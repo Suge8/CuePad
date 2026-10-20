@@ -28,7 +28,7 @@ extension NSPasteboard {
             return urls.filter { (try? $0.resourceValues(forKeys: [.contentTypeKey]))?.contentType?.conforms(to: .image) == true }.map(PasteboardImage.file)
         }
         if let png = data(forType: .png) { return [.png(png)] }
-        if let tiff = data(forType: .tiff), let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) { return [.png(png)] }
+        if let tiff = data(forType: .tiff), let png = ImageFiles.png(from: tiff) { return [.png(png)] }
         return []
     }
 }

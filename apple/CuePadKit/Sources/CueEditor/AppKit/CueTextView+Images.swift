@@ -45,12 +45,6 @@ extension CueTextView {
         NSPasteboard.imageTypes + super.readablePasteboardTypes
     }
 
-    public override func preferredPasteboardType(
-        from availableTypes: [NSPasteboard.PasteboardType], restrictedToTypesFrom allowedTypes: [NSPasteboard.PasteboardType]?
-    ) -> NSPasteboard.PasteboardType? {
-        (NSPasteboard.imageTypes + [.string]).first { availableTypes.contains($0) }
-            ?? super.preferredPasteboardType(from: availableTypes, restrictedToTypesFrom: allowedTypes)
-    }
 
     // MARK: 复制
 
