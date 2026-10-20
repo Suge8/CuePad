@@ -390,13 +390,14 @@ private final class Duty {
         let durations = rounds.compactMap { round in round.finishedAt.map { $0.timeIntervalSince(round.startedAt) } }.sorted()
         let median = durations.isEmpty ? "—" : seconds(durations.count.isMultiple(of: 2)
             ? (durations[durations.count / 2 - 1] + durations[durations.count / 2]) / 2 : durations[durations.count / 2])
-        let renewals = ((try? await rig.store.cueMessages(limit: 5000)) ?? []).count { $0.author == .known(.handoff) }
+        let renewals = CueEval.renewals(eval.rounds)
+        let renewedAt = renewals.compactMap { round in steps.firstIndex { $0.window?.contains(round.startedAt) == true }.map { "第 \($0 + 1) 步「\(steps[$0].label)」" } }
         let usage = rig.brainDirectory.map(BrainUsage.rounds(in:)) ?? []
         let total = usage.reduce(BrainUsage(), +)
         eval.overview = (rounds.reduce(0) { $0 + $1.calls.count }, "中位 \(median)")
         var lines = [
             "", "## 长程", "",
-            "- 醒来 \(rounds.count) 次（不含预热；剧本叫醒 \(steps.count) 次），换新 \(renewals) 次（库里的交接备忘）",
+            "- 醒来 \(rounds.count) 次（不含预热；剧本叫醒 \(steps.count) 次），换新 \(renewals.count) 次（上下文骤降的轮）\(renewedAt.isEmpty ? "" : "，在" + renewedAt.joined(separator: "、"))",
             "- 每轮用时中位 \(median)",
             "- 合计（含预热，大脑报了 \(usage.count) 轮）：\(BrainUsage.header.replacingOccurrences(of: " | ", with: "、")) = \(total.cells.replacingOccurrences(of: " | ", with: "、"))",
         ]
