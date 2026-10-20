@@ -92,10 +92,12 @@ private final class Duty {
             try await login.fail(#"500 {"type":"error","error":{"type":"api_error","message":"Internal server error"}}"#, rig: rig)
         }
         try await event("设置页：交回分组清单（长）", on: settings) { try await settings.settle(Script.settingsInventory, rig: rig) }
-        try await say("他：依赖先升第一档", "依赖那件先把第一档升了，别的等等。")
-        try await event("依赖：第一档升完（长）", on: deps) { try await deps.settle(Script.depsTier1, rig: rig) }
-        try await say("他：问 TS 那 14 处", "依赖清单里说 TypeScript 升级会报 14 处错，让它在临时分支上试一下，列出具体是哪些，先别修。")
-        try await event("依赖：列出 14 处报错（长）", on: deps) { try await deps.settle(Script.tsErrors, rig: rig) }
+        let tier1 = try await say("他：依赖先升第一档", "依赖那件先把第一档升了，别的等等。")
+        let upgrade = try await continuing(deps, /依赖|升级|第一档/, after: tier1)
+        try await event("依赖：第一档升完（长）", on: upgrade) { try await upgrade.settle(Script.depsTier1, rig: rig) }
+        let tsAsk = try await say("他：问 TS 那 14 处", "依赖清单里说 TypeScript 升级会报 14 处错，让它在临时分支上试一下，列出具体是哪些，先别修。")
+        let trial = try await continuing(upgrade, /TypeScript|TS|报错/, after: tsAsk)
+        try await event("依赖：列出 14 处报错（长）", on: trial) { try await trial.settle(Script.tsErrors, rig: rig) }
         let speed = try await say("他：官网 Lighthouse 掉分", "官网首页的 Lighthouse 性能分掉到 60 多了，查一下原因修掉。")
         let website = try await adopt(/Lighthouse|性能|首页/, after: speed, title: "修回官网首页性能分", in: "官网")
         let certAsk = try await say("他：查官网证书到期", "官网的 SSL 证书什么时候到期？找个会话查一下。")
@@ -271,6 +273,19 @@ private final class Duty {
         let session = ScriptedSession(session: fake, task: task, opening: PiChatMessage(sessionID: id, entryID: "e1", seq: 1, role: .user, text: task.body, at: .now, deliveryID: delivery))
         sessions.append(session)
         return session
+    }
+
+    /// 他在一件事上接着交代：Cue 可能对原来的会话说，也可能（那件已做完、会话已结束）另建任务开新会话。开了新会话就接着用新的。
+    private func continuing(_ session: ScriptedSession, _ topic: Regex<Substring>, after step: Step) async throws -> ScriptedSession {
+        guard calls(step, "task", ["start"]).contains(where: { !$0.call.failed }) else { return session }
+        var found: ScriptedSession?
+        try? await eventually("Cue 开出的会话绑上任务", timeout: .seconds(60)) {
+            found = try await self.opened(topic)
+            return found != nil
+        }
+        guard let found else { return session }
+        sessions.append(found)
+        return found
     }
 
     private func opened(_ topic: Regex<Substring>) async throws -> ScriptedSession? {
