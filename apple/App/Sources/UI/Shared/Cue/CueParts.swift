@@ -221,7 +221,7 @@ enum CueBubble {
 
 
 /// Cue 说的一句：靠左的一颗纸做的气泡（`cueBubble`），里面是 Markdown（同会话里 Agent 的回答）；它第一次提到一件活时气泡底下一行这件活（`CueTaskLine`）。
-/// 问过你的，答完或撤回后回到问的位置，这句话下面是它点名的图（`CueShots`）；你的回答在答的那一刻另成一格（`CueAnswer`，还在等的不在对话里，见 `CueThread.rows`）。
+/// 问过你的，结束后（`CueQuestionEnd`）回到问的位置，这句话下面是它点名的图（`CueShots`）；你的回答在答的那一刻另成一格（`CueAnswer`，还在等的不在对话里，见 `CueThread.rows`）。
 /// 长按（Mac 右键）是消息菜单（`MessageMenu.Kind.cue`），预览就是这颗气泡。
 struct CueSays: View {
     let message: CueMessage
@@ -470,8 +470,8 @@ private struct ShotRow: Layout {
 /// "等你"：固定在输入框上方，最早的那一条，收得紧。第一句是要你定什么，由代码按 Cue 写的动作短语写出
 /// （`CueAsking.question`），不靠 Cue 的措辞；Cue 的原话默认收起，点"原话"再看（长了在里面滚）。下面是 Cue 点名要你看的图与各看什么
 /// （`CueShots`，没点名的没有图；点开全屏时底栏就是这几个选项，看完当场定）、选项（`CueChoices`），末行是关联的任务与原话的开关
-/// （Mac 上连同选项；辅助功能字号下各占一行），Mac 与手机同一结构；还有几条在等由页头与侧栏的"等你 N"说。卡上只能选：别的话在 Cue 页底下的输入框说，Cue 判断是在答这张就照办并撤回它。
-/// 没有关掉：卡片一直挂着，直到你选一项或 Cue 撤回。
+/// （Mac 上连同选项；辅助功能字号下各占一行），Mac 与手机同一结构；还有几条在等由页头与侧栏的"等你 N"说。卡上只能选：别的话在 Cue 页底下的输入框说，
+/// 一开口卡就收起（Cue 判断不是在答它会放回，见 `CueQuestionEnd`）。没有关掉。
 /// 列表与数量只来自 `cueMessagesWaitingForYou()`：回答后等库里那条结束才换下一条，写的时候按钮停用；没写成就报错、按钮恢复，可以再点。
 struct CueWaitingDock: View {
     let waiting: [CueMessage]

@@ -91,7 +91,7 @@ nonisolated struct CueThread: Equatable, Sendable {
     enum Row: Identifiable, Equatable, Sendable {
         case you(CueMessage)
         /// 你对一条提问的回答（选的那一项，`CueMessage.answer`；更旧版本存下的另外一句照原文），排在答的那一刻（`answeredAt`）；数据就是那条提问本身，
-        /// Cue 撤回的没有这一格。问的那句总在对话里（`messages`），引用点了跳回去
+        /// 收起、撤回的没有这一格。问的那句总在对话里（`messages`），引用点了跳回去
         case answer(CueMessage)
         case cue(CueMessage, task: UUID?)
         /// 挂着交付物的 Cue 的话（结果卡）：从早到晚
