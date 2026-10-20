@@ -31,7 +31,8 @@ struct ProjectSwitcher: View {
             if (workspace.catalog?.unfiledCount ?? 0) > 0 {
                 Button { workspace.show(.unfiled) } label: { Label(CaptureCopy.unfiled, icon: .unfiled).labelStyle(.titleAndIcon) }
             }
-            Button { workspace.show(.agent) } label: { Label("Agent", icon: .agent).labelStyle(.titleAndIcon) }
+            let sessions = SidebarOutline.Entry.sessions
+            Button { workspace.show(sessions.route) } label: { Label(sessions.title, icon: sessions.icon).labelStyle(.titleAndIcon) }
             Button { workspace.show(.archive) } label: { Label("归档", icon: .archive).labelStyle(.titleAndIcon) }
             Button { workspace.show(.trash) } label: { Label("回收站", icon: .trash).labelStyle(.titleAndIcon) }
         } label: {
@@ -99,8 +100,9 @@ private struct CurrentPage: View {
             Image(.trash).accessibilityHidden(true)
             Text("回收站")
         case .agent, .session:
-            Image(.agent).accessibilityHidden(true)
-            Text("Agent")
+            let sessions = SidebarOutline.Entry.sessions
+            Image(sessions.icon).accessibilityHidden(true)
+            Text(sessions.title)
         default:
             EmptyView()
         }

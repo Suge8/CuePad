@@ -14,7 +14,7 @@ enum ScrollAnchor {
 /// - `-CuePadDemo YES`：库为空时写入演示数据；
 /// - `-CuePadSeed perf`（仅 Mac）：库为空时写入性能测量用的大资料库（`PerfLibrary`），配合 `-CuePadBench interact`；
 /// - `-CuePadProject <名称>`：打开该项目；
-/// - `-CuePadScene <画面>`：初始画面。Mac：collapsed、older、editor（-CuePadCard 那张散放的灵感进编辑页）、task（在任务浮窗里打开本项目第一条任务；给了 `-CuePadTask <标题开头>` 是那一条）、search、tasks（任务面板；配 -CuePadDemo 时写入演示会话，进行中的带会话状态）、agentsetup（接入 Agent 的面板）、connected（几家 Agent 接进隔离目录、打开 Agent 页：看接入后的侧栏与 + 的新会话里选 Agent；配 `-CuePadFolder <路径>` 再建一个绑着这个文件夹的项目，给隔离实例里真跑 Cue 派活用）、select（批量选择本页前三条灵感）、wallgap（配 -CuePadProject Flow：新记两条再删最早那条，看删卡后卡片墙的排布）、trash、archive、settings（拍真的设置窗口，主窗口收起；`-CuePadSettingsPane cue|general|agents` 翻到那一页）、menubar、cuebar（"对 Cue 说"的输入条）、projectform；
+/// - `-CuePadScene <画面>`：初始画面。Mac：collapsed、older、editor（-CuePadCard 那张散放的灵感进编辑页）、task（在任务浮窗里打开本项目第一条任务；给了 `-CuePadTask <标题开头>` 是那一条）、search、tasks（任务面板；配 -CuePadDemo 时写入演示会话，进行中的带会话状态）、agentsetup（接入 Agent 的面板）、connected（几家 Agent 接进隔离目录、打开 Agent 页：看接入后的会话页与 + 的新会话里选 Agent；配 `-CuePadFolder <路径>` 再建一个绑着这个文件夹的项目，给隔离实例里真跑 Cue 派活用）、select（批量选择本页前三条灵感）、wallgap（配 -CuePadProject Flow：新记两条再删最早那条，看删卡后卡片墙的排布）、trash、archive、settings（拍真的设置窗口，主窗口收起；`-CuePadSettingsPane cue|general|agents` 翻到那一页）、menubar、cuebar（"对 Cue 说"的输入条）、projectform；
 ///   cue 打开 Cue 页、cuememory 再打开"Cue 记得什么"、cuerun 再打开"运行情况"（仅 Mac；演示数据里 Cue 这时运行在这台，见 `DebugScene+Cue.swift`）；
 ///   agent 打开 Agent 整页列表，session 整页打开 `-CuePadSession <会话名>`（这两个画面配 `-CuePadDemo YES` 时写入 Mac 同步来的演示会话，见 `DebugScene+PiDemo.swift`；notes 里你的话带一张图、relay 里发出还没进对话的话带一张图，核对对话里的图片；长对话与追加中的对话见 `DebugScene+LongChat.swift`）；
 ///   iOS 见 `DebugScene+iOS.swift`；

@@ -154,7 +154,7 @@ nonisolated struct RelayEnd: Equatable, Sendable {
 
 /// Cue 的头像出现的几处，同时在屏上时取等级高的那处。
 enum CueSpot: Int {
-    /// 入口：Mac 侧栏最上面 Cue 那一行（也是菜单栏面板、输入条的那一行）、手机与 iPad 侧栏的 Cue 那一行。
+    /// 入口：Mac 侧栏最上面的 Cue 名片、菜单栏面板与输入条的那一行、手机与 iPad 侧栏的 Cue 那一行（`CueEntryAvatar`）。
     case entry
     /// 页头：Mac 与手机 Cue 页的页头——正看着 Cue 时落在它脸上。
     case header

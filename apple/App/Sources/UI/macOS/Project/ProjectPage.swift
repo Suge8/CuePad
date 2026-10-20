@@ -2,7 +2,8 @@
 import CueStore
 import SwiftUI
 
-/// 项目页：页头（名称、介绍、目录与计数）→ 任务 → 资料 → 工作集卡片墙 → 更早。
+/// 项目页：最上面一行次要字（介绍、目录与灵感条数，`ProjectLine`）→ 任务 → 资料 → 工作集卡片墙 → 更早。
+/// 不写项目名作大标题：侧栏开着时名字就在选中的那一行，收起时工具栏的切换胶囊写它（`ProjectSwitcher`）。
 struct ProjectPage: View {
     let projectID: UUID?
     @Environment(Workspace.self) private var workspace
@@ -21,7 +22,7 @@ struct ProjectPage: View {
     /// 首次挂上时内容分几帧出（`Stage`）：一个回合里全建要几十毫秒；留着的页回来时已经在最后一段。
     @State private var stage = Stage.header
 
-    /// 页头先到，其余每帧一段，自上而下。
+    /// 最上面那行先到，其余每帧一段，自上而下。
     private enum Stage: Int, CaseIterable, Comparable {
         case header, focus, wall, older
         static func < (a: Self, b: Self) -> Bool { a.rawValue < b.rawValue }
@@ -78,17 +79,19 @@ struct ProjectPage: View {
         }
     }
 
-    /// 页头（名称、目录、计数）取自项目目录，切换项目的第一帧就是新项目；卡片与任务读到后在其下出现。
+    /// 最上面那行（介绍、目录、条数）取自项目目录，切换项目的第一帧就是新项目；卡片与任务读到后在其下出现。
     @ViewBuilder private var content: some View {
         let catalog = workspace.catalog
         if projectID == nil, catalog?.projects.isEmpty == true, (catalog?.unfiledCount ?? 0) == 0 {
             Welcome()
         } else {
-            VStack(alignment: .leading, spacing: Spacing.section) {
-                ProjectHeader(
-                    projectID: projectID, project: catalog?.project(projectID),
-                    directory: projectID.flatMap { catalog?.directories[$0] }, cardCount: catalog?.cardCounts[projectID] ?? 0)
-                if let data, let arrangement = board.arrangement, let shape { page(data, arrangement, shape) }
+            VStack(alignment: .leading, spacing: Spacing.sectionTitle) {
+                ProjectLine(
+                    project: catalog?.project(projectID), directory: projectID.flatMap { catalog?.directories[$0] },
+                    cardCount: catalog?.cardCounts[projectID] ?? 0)
+                VStack(alignment: .leading, spacing: Spacing.section) {
+                    if let data, let arrangement = board.arrangement, let shape { page(data, arrangement, shape) }
+                }
             }
             .padding(.horizontal, Spacing.page).padding(.top, Spacing.pageTop).padding(.bottom, 150)
         }
@@ -197,8 +200,9 @@ private struct PageShape: Equatable {
     }
 }
 
-private struct ProjectHeader: View {
-    let projectID: UUID?
+/// 项目页最上面的一行次要字：介绍（一行，截断时悬停看全文）· 绑着的文件夹（点它更换）· 几条灵感；哪样没有就不写，都没有时这一行不占位置。
+/// 没绑文件夹时这里不说，"还没绑定文件夹"与一键绑只在任务区那一处。
+private struct ProjectLine: View {
     let project: Project?
     let directory: String?
     let cardCount: Int
@@ -206,31 +210,21 @@ private struct ProjectHeader: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        HStack(alignment: .bottom) {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 10) {
-                    ProjectGlyph(project: project, size: 20)
-                    Text(projectID == nil ? CaptureCopy.unfiled : project?.name ?? "").font(Typography.pageTitle).foregroundStyle(palette.ink)
+        let intro = project?.intro
+        let folder = project != nil && directory != nil
+        if intro != nil || folder || cardCount > 0 {
+            HStack(spacing: 4) {
+                if let intro {
+                    Text(intro).foregroundStyle(palette.ink2).lineLimit(1).truncationMode(.tail).help(intro).textSelection(.enabled)
+                    if folder || cardCount > 0 { Dot() }
                 }
-                .contextMenu { if let project { ProjectActions(project: project) { workspace.projectForm = .init(project: project) } } }
-                // 介绍回答"这是什么项目"，属于页头，不占任务栏的一栏
-                if let intro = project?.intro {
-                    Text(intro).font(Typography.lead).foregroundStyle(palette.ink2)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .textSelection(.enabled)
+                if let project, let directory {
+                    DirectoryLink(path: Self.abbreviated(directory)) { workspace.chooseFolder(for: project) }.layoutPriority(1)
+                    if cardCount > 0 { Dot() }
                 }
-                // 绑着文件夹时写路径（点它更换）；没绑时这里不说，"还没绑定文件夹"与一键绑只在任务区那一处
-                HStack(spacing: 4) {
-                    if let project, let directory {
-                        DirectoryLink(path: Self.abbreviated(directory)) { workspace.chooseFolder(for: project) }
-                        if cardCount > 0 { Dot() }
-                    }
-                    if cardCount > 0 { Text("\(cardCount) 条灵感").monospacedDigit() }
-                }
-                .font(Typography.meta).foregroundStyle(palette.ink3)
+                if cardCount > 0 { Text("\(cardCount) 条灵感").monospacedDigit().layoutPriority(1) }
             }
-            // 不再放"记一条灵感"：底部的输入栏与 ⌘N 就是入口
-            Spacer()
+            .font(Typography.secondary).foregroundStyle(palette.ink3)
         }
     }
 
@@ -241,7 +235,7 @@ private struct ProjectHeader: View {
     }
 }
 
-/// 项目页头部绑着的文件夹路径：点它更换，悬停有下划线、指针变手形。
+/// 项目页最上面那行里绑着的文件夹路径：点它更换，悬停有下划线、指针变手形。
 private struct DirectoryLink: View {
     let path: String
     let choose: () -> Void
