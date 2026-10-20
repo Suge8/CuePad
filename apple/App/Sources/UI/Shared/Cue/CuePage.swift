@@ -13,7 +13,7 @@ import CuePi
 /// 经过清单里"对你说"那一条点它回到对话里的原处。连着的动态（含 Cue 自己醒来那几轮的经过）折成一行旁注（`CueNotes`），
 /// 它换了新上下文的地方一条分隔（`CueRenewal`，点开是交接备忘），末尾是它此刻在做什么（`CueEnding`）；
 /// 对话区与会话页是同一个（`ChatColumn`：排开、刻度滑条、跳转与描圈）；底部是"等你"（`CueWaitingDock`）与输入框（`CueComposer`）。
-/// 对话第一帧就排好（`observing` 当场读），停在最新处；有新消息时从它们上面的分隔线读起（`CueViewing`）。
+/// 对话第一帧就排好（`observing` 当场读），停在最新处；有新消息时从第一条读起，还没读的气泡旁一颗小点（`CueViewing`）。
 /// Cue 运行在别的设备上、本机正在和 iCloud 对时（`AppServices.isCatchingUp(on:)`）页头写"正在同步"，这期间到的话先不滑上来，
 /// 对完一次滑到最新（`ChatColumn` 的 `holding`）。
 /// Cue 在做的事在任务与 Agent 页里看，这里不另列。
@@ -41,8 +41,7 @@ struct CuePage: View {
     @State private var width: CGFloat = 0
     /// "等你"卡正在来去（`CueWaitingDock.moving`）：对话先不往上滑。
     @State private var docking = false
-    /// 新消息的分隔线（开始看这一页时记下）与末尾在屏上的新消息（`CueViewing`）。
-    @State private var divider: CueDivider?
+    /// 末尾在屏上的新消息（`CueViewing`）。
     @State private var seen: [UUID: Date] = [:]
 
     #if os(macOS)
@@ -66,7 +65,7 @@ struct CuePage: View {
             }
             .previewPresenter($opened)
             .panel(isPresented: Bindable(cue).showsMemory) { CueMemoryPage() }
-            .modifier(CueViewing(thread: thread, catchingUp: catchingUp, divider: $divider, seen: $seen, follow: $follow))
+            .modifier(CueViewing(thread: thread, catchingUp: catchingUp, seen: $seen, follow: $follow))
             .onChange(of: thread != nil, initial: true) { _, loaded in
                 guard loaded else { return }
                 DebugHooks.mark("cue")
@@ -195,9 +194,9 @@ struct CuePage: View {
                     CueSegment(rows: items.map { item in
                         CueRow(
                             row: item, ref: item.taskID.flatMap { thread.tasks[$0] }, shots: thread.shots[item.id] ?? [],
-                            joined: thread.joined.contains(item.id) && item.id != divider?.id,
+                            joined: thread.joined.contains(item.id),
                             stamp: thread.stamps[item.id], delivered: item.id == lastYou, live: live.flatMap { item.contains(round: $0.round) ? $0 : nil },
-                            divider: item.id == divider?.id ? divider?.count : nil, unread: thread.unread.contains(item.id), opened: $opened, seen: $seen)
+                            unread: thread.unread.contains(item.id), opened: $opened, seen: $seen)
                     })
                     .equatable()
                 }
@@ -315,7 +314,7 @@ struct CuePage: View {
 
     // MARK: 底部
 
-    /// 浮在对话底上的一块："等你"卡、启用卡与输入框。
+    /// 浮在对话底上的一块："等你"卡、启用卡与输入框。输入框按自己的高、不被挤（`fixedSize`），地方不够时（键盘弹出、小屏、横屏、输入框写了好几行）卡用剩下的。
     private var bottom: some View {
         VStack(spacing: 0) {
             if let thread {
@@ -325,9 +324,9 @@ struct CuePage: View {
                 CueEnableCard().padding(.bottom, 8).transition(.opacity)
             }
             #if os(iOS)
-            if docked { dockRow } else { composer }
+            Group { if docked { dockRow } else { composer } }.fixedSize(horizontal: false, vertical: true)
             #else
-            CueComposer(style: .page) { follow.sent() }
+            CueComposer(style: .page) { follow.sent() }.fixedSize(horizontal: false, vertical: true)
             #endif
         }
         .animation(Motion.quick, value: cue.canHear)
@@ -358,9 +357,7 @@ private struct CueRow: View, Equatable {
     /// 你最后一句：气泡旁标已送达（`BubbleTrip.delivered`）。
     let delivered: Bool
     let live: CueLiveRound?
-    /// 新消息从这一格起：上面一条分隔线，写着有几条。
-    let divider: Int?
-    /// 这一格是新消息：末尾进出滚动区时报给页面（`CueViewing`）。
+    /// 这一格是新消息：左边一颗小点（`CueUnreadDot`），末尾进出滚动区时报给页面（`CueViewing`）。
     let unread: Bool
     @Binding var opened: PreviewOpening?
     @Binding var seen: [UUID: Date]
@@ -369,21 +366,22 @@ private struct CueRow: View, Equatable {
 
     /// 这一格排出来什么样只看这几样。
     nonisolated struct Key: Equatable {
-        let row: CueThread.Row, ref: CueTaskRef?, shots: [CueShown], joined: Bool, stamp: Date?, delivered: Bool, live: CueLiveRound?, divider: Int?,
-            unread: Bool
+        let row: CueThread.Row, ref: CueTaskRef?, shots: [CueShown], joined: Bool, stamp: Date?, delivered: Bool, live: CueLiveRound?, unread: Bool
     }
 
     nonisolated var key: Key {
-        Key(row: row, ref: ref, shots: shots, joined: joined, stamp: stamp, delivered: delivered, live: live, divider: divider, unread: unread)
+        Key(row: row, ref: ref, shots: shots, joined: joined, stamp: stamp, delivered: delivered, live: live, unread: unread)
     }
 
     nonisolated static func == (a: Self, b: Self) -> Bool { a.key == b.key }
 
     var body: some View {
-        if let divider { CueNewMessages(count: divider).padding(.top, CuePage.stampAbove) }
-        if let stamp { ChatTimeMarker(date: stamp).padding(.top, divider != nil ? 4 : CuePage.stampAbove) }
+        if let stamp { ChatTimeMarker(date: stamp).padding(.top, CuePage.stampAbove) }
         content
-            .padding(.top, stamp != nil || divider != nil ? CuePage.stampBelow : CuePage.gap(before: row.speaker, joined: joined))
+            .overlay(alignment: .topLeading) {
+                CueUnreadDot(unread: unread).alignmentGuide(.leading) { $0[.trailing] + CueUnreadDot.gap }
+            }
+            .padding(.top, stamp != nil ? CuePage.stampBelow : CuePage.gap(before: row.speaker, joined: joined))
             .background(alignment: .bottom) {
                 if unread {
                     CueEndProbe { visible in seen[row.id] = visible ? row.date : nil }

@@ -50,7 +50,7 @@ extension Table {
     case .cueRead: CueRead.columns
     case .macPresence: MacPresence.columns
     case .macAgents: MacAgents.columns
-    case .sessionViewers: SessionViewer.columns
+    case .sessionViewers: Viewer.columns
     case .cueSummaries: ["lo", "hi", "text", "lineIDs", "createdAt"]
     case .writeCounter: ["seq"]
     }

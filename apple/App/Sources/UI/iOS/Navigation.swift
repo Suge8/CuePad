@@ -76,8 +76,6 @@ final class Navigation {
 
     /// 这个窗口有系统菜单开着（`MenuButton`）：这段里贴着键盘的那一层不跟键盘走（`KeyboardHold`）。
     var menuOpen = false
-    /// 有浮在键盘上方的输入框（新会话、发给 Agent）。
-    var floating: Bool { newSession != nil || outbox != nil }
     var outbox: Outbox? {
         didSet { if let outbox, outbox.id != oldValue?.id { handOffDraft = ComposerDraft(attachments: [outbox]) } }
     }
@@ -214,15 +212,15 @@ final class Navigation {
     /// 此刻屏幕上最上面的页。
     var top: Route { path.last ?? root }
 
-    /// 屏幕上最上面那一页是会话页时是它（这台手机开着哪个会话，`SessionViewerKeeper`）。
-    var shownSession: SessionViewerKeeper.Page? {
-        if case .session(let route) = top { SessionViewerKeeper.Page(id: route.id, sessionID: route.sessionID) } else { nil }
+    /// 屏幕上最上面那一页是会话页时是它（这台手机开着哪个会话，`ViewerKeeper`）。
+    var shownSession: ViewerKeeper.Page? {
+        if case .session(let route) = top { ViewerKeeper.Page(id: route.id, sessionID: route.sessionID) } else { nil }
     }
 
-    /// 会话的前台提示（等你确认、做完了）弹不弹：屏幕上最上面那一页盖住了这个会话（`Route.covers`）时不弹。
-    func showsAlert(about session: UUID) -> Bool { !top.covers(session: session) }
+    /// 会话的前台提示（等你确认、做完了）弹不弹：开着这个会话页时不弹（与系统通知同一条规则，见 `AlertCenter`）。
+    func showsAlert(about session: UUID) -> Bool { shownSession?.id != session }
 
-    /// 顶上那条提示还留不留：说的是某个会话的提示（等你确认、做完了），你进了那个会话或 Agent 列表就当场撤下
+    /// 顶上那条提示还留不留：说的是某个会话的提示（等你确认、做完了），你进了那个会话就当场撤下
     /// （与不弹同一条规则 `showsAlert`），不在正看着的页面上停满 5 秒；别的提示照常留到时间。
     func keeps(_ notice: Workspace.Notice) -> Bool {
         guard case .session(let route)? = notice.link else { return true }

@@ -65,7 +65,7 @@ nonisolated struct CueTiming: Sendable {
 /// 回复是这一轮做完时大脑还留着的正在说的话（`CueBrainEvent.speaking`），一轮结束时才写进对话（`cueMessages` 是 Cue 对话唯一的事实源）。
 /// 说的过程只在这台 Mac 的内存里给 Cue 页逐字显示（`speech`），只显示在回答你的一轮（`Turn.answersYou`）：
 /// Cue 自己醒来的一轮最后的话可能被当复述不写，显示了就落不了库。
-/// 回复写成什么看这一轮为什么醒（`author(of:)`）：你发起的（含插进来的话）与刚启用的写成 `cue`，其余 Cue 自己醒来的写成 `note`（折成灰色一行、不推送），
+/// 回复写成什么看这一轮为什么醒（`author(of:)`）：你发起的（含插进来的话）与刚启用的写成 `cue`（回答你的那一轮的推送提示你），其余 Cue 自己醒来的写成 `note`（折成灰色一行、不推送），
 /// 换新后的第一轮跟写下交接的那一轮一样；
 /// Cue 自己醒来的一轮（含刚启用）里已经用 tell 对你说过话的，最后的回复不再写（几乎是同一句）；你发起的一轮最后的回复就是答复，照写
 /// （`CueStore.replyCueRound`）。Cue 被会话的动静叫醒、这一轮没动过手（`CueRound.acted`），补一行动态"看过「会话名」，不打算行动"，
@@ -74,7 +74,7 @@ nonisolated struct CueTiming: Sendable {
 /// 基线（变化从哪算起）只在一轮做完且没出错时前移：出错的一轮里 Cue 没看完的变化下次还在。变化按本机写入序号分新旧
 /// （`CueStore.lastWrite`），不按事件时刻：事件可能晚到（机器忙、从别的设备同步来），时刻早于上次醒来也照样是新的。
 /// Cue 自己醒来（刚启用、换新、提醒与 5–7）的一轮出错后，隔 `CueTiming.retryWake` 再醒一次，再错就等下一个新变化；额度、登录类的错不重试。
-/// 出错写一条 Cue 消息告诉你：你发起的一轮、不重试的错立刻说；会重试的那次先不说，重试也错了才说。
+/// 出错写一条 Cue 消息告诉你：你发起的一轮、不重试的错立刻说；会重试的那次先不说，重试也错了才说。回答你的一轮的回复与出错、起不来都提示你（`CueMessage.urgent`）。
 /// 上下文用到换新线（`CueContext.renewAt`）后，下一次醒来的信封里提示先写交接。大脑意外退出或起不来按 `CueTiming.restarts` 退避重试，
 /// 那一轮里交出去的你的话清掉送达、重起后重新交；连续失败超过次数写一条 Cue 消息、停在"起不来"，等你的下一条消息再试。
 /// 每一轮的经过（`rounds`）只在这里，在跑的一轮就是 `Turn.round`，做完收进最近的几轮；Mac 的"运行情况"读它；上下文随状态写进库，各端读 `CueState.context`。
@@ -216,8 +216,8 @@ final class CueKeeper {
         var active: Bool
         var memory: CueMemoryVersion
         var profile: CueProfile?
-        /// 各设备开着哪个会话（`SessionViewer`）：他离开了在场的会话，要再报给 Cue
-        var viewers: [SessionViewer]
+        /// 各设备开着的会话（`Viewer`）：他离开了在场的会话，要再报给 Cue
+        var viewing: [String]
         /// 本机最近一次写入的序号（`CueStore.lastWrite`）：会话状态、问答，卡片的完成与层级，投送请求的状态，对话里的新消息一变它就变
         /// （晚到的变化事件时刻也可能更早，只有写入序号一定跟着变）；会话的其余列（说明、上下文、子代理的动作）怎么变都不叫醒对账
         var written: Int
@@ -300,7 +300,7 @@ final class CueKeeper {
                     for try await _ in store.observe({ store in
                         Signal(
                             messages: try store.cueMessages(limit: 50), active: try store.cueBoardActive(), memory: try store.cueMemoryVersion(),
-                            profile: try store.cueProfile(), viewers: try store.sessionViewers(), written: try store.lastWrite())
+                            profile: try store.cueProfile(), viewing: try store.viewers().compactMap(\.sessionID), written: try store.lastWrite())
                     }) { input.yield(.kick) }
                 } catch {
                     Self.log.error("Cue 订阅资料库失败：\(error.localizedDescription, privacy: .public)")
@@ -411,7 +411,7 @@ final class CueKeeper {
         }
         guard failures <= setup.timing.restarts.count else {
             phase = .stuck(reason)
-            await say(.cue, "我起不来了：\(reason)\n你再发一条消息，我就再试一次。")
+            await say(.cue, "我起不来了：\(reason)\n你再发一条消息，我就再试一次。", urgent: true)
             return
         }
         phase = .restarting(failures)
@@ -457,7 +457,7 @@ final class CueKeeper {
             let line = summary.kind == .other ? raw : "\(summary.title)\n\(raw)"  // 认不出的错，摘要只是原文的首行
             guard line != lastFailure else { return }  // 同一个错一轮轮重复（如额度）只说一次
             lastFailure = line
-            await say(.cue, "这一轮出错了：\(line)")
+            await say(.cue, "这一轮出错了：\(line)", urgent: turn?.answersYou == true)
         case .turnFinished:
             guard let finished = turn else { return }
             await recordRound()  // 中途插了你的话：这一轮成了回答你的
@@ -797,10 +797,11 @@ final class CueKeeper {
         }
     }
 
-    private func say(_ author: CueAuthor, _ text: String) async {
+    /// `urgent`：要提示你（`CueMessage.urgent`）。
+    private func say(_ author: CueAuthor, _ text: String, urgent: Bool = false) async {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         do {
-            try await setup.store.addCueMessage(author, text: text)
+            try await setup.store.addCueMessage(author, text: text, urgent: urgent)
         } catch {
             Self.log.error("Cue 的消息没能写进资料库：\(error.localizedDescription, privacy: .public)")
         }

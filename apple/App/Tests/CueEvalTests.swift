@@ -417,7 +417,7 @@ struct CueEvalTests {
         ) { eval in
             let rig = eval.rig
             let work = try await rig.working(Self.title, Self.body)
-            try await rig.store.recordViewing(device: "phone", sessionID: work.id)
+            try await rig.store.recordViewing(device: "phone", sessionID: work.id, cue: false)
             let viewing = Date.now
             try await rig.settleHisTurn(
                 work, said: "限流顺便也加到登录接口上，同一个 IP 一分钟最多 10 次。", ago: 15 * 60,
@@ -425,7 +425,7 @@ struct CueEvalTests {
             try await eventually("这一停写进库") {
                 try await rig.store.sessions(matching: work.id).first.map { $0.state == .known(.settled) && $0.answered } == true
             }
-            try await eval.trigger { try await rig.store.recordViewing(device: "phone", sessionID: nil) }
+            try await eval.trigger { try await rig.store.recordViewing(device: "phone", sessionID: nil, cue: false) }
             return [
                 Check("他开着时没叫醒 Cue（之后只有他离开后那一轮）", rig.rounds.filter { $0.startedAt >= viewing }.count == 1),
                 Check("他离开后被叫醒（信封里这一停标着他说的）", eval.round?.sent.contains { $0.contains("他说的") } == true),
