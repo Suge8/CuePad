@@ -67,10 +67,10 @@ final class RecordingHost: AgentRuntime {
     /// `sessionFile` 是它的会话文件（文件在就算说过话，进程没了时记录留着而不是删掉）。
     @discardableResult
     func connect(
-        _ sessionID: String, cwd: String, busy: Bool = false, hosted: Bool = false, protocolVersion: Int = PiWire.protocolVersion,
-        sessionFile: String? = nil
+        _ sessionID: String, cwd: String, busy: Bool = false, hosted: Bool = false,
+        protocolVersion: Int = PiWire.protocolVersion, extensionVersion: Int = 1, sessionFile: String? = nil
     ) async throws -> FakeExtension {
-        var options = FakeExtension.Options(protocolVersion: protocolVersion, cwd: cwd, hosted: hosted)
+        var options = FakeExtension.Options(protocolVersion: protocolVersion, extensionVersion: extensionVersion, cwd: cwd, hosted: hosted)
         if let sessionFile { options.sessionFile = sessionFile }
         let ext = FakeExtension(directory: socketDirectory, sessionID: sessionID, options: options)
         if busy { ext.setState(["kind": "thinking"]) }
