@@ -156,7 +156,7 @@ nonisolated extension CueMessage {
 
 /// 一次接力（`LiveSessions.flight`，`CueRelayStage` 画）：叫醒是会话 → Cue（事实是 `CueState.woke`），交给是 Cue → 会话（事实是 Cue 写的投送请求），
 /// 都不另存。时刻在同一条时间线上比新旧：叫醒与说话是 Cue 那台 Mac 的时钟，开新会话是开出它的那台（多数就是 Cue 那台）。
-/// 交给只飞把话或活交到会话手里的几种：说话、答它在等的问题（`spoken`，写下请求的时刻），开新会话（开出的会话有了记录的时刻，`CueStore.cueLaunches`：
+/// 交给只飞把话或活交到会话手里的几种：说话、答它在等的问题（`spoken`，写下请求的时刻），开新会话（开出的会话有了记录的时刻，`CueStore.cueOpenedSessions`：
 /// 写下请求时会话还不在，等它出现才飞到它那一行）。
 /// 不飞的：停下与结束是把活收回来，结束还常在做完一件事时一次结束好几个（`endUnusedSessions`），一片光讲不清；
 /// 换模型与思考强度（config）总跟在一句话前面，那句话飞就够了。
@@ -185,7 +185,7 @@ nonisolated struct CueFlight: Equatable, Sendable {
             let said = try store.cueRequests(spoken).compactMap { request in
                 request.target.ref.map { Handed(at: request.createdAt, end: RelayEnd(session: $0, task: request.cardID)) }
             }
-            let opened = try store.cueLaunches().map { Handed(at: $0.at, end: RelayEnd(session: $0.session, task: $0.card, opens: true)) }
+            let opened = try store.cueOpenedSessions().map { Handed(at: $0.at, end: RelayEnd(session: $0.session, task: $0.card, opens: true)) }
             return said + opened
         }
     }
