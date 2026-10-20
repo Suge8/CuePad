@@ -388,21 +388,23 @@ struct CueEvalTests {
         }
     }
 
-    @Test func p他在场不插嘴() async throws {
+    @Test func t他刚说过话_Cue说的那一轮做完照样收尾() async throws {
         try await CueEval.run(
-            "p-他在场不插嘴",
-            expect: "他 2 分钟前刚在会话里说过话（在场），会话停下问一个常规取舍：Cue 不插嘴（不 say、不 leave、不 tell）"
+            "t-Cue说的那一轮做完照样收尾",
+            expect: "他 7 分钟前在会话里说过话，之后 Cue 说的那句开的一轮做完（带测试输出与截图）：归 Cue，被叫醒、核对后 done"
         ) { eval in
-            let work = try await eval.rig.working(Self.title, Self.body)
+            let rig = eval.rig
+            let work = try await rig.working(Self.title, Self.body)
+            let shot = rig.app.directory.appending(path: "登录页改前改后.png")
+            try loginShot().write(to: shot)
+            _ = try await rig.store.addPreviews(filesAt: [shot], title: "登录页 忘记密码 改前改后", sessionID: work.id)
             try await eval.trigger {
-                try await eval.rig.settleHisTurn(
-                    work, said: "限流顺便也加到登录接口上，同一个 IP 一分钟最多 10 次。", ago: 2 * 60,
-                    reply: "登录接口的限流加好了骨架。计数放哪里还没定：A. 进程内存（简单，但多实例不共享）；B. Redis（项目里已经在用，多实例共享）。你选哪个？我倾向 B。")
+                try await rig.settleCueTurn(
+                    work, his: "进度怎么样了？", ago: 7 * 60, cue: "把测试输出和改前改后的截图补上。", reply: Self.doneReply)
             }
             return [
-                Check("没对会话说话（没 say）", eval.calls("task", "say").isEmpty),
-                Check("没 leave", eval.calls("task", "leave").isEmpty),
-                Check("没打扰他（没 tell）", eval.calls("tell").isEmpty),
+                Check("被叫醒（这一停没标他说的）", eval.round?.sent.contains { $0.contains("[歇下] \(Self.title)") } == true),
+                Check("done 了", eval.calls("task", "done").contains { !$0.call.failed }),
             ]
         }
     }
@@ -410,21 +412,22 @@ struct CueEvalTests {
     @Test func q他离开后接着推进() async throws {
         try await CueEval.run(
             "q-他离开后接着推进",
-            expect: "会话停下问常规取舍时他正在手机上开着它（在场，Cue 不动）；他离开那一页后 Cue 被再叫醒（他已离开），接着推进（say 作答）"
+            expect: "他在会话里发起的一轮停下问常规取舍时他正在手机上开着它（归他，不叫醒 Cue）；他离开那一页后 Cue 被叫醒，接着推进（say 作答）"
         ) { eval in
             let rig = eval.rig
             let work = try await rig.working(Self.title, Self.body)
             try await rig.store.recordViewing(device: "phone", sessionID: work.id)
-            try await eval.trigger {
-                try await rig.settleHisTurn(
-                    work, said: "限流顺便也加到登录接口上，同一个 IP 一分钟最多 10 次。", ago: 15 * 60,
-                    reply: "登录接口的限流加好了骨架。计数放哪里还没定：A. 进程内存（简单，但多实例不共享）；B. Redis（项目里已经在用，多实例共享）。你选哪个？我倾向 B。")
+            let viewing = Date.now
+            try await rig.settleHisTurn(
+                work, said: "限流顺便也加到登录接口上，同一个 IP 一分钟最多 10 次。", ago: 15 * 60,
+                reply: "登录接口的限流加好了骨架。计数放哪里还没定：A. 进程内存（简单，但多实例不共享）；B. Redis（项目里已经在用，多实例共享）。你选哪个？我倾向 B。")
+            try await eventually("这一停写进库") {
+                try await rig.store.sessions(matching: work.id).first.map { $0.state == .known(.settled) && $0.answered } == true
             }
-            let quiet = eval.calls("task", "say").isEmpty && eval.calls("task", "leave").isEmpty
             try await eval.trigger { try await rig.store.recordViewing(device: "phone", sessionID: nil) }
             return [
-                Check("他开着时没插嘴", quiet),
-                Check("他离开后再被叫醒（信封写着他已离开）", eval.round?.sent.contains { $0.contains("他已离开") } == true),
+                Check("他开着时没叫醒 Cue（之后只有他离开后那一轮）", rig.rounds.filter { $0.startedAt >= viewing }.count == 1),
+                Check("他离开后被叫醒（信封里这一停标着他说的）", eval.round?.sent.contains { $0.contains("他说的") } == true),
                 Check("接着推进（say 说到 Redis 或 B）", eval.calls("task", "say").contains { ($0.args["text"] as? String)?.contains(/Redis|B/) == true }),
             ]
         }
@@ -611,6 +614,21 @@ extension CueHostTests.Rig {
         try await answered(work.id, prompt: said, reply: text, messages: [work.prompt, first, his, answer])
     }
 
+    /// 他 `ago` 秒前直接在会话里说了 `his`，之后 Cue 说了 `cue`（发送记录是 Cue 的）开了这一轮，做完回复 `reply` 后歇下。
+    func settleCueTurn(_ work: Working, his: String, ago: TimeInterval, cue: String, reply text: String) async throws {
+        let delivery = UUID()
+        try await store.recordSend(cue, to: SendTarget(kind: .piSession, name: work.task.heading, ref: work.id), card: work.task.id, delivery: delivery, origin: .known(.cue))
+        let messages = [
+            work.prompt, reply(work, "重置邮件发出去了，测试在补。"),
+            PiChatMessage(sessionID: work.id, entryID: "u2", seq: 3, role: .user, text: his, at: .now - ago),
+            PiChatMessage(sessionID: work.id, entryID: "a2", seq: 4, role: .pi, text: "接口与邮件都好了，在补测试。", at: .now - ago + 60),
+            PiChatMessage(sessionID: work.id, entryID: "u3", seq: 5, role: .user, text: cue, at: .now - 120, deliveryID: delivery),
+            PiChatMessage(sessionID: work.id, entryID: "a3", seq: 6, role: .pi, text: text, at: .now),
+        ]
+        work.session.setState(["kind": "idle"])
+        try await answered(work.id, prompt: cue, reply: text, messages: messages)
+    }
+
     /// 会话这一轮说了 `said` 后停下来问一个选择题。
     func ask(_ work: Working, said: String, question: String, options: [String]) async throws {
         try await store.writePiTranscript(PiTranscript(
@@ -716,6 +734,10 @@ final class CueEval {
         do {
             try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
             try lines.joined(separator: "\n").appending("\n").write(to: output.appending(path: "\(name).md"), atomically: true, encoding: .utf8)
+            // 资料库留一份，看这一场在 Cue 页上的样子（docs/verify.md「Cue 评测」）
+            let library = output.appending(path: "\(name).library", directoryHint: .isDirectory)
+            try? FileManager.default.removeItem(at: library)
+            try FileManager.default.copyItem(at: rig.app.databaseURL.deletingLastPathComponent(), to: library)
             let prompt = CuePrompt.system(name: CueProfile.defaultName, memory: CueMemoryView(try await rig.store.cueMemory()), agents: [])
             try Self.summarize(prompt: prompt)
         } catch {
