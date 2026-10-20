@@ -63,6 +63,25 @@ extension CueStore {
     }
   }
 
+  /// Cue 自己醒来看过会话、这一轮什么都没写（对话里这一轮开始之后一条也没有：经过、动态、对你说的话）时补的一行动态（`note`，灰字、不推送）：
+  /// "看过「会话名」，不打算行动"。对话里最后一条就是上一行这样的动态（`after`）就并进去，看过几个会话写成"看过 N 个会话"。
+  /// 返回这一行与它看过的会话；这一轮写过东西为 nil。
+  public func noteCueGlance(_ sessionIDs: [String], startedAt: Date, after previous: CueGlance?) throws -> CueGlance? {
+    try write {
+      let wrote = try db.first("SELECT 1 FROM cueMessages WHERE createdAt >= ? LIMIT 1", [startedAt]) { _ in true } ?? false
+      guard !wrote else { return nil }
+      let last = try select(CueMessage.self, orderBy: "createdAt DESC, rowid DESC", limit: 1).first
+      let merging = previous.flatMap { $0.row == last?.id ? $0 : nil }
+      var sessions = merging?.sessions ?? []
+      for id in sessionIDs where !sessions.contains(id) { sessions.append(id) }
+      let title = sessions.count == 1 ? try sessionState(sessions[0])?.title : nil
+      let text = "看过" + (title.map { "「\($0)」" } ?? " \(sessions.count) 个会话") + "，不打算行动"
+      guard let merging else { return CueGlance(row: try insertCueMessage(.note, text: text).id, sessions: sessions) }
+      try db.run("UPDATE cueMessages SET text = ?, modifiedAt = ? WHERE id = ?", [text, Date.stamp, merging.row])
+      return CueGlance(row: merging.row, sessions: sessions)
+    }
+  }
+
   /// Cue 说的、正文就是 `text` 的最近一条（经过清单里"对你说"那一条点它跳回原处）。
   public func latestCueMessage(saying text: String) throws -> CueMessage? {
     try select(CueMessage.self, where: "author = 'cue' AND text = ?", [text], orderBy: "createdAt DESC, rowid DESC", limit: 1).first

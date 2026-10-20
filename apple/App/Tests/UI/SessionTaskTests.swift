@@ -108,7 +108,7 @@ struct SessionTaskTests {
         try await store.writePiTranscript(PiTranscript(sessionID: "s1", messages: [], recap: PiRecap(lastPrompt: "修登录", lastReply: "修好了", answeredAt: .now)))
         try await recorder.update(sessionID: "s1", state: .settled)
         try await workspace.toggle(old.id)
-        #expect(try await store.cueChanges(after: CueMarks(mark)).filter { $0.kind == .settled }.map(\.task?.id) == [old.id])
+        #expect(try await store.cueChanges(after: CueMarks(mark)).due.filter { $0.kind == .settled }.map(\.task?.id) == [old.id])
 
         let board = try await store.cueBoard()
         #expect(board.sessions.map(\.sessionID) == ["s1"])
@@ -268,39 +268,59 @@ struct SessionTaskTests {
         #expect(blocked.isError && blocked.text.contains("打断不了"))
     }
 
-    /// 这一轮是谁开的只看会话里最近一条你一方或机器的消息：他说的那一轮，变化标"他说的"；FireCode 这类扩展投进来的机器消息开的一轮
-    /// 既不算他的也不算 Cue 的——不标"他说的"，Cue 照常插话。
-    @Test func 机器消息开的一轮_不标他说的_Cue能插话() async throws {
+    /// 会话停下归谁接手看这一轮是谁开的（会话里最近一条你一方或机器的消息）与他在不在场（开着它，或 10 分钟内在里面说过话）：
+    /// Cue 说的那句开的归 Cue，他刚在里面说过话也照常报给它；他开的、FireCode 这类扩展投进来的机器消息开的，他在场就归他、不报给 Cue，
+    /// 不在场才报，他开的标"他说的"。机器消息开的一轮在跑时 Cue 照常能插话。
+    @Test func 停下归谁接手_Cue开的归Cue_他或机器开的他在场时归他() async throws {
         try await enableCue()
         let task = try await store.createTask("修登录", in: nil)
         try await store.linkCard(task.id, toSession: "s1")
         let recorder = PiStateRecorder(store: store, hostID: services.hostID)
-        try await recorder.update(sessionID: "s1", state: .thinking, title: "修登录", turnStartedAt: .now)
-        let byPad = UUID()
-        try await store.recordSend("别动登录页样式", to: SendTarget(kind: .piSession, name: "修登录", ref: "s1"), delivery: byPad)
-        try await store.writePiTranscript(PiTranscript(sessionID: "s1", messages: [
-            PiChatMessage(sessionID: "s1", entryID: "u1", seq: 1, role: .user, text: "别动登录页样式", at: .now, deliveryID: byPad),
-            PiChatMessage(sessionID: "s1", entryID: "a1", seq: 2, role: .pi, text: "好", at: .now),
-        ], recap: PiRecap(lastPrompt: "别动登录页样式", lastReply: "好", answeredAt: .now)))
-        func settledLine(after mark: Int) async throws -> String {
-            try await recorder.update(sessionID: "s1", state: .settled)
-            let changes = try await store.cueChanges(after: CueMarks(mark)).filter { $0.kind == .settled }
-            return CueEnvelope.render(CueEnvelope.Input(
-                now: .now, contextUsed: nil, projects: [], changes: changes, board: try await store.cueBoard(),
-                waiting: [], wake: .sessionActivity))
+        try await recorder.update(sessionID: "s1", state: .settled, title: "修登录")
+        let target = SendTarget(kind: .piSession, name: "修登录", ref: "s1")
+        var seq: Int64 = 0
+        /// role 一方说了 text（delivery 是那句的发送记录）开一轮，返回开之前的写入序号
+        func open(_ role: PiChatRole, _ text: String, at time: Date = .now, delivery: UUID? = nil) async throws -> Int {
+            let mark = try await store.lastWrite()
+            seq += 2
+            try await recorder.update(sessionID: "s1", state: .thinking, turnStartedAt: .now)
+            try await store.writePiTranscript(PiTranscript(sessionID: "s1", messages: [
+                PiChatMessage(sessionID: "s1", entryID: "o\(seq)", seq: seq - 1, role: role, text: text, at: time, deliveryID: delivery),
+                PiChatMessage(sessionID: "s1", entryID: "a\(seq)", seq: seq, role: .pi, text: "好", at: .now),
+            ], recap: PiRecap(lastPrompt: text, lastReply: "好", answeredAt: .now)))
+            return mark
         }
-        // 他刚在会话里说过话：同时标着他在场
-        #expect(try await settledLine(after: try await store.lastWrite()).contains("[歇下 · 他说的 · 他在场：刚在里面说过话] 修登录"))
+        /// 这一轮做完歇下：报给 Cue 的那一行（没报为 nil），与它是不是归他
+        func settle(after mark: Int) async throws -> (line: String?, his: Bool) {
+            try await recorder.update(sessionID: "s1", state: .settled)
+            let changes = try await store.cueChanges(after: CueMarks(mark))
+            let envelope = CueEnvelope.render(CueEnvelope.Input(
+                now: .now, contextUsed: nil, projects: [], changes: changes.due, board: try await store.cueBoard(), waiting: [], wake: .sessionActivity))
+            return (envelope.split(separator: "\n").first { $0.hasPrefix("- [歇下") }.map(String.init), changes.held["s1"] != nil)
+        }
 
-        let mark = try await store.lastWrite()
-        try await recorder.update(sessionID: "s1", state: .thinking, turnStartedAt: .now)  // 机器消息开的这一轮在跑
-        try await store.writePiTranscript(PiTranscript(sessionID: "s1", messages: [
-            PiChatMessage(sessionID: "s1", entryID: "m3", seq: 3, role: .machine, text: "<firecode_master_event>\n子代理交回：测试全过\n</firecode_master_event>", at: .now),
-        ], recap: PiRecap(lastPrompt: "别动登录页样式", lastReply: "测试全过", answeredAt: .now)))
+        // 他 11 分钟前在终端里说的那一轮：他已不在场，报给 Cue，标"他说的"
+        var stop = try await settle(after: try await open(.user, "先跑测试", at: .now - 11 * 60))
+        #expect(stop.line?.hasPrefix("- [歇下 · 他说的] 修登录") == true && !stop.his)
+
+        // 他刚在 CuePad 里说的那一轮（发送记录不是 Cue 的）：他在场，归他
+        let byPad = UUID()
+        try await store.recordSend("别动登录页样式", to: target, delivery: byPad)
+        stop = try await settle(after: try await open(.user, "别动登录页样式", delivery: byPad))
+        #expect(stop.line == nil && stop.his)
+
+        // 机器消息开的一轮：在跑时 Cue 照常能插话；停下时他在场，同样归他
+        let machine = try await open(.machine, "<firecode_master_event>\n子代理交回：测试全过\n</firecode_master_event>")
         let said = try #require(await CueTools(store: store, wait: 0).call("task", ["action": "say", "task": task.id.uuidString, "text": "顺便跑一遍 lint"]))
         #expect(!said.isError && said.text.contains("对「修登录」的会话说"))
-        let line = try await settledLine(after: mark)
-        #expect(line.contains("[歇下 · 他在场：刚在里面说过话] 修登录") && !line.contains("他说的"))
+        stop = try await settle(after: machine)
+        #expect(stop.line == nil && stop.his)
+
+        // Cue 说的那句开的一轮：他刚在里面说过话也归 Cue，照常报，不标"他说的"
+        let byCue = UUID()
+        try await store.recordSend("再跑一遍", to: target, delivery: byCue, origin: .known(.cue))
+        stop = try await settle(after: try await open(.user, "再跑一遍", delivery: byCue))
+        #expect(stop.line?.hasPrefix("- [歇下] 修登录") == true && !stop.his)
     }
 
     /// Cue 值班时，会话等的回答 CuePad 答得了就归 Cue：显示"等 Cue 回答"、不算进"等你 N"、不给手机推；答不了的照样等你。

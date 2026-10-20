@@ -69,7 +69,7 @@ public enum CueEnvelope {
     lines.append("项目：" + (input.projects.isEmpty ? "无" : input.projects.map { $0.name + ($0.hasFolder ? "" : "（没绑文件夹）") }.joined(separator: "、")))
 
     lines.append("变化（上次醒来之后）：" + (input.changes.isEmpty ? "无" : ""))
-    lines += input.changes.map { "- \(change($0, now: input.now))" }
+    lines += input.changes.map { "- \(change($0))" }
 
     let active = input.board.tasks.filter(\.isActive), sessions = input.board.sessions
     lines.append("在做 \(active.count + sessions.count) 件" + (active.isEmpty && sessions.isEmpty ? "" : "："))
@@ -127,7 +127,7 @@ public enum CueEnvelope {
     ].compactMap { $0 } + kept.reversed()
   }
 
-  private static func change(_ change: CueChange, now: Date) -> String {
+  private static func change(_ change: CueChange) -> String {
     let label: String =
       switch change.kind {
       case .settled: change.interrupted ? state(.known(.interrupted)) : "歇下"
@@ -137,21 +137,10 @@ public enum CueEnvelope {
       case .done: "完成"
       case .stalled: "等子代理 \(Int(PiSessionState.stallAfter / 60)) 分钟没动静"
       }
-    let tags = [label, change.byUser ? "他说的" : nil, presence(change, now: now)].compactMap(\.self)
-    var text = "[\(tags.joined(separator: " · "))] \(where_(change))"
+    var text = "[\(label)\(change.byUser ? " · 他说的" : "")] \(where_(change))"
     if let detail = change.detail, !detail.isEmpty { text += "：\(clip(detail, 120))" }
     if let reply = change.recap?.lastReply { text += " · 回复：\(clip(reply, 160))" }
     return text
-  }
-
-  /// 会话停着（`CueChange.isStop`）时他此刻在不在场（`SessionPresence`）：在场时 Cue 不插嘴，他离开时还停着会再报一次（`CueChange.away`）。
-  private static func presence(_ change: CueChange, now: Date) -> String? {
-    guard change.isStop else { return nil }
-    if change.away { return "他已离开" }
-    guard let presence = change.presence else { return "他不在场" }
-    if presence.viewing { return "他在场：正开着这个会话" }
-    let minutes = presence.spokeAt.map { Int(now.timeIntervalSince($0) / 60) } ?? 0
-    return "他在场：" + (minutes < 1 ? "刚在里面说过话" : "\(minutes) 分钟前在里面说过话")
   }
 
   /// 看板上的一件事（信封与 peek 共用）：在做的只有一个叶子时一行；同时在做几步时，头一行之后每步一行（缩进，带步骤的短 id）。

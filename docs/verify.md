@@ -113,6 +113,7 @@ TEST_RUNNER_CUEPAD_CUE_EVAL=1 TEST_RUNNER_CUEPAD_CUE_EVAL_OUT=/tmp/cue-eval/afte
 
 - 大脑是真的 Claude Code，用这台 Mac 上 Claude Code 自己的登录（`ClaudeLogin`，同 Kit 的真 Claude 用例），配置目录在临时目录；默认 opus · medium；`TEST_RUNNER_CUEPAD_CUE_EVAL_MODEL`、`TEST_RUNNER_CUEPAD_CUE_EVAL_EFFORT` 换。xcodebuild 只把 `TEST_RUNNER_` 开头的变量交给测试进程。
 - 输出目录里每个场景一个 .md（信封、工具调用与结果、Cue 写的消息、判定），`summary.md` 汇总，`system-prompt.md` 是这次的系统提示。有场景没过时命令非零退出，输出照样写完。
+- 每个场景的资料库留在 `<场景>.library`：`CUEPAD_SHOT_LIBRARY=<它> apple/scripts/xc.sh shot mac out.png -- -CuePadScene cue` 看这一场在 Cue 页上的样子。
 - 场景与判定在 `CueEvalTests` 里；模型每次答得不完全一样，结论看两遍以上。
 
 ## 崩溃诊断

@@ -57,8 +57,8 @@ nonisolated struct CueTiming: Sendable {
 /// 5. 有会话的事或不归没做完的事的会话有变化（`CueStore.cueChanges`：歇下的带着这一轮的回复，含会话等回答、Cue 自己发起的请求没能执行）：马上醒。
 ///    一轮在跑时来的变化等这一轮做完就醒，一起看（不另攒窗口：一轮的时长就是合批）。等子代理不是变化（子代理的结果交回、会话为它跑完那一轮歇下才是）；
 ///    等子代理停住（`CueChange.Kind.stalled`）不随写入出现，按下一次停住的时刻（`CueStore.nextCueStall`）排定时器，到点对账时它就在变化里。
-///    停下时他在场（`SessionPresence`）的那几次记下（`Progress.held`）：Cue 不插嘴；他离开时会话还停在那一次、也没留给他，就再报一次叫醒它
-///    （`CueStore.cueAwayChanges`）；还在场就按最早的离开时刻排一次对账，设备开着会话的记录一变也重对。
+///    会话停下归谁接手由 `CueStore.cueChanges` 定：归他的不叫醒 Cue，记下（`Progress.held`）等他离开再报；还在场就按最早的离开时刻排一次对账，
+///    设备开着会话的记录一变也重对。
 /// 6. 空闲巡视：没有在做的事（`CueStore.cueBoardActive`）、你很久没说话、不在打扰时段（`CueTiming.quietHours`），每段空闲最多一次、每天最多 3 次。
 /// 7. 记忆有待合并的块且空闲够久：醒来附上合并提示（同一块一个班次只请一次）。
 ///
@@ -68,7 +68,8 @@ nonisolated struct CueTiming: Sendable {
 /// 回复写成什么看这一轮为什么醒（`author(of:)`）：你发起的（含插进来的话）与刚启用的写成 `cue`，其余 Cue 自己醒来的写成 `note`（折成灰色一行、不推送），
 /// 换新后的第一轮跟写下交接的那一轮一样；
 /// Cue 自己醒来的一轮（含刚启用）里已经用 tell 对你说过话的，最后的回复不再写（几乎是同一句）；你发起的一轮最后的回复就是答复，照写
-/// （`CueStore.replyCueRound`）。
+/// （`CueStore.replyCueRound`）。Cue 被会话的动静叫醒、这一轮什么都没写（没有经过、动态、对你说的话），补一行动态"看过「会话名」，不打算行动"，
+/// 连着的几轮并成一行（`CueStore.noteCueGlance`）。
 /// 你发来的图按发给会话的同一个转换交给大脑（文字里的图片引用照留，Cue 能原样转给会话）；模型看不了图就不交，并对你说一声。
 /// 基线（变化从哪算起）只在一轮做完且没出错时前移：出错的一轮里 Cue 没看完的变化下次还在。变化按本机写入序号分新旧
 /// （`CueStore.lastWrite`），不按事件时刻：事件可能晚到（机器忙、从别的设备同步来），时刻早于上次醒来也照样是新的。
@@ -158,7 +159,7 @@ final class CueKeeper {
         var patrolledIdle: Date?
         /// 已为哪一次启用（`CueProfile.enabledAt`）醒来过
         var greeted: Date?
-        /// 报给 Cue 时他在场的那几次停下：会话 id → 那次停下的起点（`CueStore.cueAwayChanges`）
+        /// 归他、等他离开再报的停下：会话 id → 那次停下的起点（`CueChanges.held`）
         var held: [String: Date] = [:]
     }
 
@@ -178,7 +179,7 @@ final class CueKeeper {
         var mark: Int?
         /// 会话的动静叫醒的这一轮：叫醒它的那几个会话（随此刻的状态写进库，各端画"叫醒"的那一下）
         var woke: CueWoke?
-        /// 这一轮做完且没出错后，还要等他离开再报的那几次停下（`Progress.held`）
+        /// 这一轮做完且没出错后，还要等他离开再报的那几次停下（`Progress.held`）：这一轮报了的不再记，没做完下次照样报
         var held: [String: Date]?
 
         /// 这一轮是在回答你：你发起的、中途插进了你的话，或接着你发起的那一轮（换新后写成 cue 的）。不是的（Cue 自己醒来、
@@ -236,6 +237,8 @@ final class CueKeeper {
     /// 上一轮的回复写成谁的（换新时接着用）
     private var lastTurnAuthor: CueAuthor = .note
     private var lastFailure: String?
+    /// 最近补的那一行"看过……，不打算行动"：下一轮也什么都没写就并进它
+    private var glance: CueGlance?
     private var setback: Setback?
     private var timer: Task<Void, Never>?
     /// 做完的几轮，旧的在前，至多 `roundsKept`
@@ -480,6 +483,7 @@ final class CueKeeper {
             } else {
                 setback = nil
                 await markTold(finished.round)
+                await noteGlance(finished)
                 if let held = finished.held { progress.held = held }
                 await advanceBaseline(from: finished.mark, seen: finished.round.startedAt)
             }
@@ -515,12 +519,19 @@ final class CueKeeper {
         }
     }
 
-    /// 该报给 Cue 的变化：基线之后有会话的事里的（到 `now` 为止到了的停住），加上记着的在场停下里他已离开、再报一次的
-    /// （`CueStore.cueAwayChanges`；同一会话已在前者里的不重复）。`away` 带着还在场的最早离开时刻与作废的那几次。
-    private func changes(at now: Date = .now) async throws -> (all: [CueChange], away: (changes: [CueChange], next: Date?, dropped: Set<String>)) {
-        let recorded = try await setup.store.cueChanges(after: progress.marks ?? CueMarks(0), at: now)
-        let away = try await setup.store.cueAwayChanges(progress.held)
-        return (recorded + away.changes.filter { change in !recorded.contains { $0.session?.sessionID == change.session?.sessionID } }, away)
+    /// 被会话的动静叫醒、这一轮什么都没写：补一行"看过……，不打算行动"（`CueStore.noteCueGlance`）。
+    private func noteGlance(_ turn: Turn) async {
+        guard !turn.answersYou, let sessions = turn.woke?.sessions, !sessions.isEmpty else { return }
+        do {
+            glance = try await setup.store.noteCueGlance(sessions, startedAt: turn.round.startedAt, after: glance) ?? glance
+        } catch {
+            Self.log.error("Cue 看过会话的那一行动态没能写进资料库：\(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// 该报给 Cue 的变化：基线之后的（到 `now` 为止到了的停住），与记着的归他的停下（`CueStore.cueChanges`）。
+    private func changes(at now: Date = .now) async throws -> CueChanges {
+        try await setup.store.cueChanges(after: progress.marks ?? CueMarks(0), held: progress.held, at: now)
     }
 
     /// 一轮做完、没出错：会话的动静从醒来时读到的写入序号之后算（这一轮里才写进库的下次还在，哪怕事件时刻更早），
@@ -537,7 +548,7 @@ final class CueKeeper {
 
     /// Cue 自己醒来的一轮出错：第一次出错（且不是额度、登录）隔一会儿再醒一次，否则等新变化。
     private func setBack(_ failure: String, retrying woke: (wake: CueWake, extra: String?), as author: CueAuthor) async {
-        let latest = try? await changes().all.map(\.seq).max()
+        let latest = try? await changes().due.map(\.seq).max()
         let retry = setback == nil && Self.retryable(PiErrorSummary(failure))
         setback = Setback(
             latest: latest, since: .now, retryAt: retry ? .now + setup.timing.retryWake.seconds : nil, wake: woke.wake, extra: woke.extra, author: author)
@@ -616,10 +627,10 @@ final class CueKeeper {
             if let stall = try await store.nextCueStall(after: now) { deadlines.append(stall) }
 
             let timing = setup.timing
-            let (changes, away) = try await changes(at: now)
+            let changes = try await self.changes(at: now)
             // 出错之后：有新变化就是新事件，照常；没有就等重试的时刻，过了这一次就只等新变化
             if let held = setback {
-                if changes.contains(where: { $0.seq > held.latest ?? Int.min || ($0.kind == .stalled && $0.at > held.since) }) {
+                if changes.due.contains(where: { $0.seq > held.latest ?? Int.min || ($0.kind == .stalled && $0.at > held.since) }) {
                     setback = nil
                 } else if let retryAt = held.retryAt, now >= retryAt {
                     setback?.retryAt = nil
@@ -628,14 +639,15 @@ final class CueKeeper {
                     return schedule([deadlines.min(), held.retryAt].compactMap { $0 }.min())
                 }
             }
-            if !away.dropped.isEmpty {
-                progress.held = progress.held.filter { !away.dropped.contains($0.key) }
-                save()
-            }
-            if !changes.isEmpty {
+            if !changes.due.isEmpty {
                 return _ = try await wakeUp(.sessionActivity)
             }
-            if let next = away.next { deadlines.append(next) }
+            // 没叫醒 Cue：新归他的记下，不再归他的划掉（叫醒的一轮做完才换）
+            if changes.held != progress.held {
+                progress.held = changes.held
+                save()
+            }
+            if let lapse = changes.lapse { deadlines.append(lapse) }
 
             let lastSpoke = messages.last { $0.author == .known(.you) }?.createdAt
             let idleSince = lastSpoke ?? profile.enabledAt ?? shift.startedAt
@@ -724,19 +736,15 @@ final class CueKeeper {
             resume = try await store.cueResume(limit: CueEnvelope.resumeMessages)
             resume?.messages.removeAll { delivering.contains($0.id) }
         }
-        let (changes, away) = try await changes(at: now)
-        // 这一轮报了在场的，记下等他离开；他已离开的报过了、作废的不再记
-        let reported = Set(away.changes.compactMap(\.session?.sessionID))
-        var held = progress.held.filter { !away.dropped.contains($0.key) && !reported.contains($0.key) }
-        for change in changes where change.presence != nil { if let session = change.session { held[session.sessionID] = session.stateSince } }
+        let changes = try await self.changes(at: now)
         let envelope = CueEnvelope.render(CueEnvelope.Input(
             now: now, contextUsed: shift.context?.used, projects: try await store.cueProjects(),
-            changes: changes, board: board, waiting: try await store.cueMessagesWaitingForYou(), left: try await store.cueState()?.left ?? [],
+            changes: changes.due, board: board, waiting: try await store.cueMessagesWaitingForYou(), left: try await store.cueState()?.left ?? [],
             wake: wake, resume: resume))
         var woke: CueWoke?
         if wake == .sessionActivity {
             var seen = Set<String>()
-            woke = CueWoke(at: now, sessions: changes.compactMap(\.session?.sessionID).filter { seen.insert($0).inserted })
+            woke = CueWoke(at: now, sessions: changes.due.compactMap(\.session?.sessionID).filter { seen.insert($0).inserted })
         }
         var parts = [envelope]
         if let extra { parts.append(extra) }
@@ -754,7 +762,7 @@ final class CueKeeper {
             $0.resumed = true
             $0.turn = Turn(
                 author: author, round: round, selfStarted: wake == .message ? nil : (wake, extra), delivered: delivering, mark: mark, woke: woke,
-                held: held)
+                held: changes.held)
         }
         save()
         try await markDelivered(delivering)

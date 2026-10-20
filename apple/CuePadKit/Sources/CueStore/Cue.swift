@@ -21,7 +21,7 @@ public enum CueAuthor: String, Sendable, CaseIterable {
 }
 
 /// Cue 页的对话：Cue 对话唯一的事实源（不读运行时的会话文件）。写入后只有提问的结束（`answer`、`answeredAt`）与送达（`deliveredAt`）会变；
-/// 一轮的经过那一行（`round`，或没有正文的 `note`）随这一轮做到哪改它的清单。
+/// 一轮的经过那一行（`round`，或没有正文的 `note`）随这一轮做到哪改它的清单；"看过……，不打算行动"那一行动态并进紧接着的下一轮（`CueStore.noteCueGlance`）。
 /// 带选项的是提问，只有一个状态：`answeredAt` 为空是开着，有值是结束了（`CueStore.endCueQuestion`，结束了不再变）。
 public struct CueMessage: Identifiable, Equatable, Sendable {
   public let id: UUID
@@ -61,6 +61,12 @@ public struct CueMessage: Identifiable, Equatable, Sendable {
   /// 手机推送的标志（明文、可查询，服务端订阅按它出通知）：值班的 Mac 按通知规则置位，随那一次上传送出后清掉，
   /// 远端带回来的不留（同 `PiSessionState.notify`，见 docs/sync.md「Agent 与 Cue 的通知」）。
   var notify: Bool = false
+}
+
+/// Cue 看过会话、不打算行动的那一行动态（`CueStore.noteCueGlance`）：哪一行，与并进去的会话（Pi 的会话 id）。
+public struct CueGlance: Equatable, Sendable {
+  public var row: UUID
+  public var sessions: [String]
 }
 
 /// 新上下文接上的（`CueStore.cueResume`）：最近一份交接备忘与它之后的对话。
