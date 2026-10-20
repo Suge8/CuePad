@@ -401,7 +401,7 @@ private struct CueRow: View, Equatable {
         case .cue(let message, _):
             CueSays(message: message, task: ref, shots: shots, open: { opened = $0 }, joined: joined, arrives: !swapsInPlace)
         case .result(let message, _):
-            if let ref { CueResultCard(message: message, ref: ref, shots: shots) { opened = $0 } }
+            CueSays(message: message, task: ref, shots: shots, open: { opened = $0 }, card: true)
         case .notes(let notes):
             CueNotes(notes: notes, live: live).padding(.leading, CueBubble.noteInset)
         case .process(let message):

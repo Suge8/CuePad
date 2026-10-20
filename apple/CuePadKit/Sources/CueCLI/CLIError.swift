@@ -33,7 +33,7 @@ extension CLIError {
       self = .invalid("这条不是冲突副本（cuepad conflicts list 查看副本 id）")
     case CueStoreError.readOnlyLibrary:
       self = CLIError(kind: .readOnly, message: "资料库是只读的，写不进去：多半是 Agent 的沙箱挡住了写入（如 Codex），在沙箱外重跑这条命令")
-    case CueStoreError.previewUnreadable, CueStoreError.previewTooLarge, CueStoreError.previewUnsupported:
+    case CueStoreError.previewUnreadable, CueStoreError.previewTooLarge, CueStoreError.previewUnsupported, CueStoreError.previewTitle:
       self = .invalid(error.localizedDescription)
     default:
       self = CLIError(kind: .store, message: "\(error)")

@@ -1,22 +1,26 @@
 import CueStore
 import SwiftUI
 
-/// 会话发到手机看的文件在会话页里只有这一个样子（`PreviewBatch` 里的一排）；Cue 点名的图（提问卡、结果卡）是另一种：方形缩略图配看什么（`CueShots`），共用一张一张的 `DeliverableTile`。
+/// 会话页里 Agent 一次发来看的几个（同一时刻的一批，`PiChat.entries`）：一张纸，上面是交付物；会话发到手机的文件在会话页里只有这一个样子。
+/// Cue 点名的图（提问卡、结果卡）是另一种：方形缩略图配看什么（`CueShots`），共用一张一张的 `DeliverableTile`。
 /// 一份是整宽主图（按内容真实比例夹在 4:3～16:9），两份并排（各按真实比例，不高过主图），三份起横向滑、各按真实比例定宽同高，放不下的露出一截；
-/// 每张下面写它的标题（Agent 发时每份一句，至多两行）与类型（时长、页数）。缩略图全是真内容（`DeliverableLooks`）。
+/// 每张下面写它的标题（Agent 发时每份一句、同批各不相同，至多两行）与类型（时长、页数）。缩略图全是真内容（`DeliverableLooks`）。
 /// 文件还在从 iCloud 下载时画面上写"下载中"、点不开，到了自动换成内容。点一张交给 `open`，全屏页从这张放大出来（`previewPresenter`）。
-struct DeliverableStrip: View {
+struct PreviewBatch: View {
     let previews: [PiPreview]
     /// 放大与缩回按"哪一组 + 哪一份"认那张缩略图
     let group: String
-    /// 横向滑的一排越过所在纸面的内边距、滑到纸边（纸的内边距）
-    var bleed: CGFloat = 0
     let open: (PiPreview) -> Void
 
     var body: some View {
+        strip
+            .padding(Self.inset)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .paper(radius: 16)
+    }
+
+    @ViewBuilder private var strip: some View {
         switch previews.count {
-        case 0:
-            EmptyView()
         case 1:
             tile(previews[0], .hero(maxHeight: Self.heroMaxHeight))
         case 2:
@@ -24,15 +28,15 @@ struct DeliverableStrip: View {
                 ForEach(previews) { tile($0, .column(maxHeight: Self.heroMaxHeight)) }
             }
         default:
-            // 懒加载：一个会话一次可能发几十份，只建看得见与附近的几张。从最前面滑起、同高，位置不靠估
+            // 懒加载：一个会话一次可能发几十份，只建看得见与附近的几张。从最前面滑起、同高，位置不靠估；越过纸的内边距滑到纸边
             ScrollView(.horizontal) {
                 LazyHStack(alignment: .top, spacing: Self.gap) {
                     ForEach(previews) { tile($0, .strip(height: Self.stripHeight)) }
                 }
             }
             .scrollIndicators(.hidden)
-            .contentMargins(.horizontal, bleed, for: .scrollContent)
-            .padding(.horizontal, -bleed)
+            .contentMargins(.horizontal, Self.inset, for: .scrollContent)
+            .padding(.horizontal, -Self.inset)
             // 这一排滑动后滚动区不裁前沿（三端实测，与内容边距、负内边距、scrollClipDisabled(false) 都无关）：滑过去的缩略图画到纸外、
             // 压在桌面上。明写裁到滚动区的框，也就是纸边
             .clipShape(.rect)
@@ -41,11 +45,11 @@ struct DeliverableStrip: View {
 
     private func tile(_ preview: PiPreview, _ shape: DeliverableTile.Shape) -> some View {
         DeliverableTile(
-            preview: preview, label: Self.label(of: preview, in: previews), shape: shape, captioned: true,
-            zoom: PreviewZoomKey(group: group, preview: preview.id), open: open)
+            preview: preview, label: preview.title, shape: shape, captioned: true, zoom: PreviewZoomKey(group: group, preview: preview.id), open: open)
     }
 
     static let gap: CGFloat = 8
+    private static let inset: CGFloat = 12
 
     #if os(macOS)
     /// 三份起那一排的高
@@ -55,18 +59,6 @@ struct DeliverableStrip: View {
     private static let stripHeight: CGFloat = 132
     private static let heroMaxHeight: CGFloat = 260
     #endif
-
-    /// 一份在缩略图下与全屏页顶上的写法：几份同一个标题时写各自的文件名（分得开哪张是哪张），否则写标题。
-    static func label(of preview: PiPreview, in previews: [PiPreview]) -> String {
-        guard previews.contains(where: { $0.id != preview.id && $0.title == preview.title }) else { return preview.title }
-        return ((preview.name as NSString).lastPathComponent as NSString).deletingPathExtension
-    }
-
-    /// 几份共用的标题（会话页那张卡写在最上面）；一份或各有各的标题时为 nil。
-    static func heading(_ previews: [PiPreview]) -> String? {
-        guard previews.count > 1, let title = previews.first?.title, previews.allSatisfy({ $0.title == title }) else { return nil }
-        return title
-    }
 }
 
 /// 放大与缩回认的那张缩略图。
@@ -292,28 +284,5 @@ private extension View {
         #else
         self
         #endif
-    }
-}
-
-/// 会话页里 Agent 一次发来看的几个（同一时刻的一批）：一张纸，几份共用的标题写在最上面，下面是交付物。
-struct PreviewBatch: View {
-    let previews: [PiPreview]
-    let group: String
-    let open: (PiPreview) -> Void
-    @Environment(\.palette) private var palette
-
-    private static let inset: CGFloat = 12
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            if let heading = DeliverableStrip.heading(previews) {
-                Text(heading).font(Typography.body.weight(.medium)).foregroundStyle(palette.ink).lineLimit(2)
-                    .accessibilityAddTraits(.isHeader)
-            }
-            DeliverableStrip(previews: previews, group: group, bleed: Self.inset, open: open)
-        }
-        .padding(Self.inset)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .paper(radius: 16)
     }
 }

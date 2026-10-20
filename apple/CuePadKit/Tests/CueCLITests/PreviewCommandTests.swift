@@ -44,6 +44,8 @@ import Testing
     // 每个文件都要一句标题：少了不收
     let untitled = await sb.run("show", try page(sb), try page(sb, "b.html"), "--title", "登录页", environment: env)
     #expect(untitled.code != 0 && untitled.err.contains("--title"))
+    let repeated = await sb.run("show", try page(sb), try page(sb, "b.html"), "--title", "登录页", "--title", "登录页", environment: env)
+    #expect(repeated.code != 0 && repeated.err.contains("各不相同"))
     let missing = await sb.run("show", sb.directory.appending(path: "nope.html").path, "--title", "x", environment: env)
     #expect(missing.code != 0 && missing.err.contains("nope.html"))
     let archive = await sb.run("show", try page(sb, "a.zip", "zip"), "--title", "x", environment: env)

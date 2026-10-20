@@ -6,10 +6,10 @@ extension Command {
 
   static let show = Command(
     path: ["show"], summary: "把文件发到用户手机上的 CuePad：当前 Agent 会话的对话里出现一张卡片", arguments: "<文件…> --title <标题>…",
-    options: [Opt("title", "每个文件一个，按文件的先后：一句说清这份是什么、看哪里（宽不过 \(PiPreview.titleLimit)，约 \(PiPreview.titleLimit / 2) 个汉字）", value: "标题")],
+    options: [Opt("title", "每个文件一个、各不相同，按文件的先后：一句说清这份是什么、看哪里，用和用户对话的语言（宽不过 \(PiPreview.titleLimit)，约 \(PiPreview.titleLimit / 2) 个汉字）", value: "标题")],
     notes: """
       会话从 Agent 给每条命令带的环境变量认出（\(sessionVariables.joined(separator: "、"))）；不在 Agent 的命令里运行会报错，不猜是哪个会话；在一家的命令里又起了另一家时，按上面的先后取第一个。
-      一次给几个文件是同一张卡，点开后左右切换。缩略图下与全屏页顶上写的是标题，不是文件名：用和用户对话的语言写，如 --title "深色：会话列表的分组标题"。
+      一次给几个文件是同一张卡，点开后左右切换；缩略图下与全屏页顶上写的是标题，不是文件名。
       可发：\(PiPreviewKind.supportedList)。网页与 Markdown 在 CuePad 里打开，其余用系统的快速查看；单个文件不超过 \(PiPreview.maxBytes / 1_000_000) MB。
       网页只读、不联网、读不到别的文件；outsideReferences 是页面引用了、手机上因此缺失的地址。经 iCloud 同步，CuePad.app 需要在运行。
       \(Schema.output("[Preview {id, session, title, name, kind, bytes, outsideReferences}]", "kind：\(PiPreviewKind.allCases.map(\.rawValue).joined(separator: "、"))"))

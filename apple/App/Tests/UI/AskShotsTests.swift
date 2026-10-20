@@ -20,7 +20,7 @@ struct AskShotsTests {
             try Data(name.utf8).write(to: file)
             return file
         }
-        return try await store.addPreviews(files.map { (url: $0, title: title) }, sessionID: "s1").map(\.preview)
+        return try await store.addPreviews(files.enumerated().map { (url: $1, title: "\(title) \($0 + 1)") }, sessionID: "s1").map(\.preview)
     }
 
     @Test func 提问卡与结果卡只带点名的图() async throws {
