@@ -25,7 +25,7 @@ struct CommandProgressTests {
         let local = SendTarget(kind: .piSession, name: "atlas", ref: "atlas")
 
         let compact = try await store.requestDelivery("/compact", to: local, on: TestApp.hostID, mode: .command)
-        let failed = try await services.store.outcome(of: compact.id)
+        let failed = try await services.store.outcome(of: compact)
         #expect(try await progress()?.text(sync: app.services.syncStatus) == "/compact 没执行成功：Nothing to compact (session too small)")
 
         let said = try #require(failed.completedAt).addingTimeInterval(0.001)
@@ -35,9 +35,9 @@ struct CommandProgressTests {
         #expect(try await progress() == nil)
 
         let again = try await store.requestDelivery("/compact", to: local, on: TestApp.hostID, mode: .command)
-        _ = try await services.store.outcome(of: again.id)
+        _ = try await services.store.outcome(of: again)
         #expect(try await progress() != nil)
-        _ = try await services.store.outcome(of: try await store.requestDelivery("你好", to: local, on: TestApp.hostID, mode: .send).id)
+        _ = try await services.store.outcome(of: try await store.requestDelivery("你好", to: local, on: TestApp.hostID, mode: .send))
         #expect(try await progress() == nil)
         // 时间只到毫秒：同一毫秒里先命令后说话，按写下的先后，最新的仍是那句话
         var requests = try await store.deliveryRequests(toSession: "atlas")

@@ -37,6 +37,6 @@ extension Workspace {
     /// 请 `host` 那台 Mac 绑定（或解除）并等它的结果：没成功时抛出那台 Mac 写回的原因。
     func requestFolder(_ bind: PiBind, title: String, on host: String) async throws {
         let request = try await services.requestBind(bind, title: title, on: host)
-        if let failure = try await services.store.outcome(of: request.id).failure { throw SendError.notDelivered(failure) }
+        if let failure = try await services.store.outcome(of: request).failure { throw SendError.notDelivered(failure) }
     }
 }

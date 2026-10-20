@@ -125,7 +125,7 @@ struct HistoryRulesTests {
 
         // 手机发话（投送请求写给这台 Mac）
         let request = try await rig.store.requestDelivery("手机来的话", to: resting.target, on: resting.hostID, mode: .send)
-        let result = try await rig.services.store.outcome(of: request.id)
+        let result = try await rig.services.store.outcome(of: request)
         #expect(result.failure == nil)
         try await eventually("手机发话得到回复", timeout: Self.piStep) { try await rig.replies(of: sessionID).last == "ECHO 手机来的话 IMAGES[]" }
         try await eventually("又一次闲置退出", timeout: Self.piStep) { rig.bridge.session(sessionID: sessionID) == nil }
@@ -133,7 +133,7 @@ struct HistoryRulesTests {
 
         // 用户在 CuePad 里结束它：这时才进历史
         let end = try await rig.services.end(again)
-        #expect(try await rig.services.store.outcome(of: end.id).failure == nil)
+        #expect(try await rig.services.store.outcome(of: end).failure == nil)
         try await eventually("结束后进历史", timeout: Self.piStep) { try await rig.records(.ended).map(\.sessionID) == [sessionID] }
         #expect(try await rig.records(.live).isEmpty)
     }

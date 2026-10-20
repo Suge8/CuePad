@@ -356,7 +356,7 @@ public struct CueTools: Sendable {
   private func settled(_ request: DeliveryRequest) async throws -> DeliveryRequest {
     let left = request.createdAt.addingTimeInterval(wait).timeIntervalSinceNow
     let done = try await withThrowingTaskGroup(of: DeliveryRequest?.self) { group in
-      group.addTask { [store] in try await store.outcome(of: request.id) }
+      group.addTask { [store] in try await store.outcome(of: request) }
       group.addTask {
         if left > 0 { try await Task.sleep(for: .seconds(left)) }
         return nil
@@ -365,7 +365,7 @@ public struct CueTools: Sendable {
       return try await group.next() ?? nil
     }
     if let done { return done }
-    return try await store.deliveryRequest(request.id) ?? request
+    return try await store.latest(of: request) ?? request
   }
 
   /// say 带的 model、effort（说话与作答之前先换上）；model 的写法同 start，只写 id 时提供方按会话是哪家补。都没带为 nil。

@@ -179,7 +179,7 @@ private struct ChatSegment: View, Equatable {
         switch entry.role {
         case .user:
             UserBubble(stored: entry.text, look: .session, highlighted: entry.id == highlight, fromCue: entry.fromCue) {
-                MessageActions(text: entry.text, kind: .mine, session: session)
+                MessageActions(text: PiSkillCall.shown(entry.text), kind: .mine, session: session)
             }
                 // 你的话开始新的一轮：轮与轮之间比轮内（你的话与它的回答）松一截
                 .padding(.top, Self.turnGap)

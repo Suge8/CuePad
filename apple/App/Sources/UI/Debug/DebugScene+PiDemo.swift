@@ -199,7 +199,7 @@ extension DebugScene {
     }
 
     /// 演示对话：notes 是几轮做完的对话（带工具活动与用时、Markdown），atlas 在处理新的话，homepage、rename 停在问题上，
-    /// relay 在另一台 Mac 上（发过去的一条已送达还没进对话、一条没能送达）。
+    /// relay 在另一台 Mac 上（第二句是斜杠技能，存的是 Pi 展开后的样子；发过去的一条已送达还没进对话、一条没能送达）。
     private static func seedChats(_ store: CueStore) async {
         let now = Date.now
         func chat(_ sessionID: String, _ turns: [(you: String, pi: String?, tools: PiChatMessage.Tools?, minutes: Double)], startedMinutesAgo: Double) async {
@@ -258,8 +258,24 @@ extension DebugScene {
         ], startedMinutesAgo: 3)
         await chat("relay", [
             ("看一下线上库的迁移有没有卡住", "迁移跑到第 14 步停住了：`add_index_on_cards` 在等锁。现在没有别的写入，可以安全重跑。", .init(steps: 3, items: [.init(kind: .command, target: "psql -c 'select * from schema_migrations order by id desc limit 3'"), .init(kind: .command, target: "psql -c 'select pid, state, query from pg_stat_activity'"), .init(kind: .command, target: "psql -c 'select * from pg_locks where not granted'")]), 1.2),
+            (Self.skillSaid, "就像排队上厕所：建索引要把整张表锁一下，可前面有人一直占着没出来，它只能在门口等。占着的人走了，它马上就能进去。", nil, 0.3),
         ], startedMinutesAgo: 10)
     }
+
+    /// "/skill:eli5 为什么在等锁" 经 Pi 展开后进会话文件的样子（`PiSkillCall`）。
+    private static let skillSaid = """
+        <skill name="eli5" location="/Users/demo/.agents/skills/eli5/SKILL.md">
+        References are relative to /Users/demo/.agents/skills/eli5.
+
+        # 用大白话讲
+
+        - 先给一句结论，再打一个生活里的比方
+        - 不用术语；非用不可时当场解释
+        - 三句话以内讲完
+        </skill>
+
+        为什么在等锁
+        """
 
     /// `-CuePadDemoMac YES`：演示库里一台会回话的"demo-mac"。发给它的会话的话，像真的经同步那样慢慢走完：
     /// 等一会儿才被接手（发送中）→ 送达用一会儿（送达中）→ 会话状态再晚一点才同步过来（思考中）→ 这一轮做完（该你了），

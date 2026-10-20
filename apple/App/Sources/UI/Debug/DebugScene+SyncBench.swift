@@ -89,7 +89,7 @@ enum SyncBench {
             let request = try await services.store.requestDelivery(
                 "同步测量第 \(round) 句", to: session.target, on: session.hostID)
             let written = ContinuousClock.now
-            async let done = result(of: request.id, in: services.store)
+            async let done = result(of: request, in: services.store)
             await services.upload(request.id)
             let uploaded = (instant: ContinuousClock.now, date: Date.now)
             guard let (result, seen) = try await done else {
@@ -110,7 +110,7 @@ enum SyncBench {
 
     /// 等请求有结果，最多 `timeout`；超时返回 nil。同时记下本机看到结果的时刻。
     private static func result(
-        of request: DeliveryRequest.ID, in store: CueStore
+        of request: DeliveryRequest, in store: CueStore
     ) async throws -> (DeliveryRequest, seenAt: (instant: ContinuousClock.Instant, date: Date))? {
         try await withThrowingTaskGroup(of: (DeliveryRequest, seenAt: (instant: ContinuousClock.Instant, date: Date))?.self) { group in
             group.addTask {

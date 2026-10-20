@@ -54,6 +54,32 @@ public struct PiEnvelope: Equatable, Sendable {
   }
 }
 
+/// 你用斜杠技能说的一句（`/skill:名字 参数`）：Pi 把它展开成 `<skill name="名字" location="…">\n…正文…\n</skill>` 再接上参数交给模型，
+/// 会话文件里只有展开后的样子。CuePad 写回你发的样子（`line`）：会话页的气泡、会话名与摘要都写它，正文收着、在气泡下点开看。
+/// 展开格式随 Pi（1.3 的 `_expandSkillCommand`）；正文开头那行"References are relative to …"是给模型的，不算正文。
+/// 被截断的（扩展报的首条消息只有前 `PiSessionName.firstMessageLimit` 个字）认得出名字就行：没有闭合标签时没有参数。
+public struct PiSkillCall: Equatable, Sendable {
+  public var name: String
+  public var arguments: String
+  public var body: String
+
+  /// 你发的样子
+  public var line: String { arguments.isEmpty ? "/skill:\(name)" : "/skill:\(name) \(arguments)" }
+
+  public static func parse(_ text: String) -> PiSkillCall? {
+    guard let head = text.prefixMatch(of: /<skill name="([^"]+)" location="[^"]*">\n/) else { return nil }
+    let rest = text[head.range.upperBound...]
+    let closing = rest.range(of: "\n</skill>")
+    var body = String(rest[..<(closing?.lowerBound ?? rest.endIndex)])
+    if let note = body.prefixMatch(of: /References are relative to [^\n]*\n\n?/) { body.removeSubrange(note.range) }
+    let arguments = closing.map { rest[$0.upperBound...].trimmingCharacters(in: .whitespacesAndNewlines) } ?? ""
+    return PiSkillCall(name: String(head.1), arguments: arguments, body: body.trimmingCharacters(in: .whitespacesAndNewlines))
+  }
+
+  /// 技能展开的写回你发的样子，其余原样。
+  public static func shown(_ text: String) -> String { parse(text)?.line ?? text }
+}
+
 /// 对话里的系统行有哪几种，唯一的一处：同步记录里只有说话人与正文，种类由正文认出（正文就是它显示的那句）。
 /// 只有压缩换了上下文（对话里画分隔、刻度滑条上一个点）；停下与拒绝只是这一轮怎么结束的（行内一句）。
 public enum PiNotice: String, Sendable, CaseIterable {
@@ -322,6 +348,11 @@ extension CueStore {
   /// 在调用方的写事务里写对话与摘要（原样写会话文件的投影；"已结束的会话没有进行中的提问"在读出时定，见
   /// `PiSessionState.pendingPrompt`）。会话记录还不存在时只写消息。
   func applyTranscript(_ transcript: PiTranscript) throws {
+    // 你发出的话成了对话里的消息，投送请求就到头了：气泡由这条消息接替（`PiChat.outgoing`），请求随之收走，不另等清理。
+    // 没送到的也一样：Agent 晚收下的那句以对话为准
+    try db.run(
+      "DELETE FROM deliveryRequests WHERE mode = '\(DeliveryMode.send.rawValue)' AND id IN (SELECT value FROM json_each(?))",
+      [Self.idList(transcript.messages.compactMap(\.deliveryID))])
     for message in transcript.messages {
       try registerImages(in: message.text)
       if try insert(message, ignoringExisting: true) { continue }
