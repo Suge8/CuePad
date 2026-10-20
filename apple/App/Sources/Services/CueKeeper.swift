@@ -752,7 +752,7 @@ final class CueKeeper {
             woke = CueWoke(at: now, sessions: changes.due.compactMap(\.session?.sessionID).filter { seen.insert($0).inserted })
         }
         var parts = [envelope]
-        if CueFresh.on, !shift.resumed || CueFresh.renewDue(used: shift.context?.used, lastRequest: shift.lastRequest, now: now, cacheLifetime: timing.cacheLifetime.seconds) {
+        if CueFresh.on, !shift.resumed || CueFresh.renewDue(used: shift.context?.used, lastRequest: shift.lastRequest, now: now, cacheLifetime: setup.timing.cacheLifetime.seconds) {
             if shift.resumed {
                 do {
                     try await shift.brain.newSession()
