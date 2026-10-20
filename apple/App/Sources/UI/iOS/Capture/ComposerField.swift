@@ -1,6 +1,7 @@
 #if os(iOS)
 import SwiftUI
 import UIKit
+import UniformTypeIdentifiers
 
 /// 输入框里的多行文字区。不用 `TextField(axis: .vertical)`：输入法组合期拼音整串折行、定字后收回，撑满最大行数后
 /// 内部文字每次都瞬间跳一整行，SwiftUI 的文本框不给滚动的接口；这里的滚动改成短动画，高度由 `sizeThatFits` 决定。
@@ -16,6 +17,8 @@ struct ComposerField: UIViewRepresentable {
     var keys: (ComposerKey) -> Bool = { _ in false }
     /// 回复框的快捷键（`ReplyShortcut`）此刻要做的事；nil 是此刻用不了。外接键盘上是文字区的按键命令（按住 ⌘ 看得到）。
     var shortcut: (ReplyShortcut) -> (() -> Void)? = { _ in nil }
+    /// 收下粘贴进来的图片（原图字节）；nil 是这个输入框不收图片，剪贴板里的照常当文字粘。
+    var images: (([Data]) -> Void)?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.palette) private var palette
 
@@ -38,6 +41,7 @@ struct ComposerField: UIViewRepresentable {
         view.showsHorizontalScrollIndicator = false
         view.setContentHuggingPriority(.defaultLow, for: .horizontal)
         view.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        view.inputView = DebugHooks.inputView()
         return view
     }
 
@@ -67,6 +71,7 @@ struct ComposerField: UIViewRepresentable {
         view.animatesScroll = !reduceMotion
         view.keys = keys
         view.shortcut = shortcut
+        view.images = images
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, uiView view: GrowingTextView, context: Context) -> CGSize? {
@@ -99,6 +104,7 @@ final class GrowingTextView: UITextView {
     var animatesScroll = true
     var keys: (ComposerKey) -> Bool = { _ in false }
     var shortcut: (ReplyShortcut) -> (() -> Void)? = { _ in nil }
+    var images: (([Data]) -> Void)?
     /// 外部刚写进文字：之后的排版里滚到末尾，直到高度不再变。
     var revealsEnd = false { didSet { revealedHeight = nil } }
     /// 上次对齐末尾时的高度。
@@ -161,7 +167,22 @@ final class GrowingTextView: UITextView {
         setNeedsLayout()
     }
 
+    /// 剪贴板里有图片时"粘贴"收的是图片（交给 `images`，放进图片条）：纯文字的文字区本来不收图片，只有图片时连"粘贴"都不给。
+    /// 认图和取图是同一条规则：种类属于图片。系统的 `hasImages` 不认只有 HEIC 的剪贴板，不用它。只看种类不读内容，不触发读取剪贴板的提示。
+    private static func isImage(_ type: String) -> Bool { UTType(type)?.conforms(to: .image) == true }
+
+    override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
+        action == #selector(paste(_:)) && images != nil && UIPasteboard.general.types.contains(where: Self.isImage)
+            || super.canPerformAction(action, withSender: sender)
+    }
+
     override func paste(_ sender: Any?) {
+        if let images, UIPasteboard.general.types.contains(where: Self.isImage) {
+            images(UIPasteboard.general.items.compactMap { item in
+                item.first { Self.isImage($0.key) }.flatMap { ($0.value as? Data) ?? ($0.value as? UIImage)?.pngData() }
+            })
+            return
+        }
         super.paste(sender)
         layOutAll()
     }

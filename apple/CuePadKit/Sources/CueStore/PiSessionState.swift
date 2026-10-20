@@ -125,7 +125,7 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
   /// 旧版本写的记录没有。
   public var busySince: Date?
   /// 主会话最后一轮开始的时刻（你开的，或 Agent 自己为子代理的结果开的；等子代理到跟进轮之间 `busySince` 不变，这个要变）：
-  /// 早于这一轮可能在会话文件里收尾的任何时刻（取法见 `SessionFacts.startTurn(at:)` 与 Pi 扩展的 `turnSince`）。还没看到过一轮开始为 nil。
+  /// 早于这一轮可能在会话文件里收尾的任何时刻（取法见 `SessionFacts.startTurn(at:)` 与 Pi 扩展的 `turnSince`）。还没开过一轮为 nil。
   public var turnStartedAt: Date?
   public var createdAt: Date
   public var modifiedAt: Date
@@ -218,11 +218,10 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
 
   /// 最后一轮的回答已经读到：这一轮在会话文件里的收尾不早于它的开始。状态由 Agent 报、问答由读会话文件写，两路先后不定；
   /// 歇下只在这之后才是 Cue 的变化（`CueStore.cueChanges`），你开的、Agent 自己开的（子代理交回、补开的空输入）同一条规则。
-  /// 一轮都没收尾过（刚开出来就歇着）不算。没有开始时刻、却读到过收尾的，是这一轮开始时 CuePad 没看着（版本不兼容期间、
-  /// 更早的版本不记开始）：读到的收尾就是它的，算——重新接上时报的开始是空的（新载入的扩展没见过这一轮），等不到更准的了。
+  /// 一轮都没开过（刚开出来就歇着）没有开始时刻，不算。
   public var answered: Bool {
-    guard let answeredAt else { return false }
-    return turnStartedAt.map { answeredAt >= $0 } ?? true
+    guard let turnStartedAt, let answeredAt else { return false }
+    return answeredAt >= turnStartedAt
   }
 
   /// `detail` 里工具名与调用目标之间的分隔（Mac 写、手机读：`PiProgress` 据此拆开）。

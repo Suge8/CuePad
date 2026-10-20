@@ -226,7 +226,7 @@ private struct SidebarPages {
     }
 }
 
-/// Cue 下面的去处：任务（开合任务面板，开着时选中；同 ⌘⇧T）、会话（Agent 整页）。单独读当前页与面板开合，换页、开面板时侧栏别处不跟着重算。
+/// Cue 下面的去处：任务（开合任务面板，开着时选中；同 ⌘⇧T；面板从这一行弹出，它就是面板的锚点）、会话（Agent 整页）。单独读当前页与面板开合，换页、开面板时侧栏别处不跟着重算。
 private struct PlaceRows: View {
     let select: (Route) -> Void
     @Environment(Workspace.self) private var workspace
@@ -238,6 +238,7 @@ private struct PlaceRows: View {
                 switch entry {
                 case .tasks:
                     row(entry, selected: workspace.showsTasks) { workspace.showsTasks.toggle() }
+                        .panel(isPresented: Bindable(workspace).showsTasks, style: .side) { TasksPanel() }
                         .help("任务（⌘⇧T）")
                         .disabled(!workspace.isLibraryReady)
                 default:
@@ -376,7 +377,7 @@ private struct FooterPage: View {
 /// Agent 区：只回答"现在"——在线的会话（本机桥上的与别的 Mac 同步来的，各家 Agent 一起），与 iOS 的 Agent 页同一种行（`PiSessionRow`）、
 /// 同一列（`LiveSessionList`：与菜单栏面板、手机 Cue 页头的面板同一个顺序与折叠），全部列出；区头写一共几个会话、几个子代理在跑（`LiveWorkCount`）；
 /// 区的高度与滚动见 `Sidebar`。已结束的不列，全部会话在侧栏上面的"会话"（`AgentPage`）。
-/// 点会话在内容区打开它的整页，开在终端里的在线会话右键可跳到所在终端、悬停看出错原文；标题旁的 + 开新会话（这台 Mac 上没有能用的 Agent 时置灰）。
+/// 点会话在内容区打开它的整页，右键见 `SessionMenu`（结束前先确认），悬停看出错原文；标题旁的 + 开新会话（这台 Mac 上没有能用的 Agent 时置灰）。
 /// 没有在线会话时一行说怎么开始；一个 Agent 都没接入、本机也没有会话时，这里是接入小卡（`AgentConnectCard`）。
 private struct PiSection: View {
     @Environment(Workspace.self) private var workspace
@@ -384,6 +385,7 @@ private struct PiSection: View {
     @Environment(\.palette) private var palette
     @State private var startingSession = false
     @State private var renaming: PiSessionState?
+    @State private var ending: PiSessionState?
 
     var body: some View {
         let agents = services.agents
@@ -425,6 +427,7 @@ private struct PiSection: View {
                 }
             }
             .renameSession($renaming)
+            .endSession($ending)
         }
     }
 
@@ -437,30 +440,20 @@ private struct PiSection: View {
             .padding(.leading, SidebarMetrics.dotInset)
             .frame(height: Spacing.sidebarProjectRow)
             .sessionLink(session.sessionID)
-            .modifier(SessionRowMenu(session: session) { renaming = session })
+            .modifier(SessionErrorHelp(sessionID: session.sessionID))
+            .contextMenu {
+                SessionMenu(session: session, rename: { renaming = session }, end: session.canEnd ? { ending = session } : nil)
+            }
     }
 }
 
-/// 侧栏会话行的悬停原文与右键菜单。桥上的那个会话只在这里读（`pi.session(sessionID:)`）：整个 Agent 区读全部会话的话，任一会话一变整区重算。
-private struct SessionRowMenu: ViewModifier {
-    let session: PiSessionState
-    let rename: () -> Void
-    @Environment(Workspace.self) private var workspace
+/// 侧栏会话行悬停看出错原文。桥上的那个会话只在这里读（`pi.session(sessionID:)`）：整个 Agent 区读全部会话的话，任一会话一变整区重算。
+private struct SessionErrorHelp: ViewModifier {
+    let sessionID: String
     @Environment(AppServices.self) private var services
 
     func body(content: Content) -> some View {
-        let bridge = services.pi.session(sessionID: session.sessionID)
-        content
-            .help(bridge?.errorMessage ?? "")
-            .contextMenu {
-                MarkUnreadButton(session: session)
-                if MacDelivery.canRename(session) {
-                    Button("重命名…", icon: .rename, action: rename)
-                }
-                if let bridge, bridge.canJump {
-                    Button("跳到所在终端", icon: .terminal) { workspace.jumpToTerminal(bridge.id) }
-                }
-            }
+        content.help(services.pi.session(sessionID: sessionID)?.errorMessage ?? "")
     }
 }
 

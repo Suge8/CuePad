@@ -133,13 +133,7 @@ struct AgentPage: View {
         return PiSessionRow(session: session, project: filtered ? nil : item.project, delivery: item.delivery, end: end, rename: item.rename, undelivered: item.undelivered(at: services.speech), style: .page).equatable()
             .sessionLink(session.sessionID, press: .card)
             .contextMenu {
-                MarkUnreadButton(session: session)
-                if MacDelivery.canRename(session) {
-                    Button("重命名…", icon: .rename) { model.renaming = session }
-                }
-                if endable {
-                    Button("结束会话", icon: .endSession, role: .destructive) { model.confirmingEnd = session }
-                }
+                SessionMenu(session: session, rename: { model.renaming = session }, end: endable ? { model.confirmingEnd = session } : nil)
             }
     }
 

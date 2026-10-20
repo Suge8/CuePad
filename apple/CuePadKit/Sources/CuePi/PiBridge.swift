@@ -57,7 +57,8 @@ public final class PiBridge {
     @ObservationIgnored private var links: [String: Link] = [:]       // socket 文件名（不含 .sock）→ 连接
     /// 在线会话的控制通道（Pi 的就是它的 `Link`）
     @ObservationIgnored private var controls: [PiSession.ID: any SessionLink] = [:]
-    /// 重开前各会话（按会话 id）记下的状态与计时（`carryOver`）：重新上桥时用一次
+    /// 重开前（`carryOver`）与重新载入扩展前（`detach` 的 `.reload`）各会话（按会话 id）的状态与计时：重新上桥时用一次。
+    /// 协议号不同的读不到状态，不留也不用：接回时沿用的是它之前读到的
     @ObservationIgnored private var carried: [String: (state: PiWorkState, times: PiTimes)] = [:]
     /// 托管的会话歇着的计时（见 `reviewHosted`）
     @ObservationIgnored private var idleTimers: [PiSession.ID: Task<Void, Never>] = [:]
@@ -266,13 +267,13 @@ public final class PiBridge {
     public func carryOver(_ before: [String: (state: PiWorkState, times: PiTimes)]) { carried = before }
 
     /// 一个会话上线（发现了它，或 CuePad 刚开了它）：之后的命令交给 `link`。同一 id 已在线时只换通道与快照，不重报出现。
-    /// 状态的起点只有这一处定：重新上桥（同一 id 换了快照、CuePad 重开后接回）时粗状态（`PiWorkState.phase`）没变就沿用原来的起点，
+    /// 状态的起点只有这一处定：重新上桥（同一 id 换了快照、重新载入扩展、CuePad 重开后接回）时粗状态（`PiWorkState.phase`）没变就沿用原来的起点，
     /// 各家接入上桥时给的"现在"不算——界面的"多久前""有新回复"与同步记录都读它。
     public func attach(_ session: PiSession, via link: any SessionLink) {
         controls[session.id] = link
         var session = session
-        let before = slots.first { $0.id == session.id }.map { (state: $0.session.state, times: PiTimes(stateSince: $0.session.stateSince, busySince: $0.session.busySince)) }
-            ?? carried.removeValue(forKey: session.sessionID)
+        let before = slots.first { $0.id == session.id && $0.session.state != .incompatible }.map(\.session.carried)
+            ?? (session.state == .incompatible ? nil : carried.removeValue(forKey: session.sessionID))
         if let before, before.state.phase == session.state.phase {
             session.stateSince = before.times.stateSince
             session.busySince = before.times.busySince ?? session.busySince
@@ -312,24 +313,23 @@ public final class PiBridge {
         releasing.remove(id)
         guard let index = slots.firstIndex(where: { $0.id == id }) else { return }
         let session = slots.remove(at: index).session
+        if reason == .reload, session.state != .incompatible { carried[session.sessionID] = session.carried }
         emit(.ended(session, reason: reason))
     }
 
     // MARK: 托管的会话
 
-    /// 托管的会话什么时候请它退出（不算结束，发话时再接着）：扩展协议号不同、又不会自己重新载入的（Pi 扩展 `selfReloadingExtension`
-    /// 之前的版本，没有终端能 /reload，下次发话用新扩展恢复；之后的版本看到扩展文件换了新版本就在空闲时自己重新载入）；
-    /// 同一会话在别处（终端里）也开着、自己又空闲的（两边会各写各的；正在跑一轮的等它做完、状态变化时再看）；
-    /// 歇着满 `hostedIdle` 的（为自己起了进程的 Claude Code、Codex；Pi 自己计时，App 退出后照常在；OpenCode 的会话在它的服务里，没有进程要关）。
-    /// 从这个扩展版本起，扩展换了新版本就在空闲时自己重新载入；更早的协议号不同时只能让它退出。
+    /// 从这个扩展版本起，扩展换了新版本就在空闲时自己重新载入（`PiSession.upgrading`）；更早的协议号不同时要在终端里 /reload。
     nonisolated static let selfReloadingExtension = 29
 
+    /// 托管的会话什么时候请它退出（不算结束，发话时再接着）：同一会话在别处（终端里）也开着、自己又空闲的（两边会各写各的；正在跑一轮的等它做完、状态变化时再看）；
+    /// 歇着满 `hostedIdle` 的（为自己起了进程的 Claude Code、Codex；Pi 自己计时，App 退出后照常在；OpenCode 的会话在它的服务里，没有进程要关）。
     private func reviewHosted() {
         for slot in slots where slot.session.hosted && !releasing.contains(slot.id) {
             let session = slot.session
             let busy = session.state.hasPendingWork
             let elsewhere = slots.contains { $0.session.agent == session.agent && $0.sessionID == session.sessionID && !$0.session.hosted }
-            if (session.state == .incompatible && session.extensionVersion < Self.selfReloadingExtension) || (!busy && elsewhere) {
+            if !busy && elsewhere {
                 release(session.id)
             } else if session.agent == .pi || session.agent == .opencode {
                 continue

@@ -4,7 +4,7 @@ import SwiftUI
 
 /// 随手记、新会话与 Pi 会话回复框共用的输入框（iOS 与 Mac 同一份；文字区各用平台的文本视图，见 `ComposerField`；图片来源与带上的卡片的菜单、面板
 /// 在 `Composer+iOS`、`Composer+macOS`）：一层玻璃，里面是（调用方放的）头部、带上的卡片、图片条、文字区，以及底下一整排工具：
-/// 左"＋"（选卡片、相册、拍照）、调用方的小圆钮（会话回复框的模型与思考强度），右提交钮，"＋"与提交钮钉在左下、右下角。
+/// 左"＋"（选卡片、相册、拍照；粘贴的图片也进图片条）、调用方的小圆钮（会话回复框的模型与思考强度），右提交钮，"＋"与提交钮钉在左下、右下角。
 /// 一直展开（`ComposerForm.open`，不变形）又有工具的，文字铺满整宽在上，底下一排是＋、工具与提交钮；其余的文字区一直在两颗圆钮中间、往上长，
 /// 工具排（有就）在文字下面、两颗圆钮之间：变形时只有玻璃上沿与文字往上下挪，没有横着挪的东西——文字区是平台的文本视图，
 /// 变形时它一下换到新位置，横着挪的"＋"会从字上滑过、挪着的提交钮被玻璃下沿裁掉。带上的卡片点一下看全文，能"展开编辑"成这次要发的文字。
@@ -201,7 +201,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     private var text: some View {
         ComposerField(
             text: $draft.text, prompt: prompt, label: label, maxLines: expanded ? 6 : 1, ink: palette.ink, focus: focus, keys: handle,
-            shortcut: shortcut)
+            shortcut: shortcut, images: accepts.contains(.images) ? { draft.images += $0.map(PickedImage.init(data:)) } : nil)
             .focused(focus)
             // 收起时原文与"草稿：…"在同一个位置一换即成，不两层叠着交叉淡：同一行字在变形中只有一层
             .animation(nil) { $0.opacity(shrunkDraft == nil ? 1 : 0) }
