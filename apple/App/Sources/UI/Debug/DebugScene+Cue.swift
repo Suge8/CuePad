@@ -196,7 +196,7 @@ extension DebugScene {
     /// 一次一个、一次两个交替（看几道光错开）；给了 `-CuePadSession`（session 画面）时它排第一个，每次都有它。
     /// 录"叫醒"的动效用（`CueRelayStage`）；隔离库里 Cue 不值班，没有别人改它的状态。
     /// `-CuePadFlightLog <路径>`：每次叫醒（或交给，见 `relayIfAsked`）前歇着的 `probe` 秒与之后的 `probe` 秒各量一段，一段一行 JSON 追加到这个文件：
-    /// 主线程每帧的 display link 间隔（掉帧、最长一帧）、每圈 run loop 的主线程 CPU、进程的指令数与能量（`TurnLog.metrics`、`energyMillijoules`）。
+    /// 主线程 display link 的全部间隔、总帧数、超 16ms 的帧与掉帧（超过刷新间隔 1.5 倍）、每圈 run loop 的主线程 CPU、进程的指令数与能量（`TurnLog.metrics`、`energyMillijoules`）。
     /// 那一下的那段减去歇着那段是一次接力在 App 进程里的开销；配 `-CuePadReduceMotion YES` 再跑一遍当对照（库照样变、不飞），两者之差是飞的那一下。
     /// 不抢前台：窗口在后台、留在屏上（display link 照走）；动画本身在渲染服务里插值，渲染服务的开销不在这个进程里，量不到。
     /// 推送那条"等你"点名要看的两份：部署会话发来的预发截图与测试报告（`seedDeliveries`）。
@@ -375,12 +375,12 @@ extension DebugScene {
     }
     #endif
 
-    /// 量的一段比接力的那一下（约 1.3～1.4 秒）长一点。
-    static let flightProbe = 1.6
+    /// 覆盖三道错开的接力与最后一圈落点反馈。
+    static let flightProbe = 2.4
 
     /// `act`：开始量之后当场做的那一下（按发送钮，`pressSendIfAsked`）。
     static func measureFlight(_ kind: String, seconds: Double, into log: URL, act: () -> Void = {}) async {
-        let turns = TurnLog(), frames = FrameRecorder()
+        let turns = TurnLog(), frames = FlightFrames()
         let instructions = instructionsMillions(), energy = energyMillijoules()
         #if os(macOS)
         // 主窗口关着（`-CuePadClosed`）时没有可挂 display link 的窗口：只量指令、CPU 与能量
@@ -391,7 +391,12 @@ extension DebugScene {
         turns.begin(CACurrentMediaTime(), root: nil)
         act()
         try? await Task.sleep(for: .seconds(seconds))
-        var line = TurnLog.metrics(turns.finish(), instructions: instructions, frames: frames.stop())
+        let samples = frames.stop()
+        var line = TurnLog.metrics(turns.finish(), instructions: instructions, frames: samples.hitches)
+        line["frames"] = samples.intervals.count
+        line["over16"] = samples.intervals.filter { $0 > 0.016 }.count
+        line["frameMs"] = samples.intervals.map { ($0 * 10_000).rounded() / 10 }
+        line["seconds"] = seconds
         line["kind"] = kind
         line["energyMJ"] = ((energyMillijoules() - energy) * 10).rounded() / 10
         for key in ["clickMs", "visibleTurns", "seen", "heavy"] { line[key] = nil }
@@ -489,6 +494,39 @@ extension DebugScene {
             cue.pin(CueNowSamples.tour[index % CueNowSamples.tour.count])
             guard (try? await Task.sleep(for: .seconds(2.6))) != nil else { return }
         }
+    }
+}
+
+/// 接力的帧探针保留全部间隔：60Hz 的正常帧也超过 16ms，不能拿掉帧次数冒充它。
+private final class FlightFrames: NSObject {
+    private var link: CADisplayLink?
+    private var stamps: [CFTimeInterval] = []
+    private var refresh = 1.0 / 60
+
+    #if os(macOS)
+    func start(in view: NSView) { start(view.displayLink(target: self, selector: #selector(tick))) }
+    #else
+    func start() { start(CADisplayLink(target: self, selector: #selector(tick))) }
+    #endif
+
+    private func start(_ link: CADisplayLink) {
+        self.link = link
+        link.add(to: .main, forMode: .common)
+    }
+
+    @objc private func tick(_ link: CADisplayLink) {
+        stamps.append(link.timestamp)
+        refresh = link.duration > 0 ? link.duration : refresh
+    }
+
+    func stop() -> (hitches: FrameRecorder.Hitches, intervals: [Double]) {
+        link?.invalidate()
+        link = nil
+        let intervals = zip(stamps.dropFirst(), stamps).map { $0 - $1 }
+        let slow = zip(stamps.dropFirst(), intervals).filter { $0.1 > refresh * 1.5 }
+        return (FrameRecorder.Hitches(
+            count: slow.count, worstMs: ((intervals.max() ?? 0) * 10_000).rounded() / 10,
+            at: slow.map { [(($0.0 - (stamps.first ?? 0)) * 1000).rounded(), ($0.1 * 10_000).rounded() / 10] }), intervals)
     }
 }
 #endif
