@@ -229,7 +229,7 @@ struct RealOpenCodeTests {
             // 断开接入（App 停掉接入、删掉索引）再接入：会话先下线，再接入后重新上桥、索引从头写回
             await runtime.stop()()
             #expect(session(bridge) == nil)
-            try await store.deletePiSessions(of: .opencode)
+            try await store.deletePiSessions(of: .opencode, keepingHostedOn: "mac")
             try runtime.start()
             try await eventually("再接入后会话回来、索引写回", timeout: .seconds(60)) {
                 let indexed = try await store.piSession(live.sessionID)
