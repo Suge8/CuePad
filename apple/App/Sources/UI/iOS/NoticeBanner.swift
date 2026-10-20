@@ -41,7 +41,7 @@ struct NoticeBanner: View {
         .onChange(of: workspace.notice) { _, notice in
             if let notice { AccessibilityNotification.Announcement(notice.text.spoken).post() }
         }
-        // 前台时会话"等你确认"、"做完了"的提示：正看着那个会话或 Agent 列表时不弹；后台走系统推送
+        // 前台时会话"等你确认"、"做完了"的提示：开着那个会话时不弹；后台走系统推送
         .onChange(of: workspace.services.sessionAlert) { _, alert in
             guard let alert, navigation.showsAlert(about: alert.session) else { return }
             workspace.say(alert.text, status: alert.status, link: .session(alert.session), duration: .seconds(5))

@@ -23,16 +23,18 @@ extension CueStore {
   }
 
   /// 写一条对话（在写事务内调用）。`asking` 是提问问的什么，`project` 是它的范围；`at`：排在对话里的时刻，缺省是此刻（一轮的经过排在这一轮开始的时刻）。
+  /// 要提示你的（`CueMessage.alerts`）同时置手机推送标志，你正在 Mac 上开着 Cue 页时不置（`isWatched`）。
   func insertCueMessage(
     _ author: CueAuthor, text: String, asking: CueAsking? = nil, in project: Project? = nil, urgent: Bool = false, task: UUID? = nil,
     tools: PiChatMessage.Tools? = nil, at time: Date? = nil
   ) throws -> CueMessage {
     let now = Date.stamp
-    let message = CueMessage(
+    var message = CueMessage(
       id: UUID(), author: .known(author), text: text, choices: asking?.ask.choices(in: project?.name),
       asked: asking.map { CueAllow($0.ask, project: project?.id) }, askAction: asking?.action, askRule: asking?.rule, askShots: asking?.shots ?? [],
       urgent: urgent, taskID: task,
       answer: nil, answeredAt: nil, deliveredAt: nil, createdAt: time ?? now, modifiedAt: now, tools: tools, notify: false)
+    message.notify = try message.alerts && !isWatched(.cue)
     try insert(message)
     try registerImages(in: text)
     return message
@@ -54,12 +56,13 @@ extension CueStore {
   }
 
   /// 一轮做完时它的回复（值班的管理器调）：不是在回答你的一轮（`answersYou` 为假）里已经对你说过话（tell、done 的结果），最后那句只是复述，不写。
+  /// 回答你的一轮的回复要提示你（`urgent`）：你说完多半就离开了，在等它。
   public func replyCueRound(startedAt: Date, reply: String, as author: CueAuthor, answersYou: Bool) throws {
     guard !reply.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
     try write {
       let told = try db.first("SELECT 1 FROM cueMessages WHERE author = 'cue' AND createdAt >= ? LIMIT 1", [startedAt]) { _ in true } ?? false
       guard answersYou || !told else { return }
-      _ = try insertCueMessage(author, text: reply)
+      _ = try insertCueMessage(author, text: reply, urgent: answersYou)
     }
   }
 
@@ -169,14 +172,6 @@ extension CueStore {
       try db.run(
         "UPDATE cueMessages SET deliveredAt = NULL, modifiedAt = ?1 WHERE id IN (SELECT value FROM json_each(?2)) AND deliveredAt IS NOT NULL",
         [Date.stamp, Self.idList(ids)])
-    }
-  }
-
-  /// 要推到手机：置推送标志（值班的 Mac 按通知规则调用；见 `CueMessage.notify`）。
-  public func flagCueMessageForPush(_ id: UUID) throws {
-    try write {
-      try db.run(
-        "UPDATE cueMessages SET notify = ?1, modifiedAt = ?2 WHERE id = ?3 AND notify IS NULL", [CueMessage.notifyFlag, Date.stamp, id])
     }
   }
 

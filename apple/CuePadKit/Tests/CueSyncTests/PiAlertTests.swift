@@ -110,7 +110,7 @@ import Testing
     #expect(settled.title == "homepage" && settled.body == "完成了")
   }
 
-  /// Cue 的消息：值班的 Mac 置位的推送标志是明文字段、随那一次上传送出，服务端收下后本机清掉，之后的改动（你回答了）不再带它；
+  /// Cue 的消息："等你"写下就带推送标志（明文字段），随那一次上传送出，服务端收下后本机清掉，之后的改动（你回答了）不再带它；
   /// 远端带回来的标志不留。文案由通知服务扩展改写成 Cue 的名字与要你定什么（不露原话）、点名的图各看什么，附上选项。
   @Test func aCueMessageFlaggedForPushGoesUpOnceAndIsRewrittenFromTheDecryptedRecord() async throws {
     let rig = try Rig()
@@ -120,7 +120,6 @@ import Testing
     let shot = try #require(try await rig.store.addPreviews(filesAt: [file], title: "登录页", sessionID: "s1").first).preview
     let message = try await rig.store.addCueMessage(
       .cue, text: "要合并到 main 吗？", ask: try CueAsking(.merge, action: "把登录页修复合并进 main", shots: [CueShot(preview: shot.id, look: "改后的登录页")]))
-    try await rig.store.flagCueMessageForPush(message.id)
 
     let record = try #require(await rig.coordinator.record(for: rig.recordID(message.id)))
     #expect(record["notify"] as? String == "cue" && record.encryptedValues["text"] as? String == "要合并到 main 吗？" && record["ask"] as? String == "merge")
@@ -132,6 +131,39 @@ import Testing
     try await rig.store.endCueQuestion(message.id, .answered(CueAsk.once))
     let answered = try #require(await rig.coordinator.record(for: rig.recordID(message.id)))
     #expect(answered["notify"] == nil && answered.encryptedValues["answer"] as? String == CueAsk.once)
+  }
+
+  /// 他发完消息就离开了 App：Cue 回答这一轮的回复推到手机；他正在 Mac 上开着 Cue 页、或开着那个会话时不推（不重复打扰）。
+  /// 手机上开着的不挡推送：那条可能停在"开着"（崩在前台、进后台时没网），手机前台收到时自己按此刻开着哪页不弹。
+  @Test func cueRepliesAndSessionAlertsReachThePhoneUnlessHeHasThatPageOpenOnAMac() async throws {
+    let rig = try Rig()
+    func flag(_ id: UUID) async throws -> String? { try #require(await rig.coordinator.record(for: rig.recordID(id)))["notify"] as? String }
+    func reply(_ text: String) async throws -> UUID {
+      try await rig.store.replyCueRound(startedAt: .now, reply: text, as: .cue, answersYou: true)
+      return try #require(try await rig.store.cueMessages().last { $0.text == text }).id
+    }
+
+    try await rig.store.recordViewing(device: "phone", sessionID: nil, cue: true)
+    #expect(try await flag(reply("登录页修好了")) == "cue")
+    try await rig.store.replyCueRound(startedAt: .now, reply: "看过了", as: .note, answersYou: false)  // 自己醒来那一轮的动态
+    #expect(try await flag(try #require(try await rig.store.cueMessages().last).id) == nil)
+
+    try await rig.store.recordMacPresence(host: "mac") { true }
+    try await rig.store.recordViewing(device: "mac", sessionID: nil, cue: true)
+    #expect(try await flag(reply("合并好了")) == nil)
+
+    let recorder = PiStateRecorder(store: rig.store, hostID: "mac", timing: ManualTiming().timing)
+    try await recorder.update(sessionID: "s1", state: .thinking)
+    try await rig.store.recordViewing(device: "mac", sessionID: "s1", cue: false)
+    try await recorder.update(sessionID: "s1", state: .settled)
+    let session = try #require(try await rig.store.allPiSessionStates().first).id
+    #expect(try await flag(session) == nil)
+    #expect(try await flag(reply("又好了")) == "cue")  // 离开了 Cue 页
+
+    try await rig.store.recordViewing(device: "mac", sessionID: nil, cue: false)
+    try await recorder.update(sessionID: "s1", state: .thinking)
+    try await recorder.update(sessionID: "s1", state: .settled)
+    #expect(try await flag(session) == "settled")
   }
 
   // MARK: 幂等创建

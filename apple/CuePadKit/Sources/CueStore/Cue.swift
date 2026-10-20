@@ -44,7 +44,7 @@ public struct CueMessage: Identifiable, Equatable, Sendable {
   public var ask: CueAsk? { asked?.ask.known }
   /// 提问问的是什么（`CueAsking.init(stored:)`）；不是提问，或是认不出类别、没有动作短语的提问为 nil。
   public var asking: CueAsking? { CueAsking(stored: ask, action: askAction, rule: askRule, shots: askShots) }
-  /// 要推送到手机。
+  /// 要提示你（推到手机、Mac 发通知）：Cue 用 tell 标的急事，与你在等的——回答你那一轮的回复、出错，Cue 起不来（`CueKeeper`）。
   public var urgent: Bool
   /// 关联的卡片。
   public var taskID: UUID?
@@ -58,9 +58,12 @@ public struct CueMessage: Identifiable, Equatable, Sendable {
   public var modifiedAt: Date
   /// 一轮的经过那一行的清单（Cue 那一轮调过的工具，`CueActivity`），与回答注脚同一个样子；别的行没有。
   public var tools: PiChatMessage.Tools?
-  /// 手机推送的标志（明文、可查询，服务端订阅按它出通知）：值班的 Mac 按通知规则置位，随那一次上传送出后清掉，
-  /// 远端带回来的不留（同 `PiSessionState.notify`，见 docs/sync.md「Agent 与 Cue 的通知」）。
+  /// 手机推送的标志（明文、可查询，服务端订阅按它出通知）：写下时按 `alerts` 与他在不在 Mac 上开着 Cue 页置位（`CueStore.insertCueMessage`），
+  /// 随那一次上传送出后清掉，远端带回来的不留（同 `PiSessionState.notify`，见 docs/sync.md「Agent 与 Cue 的通知」）。
   var notify: Bool = false
+
+  /// 要提示你的 Cue 消息（手机推送与 Mac 通知同一条规则）：Cue 对你说的，带选项来问（"等你"）或 `urgent`。
+  public var alerts: Bool { author == .known(.cue) && (choices != nil || urgent) }
 }
 
 /// Cue 看过会话、不打算行动的那一行动态（`CueStore.noteCueGlance`）：哪一行，与并进去的会话（Pi 的会话 id）。

@@ -67,7 +67,7 @@ struct IOSRoot: View {
         .preferredColorScheme(scheme)
         .onChange(of: sizeClass, initial: true) { navigation.compact = sizeClass != .regular }
         .task { await workspace.follow() }
-        .modifier(SessionViewing(keeper: workspace.services.sessionViewer, navigation: navigation))
+        .modifier(SessionViewing(keeper: workspace.services.viewer, navigation: navigation))
         .onChange(of: workspace.services.pendingDeepLink, initial: true) {
             if let link = workspace.services.consumeDeepLink() { navigation.open(link) }
         }

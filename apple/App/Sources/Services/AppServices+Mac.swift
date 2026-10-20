@@ -44,8 +44,8 @@ extension AppServices {
         follow(reporting: { .syncUnavailable("这台 Mac 在线的记录没能写下：\($0)") }) { [presence, wakeNotifications] in
             try await presence.keep(notifications: wakeNotifications)
         }
-        follow(reporting: { .syncUnavailable("这台 Mac 开着的会话没能写下：\($0)") }) { [sessionViewer, wakeNotifications] in
-            try await sessionViewer?.keep(notifications: wakeNotifications)
+        follow(reporting: { .syncUnavailable("这台 Mac 开着的页没能写下：\($0)") }) { [viewer, wakeNotifications] in
+            try await viewer?.keep(notifications: wakeNotifications)
         }
         follow(reporting: { .syncUnavailable("这台 Mac 上能用的 Agent 没能写下：\($0)") }) { [macAgents, wakeNotifications] in
             try await macAgents.keep(notifications: wakeNotifications)
@@ -97,7 +97,7 @@ extension AppServices {
         hotkey.unregister()
         // 离线这一条一开始收尾就写、就传，不排在别的组件停下之后：前面的步骤耗尽上限时它也已写下；停同步前等它传完
         let signingOff = Task.detached { [presence] in await presence.signOff() }
-        let leaving = Task.detached { [sessionViewer] in await sessionViewer?.signOff() }
+        let leaving = Task.detached { [viewer] in await viewer?.signOff() }
         let stopExecutor = executor.beginStop(), stopCue = cue.stop(), sync = sync
         let log = Logger(subsystem: Self.bundleID, category: "shutdown")
         return { @concurrent in

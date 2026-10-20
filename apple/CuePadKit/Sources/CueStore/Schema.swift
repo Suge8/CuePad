@@ -79,7 +79,7 @@ enum Schema {
     "\(cueRead) \(modifiedIndex(.cueRead))",
     // 59：提问要你看的图由 Cue 点名、存在提问上（`CueAsking.shots`），不再挂关联任务的全部交付物
     "ALTER TABLE cueMessages ADD COLUMN askShots TEXT;",
-    // 60：会话停下时谁接手——Cue 留给你回的会话（`CueState.left`），每台设备开着哪个会话（`SessionViewer`）
+    // 60：会话停下时谁接手——Cue 留给你回的会话（`CueState.left`），每台设备开着哪个会话（`Viewer`）
     "ALTER TABLE cueState ADD COLUMN leftToYou TEXT; \(sessionViewers) \(modifiedIndex(.sessionViewers))",
     // 61：歇下要等最后一轮的回答读到才算变化，改按时刻判（`PiSessionState.answered`）：会话记录记最后一轮的开始，摘要记这一轮收尾的时刻；
     // 盖写入序号的列跟着换成收尾时刻（不再看进行中的提问与问答文字）
@@ -87,6 +87,8 @@ enum Schema {
     ALTER TABLE piSessionStates ADD COLUMN turnStartedAt INTEGER; ALTER TABLE piSessionStates ADD COLUMN answeredAt INTEGER;
     DROP TRIGGER piSessionStates_writeSeq_update; \(stampOnChange("piSessionStates", sessionChanges))
     """,
+    // 62：每台设备开着的页带上 Cue 页（`Viewer.cue`）：他在 Mac 上开着 Cue 页时 Cue 的话不推到手机
+    "ALTER TABLE sessionViewers ADD COLUMN cue INTEGER;",
   ]
 
   /// 已有的提问照当时的写法认出类别：带"以后<当时的叫法>都不用问"的是那一类，都不带的是规矩那一类；范围是关联任务此刻所在的项目
@@ -328,8 +330,8 @@ enum Schema {
     -- 每台 Mac 自己写、各端读：在线记录（Mac 在不在、Cue 在不在值班的唯一信号），能用的 Agent 与各家的模型。
     CREATE TABLE macPresence (id TEXT PRIMARY KEY NOT NULL, hostID TEXT NOT NULL, onlineUntil INTEGER NOT NULL, modifiedAt INTEGER NOT NULL) STRICT;
     CREATE TABLE macAgents (id TEXT PRIMARY KEY NOT NULL, hostID TEXT NOT NULL, agents TEXT, problems TEXT, modifiedAt INTEGER NOT NULL, name TEXT) STRICT;
-    -- 每台设备自己写、Cue 值班的 Mac 读：此刻开着哪个会话（会话停下时他在不在场的一半）。
-    \(sessionViewers)
+    -- 每台设备自己写：此刻开着哪个会话、开没开着 Cue 页（会话停下时他在不在场的一半；提示到不到他）。
+    CREATE TABLE sessionViewers (id TEXT PRIMARY KEY NOT NULL, device TEXT NOT NULL, sessionID TEXT, modifiedAt INTEGER NOT NULL, cue INTEGER) STRICT;
 
     -- trigram 分词：中文等无空格文本可子串匹配；LIKE 在其上对任意长度关键字都正确（3 字符以上走索引）。
     CREATE VIRTUAL TABLE searchIndex USING fts5(text, refID, kind UNINDEXED, tokenize = 'trigram');

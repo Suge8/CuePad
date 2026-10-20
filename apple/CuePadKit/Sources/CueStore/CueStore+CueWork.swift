@@ -135,7 +135,7 @@ public struct CueChange: Equatable, Sendable {
   }
 }
 
-/// 会话停下时他在不在场：正开着这个会话（某台设备的 `SessionViewer`），或 `window` 内在里面说过话（在终端里打的与在 CuePad 里发的一样，
+/// 会话停下时他在不在场：正开着这个会话（某台设备的 `Viewer`），或 `window` 内在里面说过话（在终端里打的与在 CuePad 里发的一样，
 /// Cue 发进去的不算）。不是 Cue 开的一轮停下时他在场，这一停归他（`CueStore.cueChanges`）。由事实现推，不另存。
 struct SessionPresence: Equatable, Sendable {
   /// 正开着它
@@ -147,7 +147,7 @@ struct SessionPresence: Equatable, Sendable {
   /// 与常见即时通讯"多久没动静算离开"同一个量级。
   static let window: TimeInterval = 10 * 60
 
-  /// 没有新的动静就在这一刻算离开：只有说过话的那一半会到点；开着的那一半由设备写下离开（`SessionViewer`），不到点。
+  /// 没有新的动静就在这一刻算离开：只有说过话的那一半会到点；开着的那一半由设备写下离开（`Viewer`），不到点。
   var lapse: Date? { viewing ? nil : spokeAt.map { $0 + Self.window } }
 }
 
@@ -835,7 +835,7 @@ extension CueStore {
 
   /// 他此刻在不在会话里（`SessionPresence`）；不在场为 nil。
   private func presence(in sessionID: String) throws -> SessionPresence? {
-    let viewing = try sessionViewers().contains { $0.sessionID == sessionID }
+    let viewing = try viewers().contains { $0.sessionID == sessionID }
     // 他一方说的、窗口内的话（从晚到早），去掉 Cue 发进去的（`PiChatMessage.saidByCue`）
     let said = try select(
       PiChatMessage.self, where: "sessionID = ? AND role = '\(PiChatRole.user.rawValue)' AND at > ?",

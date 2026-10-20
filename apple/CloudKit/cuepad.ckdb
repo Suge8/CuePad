@@ -286,6 +286,7 @@ DEFINE SCHEMA
         device        STRING,
         sessionID     STRING,
         modifiedAt    INT64,
+        cue           INT64,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"
     );
