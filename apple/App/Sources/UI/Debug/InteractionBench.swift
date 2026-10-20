@@ -8,6 +8,8 @@ import os
 /// `-CuePadBench interact`：单次交互那一下的主线程耗时，逐项与预算（docs/verify.md「交互预算」）比较，
 /// 每项结果作为一行 `INTERACT {json}` 打到标准输出，量完退出。配 `-CuePadDemo YES`（演示库）或 `-CuePadSeed perf`（大库）。
 /// 动作就是点击、快捷键最终调用的工作区方法（`show`、`openCard`、`toggle`；侧栏发主菜单的动作），不经事件投递（那一段只有 1～5ms）。
+/// 例外是前台量的"任务气泡开"：真实地点那条任务行（写 `AWAIT click x y`，`perf-mac.sh` 经 HID 点，同人点），从松开的那一下起量。
+/// 直接调方法时空闲一两秒后的第一下常落在没升频的性能核上（同样的指令点击回合差到一倍）；真实输入进来时系统照人点调度，量的才是用户点的那一下。
 /// - **点击回合**：动作发出到画面第一次变（含这次变化的第一帧提交）为止，主线程的全部 CPU 毫秒，跨多圈 run loop 求和：挪到下一帧的活照样算进去，
 ///   直到画面第一次变（画面的变化看窗口图层树里看得见的层，见 `TurnLog`）；CPU 时间不随机器忙闲变，墙钟会。
 /// - **合计、最重一圈、指令数**：动作后 800ms 里主线程 CPU 的总数与最重的一圈（点击回合小而合计大，是活被挪到了后面的帧里，不是没了）；进程执行的指令数（百万）不随机器忙闲变，前后对比以它为准。两端同一份探针与键名（`Probes.swift`）。
@@ -47,6 +49,10 @@ enum InteractionBench {
     ]
 
     private static let turns = TurnLog()
+    /// 记下任务行的位置（`benchSpot`）：只在单次交互的测量里。
+    static let locatesRows = DebugScene.defaults.string(forKey: "CuePadBench") == "interact"
+    /// 任务行在窗口里的位置（左上为原点），按任务。
+    static var rows: [UUID: CGRect] = [:]
 
     static func run(_ workspace: Workspace) async {
         if PerfProbe.firstSeen["content"] == nil { await PerfProbe.wait(for: "content") }
@@ -74,6 +80,20 @@ enum InteractionBench {
             var row = await measure(name, in: view, action)
             Self.signposter.endInterval("交互", interval)
             row["foreground"] = foreground
+            print("INTERACT " + String(decoding: try! JSONSerialization.data(withJSONObject: row, options: [.sortedKeys]), as: UTF8.self))
+            fflush(stdout)
+        }
+        func click(_ name: String, at point: CGPoint, in view: NSView) async {
+            if let only, !only.contains(name) { return }
+            let interval = Self.signposter.beginInterval("交互", id: Self.signposter.makeSignpostID(), "\(name, privacy: .public)")
+            guard var row = await measureClick(name, at: point, in: view) else {
+                print("FAIL \(name)：真实点击 10 秒内没到")
+                fflush(stdout)
+                return
+            }
+            Self.signposter.endInterval("交互", interval)
+            row["foreground"] = foreground
+            row["clicked"] = true
             print("INTERACT " + String(decoding: try! JSONSerialization.data(withJSONObject: row, options: [.sortedKeys]), as: UTF8.self))
             fflush(stdout)
         }
@@ -116,11 +136,19 @@ enum InteractionBench {
                 await step("收编辑页") { workspace.openCard = nil }
             }
         }
-        // 任务气泡：本项目第一条有步骤的任务（演示库里是"发言轮次乱序"那样的），没有就第一条
+        // 任务气泡：第一条顶层任务（演示库里是"发言轮次乱序"那样有步骤的），在它的项目页上开：前台量时真实地点那一行，后台直接开
         let tasks = ((try? await store.tasks(.inProgress, .todo))?.flatMap(\.tasks) ?? []).filter { $0.parentID == nil }
         if let task = tasks.first {
+            if only?.contains("任务气泡开") ?? true, workspace.currentProject != task.projectID {
+                workspace.show(.project(task.projectID))
+                try? await Task.sleep(for: .seconds(1))
+            }
             for _ in 0..<2 {
-                await step("任务气泡开") { workspace.openTask(task) }
+                if foreground, let row = rows[task.id] {
+                    await click("任务气泡开", at: screenPoint(of: row, in: window), in: view)
+                } else {
+                    await step("任务气泡开") { workspace.openTask(task) }
+                }
                 await step("任务气泡关") { workspace.openTask = nil }
             }
         }
@@ -173,8 +201,70 @@ enum InteractionBench {
         let recorder = FrameRecorder()
         recorder.start(in: view)
         let instructions = instructionsMillions()
-        turns.begin(CACurrentMediaTime(), root: view.window?.contentView?.superview?.layer ?? view.layer)
+        turns.begin(CACurrentMediaTime(), root: root(of: view))
         action()
+        return await finish(name, instructions: instructions, recorder: recorder)
+    }
+
+    /// 真实地点 `point`（全局坐标，主屏左上为原点）：指针先放到那里（退出时还回原位），写 `AWAIT click` 等 `perf-mac.sh` 经 HID 点下去，
+    /// 从松开的那一下起量（手势在松开时认出点按）。10 秒内没点到是 nil。
+    private static func measureClick(_ name: String, at point: CGPoint, in view: NSView) async -> [String: Any]? {
+        try? await Task.sleep(for: .milliseconds(900))
+        let recorder = FrameRecorder()
+        recorder.start(in: view)
+        DebugForeground.movePointer(to: point)
+        let release = Release()
+        let monitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseUp) { event in
+            if release.instructions == nil {
+                release.instructions = instructionsMillions()
+                turns.begin(CACurrentMediaTime(), root: root(of: view))
+                release.resume()
+            }
+            return event
+        }
+        await withCheckedContinuation { waiter in
+            release.waiter = waiter
+            print("AWAIT click \(Int(point.x.rounded())) \(Int(point.y.rounded()))")
+            fflush(stdout)
+            Task {
+                try? await Task.sleep(for: Self.clickLimit)
+                release.resume()
+            }
+        }
+        if let monitor { NSEvent.removeMonitor(monitor) }
+        guard let instructions = release.instructions else {
+            _ = recorder.stop()
+            return nil
+        }
+        return await finish(name, instructions: instructions, recorder: recorder)
+    }
+
+    /// 等真实点击的上限（指针移过去、停稳、按下松开约半秒）。
+    private static let clickLimit: Duration = .seconds(10)
+
+    /// 那一下松开时的指令数（还没松开为 nil），与等它的那一处：松开或到了上限，先到的那个叫醒它。
+    private final class Release {
+        var instructions: Double?
+        var waiter: CheckedContinuation<Void, Never>?
+
+        func resume() {
+            waiter?.resume()
+            waiter = nil
+        }
+    }
+
+    private static func root(of view: NSView) -> CALayer? { view.window?.contentView?.superview?.layer ?? view.layer }
+
+    /// 窗口里的一行（左上为原点）落到屏幕上的哪一点：标题上（让开左边的完成圈），行高的正中。
+    private static func screenPoint(of row: CGRect, in window: NSWindow) -> CGPoint {
+        let top = (NSScreen.screens.first?.frame.maxY ?? 0) - window.frame.maxY
+        return CGPoint(x: window.frame.minX + row.minX + TaskMetrics.ringColumn + Self.titleInset, y: top + row.midY)
+    }
+
+    /// 点在标题上离完成圈这么远。
+    private static let titleInset: CGFloat = 30
+
+    private static func finish(_ name: String, instructions: Double, recorder: FrameRecorder) async -> [String: Any] {
         try? await Task.sleep(for: .milliseconds(800))
         let began = turns.began
         var row = TurnLog.metrics(turns.finish(), instructions: instructions, frames: recorder.stop())

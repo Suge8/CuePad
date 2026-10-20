@@ -35,7 +35,10 @@ struct NewTaskField: View {
                         focused = true
                     }
             } else {
-                Button { writing = true } label: {
+                Button {
+                    releaseKeyboard()
+                    writing = true
+                } label: {
                     HStack(spacing: TaskMetrics.columnGap) {
                         glyph
                         Text(prompt).font(font).foregroundStyle(palette.ink3).frame(maxWidth: .infinity, alignment: .leading)

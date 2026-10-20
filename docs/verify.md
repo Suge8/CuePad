@@ -33,6 +33,7 @@ apple/scripts/xc.sh rec ios out.mov -- -CuePadDemo YES -CuePadCycle YES
 非占前台不可的只有下面几样，都要启动参数 `-CuePadForeground YES`，经 `DebugForeground` 借，量完或实例退出时把前台应用和指针还回去。系统的激活是协商式的，别的应用在前台时实例自己 activate 会被忽略（窗口照旧在后面、点一下只是激活，量出的帧偏乐观）：借着却没到前台时实例写请求，起它的 `app.py` 的看守经系统事件把它拉到前台（`front_keeper`）；单次交互的表里一行只有真在前台量的才记 `foreground`：
 
 - 和交互预算比的 `xc.sh perf mac`：前台才有玻璃合成与动画，后台量的帧与掉帧偏乐观。
+- 前台量的"任务气泡开"：真实指针点那条任务行（`perf-mac.sh` 经 `hid.swift` 点，量完指针放回）。
 - `-CuePadClick`、`-CuePadRightClick` 截系统菜单、点一串录任务气泡的开合与翻页：后台 App 的菜单画成停用的灰，没激活的窗口里点一下只是激活。
 - `-CuePadBench chatscroll` 的 process、hid 驱动：经窗口服务器的真实滚轮与指针。
 

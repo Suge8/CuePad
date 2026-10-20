@@ -271,6 +271,21 @@ enum DebugHooks {
 }
 
 extension View {
+    #if os(macOS)
+    /// 单次交互（`-CuePadBench interact`）时记下这条任务行在窗口里的位置，前台量的"任务气泡开"用真实点击点它（`InteractionBench`）；平时什么都不挂。
+    @ViewBuilder func benchSpot(_ task: UUID) -> some View {
+        #if DEBUG
+        if InteractionBench.locatesRows {
+            onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { InteractionBench.rows[task] = $0 }
+        } else {
+            self
+        }
+        #else
+        self
+        #endif
+    }
+    #endif
+
     #if os(iOS)
     /// 点 Cue 页头开合面板的那条路交给测量（`IOSInteractionBench` 的"开合 Cue 面板"）。
     func debugExposesCuePanel(_ toggle: @escaping () -> Void) -> some View {
