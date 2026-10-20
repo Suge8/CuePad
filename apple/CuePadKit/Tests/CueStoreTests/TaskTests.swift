@@ -66,7 +66,6 @@ import Testing
     try await store.linkCard(step.id, toSession: "s1")
     #expect(try await card(plan.id).status == .inProgress)
     #expect(try await store.taskCounts()[project.id] == TaskCounts(inProgress: 2, todo: 0, done: 0))
-    #expect(try await store.startedTasks(topLevelOnly: true).map(\.id) == [plan.id, top.id])
 
     // 开始只记在叶子上：开始了的叶子加了第一个步骤，开始移到这一步，上级照样进行中（从步骤推出）
     let solo = try await store.createTask("写发布说明", in: project.id)

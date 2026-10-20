@@ -16,11 +16,11 @@ struct CueActivityTests {
         let step = try await store.createTask("推送到 TestFlight", under: release.id)
         let canvas = try await store.createTask("画布缩放", in: project.id)
         let readme = try await store.createTask("README 截图换成 Swift 版", in: project.id)
-        try await store.setStatus(step.id, .inProgress)
-        try await store.setStatus(canvas.id, .inProgress)
         try await workspace.toggle(readme.id)
         let push = try await store.addCueMessage(.cue, text: "要推送吗？", ask: try CueAsking(.push, action: "推送 v1.4 到 TestFlight"), task: step.id)
         let recorder = PiStateRecorder(store: store, hostID: "mac-a")
+        try await recorder.update(sessionID: "testflight", state: .thinking, title: "testflight")
+        try await store.bindSession("testflight", to: step.id)
         try await recorder.update(sessionID: "zoom", state: .thinking, title: "canvas-zoom")
         try await store.bindSession("zoom", to: canvas.id)
         try await recorder.update(sessionID: "zoom", state: .waitingForUser, question: PiQuestion(promptID: "p", kind: .confirm, text: "改锚点？\n会动到缩放"))
@@ -44,15 +44,16 @@ struct CueActivityTests {
         // 允许一次（实时活动在 App 进程里调的就是它）：发布回到在管，会话在问的接上来，只能打开
         try await rig.services.answerCueQuestion(allow.message, allow.choice)
         (tally, activity) = try await both()
-        #expect(tally.managing.map(\.id) == [release.id] && tally.waiting.count == 1)
+        #expect(tally.managing.map(\.id) == ["task/\(release.id.uuidString)"] && tally.waiting.count == 1)
         #expect(activity.managing == 1 && activity.waiting == 1 && activity.cells == [.managing, .waiting, .done])
         #expect(activity.first == CueActivityState.Wait(
             title: "canvas-zoom", detail: "改锚点？", open: DeepLink.session(PiSessionState.recordID(sessionID: "zoom")).url, allow: nil))
 
-        // 会话答完、两件都做完：没有在管与等你，实时活动结束；格子只剩做完的
-        try await recorder.update(sessionID: "zoom", state: .thinking)
+        // 两件都做完、会话都结束：没有在管与等你，实时活动结束；格子只剩做完的
         try await workspace.toggle(canvas.id)
         try await workspace.toggle(release.id)
+        try await recorder.update(sessionID: "zoom", state: .ended)
+        try await recorder.update(sessionID: "testflight", state: .ended)
         (tally, activity) = try await both()
         #expect(tally.managing.isEmpty && tally.waiting.isEmpty)
         #expect(!activity.isLive && activity.first == nil && activity.cells == [.done, .done, .done])

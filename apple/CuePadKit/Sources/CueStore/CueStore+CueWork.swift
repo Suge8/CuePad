@@ -21,11 +21,28 @@ public struct HandOffPlan: Equatable, Sendable {
   public var name: String?
 }
 
-/// 看板（`CueStore.cueBoard`）：没做完的事，加上不归没做完的事的活会话。在做的（`CueStore.cueBoardActive`）归值班的 Cue 管，其余是你手上的清单。
+/// 看板（`CueStore.cueBoard`）：没做完的事，加上不归没做完的事的活会话。在做的（`active`）归值班的 Cue 管，其余是你手上的清单。
 public struct CueBoard: Equatable, Sendable {
   public var tasks: [CueBoardItem]
   /// 不归没做完的事的活会话（`CueStore.isLoose`：他直接开的、终端里的，和只有已完成的事绑着的），最近有动静的在前。
   public var sessions: [PiSessionState]
+
+  /// 在做的：在做的事（`CueBoardItem.isActive`）按看板顺序，再是不归没做完的事的活会话。信封与 peek 的"在做"、在管（`CueTally`）都是它；
+  /// 会话都结束了、没人在做的事不在内，留在你手上的清单里。只问有没有时读 `CueStore.cueBoardActive`（同一条规则，不读整块看板）。
+  public var active: [CueWork] { tasks.filter(\.isActive).map(CueWork.task) + sessions.map(CueWork.session) }
+}
+
+/// 在做的一件（`CueBoard.active`）：在做的事，或不归没做完的事的活会话。
+public enum CueWork: Identifiable, Equatable, Sendable {
+  case task(CueBoardItem)
+  case session(PiSessionState)
+
+  public var id: String {
+    switch self {
+    case .task(let item): "task/\(item.id.uuidString)"
+    case .session(let state): "session/\(state.sessionID)"
+    }
+  }
 }
 
 /// 看板上的一件事：一个没做完的顶层任务。在做的（`isActive`）归值班的 Cue 管，其余是你手上的清单。
@@ -627,7 +644,7 @@ extension CueStore {
 
   // MARK: 看板与变化
 
-  /// 看板在不在做事的唯一规则：有不归没做完的事的活会话，或有在做的事（`CueBoardItem.isActive`）。
+  /// 看板在不在做事（`CueBoard.active` 不为空）：有不归没做完的事的活会话，或有在做的事（`CueBoardItem.isActive`）。
   /// 不读整块看板、有活会话就不看各件事：值班的 Cue 管理器每次会话状态变化都读它（读整块看板曾占会话忙时常驻开销的一成多）。
   public func cueBoardActive() throws -> Bool {
     try db.first("SELECT 1 FROM piSessionStates WHERE \(Self.isLoose("piSessionStates")) LIMIT 1") { _ in true } != nil
@@ -635,7 +652,7 @@ extension CueStore {
   }
 
   /// 看板：所有没做完的顶层任务（没删除、没归档），按项目顺序，同项目按手动顺序；加上不归没做完的事的活会话（`isLoose`）。
-  /// 在做的（`cueBoardActive`）是值班的 Cue 管的，其余是你手上的清单（Cue 巡视时看）。信封、变化与 peek 都按它。
+  /// 在做的（`CueBoard.active`）是值班的 Cue 管的，其余是你手上的清单（Cue 巡视时看）。信封、变化、peek 与在管都按它。
   public func cueBoard() throws -> CueBoard {
     CueBoard(
       tasks: try boardItems(try topTasks(where: Self.onBoard)),
