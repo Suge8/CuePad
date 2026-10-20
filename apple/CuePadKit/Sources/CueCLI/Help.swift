@@ -12,7 +12,7 @@ enum Help {
       cuepad task done <id>              完成任务
       cuepad show a.png --title 改后首页 把文件发到用户手机上看，每个文件一句标题（在 Agent 的命令里运行）
 
-    默认项目：在绑定了目录的项目里运行时，读写默认限定该项目；--project 名称 / --unfiled 指定，--all-projects 不限。
+    默认范围：在绑定了目录的项目里运行时，读写默认限定该项目；--project 名称指定，--all-projects 不限；新建的不在这样的目录里时进项目「默认」。
     全部命令：cuepad project --help、cuepad card --help、cuepad task --help、cuepad conflicts --help
     选项与输出字段：cuepad <命令> --help，例如 cuepad card add --help
     --json 输出 JSON（失败时 stderr 为 {"error":{"code","message"}}）；退出码 0 成功、1 运行错误、2 用法错误。
@@ -56,10 +56,13 @@ enum Schema {
       + "\n  id 是小写 UUID；时间是 UTC ISO 8601 含毫秒；没有值是 null。"
   }
 
-  /// 没有 --project / --unfiled 时的默认范围说明。
-  static func defaultProject(otherwise fallback: String) -> String {
-    "默认项目：省略时用绑定了当前目录（或其上层目录）的项目；没有则\(fallback)。"
+  /// 没有 --project 时的默认范围说明。
+  static func defaultScope(otherwise fallback: String) -> String {
+    "默认范围：省略时用绑定了当前目录（或其上层目录）的项目；没有则\(fallback)。"
   }
+
+  /// 新建时没有项目可用的落点。
+  static let defaultTarget = "进默认项目（id 固定，名字可改）"
 }
 
 extension String {

@@ -31,6 +31,6 @@ import Testing
     try at("piSessionStates", state.id, 1_000)
     try at("piSessionStates", state.id, 6_000, column: "stateSince")
 
-    #expect(try await store.projects().map(\.name) == ["置顶", "卡片新", "任务新", "安静", "Pi 新"])
+    #expect(try await store.projects().map(\.name) == ["置顶", "卡片新", "任务新", "安静", "Pi 新", "默认"])
   }
 }

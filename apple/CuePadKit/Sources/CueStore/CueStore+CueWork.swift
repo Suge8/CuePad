@@ -8,12 +8,8 @@ public struct HandOffPlan: Equatable, Sendable {
   public enum Destination: Equatable, Sendable {
     /// 叶子绑着的会话：Pi 的会话 id、显示名、由哪台 Mac 执行（会话所在的那台；记录还没到时是发起的这台，手机上为 nil）。
     case session(id: String, title: String, host: String?)
-    /// 在项目绑定的文件夹开新会话，由绑了文件夹的那台 Mac 执行（发起的这台绑了就是它）。
+    /// 在项目的文件夹开新会话，由 `CueStore.launchHost` 定的那台 Mac 执行（那台没绑文件夹时它先建工作区）。
     case launch(project: UUID, host: String)
-    /// 项目哪台 Mac 都没绑文件夹，开不了会话。
-    case noFolder(project: UUID, projectName: String)
-    /// 未分类的任务没有文件夹，开不了会话。
-    case unfiled
   }
 
   /// 交给会话的叶子。
@@ -23,20 +19,6 @@ public struct HandOffPlan: Equatable, Sendable {
   public var opensSession: Bool { if case .session = destination { false } else { true } }
   /// 从这件事开的会话叫什么（`CueStore.sessionName(forCard:)`，`requestLaunch` 起名用的同一条规则）：叶子的标题；没有标题为 nil。
   public var name: String?
-}
-
-/// Cue 眼里的一个项目（`CueStore.cueProjects`）。
-public struct CueProject: Identifiable, Equatable, Sendable {
-  public var id: UUID
-  public var name: String
-  /// 绑了文件夹（开得了会话）。
-  public var hasFolder: Bool
-
-  public init(id: UUID, name: String, hasFolder: Bool) {
-    self.id = id
-    self.name = name
-    self.hasFolder = hasFolder
-  }
 }
 
 /// 看板（`CueStore.cueBoard`）：没做完的事，加上不归没做完的事的活会话。在做的（`CueStore.cueBoardActive`）归值班的 Cue 管，其余是你手上的清单。
@@ -251,9 +233,9 @@ extension CueStore {
   /// 任务交到哪：给任务，按它干活的叶子（`homeLeaf`）定。界面的"开始"、手机的发给 Agent 与 Cue 的开工都按它：
   /// 1. 叶子绑着会话，就交给那个会话；
   /// 2. 没绑，而同一件事的别的步骤绑着会话（`continuableSession`），就接着用它（上下文不丢；话送到时叶子绑上它；已结束的执行时先恢复）；
-  /// 3. 否则在项目绑定的文件夹开一个以叶子标题命名的新会话（这台 Mac 绑了就在这台，否则别的 Mac 里按名字排第一台）。
+  /// 3. 否则在项目的文件夹开一个以叶子标题命名的新会话，由哪台 Mac 开见 `launchHost`。
   /// `fresh` 跳过 1、2，总是开新会话（界面"绑定会话"里的"开新会话"、Cue 开工带 fresh）；`agent` 给了就只接着用这一家的会话。
-  /// `host` 是发起的这台 Mac，手机为 nil。不是任务抛 `notATask`。
+  /// `host` 是发起的这台 Mac，手机为 nil。不是任务抛 `notATask`；要开新会话而一台 Mac 都没有（只会在手机上）抛 `noMac`。
   public func handOffPlan(_ task: UUID, host: String?, fresh: Bool = false, agent: AgentKind? = nil) throws -> HandOffPlan {
     let leaf = try workingLeaf(of: task)
     return HandOffPlan(
@@ -268,17 +250,14 @@ extension CueStore {
     if !fresh, let session = try continuableSession(for: leaf.id, agent: agent) {
       return .session(id: session.sessionID, title: session.title, host: session.hostID)
     }
-    guard let project = leaf.projectID else { return .unfiled }
-    guard let launchHost = try launchHost(for: project, preferring: host) else {
-      return .noFolder(project: project, projectName: try find(Project.self, project)?.name ?? "")
-    }
-    return .launch(project: project, host: launchHost)
+    guard let launchHost = try launchHost(for: leaf.projectID, preferring: host) else { throw CueStoreError.noMac }
+    return .launch(project: leaf.projectID, host: launchHost)
   }
 
   /// 开工：把叶子（没有步骤的任务）的正文（标题连同下面的话）作为第一句交到 `handOffPlan` 定下的地方（界面的"开始"与 Cue 的 start
   /// 同一条规则，含接着用上一步的会话与 `fresh`）：接着用上一步的会话时是它的下一句（规则同 `speak`），开新会话时它是第一句。正文发出后留在任务上。
   /// 接着用上一步的会话时，话送到才绑上（同开新会话"开成了才绑"），送到前算发送中（`sendingLeaves`）。
-  /// 叶子已绑着会话（不带 `fresh`）抛 `alreadyStarted`：话在会话里说；正在开会话抛 `launching`，话还在送抛 `sending`，开不了会话抛 `noFolder`。
+  /// 叶子已绑着会话（不带 `fresh`）抛 `alreadyStarted`：话在会话里说；正在开会话抛 `launching`，话还在送抛 `sending`。
   /// `agent` 给了就只接着用这一家的会话；`agent`、`model`（这家的写法，`AgentKind.modelKey`）与 `thinking` 只用于开新会话，
   /// 开哪家见 `launchAgent`。
   public func startLeaf(
@@ -301,8 +280,6 @@ extension CueStore {
         project: project, prompt: content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : content, token: UUID().uuidString,
         agent: kind, model: key, thinking: thinking)
       return try requestLaunch(launch, title: plan.name ?? "", on: host, card: card.id, cue: cue)
-    case .noFolder(_, let projectName): throw CueStoreError.noFolder(projectName)
-    case .unfiled: throw CueStoreError.noFolder("")
     }
   }
 
@@ -442,11 +419,20 @@ extension CueStore {
   }
 
   /// 项目在哪台 Mac 上绑了文件夹：这台 Mac 绑了就是它，否则别的 Mac 里按名字排第一台；都没绑为 nil。
-  private func launchHost(for project: UUID, preferring host: String?) throws -> String? {
+  /// 在项目里开新会话由哪台 Mac 开（`host` 是发起的这台，手机为 nil）：项目绑着文件夹就在绑了的那台（发起的这台绑了就是它，
+  /// 否则按 Mac 名排第一台）——那里是它真正的代码；哪台都没绑时是发起的这台，手机发起的是 `workMac`。那台 Mac 开工时建工作区并绑定
+  /// （`MacExecutor`）。一台 Mac 都没有为 nil。
+  public func launchHost(for project: UUID, preferring host: String?) throws -> String? {
     if let host, try directory(of: project) != nil { return host }
     let hosts = try db.query(
       "SELECT hostID FROM directoryBindings WHERE projectID = ? ORDER BY \(DirectoryBinding.macNameSQL), hostID", [project]) { $0.text(0) }
-    return host.flatMap { hosts.contains($0) ? $0 : nil } ?? hosts.first
+    return try host.flatMap { hosts.contains($0) ? $0 : nil } ?? hosts.first ?? host ?? workMac()
+  }
+
+  /// 手机上没绑文件夹的项目交给哪台 Mac：Cue 运行的那台（活本来就在那里派），没启用 Cue 时按名字排第一台；一台 Mac 都没有为 nil。
+  public func workMac() throws -> String? {
+    if let host = try cueProfile()?.activeHost { return host }
+    return try allMacAgents().first?.hostID
   }
 
   /// 一句话作为提问的答案：选择题给选项原文或从 1 起的序号，收自己写的回答的（`PiQuestion.allowsOther`）其余文字照写；
@@ -641,12 +627,6 @@ extension CueStore {
 
   // MARK: 看板与变化
 
-  /// 所有项目（没进回收站的，顺序同 `projects()`）与有没有绑文件夹（本机或任何一台 Mac）：Cue 据此知道活能放进哪里、哪里开得了会话。
-  public func cueProjects() throws -> [CueProject] {
-    let bound = Set(try db.query("SELECT projectID FROM projectDirectories UNION SELECT projectID FROM directoryBindings") { $0.uuid(0) })
-    return try projects().map { CueProject(id: $0.id, name: $0.name, hasFolder: bound.contains($0.id)) }
-  }
-
   /// 看板在不在做事的唯一规则：有不归没做完的事的活会话，或有在做的事（`CueBoardItem.isActive`）。
   /// 不读整块看板、有活会话就不看各件事：值班的 Cue 管理器每次会话状态变化都读它（读整块看板曾占会话忙时常驻开销的一成多）。
   public func cueBoardActive() throws -> Bool {
@@ -654,7 +634,7 @@ extension CueStore {
       || boardItems(try topTasks(where: Self.onBoard)).contains(where: \.isActive)
   }
 
-  /// 看板：所有没做完的顶层任务（没删除、没归档），按项目顺序、未分类在最后，同项目按手动顺序；加上不归没做完的事的活会话（`isLoose`）。
+  /// 看板：所有没做完的顶层任务（没删除、没归档），按项目顺序，同项目按手动顺序；加上不归没做完的事的活会话（`isLoose`）。
   /// 在做的（`cueBoardActive`）是值班的 Cue 管的，其余是你手上的清单（Cue 巡视时看）。信封、变化与 peek 都按它。
   public func cueBoard() throws -> CueBoard {
     CueBoard(

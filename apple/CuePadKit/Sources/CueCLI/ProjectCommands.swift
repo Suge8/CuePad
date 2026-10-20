@@ -4,7 +4,7 @@ extension Command {
   static let project: [Command] = [
     Command(
       path: ["project", "list"], summary: "列出项目（置顶在前，其余按最近活动）",
-      notes: Schema.output("[Project]", Schema.project) + "\n未分类的灵感用 cuepad card list --unfiled 查看。"
+      notes: Schema.output("[Project]", Schema.project)
     ) { call in
       try call.args.expect()
       let views = try await call.projectViews(try await call.store.projects())

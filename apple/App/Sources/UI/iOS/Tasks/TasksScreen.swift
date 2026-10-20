@@ -146,7 +146,7 @@ struct NewTaskLine: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     @State private var text = ""
-    @State private var chosen: UUID??
+    @State private var chosen: UUID?
     @FocusState private var focused: Bool
 
     var body: some View {
@@ -164,18 +164,17 @@ struct NewTaskLine: View {
                 .onChange(of: focused) { if !focused, text.trimmingCharacters(in: .whitespaces).isEmpty { dismiss?() } }
             if let projects, !projects.isEmpty {
                 Menu {
-                    Button(CaptureCopy.unfiled) { chosen = .some(nil) }
-                    Divider()
                     ForEach(projects) { item in Button(item.name) { chosen = item.id } }
                 } label: {
                     DestinationChip(project: current).frame(minHeight: 44).contentShape(.rect)
                 }
-                .accessibilityLabel("记到 \(CaptureCopy.destination(current))")
+                .accessibilityLabel("记到 \(current?.name ?? "")")
             }
         }
     }
 
-    private var target: UUID? { chosen ?? project }
+    /// 落到哪个项目：换过的，没换过是给的项目，都没有（不在项目里）是默认项目。
+    private var target: UUID { chosen ?? project ?? Project.defaultID }
     private var current: Project? { projects?.first { $0.id == target } }
 
     private func add() {

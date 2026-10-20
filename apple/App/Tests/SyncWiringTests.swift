@@ -117,10 +117,10 @@ struct SyncWiringTests {
     @Test func 冲突副本经AppServices暴露_选定版本后消失() async throws {
         services.startSync()
         defer { services.cancelBackgroundWork() }
-        let original = try await services.store.createCard(in: nil, body: "原卡")
-        let copy = try await services.store.createCard(in: nil, body: "副本")
+        let original = try await services.store.createCard(body: "原卡")
+        let copy = try await services.store.createCard(body: "副本")
         #expect(DebugScene.markConflict(copy: copy.id, of: original.id, database: services.location.databaseURL))
-        _ = try await services.store.createCard(in: nil, body: "触发一次重读")
+        _ = try await services.store.createCard(body: "触发一次重读")
 
         try await eventually("services.conflicts.count == 1") { services.conflicts.count == 1 }
         #expect(services.conflicts.map(\.copy.body) == ["副本"])

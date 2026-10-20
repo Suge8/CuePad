@@ -26,12 +26,12 @@ struct PiAlertRoutingTests {
         let session = UUID()
         let alerts = AlertCenter()
         let navigation = Navigation(settings: AppSettings(defaults: UserDefaults(suiteName: UUID().uuidString)!, launchArguments: [:]))
-        navigation.select(.unfiled)
+        navigation.select(.project(Project.defaultID))
 
         alerts.receive(payload(subscription: "cuepad.pi.waiting", record: session))
         navigation.open(alert: alerts.consumeTap())
 
-        #expect(navigation.root == .unfiled && navigation.path == [.session(session)])
+        #expect(navigation.root == .project(Project.defaultID) && navigation.path == [.session(session)])
         #expect(!navigation.showsAlert(about: session))  // 正看着它：前台不再弹它的提示
         #expect(alerts.consumeTap() == nil)
     }

@@ -31,7 +31,7 @@ public struct CueMessage: Identifiable, Equatable, Sendable {
   /// 给你的选项；有选项的 Cue 消息在等你（规则见 `CueStore.cueMessagesWaitingForYou`）。选项只由 `CueAsk.choices` 在写入时按 `asked` 写出、
   /// Cue 不能自拟；写下就不再变，卡片与通知照它显示。
   public var choices: [String]?
-  /// 提问的类别与范围（明文、同步，写入时定下）：哪一类事，与关联任务当时所在的项目（不在项目里为 nil，是所有项目）。
+  /// 提问的类别与范围（明文、同步，写入时定下）：哪一类事，与关联任务当时所在的项目（没关联任务为 nil，是所有项目）。
   /// 选项里"以后……不用问"照它写，选了就把它原样记进允许清单（`CueStore.endCueQuestion`），所以字面范围与实际放行的一致。
   /// 结构 56 之前写的提问由升级按当时的选项补上（`Schema.backfillAsked`）。
   public var asked: CueAllow?
@@ -237,7 +237,7 @@ public struct CueProfile: Equatable, Sendable {
     self.modifiedAt = modifiedAt
   }
 
-  /// 这类事在这个项目里（`project` 为 nil 是不在项目里的事）已允许：清单里有不分项目的那一项，或这个项目的那一项。返回对上的那一项。
+  /// 这类事在这个项目里（`project` 为 nil 是不关联任务的事）已允许：清单里有不分项目的那一项，或这个项目的那一项。返回对上的那一项。
   public func allowing(_ ask: CueAsk, in project: UUID?) -> CueAllow? {
     [CueAllow(ask, project: nil), project.map { CueAllow(ask, project: $0) }].compactMap(\.self).first(where: allows.contains)
   }

@@ -131,8 +131,8 @@ import Testing
     }
   }
 
-  /// 没给项目建的任务落在未分类：Cue 用 edit 的 project 把它连同步骤与草稿挪进项目，就能开工。
-  @Test(.timeLimit(.minutes(1))) func cueMovesAnUnfiledTaskIntoAProject() async throws {
+  /// 没给项目建的任务落在默认项目：Cue 用 edit 的 project 把它连同步骤与草稿挪进别的项目，开工就在那个项目的文件夹。
+  @Test(.timeLimit(.minutes(1))) func cueMovesATaskFromTheDefaultProjectIntoAnother() async throws {
     let sandbox = try Sandbox()
     let store = sandbox.store
     let project = try await sandbox.project("greet")
@@ -147,7 +147,7 @@ import Testing
       let task = try #require(try await store.tasks(.todo).flatMap(\.tasks).first { $0.heading == "加问候语" }).id
       let taskID = task.uuidString
       let step = try #require(try await store.children(of: task).first)
-      #expect(try await store.card(task)?.projectID == nil)
+      #expect(try await store.card(task)?.projectID == Project.defaultID)
       #expect(try await store.card(task)?.body == "加问候语\n先看现有问候")
 
       _ = try await server.call("task", ["action": "edit", "task": taskID, "project": "greet"])
@@ -166,7 +166,7 @@ import Testing
   @Test(.timeLimit(.minutes(1))) func peekGivesTheLatestReplyInFull() async throws {
     let sandbox = try Sandbox()
     let store = sandbox.store
-    let task = try await store.createTask("跑测试", in: nil)
+    let task = try await store.createTask("跑测试")
     try await store.linkCard(task.id, toSession: "s1")
     try await PiStateRecorder(store: store, hostID: "mac").update(sessionID: "s1", state: .settled, title: "跑测试")
     let older = String(repeating: "旧", count: 500), output = "全部通过 " + String(repeating: "过", count: 4500) + "尾巴"
@@ -188,22 +188,22 @@ import Testing
     }
   }
 
-  /// 不带 task 的 peek 是看板：所有没做完的事，按项目分组、未分类在最后，做完的不列；太多时只列 60 行，说还有几件。
+  /// 不带 task 的 peek 是看板：所有没做完的事，按项目分组，做完的不列；太多时只列 60 行，说还有几件。
   @Test(.timeLimit(.minutes(1))) func cueSeesEveryOpenTaskGroupedByProject() async throws {
     let sandbox = try Sandbox()
     let store = sandbox.store
     let project = try await sandbox.project("演示")
     let mine = try await store.createTask("用户自己的事", in: project.id)
-    let unfiled = try await store.createTask("未分类的事", in: nil)
+    let home = try await store.createTask("默认项目里的事")
     let done = try await store.createTask("做完的事", in: project.id)
     try await store.setStatus(done.id, .done)
     try await Server.run(library: sandbox.directory) { server in
       let text = try await server.call("task", ["action": "peek"])
-      #expect(text.split(separator: "\n").filter { $0.hasPrefix("- ") }.map { String($0.prefix(while: { $0 != "（" })) } == ["- 用户自己的事", "- 未分类的事"])
-      #expect(text.contains(mine.id.shortID) && text.contains(unfiled.id.shortID) && !text.contains(done.heading))
-      #expect(text.split(separator: "\n").filter { $0.hasSuffix("：") && !$0.hasPrefix("-") }.dropFirst().map(String.init) == ["演示：", "未分类："])
+      #expect(text.split(separator: "\n").filter { $0.hasPrefix("- ") }.map { String($0.prefix(while: { $0 != "（" })) } == ["- 用户自己的事", "- 默认项目里的事"])
+      #expect(text.contains(mine.id.shortID) && text.contains(home.id.shortID) && !text.contains(done.heading))
+      #expect(text.split(separator: "\n").filter { $0.hasSuffix("：") && !$0.hasPrefix("-") }.dropFirst().map(String.init) == ["演示：", "默认："])
 
-      for index in 0..<70 { _ = try await store.createTask("事 \(index)", in: nil) }
+      for index in 0..<70 { _ = try await store.createTask("事 \(index)") }
       let lines = try await server.call("task", ["action": "peek"]).split(separator: "\n")
       #expect(lines.count == 60)
       let shown = lines.filter { $0.hasPrefix("- ") }.count
@@ -250,14 +250,13 @@ import Testing
 
   /// 带选项的"等你"只给收不回的那几类事（`CueAsk`），选项由 CuePad 给：Cue 自拟的确认（"照这个做吗"）发不出去。
   /// 第二项照实际范围写：任务在项目里是"以后「项目」里推送不用问"，选了允许清单记上这个项目的推送（问完任务挪了项目也照字面那个）；
-  /// 之后 Cue 再为这个项目问推送被拒，叫它直接做，别的项目照问；他撤销那一项又会问。任务不在项目里是"以后推送代码都不用问"，选了所有项目都不问。
+  /// 之后 Cue 再为这个项目问推送被拒，叫它直接做，别的项目照问；他撤销那一项又会问。不关联任务时是"以后推送代码都不用问"，选了所有项目都不问。
   /// 他对 Cue 说"以后删除都不用问"，Cue 用 memory allow 记进清单，规矩那一类放不进去。
   @Test(.timeLimit(.minutes(1))) func onlyIrreversibleThingsAreAskedAndAlwaysAllowIsRemembered() async throws {
     let sandbox = try Sandbox()
     let store = sandbox.store
     let demo = try await sandbox.project("演示"), other = try await sandbox.project("别的")
     let task = try await store.createTask("修好登录页", in: demo.id), elsewhere = try await store.createTask("改文案", in: other.id)
-    let unfiled = try await store.createTask("清理分支", in: nil)
     try await Server.run(library: sandbox.directory) { server in
       try await server.refused("tell", ["text": "调研方案好了，照这个做吗？", "ask": "confirm", "task": task.id.uuidString])
       #expect(try await store.cueMessagesWaitingForYou().isEmpty)
@@ -285,7 +284,7 @@ import Testing
       try await server.refused("memory", ["action": "allow", "ask": "rule"])
       #expect(try await store.cueProfile()?.allows == [CueAllow(.delete, project: nil)])
 
-      _ = try await server.call("tell", ["text": "要推送吗？", "ask": "push", "doing": "推送分支清理", "task": unfiled.id.uuidString])
+      _ = try await server.call("tell", ["text": "要推送吗？", "ask": "push", "doing": "推送分支清理"])
       let global = try #require(try await store.cueMessagesWaitingForYou().last)
       #expect(global.choices == ["可以", "以后推送代码都不用问"])
       #expect(try await store.endCueQuestion(global.id, .answered("以后推送代码都不用问")))
@@ -471,7 +470,7 @@ import Testing
   @Test(.timeLimit(.minutes(1))) func theBoardShowsTheStepLastWorkedOn() async throws {
     let sandbox = try Sandbox()
     let store = sandbox.store
-    let task = try await store.createTask("加语言参数", in: nil)
+    let task = try await store.createTask("加语言参数")
     let first = try await store.createTask("加 --lang", under: task.id), second = try await store.createTask("写 README", under: task.id)
     try await store.linkCard(first.id, toSession: "s1")
     try await store.linkCard(second.id, toSession: "s2")
@@ -508,7 +507,7 @@ import Testing
     let recorder = PiStateRecorder(store: store, hostID: "mac-a")
     let project = try await sandbox.project("演示")
     try await store.setDirectory("/tmp/demo", for: project.id)
-    let pi = try await store.createTask("修好登录页", in: nil), claude = try await store.createTask("改文案", in: project.id)
+    let pi = try await store.createTask("修好登录页"), claude = try await store.createTask("改文案", in: project.id)
     try await store.linkCard(pi.id, toSession: "s1")
     try await store.linkCard(claude.id, toSession: "c1")
     try await recorder.update(sessionID: "s1", state: .error, title: "修好登录页")

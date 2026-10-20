@@ -319,7 +319,7 @@ struct MacSyncTests {
     /// 发给 Agent 时命令带着卡片（卡片文字是参数）：卡片关联到会话、任务进行中，照样不写发送记录。
     @Test func 带卡片的斜杠命令只关联卡片_不写发送记录() async throws {
         _ = try await rig.host.connect("sess-1", cwd: "/work/app")
-        let task = try await services.store.createTask("改登录", in: nil)
+        let task = try await services.store.createTask("改登录")
         try await services.executor.start()
         defer { services.cancelBackgroundWork() }
 
@@ -691,7 +691,7 @@ struct MacSyncTests {
         ])
     }
 
-    @Test func 新会话_没有开场的话就不发_项目没有目录时失败() async throws {
+    @Test func 新会话_没有开场的话就不发_项目没绑文件夹时在工作区开() async throws {
         let directory = try folder("proj")
         let project = try await services.store.createProject(name: "App", color: "#000000")
         try await services.store.setDirectory(directory.path, for: project.id)
@@ -703,9 +703,11 @@ struct MacSyncTests {
         #expect(rig.host.calls == [.open(directory: directory.path, launchToken: "tok-2")])
         #expect(rig.host.extensions["new-tok-2"]?.commands.isEmpty == true)
 
-        let noDirectory = try await launched(PiLaunch(project: bare.id, prompt: nil, token: "tok-3"), title: "无目录")
-        #expect(noDirectory.status == .known(.failed))
-        #expect(noDirectory.resultDetail == SendError.noCodeDirectory("无目录").localizedDescription)
+        let unbound = try await launched(PiLaunch(project: bare.id, prompt: nil, token: "tok-3"), title: "无目录")
+        #expect(unbound.status == .known(.succeeded))
+        let workspace = rig.workspaces.directory(for: "无目录").path(percentEncoded: false)
+        #expect(try await services.store.directory(of: bare.id) == workspace)
+        #expect(FileManager.default.fileExists(atPath: workspace))
     }
 
     // MARK: 手机请这台 Mac 绑定文件夹（Mac 才有完整路径；绑定只有这一条写入：本机的目录绑定）

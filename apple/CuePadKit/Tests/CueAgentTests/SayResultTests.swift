@@ -16,7 +16,7 @@ import Testing
       $0.hostID = "mac-a"
       $0.enabledAt = .now
     }
-    let task = try await store.createTask("修好登录页", in: nil)
+    let task = try await store.createTask("修好登录页")
     try await store.linkCard(task.id, toSession: "s1")
     try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "s1", state: .thinking, title: "修好登录页")
     return task

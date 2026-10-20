@@ -13,8 +13,6 @@ final class Navigation {
     struct ProjectForm: Identifiable {
         let id = UUID()
         var project: Project?
-        /// 新建好之后接着做的（从新会话来的：开新会话的输入框）。
-        var created: ((UUID) -> Void)?
     }
 
     /// 新会话输入框（`NewSessionInput`）；`project` 是先选中的项目（Agent 页筛着的）。
@@ -36,18 +34,18 @@ final class Navigation {
         func place(among places: [ProjectFolders.LaunchPlace]) -> ProjectFolders.LaunchPlace? {
             project.flatMap { project in
                 let own = places.filter { $0.project.id == project }
-                return own.first { host != nil && $0.binding?.hostID == host } ?? own.first
+                return own.first { host != nil && $0.host == host } ?? own.first
             } ?? places.first
         }
 
-        /// 在 `binding` 那台 Mac、它绑的文件夹用 `agent`（与 `model`、`thinking`，nil 是默认）开新会话，`draft` 作开场：开好后关联 `card`（会话名按它定，`CueStore.requestLaunch`）
-        /// （没有就是带上的第一张）。
+        /// 在 `host` 那台 Mac、项目的文件夹（没绑的那台先建工作区）用 `agent`（与 `model`、`thinking`，nil 是默认）开新会话，`draft` 作开场：
+        /// 开好后关联 `card`（会话名按它定，`CueStore.requestLaunch`；没有就是带上的第一张）。
         func launch(
-            in project: Project, binding: DirectoryBinding, draft: ComposerDraft, agent: AgentKind, model: PiModelKey?, thinking: PiThinkingLevel?,
+            in project: Project, on host: String, draft: ComposerDraft, agent: AgentKind, model: PiModelKey?, thinking: PiThinkingLevel?,
             services: AppServices
         ) async throws -> SessionLaunch {
             try await services.launchSession(
-                in: project.id, prompt: try draft.stored(in: services.store.files).nonEmpty, title: name ?? project.name, on: binding.hostID,
+                in: project.id, prompt: try draft.stored(in: services.store.files).nonEmpty, title: name ?? project.name, on: host,
                 card: card ?? draft.attachments.first?.card, agent: agent, model: model, thinking: thinking)
         }
     }
@@ -93,7 +91,7 @@ final class Navigation {
         self.settings = settings
     }
 
-    /// 当前项目：正在看的项目页（含其上推入的页，如卡片纸页），否则没有（未分类）。iOS 上"在哪个项目"
+    /// 当前项目：正在看的项目页（含其上推入的页，如卡片纸页），否则没有。iOS 上"在哪个项目"
     /// 只有这一份——列表或书架点进项目只改路径；任务页新建任务、⌘N 的默认落点都读它。
     var currentProject: UUID? {
         for route in ([root] + path).reversed() {
@@ -105,27 +103,17 @@ final class Navigation {
     /// 在当前页上推入一页。
     func push(_ route: Route) { path.append(route) }
 
-    /// 开新会话的输入框。会话开在项目的文件夹里：还没有项目时先新建项目，建好接着开这个项目的新会话（入口只有这一处，输入框不再另写没有项目的样子）。
-    func startNewSession(_ start: NewSession = .init(), hasProjects: Bool) {
-        guard hasProjects else {
-            projectForm = ProjectForm(created: { [weak self] id in self?.newSession = NewSession(project: id) })
-            return
-        }
-        newSession = start
-    }
-
     /// 发给 Agent：浮起发给 Agent 的输入框，正文带在里面（`HandOffInput`）。
     func handToAgent(_ card: Card, text: String? = nil) {
         outbox = Outbox(content: text ?? Outgoing.text(of: card), card: card.id, project: card.projectID)
     }
 
     /// 发给 Agent 时选了新会话：收起发给 Agent 的输入框，换成新会话的，草稿带过去。
-    /// 在哪开、由哪台 Mac 开、会话名按交到哪的决定（`plan`）；未分类的没有项目可开，用输入框自己的默认。
+    /// 在哪开、由哪台 Mac 开、会话名按交到哪的决定（`plan`）；没有决定（读不出来）时用输入框自己的默认。
     func handOffToNewSession(_ draft: ComposerDraft, card: UUID?, plan: HandOffPlan?) {
         let (project, host): (UUID?, String?) =
             switch plan?.destination {
             case .launch(let project, let host): (project, host)
-            case .noFolder(let project, _): (project, nil)
             default: (outbox?.project, nil)
             }
         outbox = nil
@@ -259,7 +247,7 @@ extension Route {
         case .cue, .cueSettings: .cue
         case .tasks: .tasks
         case .agent: .agent
-        case .shelf, .project, .unfiled, .archive, .trash, .settings, .conflicts, .projectSessions: .shelf
+        case .shelf, .project, .archive, .trash, .settings, .conflicts, .projectSessions: .shelf
         case .search, .card, .session: nil
         }
     }

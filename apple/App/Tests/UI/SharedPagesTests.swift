@@ -10,16 +10,16 @@ struct SharedPagesTests {
 
     // MARK: Agent 页
 
-    /// 分页只在按项目（这里是未分类）筛着时：不筛时按项目分组、每组只列最近几条。
+    /// 分页只在按项目（这里是收着没有项目的会话的默认项目）筛着时：不筛时按项目分组、每组只列最近几条。
     @Test func 筛着时历史读到底才接着读下一页_换搜索词回到第一页() async throws {
         let recorder = PiStateRecorder(store: store, hostID: "mac-a")
         for index in 0..<45 { try await recorder.update(sessionID: "e\(index)", state: .ended, title: "e\(index)") }
         let model = AgentListModel()
-        model.list = try await PiSessionList.read(text: model.query, project: .unfiled, historyLimit: model.limit, at: .always(), from: store)
+        model.list = try await PiSessionList.read(text: model.query, project: Project.defaultID, historyLimit: model.limit, at: .always(), from: store)
         #expect(model.list?.loaded == PiSessionList.pageSize && model.hasMore)
 
         model.loadMore()
-        model.list = try await PiSessionList.read(text: model.query, project: .unfiled, historyLimit: model.limit, at: .always(), from: store)
+        model.list = try await PiSessionList.read(text: model.query, project: Project.defaultID, historyLimit: model.limit, at: .always(), from: store)
         #expect(model.list?.loaded == 45 && !model.hasMore)
 
         model.query = "e1"
@@ -33,7 +33,7 @@ struct SharedPagesTests {
         let project = try await store.createProject(name: "旧项目", color: "#000000")
         _ = try await store.createCard(in: project.id, body: "项目里的一条")
         _ = try await store.createCard(in: project.id, body: "项目里的另一条")
-        let lone = try await store.createCard(in: nil, body: "单独删的\n补一句")
+        let lone = try await store.createCard(body: "单独删的\n补一句")
         try await store.trashProject(project.id)
         try await store.trashCard(lone.id)
 
@@ -48,11 +48,11 @@ struct SharedPagesTests {
         #expect(try await store.cards(in: project.id).isEmpty)
     }
 
-    /// 恢复后给一句提示写明落点、点它过去（与删除时的"已删除 · 撤销"对称）；卡片所在的项目还在回收站时落到未分类。
+    /// 恢复后给一句提示写明落点、点它过去（与删除时的"已删除 · 撤销"对称）；卡片所在的项目还在回收站时落到默认项目。
     @Test func 回收站恢复后提示落点_点它过去() async throws {
         let project = try await store.createProject(name: "圆桌", color: "#000000")
         let card = try await store.createCard(in: project.id, body: "项目里的一条")
-        let loose = try await store.createCard(in: nil, body: "没有项目的一条")
+        let loose = try await store.createCard(body: "没有项目的一条")
         try await store.trashCard(card.id)
         try await store.trashCard(loose.id)
         let workspace = Workspace(services: app.services)
@@ -66,8 +66,8 @@ struct SharedPagesTests {
         }
         let inProject = try await restored(try #require(summary.cards.first { $0.id == card.id }))
         #expect(inProject?.text.visible == "已恢复到 圆桌" && inProject?.link == .project(project.id))
-        let unfiled = try await restored(try #require(summary.cards.first { $0.id == loose.id }))
-        #expect(unfiled?.text.visible == "已恢复到 未分类" && unfiled?.link == .unfiled)
+        let home = try await restored(try #require(summary.cards.first { $0.id == loose.id }))
+        #expect(home?.text.visible == "已恢复到 默认" && home?.link == .project(Project.defaultID))
 
         try await store.trashProject(project.id)
         let whole = try await restored(try #require(try await TrashSummary.read(from: store).projects.first))

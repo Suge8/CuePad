@@ -17,7 +17,7 @@ extension DebugScene {
             return url
         }
 
-        let landing = try await store.createTask("落地页深浅两版", in: nil)
+        let landing = try await store.createTask("落地页深浅两版")
         try await store.linkCard(landing.id, toSession: "landing")
         _ = try await store.addPreviews([(try file("draft-hero.png", widePNG()), "方案稿：首屏三档并排")], sessionID: "landing")
         let pages = try await store.addPreviews([
@@ -28,7 +28,7 @@ extension DebugScene {
             landing.id, evidence: ["浅色深色各一版，按钮对比度都过了 4.5:1"],
             shots: [CueShot(preview: pages[0].id, look: "浅色：专业档描边是推荐"), CueShot(preview: pages[1].id, look: "深色：按钮对比度够")])
 
-        let keyboard = try await store.createTask("修好登录页的键盘遮挡", in: nil)
+        let keyboard = try await store.createTask("修好登录页的键盘遮挡")
         try await store.linkCard(keyboard.id, toSession: "keyboard")
         let fixes = try await store.addPreviews([
             (try file("before.png", phonePNG(covered: true)), "修复前：键盘挡住登录钮"),
@@ -39,7 +39,7 @@ extension DebugScene {
             keyboard.id, evidence: ["小屏上键盘弹出后登录钮仍可见", "横竖屏切换不跳动"],
             shots: [CueShot(preview: fixes[0].id, look: "修复前：登录钮被键盘挡住"), CueShot(preview: fixes[2].id, look: "修复后：登录钮露在键盘上方")])
 
-        let pricing = try await store.createTask("重做定价区", in: nil)
+        let pricing = try await store.createTask("重做定价区")
         try await store.linkCard(pricing.id, toSession: "pricing")
         _ = try await store.addPreviews([
             (try file("pricing.html", Data(pricingPage.utf8)), "定价页：三档在窄屏横滑"), (try file("定价对比.pdf", reportPDF()), "三档价格对比表"),

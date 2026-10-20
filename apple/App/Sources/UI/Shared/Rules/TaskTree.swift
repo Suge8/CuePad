@@ -94,7 +94,7 @@ nonisolated struct TaskTree: Equatable, Sendable {
     /// 成为原上级的下一个同级；顶层为 nil。
     func outdent(_ id: UUID) -> TaskMove? {
         guard let parent = parents[id] else { return nil }
-        return TaskMove(slot: slot(under: parents[parent], project: tasks[parent]?.projectID), after: parent)
+        return TaskMove(slot: slot(under: parents[parent], project: project(of: parent)), after: parent)
     }
 
     // MARK: 拖放
@@ -150,7 +150,7 @@ nonisolated struct TaskTree: Equatable, Sendable {
         if let previous, depth == previous.depth + 1 { return TaskMove(slot: .under(previous.id), after: nil) }
         // 上一行在这一级（或更深处）的祖先就是新的上一个同级
         let sibling = previous.map { ancestor(of: $0.id, atDepth: depth) }
-        let project = (sibling ?? next.map { ancestor(of: $0.id, atDepth: 0) }).flatMap { tasks[$0]?.projectID } ?? tasks[dragged]?.projectID
+        let project = project(of: sibling ?? next.map { ancestor(of: $0.id, atDepth: 0) } ?? dragged)
         return TaskMove(slot: slot(under: sibling.flatMap { parents[$0] }, project: project), after: sibling)
     }
 
@@ -165,13 +165,16 @@ nonisolated struct TaskTree: Equatable, Sendable {
         return cursor
     }
 
-    private func slot(under parent: UUID?, project: UUID?) -> CardSlot {
+    private func slot(under parent: UUID?, project: UUID) -> CardSlot {
         parent.map(CardSlot.under) ?? .top(project: project)
     }
 
+    /// 树里一条任务所在的项目（树里的 id 都在 `tasks` 里）。
+    private func project(of id: UUID) -> UUID { tasks[id]!.projectID }
+
     /// 原位置：同级（顶层按同一项目算，与 Store 的同级范围一致）里的上一条。
     private func current(_ id: UUID) -> TaskMove {
-        let project = tasks[id]?.projectID
+        let project = project(of: id)
         let siblings = parents[id].map(children(of:)) ?? roots.filter { tasks[$0]?.projectID == project }
         let index = siblings.firstIndex(of: id) ?? 0
         return TaskMove(slot: slot(under: parents[id], project: project), after: index > 0 ? siblings[index - 1] : nil)

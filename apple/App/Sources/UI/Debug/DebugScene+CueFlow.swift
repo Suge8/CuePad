@@ -87,7 +87,7 @@ extension DebugScene {
         let context = try await store.cueState()?.context
         try await store.setCueState(.thinking, context: context)
         try await beat(FlowBeat.thinking)
-        let task = try await store.createTask("登录回调超时", in: nil)
+        let task = try await store.createTask("登录回调超时")
         var tools = PiChatMessage.Tools()
         tools.record(.init(kind: .read, target: "看板"))
         tools.record(.init(kind: .add, target: "建任务「登录回调超时」", task: task.id))

@@ -119,7 +119,7 @@ struct AgentDayTests {
         // 唤醒中就列在"现在"（侧栏的在做、Agent 页），不在历史
         app.services.liveSessions.apply(try await LiveSessions.Page.read(from: store), at: .always())
         #expect(workspace.liveWork.rows.contains { $0.sessionID == "gone" } && workspace.liveWork.running == 1)  // 区头数它在跑
-        let list = try await PiSessionList.read(text: "", project: .unfiled, historyLimit: PiSessionList.pageSize, at: .always(), from: store)
+        let list = try await PiSessionList.read(text: "", project: Project.defaultID, historyLimit: PiSessionList.pageSize, at: .always(), from: store)
         #expect(list.now.contains { $0.state.sessionID == "gone" } && !list.historyRuns.flatMap(\.items).contains { $0.state.sessionID == "gone" })
     }
 
@@ -163,9 +163,10 @@ struct AgentDayTests {
 
         let all = try await PiSessionList.read(text: "", historyLimit: PiSessionList.pageSize, at: .always(), from: store)
         #expect(all.now.map(\.state.sessionID) == ["ask", "broken", "busy", "idle"])
-        let unfiled = try await PiSessionList.read(text: "", project: .unfiled, historyLimit: PiSessionList.pageSize, at: .always(), from: store)
-        #expect(unfiled.now.map(\.state.sessionID) == ["ask", "broken", "idle"] && unfiled.ended.map(\.state.sessionID) == ["done"])
-        let inTable = try await PiSessionList.read(text: "", project: .project(table.id), historyLimit: PiSessionList.pageSize, at: .always(), from: store)
+        // 没有项目的会话归默认项目
+        let home = try await PiSessionList.read(text: "", project: Project.defaultID, historyLimit: PiSessionList.pageSize, at: .always(), from: store)
+        #expect(home.now.map(\.state.sessionID) == ["ask", "broken", "idle"] && home.ended.map(\.state.sessionID) == ["done"])
+        let inTable = try await PiSessionList.read(text: "", project: table.id, historyLimit: PiSessionList.pageSize, at: .always(), from: store)
         #expect(inTable.now.map(\.state.sessionID) == ["busy"])
         let found = try await PiSessionList.read(text: "bro", historyLimit: PiSessionList.pageSize, at: .always(), from: store)
         #expect(found.now.map(\.state.sessionID) == ["broken"])
@@ -178,7 +179,7 @@ struct AgentDayTests {
         let session = try await item("deploy").state
         let workspace = Workspace(services: app.services)
         func list() async throws -> PiSessionList {
-            try await PiSessionList.read(text: "", project: .unfiled, historyLimit: PiSessionList.pageSize, at: .always(), from: store)
+            try await PiSessionList.read(text: "", project: Project.defaultID, historyLimit: PiSessionList.pageSize, at: .always(), from: store)
         }
 
         await workspace.end(session)

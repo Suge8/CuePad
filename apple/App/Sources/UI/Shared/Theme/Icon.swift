@@ -17,7 +17,7 @@ import AppKit
 nonisolated enum Icon: Hashable, Sendable {
     // 导航与页面入口
     case cue, cueAsleep, cueLooking, cueHappy
-    case idea, task, session, search, settings, unfiled, archive, trash, sidebar
+    case idea, task, session, search, settings, archive, trash, sidebar
     case agent, allProjects, all, filter, extensionNote
     // 状态
     case waiting, cueAsking, failure, undelivered, needsReload, onTheWay, replied, yourTurn, fresh, ended, interrupted, unknown
@@ -26,7 +26,7 @@ nonisolated enum Icon: Hashable, Sendable {
     case alertsPending, alertsOn, alertsOff
     // 任务与卡片操作
     case complete, reopen, restore, start, add, indent, outdent, link, unlink
-    case projects, folder, newProject, unbindFolder, folderMissing, resource, isResource, pin, unpin
+    case projects, folder, newProject, unbindFolder, resource, isResource, pin, unpin
     case copy, share, saveAsIdea, write, rename, close, remove, clear, more
     case forward, back, expand, collapse, choose, conflict, enlarge
     // 输入、发送与会话
@@ -63,7 +63,6 @@ nonisolated enum Icon: Hashable, Sendable {
         case .session: .ink("session")
         case .search: .ink("search")
         case .settings: .ink("settings")
-        case .unfiled: .ink("inbox")
         case .archive: .ink("archive")
         case .trash: .ink("trash")
         case .sidebar: .ink("sidebar")
@@ -116,7 +115,6 @@ nonisolated enum Icon: Hashable, Sendable {
         case .folder, .projects: .ink("folder")
         case .newProject: .ink("folder.add")
         case .unbindFolder: .ink("folder.remove")
-        case .folderMissing: .ink("folder.missing")
         case .resource, .isResource: .ink("books")
         case .pin: .ink("pin")
         case .unpin: .ink("unpin")

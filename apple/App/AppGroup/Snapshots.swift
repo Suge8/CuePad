@@ -12,8 +12,8 @@ nonisolated struct ProjectsSnapshot: Codable, Equatable, Sendable {
     var projects: [Project]
 }
 
-/// 未分类快照：主 App 写，小组件读。
-nonisolated struct UnfiledSnapshot: Codable, Equatable, Sendable {
+/// 默认项目的快照：主 App 写，小组件读（项目名可改，跟着写）。
+nonisolated struct DefaultProjectSnapshot: Codable, Equatable, Sendable {
     struct Card: Codable, Equatable, Sendable {
         var id: UUID
         /// 第一行文字；没有文字（只有图片）为空。
@@ -21,9 +21,10 @@ nonisolated struct UnfiledSnapshot: Codable, Equatable, Sendable {
         var modifiedAt: Date
     }
 
-    /// 最近修改的几张，新的在前。
+    var name: String
+    /// 最近修改的几张灵感，新的在前。
     var cards: [Card]
-    /// 未分类里的卡片总数。
+    /// 默认项目里的灵感总数。
     var total: Int
 }
 
@@ -43,7 +44,7 @@ nonisolated protocol SnapshotFile: Codable, Sendable {
 }
 
 nonisolated extension ProjectsSnapshot: SnapshotFile { static let fileName = "projects.json" }
-nonisolated extension UnfiledSnapshot: SnapshotFile { static let fileName = "unfiled.json" }
+nonisolated extension DefaultProjectSnapshot: SnapshotFile { static let fileName = "default-project.json" }
 nonisolated extension CueSnapshot: SnapshotFile { static let fileName = "cue.json" }
 
 /// 快照文件的读写：原子替换，读的一方随时都能读到完整内容。

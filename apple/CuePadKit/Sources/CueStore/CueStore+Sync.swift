@@ -297,13 +297,16 @@ extension CueStore {
       if key.table == .attachments {
         hash = try db.first("SELECT hash FROM attachments WHERE id = ?", [key.id]) { $0.text(0) }
       }
-      try db.run("DELETE FROM \(key.table.rawValue) WHERE id = ?", [key.id])
+      // 默认项目不能删：别处更早的版本永久删了它，本机的那条留着、忘掉元数据就重新传上去
+      if key.table != .projects || key.id != Project.defaultID.uuidString.lowercased() {
+        try db.run("DELETE FROM \(key.table.rawValue) WHERE id = ?", [key.id])
+      }
       try db.run("DELETE FROM syncRecords WHERE recordName = ?", [key.id])
       if key.table == .projects {
         // 项目已在别处永久删除，不会再"稍后到达"：本机遗留在它名下的卡片（多半是离线期间新写的），
-        // 与本地 purgeProject 一致地释放到未分类，内容保留，不悬空隐藏。
+        // 与本地 purgeProject 一致地释放到默认项目，内容保留，不悬空隐藏。
         let now = Date.stamp
-        try db.run("UPDATE cards SET projectID = NULL, modifiedAt = ? WHERE projectID = ?", [now, key.id])
+        try db.run("UPDATE cards SET projectID = ?, modifiedAt = ? WHERE projectID = ?", [Project.defaultID, now, key.id])
         try db.run("DELETE FROM projectDirectories WHERE projectID = ?", [key.id])
       }
       return hash
@@ -334,6 +337,10 @@ extension CueStore {
     var remote = remote
     // 通知标志只由置位的那台 Mac 上传、上传即清：远端带回来的（含自己上传的回声）不能再让本机的下一次改动带上它
     if Table.notifyFlagged.contains(remote.table) { remote.fields["notify"] = .null }
+    // 每张卡都在一个项目里：更早的版本记下的没有项目的卡只在这里归到默认项目，库里没有空的项目；
+    // 默认项目不能删，别处更早的版本把它放进回收站的不算
+    if remote.table == .cards, remote.fields["projectID"] ?? .null == .null { remote.fields["projectID"] = Project.defaultID.sqlValue }
+    if remote.table == .projects, remote.id == Project.defaultID.uuidString.lowercased() { remote.fields["deletedAt"] = .null }
     let table = remote.table
     let (pushed, sent) = try db.first("SELECT pushedModifiedAt, sentModifiedAt FROM syncRecords WHERE recordName = ?", [remote.id]) {
       ($0.intOrNil(0), $0.intOrNil(1))
@@ -389,8 +396,7 @@ extension CueStore {
   /// 被淘汰的卡片版本存成一张新卡（和留下的版本同项目、放在项目最前），指回原卡。副本是灵感（不带状态、上级与会话），
   /// 不会在看板上多出一条任务。
   private func insertConflictCopy(of loser: SyncRow, keeping winner: SyncRow) throws {
-    let projectID = winner.text("projectID").flatMap(UUID.init(uuidString:))
-    let first = try db.first("SELECT MIN(sortKey) FROM cards WHERE projectID IS ?", [projectID]) { $0.textOrNil(0) } ?? nil
+    let first = try db.first("SELECT MIN(sortKey) FROM cards WHERE projectID = ?", [winner.fields["projectID"] ?? .null]) { $0.textOrNil(0) } ?? nil
     let now = Date.stamp
     var fields = loser.fields
     fields["id"] = .text(UUID().uuidString.lowercased())

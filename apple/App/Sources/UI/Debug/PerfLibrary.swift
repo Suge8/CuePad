@@ -7,7 +7,7 @@ import Synchronization
 import UniformTypeIdentifiers
 
 /// 性能测量用的大资料库（`-CuePadSeed perf`，只在 Debug 构建、隔离资料库、库为空时写入）：
-/// 50 个项目、5000 张卡（一个大项目 1200 张、未分类 300 张，其余分给 49 个项目），其中 300 张带 4032×3024 的 JPEG；
+/// 50 个项目、5000 张卡（一个大项目 1200 张、默认项目 300 张，其余分给 49 个项目），其中 300 张带 4032×3024 的 JPEG；
 /// 修改时间分布在一年内；另有 200 条任务、500 条发送记录、200 个 Pi 历史会话，其中前 \(chatRounds.count) 个带对话（轮数见 `chatRounds`，
 /// 回答混着长段落、列表、表格、代码块与工具活动，给会话页滚动与切换用）；Cue 运行在另一台 Mac 上，对话 \(cueRounds) 轮
 /// （你的话、这一轮的经过、它的回答，中间夹着动态，每 \(cueRenewEvery) 轮换一次新上下文），给 Cue 页首访用。内容由固定种子生成，每次一样。
@@ -18,7 +18,7 @@ enum PerfLibrary {
     static let piSessionCount = 200
     static let bigProject = "大项目"
     private static let bigProjectCards = 1200
-    private static let unfiledCards = 300
+    private static let defaultCards = 300
     private static let boundProjects = 10
     /// 带对话的历史会话（`perf-0`…）各有多少轮，长短悬殊。
     static let chatRounds = [3, 6, 10, 16, 24, 36, 50, 70, 100, 140, 200, 300]
@@ -30,17 +30,17 @@ enum PerfLibrary {
         let images = try storeImages(store)
         var imagePool = images[...]
         var groups: [DemoLibrary.DemoProject] = []
-        let otherCards = (cardCount - bigProjectCards - unfiledCards) / (projectCount - 1)
+        let otherCards = (cardCount - bigProjectCards - defaultCards) / (projectCount - 1)
         for index in 0..<projectCount {
             let name = index == 0 ? bigProject : "项目 \(index) · \(projectWords[index % projectWords.count])"
-            let count = index == 0 ? bigProjectCards : otherCards + (index <= (cardCount - bigProjectCards - unfiledCards) % (projectCount - 1) ? 1 : 0)
+            let count = index == 0 ? bigProjectCards : otherCards + (index <= (cardCount - bigProjectCards - defaultCards) % (projectCount - 1) ? 1 : 0)
             groups.append(DemoLibrary.DemoProject(
                 name: name, icon: icons[index % icons.count], color: colors[index % colors.count], pinned: index < 3, directory: nil,
                 cards: (0..<count).map { _ in card(&random, images: &imagePool, imageShare: index == 0 ? 0.12 : 0.05) }))
         }
         groups.append(DemoLibrary.DemoProject(
             name: "", icon: .folder, color: "", pinned: false, directory: nil,
-            cards: (0..<unfiledCards).map { _ in card(&random, images: &imagePool, imageShare: 0.03) }))
+            cards: (0..<defaultCards).map { _ in card(&random, images: &imagePool, imageShare: 0.03) }))
         // 用剩的图分给大项目最近的卡，保证 300 张都用上
         var big = groups[0]
         for (offset, hash) in imagePool.enumerated() where offset < big.cards.count {

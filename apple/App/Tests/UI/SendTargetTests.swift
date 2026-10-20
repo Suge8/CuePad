@@ -48,9 +48,9 @@ struct SendTargetTests {
     }
 
     /// 一个带着正文的叶子任务；`session` 给了就是上一步绑着这个会话的第二步（开始时接着用它）。
-    private func leaf(in project: Project?, session: String? = nil) async throws -> Card {
-        guard let session else { return try await store.createTask(Self.text, in: project?.id) }
-        let task = try await store.createTask("修乱序", in: project?.id)
+    private func leaf(in project: Project, session: String? = nil) async throws -> Card {
+        guard let session else { return try await store.createTask(Self.text, in: project.id) }
+        let task = try await store.createTask("修乱序", in: project.id)
         let first = try await store.createTask("复现", under: task.id)
         try await store.linkCard(first.id, toSession: session)
         return try await store.createTask(Self.text, under: task.id)
@@ -89,16 +89,32 @@ struct SendTargetTests {
         #expect(bound.piSessionID == "new" && bound.status == .inProgress && bound.body == Self.text)
     }
 
-    @Test func 没有文件夹的未分类任务_开不了会话_什么都不写() async throws {
+    /// 项目在这台 Mac 上没绑文件夹：开始时在工作区的根下建好以项目名命名的文件夹（文件系统不收的字符换掉）、绑上并在那里开会话；
+    /// 同名的文件夹已经在就直接用它，里面的东西不动。
+    @Test func 没绑文件夹的项目_开始时建好工作区_绑上并在那里开会话() async throws {
         try await rig.services.executor.start()
         defer { rig.services.cancelBackgroundWork() }
-        let task = try await leaf(in: nil)
+        let root = rig.workspaces.root
+        let home = try #require(try await store.project(Project.defaultID))
+        let site = try await store.createProject(name: "客户/官网", color: "blue")
+        let existing = root.appending(path: "客户-官网", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: existing, withIntermediateDirectories: true)
+        try Data("留着".utf8).write(to: existing.appending(path: "notes.md"))
 
-        workspace.handOff(task)
-
-        try await eventually("workspace.notice != nil") { workspace.notice != nil }
-        #expect(workspace.notice?.isError == true && rig.host.calls.isEmpty)
-        #expect(try await store.deliveryRequests().isEmpty)
+        for (project, folder) in [(home, root.appending(path: "默认")), (site, existing)] {
+            let calls = rig.host.calls.count
+            workspace.handOff(try await leaf(in: project))
+            try await eventually("在\(project.name)的工作区开会话") { rig.host.calls.count > calls }
+            guard case .open(let directory, _, _, _, _) = rig.host.calls.last else {
+                Issue.record("没有开新会话")
+                return
+            }
+            let expected = folder.standardizedFileURL.pathComponents
+            #expect(URL(filePath: directory).standardizedFileURL.pathComponents == expected)
+            #expect(try await store.directory(of: project.id).map { URL(filePath: $0).standardizedFileURL.pathComponents } == expected)
+        }
+        #expect(try String(contentsOf: existing.appending(path: "notes.md"), encoding: .utf8) == "留着")
+        #expect(workspace.notice == nil)
     }
 
     @Test func 上一步绑着会话_开始时接着发进那个会话_送达后这一步绑上_不开新会话() async throws {

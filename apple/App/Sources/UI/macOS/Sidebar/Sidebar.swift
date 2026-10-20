@@ -3,7 +3,7 @@ import CueStore
 import SwiftUI
 
 /// 侧栏的结构与 iPhone、iPad 同一份（`SidebarOutline`），这里只管 Mac 的长相，一列到底：最上面 Cue 名片（`CueSidebarCard`）、
-/// 下面并排两块磁贴（`PlaceTiles`：任务打开看板页，会话打开会话页）、项目（置顶的在前，末尾未分类；Mac 没有书架，全部列出），底栏是归档、回收站与设置。
+/// 下面并排两块磁贴（`PlaceTiles`：任务打开看板页，会话打开会话页）、项目（置顶的在前；Mac 没有书架，全部列出），底栏是归档、回收站与设置。
 /// 点哪一处，内容区就是哪一页。在线会话不在侧栏另列：全部在会话页，项目行尾的状态标说这个项目里有没有要看的。
 /// 名片与磁贴一直在看得见的地方，只有项目区滚动（方向键与 ⌘1–9 换到的项目滚进可见区）；项目区是普通栈：几十行的量级，行高固定。
 struct Sidebar: View {
@@ -17,7 +17,7 @@ struct Sidebar: View {
     var body: some View {
         // 不用 List：系统选中是灰胶囊，压不过墨色体系；当前页由各处自己画，方向键由 onMoveCommand 接管
         let catalog = workspace.catalog
-        let pages = trashCount.flatMap { count in catalog.map { SidebarPages($0, trashCount: count) } }
+        let pages = catalog.map(SidebarPages.init)
         VStack(spacing: 0) {
             CueSidebarCard(select: select).padding(.top, 6)
             PlaceTiles(select: select).padding(.horizontal, SidebarMetrics.edge).padding(.top, 10)
@@ -32,7 +32,7 @@ struct Sidebar: View {
                 }
             }
             .frame(maxHeight: .infinity, alignment: .top)
-            footer(showsBins: pages?.showsBins ?? false, trashCount: trashCount ?? 0)
+            footer(trashCount: trashCount ?? 0)
         }
         .focusable()
         .focused($focused)
@@ -63,14 +63,12 @@ struct Sidebar: View {
     }
 
     /// 底栏：启动问题（有才出现），下面一排归档、回收站与设置。
-    private func footer(showsBins: Bool, trashCount: Int) -> some View {
+    private func footer(trashCount: Int) -> some View {
         VStack(spacing: 8) {
             StartupIssues()
             HStack(spacing: 2) {
-                if showsBins {
-                    FooterPage(entry: .archive, select: select)
-                    FooterPage(entry: .trash, count: trashCount, select: select)
-                }
+                FooterPage(entry: .archive, select: select)
+                FooterPage(entry: .trash, count: trashCount, select: select)
                 Spacer()
                 let settings = SidebarOutline.Entry.settings
                 Button(settings.title, icon: settings.icon) { SettingsPane.open() }
@@ -146,18 +144,16 @@ private struct SidebarHeader<Action: View>: View {
     }
 }
 
-/// 侧栏里能去的页，按显示顺序：任务 → 会话 → 项目（`SidebarOutline`）→ 未分类 → 归档 → 回收站。方向键共用这一份顺序。
+/// 侧栏里能去的页，按显示顺序：任务 → 会话 → 项目（`SidebarOutline`）→ 归档 → 回收站。方向键共用这一份顺序。
 private struct SidebarPages {
     let outline: SidebarOutline
-    let showsBins: Bool
 
-    init(_ catalog: ProjectCatalog, trashCount: Int) {
+    init(_ catalog: ProjectCatalog) {
         outline = SidebarOutline(catalog)
-        showsBins = trashCount > 0 || !catalog.projects.isEmpty
     }
 
     var order: [Route] {
-        [.tasks, .agent] + outline.projects.map { .project($0.id) } + (outline.unfiled > 0 ? [.unfiled] : []) + (showsBins ? [.archive, .trash] : [])
+        [.tasks, .agent] + outline.projects.map { .project($0.id) } + [.archive, .trash]
     }
 }
 
@@ -230,14 +226,13 @@ private struct PlaceTile: View {
     }
 }
 
-/// 项目区的行：项目与末尾的未分类。只有这里读当前页与在线会话，每行拿到"选没选中"与行尾的状态标：换页时只重算选中变了的两行
+/// 项目区的行。只有这里读当前页与在线会话，每行拿到"选没选中"与行尾的状态标：换页时只重算选中变了的两行
 /// （每行各读当前页时，换一次页项目再多也全部重算），会话状态变时只重算标变了的行。
 private struct ProjectRows: View {
     let pages: SidebarPages
     let catalog: ProjectCatalog
     let select: (Route) -> Void
     @Environment(Workspace.self) private var workspace
-    @Environment(\.palette) private var palette
 
     var body: some View {
         let current = workspace.page
@@ -249,16 +244,6 @@ private struct ProjectRows: View {
                     select: select, edit: { workspace.projectForm = .init(project: project) })
                     .equatable()
                     .id(Route.project(project.id))
-            }
-            if pages.outline.unfiled > 0 {
-                PageRow(selected: current == .unfiled, action: { select(.unfiled) }) {
-                    ProjectGlyph(project: nil)
-                } title: {
-                    Text(CaptureCopy.unfiled)
-                } trailing: {
-                    Text("\(pages.outline.unfiled)").font(Typography.meta.monospacedDigit()).foregroundStyle(palette.ink3)
-                }
-                .id(Route.unfiled)
             }
         }
     }

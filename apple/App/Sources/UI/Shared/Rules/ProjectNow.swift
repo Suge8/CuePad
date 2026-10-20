@@ -48,12 +48,12 @@ nonisolated struct ProjectNow: Hashable, Sendable {
         return intro.map { ProjectNow(source: .intro, text: $0) }
     }
 
-    /// 全部项目一次算完（界面在数据变化时算一次，行只拿结果）：会话按 `projectID` 归到项目。`sessions` 要传此刻有事的会话
+    /// 全部项目一次算完（界面在数据变化时算一次，行只拿结果）：会话按 `PiSessionListItem.home` 归到项目（没有项目的归默认项目）。`sessions` 要传此刻有事的会话
     /// （`PiSessionQuery.current`：在线的，加上还有话发给它的已结束会话），只传在线的会漏掉发给已结束会话的话。
     static func byProject(
         _ projects: [Project], sessions: [PiSessionListItem], tasks: [UUID: [InProgress]], shown: (PiSessionListItem) -> PiShown
     ) -> [UUID: ProjectNow] {
-        let byProject = Dictionary(grouping: sessions.filter { $0.state.projectID != nil }) { $0.state.projectID! }
+        let byProject = Dictionary(grouping: sessions, by: \.home)
         var result: [UUID: ProjectNow] = [:]
         for project in projects {
             result[project.id] = pick(byProject[project.id] ?? [], shown: shown, task: tasks[project.id]?.first?.title, intro: project.intro)

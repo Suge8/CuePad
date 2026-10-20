@@ -32,26 +32,18 @@ final class AgentListModel {
 
     enum Empty: Equatable {
         case noMatch(String)
-        /// 会话按工作目录归入项目：没绑文件夹就一个也归不进来，不能说"没有会话"。
-        case needsFolder(Project)
-        /// 没有会话：全部（nil）、这个项目或未分类里。
-        case none(PiSessionProject?)
+        /// 没有会话：全部（nil）或这个项目里。
+        case none(UUID?)
 
         /// "没有会话"的标题（两端同一句；下面的说明与按钮各端自己给）。
         var noneTitle: String {
-            switch self {
-            case .none(.project): "这个项目还没有 Agent 会话"
-            case .none(.unfiled): "没有\(CaptureCopy.unfiled)的 Agent 会话"
-            default: "还没有 Agent 会话"
-            }
+            if case .none(.some) = self { "这个项目还没有 Agent 会话" } else { "还没有 Agent 会话" }
         }
     }
 
-    /// 列表空着时说什么；`filter` 是此刻的筛选。
-    func empty(filter: PiSessionProject?, in workspace: Workspace) -> Empty {
-        if searching { return .noMatch(query) }
-        if let project = workspace.catalog?.project(filter?.id), !workspace.hasFolder(project.id) { return .needsFolder(project) }
-        return .none(filter)
+    /// 列表空着时说什么；`filter` 是此刻筛着的项目。
+    func empty(filter: UUID?) -> Empty {
+        searching ? .noMatch(query) : .none(filter)
     }
 }
 
@@ -66,12 +58,12 @@ extension PiSessionList {
 extension View {
     /// 读 Agent 页的列表（`filter` 是此刻的项目筛选）：随会话、投送请求、项目与目录绑定的变化重读，换搜索词或筛选时重新订阅；
     /// 一并挂上改名与结束会话的确认、行里的搜索高亮。
-    func agentList(_ model: AgentListModel, filter: PiSessionProject?) -> some View { modifier(AgentListReader(model: model, filter: filter)) }
+    func agentList(_ model: AgentListModel, filter: UUID?) -> some View { modifier(AgentListReader(model: model, filter: filter)) }
 }
 
 private struct AgentListReader: ViewModifier {
     @Bindable var model: AgentListModel
-    let filter: PiSessionProject?
+    let filter: UUID?
     @Environment(AppServices.self) private var services
     @Environment(Workspace.self) private var workspace
 

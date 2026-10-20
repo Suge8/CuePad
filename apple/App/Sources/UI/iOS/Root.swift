@@ -1,4 +1,5 @@
 #if os(iOS)
+import CueStore
 import SwiftUI
 
 /// iOS/iPadOS 一个窗口的根视图（建出本窗口的 `Workspace` 与 `Navigation`）：宽屏是分栏（`SplitRoot`），窄屏（iPhone 与窄窗口 iPad）
@@ -34,7 +35,7 @@ struct IOSRoot: View {
                     if let outbox = navigation.outbox { HandOffInput(outbox: outbox).id(outbox.id) }
                 }
             }
-            .sheet(item: $navigation.projectForm) { ProjectFormSheet(project: $0.project, created: $0.created) }
+            .sheet(item: $navigation.projectForm) { ProjectFormSheet(project: $0.project) }
             .sheet(item: Binding(get: { workspace.folderPicker }, set: { workspace.folderPicker = $0 })) { FolderPickerSheet(project: $0) }
             .overlay { TaskBubbleSlot() }
         }
@@ -121,7 +122,6 @@ struct RouteView: View {
         switch route {
         case .shelf: ShelfScreen()
         case .project(let id): ProjectScreen(projectID: id)
-        case .unfiled: UnfiledScreen()
         case .archive: ArchiveList().floatingHeader("归档")
         case .trash: TrashScreen()
         case .settings: SettingsScreen()
@@ -163,9 +163,9 @@ struct RootShortcuts: View {
     @Environment(Workspace.self) private var workspace
     @Environment(Navigation.self) private var navigation
 
-    /// 新卡放进正在看的项目（不在项目里时进未分类），随即打开。
+    /// 新卡放进正在看的项目（不在项目里时进默认项目），随即打开。
     private func newCard() {
-        let project = navigation.currentProject
+        let project = navigation.currentProject ?? Project.defaultID
         workspace.attempt {
             let card = try await workspace.createCard(in: project)
             navigation.push(.card(card.id))

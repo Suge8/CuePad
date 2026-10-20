@@ -41,10 +41,9 @@ extension AppServices {
         _ = try await store.createCard(in: project, body: sections.joined(separator: "\n\n"))
     }
 
-    /// 分享时选的项目此后可能已被删除；卡片放进已删除的项目会不可见，回到未分类。
-    private func existingProject(_ id: UUID?) async throws -> UUID? {
-        guard let id else { return nil }
-        guard let project = try await store.project(id), project.deletedAt == nil else { return nil }
+    /// 没选项目（更早的版本写的），或选的项目此后已被删除（卡片放进已删除的项目会不可见）的，进默认项目。
+    private func existingProject(_ id: UUID?) async throws -> UUID {
+        guard let id, let project = try await store.project(id), project.deletedAt == nil else { return Project.defaultID }
         return id
     }
 }

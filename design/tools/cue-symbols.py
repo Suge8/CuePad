@@ -451,15 +451,6 @@ def settings(m):
     return [Layer("gear", [rpoly(pts, radii), disc((0, 0), hr, hole=True)]), Layer("axle", [disc((0, 0), hr - c - 0.3)], "secondary")]
 
 
-def inbox(m):
-    """未分类：一只托盘（上沿中间凹下去一块），上方一张小纸条（点睛）正落进去。"""
-    g, c = GROW[m], CARVE[m]
-    tray = grown([(-11, -1.2), (-5.2, -1.2), (-3.6, 2.0), (3.6, 2.0), (5.2, -1.2), (11, -1.2), (11, 8.4), (-11, 8.4)],
-                 [0.8, 0.5, 0.6, 0.6, 0.5, 0.8, 2.8, 2.8], g)
-    slip = grown([(-3.2, -8.6), (3.2, -8.6), (3.2, -1.2 - c - 2 * g), (-3.2, -1.2 - c - 2 * g)], [1.0, 1.0, 0, 0], g)
-    return [Layer("tray", [tray]), Layer("slip", [slip], "secondary")]
-
-
 def archive(m):
     """归档：箱盖一块、箱身一块，中间一道平刀口；箱身上挖一道把手槽。"""
     g, c = GROW[m], CARVE[m]
@@ -1785,7 +1776,6 @@ SYMBOLS = {
     "session": session,
     "search": search(),
     "settings": settings,
-    "inbox": inbox,
     "archive": archive,
     "trash": trash,
     "sidebar": sidebar,
@@ -1836,7 +1826,6 @@ SYMBOLS = {
     "folder": folder(),
     "folder.add": folder(mark_plus),
     "folder.remove": folder(mark_minus),
-    "folder.missing": folder(lambda c, s, w: mark_question(c, s * 0.8, w)),
     "books": books,
     "pin": pin,
     "unpin": unpin,

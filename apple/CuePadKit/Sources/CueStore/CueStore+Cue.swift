@@ -132,7 +132,7 @@ extension CueStore {
     return true
   }
 
-  /// 任务所在的项目；没有任务或任务不在项目里为 nil。
+  /// 任务所在的项目；没有任务为 nil。
   private func projectID(of task: UUID?) throws -> UUID? {
     try task.flatMap { try find(Card.self, $0) }?.projectID
   }

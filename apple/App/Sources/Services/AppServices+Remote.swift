@@ -67,11 +67,11 @@ extension AppServices {
     /// 本机的目录绑定写成同步的目录绑定记录（手机据此知道哪些项目能在哪台 Mac 上开新会话）：先对一次，
     /// 之后本机绑定每次变化时跟上，直到后台任务取消。
     func startDirectoryBindings() async throws {
-        let host = hostID
-        try await store.publishDirectoryBindings(host: host)
+        let host = hostID, workspaces = workspaces
+        try await store.publishDirectoryBindings(host: host, workspaces: workspaces)
         let changes = store.observe { try $0.projectDirectories() }
         follow(reporting: { .syncUnavailable("目录绑定没能同步给手机：\($0)") }) { [store] in
-            for try await _ in changes { try await store.publishDirectoryBindings(host: host) }
+            for try await _ in changes { try await store.publishDirectoryBindings(host: host, workspaces: workspaces) }
         }
     }
 }

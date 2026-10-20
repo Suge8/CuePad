@@ -42,23 +42,33 @@ struct IOSWorkflowTests {
     // MARK: 发给 Agent
 
     /// 一条带着正文的叶子任务，和带着它的发给 Agent 输入框草稿（`Navigation.handToAgent` 带进来的那样）。
-    private func leaf(in project: UUID?) async throws -> (task: Card, draft: ComposerDraft) {
+    private func leaf(in project: UUID) async throws -> (task: Card, draft: ComposerDraft) {
         let task = try await store.createTask("修乱序\n先复现", in: project)
         return (task, ComposerDraft(attachments: [Outbox(content: Outgoing.text(of: task), card: task.id, project: task.projectID)]))
     }
 
-    /// 默认目标是新会话时点发送：未分类的任务开不了会话，说一句、不写任何请求、不换成新会话输入框。
-    @Test func 发给Agent默认开新会话_未分类的开不了_不写请求() async throws {
-        let (task, draft) = try await leaf(in: nil)
+    /// 项目哪台 Mac 都没绑文件夹：新会话交给干活的那台 Mac（Cue 在用的，没有就是按名字排第一台），由它建好工作区开会话；
+    /// 一台 Mac 都没打开过 CuePad 时开不了，说清楚要先在 Mac 上打开它。
+    @Test func 发给Agent默认开新会话_没绑文件夹的项目交给干活的那台Mac() async throws {
+        let (task, draft) = try await leaf(in: Project.defaultID)
+        await #expect(throws: CueStoreError.noMac) { try await store.handOffPlan(task.id, host: nil) }
+
+        try await store.recordMacAgents(host: "mac-z", name: "Alpha", [])
+        try await store.recordMacAgents(host: "mac-a", name: "Zulu", [])
+        let plan = try await store.handOffPlan(task.id, host: nil)
+        #expect(plan.destination == .launch(project: Project.defaultID, host: "mac-z"))
         let workspace = Workspace(services: app.services), navigation = Navigation(settings: app.services.settings)
 
         HandOffInput.startDefault(
-            draft, card: task.id, plan: try await store.handOffPlan(task.id, host: nil), opening: try await store.opening(of: task.id, true),
-            workspace: workspace, navigation: navigation)
+            draft, card: task.id, plan: plan, opening: try await store.opening(of: task.id, true), workspace: workspace, navigation: navigation)
 
-        #expect(workspace.notice?.isError == true && workspace.notice?.text == "未分类的任务没有文件夹，开不了会话")
-        #expect(navigation.newSession == nil)
-        #expect(try await store.deliveryRequests().isEmpty)
+        let start = try #require(navigation.newSession)
+        let places = ProjectFolders.launchPlaces(
+            projects: try await store.projects(), bindings: try await store.directoryBindings(), host: nil, workMac: try await store.workMac())
+        let place = try #require(start.place(among: places)), host = try #require(place.host)
+        _ = try await start.launch(in: place.project, on: host, draft: try #require(start.draft), agent: .pi, model: nil, thinking: nil, services: app.services)
+        let request = try #require(try await store.deliveryRequests().first)
+        #expect(request.launch?.project == Project.defaultID && request.hostID == "mac-z")
     }
 
     /// 默认目标是新会话时点发送：新会话输入框默认的项目、哪台 Mac、会话名都是交到哪的决定（`CueStore.handOffPlan`）。
@@ -66,8 +76,8 @@ struct IOSWorkflowTests {
     @Test func 发给Agent默认开新会话_项目Mac会话名都按交到哪的决定() async throws {
         let project = try await store.createProject(name: "圆桌", color: "#000000")
         try await store.setDirectory("/work/table", for: project.id)
-        try await store.publishDirectoryBindings(host: "mac-z")
-        try await store.publishDirectoryBindings(host: "mac-a")
+        try await store.publishDirectoryBindings(host: "mac-z", workspaces: Workspaces(root: URL(filePath: "/Users/me/CuePad")))
+        try await store.publishDirectoryBindings(host: "mac-a", workspaces: Workspaces(root: URL(filePath: "/Users/me/CuePad")))
         try await store.recordMacAgents(host: "mac-z", name: "Alpha", [])
         try await store.recordMacAgents(host: "mac-a", name: "Zulu", [])
         let (task, draft) = try await leaf(in: project.id)
@@ -79,9 +89,10 @@ struct IOSWorkflowTests {
             draft, card: task.id, plan: plan, opening: try await store.opening(of: task.id, true), workspace: workspace, navigation: navigation)
 
         let start = try #require(navigation.newSession)
-        let places = ProjectFolders.launchPlaces(projects: try await store.projects(), bindings: try await store.directoryBindings(), host: nil)
-        let place = try #require(start.place(among: places)), binding = try #require(place.binding)
-        _ = try await start.launch(in: place.project, binding: binding, draft: try #require(start.draft), agent: .pi, model: nil, thinking: nil, services: app.services)
+        let places = ProjectFolders.launchPlaces(
+            projects: try await store.projects(), bindings: try await store.directoryBindings(), host: nil, workMac: try await store.workMac())
+        let place = try #require(start.place(among: places)), host = try #require(place.host)
+        _ = try await start.launch(in: place.project, on: host, draft: try #require(start.draft), agent: .pi, model: nil, thinking: nil, services: app.services)
         let request = try #require(try await store.deliveryRequests().first)
         #expect(request.launch?.project == project.id && request.hostID == "mac-z")
         #expect(request.launch?.name == "修乱序" && request.target.name == "修乱序" && request.cardID == task.id)

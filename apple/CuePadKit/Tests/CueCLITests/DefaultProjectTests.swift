@@ -5,7 +5,7 @@ import Testing
 
 @testable import CueCLI
 
-/// 不给 --project / --unfiled 时，默认范围是绑定了当前目录（或其祖先目录）的项目。
+/// 不给 --project 时，默认范围是绑定了当前目录（或其祖先目录）的项目；不在这样的目录里新建的进默认项目。
 @Suite struct DefaultProjectTests {
   private struct World {
     let sb: Sandbox
@@ -13,7 +13,7 @@ import Testing
     let beta: Project
     let inAlpha: Card
     let inBeta: Card
-    let inUnfiled: Card
+    let inDefault: Card
     static let alphaDirectory = "/work/alpha"
     static let inside = "/work/alpha/src/deep"
 
@@ -24,9 +24,9 @@ import Testing
       try await sb.store.setDirectory(Self.alphaDirectory, for: alpha.id)
       inAlpha = try await sb.store.createCard(in: alpha.id, body: "共同词 alpha")
       inBeta = try await sb.store.createCard(in: beta.id, body: "共同词 beta")
-      inUnfiled = try await sb.store.createCard(in: nil, body: "共同词 unfiled")
+      inDefault = try await sb.store.createCard(body: "共同词 默认")
       _ = try await sb.store.createTask("alpha 任务", in: alpha.id)
-      _ = try await sb.store.createTask("全局任务", in: nil)
+      _ = try await sb.store.createTask("默认任务")
     }
 
     func cards(_ command: [String], cwd: String? = Self.inside) async throws -> Set<String> {
@@ -57,19 +57,18 @@ import Testing
     let w = try await World()
 
     #expect(try await w.cards(["card", "list", "--project", "Beta"]) == ["共同词 beta"])
-    #expect(try await w.cards(["card", "list", "--unfiled"]) == ["共同词 unfiled"])
-    #expect(try await w.cards(["card", "list", "--all-projects"]) == ["共同词 alpha", "共同词 beta", "共同词 unfiled"])
+    #expect(try await w.cards(["card", "list", "--project", "默认"]) == ["共同词 默认"])
+    #expect(try await w.cards(["card", "list", "--all-projects"]) == ["共同词 alpha", "共同词 beta", "共同词 默认"])
     #expect(try await w.cards(["search", "共同词", "--all-projects"]).count == 3)
-    #expect(try await w.cards(["search", "共同词", "--unfiled"]) == ["共同词 unfiled"])
-    #expect(try await w.tasks(["--global"]) == ["全局任务"])
-    #expect(try await w.tasks(["--all-projects"]) == ["alpha 任务", "全局任务"])
+    #expect(try await w.tasks(["--project", "默认"]) == ["默认任务"])
+    #expect(try await w.tasks(["--all-projects"]) == ["alpha 任务", "默认任务"])
 
-    let unfiled = try await w.sb.object("card", "add", "--unfiled", "--body", "x", cwd: World.inside)
-    #expect(unfiled["projectId"] is NSNull)
     let beta = try await w.sb.object("card", "add", "--project", "Beta", "--body", "y", cwd: World.inside)
     #expect(beta.string("projectId") == w.beta.id.uuidString.lowercased())
-    let global = try await w.sb.object("task", "add", "--global", "g", cwd: World.inside)
-    #expect(global["projectId"] is NSNull)
+    // 不在绑定了目录的项目里：新建的进默认项目
+    let home = Project.defaultID.uuidString.lowercased()
+    #expect(try await w.sb.object("card", "add", "--body", "x", cwd: nil).string("projectId") == home)
+    #expect(try await w.sb.object("task", "add", "g", cwd: nil).string("projectId") == home)
 
     let conflicting = await w.sb.run("card", "list", "--project", "Beta", "--all-projects", cwd: World.inside)
     #expect(conflicting.code == 2)

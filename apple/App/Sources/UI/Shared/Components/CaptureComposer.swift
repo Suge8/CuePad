@@ -2,11 +2,11 @@ import CueStore
 import SwiftUI
 
 #if os(macOS)
-/// 随手记正在写的这一条：草稿与手动换过的落点（`.some(nil)` 是未分类；nil 时落在调用方给的默认落点）。
+/// 随手记正在写的这一条：草稿与手动换过的落点（nil 时落在调用方给的落点）。
 /// Mac 的底部输入栏与菜单栏面板各留一份。
 struct CaptureState {
     var draft = ComposerDraft()
-    var project: UUID??
+    var project: UUID?
 }
 
 /// 随手记（Mac 底部输入栏与菜单栏面板共用；手机上随手记在"对 Cue 说"里，见 `CueComposer`）：共用的 `Composer`，头部左上是落点菜单（先看去哪、再写），
@@ -15,7 +15,7 @@ struct CaptureState {
 /// 菜单栏面板的提示写在头部右边。
 struct CaptureComposer: View {
     @Binding var state: CaptureState
-    /// 没手动换过落点时落在哪（主窗口是正在看的项目，菜单栏面板是上次打开的项目）。
+    /// 没手动换过落点时落在哪（主窗口是正在看的项目，菜单栏面板是上次打开的项目）；不在项目里时是默认项目。
     let defaultProject: UUID?
     /// 一直展开、出现即聚焦（菜单栏面板，形态 `.open`）；否则聚焦或有内容时才展开。
     let pinnedOpen: Bool
@@ -26,8 +26,8 @@ struct CaptureComposer: View {
     @State private var saving = false
     @FocusState private var focused: Bool
 
-    private var project: UUID? { state.project ?? defaultProject }
-    private var destination: String { CaptureCopy.destination(workspace.catalog?.project(project)) }
+    private var project: UUID { state.project ?? defaultProject ?? Project.defaultID }
+    private var destination: String { workspace.catalog?.project(project)?.name ?? "" }
     /// 收成一行（`Composer` 同一条规则）：没有头部的落点胶囊，占位要带上落点。
     private var collapsed: Bool { !pinnedOpen && !focused && state.draft.isEmpty(accepting: .images) }
 
@@ -59,9 +59,8 @@ struct CaptureComposer: View {
 
     private var destinationMenu: some View {
         MenuButton(sections: [
-            ChoiceMenu.Section(choices: [ChoiceMenu.Choice(title: CaptureCopy.unfiled, checked: project == nil) { state.project = .some(nil) }]),
             ChoiceMenu.Section(choices: (workspace.catalog?.projects ?? []).map { item in
-                ChoiceMenu.Choice(title: item.name, checked: item.id == project) { state.project = .some(item.id) }
+                ChoiceMenu.Choice(title: item.name, checked: item.id == project) { state.project = item.id }
             }),
         ], accessibilityLabel: "记到 \(destination)") {
             DestinationChip(project: workspace.catalog?.project(project))
@@ -128,6 +127,6 @@ private enum ChipMetrics {
 
 extension DestinationChip where Icon == ProjectGlyph {
     init(project: Project?) {
-        self.init(lead: "→", title: Text(CaptureCopy.destination(project))) { ProjectGlyph(project: project, size: ChipMetrics.glyph) }
+        self.init(lead: "→", title: Text(project?.name ?? "")) { ProjectGlyph(project: project, size: ChipMetrics.glyph) }
     }
 }

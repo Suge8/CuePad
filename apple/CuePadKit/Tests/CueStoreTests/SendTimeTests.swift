@@ -12,7 +12,7 @@ import Testing
     let b = try await store.createCard(in: p.id, body: "b")
     let neverSent = try await store.createCard(in: p.id, body: "never")
     let trashed = try await store.createCard(in: p.id, body: "trashed")
-    let unfiled = try await store.createCard(in: nil, body: "unfiled")
+    let home = try await store.createCard(body: "home")
     let review = SendTarget(kind: .piSession, name: "review", ref: "s2")
     let pi = SendTarget(kind: .piSession, name: "fix bug", ref: "s1")
 
@@ -21,7 +21,7 @@ import Testing
     let latest = try await store.recordSend("a again", to: pi, card: a.id)
     let onlyOnce = try await store.recordSend("b", to: review, card: b.id)
     try await store.recordSend("t", to: review, card: trashed.id)
-    try await store.recordSend("i", to: review, card: unfiled.id)
+    try await store.recordSend("i", to: review, card: home.id)
     try await store.recordSend("loose", to: review)  // 没关联卡片
     try await store.trashCard(trashed.id)
 
@@ -31,7 +31,7 @@ import Testing
     #expect(sends[a.id]?.sentAt == latest.sentAt && latest.sentAt > old.sentAt)
     #expect(sends[a.id]?.target == pi)  // 最近一次发给谁
     #expect(sends[b.id] == LastSend(sentAt: onlyOnce.sentAt, target: review))
-    #expect(try await store.lastSends(in: nil).keys.contains(unfiled.id))
+    #expect(try await store.lastSends(in: Project.defaultID).keys.contains(home.id))
     _ = neverSent
   }
 }

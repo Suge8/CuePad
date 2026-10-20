@@ -84,7 +84,7 @@ private struct WindowPanels: View {
                 guard (try? await Task.sleep(for: Prewarm.delay)) != nil else { return }
                 mountsPalette = true
             }
-            .panel(item: $workspace.projectForm) { ProjectForm(project: $0.project, created: $0.created) }
+            .panel(item: $workspace.projectForm) { ProjectForm(project: $0.project) }
             .panel(isPresented: $workspace.showsAgentSetup) { AgentSetupPanel() }
     }
 }
@@ -174,7 +174,6 @@ private struct PageStack: View {
     @ViewBuilder private func pageView(_ page: Route) -> some View {
         switch page {
         case .project(let id): ProjectPage(projectID: id)
-        case .unfiled: ProjectPage(projectID: nil)
         case .archive: ArchivePage()
         case .trash: TrashPage()
         case .cue: CuePage()
@@ -317,7 +316,7 @@ private extension Route {
     /// 底部输入栏放不放：回收站、Agent 整页与会话页不是记灵感的地方。
     var takesCapture: Bool {
         switch self {
-        case .project, .unfiled, .archive: true
+        case .project, .archive: true
         default: false
         }
     }
@@ -352,9 +351,9 @@ extension Workspace {
         show(.project(projects[number - 1].id))
     }
 
-    /// ⌘N（"文件 › 记一条灵感"）：在当前项目里新记一条灵感并打开它。
+    /// ⌘N（"文件 › 记一条灵感"）：在当前项目里新记一条灵感并打开它；不在项目页时记进默认项目。
     func newCard() {
-        let project = currentProject
+        let project = currentProject ?? Project.defaultID
         attempt { self.open(try await self.createCard(in: project)) }
     }
 

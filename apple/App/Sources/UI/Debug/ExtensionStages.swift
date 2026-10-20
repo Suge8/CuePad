@@ -4,7 +4,7 @@ import SwiftUI
 import UIKit
 import WidgetKit
 
-/// `-CuePadScene widgets`：两种小组件（Cue、未分类）的小号与中号，用小组件自己的视图（`WidgetViews`，主 App 也编进了它）
+/// `-CuePadScene widgets`：两种小组件（Cue、默认项目）的小号与中号，用小组件自己的视图（`WidgetViews`，主 App 也编进了它）
 /// 按 iPhone 桌面的尺寸与圆角画在桌面色的底上——模拟器桌面上放小组件要点按 SpringBoard，脚本不做。
 /// 小组件的容器底（`containerBackground`）只在小组件里生效，这里按同一个令牌（`desk`）画出那块底与系统的内边距。
 struct DebugWidgetStage: View {
@@ -17,18 +17,19 @@ struct DebugWidgetStage: View {
     private static let radius: CGFloat = 23
 
     private static let cue = CueSnapshot(name: "Cue", managing: 3, waiting: 2, mood: "waiting")
-    private static let unfiled = UnfiledSnapshot(
-        cards: ["周末带孩子去科技馆", "重连用例补三个", "首页标题换成新文案"].map { UnfiledSnapshot.Card(id: UUID(), title: $0, modifiedAt: .now) },
+    private static let home = DefaultProjectSnapshot(
+        name: "默认",
+        cards: ["周末带孩子去科技馆", "重连用例补三个", "首页标题换成新文案"].map { DefaultProjectSnapshot.Card(id: UUID(), title: $0, modifiedAt: .now) },
         total: 7)
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             HStack(spacing: 24) {
                 tile(Self.small) { WidgetViews.cue(Self.cue, family: .systemSmall) }
-                tile(Self.small) { WidgetViews.unfiled(Self.unfiled) }
+                tile(Self.small) { WidgetViews.defaultProject(Self.home) }
             }
             tile(Self.medium) { WidgetViews.cue(Self.cue, family: .systemMedium) }
-            tile(Self.medium) { WidgetViews.unfiled(Self.unfiled) }
+            tile(Self.medium) { WidgetViews.defaultProject(Self.home) }
         }
         .padding(16)
         .frame(maxWidth: .infinity, maxHeight: .infinity)

@@ -8,7 +8,7 @@
 另有 wait_ready（kqueue 等就绪文件）给 rusage.py 用。
 规则：
 1. 只起 apple/.derived* 里的构建；库、偏好、各家 Agent 的配置目录、命令行链接与连接目录都在库目录或本检出的 SOCKETS 下
-   （isolated_env 是唯一一份，sync-bench.py 也用它），不碰真实资料库、~/.pi、~/.local/bin 与 ~/Applications/CuePad.app。
+   （isolated_env 是唯一一份，sync-bench.py 也用它），不碰真实资料库、~/.pi、~/.local/bin、~/CuePad（项目工作区）与 ~/Applications/CuePad.app。
 2. Mac 每个检出最多一份：看守进程（就是本进程）持 apple/.derived/mac-app.lock 的 flock，锁随看守进程释放，崩了也不留；
    新起的直接换掉 run 留着的旧实例。检出之间互不等待：几个 Agent 并行开发时各自截图、验收。
 3. 一定退出：做完、出错、被打断（TERM、INT、HUP）、超时（截图类 HOLD 秒，run 是 RUN_TTL，验完就 stop）都走 quit：先 TERM 走 App 的正常退出，
@@ -62,6 +62,7 @@ def isolated_env(library, sockets=SOCKETS):
     # 锁的内部变量不带进实例：实例里的 Agent 再调 xc.sh 要照常进锁
     inherited = {k: v for k, v in os.environ.items() if k != "CUEPAD_SIM"}
     return dict(inherited, CUEPAD_LIBRARY_DIR=library, CUEPAD_BIN_DIR=f"{library}/bin", CUEPAD_PI_SOCKET_DIR=sockets,
+                CUEPAD_WORKSPACE_DIR=f"{library}/workspaces",
                 PI_CODING_AGENT_DIR=f"{agents}/pi", CLAUDE_CONFIG_DIR=f"{agents}/claude",
                 CODEX_HOME=f"{agents}/codex", OPENCODE_CONFIG_DIR=f"{agents}/opencode")
 

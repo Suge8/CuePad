@@ -70,7 +70,8 @@ struct CardPicker: View {
                         rows(data.resources)
                     }
                     if !data.pinned.isEmpty {
-                        header(workspace.catalog?.project(project)?.name ?? "本项目", project: workspace.catalog?.project(project))
+                        let own = project.flatMap { workspace.catalog?.project($0) }
+                        header(own?.name ?? "本项目", project: own)
                         rows(data.pinned)
                         if !data.rest.isEmpty { header("其他", project: nil).padding(.top, 8) }
                     }
@@ -200,7 +201,7 @@ struct CardRow: View {
                 if let project {
                     HStack(spacing: 4) {
                         ProjectGlyph(project: project, size: 10)
-                        Text(project?.name ?? CaptureCopy.unfiled)
+                        Text(project?.name ?? "")
                     }
                     .font(.caption).foregroundStyle(palette.ink3).padding(.top, 2)
                 }

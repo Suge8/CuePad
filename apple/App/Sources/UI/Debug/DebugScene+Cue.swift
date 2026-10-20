@@ -319,16 +319,14 @@ extension DebugScene {
     private static func relayStart(_ store: CueStore, on launcher: PiStateRecorder) async throws -> (DeliveryRequest, String)? {
         let tasks = try await store.tasks(.todo).flatMap(\.tasks)
         let parents = Set(tasks.compactMap(\.parentID))
-        guard let task = tasks.first(where: { $0.piSessionID == nil && $0.projectID != nil && !parents.contains($0.id) }), let project = task.projectID else {
-            return nil
-        }
+        guard let task = tasks.first(where: { $0.piSessionID == nil && !parents.contains($0.id) }) else { return nil }
         let token = UUID().uuidString
         let request = try await store.requestLaunch(
-            PiLaunch(project: project, prompt: task.body, token: token), title: task.heading, on: "demo-mac", card: task.id, cue: true)
+            PiLaunch(project: task.projectID, prompt: task.body, token: token), title: task.heading, on: "demo-mac", card: task.id, cue: true)
         // 演示节奏：Mac 开出会话要一会儿
         try await Task.sleep(for: .seconds(0.8))
         let session = "launched-\(token.prefix(8))"
-        try await launcher.update(sessionID: session, state: .thinking, title: task.heading, directory: "demo", projectID: project, launchToken: token)
+        try await launcher.update(sessionID: session, state: .thinking, title: task.heading, directory: "demo", projectID: task.projectID, launchToken: token)
         return (request, session)
     }
 
@@ -447,7 +445,7 @@ extension DebugScene {
                 modelState: row.model ? demoModels(for: row.agent) : nil,
                 context: PiContextUsage(tokens: row.tokens, window: 200_000), agent: row.agent)
             try await store.writePiTranscript(PiTranscript(sessionID: row.id, messages: [], recap: PiRecap(lastPrompt: row.title, lastReply: "好了")))
-            let task = try await store.createTask(row.title, in: nil)
+            let task = try await store.createTask(row.title)
             try await store.linkCard(task.id, toSession: row.id)
         }
         try await store.leaveToYou("cue-claude-short")

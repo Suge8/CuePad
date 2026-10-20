@@ -138,7 +138,7 @@ private struct BubblePage: View {
     private var meta: some View {
         HStack(spacing: 5) {
             ProjectGlyph(project: data.project, size: BubbleMetrics.glyph)
-            Text(data.project?.name ?? CaptureCopy.unfiled).lineLimit(1)
+            Text(data.project?.name ?? "").lineLimit(1)
             if let progress = data.progress {
                 Dot()
                 Text(TaskCopy.progress(progress)).monospacedDigit()
@@ -398,7 +398,7 @@ nonisolated struct BubbleData: Sendable, Equatable {
     static func read(_ id: UUID, from store: isolated CueStore) throws -> BubbleData {
         guard let goal = try store.card(id) else { throw CueStoreError.notFound }
         return BubbleData(
-            goal: goal, project: try goal.projectID.flatMap { try store.project($0) }, steps: try store.children(of: id).filter(\.isTask),
+            goal: goal, project: try store.project(goal.projectID), steps: try store.children(of: id).filter(\.isTask),
             progress: try store.subtaskProgress(of: [id])[id])
     }
 }

@@ -733,7 +733,7 @@ final class CueKeeper {
         }
         let changes = try await self.changes(at: now)
         let envelope = CueEnvelope.render(CueEnvelope.Input(
-            now: now, contextUsed: shift.context?.used, projects: try await store.cueProjects(),
+            now: now, contextUsed: shift.context?.used, projects: try await store.projects(),
             changes: changes.due, board: board, waiting: try await store.cueMessagesWaitingForYou(), left: try await store.cueState()?.left ?? [],
             wake: wake, resume: resume))
         var woke: CueWoke?

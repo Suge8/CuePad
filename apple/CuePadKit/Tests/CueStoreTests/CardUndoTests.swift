@@ -32,7 +32,7 @@ import Testing
   }
 
   @Test func 改回灵感拨回_下级回到它下面() async throws {
-    let task = try await store.createTask("修重连", in: nil)
+    let task = try await store.createTask("修重连")
     let first = try await store.createTask("先复现", under: task.id)
     let second = try await store.createTask("补用例", under: task.id)
 
@@ -45,13 +45,13 @@ import Testing
   }
 
   @Test func 没有变化的设置不留回执() async throws {
-    let idea = try await store.createCard(in: nil, body: "想法")
+    let idea = try await store.createCard(body: "想法")
     #expect(try await store.setTodo(idea.id, false) == nil)
   }
 
   @Test func 删除拨回_下级按原顺序回到它下面() async throws {
-    let task = try await store.createTask("上线", in: nil)
-    let c = try await store.createCard(in: nil, body: "回滚方案")
+    let task = try await store.createTask("上线")
+    let c = try await store.createCard(body: "回滚方案")
     try await store.moveCard(c.id, to: .under(task.id), after: nil)
     let a = try await store.createTask("清单", under: task.id)
     let b = try await store.createTask("备份", under: task.id)
@@ -67,9 +67,9 @@ import Testing
   }
 
   @Test func 删除与改回灵感拨回_归档的下级也回到它下面() async throws {
-    let task = try await store.createTask("上线", in: nil)
-    let old = try await store.createCard(in: nil, body: "旧的备忘")
-    let live = try await store.createCard(in: nil, body: "清单")
+    let task = try await store.createTask("上线")
+    let old = try await store.createCard(body: "旧的备忘")
+    let live = try await store.createCard(body: "清单")
     for idea in [old, live] { try await store.moveCard(idea.id, to: .under(task.id), after: nil) }
     try await store.archive(old.id)
 
@@ -103,13 +103,13 @@ import Testing
   }
 
   @Test func 点圆圈_以Store当前状态为准_返回新状态() async throws {
-    let task = try await store.createTask("修乱序", in: nil)
+    let task = try await store.createTask("修乱序")
     #expect(try await store.toggleDone(task.id).status == .done)
     #expect(try await store.toggleDone(task.id).status == .todo)  // 手里的副本再旧，也按库里此刻的状态切
     try await store.setStatus(task.id, .inProgress)
     #expect(try await store.toggleDone(task.id).status == .done)
 
-    let idea = try await store.createCard(in: nil, body: "不是任务")
+    let idea = try await store.createCard(body: "不是任务")
     await #expect(throws: CueStoreError.notATask) { try await store.toggleDone(idea.id) }
   }
 }

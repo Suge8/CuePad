@@ -166,14 +166,14 @@ struct TaskFlowTests {
     @Test func 设为任务_删除_都能撤销_勾选以最新状态为准() async throws {
         let workspace = Workspace(services: rig.services)
         let body = "上线前检查\n把 changelog 过一遍\n看下崩溃率"
-        let multi = try await store.createCard(in: nil, body: body)
+        let multi = try await store.createCard(body: body)
         try await workspace.setTodo(multi.id, true)
         #expect(workspace.notice?.text == "已设为任务")
         try await #require(workspace.notice?.action).run()
-        #expect(try await store.cards(in: nil).map(\.body) == [body])
+        #expect(try await store.cards(in: Project.defaultID).map(\.body) == [body])
         #expect(try await store.card(multi.id)?.isTask == false)
 
-        let idea = try await store.createCard(in: nil, body: "续费域名")
+        let idea = try await store.createCard(body: "续费域名")
         try await workspace.trash(idea.id)
         #expect(workspace.notice?.text == "已删除")
         #expect(try await store.trashedCards().map(\.id) == [idea.id])
@@ -181,7 +181,7 @@ struct TaskFlowTests {
         #expect(try await store.trashedCards().isEmpty)
 
         let project = try await store.createProject(name: "圆桌", color: "#000000")
-        let stale = try await store.createTask("续费域名", in: nil)
+        let stale = try await store.createTask("续费域名")
         try await workspace.toggle(stale.id)
         try await workspace.toggle(stale.id)  // 手里的副本已过时：切换以 Store 当前状态为准
         #expect(try await store.card(stale.id)?.status == .todo)
@@ -303,13 +303,13 @@ struct TaskFlowTests {
 
     /// 看板的在管按最近开始排，只列顶层（步骤跟着上级）。
     @Test func 在管按最近开始_只列顶层() async throws {
-        let oldest = try await store.createTask("最早开始", in: nil)
+        let oldest = try await store.createTask("最早开始")
         try await store.setStatus(oldest.id, .inProgress)
         let step = try await store.createTask("步骤", under: oldest.id)
         try await store.setStatus(step.id, .inProgress)
-        let middle = try await store.createTask("中间开始", in: nil)
+        let middle = try await store.createTask("中间开始")
         try await store.setStatus(middle.id, .inProgress)
-        let newest = try await store.createTask("最近开始", in: nil)
+        let newest = try await store.createTask("最近开始")
         try await store.setStatus(newest.id, .inProgress)
 
         let board = try await TaskBoard.read(from: store)
@@ -321,9 +321,9 @@ struct TaskFlowTests {
 
     /// a（a1、a2）、b。界面给出的每一次移动，Store 都接受。
     @Test func 整理任务_缩进_反缩进_拖放_界面给出的移动Store都接受() async throws {
-        let a = try await store.createTask("a", in: nil)
-        let b = try await store.createTask("b", in: nil)
-        try await store.moveCard(a.id, to: .top(project: nil), after: nil)
+        let a = try await store.createTask("a")
+        let b = try await store.createTask("b")
+        try await store.moveCard(a.id, to: .top(project: Project.defaultID), after: nil)
         let a1 = try await store.createTask("a1", under: a.id)
         let a2 = try await store.createTask("a2", under: a.id)
         func tree() async throws -> TaskTree { TaskTree(try await store.tasks(.todo).flatMap(\.tasks)) }
@@ -359,7 +359,7 @@ struct TaskFlowTests {
     /// 点掉已完成步骤的圆圈：不再算做完只有一种——它与已完成的上级清掉完成，开始过的回进行中、没开始过的回待办，在归档里的整件取回；
     /// 上级从步骤推出开始，步骤开始过它就跟着进行中。
     @Test func 点掉已完成步骤的圆圈_上级跟着不再算做完_整件取回归档() async throws {
-        let task = try await store.createTask("发布", in: nil)
+        let task = try await store.createTask("发布")
         let step = try await store.createTask("跑检查", under: task.id)
         try await store.setStatus(step.id, .inProgress)
         let workspace = Workspace(services: rig.services)
@@ -375,8 +375,8 @@ struct TaskFlowTests {
     }
 
     @Test func 带着已完成步骤的任务不能再缩进_拖起来放回原处不换项目() async throws {
-        let second = try await store.createTask("发布", in: nil)
-        let first = try await store.createTask("备份", in: nil)
+        let second = try await store.createTask("发布")
+        let first = try await store.createTask("备份")
         let done = try await store.createTask("写说明", under: second.id)
         try await store.setStatus(done.id, .done)
         let all = try await store.tasks(.inProgress, .todo, .done).flatMap(\.tasks)
@@ -389,12 +389,13 @@ struct TaskFlowTests {
         if let move = onto?.move { try await store.moveCard(second.id, to: move.slot, after: move.after) }
 
         let site = try await store.createProject(name: "网站", color: "#000000")
-        let loose = try await store.createTask("续费域名", in: nil)
+        let loose = try await store.createTask("续费域名")
         let other = try await store.createTask("换首图", in: site.id)
         let flat = TaskTree(try await store.tasks(.inProgress, .todo).flatMap(\.tasks).filter { [loose.id, other.id].contains($0.id) })
         let flatRows = flat.rows()
         let flatFrames = Dictionary(uniqueKeysWithValues: flatRows.enumerated().map { ($1.id, CGRect(x: 0, y: CGFloat($0) * 44, width: 300, height: 44)) })
-        #expect(flat.drop(loose.id, rows: flatRows, frames: flatFrames, at: CGPoint(x: 100, y: 66), depthShift: 0) == nil)
+        let home = try #require(flatFrames[loose.id])
+        #expect(flat.drop(loose.id, rows: flatRows, frames: flatFrames, at: CGPoint(x: 100, y: home.midY), depthShift: 0) == nil)
     }
 
     // MARK: 共用的小件

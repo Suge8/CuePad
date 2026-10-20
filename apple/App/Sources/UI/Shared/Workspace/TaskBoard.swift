@@ -37,10 +37,11 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         var item: Item?
         var id: String { wait.id }
 
-        /// 按项目筛时归哪个项目：落在的任务的项目，没落在任务上的会话看会话的项目；Cue 的一般提问不属于哪个项目。
+        /// 按项目筛时归哪个项目：落在的任务的项目，没落在任务上的会话看会话的项目（没有项目的归默认项目，同 `PiSessionListItem.home`）；
+        /// Cue 的一般提问不属于哪个项目。
         var project: UUID? {
             if let item { return item.task.projectID }
-            if case .session(let session, _) = wait { return session.projectID }
+            if case .session(let session, _) = wait { return session.projectID ?? Project.defaultID }
             return nil
         }
     }
@@ -93,7 +94,7 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         func item(_ task: Card, started: Bool) throws -> Item {
             let progress = steps[task.id]
             let leaf = progress == nil ? task : started ? try store.workingLeaf(of: task.id) : nil
-            return Item(task: task, project: task.projectID.flatMap { projects[$0] }, steps: progress, leaf: leaf)
+            return Item(task: task, project: projects[task.projectID], steps: progress, leaf: leaf)
         }
         let all = try store.tasks(.inProgress, .todo, .done).flatMap(\.tasks)
         let open = TaskTree(all.filter { $0.status != .done }, all: all)
@@ -127,8 +128,7 @@ nonisolated struct TaskBoard: Sendable, Equatable {
     static func leading(_ started: [Card]) -> [UUID: [ProjectNow.InProgress]] {
         var result: [UUID: [ProjectNow.InProgress]] = [:]
         for task in started {
-            guard let project = task.projectID else { continue }
-            result[project, default: []].append(ProjectNow.InProgress(id: task.id, title: task.title.textGlyphs))
+            result[task.projectID, default: []].append(ProjectNow.InProgress(id: task.id, title: task.title.textGlyphs))
         }
         return result
     }

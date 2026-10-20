@@ -103,7 +103,7 @@ enum InteractionBench {
             }
         }
         if let a { await step("页面回访") { workspace.show(.project(a)) } }
-        if let card = try? await store.cards(in: workspace.currentProject).first?.id {
+        if let card = try? await store.cards(in: workspace.currentProject ?? Project.defaultID).first?.id {
             for _ in 0..<2 {
                 await step("开编辑页") { workspace.openCard = card }
                 await step("收编辑页") { workspace.openCard = nil }
