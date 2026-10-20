@@ -20,7 +20,7 @@ import SwiftUI
 /// 光落下的那一刻（落点那圈环的动画真的开始时，Core Animation 回调）才淡出来（`relayArrival`、`Stage.arriving`）。
 ///
 /// 降级（两个方向同一条规则：没有一个看得见的东西就不凭空画，也不往屏外飞）：
-/// - 会话那头连同底部那一排都不在屏上（推入的页、Mac、iPad）：叫醒只在头像上亮环、漾开；交给是头像亮一下、环离开头像朝窗口中间飘一小段就淡去——"它把事交出去了"。
+/// - 会话那头连同"会话"那一格都不在屏上（推入的页、Mac 侧栏收起、iPad）：叫醒只在头像上亮环、漾开；交给是头像亮一下、环离开头像朝窗口中间飘一小段就淡去——"它把事交出去了"。
 /// - 头像不在屏上（Mac 侧栏收起且不在 Cue 页，iPhone 推入的页，iPad 不在 Cue 页与侧栏收起时）：叫醒是起飞的环照样扩开、光从状态标升起一小段就淡去；
 ///   交给是只在会话那头外扩一圈、垫一层淡光。
 /// - 两头都不在就什么都不画：Cue 的头像回到屏幕上时自己就在转环，会话的状态标自己会变。
@@ -178,7 +178,7 @@ enum EndSpot: Equatable {
     case session(String, Row)
     /// 任务圈与正在开会话的空心点：带着这件任务、或交给的会话就是它绑着的那个时算。
     case task(UUID, session: String?)
-    /// iPhone 底部那一排的"会话"那一格（Cue 页上收起成一颗时是那一颗）。
+    /// "会话"那一格：iPhone 底部那一排里的（Cue 页上收起成一颗时是那一颗）、Mac 侧栏的会话磁贴。
     case dock
 
     /// 状态标所在的行，越具体越前。
@@ -212,7 +212,7 @@ extension View {
     /// Cue 的头像：接力的 Cue 那一头，环在这里亮起。
     func relaySpot(cue spot: CueSpot) -> some View { background { RelayAnchor(role: .cue(spot)) } }
 
-    /// iPhone 底部那一排里"会话"那一格（三页上）或 Cue 页上收起成的那一颗（`dock` 为真的那处）：会话哪一行都不在屏上时接力落在这里。一直挂着。
+    /// "会话"那一格（`EndSpot.dock`，`dock` 为真的那处）：会话哪一行都不在屏上时接力落在这里。一直挂着。
     func relaySpot(dock: Bool) -> some View { background { if dock { RelayAnchor(role: .end(.dock)) } } }
 
     /// 会话自己那一行：这次交给刚开出这个会话时，行先占着位置、透明，光落下时淡出来（`Stage.arriving`）。
