@@ -108,7 +108,7 @@ struct CueEndProbe: View {
     }
 }
 
-/// 还没读的 Cue 的话：气泡左边外侧一颗靛青小点（Cue 页里"这里有新的"），对着第一行字；读到了淡出。
+/// 还没读的 Cue 的话：气泡左边外侧一颗石绿小点（新消息的颜色，同入口的点与侧栏的数，`CueDot`），对着第一行字；读到了淡出。
 /// 叠在格子上、不占地方：来去不重排。高按第一行字量（一个看不见的字），跟着动态字体走。
 struct CueUnreadDot: View {
     let unread: Bool
@@ -123,7 +123,7 @@ struct CueUnreadDot: View {
         Text(verbatim: " ").font(Typography.reading).hidden()
             .frame(width: Self.size)
             .overlay {
-                if unread { Circle().fill(palette.signature).frame(width: Self.size, height: Self.size).transition(.opacity) }
+                if unread { Circle().fill(palette.replied).frame(width: Self.size, height: Self.size).transition(.opacity) }
             }
             .animation(Self.fade, value: unread)
             .padding(.top, CueBubble.padding.top)
