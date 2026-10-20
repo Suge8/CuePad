@@ -14,16 +14,18 @@ import Testing
     return url.path
   }
 
-  /// 一次给几个文件：按给的顺序存成同一次（对话里一张卡），--title 是这张卡的标题，每个文件一项报告。
+  /// 一次给几个文件：按给的顺序存成同一次（对话里一张卡），每个文件一个 --title（按先后），每个文件一项报告。
   @Test func showStoresTheFilesTogetherForTheSessionFromTheEnvironmentAndReportsEach() async throws {
     let sb = try Sandbox()
     let files = [try page(sb, "demo.html", "<link rel=\"stylesheet\" href=\"a.css\">"), try page(sb, "beep.m4a", "m4a"), try page(sb, "notes.docx", "docx")]
-    let reply = try array(try await sb.jsonValue(["show"] + files + ["--title", "登录页"], environment: ["PI_SESSION_ID": "s1"]))
+    let titles = ["登录页：首屏", "提示音", "需求文稿"]
+    let reply = try array(try await sb.jsonValue(["show"] + files + titles.flatMap { ["--title", $0] }, environment: ["PI_SESSION_ID": "s1"]))
 
     let stored = try await sb.store.previews(of: "s1")
     #expect(stored.map(\.name) == ["demo.html", "beep.m4a", "notes.docx"] && Set(stored.map(\.createdAt)).count == 1)
     #expect(reply.map { $0.string("id") } == stored.map { $0.id.uuidString.lowercased() })
-    #expect(reply.map { $0.string("kind") } == ["web", "audio", "document"] && reply.allSatisfy { $0.string("title") == "登录页" && $0.string("session") == "s1" })
+    #expect(reply.map { $0.string("kind") } == ["web", "audio", "document"] && reply.allSatisfy { $0.string("session") == "s1" })
+    #expect(reply.map { $0.string("title") } == titles && stored.map(\.title) == titles)
     #expect(reply[0]["bytes"] as? Int == stored[0].byteCount && reply[0]["outsideReferences"] as? [String] == ["a.css"])
   }
 
@@ -39,12 +41,15 @@ import Testing
   @Test func showRefusesWhatCannotBePreviewedWithAReasonAndExitCode() async throws {
     let sb = try Sandbox()
     let env = ["PI_SESSION_ID": "s1"]
-    let missing = await sb.run("show", sb.directory.appending(path: "nope.html").path, environment: env)
+    // 每个文件都要一句标题：少了不收
+    let untitled = await sb.run("show", try page(sb), try page(sb, "b.html"), "--title", "登录页", environment: env)
+    #expect(untitled.code != 0 && untitled.err.contains("--title"))
+    let missing = await sb.run("show", sb.directory.appending(path: "nope.html").path, "--title", "x", environment: env)
     #expect(missing.code != 0 && missing.err.contains("nope.html"))
-    let archive = await sb.run("show", try page(sb, "a.zip", "zip"), environment: env)
+    let archive = await sb.run("show", try page(sb, "a.zip", "zip"), "--title", "x", environment: env)
     #expect(archive.code != 0 && archive.err.contains("zip"))
     // 压缩的 SVG 预览里显示不了：不收，可发列表里也不列
-    let compressed = await sb.run("show", try page(sb, "a.svgz", "svgz"), environment: env)
+    let compressed = await sb.run("show", try page(sb, "a.svgz", "svgz"), "--title", "x", environment: env)
     #expect(compressed.code != 0 && compressed.err.contains(".svgz") && !compressed.err.contains("、svgz"))
     #expect(try await sb.store.previews(of: "s1").isEmpty)
   }
@@ -52,7 +57,7 @@ import Testing
   /// .ts、.mts 是 TypeScript（系统认作视频流）：按文本发，交给快速查看看纯文本。
   @Test func typeScriptFilesAreSentAsText() async throws {
     let sb = try Sandbox()
-    let reply = try array(try await sb.jsonValue(["show", try page(sb, "app.ts", "let a = 1"), try page(sb, "mod.mts", "export {}")], environment: ["PI_SESSION_ID": "s1"]))
+    let reply = try array(try await sb.jsonValue(["show", try page(sb, "app.ts", "let a = 1"), try page(sb, "mod.mts", "export {}"), "--title", "入口", "--title", "模块"], environment: ["PI_SESSION_ID": "s1"]))
     #expect(reply.map { $0.string("kind") } == ["text", "text"])
   }
 }

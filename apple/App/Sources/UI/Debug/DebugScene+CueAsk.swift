@@ -19,7 +19,7 @@ extension DebugScene {
             for item in items {
                 let file = folder.appending(path: item.name)
                 try item.png.write(to: file)
-                let preview = try await store.addPreviews(filesAt: [file], title: item.title, sessionID: "ask-card-design")[0].preview
+                let preview = try await store.addPreviews([(file, item.title)], sessionID: "ask-card-design")[0].preview
                 shots.append(CueShot(preview: preview.id, look: item.look))
             }
             return shots
@@ -29,27 +29,27 @@ extension DebugScene {
             ("in-thread-iphone.png", "提问卡方案 2：对话里问", "方案 2 对话里问：按钮贴输入框", proposalPNG(.thread)),
             ("slide-to-allow-iphone.png", "提问卡方案 3：郑重放行", "方案 3 郑重放行：滑过去才同意", proposalPNG(.slide)),
         ]
-        let (text, asking): (String, CueAsking) = switch variant {
+        let proposalRule = try CueAsking(.rule, action: "按方案 1 决定单改提问卡", rule: "重做界面设计要先给几个方案让我选")
+        let (text, asking, shown): (String, CueAsking, [CueShot]) = switch variant {
         case "push":
-            ("发言顺序修好了，测试都过了。要推送到 origin/main 吗？", try CueAsking(.push, action: "把发言顺序的修复推送到 origin/main"))
+            ("发言顺序修好了，测试都过了。要推送到 origin/main 吗？", try CueAsking(.push, action: "把发言顺序的修复推送到 origin/main"), [])
         case "one":
-            ("1.4.2 在预发分支上打好包了，要部署到预发吗？", try CueAsking(.release, action: "把 1.4.2 部署到预发环境", shots: try await shots([
+            ("1.4.2 在预发分支上打好包了，要部署到预发吗？", try CueAsking(.release, action: "把 1.4.2 部署到预发环境"), try await shots([
                 ("staging-1.4.2.png", "预发 1.4.2", "预发 1.4.2 要上的四处改动", stagingPNG()),
-            ])))
+            ]))
         case "four":
-            ("提问卡我重画了四个方向，你挑一个。", try CueAsking(.rule, action: "按方案 1 决定单改提问卡", rule: "重做界面设计要先给几个方案让我选", shots: try await shots(
-                proposals + [("drawer-iphone.png", "提问卡方案 4：抽屉", "方案 4 抽屉：从底下拉出来", proposalPNG(.drawer))])))
+            ("提问卡我重画了四个方向，你挑一个。", proposalRule, try await shots(
+                proposals + [("drawer-iphone.png", "提问卡方案 4：抽屉", "方案 4 抽屉：从底下拉出来", proposalPNG(.drawer))]))
         case "evidence":
-            ("修复验过了，三处证据都在。要合并进 main 吗？", try CueAsking(.merge, action: "把发言顺序的修复合并进 main", shots: try await shots([
+            ("修复验过了，三处证据都在。要合并进 main 吗？", try CueAsking(.merge, action: "把发言顺序的修复合并进 main"), try await shots([
                 ("before-after.png", "改前改后", "改前改后的发言顺序", evidencePNG("改前 / 改后", tint: .indigo)),
                 ("tests.png", "测试", "重连用例全部通过", evidencePNG("✔ 4 tests passed", tint: .green)),
                 ("pressure.png", "压测", "6 人同时重连的压测", evidencePNG("p95 9ms", tint: .orange)),
-            ])))
+            ]))
         default:
-            ("提问卡我重画了三个方向，都放在下面这条里，你挑一个。我推荐 1：点一下就答完。", try CueAsking(
-                .rule, action: "按方案 1 决定单改提问卡", rule: "重做界面设计要先给几个方案让我选", shots: try await shots(proposals)))
+            ("提问卡我重画了三个方向，都放在下面这条里，你挑一个。我推荐 1：点一下就答完。", proposalRule, try await shots(proposals))
         }
-        _ = try await store.addCueMessage(.cue, text: text, ask: asking, task: task)
+        _ = try await store.addCueMessage(.cue, text: text, ask: asking, shots: shown, task: task)
     }
 
     private enum Proposal { case sheet, thread, slide, drawer }

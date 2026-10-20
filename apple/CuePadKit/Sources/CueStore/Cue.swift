@@ -38,12 +38,13 @@ public struct CueMessage: Identifiable, Equatable, Sendable {
   /// 提问要做的动作与依据的规矩（`CueAsking`；用户内容，加密同步）。
   public var askAction: String?
   public var askRule: String?
-  /// 提问要你看的图（`CueAsking.shots`；看什么是用户内容，加密同步）。
-  public var askShots: [CueShot] = []
+  /// Cue 点名要你看的图，按它给的先后（`CueShot.checked`）：提问的是回答它必须看的，做完的结果是证明结论的最终成果（`CueStore.finishTask`）。
+  /// 卡片、通知与全屏预览只读它，没点名的没有图。看什么是用户内容，加密同步；列与同步字段沿用最初只有提问时的名字 askShots（同步表不改已有列）。
+  public var shots: [CueShot] = []
   /// 提问是哪一类事。
   public var ask: CueAsk? { asked?.ask.known }
   /// 提问问的是什么（`CueAsking.init(stored:)`）；不是提问，或是认不出类别、没有动作短语的提问为 nil。
-  public var asking: CueAsking? { CueAsking(stored: ask, action: askAction, rule: askRule, shots: askShots) }
+  public var asking: CueAsking? { CueAsking(stored: ask, action: askAction, rule: askRule) }
   /// 要提示你（推到手机、Mac 发通知）：Cue 用 tell 标的急事，与你在等的——回答你那一轮的回复或出错（这一轮还没提示过你时，`replyCueRound`），
   /// Cue 起不来（`CueKeeper`）。
   public var urgent: Bool
@@ -102,14 +103,14 @@ extension CueMessage: Record {
   var bindings: [any SQLBindable] {
     [
       id, author.rawValue, text, choices.map { JSONColumn.encode($0) }, urgent, taskID, answer, answeredAt, deliveredAt, createdAt, modifiedAt,
-      notify ? Self.notifyFlag : nil, tools?.stored, asked?.stored, askAction, askRule, JSONColumn.encodeList(askShots), setAsideBy,
+      notify ? Self.notifyFlag : nil, tools?.stored, asked?.stored, askAction, askRule, JSONColumn.encodeList(shots), setAsideBy,
     ]
   }
   init(row: Row) {
     self.init(
       id: row.uuid(0), author: Open(rawValue: row.text(1)), text: row.text(2),
       choices: JSONColumn.decode([String].self, from: row.textOrNil(3)), asked: row.textOrNil(13).flatMap(CueAllow.init(stored:)),
-      askAction: row.textOrNil(14), askRule: row.textOrNil(15), askShots: JSONColumn.decodeList(CueShot.self, from: row.textOrNil(16)), urgent: row.bool(4), taskID: row.uuidOrNil(5),
+      askAction: row.textOrNil(14), askRule: row.textOrNil(15), shots: JSONColumn.decodeList(CueShot.self, from: row.textOrNil(16)), urgent: row.bool(4), taskID: row.uuidOrNil(5),
       answer: row.textOrNil(6), answeredAt: row.dateOrNil(7), setAsideBy: row.uuidOrNil(17), deliveredAt: row.dateOrNil(8), createdAt: row.date(9),
       modifiedAt: row.date(10), tools: row.textOrNil(12).flatMap(PiChatMessage.Tools.init(stored:)), notify: row.textOrNil(11) != nil)
   }
@@ -441,7 +442,7 @@ public enum CueAsk: String, CaseIterable, Sendable {
   public func choices(in project: String?) -> [String] { [Self.once] + (always(in: project).map { [$0] } ?? []) }
 }
 
-/// Cue 的一次提问问的是什么（`CueStore.addCueMessage`）：哪一类、要做的动作，规矩那一类还有是哪条规矩，以及要你看的那几张图。
+/// Cue 的一次提问问的是什么（`CueStore.addCueMessage`）：哪一类、要做的动作，规矩那一类还有是哪条规矩；要你看的图在消息上（`CueMessage.shots`）。
 /// 动作、规矩与每张图看什么是 Cue 写的短语，卡片、侧栏与菜单栏的摘要、小组件、本机与手机通知都只露这些，不露 Cue 的原话。
 public struct CueAsking: Equatable, Sendable {
   public let ask: CueAsk
@@ -449,35 +450,28 @@ public struct CueAsking: Equatable, Sendable {
   public let action: String
   /// 规矩那一类依据的规矩（"改数据库结构前先问我"）；别的类没有。
   public let rule: String?
-  /// 回答这个问题要看的图（Cue 点名、按它给的先后），卡片、通知与全屏预览只读它；没点名的没有图。
-  public let shots: [CueShot]
 
   /// 动作与规矩各至多这么多字。
   public static let phraseLimit = 30
 
   /// Cue 提问时给的：动作必填，规矩那一类还要写规矩；都是一行、不超过 `phraseLimit` 字，不合要求抛 `askPhrase`。
-  /// 图至多 `CueShot.limit` 张、不重复，每张一句看什么（`CueShot.lookLimit` 字以内），不合要求抛 `askShots`。
-  public init(_ ask: CueAsk, action: String?, rule: String? = nil, shots: [CueShot] = []) throws {
+  public init(_ ask: CueAsk, action: String?, rule: String? = nil) throws {
     self.ask = ask
-    self.action = try Self.phrase(action, "doing", "要做的动作，如“推送 scheduler 的重连修复”", limit: Self.phraseLimit)
-    self.rule = ask == .rule ? try Self.phrase(rule, "rule", "依据的规矩，照他的原话，如“改数据库结构前先问我”", limit: Self.phraseLimit) : nil
-    guard shots.count <= CueShot.limit, Set(shots.map(\.preview)).count == shots.count else { throw CueStoreError.askShots(limit: CueShot.limit) }
-    self.shots = try shots.map {
-      CueShot(preview: $0.preview, look: try Self.phrase($0.look, "show 的 look", "这张看什么，如“方案 1：大按钮占满一行”", limit: CueShot.lookLimit))
-    }
+    self.action = try Self.phrase(action, "带 ask 要写 doing", "要做的动作，如“推送 scheduler 的重连修复”", limit: Self.phraseLimit)
+    self.rule = ask == .rule ? try Self.phrase(rule, "带 ask 要写 rule", "依据的规矩，照他的原话，如“改数据库结构前先问我”", limit: Self.phraseLimit) : nil
   }
 
   /// 照存下的读回（`CueMessage.asking`、通知服务扩展读的同步记录）：认不出类别（更新的版本写的）、没有动作短语（结构 56 之前写的，
   /// 或规矩那一类没写规矩）的不算，卡片、摘要与通知照普通的话写它的第一行，回答的引用也是这一行。
-  package init?(stored ask: CueAsk?, action: String?, rule: String?, shots: [CueShot]) {
+  package init?(stored ask: CueAsk?, action: String?, rule: String?) {
     guard let ask, let action, ask != .rule || rule != nil else { return nil }
     self.ask = ask
     self.action = action
     self.rule = rule
-    self.shots = shots
   }
 
-  private static func phrase(_ text: String?, _ field: String, _ hint: String, limit: Int) throws -> String {
+  /// Cue 写的短语：去掉首尾空白与句末标点，一行、不空、不超过 `limit` 字，不合要求抛 `askPhrase`（`field` 是报错的开头）。
+  fileprivate static func phrase(_ text: String?, _ field: String, _ hint: String, limit: Int) throws -> String {
     let trimmed = (text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "。？?！!"))
     guard !trimmed.isEmpty, trimmed.count <= limit, !trimmed.contains(where: \.isNewline) else {
       throw CueStoreError.askPhrase(field: field, hint: hint, limit: limit)
@@ -496,12 +490,12 @@ public struct CueAsking: Equatable, Sendable {
   public var why: String? { rule.map { "你说过「\($0)」。" } }
 }
 
-/// 提问要你看的一张图：发到手机的哪一份（`PiPreview.id`）与看它的什么（Cue 写的一句）。写下就不再变；那一份不在了（会话的预览过期删掉）就不显示。
+/// Cue 点名要你看的一张图（`CueMessage.shots`）：发到手机的哪一份（`PiPreview.id`）与看它的什么（Cue 写的一句）。写下就不再变；那一份不在了（会话的预览过期删掉）就不显示。
 public struct CueShot: Codable, Hashable, Sendable {
   public let preview: UUID
   public let look: String
 
-  /// 一次提问至多这么多张：只挑回答这个问题必须看的。
+  /// 一条消息至多这么多张：只挑回答问题必须看的、证明结论的。
   public static let limit = 4
   /// 看什么至多这么多字。
   public static let lookLimit = 20
@@ -509,6 +503,14 @@ public struct CueShot: Codable, Hashable, Sendable {
   public init(preview: UUID, look: String) {
     self.preview = preview
     self.look = look
+  }
+
+  /// Cue 点名的一组：至多 `limit` 张、不重复，每张一句看什么（一行、`lookLimit` 字以内）；多了或重复抛 `shots`，看什么不合要求抛 `askPhrase`。
+  public static func checked(_ shots: [CueShot]) throws -> [CueShot] {
+    guard shots.count <= limit, Set(shots.map(\.preview)).count == shots.count else { throw CueStoreError.shots(limit: limit) }
+    return try shots.map {
+      CueShot(preview: $0.preview, look: try CueAsking.phrase($0.look, "show 每张要写 look", "这张看什么，如“方案 1：大按钮占满一行”", limit: lookLimit))
+    }
   }
 }
 
@@ -544,15 +546,15 @@ public enum CueReport {
 }
 
 /// Cue 通知的文案（Mac 本机通知与手机锁屏通知同一条规则）：标题是 Cue 的名字（空的用 `CueProfile.defaultName`）；
-/// "等你"的正文是要你定什么、规矩那一类引的规矩（`CueAsking`）、要看的图各看什么，接选项，与卡片同源；其余（读不出 `CueAsking` 的提问也是）是 Cue 的原话
+/// "等你"的正文是要你定什么、规矩那一类引的规矩（`CueAsking`）、要看的图各看什么（`looks`），接选项，与卡片同源；其余（读不出 `CueAsking` 的提问也是）是 Cue 的原话
 /// （去掉图片，行内的 Markdown 记号只留字，至多 `bodyLimit` 字）。
 public enum CueAlert {
   public static let bodyLimit = 300
 
-  public static func content(name: String?, text: String, asking: CueAsking?, choices: [String]?) -> (title: String, body: String) {
+  public static func content(name: String?, text: String, asking: CueAsking?, choices: [String]?, looks: [String]) -> (title: String, body: String) {
     let body: String
     if let asking, let choices {
-      let shots = asking.shots.isEmpty ? [] : ["看图：" + asking.shots.map(\.look).joined(separator: "；")]
+      let shots = looks.isEmpty ? [] : ["看图：" + looks.joined(separator: "；")]
       body = ([asking.question] + [asking.why].compactMap(\.self) + shots + [choices.joined(separator: " / ")]).joined(separator: "\n")
     } else {
       let plain = CueFormat.plainText(text)

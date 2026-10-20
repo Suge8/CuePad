@@ -303,7 +303,7 @@ enum Schema {
     -- 同步的本机状态：同步区令牌（zoneToken）与上次同步的 iCloud 账号（account）。
     CREATE TABLE syncState (key TEXT PRIMARY KEY NOT NULL, value BLOB NOT NULL) STRICT;
 
-    -- Cue 的对话（tools 是一轮的经过，ask 是提问的类别与范围，askAction、askRule、askShots 是它要做的动作、依据的规矩与要你看的图，setAsideBy 是你开口收起它的那句话）、记忆、设置（allows 是允许清单）与此刻在做什么（round 是在跑的那一轮）。
+    -- Cue 的对话（tools 是一轮的经过，ask 是提问的类别与范围，askAction、askRule 是它要做的动作与依据的规矩，askShots 是 Cue 点名要你看的图（提问的与做完的结果，`CueMessage.shots`），setAsideBy 是你开口收起它的那句话）、记忆、设置（allows 是允许清单）与此刻在做什么（round 是在跑的那一轮）。
     CREATE TABLE cueMessages (
       id TEXT PRIMARY KEY NOT NULL, author TEXT NOT NULL, text TEXT NOT NULL, choices TEXT, urgent INTEGER NOT NULL,
       taskID TEXT, answer TEXT, answeredAt INTEGER, deliveredAt INTEGER, createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL,

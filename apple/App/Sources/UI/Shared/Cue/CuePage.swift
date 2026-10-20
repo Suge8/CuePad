@@ -270,8 +270,8 @@ struct CuePage: View {
         #endif
     }
 
-    /// 一格至少多高（连同上面的间距与时间）：气泡里的字至少多高（`TextFloor`），带图的提问另有图（`shots` 张，`CueShots.floor`），
-    /// 结果卡另有交付物（`DeliverableStrip.floor`）与下面那件活一行，旁注、经过与分隔至少一行小字（`note`）。
+    /// 一格至少多高（连同上面的间距与时间）：气泡里的字至少多高（`TextFloor`），点名了图的提问与结果卡另有图（`shots` 张，`CueShots.floor`），
+    /// 结果卡还有下面那件活一行，旁注、经过与分隔至少一行小字（`note`）。
     /// 只能数少、不能数多（数多了第一帧铺不满）；数得越贴，打开时多排的越少。
     private static func floor(_ row: CueThread.Row, shots: Int, joined: Bool, stamped: Bool, column: CGFloat) -> CGFloat {
         let note: CGFloat = 12
@@ -289,9 +289,9 @@ struct CuePage: View {
         case .answer(let question): bubble + note + 6 + said(question.answer ?? "")
         // 字与图之间隔 8（`CueSays`）
         case .cue(let message, _): bubble + answer(message.text) + (shots == 0 ? 0 : 8 + CueShots.floor(count: shots, width: width(CueBubble.cueWidth)))
-        // 字、交付物与那件活（至少 `CueTaskLine` 那么高）之间各隔 12
-        case .result(let message, _, let deliverables):
-            bubble + answer(message.text) + 12 + DeliverableStrip.floor(count: deliverables.count, size: .result, width: width(CueBubble.cueWidth)) + 12 + CueTaskLine.lineHeight
+        // 字、图与那件活（至少 `CueTaskLine` 那么高）之间各隔 12
+        case .result(let message, _):
+            bubble + answer(message.text) + 12 + CueShots.floor(count: shots, width: width(CueBubble.cueWidth)) + 12 + CueTaskLine.lineHeight
         case .notes, .process, .renewed: note
         }
         return above + body
@@ -400,8 +400,8 @@ private struct CueRow: View, Equatable {
             CueAnswer(question: question, joined: joined)
         case .cue(let message, _):
             CueSays(message: message, task: ref, shots: shots, open: { opened = $0 }, joined: joined, arrives: !swapsInPlace)
-        case .result(let message, _, let deliverables):
-            if let ref { CueResultCard(message: message, ref: ref, deliverables: deliverables) { opened = $0 } }
+        case .result(let message, _):
+            if let ref { CueResultCard(message: message, ref: ref, shots: shots) { opened = $0 } }
         case .notes(let notes):
             CueNotes(notes: notes, live: live).padding(.leading, CueBubble.noteInset)
         case .process(let message):

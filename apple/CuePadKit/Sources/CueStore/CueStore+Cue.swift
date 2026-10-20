@@ -7,9 +7,12 @@ import Foundation
 extension CueStore {
   /// 写一条对话。正文不能为空。你说的一句同时收起还开着的提问（`CueQuestionEnd`）。带 `ask` 的是 Cue 请你允许的提问（"等你"）：问的是什么（类别、动作、规矩，`CueAsking`）、
   /// 范围（关联任务此刻所在的项目，`CueMessage.asked`）与按范围写出的选项（`CueAsk.choices`）一起存下；
+  /// 提问点名要你看的图（`shots`，`CueShot.checked` 过的）跟着写下。
   /// 允许清单里有这类事（`CueProfile.allowing`，按同一个项目）就抛 `alreadyAllowed`、点名的图不在发到手机的里抛 `shotMissing`，什么都不写。
   @discardableResult
-  public func addCueMessage(_ author: CueAuthor, text: String, ask: CueAsking? = nil, urgent: Bool = false, task: UUID? = nil) throws -> CueMessage {
+  public func addCueMessage(
+    _ author: CueAuthor, text: String, ask: CueAsking? = nil, shots: [CueShot] = [], urgent: Bool = false, task: UUID? = nil
+  ) throws -> CueMessage {
     guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw CueStoreError.blankDeliveryContent }
     return try write {
       guard let ask else {
@@ -21,21 +24,26 @@ extension CueStore {
       if let allowed = try cueProfile()?.allowing(ask.ask, in: project?.id) {
         throw CueStoreError.alreadyAllowed(try allowed.project.flatMap { try find(Project.self, $0)?.name })
       }
-      for shot in ask.shots where try find(PiPreview.self, shot.preview) == nil { throw CueStoreError.shotMissing(shot.preview.uuidString.lowercased()) }
-      return try insertCueMessage(author, text: text, asking: ask, in: project, urgent: urgent, task: task)
+      try checkShots(shots)
+      return try insertCueMessage(author, text: text, asking: ask, shots: shots, in: project, urgent: urgent, task: task)
     }
   }
 
-  /// 写一条对话（在写事务内调用）。`asking` 是提问问的什么，`project` 是它的范围；`at`：排在对话里的时刻，缺省是此刻（一轮的经过排在这一轮开始的时刻）。
+  /// 点名的图都在发到手机的里，不在的抛 `shotMissing`（在写事务内调用）。
+  func checkShots(_ shots: [CueShot]) throws {
+    for shot in shots where try find(PiPreview.self, shot.preview) == nil { throw CueStoreError.shotMissing(shot.preview.uuidString.lowercased()) }
+  }
+
+  /// 写一条对话（在写事务内调用）。`asking` 是提问问的什么，`project` 是它的范围，`shots` 是点名要你看的图；`at`：排在对话里的时刻，缺省是此刻（一轮的经过排在这一轮开始的时刻）。
   /// 要提示你的（`CueMessage.alerts`）同时置手机推送标志，到不到你只看 `reaches`。
   func insertCueMessage(
-    _ author: CueAuthor, text: String, asking: CueAsking? = nil, in project: Project? = nil, urgent: Bool = false, task: UUID? = nil,
-    tools: PiChatMessage.Tools? = nil, at time: Date? = nil
+    _ author: CueAuthor, text: String, asking: CueAsking? = nil, shots: [CueShot] = [], in project: Project? = nil, urgent: Bool = false,
+    task: UUID? = nil, tools: PiChatMessage.Tools? = nil, at time: Date? = nil
   ) throws -> CueMessage {
     let now = Date.stamp
     var message = CueMessage(
       id: UUID(), author: .known(author), text: text, choices: asking?.ask.choices(in: project?.name),
-      asked: asking.map { CueAllow($0.ask, project: project?.id) }, askAction: asking?.action, askRule: asking?.rule, askShots: asking?.shots ?? [],
+      asked: asking.map { CueAllow($0.ask, project: project?.id) }, askAction: asking?.action, askRule: asking?.rule, shots: shots,
       urgent: urgent, taskID: task,
       answer: nil, answeredAt: nil, setAsideBy: nil, deliveredAt: nil, createdAt: time ?? now, modifiedAt: now, tools: tools, notify: false)
     message.notify = try message.alerts && reaches(.cue)

@@ -91,9 +91,10 @@ public enum CueAlertText {
     }
     let asking = CueAsking(
       stored: (message["ask"] as? String).flatMap(CueAllow.init(stored:))?.ask.known, action: message.encryptedValues["askAction"] as? String,
-      rule: message.encryptedValues["askRule"] as? String, shots: decoded("askShots", as: [CueShot].self) ?? [])
+      rule: message.encryptedValues["askRule"] as? String)
     return CueAlert.content(
-      name: profile?.encryptedValues["name"] as? String, text: text, asking: asking, choices: decoded("choices", as: [String].self))
+      name: profile?.encryptedValues["name"] as? String, text: text, asking: asking, choices: decoded("choices", as: [String].self),
+      looks: (decoded("askShots", as: [CueShot].self) ?? []).map(\.look))
   }
 }
 

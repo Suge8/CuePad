@@ -44,7 +44,7 @@ public struct CueTools: Sendable {
           peek{task?|session?}：只读。都不带：所有没做完的事、不归没做完的事的活会话，和最近完成的几件（各带会话）。带 task：叶子、正文、近况、最近几轮问答（"他"是用户，"你"是你）与最新回答全文、发到手机的文件（带本机路径）。带 session：那个会话；
           stop{task|session}：停下会话这一轮；
           leave{task|session}：会话停着（歇下或等回答）、这次该他接手时用，把它留给他回：会话列表显示"待回复"（等回答的回到等他确认）；不用另外 tell，他或你再对它说话就作废；
-          done{task|session,evidence?}：做完。顶层任务要 evidence：1–\(evidenceCount) 条结论，每条宽不过 \(evidenceLimit)（约 20 个汉字，如"\(evidenceExample)"），CuePad 把标题与证据拼成结果告诉用户。下一步还用它的会话就留着，否则结束会话（结束的照样能 say）；已完成的再 done 只结束没人再用的会话，不要 evidence。给 session 是收掉那个会话：没做完的事在用、或有话正送进去的不收。
+          done{task|session,evidence?,show?}：做完。顶层任务要 evidence：1–\(evidenceCount) 条结论，每条宽不过 \(evidenceLimit)（约 20 个汉字，如"\(evidenceExample)"），CuePad 把标题与证据拼成结果告诉用户。show 是结果上挂的图，写法同 tell 的 show（至多 \(CueShot.limit) 张，按要他看的先后，look 写这张看什么，如"最终版深色：分组标题"）：只挑能证明结论的最终成果（最终版浅色、深色各一张，关键的改前改后），中途稿、方案稿、旧版截图不挂；没有能看的成果就不带，不带就不挂图。没点名的仍在任务的会话里。下一步还用它的会话就留着，否则结束会话（结束的照样能 say）；已完成的再 done 只结束没人再用的会话，不要 evidence、show。给 session 是收掉那个会话：没做完的事在用、或有话正送进去的不收。
           """,
         "inputSchema": schema(
           [
@@ -53,7 +53,7 @@ public struct CueTools: Sendable {
             "agent": ["type": "string", "enum": AgentKind.allCases.map(\.rawValue)], "model": ["type": "string", "description": "provider/id"],
             "effort": ["type": "string", "enum": PiThinkingLevel.allCases.map(\.rawValue)], "text": string,
             "evidence": ["type": "array", "items": ["type": "string", "description": "宽不过 \(evidenceLimit)"], "maxItems": evidenceCount],
-            "fresh": ["type": "boolean"], "reopen": ["type": "boolean"],
+            "show": show, "fresh": ["type": "boolean"], "reopen": ["type": "boolean"],
           ], required: ["action"]),
         "annotations": ["readOnlyHint": false, "destructiveHint": true, "idempotentHint": false, "openWorldHint": false],
       ],
@@ -71,11 +71,7 @@ public struct CueTools: Sendable {
         "inputSchema": schema(
           [
             "text": string, "ask": ["type": "string", "enum": CueAsk.allCases.map(\.rawValue)], "doing": string, "rule": string,
-            "urgent": ["type": "boolean"], "task": string, "withdraw": string, "restore": string,
-            "show": [
-              "type": "array", "maxItems": CueShot.limit,
-              "items": ["type": "object", "properties": ["file": string, "look": string], "required": ["file", "look"]],
-            ],
+            "urgent": ["type": "boolean"], "task": string, "withdraw": string, "restore": string, "show": show,
           ],
           required: []),
         "annotations": ["readOnlyHint": false, "destructiveHint": false, "idempotentHint": false, "openWorldHint": false],
@@ -102,6 +98,10 @@ public struct CueTools: Sendable {
   }
 
   private static var string: [String: Any] { ["type": "string"] }
+  /// 点名要他看的图（tell 的提问与 done 的结果共用）：发到手机的那一份的 id 与看什么。
+  private static var show: [String: Any] {
+    ["type": "array", "maxItems": CueShot.limit, "items": ["type": "object", "properties": ["file": string, "look": string], "required": ["file", "look"]]]
+  }
   /// 能放进允许清单的几类（规矩那一类不能）。
   private static var allowable: String { CueAsk.allCases.filter { $0.always != nil }.map(\.rawValue).joined(separator: " / ") }
   private static var name: [String: Any] { ["type": "string", "description": "宽不过 \(CueName.limit)（汉字算 2）"] }
@@ -165,7 +165,7 @@ public struct CueTools: Sendable {
     }
   }
 
-  /// 做完：Cue 按证据确认过就完成（`finishTask`）；顶层任务同时把结果告诉用户，所以要 evidence。已完成的只结束没人再用的会话。
+  /// 做完：Cue 按证据确认过就完成（`finishTask`）；顶层任务同时把结果告诉用户，所以要 evidence，结果上只挂 show 点名的图。已完成的只结束没人再用的会话。
   /// 给 session 是收掉那个会话（`CueStore.endIdleSession`）。
   private func done(_ args: Args) async throws -> Result {
     _ = try await host()  // 停用后不能再做完事
@@ -175,16 +175,18 @@ public struct CueTools: Sendable {
       return .ok((ended ? "已请会话「\(session.title)」结束" : "会话「\(session.title)」早已结束") + "。（\(session.shortID)）")
     }
     let card = try await task(args.required("task"))
-    let evidence = card.parentID == nil && card.status != .done ? try Self.evidence(args) : []
-    let (report, ends) = try await store.finishTask(card.id, evidence: evidence)
+    let reports = card.parentID == nil && card.status != .done
+    let evidence = reports ? try Self.evidence(args) : []
+    let shots = try CueShot.checked(try await shots(args.raw["show"]))
+    if !reports, !shots.isEmpty { throw Failure("show 只跟着做完顶层任务：步骤与已完成的不写结果，没写") }
+    let (report, ends) = try await store.finishTask(card.id, evidence: evidence, shots: shots)
     let ended = ends.isEmpty ? "" : "，已请 \(ends.count) 个会话结束"
     if card.status == .done {
       return .ok("「\(card.heading)」（\(card.id.shortID)）早已完成" + (ends.isEmpty ? "，没有要结束的会话（还在用的、已结束的不动）。" : "\(ended)。"))
     }
-    let delivered = report == nil ? 0 : try await store.deliverables(of: [card.id])[card.id]?.count ?? 0
     return .ok(
       "「\(card.heading)」（\(card.id.shortID)）完成了" + ended
-        + (report.map { "；结果已告诉用户（\($0.id.shortID)）" + (delivered > 0 ? "，下面挂着发到手机的 \(delivered) 份。" : "。") } ?? "。"))
+        + (report.map { "；结果已告诉用户（\($0.id.shortID)）" + (shots.isEmpty ? "，没挂图。" : "，挂着你点名的 \(shots.count) 张。") } ?? "。"))
   }
 
   /// 证据（done 做完顶层任务时）：1–`evidenceCount` 条，每条宽不过 `evidenceLimit`；不合就整件退回，什么都不写。
@@ -456,7 +458,7 @@ public struct CueTools: Sendable {
     return .ok(lines.joined(separator: "\n"))
   }
 
-  /// 发到手机的文件，每份一行：id（提问的 show 照它点名）、标题、类型、发来的时刻与本机路径（读文件工具按扩展名认类型，给的是按原文件名放的那份）。
+  /// 发到手机的文件，每份一行：id（提问与做完的 show 照它点名）、标题、类型、发来的时刻与本机路径（读文件工具按扩展名认类型，给的是按原文件名放的那份）。
   private func deliveredLines(_ previews: [PiPreview]) -> [String] {
     guard !previews.isEmpty else { return [] }
     return ["发到手机的（id，图片、PDF 用 read 打开）："] + previews.map { preview in
@@ -513,10 +515,10 @@ public struct CueTools: Sendable {
   /// 先撤回（若有 withdraw）、放回（若有 restore），再说（若有 text）；都没有是参数错。
   private func tell(_ args: Args) async throws -> Result {
     let related = try await args.string("task").asyncMap(task)
-    let shots = try await shots(args.raw["show"])
+    let shots = try CueShot.checked(try await shots(args.raw["show"]))
     let ask = try args.string("ask").map { raw -> CueAsking in
       guard let ask = CueAsk(rawValue: raw) else { throw Failure("ask 只能是这几类：\(CuePrompt.asks)；别的事你自己定，做完告诉他") }
-      return try CueAsking(ask, action: args.string("doing"), rule: args.string("rule"), shots: shots)
+      return try CueAsking(ask, action: args.string("doing"), rule: args.string("rule"))
     }
     if ask == nil, !shots.isEmpty { throw Failure("show 只跟着 ask：要他看的图放在提问上") }
     var done: [String] = []
@@ -534,11 +536,11 @@ public struct CueTools: Sendable {
       guard !done.isEmpty else { throw Failure("要给 text（说什么）、withdraw（撤回哪条提问）或 restore（放回哪条）") }
       return .ok(done.joined())
     }
-    let message = try await store.addCueMessage(.cue, text: text, ask: ask, urgent: args.bool("urgent") ?? false, task: related?.id)
+    let message = try await store.addCueMessage(.cue, text: text, ask: ask, shots: shots, urgent: args.bool("urgent") ?? false, task: related?.id)
     return .ok(done.joined() + (message.choices != nil ? "已问用户，等他选。" : "已告诉用户。") + "（\(message.id.shortID)）")
   }
 
-  /// show 点名的图：每张的 file 是发到手机的那一份的 id 或前缀（task peek 里列的）。
+  /// show 点名的图（tell 的提问、done 的结果）：每张的 file 是发到手机的那一份的 id 或前缀（task peek 里列的）。
   private func shots(_ raw: Any?) async throws -> [CueShot] {
     guard let raw else { return [] }
     guard let items = raw as? [[String: Any]] else { throw Failure("show 是数组：[{file, look}]") }
