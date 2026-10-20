@@ -102,7 +102,7 @@ nonisolated struct CueDigest: Equatable, Sendable {
     /// 新消息有几条（`CueStore.cueUnread`）。
     var unread: Int
     /// Cue 最近对你说的那条的摘要行（`CueMessage.headline`）。
-    /// 结束了的提问（你答了或它撤回）不算：那件事已经定了，摘要接着写它在那之前最近说的。
+    /// 结束了的提问（`CueQuestionEnd`）不算：那件事已经定了，摘要接着写它在那之前最近说的。
     var lastSaid: String?
     /// 它最近一句说的那件事已经做完了（头像露"做完"的表情）。
     var lastSaidDone: Bool
