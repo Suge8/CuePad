@@ -249,7 +249,7 @@ private struct AgentStrip: View {
             MascotFace(mascot: look.mascot, floats: look.floats && !reduceMotion)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
-                    PiStateDot(shown: shown, size: BubbleMetrics.dot).relaySpot(session: session)
+                    PiStateDot(shown: shown, size: BubbleMetrics.dot).relaySpot(session: session, row: .task)
                     Text(look.title).font(BubbleMetrics.strong).foregroundStyle(palette.ink).lineLimit(1)
                 }
                 if let line = Dotted(caption, look.note).nonEmpty {

@@ -196,7 +196,7 @@ struct TaskNextMark: View {
         HStack(spacing: 5) {
             switch next {
             case .agent(let shown, let session):
-                PiStateDot(shown: shown, size: Self.dot).relaySpot(session: session.sessionID)
+                PiStateDot(shown: shown, size: Self.dot).relaySpot(session: session.sessionID, row: .task)
                 if shown.needsYou || lit || spelled { Text(shown.label).foregroundStyle(shown.labelTint(palette)) }
             case .start:
                 Image(.start).font(Self.glyph)
