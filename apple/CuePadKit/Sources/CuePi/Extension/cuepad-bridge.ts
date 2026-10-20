@@ -15,7 +15,7 @@ import type {
 	ExtensionAPI, ExtensionCommandContext, ExtensionContext, ExtensionUIContext, ExtensionUIDialogOptions, SessionEntry,
 } from "@earendil-works/pi-coding-agent";
 
-const EXTENSION_VERSION = 35;
+const EXTENSION_VERSION = 34;
 const PROTOCOL_VERSION = 16;
 
 /** 本文件在磁盘上的位置（Pi 经 jiti 载入，按 CommonJS 给出 `__filename`）：CuePad 升级时（`AgentIntegration.install`）把它原子地换成新版本，
@@ -591,9 +591,8 @@ export default function (pi: ExtensionAPI) {
 				busySince = resume?.phase === next ? resume.busySince : next === "working" || next === "waiting" ? busySince ?? now : null;
 				phase = next;
 				scheduleIdleExit();
+				reloadWhenIdle();
 			}
-			// 等子代理与工作中同一粗状态：自己这一轮歇下（进入等子代理）时也要看一次能不能换上新协议
-			reloadWhenIdle();
 			if (clients.size === 0) return;
 			const message = { t: "state", state: { ...current, since, busySince, turnSince } };
 			for (const client of clients) write(client, message);
@@ -618,17 +617,12 @@ export default function (pi: ExtensionAPI) {
 
 		/**
 		 * 自己重新载入：磁盘上的本文件换成了别的版本（CuePad 升级时写临时文件再改名，所以盯所在目录，不盯文件本身；事件驱动，不轮询），
-		 * 就等到空闲（这一轮做完、没有等你回答的弹窗、不在压缩）经内部命令调 `ctx.reload()`：它清掉 Pi 的扩展缓存、
-		 * 从磁盘载入新版本，新实例以新协议重新连上 CuePad，用户不用自己 /reload；在跑的一轮不打断，歇下时（`commit`）再重载。
-		 * 子代理在跑时：协议号没变就等它们也歇下（CuePad 照常连着，不必打断）；变了就不等——CuePad 读不到、发不进这个会话，
-		 * 指挥官又会接着子代理的结果一轮轮跑下去，等到全歇下可能要几个小时。代价是 FireCode 的子代理在飞的那一轮被重载打断
-		 * （会话与义务都在，它在重载后提醒指挥官续派）。
+		 * 就等到空闲（这一轮做完、没有等你回答的弹窗、子代理都歇下、不在压缩）经内部命令调 `ctx.reload()`：它清掉 Pi 的扩展缓存、
+		 * 从磁盘载入新版本，新实例以新协议重新连上 CuePad，用户不用自己 /reload；在跑的一轮不打断，歇下时（`commit` 里进入空闲）再重载。
 		 * 否决重新载入会话（`switchSession`）：同一工作目录下 Pi 复用缓存里的旧模块，载入的还是旧代码。
 		 */
 		let ownWatcher: fs.FSWatcher | undefined;
 		let newerOnDisk = false;
-		/** 磁盘上那一版的协议号与自己的不同：CuePad 已经连不上这个会话 */
-		let protocolOnDiskDiffers = false;
 		let ownReload: ReturnType<typeof setImmediate> | undefined;
 		function watchOwnFile() {
 			ownWatcher = fs.watch(path.dirname(OWN_FILE), (_event, name) => {
@@ -637,21 +631,17 @@ export default function (pi: ExtensionAPI) {
 				try { source = fs.readFileSync(OWN_FILE, "utf8"); }
 				catch (error) {
 					newerOnDisk = false;
-					protocolOnDiskDiffers = false;
 					if ((error as NodeJS.ErrnoException).code !== "ENOENT") ctx.ui.notify(`CuePad 扩展升级检查失败：${reason(error)}`, "error");
 					return;
 				}
 				const version = Number(/const EXTENSION_VERSION = (\d+);/.exec(source)?.[1]);
 				newerOnDisk = Number.isInteger(version) && version !== EXTENSION_VERSION;
-				const protocol = Number(/const PROTOCOL_VERSION = (\d+);/.exec(source)?.[1]);
-				protocolOnDiskDiffers = newerOnDisk && Number.isInteger(protocol) && protocol !== PROTOCOL_VERSION;
 				reloadWhenIdle();
 			});
 			ownWatcher.on("error", (error) => ctx.ui.notify(`CuePad 扩展文件监听失败：${reason(error)}`, "error"));
 		}
 		function canReload() {
-			if (asking) return false;
-			return phase === "idle" || phase === "error" || (protocolOnDiskDiffers && state().kind === "delegating");
+			return (phase === "idle" || phase === "error") && !asking;
 		}
 		function reloadWhenIdle() {
 			if (!newerOnDisk || ownReload || !canReload()) return;
