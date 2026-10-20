@@ -60,6 +60,5 @@ final class DebugKeyboard: UIInputView {
         // 键盘按新的高重排：同第三方键盘改了自己的高
         UIApplication.shared.sendAction(#selector(UIResponder.reloadInputViews), to: nil, from: nil, for: nil)
     }
-
 }
 #endif
