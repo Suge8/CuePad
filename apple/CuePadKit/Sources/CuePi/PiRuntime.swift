@@ -11,7 +11,7 @@ import OSLog
 /// - 启动即脱离 App（`ChildProcess.Placement.detached`）：App 退出、更新、崩溃都不影响它，新起的 App 经桥重新看到它；
 /// - 经环境变量 `CUEPAD_HOSTED`（值是空闲多少秒后退出，格式见 README「协议」）告诉扩展：扩展在 hello 里带回（`PiSession.hosted`），
 ///   空闲（这一轮做完、没有等你确认、子代理也歇下）满时限就自己退出；
-/// - 有哪些托管会话只看桥（`hosted` 与 hello 里的 pid），这里不记进程；结束、让出、不兼容退出由桥做（`PiBridge` 的托管会话一节）；
+/// - 有哪些托管会话只看桥（`hosted` 与 hello 里的 pid），这里不记进程；结束、让出由桥做（`PiBridge` 的托管会话一节）；
 /// - 让出的那个退出后，让接手的进程重新载入会话（`PiBridge.reload`）：它这期间没写过就接上那一轮、不分支，写过就由扩展提示一句。
 @MainActor
 public final class PiRuntime: AgentRuntime {

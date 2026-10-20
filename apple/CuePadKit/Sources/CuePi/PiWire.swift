@@ -81,8 +81,8 @@ enum PiWire {
     }
 
     /// 协议版本不同的 hello：格式可能已变，只读认得出会话的几项（其余字段读不出就当没有）。
-    /// `hosted` 也读：托管的旧版进程没有终端能 /reload，CuePad 要认出它、让它退出（`PiBridge`）。
-    /// `sessionFile` 也读：/reload 时旧连接告别，说没说过话（`PiSession.spoke`）看它，读不到就会把说过话的会话当成没说话、删掉记录与摘要。
+    /// `hosted` 也读：托管的与终端里的同一会话并存时记录跟哪个、界面标不标后台看它。
+    /// `sessionFile` 也读：进程退出时说没说过话（`PiSession.spoke`）看它，读不到就会把说过话的会话当成没说话、删掉记录与摘要。
     struct OtherProtocolHello: Decodable {
         var protocolVersion: Int
         var extensionVersion: Int

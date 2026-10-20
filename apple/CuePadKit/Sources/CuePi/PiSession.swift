@@ -83,10 +83,12 @@ public struct PiSession: Identifiable, Sendable, Equatable {
     /// 从 CuePad 能对它做什么（与同步记录上的 `PiSessionState.capabilities` 同一条规则）。
     public var capabilities: AgentCapabilities { .of(agent, hosted: hosted, model: model) }
 
-    /// 协议号不同（`.incompatible`）、又不用人管：会自己换上新扩展（`PiBridge.selfReloadingExtension` 起），或是托管的
-    /// （更早的由桥让它退出、下次发话用新扩展恢复）。这段时间读不到它在做什么、也发不进命令：同步记录不写、界面不换上桥上的状态，
-    /// 都照它最后一次读到的样子。协议号不同又不是这种的，只有终端里的旧扩展：同步记录写成 `.incompatible`，提示在终端里 /reload。
-    public var upgrading: Bool { state == .incompatible && (hosted || extensionVersion >= PiBridge.selfReloadingExtension) }
+    /// 协议号不同（`.incompatible`）、又会自己换上新扩展（`PiBridge.selfReloadingExtension` 起）：这段时间读不到它在做什么、也发不进命令，
+    /// 同步记录不写、界面不换上桥上的状态，都照它最后一次读到的样子。更早的扩展同步记录写成 `.incompatible`，提示在终端里 /reload。
+    public var upgrading: Bool { state == .incompatible && extensionVersion >= PiBridge.selfReloadingExtension }
+
+    /// 重新上桥时沿用的状态与计时（`PiBridge.attach`）
+    var carried: (state: PiWorkState, times: PiTimes) { (state, PiTimes(stateSince: stateSince, busySince: busySince)) }
 
     /// 留下了对话：会话文件已经落盘（第一条消息之前不建文件）；OpenCode 的会话一建就在它的数据库里。下线时据此决定进不进历史。
     public var spoke: Bool {
@@ -212,7 +214,7 @@ extension PiBridgeError: LocalizedError {
         case .socketDirectoryTooLong: "Agent 连接目录的路径太长"
         case .unknownSession: "这个 Agent 会话已经结束"
         case .incompatibleExtension: "这个会话正在终端里运行旧版扩展，在终端里执行 /reload 后再发"
-        case .upgradingExtension: "这个会话正在换上新版扩展，这一轮做完后自动接上，到时再发"
+        case .upgradingExtension: "这个会话正在换上新版扩展，歇下后自动接上，到时再发"
         case .unsupported: "这个 Agent 会话不支持这样操作"
         case .notEnded: "会话没有按时结束，可能还在等你在终端里处理"
         case .sessionEnded: "发送途中 Agent 会话结束了"
