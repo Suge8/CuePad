@@ -24,6 +24,8 @@ struct CueHostTests {
         let notifier = RecordingCueNotifier()
         let app: TestApp
         let folder: URL
+        /// 真 Claude Code 大脑的临时目录（`ClaudeCue.launch`，开销记录在里面）；假模型时为 nil
+        let brainDirectory: URL?
         var services: AppServices { app.services }
         var store: CueStore { services.store }
 
@@ -40,7 +42,9 @@ struct CueHostTests {
                 patrolAfter: patrolAfter, mergeAfter: .seconds(1),
                 restarts: [.milliseconds(200), .milliseconds(200), .milliseconds(200)], retryWake: .seconds(1), quietHours: [])
             let launch = CueLaunch(executable: realPi, path: realPi.deletingLastPathComponent().path + ":/usr/bin:/bin", agents: [])
-            let claudeLaunch = try claude.map { try $0.launch(in: TestLibraries.makeDirectory()) }
+            let brain = claude.map { _ in TestLibraries.makeDirectory() }
+            brainDirectory = brain
+            let claudeLaunch = try claude.map { try $0.launch(in: brain!) }
             app = TestApp(cue: CueDependencies(
                 launch: { agent, _ in agent == .pi ? launch : agent == .claudeCode ? claudeLaunch : nil }, helper: Bundle.main.bundleURL.appending(path: "Contents/Helpers/cuepad"), notifier: notifier, timing: timing))
             let agent = app.piPaths.agentDirectory

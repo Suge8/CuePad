@@ -15,13 +15,13 @@ import Testing
 /// 大脑是真的 Claude Code（同用户的 Cue：默认 opus、medium），系统提示、工具与信封全走生产路径（`CueKeeper` 起班次）；
 /// 其余沿用 `CueHostTests.Rig`：真 `cuepad mcp`、隔离库、执行器开的会话由假扩展扮演。每个场景先等刚启用那一轮做完，
 /// 再直接在库与假会话上摆好状态，让 Cue 被你的话或会话的动静自然叫醒，只评被叫醒的那一轮。
-/// 每个场景把信封、工具调用与结果、Cue 写的消息、判定写进 `CUEPAD_CUE_EVAL_OUT`（缺省 /tmp/cue-eval/latest）的一个 .md，summary.md 汇总。
-nonisolated private let environment = ProcessInfo.processInfo.environment
-private let output = URL(filePath: environment["CUEPAD_CUE_EVAL_OUT"] ?? "/tmp/cue-eval/latest", directoryHint: .isDirectory)
+/// 每个场景把信封、工具调用与结果、Cue 写的消息、判定与每一轮的开销（`BrainUsage`）写进 `CUEPAD_CUE_EVAL_OUT`（缺省 /tmp/cue-eval/latest）的一个 .md，summary.md 汇总。
+nonisolated let evalEnvironment = ProcessInfo.processInfo.environment
+let evalOutput = URL(filePath: evalEnvironment["CUEPAD_CUE_EVAL_OUT"] ?? "/tmp/cue-eval/latest", directoryHint: .isDirectory)
 
-@Suite(.enabled(if: environment["CUEPAD_CUE_EVAL"] == "1", "CUEPAD_CUE_EVAL=1 才跑"), .timeLimit(.minutes(10)))
+@Suite(.enabled(if: evalEnvironment["CUEPAD_CUE_EVAL"] == "1", "CUEPAD_CUE_EVAL=1 才跑"), .timeLimit(.minutes(10)))
 struct CueEvalTests {
-    private static let request = """
+    static let request = """
         给演示项目的登录页加一个「忘记密码」：点了之后让用户填邮箱，发一封重置密码的邮件。几条要求：重置链接 30 分钟内有效、只能用一次；\
         邮件沿用现在注册验证邮件的模板样式；同一个邮箱一分钟内最多发一次，防止被刷；不管邮箱存不存在都提示「如果这个邮箱注册过，你会收到一封邮件」，别泄露用户是否存在。
         """
@@ -485,7 +485,7 @@ struct CueEvalTests {
         我推荐 1：信息最集中、一步答完；3 的滑动在 Mac 上不顺手。
         """
 
-    private static let doneReply = """
+    static let doneReply = """
         忘记密码做好了。
 
         改动：
@@ -521,27 +521,30 @@ struct Check {
 /// 真的 Claude Code 当 Cue 的大脑。`launch` 写一个起 claude 的外壳：配置目录与 HOME 在临时目录（不碰 ~/.claude），
 /// 登录用本机 Claude Code 自己的（`ClaudeLogin`），外壳起 claude 时现取、只进它的环境；继承来的 ANTHROPIC_* 清掉，不会走到别的提供方；
 /// XDG_* 也清掉，Claude Code 的缓存与状态只落在临时 HOME 下。
+/// 开销从评测这边取：外壳把 claude 的 stdout 另存一份到 `usage` 目录（每个大脑进程一个文件，`BrainUsage` 读），
+/// 用 bash 的进程替换接 tee 再 exec，claude 仍是外壳这个进程，退出码与流都不变。
 struct ClaudeCue {
     let model: String
     let effort: PiThinkingLevel
 
     /// 缺省同用户的 Cue；`CUEPAD_CUE_EVAL_MODEL`、`CUEPAD_CUE_EVAL_EFFORT` 换
     static let current = ClaudeCue(
-        model: environment["CUEPAD_CUE_EVAL_MODEL"] ?? "opus",
-        effort: environment["CUEPAD_CUE_EVAL_EFFORT"].flatMap(PiThinkingLevel.init(rawValue:)) ?? .medium)
+        model: evalEnvironment["CUEPAD_CUE_EVAL_MODEL"] ?? "opus",
+        effort: evalEnvironment["CUEPAD_CUE_EVAL_EFFORT"].flatMap(PiThinkingLevel.init(rawValue:)) ?? .medium)
 
     func launch(in root: URL) throws -> CueLaunch {
         let claude = try #require(ExecutableLocator.standard.candidates("claude").first, "需要 claude")
-        let config = root.appending(path: "claude-config"), home = root.appending(path: "home")
-        for directory in [config, home] { try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true) }
+        let config = root.appending(path: "claude-config"), home = root.appending(path: "home"), usage = BrainUsage.directory(in: root)
+        for directory in [config, home, usage] { try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true) }
         try Data(#"{"hasCompletedOnboarding":true}"#.utf8).write(to: config.appending(path: ".claude.json"))
         _ = try #require(ClaudeLogin.token, "这台 Mac 上的 Claude Code 没登录")
         let script = root.appending(path: "claude")
         try #"""
-            #!/bin/sh
+            #!/bin/bash
             for name in $(env | sed -nE 's/^((ANTHROPIC|XDG)_[A-Za-z0-9_]*)=.*/\1/p'); do unset "$name"; done
             CLAUDE_CODE_OAUTH_TOKEN=$(\#(ClaudeLogin.tokenCommand)) || exit 1
             export CLAUDE_CODE_OAUTH_TOKEN CLAUDE_CONFIG_DIR='\#(config.path)' HOME='\#(home.path)' DISABLE_AUTOUPDATER=1
+            exec > >(exec tee '\#(usage.path)'/"$(date +%s)-$$.jsonl")
             exec '\#(claude.path)' "$@"
             """#.write(to: script, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
@@ -639,9 +642,9 @@ extension CueHostTests.Rig {
     }
 }
 
-private func oneLine(_ text: String) -> String { text.split(whereSeparator: \.isNewline).joined(separator: " ") }
+func oneLine(_ text: String) -> String { text.split(whereSeparator: \.isNewline).joined(separator: " ") }
 
-private func sentences(_ text: String) -> Int {
+func sentences(_ text: String) -> Int {
     text.split { "。！？!?\n".contains($0) }.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }.count
 }
 
@@ -649,13 +652,24 @@ private func sentences(_ text: String) -> Int {
 @MainActor
 final class CueEval {
     let rig: CueHostTests.Rig
+    private let output: URL
     private var start = Date.distantFuture
+    /// 第一次叫醒的时刻：此后的每一轮都写进现场
+    private var begin: Date?
+    /// 场景里的每一轮（含预热）按 id 留着：运行情况只留最近 `CueKeeper.roundsKept` 轮
+    private var archive: [Int: CueRound] = [:]
+    /// 场景自己要写进 .md 的段落（长程的统计），与汇总行"工具调用""用时"两格（缺省是被叫醒那一轮的）
+    var report: [String] = []
+    var overview: (calls: Int, elapsed: String)?
 
-    private init(_ rig: CueHostTests.Rig) { self.rig = rig }
+    private init(_ rig: CueHostTests.Rig, output: URL) {
+        self.rig = rig
+        self.output = output
+    }
 
     /// 起 Rig、等刚启用那一轮做完，跑 `body`（摆状态、叫醒、判定）；不论成败都把现场写完、停掉大脑，再报没过的判定。
-    static func run(_ name: String, expect: String, _ body: (CueEval) async throws -> [Check]) async throws {
-        let eval = CueEval(try await CueHostTests.Rig(claude: .current))
+    static func run(_ name: String, expect: String, output: URL = evalOutput, _ body: (CueEval) async throws -> [Check]) async throws {
+        let eval = CueEval(try await CueHostTests.Rig(claude: .current), output: output)
         var checks: [Check] = [], failure: (any Error)?
         do {
             try await eventually("刚启用那一轮做完", timeout: .seconds(300)) { eval.rig.rounds.contains { $0.wake == .enabled && $0.finishedAt != nil } }
@@ -672,51 +686,116 @@ final class CueEval {
 
     /// 叫醒 Cue（你说一句，或会话有动静），等被叫醒的那一轮做完。
     func trigger(_ wake: () async throws -> Void) async throws {
-        start = .now
+        mark()
         try await wake()
         try await eventually("Cue 做完被叫醒的那一轮", timeout: .seconds(420)) { self.round?.finishedAt != nil }
+    }
+
+    /// 叫醒 Cue，等它把这次引起的都做完才返回：至少一轮做完、没有在跑的、歇着、话都交了、没有写下了还没接上的交接，
+    /// 再稳住几秒没有新的一轮（空闲合并记忆这类紧跟着的醒来）。返回这次醒来的时段；没叫醒（等不到一轮开始）为 nil。
+    func settle(_ wake: () async throws -> Void) async throws -> ClosedRange<Date>? {
+        let from = mark()
+        try await wake()
+        do {
+            try await eventually("Cue 醒来", timeout: .seconds(120)) { self.rig.rounds.contains { $0.startedAt >= from } }
+        } catch {
+            return nil
+        }
+        while true {
+            try await eventually("Cue 做完这次醒来引起的", timeout: .seconds(900)) { try await self.idle(since: from) }
+            let count = rig.rounds.count
+            await quietPeriod(.seconds(3))
+            if rig.rounds.count == count, try await idle(since: from) { break }
+        }
+        _ = rounds
+        return from...Date.now
+    }
+
+    @discardableResult
+    private func mark() -> Date {
+        start = .now
+        if begin == nil { begin = start }
+        return start
+    }
+
+    private func idle(since from: Date) async throws -> Bool {
+        let rounds = rig.rounds
+        guard rounds.contains(where: { $0.startedAt >= from && $0.finishedAt != nil }), rounds.allSatisfy({ $0.finishedAt != nil }) else { return false }
+        guard try await rig.store.cueState()?.state == .known(.settled), try await rig.store.cueMessagesToDeliver().isEmpty else { return false }
+        // 写下交接的那一轮做完、新班次接着的一轮还没开始
+        let handoff = try await rig.store.cueMessages(limit: 50).last { $0.author == .known(.handoff) }
+        return !(handoff.map { handoff in rounds.last.map { handoff.createdAt >= $0.startedAt } ?? false } ?? false)
     }
 
     /// 被叫醒的那一轮
     var round: CueRound? { rig.rounds.first { $0.startedAt >= start } }
 
+    /// 场景到此的每一轮（含预热），从早到晚
+    var rounds: [CueRound] {
+        for round in rig.rounds { archive[round.id] = round }
+        return archive.values.sorted { $0.startedAt < $1.startedAt }
+    }
+
     /// 那一轮里调的 `tool`（只看 `action` 这一种）与它的参数
     func calls(_ tool: String, _ action: String? = nil) -> [(call: CueToolCall, args: [String: Any])] {
-        (round?.calls ?? []).compactMap { call in
+        Self.calls(in: round.map { [$0] } ?? [], tool, action.map { [$0] } ?? [])
+    }
+
+    /// `rounds` 里调的 `tool`（`actions` 为空时不论动作）与它的参数
+    static func calls(in rounds: [CueRound], _ tool: String, _ actions: Set<String> = []) -> [(call: CueToolCall, args: [String: Any])] {
+        rounds.flatMap(\.calls).compactMap { call in
             let args = (try? JSONSerialization.jsonObject(with: Data(call.arguments.utf8))) as? [String: Any] ?? [:]
-            guard call.name == tool, action == nil || args["action"] as? String == action else { return nil }
+            guard call.name == tool, actions.isEmpty || (args["action"] as? String).map(actions.contains) == true else { return nil }
             return (call, args)
         }
     }
 
     /// 叫醒之后 Cue 写的消息（tell、回复、动态、完成的结果）
-    func said() async throws -> [CueMessage] {
-        try await rig.store.cueMessages().filter { $0.createdAt >= start && $0.author != .known(.you) && !$0.text.isEmpty }
+    func said(since: Date? = nil) async throws -> [CueMessage] {
+        let from = since ?? start
+        return try await rig.store.cueMessages(limit: 2000).filter { $0.createdAt >= from && $0.author != .known(.you) && !$0.text.isEmpty }
     }
 
     /// 回答你的那句
-    func reply() async throws -> CueMessage? { try await said().last { $0.author == .known(.cue) && $0.choices == nil && $0.taskID == nil } }
+    func reply(since: Date? = nil) async throws -> CueMessage? {
+        try await said(since: since).last { $0.author == .known(.cue) && $0.choices == nil && $0.taskID == nil }
+    }
 
     private func write(_ name: String, expect: String, checks: [Check], failure: (any Error)?) async {
         let passed = failure == nil && !checks.isEmpty && checks.allSatisfy(\.passed)
         let verdict = failure != nil ? "出错" : passed ? "通过" : "不通过"
-        let round = round
-        let elapsed = round?.finishedAt.map { seconds($0.timeIntervalSince(round!.startedAt)) } ?? "—"
-        let context = round?.context.map(String.init) ?? "—"
+        let round = round, rounds = rounds
+        let usage = rig.brainDirectory.map(BrainUsage.rounds(in:)) ?? []
+        let total = usage.reduce(BrainUsage(), +)
+        let elapsed = overview?.elapsed ?? round?.finishedAt.map { seconds($0.timeIntervalSince(round!.startedAt)) } ?? "—"
+        let context = (round ?? rounds.last)?.context.map(String.init) ?? "—"
         var lines = [
-            "<!-- row: | \(name) | \(verdict) | \(round?.calls.count ?? 0) | \(elapsed) | \(context) | -->",
+            "<!-- row: | \(name) | \(verdict) | \(overview?.calls ?? round?.calls.count ?? 0) | \(elapsed) | \(context) | \(total.cells) | -->",
             "# \(name)", "", "期望：\(expect)", "", "模型：\(ClaudeCue.current.model) · \(ClaudeCue.current.effort.rawValue)", "",
             "## 判定：\(verdict)", "",
         ]
         lines += checks.map { "- [\($0.passed ? "x" : " ")] \($0.label)" }
         if let failure { lines += ["", "出错：\(failure)"] }
+        lines += report
         lines += ["", "## 用时与上下文", "", "- 被叫醒的这一轮：\(elapsed)，结束时上下文 \(context) token"]
-        if let greeting = rig.rounds.first(where: { $0.wake == .enabled }) {
+        if let greeting = rounds.first(where: { $0.wake == .enabled }) {
             let took = greeting.finishedAt.map { seconds($0.timeIntervalSince(greeting.startedAt)) } ?? "没做完"
             lines.append("- 刚启用那一轮（预热，不评）：\(took)，上下文 \(greeting.context.map(String.init) ?? "—")，工具 \(greeting.calls.map(\.name).joined(separator: "、"))")
         }
-        for (index, round) in rig.rounds.filter({ $0.startedAt >= start }).enumerated() {
-            lines += ["", "## 第 \(index + 1) 轮（醒来：\(round.wake)）\(round.finishedAt == nil ? "（写下时还没做完）" : "")", "", "### 发给大脑的"]
+        lines += ["", "## 开销（每轮，含预热；Claude Code 每轮 result 事件报的）", ""]
+        if usage.count != rounds.count {
+            lines += ["大脑报了 \(usage.count) 轮，记下的轮有 \(rounds.count) 轮，下表按先后对齐，合计以大脑报的为准。", ""]
+        }
+        lines += ["| 轮 | 醒来 | 用时 | 上下文 | \(BrainUsage.header) |", "| --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
+        for index in 0..<max(usage.count, rounds.count) {
+            let round = index < rounds.count ? rounds[index] : nil
+            let took = round?.finishedAt.map { seconds($0.timeIntervalSince(round!.startedAt)) } ?? "—"
+            lines.append("| \(index) | \(round.map { "\($0.wake)" } ?? "—") | \(took) | \(round?.context.map(String.init) ?? "—") | \(index < usage.count ? usage[index].cells : "— | — | — | — | —") |")
+        }
+        lines.append("| 合计 | | | | \(total.cells) |")
+        for (index, round) in rounds.filter({ $0.startedAt >= begin ?? start }).enumerated() {
+            let setup = round.startedAt < start ? "（铺垫）" : ""
+            lines += ["", "## 第 \(index + 1) 轮（醒来：\(round.wake)）\(setup)\(round.finishedAt == nil ? "（写下时还没做完）" : "")", "", "### 发给大脑的"]
             lines += round.sent.flatMap { ["", "```text", $0, "```"] }
             lines += ["", "### 工具调用（\(round.calls.count)）"]
             for (number, call) in round.calls.enumerated() {
@@ -726,7 +805,7 @@ final class CueEval {
             if let failed = round.failure { lines += ["", "这一轮出错：\(failed)"] }
         }
         lines += ["", "## Cue 写的消息"]
-        for message in (try? await said()) ?? [] {
+        for message in (try? await said(since: begin)) ?? [] {
             var head = "- **\(message.author.rawValue)**"
             if let choices = message.choices { head += "（等你：\(choices.joined(separator: " / "))）" }
             if message.taskID != nil { head += "（关联任务）" }
@@ -740,14 +819,14 @@ final class CueEval {
             try? FileManager.default.removeItem(at: library)
             try FileManager.default.copyItem(at: rig.app.databaseURL.deletingLastPathComponent(), to: library)
             let prompt = CuePrompt.system(name: CueProfile.defaultName, memory: CueMemoryView(try await rig.store.cueMemory()), agents: [])
-            try Self.summarize(prompt: prompt)
+            try summarize(prompt: prompt)
         } catch {
             Issue.record("评测输出没写成：\(error)")
         }
     }
 
     /// 汇总目录里各场景的那一行，写 summary.md 与这次的系统提示；并行的场景（可能在别的进程里）按文件锁轮流写。
-    private static func summarize(prompt: String) throws {
+    private func summarize(prompt: String) throws {
         let lock = open(output.appending(path: ".lock").path, O_CREAT | O_RDWR, 0o644)
         flock(lock, LOCK_EX)
         defer { flock(lock, LOCK_UN); close(lock) }
@@ -756,17 +835,78 @@ final class CueEval {
             .filter { $0.pathExtension == "md" && !["summary", "system-prompt"].contains($0.deletingPathExtension().lastPathComponent) }
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
             .compactMap { try? String(contentsOf: $0, encoding: .utf8).firstMatch(of: /<!-- row: (.*) -->/)?.1 }
+            .map(String.init)
+        let total = rows.compactMap(BrainUsage.init(row:)).reduce(BrainUsage(), +)
         let wide = prompt.unicodeScalars.count { !$0.isASCII }, ascii = prompt.unicodeScalars.count { $0.isASCII }
         let summary = [
             "# Cue 评测", "", "模型：\(ClaudeCue.current.model) · \(ClaudeCue.current.effort.rawValue)", "",
             "系统提示 \(prompt.count) 字，估算 ≈\(wide + ascii / 4) token（非 ASCII 每字算 1、ASCII 每 4 字符算 1；工具说明另算）", "",
-            "| 场景 | 判定 | 工具调用 | 用时 | 结束时上下文 token |", "| --- | --- | --- | --- | --- |",
-        ] + rows.map(String.init)
+            "工具调用与用时是被叫醒的那一轮的（长程是全程合计与每轮中位）；开销是场景里每一轮（含预热）的合计。", "",
+            "| 场景 | 判定 | 工具调用 | 用时 | 结束时上下文 token | \(BrainUsage.header) |", "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+        ] + rows + ["| 合计 | | | | | \(total.cells) |"]
         try summary.joined(separator: "\n").appending("\n").write(to: output.appending(path: "summary.md"), atomically: true, encoding: .utf8)
     }
 }
 
-private func seconds(_ interval: TimeInterval) -> String { String(format: "%.1fs", interval) }
+/// 大脑一轮的开销：Claude Code 每轮的 result 事件里，`modelUsage`（各模型的 token）与 `total_cost_usd` 是这个进程到此的累计，
+/// 同一进程相邻两轮相减得这一轮（含 Claude Code 自己顺带的小模型请求）。
+nonisolated struct BrainUsage {
+    var input = 0, cacheRead = 0, cacheWrite = 0, output = 0
+    var cost = 0.0
+
+    static let header = "输入 | 缓存读 | 缓存写 | 输出 | 费用"
+    var cells: String { "\(input) | \(cacheRead) | \(cacheWrite) | \(output) | $\(String(format: "%.4f", cost))" }
+
+    /// 大脑的 stdout 副本放在哪（`ClaudeCue.launch` 写）
+    static func directory(in root: URL) -> URL { root.appending(path: "usage", directoryHint: .isDirectory) }
+
+    /// 每个大脑进程一个文件，按起进程的先后；每个 result 事件一轮
+    static func rounds(in root: URL) -> [BrainUsage] {
+        let files = (try? FileManager.default.contentsOfDirectory(at: directory(in: root), includingPropertiesForKeys: [.creationDateKey])) ?? []
+        func created(_ file: URL) -> Date { (try? file.resourceValues(forKeys: [.creationDateKey]).creationDate) ?? .distantPast }
+        return files.sorted { created($0) < created($1) }.flatMap { file -> [BrainUsage] in
+            let text = (try? String(contentsOf: file, encoding: .utf8)) ?? ""
+            var previous = BrainUsage()
+            return text.split(separator: "\n").compactMap { line in
+                guard line.contains(#""type":"result""#),
+                      let event = (try? JSONSerialization.jsonObject(with: Data(line.utf8))) as? [String: Any], event["type"] as? String == "result"
+                else { return nil }
+                var sofar = BrainUsage(cost: event["total_cost_usd"] as? Double ?? 0)
+                for case let model as [String: Any] in (event["modelUsage"] as? [String: Any] ?? [:]).values {
+                    sofar.input += model["inputTokens"] as? Int ?? 0
+                    sofar.cacheRead += model["cacheReadInputTokens"] as? Int ?? 0
+                    sofar.cacheWrite += model["cacheCreationInputTokens"] as? Int ?? 0
+                    sofar.output += model["outputTokens"] as? Int ?? 0
+                }
+                defer { previous = sofar }
+                return sofar - previous
+            }
+        }
+    }
+
+    /// 汇总行里的那几格（`cells`）读回来
+    init?(row: String) {
+        let cells = row.split(separator: "|").map { $0.trimmingCharacters(in: .whitespaces) }.suffix(5)
+        guard cells.count == 5, let cost = Double(cells.last!.dropFirst()) else { return nil }
+        let counts = cells.dropLast().compactMap { Int($0) }
+        guard counts.count == 4 else { return nil }
+        (input, cacheRead, cacheWrite, output, self.cost) = (counts[0], counts[1], counts[2], counts[3], cost)
+    }
+
+    init(input: Int = 0, cacheRead: Int = 0, cacheWrite: Int = 0, output: Int = 0, cost: Double = 0) {
+        (self.input, self.cacheRead, self.cacheWrite, self.output, self.cost) = (input, cacheRead, cacheWrite, output, cost)
+    }
+
+    static func + (a: Self, b: Self) -> Self {
+        Self(input: a.input + b.input, cacheRead: a.cacheRead + b.cacheRead, cacheWrite: a.cacheWrite + b.cacheWrite, output: a.output + b.output, cost: a.cost + b.cost)
+    }
+
+    static func - (a: Self, b: Self) -> Self {
+        Self(input: a.input - b.input, cacheRead: a.cacheRead - b.cacheRead, cacheWrite: a.cacheWrite - b.cacheWrite, output: a.output - b.output, cost: a.cost - b.cost)
+    }
+}
+
+func seconds(_ interval: TimeInterval) -> String { String(format: "%.1fs", interval) }
 
 /// 会话发来的一张效果图：按文件名画出那个方案的提问卡（决定单、对话里问、郑重放行；original 是现在的提问卡，作对比），手机或 Mac、浅色或深色；
 /// 别的改动的截图是一页设置。Cue 用读文件工具打开看得出是哪个方案、哪一种样子。
@@ -842,7 +982,7 @@ private func mockShot(_ name: String) throws -> Data {
 
 /// 会话发到手机的那张截图：改前、改后的登录页与点了忘记密码之后的页面（Cue 用读文件工具打开看）。
 @MainActor
-private func loginShot() throws -> Data {
+func loginShot() throws -> Data {
     func field(_ text: String) -> some View {
         Text(text).frame(width: 200, alignment: .leading).padding(8).overlay(RoundedRectangle(cornerRadius: 6).stroke(.gray))
     }
