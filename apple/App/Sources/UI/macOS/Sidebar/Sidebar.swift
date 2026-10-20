@@ -162,7 +162,7 @@ private struct SidebarPages {
 }
 
 /// 名片下面并排的两块磁贴（`SidebarOutline.places`）：任务（没做完的数；开合任务面板，开着时选中，同 ⌘⇧T；面板从这一块弹出，它就是面板的锚点）、
-/// 会话（在线的数，有在跑的再写"N 在跑"、靛青，与区头"在跑"同一档 `LiveWork.running`；点进会话页）。
+/// 会话（在线的数，有在跑的再写"N 在跑"、靛青，与区头"在跑"同一档 `LiveWork.running`；点进会话页；会话哪一行都不在屏上时接力落在这里，`relaySpot(dock:)`）。
 /// 单独读当前页、面板开合与在线会话，换页、开面板、会话状态变时侧栏别处不跟着重算。
 private struct PlaceTiles: View {
     let select: (Route) -> Void
@@ -180,6 +180,7 @@ private struct PlaceTiles: View {
                 default:
                     let work = workspace.liveWork
                     PlaceTile(entry: entry, count: work.rows.count, running: work.running, selected: workspace.page == entry.route) { select(entry.route) }
+                        .relaySpot(dock: true)
                         .help("按项目查看、搜索全部会话")
                 }
             }
