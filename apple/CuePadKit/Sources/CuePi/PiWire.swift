@@ -207,6 +207,13 @@ enum PiWire {
     }
 
     struct Bye: Decodable { var reason: String }
+
+    /// 协议版本不同的连接里只认告别（`OtherProtocolHello` 同理）：格式可能已变，读不出就当不是。
+    static func otherProtocolBye(_ line: Data) -> Bye? {
+        struct Tagged: Decodable { var t: String; var reason: String }
+        guard let tagged = try? JSONDecoder().decode(Tagged.self, from: line), tagged.t == "bye" else { return nil }
+        return Bye(reason: tagged.reason)
+    }
     struct StateMessage: Decodable { var state: State }
 
     /// 正在说的话：到目前为止的全文与开始出字的时刻（毫秒）；`text` 为 null 是清掉。

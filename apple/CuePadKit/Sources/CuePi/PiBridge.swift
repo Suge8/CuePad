@@ -331,6 +331,9 @@ public final class PiBridge {
     /// 从这个扩展版本起，扩展换了新版本就在空闲时自己重新载入；更早的协议号不同时只能让它退出。
     nonisolated static let selfReloadingExtension = 29
 
+    /// 扩展重新载入前的告别（`bye` 的 `reason`）：同一进程随即以新扩展连回来
+    nonisolated private static let reloadBye = "reload"
+
     private func reviewHosted() {
         for slot in slots where slot.session.hosted && !releasing.contains(slot.id) {
             let session = slot.session
@@ -398,8 +401,11 @@ public final class PiBridge {
 
     private func consume(_ link: Link, name: String) async {
         for await line in link.connection.lines {
-            // 协议版本不同的会话：之后的消息格式不可知，只等连接断开
-            if link.session?.state == .incompatible { continue }
+            // 协议版本不同的会话：之后的消息格式不可知，只认告别（同 hello，只读认得出的一项：重载时它不算下线），等连接断开
+            if link.session?.state == .incompatible {
+                link.bye = PiWire.otherProtocolBye(line) ?? link.bye
+                continue
+            }
             do {
                 try handle(try PiWire.decode(line), on: link, name: name)
             } catch {
@@ -469,6 +475,7 @@ public final class PiBridge {
 
     private func appear(_ session: PiSession, on link: Link) {
         link.id = session.id
+        orphanExitWatchers.removeValue(forKey: session.id)?.cancel()
         link.exitWatcher = ProcessExitWatcher(pid: session.pid) { [weak self] in self?.processExited(session.id) }
         attach(session, via: link)
     }
@@ -481,23 +488,27 @@ public final class PiBridge {
         link.connection.close()
     }
 
-    /// 进程已退出：它的 socket 文件若还在（强杀）就删掉。正常退出时扩展自己已删。
+    /// 进程已退出：它的 socket 文件若还在（强杀）就删掉。正常退出时扩展自己已删。重载中（告别了、还没以新扩展连回来）就退出的，这时才下线。
     private func processExited(_ name: String) {
         let path = socketPath(name)
         if PiSocketDirectory.isOwnSocket(path) { unlink(path) }
         orphanExitWatchers.removeValue(forKey: name)?.cancel()
+        if links[name] == nil { detach(name, reason: .disconnected) }
     }
 
     private func finish(_ link: Link, name: String) {
         links[name] = nil
         link.replies.closeAll(PiBridgeError.sessionEnded)
         // 没有告别就断开 = 进程被强杀，socket 文件会残留：进程已确认退出就现在删，否则等它的退出通知
-        if link.bye == nil, link.id != nil, !removeIfStale(name), let watcher = link.exitWatcher {
+        // 重载（/reload、扩展自己换上新版本）：同一进程马上在同一路径以新扩展连回来，会话没有下线——格子留着，连回来时换上新快照（`attach`），
+        // 不报下线再出现（否则记录会先被当成进程退出写成被打断或已结束）；没连回来就退出的，等它的退出通知再下线
+        let reloading = link.bye?.reason == Self.reloadBye
+        if (link.bye == nil || reloading), link.id != nil, !removeIfStale(name), let watcher = link.exitWatcher {
             orphanExitWatchers[name] = watcher
         } else {
             link.exitWatcher?.cancel()
         }
-        if let id = link.id {
+        if let id = link.id, !(reloading && orphanExitWatchers[name] != nil) {
             detach(id, reason: link.bye.map { .closed(reason: $0.reason) } ?? .disconnected)
         }
         // /reload：同一进程在同一路径重新 listen。新文件的目录事件可能在这条连接还挂着时就被扫过（扫描跳过有连接的名字），
