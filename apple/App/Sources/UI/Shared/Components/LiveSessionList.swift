@@ -1,7 +1,7 @@
 import CueStore
 import SwiftUI
 
-/// "在做"的那一列会话：Mac 侧栏的 Agent 区、Mac 菜单栏面板与手机、iPad Cue 页头的面板同一个。行是同一种（`PiSessionRow`，样式与点它做什么由调用处给），
+/// "在做"的那一列会话：Mac 菜单栏面板与手机、iPad Cue 页头的面板同一个。行是同一种（`PiSessionRow`，样式与点它做什么由调用处给），
 /// 顺序同一个（`LiveWork.rows`，要你注意的在前）；两个以上需要 /reload 的会话合成一行（`PiReloadFold`），点开再列。
 /// `limit` 给了就先列前几个（面板只是一瞥），多出的收成末尾一行"还有 N 个"，点开就地列全、末行换成"收起"——
 /// 看全在原地，不用跳到全部会话页；区头写有几个在跑（`LiveWorkCount`）。

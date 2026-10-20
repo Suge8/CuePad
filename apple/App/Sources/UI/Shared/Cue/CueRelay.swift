@@ -152,7 +152,7 @@ nonisolated struct RelayEnd: Equatable, Sendable {
 /// Mac 与 iPad 有侧栏时总落在侧栏的 Cue 一行（在不在 Cue 页都一样），侧栏收起时退到 Cue 页页头；
 /// iPhone 没有侧栏：在 Cue 页落在页头的头像（从底部往上飞一长段，最看得出），在三页上落在底部那颗 Cue 圆钮。
 enum CueSpot: Int {
-    /// 侧栏最上面 Cue 那一行（Mac 与 iPad；菜单栏面板、输入条在别的窗口，不参与）。
+    /// 侧栏最上面的 Cue（Mac 是名片 `CueSidebarCard`、iPad 是那一行，头像都是 `CueEntryAvatar`；菜单栏面板、输入条在别的窗口，不参与）。
     case entry
     /// Cue 页的页头。
     case header
@@ -171,11 +171,11 @@ enum EndSpot: Equatable {
 
     /// 状态标所在的行，越具体越前。
     enum Row: Int {
-        /// 会话自己那一行：Agent 区、会话列表、会话页的页头卡片。
+        /// 会话自己那一行：会话列表、菜单栏面板、会话页的页头卡片。
         case own
         /// 它的任务行（任务行、任务卡、任务页上代表它的那一格）。
         case task
-        /// 项目行里此刻的现况（`ProjectNowLine`）。
+        /// 项目行上的状态：Mac 侧栏行尾的状态标、iPad 与手机的此刻一行（`ProjectNowLine`）。
         case project
     }
 
