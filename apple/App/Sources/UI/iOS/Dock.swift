@@ -323,6 +323,8 @@ struct CueDockRow<Composer: View>: View {
 /// （同宽同高，输入框收成右端一颗圆，`CueDockRow`），选一格就去那里；点别处、滚动或点那颗圆收回（`CuePage` 在对话上铺一层接点按）。
 /// 接力的落点之一（`relaySpot(dock: nil)`）。
 /// `docked`：还是 Dock 三格胶囊的样子（刚从三页来的第一帧）。
+/// 圆钮与三格一直都在、只换不透明度，靠左叠着（玻璃往右长，三格不跟着挪）：先后换、不叠着交叉淡（`Motion.handOff`）——
+/// 换出去的那样先淡完，换进来的晚这么久再出；插入、移除的过渡里被移除的那个随弹簧慢慢淡，"⋯"会叠在"任务"上停一阵。
 struct DockPlaces: View {
     @Binding var open: Bool
     var docked = false
@@ -331,35 +333,44 @@ struct DockPlaces: View {
 
     static let size = ComposerMetrics.slot
 
+    /// 换进来（`entering`）的晚 `handOff` 再淡入，换出去的在 `handOff` 内淡完。
+    private static func handOff(in entering: Bool) -> Animation {
+        entering ? Motion.quick.delay(Motion.handOff) : .easeOut(duration: Motion.handOff)
+    }
+
     var body: some View {
-        ZStack {
-            if open {
-                HStack(spacing: 0) {
-                    ForEach(Dock.places, id: \.self) { place in
-                        DockCell(place: place, selected: false) {
-                            open = false
-                            navigation.select(place.route)
-                        }
-                        .frame(width: Dock.cellWidth)
+        ZStack(alignment: .leading) {
+            HStack(spacing: 0) {
+                ForEach(Dock.places, id: \.self) { place in
+                    DockCell(place: place, selected: false) {
+                        open = false
+                        navigation.select(place.route)
                     }
+                    .frame(width: Dock.cellWidth)
                 }
-                .padding(.horizontal, Dock.inset)
-                .transition(.opacity)
-            } else {
-                Button { withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { open = true } } label: {
-                    IconImage(.more).font(.system(size: 20, weight: .medium))
-                        .frame(width: Self.size, height: Self.size)
-                        .contentShape(.circle)
-                }
-                .buttonStyle(PressStyle(.button))
-                .relaySpot(dock: nil)
-                .accessibilityLabel("去处")
-                .accessibilityHint("展开任务、会话、项目")
-                .opacity(docked ? 0 : 1)
-                .transition(.opacity)
             }
+            .padding(.horizontal, Dock.inset)
+            .frame(width: Dock.capsuleWidth)
+            .opacity(open ? 1 : 0)
+            .animation(Self.handOff(in: open), value: open)
+            .allowsHitTesting(open)
+            .accessibilityHidden(!open)
+            Button { withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { open = true } } label: {
+                IconImage(.more).font(.system(size: 20, weight: .medium))
+                    .frame(width: Self.size, height: Self.size)
+                    .contentShape(.circle)
+            }
+            .buttonStyle(PressStyle(.button))
+            .relaySpot(dock: nil)
+            .accessibilityLabel("去处")
+            .accessibilityHint("展开任务、会话、项目")
+            .opacity(open || docked ? 0 : 1)
+            .animation(Self.handOff(in: !open), value: open)
+            .allowsHitTesting(!open)
+            .accessibilityHidden(open)
         }
-        .frame(width: docked || open ? Dock.capsuleWidth : Self.size, height: docked || open ? Dock.height : Self.size)
+        .frame(width: docked || open ? Dock.capsuleWidth : Self.size, height: docked || open ? Dock.height : Self.size, alignment: .leading)
+        .clipShape(.capsule)
         .glass(in: .capsule, interactive: true, ink: .clear)
     }
 }
