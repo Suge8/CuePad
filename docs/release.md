@@ -4,19 +4,13 @@
 
 ## 签名
 
-本机构建一律 ad-hoc 签名（`xc.sh` 覆盖工程默认的团队与身份，换用不含 iCloud 的 macOS 权限文件）；签名事实源是 `App/Config/Signing.xcconfig`。发布与真机构建是手动签名：Xcode 的自动签名用 API 密钥时管不了 App Group 与 iCloud 容器，所以证书与描述文件由 `provision.py` 经 App Store Connect API 创建（只对 `iphoneos` 与 macOS 的 Release 生效）。
+签名的做法与理由在 `App/Config/Signing.xcconfig` 与 `scripts/_signing.sh` 的头注释里（凭据文件的字段也在那里），版本号怎么推出在 `_signing.sh` 的 `release_versions`，权限以 `App/Config/*.entitlements` 为准。
 
-- 凭据文件 `~/.appstoreconnect/cuepad.env`（不入库）：`ASC_KEY_ID`、`ASC_ISSUER_ID`、`ASC_KEY_PATH`、`CUEPAD_TEAM_ID`；`release ios` 另需 `CUEPAD_TESTER_EMAIL`。证书私钥在专用钥匙串 `~/.appstoreconnect/cuepad-signing.keychain-db`。
-- 权限：主 App 有 iCloud（`iCloud.com.sugeh.cuepad`）；iOS 另有推送与 App Group，macOS 另有 Apple Events 自动化（终端跳转），没有推送（Mac 不收推送，见 [sync.md](sync.md)）；扩展只有 App Group。
-- 只能在网页上做的一次性前置：创建 App Group `group.com.sugeh.cuepad` 与 iCloud 容器并挂到 App ID（主 App 与通知服务扩展 `com.sugeh.cuepad.notify` 都要挂）；Developer ID Application 证书（账号持有人创建，CSR 由 `provision.py devid-csr` 生成）；App Store Connect 里的 App 记录。
-
-## 版本号
-
-发布时由同一个时间戳推出两个版本（`_signing.sh` 的 `release_versions`）：显示版本是日期（`2026.10.13`），构建号到分钟（`2610131639`）。TestFlight 与 Sparkle 按构建号比新旧；工程里的 `MARKETING_VERSION` 只用于本机构建。
+只能在网页上做的一次性前置：创建 App Group `group.com.sugeh.cuepad` 与 iCloud 容器并挂到 App ID（主 App 与通知服务扩展 `com.sugeh.cuepad.notify` 都要挂）；Developer ID Application 证书（账号持有人创建，CSR 由 `provision.py devid-csr` 生成）；App Store Connect 里的 App 记录。
 
 ## 自动更新（macOS）
 
-Sparkle 2，只发完整包，以官方二进制 xcframework 引入（版本与校验和只在 `Vendor/Sparkle/Package.swift`）。更新源与公钥在 `App/Config/CuePad-macOS-Info.plist`；隔离模式不启动更新器。EdDSA 私钥在钥匙串 `cuepad-sparkle-ed25519`（`sparkle.sh key` 首次生成）。
+Sparkle 2：密钥、appcast 与只发完整包见 `sparkle.sh` 头注释，更新源与公钥在 `App/Config/CuePad-macOS-Info.plist`。
 
 下载位置只有一处：GitHub `Suge8/CuePad` 里一个固定的 Release（标签 `v0.1.0`），`release mac` 每次原地替换资产，都经 `releases/latest/download/<文件名>` 访问，更新链不经过官网：
 
@@ -30,9 +24,7 @@ enclosure 带构建号，是因为 GitHub 不能一次替换多个资产：用�
 
 装更新要重启 CuePad，会结束它托管的会话：还有托管会话在干活或等你确认时，重启推迟到它们空下来（`UpdateService`）。验收用 `-CuePadScene updatewait`。
 
-## App 图标
-
-`App/Sources/AppIcon.icon` 由 `scripts/make-icon.py` 从 `design/final/logo-final.png` 生成，换 logo 后重跑；菜单栏图标 `cue.menubar` 在符号生成器里画，换 logo 时一起改。
+换 logo 时重跑 `scripts/make-icon.py`，菜单栏图标 `cue.menubar` 在符号生成器里一起改。
 
 ## CloudKit 数据结构
 
@@ -40,7 +32,8 @@ enclosure 带构建号，是因为 GitHub 不能一次替换多个资产：用�
 
 ```bash
 export CLOUDKIT_MANAGEMENT_TOKEN=$(security find-generic-password -a cuepad -s cuepad-cloudkit-management-token -w)
-C="--team-id SVPPQJM9JG --container-id iCloud.com.sugeh.cuepad --environment development"
+set -a; . ~/.appstoreconnect/cuepad.env; set +a   # CUEPAD_TEAM_ID
+C="--team-id $CUEPAD_TEAM_ID --container-id iCloud.com.sugeh.cuepad --environment development"
 xcrun cktool validate-schema $C --file apple/CloudKit/cuepad.ckdb
 xcrun cktool import-schema $C --validate --file apple/CloudKit/cuepad.ckdb
 xcrun cktool export-schema $C --output-file /tmp/dev.ckdb   # 回读：服务端按字母序重排并补系统字段，逐类型核对字段与权限
@@ -54,7 +47,7 @@ xcrun cktool export-schema $C --output-file /tmp/dev.ckdb   # 回读：服务端
 
 发布带新字段或新记录类型的版本前先部署：生产里写未部署的字段或类型会让整条记录保存失败。`release mac` 打包前由 `ck-production.sh` 核对，缺的先部署再发。生产结构只能增不能删：已下线的类型与字段在 `CloudKitSchema.retiredTypes` / `retiredFields` 照原样声明。
 
-订阅也是 schema 的一部分，但不在 `.ckdb` 里，cktool 看不到：生产环境拒绝客户端创建没部署过的查询订阅（CKErrorDomain 12，底层 BadSyntax 2006），区域与数据库订阅不受限；订阅按通知形状匹配（换成 alertBody 的变体会被拒）。改订阅的定义（谓词、选项、通知文案 key）要先让开发环境签名的构建在开发容器里保存同样的订阅，再在控制台 Deploy Schema Changes——确认页各项都显示 0、也不列出订阅，但部署照样生效。
+订阅也是 schema 的一部分，但不在 `.ckdb` 里，cktool 看不到：生产环境拒绝客户端创建没部署过的查询订阅（CKErrorDomain 12，底层 BadSyntax 2006，"attempting to create a subscription in a production container"），区域与数据库订阅不受限；订阅按通知形状匹配（换成 alertBody 的变体会被拒）。改订阅的定义（谓词、选项、通知文案 key）要先让开发环境签名的构建在开发容器里保存同样的订阅，再在控制台 Deploy Schema Changes——确认页各项都显示 0、也不列出订阅，但部署照样生效。
 
 待部署到生产（已导入开发环境，发版前按上面三步部署，部署完删掉对应条目）：
 
