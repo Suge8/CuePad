@@ -41,7 +41,9 @@ extension AppServices {
     }
 
     /// 标题：会话自己报了名字或首条消息就用它的，否则用会话索引里的（接上的老会话在第一句话之前就有标题，不必去读会话文件）。
+    /// 正自己换上新扩展的（`upgrading`）读不到在做什么，不写：记录留着上一次读到的样子，退出时据此分清是不是做到一半被打断（`exited`）。
     private func recordPiState(of session: CuePi.PiSession) async throws {
+        guard !session.upgrading else { return }
         let title = session.name != nil || session.firstMessage != nil
             ? session.displayName : try await store.piSession(session.sessionID)?.title ?? session.displayName
         let alert = try await piStateRecorder.update(

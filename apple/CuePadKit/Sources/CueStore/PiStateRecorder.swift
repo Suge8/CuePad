@@ -255,9 +255,6 @@ public actor PiStateRecorder {
     agent: AgentKind? = nil, process: PiProcess? = nil
   ) async throws -> PiAlert? {
     var session = sessions[sessionID] ?? Session()
-    // 托管着的旧扩展会话（App 更新后）：读不到它在做什么，PiRuntime 马上让它退出，下次发话用新扩展恢复。
-    // 不写：记录留着上一次读到的样子，退出时据此分清是不是做到一半被打断（`exited`）
-    if state == .incompatible, hosted ?? session.content?.hosted ?? false { return nil }
     let now = timing.now()
     let previous = session.content.map { (state: $0.state, since: $0.times.stateSince) }
     // 调用方给的计时基准；没给过时（测试、演示）用第一次写入的时间，之后不变

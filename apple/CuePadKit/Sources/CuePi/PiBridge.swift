@@ -128,7 +128,7 @@ public final class PiBridge {
 
         private func request(encode: (String) throws -> Data) async throws -> PiWire.Ack {
             guard let session else { throw PiBridgeError.sessionEnded }
-            guard session.state != .incompatible else { throw PiBridgeError.incompatibleExtension }
+            guard session.state != .incompatible else { throw session.upgrading ? PiBridgeError.upgradingExtension : .incompatibleExtension }
             nextCommand += 1
             let commandID = "c\(nextCommand)"
             let data = try encode(commandID)

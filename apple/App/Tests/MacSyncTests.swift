@@ -254,7 +254,7 @@ struct MacSyncTests {
 
         let live = try #require(services.pi.session(id: kept.id))
         #expect(live.stateSince == seen.stateSince)
-        let row = PiSessionState.live(live, hostID: TestApp.hostID, projectID: nil, recap: PiRecap(lastReply: "做完了"))
+        let row = try #require(PiSessionState.live(live, hostID: TestApp.hostID, projectID: nil, recap: PiRecap(lastReply: "做完了")))
         #expect(!services.settings.isUnread(row))
         #expect(try #require(services.pi.session(id: changed.id)).stateSince > past)
     }
