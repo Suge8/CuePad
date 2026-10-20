@@ -48,7 +48,7 @@ struct SubagentWakeTests {
         let keeper = try #require(rig.services.cue.keeper)
         let hello = try #require(keeper.rounds.last { $0.wake == .message })
         #expect(hello.sent.first?.contains("变化（上次醒来之后）：无") == true, "\(hello.sent)")
-        #expect(!keeper.rounds.contains { $0.wake == .sessionActivity })
+        #expect(!keeper.rounds.contains { $0.wake.isSessionActivity })
 
         // 子代理交回（在主会话为它跑完那一轮之前仍在飞）；FireCode 投回结果、指挥官再跑一轮：歇下先写进库，回答随后才落盘
         try await store.recordViewing(device: "phone", sessionID: session.sessionID, cue: false)
@@ -60,7 +60,7 @@ struct SubagentWakeTests {
         try file.append(reply: "子代理做完：测试全过")
         try await rig.message(.cue, containing: "登录页那边歇下了")
         try await eventually("这一轮做完") { try await store.cueState()?.state == .known(.settled) }
-        let woke = keeper.rounds.filter { $0.wake == .sessionActivity }
+        let woke = keeper.rounds.filter { $0.wake.isSessionActivity }
         #expect(woke.count == 1)
         #expect(woke.first?.sent.first?.contains("回复：子代理做完：测试全过") == true, "\(woke.map(\.sent))")
         await rig.stop()
@@ -84,7 +84,7 @@ struct SubagentWakeTests {
 
         try await rig.message(.cue, containing: "子代理那边停住了")
         let keeper = try #require(rig.services.cue.keeper)
-        let woke = keeper.rounds.filter { $0.wake == .sessionActivity }
+        let woke = keeper.rounds.filter { $0.wake.isSessionActivity }
         #expect(woke.count == 1)
         let stalled = try #require(woke.first)
         #expect(stalled.startedAt >= due)
@@ -95,7 +95,7 @@ struct SubagentWakeTests {
         try await rig.message(.cue, containing: "收到：你好")
         let hello = try #require(keeper.rounds.last { $0.wake == .message })
         #expect(hello.sent.first?.contains("变化（上次醒来之后）：无") == true, "\(hello.sent)")
-        #expect(keeper.rounds.filter { $0.wake == .sessionActivity }.count == 1)
+        #expect(keeper.rounds.filter { $0.wake.isSessionActivity }.count == 1)
         await rig.stop()
     }
 

@@ -133,46 +133,223 @@ struct CueTaskLine: View {
     }
 }
 
-/// 连着的几条动态（Cue 自己醒来的那几轮：每轮先是它的经过，再是它说的那句；没推给你）：一行旁注（`NoteLine`），
-/// 图标是一颗收着的话（与气泡里对你说的话分开：没有纸、不靠气泡、字小一档），写最新一条的首行（没有正文的写它的经过）与条数；
-/// 点开在细线下按先后列全（`NoteThread`）——经过与回答注脚同一个样子（`RoundProcess`），说的话是小字。展开后那一行只写条数，最新一条就在列表末尾，不写两遍。
-struct CueNotes: View {
-    let notes: [CueMessage]
-    /// 在跑的那一轮在这几条里时有（`CueLiveRound`）
+/// 连着的几轮 Cue 自己醒来（`CueThread.Row.notes`）：靠左的一颗虚线气泡，形状同 Cue 的气泡（`CueBubble.shape`），只描边不铺底——
+/// 是它说的话，但没推给你，与纸做的实底气泡（对你说的）一眼分开。每轮一节（`CueNoteSection`）：第一行为什么醒与几点，下面是它说的话（小一档的次要墨色），
+/// 调过工具的再一行经过（`RoundProcess`，设置里关了工具步骤时没有）。只看了看、没说话的一轮只占一行"…… · 没动手"，连着几次并成一行"看了 N 次，都没动手"。
+/// 超过 `foldAfter` 节时只露最近 `shownWhenFolded` 节，上面一行"更早还醒过 N 次"，点它或点并起来的那一行原地全部展开（各节分开列）。
+struct CueNoteBubble: View {
+    let rounds: [CueNoteRound]
+    /// 在跑的那一轮在这几节里时有（`CueLiveRound`）
     let live: CueLiveRound?
     @State private var expanded = DebugHooks.preset.toolsOpen
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Button { expanded.toggle() } label: {
-                NoteLine(icon: .thinking, open: expanded) {
-                    Text(expanded ? "\(notes.count) 条动态" : Dotted(notes.last.flatMap(Self.line), notes.count > 1 ? "\(notes.count) 条" : nil))
-                        .lineLimit(1)
-                }
+    /// 多于这么多节（并起来的没动手算一节）才折
+    static let foldAfter = 4
+    static let shownWhenFolded = 3
+
+    /// 气泡里的一节：一轮，或连着几轮没动手的并成的一行。
+    enum Unit: Identifiable {
+        case round(CueNoteRound)
+        case quiet([CueNoteRound])
+
+        var id: UUID {
+            switch self {
+            case .round(let round): round.id
+            case .quiet(let rounds): rounds[0].id
             }
-            .buttonStyle(.plain)
-            .accessibilityHint(expanded ? "收起" : "展开")
-            if expanded {
-                NoteThread {
-                    ForEach(notes) { note in
-                        if note.tools != nil {
-                            RoundProcess(tools: note.tools, ending: CueLiveRound.ending(of: note, in: live))
-                        } else {
-                            SaidRow(text: CueFormat.plainText(note.text))
-                        }
+        }
+
+        var count: Int {
+            switch self {
+            case .round: 1
+            case .quiet(let rounds): rounds.count
+            }
+        }
+    }
+
+    var body: some View {
+        let units = expanded ? rounds.map(Unit.round) : Self.merged(rounds)
+        let folded = !expanded && units.count > Self.foldAfter
+        let shown = folded ? Array(units.suffix(Self.shownWhenFolded)) : units
+        BubbleWidth(fraction: CueBubble.cueWidth, edge: .leading) {
+            VStack(alignment: .leading, spacing: Self.sectionGap) {
+                if folded {
+                    let earlier = units.dropLast(Self.shownWhenFolded).reduce(0) { $0 + $1.count }
+                    Button { expanded = true } label: {
+                        NoteLine(icon: .earlier) { Text("更早还醒过 \(earlier) 次") }
+                    }
+                    .buttonStyle(.plain)
+                }
+                ForEach(shown) { unit in
+                    switch unit {
+                    case .round(let round): CueNoteSection(round: round, live: live)
+                    case .quiet(let rounds):
+                        Button { expanded = true } label: { CueQuietLine(rounds: rounds) }.buttonStyle(.plain)
                     }
                 }
             }
+            .padding(CueBubble.padding)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background { CueBubble.shape(.leading).strokeBorder(palette.noteEdge, style: StrokeStyle(lineWidth: 1, dash: [4, 3])) }
+            .contentShape(CueBubble.shape(.leading))
         }
         .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: expanded)
         .transition(.entry)
     }
 
-    /// 一条动态收成一行：它说的那句的首行；经过那一行写经过那一句。
-    private static func line(_ note: CueMessage) -> String? {
-        PiProgress.firstLine(CueFormat.plainText(note.text)) ?? PiChat.processLine(note.tools)?.visible
+    #if os(macOS)
+    static let sectionGap: CGFloat = 12
+    #else
+    static let sectionGap: CGFloat = 14
+    #endif
+
+    /// 连着几轮没动手并成一节；只有一轮的照常一节。
+    static func merged(_ rounds: [CueNoteRound]) -> [Unit] {
+        var units: [Unit] = [], run: [CueNoteRound] = []
+        func flush() {
+            if run.count == 1 { units.append(.round(run[0])) } else if !run.isEmpty { units.append(.quiet(run)) }
+            run = []
+        }
+        for round in rounds {
+            if round.quiet { run.append(round) } else {
+                flush()
+                units.append(.round(round))
+            }
+        }
+        flush()
+        return units
+    }
+}
+
+/// 虚线气泡里的一轮：为什么醒（`CueWakeTitle`），它说的话，调过工具的一行经过。旧的动态没有醒来原因，只有说的话。
+private struct CueNoteSection: View {
+    let round: CueNoteRound
+    let live: CueLiveRound?
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        let indent = round.header == nil ? 0 : Note.glyphWidth + Note.spacing
+        VStack(alignment: .leading, spacing: 3) {
+            if let header = round.header { CueWakeTitle(header: header, at: round.date, quiet: round.quiet) }
+            ForEach(round.said) { note in
+                Text(CueFormat.plainText(note.text)).font(Typography.secondary).foregroundStyle(palette.ink2)
+                    .lineSpacing(2).fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.leading, indent)
+            if let row = round.row, row.tools != nil {
+                RoundProcess(tools: row.tools, ending: CueLiveRound.ending(of: row, in: live)).padding(.leading, indent)
+            }
+        }
+    }
+}
+
+/// 一节的第一行：醒来原因的图标（叫醒它的会话出错是出错的那个）、原因（叫醒它的会话、任务、提醒是墨色的名字，点了去那里；几处时点开列出来选），行末几点。
+/// 只看了看的一轮在后面接"· 没动手"。
+private struct CueWakeTitle: View {
+    let header: CueWakeHeader
+    let at: Date
+    var quiet = false
+    @Environment(Workspace.self) private var workspace
+    @Environment(AppServices.self) private var services
+    @Environment(\.palette) private var palette
+    #if os(iOS)
+    @Environment(Navigation.self) private var navigation
+    #endif
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: Note.spacing) {
+            glyph.frame(width: Note.glyphWidth)
+            reason.layoutPriority(1)
+            Spacer(minLength: 8)
+            Text(ChatTime.time(at)).foregroundStyle(palette.ink3)
+        }
+        .font(Typography.caption.monospacedDigit())
+        .frame(minHeight: Note.lineHeight)
+    }
+
+    @ViewBuilder private var glyph: some View {
+        if header.failed { FailureMark() } else { Image(header.wake.icon).foregroundStyle(palette.ink3) }
+    }
+
+    /// 名字太长时只截名字，前后的话留全。
+    private var words: some View {
+        HStack(spacing: 4) {
+            if let lead = header.lead { Text(lead).foregroundStyle(palette.ink2).fixedSize() }
+            if header.lead != nil, header.name != nil { Dot().foregroundStyle(palette.ink3) }
+            if let name = header.name { Text(name).fontWeight(.medium).foregroundStyle(palette.ink) }
+            if let trail = header.trail { Text(trail).foregroundStyle(palette.ink2).fixedSize() }
+            if !header.targets.isEmpty { Image(.forward).font(.system(size: 8, weight: .semibold)).foregroundStyle(palette.ink3) }
+            if quiet {
+                Dot().foregroundStyle(palette.ink3)
+                Text("没动手").foregroundStyle(palette.ink3).fixedSize()
+            }
+        }
+        .lineLimit(1)
+    }
+
+    @ViewBuilder private var reason: some View {
+        let label = words.contentShape(.rect)
+        switch header.targets.count {
+        case 0: label
+        case 1: Button { open(header.targets[0].target) } label: { label }.buttonStyle(.plain)
+        default:
+            Menu {
+                ForEach(header.targets, id: \.title) { place in Button(place.title) { open(place.target) } }
+            } label: { label }
+            .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
+        }
+    }
+
+    private func open(_ target: CueWakeHeader.Target) {
+        switch target {
+        case .session(let session):
+            #if os(macOS)
+            workspace.show(.session(session.sessionID))
+            #else
+            navigation.openSession(session.id, sessionID: session.sessionID, store: services.store)
+            #endif
+        case .task(let id):
+            let store = services.store
+            workspace.attempt { if let card = try await store.card(id) { workspace.openTask(card) } }
+        case .memory:
+            workspace.cue.showsMemory = true
+        }
+    }
+}
+
+/// 连着几轮只看了看、没说话：并成一行"看了 N 次，都没动手"，图标是最近那次的，行末几点也是最近那次的；点它展开各节（`CueNoteBubble`）。
+private struct CueQuietLine: View {
+    let rounds: [CueNoteRound]
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: Note.spacing) {
+            Image(rounds.last?.header?.wake.icon ?? .wakeIdle).foregroundStyle(palette.ink3).frame(width: Note.glyphWidth)
+            Text("看了 \(rounds.count) 次，都没动手").foregroundStyle(palette.ink2)
+            DisclosureChevron(open: false)
+            Spacer(minLength: 8)
+            if let last = rounds.last { Text(ChatTime.time(last.date)).foregroundStyle(palette.ink3) }
+        }
+        .font(Typography.caption.monospacedDigit())
+        .frame(minHeight: Note.lineHeight)
+        .contentShape(.rect)
+    }
+}
+
+extension CueWake {
+    /// 醒来原因的图标（Cue 页那一节的第一行、Mac 的运行情况）。
+    var icon: Icon {
+        switch self {
+        case .enabled: .wakeEnabled
+        case .message: .wakeMessage
+        case .sessionActivity: .wakeActivity
+        case .idle: .wakeIdle
+        case .reminder: .wakeReminder
+        case .renewed: .renew
+        case .settingsChanged: .wakeSettings
+        }
     }
 }
 

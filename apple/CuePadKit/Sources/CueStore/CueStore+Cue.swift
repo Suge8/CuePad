@@ -38,28 +38,30 @@ extension CueStore {
   /// 要提示你的（`CueMessage.alerts`）同时置手机推送标志，到不到你只看 `reaches`。
   func insertCueMessage(
     _ author: CueAuthor, text: String, asking: CueAsking? = nil, shots: [CueShot] = [], in project: Project? = nil, urgent: Bool = false,
-    task: UUID? = nil, tools: PiChatMessage.Tools? = nil, at time: Date? = nil
+    task: UUID? = nil, tools: PiChatMessage.Tools? = nil, wake: CueWake? = nil, at time: Date? = nil
   ) throws -> CueMessage {
     let now = Date.stamp
     var message = CueMessage(
       id: UUID(), author: .known(author), text: text, choices: asking?.ask.choices(in: project?.name),
       asked: asking.map { CueAllow($0.ask, project: project?.id) }, askAction: asking?.action, askRule: asking?.rule, shots: shots,
       urgent: urgent, taskID: task,
-      answer: nil, answeredAt: nil, setAsideBy: nil, deliveredAt: nil, createdAt: time ?? now, modifiedAt: now, tools: tools, notify: false)
+      answer: nil, answeredAt: nil, setAsideBy: nil, deliveredAt: nil, createdAt: time ?? now, modifiedAt: now, tools: tools, wake: wake, notify: false)
     message.notify = try message.alerts && reaches(.cue)
     try insert(message)
     try registerImages(in: text)
     return message
   }
 
-  /// 一轮的经过那一行（值班的管理器写，`CueMessage.tools`）：这一轮第一次调工具时在它开始的位置写下（`id` 为 nil，返回新行的 id），
-  /// 之后每做完一步、以及这一轮做完时改它的清单与是谁的那一轮（你中途插话，Cue 自己醒来的一轮就成了回答你的）。
-  /// 这一轮说的话与结果都在它之后。你发起的写成 `round`；Cue 自己醒来的写成没有正文的动态（`note`），跟着动态收起。
+  /// 一轮的经过那一行（值班的管理器写，`CueMessage.tools`）：在这一轮开始的位置写下（`id` 为 nil，返回新行的 id；Cue 自己醒来的一轮醒来时就写，
+  /// 带着为什么醒 `wake`，你发起的第一次调工具时写），之后每做完一步、以及这一轮做完时改它的清单与是谁的那一轮（你中途插话，Cue 自己醒来的一轮就成了回答你的）。
+  /// 这一轮说的话与结果都在它之后。你发起的写成 `round`；Cue 自己醒来的写成没有正文的动态（`note`），Cue 页里是那一节的第一行。
   @discardableResult
-  public func recordCueRound(_ id: UUID?, startedAt: Date, answersYou: Bool, tools: PiChatMessage.Tools?) throws -> UUID {
+  public func recordCueRound(
+    _ id: UUID?, startedAt: Date, answersYou: Bool, tools: PiChatMessage.Tools?, wake: CueWake? = nil
+  ) throws -> UUID {
     let author: CueAuthor = answersYou ? .round : .note
     return try write {
-      guard let id else { return try insertCueMessage(author, text: "", tools: tools, at: startedAt).id }
+      guard let id else { return try insertCueMessage(author, text: "", tools: tools, wake: wake, at: startedAt).id }
       try db.run(
         "UPDATE cueMessages SET author = ?1, tools = ?2, modifiedAt = ?3 WHERE id = ?4 AND (author IS NOT ?1 OR tools IS NOT ?2)",
         [author.rawValue, tools?.stored, Date.stamp, id])
@@ -76,22 +78,6 @@ extension CueStore {
       let said = try select(CueMessage.self, where: "author = 'cue' AND createdAt >= ?", [startedAt])
       guard answersYou || said.isEmpty else { return }
       _ = try insertCueMessage(author, text: reply, urgent: answersYou && !said.contains(where: \.alerts))
-    }
-  }
-
-  /// Cue 被会话叫醒、看过没动手的那一轮补的一行动态（`note`，灰字、不推送）："看过「会话名」，不打算行动"。
-  /// 对话里最后一条就是上一行这样的动态（`after`）就并进去，看过几个会话写成"看过 N 个会话"。返回这一行与它看过的会话。
-  public func noteCueGlance(_ sessionIDs: [String], after previous: CueGlance?) throws -> CueGlance {
-    try write {
-      let last = try select(CueMessage.self, orderBy: "createdAt DESC, rowid DESC", limit: 1).first
-      let merging = previous.flatMap { $0.row == last?.id ? $0 : nil }
-      var sessions = merging?.sessions ?? []
-      for id in sessionIDs where !sessions.contains(id) { sessions.append(id) }
-      let title = sessions.count == 1 ? try sessionState(sessions[0])?.title : nil
-      let text = "看过" + (title.map { "「\($0)」" } ?? " \(sessions.count) 个会话") + "，不打算行动"
-      guard let merging else { return CueGlance(row: try insertCueMessage(.note, text: text).id, sessions: sessions) }
-      try db.run("UPDATE cueMessages SET text = ?, modifiedAt = ? WHERE id = ?", [text, Date.stamp, merging.row])
-      return CueGlance(row: merging.row, sessions: sessions)
     }
   }
 
@@ -294,6 +280,12 @@ extension CueStore {
     try find(CueMemoryLine.self, id).map(index(of:))
   }
 
+  /// 这几条记忆与它们的序号，按给的先后（到点提醒叫醒的一轮：信封里列它们、Cue 页那一节写第一条）；不在了的跳过。
+  public func cueLines(_ ids: [UUID]) throws -> [CueIndexedLine] {
+    let found = try select(CueMemoryLine.self, where: "id IN (SELECT value FROM json_each(?))", [Self.idList(ids)])
+    return try ids.compactMap { id in try found.first { $0.id == id }.map { CueIndexedLine(index: try index(of: $0), line: $0) } }
+  }
+
   private func index(of line: CueMemoryLine) throws -> Int {
     try db.first(
       "SELECT count(*) FROM cueLines WHERE createdAt < ?1 OR (createdAt = ?1 AND id < ?2)", [line.createdAt, line.id]
@@ -485,11 +477,12 @@ extension CueStore {
       let sessions = try select(
         PiSessionState.self, where: "sessionID IN (SELECT value FROM json_each(?))", [JSONColumn.encode(others.map(\.sessionID))])
       let left = others.filter { entry in sessions.contains(where: entry.holds) } + [CueLeft(sessionID: sessionID, since: session.stateSince)]
-      let next = CueState(state: current?.state ?? .known(.settled), detail: current?.detail, round: current?.round, woke: current?.woke,
-        context: current?.context, left: left, modifiedAt: Date.stamp)
+      let next = CueState(
+        state: current?.state ?? .known(.settled), detail: current?.detail, round: current?.round, context: current?.context, left: left,
+        modifiedAt: Date.stamp)
       try db.run(
         """
-        INSERT INTO cueState (\(CueState.columns.joined(separator: ", "))) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO cueState (\(CueState.columns.joined(separator: ", "))) VALUES (?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET leftToYou = excluded.leftToYou, modifiedAt = excluded.modifiedAt
         """, next.bindings)
       return CueState.recordID
@@ -504,24 +497,25 @@ extension CueStore {
     }
   }
 
+  /// Cue 在跑的这一轮为什么醒、几点醒的（这一轮经过那一行上的 `CueMessage.wake`）；歇着、这一轮还没有那一行为 nil。各端画叫醒的那一下只读它。
+  public func cueWaking() throws -> (at: Date, wake: CueWake)? {
+    guard let round = try cueState()?.round, let row = try find(CueMessage.self, round), let wake = row.wake else { return nil }
+    return (row.createdAt, wake)
+  }
+
   /// 值班的 Mac 写下 Cue 此刻的样子（在做什么、这个班次的上下文），整行一次写；和库里一样就不写（不触发同步）。不在值班写歇着、没有上下文。
   public func setCueState(
-    _ state: PiWorkState, detail: String? = nil, round: UUID? = nil, woke: CueWoke? = nil, context: CueContext? = nil
+    _ state: PiWorkState, detail: String? = nil, round: UUID? = nil, context: CueContext? = nil
   ) throws {
     try write {
       let current = try cueState()
-      let next = CueState(
-        state: .known(state), detail: detail, round: round, woke: woke, context: context, left: current?.left ?? [], modifiedAt: Date.stamp)
-      if let current,
-        (current.state, current.detail, current.round, current.woke, current.context) == (next.state, next.detail, next.round, next.woke, next.context)
-      {
-        return
-      }
+      let next = CueState(state: .known(state), detail: detail, round: round, context: context, left: current?.left ?? [], modifiedAt: Date.stamp)
+      if let current, (current.state, current.detail, current.round, current.context) == (next.state, next.detail, next.round, next.context) { return }
       try db.run(
         """
-        INSERT INTO cueState (\(CueState.columns.joined(separator: ", "))) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO cueState (\(CueState.columns.joined(separator: ", "))) VALUES (?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET state = excluded.state, detail = excluded.detail, modifiedAt = excluded.modifiedAt, round = excluded.round,
-          woke = excluded.woke, context = excluded.context
+          context = excluded.context
         """, next.bindings)
     }
   }

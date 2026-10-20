@@ -19,7 +19,7 @@ struct CueRound: Identifiable {
     var failure: String?
     /// 做完时上下文用了多少 token
     var context: Int?
-    /// 这一轮的经过在对话里的那一行（`CueStore.recordCueRound`）；还没调过工具时没有
+    /// 这一轮的经过在对话里的那一行（`CueStore.recordCueRound`）：Cue 自己醒来的一轮醒来就有，你发起的还没调过工具时没有
     var row: UUID?
 
     /// 记下的结果至多这么多字符：记忆、看板的结果可能很长，留住开头够排查
@@ -28,7 +28,7 @@ struct CueRound: Identifiable {
     /// 正在调的那个工具（最后一个还没做完的）
     var running: CueToolCall? { calls.last { $0.finishedAt == nil } }
 
-    /// 这一轮动过手：有一次做完的调用不只是看看（`Kind.looks`）。Cue 自己醒来的一轮动过手才写下经过与最后的话，没动过手补一行"看过……"（`CueKeeper`）。
+    /// 这一轮动过手：有一次做完的调用不只是看看（`Kind.looks`）。Cue 自己醒来的一轮动过手才写下最后的话（`CueKeeper`）。
     var acted: Bool { calls.contains { $0.item.map { !$0.kind.looks } ?? false } }
 
     /// 给人看的经过：做完的调用按先后（还在跑的不算，它是此刻在做的）；一个都没做完为 nil。

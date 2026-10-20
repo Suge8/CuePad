@@ -74,6 +74,7 @@ xcrun cktool export-schema $C --output-file /tmp/dev.ckdb   # 回读：服务端
 
 - `cueMessages.setAsideBy`：提问卡随你在 Cue 页开口收起时，记下是哪句话收起的
 - `sessionViewers.cue`（INT64）：设备开没开着 Cue 页（`Viewer.cue`）
+- `cueMessages.wake`（STRING）：Cue 自己醒来的一轮为什么醒，记在它的经过那一行上（`CueMessage.wake`）；`cueState.woke` 随之下线（`retiredFields` 照原样声明）
 - 订阅 `cuepad.pi.waiting`、`cuepad.cue` 加 content-available（`AlertSubscriptions`，等你类推送叫醒 App 更新实时活动）：订阅不在 `.ckdb` 里，按下面"订阅也是 schema 的一部分"那段部署
 
 生产环境的结构只能增不能删：已下线的记录类型与字段在生成器里（`CloudKitSchema.retiredTypes` / `retiredFields`）照原样声明，客户端不再读写。

@@ -59,7 +59,7 @@ public struct CueBoardLeaf: Equatable, Sendable {
 
 /// 某时刻之后，有会话的事或不归没做完的事的会话里的一处变化。
 public struct CueChange: Equatable, Sendable {
-  public enum Kind: String, Sendable, CaseIterable {
+  public enum Kind: String, Codable, Sendable, CaseIterable {
     /// 会话停下：这一轮做完歇下，或做到一半被打断（`interrupted`，会话状态是 `PiWorkState.interrupted`）
     case settled
     /// 会话在等回答

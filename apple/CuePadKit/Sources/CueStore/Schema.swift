@@ -100,6 +100,9 @@ enum Schema {
       try db.run("UPDATE projects SET deletedAt = NULL, modifiedAt = MAX(modifiedAt + 1, ?1) WHERE id = ?2 AND deletedAt IS NOT NULL", [Date.stamp, Project.defaultID])
       try db.run("UPDATE cards SET projectID = ?1, modifiedAt = MAX(modifiedAt + 1, ?2) WHERE projectID IS NULL", [Project.defaultID, Date.stamp])
     },
+    // 66：Cue 自己醒来的一轮为什么醒记在它的经过那一行上（`CueMessage.wake`，Cue 页那一节的第一行、叫醒的接力都读它），
+    // 此刻状态里的那一份（52 加的 `cueState.woke`）去掉
+    "ALTER TABLE cueMessages ADD COLUMN wake TEXT; ALTER TABLE cueState DROP COLUMN woke;",
   ]
 
   /// 默认项目（`Project.defaultID`）的那一条：新库建好就有，升级时补上。修改时间是 0：各台设备离线各自建出的是同一版，
@@ -318,11 +321,11 @@ enum Schema {
     -- 同步的本机状态：同步区令牌（zoneToken）与上次同步的 iCloud 账号（account）。
     CREATE TABLE syncState (key TEXT PRIMARY KEY NOT NULL, value BLOB NOT NULL) STRICT;
 
-    -- Cue 的对话（tools 是一轮的经过，ask 是提问的类别与范围，askAction、askRule 是它要做的动作与依据的规矩，askShots 是 Cue 点名要你看的图（提问的与做完的结果，`CueMessage.shots`），setAsideBy 是你开口收起它的那句话）、记忆、设置（allows 是允许清单）与此刻在做什么（round 是在跑的那一轮）。
+    -- Cue 的对话（tools 是一轮的经过，ask 是提问的类别与范围，askAction、askRule 是它要做的动作与依据的规矩，askShots 是 Cue 点名要你看的图（提问的与做完的结果，`CueMessage.shots`），setAsideBy 是你开口收起它的那句话，wake 是 Cue 自己醒来的那一轮为什么醒）、记忆、设置（allows 是允许清单）与此刻在做什么（round 是在跑的那一轮）。
     CREATE TABLE cueMessages (
       id TEXT PRIMARY KEY NOT NULL, author TEXT NOT NULL, text TEXT NOT NULL, choices TEXT, urgent INTEGER NOT NULL,
       taskID TEXT, answer TEXT, answeredAt INTEGER, deliveredAt INTEGER, createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL,
-      notify TEXT, tools TEXT, ask TEXT, askAction TEXT, askRule TEXT, askShots TEXT, setAsideBy TEXT
+      notify TEXT, tools TEXT, ask TEXT, askAction TEXT, askRule TEXT, askShots TEXT, setAsideBy TEXT, wake TEXT
     ) STRICT;
     CREATE INDEX cueMessages_createdAt ON cueMessages(createdAt);
     \(openQuestionIndex)
@@ -343,7 +346,7 @@ enum Schema {
       lo INTEGER NOT NULL, hi INTEGER NOT NULL, text TEXT NOT NULL, lineIDs TEXT NOT NULL, createdAt INTEGER NOT NULL, PRIMARY KEY (lo, hi)
     ) STRICT;
     CREATE TABLE cueState (
-      id TEXT PRIMARY KEY NOT NULL, state TEXT NOT NULL, detail TEXT, modifiedAt INTEGER NOT NULL, round TEXT, woke TEXT, context TEXT, leftToYou TEXT
+      id TEXT PRIMARY KEY NOT NULL, state TEXT NOT NULL, detail TEXT, modifiedAt INTEGER NOT NULL, round TEXT, context TEXT, leftToYou TEXT
     ) STRICT;
     \(cueRead)
 
