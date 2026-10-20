@@ -49,8 +49,11 @@ extension PiSessionList {
     /// "现在"一段的行：两个以上需要 /reload 的会话合成一行。
     var nowRows: [PiNowRow<PiSessionListItem>] { PiNowRow.rows(now, state: \.state) }
 
-    /// "历史"按结束时间分的段。
-    var historyRuns: [PiHistorySection.Run<PiSessionListItem>] { PiHistorySection.split(ended, date: \.state.stateSince, now: .now) }
+    /// "历史"按结束时间分的段；正在唤醒的列在"现在"，这里不再列。
+    var historyRuns: [PiHistorySection.Run<PiSessionListItem>] {
+        let current = Set(now.map(\.id))
+        return PiHistorySection.split(ended.filter { !current.contains($0.id) }, date: \.state.stateSince, now: .now)
+    }
 }
 
 extension View {

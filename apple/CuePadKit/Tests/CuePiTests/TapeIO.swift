@@ -115,15 +115,18 @@ struct LineSplitter {
 enum UnixSocket {
     struct Failed: Error { let path: String; let code: Int32 }
 
-    /// 像 Pi 扩展那样先 listen 再收紧成 0600：桥只连 0600 的 socket，看到时它已经在 listen。
+    /// 像 Pi 扩展那样在临时名上 listen、收紧成 0600 再改名进来：桥只连 0600 的 socket，名字出现时它已经在 listen。
     /// - Parameter creatingDirectory: 所在目录不在就建（0700），像 Pi 扩展那样。
     static func listen(_ path: String, creatingDirectory: Bool = false) throws -> Int32 {
         if creatingDirectory { mkdir((path as NSString).deletingLastPathComponent, 0o700) }
         unlink(path)
+        let pending = (path as NSString).deletingLastPathComponent + "/.\(UInt32.random(in: 0...UInt32.max)).tmp"
         let fd = socket(AF_UNIX, SOCK_STREAM, 0)
-        var addr = address(path)
+        var addr = address(pending)
         let bound = withUnsafePointer(to: &addr) { $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { bind(fd, $0, socklen_t(MemoryLayout<sockaddr_un>.size)) } }
-        guard bound == 0, Darwin.listen(fd, 64) == 0, chmod(path, 0o600) == 0 else { let code = errno; close(fd); throw Failed(path: path, code: code) }
+        guard bound == 0, Darwin.listen(fd, 64) == 0, chmod(pending, 0o600) == 0, rename(pending, path) == 0 else {
+            let code = errno; close(fd); throw Failed(path: path, code: code)
+        }
         return fd
     }
 

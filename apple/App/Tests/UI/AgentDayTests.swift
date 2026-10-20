@@ -101,7 +101,7 @@ struct AgentDayTests {
     }
     #endif
 
-    @Test func 没能送达留到看过为止_发给已结束的会话是正在唤醒() async throws {
+    @Test func 没能送达留到看过为止_发给已结束的会话是正在唤醒_列在现在() async throws {
         let beta = PiStateRecorder(store: store, hostID: "mac-b")
         try await beta.update(sessionID: "beta", state: .settled, title: "beta")
         let lost = try await say("备份一下线上库", to: "beta")
@@ -116,6 +116,11 @@ struct AgentDayTests {
         try await PiStateRecorder(store: store, hostID: "mac-c").update(sessionID: "gone", state: .ended, title: "gone")
         try await say("接着做", to: "gone")
         #expect(try await label("gone") == "正在唤醒")
+        // 唤醒中就列在"现在"（侧栏的在做、Agent 页），不在历史
+        app.services.liveSessions.apply(try await LiveSessions.Page.read(from: store), at: .always())
+        #expect(workspace.liveWork.rows.contains { $0.sessionID == "gone" })
+        let list = try await PiSessionList.read(text: "", historyLimit: PiSessionList.pageSize, at: .always(), from: store)
+        #expect(list.now.contains { $0.state.sessionID == "gone" } && !list.historyRuns.flatMap(\.items).contains { $0.state.sessionID == "gone" })
     }
 
     @Test func 改会话名_在路上是新名_没改成回到旧名并写没能改名_Pi改好以会话记录为准() async throws {

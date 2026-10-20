@@ -23,8 +23,7 @@ enum PiSocketDirectory {
         }
     }
 
-    /// 是 socket、属于当前用户、且只有属主可读写。扩展 bind 之后才 chmod 0600，
-    /// 之前的瞬间权限偏宽，跳过即可：chmod 的属性变更事件会触发重扫。
+    /// 是 socket、属于当前用户、且只有属主可读写（扩展收紧成 0600 后才把它改名进来）。
     static func isOwnSocket(_ path: String) -> Bool {
         var st = stat()
         return lstat(path, &st) == 0 && st.st_mode & S_IFMT == S_IFSOCK && st.st_uid == getuid() && st.st_mode & 0o077 == 0
@@ -124,6 +123,28 @@ extension PiProcess {
     public var isRunning: Bool { Self.running(pid: pid) == self }
 
     var startDate: Date { Date(timeIntervalSince1970: TimeInterval(startedAt) / 1_000_000) }
+}
+
+/// 盯一个目录本身的增删改名（kqueue），在主线程回调。不用 FSEvents：fseventsd 转发的事件实测晚到 0.4 到 20 多秒，
+/// 后台唤醒的会话、终端里新开的会话都要等它才上桥。
+@MainActor
+final class DirectoryWatcher {
+    private let source: DispatchSourceFileSystemObject
+
+    init(_ directory: URL, onChange: @escaping @MainActor () -> Void) throws {
+        let descriptor = open(directory.path, O_EVTONLY)
+        guard descriptor >= 0 else {
+            throw PiBridgeError.insecureSocketDirectory("cannot watch \(directory.path): \(String(cString: strerror(errno)))")
+        }
+        source = DispatchSource.makeFileSystemObjectSource(fileDescriptor: descriptor, eventMask: .write, queue: .main)
+        source.setEventHandler { MainActor.assumeIsolated(onChange) }
+        source.setCancelHandler { close(descriptor) }
+        source.resume()
+    }
+
+    func cancel() { source.cancel() }
+
+    deinit { source.cancel() }
 }
 
 /// 进程退出通知（kqueue `NOTE_EXIT`，非子进程也可用），回调在主线程、至多一次。注册时进程已经不在了（事件不会再来）也通知。

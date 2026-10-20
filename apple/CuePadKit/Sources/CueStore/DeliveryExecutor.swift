@@ -344,10 +344,13 @@ public actor DeliveryExecutor {
 
   /// 执行一条；暂时没成的隔 `Speech.retryDelay` 再执行一次（一条条按先后执行，等的这一下会拖住后面的请求，所以只重试一次）。
   private func run(_ request: DeliveryRequest) async {
+    let started = timing.now()
     var outcome = await handler(request)
     if case .transient = outcome, (try? await timing.sleep(Speech.retryDelay)) != nil {
       outcome = await handler(request)
     }
+    let took = timing.now().timeIntervalSince(started)
+    Self.log.info("执行投送请求 \(request.id.uuidString.prefix(8), privacy: .public) \(request.mode.rawValue, privacy: .public) 用时 \(took, format: .fixed(precision: 2)) 秒")
     await finish(request, outcome)
   }
 
