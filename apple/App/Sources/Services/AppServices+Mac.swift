@@ -11,6 +11,7 @@ extension AppServices {
     /// 幂等。窗口与 `windowShell` 就绪后调用。
     func start() {
         guard !tasks.isRunning else { return }
+        Self.raiseFileLimit()
         register(hotkey)
         if !location.isIsolated { diagnostics.start() }
         let piChanges = pi.changes() // 先订阅再启动桥与各家的接入：启动时发现的会话不能漏
@@ -172,6 +173,15 @@ extension AppServices {
                 }
             }
         }
+    }
+
+    /// 文件描述符的软上限放到这台 Mac 允许的最大：图形应用默认只有 256，在线会话每个占一条桥上的连接，
+    /// 会话文件再占一个（历史索引当场盯着它，`FileFollower`）。
+    private static func raiseFileLimit() {
+        var limit = rlimit()
+        guard getrlimit(RLIMIT_NOFILE, &limit) == 0, limit.rlim_cur < rlim_t(OPEN_MAX) else { return }
+        limit.rlim_cur = min(limit.rlim_max, rlim_t(OPEN_MAX))
+        setrlimit(RLIMIT_NOFILE, &limit)
     }
 
     /// 没有会话文件的 Agent（OpenCode）由它的运行时连着它的服务建索引。
