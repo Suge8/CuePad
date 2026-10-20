@@ -20,6 +20,7 @@ apple/scripts/xc.sh rec ios out.mov -- -CuePadDemo YES -CuePadCycle YES
 - 展开的样子：`-CuePadToolsOpen YES` 让每轮经过、子代理名册与 Cue 的动态一出现就展开，截全清单用。
 - 发送：`-CuePadSpeech press` 在输入框出现后（`-CuePadPressAfter` 秒，默认 3）真按一次发送钮，录发送动效；配 `-CuePadFlightLog <路径>` 量这一下的 CPU 与掉帧（改前改后交替跑，口径见 `measureFlight`）；`-CuePadReduceMotion YES` 看减弱动态效果。
 - 小组件与分享扩展：`-CuePadScene widgets`、`share`（iOS）用它们自己的视图画在桌面色上，模拟器桌面上加小组件脚本不做。
+- 实时活动：`-CuePadScene activity`（iOS）把各状态画成卡片；真开一个用 `xc.sh run ios -- -CuePadDemo YES -CuePadScene cue -CuePadLiveActivity YES`（隔离库默认不开），回桌面看灵动岛——`simctl io screenshot` 拍不到它，录一小段取最后一帧。
 - 录屏：会话状态切换配 `-CuePadCycle YES`；冷启动首屏给 `CUEPAD_REC_LAUNCH=1`（ios、ipad，从启动前开录），配 `-CuePadSync arrive` 看启动后拉到一批别处写下的话。录屏只在画面变时出帧，逐帧看用 `ffmpeg -i out.mov -fps_mode vfr …`；铺成一张图：`ffmpeg -i out.mov -vf "fps=8,crop=宽:高:x:y,tile=8x2" -frames:v 1 strip.png`。
 - 裁图、缩放用 `sips`（`sips -c 高 宽 --cropOffset y x`、`sips -z 高 宽`），本机没装 ImageMagick。
 - 布局反馈环压力：`apple/scripts/layout-stress.sh`，场景与判定见脚本头注释。

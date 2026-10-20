@@ -15,24 +15,32 @@ extension AppServices {
             for try await (content, moment) in self.observeTimed({ try $0.widgetContent() }) {
                 try self.publish(WidgetSnapshots(content, at: moment))
                 #if os(iOS)
-                self.cueActivity.show(CueActivityState(content.cue, at: moment))
+                await self.cueActivity?.show(CueActivityState(content.cue, at: moment), foreground: Self.isActive)
                 #endif
             }
         }
         #if os(iOS)
         // 开启只能在前台：回到前台时再看一次要不要开，并从此刻重算过时时刻
-        follow {
-            for await _ in NotificationCenter.default.notifications(named: UIApplication.didBecomeActiveNotification) { self.cueActivity.resend() }
+        if let activity = cueActivity {
+            follow {
+                for await _ in NotificationCenter.default.notifications(named: UIApplication.didBecomeActiveNotification) {
+                    await activity.resend(foreground: true)
+                }
+            }
         }
         #endif
     }
+
+    #if os(iOS)
+    private static var isActive: Bool { UIApplication.shared.applicationState == .active }
+    #endif
 
     /// 立即按当前库内容更新快照（进入后台前）；实时活动按此刻重发一次，过时时刻从这时算。
     func writeSnapshots() async throws {
         let content = try await store.widgetContent()
         try publish(WidgetSnapshots(content, at: speech))
         #if os(iOS)
-        await cueActivity.show(CueActivityState(content.cue, at: speech), resend: true).value
+        await cueActivity?.show(CueActivityState(content.cue, at: speech), resend: true, foreground: Self.isActive)
         #endif
     }
 

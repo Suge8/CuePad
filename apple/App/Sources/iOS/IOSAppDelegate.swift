@@ -1,4 +1,5 @@
 #if os(iOS)
+import AppIntents
 import Observation
 import UIKit
 import UserNotifications
@@ -15,6 +16,8 @@ final class IOSAppDelegate: NSObject, UIApplicationDelegate {
         launch = Launch.make()
         super.init()
         connect()
+        // 实时活动的"允许一次"在 App 进程里执行，可能是被叫到后台、没有窗口的时候：由这里答（`AllowOnceIntent`）
+        AppDependencyManager.shared.add { self as any CueQuestionAnswering }
     }
 
     /// 资料库打不开时失败页的重试。
@@ -23,12 +26,10 @@ final class IOSAppDelegate: NSObject, UIApplicationDelegate {
         connect()
     }
 
-    /// 实时活动的"允许一次"也在这里接上：它在 App 进程里执行，可能是被叫到后台、没有窗口的时候。
     private func connect() {
-        guard case .ready(let services) = launch else { return CueActivityAnswer.answer = nil }
+        guard case .ready(let services) = launch else { return }
         alerts.services = services
         services.alerts = alerts
-        CueActivityAnswer.answer = { try await services.answerCueQuestion($0, $1) }
     }
 
     func application(
@@ -52,6 +53,17 @@ final class IOSAppDelegate: NSObject, UIApplicationDelegate {
         guard case .ready(let services) = launch else { return .noData }
         await services.pull()
         return .newData
+    }
+}
+
+extension IOSAppDelegate: CueQuestionAnswering {
+    func answerCueQuestion(_ message: UUID, _ choice: String) async throws {
+        guard case .ready(let services) = launch else { throw LibraryClosed() }
+        try await services.answerCueQuestion(message, choice)
+    }
+
+    private struct LibraryClosed: LocalizedError {
+        var errorDescription: String? { "CuePad 的资料库没打开，到 App 里看看" }
     }
 }
 #endif

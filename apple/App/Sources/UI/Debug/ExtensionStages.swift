@@ -46,7 +46,7 @@ struct DebugWidgetStage: View {
 
 /// `-CuePadScene activity`：实时活动的各态（`CueActivityViews`，主 App 也编进了它）按真实尺寸画在桌面色的底上——锁屏卡（新的与过时的）、
 /// 灵动岛的紧凑态（有等你、只有在管）、最小态与展开态。系统的 `ActivityViewContext` 造不出来，过没过时由这里给；岛的黑底与圆角按 iPhone 17 的量。
-/// 真开起来的那一个在 cue 画面配 `-CuePadDemo YES`：演示库里有在管与等你，App 在前台就开（`CueLiveActivity`），回到桌面看灵动岛。
+/// 真开起来的那一个在 cue 画面配 `-CuePadDemo YES -CuePadLiveActivity YES`：演示库里有在管与等你，App 在前台就开（`CueLiveActivity`），回到桌面看灵动岛。
 struct DebugActivityStage: View {
     @Environment(\.palette) private var palette
 
