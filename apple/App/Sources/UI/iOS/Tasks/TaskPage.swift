@@ -141,7 +141,7 @@ private struct AgentStatusCard: View {
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 6) {
-                        if let shown { PiStateDot(shown: shown, size: 7).relaySpot(session: sessionID) }
+                        if let shown { PiStateDot(shown: shown, size: 7).relaySpot(session: sessionID, row: .task) }
                         Text(look?.title ?? "打开会话").font(TaskMetrics.font.weight(.semibold)).foregroundStyle(palette.ink)
                     }
                     if let note = look?.note {

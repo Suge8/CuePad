@@ -151,8 +151,9 @@ nonisolated extension CueMessage {
 }
 
 /// 一次接力（`CueWatch.flight`，`CueRelayStage` 画）：叫醒是会话 → Cue（事实是 `CueState.woke`），交给是 Cue → 会话（事实是 Cue 写的投送请求），
-/// 都不另存。两种的时刻都是 Cue 那台 Mac 的时钟，在同一条时间线上比新旧。
-/// 交给只飞把话或活交到会话手里的几种（`relayModes`）：说话、答它在等的问题、开新会话。
+/// 都不另存。时刻在同一条时间线上比新旧：叫醒与说话是 Cue 那台 Mac 的时钟，开新会话是开出它的那台（多数就是 Cue 那台）。
+/// 交给只飞把话或活交到会话手里的几种：说话、答它在等的问题（`spoken`，写下请求的时刻），开新会话（开出的会话有了记录的时刻，`CueStore.cueLaunches`：
+/// 写下请求时会话还不在，等它出现才飞到它那一行）。
 /// 不飞的：停下与结束是把活收回来，结束还常在做完一件事时一次结束好几个（`endUnusedSessions`），一片光讲不清；
 /// 换模型与思考强度（config）总跟在一句话前面，那句话飞就够了。
 nonisolated struct CueFlight: Equatable, Sendable {
@@ -169,21 +170,20 @@ nonisolated struct CueFlight: Equatable, Sendable {
     /// 接力的那几个会话，最新的在前。
     let ends: [RelayEnd]
 
-    static let relayModes: Set<DeliveryMode> = [.send, .answer, .start]
+    private static let spoken: Set<DeliveryMode> = [.send, .answer]
 
-    /// 一条交给：写下的时刻与交给了谁。
+    /// 一条交给：发生的时刻与交给了谁。
     struct Handed: Equatable, Sendable {
         let at: Date
         let end: RelayEnd
 
-        init?(_ request: DeliveryRequest) {
-            let session = request.target.kind == .known(.piSession) ? request.target.ref : nil
-            guard session != nil || request.cardID != nil else { return nil }
-            at = request.createdAt
-            end = RelayEnd(session: session, task: request.cardID)
+        static func read(from store: isolated CueStore) throws -> [Handed] {
+            let said = try store.cueRequests(spoken).compactMap { request in
+                request.target.ref.map { Handed(at: request.createdAt, end: RelayEnd(session: $0, task: request.cardID)) }
+            }
+            let opened = try store.cueLaunches().map { Handed(at: $0.at, end: RelayEnd(session: $0.session, task: $0.card, opens: true)) }
+            return said + opened
         }
-
-        static func read(from store: isolated CueStore) throws -> [Handed] { try store.cueRequests(relayModes).compactMap(Handed.init) }
     }
 }
 

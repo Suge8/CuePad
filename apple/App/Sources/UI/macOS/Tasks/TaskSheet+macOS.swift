@@ -133,7 +133,7 @@ private struct StepRow: View {
                 Text(step.title).font(Typography.body).strikethrough(done, color: palette.ink3).foregroundStyle(done ? palette.ink3 : palette.ink).lineLimit(1)
             }
             Spacer(minLength: 4)
-            if case .agent(let shown, let session) = next { PiStateDot(shown: shown, size: 6).relaySpot(session: session.sessionID) }
+            if case .agent(let shown, let session) = next { PiStateDot(shown: shown, size: 6).relaySpot(session: session.sessionID, row: .task) }
         }
         .animation(Motion.quick, value: done)
         .frame(minHeight: 32)

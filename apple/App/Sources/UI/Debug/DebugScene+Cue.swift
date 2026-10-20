@@ -285,17 +285,25 @@ extension DebugScene {
 
     /// `-CuePadRelay <秒>`（配 `-CuePadDemo YES`，画面就绪后开始、一直循环）：每隔这么久 Cue 交给会话一次——写一条 Cue 发起的投送请求
     /// （同 Cue 的 say 与 start 写下的样子，`CueFlight`），轮流两种：对一个在线会话说一句（给了 `-CuePadSession` 是它，否则在线会话的第一个），
-    /// 给一件还没交出去的待办开新会话（带着那张卡，还没有会话 id，落在它的任务行）；`-CuePadRelayKind say|start` 只做其中一种。
-    /// 隔离库里没有执行器，请求停在待领取；1.5 秒后删掉，会话与任务回到原样。录"交给"的动效用（`CueRelayStage`），`-CuePadFlightLog` 同叫醒。
+    /// 给一件还没交出去的待办开新会话（带着那张卡；演示 Mac 0.8 秒后开出会话、写下带认领标识的记录，光这时飞到新会话那一行）；`-CuePadRelayKind say|start` 只做其中一种。
+    /// 隔离库里没有执行器，请求停在待领取；1.5 秒后删掉，开出的会话结束。录"交给"的动效用（`CueRelayStage`），`-CuePadFlightLog` 同叫醒。
     static func relayIfAsked(_ workspace: Workspace) async {
         let store = workspace.services.store
         let kind = defaults.string(forKey: "CuePadRelayKind")
+        let launcher = PiStateRecorder(store: store, hostID: "demo-mac")
         var round = 0
         await everyIfAsked("CuePadRelay") {
             let starts = kind.map { $0 == "start" } ?? !round.isMultiple(of: 2)
             round += 1
-            guard let request = try? await (starts ? relayStart(store) : relaySay(workspace)) else { return nil }
-            return (starts ? "start" : "say", { try? await store.deleteDelivery(request.id) })
+            if starts {
+                guard let (request, session) = try? await relayStart(store, on: launcher) else { return nil }
+                return ("start", {
+                    try? await store.deleteDelivery(request.id)
+                    try? await launcher.end(sessionID: session)
+                })
+            }
+            guard let request = try? await relaySay(workspace) else { return nil }
+            return ("say", { try? await store.deleteDelivery(request.id) })
         }
     }
 
@@ -307,15 +315,21 @@ extension DebugScene {
             "看一下测试跑完没有，跑完把结果贴给我", to: SendTarget(kind: .piSession, name: session.title, ref: session.sessionID), on: session.hostID, cue: true)
     }
 
-    /// 给一件还没交出去、归在项目里的待办叶子开新会话（Cue 发起，带着那张卡）。
-    private static func relayStart(_ store: CueStore) async throws -> DeliveryRequest? {
+    /// 给一件还没交出去、归在项目里的待办叶子开新会话（Cue 发起，带着那张卡），演示 Mac 过一会儿开出它；返回请求与开出的会话 id。
+    private static func relayStart(_ store: CueStore, on launcher: PiStateRecorder) async throws -> (DeliveryRequest, String)? {
         let tasks = try await store.tasks(.todo).flatMap(\.tasks)
         let parents = Set(tasks.compactMap(\.parentID))
         guard let task = tasks.first(where: { $0.piSessionID == nil && $0.projectID != nil && !parents.contains($0.id) }), let project = task.projectID else {
             return nil
         }
-        return try await store.requestLaunch(
-            PiLaunch(project: project, prompt: task.body, token: UUID().uuidString), title: task.heading, on: "demo-mac", card: task.id, cue: true)
+        let token = UUID().uuidString
+        let request = try await store.requestLaunch(
+            PiLaunch(project: project, prompt: task.body, token: token), title: task.heading, on: "demo-mac", card: task.id, cue: true)
+        // 演示节奏：Mac 开出会话要一会儿
+        try await Task.sleep(for: .seconds(0.8))
+        let session = "launched-\(token.prefix(8))"
+        try await launcher.update(sessionID: session, state: .thinking, title: task.heading, directory: "demo", projectID: project, launchToken: token)
+        return (request, session)
     }
 
     /// `key` 给了秒数时每隔这么久做一次 `act`（返回量的那段叫什么与 1.5 秒后怎么收回；做不成返回 nil，跳过这一次），配 `-CuePadFlightLog` 前后各量一段。

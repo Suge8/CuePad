@@ -42,6 +42,8 @@ final class CueWatch {
     private(set) var flight: CueFlight?
     /// 已经算过的最新时刻（叫醒与交给同一条时间线）。
     @ObservationIgnored private var seen: Date?
+    /// 这台设备上读到 `flight` 的那一刻：新开的会话那一行只在光还在路上时等它落下（`opens`）。
+    @ObservationIgnored private var flightRead = ContinuousClock.now
     /// 当场读到的第一份（读不出来时为 nil，失败页盖住页面）：`follow` 从它接着订阅。
     @ObservationIgnored private let start: Snapshot<Reading>?
     /// Cue 页的输入（离开再回来还在）。
@@ -92,6 +94,12 @@ final class CueWatch {
     /// 最近一次接力交给的是这件任务（开新会话、带着它说话）。
     func relays(task: UUID) -> Bool { flight?.ends.contains { $0.task == task } == true }
 
+    /// 最近一次交给刚开出 `session`、光还没落下：它那一行先透明着（`relayArrival`）。
+    func opens(session: String) -> Bool {
+        // 先读 flight：观察要记下它，下一次交给来时那一行才重算
+        flight?.ends.contains { $0.session == session && $0.opens } == true && ContinuousClock.now - flightRead < .seconds(RelayFlight.arrival)
+    }
+
     /// 跟随资料库与此刻直到任务取消。
     func follow(_ services: AppServices) async throws {
         for try await (reading, moment) in services.observeTimed(from: start, { try Reading.read(from: $0) }) {
@@ -118,6 +126,7 @@ final class CueWatch {
         set(\.context, digest.state?.context)
         if let next = reading.flight(after: seen) {
             seen = reading.latest
+            flightRead = .now
             flight = next
         }
     }
