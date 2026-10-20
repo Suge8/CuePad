@@ -19,10 +19,11 @@ struct CueTaskButton<Label: View>: View {
     }
 }
 
-/// 还没启用时 Cue 页输入框上方的那一块，两端同一个：只放启用这一步，启用后怎么用由 Cue 页空态那一句说（同一屏不说两遍）。直接选一台 Mac 启用（能运行 Cue 的几台，`CueSettings.hosts`）——
+/// 还没启用时 Cue 页输入框上方的那一块，两端同一个：只放启用这一步，启用后怎么用由 Cue 页空态那一句说（同一屏不说两遍）。选一台 Mac 启用（能运行 Cue 的几台，`CueSettings.hosts`）——
 /// 一台就是一颗"在那台上启用"的主按钮；几台是点开选哪台的菜单（`MenuButton`，每台下面写能当大脑的几家或为什么不能用），
-/// Mac 上点按是在这台运行、长按选别的。没写成的原因就地写在下面（`CueSettingsModel`）。手机上还没有哪台 Mac 写下过自己时，
-/// 说先到 Mac 上打开 CuePad。没启用时输入框发出去是记下灵感。Mac 上默认项目还没有文件夹时写一句它第一次开工时建在哪（`Workspaces`）。
+/// Mac 上点按是在这台运行、长按选别的。在这台 Mac 上启用打开接入面板（`SetupPanel`：先检测、接入这台的 Agent，一家都没装时给装法，
+/// 同一下启用），别的 Mac 直接启用，没写成的原因就地写在下面（`CueSettingsModel`）。手机上还没有哪台 Mac 写下过自己时，
+/// 说先到 Mac 上打开 CuePad。没启用时输入框发出去是记下灵感。
 struct CueEnableCard: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -32,13 +33,6 @@ struct CueEnableCard: View {
     var body: some View {
         let hosts = (model.settings ?? .empty).hosts(here: here)
         VStack(alignment: .leading, spacing: 10) {
-            #if os(macOS)
-            if let home = workspace.catalog?.project(Project.defaultID), workspace.catalog?.directories[home.id] == nil {
-                let workspaces = services.workspaces
-                Label("第一次开工时建好 \(workspaces.shown(workspaces.directory(for: home.name).path(percentEncoded: false)))", icon: .folder)
-                    .font(Typography.meta).foregroundStyle(palette.ink3)
-            }
-            #endif
             if hosts.isEmpty {
                 Label(CueSettings.noHost, icon: .mac)
                     .font(Typography.secondary).foregroundStyle(palette.ink3)
@@ -70,18 +64,28 @@ struct CueEnableCard: View {
         #endif
     }
 
+    private func enable(on host: String) {
+        #if os(macOS)
+        guard host != here else {
+            workspace.showsSetup = true
+            return
+        }
+        #endif
+        model.enable(on: host, services)
+    }
+
     @ViewBuilder private func enableButton(_ hosts: [CueSettings.Host]) -> some View {
         if hosts.count == 1, let host = hosts.first {
-            Button(title(host)) { model.enable(on: host.id, services) }
+            Button(title(host)) { enable(on: host.id) }
                 .buttonStyle(ControlButtonStyle(kind: .primary))
         } else {
             MenuButton(
                 sections: [ChoiceMenu.Section(choices: hosts.map { host in
                     ChoiceMenu.Choice(title: host.name, subtitle: host.note.isEmpty ? nil : host.note, image: .icon(.mac)) {
-                        model.enable(on: host.id, services)
+                        enable(on: host.id)
                     }
                 })],
-                primary: here.map { here in { model.enable(on: here, services) } },
+                primary: here.map { here in { enable(on: here) } },
                 accessibilityLabel: here == nil ? "选一台 Mac 启用" : "在这台 Mac 上启用", hint: here == nil ? nil : "长按选别的 Mac"
             ) {
                 HStack(spacing: 6) {
