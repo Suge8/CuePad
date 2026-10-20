@@ -183,7 +183,7 @@ public struct TimedOut: Error, CustomStringConvertible {
 /// 不空等到测试时限。录制真 Agent（CUEPAD_AGENT_TESTS，见 CuePiTests 的 RealAgents）时每一步等的是真进程与真模型，放宽到一分钟。
 public let conditionTimeout: Duration = ProcessInfo.processInfo.environment["CUEPAD_AGENT_TESTS", default: ""].isEmpty ? .seconds(5) : .seconds(60)
 
-/// 有界条件等待，只给没有事件可订阅的异步用（FSEvents、socket、子进程、系统弹窗与布局、后台落盘）：
+/// 有界条件等待，只给没有事件可订阅的异步用（文件系统通知、socket、子进程、系统弹窗与布局、后台落盘）：
 /// 条件一成立马上返回，到了上限抛 `TimedOut`。库里的变化用下面按读取订阅的那个。
 public func eventually(_ what: String, timeout: Duration = conditionTimeout, _ condition: () async throws -> Bool) async throws {
   let deadline = ContinuousClock.now + timeout
