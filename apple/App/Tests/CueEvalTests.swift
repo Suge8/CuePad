@@ -717,6 +717,7 @@ final class CueEval {
         do {
             try await eventually("刚启用那一轮做完", timeout: .seconds(300)) { eval.rig.rounds.contains { $0.wake == .enabled && $0.finishedAt != nil } }
             checks = try await body(eval)
+            checks.append(try await eval.showsNoIDs())
         } catch {
             failure = error
         }
@@ -749,6 +750,14 @@ final class CueEval {
     /// 叫醒之后 Cue 写的消息（tell、回复、动态、完成的结果）
     func said() async throws -> [CueMessage] {
         try await rig.store.cueMessages().filter { $0.createdAt >= start && $0.author != .known(.you) && !$0.text.isEmpty }
+    }
+
+    /// 他看得到的字（消息与记下的记忆）没抄信封、工具结果里括号中的编号：每个场景都判。
+    func showsNoIDs() async throws -> Check {
+        let seen = rig.rounds.filter { $0.startedAt >= start }.flatMap { $0.sent + $0.calls.compactMap(\.result) }
+        let ids = Set(seen.flatMap { $0.matches(of: /（((?:s-)?[0-9a-f]{6,8})）/).map { String($0.1) } })
+        let written = try await said().map(\.text) + calls("memory", "note").compactMap { $0.args["text"] as? String }
+        return Check("他看得到的字里没有编号", !written.contains { text in ids.contains { text.contains($0) } })
     }
 
     /// 回答你的那句
