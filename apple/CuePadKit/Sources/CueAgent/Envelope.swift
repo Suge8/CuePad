@@ -87,10 +87,18 @@ public enum CueEnvelope {
     return lines.joined(separator: "\n")
   }
 
-  /// 他的一句交给大脑的样子：原话，这句收起了卡（`CueStore.cueQuestionsSetAside`）就在后面列出，Cue 判断是不是在答它们。
-  public static func said(_ text: String, setAside: [CueMessage]) -> String {
-    guard !setAside.isEmpty else { return text }
-    return ([text, "", "（他开口收起了等你里的 \(setAside.count) 张：）"] + setAside.map { "- " + question($0) }).joined(separator: "\n")
+  /// 交给大脑的他的话与回答（`CueStore.cueMessagesToDeliver`），一条一段：他的话是原话，收起了卡（`setAside` 里 `setAsideBy` 是它的）就在后面列出，
+  /// Cue 判断是不是在答它们；回答是他选了哪一项。
+  public static func delivered(_ pending: [CueMessage], setAside: [CueMessage]) -> String {
+    pending.map { message in
+      guard message.author == .known(.you) else {
+        let question = CueFormat.plainText(message.text).split(whereSeparator: \.isNewline).first.map(String.init) ?? ""
+        return "他回答了「\(question)」：\(message.answer ?? "")"
+      }
+      let cards = setAside.filter { $0.setAsideBy == message.id }
+      guard !cards.isEmpty else { return message.text }
+      return ([message.text, "", "（他开口收起了等你里的 \(cards.count) 张：）"] + cards.map { "- " + question($0) }).joined(separator: "\n")
+    }.joined(separator: "\n\n")
   }
 
   /// 一条提问一行：原话、id 与选项。
