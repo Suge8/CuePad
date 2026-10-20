@@ -19,7 +19,8 @@ public struct AgentVersion: Sendable, Equatable, Comparable, CustomStringConvert
 }
 
 extension AgentKind {
-    /// CuePad 要求的最低版本：Pi 要有 `ui_prompt_*` 事件；OpenCode 只认 v2（v1 的服务接口不同，不做兼容）。其余没有要求。
+    /// CuePad 要求的最低版本：Pi 要有 `ui_prompt_*` 事件；OpenCode 只认 v2（v1 的服务接口不同，不做兼容；Homebrew 与官方脚本装的是 v2，
+    /// npm 上 v2 是 `@opencode/cli`，旧包 `opencode-ai` 仍是 1.x）。其余没有要求。
     public var minimumVersion: AgentVersion? {
         switch self {
         case .pi: AgentVersion(0, 84, 4)

@@ -3,7 +3,7 @@ import CueStore
 import Darwin
 import Foundation
 
-/// OpenCode 后台服务的登记文件（`AgentPaths.openCodeService`）：服务起来时写、停了删。密码明文，所以只认属于当前用户、
+/// OpenCode 后台服务的登记文件（`AgentPaths.openCodeService`，不在官方文档里）：服务起来时写、停了删。密码明文，所以只认属于当前用户、
 /// 只有属主可读写（0600）的普通文件，与 Pi 的 socket 同一条校验。
 struct OpenCodeServiceInfo: Decodable, Equatable, Sendable {
     var id: String

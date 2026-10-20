@@ -20,7 +20,7 @@ enum PiWire {
         /// 主会话最后一次模型回合开始的时间（毫秒）；还没开过为 nil
         var turnSince: Double?
 
-        /// 同步记录的状态与一句话说明（`PiSession.detail`）；不认识的种类为 nil。扩展还报的在跑工具全集、`aborted`、弹窗种类没有人读，不解码。
+        /// 同步记录的状态与一句话说明（`PiSession.detail`）；不认识的种类为 nil。
         var work: (state: PiWorkState, detail: String?)? {
             switch kind {
             case "idle", "done": (.settled, nil)
