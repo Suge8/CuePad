@@ -706,18 +706,23 @@ extension CueStore {
   /// 一行是哪家 Agent 的（会话索引与会话记录都是）：早于多家接入的行没写，是 Pi。也是 Agent 索引（`Schema` 第 55 步）的表达式。
   static let agentOf = "COALESCE(agent, '\(AgentKind.pi.rawValue)')"
 
-  /// 删掉一家 Agent 的本机会话索引（断开接入时）：会话同步记录与对话不动。`host` 这台 Mac 托管着、还没结束的会话留着：
-  /// 它们是 CuePad 自己开的，没接入也照样开、照样读对话，闲置退出后再发话要靠索引接着它（`MacExecutor`）。
+  /// 删掉一家 Agent 的本机会话索引（断开接入时）：会话同步记录与对话不动。`host` 这台 Mac 托管过的会话（`hostedPiSessionIDs`）留着：
+  /// 没接入也照样开、照样读对话，闲置退出或结束后再发话要靠索引接着它（`MacExecutor`）。
   public func deletePiSessions(of agent: AgentKind, keepingHostedOn host: String) throws {
     try write {
       try db.run(
-        """
-          DELETE FROM piSessions WHERE \(Self.agentOf) = ?
-            AND id NOT IN (SELECT sessionID FROM piSessionStates WHERE hostID = ? AND hosted = 1)
-          """,
-        [agent.rawValue, host])
+        "DELETE FROM piSessions WHERE \(Self.agentOf) = ? AND id NOT IN (\(Self.hostedSessionsSQL))", [agent.rawValue, host, agent.rawValue])
     }
   }
+
+  /// `host` 这台 Mac 托管过的这家的会话：CuePad 开的（带认领标识，结束了也留着），与此刻托管着的（接着已结束的会话时不带标识）。
+  /// 没接入的 Agent 只索引这些（`PiHistoryScope.sessions`）。
+  public func hostedPiSessionIDs(of agent: AgentKind, host: String) throws -> Set<String> {
+    Set(try db.query(Self.hostedSessionsSQL, [host, agent.rawValue]) { $0.text(0) })
+  }
+
+  private static let hostedSessionsSQL =
+    "SELECT sessionID FROM piSessionStates WHERE hostID = ? AND \(agentOf) = ? AND (hosted = 1 OR launchToken IS NOT NULL)"
 
   /// 全部目录绑定（各台 Mac 的），按项目、Mac 名（`MacAgents.name`）排。
   public func directoryBindings() throws -> [DirectoryBinding] {

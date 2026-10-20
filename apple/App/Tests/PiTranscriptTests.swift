@@ -45,7 +45,7 @@ struct PiTranscriptTests {
         let indexer = PiHistoryIndexer(
             agent: .pi, paths: AgentPaths(pi: rig.piPaths), transcriptWindow: PiHistoryPersistence.transcriptWindow, files: store.files
         ) { [services] in await services.loadHistoryStart(for: $0) }!
-        let source = indexer.events(following: AsyncStream { $0.finish() })
+        let source = indexer.events(following: AsyncStream { $0.finish() }, scope: .all)
         let events = AsyncStream<PiHistoryEvent> { continuation in
             let task = Task {
                 for await event in source {
@@ -201,7 +201,7 @@ struct PiTranscriptTests {
         let file = try sessionFile("s1", at: .now.addingTimeInterval(-60))
         _ = try await live("s1", file: file)
         let indexer = PiHistoryIndexer(agent: .pi, paths: AgentPaths(pi: rig.piPaths), files: store.files) { _ in nil }!
-        let consuming = Task { await services.consumePiHistory(indexer.events(following: AsyncStream { $0.yield([file]) }), agent: .pi) }
+        let consuming = Task { await services.consumePiHistory(indexer.events(following: AsyncStream { $0.yield([file]) }, scope: .all), agent: .pi) }
         defer { consuming.cancel() }
         for try await count in store.observe({ try $0.piMessages(of: "s1").count }) where count == 4 { break }
 

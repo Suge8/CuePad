@@ -115,7 +115,7 @@ final class ClaudeTestbed {
     func terminal(_ arguments: [String] = [], mode: String = "default") async throws -> ClaudeTerminal {
         if reading == nil, let indexer = PiHistoryIndexer(agent: .claudeCode, paths: paths, files: files, start: { _ in nil }) {
             reading = Task { [runtime, bridge] in
-                for await case .updated(let update) in indexer.events(following: bridge.sessionFiles) { runtime.read(update) }
+                for await case .updated(let update) in indexer.events(following: bridge.sessionFiles, scope: .all) { runtime.read(update) }
             }
         }
         let terminal = try await ClaudeTerminal(testbed: self, arguments: ["--permission-mode", mode] + arguments)

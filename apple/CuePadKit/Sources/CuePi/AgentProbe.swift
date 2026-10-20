@@ -14,8 +14,8 @@ import Foundation
 ///   否决 `account/read`：它要联网查工作区，断网或刚醒时超时就成了没登录）；默认是用户配置的模型（`config/read` 的 `model`），
 ///   没配是 `model/list` 里标了 `isDefault` 的那个。
 /// - Claude Code：stream-json 不存会话、关掉钩子（否则 CuePad 自己的钩子把它报成一个会话）、不起 MCP 服务，控制请求 `initialize` 给模型清单，
-///   其中的 `account` 没有令牌也没有 API 密钥是没登录；`get_settings` 的 `applied.model` 是按用户配置解析出的实际模型。清单去掉 `default` 那项
-///   （它解析到的是推荐的模型，不一定是配置的），默认落到解析出同一个模型的第一项（`opus` 这样的别名排在完整 id 前面），对不上时只有 id。
+///   其中的 `account` 没有令牌也没有 API 密钥是没登录；`get_settings` 的 `applied.model` 是按用户配置解析出的实际模型。默认落到清单（`ClaudeCode.models`）里
+///   解析出同一个模型的第一项（`opus` 这样的别名排在完整 id 前面），对不上时只有 id。
 /// - OpenCode：没有模型清单，找得到命令行程序就算能用。
 /// 起的是检测时挑中的那个可执行文件（`AgentStatus.executable`，与开会话、起大脑同一个）。
 struct AgentProbe {
@@ -152,7 +152,7 @@ struct AgentProbe {
             || account?["apiProvider"]?.string != "firstParty"
         guard signedIn else { return nil }
         let applied = try await stream.request(["subtype": "get_settings"])["applied"]?["model"]?.string
-        let offered = ClaudeCode.models(in: info).filter { $0.option.key.id != "default" }
+        let offered = ClaudeCode.models(in: info)
         let model = offered.first { $0.resolved == applied }?.option.key ?? applied.map { ClaudeCode.model($0).key }
         return MacAgent(kind: .claudeCode, model: model, models: offered.map(\.option))
     }

@@ -2,9 +2,9 @@
 import CueStore
 import Foundation
 
-/// 后台索引一个 Agent 的会话目录（Pi、Claude Code、Codex 的会话文件，怎么认、怎么读见 `SessionFileFormat`）：一直跟着在线会话的文件
-/// （桥上的，`PiBridge.sessionFiles`；`FileFollower` 当场报），只读新增字节——在线会话的对话只从这里来，托管的会话没接入也开得出、也要它。
-/// 要回填（`backfill`，接入了的 Agent）时先按修改时间倒序读完整棵目录（最近的会话最先可用），发出 `backfillFinished` 再接着跟；
+/// 后台索引一个 Agent 的会话目录（Pi、Claude Code、Codex 的会话文件，怎么认、怎么读见 `SessionFileFormat`）：先按修改时间倒序回填
+/// `scope` 里的会话文件（最近的会话最先可用），发出 `backfillFinished` 后只跟着在线会话的文件（桥上的，`PiBridge.sessionFiles`；
+/// `FileFollower` 当场报），只读新增字节。会话的对话只从这里来：托管的会话没接入也开得出，所以没接入的 Agent 也要回填它托管过的那些。
 /// 整棵目录只在回填时列一次，没经接入的会话（如 Pi 关了扩展）下次启动时进历史。会话从开始到结束都在桥上（各家的接入上报），
 /// 下桥时最后读一次。歇下要等这一轮的回答从文件里读到才算（`PiSessionState.answered`），读晚一步 Cue 就晚一步被叫醒。
 ///
@@ -38,17 +38,19 @@ public struct PiHistoryIndexer: Sendable {
     }
 
     /// 结束（取消订阅）时停止后台任务。会话目录可以还不存在（先装 CuePad、后装 Agent），见 `FileFollower`。
-    /// `liveFiles` 是此刻在线会话的文件（各家的都行，不在这家会话目录里的不管），每次变了给一份。`backfill` 为 false 时不列目录、
-    /// 不发 `backfillFinished`，只跟在线的。
-    public func events(following liveFiles: some AsyncSequence<Set<URL>, Never> & Sendable, backfill: Bool = true) -> AsyncStream<PiHistoryEvent> {
+    /// `liveFiles` 是此刻在线会话的文件（各家的都行，不在这家会话目录里的不管），每次变了给一份。
+    public func events(
+        following liveFiles: some AsyncSequence<Set<URL>, Never> & Sendable, scope: PiHistoryScope
+    ) -> AsyncStream<PiHistoryEvent> {
         AsyncStream { continuation in
-            let task = Task(priority: .utility) { await run(continuation, following: liveFiles, backfill: backfill) }
+            let task = Task(priority: .utility) { await run(continuation, following: liveFiles, scope: scope) }
             continuation.onTermination = { _ in task.cancel() }
         }
     }
 
     @concurrent private func run(
-        _ continuation: AsyncStream<PiHistoryEvent>.Continuation, following liveFiles: some AsyncSequence<Set<URL>, Never> & Sendable, backfill: Bool
+        _ continuation: AsyncStream<PiHistoryEvent>.Continuation, following liveFiles: some AsyncSequence<Set<URL>, Never> & Sendable,
+        scope: PiHistoryScope
     ) async {
         // 统一用真实路径，回填列出的与桥给的文件 URL 才一致（目录还不存在时解析其上层）
         let root = self.root.realPath
@@ -96,15 +98,14 @@ public struct PiHistoryIndexer: Sendable {
             continuation.yield(.updated(update))
         }
 
-        if backfill {
-            // 回填时记住最近修改的那批文件（在线会话的就在其中）：之后盯到的写入落到缓存上，不会重读也不会重复发出
-            let found = Self.sessionFiles(under: root, depth: format.depth)
-            for (rank, file) in found.enumerated() {
-                if Task.isCancelled { return }
-                await index(file.url, modified: file.modified, size: file.size, remember: rank < Self.liveCacheLimit)
-            }
-            continuation.yield(.backfillFinished(sessionFiles: found.map(\.url).filter { !excluded.contains($0) }))
+        // 回填时记住最近修改的那批文件（在线会话的就在其中）：之后盯到的写入落到缓存上，不会重读也不会重复发出
+        let found = Self.sessionFiles(under: root, depth: format.depth).filter { scope.covers($0.url) }
+        for (rank, file) in found.enumerated() {
+            if Task.isCancelled { return }
+            await index(file.url, modified: file.modified, size: file.size, remember: rank < Self.liveCacheLimit)
         }
+        let sessionFiles = found.map(\.url).filter { !excluded.contains($0) }
+        continuation.yield(.backfillFinished(sessionFiles: scope == .all ? sessionFiles : nil))
 
         for await path in follower.paths {
             if Task.isCancelled { return }
