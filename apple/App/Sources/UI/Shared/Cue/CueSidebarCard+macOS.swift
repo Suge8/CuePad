@@ -50,7 +50,7 @@ struct CueSidebarCard: View {
     }
 }
 
-/// 名片里 Cue 最近说的那句：纸色气泡（外形同对话气泡，`BubbleShape`），尾巴从上沿指向头像。
+/// 名片里 Cue 最近说的那句：纸色气泡（外形同对话气泡，`BubbleShape`），尾巴从上沿指向头像；还没读的新消息是正文墨色，不然最淡一档。
 private struct SaidBubble: View {
     let text: String
     let fresh: Bool
@@ -62,7 +62,7 @@ private struct SaidBubble: View {
     var body: some View {
         Text(text)
             .font(Typography.cueCardSaid).lineSpacing(2).lineLimit(3)
-            .foregroundStyle(CueStatusLine.said(fresh: fresh, palette))
+            .foregroundStyle(fresh ? palette.ink : palette.ink3)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 14).padding(.vertical, 11)
             .background(palette.paper, in: BubbleShape(tail: BubbleTail(edge: .top, offset: tailX), radius: Self.radius))

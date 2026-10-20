@@ -30,20 +30,9 @@ final class AgentListModel {
         (catalog?.projects ?? []).filter { list?.projects.contains($0.id) == true || $0.id == current }
     }
 
-    enum Empty: Equatable {
-        case noMatch(String)
-        /// 没有会话：全部（nil）或这个项目里。
-        case none(UUID?)
-
-        /// "没有会话"的标题（两端同一句；下面的说明与按钮各端自己给）。
-        var noneTitle: String {
-            if case .none(.some) = self { "这个项目还没有 Agent 会话" } else { "还没有 Agent 会话" }
-        }
-    }
-
-    /// 列表空着时说什么；`filter` 是此刻筛着的项目。
-    func empty(filter: UUID?) -> Empty {
-        searching ? .noMatch(query) : .none(filter)
+    /// 列表空着、没在搜时的标题（两端同一句；下面的说明与按钮各端自己给）；`filter` 是此刻筛着的项目。
+    static func noneTitle(filter: UUID?) -> String {
+        filter == nil ? "还没有 Agent 会话" : "这个项目还没有 Agent 会话"
     }
 }
 

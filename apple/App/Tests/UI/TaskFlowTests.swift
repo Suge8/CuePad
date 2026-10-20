@@ -35,7 +35,7 @@ struct TaskFlowTests {
         }
         let request = try await store.requestDelivery(Outgoing.text(of: task), to: atlas, on: "mac-a", card: task.id)
         guard case .agent(let sending, _) = try await next(task) else { throw Unexpected.next }
-        #expect(sending.isLive && sending.undelivered == nil)
+        #expect(sending.isRunning && sending.undelivered == nil)
         try await executor.start()
         _ = try await eventually(store, { try $0.deliveryRequest(request.id)?.status }) { $0 == .known(.failed) }
         guard case .agent(let failed, _) = try await next(task) else { throw Unexpected.next }
@@ -178,8 +178,9 @@ struct TaskFlowTests {
         try await workspace.toggle(stale.id)  // 手里的副本已过时：切换以 Store 当前状态为准
         #expect(try await store.card(stale.id)?.status == .todo)
 
-        #expect(try await workspace.addTasks(fromSelection: "- 写发布说明\n\n- 更新截图", in: project.id) == 2)
-        #expect(try await store.tasks(.todo).flatMap(\.tasks).filter { $0.projectID == project.id }.map(\.body).prefix(2) == ["写发布说明", "更新截图"])
+        workspace.convertToTasks("- 写发布说明\n\n- 更新截图", in: project.id)
+        try await eventually("转好任务") { workspace.notice?.text == "已转为 2 个任务" }
+        #expect(try await store.tasks(.todo).flatMap(\.tasks).filter { $0.projectID == project.id }.map(\.body) == ["写发布说明", "更新截图"])
     }
 
     // MARK: 数字处处一致
@@ -256,7 +257,7 @@ struct TaskFlowTests {
         #expect(columns.waiting.map(\.item?.id) == [task.id, nil])
         try await expectCountsMatchCue(columns)
 
-        try await workspace.answerCueQuestion(ask, CueAsk.once)
+        try await workspace.services.answerCueQuestion(ask.id, CueAsk.once)
         #expect(try await board().managing.map(\.item?.id) == [task.id])
         try await workspace.toggle(task.id)
         columns = try await board()
@@ -296,7 +297,7 @@ struct TaskFlowTests {
         #expect(tally.managing.isEmpty)
         #expect(tally.waiting.map(\.task) == [release.id, nil, canvas.id])
 
-        try await workspace.answerCueQuestion(push, CueAsk.once)
+        try await workspace.services.answerCueQuestion(push.id, CueAsk.once)
         tally = try await digest().tally
         #expect(tally.managing.map(\.id) == ["task/\(release.id.uuidString)"] && tally.waiting.count == 2)
     }

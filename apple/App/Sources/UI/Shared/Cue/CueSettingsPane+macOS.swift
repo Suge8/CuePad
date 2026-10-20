@@ -8,9 +8,6 @@ import SwiftUI
 struct CueSettingsPane: View {
     @Environment(AppServices.self) private var services
     @State private var model = CueSettingsModel()
-    @State private var name = ""
-    /// 名字在回车或离开输入框时写入。
-    @FocusState private var editing: Bool
 
     /// 名字输入框的宽：不撑满一行。
     private static let fieldWidth: CGFloat = 200
@@ -34,16 +31,9 @@ struct CueSettingsPane: View {
                 Toggle(CueStepsSetting.title, isOn: Bindable(services.settings).showsCueSteps).labelsHidden().toggleStyle(.switch)
             }
             SettingRow(title: "名字", icon: Image(.name)) {
-                TextField("名字", text: $name, prompt: Text(CueProfile.defaultName)).labelsHidden().multilineTextAlignment(.trailing)
-                    .frame(width: Self.fieldWidth)
-                    .focused($editing)
-                    .onSubmit { model.rename(name, services) }
+                CueNameField(model: model).labelsHidden().frame(width: Self.fieldWidth)
             }
         }
-        .onChange(of: editing) { left, _ in
-            if left { model.rename(name, services) }
-        }
-        .onChange(of: shown.profile.name, initial: true) { _, saved in name = saved }
     }
 
     private func host(_ settings: CueSettings) -> some View {

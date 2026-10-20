@@ -393,7 +393,7 @@ private struct BoardNextLine: View {
 }
 
 /// 等你列的一张卡：上面是它落在的任务（点了打开），没落在任务上的会话写会话名与"没绑任务"；下面就地处理——
-/// Cue 的提问是要你定什么与它的选项（`CueChoices`，与 Cue 页"等你"卡同一套，答的方法同 `Workspace.answerCueQuestion`）；
+/// Cue 的提问是要你定什么与它的选项（`CueChoices`，与 Cue 页"等你"卡同一套，答的方法同 `AppServices.answerCueQuestion`）；
 /// 会话在问的是问题与回答框（`BoardReply`，与会话页回复同一个发送方法）。
 struct BoardWaitCard: View {
     let wait: TaskBoard.Wait
@@ -462,7 +462,7 @@ struct BoardWaitCard: View {
         ending = true
         workspace.attempt {
             defer { ending = false }
-            try await workspace.answerCueQuestion(message, choice)
+            try await workspace.services.answerCueQuestion(message.id, choice)
         }
     }
 

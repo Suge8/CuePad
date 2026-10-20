@@ -13,10 +13,7 @@ struct CueTaskButton<Label: View>: View {
             .buttonStyle(PressStyle(.card))
     }
 
-    private func open() {
-        let store = workspace.services.store, id = task
-        workspace.attempt { if let card = try await store.card(id) { workspace.openTask(card) } }
-    }
+    private func open() { workspace.openTask(id: task) }
 }
 
 /// 还没启用时 Cue 页输入框上方的那一块，两端同一个：只放启用这一步，启用后怎么用由 Cue 页空态那一句说（同一屏不说两遍）。选一台 Mac 启用（能运行 Cue 的几台，`CueSettings.hosts`）——
@@ -31,7 +28,7 @@ struct CueEnableCard: View {
     @State private var model = CueSettingsModel()
 
     var body: some View {
-        let hosts = (model.settings ?? .empty).hosts(here: here)
+        let hosts = (model.settings ?? .empty).hosts(here: workspace.localHost)
         VStack(alignment: .leading, spacing: 10) {
             if hosts.isEmpty {
                 Label(CueSettings.noHost, icon: .mac)
@@ -55,18 +52,9 @@ struct CueEnableCard: View {
         .animation(Motion.quick, value: model.failure)
     }
 
-    /// 这台 Mac（手机没有）：Mac 上它排第一、点按就在这台运行。
-    private var here: String? {
-        #if os(macOS)
-        services.hostID
-        #else
-        nil
-        #endif
-    }
-
     private func enable(on host: String) {
         #if os(macOS)
-        guard host != here else {
+        guard host != workspace.localHost else {
             workspace.showsSetup = true
             return
         }
@@ -75,6 +63,7 @@ struct CueEnableCard: View {
     }
 
     @ViewBuilder private func enableButton(_ hosts: [CueSettings.Host]) -> some View {
+        let here = workspace.localHost
         if hosts.count == 1, let host = hosts.first {
             Button(title(host)) { enable(on: host.id) }
                 .buttonStyle(ControlButtonStyle(kind: .primary))
@@ -98,12 +87,12 @@ struct CueEnableCard: View {
     }
 
     private func title(_ host: CueSettings.Host) -> String {
-        host.id == here ? "在这台 Mac 上启用" : "在「\(host.name)」上启用"
+        host.id == workspace.localHost ? "在这台 Mac 上启用" : "在「\(host.name)」上启用"
     }
 }
 
 /// 一件活收成一行（对话里 Cue 的话下面、"等你"里关联的那件）：任务圈、标题、步骤数，点它打开任务；行尾是这件活交给的会话的状态标
-/// （`AgentDot`：正在开会话、在跑、等你……，点它看那个会话；没交出去不画）。Cue 交给会话时接力落在这一行（圈与状态标都挂着锚，`CueRelay`），
+/// （`AgentDot`：正在开会话、在跑、等你……，点它看那个会话；没交出去不画）。Cue 交给会话时接力落在这一行（圈与状态标都挂着锚，`CueRelayStage`），
 /// 落下后状态标自己换成会话的真实状态。
 struct CueTaskLine: View {
     /// 平时可点的高（对话里、结果卡里）；Cue 页数格子时按它算那一行至少多高（`CuePage.floor`）。
@@ -315,8 +304,7 @@ private struct CueWakeTitle: View {
             navigation.openSession(session.id, sessionID: session.sessionID, store: services.store)
             #endif
         case .task(let id):
-            let store = services.store
-            workspace.attempt { if let card = try await store.card(id) { workspace.openTask(card) } }
+            workspace.openTask(id: id)
         case .memory:
             workspace.cue.showsMemory = true
         }
@@ -925,7 +913,7 @@ struct CueWaitingDock: View {
         ending = message.id
         workspace.attempt {
             defer { ending = nil }
-            try await workspace.answerCueQuestion(message, choice)
+            try await workspace.services.answerCueQuestion(message.id, choice)
         }
     }
 }

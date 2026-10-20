@@ -467,7 +467,7 @@ struct CueHostTests {
         let question = try await rig.message(.cue, containing: "要推送吗？")
         #expect(question.choices == ["可以", "以后推送代码都不用问"])
         try await rig.message(.cue, containing: "办好了")
-        try await Workspace(services: rig.services).answerCueQuestion(question, "以后推送代码都不用问")
+        try await rig.services.answerCueQuestion(question.id, "以后推送代码都不用问")
         try await rig.message(.cue, containing: "知道了：以后推送代码都不用问")
         try await eventually("每一轮响一次") {
             rig.notifier.posted.map(\.body) == ["可以推送登录页的修复吗？\n可以 / 以后推送代码都不用问", "知道了：以后推送代码都不用问"]
