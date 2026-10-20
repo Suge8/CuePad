@@ -72,6 +72,7 @@ xcrun cktool export-schema $C --output-file /tmp/dev.ckdb   # 回读：服务端
 
 待部署到生产（已导入开发环境，发版前按上面三步部署，部署完删掉对应条目）：
 
+- `cueMessages.setAsideBy`：提问卡随你在 Cue 页开口收起时，记下是哪句话收起的
 - `sessionViewers.cue`（INT64）：设备开没开着 Cue 页（`Viewer.cue`）
 
 生产环境的结构只能增不能删：已下线的记录类型与字段在生成器里（`CloudKitSchema.retiredTypes` / `retiredFields`）照原样声明，客户端不再读写。

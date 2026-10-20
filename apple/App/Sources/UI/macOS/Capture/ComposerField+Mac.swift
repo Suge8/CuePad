@@ -22,6 +22,7 @@ struct ComposerField: NSViewRepresentable {
     var images: (([Data]) -> Void)?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.palette) private var palette
+    @Environment(Workspace.self) private var workspace
 
     /// 文字区一行中文的高（`ComposerMetrics.lineSlot`）；Mac 的字号不跟系统的动态字号走。
     static func lineHeight(_: DynamicTypeSize) -> CGFloat { GrowingTextView.lineHeight }
@@ -81,6 +82,7 @@ struct ComposerField: NSViewRepresentable {
         view.setAccessibilityLabel(label)
         view.maxLines = maxLines
         view.images = images
+        view.fail = workspace.fail
         view.needsDisplay = true
     }
 
@@ -154,6 +156,8 @@ final class GrowingTextView: NSTextView {
     var shortcut: (ReplyShortcut) -> (() -> Void)? = { _ in nil }
     /// 收下粘贴、拖进来的图片（`ComposerField.images`）。
     var images: (([Data]) -> Void)?
+    /// 粘贴的图片文件读不出来（访达复制后删掉了、没有读那个文件夹的权限）。
+    var fail: (any Error) -> Void = { _ in }
     /// 外部刚写进文字：滚动区下一次排版后滚到末尾。
     var revealsEnd = false
     /// 最大高度：排满 `maxLines` 行中文量出来的高度（中文行比西文行高），撑满时最后一行不被切一半。
@@ -215,7 +219,7 @@ final class GrowingTextView: NSTextView {
             images(try found.map { try $0.data() })
             return true
         } catch {
-            presentError(error)
+            fail(error)
             return false
         }
     }

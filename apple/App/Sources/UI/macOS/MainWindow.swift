@@ -83,7 +83,6 @@ private struct WindowPanels: View {
                 guard (try? await Task.sleep(for: Prewarm.delay)) != nil else { return }
                 mountsPalette = true
             }
-            .panel(isPresented: $workspace.showsTasks, style: .side) { TasksPanel() }
             .panel(item: $workspace.openTask) { TaskSheet(taskID: $0.id) }
             .panel(item: $workspace.projectForm) { ProjectForm(project: $0.project, created: $0.created) }
             .panel(isPresented: $workspace.showsAgentSetup) { AgentSetupPanel() }

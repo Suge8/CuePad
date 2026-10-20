@@ -100,7 +100,7 @@ struct ComposerKinds: OptionSet {
     static let notes = ComposerKinds(rawValue: 4)
 }
 
-/// 左边"＋"能打开的来源：卡片两端都有；图片 iOS 是相册与拍照，Mac 是图片文件（各平台的选项见 `imageChoices`）。
+/// 左边"＋"能打开的来源：卡片两端都有；图片 iOS 是相册与拍照，Mac 是图片文件（各平台的选项见 `imageChoices`）。粘贴的图片不经这里，由文字区直接交进图片条。
 enum ComposerSource { case cards, photos, camera, files }
 
 extension Binding where Value == ComposerSource? {
@@ -110,7 +110,7 @@ extension Binding where Value == ComposerSource? {
     }
 }
 
-/// 选来的一张图：相册里的 HEIC 等格式转成 JPEG（Pi 与大多数应用不认 HEIC），PNG 与 JPEG 原样保留（`converted` 在各平台的文件里）。
+/// 选来、粘贴进来的一张图：HEIC、TIFF 等格式转成 JPEG（Pi 与大多数应用不认 HEIC），PNG 与 JPEG 原样保留。
 /// 图片条里的小图按条里的尺寸降采样解码（`thumbnail`），不拿原图去画：一张 4032 见方的照片原样解码是 65MB，
 /// 图片条里放九张时会话页常驻 556MB、峰值 786MB（降采样后 143MB、358MB，不带图是 131MB、346MB）。
 struct PickedImage: Identifiable {
@@ -130,7 +130,7 @@ struct PickedImage: Identifiable {
     /// 发出去的那份：PNG 与 JPEG 原样，其余（HEIC 等）转 JPEG。只要它的（插进卡片正文）不必解图片条的小图。
     static func outgoing(_ data: Data) -> Data {
         let keeps = data.starts(with: [0x89, 0x50, 0x4E, 0x47]) || data.starts(with: [0xFF, 0xD8, 0xFF])
-        return keeps ? data : converted(data) ?? data
+        return keeps ? data : ImageFiles.jpeg(from: data, quality: quality) ?? data
     }
 
     /// 填满一格（裁成方块）时短边够 3 倍屏的像素：按长短边之比定长边上限，再大的不解码。

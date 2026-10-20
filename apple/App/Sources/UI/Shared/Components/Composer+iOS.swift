@@ -3,12 +3,6 @@ import CueText
 import PhotosUI
 import SwiftUI
 
-extension PickedImage {
-    static func converted(_ data: Data) -> Data? {
-        UIImage(data: data)?.jpegData(compressionQuality: quality)
-    }
-}
-
 extension ComposerSource {
     static var imageChoices: [(title: String, icon: Icon, source: ComposerSource)] {
         [("相册", .photoLibrary, .photos)] + (CameraPicker.isAvailable ? [("拍照", .camera, .camera)] : [])

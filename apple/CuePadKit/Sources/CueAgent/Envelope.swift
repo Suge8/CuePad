@@ -77,9 +77,7 @@ public enum CueEnvelope {
     lines += sessions.map { "- \(sessionLine($0, now: input.now, left: input.left))" }
 
     lines.append("等你 \(input.waiting.count) 件" + (input.waiting.isEmpty ? "" : "："))
-    lines += input.waiting.map { message in
-      "- \(clip(CueFormat.plainText(message.text), 80))（\(message.id.shortID)）选项：\((message.choices ?? []).joined(separator: " / "))"
-    }
+    lines += input.waiting.map { "- " + question($0) }
 
     if let resume = input.resume { lines += self.resume(resume, calendar) }
     lines.append("醒来：" + wake(input.wake))
@@ -87,6 +85,17 @@ public enum CueEnvelope {
     if input.wake == .settingsChanged || (input.contextUsed ?? 0) >= CueContext.renewAt { lines.append(renew) }
     lines.append("</cue>")
     return lines.joined(separator: "\n")
+  }
+
+  /// 他的一句交给大脑的样子：原话，这句收起了卡（`CueStore.cueQuestionsSetAside`）就在后面列出，Cue 判断是不是在答它们。
+  public static func said(_ text: String, setAside: [CueMessage]) -> String {
+    guard !setAside.isEmpty else { return text }
+    return ([text, "", "（他开口收起了等你里的 \(setAside.count) 张：）"] + setAside.map { "- " + question($0) }).joined(separator: "\n")
+  }
+
+  /// 一条提问一行：原话、id 与选项。
+  private static func question(_ message: CueMessage) -> String {
+    "\(clip(CueFormat.plainText(message.text), 80))（\(message.id.shortID)）选项：\((message.choices ?? []).joined(separator: " / "))"
   }
 
   private static func wake(_ wake: CueWake) -> String {

@@ -226,7 +226,7 @@ private struct SidebarPages {
     }
 }
 
-/// Cue 下面的去处：任务（开合任务面板，开着时选中；同 ⌘⇧T）、会话（Agent 整页）。单独读当前页与面板开合，换页、开面板时侧栏别处不跟着重算。
+/// Cue 下面的去处：任务（开合任务面板，开着时选中；同 ⌘⇧T；面板从这一行弹出，它就是面板的锚点）、会话（Agent 整页）。单独读当前页与面板开合，换页、开面板时侧栏别处不跟着重算。
 private struct PlaceRows: View {
     let select: (Route) -> Void
     @Environment(Workspace.self) private var workspace
@@ -238,7 +238,7 @@ private struct PlaceRows: View {
                 switch entry {
                 case .tasks:
                     row(entry, selected: workspace.showsTasks) { workspace.showsTasks.toggle() }
-                        .panelAnchor()
+                        .panel(isPresented: Bindable(workspace).showsTasks, style: .side) { TasksPanel() }
                         .help("任务（⌘⇧T）")
                         .disabled(!workspace.isLibraryReady)
                 default:

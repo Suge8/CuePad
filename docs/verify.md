@@ -55,6 +55,7 @@ apple/scripts/xc.sh stop       # 验完就收；忘了 5 分钟后也会自己�
 - 让 Cue 真跑（看 Mac 的“运行情况”，`-CuePadScene cuerun` 直接开着）：隔离实例里没有登录的大脑，起实例前导出 Claude Code 走 DeepSeek 的变量（同 `ClaudeTestbed`：`ANTHROPIC_BASE_URL`、`ANTHROPIC_AUTH_TOKEN`、空的 `ANTHROPIC_API_KEY`、`ANTHROPIC_MODEL=deepseek-flash`），点启用后在 Cue 页输入框的模型菜单里选 Claude Code 那一组：有这组变量时 Pi 也算登录了、会先被选上，一跑就 401。
 - 任务行右键（`click` 带 `"button":"right"`）在后台弹得出菜单；墙上的灵感卡右键被当成点按（打开编辑页），它的操作从编辑页走。
 - iOS 没有 Simulator.app 窗口可给 bcu 操作：`xc.sh run ios|ipad -- …` 装包、起画面，打印 PID 与模拟器 UDID；点按用 `axe tap -x <x> -y <y> --udid <UDID>`（坐标是点，`xcrun simctl io <UDID> screenshot` 截图换算；`axe describe-ui` 读不到 SwiftUI 的元素）。模拟器池是共用的，别的任务随时会在上面装包重跑，要连续操作就尽快做完。
+- 模拟器默认当作接了电脑键盘，聚焦也不弹软键盘：看键盘弹出时的样子加 `-CuePadKeyboard system`（系统键盘）或 `tall`（比系统键盘高、点一下换高度的模拟第三方键盘）。
 
 ## 通知（Mac）
 

@@ -8,8 +8,9 @@ extension View {
     /// 左缘右滑返回照常是系统的；导航栏本身留着：顶栏占的高度与安全区不变，内容的边距不跟着变（会话页看历史时用，
     /// 见 `ChatFollow.showsHeader`）；给了 `reveal` 时让开的那一块仍接点按，点它唤出。
     /// 标题同时是读屏、返回菜单与多任务切换器里的名字。
-    /// 窄屏导航栈的根（任务、会话、项目三页，`homePage`）不是推入页：顶栏不写标题也不写那一行要紧信息——底部那一排的选中格已经说了在哪一页，
-    /// 组标题写着计数；名字照样交给系统（读屏、返回菜单、多任务切换器），右边的圆钮照旧。
+    /// 窄屏导航栈的根（任务、会话、项目三页，`homePage`）不是推入页：顶上那一排是页自己画的（`HomeBar`：左边搜索、右边这个圆钮），
+    /// 系统导航栏藏起，换去处时整排随页推移（`DockRoot`）；不写标题也不写那一行要紧信息——底部那一排的选中格已经说了在哪一页，
+    /// 组标题写着计数；名字照样交给系统（读屏、返回菜单、多任务切换器）。
     /// `explanation`：点中间那块玻璃弹出的一句说明（会话需要 /reload 时怎么接上）；没有时点它什么也不做。
     func floatingHeader<Detail: View, Trailing: View>(
         _ title: String, hidden: Bool = false, reveal: (() -> Void)? = nil, explanation: String? = nil,
@@ -33,7 +34,7 @@ extension View {
 }
 
 extension EnvironmentValues {
-    /// 这一页是窄屏导航栈的根（`HomePage`）：顶栏不写标题（`FloatingHeader`）。
+    /// 这一页是窄屏导航栈的根（`HomePage`）：顶上那一排自己画、不写标题（`FloatingHeader`）。
     @Entry var homePage = false
 }
 
@@ -54,12 +55,11 @@ private struct FloatingHeader<Label: View, Trailing: View>: ViewModifier {
 
     func body(content: Content) -> some View {
         if homePage {
+            // 内容让到这一排下面再隔 `Bars.contentGap`；这一排排在让出之前的安全区里，贴着状态栏下沿，同推入页导航栏里的圆钮
             content
                 .navigationTitle(title)
-                .toolbar(removing: .title)
-                .toolbar {
-                    if Trailing.self != EmptyView.self { ToolbarItem(placement: .primaryAction) { trailing } }
-                }
+                .safeAreaPadding(.top, FloatingHeaderLayout.height + Bars.contentGap)
+                .overlay(alignment: .top) { HomeBar(trailing: trailing) }
         } else {
             floating(content)
         }
@@ -100,6 +100,24 @@ private struct FloatingHeader<Label: View, Trailing: View>: ViewModifier {
                     .sharedBackgroundVisibility(hidden ? .hidden : .automatic)
                 }
             }
+    }
+}
+
+/// 窄屏三页根上的顶上那一排：左边搜索、右边这一页的那一个操作，两颗玻璃圆钮，位置同推入页导航栏里的返回钮与圆钮。
+private struct HomeBar<Trailing: View>: View {
+    let trailing: Trailing
+    @Environment(Navigation.self) private var navigation
+
+    var body: some View {
+        HStack {
+            Button("搜索", icon: .search) { navigation.openSearch() }
+            Spacer(minLength: 8)
+            trailing
+        }
+        .labelStyle(.iconOnly)
+        .buttonStyle(ControlButtonStyle(kind: .circular))
+        .padding(.horizontal, 16)
+        .frame(height: FloatingHeaderLayout.height)
     }
 }
 

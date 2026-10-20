@@ -5,14 +5,18 @@ import Foundation
 // MARK: 对话
 
 extension CueStore {
-  /// 写一条对话。正文不能为空。带 `ask` 的是 Cue 请你允许的提问（"等你"）：问的是什么（类别、动作、规矩，`CueAsking`）、
+  /// 写一条对话。正文不能为空。你说的一句同时收起还开着的提问（`CueQuestionEnd`）。带 `ask` 的是 Cue 请你允许的提问（"等你"）：问的是什么（类别、动作、规矩，`CueAsking`）、
   /// 范围（关联任务此刻所在的项目，`CueMessage.asked`）与按范围写出的选项（`CueAsk.choices`）一起存下；
   /// 允许清单里有这类事（`CueProfile.allowing`，按同一个项目）就抛 `alreadyAllowed`、点名的图不在发到手机的里抛 `shotMissing`，什么都不写。
   @discardableResult
   public func addCueMessage(_ author: CueAuthor, text: String, ask: CueAsking? = nil, urgent: Bool = false, task: UUID? = nil) throws -> CueMessage {
     guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw CueStoreError.blankDeliveryContent }
     return try write {
-      guard let ask else { return try insertCueMessage(author, text: text, urgent: urgent, task: task) }
+      guard let ask else {
+        let message = try insertCueMessage(author, text: text, urgent: urgent, task: task)
+        if author == .you { _ = try endQuestions(setAsideBy: message.id, where: "1", []) }
+        return message
+      }
       let project = try projectID(of: task).flatMap { try find(Project.self, $0) }
       if let allowed = try cueProfile()?.allowing(ask.ask, in: project?.id) {
         throw CueStoreError.alreadyAllowed(try allowed.project.flatMap { try find(Project.self, $0)?.name })
@@ -33,7 +37,7 @@ extension CueStore {
       id: UUID(), author: .known(author), text: text, choices: asking?.ask.choices(in: project?.name),
       asked: asking.map { CueAllow($0.ask, project: project?.id) }, askAction: asking?.action, askRule: asking?.rule, askShots: asking?.shots ?? [],
       urgent: urgent, taskID: task,
-      answer: nil, answeredAt: nil, deliveredAt: nil, createdAt: time ?? now, modifiedAt: now, tools: tools, notify: false)
+      answer: nil, answeredAt: nil, setAsideBy: nil, deliveredAt: nil, createdAt: time ?? now, modifiedAt: now, tools: tools, notify: false)
     message.notify = try message.alerts && !isWatched(.cue)
     try insert(message)
     try registerImages(in: text)
@@ -95,7 +99,8 @@ extension CueStore {
     try write {
       guard let message = try find(CueMessage.self, id) else { throw CueStoreError.notFound }
       if case .answered(let answer) = end, message.choices?.contains(answer) != true { throw CueStoreError.notAChoice(answer) }
-      guard try endQuestions(end, where: "id = ?", [id]) > 0 else { throw CueStoreError.questionEnded }
+      let answer: String? = if case .answered(let text) = end { text } else { nil }
+      guard try endQuestions(answer: answer, where: "id = ?", [id]) > 0 else { throw CueStoreError.questionEnded }
       guard case .answered(let answer) = end, let asked = message.asked, let choices = message.choices, choices.count > 1, answer == choices[1]
       else { return false }
       return try changeAllows(asked, allowed: true)
@@ -126,14 +131,33 @@ extension CueStore {
   /// 还开着的提问（唯一定义）：Cue 带选项问的、还没结束。
   static let openQuestion = "author = 'cue' AND choices IS NOT NULL AND answeredAt IS NULL"
 
-  /// 结束提问只在这里写：结束的时刻与你的回答（撤回的没有）。只动 `predicate` 选中的还开着的提问，返回结束了几条。必须在写事务内调用。
-  func endQuestions(_ end: CueQuestionEnd, where predicate: String, _ bindings: [any SQLBindable]) throws -> Int {
+  /// 你开口收起的提问（唯一定义）：结束了、记着是哪句话收起的（`CueMessage.setAsideBy`）。
+  static let setAside = "author = 'cue' AND choices IS NOT NULL AND answeredAt IS NOT NULL AND setAsideBy IS NOT NULL"
+
+  /// 结束提问只在这里写：结束的时刻，与你的回答或收起它的那句话（撤回的都没有）。只动 `predicate` 选中的还开着的提问，返回结束了几条。
+  /// 必须在写事务内调用。
+  private func endQuestions(
+    answer: String? = nil, setAsideBy: UUID? = nil, where predicate: String, _ bindings: [any SQLBindable]
+  ) throws -> Int {
     let now = Date.stamp
-    let answer: String? = if case .answered(let text) = end { text } else { nil }
-    let values: [any SQLBindable] = [answer, now, now]
+    let values: [any SQLBindable] = [answer, setAsideBy, now, now]
     try db.run(
-      "UPDATE cueMessages SET answer = ?, answeredAt = ?, modifiedAt = ? WHERE \(Self.openQuestion) AND \(predicate)", values + bindings)
+      "UPDATE cueMessages SET answer = ?, setAsideBy = ?, answeredAt = ?, modifiedAt = ? WHERE \(Self.openQuestion) AND \(predicate)",
+      values + bindings)
     return db.changes
+  }
+
+  /// 你开口收起的提问（`setAside`），从早到晚：Cue 读你那句话时看是不是在答它们。
+  public func cueQuestionsSetAside() throws -> [CueMessage] {
+    try select(CueMessage.self, where: Self.setAside, orderBy: "createdAt, rowid")
+  }
+
+  /// Cue 判断你那句话不是在答这条：放回"等你"。只有你开口收起的放得回（`setAside`），别的抛 `questionEnded`。
+  public func restoreCueQuestion(_ id: UUID) throws {
+    try write {
+      try reopen(where: "id = ?", [id])
+      guard db.changes > 0 else { throw CueStoreError.questionEnded }
+    }
   }
 
   /// 待交给 Cue 的大脑的（唯一定义），交出去都叫醒它：你说了还没交的话，与还没交、或交过之后又从别处同步来另一个回答的回答。
@@ -158,11 +182,20 @@ extension CueStore {
   }
 
   /// 撤回你说的、还没交给 Cue 的一句（重发或移除没回执的话）；返回是否撤回了。已交出去的撤不回（Cue 已经读到）。
+  /// 这句收起的提问放回"等你"：Cue 没读到这句，就没人替它判断。
   public func withdrawCueMessage(_ id: UUID) throws -> Bool {
     try write {
       try db.run("DELETE FROM cueMessages WHERE id = ? AND author = 'you' AND deliveredAt IS NULL", [id])
-      return db.changes > 0
+      guard db.changes > 0 else { return false }
+      try reopen(where: "setAsideBy = ?", [id])
+      return true
     }
+  }
+
+  /// 收起的提问放回"等你"（必须在写事务内调用）。
+  private func reopen(where predicate: String, _ bindings: [any SQLBindable]) throws {
+    try db.run(
+      "UPDATE cueMessages SET answeredAt = NULL, setAsideBy = NULL, modifiedAt = ? WHERE \(Self.setAside) AND \(predicate)", [Date.stamp] + bindings)
   }
 
   /// 交出去的这些没被 Cue 读完（大脑在那一轮中途退出）：清掉送达，下一个大脑重新交。
@@ -190,7 +223,7 @@ extension CueStore {
     return CueResume(handoff: handoff, messages: after.prefix(limit).reversed(), truncated: after.count > limit)
   }
 
-  /// 在等你回答的消息，从早到晚："在等你"就是还开着的提问（`openQuestion`），直到你回答或 Cue 撤回。
+  /// 在等你回答的消息，从早到晚："在等你"就是还开着的提问（`openQuestion`），直到你回答、你开口收起（Cue 可放回）或 Cue 撤回。
   /// 不看关联任务的状态：要问的几类（`CueAsk`）本来就在任务做完之后问（推送、合并、发布），按任务完成算过期会让刚问的那条立刻消失；
   /// 情况变了由 Cue 撤回。
   public func cueMessagesWaitingForYou() throws -> [CueMessage] {

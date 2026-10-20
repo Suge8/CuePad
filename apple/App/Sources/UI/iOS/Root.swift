@@ -92,17 +92,18 @@ struct RouteView: View {
     @Environment(\.palette) private var palette
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.statusBarBottom) private var statusBar
-    /// 这一页的上沿（全局坐标，顶栏下沿或状态栏下沿）：页面只画到状态栏下沿为止（`BelowStatusBar`）。
+    @Environment(\.homePage) private var homePage
+    /// 这一页的上沿（全局坐标）：状态栏那一条的渐变按它摆到屏幕顶上（`StatusBarFade`）。
     @State private var top: CGFloat = 0
 
     var body: some View {
-        // 沉浸式：内容一直滚到顶栏、回复框的玻璃后面，玻璃本身就是唯一的遮挡，玻璃之间与下面的内容清楚可见——
-        // 系统的滚动边缘效果（渐进模糊带，盖住整条栏）全关，也不自绘遮罩、渐变或色带；只有状态栏那一条不进内容（`Bars`）。
-        // 内容离顶栏的距离只在这里给（`Bars.contentGap`，让出在上安全区里），静止时第一行在顶栏下面。顶上自带那一排的页（搜索页、Cue 页头）
-        // 自己让到那一排下面（系统分组列表默认在顶上再留一段空，这里清掉，离栏多远只有这一个数）
+        // 沉浸式：内容一直滚到顶栏、回复框的玻璃后面、透到屏幕最顶，玻璃本身就是遮挡，玻璃之间与下面的内容清楚可见——
+        // 系统的滚动边缘效果（渐进模糊带，盖住整条栏）全关；只有状态栏那一条垫一层页底色的渐变（`Bars`）。
+        // 内容离顶栏的距离只在这里给（`Bars.contentGap`，让出在上安全区里），静止时第一行在顶栏下面。顶上那一排自己画的页（搜索页、Cue 页头、
+        // 窄屏的根）自己让到那一排下面（系统分组列表默认在顶上再留一段空，这里清掉，离栏多远只有这一个数）
         page.contentMargins(.top, route.ownsTopBar ? nil : 0, for: .scrollContent)
-            .safeAreaPadding(.top, route.ownsTopBar ? 0 : Bars.contentGap)
-            .clipShape(BelowStatusBar(top: statusBar - top))
+            .safeAreaPadding(.top, route.ownsTopBar || homePage ? 0 : Bars.contentGap)
+            .overlay(alignment: .top) { StatusBarFade(color: background).frame(height: statusBar).offset(y: -top) }
             .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: { top = $0 }
             .containerBackground(background, for: .navigation)
             // 标题在顶栏玻璃里（推入页）或不写（窄屏的根，`homePage`），不用系统大标题
@@ -143,15 +144,17 @@ struct RouteView: View {
     }
 }
 
-/// 页面画到哪：状态栏下沿以下（`top` 是它在页里的纵坐标，页的上沿在顶栏下面时是负的），左右与底不收（内容照样滚到回复框、Dock 与
-/// Home 指示条后面）。是裁掉，不是盖一层：状态栏那一条露出的是页底色（铺在导航容器上，不在裁的范围里）。
-private nonisolated struct BelowStatusBar: Shape {
-    var top: CGFloat
-    /// 左右与底边往外放这么多：页的边框外（安全区里）的内容不收。
-    private static let reach: CGFloat = 4000
+/// 状态栏那一条（屏幕顶到状态栏下沿）的页底色渐变：顶上近乎实、到状态栏下沿淡完，时间与电池压在内容上也读得清；
+/// 渐变随页走（推入、换去处时跟着页挪），颜色就是这一页的底色。不接点按、读屏跳过。
+private struct StatusBarFade: View {
+    let color: Color
+    /// 几档：时间与电池那一段（上半截）近乎实，往下缓缓淡完，没有一条看得见的边；灵动岛以下的内容大半透出来。
+    private static let stops: [(alpha: Double, at: CGFloat)] = [(0.94, 0), (0.9, 0.45), (0.55, 0.72), (0.18, 0.9), (0, 1)]
 
-    func path(in rect: CGRect) -> Path {
-        Path(CGRect(x: rect.minX - Self.reach, y: top, width: rect.width + 2 * Self.reach, height: rect.maxY - top + Self.reach))
+    var body: some View {
+        LinearGradient(stops: Self.stops.map { .init(color: color.opacity($0.alpha), location: $0.at) }, startPoint: .top, endPoint: .bottom)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
     }
 }
 
