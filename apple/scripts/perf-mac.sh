@@ -9,7 +9,7 @@
 #   前台量时"任务气泡开"是真实点击：App 写 AWAIT click x y，这里用 hid.swift 经 HID 点那一行（会移动真实指针，量完放回）。
 #   CUEPAD_TRACE=<xctrace 模板>（如 'Animation Hitches'、'Time Profiler'）：每次量的同时按 PID 录整段 trace，存 /tmp/cuepad-perf/interact-<库>-<第几次>.trace。
 # xc.sh 构建好 Release（带 DEBUG 条件，只为留下测量代码；预算按用户拿到的构建定，产物在 apple/.derived-perf，Instruments 也用这份）、
-# 独占机器（别的编译、测试同时跑，指令数之外的数都会被拖歪）后调这里，第一个参数是 CuePad.app。iOS 的单次交互见 perf-ios.sh。
+# 带 -CuePadForeground YES 时独占机器（别的编译、测试同时跑，指令数之外的数都会被拖歪；后台量只比指令数，不独占）后调这里，第一个参数是 CuePad.app。iOS 的单次交互见 perf-ios.sh。
 set -euo pipefail
 
 APPLE_DIR="$(cd "$(dirname "$0")/.." && pwd)"

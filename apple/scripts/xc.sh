@@ -9,7 +9,7 @@
 #   xc.sh rec  <mac|ios|ipad> [片.mov] [-- 启动参数…]  同上，录 CUEPAD_REC_SECONDS 秒（默认 12）；CUEPAD_REC_LAUNCH=1 从启动前开录（ios、ipad）
 #   xc.sh run  <mac|ios|ipad> [-- 启动参数…]          起着给 bcu、axe 操作，打印 PID（模拟器另带 UDID）；Mac 实例 5 分钟后自己退出
 #   xc.sh stop                                      结束本检出 run 起的 Mac 实例
-#   xc.sh perf <mac|ios> [次数] [启动参数…]            单次交互：点击回合、指令、掉帧（perf-mac.sh、perf-ios.sh）；构建完只在测量那段独占机器
+#   xc.sh perf <mac|ios> [次数] [启动参数…]            单次交互：点击回合、指令、掉帧（perf-mac.sh、perf-ios.sh）；只有带 -CuePadForeground YES 的 Mac 测量独占机器
 #   xc.sh perf idle <mac|ios> [次数] [秒] [启动参数…]   静置时的 CPU、指令、唤醒、能耗、内存与启动到就绪（perf-idle.sh）
 #   xc.sh release <mac|ios> | device | provision    发布与签名（docs/release.md）
 # 启动参数原样传给 App（如 -CuePadDemo YES -CuePadScene editor -theme dark；Debug 认的参数见 DebugScene.swift）。
@@ -162,11 +162,13 @@ case "$cmd" in
     library="${CUEPAD_SHOT_LIBRARY:-$APPLE_DIR/.derived/library$([ "$platform" = mac ] || echo "-$platform")}"
     exec python3 "$APPLE_DIR/scripts/app.py" "$cmd" "$platform" "$app" "$library" ${target[@]+"${target[@]}"} ${rest[@]+"${rest[@]}"} ;;
   perf)
-    # 构建照普通任务排队；独占机器只给交互测量那一段（帧与主线程时间怕别的进程抢），其间别的检出的构建、截图才等它。
-    # 静置开销读的是进程自己的内核记账（指令、CPU 时间、唤醒），不随机器忙闲变，不独占
+    # 构建照普通任务排队。只有在前台量、要和交互预算比的 Mac 测量（-CuePadForeground YES）独占机器：帧、掉帧与回合时长怕别的进程抢。
+    # 其余的前后对比只看指令数（与静置开销的内核记账一样不随机器忙闲变），不独占：独占要先占闸门、等在跑的任务做完，
+    # 其间所有检出的新任务都停在闸门外，几个会话并行时一次就是十几分钟
     "$0" build-perf "$platform" >"$DERIVED/build.log" || { tail -30 "$DERIVED/build.log" >&2; exit 1; }
-    mode=exclusive
-    if [ "$perf_script" = perf-idle.sh ]; then if [ "$platform" = ios ]; then mode=sim; else mode=plain; fi; fi
+    mode=plain
+    if [ "$platform" = ios ]; then mode=sim
+    elif [ "$perf_script" = perf-mac.sh ] && [[ " ${*:3} " == *" -CuePadForeground YES "* ]]; then mode=exclusive; fi
     xc_enter "$mode" "$APPLE_DIR/scripts/$perf_script" "$app" "${@:3}"
     exec "$APPLE_DIR/scripts/$perf_script" "$app" "${@:3}" ;;  # 已在锁里（脚本调脚本）时 xc_enter 直接返回
 esac
