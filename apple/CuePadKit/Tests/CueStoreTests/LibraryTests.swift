@@ -131,7 +131,7 @@ import Testing
     let task = try await store.createTask("修好登录页", in: demo.id)
     try await store.setDirectory("/work/demo", for: demo.id)
     try await store.publishDirectoryBindings(host: "mac")
-    // 退回 50：撤掉 52、54、56、57、59、60、61 加的列、55、57、60 加的索引与 58、60 加的表，放回 56 删掉的列（53、61 重建触发器、55 重建的类型索引，留着新的照样能升；
+    // 退回 50：撤掉 52、54、56、57、59、60、61、62 加的列、55、57、60 加的索引与 58、60 加的表，放回 56 删掉的列（53、61 重建触发器、55 重建的类型索引，留着新的照样能升；
     // 61 加的列被触发器引用着，先换一个不引用它的）
     let added = try RawDB(fixture.url).rows(
       """
@@ -143,6 +143,7 @@ import Testing
       ALTER TABLE cueState DROP COLUMN woke; ALTER TABLE cueState DROP COLUMN context; ALTER TABLE cueState DROP COLUMN leftToYou;
       ALTER TABLE macAgents DROP COLUMN name;
       ALTER TABLE cueMessages DROP COLUMN ask; ALTER TABLE cueMessages DROP COLUMN askAction; ALTER TABLE cueMessages DROP COLUMN askRule; ALTER TABLE cueMessages DROP COLUMN askShots;
+      ALTER TABLE cueMessages DROP COLUMN setAsideBy;
       ALTER TABLE piMessages DROP COLUMN question;
       DROP TRIGGER piSessionStates_writeSeq_update; CREATE TRIGGER piSessionStates_writeSeq_update AFTER UPDATE OF state ON piSessionStates BEGIN SELECT 1; END;
       ALTER TABLE piSessionStates DROP COLUMN turnStartedAt; ALTER TABLE piSessionStates DROP COLUMN answeredAt;

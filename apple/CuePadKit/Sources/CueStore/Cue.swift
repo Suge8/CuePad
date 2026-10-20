@@ -22,7 +22,7 @@ public enum CueAuthor: String, Sendable, CaseIterable {
 
 /// Cue 页的对话：Cue 对话唯一的事实源（不读运行时的会话文件）。写入后只有提问的结束（`answer`、`answeredAt`）与送达（`deliveredAt`）会变；
 /// 一轮的经过那一行（`round`，或没有正文的 `note`）随这一轮做到哪改它的清单；"看过……，不打算行动"那一行动态并进紧接着的下一轮（`CueStore.noteCueGlance`）。
-/// 带选项的是提问，只有一个状态：`answeredAt` 为空是开着，有值是结束了（`CueStore.endCueQuestion`，结束了不再变）。
+/// 带选项的是提问，只有一个状态：`answeredAt` 为空是开着，有值是结束了（`CueQuestionEnd`）；结束了不再变，只有你开口收起的 Cue 放得回。
 public struct CueMessage: Identifiable, Equatable, Sendable {
   public let id: UUID
   public var author: Open<CueAuthor>
@@ -48,10 +48,12 @@ public struct CueMessage: Identifiable, Equatable, Sendable {
   public var urgent: Bool
   /// 关联的卡片。
   public var taskID: UUID?
-  /// 你选的那一项（`choices` 之一；更旧版本存下的可能是卡上另外写的一句，照原文显示）；Cue 撤回的为 nil。
+  /// 你选的那一项（`choices` 之一；更旧版本存下的可能是卡上另外写的一句，照原文显示）；收起、撤回的为 nil。
   public var answer: String?
   /// 提问结束的时刻。
   public var answeredAt: Date?
+  /// 你开口收起这条提问的那句话（你的消息的 id，`CueQuestionEnd`）；放回"等你"时清掉。
+  public var setAsideBy: UUID?
   /// 你的消息或回答被交给 Cue 的大脑的时刻（由 Cue 运行的那台 Mac 写）；回答晚于它时（别的设备同步来的另一个回答）要再交一次。
   public var deliveredAt: Date?
   public var createdAt: Date
@@ -89,14 +91,14 @@ extension CueMessage: Record {
   static let table = Table.cueMessages
   static let columns = [
     "id", "author", "text", "choices", "urgent", "taskID", "answer", "answeredAt", "deliveredAt", "createdAt", "modifiedAt", "notify", "tools",
-    "ask", "askAction", "askRule", "askShots",
+    "ask", "askAction", "askRule", "askShots", "setAsideBy",
   ]
   /// `notify` 的值（订阅的谓词按它）。
   package static let notifyFlag = "cue"
   var bindings: [any SQLBindable] {
     [
       id, author.rawValue, text, choices.map { JSONColumn.encode($0) }, urgent, taskID, answer, answeredAt, deliveredAt, createdAt, modifiedAt,
-      notify ? Self.notifyFlag : nil, tools?.stored, asked?.stored, askAction, askRule, JSONColumn.encodeList(askShots),
+      notify ? Self.notifyFlag : nil, tools?.stored, asked?.stored, askAction, askRule, JSONColumn.encodeList(askShots), setAsideBy,
     ]
   }
   init(row: Row) {
@@ -104,14 +106,14 @@ extension CueMessage: Record {
       id: row.uuid(0), author: Open(rawValue: row.text(1)), text: row.text(2),
       choices: JSONColumn.decode([String].self, from: row.textOrNil(3)), asked: row.textOrNil(13).flatMap(CueAllow.init(stored:)),
       askAction: row.textOrNil(14), askRule: row.textOrNil(15), askShots: JSONColumn.decodeList(CueShot.self, from: row.textOrNil(16)), urgent: row.bool(4), taskID: row.uuidOrNil(5),
-      answer: row.textOrNil(6), answeredAt: row.dateOrNil(7), deliveredAt: row.dateOrNil(8), createdAt: row.date(9),
+      answer: row.textOrNil(6), answeredAt: row.dateOrNil(7), setAsideBy: row.uuidOrNil(17), deliveredAt: row.dateOrNil(8), createdAt: row.date(9),
       modifiedAt: row.date(10), tools: row.textOrNil(12).flatMap(PiChatMessage.Tools.init(stored:)), notify: row.textOrNil(11) != nil)
   }
 }
 
-/// 一条提问怎么结束（`CueStore.endCueQuestion`）：两种结局落到同一个状态上（`CueMessage.answeredAt`）。
-/// 卡片一直挂着，直到你选一项或 Cue 撤回，没有"关掉"。你不选、在 Cue 页底下直接说的话是一句普通的话：Cue 读了自己判断是不是在答哪张卡，
-/// 是就照办并撤回那张。
+/// 一条提问怎么结束（`CueStore.endCueQuestion`）：几种结局落到同一个状态上（`CueMessage.answeredAt`），没有"关掉"。
+/// 卡上只能选；你不选、在 Cue 页底下开口，还开着的卡当场收起，算你直接说了（`CueStore.addCueMessage`，记下是哪句话收起的，`CueMessage.setAsideBy`）。
+/// 你的话也可能只是别的想法：Cue 读了判断不是在答它，就放回"等你"（`CueStore.restoreCueQuestion`）；那句没交给 Cue 就撤回了，也放回。
 public enum CueQuestionEnd: Equatable, Sendable {
   /// 你选了一项（`choices` 之一）：交给 Cue、叫醒它
   case answered(String)
@@ -386,7 +388,7 @@ extension CueState: Record {
 /// Cue 要先问你的几类事（唯一定义，Cue 的提示词与工具说明照它写）：收不回或越出它职责的事。只有这几类能写带选项的"等你"
 /// （`CueStore.addCueMessage` 的 `ask`）；调研方案、设计取舍、实现路线、步骤与整件事算不算做完，Cue 按你的规矩与最佳实践自己定，做完告诉你。
 /// 选项也由这里给（`choices`），Cue 不能自拟"照这个做 / 我再看看"这类确认；别的想法（不同意、选别的方案、补一句条件）他在 Cue 页底下直接说，
-/// Cue 判断是在答这张就照办并撤回它（`CueQuestionEnd.withdrawn`）。
+/// 卡随之收起（`CueQuestionEnd`）。
 /// 给人看的只有 `name`（选项、设置里的"不用先问"）与 `why`；`definition` 只给 Cue 看。
 public enum CueAsk: String, CaseIterable, Sendable {
   case push, merge, release, delete, outside, budget, rule
