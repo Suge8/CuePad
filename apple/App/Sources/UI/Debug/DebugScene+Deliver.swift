@@ -16,7 +16,7 @@ extension DebugScene {
             return url
         }
 
-        let landing = try await store.createTask("落地页深浅两版", in: nil)
+        let landing = try await store.createTask("落地页深浅两版")
         try await store.linkCard(landing.id, toSession: "landing")
         _ = try await store.addPreviews(filesAt: [
             try file("浅色.html", Data(pricingPage.utf8)),
@@ -24,14 +24,14 @@ extension DebugScene {
         ], title: nil, sessionID: "landing")
         _ = try await store.finishTask(landing.id, evidence: ["浅色深色各一版，按钮对比度都过了 4.5:1"])
 
-        let keyboard = try await store.createTask("修好登录页的键盘遮挡", in: nil)
+        let keyboard = try await store.createTask("修好登录页的键盘遮挡")
         try await store.linkCard(keyboard.id, toSession: "keyboard")
         _ = try await store.addPreviews(filesAt: [
             try file("修复前.png", phonePNG(covered: true)), try file("修复后.png", phonePNG(covered: false)),
         ], title: nil, sessionID: "keyboard")
         _ = try await store.finishTask(keyboard.id, evidence: ["小屏上键盘弹出后登录钮仍可见", "横竖屏切换不跳动"])
 
-        let pricing = try await store.createTask("重做定价区", in: nil)
+        let pricing = try await store.createTask("重做定价区")
         try await store.linkCard(pricing.id, toSession: "pricing")
         _ = try await store.addPreviews(filesAt: [
             try file("pricing.html", Data(pricingPage.utf8)), try file("定价对比.pdf", reportPDF()),

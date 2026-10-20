@@ -15,7 +15,7 @@ import Testing
 
   /// 本机记录已推送过（服务器有），随后本机再改：返回该卡。
   private func pushedCard(body: String = "base") async throws -> Card {
-    let card = try await store.createCard(in: nil, body: body)
+    let card = try await store.createCard(body: body)
     try await rig.simulatePush()
     return card
   }
@@ -42,7 +42,8 @@ import Testing
 
   @Test(.timeLimit(.minutes(1)))
   func remoteRecordsAreInsertedInOneTransactionAndWakeObservers() async throws {
-    var values = store.observe { try $0.cards(in: nil).map(\.body) }.makeAsyncIterator()
+    try await rig.simulatePush()  // 新库的默认项目先传上去
+    var values = store.observe { try $0.cards(in: Project.defaultID).map(\.body) }.makeAsyncIterator()
     #expect(try await values.next() == [])
 
     let project = remoteRecord(.projects, projectFields(name: "Remote", modifiedAt: 5_000))
@@ -50,7 +51,7 @@ import Testing
     try await fetched(project, card)
 
     #expect(try await values.next() == ["from other device"])
-    #expect(try await store.projects().map(\.name) == ["Remote"])
+    #expect(try await store.projects().map(\.name) == ["Remote", "默认"])  // 没有项目的卡（更早的版本写的）收进默认项目
     #expect(try await store.search("other device").cards.count == 1)  // 搜索索引跟随
     let delta = try await rig.reconcileDelta()
     #expect(delta.saves.isEmpty && delta.deletes.isEmpty)  // 刚收到的不会被当成本机改动推回去
@@ -85,7 +86,7 @@ import Testing
 
   /// 手机上从灵感开的新会话：Mac 开好后同步来的会话记录带着认领标识，手机这边同一处认领，灵感关联到那个会话。
   @Test func 同步来的会话记录带认领标识_手机上发起的灵感关联到它() async throws {
-    let idea = try await store.createCard(in: nil, body: "看一下重连")
+    let idea = try await store.createCard(body: "看一下重连")
     let project = try await store.createProject(name: "圆桌", color: "#111")
     _ = try await store.requestLaunch(PiLaunch(project: project.id, prompt: idea.body, token: "t-phone"), title: "圆桌", on: "mac-a", card: idea.id)
 
@@ -137,7 +138,7 @@ import Testing
     #expect(conflicts.count == 1)
     #expect(conflicts[0].original.id == card.id && conflicts[0].original.body == "remote version")  // 较新的留在原卡
     #expect(conflicts[0].copy.body == "local version" && conflicts[0].copy.conflictOf == card.id)
-    #expect(try await store.cards(in: nil).count == 2)  // 副本是一张普通可见的卡，不会悄悄消失
+    #expect(try await store.cards(in: Project.defaultID).count == 2)  // 副本是一张普通可见的卡，不会悄悄消失
     #expect(try await rig.reconcileDelta().saves == [rig.id(conflicts[0].copy.id)])  // 副本会同步给其他设备
   }
 
@@ -160,7 +161,7 @@ import Testing
     try await fetched(remoteRecord(.cards, id: card.id, cardFields(project: nil, body: "same", modifiedAt: local + 1_000)))
 
     #expect(try await store.conflicts().isEmpty)
-    #expect(try await store.cards(in: nil).count == 1)
+    #expect(try await store.cards(in: Project.defaultID).count == 1)
   }
 
   @Test func resolvingAConflictKeepsTheChosenVersionAndDropsTheOther() async throws {
@@ -219,7 +220,7 @@ import Testing
 
   @Test func confirmedDeletesAndAlreadyGoneRecordsAreForgotten() async throws {
     let one = try await pushedCard()
-    let two = try await store.createCard(in: nil, body: "two")
+    let two = try await store.createCard(body: "two")
     try await rig.simulatePush()
     try await store.purgeCard(one.id)
     try await store.purgeCard(two.id)

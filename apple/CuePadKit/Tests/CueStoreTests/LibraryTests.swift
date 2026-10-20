@@ -44,7 +44,7 @@ import Testing
 
     try await store.trashProject(p.id)
     #expect(try await store.cards(in: p.id).isEmpty)
-    #expect(try await store.projects().isEmpty)
+    #expect(try await store.projects().map(\.id) == [Project.defaultID])
     #expect(try await store.trashedProjects().map(\.id) == [p.id])
     #expect(try await store.card(kept.id)?.deletedAt == nil)  // 随项目进回收站由项目推导，不逐卡记录
 
@@ -53,7 +53,7 @@ import Testing
     #expect(try await store.trashedCards().map(\.id) == [alone.id])
   }
 
-  @Test func cardRestoredIntoTrashedProjectFallsBackToUnfiled() async throws {
+  @Test func cardRestoredIntoTrashedProjectFallsBackToTheDefaultProject() async throws {
     let p = try await store.createProject(name: "P", color: "#111")
     let card = try await store.createCard(in: p.id, body: "x")
     try await store.trashCard(card.id)
@@ -61,7 +61,7 @@ import Testing
 
     try await store.restoreCard(card.id)
 
-    #expect(try await store.cards(in: nil).map(\.id) == [card.id])
+    #expect(try await store.cards(in: Project.defaultID).map(\.id) == [card.id])
   }
 
   @Test func purgeProjectRemovesItsCardsButKeepsCardsAlreadyInTrash() async throws {
@@ -74,7 +74,7 @@ import Testing
     try await store.purgeProject(p.id)
 
     #expect(try await store.card(withProject.id) == nil)
-    #expect(try await store.card(alone.id)?.projectID == nil)
+    #expect(try await store.card(alone.id)?.projectID == Project.defaultID)
     #expect(try await store.project(p.id) == nil)
   }
 
@@ -92,14 +92,14 @@ import Testing
     #expect(try await store.card(inGone.id) == nil)
     #expect(try await store.card(dead.id) == nil)
     #expect(try await store.card(alive.id) != nil)
-    #expect(try await store.projects().map(\.id) == [live.id])
+    #expect(try await store.projects().map(\.id) == [live.id, Project.defaultID])
     #expect(try await store.trashedProjects().isEmpty)
   }
 
   // MARK: 发送记录
 
   @Test func sendRecordKeepsContentSnapshotAfterCardIsPurged() async throws {
-    let card = try await store.createCard(in: nil, body: "prompt v1")
+    let card = try await store.createCard(body: "prompt v1")
     try await store.recordSend(
       "prompt v1", to: SendTarget(kind: .piSession, name: "fix bug", ref: "s1"),
       card: card.id)
@@ -112,7 +112,7 @@ import Testing
   // MARK: 结构版本
 
   @Test func reopeningTheFileKeepsData() async throws {
-    let card = try await store.createCard(in: nil, body: "persisted")
+    let card = try await store.createCard(body: "persisted")
     let reopened = try CueStore(location: .isolated(fixture.directory))
     #expect(try await reopened.card(card.id)?.body == "persisted")
   }
@@ -121,16 +121,16 @@ import Testing
   /// 改过的卡带新的修改时间（同步出去），回收站里的也换。升到 56 时已有的提问照当时的选项认出类别、范围是关联任务所在的项目
   /// （带新的修改时间同步出去），目录绑定去掉 Mac 名、绑定照旧在。
   @Test func schema50LibraryUpgradesDividersAndQuestions() async throws {
-    let card = try await store.createCard(in: nil, body: "上\n---split---\n中 ---split--- 夹着\n  ---split---  \n下")
-    let plain = try await store.createCard(in: nil, body: "没有分割线")
-    let trashed = try await store.createCard(in: nil, body: "甲\n---split---\n乙")
+    let card = try await store.createCard(body: "上\n---split---\n中 ---split--- 夹着\n  ---split---  \n下")
+    let plain = try await store.createCard(body: "没有分割线")
+    let trashed = try await store.createCard(body: "甲\n---split---\n乙")
     _ = try await store.trashCard(trashed.id)
     let before = try #require(try await store.card(card.id)).modifiedAt
     let untouched = try #require(try await store.card(plain.id)).modifiedAt
     let demo = try await store.createProject(name: "演示", color: "#111")
     let task = try await store.createTask("修好登录页", in: demo.id)
     try await store.setDirectory("/work/demo", for: demo.id)
-    try await store.publishDirectoryBindings(host: "mac")
+    try await store.publishDirectoryBindings(host: "mac", workspaces: Workspaces(root: URL(filePath: "/Users/me/CuePad")))
     // 退回 50：撤掉 52、54、56、57、59、60、61、62 加的列、55、57、60、64 加的索引与 58、60 加的表，放回 56 删掉的列（53、61 重建触发器、55 重建的类型索引，留着新的照样能升；
     // 61 加的列被触发器引用着，先换一个不引用它的）
     let added = try RawDB(fixture.url).rows(

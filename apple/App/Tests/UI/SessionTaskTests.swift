@@ -51,7 +51,7 @@ struct SessionTaskTests {
     /// Cue 的 edit reopen 同你点掉圆圈（没完成的不让改回），加步骤回到进行中。
     @Test func 对已完成任务的会话说话_任务仍是完成_改回或加步骤才变() async throws {
         try await enableCue()
-        let task = try await store.createTask("修登录", in: nil)
+        let task = try await store.createTask("修登录")
         let recorder = PiStateRecorder(store: store, hostID: services.hostID)
         try await recorder.update(sessionID: "s1", state: .settled, title: "修登录")
         let workspace = Workspace(services: services)
@@ -145,7 +145,7 @@ struct SessionTaskTests {
     /// 没绑任务的会话（他开的）done 给 session 结束；没做完的事还在用的会话不收，报出原因。
     @Test func 不再用的会话_Cue收得掉_在用的不收() async throws {
         try await enableCue()
-        let task = try await store.createTask("修登录", in: nil)
+        let task = try await store.createTask("修登录")
         let recorder = PiStateRecorder(store: store, hostID: services.hostID)
         for (id, title) in [("s1", "修登录"), ("s2", "随便问问")] {
             try await recorder.update(sessionID: id, state: .settled, title: title, hosted: true, agent: .pi)
@@ -227,7 +227,7 @@ struct SessionTaskTests {
             $0.hostID = "mac-b"
             $0.enabledAt = .now
         }
-        let task = try await store.createTask("修登录", in: nil)
+        let task = try await store.createTask("修登录")
         try await store.linkCard(task.id, toSession: "s1")
         let recorder = PiStateRecorder(store: store, hostID: services.hostID)
         try await recorder.update(sessionID: "s1", state: .settled, title: "修登录")
@@ -261,7 +261,7 @@ struct SessionTaskTests {
         #expect(!interrupted.isError && interrupted.text.contains("对「修登录」的会话说"))
 
         // 终端里的 Claude Code 在跑：CuePad 打断不了它，谁开的这一轮都不说
-        let terminal = try await store.createTask("修注册", in: nil)
+        let terminal = try await store.createTask("修注册")
         try await store.linkCard(terminal.id, toSession: "s2")
         try await recorder.update(sessionID: "s2", state: .tool, title: "修注册", agent: .claudeCode)
         let blocked = try #require(await cue.call("task", ["action": "say", "task": terminal.id.uuidString, "text": "先停一下"]))
@@ -273,7 +273,7 @@ struct SessionTaskTests {
     /// 不在场才报，他开的标"他说的"。机器消息开的一轮在跑时 Cue 照常能插话。
     @Test func 停下归谁接手_Cue开的归Cue_他或机器开的他在场时归他() async throws {
         try await enableCue()
-        let task = try await store.createTask("修登录", in: nil)
+        let task = try await store.createTask("修登录")
         try await store.linkCard(task.id, toSession: "s1")
         let recorder = PiStateRecorder(store: store, hostID: services.hostID)
         try await recorder.update(sessionID: "s1", state: .settled, title: "修登录")

@@ -39,11 +39,13 @@ extension DebugScene {
     /// 两台 Mac 的项目目录绑定（名字是各自报的，`seedMacAgents`）：Mac Studio 绑了全部带目录的项目，MacBook Air 只绑了 CuePad（新会话里 CuePad 要选 Mac）。
     /// 绑定由本机目录推导，所以先只留 CuePad 的目录发布第二台，再把目录放回去。
     private static func seedBindings(_ store: CueStore, projects: [Project]) async {
-        try? await store.publishDirectoryBindings(host: "demo-mac")
+        // 只用来写绑定记录里的文件夹名，不建目录
+        let workspaces = Workspaces.resolve(isolatedLibrary: nil)
+        try? await store.publishDirectoryBindings(host: "demo-mac", workspaces: workspaces)
         guard let directories = try? await store.projectDirectories() else { return }
         let others = projects.filter { $0.name != "CuePad" }.map(\.id)
         for id in others { try? await store.setDirectory(nil, for: id) }
-        try? await store.publishDirectoryBindings(host: "demo-air")
+        try? await store.publishDirectoryBindings(host: "demo-air", workspaces: workspaces)
         for id in others { if let directory = directories[id] { try? await store.setDirectory(directory, for: id) } }
     }
 
@@ -533,7 +535,7 @@ extension DebugScene {
             ("landing-copy", "旅行", PiRecap(lastPrompt: "把首页标题换成新文案", lastReply: "改好了，首页标题现在是「把想法写成卡片」。")),
             ("weekly", nil, PiRecap(lastPrompt: "汇总这周的提交", lastReply: "这周 23 个提交，主要是同步和 Agent 页。")),
         ]
-        // 文件夹名与还没绑文件夹的项目同名（Flow）：项目的 Agent 空态给一键"绑定 flow 文件夹（3 个会话）"
+        // 文件夹名与还没绑文件夹的项目同名（Flow）：手机给项目换文件夹时的候选里有它
         for index in 1...3 {
             let id = "flow-\(index)"
             _ = try? await recorder.update(sessionID: id, state: .settled, detail: nil, title: "flow \(index)", directory: "flow", projectID: nil)
@@ -555,9 +557,9 @@ extension DebugScene {
                 recap: PiRecap(lastPrompt: recap.lastPrompt, lastReply: recap.lastReply, pendingPrompt: recap.pendingPrompt)))
         }
         try? await recorder.end(sessionID: "piwork")
-        // 没归类的想法：书架末尾"未分类"那一行带条数
+        // 没指定项目的想法：进默认项目
         for body in ["周末读完《设计心理学》第三章", "菜单栏面板能不能直接拖图进来？", "给落地页换一张首图"] {
-            _ = try? await store.createCard(in: nil, body: body)
+            _ = try? await store.createCard(body: body)
         }
         // 后台托管、带八个子代理的会话（两个在跑、一个失败、其余已交回或空闲：名册一行要让在跑的先被看到）
         let started = Date.now.addingTimeInterval(-260)

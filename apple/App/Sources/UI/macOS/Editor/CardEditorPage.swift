@@ -71,7 +71,7 @@ struct CardEditorPage: View {
             if case CueStoreError.notFound = error { workspace.openCard = nil } else { workspace.fail(error) }
         }) { [cardID] store in
             guard let card = try store.card(cardID) else { throw CueStoreError.notFound }
-            return EditorData(card: card, project: try card.projectID.flatMap { try store.project($0) })
+            return EditorData(card: card, project: try store.project(card.projectID))
         }
         .onChange(of: data?.card.id, initial: true) {
             guard editing == nil, let card = data?.card else { return }
@@ -120,7 +120,7 @@ struct CardEditorPage: View {
     private func meta(_ data: EditorData, _ editing: CardEditing) -> some View {
         HStack(spacing: 8) {
             ProjectGlyph(project: data.project, size: 12)
-            Text(data.project?.name ?? CaptureCopy.unfiled).foregroundStyle(data.project == nil ? palette.ink3 : palette.ink)
+            Text(data.project?.name ?? "").foregroundStyle(palette.ink)
             Dot()
             Text(DateLabel.short(data.card.modifiedAt))
             SaveStatus(editing: editing)

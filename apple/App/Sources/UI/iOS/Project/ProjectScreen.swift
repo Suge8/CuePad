@@ -60,7 +60,7 @@ struct ProjectScreen: View {
         let data = page.data, lastTarget = data.lastTarget
         // 任务纸不进懒加载栈：纸在懒加载栈的一格里时，收起后按 id 滚回纸底那一行会偏出一屏（`TaskFoldAnchor`）
         VStack(alignment: .leading, spacing: 0) {
-            if data.project != nil { FocusCard(data: data, pi: pi, guide: workspace.folderGuide, fold: $fold, position: $position, anchor: anchor).padding(.bottom, Self.sectionGap) }
+            if data.project != nil { FocusCard(data: data, pi: pi, fold: $fold, position: $position, anchor: anchor).padding(.bottom, Self.sectionGap) }
             // 行距为 0：同一组的"更早"行拼成一张纸（首尾圆角、行间分隔线），段与段之间的距离各自写在段上
             LazyVStack(alignment: .leading, spacing: 0) {
                 if data.cards.isEmpty {
@@ -113,12 +113,10 @@ struct ProjectScreen: View {
     /// 名称、目录与计数取自项目目录，推入的第一帧就是最终值：导航栏标题在推入时定下，之后再换会让整页跳一下。
     private var project: Project? { workspace.catalog?.project(projectID) }
 
-    /// 顶栏的一行："25 条灵感 · 2 项任务 · cuepad"（为 0 的不写；绑定的文件夹只写名字，同名的只写一次，`ProjectFolders.names`）。
-    /// 全空的项目没有这一行（只写标题）：页面上的空态已经说了"还没有灵感"，一屏不说两遍。
+    /// 顶栏的一行：项目的文件夹在哪台 Mac 上（`ProjectFolders.places`）；一台 Mac 都没有时没有这一行。
     private var detail: Dotted {
-        let catalog = workspace.catalog
-        let count = CountCopy.text((catalog?.cardCounts[projectID] ?? 0, "条灵感"), (catalog?.openTasks[projectID] ?? 0, "项任务"))
-        return (count ?? Dotted()) + Dotted(ProjectFolders.names(of: projectID, bindings: catalog?.bindings ?? []))
+        guard let catalog = workspace.catalog, let project else { return Dotted() }
+        return Dotted(ProjectFolders.places(of: project, bindings: catalog.bindings, workMac: catalog.workMac))
     }
 
     private func wall(_ ids: [UUID], page: ProjectPage, lastTarget: [UUID: String]) -> some View {
@@ -162,12 +160,10 @@ struct ProjectScreen: View {
 
 /// 介绍与任务：项目的一句话介绍在纸外、顶栏下的第一行（次要墨色）；下面总是一张纸：本项目任务（前 3 条没做完的顶层任务连同步骤，
 /// 可拖动、缩进，同任务页；没列出的与最近完成的在纸底写个数，点了在纸里原地展开（无回弹弹簧）、各自开合，见 `TaskFold`；收起其余任务时纸底那一行留在原处、位置一步到位、纸上留下的几行淡入，见 `TaskFoldAnchor`；一条都没有时纸里只有一行"添加任务"）+ 本项目此刻在线的 Agent 会话（这一段只回答"现在谁在干活"，
-/// 已结束的不列；有历史时末尾"全部 N 个会话"看这个项目的会话列表；没有在线会话时整段不出现，同 Mac 项目页）。项目还没绑文件夹而有同名建议或正在绑时（`FolderGuide.shows`），Agent 段是绑定引导；
-/// 没有建议时不占位置，绑定在项目的"⋯"里。三种项目（多、少、只有任务）是同一个结构，切换项目时眼睛不用重新找。
+/// 已结束的不列；有历史时末尾"全部 N 个会话"看这个项目的会话列表；没有在线会话时整段不出现，同 Mac 项目页）。三种项目（多、少、只有任务）是同一个结构，切换项目时眼睛不用重新找。
 private struct FocusCard: View {
     let data: ProjectPageData
     let pi: PiSessionList?
-    let guide: FolderGuide?
     @Binding var fold: TaskFold
     @Binding var position: ScrollPosition
     let anchor: TaskFoldAnchor
@@ -197,13 +193,6 @@ private struct FocusCard: View {
             card
         }
         .debugExposesTaskFold { toggle(\.showsAll) }
-    }
-
-    /// 还没绑文件夹、而这里该给绑定引导的项目（同名建议或绑定进行中）。
-    private var guided: Project? {
-        data.project.flatMap { project in
-            !workspace.hasFolder(project.id) && guide?.shows(project.id, in: .inset) == true ? project : nil
-        }
     }
 
     private var card: some View {
@@ -259,11 +248,6 @@ private struct FocusCard: View {
                         }
                         .buttonStyle(.plain)
                     }
-                }
-            } else if let project = guided {
-                VStack(alignment: .leading, spacing: 2) {
-                    SectionLabel(text: "Agent", icon: .session).padding(.bottom, 6)
-                    ProjectFolderGuide(project: project, guide: guide, style: .inset)
                 }
             }
         }

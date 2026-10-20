@@ -3,7 +3,7 @@ import Foundation
 
 /// 任务看板（手机任务页、Mac 任务面板共用），三组：进行中、待办、最近完成。
 /// 进行中是"现在哪些在动"这条跨项目的主线：顶层的进行中任务，最近开始的在前（与 `counts.inProgress` 同一批），
-/// 行上带所在项目的小图标。待办按项目分段（`todo`，项目顺序、未分类在后），段头写项目、行里不写，段里是同级的手动顺序。
+/// 行上带所在项目的小图标。待办按项目分段（`todo`，项目顺序），段头写项目、行里不写，段里是同级的手动顺序。
 /// 步骤（没完成的，不论自己的状态）跟在它的顶层任务下（`tree`）。最近完成见 `recentlyDone`。
 /// 每条带所在项目；交给的会话此刻怎样不在这里读，行取窗口那一份（`AgentLinks`，经 `Workspace.next(for:)`）。
 nonisolated struct TaskBoard: Sendable, Equatable {
@@ -13,7 +13,7 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         var id: UUID { task.id }
     }
 
-    /// 待办里一个项目（nil = 未分类）的一段：段头写项目，段里是它的顶层任务（同级手动顺序）。
+    /// 待办里一个项目的一段：段头写项目，段里是它的顶层任务（同级手动顺序）。
     struct Section: Identifiable, Sendable, Equatable {
         var project: Project?
         var roots: [UUID]
@@ -48,7 +48,7 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         let all = try store.tasks(.inProgress, .todo, .done).flatMap(\.tasks)
         let tree = TaskTree(all.filter { $0.status != .done }, all: all)
         let done = recentlyDone(all)
-        func row(_ task: Card) -> Row { Row(task: task, project: task.projectID.flatMap { projects[$0] }) }
+        func row(_ task: Card) -> Row { Row(task: task, project: projects[task.projectID]) }
         let roots = tree.roots.compactMap(tree.task)
         // 先后只在 `CueStore.startedTasks` 定义一处
         let started = try store.startedTasks(topLevelOnly: true).compactMap { tree.task($0.id) }.map(row)
@@ -58,7 +58,7 @@ nonisolated struct TaskBoard: Sendable, Equatable {
             if let last = todo.last, last.project?.id == task.projectID {
                 todo[todo.count - 1].roots.append(task.id)
             } else {
-                todo.append(Section(project: task.projectID.flatMap { projects[$0] }, roots: [task.id]))
+                todo.append(Section(project: projects[task.projectID], roots: [task.id]))
             }
         }
         let latest = roots.filter { $0.status == .todo }.sorted { $0.createdAt > $1.createdAt }.prefix(latestLimit).map(row)
@@ -82,8 +82,7 @@ nonisolated struct TaskBoard: Sendable, Equatable {
     static func leading(_ started: [Card]) -> [UUID: [ProjectNow.InProgress]] {
         var result: [UUID: [ProjectNow.InProgress]] = [:]
         for task in started {
-            guard let project = task.projectID else { continue }
-            result[project, default: []].append(ProjectNow.InProgress(id: task.id, title: task.title.textGlyphs))
+            result[task.projectID, default: []].append(ProjectNow.InProgress(id: task.id, title: task.title.textGlyphs))
         }
         return result
     }

@@ -2,8 +2,8 @@
 import CueStore
 import SwiftUI
 
-/// 工具栏右上的"⋯"：当前页的操作。会话页是会话的（`SessionMenuItems`）；项目页（含未分类）是选择灵感、新建任务，
-/// 以及项目的操作（`ProjectActions`，未分类没有项目）；其余页没有可放的，钮置灰。
+/// 工具栏右上的"⋯"：当前页的操作。会话页是会话的（`SessionMenuItems`）；项目页是选择灵感、新建任务，
+/// 以及项目的操作（`ProjectActions`）；其余页没有可放的，钮置灰。
 /// 它是单独的工具栏项、不共用系统的玻璃底（`sharedBackgroundVisibility(.hidden)`），圆钮的玻璃自己画，与"收起"同一种做法。
 /// 钮在每一页都在、只随页面置灰：工具栏项的尺寸一变整条工具栏重排（一次进出会话页约占动作后主线程 CPU 的三分之一到一半）。
 /// 会话页的钮跟着页面就在，菜单里的会话项等页面交来的值、并晚于标题两帧（`showsMenu`）。
@@ -14,8 +14,7 @@ struct PageMenuSlot: View {
     private enum Content: Equatable {
         /// 会话页；页面还没交来值时是 nil。
         case session(SessionHeader.State?)
-        /// 项目页；未分类是 nil。
-        case project(UUID?)
+        case project(UUID)
         case cue
         case none
 
@@ -33,7 +32,6 @@ struct PageMenuSlot: View {
         switch workspace.page {
         case .session: .session(workspace.shownSessionHeader)
         case .project(let id): .project(id)
-        case .unfiled: .project(nil)
         case .cue: .cue
         default: .none
         }
@@ -71,7 +69,7 @@ struct PageMenuSlot: View {
 
 /// 项目页"⋯"里的几项：进入批量选择（`CardPresses`，一条都还没选，点卡再选）、新建任务（打开任务面板，光标在添加任务那一行，落在本项目）、项目的操作。
 private struct ProjectMenuItems: View {
-    let projectID: UUID?
+    let projectID: UUID
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
@@ -80,7 +78,7 @@ private struct ProjectMenuItems: View {
             .disabled(!ready || (workspace.catalog?.cardCounts[projectID] ?? 0) == 0)
         Button("新建任务", icon: .task) { workspace.showsTasks = true }
             .disabled(!ready)
-        if let project = projectID.flatMap({ workspace.catalog?.project($0) }) {
+        if let project = workspace.catalog?.project(projectID) {
             Divider()
             ProjectActions(project: project) { workspace.projectForm = .init(project: project) }
         }

@@ -142,14 +142,6 @@ extension CueStore {
   /// 手机据此建议给项目绑哪个文件夹（见 `PiBind`）；几千条历史聚合成几十行，不整表读。
   public func sessionFolders() throws -> [SessionFolder] { try folders(where: Self.hasFolder, []) }
 
-  /// 同上，只要名字（小写）在 `names` 里的文件夹（不分大小写，同 `ProjectFolders.suggestions`）。订阅只依赖这些文件夹里的会话（`narrow`）：
-  /// 别的会话状态变化不叫醒它——项目引导曾在每次会话状态变化时把全部会话按文件夹重新聚合一遍。
-  public func sessionFolders(named names: Set<String>) throws -> [SessionFolder] {
-    try narrow(.piSessionStates, column: "folder", candidates: Self.hasFolder, to: { names.contains($0.lowercased()) }) { rows in
-      rows.isEmpty ? [] : try folders(where: "rowid IN (SELECT value FROM json_each(?))", [JSONColumn.encode(rows.sorted())])
-    }
-  }
-
   /// 记着文件夹的会话：也是文件夹索引（`Schema` 第 55 步）的部分条件，不一样就用不上。
   static let hasFolder = "folder IS NOT NULL AND folder != ''"
 

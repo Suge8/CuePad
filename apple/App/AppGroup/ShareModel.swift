@@ -14,10 +14,9 @@ final class ShareModel {
 
     private(set) var state = State.loading
     private(set) var content: ShareContent?
-    /// 可选的项目（主 App 写的快照；从没打开过主 App 则为空，只能存进未分类）。
+    /// 可选的项目（主 App 写的快照；从没打开过主 App 则为空，存进默认项目）。
     let projects: [ProjectsSnapshot.Project]
-    /// nil 是未分类。
-    var selectedProject: UUID?
+    var selectedProject = Project.defaultID
 
     private let providers: [NSItemProvider]
     private let location: LibraryLocation

@@ -19,7 +19,7 @@ nonisolated struct PendingCapture: Codable, Equatable, Sendable {
     var text: String?
     var urls: [URL]
     var imageFiles: [String]
-    /// nil 表示未分类。
+    /// 选的项目；nil 是没选（更早的版本写的），进默认项目。
     var project: UUID?
     var createdAt: Date
 }

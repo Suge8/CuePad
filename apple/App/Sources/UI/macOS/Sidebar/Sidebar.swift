@@ -9,7 +9,7 @@ nonisolated private struct SidebarData: Sendable, Equatable {
 }
 
 /// 侧栏的结构与 iPhone、iPad 同一份（`SidebarOutline`），这里只管 Mac 的长相：从上到下 Cue（`CueSidebarRow`）、任务与会话（`PlaceRows`：
-/// 任务开合任务面板，会话打开 Agent 整页）、项目（置顶的在前，末尾未分类；Mac 没有书架，全部列出）、紧接着 Agent（Mac 独有：只列在线的会话，
+/// 任务开合任务面板，会话打开 Agent 整页）、项目（置顶的在前；Mac 没有书架，全部列出）、紧接着 Agent（Mac 独有：只列在线的会话，
 /// 全部列出；其余与历史在"会话"那一页里），底栏是归档、回收站与设置。点哪一行，内容区就是哪一页。两区按内容高度分（`SidebarSplit`）：放得下时各占所需、Agent 紧跟项目，
 /// 剩下的空白在 Agent 区下面；放不下时项目区保住至少一半可用高度，Agent 区先拿到所需、但最多拿到项目区用剩的高度，
 /// 项目区拿剩下的、自己滚动（方向键与 ⌘1–9 换到的项目滚进可见区），Agent 区一直停在看得见的地方；Agent 多到超过这个上限时
@@ -26,7 +26,7 @@ struct Sidebar: View {
     var body: some View {
         // 不用 List：系统选中是灰胶囊，压不过墨色体系，也没法让 Agent 区紧跟项目又不随项目滚走；当前页由 PageRow 自己画，方向键由 onMoveCommand 接管
         let catalog = workspace.catalog
-        let pages = data.flatMap { data in catalog.map { SidebarPages($0, trashCount: data.trashCount) } }
+        let pages = catalog.map(SidebarPages.init)
         VStack(spacing: 0) {
             CueSidebarRow(select: select)
             PlaceRows(select: select).padding(.horizontal, SidebarMetrics.column).padding(.top, 6)
@@ -36,7 +36,7 @@ struct Sidebar: View {
                     PiSection()
                 }
             }
-            footer(showsBins: pages?.showsBins ?? false, trashCount: data?.trashCount ?? 0)
+            footer(trashCount: data?.trashCount ?? 0)
         }
         .focusable()
         .focused($focused)
@@ -82,14 +82,12 @@ struct Sidebar: View {
     }
 
     /// 底栏：启动问题（有才出现），下面一排归档、回收站与设置。
-    private func footer(showsBins: Bool, trashCount: Int) -> some View {
+    private func footer(trashCount: Int) -> some View {
         VStack(spacing: 8) {
             StartupIssues()
             HStack(spacing: 2) {
-                if showsBins {
-                    FooterPage(entry: .archive, select: select)
-                    FooterPage(entry: .trash, count: trashCount, select: select)
-                }
+                FooterPage(entry: .archive, select: select)
+                FooterPage(entry: .trash, count: trashCount, select: select)
                 Spacer()
                 let settings = SidebarOutline.Entry.settings
                 Button(settings.title, icon: settings.icon) { SettingsPane.open() }
@@ -107,7 +105,7 @@ struct Sidebar: View {
     }
 }
 
-/// 侧栏一行的横向尺寸（任务、会话、项目行、未分类、会话行共用）：侧栏边缘到行的图标列 `column`，行的底（`RowStyle`）向外让出 `RowMetrics.bleed`、
+/// 侧栏一行的横向尺寸（任务、会话、项目行、会话行共用）：侧栏边缘到行的图标列 `column`，行的底（`RowStyle`）向外让出 `RowMetrics.bleed`、
 /// 离侧栏边缘 `edge`；图标列宽 `Spacing.sidebarIcon`；会话的状态标（外框是点径的 1.8 倍，`PiStateDot`）在图标列里居中，名字离它 `dot + 2`
 /// （`PiSessionRow` 的排法），项目名离图标列 `titleGap`，两种名字就落在同一条竖线上。
 enum SidebarMetrics {
@@ -211,18 +209,16 @@ private struct SidebarHeader<Action: View>: View {
     }
 }
 
-/// 侧栏里能去的页，按显示顺序：会话 → 项目（`SidebarOutline`）→ 未分类 → 归档 → 回收站。方向键共用这一份顺序（任务是面板、不是页）。
+/// 侧栏里能去的页，按显示顺序：会话 → 项目（`SidebarOutline`）→ 归档 → 回收站。方向键共用这一份顺序（任务是面板、不是页）。
 private struct SidebarPages {
     let outline: SidebarOutline
-    let showsBins: Bool
 
-    init(_ catalog: ProjectCatalog, trashCount: Int) {
+    init(_ catalog: ProjectCatalog) {
         outline = SidebarOutline(catalog)
-        showsBins = trashCount > 0 || !catalog.projects.isEmpty
     }
 
     var order: [Route] {
-        [.agent] + outline.projects.map { .project($0.id) } + (outline.unfiled > 0 ? [.unfiled] : []) + (showsBins ? [.archive, .trash] : [])
+        [.agent] + outline.projects.map { .project($0.id) } + [.archive, .trash]
     }
 }
 
@@ -258,7 +254,7 @@ private struct PlaceRows: View {
     }
 }
 
-/// 项目区的行：项目与末尾的未分类。只有这里读当前页，每行拿到"选没选中"：换页时只重算选中变了的两行
+/// 项目区的行。只有这里读当前页，每行拿到"选没选中"：换页时只重算选中变了的两行
 /// （每行各读当前页时，换一次页项目再多也全部重算）。
 private struct ProjectRows: View {
     let pages: SidebarPages
@@ -276,14 +272,6 @@ private struct ProjectRows: View {
                     select: select, edit: { workspace.projectForm = .init(project: project) })
                     .equatable()
                     .id(Route.project(project.id))
-            }
-            if pages.outline.unfiled > 0 {
-                PageRow(count: pages.outline.unfiled, selected: current == .unfiled, action: { select(.unfiled) }) {
-                    ProjectGlyph(project: nil)
-                } title: {
-                    Text(CaptureCopy.unfiled)
-                }
-                .id(Route.unfiled)
             }
         }
     }

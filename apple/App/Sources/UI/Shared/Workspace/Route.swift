@@ -1,12 +1,11 @@
 import CueStore
 import Foundation
 
-/// 去哪一页：Mac 内容区挂哪一页与 iOS 导航栈里推入哪一页是同一个类型，平台只差呈现（Mac 只用其中的 `project`、`unfiled`、`archive`、`trash`、`cue`、`agent`、`session`）。
+/// 去哪一页：Mac 内容区挂哪一页与 iOS 导航栈里推入哪一页是同一个类型，平台只差呈现（Mac 只用其中的 `project`、`archive`、`trash`、`cue`、`agent`、`session`）。
 nonisolated enum Route: Hashable {
     /// 项目书架：全部项目（iPhone、iPad 侧栏的"全部项目"）。
     case shelf
     case project(UUID)
-    case unfiled
     /// 归档的灵感与任务。
     case archive
     case trash
@@ -31,9 +30,6 @@ nonisolated enum Route: Hashable {
     static func session(_ id: UUID, sessionID: String? = nil, seed: SessionDigest? = nil) -> Route {
         .session(SessionRoute(id: id, sessionID: sessionID, seed: seed))
     }
-
-    /// 项目页，没有项目是未分类（通知与随手记的落点）。
-    static func place(_ project: UUID?) -> Route { project.map(Route.project) ?? .unfiled }
 
     /// 从 Pi 的会话 id 去会话页（Mac 的侧栏、搜索、通知）。
     static func session(_ sessionID: String) -> Route { .session(PiSessionState.recordID(sessionID: sessionID), sessionID: sessionID) }

@@ -13,7 +13,7 @@ import Testing
 
   /// 已同步过的一张卡，随后编辑一次并上传这一版、结果落账：返回卡与上传的记录。
   private func editedAndUploaded(_ body: String) async throws -> (Card, CKRecord) {
-    let card = try await store.createCard(in: nil, body: "base")
+    let card = try await store.createCard(body: "base")
     try await rig.simulatePush()
     _ = try await edit(card, body)
     return (card, try #require(try await rig.simulatePush().first))
@@ -27,7 +27,7 @@ import Testing
 
   private func expectNoCopyAndLocalKept(_ card: Card, body: String) async throws {
     #expect(try await store.conflicts().isEmpty)
-    #expect(try await store.cards(in: nil).map(\.body) == [body])
+    #expect(try await store.cards(in: Project.defaultID).map(\.body) == [body])
     #expect(try await rig.reconcileDelta().saves == [rig.id(card.id)])  // 更新的版本仍待推送
   }
 
@@ -46,7 +46,7 @@ import Testing
   /// 或下一次上传被拒时附回来。
   @Test(arguments: [false, true])
   func anUploadWhoseResultNeverArrivedIsNotAConflict(comesBackAsRejection: Bool) async throws {
-    let card = try await store.createCard(in: nil, body: "base")
+    let card = try await store.createCard(body: "base")
     try await rig.simulatePush()
     _ = try await edit(card, "第一版")
     let lost = try #require(await rig.coordinator.nextBatch(first: [], limit: 400)?.saves.first)  // 交出去，结果没回来

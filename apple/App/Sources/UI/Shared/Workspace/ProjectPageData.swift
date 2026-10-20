@@ -27,12 +27,12 @@ nonisolated struct ProjectPageData: Sendable, Equatable {
         })
     }
 
-    static func read(_ project: UUID?, from store: isolated CueStore) throws -> ProjectPageData {
+    static func read(_ project: UUID, from store: isolated CueStore) throws -> ProjectPageData {
         // 层级限制按本项目全部任务（含已完成）算
         let all = try store.tasks(in: project, .inProgress, .todo, .done)
         let cards = try store.cards(in: project), lastSends = try store.lastSends(in: project)
         return ProjectPageData(
-            project: try project.flatMap { try store.project($0) },
+            project: try store.project(project),
             cards: cards,
             lastSends: lastSends,
             tasks: TaskTree(all.filter { $0.status != .done }, all: all),
@@ -50,7 +50,7 @@ nonisolated struct WallBoard: Equatable, Sendable {
 
     /// 用最新数据更新分区；返回是否是第一次排墙（调用方据此决定要不要动画）。
     @discardableResult
-    mutating func refresh(with data: ProjectPageData, project: UUID?, now: Date = .now, calendar: Calendar = .current) -> Bool {
+    mutating func refresh(with data: ProjectPageData, project: UUID, now: Date = .now, calendar: Calendar = .current) -> Bool {
         guard let previous = arrangement else {
             arrangement = WallArrangement.arrange(data.stamps, project: project, now: now)
             return true

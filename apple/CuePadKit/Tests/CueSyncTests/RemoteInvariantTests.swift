@@ -18,7 +18,7 @@ import Testing
     let projectID = UUID()
     try await rig.coordinator.pulled([remoteRecord(.cards, cardFields(project: projectID, body: "early", modifiedAt: 5_000))], [])
     #expect(try RawDB(rig.fixture.url).rows("SELECT projectID FROM cards") == [[rig.id(projectID)]])  // 原样保存，没有被改成未分类
-    #expect(try await store.cards(in: nil).isEmpty)
+    #expect(try await store.cards(in: Project.defaultID).isEmpty)
 
     try await rig.coordinator.pulled([remoteRecord(.projects, id: projectID, projectFields(name: "late", modifiedAt: 5_000))], [])
     #expect(try await store.cards(in: projectID).map(\.body) == ["early"])
@@ -34,13 +34,13 @@ import Testing
     ], [])
 
     #expect(try await store.cards(in: projectID).isEmpty)  // 随项目隐藏，由项目推导
-    #expect(try await store.cards(in: nil).isEmpty)
+    #expect(try await store.cards(in: Project.defaultID).isEmpty)
     #expect(try RawDB(rig.fixture.url).rows("SELECT projectID FROM cards") == [[rig.id(projectID)]])
   }
 
   // MARK: 项目被远端永久删除
 
-  @Test func remotelyPurgedProjectReleasesLocalCardsToUnfiled() async throws {
+  @Test func remotelyPurgedProjectReleasesLocalCardsToTheDefaultProject() async throws {
     let project = try await store.createProject(name: "P", color: "#111")
     try await store.setDirectory("/work/p", for: project.id)
     try await rig.simulatePush()
@@ -51,8 +51,8 @@ import Testing
     try await rig.coordinator.pulled([], [(rig.recordID(project.id), "projects")])
 
     #expect(try await store.project(project.id) == nil)
-    #expect(try await store.cards(in: nil).map(\.id) == [card.id])  // 内容保留，归入未分类，而不是悬空隐藏
-    #expect(try await store.card(task.id)?.projectID == nil)
+    #expect(try await store.cards(in: Project.defaultID).map(\.id) == [card.id])  // 内容保留，归入默认项目，而不是悬空隐藏
+    #expect(try await store.card(task.id)?.projectID == Project.defaultID)
     #expect(try await store.directory(of: project.id) == nil)
     #expect(try await rig.reconcileDelta().saves == [rig.id(card.id), rig.id(task.id)])  // 归属变更推回去
   }

@@ -224,7 +224,7 @@ nonisolated struct SessionTaskLink: Sendable, Equatable {
 extension Workspace {
     /// 回到会话做的那件事：项目页，任务浮窗停在这一步。
     func showTask(_ task: Card) {
-        show(task.projectID.map(Route.project) ?? .unfiled)
+        show(.project(task.projectID))
         open(task)
     }
 

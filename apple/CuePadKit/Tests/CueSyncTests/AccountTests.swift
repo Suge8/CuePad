@@ -57,7 +57,7 @@ import Testing
     let other = remoteRecord(.cards, cardFields(project: nil, body: "other user", modifiedAt: 9_000_000_000_000))
     await #expect(throws: SyncPaused.self) { try await rig.coordinator.pulled([other], []) }
     #expect(try await store.card(card.id)?.body == "edited while waiting")
-    #expect(try await store.cards(in: nil).isEmpty)  // 新账号的记录没有被应用
+    #expect(try await store.cards(in: Project.defaultID).isEmpty)  // 新账号的记录没有被应用
   }
 
   @Test func uploadingLocalDataAfterASwitchMakesEverythingPendingForTheNewAccount() async throws {
@@ -102,14 +102,15 @@ import Testing
 
   /// 第一台设备第一次同步时服务器上还没有同步区：不是云端数据丢了，第一次上传时建区。
   @Test func aMissingZoneBeforeAnythingWasSyncedIsNotADecision() async throws {
-    _ = try await store.createCard(in: nil, body: "first")
+    _ = try await store.createCard(body: "first")
     await rig.coordinator.zoneMissing(deletedByUser: false)
     #expect(await rig.coordinator.status != .needsDecision(.cloudDataReset))
     #expect(await rig.coordinator.nextBatch(first: [], limit: 400) != nil)
   }
 
   @Test func quotaExceededIsReportedKeepsChangesPendingAndClearsOnSuccess() async throws {
-    let card = try await store.createCard(in: nil, body: "big")
+    try await rig.simulatePush()  // 新库的默认项目先传上去
+    let card = try await store.createCard(body: "big")
     let record = try #require(await rig.coordinator.record(for: rig.recordID(card.id)))
 
     _ = await rig.coordinator.sent(SentRecords(saved: [], failedSaves: [(record, CKError(.quotaExceeded))], deleted: [], failedDeletes: []))
@@ -122,7 +123,7 @@ import Testing
 
   /// 服务端拒绝某条记录（如同名的旧类型记录不能改类型）：问题带着记录类型、名字与服务端原因，界面才说得清是哪一张。
   @Test func aRejectedRecordIsReportedWithItsTypeNameAndServerReason() async throws {
-    let card = try await store.createCard(in: nil, body: "x")
+    let card = try await store.createCard(body: "x")
     let record = try #require(await rig.coordinator.record(for: rig.recordID(card.id)))
     let rejection = CKError(
       .invalidArguments, userInfo: ["ServerErrorDescription": "invalid attempt to update record from type 'tasks' to 'cards'"])

@@ -32,7 +32,7 @@ struct SharedPagesTests {
         let project = try await store.createProject(name: "旧项目", color: "#000000")
         _ = try await store.createCard(in: project.id, body: "项目里的一条")
         _ = try await store.createCard(in: project.id, body: "项目里的另一条")
-        let lone = try await store.createCard(in: nil, body: "单独删的\n补一句")
+        let lone = try await store.createCard(body: "单独删的\n补一句")
         try await store.trashProject(project.id)
         try await store.trashCard(lone.id)
 
@@ -51,7 +51,7 @@ struct SharedPagesTests {
     @Test func 回收站恢复后提示落点_点它过去() async throws {
         let project = try await store.createProject(name: "圆桌", color: "#000000")
         let card = try await store.createCard(in: project.id, body: "项目里的一条")
-        let loose = try await store.createCard(in: nil, body: "没有项目的一条")
+        let loose = try await store.createCard(body: "没有项目的一条")
         try await store.trashCard(card.id)
         try await store.trashCard(loose.id)
         let workspace = Workspace(services: app.services)

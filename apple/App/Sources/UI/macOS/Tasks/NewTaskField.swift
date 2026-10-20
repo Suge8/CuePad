@@ -1,4 +1,5 @@
 #if os(macOS)
+import CueStore
 import SwiftUI
 
 /// 一行新建任务：↩ 添加，保持焦点以便连续输入。`parent` 给了时建成它的一个步骤（任务浮窗里）；`choosesProject` 时右边可换落到哪个项目（任务面板跨项目）。
@@ -11,10 +12,11 @@ struct NewTaskField: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     @State private var text = ""
-    @State private var chosen: UUID??
+    @State private var chosen: UUID?
     @FocusState private var focused: Bool
 
-    private var target: UUID? { chosen ?? project }
+    /// 落到哪个项目：换过的，没换过是给的项目，都没有（不在项目页）是默认项目。
+    private var target: UUID { chosen ?? project ?? Project.defaultID }
     private var prompt: String { parent == nil ? "添加任务" : "添加步骤" }
 
     var body: some View {
@@ -28,14 +30,12 @@ struct NewTaskField: View {
                 .onSubmit(add)
             if choosesProject, let projects = workspace.catalog?.projects, !projects.isEmpty {
                 Menu {
-                    Button(CaptureCopy.unfiled) { chosen = .some(nil) }
-                    Divider()
                     ForEach(projects) { item in Button(item.name) { chosen = item.id } }
                 } label: {
                     let current = projects.first { $0.id == target }
                     HStack(spacing: 4) {
                         ProjectGlyph(project: current, size: 10)
-                        Text(current?.name ?? CaptureCopy.unfiled).lineLimit(1)
+                        Text(current?.name ?? "").lineLimit(1)
                     }
                     .font(Typography.meta).foregroundStyle(palette.ink2)
                     .padding(.horizontal, 8).frame(height: 24)
@@ -43,7 +43,7 @@ struct NewTaskField: View {
                     .contentShape(.capsule)
                 }
                 .menuStyle(.button).buttonStyle(PressStyle()).menuIndicator(.hidden).fixedSize()
-                .accessibilityLabel("挂到 \(projects.first { $0.id == target }?.name ?? CaptureCopy.unfiled)")
+                .accessibilityLabel("挂到 \(projects.first { $0.id == target }?.name ?? "")")
             }
         }
         .frame(minHeight: TaskMetrics.rowHeight)

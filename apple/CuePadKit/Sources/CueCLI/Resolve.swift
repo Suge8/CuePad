@@ -55,34 +55,30 @@ extension Call {
   }
 }
 
-/// `--project 项目` 与 `--unfiled` 二选一的范围。
+/// `--project 项目` 给的范围，或不限。
 enum Scope {
-  case any, unfiled, project(Project)
+  case any, project(Project)
 
-  /// 新建与移动的落点：未指定等同未分类。
-  var target: UUID? {
+  /// 新建的落点：没指定项目（也不在绑定了目录的项目里）的进默认项目。
+  var target: UUID {
     if case .project(let project) = self { return project.id }
-    return nil
+    return Project.defaultID
   }
 
-  func contains(_ projectID: UUID?) -> Bool {
+  func contains(_ projectID: UUID) -> Bool {
     switch self {
     case .any: true
-    case .unfiled: projectID == nil
     case .project(let project): projectID == project.id
     }
   }
 }
 
 extension Call {
-  /// `--project 项目`、`--<nullFlag>`（未分类 / 全局）、`--all-projects` 三选一；都没给时，
-  /// `implicit` 为真则用绑定了当前目录的项目，没有就不限。
-  func scope(nullFlag: String = "unfiled", implicit: Bool = true) async throws -> Scope {
+  /// `--project 项目` 与 `--all-projects` 二选一；都没给时，`implicit` 为真则用绑定了当前目录的项目，没有就不限。
+  func scope(implicit: Bool = true) async throws -> Scope {
     let ref = args.value("project")
-    let chosen = [ref != nil, args.has(nullFlag), args.has("all-projects")].filter { $0 }.count
-    if chosen > 1 { throw CLIError.usage("--project、--\(nullFlag)、--all-projects 只能选一个") }
+    if ref != nil, args.has("all-projects") { throw CLIError.usage("--project 与 --all-projects 只能选一个") }
     if let ref { return .project(try await project(ref)) }
-    if args.has(nullFlag) { return .unfiled }
     if args.has("all-projects") || !implicit { return .any }
     return try await store.project(containing: URL(filePath: directory)).map(Scope.project) ?? .any
   }

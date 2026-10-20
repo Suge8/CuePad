@@ -152,29 +152,17 @@ struct SessionList<Top: View>: View {
 
     @ViewBuilder private var empty: some View {
         let project = filter.flatMap { workspace.catalog?.project($0) }
-        switch model.empty(filtering: project, hasFolder: filter.map(workspace.hasFolder) ?? true) {
+        switch model.empty(filtering: project) {
         case .noMatch(let query):
             EmptyState.noMatch(query).padding(.top, 40)
-        case .needsFolder(let project):
-            EmptyState(mascot: .empty, title: "还没绑定文件夹", message: "绑定后，在那个文件夹里跑的 Agent 会话会出现在这里") {
-                ProjectFolderGuide(project: project, guide: workspace.folderGuide)
-            }
-            .padding(.top, 40)
         case .none(inProject: true):
             EmptyState(mascot: .empty, title: "这个项目还没有 Agent 会话", waitsForSync: true) {
                 EmptyStateButton(title: "新会话", icon: .add, action: { navigation.newSession = .init(project: filter) })
             }
             .padding(.top, 40)
         case .none(inProject: false):
-            let hasProjects = workspace.catalog?.projects.isEmpty == false
-            EmptyState(
-                mascot: .empty, title: "还没有 Agent 会话",
-                message: hasProjects ? "在 Mac 的终端里开一个 Agent，或在这里开新会话" : "在 Mac 的终端里开一个 Agent，或新建项目后在这里开会话",
-                waitsForSync: true
-            ) {
-                EmptyStateButton(
-                    title: hasProjects ? "新会话" : "新建项目", icon: hasProjects ? .add : .newProject,
-                    action: { navigation.startNewSession(hasProjects: hasProjects) })
+            EmptyState(mascot: .empty, title: "还没有 Agent 会话", message: "在 Mac 的终端里开一个 Agent，或在这里开新会话", waitsForSync: true) {
+                EmptyStateButton(title: "新会话", icon: .add, action: { navigation.newSession = .init() })
             }
             .padding(.top, 40)
         }
@@ -193,7 +181,7 @@ private struct NewSessionButton: View {
 
     var body: some View {
         Button("新会话", icon: .add) {
-            navigation.startNewSession(.init(project: project), hasProjects: workspace.catalog?.projects.isEmpty == false)
+            navigation.newSession = .init(project: project)
         }
             .accessibilityHint("让 Mac 开一个 Agent 会话")
     }

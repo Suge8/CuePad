@@ -28,9 +28,6 @@ struct ProjectSwitcher: View {
                 }
             }
             Divider()
-            if (workspace.catalog?.unfiledCount ?? 0) > 0 {
-                Button { workspace.show(.unfiled) } label: { Label(CaptureCopy.unfiled, icon: .unfiled).labelStyle(.titleAndIcon) }
-            }
             Button { workspace.show(.agent) } label: { Label("Agent", icon: .agent).labelStyle(.titleAndIcon) }
             Button { workspace.show(.archive) } label: { Label("归档", icon: .archive).labelStyle(.titleAndIcon) }
             Button { workspace.show(.trash) } label: { Label("回收站", icon: .trash).labelStyle(.titleAndIcon) }
@@ -89,9 +86,6 @@ private struct CurrentPage: View {
             let project = projects.first { $0.id == id }
             ProjectGlyph(project: project, size: 12)
             Text(project?.name ?? "")
-        case .unfiled:
-            Image(.unfiled).accessibilityHidden(true)
-            Text(CaptureCopy.unfiled)
         case .archive:
             Image(.archive).accessibilityHidden(true)
             Text("归档")

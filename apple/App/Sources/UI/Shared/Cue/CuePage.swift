@@ -156,13 +156,13 @@ struct CuePage: View {
     // MARK: 对话
 
     /// 读不出来时也排一个真的视图：读库的订阅挂在页上，等视图出现才启动（docs/ui.md）。
-    /// 还没说过话时是空态（`EmptyState`）：它自我介绍，下一步就是下面的输入框（没启用时是启用卡）。
+    /// 还没说过话时是空态（`EmptyState`）：它自我介绍，下一步就是下面的输入框（没启用时是启用卡，说清启用后活放进默认项目）。
     @ViewBuilder private var chat: some View {
         Group {
             if let thread, !thread.rows.isEmpty {
                 conversation(thread)
             } else if thread != nil {
-                EmptyState(mascot: .hello, title: "我是 \(cue.name)", message: cue.canHear ? "要做什么，直接在下面跟我说" : nil, waitsForSync: true)
+                EmptyState(mascot: .hello, title: "我是 \(cue.name)", message: greeting, waitsForSync: true)
                     .padding(.horizontal, Self.inset)
                     .frame(maxWidth: Self.readingWidth, maxHeight: .infinity)
                     .frame(maxWidth: .infinity)
@@ -170,6 +170,13 @@ struct CuePage: View {
                 Color.clear
             }
         }
+    }
+
+    /// 空态的那句：启用了就请他直接说；没启用时说启用后怎么用（说一件事，它放进默认项目里开工）。
+    private var greeting: String {
+        guard !cue.canHear else { return "要做什么，直接在下面跟我说" }
+        let home = workspace.catalog?.project(Project.defaultID)?.name ?? ""
+        return "启用后说一件想做的事，我放进「\(home)」项目里开工"
     }
 
     /// 只排开铺满可见区要的那几格（`paging`）：打开时铺一屏，离最早那头不到一屏时（打开后紧接着就是）往上再铺一屏；

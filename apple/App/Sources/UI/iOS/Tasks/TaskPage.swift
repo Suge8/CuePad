@@ -34,7 +34,7 @@ struct TaskPage: View {
             .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 40)
         }
         .scrollDismissesKeyboard(.interactively)
-        .floatingHeader(workspace.catalog?.project(card.projectID)?.name ?? CaptureCopy.unfiled) { more }
+        .floatingHeader(workspace.catalog?.project(card.projectID)?.name ?? "") { more }
         .observing(services.store, id: card.id, into: $detail, onError: workspace.fail) { [id = card.id] in
             try TaskDetail.read(id, from: $0)
         }

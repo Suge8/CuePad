@@ -311,11 +311,9 @@ extension DebugScene {
     private static func relayStart(_ store: CueStore) async throws -> DeliveryRequest? {
         let tasks = try await store.tasks(.todo).flatMap(\.tasks)
         let parents = Set(tasks.compactMap(\.parentID))
-        guard let task = tasks.first(where: { $0.piSessionID == nil && $0.projectID != nil && !parents.contains($0.id) }), let project = task.projectID else {
-            return nil
-        }
+        guard let task = tasks.first(where: { $0.piSessionID == nil && !parents.contains($0.id) }) else { return nil }
         return try await store.requestLaunch(
-            PiLaunch(project: project, prompt: task.body, token: UUID().uuidString), title: task.heading, on: "demo-mac", card: task.id, cue: true)
+            PiLaunch(project: task.projectID, prompt: task.body, token: UUID().uuidString), title: task.heading, on: "demo-mac", card: task.id, cue: true)
     }
 
     /// `key` 给了秒数时每隔这么久做一次 `act`（返回量的那段叫什么与 1.5 秒后怎么收回；做不成返回 nil，跳过这一次），配 `-CuePadFlightLog` 前后各量一段。
@@ -433,7 +431,7 @@ extension DebugScene {
                 modelState: row.model ? demoModels(for: row.agent) : nil,
                 context: PiContextUsage(tokens: row.tokens, window: 200_000), agent: row.agent)
             try await store.writePiTranscript(PiTranscript(sessionID: row.id, messages: [], recap: PiRecap(lastPrompt: row.title, lastReply: "好了")))
-            let task = try await store.createTask(row.title, in: nil)
+            let task = try await store.createTask(row.title)
             try await store.linkCard(task.id, toSession: row.id)
         }
         try await store.leaveToYou("cue-claude-short")

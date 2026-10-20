@@ -48,7 +48,7 @@ struct SendTests {
     func Mac发给Pi会话_写本机投送请求由执行器送达_只多一条请求与一条发送记录() async throws {
         let ext = try await connectedSession()
         let body = try await bodyWithImage()
-        let task = try await services.store.createTask("do it", in: nil)
+        let task = try await services.store.createTask("do it")
 
         Workspace(services: services).send(body, to: AgentTarget(session: ext.sessionID), card: task.id)
 

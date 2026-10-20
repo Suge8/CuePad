@@ -6,11 +6,9 @@ import SwiftUI
 /// 收起其余任务时纸底那一行留在原来的屏幕位置（`TaskFoldAnchor`），长列表底部收起不会跳到卡片墙。
 /// 段标题"任务 N"在纸外，与"资料""最近"同一个样子。行与任务面板同一种（`TaskLine`），标题后一格"下一步"（`TaskNext`）：交给的 Agent 要你做什么，或还没交出去的"开始"；要 Agent 做什么写在任务的正文里（任务浮窗）。
 /// 会话的全部列表在侧栏，这里不另开一栏。
-/// 项目还没绑文件夹时，任务下面接一行绑定引导（`ProjectFolderGuide`，有同名建议、正在绑时才出现，见 `FolderGuide.shows`）。
 /// 纸与下面的资料、卡片墙同宽，行铺满纸：行尾的进度贴着纸的右边成一列，与任务面板的行同一个样子。
 struct FocusBand: View {
     let data: ProjectPageData
-    let guide: FolderGuide?
     @Binding var position: ScrollPosition
     let anchor: TaskFoldAnchor
     @Environment(Workspace.self) private var workspace
@@ -32,12 +30,7 @@ struct FocusBand: View {
             }
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isHeader)
-            VStack(alignment: .leading, spacing: 6) {
-                taskRows
-                if let project = data.project, !workspace.hasFolder(project.id), guide?.shows(project.id, in: .inset) == true {
-                    ProjectFolderGuide(project: project, guide: guide, style: .inset).padding(.top, 8)
-                }
-            }
+            taskRows
             .padding(.horizontal, 20).padding(.vertical, 14)
             .frame(maxWidth: .infinity, alignment: .topLeading)
             .paper(radius: 18)
@@ -106,7 +99,7 @@ struct CompactFocus: View {
             HStack(spacing: 14) {
                 HStack(spacing: 6) {
                     ProjectGlyph(project: data.project, size: 13)
-                    Text(data.project?.name ?? CaptureCopy.unfiled).font(Typography.toolbarTitle).lineLimit(1)
+                    Text(data.project?.name ?? "").font(Typography.toolbarTitle).lineLimit(1)
                 }
                 Label(data.taskCounts.open > 0 ? "任务 \(data.taskCounts.open)" : "任务", icon: .task).foregroundStyle(palette.ink2)
             }

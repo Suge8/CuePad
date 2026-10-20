@@ -8,7 +8,7 @@ import SwiftUI
 /// 待办收着时露出最近添加的几条（`TaskBoard.latestTodo`，标题后跟项目小图标），末行"还有 N 项"原地展开成按项目分的段（段头写项目），末行换成"收起"；
 /// 最近完成折着。步骤缩进跟在上级下（`TaskOutline`：长按拖动排序、拖到一条上成为它的步骤、拖进待办别的段换项目，拖动不改状态；
 /// 进行中按开始时间排、露出的那几条按添加时间排，两行之间不能落；轻扫见 `CardMenu.swipes`），行是全 App 共用的 `TaskLine`。
-/// 添加任务在右上角"+"：点了列表顶上浮出一行输入（`NewTaskLine`，↩ 即一条，落当前项目或未分类，可换），失焦且没写字时收回。
+/// 添加任务在右上角"+"：点了列表顶上浮出一行输入（`NewTaskLine`，↩ 即一条，落当前项目或默认项目，可换），失焦且没写字时收回。
 /// 没有没做完的任务时是吉祥物加一句现状。宽屏（iPad）里列表不铺满：标题与行尾的旁注隔太远读不成一行。
 struct TasksScreen: View {
     @Environment(Workspace.self) private var workspace
@@ -227,7 +227,7 @@ struct NewTaskLine: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     @State private var text = ""
-    @State private var chosen: UUID??
+    @State private var chosen: UUID?
     @FocusState private var focused: Bool
 
     var body: some View {
@@ -245,18 +245,16 @@ struct NewTaskLine: View {
                 .onChange(of: focused) { if !focused, text.trimmingCharacters(in: .whitespaces).isEmpty { dismiss?() } }
             if let projects, !projects.isEmpty {
                 Menu {
-                    Button(CaptureCopy.unfiled) { chosen = .some(nil) }
-                    Divider()
                     ForEach(projects) { item in Button(item.name) { chosen = item.id } }
                 } label: {
                     DestinationChip(project: current).frame(minHeight: 44).contentShape(.rect)
                 }
-                .accessibilityLabel("记到 \(CaptureCopy.destination(current))")
+                .accessibilityLabel("记到 \(current?.name ?? "")")
             }
         }
     }
 
-    private var target: UUID? { chosen ?? project }
+    private var target: UUID { chosen ?? project ?? Project.defaultID }
     private var current: Project? { projects?.first { $0.id == target } }
 
     private func add() {

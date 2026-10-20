@@ -4,7 +4,7 @@ import SwiftUI
 
 /// 项目页：页头（名称、介绍、目录与计数）→ 任务 → 资料 → 工作集卡片墙 → 更早。
 struct ProjectPage: View {
-    let projectID: UUID?
+    let projectID: UUID
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
@@ -32,7 +32,7 @@ struct ProjectPage: View {
     private static let minColumnWidth: CGFloat = 260
     private static let maxColumns = 12
     private static let wallSpacing: CGFloat = 16
-    /// 空项目那一行"添加任务"的宽度上限：只是一行输入，跟着内容，不铺满整页（下面的绑定引导与空态是纸，与页面同宽）。
+    /// 空项目那一行"添加任务"的宽度上限：只是一行输入，跟着内容，不铺满整页（下面的空态是纸，与页面同宽）。
     private static let emptyLineWidth: CGFloat = 460
 
     var body: some View {
@@ -81,17 +81,12 @@ struct ProjectPage: View {
     /// 页头（名称、目录、计数）取自项目目录，切换项目的第一帧就是新项目；卡片与任务读到后在其下出现。
     @ViewBuilder private var content: some View {
         let catalog = workspace.catalog
-        if projectID == nil, catalog?.projects.isEmpty == true, (catalog?.unfiledCount ?? 0) == 0 {
-            Welcome()
-        } else {
-            VStack(alignment: .leading, spacing: Spacing.section) {
-                ProjectHeader(
-                    projectID: projectID, project: catalog?.project(projectID),
-                    directory: projectID.flatMap { catalog?.directories[$0] }, cardCount: catalog?.cardCounts[projectID] ?? 0)
-                if let data, let arrangement = board.arrangement, let shape { page(data, arrangement, shape) }
-            }
-            .padding(.horizontal, Spacing.page).padding(.top, Spacing.pageTop).padding(.bottom, 150)
+        VStack(alignment: .leading, spacing: Spacing.section) {
+            ProjectHeader(
+                project: catalog?.project(projectID), directory: catalog?.directories[projectID], cardCount: catalog?.cardCounts[projectID] ?? 0)
+            if let data, let arrangement = board.arrangement, let shape { page(data, arrangement, shape) }
         }
+        .padding(.horizontal, Spacing.page).padding(.top, Spacing.pageTop).padding(.bottom, 150)
     }
 
     @ViewBuilder
@@ -102,15 +97,10 @@ struct ProjectPage: View {
             EmptyView()
         } else if !data.tasks.isEmpty || data.taskCounts.done > 0 {
             // 没做完的都做完了也留着任务纸：纸底的"已完成"要能原地展开、点圆圈回到待办
-            FocusBand(data: data, guide: workspace.folderGuide, position: $position, anchor: anchor)
-        } else if let project = projectID {
-            // 一条任务都没有：不画一个只装着空态的大框，收成一行添加任务；还没绑文件夹时接着写明并给一键绑（与任务区里同一个组件）
-            VStack(alignment: .leading, spacing: 12) {
-                NewTaskField(project: project).frame(maxWidth: Self.emptyLineWidth, alignment: .leading)
-                if let project = data.project, !workspace.hasFolder(project.id) {
-                    ProjectFolderGuide(project: project, guide: workspace.folderGuide, style: .panel)
-                }
-            }
+            FocusBand(data: data, position: $position, anchor: anchor)
+        } else {
+            // 一条任务都没有：不画一个只装着空态的大框，收成一行添加任务
+            NewTaskField(project: projectID).frame(maxWidth: Self.emptyLineWidth, alignment: .leading)
         }
         if stage >= .wall {
             if data.cards.isEmpty {
@@ -197,62 +187,54 @@ private struct PageShape: Equatable {
     }
 }
 
+/// 页头：名称与介绍，下面一行是项目在这台 Mac 上的文件夹（绑着的写路径，带"在访达中显示"；没绑的写开工时会建好的工作区，`Workspaces`）、
+/// "换文件夹…"与灵感数。
 private struct ProjectHeader: View {
-    let projectID: UUID?
     let project: Project?
+    /// 这台 Mac 上绑着的文件夹；没绑为 nil。
     let directory: String?
     let cardCount: Int
     @Environment(Workspace.self) private var workspace
+    @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
 
     var body: some View {
-        HStack(alignment: .bottom) {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 10) {
-                    ProjectGlyph(project: project, size: 20)
-                    Text(projectID == nil ? CaptureCopy.unfiled : project?.name ?? "").font(Typography.pageTitle).foregroundStyle(palette.ink)
-                }
-                .contextMenu { if let project { ProjectActions(project: project) { workspace.projectForm = .init(project: project) } } }
-                // 介绍回答"这是什么项目"，属于页头，不占任务栏的一栏
-                if let intro = project?.intro {
-                    Text(intro).font(Typography.lead).foregroundStyle(palette.ink2)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .textSelection(.enabled)
-                }
-                // 绑着文件夹时写路径（点它更换）；没绑时这里不说，"还没绑定文件夹"与一键绑只在任务区那一处
-                HStack(spacing: 4) {
-                    if let project, let directory {
-                        DirectoryLink(path: Self.abbreviated(directory)) { workspace.chooseFolder(for: project) }
-                        if cardCount > 0 { Dot() }
-                    }
-                    if cardCount > 0 { Text("\(cardCount) 条灵感").monospacedDigit() }
-                }
-                .font(Typography.meta).foregroundStyle(palette.ink3)
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 10) {
+                ProjectGlyph(project: project, size: 20)
+                Text(project?.name ?? "").font(Typography.pageTitle).foregroundStyle(palette.ink)
             }
-            // 不再放"记一条灵感"：底部的输入栏与 ⌘N 就是入口
-            Spacer()
+            .contextMenu { if let project { ProjectActions(project: project) { workspace.projectForm = .init(project: project) } } }
+            // 介绍回答"这是什么项目"，属于页头，不占任务栏的一栏
+            if let intro = project?.intro {
+                Text(intro).font(Typography.lead).foregroundStyle(palette.ink2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
+            }
+            if let project { folder(project) }
         }
+        // 不再放"记一条灵感"：底部的输入栏与 ⌘N 就是入口
     }
 
-    static func abbreviated(_ path: String) -> String {
-        let home = FileManager.default.homeDirectoryForCurrentUser.path(percentEncoded: false)
-        let trimmed = home.hasSuffix("/") ? String(home.dropLast()) : home
-        return path.hasPrefix(trimmed) ? "~" + path.dropFirst(trimmed.count) : path
-    }
-}
-
-/// 项目页头部绑着的文件夹路径：点它更换，悬停有下划线、指针变手形。
-private struct DirectoryLink: View {
-    let path: String
-    let choose: () -> Void
-    @State private var hovering = false
-
-    var body: some View {
-        Button(action: choose) { Text(path).underline(hovering) }
-            .buttonStyle(.plain)
-            .onHover { hovering = $0 }
-            .pointerStyle(.link)
-            .help("更换文件夹")
+    private func folder(_ project: Project) -> some View {
+        let path = directory ?? services.workspaces.directory(for: project.name).path(percentEncoded: false)
+        return HStack(spacing: 8) {
+            Label((path as NSString).abbreviatingWithTildeInPath, icon: .folder).textSelection(.enabled)
+                .help(directory == nil ? "第一次在这台 Mac 上开工时建好" : path)
+            if let directory {
+                Button("在访达中显示") { NSWorkspace.shared.activateFileViewerSelecting([URL(filePath: directory, directoryHint: .isDirectory)]) }
+                    .buttonStyle(ControlButtonStyle(kind: .secondary, compact: true))
+            } else {
+                Text("开工时建好")
+            }
+            Button("换文件夹…") { workspace.chooseFolder(for: project) }
+                .buttonStyle(ControlButtonStyle(kind: .secondary, compact: true))
+            if cardCount > 0 {
+                Dot()
+                Text("\(cardCount) 条灵感").monospacedDigit()
+            }
+        }
+        .font(Typography.meta).foregroundStyle(palette.ink3)
     }
 }
 
@@ -265,16 +247,4 @@ private struct EmptyProject: View {
     }
 }
 
-/// 空库首次打开：共享的 EmptyLibrary（同 iOS 的图标与文案），动作是 Mac 的主按钮。
-private struct Welcome: View {
-    @Environment(Workspace.self) private var workspace
-
-    var body: some View {
-        EmptyLibrary {
-            // 不挂 ↩：弹出的项目表单里 ↩ 是"创建"，下面的页再挂一个会抢
-            EmptyStateButton(title: "新建项目", icon: .newProject, action: { workspace.projectForm = .init() })
-        }
-        .padding(.top, 160)
-    }
-}
 #endif

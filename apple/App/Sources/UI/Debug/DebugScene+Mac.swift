@@ -29,7 +29,7 @@ extension DebugScene {
         case "wallgap":
             // 卡片墙删卡后的排布：在当前项目（配 -CuePadProject Flow）新记两条，再删掉最早那条（它独占一列），看留下的几张怎么排
             try? await Task.sleep(for: .seconds(1))
-            let project = workspace.currentProject
+            let project = workspace.currentProject ?? Project.defaultID
             for body in ["报销\nbs 84.36 刀 claude github", "产品决策\nanti-slop 整理前端"] {
                 _ = try? await workspace.createCard(body: body, in: project)
                 try? await Task.sleep(for: .milliseconds(300))
@@ -96,7 +96,7 @@ extension DebugScene {
         case "archive": workspace.show(.archive)
         case "editor":
             // 散放的灵感进编辑页
-            if let id = await card(in: workspace.currentProject, store: workspace.services.store),
+            if let id = await card(in: workspace.currentProject ?? Project.defaultID, store: workspace.services.store),
                let card = try? await workspace.services.store.card(id) { workspace.open(card) }
         case "session":
             // 整页打开 -CuePadSession（演示会话的 sessionID 与会话名相同）
@@ -170,7 +170,7 @@ extension DebugScene {
     private static func benchChurn(_ workspace: Workspace) async {
         try? await Task.sleep(for: .seconds(1))
         guard let window = mainWindow else { return }
-        let project = workspace.currentProject
+        let project = workspace.currentProject ?? Project.defaultID
         let widths = Array(stride(from: 900.0, through: 1500.0, by: 1))
         for (step, width) in widths.enumerated() {
             var frame = window.frame

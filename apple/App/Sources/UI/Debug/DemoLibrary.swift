@@ -172,7 +172,7 @@ enum DemoLibrary {
         }
     }
 
-    /// 把项目分组与任务写进库；名称为空的一组是未分类的灵感。
+    /// 把项目分组与任务写进库；名称为空的一组进默认项目。
     static func seed(_ store: CueStore, groups: [DemoProject], tasks: [DemoTask]) async throws {
         let named = groups.filter { !$0.name.isEmpty }
         func index(of name: String?) -> Int? { name.flatMap { name in named.firstIndex { $0.name == name } } }

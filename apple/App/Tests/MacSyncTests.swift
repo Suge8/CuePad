@@ -319,7 +319,7 @@ struct MacSyncTests {
     /// 发给 Agent 时命令带着卡片（卡片文字是参数）：卡片关联到会话、任务进行中，照样不写发送记录。
     @Test func 带卡片的斜杠命令只关联卡片_不写发送记录() async throws {
         _ = try await rig.host.connect("sess-1", cwd: "/work/app")
-        let task = try await services.store.createTask("改登录", in: nil)
+        let task = try await services.store.createTask("改登录")
         try await services.executor.start()
         defer { services.cancelBackgroundWork() }
 

@@ -30,7 +30,7 @@ import Testing
     let server = ScriptedServer([{ _ in throw CKError(.zoneNotFound) }])
     let sender = RecordSender(uploader: server, coordinator: rig.coordinator)
     await sender.start()
-    let card = try await rig.store.createCard(in: nil, body: "新装后第一条")
+    let card = try await rig.store.createCard(body: "新装后第一条")
 
     #expect(await sender.send([rig.id(card.id)]))
     #expect(await server.zonesSaved == 1)
@@ -43,8 +43,9 @@ import Testing
     let limited = CKError(.requestRateLimited, userInfo: [CKErrorRetryAfterKey: 60.0])
     let server = ScriptedServer([{ records in SentRecords(saved: [records[0]], failedSaves: [(records[1], limited)]) }])
     let sender = RecordSender(uploader: server, coordinator: rig.coordinator)
-    _ = try await rig.store.createCard(in: nil, body: "一")
-    _ = try await rig.store.createCard(in: nil, body: "二")
+    try await rig.simulatePush()  // 新库的默认项目先传上去
+    _ = try await rig.store.createCard(body: "一")
+    _ = try await rig.store.createCard(body: "二")
     await sender.start()
     await sender.flush()
 

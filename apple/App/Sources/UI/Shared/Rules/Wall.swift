@@ -18,14 +18,14 @@ nonisolated struct WallArrangement: Equatable, Sendable {
     /// 墙上最多几张（不含资料）。
     static let capacity = 14
 
-    var project: UUID?
+    var project: UUID
     var arrangedAt: Date
     /// 资料（`Card.isPinned`）。
     var pinned: [UUID]
     var wall: [UUID]
     var older: [UUID]
 
-    static func arrange(_ cards: [CardStamp], project: UUID?, now: Date) -> WallArrangement {
+    static func arrange(_ cards: [CardStamp], project: UUID, now: Date) -> WallArrangement {
         let sorted = cards.sorted(by: newestFirst)
         let pinned = sorted.filter(\.isPinned)
         let candidates = sorted.filter { !$0.isPinned }
@@ -37,7 +37,7 @@ nonisolated struct WallArrangement: Equatable, Sendable {
     }
 
     /// 卡片数据变化后的新分区：换项目或跨天时整体重排，否则保持已有位置。
-    func refreshed(with cards: [CardStamp], project: UUID?, now: Date, calendar: Calendar) -> WallArrangement {
+    func refreshed(with cards: [CardStamp], project: UUID, now: Date, calendar: Calendar) -> WallArrangement {
         guard project == self.project, calendar.isDate(now, inSameDayAs: arrangedAt) else {
             return Self.arrange(cards, project: project, now: now)
         }

@@ -131,8 +131,8 @@ enum DebugScene {
             try? await Task.sleep(for: .seconds(1))
             source.wrappedValue = .cards
         case "attachments":
-            // 先挑未分类里的，没有再挑第一个项目里的
-            var id = await card(in: nil, store: store)
+            // 先挑默认项目里的，没有再挑第一个项目里的
+            var id = await card(in: Project.defaultID, store: store)
             if id == nil, let project = try? await store.projects().first { id = await card(in: project.id, store: store) }
             if let id, let card = try? await store.card(id) {
                 draft.wrappedValue.attach(card)
@@ -159,7 +159,7 @@ enum DebugScene {
     }
 
     /// `-CuePadCard` 指定（或最近修改）的一张散放的灵感。
-    static func card(in project: UUID?, store: CueStore) async -> UUID? {
+    static func card(in project: UUID, store: CueStore) async -> UUID? {
         let cards = (try? await store.cards(in: project)) ?? []
         let prefix = defaults.string(forKey: "CuePadCard") ?? ""
         return cards.filter { $0.body.hasPrefix(prefix) }.max { $0.modifiedAt < $1.modifiedAt }?.id

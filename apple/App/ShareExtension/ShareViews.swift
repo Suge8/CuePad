@@ -25,11 +25,13 @@ private struct ShareForm: View {
                     }
                     .listRowBackground(palette.paper)
                 }
-                Picker("存到", selection: $model.selectedProject) {
-                    Text("未分类").tag(UUID?.none)
-                    ForEach(model.projects, id: \.id) { Text($0.name).tag(UUID?.some($0.id)) }
+                // 从没打开过主 App 时没有项目快照：存进默认项目，不给空的选择
+                if !model.projects.isEmpty {
+                    Picker("存到", selection: $model.selectedProject) {
+                        ForEach(model.projects, id: \.id) { Text($0.name).tag($0.id) }
+                    }
+                    .listRowBackground(palette.paper)
                 }
-                .listRowBackground(palette.paper)
             }
             // 纸与墨：桌面色的底、纸色的行、墨色的字与按钮（tint 由 withPalette 设成墨），不是系统灰底蓝字
             .scrollContentBackground(.hidden)

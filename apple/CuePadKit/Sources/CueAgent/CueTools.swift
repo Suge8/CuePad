@@ -65,7 +65,7 @@ public struct CueTools: Sendable {
           卡片、摘要与通知只显示"可以<doing>吗？"、rule 那类的这条规矩、show 的图与选项，不显示 text。
           show 是回答这个问题必须看的图，至多 \(CueShot.limit) 张，按要他看的先后：file 写 task peek 里"发到手机的"那一份的 id，look 写这张看什么（一行、≤\(CueShot.lookLimit) 字，如"方案 1：大按钮占满一行"）。几个方案就每个方案一张、同一台设备同一种样子，推荐的在前；不用看图就能答的不带。只有 show 里的图上卡片。
           text 先一句要做的动作，再一句依据（rule 那类写哪条规矩）和不做会怎样；不写 push、rule 这类分类名。
-          选项由 CuePad 给（如推送：\(CueAsk.push.choices(in: "项目名").joined(separator: " / "))；task 不在项目里时第二项是"\(CueAsk.push.always ?? "")"；rule 只有第一项），他选第二项就照字面记进允许清单。卡上只能选：他在 Cue 页一开口，开着的卡就当场收起，算他直接说了；他那句不是在答它，restore 放回。允许清单里有的（task 所在的项目或所有项目）会被拒：直接做。
+          选项由 CuePad 给（如推送：\(CueAsk.push.choices(in: "项目名").joined(separator: " / "))；不带 task 时第二项是"\(CueAsk.push.always ?? "")"；rule 只有第一项），他选第二项就照字面记进允许清单。卡上只能选：他在 Cue 页一开口，开着的卡就当场收起，算他直接说了；他那句不是在答它，restore 放回。允许清单里有的（task 所在的项目或所有项目）会被拒：直接做。
           urgent 推送到手机；task 关联一个任务（按它的项目查允许清单）；withdraw 写"等你"里一条的 id，撤回它（你不用再问了，或他在会话里说了怎么办），可同时带 text 说明；restore 写他开口收起的那条的 id，放回"等你"。
           """,
         "inputSchema": schema(
@@ -216,16 +216,18 @@ public struct CueTools: Sendable {
     if let session, let busy = try await store.tasks(boundTo: session.sessionID).first(where: { $0.task.piSessionID == session.sessionID && $0.task.status != .done }) {
       throw Failure("会话「\(session.title)」正在做「\(busy.task.heading)」（\(busy.task.id.shortID)）：同一件事接着做用 say 或给它 edit 加步骤")
     }
+    // 没给 project：带会话的是会话所在的项目，其余进默认项目
     var project = try await args.string("project").asyncMap(project)
     if project == nil, let home = session?.projectID { project = try await store.projects().first { $0.id == home } }
+    let projectID = project?.id ?? Project.defaultID
     // 同一件事建第二份（重试、同一轮里并发发出的两次 add）只会开出第二个会话：返回已有的那件
     if session == nil, let same = try await store.tasks(.todo, .inProgress).flatMap(\.tasks).first(where: {
-      $0.parentID == nil && $0.projectID == project?.id && $0.heading.caseInsensitiveCompare(heading) == .orderedSame
+      $0.parentID == nil && $0.projectID == projectID && $0.heading.caseInsensitiveCompare(heading) == .orderedSame
     }) {
       let dropped = args.string("body") != nil || !names.isEmpty ? "，这次的正文与步骤也没写（要改用 edit）" : ""
       return .ok("已有没做完的「\(same.heading)」（\(same.id.shortID)），没再建\(dropped)：同一件事接着用它。")
     }
-    let top = try await store.createTask(CueLines.joined(title: heading, rest: args.string("body")), in: project?.id)
+    let top = try await store.createTask(CueLines.joined(title: heading, rest: args.string("body")), in: projectID)
     var steps: [UUID] = []
     for step in names { steps.append(try await store.createTask(step, under: top.id).id) }
     var text = "建好了「\(top.heading)」（\(top.id.shortID)）" + (steps.isEmpty ? "" : "，\(steps.count) 个步骤")
@@ -234,7 +236,7 @@ public struct CueTools: Sendable {
       try await store.bindSession(session.sessionID, to: leaf.id)
       text += "，" + (leaf.id == top.id ? "" : "「\(leaf.heading)」") + "绑上了会话「\(session.title)」"
     }
-    text += project == nil ? "（未分类，开不了会话：用 edit 的 project 放进项目再开工）。" : "，在项目「\(project!.name)」里。"
+    text += "，在项目「\(try await store.project(projectID)?.name ?? "")」里。"
     return .ok(text)
   }
 
@@ -272,7 +274,7 @@ public struct CueTools: Sendable {
       let project = try await project(ref)
       let top = try await store.topTask(of: card.id)
       try await store.moveCard(top, to: .top(project: project.id), after: nil)
-      done.append("连同步骤挪到了项目「\(project.name)」" + (try await store.cueProjects().first { $0.id == project.id }?.hasFolder == true ? "" : "（它没绑文件夹，开工前请用户绑一个）"))
+      done.append("连同步骤挪到了项目「\(project.name)」")
     }
     guard !done.isEmpty else { throw Failure("edit 至少给 title、body、steps、project、reopen 之一") }
     return .ok("「\(card.heading)」（\(card.id.shortID)）：\(done.joined(separator: "，"))。")
@@ -372,7 +374,7 @@ public struct CueTools: Sendable {
     return PiConfig(model: try (agent ?? .pi).requiredModelKey(raw), thinking: effort)
   }
 
-  /// 看板：所有没做完的顶层任务，按项目分组（未分类在最后），再是不归没做完的事的活会话，至多 `overviewLimit` 行；在做的归 Cue 管，其余是用户手上的清单。
+  /// 看板：所有没做完的顶层任务，按项目分组，再是不归没做完的事的活会话，至多 `overviewLimit` 行；在做的归 Cue 管，其余是用户手上的清单。
   /// 末尾是最近完成的 `recentlyDone` 件，各带会话与它此刻的状态：在旧会话上做别的事时从这里找（add 带 session）。
   private func board() async throws -> Result {
     let board = try await store.cueBoard()
@@ -381,11 +383,11 @@ public struct CueTools: Sendable {
     let items = board.tasks
     let names = Dictionary(uniqueKeysWithValues: try await store.projects().map { ($0.id, $0.name) })
     let now = Date()
-    var lines: [(text: String, isItem: Bool)] = [], group: UUID?? = .none
+    var lines: [(text: String, isItem: Bool)] = [], group: UUID?
     for item in items {
       if item.task.projectID != group {
         group = item.task.projectID
-        lines.append(((item.task.projectID.flatMap { names[$0] } ?? "未分类") + "：", false))
+        lines.append(((names[item.task.projectID] ?? "") + "：", false))
       }
       lines.append(("- " + CueEnvelope.boardLine(item, now: now, left: left), true))
     }

@@ -43,7 +43,7 @@ struct CardEditorScreen: View {
             }
             .observing(services.store, id: cardID, into: $data, onError: workspace.fail) { [cardID] store in
                 guard let card = try store.card(cardID) else { throw CueStoreError.notFound }
-                return EditorData(card: card, project: try card.projectID.flatMap { try store.project($0) })
+                return EditorData(card: card, project: try store.project(card.projectID))
             }
             .onChange(of: data?.card.id, initial: true) {
                 guard initialText == nil, let card = data?.card else { return }
@@ -94,7 +94,7 @@ struct CardEditorScreen: View {
 
     /// 顶栏中间：任务的正文写任务的标题，其余写所属项目。
     private func place(_ data: EditorData) -> String {
-        part == .rest ? data.card.title : data.project?.name ?? CaptureCopy.unfiled
+        part == .rest ? data.card.title : data.project?.name ?? ""
     }
 
     /// 顶栏的一行："改于 03:36 · 资料"；任务的正文是"正文 · 改于 03:36"。

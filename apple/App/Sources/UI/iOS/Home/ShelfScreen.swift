@@ -5,8 +5,8 @@ import SwiftUI
 /// 项目页（iPhone 底部一排的"项目"；宽屏侧栏项目区末尾的"全部项目"，侧栏只列置顶与最近的几个），右上"新建项目"。
 /// 只排项目（任务的事在任务页）：置顶项目是纸卡，按行平分整行（`pinnedGrid`）；其余按项目目录的顺序排成一张纸上的行，长相同侧栏的项目行
 /// （名字、灵感数，下面一行"此刻"）。卡与行的"此刻"同侧栏一条规则（`ProjectNow.byProject`：会话的事、进行中的任务、介绍）。
-/// 窄屏（iPhone）没有侧栏，末尾一组未分类、归档、回收站、设置（同步到不了 Mac 时设置那一行带点，`AppServices.macAlert`），推在这一页上；
-/// 宽屏这一组在侧栏里，这里不放。空库时是空库引导，窄屏末尾那一组照样在（设置只有这一个入口）。
+/// 窄屏（iPhone）没有侧栏，末尾一组归档、回收站、设置（同步到不了 Mac 时设置那一行带点，`AppServices.macAlert`），推在这一页上；
+/// 宽屏这一组在侧栏里，这里不放。
 struct ShelfScreen: View {
     @Environment(Workspace.self) private var workspace
     @Environment(Navigation.self) private var navigation
@@ -36,7 +36,6 @@ struct ShelfScreen: View {
         let now = ProjectNow.byProject(catalog.projects, sessions: services.liveSessions.items, tasks: leading, shown: workspace.shown)
         let wide = !narrow && !typeSize.isAccessibilitySize
         return LazyVStack(alignment: .leading, spacing: Self.sectionGap) {
-            if catalog.projects.isEmpty { EmptyShelf { navigation.projectForm = .init() } }
             if !pinned.isEmpty {
                 // 置顶卡平分整行：iPhone 至多两列，宽屏至多四列，不留一排窄卡靠左
                 pinnedGrid(pinned, columns: typeSize.isAccessibilitySize ? 1 : min(pinned.count, wide ? 4 : 2), now: now)
@@ -48,7 +47,7 @@ struct ShelfScreen: View {
                 .padding(.vertical, Self.paperInset)
                 .rowPaper(radius: Self.radius)
             }
-            if narrow { ShelfFooter(unfiled: catalog.unfiledCount) }
+            if narrow { ShelfFooter() }
         }
         .padding(.horizontal, 16)
         .padding(.bottom, 24)
@@ -132,18 +131,6 @@ private struct PinnedShelfCard: View {
     }
 }
 
-/// 空库：共用的空库引导，动作是 iOS 的主按钮。
-private struct EmptyShelf: View {
-    let create: () -> Void
-
-    var body: some View {
-        EmptyLibrary {
-            EmptyStateButton(title: "新建项目", icon: .newProject, action: create)
-        }
-        .padding(.top, 40)
-    }
-}
-
 /// 项目的一行，长相同侧栏的项目行：图标、名字、灵感数，下面一行"此刻"（`ProjectNowLine` 一直占着这一行的高度，状态出现、消失时列表不跳）。
 /// 辅助字号下名字独占一行、可换行，灵感数排到下一行。
 private struct ShelfRow: View {
@@ -182,15 +169,13 @@ private struct ShelfRow: View {
     }
 }
 
-/// 窄屏末尾那一组：未分类（有才列）、归档、回收站、设置（`SidebarOutline.footer`，同侧栏底部），点了推在项目页上。
+/// 窄屏末尾那一组：归档、回收站、设置（`SidebarOutline.footer`，同侧栏底部），点了推在项目页上。
 private struct ShelfFooter: View {
-    let unfiled: Int
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
 
     var body: some View {
         VStack(spacing: 0) {
-            if unfiled > 0 { ShelfLine(route: .unfiled, icon: .unfiled, title: CaptureCopy.unfiled, count: unfiled) }
             ForEach(SidebarOutline.footer, id: \.self) { entry in
                 ShelfLine(route: entry.route, icon: entry.icon, title: entry.title, alert: entry == .settings ? services.macAlert : nil)
             }
@@ -205,7 +190,6 @@ private struct ShelfLine: View {
     let route: Route
     let icon: Icon
     let title: String
-    var count = 0
     var alert: SyncSummary?
     @Environment(\.palette) private var palette
     @ScaledMetric(relativeTo: .body) private var glyph: CGFloat = 17
@@ -217,7 +201,6 @@ private struct ShelfLine: View {
                 Text(title).foregroundStyle(palette.ink)
                 Spacer(minLength: 8)
                 if let alert { Circle().fill(palette.color(alert.tone)).frame(width: 7, height: 7).accessibilityHidden(true) }
-                if count > 0 { Text("\(count)").font(.subheadline.monospacedDigit()).foregroundStyle(palette.ink3).counting(count) }
                 Image(.forward).font(.footnote.weight(.semibold)).foregroundStyle(palette.ink3).accessibilityHidden(true)
             }
             .padding(.horizontal, 16).frame(minHeight: 48)

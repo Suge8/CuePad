@@ -124,6 +124,8 @@ final class AppServices {
     @ObservationIgnored let hotkeyBackend: any HotkeyBackend
     /// 这台 Mac 的稳定标识：Pi 状态记录与投送请求都靠它区分是哪台 Mac。
     @ObservationIgnored let hostID: String
+    /// 项目的工作区放在哪（`Workspaces`）：没绑文件夹的项目在这台 Mac 开工时建在这里。
+    @ObservationIgnored let workspaces: Workspaces
     @ObservationIgnored let wakeNotifications: NotificationCenter
     @ObservationIgnored let piStateRecorder: PiStateRecorder
     /// 这台 Mac 的在线记录；`start()` 时开始续期，退出时写成离线。
@@ -132,7 +134,7 @@ final class AppServices {
     @ObservationIgnored let macAgents: MacAgentsRecorder
     /// 执行发给这台 Mac 的投送请求（手机发来的与本机界面写的）；`start()` 时启动。
     @ObservationIgnored lazy var executor = MacExecutor(
-        store: store, pi: pi, runtimes: runtimes, hostID: hostID, recorder: piStateRecorder,
+        store: store, pi: pi, runtimes: runtimes, hostID: hostID, workspaces: workspaces, recorder: piStateRecorder,
         upload: { [weak self] id in await self?.upload(id) },
         refreshQuota: { [weak self] in try await self?.refreshQuotaForRequest() },
         reportIssue: { [weak self] message in self?.reportIssue(.syncUnavailable(message)) })
@@ -278,6 +280,7 @@ final class AppServices {
         liveSessions = try LiveSessions(store: store, endedOn: mac.hostID, at: speechClock.moment)
         timing = mac.timing
         hostID = mac.hostID
+        workspaces = mac.workspaces
         wakeNotifications = mac.wakeNotifications
         piStateRecorder = PiStateRecorder(store: store, hostID: mac.hostID)
         presence = MacPresenceKeeper(store: store, sync: self.sync, host: mac.hostID)

@@ -84,7 +84,7 @@ private struct WindowPanels: View {
                 mountsPalette = true
             }
             .panel(item: $workspace.openTask) { TaskSheet(taskID: $0.id) }
-            .panel(item: $workspace.projectForm) { ProjectForm(project: $0.project, created: $0.created) }
+            .panel(item: $workspace.projectForm) { ProjectForm(project: $0.project) }
             .panel(isPresented: $workspace.showsAgentSetup) { AgentSetupPanel() }
     }
 }
@@ -168,7 +168,6 @@ private struct PageStack: View {
     @ViewBuilder private func pageView(_ page: Route) -> some View {
         switch page {
         case .project(let id): ProjectPage(projectID: id)
-        case .unfiled: ProjectPage(projectID: nil)
         case .archive: ArchivePage()
         case .trash: TrashPage()
         case .cue: CuePage()
@@ -310,7 +309,7 @@ private extension Route {
     /// 底部输入栏放不放：回收站、Agent 整页与会话页不是记灵感的地方。
     var takesCapture: Bool {
         switch self {
-        case .project, .unfiled, .archive: true
+        case .project, .archive: true
         default: false
         }
     }
@@ -366,8 +365,9 @@ private struct WorkspaceShortcuts: View {
         .accessibilityHidden(true)
     }
 
+    /// 新卡进正在看的项目，不在项目页时进默认项目。
     private func newCard() {
-        let project = workspace.currentProject
+        let project = workspace.currentProject ?? Project.defaultID
         workspace.attempt {
             workspace.open(try await workspace.createCard(in: project))
         }

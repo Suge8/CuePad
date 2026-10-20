@@ -5,7 +5,7 @@ import WidgetKit
 @main
 struct CuePadWidgets: WidgetBundle {
     var body: some Widget {
-        UnfiledWidget()
+        DefaultProjectWidget()
         CueWidget()
     }
 }
@@ -47,15 +47,15 @@ struct CueWidget: Widget {
     }
 }
 
-struct UnfiledWidget: Widget {
+struct DefaultProjectWidget: Widget {
     /// 已放到桌面的小组件按这个字符串认，改了它们会消失；与代码里的叫法不同是有意保留。
     static let kind = "CuePadInbox"
 
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: Self.kind, provider: SnapshotProvider(empty: UnfiledSnapshot(cards: [], total: 0))) { entry in
-            WidgetViews.unfiled(entry.snapshot)
+        StaticConfiguration(kind: Self.kind, provider: SnapshotProvider(empty: DefaultProjectSnapshot(name: "默认", cards: [], total: 0))) { entry in
+            WidgetViews.defaultProject(entry.snapshot)
         }
-        .configurationDisplayName("未分类")
+        .configurationDisplayName("默认")
         .description("最近记下的灵感，点一下对 Cue 说。")
         .supportedFamilies([.systemSmall, .systemMedium])
     }

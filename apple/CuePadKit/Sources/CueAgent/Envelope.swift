@@ -34,8 +34,8 @@ public enum CueEnvelope {
     public var now: Date
     /// 上下文已用多少 token；不知道为 nil。
     public var contextUsed: Int?
-    /// 所有项目（`CueStore.cueProjects`）：Cue 据此把活放进项目。
-    public var projects: [CueProject]
+    /// 所有项目（`CueStore.projects`）：Cue 据此把活放进项目。
+    public var projects: [Project]
     public var changes: [CueChange]
     /// 看板（`CueStore.cueBoard`）：只写在做的。
     public var board: CueBoard
@@ -47,7 +47,7 @@ public enum CueEnvelope {
     public var resume: CueResume?
 
     public init(
-      now: Date, contextUsed: Int?, projects: [CueProject], changes: [CueChange],
+      now: Date, contextUsed: Int?, projects: [Project], changes: [CueChange],
       board: CueBoard, waiting: [CueMessage], left: [CueLeft] = [], wake: CueWake, resume: CueResume? = nil
     ) {
       self.left = left
@@ -66,7 +66,7 @@ public enum CueEnvelope {
     let calendar = Calendar(identifier: .gregorian)
     var lines = ["<cue>", stamp(input.now, calendar)]
 
-    lines.append("项目：" + (input.projects.isEmpty ? "无" : input.projects.map { $0.name + ($0.hasFolder ? "" : "（没绑文件夹）") }.joined(separator: "、")))
+    lines.append("项目：" + (input.projects.isEmpty ? "无" : input.projects.map(\.name).joined(separator: "、")))
 
     lines.append("变化（上次醒来之后）：" + (input.changes.isEmpty ? "无" : ""))
     lines += input.changes.map { "- \(change($0))" }

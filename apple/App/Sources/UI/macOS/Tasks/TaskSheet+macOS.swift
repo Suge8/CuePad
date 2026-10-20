@@ -293,7 +293,7 @@ nonisolated private struct SheetData: Sendable, Equatable {
         guard let goal = try store.card(id) else { throw CueStoreError.notFound }
         let steps = try store.children(of: id).filter(\.isTask)
         return SheetData(
-            goal: goal, project: try goal.projectID.flatMap { try store.project($0) }, steps: steps,
+            goal: goal, project: try store.project(goal.projectID), steps: steps,
             progress: try store.subtaskProgress(of: [id])[id])
     }
 }

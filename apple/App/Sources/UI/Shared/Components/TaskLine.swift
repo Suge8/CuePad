@@ -306,7 +306,7 @@ struct TaskGroupHeader: View {
     #endif
 }
 
-/// 待办里按项目分的一段的段头：项目图标、名字与这一段的条数；未分类是托盘图标与"未分类"。比组标题小一级。
+/// 待办里按项目分的一段的段头：项目图标、名字与这一段的条数。比组标题小一级。
 struct TaskSectionHeader: View {
     let project: Project?
     let count: Int
@@ -315,7 +315,7 @@ struct TaskSectionHeader: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 5) {
             ProjectGlyph(project: project, size: Self.glyph)
-            Text(project?.name ?? CaptureCopy.unfiled).foregroundStyle(palette.ink2)
+            Text(project?.name ?? "").foregroundStyle(palette.ink2)
             Text("\(count)").monospacedDigit().foregroundStyle(palette.ink3)
         }
         .font(Self.font)

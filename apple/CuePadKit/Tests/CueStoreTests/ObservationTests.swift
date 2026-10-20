@@ -45,11 +45,11 @@ import Testing
     var read = reads.makeAsyncIterator()
     var values = store.observe(after: 0) { store -> Int in
       readSignal.yield()
-      return try store.cards(in: nil).count
+      return try store.cards(in: Project.defaultID).count
     }.makeAsyncIterator()
     await read.next()  // 第一次读到的是 0，和手里的一样：不产出
 
-    _ = try await store.createCard(in: nil, body: "x")
+    _ = try await store.createCard(body: "x")
     #expect(try await values.next() == 1)
   }
 }

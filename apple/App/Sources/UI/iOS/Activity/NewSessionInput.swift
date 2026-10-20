@@ -7,8 +7,8 @@ import SwiftUI
 /// （`PiConfigControls.init(choice:)`，与 Mac 的新会话表单、Cue 同一排）：Agent 只列那台 Mac 上能用的（`MacAgents`），默认上次选的（`MacAgents.preferred`，选了就记作下次的默认）；
 /// 模型与思考强度默认跟着这家的默认，换了 Agent 或 Mac 回到默认。一家都不能用时头部写那台为什么（`whyNone`）、开不了。发送钮就是开始：
 /// 发出后头部写进度（送达中 → Mac 在开），Mac 开好、带着这次标识的会话同步过来时自动收起并进入它；没能打开时头部写原因，可以再发。
-/// 新会话的目录只由项目绑定的文件夹推出；选中还没绑文件夹的项目时头部引导就地绑（弹候选，请 Mac 绑），绑好才能开。
-/// 没有项目时不出这个输入框，先新建项目（`Navigation.startNewSession`）。
+/// 新会话的目录只由项目绑定的文件夹推出；还没绑的项目也直接开：发给 Cue 运行的那台 Mac（没启用 Cue 时按名字排第一台，`CueStore.workMac`），
+/// 它开工时建好工作区并绑定。
 struct NewSessionInput: View {
     let start: Navigation.NewSession
     @Environment(Workspace.self) private var workspace
@@ -19,7 +19,7 @@ struct NewSessionInput: View {
     @State private var draft = ComposerDraft()
     @State private var launched: SessionLaunch?
     @State private var progress: LaunchProgress?
-    /// 选中的项目绑着的那台 Mac 上能用的几家；还没读到为 nil。
+    /// 由哪台 Mac 开（`LaunchPlace.host`）、那台上能用的几家；还没读到为 nil。
     @State private var agents: MacAgents?
     /// 这次指定的模型与思考强度（nil 是这家的默认）。
     @State private var model: PiModelKey?
@@ -29,7 +29,8 @@ struct NewSessionInput: View {
 
     /// 只列项目，按所有项目选择器的同一个顺序（`ProjectCatalog.projects`，最近活跃的在前）。
     private var places: [ProjectFolders.LaunchPlace] {
-        ProjectFolders.launchPlaces(projects: workspace.catalog?.projects ?? [], bindings: workspace.catalog?.bindings ?? [], host: nil)
+        ProjectFolders.launchPlaces(
+            projects: workspace.catalog?.projects ?? [], bindings: workspace.catalog?.bindings ?? [], host: nil, workMac: workspace.catalog?.workMac?.hostID)
     }
     private var chosen: ProjectFolders.LaunchPlace? {
         let places = places
@@ -43,10 +44,10 @@ struct NewSessionInput: View {
     }
     private var agent: AgentKind? { agents?.preferred(services.settings.lastAgent) }
     private var brain: AgentModelChoice? {
-        guard chosen?.binding != nil, let agents, let agent else { return nil }
+        guard chosen?.host != nil, let agents, let agent else { return nil }
         return AgentModelChoice(agents: agents.agents, agent: agent, model: model, thinking: thinking)
     }
-    private var canStart: Bool { chosen?.binding != nil && agent != nil && services.reachesPiHost && !inFlight }
+    private var canStart: Bool { chosen?.host != nil && agent != nil && services.reachesPiHost && !inFlight }
 
     var body: some View {
         Composer(
@@ -83,13 +84,13 @@ struct NewSessionInput: View {
             guard let launched else { return LaunchProgress() }
             return try launched.progress(from: store)
         }
-        .observing(services.store, id: chosen?.binding?.hostID, into: $agents, onError: workspace.fail) {
-            [host = chosen?.binding?.hostID] store in
+        .observing(services.store, id: chosen?.host, into: $agents, onError: workspace.fail) {
+            [host = chosen?.host] store in
             guard let host else { return MacAgents(hostID: "", agents: [], modifiedAt: .distantPast) }
             return try store.macAgents(on: host)
         }
         // 换了 Mac：模型清单是另一份，回到默认
-        .onChange(of: chosen?.binding?.hostID) { model = nil }
+        .onChange(of: chosen?.host) { model = nil }
         .onChange(of: progress?.claimed?.id) { _, session in
             guard let session else { return }
             navigation.newSession = nil
@@ -102,7 +103,7 @@ struct NewSessionInput: View {
         HStack(spacing: 8) {
             MenuButton(sections: [ChoiceMenu.Section(choices: places.map { place in
                 ChoiceMenu.Choice(
-                    title: Dotted(place.project.name, place.detail ?? (place.binding == nil ? "还没有文件夹" : nil)).visible,
+                    title: Dotted(place.project.name, place.detail).visible,
                     checked: place.id == chosen?.id) { choice = place.id }
             })], accessibilityLabel: "在哪开：\(chosen?.project.name ?? "没选")") {
                 DestinationChip(title: Text(Dotted("新会话", chosen?.project.name ?? "选在哪开"))) {
@@ -114,14 +115,10 @@ struct NewSessionInput: View {
         }
     }
 
-    /// 发出后的进度，上一次没能打开的原因，送不到 Mac 的原因，或项目还没有文件夹时的引导。
+    /// 发出后的进度，上一次没能打开的原因，或送不到 Mac 的原因。
     @ViewBuilder private var status: some View {
-        if let place = chosen, place.binding == nil, phase == .idle {
-            // 项目还没有文件夹：写明，同名文件夹一键绑，或自己选（请 Mac 绑，进度与没绑成的原因就在这里）
-            VStack(alignment: .leading, spacing: 0) {
-                Text("「\(place.project.name)」还没有文件夹").foregroundStyle(palette.ink3)
-                ProjectFolderGuide(project: place.project, guide: workspace.folderGuide, style: .line)
-            }
+        if chosen != nil, chosen?.host == nil {
+            Text("还没有 Mac 打开过 CuePad：先在 Mac 上打开它").foregroundStyle(palette.ink3)
         } else {
             switch phase {
             case .failed(let failure): Text(failure.text(sync: services.syncStatus)).foregroundStyle(palette.failure)
@@ -130,8 +127,8 @@ struct NewSessionInput: View {
                 HStack(spacing: 6) { Spinner(.mini); Text(transit.label) }.font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink2)
             case .idle:
                 // 那台一家都不能用时先说它：同步通了也开不了
-                if let binding = chosen?.binding, let agents, agents.agents.isEmpty {
-                    Text("\(binding.macName)：\(agents.whyNone)").foregroundStyle(palette.ink3)
+                if let agents, agents.agents.isEmpty {
+                    Text("\(agents.shownName)：\(agents.whyNone)").foregroundStyle(palette.ink3)
                 } else if !services.reachesPiHost {
                     SyncHint(status: services.syncStatus, consequence: "发不到 Mac")
                 }
@@ -140,13 +137,13 @@ struct NewSessionInput: View {
     }
 
     private func launch() {
-        guard let place = chosen, let binding = place.binding, let agent, let brain, canStart else { return }
+        guard let place = chosen, let host = place.host, let agent, let brain, canStart else { return }
         let draft = draft
         sending = true
         workspace.attempt {
             defer { sending = false }
             launched = try await start.launch(
-                in: place.project, binding: binding, draft: draft, agent: agent, model: brain.model, thinking: brain.shownThinking, services: services)
+                in: place.project, on: host, draft: draft, agent: agent, model: brain.model, thinking: brain.shownThinking, services: services)
         }
     }
 }

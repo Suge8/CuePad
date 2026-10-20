@@ -139,13 +139,9 @@ struct AgentPage: View {
 
     @ViewBuilder private var empty: some View {
         let project = filter.flatMap { workspace.catalog?.project($0) }
-        switch model.empty(filtering: project, hasFolder: filter.map(workspace.hasFolder) ?? true) {
+        switch model.empty(filtering: project) {
         case .noMatch(let query):
             EmptyState.noMatch(query)
-        case .needsFolder(let project):
-            EmptyState(mascot: .empty, title: "还没绑定文件夹", message: "绑定后，在那个文件夹里跑的 Agent 会话会出现在这里") {
-                ProjectFolderGuide(project: project, guide: workspace.folderGuide)
-            }
         case .none(let inProject):
             EmptyState(mascot: .empty, title: inProject ? "这个项目还没有 Agent 会话" : "还没有 Agent 会话",
                        message: "在终端里开一个 Agent，或点右上角开新会话", waitsForSync: true) { EmptyView() }

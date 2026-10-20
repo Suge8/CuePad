@@ -113,8 +113,8 @@ final class SendState {
 
 extension Workspace {
     /// 开始：把叶子任务的第一句（`CueStore.opening`，与 Cue 的开工同一个函数）发给 Agent，交到哪只由 `CueStore.handOffPlan` 定：
-    /// 接着用上一步的会话就发给它（在跑就打断这一轮）；要开新会话就开以任务命名的、开好后任务绑上它；
-    /// 哪台 Mac 都没绑文件夹时就地弹选文件夹，取消就不开。正文发出后留在任务上。
+    /// 接着用上一步的会话就发给它（在跑就打断这一轮）；要开新会话就开以任务命名的、开好后任务绑上它（项目没绑文件夹时执行的那台 Mac
+    /// 先建工作区，`MacExecutor`）。正文发出后留在任务上。
     func handOff(_ leaf: Card) {
         let id = leaf.id
         attempt { try await self.handOff(leaf: id) }
@@ -136,20 +136,14 @@ extension Workspace {
             send(text, to: AgentTarget(session: session, host: host), card: leaf)
         case .launch(let project, let host):
             // 会话名由任务定（`CueStore.requestLaunch`）；请求上显示的目标名同新会话的其他入口：任务没有标题时写项目名
-            let projectName = try await services.store.project(project)?.name
-            let title = plan.name ?? projectName ?? CaptureCopy.unfiled
+            let projectName = try await services.store.project(project)?.name ?? ""
+            let title = plan.name ?? projectName
             let agents = try await services.store.macAgents(on: host)
             guard let agent = agents.preferred(services.settings.lastAgent) else {
                 say("\(host == services.hostID ? "这台" : "那台") Mac 上开不了会话：\(agents.whyNone)", isError: true)
                 return
             }
             _ = try await startSession(in: project, prompt: text.nonEmpty, title: title, on: host, card: leaf, agent: agent) {}
-        case .noFolder(let project, _):
-            guard let path = await ProjectDirectory.pick() else { return }
-            try await services.store.setDirectory(path, for: project)
-            try await handOff(leaf: leaf, fresh: fresh)
-        case .unfiled:
-            say("未分类的任务没有文件夹，开不了会话", isError: true)
         }
     }
 

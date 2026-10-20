@@ -1,12 +1,12 @@
 import SwiftUI
 import WidgetKit
 
-/// 小组件的界面。未分类的整块点开"对 Cue 说"（`DeepLink.speak`，随手记也在那里说），卡片可用 `DeepLink.card` 链接直达。
+/// 小组件的界面。默认项目的整块点开"对 Cue 说"（`DeepLink.speak`，随手记也在那里说），卡片可用 `DeepLink.card` 链接直达。
 /// 主 App（iOS）也编进这个文件，调试画面用同一份视图按系统尺寸画（`DebugWidgetStage`）：尺寸档由调用方给，
 /// 小组件里从环境读（`widgetFamily` 只能由系统设）。
 enum WidgetViews {
-    static func unfiled(_ snapshot: UnfiledSnapshot) -> some View {
-        UnfiledView(snapshot: snapshot)
+    static func defaultProject(_ snapshot: DefaultProjectSnapshot) -> some View {
+        DefaultProjectView(snapshot: snapshot)
             .widgetURL(DeepLink.speak.url)
             .modifier(WidgetPaper())
     }
@@ -69,13 +69,13 @@ private struct CueView: View {
     }
 }
 
-private struct UnfiledView: View {
-    let snapshot: UnfiledSnapshot
+private struct DefaultProjectView: View {
+    let snapshot: DefaultProjectSnapshot
     @Environment(\.palette) private var palette
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(Dotted("未分类", "\(snapshot.total)")).font(.caption).foregroundStyle(palette.ink2)
+            Text(Dotted(snapshot.name, "\(snapshot.total)")).font(.caption).foregroundStyle(palette.ink2)
             ForEach(snapshot.cards.prefix(3), id: \.id) { card in
                 Text(card.title.isEmpty ? "图片" : card.title).font(.footnote).lineLimit(1)
             }

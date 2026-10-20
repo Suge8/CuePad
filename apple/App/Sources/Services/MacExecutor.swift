@@ -10,6 +10,7 @@ final class MacExecutor {
     private let pi: PiBridge
     private let runtimes: [AgentKind: any AgentRuntime]
     private let hostID: String
+    private let workspaces: Workspaces
     private let recorder: PiStateRecorder
     private let upload: @Sendable (UUID) async -> Void
     private let refreshQuota: @MainActor () async throws -> Void
@@ -17,7 +18,7 @@ final class MacExecutor {
     private var running: DeliveryExecutor?
 
     init(
-        store: CueStore, pi: PiBridge, runtimes: [AgentKind: any AgentRuntime], hostID: String, recorder: PiStateRecorder,
+        store: CueStore, pi: PiBridge, runtimes: [AgentKind: any AgentRuntime], hostID: String, workspaces: Workspaces, recorder: PiStateRecorder,
         upload: @escaping @Sendable (UUID) async -> Void,
         refreshQuota: @escaping @MainActor () async throws -> Void,
         reportIssue: @escaping @MainActor (String) -> Void
@@ -26,6 +27,7 @@ final class MacExecutor {
         self.pi = pi
         self.runtimes = runtimes
         self.hostID = hostID
+        self.workspaces = workspaces
         self.recorder = recorder
         self.upload = upload
         self.refreshQuota = refreshQuota
@@ -178,12 +180,13 @@ final class MacExecutor {
 
     // MARK: 不指向某个会话的请求（除开新会话的开场白外不写发送记录）
 
-    /// 开新会话：在后台托管（各家的 `AgentRuntime`），目录由本机按项目绑定的文件夹解析（新会话的目录只由项目绑定推出）；
+    /// 开新会话：在后台托管（各家的 `AgentRuntime`），目录由本机按项目绑定的文件夹解析（新会话的目录只由项目绑定推出；
+    /// 这台 Mac 上还没绑的，先建好它的工作区并绑定，`workspace(of:)`）；
     /// 带上发起方的认领标识与会话名、模型、思考强度（Pi 的启动参数，一步生效：模型无效时 Pi 起不来，请求整体失败、不留会话），
     /// 连上后把开场的话作为第一条消息送进去（带着这条请求的 id，对话据此认出它），并记发送记录（同 `deliver`：请求清理后对话仍认得出是谁说的）。
     private func startSession(_ request: DeliveryRequest) async throws {
         guard let launch = request.launch else { throw SendError.unsupportedMode(request.mode.rawValue) }  // 更新版本写的新内容
-        let directory = try await directory(of: .project(launch.project))
+        let directory = try await workspace(of: launch.project)
         try requireDirectory(directory)
         let id = try await runtime(launch.agent ?? .pi).open(
             in: directory, launchToken: launch.token, name: launch.name, model: launch.model, thinking: launch.thinking)
@@ -211,6 +214,17 @@ final class MacExecutor {
         let directory = try await directory(of: folder)
         try requireDirectory(directory)
         try await store.setDirectory(directory.path, for: bind.project)
+    }
+
+    /// 项目在这台 Mac 上的文件夹：绑着的就是它；没绑的建好工作区（`Workspaces.directory`，已存在同名的直接用）并绑定——
+    /// 绑定照常发布给别的设备（`startDirectoryBindings`），之后与自己选的文件夹没有分别。
+    private func workspace(of project: UUID) async throws -> URL {
+        if let path = try await store.directory(of: project) { return URL(filePath: path, directoryHint: .isDirectory) }
+        guard let name = try await store.project(project)?.name else { throw SendError.projectNotHere }
+        let directory = workspaces.directory(for: name)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try await store.setDirectory(directory.path(percentEncoded: false), for: project)
+        return directory
     }
 
     private func requireDirectory(_ directory: URL) throws {

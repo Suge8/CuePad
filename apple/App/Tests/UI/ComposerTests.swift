@@ -19,7 +19,7 @@ struct ComposerTests {
         let target = try await session()
         let photo = pngData(shade: 0.3)
         let hash = try store.files.store(pngData(shade: 0.8))
-        let card = try await store.createCard(in: nil, body: "接口约定\n\n![](cuepad://img/\(hash))")
+        let card = try await store.createCard(body: "接口约定\n\n![](cuepad://img/\(hash))")
         let draft = ComposerDraft(
             text: "  照这个改  ", images: [PickedImage(data: photo)],
             attachments: [Outbox(content: card.body, card: card.id, project: nil)])
@@ -98,7 +98,7 @@ struct ComposerTests {
             try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "loose", state: .settled, title: "loose")
             return try #require(try await store.allPiSessionStates().first { $0.sessionID == "loose" })
         }())
-        #expect(try await store.cards(in: nil).map(\.body) == ["没归属的"])
+        #expect(try await store.cards(in: Project.defaultID).map(\.body) == ["没归属的"])
         #expect(workspace.notice?.text == "已记到 未分类" && workspace.notice?.link == .unfiled)
     }
 }

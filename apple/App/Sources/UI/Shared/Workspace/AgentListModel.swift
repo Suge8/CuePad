@@ -32,15 +32,12 @@ final class AgentListModel {
 
     enum Empty: Equatable {
         case noMatch(String)
-        /// 会话按工作目录归入项目：没绑文件夹就一个也归不进来，不能说"没有会话"。
-        case needsFolder(Project)
         case none(inProject: Bool)
     }
 
     /// 列表空着时说什么；`project` 是此刻筛着的项目。
-    func empty(filtering project: Project?, hasFolder: Bool) -> Empty {
+    func empty(filtering project: Project?) -> Empty {
         if searching { return .noMatch(query) }
-        if let project, !hasFolder { return .needsFolder(project) }
         return .none(inProject: project != nil)
     }
 }

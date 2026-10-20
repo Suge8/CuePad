@@ -92,7 +92,7 @@ struct SpeakTests {
         await writing?.value
 
         let hash = try files.store(photo.data)
-        #expect(try await store.cards(in: nil).map(\.body) == ["周末读完第三章\n\n![](cuepad://img/\(hash))"])
+        #expect(try await store.cards(in: Project.defaultID).map(\.body) == ["周末读完第三章\n\n![](cuepad://img/\(hash))"])
         #expect(workspace.notice?.text == "已记到 未分类")
         #expect(try await youSaid().isEmpty)
     }

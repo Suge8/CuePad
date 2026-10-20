@@ -174,7 +174,7 @@ struct SearchPalette: View {
                             let project = data.projects.first { $0.id == group.owner }
                             HStack(spacing: 6) {
                                 ProjectGlyph(project: project, size: 11)
-                                Text(project?.name ?? CaptureCopy.unfiled)
+                                Text(project?.name ?? "")
                                 Text("\(group.cards.count)").foregroundStyle(palette.ink3)
                             }
                             .font(Typography.label).foregroundStyle(palette.ink2)
@@ -232,7 +232,7 @@ struct SearchPalette: View {
             VStack(alignment: .leading, spacing: 10) {
                 Text(text.label).font(Typography.previewTitle).foregroundStyle(palette.ink)
                 HStack(spacing: 6) {
-                    Text(Dotted(project?.name ?? CaptureCopy.unfiled, DateLabel.short(card.modifiedAt)))
+                    Text(Dotted(project?.name, DateLabel.short(card.modifiedAt)))
                     if let name = data.lastSends[card.id]?.target.shownName { SentMark(target: name) }
                 }
                 .font(Typography.meta).foregroundStyle(palette.ink3)
@@ -278,9 +278,9 @@ struct SearchPalette: View {
         .opacity(0).frame(width: 0, height: 0).accessibilityHidden(true)
     }
 
-    private func groups(_ data: PaletteData) -> [(owner: UUID?, cards: [Card])] {
-        var order: [UUID?] = []
-        var buckets: [UUID?: [Card]] = [:]
+    private func groups(_ data: PaletteData) -> [(owner: UUID, cards: [Card])] {
+        var order: [UUID] = []
+        var buckets: [UUID: [Card]] = [:]
         for card in data.cards {
             if buckets[card.projectID] == nil { order.append(card.projectID) }
             buckets[card.projectID, default: []].append(card)
@@ -307,7 +307,7 @@ struct SearchPalette: View {
     private func open(_ card: Card) {
         workspace.searching = false
         if card.projectID != workspace.currentProject {
-            workspace.show(card.projectID.map(Route.project) ?? .unfiled)
+            workspace.show(.project(card.projectID))
         }
         workspace.open(card)
     }
@@ -377,7 +377,6 @@ private struct FilterBar: View {
     @ViewBuilder private var chips: some View {
         FilterToken(name: "项目", value: projectLabel, on: query.project != nil) {
             Button("全部") { query.project = nil }
-            Button(CaptureCopy.unfiled) { query.project = .some(nil) }
             Divider()
             ForEach(projects) { project in Button(project.name) { query.project = project.id } }
         }
@@ -403,11 +402,7 @@ private struct FilterBar: View {
     }
 
     private var projectLabel: String {
-        switch query.project {
-        case .none: "全部"
-        case .some(.none): CaptureCopy.unfiled
-        case .some(.some(let id)): projects.first { $0.id == id }?.name ?? "全部"
-        }
+        query.project.flatMap { id in projects.first { $0.id == id }?.name } ?? "全部"
     }
 
     private var sentLabel: String {

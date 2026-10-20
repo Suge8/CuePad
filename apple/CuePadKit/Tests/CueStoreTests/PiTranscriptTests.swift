@@ -36,7 +36,7 @@ import Testing
     let longAgo = now.addingTimeInterval(-30 * 86_400)
     let only = try store.files.store(pngData(width: 8, height: 8, shade: 0.1))
     let shared = try store.files.store(pngData(width: 8, height: 8, shade: 0.9))
-    _ = try await store.createCard(in: nil, body: CueFormat.imageMarkup(id: shared))
+    _ = try await store.createCard(body: CueFormat.imageMarkup(id: shared))
     try await store.upsertPiSession(IndexedSession(id: "s", path: "/s/s.jsonl", cwd: "/w", lastActivityAt: longAgo), host: "mac")
     let text = "看\n\(CueFormat.imageMarkup(id: only))\n\(CueFormat.imageMarkup(id: shared))"
     try await store.writePiTranscript(

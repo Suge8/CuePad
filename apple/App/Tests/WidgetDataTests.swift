@@ -11,10 +11,10 @@ struct WidgetDataTests {
 
     @Test func 未分类快照按最近修改排最多五张_带总数与首行标题() async throws {
         for index in 1...7 {
-            let card = try await services.store.createCard(in: nil, body: "卡片 \(index)\n后面的行")
+            let card = try await services.store.createCard(body: "卡片 \(index)\n后面的行")
             try await services.store.updateCard(card.id) { $0.modifiedAt = Date(timeIntervalSince1970: Double(index)) }
         }
-        _ = try await services.store.createCard(in: nil, body: "![](cuepad://img/\(String(repeating: "a", count: 64)))")
+        _ = try await services.store.createCard(body: "![](cuepad://img/\(String(repeating: "a", count: 64)))")
         let project = try await services.store.createProject(name: "P", color: "#000000")
         _ = try await services.store.createCard(in: project.id, body: "不在未分类")
 
@@ -32,7 +32,7 @@ struct WidgetDataTests {
         defer { services.cancelBackgroundWork() }
 
         _ = try await services.store.createProject(name: "新项目", color: "#abcdef")
-        _ = try await services.store.createCard(in: nil, body: "未分类里的")
+        _ = try await services.store.createCard(body: "未分类里的")
 
         try await eventually("快照里有新项目与未分类") {
             Snapshots.read(ProjectsSnapshot.self, from: snapshots)?.projects.map(\.name) == ["新项目"]
@@ -49,7 +49,7 @@ struct WidgetDataTests {
         services.addBackgroundFlush { order.append("另一处") }
         let removed = services.addBackgroundFlush { order.append("已注销") }
         services.removeBackgroundFlush(removed)
-        _ = try await services.store.createCard(in: nil, body: "刚写的")
+        _ = try await services.store.createCard(body: "刚写的")
 
         await services.prepareForBackground()
 

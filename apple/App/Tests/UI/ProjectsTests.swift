@@ -62,7 +62,7 @@ struct ProjectsTests {
         let workspace = Workspace(services: services)
 
         for target in [UUID(), trashed.id] { #expect(try await workspace.createCard(body: "想法", in: target).projectID == nil) }
-        #expect(try await store.cards(in: nil).map(\.body) == ["想法", "想法"])
+        #expect(try await store.cards(in: Project.defaultID).map(\.body) == ["想法", "想法"])
         #expect(try await workspace.createTask("跟进", in: UUID()).projectID == nil)
         let live = try await store.createProject(name: "B", color: "#000000")
         #expect(try await workspace.createCard(body: "想法", in: live.id).projectID == live.id)
