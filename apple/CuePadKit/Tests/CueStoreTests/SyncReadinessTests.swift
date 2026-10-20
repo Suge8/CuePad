@@ -6,10 +6,8 @@ import Testing
 /// 这些约束让映射不必改表结构：单列 TEXT 主键、每条记录有 modifiedAt、没有外键与唯一约束、
 /// 只用 CKRecord 能直接存的列类型、同步字段与本机字段分表。
 @Suite struct SyncReadinessTests {
-  static let synced = [
-    "projects", "cards", "sendRecords", "attachments", "piSessionStates", "agentCatalogs", "deliveryRequests", "directoryBindings",
-    "piMessages", "previews", "accountQuotas", "cueMessages", "cueLines", "cueProfile", "cueState", "cueRead", "macPresence", "macAgents", "sessionViewers",
-  ]
+  static let synced = Table.synced.map(\.rawValue)
+  /// 本机表逐张列出：新加的表要在这里或 `Table.synced` 里表态。
   static let local = ["piSessions", "piProcesses", "writeCounter", "projectDirectories", "syncRecords", "syncState", "cueSummaries"]
   let fixture = try! Fixture()
   var raw: RawDB { RawDB(fixture.url) }

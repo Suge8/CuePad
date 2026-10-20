@@ -20,13 +20,8 @@ struct IOSChromeTests {
             }
         }
         h.load(stored)
-        var last = -1.0, stableCount = 0
-        #expect(await h.wait {
-            let current = Double(h.textView.contentSize.height)
-            stableCount = current == last ? stableCount + 1 : 0
-            last = current
-            return stableCount >= 25
-        })
+        #expect(await h.wait { laidOutToTheEnd(h.textView.textLayoutManager!) })
+        h.layout()
         let settled = h.textView.contentSize.height
 
         var y: CGFloat = 0

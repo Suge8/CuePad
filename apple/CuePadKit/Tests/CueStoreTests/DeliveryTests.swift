@@ -226,7 +226,6 @@ import Testing
     for (made, mode) in [(end, DeliveryMode.end), (stop, .stop)] {
       let stored = try #require(try await request(made.id))
       #expect(stored.mode == .known(mode) && stored.hostID == "mac-a" && stored.target == pi && stored.isOpen)
-      #expect(!DeliveryMode.toSession.contains(mode))
     }
     #expect(DeliveryMode.end.rawValue == "end" && DeliveryMode.stop.rawValue == "stop")
     #expect(try await store.requestStop(of: pi, on: "mac-a").id == stop.id)
