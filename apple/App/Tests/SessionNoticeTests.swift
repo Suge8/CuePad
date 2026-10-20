@@ -75,16 +75,13 @@ struct SessionNoticeTests {
         Navigation(settings: AppSettings(defaults: UserDefaults(suiteName: UUID().uuidString)!, launchArguments: [:]))
     }
 
-    /// 正看着 Agent 列表时也不弹会话的前台提示：列表里那一行已经在变，再弹一条横幅只会压在列表顶上。
-    /// Agent 整页是侧栏的"会话"；Cue 页本身与 iPad 右侧面板不是会话列表。
-    @Test func 正看着Agent列表或那个会话时不弹提示_别处照弹() {
+    /// 开着那个会话时不弹它的前台提示（与系统通知同一条：开着那一页才算在看）；别处照弹，Agent 列表也照弹。
+    @Test func 开着那个会话时不弹提示_别处照弹() {
         let session = UUID()
         let navigation = navigation()
         #expect(navigation.showsAlert(about: session))  // Cue 页
-        navigation.agentPanel = true  // iPad 右侧的面板开着：那是 Cue 页
-        #expect(navigation.showsAlert(about: session))
         navigation.select(.agent)
-        #expect(!navigation.showsAlert(about: session))
+        #expect(navigation.showsAlert(about: session))
         navigation.push(.session(UUID()))  // 列表上推了别的会话
         #expect(navigation.showsAlert(about: session))
         navigation.path = [.session(session)]
@@ -94,7 +91,7 @@ struct SessionNoticeTests {
         #expect(!navigation.showsAlert(about: session))
     }
 
-    /// 提示弹出后才进了那个会话（或 Agent 列表）：横幅当场撤下，不在正看着的会话页上停满 5 秒。
+    /// 提示弹出后才进了那个会话：横幅当场撤下，不在正看着的会话页上停满 5 秒。
     @Test func 进了提示说的那个会话_横幅撤下_别的提示留着() {
         let session = UUID()
         let navigation = navigation()

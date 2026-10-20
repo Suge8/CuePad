@@ -33,7 +33,8 @@ enum ScrollAnchor {
 ///   `-CuePadFlightLog <路径>` 另量每一下在 App 进程里的开销（同一处）；`-CuePadNoAsks YES`：等你回答的演示会话都歇着、Cue 的提问撤回，"等你"为 0（`settleAsks`）；`-CuePadCueSays <秒>`：过这么久 Cue 自己说一句，`-CuePadVisitCue <秒>` 说完这么久去 Cue 页读、再回原处（`saysIfAsked`，同一处）；
 /// - `-CuePadCueFlow YES`（配 cue 画面与 `-CuePadDemo YES`）：画面就绪后按固定节奏走一遍完整的一轮（发送、在想、用工具、回复、结果卡、等你、切页），录 Cue 页的流转；
 ///   `-CuePadCueFlowLog <路径>` 另量静止与发送各一段（`cueFlowIfAsked`，见 `DebugScene+CueFlow.swift`）；
-/// - `-CuePadClick x,y`、`-CuePadRightClick x,y`（仅 Mac）：就绪后在主窗口里左键、右键点一下，打开那里的系统菜单再截图（`openMenuIfAsked`，见 `DebugMenus+Mac.swift`）；
+/// - `-CuePadForeground YES`（仅 Mac）：允许占前台（本机构建默认在后台）；只有下面几项真占，规则见 `DebugForeground` 与 docs/verify.md「占前台」；
+/// - `-CuePadClick x,y`、`-CuePadRightClick x,y`（仅 Mac，要 `-CuePadForeground YES`）：就绪后在主窗口里左键、右键点一下，打开那里的系统菜单再截图（`openMenuIfAsked`，见 `DebugMenus+Mac.swift`）；
 /// - `-CuePadCueBrain <可执行文件>`（仅 Mac）：Cue 的大脑换成这个替身（如 `scripts/cue-brain-stub.py`），量值班开销用（docs/verify.md「性能测量」）；
 /// - `-CuePadClosed <秒>`（仅 Mac）：画面就绪后这么久关上主窗口，`-CuePadReopen <秒>` 关上这么久再打开（`closeIfAsked`，见 `DebugScene+Cue.swift`）；
 /// - `-CuePadDockTour YES`（iPhone）：画面就绪后按固定节奏走一遍底部那一排：Cue 页展开去处、去三页、推入与返回、搜索、换去处清掉推入的页、回 Cue，

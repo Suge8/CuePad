@@ -77,7 +77,7 @@ extension Open<PiWorkState> {
 public enum PiAlert: String, Sendable, CaseIterable {
   case waitingForUser, settled
 
-  /// 要不要提示的唯一规则（Mac 置位通知标志、手机在前台读同步来的记录做 App 内提示都用它）：进入等你确认；从工作中进入完成。
+  /// 哪次转换是一件要提示的事的唯一规则（Mac 置位通知标志、两端读同步来的记录做提示都用它）：进入等你确认；从工作中进入完成。
   /// 首次看到的会话（没有上一个状态）不提示，重启或重新读取时不会把旧事件再提示一遍。
   /// 状态起点（`since`）退回到上一个状态之前是回落、不是新的转换：歇着时的手动压缩做完、失败或被停止，扩展让会话回到压缩前的状态与起点，
   /// 压完不是"做完了"。
@@ -89,18 +89,8 @@ public enum PiAlert: String, Sendable, CaseIterable {
   }
 }
 
-extension PiAlert {
-  /// 这次转换要不要提示你：做完了照常；进入等回答只在会话真在等你时（`PiSessionState.asksYou`）。
-  public func reaches(_ state: PiSessionState, cue: CueDuty?) -> Bool { self != .waitingForUser || state.asksYou(cue) }
-}
-
 extension PiSessionState {
-  /// 相对上一次读到的版本，要提示你的转换（`alert(since:)` 里只留 `PiAlert.reaches` 的）。
-  public func alert(since previous: PiSessionState?, cue: CueDuty?) -> PiAlert? {
-    alert(since: previous).flatMap { $0.reaches(self, cue: cue) ? $0 : nil }
-  }
-
-  /// 相对上一次读到的版本（nil：第一次读到），这个版本是不是一次要提示的转换。手机读到的是同步合并后的版本：状态没变而
+  /// 相对上一次读到的版本（nil：第一次读到），这个版本是不是一次要提示的转换（到不到你另由 `CueStore.reaches` 定）。手机读到的是同步合并后的版本：状态没变而
   /// 状态起点往后走了，说明中间又经过了一轮工作（没读到），按"刚从工作中来"算。
   public func alert(since previous: PiSessionState?) -> PiAlert? {
     guard let previous, let state = state.known else { return nil }

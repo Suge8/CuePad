@@ -21,7 +21,7 @@ extension AppServices {
         if !location.isIsolated { diagnostics.start() }
     }
 
-    /// 前台提示：本机已同步来的在线会话（`LiveSessions`）每次变化，由 `SessionAlertTracker` 认出"等你"（等 Cue 回答的不算）、"做完了"的转换，交给界面。
+    /// 前台提示：本机已同步来的在线会话（`LiveSessions`）每次变化，由 `SessionAlertTracker` 认出"等你"、"做完了"，到得了你的（`CueStore.reaches`）交给界面。
     /// 不依赖推送是否到达；App 不在前台时不发（后台由系统推送提示，前台系统不再重复展示，见 `AlertCenter`）。
     private func startSessionAlerts() {
         let active = ActiveSince()
@@ -32,8 +32,10 @@ extension AppServices {
             var tracker = SessionAlertTracker()
             for await live in Observations({ self.liveSessions.live }) {
                 let alerts = tracker.alerts(for: live, cue: self.liveSessions.cue, since: active.date)
-                guard UIApplication.shared.applicationState == .active else { continue }
-                if let alert = alerts.last(where: { $0.kind == .waitingForUser }) ?? alerts.last { self.post(alert) }
+                guard UIApplication.shared.applicationState == .active, !alerts.isEmpty else { continue }
+                var reaching: [SessionAlert] = []
+                for alert in alerts where await self.reaches(.session(alert.session, alert.kind)) { reaching.append(alert) }
+                if let alert = reaching.last(where: { $0.kind == .waitingForUser }) ?? reaching.last { self.post(alert) }
             }
         }
     }

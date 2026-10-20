@@ -242,7 +242,7 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
   public func waitsForCue(_ cue: CueDuty?) -> Bool { cue.map { !$0.leftToYou(self) } == true && answerableQuestion != nil }
 
   /// "等你"里会话那一半的唯一规则：在等回答且等的不是 Cue（`waitsForCue`），或 Cue 值班时把这次歇下留给了你回（会话行的"待回复"）。
-  /// "等你 N"、Dock 角标、"等你"的提示（Mac 的通知、手机的前台横幅与锁屏推送标志，`PiAlert.reaches`）都只认它。
+  /// "等你 N"、Dock 角标、"等你"的提示（Mac 的通知、手机的前台横幅与锁屏推送标志，`CueStore.reaches`）都只认它。
   public func asksYou(_ cue: CueDuty?) -> Bool {
     switch state.known {
     case .waitingForUser: !waitsForCue(cue)
