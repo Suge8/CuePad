@@ -11,8 +11,8 @@ enum ScrollAnchor {
 
 #if DEBUG
 /// 视觉验收用的启动参数（只在 Debug 构建读取，配合 `CUEPAD_LIBRARY_DIR` 使用隔离资料库）：
-/// - `-CuePadDemo YES`：库为空时写入演示数据；
-/// - `-CuePadSeed perf`（仅 Mac）：库为空时写入性能测量用的大资料库（`PerfLibrary`），配合 `-CuePadBench interact`；
+/// - `-CuePadDemo YES`：库为空（只有默认项目）时写入演示数据；
+/// - `-CuePadSeed perf`（仅 Mac）：库为空（只有默认项目）时写入性能测量用的大资料库（`PerfLibrary`），配合 `-CuePadBench interact`；
 /// - `-CuePadProject <名称>`：打开该项目；
 /// - `-CuePadScene <画面>`：初始画面。Mac：collapsed、older、editor（-CuePadCard 那张散放的灵感进编辑页）、task（打开本项目第一条任务的气泡，没有落点、在上方居中；给了 `-CuePadTask <标题开头>` 是那一条）、search、tasks（任务面板；配 -CuePadDemo 时写入演示会话，进行中的带会话状态）、agentsetup（接入 Agent 的面板）、connected（几家 Agent 接进隔离目录、打开 Agent 页：看接入后的会话页与 + 的新会话里选 Agent；配 `-CuePadFolder <路径>` 再建一个绑着这个文件夹的项目，给隔离实例里真跑 Cue 派活用）、select（批量选择本页前三条灵感）、wallgap（配 -CuePadProject Flow：新记两条再删最早那条，看删卡后卡片墙的排布）、trash、archive、settings（拍真的设置窗口，主窗口收起；`-CuePadSettingsPane cue|general|agents` 翻到那一页）、menubar、cuebar（"对 Cue 说"的输入条）、projectform；
 ///   cue 打开 Cue 页、cuememory 再打开"Cue 记得什么"、cuerun 再打开"运行情况"（仅 Mac；演示数据里 Cue 这时运行在这台，见 `DebugScene+Cue.swift`）；
@@ -101,11 +101,11 @@ enum DebugScene {
         // -CuePadSampleCrash YES：存一份样例崩溃诊断，设置里出现"上次崩溃"（配 -CuePadCrashSheet YES 直接打开摘要）
         if defaults.bool(forKey: "CuePadSampleCrash") { workspace.services.diagnostics.record([sampleCrash]) }
         #if os(macOS)
-        if defaults.string(forKey: "CuePadSeed") == "perf", (try? await store.projects().isEmpty) == true {
+        if defaults.string(forKey: "CuePadSeed") == "perf", (try? await store.projects().allSatisfy(\.isDefault)) == true {
             do { try await PerfLibrary.seed(store) } catch { workspace.fail(error) }
         }
         #endif
-        if defaults.bool(forKey: "CuePadDemo"), (try? await store.projects().isEmpty) == true {
+        if defaults.bool(forKey: "CuePadDemo"), (try? await store.projects().allSatisfy(\.isDefault)) == true {
             do { try await DemoLibrary.seed(store) } catch { workspace.fail(error) }
         }
         if defaults.bool(forKey: "CuePadDemo") { await seedMacAgents(workspace.services) }

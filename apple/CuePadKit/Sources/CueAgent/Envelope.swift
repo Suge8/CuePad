@@ -66,7 +66,7 @@ public enum CueEnvelope {
     let calendar = Calendar(identifier: .gregorian)
     var lines = ["<cue>", stamp(input.now, calendar)]
 
-    lines.append("项目：" + (input.projects.isEmpty ? "无" : input.projects.map(\.name).joined(separator: "、")))
+    lines.append("项目：" + input.projects.map(\.name).joined(separator: "、"))
 
     lines.append("变化（上次醒来之后）：" + (input.changes.isEmpty ? "无" : ""))
     lines += input.changes.map { "- \(change($0))" }
