@@ -89,7 +89,7 @@ nonisolated enum CueMood: String, Sendable {
     }
 }
 
-/// Cue 的一页摘要：名字、在管与等你、你最近一句交没交出去、它此刻在做什么。三端侧栏的 Cue 一行、菜单栏面板、小组件与实时活动都读它（一份规则）。
+/// Cue 的一页摘要：名字、在管与等你、它最近一句、你最近一句交没交出去、它此刻在做什么。三端侧栏的 Cue 一行与名片、菜单栏面板、小组件与实时活动都读它（一份规则）。
 nonisolated struct CueDigest: Equatable, Sendable {
     var name: String
     /// 启用了（`CueProfile.activeHost` 有值）。
@@ -105,7 +105,10 @@ nonisolated struct CueDigest: Equatable, Sendable {
     var managing: Int { tally.managing.count }
     /// 新消息有几条（`CueStore.cueUnread`）。
     var unread: Int
-    /// 它最近对你说的那条（结束了的提问不算，`CueQuestionEnd`）说的那件事已经做完了：头像露"做完"的表情。
+    /// Cue 最近对你说的那条的摘要行（`CueMessage.headline`），只给 Mac 侧栏名片的气泡（Cue 那一行写在管与等你，不写它）。
+    /// 结束了的提问（`CueQuestionEnd`）不算：那件事已经定了，接着写它在那之前最近说的。
+    var lastSaid: String?
+    /// 它最近一句说的那件事已经做完了（头像露"做完"的表情）。
     var lastSaidDone: Bool
     /// 它运行的那台 Mac 此刻在线（`CueStore.macOnline`）；没启用为 false。
     var hostOnline: Bool
@@ -115,7 +118,7 @@ nonisolated struct CueDigest: Equatable, Sendable {
     var state: CueState?
 
     static let empty = CueDigest(
-        name: CueProfile.defaultName, enabled: false, hostID: nil, hostName: nil, tally: .empty, unread: 0, lastSaidDone: false, hostOnline: false,
+        name: CueProfile.defaultName, enabled: false, hostID: nil, hostName: nil, tally: .empty, unread: 0, lastSaid: nil, lastSaidDone: false, hostOnline: false,
         lastYou: nil, state: nil)
 
     struct LastYou: Equatable, Sendable {
@@ -135,6 +138,7 @@ nonisolated struct CueDigest: Equatable, Sendable {
             hostName: try profile?.hostID.map { try store.macAgents(on: $0).shownName },
             tally: try store.cueTally(),
             unread: try store.cueUnread().count,
+            lastSaid: said?.headline,
             lastSaidDone: saidTask?.status == .done,
             hostOnline: try profile?.activeHost.map { try store.macOnline($0) } ?? false,
             lastYou: try store.cueLastYou().map { LastYou(said: $0.said, delivered: $0.delivered) },
@@ -150,14 +154,15 @@ nonisolated struct CueDigest: Equatable, Sendable {
 }
 
 nonisolated extension CueMessage {
-    /// Cue 的一句在对话以外的那一行（"等你"卡与全屏预览底栏的第一句、回答的引用、实时活动里第一件等你）：提问是要你定什么（`CueAsking.question`，不露原话），
+    /// Cue 的一句在对话以外的那一行（Mac 侧栏名片的气泡、"等你"卡与全屏预览底栏的第一句、回答的引用、实时活动里第一件等你）：提问是要你定什么（`CueAsking.question`，不露原话），
     /// 其余是第一行纯文字（Markdown 的符号去掉，`MarkdownBlock.firstPlainLine`）。
     var headline: String? { asking?.question ?? MarkdownBlock.firstPlainLine(CueFormat.plainText(text)) }
 }
 
 /// 一次接力（`CueWatch.flight`，`CueRelayStage` 画）：叫醒是会话 → Cue（事实是 `CueState.woke`），交给是 Cue → 会话（事实是 Cue 写的投送请求），
-/// 都不另存。两种的时刻都是 Cue 那台 Mac 的时钟，在同一条时间线上比新旧。
-/// 交给只飞把话或活交到会话手里的几种（`relayModes`）：说话、答它在等的问题、开新会话。
+/// 都不另存。时刻在同一条时间线上比新旧：叫醒与说话是 Cue 那台 Mac 的时钟，开新会话是开出它的那台（多数就是 Cue 那台）。
+/// 交给只飞把话或活交到会话手里的几种：说话、答它在等的问题（`spoken`，写下请求的时刻），开新会话（开出的会话有了记录的时刻，`CueStore.cueLaunches`：
+/// 写下请求时会话还不在，等它出现才飞到它那一行）。
 /// 不飞的：停下与结束是把活收回来，结束还常在做完一件事时一次结束好几个（`endUnusedSessions`），一片光讲不清；
 /// 换模型与思考强度（config）总跟在一句话前面，那句话飞就够了。
 nonisolated struct CueFlight: Equatable, Sendable {
@@ -174,21 +179,20 @@ nonisolated struct CueFlight: Equatable, Sendable {
     /// 接力的那几个会话，最新的在前。
     let ends: [RelayEnd]
 
-    static let relayModes: Set<DeliveryMode> = [.send, .answer, .start]
+    private static let spoken: Set<DeliveryMode> = [.send, .answer]
 
-    /// 一条交给：写下的时刻与交给了谁。
+    /// 一条交给：发生的时刻与交给了谁。
     struct Handed: Equatable, Sendable {
         let at: Date
         let end: RelayEnd
 
-        init?(_ request: DeliveryRequest) {
-            let session = request.target.kind == .known(.piSession) ? request.target.ref : nil
-            guard session != nil || request.cardID != nil else { return nil }
-            at = request.createdAt
-            end = RelayEnd(session: session, task: request.cardID)
+        static func read(from store: isolated CueStore) throws -> [Handed] {
+            let said = try store.cueRequests(spoken).compactMap { request in
+                request.target.ref.map { Handed(at: request.createdAt, end: RelayEnd(session: $0, task: request.cardID)) }
+            }
+            let opened = try store.cueLaunches().map { Handed(at: $0.at, end: RelayEnd(session: $0.session, task: $0.card, opens: true)) }
+            return said + opened
         }
-
-        static func read(from store: isolated CueStore) throws -> [Handed] { try store.cueRequests(relayModes).compactMap(Handed.init) }
     }
 }
 

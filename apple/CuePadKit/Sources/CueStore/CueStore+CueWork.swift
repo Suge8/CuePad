@@ -137,7 +137,7 @@ public struct CueChange: Equatable, Sendable {
 
 /// 会话停下时他在不在场：正开着这个会话（某台设备的 `Viewer`），或 `window` 内在里面说过话（在终端里打的与在 CuePad 里发的一样，
 /// Cue 发进去的不算）。不是 Cue 开的一轮停下时他在场，这一停归他（`CueStore.cueChanges`）。由事实现推，不另存。
-struct SessionPresence: Equatable, Sendable {
+public struct SessionPresence: Equatable, Sendable {
   /// 正开着它
   var viewing: Bool
   /// 窗口内最近一次在里面说话的时刻；窗口内没说过为 nil
@@ -145,7 +145,8 @@ struct SessionPresence: Equatable, Sendable {
 
   /// 10 分钟：比读完一段回复、想一想再回的时间长，比 Agent 一轮常见的十几分钟短——他说完走开，这一轮做完时多半已经不算在场；
   /// 与常见即时通讯"多久没动静算离开"同一个量级。
-  static let window: TimeInterval = 10 * 60
+  /// 也是 Mac 上多久没动键盘鼠标就算人走开了（`ViewerKeeper`）：在场只有这一个口径。
+  public static let window: TimeInterval = 10 * 60
 
   /// 没有新的动静就在这一刻算离开：只有说过话的那一半会到点；开着的那一半由设备写下离开（`Viewer`），不到点。
   var lapse: Date? { viewing ? nil : spokeAt.map { $0 + Self.window } }
@@ -828,7 +829,7 @@ extension CueStore {
   }
 
   /// 停着的会话此刻归他（返回他的在场）：这一轮不是 Cue 开的（`turnOpener`），他在场；归 Cue 为 nil。谁接手只认这一处。
-  private func hisStop(_ sessionID: String) throws -> SessionPresence? {
+  func hisStop(_ sessionID: String) throws -> SessionPresence? {
     guard try turnOpener(sessionID) != .cue else { return nil }
     return try presence(in: sessionID)
   }

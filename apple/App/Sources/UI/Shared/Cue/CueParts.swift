@@ -2,14 +2,11 @@ import CueStore
 import CueText
 import SwiftUI
 
-/// 打开一件任务（Cue 页里提到的那一行、"等你"关联的任务）：Mac 是任务浮窗，iOS 推入任务的纸页。
+/// 打开一件任务（Cue 页里提到的那一行、"等你"关联的任务）：从点的地方长出任务气泡（`Workspace.openTask`）。
 struct CueTaskButton<Label: View>: View {
     let task: UUID
     @ViewBuilder let label: Label
     @Environment(Workspace.self) private var workspace
-    #if os(iOS)
-    @Environment(Navigation.self) private var navigation
-    #endif
 
     var body: some View {
         Button(action: open) { label.contentShape(.rect) }
@@ -17,12 +14,8 @@ struct CueTaskButton<Label: View>: View {
     }
 
     private func open() {
-        #if os(iOS)
-        navigation.push(.card(task))
-        #else
         let store = workspace.services.store, id = task
-        workspace.attempt { if let card = try await store.card(id) { workspace.open(card) } }
-        #endif
+        workspace.attempt { if let card = try await store.card(id) { workspace.openTask(card) } }
     }
 }
 

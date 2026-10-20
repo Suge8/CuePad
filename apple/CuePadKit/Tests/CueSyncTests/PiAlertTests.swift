@@ -134,37 +134,79 @@ import Testing
     #expect(answered["notify"] == nil && answered.encryptedValues["answer"] as? String == CueAsk.once)
   }
 
-  /// 他发完消息就离开了 App：Cue 回答这一轮的回复推到手机；他正在 Mac 上开着 Cue 页、或开着那个会话时不推（不重复打扰）。
-  /// 手机上开着的不挡推送：那条可能停在"开着"（崩在前台、进后台时没网），手机前台收到时自己按此刻开着哪页不弹。
-  @Test func cueRepliesAndSessionAlertsReachThePhoneUnlessHeHasThatPageOpenOnAMac() async throws {
+  // MARK: 到不到你（用户定的规则：回答他那一轮的话推到手机、一轮只响一次；他在 Mac 上开着那一页不推；Cue 值班时会话做完只推归他的停下与留给他的）
+
+  private func flag(_ rig: Rig, _ id: UUID) async throws -> String? {
+    try #require(await rig.coordinator.record(for: rig.recordID(id)))["notify"] as? String
+  }
+
+  /// 他发完消息就离开了 App：Cue 回答这一轮的话推到手机，正文是 Cue 的原话；这一轮先发了提问卡就只响提问卡那一下。
+  /// 他在 Mac 上开着 Cue 页时不推；手机上开着的不挡（那条可能停在"开着"，手机前台自己不弹）。
+  @Test func cueRepliesToHisRoundReachThePhoneOncePerRoundUnlessHeHasTheCuePageOpenOnAMac() async throws {
     let rig = try Rig()
-    func flag(_ id: UUID) async throws -> String? { try #require(await rig.coordinator.record(for: rig.recordID(id)))["notify"] as? String }
-    func reply(_ text: String) async throws -> UUID {
-      try await rig.store.replyCueRound(startedAt: .now, reply: text, as: .cue, answersYou: true)
+    func reply(_ text: String, startedAt: Date = .now) async throws -> UUID {
+      try await rig.store.replyCueRound(startedAt: startedAt, reply: text, as: .cue, answersYou: true)
       return try #require(try await rig.store.cueMessages().last { $0.text == text }).id
     }
 
     try await rig.store.recordViewing(device: "phone", sessionID: nil, cue: true)
-    #expect(try await flag(reply("登录页修好了")) == "cue")
-    try await rig.store.replyCueRound(startedAt: .now, reply: "看过了", as: .note, answersYou: false)  // 自己醒来那一轮的动态
-    #expect(try await flag(try #require(try await rig.store.cueMessages().last).id) == nil)
+    let fixed = try await reply("登录页修好了，**测试全过**")
+    #expect(try await flag(rig, fixed) == "cue")
+    let record = try #require(await rig.coordinator.record(for: rig.recordID(fixed)))
+    #expect(CueAlertText.content(message: record, profile: nil)?.body == "登录页修好了，测试全过")
+
+    let round = Date.now
+    let card = try await rig.store.addCueMessage(.cue, text: "要推送吗？", ask: try CueAsking(.push, action: "推送登录页的修复"))
+    #expect(try await flag(rig, card.id) == "cue")
+    #expect(try await flag(rig, reply("问你了", startedAt: round)) == nil)
 
     try await rig.store.recordMacPresence(host: "mac") { true }
     try await rig.store.recordViewing(device: "mac", sessionID: nil, cue: true)
-    #expect(try await flag(reply("合并好了")) == nil)
+    #expect(try await flag(rig, reply("合并好了")) == nil)
+  }
 
+  /// 会话做完：Cue 不值班时推；值班时会话归它接手不推，只推归他的停下（他刚在里面说过话）与它留给他回的（正文是会话最后那句回答）；
+  /// 他在 Mac 上开着那个会话时都不推。
+  @Test func sessionAlertsReachThePhoneOnlyWhenTheStopIsHis() async throws {
+    let rig = try Rig()
     let recorder = PiStateRecorder(store: rig.store, hostID: "mac", timing: ManualTiming().timing)
-    try await recorder.update(sessionID: "s1", state: .thinking)
-    try await rig.store.recordViewing(device: "mac", sessionID: "s1", cue: false)
-    try await recorder.update(sessionID: "s1", state: .settled)
-    let session = try #require(try await rig.store.allPiSessionStates().first).id
-    #expect(try await flag(session) == nil)
-    #expect(try await flag(reply("又好了")) == "cue")  // 离开了 Cue 页
+    let session = PiSessionState.recordID(sessionID: "s1")
+    func round(_ said: String? = nil) async throws {
+      try await recorder.update(sessionID: "s1", state: .thinking, title: "登录页")
+      if let said {
+        let message = PiChatMessage(sessionID: "s1", entryID: UUID().uuidString, seq: 1, role: .user, text: said, at: .now, deliveryID: nil)
+        try await rig.store.writePiTranscript(PiTranscript(sessionID: "s1", messages: [message], recap: PiRecap(lastPrompt: said, lastReply: "改好了\n细节见下")))
+      }
+      try await recorder.update(sessionID: "s1", state: .settled)
+    }
 
+    try await round()
+    #expect(try await flag(rig, session) == "settled")
+    try await rig.simulatePush()
+    try await rig.store.recordMacPresence(host: "mac") { true }
+    try await rig.store.recordViewing(device: "mac", sessionID: "s1", cue: false)
+    try await round()
+    #expect(try await flag(rig, session) == nil)
     try await rig.store.recordViewing(device: "mac", sessionID: nil, cue: false)
-    try await recorder.update(sessionID: "s1", state: .thinking)
-    try await recorder.update(sessionID: "s1", state: .settled)
-    #expect(try await flag(session) == "settled")
+
+    _ = try await rig.store.updateCueProfile {
+      $0.hostID = "mac"
+      $0.enabledAt = .now
+    }
+    try await round()
+    #expect(try await flag(rig, session) == nil)  // 归 Cue 接手
+    try await round("顺便把限流加上")
+    #expect(try await flag(rig, session) == "settled")  // 他刚说过话：这一停归他
+    try await rig.simulatePush()
+
+    let left = try #require(try await { () async throws -> CueLeft? in
+      try await rig.store.leaveToYou("s1")
+      return try await rig.store.cueDuty()?.left.first
+    }())
+    #expect(try await rig.store.flagLeftToYou(left, host: "mac") == session)
+    let record = try #require(await rig.coordinator.record(for: rig.recordID(session)))
+    #expect(record["notify"] as? String == "waitingForUser")
+    #expect(PiAlertText.content(for: record, kind: .waitingForUser)?.body == "改好了")
   }
 
   // MARK: 幂等创建

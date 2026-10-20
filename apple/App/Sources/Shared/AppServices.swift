@@ -82,9 +82,17 @@ final class AppServices {
     var hasOpenDeliveries = false
     /// 正在显示的 Agent 页与会话近况页数（iPad 可能多个窗口）；大于 0 时主动拉，见 `pollingCadence`。
     var piViewers = 0
-    /// 有人在看的 Cue 页数（`CueViewing`：页与 App 都在前台；各平台、各窗口同一个数）：Cue 的通知按它算你在不在看（Mac 见 `AlertPresentation`，iOS 前台的系统横幅）；
+    /// 有人在看的 Cue 页数（`CueViewing`；各平台、各窗口同一个数）：这台设备开着 Cue 页（`ViewerKeeper.showCue`）、iOS 前台的系统横幅弹不弹；
     /// 手机上大于 0 时按节奏拉（`pollingCadence`）。
     var cueViewers = 0
+    #if os(macOS)
+    /// 主窗口露在屏上（没缩进程序坞、没被别的窗口整个盖住、App 没隐藏），有没有焦点都算（`ViewerKeeper.follow` 写）。
+    var mainWindowExposed = true
+    /// 人不在跟前：睡眠、屏幕睡了、锁屏、`SessionPresence.window` 没动键盘鼠标（`ViewerKeeper.Away` 有没有，它写）。
+    var away = false
+    /// 这台 Mac 上的人看得到主窗口：开着的页算在看（会话页、Cue 页的在场、读过与提示都只认它）。
+    var seesMainWindow: Bool { mainWindowExposed && !away }
+    #endif
     /// 最近一拉（`pull`）：开拉的时刻与它的任务，拉完也留着（等它立即返回）。同步启动时先是那次启动（不是一拉，没有开拉时刻）。
     @ObservationIgnored var latestPull: (began: ContinuousClock.Instant?, task: Task<Void, Never>)?
     /// 还没返回的那一次立即同步（`syncNow`：启动、回到前台、下拉刷新、"立即同步"按钮）：期间再要立即同步的等它。
@@ -332,6 +340,16 @@ final class AppServices {
     #if os(iOS)
     func post(_ alert: SessionAlert) { sessionAlert = alert }
     #endif
+
+    /// 这条提示此刻到不到你（`CueStore.reaches`）；读不出就照常提示，宁可多响一次也不悄悄吞掉。
+    func reaches(_ subject: AlertSubject) async -> Bool {
+        do {
+            return try await store.reaches(subject)
+        } catch {
+            Self.log.error("没能读出这条提示到不到你，照常提示：\(error.localizedDescription, privacy: .public)")
+            return true
+        }
+    }
 
     /// 同步从不通变通时立即同步一次（`syncNow`）：断网时没传上去的记录（留在库里待推送）当场传出、在等的回执当场拉回，
     /// 不等发送者的退避；按节奏的拉取也随之重开一个窗口（`pollingCondition`）。

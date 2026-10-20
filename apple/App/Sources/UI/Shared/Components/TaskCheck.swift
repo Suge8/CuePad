@@ -107,7 +107,7 @@ struct TaskCheckButton: View {
     }
 }
 
-/// 任务页、任务浮窗标题旁的完成圈：自己记着这一下（标题不随它划线，完成后页面自己换成"完成了"）。
+/// 任务气泡标题旁的完成圈：自己记着这一下（标题不随它划线）。
 struct GoalCheck: View {
     let task: Card
     var subtasks: TaskProgress?

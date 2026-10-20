@@ -9,12 +9,12 @@ nonisolated extension PiSessionState {
 }
 
 nonisolated extension PiSessionListItem {
-    /// 列在"现在"（侧栏的在做、Agent 页）：没结束的，与正在唤醒的——唤醒中当场列出、写"正在唤醒"，上了桥就是在线的那一行。
+    /// 列在"现在"（"在做"、Agent 页）：没结束的，与正在唤醒的——唤醒中当场列出、写"正在唤醒"，上了桥就是在线的那一行。
     func isCurrent(at moment: Speech.Moment) -> Bool {
         state.state != .known(.ended) || state.isWaking(by: delivery, at: moment)
     }
 
-    /// 此刻没能送达的话有几句，按 Pi 的会话 id（只留有的）：手里只有会话记录的行（Mac 侧栏、菜单栏、⌘K、项目页 Agent 栏）按它找自己的数。
+    /// 此刻没能送达的话有几句，按 Pi 的会话 id（只留有的）：手里只有会话记录的行（Mac 菜单栏、⌘K、项目页 Agent 栏）按它找自己的数。
     static func undelivered(_ items: [PiSessionListItem], at moment: Speech.Moment) -> [String: Int] {
         Dictionary(items.compactMap { item in
             let count = item.undelivered(at: moment)
@@ -24,7 +24,7 @@ nonisolated extension PiSessionListItem {
 }
 
 nonisolated extension PiSessionState {
-    /// 会话列表的顺序（Agent 页、Mac 侧栏）：要你注意的在前（`PiShown.rank`），同一档保持原来的先后（最近进入当前状态的在前）。
+    /// 会话列表的顺序（Agent 页、"在做"）：要你注意的在前（`PiShown.rank`），同一档保持原来的先后（最近进入当前状态的在前）。
     /// `deliveries` 是发给各会话（按 Pi 的会话 id）的最近一条投送请求：话在路上的与工作中同档，发出那一刻就挪到位。
     /// 不看有没有新回复：看一眼就让行换位置，列表会在手下跳。
     /// `cue`：Cue 在值班时的那一份（`LiveSessions.cue`），等它回答的与在跑的同档（`PiShown.Status.cueAsking`），它留给你回的与等你确认同档。
