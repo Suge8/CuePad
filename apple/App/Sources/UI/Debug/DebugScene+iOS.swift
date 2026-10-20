@@ -16,6 +16,7 @@ import UIKit
 /// `-CuePadDemoMac YES`：发给演示 Mac（demo-mac）上会话的话由它慢慢接手、送达、再回状态，对运行在它上面的 Cue 说的话也会交给 Cue（见 `runDemoMac`）。
 /// `-CuePadCuePresence away`（cue 画面）：一夜里 Cue 陆续说了几句，回到 Cue 页从新消息读起；`-CuePadAwayAfter <秒>`：就绪后这么久离开 Cue 页、
 /// 那几句这时才来，再回到 Cue 页，录"离开很久后回来"的定位（`awayIfAsked`）。
+/// `-CuePadActivityDrain YES`：每回到前台一次答掉一件等你或做完一件在管，看实时活动跟着变到结束（`activityDrainIfAsked`）。
 /// cuepanel：iPad 在项目页旁开着右侧 Cue 面板。演示库另写入 Mac 同步来的 Pi 会话状态（含历史）与几条发到 Mac 的请求。
 extension DebugScene {
     /// 模拟器当作接了电脑键盘、聚焦不弹软键盘：清掉输入法的硬件键盘布局后照常弹出（私有选择子，只在 Debug 里）。
