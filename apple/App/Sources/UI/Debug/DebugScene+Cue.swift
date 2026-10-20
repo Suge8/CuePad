@@ -12,7 +12,7 @@ import SwiftUI
 /// 刚说的还没交出去（sending：话在路上，时限内气泡转圈）、
 /// 演示 Mac 不在线、两分钟前说的一直没交出去（asleep：它在睡觉，气泡过了等回执的时限 `Speech.receiptLimit`、没能送达可重发；
 /// 隔离库没有同步，要配 `-CuePadDemoMac YES` 才算同步通着、说它在睡觉）、
-/// 没启用；away 是你答了"等你"、说了句去睡了，一夜里 Cue 陆续说了几句（Cue 页的新消息与分隔线，`CueReadingTracker`）。演示 Mac 不值班，在线记录与此刻在做什么直接写进库（`CueStore.recordMacPresence`、`setCueState`；在线管一个期限 `MacPresence.lifetime`）。
+/// 没启用；away 是你答了"等你"、说了句去睡了，一夜里 Cue 陆续说了几句（Cue 页的新消息，`CueViewing`）。演示 Mac 不值班，在线记录与此刻在做什么直接写进库（`CueStore.recordMacPresence`、`setCueState`；在线管一个期限 `MacPresence.lifetime`）。
 extension DebugScene {
     /// 演示记忆：长短不一（一句话到接近一条的上限）、钉住的与其他、你记的与 Cue 记的，时间从刚刚到几个月前。
     private static var demoMemory: [SeedCueLine] {

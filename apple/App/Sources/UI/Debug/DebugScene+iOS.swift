@@ -63,13 +63,13 @@ extension DebugScene {
                 }
             }
         case "cue", "cuememory", "cuesettings":
-            if defaults.bool(forKey: "CuePadDemo") { await seedCue(workspace.services) }
-            if let draft = defaults.string(forKey: "CuePadCueDraft") { workspace.cue.draft.text = draft }
-            // 一夜里来的话是看着 Cue 页时写进去的：先离开再回来，才是"回来时有新消息"的样子
+            // 一夜里来的话要在不看 Cue 页时写（看着时写当场就读掉了）：先离开、写完再回来，才是"回来时有新消息"的样子
             if defaults.string(forKey: "CuePadCuePresence") == "away" {
                 navigation.show(.tasks)
                 await NextFrame.wait()
             }
+            if defaults.bool(forKey: "CuePadDemo") { await seedCue(workspace.services) }
+            if let draft = defaults.string(forKey: "CuePadCueDraft") { workspace.cue.draft.text = draft }
             navigation.show(.cue)
             navigation.sidebar = .all
             if scene == "cuememory" { workspace.cue.showsMemory = true }
