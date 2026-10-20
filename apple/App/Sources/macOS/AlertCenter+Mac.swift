@@ -7,22 +7,8 @@ import os
 /// Mac 的通知都是本机发的：Mac 不注册远程通知、不收 CloudKit 推送（docs/sync.md「Agent 与 Cue 的通知」），
 /// 所以设置里的开关与提示音管得到每一条，免打扰只认系统的专注模式。
 extension AlertCenter: CueNotifying {
-    /// 隔离库（开发与验收）默认不发系统通知：通知权限、提示音与角标按 bundle id 记，与正式版同一个。
-    /// Debug 构建给 `-CuePadNotifications YES` 时照常发（验收用，规则见 docs/verify.md「通知（Mac）」）。
-    var delivers: Bool { services.map { !$0.location.isIsolated || DebugHooks.deliversNotifications } ?? false }
-
     func post(title: String, body: String) async {
         await post(AlertMessage(title: title, body: body))
-    }
-
-    /// 这条提示发不发（`post` 问）：到不到你（`reaches`），且这份库发系统通知（`delivers`）。
-    func admits(_ alert: AlertMessage) async -> Bool {
-        guard await reaches(alert.route) else { return false }
-        guard delivers else {
-            AppServices.log.notice("通知（隔离库不发）：\(alert.title, privacy: .public)：\(alert.body, privacy: .private)")
-            return false
-        }
-        return true
     }
 
     /// 提示音（`post` 问）：这种提示选的那段（先装进去，见 `AlertSounds`），选了无声为 nil；没有开关的周额度提醒用系统默认音。
@@ -38,8 +24,8 @@ extension AlertCenter: CueNotifying {
         await reaches(route) ? [.banner, .sound, .list] : []
     }
 
-    /// 这条提示此刻到不到你：这种提示开着，且 `AppServices.reaches`（这台 Mac 开着哪页也记在那里）；周额度提醒总是到。
-    private func reaches(_ route: AlertRoute) async -> Bool {
+    /// 这条提示此刻到不到你（`post` 问）：这种提示开着，且 `AppServices.reaches`（这台 Mac 开着哪页也记在那里）；周额度提醒总是到。
+    func reaches(_ route: AlertRoute) async -> Bool {
         guard let kind = route.kind, let subject = route.subject else { return true }
         guard let services = workspace?.services, services.settings.alerts[kind].isOn else { return false }
         return await services.reaches(subject)

@@ -31,6 +31,10 @@ final class AlertCenter: NSObject, UNUserNotificationCenterDelegate {
 
     var isAuthorized: Bool { authorization == .authorized || authorization == .provisional }
 
+    /// 隔离库（开发、测试与验收）默认不要通知权限、不发系统通知、不设角标：这些按 bundle id 记，与正式版同一个；
+    /// 没人去点的权限弹窗还会一直留在系统里、盖住之后起的每个实例。Debug 构建给 `-CuePadNotifications YES` 时照常（docs/verify.md「通知」）。
+    var delivers: Bool { services.map { !$0.location.isIsolated || DebugHooks.deliversNotifications } ?? false }
+
     /// 用户可能在系统设置里改过：回到前台时重新读。
     func refresh() async {
         authorization = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
@@ -41,9 +45,7 @@ final class AlertCenter: NSObject, UNUserNotificationCenterDelegate {
 
     /// 尚未决定时弹一次系统提示；已决定过的直接返回。
     func requestAuthorization() async {
-        #if os(macOS)
         guard delivers else { return }
-        #endif
         do {
             _ = try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
         } catch {
@@ -76,14 +78,17 @@ final class AlertCenter: NSObject, UNUserNotificationCenterDelegate {
         receive(response.notification.request.content.userInfo)
     }
 
-    /// 本机发通知的唯一出口（Mac 的 Agent 与 Cue 提示、两端的周额度提醒）：Mac 上到不到你不成立时什么都不做（不要权限、不装提示音，`admits`）；
-    /// 第一次真要发时才征求权限（与 `enable` 同一道门），没有权限就不发。给了 `date` 是定时的：到点由系统弹，App 不必在跑；
+    /// 本机发通知的唯一出口（Mac 的 Agent 与 Cue 提示、两端的周额度提醒）：Mac 上到不到你不成立时、这份库不发时（`delivers`）什么都不做
+    /// （不要权限、不装提示音）；第一次真要发时才征求权限，没有权限就不发。给了 `date` 是定时的：到点由系统弹，App 不必在跑；
     /// 同一 `id` 的待发通知原地换掉，已送达的还在通知中心里时系统只换内容、不再响（所以即时的每条标识都不同）。
     func post(_ alert: AlertMessage, id: String = UUID().uuidString, at date: Date? = nil) async {
         #if os(macOS)
-        guard await admits(alert) else { return }
+        guard await reaches(alert.route) else { return }
         #endif
-        if authorization == .notDetermined, DebugHooks.asksNotificationPermission { await requestAuthorization() }
+        guard delivers else {
+            return AppServices.log.notice("通知（隔离库不发）：\(alert.title, privacy: .public)：\(alert.body, privacy: .private)")
+        }
+        if authorization == .notDetermined { await requestAuthorization() }
         guard isAuthorized else { return }
         let content = UNMutableNotificationContent()
         content.title = alert.title
@@ -105,6 +110,7 @@ final class AlertCenter: NSObject, UNUserNotificationCenterDelegate {
 
     /// 按最新的额度观测重排周额度提醒（`QuotaReminder`）：撤掉不再要响的待发提醒，要响的经 `post` 按同一标识排上（待发的原地换成最新的剩余）。
     func remind(_ quotas: [AccountQuota]) async {
+        guard delivers else { return }
         let center = UNUserNotificationCenter.current()
         let due = QuotaReminder.due(quotas, at: .now)
         let stale = await center.pendingNotificationRequests().map(\.identifier)
@@ -151,12 +157,12 @@ final class AlertCenter: NSObject, UNUserNotificationCenterDelegate {
     private(set) var registration: Registration = .pending
     @ObservationIgnored private var enabled = false
 
-    /// 幂等。只在有同步时调用：没有同步就不会有这类通知。尚未决定时请求一次权限（只会弹一次系统提示）。
+    /// 幂等。只在有同步时调用：没有同步就不会有这类通知。尚未决定时请求一次权限（只会弹一次系统提示，隔离库不要，`delivers`）。
     func enable() async {
         guard !enabled else { return }
         enabled = true
         await refresh()
-        if authorization == .notDetermined, DebugHooks.asksNotificationPermission { await requestAuthorization() }
+        if authorization == .notDetermined { await requestAuthorization() }
         // 无论是否授权都注册：同步区有变化的静默推送不要通知权限（`AlertSubscriptions.changesID`）
         UIApplication.shared.registerForRemoteNotifications()
     }

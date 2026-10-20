@@ -116,15 +116,6 @@ enum DebugHooks {
         #endif
     }
 
-    /// 不请求通知权限：演示与脚本起的实例（`-CuePadDemo` 或 `scripted`）里系统弹窗会盖住画面，没人去点；验收通知时（`deliversNotifications`）照常请求。
-    static var asksNotificationPermission: Bool {
-        #if DEBUG
-        deliversNotifications || (!DebugScene.defaults.bool(forKey: "CuePadDemo") && !scripted)
-        #else
-        true
-        #endif
-    }
-
     /// 启动参数（`-theme dark` 这类）覆盖已存的设置，只在 Debug 构建生效：视觉验收要用，发布版不能被命令行参数改设置。
     /// 标准偏好域自带这层覆盖；隔离模式的套件读不到，所以显式传入。
     static var launchArgumentOverrides: [String: Any] {
@@ -191,7 +182,7 @@ enum DebugHooks {
     }
 
     /// 第 `attempt` 次订阅项目目录之前：`-CuePadCatalogFailure` 在这里注入读取失败。
-    /// 隔离库下也发真实的系统通知、装提示音、设角标（`-CuePadNotifications YES`，见 `AlertCenter.delivers`）；两端都照常请求通知权限（`asksNotificationPermission`）。
+    /// 隔离库下也要通知权限、发真实的系统通知、装提示音、设角标（`-CuePadNotifications YES`，见 `AlertCenter.delivers`）。
     static var deliversNotifications: Bool {
         #if DEBUG
         DebugScene.defaults.bool(forKey: "CuePadNotifications")
