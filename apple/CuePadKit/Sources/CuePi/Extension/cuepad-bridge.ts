@@ -15,7 +15,7 @@ import type {
 	ExtensionAPI, ExtensionCommandContext, ExtensionContext, ExtensionUIContext, ExtensionUIDialogOptions, SessionEntry,
 } from "@earendil-works/pi-coding-agent";
 
-const EXTENSION_VERSION = 36;
+const EXTENSION_VERSION = 37;
 const PROTOCOL_VERSION = 16;
 
 /** 本文件在磁盘上的位置（Pi 经 jiti 载入，按 CommonJS 给出 `__filename`）：CuePad 升级时（`AgentIntegration.install`）把它原子地换成新版本，
@@ -183,6 +183,9 @@ type UserContent = Parameters<ExtensionAPI["sendUserMessage"]>[0];
 type Command = Record<string, unknown>;
 type DialogMethod = (...args: unknown[]) => unknown;
 type Ack = (fields: object) => void;
+/** 一句要开新一轮的话：交给 Pi 的内容、斜杠开头的要不要由 Pi 展开，与认它的文字（会话里落成的那条用户消息的文字）。
+ * CuePad 发来的话（`send`）另带投送请求 id 与它的确认。 */
+type Said = { content: UserContent; expand: boolean; text: string; id?: string; ack?: Ack };
 type Reject = (error: string) => void;
 
 function isThinkingLevel(value: unknown): value is ThinkingLevel {
@@ -520,8 +523,12 @@ export default function (pi: ExtensionAPI) {
 			...contextInfo(ctx),
 			...commandInfo(pi),
 		};
-		/** CuePad 送进来、还没落成会话里一条消息的投送请求：文字 → 请求 id，按发出的先后（同一文字发了两次时先发的先认领） */
-		const deliveries: { text: string; id: string }[] = [];
+		/**
+		 * 已交给 Pi、还没落成会话里一条消息的那句（一次只交一句）。落成时（用户消息的 `message_end`）才算送达：投送请求 id 写到那条消息上、
+		 * 回 CuePad 的确认。Pi 拒收（没登录、没有模型……）不发任何事件、只记在它自己的界面里，受理就确认的话 CuePad 当它已送达、
+		 * 会话却一句没收；等不到确认的，CuePad 到点按没送到报。
+		 */
+		let starting: Said | null = null;
 		/** 正在弹出的对话框（最外层）。ui_prompt_start 只带标题，说明与选项要在调用时记下；`settle` 从 CuePad 作答 */
 		let asking: (Question & { settle?: (value: unknown) => void; dismiss?: () => void }) | null = null;
 
@@ -538,7 +545,7 @@ export default function (pi: ExtensionAPI) {
 		 * followUp 只在一轮正常做完时读出、steer 等在跑的工具做完才读，停止既不清也不读它们，排着的话会一直卡住。
 		 * 一次交一句：等着的还有下一句时，刚开始的这一轮（`agent_start`）照样先停下，每句都是新的一轮。
 		 */
-		const pending: { content: UserContent; expand: boolean }[] = [];
+		const pending: Said[] = [];
 
 		/**
 		 * 正在说的话（`draft`）：主会话当前这条助手消息到目前为止的正文，给 CuePad 逐字显示；思考与工具参数不算，FireCode 的子代理是别的会话、不经这里。
@@ -772,21 +779,24 @@ export default function (pi: ExtensionAPI) {
 			const content: UserContent = images.length === 0
 				? text
 				: [{ type: "text", text }, ...images.map((i) => ({ type: "image" as const, data: i.data, mimeType: i.mimeType }))];
-			if (typeof command.deliveryId === "string") deliveries.push({ text, id: command.deliveryId });
-			startRound(content, false);
-			ack({ ok: true });
+			const id = typeof command.deliveryId === "string" ? command.deliveryId : undefined;
+			startRound({ content, expand: false, text, id, ack });
 		}
 
-		/** 以这句开新一轮（见 `pending`）。`expand`：斜杠开头的模板与 skill 由 Pi 展开。 */
-		function startRound(content: UserContent, expand: boolean) {
-			if (pending.length === 0 && ctx.isIdle()) return submit(content, expand);
-			pending.push({ content, expand });
+		/** 以这句开新一轮（见 `pending`）。 */
+		function startRound(said: Said) {
+			if (pending.length === 0 && ctx.isIdle()) return submit(said);
+			pending.push(said);
 			stopRound();
 		}
 
-		/** 不带 deliverAs：只在歇着时交（见 `pending`），Pi 直接开始这一轮。 */
-		function submit(content: UserContent, expand: boolean) {
-			pi.sendUserMessage(content, expand ? { expandPromptTemplates: true } : undefined);
+		/**
+		 * 不带 deliverAs：只在歇着时交（见 `pending`），Pi 直接开始这一轮。歇着又没有等着的话时，之前交出、还没落成消息的那句
+		 * 已被 Pi 拒收，不会再来（见 `starting`）。
+		 */
+		function submit(said: Said) {
+			starting = said;
+			pi.sendUserMessage(said.content, said.expand ? { expandPromptTemplates: true } : undefined);
 		}
 
 		/** 歇下了就交出等着的下一句。下一轮事件循环再看：压缩完成的事件在 Pi 收起压缩标记之前发出。 */
@@ -794,7 +804,7 @@ export default function (pi: ExtensionAPI) {
 			if (pending.length === 0) return;
 			later("等着的话", () => {
 				const next = ctx.isIdle() ? pending.shift() : undefined;
-				if (next) submit(next.content, next.expand);
+				if (next) submit(next);
 			});
 		}
 
@@ -863,7 +873,7 @@ export default function (pi: ExtensionAPI) {
 			const found = name === INTERNAL_COMMAND ? undefined : pi.getCommands().find((c) => c.name === name);
 			if (!found) return reject("unknown_command");
 			if (found.source === "extension") pi.sendUserMessage(text, { expandPromptTemplates: true });
-			else startRound(text, true);
+			else startRound({ content: text, expand: true, text });
 			ack({ ok: true });
 		}
 
@@ -1108,17 +1118,21 @@ export default function (pi: ExtensionAPI) {
 				if (event.message.role !== "user") return;
 				// 首条消息与 Pi 会话列表一致，不区分机器消息
 				updateInfo({ firstMessage: info.firstMessage ?? preview(messageText(event.message)) });
-				// CuePad 送进来的：把投送请求 id 写到这条消息上。扩展先收到 message_end、Pi 再把同一个消息对象写进会话文件，
-				// 所以 id 随消息落盘，对话（读会话文件）据此认出它
-				const index = deliveries.findIndex((d) => d.text === messageText(event.message));
-				if (index >= 0) Object.assign(event.message, { cuepadDelivery: deliveries.splice(index, 1)[0].id });
+				// 交出的那句落成了消息（带图时 Pi 在文字后附上图片说明，所以按开头认）：投送请求 id 写到它上面，再确认送达。
+				// 扩展先收到 message_end、Pi 再把同一个消息对象写进会话文件，所以 id 随消息落盘，对话（读会话文件）据此认出它
+				const said = starting;
+				if (!said || !messageText(event.message).startsWith(said.text)) return;
+				starting = null;
+				if (said.id) Object.assign(event.message, { cuepadDelivery: said.id });
+				said.ack?.({ ok: true });
 			}),
 
 			// ---- Pi 事件 → 状态 ----
 			// 提交了一条消息（你的提问，或扩展投进来的，如 FireCode 交回子代理结果）：这一轮从这里开始算。
-			// FireCode 交回结果时，在飞数在这之后、agent_start 之前就归零了，从这里接上，连续处理才不会在交接处断开
-			pi.on("input", () => {
-				if (tracker.active) return;
+			// FireCode 交回结果时，在飞数在这之后、agent_start 之前就归零了，从这里接上，连续处理才不会在交接处断开。
+			// 自己交出的话从 agent_start 起算：Pi 在 input 之后才查模型与登录，拒收了这里就会一直报工作中
+			pi.on("input", (event) => {
+				if (tracker.active || starting?.text === event.text) return;
 				tracker.active = true;
 				commit();
 			}),
