@@ -10,7 +10,8 @@ import Testing
 
 /// 长程值班：Cue 值一段班，被叫醒二十多次（他的话、会话歇下带长回复、会话提问、出错），回复撑大上下文，现做法至少跨一次换新线。
 /// 中后段的判定点只有记得前面才答得对：他口头交代、没让记成规矩的细节，早先会话交回的事实，正在推进的事不重做不丢，他否掉的方案不再提；
-/// 换新之后还有三处 Cue 当场没理由落库的：他顺口说的与任务无关的事实、已完成的事里会话顺带提的细节、他要它做完时告诉他的事。
+/// 换新之后还有三处 Cue 当场没理由落库的：他顺口说的与任务无关的事实、已完成的事里会话顺带提的细节、他要它查完时告诉他的事。
+/// 要等收尾才兑现的两处（升版本号、证书签发方）看那一步 Cue 有没有收尾：没收尾的升版本号不算，签发方照样要说。
 /// 只经库与假会话驱动、只读库与工具调用判定，不碰哪种上下文做法独有的内部状态（换新次数数库里的交接备忘）。跑法见 docs/verify.md「Cue 评测」。
 @Suite(.enabled(if: evalEnvironment["CUEPAD_CUE_EVAL"] == "1", "CUEPAD_CUE_EVAL=1 才跑"), .timeLimit(.minutes(60)))
 struct CueEvalLongTests {
@@ -29,7 +30,7 @@ private final class Duty {
     static let expect = """
         值一段班（三十来次醒来）：中后段记得他口头交代的（这件做完后升版本号记 CHANGELOG、这周不跑 e2e）、早先会话查清的事实（发信走 Postmark）、\
         他否掉的方案（设置页不分标签页）；换新前后在做的事不重建、不重复说；\
-        换新之后答得出他顺口说的行程、已完成的调研里顺带的细节（退信里邮箱不存在的 13 封），官网做完时照他要的说改了哪几个文件
+        换新之后答得出他顺口说的行程、已完成的调研里顺带的细节（退信里邮箱不存在的 13 封），证书查完时照他要的说是哪家签发的
         """
 
     private let eval: CueEval
@@ -97,7 +98,9 @@ private final class Duty {
         try await event("依赖：列出 14 处报错（长）", on: deps) { try await deps.settle(Script.tsErrors, rig: rig) }
         let speed = try await say("他：官网 Lighthouse 掉分", "官网首页的 Lighthouse 性能分掉到 60 多了，查一下原因修掉。")
         let website = try await adopt(/Lighthouse|性能|首页/, after: speed, title: "修回官网首页性能分", in: "官网")
-        try await say("他：官网做完告诉他改了哪些文件", "官网那件做完的时候跟我说一声具体改了哪几个文件，我要转给前端组长。")
+        let certAsk = try await say("他：查官网证书到期", "官网的 SSL 证书什么时候到期？找个会话查一下。")
+        let cert = try await adopt(/证书|SSL/, after: certAsk, title: "查官网证书到期", in: "官网")
+        try await say("他：证书查完告诉他签发方", "证书那件查完的时候顺便告诉我是哪家签发的，我要跟采购对一下账。")
         try await event("官网：交回分析（长）", on: website) { try await website.settle(Script.lighthouseAnalysis, rig: rig) }
         try await say("他：转来安全扫描报告（长）", Script.securityScan)
         try await event("忘记密码：后端做完（长）", on: login) { try await login.settle(Script.backendDone, rig: rig) }
@@ -110,7 +113,7 @@ private final class Duty {
         let readme = try await adopt(/README/, after: readmeAsk, title: "重截 README 截图", in: "演示")
         try await event("README：问截图放哪", on: readme) {
             try await readme.ask(
-                said: "README 用到的 9 张截图都按现在的界面重截好了。旧图在 docs/images/ 和 assets/readme/ 两处都有：README 引用的是 docs/images/，assets/readme/ 里是没人引用的旧副本。",
+                said: "README 用到的 9 张截图里，除了登录、设置两张先不换，其余 7 张都按现在的界面重截好了。旧图在 docs/images/ 和 assets/readme/ 两处都有：README 引用的是 docs/images/，assets/readme/ 里是没人引用的旧副本。",
                 question: "新截图放哪？", options: ["docs/images/", "assets/readme/"], rig: rig)
         }
         let digestAsk = try await say("他：加每周周报邮件", "演示项目再加一个：每周一早上 9 点给上周活跃过的用户发一封周报邮件，列出他看板上上周新建、完成的任务数和最忙的一天。")
@@ -134,15 +137,19 @@ private final class Duty {
         }
         let trip = try await say("他：问行程", "我去成都是哪天来着？几点的飞机？")
         let bounce = try await say("他：问调研里的细节", "之前查邮件服务那件，退信里有几封是邮箱不存在的？")
+        let certified = try await event("证书：查完交回", on: cert) { try await cert.settle(Script.sslReport, rig: rig) }
         try await event("README：做完交回", on: readme) {
             try await readme.deliver(pageShot("README 截图（新）", Script.readmeShots), title: "README 新截图", rig: rig)
             try await readme.settle(Script.readmeDone, rig: rig)
         }
         let finish = try await event("忘记密码：做完交回", on: login) {
             try await login.deliver(loginShot(), title: "登录页 忘记密码 改前改后", rig: rig)
-            try await login.settle(CueEvalTests.doneReply, rig: rig)
+            try await login.deliver(pageShot("/reset 设新密码", ["新密码  ••••••••", "确认新密码  ••••••••", "强度：较强", "[ 重置密码 ]"]), title: "设新密码页", rig: rig)
+            try await login.deliver(pageShot("/reset 链接已失效", ["链接已失效", "重置链接 30 分钟内有效、只能用一次。", "[ 重新发送重置邮件 ]"]), title: "链接失效页", rig: rig)
+            try await login.deliver(pageShot("MailHog：两封邮件并排", ["左：验证你的邮箱（注册验证邮件）", "右：重置你的密码（重置邮件）", "同一页眉、按钮样式与页脚"]), title: "重置邮件与注册验证邮件并排", rig: rig)
+            try await login.settle(Script.loginDone, rig: rig)
         }
-        let shipped = try await event("官网：做完交回", on: website) {
+        try await event("官网：做完交回", on: website) {
             try await website.deliver(pageShot("Lighthouse 移动端 · 首页", Script.lighthouseShot), title: "首页 Lighthouse 改前改后", rig: rig)
             try await website.settle(Script.lighthouseDone, rig: rig)
         }
@@ -150,14 +157,15 @@ private final class Duty {
 
         return try await judge(login: login, settings: settings, site: website, digest: digest, key: Points(
             go: go, progress: progress, readmeStatus: readmeStatus, provider: provider, tabs: tabs, e2e: e2e, trip: trip, bounce: bounce,
-            finish: finish, shipped: shipped, wrap: wrap))
+            finish: finish, certified: certified, wrap: wrap, cert: cert))
     }
 
     // MARK: 判定
 
     /// 判定要看的那几步
     struct Points {
-        let go, progress, readmeStatus, provider, tabs, e2e, trip, bounce, finish, shipped, wrap: Step
+        let go, progress, readmeStatus, provider, tabs, e2e, trip, bounce, finish, certified, wrap: Step
+        let cert: ScriptedSession
     }
 
     private func judge(
@@ -188,14 +196,15 @@ private final class Duty {
         let started = CueEval.calls(in: rounds(key.finish), "task", ["start"]).compactMap { call in
             login.cards.first { card in (call.args["task"] as? String).map { card.id.uuidString.lowercased().hasPrefix($0.lowercased()) } == true }?.body
         }
-        // 他要的：官网做完时说改了哪几个文件（会话的交回里列着四个）
-        let shippedDone = calls(key.shipped, "task", ["done"]).contains { !$0.call.failed && target($0.args) === site }
-        let shippedSaid = try await messages(key.shipped) + calls(key.shipped, "tell").compactMap { $0.args["text"] as? String }
-        let told = ["index.html", "fonts.css", "Hero.tsx", "ChatWidget.tsx"].count { file in shippedSaid.contains { $0.contains(file) } }
+        // 他要的：证书查完时告诉他签发方（会话交回里写着 Sectigo）
+        let certDone = calls(key.certified, "task", ["done", "leave"]).contains { !$0.call.failed && target($0.args) === key.cert }
+        let certSaid = try await messages(key.certified) + calls(key.certified, "tell").compactMap { $0.args["text"] as? String }
+        let loginDone = calls(key.finish, "task", ["done"]).contains { !$0.call.failed && target($0.args) === login }
         let wrapUp = CueEval.calls(in: rounds(key.finish), "task", ["say", "edit", "add"]).map { Self.texts($0.args) } + started
         let planned = try await rig.store.cueTaskDetail(login.task.id).leaves.contains { $0.leaf.status != .done && $0.leaf.body.contains(bump) }
         return [
-            Check("(a) 他口头交代的升 2.3.1、记 CHANGELOG：收尾时交代了，或还排在这件事的步骤里", wrapUp.contains { $0.contains(bump) } || planned),
+            Check("(a) 他口头交代的升 2.3.1、记 CHANGELOG：收尾时交代了，或排成了下一步" + (loginDone ? "" : "（这件没收尾，不算）"),
+                  !loginDone || wrapUp.contains { $0.contains(bump) } || planned),
             Check("(a) 他口头交代的：官网问跑不跑 e2e，答只跑单元测试", e2eSaid.contains { $0.contains(/单元|只跑|不跑|别跑/) } && !e2eSaid.contains { $0.contains("跑 e2e 回归") || $0 == "1" }),
             Check("(b) 早先会话查清的：周报邮件问走哪家发信，答 Postmark", providerSaid.contains { $0.localizedCaseInsensitiveContains("Postmark") } && !providerSaid.contains { $0 == "SendGrid" || $0 == "1" }),
             Check("(c) README 只建了一个任务（问进展时没另建）", readmeAdds == 1 && calls(key.readmeStatus, "task", ["add", "start"]).isEmpty),
@@ -208,7 +217,7 @@ private final class Duty {
             Check("(d) 他否掉之后没再提分标签页", !afterRejection.contains(where: Self.proposesTabs)),
             try await recalled("(e) 他顺口说的行程：答出下周三下午 3 点", key.trip) { $0.contains(/周三|28/) && $0.contains(/3 ?点|15[:：]|三点/) },
             try await recalled("(f) 已完成的调研里顺带的细节：答出 13 封", key.bounce) { $0.contains(/13|十三/) },
-            Check("(g) 官网做完时照他要的说了改了哪几个文件" + (shippedDone ? "" : "（这一步没收尾，不算）"), !shippedDone || told >= 3),
+            Check("(g) 证书查完时照他要的说了是哪家签发的" + (certDone ? "" : "（这一步没收尾）"), certSaid.contains { $0.localizedCaseInsensitiveContains("Sectigo") }),
             Check("问登录页进展：答了进展、没派新活", try await reply(key.progress)?.contains(/后端|前端|测试|接口/) == true && calls(key.progress, "task", ["add", "start"]).isEmpty),
             Check("问今天的事：回了他、没派新活", try await reply(key.wrap) != nil && calls(key.wrap, "task", ["add", "start"]).isEmpty),
         ]
@@ -1018,26 +1027,99 @@ private enum Script {
         修复后在工单里回复提交号，安全组会在一周内复扫确认。
         """
 
+    static let sslReport = """
+        查清楚了：官网的证书 2027-01-14 到期，还有 86 天；证书挂在 CDN 上，平台会在到期前 30 天自动续期，不用手动操作。没有改任何配置。
+
+        ```
+        $ echo | openssl s_client -connect www.demo-site.com:443 -servername www.demo-site.com 2>/dev/null | openssl x509 -noout -subject -issuer -dates -ext subjectAltName
+        subject=CN=*.demo-site.com
+        issuer=C=GB, O=Sectigo Limited, CN=Sectigo RSA Domain Validation Secure Server CA
+        notBefore=Jan 14 00:00:00 2026 GMT
+        notAfter=Jan 14 23:59:59 2027 GMT
+        X509v3 Subject Alternative Name:
+            DNS:*.demo-site.com, DNS:demo-site.com
+        ```
+
+        - 类型：DV 通配符证书，覆盖 demo-site.com 和所有子域名（www、blog、status）。
+        - 签发：Sectigo（中间证书 Sectigo RSA Domain Validation Secure Server CA）。
+        - 续期：CDN 控制台「SSL/TLS → 边缘证书」里开着自动续期，上次续期是 2026-01-14，续期记录里没有失败。
+        - 其他：TLS 1.2 与 1.3 开着，1.0、1.1 已关；HSTS 一年、含子域名；OCSP stapling 正常。
+        - 预发环境 staging.demo-site.com 用的是另一张 Let's Encrypt 证书，2026-12-02 到期，同样自动续期。
+        """
+
+    static let loginDone = """
+        忘记密码做完了，前后端都好了，没有提交、没有推送。
+
+        ## 对照要求
+
+        | 要求 | 结果 |
+        | --- | --- |
+        | 登录页有入口，填邮箱发重置邮件 | 登录页「忘记密码？」→ /forgot → 发信，/reset?token=… 设新密码 |
+        | 链接 30 分钟有效、只能用一次 | 过期或用过的链接打开 /reset 显示「链接已失效」，带「重新发送重置邮件」入口 |
+        | 沿用注册验证邮件的模板 | 同一个 verify.mjml，只换文案；MailHog 里两封并排对比图已发到手机 |
+        | 同一邮箱一分钟最多一次 | 后端 60 秒限一次；前端提交后按钮 60 秒倒计时，被限流时也照样显示同一句提示，不显示「请稍后再试」 |
+        | 不泄露邮箱是否存在 | 注册过、没注册、被限流三种情况都显示「如果这个邮箱注册过，你会收到一封邮件」，状态码都是 202，响应时间补齐到 300 ms |
+
+        ## 五种情况手动走了一遍（本地 + MailHog）
+
+        1. 注册过的邮箱：收到邮件，点链接设新密码后能用新密码登录、旧密码失效。
+        2. 没注册的邮箱：同一句提示，MailHog 里没有邮件。
+        3. 过期链接：把 expires_at 改到 31 分钟前，打开显示「链接已失效」。
+        4. 用过的链接：设完新密码再点一次，显示「链接已失效」。
+        5. 一分钟内连点：按钮在倒计时，强行用 curl 再请求一次，后端返回 202 和同一句提示、不发第二封。
+
+        ## 验证
+
+        ```
+        $ npm test
+         PASS  tests/auth/reset-request.test.ts (6 tests)
+         PASS  tests/auth/reset.test.ts (6 tests)
+         PASS  tests/auth/login.test.ts (9 tests)
+         PASS  tests/pages/ForgotPage.test.tsx (6 tests)
+         PASS  tests/pages/ResetPage.test.tsx (8 tests)
+         PASS  tests/pages/LoginPage.test.tsx (11 tests)
+        Test Suites: 6 passed, 6 total
+        Tests:       46 passed, 46 total
+        $ npm run lint
+        ✔ No problems
+        $ git status --short
+         M src/pages/LoginPage.tsx
+         M src/server/routes/auth.ts
+        ?? migrations/20261019_add_password_resets.sql
+        ?? src/pages/ForgotPage.tsx
+        ?? src/pages/ResetPage.tsx
+        ?? src/server/auth/reset.ts
+        ?? templates/mail/reset.mjml
+        ?? tests/auth/reset-request.test.ts
+        ?? tests/auth/reset.test.ts
+        ?? tests/pages/ForgotPage.test.tsx
+        ?? tests/pages/ResetPage.test.tsx
+        ```
+
+        截图发到手机了：登录页改前改后与填邮箱页、/reset 设新密码页、链接失效页、MailHog 里重置邮件与注册验证邮件并排。e2e 按你说的这周没跑。
+        """
+
     static let readmeShots = [
-        "01-首页.png  1280×800  现在的首页（新导航）", "02-登录.png  1280×800  带「忘记密码？」入口", "03-看板.png  1280×800  三栏看板",
-        "04-编辑器.png  1280×800  Markdown 编辑与预览", "05-设置.png  1280×800  设置页", "06-通知.png  1280×800  通知中心",
+        "01-首页.png  1280×800  现在的首页（新导航）", "03-看板.png  1280×800  三栏看板",
+        "04-编辑器.png  1280×800  Markdown 编辑与预览", "06-通知.png  1280×800  通知中心",
         "07-手机首页.png  390×844", "08-手机看板.png  390×844", "09-深色.png  1280×800  深色模式",
     ]
 
     static let readmeDone = """
         README 的截图换好了。
 
-        - 9 张截图都按现在的界面重截（Mac 1280×800、手机 390×844 各按原来的尺寸），放在 docs/images/，文件名沿用原来的，README 里的引用不用改。
-        - 对照表：01 首页、02 登录（多了「忘记密码？」入口）、03 看板、04 编辑器、05 设置、06 通知、07 手机首页、08 手机看板、09 深色模式。
+        - 9 张里重截了 7 张（Mac 1280×800、手机 390×844 各按原来的尺寸），放在 docs/images/，文件名沿用原来的，README 里的引用不用改。
+        - 02 登录、05 设置两张照你说的没换，等那两件改完再补。
+        - 对照表：01 首页、03 看板、04 编辑器、06 通知、07 手机首页、08 手机看板、09 深色模式。
         - assets/readme/ 里没人引用的旧副本没动，删不删等你定。
 
         ```
         $ ls -la docs/images/
         -rw-r--r--  1 dev  staff  412330 Oct 20 16:02 01-首页.png
-        -rw-r--r--  1 dev  staff  298114 Oct 20 16:02 02-登录.png
+        -rw-r--r--  1 dev  staff  301877 Sep  3 11:20 02-登录.png
         -rw-r--r--  1 dev  staff  455902 Oct 20 16:03 03-看板.png
         -rw-r--r--  1 dev  staff  377451 Oct 20 16:03 04-编辑器.png
-        -rw-r--r--  1 dev  staff  341208 Oct 20 16:04 05-设置.png
+        -rw-r--r--  1 dev  staff  336512 Sep  3 11:21 05-设置.png
         -rw-r--r--  1 dev  staff  289760 Oct 20 16:04 06-通知.png
         -rw-r--r--  1 dev  staff  201377 Oct 20 16:05 07-手机首页.png
         -rw-r--r--  1 dev  staff  219044 Oct 20 16:05 08-手机看板.png
