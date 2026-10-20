@@ -67,6 +67,8 @@ final class Workspace {
     #if os(macOS)
     /// 新建或编辑项目的表单（`ProjectForm`；侧栏与项目页的入口都经这里，主窗口弹出）。
     var projectForm: ProjectForm.Request?
+    /// 项目范围：任务页与会话页共用这一份（顶栏中间那颗显示它、点 ✕ 清掉；项目页的"全部 N 个会话"设成这个项目再切到会话页），nil 是全部项目。
+    var projectScope: UUID?
     /// ⌘K 搜索开着（`SearchPalette`）。
     var searching = false
     /// 接入 Agent 的面板（`AgentSetupPanel`；首次打开由 `offerAgentSetup` 置起，主窗口弹出）。
