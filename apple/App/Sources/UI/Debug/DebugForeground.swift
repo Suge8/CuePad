@@ -1,21 +1,27 @@
 #if os(macOS) && DEBUG
 import AppKit
 
-/// 本机构建一律在后台跑（`DebugHooks.staysInBackground`）。非占前台不可的只经这里借：前台才有的合成与动画（`InteractionBench` 量掉帧）、
-/// 后台画成停用灰的系统菜单（`openMenuIfAsked`）、经窗口服务器的真实事件与指针（`ChatScrollBench` 的 process、hid）。
-/// 只在启动参数给了 `-CuePadForeground YES` 时借得到（什么时候才可以给见 docs/verify.md「占前台」）；借时记下当时的前台应用，
-/// 动过指针就记下原位，`giveBack` 时都还回去。量完、被结束都经应用终止流程还（`DebugHooks.willTerminate`）；被 KILL 时系统把前台交给下一个应用，指针不还。
+/// 占前台的唯一入口：本机构建一律在后台（`DebugHooks.present`），只有启动参数给了 `-CuePadForeground YES` 才借得到。
+/// 借时记下当时的前台应用，动过指针就记下原位，`giveBack` 时都还回去；量完、被结束都经应用终止流程还（`DebugHooks.willTerminate`），
+/// 被 KILL 时系统把前台交给下一个应用，指针不还。哪几样可以借、什么时候才可以给见 docs/verify.md「占前台」。
 enum DebugForeground {
     private static var lender: NSRunningApplication?
     private static var pointer: CGPoint?
 
-    /// 本 App 到前台、`window` 到最前并接过键盘；没给 `-CuePadForeground YES` 时什么都不做，返回 false。
+    /// 本 App 到前台、`window` 到最前并接过键盘；没给 `-CuePadForeground YES` 时什么都不做，返回 false。可重复调（把窗口再拉到最前）。
     static func borrow(_ window: NSWindow) -> Bool {
         guard DebugScene.defaults.bool(forKey: "CuePadForeground") else { return false }
         if lender == nil, let front = NSWorkspace.shared.frontmostApplication, front != .current { lender = front }
         NSApp.activate()
         window.makeKeyAndOrderFront(nil)
         return true
+    }
+
+    /// 非占前台不可的（`what` 说是谁）：借不到就报错退出。
+    static func require(_ window: NSWindow, for what: String) {
+        guard !borrow(window) else { return }
+        FileHandle.standardError.write(Data("\(what) 要占前台：加 -CuePadForeground YES（docs/verify.md「占前台」）\n".utf8))
+        exit(2)
     }
 
     /// 把真实指针移到 `point`（全局坐标，主屏左上为原点）；第一次移时记下原位，`giveBack` 时放回。只在借到前台后调。

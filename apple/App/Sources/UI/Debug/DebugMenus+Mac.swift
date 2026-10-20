@@ -15,10 +15,7 @@ extension DebugScene {
         else { return }
         let parts = defaults.string(forKey: key)!.split(separator: ",").compactMap { Double($0) }
         guard parts.count == 2 else { return }
-        guard DebugForeground.borrow(window) else {
-            FileHandle.standardError.write(Data("\(key) 要占前台：加 -CuePadForeground YES（docs/verify.md「占前台」）\n".utf8))
-            exit(2)
-        }
+        DebugForeground.require(window, for: key)
         try? await Task.sleep(for: .milliseconds(500))
         let point = NSPoint(x: parts[0], y: window.frame.height - parts[1])
         for type in [down, up] {

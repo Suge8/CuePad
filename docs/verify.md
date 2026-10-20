@@ -27,7 +27,7 @@ apple/scripts/xc.sh rec ios out.mov -- -CuePadDemo YES -CuePadCycle YES
 
 ## 占前台
 
-开发与测试的自动化不抢前台：本机构建（Debug、测试宿主、perf 的 Release）不管怎么起都在后台，窗口排在所有窗口最后（`DebugHooks.staysInBackground`）；Mac 截图、录屏按窗口拍，模拟器不开 Simulator.app，bcu、axe 按进程投递，都不动用户的前台和指针。
+开发与测试的自动化不抢前台：本机构建（Debug、测试宿主、perf 的 Release）不管怎么起都在后台，窗口排在所有窗口最后（`DebugHooks.present`）；Mac 截图、录屏按窗口拍，模拟器不开 Simulator.app，bcu、axe 按进程投递，都不动用户的前台和指针。
 
 非占前台不可的只有下面几样，都要启动参数 `-CuePadForeground YES`，经 `DebugForeground` 借，量完或实例退出时把前台应用和指针还回去：
 

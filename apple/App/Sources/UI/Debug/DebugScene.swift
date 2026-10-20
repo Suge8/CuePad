@@ -228,10 +228,13 @@ enum DebugScene {
         workspace.say(Dotted(text), status: .unread, link: .agent, duration: .seconds(60))
     }
 
-    /// `CUEPAD_SHOT_READY` 给了文件路径时，画面摆好（`prepare` 做完）之后等到：读库的结果都回来了、摆画面的事都做完了、
+    /// 就绪文件：脚本起的实例都带（`CUEPAD_SHOT_READY`，见 app.py），App 也据此认出是脚本起的（`DebugHooks.scripted`）。
+    static let readyFile = ProcessInfo.processInfo.environment["CUEPAD_SHOT_READY"]
+
+    /// 给了就绪文件时，画面摆好（`prepare` 做完）之后等到：读库的结果都回来了、摆画面的事都做完了、
     /// 没有视图报着正在过渡、屏上没有进行中的一次性动画（转圈这类一直循环的不算），连着三帧都这样，再写下这个文件。`xc.sh shot` 等它出现才截图，不靠固定的等待。
     static func signalReady(_ services: AppServices) async {
-        guard let path = ProcessInfo.processInfo.environment["CUEPAD_SHOT_READY"] else { return }
+        guard let path = readyFile else { return }
         var still = 0
         while still < 3 {
             // 排在页面已经发出的读库之后：它回来时，那些读取也都回来了
