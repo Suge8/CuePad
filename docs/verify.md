@@ -98,7 +98,7 @@ apple/scripts/xc.sh stop       # 验完就收；忘了 5 分钟后也会自己�
 
 ### 交互预算
 
-预算表只在 `InteractionBench.budgets`，指标的定义在 `InteractionBench` 与 `Probes.swift` 的注释里，跑法在 `perf-mac.sh` 头注释里；和预算比的数在前台量（`-CuePadForeground YES`），至少跑两遍取中位数。
+预算表只在 `InteractionBench.budgets`，指标的定义在 `InteractionBench` 与 `Probes.swift` 的注释里，跑法在 `perf-mac.sh` 头注释里；和预算比的数在前台量（`-CuePadForeground YES`），至少跑两遍取中位数。点击回合会随这台机器那一刻的频率差到一倍（空闲后的第一下性能核常还没升频）：表里同列的"其中指令 M"不随它变，GHz 低的那几次就是慢在频率上；前后对比看指令，交替跑改前改后。
 
 冷启动进 Cue 页（iOS 第一项，`launchMs` 是进程启动到对话排出来）要量真实大小的对话：`CUEPAD_PERF_SEED=<真实库的只读副本> xc.sh perf ios 5 -CuePadInteractOnly "冷启动·Cue 页"`（副本先用这个构建打开一次，免得每次都量进升级库结构）。Mac 的"Cue 页首访"带 `contentMs`（点下到对话排出来），大库里有一段 Cue 对话。项名带空格，整个参数要加引号。
 
