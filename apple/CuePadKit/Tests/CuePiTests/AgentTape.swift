@@ -482,7 +482,6 @@ final class AgentTape: @unchecked Sendable {
     // MARK: socket 代理（录制）
 
     private var hookSource: DispatchSourceRead?
-    private var socketWatch: Task<Void, Never>?
 
     /// 真 Agent 的 socket 目录（`i`）里：钩子 socket 由这里听着、转给 CuePad 的；扩展建的会话 socket 在 CuePad 的目录里建一个同名（pid 换成替身的）代理。
     private func startHookProxy() throws {

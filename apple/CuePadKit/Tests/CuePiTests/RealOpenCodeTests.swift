@@ -319,7 +319,7 @@ struct RealOpenCodeTests {
                 let reconnected = OpenCodeRuntime(bridge: bridge, paths: sandbox.paths, store: store, hostID: "mac", opencode: { await ExecutableLocator.system.candidates("opencode").first })
                 try reconnected.start()
                 try await eventually("重新接上", timeout: .seconds(60)) { session(bridge) != nil }
-                try await Task.sleep(for: .seconds(2))
+                await quietPeriod(.seconds(2))  // 名字被改写没有事件可等
                 #expect(session(bridge)?.displayName.contains("say hi") == true, "名字仍是首条消息：\(String(describing: session(bridge)?.displayName))")
                 await reconnected.stop()()
             }

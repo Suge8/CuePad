@@ -225,27 +225,9 @@ nonisolated final class FakeExtension: @unchecked Sendable {
         for conn in shared.withLock({ $0.connections }) { write(object, to: conn) }
     }
 
-    /// 发 `info`：只带变了的几项，没带的不变（hello 才带全部）；这里是模型配置那三项。
-    func setModel(_ model: WireModel?, thinking: String?, models: [WireModel]) {
-        broadcast(["t": "info", "model": model?.json ?? NSNull(), "thinking": thinking ?? NSNull(), "models": models.map(\.json)])
-    }
-
-    /// 发 `info`：上下文余量与命令清单。
-    func setUsage(context: (tokens: Int?, window: Int)?, commands: [WireCommand]) {
-        broadcast([
-            "t": "info", "context": Self.contextJSON(context),
-            "commands": commands.map(\.json),
-        ])
-    }
-
-    /// 发只带 `fields` 的 `info`。
+    /// 发只带 `fields` 的 `info`（只带变了的几项，没带的不变；hello 才带全部）。
     func sendInfo(_ fields: [String: Any]) {
         broadcast(["t": "info"].merging(fields) { $1 })
-    }
-
-    /// 发 `quota`：订阅额度的一次观测（`windows` 按线上格式：`seconds`、`used`、`resetsAt` 秒、可选 `model`、`binding`）。
-    func sendQuota(provider: String, windows: [[String: Any]], complete: Bool) {
-        broadcast(["t": "quota", "provider": provider, "windows": windows, "complete": complete])
     }
 
     /// 发状态切换（`kind` 等字段按协议；`since` 自动补）。从不在跑进入思考或调工具是开始新的一轮：`turnSince` 记成此刻（同扩展在回合开始时记）。
@@ -269,11 +251,6 @@ nonisolated final class FakeExtension: @unchecked Sendable {
         broadcast(["t": "bye", "reason": reason])
         crash()
         try? FileManager.default.removeItem(at: socketURL)
-    }
-
-    /// 回完手上这条命令再告别退出（Pi 收到 end 也是先回 ack 再走）：排在处理命令的同一条队列上，ack 一定先于 bye 写出。
-    func closeAfterReply(bye reason: String) {
-        queue.async { [weak self] in self?.close(bye: reason) }
     }
 
     /// 不告别直接断开并留下 socket 文件（等同 kill -9）。幂等：fd 是进程全局的，重复 close 会误关别的测试刚复用的描述符。

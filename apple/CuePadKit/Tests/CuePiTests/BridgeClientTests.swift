@@ -46,12 +46,10 @@ struct BridgeClientTests {
         #expect(l.sessionFile == nil && l.model == nil && l.terminal == PiTerminal())
     }
 
-    // MARK: 模型与思考强度
+    // MARK: 上下文余量与斜杠命令
 
     private let sonnet = FakeExtension.WireModel(provider: "anthropic", id: "sonnet", name: "Sonnet", thinking: ["off", "low", "medium"])
     private let opus = FakeExtension.WireModel(provider: "anthropic", id: "opus", name: "Opus", thinking: ["off", "high", "max"])
-
-    // MARK: 上下文余量与斜杠命令
 
     /// `info` 只带变了的几项：没带的项（模型表、命令清单、会话名……）保持原样，带了 null 的才清空。
     @Test func infoCarriesOnlyWhatChangedAndLeavesTheRest() async throws {
@@ -74,8 +72,6 @@ struct BridgeClientTests {
         try await eventually("带 null 的清空") { session(ext.id)?.model == nil && session(ext.id)?.thinking == nil }
         #expect(session(ext.id)?.availableModels.count == 2 && session(ext.id)?.commands.count == 1)
     }
-
-    // MARK: 状态
 
     // MARK: 结束与残留清理
 
@@ -101,16 +97,8 @@ struct BridgeClientTests {
         try await eventually("同一会话重新连上") { session(old.id) != nil && reloaded.connectionCount == 1 }
     }
 
-    @Test func staleSocketFromDeadProcessIsRemovedAtStartWithoutBecomingASession() async throws {
-        let stale = dir.appending(path: "\(UUID().uuidString.lowercased()).\(try await deadPid()).sock")
-        try FakeExtension.makeStaleSocket(at: stale)
-        try bridge.start()
-        try await eventually("启动扫描清掉残留") { fileGone(stale) }
-        #expect(bridge.sessions.isEmpty)
-    }
-
-    @Test func unlistenedSocketOfLiveProcessIsKeptWhileDeadOnesAreRemoved() async throws {
-        // 进程活着但还没 listen（刚 bind）：不能删，否则会破坏正在启动的会话
+    /// 启动扫描：属主已死的残留 socket 删掉、不成会话；属主活着但还没 listen（刚 bind）的不能删，否则会破坏正在启动的会话。
+    @Test func staleSocketsOfDeadProcessesAreRemovedWhileUnlistenedOnesOfLiveProcessesAreKept() async throws {
         let pending = dir.appending(path: "\(UUID().uuidString.lowercased()).\(getpid()).sock")
         let stale = dir.appending(path: "\(UUID().uuidString.lowercased()).\(try await deadPid()).sock")
         try FakeExtension.makeStaleSocket(at: pending)
@@ -118,6 +106,7 @@ struct BridgeClientTests {
         try bridge.start()
         try await eventually("扫描已发生：属主已死的残留被删") { fileGone(stale) }
         #expect(!fileGone(pending))
+        #expect(bridge.sessions.isEmpty)
     }
 
     // MARK: 目录安全
@@ -170,7 +159,8 @@ struct BridgeClientTests {
         try await eventually("ended") { session(ext.id) == nil }
     }
 
-    @Test func corruptedMessageDropsConnectionAsIncompatible() async throws {
+    /// 读不懂的消息：连接判为不兼容并断开；之后在终端里 /reload，扩展在同一路径重新 listen，新 socket 不再被当成那个坏掉的旧连接跳过。
+    @Test func aCorruptedMessageDropsTheConnectionAsIncompatibleAndAReloadConnectsAgain() async throws {
         let ext = FakeExtension(directory: dir)
         try ext.start()
         try bridge.start()
@@ -180,16 +170,6 @@ struct BridgeClientTests {
         try await eventually("被判为不兼容并断开") {
             log.changes.contains { if case .incompatible = $0 { true } else { false } } && bridge.sessions.isEmpty
         }
-    }
-
-    /// 被判为不兼容的会话在终端里 /reload：扩展在同一路径重新 listen，新 socket 不再被当成那个坏掉的旧连接跳过。
-    @Test func reloadAfterBeingJudgedIncompatibleConnectsTheNewSocket() async throws {
-        let ext = FakeExtension(directory: dir)
-        try ext.start()
-        try bridge.start()
-        try await eventually("appeared") { session(ext.id) != nil }
-        ext.sendRaw(#"{"t":"state","state":{"kind":"warp-drive"}}"#)
-        try await eventually("被判为不兼容并断开") { bridge.sessions.isEmpty }
 
         ext.crash()
         let reloaded = FakeExtension(directory: dir, sessionID: ext.sessionID)
@@ -209,6 +189,21 @@ struct BridgeClientTests {
         try await eventually("命令到达") { !ext.commands.isEmpty }
         ext.crash()
         await #expect(throws: PiBridgeError.sessionEnded) { try await pending.value }
+    }
+
+    /// 取消一条等 ack 的命令：立即以取消结束，不用等 ack 超时（10 秒）。
+    @Test func cancellingACommandWaitingForItsAckReturnsAtOnce() async throws {
+        let ext = FakeExtension(directory: dir)
+        ext.onCommand = { _, _ in nil }  // 扩展收到命令不回 ack
+        try ext.start()
+        try bridge.start()
+        try await eventually("会话出现") { session(ext.id) != nil }
+
+        let request = Task { try await bridge.abort(ext.id) }
+        try await eventually("命令已发出") { !ext.commands.isEmpty }
+        request.cancel()
+
+        await #expect(throws: CancellationError.self) { try await request.value }  // 等到 ack 超时就是 ackTimeout
     }
 
     // MARK: 多客户端
