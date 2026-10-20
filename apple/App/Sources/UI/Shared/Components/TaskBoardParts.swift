@@ -406,7 +406,7 @@ struct BoardWaitCard: View {
             switch wait.wait {
             case .message(let message, _):
                 question(message.headline ?? "", by: workspace.cue.name)
-                CueChoices(options: message.choices ?? [], disabled: ending, fills: true) { answer(message, $0) }
+                CueChoices(options: message.choices ?? [], disabled: ending, stacks: true) { answer(message, $0) }
             case .session(let session, _):
                 // 在问的是整段问题连同选项（回答框里写选项原文或序号）；Cue 留给你回的是它最后那句的首句
                 question(session.question?.displayText ?? PiProgress.line(of: session) ?? workspace.shown(session, delivery: nil).label, by: nil)

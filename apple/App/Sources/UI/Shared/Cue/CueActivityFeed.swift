@@ -2,7 +2,7 @@ import CueStore
 import Foundation
 
 /// 实时活动那一份（`CueActivityState`）从库里怎么推：表情、在管与等你只从 Cue 的摘要来（`CueDigest`，数只读 `CueStore.cueTally`），
-/// 第一件等你是摘要里等你的第一件，做完是今天做完的顶层任务（`CueStore.tasksDone`）。iPhone 上开着它的是 `CueLiveActivity`。
+/// 第一件等你是摘要里等你的第一件，做完是今天做完的顶层任务（`CueStore.tasksDone`，去掉被等你占着的，同任务看板的做完列）。iPhone 上开着它的是 `CueLiveActivity`。
 nonisolated extension CueActivityState {
     /// 一次读到的：摘要与今天做完的顶层任务（最近的在前）。
     struct Reading: Equatable, Sendable {
@@ -10,7 +10,8 @@ nonisolated extension CueActivityState {
         var done: [Card]
 
         static func read(from store: isolated CueStore) throws -> Reading {
-            Reading(digest: try CueDigest.read(from: store), done: try store.tasksDone(since: Calendar.current.startOfDay(for: .now)))
+            let digest = try CueDigest.read(from: store)
+            return Reading(digest: digest, done: digest.tally.free(try store.tasksDone(since: Calendar.current.startOfDay(for: .now))))
         }
     }
 

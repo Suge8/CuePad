@@ -14,10 +14,19 @@ nonisolated struct ProjectNow: Hashable, Sendable {
     let source: Source
     let text: String
 
-    /// 一条进行中的任务（`TaskBoard.leading` 按项目给出，最近开始的在前）。
+    /// 一条进行中的任务（`leading` 按项目给出，最近开始的在前）。
     struct InProgress: Hashable, Sendable {
         let id: UUID
         let title: String
+    }
+
+    /// 各项目的进行中任务，最近开始的在前：`started` 是 `CueStore.startedTasks()`，按项目归拢。
+    static func leading(_ started: [Card]) -> [UUID: [InProgress]] {
+        var result: [UUID: [InProgress]] = [:]
+        for task in started {
+            result[task.projectID, default: []].append(InProgress(id: task.id, title: task.title.textGlyphs))
+        }
+        return result
     }
 
     /// Agent 的事才有状态（项目页、侧栏的状态标与项目长按菜单的标题读它）。

@@ -383,24 +383,24 @@ struct CueQuestionLine: View {
     private static let tailLength = 4
 }
 
-/// "等你"的选项：只有第一项"可以"是实底主按钮（全卡唯一的靛青）；第二项（"以后……不用问"）是无底色的文字按钮、宽按文字，在"可以"左边，
-/// 一行放不下（项目名长）或辅助功能字号时竖排在"可以"下面、居中。"等你"卡与全屏预览的底栏共用。
-/// 手机上"可以"伸满剩下的宽（只有它时占满一行）；Mac 上排在一行尾端，"可以"不窄过 `onceWidth`。
-/// `fills`：伸满给的宽（任务看板等你列那样窄的卡里两端都这样，竖排时文字按钮也折行，不撑宽卡片）。
+/// "等你"的选项：只有第一项"可以"是实底主按钮（全卡唯一的靛青），其余（"以后……不用问"）是无底色的文字按钮。"等你"卡、任务看板的等你卡与全屏预览的底栏共用。
+/// `stacks`（手机上一律，Mac 上任务看板的窄卡）：竖排——"可以"铺满一行在上，文字按钮在它下面居中、长了折行。摆法不随选项的字长变：
+/// "以后「项目」里……不用问"带着项目名，长短不一，按放不放得下挑横竖时并排的两张卡会一横一竖；主按钮也总在同一处、最好按。
+/// 不竖排时（Mac 的 Cue 页与预览底栏，地方宽）文字按钮在"可以"左边、排在一行尾端，"可以"不窄过 `onceWidth`；一行放不下或辅助功能字号时照样竖排、按字宽收着。
 struct CueChoices: View {
     let options: [String]
     var disabled = false
-    var fills = Self.fillsByDefault
+    var stacks = Self.stacksByDefault
     let pick: (String) -> Void
     @Environment(\.dynamicTypeSize) private var typeSize
 
     #if os(macOS)
     static let onceWidth: CGFloat = 96
-    private static let fillsByDefault = false
+    private static let stacksByDefault = false
     private static let stackGap: CGFloat = 4
     #else
     static let onceWidth: CGFloat = 88
-    private static let fillsByDefault = true
+    private static let stacksByDefault = true
     /// 文字按钮自带可点的高，竖排时与"可以"不另留间距
     private static let stackGap: CGFloat = 0
     #endif
@@ -413,17 +413,17 @@ struct CueChoices: View {
             button(once, kind: .primary, fill: true)
             ForEach(others, id: \.self) { button($0, kind: .quiet) }
         }
-        // Mac 上竖排也按字宽收着（"可以"与文字按钮同宽），不铺满整行
-        .fixedSize(horizontal: !fills, vertical: false)
+        // 不铺满时竖排也按字宽收着（"可以"与文字按钮同宽）
+        .fixedSize(horizontal: !stacks, vertical: false)
         if others.isEmpty {
-            button(once, kind: .primary, fill: fills, minWidth: Self.onceWidth)
-        } else if typeSize.isAccessibilitySize {
+            button(once, kind: .primary, fill: stacks, minWidth: Self.onceWidth)
+        } else if stacks || typeSize.isAccessibilitySize {
             stacked
         } else {
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: 8) {
                     ForEach(others, id: \.self) { button($0, kind: .quiet).lineLimit(1).fixedSize() }
-                    button(once, kind: .primary, fill: fills, minWidth: Self.onceWidth).lineLimit(1)
+                    button(once, kind: .primary, minWidth: Self.onceWidth).lineLimit(1)
                 }
                 stacked
             }
@@ -631,7 +631,7 @@ struct CueWaitingDock: View {
     /// 整张 → 紧凑（去掉那排图；问句与选项钉住，展开的原话在中间滚，末行放得下才露）→ 只剩问句一行（`folded`）。
     /// 紧凑那档的理想高只算问句与选项（原话与末行都是 `Yielding`），所以"问句加选项都放不下"才收成一行；哪一档都不会截出半截字或半张图。
     /// 放得下时不进滚动区：滚动区里的按钮按下要晚一下才有反馈。Mac 上不挑（挑的话几份都要建，第一次打开 Cue 页时卡多建一遍）。
-    /// 手机上选项一行、任务与原话一行（辅助功能字号下各占一行）；Mac 上合成一行，右下角是"可以"。
+    /// 手机上选项竖排（`CueChoices`）、下面任务与原话一行（辅助功能字号下各占一行）；Mac 上合成一行，右下角是"可以"。
     private func card(_ message: CueMessage) -> some View {
         let ref = message.taskID.flatMap { tasks[$0] }
         let choices = CueChoices(options: message.choices ?? [], disabled: ending == message.id) { answer(message, $0) }

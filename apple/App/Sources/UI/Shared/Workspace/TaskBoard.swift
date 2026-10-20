@@ -2,9 +2,10 @@ import CueStore
 import Foundation
 
 /// 任务看板（Mac 任务页、手机任务页）的四列，按流水排：待办 → 在管 → 等你 → 做完（今天）。列只是任务状态与等你的投影，不另存状态：
+/// 一件任务只在一列：被等你占着的（`CueTally.held`）只在等你，不论它的状态；其余按状态。
 /// - 待办：没开始的顶层任务，项目顺序、同级手动顺序（拖动排序只在同一项目的顶层里挪，`move`）。
 /// - 在管、等你：就是 `CueStore.cueTally`（Cue 那一行的同一份），"全部"下列头的数与它相等；等你每件一张，没落在任务上的（Cue 的一般提问、没绑任务的会话）也在。
-/// - 做完：今天做完的顶层任务，最近的在前；更早做完的收在列末（`earlier`），没进归档，所以就地展开，不跳去归档页。
+/// - 做完：今天做完的顶层任务（`CueStore.tasksDone`），最近的在前；更早做完的收在列末（`earlier`），没进归档，所以就地展开，不跳去归档页。
 /// 步骤不单列，卡片写进度；会话此刻在做什么看任务此刻干活的叶子（`Item.leaf`）。顶层的口径同 `CueStore.taskCounts`（`TaskTree` 的顶层）。
 nonisolated struct TaskBoard: Sendable, Equatable {
     enum Column: CaseIterable, Identifiable, Sendable {
@@ -96,40 +97,18 @@ nonisolated struct TaskBoard: Sendable, Equatable {
             let leaf = progress == nil ? task : started ? try store.workingLeaf(of: task.id) : nil
             return Item(task: task, project: projects[task.projectID], steps: progress, leaf: leaf)
         }
-        let all = try store.tasks(.inProgress, .todo, .done).flatMap(\.tasks)
-        let open = TaskTree(all.filter { $0.status != .done }, all: all)
-        let finished = doneRoots(all)
-        let today = Calendar.current.startOfDay(for: now)
+        let open = TaskTree(try store.tasks(.inProgress, .todo).flatMap(\.tasks))
         let tally = try store.cueTally()
+        let finished = tally.free(try store.tasksDone())
+        let today = Calendar.current.startOfDay(for: now)
+        let split = finished.firstIndex { ($0.completedAt ?? .distantPast) < today } ?? finished.endIndex
         return TaskBoard(
-            todo: try open.roots.compactMap(open.task).filter { $0.status == .todo }.map { try item($0, started: false) },
+            todo: try tally.free(open.roots.compactMap(open.task).filter { $0.status == .todo }).map { try item($0, started: false) },
             managing: try tally.managing.map { try item($0, started: true) },
             waiting: try tally.waiting.map { wait in
                 Wait(wait: wait, item: try wait.task.flatMap { try store.card($0) }.map { try item($0, started: true) })
             },
-            done: try finished.prefix { ($0.completedAt ?? .distantPast) >= today }.map { try item($0, started: false) },
-            earlier: try finished.drop { ($0.completedAt ?? .distantPast) >= today }.map { try item($0, started: false) })
-    }
-
-    /// 完成的顶层任务：`all`（同一范围里库中的全部任务）里完成了、上级不在其中的（与 `TaskCounts.done` 同一批），按完成时间从新到旧。
-    private static func doneRoots(_ all: [Card]) -> [Card] {
-        let listed = Set(all.map(\.id))
-        return all.filter { $0.status == .done && !($0.parentID.map(listed.contains) ?? false) }
-            .sorted { ($0.completedAt ?? .distantPast) > ($1.completedAt ?? .distantPast) }
-    }
-
-    /// 项目页任务纸的"已完成"：最近完成的前 `doneLimit` 条，规则同看板的做完列。
-    static func recentlyDone(_ all: [Card]) -> [Card] { Array(doneRoots(all).prefix(doneLimit)) }
-
-    /// 项目页"已完成"列多少条。
-    static let doneLimit = 30
-
-    /// 各项目的进行中任务，最近开始的在前（项目的"此刻"一行，`ProjectNow`）：`started` 是 `CueStore.startedTasks()`，按项目归拢。
-    static func leading(_ started: [Card]) -> [UUID: [ProjectNow.InProgress]] {
-        var result: [UUID: [ProjectNow.InProgress]] = [:]
-        for task in started {
-            result[task.projectID, default: []].append(ProjectNow.InProgress(id: task.id, title: task.title.textGlyphs))
-        }
-        return result
+            done: try finished[..<split].map { try item($0, started: false) },
+            earlier: try finished[split...].map { try item($0, started: false) })
     }
 }
