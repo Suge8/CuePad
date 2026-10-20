@@ -16,6 +16,8 @@ enum Note {
 struct NoteLine<Glyph: View, Label: View>: View {
     /// 能展开时是此刻开没开（末尾的箭头）；不能展开为 nil。
     var open: Bool?
+    /// 行末的几点（Cue 页动态里一节的第一行）：按自己的宽排、不换行，地方不够时截左边的字。
+    var time: Date?
     @ViewBuilder let glyph: Glyph
     @ViewBuilder let label: Label
     @Environment(\.palette) private var palette
@@ -23,8 +25,13 @@ struct NoteLine<Glyph: View, Label: View>: View {
     var body: some View {
         HStack(spacing: Note.spacing) {
             glyph.foregroundStyle(palette.ink3).frame(width: Note.glyphWidth).accessibilityHidden(true)
-            label
+            // 行末有几点时字先占满（几点按自己的宽、不被挤），不和中间的空白平分
+            label.layoutPriority(time == nil ? 0 : 1)
             if let open { DisclosureChevron(open: open) }
+            if let time {
+                Spacer(minLength: 8)
+                Text(ChatTime.time(time)).foregroundStyle(palette.ink3).fixedSize()
+            }
         }
         .font(Typography.caption.monospacedDigit()).foregroundStyle(palette.ink2)
         .frame(minHeight: Note.lineHeight)
@@ -33,8 +40,8 @@ struct NoteLine<Glyph: View, Label: View>: View {
 }
 
 extension NoteLine where Glyph == Image {
-    init(icon: Icon, open: Bool? = nil, @ViewBuilder label: () -> Label) {
-        self.init(open: open, glyph: { Image(icon) }, label: label)
+    init(icon: Icon, open: Bool? = nil, time: Date? = nil, @ViewBuilder label: () -> Label) {
+        self.init(open: open, time: time, glyph: { Image(icon) }, label: label)
     }
 }
 

@@ -261,7 +261,7 @@ struct CueHostTests {
         }
         func glanced(_ round: CueNoteRound) -> Bool {
             guard case .session(let target)? = round.header?.targets.first?.target else { return false }
-            return round.quiet && round.header?.name == title && round.header?.trail == "停下了" && target.sessionID == session.sessionID
+            return round.quiet(live: nil) && round.header?.name == title && round.header?.trail == "停下了" && target.sessionID == session.sessionID
         }
         let first = try await notes()
         #expect(first.count == 1 && first.allSatisfy(glanced), "\(first)")

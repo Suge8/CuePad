@@ -135,7 +135,8 @@ struct CueTaskLine: View {
 
 /// 连着的几轮 Cue 自己醒来（`CueThread.Row.notes`）：靠左的一颗虚线气泡，形状同 Cue 的气泡（`CueBubble.shape`），只描边不铺底——
 /// 是它说的话，但没推给你，与纸做的实底气泡（对你说的）一眼分开。每轮一节（`CueNoteSection`）：第一行为什么醒与几点，下面是它说的话（小一档的次要墨色），
-/// 调过工具的再一行经过（`RoundProcess`，设置里关了工具步骤时没有）。只看了看、没说话的一轮只占一行"…… · 没动手"，连着几次并成一行"看了 N 次，都没动手"。
+/// 调过工具的再一行经过（`RoundProcess`，设置里关了工具步骤时没有；在跑的那一轮总有，写此刻在做的）。做完了、只看了看、没说话的一轮只占一行"…… · 没动手"，
+/// 连着几次并成一行"看了 N 次，都没动手"；在跑的那一轮还不算（它随时会动手、说话，算了就要在并起来与分开之间来回跳）。
 /// 超过 `foldAfter` 节时只露最近 `shownWhenFolded` 节，上面一行"更早还醒过 N 次"，点它或点并起来的那一行原地全部展开（各节分开列）。
 struct CueNoteBubble: View {
     let rounds: [CueNoteRound]
@@ -170,7 +171,7 @@ struct CueNoteBubble: View {
     }
 
     var body: some View {
-        let units = expanded ? rounds.map(Unit.round) : Self.merged(rounds)
+        let units = expanded ? rounds.map(Unit.round) : Self.merged(rounds, live: live?.round)
         let folded = !expanded && units.count > Self.foldAfter
         let shown = folded ? Array(units.suffix(Self.shownWhenFolded)) : units
         BubbleWidth(fraction: CueBubble.cueWidth, edge: .leading) {
@@ -186,7 +187,13 @@ struct CueNoteBubble: View {
                     switch unit {
                     case .round(let round): CueNoteSection(round: round, live: live)
                     case .quiet(let rounds):
-                        Button { expanded = true } label: { CueQuietLine(rounds: rounds) }.buttonStyle(.plain)
+                        // 图标与几点是最近那次的
+                        Button { expanded = true } label: {
+                            NoteLine(icon: rounds[rounds.count - 1].header?.wake.icon ?? .wakeIdle, open: false, time: rounds[rounds.count - 1].date) {
+                                Text("看了 \(rounds.count) 次，都没动手")
+                            }
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
             }
@@ -206,14 +213,14 @@ struct CueNoteBubble: View {
     #endif
 
     /// 连着几轮没动手并成一节；只有一轮的照常一节。
-    static func merged(_ rounds: [CueNoteRound]) -> [Unit] {
+    static func merged(_ rounds: [CueNoteRound], live: UUID?) -> [Unit] {
         var units: [Unit] = [], run: [CueNoteRound] = []
         func flush() {
             if run.count == 1 { units.append(.round(run[0])) } else if !run.isEmpty { units.append(.quiet(run)) }
             run = []
         }
         for round in rounds {
-            if round.quiet { run.append(round) } else {
+            if round.quiet(live: live) { run.append(round) } else {
                 flush()
                 units.append(.round(round))
             }
@@ -232,21 +239,21 @@ private struct CueNoteSection: View {
     var body: some View {
         let indent = round.header == nil ? 0 : Note.glyphWidth + Note.spacing
         VStack(alignment: .leading, spacing: 3) {
-            if let header = round.header { CueWakeTitle(header: header, at: round.date, quiet: round.quiet) }
+            if let header = round.header { CueWakeTitle(header: header, at: round.date, quiet: round.quiet(live: live?.round)) }
             ForEach(round.said) { note in
                 Text(CueFormat.plainText(note.text)).font(Typography.secondary).foregroundStyle(palette.ink2)
                     .lineSpacing(2).fixedSize(horizontal: false, vertical: true)
             }
             .padding(.leading, indent)
-            if let row = round.row, row.tools != nil {
+            if let row = round.row, row.tools != nil || row.id == live?.round {
                 RoundProcess(tools: row.tools, ending: CueLiveRound.ending(of: row, in: live)).padding(.leading, indent)
             }
         }
     }
 }
 
-/// 一节的第一行：醒来原因的图标（叫醒它的会话出错是出错的那个）、原因（叫醒它的会话、任务、提醒是墨色的名字，点了去那里；几处时点开列出来选），行末几点。
-/// 只看了看的一轮在后面接"· 没动手"。
+/// 一节的第一行（`NoteLine`，同并起来的那一行）：醒来原因的图标（叫醒它的会话出错是出错的那个）、原因（叫醒它的会话、任务、提醒是墨色的名字，点了去那里；
+/// 几处时点开列出来选），行末几点。只看了看的一轮在后面接"· 没动手"。
 private struct CueWakeTitle: View {
     let header: CueWakeHeader
     let at: Date
@@ -259,18 +266,11 @@ private struct CueWakeTitle: View {
     #endif
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: Note.spacing) {
-            glyph.frame(width: Note.glyphWidth)
-            reason.layoutPriority(1)
-            Spacer(minLength: 8)
-            Text(ChatTime.time(at)).foregroundStyle(palette.ink3)
+        NoteLine(time: at) {
+            if header.failed { FailureMark() } else { Image(header.wake.icon) }
+        } label: {
+            reason
         }
-        .font(Typography.caption.monospacedDigit())
-        .frame(minHeight: Note.lineHeight)
-    }
-
-    @ViewBuilder private var glyph: some View {
-        if header.failed { FailureMark() } else { Image(header.wake.icon).foregroundStyle(palette.ink3) }
     }
 
     /// 名字太长时只截名字，前后的话留全。
@@ -298,7 +298,7 @@ private struct CueWakeTitle: View {
             Menu {
                 ForEach(header.targets, id: \.title) { place in Button(place.title) { open(place.target) } }
             } label: { label }
-            .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
+            .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden)
         }
     }
 
@@ -316,25 +316,6 @@ private struct CueWakeTitle: View {
         case .memory:
             workspace.cue.showsMemory = true
         }
-    }
-}
-
-/// 连着几轮只看了看、没说话：并成一行"看了 N 次，都没动手"，图标是最近那次的，行末几点也是最近那次的；点它展开各节（`CueNoteBubble`）。
-private struct CueQuietLine: View {
-    let rounds: [CueNoteRound]
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: Note.spacing) {
-            Image(rounds.last?.header?.wake.icon ?? .wakeIdle).foregroundStyle(palette.ink3).frame(width: Note.glyphWidth)
-            Text("看了 \(rounds.count) 次，都没动手").foregroundStyle(palette.ink2)
-            DisclosureChevron(open: false)
-            Spacer(minLength: 8)
-            if let last = rounds.last { Text(ChatTime.time(last.date)).foregroundStyle(palette.ink3) }
-        }
-        .font(Typography.caption.monospacedDigit())
-        .frame(minHeight: Note.lineHeight)
-        .contentShape(.rect)
     }
 }
 
