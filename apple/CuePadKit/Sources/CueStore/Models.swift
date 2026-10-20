@@ -187,14 +187,16 @@ public struct TaskCounts: Equatable, Sendable {
   }
 }
 
-/// 步骤完成了几个、一共几个（任务的直接步骤，见 `CueStore.subtaskProgress`）。
+/// 步骤完成了几个、一共几个（任务的直接步骤，见 `CueStore.subtaskProgress`），与最近做完的那一步在什么时候（任务行估还要多久，`TaskPace`）。
 public struct TaskProgress: Equatable, Sendable {
   public let done: Int
   public let total: Int
+  public let lastDone: Date?
 
-  public init(done: Int, total: Int) {
+  public init(done: Int, total: Int, lastDone: Date? = nil) {
     self.done = done
     self.total = total
+    self.lastDone = lastDone
   }
 }
 

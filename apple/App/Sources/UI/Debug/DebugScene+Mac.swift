@@ -22,6 +22,7 @@ extension DebugScene {
             if defaults.bool(forKey: "CuePadDemo") {
                 await seedRemote(workspace.services)
                 await seedCue(workspace.services)
+                await seedBusyBoard(workspace.services.store)
             }
             workspace.show(.tasks)
         case "agentsetup": workspace.showsSetup = true

@@ -45,6 +45,8 @@ enum DebugHooks {
         #if os(iOS)
         /// 设置页通知那一行显示的状态（`-CuePadAlertStatus`；演示模式没有同步，真实状态出不来）。
         var alertStatus: PiAlertStatus?
+        /// 手机任务页打开时落在哪一列（`-CuePadColumn 待办|推进中|等你|做完`）。
+        var boardColumn: TaskBoard.Column?
         /// 搜索页一打开在哪个范围（`-CuePadSearchScope sessions`）。
         var searchScope = SearchScreen.Scope.cards
         /// Cue 页头一出现就展开成面板（`-CuePadCuePanel YES`；`end` 再滚到面板底，看记忆）。

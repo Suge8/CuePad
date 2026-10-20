@@ -295,11 +295,11 @@ extension CueStore {
   private func subtaskProgress(scope: String, _ arguments: [any SQLBindable]) throws -> [UUID: TaskProgress] {
     let rows = try db.query(
       """
-      SELECT parentID, COUNT(*), COUNT(completedAt) FROM cards
+      SELECT parentID, COUNT(*), COUNT(completedAt), MAX(completedAt) FROM cards
       WHERE parentID IS NOT NULL AND todoAt IS NOT NULL AND deletedAt IS NULL AND archivedAt IS NULL \(scope)
       GROUP BY parentID
       """, arguments
-    ) { (parent: $0.uuid(0), progress: TaskProgress(done: Int($0.int(2)), total: Int($0.int(1)))) }
+    ) { (parent: $0.uuid(0), progress: TaskProgress(done: Int($0.int(2)), total: Int($0.int(1)), lastDone: $0.dateOrNil(3))) }
     return Dictionary(uniqueKeysWithValues: rows.map { ($0.parent, $0.progress) })
   }
 

@@ -1,10 +1,11 @@
 import CueStore
 import SwiftUI
 
-/// 一条任务或步骤，全 App 只有这一种行（手机项目页任务纸、Mac 项目页任务区）：完成圈（`TaskCheckButton`）、标题，
-/// 加一格旁注——上级的步骤做了几个（"1/4"），与"下一步"（`TaskNextMark`：会话的状态标，或还没交出去的叶子的"开始"）。
-/// 一行只说一遍状态：进行中是圈的半填，会话在做什么是那个会动的状态标；不写分组标题、不写状态词胶囊（要你管的才写字）。
-/// 所在项目由所在的页说，行里不重复。
+/// 一条任务或步骤，全 App 只有这一种行（手机项目页任务纸、Mac 项目页任务区、任务看板的各列与等你卡的抬头）：完成圈（`TaskCheckButton`）、标题，
+/// 加一格旁注——进行中的任务多久（`TaskPace`："约 N 分钟""已跑 N 分钟"，次要墨色），与"下一步"（`TaskNextMark`：会话的状态标，或还没交出去的叶子的"开始"）。
+/// 一行只说一遍状态：进行中是圈的半填，步骤做到哪是圈的分段（`TaskRingView`，所以不写"1/4"），会话在做什么是那个会动的状态标；
+/// 不写分组标题、不写状态词胶囊。要你管的（`PiShown.speaksOnTask`）才写状态词，它占时间那一格的位置。
+/// 看板上上级收成一行（`lead`）：状态看此刻干活的叶子。所在项目由所在的页或段头说，行里不重复。
 /// 步骤（`step`）比上级小一档：字小一号、圈小一号，缩进到圈对着上级标题的起点（`TaskOutline.indentWidth`），层级靠对齐读出来，不靠线。
 /// 旁注的位置：iPhone 在行尾（屏窄，行尾就在眼前）；iPad 宽栏与 Mac 紧跟标题（放在行尾时宽窗口里离标题太远，一眼看不到）。
 /// 点圈完成（`TaskCheck`），点行的其余地方打开任务气泡（`Workspace.openTask`；气泡里的步骤行是翻到这一步）。Mac 右键是 `CardActions`；
@@ -17,6 +18,8 @@ struct TaskLine: View {
     var subtasks: TaskProgress?
     /// 是某条任务的步骤（大纲里缩进的那一级）。
     var step = false
+    /// 此刻干活的叶子（看板上收成一行的上级，`TaskBoard.Item.leaf`）：会话状态看它。
+    var lead: Card?
     @State private var check = TaskCheck()
     @Environment(Workspace.self) private var workspace
     @Environment(\.cardAgents) private var agents
@@ -31,7 +34,7 @@ struct TaskLine: View {
     #endif
 
     var body: some View {
-        let next = workspace.next(for: task, in: agents, steps: subtasks)
+        let next = workspace.next(for: task, lead: lead, in: agents, steps: subtasks)
         let done = check.done(task)
         framed(line(next: next, done: done))
             // 读屏把一行当一个元素："任务内容，步骤 1/4，下一步"，值是状态（文案见 TaskSpeech）；默认动作勾选（与圈同一个动作）
@@ -85,16 +88,22 @@ struct TaskLine: View {
         let size = step ? TaskMetrics.stepRing : TaskMetrics.ring
         let target = CGSize(width: TaskMetrics.ringColumn, height: Self.ringTarget)
         #if os(macOS)
-        return TaskCheckButton(task: task, subtasks: subtasks, agentBusy: next?.agentBusy ?? false, size: size, target: target, check: $check, rowTap: open)
+        return TaskCheckButton(task: task, subtasks: subtasks, agentBusy: next?.agentBusy ?? false, running: next?.isRunning ?? false, size: size, target: target, check: $check, rowTap: open)
         #else
-        return TaskCheckButton(task: task, subtasks: subtasks, agentBusy: next?.agentBusy ?? false, size: size, target: target, check: $check)
+        return TaskCheckButton(task: task, subtasks: subtasks, agentBusy: next?.agentBusy ?? false, running: next?.isRunning ?? false, size: size, target: target, check: $check)
         #endif
     }
 
-    /// 旁注：上级的步骤数与"下一步"；做完的不写。
+    /// 旁注：多久与"下一步"；做完的不写，要你管的状态词写出来时不写多久。
     @ViewBuilder private func notes(next: TaskNext?, done: Bool) -> some View {
-        if !done, let subtasks {
-            Text("\(subtasks.done)/\(subtasks.total)").font(TaskMetrics.caption).monospacedDigit().foregroundStyle(palette.ink3).fixedSize()
+        if !done, !(next?.speaks ?? false), let pace = TaskPace.of(task, steps: subtasks) {
+            Group {
+                switch pace {
+                case .left(let seconds): Text(TaskPace.left(seconds))
+                case .ran(let since): LiveText(style: TaskPace.Ran(since: since))
+                }
+            }
+            .font(TaskMetrics.caption).monospacedDigit().foregroundStyle(palette.ink3).fixedSize()
         }
         if !done, let next { TaskNextMark(next: next).transition(.opacity) }
     }
@@ -132,7 +141,7 @@ struct TaskLine: View {
     private var stacked: Bool { false }
     private var titleLines: Int { 1 }
     private static let titlePadding: CGFloat = 0
-    private static let ringTarget: CGFloat = 15
+    private static let ringTarget: CGFloat = TaskMetrics.ring
 
     private func framed(_ content: some View) -> some View {
         content
@@ -148,13 +157,11 @@ struct TaskLine: View {
 }
 
 /// 任务行上"下一步"那一格（`TaskNext`），Mac 与手机同一份，不垫底、不成胶囊——一屏可能有十几格，胶囊排成一列就成了一墙按钮：
-/// 会话那边的事是会话状态标（`PiStateDot`，在做时那条心电线自己会动），要你管的（等你确认、出错、没送到）旁边写状态词，点了打开会话；
+/// 会话那边的事是会话状态标（`PiStateDot`，在做时那条心电线自己会动），要你管的（`PiShown.speaksOnTask`）旁边写状态词，点了打开会话；
 /// 还没交出去的叶子是一个"▶"，点了把任务的正文交给 Agent（Mac 直接交出，手机浮起发给 Agent 的输入框带着它）。
 /// Mac 上指针停在这一行时（`rowHovered`）"▶ 开始"以靛青露出来、状态标旁写出状态词；没停时"开始"不画（签名色只给焦点，ui.md）。
-/// `spelled`：写成单独一行（任务看板的卡，`BoardTaskCard`），状态词与"开始"一直写出来、贴着左边。
 struct TaskNextMark: View {
     let next: TaskNext
-    var spelled = false
     @Environment(\.rowHovered) private var lit
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
@@ -178,13 +185,11 @@ struct TaskNextMark: View {
             switch next {
             case .agent(let shown, let session):
                 PiStateDot(shown: shown, size: Self.dot).relaySpot(session: session.sessionID, row: .task)
-                if shown.needsYou || lit || spelled { Text(shown.label).foregroundStyle(shown.labelTint(palette)) }
+                if shown.speaksOnTask || lit { Text(shown.label).foregroundStyle(shown.labelTint(palette)) }
             case .start:
                 Image(.start).font(Self.glyph)
                 #if os(macOS)
                 Text("开始").fontWeight(.semibold)
-                #else
-                if spelled { Text("开始") }
                 #endif
             }
         }
@@ -193,7 +198,7 @@ struct TaskNextMark: View {
         .foregroundStyle(starts ? (lit ? palette.signature : palette.ink3) : palette.ink2)
         .lineLimit(1).fixedSize()
         // 点按区比图形宽；图形贴着行的那一边（手机行尾的一列右缘对齐，紧跟标题时靠左），不在点按区里居中
-        .frame(minWidth: Self.target, minHeight: spelled ? nil : Self.target, alignment: spelled ? .leading : edge)
+        .frame(minWidth: Self.target, minHeight: Self.target, alignment: edge)
         .contentShape(.rect)
         .animation(Motion.quick, value: lit)
     }
@@ -232,6 +237,25 @@ struct TaskNextMark: View {
         #else
         navigation.follow(next, store: services.store)
         #endif
+    }
+}
+
+extension PiShown {
+    /// 任务行上要写出状态词的：要你动手的（`needsYou`），加上停在半路（被打断、需要 /reload）与做完一轮你还没看的。在跑的只有会动的线。
+    var speaksOnTask: Bool { needsYou || status == .interrupted || status == .restart || status == .unread }
+}
+
+extension TaskNext {
+    /// 行上写出了状态词（`PiShown.speaksOnTask`）。
+    var speaks: Bool { if case .agent(let shown, _) = self { shown.speaksOnTask } else { false } }
+    /// 会话此刻在跑（圈上那一段走流光）。
+    var isRunning: Bool { if case .agent(let shown, _) = self { shown.isRunning } else { false } }
+}
+
+extension Workspace {
+    /// 一行的"下一步"：给了此刻干活的叶子（`lead`）看它，否则看这件自己。
+    func next(for task: Card, lead: Card?, in agents: AgentLinks, steps: TaskProgress?) -> TaskNext? {
+        lead.map { next(for: $0, in: agents, steps: nil) } ?? next(for: task, in: agents, steps: steps)
     }
 }
 
