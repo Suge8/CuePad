@@ -87,8 +87,7 @@ esac
 # 这里的 Mac 构建在包里声明成 UIElement：谁起的（测试宿主、截图、测量、会话自己写的脚本）、怎么结束的，都不进程序坞、不占菜单栏。
 # 写在包里而不按启动时的环境切换：脚本直接起的实例不带那些环境变量，进了程序坞的图标退出后又可能撤不掉（曾攒下上百个）。
 # 人用 Xcode ⌘R 起的不经这里，照常进程序坞；正式版由 release-mac.sh 构建
-local_build=()
-if [ "$platform" = mac ]; then local_build+=(INFOPLIST_KEY_LSUIElement=YES); fi
+if [ "$platform" = mac ]; then build_settings+=(INFOPLIST_KEY_LSUIElement=YES); fi
 # 系统 SDK 的预编译模块（约 166 个，冷编前 10 秒都在生成它们）所有检出共用一份：Xcode 默认就放在各工程共用的 DerivedData 根下，
 # 这里的产物目录按检出分开，不指定就每个新检出从头编一遍。实测换检出路径照样命中，冷编约快 17%。删 .derived 不会清掉它
 shared_cache="$HOME/Library/Caches/cuepad-xc"
@@ -99,7 +98,7 @@ shared_modules=(SDK_EXPLICIT_MODULES_OUTPUT_PATH="$shared_cache/SDKExplicitPreco
 xcb() {
   xcodebuild -project "$APPLE_DIR/CuePad.xcodeproj" -scheme CuePad -configuration "$configuration" \
     -destination "$destination" -derivedDataPath "$DERIVED" "$@" \
-    ${local_build[@]+"${local_build[@]}"} "${shared_modules[@]}" ${build_settings[@]+"${build_settings[@]}"} 2>&1 \
+    "${shared_modules[@]}" ${build_settings[@]+"${build_settings[@]}"} 2>&1 \
     | { grep -v 'failed with exit code 0 but produced no further output' || true; }
 }
 

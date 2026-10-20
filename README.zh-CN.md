@@ -42,7 +42,7 @@ cuepad task done <id>
 
 在绑定了目录的项目里运行时，默认只作用于该项目。`--json` 给 agent 稳定的输出。完整用法见 `cuepad --help` 与 `cuepad <命令> --help`。
 
-**Pi、Claude Code、Codex 与 OpenCode 都是双向接入。** 首次打开（之后在设置的 Agent 一节）每个 Agent 一个开关。打开后 CuePad 看得到它的会话在做什么，能把任务与你的话发进会话，在 Mac 或手机上回答它的提问与权限确认，在后台开会话；Agent 也能用 `cuepad` 记灵感、改任务、把文件发到手机上预览。每家在它自己的目录里放一个小技能（`~/.pi/agent/skills`、`~/.claude/skills`、`~/.codex/skills`、`~/.config/opencode/skills`）；Pi 另装桥扩展，Claude Code 与 Codex 另在设置里加钩子，OpenCode（需要第 2 版）不用再装，CuePad 直连它的后台服务。不打开就什么都不写，关掉即删掉 CuePad 写的全部文件。同一处还能把 `cuepad` 链接进 `~/.local/bin`，自己在终端里用。
+**Pi、Claude Code、Codex 与 OpenCode 都是双向接入。** 首次打开时一个面板一下接入检测到的 Agent、在这台 Mac 上启用 Cue；之后在设置的 Agent 一节逐个开关。打开后 CuePad 看得到它的会话在做什么，能把任务与你的话发进会话，在 Mac 或手机上回答它的提问与权限确认，在后台开会话；Agent 也能用 `cuepad` 记灵感、改任务、把文件发到手机上预览。每家在它自己的目录里放一个小技能（`~/.pi/agent/skills`、`~/.claude/skills`、`~/.codex/skills`、`~/.config/opencode/skills`）；Pi 另装桥扩展，Claude Code 与 Codex 另在设置里加钩子，OpenCode（需要第 2 版）不用再装，CuePad 直连它的后台服务。不确认就什么都不写，关掉即删掉 CuePad 写的全部文件。同一处还能把 `cuepad` 链接进 `~/.local/bin`，自己在终端里用。
 
 ## 下载
 
