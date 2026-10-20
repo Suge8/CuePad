@@ -245,12 +245,24 @@ struct CueHostTests {
         await rig.stop()
     }
 
-    /// 会话的动静叫醒 Cue，它看了看、什么都没做（没有落了结果的一步）：这一轮最后的话不写进对话，没有灰色的一行。
-    @Test func 会话歇下后Cue什么都没做_不写动态() async throws {
+    /// 会话的动静叫醒 Cue，它看了看、什么都没做（没有落了结果的一步）：这一轮最后的话不写进对话，补一行灰色动态"看过「会话名」，不打算行动"；
+    /// 紧接着又这样看了同一个会话，并进那一行，不另起一行。
+    @Test func 会话歇下后Cue什么都没做_补一行看过() async throws {
         let rig = try await Rig()
         try await rig.settleTask(titled: "修好登录页 只看看")
-        try await eventually("被叫醒的那一轮做完") { rig.rounds.contains { $0.wake == .sessionActivity && $0.finishedAt != nil } }
-        #expect(try await rig.store.cueMessages().allSatisfy { $0.author != .known(.note) })
+        func woke(_ count: Int) -> Bool { rig.rounds.filter { $0.wake == .sessionActivity && $0.finishedAt != nil }.count == count }
+        try await eventually("被叫醒的那一轮做完") { woke(1) }
+        let session = try #require(rig.app.host.extensions.values.first)
+        let title = try #require(try await rig.store.sessions(matching: session.sessionID).first?.title)
+        func notes() async throws -> [String] { try await rig.store.cueMessages().filter { $0.author == .known(.note) }.map(\.text) }
+        #expect(try await notes() == ["看过「\(title)」，不打算行动"])
+
+        session.setState(["kind": "thinking"])
+        try await eventually("又在干活") { try await rig.store.sessions(matching: session.sessionID).first?.state.isWorking == true }
+        session.setState(["kind": "idle"])
+        try await rig.answered(session.sessionID)
+        try await eventually("又被叫醒的那一轮做完") { woke(2) }
+        #expect(try await notes() == ["看过「\(title)」，不打算行动"])
         await rig.stop()
     }
 
@@ -335,7 +347,7 @@ struct CueHostTests {
         try await eventually("工具当场报了没送到") { rig.model.answered("没送到——会话已关闭") }
         try await eventually("这一轮做完、记下 Cue 已知道") {
             let failed = try await rig.store.deliveryRequests(toSession: "remote-3").contains { $0.failure != nil }
-            let reported = try await rig.store.cueChanges(after: CueMarks(0)).contains { $0.kind == .undelivered }
+            let reported = try await rig.store.cueChanges(after: CueMarks(0)).due.contains { $0.kind == .undelivered }
             return failed && !reported
         }
         await macB.stop()
@@ -382,7 +394,7 @@ struct CueHostTests {
         #expect(rig.app.host.calls.count == 2)  // 第一次没起来，重试那次起来了
         let sent = try #require(try await rig.store.deliveryRequests(toSession: "local-1").last)
         #expect(Said.request(sent).trip(at: .always(at: .now)) == .delivered)
-        #expect(try await rig.store.cueChanges(after: CueMarks(0)).allSatisfy { $0.kind != .undelivered && $0.kind != .failed })
+        #expect(try await rig.store.cueChanges(after: CueMarks(0)).due.allSatisfy { $0.kind != .undelivered && $0.kind != .failed })
         await rig.stop()
     }
 

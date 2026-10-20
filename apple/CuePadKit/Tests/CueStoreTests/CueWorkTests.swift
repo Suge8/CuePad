@@ -23,7 +23,7 @@ import Testing
     let mine = try await store.requestEnd(of: SendTarget(kind: .piSession, name: "发布", ref: "s1"), on: "mac")
     _ = try await eventually(store, { try $0.deliveryRequest(mine.id) }) { $0 == nil }  // 清理过了
 
-    let changes = try await store.cueChanges(after: since)
+    let changes = try await store.cueChanges(after: since).due
     #expect(changes.map(\.detail) == ["停下：会话已关闭"])
     #expect(changes.first?.task?.id == task.id && changes.first?.leaf?.id == task.id)
   }

@@ -345,7 +345,7 @@ import Testing
       }
       try await executor.start()
       defer { Task { await executor.stop() } }
-      let changes = try await eventually(store, { try $0.cueChanges(after: since) }) { !$0.isEmpty }
+      let changes = try await eventually(store, { try $0.cueChanges(after: since).due }) { !$0.isEmpty }
       #expect(changes.map(\.kind) == [.failed] && changes.map(\.detail) == ["开工：这台 Mac 上没有找到 Codex"])
       #expect(changes.first?.task?.id == task.id)
     }
