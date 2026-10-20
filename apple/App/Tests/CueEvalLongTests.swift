@@ -323,15 +323,23 @@ private final class Duty {
 
     /// 他问起早先的事：答对才过；没答对时标出是说不知道还是答错（乱编）
     private func recalled(_ label: String, _ step: Step, _ correct: (String) -> Bool) async throws -> Check {
-        let answer = try await reply(step) ?? ""
-        if correct(answer) { return Check(label, true) }
-        return Check(label + (answer.contains(/不记得|不确定|没找到|查不到|没有记录|没查到|不知道|答不出/) ? "（说不知道）" : "（答错）"), false)
+        // 这一步里回他的每一句都算：碰上换新时，答他的那句之后新班次还会再回一句
+        let answers = try await replies(step)
+        if answers.contains(where: correct) { return Check(label, true) }
+        return Check(label + (answers.contains { $0.contains(/不记得|不确定|没找到|查不到|没有记录|没查到|不知道|答不出|答不上|报不出|没统计|没查退信/) } ? "（说不知道）" : "（答错）"), false)
     }
 
     /// 这一步里 Cue 写的消息（回复、tell、动态、完成的结果）
     private func messages(_ step: Step) async throws -> [String] {
         guard let window = step.window else { return [] }
         return try await eval.said(since: window.lowerBound).filter { $0.createdAt <= window.upperBound }.map(\.text)
+    }
+
+    /// 这一步里回他的话（Cue 回复他、不关联任务、不带选项的）
+    private func replies(_ step: Step) async throws -> [String] {
+        guard let window = step.window else { return [] }
+        return try await eval.said(since: window.lowerBound)
+            .filter { $0.author == .known(.cue) && $0.choices == nil && $0.taskID == nil && $0.createdAt <= window.upperBound }.map(\.text)
     }
 
     /// 回答他的那句（这一步里）
