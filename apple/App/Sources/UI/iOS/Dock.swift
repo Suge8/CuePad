@@ -323,7 +323,6 @@ struct CueDockRow<Composer: View>: View {
 
 /// Cue 页底部左边那颗玻璃圆钮（与输入框同高）：图标是"⋯"（更多去处，不随上次去了哪页变）。点它原地展开成 Dock 那样的三格胶囊
 /// （同宽同高，输入框收成右端一颗圆，`CueDockRow`），选一格就去那里；点别处、滚动或点那颗圆收回（`CuePage` 在对话上铺一层接点按）。
-/// 收起时它代替"会话"那一格做接力的落点（`relaySpot(dock:)`）。
 /// `docked`：还是 Dock 三格胶囊的样子（刚从三页来的第一帧）。
 /// 圆钮与三格一直都在、只换不透明度，靠左叠着（玻璃往右长，三格不跟着挪）：先后换、不叠着交叉淡（`Motion.handOff`）——
 /// 换出去的那样先淡完，换进来的晚这么久再出；插入、移除的过渡里被移除的那个随弹簧慢慢淡，"⋯"会叠在"任务"上停一阵。
@@ -363,7 +362,6 @@ struct DockPlaces: View {
                     .contentShape(.circle)
             }
             .buttonStyle(PressStyle(.button))
-            .relaySpot(dock: true)
             .accessibilityLabel("去处")
             .accessibilityHint("展开任务、会话、项目")
             .opacity(open || docked ? 0 : 1)
