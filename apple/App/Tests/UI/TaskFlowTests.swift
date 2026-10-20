@@ -268,7 +268,7 @@ struct TaskFlowTests {
         #expect(try await board().managing.map(\.item?.id) == [task.id])
         try await workspace.toggle(task.id)
         columns = try await board()
-        #expect(columns.done.map(\.id) == [task.id] && columns.managing.map(\.id) == ["s1"] && columns.waiting.count == 1)
+        #expect(columns.done.map(\.id) == [task.id] && columns.managing.map(\.id) == ["session/s1"] && columns.waiting.count == 1)
         try await expectCountsMatchCue(columns)
 
         // 做完了 Cue 还在问它：它只在等你，做完列与实时活动的"今天做完"都不再算它
@@ -326,14 +326,14 @@ struct TaskFlowTests {
         func inEnvelope() async throws -> Int { try await store.cueBoard().active.count }  // 信封的"在做 N 件"数的就是它
 
         var board = try await TaskBoard.read(from: store)
-        #expect(board.managing.map(\.id) == [live.id.uuidString, "term"])  // 任务在前，没绑任务的会话在后
+        #expect(board.managing.map(\.id) == ["task/\(live.id.uuidString)", "session/term"])  // 任务在前，没绑任务的会话在后
         #expect(board.todo.map(\.id) == [card.id] && board.todo.first?.task.status == .inProgress)
         #expect(try await CueDigest.read(from: store).managing == 2)
         #expect(try await inEnvelope() == 2)
 
         try await recorder.update(sessionID: "kyc", state: .thinking)
         board = try await TaskBoard.read(from: store)
-        #expect(Set(board.managing.map(\.id)) == [card.id.uuidString, live.id.uuidString, "term"] && board.todo.isEmpty)
+        #expect(Set(board.managing.map(\.id)) == ["task/\(card.id.uuidString)", "task/\(live.id.uuidString)", "session/term"] && board.todo.isEmpty)
         #expect(try await inEnvelope() == 3)
     }
 

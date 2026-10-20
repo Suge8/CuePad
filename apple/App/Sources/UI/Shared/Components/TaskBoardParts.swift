@@ -98,9 +98,10 @@ struct BoardColumn: View {
             if board.todo.isEmpty && !adding { empty("没有待办") }
         case .managing:
             ForEach(board.managing) { work in
-                switch work {
-                case .task(let item): BoardTaskCard(item: item).draggable(item.id.uuidString)
-                case .session(let session): BoardSessionCard(session: session)
+                if let item = work.item {
+                    BoardTaskCard(item: item).draggable(item.id.uuidString)
+                } else if case .session(let session) = work.work {
+                    BoardSessionCard(session: session)
                 }
             }
             if board.managing.isEmpty { empty("拖一件待办到这里开始") }
@@ -468,39 +469,32 @@ struct BoardWaitCard: View {
     private func open(_ task: Card) { workspace.openTask(task) }
 }
 
-/// 在管列里一个没绑没做完的任务的活会话（终端里开的、"新会话"、只有已完成的事绑着的）：会话名与"没绑任务"，下面是它此刻的样子（`PiShown`）与进展（`PiProgress`）。
+/// 在管列里一个没绑没做完的任务的活会话（终端里开的、"新会话"、只有已完成的事绑着的）：就是会话列表的那一行（`PiSessionRow`，菜单栏面板、Cue 页头面板同一种）铺在纸上，点了打开会话。
 private struct BoardSessionCard: View {
     let session: PiSessionState
     @Environment(Workspace.self) private var workspace
-    @Environment(\.palette) private var palette
+    @Environment(AppServices.self) private var services
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            BoardSessionHeader(session: session)
-            HStack(spacing: 6) {
-                Text(workspace.shown(session, delivery: nil).label)
-                if let line = PiProgress.line(of: session) { Text(line).foregroundStyle(palette.ink3).lineLimit(1) }
-            }
-            .font(TaskMetrics.caption).foregroundStyle(palette.ink2)
+        let live = services.liveSessions
+        BoardSessionLink(session: session) {
+            PiSessionRow(
+                session: session, project: workspace.catalog?.project(session.projectID), delivery: live.deliveries[session.sessionID],
+                rename: live.renames[session.sessionID], undelivered: live.undelivered[session.sessionID] ?? 0
+            ).equatable()
+                .padding(TaskMetrics.cardPadding)
+                .paper(radius: TaskMetrics.cardRadius)
         }
-        .padding(TaskMetrics.cardPadding)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .paper(radius: TaskMetrics.cardRadius)
     }
 }
 
-/// 看板上没绑任务的会话的抬头（在管、等你两列）：会话名与"会话 · 没绑任务"，点了打开会话。
+/// 等你卡上没绑任务的会话的抬头：会话名与"会话 · 没绑任务"，点了打开会话。
 private struct BoardSessionHeader: View {
     let session: PiSessionState
-    @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
-    #if os(iOS)
-    @Environment(AppServices.self) private var services
-    @Environment(Navigation.self) private var navigation
-    #endif
 
     var body: some View {
-        Button(action: open) {
+        BoardSessionLink(session: session) {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
                     Image(.session).foregroundStyle(palette.ink2)
@@ -508,8 +502,23 @@ private struct BoardSessionHeader: View {
                 }
                 Text(Dotted("会话", "没绑任务")).font(TaskMetrics.caption).foregroundStyle(palette.ink3)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(.rect)
+        }
+    }
+}
+
+/// 看板上点了打开会话的一块（在管的会话卡、等你卡的抬头）。
+private struct BoardSessionLink<Label: View>: View {
+    let session: PiSessionState
+    @ViewBuilder let label: Label
+    @Environment(Workspace.self) private var workspace
+    #if os(iOS)
+    @Environment(AppServices.self) private var services
+    @Environment(Navigation.self) private var navigation
+    #endif
+
+    var body: some View {
+        Button(action: open) {
+            label.frame(maxWidth: .infinity, alignment: .leading).contentShape(.rect)
         }
         .buttonStyle(PressStyle(.card))
         .accessibilityHint("打开会话")
