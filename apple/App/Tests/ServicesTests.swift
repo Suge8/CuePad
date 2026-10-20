@@ -140,7 +140,7 @@ struct AgentUpgradeTests {
 }
 
 /// "接入"管终端里的会话与历史：整个会话目录只为接入了的 Agent 回填，关掉时删掉这家的本地索引，同步出去的会话记录不动。
-/// CuePad 托管的会话不论接入（桥上在线会话的文件照样跟读）。
+/// CuePad 托管过的会话不论接入都读得到对话。
 struct AgentIndexingTests {
     /// 在 Claude Code 的配置目录里放一个做完一轮的会话文件。
     private func claudeSession(in rig: TestApp, id: String) throws {
@@ -179,6 +179,22 @@ struct AgentIndexingTests {
         // 再接入：从头回填回来
         try await services.agents.install(.claudeCode)
         _ = try await eventually(store, { try $0.piSessions().filter { $0.agent == .claudeCode }.map(\.id) }) { $0 == [id] }
+    }
+
+    /// 用户反馈：Cue 在没接入的 Claude Code 里开的会话做完、结束后，两端点进去都是空的。
+    @Test func 没接入时CuePad开过的会话_结束了也读得到对话() async throws {
+        let rig = TestApp()
+        let id = "6f1c0d2e-0000-4000-8000-000000000002"
+        try claudeSession(in: rig, id: id)
+        let services: AppServices = rig.services
+        try await services.piStateRecorder.update(sessionID: id, state: .settled, launchToken: "launch-1", hosted: true, agent: .claudeCode)
+        try await services.piStateRecorder.end(sessionID: id)
+        services.start()
+        defer { services.cancelBackgroundWork() }
+
+        let said = try await eventually(services.store, { try $0.piMessages(of: id).map(\.text) }) { !$0.isEmpty }
+        #expect(said == ["修一下登录", "修好了"])
+        #expect(services.agents.status(.claudeCode)?.isConnected == false)
     }
 }
 

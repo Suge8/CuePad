@@ -96,8 +96,25 @@ public struct PiHistoryUpdate: Sendable {
 public enum PiHistoryEvent: Sendable {
     case updated(PiHistoryUpdate)
     /// 首次回填（按修改时间倒序）全部完成；之后只有文件变化触发的 `updated`。
-    /// `sessionFiles` 是此刻全部会话文件：不在其中的旧索引（文件已删除的）可以丢掉
-    case backfillFinished(sessionFiles: [URL])
+    /// `sessionFiles` 是此刻全部会话文件：不在其中的旧索引（文件已删除的）可以丢掉；只回填了一部分（`PiHistoryScope.sessions`）为 nil，
+    /// 不能据此丢
+    case backfillFinished(sessionFiles: [URL]?)
+}
+
+/// 回填哪些会话文件：接入了的 Agent 是整个会话目录；没接入的只有 CuePad 托管过的会话（`CueStore.hostedPiSessionIDs`）。
+public enum PiHistoryScope: Sendable, Equatable {
+    case all
+    case sessions(Set<String>)
+
+    /// 三家的会话文件名都以会话 id 结尾（Claude Code `<id>.jsonl`，Pi `<时刻>_<id>.jsonl`，Codex `rollout-<时刻>-<id>.jsonl`）。
+    func covers(_ file: URL) -> Bool {
+        switch self {
+        case .all: true
+        case .sessions(let ids): ids.contains(String(file.deletingPathExtension().lastPathComponent.suffix(Self.idLength)).lowercased())
+        }
+    }
+
+    private static let idLength = 36
 }
 
 /// 一家 Agent 的会话文件怎么认、怎么读：唯一的一处（会话目录本身在 `AgentPaths.sessionsDirectory`）。OpenCode 的会话在它的数据库里，没有。
