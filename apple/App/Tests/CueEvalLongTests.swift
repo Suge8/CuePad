@@ -9,7 +9,8 @@ import Testing
 @testable import CuePad
 
 /// 长程值班：Cue 值一段班，被叫醒二十多次（他的话、会话歇下带长回复、会话提问、出错），回复撑大上下文，现做法至少跨一次换新线。
-/// 中后段的判定点只有记得前面才答得对：他口头交代、没让记成规矩的细节，早先会话交回的事实，正在推进的事不重做不丢，他否掉的方案不再提。
+/// 中后段的判定点只有记得前面才答得对：他口头交代、没让记成规矩的细节，早先会话交回的事实，正在推进的事不重做不丢，他否掉的方案不再提；
+/// 换新之后还有三处 Cue 当场没理由落库的：他顺口说的与任务无关的事实、已完成的事里会话顺带提的细节、他要它做完时告诉他的事。
 /// 只经库与假会话驱动、只读库与工具调用判定，不碰哪种上下文做法独有的内部状态（换新次数数库里的交接备忘）。跑法见 docs/verify.md「Cue 评测」。
 @Suite(.enabled(if: evalEnvironment["CUEPAD_CUE_EVAL"] == "1", "CUEPAD_CUE_EVAL=1 才跑"), .timeLimit(.minutes(60)))
 struct CueEvalLongTests {
@@ -27,7 +28,8 @@ struct CueEvalLongTests {
 private final class Duty {
     static let expect = """
         值一段班（三十来次醒来）：中后段记得他口头交代的（这件做完后升版本号记 CHANGELOG、这周不跑 e2e）、早先会话查清的事实（发信走 Postmark）、\
-        他否掉的方案（设置页不分标签页）；换新前后在做的事不重建、不重复说
+        他否掉的方案（设置页不分标签页）；换新前后在做的事不重建、不重复说；\
+        换新之后答得出他顺口说的行程、已完成的调研里顺带的细节（退信里邮箱不存在的 13 封），官网做完时照他要的说改了哪几个文件
         """
 
     private let eval: CueEval
@@ -68,6 +70,7 @@ private final class Duty {
         let login = try await adopt(/忘记密码|重置密码/, after: reset, title: "登录页加忘记密码", in: "演示")
         try await say("他：做完后升版本号（口头、不记规矩）", "对了，忘记密码那件做完以后，让它顺手把演示项目的版本号从 2.3.0 升到 2.3.1，CHANGELOG 里记一笔。就这一次，不用记成规矩。")
         try await say("他：贴站会纪要（长）", Script.standup)
+        try await say("他：顺口说行程（与任务无关）", "对了，我下周三下午 3 点的飞机去成都，周四晚上回来。")
         let mailAsk = try await say("他：查邮件服务", "演示项目现在发邮件用的是哪家服务、这个月额度还剩多少？找个会话查清楚。")
         let mail = try await adopt(/邮件|发信|额度/, after: mailAsk, title: "查清邮件服务与额度", in: "演示")
         try await event("忘记密码：问令牌存哪", on: login) {
@@ -94,6 +97,7 @@ private final class Duty {
         try await event("依赖：列出 14 处报错（长）", on: deps) { try await deps.settle(Script.tsErrors, rig: rig) }
         let speed = try await say("他：官网 Lighthouse 掉分", "官网首页的 Lighthouse 性能分掉到 60 多了，查一下原因修掉。")
         let website = try await adopt(/Lighthouse|性能|首页/, after: speed, title: "修回官网首页性能分", in: "官网")
+        try await say("他：官网做完告诉他改了哪些文件", "官网那件做完的时候跟我说一声具体改了哪几个文件，我要转给前端组长。")
         try await event("官网：交回分析（长）", on: website) { try await website.settle(Script.lighthouseAnalysis, rig: rig) }
         try await say("他：转来安全扫描报告（长）", Script.securityScan)
         try await event("忘记密码：后端做完（长）", on: login) { try await login.settle(Script.backendDone, rig: rig) }
@@ -128,6 +132,8 @@ private final class Duty {
                 said: "首页改好了：hero 图换成 AVIF 并按屏宽出图，字体改成 font-display: swap 并预加载，客服挂件改成点了才加载。本地 Lighthouse 移动端性能 63 → 92，单元测试 31 个全过，lint 干净。",
                 question: "要不要再跑一遍 e2e 回归（Playwright，约 25 分钟）再交？", options: ["跑 e2e 回归", "只跑单元测试就交"], rig: rig)
         }
+        let trip = try await say("他：问行程", "我去成都是哪天来着？几点的飞机？")
+        let bounce = try await say("他：问调研里的细节", "之前查邮件服务那件，退信里有几封是邮箱不存在的？")
         try await event("README：做完交回", on: readme) {
             try await readme.deliver(pageShot("README 截图（新）", Script.readmeShots), title: "README 新截图", rig: rig)
             try await readme.settle(Script.readmeDone, rig: rig)
@@ -136,21 +142,27 @@ private final class Duty {
             try await login.deliver(loginShot(), title: "登录页 忘记密码 改前改后", rig: rig)
             try await login.settle(CueEvalTests.doneReply, rig: rig)
         }
-        try await event("官网：做完交回", on: website) {
+        let shipped = try await event("官网：做完交回", on: website) {
             try await website.deliver(pageShot("Lighthouse 移动端 · 首页", Script.lighthouseShot), title: "首页 Lighthouse 改前改后", rig: rig)
             try await website.settle(Script.lighthouseDone, rig: rig)
         }
         let wrap = try await say("他：问今天的事", "今天这些事现在都怎么样了？")
 
-        return try await judge(login: login, settings: settings, site: website, digest: digest, steps: (
-            progress: progress, tabs: tabs, e2e: e2e, readmeStatus: readmeStatus, provider: provider, finish: finish, wrap: wrap, go: go))
+        return try await judge(login: login, settings: settings, site: website, digest: digest, key: Points(
+            go: go, progress: progress, readmeStatus: readmeStatus, provider: provider, tabs: tabs, e2e: e2e, trip: trip, bounce: bounce,
+            finish: finish, shipped: shipped, wrap: wrap))
     }
 
     // MARK: 判定
 
+    /// 判定要看的那几步
+    struct Points {
+        let go, progress, readmeStatus, provider, tabs, e2e, trip, bounce, finish, shipped, wrap: Step
+    }
+
     private func judge(
         login: ScriptedSession, settings: ScriptedSession, site: ScriptedSession, digest: ScriptedSession,
-        steps key: (progress: Step, tabs: Step, e2e: Step, readmeStatus: Step, provider: Step, finish: Step, wrap: Step, go: Step)
+        key: Points
     ) async throws -> [Check] {
         for session in sessions { try await session.refresh(rig) }
         let adds = CueEval.calls(in: rounds(after: steps.first!), "task", ["add"]).filter { !$0.call.failed }
@@ -176,6 +188,10 @@ private final class Duty {
         let started = CueEval.calls(in: rounds(key.finish), "task", ["start"]).compactMap { call in
             login.cards.first { card in (call.args["task"] as? String).map { card.id.uuidString.lowercased().hasPrefix($0.lowercased()) } == true }?.body
         }
+        // 他要的：官网做完时说改了哪几个文件（会话的交回里列着四个）
+        let shippedDone = calls(key.shipped, "task", ["done"]).contains { !$0.call.failed && target($0.args) === site }
+        let shippedSaid = try await messages(key.shipped) + calls(key.shipped, "tell").compactMap { $0.args["text"] as? String }
+        let told = ["index.html", "fonts.css", "Hero.tsx", "ChatWidget.tsx"].count { file in shippedSaid.contains { $0.contains(file) } }
         let wrapUp = CueEval.calls(in: rounds(key.finish), "task", ["say", "edit", "add"]).map { Self.texts($0.args) } + started
         let planned = try await rig.store.cueTaskDetail(login.task.id).leaves.contains { $0.leaf.status != .done && $0.leaf.body.contains(bump) }
         return [
@@ -190,6 +206,9 @@ private final class Duty {
                   tabsSaid.contains { $0.contains(/一页|不拆|保持|不分|别拆|不要/) } && !tabsSaid.contains { $0 == "拆成标签页" || $0 == "1" }
                     && calls(key.tabs, "tell").allSatisfy { $0.args["ask"] == nil }),
             Check("(d) 他否掉之后没再提分标签页", !afterRejection.contains(where: Self.proposesTabs)),
+            try await recalled("(e) 他顺口说的行程：答出下周三下午 3 点", key.trip) { $0.contains(/周三|28/) && $0.contains(/3 ?点|15[:：]|三点/) },
+            try await recalled("(f) 已完成的调研里顺带的细节：答出 13 封", key.bounce) { $0.contains(/13|十三/) },
+            Check("(g) 官网做完时照他要的说了改了哪几个文件" + (shippedDone ? "" : "（这一步没收尾，不算）"), !shippedDone || told >= 3),
             Check("问登录页进展：答了进展、没派新活", try await reply(key.progress)?.contains(/后端|前端|测试|接口/) == true && calls(key.progress, "task", ["add", "start"]).isEmpty),
             Check("问今天的事：回了他、没派新活", try await reply(key.wrap) != nil && calls(key.wrap, "task", ["add", "start"]).isEmpty),
         ]
@@ -276,6 +295,19 @@ private final class Duty {
     /// 这几步里成功对 `session` 说的话（say 的 text）
     private func says(_ steps: [Step], to session: ScriptedSession) -> [String] {
         steps.flatMap { calls($0, "task", ["say"]) }.filter { !$0.call.failed && target($0.args) === session }.compactMap { $0.args["text"] as? String }
+    }
+
+    /// 他问起早先的事：答对才过；没答对时标出是说不知道还是答错（乱编）
+    private func recalled(_ label: String, _ step: Step, _ correct: (String) -> Bool) async throws -> Check {
+        let answer = try await reply(step) ?? ""
+        if correct(answer) { return Check(label, true) }
+        return Check(label + (answer.contains(/不记得|不确定|没找到|查不到|没有记录|没查到|不知道/) ? "（说不知道）" : "（答错）"), false)
+    }
+
+    /// 这一步里 Cue 写的消息（回复、tell、动态、完成的结果）
+    private func messages(_ step: Step) async throws -> [String] {
+        guard let window = step.window else { return [] }
+        return try await eval.said(since: window.lowerBound).filter { $0.createdAt <= window.upperBound }.map(\.text)
     }
 
     /// 回答他的那句（这一步里）
@@ -1042,6 +1074,7 @@ private enum Script {
         $ npm run lint
         ✔ No problems
         ```
+        改动的文件：index.html、src/styles/fonts.css、src/components/Hero.tsx、src/components/ChatWidget.tsx。
         改前改后的 Lighthouse 对比截图发到手机了。
         """
 }
