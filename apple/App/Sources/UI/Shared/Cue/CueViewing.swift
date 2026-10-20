@@ -1,7 +1,8 @@
 import CueStore
 import SwiftUI
 
-/// 有人在看 Cue 页：这一页在屏上（Mac 页栈里的当前页、窗口露在屏幕上，有没有焦点都算；手机上没被推进的页盖住、App 在前台）。在看的期间——
+/// 有人在看 Cue 页：这一页在屏上（Mac 页栈里的当前页、人看得到主窗口——露在屏上、有没有焦点都算、人没走开，`AppServices.seesMainWindow`；
+/// 手机上没被推进的页盖住、App 在前台）。在看的期间——
 /// - 算一个在看的（`AppServices.cueViewers`）：这台设备开着 Cue 页（`ViewerKeeper.showCue`，Cue 的提示据此不发，见 `AlertCenter`），手机按节奏拉；
 /// - 读新消息（哪几条算新的只在 Kit 的 `CueStore.cueUnread`，读到哪只记在同步的 `CueRead`，换一台设备接着读）。
 /// 新消息是气泡旁的一颗小点（`CueUnreadDot`），不插进对话：来去都不重排。开始看（进来、App 回到前台、窗口重新露出来）
@@ -21,9 +22,8 @@ struct CueViewing: ViewModifier {
     @Environment(\.scenePhase) private var phase
     private var onScreen: Bool { phase == .active }
     #else
-    /// 主窗口露在屏幕上（没缩进程序坞、没被别的窗口整个盖住、App 没隐藏）。脚本起的验收实例窗口排在最后，当它露着
-    @State private var exposed = true
-    private var onScreen: Bool { exposed || DebugHooks.scripted }
+    /// 人看得到主窗口（`AppServices.seesMainWindow`：窗口露在屏上、人在跟前）。脚本起的验收实例窗口排在最后，当它露着
+    private var onScreen: Bool { services.seesMainWindow || DebugHooks.scripted }
     #endif
     /// 页面在屏上（推进了别的页盖住它时不在）。
     @State private var appeared = false
@@ -45,9 +45,6 @@ struct CueViewing: ViewModifier {
                 appeared = false
                 count(false)
             }
-            #if os(macOS)
-            .task { await followExposure() }
-            #endif
             .onChange(of: watching, initial: true) { _, on in count(on) }
             .onChange(of: reading && thread != nil, initial: true) { _, start in if start { land() } }
             .task(id: Reading(seen: Set(seen.keys), counts: reading)) { await mark() }
@@ -75,16 +72,6 @@ struct CueViewing: ViewModifier {
         do { try await Task.sleep(for: Self.dwell) } catch { return }
         do { try await services.store.markCueRead(through: latest) } catch { workspace.fail(error) }
     }
-
-    #if os(macOS)
-    private func followExposure() async {
-        guard let window = services.windowShell else { return }
-        exposed = window.occlusionState.contains(.visible)
-        for await _ in NotificationCenter.default.notifications(named: NSWindow.didChangeOcclusionStateNotification, object: window) {
-            exposed = window.occlusionState.contains(.visible)
-        }
-    }
-    #endif
 }
 
 /// 一条新消息的末尾在不在可见区里：在滚动区里、又不在浮着的输入框与"等你"卡底下（`chatBottomInset`）才算看到了这一条（长的回答要读到底）。

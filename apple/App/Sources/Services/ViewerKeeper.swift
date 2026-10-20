@@ -10,9 +10,9 @@ import os
 import Synchronization
 
 /// 这台设备此刻开着哪一页（`Viewer`，规则在它的头注释）只由这里写，只在开着的页变了时写一次，写成立即上传；没有心跳。
-/// 开着的那一页由界面报来：会话页（`show`）Mac 是主窗口在前台时内容区的会话页（`Workspace.openSession`），手机是场景前台活跃时导航最上面的会话页
+/// 开着的那一页由界面报来：会话页（`show`）Mac 是人看得到主窗口时内容区的会话页（`Workspace.openSession`），手机是场景前台活跃时导航最上面的会话页
 /// （`Navigation.shownSession`；iPad 开几个窗口各报各的，取最近开的那个）；Cue 页（`showCue`）两端都由 `CueViewing` 报（iPad 上它可以在面板里、
-/// 不在导航最上面）。Mac 上人不在跟前（系统将睡眠、屏幕睡了、锁屏、退出）时一概算没开着，
+/// 不在导航最上面）。Mac 上人不在跟前（系统将睡眠、屏幕睡了、锁屏、退出，或 `SessionPresence.window` 没动过键盘鼠标）时一概算没开着，
 /// 回来再按界面报的算；将睡眠与退出同步写完、传完才放行（做法同 `MacPresenceKeeper`），手机进后台时写完、传完。
 /// 写的那一刻在 Store 的隔离域里读开着哪一页：几路写入谁先谁后，库里留下的都是最后的那个状态。
 nonisolated final class ViewerKeeper: Sendable {
@@ -24,7 +24,7 @@ nonisolated final class ViewerKeeper: Sendable {
 
     /// Mac 上人不在跟前的原因：几样可能同时成立（锁着屏时屏幕亮了还是锁着），都过去了才算回来。
     enum Away: Hashable, Sendable {
-        case asleep, screenOff, locked, quitting
+        case asleep, screenOff, locked, idle, quitting
     }
 
     private struct State {
@@ -46,6 +46,9 @@ nonisolated final class ViewerKeeper: Sendable {
     private let state = Mutex(State())
     private let changes: AsyncStream<Void>
     private let changed: AsyncStream<Void>.Continuation
+    /// 人在不在跟前变了（Mac：`Away` 有没有），界面据此算在不在看（`AppServices.seesMainWindow`）。
+    private let aways: AsyncStream<Bool>
+    private let awayChanged: AsyncStream<Bool>.Continuation
     private static let log = Logger(subsystem: AppServices.bundleID, category: "services")
 
     init(store: CueStore, sync: (any SyncControlling)?, device: String) {
@@ -53,6 +56,7 @@ nonisolated final class ViewerKeeper: Sendable {
         self.sync = sync
         self.device = device
         (changes, changed) = AsyncStream.makeStream(bufferingPolicy: .bufferingNewest(1))
+        (aways, awayChanged) = AsyncStream.makeStream(bufferingPolicy: .bufferingNewest(1))
     }
 
     /// 一个窗口开着的会话页（nil：没开着，或窗口不在前台）。开着哪个变了就由 `keep` 当场写。
@@ -88,6 +92,7 @@ nonisolated final class ViewerKeeper: Sendable {
             for (source, name, reason, gone) in events {
                 group.addTask { for await _ in source.notifications(named: name) { self.mark(reason, gone) } }
             }
+            group.addTask { await self.followIdle() }
             #endif
         }
     }
@@ -98,12 +103,13 @@ nonisolated final class ViewerKeeper: Sendable {
     }
 
     private func update(_ edit: (inout State) -> Void) {
-        let moved = state.withLock { state in
-            let before = state.viewing
+        let (moved, away) = state.withLock { state in
+            let before = (state.viewing, state.away.isEmpty)
             edit(&state)
-            return state.viewing != before
+            return (state.viewing != before.0, state.away.isEmpty != before.1 ? !state.away.isEmpty : nil)
         }
         if moved { changed.yield() }
+        if let away { awayChanged.yield(away) }
     }
 
     private func mark(_ reason: Away, _ gone: Bool) {
@@ -126,6 +132,37 @@ nonisolated final class ViewerKeeper: Sendable {
 
 #if os(macOS)
 nonisolated extension ViewerKeeper {
+    /// 人走开了：键盘鼠标 `SessionPresence.window` 没动（与"在场"同一个口径）就算不在跟前，回来的第一下输入就回来。
+    /// 只认真人的输入（`hidSystemState`，别的程序合成的事件不算）。没到点就睡到会到点的那一刻再查一次，走开期间等系统的输入事件，不轮询。
+    private func followIdle() async {
+        let limit = SessionPresence.window, anyInput = CGEventType(rawValue: ~0)!
+        while !Task.isCancelled {
+            let idle = CGEventSource.secondsSinceLastEventType(.hidSystemState, eventType: anyInput)
+            guard idle >= limit else {
+                do { try await Task.sleep(for: .seconds(limit - idle)) } catch { return }
+                continue
+            }
+            mark(.idle, true)
+            await Self.nextInput()
+            mark(.idle, false)
+        }
+    }
+
+    /// 下一下键盘鼠标输入（在别的 App 里与在 CuePad 里的都算）；任务取消时也返回。
+    @MainActor private static func nextInput() async {
+        let (inputs, input) = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
+        let mask: NSEvent.EventTypeMask = [.mouseMoved, .leftMouseDown, .rightMouseDown, .otherMouseDown, .scrollWheel, .keyDown, .flagsChanged]
+        let monitors = [
+            NSEvent.addGlobalMonitorForEvents(matching: mask) { _ in input.yield() },
+            NSEvent.addLocalMonitorForEvents(matching: mask) { event in
+                input.yield()
+                return event
+            },
+        ].compactMap(\.self)
+        defer { monitors.forEach(NSEvent.removeMonitor) }
+        for await _ in inputs { return }
+    }
+
     /// 退出时：写成离开并上传。
     func signOff() async {
         state.withLock { _ = $0.away.insert(.quitting) }
@@ -145,22 +182,27 @@ nonisolated extension ViewerKeeper {
         }
     }
 
-    /// 跟着主窗口报开着的会话页（`Workspace.openSession`），直到任务取消：页一换，或 App 与窗口的前台、可见一变就重算。
+    /// 跟着主窗口，直到任务取消：把这台 Mac 上的人看不看得到主窗口交给界面（`AppServices.seesMainWindow` 的两半：窗口露没露在屏上、
+    /// 人在不在跟前），再报开着的会话页（`Workspace.openSession`，页一换或看得到与否一变就重算）。
     @MainActor func follow(_ workspace: Workspace) async {
-        let window = UUID(), center = NotificationCenter.default
-        let (moves, moved) = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
-        let names = [
-            NSApplication.didBecomeActiveNotification, NSApplication.didResignActiveNotification, NSWindow.didMiniaturizeNotification,
-            NSWindow.didDeminiaturizeNotification, NSWindow.didBecomeKeyNotification,
-        ]
-        let observers = names.map { center.addObserver(forName: $0, object: nil, queue: nil) { _ in moved.yield() } }
-        let pages = Task { for await _ in Observations({ workspace.page }) { moved.yield() } }
+        let services = workspace.services, window = UUID()
+        let away = Task { for await away in aways { services.away = away } }
+        let exposure = Task { await Self.followExposure(services) }
         defer {
-            pages.cancel()
-            for observer in observers { center.removeObserver(observer) }
+            away.cancel()
+            exposure.cancel()
         }
-        for await _ in moves { show(workspace.openSession, in: window) }
+        for await page in Observations({ workspace.openSession }) { show(page, in: window) }
     }
+
+    @MainActor private static func followExposure(_ services: AppServices) async {
+        guard let shell = services.windowShell else { return }
+        services.mainWindowExposed = shell.occlusionState.contains(.visible)
+        for await _ in NotificationCenter.default.notifications(named: NSWindow.didChangeOcclusionStateNotification, object: shell) {
+            services.mainWindowExposed = shell.occlusionState.contains(.visible)
+        }
+    }
+
 }
 #else
 /// 这个窗口在前台活跃时导航最上面的会话页，报给 `ViewerKeeper`；窗口关掉时收回。

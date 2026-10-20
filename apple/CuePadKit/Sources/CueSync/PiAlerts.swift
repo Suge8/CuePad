@@ -48,18 +48,23 @@ public enum PiAlertText {
     let fields = record.encryptedValues
     guard let title = (fields["title"] as? String).flatMap({ $0.isEmpty ? nil : $0 }) else { return nil }
     let question = (fields["question"] as? String).flatMap(PiQuestion.init(stored:))?.text
-    return content(title: title, question: question, kind: kind)
+    return content(title: title, question: question, reply: fields["lastReply"] as? String, kind: kind)
   }
 
-  /// 等你确认：标题"会话名 在等你"，正文是问题首行（没有问题文案时写"去看看它在问什么"）；完成：标题会话名，正文"完成了"。
-  public static func content(title: String, question: String?, kind: PiAlert) -> (title: String, body: String) {
+  /// 等你：标题"会话名 在等你"，正文是问题首行；没有问题（Cue 把歇着的它留给你回）是它最后那句回答的首行；都没有写"去看看它在问什么"。
+  /// 完成：标题会话名，正文"完成了"。
+  public static func content(title: String, question: String?, reply: String?, kind: PiAlert) -> (title: String, body: String) {
     switch kind {
     case .waitingForUser:
-      let first = question?.split(whereSeparator: \.isNewline).first.map(String.init)?.trimmingCharacters(in: .whitespaces)
-      return ("\(title) 在等你", first.flatMap { $0.isEmpty ? nil : $0 } ?? "去看看它在问什么")
+      let first = [question, reply].lazy.compactMap { $0.flatMap(Self.firstLine) }.first
+      return ("\(title) 在等你", first ?? "去看看它在问什么")
     case .settled:
       return (title, "完成了")
     }
+  }
+
+  private static func firstLine(_ text: String) -> String? {
+    text.split(whereSeparator: \.isNewline).lazy.map { $0.trimmingCharacters(in: .whitespaces) }.first { !$0.isEmpty }
   }
 }
 
