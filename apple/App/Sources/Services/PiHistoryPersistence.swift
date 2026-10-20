@@ -128,9 +128,10 @@ actor PiHistoryPersistence {
         }
     }
 
-    /// 一家 Agent 断开了接入：删掉它的本机会话索引（同步记录不动），下次接入从头回填。
+    /// 一家 Agent 断开了接入：删掉它的本机会话索引（同步记录不动；这台 Mac 托管着的会话留着，见 `CueStore.deletePiSessions`），
+    /// 下次接入从头回填。
     func forget(_ agent: AgentKind) async throws {
-        try await storage.deletePiSessions(of: agent)
+        try await storage.deletePiSessions(of: agent, keepingHostedOn: host)
         starts = nil
     }
 

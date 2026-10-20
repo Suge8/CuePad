@@ -139,8 +139,8 @@ struct AgentUpgradeTests {
     }
 }
 
-/// "接入"一个开关一个含义：开了 CuePad 才跟这家打交道。会话索引只为接入了的 Agent 建：打开时回填，关掉时删掉这家的本地索引，
-/// 同步出去的会话记录不动。
+/// "接入"管终端里的会话与历史：整个会话目录只为接入了的 Agent 回填，关掉时删掉这家的本地索引，同步出去的会话记录不动。
+/// CuePad 托管的会话不论接入（桥上在线会话的文件照样跟读）。
 struct AgentIndexingTests {
     /// 在 Claude Code 的配置目录里放一个做完一轮的会话文件。
     private func claudeSession(in rig: TestApp, id: String) throws {
