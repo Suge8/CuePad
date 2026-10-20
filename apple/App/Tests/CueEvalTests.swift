@@ -530,7 +530,7 @@ struct ClaudeCue {
         model: environment["CUEPAD_CUE_EVAL_MODEL"] ?? "opus",
         effort: environment["CUEPAD_CUE_EVAL_EFFORT"].flatMap(PiThinkingLevel.init(rawValue:)) ?? .medium)
 
-    func launch(in root: URL) throws -> CueLaunch {
+    func launch(in root: URL) throws -> CuePad.CueLaunch {
         let claude = try #require(ExecutableLocator.standard.candidates("claude").first, "需要 claude")
         let config = root.appending(path: "claude-config"), home = root.appending(path: "home")
         for directory in [config, home] { try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true) }
@@ -545,7 +545,7 @@ struct ClaudeCue {
             exec '\#(claude.path)' "$@"
             """#.write(to: script, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
-        return CueLaunch(executable: script, path: claude.deletingLastPathComponent().path + ":/usr/bin:/bin", agents: [])
+        return CuePad.CueLaunch(executable: script, path: claude.deletingLastPathComponent().path + ":/usr/bin:/bin", agents: [])
     }
 
     /// 启用、运行在这台 Mac、用这个模型与强度。不经 `enableCue`：它先探测本机能用的 Agent，测试里的 Claude Code 报不出来。
