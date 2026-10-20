@@ -539,7 +539,7 @@ struct EvalBrain {
     }()
 
     /// .md 与 summary.md 开头那一行：大脑、模型与强度、哪种上下文做法（`CueFresh`）
-    var label: String { "\(runtime.name) · \(model) · \(effort.rawValue) · \(CueFresh.on ? "混合做法（平时往后加，到换新线开新会话、用对话视图接上）" : "现做法")" }
+    var label: String { "\(runtime.name) · \(model) · \(effort.rawValue) · \(CueFresh.on ? "日志树（所有经过进日志、越早越粗、能 zoom）" : "现做法")" }
 
     /// Pi 的登录：用户的 Pi 存的那一份，只读
     private static let piAuth = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".pi/agent/auth.json")

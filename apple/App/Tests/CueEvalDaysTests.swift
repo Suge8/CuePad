@@ -34,8 +34,8 @@ private final class Days: EvalScript {
     static let mergeAfter = Duration.seconds(10)
     static let cacheLifetime = Duration.seconds(20)
     static let away = Duration.seconds(40)
-    /// 开跑前至多等这么多次合并醒来（记忆预置成正好这么多块待合并）
-    static let merges = 4
+    /// 开跑前至多等这么多次合并醒来：现做法的记忆树预置成正好 4 块待合并；日志树一次醒来成批合并，两周积压约 3 次清完
+    static let merges = 6
 
     private let history: DaysHistory
     private var mergeRounds: [CueRound] = []
@@ -86,14 +86,18 @@ private final class Days: EvalScript {
         let from = Date.now
         try? await eventually("记忆合并完", timeout: .seconds(Double(Self.merges) * 40 + 120)) {
             let done = self.eval.rounds.filter { $0.startedAt >= from && Self.isMerge($0) }
-            let pending = CueMemoryView(try await self.rig.store.cueMemory()).merges
-            return (pending.isEmpty || done.count >= Self.merges) && done.allSatisfy { $0.finishedAt != nil } && self.eval.rounds.allSatisfy { $0.finishedAt != nil }
+            return (try await self.pending() == 0 || done.count >= Self.merges) && done.allSatisfy { $0.finishedAt != nil } && self.eval.rounds.allSatisfy { $0.finishedAt != nil }
         }
         mergeRounds = eval.rounds.filter { $0.startedAt >= from && Self.isMerge($0) }
-        let left = CueMemoryView(try await rig.store.cueMemory()).merges.count
-        notes.append("开跑前合并醒来 \(mergeRounds.count) 次，还剩 \(left) 块待合并")
+        notes.append("开跑前合并醒来 \(mergeRounds.count) 次，还剩 \(try await pending()) 块待合并")
     }
 
+    /// 待合并的块：日志树（`CueFresh`）是日志的，现做法是记忆树的
+    private func pending() async throws -> Int {
+        CueFresh.on ? CueLog(try await rig.store.cueLogSource()).merges.count : CueMemoryView(try await rig.store.cueMemory()).merges.count
+    }
+
+    /// 合并的醒来：两种做法请合并的话里都有这句
     private static func isMerge(_ round: CueRound) -> Bool { round.sent.contains { $0.contains("写回：memory merge") } }
 
     // MARK: 判定
