@@ -201,7 +201,7 @@ struct AgentPage: View {
 }
 
 /// 接入 Agent 的小卡：这台 Mac 检测到 Agent、一家都没接入、桥上也没有会话时才有（没接入时本机的会话在这一页看不到，列表空着时它就是如实的空态，不再叠吉祥物）。
-/// 一个图标、一句话说接入了双向能做什么，右边"接入"打开接入面板（`AgentSetupPanel`，检测到还没接入的几家，一键接入）；别的 Mac 上的会话照样列在下面。
+/// 一个图标、一句话说接入了双向能做什么，右边"接入"打开接入面板（`SetupPanel`，检测到还没接入的几家，一键接入；Cue 没启用时同一下启用它）；别的 Mac 上的会话照样列在下面。
 private struct ConnectAgents: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -225,7 +225,7 @@ private struct ConnectAgents: View {
                     Text("终端和桌面版里的会话与历史也看得到").font(Typography.secondary).foregroundStyle(palette.ink2)
                 }
                 Spacer(minLength: 8)
-                Button { workspace.showsAgentSetup = true } label: {
+                Button { workspace.showsSetup = true } label: {
                     Text("接入").font(Typography.secondary.weight(.semibold)).foregroundStyle(palette.onFill)
                         .padding(.horizontal, 14).frame(height: 28)
                         .background(palette.signatureFill, in: .capsule).contentShape(.capsule)

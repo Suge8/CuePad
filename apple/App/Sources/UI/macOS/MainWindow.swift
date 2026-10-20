@@ -85,7 +85,7 @@ private struct WindowPanels: View {
                 mountsPalette = true
             }
             .panel(item: $workspace.projectForm) { ProjectForm(project: $0.project) }
-            .panel(isPresented: $workspace.showsAgentSetup) { AgentSetupPanel() }
+            .panel(isPresented: $workspace.showsSetup) { SetupPanel() }
     }
 }
 

@@ -16,7 +16,7 @@ enum Help {
     全部命令：cuepad project --help、cuepad card --help、cuepad task --help、cuepad conflicts --help
     选项与输出字段：cuepad <命令> --help，例如 cuepad card add --help
     --json 输出 JSON（失败时 stderr 为 {"error":{"code","message"}}）；退出码 0 成功、1 运行错误、2 用法错误。
-    隔离库：CUEPAD_LIBRARY_DIR=<绝对路径>；默认是 CuePad.app 的库（需先打开过一次）。
+    隔离库：CUEPAD_LIBRARY_DIR=<绝对路径>；默认是 CuePad.app 的库（需先打开过一次）；从源码编的用开发库 ~/Library/Application Support/CuePad Dev。
     cuepad hook <agent> 是 CuePad 写进 Claude Code、Codex 钩子配置的转发命令，不用手动运行。
     """
 

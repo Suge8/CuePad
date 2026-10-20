@@ -45,7 +45,10 @@ struct MacDependencies {
         let commandLineTool = location.isIsolated && !paths.pi.isExplicit
             ? CommandLineToolInstaller(linkDirectory: location.directory.appending(path: "bin", directoryHint: .isDirectory))
             : CommandLineToolInstaller(linkDirectory: paths.pi.binDirectory)
-        let agents = AgentIntegrations(AgentIntegration(paths: paths, cuepad: commandLineTool.helper, isolated: location.isIsolated))
+        let findsNone = location.isIsolated && DebugHooks.findsNoAgents
+        let agents = AgentIntegrations(AgentIntegration(
+            paths: paths, locate: { @Sendable in findsNone ? ExecutableLocator(searchDirectories: []) : await .system },
+            cuepad: commandLineTool.helper, isolated: location.isIsolated))
         let hostID = (location.isIsolated ? DebugHooks.hostID : nil) ?? HostIdentity.current()
         return MacDependencies(
             pi: pi,

@@ -24,7 +24,7 @@ extension DebugScene {
                 await seedCue(workspace.services)
             }
             workspace.show(.tasks)
-        case "agentsetup": workspace.showsAgentSetup = true
+        case "agentsetup": workspace.showsSetup = true
         case "connected":
             await connectAgents(workspace.services)
             await bindFolderIfAsked(workspace.services.store)

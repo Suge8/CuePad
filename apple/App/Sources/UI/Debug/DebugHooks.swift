@@ -107,6 +107,15 @@ enum DebugHooks {
         #endif
     }
 
+    /// 隔离库下这台 Mac 上一家 Agent 都找不到（`-CuePadNoAgents YES`）：看一家都没装时的接入面板，不用真去卸。
+    static var findsNoAgents: Bool {
+        #if DEBUG
+        DebugScene.defaults.bool(forKey: "CuePadNoAgents")
+        #else
+        false
+        #endif
+    }
+
     /// 脚本起的实例（带就绪文件 `DebugScene.readyFile`：截图、录屏、交互验收、测量）；测试宿主不算。Mac 上当作有人在看（`CueViewing`）。
     static var scripted: Bool {
         #if DEBUG

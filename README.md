@@ -50,13 +50,18 @@ Get the latest Mac build from [GitHub Releases](https://github.com/Suge8/CuePad/
 
 ## Build from source
 
-Requires Xcode 27. Local builds are ad-hoc signed, so no developer account is needed.
+Requires macOS 26 and Xcode 27; no developer account or signing setup.
 
 ```bash
 git clone https://github.com/Suge8/CuePad.git
+open CuePad/apple/CuePad.xcodeproj    # choose My Mac as the destination, then ⌘R
+```
+
+Your build is ad-hoc signed and keeps its own library in `~/Library/Application Support/CuePad Dev`, apart from the released app's. From the command line (`check` needs `brew install ripgrep`):
+
+```bash
 cd CuePad
-apple/scripts/xc.sh build mac    # also: build ios, test mac, shot mac
-apple/scripts/xc.sh test kit     # shared package tests
+apple/scripts/xc.sh build mac    # also: build ios, test mac, test kit, check
 ```
 
 ## Contributing
