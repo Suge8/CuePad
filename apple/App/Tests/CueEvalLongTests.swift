@@ -301,7 +301,7 @@ private final class Duty {
     private func recalled(_ label: String, _ step: Step, _ correct: (String) -> Bool) async throws -> Check {
         let answer = try await reply(step) ?? ""
         if correct(answer) { return Check(label, true) }
-        return Check(label + (answer.contains(/不记得|不确定|没找到|查不到|没有记录|没查到|不知道/) ? "（说不知道）" : "（答错）"), false)
+        return Check(label + (answer.contains(/不记得|不确定|没找到|查不到|没有记录|没查到|不知道|答不出/) ? "（说不知道）" : "（答错）"), false)
     }
 
     /// 这一步里 Cue 写的消息（回复、tell、动态、完成的结果）
@@ -1074,7 +1074,28 @@ private enum Script {
         $ npm run lint
         ✔ No problems
         ```
-        改动的文件：index.html、src/styles/fonts.css、src/components/Hero.tsx、src/components/ChatWidget.tsx。
+        改动的文件（都没提交、没推送）：
+        - index.html：首图加 preload 与 fetchpriority="high"，客服挂件的脚本从 <head> 里拿掉
+        - src/styles/fonts.css：字体改成 preload + font-display: swap，只留 400 与 600，加 size-adjust
+        - src/components/Hero.tsx：首图改成 <picture>，640 / 1280 / 1920 三档 srcset
+        - src/components/ChatWidget.tsx：点了「联系我们」才加载挂件，先放同尺寸占位
+        - public/images/hero-2026-640.avif、hero-2026-1280.avif、hero-2026-1920.avif：新增的三档首图（原来的 PNG 留着没删）
+        ```
+        $ git status --short
+         M index.html
+         M src/components/ChatWidget.tsx
+         M src/components/Hero.tsx
+         M src/styles/fonts.css
+        ?? public/images/hero-2026-1280.avif
+        ?? public/images/hero-2026-1920.avif
+        ?? public/images/hero-2026-640.avif
+        $ git diff --stat
+         index.html                    |  9 ++++++---
+         src/components/ChatWidget.tsx | 41 +++++++++++++++++++++++++++++------------
+         src/components/Hero.tsx       | 18 ++++++++++++------
+         src/styles/fonts.css          | 22 ++++++++++++----------
+         4 files changed, 58 insertions(+), 32 deletions(-)
+        ```
         改前改后的 Lighthouse 对比截图发到手机了。
         """
 }
