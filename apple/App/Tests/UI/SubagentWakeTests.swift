@@ -14,7 +14,8 @@ import Testing
 @MainActor
 struct SubagentWakeTests {
     /// 你请 Cue 开工；会话派出子代理、自己这一轮答完（等子代理）：Cue 不醒，你这时跟它说话，它看到的变化里也没有这个会话。
-    /// 子代理交回结果、会话为它跑完一轮：歇下先到、这一轮的回答随后才写进会话文件（回答晚到）——Cue 只醒一次，信封里是那一轮的回答。
+    /// 子代理交回结果、会话为它跑完一轮：歇下先到、这一轮的回答随后才写进会话文件（回答晚到）——Cue 只醒一次，信封里是那一轮的回答；
+    /// 你在手机上开着这个会话看着它停下也一样：这件事是 Cue 开的。
     /// 会话文件由 Mac 照常读（不经测试代写摘要）：会话是 FireCode 的指挥官，交回结果是一条机器消息开的轮。
     @Test func 等子代理不叫醒_结果交回那一轮回答晚到也只叫醒一次() async throws {
         let rig = try await CueHostTests.Rig()
@@ -29,7 +30,9 @@ struct SubagentWakeTests {
         try await store.updateCard(task.id) { $0.body = "修好登录页 派子代理" }
         var file = try SessionLog(rig.app.piPaths.sessionsDirectory.appending(path: "--demo--/\(session.sessionID).jsonl"), id: session.sessionID)
 
-        try file.append(user: "修好登录页")
+        // 开工那句是 Cue 发进去的（带着它的投送请求 id 落盘）：之后子代理交回、接着跑完的轮也归 Cue
+        try await eventually("开工那句送到") { !session.messages.isEmpty }
+        try file.append(user: "修好登录页", delivery: session.messages.first?.deliveryID)
         session.setState(["kind": "thinking"])
         try file.append(reply: "派了 ui 去跑测试")
         session.sendInfo(["subagents": [Self.ui("running", action: "Run $ swift test")]])
@@ -48,6 +51,7 @@ struct SubagentWakeTests {
         #expect(!keeper.rounds.contains { $0.wake == .sessionActivity })
 
         // 子代理交回（在主会话为它跑完那一轮之前仍在飞）；FireCode 投回结果、指挥官再跑一轮：歇下先写进库，回答随后才落盘
+        try await store.recordViewing(device: "phone", sessionID: session.sessionID, cue: false)
         session.sendInfo(["subagents": [Self.ui("done", action: "测试全过")]])
         try file.append(user: "<firecode_master_event>\nui 交回：测试全过\n</firecode_master_event>")
         session.setState(["kind": "thinking"])
@@ -119,7 +123,9 @@ private struct SessionLog {
         try write(["type": "session", "version": 3, "id": id, "timestamp": Self.stamp(), "cwd": url.deletingLastPathComponent().path])
     }
 
-    mutating func append(user text: String) throws { try message(["role": "user", "content": text]) }
+    mutating func append(user text: String, delivery: String? = nil) throws {
+        try message(["role": "user", "content": text, "cuepadDelivery": delivery ?? NSNull()])
+    }
 
     mutating func append(reply text: String) throws {
         try message(["role": "assistant", "stopReason": "stop", "content": [["type": "text", "text": text]]])

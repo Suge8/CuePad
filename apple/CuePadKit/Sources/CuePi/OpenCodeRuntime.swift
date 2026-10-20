@@ -6,7 +6,7 @@ import OSLog
 /// OpenCode 的接入：直连它的后台服务（事件流 + 接口），零安装。终端里的会话（OpenCode 的终端界面默认就连这个服务）与 CuePad 开的会话都在服务里；
 /// 它的会话不在文件里，会话索引与对话由这里写进资料库（`agent` 为 `opencode`，路径是 `opencode:<会话 id>`）。
 ///
-/// - 发现：读服务的登记文件（`AgentPaths.openCodeService`，校验属主与 0600），FSEvents 跟着它出现与消失，服务进程退出也算消失。
+/// - 发现：读服务的登记文件（`AgentPaths.openCodeService`，校验属主与 0600），另盯着它（kqueue，`FSEventsWatcher.follow`）出现、改写与消失，服务进程退出也算消失。
 /// - 跟随：长连事件流；服务不续传，所以每次连上（含断线重连）都重拉一遍快照：会话列表、在跑的执行、在线会话待答的权限与表单。
 /// - 在线：服务活着期间有过活动（建立、发话、执行、提问）的顶层会话在线——连上时按"最后修改晚于服务启动"认，之后按事件认；
 ///   没在跑就是歇着。服务停了、会话被删了下线；在 CuePad 里结束的会话也下线，直到它再有活动。子代理（子会话）不单独上线，
@@ -110,6 +110,7 @@ public final class OpenCodeRuntime: AgentRuntime {
 
     public func start() throws {
         let watcher = FSEventsWatcher(root: paths.openCodeService.deletingLastPathComponent())
+        watcher.follow(only: [paths.openCodeService.realPath.path])
         self.watcher = watcher
         watching = Task { [weak self] in
             for await _ in watcher.paths { self?.refresh() }

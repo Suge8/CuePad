@@ -182,7 +182,7 @@ extension AppServices {
         if let indexer = PiHistoryIndexer(
             agent: agent, paths: paths, transcriptWindow: PiHistoryPersistence.transcriptWindow, files: store.files,
             start: { [weak self] file in await self?.loadHistoryStart(for: file) }) {
-            return await consumePiHistory(indexer.events(), agent: agent)
+            return await consumePiHistory(indexer.events(following: pi.sessionFiles), agent: agent)
         }
         guard let runtime = runtimes[agent] else { return }
         do {
