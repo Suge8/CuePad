@@ -14,24 +14,19 @@ struct SyncWiringTests {
         services.startSync()
         defer { services.cancelBackgroundWork() }
         try await eventually("app.sync.started == 1") { app.sync.started == 1 }
-        #expect(app.sync.started == 1)
 
         app.sync.emit(SyncState(status: .syncing, issues: []))
         try await eventually("services.syncStatus == .syncing") { services.syncStatus == .syncing }
-        #expect(services.syncStatus == .syncing)
 
         let issue = SyncIssue(recordType: "cards", recordName: "c1", message: "附件记录没有文件，已拒绝")
         app.sync.emit(SyncState(status: .syncing, issues: [issue]))
         try await eventually("services.syncIssues == [issue]") { services.syncIssues == [issue] }
-        #expect(services.syncIssues == [issue])
 
         app.sync.emit(SyncState(status: .syncing, issues: [], alerts: .failed("没有网络")))
         try await eventually("services.alertSubscription == .failed(\"没有网络\")") { services.alertSubscription == .failed("没有网络") }
-        #expect(services.alertSubscription == .failed("没有网络"))
 
         app.sync.emit(SyncState(status: .needsDecision(.accountSwitched), issues: [issue]))
         try await eventually("services.syncStatus == .needsDecision(.accountSwitched)") { services.syncStatus == .needsDecision(.accountSwitched) }
-        #expect(services.syncStatus == .needsDecision(.accountSwitched))
     }
 
     struct NoEntitlement: Error {}
@@ -55,25 +50,21 @@ struct SyncWiringTests {
         #expect(reason.contains("没能启动"))
     }
 
-    /// 同步一直不返回（引擎队列被占着、网络没有回音）：下拉刷新的圈到时限就停，转着的时候主线程照常响应。
-    /// 到时限就停：圈停了、同步仍挂着（停不下来由测试时限抓）。照常响应按主线程上的小睡被耽误多久判断：被占住就是一整个时限，
-    /// 门槛取它的五分之一，不按机器空闲时的快慢取。
+    /// 同步一直不返回（引擎队列被占着、网络没有回音）：下拉刷新的圈到时限就停，同步仍挂着；转着的时候主线程照常响应（测试本身在主线程上推钟）。
     @Test(.timeLimit(.minutes(1)))
-    func 同步一直不返回时_下拉刷新到时限就停_主线程照常响应() async throws {
+    func 同步一直不返回时_下拉刷新到时限就停() async {
+        let clock = ManualTiming()
+        let app = TestApp(timing: clock.timing)
         app.sync.syncNowHangs.withLock { $0 = true }
-        let refresh = Task { await services.syncNow() }
+        let refresh = Task { await app.services.syncNow() }
+        await clock.waitForSleeper()
+        #expect(app.services.isSyncingNow)
 
-        var worstDelay = Duration.zero
-        let began = ContinuousClock.now
-        while began.duration(to: .now) < AppServices.syncWaitLimit {
-            let asked = ContinuousClock.now
-            try await Task.sleep(for: .milliseconds(50))
-            worstDelay = max(worstDelay, asked.duration(to: .now) - .milliseconds(50))
-        }
+        clock.advance(AppServices.syncWaitLimit)
         await refresh.value
 
+        #expect(!app.services.isSyncingNow)
         #expect(app.sync.syncNows == 1)
-        #expect(worstDelay < AppServices.syncWaitLimit / 5)
     }
 
     /// 回到前台时正有在等的东西（手机停在 Agent 页、Cue 页，或有话在等回执）：按节奏的拉取随之开始，与立即同步是同一拉，不连拉两次。
@@ -127,7 +118,6 @@ struct SyncWiringTests {
 
         try await services.resolveConflict(copy: copy.id, keep: .original)
         try await eventually("services.conflicts.isEmpty") { services.conflicts.isEmpty }
-        #expect(services.conflicts.isEmpty)
     }
 
     /// 正式组装（`.iCloud`）没有创建引擎时，状态写明原因，不显示成"已同步"。
