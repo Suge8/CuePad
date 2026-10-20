@@ -20,10 +20,12 @@ extension View {
 }
 
 extension View {
-    /// 每个窗口的根视图挂一次：本窗口的浮层都画在这里，盖住整窗（含侧栏）。模态的浮层开着时，内容区的点按落在压暗的底上（点它关），
-    /// 工具栏那一条的点按也是关掉它，按键不进下面那层界面（`PanelHost`），读屏只在浮层里（`isModal`）。
-    /// 环境要在它外面注入，浮层内容才拿得到。
+    /// 每个窗口的根视图挂一次：本窗口的浮层都画在这里，盖住整窗（含侧栏）。点浮层外面任意处（含工具栏）或按 Esc 关最上面那一层（`PanelHost`）；
+    /// 模态的开着时按键不进下面那层界面，读屏只在浮层里（`isModal`）。环境要在它外面注入，浮层内容才拿得到。
     func panelHost() -> some View { modifier(PanelHostModifier()) }
+
+    /// 开合某个右上角面板的那一行（侧栏的"任务"）：面板开着时点它不算点在外面，由它自己的开合收起——否则按下时先收起、松开时又被它开回来。
+    func panelAnchor() -> some View { background { AnchorMark() } }
 }
 
 /// 本窗口此刻的浮层，后开的在上（右上角的面板总在模态浮层之下）。
@@ -44,7 +46,11 @@ final class PanelHost {
     @ObservationIgnored fileprivate weak var window: NSWindow?
     /// 模态浮层弹出前的焦点，收起后交还（同系统 sheet）；弹出时先让窗口交出焦点，打字不会落进下面的编辑器。
     @ObservationIgnored private var responders: [UUID: WeakResponder] = [:]
-    /// 有浮层时本窗口的按键与工具栏点按先经这里（`takes`）。
+    /// 各浮层占的地方（`PanelLayer` 垫在内容下面的视图），点在外面就关。
+    @ObservationIgnored fileprivate var areas: [UUID: WeakView] = [:]
+    /// 开合右上角面板的那几行（`panelAnchor`）。
+    @ObservationIgnored fileprivate var anchors: [ObjectIdentifier: WeakView] = [:]
+    /// 有浮层时本窗口的按键与点按先经这里（`takes`）。
     @ObservationIgnored private var monitor: Any?
 
     /// `open` 为 false：只把内容挂着（常驻浮层收起的样子）；已开着的变成收起。
@@ -85,6 +91,7 @@ final class PanelHost {
         } else {
             withAnimation(Motion.snappy) { _ = shown.remove(at: index) }
         }
+        areas[id] = nil
         released(id)
     }
 
@@ -105,24 +112,26 @@ final class PanelHost {
         }
     }
 
-    /// 这个事件由浮层接下（不再交给窗口）则为真。Esc 关最上面那一层。模态的开着时：带 ⌘ 的组合键不交给窗口（下面那层的快捷键都在
-    /// 窗口里），先走主菜单——拷贝、粘贴、全选这些编辑命令由主菜单发给浮层里的输入框；主菜单不接的再只问焦点所在的视图（浮层里编辑器的 ⌘↩），
-    /// 不问整个窗口。工具栏那一条（内容区之外、压暗的底盖不到）的点按等于点在浮层外面。不用停用（`disabled`）下面那层来做模态：停用整窗开、关各多 20～25ms。
+    /// 这个事件由浮层接下（不再交给窗口）则为真。关法同系统 popover，只有一套：Esc 或在最上面那一层外面按下鼠标（左右键、本窗口任意处，
+    /// 含工具栏），关它。模态的这一下就此接下（同系统 sheet 外点不穿透）；右上角的面板照常交给下面，点哪就是哪。
+    /// 模态的开着时：带 ⌘ 的组合键不交给窗口（下面那层的快捷键都在窗口里），先走主菜单——拷贝、粘贴、全选这些编辑命令由主菜单发给浮层里的
+    /// 输入框；主菜单不接的再只问焦点所在的视图（浮层里编辑器的 ⌘↩），不问整个窗口。
+    /// 不用停用（`disabled`）下面那层来做模态：停用整窗开、关各多 20～25ms。
     private func takes(_ event: NSEvent) -> Bool {
         guard let top = shown.last(where: \.open), let window, event.window === window else { return false }
-        if event.type == .keyDown, event.keyCode == Self.escape {
-            top.close()
-            return true
-        }
-        guard let modal = shown.last(where: { $0.modal && $0.open }) else { return false }
         if event.type == .keyDown {
-            guard event.modifierFlags.contains(.command) else { return false }
+            if event.keyCode == Self.escape {
+                top.close()
+                return true
+            }
+            guard shown.contains(where: { $0.modal && $0.open }), event.modifierFlags.contains(.command) else { return false }
             if NSApp.mainMenu?.performKeyEquivalent(with: event) != true { _ = (window.firstResponder as? NSView)?.performKeyEquivalent(with: event) }
             return true
         }
-        guard !window.contentLayoutRect.contains(event.locationInWindow) else { return false }
-        modal.close()
-        return true
+        let inside = { (view: WeakView?) in view?.contains(event) == true }
+        if inside(areas[top.id]) || (!top.modal && anchors.values.contains(where: inside)) { return false }
+        top.close()
+        return top.modal
     }
 
     private static let escape: UInt16 = 53
@@ -131,6 +140,41 @@ final class PanelHost {
 private struct WeakResponder {
     weak var value: NSResponder?
     init(_ value: NSResponder?) { self.value = value }
+}
+
+private struct WeakView {
+    weak var value: NSView?
+
+    /// 这一下鼠标落在它占的地方。
+    func contains(_ event: NSEvent) -> Bool {
+        guard let value else { return false }
+        return value.bounds.contains(value.convert(event.locationInWindow, from: nil))
+    }
+}
+
+/// 垫在一块界面下面、量它占的地方的空视图（不接点按）；建好时交给 `mark` 登记。
+private struct AreaMark: NSViewRepresentable {
+    let mark: (NSView) -> Void
+
+    func makeNSView(context: Context) -> NSView {
+        let view = Inert()
+        mark(view)
+        return view
+    }
+
+    func updateNSView(_ view: NSView, context: Context) {}
+
+    private final class Inert: NSView {
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+    }
+}
+
+private struct AnchorMark: View {
+    @Environment(PanelHost.self) private var host
+
+    var body: some View {
+        AreaMark { [host] in host.anchors[ObjectIdentifier($0)] = WeakView(value: $0) }
+    }
 }
 
 private struct WindowPanel<Panel: View>: ViewModifier {
@@ -197,7 +241,7 @@ private struct WindowReader: NSViewRepresentable {
     }
 }
 
-/// 浮层那一层。模态的：压暗整窗的底（点它关），居中一块圆角面板，内容自己定大小、太大时让出窗口四周 24。
+/// 浮层那一层。模态的：压暗整窗的底（挡住下面的悬停与滚动），居中一块圆角面板，内容自己定大小、太大时让出窗口四周 24。
 /// 右上角的面板：页面轻轻压暗（不拦点按，背后透出来的卡片不和面板里的字抢），面板原地淡入淡出、不滑动——位置逐帧变时，AppKit 每帧
 /// 重算整窗的鼠标跟踪区并重设光标（`NSTrackingAreaAKManager setCursorForMouseLocation`），前台每次开合 17～19 帧超时；淡入淡出不改几何，没有这笔。
 private struct PanelLayer: View {
@@ -220,11 +264,10 @@ private struct PanelLayer: View {
     private func modal(_ shown: PanelHost.Shown) -> some View {
         ZStack {
             if shown.open {
-                palette.backdrop.ignoresSafeArea()
-                    .onTapGesture { shown.close() }
-                    .accessibilityHidden(true)
+                palette.backdrop.ignoresSafeArea().accessibilityHidden(true)
             }
             shown.content
+                .background { area(shown.id) }
                 .clipShape(.rect(cornerRadius: PanelStyle.radius, style: .continuous))
                 .rowContainer(.rect(cornerRadius: PanelStyle.radius, style: .continuous))
                 .overlay { RoundedRectangle(cornerRadius: PanelStyle.radius, style: .continuous).strokeBorder(palette.hair) }
@@ -242,9 +285,14 @@ private struct PanelLayer: View {
 
     private func side(_ shown: PanelHost.Shown) -> some View {
         shown.content
+            .background { area(shown.id) }
             .padding(.trailing, 12).padding(.top, 6)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
             .transition(.opacity)
+    }
+
+    private func area(_ id: UUID) -> some View {
+        AreaMark { [host] in host.areas[id] = WeakView(value: $0) }
     }
 }
 
