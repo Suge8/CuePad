@@ -384,7 +384,7 @@ struct MacSyncTests {
         _ = try await services.store.requestDelivery(
             "hi", to: SendTarget(kind: .piSession, name: "app", ref: "sess-1"), on: TestApp.hostID)
         while let next = await waiting.next(), next == nil {}
-        #expect(services.pollingCadence == SyncPoller.Cadence(.every(.seconds(2))))
+        #expect(services.pollingCadence == SyncPoller.Cadence(every: .seconds(2)))
     }
 
     /// Cue 在这台值班也是在等：你在手机上对它说的话、"等你"的回答只经主动拉取到达，会话都关着、没有在路上的请求时也拉。
@@ -399,7 +399,7 @@ struct MacSyncTests {
         defer { services.cancelBackgroundWork() }
         try await eventually("Cue 在这台值班") { services.cue.onDuty }
         #expect(services.pi.slots.isEmpty && !services.hasOpenDeliveries)
-        #expect(services.pollingCadence == SyncPoller.Cadence(.every(.seconds(2))))
+        #expect(services.pollingCadence == SyncPoller.Cadence(every: .seconds(2)))
     }
 
     /// 领取与写回结果后各立即只上传这一条，不等引擎调度：手机才能尽早知道 Mac 接手了、拉到结果。

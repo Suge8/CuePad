@@ -259,19 +259,13 @@ import Testing
     ]
   }
 
-  @Test func tappingACueNotificationRoutesToTheMessage() {
+  @Test func tappingANotificationRoutesToTheMessageOrSessionRecord() {
     let id = UUID()
-    #expect(CueAlertRoute.message(from: payload(subscription: "cuepad.cue", record: id.uuidString.lowercased())) == id)
-    #expect(CueAlertRoute.message(from: payload(subscription: "cuepad.pi.waiting", record: id.uuidString.lowercased())) == nil)
-    #expect(PiAlertRoute.tap(from: payload(subscription: "cuepad.cue", record: id.uuidString.lowercased())) == nil)
-  }
-
-  @Test func tappingANotificationRoutesToTheSessionRecord() {
-    let id = UUID()
-    let waiting = PiAlertRoute.tap(from: payload(subscription: "cuepad.pi.waiting", record: id.uuidString.lowercased()))
-    let settled = PiAlertRoute.tap(from: payload(subscription: "cuepad.pi.settled", record: id.uuidString.lowercased()))
-    #expect(waiting == PiAlertTap(kind: .waitingForUser, sessionState: id))
-    #expect(settled == PiAlertTap(kind: .settled, sessionState: id))
+    func tap(_ subscription: String) -> CloudAlert? { CloudAlert(userInfo: payload(subscription: subscription, record: id.uuidString.lowercased())) }
+    #expect(tap("cuepad.cue") == .cue(message: id))
+    #expect(tap("cuepad.pi.waiting") == .session(PiAlertTap(kind: .waitingForUser, sessionState: id)))
+    #expect(tap("cuepad.pi.settled") == .session(PiAlertTap(kind: .settled, sessionState: id)))
+    #expect(tap("cuepad.changes") == nil)
   }
 
 }

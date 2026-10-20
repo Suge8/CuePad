@@ -3,17 +3,6 @@ import CueStore
 import CueText
 import Foundation
 
-extension PiAlert {
-  /// 哪个订阅触发的通知（锁屏通知种类就是 `PiAlert`）。
-  init?(subscriptionID: String) {
-    switch subscriptionID {
-    case AlertSubscriptions.waitingID: self = .waitingForUser
-    case AlertSubscriptions.settledID: self = .settled
-    default: return nil
-    }
-  }
-}
-
 /// 点通知得到的路由信息：哪种通知、对应的 Pi 会话状态记录（`PiSessionState.id`）。
 public struct PiAlertTap: Equatable, Sendable {
   public var kind: PiAlert
@@ -25,18 +14,22 @@ public struct PiAlertTap: Equatable, Sendable {
   }
 }
 
-public enum PiAlertRoute {
-  /// 本地化文案 key：App 的 Localizable.strings 里提供"Agent 在等你确认"与"Agent 完成了"。
-  public static let waitingLocalizationKey = "pi_alert_waiting"
-  public static let settledLocalizationKey = "pi_alert_settled"
+/// 点开的 CloudKit 通知指向哪里（通知自带触发它的订阅与记录 id）：Pi 会话状态记录，或 Cue 的那条消息（点开进 Cue 页）。
+public enum CloudAlert: Equatable, Sendable {
+  case session(PiAlertTap)
+  case cue(message: UUID)
 
-  /// 从点开的通知的 userInfo 里取出路由信息（CloudKit 通知自带触发它的记录 id 与订阅 id）；不是 Pi 通知返回 nil。
-  public static func tap(from userInfo: [AnyHashable: Any]) -> PiAlertTap? {
+  /// 不是这里订阅的通知为 nil。
+  public init?(userInfo: [AnyHashable: Any]) {
     guard let notification = CKNotification(fromRemoteNotificationDictionary: userInfo) as? CKQueryNotification,
-      let subscriptionID = notification.subscriptionID, let kind = PiAlert(subscriptionID: subscriptionID),
       let name = notification.recordID?.recordName, let id = UUID(uuidString: name)
     else { return nil }
-    return PiAlertTap(kind: kind, sessionState: id)
+    switch notification.subscriptionID {
+    case AlertSubscriptions.waitingID: self = .session(PiAlertTap(kind: .waitingForUser, sessionState: id))
+    case AlertSubscriptions.settledID: self = .session(PiAlertTap(kind: .settled, sessionState: id))
+    case AlertSubscriptions.cueID: self = .cue(message: id)
+    default: return nil
+    }
   }
 }
 
@@ -65,20 +58,6 @@ public enum PiAlertText {
 
   private static func firstLine(_ text: String) -> String? {
     text.split(whereSeparator: \.isNewline).lazy.map { $0.trimmingCharacters(in: .whitespaces) }.first { !$0.isEmpty }
-  }
-}
-
-/// Cue 的手机通知（"等你"与 urgent 的 Cue 消息，值班的 Mac 置位 `cueMessages.notify`）：点开进 Cue 页；文案由通知服务扩展按记录改写。
-public enum CueAlertRoute {
-  /// 本地化文案 key：改写不成时显示的通用句。
-  public static let localizationKey = "cue_alert"
-
-  /// 点开的通知是 Cue 的就给出那条消息的 id；别的通知为 nil。
-  public static func message(from userInfo: [AnyHashable: Any]) -> UUID? {
-    guard let notification = CKNotification(fromRemoteNotificationDictionary: userInfo) as? CKQueryNotification,
-      notification.subscriptionID == AlertSubscriptions.cueID, let name = notification.recordID?.recordName
-    else { return nil }
-    return UUID(uuidString: name)
   }
 }
 
@@ -124,14 +103,16 @@ struct AlertSubscriptions {
   static let cueID = prefix + "cue"
   /// 同步区有变化就给这台设备一个静默推送，收到就拉一次（App 的远程通知回调）。数据库订阅生产环境允许客户端直接建。
   static let changesID = prefix + "changes"
+  /// 通知的本地化文案 key（App 的 Localizable.strings 里的通用句）：改写不成时显示它们。
+  private static let waitingKey = "pi_alert_waiting", settledKey = "pi_alert_settled", cueKey = "cue_alert"
 
   let zoneID: CKRecordZone.ID
 
   func desired() -> [CKSubscription] {
     [
-      make(.piSessionStates, id: Self.waitingID, flag: "waitingForUser", key: PiAlertRoute.waitingLocalizationKey, wakes: true),
-      make(.piSessionStates, id: Self.settledID, flag: "settled", key: PiAlertRoute.settledLocalizationKey),
-      make(.cueMessages, id: Self.cueID, flag: CueMessage.notifyFlag, key: CueAlertRoute.localizationKey, wakes: true),
+      make(.piSessionStates, id: Self.waitingID, flag: "waitingForUser", key: Self.waitingKey, wakes: true),
+      make(.piSessionStates, id: Self.settledID, flag: "settled", key: Self.settledKey),
+      make(.cueMessages, id: Self.cueID, flag: CueMessage.notifyFlag, key: Self.cueKey, wakes: true),
       changes(),
     ]
   }

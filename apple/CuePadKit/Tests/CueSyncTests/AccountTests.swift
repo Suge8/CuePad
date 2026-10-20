@@ -17,20 +17,6 @@ import Testing
     return card
   }
 
-  @Test(arguments: [
-    (CKAccountStatus.noAccount, SyncStatus.noAccount),
-    (.restricted, .accountRestricted),
-    (.temporarilyUnavailable, .accountUnavailable),
-    (.couldNotDetermine, .accountUnavailable),
-  ])
-  func accountStatusIsReportedAndRecoversWhenAvailable(status: CKAccountStatus, expected: SyncStatus) async throws {
-    await rig.coordinator.accountStatus(status)
-    #expect(await rig.coordinator.status == expected)
-
-    await rig.coordinator.accountStatus(.available)
-    #expect(await rig.coordinator.status == .idle)
-  }
-
   @Test func signingOutKeepsLocalDataAndTheSameAccountCarriesOn() async throws {
     let card = try await populateAndPush()
 

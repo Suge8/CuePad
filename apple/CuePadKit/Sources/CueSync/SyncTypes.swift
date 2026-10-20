@@ -45,18 +45,6 @@ public enum SyncResolution: Sendable {
   case eraseLocal
 }
 
-public enum SyncError: Error, Equatable, Sendable {
-  case nothingToResolve
-}
-
-extension SyncError: LocalizedError {
-  public var errorDescription: String? {
-    switch self {
-    case .nothingToResolve: "没有需要处理的同步决定"
-    }
-  }
-}
-
 /// 同步过程中遇到的、被跳过或没能处理的事项（未知记录类型、损坏的附件、单条记录写入失败等）。不静默。
 public struct SyncIssue: Equatable, Sendable {
   public var recordType: String?
