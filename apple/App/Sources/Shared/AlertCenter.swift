@@ -14,7 +14,7 @@ import UIKit
 /// - iOS：通知都是 CloudKit 订阅在服务端生成的锁屏通知；这里另管远程通知注册，设置页据此显示一行状态（`PiAlertStatus`）。
 ///   前台收到的 Agent 通知不展示（前台的提示是 App 内横幅，`SessionAlertTracker`）；Cue 的在 Cue 页不在屏上时照常弹。
 /// - Mac：不收推送，通知都是这里发的本地通知（`post`）；你在哪台 Mac 上开着那一页时什么都不发，其余前台后台一样是系统通知。
-/// - 周额度提醒（`remind`）两端都是本机排的定时本地通知：到点时 App 不必在跑，手机上也不靠推送。
+/// - 周额度提醒（`remind`）两端都经 `post` 排成定时本地通知：到点时 App 不必在跑，手机上也不靠推送。
 @Observable
 final class AlertCenter: NSObject, UNUserNotificationCenterDelegate {
     private(set) var pendingTap: PiAlertTap?
@@ -76,40 +76,41 @@ final class AlertCenter: NSObject, UNUserNotificationCenterDelegate {
         receive(response.notification.request.content.userInfo)
     }
 
-    /// 按最新的额度观测重排周额度提醒（`QuotaReminder`）：撤掉不再要响的待发提醒，要响的按同一标识加上（待发的原地换成最新的剩余）。
-    /// Mac 第一次真要排时才征求权限（同 `post`）；手机的权限随推送一起征求（`enable`），没有就不排。
+    /// 本机发通知的唯一出口（Mac 的 Agent 与 Cue 提示、两端的周额度提醒）：Mac 上到不到你不成立时什么都不做（不要权限、不装提示音，`admits`）；
+    /// 第一次真要发时才征求权限（与 `enable` 同一道门），没有权限就不发。给了 `date` 是定时的：到点由系统弹，App 不必在跑；
+    /// 同一 `id` 的待发通知原地换掉，已送达的还在通知中心里时系统只换内容、不再响（所以即时的每条标识都不同）。
+    func post(_ alert: AlertMessage, id: String = UUID().uuidString, at date: Date? = nil) async {
+        #if os(macOS)
+        guard await admits(alert) else { return }
+        #endif
+        if authorization == .notDetermined, DebugHooks.asksNotificationPermission { await requestAuthorization() }
+        guard isAuthorized else { return }
+        let content = UNMutableNotificationContent()
+        content.title = alert.title
+        content.body = alert.body
+        content.userInfo = alert.route.userInfo
+        content.threadIdentifier = alert.thread
+        #if os(macOS)
+        content.sound = await sound(for: alert.route)
+        #else
+        content.sound = .default
+        #endif
+        let trigger = date.map { UNTimeIntervalNotificationTrigger(timeInterval: $0.timeIntervalSinceNow, repeats: false) }
+        do {
+            try await UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: id, content: content, trigger: trigger))
+        } catch {
+            AppServices.log.error("通知没能发出：\(String(describing: error), privacy: .public)")
+        }
+    }
+
+    /// 按最新的额度观测重排周额度提醒（`QuotaReminder`）：撤掉不再要响的待发提醒，要响的经 `post` 按同一标识排上（待发的原地换成最新的剩余）。
     func remind(_ quotas: [AccountQuota]) async {
         let center = UNUserNotificationCenter.current()
         let due = QuotaReminder.due(quotas, at: .now)
         let stale = await center.pendingNotificationRequests().map(\.identifier)
             .filter { id in id.hasPrefix(QuotaReminder.prefix) && !due.contains { $0.id == id } }
         if !stale.isEmpty { center.removePendingNotificationRequests(withIdentifiers: stale) }
-        guard !due.isEmpty else { return }
-        #if os(macOS)
-        guard delivers else {
-            return AppServices.log.notice("周额度提醒（隔离库不排）：\(due.map { "\($0.title) @ \($0.fireAt)" }, privacy: .public)")
-        }
-        #endif
-        await refresh()
-        #if os(macOS)
-        if authorization == .notDetermined { await requestAuthorization() }
-        #endif
-        guard isAuthorized else { return }
-        for reminder in due {
-            let content = UNMutableNotificationContent()
-            content.title = reminder.title
-            content.body = reminder.body
-            content.userInfo = AlertRoute.quota.userInfo
-            content.threadIdentifier = QuotaReminder.prefix
-            content.sound = .default
-            let trigger = UNTimeIntervalNotificationTrigger(timeInterval: reminder.fireAt.timeIntervalSinceNow, repeats: false)
-            do {
-                try await center.add(UNNotificationRequest(identifier: reminder.id, content: content, trigger: trigger))
-                AppServices.log.notice("周额度提醒排在 \(reminder.fireAt, privacy: .public)：\(reminder.title, privacy: .public)，\(reminder.body, privacy: .public)")
-            } catch {
-                AppServices.log.error("周额度提醒没能排上：\(String(describing: error), privacy: .public)")
-            }
-        }
+        for reminder in due { await post(AlertMessage(reminder), id: reminder.id, at: reminder.fireAt) }
     }
 
     #if os(iOS)
@@ -174,6 +175,32 @@ final class AlertCenter: NSObject, UNUserNotificationCenterDelegate {
         registration = .failed(error.localizedDescription)
     }
     #endif
+}
+
+/// 一条本机发的通知（`AlertCenter.post`）：说的是什么（开关、提示音、点开去哪都看它）、归在哪一组（同一会话的在通知中心里叠在一起）与文案。
+struct AlertMessage {
+    var route: AlertRoute
+    var thread: String
+    var title: String
+    var body: String
+
+    init(_ alert: SessionAlert) {
+        route = .session(PiAlertTap(kind: alert.kind, sessionState: alert.session))
+        thread = alert.session.uuidString
+        (title, body) = alert.content
+    }
+
+    init(title: String, body: String) {
+        route = .cue
+        thread = "cue"
+        (self.title, self.body) = (title, body)
+    }
+
+    init(_ reminder: QuotaReminder) {
+        route = .quota
+        thread = QuotaReminder.prefix
+        (title, body) = (reminder.title, reminder.body)
+    }
 }
 
 /// 一条通知说的是什么：Agent 会话的提示（"等你"或"做完了"），Cue 的消息（带选项来问、urgent 的，都算"等你"），或周额度提醒。

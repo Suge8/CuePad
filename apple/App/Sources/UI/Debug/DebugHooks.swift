@@ -191,7 +191,7 @@ enum DebugHooks {
     }
 
     /// 第 `attempt` 次订阅项目目录之前：`-CuePadCatalogFailure` 在这里注入读取失败。
-    /// 隔离库下也发真实的系统通知、装提示音、设角标（`-CuePadNotifications YES`，见 `AlertCenter.delivers`）；iOS 上没有同步也开通知、请求权限。
+    /// 隔离库下也发真实的系统通知、装提示音、设角标（`-CuePadNotifications YES`，见 `AlertCenter.delivers`）；两端都照常请求通知权限（`asksNotificationPermission`）。
     static var deliversNotifications: Bool {
         #if DEBUG
         DebugScene.defaults.bool(forKey: "CuePadNotifications")
