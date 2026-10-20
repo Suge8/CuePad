@@ -28,7 +28,8 @@ struct SessionTaskTests {
         session.name = "修登录"
         try await bridge(.appeared(session))
 
-        #expect(try await TaskBoard.read(from: store).order.isEmpty)
+        let empty = try await TaskBoard.read(from: store)
+        #expect(empty.todo.isEmpty && empty.managing.isEmpty)
         let envelope = CueEnvelope.render(CueEnvelope.Input(
             now: .now, contextUsed: nil, projects: [], changes: [], board: try await store.cueBoard(), waiting: [],
             wake: .idle))
@@ -41,7 +42,7 @@ struct SessionTaskTests {
 
         let added = try #require(await cue.call("task", ["action": "add", "title": "修好登录", "session": "s1"]))
         #expect(!added.isError)
-        let row = try #require(try await TaskBoard.read(from: store).inProgress.first)
+        let row = try #require(try await TaskBoard.read(from: store).managing.first)
         #expect(row.task.title == "修好登录" && row.project?.id == project.id && row.task.piSessionID == "s1")
         #expect(try await store.cueBoard().sessions.isEmpty)
     }
@@ -132,7 +133,7 @@ struct SessionTaskTests {
 
         let added = try #require(await cue.call("task", ["action": "add", "title": "补注册页", "session": "s1"]))
         #expect(!added.isError)
-        let fresh = try #require(try await TaskBoard.read(from: store).inProgress.first?.task)
+        let fresh = try #require(try await TaskBoard.read(from: store).managing.first?.task)
         #expect(fresh.title == "补注册页" && fresh.piSessionID == "s1")
         let kept = try #require(try await store.card(old.id))
         #expect(kept.status == .done && kept.piSessionID == "s1")

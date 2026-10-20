@@ -3,7 +3,7 @@ import CueStore
 import SwiftUI
 
 /// 侧栏的结构与 iPhone、iPad 同一份（`SidebarOutline`），这里只管 Mac 的长相，一列到底：最上面 Cue 名片（`CueSidebarCard`）、
-/// 下面并排两块磁贴（`PlaceTiles`：任务开合任务面板，会话打开会话页）、项目（置顶的在前，末尾未分类；Mac 没有书架，全部列出），底栏是归档、回收站与设置。
+/// 下面并排两块磁贴（`PlaceTiles`：任务打开看板页，会话打开会话页）、项目（置顶的在前，末尾未分类；Mac 没有书架，全部列出），底栏是归档、回收站与设置。
 /// 点哪一处，内容区就是哪一页。在线会话不在侧栏另列：全部在会话页，项目行尾的状态标说这个项目里有没有要看的。
 /// 名片与磁贴一直在看得见的地方，只有项目区滚动（方向键与 ⌘1–9 换到的项目滚进可见区）；项目区是普通栈：几十行的量级，行高固定。
 struct Sidebar: View {
@@ -146,7 +146,7 @@ private struct SidebarHeader<Action: View>: View {
     }
 }
 
-/// 侧栏里能去的页，按显示顺序：会话 → 项目（`SidebarOutline`）→ 未分类 → 归档 → 回收站。方向键共用这一份顺序（任务是面板、不是页）。
+/// 侧栏里能去的页，按显示顺序：任务 → 会话 → 项目（`SidebarOutline`）→ 未分类 → 归档 → 回收站。方向键共用这一份顺序。
 private struct SidebarPages {
     let outline: SidebarOutline
     let showsBins: Bool
@@ -157,14 +157,14 @@ private struct SidebarPages {
     }
 
     var order: [Route] {
-        [.agent] + outline.projects.map { .project($0.id) } + (outline.unfiled > 0 ? [.unfiled] : []) + (showsBins ? [.archive, .trash] : [])
+        [.tasks, .agent] + outline.projects.map { .project($0.id) } + (outline.unfiled > 0 ? [.unfiled] : []) + (showsBins ? [.archive, .trash] : [])
     }
 }
 
-/// 名片下面并排的两块磁贴（`SidebarOutline.places`，数是 `Entry.count`，iPad 侧栏同一个）：任务（没做完的；开合任务面板，开着时选中，同 ⌘⇧T；
-/// 面板从这一块弹出，它就是面板的锚点）、会话（在线的，有在跑的再写"N 在跑"、靛青，与菜单栏面板区头"在跑"同一档 `LiveWork.running`；点进会话页；
+/// 名片下面并排的两块磁贴（`SidebarOutline.places`，数是 `Entry.count`，iPad 侧栏同一个）：任务（没做完的；打开看板页，同 ⌘⇧T）、
+/// 会话（在线的，有在跑的再写"N 在跑"、靛青，与菜单栏面板区头"在跑"同一档 `LiveWork.running`；点进会话页；
 /// 会话哪一行都不在屏上时接力落在这里，`relaySpot(dock:)`）。
-/// 单独读当前页、面板开合与在线会话，换页、开面板、会话状态变时侧栏别处不跟着重算。
+/// 单独读当前页与在线会话，换页、会话状态变时侧栏别处不跟着重算。
 private struct PlaceTiles: View {
     let select: (Route) -> Void
     @Environment(Workspace.self) private var workspace
@@ -174,10 +174,8 @@ private struct PlaceTiles: View {
             ForEach(SidebarOutline.places, id: \.self) { entry in
                 switch entry {
                 case .tasks:
-                    PlaceTile(entry: entry, count: entry.count(in: workspace), selected: workspace.showsTasks) { workspace.showsTasks.toggle() }
-                        .panel(isPresented: Bindable(workspace).showsTasks, style: .side) { TasksPanel() }
+                    PlaceTile(entry: entry, count: entry.count(in: workspace), selected: workspace.page == entry.route) { select(entry.route) }
                         .help("任务（⌘⇧T）")
-                        .disabled(!workspace.isLibraryReady)
                 default:
                     PlaceTile(entry: entry, count: entry.count(in: workspace), running: workspace.liveWork.running, selected: workspace.page == entry.route) {
                         select(entry.route)
@@ -190,7 +188,7 @@ private struct PlaceTiles: View {
     }
 }
 
-/// 一块磁贴：纸色圆角，图标左上、数字右上、名字左下（会话的"N 在跑"在右下）；选中（面板开着、当前页）换成选中底。
+/// 一块磁贴：纸色圆角，图标左上、数字右上、名字左下（会话的"N 在跑"在右下）；选中（当前页）换成选中底。
 private struct PlaceTile: View {
     let entry: SidebarOutline.Entry
     let count: Int

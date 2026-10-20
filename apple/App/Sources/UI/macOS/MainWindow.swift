@@ -2,8 +2,8 @@
 import CueStore
 import SwiftUI
 
-/// 主窗口：玻璃侧栏 + 当前页（侧栏点 Cue、会话、项目，都在内容区整页切换，侧栏的"任务"开合任务面板；没有返回、前进与往上一层，
-/// 导航都在侧栏，工具栏左上只在开着编辑页时有"收起"）；卡片编辑页、⌘K 搜索、任务面板、底部输入栏、提示都在详情区之上。
+/// 主窗口：玻璃侧栏 + 当前页（侧栏点 Cue、任务、会话、项目，都在内容区整页切换；没有返回、前进与往上一层，
+/// 导航都在侧栏，工具栏左上只在开着编辑页时有"收起"）；卡片编辑页、⌘K 搜索、底部输入栏、提示都在详情区之上。
 struct MainWindow: View {
     @State var workspace: Workspace
     @Environment(\.palette) private var palette
@@ -57,7 +57,7 @@ struct MainWindow: View {
         ToolbarSpacer(.flexible)
         ToolbarItemGroup(placement: .primaryAction) {
             SyncAlert()
-            // 资料库读不出来时：搜索结果能打开卡片、任务面板能增改任务，都是写入入口
+            // 资料库读不出来时：搜索结果能打开卡片，是写入入口
             Button("搜索", icon: .search) { workspace.searching.toggle() }
                 .help("搜索（⌘K）")
                 .disabled(!workspace.isLibraryReady)
@@ -179,6 +179,7 @@ private struct PageStack: View {
         case .trash: TrashPage()
         case .cue: CuePage()
         case .agent: AgentPage()
+        case .tasks: TaskBoardPage()
         case .session(let route): if let id = route.sessionID { SessionPage(sessionID: id).id(id) }
         default: EmptyView()  // 其余是 iOS 的页
         }
@@ -364,7 +365,7 @@ extension Workspace {
     }
 }
 
-/// 窗口级快捷键：⌘1–9 切项目。⌘N 记一条灵感、⌥⌘N 新会话、⌘K 搜索、⌘⇧T 任务面板、⌃⌘S 侧栏与设置（⌘,）在主菜单，Esc 关浮层在 `PanelHost`。
+/// 窗口级快捷键：⌘1–9 切项目。⌘N 记一条灵感、⌥⌘N 新会话、⌘K 搜索、⌘⇧T 任务页、⌃⌘S 侧栏与设置（⌘,）在主菜单，Esc 关浮层在 `PanelHost`。
 /// ⌘1–9 的唯一处理者在这里：工具栏的项目切换菜单收起时不响应其菜单项的快捷键（实测），菜单里的 ⌘ 只是提示。
 private struct WorkspaceShortcuts: View {
     let workspace: Workspace
