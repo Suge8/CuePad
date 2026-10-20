@@ -840,8 +840,10 @@ extension CueStore {
     let left = try cueState()?.left ?? []
     let sessions = try select(PiSessionState.self, where: "sessionID IN (SELECT value FROM json_each(?))", [JSONColumn.encode(held.keys.sorted())])
     let seqs = try writeSeqs(of: .piSessionStates, "sessionID", sessions.map(\.sessionID))
+    let bound = try boundLeaves(sessions.map(\.sessionID))
     for session in sessions where session.stateSince.stored == held[session.sessionID]?.stored && !left.contains(where: { $0.holds(for: session) }) {
-      let (task, leaf) = try boundLeaf(of: session.sessionID)
+      let leaf = bound[session.sessionID]
+      let task = try leaf.flatMap { try find(Card.self, try topTask(of: $0.id)) }
       guard let change = try sessionChange(session, seq: seqs[session.sessionID] ?? 0, task: task, leaf: leaf), change.isStop else { continue }
       if let presence = try hisStop(session.sessionID) {
         result.held[session.sessionID] = session.stateSince
@@ -851,15 +853,6 @@ extension CueStore {
       }
     }
     return result
-  }
-
-  /// 会话绑着的、没做完的事里最近绑上它的那个叶子与它的顶层任务；不归没做完的事为 (nil, nil)。
-  private func boundLeaf(of sessionID: String) throws -> (Card?, Card?) {
-    let leaves = try select(
-      Card.self, where: "piSessionID = ? AND todoAt IS NOT NULL AND deletedAt IS NULL AND completedAt IS NULL", [sessionID],
-      orderBy: "modifiedAt DESC", limit: 1)
-    guard let leaf = leaves.first, let task = try find(Card.self, try topTask(of: leaf.id)) else { return (nil, nil) }
-    return (task, leaf)
   }
 
   /// 请求带着的叶子与它的顶层任务；卡不在了、不是任务（已删、改回灵感）为空。
