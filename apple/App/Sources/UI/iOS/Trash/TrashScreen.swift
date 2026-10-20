@@ -30,11 +30,9 @@ struct TrashScreen: View {
             Button("清空", icon: .trash, role: .destructive) { confirmEmpty = true }
                 .disabled(data?.isEmpty ?? true)
         }
-        .confirmationDialog("永久删除回收站里的全部内容？", isPresented: $confirmEmpty, titleVisibility: .visible) {
-            Button("清空回收站", role: .destructive) { workspace.perform { try await $0.emptyTrash() } }
-        } message: {
-            Text("此操作无法撤销。")
-        }
+        .dialog("永久删除回收站里的全部内容？", isPresented: $confirmEmpty, message: "此操作无法撤销。", buttons: [
+            DialogButton(title: "清空回收站", role: .destructive) { workspace.perform { try await $0.emptyTrash() } },
+        ])
         .observing(services.store, into: $data, onError: workspace.fail) { store in
             try TrashSummary.read(from: store)
         }

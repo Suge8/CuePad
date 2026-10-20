@@ -8,11 +8,6 @@ struct SceneRoot: View {
     let services: AppServices
     let alerts: AlertCenter
 
-    init(services: AppServices, alerts: AlertCenter) {
-        self.services = services
-        self.alerts = alerts
-    }
-
     var body: some View {
         IOSRoot(services: services, alerts: alerts)
             .debugCompact()

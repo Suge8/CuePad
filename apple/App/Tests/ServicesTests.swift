@@ -216,7 +216,7 @@ struct CueEnableTests {
         var now = try await profile()
         #expect(now.activeHost == TestApp.hostID && now.runtime == .known(.pi) && now.model == "fake/m" && now.effort == .known(.high))
 
-        try await services.disableCue()
+        try await services.updateCue { $0.enabledAt = nil }
         try await services.enableCue(on: TestApp.hostID, moving: false)
         now = try await profile()
         #expect(now.activeHost == TestApp.hostID && now.model == "fake/m" && now.effort == .known(.high))

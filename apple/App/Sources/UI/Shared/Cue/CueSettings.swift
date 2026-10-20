@@ -27,7 +27,7 @@ final class CueSettingsModel {
 
     /// 设置里的"在哪台运行"：nil（"不启用"）是停用；选一台就是在那台启用，Cue 正在别的 Mac 上运行时先请你确认（`moving`）。
     func choose(_ host: CueSettings.Host?, _ services: AppServices) {
-        guard let host else { return run { try await services.disableCue() } }
+        guard let host else { return run { try await services.updateCue { $0.enabledAt = nil } } }
         let settings = settings ?? .empty
         if case .runs(let id, let from) = settings.gate(services), id != host.id {
             moving = CueMove(to: host, from: from, cue: settings.profile.name)
