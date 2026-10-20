@@ -2,7 +2,8 @@
 import CueStore
 import SwiftUI
 
-/// 手机与 iPad 的 Cue 页头：一块实底玻璃，平时是左右各离屏边 21 点、56 点高的一条——头像、名字、"在管 N · 等你 M"（`CueStatusLine` 的 tally）、展开的箭头；
+/// 手机与 iPad 的 Cue 页头：一块实底玻璃，平时是左右各离屏边 21 点、56 点高的一条——头像在左端、展开的箭头在右端，
+/// 名字与下面那一行（Cue 此刻：珠子接一句，`CueStatusLine`）在整条里居中（`HeadLayout`）；
 /// 点它从顶部长出面板（同一块玻璃长高）：手机上 Cue 的总面板（`CueNowPanel`：大脑、上下文、等你、在做、
 /// 全部会话、额度、记忆、设置），手机上 Cue 的这些只有这一个入口。
 /// 与 Mac 侧栏的 Cue 名片、菜单栏面板是同一套件、同一份数据（`CueWatch`、`Workspace.liveWork`）。
@@ -18,7 +19,7 @@ struct CueHeader: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var expanded = DebugHooks.preset.cuePanelOpen
 
-    static let height: CGFloat = 56
+    nonisolated static let height: CGFloat = 56
     private static let radius: CGFloat = height / 2
     /// 面板里行与行之间的空（会话一列的行距），行的底上下各伸进一半。
     static let rowGap: CGFloat = 12
@@ -75,22 +76,21 @@ struct CueHeader: View {
 
     private var head: some View {
         let cue = workspace.cue
-        return HStack(spacing: 10) {
+        return HeadLayout(gap: 8, spacing: 2) {
             CueAvatar(mood: cue.mood(composing: !cue.draft.isEmpty(accepting: .images)), presence: cue.presence, size: .header)
                 .relaySpot(cue: .header)
                 // 头像与胶囊的左端同心
                 .padding(.leading, (Self.height - CueAvatar.Size.header.box) / 2)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(cue.name).font(.title3.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(1)
-                CueStatusLine(tally: true, font: .subheadline).lineLimit(1)
-            }
-            // 页头是定高的一条：字号跟着动态字体放大到这一档为止，再大第二行就被裁掉
-            .dynamicTypeSize(...DynamicTypeSize.xxLarge)
-            Spacer(minLength: 6)
             Image(.expand).font(.footnote.weight(.semibold)).foregroundStyle(palette.ink3)
                 .rotationEffect(.degrees(expanded ? 180 : 0))
                 .padding(.trailing, 18)
                 .accessibilityHidden(true)
+            Group {
+                Text(cue.name).font(.title3.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(1)
+                CueStatusLine(tally: true, font: .subheadline).lineLimit(1).truncationMode(.tail)
+            }
+            // 页头是定高的一条：字号跟着动态字体放大到这一档为止，再大第二行就被裁掉
+            .dynamicTypeSize(...DynamicTypeSize.xxLarge)
         }
         .frame(height: Self.height)
         .contentShape(.rect)
@@ -98,9 +98,42 @@ struct CueHeader: View {
         .accessibilityElement(children: .combine)
     }
 
-
     private func toggle() {
         withAnimation(Motion.spatial(Motion.panel, reduceMotion: reduceMotion)) { expanded.toggle() }
+    }
+}
+
+/// 页头那一条的排法：头一个子视图贴左、第二个贴右，其余是居中的几行，自上而下、整组上下居中。
+/// 名字按整条的中线居中；第二行长到居中放不下时往空的那一侧挪，最宽占满左右两端之间（离两端各 `gap`），再长由它自己省略。
+/// 用 `Layout` 一次排：两侧宽度不等时 `HStack` 加 `Spacer` 居中不到整条的中线，量两侧再写回状态会形成布局反馈环。
+private struct HeadLayout: Layout {
+    let gap: CGFloat
+    let spacing: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        CGSize(width: proposal.width ?? 0, height: CueHeader.height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let leading = subviews[0].sizeThatFits(.unspecified), trailing = subviews[1].sizeThatFits(.unspecified)
+        subviews[0].place(at: CGPoint(x: bounds.minX, y: bounds.midY), anchor: .leading, proposal: ProposedViewSize(leading))
+        subviews[1].place(at: CGPoint(x: bounds.maxX, y: bounds.midY), anchor: .trailing, proposal: ProposedViewSize(trailing))
+        let minX = bounds.minX + leading.width + gap, maxX = bounds.maxX - trailing.width - gap
+        let lines = subviews.dropFirst(2)
+        let sizes = lines.enumerated().map { index, line in
+            let width = index == 0 ? 2 * min(bounds.midX - minX, maxX - bounds.midX) : maxX - minX
+            return line.sizeThatFits(ProposedViewSize(width: max(width, 0), height: nil))
+        }
+        var y = bounds.midY - stack(sizes.map(\.height)) / 2
+        for (line, size) in zip(lines, sizes) {
+            let x = min(max(bounds.midX - size.width / 2, minX), maxX - size.width)
+            line.place(at: CGPoint(x: x, y: y), anchor: .topLeading, proposal: ProposedViewSize(size))
+            y += size.height + spacing
+        }
+    }
+
+    private func stack(_ heights: [CGFloat]) -> CGFloat {
+        heights.reduce(0, +) + spacing * CGFloat(max(heights.count - 1, 0))
     }
 }
 
@@ -259,9 +292,9 @@ private struct FadesUnderHeader: ViewModifier {
     private static let fade: CGFloat = 12
 
     func body(content: Content) -> some View {
-        content.visualEffect { [header] content, proxy in
-            let top = proxy.frame(in: .scrollView).minY - (header - Self.fade / 2)
-            return content.opacity(min(max(top / Self.fade, 0), 1))
+        content.visualEffect { [header, fade = Self.fade] content, proxy in
+            let top = proxy.frame(in: .scrollView).minY - (header - fade / 2)
+            return content.opacity(min(max(top / fade, 0), 1))
         }
     }
 }
