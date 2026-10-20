@@ -490,7 +490,7 @@ final class CueKeeper {
         guard let turn, !turn.round.calls.isEmpty else { return }
         do {
             let row = try await setup.store.recordCueRound(
-                turn.round.row, startedAt: turn.round.startedAt, answersYou: turn.answersYou, tools: turn.round.process)
+                turn.round.row, startedAt: turn.round.startedAt, answersYou: turn.answersYou, tools: turn.round.process, wake: turn.selfStarted?.wake)
             updateShift { $0.turn?.round.row = row }
         } catch {
             Self.log.error("Cue 这一轮的经过没能写进资料库：\(error.localizedDescription, privacy: .public)")
