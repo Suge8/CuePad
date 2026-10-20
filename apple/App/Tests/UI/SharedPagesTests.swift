@@ -10,15 +10,16 @@ struct SharedPagesTests {
 
     // MARK: Agent 页
 
-    @Test func 历史读到底才接着读下一页_换搜索词回到第一页() async throws {
+    /// 分页只在按项目（这里是未分类）筛着时：不筛时按项目分组、每组只列最近几条。
+    @Test func 筛着时历史读到底才接着读下一页_换搜索词回到第一页() async throws {
         let recorder = PiStateRecorder(store: store, hostID: "mac-a")
         for index in 0..<45 { try await recorder.update(sessionID: "e\(index)", state: .ended, title: "e\(index)") }
         let model = AgentListModel()
-        model.list = try await PiSessionList.read(text: model.query, history: .paged(model.limit), at: .always(), from: store)
+        model.list = try await PiSessionList.read(text: model.query, project: .unfiled, historyLimit: model.limit, at: .always(), from: store)
         #expect(model.list?.loaded == PiSessionList.pageSize && model.hasMore)
 
         model.loadMore()
-        model.list = try await PiSessionList.read(text: model.query, history: .paged(model.limit), at: .always(), from: store)
+        model.list = try await PiSessionList.read(text: model.query, project: .unfiled, historyLimit: model.limit, at: .always(), from: store)
         #expect(model.list?.loaded == 45 && !model.hasMore)
 
         model.query = "e1"
