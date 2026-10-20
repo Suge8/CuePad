@@ -15,9 +15,8 @@ import SwiftUI
 /// 弧向窗口竖中线那边鼓（从侧栏、屏边起飞时弧在屏内）；来回两个方向走同一条弧。整个过程约 1.3～1.4s：
 /// 这是全 App 唯一超过 300ms 的动效（docs/ui.md），它讲的是一件低频的事从哪到哪，短了看不清起点。
 ///
-/// 会话在屏上的位置（`RelayEnd`）：它的状态标；没有在屏上的状态标时是它的任务行（任务圈，`relaySpot(task:)`，Cue 页上是 Cue 那句话下面的那一行）；
-/// 都不在屏上时是 iPhone 底部那一排里它的去处（会话、开新会话时是任务；Cue 页上收起成一颗时就是那一颗，`relaySpot(dock:)`）——
-/// 开新会话还没有会话 id，只认任务。同一个会话出现几处时取离头像最近的那处。Cue 的头像同时在屏上几处时取等级高的（`CueSpot`）。
+/// 两头各落在屏上哪一处，规则只在两个枚举里：Cue 那头按平台定一处（`CueSpot`），会话那头按具体程度取最具体的那处（`EndSpot`），同一级有几处时取离头像近的。
+/// 开新会话（start）不在写下请求时飞，等开出的会话有了记录（`CueFlight.Handed`）才飞：落在新会话自己那一行，那一行先占好位置、光落下时才显现（`relayArrival`）。
 ///
 /// 降级（两个方向同一条规则：没有一个看得见的东西就不凭空画，也不往屏外飞）：
 /// - 会话那头连同底部那一排都不在屏上（推入的页、Mac、iPad）：叫醒只在头像上亮环、漾开；交给是头像亮一下、环离开头像朝窗口中间飘一小段就淡去——"它把事交出去了"。
@@ -67,29 +66,28 @@ struct CueRelayStage: ViewModifier {
                 // 在接力的那几处这一刻才挂上锚：等这一次更新排好、提交了再量
                 await NextFrame.wait()
                 guard let window = host?.window, let root = RelayAnchorView.rootLayer(of: window), let color else { return }
+                let drawing = RelayFlight(color: color, reduceMotion: reduceMotion)
+                let cue = RelayAnchorView.cue(among: RelayAnchorView.all(in: window), in: root)
+                if flight.direction == .relay {
+                    if let cue, !reduceMotion { drawing.send(from: cue, in: root) }
+                    // 环离开头像时才量会话那头：在做的那一列按同一次改动重排，它的读数比这里晚到；先量，光就落在那一行原来的位置（别的会话）上
+                    try? await Task.sleep(for: .seconds(RelayFlight.release))
+                }
                 let anchors = RelayAnchorView.all(in: window)
-                let cue = anchors.compactMap { anchor -> (spot: CueSpot, frame: CGRect)? in
-                    guard case .cue(let spot) = anchor.role, let frame = anchor.frame(in: root) else { return nil }
-                    return (spot, frame)
-                }.max { $0.spot.rawValue < $1.spot.rawValue }?.frame
                 let places = flight.ends.compactMap { Self.place(of: $0, among: anchors, in: root, near: cue?.center) }
-                RelayFlight(color: color, reduceMotion: reduceMotion).play(flight.direction, cue: cue, ends: Array(places.prefix(RelayFlight.most)), in: root)
+                drawing.play(flight.direction, cue: cue, ends: Array(places.prefix(RelayFlight.most)), in: root)
             }
         }
 
-        /// 会话那头在屏上的位置：状态标，没有就是它的任务行；几处都在时取离头像最近的。
+        /// 会话那头在屏上的位置：最具体的那一级（`EndSpot.rank`），同一级几处都在时取离头像近的。
+        /// 刚开出的会话自己那一行正透明着等光落下（`relayArrival`），量它时不看透明度。
         private static func place(of end: RelayEnd, among anchors: [RelayAnchorView], in root: CALayer, near cue: CGPoint?) -> CGPoint? {
-            func nearest(_ matches: (RelayAnchorView.Role) -> Bool) -> CGPoint? {
-                anchors.filter { matches($0.role) }.compactMap { $0.frame(in: root)?.center }
-                    .min { RelayFlight.distance($0, cue) < RelayFlight.distance($1, cue) }
+            anchors.compactMap { anchor -> (rank: Int, point: CGPoint)? in
+                guard case .end(let spot) = anchor.role, let rank = spot.rank(for: end),
+                      let frame = anchor.frame(in: root, seesThrough: end.opens && rank == EndSpot.Row.own.rawValue) else { return nil }
+                return (rank, frame.center)
             }
-            return end.session.flatMap { session in nearest { $0 == .session(session) } }
-                ?? nearest { role in
-                    guard case .task(let task, let session) = role else { return false }
-                    return task == end.task || (end.session != nil && session == end.session)
-                }
-                ?? nearest { $0 == .dock(end.session == nil ? .tasks : .sessions) }
-                ?? nearest { $0 == .dock(nil) }
+            .min { ($0.rank, RelayFlight.distance($0.point, cue)) < ($1.rank, RelayFlight.distance($1.point, cue)) }?.point
         }
     }
 
@@ -107,7 +105,7 @@ struct CueRelayStage: ViewModifier {
 }
 
 /// 发出（"对 Cue 说"的发送钮 → Cue 的头像）：钮上挂一个锚（`relayLaunch`），发出的那一刻量出机头与头像在窗口里的位置，
-/// 交给 `RelayFlight.launch` 当场起飞（不等下一帧：钮在这一帧换成发送中，光要接上正飞走的机头）。头像几处都在屏上时取等级高的（`CueSpot`）。
+/// 交给 `RelayFlight.launch` 当场起飞（不等下一帧：钮在这一帧换成发送中，光要接上正飞走的机头）。头像落在哪处同接力（`CueSpot`）。
 final class RelayLaunch {
     fileprivate weak var pad: RelayAnchorView?
     fileprivate var color: CGColor?
@@ -118,10 +116,7 @@ final class RelayLaunch {
     func fly(reduceMotion: Bool) {
         guard let pad, let window = pad.window, let root = RelayAnchorView.rootLayer(of: window), let color,
               let from = pad.frame(in: root) else { return }
-        let cue = RelayAnchorView.all(in: window).compactMap { anchor -> (spot: CueSpot, frame: CGRect)? in
-            guard case .cue(let spot) = anchor.role, let frame = anchor.frame(in: root) else { return nil }
-            return (spot, frame)
-        }.max { $0.spot.rawValue < $1.spot.rawValue }?.frame
+        let cue = RelayAnchorView.cue(among: RelayAnchorView.all(in: window), in: root)
         let up: CGFloat = RelayFlight.up(in: root)
         let head = CGPoint(x: from.midX + from.width * Self.nose.width, y: from.midY + up * from.height * Self.nose.height)
         RelayFlight(color: color, reduceMotion: reduceMotion).launch(from: head, to: cue, in: root)
@@ -146,49 +141,83 @@ private struct RelayLaunchPad {
     }
 }
 
-/// 接力的一头的那个会话：会话 id（开新会话时还没有）与它的任务（请求带着的那张卡）。
+/// 接力的一头：会话 id 与它的任务（请求带着的那张卡）；`opens` 是这次交给开出了这个会话（start）。
 nonisolated struct RelayEnd: Equatable, Sendable {
-    var session: String?
+    var session: String
     var task: UUID?
+    var opens = false
 }
 
-/// Cue 的头像出现的几处，同时在屏上时取等级高的那处。
+/// Cue 那一头落在哪：同时在屏上几处时取排在前面的。三端的规则就是这个顺序——
+/// Mac 与 iPad 有侧栏时总落在侧栏的 Cue 一行（在不在 Cue 页都一样），侧栏收起时退到 Cue 页页头；
+/// iPhone 没有侧栏：在 Cue 页落在页头的头像（从底部往上飞一长段，最看得出），在三页上落在底部那颗 Cue 圆钮。
 enum CueSpot: Int {
-    /// 入口：Mac 侧栏最上面的 Cue 名片、菜单栏面板与输入条的那一行、手机与 iPad 侧栏的 Cue 那一行（`CueEntryAvatar`）。
+    /// 侧栏最上面的 Cue（Mac 是名片 `CueSidebarCard`、iPad 是那一行，头像都是 `CueEntryAvatar`；菜单栏面板、输入条在别的窗口，不参与）。
     case entry
-    /// 页头：Mac 与手机 Cue 页的页头——正看着 Cue 时落在它脸上。
+    /// Cue 页的页头。
     case header
+    /// iPhone 三页底部那颗 Cue 圆钮。
+    case dock
+}
+
+/// 会话那一头落在哪：屏上有它的几处时取最具体的（`rank` 小的）。只有此刻在接力的会话与任务挂锚。
+enum EndSpot: Equatable {
+    /// 会话的状态标，按它所在的那一行分级（`Row`）。
+    case session(String, Row)
+    /// 任务圈与正在开会话的空心点：带着这件任务、或交给的会话就是它绑着的那个时算。
+    case task(UUID, session: String?)
+    /// iPhone 底部那一排的"会话"那一格（Cue 页上收起成一颗时是那一颗）。
+    case dock
+
+    /// 状态标所在的行，越具体越前。
+    enum Row: Int {
+        /// 会话自己那一行：会话列表、菜单栏面板、会话页的页头卡片。
+        case own
+        /// 它的任务行（任务行、任务卡、任务页上代表它的那一格）。
+        case task
+        /// 项目行上的状态：Mac 侧栏行尾的状态标、iPad 与手机的此刻一行（`ProjectNowLine`）。
+        case project
+    }
+
+    /// 对 `end` 来说有多具体；不是它的为 nil。
+    func rank(for end: RelayEnd) -> Int? {
+        switch self {
+        case .session(let session, let row): session == end.session ? row.rawValue : nil
+        case .task(let task, let session): task == end.task || session == end.session ? Row.task.rawValue : nil
+        case .dock: Row.project.rawValue + 1
+        }
+    }
 }
 
 extension View {
-    /// 会话的状态标：接力的会话那一头。只有此刻在接力的会话挂锚，平时什么都不加。
-    func relaySpot(session: String?) -> some View { modifier(SessionSpot(session: session)) }
+    /// 会话的状态标：接力的会话那一头，`row` 是它在哪种行里。只有此刻在接力的会话挂锚，平时什么都不加。
+    /// 这次交给刚开出这个会话时，状态标先透明着，光落下时才亮出来（同 `relayArrival`）。
+    func relaySpot(session: String?, row: EndSpot.Row = .own) -> some View { modifier(SessionSpot(session: session, row: row)) }
 
-    /// 任务行（任务圈、正在开会话的那个空心点）：任务交给的会话没有状态标在屏上、或正为它开新会话时，接力落在这里。
+    /// 任务行（任务圈、正在开会话的那个空心点）：任务交给的会话在接力、或这件任务就是接力带着的那件时，接力落在这里。
     func relaySpot(task: UUID) -> some View { modifier(TaskSpot(task: task)) }
 
     /// Cue 的头像：接力的 Cue 那一头，环在这里亮起。
-    func relaySpot(cue spot: CueSpot?) -> some View {
-        background { if let spot { RelayAnchor(role: .cue(spot)) } }
-    }
+    func relaySpot(cue spot: CueSpot) -> some View { background { RelayAnchor(role: .cue(spot)) } }
 
-    /// iPhone 底部那一排里的去处（`SidebarOutline.Entry`；nil 是 Cue 页上收起成一颗的那颗）：会话与它的任务行都不在屏上时接力落在这里。
-    /// 只有几颗，一直挂着。
-    func relaySpot(dock entry: SidebarOutline.Entry?) -> some View {
-        background { RelayAnchor(role: .dock(entry)) }
-    }
+    /// iPhone 底部那一排里"会话"那一格（三页上）或 Cue 页上收起成的那一颗（`dock` 为真的那处）：会话哪一行都不在屏上时接力落在这里。一直挂着。
+    func relaySpot(dock: Bool) -> some View { background { if dock { RelayAnchor(role: .end(.dock)) } } }
+
+    /// 会话自己那一行：这次交给刚开出这个会话时，行先占着位置、透明，光落下时淡出来（`CueWatch.opens`）。
+    func relayArrival(session: String) -> some View { modifier(Arrival(session: session)) }
 }
 
 /// 读 `CueWatch` 里在接力的会话（只在变了时才写），不经环境值：在窗口根上换一个环境值，整棵树里每个读环境的视图都要重新比一遍，
 /// 实测每次叫醒主线程多出约 200M 条指令、最重一圈多 20ms；这里只有屏上带状态标的几处各重算这一个小视图。
 private struct SessionSpot: ViewModifier {
     let session: String?
+    let row: EndSpot.Row
     @Environment(Workspace.self) private var workspace
 
     func body(content: Content) -> some View {
         let flying = session.flatMap { workspace.cue.relays(session: $0) ? $0 : nil }
-        content.background {
-            if let flying { RelayAnchor(role: .session(flying)) }
+        content.modifier(Arrival(session: session)).background {
+            if let flying { RelayAnchor(role: .end(.session(flying, row))) }
         }
     }
 }
@@ -204,8 +233,27 @@ private struct TaskSpot: ViewModifier {
         let session = agents.items[task]?.state.sessionID
         let flying = cue.relays(task: task) || session.map(cue.relays(session:)) == true
         content.background {
-            if flying { RelayAnchor(role: .task(task, session: session)) }
+            if flying { RelayAnchor(role: .end(.task(task, session: session))) }
         }
+    }
+}
+
+/// 新开出的会话那一行或它的状态标：出现时若正是这次交给开出的（`CueWatch.opens`），先透明，到光落下（`RelayFlight.arrival`）再淡出来；
+/// 减弱动态效果时光不飞，行直接淡出来。之后再出现（滚回来、换页回来）就不再等。
+private struct Arrival: ViewModifier {
+    let session: String?
+    @Environment(Workspace.self) private var workspace
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var landed = false
+
+    func body(content: Content) -> some View {
+        let opens = session.map(workspace.cue.opens(session:)) == true
+        content
+            .opacity(opens && !landed ? 0 : 1)
+            .onChange(of: opens, initial: true) {
+                guard opens else { return }
+                withAnimation(Motion.quick.delay(reduceMotion ? 0 : RelayFlight.arrival)) { landed = true }
+            }
     }
 }
 
@@ -220,9 +268,7 @@ final class RelayAnchorView: RelayAnchorBase {
         /// 发出的起点（`RelayLaunch`）。
         case launch
         case cue(CueSpot)
-        case session(String)
-        case task(UUID, session: String?)
-        case dock(SidebarOutline.Entry?)
+        case end(EndSpot)
     }
 
     var role: Role
@@ -247,6 +293,14 @@ final class RelayAnchorView: RelayAnchorBase {
 
     static func all(in window: AnyObject) -> [RelayAnchorView] { anchors.allObjects.filter { $0.window === window } }
 
+    /// Cue 那头在屏上的那块：几处都在时取 `CueSpot` 排在前面的。
+    static func cue(among anchors: [RelayAnchorView], in root: CALayer) -> CGRect? {
+        anchors.compactMap { anchor -> (spot: CueSpot, frame: CGRect)? in
+            guard case .cue(let spot) = anchor.role, let frame = anchor.frame(in: root) else { return nil }
+            return (spot, frame)
+        }.min { $0.spot.rawValue < $1.spot.rawValue }?.frame
+    }
+
     /// 窗口最底下那一层：Mac 是窗口外框的层（工具栏与内容都在它下面），iOS 是窗口的层。
     #if os(iOS)
     static func rootLayer(of window: UIWindow) -> CALayer? { window.layer }
@@ -254,8 +308,8 @@ final class RelayAnchorView: RelayAnchorBase {
     static func rootLayer(of window: NSWindow) -> CALayer? { window.contentView?.superview?.layer }
     #endif
 
-    /// 在 `root` 里看得见的那块：沿层树往上换算，被裁掉、藏起或透明的祖先让它不算在屏上。
-    func frame(in root: CALayer) -> CGRect? {
+    /// 在 `root` 里看得见的那块：沿层树往上换算，被裁掉、藏起或透明的祖先让它不算在屏上（`seesThrough` 时透明的不算）。
+    func frame(in root: CALayer, seesThrough: Bool = false) -> CGRect? {
         #if os(iOS)
         var current = layer
         #else
@@ -263,7 +317,7 @@ final class RelayAnchorView: RelayAnchorBase {
         #endif
         var rect = current.bounds
         while let parent = current.superlayer {
-            guard !current.isHidden, current.opacity > 0.01 else { return nil }
+            guard !current.isHidden, seesThrough || current.opacity > 0.01 else { return nil }
             rect = current.convert(rect, to: parent)
             if parent.masksToBounds || parent === root { rect = rect.intersection(parent.bounds) }
             guard !rect.isEmpty else { return nil }
@@ -323,7 +377,9 @@ struct RelayFlight {
     /// 起飞那圈环外扩之后多久光离开状态标（叫醒）。
     private static let liftoff = 0.05
     /// 头像的环亮起之后多久小环离开头像（交给）：先看清是 Cue 发出的。
-    private static let release = 0.12
+    static let release = 0.12
+    /// 交给的光大约多久落到会话那头（离开头像，再飞一程常见的 0.6s 的九成）：新开的会话那一行这时才显现（`relayArrival`）。
+    static let arrival = release + 0.9 * 0.6
     /// 飞着的那颗点（叫醒）与那个小环（交给）的直径。
     private static let head: CGFloat = 7
     private static let ring: CGFloat = 10
@@ -370,6 +426,9 @@ struct RelayFlight {
         }
     }
 
+    /// 交给的第一拍：头像的环亮一下。过 `release` 再 `play(.relay…)`，小环这时离开头像。
+    func send(from cue: CGRect, in root: CALayer) { stage(in: root) { $0.send(from: cue) } }
+
     /// 在窗口根层最上面铺一层画布交给 `draw` 画，所有动画一次提交给 Core Animation，播完画布拿掉。
     private func stage(in root: CALayer, _ draw: (Scene) -> Void) {
         let canvas = CALayer()
@@ -403,9 +462,8 @@ struct RelayFlight {
             for (index, target) in targets.enumerated() { scene.depart(at: target, delay: Double(index) * Self.stagger, fills: true) }
             return
         }
-        scene.send(from: source)
         for (index, target) in targets.enumerated() {
-            let start = Self.release + Double(index) * Self.stagger
+            let start = Double(index) * Self.stagger
             let duration = scene.fly(from: source.center, to: target, head: .ring, delay: start)
             scene.depart(at: target, delay: start + duration * 0.9, fills: true)
         }
@@ -413,7 +471,7 @@ struct RelayFlight {
         if targets.isEmpty {
             let inward: CGFloat = scene.canvas.bounds.midY > source.midY ? 1 : -1
             let edge = CGPoint(x: source.midX, y: source.midY + inward * source.height / 2)
-            scene.drift(from: edge, rise: inward * Self.drift * 1.5, head: .ring, delay: Self.release)
+            scene.drift(from: edge, rise: inward * Self.drift * 1.5, head: .ring, delay: 0)
         }
     }
 

@@ -145,11 +145,14 @@ struct PiSessionRow: View {
     var body: some View {
         let shown = workspace.shown(session, delivery: delivery)
         let facts = services.settings.facts(session, shown: shown, end: end, rename: rename, at: services.speech)
-        if style.card {
-            card(shown: shown, facts: facts)
-        } else {
-            compact(shown: shown, facts: facts)
+        Group {
+            if style.card {
+                card(shown: shown, facts: facts)
+            } else {
+                compact(shown: shown, facts: facts)
+            }
         }
+        .relayArrival(session: session.sessionID)
     }
 
     /// 历史里的行：已结束、也不在唤醒（正在唤醒的照在线的写状态）。

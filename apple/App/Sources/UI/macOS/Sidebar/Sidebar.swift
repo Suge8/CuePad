@@ -328,7 +328,7 @@ private struct ProjectRow: View, Equatable {
         } title: {
             Text(project.name)
         } trailing: {
-            if let mark { PiStateDot(shown: mark.shown, size: 7, announces: true).relaySpot(session: mark.session) }
+            if let mark { PiStateDot(shown: mark.shown, size: 7, announces: true).relaySpot(session: mark.session, row: .project) }
         }
         .contextMenu { ProjectActions(project: project, edit: edit) }
     }
