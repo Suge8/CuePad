@@ -72,7 +72,7 @@ xcrun cktool export-schema $C --output-file /tmp/dev.ckdb   # 回读：服务端
 
 待部署到生产（已导入开发环境，发版前按上面三步部署，部署完删掉对应条目）：
 
-- `piSessionStates.turnStartedAt`、`piSessionStates.answeredAt`（INT64）：歇下等最后一轮的回答读到才算（`PiSessionState.answered`）。
+- （无）
 
 生产环境的结构只能增不能删：已下线的记录类型与字段在生成器里（`CloudKitSchema.retiredTypes` / `retiredFields`）照原样声明，客户端不再读写。
 
