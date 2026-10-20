@@ -66,7 +66,7 @@ enum IOSInteractionBench {
         let store = workspace.services.store
         let projects = (workspace.catalog?.projects ?? []).map(\.id)
         let sessions = ((try? await store.piSessionPage(PiSessionQuery(limit: 4)))?.items ?? []).map(\.state.id)
-        let tasks = ((try? await store.tasks(.inProgress, .todo))?.flatMap(\.tasks) ?? []).filter { $0.parentID == nil }.map(\.id)
+        let tasks = ((try? await store.tasks(.inProgress, .todo))?.flatMap(\.tasks) ?? []).filter { $0.parentID == nil }
         guard projects.count >= 2 else { fail("演示库里不到两个项目") }
         guard sessions.count >= 2 else { fail("演示库里不到两个会话") }
         guard let task = tasks.first else { fail("演示库里没有任务") }
@@ -119,8 +119,8 @@ enum IOSInteractionBench {
         navigation.select(.shelf)
         try? await Task.sleep(for: .seconds(1))
         for _ in 0..<2 {
-            await step("打开任务页") { navigation.push(.card(task)) }
-            await step("返回（任务页）") { navigation.path.removeAll() }
+            await step("开任务气泡") { workspace.openTask(task) }
+            await step("关任务气泡") { workspace.openTask = nil }
         }
         await typeLong(workspace, navigation, session: sessions[0], card: idea.id, wants: wants, fail: fail, step: { name, action in await step(name, action) })
         // 最后量长按书架上的项目卡（放在最后：万一菜单没收起，不影响前面各项）：系统的长按菜单在进程内没有入口，由 perf-ios.sh 在模拟器上真按（`AWAIT 名 x y` 是要它按的点，屏幕坐标）。

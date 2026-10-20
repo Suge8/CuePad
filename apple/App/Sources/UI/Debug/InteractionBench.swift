@@ -30,6 +30,8 @@ enum InteractionBench {
         "Cue 页首访": (120, 2),
         "开编辑页": (28, 2),
         "收编辑页": (14, 2),
+        "任务气泡开": (28, 2),
+        "任务气泡关": (14, 2),
         "任务面板开": (28, 2),
         "任务面板关": (14, 2),
         "⌘K 面板开": (28, 2),
@@ -105,6 +107,14 @@ enum InteractionBench {
             for _ in 0..<2 {
                 await step("开编辑页") { workspace.openCard = card }
                 await step("收编辑页") { workspace.openCard = nil }
+            }
+        }
+        // 任务气泡：本项目第一条有步骤的任务（演示库里是"发言轮次乱序"那样的），没有就第一条
+        let tasks = ((try? await store.tasks(.inProgress, .todo))?.flatMap(\.tasks) ?? []).filter { $0.parentID == nil }
+        if let task = tasks.first {
+            for _ in 0..<2 {
+                await step("任务气泡开") { workspace.openTask(task) }
+                await step("任务气泡关") { workspace.openTask = nil }
             }
         }
         for _ in 0..<2 {

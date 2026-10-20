@@ -139,7 +139,7 @@ struct PageTitleSlot: View {
         .accessibilityLabel(done ? "任务已完成" : "完成任务")
     }
 
-    /// 会话名下面的"任务 · 步骤"（绑着好几件时后面"等 N 件"）：点它回到这件事（项目页，任务浮窗停在这一步）。
+    /// 会话名下面的"任务 · 步骤"（绑着好几件时后面"等 N 件"）：点它回到这件事（项目页，任务气泡翻到这一步）。
     private func path(_ item: LeafTask, _ line: Dotted) -> some View {
         Button { workspace.showTask(item.task) } label: {
             Text(line)
@@ -222,7 +222,7 @@ nonisolated struct SessionTaskLink: Sendable, Equatable {
 }
 
 extension Workspace {
-    /// 回到会话做的那件事：项目页，任务浮窗停在这一步。
+    /// 回到会话做的那件事：项目页，任务气泡翻到这一步（从点的那一下长出来）。
     func showTask(_ task: Card) {
         show(task.projectID.map(Route.project) ?? .unfiled)
         open(task)

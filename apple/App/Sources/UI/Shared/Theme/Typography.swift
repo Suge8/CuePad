@@ -36,7 +36,7 @@ enum Typography {
     /// 页内分组标题（资料、最近、更早、现在、历史）与它旁边的计数。
     static let sectionTitle = Font.system(size: 15, weight: .semibold)
     static let sectionCount = Font.system(size: 13).monospacedDigit()
-    /// 纸页里的标题（任务名）。
+    /// 面板顶上的大标题（接入 Agent）。
     static let heading = Font.system(size: 22, weight: .semibold)
     /// ⌘K 搜索框的输入与右侧预览的标题：浮层里最大的两行字。
     static let searchField = Font.system(size: 18)
@@ -75,7 +75,6 @@ enum Typography {
     static let inlineCode = Font.callout.monospaced()
     static let readingLineSpacing: CGFloat = 4
     static let title = Font.title3.weight(.semibold)
-    static let heading = Font.title3.weight(.semibold)
     static let emptyTitle = Font.title3.weight(.semibold)
     #endif
 }
