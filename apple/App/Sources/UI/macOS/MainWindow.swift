@@ -83,7 +83,7 @@ private struct WindowPanels: View {
                 guard (try? await Task.sleep(for: Prewarm.delay)) != nil else { return }
                 mountsPalette = true
             }
-            .panel(item: $workspace.openTask) { TaskSheet(taskID: $0.id) }
+            .panel(item: $workspace.openTask, style: .bubble(anchor: workspace.openTask?.anchor)) { TaskBubble(request: $0) }
             .panel(item: $workspace.projectForm) { ProjectForm(project: $0.project, created: $0.created) }
             .panel(isPresented: $workspace.showsAgentSetup) { AgentSetupPanel() }
     }
@@ -119,6 +119,11 @@ private struct CardPressMonitor: NSViewRepresentable {
             return true
         }
 
+        /// 窗口坐标（左下为原点）换成内容的坐标（左上为原点，内容铺满整窗）。
+        private func flipped(_ point: NSPoint) -> CGPoint {
+            CGPoint(x: point.x, y: (window?.contentView?.bounds.height ?? 0) - point.y)
+        }
+
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
             if let monitor { NSEvent.removeMonitor(monitor) }
@@ -128,6 +133,7 @@ private struct CardPressMonitor: NSViewRepresentable {
                 let handled = MainActor.assumeIsolated {
                     guard let self, event.window === self.window else { return false }
                     if event.type == .keyDown { return self.deleteHovered(event) }
+                    if event.type == .leftMouseDown { self.workspace.pressed(at: self.flipped(event.locationInWindow)) }
                     if !event.modifierFlags.contains(.control) { self.workspace.presses.mouse(down: event.type == .leftMouseDown) }
                     return false
                 }

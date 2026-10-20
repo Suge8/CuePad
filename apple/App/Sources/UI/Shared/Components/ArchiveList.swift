@@ -79,7 +79,7 @@ struct ArchiveList: View {
 
     private func open(_ card: Card) {
         #if os(iOS)
-        navigation.push(.card(card.id))
+        if card.isTask { workspace.openTask(card) } else { navigation.push(.card(card.id)) }
         #else
         workspace.open(card)
         #endif

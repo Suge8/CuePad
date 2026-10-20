@@ -4,7 +4,7 @@ import SwiftUI
 /// 右上角面板：顶上一行快速添加；下面是共用的任务看板（`TaskBoard`）——进行中（跨项目、最近开始的在前，标题后跟项目小图标，悬停写全名）、
 /// 待办（按项目分段，段头写项目）、最近完成（折起），步骤缩进跟在任务下（`TaskOutline`：按住拖动排序、拖到一条上成为它的步骤、
 /// 横向拖改层级、拖进待办别的段换项目，拖动不改状态；进行中按开始时间排，两行之间不能落），
-/// 行与项目页同一种（`TaskLine`）。点任务弹出任务浮窗（面板留着）。
+/// 行与项目页同一种（`TaskLine`）。点任务从那一行长出任务气泡（面板留着）。
 struct TasksPanel: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services

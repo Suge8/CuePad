@@ -39,8 +39,6 @@ enum DebugHooks {
         #if os(iOS)
         /// 任务页的"最近完成"展开并滚到底（`-CuePadShowsDone`）。
         var showsDone = false
-        /// 任务页一出现就弹出正文的编辑页（`-CuePadBrief`）。
-        var briefOpen = false
         /// 设置页通知那一行显示的状态（`-CuePadAlertStatus`；演示模式没有同步，真实状态出不来）。
         var alertStatus: PiAlertStatus?
         /// 搜索页一打开在哪个范围（`-CuePadSearchScope sessions`）。
