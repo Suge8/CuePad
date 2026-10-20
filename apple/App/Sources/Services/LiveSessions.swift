@@ -13,9 +13,9 @@ final class LiveSessions {
     private(set) var items: [PiSessionListItem] = []
     /// 全部会话记录数（含历史）。
     private(set) var total = 0
-    /// 正在唤醒的已结束会话（`PiSessionListItem.isWaking`）："在做"里与在线的一起列。
-    private(set) var waking: [PiSessionListItem] = []
-    /// 在线会话的摘要、此刻没能送达的话有几句，在线与正在唤醒的会话收到的最近一条投送请求与改名，按 Pi 的会话 id。
+    /// "在做"列的会话（`PiSessionListItem.isCurrent`）：在线的与正在唤醒的。
+    private(set) var current: [PiSessionListItem] = []
+    /// 在线会话的摘要、此刻没能送达的话有几句，"在做"列的会话收到的最近一条投送请求与改名，按 Pi 的会话 id。
     private(set) var recaps: [String: PiRecap] = [:]
     private(set) var deliveries: [String: DeliveryRequest] = [:]
     private(set) var renames: [String: DeliveryRequest] = [:]
@@ -69,11 +69,10 @@ final class LiveSessions {
         if page.total != total { total = page.total }
         set(\.recentlyEnded, page.ended)
         let live = self.live
-        set(\.waking, page.items.filter { $0.isWaking(at: moment) })
-        let listed = live + waking
+        set(\.current, page.items.filter { $0.isCurrent(at: moment) })
         set(\.recaps, Dictionary(live.map { ($0.state.sessionID, $0.state.recap) }) { first, _ in first })
-        set(\.deliveries, Dictionary(listed.compactMap { item in item.delivery.map { (item.state.sessionID, $0) } }) { first, _ in first })
-        set(\.renames, Dictionary(listed.compactMap { item in item.rename.map { (item.state.sessionID, $0) } }) { first, _ in first })
+        set(\.deliveries, Dictionary(current.compactMap { item in item.delivery.map { (item.state.sessionID, $0) } }) { first, _ in first })
+        set(\.renames, Dictionary(current.compactMap { item in item.rename.map { (item.state.sessionID, $0) } }) { first, _ in first })
         set(\.undelivered, PiSessionListItem.undelivered(live, at: moment))
         set(\.cue, page.cue)
     }

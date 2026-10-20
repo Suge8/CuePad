@@ -1,7 +1,7 @@
 import CueStore
 import SwiftUI
 
-/// Agent 页读到的会话："现在"是全部在线的与正在唤醒的（`PiSessionListItem.isWaking`；不多，不分页），按要你注意的先后；
+/// Agent 页读到的会话："现在"是全部在线的与正在唤醒的（`PiSessionListItem.isCurrent`；不多，不分页），按要你注意的先后；
 /// "历史"是已结束的前 `loaded` 条（"现在"里有的不再列），从新到旧（分段见 `PiHistorySection`）。两部分用同一个搜索词与项目筛选。
 nonisolated struct PiSessionList: Sendable, Equatable {
     static let pageSize = 40
@@ -35,7 +35,7 @@ nonisolated struct PiSessionList: Sendable, Equatable {
         text: String, project: UUID? = nil, historyLimit: Int, at moment: Speech.Moment, from store: isolated CueStore
     ) throws -> PiSessionList {
         let live = try store.piSessionPage(PiSessionQuery(scope: .current, text: text, project: project, limit: .max)).items
-            .filter { $0.state.state != .known(.ended) || $0.isWaking(at: moment) }
+            .filter { $0.isCurrent(at: moment) }
         let ended = try store.piSessionPage(PiSessionQuery(scope: .ended, text: text, project: project, limit: historyLimit))
         let deliveries = Dictionary(live.compactMap { item in item.delivery.map { (item.state.sessionID, $0) } }) { first, _ in first }
         let order = Dictionary(uniqueKeysWithValues: PiSessionState.inListOrder(live.map(\.state), deliveries: deliveries, cue: try store.cueDuty(), at: moment).enumerated().map { ($1.id, $0) })
@@ -104,13 +104,10 @@ struct PiSessionRow: View {
     }
 
     /// 历史里的行：已结束、也不在唤醒（正在唤醒的照在线的写状态）。
-    private func isPast(_ shown: PiShown) -> Bool {
-        session.state == .known(.ended) && shown.status != .delivery(.inTransit(.waking))
-    }
+    private var ended: Bool { session.state == .known(.ended) && !session.isWaking(by: delivery, at: services.speech) }
 
     private func card(shown: PiShown, facts: PiRowFacts) -> some View {
-        let ended = isPast(shown)
-        return HStack(alignment: .firstTextBaseline, spacing: 10) {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
             if !ended { PiStateDot(shown: shown, size: style.dot).relaySpot(session: session.sessionID) }
             VStack(alignment: .leading, spacing: style.spacing) {
                 headline(shown: shown)
@@ -163,8 +160,7 @@ struct PiSessionRow: View {
 
     /// 第一层：名字（有新回复时加粗）、"后台"小签、没送到的折回箭头、右上的时长。
     private func headline(shown: PiShown) -> some View {
-        let ended = isPast(shown)
-        return HStack(alignment: .firstTextBaseline, spacing: 6) {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
             Text(Highlight.matches(PiRename.title(of: session, request: rename, at: services.speech), highlight))
                 .font(style.name).fontWeight(shown.isUnread ? .bold : nil)
                 .foregroundStyle(style.card && ended ? palette.ink2 : palette.ink).lineLimit(1)

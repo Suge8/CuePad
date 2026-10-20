@@ -18,8 +18,8 @@ extension URL {
 /// 递归监听目录，事件流里是变化路径。发生丢事件/需要重扫时，流里出现根路径本身。
 /// 目录可以还不存在（先装 CuePad、后装 Pi），也可以被删掉再建：不存在时盯着最近的已存在上层目录，等它出现再切过去，
 /// 切过去时给出一次根路径（整体重扫，切换前写进去的文件不会漏）；根目录被删掉再建也一样。
-/// 不要依赖创建事件：FSEvents 不报告"仅 bind、没有后续属性变更"的 socket 文件创建。
-/// FSEvents 对一直开着写的文件只在关闭时报内容变化（Codex 的常驻服务整段会话都开着会话文件）：这类文件用 `follow` 另盯每次追加。
+/// 要及时看到追加的文件用 `follow` 另盯（kqueue）：FSEvents 对一直开着写的文件只在关闭时报内容变化，写完就关的也要晚到、并成一次。
+/// 平铺的一层目录不用它，用 `DirectoryWatcher`（kqueue，当场）。
 final class FSEventsWatcher: Sendable {
     let paths: AsyncStream<[String]>
     private let core: Core

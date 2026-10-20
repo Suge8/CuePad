@@ -61,20 +61,20 @@ private struct LiveMoreFold: View {
     }
 }
 
-/// 此刻在做的（各端"在做"读的唯一一份，`Workspace.liveWork`）：列出来的在线会话（按要你注意的先后），与同时在跑的 Agent——
-/// 显示的状态是工作中的会话（思考、用工具、压缩、子代理工作中，`PiShown.Status.working`，与行上那颗在跑的状态标同一个判断；
+/// 此刻在做的（各端"在做"读的唯一一份，`Workspace.liveWork`）：列出来的会话（在线的与正在唤醒的，按要你注意的先后），与同时在跑的 Agent——
+/// 显示的状态在跑的会话（工作中、话在路上，`PiShown.isRunning`，与行上那颗状态标的靛青同一档；
 /// 等你、出错、没能送达、歇着、新会话都不算），加上各会话里在跑的子代理（`PiSubagentState.isRunning`）。
 /// 子代理只数会话自己报上来的（同步记录的 `PiSessionState.subagents`，四家同一个来源；报不出的那家就是 0，不估算）。
 nonisolated struct LiveWork: Equatable {
     let rows: [PiSessionState]
-    /// 此刻在工作的会话数。
-    let working: Int
+    /// 此刻在跑的会话数。
+    let running: Int
     /// 在跑的子代理数。
     let subagents: Int
 
-    init(rows: [PiSessionState], working: (PiSessionState) -> Bool) {
+    init(rows: [PiSessionState], running: (PiSessionState) -> Bool) {
         self.rows = rows
-        self.working = rows.count(where: working)
+        self.running = rows.count(where: running)
         subagents = rows.reduce(0) { $0 + $1.subagents.count(where: \.isRunning) }
     }
 }
@@ -90,12 +90,12 @@ struct LiveWorkCount: View {
         Text(text)
             .font(font.monospacedDigit()).foregroundStyle(palette.ink3).lineLimit(1)
             .contentTransition(.numericText())
-            .animation(Motion.quick, value: work.working)
+            .animation(Motion.quick, value: work.running)
             .animation(Motion.quick, value: work.subagents)
     }
 
     private var text: Dotted {
-        switch (work.working, work.subagents) {
+        switch (work.running, work.subagents) {
         case (0, 0): "都停着"
         case (0, let agents): Dotted("\(agents) 个子代理在跑")
         case (let sessions, 0): Dotted("\(sessions) 个在跑")
@@ -117,10 +117,8 @@ extension Workspace {
         let live: [PiSessionState] = []
         #endif
         let rows = PiSessionState.liveRows(
-            live: live, recorded: (sessions.live + sessions.waking).map(\.listed), deliveries: sessions.deliveries, cue: sessions.cue, at: services.speech)
-        return LiveWork(rows: rows) { session in
-            if case .working = shown(session, delivery: sessions.deliveries[session.sessionID]).status { true } else { false }
-        }
+            live: live, recorded: sessions.current.map(\.listed), deliveries: sessions.deliveries, cue: sessions.cue, at: services.speech)
+        return LiveWork(rows: rows) { shown($0, delivery: sessions.deliveries[$0.sessionID]).isRunning }
     }
 }
 

@@ -110,8 +110,6 @@ struct SessionFileFormat: Sendable {
     /// 会话文件在会话目录下第几层，与各家自己的会话列表一致：Pi 与 Claude Code 是 `<项目目录>/*.jsonl`（更深的，如子代理的
     /// `<项目目录>/…/subagents/*.jsonl`，不是会话列表里的会话）；Codex 是 `YYYY/MM/DD/rollout-*.jsonl`。
     let depth: Int
-    /// Agent 写会话文件时一直开着它（Codex 的常驻服务整段会话都开着）：FSEvents 只在关闭时报，要另盯追加
-    let keepsFilesOpen: Bool
     /// 文件名就是会话 id（Claude Code）：文件头还没读到也算会话
     let nameIsSessionID: Bool
 
@@ -121,9 +119,9 @@ struct SessionFileFormat: Sendable {
 
     static func of(_ agent: AgentKind) -> SessionFileFormat? {
         switch agent {
-        case .pi: SessionFileFormat(ingest: PiHistory.ingest, depth: 2, keepsFilesOpen: false, nameIsSessionID: false)
-        case .claudeCode: SessionFileFormat(ingest: ClaudeHistory.ingest, depth: 2, keepsFilesOpen: false, nameIsSessionID: true)
-        case .codex: SessionFileFormat(ingest: CodexHistory.ingest, depth: 4, keepsFilesOpen: true, nameIsSessionID: false)
+        case .pi: SessionFileFormat(ingest: PiHistory.ingest, depth: 2, nameIsSessionID: false)
+        case .claudeCode: SessionFileFormat(ingest: ClaudeHistory.ingest, depth: 2, nameIsSessionID: true)
+        case .codex: SessionFileFormat(ingest: CodexHistory.ingest, depth: 4, nameIsSessionID: false)
         case .opencode: nil
         }
     }

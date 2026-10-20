@@ -37,12 +37,12 @@ public enum Speech {
   public static let receiptLimit: TimeInterval = 60
 
   /// Cue 的说话工具（say、answer）写下请求后等结果多久。这一轮停在这里等，所以比 `receiptLimit` 短得多：Cue 多半运行在会话所在的
-  /// 那台 Mac 上，本机执行 1 秒内有结果，唤醒已结束的会话几秒，加上一次暂时性错误的重试（`retryDelay`）也在 10 秒内；
+  /// 那台 Mac 上，本机执行与唤醒已结束的会话都在 1 秒内有结果，加上一次暂时性错误的重试（`retryDelay`）也在 10 秒内；
   /// 跨 Mac 的往返大多几秒。取 20 秒覆盖这些；没交到 Cue 手上的失败不丢，写进它下一轮的变化并立即叫醒它（`CueChange.Kind.undelivered`）。
   public static let cueWait: TimeInterval = 20
 
-  /// Mac 执行器遇上暂时性错误（会话正在起、还没连上桥）后隔多久重试一次。假扩展与真实 Pi 起来后连上桥都在 1 秒左右
-  /// （桥靠目录监听发现新 socket），取 2 秒留出余量；执行器按先后一条条执行，等得再久会拖住后面的请求。
+  /// Mac 执行器遇上暂时性错误（会话正在起、还没连上桥）后隔多久重试一次。假扩展与真实 Pi 起来后连上桥都在 0.3 秒内
+  /// （桥用 kqueue 盯 socket 目录），取 2 秒留出余量；执行器按先后一条条执行，等得再久会拖住后面的请求。
   public static let retryDelay: Duration = .seconds(2)
 
   // MARK: 规则
