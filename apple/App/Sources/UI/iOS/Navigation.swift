@@ -76,8 +76,6 @@ final class Navigation {
 
     /// 这个窗口有系统菜单开着（`MenuButton`）：这段里贴着键盘的那一层不跟键盘走（`KeyboardHold`）。
     var menuOpen = false
-    /// 有浮在键盘上方的输入框（新会话、发给 Agent）。
-    var floating: Bool { newSession != nil || outbox != nil }
     var outbox: Outbox? {
         didSet { if let outbox, outbox.id != oldValue?.id { handOffDraft = ComposerDraft(attachments: [outbox]) } }
     }
