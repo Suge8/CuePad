@@ -32,8 +32,8 @@ public struct PiSessionQuery: Sendable, Equatable {
   public var scope: PiSessionScope
   /// 在会话名、文件夹名、最后的提问里找（不分大小写）；nil 或空白表示全部。
   public var text: String?
-  /// 只要归入这个项目的；nil 表示不限。
-  public var project: UUID?
+  /// 只要归入这个项目的，或不在哪个项目里的（`unfiled`）；nil 表示不限。
+  public var project: PiSessionProject?
   /// 只要带这个认领标识的（新会话认领用，精确取一条）。
   public var launchToken: String?
   /// 只要这一条记录（`PiSessionState.id`）。
@@ -43,7 +43,7 @@ public struct PiSessionQuery: Sendable, Equatable {
   public var limit: Int
 
   public init(
-    scope: PiSessionScope = .all, text: String? = nil, project: UUID? = nil, launchToken: String? = nil, id: UUID? = nil,
+    scope: PiSessionScope = .all, text: String? = nil, project: PiSessionProject? = nil, launchToken: String? = nil, id: UUID? = nil,
     offset: Int = 0, limit: Int = 50
   ) {
     self.scope = scope
@@ -59,6 +59,16 @@ public struct PiSessionQuery: Sendable, Equatable {
   public static let live = PiSessionQuery(scope: .live, limit: .max)
   /// 此刻有事的会话（在线的与还有话发给它的已结束会话，数量少，不分页）。
   public static let current = PiSessionQuery(scope: .current, limit: .max)
+}
+
+/// 会话归在哪：一个项目，或不在哪个项目里（没有项目或项目已删；界面上叫"未分类"）。会话页按它分组、按它筛。
+public enum PiSessionProject: Hashable, Sendable {
+  case project(UUID)
+  case unfiled
+
+  public init(_ id: UUID?) { self = id.map(Self.project) ?? .unfiled }
+
+  public var id: UUID? { if case .project(let id) = self { id } else { nil } }
 }
 
 /// 列表里的一个会话、它所属的项目（没有绑定项目或项目已删为 nil；文件夹名在 `state.folder`），
@@ -232,7 +242,7 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
   public func waitsForCue(_ cue: CueDuty?) -> Bool { cue.map { !$0.leftToYou(self) } == true && answerableQuestion != nil }
 
   /// "等你"里会话那一半的唯一规则：在等回答且等的不是 Cue（`waitsForCue`），或 Cue 值班时把这次歇下留给了你回（会话行的"待回复"）。
-  /// "等你 N"、Dock 角标、"等你"的提示（Mac 的通知、手机的前台横幅与锁屏推送标志，`PiAlert.reaches`）都只认它。
+  /// "等你 N"、Dock 角标、"等你"的提示（Mac 的通知、手机的前台横幅与锁屏推送标志，`CueStore.reaches`）都只认它。
   public func asksYou(_ cue: CueDuty?) -> Bool {
     switch state.known {
     case .waitingForUser: !waitsForCue(cue)

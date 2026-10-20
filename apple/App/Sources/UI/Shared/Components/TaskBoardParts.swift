@@ -8,7 +8,12 @@ struct BoardColumns: View {
     @Binding var adding: Bool
     let newTaskProject: UUID?
 
+    #if os(macOS)
     private static let minColumn: CGFloat = 230
+    #else
+    /// iPad 竖屏（侧栏收着）也四列并排放得下。
+    private static let minColumn: CGFloat = 180
+    #endif
     private static let gap: CGFloat = 14
 
     var body: some View {
@@ -272,7 +277,7 @@ struct BoardColumnGlyph: View {
 
 /// 看板上的一张任务卡（纸）：完成圈（`TaskCheckButton`）、标题，下面一行项目小图标与名字、步骤 n/m，
 /// 交给了会话的再一行会话此刻在做什么——"下一步"那一格（`TaskNextMark`，状态样子只经 `PiShown`，在跑是会动的线）、会话名，与它此刻的进展（`PiProgress`）；
-/// 还没交出去的叶子在标题行尾是"开始"（Mac 指针停在卡上才露出）。点卡打开任务（Mac 任务浮窗，手机推入任务页），Mac 右键是 `CardActions`。
+/// 还没交出去的叶子在标题行尾是"开始"（Mac 指针停在卡上才露出）。点卡从那一下长出任务气泡（`Workspace.openTask`），Mac 右键是 `CardActions`。
 struct BoardTaskCard: View {
     let item: TaskBoard.Item
     @State private var check = TaskCheck()
@@ -280,9 +285,6 @@ struct BoardTaskCard: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.cardAgents) private var agents
     @Environment(\.palette) private var palette
-    #if os(iOS)
-    @Environment(Navigation.self) private var navigation
-    #endif
 
     var body: some View {
         let next = item.task.status == .done ? nil : item.leaf.flatMap { workspace.next(for: $0, in: agents, steps: nil) }
@@ -294,10 +296,12 @@ struct BoardTaskCard: View {
                 Text(item.task.title.textGlyphs).font(TaskMetrics.lineFont)
                     .strikethrough(check.phase != .idle, color: palette.ink3).foregroundStyle(done ? palette.ink2 : palette.ink)
                     .lineLimit(3).frame(maxWidth: .infinity, alignment: .leading)
+                #if os(macOS)
                 // 还没交出去的"开始"跟在标题这一行尾上：Mac 上悬停才露出，占的是这一行本来就有的高，卡不因悬停变高
                 if let next, case .start = next { TaskNextMark(next: next) }
+                #endif
             }
-            meta.padding(.leading, Self.indent)
+            meta(start: Self.startsInMeta ? next : nil).padding(.leading, Self.indent)
             if let next, case .agent = next { BoardNextLine(next: next).padding(.leading, Self.indent) }
         }
         .padding(TaskMetrics.cardPadding)
@@ -333,8 +337,16 @@ struct BoardTaskCard: View {
         #endif
     }
 
-    @ViewBuilder private var meta: some View {
-        if item.project != nil || item.steps != nil {
+    /// 手机上"开始"一直露着，放在项目那一行尾上，不占标题的宽（窄列里标题会被挤成三行）。
+    #if os(macOS)
+    private static let startsInMeta = false
+    #else
+    private static let startsInMeta = true
+    #endif
+
+    @ViewBuilder private func meta(start next: TaskNext?) -> some View {
+        let start: TaskNext? = if let next, case .start = next { next } else { nil }
+        if item.project != nil || item.steps != nil || start != nil {
             HStack(spacing: 10) {
                 if let project = item.project {
                     HStack(spacing: 4) {
@@ -343,18 +355,14 @@ struct BoardTaskCard: View {
                     }
                 }
                 if let steps = item.steps { Text(TaskCopy.progress(steps)).monospacedDigit() }
+                // 写成"▶ 开始"、不占 44pt 高的点按格：卡已经是可点的大块，这一格只是说明能开始
+                if let start { TaskNextMark(next: start, spelled: true).fixedSize() }
             }
             .font(TaskMetrics.caption).foregroundStyle(palette.ink3)
         }
     }
 
-    private func open() {
-        #if os(macOS)
-        workspace.open(item.task)
-        #else
-        navigation.push(.card(item.task.id))
-        #endif
-    }
+    private func open() { workspace.openTask(item.task) }
 }
 
 /// 卡上会话那一行：状态标与状态词（`TaskNextMark`，点了打开会话），会话名；下面一行它此刻的进展（`PiProgress`）。
@@ -365,7 +373,8 @@ private struct BoardNextLine: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 6) {
-                TaskNextMark(next: next, spelled: true)
+                // 状态词不让：窄列里先截会话名
+                TaskNextMark(next: next, spelled: true).fixedSize()
                 if case .agent(_, let session) = next {
                     Text(session.title).font(TaskMetrics.caption.monospaced()).foregroundStyle(palette.ink2).lineLimit(1)
                 }
@@ -467,13 +476,7 @@ struct BoardWaitCard: View {
         }
     }
 
-    private func open(_ task: Card) {
-        #if os(macOS)
-        workspace.open(task)
-        #else
-        navigation.push(.card(task.id))
-        #endif
-    }
+    private func open(_ task: Card) { workspace.openTask(task) }
 
     private func open(_ session: PiSessionState) {
         #if os(macOS)

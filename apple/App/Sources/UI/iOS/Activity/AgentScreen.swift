@@ -80,7 +80,7 @@ struct SessionList<Top: View>: View {
         .contentMargins(.top, Bars.contentGap, for: .scrollContent)
         .scrollDismissesKeyboard(.immediately)
         .refreshable { await services.syncNow() }
-        .agentList(model, filter: filter)
+        .agentList(model, filter: filter.map(PiSessionProject.project))
     }
 
     /// 会话列表。换搜索词或项目时整段换掉、不做动画（逐行挪动会让新旧两批字叠在一起）；同一筛选下会话进出、换状态才有动画。

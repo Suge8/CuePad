@@ -12,7 +12,8 @@ import QuartzCore
 /// - **合计、最重一圈、指令数**：动作后 800ms 里主线程 CPU 的总数与最重的一圈（点击回合小而合计大，是活被挪到了后面的帧里，不是没了）；进程执行的指令数（百万）不随机器忙闲变，前后对比以它为准。两端同一份探针与键名（`Probes.swift`）。
 /// - **掉帧**：动作后 800ms 内窗口 display link 相邻两次回调间隔超过 1.5 帧的次数与最长一次（毫秒）。
 /// - **到对话出现**（`contentMs`，只有"Cue 页首访"）：动作发出到 Cue 页的对话排出来的墙钟毫秒（`PerfProbe` 的 `cue`）；第一次变的画面可能还是空的页。
-/// 开头把本实例调到前台：后台量的数字偏乐观（前台才有玻璃等实际合成），所以会抢一下焦点，量完退出。
+/// 默认在后台量：指令数照样能前后对比，帧与掉帧偏乐观（前台才有玻璃等实际合成）。和预算比要在前台量（`-CuePadForeground YES`，见 `DebugForeground`），
+/// 每行的 `foreground` 记这次在不在前台；量完退出，退出时把前台还回去。
 enum InteractionBench {
     /// 每项的预算：点击回合上限（毫秒）与掉帧次数上限。预算是目标，不是现状：没达到的项如实报超预算，不改数字迁就。
     /// 依据：144Hz 一帧 6.9ms；对点击的回应在两帧（14ms）内人感觉是"跟手"，要建内容的在四帧（28ms）内不觉得顿；掉帧最多两次。
@@ -29,6 +30,8 @@ enum InteractionBench {
         "Cue 页首访": (120, 2),
         "开编辑页": (28, 2),
         "收编辑页": (14, 2),
+        "任务气泡开": (28, 2),
+        "任务气泡关": (14, 2),
         "进任务页": (28, 2),
         "回 Cue 页": (14, 2),
         "⌘K 面板开": (28, 2),
@@ -55,18 +58,15 @@ enum InteractionBench {
         guard let window = NSApp.windows.first(where: { $0.styleMask.contains(.fullSizeContentView) && $0.styleMask.contains(.resizable) }),
               let view = window.contentView
         else { return }
-        // 前台才有玻璃等实际合成，后台量的数字偏乐观；给了 CUEPAD_SHOT_READY 时留在后台（不抢用户的前台，指令数仍可前后对比）
-        if !DebugHooks.staysInBackground {
-            NSApp.activate(ignoringOtherApps: true)
-            window.makeKeyAndOrderFront(nil)
-        }
+        let foreground = DebugForeground.borrow(window)
         try? await Task.sleep(for: .seconds(1))
         let store = workspace.services.store
         let projects = (workspace.catalog?.projects ?? []).map(\.id)
         let sessions = ((try? await store.piSessionPage(PiSessionQuery(limit: 3)))?.items ?? []).map(\.state.sessionID)
         func step(_ name: String, _ action: () -> Void) async {
             if let only, !only.contains(name) { return }
-            let row = await measure(name, in: view, action)
+            var row = await measure(name, in: view, action)
+            row["foreground"] = foreground
             print("INTERACT " + String(decoding: try! JSONSerialization.data(withJSONObject: row, options: [.sortedKeys]), as: UTF8.self))
             fflush(stdout)
         }
@@ -107,6 +107,14 @@ enum InteractionBench {
             for _ in 0..<2 {
                 await step("开编辑页") { workspace.openCard = card }
                 await step("收编辑页") { workspace.openCard = nil }
+            }
+        }
+        // 任务气泡：本项目第一条有步骤的任务（演示库里是"发言轮次乱序"那样的），没有就第一条
+        let tasks = ((try? await store.tasks(.inProgress, .todo))?.flatMap(\.tasks) ?? []).filter { $0.parentID == nil }
+        if let task = tasks.first {
+            for _ in 0..<2 {
+                await step("任务气泡开") { workspace.openTask(task) }
+                await step("任务气泡关") { workspace.openTask = nil }
             }
         }
         for _ in 0..<2 {

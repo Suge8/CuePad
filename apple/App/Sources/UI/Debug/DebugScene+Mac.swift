@@ -45,10 +45,10 @@ extension DebugScene {
             try? await Task.sleep(for: .seconds(1))
             for id in workspace.presses.selectable.prefix(3) { workspace.presses.toggle(id) }
         case "task":
-            // 给了 -CuePadTask <标题开头> 打开那一条，否则本项目第一条没完成的顶层任务，在任务浮窗里打开
+            // 给了 -CuePadTask <标题开头> 打开那一条，否则本项目第一条没完成的顶层任务，打开它的气泡
             let tasks = (try? await workspace.services.store.tasks(.inProgress, .todo).flatMap(\.tasks)) ?? []
             let named = defaults.string(forKey: "CuePadTask").flatMap { prefix in tasks.first { $0.title.hasPrefix(prefix) } }
-            if let task = named ?? tasks.first(where: { $0.parentID == nil && $0.projectID == workspace.currentProject }) ?? tasks.first { workspace.open(task) }
+            if let task = named ?? tasks.first(where: { $0.parentID == nil && $0.projectID == workspace.currentProject }) ?? tasks.first { workspace.openTask(task) }
         case "agent":
             if defaults.bool(forKey: "CuePadDemo") {
                 await seedRemote(workspace.services)
@@ -58,12 +58,14 @@ extension DebugScene {
         case "projectagent":
             // 项目页（-CuePadProject）的 Agent 栏，演示会话与同名文件夹的会话都在；圆桌的任务下，开了工的步骤带会话状态
             if defaults.bool(forKey: "CuePadDemo") { await seedRemote(workspace.services) }
+            if defaults.bool(forKey: "CuePadNoAsks") { await settleAsks(workspace.services.store) }
         case "cue", "cuememory", "cuerun":
             // Cue 页（演示数据见 `DebugScene+Cue.swift`）；cuememory 再打开"Cue 记得什么"，cuerun 打开"运行情况"（Cue 在这台值班时才有）
             if defaults.bool(forKey: "CuePadDemo") {
                 await seedRemote(workspace.services)
                 await seedCue(workspace.services)
             }
+            if defaults.bool(forKey: "CuePadNoAsks") { await settleAsks(workspace.services.store) }
             workspace.show(.cue)
             if scene == "cuememory" { workspace.cue.showsMemory = true }
             if scene == "cuerun" { workspace.cue.showsRun = true }

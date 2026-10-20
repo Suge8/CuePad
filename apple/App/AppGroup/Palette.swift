@@ -26,7 +26,7 @@ struct Palette {
     /// 页面底，也是小组件与分享扩展的底。iOS 启动屏的底色（资源目录的 LaunchBackground）与它同值：启动屏只认资源目录里的颜色，不同的话冷启动先白后米一闪。
     var desk: Color { dark ? Color(hex: 0x1B1916) : Color(hex: 0xEFEDE8) }
     var paper: Color { dark ? Color(hex: 0x282420) : Color(hex: 0xFCFBF8) }
-    /// 纸的上沿：比纸略亮一点，纸面从上往下极轻地过渡到纸色，像有一层向上的光（`paper()`）；也是 Mac 任务浮窗选中的那一行。
+    /// 纸的上沿：比纸略亮一点，纸面从上往下极轻地过渡到纸色，像有一层向上的光（`paper()`）。
     var paperLit: Color { dark ? Color(hex: 0x2E2A25) : Color(hex: 0xFFFFFD) }
     /// 纸和玻璃上沿的一线高光。
     var sheen: Color { Color.white.opacity(dark ? 0.07 : 0.9) }

@@ -46,8 +46,8 @@ struct ProjectScreen: View {
         .observing(services.store, id: projectID, into: $page, onError: workspace.fail) {
             [projectID] store in ProjectPage(try ProjectPageData.read(projectID, from: store))
         }
-        .observing(services.store, id: PiSessionList.Key(filter: .init(text: "", project: projectID), limit: 0, moment: services.speech), into: $pi, onError: workspace.fail) {
-            [projectID, moment = services.speech] store in try PiSessionList.read(text: "", project: projectID, historyLimit: 0, at: moment, from: store)
+        .observing(services.store, id: PiSessionList.Key(filter: .init(text: "", project: .project(projectID)), history: .paged(0), moment: services.speech), into: $pi, onError: workspace.fail) {
+            [projectID, moment = services.speech] store in try PiSessionList.read(text: "", project: .project(projectID), history: .paged(0), at: moment, from: store)
         }
         .onChange(of: page?.data.stamps) { rearrange() }
         .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in rearrange() }

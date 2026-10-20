@@ -2,37 +2,49 @@
 import CueStore
 import SwiftUI
 
-/// Agent 页（侧栏上面的"会话"进来）：与手机的 Agent 页同构——没有页标题（侧栏那一行选中就说了在哪），最上面就是一排（按项目筛、搜索、新会话），"现在"是没结束的会话、
-/// 按要你注意的先后（等你确认 → 出错 → 工作中 → 空闲），"历史"是已结束的、按结束时间分段（`PiHistorySection`），
-/// 读到底再接一页；搜索那一排下面是订阅额度的总览（`QuotaStrip`，没有额度记录时没有）。行与手机同一种（`PiSessionRow`），点行在内容区打开会话页；在线会话右键可结束（确认后发给它所在的 Mac，对话留着）。
+/// 会话页（侧栏的"会话"进来）：没有页标题（侧栏那块选中就说了在哪），最上面就是一排（按项目筛、搜索、新会话），下面是订阅额度的总览（`QuotaStrip`，没有额度记录时没有）。
+/// 不筛时按项目分组（`PiSessionList.Group`）：组头是项目图标与名字、几个在线，下面先是它在线的会话（按要你注意的先后：等你确认 → 出错 → 工作中 → 空闲），
+/// 再是最近结束的几条；结束的更多时组头右边"全部 N 个"按这个项目筛。没有项目的会话归"未分类"一组。一眼看出哪个项目在跑什么，不必读每张卡的所在。
+/// 按项目筛着时是这个项目的"现在"与按结束时间分段的"历史"（`PiHistorySection`），读到底再接一页。
+/// 行与手机同一种（`PiSessionRow`），点行在内容区打开会话页；在线会话右键可结束（确认后发给它所在的 Mac，对话留着）。
+/// 这台 Mac 检测到 Agent 却一家都没接入时，最上面是接入小卡（`ConnectAgents`）：没接入时本机的会话在这里看不到。
 struct AgentPage: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @State private var model = AgentListModel()
-    @State private var filter: UUID?
+    @State private var filter: PiSessionProject?
     @State private var starting = false
 
     /// 列表的宽度：一行读得完，不至于横跨整个大窗口。
     private static let width: CGFloat = 720
 
     var body: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 0, pinnedViews: []) {
-                topRow.padding(.bottom, 16)
-                QuotaStrip().padding(.horizontal, 4).padding(.bottom, 12)
-                if let list = model.list { sessions(list) }
-            }
-            .padding(.horizontal, Spacing.page).padding(.vertical, Spacing.pageTop)
-            .frame(maxWidth: Self.width)
-            .frame(maxWidth: .infinity)
+        ScrollViewReader { proxy in
+            ScrollView { column }
+            // 组头的"全部"在页中间换筛选：换完回到顶上，从这个项目的第一条看起
+            .onChange(of: filter) { proxy.scrollTo(Self.top, anchor: .top) }
         }
         .background(palette.desk)
-        .agentList(model, filter: filter)
+        .agentList(model, filter: filter, grouped: true)
         .refreshesQuota()
     }
 
-    /// 顶上一排：左边按项目筛（全部 + 在 Mac 上绑了文件夹的项目），中间搜索，右边新会话。
+    private static let top = "top"
+
+    private var column: some View {
+        LazyVStack(alignment: .leading, spacing: 0, pinnedViews: []) {
+            topRow.padding(.bottom, 16).id(Self.top)
+            QuotaStrip().padding(.horizontal, 4).padding(.bottom, 12)
+            ConnectAgents().padding(.bottom, 12)
+            if let list = model.list { sessions(list) }
+        }
+        .padding(.horizontal, Spacing.page).padding(.vertical, Spacing.pageTop)
+        .frame(maxWidth: Self.width)
+        .frame(maxWidth: .infinity)
+    }
+
+    /// 顶上一排：左边按项目筛（全部、在 Mac 上绑了文件夹的项目、未分类），中间搜索，右边新会话。
     private var topRow: some View {
         HStack(spacing: 10) {
             filterMenu
@@ -55,57 +67,65 @@ struct AgentPage: View {
     }
 
     private var searchPrompt: String {
-        workspace.catalog?.project(filter).map { "搜 \($0.name) 的会话" } ?? "搜会话、目录、说过的话"
+        switch filter {
+        case .project(let id): workspace.catalog?.project(id).map { "搜 \($0.name) 的会话" } ?? Self.prompt
+        case .unfiled: "搜\(CaptureCopy.unfiled)的会话"
+        case nil: Self.prompt
+        }
     }
 
+    private static let prompt = "搜会话、目录、说过的话"
+
     private var filterMenu: some View {
-        let projects = model.filterable(in: workspace.catalog, current: filter)
-        let current = workspace.catalog?.project(filter)
+        let projects = model.filterable(in: workspace.catalog, current: filter?.id)
+        let current = workspace.catalog?.project(filter?.id)
         return Menu {
             Picker("按项目看", selection: $filter) {
-                Label("全部", icon: .all).tag(UUID?.none)
+                Label("全部", icon: .all).tag(PiSessionProject?.none)
                 ForEach(projects) { project in
-                    Label { Text(project.name) } icon: { ProjectGlyph(project: project) }.tag(Optional(project.id))
+                    Label { Text(project.name) } icon: { ProjectGlyph(project: project) }.tag(Optional(PiSessionProject.project(project.id)))
                 }
+                Label { Text(CaptureCopy.unfiled) } icon: { ProjectGlyph(project: nil) }.tag(Optional(PiSessionProject.unfiled))
             }
             .pickerStyle(.inline)
         } label: {
             HStack(spacing: 6) {
-                if let current { ProjectGlyph(project: current, size: 13) } else { Image(.filter) }
-                Text(current?.name ?? "全部").lineLimit(1)
+                switch filter {
+                case nil: Image(.filter)
+                case .unfiled: ProjectGlyph(project: nil, size: 13)
+                case .project: ProjectGlyph(project: current, size: 13)
+                }
+                Text(filter == .unfiled ? CaptureCopy.unfiled : current?.name ?? "全部").lineLimit(1)
             }
             .font(Typography.toolbarLabel).foregroundStyle(palette.ink2)
             .padding(.horizontal, 12).frame(height: 36)
             .glass(in: .capsule, interactive: true)
         }
         .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
-        .accessibilityLabel(current.map { "按项目看：\($0.name)" } ?? "按项目看")
+        .accessibilityLabel(filter == .unfiled ? "按项目看：\(CaptureCopy.unfiled)" : current.map { "按项目看：\($0.name)" } ?? "按项目看")
     }
 
     @ViewBuilder private func sessions(_ list: PiSessionList) -> some View {
-        let filtered = list.filter.project != nil
         if list.isEmpty {
-            empty.padding(.top, 60)
+            if !ConnectAgents.needed(services) { empty.padding(.top, 60) }
+        } else if list.filter.project == nil {
+            ForEach(list.groups) { group in
+                header(group)
+                cards {
+                    nowRows(group.now, in: list)
+                    ForEach(group.ended) { row($0, end: nil) }
+                }
+            }
         } else {
             if !list.now.isEmpty {
                 title("现在")
-                cards {
-                    ForEach(list.nowRows) { nowRow in
-                        switch nowRow {
-                        case .session(let item): row(item, filtered: filtered, end: list.ends[item.id])
-                        case .reload(let items):
-                            PiReloadFold(count: items.count, expanded: $model.reloadOpen, style: .page)
-                                .sessionCard()
-                            if model.reloadOpen { ForEach(items) { row($0, filtered: filtered, end: list.ends[$0.id]) } }
-                        }
-                    }
-                }
+                cards { nowRows(list.now, in: list) }
             }
             ForEach(Array(list.historyRuns.enumerated()), id: \.element.section) { index, run in
                 if index == 0 { title("历史") }
                 Text(run.section.title).font(Typography.label).foregroundStyle(palette.ink3)
                     .padding(.horizontal, 4).padding(.top, index == 0 ? 0 : 14).padding(.bottom, 6)
-                cards { ForEach(run.items) { row($0, filtered: filtered, end: nil) } }
+                cards { ForEach(run.items) { row($0, end: nil) } }
             }
             if model.hasMore {
                 // 滑到这里才读下一页
@@ -113,6 +133,45 @@ struct AgentPage: View {
                     .task(id: list.loaded) { model.loadMore() }
             }
         }
+    }
+
+    /// 在线的会话，两个以上需要 /reload 的合成一行（`PiNowRow`）。
+    @ViewBuilder private func nowRows(_ items: [PiSessionListItem], in list: PiSessionList) -> some View {
+        ForEach(PiNowRow.rows(items, state: \.state)) { nowRow in
+            switch nowRow {
+            case .session(let item): row(item, end: list.ends[item.id])
+            case .reload(let items):
+                PiReloadFold(count: items.count, expanded: $model.reloadOpen, style: .page)
+                    .sessionCard()
+                if model.reloadOpen { ForEach(items) { row($0, end: list.ends[$0.id]) } }
+            }
+        }
+    }
+
+    /// 一组的组头：项目图标与名字、几个在线；结束的还有没列出来的时，右边"全部 N 个"按这个项目筛。
+    private func header(_ group: PiSessionList.Group) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            ProjectGlyph(project: group.project, size: 14)
+            Text(group.project?.name ?? CaptureCopy.unfiled).font(Typography.sectionTitle).foregroundStyle(palette.ink).lineLimit(1)
+            if !group.now.isEmpty {
+                Text("\(group.now.count) 个在线").font(Typography.sectionCount).foregroundStyle(palette.ink3)
+            }
+            Spacer(minLength: 8)
+            if group.endedTotal > group.ended.count {
+                Button { filter = group.place } label: {
+                    HStack(spacing: 3) {
+                        Text("全部 \(group.endedTotal) 个")
+                        Image(.forward).font(Typography.meta.weight(.semibold)).accessibilityHidden(true)
+                    }
+                    .font(Typography.secondary).foregroundStyle(palette.ink2).contentShape(.rect)
+                }
+                .buttonStyle(PressStyle())
+                .help("只看\(group.project?.name ?? CaptureCopy.unfiled)的会话")
+            }
+        }
+        .padding(.horizontal, 4).padding(.top, 18).padding(.bottom, 8)
+        .accessibilityElement(children: .contain)
+        .accessibilityAddTraits(.isHeader)
     }
 
     private func title(_ text: String) -> some View {
@@ -127,10 +186,11 @@ struct AgentPage: View {
         LazyVStack(spacing: 8) { rows() }
     }
 
-    private func row(_ item: PiSessionListItem, filtered: Bool, end: Speech.Trip?) -> some View {
+    /// 所在不写在卡上：组头或筛选已经说了（未分类的写文件夹，`PiSessionRow.place`）。
+    private func row(_ item: PiSessionListItem, end: Speech.Trip?) -> some View {
         let session = item.state
         let endable = session.canEnd && end != .sending
-        return PiSessionRow(session: session, project: filtered ? nil : item.project, delivery: item.delivery, end: end, rename: item.rename, undelivered: item.undelivered(at: services.speech), style: .page).equatable()
+        return PiSessionRow(session: session, project: nil, delivery: item.delivery, end: end, rename: item.rename, undelivered: item.undelivered(at: services.speech), style: .page).equatable()
             .sessionLink(session.sessionID, press: .card)
             .contextMenu {
                 SessionMenu(session: session, rename: { model.renaming = session }, end: endable ? { model.confirmingEnd = session } : nil)
@@ -138,8 +198,8 @@ struct AgentPage: View {
     }
 
     @ViewBuilder private var empty: some View {
-        let project = filter.flatMap { workspace.catalog?.project($0) }
-        switch model.empty(filtering: project, hasFolder: filter.map(workspace.hasFolder) ?? true) {
+        let project = workspace.catalog?.project(filter?.id)
+        switch model.empty(filtering: project, hasFolder: filter?.id.map(workspace.hasFolder) ?? true) {
         case .noMatch(let query):
             EmptyState.noMatch(query)
         case .needsFolder(let project):
@@ -147,8 +207,46 @@ struct AgentPage: View {
                 ProjectFolderGuide(project: project, guide: workspace.folderGuide)
             }
         case .none(let inProject):
-            EmptyState(mascot: .empty, title: inProject ? "这个项目还没有 Agent 会话" : "还没有 Agent 会话",
+            EmptyState(mascot: .empty, title: filter == .unfiled ? "没有\(CaptureCopy.unfiled)的 Agent 会话" : inProject ? "这个项目还没有 Agent 会话" : "还没有 Agent 会话",
                        message: "在终端里开一个 Agent，或点右上角开新会话", waitsForSync: true) { EmptyView() }
+        }
+    }
+}
+
+/// 接入 Agent 的小卡：这台 Mac 检测到 Agent、一家都没接入、桥上也没有会话时才有（没接入时本机的会话在这一页看不到，列表空着时它就是如实的空态，不再叠吉祥物）。
+/// 一个图标、一句话说接入了双向能做什么，右边"接入"打开接入面板（`AgentSetupPanel`，检测到还没接入的几家，一键接入）；别的 Mac 上的会话照样列在下面。
+private struct ConnectAgents: View {
+    @Environment(Workspace.self) private var workspace
+    @Environment(AppServices.self) private var services
+    @Environment(\.palette) private var palette
+
+    /// 检测到 Agent、一家都没接入、桥上也没有会话。
+    static func needed(_ services: AppServices) -> Bool {
+        let agents = services.agents
+        return AgentKind.allCases.contains { agents.status($0) != nil } && !AgentKind.allCases.contains { agents.status($0)?.isConnected == true }
+            && services.pi.slots.isEmpty
+    }
+
+    var body: some View {
+        if Self.needed(services) {
+            HStack(alignment: .center, spacing: 12) {
+                Image(.extensionNote).font(.system(size: 15)).foregroundStyle(palette.ink2)
+                    .frame(width: 32, height: 32).background(palette.fill, in: .rect(cornerRadius: 9, style: .continuous))
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("接入 Agent").font(Typography.bodyStrong).foregroundStyle(palette.ink)
+                    Text("终端和桌面版里的会话与历史也看得到").font(Typography.secondary).foregroundStyle(palette.ink2)
+                }
+                Spacer(minLength: 8)
+                Button { workspace.showsAgentSetup = true } label: {
+                    Text("接入").font(Typography.secondary.weight(.semibold)).foregroundStyle(palette.onFill)
+                        .padding(.horizontal, 14).frame(height: 28)
+                        .background(palette.signatureFill, in: .capsule).contentShape(.capsule)
+                }
+                .buttonStyle(PressStyle())
+            }
+            .sessionCard()
+            .help("接入 Pi、Claude Code、Codex 或 OpenCode：在终端和桌面版里开的会话与历史也出现在这里，在 Mac 和手机上看进展、发话、回答提问。CuePad 往它的配置目录写技能（Claude Code、Codex 另写钩子），在设置里关掉即删除。")
         }
     }
 }

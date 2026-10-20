@@ -39,8 +39,6 @@ enum DebugHooks {
         /// 任务页做完列的"更早做完的"一开始就展开（`-CuePadShowsDone`）。
         var showsDone = false
         #if os(iOS)
-        /// 任务页一出现就弹出正文的编辑页（`-CuePadBrief`）。
-        var briefOpen = false
         /// 设置页通知那一行显示的状态（`-CuePadAlertStatus`；演示模式没有同步，真实状态出不来）。
         var alertStatus: PiAlertStatus?
         /// 搜索页一打开在哪个范围（`-CuePadSearchScope sessions`）。
@@ -109,10 +107,19 @@ enum DebugHooks {
         #endif
     }
 
-    /// 不请求通知权限：演示与脚本截图、录屏（`-CuePadDemo` 或给了 `CUEPAD_SHOT_READY`）里系统弹窗会盖住画面，没人去点。
+    /// 脚本起的实例（带就绪文件 `DebugScene.readyFile`：截图、录屏、交互验收、测量）；测试宿主不算。Mac 上当作有人在看（`CueViewing`）。
+    static var scripted: Bool {
+        #if DEBUG
+        DebugScene.readyFile != nil
+        #else
+        false
+        #endif
+    }
+
+    /// 不请求通知权限：演示与脚本起的实例（`-CuePadDemo` 或 `scripted`）里系统弹窗会盖住画面，没人去点。
     static var asksNotificationPermission: Bool {
         #if DEBUG
-        !DebugScene.defaults.bool(forKey: "CuePadDemo") && ProcessInfo.processInfo.environment["CUEPAD_SHOT_READY"] == nil
+        !DebugScene.defaults.bool(forKey: "CuePadDemo") && !scripted
         #else
         true
         #endif
@@ -198,13 +205,10 @@ enum DebugHooks {
     typealias MainWindowClass = MainShellWindow
     #endif
 
-    /// 脚本截图（给了 `CUEPAD_SHOT_READY`）：App 在后台跑，主窗口排在所有窗口最后——不抢前台和键盘，也不盖住正在用的窗口；
-    /// 按窗口截图截得到被挡住的窗口。
-    static var staysInBackground: Bool {
+    /// 退出前把借走的前台与指针还回去（`DebugForeground`）。
+    static func willTerminate() {
         #if DEBUG
-        ProcessInfo.processInfo.environment["CUEPAD_SHOT_READY"] != nil
-        #else
-        false
+        DebugForeground.giveBack()
         #endif
     }
 
@@ -224,9 +228,15 @@ enum DebugHooks {
         #endif
     }
 
-    /// 显示主窗口或设置窗口：平时到最前并接过键盘；脚本截图时排在最后（`staysInBackground`）。
-    static func present(_ window: NSWindow) {
-        if staysInBackground { window.orderBack(nil) } else { window.makeKeyAndOrderFront(nil) }
+    /// 显示窗口：到最前并接过键盘（`activating` 时连 App 一起到前台）。本机构建（DEBUG 条件，含 perf 的 Release）不管谁起的都在后台：
+    /// 窗口排在所有窗口最后，不抢前台和键盘、不盖住正在用的窗口，按窗口截图照样截得到；非占前台不可的只经 `DebugForeground` 借。
+    static func present(_ window: NSWindow, activating: Bool = false) {
+        #if DEBUG
+        window.orderBack(nil)
+        #else
+        if activating { NSApp.activate() }
+        window.makeKeyAndOrderFront(nil)
+        #endif
     }
 
     /// 隔离库下也发真实的系统通知、装提示音、设角标（`-CuePadNotifications YES`，见 `AlertCenter.delivers`）。

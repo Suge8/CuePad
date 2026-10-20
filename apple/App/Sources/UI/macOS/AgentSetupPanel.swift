@@ -14,7 +14,7 @@ extension Workspace {
     }
 }
 
-/// 接入 Agent：首次打开出现一次（`Workspace.offerAgentSetup`），侧栏的接入小卡也打开它；之后在设置里逐个开关。
+/// 接入 Agent：首次打开出现一次（`Workspace.offerAgentSetup`）；之后在设置里逐个开关。
 /// 列出这台 Mac 上检测到、还没接入的几家（`AgentIntegrations.connectable`），默认全选，"接入"一次装好选中的（同设置里打开开关）；
 /// 点"接入"就是同意，每家写什么写在它那一行。没装上的那一行写原因，全装上就收起。"以后再说"关掉就是不接。
 struct AgentSetupPanel: View {

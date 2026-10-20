@@ -3,7 +3,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 项目的"此刻"一行（书架大卡与行、iPad、Mac 侧栏共用）：每个项目只挑一件最该知道的事，按优先取第一个——
+/// 项目的"此刻"一行（书架大卡与行、iPad 侧栏共用）：每个项目只挑一件最该知道的事，按优先取第一个——
 /// 等你确认（它在问什么）→ 出错（原因）→ Agent 在跑（在做什么）→ 有新回复（回复第一句）→ 进行中的任务 → 项目介绍；都没有就没有。
 struct ProjectNowTests {
     let project = UUID()
@@ -96,7 +96,7 @@ struct ProjectNowSeenTests {
 }
 
 #if os(iOS)
-/// 项目的"此刻"（侧栏、iPhone 项目页）看得到发给已结束会话的话：发出后在唤醒、没能送达时，项目写的是它，不回落到任务或介绍。
+/// 项目的"此刻"（iPad 侧栏、iPhone 项目页）看得到发给已结束会话的话：发出后在唤醒、没能送达时，项目写的是它，不回落到任务或介绍。
 struct ProjectNowEndedSessionTests {
     let app = TestApp()
     var store: CueStore { app.services.store }
