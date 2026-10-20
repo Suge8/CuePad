@@ -18,9 +18,12 @@ extension DebugScene {
         case "collapsed": workspace.pages.sidebar = .detailOnly
         case "search": workspace.searching = true
         case "tasks":
-            // 任务面板：配 -CuePadDemo 时写入 Mac 同步来的演示会话，进行中的任务与步骤带会话状态（同 iOS 的 tasks）
-            if defaults.bool(forKey: "CuePadDemo") { await seedRemote(workspace.services) }
-            workspace.showsTasks = true
+            // 任务页：配 -CuePadDemo 时写入 Mac 同步来的演示会话与 Cue 的等你，在管的任务带会话状态（同 iOS 的 tasks）
+            if defaults.bool(forKey: "CuePadDemo") {
+                await seedRemote(workspace.services)
+                await seedCue(workspace.services)
+            }
+            workspace.show(.tasks)
         case "agentsetup": workspace.showsAgentSetup = true
         case "connected":
             await connectAgents(workspace.services)
@@ -128,7 +131,7 @@ extension DebugScene {
         try? await Task.sleep(for: delay)
         guard let message = try? await services.store.addCueMessage(.cue, text: "登录页修好了，要推送到 origin/main 吗？", ask: try? CueAsking(.push, action: "把登录页的修复推送到 origin/main")),
               let alerts = services.alerts else { return }
-        let content = CueAlert.content(name: try? await services.store.cueProfile()?.name, text: message.text, asking: message.asking, choices: message.choices)
+        let content = CueAlert.content(name: try? await services.store.cueProfile()?.name, text: message.text, asking: message.asking, choices: message.choices, looks: message.shots.map(\.look))
         await alerts.post(title: content.title, body: content.body)
     }
 

@@ -14,7 +14,7 @@ enum ScrollAnchor {
 /// - `-CuePadDemo YES`：库为空（只有默认项目）时写入演示数据；
 /// - `-CuePadSeed perf`（仅 Mac）：库为空（只有默认项目）时写入性能测量用的大资料库（`PerfLibrary`），配合 `-CuePadBench interact`；
 /// - `-CuePadProject <名称>`：打开该项目；
-/// - `-CuePadScene <画面>`：初始画面。Mac：collapsed、older、editor（-CuePadCard 那张散放的灵感进编辑页）、task（打开本项目第一条任务的气泡，没有落点、在上方居中；给了 `-CuePadTask <标题开头>` 是那一条）、search、tasks（任务面板；配 -CuePadDemo 时写入演示会话，进行中的带会话状态）、agentsetup（接入 Agent 的面板）、connected（几家 Agent 接进隔离目录、打开 Agent 页：看接入后的会话页与 + 的新会话里选 Agent；配 `-CuePadFolder <路径>` 再建一个绑着这个文件夹的项目，给隔离实例里真跑 Cue 派活用）、select（批量选择本页前三条灵感）、wallgap（配 -CuePadProject Flow：新记两条再删最早那条，看删卡后卡片墙的排布）、trash、archive、settings（拍真的设置窗口，主窗口收起；`-CuePadSettingsPane cue|general|agents` 翻到那一页）、menubar、cuebar（"对 Cue 说"的输入条）、projectform；
+/// - `-CuePadScene <画面>`：初始画面。Mac：collapsed、older、editor（-CuePadCard 那张散放的灵感进编辑页）、task（打开本项目第一条任务的气泡，没有落点、在上方居中；给了 `-CuePadTask <标题开头>` 是那一条）、search、tasks（任务页；配 -CuePadDemo 时写入演示会话与 Cue 的等你，在管的带会话状态）、agentsetup（接入 Agent 的面板）、connected（几家 Agent 接进隔离目录、打开 Agent 页：看接入后的会话页与 + 的新会话里选 Agent；配 `-CuePadFolder <路径>` 再建一个绑着这个文件夹的项目，给隔离实例里真跑 Cue 派活用）、select（批量选择本页前三条灵感）、wallgap（配 -CuePadProject Flow：新记两条再删最早那条，看删卡后卡片墙的排布）、trash、archive、settings（拍真的设置窗口，主窗口收起；`-CuePadSettingsPane cue|general|agents` 翻到那一页）、menubar、cuebar（"对 Cue 说"的输入条）、projectform；
 ///   cue 打开 Cue 页、cuememory 再打开"Cue 记得什么"、cuerun 再打开"运行情况"（仅 Mac；演示数据里 Cue 这时运行在这台，见 `DebugScene+Cue.swift`）；
 ///   agent 打开 Agent 整页列表，session 整页打开 `-CuePadSession <会话名>`（这两个画面配 `-CuePadDemo YES` 时写入 Mac 同步来的演示会话，见 `DebugScene+PiDemo.swift`；notes 里你的话带一张图、relay 里发出还没进对话的话带一张图，核对对话里的图片；长对话与追加中的对话见 `DebugScene+LongChat.swift`）；
 ///   iOS 见 `DebugScene+iOS.swift`；
@@ -47,15 +47,15 @@ enum ScrollAnchor {
 /// - `-CuePadAllKinds YES|<批数>`（配 `-CuePadDemo YES -CuePadScene session -CuePadSession scratch`）：scratch 会话里发每种类型各一份的交付物、一个 3D 模型与一张"下载中"，两份一批（`seedAllKinds`）；
 /// - `-CuePadTasksOpen YES`：项目页任务纸的"还有 N 条"与"已完成 M"一开始就展开；
 /// - `-CuePadHover <正文开头>`（仅 Mac）：那张灵感卡、那条任务、那条记忆或那一行（"更早"、任务气泡的步骤；回收站按名字）一出现就画成指针停着的样子（"设为任务"、亮起的"开始"、记忆行尾的钉住与忘掉、行的淡底）；
-/// - `-CuePadShowsDone YES`（仅 iOS）：任务页的"最近完成"默认展开并滚到底；
+/// - `-CuePadShowsDone YES`：任务页做完列的"更早做完的"一开始就展开；
 /// - `-CuePadExplain YES`（仅 iOS）：推入页顶栏有说明时（会话需要 /reload）直接弹出，核对点标题的说明；
 /// - `-CuePadCatalogFailure YES`：项目目录读取直接报错（重试也一样），核对读取失败画面；
 ///   `-CuePadCatalogFailure once`：每个窗口（含菜单栏面板）只有第一次读取报错，按"重试"后恢复，核对重试路径。
 /// - `-CuePadSync <noAccount|decide|failed|syncing|restricted|conflicts>`：装上报这个状态的同步替身，设置里 iCloud 同步与 Mac 工具栏的同步提示按它显示（`DebugScene+Sync.swift`）；
 ///   `-CuePadSync stalled`：装上同步永不返回的替身，核对下拉刷新的圈有时限；`-CuePadSync arrive`：启动后的第一次拉取分几页带回别的设备写下的 Cue 的话（`ArrivingSync`），核对"同步中"与对完一次滑上来；
 /// - `-CuePadSampleCrash YES`：存一份样例崩溃诊断（配 `-CuePadCrashSheet YES` 直接打开摘要）；
-/// - `-CuePadNotifications YES`：Mac 隔离库下也发真实的系统通知（规则见 docs/verify.md「通知（Mac）」），iOS 没有同步也请求通知权限；
-///   `-CuePadQuotaRemindIn <秒>`：写一份额度观测，Claude 的本周这么多秒后到提醒时刻（`remindQuotaIfAsked`，核对周额度提醒）；
+/// - `-CuePadNotifications YES`：Mac 隔离库下也发真实的系统通知（规则见 docs/verify.md「通知（Mac）」），两端都照常请求通知权限；
+///   `-CuePadQuotaRemindIn <秒>`（配 `-CuePadDemo YES` 与空库）：演示额度里 Claude 的本周这么多秒后到提醒时刻（`DemoLibrary.seedQuotas`，核对周额度提醒）；
 ///   `-CuePadSampleCue <秒>`（仅 Mac）：过这么久写一条 Cue 请你允许推送的消息，经 Cue 的通知出口发出（隔离库里 Cue 不值班，不会自己推）；
 /// 设置项可在参数域覆盖：`-theme dark`。
 enum DebugScene {
@@ -109,7 +109,6 @@ enum DebugScene {
             do { try await DemoLibrary.seed(store) } catch { workspace.fail(error) }
         }
         if defaults.bool(forKey: "CuePadDemo") { await seedMacAgents(workspace.services) }
-        await remindQuotaIfAsked(store)
         await presetSync(workspace.services)
         guard let name = defaults.string(forKey: "CuePadProject"),
               let project = try? await store.projects().first(where: { $0.name == name })
@@ -189,11 +188,11 @@ enum DebugScene {
         preset.cueFocus = defaults.bool(forKey: "CuePadCueFocus")
         preset.reducesMotion = defaults.bool(forKey: "CuePadReduceMotion")
         if defaults.bool(forKey: "CuePadTasksOpen") { preset.taskFold = TaskFold(showsAll: true, showsDone: true) }
+        preset.showsDone = defaults.bool(forKey: "CuePadShowsDone")
         #if os(macOS)
         preset.hovered = defaults.string(forKey: "CuePadHover")
         #endif
         #if os(iOS)
-        preset.showsDone = defaults.bool(forKey: "CuePadShowsDone")
         preset.alertStatus = alertStatus
         if defaults.string(forKey: "CuePadSearchScope") == "sessions" { preset.searchScope = .sessions }
         let panel = defaults.string(forKey: "CuePadCuePanel")
@@ -220,29 +219,6 @@ enum DebugScene {
             try? await Task.sleep(for: delay)
             work()
             pending -= 1
-        }
-    }
-
-    /// `-CuePadQuotaRemindIn <秒>`：写一份额度观测，Claude 的本周窗口这么多秒后到提醒时刻（`QuotaReminder`）；同一份里 Claude 的 5 小时
-    /// 一小时后重置（不是周窗口）、Codex 的本周 36 小时后重置（还远），都不该响。到点 20 秒后再观测到同一个本周窗口（多用了一些），不该再响。
-    private static func remindQuotaIfAsked(_ store: CueStore) async {
-        let remindIn = defaults.double(forKey: "CuePadQuotaRemindIn")
-        guard remindIn > 0 else { return }
-        let weekResets = Date.now.addingTimeInterval(QuotaReminder.lead + remindIn)
-        func observe(_ provider: String, _ windows: [QuotaWindow]) async {
-            _ = try? await store.recordQuota(QuotaReport(provider: provider, windows: windows, complete: true), host: "demo-mac")
-        }
-        func claude(used: Double) async {
-            await observe("anthropic", [
-                QuotaWindow(seconds: 5 * 3_600, used: 0.3, resetsAt: .now.addingTimeInterval(3_600)),
-                QuotaWindow(seconds: QuotaReminder.week, used: used, resetsAt: weekResets),
-            ])
-        }
-        await claude(used: 0.38)
-        await observe("openai-codex", [QuotaWindow(seconds: QuotaReminder.week, used: 0.2, resetsAt: .now.addingTimeInterval(36 * 3_600))])
-        Task {
-            try? await Task.sleep(for: .seconds(remindIn + 20))
-            await claude(used: 0.45)
         }
     }
 

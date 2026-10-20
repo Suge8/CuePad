@@ -338,19 +338,21 @@ struct CueQuestionLine: View {
 /// "等你"的选项：只有第一项"可以"是实底主按钮（全卡唯一的靛青）；第二项（"以后……不用问"）是无底色的文字按钮、宽按文字，在"可以"左边，
 /// 一行放不下（项目名长）或辅助功能字号时竖排在"可以"下面、居中。"等你"卡与全屏预览的底栏共用。
 /// 手机上"可以"伸满剩下的宽（只有它时占满一行）；Mac 上排在一行尾端，"可以"不窄过 `onceWidth`。
+/// `fills`：伸满给的宽（任务看板等你列那样窄的卡里两端都这样，竖排时文字按钮也折行，不撑宽卡片）。
 struct CueChoices: View {
     let options: [String]
     var disabled = false
+    var fills = Self.fillsByDefault
     let pick: (String) -> Void
     @Environment(\.dynamicTypeSize) private var typeSize
 
     #if os(macOS)
     static let onceWidth: CGFloat = 96
-    private static let fills = false
+    private static let fillsByDefault = false
     private static let stackGap: CGFloat = 4
     #else
     static let onceWidth: CGFloat = 88
-    private static let fills = true
+    private static let fillsByDefault = true
     /// 文字按钮自带可点的高，竖排时与"可以"不另留间距
     private static let stackGap: CGFloat = 0
     #endif
@@ -364,16 +366,16 @@ struct CueChoices: View {
             ForEach(others, id: \.self) { button($0, kind: .quiet) }
         }
         // Mac 上竖排也按字宽收着（"可以"与文字按钮同宽），不铺满整行
-        .fixedSize(horizontal: !Self.fills, vertical: false)
+        .fixedSize(horizontal: !fills, vertical: false)
         if others.isEmpty {
-            button(once, kind: .primary, fill: Self.fills, minWidth: Self.onceWidth)
+            button(once, kind: .primary, fill: fills, minWidth: Self.onceWidth)
         } else if typeSize.isAccessibilitySize {
             stacked
         } else {
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: 8) {
                     ForEach(others, id: \.self) { button($0, kind: .quiet).lineLimit(1).fixedSize() }
-                    button(once, kind: .primary, fill: Self.fills, minWidth: Self.onceWidth).lineLimit(1)
+                    button(once, kind: .primary, fill: fills, minWidth: Self.onceWidth).lineLimit(1)
                 }
                 stacked
             }

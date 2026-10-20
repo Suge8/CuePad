@@ -10,7 +10,7 @@ enum Help {
       cuepad task add 写发布说明          加任务
       cuepad task list                   看未完成任务
       cuepad task done <id>              完成任务
-      cuepad show a.html b.png           把文件发到用户手机上看（在 Agent 的命令里运行）
+      cuepad show a.png --title 改后首页 把文件发到用户手机上看，每个文件一句标题（在 Agent 的命令里运行）
 
     默认范围：在绑定了目录的项目里运行时，读写默认限定该项目；--project 名称指定，--all-projects 不限；新建的不在这样的目录里时进项目「默认」。
     全部命令：cuepad project --help、cuepad card --help、cuepad task --help、cuepad conflicts --help

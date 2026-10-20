@@ -12,7 +12,7 @@ extension View {
                 self.fullScreenCover(item: item) { content($0).environment(\.closePanel, close) }
             case .bubble(let anchor):
                 self.overlay { BubbleLayer(item: item.wrappedValue, anchor: anchor, close: close, content: content) }
-            case .sheet, .side:
+            case .sheet:
                 self.sheet(item: item) { content($0).environment(\.closePanel, close) }
             }
         }

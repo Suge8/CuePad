@@ -163,7 +163,6 @@ private struct SessionLink: ViewModifier {
         let opened = workspace.page == .session(sessionID)
         let button = Button {
             workspace.searching = false
-            workspace.showsTasks = false
             workspace.show(.session(sessionID))
         } label: {
             content.contentShape(.rect)

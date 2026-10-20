@@ -1,14 +1,14 @@
 import CueStore
 import SwiftUI
 
-/// 结果卡：挂着交付物的 Cue 的话（哪句挂哪几份只在 `CueThread.rows` 定）。一张纸，上面是那句话（Cue 做完时是"「X」做完了"与证据），
-/// 中间是交付物（`DeliverableStrip`），末行是这件活（点开任务）。自成一行，不进气泡：靠左、最宽与 Cue 的气泡同一栏比例，
-/// 字与气泡里的字、旁注的图标对齐（`CueBubble.padding`）；点一份放大到全屏，底栏是关于它对 Cue 说。
+/// 结果卡：Cue 做完时点名了图的那句话（哪句算结果卡只在 `CueThread.rows` 定）。一张纸，上面是那句话（"「X」做完了"与证据），
+/// 中间是 Cue 挑的那几张与各看什么（`CueShots`，同提问卡），末行是这件活（点开任务）。自成一行，不进气泡：靠左、最宽与 Cue 的气泡同一栏比例，
+/// 字与气泡里的字、旁注的图标对齐（`CueBubble.padding`）；点一张放大到全屏，左右翻的就是这几张，底栏是关于它对 Cue 说。
 /// 那句话的第一行是一句平常的话时（"「X」做完了"）单独加粗作标题，其余照 Markdown：一眼先读到做完了什么，再看证据。
 struct CueResultCard: View {
     let message: CueMessage
     let ref: CueTaskRef
-    let deliverables: [PiPreview]
+    let shots: [CueShown]
     let open: (PreviewOpening) -> Void
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -26,9 +26,7 @@ struct CueResultCard: View {
                     if !parts.body.isEmpty { MarkdownText(source: parts.body).equatable() }
                 }
                 .contextMenu { MessageActions(text: message.text, kind: .cue) }
-                DeliverableStrip(previews: deliverables, size: .result, group: message.id.uuidString, bleed: CueBubble.padding.leading) {
-                    open(PreviewOpening(preview: $0, batch: deliverables, group: message.id.uuidString, reply: .cue))
-                }
+                CueShots(shots: shots, group: message.id.uuidString, reply: .cue, open: open)
                 CueTaskLine(ref: ref)
             }
             .padding(CueBubble.padding)

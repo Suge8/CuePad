@@ -1,5 +1,5 @@
 extension SidebarOutline.Entry {
-    /// 点这一行去的页（Mac 上"任务"开合任务面板，不去这一页）。
+    /// 点这一行去的页。
     var route: Route {
         switch self {
         case .tasks: .tasks

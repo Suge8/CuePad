@@ -93,6 +93,8 @@ extension DebugScene {
             await seedCueRows(workspace.services)
             navigation.show(.agent)
         case "tasks":
+            // 看板的等你列：配 -CuePadDemo 时写入 Cue 的等你（会话在问的随演示 Mac 的会话来）
+            if defaults.bool(forKey: "CuePadDemo") { await seedCue(workspace.services) }
             navigation.show(.tasks)
         case "task":
             let store = workspace.services.store

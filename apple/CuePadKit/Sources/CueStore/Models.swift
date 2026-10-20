@@ -413,6 +413,8 @@ public enum CueStoreError: Error, Equatable {
   case previewTooLarge(String, limit: Int)
   /// 预览不支持这种文件（参数是扩展名，空为没有扩展名）。
   case previewUnsupported(String)
+  /// 发到手机的一份没有标题、标题不止一行或宽过 `limit`（参数是文件名）。
+  case previewTitle(String, limit: Int)
   /// 资料库文件只能读（多半是 Agent 的沙箱挡住了写入）。
   case readOnlyLibrary
   /// 手机上要开新会话，而一台 Mac 都还没打开过 CuePad（没写过 `macAgents`、也没有目录绑定）。
@@ -460,11 +462,11 @@ public enum CueStoreError: Error, Equatable {
   case notAChoice(String)
   /// 允许清单里有这类事（参数是只管的那个项目的名字；不分项目的为 nil）。
   case alreadyAllowed(String?)
-  /// 提问的动作或规矩短语缺了、超长或不止一行（`CueAsking`）。
+  /// Cue 写的短语（提问的动作、规矩，图看什么）缺了、超长或不止一行（`CueAsking`、`CueShot.checked`）。
   case askPhrase(field: String, hint: String, limit: Int)
-  /// 提问的图多于 `limit` 张或有重复（`CueAsking`）。
-  case askShots(limit: Int)
-  /// 提问点名的那一份不在发到手机的里（参数是 id）。
+  /// 点名的图多于 `limit` 张或有重复（`CueShot.checked`）。
+  case shots(limit: Int)
+  /// 点名的那一份不在发到手机的里（参数是 id）。
   case shotMissing(String)
   /// 规矩那一类不能放进允许清单。
   case cannotAllowRule
@@ -493,6 +495,8 @@ extension CueStoreError: LocalizedError {
     case .previewUnreadable(let path): "读不了这个文件（不存在、不是文件或没有权限）：\(path)"
     case .previewTooLarge(let path, let limit): "文件太大，单个不超过 \(limit / 1_000_000) MB：\(path)"
     case .previewUnsupported(let ext): "不支持预览\(ext.isEmpty ? "没有扩展名的文件" : " .\(ext) 文件")，可发：\(PiPreviewKind.supportedList)"
+    case .previewTitle(let name, let limit):
+      "\(name) 的标题要一句说清这份是什么、看哪里（一行、宽不过 \(limit)，约 \(limit / 2) 个汉字，用和用户对话的语言），如“深色：会话列表的分组标题”"
     case .readOnlyLibrary: "资料库是只读的，写不进去"
     case .noSession(let title): "「\(title)」还没有会话：先 start 开工，它的正文会作为第一句"
     case .alreadyStarted(let title): "「\(title)」已有会话：用 say 对它说话"
@@ -515,8 +519,8 @@ extension CueStoreError: LocalizedError {
     case .cueNotEnabled: "Cue 没有启用，不能派活：等用户在 CuePad 里重新启用"
     case .questionEnded: "这条提问已经结束了"
     case .notAChoice(let answer): "「\(answer)」不是这条提问的选项"
-    case .askPhrase(let field, let hint, let limit): "带 ask 要写 \(field)：\(hint)，一行、不超过 \(limit) 字"
-    case .askShots(let limit): "show 至多 \(limit) 张、不重复：只挑回答这个问题必须看的"
+    case .askPhrase(let field, let hint, let limit): "\(field)：\(hint)，一行、不超过 \(limit) 字"
+    case .shots(let limit): "show 至多 \(limit) 张、不重复：只挑回答问题必须看的、证明结论的最终成果"
     case .shotMissing(let id): "发到手机的里没有 \(id)：照 task peek 里列的 id 写"
     case .alreadyAllowed(let project): "这类事在允许清单里（\(project.map { "项目「\($0)」" } ?? "所有项目")不用问）：直接做，做完告诉他"
     case .cannotAllowRule: "规矩那一类不能放行：要他先问的就一直问"

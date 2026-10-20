@@ -133,7 +133,7 @@ extension DebugScene {
                     ```
 
                     要把改动**推送到 origin/main** 吗？推上去 CI 会自动部署到正式环境。
-                    """, ask: try CueAsking(.push, action: "把发言顺序的修复推送到 origin/main", shots: try await deployShots(store)), task: order?.id)
+                    """, ask: try CueAsking(.push, action: "把发言顺序的修复推送到 origin/main"), shots: try await deployShots(store), task: order?.id)
             // 第二张"等你"（答完第一张接着露出来）：还有几条在等的演示
             if !cueFlows, let billing = task("清理旧的计费脚本") {
                 _ = try await store.addCueMessage(
@@ -455,7 +455,7 @@ extension DebugScene {
     static func seedEvidence(_ store: CueStore, session: String, title: String) async {
         let file = FileManager.default.temporaryDirectory.appending(path: "cuepad-demo-\(session).png")
         try? swatchPNG().write(to: file)
-        _ = try? await store.addPreviews(filesAt: [file], title: title, sessionID: session)
+        _ = try? await store.addPreviews([(file, title)], sessionID: session)
     }
 
     /// 一张像截图的演示图：浅底上一列名单。

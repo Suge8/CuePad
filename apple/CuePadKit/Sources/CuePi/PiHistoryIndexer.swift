@@ -3,10 +3,9 @@ import CueStore
 import Foundation
 
 /// 后台索引一个 Agent 的会话目录（Pi、Claude Code、Codex 的会话文件，怎么认、怎么读见 `SessionFileFormat`）：先按修改时间倒序回填
-/// （最近的会话最先可用），发出 `backfillFinished` 后跟随文件变化，只读新增字节。FSEvents 盯整棵目录（别处写的会话文件、丢事件重扫）；
-/// 在线会话的文件（桥上的，`PiBridge.sessionFiles`）另用 kqueue 盯（`FSEventsWatcher.follow`），还没建出来的也盯着：
-/// 歇下要等这一轮的回答从文件里读到才算（`PiSessionState.answered`），fseventsd 负载高时晚到几分钟、Cue 就跟着几分钟不被叫醒，
-/// 开着写的文件（Codex 的常驻服务）更是只在关闭时报。
+/// （最近的会话最先可用），发出 `backfillFinished` 后只跟着在线会话的文件（桥上的，`PiBridge.sessionFiles`；`FileFollower` 当场报），
+/// 只读新增字节。会话从开始到结束都在桥上（三家各自的接入上报），下桥时最后读一次；整棵目录只在回填时列一次，没经接入的会话
+/// （如 Pi 关了扩展）下次启动时进历史。歇下要等这一轮的回答从文件里读到才算（`PiSessionState.answered`），读晚一步 Cue 就晚一步被叫醒。
 ///
 /// 不持有全部检查点：从哪接着读由调用方通过 `start` 提供（App 层从 Store 读），每个 `updated` 里带回新检查点由调用方持久化。
 /// 索引器只对最近修改/最近被触碰的若干文件在内存里保留，这样调用方持久化滞后时增量也不会退化成重读。
@@ -37,7 +36,7 @@ public struct PiHistoryIndexer: Sendable {
         self.start = start
     }
 
-    /// 结束（取消订阅）时停止后台任务。会话目录可以还不存在（先装 CuePad、后装 Agent）或被删再建，见 `FSEventsWatcher`。
+    /// 结束（取消订阅）时停止后台任务。会话目录可以还不存在（先装 CuePad、后装 Agent），见 `FileFollower`。
     /// `liveFiles` 是此刻在线会话的文件（各家的都行，不在这家会话目录里的不管），每次变了给一份。
     public func events(following liveFiles: some AsyncSequence<Set<URL>, Never> & Sendable) -> AsyncStream<PiHistoryEvent> {
         AsyncStream { continuation in
@@ -49,15 +48,15 @@ public struct PiHistoryIndexer: Sendable {
     @concurrent private func run(
         _ continuation: AsyncStream<PiHistoryEvent>.Continuation, following liveFiles: some AsyncSequence<Set<URL>, Never> & Sendable
     ) async {
-        // FSEvents 报告真实路径；统一用真实路径，回填与增量的文件 URL 才一致（目录还不存在时解析其上层）
+        // 统一用真实路径，回填列出的与桥给的文件 URL 才一致（目录还不存在时解析其上层）
         let root = self.root.realPath
-        let watcher = FSEventsWatcher(root: root) // 先开始监听：回填期间的变化不会丢
-        defer { watcher.stop() }
+        let follower = FileFollower() // 先开始盯：回填期间的写入不会丢
+        defer { follower.stop() }
         let following = Task { [format] in
             var last: Set<URL>?
             for await files in liveFiles where files != last {  // 会话的每次状态变化都会再给一份
                 last = files
-                watcher.follow(only: Set(files.map(\.realPath.path).filter { Self.isSessionFile($0, under: root, depth: format.depth) }))
+                follower.follow(only: Set(files.map(\.realPath.path).filter { Self.isSessionFile($0, under: root, depth: format.depth) }))
             }
         }
         defer { following.cancel() }
@@ -95,8 +94,7 @@ public struct PiHistoryIndexer: Sendable {
             continuation.yield(.updated(update))
         }
 
-        // 回填时记住最近修改的那批文件（正在被 Agent 写入的最可能是它们）：之后的事件（包括 FSEvents
-        // 对回填前写入的迟到通知）落到缓存上，不会重读也不会重复发出
+        // 回填时记住最近修改的那批文件（在线会话的就在其中）：之后盯到的写入落到缓存上，不会重读也不会重复发出
         let found = Self.sessionFiles(under: root, depth: format.depth)
         for (rank, file) in found.enumerated() {
             if Task.isCancelled { return }
@@ -104,18 +102,9 @@ public struct PiHistoryIndexer: Sendable {
         }
         continuation.yield(.backfillFinished(sessionFiles: found.map(\.url).filter { !excluded.contains($0) }))
 
-        for await paths in watcher.paths {
+        for await path in follower.paths {
             if Task.isCancelled { return }
-            if paths.contains(root.path) { // 丢事件：整体重扫
-                // 与回填一样只记住最近修改的那批：从新到旧全记住会让旧文件把新的挤出缓存
-                for (rank, file) in Self.sessionFiles(under: root, depth: format.depth).enumerated() {
-                    await index(file.url, modified: file.modified, size: file.size, remember: rank < Self.liveCacheLimit)
-                }
-                continue
-            }
-            for path in Set(paths) where Self.isSessionFile(path, under: root, depth: format.depth) {
-                await index(URL(filePath: path), modified: nil, remember: true)
-            }
+            await index(URL(filePath: path), modified: nil, remember: true)
         }
     }
 
