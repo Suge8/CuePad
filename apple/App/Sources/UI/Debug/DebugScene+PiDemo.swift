@@ -103,8 +103,8 @@ extension DebugScene {
         try? Self.review.write(to: report, atomically: true, encoding: .utf8)
         try? Self.screenshotPNG()?.write(to: shot)
         var created: [Date] = []
-        for (files, title) in [([page], "登录页 v2：可点的完整页面"), ([shot, report], "截图与评审结论")] {
-            if let added = try? await store.addPreviews(filesAt: files, title: title, sessionID: "notes") { created.append(added[0].preview.createdAt) }
+        for batch in [[(page, "登录页 v2：可点的完整页面")], [(shot, "手机截图：登录钮在键盘上方"), (report, "评审结论：还有三处要改")]] {
+            if let added = try? await store.addPreviews(batch.map { (url: $0.0, title: $0.1) }, sessionID: "notes") { created.append(added[0].preview.createdAt) }
         }
         // 对话围着预览的创建时间排：你的话在先，回答在后
         guard let first = created.first, let last = created.last else { return }

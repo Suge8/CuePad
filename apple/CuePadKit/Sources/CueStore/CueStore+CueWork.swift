@@ -491,19 +491,21 @@ extension CueStore {
 
   /// Cue 做完一件事：算不算做完由 Cue 按证据自己定，不请你确认。还有没完成的步骤抛 `stepsRemaining`、什么都不改；否则完成它，
   /// 结束没人再用的会话（`endUnusedSessions`，同你点圆圈 `toggleDone`，请求算 Cue 发起的）。顶层任务同时写一条给你的结果
-  /// （`CueReport.text`：标题加证据要点，关联任务）：做完告诉你；你不认可就把它改回没做完，或直接告诉 Cue。
+  /// （`CueReport.text`：标题加证据要点，关联任务）：做完告诉你；你不认可就把它改回没做完，或直接告诉 Cue。结果上只挂 Cue 点名的图（`shots`，
+  /// 证明结论的最终成果、`CueShot.checked` 过的），没点名就不挂；这件事发到手机的其余文件仍在它的会话里。点名的不在发到手机的里抛 `shotMissing`、什么都不改。
   /// 已完成的再做完一次只结束没人再用的会话（说话会恢复已结束的会话，答完就空着），状态与结果不再写。
   /// 证据的条数与长短由调用方（Cue 的工具）把关。返回这条结果（步骤与已完成的为 nil）与结束请求。
   @discardableResult
-  public func finishTask(_ task: UUID, evidence: [String]) throws -> (report: CueMessage?, ended: [DeliveryRequest]) {
+  public func finishTask(_ task: UUID, evidence: [String], shots: [CueShot] = []) throws -> (report: CueMessage?, ended: [DeliveryRequest]) {
     try write {
       try checkStepsDone(task)
+      try checkShots(shots)
       guard let card = try find(Card.self, task) else { throw CueStoreError.notFound }
       let finished = card.status != .done
       _ = try applyStatus(task, .done)
       let ended = try endUnusedSessions(of: task, cue: true)
       guard finished, card.parentID == nil else { return (nil, ended) }
-      return (try insertCueMessage(.cue, text: CueReport.text(task: card.heading, evidence: evidence), task: task), ended)
+      return (try insertCueMessage(.cue, text: CueReport.text(task: card.heading, evidence: evidence), shots: shots, task: task), ended)
     }
   }
 
@@ -962,7 +964,7 @@ extension CueStore {
 
   /// 一批顶层任务各自的交付物（唯一的规则）：任务与它的步骤用过的会话（正在用的与换下来的，`Card.formerSessionIDs`）
   /// 在任务开工（`Card.startedSQL`，没开始过按排进待办的时刻）之后发到手机的预览，从早到晚。开工前的不算：会话被另一件事接着用时，前一件的图不会算到这件上。
-  /// 不另记"哪些是交付物"：会话发到手机本来就是给人看的。Cue 页里一句话下面挂哪几份按话的先后再切（`CueThread`）。没有的任务不在结果里。
+  /// 不另记"哪些是交付物"：会话发到手机本来就是给人看的。Cue 在 peek 里看这份清单，做完时从中点名要挂在结果上的几张（`finishTask` 的 shots）。没有的任务不在结果里。
   public func deliverables(of tasks: [UUID]) throws -> [UUID: [PiPreview]] {
     guard !tasks.isEmpty else { return [:] }
     let rows = try db.query(
