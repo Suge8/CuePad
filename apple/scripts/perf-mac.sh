@@ -16,11 +16,10 @@ extra=("${@:3}")
 DERIVED="$(dirname "$(dirname "$(dirname "$APP")")")"
 LIBRARY="$DERIVED/library-perf"
 
-# 实例经 app.py exec（隔离、占住本检出那一份后 exec 成 CuePad）：后台调用时 $! 就是 CuePad。
-# 给 CUEPAD_SHOT_READY 算作脚本起的实例（DebugHooks.scripted）：在后台也当作有人在看 Cue 页，和前台量的做同样的事
+# 实例经 app.py exec（隔离、占住本检出那一份后 exec 成 CuePad）：后台调用时 $! 就是 CuePad
 launch() {
   local library="$1"; shift
-  CUEPAD_SHOT_READY="$DERIVED/perf-ready" exec python3 "$APPLE_DIR/scripts/app.py" exec "$APP" "$library" -- "$@"
+  exec python3 "$APPLE_DIR/scripts/app.py" exec "$APP" "$library" -- "$@"
 }
 
 # 第一次：写入大库并把大项目设为当前项目，写完结束；之后的运行才是冷启动
