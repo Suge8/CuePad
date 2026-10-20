@@ -36,16 +36,15 @@ enum Typography {
     /// 页内分组标题（资料、最近、更早、现在、历史）与它旁边的计数。
     static let sectionTitle = Font.system(size: 15, weight: .semibold)
     static let sectionCount = Font.system(size: 13).monospacedDigit()
-    /// 纸页里的标题（任务名）。
+    /// 面板顶上的大标题（接入 Agent）。
     static let heading = Font.system(size: 22, weight: .semibold)
     /// ⌘K 搜索框的输入与右侧预览的标题：浮层里最大的两行字。
     static let searchField = Font.system(size: 18)
     static let previewTitle = Font.system(size: 17, weight: .bold)
     /// 键帽（快捷键提示）。
     static let keycap = Font.system(size: 11, weight: .medium, design: .rounded)
-    /// 页标题（项目名、归档、回收站）与其下一句介绍。
+    /// 页标题（归档、回收站）。
     static let pageTitle = Font.system(size: 28, weight: .bold)
-    static let lead = Font.system(size: 16)
     /// 空态的标题。
     static let emptyTitle = Font.system(size: 17, weight: .semibold)
     /// 工具栏：按钮上的字（收起、项目切换），会话页的标题与其后的状态；标题下面还有一行（任务 · 步骤）时标题收小，两行放进一个控件的高度。
@@ -54,10 +53,14 @@ enum Typography {
     static let toolbarTitlePaired = Font.system(size: 13, weight: .semibold)
     static let toolbarSubtitle = Font.system(size: 12)
     static let toolbarPath = Font.system(size: 11)
-    /// 侧栏：行、行下的一句（项目的"此刻"）、分组标题。
+    /// 侧栏：行、分组标题。
     static let sidebarRow = Font.system(size: 14)
-    static let sidebarDetail = Font.system(size: 12)
     static let sidebarHeader = Font.system(size: 12, weight: .semibold)
+    /// 侧栏最上面的 Cue 名片：名字，与气泡里它最近说的话（比侧栏的行小半号：是引一句，不跟名字抢）。
+    static let cueCardName = Font.system(size: 18, weight: .semibold)
+    static let cueCardSaid = Font.system(size: 13.5)
+    /// 侧栏磁贴（任务、会话）右上的数。
+    static let sidebarTileCount = Font.system(size: 22, weight: .medium).monospacedDigit()
     /// 多行正文的行距：苹方的默认行高偏紧，加上这些约是 1.5 倍行高。
     static let lineSpacing: CGFloat = 4
     #else
@@ -75,7 +78,6 @@ enum Typography {
     static let inlineCode = Font.callout.monospaced()
     static let readingLineSpacing: CGFloat = 4
     static let title = Font.title3.weight(.semibold)
-    static let heading = Font.title3.weight(.semibold)
     static let emptyTitle = Font.title3.weight(.semibold)
     #endif
 }
@@ -92,9 +94,8 @@ enum Spacing {
     static let sectionTitle: CGFloat = 12
     /// 工具栏里自绘控件的高度：与系统工具栏的圆钮同高。
     static let toolbarControl: CGFloat = 36
-    /// 侧栏行高：单行与项目的两行（名称与"此刻"）。
+    /// 侧栏行高。
     static let sidebarRow: CGFloat = 32
-    static let sidebarProjectRow: CGFloat = 46
     /// 侧栏行首的图标列（项目图标、会话状态标在里面居中）。
     static let sidebarIcon: CGFloat = 20
 }

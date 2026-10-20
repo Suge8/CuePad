@@ -50,7 +50,7 @@ struct MainWindow: View {
         // 工具栏给条目画的玻璃底不随内容显隐（隐去时会留一个空圆钮），所以关掉它、由按钮自己画
         ToolbarItem(placement: .navigation) { CloseButton() }
             .sharedBackgroundVisibility(.hidden)
-        // 会话页与 Cue 页的标题（`SessionHeader`、`CueTitle`，居中）；右上的"⋯"（`PageMenuSlot`）是当前页的操作：项常驻、只换里面的内容。.principal 在详情区里居中，与对话的阅读栏同一条中线
+        // 会话页与 Cue 页（侧栏收起时）的标题（`SessionHeader`、`CueTitle`，居中）；右上的"⋯"（`PageMenuSlot`）是当前页的操作：项常驻、只换里面的内容。.principal 在详情区里居中，与对话的阅读栏同一条中线
         ToolbarItem(placement: .principal) { PageTitleSlot() }
             .sharedBackgroundVisibility(.hidden)
         ToolbarSpacer(.flexible)
@@ -83,7 +83,7 @@ private struct WindowPanels: View {
                 guard (try? await Task.sleep(for: Prewarm.delay)) != nil else { return }
                 mountsPalette = true
             }
-            .panel(item: $workspace.openTask) { TaskSheet(taskID: $0.id) }
+            .panel(item: $workspace.openTask, style: .bubble(anchor: workspace.openTask?.anchor)) { TaskBubble(request: $0) }
             .panel(item: $workspace.projectForm) { ProjectForm(project: $0.project) }
             .panel(isPresented: $workspace.showsAgentSetup) { AgentSetupPanel() }
     }
@@ -119,6 +119,11 @@ private struct CardPressMonitor: NSViewRepresentable {
             return true
         }
 
+        /// 窗口坐标（左下为原点）换成内容的坐标（左上为原点，内容铺满整窗）。
+        private func flipped(_ point: NSPoint) -> CGPoint {
+            CGPoint(x: point.x, y: (window?.contentView?.bounds.height ?? 0) - point.y)
+        }
+
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
             if let monitor { NSEvent.removeMonitor(monitor) }
@@ -128,6 +133,7 @@ private struct CardPressMonitor: NSViewRepresentable {
                 let handled = MainActor.assumeIsolated {
                     guard let self, event.window === self.window else { return false }
                     if event.type == .keyDown { return self.deleteHovered(event) }
+                    if event.type == .leftMouseDown { self.workspace.pressed(at: self.flipped(event.locationInWindow)) }
                     if !event.modifierFlags.contains(.control) { self.workspace.presses.mouse(down: event.type == .leftMouseDown) }
                     return false
                 }
@@ -229,7 +235,7 @@ private struct SwitcherSlot: View {
     }
 }
 
-/// 开合侧栏（`MacPages.toggleSidebar`，⌃⌘S 同）。收起时侧栏的 Cue 一行看不见了：不在 Cue 页、Cue 有等你或新消息时钮角上带点（`CueDot`）。
+/// 开合侧栏（`MacPages.toggleSidebar`，⌃⌘S 同）。收起时侧栏的 Cue 名片看不见了：不在 Cue 页、Cue 有等你或新消息时钮角上带点（`CueDot`）。
 private struct SidebarToggle: View {
     @Environment(Workspace.self) private var workspace
 

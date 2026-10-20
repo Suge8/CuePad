@@ -14,11 +14,11 @@ struct SharedPagesTests {
         let recorder = PiStateRecorder(store: store, hostID: "mac-a")
         for index in 0..<45 { try await recorder.update(sessionID: "e\(index)", state: .ended, title: "e\(index)") }
         let model = AgentListModel()
-        model.list = try await PiSessionList.read(text: model.query, historyLimit: model.limit, at: .always(), from: store)
+        model.list = try await PiSessionList.read(text: model.query, history: .paged(model.limit), at: .always(), from: store)
         #expect(model.list?.loaded == PiSessionList.pageSize && model.hasMore)
 
         model.loadMore()
-        model.list = try await PiSessionList.read(text: model.query, historyLimit: model.limit, at: .always(), from: store)
+        model.list = try await PiSessionList.read(text: model.query, history: .paged(model.limit), at: .always(), from: store)
         #expect(model.list?.loaded == 45 && !model.hasMore)
 
         model.query = "e1"

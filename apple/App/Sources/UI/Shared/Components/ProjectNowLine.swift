@@ -13,7 +13,7 @@ struct ProjectNowLine: View {
             Text(verbatim: " ").font(font).hidden()
             if let now {
                 HStack(spacing: 5) {
-                    if case .agent(let shown, let session) = now.source { PiStateDot(shown: shown, size: dot).relaySpot(session: session) }
+                    if case .agent(let shown, let session) = now.source { PiStateDot(shown: shown, size: dot).relaySpot(session: session, row: .project) }
                     Text(now.text).font(font).foregroundStyle(now.needsYou ? palette.ink : palette.ink2).lineLimit(1)
                 }
                 .id(now.text)

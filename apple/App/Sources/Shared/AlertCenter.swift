@@ -9,8 +9,8 @@ import UIKit
 /// 系统通知，两端一份：通知代理、通知权限、点开的通知去哪。点开时按种类路由（`AlertRoute`）：Agent 的打开那个会话（`pendingTap`，
 /// 界面取走），Cue 的打开 Cue 页（`AppServices.pendingDeepLink = .cue`）。进程只有一个，由 App 代理持有并在启动完成前设为代理，
 /// 冷启动时点开的通知才不会丢。
-/// 你在不在看只有一条规则：开着这条提示说的那一页（会话页、Cue 页）就不提示。别的设备替你做决定（Mac 置手机推送标志、Mac 发通知）
-/// 只认在线的 Mac 写下的（`CueStore.isWatched`）；手机自己前台收到推送时按本机此刻开着哪一页定。
+/// 提示到不到你只有一条规则（`CueStore.reaches`：该不该你接、你在不在哪台在线的 Mac 上开着那一页）；手机自己前台收到推送时
+/// 再按本机此刻开着哪一页定弹不弹。
 /// - iOS：通知都是 CloudKit 订阅在服务端生成的锁屏通知；这里另管远程通知注册，设置页据此显示一行状态（`PiAlertStatus`）。
 ///   前台收到的 Agent 通知不展示（前台的提示是 App 内横幅，`SessionAlertTracker`）；Cue 的在 Cue 页不在屏上时照常弹。
 /// - Mac：不收推送，通知都是这里发的本地通知（`post`）；你在哪台 Mac 上开着那一页时什么都不发，其余前台后台一样是系统通知。
@@ -150,8 +150,13 @@ nonisolated enum AlertRoute: Equatable {
         if case .session(let tap) = self { tap.sessionState } else { nil }
     }
 
-    /// 开着哪一页就不用再说它（`CueStore.isWatched`）。
-    var subject: AlertSubject { session.map(AlertSubject.session) ?? .cue }
+    /// 到不到你问 `CueStore.reaches` 时说的是什么。
+    var subject: AlertSubject {
+        switch self {
+        case .session(let tap): .session(tap.sessionState, tap.kind)
+        case .cue: .cue
+        }
+    }
 
     private static let subjectKey = "cuepad.alert", kindKey = "cuepad.alert.kind", recordKey = "cuepad.alert.record"
     private static let cueSubject = "cue", sessionSubject = "session"

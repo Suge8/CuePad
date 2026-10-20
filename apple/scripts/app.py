@@ -15,7 +15,8 @@
    5 秒不退再 KILL，连同它起的子进程（Cue 的 pi、cuepad mcp）一起结束。exec 起的 bench 由调用方按 PID 结束，锁随 CuePad 进程释放。
    看守或调用方自己被 KILL、来不及收时，实例发现父进程没了也会正常退出（DebugHooks.exitsWithParent）。
 4. 不靠固定等待：Debug 构建摆好画面后写就绪文件（CUEPAD_SHOT_READY，DebugScene.signalReady），这里用 kqueue 等它出现或 App 退出。
-   给了 CUEPAD_SHOT_READY 的 Mac 实例在后台跑、不抢前台（DebugHooks.staysInBackground）；不进程序坞是包里声明的（xc.sh 的 LSUIElement）。
+   这里起的实例都带它（exec 没给就用本检出那一份），App 据此认出是脚本起的（DebugHooks.scripted），测试宿主不带。
+   本机构建一律在后台跑、不抢前台（DebugHooks.present）；不进程序坞是包里声明的（xc.sh 的 LSUIElement）。
 5. Mac 截图、录屏按窗口拍（wincap.swift，尺寸对不上就失败）；启动参数没给窗口尺寸时用 WINDOW。
 iOS、iPadOS：模拟器里本就隔离，同一台上再 launch 就换掉旧的；状态栏固定成 9:41、满格满电，做完 terminate，run 留着。
 """
@@ -260,7 +261,9 @@ def exec_mac(app, library, args):
     os.set_inheritable(slot.fileno(), True)
     os.makedirs(SOCKETS, mode=0o700, exist_ok=True)
     exe = f"{app}/Contents/MacOS/CuePad"
-    os.execve(exe, [exe, *args], isolated_env(os.path.abspath(library)))
+    env = isolated_env(os.path.abspath(library))
+    env.setdefault("CUEPAD_SHOT_READY", READY)
+    os.execve(exe, [exe, *args], env)
 
 
 def stop():

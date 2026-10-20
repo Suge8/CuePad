@@ -32,7 +32,7 @@ public struct PiSessionQuery: Sendable, Equatable {
   public var scope: PiSessionScope
   /// 在会话名、文件夹名、最后的提问里找（不分大小写）；nil 或空白表示全部。
   public var text: String?
-  /// 只要归入这个项目的；nil 表示不限。
+  /// 只要归在这个项目的（`PiSessionListItem.home`）；nil 表示不限。
   public var project: UUID?
   /// 只要带这个认领标识的（新会话认领用，精确取一条）。
   public var launchToken: String?
@@ -72,6 +72,8 @@ public struct PiSessionListItem: Identifiable, Sendable, Equatable {
   /// 发给它、还没有回执或失败了的话（说话的方式，没被领取或失败、还没重发或移除的）：哪几句没能送达按说的话那条规则看此刻（`undelivered`）。
   public var unsettled: [DeliveryRequest]
   public var id: UUID { state.id }
+  /// 会话归在哪个项目（会话页按它分组、按它筛）：它的项目还在就是它，没有项目或项目已删的归默认项目。
+  public var home: UUID { project?.id ?? Project.defaultID }
 
   public init(
     state: PiSessionState, project: Project? = nil, delivery: DeliveryRequest? = nil, rename: DeliveryRequest? = nil,
@@ -232,7 +234,7 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
   public func waitsForCue(_ cue: CueDuty?) -> Bool { cue.map { !$0.leftToYou(self) } == true && answerableQuestion != nil }
 
   /// "等你"里会话那一半的唯一规则：在等回答且等的不是 Cue（`waitsForCue`），或 Cue 值班时把这次歇下留给了你回（会话行的"待回复"）。
-  /// "等你 N"、Dock 角标、"等你"的提示（Mac 的通知、手机的前台横幅与锁屏推送标志，`PiAlert.reaches`）都只认它。
+  /// "等你 N"、Dock 角标、"等你"的提示（Mac 的通知、手机的前台横幅与锁屏推送标志，`CueStore.reaches`）都只认它。
   public func asksYou(_ cue: CueDuty?) -> Bool {
     switch state.known {
     case .waitingForUser: !waitsForCue(cue)

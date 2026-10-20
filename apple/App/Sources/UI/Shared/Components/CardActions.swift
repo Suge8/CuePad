@@ -1,7 +1,7 @@
 import CueStore
 import SwiftUI
 
-/// 灵感与任务的菜单（长按 / Mac 右键，或任务页与纸页的"⋯"），iOS 与 Mac 共用：有哪几项、什么顺序只在 `CardMenu`，这里只画。
+/// 灵感与任务的菜单（长按 / Mac 右键，或任务气泡与纸页的"⋯"），iOS 与 Mac 共用：有哪几项、什么顺序只在 `CardMenu`，这里只画。
 struct CardActions: View {
     let card: Card
     /// "⋯"里的那一份（`CardMenu.more`）；false 是长按菜单。

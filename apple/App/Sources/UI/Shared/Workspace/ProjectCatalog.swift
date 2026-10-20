@@ -25,6 +25,9 @@ nonisolated struct ProjectCatalog: Equatable, Sendable {
         id.flatMap { id in projects.first { $0.id == id } }
     }
 
+    /// 会话归在哪个项目：它的项目还在就是它，没有项目或项目已删的归默认项目（同 `CueStore.piSessionGroups`）。
+    func home(ofSession projectID: UUID?) -> UUID { project(projectID)?.id ?? Project.defaultID }
+
     static func read(from store: isolated CueStore) throws -> ProjectCatalog {
         let summaries = try store.projectSummaries()
         return ProjectCatalog(

@@ -349,13 +349,13 @@ struct SessionTaskTests {
             return Dictionary(uniqueKeysWithValues: services.liveSessions.live.map { ($0.state.sessionID, workspace.shown($0).label) })
         }
         #expect(try await shown() == ["s1": "等 Cue 回答", "s2": "等你确认"])
-        #expect(try await CueWaiting.count(in: store) == 1)
+        #expect(try await store.cueTally().waiting.count == 1)
         let states = try await store.piSessions(sessionIDs: ["s1", "s2"])
         #expect(states["s1"] != nil && states["s1"]?.state.notify == nil)
         #expect(states["s2"]?.state.notify == .known(.waitingForUser))
 
         // mac-b 之后再没续期：期限（`MacPresence.lifetime`）一到"等你"自己从 1 变 2
-        var counts = store.observe({ try CueWaiting.count(in: $0) }).makeAsyncIterator()
+        var counts = store.observe({ try $0.cueTally().waiting.count }).makeAsyncIterator()
         #expect(try await counts.next() == 1)
         await clock.waitForSleeper()
         clock.advance(.seconds(MacPresence.lifetime))
@@ -368,11 +368,11 @@ struct SessionTaskTests {
         // mac-b 续上在线：又在值班
         try await store.recordMacPresence(host: "mac-b") { true }
         #expect(try await shown() == ["s1": "等 Cue 回答", "s2": "等你确认", "s3": "等 Cue 回答"])
-        #expect(try await CueWaiting.count(in: store) == 1)
+        #expect(try await store.cueTally().waiting.count == 1)
 
         try await store.updateCueProfile { $0.enabledAt = nil }
         #expect(try await shown() == ["s1": "等你确认", "s2": "等你确认", "s3": "等你确认"])
-        #expect(try await CueWaiting.count(in: store) == 3)
+        #expect(try await store.cueTally().waiting.count == 3)
     }
 
     @Test func 叶子开新会话又改绑_换下来的会话留在原叶子下() async throws {

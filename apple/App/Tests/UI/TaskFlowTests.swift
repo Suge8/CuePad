@@ -232,6 +232,35 @@ struct TaskFlowTests {
     }
 
     /// 任务页的"进行中"按最近开始排，只列顶层（步骤跟着上级）。
+    /// 在管与等你（Cue 那一行、看板中间两列同一份）：开工的顶层任务在管；Cue 问到它的步骤、它的会话在问你，它就从在管挪到等你，一处在等算一件；
+    /// 没落在任务上的提问也算等你；答完回到在管。
+    @Test func 在管与等你_问到哪件哪件挪到等你_答完回到在管() async throws {
+        let workspace = Workspace(services: rig.services)
+        let project = try await store.createProject(name: "圆桌", color: "#000000")
+        let release = try await store.createTask("发布 v1.4", in: project.id)
+        let step = try await store.createTask("推送到 TestFlight", under: release.id)
+        let canvas = try await store.createTask("画布缩放", in: project.id)
+        _ = try await store.createTask("登录回调", in: project.id)
+        try await store.setStatus(step.id, .inProgress)
+        try await store.setStatus(canvas.id, .inProgress)
+        func digest() async throws -> CueDigest { try await CueDigest.read(from: store) }
+        #expect(try await digest().tally.managing.map(\.id) == [canvas.id, release.id])
+
+        let push = try await store.addCueMessage(.cue, text: "要推送吗？", ask: try CueAsking(.push, action: "推送 v1.4"), task: step.id)
+        _ = try await store.addCueMessage(.cue, text: "要删旧脚本吗？", ask: try CueAsking(.delete, action: "删掉 scripts/legacy"))
+        try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "zoom", state: .thinking, title: "canvas-zoom")
+        try await store.bindSession("zoom", to: canvas.id)
+        try await PiStateRecorder(store: store, hostID: "mac-a")
+            .update(sessionID: "zoom", state: .waitingForUser, question: PiQuestion(promptID: "p", kind: .confirm, text: "改锚点？"))
+        var tally = try await digest().tally
+        #expect(tally.managing.isEmpty)
+        #expect(tally.waiting.map(\.task) == [release.id, nil, canvas.id])
+
+        try await workspace.answerCueQuestion(push, CueAsk.once)
+        tally = try await digest().tally
+        #expect(tally.managing.map(\.id) == [release.id] && tally.waiting.count == 2)
+    }
+
     @Test func 进行中按最近开始_只列顶层() async throws {
         let oldest = try await store.createTask("最早开始")
         try await store.setStatus(oldest.id, .inProgress)

@@ -5,12 +5,9 @@ import CueSync
 
 /// Mac 主窗口与提示：开着哪个会话页（`ViewerKeeper` 写下，提示据此定发不发）、点开的通知去哪。
 extension Workspace {
-    /// App 在前台、主窗口可见：此刻看得到内容区的这一页。
-    private var isInFront: Bool { NSApp.isActive && services.windowShell?.isVisible == true }
-
-    /// 此刻开着的会话页（这台 Mac 开着哪个会话，`ViewerKeeper`）。
+    /// 此刻开着的会话页（这台 Mac 开着哪个会话，`ViewerKeeper`）：内容区是会话页，人看得到主窗口（`AppServices.seesMainWindow`）。
     var openSession: ViewerKeeper.Page? {
-        guard isInFront, case .session(let route) = page else { return nil }
+        guard services.seesMainWindow, case .session(let route) = page else { return nil }
         return ViewerKeeper.Page(id: route.id, sessionID: route.sessionID)
     }
 

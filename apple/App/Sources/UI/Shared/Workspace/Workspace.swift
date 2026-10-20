@@ -55,9 +55,15 @@ final class Workspace {
     var openCard: UUID? {
         didSet { if let openCard { presses.present(openCard) } }
     }
-    /// 浮窗里看着的任务（`TaskSheet`）：盖在当前页上，不换页。
-    var openTask: TaskSheet.Request?
     #endif
+    /// 气泡里看着的任务（`TaskBubble`）：从被点的那一下长出来，盖在当前页上，不换页。两端同一份，各个入口都经 `openTask(_:)`。
+    var openTask: TaskBubble.Request? {
+        didSet { if openTask == nil, let oldValue { closedTask = (oldValue.task, .now) } }
+    }
+    /// 刚收起的气泡是哪件事、什么时候：按在它那一行上收起的（按下就关，松开时那一行又要打开它），这一下不再打开。
+    @ObservationIgnored private var closedTask: (task: UUID, at: ContinuousClock.Instant)?
+    /// 这个窗口里最近按下的那一下（窗口坐标与时刻；Mac 的鼠标、手机的手指，由窗口的按下监听报来）：任务气泡从这里长出来。
+    @ObservationIgnored private var press: (point: CGPoint, at: ContinuousClock.Instant)?
     #if os(macOS)
     /// 新建或编辑项目的表单（`ProjectForm`；侧栏与项目页的入口都经这里，主窗口弹出）。
     var projectForm: ProjectForm.Request?
@@ -128,29 +134,23 @@ final class Workspace {
     /// 此刻挂着的页：留着的加上当前页（首屏、目录纠正出来的页还没经过 `show`；会话页只在是当前页时在里面）。
     var mountedPages: [Route] { pages.kept.contains(page) ? pages.kept : pages.kept + [page] }
 
-    /// 这一条归档或删掉了：开着它的编辑页或任务浮窗收起。
-    private func closeIfOpen(_ id: UUID) {
-        if openCard == id { openCard = nil }
-        if openTask?.id == id { openTask = nil }
-    }
-
     /// 编辑页淡出结束。
     func finishClosingCard() {
         guard openCard == nil else { return }
         presses.dismiss()
     }
 
-    /// 打开一条灵感或任务：任务在浮窗里看（盖在当前页上，右上角的任务面板留着；步骤是它上级的浮窗、选中这一步）；
+    /// 打开一条灵感或任务：任务在气泡里看（`openTask`，右上角的任务面板留着）；
     /// 灵感（挂在任务下的资料也一样）进整页的编辑页。
     func open(_ card: Card) {
         presses.clearSelection()
-        if card.isTask { return openTask = card.parentID.map { .init(id: $0, step: card.id) } ?? .init(id: card.id) }
+        if card.isTask { return openTask(card) }
         openTask = nil
         showsTasks = false
         openCard = card.id
     }
 
-    /// 切到一页（侧栏点哪就是哪）；开着的编辑页与任务浮窗随之收起。没有历史，也没有上一层：Mac 的导航都在侧栏。
+    /// 切到一页（侧栏点哪就是哪）；开着的编辑页与任务气泡随之收起。没有历史，也没有上一层：Mac 的导航都在侧栏。
     func show(_ page: Route) {
         openCard = nil
         openTask = nil
@@ -319,13 +319,39 @@ final class Workspace {
         }
     }
 
+    /// 这一条归档或删掉了：开着它的编辑页或任务气泡收起。
+    private func closeIfOpen(_ id: UUID) {
+        #if os(macOS)
+        if openCard == id { openCard = nil }
+        #endif
+        if openTask?.task == id { openTask = nil }
+    }
+
+    /// 窗口里按下了一下（窗口坐标）。
+    func pressed(at point: CGPoint) { press = (point, .now) }
+
+    /// 打开一条任务的气泡（项目页与任务页的行、Cue 对话里的任务、⌘K、归档、小组件链接都经这里）：从刚按下的那一下长出来；
+    /// 不是刚点的（键盘、⌘K 里按 ↩、链接）就没有落点，气泡在窗口上方居中。步骤是它上级的气泡、翻到这一步；
+    /// 这件事的气泡已经开着时（气泡里点步骤、返回）原地翻页，不重新长一次。
+    func openTask(_ card: Card) {
+        let task = card.parentID ?? card.id, step = card.parentID == nil ? nil : card.id
+        if openTask?.task == task {
+            openTask?.step = step
+            return
+        }
+        if let closed = closedTask, closed.task == task, ContinuousClock.now - closed.at < Self.pressFresh { return closedTask = nil }
+        let anchor = press.flatMap { ContinuousClock.now - $0.at < Self.pressFresh ? $0.point : nil }
+        openTask = TaskBubble.Request(task: task, step: step, anchor: anchor)
+    }
+
+    /// 按下之后这么久之内打开的气泡算是这一下点开的（点按松开、读库的一跳都在里面；再久就不是这一下了）。
+    private static let pressFresh: Duration = .milliseconds(900)
+
     /// 归档（连同下级）：不占列表、仍可搜；提示里可撤销。
     func archive(_ id: UUID) async throws {
         let store = services.store
         try await store.archive(id)
-        #if os(macOS)
         closeIfOpen(id)
-        #endif
         say("已归档", action: .undo { try await store.unarchive(id) })
     }
 
@@ -334,8 +360,8 @@ final class Workspace {
 
     func trash(_ ids: [UUID]) async throws {
         let undo = try await services.store.trashing(ids)
-        #if os(macOS)
         ids.forEach(closeIfOpen)
+        #if os(macOS)
         // 卡从墙上拿走时收不到鼠标移出：不再算停在它上面（⌘⌫ 删的是鼠标停着的那张）
         ids.forEach { presses.hover($0, inside: false) }
         #endif

@@ -9,9 +9,9 @@ import SwiftUI
 /// 步骤（`step`）比上级小一档：字小一号、圈小一号，缩进到圈对着上级标题的起点（`TaskOutline.indentWidth`），层级靠对齐读出来，不靠线。
 /// 旁注的位置：iPhone 在行尾（屏窄，行尾就在眼前）；iPad 宽栏与 Mac 紧跟标题（放在行尾时宽窗口里离标题太远，一眼看不到）。
 /// `spelled`（手机任务页进行中的顶层叶子）："下一步"写成标题下的第二行，状态词或"开始"一直写出来（`TaskNextMark.spelled`）。
-/// 点圈完成（`TaskCheck`），点行的其余地方打开任务（手机推入任务页，Mac 弹出任务浮窗）。Mac 右键是 `CardActions`；
+/// 点圈完成（`TaskCheck`），点行的其余地方打开任务气泡（`Workspace.openTask`；气泡里的步骤行是翻到这一步）。Mac 右键是 `CardActions`；
 /// 手机长按直接拖动（`TaskOutline`），不挂长按菜单：系统长按菜单弹出后，把预览往下拉是收起菜单、拖不起来，
-/// 往下面的组或项目段拖就做不到。菜单那几项各有入口：完成点圈、删除轻扫、归档在任务页的"⋯"。
+/// 往下面的组或项目段拖就做不到。菜单那几项各有入口：完成点圈、删除轻扫、归档在任务气泡的"⋯"。
 /// Mac 上指针停在行上时铺行的淡底（`RowStyle`），"开始"与状态词这时才露出来（`TaskNextMark` 读 `rowHovered`）。
 struct TaskLine: View {
     let task: Card
@@ -115,13 +115,7 @@ struct TaskLine: View {
         if !done, let next { TaskNextMark(next: next, spelled: spelled).transition(.opacity) }
     }
 
-    private func open() {
-        #if os(macOS)
-        workspace.open(task)
-        #else
-        navigation.push(.card(task.id))
-        #endif
-    }
+    private func open() { workspace.openTask(task) }
 
     private func start(_ next: TaskNext?) {
         guard let next else { return }
@@ -202,7 +196,7 @@ struct TaskNextMark: View {
         HStack(spacing: 5) {
             switch next {
             case .agent(let shown, let session):
-                PiStateDot(shown: shown, size: Self.dot).relaySpot(session: session.sessionID)
+                PiStateDot(shown: shown, size: Self.dot).relaySpot(session: session.sessionID, row: .task)
                 if shown.needsYou || lit || spelled { Text(shown.label).foregroundStyle(shown.labelTint(palette)) }
             case .start:
                 Image(.start).font(Self.glyph)

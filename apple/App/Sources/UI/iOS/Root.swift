@@ -37,7 +37,10 @@ struct IOSRoot: View {
             }
             .sheet(item: $navigation.projectForm) { ProjectFormSheet(project: $0.project) }
             .sheet(item: Binding(get: { workspace.folderPicker }, set: { workspace.folderPicker = $0 })) { FolderPickerSheet(project: $0) }
+            // 任务气泡从手指落下的那一下长出来（`Workspace.openTask`）
+            .panel(item: $workspace.openTask, style: .bubble(anchor: workspace.openTask?.anchor)) { TaskBubble(request: $0) }
         }
+        .watchesTouches { [workspace] in workspace.pressed(at: $0) }
         // 这一层还没有导航栏：上安全区就是状态栏
         .measuresStatusBar()
         // 窄屏盖在整个窗口上；宽屏在右边那一栏里（`SplitRoot`）
@@ -57,10 +60,19 @@ struct IOSRoot: View {
         .task { await workspace.follow() }
         .modifier(SessionViewing(keeper: workspace.services.viewer, navigation: navigation))
         .onChange(of: workspace.services.pendingDeepLink, initial: true) {
-            if let link = workspace.services.consumeDeepLink() { navigation.open(link) }
+            if let link = workspace.services.consumeDeepLink() { open(link) }
         }
         .onChange(of: alerts.pendingTap, initial: true) { navigation.open(alert: alerts.consumeTap()) }
         .debugScene(workspace, navigation)
+    }
+
+    /// 小组件与分享扩展的链接：任务开它的气泡（没有落点，在上方居中），其余交给导航。
+    private func open(_ link: DeepLink) {
+        guard case .card(let id) = link else { return navigation.open(link) }
+        let store = workspace.services.store, workspace = workspace, navigation = navigation
+        workspace.attempt {
+            if let card = try await store.card(id), card.isTask { workspace.openTask(card) } else { navigation.open(link) }
+        }
     }
 
     private var scheme: ColorScheme? {

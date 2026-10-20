@@ -44,7 +44,8 @@ public struct CueMessage: Identifiable, Equatable, Sendable {
   public var ask: CueAsk? { asked?.ask.known }
   /// 提问问的是什么（`CueAsking.init(stored:)`）；不是提问，或是认不出类别、没有动作短语的提问为 nil。
   public var asking: CueAsking? { CueAsking(stored: ask, action: askAction, rule: askRule, shots: askShots) }
-  /// 要提示你（推到手机、Mac 发通知）：Cue 用 tell 标的急事，与你在等的——回答你那一轮的回复、出错，Cue 起不来（`CueKeeper`）。
+  /// 要提示你（推到手机、Mac 发通知）：Cue 用 tell 标的急事，与你在等的——回答你那一轮的回复或出错（这一轮还没提示过你时，`replyCueRound`），
+  /// Cue 起不来（`CueKeeper`）。
   public var urgent: Bool
   /// 关联的卡片。
   public var taskID: UUID?
@@ -344,7 +345,7 @@ public struct CueWoke: StoredJSON, Equatable, Sendable {
 
 /// Cue 把会话的这一次停下留给你回（`CueStore.leaveToYou`）：会话停在 `since` 起的那次停下（歇着或等回答）时成立，
 /// 谁再对它说话、它动起来（`stateSince` 变了）就自然作废，不用谁去清。只有一份：会话列表的"待回复"、等你确认与"等你 N"都经 `CueDuty` 读它。
-public struct CueLeft: StoredJSON, Equatable, Sendable {
+public struct CueLeft: StoredJSON, Hashable, Sendable {
   public var sessionID: String
   public var since: Date
 
@@ -543,7 +544,8 @@ public enum CueReport {
 }
 
 /// Cue 通知的文案（Mac 本机通知与手机锁屏通知同一条规则）：标题是 Cue 的名字（空的用 `CueProfile.defaultName`）；
-/// "等你"的正文是要你定什么、规矩那一类引的规矩（`CueAsking`）、要看的图各看什么，接选项，不露原话；其余（读不出 `CueAsking` 的提问也是）是那条消息的文字（去掉图片，至多 `bodyLimit` 字）。
+/// "等你"的正文是要你定什么、规矩那一类引的规矩（`CueAsking`）、要看的图各看什么，接选项，与卡片同源；其余（读不出 `CueAsking` 的提问也是）是 Cue 的原话
+/// （去掉图片，行内的 Markdown 记号只留字，至多 `bodyLimit` 字）。
 public enum CueAlert {
   public static let bodyLimit = 300
 
@@ -553,7 +555,9 @@ public enum CueAlert {
       let shots = asking.shots.isEmpty ? [] : ["看图：" + asking.shots.map(\.look).joined(separator: "；")]
       body = ([asking.question] + [asking.why].compactMap(\.self) + shots + [choices.joined(separator: " / ")]).joined(separator: "\n")
     } else {
-      body = CueFormat.plainText(text).trimmingCharacters(in: .whitespacesAndNewlines).clipped(bodyLimit)
+      let plain = CueFormat.plainText(text)
+      let words = (try? AttributedString(markdown: plain, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))).map { String($0.characters) }
+      body = (words ?? plain).trimmingCharacters(in: .whitespacesAndNewlines).clipped(bodyLimit)
     }
     let name = name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     return (name.isEmpty ? CueProfile.defaultName : name, body)

@@ -2,7 +2,8 @@
 import CueStore
 import SwiftUI
 
-/// 项目页：页头（名称、介绍、目录与计数）→ 任务 → 资料 → 工作集卡片墙 → 更早。
+/// 项目页：最上面一行次要字（介绍、目录与灵感条数，`ProjectLine`）→ 任务 → 资料 → 工作集卡片墙 → 更早。
+/// 不写项目名作大标题：侧栏开着时名字就在选中的那一行，收起时工具栏的切换胶囊写它（`ProjectSwitcher`）。
 struct ProjectPage: View {
     let projectID: UUID
     @Environment(Workspace.self) private var workspace
@@ -21,7 +22,7 @@ struct ProjectPage: View {
     /// 首次挂上时内容分几帧出（`Stage`）：一个回合里全建要几十毫秒；留着的页回来时已经在最后一段。
     @State private var stage = Stage.header
 
-    /// 页头先到，其余每帧一段，自上而下。
+    /// 最上面那行先到，其余每帧一段，自上而下。
     private enum Stage: Int, CaseIterable, Comparable {
         case header, focus, wall, older
         static func < (a: Self, b: Self) -> Bool { a.rawValue < b.rawValue }
@@ -78,13 +79,14 @@ struct ProjectPage: View {
         }
     }
 
-    /// 页头（名称、目录、计数）取自项目目录，切换项目的第一帧就是新项目；卡片与任务读到后在其下出现。
+    /// 最上面那行（介绍、目录、条数）取自项目目录，切换项目的第一帧就是新项目；卡片与任务读到后在其下出现。
     @ViewBuilder private var content: some View {
         let catalog = workspace.catalog
-        VStack(alignment: .leading, spacing: Spacing.section) {
-            ProjectHeader(
-                project: catalog?.project(projectID), directory: catalog?.directories[projectID], cardCount: catalog?.cardCounts[projectID] ?? 0)
-            if let data, let arrangement = board.arrangement, let shape { page(data, arrangement, shape) }
+        VStack(alignment: .leading, spacing: Spacing.sectionTitle) {
+            ProjectLine(project: catalog?.project(projectID), directory: catalog?.directories[projectID], cardCount: catalog?.cardCounts[projectID] ?? 0)
+            VStack(alignment: .leading, spacing: Spacing.section) {
+                if let data, let arrangement = board.arrangement, let shape { page(data, arrangement, shape) }
+            }
         }
         .padding(.horizontal, Spacing.page).padding(.top, Spacing.pageTop).padding(.bottom, 150)
     }
@@ -187,9 +189,9 @@ private struct PageShape: Equatable {
     }
 }
 
-/// 页头：名称与介绍，下面一行是项目在这台 Mac 上的文件夹（绑着的写路径，带"在访达中显示"；没绑的写开工时会建好的工作区，`Workspaces`）、
-/// "换文件夹…"与灵感数。
-private struct ProjectHeader: View {
+/// 项目页最上面的一行次要字：介绍（一行，截断时悬停看全文）· 项目在这台 Mac 上的文件夹（绑着的写路径，带"在访达中显示"；
+/// 没绑的写开工时会建好的工作区，`Workspaces`）与"换文件夹…" · 几条灵感。
+private struct ProjectLine: View {
     let project: Project?
     /// 这台 Mac 上绑着的文件夹；没绑为 nil。
     let directory: String?
@@ -199,42 +201,34 @@ private struct ProjectHeader: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 10) {
-                ProjectGlyph(project: project, size: 20)
-                Text(project?.name ?? "").font(Typography.pageTitle).foregroundStyle(palette.ink)
-            }
-            .contextMenu { if let project { ProjectActions(project: project) { workspace.projectForm = .init(project: project) } } }
-            // 介绍回答"这是什么项目"，属于页头，不占任务栏的一栏
+        HStack(spacing: 4) {
             if let intro = project?.intro {
-                Text(intro).font(Typography.lead).foregroundStyle(palette.ink2)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .textSelection(.enabled)
+                Text(intro).foregroundStyle(palette.ink2).lineLimit(1).truncationMode(.tail).help(intro).textSelection(.enabled)
+                Dot()
             }
-            if let project { folder(project) }
+            if let project { folder(project).layoutPriority(1) }
+            if cardCount > 0 {
+                Dot()
+                Text("\(cardCount) 条灵感").monospacedDigit().layoutPriority(1)
+            }
         }
-        // 不再放"记一条灵感"：底部的输入栏与 ⌘N 就是入口
+        .font(Typography.secondary).foregroundStyle(palette.ink3)
     }
 
     private func folder(_ project: Project) -> some View {
         let path = directory ?? services.workspaces.directory(for: project.name).path(percentEncoded: false)
         return HStack(spacing: 8) {
-            Label((path as NSString).abbreviatingWithTildeInPath, icon: .folder).textSelection(.enabled)
+            Label((path as NSString).abbreviatingWithTildeInPath, icon: .folder).lineLimit(1).truncationMode(.middle).textSelection(.enabled)
                 .help(directory == nil ? "第一次在这台 Mac 上开工时建好" : path)
             if let directory {
                 Button("在访达中显示") { NSWorkspace.shared.activateFileViewerSelecting([URL(filePath: directory, directoryHint: .isDirectory)]) }
                     .buttonStyle(ControlButtonStyle(kind: .secondary, compact: true))
             } else {
-                Text("开工时建好")
+                Text("开工时建好").lineLimit(1)
             }
             Button("换文件夹…") { workspace.chooseFolder(for: project) }
                 .buttonStyle(ControlButtonStyle(kind: .secondary, compact: true))
-            if cardCount > 0 {
-                Dot()
-                Text("\(cardCount) 条灵感").monospacedDigit()
-            }
         }
-        .font(Typography.meta).foregroundStyle(palette.ink3)
     }
 }
 

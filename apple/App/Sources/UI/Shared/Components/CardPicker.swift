@@ -152,11 +152,12 @@ struct CardRow: View {
     var project: Project??
     /// 命中的词（空格分隔），每个都标底色。
     var highlight = ""
-    /// 点一下选中这张卡（卡片选择）；nil 时点开卡片，长按是卡片操作。
+    /// 点一下选中这张卡（卡片选择）；nil 时点开卡片（任务是从这一行长出的气泡），长按是卡片操作。
     var pick: ((Card) -> Void)?
     @Environment(\.palette) private var palette
     #if os(iOS)
     @Environment(\.zoomNamespace) private var zoom
+    @Environment(Workspace.self) private var workspace
     #endif
     /// 任务圈与标题同高。
     private static let ring: CGFloat = 18
@@ -166,10 +167,16 @@ struct CardRow: View {
             Button { pick(entry.card) } label: { row }.buttonStyle(PressStyle(.card))
         } else {
             #if os(iOS)
-            NavigationLink(value: Route.card(entry.card.id)) { row }
-                .buttonStyle(PressStyle(.card))
-                .zoomSource(entry.card.id, in: zoom)
-                .contextMenu { CardActions(card: entry.card) }
+            if entry.card.isTask {
+                Button { workspace.openTask(entry.card) } label: { row }
+                    .buttonStyle(PressStyle(.card))
+                    .contextMenu { CardActions(card: entry.card) }
+            } else {
+                NavigationLink(value: Route.card(entry.card.id)) { row }
+                    .buttonStyle(PressStyle(.card))
+                    .zoomSource(entry.card.id, in: zoom)
+                    .contextMenu { CardActions(card: entry.card) }
+            }
             #endif
         }
     }

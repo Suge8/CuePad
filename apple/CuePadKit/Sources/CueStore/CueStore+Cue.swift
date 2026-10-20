@@ -27,7 +27,7 @@ extension CueStore {
   }
 
   /// 写一条对话（在写事务内调用）。`asking` 是提问问的什么，`project` 是它的范围；`at`：排在对话里的时刻，缺省是此刻（一轮的经过排在这一轮开始的时刻）。
-  /// 要提示你的（`CueMessage.alerts`）同时置手机推送标志，你正在 Mac 上开着 Cue 页时不置（`isWatched`）。
+  /// 要提示你的（`CueMessage.alerts`）同时置手机推送标志，到不到你只看 `reaches`。
   func insertCueMessage(
     _ author: CueAuthor, text: String, asking: CueAsking? = nil, in project: Project? = nil, urgent: Bool = false, task: UUID? = nil,
     tools: PiChatMessage.Tools? = nil, at time: Date? = nil
@@ -38,7 +38,7 @@ extension CueStore {
       asked: asking.map { CueAllow($0.ask, project: project?.id) }, askAction: asking?.action, askRule: asking?.rule, askShots: asking?.shots ?? [],
       urgent: urgent, taskID: task,
       answer: nil, answeredAt: nil, setAsideBy: nil, deliveredAt: nil, createdAt: time ?? now, modifiedAt: now, tools: tools, notify: false)
-    message.notify = try message.alerts && !isWatched(.cue)
+    message.notify = try message.alerts && reaches(.cue)
     try insert(message)
     try registerImages(in: text)
     return message
@@ -59,14 +59,15 @@ extension CueStore {
     }
   }
 
-  /// 一轮做完时它的回复（值班的管理器调）：不是在回答你的一轮（`answersYou` 为假）里已经对你说过话（tell、done 的结果），最后那句只是复述，不写。
-  /// 回答你的一轮的回复要提示你（`urgent`）：你说完多半就离开了，在等它。
+  /// 一轮写给你的话（值班的管理器调）：做完时的回复，或回答你的一轮出错。不是在回答你的一轮（`answersYou` 为假）里已经对你说过话
+  /// （tell、done 的结果），最后那句只是复述，不写。回答你的一轮要提示你（`urgent`：你说完多半就离开了，在等它），一轮只响一次：
+  /// 这一轮已经提示过你（提问卡、急事、出错）就不再提示。
   public func replyCueRound(startedAt: Date, reply: String, as author: CueAuthor, answersYou: Bool) throws {
     guard !reply.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
     try write {
-      let told = try db.first("SELECT 1 FROM cueMessages WHERE author = 'cue' AND createdAt >= ? LIMIT 1", [startedAt]) { _ in true } ?? false
-      guard answersYou || !told else { return }
-      _ = try insertCueMessage(author, text: reply, urgent: answersYou)
+      let said = try select(CueMessage.self, where: "author = 'cue' AND createdAt >= ?", [startedAt])
+      guard answersYou || said.isEmpty else { return }
+      _ = try insertCueMessage(author, text: reply, urgent: answersYou && !said.contains(where: \.alerts))
     }
   }
 

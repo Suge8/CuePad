@@ -24,7 +24,7 @@ struct SessionGroup: Equatable {
     }
 }
 
-/// ⌘K 搜什么：卡片或 Agent 会话。每次打开 ⌘K 从卡片开始；侧栏"全部 N 个"直接进会话。
+/// ⌘K 搜什么：卡片或 Agent 会话。每次打开 ⌘K 从卡片开始。
 enum SearchScope: Hashable {
     case cards, sessions
 }

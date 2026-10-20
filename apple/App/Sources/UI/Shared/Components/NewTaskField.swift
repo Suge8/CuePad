@@ -1,8 +1,7 @@
-#if os(macOS)
 import CueStore
 import SwiftUI
 
-/// 一行新建任务：↩ 添加，保持焦点以便连续输入。`parent` 给了时建成它的一个步骤（任务浮窗里）；`choosesProject` 时右边可换落到哪个项目（任务面板跨项目）。
+/// 一行新建任务：↩ 添加，保持焦点以便连续输入。`parent` 给了时建成它的一个步骤（任务气泡里）；`choosesProject` 时右边可换落到哪个项目（Mac 任务面板跨项目）。
 struct NewTaskField: View {
     let project: UUID?
     var parent: UUID?
@@ -22,12 +21,14 @@ struct NewTaskField: View {
     var body: some View {
         HStack(spacing: TaskMetrics.columnGap) {
             // 入口不用系统占位灰：那样看起来像不能点
-            Image(.add).font(.system(size: 12, weight: .semibold)).foregroundStyle(palette.ink2).accessibilityHidden(true)
+            Image(.add).font(Self.glyph).foregroundStyle(palette.ink2).accessibilityHidden(true)
                 .frame(width: TaskMetrics.ringColumn)
-            TextField(prompt, text: $text, palette: palette).textFieldStyle(.plain).font(Typography.body)
+            TextField(prompt, text: $text, palette: palette).textFieldStyle(.plain).font(parent == nil ? Typography.body : TaskMetrics.stepFont)
+                .submitLabel(.done)
                 .accessibilityLabel(prompt)
                 .focused($focused)
                 .onSubmit(add)
+            #if os(macOS)
             if choosesProject, let projects = workspace.catalog?.projects, !projects.isEmpty {
                 Menu {
                     ForEach(projects) { item in Button(item.name) { chosen = item.id } }
@@ -45,10 +46,17 @@ struct NewTaskField: View {
                 .menuStyle(.button).buttonStyle(PressStyle()).menuIndicator(.hidden).fixedSize()
                 .accessibilityLabel("挂到 \(projects.first { $0.id == target }?.name ?? "")")
             }
+            #endif
         }
         .frame(minHeight: TaskMetrics.rowHeight)
         .onAppear { focused = autofocus }
     }
+
+    #if os(macOS)
+    private static let glyph = Font.system(size: 12, weight: .semibold)
+    #else
+    private static let glyph = Font.footnote.weight(.semibold)
+    #endif
 
     private func add() {
         let content = text.trimmingCharacters(in: .whitespaces)
@@ -64,4 +72,3 @@ struct NewTaskField: View {
     }
 }
 
-#endif

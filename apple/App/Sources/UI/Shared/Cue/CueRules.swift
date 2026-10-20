@@ -89,7 +89,7 @@ nonisolated enum CueMood: String, Sendable {
     }
 }
 
-/// Cue 的一页摘要：名字、"等你 N"、它最近一句、你最近一句交没交出去、它此刻在做什么。三端侧栏的 Cue 一行、菜单栏面板、小组件都读它（一份规则）。
+/// Cue 的一页摘要：名字、在管与等你、它最近一句、你最近一句交没交出去、它此刻在做什么。三端侧栏的 Cue 一行、菜单栏面板、小组件都读它（一份规则）。
 nonisolated struct CueDigest: Equatable, Sendable {
     var name: String
     /// 启用了（`CueProfile.activeHost` 有值）。
@@ -97,8 +97,12 @@ nonisolated struct CueDigest: Equatable, Sendable {
     /// 它运行（或停用前运行）的那台 Mac 与它的名字（`MacAgents.shownName`）。
     var hostID: String?
     var hostName: String?
-    /// "等你 N"（`CueWaiting.count`）。
-    var waiting: Int
+    /// 在管与等你（`CueStore.cueTally`）。
+    var tally: CueTally
+    /// "等你 N"。
+    var waiting: Int { tally.waiting.count }
+    /// "在管 N"。
+    var managing: Int { tally.managing.count }
     /// 新消息有几条（`CueStore.cueUnread`）。
     var unread: Int
     /// Cue 最近对你说的那条的摘要行（`CueMessage.headline`）。
@@ -114,7 +118,7 @@ nonisolated struct CueDigest: Equatable, Sendable {
     var state: CueState?
 
     static let empty = CueDigest(
-        name: CueProfile.defaultName, enabled: false, hostID: nil, hostName: nil, waiting: 0, unread: 0, lastSaid: nil, lastSaidDone: false, hostOnline: false,
+        name: CueProfile.defaultName, enabled: false, hostID: nil, hostName: nil, tally: .empty, unread: 0, lastSaid: nil, lastSaidDone: false, hostOnline: false,
         lastYou: nil, state: nil)
 
     struct LastYou: Equatable, Sendable {
@@ -132,7 +136,7 @@ nonisolated struct CueDigest: Equatable, Sendable {
             enabled: profile?.activeHost != nil,
             hostID: profile?.hostID,
             hostName: try profile?.hostID.map { try store.macAgents(on: $0).shownName },
-            waiting: try CueWaiting.count(in: store),
+            tally: try store.cueTally(),
             unread: try store.cueUnread().count,
             lastSaid: said?.headline,
             lastSaidDone: saidTask?.status == .done,
@@ -151,8 +155,9 @@ nonisolated extension CueMessage {
 }
 
 /// 一次接力（`CueWatch.flight`，`CueRelayStage` 画）：叫醒是会话 → Cue（事实是 `CueState.woke`），交给是 Cue → 会话（事实是 Cue 写的投送请求），
-/// 都不另存。两种的时刻都是 Cue 那台 Mac 的时钟，在同一条时间线上比新旧。
-/// 交给只飞把话或活交到会话手里的几种（`relayModes`）：说话、答它在等的问题、开新会话。
+/// 都不另存。时刻在同一条时间线上比新旧：叫醒与说话是 Cue 那台 Mac 的时钟，开新会话是开出它的那台（多数就是 Cue 那台）。
+/// 交给只飞把话或活交到会话手里的几种：说话、答它在等的问题（`spoken`，写下请求的时刻），开新会话（开出的会话有了记录的时刻，`CueStore.cueLaunches`：
+/// 写下请求时会话还不在，等它出现才飞到它那一行）。
 /// 不飞的：停下与结束是把活收回来，结束还常在做完一件事时一次结束好几个（`endUnusedSessions`），一片光讲不清；
 /// 换模型与思考强度（config）总跟在一句话前面，那句话飞就够了。
 nonisolated struct CueFlight: Equatable, Sendable {
@@ -169,21 +174,20 @@ nonisolated struct CueFlight: Equatable, Sendable {
     /// 接力的那几个会话，最新的在前。
     let ends: [RelayEnd]
 
-    static let relayModes: Set<DeliveryMode> = [.send, .answer, .start]
+    private static let spoken: Set<DeliveryMode> = [.send, .answer]
 
-    /// 一条交给：写下的时刻与交给了谁。
+    /// 一条交给：发生的时刻与交给了谁。
     struct Handed: Equatable, Sendable {
         let at: Date
         let end: RelayEnd
 
-        init?(_ request: DeliveryRequest) {
-            let session = request.target.kind == .known(.piSession) ? request.target.ref : nil
-            guard session != nil || request.cardID != nil else { return nil }
-            at = request.createdAt
-            end = RelayEnd(session: session, task: request.cardID)
+        static func read(from store: isolated CueStore) throws -> [Handed] {
+            let said = try store.cueRequests(spoken).compactMap { request in
+                request.target.ref.map { Handed(at: request.createdAt, end: RelayEnd(session: $0, task: request.cardID)) }
+            }
+            let opened = try store.cueLaunches().map { Handed(at: $0.at, end: RelayEnd(session: $0.session, task: $0.card, opens: true)) }
+            return said + opened
         }
-
-        static func read(from store: isolated CueStore) throws -> [Handed] { try store.cueRequests(relayModes).compactMap(Handed.init) }
     }
 }
 
@@ -195,11 +199,3 @@ nonisolated extension CueSnapshot {
     }
 }
 
-/// "等你 N" 只有一处算：Cue 带选项问你、还没结束的（`cueMessagesWaitingForYou`），加上会话里在等你回答的
-/// （`PiSessionState.asksYou`：Cue 在值班时等它回答的由它去答或转问你，不重复算；它运行的那台 Mac 不在线就不算值班，回到等你）。这个数只挂在 Cue 上（三端侧栏的 Cue 一行、Dock 角标）：
-/// Cue 是总控，一处说清"有几件在等你"；会话那一份不在 Agent 入口上另挂一个数，免得同一件事报两遍。
-nonisolated enum CueWaiting {
-    static func count(in store: isolated CueStore) throws -> Int {
-        try store.cueMessagesWaitingForYou().count + store.sessionsAskingYou()
-    }
-}
