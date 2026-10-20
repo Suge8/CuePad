@@ -38,6 +38,13 @@ final class ClaudeStream {
     /// 输出读完了（进程退出）：之后的请求不再等
     var isClosed: Bool { replies.isClosed }
 
+    /// 它开始请求模型（`system/status` 的 `requesting`）：主会话的一轮从这里算起，到 `result` 止。不从 `system/init` 算：
+    /// 子代理经 SubagentHandback 交回时同一份结果排进两条，第二条只空跑一轮（`init` 后直接 `result`，`num_turns` 为 0），
+    /// 算上就歇下两次（2.1.299 实测，auto 模式下子代理才走这条路）。
+    static func requestsModel(_ message: JSONValue) -> Bool {
+        message["type"]?.string == "system" && message["subtype"]?.string == "status" && message["status"]?.string == "requesting"
+    }
+
     /// 一条用户消息的内容：文字在前、图片块在后（空文字不带）。
     static func content(text: String, images: [PiImage]) -> JSONValue {
         var content: [JSONValue] = text.isEmpty ? [] : [["type": "text", "text": .string(text)]]

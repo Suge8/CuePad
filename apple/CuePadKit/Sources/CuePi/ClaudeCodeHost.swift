@@ -6,11 +6,14 @@ import Foundation
 /// CuePad 在后台托管的一个 Claude Code 会话：`claude` 以 stream-json 收发（与 Agent SDK 同一套线协议），没有终端界面，
 /// CuePad 掌握它的全部输入输出——发话（带图）、斜杠命令、停止、换模型与强度、改名、作答、结束都能做。
 ///
-/// - 状态来自它的输出：一轮从 `system/init` 起到 `result` 止，其间看模型回答里的工具调用与 `can_use_tool`；在飞的工作见 `ClaudeHostedTasks`；
+/// - 状态来自它的输出：一轮从它开始请求模型（`ClaudeStream.requestsModel`）起到 `result` 止，其间看模型回答里的工具调用与 `can_use_tool`；在飞的工作见 `ClaudeHostedTasks`；
 ///   正在说的话（`PiDraft`）由 `ClaudeStream` 得出（增量累积、块说完换成定稿），这里交给桥；
 ///   它自己也会跑用户装的钩子（`ClaudeCodeRuntime` 按进程认出来直接放行，不重复登记）。
 /// - 发话与斜杠命令：歇着就直接开始；在跑就先停下这一轮（`interrupt` 控制请求，连同在跑的工具），等它收尾（`result`）再送进去开新一轮，
 ///   被停下的那一轮不算歇下。不用 `priority: "now"`：前台工具跑着时它不中止，等工具跑完并进这一轮（实测 2.1.299，各权限模式）。
+/// - 权限模式固定 auto（与终端里 Claude Code 的内置默认一致）：读、工作目录里的改动直接做，其余由它的分类器放行或拦下（拦下的告诉模型原因，不问人）；
+///   仍要人点头的（用户的 ask 规则、连续被拦到阈值、auto 用不了时整场退回 Manual）经 `can_use_tool` 成为 CuePad 里的确认。
+///   用户的 allow / deny / ask 规则照旧生效，所以不另设模式开关。
 /// - 退出靠关标准输入（读到 EOF 正常收尾）；结束、空闲满时限、让出（桥决定）都这样退，后两者不算结束。
 @MainActor
 final class ClaudeHostedSession: SessionLink {
@@ -48,7 +51,7 @@ final class ClaudeHostedSession: SessionLink {
         self.sessionID = sessionID
         self.bridge = bridge
         stream = try ClaudeStream(
-            executable: executable, arguments: ["--permission-prompt-tool", "stdio", "--permission-mode", "default"] + arguments,
+            executable: executable, arguments: ["--permission-prompt-tool", "stdio", "--permission-mode", "auto"] + arguments,
             directory: directory, environment: environment)
         stream.onMessage = { [weak self] in self?.received($0) }
         stream.onDraft = { [weak self] draft in
@@ -166,7 +169,6 @@ final class ClaudeHostedSession: SessionLink {
     private func system(_ message: JSONValue, at now: Date) {
         switch message["subtype"]?.string {
         case "init":
-            beginTurn()
             started()
             if let model = message["model"]?.string, let id {
                 bridge?.update(id) { session in session.model = self.option(model, current: session.model, in: session.availableModels) }
@@ -175,6 +177,7 @@ final class ClaudeHostedSession: SessionLink {
             tasks.list(message["tasks"]?.array ?? [])
             facts.inFlight = tasks.inFlight
         case "status":
+            if ClaudeStream.requestsModel(message) { beginTurn() }
             facts.compacting = message["status"]?.string == "compacting"
         case "session_title_changed":
             if let title = message["title"]?.string, let id { bridge?.update(id) { $0.name = title } }
@@ -201,8 +204,8 @@ final class ClaudeHostedSession: SessionLink {
         }
     }
 
-    /// 主会话开始一轮（已在跑的不算新的一轮：发出话、后台任务落定时先算开始，随后的 `system/init` 是同一轮）。
-    /// 开始时刻是此刻：发出话的那一刻、收到开它的 `task_notification` 或 `system/init` 的那一刻，都早于这一轮的回答。
+    /// 主会话开始一轮（已在跑的不算新的一轮：发出话、后台任务落定时先算开始，随后它请求模型是同一轮）。
+    /// 开始时刻是此刻：发出话的那一刻、收到开它的 `task_notification` 或它开始请求模型的那一刻，都早于这一轮的回答。
     private func beginTurn() {
         if !facts.running { facts.startTurn(at: .now) }
     }
@@ -227,8 +230,6 @@ final class ClaudeHostedSession: SessionLink {
         if let id { bridge?.detach(id, reason: .closed(reason: "quit")) }
     }
 
-    private var busy: Bool { facts.running }
-
     /// 送进一句话：在跑就先停下这一轮、等它收尾（见类注释）。写明 `next`：不写时缺省可能是 `later`，要等后台的工作做完才读（实测等到被停下时挪去后台的命令跑完）。
     private func say(_ content: JSONValue, uuid: String) async throws {
         try await stop(restarting: true)
@@ -242,7 +243,7 @@ final class ClaudeHostedSession: SessionLink {
     /// 停下在跑的这一轮并等它收尾；还没开跑的（`starting`）先等它开跑。歇着什么都不做。
     private func stop(restarting: Bool) async throws {
         if starting != nil { await withCheckedContinuation { starting?.append($0) } }
-        guard busy else { return }
+        guard facts.running else { return }
         stopping = true
         restart = restarting
         let turn = closed

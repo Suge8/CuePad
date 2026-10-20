@@ -6,6 +6,7 @@
 #   列成表。默认在后台量（不抢前台）：指令数照样前后对比，帧与掉帧偏乐观，不和预算比；
 #   要和交互预算（docs/verify.md「交互预算」）比就加 -CuePadForeground YES 在前台量（规则见 docs/verify.md「占前台」），有一项超了就以 1 退出。
 #   -CuePadInteractOnly 项,项 只量列出的几项（前后对比省下整套流程），用法见 docs/verify.md。
+#   前台量时"任务气泡开"是真实点击：App 写 AWAIT click x y，这里用 hid.swift 经 HID 点那一行（会移动真实指针，量完放回）。
 #   CUEPAD_TRACE=<xctrace 模板>（如 'Animation Hitches'、'Time Profiler'）：每次量的同时按 PID 录整段 trace，存 /tmp/cuepad-perf/interact-<库>-<第几次>.trace。
 # xc.sh 构建好 Release（带 DEBUG 条件，只为留下测量代码；预算按用户拿到的构建定，产物在 apple/.derived-perf，Instruments 也用这份）、
 # 独占机器（别的编译、测试同时跑，指令数之外的数都会被拖歪）后调这里，第一个参数是 CuePad.app。iOS 的单次交互见 perf-ios.sh。
@@ -37,14 +38,28 @@ if [ ! -f "$LIBRARY/cuepad.db" ]; then
   wait "$pid" || true
 fi
 
+# 真实点击的小工具（源文件比它新时重编）：App 每写一行 `AWAIT click x y` 就在那一点点一下，其余行原样转出
+HID="$DERIVED/hid"
+if [ ! -x "$HID" ] || [ "$APPLE_DIR/scripts/hid.swift" -nt "$HID" ]; then xcrun swiftc -O "$APPLE_DIR/scripts/hid.swift" -o "$HID"; fi
+clicker() {
+  local line kind x y
+  while IFS= read -r line; do
+    read -r kind _ x y <<<"$line"
+    if [ "$kind" = AWAIT ]; then "$HID" click "$x" "$y"; else printf '%s\n' "$line"; fi
+  done
+}
+
 # 每次都是全新进程（首访就是首访）与一份没量过的库：量的动作会写库（发送），同一份库连跑，后几次量的是越来越长的对话。
 # 演示库每次重建；大库每次从写好的那份 APFS 克隆（不占时间也不占空间）
 collect() {
-  local label="$1" source="$2" library="$DERIVED/library-run" out="$DERIVED/interact-run.log"; shift 2
+  local label="$1" source="$2" library="$DERIVED/library-run" out="$DERIVED/interact-run.log" pipe="$DERIVED/interact-run.fifo"; shift 2
   for run in $(seq "$runs"); do
-    rm -rf "$library"
+    rm -rf "$library" "$pipe"
     if [ -n "$source" ]; then cp -cR "$source" "$library"; fi
-    launch "$library" "$@" -CuePadBench interact -CuePadWindowSize 1440x900 ${extra[@]+"${extra[@]}"} >"$out" 2>/dev/null &
+    mkfifo "$pipe"
+    clicker <"$pipe" >"$out" &
+    local reader=$!
+    launch "$library" "$@" -CuePadBench interact -CuePadWindowSize 1440x900 ${extra[@]+"${extra[@]}"} >"$pipe" 2>/dev/null &
     local pid=$! tracer=""
     if [ -n "${CUEPAD_TRACE:-}" ]; then
       local trace="/tmp/cuepad-perf/interact-$label-$run.trace"
@@ -55,11 +70,12 @@ collect() {
     fi
     local status=0
     wait "$pid" || status=$?
+    wait "$reader"
     if [ -n "$tracer" ]; then wait "$tracer" || true; fi
     if [ "$status" != 0 ]; then return "$status"; fi
     sed -n 's/^INTERACT //p' "$out" | sed "s/^{/{\"库\":\"$label\",/"
   done
-  rm -rf "$library" "$out"
+  rm -rf "$library" "$out" "$pipe"
 }
 rows="$DERIVED/interact.jsonl"
 : >"$rows"

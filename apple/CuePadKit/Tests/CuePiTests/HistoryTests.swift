@@ -321,7 +321,7 @@ final class HistoryEventLog: Sendable {
 
     /// `live` 是在线会话的文件（桥给的，`PiBridge.sessionFiles`）；只看回填的不给。
     init(_ indexer: PiHistoryIndexer, following live: some AsyncSequence<Set<URL>, Never> & Sendable = AsyncStream { $0.finish() }) {
-        let stream = indexer.events(following: live)
+        let stream = indexer.events(following: live, scope: .all)
         task.withLock { $0 = Task { [weak self] in for await e in stream { self?.recorded.withLock { $0.append(e) } } } }
     }
     deinit { task.withLock { $0?.cancel() } }
@@ -373,7 +373,7 @@ struct HistoryIndexerTests {
         let log = HistoryEventLog(PiHistoryIndexer(sessions: root), following: live)
         try await eventually("回填完成") { log.finishedBackfill }
         #expect(log.updates.map { $0.file.lastPathComponent } == ["a.jsonl"])
-        guard case .backfillFinished(let found) = log.events.last! else { Issue.record("backfillFinished 应是最后一个事件"); return }
+        guard case .backfillFinished(let found?) = log.events.last! else { Issue.record("backfillFinished 应是最后一个事件"); return }
         #expect(found.map(\.lastPathComponent) == [top.url.lastPathComponent])
 
         let worker = try makeSession("p1/subagents", "w2.jsonl", prompt: "worker 2", modified: Date())

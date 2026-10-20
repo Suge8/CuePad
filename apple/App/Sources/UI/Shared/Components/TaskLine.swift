@@ -139,6 +139,7 @@ struct TaskLine: View {
             .contentShape(.rect)
             .row(hovers: true)
             .environment(\.rowHoverPreset, DebugHooks.hovers(task.body))
+            .benchSpot(task.id)
             .onTapGesture(perform: open)
             .contextMenu { CardActions(card: task, leaf: subtasks == nil) }
             .padding(.vertical, 1)
