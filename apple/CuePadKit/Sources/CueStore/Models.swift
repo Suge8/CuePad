@@ -341,9 +341,7 @@ public struct SearchQuery: Sendable, ExpressibleByStringLiteral {
   var hasCardFilters: Bool { projects != nil || hasImages != nil || sent != .any || modifiedIn != nil }
 }
 
-/// 搜索的发送条件。
 public enum SendCondition: Equatable, Sendable {
-  /// 不限。
   case any
   /// 从未发送过（没有任何关联该卡的发送记录）。
   case never

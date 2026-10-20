@@ -6,7 +6,7 @@ import Foundation
 /// （写的时机在 App 的 `MacPresenceKeeper`）。到期由订阅重读（`expire(at:)`），不轮询；期限是那台 Mac 的时钟写的，各端时钟大致对准即可。
 public struct MacPresence: Equatable, Sendable {
   public var hostID: String
-  public var onlineUntil: Date
+  var onlineUntil: Date
   public var modifiedAt: Date
 
   /// 醒着时多久续一次。在线记录只在 Mac 没打招呼就消失时（崩溃、断电、断网、将睡眠那一条没传出去）靠期限兜底，
@@ -16,7 +16,7 @@ public struct MacPresence: Equatable, Sendable {
   /// 一次续期管多久：两个续期间隔。晚一次续期（上传慢、系统忙时定时器推迟）不会被说成离线，错过两次才算。
   public static let lifetime: TimeInterval = 2 * Double(renewal.components.seconds)
 
-  public func isOnline(at now: Date) -> Bool { now < onlineUntil }
+  func isOnline(at now: Date) -> Bool { now < onlineUntil }
 
   public static func recordID(host: String) -> UUID { DeterministicID.uuid("mac-presence/\(host)") }
 }
@@ -39,11 +39,7 @@ extension CueStore {
       let offline = Date(timeIntervalSince1970: (now.timeIntervalSince1970 * 1000).rounded(.down) / 1000)
       let presence = MacPresence(
         hostID: host, onlineUntil: awake() ? now.addingTimeInterval(MacPresence.lifetime) : offline, modifiedAt: Date.stamp)
-      try db.run(
-        """
-        INSERT INTO macPresence (\(MacPresence.columns.joined(separator: ", "))) VALUES (?, ?, ?, ?)
-        ON CONFLICT(id) DO UPDATE SET onlineUntil = excluded.onlineUntil, modifiedAt = excluded.modifiedAt
-        """, presence.bindings)
+      try upsert(presence, updating: ["onlineUntil", "modifiedAt"])
       return MacPresence.recordID(host: host)
     }
   }

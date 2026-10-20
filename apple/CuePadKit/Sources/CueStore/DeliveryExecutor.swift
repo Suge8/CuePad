@@ -85,10 +85,17 @@ extension CueStore {
   }
 
   /// 开新会话的请求（`deliveryRequests` 里的一行）还没等到那个会话的记录：认领（`claimLaunchedCards`）要等它。
-  static let launchUnclaimed = """
-    NOT EXISTS (SELECT 1 FROM piSessionStates s
-      WHERE s.launchToken = CASE WHEN json_valid(deliveryRequests.content) THEN json_extract(deliveryRequests.content, '$.token') END)
-    """
+  static let launchUnclaimed = "NOT EXISTS (SELECT 1 FROM piSessionStates s WHERE s.launchToken = \(launchToken("deliveryRequests")))"
+
+  /// 开新会话请求（表 `alias` 里的一行）带的认领标识：会话记下的 `PiSessionState.launchToken` 与它相等就是这次开的。
+  static func launchToken(_ alias: String) -> String {
+    "CASE WHEN json_valid(\(alias).content) THEN json_extract(\(alias).content, '$.token') END"
+  }
+
+  /// 请求（表 `alias` 里的一行）是它那张卡最近一次交给（`handedSessions`、认领、`launchingLeaves` 只认这一次）。
+  static func latestHandoff(_ alias: String) -> String {
+    "\(alias).createdAt = (SELECT MAX(q.createdAt) FROM deliveryRequests q WHERE q.cardID = \(alias).cardID)"
+  }
 
   /// 认领：最近一次是"开新会话"请求的灵感与任务，等那个会话带着请求里的 `token` 记下（`PiSessionState.launchToken`）时
   /// 关联到它，任务同时进行中——与发给已有会话后 `recordSend` 的结果一样。会话记录在本机写下（Mac 的记录器）或同步过来时都在这里认领。
@@ -100,10 +107,8 @@ extension CueStore {
       UPDATE cards SET \(Self.keepingFormerSession("s.sessionID")), piSessionID = s.sessionID, modifiedAt = ?1,
         startedAt = CASE WHEN cards.todoAt IS NOT NULL THEN COALESCE(cards.startedAt, ?1) END,
         completedAt = CASE WHEN cards.todoAt IS NOT NULL THEN NULL END
-      FROM deliveryRequests r JOIN piSessionStates s
-        ON s.launchToken = CASE WHEN json_valid(r.content) THEN json_extract(r.content, '$.token') END
-      WHERE r.cardID = cards.id AND r.mode = 'start'
-        AND r.createdAt = (SELECT MAX(q.createdAt) FROM deliveryRequests q WHERE q.cardID = cards.id)
+      FROM deliveryRequests r JOIN piSessionStates s ON s.launchToken = \(Self.launchToken("r"))
+      WHERE r.cardID = cards.id AND r.mode = '\(DeliveryMode.start.rawValue)' AND \(Self.latestHandoff("r"))
         AND cards.piSessionID IS NOT s.sessionID
       """, [Date.stamp])
   }
@@ -133,7 +138,7 @@ extension CueStore {
     try db.query(
       """
       SELECT s.sessionID, r.cardID, s.createdAt FROM deliveryRequests r
-        JOIN piSessionStates s ON s.launchToken = CASE WHEN json_valid(r.content) THEN json_extract(r.content, '$.token') END
+        JOIN piSessionStates s ON s.launchToken = \(Self.launchToken("r"))
       WHERE r.origin = '\(DeliveryOrigin.cue.rawValue)' AND r.mode = '\(DeliveryMode.start.rawValue)'
       ORDER BY s.createdAt
       """
@@ -257,8 +262,7 @@ extension CueStore {
       """
     let awaitingClaim = """
       mode = 'start' AND status = 'succeeded' AND cardID IS NOT NULL AND completedAt >= ?2
-        AND createdAt = (SELECT MAX(q.createdAt) FROM deliveryRequests q WHERE q.cardID = deliveryRequests.cardID)
-        AND \(Self.launchUnclaimed)
+        AND \(Self.latestHandoff("deliveryRequests")) AND \(Self.launchUnclaimed)
       """
     let arguments: [any SQLBindable] = [cutoff, claimCutoff, keptCutoff]
     return try write {

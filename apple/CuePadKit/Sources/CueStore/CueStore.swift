@@ -18,7 +18,7 @@ public actor CueStore {
   private nonisolated let reader: CueStore?
   /// 提交过几次（本连接的写事务、别的进程的提交）：从快照接着订阅时据此知道其间有没有写入。快照在主线程上取它，所以是原子的。
   private nonisolated let commits = Atomic(0)
-  /// 图片文件的读取（原图、缩略图）；不经过 actor，界面可并发调用。写入用 `addImage`。
+  /// 图片文件的读写（`AttachmentFiles`）；不经过 actor，界面可并发调用。
   public nonisolated let files: AttachmentFiles
   /// 随时间变的读（`expire(at:)` 的到点重读、Mac 在不在线）用的时钟（你的话等没等过时限归 App 的 `SpeechClock`）；测试换成手动推进的。写下的时刻仍盖真实时间（`Date.stamp`）。
   public nonisolated let timing: Timing
@@ -319,6 +319,18 @@ public actor CueStore {
       \(ignoringExisting ? "ON CONFLICT(id) DO NOTHING" : "")
       """, record.bindings)
     return db.changes > 0
+  }
+
+  /// 有这一行就按主键改 `updating` 这几列（nil 是除主键外的全部），没有就插入。
+  func upsert<R: Record>(_ record: R, updating: [String]? = nil) throws {
+    try db.run(Self.upsertSQL(R.table, R.columns, updating: updating), record.bindings)
+  }
+
+  static func upsertSQL(_ table: Table, _ columns: [String], updating: [String]? = nil) -> String {
+    """
+    INSERT INTO \(table.rawValue) (\(columns.joined(separator: ", "))) VALUES (\(columns.map { _ in "?" }.joined(separator: ", ")))
+    ON CONFLICT(id) DO UPDATE SET \((updating ?? Array(columns.dropFirst())).map { "\($0) = excluded.\($0)" }.joined(separator: ", "))
+    """
   }
 
   /// 按主键覆盖除主键外的所有列。

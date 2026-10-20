@@ -148,7 +148,7 @@ extension CueStore {
   /// 不停在旧的回复上。开新会话的请求不抢：开好时由认领记到卡上（`claimLaunchedCards`）。
   public func handedSessions() throws -> [UUID: AgentHandoff] {
     let handOff = "r.cardID IS NOT NULL AND (r.mode = 'start' OR (r.targetRef IS NOT NULL AND r.mode IN (\(sqlList(DeliveryMode.toSession)))))"
-      + " AND r.createdAt = (SELECT MAX(q.createdAt) FROM deliveryRequests q WHERE q.cardID = r.cardID)"
+      + " AND \(Self.latestHandoff("r"))"
     let rows = try db.query(
       """
       SELECT r.cardID, r.targetRef, 0, 0 AS rank FROM deliveryRequests r WHERE \(handOff) AND r.mode != 'start' AND r.status IN (\(DeliveryStatus.openSQL))

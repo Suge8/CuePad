@@ -280,13 +280,7 @@ extension CueStore {
 
   private func overwrite(_ row: SyncRow) throws {
     let columns = row.table.columns
-    let placeholders = columns.map { _ in "?" }.joined(separator: ", ")
-    let assignments = columns.dropFirst().map { "\($0) = excluded.\($0)" }.joined(separator: ", ")
-    try db.run(
-      """
-      INSERT INTO \(row.table.rawValue) (\(columns.joined(separator: ", "))) VALUES (\(placeholders))
-      ON CONFLICT(id) DO UPDATE SET \(assignments)
-      """, columns.map { row.fields[$0] ?? .null })
+    try db.run(Self.upsertSQL(row.table, columns), columns.map { row.fields[$0] ?? .null })
   }
 
   /// 返回被删附件的哈希（提交后回收文件）。

@@ -39,7 +39,7 @@ public struct AttachmentFiles: Sendable {
   }
 
   /// 存入任意文件（预览用）：边读边算哈希再拷贝，同哈希已在则不重写。不检查内容是不是图片。
-  public func storeFile(at source: URL) throws -> String {
+  func storeFile(at source: URL) throws -> String {
     let hash = try Self.hash(of: source)
     try place(source, as: hash)
     return hash

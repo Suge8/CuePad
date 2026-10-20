@@ -178,7 +178,6 @@ final class SQLite {
     try query(sql, arguments, map).first
   }
 
-  /// 最近一条语句改动的行数。
   var changes: Int { Int(sqlite3_changes(handle)) }
 
   /// 提交后返回本事务改动过的行；回滚则丢弃。
