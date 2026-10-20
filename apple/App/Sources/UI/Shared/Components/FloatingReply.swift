@@ -23,7 +23,8 @@ struct FloatingReply<Chat: View, Reply: View>: View {
                 .frame(maxWidth: .infinity)
                 .background(backed ? palette.desk : .clear)
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height = $0 }
-                .frame(maxHeight: .infinity, alignment: .bottom)
+                // minHeight 0：不随里面撑大，框就是给的高，放不下的从顶上伸出去（只给 maxHeight 时框跟着内容变高、被外面顶对齐，伸到键盘底下）
+                .frame(minHeight: 0, maxHeight: .infinity, alignment: .bottom)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
         // 对话透到上安全区里（页头、状态栏底下也是对话），可见的高连同它算；下安全区不算：键盘弹出时它是键盘，盖住的不可见

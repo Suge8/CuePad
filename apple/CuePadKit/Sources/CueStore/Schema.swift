@@ -79,7 +79,7 @@ enum Schema {
     "\(cueRead) \(modifiedIndex(.cueRead))",
     // 59：提问要你看的图由 Cue 点名、存在提问上（`CueAsking.shots`），不再挂关联任务的全部交付物
     "ALTER TABLE cueMessages ADD COLUMN askShots TEXT;",
-    // 60：会话停下时谁接手——Cue 留给你回的会话（`CueState.left`），每台设备开着哪个会话（`SessionViewer`）
+    // 60：会话停下时谁接手——Cue 留给你回的会话（`CueState.left`），每台设备开着哪个会话（`Viewer`）
     "ALTER TABLE cueState ADD COLUMN leftToYou TEXT; \(sessionViewers) \(modifiedIndex(.sessionViewers))",
     // 61：歇下要等最后一轮的回答读到才算变化，改按时刻判（`PiSessionState.answered`）：会话记录记最后一轮的开始，摘要记这一轮收尾的时刻；
     // 盖写入序号的列跟着换成收尾时刻（不再看进行中的提问与问答文字）
@@ -87,6 +87,12 @@ enum Schema {
     ALTER TABLE piSessionStates ADD COLUMN turnStartedAt INTEGER; ALTER TABLE piSessionStates ADD COLUMN answeredAt INTEGER;
     DROP TRIGGER piSessionStates_writeSeq_update; \(stampOnChange("piSessionStates", sessionChanges))
     """,
+    // 62：你在 Cue 页开口收起还开着的提问，记下是哪句话收起的（`CueMessage.setAsideBy`），Cue 判断不是在答它就放回
+    "ALTER TABLE cueMessages ADD COLUMN setAsideBy TEXT;",
+    // 63：每台设备开着的页带上 Cue 页（`Viewer.cue`）：他在 Mac 上开着 Cue 页时 Cue 的话不推到手机
+    "ALTER TABLE sessionViewers ADD COLUMN cue INTEGER;",
+    // 64：你开口收起的提问走部分索引（每次把你的话交给 Cue 都读）
+    "\(setAsideIndex)",
   ]
 
   /// 已有的提问照当时的写法认出类别：带"以后<当时的叫法>都不用问"的是那一类，都不带的是规矩那一类；范围是关联任务此刻所在的项目
@@ -139,6 +145,8 @@ enum Schema {
   /// Cue 页读到的对话之前问、之后答的提问（`CueStore.cueQuestionsAnswered`，每次 Cue 的对话变化重读）：提问只占对话的一小部分。
   private static let answeredIndex = "CREATE INDEX cueMessages_answered ON cueMessages(answeredAt) WHERE \(CueStore.answered);"
   private static let openQuestionIndex = "CREATE INDEX cueMessages_open ON cueMessages(createdAt) WHERE \(CueStore.openQuestion);"
+  /// 你开口收起的提问（`CueStore.cueQuestionsSetAside`，每次把你的话交给 Cue 都读）：部分索引只收这几条，条件同出 `CueStore.setAside`。
+  private static let setAsideIndex = "CREATE INDEX cueMessages_setAside ON cueMessages(createdAt) WHERE \(CueStore.setAside);"
 
   /// 本机写入序号（`CueStore.lastWrite`）的计数器与盖序号的触发器：Cue 的变化按本机收到的先后分新旧，不按事件时刻（晚到的事件时刻可能早于上次醒来）。
   /// 构成 Cue 的变化的那几列真的变了（不只是被写了一遍）时，计数器加一、那一行记下它；本机写入与同步落库走的都是 INSERT / UPDATE，一处覆盖两条路。
@@ -295,15 +303,16 @@ enum Schema {
     -- 同步的本机状态：同步区令牌（zoneToken）与上次同步的 iCloud 账号（account）。
     CREATE TABLE syncState (key TEXT PRIMARY KEY NOT NULL, value BLOB NOT NULL) STRICT;
 
-    -- Cue 的对话（tools 是一轮的经过，ask 是提问的类别与范围，askAction、askRule、askShots 是它要做的动作、依据的规矩与要你看的图）、记忆、设置（allows 是允许清单）与此刻在做什么（round 是在跑的那一轮）。
+    -- Cue 的对话（tools 是一轮的经过，ask 是提问的类别与范围，askAction、askRule、askShots 是它要做的动作、依据的规矩与要你看的图，setAsideBy 是你开口收起它的那句话）、记忆、设置（allows 是允许清单）与此刻在做什么（round 是在跑的那一轮）。
     CREATE TABLE cueMessages (
       id TEXT PRIMARY KEY NOT NULL, author TEXT NOT NULL, text TEXT NOT NULL, choices TEXT, urgent INTEGER NOT NULL,
       taskID TEXT, answer TEXT, answeredAt INTEGER, deliveredAt INTEGER, createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL,
-      notify TEXT, tools TEXT, ask TEXT, askAction TEXT, askRule TEXT, askShots TEXT
+      notify TEXT, tools TEXT, ask TEXT, askAction TEXT, askRule TEXT, askShots TEXT, setAsideBy TEXT
     ) STRICT;
     CREATE INDEX cueMessages_createdAt ON cueMessages(createdAt);
     \(openQuestionIndex)
     \(answeredIndex)
+    \(setAsideIndex)
     CREATE TABLE cueLines (
       id TEXT PRIMARY KEY NOT NULL, text TEXT NOT NULL, pinned INTEGER NOT NULL, source TEXT NOT NULL, remindAt INTEGER,
       createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL, deletedAt INTEGER
@@ -328,8 +337,8 @@ enum Schema {
     -- 每台 Mac 自己写、各端读：在线记录（Mac 在不在、Cue 在不在值班的唯一信号），能用的 Agent 与各家的模型。
     CREATE TABLE macPresence (id TEXT PRIMARY KEY NOT NULL, hostID TEXT NOT NULL, onlineUntil INTEGER NOT NULL, modifiedAt INTEGER NOT NULL) STRICT;
     CREATE TABLE macAgents (id TEXT PRIMARY KEY NOT NULL, hostID TEXT NOT NULL, agents TEXT, problems TEXT, modifiedAt INTEGER NOT NULL, name TEXT) STRICT;
-    -- 每台设备自己写、Cue 值班的 Mac 读：此刻开着哪个会话（会话停下时他在不在场的一半）。
-    \(sessionViewers)
+    -- 每台设备自己写：此刻开着哪个会话、开没开着 Cue 页（会话停下时他在不在场的一半；提示到不到他）。
+    CREATE TABLE sessionViewers (id TEXT PRIMARY KEY NOT NULL, device TEXT NOT NULL, sessionID TEXT, modifiedAt INTEGER NOT NULL, cue INTEGER) STRICT;
 
     -- trigram 分词：中文等无空格文本可子串匹配；LIKE 在其上对任意长度关键字都正确（3 字符以上走索引）。
     CREATE VIRTUAL TABLE searchIndex USING fts5(text, refID, kind UNINDEXED, tokenize = 'trigram');

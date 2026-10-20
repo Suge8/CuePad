@@ -30,7 +30,7 @@ nonisolated struct UnfiledSnapshot: Codable, Equatable, Sendable {
 /// Cue 的快照：主 App 写，小组件读（头像、"等你 N"、它最近一句）。
 nonisolated struct CueSnapshot: Codable, Equatable, Sendable {
     var name: String
-    /// "等你 N"（App 里 `CueWaiting` 的同一个数）。
+    /// "等你 N"（App 里 `CueStore.cueTally` 的同一个数）。
     var waiting: Int
     /// Cue 最近对你说的一句（纯文字）。
     var lastSaid: String?

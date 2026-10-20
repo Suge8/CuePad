@@ -3,8 +3,9 @@ import CueStore
 import Foundation
 
 /// 后台索引一个 Agent 的会话目录（Pi、Claude Code、Codex 的会话文件，怎么认、怎么读见 `SessionFileFormat`）：先按修改时间倒序回填
-/// （最近的会话最先可用），发出 `backfillFinished` 后用 FSEvents 跟随文件变化，只读新增字节。一直开着会话文件写的 Agent（Codex 的常驻服务），
-/// FSEvents 只在关闭时报它的变化：它最近写过的文件另盯追加（`FSEventsWatcher.follow`，见 `Followed`）。
+/// （最近的会话最先可用），发出 `backfillFinished` 后跟随文件变化，只读新增字节。FSEvents 盯整棵目录（新建的会话文件、丢事件重扫）；
+/// 最近写过的会话文件另用 kqueue 盯追加（`FSEventsWatcher.follow`，见 `Followed`）：FSEvents 对开着写的文件（Codex 的常驻服务）
+/// 只在关闭时报，写完就关的（Pi、Claude Code）也实测晚 0.1–1 秒、连着几次写并成一次，回答与歇下要跟着晚。
 ///
 /// 不持有全部检查点：从哪接着读由调用方通过 `start` 提供（App 层从 Store 读），每个 `updated` 里带回新检查点由调用方持久化。
 /// 索引器只对最近修改/最近被触碰的若干文件在内存里保留，这样调用方持久化滞后时增量也不会退化成重读。
@@ -20,8 +21,8 @@ public struct PiHistoryIndexer: Sendable {
     private let start: @Sendable (URL) async -> PiHistoryStart?
 
     private static let liveCacheLimit = 64
-    /// 同时另盯追加的文件数：每个占一个文件描述符，GUI 应用默认只有 256 个
-    private static let followLimit = 64
+    /// 每家同时另盯追加的文件数：每个占一个文件描述符，GUI 应用默认只有 256 个，三家合起来不超过 96 个
+    private static let followLimit = 32
 
     /// 会话不在文件里的 Agent（OpenCode）为 nil。`files` 是你的消息里的图片存进的附件目录。
     public init?(
@@ -79,7 +80,7 @@ public struct PiHistoryIndexer: Sendable {
                 excluded.insert(file)
                 return
             }
-            if format.keepsFilesOpen, let written {
+            if let written {
                 let change = followed.note(file.path, writtenAt: written)
                 if let dropped = change.dropped { watcher.unfollow(dropped) }
                 if change.follows { watcher.follow(file.path) }

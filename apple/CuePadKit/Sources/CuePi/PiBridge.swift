@@ -8,7 +8,7 @@ import Observation
 /// 其他 Agent 的由各自的适配接上（`attach`、`update`、`detach`），界面、记录器与执行器只认这一处。
 ///
 /// - Pi 会话出现 = 连上 socket 并收到 hello 快照；会话结束 = 连接断开（无心跳、无轮询）。
-/// - 目录新增由 FSEvents 触发重扫；启动时全量扫描一次。残留 socket（进程被强杀）按文件名里的 pid 判死后删除。
+/// - 目录本身一变（kqueue，`DirectoryWatcher`）就重扫；启动时全量扫描一次。残留 socket（进程被强杀）按文件名里的 pid 判死后删除。
 /// - 多个客户端（包括多个 `PiBridge`）可同时连同一会话：各自都收到 hello 与全部状态切换，
 ///   命令各走各的连接，`ack` 只回给发送方；扩展不做仲裁，命令按到达顺序交给 Pi。
 @MainActor @Observable
@@ -69,8 +69,7 @@ public final class PiBridge {
     /// 已报告不兼容的 socket 文件：同一个文件还在时不再重连，避免每次目录事件都重复报告。按文件本身认（不按名字）：
     /// /reload 在同一路径建的新 socket 名字不变，得照常去连
     @ObservationIgnored private var incompatible: [String: PiSocketDirectory.FileIdentity] = [:]
-    @ObservationIgnored private var watcher: FSEventsWatcher?
-    @ObservationIgnored private var watchTask: Task<Void, Never>?
+    @ObservationIgnored private var watcher: DirectoryWatcher?
     @ObservationIgnored private var subscribers: [UUID: AsyncStream<PiSessionChange>.Continuation] = [:]
 
     /// 一条已连接的 Pi socket 及其未完成的命令。
@@ -150,18 +149,12 @@ public final class PiBridge {
     public func start() throws {
         guard watcher == nil else { return }
         try PiSocketDirectory.prepare(directory)
-        let watcher = FSEventsWatcher(root: directory)
-        self.watcher = watcher
-        watchTask = Task { [weak self] in
-            for await _ in watcher.paths { self?.scan() }
-        }
+        watcher = try DirectoryWatcher(directory) { [weak self] in self?.scan() }
         scan()
     }
 
     public func stop() {
-        watchTask?.cancel()
-        watchTask = nil
-        watcher?.stop()
+        watcher?.cancel()
         watcher = nil
         for link in links.values { link.connection.close() }
         links = [:]
@@ -386,8 +379,8 @@ public final class PiBridge {
         }
     }
 
-    /// 连不上（ECONNREFUSED，没人在 listen）的 socket：属主 pid 已死是强杀残留，删；还活着就不删、不重试——扩展先 listen
-    /// 再收紧成 0600，收紧产生的目录事件会再触发一次扫描（/reload 时扫到的还没删的旧文件同理，新文件随后出现）。
+    /// 连不上（ECONNREFUSED，没人在 listen）的 socket：属主 pid 已死是强杀残留，删；还活着就不删、不重试——扩展 listen 好才把 socket
+    /// 改名进来，活着的进程留下的没人 listen 的只有 /reload 时还没删的旧文件，新文件改名进来时目录会再变一次。
     @discardableResult
     private func removeIfStale(_ name: String) -> Bool {
         guard let pid = PiSocketDirectory.pid(fromSocketName: name + ".sock"), PiSocketDirectory.processIsDead(pid) else { return false }

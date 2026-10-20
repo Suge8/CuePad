@@ -1,7 +1,19 @@
 import CueStore
 import Foundation
 
+nonisolated extension PiSessionState {
+    /// 已结束、发给它的话（`delivery`，最近一条）正在路上：它所在的 Mac 正在唤醒它（`PiDelivery.Transit.waking`）。
+    func isWaking(by delivery: DeliveryRequest?, at moment: Speech.Moment) -> Bool {
+        PiDelivery.phase(of: delivery, for: self, at: moment) == .inTransit(.waking)
+    }
+}
+
 nonisolated extension PiSessionListItem {
+    /// 列在"现在"（侧栏的在做、Agent 页）：没结束的，与正在唤醒的——唤醒中当场列出、写"正在唤醒"，上了桥就是在线的那一行。
+    func isCurrent(at moment: Speech.Moment) -> Bool {
+        state.state != .known(.ended) || state.isWaking(by: delivery, at: moment)
+    }
+
     /// 此刻没能送达的话有几句，按 Pi 的会话 id（只留有的）：手里只有会话记录的行（Mac 侧栏、菜单栏、⌘K、项目页 Agent 栏）按它找自己的数。
     static func undelivered(_ items: [PiSessionListItem], at moment: Speech.Moment) -> [String: Int] {
         Dictionary(items.compactMap { item in
@@ -114,7 +126,7 @@ nonisolated enum PiUnread {
 /// 会话停着时话在路上就说路上到哪了（`PiDelivery`）；其余按 Pi 报的状态，停在空闲时再分——
 /// 还没说过话是"新会话"，做完一轮你还没看是"有新回复"（`PiUnread`），看过是"该你了"（轮到你说下一句）；
 /// Cue 在值班（`CueProfile.onDuty`）时接手的是 Cue，只说"歇着"，它把这次停下留给你回的（`CueDuty.leftToYou`）是"待回复"；会话等的回答 CuePad 答得了时等的也是 Cue
-/// （"等 Cue 回答"，中性墨色，`PiSessionState.waitsForCue`），赭黄只留给在等你的（与"等你 N"同一条规则，`PiSessionState.asksYou`、`CueWaiting`）。计时读哪一种（`clock`）也在这里定。
+/// （"等 Cue 回答"，中性墨色，`PiSessionState.waitsForCue`），赭黄只留给在等你的（与"等你 N"同一条规则，`PiSessionState.asksYou`、`CueStore.cueTally`）。计时读哪一种（`clock`）也在这里定。
 nonisolated struct PiShown: Hashable, Sendable {
     enum Status: Hashable, Sendable {
         case delivery(PiDelivery)
@@ -282,6 +294,14 @@ nonisolated extension PiShown {
     }
 
     /// 会话列表的档：等你确认与待回复 → 出错与没能送达 → 工作中与话在路上 → 停下的 → 已结束。
+    /// 在跑：工作中，或话在路上、已送达而会话还没跟上（没能送达的不算）——状态色、排序与区头"N 个在跑"同一档。
+    var isRunning: Bool {
+        switch status {
+        case .working, .delivery(.inTransit), .delivery(.delivered): true
+        default: false
+        }
+    }
+
     var rank: Int {
         switch status {
         case .asking, .awaitsReply: 0

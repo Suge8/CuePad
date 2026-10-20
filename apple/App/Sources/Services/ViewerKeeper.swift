@@ -9,12 +9,13 @@ import Foundation
 import os
 import Synchronization
 
-/// 这台设备此刻开着哪个会话（`SessionViewer`，规则在它的头注释）只由这里写，只在开着的会话变了时写一次，写成立即上传；没有心跳。
-/// 开着的那一页由界面报来（`show`）：Mac 是主窗口在前台时内容区的会话页（`Workspace.openSession`），手机是场景前台活跃时导航最上面的会话页
-/// （`Navigation.shownSession`；iPad 开几个窗口各报各的，取最近开的那个）。Mac 上人不在跟前（系统将睡眠、屏幕睡了、锁屏、退出）时一概算没开着，
+/// 这台设备此刻开着哪一页（`Viewer`，规则在它的头注释）只由这里写，只在开着的页变了时写一次，写成立即上传；没有心跳。
+/// 开着的那一页由界面报来：会话页（`show`）Mac 是主窗口在前台时内容区的会话页（`Workspace.openSession`），手机是场景前台活跃时导航最上面的会话页
+/// （`Navigation.shownSession`；iPad 开几个窗口各报各的，取最近开的那个）；Cue 页（`showCue`）两端都由 `CueViewing` 报（iPad 上它可以在面板里、
+/// 不在导航最上面）。Mac 上人不在跟前（系统将睡眠、屏幕睡了、锁屏、退出）时一概算没开着，
 /// 回来再按界面报的算；将睡眠与退出同步写完、传完才放行（做法同 `MacPresenceKeeper`），手机进后台时写完、传完。
 /// 写的那一刻在 Store 的隔离域里读开着哪一页：几路写入谁先谁后，库里留下的都是最后的那个状态。
-nonisolated final class SessionViewerKeeper: Sendable {
+nonisolated final class ViewerKeeper: Sendable {
     /// 开着的会话页：会话记录 id；`sessionID` 是 Pi 的会话 id，只有记录 id 的入口（点通知进来）不带，写时从记录里取。
     struct Page: Equatable, Sendable {
         let id: UUID
@@ -27,10 +28,16 @@ nonisolated final class SessionViewerKeeper: Sendable {
     }
 
     private struct State {
-        /// 各窗口此刻开着的，最近开的在后。
+        /// 各窗口此刻开着的会话页，最近开的在后。
         var shown: [(window: UUID, page: Page)] = []
+        var cue = false
         var away: Set<Away> = []
-        var viewing: Page? { away.isEmpty ? shown.last?.page : nil }
+        var viewing: Viewing { away.isEmpty ? Viewing(session: shown.last?.page, cue: cue) : Viewing(session: nil, cue: false) }
+    }
+
+    private struct Viewing: Equatable {
+        var session: Page?
+        var cue: Bool
     }
 
     private let store: CueStore
@@ -54,6 +61,11 @@ nonisolated final class SessionViewerKeeper: Sendable {
             state.shown.removeAll { $0.window == window }
             if let page { state.shown.append((window, page)) }
         }
+    }
+
+    /// 这台设备开没开着 Cue 页（`CueViewing` 数的在看的有没有）。
+    func showCue(_ shown: Bool) {
+        update { $0.cue = shown }
     }
 
     /// 写下界面报来的变化，直到任务取消；Mac 另跟系统的睡眠、屏幕与锁屏。
@@ -104,16 +116,16 @@ nonisolated final class SessionViewerKeeper: Sendable {
     }
 
     private func record(in store: isolated CueStore) throws -> UUID? {
-        let page = state.withLock { $0.viewing }
-        let sessionID = try page.flatMap { page in
+        let viewing = state.withLock { $0.viewing }
+        let sessionID = try viewing.session.flatMap { page in
             try page.sessionID ?? store.piSessionPage(PiSessionQuery(id: page.id)).items.first?.state.sessionID
         }
-        return try store.recordViewing(device: device, sessionID: sessionID)
+        return try store.recordViewing(device: device, sessionID: sessionID, cue: viewing.cue)
     }
 }
 
 #if os(macOS)
-nonisolated extension SessionViewerKeeper {
+nonisolated extension ViewerKeeper {
     /// 退出时：写成离开并上传。
     func signOff() async {
         state.withLock { _ = $0.away.insert(.quitting) }
@@ -129,7 +141,7 @@ nonisolated extension SessionViewerKeeper {
             done.signal()
         }
         if done.wait(timeout: .now() + MacPresenceKeeper.sleepUploadLimit) == .timedOut {
-            Self.log.notice("将睡眠：这台 Mac 离开会话的记录 \(Int(MacPresenceKeeper.sleepUploadLimit)) 秒内没传完")
+            Self.log.notice("将睡眠：这台 Mac 离开那一页的记录 \(Int(MacPresenceKeeper.sleepUploadLimit)) 秒内没传完")
         }
     }
 
@@ -151,9 +163,9 @@ nonisolated extension SessionViewerKeeper {
     }
 }
 #else
-/// 这个窗口在前台活跃时导航最上面的会话页，报给 `SessionViewerKeeper`；窗口关掉时收回。
+/// 这个窗口在前台活跃时导航最上面的会话页，报给 `ViewerKeeper`；窗口关掉时收回。
 struct SessionViewing: ViewModifier {
-    let keeper: SessionViewerKeeper?
+    let keeper: ViewerKeeper?
     let navigation: Navigation
     @Environment(\.scenePhase) private var phase
     @State private var window = UUID()

@@ -2,8 +2,7 @@
 import CueStore
 import SwiftUI
 
-/// 手机与 iPad 的 Cue 页头：一块实底玻璃，平时是左右各离屏边 21 点、56 点高的一条——左上一颗"⋯"（更多，展开时换成关闭）、名字、此刻在做什么、"等你 N"；
-/// 左上那一格与三页左上的搜索钮同一个位置，每页左上都是一颗钮。Cue 的头像在底部那一排（三页的 Cue 圆钮、去处展开时收起的输入框）。
+/// 手机与 iPad 的 Cue 页头：一块实底玻璃，平时是左右各离屏边 21 点、56 点高的一条——头像、名字、此刻在做什么、"等你 N"、展开的箭头；
 /// 点它从顶部长出面板（同一块玻璃长高）：手机上 Cue 的总面板（`CueNowPanel`：大脑、上下文、等你、在做、
 /// 全部会话、额度、记忆、设置），手机上 Cue 的这些只有这一个入口。
 /// 与 Mac 侧栏的 Cue 行与 Agent 区、菜单栏面板是同一套件、同一份数据（`CueWatch`、`Workspace.liveWork`）。
@@ -77,7 +76,10 @@ struct CueHeader: View {
     private var head: some View {
         let cue = workspace.cue
         return HStack(spacing: 10) {
-            more
+            CueAvatar(mood: cue.mood(composing: !cue.draft.isEmpty(accepting: .images)), presence: cue.presence, size: .header)
+                .relaySpot(cue: .header)
+                // 头像与胶囊的左端同心
+                .padding(.leading, (Self.height - CueAvatar.Size.header.box) / 2)
             VStack(alignment: .leading, spacing: 2) {
                 Text(cue.name).font(.title3.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(1)
                 CueStatusLine(fallback: cue.lastSaid, font: .subheadline).lineLimit(1)
@@ -87,7 +89,10 @@ struct CueHeader: View {
             Spacer(minLength: 6)
             // 展开时等你那一行在面板里，页头不再重复
             WaitingCount(count: expanded ? 0 : cue.waiting).font(.subheadline)
+            Image(.expand).font(.footnote.weight(.semibold)).foregroundStyle(palette.ink3)
+                .rotationEffect(.degrees(expanded ? 180 : 0))
                 .padding(.trailing, 18)
+                .accessibilityHidden(true)
         }
         .frame(height: Self.height)
         .contentShape(.rect)
@@ -97,22 +102,6 @@ struct CueHeader: View {
         .accessibilityElement(children: .combine)
     }
 
-
-    /// 左端的"⋯"：一格与胶囊左端同心的圆，展开时换成关闭。接力的光落在这里（`relaySpot(cue: .header)`）。
-    private var more: some View {
-        Image(expanded ? .close : .more)
-            .contentTransition(.symbolEffect(.replace))
-            .font(.system(size: 18, weight: .semibold))
-        .foregroundStyle(palette.ink)
-        .frame(width: Self.slot, height: Self.slot)
-        .background(palette.fill, in: .circle)
-        .relaySpot(cue: .header)
-        .padding(.leading, (Self.height - Self.slot) / 2)
-        .accessibilityHidden(true)
-    }
-
-    /// 左端那一格的直径：与胶囊左端同心，留出和上下一样的边。
-    private static let slot: CGFloat = 44
 
     private func toggle() {
         withAnimation(Motion.spatial(Motion.panel, reduceMotion: reduceMotion)) { expanded.toggle() }

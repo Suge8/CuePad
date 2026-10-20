@@ -23,8 +23,6 @@ nonisolated struct CueThread: Equatable, Sendable {
     let marks: [ChatMark]
     /// 还没读的 Cue 的话（Kit 的 `cueUnread` 是唯一的规则）。
     let unread: Set<UUID>
-    /// 新消息的分隔线此刻该在哪：对话里第一条新消息，与读到的这些里有几条；没有为 nil。
-    let divider: CueDivider?
 
     /// 读最近这么多条对话（更早的不在 Cue 页里翻：要找旧事问 Cue）。
     static let limit = 200
@@ -40,8 +38,6 @@ nonisolated struct CueThread: Equatable, Sendable {
         self.unread = unread
         let rows = Self.rows(messages, tasks: tasks, waiting: waiting, showsSteps: showsSteps)
         self.rows = rows
-        let fresh = rows.lazy.map(\.id).filter(unread.contains)
-        divider = fresh.first.map { CueDivider(id: $0, count: fresh.count) }
         let stamps = Self.stamps(rows)
         self.stamps = stamps
         joined = Set(zip(rows, rows.dropFirst()).compactMap { above, row in
@@ -91,7 +87,7 @@ nonisolated struct CueThread: Equatable, Sendable {
     enum Row: Identifiable, Equatable, Sendable {
         case you(CueMessage)
         /// 你对一条提问的回答（选的那一项，`CueMessage.answer`；更旧版本存下的另外一句照原文），排在答的那一刻（`answeredAt`）；数据就是那条提问本身，
-        /// Cue 撤回的没有这一格。问的那句总在对话里（`messages`），引用点了跳回去
+        /// 收起、撤回的没有这一格。问的那句总在对话里（`messages`），引用点了跳回去
         case answer(CueMessage)
         case cue(CueMessage, task: UUID?)
         /// 挂着交付物的 Cue 的话（结果卡）：从早到晚

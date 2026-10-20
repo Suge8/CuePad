@@ -221,7 +221,7 @@ enum CueBubble {
 
 
 /// Cue 说的一句：靠左的一颗纸做的气泡（`cueBubble`），里面是 Markdown（同会话里 Agent 的回答）；它第一次提到一件活时气泡底下一行这件活（`CueTaskLine`）。
-/// 问过你的，答完或撤回后回到问的位置，这句话下面是它点名的图（`CueShots`）；你的回答在答的那一刻另成一格（`CueAnswer`，还在等的不在对话里，见 `CueThread.rows`）。
+/// 问过你的，结束后（`CueQuestionEnd`）回到问的位置，这句话下面是它点名的图（`CueShots`）；你的回答在答的那一刻另成一格（`CueAnswer`，还在等的不在对话里，见 `CueThread.rows`）。
 /// 长按（Mac 右键）是消息菜单（`MessageMenu.Kind.cue`），预览就是这颗气泡。
 struct CueSays: View {
     let message: CueMessage
@@ -470,8 +470,8 @@ private struct ShotRow: Layout {
 /// "等你"：固定在输入框上方，最早的那一条，收得紧。第一句是要你定什么，由代码按 Cue 写的动作短语写出
 /// （`CueAsking.question`），不靠 Cue 的措辞；Cue 的原话默认收起，点"原话"再看（长了在里面滚）。下面是 Cue 点名要你看的图与各看什么
 /// （`CueShots`，没点名的没有图；点开全屏时底栏就是这几个选项，看完当场定）、选项（`CueChoices`），末行是关联的任务与原话的开关
-/// （Mac 上连同选项；辅助功能字号下各占一行），Mac 与手机同一结构；还有几条在等由页头与侧栏的"等你 N"说。卡上只能选：别的话在 Cue 页底下的输入框说，Cue 判断是在答这张就照办并撤回它。
-/// 没有关掉：卡片一直挂着，直到你选一项或 Cue 撤回。
+/// （Mac 上连同选项；辅助功能字号下各占一行），Mac 与手机同一结构；还有几条在等由页头与侧栏的"等你 N"说。卡上只能选：别的话在 Cue 页底下的输入框说，
+/// 一开口卡就收起（Cue 判断不是在答它会放回，见 `CueQuestionEnd`）。没有关掉。
 /// 列表与数量只来自 `cueMessagesWaitingForYou()`：回答后等库里那条结束才换下一条，写的时候按钮停用；没写成就报错、按钮恢复，可以再点。
 struct CueWaitingDock: View {
     let waiting: [CueMessage]
@@ -576,58 +576,92 @@ struct CueWaitingDock: View {
         level = 0
     }
 
-    /// 从上到下：问句（规矩那一类下面是规矩原话）、一排图、操作。卡至多占对话区可见高的一半（`RiseLayout`），放不下时上面那段在卡里滚，
-    /// 操作钉在卡底、一直露着。手机上选项一行、任务与原话一行（辅助功能字号下各占一行）；Mac 上合成一行，右下角是"可以"。
+    /// 从上到下：问句（规矩那一类下面是规矩原话）、一排图、操作。卡至多占对话区可见高的一半，地方不够时只用剩下的（`RiseLayout`）。
+    /// Mac 上放不下时上面那段在卡里滚、操作钉在卡底。手机上（键盘弹出、小屏、横屏）按能放下的挑（`ViewThatFits`，按各自的实际高）：
+    /// 整张 → 紧凑（去掉那排图；问句与选项钉住，展开的原话在中间滚，末行放得下才露）→ 只剩问句一行（`folded`）。
+    /// 紧凑那档的理想高只算问句与选项（原话与末行都是 `Yielding`），所以"问句加选项都放不下"才收成一行；哪一档都不会截出半截字或半张图。
+    /// 放得下时不进滚动区：滚动区里的按钮按下要晚一下才有反馈。Mac 上不挑（挑的话几份都要建，第一次打开 Cue 页时卡多建一遍）。
+    /// 手机上选项一行、任务与原话一行（辅助功能字号下各占一行）；Mac 上合成一行，右下角是"可以"。
     private func card(_ message: CueMessage) -> some View {
         let ref = message.taskID.flatMap { tasks[$0] }
         let choices = CueChoices(options: message.choices ?? [], disabled: ending == message.id) { answer(message, $0) }
-        let upper = VStack(alignment: .leading, spacing: 0) {
-            CueQuestionLine(message: message)
-            if reading == message.id { original(message.text).padding(.top, 12).transition(.opacity) }
-            if let shots = shots[message.id] {
-                CueShots(shots: shots, group: "waiting", reply: .answer(message), open: open).padding(.top, 16)
-            }
-        }
-        .padding(.top, Self.padding.top).padding(.horizontal, Self.padding.leading)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        let side = Self.padding.leading
         #if os(macOS)
-        let actions = footer(message, ref, choices).padding(.top, Self.footerGap)
+        let body = VStack(spacing: 0) {
+            Yielding { ScrollView { upper(message, shots: true) }.scrollBounceBehavior(.basedOnSize) }
+            footer(message, ref, choices).padding(.top, Self.footerGap)
+                .padding(.horizontal, side).padding(.bottom, Self.padding.bottom).layoutPriority(1)
+        }
         #else
-        let actions = VStack(alignment: .leading, spacing: 0) {
-            choices.padding(.top, 16)
+        let choicesRow = choices.padding(.top, 16).padding(.horizontal, side)
+        let footerRow = Group {
             if typeSize.isAccessibilitySize {
                 // 任务至多两行、不截断
                 VStack(alignment: .leading, spacing: 0) {
                     if let ref { CueTaskLine(ref: ref, height: Self.footerHeight, lines: 2) }
                     originalToggle(message)
                 }
-                .padding(.top, 4)
             } else {
-                footer(message, ref, nil).padding(.top, 4)
+                footer(message, ref, nil)
             }
         }
-        #endif
-        return VStack(spacing: 0) {
-            scrollingIfTall(upper)
-            actions.padding(.horizontal, Self.padding.leading).padding(.bottom, Self.padding.bottom).layoutPriority(1)
+        .padding(.top, 4).padding(.horizontal, side)
+        let body = ViewThatFits(in: .vertical) {
+            VStack(spacing: 0) {
+                upper(message, shots: true)
+                choicesRow
+                footerRow
+            }
+            .padding(.bottom, Self.padding.bottom)
+            VStack(spacing: 0) {
+                CueQuestionLine(message: message).padding(.top, Self.padding.top).padding(.horizontal, side)
+                if reading == message.id {
+                    Yielding { ScrollView { original(message.text).padding(.top, 12).padding(.horizontal, side) }.scrollBounceBehavior(.basedOnSize) }
+                }
+                choicesRow
+                Yielding { ViewThatFits(in: .vertical) { footerRow; Color.clear.frame(height: 0) } }
+            }
+            .padding(.bottom, Self.padding.bottom)
+            folded(message)
         }
-        .paper(radius: ComposerMetrics.radius, lifted: true)
-        .animation(Motion.quick, value: reading)
-        .padding(.bottom, Self.below)
+        #endif
+        return body
+            .paper(radius: ComposerMetrics.radius, lifted: true)
+            .animation(Motion.quick, value: reading)
+            .padding(.bottom, Self.below)
     }
 
-    /// 卡里上面那段（问句、原话、图）放不下时在卡里滚，操作钉在卡底。
-    /// Mac 上是一个滚动区、按内容高（`UpToHeight`）：用 ViewThatFits 在内容与滚动区里的内容之间挑的话两份都要建，第一次打开 Cue 页时卡多建一遍；
-    /// 手机上仍是挑：滚动区里的按钮按下要晚一下才有反馈，放得下时不该这样。
-    @ViewBuilder private func scrollingIfTall(_ content: some View) -> some View {
-        #if os(macOS)
-        UpToHeight { ScrollView { content }.scrollBounceBehavior(.basedOnSize) }
-        #else
-        ViewThatFits(in: .vertical) {
-            content
-            ScrollView { content }.scrollBounceBehavior(.basedOnSize)
+    #if os(iOS)
+    /// 连紧凑的样子都放不下（横屏弹着键盘）：整张卡收成问句一行，放不下的用省略号。点它收起键盘，地方够了卡就按上面的挑法展开。
+    private func folded(_ message: CueMessage) -> some View {
+        Button {
+            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        } label: {
+            HStack(spacing: 9) {
+                PiStateGlyph(status: .asking).font(Typography.title)
+                Text(message.headline ?? "").font(Typography.title).foregroundStyle(palette.ink).lineLimit(1)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, Self.padding.leading)
+            .frame(minHeight: Self.footerHeight)
+            .contentShape(.rect)
         }
-        #endif
+        .buttonStyle(.plain)
+        .accessibilityHint("收起键盘，展开这张卡")
+    }
+    #endif
+
+    /// 卡里上面那段：问句、展开的原话、一排图（`shots` 为 false 是紧凑的样子，不带图）。
+    private func upper(_ message: CueMessage, shots showsShots: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            CueQuestionLine(message: message)
+            if reading == message.id { original(message.text).padding(.top, 12).transition(.opacity) }
+            if showsShots, let shots = shots[message.id] {
+                CueShots(shots: shots, group: "waiting", reply: .answer(message), open: open).padding(.top, 16)
+            }
+        }
+        .padding(.top, Self.padding.top).padding(.horizontal, Self.padding.leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     /// 末行（任务、原话；Mac 上连同选项）可点的高。
@@ -728,31 +762,37 @@ private struct RiseLayout: Layout {
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         guard let child = subviews.first else { return .zero }
-        // 孩子只按 `limit` 排，不看给的高：升起时外面按缩了的高（整高 × 露出的比例）回头再排一次，
-        // 照给的高排的话卡里那段就当成放不下、换成滚动的，尾段停下前截掉一截
-        let size = child.sizeThatFits(ProposedViewSize(width: proposal.width, height: limit))
+        let size = child.sizeThatFits(ProposedViewSize(width: proposal.width, height: room(proposal.height)))
         // 宽照给的：卡拿掉的那一刻孩子没了，宽跟着塌成 0 的话，裁的窗口两边让出的影子位就成了一小块露在输入框上
         return CGSize(width: proposal.width ?? size.width, height: size.height * shown)
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         guard let child = subviews.first else { return }
-        let size = child.sizeThatFits(ProposedViewSize(width: bounds.width, height: limit))
+        let fit = ProposedViewSize(width: bounds.width, height: room(proposal.height))
+        let size = child.sizeThatFits(fit)
         let origin = floats ? CGPoint(x: bounds.minX, y: bounds.maxY - size.height) : bounds.origin
-        child.place(at: origin, anchor: .topLeading, proposal: ProposedViewSize(width: bounds.width, height: limit))
+        child.place(at: origin, anchor: .topLeading, proposal: fit)
+    }
+
+    /// 孩子按整高排：至多 `limit`，外面给的不够时（输入框先拿走它的高，剩下的不到 `limit`）只到给的。给的是露出的那截，
+    /// 除以露出的比例换回整高：升起时外面按缩了的高回头再排一次，照给的高直接排的话卡里那段就当成放不下、换成紧凑的。
+    /// 向上取整：除回来的小数比整高少一点点也会被当成放不下。
+    private func room(_ offered: CGFloat?) -> CGFloat {
+        guard let offered, shown > 0 else { return limit }
+        return min(limit, (offered / shown).rounded(.up))
     }
 }
 
-#if os(macOS)
-/// 按里面的理想高（滚动区是它内容的高）、最高到给的高：放得下时与内容一样高，放不下时只占给的高。
-private struct UpToHeight: Layout {
+/// 地方不够时先让的一段：给了高时按里面的理想高（滚动区是它内容的高）、至多到给的高（滚动区本身会占满给的高，留下一截空白）；
+/// 量理想高时（`ViewThatFits` 挑哪一档、外面不给高）不占高，所以它放不放得下不影响挑哪一档。
+private struct Yielding: Layout {
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let ideal = subviews[0].sizeThatFits(ProposedViewSize(width: proposal.width, height: nil))
-        return CGSize(width: proposal.width ?? ideal.width, height: min(ideal.height, proposal.height ?? ideal.height))
+        return CGSize(width: proposal.width ?? ideal.width, height: proposal.height.map { min(ideal.height, $0) } ?? 0)
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         subviews[0].place(at: bounds.origin, proposal: ProposedViewSize(bounds.size))
     }
 }
-#endif

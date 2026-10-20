@@ -315,16 +315,16 @@ struct CueEvalTests {
         try await CueEval.run(
             "l-底下直接回了卡上的事",
             expect: "卡上问着按方案 1 改提问卡；他不点卡，在 Cue 页底下说「用 2，按钮再小一点」："
-                + "照方案 2 加上按钮再小一点让会话去做，撤回那张卡，不再为这件事发等你"
+                + "照方案 2 加上按钮再小一点让会话去做；卡随他开口收起，不放回，不再为这件事发等你"
         ) { eval in
             let (work, question) = try await Self.proposalsAsked(eval)
             try await eval.trigger { try await eval.rig.say("用 2，按钮再小一点") }
             let said = eval.calls("task", "say").compactMap { $0.args["text"] as? String }
-            let withdrawn = try await eval.rig.store.cueMessages().first { $0.id == question.id }
+            let card = try await eval.rig.store.cueMessages().first { $0.id == question.id }
             return [
                 Check("让会话照方案 2 做（说到 2 或对话里问）", said.contains { $0.contains(/2|二|对话里问/) }),
                 Check("带上按钮再小一点", said.contains { $0.contains(/小/) }),
-                Check("撤回了那张卡", withdrawn?.answeredAt != nil && withdrawn?.answer == nil),
+                Check("卡收起着（没放回）", card?.setAsideBy != nil),
                 Check("没再为这件事发等你", !eval.calls("tell").contains { $0.args["ask"] != nil }),
                 Check("没收掉这件事（没 done）", eval.calls("task", "done").isEmpty && work.task.status != .done),
             ]
@@ -334,13 +334,13 @@ struct CueEvalTests {
     @Test func m底下说的是别的事() async throws {
         try await CueEval.run(
             "m-底下说的是别的事",
-            expect: "卡上问着按方案 1 改提问卡；他在 Cue 页底下问的是另一件事（README 截图那件做到哪了）：答他问的，卡留着、不撤回"
+            expect: "卡上问着按方案 1 改提问卡；他在 Cue 页底下问的是另一件事（README 截图那件做到哪了），卡随他开口收起：答他问的，把卡放回等你"
         ) { eval in
             let (_, question) = try await Self.proposalsAsked(eval)
             try await eval.trigger { try await eval.rig.say("README 截图那件做到哪了？") }
             return [
                 Check("没撤回", !eval.calls("tell").contains { $0.args["withdraw"] != nil }),
-                Check("卡还在等你", try await eval.rig.store.cueMessagesWaitingForYou().contains { $0.id == question.id }),
+                Check("放回了等你", try await eval.rig.store.cueMessagesWaitingForYou().contains { $0.id == question.id }),
                 Check("回了他", try await eval.reply() != nil),
             ]
         }
@@ -417,7 +417,7 @@ struct CueEvalTests {
         ) { eval in
             let rig = eval.rig
             let work = try await rig.working(Self.title, Self.body)
-            try await rig.store.recordViewing(device: "phone", sessionID: work.id)
+            try await rig.store.recordViewing(device: "phone", sessionID: work.id, cue: false)
             let viewing = Date.now
             try await rig.settleHisTurn(
                 work, said: "限流顺便也加到登录接口上，同一个 IP 一分钟最多 10 次。", ago: 15 * 60,
@@ -425,7 +425,7 @@ struct CueEvalTests {
             try await eventually("这一停写进库") {
                 try await rig.store.sessions(matching: work.id).first.map { $0.state == .known(.settled) && $0.answered } == true
             }
-            try await eval.trigger { try await rig.store.recordViewing(device: "phone", sessionID: nil) }
+            try await eval.trigger { try await rig.store.recordViewing(device: "phone", sessionID: nil, cue: false) }
             return [
                 Check("他开着时没叫醒 Cue（之后只有他离开后那一轮）", rig.rounds.filter { $0.startedAt >= viewing }.count == 1),
                 Check("他离开后被叫醒（信封里这一停标着他说的）", eval.round?.sent.contains { $0.contains("他说的") } == true),

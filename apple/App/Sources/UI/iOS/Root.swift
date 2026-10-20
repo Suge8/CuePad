@@ -6,8 +6,6 @@ import SwiftUI
 struct IOSRoot: View {
     @State private var workspace: Workspace
     @State private var navigation: Navigation
-    /// 页面此刻不躲键盘（浮起的输入框开着，或刚收起、键盘还没落下）。
-    @State private var pageIgnoresKeyboard = false
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Namespace private var zoom
     let alerts: AlertCenter
@@ -25,17 +23,6 @@ struct IOSRoot: View {
                 if sizeClass == .regular { SplitRoot() } else { DockRoot() }
             }
             .background { RootShortcuts() }
-            // 浮起的输入框（新会话、发给 Agent）盖在页面上、自己随键盘升起：这时页面不躲键盘，
-            // 否则键盘一出来、一收起，底下整页都要按新的安全区重排一遍
-            .ignoresSafeArea(pageIgnoresKeyboard ? .keyboard : [], edges: .bottom)
-            .onChange(of: navigation.floating) { _, floating in if floating { pageIgnoresKeyboard = true } }
-            // 收起时等键盘落下再恢复躲键盘（收起的一刻键盘还在，马上恢复就是多排一遍）；页里自己的输入框要弹键盘时立刻恢复
-            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidHideNotification)) { _ in
-                if !navigation.floating { pageIgnoresKeyboard = false }
-            }
-            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
-                if !navigation.floating { pageIgnoresKeyboard = false }
-            }
             // 会写资料库的面板挂在门内：读不出资料库时不弹出，读到后再弹；新会话与发给 Agent 都是浮在键盘上方的输入框
             .overlay {
                 FloatingInput(isPresented: navigation.newSession != nil, close: { navigation.newSession = nil }) {
@@ -67,7 +54,7 @@ struct IOSRoot: View {
         .preferredColorScheme(scheme)
         .onChange(of: sizeClass, initial: true) { navigation.compact = sizeClass != .regular }
         .task { await workspace.follow() }
-        .modifier(SessionViewing(keeper: workspace.services.sessionViewer, navigation: navigation))
+        .modifier(SessionViewing(keeper: workspace.services.viewer, navigation: navigation))
         .onChange(of: workspace.services.pendingDeepLink, initial: true) {
             if let link = workspace.services.consumeDeepLink() { navigation.open(link) }
         }
@@ -93,7 +80,8 @@ struct RouteView: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.statusBarBottom) private var statusBar
     @Environment(\.homePage) private var homePage
-    /// 这一页的上沿（全局坐标）：状态栏那一条的渐变按它摆到屏幕顶上（`StatusBarFade`）。
+    /// 这一页的上沿（全局坐标）：状态栏那一条的渐变按它摆到屏幕顶上（`StatusBarFade`）。页的上沿不一定在屏幕顶，
+    /// 也不能靠 `ignoresSafeArea` 伸上去：根页让出的顶栏那一排也在安全区里，伸上去落在那一排下面。
     @State private var top: CGFloat = 0
 
     var body: some View {
@@ -144,12 +132,12 @@ struct RouteView: View {
     }
 }
 
-/// 状态栏那一条（屏幕顶到状态栏下沿）的页底色渐变：顶上近乎实、到状态栏下沿淡完，时间与电池压在内容上也读得清；
+/// 状态栏那一条（屏幕顶到状态栏下沿）的页底色渐变：时间那一段实、到状态栏下沿淡完，时间与电池不压在字上；
 /// 渐变随页走（推入、换去处时跟着页挪），颜色就是这一页的底色。不接点按、读屏跳过。
 private struct StatusBarFade: View {
     let color: Color
-    /// 几档：时间与电池那一段（上半截）近乎实，往下缓缓淡完，没有一条看得见的边；灵动岛以下的内容大半透出来。
-    private static let stops: [(alpha: Double, at: CGFloat)] = [(0.94, 0), (0.9, 0.45), (0.55, 0.72), (0.18, 0.9), (0, 1)]
+    /// 几档：时间、信号与电池那一段（上半截多一点）实，字压不到它们下面；往下缓缓淡完，没有一条看得见的边，灵动岛以下的内容透出来。
+    private static let stops: [(alpha: Double, at: CGFloat)] = [(1, 0), (1, 0.55), (0.75, 0.7), (0.35, 0.85), (0, 1)]
 
     var body: some View {
         LinearGradient(stops: Self.stops.map { .init(color: color.opacity($0.alpha), location: $0.at) }, startPoint: .top, endPoint: .bottom)

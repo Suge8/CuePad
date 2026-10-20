@@ -18,9 +18,19 @@ import UIKit
 /// 那几句这时才来，再回到 Cue 页，录"离开很久后回来"的定位（`awayIfAsked`）。
 /// cuepanel：iPad 在项目页旁开着右侧 Cue 面板。演示库另写入 Mac 同步来的 Pi 会话状态（含历史）与几条发到 Mac 的请求。
 extension DebugScene {
+    /// 模拟器当作接了电脑键盘、聚焦不弹软键盘：清掉输入法的硬件键盘布局后照常弹出（私有选择子，只在 Debug 里）。
+    private static func showSoftwareKeyboard() {
+        let selector = NSSelectorFromString("setHardwareLayout:")
+        for mode in UITextInputMode.activeInputModes where mode.responds(to: selector) { mode.perform(selector, with: nil) }
+    }
+
     static func prepare(_ workspace: Workspace, _ navigation: Navigation) async {
         if defaults.string(forKey: "CuePadBench") == "interact" { IOSInteractionBench.beginCold() }
         dumpAccessibilityIfAsked()
+        if defaults.bool(forKey: "CuePadSoftKeyboard") { showSoftwareKeyboard() }
+        if defaults.bool(forKey: "CuePadLandscape") {
+            (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.requestGeometryUpdate(.iOS(interfaceOrientations: .landscapeRight))
+        }
         let project = await prepareLibrary(workspace)
         if defaults.bool(forKey: "CuePadDemo") { await seedRemote(workspace.services) }
         if defaults.bool(forKey: "CuePadDemoMac") { Task { await runDemoMac(workspace.services) } }
@@ -63,13 +73,13 @@ extension DebugScene {
                 }
             }
         case "cue", "cuememory", "cuesettings":
-            if defaults.bool(forKey: "CuePadDemo") { await seedCue(workspace.services) }
-            if let draft = defaults.string(forKey: "CuePadCueDraft") { workspace.cue.draft.text = draft }
-            // 一夜里来的话是看着 Cue 页时写进去的：先离开再回来，才是"回来时有新消息"的样子
+            // 一夜里来的话要在不看 Cue 页时写（看着时写当场就读掉了）：先离开、写完再回来，才是"回来时有新消息"的样子
             if defaults.string(forKey: "CuePadCuePresence") == "away" {
                 navigation.show(.tasks)
                 await NextFrame.wait()
             }
+            if defaults.bool(forKey: "CuePadDemo") { await seedCue(workspace.services) }
+            if let draft = defaults.string(forKey: "CuePadCueDraft") { workspace.cue.draft.text = draft }
             navigation.show(.cue)
             navigation.sidebar = .all
             if scene == "cuememory" { workspace.cue.showsMemory = true }

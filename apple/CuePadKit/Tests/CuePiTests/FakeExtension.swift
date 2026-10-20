@@ -122,10 +122,12 @@ nonisolated final class FakeExtension: @unchecked Sendable {
 
     func start() throws {
         try? FileManager.default.removeItem(at: socketURL)
-        let fd = try Self.boundSocket(at: socketURL)
-        guard listen(fd, 8) == 0 else { throw POSIXError(.init(rawValue: errno)!) }
-        // 与真实扩展一致：bind 之后 chmod（FSEvents 不报告仅 bind 的 socket 创建）
-        chmod(socketURL.path, options.socketMode)
+        // 与真实扩展一致：在临时名上 listen、定好权限，再改名进来
+        let pending = socketURL.deletingPathExtension().appendingPathExtension("tmp")
+        let fd = try Self.boundSocket(at: pending)
+        guard listen(fd, 8) == 0, chmod(pending.path, options.socketMode) == 0, rename(pending.path, socketURL.path) == 0 else {
+            throw POSIXError(.init(rawValue: errno)!)
+        }
         shared.withLock { $0.listenFD = fd }
         let src = DispatchSource.makeReadSource(fileDescriptor: fd, queue: queue)
         src.setEventHandler { [weak self] in self?.accept() }

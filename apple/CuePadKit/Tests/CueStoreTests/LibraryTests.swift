@@ -131,12 +131,12 @@ import Testing
     let task = try await store.createTask("修好登录页", in: demo.id)
     try await store.setDirectory("/work/demo", for: demo.id)
     try await store.publishDirectoryBindings(host: "mac")
-    // 退回 50：撤掉 52、54、56、57、59、60、61 加的列、55、57、60 加的索引与 58、60 加的表，放回 56 删掉的列（53、61 重建触发器、55 重建的类型索引，留着新的照样能升；
+    // 退回 50：撤掉 52、54、56、57、59、60、61、62 加的列、55、57、60、64 加的索引与 58、60 加的表，放回 56 删掉的列（53、61 重建触发器、55 重建的类型索引，留着新的照样能升；
     // 61 加的列被触发器引用着，先换一个不引用它的）
     let added = try RawDB(fixture.url).rows(
       """
       SELECT name FROM sqlite_master WHERE name GLOB '*_modified' OR name IN
-        ('syncRecords_pushed', 'piSessionStates_folder', 'piMessages_sessionID_at', 'piSessions_agent', 'cueMessages_open', 'cueMessages_answered')
+        ('syncRecords_pushed', 'piSessionStates_folder', 'piMessages_sessionID_at', 'piSessions_agent', 'cueMessages_open', 'cueMessages_answered', 'cueMessages_setAside')
       """)
     try RawDB(fixture.url).exec(
       """
@@ -147,7 +147,7 @@ import Testing
       DROP TRIGGER piSessionStates_writeSeq_update; CREATE TRIGGER piSessionStates_writeSeq_update AFTER UPDATE OF state ON piSessionStates BEGIN SELECT 1; END;
       ALTER TABLE piSessionStates DROP COLUMN turnStartedAt; ALTER TABLE piSessionStates DROP COLUMN answeredAt;
       ALTER TABLE directoryBindings ADD COLUMN hostName TEXT NOT NULL DEFAULT 'Studio';
-      \(added.map { "DROP INDEX \($0[0]);" }.joined()) DROP TABLE cueRead; DROP TABLE sessionViewers; PRAGMA user_version = 50;
+      \(added.map { "DROP INDEX \($0[0]);" }.joined()) ALTER TABLE cueMessages DROP COLUMN setAsideBy; DROP TABLE cueRead; DROP TABLE sessionViewers; PRAGMA user_version = 50;
       INSERT INTO cueMessages (id, author, text, choices, urgent, taskID, createdAt, modifiedAt) VALUES
         ('\(UUID().uuidString.lowercased())', 'cue', '要推送吗？', '["允许一次","以后推送都不用问"]', 0, '\(task.id.uuidString.lowercased())', 1, 1),
         ('\(UUID().uuidString.lowercased())', 'cue', '按规矩要先问', '["允许一次"]', 0, NULL, 2, 2);

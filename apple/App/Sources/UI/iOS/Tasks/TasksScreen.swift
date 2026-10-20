@@ -202,11 +202,11 @@ private struct RunningSessions: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        let working = workspace.liveWork.working
-        if working > 0 {
+        let running = workspace.liveWork.running
+        if running > 0 {
             Button { navigation.show(.agent) } label: {
                 HStack(spacing: 3) {
-                    Text("\(working) 个会话在跑").contentTransition(.numericText()).animation(Motion.snappy, value: working)
+                    Text("\(running) 个会话在跑").contentTransition(.numericText()).animation(Motion.snappy, value: running)
                     Image(.forward).font(.footnote.weight(.semibold)).accessibilityHidden(true)
                 }
                 .font(.subheadline.monospacedDigit()).foregroundStyle(palette.ink3)
