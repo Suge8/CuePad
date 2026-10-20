@@ -164,6 +164,40 @@ import Testing
     #expect(try await upgraded.directoryBindings().map(\.folder) == ["demo"])
   }
 
+  /// 结构 64 的库没有默认项目，没有项目的灵感、任务（含回收站里的）projectID 是空的：升到 65 时建好默认项目（另一台设备上更早的版本
+  /// 删过同 id 的也取回），这些卡都挪进去、带新的修改时间同步出去；项目里的卡不动。之后库里没有空的 projectID。
+  @Test(arguments: [false, true])
+  func schema64LibraryMovesCardsWithoutProjectIntoTheDefaultProject(defaultWasTrashed: Bool) async throws {
+    // 都已推送过：升级后待推送的只有被挪的卡与补上的默认项目
+    let demo = try await store.createProject(name: "演示", color: "#111")
+    let filed = try await store.createCard(in: demo.id, body: "项目里的")
+    let idea = try await store.createCard(body: "散的灵感")
+    let task = try await store.createTask("散的任务")
+    let trashed = try await store.createCard(body: "回收站里的")
+    try await store.trashCard(trashed.id)
+    let home = Project.defaultID.uuidString.lowercased()
+    try RawDB(fixture.url).exec(
+      """
+      UPDATE cards SET projectID = NULL, modifiedAt = 1 WHERE projectID = '\(home)';
+      \(defaultWasTrashed ? "UPDATE projects SET deletedAt = 5, modifiedAt = 5" : "DELETE FROM projects") WHERE id = '\(home)';
+      INSERT INTO syncRecords (recordName, recordType, pushedModifiedAt) SELECT id, 'cards', modifiedAt FROM cards;
+      PRAGMA user_version = 64;
+      """)
+    let untouched = try #require(try await store.card(filed.id)).modifiedAt
+
+    let upgraded = try CueStore(location: .isolated(fixture.directory))
+    let restored = try #require(try await upgraded.project(Project.defaultID))
+    #expect(restored.deletedAt == nil && (defaultWasTrashed || restored.name == "默认"))
+    #expect(try await upgraded.cards(in: Project.defaultID).map(\.id) == [idea.id])
+    #expect(try await upgraded.tasks(in: Project.defaultID, .todo).map(\.id) == [task.id])
+    #expect(try await upgraded.trashedCards().map(\.projectID) == [Project.defaultID])
+    #expect(try RawDB(fixture.url).count("cards WHERE projectID IS NULL") == 0)
+    for id in [idea.id, task.id, trashed.id] { #expect(try await upgraded.card(id)!.modifiedAt > Date(timeIntervalSince1970: 0.001)) }
+    #expect(try await upgraded.card(filed.id)?.modifiedAt == untouched)
+    let pending = Set(try await upgraded.pendingSync().saves.map(\.id))
+    #expect(pending == Set([idea.id, task.id, trashed.id, Project.defaultID, demo.id].map { $0.uuidString.lowercased() }))
+  }
+
   /// 更新版本建的库与更早版本建的库（不再升级旧结构）都拒绝打开，不在错位的表结构上读写。
   @Test(arguments: [
     (CueStore.supportedSchemaVersions.upperBound + 1, CueStoreError.unsupportedSchemaVersion(CueStore.supportedSchemaVersions.upperBound + 1)),

@@ -48,6 +48,22 @@ import Testing
     #expect(ended.state == .known(.ended) && ended.lastReply == recap.lastReply)  // 跑完的结论在手机上还看得到
   }
 
+  /// 两台设备离线时各自建了默认项目（同一个固定 id），各往里记了东西，Mac 上还改了名：同步后两边只有一个默认项目，
+  /// 名字是改过的那个（新装设备的那一版修改时间是 0，盖不回"默认"），两条灵感都在里面。
+  @Test func defaultProjectsCreatedOfflineOnTwoDevicesMergeIntoOne() async throws {
+    try await mac.store.updateProject(Project.defaultID) { $0.name = "收件" }
+    let fromMac = try await mac.store.createCard(body: "Mac 上记的")
+    let fromPhone = try await phone.store.createCard(body: "手机上记的")
+    try await cloud.exchange()
+    try await cloud.exchange()
+
+    for rig in [mac, phone] {
+      let homes = try await rig.store.projects().filter(\.isDefault)
+      #expect(homes.map(\.name) == ["收件"])
+      #expect(Set(try await rig.store.cards(in: Project.defaultID).map(\.id)) == [fromMac.id, fromPhone.id])
+    }
+  }
+
   /// Agent 发到手机的预览：Mac 写预览记录与文件，手机拿到记录和一模一样的文件；Mac 过期清理后手机的记录与文件也没了。
   @Test func aPreviewAndItsFileTravelToThePhoneAndGoWhenTheMacDropsIt() async throws {
     let source = mac.fixture.directory.appending(path: "demo.html")
