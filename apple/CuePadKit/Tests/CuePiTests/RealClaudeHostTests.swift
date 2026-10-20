@@ -53,13 +53,23 @@ struct RealClaudeHostTests {
         }
     }
 
-    /// 等你确认（托管进程问 CuePad 能不能用工具）从 CuePad 作答；跑着的一轮能停，停了上下文用量不归零，还能接着说。
+    /// 托管会话以 auto 模式跑：只读命令与工作目录里的改动不问人；用户的 ask 规则仍要确认，从 CuePad 作答。
+    /// 跑着的一轮能停，停了上下文用量不归零，还能接着说。
     @Test func cuePadAnswersAPermissionAndStopsARunningTurn() async throws {
-        try await ClaudeTestbed.run { testbed in
+        try await ClaudeTestbed.run(settings: #"{"permissions": {"ask": ["Bash(touch *)"]}}"#) { testbed in
             try testbed.runtime.start()
             let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t", name: nil, model: nil, thinking: nil)
-            let touched = testbed.work.appending(path: "hosted.txt")
+            try "hello cuepad\n".write(to: testbed.work.appending(path: "seed.txt"), atomically: true, encoding: .utf8)
+            let edited = testbed.work.appending(path: "edited.txt")
 
+            let routine = Date()
+            try await testbed.bridge.send(
+                PiMessage(text: "用 Bash 工具依次执行 ls、cat seed.txt、rg hello（各一条命令），再用 Write 工具写 \(edited.path)，内容是 EDITED，然后只回复 DONE"), to: id)
+            try await testbed.waitForTurn(id, since: routine)
+            #expect(FileManager.default.fileExists(atPath: edited.path))
+            #expect(!testbed.log.states.contains(.waitingForUser), "\(testbed.log.details)")
+
+            let touched = testbed.work.appending(path: "hosted.txt")
             let asked = Date()
             try await testbed.bridge.send(PiMessage(text: "用 Bash 工具执行 touch \(touched.path) ，然后只回复 DONE"), to: id)
             let permission = try await testbed.waitForQuestion(id)
@@ -97,7 +107,7 @@ struct RealClaudeHostTests {
     /// 等你确认的问题收起，对话里在这句之前留一行"已停止"。命令比等的时限长：没被打断就等不到这句的回答。
     @Test(arguments: [false, true]) func aMessageWhileBusyStopsTheTurnAndStartsANewOne(toolRunning: Bool) async throws {
         AgentTape.variant(toolRunning ? "tool" : "asking")
-        try await ClaudeTestbed.run(settings: toolRunning ? #"{"permissions": {"allow": ["Bash"]}}"# : nil) { testbed in
+        try await ClaudeTestbed.run(settings: toolRunning ? nil : #"{"permissions": {"ask": ["Bash(touch *)"]}}"#) { testbed in
             try testbed.runtime.start()
             let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t", name: nil, model: nil, thinking: nil)
             let never = testbed.work.appending(path: "never.txt")
