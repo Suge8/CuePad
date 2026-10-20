@@ -201,6 +201,7 @@ struct TaskFlowTests {
         try await store.setStatus(publish.id, .done)
         let fix = try await store.createTask("修重连", in: project)
         try await store.setStatus(fix.id, .done)
+        try await Task.sleep(for: .milliseconds(2))  // 完成时间存到毫秒：同一毫秒里做完的两件分不出先后
         let shipped = try await store.createTask("发版", in: project)
         try await store.setStatus(shipped.id, .done)
         let closed = try await store.createTask("收尾", in: project)
@@ -232,8 +233,8 @@ struct TaskFlowTests {
     #if os(macOS)
     /// 任务页的流水看板（Mac 侧栏"任务"与手机任务页同一份）：拖到在管就是开始（同"开始"，`Workspace.handOff`），会话开好它就在管；
     /// Cue 问到它，它挪到等你，没绑任务的会话在问也在这一列；在管、等你两列的数就是 Cue 摘要里的数；答完回到在管；
-    /// 拖到做完就是做完（同点完成圈，`Workspace.toggle`），落在今天做完的那一列。
-    @Test func 看板_拖到在管就是开始_Cue问到它挪到等你_两列的数同Cue摘要_拖到做完就是做完() async throws {
+    /// 拖到做完就是做完（同点完成圈，`Workspace.toggle`），落在今天做完的那一列；做完了 Cue 还在问它，它只在等你。
+    @Test func 看板_拖到在管就是开始_Cue问到它挪到等你_两列的数同Cue摘要_拖到做完就是做完_做完了还在问只在等你() async throws {
         try await rig.offersPi()
         let workspace = Workspace(services: rig.services)
         let project = try await store.createProject(name: "圆桌", color: "#000000")
@@ -268,6 +269,13 @@ struct TaskFlowTests {
         try await workspace.toggle(task.id)
         columns = try await board()
         #expect(columns.done.map(\.id) == [task.id] && columns.managing.isEmpty && columns.waiting.count == 1)
+        try await expectCountsMatchCue(columns)
+
+        // 做完了 Cue 还在问它：它只在等你，做完列与实时活动的"今天做完"都不再算它
+        _ = try await store.addCueMessage(.cue, text: "要删分支吗？", ask: try CueAsking(.delete, action: "删掉修发言乱序的分支"), task: task.id)
+        columns = try await board()
+        #expect(columns.done.isEmpty && columns.waiting.compactMap(\.item?.id) == [task.id])
+        #expect(try await CueActivityState.Reading.read(from: store).done.isEmpty)
         try await expectCountsMatchCue(columns)
     }
     #endif

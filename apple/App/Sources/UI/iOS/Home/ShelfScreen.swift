@@ -26,7 +26,7 @@ struct ShelfScreen: View {
         .floatingHeader(narrow ? "项目" : SidebarOutline.Entry.allProjects.title, detail: workspace.catalog.map { "\($0.projects.count) 个项目" } ?? "") {
             Button("新建项目", icon: .newProject) { navigation.projectForm = .init() }
         }
-        .observing(services.store, into: $leading, onError: workspace.fail) { TaskBoard.leading(try $0.startedTasks()) }
+        .observing(services.store, into: $leading, onError: workspace.fail) { ProjectNow.leading(try $0.startedTasks()) }
     }
 
     private func content(_ catalog: ProjectCatalog, leading: [UUID: [ProjectNow.InProgress]]) -> some View {

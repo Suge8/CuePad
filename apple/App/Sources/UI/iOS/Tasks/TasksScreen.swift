@@ -3,7 +3,7 @@ import CueStore
 import SwiftUI
 
 /// 任务页（iPhone 底部一排的"任务"、宽屏侧栏的"任务"）：流水看板（`TaskBoard`），待办 → 在管 → 等你 → 做完（今天）。
-/// 宽屏（iPad）同 Mac 四列并排（`BoardColumns`），顶上按项目筛的胶囊。窄屏一屏一列：顶上一排带数的分段（`BoardSegments`），左右滑换列（分页滚动），
+/// 宽屏（iPad）同 Mac 四列并排（`BoardColumns`），顶上不写页名，第一排是按项目筛的胶囊（`Header`）。窄屏一屏一列：顶上一排带数的分段（`BoardSegments`），左右滑换列（分页滚动），
 /// 点分段滑过去；打开时有等你就落在等你。分段下面一行"全部项目"菜单按项目筛（筛了以后分段的数也只数这个项目）。
 /// 右上角"+"去待办、顶上浮出添加那一行（`NewTaskLine`，落在筛的项目或当前项目，可换），失焦且没写字时收回。
 struct TasksScreen: View {
@@ -37,9 +37,9 @@ struct TasksScreen: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .floatingHeader("任务") {
+        .modifier(Header(wide: sizeClass == .regular) {
             Button("添加任务", icon: .add) { add() }
-        }
+        })
         .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: adding)
         .onChange(of: project) { adding = false }
         .onAppear { if let board { land(board) } }
@@ -100,6 +100,25 @@ struct TasksScreen: View {
     private func add() {
         guard column != .todo else { return adding = true }
         withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { column = .todo } completion: { adding = true }
+    }
+}
+
+/// 任务页顶上那一排，不写页名（侧栏、底部那一排的选中格已经说了在哪一页）：窄屏同另两页的根（`floatingHeader`）；
+/// 宽屏导航栏里只有侧栏开关与右边的"+"，按项目筛的胶囊是内容的第一排。胶囊不进导航栏：横滑的一排放进工具栏项量不出宽，只剩第一颗。
+private struct Header<Add: View>: ViewModifier {
+    let wide: Bool
+    @ViewBuilder let add: Add
+
+    func body(content: Content) -> some View {
+        if wide {
+            content
+                .navigationTitle("任务")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar(removing: .title)
+                .toolbar { ToolbarItem(placement: .primaryAction) { add } }
+        } else {
+            content.floatingHeader("任务") { add }
+        }
     }
 }
 

@@ -158,7 +158,7 @@ private struct SplitSidebar: View {
             }
             .padding(.horizontal, 20).padding(.bottom, 20)
         }
-        .observing(services.store, into: $leading, onError: workspace.fail) { TaskBoard.leading(try $0.startedTasks()) }
+        .observing(services.store, into: $leading, onError: workspace.fail) { ProjectNow.leading(try $0.startedTasks()) }
     }
 
     private static let rowGap: CGFloat = 2

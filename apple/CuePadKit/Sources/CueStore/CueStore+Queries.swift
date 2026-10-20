@@ -221,7 +221,7 @@ extension CueStore {
   /// 可当上级的任务：列得出来的（没删除、没归档）要做卡片。上级不在这里的步骤当顶层，与 `tasks(_:)` 列出的一致。
   private static let liveTask = "u.deletedAt IS NULL AND u.archivedAt IS NULL AND u.todoAt IS NOT NULL"
 
-  /// 任务（`t`）连着它的项目（`p`）与列得出来的上级（`u`）；顶层的条件见 `topLevel`。`taskCounts` 与 `startedTasks` 共用。
+  /// 任务（`t`）连着它的项目（`p`）与列得出来的上级（`u`）；顶层的条件见 `topLevel`。`taskCounts`、`startedTasks` 与 `tasksDone` 共用。
   private static let taskWithParent =
     "FROM cards t LEFT JOIN projects p ON p.id = t.projectID LEFT JOIN cards u ON u.id = t.parentID AND \(liveTask)"
   private static let topLevel = "(u.id IS NULL OR (t.completedAt IS NULL AND u.completedAt IS NOT NULL))"
@@ -261,15 +261,25 @@ extension CueStore {
     ) { Card(row: $0) }
   }
 
-  /// `since` 以来做完的顶层任务，最近做完的在前（实时活动里的"最近做完"）：做完常顺手归档，归档的也算；回收站里的与回收站项目的不算。
-  public func tasksDone(since: Date) throws -> [Card] {
-    try db.query(
+  /// 做完的顶层任务，最近做完的在前——给用户看的"做完了哪些"只有这一处：任务看板的做完列与更早做完的、实时活动的"今天做完"、项目页的"已完成"。
+  /// 顶层与可见的口径同 `taskCounts`（做完的步骤跟着上级，归档、回收站里的与回收站项目的不算）。
+  /// `since` 只要这一刻以来做完的，`project` 只要这个项目的，`limit` 至多几条。
+  public func tasksDone(since: Date? = nil, in project: UUID? = nil, limit: Int? = nil) throws -> [Card] {
+    var scope = "", arguments: [any SQLBindable] = []
+    if let since {
+      scope += " AND t.completedAt >= ?"
+      arguments.append(since)
+    }
+    if let project {
+      scope += " AND t.projectID = ?"
+      arguments.append(project)
+    }
+    return try db.query(
       """
       SELECT \(Card.selection(as: "t")) \(Self.taskWithParent)
-      WHERE t.todoAt IS NOT NULL AND t.deletedAt IS NULL AND (t.projectID IS NULL OR p.deletedAt IS NULL)
-        AND t.completedAt >= ? AND u.id IS NULL
-      ORDER BY t.completedAt DESC, t.id
-      """, [since]
+      WHERE \(visibleTask) AND t.completedAt IS NOT NULL AND \(Self.topLevel)\(scope)
+      ORDER BY t.completedAt DESC, t.id\(limit.map { " LIMIT \($0)" } ?? "")
+      """, arguments
     ) { Card(row: $0) }
   }
 

@@ -44,6 +44,8 @@ struct DockRoot: View {
                 }
             }
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+            // 推移是 SwiftUI 逐帧插值的位移，图层上看不出在动：截图要等旧页拿掉（推完）再拍，不然拍到两页各露一截
+            .debugSettling(leaving != nil)
             .toolbarVisibility(.hidden, for: .navigationBar)
             .navigationDestination(for: Route.self) { RouteView(route: $0) }
         }
