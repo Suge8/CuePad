@@ -306,7 +306,7 @@ extension View {
         #endif
     }
 
-    /// 会话页直接打开 `-CuePadOpenPreview <批的标题或文件名>` 那张预览（对话里的交付物到了再找）。
+    /// 会话页直接打开 `-CuePadOpenPreview <标题或文件名>` 那张预览（对话里的交付物到了再找）。
     func debugOpensPreview(in items: [PiChatEntry], session: PiSessionState, _ opened: Binding<PreviewOpening?>) -> some View {
         #if DEBUG
         task(id: items.count) {

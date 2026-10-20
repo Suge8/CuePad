@@ -213,42 +213,93 @@ enum CueBubble {
 }
 
 
-/// Cue 说的一句：靠左的一颗纸做的气泡（`cueBubble`），里面是 Markdown（同会话里 Agent 的回答）；它第一次提到一件活时气泡底下一行这件活（`CueTaskLine`）。
-/// 问过你的，结束后（`CueQuestionEnd`）回到问的位置，这句话下面是它点名的图（`CueShots`）；你的回答在答的那一刻另成一格（`CueAnswer`，还在等的不在对话里，见 `CueThread.rows`）。
-/// 长按（Mac 右键）是消息菜单（`MessageMenu.Kind.cue`），预览就是这颗气泡。
+/// Cue 说的一句：靠左的一颗纸做的气泡（`cueBubble`），里面是 Markdown（同会话里 Agent 的回答），下面是它点名的图（`CueShots`：结束了回到问的位置的提问，
+/// 你的回答在答的那一刻另成一格，见 `CueAnswer`、`CueThread.rows`）；它第一次提到一件活时底下一行这件活（`CueTaskLine`）。
+/// `card`：结果卡（点名了图的做完，哪句算只在 `CueThread.rows` 定）——不是气泡而是一张纸（`paper`），不与上下的气泡连成一串；
+/// 第一行是一句平常的话时（"「X」做完了"）单独加粗作标题，一眼先读到做完了什么，再看证据与图。
+/// 长按（Mac 右键）是消息菜单（`MessageMenu.Kind.cue`），预览就是这颗气泡或这张纸。
 struct CueSays: View {
     let message: CueMessage
     var task: CueTaskRef?
-    /// 提问点名的图（`CueThread.shots`）与点开一张
+    /// Cue 点名的图（`CueThread.shots`）与点开一张：全屏左右翻的就是这几张，底栏是关于它对 Cue 说
     var shots: [CueShown] = []
     var open: (PreviewOpening) -> Void = { _ in }
+    var card = false
     /// 上面紧挨着 Cue 的另一句（`CueBubble.shape`）。
     var joined = false
     /// 新到的从左下角长出来；原位换下正在说的话时（`CueEnding`）直接出现
     var arrives = true
+    @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var selecting = false
 
     var body: some View {
-        let shape = CueBubble.shape(.leading, joined: joined)
-        VStack(alignment: .leading, spacing: 4) {
-            BubbleWidth(fraction: CueBubble.cueWidth, edge: .leading) {
-                VStack(alignment: .leading, spacing: 8) {
-                    MarkdownText(source: message.text).equatable()
-                    if !shots.isEmpty { CueShots(shots: shots, group: message.id.uuidString, reply: .cue, open: open) }
-                    if let task { CueTaskLine(ref: task) }
-                }
-                .cueBubble(joined: joined)
-                #if os(iOS)
-                .contentShape(.contextMenuPreview, shape)
-                #endif
-                .contextMenu { MessageActions(text: message.text, kind: .cue, selectText: { selecting = true }) }
+        BubbleWidth(fraction: CueBubble.cueWidth, edge: .leading) {
+            VStack(alignment: .leading, spacing: card ? 12 : 8) {
+                words
+                if !shots.isEmpty { CueShots(shots: shots, group: message.id.uuidString, reply: .cue, open: open) }
+                if let task { CueTaskLine(ref: task) }
             }
+            .modifier(CueSaysSurface(card: card, joined: joined))
+            .contextMenu { MessageActions(text: message.text, kind: .cue, selectText: { selecting = true }) }
         }
         #if os(iOS)
         .sheet(isPresented: $selecting) { SelectableTextSheet(text: message.text) }
         #endif
         .transition(arrives ? CueBubble.arrival(.leading, reduceMotion: reduceMotion) : .identity)
+    }
+
+    @ViewBuilder private var words: some View {
+        let parts: (title: String?, body: String) = card ? Self.headline(message.text) : (nil, message.text)
+        if let title = parts.title {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(Self.inline(title)).font(Typography.reading.weight(.semibold)).foregroundStyle(palette.ink)
+                    .lineSpacing(Typography.readingLineSpacing)
+                    .fixedSize(horizontal: false, vertical: true)
+                if !parts.body.isEmpty { MarkdownText(source: parts.body).equatable() }
+            }
+        } else {
+            MarkdownText(source: parts.body).equatable()
+        }
+    }
+
+    /// 第一行是平常的一句话（不是标题、列表、引用、代码、表格）时拆出来作标题，其余是正文。
+    private static func headline(_ text: String) -> (title: String?, body: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let lines = trimmed.split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: false)
+        guard let first = lines.first.map(String.init), !first.isEmpty, !Self.isMarkup(first) else { return (nil, trimmed) }
+        let rest = lines.count > 1 ? String(lines[1]).trimmingCharacters(in: .whitespacesAndNewlines) : ""
+        return (first, rest)
+    }
+
+    /// 标题行里的行内记号（粗体、代码、链接）照样认，不露出星号与反引号。
+    private static func inline(_ line: String) -> AttributedString {
+        (try? AttributedString(markdown: line, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(line)
+    }
+
+    private static func isMarkup(_ line: String) -> Bool {
+        if ["#", "-", "*", "+", ">", "`", "|", "!["].contains(where: line.hasPrefix) { return true }
+        return line.prefix { $0.isNumber }.count > 0 && line.drop { $0.isNumber }.hasPrefix(".")
+    }
+}
+
+/// `CueSays` 的底：气泡（`cueBubble`），或结果卡的一张纸；长按的预览照这个形状裁。
+private struct CueSaysSurface: ViewModifier {
+    let card: Bool
+    let joined: Bool
+
+    func body(content: Content) -> some View {
+        if card {
+            content.padding(CueBubble.padding).frame(maxWidth: .infinity, alignment: .leading).paper(radius: CueBubble.radius)
+                #if os(iOS)
+                .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: CueBubble.radius, style: .continuous))
+                #endif
+        } else {
+            content.cueBubble(joined: joined)
+                #if os(iOS)
+                .contentShape(.contextMenuPreview, CueBubble.shape(.leading, joined: joined))
+                #endif
+        }
     }
 }
 
@@ -383,7 +434,7 @@ struct CueChoices: View {
     }
 }
 
-/// 提问点名要你看的图（`CueShown`，至多 `CueShot.limit` 张），按 Cue 给的先后：一排靠左、一行排完不横滑，每张同样大的方形缩略图
+/// Cue 点名要你看的图（提问卡与结果卡，`CueShown`，至多 `CueShot.limit` 张），按 Cue 给的先后：一排靠左、一行排完不横滑，每张同样大的方形缩略图
 /// （边长 `ShotRow`：放得下就是 `side`，不然几张平分可用宽），按显著区域裁切填满（`LookBox.salient`）。缩略图本来看不全、都要点开，它只管认出是哪张、邀请点开；
 /// 要看什么由每张正下方那一句说（与图同宽、向下换行；含"："的拆两行，前半加粗是名字、后半是说明），辅助功能字号下也一样。
 /// 点一张全屏看整张，左右翻的就是这几张，页顶写看什么；底栏按 `reply`（"等你"里是那几个选项）。
@@ -399,7 +450,7 @@ struct CueShots: View {
     #else
     static let side: CGFloat = 120
     #endif
-    fileprivate static let gap = DeliverableStrip.gap
+    fileprivate static let gap = PreviewBatch.gap
 
     /// 在 `width` 宽里排 `count` 张时每张的边长（`ShotRow` 照它排）：放得下是 `side`，不然几张平分。
     static func cell(count: Int, width: CGFloat) -> CGFloat {

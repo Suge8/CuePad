@@ -27,10 +27,10 @@ import Testing
 
     let fine = try file("fine.png", "png")
     // 一批里有一个不行，整批都不留
-    await #expect(throws: CueStoreError.previewUnreadable(missing.path)) { try await store.addPreviews([fine, missing].map { (url: $0, title: "预览") }, sessionID: "s1") }
-    await #expect(throws: CueStoreError.previewUnreadable(folder.path)) { try await store.addPreviews([folder].map { (url: $0, title: "预览") }, sessionID: "s1") }
-    await #expect(throws: CueStoreError.previewUnsupported("zip")) { try await store.addPreviews([fine, archive].map { (url: $0, title: "预览") }, sessionID: "s1") }
-    await #expect(throws: CueStoreError.previewTooLarge(big.path, limit: PiPreview.maxBytes)) { try await store.addPreviews([big].map { (url: $0, title: "预览") }, sessionID: "s1") }
+    await #expect(throws: CueStoreError.previewUnreadable(missing.path)) { try await store.addPreviews([fine, missing].map { (url: $0, title: $0.lastPathComponent) }, sessionID: "s1") }
+    await #expect(throws: CueStoreError.previewUnreadable(folder.path)) { try await store.addPreviews([(folder, folder.lastPathComponent)], sessionID: "s1") }
+    await #expect(throws: CueStoreError.previewUnsupported("zip")) { try await store.addPreviews([fine, archive].map { (url: $0, title: $0.lastPathComponent) }, sessionID: "s1") }
+    await #expect(throws: CueStoreError.previewTooLarge(big.path, limit: PiPreview.maxBytes)) { try await store.addPreviews([(big, big.lastPathComponent)], sessionID: "s1") }
 
     let stored = try await store.previews(of: "s1")
     let records = try RawDB(fixture.url).count("attachments")
@@ -40,12 +40,12 @@ import Testing
   /// 同一批 = 同一创建时间：同一会话里后发的一批即使时钟落在已有预览当时或之前（同一毫秒、时钟回拨），也排在它之后 1 毫秒，不与它合成一张卡；
   /// 别的会话不受影响。
   @Test func aLaterBatchNeverSharesACreationTimeWithAnEarlierOneInTheSameSession() async throws {
-    let first = try await store.addPreviews([file("a.png", "a"), file("b.png", "b")].map { (url: $0, title: "预览") }, sessionID: "s1").map(\.preview)
+    let first = try await store.addPreviews([file("a.png", "a"), file("b.png", "b")].map { (url: $0, title: $0.lastPathComponent) }, sessionID: "s1").map(\.preview)
     let ahead = first[0].createdAt.addingTimeInterval(60)
     try RawDB(fixture.url).exec("UPDATE previews SET createdAt = \(Int64(ahead.timeIntervalSince1970 * 1000))")
 
-    let next = try await store.addPreviews([file("c.png", "c"), file("d.png", "d")].map { (url: $0, title: "预览") }, sessionID: "s1").map(\.preview)
-    let elsewhere = try await store.addPreviews([file("e.png", "e")].map { (url: $0, title: "预览") }, sessionID: "s2")[0].preview
+    let next = try await store.addPreviews([file("c.png", "c"), file("d.png", "d")].map { (url: $0, title: $0.lastPathComponent) }, sessionID: "s1").map(\.preview)
+    let elsewhere = try await store.addPreviews([file("e.png", "e")].map { (url: $0, title: $0.lastPathComponent) }, sessionID: "s2")[0].preview
 
     #expect(next.allSatisfy { $0.createdAt == ahead.addingTimeInterval(0.001) })
     #expect(try await store.previews(of: "s1").map(\.name) == ["a.png", "b.png", "c.png", "d.png"])
@@ -61,9 +61,9 @@ import Testing
       try await store.writePiTranscript(PiTranscript(
         sessionID: id, messages: [PiChatMessage(sessionID: id, entryID: "e", seq: 1, role: .user, text: "x", at: longAgo)], recap: PiRecap()))
     }
-    let shared = try await store.addPreviews([file("s.txt", "shared")].map { (url: $0, title: "预览") }, sessionID: "quiet")[0].preview
-    _ = try await store.addPreviews([file("s.txt", "shared")].map { (url: $0, title: "预览") }, sessionID: "active")
-    let only = try await store.addPreviews([file("o.txt", "only")].map { (url: $0, title: "预览") }, sessionID: "quiet")[0].preview
+    let shared = try await store.addPreviews([file("s.txt", "shared")].map { (url: $0, title: $0.lastPathComponent) }, sessionID: "quiet")[0].preview
+    _ = try await store.addPreviews([file("s.txt", "shared")].map { (url: $0, title: $0.lastPathComponent) }, sessionID: "active")
+    let only = try await store.addPreviews([file("o.txt", "only")].map { (url: $0, title: $0.lastPathComponent) }, sessionID: "quiet")[0].preview
 
     try await store.prunePiMessages(olderThan: 7 * 86_400, now: now.addingTimeInterval(8 * 86_400))
 

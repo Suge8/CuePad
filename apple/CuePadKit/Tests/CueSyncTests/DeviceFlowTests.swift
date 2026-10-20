@@ -52,7 +52,7 @@ import Testing
   @Test func aPreviewAndItsFileTravelToThePhoneAndGoWhenTheMacDropsIt() async throws {
     let source = mac.fixture.directory.appending(path: "demo.html")
     try Data("<h1>登录页</h1>".utf8).write(to: source)
-    let preview = try await mac.store.addPreviews([source].map { (url: $0, title: "登录页") }, sessionID: "s1")[0].preview
+    let preview = try await mac.store.addPreviews([(source, "登录页")], sessionID: "s1")[0].preview
     try await cloud.exchange()
 
     let seen = try #require(try await phone.store.previews(of: "s1").first)
