@@ -20,6 +20,8 @@
 	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>CuePad 用相机拍照，把照片记进灵感或任务。</string>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>

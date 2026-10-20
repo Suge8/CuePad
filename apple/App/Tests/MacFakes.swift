@@ -39,10 +39,13 @@ final class RecordingHost: AgentRuntime {
     var resumeFailures: [any Error] = []
     private let bridge: PiBridge
     private let socketDirectory: URL
+    /// Pi 的会话目录：开的新会话像 Pi 那样一上桥就报出它将来的会话文件 `--demo--/<会话 id>.jsonl`（第一条回答落盘前还不存在）
+    private let sessions: URL
 
-    init(bridge: PiBridge, socketDirectory: URL) {
+    init(bridge: PiBridge, socketDirectory: URL, sessions: URL) {
         self.bridge = bridge
         self.socketDirectory = socketDirectory
+        self.sessions = sessions
     }
 
     func start() {}
@@ -60,7 +63,8 @@ final class RecordingHost: AgentRuntime {
         calls.append(.open(
             directory: directory.path, launchToken: launchToken, name: name, model: model.map { "\($0.provider)/\($0.id)" }, thinking: thinking?.rawValue))
         if let openFailure { throw PiHostError.exited(openFailure) }
-        return try await connect("new-\(launchToken)", cwd: directory.path).id
+        let id = "new-\(launchToken)"
+        return try await connect(id, cwd: directory.path, sessionFile: sessions.appending(path: "--demo--/\(id).jsonl").path).id
     }
 
     /// 一个连着桥的会话：假扩展在 socket 目录里监听，桥发现它后返回。`busy` 为 true 时它正在跑一轮；`hosted` 是 CuePad 在后台托管的；

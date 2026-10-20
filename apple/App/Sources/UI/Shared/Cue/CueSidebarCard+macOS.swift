@@ -1,10 +1,10 @@
 #if os(macOS)
 import SwiftUI
 
-/// Mac 侧栏最上面的 Cue 名片：头像（大一档，`CueAvatar.Size.header`）、名字，名字下面一行只写此刻在做什么或不在的原因（`CueStatusLine`，不带它最近一句），
-/// 名字右边"等你 N"（主窗口里只此一处）与新消息数；下面一个纸色气泡放它最近说的话（`CueWatch.lastSaid`，最多三行，墨色同状态行的那一句），
+/// Mac 侧栏最上面的 Cue 名片：头像（大一档，`CueAvatar.Size.header`）、名字，名字下面一行"在管 N · 等你 M"或不在的原因（`CueStatusLine` 的 tally，主窗口里只此一处），
+/// 名字右边新消息数；下面一个纸色气泡放它最近说的话（`CueWatch.lastSaid`，最多三行，没读的是正文墨色），
 /// 左上一个尖角指向头像——是它说的。点开 Cue 页；开着时整张名片是选中底（`RowStyle`），气泡收起：对话就在右边，不重复同一句。
-/// 零件与状态行（`CueStatusRow`：菜单栏面板、输入条、iPad）共用：头像、等你数、新消息数、状态一行。
+/// 零件与状态行（`CueStatusRow`：菜单栏面板、输入条、iPad）共用：头像、新消息数、在管与等你那一行。
 struct CueSidebarCard: View {
     let select: (Route) -> Void
     @Environment(Workspace.self) private var workspace
@@ -25,10 +25,9 @@ struct CueSidebarCard: View {
                             Text(cue.name).font(Typography.cueCardName).fontWeight(cue.unread > 0 ? .bold : nil).foregroundStyle(palette.ink)
                                 .lineLimit(1)
                             Spacer(minLength: 0)
-                            WaitingCount(count: cue.waiting).font(Typography.meta)
                             UnreadCount(count: cue.unread).font(Typography.meta)
                         }
-                        CueStatusLine().lineLimit(1)
+                        CueStatusLine(tally: true).lineLimit(1)
                     }
                 }
                 if !selected, let said = cue.lastSaid {
@@ -39,7 +38,6 @@ struct CueSidebarCard: View {
             .contentShape(.rect)
         }
         .buttonStyle(RowStyle(selected: selected))
-        .animation(Motion.quick, value: cue.waiting)
         .animation(Motion.quick, value: cue.unread)
         .animation(Motion.quick, value: cue.presence)
         .accessibilityAddTraits(selected ? .isSelected : [])

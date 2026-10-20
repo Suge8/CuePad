@@ -1,6 +1,6 @@
 import Foundation
 
-/// 小组件、分享扩展打开主 App 的链接：`cuepad://speak`、`cuepad://project/<id>`、`cuepad://card/<id>`、`cuepad://cue`。
+/// 小组件、分享扩展与实时活动打开主 App 的链接：`cuepad://speak`、`cuepad://project/<id>`、`cuepad://card/<id>`、`cuepad://cue`、`cuepad://session/<id>`。
 nonisolated enum DeepLink: Equatable, Sendable {
     static let scheme = "cuepad"
 
@@ -10,6 +10,8 @@ nonisolated enum DeepLink: Equatable, Sendable {
     case card(UUID)
     /// 打开 Cue 页。
     case cue
+    /// 打开一个会话（会话状态记录的 id，`PiSessionState.id`）：实时活动里会话在问的那件"打开"。
+    case session(UUID)
 
     init?(url: URL) {
         guard url.scheme == Self.scheme, let host = url.host() else { return nil }
@@ -25,6 +27,9 @@ nonisolated enum DeepLink: Equatable, Sendable {
         case ("card", 1):
             guard let id = UUID(uuidString: parts[0]) else { return nil }
             self = .card(id)
+        case ("session", 1):
+            guard let id = UUID(uuidString: parts[0]) else { return nil }
+            self = .session(id)
         default:
             return nil
         }
@@ -36,6 +41,7 @@ nonisolated enum DeepLink: Equatable, Sendable {
         case .project(let id): URL(string: "cuepad://project/\(id.uuidString.lowercased())")!
         case .card(let id): URL(string: "cuepad://card/\(id.uuidString.lowercased())")!
         case .cue: URL(string: "cuepad://cue")!
+        case .session(let id): URL(string: "cuepad://session/\(id.uuidString.lowercased())")!
         }
     }
 }

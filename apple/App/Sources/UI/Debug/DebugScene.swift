@@ -54,7 +54,8 @@ enum ScrollAnchor {
 /// - `-CuePadSync <noAccount|decide|failed|syncing|restricted|conflicts>`：装上报这个状态的同步替身，设置里 iCloud 同步与 Mac 工具栏的同步提示按它显示（`DebugScene+Sync.swift`）；
 ///   `-CuePadSync stalled`：装上同步永不返回的替身，核对下拉刷新的圈有时限；`-CuePadSync arrive`：启动后的第一次拉取分几页带回别的设备写下的 Cue 的话（`ArrivingSync`），核对"同步中"与对完一次滑上来；
 /// - `-CuePadSampleCrash YES`：存一份样例崩溃诊断（配 `-CuePadCrashSheet YES` 直接打开摘要）；
-/// - `-CuePadNotifications YES`（仅 Mac）：隔离库下也发真实的系统通知（规则见 docs/verify.md「通知（Mac）」）；
+/// - `-CuePadNotifications YES`：Mac 隔离库下也发真实的系统通知（规则见 docs/verify.md「通知（Mac）」），两端都照常请求通知权限；
+///   `-CuePadQuotaRemindIn <秒>`（配 `-CuePadDemo YES` 与空库）：演示额度里 Claude 的本周这么多秒后到提醒时刻（`DemoLibrary.seedQuotas`，核对周额度提醒）；
 ///   `-CuePadSampleCue <秒>`（仅 Mac）：过这么久写一条 Cue 请你允许推送的消息，经 Cue 的通知出口发出（隔离库里 Cue 不值班，不会自己推）；
 /// 设置项可在参数域覆盖：`-theme dark`。
 enum DebugScene {

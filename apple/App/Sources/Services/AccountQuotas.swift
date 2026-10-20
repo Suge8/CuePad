@@ -6,7 +6,7 @@ import CuePi
 #endif
 
 /// 订阅账号的额度（`AccountQuota`，每个提供方一条），整个 App 一份：Agent 页顶部、菜单栏面板、回复框的模型胶囊与模型菜单都读这里，
-/// 不各自订阅。数据只在 Mac 上由桥写入（回复里带回的观测随时到，见 `AppServices.consumePiChanges`）；这里还管主动刷新的节流：
+/// 不各自订阅；每次变化按它重排周额度提醒（`QuotaReminder`）。数据只在 Mac 上由桥写入（回复里带回的观测随时到，见 `AppServices.consumePiChanges`）；这里还管主动刷新的节流：
 /// 只在额度视图出现、有观测陈旧（`AccountQuota.staleAfter`）时查一次，同时来的几次合并成一次，查到后同样久之内不再查，
 /// 失败后冷却 `failureCooldown`。没有定时器：不看就不查。
 @Observable
@@ -17,8 +17,11 @@ final class AccountQuotas {
 
     private static let failureCooldown: TimeInterval = 2 * 60
 
-    func follow(_ store: CueStore) async throws {
-        for try await items in store.observe({ try $0.accountQuotas() }) where items != self.items { self.items = items }
+    func follow(_ store: CueStore, changed: ([AccountQuota]) async -> Void) async throws {
+        for try await items in store.observe({ try $0.accountQuotas() }) where items != self.items {
+            self.items = items
+            await changed(items)
+        }
     }
 
     /// 还一条都没有，或有一条陈旧了。
@@ -49,7 +52,7 @@ extension AppServices {
     /// 开始跟随额度记录（`start()` 调用）；读失败时报告并停止。
     func startAccountQuotas() {
         follow(reporting: { .syncUnavailable("读取订阅额度失败，额度不再更新：\($0)") }) {
-            try await self.accountQuotas.follow(self.store)
+            try await self.accountQuotas.follow(self.store) { await self.alerts?.remind($0) }
         }
     }
 

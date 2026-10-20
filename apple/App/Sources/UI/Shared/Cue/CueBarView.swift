@@ -1,7 +1,7 @@
 #if os(macOS)
 import SwiftUI
 
-/// "对 Cue 说"输入条的内容（`CueBar`）：上面一行头像、名字与此刻在做什么（有等你的写"等你 N"），下面是一直展开的输入框（可带图片）。
+/// "对 Cue 说"输入条的内容（`CueBar`）：上面一行头像、名字与在管、等你（`CueStatusRow`），下面是一直展开的输入框（可带图片）。
 /// 说出去就收起；草稿与 Cue 页同一份（`CueWatch.draft`），没说完收起了，在 Cue 页里接着写。
 struct CueBarView: View {
     /// 调试画面里放在桌面图上拍时没有宿主。
@@ -22,9 +22,8 @@ struct CueBarView: View {
 
 import SwiftUI
 
-/// 一行 Cue 的现状（菜单栏面板、输入条、iPad 侧栏最上面；Mac 侧栏是名片 `CueSidebarCard`，用同一套零件）：头像（`CueEntryAvatar`）、名字、
-/// 此刻在做什么或它最近一句，有等你的写"等你 N"（赭黄），有新消息的写几条（石绿，`UnreadCount`）。
-/// 有新消息时同会话行的"有新回复"：名字加粗，它最近一句用正文墨色（新的那句就是它）。
+/// 一行 Cue 的现状（菜单栏面板、输入条、iPad 侧栏最上面；Mac 侧栏是名片 `CueSidebarCard`，用同一套零件）：头像（`CueEntryAvatar`）、名字，
+/// 下面"在管 N · 等你 M"（`CueStatusLine` 的 tally），有新消息的在行尾写几条（石绿，`UnreadCount`）。有新消息时同会话行的"有新回复"：名字加粗。
 struct CueStatusRow<Trailing: View>: View {
     var font = Typography.body.weight(.semibold)
     @ViewBuilder var trailing: Trailing
@@ -37,16 +36,13 @@ struct CueStatusRow<Trailing: View>: View {
             CueEntryAvatar()
             VStack(alignment: .leading, spacing: 1) {
                 Text(cue.name).font(font).fontWeight(cue.unread > 0 ? .bold : nil).foregroundStyle(palette.ink).lineLimit(1)
-                CueStatusLine(fallback: cue.lastSaid, fresh: cue.unread > 0).lineLimit(1)
+                CueStatusLine(tally: true).lineLimit(1)
             }
             Spacer(minLength: 6)
-            WaitingCount(count: cue.waiting).font(Typography.meta)
             UnreadCount(count: cue.unread).font(Typography.meta)
             trailing
         }
-        .animation(Motion.quick, value: cue.waiting)
         .animation(Motion.quick, value: cue.unread)
-        .animation(Motion.quick, value: cue.lastSaid)
         .animation(Motion.quick, value: cue.presence)
     }
 }
@@ -83,12 +79,13 @@ struct UnreadCount: View {
     }
 }
 
-/// Cue 此刻在做什么的那一句：话在路上、在做事与会话顶栏同一个样子（`PiShownLabel`）；不在时写原因（`CuePresence.line`，起不来是失败色，其余次要灰）；
-/// 都没有时是 `fallback`（`fresh`：它是还没读的新消息，用正文墨色，不然次要灰）。页头与状态行同用。Cue 在这台 Mac 值班、正在说回答你的话（`CueKeeper.speech`）时说"输出中"（`PiShown.speaking`）。
-/// 它运行在别的设备上、本机正在和 iCloud 对时（`AppServices.isCatchingUp(on:)`，久过 `Pending.delay` 才出）写"正在同步"：那时写下的状态可能已经过时。
+/// Cue 那一行的第二行（`tally`：Mac 侧栏名片、iPad 侧栏、菜单栏面板、输入条与手机、iPad 的页头）或 Mac Cue 页头里此刻在做什么的那一句。
+/// 不在时写原因（`CuePresence.line`，起不来是失败色，其余次要灰）；`tally` 时其余写"在管 N · 等你 M"（`CueTallyLine`），都为 0 时 Cue 在做事写状态词、
+/// 静着写一句安静的现状；不写 tally 时话在路上、在做事与会话顶栏同一个样子（`PiShownLabel`），空闲不写。
+/// Cue 在这台 Mac 值班、正在说回答你的话（`CueKeeper.speech`）时状态词是"输出中"（`PiShown.speaking`）。
+/// 它运行在别的设备上、本机正在和 iCloud 对时（`AppServices.isCatchingUp(on:)`，久过 `Pending.delay` 才出）写"正在同步"：那时写下的状态与数可能已经过时。
 struct CueStatusLine: View {
-    var fallback: String?
-    var fresh = false
+    var tally = false
     var font = Typography.meta
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -97,23 +94,30 @@ struct CueStatusLine: View {
 
     var body: some View {
         let cue = workspace.cue
+        let counted = tally && (cue.managing > 0 || cue.waiting > 0)
         // 什么都不写时也要有一个真的视图：等同步的那个任务挂在它上面
         ZStack(alignment: .leading) {
-            // 换一句就是换一个视图（按说的字认）：同一种说法里换字也先淡掉再淡入（`handOff`）
+            // 换一句就是换一个视图（按说的字认）：同一种说法里换字也先淡掉再淡入（`handOff`）；数变了原地滚过去
             if syncing {
                 SyncingLabel().transition(.handOff)
+            } else if let line = cue.presence.line(name: cue.name) {
+                Text(line).foregroundStyle(cue.presence.isUnreachable ? palette.failure : palette.ink3).id(line).transition(.handOff)
+            } else if counted || (tally && shown == nil) {
+                CueTallyLine().id(Self.tallyID).transition(.handOff)
             } else if let shown {
                 PiShownLabel(shown: shown).id(shown.label).transition(.handOff)
-            } else if let line = cue.presence.line(name: cue.name) ?? fallback {
-                Text(line).foregroundStyle(cue.presence.isUnreachable ? palette.failure : Self.said(fresh: fresh, palette)).id(line).transition(.handOff)
             }
         }
         .font(font)
         .transition(.opacity)
+        .animation(Motion.quick, value: cue.managing)
+        .animation(Motion.quick, value: cue.waiting)
         .pending(services.isCatchingUp(on: cue.hostID), shown: $syncing)
     }
 
-    /// 它最近一句的墨色（这里的 `fallback` 与 Mac 侧栏名片的气泡）：是还没读的新消息时用正文墨色，不然最淡一档。
+    private static let tallyID = "tally"
+
+    /// Cue 最近一句的墨色（Mac 侧栏名片的气泡）：是还没读的新消息时用正文墨色，不然最淡一档。
     static func said(fresh: Bool, _ palette: Palette) -> Color { fresh ? palette.ink : palette.ink3 }
 
     private var shown: PiShown? {
@@ -125,9 +129,39 @@ struct CueStatusLine: View {
     }
 }
 
+/// Cue 那一行的"在管 N · 等你 M"（`TallyLabel`）：在管那半是次要墨色，流光在 Cue 做事时（`CueWatch.busy`）会动。
+private struct CueTallyLine: View {
+    @Environment(Workspace.self) private var workspace
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        let cue = workspace.cue
+        TallyLabel(managing: cue.managing, waiting: cue.waiting) { TallyStreak(flowing: cue.busy) } mark: { Image(.waiting) }
+            .foregroundStyle(palette.ink2)
+    }
+}
+
+/// 在管前那一截靛青流光：Cue 在做事时一道光沿着淡的底走（`LoopLayer.sheen`），静着时与减弱动态效果时是静止的样子（`StillStreak`）。
+struct TallyStreak: View {
+    let flowing: Bool
+    @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        if flowing, !reduceMotion {
+            StillStreak().hidden()
+                .background(palette.selection, in: .capsule)
+                .overlay { LoopLayer(kind: .sheen, color: palette.signature).clipShape(.capsule) }
+                .transition(.opacity)
+        } else {
+            StillStreak().transition(.opacity)
+        }
+    }
+}
+
 #if os(macOS)
-/// Mac Cue 页的页头（窗口工具栏居中，玻璃由工具栏给）：头像，名字接此刻在做什么，一行（等你的卡就在输入框上方，这里不写"等你 N"）。输入框里有没说出去的话时头像露"在听"。
-/// 只在侧栏收起时有（`PageTitleSlot`）：侧栏开着时最上面的名片已经写了名字与此刻在做什么。
+/// Mac Cue 页的页头（窗口工具栏居中，玻璃由工具栏给）：头像，名字接此刻在做什么，一行（在管与等你在侧栏的名片上，等你的卡就在输入框上方，这里不写）。输入框里有没说出去的话时头像露"在听"。
+/// 只在侧栏收起时有（`PageTitleSlot`）：侧栏开着时最上面的名片已经写了名字与现状。
 /// 手机与 iPad 的页头是 `CueHeader`。
 struct CueTitle: View {
     @Environment(Workspace.self) private var workspace

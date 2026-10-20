@@ -58,8 +58,9 @@ forbid "不用系统色与系统灰（.secondary、.gray、NSColor.labelColor…
 forbid "不在界面里给颜色叠透明度：每处各写一个透明度就多出一档颜色。用色板里现成的档（ink2、ink3、hair、fill、track、selection、wash…），没有就进色板加一个；渐变的透明端写 .opacity(0)" \
   '(?:palette\.\w+|Color\.\w+|\.black|\.white)(?:\([^()]*\))?\.opacity\((?!0\))' \
   'App/AppGroup/Palette.swift' 'App/Sources/UI/Debug/**'
-forbid "图标只经 Icon（Theme/Icon.swift）按意思取自家墨块符号（design/tools/cue-symbols.py 生成），不用系统符号：哪个意思画成哪个符号只在那里写一处，缺哪个就在生成器里画、在 Icon 里加一个意思。用 Image(.名)、Label(_:icon:)、Button(_:icon:)、Menu(_:icon:)、Icon.platformImage；出错是 .failure、等你是 .waiting" \
-  '\b(?:systemName|systemImage|systemSymbolName)\b|\b(?:Image|UIImage|NSImage)\((?:named:\s*|symbolName:\s*)?"cue\.'
+forbid "图标只经 Icon（Theme/Icon.swift）按意思取自家墨块符号（design/tools/cue-symbols.py 生成），不用系统符号：哪个意思画成哪个符号只在那里写一处，缺哪个就在生成器里画、在 Icon 里加一个意思。用 Image(.名)、Label(_:icon:)、Button(_:icon:)、Menu(_:icon:)、Icon.platformImage；出错是 .failure、等你是 .waiting。扩展里没有 Icon，经 WidgetIcon" \
+  '\b(?:systemName|systemImage|systemSymbolName)\b|\b(?:Image|UIImage|NSImage)\((?:named:\s*|symbolName:\s*)?"cue\.' \
+  'App/Widget/WidgetIcon.swift'
 forbid "说的话只有一条路 Workspace.speak（Speaking.swift）：同步清空输入框、写一条记录、后台立即上传，界面不等上传与结果；别处直接写记录会长出第二套发消息的写法" \
   '(\baddCueMessage\(\s*\.you\b|\bstore\.(requestDelivery|speak)\()' '**/Workspace/Speaking.swift' '**/CueAgent/CueTools.swift' '**/Tests/**' 'App/Sources/UI/Debug/**'
 forbid "界面上请求到哪了只读 Speech.trip（发送中、已送达、没能送达，含超时与本机同步不通）：直接看请求的原始状态会长出第二套状态机，超时与断网时说法对不上" \
