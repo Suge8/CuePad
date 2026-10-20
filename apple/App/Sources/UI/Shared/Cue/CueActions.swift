@@ -42,11 +42,9 @@ extension Workspace {
         }
     }
 
-    /// 回答 Cue 的一条"等你"：选一项（不选的话在 Cue 页直接说，见 `CueQuestionEnd`）。选"以后……不用问"时 Store 同时按提问存的范围把它记进允许清单（Cue 的设置），一起上传。
+    /// 回答 Cue 的一条"等你"（卡上、全屏预览底栏，`AppServices.answerCueQuestion`）。
     func answerCueQuestion(_ message: CueMessage, _ choice: String) async throws {
-        let allowed = try await services.store.endCueQuestion(message.id, .answered(choice))
-        await services.upload(message.id)
-        if allowed { await services.upload(CueProfile.recordID) }
+        try await services.answerCueQuestion(message.id, choice)
     }
 
     // MARK: 记忆
@@ -70,5 +68,15 @@ extension Workspace {
             try await store.pinCueLine(id, pinned)
             await services.upload(id)
         }
+    }
+}
+
+extension AppServices {
+    /// 回答 Cue 的一条"等你"：选一项（不选的话在 Cue 页直接说，见 `CueQuestionEnd`）。Cue 页的卡与实时活动的"允许一次"（`AllowOnceIntent`，可能没有窗口）同走这里。
+    /// 选"以后……不用问"时 Store 同时按提问存的范围把它记进允许清单（Cue 的设置），一起上传。
+    func answerCueQuestion(_ message: UUID, _ choice: String) async throws {
+        let allowed = try await store.endCueQuestion(message, .answered(choice))
+        await upload(message)
+        if allowed { await upload(CueProfile.recordID) }
     }
 }

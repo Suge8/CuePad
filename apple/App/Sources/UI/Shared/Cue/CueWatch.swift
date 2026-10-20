@@ -4,7 +4,7 @@ import Observation
 
 /// 一个窗口里 Cue 的现状和 Cue 页的输入草稿：侧栏、菜单栏面板与 Cue 页都读这一份，不各自订阅。
 /// 事实只有库里那一页摘要（`CueDigest`）与此刻（`SpeechClock`）；这里按读的人要的粒度把它拆成一项项存下，每项只在变了时才写——
-/// Observation 按存储属性追踪，存整份摘要时任何一项变（在想→用工具、等你数、最近一句……），读名字的每一行会话（`Workspace.cueOnDuty`）、
+/// Observation 按存储属性追踪，存整份摘要时任何一项变（在想→用工具、在管与等你的数……），读名字的每一行会话（`Workspace.cueOnDuty`）、
 /// 书架与侧栏都要跟着重算。
 /// 在不在、话在不在路上随库与此刻重算：它那台 Mac 的在线期限由订阅到点重读（`CueStore.macOnline`），你最近一句的时限与同步通断由
 /// 此刻给，这里不另计时。
@@ -23,11 +23,11 @@ final class CueWatch {
     /// 在路上或在做事（`CuePresence.shown` 有值）与此刻的表情（不算你正在写，`mood(composing:)`）：标签图标只看这两项。
     private(set) var busy = false
     private(set) var expression = CueMood.sleeping
-    /// "等你 N"（`CueDigest.waiting`）。
+    /// "在管 N"与"等你 M"（`CueDigest.managing`、`waiting`）。
+    private(set) var managing = 0
     private(set) var waiting = 0
     /// 新消息有几条（`CueDigest.unread`）。
     private(set) var unread = 0
-    private(set) var lastSaid: String?
     /// 它运行的那台 Mac 与它的名字（`CueDigest.hostID`、`hostName`）。
     private(set) var hostID: String?
     private(set) var hostName: String?
@@ -109,9 +109,9 @@ final class CueWatch {
         set(\.lastYouSaid, digest.lastYou?.said)
         set(\.busy, presence.shown != nil)
         set(\.expression, CueMood.of(presence, waiting: digest.waiting, justDone: digest.lastSaidDone))
+        set(\.managing, digest.managing)
         set(\.waiting, digest.waiting)
         set(\.unread, digest.unread)
-        set(\.lastSaid, digest.lastSaid)
         set(\.hostID, digest.hostID)
         set(\.hostName, digest.hostName)
         set(\.round, digest.state?.round)

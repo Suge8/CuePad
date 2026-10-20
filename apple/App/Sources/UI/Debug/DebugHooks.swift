@@ -365,6 +365,7 @@ extension View {
                 case "style": StyleBoard()
                 case "icons": IconSheet()
                 case "widgets": DebugWidgetStage()
+                case "activity": DebugActivityStage()
                 case "share": DebugShareStage(location: workspace.services.location)
                 default: EmptyView()
                 }

@@ -11,7 +11,7 @@ import UIKit
 /// projectform：项目表单（给了 `-CuePadProject` 是编辑该项目，否则新建）。
 /// projectagent：在 `-CuePadProject` 的项目页上推入它的 Agent 页（筛着这个项目）。
 /// style：视觉样板（`StyleBoard`）盖在最上层；icons：图标总览（`IconSheet`，iPad 竖屏一屏）。
-/// widgets：小组件的小号与中号（`DebugWidgetStage`）；share：分享扩展的表单（`DebugShareStage`）。两者都盖在最上层。
+/// widgets：小组件的小号与中号（`DebugWidgetStage`）；activity：实时活动的各态（`DebugActivityStage`）；share：分享扩展的表单（`DebugShareStage`）。都盖在最上层。
 /// newsession：Agent 页上浮起新会话输入框；给了 `-CuePadLaunch YES` 则已经替你在圆桌发出（看送达中）。
 /// `-CuePadDemoMac YES`：发给演示 Mac（demo-mac）上会话的话由它慢慢接手、送达、再回状态，对运行在它上面的 Cue 说的话也会交给 Cue（见 `runDemoMac`）。
 /// `-CuePadCuePresence away`（cue 画面）：一夜里 Cue 陆续说了几句，回到 Cue 页从新消息读起；`-CuePadAwayAfter <秒>`：就绪后这么久离开 Cue 页、

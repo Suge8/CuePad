@@ -1,7 +1,7 @@
 #if os(macOS)
 import SwiftUI
 
-/// Mac 侧栏最上面一行：头像、名字、此刻在做什么，"等你 N"；点开 Cue 页，开着时是行的选中底（`RowStyle`）。
+/// Mac 侧栏最上面一行：头像、名字、"在管 N · 等你 M"（`CueStatusRow`）；点开 Cue 页，开着时是行的选中底（`RowStyle`）。
 struct CueSidebarRow: View {
     let select: (Route) -> Void
     @Environment(Workspace.self) private var workspace

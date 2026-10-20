@@ -87,11 +87,12 @@ import Testing
       #expect(subscription.zoneID == zone)
       #expect(subscription.querySubscriptionOptions == [.firesOnRecordCreation, .firesOnRecordUpdate])  // 删除不通知
       let info: CKSubscription.NotificationInfo? = subscription.notificationInfo
-      #expect(info?.shouldSendContentAvailable == false)  // 可见通知，不是静默推送
       #expect(info?.shouldSendMutableContent == true)  // 手机上的通知服务扩展先拿到，改写成会话名与问题
       #expect(info?.alertBody == nil && info?.alertLocalizationArgs == nil && info?.desiredKeys == nil)
     }
     #expect(subscriptions.map { $0.notificationInfo?.alertLocalizationKey } == ["pi_alert_waiting", "pi_alert_settled", "cue_alert"])
+    // 等你类的可见通知同时叫醒 App 拉一次（实时活动随之更新），做完的不叫
+    #expect(subscriptions.map { $0.notificationInfo?.shouldSendContentAvailable } == [true, false, true])
   }
 
   /// 通知服务扩展取回记录、在设备上解密后改写文案：等你确认是"会话名 在等你" + 问题首行，完成是会话名 + "完成了"。

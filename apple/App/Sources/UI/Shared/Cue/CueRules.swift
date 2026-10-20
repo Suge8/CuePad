@@ -89,7 +89,7 @@ nonisolated enum CueMood: String, Sendable {
     }
 }
 
-/// Cue 的一页摘要：名字、在管与等你、它最近一句、你最近一句交没交出去、它此刻在做什么。三端侧栏的 Cue 一行、菜单栏面板、小组件都读它（一份规则）。
+/// Cue 的一页摘要：名字、在管与等你、你最近一句交没交出去、它此刻在做什么。三端侧栏的 Cue 一行、菜单栏面板、小组件与实时活动都读它（一份规则）。
 nonisolated struct CueDigest: Equatable, Sendable {
     var name: String
     /// 启用了（`CueProfile.activeHost` 有值）。
@@ -99,16 +99,13 @@ nonisolated struct CueDigest: Equatable, Sendable {
     var hostName: String?
     /// 在管与等你（`CueStore.cueTally`）。
     var tally: CueTally
-    /// "等你 N"。
+    /// "等你 M"。
     var waiting: Int { tally.waiting.count }
     /// "在管 N"。
     var managing: Int { tally.managing.count }
     /// 新消息有几条（`CueStore.cueUnread`）。
     var unread: Int
-    /// Cue 最近对你说的那条的摘要行（`CueMessage.headline`）。
-    /// 结束了的提问（`CueQuestionEnd`）不算：那件事已经定了，摘要接着写它在那之前最近说的。
-    var lastSaid: String?
-    /// 它最近一句说的那件事已经做完了（头像露"做完"的表情）。
+    /// 它最近对你说的那条（结束了的提问不算，`CueQuestionEnd`）说的那件事已经做完了：头像露"做完"的表情。
     var lastSaidDone: Bool
     /// 它运行的那台 Mac 此刻在线（`CueStore.macOnline`）；没启用为 false。
     var hostOnline: Bool
@@ -118,7 +115,7 @@ nonisolated struct CueDigest: Equatable, Sendable {
     var state: CueState?
 
     static let empty = CueDigest(
-        name: CueProfile.defaultName, enabled: false, hostID: nil, hostName: nil, tally: .empty, unread: 0, lastSaid: nil, lastSaidDone: false, hostOnline: false,
+        name: CueProfile.defaultName, enabled: false, hostID: nil, hostName: nil, tally: .empty, unread: 0, lastSaidDone: false, hostOnline: false,
         lastYou: nil, state: nil)
 
     struct LastYou: Equatable, Sendable {
@@ -138,7 +135,6 @@ nonisolated struct CueDigest: Equatable, Sendable {
             hostName: try profile?.hostID.map { try store.macAgents(on: $0).shownName },
             tally: try store.cueTally(),
             unread: try store.cueUnread().count,
-            lastSaid: said?.headline,
             lastSaidDone: saidTask?.status == .done,
             hostOnline: try profile?.activeHost.map { try store.macOnline($0) } ?? false,
             lastYou: try store.cueLastYou().map { LastYou(said: $0.said, delivered: $0.delivered) },
@@ -146,10 +142,15 @@ nonisolated struct CueDigest: Equatable, Sendable {
     }
 
     private static let recentWindow = 40
+
+    /// 头像此刻的表情（不算你正在写）：Cue 那一行、小组件与实时活动同一个。
+    func mood(at moment: Speech.Moment) -> CueMood {
+        CueMood.of(CuePresence.derive(self, at: moment), waiting: waiting, justDone: lastSaidDone)
+    }
 }
 
 nonisolated extension CueMessage {
-    /// Cue 的一句在对话以外的那一行（侧栏与菜单栏的摘要、"等你"卡与全屏预览底栏的第一句、回答的引用）：提问是要你定什么（`CueAsking.question`，不露原话），
+    /// Cue 的一句在对话以外的那一行（"等你"卡与全屏预览底栏的第一句、回答的引用、实时活动里第一件等你）：提问是要你定什么（`CueAsking.question`，不露原话），
     /// 其余是第一行纯文字（Markdown 的符号去掉，`MarkdownBlock.firstPlainLine`）。
     var headline: String? { asking?.question ?? MarkdownBlock.firstPlainLine(CueFormat.plainText(text)) }
 }
@@ -194,8 +195,7 @@ nonisolated struct CueFlight: Equatable, Sendable {
 nonisolated extension CueSnapshot {
     /// 小组件那一份：表情按写快照这一刻（`moment`）推出的状态定（快照随库与此刻重写）。
     init(digest: CueDigest, at moment: Speech.Moment) {
-        let mood = CueMood.of(CuePresence.derive(digest, at: moment), waiting: digest.waiting, justDone: digest.lastSaidDone)
-        self.init(name: digest.name, waiting: digest.waiting, lastSaid: digest.lastSaid, mood: mood.rawValue)
+        self.init(name: digest.name, managing: digest.managing, waiting: digest.waiting, mood: digest.mood(at: moment).rawValue)
     }
 }
 
