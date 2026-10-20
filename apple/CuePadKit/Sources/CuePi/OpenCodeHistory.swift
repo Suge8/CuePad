@@ -12,12 +12,10 @@ struct OpenCodeMessage: Decodable, Sendable {
     var metadata: OpenCodePrompt.Metadata?
     var content: [Content]?
     var finish: String?
-    /// 助手这一步用的模型
     var model: OpenCodeModelRef?
     /// 压缩：`running` / `completed` / `failed`
     var status: String?
     var tokens: OpenCodeTokens?
-    /// 助手这一步出错的原因
     var error: OpenCodeFailure?
     /// `idle` 的：这一轮怎么结束的（`succeeded` / `interrupted` / `failed`）
     var outcome: String?

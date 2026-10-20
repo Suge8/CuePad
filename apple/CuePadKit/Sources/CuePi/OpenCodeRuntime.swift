@@ -58,7 +58,6 @@ public final class OpenCodeRuntime: AgentRuntime, SessionLink {
     /// 顶层会话正在说的话（桥上那一格的来源）
     private var drafts = OpenCodeDrafts()
 
-    /// 连着的一个服务进程。
     @MainActor private final class Connection {
         let client: OpenCodeClient
         let startedAt: Date
@@ -883,7 +882,6 @@ public final class OpenCodeRuntime: AgentRuntime, SessionLink {
 /// `GET /api/session/active` 的一项（只有 `running`）。
 struct OpenCodeActive: Decodable, Sendable { var type: String }
 
-/// 表单答案的一个值。
 enum OpenCodeAnswer: Encodable {
     case string(String), bool(Bool)
     func encode(to encoder: any Encoder) throws {

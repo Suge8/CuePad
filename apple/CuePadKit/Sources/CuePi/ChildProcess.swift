@@ -10,7 +10,6 @@ import Synchronization
 /// - 输出用读事件读，按 `\n` 切行（JSON 字符串里的 U+2028/2029 不是行界）；写入排在一条串行队列上（大图片写进管道时不卡调用方，
 ///   先后不变），写端设了 `F_SETNOSIGPIPE`：进程已退出时写入只是失败；关了输入之后的写入丢掉（描述符号可能已被别的文件复用）。
 public final class ChildProcess: Sendable {
-    /// 进程归属。
     enum Placement: Sendable {
         /// 跟 App 同一个进程组（一次性的命令）
         case inline

@@ -69,12 +69,11 @@ nonisolated final class FakeExtension: @unchecked Sendable {
 
     /// 与真扩展（Node：写已断开的连接只得到 EPIPE）一样，写不会让进程收到 SIGPIPE；写与关闭互斥、关闭后的写丢掉：
     /// 回 ack 与另一条线程上的告别关闭（`close(bye:)`）会交错，关闭后再写会落到已关掉的连接或被复用的描述符上，
-    /// 曾以 SIGPIPE 杀掉整个测试宿主（同 `PiSocket` 的写法）。
+    /// SIGPIPE 会杀掉整个测试宿主（同 `PiSocketConnection` 的写法）。
     private final class Connection: @unchecked Sendable {
         let fd: Int32
         var source: DispatchSourceRead?
         var buffer = Data()
-        /// 已关闭
         private let closed = Mutex(false)
 
         init(fd: Int32) {

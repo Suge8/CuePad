@@ -87,7 +87,6 @@ struct SessionFacts {
         }
     }
 
-    /// 此刻的状态与那句说明。
     var state: (state: PiWorkState, detail: String?) {
         if let question { return (.waitingForUser, ToolDetail.singleLine(question.text).clipped(ToolDetail.limit)) }
         if compacting { return (.compacting, nil) }
@@ -100,7 +99,6 @@ struct SessionFacts {
     /// 此刻显示的那一问
     var question: PiQuestion? { questions.first ?? standingQuestion }
 
-    /// 把事实写进桥上的会话。
     mutating func publish(to session: inout PiSession, at now: Date = .now) {
         let (state, detail) = state
         if state == .compacting, session.state != .compacting, !session.state.hasPendingWork {

@@ -104,7 +104,6 @@ final class CodexRPC {
         return message["result"] ?? .object([:])
     }
 
-    /// 回一个服务端请求。
     func respond(to id: JSONValue, result: JSONValue) {
         send(["id": id, "result": result])
     }

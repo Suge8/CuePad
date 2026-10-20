@@ -344,7 +344,6 @@ final class ClaudeHostedSession: SessionLink {
 /// - 子代理交回中途结果（报 completed、名下还有后台命令）后，那条命令做完时它以同一 id 再跑：命令的通知先到、清单先变空、它才重新出现，
 ///   这中间它仍算在飞。被停下的不会再跑。
 struct ClaudeHostedTasks {
-    /// 清单里此刻的任务
     private var listed: Set<String> = []
     /// 清单里出现过的顶层任务（没有 `parent_task_id`）
     private var topLevel: Set<String> = []

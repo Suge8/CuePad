@@ -3,7 +3,6 @@ import CueStore
 import Foundation
 
 extension AgentKind {
-    /// 可执行文件名
     public var command: String {
         switch self {
         case .pi: "pi"

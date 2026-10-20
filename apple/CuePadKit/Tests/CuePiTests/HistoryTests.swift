@@ -313,7 +313,6 @@ struct ConversationRuleTests {
 
 // MARK: - 后台索引器：首次按修改时间倒序，之后跟着在线会话的文件
 
-/// 订阅索引器事件流并记录。
 final class HistoryEventLog: Sendable {
     private let recorded = Mutex<[PiHistoryEvent]>([])
     /// 订阅的任务要引用自己，只能在初始化完成后起，所以放在锁里补上。

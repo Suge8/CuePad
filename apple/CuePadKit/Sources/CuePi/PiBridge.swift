@@ -251,7 +251,7 @@ public final class PiBridge {
         try await pi(id).refreshQuota()
     }
 
-    /// 会话的控制通道；这个 Agent 的这类会话做不到（`AgentCapabilities`）就抛 `unsupported`：能做什么只看能力表，通道不再判断。
+    /// 会话的控制通道；这个 Agent 的这类会话做不到（`AgentCapabilities`）就抛 `unsupported`：能做什么只看能力表，通道不判断。
     private func control(_ id: PiSession.ID, needs: AgentCapabilities) throws -> any SessionLink {
         guard let link = controls[id], let session = session(id: id) else { throw PiBridgeError.unknownSession(id) }
         guard session.capabilities.isSuperset(of: needs) else { throw PiBridgeError.unsupported }

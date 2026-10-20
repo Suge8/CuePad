@@ -275,7 +275,6 @@ struct OpenCodeForm: Decodable, Sendable {
     }
 }
 
-/// 待答的权限请求。
 struct OpenCodePermission: Decodable, Sendable {
     var id: String
     var sessionID: String
