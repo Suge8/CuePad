@@ -49,7 +49,7 @@ nonisolated struct CueTiming: Sendable {
 /// 每次对完账写进库（`CueStore.setCueState`，同步给各端；值班结束时由 `CueService` 写回歇着）。
 ///
 /// 对账：库一变（订阅，不轮询）、大脑有事件、定时器到点，都重新对一次账，按先后只做一件事：
-/// 1. 你的消息（连同它收起的卡，`CueEnvelope.said`）与"等你"的回答（选的那一项）：大脑空闲就发信封醒来，正忙就插进当前这一轮；写 `deliveredAt`（回答也记在那条"等你"上）。
+/// 1. 你的消息（连同它收起的卡，`CueEnvelope.delivered`）与"等你"的回答（选的那一项）：大脑空闲就发信封醒来，正忙就插进当前这一轮；写 `deliveredAt`（回答也记在那条"等你"上）。
 /// 2. 这一轮还没完就等。
 /// 3. 换新：本班次里出现了交接备忘（`memory renew`）就停掉大脑、起新班次，马上醒来接着做。要换大脑（见上）就醒来请它写交接，请过还没有就直接换。
 ///    刚启用（这一次启用还没醒过，含另一台 Mac 接管过来）：醒来看看你手上有哪些事。
@@ -567,11 +567,7 @@ final class CueKeeper {
                 if case .stuck = phase { await startShift() }
                 guard let shift else { return }
                 let ids = pending.map(\.id)
-                let setAside = pending.contains { $0.author == .known(.you) } ? try await store.cueQuestionsSetAside() : []
-                let said = pending.map { message in
-                    message.author == .known(.you)
-                        ? CueEnvelope.said(message.text, setAside: setAside.filter { $0.setAsideBy == message.id }) : Self.answerLine(message)
-                }.joined(separator: "\n\n")
+                let said = CueEnvelope.delivered(pending, setAside: try await store.cueQuestionsSetAside())
                 let images = await images(in: pending, for: shift.brain)
                 if shift.turn != nil {
                     do {
@@ -834,12 +830,6 @@ final class CueKeeper {
 
     /// 重试可能好的错：额度、登录类的不算。
     private static func retryable(_ summary: PiErrorSummary) -> Bool { summary.kind != .quota && summary.kind != .authentication }
-
-    /// 回答交给 Cue 的说法：他选了哪一项。
-    private static func answerLine(_ message: CueMessage) -> String {
-        let question = CueFormat.plainText(message.text).split(whereSeparator: \.isNewline).first.map(String.init) ?? ""
-        return "他回答了「\(question)」：\(message.answer ?? "")"
-    }
 
     private static func day(_ date: Date) -> String {
         let parts = Calendar.current.dateComponents([.year, .month, .day], from: date)

@@ -447,7 +447,7 @@ public enum CueStoreError: Error, Equatable {
   case invalidSummaryRange
   /// Cue 没启用（没有 `cueProfile`、停用了或没选运行在哪台 Mac）。
   case cueNotEnabled
-  /// 这条提问已经结束了（答了或撤回了）。
+  /// 这条提问已经结束了（答了或撤回了），或放不回（不是你开口收起的）。
   case questionEnded
   /// 回答不是这条提问的选项（参数是那句话）：不选的话在对话里直接说。
   case notAChoice(String)

@@ -128,8 +128,9 @@ extension CueStore {
   /// 还开着的提问（唯一定义）：Cue 带选项问的、还没结束。
   static let openQuestion = "author = 'cue' AND choices IS NOT NULL AND answeredAt IS NULL"
 
-  /// 你开口收起的提问（唯一定义）：结束了、记着是哪句话收起的（`CueMessage.setAsideBy`）。
-  static let setAside = "author = 'cue' AND choices IS NOT NULL AND answeredAt IS NOT NULL AND setAsideBy IS NOT NULL"
+  /// 你开口收起的提问（唯一定义，也是它的部分索引的条件）：记着是哪句话收起的（`CueMessage.setAsideBy`）。
+  /// 它只随结束写下（`endQuestions`）、随放回清掉（`reopen`），有值就是收起着，不再另看 `answeredAt`。
+  static let setAside = "setAsideBy IS NOT NULL"
 
   /// 结束提问只在这里写：结束的时刻，与你的回答或收起它的那句话（撤回的都没有）。只动 `predicate` 选中的还开着的提问，返回结束了几条。
   /// 必须在写事务内调用。
@@ -144,7 +145,7 @@ extension CueStore {
     return db.changes
   }
 
-  /// 你开口收起的提问（`setAside`），从早到晚：Cue 读你那句话时看是不是在答它们。
+  /// 你开口收起的提问（`setAside`，走部分索引），从早到晚：交给 Cue 时列在收起它的那句话后面，Cue 放回时按 id 前缀在里面找。
   public func cueQuestionsSetAside() throws -> [CueMessage] {
     try select(CueMessage.self, where: Self.setAside, orderBy: "createdAt, rowid")
   }
