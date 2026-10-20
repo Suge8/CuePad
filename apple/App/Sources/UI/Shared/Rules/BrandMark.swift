@@ -3,7 +3,7 @@ import SwiftUI
 /// 品牌标志，全 App 只此一处：资源名规则、AppKit 用的图都在这里。规则：标志是产品的，不是公司的——
 /// 模型显示它的家族（Claude、GPT、Gemini、Grok…，`BrandMark.model`，规则在 `PiProvider` 旁边）；提供方（模型菜单的分组、
 /// 订阅额度的账号）显示它的产品（Anthropic 是 Claude、OpenAI Codex 是 Codex，`PiProvider.mark`）；Agent 显示它自己（`AgentKind.mark`）。
-/// 认不出的（用户自定义的提供方与它的模型）不带标志，只写名字：通用图标（曾是芯片）说不出是哪一家，在模型胶囊上还被读成"默认模型"。
+/// 认不出的（用户自定义的提供方与它的模型）不带标志，只写名字：通用图标说不出是哪一家，在模型胶囊上还被读成"默认模型"。
 /// 标志是 LobeHub 的单色标志转成的自定义符号（资源目录 Brands 下的 `brand-<名>`，由 design/tools/brand-symbols.py 生成），
 /// 与文字基线对齐、随字号缩放、能嵌进 `Text` 插值，颜色跟着前景色走（界面里是次要墨色，系统菜单里是模板图、随菜单文字着色），不用品牌色。
 nonisolated struct BrandMark: Hashable, Sendable {

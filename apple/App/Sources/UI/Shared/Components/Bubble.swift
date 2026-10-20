@@ -61,7 +61,6 @@ nonisolated struct BubblePlacement: Equatable {
     }
 
     static let width: CGFloat = 400
-    /// 进出场挪的那一小段。
     static let rise: CGFloat = 8
     #if os(macOS)
     static let radius: CGFloat = 18
@@ -78,9 +77,7 @@ nonisolated struct BubblePlacement: Equatable {
     static let lead: CGFloat = tailInset + 20
     /// 下面至少留这么高就摆在下面（否则摆到空间大的那一侧）。
     static let roomy: CGFloat = 360
-    /// 没有落点时离可用区上沿的距离。
     static let unanchoredTop: CGFloat = 40
-    /// 气泡离窗口边与安全区的距离。
     static let margin: CGFloat = 12
 }
 

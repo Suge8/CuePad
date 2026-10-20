@@ -71,7 +71,6 @@ nonisolated struct PiThinkingMeter: Equatable {
 
 
 extension PiThinkingLevel {
-    /// 思考强度给人看的名字。
     nonisolated var label: String {
         switch self {
         case .off: "关"

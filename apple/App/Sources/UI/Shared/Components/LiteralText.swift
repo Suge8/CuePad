@@ -5,7 +5,7 @@ import UIKit
 #endif
 
 /// 输入框原样收字：写给 Agent 的话里常有命令行参数与代码，`--flag` 不能被换成破折号、直引号不能换成弯引号、也不做文本替换
-/// （编辑器 `CueTextView` / `iOSCueTextView` 同一条规则）。App 里的输入框大多是 SwiftUI 的 `TextField`，拿不到底下的系统视图，
+/// （编辑器 `CueTextView` 两端同一条规则）。App 里的输入框大多是 SwiftUI 的 `TextField`，拿不到底下的系统视图，
 /// 所以进程启动时一处关掉，覆盖全部输入框（输入框、会话回复框、随手记、搜索、任务标题、记忆、对话框里的输入）。
 enum LiteralText {
     #if os(macOS)

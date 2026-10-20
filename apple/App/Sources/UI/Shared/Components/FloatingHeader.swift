@@ -7,10 +7,9 @@ extension View {
     /// `hidden` 时中间那块与右边的圆钮让开（淡到透明、不可点、读屏跳过），返回钮一直在——随时看得到怎么回去，
     /// 左缘右滑返回照常是系统的；导航栏本身留着：顶栏占的高度与安全区不变，内容的边距不跟着变（会话页看历史时用，
     /// 见 `ChatFollow.showsHeader`）；给了 `reveal` 时让开的那一块仍接点按，点它唤出。
-    /// 标题同时是读屏、返回菜单与多任务切换器里的名字。
+    /// 标题同时是读屏、返回菜单与多任务切换器里的名字（窄屏导航栈的根也照样交给系统）。
     /// 窄屏导航栈的根（任务、会话、项目三页，`homePage`）不是推入页：顶上那一排是页自己画的（`HomeBar`：左边搜索、右边这个圆钮），
-    /// 系统导航栏藏起，换去处时整排随页推移（`DockRoot`）；不写标题也不写那一行要紧信息——底部那一排的选中格已经说了在哪一页，
-    /// 组标题写着计数；名字照样交给系统（读屏、返回菜单、多任务切换器）。
+    /// 系统导航栏藏起，换去处时整排随页推移（`DockRoot`）；不写标题也不写那一行要紧信息——底部那一排的选中格已经说了在哪一页，组标题写着计数。
     /// `explanation`：点中间那块玻璃弹出的一句说明（会话需要 /reload 时怎么接上）；没有时点它什么也不做。
     func floatingHeader<Detail: View, Trailing: View>(
         _ title: String, hidden: Bool = false, reveal: (() -> Void)? = nil, explanation: String? = nil,
@@ -27,7 +26,6 @@ extension View {
         floatingHeader(title, detail: { HeaderDetail(text: detail) }, trailing: trailing)
     }
 
-    /// 没有操作的页。
     func floatingHeader(_ title: String, detail: Dotted? = nil) -> some View {
         floatingHeader(title, detail: detail) { EmptyView() }
     }
@@ -155,7 +153,6 @@ private struct HeaderTitle<Label: View>: View {
     }
 }
 
-/// 标题，下面一行要紧信息。
 private struct TitleStack<Detail: View>: View {
     let title: String
     let detail: Detail

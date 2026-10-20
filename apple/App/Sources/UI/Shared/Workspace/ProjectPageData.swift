@@ -27,7 +27,6 @@ nonisolated struct ProjectPageData: Sendable, Equatable {
         })
     }
 
-    /// "已完成"列多少条。
     static let doneLimit = 30
 
     static func read(_ project: UUID, from store: isolated CueStore) throws -> ProjectPageData {
@@ -68,7 +67,6 @@ nonisolated struct WallBoard: Equatable, Sendable {
 }
 
 extension ProjectPageData {
-    /// "更早"的分组。
     func olderGroups(_ arrangement: WallArrangement, now: Date = .now, calendar: Calendar = .current) -> [OlderGroup] {
         let byID = Dictionary(uniqueKeysWithValues: stamps.map { ($0.id, $0) })
         return OlderGroup.group(arrangement.older.compactMap { byID[$0] }, now: now, calendar: calendar)
