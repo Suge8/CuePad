@@ -24,7 +24,9 @@ final class IOSAppDelegate: NSObject, UIApplicationDelegate {
     }
 
     private func connect() {
-        if case .ready(let services) = launch { alerts.services = services }
+        guard case .ready(let services) = launch else { return }
+        alerts.services = services
+        services.alerts = alerts
     }
 
     func application(
