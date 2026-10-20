@@ -16,7 +16,7 @@ struct DebugWidgetStage: View {
     private static let margin: CGFloat = 16
     private static let radius: CGFloat = 23
 
-    private static let cue = CueSnapshot(name: "Cue", managing: 3, waiting: 2, mood: "waiting")
+    private static let cue = CueNowSamples.asks
     private static let home = DefaultProjectSnapshot(
         name: "默认",
         cards: ["周末带孩子去科技馆", "重连用例补三个", "首页标题换成新文案"].map { DefaultProjectSnapshot.Card(id: UUID(), title: $0, modifiedAt: .now) },
@@ -44,82 +44,107 @@ struct DebugWidgetStage: View {
     }
 }
 
-/// `-CuePadScene activity`：实时活动的各态（`CueActivityViews`，主 App 也编进了它）按真实尺寸画在桌面色的底上——锁屏卡（新的与过时的）、
-/// 灵动岛的紧凑态（有等你、只有在管）、最小态与展开态。系统的 `ActivityViewContext` 造不出来，过没过时由这里给；岛的黑底与圆角按 iPhone 17 的量。
-/// 真开起来的那一个在 cue 画面配 `-CuePadDemo YES -CuePadLiveActivity YES`：演示库里有在管与等你，App 在前台就开（`CueLiveActivity`），回到桌面看灵动岛。
+/// `-CuePadScene activity`：实时活动按真实尺寸与位置画（`CueActivityViews`，主 App 也编进了它），叠在 Cue 页上：顶上紧凑态盖在灵动岛的位置，
+/// 下面露出真的 Cue 页头（同一份 Cue 此刻），再往下是展开态、锁屏、最小态与横屏的窄紧凑态。画的是 Cue 那一行此刻那一份（`CueWatch.now`），
+/// 配 `-CuePadCueNow <样例>`（`CueNowSamples`）钉成某一态，`-CuePadCueCycle YES` 就绪后轮流走过各态（页头与岛一起变，录切换）。
+/// 系统的 `ActivityViewContext` 造不出来：过没过时、横屏窄不窄由这里给，展开态按系统的四块（左、右、摄像头下、下面）摆；岛的黑底与圆角按 iPhone 17 的量。
+/// 真开起来的那一个在 cue 画面配 `-CuePadDemo YES -CuePadLiveActivity YES`，回到桌面看灵动岛（`simctl io screenshot` 拍不到它，录一小段取帧）。
 struct DebugActivityStage: View {
+    let workspace: Workspace
     @Environment(\.palette) private var palette
 
     private static let island = Color(white: 0)
-    /// 紧凑态整条宽 × 高、展开态宽（iPhone 17 竖屏，pt）。
-    private static let compact = CGSize(width: 250, height: 37)
+    /// 摄像头那一截宽、紧凑态高、展开态宽、锁屏卡宽（iPhone 17 竖屏，pt）。
+    private static let camera: CGFloat = 120
+    private static let height: CGFloat = 37
     private static let expandedWidth: CGFloat = 371
     private static let lockWidth: CGFloat = 361
-
-    private static let first = CueActivityState.Wait(
-        title: "发布 v1.4 到 TestFlight", detail: "Cue 请你允许发布或部署", open: DeepLink.cue.url,
-        allow: CueActivityState.Allow(message: UUID(), choice: CueAsk.once))
-    private static let busy = CueActivityState(
-        mood: "waiting", managing: 3, waiting: 2, done: 1, first: first,
-        lastDone: CueActivityState.Done(title: "README 截图换成 Swift 版", at: .now.addingTimeInterval(-6 * 60)), at: .now)
-    private static let managingOnly = CueActivityState(mood: "thinking", managing: 3, waiting: 0, done: 2, first: nil, lastDone: nil, at: .now)
-    private static let asked = CueActivityState(
-        mood: "waiting", managing: 1, waiting: 1, done: 0,
-        first: CueActivityState.Wait(title: "rename", detail: "要把 utils 拆成两个文件吗？", open: DeepLink.cue.url, allow: nil),
-        lastDone: nil, at: .now.addingTimeInterval(-23 * 60))
+    /// 露出真的页头：从屏顶到页头下沿。
+    private static let header: CGFloat = 132
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                label("锁屏")
-                lock(Self.busy, stale: false)
-                label("锁屏 · 会话在问、过时")
-                lock(Self.asked, stale: true)
-                label("紧凑态 · 有等你 / 只有在管")
-                compact(Self.busy)
-                compact(Self.managingOnly)
-                label("最小态")
-                CueActivityViews.minimal(Self.busy).frame(width: Self.compact.height, height: Self.compact.height).background(Self.island, in: .circle)
-                label("展开态")
-                expanded(Self.busy)
+        let state = CueActivityState(now: workspace.cue.now, quotas: CueNowSamples.quotas)
+        ZStack(alignment: .top) {
+            VStack(spacing: 0) {
+                Color.clear.frame(height: Self.header)
+                palette.desk
             }
-            .padding(16)
-            .frame(maxWidth: .infinity)
+            VStack(alignment: .leading, spacing: 0) {
+                Group {
+                    if state.now.isLive { compact(state, limited: false) } else { Self.island.frame(width: Self.camera, height: Self.height).clipShape(.capsule) }
+                }
+                .frame(maxWidth: .infinity).padding(.top, 11)
+                Color.clear.frame(height: Self.header - 11 - Self.height)
+                if state.now.isLive {
+                    label("长按灵动岛")
+                    expanded(state)
+                    label("锁屏")
+                    CueActivityViews.lockScreen(state, stale: false)
+                        .frame(width: Self.lockWidth)
+                        .background(palette.paper, in: .rect(cornerRadius: 22, style: .continuous))
+                    HStack(alignment: .top, spacing: 28) {
+                        VStack(alignment: .leading, spacing: 0) {
+                            label("最小（和别的实时活动同在）")
+                            CueActivityViews.minimal(state, stale: false).frame(width: Self.height, height: Self.height).background(Self.island, in: .circle)
+                        }
+                        VStack(alignment: .leading, spacing: 0) {
+                            label("横屏（窄紧凑态）")
+                            compact(state, limited: true)
+                        }
+                    }
+                } else {
+                    label("实时活动")
+                    Text("没有在跑的活：实时活动已结束，灵动岛空出来")
+                        .font(.footnote).foregroundStyle(palette.ink3).frame(width: Self.lockWidth, height: 56)
+                        .background(palette.fill, in: .rect(cornerRadius: 22, style: .continuous))
+                }
+            }
+            .padding(.horizontal, 20)
+            HStack {
+                Text("9:41").font(.system(size: 17, weight: .semibold)).foregroundStyle(palette.ink).frame(width: 78)
+                Spacer()
+            }
+            .padding(.top, 21).padding(.horizontal, 6)
         }
-        .background(palette.sidebar)
+        .ignoresSafeArea()
+        // 系统的状态栏画在最上层、会压住岛的两端（真机上岛撑开时系统让开）：藏起来，自己写时间
+        .statusBarHidden(true)
+        .animation(.smooth(duration: 0.45), value: workspace.cue.now)
+        .allowsHitTesting(false)
     }
 
     private func label(_ text: String) -> some View {
-        Text(text).font(.caption.weight(.semibold)).foregroundStyle(palette.ink3)
+        Text(text).font(.caption.weight(.semibold)).foregroundStyle(palette.ink3).padding(.top, 14).padding(.bottom, 6)
     }
 
-    private func lock(_ state: CueActivityState, stale: Bool) -> some View {
-        CueActivityViews.lockScreen(state, stale: stale)
-            .frame(width: Self.lockWidth)
-            .background(palette.paper, in: .rect(cornerRadius: 22, style: .continuous))
-    }
-
-    private func compact(_ state: CueActivityState) -> some View {
-        HStack {
-            CueActivityViews.compactLeading(state)
-            Spacer()
-            CueActivityViews.compactTrailing(state)
+    /// 紧凑态：系统按摄像头左右对称地撑开，两边一样宽（取宽的那边，同系统）。
+    private func compact(_ state: CueActivityState, limited: Bool) -> some View {
+        HStack(spacing: 0) {
+            CueActivityViews.compactLeading(state, stale: false, limited: limited).fixedSize()
+                .frame(minWidth: limited ? nil : 66, alignment: .leading)
+            Color.clear.frame(width: limited ? 14 : Self.camera)
+            CueActivityViews.compactTrailing(state, stale: false, limited: limited).fixedSize()
+                .frame(minWidth: limited ? nil : 66, alignment: .trailing)
         }
-        .padding(.horizontal, 7)
-        .frame(width: Self.compact.width, height: Self.compact.height)
+        .padding(.horizontal, 9)
+        .frame(height: Self.height)
         .background(Self.island, in: .capsule)
     }
 
+    /// 展开态：左右两块贴着摄像头两侧，摄像头下是中间那块，再下面是下面那块。
     private func expanded(_ state: CueActivityState) -> some View {
-        VStack(spacing: 8) {
-            HStack {
-                CueActivityViews.expandedLeading(state)
-                Spacer()
-                CueActivityViews.expandedTrailing(state)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 8) {
+                CueActivityViews.expandedLeading(state, stale: false)
+                VStack(spacing: 0) {
+                    Color.clear.frame(height: 26)
+                    CueActivityViews.expandedCenter(state, stale: false)
+                }
+                CueActivityViews.expandedTrailing(state, stale: false)
             }
             CueActivityViews.expandedBottom(state, stale: false)
         }
-        .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 18)
+        .padding(.horizontal, 18).padding(.top, 12).padding(.bottom, 16)
         .frame(width: Self.expandedWidth)
         .background(Self.island, in: .rect(cornerRadius: 44, style: .continuous))
     }

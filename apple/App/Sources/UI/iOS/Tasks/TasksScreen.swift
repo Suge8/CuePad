@@ -2,7 +2,7 @@
 import CueStore
 import SwiftUI
 
-/// 任务页（iPhone 底部一排的"任务"、宽屏侧栏的"任务"）：流水看板（`TaskBoard`），待办 → 在管 → 等你 → 做完（今天）。
+/// 任务页（iPhone 底部一排的"任务"、宽屏侧栏的"任务"）：流水看板（`TaskBoard`），待办 → 推进中 → 等你 → 做完（今天）。
 /// 宽屏（iPad）同 Mac 四列并排（`BoardColumns`），顶上不写页名，第一排是按项目筛的胶囊（`Header`）。窄屏一屏一列：顶上一排带数的分段（`BoardSegments`），左右滑换列（分页滚动），
 /// 点分段滑过去；打开时有等你就落在等你。分段下面一行"全部项目"菜单按项目筛（筛了以后分段的数也只数这个项目）。
 /// 右上角"+"去待办、顶上浮出添加那一行（`NewTaskLine`，落在筛的项目或当前项目，可换），失焦且没写字时收回。
@@ -91,9 +91,9 @@ struct TasksScreen: View {
         .accessibilityLabel(current.map { "按项目看：\($0.name)" } ?? "按项目看")
     }
 
-    /// 打开时落在哪一列：有等你就是等你（要你拍板的事在那里就能处理），否则在管、再否则待办。
+    /// 打开时落在哪一列：有等你就是等你（要你拍板的事在那里就能处理），否则推进中、再否则待办。
     private func land(_ board: TaskBoard) {
-        column = !board.waiting.isEmpty ? .waiting : !board.managing.isEmpty ? .managing : .todo
+        column = !board.waiting.isEmpty ? .waiting : !board.advancing.isEmpty ? .advancing : .todo
     }
 
     /// 先滑到待办、停稳了再浮出添加那一行：滑动途中插进来的输入框接不住焦点（实测会空着不聚焦）。

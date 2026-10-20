@@ -89,7 +89,8 @@ nonisolated enum CueMood: String, Sendable {
     }
 }
 
-/// Cue 的一页摘要：名字、在管与等你、它最近一句、你最近一句交没交出去、它此刻在做什么。三端侧栏的 Cue 一行与名片、菜单栏面板、小组件与实时活动都读它（一份规则）。
+/// Cue 的一页摘要：名字、推进中与等你、它最近一句、你最近一句交没交出去、它此刻在做什么与谁叫醒的、今天做完的。
+/// 三端侧栏的 Cue 一行与名片、菜单栏面板、小组件与实时活动都读它推出的 Cue 此刻（`CueNow`，一份规则）。
 nonisolated struct CueDigest: Equatable, Sendable {
     var name: String
     /// 启用了（`CueProfile.activeHost` 有值）。
@@ -97,15 +98,15 @@ nonisolated struct CueDigest: Equatable, Sendable {
     /// 它运行（或停用前运行）的那台 Mac 与它的名字（`MacAgents.shownName`）。
     var hostID: String?
     var hostName: String?
-    /// 在管与等你（`CueStore.cueTally`）。
+    /// 推进中与等你（`CueStore.cueTally`）。
     var tally: CueTally
     /// "等你 M"。
     var waiting: Int { tally.waiting.count }
-    /// "在管 N"。
-    var managing: Int { tally.managing.count }
+    /// 推进中几件。
+    var advancing: Int { tally.advancing.count }
     /// 新消息有几条（`CueStore.cueUnread`）。
     var unread: Int
-    /// Cue 最近对你说的那条的摘要行（`CueMessage.headline`），只给 Mac 侧栏名片的气泡（Cue 那一行写在管与等你，不写它）。
+    /// Cue 最近对你说的那条的摘要行（`CueMessage.headline`），只给 Mac 侧栏名片的气泡（Cue 那一行写 Cue 此刻，不写它）。
     /// 结束了的提问（`CueQuestionEnd`）不算：那件事已经定了，接着写它在那之前最近说的。
     var lastSaid: String?
     /// 它最近一句说的那件事已经做完了（头像露"做完"的表情）。
@@ -116,10 +117,19 @@ nonisolated struct CueDigest: Equatable, Sendable {
     var lastYou: LastYou?
     /// 值班的 Mac 写下的此刻在做什么（`CueStore.cueState`）。
     var state: CueState?
+    /// 在跑的这一轮为什么醒（`CueStore.cueWaking`）：醒的时刻与"被谁叫醒"那一截；歇着、这一轮没记为 nil。
+    var woke: Woke?
+    /// 今天做完的顶层任务（被等你占着的不算，同任务看板的做完列），最近的在前。
+    var done: [Card]
 
     static let empty = CueDigest(
         name: CueProfile.defaultName, enabled: false, hostID: nil, hostName: nil, tally: .empty, unread: 0, lastSaid: nil, lastSaidDone: false, hostOnline: false,
-        lastYou: nil, state: nil)
+        lastYou: nil, state: nil, woke: nil, done: [])
+
+    struct Woke: Equatable, Sendable {
+        var at: Date
+        var text: String?
+    }
 
     struct LastYou: Equatable, Sendable {
         var said: Date
@@ -131,18 +141,39 @@ nonisolated struct CueDigest: Equatable, Sendable {
         let recent = try store.cueMessages(limit: recentWindow)
         let said = recent.last { $0.author == .known(.cue) && ($0.choices == nil || $0.answeredAt == nil) }
         let saidTask = try said?.taskID.flatMap { try store.card($0) }
+        let tally = try store.cueTally()
         return CueDigest(
             name: profile?.name ?? CueProfile.defaultName,
             enabled: profile?.activeHost != nil,
             hostID: profile?.hostID,
             hostName: try profile?.hostID.map { try store.macAgents(on: $0).shownName },
-            tally: try store.cueTally(),
+            tally: tally,
             unread: try store.cueUnread().count,
             lastSaid: said?.headline,
             lastSaidDone: saidTask?.status == .done,
             hostOnline: try profile?.activeHost.map { try store.macOnline($0) } ?? false,
             lastYou: try store.cueLastYou().map { LastYou(said: $0.said, delivered: $0.delivered) },
-            state: try store.cueState())
+            state: try store.cueState(),
+            woke: try store.cueWaking().map { Woke(at: $0.at, text: try Self.woke($0.wake, store: store)) },
+            done: tally.free(try store.tasksDone(since: Calendar.current.startOfDay(for: .now))))
+    }
+
+    /// 这一轮为什么醒，写成那一句的开头（"被 canvas-zoom 叫醒"）；换上下文、改设置这类内部的事不说，按在想写。
+    private static func woke(_ wake: CueWake, store: isolated CueStore) throws -> String? {
+        switch wake {
+        case .message: return "在回你的话"
+        case .idle: return "例行查看"
+        case .reminder: return "提醒到点"
+        case .enabled: return "刚启用"
+        case .renewed, .settingsChanged: return nil
+        case .sessionActivity(let stirs):
+            var seen = Set<String>()
+            let ids = stirs.compactMap(\.session).filter { seen.insert($0).inserted }
+            guard let first = ids.first else { return "有一件做完了" }
+            let title = try store.piSessions(sessionIDs: [first])[first]?.state.title
+            let name = title.flatMap { $0.isEmpty ? nil : $0 } ?? "会话"
+            return ids.count > 1 ? "被 \(name) 等 \(ids.count) 处叫醒" : "被 \(name) 叫醒"
+        }
     }
 
     private static let recentWindow = 40
@@ -226,10 +257,4 @@ nonisolated struct CueFlight: Equatable, Sendable {
     }
 }
 
-nonisolated extension CueSnapshot {
-    /// 小组件那一份：表情按写快照这一刻（`moment`）推出的状态定（快照随库与此刻重写）。
-    init(digest: CueDigest, at moment: Speech.Moment) {
-        self.init(name: digest.name, managing: digest.managing, waiting: digest.waiting, mood: digest.mood(at: moment).rawValue)
-    }
-}
 

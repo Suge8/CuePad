@@ -1,7 +1,7 @@
 #if os(macOS)
 import SwiftUI
 
-/// 任务页（侧栏"任务"、⌘⇧T）：流水看板（`TaskBoard`）四列并排——待办 → 在管 → 等你 → 做完（今天），每列各自滚动（`BoardColumn`）。
+/// 任务页（侧栏"任务"、⌘⇧T）：流水看板（`TaskBoard`）四列并排——待办 → 推进中 → 等你 → 做完（今天），每列各自滚动（`BoardColumn`）。
 /// 顶上不写页名（侧栏的选中格已经说了在哪一页），一排是按项目筛的胶囊（`BoardProjectChips`；筛了以后列头的数也只数这个项目）、右边"新任务"（待办顶上浮出添加那一行，落在筛的项目或当前项目）。
 struct TaskBoardPage: View {
     @Environment(Workspace.self) private var workspace

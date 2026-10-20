@@ -481,5 +481,14 @@ extension DebugScene {
         renderer.scale = 2
         return renderer.cgImage.map { DemoLibrary.encode($0) } ?? Data()
     }
+
+    /// `-CuePadCueCycle YES`：就绪后 Cue 此刻每 2.6 秒换成下一份样例（`CueNowSamples.tour`），页头、侧栏与实时活动的调试画面同一份一起变，录切换的动效。
+    static func cueNowTourIfAsked(_ cue: CueWatch) async {
+        guard defaults.bool(forKey: "CuePadCueCycle") else { return }
+        for index in 0... {
+            cue.pin(CueNowSamples.tour[index % CueNowSamples.tour.count])
+            guard (try? await Task.sleep(for: .seconds(2.6))) != nil else { return }
+        }
+    }
 }
 #endif

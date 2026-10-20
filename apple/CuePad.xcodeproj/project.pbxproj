@@ -126,6 +126,8 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				CueFaces.xcassets,
+				CueNowViews.swift,
+				UsageLevel.swift,
 				Waiting.swift,
 			);
 			target = C1000000000000000000000A /* CuePadShare */;

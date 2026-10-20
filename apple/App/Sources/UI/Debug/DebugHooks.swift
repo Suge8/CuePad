@@ -38,6 +38,8 @@ enum DebugHooks {
         #endif
         /// 任务页做完列的"更早做完的"一开始就展开（`-CuePadShowsDone`）。
         var showsDone = false
+        /// Cue 此刻钉成这一份样例（`-CuePadCueNow <样例>`，`CueNowSamples`）：页头、侧栏、小组件与实时活动都按它画，截各态用。
+        var cueNow: CueNow?
         #if os(iOS)
         /// 设置页通知那一行显示的状态（`-CuePadAlertStatus`；演示模式没有同步，真实状态出不来）。
         var alertStatus: PiAlertStatus?
@@ -390,7 +392,7 @@ extension View {
                 case "style": StyleBoard()
                 case "icons": IconSheet()
                 case "widgets": DebugWidgetStage()
-                case "activity": DebugActivityStage()
+                case "activity": DebugActivityStage(workspace: workspace)
                 case "share": DebugShareStage(location: workspace.services.location)
                 default: EmptyView()
                 }
@@ -413,8 +415,9 @@ extension View {
                 async let away: Void = DebugScene.awayIfAsked(
                     workspace.services.store, leave: { navigation.show(.tasks) }, back: { navigation.show(.cue) })
                 async let tour: Void = DebugScene.dockTourIfAsked(workspace, navigation)
+                async let cueNow: Void = DebugScene.cueNowTourIfAsked(workspace.cue)
                 await DebugScene.cycleIfAsked(workspace.services)
-                _ = await (wakes, says, relays, flow, away, tour)
+                _ = await (wakes, says, relays, flow, away, tour, cueNow)
             }
         #else
         self

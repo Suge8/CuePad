@@ -173,7 +173,7 @@ private struct QuotaWindowRow: View {
 /// 还剩随动画插值，档位的颜色直接换。
 struct QuotaRing: View, Animatable {
     private var left: Double
-    private let level: PiContextMeter.Level
+    private let level: UsageLevel
     @Environment(\.palette) private var palette
 
     private static let line: CGFloat = 1.5

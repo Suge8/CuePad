@@ -1,10 +1,10 @@
 #if os(macOS)
 import SwiftUI
 
-/// Mac 侧栏最上面的 Cue 名片：头像（大一档，`CueAvatar.Size.header`）、名字，名字下面一行"在管 N · 等你 M"或不在的原因（`CueStatusLine` 的 tally，主窗口里只此一处），
+/// Mac 侧栏最上面的 Cue 名片：头像（大一档，`CueAvatar.Size.header`）、名字，名字下面 Cue 此刻那一行（珠子接那一句，不在时写原因；`CueStatusLine` 的 tally，主窗口里只此一处），
 /// 名字右边新消息数；下面一个纸色气泡放它最近说的话（`CueWatch.lastSaid`，最多三行，没读的是正文墨色），
 /// 左上一个尖角指向头像——是它说的。点开 Cue 页；开着时整张名片是选中底（`RowStyle`），气泡收起：对话就在右边，不重复同一句。
-/// 零件与状态行（`CueStatusRow`：菜单栏面板、输入条、iPad）共用：头像、新消息数、在管与等你那一行。
+/// 零件与状态行（`CueStatusRow`：菜单栏面板、输入条、iPad）共用：头像、新消息数、Cue 此刻那一行。
 struct CueSidebarCard: View {
     let select: (Route) -> Void
     @Environment(Workspace.self) private var workspace

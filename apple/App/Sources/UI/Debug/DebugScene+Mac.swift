@@ -18,7 +18,7 @@ extension DebugScene {
         case "collapsed": workspace.pages.sidebar = .detailOnly
         case "search": workspace.searching = true
         case "tasks":
-            // 任务页：配 -CuePadDemo 时写入 Mac 同步来的演示会话与 Cue 的等你，在管的任务带会话状态（同 iOS 的 tasks）
+            // 任务页：配 -CuePadDemo 时写入 Mac 同步来的演示会话与 Cue 的等你，推进中的任务带会话状态（同 iOS 的 tasks）
             if defaults.bool(forKey: "CuePadDemo") {
                 await seedRemote(workspace.services)
                 await seedCue(workspace.services)

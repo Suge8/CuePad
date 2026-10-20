@@ -3,10 +3,10 @@ import SwiftUI
 /// 带一道刻线的细条，上下文卡的换新线（`CueContextCard`）与额度的匀速线（`QuotaStrip`）同一种画法，一块画布：
 /// 底是整条，铺色到 `fill`，刻线在条上压出一道缝，任何底色上都读得出。
 /// 铺色的末端落在缝里、或越过缝却不足两个条宽时收在缝前（圆头）：否则缝的另一边留下一小截两头圆的碎块，读成一个点或渲染毛刺（一个条宽的门槛挡不住 62% 对 59% 那种）。
-/// 铺色按用量的档位（`PiContextMeter.Level.ink`）。比例与刻线随动画插值（`animatableData`），颜色直接换。
+/// 铺色按用量的档位（`UsageLevel.ink`）。比例与刻线随动画插值（`animatableData`），颜色直接换。
 struct MarkedBar: View, Animatable {
     private var values: AnimatablePair<Double, Double>
-    private let level: PiContextMeter.Level
+    private let level: UsageLevel
     @Environment(\.palette) private var palette
 
     static let height: CGFloat = 11
@@ -16,7 +16,7 @@ struct MarkedBar: View, Animatable {
     private static let line: CGFloat = 1.5
 
     /// `fill`、`mark` 是占整条的比例（0 到 1）；`mark` 为 nil 时没有刻线。
-    init(fill: Double, mark: Double?, level: PiContextMeter.Level) {
+    init(fill: Double, mark: Double?, level: UsageLevel) {
         values = AnimatablePair(fill, mark ?? -1)
         self.level = level
     }
@@ -45,16 +45,5 @@ struct MarkedBar: View, Animatable {
             context.fill(Path(roundedRect: CGRect(x: x - Self.line / 2, y: 0, width: Self.line, height: size.height), cornerRadius: Self.line / 2), with: .color(ink))
         }
         .frame(height: Self.height)
-    }
-}
-
-extension PiContextMeter.Level {
-    /// 用量计（刻度条 `MarkedBar`、模型胶囊的额度环 `QuotaRing`）的铺色：余量足次要墨色，七成起墨色，九成起胭脂（不借赭黄、不用靛青）。
-    func ink(_ palette: Palette) -> Color {
-        switch self {
-        case .roomy: palette.ink2
-        case .tight: palette.ink
-        case .critical: palette.failure
-        }
     }
 }

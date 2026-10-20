@@ -33,7 +33,7 @@ struct BoardColumns: View {
 }
 
 /// 看板的一列（`TaskBoard`；Mac 与宽屏 iPad 四列并排，手机一屏一列）：卡片在懒加载栈里（列可能很长，只建看得见的）。
-/// 拖放：卡片拖到在管是开始（同"开始"：Mac 交给 Agent，手机浮起发给 Agent 的输入框）、拖到做完是做完（同点完成圈，还有没完成的步骤、
+/// 拖放：卡片拖到「推进中」是开始（同"开始"：Mac 交给 Agent，手机浮起发给 Agent 的输入框）、拖到做完是做完（同点完成圈，还有没完成的步骤、
 /// Agent 还在做时先问一句，`TaskCheck`）；待办里拖到一张卡前面是排序（`TaskBoard.move`），拖进来不改状态。别的拖法不接。
 /// 做完列末尾是"更早做完的 N"：原地展开（它们没进归档，跳去归档页看到的是别的），展开后旁边是"全部归档"。
 struct BoardColumn: View {
@@ -80,7 +80,7 @@ struct BoardColumn: View {
     private var ids: [String] {
         switch column {
         case .todo: board.todo.map(\.id.uuidString)
-        case .managing: board.managing.map(\.id)
+        case .advancing: board.advancing.map(\.id)
         case .waiting: board.waiting.map(\.id)
         case .done: board.done.map(\.id.uuidString) + (showsEarlier ? board.earlier.map(\.id.uuidString) : [])
         }
@@ -96,15 +96,15 @@ struct BoardColumn: View {
                 BoardTaskCard(item: item).draggable(item.id.uuidString).modifier(InsertBefore(id: item.id) { drop($0, before: item.id) })
             }
             if board.todo.isEmpty && !adding { empty("没有待办") }
-        case .managing:
-            ForEach(board.managing) { work in
+        case .advancing:
+            ForEach(board.advancing) { work in
                 if let item = work.item {
                     BoardTaskCard(item: item).draggable(item.id.uuidString)
                 } else if case .session(let session) = work.work {
                     BoardSessionCard(session: session)
                 }
             }
-            if board.managing.isEmpty { empty("拖一件待办到这里开始") }
+            if board.advancing.isEmpty { empty("拖一件待办到这里开始") }
         case .waiting:
             ForEach(board.waiting) { wait in
                 if let item = wait.item {
@@ -178,7 +178,7 @@ struct BoardColumn: View {
                 workspace.perform { try await $0.moveCard(id, to: move.slot, after: move.after) }
             }
             return true
-        case .managing:
+        case .advancing:
             guard fromTodo else { return false }
             start(item.task)
             return true
@@ -211,7 +211,7 @@ struct BoardColumn: View {
 extension TaskBoard {
     /// 看板上的这件任务（在哪一列都算）。
     func item(_ id: UUID) -> Item? {
-        todo.first { $0.id == id } ?? managing.lazy.compactMap(\.item).first { $0.id == id } ?? waiting.lazy.compactMap(\.item).first { $0.id == id }
+        todo.first { $0.id == id } ?? advancing.lazy.compactMap(\.item).first { $0.id == id } ?? waiting.lazy.compactMap(\.item).first { $0.id == id }
             ?? done.first { $0.id == id } ?? earlier.first { $0.id == id }
     }
 }
@@ -240,7 +240,7 @@ private struct InsertBefore: ViewModifier {
     }
 }
 
-/// 列头：列的状态图形、列名、数（做完写"今天"）。图形只用现成的：待办空圈、在管半圈（`TaskRingView`）、等你赭黄问号（`PiStateGlyph`）、做完对勾。
+/// 列头：列的状态图形、列名、数（做完写"今天"）。图形只用现成的：待办空圈、推进中半圈（`TaskRingView`）、等你赭黄问号（`PiStateGlyph`）、做完对勾。
 struct BoardColumnHeader: View {
     let column: TaskBoard.Column
     let count: Int
@@ -274,7 +274,7 @@ struct BoardColumnGlyph: View {
     var body: some View {
         switch column {
         case .todo: TaskRingView(status: .todo, done: false, size: size)
-        case .managing: TaskRingView(status: .inProgress, done: false, size: size)
+        case .advancing: TaskRingView(status: .inProgress, done: false, size: size)
         case .waiting: PiStateGlyph(status: .asking).font(.system(size: size))
         case .done: TaskRingView(status: .done, done: true, size: size)
         }
@@ -469,7 +469,7 @@ struct BoardWaitCard: View {
     private func open(_ task: Card) { workspace.openTask(task) }
 }
 
-/// 在管列里一个没绑没做完的任务的活会话（终端里开的、"新会话"、只有已完成的事绑着的）：就是会话列表的那一行（`PiSessionRow`，菜单栏面板、Cue 页头面板同一种）铺在纸上，点了打开会话。
+/// 推进中列里一个没绑没做完的任务的活会话（终端里开的、"新会话"、只有已完成的事绑着的）：就是会话列表的那一行（`PiSessionRow`，菜单栏面板、Cue 页头面板同一种）铺在纸上，点了打开会话。
 private struct BoardSessionCard: View {
     let session: PiSessionState
     @Environment(Workspace.self) private var workspace
@@ -506,7 +506,7 @@ private struct BoardSessionHeader: View {
     }
 }
 
-/// 看板上点了打开会话的一块（在管的会话卡、等你卡的抬头）。
+/// 看板上点了打开会话的一块（推进中的会话卡、等你卡的抬头）。
 private struct BoardSessionLink<Label: View>: View {
     let session: PiSessionState
     @ViewBuilder let label: Label
@@ -635,7 +635,7 @@ private struct BoardReading: ViewModifier {
 extension TaskBoard {
     /// 看板上有事的项目（筛选胶囊列它们），按项目目录的顺序。
     func projects(in catalog: ProjectCatalog?) -> [Project] {
-        let used = Set((todo + done + earlier).map(\.task.projectID) + managing.map(\.project) + waiting.compactMap(\.project))
+        let used = Set((todo + done + earlier).map(\.task.projectID) + advancing.map(\.project) + waiting.compactMap(\.project))
         return catalog?.projects.filter { used.contains($0.id) } ?? []
     }
 }

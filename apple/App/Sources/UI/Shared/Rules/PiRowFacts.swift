@@ -6,7 +6,7 @@ import Foundation
 nonisolated struct PiRowFacts: Equatable {
     var note: Note?
     var subagents: PiSubagentSummary?
-    /// 上下文用到七成（`PiContextMeter.tightFraction`）起才有：余量足或刚压缩完不知道用量时，行上不写。
+    /// 上下文用到七成（`UsageLevel.tightFraction`）起才有：余量足或刚压缩完不知道用量时，行上不写。
     var context: PiContextMeter?
     var model: Model?
 

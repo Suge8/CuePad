@@ -81,7 +81,7 @@ public struct CueTools: Sendable {
         "description": """
           你的长期记忆，一行一条（≤\(CueMemoryLine.maxBytes) 字节），序号就是身份。note{text,pin?} 记一条，pin 一直记着（不 pin 的旧行会被并成摘要）；recall{query} 只读：全文找记忆、对话与任务；
           forget{line}；pin{line,pinned}；remind{text,at} 到点叫醒你（ISO 8601 或 yyyy-MM-dd HH:mm）；merge{lo,hi,text} 把待合并的块写成一行摘要；
-          renew{handoff} 写交接备忘，然后换新上下文：只写你在管的事各自做到哪、下一步，和他之间没了结的事，至多 \(handoffLimit) 字；
+          renew{handoff} 写交接备忘，然后换新上下文：只写推进中的事各自做到哪、下一步，和他之间没了结的事，至多 \(handoffLimit) 字；
           allow{ask,project?,allowed?} 改允许清单：ask 只能是 \(Self.allowable)，不带 project 是所有项目，allowed:false 去掉。
           """,
         "inputSchema": schema(
@@ -627,7 +627,7 @@ public struct CueTools: Sendable {
     case "renew":
       let handoff = try args.required("handoff")
       guard handoff.count <= Self.handoffLimit else {
-        throw Failure("交接 \(handoff.count) 字，上限 \(Self.handoffLimit)，没写：只写你在管的事各自做到哪、下一步，和他之间没了结的事，每件一两句")
+        throw Failure("交接 \(handoff.count) 字，上限 \(Self.handoffLimit)，没写：只写推进中的事各自做到哪、下一步，和他之间没了结的事，每件一两句")
       }
       let message = try await store.addCueMessage(.handoff, text: handoff)
       return .ok("交接备忘写好了，接下来换新上下文。（\(message.id.shortID)）")

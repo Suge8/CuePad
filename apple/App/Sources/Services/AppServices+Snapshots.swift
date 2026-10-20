@@ -13,10 +13,12 @@ extension AppServices {
     func startSnapshots() {
         follow(reporting: { .widgetDataUnavailable("\($0)") }) {
             for try await (content, moment) in self.observeTimed({ try $0.widgetContent() }) {
-                try self.publish(WidgetSnapshots(content, at: moment))
+                let now = Self.cueNow(content.cue, at: moment)
+                // 岛先改：后台被推送叫醒时剩的时间不多，写快照、刷新小组件排在它后面
                 #if os(iOS)
-                await self.cueActivity?.show(CueActivityState(content.cue, at: moment), foreground: Self.isActive)
+                await self.cueActivity?.show(CueActivityState(now: now, quotas: content.quotas, at: moment.now), foreground: Self.isActive)
                 #endif
+                try self.publish(WidgetSnapshots(content, now: now))
             }
         }
         #if os(iOS)
@@ -35,19 +37,34 @@ extension AppServices {
     private static var isActive: Bool { UIApplication.shared.applicationState == .active }
     #endif
 
+    /// Cue 此刻：小组件、实时活动与 Cue 那一行（`CueWatch`）都经这里推（调试时可钉成一份样例，`-CuePadCueNow`）。
+    static func cueNow(_ digest: CueDigest, at moment: Speech.Moment) -> CueNow {
+        DebugHooks.preset.cueNow ?? CueNow(digest, at: moment)
+    }
+
     /// 立即按当前库内容更新快照（进入后台前）；实时活动按此刻重发一次，过时时刻从这时算。
     func writeSnapshots() async throws {
         let content = try await store.widgetContent()
-        try publish(WidgetSnapshots(content, at: speech))
+        let now = Self.cueNow(content.cue, at: speech)
         #if os(iOS)
-        await cueActivity?.show(CueActivityState(content.cue, at: speech), resend: true, foreground: Self.isActive)
+        await cueActivity?.show(CueActivityState(now: now, quotas: content.quotas, at: speech.now), resend: true, foreground: Self.isActive)
         #endif
+        try publish(WidgetSnapshots(content, now: now))
     }
+
+    #if os(iOS)
+    /// 推送叫醒、拉完之后当场改岛：快照那条观察是异步的，回调一返回系统就可能挂起 App，等它可能来不及（`IOSAppDelegate`）。
+    func showCueActivityNow() async throws {
+        let content = try await store.widgetContent()
+        let now = Self.cueNow(content.cue, at: speech)
+        await cueActivity?.show(CueActivityState(now: now, quotas: content.quotas, at: speech.now), foreground: Self.isActive)
+    }
+    #endif
 
     private func publish(_ snapshots: WidgetSnapshots) throws {
         let old = publishedSnapshots
         try write(snapshots.projects, over: old?.projects)
-        let shown = [try write(snapshots.home, over: old?.home), try write(snapshots.cue, over: old?.cue)]
+        let shown = [try write(snapshots.home, over: old?.home), try write(snapshots.cue, over: old?.cue, same: { $0.same(as: $1) })]
         if shown.contains(true) { reloadWidgets() }
         publishedSnapshots = snapshots
     }
@@ -58,10 +75,10 @@ extension AppServices {
         #endif
     }
 
-    /// 和上次写出的一样就不写；返回写了没有。
+    /// 和上次写出的一样（`same`，默认相等）就不写；返回写了没有。
     @discardableResult
-    private func write<S: SnapshotFile & Equatable>(_ snapshot: S, over old: S?) throws -> Bool {
-        guard snapshot != old else { return false }
+    private func write<S: SnapshotFile & Equatable>(_ snapshot: S, over old: S?, same: (S, S) -> Bool = (==)) throws -> Bool {
+        if let old, same(snapshot, old) { return false }
         try Snapshots.write(snapshot, to: location.snapshotsDirectory)
         return true
     }
@@ -71,13 +88,33 @@ extension AppServices {
 nonisolated struct WidgetSnapshots: Equatable, Sendable {
     var projects: ProjectsSnapshot
     var home: DefaultProjectSnapshot
-    var cue: CueSnapshot
+    var cue: CueNow
 
-    /// Cue 的表情随此刻（`CueSnapshot`），读库的那份不随。
-    init(_ content: WidgetContent, at moment: Speech.Moment) {
+    /// Cue 此刻随此刻推（在不在、话在不在路上、表情，`AppServices.cueNow`），读库的那份不随。
+    init(_ content: WidgetContent, now: CueNow) {
         projects = content.projects
         home = content.home
-        cue = CueSnapshot(digest: content.cue.digest, at: moment)
+        cue = now
+    }
+
+    /// 只比内容（Cue 此刻推出的时刻不算）：内容一样就不重写、不刷新小组件。
+    static func == (a: Self, b: Self) -> Bool { a.projects == b.projects && a.home == b.home && a.cue.same(as: b.cue) }
+}
+
+extension CueActivityState {
+    /// 实时活动那一份：Cue 此刻，加各家额度此刻（`date`）的读数（`QuotaMeter`）与本周快重置的提醒段（`QuotaReminder.isNear`）。
+    nonisolated init(now: CueNow, quotas: [AccountQuota], at date: Date) {
+        self.now = now
+        self.quotas = quotas.compactMap { quota in
+            let meter = QuotaMeter(quota, at: date)
+            let week = QuotaReminder.window(of: quota)
+            let windows = meter.windows.map { window in
+                Quota.Window(
+                    name: window.name, left: window.left, level: window.level, resetsAt: window.resetsAt,
+                    near: week.map { window.id == $0.id && QuotaReminder.isNear($0, at: date) } ?? false)
+            }
+            return windows.isEmpty ? nil : Quota(account: meter.account, windows: windows)
+        }
     }
 }
 
@@ -85,8 +122,10 @@ nonisolated struct WidgetSnapshots: Equatable, Sendable {
 nonisolated struct WidgetContent: Equatable, Sendable {
     var projects: ProjectsSnapshot
     var home: DefaultProjectSnapshot
-    /// Cue 的摘要与今天做完的（小组件只用摘要，实时活动都用）。
-    var cue: CueActivityState.Reading
+    /// Cue 的摘要（推出 Cue 此刻）。
+    var cue: CueDigest
+    /// 各家订阅额度（只给实时活动）。
+    var quotas: [AccountQuota]
 }
 
 extension CueStore {
@@ -105,6 +144,7 @@ extension CueStore {
                     DefaultProjectSnapshot.Card(id: $0.id, title: $0.heading, modifiedAt: $0.modifiedAt)
                 },
                 total: cards.count),
-            cue: try CueActivityState.Reading.read(from: self))
+            cue: try CueDigest.read(from: self),
+            quotas: try accountQuotas())
     }
 }

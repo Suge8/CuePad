@@ -231,10 +231,10 @@ struct TaskFlowTests {
     }
 
     #if os(macOS)
-    /// 任务页的流水看板（Mac 侧栏"任务"与手机任务页同一份）：拖到在管就是开始（同"开始"，`Workspace.handOff`），会话开好它就在管；
-    /// Cue 问到它，它挪到等你，没绑任务的会话在问也在这一列；在管、等你两列的数就是 Cue 摘要里的数；答完回到在管；
-    /// 拖到做完就是做完（同点完成圈，`Workspace.toggle`），落在今天做完的那一列，它还活着的会话留在在管；做完了 Cue 还在问它，它只在等你。
-    @Test func 看板_拖到在管就是开始_Cue问到它挪到等你_两列的数同Cue摘要_拖到做完就是做完_做完了还在问只在等你() async throws {
+    /// 任务页的流水看板（Mac 侧栏"任务"与手机任务页同一份）：拖到「推进中」就是开始（同"开始"，`Workspace.handOff`），会话开好它就推进中；
+    /// Cue 问到它，它挪到等你，没绑任务的会话在问也在这一列；推进中、等你两列的数就是 Cue 摘要里的数；答完回到「推进中」；
+    /// 拖到做完就是做完（同点完成圈，`Workspace.toggle`），落在今天做完的那一列，它还活着的会话留在「推进中」；做完了 Cue 还在问它，它只在等你。
+    @Test func 看板_拖到推进中就是开始_Cue问到它挪到等你_两列的数同Cue摘要_拖到做完就是做完_做完了还在问只在等你() async throws {
         try await rig.offersPi()
         let workspace = Workspace(services: rig.services)
         let project = try await store.createProject(name: "圆桌", color: "#000000")
@@ -244,7 +244,7 @@ struct TaskFlowTests {
         func board() async throws -> TaskBoard { try await TaskBoard.read(from: store) }
         func expectCountsMatchCue(_ board: TaskBoard) async throws {
             let digest = try await CueDigest.read(from: store)
-            #expect(board.count(.managing) == digest.managing && board.count(.waiting) == digest.waiting)
+            #expect(board.count(.advancing) == digest.advancing && board.count(.waiting) == digest.waiting)
         }
         #expect(try await Set(board().todo.map(\.id)) == [task.id, other.id])
 
@@ -253,36 +253,36 @@ struct TaskFlowTests {
         let token = try #require(launch?.launch?.token)
         try await PiStateRecorder(store: store, hostID: TestApp.hostID).update(sessionID: "s1", state: .thinking, title: "修发言乱序", launchToken: token)
         var columns = try await board()
-        #expect(columns.managing.map(\.item?.id) == [task.id] && columns.todo.map(\.id) == [other.id])
+        #expect(columns.advancing.map(\.item?.id) == [task.id] && columns.todo.map(\.id) == [other.id])
         try await expectCountsMatchCue(columns)
 
         let ask = try await store.addCueMessage(.cue, text: "要推送吗？", ask: try CueAsking(.push, action: "推送发言顺序的修复"), task: task.id)
         try await PiStateRecorder(store: store, hostID: "mac-a")
             .update(sessionID: "rename", state: .waitingForUser, title: "rename", question: PiQuestion(promptID: "p", kind: .text, text: "新分支叫什么？"))
         columns = try await board()
-        #expect(columns.managing.isEmpty)
+        #expect(columns.advancing.isEmpty)
         #expect(columns.waiting.map(\.item?.id) == [task.id, nil])
         try await expectCountsMatchCue(columns)
 
         try await workspace.answerCueQuestion(ask, CueAsk.once)
-        #expect(try await board().managing.map(\.item?.id) == [task.id])
+        #expect(try await board().advancing.map(\.item?.id) == [task.id])
         try await workspace.toggle(task.id)
         columns = try await board()
-        #expect(columns.done.map(\.id) == [task.id] && columns.managing.map(\.id) == ["session/s1"] && columns.waiting.count == 1)
+        #expect(columns.done.map(\.id) == [task.id] && columns.advancing.map(\.id) == ["session/s1"] && columns.waiting.count == 1)
         try await expectCountsMatchCue(columns)
 
-        // 做完了 Cue 还在问它：它只在等你，做完列与实时活动的"今天做完"都不再算它
+        // 做完了 Cue 还在问它：它只在等你，做完列与 Cue 此刻的"刚做完"都不再算它
         _ = try await store.addCueMessage(.cue, text: "要删分支吗？", ask: try CueAsking(.delete, action: "删掉修发言乱序的分支"), task: task.id)
         columns = try await board()
         #expect(columns.done.isEmpty && columns.waiting.compactMap(\.item?.id) == [task.id])
-        #expect(try await CueActivityState.Reading.read(from: store).done.isEmpty)
+        #expect(try await CueDigest.read(from: store).done.isEmpty)
         try await expectCountsMatchCue(columns)
     }
     #endif
 
-    /// 在管与等你（Cue 那一行、看板中间两列同一份）：会话在做的顶层任务在管；Cue 问到它的步骤、它的会话在问你，它就从在管挪到等你，一处在等算一件；
-    /// 没落在任务上的提问也算等你；答完回到在管。
-    @Test func 在管与等你_问到哪件哪件挪到等你_答完回到在管() async throws {
+    /// 推进中与等你（Cue 那一行、看板中间两列同一份）：会话在做的顶层任务推进中；Cue 问到它的步骤、它的会话在问你，它就从推进中挪到等你，一处在等算一件；
+    /// 没落在任务上的提问也算等你；答完回到「推进中」。
+    @Test func 推进中与等你_问到哪件哪件挪到等你_答完回到推进中() async throws {
         let workspace = Workspace(services: rig.services)
         let project = try await store.createProject(name: "圆桌", color: "#000000")
         let release = try await store.createTask("发布 v1.4", in: project.id)
@@ -295,23 +295,23 @@ struct TaskFlowTests {
         try await recorder.update(sessionID: "zoom", state: .thinking, title: "canvas-zoom")
         try await store.bindSession("zoom", to: canvas.id)
         func digest() async throws -> CueDigest { try await CueDigest.read(from: store) }
-        #expect(try await Set(digest().tally.managing.map(\.id)) == ["task/\(release.id.uuidString)", "task/\(canvas.id.uuidString)"])
+        #expect(try await Set(digest().tally.advancing.map(\.id)) == ["task/\(release.id.uuidString)", "task/\(canvas.id.uuidString)"])
 
         let push = try await store.addCueMessage(.cue, text: "要推送吗？", ask: try CueAsking(.push, action: "推送 v1.4"), task: step.id)
         _ = try await store.addCueMessage(.cue, text: "要删旧脚本吗？", ask: try CueAsking(.delete, action: "删掉 scripts/legacy"))
         try await recorder.update(sessionID: "zoom", state: .waitingForUser, question: PiQuestion(promptID: "p", kind: .confirm, text: "改锚点？"))
         var tally = try await digest().tally
-        #expect(tally.managing.isEmpty)
+        #expect(tally.advancing.isEmpty)
         #expect(tally.waiting.map(\.task) == [release.id, nil, canvas.id])
 
         try await workspace.answerCueQuestion(push, CueAsk.once)
         tally = try await digest().tally
-        #expect(tally.managing.map(\.id) == ["task/\(release.id.uuidString)"] && tally.waiting.count == 2)
+        #expect(tally.advancing.map(\.id) == ["task/\(release.id.uuidString)"] && tally.waiting.count == 2)
     }
 
-    /// 在管只算 Cue 此刻在做的，与它信封里的"在做"同一份：开过工、会话都结束了的任务（在等你自己去办的事）不算，
-    /// 它没丢也没做完，回到待办；会话恢复了又回到在管。没绑没做完的任务的活会话也在在管。
-    @Test func 会话都结束了的任务不算在管_回到待办_数同信封() async throws {
+    /// 推进中只算 Cue 此刻在做的，与它信封里的"在做"同一份：开过工、会话都结束了的任务（在等你自己去办的事）不算，
+    /// 它没丢也没做完，回到待办；会话恢复了又回到「推进中」。没绑没做完的任务的活会话也在「推进中」。
+    @Test func 会话都结束了的任务不算推进中_回到待办_数同信封() async throws {
         let card = try await store.createTask("开 U 卡")
         let bitget = try await store.createTask("bitget", under: card.id)
         _ = try await store.createTask("KYC", under: card.id)
@@ -326,14 +326,14 @@ struct TaskFlowTests {
         func inEnvelope() async throws -> Int { try await store.cueBoard().active.count }  // 信封的"在做 N 件"数的就是它
 
         var board = try await TaskBoard.read(from: store)
-        #expect(board.managing.map(\.id) == ["task/\(live.id.uuidString)", "session/term"])  // 任务在前，没绑任务的会话在后
+        #expect(board.advancing.map(\.id) == ["task/\(live.id.uuidString)", "session/term"])  // 任务在前，没绑任务的会话在后
         #expect(board.todo.map(\.id) == [card.id] && board.todo.first?.task.status == .inProgress)
-        #expect(try await CueDigest.read(from: store).managing == 2)
+        #expect(try await CueDigest.read(from: store).advancing == 2)
         #expect(try await inEnvelope() == 2)
 
         try await recorder.update(sessionID: "kyc", state: .thinking)
         board = try await TaskBoard.read(from: store)
-        #expect(Set(board.managing.map(\.id)) == ["task/\(card.id.uuidString)", "task/\(live.id.uuidString)", "session/term"] && board.todo.isEmpty)
+        #expect(Set(board.advancing.map(\.id)) == ["task/\(card.id.uuidString)", "task/\(live.id.uuidString)", "session/term"] && board.todo.isEmpty)
         #expect(try await inEnvelope() == 3)
     }
 

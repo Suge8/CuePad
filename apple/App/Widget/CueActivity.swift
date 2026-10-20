@@ -4,62 +4,33 @@ import ActivityKit
 import AppIntents
 #endif
 
-/// 实时活动的一份（iPhone 锁屏与灵动岛；macOS 26 起系统把它转进 Mac 的菜单栏，Mac 不写代码）：Cue 的表情、在管与等你的数、一排格子、
-/// 第一件等你与锁屏最下一行最近做完的。App 由库推出（`CueActivityState.read`，数只读 `CueStore.cueTally`），小组件进程只画（`CueActivityViews`）。
+/// 实时活动的一份（iPhone 锁屏与灵动岛；macOS 26 起系统把它转进 Mac 的菜单栏，Mac 不写代码）：Cue 此刻（`CueNow`，同 App 里 Cue 那一行的唯一一份）
+/// 加各家订阅额度的一瞥（`Quota`，读数规则是 App 里的 `QuotaMeter`，这里只存算好的）。App 推出（`AppServices.startSnapshots`），小组件进程只画（`CueActivityViews`）。
 nonisolated struct CueActivityState: Codable, Hashable, Sendable {
-    /// 头像的表情（`CueMood` 的原始值，图在 CueFaces 里）。
-    var mood: String
-    var managing: Int
-    var waiting: Int
-    /// 今天做完的顶层任务几件（格子里的石绿）。
-    var done: Int
-    var first: Wait?
-    var lastDone: Done?
-    /// 这一份是什么时候写下的：过时（`staleDate`）后卡片变淡，写"x 分钟前"。
-    var at: Date
+    var now: CueNow
+    var quotas: [Quota]
 
-    /// 第一件等你：说什么、"打开"去哪，只有 Cue 带选项的提问能"允许一次"（会话在问的只给打开）。
-    struct Wait: Codable, Hashable, Sendable {
-        var title: String
-        var detail: String?
-        var open: URL
-        var allow: Allow?
+    /// 一个订阅账号：账号名与几个窗口此刻还剩多少。
+    struct Quota: Codable, Hashable, Sendable {
+        var account: String
+        var windows: [Window]
+
+        struct Window: Codable, Hashable, Sendable {
+            /// "5 小时"、"本周"
+            var name: String
+            /// 还剩（0 到 1）
+            var left: Double
+            var level: UsageLevel
+            var resetsAt: Date
+            /// 快重置了、提醒把额度用掉的那段里（`QuotaReminder.isNear`）
+            var near: Bool
+
+            var percent: String { "\(Int((left * 100).rounded()))%" }
+        }
     }
 
-    /// "允许一次"答哪条提问、选哪一项（提问的第一项，`CueAsk.once`）。
-    struct Allow: Codable, Hashable, Sendable {
-        var message: UUID
-        var choice: String
-    }
-
-    struct Done: Codable, Hashable, Sendable {
-        var title: String
-        var at: Date
-    }
-
-    enum Cell: String, Codable, Sendable {
-        case managing, waiting, done
-    }
-
-    static let cellLimit = 8
-
-    /// 格子：每件在管、每件等你、今天做完的各一格，按这个先后排；放不下 `cellLimit` 格时先保等你、再保在管，做完的最先让出去。
-    var cells: [Cell] {
-        let waits = min(waiting, Self.cellLimit)
-        let manages = min(managing, Self.cellLimit - waits)
-        let dones = min(done, Self.cellLimit - waits - manages)
-        return Array(repeating: .managing, count: manages) + Array(repeating: .waiting, count: waits) + Array(repeating: .done, count: dones)
-    }
-
-    /// 有在管或等你的才开着实时活动，都没了就结束。
-    var isLive: Bool { managing > 0 || waiting > 0 }
-
-    /// 内容一样（不看写下的时刻）：一样的就不重发。
-    func same(as other: CueActivityState) -> Bool {
-        var other = other
-        other.at = at
-        return self == other
-    }
+    /// 内容一样（不看推出的时刻）：一样的就不重发。
+    func same(as other: CueActivityState) -> Bool { now.same(as: other.now) && quotas == other.quotas }
 }
 
 #if os(iOS)
@@ -79,7 +50,7 @@ struct AllowOnceIntent: LiveActivityIntent {
 
     init() {}
 
-    init(_ allow: CueActivityState.Allow) {
+    init(_ allow: CueNow.Allow) {
         message = allow.message.uuidString
         choice = allow.choice
     }
