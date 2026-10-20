@@ -21,7 +21,7 @@ Swift 原生应用（macOS / iOS / iPadOS），产品见 [README.md](README.md)�
 
 - 界面配色、动效、布局、渲染性能 → [docs/ui.md](docs/ui.md)
 - 同步、投送请求、CloudKit 订阅、通知、同步排查 → [docs/sync.md](docs/sync.md)
-- 截图验收、交互验收、通知验收、性能测量、崩溃诊断、改 Cue 提示词的前后评测 → [docs/verify.md](docs/verify.md)
+- 截图验收、交互验收、通知验收、性能测量、崩溃诊断、改 Cue 提示词的前后评测、要占前台（截系统菜单、在前台量帧） → [docs/verify.md](docs/verify.md)
 - 签名、发布、Sparkle、CloudKit 结构部署 → [docs/release.md](docs/release.md)
 - Agent 桥、socket 协议、各家接入 → [CuePi README](apple/CuePadKit/Sources/CuePi/README.md)
 - 落地页 → [landing/AGENTS.md](landing/AGENTS.md)

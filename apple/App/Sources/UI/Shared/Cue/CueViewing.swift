@@ -21,9 +21,9 @@ struct CueViewing: ViewModifier {
     @Environment(\.scenePhase) private var phase
     private var onScreen: Bool { phase == .active }
     #else
-    /// 主窗口露在屏幕上（没缩进程序坞、没被别的窗口整个盖住、App 没隐藏）。脚本截图时窗口排在最后，当它露着
+    /// 主窗口露在屏幕上（没缩进程序坞、没被别的窗口整个盖住、App 没隐藏）。脚本起的验收实例窗口排在最后，当它露着
     @State private var exposed = true
-    private var onScreen: Bool { exposed || DebugHooks.staysInBackground }
+    private var onScreen: Bool { exposed || DebugHooks.scripted }
     #endif
     /// 页面在屏上（推进了别的页盖住它时不在）。
     @State private var appeared = false

@@ -211,11 +211,11 @@ import QuartzCore
 /// `movedPx`（为 0 说明没滚动起来，数字作废）、`events` 与 `delivered`（应投与实际投出的事件数，不等时这一组的工作量和别组不同，数字作废）；前台时还有 display link 掉帧。
 /// 别人在编译时 CPU 时间会被拖歪，指令数基本不动；热身时排开多少条随时机略变，要排除它就把初始排开的条数固定成同一个值再比（同值下三遍指令数相差不到 1%）。
 /// 跑法：`-CuePadDemo YES -CuePadLongChat YES -CuePadScene session -CuePadSession marathon -CuePadWindowSize 1440x900 -CuePadOffscreen YES`（Cue 页把后两项场景换成 `-CuePadScene cue`），
-/// 用 `open -g -n -a <app> --stdout <文件> --env … --args …` 后台启动（直接执行二进制会把应用调到前台抢焦点）；Time Profiler 按这次启动的 PID `--attach`。
+/// 本机构建怎么起都在后台；Time Profiler 按这次启动的 PID `--attach`。
 /// 默认不碰真实指针、不把窗口调到前台、不向系统发事件，配 `-CuePadOffscreen YES` 在屏幕外跑：直接挪滚动视图的裁剪区原点（不经 AppKit 的滚轮事件与动画，
 /// 那条路靠 display link，屏幕外不走），补发 `willStartLiveScroll` 与 `didEndLiveScroll` 两个通知（滚动区据此知道"用户在滚"）。屏幕外量不到：滚轮事件与动画那一段、
 /// 指针在窗口里时每帧重设光标的成本（自定义指针的机器上很贵）、合成与掉帧。
-/// 前台的两种驱动（会把应用调到前台，要在没人用电脑时跑；`pointerInWindow` 记录量的时候真实指针是否在窗口里，两种数字不能混着比）：
+/// 前台的两种驱动（要占前台，配 `-CuePadForeground YES`，只在没人用电脑时跑，量完把前台与指针还回去；`pointerInWindow` 记录量的时候真实指针是否在窗口里，两种数字不能混着比）：
 /// - `-CuePadScrollDriver process`：滚轮事件在进程内直接交给对话的滚动视图（`scrollWheel(with:)`），经 AppKit 的滚轮与动画，不碰指针；
 /// - `-CuePadScrollDriver hid`：经窗口服务器发真实滚轮事件（本窗口不在指针下的最上层时一个事件也不发，量不了就报错退出）。
 /// `-CuePadScrollPointer in|out` 在热身之后把指针移到对话区中央（in）或窗口外的屏幕角落（out），量完放回；hid 要配 in。
@@ -252,8 +252,7 @@ enum ChatScrollBench {
         guard let (window, scroll) = found else { print("CHATSCROLL-ERR 找不到对话的滚动视图"); fflush(stdout); exit(1) }
         try? await Task.sleep(for: .seconds(3))
         if driver != .direct {
-            NSApp.activate(ignoringOtherApps: true)
-            window.makeKeyAndOrderFront(nil)
+            guard DebugForeground.borrow(window) else { print("CHATSCROLL-ERR \(driver.rawValue) 要占前台：加 -CuePadForeground YES"); fflush(stdout); exit(1) }
             try? await Task.sleep(for: .seconds(1))
         }
         let primaryHeight = NSScreen.screens[0].frame.height
@@ -263,11 +262,9 @@ enum ChatScrollBench {
         let spot = pointer == "out"
             ? corners.max { abs($0.x - center.midX) < abs($1.x - center.midX) } ?? .zero
             : CGPoint(x: center.midX, y: primaryHeight - center.midY)
-        let original = CGEvent(source: nil)?.location ?? .zero
-        var pointerMoved = false
-        /// 任何退出路径（含出错提前退出）都从这里走：动过指针就放回原处。
+        /// 任何退出路径（含出错提前退出）都从这里走：借了前台、动过指针就还回去。
         func finish(_ code: Int32) -> Never {
-            if pointerMoved { CGWarpMouseCursorPosition(original) }
+            DebugForeground.giveBack()
             fflush(stdout)
             exit(code)
         }
@@ -325,8 +322,7 @@ enum ChatScrollBench {
         try? await Task.sleep(for: .seconds(1))
         let movesPointer = driver != .direct && (pointer == "in" || pointer == "out")
         if movesPointer {
-            pointerMoved = true
-            CGWarpMouseCursorPosition(spot)
+            DebugForeground.movePointer(to: spot)
             try? await Task.sleep(for: .milliseconds(500))
         }
         if driver == .hid {
@@ -335,8 +331,7 @@ enum ChatScrollBench {
             for _ in 0..<20 {
                 ready = NSWindow.windowNumber(at: NSEvent.mouseLocation, belowWindowWithWindowNumber: 0) == window.windowNumber
                 if ready { break }
-                NSApp.activate(ignoringOtherApps: true)
-                window.orderFrontRegardless()
+                _ = DebugForeground.borrow(window)
                 try? await Task.sleep(for: .milliseconds(500))
             }
             guard ready else {

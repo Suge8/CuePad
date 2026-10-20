@@ -17,8 +17,7 @@ class MainShellWindow: NSWindow, NSWindowDelegate {
             self.parked = nil
         }
         if isMiniaturized { deminiaturize(nil) }
-        NSApp.activate()
-        makeKeyAndOrderFront(nil)
+        DebugHooks.present(self, activating: true)
     }
 
     /// 连应用一起隐藏，焦点才会回到此前的前台应用。
