@@ -1,10 +1,12 @@
 #if os(macOS)
 import AppKit
+import CueEditor
 import SwiftUI
 
 /// 输入框里的多行文字区（Mac）：与 iOS 那份同样的接口与行为——高度随文字长到 `maxLines` 行后在里面滚，
 /// 输入法组字期间不从外面写回，空着时显示提示。焦点由调用方的 `.focused` 交给文本视图；文本视图自己拿到、交出焦点
 /// （点进来、Esc）时再报回 `focus`。↩ 换行；⌘↩ 等回复框快捷键是主菜单"回复"里的项，经响应链交到这里（`performReplyShortcut`）。
+/// 粘贴、拖进来的图片交给 `images`（输入框放进图片条），不当文字插。
 struct ComposerField: NSViewRepresentable {
     @Binding var text: String
     let prompt: String
@@ -16,6 +18,8 @@ struct ComposerField: NSViewRepresentable {
     var keys: (ComposerKey) -> Bool = { _ in false }
     /// 回复框的快捷键（`ReplyShortcut`）此刻要做的事；nil 是此刻用不了（菜单项停用）。
     var shortcut: (ReplyShortcut) -> (() -> Void)? = { _ in nil }
+    /// 收下粘贴、拖进来的图片（原图字节）；nil 是这个输入框不收图片，剪贴板里的照常当文字粘。
+    var images: (([Data]) -> Void)?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.palette) private var palette
 
@@ -76,6 +80,7 @@ struct ComposerField: NSViewRepresentable {
         }
         view.setAccessibilityLabel(label)
         view.maxLines = maxLines
+        view.images = images
         view.needsDisplay = true
     }
 
@@ -147,6 +152,8 @@ final class GrowingTextView: NSTextView {
     var maxLines = 1
     var focusChanged: ((Bool) -> Void)?
     var shortcut: (ReplyShortcut) -> (() -> Void)? = { _ in nil }
+    /// 收下粘贴、拖进来的图片（`ComposerField.images`）。
+    var images: (([Data]) -> Void)?
     /// 外部刚写进文字：滚动区下一次排版后滚到末尾。
     var revealsEnd = false
     /// 最大高度：排满 `maxLines` 行中文量出来的高度（中文行比西文行高），撑满时最后一行不被切一半。
@@ -192,6 +199,25 @@ final class GrowingTextView: NSTextView {
     override func validateMenuItem(_ item: NSMenuItem) -> Bool {
         guard item.action == #selector(performReplyShortcut(_:)) else { return super.validateMenuItem(item) }
         return ReplyShortcut(rawValue: item.tag).flatMap(shortcut) != nil
+    }
+
+    override var readablePasteboardTypes: [NSPasteboard.PasteboardType] {
+        images == nil ? super.readablePasteboardTypes : NSPasteboard.imageTypes + super.readablePasteboardTypes
+    }
+
+    /// 粘贴与拖入都汇到这里：有图片（规则在 `NSPasteboard.images`）就交出去；否则按文字的种类照常插（图片的种类排在前面，传进来的可能是它们）。
+    override func readSelection(from pboard: NSPasteboard, type: NSPasteboard.PasteboardType) -> Bool {
+        let found = pboard.images
+        guard let images, !found.isEmpty else {
+            return super.readSelection(from: pboard, type: pboard.availableType(from: super.readablePasteboardTypes) ?? type)
+        }
+        do {
+            images(try found.map { try $0.data() })
+            return true
+        } catch {
+            presentError(error)
+            return false
+        }
     }
 
     override func becomeFirstResponder() -> Bool {
