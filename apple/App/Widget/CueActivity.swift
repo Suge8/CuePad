@@ -67,14 +67,15 @@ nonisolated struct CueActivityAttributes: ActivityAttributes {
     typealias ContentState = CueActivityState
 }
 
-/// 实时活动上的"允许一次"：在 App 进程里执行（`LiveActivityIntent`，不打开 App），走 Cue 页回答提问的同一个方法（`CueActivityAnswer`）。
-/// 小组件进程里只有这个类型、不执行它。
+/// 实时活动上的"允许一次"：在 App 进程里执行（`LiveActivityIntent`，不打开 App），走 Cue 页回答提问的同一个方法。
+/// 谁来答由 App 启动时交给 App Intents（`AppDependencyManager`，`IOSAppDelegate`）；小组件进程里只有这个类型、不执行它。
 struct AllowOnceIntent: LiveActivityIntent {
     static let title: LocalizedStringResource = "允许一次"
     static let isDiscoverable = false
 
     @Parameter(title: "提问") var message: String
     @Parameter(title: "选项") var choice: String
+    @Dependency private var answerer: any CueQuestionAnswering
 
     init() {}
 
@@ -84,18 +85,14 @@ struct AllowOnceIntent: LiveActivityIntent {
     }
 
     @MainActor func perform() async throws -> some IntentResult {
-        guard let id = UUID(uuidString: message), let answer = CueActivityAnswer.answer else { throw CueActivityAnswer.Unavailable() }
-        try await answer(id, choice)
+        guard let id = UUID(uuidString: message) else { return .result() }
+        try await answerer.answerCueQuestion(id, choice)
         return .result()
     }
 }
 
-/// App 进程里谁来答：资料库与服务建好时登记（`IOSAppDelegate`），打不开库时为 nil。
-enum CueActivityAnswer {
-    static var answer: (@MainActor (UUID, String) async throws -> Void)?
-
-    struct Unavailable: Error, CustomLocalizedStringResourceConvertible {
-        var localizedStringResource: LocalizedStringResource { "CuePad 的资料库没打开，到 App 里看看" }
-    }
+/// 回答 Cue 的一条提问（选第几项由调用方给）。
+@MainActor protocol CueQuestionAnswering: Sendable {
+    func answerCueQuestion(_ message: UUID, _ choice: String) async throws
 }
 #endif

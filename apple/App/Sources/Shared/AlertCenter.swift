@@ -25,7 +25,7 @@ final class AlertCenter: NSObject, UNUserNotificationCenterDelegate {
     /// 主窗口：前台怎么呈现、你在不在看（`Workspace.presentation`）。
     @ObservationIgnored weak var workspace: Workspace?
     @ObservationIgnored let sounds = AlertSounds()
-    /// Dock 角标该显示的数（`AppServices.startAlerts`）；没有权限时记着，开了之后补上。
+    /// Dock 角标该显示的数（`CueWatch.waiting`，`AppDelegate` 接的）；没有权限时记着，开了之后补上。
     @ObservationIgnored var badge = 0
     #endif
 

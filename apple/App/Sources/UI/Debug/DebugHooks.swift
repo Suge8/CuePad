@@ -200,6 +200,15 @@ enum DebugHooks {
         #endif
     }
 
+    /// 隔离库下也开实时活动（`-CuePadLiveActivity YES`，见 `AppServices.cueActivity`）：验收锁屏与灵动岛时用，用完结束掉。
+    static var opensLiveActivity: Bool {
+        #if DEBUG
+        DebugScene.defaults.bool(forKey: "CuePadLiveActivity")
+        #else
+        false
+        #endif
+    }
+
     static func willReadCatalog(attempt: Int) throws {
         #if DEBUG
         try DebugScene.injectCatalogFailure(attempt: attempt)
@@ -398,9 +407,8 @@ extension View {
                 async let away: Void = DebugScene.awayIfAsked(
                     workspace.services.store, leave: { navigation.show(.tasks) }, back: { navigation.show(.cue) })
                 async let tour: Void = DebugScene.dockTourIfAsked(workspace, navigation)
-                async let drain: Void = DebugScene.activityDrainIfAsked(workspace)
                 await DebugScene.cycleIfAsked(workspace.services)
-                _ = await (wakes, says, relays, flow, away, tour, drain)
+                _ = await (wakes, says, relays, flow, away, tour)
             }
         #else
         self

@@ -137,8 +137,10 @@ case "$cmd" in
   build-perf) xcb -quiet build ;;
   test)
     limits=(-test-timeouts-enabled YES -maximum-test-execution-time-allowance "$TEST_TIME_LIMIT")
-    # 先开好领到的模拟器（停用 PosterBoard，见 _sim.sh），xcodebuild 就用开着的这台
-    if [ -n "${device:-}" ]; then sim_boot "$device"; fi
+    # 先开好领到的模拟器（停用 PosterBoard，见 _sim.sh），xcodebuild 就用开着的这台。
+    # 再卸掉上一次装的 App：它开着的实时活动在重装时被系统结束，系统随即把 App 叫到后台（不带测试的环境），
+    # 正撞上测试宿主的启动，测试进程就连不上（"The test runner hung before establishing connection"）。卸掉时活动一起没了，没有这一下
+    if [ -n "${device:-}" ]; then sim_boot "$device"; xcrun simctl uninstall "$device" com.sugeh.cuepad; fi
     kit_test() {
       (cd "$APPLE_DIR/CuePadKit" && xcodebuild test -scheme CuePadKit-Package -destination "$destination" -derivedDataPath "$DERIVED/kit-$platform" "${limits[@]}" "$@" 2>&1) \
         | { grep -v 'failed with exit code 0 but produced no further output' || true; }
