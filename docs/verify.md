@@ -134,7 +134,7 @@ TEST_RUNNER_CUEPAD_CUE_EVAL=1 TEST_RUNNER_CUEPAD_CUE_EVAL_OUT=/tmp/cue-eval/long
 ```
 - 多日记忆（`CueEvalDaysTests`，一次十分钟左右）单独跑：启用前预置两周历史（对话一千五百多条、做完的任务与会话回复、九十多行记忆），先等它空闲合并记忆（合并开销单列），再问起不同年纪埋下的事；缓存时长缩到 20 秒、场景里插几段静止，看冷醒来换不换新。换新次数从大脑的输出里数（新进程或 Pi 的 new_session）。`-only-testing:CuePadTests/CueEvalDaysTests`，`CUEPAD_TEST_TIME_LIMIT=1700`。
 - 每个场景的资料库留在 `<场景>.library`：`CUEPAD_SHOT_LIBRARY=<它> apple/scripts/xc.sh shot mac out.png -- -CuePadScene cue` 看这一场在 Cue 页上的样子。
-- 原型对比（`CueFresh`，正式做时删）：加 `TEST_RUNNER_CUEPAD_CUE_FRESH=1` 跑混合做法：平时只往后加，换新（到 6 万，或过 3 万且缓存已过期）时开新会话、用对话视图接上，不写交接。
+- 原型对比（`CueFresh`，正式做时删）：加 `TEST_RUNNER_CUEPAD_CUE_FRESH=1` 跑混合做法：平时只往后加，换新（到 6 万，或缓存已过期）时开新会话、用日志的视图接上，不写交接；经过自动进日志，越早越粗地并成摘要，Cue 用 memory zoom 展开。
 - 场景与判定在 `CueEvalTests` 与 `CueEvalLongTests` 里；模型每次答得不完全一样，结论看两遍以上。
 
 ## 崩溃诊断

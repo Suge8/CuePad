@@ -79,7 +79,7 @@ public enum CueActivity {
     case "memory":
       switch args.line("action") {
       case "recall": return item(.search, args.line("query") ?? "记忆")
-      case "note": return item(.other, "记下：\(args.line("text") ?? "")")
+      case "note": return item(.other, notedPrefix + (args.line("text") ?? ""))
       case "remind": return item(.other, "提醒：\(args.line("text") ?? "")")
       case "renew": return item(.other, "写交接备忘")
       case "allow":
@@ -95,6 +95,8 @@ public enum CueActivity {
   }
 
   static let targetLimit = 80
+  /// 记下一条记忆在经过清单里的开头：Cue 的日志（`CueLog`）里那条记忆自己就是一条，这一步不再重复
+  static let notedPrefix = "记下："
 
 
   /// 大脑报的参数：JSON 对象，取各项的第一个非空行。
