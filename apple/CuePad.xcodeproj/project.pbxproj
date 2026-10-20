@@ -719,7 +719,7 @@
 				"INFOPLIST_FILE[sdk=macosx*]" = "App/Config/CuePad-macOS-Info.plist";
 				INFOPLIST_KEY_UIApplicationSupportsMultipleScenes = YES;
 				INFOPLIST_KEY_NSAppleEventsUsageDescription = "CuePad 需要控制终端应用，才能把你带到运行 Agent 会话的那个终端标签页。";
-				INFOPLIST_KEY_NSPrincipalClass = CuePadApplication;
+				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -761,7 +761,7 @@
 				"INFOPLIST_FILE[sdk=macosx*]" = "App/Config/CuePad-macOS-Info.plist";
 				INFOPLIST_KEY_UIApplicationSupportsMultipleScenes = YES;
 				INFOPLIST_KEY_NSAppleEventsUsageDescription = "CuePad 需要控制终端应用，才能把你带到运行 Agent 会话的那个终端标签页。";
-				INFOPLIST_KEY_NSPrincipalClass = CuePadApplication;
+				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
