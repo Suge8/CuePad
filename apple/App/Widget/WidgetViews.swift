@@ -11,7 +11,7 @@ enum WidgetViews {
             .modifier(WidgetPaper())
     }
 
-    /// Cue：头像与名字、"等你 N"（赭黄），下面它最近一句；整块点开 Cue 页（`DeepLink.cue`）。
+    /// Cue：头像、名字与"在管 N · 等你 M"（`TallyLabel`，同 App 里 Cue 那一行）；整块点开 Cue 页（`DeepLink.cue`）。
     static func cue(_ snapshot: CueSnapshot) -> some View {
         FamilyReader { cue(snapshot, family: $0) }
     }
@@ -51,19 +51,13 @@ private struct CueView: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
-                Image("mascot-cue-\(snapshot.mood)").resizable().scaledToFit().frame(width: family == .systemSmall ? 40 : 44)
-                    .opacity(snapshot.mood == "sleeping" ? 0.6 : 1)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(snapshot.name).font(.headline).lineLimit(1)
-                    WaitingCount(count: snapshot.waiting).font(.caption)
-                }
-            }
-            if let line = snapshot.lastSaid {
-                Text(line).font(.footnote).foregroundStyle(palette.ink2).lineLimit(family == .systemSmall ? 3 : 2)
-            }
+        VStack(alignment: .leading, spacing: 8) {
+            Image("mascot-cue-\(snapshot.mood)").resizable().scaledToFit().frame(width: family == .systemSmall ? 48 : 52)
+                .opacity(snapshot.mood == "sleeping" ? 0.6 : 1)
             Spacer(minLength: 0)
+            Text(snapshot.name).font(.headline).lineLimit(1)
+            TallyLabel(managing: snapshot.managing, waiting: snapshot.waiting) { StillStreak() } mark: { WidgetIcon.waiting.image }
+                .font(.footnote).foregroundStyle(palette.ink2)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

@@ -375,6 +375,7 @@ extension View {
                 case "style": StyleBoard()
                 case "icons": IconSheet()
                 case "widgets": DebugWidgetStage()
+                case "activity": DebugActivityStage()
                 case "share": DebugShareStage(location: workspace.services.location)
                 default: EmptyView()
                 }
@@ -397,8 +398,9 @@ extension View {
                 async let away: Void = DebugScene.awayIfAsked(
                     workspace.services.store, leave: { navigation.show(.tasks) }, back: { navigation.show(.cue) })
                 async let tour: Void = DebugScene.dockTourIfAsked(workspace, navigation)
+                async let drain: Void = DebugScene.activityDrainIfAsked(workspace)
                 await DebugScene.cycleIfAsked(workspace.services)
-                _ = await (wakes, says, relays, flow, away, tour)
+                _ = await (wakes, says, relays, flow, away, tour, drain)
             }
         #else
         self

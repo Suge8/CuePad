@@ -112,6 +112,8 @@ final class AppServices {
 
     #if os(iOS)
     @ObservationIgnored let pasteboard: UIPasteboard
+    /// 锁屏与灵动岛上的那一个实时活动（`startSnapshots` 跟着库开、改、结束它）。
+    @ObservationIgnored let cueActivity = CueLiveActivity()
     #endif
 
     #if os(macOS)

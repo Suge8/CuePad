@@ -1,3 +1,4 @@
+import ActivityKit
 import CueStore
 import SwiftUI
 import WidgetKit
@@ -7,6 +8,30 @@ struct CuePadWidgets: WidgetBundle {
     var body: some Widget {
         UnfiledWidget()
         CueWidget()
+        CueActivityWidget()
+    }
+}
+
+/// Cue 的实时活动（App 开、改、结束，`CueLiveActivity`）：各态的样子在 `CueActivityViews`，点卡片空白处进 Cue 页。
+struct CueActivityWidget: Widget {
+    var body: some WidgetConfiguration {
+        ActivityConfiguration(for: CueActivityAttributes.self) { context in
+            CueActivityViews.lockScreen(context.state, stale: context.isStale)
+                .widgetURL(DeepLink.cue.url)
+        } dynamicIsland: { context in
+            DynamicIsland {
+                DynamicIslandExpandedRegion(.leading) { CueActivityViews.expandedLeading(context.state) }
+                DynamicIslandExpandedRegion(.trailing) { CueActivityViews.expandedTrailing(context.state) }
+                DynamicIslandExpandedRegion(.bottom) { CueActivityViews.expandedBottom(context.state, stale: context.isStale) }
+            } compactLeading: {
+                CueActivityViews.compactLeading(context.state)
+            } compactTrailing: {
+                CueActivityViews.compactTrailing(context.state)
+            } minimal: {
+                CueActivityViews.minimal(context.state)
+            }
+            .widgetURL(DeepLink.cue.url)
+        }
     }
 }
 
@@ -38,11 +63,11 @@ struct CueWidget: Widget {
     static let kind = "CuePadCue"
 
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: Self.kind, provider: SnapshotProvider(empty: CueSnapshot(name: "Cue", waiting: 0, lastSaid: nil, mood: "sleeping"))) { entry in
+        StaticConfiguration(kind: Self.kind, provider: SnapshotProvider(empty: CueSnapshot(name: "Cue", managing: 0, waiting: 0, mood: "sleeping"))) { entry in
             WidgetViews.cue(entry.snapshot)
         }
         .configurationDisplayName("Cue")
-        .description("等你的几件事和它最近说的一句，点一下和它说话。")
+        .description("它在管几件、几件在等你，点一下和它说话。")
         .supportedFamilies([.systemSmall, .systemMedium])
     }
 }

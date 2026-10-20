@@ -260,6 +260,18 @@ extension CueStore {
     ) { Card(row: $0) }
   }
 
+  /// `since` 以来做完的顶层任务，最近做完的在前（实时活动里的"最近做完"）：做完常顺手归档，归档的也算；回收站里的与回收站项目的不算。
+  public func tasksDone(since: Date) throws -> [Card] {
+    try db.query(
+      """
+      SELECT \(Card.selection(as: "t")) \(Self.taskWithParent)
+      WHERE t.todoAt IS NOT NULL AND t.deletedAt IS NULL AND (t.projectID IS NULL OR p.deletedAt IS NULL)
+        AND t.completedAt >= ? AND u.id IS NULL
+      ORDER BY t.completedAt DESC, t.id
+      """, [since]
+    ) { Card(row: $0) }
+  }
+
   /// 每条任务的步骤完成了几个、一共几个：任务行的完成圈与"步骤 n/m"由它推出；没有步骤的不在结果里。
   /// 不带参数读全库；`of` 只读这几条任务的；`in` 只读一个项目（nil = 未分类）里的（下级与上级同项目）。
   public func subtaskProgress() throws -> [UUID: TaskProgress] { try subtaskProgress(scope: "", []) }

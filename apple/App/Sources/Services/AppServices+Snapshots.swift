@@ -1,24 +1,39 @@
 import CueStore
 import Foundation
 #if os(iOS)
+import UIKit
 import WidgetKit
 #endif
 
 /// 给小组件与分享扩展的快照：跟随资料库变化写进共享容器。扩展不打开资料库。
 /// 只写内容真正变了的那份；小组件显示未分类与 Cue，只有这两份变了才刷新它们（刷新次数有系统预算）。
+/// iPhone 的实时活动（`CueLiveActivity`）读同一条观察：后台被推送叫醒、拉到变化时也由它更新。
 extension AppServices {
     /// 项目或卡片变化、此刻变了（Cue 的表情随它，`observeTimed`）时重读快照，直到任务取消。
     func startSnapshots() {
         follow(reporting: { .widgetDataUnavailable("\($0)") }) {
             for try await (content, moment) in self.observeTimed({ try $0.widgetContent() }) {
                 try self.publish(WidgetSnapshots(content, at: moment))
+                #if os(iOS)
+                self.cueActivity.show(CueActivityState(content.cue, at: moment))
+                #endif
             }
         }
+        #if os(iOS)
+        // 开启只能在前台：回到前台时再看一次要不要开，并从此刻重算过时时刻
+        follow {
+            for await _ in NotificationCenter.default.notifications(named: UIApplication.didBecomeActiveNotification) { self.cueActivity.resend() }
+        }
+        #endif
     }
 
-    /// 立即按当前库内容更新快照。
+    /// 立即按当前库内容更新快照（进入后台前）；实时活动按此刻重发一次，过时时刻从这时算。
     func writeSnapshots() async throws {
-        try publish(WidgetSnapshots(await store.widgetContent(), at: speech))
+        let content = try await store.widgetContent()
+        try publish(WidgetSnapshots(content, at: speech))
+        #if os(iOS)
+        await cueActivity.show(CueActivityState(content.cue, at: speech), resend: true).value
+        #endif
     }
 
     private func publish(_ snapshots: WidgetSnapshots) throws {
@@ -54,7 +69,7 @@ nonisolated struct WidgetSnapshots: Equatable, Sendable {
     init(_ content: WidgetContent, at moment: Speech.Moment) {
         projects = content.projects
         unfiled = content.unfiled
-        cue = CueSnapshot(digest: content.cue, at: moment)
+        cue = CueSnapshot(digest: content.cue.digest, at: moment)
     }
 }
 
@@ -62,7 +77,8 @@ nonisolated struct WidgetSnapshots: Equatable, Sendable {
 nonisolated struct WidgetContent: Equatable, Sendable {
     var projects: ProjectsSnapshot
     var unfiled: UnfiledSnapshot
-    var cue: CueDigest
+    /// Cue 的摘要与今天做完的（小组件只用摘要，实时活动都用）。
+    var cue: CueActivityState.Reading
 }
 
 extension CueStore {
@@ -80,6 +96,6 @@ extension CueStore {
                     UnfiledSnapshot.Card(id: $0.id, title: $0.heading, modifiedAt: $0.modifiedAt)
                 },
                 total: cards.count),
-            cue: try CueDigest.read(from: self))
+            cue: try CueActivityState.Reading.read(from: self))
     }
 }
