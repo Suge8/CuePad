@@ -66,7 +66,7 @@ struct SessionTaskTests {
         try await reply("登录后还是白屏", to: "s1", in: workspace)
         let sent = try #require(try await store.deliveryRequests(toSession: "s1").last)
         #expect(sent.mode == .known(.send))
-        #expect(try await store.outcome(of: sent.id).status == .known(.succeeded))
+        #expect(try await store.outcome(of: sent).status == .known(.succeeded))
         #expect(try await store.card(task.id)?.status == .done)
 
         let question = PiQuestion(promptID: "p1", kind: .select, text: "旧数据怎么办？", options: ["覆盖", "跳过"])
@@ -79,7 +79,7 @@ struct SessionTaskTests {
         #expect(!answered.isError && answered.text.contains("回答"))
         let answer = try #require(try await store.deliveryRequests(toSession: "s1").last)
         #expect(answer.answer == PiAnswer(promptID: "p1", value: .option("覆盖")))
-        #expect(try await store.outcome(of: answer.id).status == .known(.succeeded))
+        #expect(try await store.outcome(of: answer).status == .known(.succeeded))
         #expect(try await store.card(task.id)?.status == .done)
 
         let reopened = try #require(await cue.call("task", ["action": "edit", "task": task.id.uuidString, "reopen": true]))
@@ -162,7 +162,7 @@ struct SessionTaskTests {
         /// 最近那条结束请求执行完（执行器先把会话记成已结束再报成功）后会话是不是已结束。
         func ended(_ id: String) async throws -> Bool {
             let end = try #require(try await store.deliveryRequests(toSession: id).last { $0.mode == .known(.end) })
-            #expect(try await store.outcome(of: end.id).status == .known(.succeeded))
+            #expect(try await store.outcome(of: end).status == .known(.succeeded))
             return try await store.piSessions(sessionIDs: [id])[id]?.state.state == .known(.ended)
         }
 
