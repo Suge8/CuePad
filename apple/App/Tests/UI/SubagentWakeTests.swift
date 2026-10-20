@@ -30,9 +30,9 @@ struct SubagentWakeTests {
         try await store.updateCard(task.id) { $0.body = "修好登录页 派子代理" }
         var file = try SessionLog(rig.app.piPaths.sessionsDirectory.appending(path: "--demo--/\(session.sessionID).jsonl"), id: session.sessionID)
 
-        // 开工那句是 Cue 发进去的（带着它的投送请求 id 落盘）：之后子代理交回、接着跑完的轮也归 Cue
-        try await eventually("开工那句送到") { !session.messages.isEmpty }
-        try file.append(user: "修好登录页", delivery: session.messages.first?.deliveryID)
+        try await eventually("开工的第一句发进会话") { !session.messages.isEmpty }
+        let opening = try #require(session.messages.first)
+        try file.append(user: opening.text, delivery: opening.deliveryID)  // 带着投送请求 id：会话认得出是 Cue 发的，不算他在场
         session.setState(["kind": "thinking"])
         try file.append(reply: "派了 ui 去跑测试")
         session.sendInfo(["subagents": [Self.ui("running", action: "Run $ swift test")]])
@@ -123,6 +123,7 @@ private struct SessionLog {
         try write(["type": "session", "version": 3, "id": id, "timestamp": Self.stamp(), "cwd": url.deletingLastPathComponent().path])
     }
 
+    /// `delivery` 是 CuePad 投进来的那句的请求 id（Pi 写成 `cuepadDelivery`）。
     mutating func append(user text: String, delivery: String? = nil) throws {
         try message(["role": "user", "content": text, "cuepadDelivery": delivery ?? NSNull()])
     }

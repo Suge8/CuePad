@@ -2,41 +2,37 @@
 import CueStore
 import SwiftUI
 
-/// 侧栏自己读的：回收站条数与各项目最近开始的进行中任务（项目行的"此刻"，`ProjectNow`）。会话在 `LiveSessions`。
-nonisolated private struct SidebarData: Sendable, Equatable {
-    var trashCount: Int
-    var leading: [UUID: [ProjectNow.InProgress]]
-}
-
-/// 侧栏的结构与 iPhone、iPad 同一份（`SidebarOutline`），这里只管 Mac 的长相：从上到下 Cue（`CueSidebarRow`）、任务与会话（`PlaceRows`：
-/// 任务开合任务面板，会话打开 Agent 整页）、项目（置顶的在前，末尾未分类；Mac 没有书架，全部列出）、紧接着 Agent（Mac 独有：只列在线的会话，
-/// 全部列出；其余与历史在"会话"那一页里），底栏是归档、回收站与设置。点哪一行，内容区就是哪一页。两区按内容高度分（`SidebarSplit`）：放得下时各占所需、Agent 紧跟项目，
-/// 剩下的空白在 Agent 区下面；放不下时项目区保住至少一半可用高度，Agent 区先拿到所需、但最多拿到项目区用剩的高度，
-/// 项目区拿剩下的、自己滚动（方向键与 ⌘1–9 换到的项目滚进可见区），Agent 区一直停在看得见的地方；Agent 多到超过这个上限时
-/// 在自己的区里滚动（项目少时上限就是项目区用剩的全部，不在下面空着）。两区都是普通栈：项目与在线会话是几十行的量级，行高固定。
-/// 每一行同一套横向尺寸：图标列（项目图标、会话状态标居中）同宽，任务、会话、项目名与会话名落在同一条竖线上。
+/// 侧栏的结构与 iPhone、iPad 同一份（`SidebarOutline`），这里只管 Mac 的长相，一列到底：最上面 Cue 名片（`CueSidebarCard`）、
+/// 下面并排两块磁贴（`PlaceTiles`：任务开合任务面板，会话打开会话页）、项目（置顶的在前，末尾未分类；Mac 没有书架，全部列出），底栏是归档、回收站与设置。
+/// 点哪一处，内容区就是哪一页。在线会话不在侧栏另列：全部在会话页，项目行尾的状态标说这个项目里有没有要看的。
+/// 名片与磁贴一直在看得见的地方，只有项目区滚动（方向键与 ⌘1–9 换到的项目滚进可见区）；项目区是普通栈：几十行的量级，行高固定。
 struct Sidebar: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
-    @State private var data: SidebarData?
+    @State private var trashCount: Int?
     /// 点过侧栏里的页后焦点留在侧栏，方向键才有地方去
     @FocusState private var focused: Bool
 
     var body: some View {
-        // 不用 List：系统选中是灰胶囊，压不过墨色体系，也没法让 Agent 区紧跟项目又不随项目滚走；当前页由 PageRow 自己画，方向键由 onMoveCommand 接管
+        // 不用 List：系统选中是灰胶囊，压不过墨色体系；当前页由各处自己画，方向键由 onMoveCommand 接管
         let catalog = workspace.catalog
-        let pages = data.flatMap { data in catalog.map { SidebarPages($0, trashCount: data.trashCount) } }
+        let pages = trashCount.flatMap { count in catalog.map { SidebarPages($0, trashCount: count) } }
         VStack(spacing: 0) {
-            CueSidebarRow(select: select)
-            PlaceRows(select: select).padding(.horizontal, SidebarMetrics.column).padding(.top, 6)
-            SidebarSplit {
-                if let data, let catalog, let pages {
-                    projects(pages, catalog, data: data)
-                    PiSection()
+            CueSidebarCard(select: select).padding(.top, 6)
+            PlaceTiles(select: select).padding(.horizontal, SidebarMetrics.edge).padding(.top, 10)
+            VStack(alignment: .leading, spacing: 0) {
+                SidebarHeader(title: "项目") {
+                    Button("新建项目", icon: .add) { workspace.projectForm = .init() }.disabled(!workspace.isLibraryReady)
+                }
+                SidebarScroll {
+                    if let catalog, let pages {
+                        ProjectRows(pages: pages, catalog: catalog, select: select).padding(.horizontal, SidebarMetrics.column)
+                    }
                 }
             }
-            footer(showsBins: pages?.showsBins ?? false, trashCount: data?.trashCount ?? 0)
+            .frame(maxHeight: .infinity, alignment: .top)
+            footer(showsBins: pages?.showsBins ?? false, trashCount: trashCount ?? 0)
         }
         .focusable()
         .focused($focused)
@@ -48,22 +44,7 @@ struct Sidebar: View {
         }
         // 侧栏比桌面深一档：浅色、深色都能看出分层，与内容同一色温
         .background(palette.sidebar)
-        .observing(services.store, into: $data, onError: workspace.fail) { store in
-            SidebarData(trashCount: try store.trashCount(), leading: TaskBoard.leading(try store.startedTasks()))
-        }
-    }
-
-    private func projects(_ pages: SidebarPages, _ catalog: ProjectCatalog, data: SidebarData) -> some View {
-        // 各项目的"此刻"在数据变化时算一次，行只拿结果
-        let now = ProjectNow.byProject(pages.outline.projects, sessions: services.liveSessions.items, tasks: data.leading, shown: workspace.shown)
-        return VStack(alignment: .leading, spacing: 0) {
-            SidebarHeader(title: "项目") {
-                Button("新建项目", icon: .add) { workspace.projectForm = .init() }.disabled(!workspace.isLibraryReady)
-            }
-            SidebarScroll(revealsPage: true) {
-                ProjectRows(pages: pages, catalog: catalog, now: now, select: select).padding(.horizontal, SidebarMetrics.column)
-            }
-        }
+        .observing(services.store, into: $trashCount, onError: workspace.fail) { try $0.trashCount() }
     }
 
     private func select(_ page: Route) {
@@ -107,25 +88,18 @@ struct Sidebar: View {
     }
 }
 
-/// 侧栏一行的横向尺寸（任务、会话、项目行、未分类、会话行共用）：侧栏边缘到行的图标列 `column`，行的底（`RowStyle`）向外让出 `RowMetrics.bleed`、
-/// 离侧栏边缘 `edge`；图标列宽 `Spacing.sidebarIcon`；会话的状态标（外框是点径的 1.8 倍，`PiStateDot`）在图标列里居中，名字离它 `dot + 2`
-/// （`PiSessionRow` 的排法），项目名离图标列 `titleGap`，两种名字就落在同一条竖线上。
+/// 侧栏一行的横向尺寸：侧栏边缘到行的图标列 `column`，行的底（`RowStyle`）向外让出 `RowMetrics.bleed`、离侧栏边缘 `edge`（名片与磁贴也离边缘 `edge`）；
+/// 图标列宽 `Spacing.sidebarIcon`，名字离图标列 `titleGap`。
 enum SidebarMetrics {
     static let edge: CGFloat = 10
     static let column = edge + RowMetrics.bleed
     static let rowGap: CGFloat = 2
-    static let dot: CGFloat = 6
-    private static let dotBox = dot * 1.8
-    static let dotInset = (Spacing.sidebarIcon - dotBox) / 2
-    static let titleGap = dotBox / 2 + dot + 2 - Spacing.sidebarIcon / 2
-    static let session = PiSessionRow.Style(
-        name: Typography.sidebarRow, line: Typography.sidebarDetail, meta: Typography.sidebarDetail, dot: dot, spacing: 2)
+    static let titleGap: CGFloat = 8
 }
 
-/// 侧栏一区的滚动：放得下时不弹；下面还有没露出的行时底边淡出一截，看得出能往下滚（只换一层遮盖，不影响排版）。
-/// `revealsPage`：当前页是区里的一行（打开时、方向键、⌘1–9 换到）且不在可见处时，滚到它出现在可见区中间附近（不给锚点时 macOS 的实测行为），行以页（`Route`）为 id。
+/// 项目区的滚动：放得下时不弹；下面还有没露出的行时底边淡出一截，看得出能往下滚（只换一层遮盖，不影响排版）。
+/// 当前页是区里的一行（打开时、方向键、⌘1–9 换到）且不在可见处时，滚到它出现在可见区中间附近（不给锚点时 macOS 的实测行为），行以页（`Route`）为 id。
 private struct SidebarScroll<Content: View>: View {
-    var revealsPage = false
     @ViewBuilder let content: Content
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
@@ -138,9 +112,7 @@ private struct SidebarScroll<Content: View>: View {
             ScrollView { content }
                 .scrollBounceBehavior(.basedOnSize)
                 .onScrollGeometryChange(for: Bool.self) { $0.visibleRect.maxY < $0.contentSize.height - 1 } action: { continues = $1 }
-                .onChange(of: revealsPage ? workspace.page : nil, initial: true) { _, page in
-                    if let page { proxy.scrollTo(page) }
-                }
+                .onChange(of: workspace.page, initial: true) { _, page in proxy.scrollTo(page) }
         }
         .overlay(alignment: .bottom) {
             if continues {
@@ -153,44 +125,7 @@ private struct SidebarScroll<Content: View>: View {
     }
 }
 
-/// 侧栏的项目区与 Agent 区按内容高度分可用高度（规则见 `Sidebar`）：只按两区此刻要多高排，不把量到的尺寸写回状态。
-/// 不回答对齐查询（默认实现会递归问遍两区的每一行）。
-private struct SidebarSplit: Layout {
-    /// 放不下时项目区至少保住可用高度的这一份；Agent 区的上限是项目区用剩的高度。
-    private static let agentShare: CGFloat = 0.5
-
-    static func heights(available: CGFloat, projects: CGFloat, agents: CGFloat) -> (projects: CGFloat, agents: CGFloat) {
-        let reserved = min(agents, available * agentShare)
-        let projectHeight = min(projects, max(0, available - reserved))
-        return (projectHeight, min(agents, max(0, available - projectHeight)))
-    }
-
-    private func needs(_ subviews: Subviews, width: CGFloat?) -> [CGFloat] {
-        subviews.map { $0.sizeThatFits(ProposedViewSize(width: width, height: nil)).height }
-    }
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let width = proposal.width ?? 0
-        return CGSize(width: width, height: proposal.height ?? needs(subviews, width: width).reduce(0, +))
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        let needs = needs(subviews, width: bounds.width)
-        guard needs.count == 2 else {
-            for subview in subviews { subview.place(at: bounds.origin, proposal: ProposedViewSize(bounds.size)) }
-            return
-        }
-        let split = Self.heights(available: bounds.height, projects: needs[0], agents: needs[1])
-        subviews[0].place(at: bounds.origin, proposal: ProposedViewSize(width: bounds.width, height: split.projects))
-        subviews[1].place(
-            at: CGPoint(x: bounds.minX, y: bounds.minY + split.projects), proposal: ProposedViewSize(width: bounds.width, height: split.agents))
-    }
-
-    func explicitAlignment(of guide: HorizontalAlignment, in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGFloat? { nil }
-    func explicitAlignment(of guide: VerticalAlignment, in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGFloat? { nil }
-}
-
-/// 侧栏分组标题：名称在左、一颗动作在右（项目的"新建项目"、Agent 的"新会话"）。
+/// 侧栏分组标题：名称在左、一颗动作在右（项目的"新建项目"）。
 private struct SidebarHeader<Action: View>: View {
     let title: String
     @ViewBuilder let action: Action
@@ -226,92 +161,148 @@ private struct SidebarPages {
     }
 }
 
-/// Cue 下面的去处：任务（开合任务面板，开着时选中；同 ⌘⇧T；面板从这一行弹出，它就是面板的锚点）、会话（Agent 整页）。单独读当前页与面板开合，换页、开面板时侧栏别处不跟着重算。
-private struct PlaceRows: View {
+/// 名片下面并排的两块磁贴（`SidebarOutline.places`）：任务（没做完的数；开合任务面板，开着时选中，同 ⌘⇧T；面板从这一块弹出，它就是面板的锚点）、
+/// 会话（在线的数，有在跑的再写"N 在跑"、靛青，与区头"在跑"同一档 `LiveWork.running`；点进会话页；会话哪一行都不在屏上时接力落在这里，`relaySpot(dock:)`）。
+/// 单独读当前页、面板开合与在线会话，换页、开面板、会话状态变时侧栏别处不跟着重算。
+private struct PlaceTiles: View {
     let select: (Route) -> Void
     @Environment(Workspace.self) private var workspace
-    @Environment(\.palette) private var palette
 
     var body: some View {
-        VStack(spacing: SidebarMetrics.rowGap) {
+        HStack(spacing: 8) {
             ForEach(SidebarOutline.places, id: \.self) { entry in
                 switch entry {
                 case .tasks:
-                    row(entry, selected: workspace.showsTasks) { workspace.showsTasks.toggle() }
+                    PlaceTile(entry: entry, count: entry.count(in: workspace), selected: workspace.showsTasks) { workspace.showsTasks.toggle() }
                         .panel(isPresented: Bindable(workspace).showsTasks, style: .side) { TasksPanel() }
                         .help("任务（⌘⇧T）")
                         .disabled(!workspace.isLibraryReady)
                 default:
-                    row(entry, selected: workspace.page == entry.route) { select(entry.route) }
+                    let work = workspace.liveWork
+                    PlaceTile(entry: entry, count: work.rows.count, running: work.running, selected: workspace.page == entry.route) { select(entry.route) }
+                        .relaySpot(dock: true)
                         .help("按项目查看、搜索全部会话")
                 }
             }
         }
     }
+}
 
-    private func row(_ entry: SidebarOutline.Entry, selected: Bool, action: @escaping () -> Void) -> some View {
-        PageRow(count: entry.count(in: workspace), selected: selected, action: action) {
-            Image(entry.icon).font(.system(size: 13, weight: .medium)).foregroundStyle(palette.ink2)
-        } title: {
-            Text(entry.title)
+/// 一块磁贴：纸色圆角，图标左上、数字右上、名字左下（会话的"N 在跑"在右下）；选中（面板开着、当前页）换成选中底。
+private struct PlaceTile: View {
+    let entry: SidebarOutline.Entry
+    let count: Int
+    var running = 0
+    let selected: Bool
+    let action: () -> Void
+    @Environment(\.palette) private var palette
+
+    private static let corner: CGFloat = 16
+    private static let height: CGFloat = 66
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: Self.corner, style: .continuous)
+        Button(action: action) {
+            VStack(spacing: 0) {
+                HStack(alignment: .top) {
+                    Image(entry.icon).font(.system(size: 13, weight: .medium)).foregroundStyle(palette.ink2).padding(.top, 4)
+                    Spacer(minLength: 4)
+                    Text(count, format: .number).font(Typography.sidebarTileCount).foregroundStyle(palette.ink).counting(count)
+                }
+                Spacer(minLength: 0)
+                HStack(alignment: .firstTextBaseline) {
+                    Text(entry.title).font(Typography.sidebarRow.weight(selected ? .semibold : .medium)).foregroundStyle(palette.ink)
+                    Spacer(minLength: 4)
+                    if running > 0 {
+                        Text("\(running) 在跑").font(Typography.meta.monospacedDigit()).foregroundStyle(palette.signature).lineLimit(1)
+                    }
+                }
+            }
+            .padding(.horizontal, 12).padding(.top, 8).padding(.bottom, 10)
+            .frame(maxWidth: .infinity, minHeight: Self.height, maxHeight: Self.height)
+            .background(selected ? palette.selection : palette.paper, in: shape)
+            .contentShape(shape)
         }
+        .buttonStyle(PressStyle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(running > 0 ? "\(entry.title)，\(count)，\(running) 个在跑" : "\(entry.title)，\(count)")
+        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
     }
 }
 
-/// 项目区的行：项目与末尾的未分类。只有这里读当前页，每行拿到"选没选中"：换页时只重算选中变了的两行
-/// （每行各读当前页时，换一次页项目再多也全部重算）。
+/// 项目区的行：项目与末尾的未分类。只有这里读当前页与在线会话，每行拿到"选没选中"与行尾的状态标：换页时只重算选中变了的两行
+/// （每行各读当前页时，换一次页项目再多也全部重算），会话状态变时只重算标变了的行。
 private struct ProjectRows: View {
     let pages: SidebarPages
     let catalog: ProjectCatalog
-    let now: [UUID: ProjectNow]
     let select: (Route) -> Void
     @Environment(Workspace.self) private var workspace
+    @Environment(\.palette) private var palette
 
     var body: some View {
         let current = workspace.page
+        let marks = marks()
         VStack(spacing: SidebarMetrics.rowGap) {
             ForEach(pages.outline.projects) { project in
                 ProjectRow(
-                    project: project, count: catalog.cardCounts[project.id] ?? 0, now: now[project.id], selected: current == .project(project.id),
+                    project: project, mark: marks[project.id], selected: current == .project(project.id),
                     select: select, edit: { workspace.projectForm = .init(project: project) })
                     .equatable()
                     .id(Route.project(project.id))
             }
             if pages.outline.unfiled > 0 {
-                PageRow(count: pages.outline.unfiled, selected: current == .unfiled, action: { select(.unfiled) }) {
+                PageRow(selected: current == .unfiled, action: { select(.unfiled) }) {
                     ProjectGlyph(project: nil)
                 } title: {
                     Text(CaptureCopy.unfiled)
+                } trailing: {
+                    Text("\(pages.outline.unfiled)").font(Typography.meta.monospacedDigit()).foregroundStyle(palette.ink3)
                 }
                 .id(Route.unfiled)
             }
         }
     }
+
+    /// 各项目行尾的状态标：项目在线会话里最该你看的那个——要你动手的（等你、出错、没能送达，`PiShown.needsYou`）与在跑的（`isRunning`），
+    /// 按会话列表的档取第一个（"在做"本来就按 `PiShown.rank` 排好）；都停着不画。
+    private func marks() -> [UUID: ProjectMark] {
+        let deliveries = workspace.services.liveSessions.deliveries
+        var marks: [UUID: ProjectMark] = [:]
+        for session in workspace.liveWork.rows {
+            guard let project = session.projectID, marks[project] == nil else { continue }
+            let shown = workspace.shown(session, delivery: deliveries[session.sessionID])
+            if shown.needsYou || shown.isRunning { marks[project] = ProjectMark(shown: shown, session: session.sessionID) }
+        }
+        return marks
+    }
 }
 
-/// 侧栏里的一行：图标列、名字、行尾的计数；当前页（任务面板开着时的任务）是行的选中底（`RowStyle`）、文字加粗；其余用 85% 的墨，不发灰。
-private struct PageRow<Icon: View, Title: View>: View {
-    let count: Int
-    var height = Spacing.sidebarRow
+/// 项目行尾的状态标：哪个会话、显示成什么。
+private struct ProjectMark: Equatable {
+    let shown: PiShown
+    let session: String
+}
+
+/// 侧栏里的一行：图标列、名字、行尾一样东西（状态标或条数）；当前页是行的选中底（`RowStyle`）、文字加粗。
+private struct PageRow<Icon: View, Title: View, Trailing: View>: View {
     let selected: Bool
     let action: () -> Void
     @ViewBuilder let icon: Icon
     @ViewBuilder let title: Title
+    @ViewBuilder let trailing: Trailing
     @Environment(\.palette) private var palette
 
     var body: some View {
         Button(action: action) {
-            HStack(alignment: .firstTextBaseline, spacing: 0) {
+            HStack(spacing: 0) {
                 icon.frame(width: Spacing.sidebarIcon)
-                title.font(Typography.sidebarRow).fontWeight(selected ? .semibold : .regular)
+                title.font(Typography.sidebarRow).fontWeight(selected ? .semibold : .regular).lineLimit(1)
                     .padding(.leading, SidebarMetrics.titleGap)
                 Spacer(minLength: 4)
-                if count > 0 {
-                    Text("\(count)").font(Typography.meta.monospacedDigit()).foregroundStyle(palette.ink3)
-                }
+                trailing
             }
             .foregroundStyle(palette.ink)
-            .frame(height: height)
+            .frame(height: Spacing.sidebarRow)
             .contentShape(.rect)
         }
         .buttonStyle(RowStyle(selected: selected))
@@ -321,28 +312,24 @@ private struct PageRow<Icon: View, Title: View>: View {
     }
 }
 
-/// 项目行：名称，下面一行是"此刻"（`ProjectNow`，与书架同一条规则）。行高一直是两行的高度，状态出现、消失时列表不跳；
-/// 没有可说的时名称在行里居中，不在上半截空出一行（一列里有的有、有的没有时，名称高低错落）。
-/// 只随自己的项目、计数、"此刻"与选中重算：Agent 的状态一变，侧栏的数据整个换新，没变的行不跟着重算。
+/// 项目行：图标、名字，行尾项目的状态标（`ProjectMark`，`PiStateDot`；接力落到这个会话时落在标上）。
+/// 只随自己的项目、状态标与选中重算：会话状态一变，各行的标重新算一遍，没变的行不跟着重算。
 private struct ProjectRow: View, Equatable {
     let project: Project
-    let count: Int
-    let now: ProjectNow?
+    let mark: ProjectMark?
     let selected: Bool
     let select: (Route) -> Void
     let edit: () -> Void
 
-    static func == (a: Self, b: Self) -> Bool { a.project == b.project && a.count == b.count && a.now == b.now && a.selected == b.selected }
+    static func == (a: Self, b: Self) -> Bool { a.project == b.project && a.mark == b.mark && a.selected == b.selected }
 
     var body: some View {
-        PageRow(count: count, height: Spacing.sidebarProjectRow, selected: selected, action: { select(.project(project.id)) }) {
+        PageRow(selected: selected, action: { select(.project(project.id)) }) {
             ProjectGlyph(project: project)
         } title: {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(project.name)
-                if now != nil { ProjectNowLine(now: now, font: Typography.sidebarDetail, dot: 6).fontWeight(.regular) }
-            }
-            .animation(Motion.quick, value: now == nil)
+            Text(project.name)
+        } trailing: {
+            if let mark { PiStateDot(shown: mark.shown, size: 7, announces: true).relaySpot(session: mark.session, row: .project) }
         }
         .contextMenu { ProjectActions(project: project, edit: edit) }
     }
@@ -371,120 +358,6 @@ private struct FooterPage: View {
         .help(title)
         .accessibilityLabel(title)
         .accessibilityAddTraits(selected ? .isSelected : [])
-    }
-}
-
-/// Agent 区：只回答"现在"——在线的会话（本机桥上的与别的 Mac 同步来的，各家 Agent 一起），与 iOS 的 Agent 页同一种行（`PiSessionRow`）、
-/// 同一列（`LiveSessionList`：与菜单栏面板、手机 Cue 页头的面板同一个顺序与折叠），全部列出；区头写一共几个会话、几个子代理在跑（`LiveWorkCount`）；
-/// 区的高度与滚动见 `Sidebar`。已结束的不列，全部会话在侧栏上面的"会话"（`AgentPage`）。
-/// 点会话在内容区打开它的整页，右键见 `SessionMenu`（结束前先确认），悬停看出错原文；标题旁的 + 开新会话（这台 Mac 上没有能用的 Agent 时置灰）。
-/// 没有在线会话时一行说怎么开始；一个 Agent 都没接入、本机也没有会话时，这里是接入小卡（`AgentConnectCard`）。
-private struct PiSection: View {
-    @Environment(Workspace.self) private var workspace
-    @Environment(AppServices.self) private var services
-    @Environment(\.palette) private var palette
-    @State private var startingSession = false
-    @State private var renaming: PiSessionState?
-    @State private var ending: PiSessionState?
-
-    var body: some View {
-        let agents = services.agents
-        let detected = AgentKind.allCases.contains { agents.status($0) != nil }
-        let connected = AgentKind.allCases.contains { agents.status($0)?.isConnected == true }
-        let work = workspace.liveWork, rows = work.rows
-        let total = services.liveSessions.total
-        if detected || total > 0 {
-            VStack(alignment: .leading, spacing: 0) {
-                SidebarHeader(title: "Agent") {
-                    if !rows.isEmpty { LiveWorkCount(work: work, font: Typography.sidebarDetail) }
-                    NewSessionButton(showing: $startingSession)
-                }
-                .accessibilityElement(children: .contain)
-                .accessibilityAddTraits(.isHeader)
-                // 没接入：本机的会话看不到，在这一区里接入，别的 Mac 上在线的照样列在下面
-                if detected, !connected, services.pi.slots.isEmpty {
-                    AgentConnectCard().padding(.horizontal, SidebarMetrics.edge)
-                } else if rows.isEmpty {
-                    // 现状一行、怎么办一行：同一句挤成两行时"·"会落到行首
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("没有运行中的 Agent 会话").foregroundStyle(palette.ink3)
-                        Text("在终端里开一个，或点 + 在后台开").foregroundStyle(palette.ink3)
-                    }
-                    .font(Typography.meta)
-                    .padding(.horizontal, SidebarMetrics.column).padding(.vertical, 4)
-                }
-                if !rows.isEmpty {
-                    SidebarScroll {
-                        LiveSessionList(sessions: rows, spacing: SidebarMetrics.rowGap) {
-                            sessionRow($0)
-                        } fold: { count, expanded in
-                            PiReloadFold(count: count, expanded: expanded, style: SidebarMetrics.session)
-                                .padding(.leading, SidebarMetrics.dotInset)
-                                .frame(height: Spacing.sidebarRow)
-                        }
-                        .padding(.horizontal, SidebarMetrics.column)
-                    }
-                }
-            }
-            .renameSession($renaming)
-            .endSession($ending)
-        }
-    }
-
-    private func sessionRow(_ session: PiSessionState) -> some View {
-        let sessions = services.liveSessions
-        return PiSessionRow(
-            session: session, project: workspace.catalog?.project(session.projectID), delivery: sessions.deliveries[session.sessionID],
-            rename: sessions.renames[session.sessionID], undelivered: sessions.undelivered[session.sessionID] ?? 0, style: SidebarMetrics.session)
-            .equatable()
-            .padding(.leading, SidebarMetrics.dotInset)
-            .frame(height: Spacing.sidebarProjectRow)
-            .sessionLink(session.sessionID)
-            .modifier(SessionErrorHelp(sessionID: session.sessionID))
-            .contextMenu {
-                SessionMenu(session: session, rename: { renaming = session }, end: session.canEnd ? { ending = session } : nil)
-            }
-    }
-}
-
-/// 侧栏会话行悬停看出错原文。桥上的那个会话只在这里读（`pi.session(sessionID:)`）：整个 Agent 区读全部会话的话，任一会话一变整区重算。
-private struct SessionErrorHelp: ViewModifier {
-    let sessionID: String
-    @Environment(AppServices.self) private var services
-
-    func body(content: Content) -> some View {
-        content.help(services.pi.session(sessionID: sessionID)?.errorMessage ?? "")
-    }
-}
-
-/// 接入 Agent 的小卡：一个图标、一句话说接入了双向能做什么，右边"接入"打开接入面板（`AgentSetupPanel`，检测到还没接入的几家，一键接入）。
-/// 没有"不用了"：没接入时本机的会话在这一区里看不到，这张卡就是这一区如实的空态。
-private struct AgentConnectCard: View {
-    @Environment(Workspace.self) private var workspace
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        HStack(alignment: .center, spacing: 10) {
-            Image(.extensionNote).font(.system(size: 14)).foregroundStyle(palette.ink2)
-                .frame(width: 28, height: 28).background(palette.fill, in: .rect(cornerRadius: 8, style: .continuous))
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 1) {
-                Text("接入 Agent").font(Typography.label).foregroundStyle(palette.ink).lineLimit(1)
-                Text("终端和桌面版里的会话与历史也看得到").font(Typography.meta).foregroundStyle(palette.ink3)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: 4)
-            Button { workspace.showsAgentSetup = true } label: {
-                Text("接入").font(Typography.meta.weight(.semibold)).foregroundStyle(palette.onFill)
-                    .padding(.horizontal, 12).frame(height: 24)
-                    .background(palette.signatureFill, in: .capsule).contentShape(.capsule)
-            }
-            .buttonStyle(PressStyle())
-        }
-        .padding(10)
-        .background(palette.paper, in: .rect(cornerRadius: 12, style: .continuous))
-        .help("接入 Pi、Claude Code、Codex 或 OpenCode：在终端和桌面版里开的会话与历史也出现在这里，在 Mac 和手机上看进展、发话、回答提问。CuePad 往它的配置目录写技能（Claude Code、Codex 另写钩子），在设置里关掉即删除。")
-        .transition(.opacity)
     }
 }
 

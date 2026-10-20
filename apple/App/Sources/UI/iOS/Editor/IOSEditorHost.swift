@@ -11,6 +11,7 @@ final class IOSEditorHandle {
     /// 选中部分的存储格式；没选中为 nil。
     var selection: String? { view?.selectedStoredText }
     func insertImage(_ data: Data) { view?.insertImage(data: data) }
+    func focus() { view?.becomeFirstResponder() }
 }
 
 /// iOS CueTextView 的 SwiftUI 宿主。正文只在创建时载入一次，之后编辑器是这张卡正文的唯一写者。

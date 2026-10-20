@@ -1,14 +1,14 @@
 #if os(macOS)
 import SwiftUI
 
-/// 右上角面板：顶上一行快速添加；下面是共用的任务看板（`TaskBoard`）——进行中（跨项目、最近开始的在前，标题后跟项目小图标，悬停写全名）、
+/// 右上角面板（从侧栏的"任务"磁贴弹出）：顶上就是一行快速添加，不写"任务 N"的标题与关闭钮——弹出它的磁贴就在旁边、写着同一个名字与数，
+/// 关法同其余浮层（Esc、点外面、再点磁贴或 ⌘⇧T）；下面是共用的任务看板（`TaskBoard`）——进行中（跨项目、最近开始的在前，标题后跟项目小图标，悬停写全名）、
 /// 待办（按项目分段，段头写项目）、最近完成（折起），步骤缩进跟在任务下（`TaskOutline`：按住拖动排序、拖到一条上成为它的步骤、
 /// 横向拖改层级、拖进待办别的段换项目，拖动不改状态；进行中按开始时间排，两行之间不能落），
-/// 行与项目页同一种（`TaskLine`）。点任务弹出任务浮窗（面板留着）。
+/// 行与项目页同一种（`TaskLine`）。点任务从那一行长出任务气泡（面板留着）。
 struct TasksPanel: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
-    @Environment(\.closePanel) private var close
     @Environment(\.palette) private var palette
     @State private var board: TaskBoard?
     @State private var showsCompleted = false
@@ -26,16 +26,8 @@ struct TasksPanel: View {
     var body: some View {
         let lazy = isLazy(board)
         VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Text("任务").font(Typography.sectionTitle)
-                if let board, board.counts.open > 0 { Text("\(board.counts.open)").font(Typography.sectionCount).foregroundStyle(palette.ink2) }
-                Spacer()
-                Button("关闭", icon: .close) { close() }
-                    .labelStyle(.iconOnly).buttonStyle(.borderless).foregroundStyle(palette.ink2)
-            }
-            .padding(.horizontal, 18).padding(.top, 16).padding(.bottom, 6)
             NewTaskField(project: workspace.currentProject, choosesProject: true, autofocus: true)
-                .padding(.horizontal, 20).padding(.bottom, 6)
+                .padding(.horizontal, 20).padding(.top, 14).padding(.bottom, 6)
             ScrollView {
                 if let board { list(board, lazy: lazy) }
             }

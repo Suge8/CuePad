@@ -3,6 +3,36 @@ import Foundation
 extension CueStore {
   /// 会话列表的一页（Mac 与手机共用的唯一查询）。顺序见 `PiSessionPage`。
   public func piSessionPage(_ query: PiSessionQuery) throws -> PiSessionPage {
+    let (condition, arguments) = Self.condition(query)
+    let states = try select(
+      PiSessionState.self, where: condition, arguments, orderBy: "state = '\(PiWorkState.ended.rawValue)', stateSince DESC, id",
+      limit: query.limit, offset: query.offset)
+    let total = try db.first("SELECT count(*) FROM piSessionStates WHERE \(condition)", arguments) { Int($0.int(0)) } ?? 0
+    return PiSessionPage(items: try listItems(states), total: total)
+  }
+
+  /// 按项目分组的会话：每组（项目或未分类）最近的 `each` 条与这一组一共几条，条件同 `piSessionPage`（`query.project`、分页不用）。
+  /// 会话页不按项目筛时的历史读它：几千条历史只按组各读开头几条，两条语句（排名取前几、按组计数）。
+  public func piSessionGroups(_ query: PiSessionQuery, each: Int) throws -> [PiSessionProject: PiSessionPage] {
+    let (condition, arguments) = Self.condition(query)
+    let group = "CASE WHEN \(Self.unfiled) THEN NULL ELSE projectID END"
+    let states = try select(
+      PiSessionState.self,
+      where: """
+        id IN (SELECT id FROM (SELECT id, row_number() OVER (PARTITION BY \(group) ORDER BY stateSince DESC, id) AS rank
+          FROM piSessionStates WHERE \(condition)) WHERE rank <= ?)
+        """, arguments + [each], orderBy: "stateSince DESC, id")
+    let totals = Dictionary(uniqueKeysWithValues: try db.query("SELECT \(group), count(*) FROM piSessionStates WHERE \(condition) GROUP BY 1", arguments) {
+      (PiSessionProject($0.uuidOrNil(0)), Int($0.int(1)))
+    })
+    let items = Dictionary(grouping: try listItems(states)) { PiSessionProject($0.project?.id) }
+    return totals.reduce(into: [:]) { groups, entry in groups[entry.key] = PiSessionPage(items: items[entry.key] ?? [], total: entry.value) }
+  }
+
+  /// 不在哪个项目里：没有项目，或项目已删（列表项也不带它，`listItems`）。
+  private static let unfiled = "(projectID IS NULL OR projectID NOT IN (SELECT id FROM projects WHERE deletedAt IS NULL))"
+
+  private static func condition(_ query: PiSessionQuery) -> (String, [any SQLBindable]) {
     var conditions: [String] = []
     var arguments: [any SQLBindable] = []
     switch query.scope {
@@ -22,9 +52,12 @@ extension CueStore {
       conditions.append("(title LIKE ? ESCAPE '\\' OR folder LIKE ? ESCAPE '\\' OR lastPrompt LIKE ? ESCAPE '\\')")
       arguments += [pattern, pattern, pattern]
     }
-    if let project = query.project {
+    switch query.project {
+    case .project(let id):
       conditions.append("projectID = ?")
-      arguments.append(project)
+      arguments.append(id)
+    case .unfiled: conditions.append(unfiled)
+    case nil: break
     }
     if let token = query.launchToken {
       conditions.append("launchToken = ?")
@@ -34,12 +67,7 @@ extension CueStore {
       conditions.append("id = ?")
       arguments.append(id)
     }
-    let condition = conditions.isEmpty ? "1" : conditions.joined(separator: " AND ")
-    let states = try select(
-      PiSessionState.self, where: condition, arguments, orderBy: "state = '\(PiWorkState.ended.rawValue)', stateSince DESC, id",
-      limit: query.limit, offset: query.offset)
-    let total = try db.first("SELECT count(*) FROM piSessionStates WHERE \(condition)", arguments) { Int($0.int(0)) } ?? 0
-    return PiSessionPage(items: try listItems(states), total: total)
+    return (conditions.isEmpty ? "1" : conditions.joined(separator: " AND "), arguments)
   }
 
   /// 一批会话（Pi 的会话 id）的列表项，按会话 id 索引；没有记录的 id 不在结果里。行与卡上要显示几十个会话的状态时一次读出，
@@ -70,16 +98,16 @@ extension CueStore {
     }
   }
 
-  /// 在问你的会话数："等你"里会话那一半（规则在 `PiSessionState.asksYou`）。只读在等回答的与 Cue 留给你回的那几条，订阅也只依赖它们（`narrow`）：
-  /// Dock 角标与"等你 N"（Cue 的摘要）别的会话变状态时不重读。
-  public func sessionsAskingYou() throws -> Int {
+  /// 在问你的会话："等你"里会话那一半（规则在 `PiSessionState.asksYou`，汇总在 `cueTally`）。只读在等回答的与 Cue 留给你回的那几条，订阅也只依赖它们（`narrow`）：
+  /// 别的会话变状态时"等你"不重读。
+  public func sessionsAskingYou() throws -> [PiSessionState] {
     let cue = try cueDuty()
     let waiting = PiWorkState.waitingForUser.rawValue, settled = PiWorkState.settled.rawValue
     let left = JSONColumn.encode(cue?.left.map(\.sessionID) ?? []).replacingOccurrences(of: "'", with: "''")
     let candidates = "state = '\(waiting)' OR (state = '\(settled)' AND sessionID IN (SELECT value FROM json_each('\(left)')))"
     return try narrow(.piSessionStates, column: "state", candidates: candidates, to: { $0 == waiting || $0 == settled }) { rows in
-      rows.isEmpty ? 0 : try select(PiSessionState.self, where: "rowid IN (SELECT value FROM json_each(?))", [JSONColumn.encode(rows.sorted())])
-        .count { $0.asksYou(cue) }
+      rows.isEmpty ? [] : try select(PiSessionState.self, where: "rowid IN (SELECT value FROM json_each(?))", [JSONColumn.encode(rows.sorted())])
+        .filter { $0.asksYou(cue) }
     }
   }
 

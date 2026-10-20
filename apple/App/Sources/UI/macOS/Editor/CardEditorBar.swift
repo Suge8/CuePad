@@ -4,49 +4,13 @@ import CueStore
 import CueText
 import SwiftUI
 
-/// 一条灵感或任务正文此刻的编辑：编辑器的操作口、打字中的正文、自动保存与保存状态。整页编辑页（散放的灵感，整条正文）与
-/// 任务浮窗的输入框（任务标题下面的话，`Card.rest`）共用这一份，各自只管怎么摆。编辑器是这段正文的唯一写者（见 `EditorHost`）；
-/// 离开时 `leave` 写下没保存的字，什么都没写的灵感不留下（新记的一条先建一条空的再编辑）。
-@Observable
-final class CardEditing {
-    let cardID: UUID
-    /// 打开那一刻的正文：编辑器只在创建时载入一次。
-    let initialText: String
-    @ObservationIgnored let handle = EditorHandle()
-    /// 打字中的正文（底栏据此认出变量）。
-    private(set) var text: String
-    private(set) var saveState = SaveState.idle
-    @ObservationIgnored private let workspace: Workspace
-    @ObservationIgnored private var autosave: Autosave?
-
-    init(_ card: Card, part: CardTextPart = .whole, workspace: Workspace) {
-        cardID = card.id
-        initialText = part.text(of: card)
-        text = initialText
-        self.workspace = workspace
-        let store = workspace.services.store, id = card.id
-        autosave = Autosave(
-            save: { [weak self] text in
-                self?.saveState = .saving
-                try await store.updateCard(id) { part.write(text, into: &$0) }
-                self?.saveState = .saved
-            },
-            onError: { [weak self] error in
-                self?.saveState = .failed
-                workspace.fail(error)
-            })
-    }
-
-    /// "已保存"亮过一会儿之后回到平时。
-    func settleSaved() { if saveState == .saved { saveState = .idle } }
-
-    /// 编辑器里的 ⌘↩ 与浮窗的"开始"：任务先写下没保存的字，再把库里此刻的正文交给 Agent（`Workspace.handOff`）；灵感没有这一下。
+extension CardEditing {
+    /// 编辑器里的 ⌘↩：任务先写下没保存的字，再把库里此刻的正文交给 Agent（`Workspace.handOff`）；灵感没有这一下。
     func submit() {
-        let autosave = autosave, workspace = workspace, id = cardID
+        let workspace = workspace
         Task {
-            await autosave?.flush()
             do {
-                guard let card = try await workspace.services.store.card(id), card.isTask else { return }
+                guard let card = try await flushed(), card.isTask else { return }
                 workspace.handOff(card)
             } catch {
                 workspace.fail(error)
@@ -54,18 +18,12 @@ final class CardEditing {
         }
     }
 
-    /// 离开编辑：写下没保存的字，空白的不留下。
-    func leave() { workspace.leaveEditing(cardID, flush: autosave) }
-
     /// 这张卡的编辑器：正文变化交给自动保存，右键有选区动作，⌘↩ 是主动作。
     func field(_ card: Card, theme: CueEditorTheme) -> EditorHost {
         let workspace = workspace
         return EditorHost(
             initialText: initialText, theme: theme, handle: handle,
-            onChange: { [weak self] next in
-                self?.text = next
-                self?.autosave?.changed(next)
-            },
+            onChange: { [weak self] in self?.changed($0) },
             selectionActions: [.convertToTasks(from: card, workspace: workspace)],
             onSubmit: { [weak self] in self?.submit() },
             onError: workspace.fail)
@@ -89,22 +47,6 @@ struct SaveStatus: View {
             guard editing.saveState == .saved else { return }
             try? await Task.sleep(for: SaveState.savedDisplay)
             if !Task.isCancelled { editing.settleSaved() }
-        }
-    }
-}
-
-/// 保存状态：平时不显示；保存中显示，保存完显示"已保存"一会儿，失败一直显示直到下次保存成功。
-enum SaveState: Equatable {
-    case idle, saving, saved, failed
-
-    static let savedDisplay: Duration = .seconds(1.5)
-
-    var text: String? {
-        switch self {
-        case .idle: nil
-        case .saving: "保存中…"
-        case .saved: "已保存"
-        case .failed: "没能保存"
         }
     }
 }

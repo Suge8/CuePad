@@ -1,61 +1,110 @@
 import CueStore
 import SwiftUI
 
-/// Agent 页读到的会话："现在"是全部在线的与正在唤醒的（`PiSessionListItem.isCurrent`；不多，不分页），按要你注意的先后；
-/// "历史"是已结束的前 `loaded` 条（"现在"里有的不再列），从新到旧（分段见 `PiHistorySection`）。两部分用同一个搜索词与项目筛选。
+/// 会话页读到的会话："现在"是全部在线的与正在唤醒的（`PiSessionListItem.isCurrent`；不多，不分页），按要你注意的先后；
+/// "历史"是已结束的（"现在"里有的不再列），从新到旧。历史有两种读法（`History`）：按时间分页的前 `loaded` 条（分段见 `PiHistorySection`），
+/// 或按项目分组、每组最近几条（`groups`，Mac 会话页不按项目筛时）。两部分用同一个搜索词与项目筛选。
 nonisolated struct PiSessionList: Sendable, Equatable {
     static let pageSize = 40
 
     /// 搜索词与项目筛选：两部分共用。
     struct Filter: Hashable, Sendable {
         var text: String
-        var project: UUID?
+        var project: PiSessionProject?
     }
 
-    /// 重读的条件：筛选、页数，与此刻（到点、同步通断时次序与"没能送达"随之变，`AppServices.speech`）。
+    /// 历史怎么读：按时间分页（读到前几条），或按项目分组、每组最近 `groupHead` 条。
+    enum History: Hashable, Sendable {
+        case paged(Int)
+        case grouped
+    }
+
+    /// 重读的条件：筛选、历史的读法与页数，与此刻（到点、同步通断时次序与"没能送达"随之变，`AppServices.speech`）。
     struct Key: Equatable {
         var filter: Filter
-        var limit: Int
+        var history: History
         var moment: Speech.Moment
     }
 
+    /// 按项目分的一组：项目（未分类时没有）、它在线的会话（"现在"的次序）、最近结束的几条与一共结束了几条。
+    struct Group: Identifiable, Sendable, Equatable {
+        let place: PiSessionProject
+        let project: Project?
+        var now: [PiSessionListItem]
+        var ended: [PiSessionListItem]
+        var endedTotal: Int
+        var id: PiSessionProject { place }
+    }
+
+    /// 分组时每组列出的最近结束的会话条数；更多的点组头的"全部"按这个项目筛。
+    static let groupHead = 3
+
     var filter: Filter
     var now: [PiSessionListItem]
+    /// 按时间分页读到的历史（分组读法时为空）。
     var ended: [PiSessionListItem]
     var total: Int
+    /// 分组读法时的各组：有在线会话的在前，组内照项目在侧栏的次序，未分类排在最后；分页读法时为空。
+    var groups: [Group] = []
     /// 能按它筛的项目：在 Mac 上绑了文件夹的（会话按工作目录归入项目，没绑的不会有会话）。
     var projects: Set<UUID>
     /// 在线会话此刻要显示的那次结束到哪了（按记录 id，`DeliveryRequest.shownEnd`）：正在结束、没能结束。会话页读同一条规则。
     var ends: [UUID: Speech.Trip] = [:]
 
     var loaded: Int { ended.count }
-    var isEmpty: Bool { now.isEmpty && total == 0 }
+    var isEmpty: Bool { now.isEmpty && total == 0 && groups.isEmpty }
 
     static func read(
-        text: String, project: UUID? = nil, historyLimit: Int, at moment: Speech.Moment, from store: isolated CueStore
+        text: String, project: PiSessionProject? = nil, history: History, at moment: Speech.Moment, from store: isolated CueStore
     ) throws -> PiSessionList {
         let live = try store.piSessionPage(PiSessionQuery(scope: .current, text: text, project: project, limit: .max)).items
             .filter { $0.isCurrent(at: moment) }
-        let ended = try store.piSessionPage(PiSessionQuery(scope: .ended, text: text, project: project, limit: historyLimit))
         let deliveries = Dictionary(live.compactMap { item in item.delivery.map { (item.state.sessionID, $0) } }) { first, _ in first }
         let order = Dictionary(uniqueKeysWithValues: PiSessionState.inListOrder(live.map(\.state), deliveries: deliveries, cue: try store.cueDuty(), at: moment).enumerated().map { ($1.id, $0) })
-        return PiSessionList(
-            filter: Filter(text: text, project: project), now: live.sorted { order[$0.id, default: 0] < order[$1.id, default: 0] }, ended: ended.items, total: ended.total,
+        let now = live.sorted { order[$0.id, default: 0] < order[$1.id, default: 0] }
+        var list = PiSessionList(
+            filter: Filter(text: text, project: project), now: now, ended: [], total: 0,
             projects: Set(try store.directoryBindings().map(\.projectID)),
             ends: try live.reduce(into: [:]) { ends, item in
                 ends[item.id] = DeliveryRequest.shownEnd(in: try store.deliveryRequests(toSession: item.state.sessionID), at: moment)
             })
+        switch history {
+        case .paged(let limit):
+            let ended = try store.piSessionPage(PiSessionQuery(scope: .ended, text: text, project: project, limit: limit))
+            list.ended = ended.items
+            list.total = ended.total
+        case .grouped:
+            let ended = try store.piSessionGroups(PiSessionQuery(scope: .ended, text: text, project: project), each: groupHead)
+            list.groups = groups(now: now, ended: ended, order: try store.projects().map(\.id))
+        }
+        return list
+    }
+
+    /// 在线的按所在分组、接上各组最近结束的；正在唤醒的已列在"现在"，历史里不再列。
+    private static func groups(now: [PiSessionListItem], ended: [PiSessionProject: PiSessionPage], order: [UUID]) -> [Group] {
+        let current = Set(now.map(\.id))
+        let live = Dictionary(grouping: now) { PiSessionProject($0.project?.id) }
+        let rank = Dictionary(uniqueKeysWithValues: order.enumerated().map { (PiSessionProject.project($1), $0) })
+        return Set(live.keys).union(ended.keys).map { place in
+            let history = ended[place]
+            let items = live[place] ?? []
+            return Group(
+                place: place, project: (items + (history?.items ?? [])).lazy.compactMap(\.project).first, now: items,
+                ended: history?.items.filter { !current.contains($0.id) } ?? [], endedTotal: history?.total ?? 0)
+        }
+        .filter { !$0.now.isEmpty || !$0.ended.isEmpty }
+        .sorted { ($0.now.isEmpty ? 1 : 0, rank[$0.place] ?? .max) < ($1.now.isEmpty ? 1 : 0, rank[$1.place] ?? .max) }
     }
 }
 
-/// 一个 Agent 会话的行（iOS 的 Agent 页，Mac 的 Agent 页、侧栏、菜单栏面板、项目页的 Agent 栏、⌘K 同一种，状态都经 `PiShown`）。
+/// 一个 Agent 会话的行（iOS 的 Agent 页，Mac 的 Agent 页、菜单栏面板、项目页的 Agent 栏、⌘K 同一种，状态都经 `PiShown`）。
 /// 不写会话在说什么（那在会话页里），只写它是谁、在哪、什么状态、跑得怎样。
 /// - 整页（`page`）是一张圆角卡片，"现在"的卡片：状态标、名字（Mac 在后台开的带"后台"小签）与右上的时长；
 ///   所在（项目图标与名字，没有项目时是文件夹；按项目筛着时不写）接状态词，上下文靠右；有模型或子代理时再一层读数——模型、
 ///   子代理（角色图标，颜色是它的状态，后接在跑 / 共几个）。卡片高随内容，没有读数不留空行。要你看的三种状态卡片换成这种状态的淡底（`PiShown.wash`）。
 ///   已结束的（历史）两层：名字与时长、所在，没有状态标。
 /// 名字后是哪家 Agent 只放标志（`AgentMark`）：名字优先，窄处先截名字，标志与时长一直留着。
-/// - 窄处（`compact`：Mac 侧栏、菜单栏、⌘K、项目页）两层：状态标、名字、时长；状态词接读数（`PiStatusLine`），上下文靠右。
+/// - 窄处（`compact`：Mac 菜单栏、⌘K、项目页）两层：状态标、名字、时长；状态词接读数（`PiStatusLine`），上下文靠右。
 /// 状态标自成一列（固定宽、对着名字那一行的中线），第二层从名字起头；上下文只在快满时出现（`PiRowFacts.context`），
 /// 两种都在第二层落在时长正下方，与时长一样用等宽数字，状态词长短不同也不挪。
 /// 时长只有一种写法：在这个状态里待了多久（`PiClock.Style.span`）。搜索命中在说过的话里时，状态那一层换成命中的那一截。
@@ -96,11 +145,14 @@ struct PiSessionRow: View {
     var body: some View {
         let shown = workspace.shown(session, delivery: delivery)
         let facts = services.settings.facts(session, shown: shown, end: end, rename: rename, at: services.speech)
-        if style.card {
-            card(shown: shown, facts: facts)
-        } else {
-            compact(shown: shown, facts: facts)
+        Group {
+            if style.card {
+                card(shown: shown, facts: facts)
+            } else {
+                compact(shown: shown, facts: facts)
+            }
         }
+        .relayArrival(session: session.sessionID)
     }
 
     /// 历史里的行：已结束、也不在唤醒（正在唤醒的照在线的写状态）。

@@ -129,6 +129,16 @@ enum Mascot: String {
     case clean = "mascot-clean"
     case error = "mascot-error"
     case hello = "mascot-hello"
+
+    /// 浮动用的位图（`LoopLayer.float`），按 `side` 的三倍取。
+    func bitmap(side: CGFloat) -> CGImage? {
+        #if os(macOS)
+        var rect = CGRect(x: 0, y: 0, width: side * 3, height: side * 3)
+        return NSImage(named: rawValue)?.cgImage(forProposedRect: &rect, context: nil, hints: nil)
+        #else
+        UIImage(named: rawValue)?.cgImage
+        #endif
+    }
 }
 
 /// 项目页与未分类还没有灵感：任务存在时用轻量纸卡；完全空时复用 EmptyState 的整页布局。

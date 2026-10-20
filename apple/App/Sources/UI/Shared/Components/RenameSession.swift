@@ -1,7 +1,7 @@
 import CueStore
 import SwiftUI
 
-/// 改会话名（iOS 的 Agent 页与会话页、Mac 侧栏、Agent 整页与会话页共用）：一张小表单，输入框预填现在的名字、弹出即聚焦，
+/// 改会话名（iOS 的 Agent 页与会话页、Mac 菜单栏面板、Agent 整页与会话页共用）：一张小表单，输入框预填现在的名字、弹出即聚焦，
 /// 确定后经 `AppServices.rename` 让 Pi 改（会话名只来自 Pi）。没改动或空着时"改名"停用——用系统工具栏按钮而不是提示框：
 /// iOS 的提示框不画按钮的停用态，点不了也看不出来。
 private struct RenameSheet: View {
