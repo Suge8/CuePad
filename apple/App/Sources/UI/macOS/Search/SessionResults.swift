@@ -18,7 +18,7 @@ struct SessionGroup: Equatable {
         live: [PiSessionState], ended: [PiSessionState], cue: CueDuty? = nil, now: Date, at moment: Speech.Moment,
         calendar: Calendar = .current
     ) -> [SessionGroup] {
-        let current = live.isEmpty ? [] : [SessionGroup(key: .now, sessions: PiSessionState.inListOrder(live, cue: cue, at: moment))]
+        let current = live.isEmpty ? [] : [SessionGroup(key: .now, sessions: PiSessionState.inListOrder(live, state: \.self, cue: cue, at: moment))]
         let past = PiHistorySection.split(ended, date: \.stateSince, now: now, calendar: calendar)
         return current + past.map { SessionGroup(key: .ended($0.section), sessions: $0.items) }
     }

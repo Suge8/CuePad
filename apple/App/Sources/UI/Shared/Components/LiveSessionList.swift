@@ -140,6 +140,6 @@ extension PiSessionState {
     ) -> [PiSessionState] {
         let shown = Set(live.map(\.sessionID))
         let others = recorded.filter { !shown.contains($0.sessionID) }
-        return inListOrder(live + others, deliveries: deliveries, cue: cue, at: moment)
+        return inListOrder(live + others, state: \.self, deliveries: deliveries, cue: cue, at: moment)
     }
 }

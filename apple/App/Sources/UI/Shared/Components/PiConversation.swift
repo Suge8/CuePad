@@ -262,7 +262,7 @@ struct PiSessionSubtitle: View {
 
     var body: some View {
         let shown = workspace.shownInHeader(session)
-        let speaks = syncing || shown.isLive || shown.needsYou || [.restart, .ended, .cueAsking].contains(shown.status)
+        let speaks = syncing || shown.isRunning || shown.needsYou || [.restart, .ended, .cueAsking].contains(shown.status)
         let mark = session.agentMark
         // 什么都不写时也要有一个真的视图：等同步的那个任务挂在它上面
         ZStack(alignment: .leading) {
@@ -277,7 +277,7 @@ struct PiSessionSubtitle: View {
                         if speaks { Dot().foregroundStyle(palette.failure) }
                         Text(undelivered).foregroundStyle(palette.failure)
                     }
-                    if !syncing, shown.isLive, shown.clock != nil {
+                    if !syncing, shown.isRunning, shown.clock != nil {
                         Dot().foregroundStyle(palette.ink3)
                         // 整个 App 只有这一个计时到秒：正看着的这个会话
                         PiElapsed(shown: shown, font: Self.font, style: .header)
