@@ -128,10 +128,10 @@ func projectFields(name: String, modifiedAt: Int64) -> [String: SQLValue] {
 }
 
 func cardFields(
-  project: UUID?, body: String, modifiedAt: Int64, sortKey: String = "V", conflictOf: UUID? = nil
+  project: UUID = Project.defaultID, body: String, modifiedAt: Int64, sortKey: String = "V", conflictOf: UUID? = nil
 ) -> [String: SQLValue] {
   [
-    "projectID": project.map { .text($0.uuidString.lowercased()) } ?? .null, "body": .text(body),
+    "projectID": .text(project.uuidString.lowercased()), "body": .text(body),
     "isPinned": .int(0), "variableValues": .text("{}"),
     "sortKey": .text(sortKey), "deletedAt": .null, "createdAt": .int(1_000), "modifiedAt": .int(modifiedAt),
     "conflictOf": conflictOf.map { .text($0.uuidString.lowercased()) } ?? .null,

@@ -233,19 +233,18 @@ import Testing
     #expect(reason.contains("2006"))
   }
 
-  @Test func driftedSubscriptionsAreReplacedAndStaleOnesOfOursAndForeignDatabaseOnesAreRemovedButForeignQueriesAreLeftAlone() async throws {
+  @Test func driftedSubscriptionsAreReplacedAndStaleOnesOfOursAreRemovedButForeignOnesAreLeftAlone() async throws {
     let manager = AlertSubscriptions(zoneID: zone)
     var drifted = manager.desired()[0]
     drifted = CKQuerySubscription(recordType: "piSessionStates", predicate: NSPredicate(format: "notify == %@", "other"), subscriptionID: drifted.subscriptionID, options: [.firesOnRecordCreation])
     let stale = CKQuerySubscription(recordType: "piSessionStates", predicate: NSPredicate(value: true), subscriptionID: "cuepad.pi.old", options: [.firesOnRecordCreation])
     let foreign = CKQuerySubscription(recordType: "other", predicate: NSPredicate(value: true), subscriptionID: "somebody.else", options: [.firesOnRecordCreation])
-    let engines = CKDatabaseSubscription(subscriptionID: "engine-made")  // CKSyncEngine 当年建的：和我们的静默推送重复
-    let fake = store(preloaded: [drifted, stale, foreign, engines])
+    let fake = store(preloaded: [drifted, stale, foreign])
 
     #expect(await manager.ensure(in: fake) == .active)
 
     #expect(await fake.saved.sorted() == ["cuepad.changes", "cuepad.cue", "cuepad.pi.settled", "cuepad.pi.waiting"])
-    #expect(await fake.deleted.sorted() == ["cuepad.pi.old", "engine-made"])
+    #expect(await fake.deleted.sorted() == ["cuepad.pi.old"])
     #expect(await fake.ids.contains("somebody.else"))
   }
 

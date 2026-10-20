@@ -44,9 +44,6 @@ enum CloudKitSchema {
     ),
   ]
 
-  /// 已下线的记录类型：服务器上可能还有（旧版本的设备仍会写），拉到时直接跳过、不算问题。
-  static let retiredTypeNames = Set(retiredTypes.map(\.name))
-
   static func generate() async throws -> String {
     let directory = FileManager.default.temporaryDirectory.appending(path: "cuepad-schema-\(UUID().uuidString)", directoryHint: .isDirectory)
     defer { try? FileManager.default.removeItem(at: directory) }

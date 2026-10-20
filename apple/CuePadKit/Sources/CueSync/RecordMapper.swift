@@ -33,14 +33,9 @@ enum RecordMapper {
   }
 
   /// `base` 是上次从服务器拿到的记录（带系统字段），在它上面改字段才能通过服务器的版本校验；没有则新建。上传是整条。
-  /// 下线的字段（`CloudKitSchema.retiredFields`）显式置空：CloudKit 不会因为记录里没有某个键就删掉服务器上的值，
-  /// 不置空的话旧版本写下的值（如会话状态里的大清单）一直留在服务器上，别的设备每次整条拉取都要下载。
   static func record(from row: SyncRow, zoneID: CKRecordZone.ID, base: CKRecord? = nil) -> CKRecord {
     let record = base ?? CKRecord(
       recordType: row.table.rawValue, recordID: CKRecord.ID(recordName: row.id, zoneID: zoneID))
-    for field in CloudKitSchema.retiredFields[row.table.rawValue] ?? [] {
-      if field.declaration.hasPrefix("ENCRYPTED") { record.encryptedValues[field.name] = nil } else { record[field.name] = nil }
-    }
     let encrypted = encryptedColumns[row.table] ?? []
     for column in row.table.columns where column != "id" {
       let value = row.fields[column] ?? .null

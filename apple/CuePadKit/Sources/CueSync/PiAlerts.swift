@@ -125,15 +125,14 @@ struct AlertSubscriptions {
     return subscription
   }
 
-  /// 幂等：缺的创建，与期望不一致的替换，本前缀下多余的删除；不是这里建的数据库订阅也删掉（CKSyncEngine 当年建的，
-  /// 它的静默推送和 `changesID` 重复），别的查询订阅不碰。
+  /// 幂等：缺的创建，与期望不一致的替换，本前缀下多余的删除，别人的订阅不碰。
   /// 账号切换后新账号的数据库里没有这些订阅，再调用一次即重建。失败不抛：结果就是状态，原因交给界面。
   func ensure(in store: any SubscriptionStore) async -> PiAlertSubscriptionStatus {
     do {
       let existing = try await store.subscriptions()
       let wanted = desired()
       let wantedIDs = Set(wanted.map(\.subscriptionID))
-      for (id, subscription) in existing where !wantedIDs.contains(id) && (id.hasPrefix(Self.prefix) || subscription is CKDatabaseSubscription) {
+      for id in existing.keys where !wantedIDs.contains(id) && id.hasPrefix(Self.prefix) {
         try await store.delete(id)
       }
       for subscription in wanted where !Self.matches(existing[subscription.subscriptionID], subscription) {

@@ -44,17 +44,6 @@ public struct PiQuestion: Sendable, Equatable, StoredJSON {
   /// 能用文字答（回复框作答，答案是 `PiAnswerValue.text`）：文字题，或允许自己填的选择题。
   public var acceptsText: Bool { kind == .known(.text) || (kind == .known(.select) && allowsOther) }
 
-  private enum CodingKeys: String, CodingKey { case promptID, kind, text, options, allowsOther }
-
-  public init(from decoder: any Decoder) throws {
-    let container = try decoder.container(keyedBy: CodingKeys.self)
-    try self.init(
-      promptID: container.decodeIfPresent(String.self, forKey: .promptID), kind: container.decode(Open<PiQuestionKind>.self, forKey: .kind),
-      text: container.decode(String.self, forKey: .text), options: container.decodeIfPresent([String].self, forKey: .options) ?? [],
-      // 旧版本写的记录没有这个键
-      allowsOther: container.decodeIfPresent(Bool.self, forKey: .allowsOther) ?? false)
-  }
-
   /// 同步记录里的 `question` 字段（通知扩展也读它）；读不成 JSON 按没有提问处理，不让整条记录解码失败。
   public init?(stored: String) {
     guard let value = JSONColumn.decode(Self.self, from: stored) else { return nil }

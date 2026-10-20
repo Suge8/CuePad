@@ -40,7 +40,7 @@ import Testing
     try await Task.sleep(for: .milliseconds(3))
     try await store.updateCard(card.id) { $0.body = "edited while waiting" }
     #expect(await rig.coordinator.nextBatch(first: [], limit: 400) == nil)
-    let other = remoteRecord(.cards, cardFields(project: nil, body: "other user", modifiedAt: 9_000_000_000_000))
+    let other = remoteRecord(.cards, cardFields(body: "other user", modifiedAt: 9_000_000_000_000))
     await #expect(throws: SyncPaused.self) { try await rig.coordinator.pulled([other], []) }
     #expect(try await store.card(card.id)?.body == "edited while waiting")
     #expect(try await store.cards(in: Project.defaultID).isEmpty)  // 新账号的记录没有被应用
