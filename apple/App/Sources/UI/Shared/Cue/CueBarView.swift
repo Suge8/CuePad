@@ -125,13 +125,14 @@ struct CueStatusLine: View {
     }
 }
 
-/// App 里的 Cue 此刻那一行（`CueNowLine`）：刚做完的那颗到点自己收掉（`Moments` 睡到 `CueNow.nextChange`，不另计时）。
+/// App 里的 Cue 此刻那一行（`CueNowLine`）：刚做完的那颗到点自己收掉（`Moments` 睡到 `CueNow.nextChange`，不另计时）；
+/// 每颗珠子是它那几个会话接力飞光的落点（`relaySpot(bead:)`），露出来的才有，收进"+N"的落回会话与任务行。
 struct CueNowRow: View {
     let now: CueNow
 
     var body: some View {
         Moments(next: now.nextChange(after:)) { date in
-            CueNowLine(now: now.aged(to: date))
+            CueNowLine(now: now.aged(to: date)) { bead, dot in dot.relaySpot(bead: bead.sessions) }
         }
     }
 }
