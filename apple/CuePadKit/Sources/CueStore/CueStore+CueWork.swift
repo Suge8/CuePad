@@ -116,7 +116,7 @@ public struct CueChange: Equatable, Sendable {
 
   /// 会话停着（歇下、等回答、出错；被打断的不算）：谁接手（`CueStore.cueChanges`）只管这几种。等子代理停住时会话还在做，
   /// 与完成、发送失败一样总报给 Cue。
-  public var isStop: Bool { [.settled, .waitingForUser, .failed].contains(kind) && !interrupted }
+  var isStop: Bool { [.settled, .waitingForUser, .failed].contains(kind) && !interrupted }
 
   init(
     kind: Kind, task: Card?, leaf: Card? = nil, session: PiSessionState? = nil, byUser: Bool = false, at: Date, seq: Int,
@@ -830,42 +830,38 @@ extension CueStore {
   /// 停着的会话此刻归他（返回他的在场）：这一轮不是 Cue 开的（`turnOpener`），他在场；归 Cue 为 nil。谁接手只认这一处。
   private func hisStop(_ sessionID: String) throws -> SessionPresence? {
     guard try turnOpener(sessionID) != .cue else { return nil }
-    return try sessionPresence([sessionID])[sessionID]
+    return try presence(in: sessionID)
   }
 
-  /// 他此刻在场的会话（`SessionPresence`），按 Pi 的会话 id；不在场的不在其中。
-  private func sessionPresence(_ sessionIDs: [String]) throws -> [String: SessionPresence] {
-    guard !sessionIDs.isEmpty else { return [:] }
-    let now = timing.now(), ids = JSONColumn.encode(sessionIDs)
-    let viewing = Set(try sessionViewers().compactMap(\.sessionID)).intersection(sessionIDs)
+  /// 他此刻在不在会话里（`SessionPresence`）；不在场为 nil。
+  private func presence(in sessionID: String) throws -> SessionPresence? {
+    let viewing = try sessionViewers().contains { $0.sessionID == sessionID }
     // 他一方说的、窗口内的话（从晚到早），去掉 Cue 发进去的（`PiChatMessage.saidByCue`）
     let said = try select(
-      PiChatMessage.self, where: "sessionID IN (SELECT value FROM json_each(?)) AND role = '\(PiChatRole.user.rawValue)' AND at > ?",
-      [ids, now - SessionPresence.window], orderBy: "at DESC")
+      PiChatMessage.self, where: "sessionID = ? AND role = '\(PiChatRole.user.rawValue)' AND at > ?",
+      [sessionID, timing.now() - SessionPresence.window], orderBy: "at DESC")
     let cueSent = try cueSentDeliveries(among: said.compactMap(\.deliveryID))
-    var spoke: [String: Date] = [:]
-    for message in said where !message.saidByCue(cueSent) && spoke[message.sessionID] == nil { spoke[message.sessionID] = message.at }
-    return Dictionary(uniqueKeysWithValues: viewing.union(spoke.keys).map { ($0, SessionPresence(viewing: viewing.contains($0), spokeAt: spoke[$0])) })
+    let spokeAt = said.first { !$0.saidByCue(cueSent) }?.at
+    return viewing || spokeAt != nil ? SessionPresence(viewing: viewing, spokeAt: spokeAt) : nil
   }
 
-  /// 归他的停下（会话 id → 那次停下的起点）此刻怎样了：会话动了（谁说了话、结束了）或已留给他的不再记；还归他的接着记，给出最早会到点的离开时刻；
-  /// 他离开了的作为变化报给 Cue（`reported` 里已有这个会话的变化就不重复）。
+  /// 归他的停下（会话 id → 那次停下的起点）此刻怎样了：会话动了（谁说了话、结束了）、不再停着（`CueChange.isStop`）或已留给他的不再记；
+  /// 还归他的接着记，给出最早会到点的离开时刻；他离开了的作为变化报给 Cue（`reported` 里已有这个会话的变化就不重复）。
   private func heldChanges(_ held: [String: Date], reported: Set<String>) throws -> CueChanges {
     var result = CueChanges(due: [], held: [:], lapse: nil)
     guard !held.isEmpty else { return result }
     let left = try cueState()?.left ?? []
     let sessions = try select(PiSessionState.self, where: "sessionID IN (SELECT value FROM json_each(?))", [JSONColumn.encode(held.keys.sorted())])
     let seqs = try writeSeqs(of: .piSessionStates, "sessionID", sessions.map(\.sessionID))
-    for session in sessions where session.stateSince.stored == held[session.sessionID]?.stored && session.state.known?.isStopped == true
-      && !left.contains(where: { $0.holds(for: session) }) {
+    for session in sessions where session.stateSince.stored == held[session.sessionID]?.stored && !left.contains(where: { $0.holds(for: session) }) {
+      let (task, leaf) = try boundLeaf(of: session.sessionID)
+      guard let change = try sessionChange(session, seq: seqs[session.sessionID] ?? 0, task: task, leaf: leaf), change.isStop else { continue }
       if let presence = try hisStop(session.sessionID) {
         result.held[session.sessionID] = session.stateSince
         if let lapse = presence.lapse { result.lapse = min(result.lapse ?? lapse, lapse) }
-        continue
+      } else if !reported.contains(session.sessionID) {
+        result.due.append(change)
       }
-      guard !reported.contains(session.sessionID) else { continue }
-      let (task, leaf) = try boundLeaf(of: session.sessionID)
-      if let change = try sessionChange(session, seq: seqs[session.sessionID] ?? 0, task: task, leaf: leaf) { result.due.append(change) }
     }
     return result
   }
