@@ -11,8 +11,8 @@ struct BoardColumns: View {
     #if os(macOS)
     private static let minColumn: CGFloat = 230
     #else
-    /// iPad 竖屏（侧栏收着）也四列并排放得下。
-    private static let minColumn: CGFloat = 180
+    /// 一行要放下 44pt 的圈、两行标题与行尾的时间和状态标：iPad 竖屏放三列多一点，横滑看第四列。
+    private static let minColumn: CGFloat = 260
     #endif
     private static let gap: CGFloat = 14
 
