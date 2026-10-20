@@ -43,7 +43,7 @@ extension CueStore {
     }
   }
 
-  /// 一个会话的进程没了（不是你结束的：崩溃、被杀、更新时让旧扩展的托管进程退出）：托管的记为歇着（仍可唤醒、不进历史），
+  /// 一个会话的进程没了（不是你结束的：崩溃、被杀）：托管的记为歇着（仍可唤醒、不进历史），
   /// 其余记为已结束、进历史；记录上手上还有活（在跑一轮、等你确认、子代理还在跑）的都记为做到一半被打断（`PiWorkState.interrupted`）。
   func losePiState(host: String, sessionID: String, at now: Date) throws {
     try write {
@@ -328,7 +328,7 @@ public actor PiStateRecorder {
   /// - 没留下对话的（`spoke` 为 false：Pi 在第一条消息落盘前不建文件，`--no-session` 也没有）：一句话没说过，不进历史，记录删掉（同步删除）；
   /// - CuePad 后台托管的：闲置退出不算结束，记录留着、歇着，仍在"现在"，发话由本机执行器照常唤醒；
   /// - 其余（终端里的 Pi 退出）：记为已结束，进历史。
-  /// 后两种在记录上手上还有活时记为做到一半被打断（`PiWorkState.interrupted`：崩溃、被杀、App 更新时让旧扩展的托管进程退出）。
+  /// 后两种在记录上手上还有活时记为做到一半被打断（`PiWorkState.interrupted`：崩溃、被杀）。
   /// 托管的会话要结束，由用户的结束请求写 `end`。
   public func exited(sessionID: String, spoke: Bool) async throws {
     if var session = sessions.removeValue(forKey: sessionID) { cancelPending(&session) }

@@ -795,10 +795,7 @@ struct MacSyncTests {
         #expect(rig.host.calls.isEmpty)
     }
 
-    /// 后台托管着时，用户在自己的终端里打开了同一个会话：同步记录跟着用户那个进程（不再标"后台托管"），
-    /// 后台进程随后退出也不把记录标为已结束——始终只有一条。
-    /// 扩展升级后旧版会话在终端里 /reload：旧协议的连接告别、新扩展接回同一个会话。说过话的会话这时不是"没说话就退出"，
-    /// 记录与它的摘要留着，接回后不变成"新会话"。
+    /// 不会自己重新载入的旧扩展会话：记成需要 /reload；在终端里 /reload 后新扩展接回同一个会话，记录与它的摘要留着，不变成"新会话"。
     @Test(.timeLimit(.minutes(1)))
     func 旧协议会话重载接回_摘要还在() async throws {
         let changes = rig.pi.changes()
@@ -823,34 +820,48 @@ struct MacSyncTests {
         #expect(back?.recap == PiRecap(lastPrompt: "修登录", lastReply: "改好了"))
     }
 
-    /// App 更新后，开着的会话（托管的与终端里的）以旧协议连着、跑完了一轮：这期间读不到它的状态，记录停在更新前的"在跑"，
-    /// 也没有这一轮的开始（更新前的版本不记）。扩展够新，歇下后自己重新载入、以新协议接回（新载入的扩展没见过这一轮，开始报空）：
-    /// 这一轮在这期间停下了，接回时照常算一次歇下，Cue 被叫醒（他不在场：那句话说在半小时前）。
-    @Test(.timeLimit(.minutes(1)), arguments: [true, false])
-    func 旧协议会话做完这一轮后自己重载接回_Cue被叫醒(hosted: Bool) async throws {
+    /// App 更新后，开着的会话歇下后自己重新载入扩展、接回（新载入的扩展没见过这一轮：开始报空、起点是此刻）。
+    /// 协议号变了的（`upgrading`）这期间读不到状态，记录停在更新前的样子；没变的照常读着。更新前在跑、重载前做完了这一轮的，
+    /// 接回时照常算一次歇下，Cue 被叫醒（他不在场：那句话说在半小时前）；更新前就歇着的，接回不是新的歇下，不叫醒。
+    @Test(.timeLimit(.minutes(1)), arguments: [true, false], [true, false])
+    func 会话重载扩展接回_这期间做完一轮的才叫醒Cue(running: Bool, upgrading: Bool) async throws {
         let changes = rig.pi.changes()
         try rig.pi.start()
         let services: AppServices = services, store = services.store
         let file = FileManager.default.temporaryDirectory.appending(path: "mac-sync-\(UUID().uuidString).jsonl")
         FileManager.default.createFile(atPath: file.path, contents: Data())
         let turn = Date.now.addingTimeInterval(-30 * 60)
+        let said = PiChatMessage(sessionID: "s1", entryID: "u1", seq: 1, role: .user, text: "发版", at: turn)
         try await services.piStateRecorder.update(
-            sessionID: "s1", state: .thinking, title: "发版", directory: "/work/app", times: PiTimes(stateSince: turn, busySince: turn), hosted: hosted)
+            sessionID: "s1", state: .thinking, title: "发版", directory: "/work/app", times: PiTimes(stateSince: turn, busySince: turn), turnStartedAt: turn)
+        if !running {
+            try await store.writePiTranscript(PiTranscript(
+                sessionID: "s1", messages: [said], recap: PiRecap(lastPrompt: "发版", lastReply: "发好了", answeredAt: turn.addingTimeInterval(60))))
+            try await services.piStateRecorder.update(sessionID: "s1", state: .settled, times: PiTimes(stateSince: turn.addingTimeInterval(60), busySince: nil))
+        }
+        try await services.resetPiState()  // 更新后的 App 启动对账
         let mark = try await store.lastWrite()
         let consuming = Task { try await services.consumePiChanges(changes) }
         defer { consuming.cancel() }
 
         let old = try await rig.host.connect(
-            "s1", cwd: "/work/app", hosted: hosted, protocolVersion: 3, extensionVersion: PiBridge.selfReloadingExtension, sessionFile: file.path)
-        try await store.writePiTranscript(PiTranscript(
-            sessionID: "s1", messages: [PiChatMessage(sessionID: "s1", entryID: "u1", seq: 1, role: .user, text: "发版", at: turn)],
-            recap: PiRecap(lastPrompt: "发版", lastReply: "发好了", answeredAt: .now)))
+            "s1", cwd: "/work/app", busy: running, protocolVersion: upgrading ? 3 : PiWire.protocolVersion,
+            extensionVersion: PiBridge.selfReloadingExtension, sessionFile: file.path)
+        if running {
+            try await store.writePiTranscript(PiTranscript(
+                sessionID: "s1", messages: [said], recap: PiRecap(lastPrompt: "发版", lastReply: "发好了", answeredAt: .now)))
+        }
         old.close(bye: "reload")
-        try await rig.host.connect("s1", cwd: "/work/app", hosted: hosted, sessionFile: file.path)
+        try await rig.host.connect("s1", cwd: "/work/app", sessionFile: file.path)
 
-        _ = try await eventually(store, { try $0.allPiSessionStates().first?.state }, until: { $0 == .known(.settled) })
+        // 接回的那一次写入落了盘（记录的状态与起点跟上桥上的）才看 Cue 的变化，不然歇着的那一例还没写就判过了
+        try await eventually("桥上以新协议接回") { services.pi.session(sessionID: "s1").map { $0.state == .settled && $0.extensionVersion == 1 } == true }
+        let live = try #require(services.pi.session(sessionID: "s1"))
+        _ = try await eventually(store, { try $0.allPiSessionStates().first }, until: {
+            $0?.state == .known(.settled) && abs(($0?.stateSince ?? .distantPast).timeIntervalSince(live.stateSince)) < 0.001
+        })
         let woke = try await store.cueChanges(after: CueMarks(mark))
-        #expect(woke.due.map { "\($0.kind)\($0.interrupted ? "（被打断）" : "") \($0.session?.sessionID ?? "")" } == ["settled s1"])
+        #expect(woke.due.map { "\($0.kind)\($0.interrupted ? "（被打断）" : "") \($0.session?.sessionID ?? "")" } == (running ? ["settled s1"] : []))
     }
 
     /// 后台托管的会话进程没了（App 退出、闲置退出）记录仍歇着、发话会唤醒它：它报过的斜杠命令留着，
@@ -871,6 +882,8 @@ struct MacSyncTests {
         #expect(PiSlash.line(of: ComposerDraft(text: "/default"), in: stored.usableCommands(in: catalog)) == "/default")
     }
 
+    /// 后台托管着时，用户在自己的终端里打开了同一个会话：同步记录跟着用户那个进程（不再标"后台托管"），
+    /// 后台进程随后退出也不把记录标为已结束——始终只有一条。
     @Test func 同一会话换到用户的终端里_记录跟着新进程_后台进程退出不结束记录() async throws {
         var hosted = session("s1", pid: 100)
         hosted.hosted = true

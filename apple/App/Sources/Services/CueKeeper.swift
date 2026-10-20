@@ -68,7 +68,7 @@ nonisolated struct CueTiming: Sendable {
 /// 回复写成什么看这一轮为什么醒（`author(of:)`）：你发起的（含插进来的话）与刚启用的写成 `cue`，其余 Cue 自己醒来的写成 `note`（折成灰色一行、不推送），
 /// 换新后的第一轮跟写下交接的那一轮一样；
 /// Cue 自己醒来的一轮（含刚启用）里已经用 tell 对你说过话的，最后的回复不再写（几乎是同一句）；你发起的一轮最后的回复就是答复，照写
-/// （`CueStore.replyCueRound`）。Cue 被会话的动静叫醒、这一轮什么都没写（没有经过、动态、对你说的话），补一行动态"看过「会话名」，不打算行动"，
+/// （`CueStore.replyCueRound`）。Cue 被会话的动静叫醒、这一轮没动过手（`CueRound.acted`），补一行动态"看过「会话名」，不打算行动"，
 /// 连着的几轮并成一行（`CueStore.noteCueGlance`）。
 /// 你发来的图按发给会话的同一个转换交给大脑（文字里的图片引用照留，Cue 能原样转给会话）；模型看不了图就不交，并对你说一声。
 /// 基线（变化从哪算起）只在一轮做完且没出错时前移：出错的一轮里 Cue 没看完的变化下次还在。变化按本机写入序号分新旧
@@ -189,9 +189,9 @@ final class CueKeeper {
             return !delivered.isEmpty || (wake != .enabled && author == .cue)
         }
 
-        /// 最后的话写不写进对话：回答你的一轮、刚启用的招呼照写；Cue 自己醒来的其余各轮什么都没做（没有落了结果的一步，`Kind.acts`）就不写——
+        /// 最后的话写不写进对话：回答你的一轮、刚启用的招呼照写；Cue 自己醒来的其余各轮没动过手（`CueRound.acted`）就不写——
         /// 系统提示里"什么都没做就不写"只在这里定。
-        var writesReply: Bool { answersYou || selfStarted?.wake == .enabled || round.process?.items.contains(where: \.kind.acts) == true }
+        var writesReply: Bool { answersYou || selfStarted?.wake == .enabled || round.acted }
     }
 
     /// Cue 自己醒来的一轮出错了：之后自己醒来先等着，直到 `retryAt`（只一次）或有新变化（写入序号大于 `latest`，或在 `since` 之后才到的等子代理停住）。
@@ -237,7 +237,7 @@ final class CueKeeper {
     /// 上一轮的回复写成谁的（换新时接着用）
     private var lastTurnAuthor: CueAuthor = .note
     private var lastFailure: String?
-    /// 最近补的那一行"看过……，不打算行动"：下一轮也什么都没写就并进它
+    /// 最近补的那一行"看过……，不打算行动"：下一轮也没动过手就并进它
     private var glance: CueGlance?
     private var setback: Setback?
     private var timer: Task<Void, Never>?
@@ -494,14 +494,13 @@ final class CueKeeper {
     }
 
     /// 把在跑这一轮的经过写进对话里它那一行（`CueStore.recordCueRound`）：第一次调工具时在这一轮开始的位置写下，之后每做完一步改它。
-    /// Cue 自己醒来的一轮做了事（`Kind.acts`）才写下：只看了看的每次醒来都有，写下来满是噪声，在跑时由对话末尾那一行（`CueEnding`）显示。
+    /// Cue 自己醒来的一轮动过手（`CueRound.acted`）才写下：只看了看的每次醒来都有，写下来满是噪声，在跑时由对话末尾那一行（`CueEnding`）显示。
     private func recordRound() async {
         guard let turn, !turn.round.calls.isEmpty else { return }
-        let process = turn.round.process
-        guard turn.round.row != nil || turn.answersYou || process?.items.contains(where: \.kind.acts) == true else { return }
+        guard turn.round.row != nil || turn.answersYou || turn.round.acted else { return }
         do {
             let row = try await setup.store.recordCueRound(
-                turn.round.row, startedAt: turn.round.startedAt, answersYou: turn.answersYou, tools: process)
+                turn.round.row, startedAt: turn.round.startedAt, answersYou: turn.answersYou, tools: turn.round.process)
             updateShift { $0.turn?.round.row = row }
         } catch {
             Self.log.error("Cue 这一轮的经过没能写进资料库：\(error.localizedDescription, privacy: .public)")
@@ -519,11 +518,11 @@ final class CueKeeper {
         }
     }
 
-    /// 被会话的动静叫醒、这一轮什么都没写：补一行"看过……，不打算行动"（`CueStore.noteCueGlance`）。
+    /// 被会话的动静叫醒、这一轮没动过手（对话里因此什么都没写）：补一行"看过……，不打算行动"（`CueStore.noteCueGlance`）。
     private func noteGlance(_ turn: Turn) async {
-        guard !turn.answersYou, let sessions = turn.woke?.sessions, !sessions.isEmpty else { return }
+        guard !turn.answersYou, !turn.round.acted, let sessions = turn.woke?.sessions, !sessions.isEmpty else { return }
         do {
-            glance = try await setup.store.noteCueGlance(sessions, startedAt: turn.round.startedAt, after: glance) ?? glance
+            glance = try await setup.store.noteCueGlance(sessions, after: glance)
         } catch {
             Self.log.error("Cue 看过会话的那一行动态没能写进资料库：\(error.localizedDescription, privacy: .public)")
         }

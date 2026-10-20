@@ -63,13 +63,10 @@ extension CueStore {
     }
   }
 
-  /// Cue 自己醒来看过会话、这一轮什么都没写（对话里这一轮开始之后一条也没有：经过、动态、对你说的话）时补的一行动态（`note`，灰字、不推送）：
-  /// "看过「会话名」，不打算行动"。对话里最后一条就是上一行这样的动态（`after`）就并进去，看过几个会话写成"看过 N 个会话"。
-  /// 返回这一行与它看过的会话；这一轮写过东西为 nil。
-  public func noteCueGlance(_ sessionIDs: [String], startedAt: Date, after previous: CueGlance?) throws -> CueGlance? {
+  /// Cue 被会话叫醒、看过没动手的那一轮补的一行动态（`note`，灰字、不推送）："看过「会话名」，不打算行动"。
+  /// 对话里最后一条就是上一行这样的动态（`after`）就并进去，看过几个会话写成"看过 N 个会话"。返回这一行与它看过的会话。
+  public func noteCueGlance(_ sessionIDs: [String], after previous: CueGlance?) throws -> CueGlance {
     try write {
-      let wrote = try db.first("SELECT 1 FROM cueMessages WHERE createdAt >= ? LIMIT 1", [startedAt]) { _ in true } ?? false
-      guard !wrote else { return nil }
       let last = try select(CueMessage.self, orderBy: "createdAt DESC, rowid DESC", limit: 1).first
       let merging = previous.flatMap { $0.row == last?.id ? $0 : nil }
       var sessions = merging?.sessions ?? []

@@ -384,6 +384,7 @@ struct CueEvalTests {
                 Check("留给了他（leave 成了）", eval.calls("task", "leave").contains { !$0.call.failed }),
                 Check("会话行显示待回复", PiShown(session, cue: duty, at: .always()).label == "待回复"),
                 Check("没发等你", try await eval.said().allSatisfy { $0.choices == nil }),
+                Check("留给他了就不补「不打算行动」", try await eval.said().allSatisfy { !$0.text.contains("不打算行动") }),
             ]
         }
     }

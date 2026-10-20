@@ -226,6 +226,9 @@ extension PiChatMessage {
         case .command, .read, .search, .other, .said: false
         }
       }
+
+      /// 只是看了看的一步（读、搜、跑命令）；其余都算动过手（Cue 留给你回、记一笔也是）。
+      public var looks: Bool { self == .read || self == .search || self == .command }
     }
 
     public struct Item: Codable, Equatable, Sendable {
