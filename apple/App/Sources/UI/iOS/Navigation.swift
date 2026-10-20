@@ -57,7 +57,6 @@ final class Navigation {
         didSet {
             guard root != oldValue else { return }
             previousRoot = oldValue
-            if root != .cue, root.home == root { lastPlace = root }
         }
     }
     /// 根页上推入的页（打开的卡片纸页、会话页……）。
@@ -70,8 +69,6 @@ final class Navigation {
             root = home
         }
     }
-    /// 上次去的三页之一（任务、会话、项目）：Cue 页底部那颗圆钮画它的图标。
-    private(set) var lastPlace: Route = .tasks
     /// 换到当前去处之前的那一个：新去处的底部那一排从它的样子长成自己的（`Dock.Arrival`）；打开 App 时没有。
     private(set) var previousRoot: Route?
     /// 每次请"对 Cue 说"拿到焦点（⌘⇧N、随手记小组件）加一：Cue 页的输入框看它变了就聚焦。

@@ -15,7 +15,7 @@ import type {
 	ExtensionAPI, ExtensionCommandContext, ExtensionContext, ExtensionUIContext, ExtensionUIDialogOptions, SessionEntry,
 } from "@earendil-works/pi-coding-agent";
 
-const EXTENSION_VERSION = 34;
+const EXTENSION_VERSION = 36;
 const PROTOCOL_VERSION = 16;
 
 /** 本文件在磁盘上的位置（Pi 经 jiti 载入，按 CommonJS 给出 `__filename`）：CuePad 升级时（`AgentIntegration.install`）把它原子地换成新版本，
@@ -480,6 +480,8 @@ export default function (pi: ExtensionAPI) {
 			return;
 		}
 		if (ctx.mode !== "tui" && ctx.mode !== "rpc") return;
+		// Pi 在 RPC 的 new_session 上连发两次 session_start（实测 1.3.0）：先收掉前一个，同一会话只留一份 socket 与事件处理
+		live?.close("new");
 		live = serve(ctx, launchToken);
 		launchToken = null;
 	});
@@ -994,14 +996,26 @@ export default function (pi: ExtensionAPI) {
 		// ---- 生命周期 ----
 		function start() {
 			ensureSecureDirectory(socketDirectory);
-			const file = path.join(socketDirectory, `${ctx.sessionManager.getSessionId()}.${process.pid}.sock`);
+			const name = path.join(socketDirectory, `${ctx.sessionManager.getSessionId()}.${process.pid}`);
+			const file = `${name}.sock`;
+			const pending = `${name}.tmp`; // 比 file 短，file 不超限它就不超
 			if (Buffer.byteLength(file) >= SUN_PATH_LIMIT) throw new Error(`socket path too long: ${file}`);
 			fs.rmSync(file, { force: true });
-			server = net.createServer((socket) => void onConnection(socket));
-			server.on("error", () => {});
-			// chmod 既收紧权限，也会产生 FSEvents 能看到的属性变更（仅 bind 的 socket 创建事件不会被报告）
-			server.listen(file, () => fs.chmodSync(file, 0o600));
-			removeSocket = () => fs.rmSync(file, { force: true });
+			fs.rmSync(pending, { force: true });
+			const own = net.createServer((socket) => void onConnection(socket));
+			own.on("error", () => {});
+			server = own;
+			// 在临时名上 listen、收紧成 0600，再改名进来：CuePad 盯着目录（kqueue），名字一出现就连，这时它已在 listen、权限已收紧。
+			// listen 好之前已经收掉的（stop）不再改名：同一路径上可能已是接替它的那个
+			own.listen(pending, () => {
+				if (server !== own) return;
+				fs.chmodSync(pending, 0o600);
+				fs.renameSync(pending, file);
+			});
+			removeSocket = () => {
+				fs.rmSync(file, { force: true });
+				fs.rmSync(pending, { force: true });
+			};
 			process.on("exit", removeSocket);
 		}
 
@@ -1012,6 +1026,7 @@ export default function (pi: ExtensionAPI) {
 			}
 			clients.clear();
 			server?.close();
+			server = undefined;
 			if (removeSocket) {
 				process.off("exit", removeSocket);
 				removeSocket();
