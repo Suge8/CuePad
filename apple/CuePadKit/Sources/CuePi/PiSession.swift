@@ -218,7 +218,7 @@ extension PiBridgeError: LocalizedError {
         case .unsupported: "这个 Agent 会话不支持这样操作"
         case .notEnded: "会话没有按时结束，可能还在等你在终端里处理"
         case .sessionEnded: "发送途中 Agent 会话结束了"
-        case .ackTimeout: "Agent 没有及时确认收到，请确认会话仍在运行"
+        case .ackTimeout: "Agent 没有及时确认：会话可能没在运行，或没接下这句（没登录、没有模型），到会话里看看"
         case .rejected("no_prompt"), .rejected("stale_prompt"): "这个问题已经答过了，或 Agent 已经不在等这个问题"
         case .rejected("bad_answer"): "答案和问题对不上（选项不在列表里，或类型不对）"
         case .unknownModel(let agent): "这台 Mac 上的 \(agent.name) 里找不到这个模型"

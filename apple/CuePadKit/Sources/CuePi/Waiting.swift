@@ -3,7 +3,7 @@ import Foundation
 
 /// 接入里各种等待的时限，唯一的一处。
 public enum AgentTimeouts {
-    /// Pi 扩展收到命令就回 ack
+    /// Pi 扩展回 ack：多数命令受理就回，`send` 等这句落成会话里的消息（停下在跑的一轮再开也在内）
     public static let ack: Duration = .seconds(10)
     /// Claude Code 的控制请求、Codex 的 RPC 请求（含握手）
     public static let reply: Duration = .seconds(60)
