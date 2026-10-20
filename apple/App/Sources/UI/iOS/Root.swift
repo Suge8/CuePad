@@ -54,7 +54,6 @@ struct IOSRoot: View {
         .environment(workspace)
         .environment(navigation)
         .environment(workspace.services)
-        .preferredColorScheme(scheme)
         .onChange(of: sizeClass, initial: true) { navigation.compact = sizeClass != .regular }
         .task { await workspace.follow() }
         .modifier(SessionViewing(keeper: workspace.services.viewer, navigation: navigation))
@@ -71,14 +70,6 @@ struct IOSRoot: View {
         let store = workspace.services.store, workspace = workspace, navigation = navigation
         workspace.attempt {
             if let card = try await store.card(id), card.isTask { workspace.openTask(card) } else { navigation.open(link) }
-        }
-    }
-
-    private var scheme: ColorScheme? {
-        switch workspace.services.settings.theme {
-        case .system: nil
-        case .light: .light
-        case .dark: .dark
         }
     }
 }
