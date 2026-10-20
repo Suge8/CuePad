@@ -716,15 +716,15 @@ extension CueStore {
     try select(DirectoryBinding.self, orderBy: "projectID, \(DirectoryBinding.macNameSQL), hostID")
   }
 
-  /// 把这台 Mac 本机的目录绑定写成同步的目录绑定记录：有绑定的写（文件夹名变了才改；名字按 `Workspaces.shownFolder`），没了的删；别的 Mac 的不动。
-  public func publishDirectoryBindings(host: String, workspaces: Workspaces) throws {
+  /// 把这台 Mac 本机的目录绑定写成同步的目录绑定记录：有绑定的写（目录末段名变了才改），没了的删；别的 Mac 的不动。
+  public func publishDirectoryBindings(host: String) throws {
     try write {
       let local = try projectDirectories()
       let mine = Dictionary(
         uniqueKeysWithValues: try select(DirectoryBinding.self, where: "hostID = ?", [host]).map { ($0.projectID, $0) })
       let now = Date.stamp
       for (project, directory) in local {
-        let folder = workspaces.shownFolder(directory)
+        let folder = URL(filePath: directory, directoryHint: .isDirectory).lastPathComponent
         if let existing = mine[project] {
           guard existing.folder != folder else { continue }
           try db.run("UPDATE directoryBindings SET folder = ?, modifiedAt = ? WHERE id = ?", [folder, now, existing.id])

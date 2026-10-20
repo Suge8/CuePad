@@ -16,8 +16,7 @@ extension Call {
     if let hit = named.first { return hit }
     let byPrefix = live.filter { matches(ref, $0.id) }
     if byPrefix.count == 1 { return byPrefix[0] }
-    let available = live.isEmpty ? "还没有项目" : "现有项目：" + live.map(\.name).joined(separator: "、")
-    throw CLIError.notFound("找不到项目「\(ref)」。\(available)（cuepad project list）")
+    throw CLIError.notFound("找不到项目「\(ref)」。现有项目：\(live.map(\.name).joined(separator: "、"))（cuepad project list）")
   }
 
   /// 含回收站里的卡片，也含随项目进回收站的卡片。

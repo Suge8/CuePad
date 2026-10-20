@@ -66,7 +66,7 @@ def isolated_env(library, sockets=SOCKETS):
     # 锁的内部变量不带进实例：实例里的 Agent 再调 xc.sh 要照常进锁
     inherited = {k: v for k, v in os.environ.items() if k != "CUEPAD_SIM"}
     return dict(inherited, CUEPAD_LIBRARY_DIR=library, CUEPAD_BIN_DIR=f"{library}/bin", CUEPAD_PI_SOCKET_DIR=sockets,
-                CUEPAD_WORKSPACE_DIR=f"{library}/workspaces",
+                CUEPAD_WORKSPACE_DIR=f"{library}/CuePad",
                 PI_CODING_AGENT_DIR=f"{agents}/pi", CLAUDE_CONFIG_DIR=f"{agents}/claude",
                 CODEX_HOME=f"{agents}/codex", OPENCODE_CONFIG_DIR=f"{agents}/opencode")
 

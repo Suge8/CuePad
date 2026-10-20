@@ -41,11 +41,11 @@ extension DebugScene {
     private static func seedBindings(_ store: CueStore, projects: [Project]) async {
         // 只用来写绑定记录里的文件夹名，不建目录
         let workspaces = Workspaces.resolve(isolatedLibrary: nil)
-        try? await store.publishDirectoryBindings(host: "demo-mac", workspaces: workspaces)
+        try? await store.publishDirectoryBindings(host: "demo-mac")
         guard let directories = try? await store.projectDirectories() else { return }
         let others = projects.filter { $0.name != "CuePad" }.map(\.id)
         for id in others { try? await store.setDirectory(nil, for: id) }
-        try? await store.publishDirectoryBindings(host: "demo-air", workspaces: workspaces)
+        try? await store.publishDirectoryBindings(host: "demo-air")
         for id in others { if let directory = directories[id] { try? await store.setDirectory(directory, for: id) } }
     }
 

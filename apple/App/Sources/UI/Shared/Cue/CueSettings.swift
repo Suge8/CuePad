@@ -123,6 +123,8 @@ nonisolated struct CueSettings: Equatable, Sendable {
 
     /// 两端同一套写法：选在哪台运行的那一项，与允许清单那一节（开关打开的那类在所有项目里都不用问）。
     static let hostTitle = "在哪台 Mac 上运行"
+    /// 手机上还没有哪台 Mac 写下过自己（`hosts` 为空）时的那句：启用卡与 Cue 设置同一句。
+    static let noHost = "先到 Mac 上打开 CuePad，它会出现在这里"
     static let allowsTitle = "不用先问的事"
     static func allowsNote(_ name: String) -> String {
         "推送、删除这类收不回的事，\(name) 做之前会先问你；打开的那类在所有项目里直接做。在它的提问上选\u{201C}以后……不用问\u{201D}也记在这里。"

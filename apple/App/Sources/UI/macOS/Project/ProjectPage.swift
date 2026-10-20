@@ -190,7 +190,8 @@ private struct PageShape: Equatable {
 }
 
 /// 项目页最上面的一行次要字：介绍（一行，截断时悬停看全文）· 项目在这台 Mac 上的文件夹（绑着的写路径，带"在访达中显示"；
-/// 没绑的写开工时会建好的工作区，`Workspaces`）与"换文件夹…" · 几条灵感。
+/// 没绑的写开工时会建好的工作区）与"换文件夹…" · 几条灵感。路径写短（`Workspaces.shown`，悬停看全路径）：它说的是活在哪干，
+/// 一眼认得出就够，不收进菜单。
 private struct ProjectLine: View {
     let project: Project?
     /// 这台 Mac 上绑着的文件夹；没绑为 nil。
@@ -218,7 +219,7 @@ private struct ProjectLine: View {
     private func folder(_ project: Project) -> some View {
         let path = directory ?? services.workspaces.directory(for: project.name).path(percentEncoded: false)
         return HStack(spacing: 8) {
-            Label((path as NSString).abbreviatingWithTildeInPath, icon: .folder).lineLimit(1).truncationMode(.middle).textSelection(.enabled)
+            Label(services.workspaces.shown(path), icon: .folder).lineLimit(1).truncationMode(.middle).textSelection(.enabled)
                 .help(directory == nil ? "第一次在这台 Mac 上开工时建好" : path)
             if let directory {
                 Button("在访达中显示") { NSWorkspace.shared.activateFileViewerSelecting([URL(filePath: directory, directoryHint: .isDirectory)]) }
@@ -237,7 +238,7 @@ private struct EmptyProject: View {
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        EmptyIdeas(compact: compact, write: workspace.focusCapture).padding(.top, compact ? 0 : 48)
+        EmptyIdeas(compact: compact, write: workspace.focusCapture, speak: { workspace.show(.cue) }).padding(.top, compact ? 0 : 48)
     }
 }
 

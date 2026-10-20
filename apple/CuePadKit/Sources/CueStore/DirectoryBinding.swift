@@ -1,6 +1,6 @@
 import Foundation
 
-/// 项目在哪台 Mac 上绑定了代码目录（Mac 写、手机读）：每个 (项目, Mac) 一条，只有文件夹名（末段，工作区里的带上根目录名，`Workspaces.shownFolder`），
+/// 项目在哪台 Mac 上绑定了代码目录（Mac 写、手机读）：每个 (项目, Mac) 一条，只有文件夹名（末段），
 /// 完整路径只在那台 Mac 本机。
 /// 手机据此列出能开新会话的项目，并知道发给哪台 Mac。由 Mac 从本机的目录绑定推导（`CueStore.publishDirectoryBindings`）。
 /// 那台 Mac 的名字不存在这里：读出时取自它报的（`macName`）。

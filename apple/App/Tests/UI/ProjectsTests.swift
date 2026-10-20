@@ -16,15 +16,16 @@ struct ProjectsTests {
         Task { await workspace.follow() }
     }
 
-    /// 新库第一次打开：没有"还没有项目"的空页，首屏就是默认项目（名字"默认"、房子图标、灰色）；只记下（⌘⇧N 同一个）不选项目，灵感进它。
-    @Test func 新库首屏是默认项目_只记下的灵感进它() async throws {
+    /// 新库第一次打开：落在 Cue 页（没有"还没有项目"的空页），库里已有默认项目（名字"默认"、房子图标、灰色）；
+    /// 只记下（⌘⇧N 同一个）不选项目，灵感进它。
+    @Test func 新库首屏是Cue页_只记下的灵感进默认项目() async throws {
         let workspace = Workspace(services: services)
         let catalog = observing(workspace)
         defer { catalog.cancel() }
         try await eventually("目录里只有默认项目") { workspace.catalog?.projects.map(\.id) == [Project.defaultID] }
         let home = try #require(workspace.catalog?.project(Project.defaultID))
         #expect(home.name == "默认" && home.icon == "house" && home.color == "#8A8A84")
-        #expect(workspace.page == .project(Project.defaultID))
+        #expect(workspace.page == .cue)
 
         workspace.cue.draft = ComposerDraft(text: "周末读完第三章")
         await workspace.note(from: Bindable(workspace.cue).draft)?.value
@@ -32,8 +33,8 @@ struct ProjectsTests {
         #expect(workspace.notice?.text == "已记到 默认" && workspace.notice?.link == .project(Project.defaultID))
     }
 
-    @Test func 启动落在哪个项目_跟着侧栏顺序_数字键按当下顺序取_失效时回落() async throws {
-        // 保存的项目不存在：首屏是侧栏第一个有效项目（置顶的在前），并清掉失效的设置
+    @Test func 启动回到上次的项目_失效时回到Cue页_数字键按当下顺序取() async throws {
+        // 保存的项目不存在：清掉失效的设置，首屏是 Cue 页
         _ = try await store.createProject(name: "A", color: "#000000")
         let pinned = try await store.createProject(name: "B", color: "#000000")
         try await store.updateProject(pinned.id) { $0.isPinned = true }
@@ -42,19 +43,17 @@ struct ProjectsTests {
         let catalog = observing(workspace)
         defer { catalog.cancel() }
         try await eventually("目录读到三个项目，失效设置清掉") { workspace.catalog?.projects.count == 3 && services.settings.currentProject == nil }
-        #expect(workspace.page == .project(pinned.id))
+        #expect(workspace.page == .cue)
 
-        // 没打开过项目：项目顺序变了首屏跟着变、不记成"上次打开"，用户切换才记下
+        // 打开过的项目：下次打开回到它
+        services.settings.currentProject = pinned.id
         let fresh = Workspace(services: services)
-        services.settings.currentProject = nil
         let freshCatalog = observing(fresh)
         defer { freshCatalog.cancel() }
-        try await eventually("fresh.catalog?.projects.first?.id == pinned.id") { fresh.catalog?.projects.first?.id == pinned.id }
-        #expect(fresh.page == .project(pinned.id) && services.settings.currentProject == nil)
+        #expect(fresh.page == .project(pinned.id))
         let last = try await store.createProject(name: "C", color: "#000000")
         try await store.updateProject(last.id) { $0.isPinned = true }
         try await eventually("fresh.catalog?.projects.first?.id == last.id") { fresh.catalog?.projects.first?.id == last.id }
-        #expect(fresh.page == .project(last.id))
 
         // ⌘N 打开侧栏里此刻的第 N 个：顺序变了不能还绑在旧顺序上；没有那么多个就不动
         fresh.showProject(number: 1)
@@ -65,13 +64,13 @@ struct ProjectsTests {
         fresh.showProject(number: 9)
         #expect(fresh.page == .project(third))
 
-        // 当前项目进了回收站：回落到默认项目（它删不掉）
+        // 当前项目进了回收站：回到 Cue 页；默认项目删不掉
         services.settings.currentProject = third
         for project in try await store.projects() where !project.isDefault { try await store.trashProject(project.id) }
         await #expect(throws: CueStoreError.defaultProjectUndeletable) { try await store.trashProject(Project.defaultID) }
         let only = Workspace(services: services)
         await only.reconcileCurrentProject()
-        #expect(only.page == .project(Project.defaultID) && services.settings.currentProject == nil)
+        #expect(only.page == .cue && services.settings.currentProject == nil)
     }
 
     @Test func 往失效项目存东西_落到默认项目_写入时被删则纠正并提示() async throws {

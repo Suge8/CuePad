@@ -25,12 +25,12 @@ nonisolated enum ProjectFolders {
         }
     }
 
-    /// 项目的文件夹在哪，给人看的那一行（手机项目页顶栏）："在 MacBook Pro 上：CuePad/默认"，绑在几台 Mac 上各写一段；
-    /// 哪台都没绑时写开工时会建在哪（`workMac` 的工作区，`Workspaces`）；一台 Mac 都没有为空。
+    /// 项目的文件夹在哪，给人看的那一行（手机项目页顶栏）："在 MacBook Pro 上：默认"，绑在几台 Mac 上各写一段。只写文件夹名：
+    /// 同步来的绑定只有末段（完整路径不出那台 Mac）。哪台都没绑时写 `workMac` 开工时会建的那个（`Workspaces.folderName`）；一台 Mac 都没有为空。
     static func places(of project: Project, bindings: [DirectoryBinding], workMac: MacAgents?) -> [String] {
         let own = bindings.filter { $0.projectID == project.id }
         guard own.isEmpty else { return own.map { "在 \($0.macName) 上：\($0.folder)" } }
-        return workMac.map { ["在 \($0.shownName) 上：\(Workspaces.rootName)/\(Workspaces.folderName(for: project.name))"] } ?? []
+        return workMac.map { ["在 \($0.shownName) 上：\(Workspaces.folderName(for: project.name))（开工时建好）"] } ?? []
     }
 
     /// 项目操作菜单里的绑定项（`ProjectActions`）："换文件夹…"之外，绑着的每处一项解除（解除后下次开工回到工作区）；

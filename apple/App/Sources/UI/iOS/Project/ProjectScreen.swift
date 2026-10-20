@@ -66,7 +66,7 @@ struct ProjectScreen: View {
                 if data.cards.isEmpty {
                     // 上面已有任务或会话时页面不是空的：空态缩成一行，不放吉祥物与实心主按钮
                     let busy = !data.tasks.roots.isEmpty || pi?.now.isEmpty == false
-                    EmptyIdeas(compact: busy, write: newCard).padding(.bottom, busy ? 0 : 24)
+                    EmptyIdeas(compact: busy, write: newCard, speak: navigation.speakToCue).padding(.bottom, busy ? 0 : 24)
                 }
                 if !arrangement.pinned.isEmpty {
                     // 资料：长期参考的灵感，一行一条压在任务区下面

@@ -131,10 +131,10 @@ import Testing
     let site = try await store.createProject(name: "Site", color: "#222")
     try await store.setDirectory("/Users/someone/work/app", for: app.id)
     try await store.setDirectory("/Users/someone/work/site", for: site.id)
-    try await store.publishDirectoryBindings(host: "mac-b", workspaces: Workspaces(root: URL(filePath: "/Users/me/CuePad")))
+    try await store.publishDirectoryBindings(host: "mac-b")
     try await store.recordMacAgents(host: "mac-a", name: "Studio", [])
 
-    try await store.publishDirectoryBindings(host: "mac-a", workspaces: Workspaces(root: URL(filePath: "/Users/me/CuePad")))
+    try await store.publishDirectoryBindings(host: "mac-a")
     let bindings = try await store.directoryBindings().filter { $0.hostID == "mac-a" }
     #expect(Set(bindings.map(\.folder)) == ["app", "site"] && bindings.allSatisfy { $0.macName == "Studio" })
     #expect(try await store.directoryBindings().filter { $0.hostID == "mac-b" }.allSatisfy { $0.macName == MacAgents.unnamed })
@@ -142,7 +142,7 @@ import Testing
     #expect(!stored.flatMap { $0 }.contains { $0.contains("/Users/someone") })
 
     try await store.setDirectory(nil, for: site.id)
-    try await store.publishDirectoryBindings(host: "mac-a", workspaces: Workspaces(root: URL(filePath: "/Users/me/CuePad")))
+    try await store.publishDirectoryBindings(host: "mac-a")
     #expect(try await store.directoryBindings().filter { $0.hostID == "mac-a" }.map(\.projectID) == [app.id])
     #expect(try await store.directoryBindings().filter { $0.hostID == "mac-b" }.count == 2)
   }

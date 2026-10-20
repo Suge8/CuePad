@@ -172,11 +172,11 @@ struct CuePage: View {
         }
     }
 
-    /// 空态的那句：启用了就请他直接说；没启用时说启用后怎么用（说一件事，它放进默认项目里开工）。
+    /// 空态的那句：启用了就请他直接说；没启用时说启用后怎么用（说一件事，它放进默认项目里开工），启用卡只放启用那一步。
     private var greeting: String {
         guard !cue.canHear else { return "要做什么，直接在下面跟我说" }
         let home = workspace.catalog?.project(Project.defaultID)?.name ?? ""
-        return "启用后说一件想做的事，我放进「\(home)」项目里开工"
+        return "启用后说一件想做的事，我放进「\(home)」项目里开工，只在要你拿主意时找你"
     }
 
     /// 只排开铺满可见区要的那几格（`paging`）：打开时铺一屏，离最早那头不到一屏时（打开后紧接着就是）往上再铺一屏；

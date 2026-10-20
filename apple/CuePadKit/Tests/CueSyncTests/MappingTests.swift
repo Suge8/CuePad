@@ -23,7 +23,7 @@ import Testing
       context: PiContextUsage(tokens: 1_000, window: 200_000), commands: [PiSlashCommand(name: "compact", summary: "压缩", source: .known(.builtin))])
     try await store.requestDelivery("deliver me", to: SendTarget(kind: .piSession, name: "n", ref: "r"), on: "mac", card: card.id)
     try await store.setDirectory("/work/p", for: project.id)
-    try await store.publishDirectoryBindings(host: "mac", workspaces: Workspaces(root: URL(filePath: "/Users/me/CuePad")))
+    try await store.publishDirectoryBindings(host: "mac")
     try await store.writePiTranscript(PiTranscript(
       sessionID: "s1",
       messages: [
