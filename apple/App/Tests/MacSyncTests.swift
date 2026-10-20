@@ -825,7 +825,7 @@ struct MacSyncTests {
 
     /// App 更新后，开着的会话（托管的与终端里的）以旧协议连着、跑完了一轮：这期间读不到它的状态，记录停在更新前的"在跑"，
     /// 也没有这一轮的开始（更新前的版本不记）。扩展够新，歇下后自己重新载入、以新协议接回（新载入的扩展没见过这一轮，开始报空）：
-    /// 这一轮在这期间停下了，接回时照常算一次歇下，Cue 被叫醒。
+    /// 这一轮在这期间停下了，接回时照常算一次歇下，Cue 被叫醒（他不在场：那句话说在半小时前）。
     @Test(.timeLimit(.minutes(1)), arguments: [true, false])
     func 旧协议会话做完这一轮后自己重载接回_Cue被叫醒(hosted: Bool) async throws {
         let changes = rig.pi.changes()
@@ -833,7 +833,7 @@ struct MacSyncTests {
         let services: AppServices = services, store = services.store
         let file = FileManager.default.temporaryDirectory.appending(path: "mac-sync-\(UUID().uuidString).jsonl")
         FileManager.default.createFile(atPath: file.path, contents: Data())
-        let turn = Date.now.addingTimeInterval(-60)
+        let turn = Date.now.addingTimeInterval(-30 * 60)
         try await services.piStateRecorder.update(
             sessionID: "s1", state: .thinking, title: "发版", directory: "/work/app", times: PiTimes(stateSince: turn, busySince: turn), hosted: hosted)
         let mark = try await store.lastWrite()
@@ -850,7 +850,7 @@ struct MacSyncTests {
 
         _ = try await eventually(store, { try $0.allPiSessionStates().first?.state }, until: { $0 == .known(.settled) })
         let woke = try await store.cueChanges(after: CueMarks(mark))
-        #expect(woke.map { "\($0.kind)\($0.interrupted ? "（被打断）" : "") \($0.session?.sessionID ?? "")" } == ["settled s1"])
+        #expect(woke.due.map { "\($0.kind)\($0.interrupted ? "（被打断）" : "") \($0.session?.sessionID ?? "")" } == ["settled s1"])
     }
 
     /// 后台托管的会话进程没了（App 退出、闲置退出）记录仍歇着、发话会唤醒它：它报过的斜杠命令留着，
