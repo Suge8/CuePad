@@ -93,7 +93,8 @@ struct RouteView: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.statusBarBottom) private var statusBar
     @Environment(\.homePage) private var homePage
-    /// 这一页的上沿（全局坐标）：状态栏那一条的渐变按它摆到屏幕顶上（`StatusBarFade`）。
+    /// 这一页的上沿（全局坐标）：状态栏那一条的渐变按它摆到屏幕顶上（`StatusBarFade`）。页的上沿不一定在屏幕顶，
+    /// 也不能靠 `ignoresSafeArea` 伸上去：根页让出的顶栏那一排也在安全区里，伸上去落在那一排下面。
     @State private var top: CGFloat = 0
 
     var body: some View {
@@ -144,12 +145,12 @@ struct RouteView: View {
     }
 }
 
-/// 状态栏那一条（屏幕顶到状态栏下沿）的页底色渐变：顶上近乎实、到状态栏下沿淡完，时间与电池压在内容上也读得清；
+/// 状态栏那一条（屏幕顶到状态栏下沿）的页底色渐变：时间那一段实、到状态栏下沿淡完，时间与电池不压在字上；
 /// 渐变随页走（推入、换去处时跟着页挪），颜色就是这一页的底色。不接点按、读屏跳过。
 private struct StatusBarFade: View {
     let color: Color
-    /// 几档：时间与电池那一段（上半截）近乎实，往下缓缓淡完，没有一条看得见的边；灵动岛以下的内容大半透出来。
-    private static let stops: [(alpha: Double, at: CGFloat)] = [(0.94, 0), (0.9, 0.45), (0.55, 0.72), (0.18, 0.9), (0, 1)]
+    /// 几档：时间、信号与电池那一段（上半截多一点）实，字压不到它们下面；往下缓缓淡完，没有一条看得见的边，灵动岛以下的内容透出来。
+    private static let stops: [(alpha: Double, at: CGFloat)] = [(1, 0), (1, 0.55), (0.75, 0.7), (0.35, 0.85), (0, 1)]
 
     var body: some View {
         LinearGradient(stops: Self.stops.map { .init(color: color.opacity($0.alpha), location: $0.at) }, startPoint: .top, endPoint: .bottom)
