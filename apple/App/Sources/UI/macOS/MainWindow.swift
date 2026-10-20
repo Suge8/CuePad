@@ -351,18 +351,27 @@ extension Workspace {
         guard let projects = catalog?.projects, projects.indices.contains(number - 1) else { return }
         show(.project(projects[number - 1].id))
     }
+
+    /// ⌘N（"文件 › 记一条灵感"）：在当前项目里新记一条灵感并打开它。
+    func newCard() {
+        let project = currentProject
+        attempt { self.open(try await self.createCard(in: project)) }
+    }
+
+    /// ⌥⌘N（"文件 › 新会话"）：去会话页、从那一页的 + 弹出新会话的表单（表单只有这一个出处）。
+    func newSession() {
+        show(.agent)
+        showsNewSession = true
+    }
 }
 
-/// 窗口级快捷键：⌘1–9 切项目、⌘N 新建卡片。⌘K 搜索、⌘⇧T 任务页、⌃⌘S 侧栏与设置（⌘,）在主菜单，Esc 关浮层在 `PanelHost`。
+/// 窗口级快捷键：⌘1–9 切项目。⌘N 记一条灵感、⌥⌘N 新会话、⌘K 搜索、⌘⇧T 任务页、⌃⌘S 侧栏与设置（⌘,）在主菜单，Esc 关浮层在 `PanelHost`。
 /// ⌘1–9 的唯一处理者在这里：工具栏的项目切换菜单收起时不响应其菜单项的快捷键（实测），菜单里的 ⌘ 只是提示。
 private struct WorkspaceShortcuts: View {
     let workspace: Workspace
 
     var body: some View {
         ZStack {
-            if workspace.isLibraryReady {
-                Button("记一条灵感") { newCard() }.keyboardShortcut("n")
-            }
             ForEach(Array(1...9).prefix(workspace.catalog?.projects.count ?? 0), id: \.self) { number in
                 Button("项目 \(number)") { workspace.showProject(number: number) }
                     .keyboardShortcut(KeyEquivalent(Character("\(number)")))
@@ -373,12 +382,6 @@ private struct WorkspaceShortcuts: View {
         .accessibilityHidden(true)
     }
 
-    private func newCard() {
-        let project = workspace.currentProject
-        workspace.attempt {
-            workspace.open(try await workspace.createCard(in: project))
-        }
-    }
 }
 
 /// 提示里的动作（撤销、归档）：点了收起提示并做那件事；撤销另有 ⌘Z。

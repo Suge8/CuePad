@@ -1,7 +1,8 @@
 #if os(macOS)
 import AppKit
 
-/// 无 nib 的标准主菜单：⌘Q 退出、⌘W 关闭（即隐藏）、编辑快捷键、搜索与侧栏的开关、去任务页（"显示"），以及会话回复框的快捷键（"回复"，`ReplyShortcut`）。
+/// 无 nib 的标准主菜单：⌘Q 退出、⌘W 关闭（即隐藏）、新建（"文件"：⌘N 记一条灵感、⌥⌘N 新会话）、编辑快捷键、搜索与侧栏的开关、去任务页（"显示"），
+/// 以及会话回复框的快捷键（"回复"，`ReplyShortcut`）。⌘N 已是记一条灵感，新会话用 ⌥⌘N（Mac 上"另一种新建"的惯例）。
 enum MainMenu {
     static func install() {
         let main = build()
@@ -23,6 +24,10 @@ enum MainMenu {
             .item("隐藏 CuePad", #selector(NSApplication.hide(_:)), "h"),
             .separator,
             .item("退出 CuePad", #selector(NSApplication.terminate(_:)), "q"),
+        ]))
+        main.addItem(submenu(title: "文件", items: [
+            .item("记一条灵感", #selector(AppDelegate.newCard(_:)), "n"),
+            .item("新会话…", #selector(AppDelegate.newSession(_:)), "n", [.option, .command]),
         ]))
         main.addItem(submenu(title: "编辑", items: [
             .item("撤销", Selector(("undo:")), "z"),

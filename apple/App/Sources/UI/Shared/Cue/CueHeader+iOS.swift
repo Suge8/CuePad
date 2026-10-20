@@ -2,7 +2,7 @@
 import CueStore
 import SwiftUI
 
-/// 手机与 iPad 的 Cue 页头：一块实底玻璃，平时是左右各离屏边 21 点、56 点高的一条——头像、名字、此刻在做什么、"等你 N"、展开的箭头；
+/// 手机与 iPad 的 Cue 页头：一块实底玻璃，平时是左右各离屏边 21 点、56 点高的一条——头像、名字、"在管 N · 等你 M"（`CueStatusLine` 的 tally）、展开的箭头；
 /// 点它从顶部长出面板（同一块玻璃长高）：手机上 Cue 的总面板（`CueNowPanel`：大脑、上下文、等你、在做、
 /// 全部会话、额度、记忆、设置），手机上 Cue 的这些只有这一个入口。
 /// 与 Mac 侧栏的 Cue 名片、菜单栏面板是同一套件、同一份数据（`CueWatch`、`Workspace.liveWork`）。
@@ -82,13 +82,11 @@ struct CueHeader: View {
                 .padding(.leading, (Self.height - CueAvatar.Size.header.box) / 2)
             VStack(alignment: .leading, spacing: 2) {
                 Text(cue.name).font(.title3.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(1)
-                CueStatusLine(fallback: cue.lastSaid, font: .subheadline).lineLimit(1)
+                CueStatusLine(tally: true, font: .subheadline).lineLimit(1)
             }
             // 页头是定高的一条：字号跟着动态字体放大到这一档为止，再大第二行就被裁掉
             .dynamicTypeSize(...DynamicTypeSize.xxLarge)
             Spacer(minLength: 6)
-            // 展开时等你那一行在面板里，页头不再重复
-            WaitingCount(count: expanded ? 0 : cue.waiting).font(.subheadline)
             Image(.expand).font(.footnote.weight(.semibold)).foregroundStyle(palette.ink3)
                 .rotationEffect(.degrees(expanded ? 180 : 0))
                 .padding(.trailing, 18)
@@ -96,8 +94,6 @@ struct CueHeader: View {
         }
         .frame(height: Self.height)
         .contentShape(.rect)
-        .animation(Motion.quick, value: cue.waiting)
-        .animation(Motion.quick, value: cue.lastSaid)
         .animation(Motion.quick, value: cue.presence)
         .accessibilityElement(children: .combine)
     }

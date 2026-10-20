@@ -96,9 +96,10 @@ struct TasksScreen: View {
         column = !board.waiting.isEmpty ? .waiting : !board.managing.isEmpty ? .managing : .todo
     }
 
+    /// 先滑到待办、停稳了再浮出添加那一行：滑动途中插进来的输入框接不住焦点（实测会空着不聚焦）。
     private func add() {
-        withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { column = .todo }
-        adding = true
+        guard column != .todo else { return adding = true }
+        withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { column = .todo } completion: { adding = true }
     }
 }
 

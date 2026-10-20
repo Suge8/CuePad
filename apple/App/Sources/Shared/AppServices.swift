@@ -107,8 +107,13 @@ final class AppServices {
     /// 进入后台前要落盘的界面状态（如编辑中的草稿）；见 `prepareForBackground()`。
     @ObservationIgnored var backgroundFlushes: [UUID: @MainActor () async -> Void] = [:]
 
+    /// 系统通知（App 代理持有的那一个，`start()` 前接上）；测试没有，不发真实通知。
+    @ObservationIgnored weak var alerts: AlertCenter?
+
     #if os(iOS)
     @ObservationIgnored let pasteboard: UIPasteboard
+    /// 锁屏与灵动岛上的那一个实时活动（`startSnapshots` 跟着库开、改、结束它）。
+    @ObservationIgnored let cueActivity = CueLiveActivity()
     #endif
 
     #if os(macOS)
@@ -120,8 +125,6 @@ final class AppServices {
     let updates: UpdateService
     /// 主窗口（显隐规则在它身上）；全局快捷键经它。测试没有窗口。
     @ObservationIgnored var windowShell: MainShellWindow?
-    /// 系统通知（App 代理持有的那一个，`start()` 前接上）；测试没有，不发真实通知。
-    @ObservationIgnored weak var alerts: AlertCenter?
 
     @ObservationIgnored let paths: AgentPaths
     @ObservationIgnored let terminal: PiTerminalJumper

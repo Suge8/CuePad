@@ -118,6 +118,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         workspace?.searching = false
         workspace?.show(.tasks)
     }
+    @objc func newCard(_ sender: Any?) { workspace?.newCard() }
+    @objc func newSession(_ sender: Any?) { workspace?.newSession() }
     /// 不叫 `toggleSidebar(_:)`：AppKit 的分栏控制器自己响应那个动作，在响应链上先接走，带着分栏动画开合。
     @objc func toggleCueSidebar(_ sender: Any?) { workspace?.pages.toggleSidebar() }
 
@@ -126,7 +128,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         case #selector(checkForUpdates(_:)): services?.updates.canCheckForUpdates ?? false
         case #selector(installUpdateNow(_:)): showsUpdateWait(item)
         // 资料库读不出来时：搜索结果能打开卡片、任务页能增改任务，都是写入入口
-        case #selector(toggleSearch(_:)), #selector(showTasks(_:)): workspace?.isLibraryReady == true && NSApp.mainWindow === services?.windowShell
+        case #selector(toggleSearch(_:)), #selector(showTasks(_:)), #selector(newCard(_:)), #selector(newSession(_:)):
+            workspace?.isLibraryReady == true && NSApp.mainWindow === services?.windowShell
         case #selector(toggleCueSidebar(_:)): NSApp.mainWindow === services?.windowShell
         default: true
         }

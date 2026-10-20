@@ -43,6 +43,9 @@ public final class PiBridge {
     /// 在线会话的快照（读了每一格，任何一格变化都会通知读它的视图）：非界面代码与测试用，视图别读。
     public var sessions: [PiSession] { slots.map(\.session) }
 
+    /// 在线会话的文件，会话上线、下线（或换了文件）时给新的一份：历史索引另盯它们（`PiHistoryIndexer.events(following:)`）。
+    public var sessionFiles: Observations<Set<URL>, Never> { Observations { Set(self.slots.compactMap(\.session.sessionFile)) } }
+
     /// 这个 Pi 会话（`sessionID`）在线的那个进程；同一会话开在两个进程里时取先出现的。只随这一个会话的变化通知。
     public func session(sessionID: String) -> PiSession? { slot(sessionID: sessionID)?.session }
 

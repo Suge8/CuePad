@@ -114,8 +114,8 @@ final class ClaudeTestbed {
     /// 在私有 tmux 里开一个终端里的 Claude Code（权限模式默认 default：要用工具就问）。
     func terminal(_ arguments: [String] = [], mode: String = "default") async throws -> ClaudeTerminal {
         if reading == nil, let indexer = PiHistoryIndexer(agent: .claudeCode, paths: paths, files: files, start: { _ in nil }) {
-            reading = Task { [runtime] in
-                for await case .updated(let update) in indexer.events() { runtime.read(update) }
+            reading = Task { [runtime, bridge] in
+                for await case .updated(let update) in indexer.events(following: bridge.sessionFiles) { runtime.read(update) }
             }
         }
         let terminal = try await ClaudeTerminal(testbed: self, arguments: ["--permission-mode", mode] + arguments)

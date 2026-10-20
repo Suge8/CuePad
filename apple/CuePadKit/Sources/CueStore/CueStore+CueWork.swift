@@ -101,7 +101,7 @@ public struct CueChange: Equatable, Sendable {
   public var leaf: Card?
   /// 变化所在的会话；任务完成这类不在会话上的变化为 nil。
   public var session: PiSessionState?
-  /// 这一轮是他直接在会话里说的（`CueStore.turnOpener`，由事实推出，不另存）：Cue 说的、扩展投进来的机器消息开的都不算。
+  /// 这一轮是他直接在会话里说的（`CueStore.turnOpener`，由事实推出，不另存）：Cue 说的不算；扩展投进来的机器消息开的轮跟着它之前那句。
   public var byUser: Bool
   /// 事件发生的时刻（给 Cue 看）；分新旧看 `seq`
   public var at: Date
@@ -405,19 +405,17 @@ extension CueStore {
     return try turnOpener(sessionID) == .user
   }
 
-  /// 会话最近（或正在跑）的这一轮是谁开的，唯一的一处（"他说的"标记与他那一轮里 Cue 不插嘴都只认它）：
-  /// 取会话里最近一条你一方或机器的消息——机器消息（扩展投进来的，如 FireCode 交回结果）既不算他的也不算 Cue 的；
-  /// 你一方的按来源分（`PiChatMessage.saidByCue`）。会话里还没有这两种消息为 nil。
+  /// 会话最近（或正在跑）的这一轮是谁开的，唯一的一处（"他说的"标记、他那一轮里 Cue 不插嘴、停下归谁接手都只认它）：
+  /// 取会话里最近一句你一方的话，按来源分（`PiChatMessage.saidByCue`）。扩展投进来的机器消息（FireCode 交回子代理结果、审查结论）
+  /// 开的轮不另算：它是那句话派出去的活交回来了，同等子代理只歇下一次一样，从那句起到真正歇下是一件事。会话里还没有你一方的话为 nil。
   private func turnOpener(_ sessionID: String) throws -> TurnOpener? {
     guard let last = try select(
-      PiChatMessage.self, where: "sessionID = ? AND role IN ('\(PiChatRole.user.rawValue)', '\(PiChatRole.machine.rawValue)')", [sessionID],
-      orderBy: "seq DESC, id DESC", limit: 1
+      PiChatMessage.self, where: "sessionID = ? AND role = '\(PiChatRole.user.rawValue)'", [sessionID], orderBy: "seq DESC, id DESC", limit: 1
     ).first else { return nil }
-    guard last.role == .known(.user) else { return .machine }
     return last.saidByCue(try cueSentDeliveries(among: [last.deliveryID].compactMap(\.self))) ? .cue : .user
   }
 
-  private enum TurnOpener { case user, cue, machine }
+  private enum TurnOpener { case user, cue }
 
   /// 这些叶子里正在开新会话的：带着叶子的开新会话请求还在路上，或成功了、会话记录还没到（还没认领）。
   /// 只认会被认领的那条（同 `claimLaunchedCards`）：它是带着这张卡的最近一次交给；之后又交给了别处，或亲手绑定、解绑作废了它（`forgetLaunches`），就不算。
@@ -738,7 +736,7 @@ extension CueStore {
   /// （这些从 `marks.sessions` 之后算；还没开成会话的事也报），叶子或任务完成（从 `marks.tasks` 之后算），
   /// 等子代理停住（停住的时刻在 `marks.stalls` 之后、不晚于 `now`；序号是会话记录的）。等子代理本身不是变化：子代理的结果交回、会话为它跑完那一轮歇下才报。
   /// 会话里用户说的话不另报：他那一轮歇下时变化标着这一轮是他说的（`CueChange.byUser`）。
-  /// 会话停着（`CueChange.isStop`）归谁接手只在这里定（`hisStop`）：Cue 开的这一轮归 Cue；他或机器开的、停下时他在场（`SessionPresence`）归他，
+  /// 会话停着（`CueChange.isStop`）归谁接手只在这里定（`hisStop`）：Cue 开的这一轮归 Cue；他开的（机器消息开的跟着它之前那句，见 `turnOpener`）、停下时他在场（`SessionPresence`）归他，
   /// 不报给 Cue、记进 `held`。管理器把上次的 `held` 交回来：归他的停下等他离开，会话还停在那一次、也没留给他（`CueLeft`）就作为变化报给 Cue。
   public func cueChanges(after marks: CueMarks, held: [String: Date] = [:], at now: Date = .now) throws -> CueChanges {
     var held = held

@@ -64,6 +64,7 @@ struct WidgetDataTests {
         ("cuepad://project/6f0c1a7e-0000-4000-8000-000000000002", DeepLink.project(UUID(uuidString: "6f0c1a7e-0000-4000-8000-000000000002")!)),
         ("cuepad://card/6f0c1a7e-0000-4000-8000-000000000003", DeepLink.card(UUID(uuidString: "6f0c1a7e-0000-4000-8000-000000000003")!)),
         ("cuepad://cue", DeepLink.cue),
+        ("cuepad://session/6f0c1a7e-0000-4000-8000-000000000004", DeepLink.session(UUID(uuidString: "6f0c1a7e-0000-4000-8000-000000000004")!)),
     ])
     func 深链接解析与生成互逆(text: String, link: DeepLink) {
         #expect(DeepLink(url: URL(string: text)!) == link)
