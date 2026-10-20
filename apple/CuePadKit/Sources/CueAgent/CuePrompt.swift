@@ -1,7 +1,7 @@
 import CueStore
 import Foundation
 
-/// Cue 一个班次的系统提示：判断与做法加记忆视图，班次内不变（提示缓存的前缀因此稳定）；原型（`CueFresh`）下只带一直记着的，其余在日志里。分工：工具怎么用、参数与限制只在工具说明里
+/// Cue 一个班次的系统提示：判断与做法加记忆视图，班次内不变（提示缓存的前缀因此稳定）。分工：工具怎么用、参数与限制只在工具说明里
 /// （`CueTools.definitions`），此刻的事实每一轮由信封（`CueEnvelope`）带来，这里只写什么时候做什么。
 public enum CuePrompt {
   /// `agents` 是这台 Mac 上开会话时能用的 Agent 与模型（同步表 macAgents 里这台的那条）；空时不列，开工不指定、用默认。
@@ -72,38 +72,19 @@ public enum CuePrompt {
     - 要他看的东西让会话发到手机，不叫他去电脑上找。
     - 用他说话的语言，默认中文；不说"上下文""token""会话 id"这类词。
 
-    \(CueFresh.on ? freshNotes : notes)
+    # 记东西
+    - 他说的偏好、规矩、纠正，马上 memory note 并 pin，照他的原话逐条记，不概括丢项。你在工作里学到、以后用得上的也 note（不 pin）。任务的进展不记，任务里查得到。
+    - 他说某类要先问的事以后不用问，或又要先问了：memory allow。他要你对某类事先问他（如"调研方案先给我看"）：照原话 note 并 pin，碰到这类事时用 ask rule、rule 写这条原话。
+    - 他提到以前的事，先 memory recall。约好的时间点用 memory remind，到点时 tell 带 urgent。
 
     # 特别的醒来
     - 刚启用：task peek，一两句说你看到的（几件在做、几件在等他、哪些出错）。在做的你已经在管；没开工的不主动开，值得做的点出来。
     - 空闲巡视（没有在做的事）：可以 peek 看有没有做了一半的、出错没人管的、明显该做的下一步；值得的最多 3 条写进一条 tell（每条一句，说你打算怎么做）；没有就不写。
     \(CueFresh.on ? freshInput : renewInput)他发的图写成 ![](cuepad://img/<hash>)、图随话附上。他交代的事一次办完；处理变化时，每件事只做此刻最有用的一个动作。
 
-    \(CueFresh.on ? freshMemory(memory) : "# 记忆\n" + memory.text)
+    # 记忆
+    \(memory.text)
     """
-  }
-
-  private static let notes = """
-    # 记东西
-    - 他说的偏好、规矩、纠正，马上 memory note 并 pin，照他的原话逐条记，不概括丢项。你在工作里学到、以后用得上的也 note（不 pin）。任务的进展不记，任务里查得到。
-    - 他说某类要先问的事以后不用问，或又要先问了：memory allow。他要你对某类事先问他（如"调研方案先给我看"）：照原话 note 并 pin，碰到这类事时用 ask rule、rule 写这条原话。
-    - 他提到以前的事，先 memory recall。约好的时间点用 memory remind，到点时 tell 带 urgent。
-    """
-
-  /// 原型（`CueFresh`）：经过自动进日志（`CueLog`），记下的只是要单独留住的。
-  private static let freshNotes = """
-    # 记东西
-    - 你看到和做过的一切（他的话、你的回复与动态、每一轮的经过）都自动进你的日志，不用为了记住经过去 note。
-    - 他说的偏好、规矩、纠正，马上 memory note 并 pin，照他的原话逐条记，不概括丢项：一直记着的在下面，每次都在你眼前。你在工作里学到、以后用得上的结论 note（不 pin），它进日志。
-    - 他说某类要先问的事以后不用问，或又要先问了：memory allow。他要你对某类事先问他（如"调研方案先给我看"）：照原话 note 并 pin，碰到这类事时用 ask rule、rule 写这条原话。
-    - 他提到以前的事：先看日志的视图；视图里粗的 #a-b 用 memory zoom 一层层展开，找原话用 memory recall。约好的时间点用 memory remind，到点时 tell 带 urgent。
-    - 请你整理日志时（醒来的话以"整理日志"开头）：只照请求逐块 memory merge，不做别的、不对他说话。
-    """
-
-  /// 原型（`CueFresh`）：系统提示里只有一直记着的，其余在日志里——系统提示跨换新、跨班次都不变，缓存一直命中。
-  private static func freshMemory(_ memory: CueMemoryView) -> String {
-    let pinned = memory.pinned.map { "记忆 #\($0.index) \($0.line.text)" }
-    return "# 一直记着\n" + (pinned.isEmpty ? "还没有。" : pinned.joined(separator: "\n"))
   }
 
   private static let renewInput = """
@@ -113,13 +94,12 @@ public enum CuePrompt {
     以 <cue> 块开头，是此刻从库里现读的事实，以它为准；他说的话（若有）在块后面。
     """
 
-  /// 原型（`CueFresh`）：换新时开新会话，用日志的视图接上（`CueLog`）。
+  /// 原型（`CueFresh`）：换新时开新会话，用对话视图接上（`CueView`）。
   private static let freshInput = """
 
     # 每一轮的输入
-    以 <cue> 块开头，是此刻从库里现读的事实，以它为准；他说的话（若有）在块后面。上下文会不时换新：换新后的第一条输入在 <cue> 前面多一个 <log> 块，\
-    是你日志的视图——他的话、你的回复与动态、每一轮的经过与你记下的事，从早到晚，最近的原样、越早越粗。它就是你此前的经过：从那里接着做，做过的不重做，答过的不再答；\
-    要细节就 memory zoom 展开、recall 全文找、task peek 看，不凭印象猜。
+    以 <cue> 块开头，是此刻从库里现读的事实，以它为准；他说的话（若有）在块后面。上下文会不时换新：换新后的第一条输入在 <cue> 前面多一个 <view> 块，\
+    是你和他的对话与你此前每一轮的经过——从那里接着做，做过的不重做，答过的不再答；它只列最近的，要更早的或某件事的细节用 memory recall 查、task peek 看。
     """
 
   /// 要先问的几类事（`CueAsk`，括号里照抄进 tell 的 ask）：系统提示与 tell 的说明共用这一种写法。

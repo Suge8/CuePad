@@ -19,8 +19,6 @@ struct CueRound: Identifiable {
     var failure: String?
     /// 做完时上下文用了多少 token
     var context: Int?
-    /// 原型（`CueFresh`）：Cue 自己醒来的这一轮因何醒来的一句（`CueEnvelope.woke`），随经过写进对话、进日志
-    var woke: String?
     /// 这一轮的经过在对话里的那一行（`CueStore.recordCueRound`）；还没调过工具时没有
     var row: UUID?
 
@@ -38,7 +36,6 @@ struct CueRound: Identifiable {
         let items = calls.compactMap(\.item)
         guard !items.isEmpty else { return nil }
         var tools = PiChatMessage.Tools()
-        tools.woke = woke
         for item in items { tools.record(item) }
         return tools
     }

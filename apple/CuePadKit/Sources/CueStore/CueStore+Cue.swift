@@ -365,31 +365,6 @@ extension CueStore {
     }
   }
 
-  /// 原型（`CueFresh`）：日志要的全部（`CueLogSource`）。对话按 (createdAt, rowid)，记忆按序号。
-  public func cueLogSource() throws -> CueLogSource {
-    let summaries = try db.query("SELECT lo, hi, text, lineIDs FROM cueSummaries ORDER BY lo, hi") { row in
-      CueStoredSummary(lo: Int(row.int(0)), hi: Int(row.int(1)), text: row.text(2), fingerprint: row.text(3))
-    }
-    return CueLogSource(
-      messages: try select(CueMessage.self, orderBy: "createdAt, rowid"), lines: try select(CueMemoryLine.self, orderBy: Self.lineOrder),
-      summaries: summaries)
-  }
-
-  /// 原型（`CueFresh`）：写日志里一块的摘要（覆盖旧的）。区间与指纹由日志算好、校验过（`CueLog.merge`）；与记忆的摘要同一张缓存表，
-  /// 两种做法的指纹互不相认，切换做法时对方的摘要读出即作废。
-  public func setCueLogSummary(lo: Int, hi: Int, text: String, fingerprint: String) throws {
-    let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !text.isEmpty else { throw CueStoreError.blankTaskContent }
-    guard CueMemoryLine.fits(text) else { throw CueStoreError.memoryLineTooLong(CueMemoryLine.maxBytes) }
-    try write {
-      try db.run(
-        """
-        INSERT INTO cueSummaries (lo, hi, text, lineIDs, createdAt) VALUES (?, ?, ?, ?, ?)
-        ON CONFLICT(lo, hi) DO UPDATE SET text = excluded.text, lineIDs = excluded.lineIDs, createdAt = excluded.createdAt
-        """, [lo, hi, text, fingerprint, Date.stamp])
-    }
-  }
-
   private static func fingerprint(_ lines: ArraySlice<CueMemoryLine>) -> String {
     SHA256.hash(data: Data(lines.map { $0.id.uuidString + ($0.deletedAt == nil ? "" : "-") }.joined(separator: ",").utf8)).prefix(12).hex
   }

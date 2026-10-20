@@ -82,7 +82,7 @@ public struct CueTools: Sendable {
       ],
       [
         "name": "memory",
-        "description": CueFresh.on ? freshMemory : """
+        "description": """
           你的长期记忆，一行一条（≤\(CueMemoryLine.maxBytes) 字节），序号就是身份。note{text,pin?} 记一条，pin 一直记着（不 pin 的旧行会被并成摘要）；recall{query} 只读：全文找记忆、对话、任务，与你管过的会话里 Agent 的回复原话（带会话名与短 id，可接着 peek）；
           forget{line}；pin{line,pinned}；remind{text,at} 到点叫醒你（ISO 8601 或 yyyy-MM-dd HH:mm）；merge{lo,hi,text} 把待合并的块写成一行摘要；
           renew{handoff} 写交接备忘，然后换新上下文：只写你在管的事各自做到哪、下一步，和他之间没了结的事，至多 \(handoffLimit) 字；
@@ -90,7 +90,7 @@ public struct CueTools: Sendable {
           """,
         "inputSchema": schema(
           [
-            "action": ["type": "string", "enum": CueFresh.on ? memoryActions.filter { $0 != "renew" } + ["zoom"] : memoryActions],
+            "action": ["type": "string", "enum": ["note", "recall", "forget", "pin", "remind", "merge", "renew", "allow"]],
             "text": string, "pin": ["type": "boolean"], "query": string, "line": ["type": ["string", "integer"]],
             "pinned": ["type": "boolean"], "at": string, "lo": ["type": "integer"], "hi": ["type": "integer"], "handoff": string,
             "ask": ["type": "string", "enum": CueAsk.allCases.filter { $0.always != nil }.map(\.rawValue)], "project": string,
@@ -99,20 +99,6 @@ public struct CueTools: Sendable {
         "annotations": ["readOnlyHint": false, "destructiveHint": false, "idempotentHint": false, "openWorldHint": false],
       ],
     ]
-  }
-
-  private static let memoryActions = ["note", "recall", "forget", "pin", "remind", "merge", "renew", "allow"]
-
-  /// 原型（`CueFresh`）：日志与树（`CueLog`）下的 memory。
-  private static var freshMemory: String {
-    """
-    你的记忆。你看到和做过的一切都自动进日志（#序号），日志越早越粗地并成摘要（#a-b）；你记下的事（记忆 #n）也在日志里，一直记着的在系统提示里。
-    note{text,pin?} 记一条（≤\(CueMemoryLine.maxBytes) 字节），pin 一直记着；recall{query} 只读：全文找记忆、对话、任务，与你管过的会话里 Agent 的回复原话（带会话名与短 id，可接着 peek）；
-    zoom{lo,hi?} 展开日志的 #lo-hi：给它的两半（摘要，或原来的各条）；只给 lo（或 lo 等于 hi）是那一条的全文；
-    forget{line}、pin{line,pinned}：line 是记忆的序号（记忆 #n 的 n）；remind{text,at} 到点叫醒你（ISO 8601 或 yyyy-MM-dd HH:mm）；
-    merge{lo,hi,text} 把整理日志时请你合并的一块写成一行摘要（区间 [lo, hi)，照请求里给的数）；
-    allow{ask,project?,allowed?} 改允许清单：ask 只能是 \(allowable)，不带 project 是所有项目，allowed:false 去掉。
-    """
   }
 
   private static var string: [String: Any] { ["type": "string"] }
@@ -578,35 +564,30 @@ public struct CueTools: Sendable {
 
   // MARK: memory
 
-  /// 命中的那一段，至多 `excerptLimit` 字：截在最具体的命中词（在这段话里出现得最少的，一样少取最长的）第一次出现处前面一点，
-  /// 不从开头截——长回复的开头多半不是要找的，常见的词（"测试""完成"）也定位不到要找的地方。
+  /// 回复里命中的那一段：从第一个命中的词前面一点起，至多 `excerptLimit` 字（回复常有几千字，开头多半不是要找的）。
   static func excerpt(_ text: String, around words: [String]) -> String {
     let flat = CueEnvelope.clip(text, Int.max)
-    let lowered = flat.lowercased()
-    let ranked = words.map { $0.lowercased() }.filter { !$0.isEmpty }.map { word in (word, lowered.components(separatedBy: word).count - 1) }
-      .filter { $0.1 > 0 }.min { ($0.1, -$0.0.count) < ($1.1, -$1.0.count) }
-    guard let word = ranked?.0, let hit = flat.range(of: word, options: .caseInsensitive) else { return flat.clipped(excerptLimit) }
+    guard let hit = words.compactMap({ flat.range(of: $0, options: .caseInsensitive) }).min(by: { $0.lowerBound < $1.lowerBound }) else {
+      return flat.clipped(excerptLimit)
+    }
     let start = flat.index(hit.lowerBound, offsetBy: -excerptLead, limitedBy: flat.startIndex) ?? flat.startIndex
     return (start == flat.startIndex ? "" : "…") + String(flat[start...]).clipped(excerptLimit)
   }
 
   static let excerptLimit = 200
-  /// 记忆的序号怎么写：原型（`CueFresh`）下日志也有 #序号，记忆的写成"记忆 #n"以免混淆
-  static var memoryRef: String { CueFresh.on ? "记忆 #" : "#" }
   static let excerptLead = 40
 
   private func memory(_ args: Args) async throws -> Result {
     switch try args.required("action") {
     case "note":
       let (line, index) = try await store.noteCueLine(try args.required("text"), source: .cue, pinned: args.bool("pin") ?? false)
-      return .ok("记下了 \(Self.memoryRef)\(index)\(line.pinned ? "，一直记着" : "")。")
+      return .ok("记下了 #\(index)\(line.pinned ? "，一直记着" : "")。")
     case "recall":
-      let query = try args.required("query")
-      let found = try await store.recallCue(query)
-      let words = query.split(whereSeparator: \.isWhitespace).map(String.init)
-      var lines = found.lines.map { "\(Self.memoryRef)\($0.index) \($0.line.text)" + ($0.line.deletedAt == nil ? "" : "（已忘掉）") }
-      lines += found.messages.map { "对话 \(iso($0.createdAt)) \($0.author.rawValue)：\(Self.excerpt(CueFormat.plainText($0.text), around: words))" }
+      let found = try await store.recallCue(try args.required("query"))
+      var lines = found.lines.map { "#\($0.index) \($0.line.text)" + ($0.line.deletedAt == nil ? "" : "（已忘掉）") }
+      lines += found.messages.map { "对话 \(iso($0.createdAt)) \($0.author.rawValue)：\(CueEnvelope.clip(CueFormat.plainText($0.text), 160))" }
       lines += found.cards.map { "\($0.isTask ? "任务" : "灵感")「\($0.heading)」（\($0.id.shortID)）" }
+      let words = (try args.required("query")).split(whereSeparator: \.isWhitespace).map(String.init)
       lines += found.replies.map { reply in
         let name = reply.session.map(CueEnvelope.sessionName) ?? "会话（\(reply.message.sessionID.prefix(8))）"
         return "\(name) \(iso(reply.message.at)) 回复：\(Self.excerpt(reply.message.text, around: words))"
@@ -615,40 +596,22 @@ public struct CueTools: Sendable {
     case "forget":
       let (line, index) = try await line(args)
       try await store.forgetCueLine(line.id)
-      return .ok("忘掉了 \(Self.memoryRef)\(index)。")
+      return .ok("忘掉了 #\(index)。")
     case "pin":
       let (line, index) = try await line(args)
       guard let pinned = args.bool("pinned") else { throw Failure("pin 要给 pinned: true 或 false") }
       try await store.pinCueLine(line.id, pinned)
-      return .ok(pinned ? "\(Self.memoryRef)\(index) 一直记着。" : "\(Self.memoryRef)\(index) 不再一直记着。")
+      return .ok(pinned ? "#\(index) 一直记着。" : "#\(index) 不再一直记着。")
     case "remind":
       let raw = try args.required("at")
       guard let at = Self.date(raw) else { throw Failure("at 写 ISO 8601（2026-10-15T09:00:00+08:00）或 yyyy-MM-dd HH:mm（本机时区）") }
       guard at > Date() else { throw Failure("提醒时刻已经过了：\(raw)") }
       let (_, index) = try await store.noteCueLine(try args.required("text"), source: .cue, remindAt: at)
-      return .ok("记下了 \(Self.memoryRef)\(index)，\(iso(at)) 叫醒你。")
+      return .ok("记下了 #\(index)，\(iso(at)) 叫醒你。")
     case "merge":
       guard let lo = args.int("lo"), let hi = args.int("hi") else { throw Failure("merge 要给 lo 与 hi（区间 [lo, hi)）") }
-      let text = try args.required("text").trimmingCharacters(in: .whitespacesAndNewlines)
-      guard text.utf8.count <= CueMemoryLine.maxBytes else {
-        throw Failure("这一行 \(text.utf8.count) 字节，上限 \(CueMemoryLine.maxBytes)（约 \(CueMemoryLine.maxBytes / 3) 个汉字）：压短到 \(text.count * CueMemoryLine.maxBytes / max(text.utf8.count, 1)) 字以内再写，没写")
-      }
-      if CueFresh.on {
-        guard let fingerprint = CueLog(try await store.cueLogSource()).checkMerge(lo: lo, hi: hi) else {
-          throw Failure("#\(lo)-\(hi - 1) 不是日志里能合并的一块：照整理日志的请求里给的 lo、hi 写")
-        }
-        try await store.setCueLogSummary(lo: lo, hi: hi, text: text, fingerprint: fingerprint)
-      } else {
-        try await store.setCueSummary(lo: lo, hi: hi, text: text)
-      }
+      try await store.setCueSummary(lo: lo, hi: hi, text: try args.required("text"))
       return .ok("#\(lo)-\(hi - 1) 合成了一行。")
-    case "zoom" where CueFresh.on:
-      guard let lo = args.int("lo") else { throw Failure("zoom 要给 lo（与 hi，同视图里的 #lo-hi）") }
-      let hi = args.int("hi") ?? lo
-      guard let text = CueLog(try await store.cueLogSource()).zoom(lo: lo, hi: hi) else {
-        throw Failure("展开不了 #\(lo)-\(hi)：照视图或摘要里出现过的 #a-b 写，单条只给 lo")
-      }
-      return .ok(text)
     case "renew":
       let handoff = try args.required("handoff")
       guard handoff.count <= Self.handoffLimit else {
@@ -657,9 +620,7 @@ public struct CueTools: Sendable {
       let message = try await store.addCueMessage(.handoff, text: handoff)
       return .ok("交接备忘写好了，接下来换新上下文。（\(message.id.shortID)）")
     case "allow": return try await allow(args)
-    case let other:
-      let actions = CueFresh.on ? "note / recall / zoom / forget / pin / remind / merge / allow" : "note / recall / forget / pin / remind / merge / renew / allow"
-      throw Failure("memory 没有 \(other)：可用 \(actions)")
+    case let other: throw Failure("memory 没有 \(other)：可用 note / recall / forget / pin / remind / merge / renew / allow")
     }
   }
 
@@ -678,9 +639,7 @@ public struct CueTools: Sendable {
   /// `line`：序号（可带 #）或 id。
   private func line(_ args: Args) async throws -> (CueMemoryLine, Int) {
     guard let raw = args.string("line") ?? args.int("line").map(String.init) else { throw Failure("要给 line（序号，如 12）") }
-    var trimmed = raw.trimmingCharacters(in: .whitespaces)
-    if trimmed.hasPrefix("记忆") { trimmed = String(trimmed.dropFirst(2)).trimmingCharacters(in: .whitespaces) }
-    if trimmed.hasPrefix("#") { trimmed = String(trimmed.dropFirst()) }
+    let trimmed = raw.hasPrefix("#") ? String(raw.dropFirst()) : raw
     if let index = Int(trimmed), let line = try await store.cueLine(at: index) { return (line, index) }
     if let uuid = UUID(uuidString: raw), let line = try await store.cueLine(uuid), let index = try await store.cueLineIndex(uuid) { return (line, index) }
     throw Failure("没有记忆 \(raw)：用 recall 找它的序号")

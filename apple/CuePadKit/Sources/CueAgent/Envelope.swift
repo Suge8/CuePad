@@ -144,34 +144,17 @@ public enum CueEnvelope {
     ].compactMap { $0 } + kept.reversed()
   }
 
-  /// 原型（`CueFresh`）：Cue 自己醒来的一轮因何醒来，一句（进日志，`PiChatMessage.Tools.woke`）：会话的动静逐件写"状态 在哪"，
-  /// 他发来消息为 nil（他的话本身就在日志里）。
-  public static func woke(_ wake: CueWake, changes: [CueChange]) -> String? {
-    let text: String
-    switch wake {
-    case .message: return nil
-    case .sessionActivity: text = changes.isEmpty ? self.wake(wake) : changes.map { "\(label($0)) \(where_($0))" }.joined(separator: "；")
-    case .reminder(let due): text = "提醒到点：" + due.map(\.line.text).joined(separator: "；")
-    default: text = self.wake(wake)
-    }
-    return clip(text, wokeLimit)
-  }
-
-  static let wokeLimit = 120
-
-  private static func label(_ change: CueChange) -> String {
-    switch change.kind {
-    case .settled: change.interrupted ? state(.known(.interrupted)) : "歇下"
-    case .waitingForUser: "等回答"
-    case .failed: "出错"
-    case .undelivered: "发送失败"
-    case .done: "完成"
-    case .stalled: "等子代理 \(Int(PiSessionState.stallAfter / 60)) 分钟没动静"
-    }
-  }
-
   private static func change(_ change: CueChange) -> String {
-    var text = "[\(label(change))\(change.byUser ? " · 他说的" : "")] \(where_(change))"
+    let label: String =
+      switch change.kind {
+      case .settled: change.interrupted ? state(.known(.interrupted)) : "歇下"
+      case .waitingForUser: "等回答"
+      case .failed: "出错"
+      case .undelivered: "发送失败"
+      case .done: "完成"
+      case .stalled: "等子代理 \(Int(PiSessionState.stallAfter / 60)) 分钟没动静"
+      }
+    var text = "[\(label)\(change.byUser ? " · 他说的" : "")] \(where_(change))"
     if let detail = change.detail, !detail.isEmpty { text += "：\(clip(detail, 120))" }
     if let reply = change.recap?.lastReply { text += " · 回复：\(clip(reply, 160))" }
     return text

@@ -1,7 +1,7 @@
 import CueStore
 import Foundation
 
-/// 原型开关（`CUEPAD_CUE_FRESH=1`）：平时同一个会话里只往后加信封，换新时开新会话、用日志的视图（`CueLog`）接上，不写交接；系统提示只带一直记着的，其余记忆与经过都在日志与它的树里。
+/// 原型开关（`CUEPAD_CUE_FRESH=1`）：平时同一个会话里只往后加信封，换新时开新会话、用对话视图（`CueView`）接上，不写交接。
 /// 只为同一分支对比两种做法而存在，正式做时删掉它与它分出的旧路径。
 public enum CueFresh {
   public static let on = ProcessInfo.processInfo.environment["CUEPAD_CUE_FRESH"] == "1"

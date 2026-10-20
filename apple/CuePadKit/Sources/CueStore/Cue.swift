@@ -183,22 +183,6 @@ public struct CueMemorySummary: Equatable, Sendable {
   public var createdAt: Date
 }
 
-/// 原型（`CueFresh`）：拼 Cue 的日志（`CueAgent` 的 `CueLog`）要的一切，一次读出——全部对话、全部记忆（含一直记着与忘掉的）与摘要缓存里的全部行。
-/// 摘要是否还有效由日志按条目指纹判断（`CueStoredSummary.fingerprint`），这里不筛。
-public struct CueLogSource: Sendable {
-  public var messages: [CueMessage]
-  public var lines: [CueMemoryLine]
-  public var summaries: [CueStoredSummary]
-}
-
-/// 摘要缓存（`cueSummaries`，本机、不同步）里的一行：区间 [lo, hi) 与写下时区间内条目的指纹。
-public struct CueStoredSummary: Sendable {
-  public var lo: Int
-  public var hi: Int
-  public var text: String
-  public var fingerprint: String
-}
-
 /// 记忆的全貌：全部行（序号即下标，含忘掉的）与仍然有效的摘要，一次读出。记忆视图（`CueAgent`）从它算。
 public struct CueMemory: Equatable, Sendable {
   public var lines: [CueMemoryLine]
