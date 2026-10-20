@@ -24,16 +24,16 @@ struct CueHostTests {
         let notifier = RecordingCueNotifier()
         let app: TestApp
         let folder: URL
-        /// 真 Claude Code 大脑的临时目录（`ClaudeCue.launch`，开销记录在里面）；假模型时为 nil
+        /// 真大脑的临时目录（`EvalBrain.launch`，开销记录在里面）；假模型时为 nil
         let brainDirectory: URL?
         var services: AppServices { app.services }
         var store: CueStore { services.store }
 
         /// `failingOnce`：信封里有这些话的请求，假模型第一次报错。
         /// `seesImages`：假模型能不能看图（Pi 的模型表里写的输入）。`asksOnEnable`：刚启用那一轮先用 tell 问你一句，再写最后的回复。
-        /// `claude`：大脑换成真的 Claude Code（`CueEvalTests`），假模型的剧本不再用上。`patrolAfter`：空闲多久巡视一次。
+        /// `brain`：大脑换成真的 Agent（`CueEvalTests`），假模型的剧本不再用上。`patrolAfter`：空闲多久巡视一次。
         init(
-            usage: Int = 100, failingOnce: [String] = [], seesImages: Bool = true, asksOnEnable: Bool = false, claude: ClaudeCue? = nil,
+            usage: Int = 100, failingOnce: [String] = [], seesImages: Bool = true, asksOnEnable: Bool = false, brain: EvalBrain? = nil,
             patrolAfter: Duration = .seconds(3600)
         ) async throws {
             model = try FakeModel(usage: usage, failingOnce: failingOnce, asksOnEnable: asksOnEnable)
@@ -42,11 +42,11 @@ struct CueHostTests {
                 patrolAfter: patrolAfter, mergeAfter: .seconds(1),
                 restarts: [.milliseconds(200), .milliseconds(200), .milliseconds(200)], retryWake: .seconds(1), quietHours: [])
             let launch = CueLaunch(executable: realPi, path: realPi.deletingLastPathComponent().path + ":/usr/bin:/bin", agents: [])
-            let brain = claude.map { _ in TestLibraries.makeDirectory() }
-            brainDirectory = brain
-            let claudeLaunch = try claude.map { try $0.launch(in: brain!) }
+            let directory = brain.map { _ in TestLibraries.makeDirectory() }
+            brainDirectory = directory
+            let brainLaunch = try brain.map { try $0.launch(in: directory!) }, runtime = brain?.runtime
             app = TestApp(cue: CueDependencies(
-                launch: { agent, _ in agent == .pi ? launch : agent == .claudeCode ? claudeLaunch : nil }, helper: Bundle.main.bundleURL.appending(path: "Contents/Helpers/cuepad"), notifier: notifier, timing: timing))
+                launch: { agent, _ in agent == runtime ? brainLaunch : agent == .pi ? launch : nil }, helper: Bundle.main.bundleURL.appending(path: "Contents/Helpers/cuepad"), notifier: notifier, timing: timing))
             let agent = app.piPaths.agentDirectory
             try FileManager.default.createDirectory(at: agent, withIntermediateDirectories: true)
             try Data(#"{"providers":{"fake":{"baseUrl":"http://127.0.0.1:\#(port)/v1","api":"openai-completions","apiKey":"fake","models":[{"id":"fake-model","contextWindow":200000,"input":\#(seesImages ? #"["text","image"]"# : #"["text"]"#)},{"id":"fake-model-2","contextWindow":200000,"reasoning":true,"input":["text"]}]}}}"#.utf8)
@@ -58,8 +58,8 @@ struct CueHostTests {
             try await app.services.store.setDirectory(folder.path, for: project.id)
             try await app.connect(.pi)
             app.services.start()
-            if let claude {
-                try await claude.enable(self)
+            if let brain {
+                try await brain.enable(self)
                 return
             }
             try await app.services.enableCue(on: TestApp.hostID)

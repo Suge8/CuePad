@@ -123,9 +123,9 @@ TEST_RUNNER_CUEPAD_CUE_EVAL=1 TEST_RUNNER_CUEPAD_CUE_EVAL_OUT=/tmp/cue-eval/afte
   apple/scripts/xc.sh test mac -parallel-testing-enabled YES -only-testing:CuePadTests/CueEvalTests
 ```
 
-- 大脑是真的 Claude Code，用这台 Mac 上 Claude Code 自己的登录（`ClaudeLogin`，同 Kit 的真 Claude 用例），配置目录在临时目录；默认 opus · medium；`TEST_RUNNER_CUEPAD_CUE_EVAL_MODEL`、`TEST_RUNNER_CUEPAD_CUE_EVAL_EFFORT` 换。xcodebuild 只把 `TEST_RUNNER_` 开头的变量交给测试进程。
+- 大脑缺省是真的 Claude Code，用这台 Mac 上 Claude Code 自己的登录（`ClaudeLogin`，同 Kit 的真 Claude 用例），配置目录在临时目录；默认 opus · medium。`TEST_RUNNER_CUEPAD_CUE_EVAL_RUNTIME=pi` 换成 Pi（anthropic/claude-sonnet-5-5 · medium），登录从 ~/.pi/agent/auth.json 只读地取访问令牌、不替它刷新，令牌过期就起不来，等用户自己的 Pi 续上。`TEST_RUNNER_CUEPAD_CUE_EVAL_MODEL`、`TEST_RUNNER_CUEPAD_CUE_EVAL_EFFORT` 换模型与强度。xcodebuild 只把 `TEST_RUNNER_` 开头的变量交给测试进程。
 - 输出目录里每个场景一个 .md（信封、工具调用与结果、Cue 写的消息、判定、每一轮含预热的开销），`summary.md` 汇总（含各场景与全部的开销合计），`system-prompt.md` 是这次的系统提示。有场景没过时命令非零退出，输出照样写完。
-- 开销是 Claude Code 每轮 result 事件报的输入、缓存读、缓存写、输出 token 与费用（`total_cost_usd`）：起 claude 的外壳把它的输出另存一份再读。提示缓存跨进程、跨场景命中（一小时），先后跑的同一套场景缓存读写会不同，比开销看两遍以上。
+- 开销是大脑自报的输入、缓存读、缓存写、输出 token 与费用（Claude Code 每轮的 result 事件；Pi 每条助手消息的 usage，与 `agent_end` 对账）：起大脑的外壳把它的输出另存一份再读。提示缓存跨进程、跨场景命中（一小时），先后跑的同一套场景缓存读写会不同，比开销看两遍以上。
 - 长程场景（`CueEvalLongTests`，一次十分钟左右）单独跑：三十来次醒来、上下文跨过换新线，判定只有记得前面才答得对的几处，统计醒来与换新次数、开销与每轮用时中位。`TEST_RUNNER_CUEPAD_CUE_EVAL_RUNS=2` 同时跑两遍，第 n 遍写到"输出目录-n"：
 
 ```bash

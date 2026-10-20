@@ -518,46 +518,80 @@ struct Check {
     }
 }
 
-/// 真的 Claude Code 当 Cue 的大脑。`launch` 写一个起 claude 的外壳：配置目录与 HOME 在临时目录（不碰 ~/.claude），
-/// 登录用本机 Claude Code 自己的（`ClaudeLogin`），外壳起 claude 时现取、只进它的环境；继承来的 ANTHROPIC_* 清掉，不会走到别的提供方；
-/// XDG_* 也清掉，Claude Code 的缓存与状态只落在临时 HOME 下。
-/// 开销从评测这边取：外壳把 claude 的 stdout 另存一份到 `usage` 目录（每个大脑进程一个文件，`BrainUsage` 读），
-/// 用 bash 的进程替换接 tee 再 exec，claude 仍是外壳这个进程，退出码与流都不变。
-struct ClaudeCue {
+/// 当 Cue 的大脑的真 Agent：缺省 Claude Code（opus · medium，同用户的 Cue）；`CUEPAD_CUE_EVAL_RUNTIME=pi` 换成 Pi（anthropic/claude-sonnet-5-5 · medium）；
+/// `CUEPAD_CUE_EVAL_MODEL`、`CUEPAD_CUE_EVAL_EFFORT` 换模型与强度。`launch` 写一个起它的外壳，配置与 HOME 在临时目录，
+/// 继承来的 ANTHROPIC_*、XDG_* 清掉，登录在外壳起进程时现取、只进它的环境：
+/// - Claude Code 用它自己存在钥匙串里的那条（`ClaudeLogin`），配置目录 `CLAUDE_CONFIG_DIR` 在临时目录（不碰 ~/.claude）；
+/// - Pi 用 `ANTHROPIC_OAUTH_TOKEN`，从 ~/.pi/agent/auth.json 的 anthropic.access 只读地取。不拷 auth.json、不替它刷新：
+///   刷新会用掉一次性的刷新令牌，把用户挤下线；令牌过期就起不来，等他自己的 Pi 续上。`PI_CODING_AGENT_DIR` 在临时目录。
+/// 开销从评测这边取：外壳把大脑的 stdout 另存一份到 `usage` 目录（每个大脑进程一个文件，`BrainUsage` 读），
+/// 用 bash 的进程替换接 tee 再 exec，大脑仍是外壳这个进程，退出码与流都不变。
+struct EvalBrain {
+    let runtime: AgentKind
     let model: String
     let effort: PiThinkingLevel
 
-    /// 缺省同用户的 Cue；`CUEPAD_CUE_EVAL_MODEL`、`CUEPAD_CUE_EVAL_EFFORT` 换
-    static let current = ClaudeCue(
-        model: evalEnvironment["CUEPAD_CUE_EVAL_MODEL"] ?? "opus",
-        effort: evalEnvironment["CUEPAD_CUE_EVAL_EFFORT"].flatMap(PiThinkingLevel.init(rawValue:)) ?? .medium)
+    static let current: EvalBrain = {
+        let pi = evalEnvironment["CUEPAD_CUE_EVAL_RUNTIME"] == "pi"
+        return EvalBrain(
+            runtime: pi ? .pi : .claudeCode, model: evalEnvironment["CUEPAD_CUE_EVAL_MODEL"] ?? (pi ? "anthropic/claude-sonnet-5-5" : "opus"),
+            effort: evalEnvironment["CUEPAD_CUE_EVAL_EFFORT"].flatMap(PiThinkingLevel.init(rawValue:)) ?? .medium)
+    }()
+
+    /// .md 与 summary.md 开头那一行：大脑、模型与强度、哪种上下文做法（`CueFresh`）
+    var label: String { "\(runtime.name) · \(model) · \(effort.rawValue) · \(CueFresh.on ? "新做法（每次醒来开新会话）" : "现做法")" }
+
+    /// Pi 的登录：用户的 Pi 存的那一份，只读
+    private static let piAuth = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".pi/agent/auth.json")
 
     func launch(in root: URL) throws -> CueLaunch {
-        let claude = try #require(ExecutableLocator.standard.candidates("claude").first, "需要 claude")
-        let config = root.appending(path: "claude-config"), home = root.appending(path: "home"), usage = BrainUsage.directory(in: root)
-        for directory in [config, home, usage] { try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true) }
-        try Data(#"{"hasCompletedOnboarding":true}"#.utf8).write(to: config.appending(path: ".claude.json"))
-        _ = try #require(ClaudeLogin.token, "这台 Mac 上的 Claude Code 没登录")
-        let script = root.appending(path: "claude")
+        let home = root.appending(path: "home"), usage = BrainUsage.directory(in: root)
+        for directory in [home, usage] { try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true) }
+        let script = root.appending(path: "brain")
+        let executable: URL, login: String
+        switch runtime {
+        case .pi:
+            executable = realPi
+            let agent = root.appending(path: "pi-agent")
+            try FileManager.default.createDirectory(at: agent, withIntermediateDirectories: true)
+            let auth = try #require(
+                (try? JSONSerialization.jsonObject(with: Data(contentsOf: Self.piAuth))) as? [String: Any], "这台 Mac 上的 Pi 没登录")["anthropic"] as? [String: Any]
+            let expires = try #require(auth?["expires"] as? Double, "Pi 没有 Anthropic 的登录")
+            try #require(Date(timeIntervalSince1970: expires / 1000) > .now, "Pi 的 Anthropic 令牌已过期：等用户自己的 Pi 续上，评测不替它刷新")
+            login = """
+                ANTHROPIC_OAUTH_TOKEN=$(/usr/bin/plutil -extract anthropic.access raw -o - '\(Self.piAuth.path)') || exit 1
+                export ANTHROPIC_OAUTH_TOKEN PI_CODING_AGENT_DIR='\(agent.path)'
+                """
+        default:
+            executable = try #require(ExecutableLocator.standard.candidates("claude").first, "需要 claude")
+            let config = root.appending(path: "claude-config")
+            try FileManager.default.createDirectory(at: config, withIntermediateDirectories: true)
+            try Data(#"{"hasCompletedOnboarding":true}"#.utf8).write(to: config.appending(path: ".claude.json"))
+            _ = try #require(ClaudeLogin.token, "这台 Mac 上的 Claude Code 没登录")
+            login = """
+                CLAUDE_CODE_OAUTH_TOKEN=$(\(ClaudeLogin.tokenCommand)) || exit 1
+                export CLAUDE_CODE_OAUTH_TOKEN CLAUDE_CONFIG_DIR='\(config.path)' DISABLE_AUTOUPDATER=1
+                """
+        }
         try #"""
             #!/bin/bash
             for name in $(env | sed -nE 's/^((ANTHROPIC|XDG)_[A-Za-z0-9_]*)=.*/\1/p'); do unset "$name"; done
-            CLAUDE_CODE_OAUTH_TOKEN=$(\#(ClaudeLogin.tokenCommand)) || exit 1
-            export CLAUDE_CODE_OAUTH_TOKEN CLAUDE_CONFIG_DIR='\#(config.path)' HOME='\#(home.path)' DISABLE_AUTOUPDATER=1
+            \#(login)
+            export HOME='\#(home.path)'
             exec > >(exec tee '\#(usage.path)'/"$(date +%s)-$$.jsonl")
-            exec '\#(claude.path)' "$@"
+            exec '\#(executable.path)' "$@"
             """#.write(to: script, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
-        return CueLaunch(executable: script, path: claude.deletingLastPathComponent().path + ":/usr/bin:/bin", agents: [])
+        return CueLaunch(executable: script, path: executable.deletingLastPathComponent().path + ":/usr/bin:/bin", agents: [])
     }
 
-    /// 启用、运行在这台 Mac、用这个模型与强度。不经 `enableCue`：它先探测本机能用的 Agent，测试里的 Claude Code 报不出来。
+    /// 启用、运行在这台 Mac、用这个大脑、模型与强度。不经 `enableCue`：它先探测本机能用的 Agent，测试里的报不出来。
     func enable(_ rig: CueHostTests.Rig) async throws {
         let host = TestApp.hostID
-        try await rig.store.updateCueProfile { [model, effort] profile in
+        try await rig.store.updateCueProfile { [runtime, model, effort] profile in
             profile.hostID = host
             profile.enabledAt = .now
-            profile.runtime = .known(.claudeCode)
+            profile.runtime = .known(runtime)
             profile.model = model
             profile.effort = .known(effort)
         }
@@ -669,7 +703,7 @@ final class CueEval {
 
     /// 起 Rig、等刚启用那一轮做完，跑 `body`（摆状态、叫醒、判定）；不论成败都把现场写完、停掉大脑，再报没过的判定。
     static func run(_ name: String, expect: String, output: URL = evalOutput, _ body: (CueEval) async throws -> [Check]) async throws {
-        let eval = CueEval(try await CueHostTests.Rig(claude: .current), output: output)
+        let eval = CueEval(try await CueHostTests.Rig(brain: .current), output: output)
         var checks: [Check] = [], failure: (any Error)?
         do {
             try await eventually("刚启用那一轮做完", timeout: .seconds(300)) { eval.rig.rounds.contains { $0.wake == .enabled && $0.finishedAt != nil } }
@@ -771,7 +805,7 @@ final class CueEval {
         let context = (round ?? rounds.last)?.context.map(String.init) ?? "—"
         var lines = [
             "<!-- row: | \(name) | \(verdict) | \(overview?.calls ?? round?.calls.count ?? 0) | \(elapsed) | \(context) | \(total.cells) | -->",
-            "# \(name)", "", "期望：\(expect)", "", "模型：\(ClaudeCue.current.model) · \(ClaudeCue.current.effort.rawValue)", "",
+            "# \(name)", "", "期望：\(expect)", "", "大脑：\(EvalBrain.current.label)", "",
             "## 判定：\(verdict)", "",
         ]
         lines += checks.map { "- [\($0.passed ? "x" : " ")] \($0.label)" }
@@ -785,6 +819,9 @@ final class CueEval {
         lines += ["", "## 开销（每轮，含预热；Claude Code 每轮 result 事件报的）", ""]
         if usage.count != rounds.count {
             lines += ["大脑报了 \(usage.count) 轮，记下的轮有 \(rounds.count) 轮，下表按先后对齐，合计以大脑报的为准。", ""]
+        }
+        if let directory = rig.brainDirectory, case let check = BrainUsage.piMismatches(in: directory), check.pi > 0 {
+            lines += ["Pi 自报（agent_end）与逐条助手消息累加：\(check.pi - check.mismatched)/\(check.pi) 轮一致。", ""]
         }
         lines += ["| 轮 | 醒来 | 用时 | 上下文 | \(BrainUsage.header) |", "| --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
         for index in 0..<max(usage.count, rounds.count) {
@@ -839,7 +876,7 @@ final class CueEval {
         let total = rows.compactMap(BrainUsage.init(row:)).reduce(BrainUsage(), +)
         let wide = prompt.unicodeScalars.count { !$0.isASCII }, ascii = prompt.unicodeScalars.count { $0.isASCII }
         let summary = [
-            "# Cue 评测", "", "模型：\(ClaudeCue.current.model) · \(ClaudeCue.current.effort.rawValue)", "",
+            "# Cue 评测", "", "大脑：\(EvalBrain.current.label)", "",
             "系统提示 \(prompt.count) 字，估算 ≈\(wide + ascii / 4) token（非 ASCII 每字算 1、ASCII 每 4 字符算 1；工具说明另算）", "",
             "工具调用与用时是被叫醒的那一轮的（长程是全程合计与每轮中位）；开销是场景里每一轮（含预热）的合计。", "",
             "| 场景 | 判定 | 工具调用 | 用时 | 结束时上下文 token | \(BrainUsage.header) |", "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
@@ -848,8 +885,11 @@ final class CueEval {
     }
 }
 
-/// 大脑一轮的开销：Claude Code 每轮的 result 事件里，`modelUsage`（各模型的 token）与 `total_cost_usd` 是这个进程到此的累计，
-/// 同一进程相邻两轮相减得这一轮（含 Claude Code 自己顺带的小模型请求）。
+/// 大脑一轮的开销，从大脑 stdout 的副本里读：
+/// - Claude Code：每轮的 result 事件里 `modelUsage`（各模型的 token）与 `total_cost_usd` 是这个进程到此的累计，
+///   同一进程相邻两轮相减得这一轮（含 Claude Code 自己顺带的小模型请求）；
+/// - Pi：一轮从 `agent_start` 到 `agent_settled`，这一轮里每条助手消息 `message_end` 的 usage（input、cacheRead、cacheWrite、output、cost.total）相加；
+///   同一轮的 `agent_end` 里也带着这次运行的消息，是 Pi 自报的同一份数，拿来对账（`piMismatches`）。
 nonisolated struct BrainUsage {
     var input = 0, cacheRead = 0, cacheWrite = 0, output = 0
     var cost = 0.0
@@ -857,31 +897,69 @@ nonisolated struct BrainUsage {
     static let header = "输入 | 缓存读 | 缓存写 | 输出 | 费用"
     var cells: String { "\(input) | \(cacheRead) | \(cacheWrite) | \(output) | $\(String(format: "%.4f", cost))" }
 
-    /// 大脑的 stdout 副本放在哪（`ClaudeCue.launch` 写）
+    /// 大脑的 stdout 副本放在哪（`EvalBrain.launch` 写）
     static func directory(in root: URL) -> URL { root.appending(path: "usage", directoryHint: .isDirectory) }
 
-    /// 每个大脑进程一个文件，按起进程的先后；每个 result 事件一轮
-    static func rounds(in root: URL) -> [BrainUsage] {
+    /// 每个大脑进程一个文件，按起进程的先后；每轮一项
+    static func rounds(in root: URL) -> [BrainUsage] { parsed(root).map(\.usage) }
+
+    /// Pi 的轮里，逐条累加与 `agent_end` 自报对不上的轮数（Claude Code 的轮不算）
+    static func piMismatches(in root: URL) -> (pi: Int, mismatched: Int) {
+        let pi = parsed(root).compactMap { round in round.reported.map { (round.usage, $0) } }
+        return (pi.count, pi.count { !$0.0.close(to: $0.1) })
+    }
+
+    private static func parsed(_ root: URL) -> [(usage: BrainUsage, reported: BrainUsage?)] {
         let files = (try? FileManager.default.contentsOfDirectory(at: directory(in: root), includingPropertiesForKeys: [.creationDateKey])) ?? []
         func created(_ file: URL) -> Date { (try? file.resourceValues(forKeys: [.creationDateKey]).creationDate) ?? .distantPast }
-        return files.sorted { created($0) < created($1) }.flatMap { file -> [BrainUsage] in
-            let text = (try? String(contentsOf: file, encoding: .utf8)) ?? ""
-            var previous = BrainUsage()
-            return text.split(separator: "\n").compactMap { line in
-                guard line.contains(#""type":"result""#),
-                      let event = (try? JSONSerialization.jsonObject(with: Data(line.utf8))) as? [String: Any], event["type"] as? String == "result"
-                else { return nil }
-                var sofar = BrainUsage(cost: event["total_cost_usd"] as? Double ?? 0)
-                for case let model as [String: Any] in (event["modelUsage"] as? [String: Any] ?? [:]).values {
-                    sofar.input += model["inputTokens"] as? Int ?? 0
-                    sofar.cacheRead += model["cacheReadInputTokens"] as? Int ?? 0
-                    sofar.cacheWrite += model["cacheCreationInputTokens"] as? Int ?? 0
-                    sofar.output += model["outputTokens"] as? Int ?? 0
-                }
-                defer { previous = sofar }
-                return sofar - previous
+        return files.sorted { created($0) < created($1) }.flatMap { file in
+            let events = ((try? String(contentsOf: file, encoding: .utf8)) ?? "").split(separator: "\n").compactMap { line -> [String: Any]? in
+                guard line.contains(#""type":"result""#) || line.contains(#""type":"agent_"#) || line.contains(#""type":"message_end""#) else { return nil }
+                return (try? JSONSerialization.jsonObject(with: Data(line.utf8))) as? [String: Any]
+            }
+            return claude(events) + pi(events)
+        }
+    }
+
+    private static func claude(_ events: [[String: Any]]) -> [(usage: BrainUsage, reported: BrainUsage?)] {
+        var previous = BrainUsage()
+        return events.filter { $0["type"] as? String == "result" }.map { event in
+            var sofar = BrainUsage(cost: event["total_cost_usd"] as? Double ?? 0)
+            for case let model as [String: Any] in (event["modelUsage"] as? [String: Any] ?? [:]).values {
+                sofar.input += model["inputTokens"] as? Int ?? 0
+                sofar.cacheRead += model["cacheReadInputTokens"] as? Int ?? 0
+                sofar.cacheWrite += model["cacheCreationInputTokens"] as? Int ?? 0
+                sofar.output += model["outputTokens"] as? Int ?? 0
+            }
+            defer { previous = sofar }
+            return (sofar - previous, nil)
+        }
+    }
+
+    private static func pi(_ events: [[String: Any]]) -> [(usage: BrainUsage, reported: BrainUsage?)] {
+        var rounds: [(usage: BrainUsage, reported: BrainUsage?)] = [], round: (usage: BrainUsage, reported: BrainUsage)?
+        func assistant(_ message: Any?) -> BrainUsage {
+            guard let message = message as? [String: Any], message["role"] as? String == "assistant", let usage = message["usage"] as? [String: Any] else { return BrainUsage() }
+            return BrainUsage(
+                input: usage["input"] as? Int ?? 0, cacheRead: usage["cacheRead"] as? Int ?? 0, cacheWrite: usage["cacheWrite"] as? Int ?? 0,
+                output: usage["output"] as? Int ?? 0, cost: (usage["cost"] as? [String: Any])?["total"] as? Double ?? 0)
+        }
+        for event in events {
+            switch event["type"] as? String {
+            case "agent_start": if round == nil { round = (BrainUsage(), BrainUsage()) }
+            case "message_end": if let current = round { round?.usage = current.usage + assistant(event["message"]) }
+            case "agent_end": if let current = round { round?.reported = (event["messages"] as? [Any] ?? []).map(assistant).reduce(current.reported, +) }
+            case "agent_settled":
+                if let done = round { rounds.append((done.usage, done.reported)) }
+                round = nil
+            default: break
             }
         }
+        return rounds
+    }
+
+    private func close(to other: BrainUsage) -> Bool {
+        input == other.input && cacheRead == other.cacheRead && cacheWrite == other.cacheWrite && output == other.output && abs(cost - other.cost) < 1e-9
     }
 
     /// 汇总行里的那几格（`cells`）读回来
