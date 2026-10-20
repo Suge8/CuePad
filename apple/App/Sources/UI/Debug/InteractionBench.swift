@@ -3,6 +3,7 @@ import AppKit
 import CueStore
 import Darwin
 import QuartzCore
+import os
 
 /// `-CuePadBench interact`：单次交互那一下的主线程耗时，逐项与预算（docs/verify.md「交互预算」）比较，
 /// 每项结果作为一行 `INTERACT {json}` 打到标准输出，量完退出。配 `-CuePadDemo YES`（演示库）或 `-CuePadSeed perf`（大库）。
@@ -15,6 +16,7 @@ import QuartzCore
 /// 默认在后台量：指令数照样能前后对比，帧与掉帧偏乐观（前台才有玻璃等实际合成）。和预算比要在前台量（`-CuePadForeground YES`，见 `DebugForeground`），
 /// 每行的 `foreground` 记这次在不在前台；量完退出，退出时把前台还回去。
 enum InteractionBench {
+    private static let signposter = OSSignposter(logHandle: OSLog(subsystem: "com.sugeh.cuepad", category: .pointsOfInterest))
     /// 每项的预算：点击回合上限（毫秒）与掉帧次数上限。预算是目标，不是现状：没达到的项如实报超预算，不改数字迁就。
     /// 依据：144Hz 一帧 6.9ms；对点击的回应在两帧（14ms）内人感觉是"跟手"，要建内容的在四帧（28ms）内不觉得顿；掉帧最多两次。
     /// 回访页面、收起、关闭只是换可见性，对点击要跟手；首访、打开要建视图，给四帧。
@@ -58,14 +60,19 @@ enum InteractionBench {
         guard let window = NSApp.windows.first(where: { $0.styleMask.contains(.fullSizeContentView) && $0.styleMask.contains(.resizable) }),
               let view = window.contentView
         else { return }
-        let foreground = DebugForeground.borrow(window)
+        let borrowed = DebugForeground.borrow(window)
         try? await Task.sleep(for: .seconds(1))
+        // 真到了前台才算前台量的（借了却被别的应用占着时，帧与掉帧照样偏乐观）
+        let foreground = borrowed && NSApp.isActive
         let store = workspace.services.store
         let projects = (workspace.catalog?.projects ?? []).map(\.id)
         let sessions = ((try? await store.piSessionPage(PiSessionQuery(limit: 3)))?.items ?? []).map(\.state.sessionID)
         func step(_ name: String, _ action: () -> Void) async {
             if let only, !only.contains(name) { return }
+            // 每一项在 trace 里是一段区间（CUEPAD_TRACE 录的掉帧、采样按它对到是哪一项）
+            let interval = Self.signposter.beginInterval("交互", id: Self.signposter.makeSignpostID(), "\(name, privacy: .public)")
             var row = await measure(name, in: view, action)
+            Self.signposter.endInterval("交互", interval)
             row["foreground"] = foreground
             print("INTERACT " + String(decoding: try! JSONSerialization.data(withJSONObject: row, options: [.sortedKeys]), as: UTF8.self))
             fflush(stdout)
