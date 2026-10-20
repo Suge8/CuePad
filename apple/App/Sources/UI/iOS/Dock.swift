@@ -7,7 +7,7 @@ import SwiftUI
 /// 换去处时两页在栈的根里水平推移（按底部那一排从左到右的顺序，`Dock.order`），推的是 SwiftUI 自己画的内容，逐帧插值；
 /// 导航栈托管在 UIKit 里，挪整个栈（几个栈交替）时 SwiftUI 不逐帧挪它，旧页停着、最后一下才跳走，就是换去处时闪回旧页的那一下。
 /// 先排后动（docs/ui.md 渲染性能）：新页先在屏外那一侧建好、画好、交出一帧，下一帧两页一起推（`arrived`）；底部那一排不跟着推，
-/// 留在原处从旧的样子长成自己的（`Dock.Arrival`、`dockSettled`、`dockShift`）。推完才拿掉旧页，它这时已在屏外：
+/// 留在原处从旧的样子长成自己的（`Dock.Arrival`、`DockMove`）。推完才拿掉旧页，它这时已在屏外：
 /// 位置只由 `arrived` 推出，拿掉时不回到原处。减弱动态效果时不推，新页在原处淡入。
 /// 不用折叠的分栏：那个容器本身冷启动就多约 3000M 指令。
 struct DockRoot: View {
@@ -40,8 +40,7 @@ struct DockRoot: View {
                         .opacity(reduceMotion && current && !settled ? 0 : 1)
                         .allowsHitTesting(current)
                         .accessibilityHidden(!current)
-                        .environment(\.dockLeaving, !current && settled)
-                        .environment(\.dockShift, shift)
+                        .environment(\.dockMove, DockMove(settled: settled, leaving: !current && settled, shift: shift))
                 }
             }
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
@@ -52,8 +51,6 @@ struct DockRoot: View {
             shown = root
             arrived = root
         }
-        // 与新页同一次更新里就是 false：新页底部那一排的第一帧停在旧的样子上
-        .environment(\.dockSettled, settled)
         .onChange(of: root) {
             Task {
                 await NextFrame.wait()
@@ -151,8 +148,8 @@ struct Dock: View {
     /// 四个去处在底部那一排里从左到右的位置（三格，Cue 在最右）：换去处时新页从它那一侧推进来（`DockRoot`）。
     static func order(_ route: Route) -> Int { places.firstIndex { $0.route == route } ?? places.count }
 
-    /// 内容在安全区之上还要给 Dock 让出的高度（栏顶到安全区底边）；键盘盖住 Dock 时为 0。
-    static func reserve(above safeBottom: CGFloat) -> CGFloat { max(0, height + margin - safeBottom) }
+    /// 内容在安全区之上还要给 Dock 让出的高度（栏顶再隔 `Bars.contentGap` 到安全区底边）：滚到底时最后一行完整停在栏上面；键盘盖住 Dock 时为 0。
+    static func reserve(above safeBottom: CGFloat) -> CGFloat { max(0, height + margin + Bars.contentGap - safeBottom) }
 
     var body: some View {
         let fromCue = arriving && isFromCue
@@ -322,10 +319,12 @@ struct CueDockRow<Composer: View>: View {
     }
 }
 
-/// Cue 页底部左边那颗玻璃圆钮（与输入框同高）：图标是上次去的那一页（`Navigation.lastPlace`）。点它原地展开成 Dock 那样的三格胶囊
+/// Cue 页底部左边那颗玻璃圆钮（与输入框同高）：图标是"⋯"（更多去处，不随上次去了哪页变）。点它原地展开成 Dock 那样的三格胶囊
 /// （同宽同高，输入框收成右端一颗圆，`CueDockRow`），选一格就去那里；点别处、滚动或点那颗圆收回（`CuePage` 在对话上铺一层接点按）。
 /// 接力的落点之一（`relaySpot(dock: nil)`）。
 /// `docked`：还是 Dock 三格胶囊的样子（刚从三页来的第一帧）。
+/// 圆钮与三格一直都在、只换不透明度，靠左叠着（玻璃往右长，三格不跟着挪）：先后换、不叠着交叉淡（`Motion.handOff`）——
+/// 换出去的那样先淡完，换进来的晚这么久再出；插入、移除的过渡里被移除的那个随弹簧慢慢淡，"⋯"会叠在"任务"上停一阵。
 struct DockPlaces: View {
     @Binding var open: Bool
     var docked = false
@@ -334,37 +333,44 @@ struct DockPlaces: View {
 
     static let size = ComposerMetrics.slot
 
+    /// 换进来（`entering`）的晚 `handOff` 再淡入，换出去的在 `handOff` 内淡完。
+    private static func handOff(in entering: Bool) -> Animation {
+        entering ? Motion.quick.delay(Motion.handOff) : .easeOut(duration: Motion.handOff)
+    }
+
     var body: some View {
-        let last = Dock.places.first { $0.route == navigation.lastPlace } ?? .tasks
-        ZStack {
-            if open {
-                HStack(spacing: 0) {
-                    ForEach(Dock.places, id: \.self) { place in
-                        DockCell(place: place, selected: false) {
-                            open = false
-                            navigation.select(place.route)
-                        }
-                        .frame(width: Dock.cellWidth)
+        ZStack(alignment: .leading) {
+            HStack(spacing: 0) {
+                ForEach(Dock.places, id: \.self) { place in
+                    DockCell(place: place, selected: false) {
+                        open = false
+                        navigation.select(place.route)
                     }
+                    .frame(width: Dock.cellWidth)
                 }
-                .padding(.horizontal, Dock.inset)
-                .transition(.opacity)
-            } else {
-                Button { withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { open = true } } label: {
-                    IconImage(last.dockIcon).font(.system(size: 20, weight: .medium))
-                        .frame(width: Self.size, height: Self.size)
-                        .contentShape(.circle)
-                }
-                .buttonStyle(PressStyle(.button))
-                .relaySpot(dock: nil)
-                .accessibilityLabel("去处")
-                .accessibilityValue(last.dockTitle)
-                .accessibilityHint("展开任务、会话、项目")
-                .opacity(docked ? 0 : 1)
-                .transition(.opacity)
             }
+            .padding(.horizontal, Dock.inset)
+            .frame(width: Dock.capsuleWidth)
+            .opacity(open ? 1 : 0)
+            .animation(Self.handOff(in: open), value: open)
+            .allowsHitTesting(open)
+            .accessibilityHidden(!open)
+            Button { withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { open = true } } label: {
+                IconImage(.more).font(.system(size: 20, weight: .medium))
+                    .frame(width: Self.size, height: Self.size)
+                    .contentShape(.circle)
+            }
+            .buttonStyle(PressStyle(.button))
+            .relaySpot(dock: nil)
+            .accessibilityLabel("去处")
+            .accessibilityHint("展开任务、会话、项目")
+            .opacity(open || docked ? 0 : 1)
+            .animation(Self.handOff(in: !open), value: open)
+            .allowsHitTesting(!open)
+            .accessibilityHidden(open)
         }
-        .frame(width: docked || open ? Dock.capsuleWidth : Self.size, height: docked || open ? Dock.height : Self.size)
+        .frame(width: docked || open ? Dock.capsuleWidth : Self.size, height: docked || open ? Dock.height : Self.size, alignment: .leading)
+        .clipShape(.capsule)
         .glass(in: .capsule, interactive: true, ink: .clear)
     }
 }
@@ -411,33 +417,32 @@ extension SidebarOutline.Entry {
     var dockIcon: Icon { self == .allProjects ? .projects : icon }
 }
 
-/// 换去处时底部那一排的两头：新去处的栈建好、两页开始推时（`dockSettled`），新的那一排从旧的样子长成自己的（`Motion.dock`）；
-/// 旧的那一排同一刻当场隐去（`dockLeaving`），不随旧页推走。这一排不跟着页推：反着挪回页推出去的那一段（`dockShift`），
-/// 与页同一个动画，停在原处原地换形。
+/// 换去处时一页底部那一排怎么动（`DockRoot` 按页给出）。新页建好那一帧 `settled` 还是 false：新的那一排第一帧停在旧的样子上；
+/// 两页开始推时为 true，新的那一排从旧的样子长成自己的（`Motion.dock`），旧的那一排同一刻当场隐去（`leaving`），不随旧页推走。
+/// 这一排不跟着页推：反着挪回页推出去的那一段（`shift`），与页同一个动画，停在原处原地换形。
+struct DockMove {
+    var settled = true
+    var leaving = false
+    var shift: CGFloat = 0
+}
+
 private struct Arrive: ViewModifier {
     @Binding var arriving: Bool
-    @Environment(\.dockSettled) private var settled
-    @Environment(\.dockLeaving) private var leaving
-    @Environment(\.dockShift) private var shift
+    @Environment(\.dockMove) private var move
 
     func body(content: Content) -> some View {
         content
-            .offset(x: -shift)
-            .opacity(leaving ? 0 : 1)
-            .animation(nil, value: leaving)
-            .onChange(of: settled, initial: true) {
-                guard settled, arriving else { return }
+            .offset(x: -move.shift)
+            .opacity(move.leaving ? 0 : 1)
+            .animation(nil, value: move.leaving)
+            .onChange(of: move.settled, initial: true) {
+                guard move.settled, arriving else { return }
                 withAnimation(Motion.dock) { arriving = false }
             }
     }
 }
 
 extension EnvironmentValues {
-    /// 窄屏当前去处的页已经建好、开始推进来（`DockRoot`）：换去处时新页先在屏外建好一帧，这之后底部那一排才开始长。
-    @Entry var dockSettled = true
-    /// 这一页是换去处时正在推走的旧页：它底部那一排当场隐去（`Arrive`）。
-    @Entry var dockLeaving = false
-    /// 这一页此刻水平推出去多远（`DockRoot`）：底部那一排反着挪回来，留在原处。
-    @Entry var dockShift: CGFloat = 0
+    @Entry var dockMove = DockMove()
 }
 #endif

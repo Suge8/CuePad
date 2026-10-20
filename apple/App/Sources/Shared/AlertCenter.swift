@@ -9,9 +9,11 @@ import UIKit
 /// 系统通知，两端一份：通知代理、通知权限、点开的通知去哪。点开时按种类路由（`AlertRoute`）：Agent 的打开那个会话（`pendingTap`，
 /// 界面取走），Cue 的打开 Cue 页（`AppServices.pendingDeepLink = .cue`）。进程只有一个，由 App 代理持有并在启动完成前设为代理，
 /// 冷启动时点开的通知才不会丢。
+/// 你在不在看只有一条规则：开着这条提示说的那一页（会话页、Cue 页）就不提示。别的设备替你做决定（Mac 置手机推送标志、Mac 发通知）
+/// 只认在线的 Mac 写下的（`CueStore.isWatched`）；手机自己前台收到推送时按本机此刻开着哪一页定。
 /// - iOS：通知都是 CloudKit 订阅在服务端生成的锁屏通知；这里另管远程通知注册，设置页据此显示一行状态（`PiAlertStatus`）。
-///   前台收到的 Agent 通知不展示（前台的提示是 App 内横幅，`SessionAlertTracker`）；Cue 的在 Cue 页不在前台时照常弹。
-/// - Mac：不收推送，通知都是这里发的本地通知（`post`）；你正看着那一页时什么都不发（`Workspace.isWatching`），其余前台后台一样是系统通知。
+///   前台收到的 Agent 通知不展示（前台的提示是 App 内横幅，`SessionAlertTracker`）；Cue 的在 Cue 页不在屏上时照常弹。
+/// - Mac：不收推送，通知都是这里发的本地通知（`post`）；你在哪台 Mac 上开着那一页时什么都不发，其余前台后台一样是系统通知。
 @Observable
 final class AlertCenter: NSObject, UNUserNotificationCenterDelegate {
     private(set) var pendingTap: PiAlertTap?
@@ -85,10 +87,10 @@ final class AlertCenter: NSObject, UNUserNotificationCenterDelegate {
     ) async -> UNNotificationPresentationOptions {
         guard let route = AlertRoute(userInfo: notification.request.content.userInfo) else { return [] }
         #if os(macOS)
-        return present(route)
+        return await present(route)
         #else
         pushed()
-        // Agent 的由 App 内横幅提示（正看着那个会话时连横幅也不弹）；Cue 的没有 App 内横幅，Cue 页开着就不弹（对话里已经看到了）
+        // Agent 的由 App 内横幅提示（开着那个会话时连横幅也不弹）；Cue 的没有 App 内横幅，这台手机开着 Cue 页就不弹（对话里已经看到了）
         return route == .cue && services?.cueViewers == 0 ? [.banner, .list, .sound] : []
         #endif
     }
@@ -147,6 +149,9 @@ nonisolated enum AlertRoute: Equatable {
     var session: UUID? {
         if case .session(let tap) = self { tap.sessionState } else { nil }
     }
+
+    /// 开着哪一页就不用再说它（`CueStore.isWatched`）。
+    var subject: AlertSubject { session.map(AlertSubject.session) ?? .cue }
 
     private static let subjectKey = "cuepad.alert", kindKey = "cuepad.alert.kind", recordKey = "cuepad.alert.record"
     private static let cueSubject = "cue", sessionSubject = "session"

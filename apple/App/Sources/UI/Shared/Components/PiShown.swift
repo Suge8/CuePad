@@ -2,6 +2,11 @@ import CueStore
 import Foundation
 
 nonisolated extension PiSessionListItem {
+    /// 已结束、发给它的话正在路上：它所在的 Mac 正在唤醒它（`PiDelivery.Transit.waking`）。"现在"里当场列出、写"正在唤醒"，上了桥就是在线的那一行。
+    func isWaking(at moment: Speech.Moment) -> Bool {
+        state.state == .known(.ended) && PiDelivery.phase(of: delivery, for: state, at: moment) == .inTransit(.waking)
+    }
+
     /// 此刻没能送达的话有几句，按 Pi 的会话 id（只留有的）：手里只有会话记录的行（Mac 侧栏、菜单栏、⌘K、项目页 Agent 栏）按它找自己的数。
     static func undelivered(_ items: [PiSessionListItem], at moment: Speech.Moment) -> [String: Int] {
         Dictionary(items.compactMap { item in

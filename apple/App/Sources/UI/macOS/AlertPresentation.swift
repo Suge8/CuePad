@@ -3,25 +3,15 @@ import AppKit
 import CueStore
 import CueSync
 
-/// Mac 主窗口与提示：你在不在看、点开去哪（`AlertCenter` 发通知、系统交来前台呈现、点开的通知都问这里）。
+/// Mac 主窗口与提示：开着哪个会话页（`ViewerKeeper` 写下，提示据此定发不发）、点开的通知去哪。
 extension Workspace {
     /// App 在前台、主窗口可见：此刻看得到内容区的这一页。
     private var isInFront: Bool { NSApp.isActive && services.windowShell?.isVisible == true }
 
-    /// 此刻开着的会话页（这台 Mac 开着哪个会话，`SessionViewerKeeper`）。
-    var openSession: SessionViewerKeeper.Page? {
+    /// 此刻开着的会话页（这台 Mac 开着哪个会话，`ViewerKeeper`）。
+    var openSession: ViewerKeeper.Page? {
         guard isInFront, case .session(let route) = page else { return nil }
-        return SessionViewerKeeper.Page(id: route.id, sessionID: route.sessionID)
-    }
-
-    /// 只有这一处定：在看是 CuePad 在前台、主窗口在屏幕上，且当前页盖住了那个会话（`Route.covers`），
-    /// 或 Cue 页（Cue 的，`AppServices.cueViewers`）。在看时什么都不发；其余一律是系统通知。
-    func isWatching(_ route: AlertRoute) -> Bool {
-        guard isInFront else { return false }
-        return switch route {
-        case .cue: services.cueViewers > 0
-        case .session(let tap): page.covers(session: tap.sessionState)
-        }
+        return ViewerKeeper.Page(id: route.id, sessionID: route.sessionID)
     }
 
     /// 点开的 Agent 通知：打开那个会话的整页。通知只带会话记录 id，Mac 的会话页按 Pi 的会话 id 认（桥上的在线会话）：从记录里取；

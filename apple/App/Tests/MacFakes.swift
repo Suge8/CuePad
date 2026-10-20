@@ -117,7 +117,6 @@ final class FakeUpdater: AppUpdater {
 
 /// 记下 Cue 推了哪些通知，不碰系统通知中心。
 final class RecordingCueNotifier: CueNotifying {
-    var isWatchingCue = false
     private(set) var posted: [(title: String, body: String)] = []
 
     func post(title: String, body: String) async { posted.append((title, body)) }

@@ -18,21 +18,21 @@ struct PiAlertStatus: Equatable {
     init(authorization: UNAuthorizationStatus, registration: AlertCenter.Registration, subscription: PiAlertSubscriptionStatus) {
         switch (authorization, registration, subscription) {
         case (.denied, _, _):
-            self = Self(.problem, "通知已关闭", "Agent 在等你确认或做完时，锁屏收不到提示。", action: .openSettings)
+            self = Self(.problem, "通知已关闭", "Agent 在等你确认或做完、Cue 回你话时，锁屏收不到提示。", action: .openSettings)
         case (.notDetermined, _, _):
-            self = Self(.problem, "还没有开启通知", "开启后，Agent 在等你确认或做完时，锁屏会提示你。", action: .allow)
+            self = Self(.problem, "还没有开启通知", "开启后，Agent 在等你确认或做完、Cue 回你话时，锁屏会提示你。", action: .allow)
         case (_, .failed(let reason), _):
             self = Self(.problem, "没能向系统注册推送", Self.retrying, diagnostics: reason, action: .retry)
         case (_, _, .failed(let reason)):
             self = Self(.problem, "没能向 iCloud 登记通知", Self.retrying, diagnostics: reason, action: .retry)
         case (_, .registered, .active):
-            self = Self(.on, "已开启", "Agent 在等你确认或做完时，锁屏会提示你。")
+            self = Self(.on, "已开启", "Agent 在等你确认或做完、Cue 回你话时，锁屏会提示你。")
         default:
             self = Self(.pending, "正在开启…", nil)
         }
     }
 
-    private static let retrying = "Agent 的锁屏通知暂时收不到。回到前台时会自动重试，也可以现在重试。"
+    private static let retrying = "锁屏通知暂时收不到。回到前台时会自动重试，也可以现在重试。"
 
     private init(_ state: State, _ title: String, _ detail: String?, diagnostics: String? = nil, action: Action? = nil) {
         self.state = state

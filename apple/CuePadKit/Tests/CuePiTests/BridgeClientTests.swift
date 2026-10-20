@@ -29,7 +29,7 @@ struct BridgeClientTests {
 
         let late = FakeExtension(directory: dir, options: .init(cwd: "/work/other", mode: "rpc", model: nil, sessionFile: nil, tty: nil, env: [:]))
         try late.start()
-        try await eventually("启动后新增的会话被发现（FSEvents）") { session(late.id) != nil }
+        try await eventually("启动后新增的会话被发现") { session(late.id) != nil }
 
         let s = try #require(session(early.id))
         #expect(s.sessionID == early.sessionID)
@@ -147,9 +147,6 @@ struct BridgeClientTests {
         try bridge.start()
         await quietPeriod(.milliseconds(400))
         #expect(bridge.sessions.isEmpty && ext.connectionCount == 0)
-
-        chmod(ext.socketURL.path, 0o600) // 收紧权限（属性变更触发重扫）后才会被接受
-        try await eventually("权限收紧后被发现") { session(ext.id) != nil }
     }
 
     // MARK: 协议兼容

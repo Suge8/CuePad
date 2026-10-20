@@ -32,10 +32,8 @@ nonisolated struct CueLaunch: Equatable, Sendable {
     }
 }
 
-/// Cue 的通知出口（Mac 本机）：生产是 `AlertCenter`（点开去哪、开关、提示音、前台怎么呈现都在那里），测试换成记录型替身。
+/// Cue 的通知出口（Mac 本机）：生产是 `AlertCenter`（你在不在看、点开去哪、开关、提示音、前台怎么呈现都在那里），测试换成记录型替身。
 protocol CueNotifying: AnyObject {
-    /// 你正看着 Cue 页：这时不发本机通知，也不给手机推送。
-    var isWatchingCue: Bool { get }
     func post(title: String, body: String) async
 }
 
@@ -43,9 +41,8 @@ protocol CueNotifying: AnyObject {
 /// - 启用、停用不经这里：两端同一个入口（`AppServices.enableCue(on:)`、`disableCue`，规则在 `CueStore.enableCue`）；
 ///   另一台 Mac 启用就是接管，这台看到 `activeHost` 不是自己就停下。
 /// - `activeHost` 是这台时起一个 `CueKeeper` 值班，不是就停掉；名字、运行时、模型、强度变了由值班的它自己对上（就地换或写交接后换大脑）。
-/// - 通知只推"等你"（带选项的 Cue 消息）与 urgent 的 Cue 消息，只由值班的这台 Mac 判断：你没在看 Cue 页时，这台 Mac 发本机通知
-///   （算"等你"那种提示，开关与提示音在设置里），并给消息置推送标志（`CueStore.flagCueMessageForPush`），手机由服务端订阅推送（见 `AlertSubscriptions`）。
-///   免打扰只认系统的专注模式，不看打扰时段（那只管 Cue 自己巡视，`CueTiming.quietHours`）。
+/// - 通知：哪几条要提示你只在 `CueMessage.alerts`；手机推送标志在写下时就置好（`CueStore.insertCueMessage`），这里只给值班的这台 Mac
+///   发本机通知（算"等你"那种提示，开关、提示音与你在不在看都在 `AlertCenter`）。免打扰只认系统的专注模式，不看打扰时段（那只管 Cue 自己巡视，`CueTiming.quietHours`）。
 @Observable
 final class CueService {
     /// Cue 在这台 Mac 值班（同步据此按节奏拉取，见 `AppServices.pollingCadence`）。
@@ -121,25 +118,18 @@ final class CueService {
 
     // MARK: 通知
 
-    /// 推"等你"与 urgent 的 Cue 消息，直到任务取消。只推这次启动之后新写的；你正看着 Cue 页时不推。
+    /// 值班时给要提示你的 Cue 消息（`CueMessage.alerts`）发本机通知，直到任务取消。只发这次启动之后新写的。
     func followNotifications() async throws {
         let since = Date.now
         var seen = Set<UUID>()
         for try await messages in store.observe({ try $0.cueMessages(limit: 20) }) {
-            let fresh = messages.filter {
-                $0.author == .known(.cue) && $0.createdAt >= since && ($0.choices != nil || $0.urgent) && !seen.contains($0.id)
-            }
+            let fresh = messages.filter { $0.alerts && $0.createdAt >= since && !seen.contains($0.id) }
             seen.formUnion(fresh.map(\.id))
-            guard duty != nil, !notifier.isWatchingCue else { continue }
-            let name = (try? await store.cueProfile())?.name
+            guard duty != nil, !fresh.isEmpty else { continue }
+            let name = try await store.cueProfile()?.name
             for message in fresh {
                 let alert = CueAlert.content(name: name, text: message.text, asking: message.asking, choices: message.choices)
                 await notifier.post(title: alert.title, body: alert.body)
-                do {
-                    try await store.flagCueMessageForPush(message.id)
-                } catch {
-                    Self.log.error("Cue 消息没能标上手机推送：\(error.localizedDescription, privacy: .public)")
-                }
             }
         }
     }

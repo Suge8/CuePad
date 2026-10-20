@@ -209,6 +209,7 @@ DEFINE SCHEMA
         askAction     ENCRYPTED STRING,
         askRule       ENCRYPTED STRING,
         askShots      ENCRYPTED STRING,
+        setAsideBy    STRING,
         acceptance    INT64,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"
@@ -286,6 +287,7 @@ DEFINE SCHEMA
         device        STRING,
         sessionID     STRING,
         modifiedAt    INT64,
+        cue           INT64,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"
     );

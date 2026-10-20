@@ -2,7 +2,7 @@ import CueStore
 import SwiftUI
 
 /// 有人在看 Cue 页：这一页在屏上（Mac 页栈里的当前页、窗口露在屏幕上，有没有焦点都算；手机上没被推进的页盖住、App 在前台）。在看的期间——
-/// - 算一个在看的（`AppServices.cueViewers`）：Cue 的通知不发（Mac 另要 App 在前台，见 `AlertPresentation`；iOS 前台的系统横幅），手机按节奏拉；
+/// - 算一个在看的（`AppServices.cueViewers`）：这台设备开着 Cue 页（`ViewerKeeper.showCue`，Cue 的提示据此不发，见 `AlertCenter`），手机按节奏拉；
 /// - 读新消息（哪几条算新的只在 Kit 的 `CueStore.cueUnread`，读到哪只记在同步的 `CueRead`，换一台设备接着读）。
 /// 新消息是气泡旁的一颗小点（`CueUnreadDot`），不插进对话：来去都不重排。开始看（进来、App 回到前台、窗口重新露出来）
 /// 又没在和 iCloud 对时，有新消息就从第一条读起（`ChatFollow.Landing.read`：停在顶上，下面不到一屏时滚动区停在最新处）。
@@ -60,6 +60,7 @@ struct CueViewing: ViewModifier {
         guard on != counted else { return }
         counted = on
         services.cueViewers += on ? 1 : -1
+        services.viewer?.showCue(services.cueViewers > 0)
     }
 
     private func land() {

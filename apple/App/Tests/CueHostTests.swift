@@ -450,16 +450,16 @@ struct CueHostTests {
     }
 
     /// Cue 请你允许推送；你选"以后推送代码都不用问"后 Cue 被唤醒，回答写成 Cue 说的，允许清单记上推送（不进记忆）；
-    /// 它再问推送就被拒、叫它直接做。"等你"推了通知（正文是要你定什么，不露原话）。
+    /// 它再问推送就被拒、叫它直接做。"等你"推了通知（正文是要你定什么，不露原话），回答你这一轮的回复也推了（你说完多半已离开 App）。
     @Test func 等你被回答_Cue被唤醒_以后都不用问记进允许清单() async throws {
         let rig = try await Rig()
         try await rig.say("请问我一个问题")
         let question = try await rig.message(.cue, containing: "要推送吗？")
         #expect(question.choices == ["可以", "以后推送代码都不用问"])
-        try await eventually("推了通知") {
-            rig.notifier.posted.map(\.body) == ["可以推送登录页的修复吗？\n可以 / 以后推送代码都不用问"]
-        }
         try await rig.message(.cue, containing: "办好了")
+        try await eventually("推了通知") {
+            rig.notifier.posted.map(\.body) == ["可以推送登录页的修复吗？\n可以 / 以后推送代码都不用问", "办好了"]
+        }
         try await Workspace(services: rig.services).answerCueQuestion(question, "以后推送代码都不用问")
         try await rig.message(.cue, containing: "知道了：以后推送代码都不用问")
         #expect(try await rig.store.cueProfile()?.allows == [CueAllow(.push, project: nil)])

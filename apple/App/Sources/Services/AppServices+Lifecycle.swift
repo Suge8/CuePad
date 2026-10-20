@@ -29,7 +29,7 @@ extension AppServices {
     func prepareForBackground() async {
         stopPolling()
         for flush in backgroundFlushes.values { await flush() }
-        await sessionViewer?.settle()
+        await viewer?.settle()
         await sync?.push()
         do {
             try await writeSnapshots()
