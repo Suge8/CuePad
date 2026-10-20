@@ -1,14 +1,12 @@
 import CueStore
 import SwiftUI
 
-/// 一条任务或步骤，全 App 只有这一种行（手机任务页与项目页任务纸、Mac 任务面板与项目页任务区）：完成圈（`TaskCheckButton`）、标题，
+/// 一条任务或步骤，全 App 只有这一种行（手机项目页任务纸、Mac 项目页任务区）：完成圈（`TaskCheckButton`）、标题，
 /// 加一格旁注——上级的步骤做了几个（"1/4"），与"下一步"（`TaskNextMark`：会话的状态标，或还没交出去的叶子的"开始"）。
 /// 一行只说一遍状态：进行中是圈的半填，会话在做什么是那个会动的状态标；不写分组标题、不写状态词胶囊（要你管的才写字）。
-/// 所在项目由段头说（待办按项目分段，`TaskBoard.todo`），行里不重复；跨项目平铺的（进行中、最近完成）在标题末尾跟一个项目的小图标，
-/// 跟着标题一起折行，不占旁注那一列（读屏念项目名，Mac 悬停写全名）。
+/// 所在项目由所在的页说，行里不重复。
 /// 步骤（`step`）比上级小一档：字小一号、圈小一号，缩进到圈对着上级标题的起点（`TaskOutline.indentWidth`），层级靠对齐读出来，不靠线。
 /// 旁注的位置：iPhone 在行尾（屏窄，行尾就在眼前）；iPad 宽栏与 Mac 紧跟标题（放在行尾时宽窗口里离标题太远，一眼看不到）。
-/// `spelled`（手机任务页进行中的顶层叶子）："下一步"写成标题下的第二行，状态词或"开始"一直写出来（`TaskNextMark.spelled`）。
 /// 点圈完成（`TaskCheck`），点行的其余地方打开任务气泡（`Workspace.openTask`；气泡里的步骤行是翻到这一步）。Mac 右键是 `CardActions`；
 /// 手机长按直接拖动（`TaskOutline`），不挂长按菜单：系统长按菜单弹出后，把预览往下拉是收起菜单、拖不起来，
 /// 往下面的组或项目段拖就做不到。菜单那几项各有入口：完成点圈、删除轻扫、归档在任务气泡的"⋯"。
@@ -19,10 +17,6 @@ struct TaskLine: View {
     var subtasks: TaskProgress?
     /// 是某条任务的步骤（大纲里缩进的那一级）。
     var step = false
-    /// 跨项目平铺时（进行中、最近完成）给出所在项目，标题末尾画它的小图标；分了段的地方不给。
-    var project: Project?
-    /// "下一步"写成标题下的第二行（有步骤的上级不算：它的旁注是步骤数）。
-    var spelled = false
     @State private var check = TaskCheck()
     @Environment(Workspace.self) private var workspace
     @Environment(\.cardAgents) private var agents
@@ -40,9 +34,9 @@ struct TaskLine: View {
         let next = workspace.next(for: task, in: agents, steps: subtasks)
         let done = check.done(task)
         framed(line(next: next, done: done))
-            // 读屏把一行当一个元素："任务内容，步骤 1/4，项目，下一步"，值是状态（文案见 TaskSpeech）；默认动作勾选（与圈同一个动作）
+            // 读屏把一行当一个元素："任务内容，步骤 1/4，下一步"，值是状态（文案见 TaskSpeech）；默认动作勾选（与圈同一个动作）
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel([task.title, subtasks.map(TaskCopy.progress), project?.name, next?.speech].compactMap { $0 }.joined(separator: "，"))
+            .accessibilityLabel([task.title, subtasks.map(TaskCopy.progress), next?.speech].compactMap { $0 }.joined(separator: "，"))
             .accessibilityValue(TaskSpeech.value(done ? .done : task.status))
             .accessibilityAddTraits(.isButton)
             .accessibilityHint(check.phase == .pending ? "撤销完成" : TaskSpeech.toggle(done: done))
@@ -61,17 +55,16 @@ struct TaskLine: View {
     }
 
     private func line(next: TaskNext?, done: Bool) -> some View {
-        let title = titled(done: done)
+        let title = Text(task.title.textGlyphs).strikethrough(done, color: palette.ink3).foregroundStyle(done ? palette.ink3 : palette.ink)
             .font(step ? TaskMetrics.stepFont : TaskMetrics.lineFont)
             .lineLimit(titleLines)
         // 旁注不让：标题先折行、再截断，状态词总是完整的
-        let below = spelled && subtasks == nil && next != nil && !done
-        let side = HStack(alignment: .firstTextBaseline, spacing: 8) { notes(next: next, done: done, spelled: below) }.fixedSize()
+        let side = HStack(alignment: .firstTextBaseline, spacing: 8) { notes(next: next, done: done) }.fixedSize()
         // 圈与旁注都对着标题第一行（`TaskRingView` 的基线），标题折成两行也不落到中间
         return HStack(alignment: .firstTextBaseline, spacing: TaskMetrics.columnGap) {
             ring(next: next)
-            if stacked || below {
-                // 辅助字号、写成第二行时：旁注换到标题下面，不与标题抢一行
+            if stacked {
+                // 辅助字号时：旁注换到标题下面，不与标题抢一行
                 VStack(alignment: .leading, spacing: 2) { title; side }
                     .padding(.vertical, Self.titlePadding)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -88,15 +81,6 @@ struct TaskLine: View {
         .animation(Motion.quick, value: done)
     }
 
-    /// 标题，跨项目时末尾跟所在项目的小图标（拼进同一段字：随标题折行，基线对齐）。
-    private func titled(done: Bool) -> Text {
-        let title = Text(task.title.textGlyphs).strikethrough(done, color: palette.ink3).foregroundStyle(done ? palette.ink3 : palette.ink)
-        guard let project else { return title }
-        let glyph = Text(Image(ProjectGlyph.icon(project))).font(Self.projectGlyph)
-            .foregroundStyle(done ? palette.ink3 : palette.project(project.color))
-        return Text("\(title)  \(glyph)")
-    }
-
     private func ring(next: TaskNext?) -> some View {
         let size = step ? TaskMetrics.stepRing : TaskMetrics.ring
         let target = CGSize(width: TaskMetrics.ringColumn, height: Self.ringTarget)
@@ -108,11 +92,11 @@ struct TaskLine: View {
     }
 
     /// 旁注：上级的步骤数与"下一步"；做完的不写。
-    @ViewBuilder private func notes(next: TaskNext?, done: Bool, spelled: Bool) -> some View {
+    @ViewBuilder private func notes(next: TaskNext?, done: Bool) -> some View {
         if !done, let subtasks {
             Text("\(subtasks.done)/\(subtasks.total)").font(TaskMetrics.caption).monospacedDigit().foregroundStyle(palette.ink3).fixedSize()
         }
-        if !done, let next { TaskNextMark(next: next, spelled: spelled).transition(.opacity) }
+        if !done, let next { TaskNextMark(next: next).transition(.opacity) }
     }
 
     private func open() { workspace.openTask(task) }
@@ -133,7 +117,6 @@ struct TaskLine: View {
     /// 标题折成两行时上下留的白：单行时行高由 44pt 的点按高度撑着。
     private static let titlePadding: CGFloat = 10
     private static let ringTarget: CGFloat = 44
-    private static let projectGlyph = Font.caption.weight(.medium)
 
     /// 长按提起的那一行的外形：与列表那张纸同一个圆角。
     private static let liftRadius: CGFloat = 16
@@ -150,7 +133,6 @@ struct TaskLine: View {
     private var titleLines: Int { 1 }
     private static let titlePadding: CGFloat = 0
     private static let ringTarget: CGFloat = 15
-    private static let projectGlyph = Font.system(size: 11, weight: .medium)
 
     private func framed(_ content: some View) -> some View {
         content
@@ -159,8 +141,6 @@ struct TaskLine: View {
             .environment(\.rowHoverPreset, DebugHooks.hovers(task.body))
             .onTapGesture(perform: open)
             .contextMenu { CardActions(card: task, leaf: subtasks == nil) }
-            // 只给带项目图标的行挂悬停提示：每行一块提示的跟踪区，滚动时跟着重算
-            .background { if let project { Color.clear.help(project.name) } }
             .padding(.vertical, 1)
     }
     #endif
@@ -170,7 +150,7 @@ struct TaskLine: View {
 /// 会话那边的事是会话状态标（`PiStateDot`，在做时那条心电线自己会动），要你管的（等你确认、出错、没送到）旁边写状态词，点了打开会话；
 /// 还没交出去的叶子是一个"▶"，点了把任务的正文交给 Agent（Mac 直接交出，手机浮起发给 Agent 的输入框带着它）。
 /// Mac 上指针停在这一行时（`rowHovered`）"▶ 开始"以靛青露出来、状态标旁写出状态词；没停时"开始"不画（签名色只给焦点，ui.md）。
-/// `spelled`：写成标题下的第二行（`TaskLine.spelled`），状态词与"开始"一直写出来、贴着左边。
+/// `spelled`：写成单独一行（任务看板的卡，`BoardTaskCard`），状态词与"开始"一直写出来、贴着左边。
 struct TaskNextMark: View {
     let next: TaskNext
     var spelled = false
@@ -275,54 +255,3 @@ extension Navigation {
     }
 }
 #endif
-
-/// 看板一组的标题（手机任务页、Mac 任务面板）："进行中 3"、"待办 11"。
-struct TaskGroupHeader: View {
-    let title: String
-    let count: Int
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 6) {
-            Text(title).font(Self.font).foregroundStyle(palette.ink)
-            Text("\(count)").font(Self.countFont).monospacedDigit().foregroundStyle(palette.ink3)
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isHeader)
-    }
-
-    #if os(macOS)
-    private static let font = Typography.secondary.weight(.semibold)
-    private static let countFont = Typography.meta
-    #else
-    private static let font = Font.headline
-    private static let countFont = Font.subheadline
-    #endif
-}
-
-/// 待办里按项目分的一段的段头：项目图标、名字与这一段的条数；未分类是托盘图标与"未分类"。比组标题小一级。
-struct TaskSectionHeader: View {
-    let project: Project?
-    let count: Int
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 5) {
-            ProjectGlyph(project: project, size: Self.glyph)
-            Text(project?.name ?? CaptureCopy.unfiled).foregroundStyle(palette.ink2)
-            Text("\(count)").monospacedDigit().foregroundStyle(palette.ink3)
-        }
-        .font(Self.font)
-        .lineLimit(1)
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isHeader)
-    }
-
-    #if os(macOS)
-    private static let font = Typography.meta
-    private static let glyph: CGFloat = 10
-    #else
-    private static let font = Font.footnote.weight(.semibold)
-    private static let glyph: CGFloat = 11
-    #endif
-}

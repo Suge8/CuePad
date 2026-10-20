@@ -10,7 +10,7 @@ import SwiftUI
 ///    让它在这台值班就会真起大脑，管理器每次对账还把此刻的状态写回它自己的（歇着、起不来），盖掉这里写的在想与用工具，所以不喂；
 /// 4. 第 2 步建的任务交来一张截图后做完（结果卡，同演示库的 `seedEvidence` 加 `finishTask`），再来一条"等你"，停 2 秒替你选"可以"（同点卡上的选项）；
 ///    演示库原有的那条"等你"写入时就答掉（`seedCue`），这张卡是"等你"里唯一的一张，出现与消失都看得到；
-/// 5. 切页：Mac 开再收任务面板（同点侧栏的"任务"）；iPhone 点底部那一排去任务再点 Cue 回来，iPad 侧栏点"任务"再点 Cue。
+/// 5. 切页：Mac 侧栏点"任务"再点 Cue；iPhone 点底部那一排去任务再点 Cue 回来，iPad 侧栏点"任务"再点 Cue。
 /// `-CuePadCueFlowLog <路径>`：同 `measureFlight` 的量法，量"发送"（send：从按下起）与"静止"（idle：走完之后 Cue 歇着、页面不动）各一段，一段一行 JSON 追加进这个文件。
 /// 静止放在最后量：刚就绪的几秒里进程还在后台忙（iOS 模拟器上 4 秒能有上百亿条指令，主线程却几乎不动），量不出页面歇着的样子。
 extension DebugScene {
@@ -45,7 +45,7 @@ extension DebugScene {
     }
     #else
     static func cueFlowIfAsked(_ workspace: Workspace) async {
-        await runCueFlow(workspace) { _ in workspace.showsTasks.toggle() }
+        await runCueFlow(workspace) { away in workspace.show(away ? .tasks : .cue) }
     }
     #endif
 

@@ -223,15 +223,55 @@ struct TaskFlowTests {
 
         let open = [release.id, closed.id, orphan.id]
         #expect(Set(page.tasks.roots) == Set(open))
-        #expect(catalog.openTasks[project] == open.count && board.counts.open == open.count)
-        #expect(Set(board.inProgress.map(\.id) + board.todo.flatMap(\.roots)) == Set(open))
+        #expect(catalog.openTasks[project] == open.count)
+        #expect(Set(board.todo.map(\.id) + board.managing.map(\.id)) == Set(open))
         let done = [fix.id, shipped.id]
-        #expect(Set(board.done.map(\.id)) == Set(done) && board.counts.done == done.count)
-        #expect(page.taskCounts == board.counts)
-        #expect(board.done.first?.task.id == shipped.id)  // 最近完成按完成时间排，不按项目分组
+        #expect(board.done.map(\.id) == [shipped.id, fix.id] && page.taskCounts.done == done.count)  // 做完按完成时间排，最近的在前
     }
 
-    /// 任务页的"进行中"按最近开始排，只列顶层（步骤跟着上级）。
+    #if os(macOS)
+    /// 任务页的流水看板（Mac 侧栏"任务"与手机任务页同一份）：拖到在管就是开始（同"开始"，`Workspace.handOff`），会话开好它就在管；
+    /// Cue 问到它，它挪到等你，没绑任务的会话在问也在这一列；在管、等你两列的数就是 Cue 摘要里的数；答完回到在管；
+    /// 拖到做完就是做完（同点完成圈，`Workspace.toggle`），落在今天做完的那一列。
+    @Test func 看板_拖到在管就是开始_Cue问到它挪到等你_两列的数同Cue摘要_拖到做完就是做完() async throws {
+        try await rig.offersPi()
+        let workspace = Workspace(services: rig.services)
+        let project = try await store.createProject(name: "圆桌", color: "#000000")
+        try await store.setDirectory("/tmp/roundtable", for: project.id)
+        let task = try await store.createTask("修发言乱序", in: project.id)
+        let other = try await store.createTask("补重连用例", in: project.id)
+        func board() async throws -> TaskBoard { try await TaskBoard.read(from: store) }
+        func expectCountsMatchCue(_ board: TaskBoard) async throws {
+            let digest = try await CueDigest.read(from: store)
+            #expect(board.count(.managing) == digest.managing && board.count(.waiting) == digest.waiting)
+        }
+        #expect(try await Set(board().todo.map(\.id)) == [task.id, other.id])
+
+        workspace.handOff(task)
+        let launch = try await eventually(store, { try $0.deliveryRequests().first { $0.mode == .known(.start) } }) { $0 != nil }
+        let token = try #require(launch?.launch?.token)
+        try await PiStateRecorder(store: store, hostID: TestApp.hostID).update(sessionID: "s1", state: .thinking, title: "修发言乱序", launchToken: token)
+        var columns = try await board()
+        #expect(columns.managing.map(\.id) == [task.id] && columns.todo.map(\.id) == [other.id])
+        try await expectCountsMatchCue(columns)
+
+        let ask = try await store.addCueMessage(.cue, text: "要推送吗？", ask: try CueAsking(.push, action: "推送发言顺序的修复"), task: task.id)
+        try await PiStateRecorder(store: store, hostID: "mac-a")
+            .update(sessionID: "rename", state: .waitingForUser, title: "rename", question: PiQuestion(promptID: "p", kind: .text, text: "新分支叫什么？"))
+        columns = try await board()
+        #expect(columns.managing.isEmpty)
+        #expect(columns.waiting.map(\.item?.id) == [task.id, nil])
+        try await expectCountsMatchCue(columns)
+
+        try await workspace.answerCueQuestion(ask, CueAsk.once)
+        #expect(try await board().managing.map(\.id) == [task.id])
+        try await workspace.toggle(task.id)
+        columns = try await board()
+        #expect(columns.done.map(\.id) == [task.id] && columns.managing.isEmpty && columns.waiting.count == 1)
+        try await expectCountsMatchCue(columns)
+    }
+    #endif
+
     /// 在管与等你（Cue 那一行、看板中间两列同一份）：开工的顶层任务在管；Cue 问到它的步骤、它的会话在问你，它就从在管挪到等你，一处在等算一件；
     /// 没落在任务上的提问也算等你；答完回到在管。
     @Test func 在管与等你_问到哪件哪件挪到等你_答完回到在管() async throws {
@@ -261,7 +301,8 @@ struct TaskFlowTests {
         #expect(tally.managing.map(\.id) == [release.id] && tally.waiting.count == 2)
     }
 
-    @Test func 进行中按最近开始_只列顶层() async throws {
+    /// 看板的在管按最近开始排，只列顶层（步骤跟着上级）。
+    @Test func 在管按最近开始_只列顶层() async throws {
         let oldest = try await store.createTask("最早开始", in: nil)
         try await store.setStatus(oldest.id, .inProgress)
         let step = try await store.createTask("步骤", under: oldest.id)
@@ -272,8 +313,8 @@ struct TaskFlowTests {
         try await store.setStatus(newest.id, .inProgress)
 
         let board = try await TaskBoard.read(from: store)
-        #expect(board.inProgress.map(\.id) == [newest.id, middle.id, oldest.id])
-        #expect(board.counts.inProgress == 3)  // 标题上的"3 进行中"：顶层，不含步骤
+        #expect(board.managing.map(\.id) == [newest.id, middle.id, oldest.id])
+        #expect(board.count(.managing) == 3)  // 列头的"在管 3"：顶层，不含步骤
     }
 
     // MARK: 整理任务的层级

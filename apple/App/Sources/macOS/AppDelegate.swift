@@ -111,10 +111,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     /// 主菜单里写"等 N 个 Agent 做完再装"的那一行（停用，只是说明）。
     static let updateNoteTag = 1
 
-    /// 主菜单"显示"里的搜索（⌘K）、任务面板（⌘⇧T）与侧栏（⌃⌘S）：命令本身是开关，开着时同一条命令把它关掉。放在主菜单而不是窗口里的快捷键：
-    /// 模态浮层（⌘K 自己就是）开着时只把 ⌘ 组合键交给主菜单（`PanelHost`）。
+    /// 主菜单"显示"里的搜索（⌘K）、任务（⌘⇧T）与侧栏（⌃⌘S）：搜索与侧栏是开关，开着时同一条命令把它关掉；任务是去任务页（收起开着的搜索）。
+    /// 放在主菜单而不是窗口里的快捷键：模态浮层（⌘K 自己就是）开着时只把 ⌘ 组合键交给主菜单（`PanelHost`）。
     @objc func toggleSearch(_ sender: Any?) { workspace?.searching.toggle() }
-    @objc func toggleTasks(_ sender: Any?) { workspace?.showsTasks.toggle() }
+    @objc func showTasks(_ sender: Any?) {
+        workspace?.searching = false
+        workspace?.show(.tasks)
+    }
     @objc func newCard(_ sender: Any?) { workspace?.newCard() }
     @objc func newSession(_ sender: Any?) { workspace?.newSession() }
     /// 不叫 `toggleSidebar(_:)`：AppKit 的分栏控制器自己响应那个动作，在响应链上先接走，带着分栏动画开合。
@@ -124,8 +127,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         switch item.action {
         case #selector(checkForUpdates(_:)): services?.updates.canCheckForUpdates ?? false
         case #selector(installUpdateNow(_:)): showsUpdateWait(item)
-        // 资料库读不出来时：搜索结果能打开卡片、任务面板能增改任务，都是写入入口
-        case #selector(toggleSearch(_:)), #selector(toggleTasks(_:)), #selector(newCard(_:)), #selector(newSession(_:)):
+        // 资料库读不出来时：搜索结果能打开卡片、任务页能增改任务，都是写入入口
+        case #selector(toggleSearch(_:)), #selector(showTasks(_:)), #selector(newCard(_:)), #selector(newSession(_:)):
             workspace?.isLibraryReady == true && NSApp.mainWindow === services?.windowShell
         case #selector(toggleCueSidebar(_:)): NSApp.mainWindow === services?.windowShell
         default: true

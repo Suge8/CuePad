@@ -69,8 +69,6 @@ final class Workspace {
     var projectForm: ProjectForm.Request?
     /// ⌘K 搜索开着（`SearchPalette`）。
     var searching = false
-    /// 右上角的任务面板开着（`TasksPanel`）。
-    var showsTasks = false
     /// 接入 Agent 的面板（`AgentSetupPanel`；首次打开由 `offerAgentSetup` 置起，主窗口弹出）。
     var showsAgentSetup = false
     /// 新会话的表单开着（`NewSessionForm`，从会话页的 + 弹出；菜单"文件 › 新会话"先去会话页再置起，`newSession`）。
@@ -143,13 +141,12 @@ final class Workspace {
         presses.dismiss()
     }
 
-    /// 打开一条灵感或任务：任务在气泡里看（`openTask`，右上角的任务面板留着）；
+    /// 打开一条灵感或任务：任务在气泡里看（`openTask`）；
     /// 灵感（挂在任务下的资料也一样）进整页的编辑页。
     func open(_ card: Card) {
         presses.clearSelection()
         if card.isTask { return openTask(card) }
         openTask = nil
-        showsTasks = false
         openCard = card.id
     }
 

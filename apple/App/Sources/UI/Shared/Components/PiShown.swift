@@ -282,7 +282,7 @@ nonisolated extension PiShown {
     /// 名字与状态词加粗：做完了你还没看。
     var isUnread: Bool { status == .unread }
 
-    /// 此刻显示为没能送达时的原因（会话行、项目"此刻"、Mac 任务面板写它）。
+    /// 此刻显示为没能送达时的原因（会话行、项目"此刻"、任务浮窗写它）。
     var undelivered: Speech.Failure? { if case .delivery(.failed(let failure)) = status { failure } else { nil } }
 
     /// 在动：工作中（心电线）、话在路上（三块实心 V）。

@@ -2,219 +2,138 @@
 import CueStore
 import SwiftUI
 
-/// 任务页（iPhone 底部一排的"任务"、宽屏侧栏的"任务"）：两组（`TaskBoard`）直接排在桌面上，不垫纸——
-/// 进行中在上：跨项目、最近开始的在前，标题后跟项目小图标；没有步骤的那几条"下一步"写成第二行（会话状态或"▶ 开始"，`TaskLine.spelled`），
-/// 有步骤的旁注是步骤数、步骤跟在下面；组标题右边"N 个会话在跑 ›"去会话页（`RunningSessions`）。
-/// 待办收着时露出最近添加的几条（`TaskBoard.latestTodo`，标题后跟项目小图标），末行"还有 N 项"原地展开成按项目分的段（段头写项目），末行换成"收起"；
-/// 最近完成折着。步骤缩进跟在上级下（`TaskOutline`：长按拖动排序、拖到一条上成为它的步骤、拖进待办别的段换项目，拖动不改状态；
-/// 进行中按开始时间排、露出的那几条按添加时间排，两行之间不能落；轻扫见 `CardMenu.swipes`），行是全 App 共用的 `TaskLine`。
-/// 添加任务在右上角"+"：点了列表顶上浮出一行输入（`NewTaskLine`，↩ 即一条，落当前项目或未分类，可换），失焦且没写字时收回。
-/// 没有没做完的任务时是吉祥物加一句现状。宽屏（iPad）里列表不铺满：标题与行尾的旁注隔太远读不成一行。
+/// 任务页（iPhone 底部一排的"任务"、宽屏侧栏的"任务"）：流水看板（`TaskBoard`），待办 → 在管 → 等你 → 做完（今天）。
+/// 宽屏（iPad）同 Mac 四列并排（`BoardColumns`），顶上按项目筛的胶囊。窄屏一屏一列：顶上一排带数的分段（`BoardSegments`），左右滑换列（分页滚动），
+/// 点分段滑过去；打开时有等你就落在等你。分段下面一行"全部项目"菜单按项目筛（筛了以后分段的数也只数这个项目）。
+/// 右上角"+"去待办、顶上浮出添加那一行（`NewTaskLine`，落在筛的项目或当前项目，可换），失焦且没写字时收回。
 struct TasksScreen: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
+    @Environment(Navigation.self) private var navigation
     @Environment(\.palette) private var palette
+    @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var board: TaskBoard?
-    @State private var showsCompleted = false
-    @State private var showsAllTodo = false
+    @State private var project: UUID?
     @State private var adding = false
-    @Environment(Navigation.self) private var navigation
-
-    private static let readableWidth: CGFloat = 720
-    private static let radius: CGFloat = 16
-    private static let newTask = "newTask"
+    /// 窄屏此刻看的那一列（分页滚动的位置）。
+    @State private var column: TaskBoard.Column?
 
     var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                if let board { content(board) }
-            }
-            // 滚动收起键盘：浮出的添加那一行没写字时跟着收回（`NewTaskLine.dismiss`）
-            .scrollDismissesKeyboard(.immediately)
-            .onChange(of: board?.done.last?.id) {
-                if DebugHooks.preset.showsDone, let last = board?.done.last?.id { proxy.scrollTo(last, anchor: .bottom) }
-            }
-            // 浮出的那一行在列表最上面：滚走了就滚回来
-            .onChange(of: adding) {
-                if adding { withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { proxy.scrollTo(Self.newTask, anchor: .top) } }
-            }
-            // 没有没做完的任务时页头不写计数：下面的空态已经说了
-            .floatingHeader("任务", detail: board.flatMap { $0.counts.open == 0 ? nil : $0.counts.summary } ?? "") {
-                Button("添加任务", icon: .add) { adding = true }
-            }
-        }
-        .onAppear { if DebugHooks.preset.showsDone { showsCompleted = true } }
-        .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: board?.order)
-        .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: adding)
-        .observing(services.store, into: $board, onError: workspace.fail) {
-            try TaskBoard.read(from: $0)
-        }
-    }
-
-    /// 行按需建（懒加载栈，组里的行也是，`TaskOutline.lazyAfter`）：普通栈在进页那一圈把所有行都建出来量一遍，150 条待办进页约 380ms。
-    private func content(_ board: TaskBoard) -> some View {
-        LazyVStack(alignment: .leading, spacing: 28) {
-            if adding {
-                NewTaskLine(project: navigation.currentProject, projects: workspace.catalog?.projects) { adding = false }
-                    .padding(.horizontal, 6)
-                    .background(palette.paper, in: .rect(cornerRadius: Self.radius, style: .continuous))
-                    .id(Self.newTask)
-                    .transition(Motion.item)
-            }
-            if board.inProgress.isEmpty && board.todo.isEmpty {
-                EmptyState(
-                    mascot: board.done.isEmpty ? .empty : .clean, title: board.done.isEmpty ? "还没有任务" : "全部完成了",
-                    message: board.done.isEmpty ? "点右上角的 + 写一条" : nil, waitsForSync: true)
-                .transition(Motion.item)
-            }
-            if !board.inProgress.isEmpty { inProgress(board) }
-            if !board.todo.isEmpty { todo(board) }
-            if !board.done.isEmpty { completed(board.done, count: board.counts.done) }
-        }
-        .padding(.horizontal, 16).padding(.bottom, 24)
-        .frame(maxWidth: Self.readableWidth)
-        .frame(maxWidth: .infinity)
-    }
-
-    /// 进行中：跨项目，行的标题后跟项目小图标（步骤不跟，它跟着上级）。
-    private func inProgress(_ board: TaskBoard) -> some View {
-        let projects = Dictionary(uniqueKeysWithValues: board.inProgress.map { ($0.id, $0.project) })
-        return VStack(alignment: .leading, spacing: 4) {
-            // 放不下一行（辅助字号）时"N 个会话在跑"换到标题下面
-            ViewThatFits(in: .horizontal) {
-                HStack(alignment: .firstTextBaseline) {
-                    TaskGroupHeader(title: "进行中", count: board.counts.inProgress)
-                    Spacer(minLength: 8)
-                    RunningSessions().fixedSize()
+        let whole = board ?? .empty
+        let shown = whole.only(project)
+        Group {
+            if sizeClass == .regular {
+                VStack(alignment: .leading, spacing: 14) {
+                    BoardProjectChips(projects: whole.projects(in: workspace.catalog), selected: $project).padding(.horizontal, 16)
+                    BoardColumns(board: shown, adding: $adding, newTaskProject: newTaskProject).padding(.horizontal, 12)
                 }
-                VStack(alignment: .leading, spacing: 0) {
-                    TaskGroupHeader(title: "进行中", count: board.counts.inProgress)
-                    RunningSessions()
-                }
-            }
-            .padding(.horizontal, 4)
-            TaskOutline(tree: board.tree, roots: board.inProgress.map(\.id), gaps: false, lazyAfter: 0) { row in
-                TaskLine(
-                    task: row.task, subtasks: board.subtasks[row.id], step: row.depth > 0, project: projects[row.id] ?? nil,
-                    spelled: row.depth == 0)
-            }
-            .padding(.leading, Self.lineInset)
-        }
-        .transition(Motion.item)
-    }
-
-    /// 待办：收着时露出最近添加的几条，其余收成末行"还有 N 项"；展开后按项目分段，末行"收起"。
-    private func todo(_ board: TaskBoard) -> some View {
-        let total = board.todo.reduce(0) { $0 + $1.roots.count }
-        let hidden = total - board.latestTodo.count
-        let expanded = showsAllTodo && hidden > 0
-        let projects = Dictionary(uniqueKeysWithValues: board.latestTodo.map { ($0.id, $0.project) })
-        return LazyVStack(alignment: .leading, spacing: expanded ? 12 : 4) {
-            TaskGroupHeader(title: "待办", count: board.counts.todo).padding(.horizontal, 4)
-            if expanded {
-                ForEach(board.todo) { section($0, in: board) }
             } else {
-                TaskOutline(tree: board.tree, roots: board.latestTodo.map(\.id), gaps: false, lazyAfter: 0) { row in
-                    TaskLine(task: row.task, subtasks: board.subtasks[row.id], step: row.depth > 0, project: projects[row.id] ?? nil)
+                VStack(alignment: .leading, spacing: 10) {
+                    BoardSegments(board: shown, selected: $column).padding(.horizontal, 16)
+                    filterMenu(whole).padding(.horizontal, 16)
+                    pages(shown)
                 }
-                .padding(.leading, Self.lineInset)
             }
-            if hidden > 0 { todoFold(hidden: hidden, expanded: expanded) }
         }
-        .transition(Motion.item)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .floatingHeader("任务") {
+            Button("添加任务", icon: .add) { add() }
+        }
+        .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: adding)
+        .onChange(of: project) { adding = false }
+        .onAppear { if let board { land(board) } }
+        .onChange(of: board == nil) { if let board { land(board) } }
+        .observingBoard(into: $board, store: services.store, onError: workspace.fail)
     }
 
-    private func section(_ section: TaskBoard.Section, in board: TaskBoard) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            TaskSectionHeader(project: section.project, count: section.roots.count).padding(.horizontal, 4)
-            TaskOutline(tree: board.tree, roots: section.roots, lazyAfter: 0) { row in
-                TaskLine(task: row.task, subtasks: board.subtasks[row.id], step: row.depth > 0)
+    private var newTaskProject: UUID? { project ?? navigation.currentProject }
+
+    /// 一屏一列，左右滑换列：列的宽就是可见宽（`containerRelativeFrame`），按页停。
+    private func pages(_ board: TaskBoard) -> some View {
+        ScrollView(.horizontal) {
+            LazyHStack(alignment: .top, spacing: 0) {
+                ForEach(TaskBoard.Column.allCases) { column in
+                    BoardColumn(column: column, board: board, adding: $adding, newTaskProject: newTaskProject)
+                        .padding(.horizontal, 12)
+                        .containerRelativeFrame(.horizontal)
+                        .id(column)
+                }
             }
-            .padding(.leading, Self.lineInset)
+            .scrollTargetLayout()
         }
-        .transition(Motion.item)
+        .scrollTargetBehavior(.paging)
+        .scrollPosition(id: $column)
+        .scrollIndicators(.never)
     }
 
-    /// 待办的末行：收着时"还有 N 项"，展开后"收起"；字与行的标题对齐。
-    private func todoFold(hidden: Int, expanded: Bool) -> some View {
-        Button {
-            withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { showsAllTodo.toggle() }
+    /// "全部项目"：按项目筛，只列看板上有事的项目。
+    private func filterMenu(_ whole: TaskBoard) -> some View {
+        let current = workspace.catalog?.project(project)
+        return Menu {
+            Picker("按项目看", selection: $project) {
+                Label("全部项目", icon: .all).tag(UUID?.none)
+                ForEach(whole.projects(in: workspace.catalog)) { item in
+                    Label { Text(item.name) } icon: { ProjectGlyph(project: item) }.tag(Optional(item.id))
+                }
+            }
         } label: {
-            HStack(spacing: 4) {
-                Text(expanded ? "收起" : "还有 \(hidden) 项").monospacedDigit()
-                Image(.forward).font(.caption.weight(.semibold))
-                    .rotationEffect(.degrees(expanded ? -90 : 0)).accessibilityHidden(true)
-                Spacer(minLength: 0)
+            HStack(spacing: 5) {
+                if let current { ProjectGlyph(project: current, size: 13) }
+                Text(current?.name ?? "全部项目").lineLimit(1)
+                Image(.expand).font(.caption.weight(.semibold)).accessibilityHidden(true)
             }
-            .font(.subheadline).foregroundStyle(palette.ink3)
-            .padding(.leading, Self.lineInset + TaskMetrics.ringColumn + TaskMetrics.columnGap)
-            .frame(minHeight: 44).contentShape(.rect)
+            .font(.subheadline).foregroundStyle(palette.ink2)
+            .padding(.horizontal, 12).frame(minHeight: 36)
+            .background(palette.fill, in: .capsule)
+            .contentShape(.capsule)
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(expanded ? "收起待办" : "还有 \(hidden) 项待办")
-        .accessibilityExpanded(expanded)
+        .accessibilityLabel(current.map { "按项目看：\($0.name)" } ?? "按项目看")
     }
 
-    /// 行比组标题往左多出的那一截：圈在 44pt 的点按格里居中，圈的左缘对着组标题的字。
-    private static let lineInset: CGFloat = -8
+    /// 打开时落在哪一列：有等你就是等你（要你拍板的事在那里就能处理），否则在管、再否则待办。
+    private func land(_ board: TaskBoard) {
+        column = !board.waiting.isEmpty ? .waiting : !board.managing.isEmpty ? .managing : .todo
+    }
 
-    private func completed(_ rows: [TaskBoard.Row], count: Int) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Button {
-                    withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { showsCompleted.toggle() }
-                } label: {
-                    HStack(spacing: 6) {
-                        Text("最近完成 \(count)")
-                        Image(.forward).font(.caption.weight(.semibold))
-                            .rotationEffect(.degrees(showsCompleted ? 90 : 0)).accessibilityHidden(true)
-                        Spacer()
-                    }
-                    .font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink2)
-                    .padding(.horizontal, 4)
-                    .frame(minHeight: 44).contentShape(.rect)
-                }
-                .buttonStyle(.plain)
-                .accessibilityValue(showsCompleted ? "已展开" : "已折叠")
-                // 做完的一键收走：归档后不占列表，照样搜得到
-                Button("全部归档") { workspace.attempt { try await workspace.archiveCompletedTasks() } }
-                    .font(.subheadline).foregroundStyle(palette.ink3)
-                    .padding(.horizontal, 4).frame(minHeight: 44).contentShape(.rect)
-                    .buttonStyle(.plain)
-            }
-            if showsCompleted {
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    ForEach(rows) { TaskLine(task: $0.task, project: $0.project).id($0.id) }
-                }
-                .padding(.leading, Self.lineInset)
-                .transition(.opacity)
-            }
-        }
+    /// 先滑到待办、停稳了再浮出添加那一行：滑动途中插进来的输入框接不住焦点（实测会空着不聚焦）。
+    private func add() {
+        guard column != .todo else { return adding = true }
+        withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { column = .todo } completion: { adding = true }
     }
 }
 
-/// 进行中组标题右边的"N 个会话在跑 ›"（`Workspace.liveWork` 的在跑数，同 Cue 页头面板的区头），点了去会话页；没有在跑的不写。
-/// 单独一个视图读会话：会话状态变化时只重算它，不重算整页任务。
-private struct RunningSessions: View {
-    @Environment(Workspace.self) private var workspace
-    @Environment(Navigation.self) private var navigation
+/// 窄屏任务页顶上的分段：四列各一格，写状态图形、列名与数；选中的那格是靛青浅底（`selection`）。点了滑到那一列。
+private struct BoardSegments: View {
+    let board: TaskBoard
+    @Binding var selected: TaskBoard.Column?
     @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        let running = workspace.liveWork.running
-        if running > 0 {
-            Button { navigation.show(.agent) } label: {
-                HStack(spacing: 3) {
-                    Text("\(running) 个会话在跑").contentTransition(.numericText()).animation(Motion.snappy, value: running)
-                    Image(.forward).font(.footnote.weight(.semibold)).accessibilityHidden(true)
+        HStack(spacing: 2) {
+            ForEach(TaskBoard.Column.allCases) { column in
+                let on = selected == column
+                Button {
+                    withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { selected = column }
+                } label: {
+                    HStack(spacing: 4) {
+                        if column == .waiting, board.count(column) > 0 { BoardColumnGlyph(column: column, size: 12) }
+                        Text(column.title).fontWeight(on ? .semibold : .regular)
+                        Text("\(board.count(column))").monospacedDigit().foregroundStyle(palette.ink3)
+                    }
+                    .font(.subheadline).foregroundStyle(on ? palette.ink : palette.ink2)
+                    .lineLimit(1).minimumScaleFactor(0.8)
+                    .frame(maxWidth: .infinity, minHeight: 40)
+                    .background(on ? palette.selection : .clear, in: .capsule)
+                    .contentShape(.capsule)
                 }
-                .font(.subheadline.monospacedDigit()).foregroundStyle(palette.ink3)
-                .frame(minHeight: 44).contentShape(.rect)
+                .buttonStyle(PressStyle())
+                .accessibilityAddTraits(on ? .isSelected : [])
             }
-            .buttonStyle(PressStyle())
-            .accessibilityHint("看全部会话")
         }
+        .padding(3)
+        .glass(in: .capsule)
     }
 }
 
