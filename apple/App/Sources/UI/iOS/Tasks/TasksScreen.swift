@@ -44,9 +44,7 @@ struct TasksScreen: View {
         .onChange(of: project) { adding = false }
         .onAppear { if let board { land(board) } }
         .onChange(of: board == nil) { if let board { land(board) } }
-        .observing(services.store, into: $board, onError: workspace.fail) {
-            try TaskBoard.read(from: $0)
-        }
+        .observingBoard(into: $board, store: services.store, onError: workspace.fail)
     }
 
     private var newTaskProject: UUID? { project ?? navigation.currentProject }

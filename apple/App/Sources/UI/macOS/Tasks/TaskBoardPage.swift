@@ -22,9 +22,7 @@ struct TaskBoardPage: View {
         .background(palette.desk)
         .animation(Motion.quick, value: adding)
         .onChange(of: project) { adding = false }
-        .observing(services.store, into: $board, onError: workspace.fail) {
-            try TaskBoard.read(from: $0)
-        }
+        .observingBoard(into: $board, store: services.store, onError: workspace.fail)
     }
 
     private func topRow(_ whole: TaskBoard) -> some View {

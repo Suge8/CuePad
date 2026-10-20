@@ -46,13 +46,9 @@ struct BoardColumn: View {
     #endif
     @State private var showsEarlier = DebugHooks.preset.showsDone
     @State private var targeted = false
-    /// 拖到做完、要先问一句的那件。
-    @State private var finishing: Finishing?
-
-    private struct Finishing {
-        let task: Card
-        let ask: TaskCheck.Ask
-    }
+    /// 拖到做完的那件与它这一下（同点完成圈，`taskCheck`）。
+    @State private var finishing: TaskBoard.Item?
+    @State private var check = TaskCheck()
 
     var body: some View {
         ScrollView {
@@ -69,12 +65,7 @@ struct BoardColumn: View {
         .dropDestination(for: String.self) { ids, _ in
             drop(ids, before: nil)
         } isTargeted: { targeted = $0 && column != .todo && column != .waiting }
-        .dialog(
-            TaskCopy.openSubtasks(finishing.flatMap { board.item($0.task.id)?.steps }), isPresented: asking(.steps),
-            buttons: [DialogButton(title: "全部完成") { confirmFinish() }])
-        .dialog(
-            "Agent 还在做这件事", isPresented: asking(.agent), message: "完成会把它的会话一起结束。",
-            buttons: [DialogButton(title: "完成并结束会话") { confirmFinish() }])
+        .taskCheck(finishing?.task, subtasks: finishing?.steps, check: $check)
     }
 
     private static let gap: CGFloat = 8
@@ -197,27 +188,12 @@ struct BoardColumn: View {
         #endif
     }
 
-    /// 同点完成圈（`Workspace.tap`）：还有没完成的步骤、Agent 还在做时先问一句。
+    /// 同点完成圈（`Workspace.tap`，确认、停留与写入同 `taskCheck`）。
     private func finish(_ item: TaskBoard.Item) {
         let busy = item.leaf.flatMap { workspace.next(for: $0, in: workspace.agentLinks, steps: nil) }?.agentBusy ?? false
-        if TaskCopy.hasOpen(item.steps) {
-            finishing = Finishing(task: item.task, ask: .steps)
-        } else if busy {
-            finishing = Finishing(task: item.task, ask: .agent)
-        } else {
-            let id = item.id
-            workspace.attempt { try await workspace.toggle(id) }
-        }
-    }
-
-    private func confirmFinish() {
-        guard let id = finishing?.task.id else { return }
-        finishing = nil
-        workspace.attempt { try await workspace.toggle(id) }
-    }
-
-    private func asking(_ ask: TaskCheck.Ask) -> Binding<Bool> {
-        Binding(get: { finishing?.ask == ask }, set: { if !$0, finishing?.ask == ask { finishing = nil } })
+        finishing = item
+        check = TaskCheck()
+        workspace.tap($check, task: item.task, subtasks: item.steps, agentBusy: busy)
     }
 }
 
@@ -423,7 +399,8 @@ struct BoardWaitCard: View {
                 question(message.headline ?? "", by: workspace.cue.name)
                 CueChoices(options: message.choices ?? [], disabled: ending, fills: true) { answer(message, $0) }
             case .session(let session, _):
-                question(PiProgress.line(of: session) ?? workspace.shown(session, delivery: nil).label, by: nil)
+                // 在问的是整段问题连同选项（回答框里写选项原文或序号）；Cue 留给你回的是它最后那句的首句
+                question(session.question?.displayText ?? PiProgress.line(of: session) ?? workspace.shown(session, delivery: nil).label, by: nil)
                 BoardReply(session: session)
             }
         }
@@ -584,6 +561,26 @@ struct BoardProjectChips: View {
     #else
     private static let height: CGFloat = 36
     #endif
+}
+
+extension View {
+    /// 读看板（Mac 任务页、手机任务页同一处）：库变了重读；过了零点也重读一次——"今天做完"按读的那一刻分，库没变时日子换了也要换（同项目页）。
+    func observingBoard(into board: Binding<TaskBoard?>, store: CueStore, onError: @escaping (any Error) -> Void) -> some View {
+        modifier(BoardReading(board: board, store: store, onError: onError))
+    }
+}
+
+private struct BoardReading: ViewModifier {
+    @Binding var board: TaskBoard?
+    let store: CueStore
+    let onError: (any Error) -> Void
+    @State private var day = 0
+
+    func body(content: Content) -> some View {
+        content
+            .observing(store, id: day, into: $board, onError: onError) { try TaskBoard.read(from: $0) }
+            .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in day += 1 }
+    }
 }
 
 extension TaskBoard {
