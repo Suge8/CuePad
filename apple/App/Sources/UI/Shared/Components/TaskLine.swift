@@ -1,10 +1,10 @@
 import CueStore
 import SwiftUI
 
-/// 一条任务或步骤，全 App 只有这一种行（手机任务页与项目页任务纸、Mac 任务面板与项目页任务区）：完成圈（`TaskCheckButton`）、标题，
+/// 一条任务或步骤，全 App 只有这一种行（手机项目页任务纸、Mac 项目页任务区）：完成圈（`TaskCheckButton`）、标题，
 /// 加一格旁注——上级的步骤做了几个（"1/4"），与"下一步"（`TaskNextMark`：会话的状态标，或还没交出去的叶子的"开始"）。
 /// 一行只说一遍状态：进行中是圈的半填，会话在做什么是那个会动的状态标；不写分组标题、不写状态词胶囊（要你管的才写字）。
-/// 所在项目由段头说（待办按项目分段，`TaskBoard.todo`），行里不重复；跨项目平铺的（进行中、最近完成）在标题末尾跟一个项目的小图标，
+/// 所在项目由所在的页说，行里不重复；跨项目平铺时在标题末尾跟一个项目的小图标，
 /// 跟着标题一起折行，不占旁注那一列（读屏念项目名，Mac 悬停写全名）。
 /// 步骤（`step`）比上级小一档：字小一号、圈小一号，缩进到圈对着上级标题的起点（`TaskOutline.indentWidth`），层级靠对齐读出来，不靠线。
 /// 旁注的位置：iPhone 在行尾（屏窄，行尾就在眼前）；iPad 宽栏与 Mac 紧跟标题（放在行尾时宽窗口里离标题太远，一眼看不到）。
@@ -281,54 +281,3 @@ extension Navigation {
     }
 }
 #endif
-
-/// 看板一组的标题（手机任务页、Mac 任务面板）："进行中 3"、"待办 11"。
-struct TaskGroupHeader: View {
-    let title: String
-    let count: Int
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 6) {
-            Text(title).font(Self.font).foregroundStyle(palette.ink)
-            Text("\(count)").font(Self.countFont).monospacedDigit().foregroundStyle(palette.ink3)
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isHeader)
-    }
-
-    #if os(macOS)
-    private static let font = Typography.secondary.weight(.semibold)
-    private static let countFont = Typography.meta
-    #else
-    private static let font = Font.headline
-    private static let countFont = Font.subheadline
-    #endif
-}
-
-/// 待办里按项目分的一段的段头：项目图标、名字与这一段的条数；未分类是托盘图标与"未分类"。比组标题小一级。
-struct TaskSectionHeader: View {
-    let project: Project?
-    let count: Int
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 5) {
-            ProjectGlyph(project: project, size: Self.glyph)
-            Text(project?.name ?? CaptureCopy.unfiled).foregroundStyle(palette.ink2)
-            Text("\(count)").monospacedDigit().foregroundStyle(palette.ink3)
-        }
-        .font(Self.font)
-        .lineLimit(1)
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isHeader)
-    }
-
-    #if os(macOS)
-    private static let font = Typography.meta
-    private static let glyph: CGFloat = 10
-    #else
-    private static let font = Font.footnote.weight(.semibold)
-    private static let glyph: CGFloat = 11
-    #endif
-}

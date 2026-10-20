@@ -9,7 +9,7 @@ nonisolated private struct SidebarData: Sendable, Equatable {
 }
 
 /// 侧栏的结构与 iPhone、iPad 同一份（`SidebarOutline`），这里只管 Mac 的长相：从上到下 Cue（`CueSidebarRow`）、任务与会话（`PlaceRows`：
-/// 任务开合任务面板，会话打开 Agent 整页）、项目（置顶的在前，末尾未分类；Mac 没有书架，全部列出）、紧接着 Agent（Mac 独有：只列在线的会话，
+/// 任务打开看板页，会话打开 Agent 整页）、项目（置顶的在前，末尾未分类；Mac 没有书架，全部列出）、紧接着 Agent（Mac 独有：只列在线的会话，
 /// 全部列出；其余与历史在"会话"那一页里），底栏是归档、回收站与设置。点哪一行，内容区就是哪一页。两区按内容高度分（`SidebarSplit`）：放得下时各占所需、Agent 紧跟项目，
 /// 剩下的空白在 Agent 区下面；放不下时项目区保住至少一半可用高度，Agent 区先拿到所需、但最多拿到项目区用剩的高度，
 /// 项目区拿剩下的、自己滚动（方向键与 ⌘1–9 换到的项目滚进可见区），Agent 区一直停在看得见的地方；Agent 多到超过这个上限时
@@ -211,7 +211,7 @@ private struct SidebarHeader<Action: View>: View {
     }
 }
 
-/// 侧栏里能去的页，按显示顺序：会话 → 项目（`SidebarOutline`）→ 未分类 → 归档 → 回收站。方向键共用这一份顺序（任务是面板、不是页）。
+/// 侧栏里能去的页，按显示顺序：任务 → 会话 → 项目（`SidebarOutline`）→ 未分类 → 归档 → 回收站。方向键共用这一份顺序。
 private struct SidebarPages {
     let outline: SidebarOutline
     let showsBins: Bool
@@ -222,11 +222,11 @@ private struct SidebarPages {
     }
 
     var order: [Route] {
-        [.agent] + outline.projects.map { .project($0.id) } + (outline.unfiled > 0 ? [.unfiled] : []) + (showsBins ? [.archive, .trash] : [])
+        [.tasks, .agent] + outline.projects.map { .project($0.id) } + (outline.unfiled > 0 ? [.unfiled] : []) + (showsBins ? [.archive, .trash] : [])
     }
 }
 
-/// Cue 下面的去处：任务（开合任务面板，开着时选中；同 ⌘⇧T；面板从这一行弹出，它就是面板的锚点）、会话（Agent 整页）。单独读当前页与面板开合，换页、开面板时侧栏别处不跟着重算。
+/// Cue 下面的去处：任务（看板页，同 ⌘⇧T）、会话（Agent 整页）。单独读当前页，换页时侧栏别处不跟着重算。
 private struct PlaceRows: View {
     let select: (Route) -> Void
     @Environment(Workspace.self) private var workspace
@@ -235,16 +235,8 @@ private struct PlaceRows: View {
     var body: some View {
         VStack(spacing: SidebarMetrics.rowGap) {
             ForEach(SidebarOutline.places, id: \.self) { entry in
-                switch entry {
-                case .tasks:
-                    row(entry, selected: workspace.showsTasks) { workspace.showsTasks.toggle() }
-                        .panel(isPresented: Bindable(workspace).showsTasks, style: .side) { TasksPanel() }
-                        .help("任务（⌘⇧T）")
-                        .disabled(!workspace.isLibraryReady)
-                default:
-                    row(entry, selected: workspace.page == entry.route) { select(entry.route) }
-                        .help("按项目查看、搜索全部会话")
-                }
+                row(entry, selected: workspace.page == entry.route) { select(entry.route) }
+                    .help(entry == .tasks ? "任务（⌘⇧T）" : "按项目查看、搜索全部会话")
             }
         }
     }
@@ -289,7 +281,7 @@ private struct ProjectRows: View {
     }
 }
 
-/// 侧栏里的一行：图标列、名字、行尾的计数；当前页（任务面板开着时的任务）是行的选中底（`RowStyle`）、文字加粗；其余用 85% 的墨，不发灰。
+/// 侧栏里的一行：图标列、名字、行尾的计数；当前页是行的选中底（`RowStyle`）、文字加粗；其余用 85% 的墨，不发灰。
 private struct PageRow<Icon: View, Title: View>: View {
     let count: Int
     var height = Spacing.sidebarRow

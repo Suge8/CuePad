@@ -36,9 +36,9 @@ enum DebugHooks {
         /// 合成的鼠标移动事件也不触发不在前台的应用的悬停。
         var hovered: String?
         #endif
-        #if os(iOS)
-        /// 任务页的"最近完成"展开并滚到底（`-CuePadShowsDone`）。
+        /// 任务页做完列的"更早做完的"一开始就展开（`-CuePadShowsDone`）。
         var showsDone = false
+        #if os(iOS)
         /// 任务页一出现就弹出正文的编辑页（`-CuePadBrief`）。
         var briefOpen = false
         /// 设置页通知那一行显示的状态（`-CuePadAlertStatus`；演示模式没有同步，真实状态出不来）。

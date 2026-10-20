@@ -1,7 +1,7 @@
 #if os(macOS)
 import AppKit
 
-/// 无 nib 的标准主菜单：⌘Q 退出、⌘W 关闭（即隐藏）、编辑快捷键、搜索、任务面板与侧栏的开关（"显示"），以及会话回复框的快捷键（"回复"，`ReplyShortcut`）。
+/// 无 nib 的标准主菜单：⌘Q 退出、⌘W 关闭（即隐藏）、编辑快捷键、搜索与侧栏的开关、去任务页（"显示"），以及会话回复框的快捷键（"回复"，`ReplyShortcut`）。
 enum MainMenu {
     static func install() {
         let main = build()
@@ -35,7 +35,7 @@ enum MainMenu {
         ]))
         main.addItem(submenu(title: "显示", items: [
             .item("搜索", #selector(AppDelegate.toggleSearch(_:)), "k"),
-            .item("任务", #selector(AppDelegate.toggleTasks(_:)), "T"),
+            .item("任务", #selector(AppDelegate.showTasks(_:)), "T"),
             // macOS 标准的显示/隐藏侧栏；不用 ⌘\：常见的 1Password 把它占作全局快捷键，按键到不了 App
             .item("侧栏", #selector(AppDelegate.toggleCueSidebar(_:)), "s", [.control, .command]),
         ]))

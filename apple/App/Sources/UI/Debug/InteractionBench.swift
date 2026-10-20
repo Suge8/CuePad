@@ -29,8 +29,8 @@ enum InteractionBench {
         "Cue 页首访": (120, 2),
         "开编辑页": (28, 2),
         "收编辑页": (14, 2),
-        "任务面板开": (28, 2),
-        "任务面板关": (14, 2),
+        "进任务页": (28, 2),
+        "回 Cue 页": (14, 2),
         "⌘K 面板开": (28, 2),
         "⌘K 面板关": (14, 2),
         "侧栏收起": (28, 2),
@@ -110,8 +110,8 @@ enum InteractionBench {
             }
         }
         for _ in 0..<2 {
-            await step("任务面板开") { workspace.showsTasks = true }
-            await step("任务面板关") { workspace.showsTasks = false }
+            await step("进任务页") { workspace.show(.tasks) }
+            await step("回 Cue 页") { workspace.show(.cue) }
             await step("⌘K 面板开") { workspace.searching = true }
             await step("⌘K 面板关") { workspace.searching = false }
         }
