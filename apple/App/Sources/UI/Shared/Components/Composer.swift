@@ -201,7 +201,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     private var text: some View {
         ComposerField(
             text: $draft.text, prompt: prompt, label: label, maxLines: expanded ? 6 : 1, ink: palette.ink, focus: focus, keys: handle,
-            shortcut: shortcut)
+            shortcut: shortcut, images: accepts.contains(.images) ? { draft.images += $0.map(PickedImage.init(data:)) } : nil)
             .focused(focus)
             // 收起时原文与"草稿：…"在同一个位置一换即成，不两层叠着交叉淡：同一行字在变形中只有一层
             .animation(nil) { $0.opacity(shrunkDraft == nil ? 1 : 0) }
