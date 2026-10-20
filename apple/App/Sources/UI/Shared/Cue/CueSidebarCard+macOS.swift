@@ -65,7 +65,7 @@ private struct SaidBubble: View {
             .foregroundStyle(CueStatusLine.said(fresh: fresh, palette))
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 14).padding(.vertical, 11)
-            .background(palette.paper, in: BubbleShape(tail: BubbleTail(edge: .top, offset: tailX, fromEnd: false), radius: Self.radius))
+            .background(palette.paper, in: BubbleShape(tail: BubbleTail(edge: .top, offset: tailX), radius: Self.radius))
             // 尾巴长在矩形外面：让出它的长度，不压到上面的名字
             .padding(.top, BubbleTail.length)
     }

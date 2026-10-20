@@ -36,8 +36,7 @@ struct IOSRoot: View {
             }
             .sheet(item: $navigation.projectForm) { ProjectFormSheet(project: $0.project, created: $0.created) }
             .sheet(item: Binding(get: { workspace.folderPicker }, set: { workspace.folderPicker = $0 })) { FolderPickerSheet(project: $0) }
-            // 任务气泡从手指落下的那一下长出来（`Workspace.openTask`）
-            .panel(item: $workspace.openTask, style: .bubble(anchor: workspace.openTask?.anchor)) { TaskBubble(request: $0) }
+            .overlay { TaskBubbleSlot() }
         }
         .watchesTouches { [workspace] in workspace.pressed(at: $0) }
         // 这一层还没有导航栏：上安全区就是状态栏

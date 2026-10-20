@@ -20,6 +20,7 @@ struct MainWindow: View {
             detail
         }
         .background { WindowPanels(workspace: workspace) }
+        .background { TaskBubbleSlot() }
         .background { WorkspaceShortcuts(workspace: workspace) }
         .background { CardPressMonitor(workspace: workspace) }
         .overlay { Prewarm().environment(workspace) }
@@ -83,7 +84,6 @@ private struct WindowPanels: View {
                 guard (try? await Task.sleep(for: Prewarm.delay)) != nil else { return }
                 mountsPalette = true
             }
-            .panel(item: $workspace.openTask, style: .bubble(anchor: workspace.openTask?.anchor)) { TaskBubble(request: $0) }
             .panel(item: $workspace.projectForm) { ProjectForm(project: $0.project, created: $0.created) }
             .panel(isPresented: $workspace.showsAgentSetup) { AgentSetupPanel() }
     }

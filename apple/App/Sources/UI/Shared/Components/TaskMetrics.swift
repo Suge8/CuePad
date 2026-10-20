@@ -3,7 +3,7 @@ import SwiftUI
 /// 任务区各块的尺寸：手机按动态字体与 44pt 点按，Mac 用小字。
 enum TaskMetrics {
     #if os(iOS)
-    static let rowHeight: CGFloat = 44
+    nonisolated static let rowHeight: CGFloat = 44
     static let caption = Font.footnote
     static let chipTarget: CGFloat = 44
     static let titleRing: CGFloat = 24
@@ -16,7 +16,7 @@ enum TaskMetrics {
     static let ringColumn: CGFloat = 44
     static let columnGap: CGFloat = 2
     #else
-    static let rowHeight: CGFloat = 30
+    nonisolated static let rowHeight: CGFloat = 30
     static let caption = Typography.meta
     static let chipTarget: CGFloat = 24
     static let titleRing: CGFloat = 20
