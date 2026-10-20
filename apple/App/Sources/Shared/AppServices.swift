@@ -53,6 +53,8 @@ final class AppServices {
     private(set) var syncIssues: [SyncIssue] = []
     /// 同步在一页页地拉积压（`SyncState.catchingUp`）；界面只经 `isCatchingUp` 读。
     private(set) var syncCatchingUp = false
+    /// 这台的库和 iCloud 对过至少一遍（`SyncState.reconciled`）；界面只经 `knowsSyncedFacts` 读。
+    private(set) var syncReconciled = false
     /// Pi 锁屏通知的服务端订阅（只有 iOS 建立）；设置页与权限、注册状态一起显示。
     private(set) var alertSubscription: PiAlertSubscriptionStatus = .off
     #if os(iOS)
@@ -367,6 +369,7 @@ final class AppServices {
         if recovered { Task { await syncNow() } }
         syncIssues = state.issues
         syncCatchingUp = state.catchingUp
+        syncReconciled = state.reconciled
         alertSubscription = state.alerts
     }
 

@@ -2,7 +2,7 @@ import CloudKit
 import CueStore
 import Foundation
 
-/// 拉：从同步区的令牌起拉变化，交给协调器应用（`SyncCoordinator.pulled`）。令牌只有一份，存在库里（`syncState` 的 `zoneToken`），
+/// 拉：从同步区的令牌起拉变化，交给协调器应用（`SyncCoordinator.pulled`）。令牌只有一份，存在库里（`syncState` 的 `zoneToken`，经协调器读写），
 /// 每页应用完才前移：应用失败（库或附件文件写不进去、停下来等你决定）、网络中断或退出，下次从上一页接着拉，不会跨过没应用的变化。
 /// 单条记录本身不合法（字段非法、附件缺文件或哈希不符）只报告、不挡令牌：它不会自己变好，挡住就永远拉不动了。
 ///
@@ -51,7 +51,7 @@ actor ZonePuller {
     do {
       try await drain()
     } catch let error as CKError where error.code == .changeTokenExpired {
-      try await store.setSyncState(Self.tokenKey, nil)
+      try await coordinator.setToken(nil)
       try await drain()
     } catch let error as CKError where [.zoneNotFound, .userDeletedZone].contains(error.code) {
       await coordinator.zoneMissing(deletedByUser: error.code == .userDeletedZone)
@@ -73,18 +73,18 @@ actor ZonePuller {
 
   private func drainPages() async throws {
     // 对账与积压了不止一页（离线久了、别处一下写了很多）算在同步中；一页就拉完的（按节奏每两三秒一次）不算，状态不跟着闪
-    var token = try await store.syncState(Self.tokenKey)
+    var token = try await coordinator.token()
     if token == nil {
       await coordinator.setCatchingUp(true)
       token = try await catchUp()
-      try await store.setSyncState(Self.tokenKey, token)
+      try await coordinator.setToken(token)
     }
     var batch: ZoneChangeBatch
     repeat {
       batch = try await source.changes(since: token, keys: nil)
       if batch.moreComing { await coordinator.setCatchingUp(true) }
       try await coordinator.pulled(batch.modifications, batch.deletions)
-      if batch.token != token { try await store.setSyncState(Self.tokenKey, batch.token) }  // 库里的就是 `token`：没有变化的一拉不写库
+      if batch.token != token { try await coordinator.setToken(batch.token) }  // 库里的就是 `token`：没有变化的一拉不写库
       token = batch.token
     } while batch.moreComing
   }

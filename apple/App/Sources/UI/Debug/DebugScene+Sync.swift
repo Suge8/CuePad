@@ -11,7 +11,8 @@ extension DebugScene {
     /// `-CuePadSync offline`：一开始连不上 iCloud，`-CuePadOfflineSeconds`（默认 6）秒后恢复；配 `-CuePadDemoMac YES` 与
     /// `-CuePadSpeech send` 录"断网时说 → 同步不通 → 恢复 → 送达"（演示 Mac 断网时不接手）。
     /// `-CuePadSync <noAccount|decide|failed|syncing|restricted|conflicts>`：装上报这个状态的替身，设置里 iCloud 同步那一行、
-    /// 要你决定的两个选择、立即同步与 Mac 工具栏的同步提示都按有同步时的样子出现；`failed` 带两条没能同步的记录，`conflicts` 在演示库里造一份冲突副本。
+    /// 要你决定的两个选择、立即同步与 Mac 工具栏的同步提示都按有同步时的样子出现；`failed` 带两条没能同步的记录，`conflicts` 在演示库里造一份冲突副本；
+    /// `syncing` 还没和 iCloud 对完第一遍（换新 Mac 时：接入面板里 Cue 那一行在等 iCloud）。其余替身都当已对过。
     static var syncSource: AppServices.SyncSource {
         let issues = [
             SyncIssue(recordType: "Card", recordName: "A1B2", message: "CKError 14: server record changed"),
@@ -23,7 +24,7 @@ extension DebugScene {
         case "noAccount": .custom(StandInSync(SyncState(status: .noAccount, issues: [])))
         case "decide": .custom(StandInSync(SyncState(status: .needsDecision(.accountSwitched), issues: [])))
         case "failed": .custom(StandInSync(SyncState(status: .failed("同步出错"), issues: issues)))
-        case "syncing": .custom(StandInSync(SyncState(status: .syncing, issues: [])))
+        case "syncing": .custom(StandInSync(SyncState(status: .syncing, issues: [], reconciled: false)))
         case "restricted": .custom(StandInSync(SyncState(status: .accountRestricted, issues: [])))
         case "offline": .custom(OfflineSync(seconds: defaults.object(forKey: "CuePadOfflineSeconds") as? Double ?? 6))
         case "arrive": .custom(ArrivingSync())
@@ -40,7 +41,7 @@ extension DebugScene {
                 continuation.yield(SyncState(status: .offline, issues: []))
                 let task = Task {
                     try? await Task.sleep(for: .seconds(seconds))
-                    continuation.yield(SyncState(status: .idle, issues: []))
+                    continuation.yield(SyncState(status: .idle, issues: [], reconciled: true))
                 }
                 continuation.onTermination = { _ in task.cancel() }
             }
@@ -63,7 +64,7 @@ extension DebugScene {
         static let library = AsyncStream<CueStore>.makeStream(bufferingPolicy: .bufferingNewest(1))
         private let first = Mutex<Task<Void, Never>?>(nil)
 
-        var stateUpdates: AsyncStream<SyncState> { AsyncStream { $0.yield(SyncState(status: .idle, issues: [])) } }
+        var stateUpdates: AsyncStream<SyncState> { AsyncStream { $0.yield(SyncState(status: .idle, issues: [], reconciled: true)) } }
         func start() async throws {}
         func stop() async {}
         func syncNow() async throws { await pull() }
@@ -106,7 +107,7 @@ extension DebugScene {
     nonisolated final class StandInSync: SyncControlling {
         let state: SyncState
         let stalls: Bool
-        init(_ state: SyncState = SyncState(status: .idle, issues: []), stalls: Bool = false) { (self.state, self.stalls) = (state, stalls) }
+        init(_ state: SyncState = SyncState(status: .idle, issues: [], reconciled: true), stalls: Bool = false) { (self.state, self.stalls) = (state, stalls) }
         var stateUpdates: AsyncStream<SyncState> { AsyncStream { [state] in $0.yield(state) } }
         func start() async throws {}
         func stop() async {}
