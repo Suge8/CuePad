@@ -34,6 +34,8 @@ struct CueViewing: ViewModifier {
     static let dwell: Duration = .seconds(1)
 
     private var watching: Bool { active && onScreen && appeared }
+    /// 读到的算数：在看、又没在和 iCloud 对（对的时候对话还不是最新的）。
+    private var reading: Bool { watching && !catchingUp }
 
     func body(content: Content) -> some View {
         content
@@ -47,8 +49,8 @@ struct CueViewing: ViewModifier {
             .task { await followExposure() }
             #endif
             .onChange(of: watching, initial: true) { _, on in count(on) }
-            .onChange(of: watching && thread != nil && !catchingUp, initial: true) { _, start in if start { land() } }
-            .task(id: Reading(seen: Set(seen.keys), counts: watching && !catchingUp)) { await mark() }
+            .onChange(of: reading && thread != nil, initial: true) { _, start in if start { land() } }
+            .task(id: Reading(seen: Set(seen.keys), counts: reading)) { await mark() }
     }
 
     private struct Reading: Equatable {
@@ -69,7 +71,7 @@ struct CueViewing: ViewModifier {
     }
 
     private func mark() async {
-        guard watching, !catchingUp, let thread, let latest = seen.filter({ thread.unread.contains($0.key) }).values.max() else { return }
+        guard reading, let thread, let latest = seen.filter({ thread.unread.contains($0.key) }).values.max() else { return }
         do { try await Task.sleep(for: Self.dwell) } catch { return }
         do { try await services.store.markCueRead(through: latest) } catch { workspace.fail(error) }
     }
@@ -90,7 +92,7 @@ struct CueViewing: ViewModifier {
 /// 浮着的那块的高在这里读，升起时每帧变也只重算新消息的这一格。
 /// 滚动区这个坐标空间不含上下的内容边距（`ChatLayout.edge`），浮着那块的高却是从滚动区真正的下沿量起：比之前补回这一截。
 /// 末尾按最后一行字算，不按气泡的下沿（量的这一线抬起气泡的下内边距）：最后一颗气泡的底常常刚好压在"等你"卡的上沿下一两点，
-/// 字全露着也读不到它。
+/// 字全露着也读不到它。拆掉时（读过了不再是新消息、离屏远的段换成空白）报一次不在：甩过去的不留下"看见了"。
 struct CueEndProbe: View {
     let seen: (Bool) -> Void
     @Environment(\.chatBottomInset) private var covered
@@ -101,6 +103,7 @@ struct CueEndProbe: View {
                 guard let visible = proxy.bounds(of: .scrollView) else { return false }
                 return visible.minY <= ChatLayout.edge && 1 <= visible.maxY + ChatLayout.edge - covered
             } action: { seen($0) }
+            .onDisappear { seen(false) }
             .padding(.bottom, CueBubble.padding.bottom)
     }
 }
