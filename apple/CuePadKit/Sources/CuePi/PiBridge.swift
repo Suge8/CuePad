@@ -60,16 +60,16 @@ public final class PiBridge {
     @ObservationIgnored private var links: [String: Link] = [:]       // socket 文件名（不含 .sock）→ 连接
     /// 在线会话的控制通道（Pi 的就是它的 `Link`）
     @ObservationIgnored private var controls: [PiSession.ID: any SessionLink] = [:]
-    /// 重开前（`carryOver`）与重新载入扩展前（`detach` 的 `.reload`）各会话（按会话 id）的状态与计时：重新上桥时用一次。
+    /// 重开前（`carryOver`）与重新载入扩展前（`detach` 的 `.reload`）各会话的状态与计时：重新上桥时用一次。
     /// 协议号不同的读不到状态，不留也不用：接回时沿用的是它之前读到的
     @ObservationIgnored private var carried: [String: (state: PiWorkState, times: PiTimes)] = [:]
     /// 托管的会话歇着的计时（见 `reviewHosted`）
     @ObservationIgnored private var idleTimers: [PiSession.ID: Task<Void, Never>] = [:]
     /// 已经请它退出的托管会话：同一个只请一次（Pi 收尾中再收到一次 SIGTERM 会跳过收尾直接退出）
     @ObservationIgnored private var releasing: Set<PiSession.ID> = []
-    /// 没告别就断开的会话：断开可能先于进程退出被确认（强杀后进程还是僵尸），留着它的退出监视，退出时再删残留 socket
+    /// 没告别就断开的会话：断开可能先于进程退出（强杀后还是僵尸），留着退出监视，退出时再删残留 socket
     @ObservationIgnored private var orphanExitWatchers: [String: ProcessExitWatcher] = [:]
-    /// 已报告不兼容的 socket 文件：同一个文件还在时不再重连，避免每次目录事件都重复报告。按文件本身认（不按名字）：
+    /// 已报告不兼容的 socket 文件：同一个文件还在时不再重连、不重复报告。按文件本身认（不按名字）：
     /// /reload 在同一路径建的新 socket 名字不变，得照常去连
     @ObservationIgnored private var incompatible: [String: PiSocketDirectory.FileIdentity] = [:]
     @ObservationIgnored private var watcher: DirectoryWatcher?
@@ -102,14 +102,15 @@ public final class PiBridge {
 
         func reload() async throws { _ = try await request { try PiWire.bare("reload", id: $0) } }
 
-        /// 托管的（没有终端界面）给进程发 SIGTERM，Pi 优雅收尾（扩展先发 bye），不论这一轮在不在跑；
-        /// 终端里开的由扩展走 Pi 的正常退出（终端恢复原样、提示怎么恢复这个会话）。
+        /// 托管的 SIGTERM 请 Pi 收尾（扩展先发 bye），过了 `endGrace` 还在桥上（连接没断，pid 仍是它）就强杀；
+        /// 终端里开的经扩展走 Pi 的正常退出（终端恢复原样）。
         func end(_: PiSession.ID) async throws {
             guard let session else { throw PiBridgeError.sessionEnded }
-            if session.hosted {
-                kill(session.pid, SIGTERM)
-            } else {
-                _ = try await request { try PiWire.bare("end", id: $0) }
+            guard session.hosted else { return _ = try await request { try PiWire.bare("end", id: $0) } }
+            kill(session.pid, SIGTERM)
+            Task { [weak self] in
+                try? await Task.sleep(for: AgentTimeouts.endGrace)
+                if self?.session?.pid == session.pid { kill(session.pid, SIGKILL) }
             }
         }
 
@@ -211,7 +212,7 @@ public final class PiBridge {
         try await pi(id).reload()
     }
 
-    /// 结束该会话，等它真的下线：托管的进程退出，终端里的会话像在终端里退出那样收尾。没有在 `AgentTimeouts.end` 内下线抛 `notEnded`。
+    /// 结束该会话并等它下线；`AgentTimeouts.end` 内没下线抛 `notEnded`。
     public func end(_ id: PiSession.ID) async throws {
         let link = try control(id, needs: .end)
         let changes = changes()  // 先订阅再动手：下线的那一刻不会漏
