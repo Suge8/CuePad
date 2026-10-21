@@ -1,4 +1,5 @@
 import CueStore
+import Foundation
 
 /// 任务行上"下一步"那一格：一件事此刻要你做什么，最多一个，点了就去那一步（Mac 与手机同一个判断，`Workspace.next(for:)`）。
 /// 一个叶子任务一个 Agent 会话：会话那边有事（等你确认、出错、话没送到、有新回复、正在做）就是它，点了打开会话；
@@ -50,13 +51,20 @@ extension Workspace {
     func next(for task: Card, lead: Card? = nil, in agents: AgentLinks, steps: TaskProgress?) -> TaskNext? {
         if let lead, let next = next(for: lead, in: agents, steps: nil) { return next }
         guard task.status != .done else { return nil }
-        #if os(macOS)
-        let agent = agents.items[task.id].map(withLiveState)
-        #else
-        let agent = agents.items[task.id]
-        #endif
+        let agent = agent(of: task.id, in: agents)
         let startable = steps == nil && !agents.launching.contains(task.id) ? task : nil
-        return TaskNext(shown: agent.map(shown), session: agent?.state, startable: startable)
+        return TaskNext(shown: agent?.shown, session: agent?.session, startable: startable)
+    }
+
+    /// 这条任务交给的会话与它此刻显示的状态（不论值不值得写进"下一步"），没交给会话为 nil：
+    /// Mac 上本机在线的会话换上桥上的实时状态。"下一步"与推进中的档（`BoardPulse`）都读它。
+    func agent(of task: UUID, in agents: AgentLinks) -> (shown: PiShown, session: PiSessionState)? {
+        #if os(macOS)
+        guard let agent = agents.items[task].map(withLiveState) else { return nil }
+        #else
+        guard let agent = agents.items[task] else { return nil }
+        #endif
+        return (shown(agent), agent.state)
     }
 
     /// 有步骤的任务此刻最该看的那一步的"下一步"：要你动手的会话优先，其次第一个有动静的会话，再次第一个能开始的步骤。

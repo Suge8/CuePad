@@ -131,7 +131,7 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         let finished = tally.free(try store.tasksDone())
         let today = Calendar.current.startOfDay(for: now)
         let split = finished.firstIndex { ($0.completedAt ?? .distantPast) < today } ?? finished.endIndex
-        let results = try store.cueResultShots(of: finished.map(\.id))
+        let results = try store.cueResultShots(of: finished)
         let previews = try store.previews(Set(results.values.joined().map(\.preview)))
         func finishedItem(_ task: Card) throws -> Item {
             var done = try item(task)

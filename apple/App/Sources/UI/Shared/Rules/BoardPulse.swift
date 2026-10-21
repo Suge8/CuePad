@@ -16,11 +16,6 @@ struct BoardPulse: Equatable {
     var shown: PiShown?
     var session: PiSessionState?
 
-    /// 任务行：它"下一步"那一格是会话时（`TaskNext.agent`）看那个会话，否则歇着。
-    init(_ next: TaskNext?) {
-        if case .agent(let shown, let session)? = next { self.init(shown: shown, session: session) } else { self.init() }
-    }
-
     init(shown: PiShown? = nil, session: PiSessionState? = nil) {
         self.shown = shown
         self.session = session
@@ -45,10 +40,17 @@ struct BoardPulse: Equatable {
 }
 
 extension Workspace {
-    /// 推进中一件此刻的档（`BoardPulse`）：任务看此刻干活的叶子的"下一步"，会话看它自己（同会话行）。
+    /// 任务行此刻的档：看此刻干活的叶子交给的会话，没有再看任务自己的（同"下一步"的先后）；会话歇着、"下一步"不写它时也照样看，
+    /// 快满的上下文不因此漏掉。都没交给会话是歇着。
+    func pulse(for task: Card, lead: Card?, in agents: AgentLinks) -> BoardPulse {
+        guard let agent = lead.flatMap({ agent(of: $0.id, in: agents) }) ?? agent(of: task.id, in: agents) else { return BoardPulse() }
+        return BoardPulse(shown: agent.shown, session: agent.session)
+    }
+
+    /// 推进中一件此刻的档（`BoardPulse`）：任务同任务行，会话看它自己（同会话行）。
     func pulse(_ work: TaskBoard.Work, agents: AgentLinks) -> BoardPulse {
         switch work.work {
-        case .task: BoardPulse(work.item.flatMap { next(for: $0.task, lead: $0.leaf, in: agents, steps: $0.steps) })
+        case .task: work.item.map { pulse(for: $0.task, lead: $0.leaf, in: agents) } ?? BoardPulse()
         case .session(let session):
             BoardPulse(shown: shown(session, delivery: services.liveSessions.deliveries[session.sessionID]), session: session)
         }

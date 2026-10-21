@@ -2,7 +2,7 @@ import CueStore
 import SwiftUI
 
 /// 等你列的一张卡，卡里的排版只在这一个视图里。从上到下：
-/// - 抬头一行：项目小图标（看全部项目时；选了项目范围不画）、它落在的任务的标题（没落在任务上的会话写会话名，Cue 的一般提问写 Cue 的名字；
+/// - 抬头一行：项目小图标（看全部项目时；选了项目范围不画）、标题（会话在问的写会话名，Cue 问的写它落在的任务，Cue 的一般提问写 Cue 的名字；
 ///   做完了还在问的也照常写、不划线），右边是等了多久（`TaskBoard.Wait.since`）。点抬头去回答的地方（`BoardLink`）：会话在问的进会话，
 ///   Cue 问的去 Cue 页那条提问。
 /// - 要你定什么：Cue 的提问是问句（`CueMessage.headline`），下面一行它依据的规矩与范围（"推送代码前先问你 · 圆桌"，`basis`），再下面是选项——
@@ -58,10 +58,10 @@ struct BoardWaitCard: View {
         }
     }
 
+    /// 会话在问的写会话名（点了进的就是它），Cue 问的写落在的任务，没落在任务上的写 Cue 的名字。
     private var title: String {
-        if let item = wait.item { return item.task.title }
         if case .session(let session, _) = wait.wait { return session.title }
-        return workspace.cue.name
+        return wait.item?.task.title ?? workspace.cue.name
     }
 
     /// 要你定什么那一句。不画问号：列名已经说了在等你。

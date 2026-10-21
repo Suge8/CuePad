@@ -103,14 +103,14 @@ struct TaskLine: View {
     /// 标题的墨：点圈停留的那一下最淡（还划线），已完成的与看板上歇着的（`BoardPulse.Tier.resting`）淡一档。
     private func titleInk(_ next: TaskNext?) -> Color {
         if check.phase != .idle { return palette.ink3 }
-        if task.status == .done || board?.advancing == true && BoardPulse(next).tier == .resting { return palette.ink2 }
+        if task.status == .done || board?.advancing == true && workspace.pulse(for: task, lead: lead, in: agents).tier == .resting { return palette.ink2 }
         return palette.ink
     }
 
     /// 旁注："下一步"、快满的上下文与多久；做完的不写，要你管的状态词写出来时不写多久。放不下时谁先让（`TaskLineLayout.yields`）：
     /// 先是时间，再是没写状态词的标。看板上行尾最后是成果图与项目小图标（`BoardRowEnd`，"开始"也在那一格）。
     @ViewBuilder private func notes(next: TaskNext?, done: Bool) -> some View {
-        let pulse = BoardPulse(next), start = board != nil && next?.starts == true
+        let pulse = workspace.pulse(for: task, lead: lead, in: agents), start = board != nil && next?.starts == true
         if !done, let next, !start, board?.advancing != true || pulse.showsMark { TaskNextMark(next: next).yields(first: false, ever: !next.speaks).transition(.opacity) }
         if !done, !(next?.speaks ?? false), let meter = pulse.fullContext { ContextFact(meter: meter).font(TaskMetrics.caption).fixedSize() }
         if !done, !pulse.speaks, let pace = TaskPace.of(task, steps: subtasks) {
