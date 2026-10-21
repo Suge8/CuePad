@@ -629,7 +629,7 @@ final class CueKeeper {
                 let ready = lastTurnEnd + timing.mergeAfter.seconds
                 if now >= ready {
                     updateShift { $0.mergesTried.insert([merge.lo, merge.hi]) }
-                    return _ = try await wakeUp(.idle, extra: CueMemoryView.mergePrompt(merge))
+                    return _ = try await wakeUp(.tidy, extra: CueMemoryView.mergePrompt(merge))
                 }
                 deadlines.append(ready)
             }
@@ -802,11 +802,11 @@ final class CueKeeper {
         }
     }
 
-    /// 这一轮的回复写成谁的：你发来消息、刚启用（你正看着屏幕）写成 cue；其余 Cue 自己醒来的写成 note（换新由调用方按写下交接的那一轮定）。
+    /// 这一轮的回复写成谁的：你发来消息、刚启用写成 cue；其余写成 note（换新由调用方按写下交接的那一轮定）。
     private static func author(of wake: CueWake) -> CueAuthor {
         switch wake {
         case .message, .enabled: .cue
-        case .sessionActivity, .idle, .reminder, .renewed, .settingsChanged: .note
+        case .sessionActivity, .idle, .tidy, .reminder, .renewed, .settingsChanged: .note
         }
     }
 

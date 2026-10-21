@@ -254,7 +254,7 @@ private struct CueNoteSection: View {
 }
 
 /// 一节的第一行（`NoteLine`，同并起来的那一行）：醒来原因的图标（叫醒它的会话出错是出错的那个）、原因（叫醒它的会话、任务、提醒是墨色的名字，点了去那里；
-/// 几处时点开列出来选），行末几点。几段之间一律隔一个点（"提醒到点 · 周会"、"atlas 停下了 · 没动手"），点得进去的末尾一个箭头。
+/// 几处时点开列出来选），行末几点。原因只画图标，几段间隔一个点，可点的末尾一个箭头。
 private struct CueWakeTitle: View {
     let header: CueWakeHeader
     let at: Date
@@ -277,17 +277,17 @@ private struct CueWakeTitle: View {
     /// 名字太长时只截名字，前后的话留全。
     private var words: some View {
         HStack(spacing: 4) {
-            if let lead = header.lead { Text(lead).foregroundStyle(palette.ink2).fixedSize() }
-            if header.lead != nil, header.name != nil { Dot().foregroundStyle(palette.ink3) }
             if let name = header.name { Text(name).fontWeight(.medium).foregroundStyle(palette.ink) }
             if let trail = header.trail { Text(trail).foregroundStyle(palette.ink2).fixedSize() }
             if quiet {
-                Dot().foregroundStyle(palette.ink3)
+                if header.name != nil { Dot().foregroundStyle(palette.ink3) }
                 Text("没动手").foregroundStyle(palette.ink3).fixedSize()
             }
             if !header.targets.isEmpty { Image(.forward).font(.system(size: 8, weight: .semibold)).foregroundStyle(palette.ink3) }
         }
         .lineLimit(1)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel([header.reason, header.name, header.trail, quiet ? "没动手" : nil].compactMap(\.self).joined(separator: "，"))
     }
 
     @ViewBuilder private var reason: some View {
@@ -327,6 +327,7 @@ extension CueWake {
         case .message: .wakeMessage
         case .sessionActivity: .wakeActivity
         case .idle: .wakeIdle
+        case .tidy: .memory
         case .reminder: .wakeReminder
         case .renewed: .renew
         case .settingsChanged: .wakeSettings
