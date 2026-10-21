@@ -58,6 +58,14 @@ extension Workspace {
         let startable = steps == nil && !agents.launching.contains(task.id) ? task : nil
         return TaskNext(shown: agent.map(shown), session: agent?.state, startable: startable)
     }
+
+    /// 有步骤的任务此刻最该看的那一步的"下一步"：要你动手的会话优先，其次第一个有动静的会话，再次第一个能开始的步骤。
+    func lead(of steps: [Card], in agents: AgentLinks) -> TaskNext? {
+        let nexts = steps.compactMap { next(for: $0, in: agents, steps: nil) }
+        func needsYou(_ next: TaskNext) -> Bool { if case .agent(let shown, _) = next { shown.needsYou } else { false } }
+        func agent(_ next: TaskNext) -> Bool { if case .agent = next { true } else { false } }
+        return nexts.first(where: needsYou) ?? nexts.first(where: agent) ?? nexts.first
+    }
 }
 
 extension TaskNext {
