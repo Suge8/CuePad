@@ -191,6 +191,14 @@ final class CueEval {
             lines.append("| \(index) | \(round.map { "\($0.wake)" } ?? "—") | \(took) | \(round?.context.map(String.init) ?? "—") | \(index < usage.count ? usage[index].cells : "— | — | — | — | —") |")
         }
         lines.append("| 合计 | | | | \(total.cells) |")
+        let dreams = rig.brainDirectory.map(BrainUsage.dreams(in:)) ?? []
+        if !dreams.isEmpty {
+            lines += ["", "后台合并（做梦，每个一次性进程一行；不在上表里）：", "", "| 次 | 起 | 用时 | \(BrainUsage.header) |", "| --- | --- | --- | --- | --- | --- | --- | --- |"]
+            for (index, dream) in dreams.enumerated() {
+                lines.append("| \(index + 1) | \(dream.started.formatted(date: .omitted, time: .standard)) | \(seconds(dream.finished.timeIntervalSince(dream.started))) | \(dream.usage.cells) |")
+            }
+            lines.append("| 合计 | | | \(dreams.map(\.usage).reduce(BrainUsage(), +).cells) |")
+        }
         for (index, round) in rounds.filter({ $0.startedAt >= begin ?? start }).enumerated() {
             let setup = round.startedAt < start ? "（铺垫）" : ""
             lines += ["", "## 第 \(index + 1) 轮（醒来：\(round.wake)）\(setup)\(round.finishedAt == nil ? "（写下时还没做完）" : "")", "", "### 发给大脑的"]
