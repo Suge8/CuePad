@@ -94,7 +94,10 @@ extension CueStore {
       let ids = Set(keys.map(\.id)).sorted()
       pending.saves += try pendingSaves(table, where: "t.id IN (SELECT value FROM json_each(?))", [JSONColumn.encode(ids)])
     }
-    for name in Set(touched.deletes).sorted() where try isPendingDelete(name) { pending.deletes.append(name) }
+    let deletes = Set(touched.deletes).sorted()
+    if !deletes.isEmpty {
+      for table in Table.synced { pending.deletes += try pendingDeletes(table, among: deletes) }
+    }
     return (pending, syncGeneration)
   }
 
@@ -110,13 +113,6 @@ extension CueStore {
       union.deletes += delta.deletes
     }
     return union
-  }
-
-  private func isPendingDelete(_ name: String) throws -> Bool {
-    guard let type = try db.first("SELECT recordType FROM syncRecords WHERE recordName = ? AND pushedModifiedAt IS NOT NULL", [name], { $0.text(0) }),
-      let table = Table(rawValue: type)
-    else { return false }
-    return try db.first("SELECT 1 FROM \(table.rawValue) WHERE id = ?", [name]) { _ in true } == nil
   }
 
   /// 一次提交里改动的行中变成待推送的；删除只查删过行的表。
@@ -145,10 +141,14 @@ extension CueStore {
     ) { SyncKey(table: table, id: $0.text(0)) }
   }
 
-  private func pendingDeletes(_ table: Table) throws -> [String] {
+  /// "待推送的删除"的唯一定义：服务器收下过，本机的行已不在。`among` 只看这几条（按增量复查时，从这几条查起）。
+  private func pendingDeletes(_ table: Table, among names: [String]? = nil) throws -> [String] {
     try db.query(
-      "SELECT recordName FROM syncRecords WHERE recordType = ? AND pushedModifiedAt IS NOT NULL AND recordName NOT IN (SELECT id FROM \(table.rawValue))",
-      [table.rawValue]
+      """
+      SELECT s.recordName FROM \(names == nil ? "syncRecords s" : "json_each(?) j CROSS JOIN syncRecords s ON s.recordName = j.value")
+      WHERE s.recordType = ? AND s.pushedModifiedAt IS NOT NULL AND NOT EXISTS (SELECT 1 FROM \(table.rawValue) t WHERE t.id = s.recordName)
+      """,
+      (names.map { [JSONColumn.encode($0)] } ?? []) + [table.rawValue]
     ) { $0.text(0) }
   }
 
