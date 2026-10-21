@@ -5,6 +5,7 @@
 #   合计、最重一圈、指令数与掉帧，取各次的中位数，
 #   列成表。默认在后台量（不抢前台）：指令数照样前后对比，帧与掉帧偏乐观，不和预算比；
 #   要和交互预算（docs/verify.md「交互预算」）比就加 -CuePadForeground YES 在前台量（规则见 docs/verify.md「占前台」），有一项超了就以 1 退出。
+#   CUEPAD_PERF_SEED=<库目录>（如真实库的只读副本）：只量这份库，每次从它克隆，换掉演示库与大库；配 -CuePadProject <库里的项目名>（单次交互从项目页起）。
 #   -CuePadInteractOnly 项,项 只量列出的几项（前后对比省下整套流程），用法见 docs/verify.md。
 #   前台量时"任务气泡开"是真实点击：App 写 AWAIT click x y，这里用 hid.swift 经 HID 点那一行（会移动真实指针，量完放回）。
 #   CUEPAD_TRACE=<xctrace 模板>（如 'Animation Hitches'、'Time Profiler'）：每次量的同时按 PID 录整段 trace，存 /tmp/cuepad-perf/interact-<库>-<第几次>.trace。
@@ -79,8 +80,12 @@ collect() {
 }
 rows="$DERIVED/interact.jsonl"
 : >"$rows"
-collect 演示库 "" -CuePadDemo YES -CuePadProject 圆桌 >>"$rows"
-collect 大库 "$LIBRARY" -CuePadProject 大项目 >>"$rows"
+if [ -n "${CUEPAD_PERF_SEED:-}" ]; then
+  collect 真实库 "$CUEPAD_PERF_SEED" >>"$rows"
+else
+  collect 演示库 "" -CuePadDemo YES -CuePadProject 圆桌 >>"$rows"
+  collect 大库 "$LIBRARY" -CuePadProject 大项目 >>"$rows"
+fi
 python3 - "$rows" <<'PY'
 import json, statistics as st, sys
 rows = [json.loads(line) for line in open(sys.argv[1])]
