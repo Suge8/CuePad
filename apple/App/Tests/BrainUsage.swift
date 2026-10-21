@@ -15,12 +15,11 @@ nonisolated struct BrainUsage {
     /// Pi 每次请求模型前的计费标识记录（`EvalBrain.billingLog` 写）
     static func billingLog(in root: URL) -> URL { root.appending(path: "billing.jsonl") }
 
-    /// 请求数、系统提示首块带计费标识的请求数、用过的 user-agent
-    static func billing(in root: URL) -> (requests: Int, marked: Int, agents: Set<String>) {
-        let lines = ((try? String(contentsOf: billingLog(in: root), encoding: .utf8)) ?? "").split(separator: "\n")
+    /// 请求数、系统提示首块带计费标识的请求数
+    static func billing(in root: URL) -> (requests: Int, marked: Int) {
+        let requests = ((try? String(contentsOf: billingLog(in: root), encoding: .utf8)) ?? "").split(separator: "\n")
             .compactMap { (try? JSONSerialization.jsonObject(with: Data($0.utf8))) as? [String: Any] }
-        let requests = lines.filter { $0["kind"] as? String == "request" }
-        return (requests.count, requests.count { $0["billing"] as? Bool == true }, Set(lines.compactMap { $0["ua"] as? String }))
+        return (requests.count, requests.count { $0["billing"] as? Bool == true })
     }
 
     /// 大脑的 stdout 副本放在哪（`EvalBrain.launch` 写）

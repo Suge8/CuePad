@@ -32,18 +32,15 @@ struct EvalBrain {
     /// Pi 的登录：用户的 Pi 存的那一份，只读
     private static let piAuth = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".pi/agent/auth.json")
 
-    /// 评测给 Pi 多加载的只读扩展：每次请求模型前记下 user-agent 与系统提示首块是不是计费标识（在大脑自己的扩展之后加载，看到的是它们改过的），
+    /// 评测给 Pi 多加载的只读扩展：每次请求模型前记下系统提示首块是不是计费标识（在大脑自己的扩展之后加载，看到的是它们改过的），
     /// 证明请求走的是带 Claude 订阅计费标识的那条路；什么都不改。
     private static let billingLog = """
         import { appendFileSync } from "node:fs";
         const log = process.env.CUEPAD_EVAL_BILLING_LOG;
         export default function (pi: any) {
-          pi.on("before_provider_headers", (event: any) => {
-            if (log) appendFileSync(log, JSON.stringify({ kind: "headers", ua: event.headers?.["user-agent"] ?? null }) + "\\n");
-          });
           pi.on("before_provider_request", (event: any) => {
             const first = Array.isArray(event.payload?.system) ? event.payload.system[0]?.text : undefined;
-            if (log) appendFileSync(log, JSON.stringify({ kind: "request", billing: typeof first === "string" && first.startsWith("x-anthropic-billing-header:") }) + "\\n");
+            if (log) appendFileSync(log, JSON.stringify({ billing: typeof first === "string" && first.startsWith("x-anthropic-billing-header:") }) + "\\n");
           });
         }
         """
