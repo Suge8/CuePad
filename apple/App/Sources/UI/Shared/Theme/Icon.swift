@@ -20,7 +20,7 @@ nonisolated enum Icon: Hashable, Sendable {
     case idea, task, session, search, settings, archive, trash, sidebar
     case agent, allProjects, all, filter, extensionNote
     // 状态
-    case waiting, cueAsking, failure, undelivered, needsReload, onTheWay, replied, yourTurn, fresh, ended, interrupted, unknown
+    case waiting, cueAsking, failure, undelivered, onTheWay, replied, yourTurn, fresh, ended, interrupted, unknown
     case done, donePending, picked
     case syncStarting, synced, syncing, syncOff, syncRestricted, syncTrouble, syncPaused, uploadLocal, replaceWithCloud, syncNow
     case alertsPending, alertsOn, alertsOff
@@ -31,7 +31,7 @@ nonisolated enum Icon: Hashable, Sendable {
     case forward, back, expand, collapse, choose, conflict, enlarge
     // 输入、发送与会话
     case send, save, checked, stop, endSession, handOff, delivered, retry, toLatest, fetching, compact, renew
-    case declined, cannotSend, mac, yourAnswer, above, floated, earlier
+    case declined, mac, yourAnswer, above, floated, earlier
     case photo, photoLibrary, camera, pickCards, expandEdit, selectText, dismissKeyboard, variables
     case terminal, terminalWindow, readFile, editFile, pondering, tool, said, started, added, branch, markUnread, fireCode, thinking
     case researcher, engineer, batchWorker, designer, sentinel, subagent
@@ -85,7 +85,6 @@ nonisolated enum Icon: Hashable, Sendable {
         case .cueAsking: .ink("asking")
         case .failure: .ink("failure")
         case .undelivered: .ink("undelivered")
-        case .needsReload: .ink("reload")
         case .replied, .alertsPending: .ink("bell")
         case .yourTurn: .ink("cursor")
         case .fresh: .ink("sparkle")
@@ -139,7 +138,6 @@ nonisolated enum Icon: Hashable, Sendable {
         case .fetching: .ink("ring.down")
         case .compact: .ink("compact")
         case .declined: .ink("hand")
-        case .cannotSend: .ink("ended")
         case .mac: .ink("mac")
         case .yourAnswer: .ink("restore")
         case .above, .floated, .earlier: .ink("arrow.up")

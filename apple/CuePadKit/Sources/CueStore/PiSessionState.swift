@@ -72,7 +72,7 @@ public struct PiSessionListItem: Identifiable, Sendable, Equatable {
   /// 发给它、还没有回执或失败了的话（说话的方式，没被领取或失败、还没重发或移除的）：哪几句没能送达按说的话那条规则看此刻（`undelivered`）。
   public var unsettled: [DeliveryRequest]
   public var id: UUID { state.id }
-  /// 会话归在哪个项目（会话页按它分组、按它筛）：它的项目还在就是它，没有项目或项目已删的归默认项目。
+  /// 会话归在哪个项目（会话页按它筛、项目的此刻按它归）：它的项目还在就是它，没有项目或项目已删的归默认项目。
   public var home: UUID { project?.id ?? Project.defaultID }
 
   public init(
@@ -193,9 +193,9 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
 
   // 下面几条是界面与 Cue 共用的唯一一份：做不到的操作界面上不露出，Cue 要做时报错。
 
-  /// 能结束：做得到，在线，且读得到（旧版扩展的会话收不到结束命令，要在终端里退出 Pi）。
+  /// 能结束：做得到，且没结束。
   public var canEnd: Bool {
-    capabilities.contains(.end) && state != .known(.ended) && state != .known(.incompatible)
+    capabilities.contains(.end) && state != .known(.ended)
   }
 
   /// 能停止这一轮：做得到，且指挥官自己在跑一轮、没在等你时；等你确认时它在等你答（停止会让人以为把问题也撤了），
@@ -245,6 +245,11 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
 
   /// 一个 Pi 会话对应的记录 id（每个会话一条，任何设备上算出来都一样）。
   public static func recordID(sessionID: String) -> UUID { DeterministicID.uuid("pi-session/\(sessionID)") }
+}
+
+extension PiSessionState {
+  /// 给 Cue 看的会话短 id：会话 id 的前 8 位（Cue 的工具接受至少 4 位的前缀）。
+  public var shortID: String { String(sessionID.prefix(8)) }
 }
 
 extension PiSessionState: Record {

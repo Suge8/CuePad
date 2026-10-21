@@ -39,7 +39,6 @@ struct ComposerDraft {
         return parts.isEmpty ? nil : "带了 " + parts.joined(separator: "、")
     }
 
-    /// 带的内容里有没有图片：自己选的，或带上的卡片里的。
     var hasImages: Bool { !images.isEmpty || attachments.contains { !CardText($0.content).images.isEmpty } }
 
     /// "＋ 选灵感"带上一张（作为这次消息的附件，卡片本身不动）；已带着的不重复。
@@ -92,7 +91,6 @@ struct ComposerDraft {
     }
 }
 
-/// 一个去处接受草稿里的哪几种东西。
 struct ComposerKinds: OptionSet {
     let rawValue: Int
     static let images = ComposerKinds(rawValue: 1)

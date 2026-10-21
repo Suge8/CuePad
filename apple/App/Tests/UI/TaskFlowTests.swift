@@ -4,8 +4,8 @@ import Synchronization
 import Testing
 @testable import CuePad
 
-/// 任务优先的主动线，按用户走的路写：灵感设为任务 → 开始把正文交给 Agent（话在路上、没送到可重发、送达后正文留着）→ 完成并归档；中途撤销；整理任务的层级；
-/// 各处写的任务数是同一批。规则单测（行的状态怎么推、任务树怎么算）都从这些动作里走一遍，不单独测。
+/// 任务优先的主动线，按用户走的路写：灵感设为任务 → 开始把正文交给 Agent（话在路上、没送到可重发、送达后正文留着）→ 完成并归档；中途撤销。
+/// 规则单测（行的状态怎么推）都从这些动作里走一遍，不单独测；各处写的任务数见 `TaskCountTests`，整理层级见 `TaskOutlineTests`。
 struct TaskFlowTests {
     let rig = TestApp()
     var store: CueStore { rig.services.store }
@@ -35,20 +35,19 @@ struct TaskFlowTests {
         }
         let request = try await store.requestDelivery(Outgoing.text(of: task), to: atlas, on: "mac-a", card: task.id)
         guard case .agent(let sending, _) = try await next(task) else { throw Unexpected.next }
-        #expect(sending.isLive && sending.undelivered == nil)
+        #expect(sending.isRunning && sending.undelivered == nil)
         try await executor.start()
         _ = try await eventually(store, { try $0.deliveryRequest(request.id)?.status }) { $0 == .known(.failed) }
         guard case .agent(let failed, _) = try await next(task) else { throw Unexpected.next }
         #expect(failed.undelivered != nil)
 
-        // 重发送达：任务进行中并记着会话，正文留在任务上，发送记录留着话
+        // 重发送达：任务进行中并记着会话，正文留在任务上
         delivers.withLock { $0 = true }
         try await store.requestDelivery(Outgoing.text(of: task), to: atlas, on: "mac-a", card: task.id)
         _ = try await eventually(store, { try $0.card(task.id)?.piSessionID }) { $0 == "s1" }
         await executor.stop()
         let started = try #require(try await store.card(task.id))
         #expect(started.status == .inProgress && started.body == "修乱序\n日志在 logs/0918.txt")
-        #expect(try RawDB(rig.services.location.databaseURL).rows("SELECT content FROM sendRecords") == [["修乱序\n日志在 logs/0918.txt"]])
 
         // 任务不自动完成；用户勾选，提示里给归档
         try await workspace.toggle(task.id)
@@ -178,236 +177,9 @@ struct TaskFlowTests {
         try await workspace.toggle(stale.id)  // 手里的副本已过时：切换以 Store 当前状态为准
         #expect(try await store.card(stale.id)?.status == .todo)
 
-        #expect(try await workspace.addTasks(fromSelection: "- 写发布说明\n\n- 更新截图", in: project.id) == 2)
-        #expect(try await store.tasks(.todo).flatMap(\.tasks).filter { $0.projectID == project.id }.map(\.body).prefix(2) == ["写发布说明", "更新截图"])
-    }
-
-    // MARK: 数字处处一致
-
-    @Test func 各处写的任务数与列出的行是同一批顶层任务_任务页按状态跨项目分组() async throws {
-        let project = try await store.createProject(name: "圆桌", color: "#000000").id
-        let release = try await store.createTask("上线", in: project)
-        let backup = try await store.createTask("备份", under: release.id)
-        let publish = try await store.createTask("发布", under: release.id)
-        try await store.setStatus(backup.id, .inProgress)
-        try await store.setStatus(publish.id, .done)
-        let fix = try await store.createTask("修重连", in: project)
-        try await store.setStatus(fix.id, .done)
-        try await Task.sleep(for: .milliseconds(2))  // 完成时间存到毫秒：同一毫秒里做完的两件分不出先后
-        let shipped = try await store.createTask("发版", in: project)
-        try await store.setStatus(shipped.id, .done)
-        let closed = try await store.createTask("收尾", in: project)
-        let reopened = try await store.createTask("补文档", under: closed.id)
-        try await store.setStatus(closed.id, .done)
-        try await store.setStatus(reopened.id, .todo)  // 上级跟着不再算做完
-        let archived = try await store.createTask("旧的", in: project)
-        _ = try await store.createTask("旧的步骤", under: archived.id)
-        try await store.archive(archived.id)
-        let stranded = try await store.createTask("上级归档了", in: project)
-        let orphan = try await store.createTask("孤儿", under: stranded.id)
-        try await store.archive(stranded.id)
-        try await store.unarchive(orphan.id)
-        let gone = try await store.createTask("删了的", in: project)
-        try await store.trashCard(gone.id)
-
-        let catalog = try await ProjectCatalog.read(from: store)
-        let page = try await ProjectPageData.read(project, from: store)
-        let board = try await TaskBoard.read(from: store)
-
-        let open = [release.id, closed.id, orphan.id]
-        #expect(Set(page.tasks.roots) == Set(open))
-        #expect(catalog.openTasks[project] == open.count)
-        #expect(Set(board.todo.map(\.id)) == Set(open))  // 没有会话在做：开始过的也在待办
-        let done = [fix.id, shipped.id]
-        #expect(board.done.map(\.id) == [shipped.id, fix.id] && page.taskCounts.done == done.count)  // 做完按完成时间排，最近的在前
-    }
-
-    #if os(macOS)
-    /// 任务页的流水看板（Mac 侧栏"任务"与手机任务页同一份）：拖到在管就是开始（同"开始"，`Workspace.handOff`），会话开好它就在管；
-    /// Cue 问到它，它挪到等你，没绑任务的会话在问也在这一列；在管、等你两列的数就是 Cue 摘要里的数；答完回到在管；
-    /// 拖到做完就是做完（同点完成圈，`Workspace.toggle`），落在今天做完的那一列，它还活着的会话留在在管；做完了 Cue 还在问它，它只在等你。
-    @Test func 看板_拖到在管就是开始_Cue问到它挪到等你_两列的数同Cue摘要_拖到做完就是做完_做完了还在问只在等你() async throws {
-        try await rig.offersPi()
-        let workspace = Workspace(services: rig.services)
-        let project = try await store.createProject(name: "圆桌", color: "#000000")
-        try await store.setDirectory("/tmp/roundtable", for: project.id)
-        let task = try await store.createTask("修发言乱序", in: project.id)
-        let other = try await store.createTask("补重连用例", in: project.id)
-        func board() async throws -> TaskBoard { try await TaskBoard.read(from: store) }
-        func expectCountsMatchCue(_ board: TaskBoard) async throws {
-            let digest = try await CueDigest.read(from: store)
-            #expect(board.count(.managing) == digest.managing && board.count(.waiting) == digest.waiting)
-        }
-        #expect(try await Set(board().todo.map(\.id)) == [task.id, other.id])
-
-        workspace.handOff(task)
-        let launch = try await eventually(store, { try $0.deliveryRequests().first { $0.mode == .known(.start) } }) { $0 != nil }
-        let token = try #require(launch?.launch?.token)
-        try await PiStateRecorder(store: store, hostID: TestApp.hostID).update(sessionID: "s1", state: .thinking, title: "修发言乱序", launchToken: token)
-        var columns = try await board()
-        #expect(columns.managing.map(\.item?.id) == [task.id] && columns.todo.map(\.id) == [other.id])
-        try await expectCountsMatchCue(columns)
-
-        let ask = try await store.addCueMessage(.cue, text: "要推送吗？", ask: try CueAsking(.push, action: "推送发言顺序的修复"), task: task.id)
-        try await PiStateRecorder(store: store, hostID: "mac-a")
-            .update(sessionID: "rename", state: .waitingForUser, title: "rename", question: PiQuestion(promptID: "p", kind: .text, text: "新分支叫什么？"))
-        columns = try await board()
-        #expect(columns.managing.isEmpty)
-        #expect(columns.waiting.map(\.item?.id) == [task.id, nil])
-        try await expectCountsMatchCue(columns)
-
-        try await workspace.answerCueQuestion(ask, CueAsk.once)
-        #expect(try await board().managing.map(\.item?.id) == [task.id])
-        try await workspace.toggle(task.id)
-        columns = try await board()
-        #expect(columns.done.map(\.id) == [task.id] && columns.managing.map(\.id) == ["session/s1"] && columns.waiting.count == 1)
-        try await expectCountsMatchCue(columns)
-
-        // 做完了 Cue 还在问它：它只在等你，做完列与实时活动的"今天做完"都不再算它
-        _ = try await store.addCueMessage(.cue, text: "要删分支吗？", ask: try CueAsking(.delete, action: "删掉修发言乱序的分支"), task: task.id)
-        columns = try await board()
-        #expect(columns.done.isEmpty && columns.waiting.compactMap(\.item?.id) == [task.id])
-        #expect(try await CueActivityState.Reading.read(from: store).done.isEmpty)
-        try await expectCountsMatchCue(columns)
-    }
-    #endif
-
-    /// 在管与等你（Cue 那一行、看板中间两列同一份）：会话在做的顶层任务在管；Cue 问到它的步骤、它的会话在问你，它就从在管挪到等你，一处在等算一件；
-    /// 没落在任务上的提问也算等你；答完回到在管。
-    @Test func 在管与等你_问到哪件哪件挪到等你_答完回到在管() async throws {
-        let workspace = Workspace(services: rig.services)
-        let project = try await store.createProject(name: "圆桌", color: "#000000")
-        let release = try await store.createTask("发布 v1.4", in: project.id)
-        let step = try await store.createTask("推送到 TestFlight", under: release.id)
-        let canvas = try await store.createTask("画布缩放", in: project.id)
-        _ = try await store.createTask("登录回调", in: project.id)
-        let recorder = PiStateRecorder(store: store, hostID: "mac-a")
-        try await recorder.update(sessionID: "push", state: .thinking, title: "push-testflight")
-        try await store.bindSession("push", to: step.id)
-        try await recorder.update(sessionID: "zoom", state: .thinking, title: "canvas-zoom")
-        try await store.bindSession("zoom", to: canvas.id)
-        func digest() async throws -> CueDigest { try await CueDigest.read(from: store) }
-        #expect(try await Set(digest().tally.managing.map(\.id)) == ["task/\(release.id.uuidString)", "task/\(canvas.id.uuidString)"])
-
-        let push = try await store.addCueMessage(.cue, text: "要推送吗？", ask: try CueAsking(.push, action: "推送 v1.4"), task: step.id)
-        _ = try await store.addCueMessage(.cue, text: "要删旧脚本吗？", ask: try CueAsking(.delete, action: "删掉 scripts/legacy"))
-        try await recorder.update(sessionID: "zoom", state: .waitingForUser, question: PiQuestion(promptID: "p", kind: .confirm, text: "改锚点？"))
-        var tally = try await digest().tally
-        #expect(tally.managing.isEmpty)
-        #expect(tally.waiting.map(\.task) == [release.id, nil, canvas.id])
-
-        try await workspace.answerCueQuestion(push, CueAsk.once)
-        tally = try await digest().tally
-        #expect(tally.managing.map(\.id) == ["task/\(release.id.uuidString)"] && tally.waiting.count == 2)
-    }
-
-    /// 在管只算 Cue 此刻在做的，与它信封里的"在做"同一份：开过工、会话都结束了的任务（在等你自己去办的事）不算，
-    /// 它没丢也没做完，回到待办；会话恢复了又回到在管。没绑没做完的任务的活会话也在在管。
-    @Test func 会话都结束了的任务不算在管_回到待办_数同信封() async throws {
-        let card = try await store.createTask("开 U 卡")
-        let bitget = try await store.createTask("bitget", under: card.id)
-        _ = try await store.createTask("KYC", under: card.id)
-        let recorder = PiStateRecorder(store: store, hostID: "mac-a")
-        try await recorder.update(sessionID: "kyc", state: .settled, title: "bitget")
-        try await store.bindSession("kyc", to: bitget.id)
-        try await recorder.update(sessionID: "kyc", state: .ended)
-        let live = try await store.createTask("修登录")
-        try await recorder.update(sessionID: "login", state: .thinking, title: "修登录")
-        try await store.bindSession("login", to: live.id)
-        try await recorder.update(sessionID: "term", state: .settled, title: "终端里的")
-        func inEnvelope() async throws -> Int { try await store.cueBoard().active.count }  // 信封的"在做 N 件"数的就是它
-
-        var board = try await TaskBoard.read(from: store)
-        #expect(board.managing.map(\.id) == ["task/\(live.id.uuidString)", "session/term"])  // 任务在前，没绑任务的会话在后
-        #expect(board.todo.map(\.id) == [card.id] && board.todo.first?.task.status == .inProgress)
-        #expect(try await CueDigest.read(from: store).managing == 2)
-        #expect(try await inEnvelope() == 2)
-
-        try await recorder.update(sessionID: "kyc", state: .thinking)
-        board = try await TaskBoard.read(from: store)
-        #expect(Set(board.managing.map(\.id)) == ["task/\(card.id.uuidString)", "task/\(live.id.uuidString)", "session/term"] && board.todo.isEmpty)
-        #expect(try await inEnvelope() == 3)
-    }
-
-    // MARK: 整理任务的层级
-
-    /// a（a1、a2）、b。界面给出的每一次移动，Store 都接受。
-    @Test func 整理任务_缩进_反缩进_拖放_界面给出的移动Store都接受() async throws {
-        let a = try await store.createTask("a")
-        let b = try await store.createTask("b")
-        try await store.moveCard(a.id, to: .top(project: Project.defaultID), after: nil)
-        let a1 = try await store.createTask("a1", under: a.id)
-        let a2 = try await store.createTask("a2", under: a.id)
-        func tree() async throws -> TaskTree { TaskTree(try await store.tasks(.todo).flatMap(\.tasks)) }
-        func apply(_ move: TaskMove?, _ id: UUID) async throws {
-            let move = try #require(move)
-            try await store.moveCard(id, to: move.slot, after: move.after)
-        }
-
-        let listed = try await tree().rows()
-        #expect(listed.map(\.id) == [a.id, a1.id, a2.id, b.id] && listed.map(\.depth) == [0, 1, 1, 0])
-
-        // 缩进成为上一个同级的最后一个步骤；没有上一个同级、或任务会超过两级时不能缩进
-        #expect(try await tree().indent(a.id) == nil)
-        #expect(try await tree().indent(a1.id) == nil)
-        #expect(try await tree().indent(a2.id) == nil)
-        try await apply(try await tree().indent(b.id), b.id)
-        #expect(try await store.card(b.id)?.parentID == a.id)
-        // 反缩进成为原上级的下一个同级；顶层不能反缩进
-        try await apply(try await tree().outdent(b.id), b.id)
-        #expect(try await store.card(b.id)?.parentID == nil)
-        #expect(try await tree().outdent(b.id) == nil)
-
-        // 拖到一行中部成为它的步骤；不能拖进自己的子树
-        let rows = try await tree().rows()
-        let frames = Dictionary(uniqueKeysWithValues: rows.enumerated().map { ($1.id, CGRect(x: 0, y: CGFloat($0) * 44, width: 300, height: 44)) })
-        let middle = CGPoint(x: 100, y: 66)
-        try await apply(try await tree().drop(b.id, rows: rows, frames: frames, at: CGPoint(x: 100, y: 22), depthShift: 0)?.move, b.id)
-        #expect(try await store.card(b.id)?.parentID == a.id)
-        #expect(try await tree().drop(a.id, rows: rows, frames: frames, at: middle, depthShift: 0) == nil)
-    }
-
-    /// 层级限制与 Store 同一口径：已完成、不显示的步骤也算层级；拖起来又放回原处什么都不改。
-    /// 点掉已完成步骤的圆圈：不再算做完只有一种——它与已完成的上级清掉完成，开始过的回进行中、没开始过的回待办，在归档里的整件取回；
-    /// 上级从步骤推出开始，步骤开始过它就跟着进行中。
-    @Test func 点掉已完成步骤的圆圈_上级跟着不再算做完_整件取回归档() async throws {
-        let task = try await store.createTask("发布")
-        let step = try await store.createTask("跑检查", under: task.id)
-        try await store.setStatus(step.id, .inProgress)
-        let workspace = Workspace(services: rig.services)
-        try await workspace.toggle(task.id)
-        try await workspace.archive(task.id)
-        #expect(try await store.card(step.id)?.status == .done)
-        #expect(try await store.archived().count == 1)
-
-        try await workspace.toggle(step.id)
-        #expect(try await store.card(step.id)?.status == .inProgress)
-        #expect(try await store.card(task.id)?.status == .inProgress)
-        #expect(try await store.archived().isEmpty)
-    }
-
-    @Test func 带着已完成步骤的任务不能再缩进_拖起来放回原处不换项目() async throws {
-        let second = try await store.createTask("发布")
-        let first = try await store.createTask("备份")
-        let done = try await store.createTask("写说明", under: second.id)
-        try await store.setStatus(done.id, .done)
-        let all = try await store.tasks(.inProgress, .todo, .done).flatMap(\.tasks)
-        let tree = TaskTree(all.filter { $0.status != .done }, all: all)
-        #expect(tree.indent(second.id) == nil)
-        let rows = tree.rows()
-        let frames = Dictionary(uniqueKeysWithValues: rows.enumerated().map { ($1.id, CGRect(x: 0, y: CGFloat($0) * 44, width: 300, height: 44)) })
-        let onto = tree.drop(second.id, rows: rows, frames: frames, at: CGPoint(x: 100, y: 22), depthShift: 0)
-        #expect(onto?.mark != .onto(first.id))
-        if let move = onto?.move { try await store.moveCard(second.id, to: move.slot, after: move.after) }
-
-        let site = try await store.createProject(name: "网站", color: "#000000")
-        let loose = try await store.createTask("续费域名")
-        let other = try await store.createTask("换首图", in: site.id)
-        let flat = TaskTree(try await store.tasks(.inProgress, .todo).flatMap(\.tasks).filter { [loose.id, other.id].contains($0.id) })
-        let flatRows = flat.rows()
-        let flatFrames = Dictionary(uniqueKeysWithValues: flatRows.enumerated().map { ($1.id, CGRect(x: 0, y: CGFloat($0) * 44, width: 300, height: 44)) })
-        let home = try #require(flatFrames[loose.id])
-        #expect(flat.drop(loose.id, rows: flatRows, frames: flatFrames, at: CGPoint(x: 100, y: home.midY), depthShift: 0) == nil)
+        workspace.convertToTasks("- 写发布说明\n\n- 更新截图", in: project.id)
+        try await eventually("转好任务") { workspace.notice?.text == "已转为 2 个任务" }
+        #expect(try await store.tasks(.todo).flatMap(\.tasks).filter { $0.projectID == project.id }.map(\.body) == ["写发布说明", "更新截图"])
     }
 
     // MARK: 共用的小件

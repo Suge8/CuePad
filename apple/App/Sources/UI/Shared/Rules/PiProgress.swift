@@ -1,16 +1,15 @@
 import CueStore
 import Foundation
 
-/// 会话"现在到哪了"的一句话（项目行、任务看板的卡、任务浮窗；会话行不写它，只写状态与读数，见 `PiRowFacts`）：等你确认时是问题首行，干活时是当前动作（还没有动作时是正在处理的提问），
+/// 会话"现在到哪了"的一句话（项目行、任务看板的卡、任务浮窗、会话页卡片的第二行；窄处的会话行不写它，只写状态与读数，见 `PiRowFacts`）：等你确认时是问题首行，干活时是当前动作（还没有动作时是正在处理的提问），
 /// 出错时是原因首行，空闲或已结束时是最后回答的首句。先去掉 Markdown 符号再截断。没有可说的就是 nil（不占行，用的地方写状态）：
 /// 没有回答时不拿最后那句提问凑数——那句可能是 Cue 发进去的，近况里分不出是谁说的，会话名已经说了是什么事。
 nonisolated enum PiProgress {
-    /// 任务浮窗与手机任务页大字下面的一句：没送到的原因 → 到哪了 → 新会话、需要 /reload 时的提示。
+    /// 任务浮窗与手机任务页大字下面的一句：没送到的原因 → 到哪了 → 新会话时的提示。
     static func note(of session: PiSessionState, failure: String?) -> String? {
         if let failure { return failure }
         if let progress = line(of: session) { return progress }
         if session.state == .known(.settled), !session.hasStarted { return "等你说第一句" }
-        if session.state == .known(.incompatible) { return "在终端里执行 /reload 就能接上" }
         return nil
     }
 
@@ -24,7 +23,7 @@ nonisolated enum PiProgress {
         case .compacting: nil
         case .error: firstLine(session.detail)
         // 被打断的：最近一轮做完的回答，正在处理的那句由状态词"被打断"带出
-        case .settled, .ended, .interrupted, .incompatible, nil: firstSentence(session.lastReply)
+        case .settled, .ended, .interrupted, nil: firstSentence(session.lastReply)
         }
     }
 

@@ -9,7 +9,6 @@ import AppKit
 enum DebugForeground {
     private static var lender: NSRunningApplication?
     private static var pointer: CGPoint?
-    /// 正借着前台（`borrow` 之后、`giveBack` 之前）。
     private static var holding = false
     private static let request = ProcessInfo.processInfo.environment["CUEPAD_FRONT_REQUEST"]
 

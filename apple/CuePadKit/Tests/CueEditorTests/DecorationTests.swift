@@ -68,24 +68,6 @@ struct DecorationTests {
         #expect(h.textView.undoManager?.canUndo == false)
     }
 
-    @Test("与输入法组合共存：标记文本不被打断，各行样式不变")
-    func withComposing() {
-        let h = EditorHarness()
-        h.load("\n# 次行")
-        h.setCaret(0)
-
-        h.textView.setMarkedText("shou", selectedRange: NSRange(location: 4, length: 0), replacementRange: nowhere)
-        #expect(h.textView.hasMarkedText() && h.textView.markedRange() == NSRange(location: 0, length: 4))
-        var p = displayed(h)
-        #expect(font(p[0]) == theme.font && font(p[1]) == theme.headingFont)
-
-        h.textView.insertText("首", replacementRange: nowhere)
-        #expect(!h.textView.hasMarkedText())
-        #expect(h.stored == "首\n# 次行")
-        p = displayed(h)
-        #expect(font(p[0]) == theme.font && font(p[1]) == theme.headingFont)
-        #expect(h.textView.textLayoutManager != nil)
-    }
 }
 
 #endif

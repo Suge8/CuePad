@@ -47,7 +47,7 @@ struct SyncPollerTests {
 
   @Test func fetchesEveryIntervalWhileWaitingAndStopsWhenTheConditionClears() async throws {
     let condition = Condition()
-    let every5 = SyncPoller.Cadence(.every(.seconds(5)))
+    let every5 = SyncPoller.Cadence(every: .seconds(5))
     var asks = condition.asks.makeAsyncIterator()
     let (task, count, fetches) = run(SyncPoller(timing: time.timing), condition)
     var fetched = fetches.makeAsyncIterator()
@@ -72,7 +72,7 @@ struct SyncPollerTests {
 
   @Test func aNewCadenceInterruptsTheSleepAndFetchesRightAway() async throws {
     let condition = Condition()
-    let slow = SyncPoller.Cadence(.every(.seconds(10)))
+    let slow = SyncPoller.Cadence(every: .seconds(10))
     var asks = condition.asks.makeAsyncIterator()
     let (task, count, fetches) = run(SyncPoller(timing: time.timing), condition)
     var fetched = fetches.makeAsyncIterator()
@@ -82,7 +82,7 @@ struct SyncPollerTests {
     await time.waitForSleeper()  // 睡在 10 秒的间隔里
 
     await asks.next()
-    condition.input.yield(SyncPoller.Cadence(.every(.seconds(2))))  // 来了要等的东西：不等睡醒，马上拉
+    condition.input.yield(SyncPoller.Cadence(every: .seconds(2)))  // 来了要等的东西：不等睡醒，马上拉
     await fetched.next()
 
     condition.input.finish()

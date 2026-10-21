@@ -34,349 +34,53 @@ enum Schema {
   /// 能打开的最老结构版本（`upgrades` 的起点）：更早的库不升级、不打开（`schemaTooOld`）。
   /// 发出的版本把用户的库都升过了某一版，就把那一版及以前的步骤折进 `create`、起点挪到那一版：`create` 建的就是最新结构，
   /// 升级步骤只留还有库没跑过的。
-  static let baseVersion = 50
+  static let baseVersion = 66
 
   /// `upgrades[i]` 把结构版本 `baseVersion + i` 升到 `baseVersion + i + 1`；改结构时在末尾追加一步，同时更新 `create`
   /// （新库直接建成最新结构、不跑升级步骤：只改数据的一步在空库上无事可做）。
   /// 一步里任何会因数据冲突失败的语句（加唯一索引、NOT NULL、按假定的数据形状改写）都会让启动失败、库打不开：
   /// 要按别的设备已经同步来的、任意形状的数据写。
   static let upgrades: [Upgrade] = [
-    // 51：正文是标准 Markdown，分割线就是 `---`：独占一行（可带首尾空白）的私有标记 `---split---` 换成它，行里夹着的不是分割线。
-    // 回收站里的也换；modifiedAt 变大，改动才会同步出去
+    // 67：同步元数据的系统字段压缩存（`SystemFields`），真实库从 65MB 降到约 10MB。原地改写的行仍各占一页，所以整表重建：
+    // 一条 INSERT … SELECT 按行压缩，建好再补索引；腾出的页由升级后的整理还给磁盘（`reclaim`）
     Upgrade { db in
-      let now = Date.stamp
-      let marked = try db.query("SELECT id, body FROM cards WHERE body LIKE '%---split---%'") { (id: $0.uuid(0), body: $0.text(1)) }
-      for card in marked {
-        let body = card.body.components(separatedBy: "\n")
-          .map { $0.trimmingCharacters(in: .whitespaces) == "---split---" ? "---" : $0 }
-          .joined(separator: "\n")
-        guard body != card.body else { continue }
-        try db.run("UPDATE cards SET body = ?1, modifiedAt = MAX(modifiedAt + 1, ?2) WHERE id = ?3", [body, now, card.id])
-      }
-    },
-    // 52：Cue 这一轮是被哪几个会话的动静叫醒的（`CueState.woke`），各端据此画"叫醒"的那一下
-    "ALTER TABLE cueState ADD COLUMN woke TEXT;",
-    // 53：会话记录的问答（读会话文件写的，可能晚于桥报的状态）变了也盖写入序号：歇下要等这一轮的回复读到才算变化（`CueStore.cueChanges`）
-    "DROP TRIGGER piSessionStates_writeSeq_update; \(stampOnChange("piSessionStates", ["state", "stateSince", "lastPrompt", "lastReply", "pendingPrompt"]))",
-    // 54：手机上的 Cue 与 Mac 对齐：每台 Mac 写下自己的名字（Cue 能运行在哪几台、运行在哪台都读它），Cue 的上下文随状态同步
-    "ALTER TABLE macAgents ADD COLUMN name TEXT; ALTER TABLE cueState ADD COLUMN context TEXT;",
-    // 55：启动、推导待推送与每次会话、Cue 对话变化都要读的几处走覆盖或部分索引，不再整表读带长文的行（各自的理由见下面的定义）
-    // 后来加的同步表那时还没有，各在建它的那一步建自己的索引
-    "DROP INDEX syncRecords_recordType; \(pendingIndexes(Table.synced.filter { ![.cueRead, .sessionViewers].contains($0) })) \(folderIndex) \(transcriptAgeIndex) \(agentIndex) \(openQuestionIndex)",
-    // 56：提问存下类别与范围（`CueMessage.asked`）、要做的动作与依据的规矩（`CueAsking`），不再按选项文字反认；
-    // Mac 名只在 macAgents，目录绑定不再带名字
-    Upgrade { db in
+      try db.define("packSystemFields", SystemFields.pack)
       try db.exec(
         """
-        ALTER TABLE cueMessages ADD COLUMN ask TEXT; ALTER TABLE cueMessages ADD COLUMN askAction TEXT; ALTER TABLE cueMessages ADD COLUMN askRule TEXT;
-        ALTER TABLE directoryBindings DROP COLUMN hostName;
+        ALTER TABLE syncRecords RENAME TO syncRecordsOld; DROP INDEX syncRecords_recordType; DROP INDEX syncRecords_pushed;
+        \(syncRecordsTable)
+        INSERT INTO syncRecords SELECT recordName, recordType, packSystemFields(systemFields), pushedModifiedAt, sentModifiedAt FROM syncRecordsOld;
+        DROP TABLE syncRecordsOld;
+        \(syncRecordsIndexes)
         """)
-      try backfillAsked(db)
     },
-    // 57：会话里你在 CuePad 作答的那一句写进对话（`PiChatRole.answer`），带着当时问的问题；Cue 页按答的时刻找你答了的提问
-    "ALTER TABLE piMessages ADD COLUMN question TEXT; \(answeredIndex)",
-    // 58：Cue 页读到哪（`CueRead`）
-    "\(cueRead) \(modifiedIndex(.cueRead))",
-    // 59：提问要你看的图由 Cue 点名、存在提问上（`CueAsking.shots`），不再挂关联任务的全部交付物
-    "ALTER TABLE cueMessages ADD COLUMN askShots TEXT;",
-    // 60：会话停下时谁接手——Cue 留给你回的会话（`CueState.left`），每台设备开着哪个会话（`Viewer`）
-    "ALTER TABLE cueState ADD COLUMN leftToYou TEXT; \(sessionViewers) \(modifiedIndex(.sessionViewers))",
-    // 61：歇下要等最后一轮的回答读到才算变化，改按时刻判（`PiSessionState.answered`）：会话记录记最后一轮的开始，摘要记这一轮收尾的时刻；
-    // 盖写入序号的列跟着换成收尾时刻（不再看进行中的提问与问答文字）
-    """
-    ALTER TABLE piSessionStates ADD COLUMN turnStartedAt INTEGER; ALTER TABLE piSessionStates ADD COLUMN answeredAt INTEGER;
-    DROP TRIGGER piSessionStates_writeSeq_update; \(stampOnChange("piSessionStates", sessionChanges))
-    """,
-    // 62：你在 Cue 页开口收起还开着的提问，记下是哪句话收起的（`CueMessage.setAsideBy`），Cue 判断不是在答它就放回
-    "ALTER TABLE cueMessages ADD COLUMN setAsideBy TEXT;",
-    // 63：每台设备开着的页带上 Cue 页（`Viewer.cue`）：他在 Mac 上开着 Cue 页时 Cue 的话不推到手机
-    "ALTER TABLE sessionViewers ADD COLUMN cue INTEGER;",
-    // 64：你开口收起的提问走部分索引（每次把你的话交给 Cue 都读）
-    "\(setAsideIndex)",
-    // 65：未分类取消，每张卡都在一个项目里：建默认项目，没有项目的灵感与任务挪进去（modifiedAt 变大，改动才会同步出去）。
-    // 别的设备上更早的版本删过同 id 的（不会有：它们不认得默认项目）也取回
-    Upgrade { db in
-      try db.exec(defaultProject)
-      try db.run("UPDATE projects SET deletedAt = NULL, modifiedAt = MAX(modifiedAt + 1, ?1) WHERE id = ?2 AND deletedAt IS NOT NULL", [Date.stamp, Project.defaultID])
-      try db.run("UPDATE cards SET projectID = ?1, modifiedAt = MAX(modifiedAt + 1, ?2) WHERE projectID IS NULL", [Project.defaultID, Date.stamp])
-    },
-    // 66：Cue 自己醒来的一轮为什么醒记在它的经过那一行上（`CueMessage.wake`，Cue 页那一节的第一行、叫醒的接力都读它），
-    // 此刻状态里的那一份（52 加的 `cueState.woke`）去掉
-    "ALTER TABLE cueMessages ADD COLUMN wake TEXT; ALTER TABLE cueState DROP COLUMN woke;",
+    // 68：启动与每次会话、Cue 对话变化都要读的几处走索引（各自的理由见下面的定义）
+    "DROP INDEX piSessionStates_state; \(stateIndex) \(launchTokenIndex) \(hostedIndex) \(toDeliverIndex)",
   ]
 
-  /// 默认项目（`Project.defaultID`）的那一条：新库建好就有，升级时补上。修改时间是 0：各台设备离线各自建出的是同一版，
-  /// 合并时用户改过的（名字、颜色、图标）总比它新，不会被一台新装的设备盖回"默认"。
-  static let defaultProject = """
-    INSERT INTO projects (id, name, icon, color, isPinned, deletedAt, createdAt, modifiedAt, intro)
-    VALUES ('\(Project.defaultID.uuidString.lowercased())', '默认', 'house', '#8A8A84', 0, NULL, 0, 0, NULL)
-    ON CONFLICT(id) DO NOTHING;
-    """
-
-  /// 已有的提问照当时的写法认出类别：带"以后<当时的叫法>都不用问"的是那一类，都不带的是规矩那一类；范围是关联任务此刻所在的项目
-  /// （原先选第二项时就按它记）。没有动作短语，卡片按类别与任务标题拼。modifiedAt 变大，改动才会同步出去，新装的设备拿到的也有。
-  private static let oldAlways: [CueAsk: String] = [
-    .push: "推送", .merge: "合并到共享分支", .release: "发布或部署", .delete: "删除", .outside: "动项目以外的东西", .budget: "超出预算",
-  ]
-
-  private static func backfillAsked(_ db: SQLite) throws {
-    let now = Date.stamp
-    let asked = try db.query(
-      "SELECT m.id, m.choices, c.projectID FROM cueMessages m LEFT JOIN cards c ON c.id = m.taskID WHERE m.choices IS NOT NULL AND m.ask IS NULL"
-    ) { (id: $0.uuid(0), choices: JSONColumn.decode([String].self, from: $0.textOrNil(1)) ?? [], project: $0.uuidOrNil(2)) }
-    for message in asked {
-      let ask = oldAlways.first { message.choices.contains("以后\($0.value)都不用问") }?.key ?? .rule
-      try db.run(
-        "UPDATE cueMessages SET ask = ?1, modifiedAt = MAX(modifiedAt + 1, ?2) WHERE id = ?3",
-        [CueAllow(ask, project: message.project).stored, now, message.id])
-    }
+  /// 升级腾出了大量空页（如 67 把系统字段压小）时整理一遍，把它们还给磁盘：库不开自动整理，空页只等以后的写入复用，文件不会变小。
+  /// 别的进程（命令行、扩展）正开着库时整理不了（忙），空页留着照样复用，不挡打开。
+  static func reclaim(_ db: SQLite) throws {
+    let free = try db.first("PRAGMA freelist_count") { $0.int(0) } ?? 0
+    let total = try db.first("PRAGMA page_count") { $0.int(0) } ?? 0
+    guard free * 4 > total else { return }
+    try? db.exec("VACUUM")
   }
 
-  /// 推导待推送（`CueStore.pendingSync`）只读每条记录的 id 与修改时间、同步元数据的记录名、类型与收下的修改时间：
-  /// 覆盖索引让它不碰表本身——同步元数据每行带约 4KB 的系统字段，会话消息、会话记录的行也大，真实库一次推导因此从 3.3 亿条指令降到 1 亿。
-  private static func pendingIndexes(_ tables: [Table]) -> String {
-    """
-    CREATE INDEX syncRecords_recordType ON syncRecords(recordType, pushedModifiedAt, recordName);
-    CREATE INDEX syncRecords_pushed ON syncRecords(recordName, pushedModifiedAt);
-    \(tables.map(modifiedIndex).joined(separator: "\n"))
-    """
-  }
-
-  private static func modifiedIndex(_ table: Table) -> String {
-    "CREATE INDEX \(table.rawValue)_modified ON \(table.rawValue)(id, modifiedAt);"
-  }
-  /// 各台 Mac 跑过 Agent 的文件夹（`CueStore.sessionFolders`）：每次会话记录变化都重读，按 (Mac, 文件夹) 聚合只读这几列，
-  /// 不碰带问答长文的会话记录本身（真实库四千多条，整表冷读约 75ms）。
-  private static let folderIndex = """
-    CREATE INDEX piSessionStates_folder ON piSessionStates(hostID, folder, stateSince, sessionID, projectID)
-      WHERE \(CueStore.hasFolder);
-    """
-  /// 清理过期对话（`CueStore.prunePiMessages`，启动时一次）按会话取最后的时刻：只读索引，不逐条读消息正文（冷读约 190ms → 15ms）。
-  private static let transcriptAgeIndex = "CREATE INDEX piMessages_sessionID_at ON piMessages(sessionID, at, createdAt);"
-  /// 本机会话索引按 Agent 取、删（启动时对每家接入各一次）：表里存着检查点，整表扫一次约 35ms。表达式与查询同出 `CueStore.agentOf`。
-  private static let agentIndex = "CREATE INDEX piSessions_agent ON piSessions(\(CueStore.agentOf));"
-  private static let cueRead = "CREATE TABLE cueRead (id TEXT PRIMARY KEY NOT NULL, modifiedAt INTEGER NOT NULL) STRICT;"
-  private static let sessionViewers = """
-    CREATE TABLE sessionViewers (id TEXT PRIMARY KEY NOT NULL, device TEXT NOT NULL, sessionID TEXT, modifiedAt INTEGER NOT NULL) STRICT;
-    """
-  /// Cue 还开着的提问（首屏读、每次 Cue 的对话变化重读）：部分索引只收这几条，条件与查询同出 `CueStore.openQuestion`（不一样就用不上）。
-  /// Cue 页读到的对话之前问、之后答的提问（`CueStore.cueQuestionsAnswered`，每次 Cue 的对话变化重读）：提问只占对话的一小部分。
-  private static let answeredIndex = "CREATE INDEX cueMessages_answered ON cueMessages(answeredAt) WHERE \(CueStore.answered);"
-  private static let openQuestionIndex = "CREATE INDEX cueMessages_open ON cueMessages(createdAt) WHERE \(CueStore.openQuestion);"
-  /// 你开口收起的提问（`CueStore.cueQuestionsSetAside`，每次把你的话交给 Cue 都读）：部分索引只收这几条，条件同出 `CueStore.setAside`。
-  private static let setAsideIndex = "CREATE INDEX cueMessages_setAside ON cueMessages(createdAt) WHERE \(CueStore.setAside);"
-
-  /// 本机写入序号（`CueStore.lastWrite`）的计数器与盖序号的触发器：Cue 的变化按本机收到的先后分新旧，不按事件时刻（晚到的事件时刻可能早于上次醒来）。
-  /// 构成 Cue 的变化的那几列真的变了（不只是被写了一遍）时，计数器加一、那一行记下它；本机写入与同步落库走的都是 INSERT / UPDATE，一处覆盖两条路。
-  /// 会话记录（`sessionChanges`）、卡片（完成、上级、是不是任务）、Cue 发起的请求（状态）在改变时盖，对话里的消息在新增时盖。
-  private static let writeSeq = """
-    CREATE TABLE writeCounter (seq INTEGER NOT NULL) STRICT;
-    INSERT INTO writeCounter (seq) VALUES (0);
-    \(stamped("piSessionStates", when: sessionChanges))
-    \(stamped("cards", when: ["completedAt", "parentID", "todoAt"]))
-    \(stamped("deliveryRequests", when: ["status"]))
-    \(stamped("piMessages", when: []))
-    """
-
-  /// `table`（已有 `writeSeq` 列）新增的行，或 `when` 里的列改了值的行，盖上计数器的下一个数。
-  private static func stamped(_ table: String, when columns: [String]) -> String {
-    let insert = "CREATE TRIGGER \(table)_writeSeq_insert AFTER INSERT ON \(table) BEGIN \(stamp(table)) END;"
-    return columns.isEmpty ? insert : insert + "\n" + stampOnChange(table, columns)
-  }
-
-  /// 会话记录上构成 Cue 的变化的列：进入的状态与时刻，与最后一轮在会话文件里收尾的时刻（读到这一轮的回答时它变，变化随之就绪）。
-  private static let sessionChanges = ["state", "stateSince", "answeredAt"]
-
-  private static func stampOnChange(_ table: String, _ columns: [String]) -> String {
-    let changed = columns.map { "old.\($0) IS NOT new.\($0)" }.joined(separator: " OR ")
-    return "CREATE TRIGGER \(table)_writeSeq_update AFTER UPDATE OF \(columns.joined(separator: ", ")) ON \(table) WHEN \(changed) BEGIN \(stamp(table)) END;"
-  }
-
-  private static func stamp(_ table: String) -> String {
-    "UPDATE writeCounter SET seq = seq + 1; UPDATE \(table) SET writeSeq = (SELECT seq FROM writeCounter) WHERE rowid = new.rowid;"
-  }
-
-  /// `PRAGMA user_version`：空库为 0，建好后为 `version`；旧于 `baseVersion` 的拒绝打开；其余旧的按 `upgrades` 就地升级；
-  /// 比它新的是更新版本建的库，不打开。
-  static let version = baseVersion + upgrades.count
-
-  /// 新库的结构（`version` 那一版），与从 `baseVersion` 升上来的库表、列、索引、触发器一致；列的先后不同（早年的库加列都在表尾），
-  /// 读写都按列名，不受影响。
-  static let create = """
-    CREATE TABLE projects (
-      id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, icon TEXT, color TEXT NOT NULL,
-      isPinned INTEGER NOT NULL, deletedAt INTEGER,
-      createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL, intro TEXT
-    ) STRICT;
-
-    -- conflictOf：冲突副本指向原卡。todoAt 有值是任务（灵感为 NULL），parentID 是上级任务。
-    -- formerSessionIDs：叶子以前用过的会话（换下来的仍属于它），记着的卡只占一小部分（部分索引）。
-    CREATE TABLE cards (
-      id TEXT PRIMARY KEY NOT NULL, projectID TEXT, body TEXT NOT NULL,
-      isPinned INTEGER NOT NULL, variableValues TEXT NOT NULL, sortKey TEXT NOT NULL, conflictOf TEXT,
-      deletedAt INTEGER, createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL,
-      parentID TEXT, todoAt INTEGER, startedAt INTEGER, completedAt INTEGER, piSessionID TEXT, archivedAt INTEGER,
-      formerSessionIDs TEXT, writeSeq INTEGER NOT NULL DEFAULT 0
-    ) STRICT;
-    CREATE INDEX cards_projectID_sortKey ON cards(projectID, sortKey);
-    CREATE INDEX cards_projectID_modifiedAt ON cards(projectID, modifiedAt);
-    CREATE INDEX cards_parentID ON cards(parentID);
-    CREATE INDEX cards_deletedAt ON cards(deletedAt) WHERE deletedAt IS NOT NULL;
-    CREATE INDEX cards_todoAt ON cards(todoAt) WHERE todoAt IS NOT NULL;
-    CREATE INDEX cards_piSessionID ON cards(piSessionID) WHERE piSessionID IS NOT NULL;
-    CREATE INDEX cards_formerSessionIDs ON cards(id) WHERE formerSessionIDs IS NOT NULL;
-
-    CREATE TABLE sendRecords (
-      id TEXT PRIMARY KEY NOT NULL, content TEXT NOT NULL, targetKind TEXT NOT NULL,
-      targetName TEXT NOT NULL, targetRef TEXT, cardID TEXT,
-      sentAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL, deliveryID TEXT, origin TEXT
-    ) STRICT;
-    CREATE INDEX sendRecords_sentAt ON sendRecords(sentAt);
-    CREATE INDEX sendRecords_cardID_sentAt ON sendRecords(cardID, sentAt);
-    CREATE INDEX sendRecords_deliveryID ON sendRecords(deliveryID) WHERE deliveryID IS NOT NULL;
-
-    CREATE TABLE attachments (
-      id TEXT PRIMARY KEY NOT NULL, hash TEXT NOT NULL, byteCount INTEGER NOT NULL, format TEXT NOT NULL,
-      createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL
-    ) STRICT;
-    CREATE INDEX attachments_hash ON attachments(hash);
-
-    -- Pi 会话状态（按会话一条）；notify 是明文通知标志，服务端订阅按它触发手机通知。
-    CREATE TABLE piSessionStates (
-      id TEXT PRIMARY KEY NOT NULL, sessionID TEXT NOT NULL, hostID TEXT NOT NULL, title TEXT NOT NULL,
-      projectID TEXT, state TEXT NOT NULL, detail TEXT, notify TEXT, folder TEXT,
-      lastPrompt TEXT, lastReply TEXT, question TEXT, busySince INTEGER, launchToken TEXT, hosted INTEGER, subagents TEXT, pendingPrompt TEXT,
-      pendingTools TEXT, model TEXT, thinking TEXT, context TEXT, agent TEXT, catalogID TEXT, turnStartedAt INTEGER, answeredAt INTEGER,
-      stateSince INTEGER NOT NULL,
-      createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL, writeSeq INTEGER NOT NULL DEFAULT 0
-    ) STRICT;
-    CREATE INDEX piSessionStates_hostID ON piSessionStates(hostID);
-    CREATE INDEX piSessionStates_sessionID ON piSessionStates(sessionID);
-    CREATE INDEX piSessionStates_state ON piSessionStates(state, stateSince);
-    CREATE INDEX piSessionStates_projectID ON piSessionStates(projectID, stateSince);
-    -- 指向带模型的目录记录的只有在线会话，进程没了的只指向只有命令的那几份：回收没人用的目录时不必翻全部历史
-    CREATE INDEX piSessionStates_catalogID ON piSessionStates(catalogID) WHERE catalogID IS NOT NULL;
-    \(folderIndex)
-
-    -- 会话可换的模型与斜杠命令（AgentCatalog）；id 由主机与内容算出，写下不改。
-    CREATE TABLE agentCatalogs (id TEXT PRIMARY KEY NOT NULL, hostID TEXT NOT NULL, models TEXT, commands TEXT, modifiedAt INTEGER NOT NULL) STRICT;
-
-    -- Agent 发到手机的预览。
-    CREATE TABLE previews (
-      id TEXT PRIMARY KEY NOT NULL, sessionID TEXT NOT NULL, hash TEXT NOT NULL, name TEXT NOT NULL, title TEXT NOT NULL,
-      byteCount INTEGER NOT NULL, createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL
-    ) STRICT;
-    CREATE INDEX previews_sessionID_createdAt ON previews(sessionID, createdAt);
-
-    -- 订阅账号的用量：每个提供方一条（id 由提供方定），windows 是 JSON 数组。
-    CREATE TABLE accountQuotas (
-      id TEXT PRIMARY KEY NOT NULL, provider TEXT NOT NULL, hostID TEXT NOT NULL, windows TEXT NOT NULL,
-      createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL
-    ) STRICT;
-
-    CREATE TABLE piMessages (
-      id TEXT PRIMARY KEY NOT NULL, sessionID TEXT NOT NULL, seq INTEGER NOT NULL, role TEXT NOT NULL, text TEXT NOT NULL,
-      at INTEGER NOT NULL, tools TEXT, roundStartedAt INTEGER, deliveryID TEXT,
-      createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL, writeSeq INTEGER NOT NULL DEFAULT 0, question TEXT
-    ) STRICT;
-    CREATE INDEX piMessages_sessionID_seq ON piMessages(sessionID, seq);
-    \(transcriptAgeIndex)
-
-    -- 项目在哪台 Mac 上绑定了代码目录：每个 (projectID, hostID) 一条，只有目录末段名（完整路径在本机表 projectDirectories）。
-    CREATE TABLE directoryBindings (
-      id TEXT PRIMARY KEY NOT NULL, projectID TEXT NOT NULL, hostID TEXT NOT NULL,
-      folder TEXT NOT NULL, createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL
-    ) STRICT;
-
-    CREATE TABLE deliveryRequests (
-      id TEXT PRIMARY KEY NOT NULL, content TEXT NOT NULL, targetKind TEXT NOT NULL, targetName TEXT NOT NULL,
-      targetRef TEXT, hostID TEXT NOT NULL, mode TEXT NOT NULL, cardID TEXT, status TEXT NOT NULL,
-      resultDetail TEXT, handledBy TEXT, createdAt INTEGER NOT NULL, completedAt INTEGER, modifiedAt INTEGER NOT NULL,
-      resultReceivedAt INTEGER, origin TEXT, cueToldAt INTEGER, writeSeq INTEGER NOT NULL DEFAULT 0
-    ) STRICT;
-    CREATE INDEX deliveryRequests_status ON deliveryRequests(status, createdAt);
-
-    -- Pi 历史索引：checkpoint 是服务层的不透明字节（读取偏移与解析状态）。
-    CREATE TABLE piSessions (
-      id TEXT PRIMARY KEY NOT NULL, path TEXT NOT NULL, cwd TEXT NOT NULL, title TEXT NOT NULL,
-      lastActivityAt INTEGER NOT NULL, checkpoint BLOB, agent TEXT
-    ) STRICT;
-    CREATE INDEX piSessions_cwd ON piSessions(cwd);
-    \(agentIndex)
-
-    -- 承载会话的进程：pid 与启动时刻（微秒），只在本机（PiProcess）。
-    CREATE TABLE piProcesses (sessionID TEXT PRIMARY KEY NOT NULL, pid INTEGER NOT NULL, startedAt INTEGER NOT NULL) STRICT;
-
-    -- 项目绑定的代码目录：路径因设备而异，只在本机。Pi 会话按 cwd 归入项目时用它。
-    CREATE TABLE projectDirectories (
-      projectID TEXT PRIMARY KEY NOT NULL, directory TEXT NOT NULL
-    ) STRICT;
-
-    -- 同步元数据：每条记录服务器端的系统字段与服务器收下的修改时间（从没收下过为 NULL），以及本机交出去的那一版的修改时间
-    -- （sentModifiedAt，见 CueStore.noteSent）。服务器收下过而行已不在数据表里的，就是要向服务器删除的（不需要墓碑表）。
+  /// 同步元数据：每条记录服务器端的系统字段（压缩存，见 `SystemFields`）与服务器收下的修改时间（从没收下过为 NULL），以及本机交出去的那一版的修改时间
+  /// （sentModifiedAt，见 `CueStore.noteSent`）。服务器收下过而行已不在数据表里的，就是要向服务器删除的（不需要墓碑表）。
+  static let syncRecordsTable = """
     CREATE TABLE syncRecords (
       recordName TEXT PRIMARY KEY NOT NULL, recordType TEXT NOT NULL, systemFields BLOB,
       pushedModifiedAt INTEGER, sentModifiedAt INTEGER
     ) STRICT;
-    -- 同步的本机状态：同步区令牌（zoneToken）与上次同步的 iCloud 账号（account）。
-    CREATE TABLE syncState (key TEXT PRIMARY KEY NOT NULL, value BLOB NOT NULL) STRICT;
-
-    -- Cue 的对话（tools 是一轮的经过，ask 是提问的类别与范围，askAction、askRule 是它要做的动作与依据的规矩，askShots 是 Cue 点名要你看的图（提问的与做完的结果，`CueMessage.shots`），setAsideBy 是你开口收起它的那句话，wake 是 Cue 自己醒来的那一轮为什么醒）、记忆、设置（allows 是允许清单）与此刻在做什么（round 是在跑的那一轮）。
-    CREATE TABLE cueMessages (
-      id TEXT PRIMARY KEY NOT NULL, author TEXT NOT NULL, text TEXT NOT NULL, choices TEXT, urgent INTEGER NOT NULL,
-      taskID TEXT, answer TEXT, answeredAt INTEGER, deliveredAt INTEGER, createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL,
-      notify TEXT, tools TEXT, ask TEXT, askAction TEXT, askRule TEXT, askShots TEXT, setAsideBy TEXT, wake TEXT
-    ) STRICT;
-    CREATE INDEX cueMessages_createdAt ON cueMessages(createdAt);
-    \(openQuestionIndex)
-    \(answeredIndex)
-    \(setAsideIndex)
-    CREATE TABLE cueLines (
-      id TEXT PRIMARY KEY NOT NULL, text TEXT NOT NULL, pinned INTEGER NOT NULL, source TEXT NOT NULL, remindAt INTEGER,
-      createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL, deletedAt INTEGER
-    ) STRICT;
-    CREATE INDEX cueLines_order ON cueLines(createdAt, id);
-    CREATE INDEX cueLines_remindAt ON cueLines(remindAt) WHERE remindAt IS NOT NULL;
-    CREATE TABLE cueProfile (
-      id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, hostID TEXT, runtime TEXT NOT NULL, model TEXT, effort TEXT,
-      enabledAt INTEGER, modifiedAt INTEGER NOT NULL, allows TEXT
-    ) STRICT;
-    -- lineIDs：区间里各行 id 的指纹，行序变了（别处同步来更早的行）摘要随之作废
-    CREATE TABLE cueSummaries (
-      lo INTEGER NOT NULL, hi INTEGER NOT NULL, text TEXT NOT NULL, lineIDs TEXT NOT NULL, createdAt INTEGER NOT NULL, PRIMARY KEY (lo, hi)
-    ) STRICT;
-    CREATE TABLE cueState (
-      id TEXT PRIMARY KEY NOT NULL, state TEXT NOT NULL, detail TEXT, modifiedAt INTEGER NOT NULL, round TEXT, context TEXT, leftToYou TEXT
-    ) STRICT;
-    \(cueRead)
-
-    \(writeSeq)
-
-    -- 每台 Mac 自己写、各端读：在线记录（Mac 在不在、Cue 在不在值班的唯一信号），能用的 Agent 与各家的模型。
-    CREATE TABLE macPresence (id TEXT PRIMARY KEY NOT NULL, hostID TEXT NOT NULL, onlineUntil INTEGER NOT NULL, modifiedAt INTEGER NOT NULL) STRICT;
-    CREATE TABLE macAgents (id TEXT PRIMARY KEY NOT NULL, hostID TEXT NOT NULL, agents TEXT, problems TEXT, modifiedAt INTEGER NOT NULL, name TEXT) STRICT;
-    -- 每台设备自己写：此刻开着哪个会话、开没开着 Cue 页（会话停下时他在不在场的一半；提示到不到他）。
-    CREATE TABLE sessionViewers (id TEXT PRIMARY KEY NOT NULL, device TEXT NOT NULL, sessionID TEXT, modifiedAt INTEGER NOT NULL, cue INTEGER) STRICT;
-
-    -- trigram 分词：中文等无空格文本可子串匹配；LIKE 在其上对任意长度关键字都正确（3 字符以上走索引）。
-    CREATE VIRTUAL TABLE searchIndex USING fts5(text, refID, kind UNINDEXED, tokenize = 'trigram');
-    \(searchTriggers(table: "projects", column: "name", kind: "project"))
-    \(searchTriggers(table: "cards", column: "body", kind: "card"))
-    \(pendingIndexes(Table.synced))
-    \(defaultProject)
+    """
+  static let syncRecordsIndexes = """
+    CREATE INDEX syncRecords_recordType ON syncRecords(recordType, pushedModifiedAt, recordName);
+    CREATE INDEX syncRecords_pushed ON syncRecords(recordName, pushedModifiedAt);
     """
 
-  /// 触发器对本地写入与将来同步的写入一视同仁，索引始终跟随数据。
-  private static func searchTriggers(table: String, column: String, kind: String) -> String {
-    let remove = #"DELETE FROM searchIndex WHERE searchIndex MATCH 'refID: "' || old.id || '"';"#
-    let add = """
-      INSERT INTO searchIndex(text, refID, kind)
-      SELECT new.\(column), new.id, '\(kind)' WHERE new.\(column) <> '';
-      """
-    return """
-      CREATE TRIGGER searchIndex_\(table)_insert AFTER INSERT ON \(table) BEGIN \(add) END;
-      CREATE TRIGGER searchIndex_\(table)_update AFTER UPDATE OF \(column) ON \(table) BEGIN \(remove) \(add) END;
-      CREATE TRIGGER searchIndex_\(table)_delete AFTER DELETE ON \(table) BEGIN \(remove) END;
-      """
-  }
+  /// `PRAGMA user_version`：空库为 0，建好后为 `version`；旧于 `baseVersion` 的拒绝打开；其余旧的按 `upgrades` 就地升级；
+  /// 比它新的是更新版本建的库，不打开。
+  static let version = baseVersion + upgrades.count
 }

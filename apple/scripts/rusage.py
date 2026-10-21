@@ -6,6 +6,8 @@
 再静置几秒让启动后的收尾做完，然后量一个窗口，窗口开始时起 --during（如 xctrace，量完等它写完），打印一行 JSON：
   readyMs        启动到就绪标记出现（标记的含义见 DebugScene.signalReady：画面摆好、读库回来、动画停下）。
                  Mac 从 app.py exec 成 CuePad 那一刻算（锁记录里的 execAt），iOS 从进程启动算
+  readyInstructionsM  进程从启动到就绪执行的指令（百万），启动那段的前后对比看它；
+                 Mac 上含 exec 之前 app.py 那段 python（每次相同的一截，前后对比时抵消）
   wakeupsPerSec  窗口内每秒唤醒次数（包空闲唤醒加中断唤醒，同活动监视器的"空闲唤醒"口径再加中断唤醒）
   instructionsM  窗口内执行的指令（百万）    cpuMs  窗口内的 CPU 毫秒（用户态加内核态）
   footprintMB    窗口结束时的物理占用（同活动监视器的"内存"）    peakMB  进程一生的物理占用峰值
@@ -56,6 +58,7 @@ def main():
     wait_ready(ready, pid)
     # time.monotonic_ns 在 macOS 上就是 mach_absolute_time 换成纳秒，与内核记账同一个钟
     ready_ms = (time.monotonic_ns() - started_ns(pid)) / 1e6
+    ready_instructions = usage(pid)["instructions"]
     if "--on-ready" in hooks:
         subprocess.run(hooks["--on-ready"], shell=True, check=True, stdout=subprocess.DEVNULL)
     time.sleep(settle)
@@ -68,6 +71,7 @@ def main():
     d = lambda k: b[k] - a[k]
     print(json.dumps({
         "readyMs": round(ready_ms),
+        "readyInstructionsM": round(ready_instructions / 1e6, 1),
         "wakeupsPerSec": round((d("idle_wkups") + d("interrupt_wkups")) / seconds, 2),
         "instructionsM": round(d("instructions") / 1e6, 1),
         "cpuMs": round((d("user") + d("system")) * NS / 1e6, 1),
@@ -77,4 +81,5 @@ def main():
     }), flush=True)
 
 
-main()
+if __name__ == "__main__":
+    main()

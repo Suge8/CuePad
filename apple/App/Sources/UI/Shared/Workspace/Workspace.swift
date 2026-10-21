@@ -51,7 +51,7 @@ final class Workspace {
     let sendState: SendState
     private(set) var nonProjectPage: Route?
     /// 打开的卡（编辑页；iOS 打开卡片是推入导航，见 `Navigation.push`）。设成某张卡时编辑页立即挂上；
-    /// 清空时编辑页先淡出，淡完才卸下（见 `presentedCard`）。
+    /// 清空时编辑页先淡出，淡完才卸下（`CardEditorPage`）。
     var openCard: UUID? {
         didSet { if let openCard { presses.present(openCard) } }
     }
@@ -61,21 +61,24 @@ final class Workspace {
         didSet { if openTask == nil, let oldValue { closedTask = (oldValue.task, .now) } }
     }
     /// 刚收起的气泡是哪件事、什么时候：按在它那一行上收起的（按下就关，松开时那一行又要打开它），这一下不再打开。
-    @ObservationIgnored private var closedTask: (task: UUID, at: ContinuousClock.Instant)?
-    /// 这个窗口里最近按下的那一下（窗口坐标与时刻；Mac 的鼠标、手机的手指，由窗口的按下监听报来）：任务气泡从这里长出来。
-    @ObservationIgnored private var press: (point: CGPoint, at: ContinuousClock.Instant)?
+    @ObservationIgnored var closedTask: (task: UUID, at: ContinuousClock.Instant)?
+    @ObservationIgnored var press = PressPoint()
     #if os(macOS)
     /// 新建或编辑项目的表单（`ProjectForm`；侧栏与项目页的入口都经这里，主窗口弹出）。
     var projectForm: ProjectForm.Request?
-    /// 项目范围：任务页与会话页共用这一份（顶栏中间那颗显示它、点 ✕ 清掉；项目页的"全部 N 个会话"设成这个项目再切到会话页），nil 是全部项目。
-    var projectScope: UUID?
     /// ⌘K 搜索开着（`SearchPalette`）。
     var searching = false
     /// 接入 Agent 并启用 Cue 的面板（`SetupPanel`；首次打开由 `offerSetup` 置起，Cue 页的启用卡与会话页的"接入"也打开它，主窗口弹出）。
     var showsSetup = false
     /// 新会话的表单开着（`NewSessionForm`，从会话页的 + 弹出；菜单"文件 › 新会话"先去会话页再置起，`newSession`）。
     var showsNewSession = false
+    /// 任务页待办顶上浮出添加那一行（页上的"新任务"与右上"⋯"里的同一下）。
+    var addsTask = false
+    /// 清空回收站的确认开着（回收站页上与"⋯"里的"清空回收站…"同一下）。
+    var confirmsEmptyTrash = false
     #endif
+    /// 项目范围：任务页与会话页共用这一份（顶栏中间那颗显示它、点 ✕ 清掉；项目页"⋯"里的"看这个项目的会话"设成这个项目再切到会话页），nil 是全部项目。
+    var projectScope: UUID?
     var notice: Notice?
     /// 正在给哪个项目选文件夹（iOS：根视图据此弹候选；Mac 直接弹系统的选文件夹面板，不经这里）。
     var folderPicker: Project?
@@ -111,7 +114,7 @@ final class Workspace {
         self.services = services
         let digest = try? services.store.snapshot { try CueDigest.read(from: $0) }
         // 读不出来时目录也读不出来，失败页盖住页面，空摘要不会露面
-        cue = CueWatch(digest, at: services.speech)
+        cue = CueWatch(digest, at: services.speech, local: services.cueLocal)
         #if os(macOS)
         sendState = SendState(services: services)
         #endif
@@ -133,7 +136,6 @@ final class Workspace {
     /// 此刻挂着的页：留着的加上当前页（首屏、目录纠正出来的页还没经过 `show`；会话页只在是当前页时在里面）。
     var mountedPages: [Route] { pages.kept.contains(page) ? pages.kept : pages.kept + [page] }
 
-    /// 编辑页淡出结束。
     func finishClosingCard() {
         guard openCard == nil else { return }
         presses.dismiss()
@@ -264,129 +266,6 @@ final class Workspace {
         }
     }
     #endif
-
-    /// 新建卡片。项目是否有效由 Store 在写事务里判定：项目已不存在或在回收站（`invalidProject`）时，
-    /// 重新核对当前项目，卡片落到默认项目并提示，不会写进看不见的地方。
-    func createCard(body: String = "", in project: UUID) async throws -> Card {
-        let store = services.store
-        return try await fallingBack(from: project) { try await store.createCard(in: $0, body: body) }
-    }
-
-    /// 新建任务；项目失效时同样回落，任务进默认项目并提示。
-    func createTask(_ body: String, in project: UUID) async throws -> Card {
-        let store = services.store
-        return try await fallingBack(from: project) { try await store.createTask(body, in: $0) }
-    }
-
-    private func fallingBack<T>(from project: UUID, _ write: (UUID) async throws -> T) async throws -> T {
-        do {
-            return try await write(project)
-        } catch CueStoreError.invalidProject where project != Project.defaultID {
-            #if os(macOS)
-            await reconcileCurrentProject()
-            #endif
-            let result = try await write(Project.defaultID)
-            say("原项目已不存在或在回收站，已放到默认项目", isError: true)
-            return result
-        }
-    }
-
-    /// 点任务的圆圈：待办与进行中都变完成，完成的不再算做完（开始过的回到进行中）。下一个状态由 Store 在一个事务里按当前值定（`toggleDone`）：
-    /// 界面手里的副本可能已过时（列表还没刷新就又点了一次）。
-    /// 完成就是做完了：它（和它的步骤）绑着的会话里，绑着的事都做完了的一起结束——结束哪些只由 Store 定（`CueStore.toggleDone`，
-    /// 与 Cue 的 done 同一条规则），结束请求写下就上传。
-    func toggle(_ id: UUID) async throws {
-        let (status, ended) = try await services.store.toggleDone(id)
-        for request in ended { _ = services.uploaded(request) }
-        // 做完了就给一个归档（不自动归档）
-        guard status == .done else { return }
-        say("已完成", action: NoticeAction(title: "归档") { try await self.archive(id) })
-    }
-
-    /// 设为任务 / 改回灵感；提示里带"撤销"。
-    func setTodo(_ id: UUID, _ on: Bool) async throws {
-        say(on ? "已设为任务" : "已改回灵感", action: .undo(try await services.store.settingTodo(id, on)))
-    }
-
-    /// 离开一条灵感或任务正文的编辑：先写下没保存的字，还是空白（`Card.isBlank`）的灵感就不留下——记一条是先建一条空的再编辑。
-    func leaveEditing(_ id: UUID, flush: Autosave?) {
-        let store = services.store
-        attempt {
-            await flush?.flush()
-            try await store.dropIfBlank(id)
-        }
-    }
-
-    /// 这一条归档或删掉了：开着它的编辑页或任务气泡收起。
-    private func closeIfOpen(_ id: UUID) {
-        #if os(macOS)
-        if openCard == id { openCard = nil }
-        #endif
-        if openTask?.task == id { openTask = nil }
-    }
-
-    /// 窗口里按下了一下（窗口坐标）。
-    func pressed(at point: CGPoint) { press = (point, .now) }
-
-    /// 打开一条任务的气泡（项目页与任务页的行、Cue 对话里的任务、⌘K、归档、小组件链接都经这里）：从刚按下的那一下长出来；
-    /// 不是刚点的（键盘、⌘K 里按 ↩、链接）就没有落点，气泡在窗口上方居中。步骤是它上级的气泡、翻到这一步；
-    /// 这件事的气泡已经开着时（气泡里点步骤、返回）原地翻页，不重新长一次。
-    func openTask(_ card: Card) {
-        let task = card.parentID ?? card.id, step = card.parentID == nil ? nil : card.id
-        if openTask?.task == task {
-            openTask?.step = step
-            return
-        }
-        if let closed = closedTask, closed.task == task, ContinuousClock.now - closed.at < Self.pressFresh { return closedTask = nil }
-        let anchor = press.flatMap { ContinuousClock.now - $0.at < Self.pressFresh ? $0.point : nil }
-        openTask = TaskBubble.Request(task: task, step: step, anchor: anchor)
-    }
-
-    /// 按下之后这么久之内打开的气泡算是这一下点开的（点按松开、读库的一跳都在里面；再久就不是这一下了）。
-    private static let pressFresh: Duration = .milliseconds(900)
-
-    /// 归档（连同下级）：不占列表、仍可搜；提示里可撤销。
-    func archive(_ id: UUID) async throws {
-        let store = services.store
-        try await store.archive(id)
-        closeIfOpen(id)
-        say("已归档", action: .undo { try await store.unarchive(id) })
-    }
-
-    /// 删除灵感或任务（一条，或 Mac 上批量选中的几条，一次写入）：提示里可撤销，撤销把这一批一起拨回。
-    func trash(_ id: UUID) async throws { try await trash([id]) }
-
-    func trash(_ ids: [UUID]) async throws {
-        let undo = try await services.store.trashing(ids)
-        ids.forEach(closeIfOpen)
-        #if os(macOS)
-        // 卡从墙上拿走时收不到鼠标移出：不再算停在它上面（⌘⌫ 删的是鼠标停着的那张）
-        ids.forEach { presses.hover($0, inside: false) }
-        #endif
-        say(ids.count > 1 ? "已删除 \(ids.count) 条" : "已删除", action: .undo(undo))
-    }
-
-    /// 一键归档"最近完成"的任务。
-    func archiveCompletedTasks() async throws {
-        let count = try await services.store.archiveCompletedTasks()
-        if count > 0 { say("已归档 \(count) 项任务") }
-    }
-
-    /// 复制正文（存储格式，变量已填）到剪贴板：普通的复制，不是发送，不记发送记录。
-    func copy(_ stored: String) {
-        do {
-            try services.copy(stored)
-            say("已复制")
-        } catch {
-            fail(error)
-        }
-    }
-
-    /// 点提示里的动作（撤销、归档）：收起提示，做那件事。
-    func run(_ action: NoticeAction) {
-        notice = nil
-        attempt { try await action.run() }
-    }
 
     /// 请会话所在的 Mac 结束它。进度（正在结束、没能结束的原因）只来自这条结束请求，界面按 `DeliveryRequest.shownEnd` 读；
     /// 还在路上时再点不会再发一条（Store 去重）。写不进请求时提示。

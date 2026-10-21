@@ -154,63 +154,55 @@ struct AgentIndexingTests {
         try (lines.joined(separator: "\n") + "\n").write(to: project.appending(path: "\(id).jsonl"), atomically: true, encoding: .utf8)
     }
 
-    @Test func 只有接入了的Agent建会话索引_关掉即删掉本地索引_同步记录留着() async throws {
+    /// 没接入时那一遍回填只收 CuePad 托管过的会话（用户反馈：Cue 在没接入的 Claude Code 里开的会话做完、结束后，两端点进去都是空的）：
+    /// 托管过的那个读得到对话，就说明这一遍回填已经看过整个目录，同目录里终端开的那个没进索引。
+    @Test func 只有接入了的Agent建会话索引_托管过的不论接入都读得到_关掉删本地索引_同步记录留着() async throws {
         let rig = TestApp()
-        let id = "6f1c0d2e-0000-4000-8000-000000000001"
-        try claudeSession(in: rig, id: id)
-        let services: AppServices = rig.services
+        let hosted = "6f1c0d2e-0000-4000-8000-000000000002", terminal = "6f1c0d2e-0000-4000-8000-000000000001"
+        try claudeSession(in: rig, id: hosted)
+        try claudeSession(in: rig, id: terminal)
+        let services: AppServices = rig.services, store = services.store
+        try await services.piStateRecorder.update(sessionID: hosted, state: .settled, launchToken: "launch-1", hosted: true, agent: .claudeCode)
+        try await services.piStateRecorder.end(sessionID: hosted)
         services.start()
         defer { services.cancelBackgroundWork() }
-        let store = services.store
-        try await eventually("检测完各家") { AgentKind.allCases.allSatisfy { services.agents.status($0) != nil } }
+        func indexed(_ ids: Set<String>) async throws {
+            _ = try await eventually(store, { Set(try $0.piSessions().filter { $0.agent == .claudeCode }.map(\.id)) }) { $0 == ids }
+        }
 
-        // 用过 Claude Code（有配置目录）但没接入：不读它的会话
-        await quietPeriod(.seconds(1))
-        #expect(try await store.piSessions().filter { $0.agent == .claudeCode }.isEmpty)
+        let said = try await eventually(store, { try $0.piMessages(of: hosted).map(\.text) }) { !$0.isEmpty }
+        #expect(said == ["修一下登录", "修好了"])
+        #expect(services.agents.status(.claudeCode)?.isConnected == false)
+        #expect(try await Set(store.piSessions().filter { $0.agent == .claudeCode }.map(\.id)) == [hosted])
 
         try await rig.connect(.claudeCode)
-        _ = try await eventually(store, { try $0.piSessions().filter { $0.agent == .claudeCode }.map(\.id) }) { $0 == [id] }
-        #expect(try await store.allPiSessionStates().contains { $0.sessionID == id })
+        try await indexed([hosted, terminal])
+        #expect(try await store.allPiSessionStates().contains { $0.sessionID == terminal })
 
         try await services.agents.uninstall(.claudeCode)
-        _ = try await eventually(store, { try $0.piSessions().filter { $0.agent == .claudeCode }.count }) { $0 == 0 }
-        #expect(try await store.allPiSessionStates().contains { $0.sessionID == id }, "同步出去的会话记录不动")
+        try await indexed([hosted])
+        #expect(try await store.allPiSessionStates().contains { $0.sessionID == terminal }, "同步出去的会话记录不动")
 
         // 再接入：从头回填回来
         try await services.agents.install(.claudeCode)
-        _ = try await eventually(store, { try $0.piSessions().filter { $0.agent == .claudeCode }.map(\.id) }) { $0 == [id] }
-    }
-
-    /// 用户反馈：Cue 在没接入的 Claude Code 里开的会话做完、结束后，两端点进去都是空的。
-    @Test func 没接入时CuePad开过的会话_结束了也读得到对话() async throws {
-        let rig = TestApp()
-        let id = "6f1c0d2e-0000-4000-8000-000000000002"
-        try claudeSession(in: rig, id: id)
-        let services: AppServices = rig.services
-        try await services.piStateRecorder.update(sessionID: id, state: .settled, launchToken: "launch-1", hosted: true, agent: .claudeCode)
-        try await services.piStateRecorder.end(sessionID: id)
-        services.start()
-        defer { services.cancelBackgroundWork() }
-
-        let said = try await eventually(services.store, { try $0.piMessages(of: id).map(\.text) }) { !$0.isEmpty }
-        #expect(said == ["修一下登录", "修好了"])
-        #expect(services.agents.status(.claudeCode)?.isConnected == false)
+        try await indexed([hosted, terminal])
     }
 }
 
 /// 启用只是"换到这台运行、记下启用时刻"：你选的 Agent、模型、强度原样不动；选的 Agent 这台用不了（启用时重新问出的这台 Mac 上能用的
-/// Agent 里没有它）才换成第一家能用的，模型属于原来那家，一并清掉，强度留着（交给运行时取档）。全新的设置强度是"低"（大脑默认要快）。
+/// Agent 里没有它）才换成第一家能用的，模型属于原来那家，一并清掉，强度留着（交给运行时取档）。
 /// 一家都不能用时报出各家为什么。
 struct CueEnableTests {
-    @Test func 全新设置启用后强度是低() async throws {
+    /// 起一个对过 iCloud 的 App（启用的前提）。
+    private func launch() async throws -> TestApp {
         let app = TestApp()
-        try await app.connect(.pi)
-        try await app.services.enableCue(on: TestApp.hostID)
-        #expect(try await app.services.store.cueProfile()?.effort == .known(.low))
+        app.services.startSync()
+        try await app.syncs()
+        return app
     }
 
     @Test func 启用不动你选的Agent与模型() async throws {
-        let app = TestApp()
+        let app = try await launch()
         try await app.connect(.pi)
         let services: AppServices = app.services, store = app.services.store
         func profile() async throws -> CueProfile { try #require(try await store.cueProfile()) }
@@ -220,27 +212,27 @@ struct CueEnableTests {
             $0.model = "fake/m"
             $0.effort = .known(.high)
         }
-        try await services.enableCue(on: TestApp.hostID)
+        try await services.enableCue(on: TestApp.hostID, moving: false)
         var now = try await profile()
         #expect(now.activeHost == TestApp.hostID && now.runtime == .known(.pi) && now.model == "fake/m" && now.effort == .known(.high))
 
-        try await services.disableCue()
-        try await services.enableCue(on: TestApp.hostID)
+        try await services.updateCue { $0.enabledAt = nil }
+        try await services.enableCue(on: TestApp.hostID, moving: false)
         now = try await profile()
         #expect(now.activeHost == TestApp.hostID && now.model == "fake/m" && now.effort == .known(.high))
 
         try await app.services.updateCue { $0.runtime = .known(.claudeCode) }
-        try await services.enableCue(on: TestApp.hostID)
+        try await services.enableCue(on: TestApp.hostID, moving: false)
         now = try await profile()
         #expect(now.runtime == .known(.pi) && now.model == nil && now.effort == .known(.high))
     }
 
     @Test func 一家都不能用时启用报出各家为什么() async throws {
-        let app = TestApp()
+        let app = try await launch()
         await #expect {
-            try await app.services.enableCue(on: TestApp.hostID)
+            try await app.services.enableCue(on: TestApp.hostID, moving: false)
         } throws: {
-            $0.localizedDescription == "那台 Mac 上没有能当 Cue 的 Agent：Pi 没装 · Claude Code 没装 · Codex 没装 · OpenCode 没装"
+            $0.localizedDescription == "没有能当 Cue 的 Agent：Pi 没装 · Claude Code 没装 · Codex 没装 · OpenCode 没装"
         }
         #expect(try await app.services.store.cueProfile()?.enabledAt == nil)
     }

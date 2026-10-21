@@ -43,6 +43,6 @@ nonisolated enum SendCopy {
 }
 
 nonisolated extension SendTarget {
-    /// 卡上"发给过谁"写的名字：只有 Agent 会话。投送到应用（剪贴板等）已经下线，旧版本留下的发送记录不再当成去处写出来。
+    /// 卡上"发给过谁"写的名字：只有 Agent 会话，非会话目标（`SendTargetKind.mac`）不当去处。
     var shownName: String? { kind == .known(.piSession) ? name : nil }
 }

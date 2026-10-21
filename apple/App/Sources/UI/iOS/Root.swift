@@ -83,7 +83,7 @@ struct RouteView: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.statusBarBottom) private var statusBar
     @Environment(\.homePage) private var homePage
-    /// 这一页的上沿（全局坐标）：状态栏那一条的渐变按它摆到屏幕顶上（`StatusBarFade`）。页的上沿不一定在屏幕顶，
+    /// 这一页的上沿（全局坐标）：状态栏那一条的渐变按它摆到屏幕顶上（`TopFade`）。页的上沿不一定在屏幕顶，
     /// 也不能靠 `ignoresSafeArea` 伸上去：根页让出的顶栏那一排也在安全区里，伸上去落在那一排下面。
     @State private var top: CGFloat = 0
 
@@ -94,7 +94,7 @@ struct RouteView: View {
         // 窄屏的根）自己让到那一排下面（系统分组列表默认在顶上再留一段空，这里清掉，离栏多远只有这一个数）
         page.contentMargins(.top, route.ownsTopBar ? nil : 0, for: .scrollContent)
             .safeAreaPadding(.top, route.ownsTopBar || homePage ? 0 : Bars.contentGap)
-            .overlay(alignment: .top) { StatusBarFade(color: background).frame(height: statusBar).offset(y: -top) }
+            .overlay(alignment: .top) { TopFade(color: background).frame(height: statusBar).offset(y: -top) }
             .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: { top = $0 }
             .containerBackground(background, for: .navigation)
             // 标题在顶栏玻璃里（推入页）或不写（窄屏的根，`homePage`），不用系统大标题
@@ -121,7 +121,6 @@ struct RouteView: View {
         case .cue: CuePage().countsAsPiViewer()
         case .cueSettings: CueSettingsScreen()
         case .agent: AgentScreen().countsAsPiViewer()
-        case .projectSessions(let id): AgentScreen(project: id).countsAsPiViewer()
         case .search: SearchScreen()
         case .session(let route): SessionScreen(id: route.id, seed: route.seed).countsAsPiViewer()
         case .card(let id):
@@ -131,20 +130,6 @@ struct RouteView: View {
                 CardEditorScreen(cardID: id)
             }
         }
-    }
-}
-
-/// 状态栏那一条（屏幕顶到状态栏下沿）的页底色渐变：时间那一段实、到状态栏下沿淡完，时间与电池不压在字上；
-/// 渐变随页走（推入、换去处时跟着页挪），颜色就是这一页的底色。不接点按、读屏跳过。
-private struct StatusBarFade: View {
-    let color: Color
-    /// 几档：时间、信号与电池那一段（上半截多一点）实，字压不到它们下面；往下缓缓淡完，没有一条看得见的边，灵动岛以下的内容透出来。
-    private static let stops: [(alpha: Double, at: CGFloat)] = [(1, 0), (1, 0.55), (0.75, 0.7), (0.35, 0.85), (0, 1)]
-
-    var body: some View {
-        LinearGradient(stops: Self.stops.map { .init(color: color.opacity($0.alpha), location: $0.at) }, startPoint: .top, endPoint: .bottom)
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
     }
 }
 
@@ -175,7 +160,7 @@ struct RootShortcuts: View {
             Button("对 Cue 说") { navigation.speakToCue() }.keyboardShortcut("n", modifiers: [.command, .shift])
             Button("设置") { navigation.select(.settings) }.keyboardShortcut(",")
             Button("侧栏") {
-                withAnimation(Motion.panel) { navigation.sidebar = navigation.sidebar == .detailOnly ? .automatic : .detailOnly }
+                withAnimation(Motion.snappy) { navigation.sidebar = navigation.sidebar == .detailOnly ? .automatic : .detailOnly }
             }
             .keyboardShortcut("\\")
             Button("任务") { navigation.show(.tasks) }.keyboardShortcut("t", modifiers: [.command, .shift])

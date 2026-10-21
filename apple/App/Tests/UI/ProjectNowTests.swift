@@ -41,18 +41,14 @@ struct ProjectNowTests {
         #expect(now([seen])?.text == "补重连用例")
         #expect(now([seen], task: nil)?.text == "多 Agent 调度本月可上线")
         #expect(now([seen], task: nil, intro: nil) == nil)
+        // 会话没有回答（模型拒绝、中途被停）：最后那句可能是 Cue 发进去的，不写它，只写状态
+        #expect(now([item("notes", .settled)])?.text == "Agent 有新回复")
     }
-
-    /// 会话没有回答（模型拒绝、中途被停）：最后那句可能是 Cue 发进去的，近况不写它，只写状态（会话名已经说了是什么事）。
-    @Test func 没有回答时不写最后那句() {
-        let silent = item("notes", .settled)
-        #expect(now([silent])?.text == "Agent 有新回复")
-    }
-
 }
 
 /// 没送到的话在"此刻"与会话行是同一个判定（`AppSettings.shown`）：你看过那个会话之前写没送到的原因，
-/// 看过以后不再写（会话行只留小标记），"此刻"按其余档往下取——在线的会话停着就轮到进行中的任务，已结束的轮到项目介绍。
+/// 看过以后不再写（会话行只留小标记），"此刻"按其余档往下取——在线的会话停着就轮到进行中的任务，已结束的轮到项目介绍；
+/// 再发给已结束的会话，在唤醒时写的是它。会话取自侧栏、书架同一份（`LiveSessions`）。
 struct ProjectNowSeenTests {
     let app = TestApp()
     var store: CueStore { app.services.store }
@@ -76,7 +72,7 @@ struct ProjectNowSeenTests {
         }
         await executor.stop()
         func now(_ tasks: [ProjectNow.InProgress] = []) async throws -> String? {
-            let current = try await store.piSessionPage(.current).items
+            let current = try await LiveSessions.Page.read(from: store).items
             let projects = try await store.projects()
             return ProjectNow.byProject(projects, sessions: current, tasks: [project.id: tasks], shown: Workspace(services: app.services).shown)[project.id]?.text
         }
@@ -92,28 +88,9 @@ struct ProjectNowSeenTests {
         app.services.settings.markSeen(try await state("quote"), at: .now.addingTimeInterval(1))
         #expect(try await now([task]) == "比价")
         #expect(try await now() == "三家报价")
+
+        // 再发给已结束的会话：发出后在唤醒，"此刻"写的是它，不回落到任务或介绍
+        try await store.requestDelivery("再跑一遍", to: SendTarget(kind: .piSession, name: "quote", ref: "quote"), on: "mac-fail")
+        #expect(try await now([task]) == "正在唤醒 Agent")
     }
 }
-
-#if os(iOS)
-/// 项目的"此刻"（iPad 侧栏、iPhone 项目页）看得到发给已结束会话的话：发出后在唤醒、没能送达时，项目写的是它，不回落到任务或介绍。
-struct ProjectNowEndedSessionTests {
-    let app = TestApp()
-    var store: CueStore { app.services.store }
-
-    @Test func 发给已结束会话的话_在项目的此刻里() async throws {
-        let project = try await store.createProject(name: "圆桌", color: "#000000")
-        try await store.updateProject(project.id) { $0.intro = "多 Agent 调度本月可上线" }
-        let recorder = PiStateRecorder(store: store, hostID: "mac")
-        try await recorder.update(sessionID: "atlas", state: .settled, title: "atlas", projectID: project.id)
-        try await recorder.end(sessionID: "atlas")
-        try await store.requestDelivery("再跑一遍", to: SendTarget(kind: .piSession, name: "atlas", ref: "atlas"), on: "mac")
-
-        let sessions = try await LiveSessions.Page.read(from: store).items
-
-        let projects = try await ProjectCatalog.read(from: store).projects
-        let workspace = Workspace(services: app.services)
-        #expect(ProjectNow.byProject(projects, sessions: sessions, tasks: [:]) { workspace.shown($0) }[project.id]?.text == "正在唤醒 Agent")
-    }
-}
-#endif

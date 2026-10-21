@@ -208,22 +208,22 @@ type State =
 	| { kind: "idle" }
 	/** 工作中、没在调工具：正在出字也算（正在说的话另走 `draft`） */
 	| { kind: "thinking" }
-	| { kind: "tool"; tool: string; tools: string[]; detail?: string }
+	| { kind: "tool"; tool: string; detail?: string }
 	/** 自己这轮已经歇下，还有子代理在飞：仍在处理 */
 	| { kind: "delegating" }
 	/** 在压缩上下文：手动 /compact、上下文快满时自动压缩、上下文溢出后压缩再重试，都是它 */
 	| { kind: "compacting" }
-	| { kind: "waiting_user"; promptKind: string; title?: string }
-	| { kind: "done"; aborted: boolean }
+	| { kind: "waiting_user"; title?: string }
+	| { kind: "done" }
 	| { kind: "error"; error: string };
 
 /** 事件只更新变量，对外状态只由 derive() 推导。 */
 class StateTracker {
 	active = false;
 	tools = new Map<string, { name: string; detail?: string }>();
-	prompt: { kind: string; title?: string } | null = null;
+	prompt: { title?: string } | null = null;
 	/** agent_end 记录结果，agent_settled 才生效：重试/压缩/排队消息都可能在 agent_end 之后继续 */
-	outcome: State = { kind: "done", aborted: false };
+	outcome: State = { kind: "done" };
 	/** 这一轮收到过 CuePad 的停止（`abort` 命令） */
 	stopped = false;
 	settled: State | null = null;
@@ -232,13 +232,12 @@ class StateTracker {
 
 	/** `inFlight`：在飞子代理数（FireCode 发布） */
 	derive(inFlight: number): State {
-		if (this.prompt) return { kind: "waiting_user", promptKind: this.prompt.kind, title: this.prompt.title };
+		if (this.prompt) return { kind: "waiting_user", title: this.prompt.title };
 		if (this.compacting) return { kind: "compacting" };
 		if (this.active) {
 			if (this.tools.size > 0) {
-				const running = [...this.tools.values()];
-				const latest = running[running.length - 1];
-				return { kind: "tool", tool: latest.name, tools: running.map((t) => t.name), detail: latest.detail };
+				const latest = [...this.tools.values()].at(-1)!;
+				return { kind: "tool", tool: latest.name, detail: latest.detail };
 			}
 			return { kind: "thinking" };
 		}
@@ -526,7 +525,8 @@ export default function (pi: ExtensionAPI) {
 		/**
 		 * 已交给 Pi、还没落成会话里一条消息的那句（一次只交一句）。落成时（用户消息的 `message_end`）才算送达：投送请求 id 写到那条消息上、
 		 * 回 CuePad 的确认。Pi 拒收（没登录、没有模型……）不发任何事件、只记在它自己的界面里，受理就确认的话 CuePad 当它已送达、
-		 * 会话却一句没收；等不到确认的，CuePad 到点按没送到报。
+		 * 会话却一句没收；等不到确认的，CuePad 到点按没送到报。交出的那一刻恰好有别的东西开了一轮时 Pi 也拒收（它在处理 input
+		 * 与"正忙"检查之间有一次异步等待）。
 		 */
 		let starting: Said | null = null;
 		/** 正在弹出的对话框（最外层）。ui_prompt_start 只带标题，说明与选项要在调用时记下；`settle` 从 CuePad 作答 */
@@ -544,6 +544,7 @@ export default function (pi: ExtensionAPI) {
 		 * 在跑（含压缩、等你确认）就先停下这一轮，等真正歇下（`agent_settled`、压缩结束）再交给 Pi。不用 Pi 的队列：
 		 * followUp 只在一轮正常做完时读出、steer 等在跑的工具做完才读，停止既不清也不读它们，排着的话会一直卡住。
 		 * 一次交一句：等着的还有下一句时，刚开始的这一轮（`agent_start`）照样先停下，每句都是新的一轮。
+		 * 停下到真正歇下之间（通常不到一秒）会话被关掉（退出、重新载入、换会话）时，等着的话随扩展实例丢掉，`bye` 不报它们。
 		 */
 		const pending: Said[] = [];
 
@@ -1139,7 +1140,7 @@ export default function (pi: ExtensionAPI) {
 			pi.on("agent_start", () => {
 				tracker.active = true;
 				tracker.settled = null;
-				tracker.outcome = { kind: "done", aborted: false };
+				tracker.outcome = { kind: "done" };
 				tracker.stopped = false;
 				commit();
 				clearDraft();
@@ -1160,7 +1161,7 @@ export default function (pi: ExtensionAPI) {
 			pi.on("tool_execution_start", (event) => { tracker.tools.set(event.toolCallId, { name: event.toolName, detail: toolDetail(event.args) }); commit(); }),
 			pi.on("tool_execution_end", (event) => { tracker.tools.delete(event.toolCallId); commit(); }),
 			pi.on("ui_prompt_start", (event) => {
-				tracker.prompt = { kind: event.kind, title: event.title };
+				tracker.prompt = { title: event.title };
 				const question = asking ?? { id: null, kind: event.kind, text: event.title ?? "", options: [] };
 				updateInfo({ question: { id: question.id, kind: question.kind, text: clip(question.text, QUESTION_LIMIT) ?? "", options: question.options } });
 				commit();
@@ -1183,7 +1184,7 @@ export default function (pi: ExtensionAPI) {
 			pi.on("agent_end", (event, context) => {
 				const last = event.messages.findLast((m) => m.role === "assistant");
 				const stopped = tracker.stopped || context.signal?.aborted === true;
-				if (last?.stopReason === "aborted" || (last?.stopReason === "error" && stopped)) tracker.outcome = { kind: "done", aborted: true };
+				if (last?.stopReason === "aborted" || (last?.stopReason === "error" && stopped)) tracker.outcome = { kind: "done" };
 				else if (last?.stopReason === "error") tracker.outcome = { kind: "error", error: last.errorMessage ?? "unknown" };
 			}),
 			// 订阅额度随每次回复带回来（零额外请求）：Claude 在响应头里，Codex 在流里的 codex.rate_limits 事件里

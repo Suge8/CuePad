@@ -1,12 +1,12 @@
 #if os(macOS)
 import SwiftUI
 
-/// 项目页的任务：前几条没做完的任务连同它们的步骤，一行一件（可拖动、缩进）；没列出的与最近完成的在纸底写个数，点了在纸里原地展开、
-/// 各自开合（规则见 `TaskFold`）。按 ui.md 的 Mac 开合规则一步到位：新行直接出现，同访达展开，不淡入、不挪动。
+/// 项目页的那张纸（与手机项目页同构，一条任务都没有时也在、只剩纸底一行）：前几条没做完的任务连同它们的步骤，一行一件（可拖动、缩进）；
+/// 纸底一行左边"添加任务"，右边是没列出的与最近完成的个数，点了在纸里原地展开、各自开合（规则见 `TaskFold`）。会话不在页上，"⋯"里"看这个项目的会话"去会话页。
+/// 按 ui.md 的 Mac 开合规则一步到位：新行直接出现，同访达展开，不淡入、不挪动。
 /// 收起其余任务时纸底那一行留在原来的屏幕位置（`TaskFoldAnchor`），长列表底部收起不会跳到卡片墙。
-/// 纸上不写"任务 N"的段标题：主窗口里侧栏的"任务"磁贴一直在旁边，同屏再写一遍"任务"、还是另一个数，读着像两处不一致；
-/// 纸是页面最上面的第一块、行首都是任务圈，不用标题也认得出（读屏念"任务"）。没列出的条数在纸底。行是全 App 共用的那一种（`TaskLine`），标题后一格"下一步"（`TaskNext`）：交给的 Agent 要你做什么，或还没交出去的"开始"；要 Agent 做什么写在任务的正文里（任务气泡）。
-/// 会话的全部列表在侧栏，这里不另开一栏。
+/// 纸上不写"任务"的段标题：侧栏的"任务"磁贴一直在旁边，纸又是页面最上面的第一块、行首都是任务圈，不用标题也认得出（读屏念"任务"）。
+/// 行是全 App 共用的那一种（`TaskLine`），标题后一格"下一步"（`TaskNext`）：交给的 Agent 要你做什么，或还没交出去的"开始"；要 Agent 做什么写在任务的正文里（任务气泡）。
 /// 纸与下面的资料、卡片墙同宽，行铺满纸：行尾的进度贴着纸的右边成一列。
 struct FocusBand: View {
     let data: ProjectPageData
@@ -45,21 +45,19 @@ struct FocusBand: View {
             ) { row in
                 TaskLine(task: row.task, subtasks: data.subtasks[row.id], step: row.depth > 0)
             }
-            if hidden > 0 || done > 0 {
-                HStack(spacing: 6) {
-                    if hidden > 0 { toggleButton(TaskCopy.more(hidden: hidden, expanded: fold.showsAll), open: fold.showsAll, \.showsAll) }
-                    if hidden > 0, done > 0 { Dot() }
-                    if done > 0 { toggleButton(TaskCopy.done(done), open: fold.showsDone, \.showsDone) }
-                }
-                .font(Typography.meta).foregroundStyle(palette.ink3)
-                .padding(.horizontal, TaskMetrics.ringColumn + TaskMetrics.columnGap).padding(.vertical, 6)
-                .taskFoldBar(anchor)
-            }
             if fold.showsDone {
                 // 已完成的行：淡一档，点圆圈回到待办
                 ForEach(data.done) { TaskLine(task: $0) }
             }
-            NewTaskField(project: data.project?.id).padding(.top, 2)
+            HStack(spacing: 6) {
+                NewTaskField(project: data.project?.id)
+                if hidden > 0 { toggleButton(TaskCopy.more(hidden: hidden, expanded: fold.showsAll), open: fold.showsAll, \.showsAll) }
+                if hidden > 0, done > 0 { Dot() }
+                if done > 0 { toggleButton(TaskCopy.done(done), open: fold.showsDone, \.showsDone) }
+            }
+            .font(Typography.meta).foregroundStyle(palette.ink3)
+            .padding(.top, 2)
+            .taskFoldBar(anchor)
         }
     }
 
@@ -75,9 +73,10 @@ struct FocusBand: View {
                 Text(title)
                 Image(open ? .collapse : .expand).font(.system(size: 8, weight: .semibold)).accessibilityHidden(true)
             }
+            .fixedSize()
             .contentShape(.rect)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressStyle(.inline))
         .accessibilityValue(open ? "已展开" : "已折叠")
     }
 }
@@ -101,14 +100,8 @@ struct CompactFocus: View {
                         .accessibilityLabel("\(data.taskCounts.open) 个任务没做完")
                 }
             }
-            .font(Typography.toolbarLabel)
-            .foregroundStyle(palette.ink)
-            .padding(.horizontal, 16).frame(height: Spacing.toolbarControl)
-            .glass(in: .capsule, interactive: true)
         }
-        .buttonStyle(PressStyle())
-        // 放在工具栏里时系统默认只显示图标
-        .labelStyle(.titleAndIcon)
+        .buttonStyle(ControlButtonStyle(kind: .glass))
         .help("回到顶部")
     }
 }

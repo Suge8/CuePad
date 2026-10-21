@@ -26,7 +26,7 @@
 - **选区与变量**：把选中的几行转成任务；发送前集中填写 `{{变量}}`，每条记住上次的值。
 - **随处搜索**：`⌘K` 搜项目、灵感与任务，可按项目、含图片、是否交给过 Agent、时间筛选。
 - **Mac**：玻璃侧栏、随手记灵感的菜单栏小稿纸、全局快捷键（默认 `Option + Space`）随时唤回，`Option + Shift + Space` 对 Cue 说话。
-- **iPhone 与 iPad**：iPhone 打开就是 Cue，任务、会话、项目在底部一点即达；iPad 与 Mac 同一个侧栏。项目书架、随手记输入栏、分享扩展与小组件。手机上记的灵感稍后出现在 Mac 上，手机也能把文字发给 Mac 上的 Agent 会话。
+- **iPhone 与 iPad**：iPhone 打开就是 Cue，项目、任务、会话在底部一点即达；iPad 与 Mac 同一个侧栏。项目书架、随手记输入栏、分享扩展与小组件。手机上记的灵感稍后出现在 Mac 上，手机也能把文字发给 Mac 上的 Agent 会话。
 - **iCloud 同步**：按记录同步；同一条在两台设备离线并发编辑时，两个版本都保留，由你选择。
 
 ## `cuepad`：给 agent 的记忆
@@ -42,7 +42,7 @@ cuepad task done <id>
 
 在绑定了目录的项目里运行时，默认只作用于该项目。`--json` 给 agent 稳定的输出。完整用法见 `cuepad --help` 与 `cuepad <命令> --help`。
 
-**Pi、Claude Code、Codex 与 OpenCode 都是双向接入。** 首次打开时一个面板一下接入检测到的 Agent、在这台 Mac 上启用 Cue；之后在设置的 Agent 一节逐个开关。打开后 CuePad 看得到它的会话在做什么，能把任务与你的话发进会话，在 Mac 或手机上回答它的提问与权限确认，在后台开会话；Agent 也能用 `cuepad` 记灵感、改任务、把文件发到手机上预览。每家在它自己的目录里放一个小技能（`~/.pi/agent/skills`、`~/.claude/skills`、`~/.codex/skills`、`~/.config/opencode/skills`）；Pi 另装桥扩展，Claude Code 与 Codex 另在设置里加钩子，OpenCode（需要第 2 版）不用再装，CuePad 直连它的后台服务。不确认就什么都不写，关掉即删掉 CuePad 写的全部文件。同一处还能把 `cuepad` 链接进 `~/.local/bin`，自己在终端里用。
+**Pi、Claude Code、Codex 与 OpenCode 都是双向接入。** 首次打开时一个面板接入检测到的 Agent、在这台 Mac 上启用 Cue；没装或没登录的 Claude Code、Codex、Pi 也在这里一键安装（官方脚本）或登录。之后在设置的 Agent 一节逐个开关。打开后 CuePad 看得到它的会话在做什么，能把任务与你的话发进会话，在 Mac 或手机上回答它的提问与权限确认，在后台开会话；Agent 也能用 `cuepad` 记灵感、改任务、把文件发到手机上预览。每家在它自己的目录里放一个小技能（`~/.pi/agent/skills`、`~/.claude/skills`、`~/.codex/skills`、`~/.config/opencode/skills`）；Pi 另装桥扩展，Claude Code 与 Codex 另在设置里加钩子，OpenCode（需要第 2 版）不用再装，CuePad 直连它的后台服务。不确认就什么都不写，关掉即删掉 CuePad 写的全部文件。同一处还能把 `cuepad` 链接进 `~/.local/bin`，自己在终端里用。
 
 ## 下载
 

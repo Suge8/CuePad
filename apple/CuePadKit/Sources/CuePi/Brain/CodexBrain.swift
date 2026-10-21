@@ -33,7 +33,6 @@ final class CodexBrain: CueBrain {
     private var model: CodexModel?
     private var level: PiThinkingLevel?
     var seesImages: Bool { model?.seesImages == true }
-    /// 进行中的一轮
     private var turn: Turn?
     private struct Turn {
         let id: String

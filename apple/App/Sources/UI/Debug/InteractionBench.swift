@@ -80,7 +80,7 @@ enum InteractionBench {
             var row = await measure(name, in: view, action)
             Self.signposter.endInterval("交互", interval)
             row["foreground"] = foreground
-            print("INTERACT " + String(decoding: try! JSONSerialization.data(withJSONObject: row, options: [.sortedKeys]), as: UTF8.self))
+            print(jsonLine("INTERACT", row))
             fflush(stdout)
         }
         func click(_ name: String, at point: CGPoint, in view: NSView) async {
@@ -94,7 +94,7 @@ enum InteractionBench {
             Self.signposter.endInterval("交互", interval)
             row["foreground"] = foreground
             row["clicked"] = true
-            print("INTERACT " + String(decoding: try! JSONSerialization.data(withJSONObject: row, options: [.sortedKeys]), as: UTF8.self))
+            print(jsonLine("INTERACT", row))
             fflush(stdout)
         }
         let a = projects.indices.contains(1) ? projects[1] : nil, b = projects.indices.contains(2) ? projects[2] : nil

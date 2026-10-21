@@ -2,7 +2,7 @@
 import CueStore
 import SwiftUI
 
-/// 菜单栏面板：最上面一行 Cue（点它在主窗口里打开 Cue 页；右边"交给 Cue"把这次随手记直接说给 Cue），再是订阅额度的总览（`QuotaStrip`，没有额度记录时没有；面板弹出时数据陈旧就查一次，见 `AppDelegate`）+ 在做的会话（区头"在做"与一共几个会话、几个子代理在跑，`LiveWorkCount`；`LiveSessionList`，与手机、iPad Cue 页头的面板同一列，先列 4 个、多的在列末就地展开；点会话在主窗口里打开它的整页：面板只是一瞥，读与回复在主窗口）+ 随手记（与主窗口底部同一个 `CaptureComposer`，一直展开）。
+/// 菜单栏面板：最上面一行 Cue（点它在主窗口里打开 Cue 页；右边"交给 Cue"把这次随手记直接说给 Cue），那一行右边是额度环（`QuotaRings`，同手机与会话页；点它在 Cue 行下面就地展开明细 `QuotaDetail`，再点收回；面板弹出时数据陈旧就查一次，见 `AppDelegate`）+ 在做的会话（区头"在做"与一共几个会话、几个子代理在跑，`LiveWorkCount`；`LiveSessionList`，与手机、iPad Cue 页头的面板同一列，先列 4 个、多的在列末就地展开；点会话在主窗口里打开它的整页：面板只是一瞥，读与回复在主窗口）+ 随手记（与主窗口底部同一个 `CaptureComposer`，一直展开）。
 /// 面板最高到屏幕可用的高（`MenuBarPanel`），放不下时"在做"那一块在里面滚，其余几块始终整块可见。
 /// 各块各是一片玻璃、中间留空，面板自己没有底（输入框自带玻璃，外面再包一层就是玻璃套玻璃）。资料库读到之前没有输入框；读不出来时说明原因并给"重试"。
 struct MenuBarPad: View {
@@ -12,6 +12,7 @@ struct MenuBarPad: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @State private var capture = CaptureState()
+    @State private var quotaOpen = false
 
     private static let sessionLimit = 4
     private static let blockRadius: CGFloat = 22
@@ -20,9 +21,7 @@ struct MenuBarPad: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             if workspace.isLibraryReady { cueRow }
-            if !services.accountQuotas.items.isEmpty {
-                QuotaStrip().modifier(Block())
-            }
+            if quotaOpen, !services.accountQuotas.items.isEmpty { QuotaDetail().modifier(Block()) }
             let work = workspace.liveWork
             if !work.rows.isEmpty {
                 VStack(alignment: .leading, spacing: 9) {
@@ -62,17 +61,17 @@ struct MenuBarPad: View {
                 delivery: services.liveSessions.deliveries[session.sessionID], rename: services.liveSessions.renames[session.sessionID],
                 undelivered: services.liveSessions.undelivered[session.sessionID] ?? 0).equatable()
                 .contentShape(.rect)
+                .row()
                 .onTapGesture { open(.session(session.sessionID)) }
                 .accessibilityAddTraits(.isButton)
                 .accessibilityAction { open(.session(session.sessionID)) }
-        } fold: { count, expanded in
-            PiReloadFold(count: count, expanded: expanded)
         }
     }
 
     private var cueRow: some View {
         let empty = capture.draft.isEmpty(accepting: .images) || !workspace.cue.canHear
         return CueStatusRow {
+            QuotaRings(open: quotaOpen, height: 28) { quotaOpen.toggle() }
             Button("交给 \(workspace.cue.name)", icon: .handOff, action: handToCue)
                 .font(Typography.meta.weight(.semibold))
                 .buttonStyle(ControlButtonStyle(kind: empty ? .secondary : .primary, compact: true))

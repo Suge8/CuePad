@@ -10,8 +10,8 @@ import os
 /// 立即同步与回到前台（`kick`）、网络恢复。每批至多 400 条，`.ifServerRecordUnchanged`；结果交给协调器记账（`SyncCoordinator.sent`）。
 /// 同一时刻只有一批在路上：同一条记录不会有两个版本同时上传、互相以版本冲突拒绝，结果也按发出的先后回来。
 ///
-/// 失败：整个请求可重试的（离线、限流、服务忙）按服务器给的 `retryAfter` 或指数退避定时再发，网络恢复与明确的触发不等退避
-/// （服务器给了 `retryAfter` 的除外）；配额、登录与未预期的失败停下，提交触发的先等 `blockedPause`，明确的触发照发。
+/// 失败：整个请求可重试的（离线、限流、服务忙）按服务器给的 `retryAfterSeconds` 或指数退避定时再发，网络恢复与明确的触发不等退避
+/// （服务器给了 `retryAfterSeconds` 的除外）；配额、登录与未预期的失败停下，提交触发的先等 `blockedPause`，明确的触发照发。
 actor RecordSender {
   static let gatherWindow = Duration.milliseconds(300)
   static let blockedPause = Duration.seconds(60)
@@ -38,7 +38,7 @@ actor RecordSender {
   private var failures = 0
   private var limit = CloudKitLimits.recordsPerRequest
   private var blockedUntil: ContinuousClock.Instant?
-  /// 服务器要求在这之前别再发（`retryAfter`）。
+  /// 服务器要求在这之前别再发（`retryAfterSeconds`）。
   private var notBefore: ContinuousClock.Instant?
 
   init(uploader: any RecordUploader, coordinator: SyncCoordinator) {
@@ -101,7 +101,6 @@ actor RecordSender {
     poke()
   }
 
-  /// 一轮怎么结束的。
   private enum End {
     /// 没有待推送了
     case done
@@ -176,7 +175,7 @@ actor RecordSender {
         }
         await coordinator.reached(error)  // 网络类失败：连不上 iCloud
         guard let error = error as? CKError, Self.retryable.contains(error.code) else {
-          if let error = error as? CKError { await coordinator.uploadFailed(error) }
+          if let error = error as? CKError { await coordinator.classify(error, recordName: nil) }
           blockedUntil = .now + Self.blockedPause
           return .halted
         }
@@ -188,10 +187,7 @@ actor RecordSender {
     return .more
   }
 
-  static let retryable: Set<CKError.Code> = [
-    .networkFailure, .networkUnavailable, .serviceUnavailable, .requestRateLimited, .zoneBusy, .serverResponseLost,
-    .accountTemporarilyUnavailable, .operationCancelled,
-  ]
+  static let retryable = SyncCoordinator.offlineCodes.union([.requestRateLimited, .zoneBusy, .accountTemporarilyUnavailable, .operationCancelled])
 
   private func backoff() -> Duration {
     failures += 1

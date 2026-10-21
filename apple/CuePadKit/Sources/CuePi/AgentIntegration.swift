@@ -19,7 +19,8 @@ public struct AgentVersion: Sendable, Equatable, Comparable, CustomStringConvert
 }
 
 extension AgentKind {
-    /// CuePad 要求的最低版本：Pi 要有 `ui_prompt_*` 事件；OpenCode 只认 v2（v1 的服务接口不同，不做兼容）。其余没有要求。
+    /// CuePad 要求的最低版本：Pi 要有 `ui_prompt_*` 事件；OpenCode 只认 v2（v1 的服务接口不同，不做兼容；Homebrew 与官方脚本装的是 v2，
+    /// npm 上 v2 是 `@opencode/cli`，旧包 `opencode-ai` 仍是 1.x）。其余没有要求。
     public var minimumVersion: AgentVersion? {
         switch self {
         case .pi: AgentVersion(0, 84, 4)
@@ -63,11 +64,14 @@ public struct AgentStatus: Sendable, Equatable {
     public var files: Files
     /// 检测时挑中的可执行文件（`found` 时；只有配置目录、比如只装了桌面版时为 nil）：开会话、起大脑、问模型都用这一个，不另找。
     public var executable: URL?
+    /// 没装、而装它要先有的这台还没有（`AgentKind.installPrerequisite`）：先装这个，官方脚本才跑得成。
+    public var lacking: InstallPrerequisite?
 
-    public init(presence: Presence, files: Files, executable: URL? = nil) {
+    public init(presence: Presence, files: Files, executable: URL? = nil, lacking: InstallPrerequisite? = nil) {
         self.presence = presence
         self.files = files
         self.executable = executable
+        self.lacking = lacking
     }
 
     public var isAvailable: Bool { if case .found = presence { true } else { false } }
@@ -101,22 +105,25 @@ extension AgentInstallError: LocalizedError {
 /// 那里是用户自己维护的，且会被好几家同时读到。OpenCode 也读 `~/.claude/skills`，两份同名同内容，按名字去重。
 /// 写入不做事务：哪一样没写上，状态就是 `outdated`，下次启动的静默升级补上。
 public struct AgentIntegration: Sendable {
-    private let paths: AgentPaths
+    let paths: AgentPaths
     private var pi: PiPaths { paths.pi }
-    private let locate: @Sendable () async -> ExecutableLocator
+    let locate: @Sendable () async -> ExecutableLocator
     /// App 里的命令行工具（`Contents/Helpers/cuepad`），技能里写它的绝对路径
     private let cuepad: URL
     /// 隔离运行（开发构建）：配置目录是缺省真实位置的那几家只检测、不写
     private let isolated: Bool
+    /// 装一家用的命令（`runInstaller`）：官方的那条，测试换成放替身的
+    let installCommand: @Sendable (AgentKind, AgentStatus.Presence) -> String
 
     public init(
         paths: AgentPaths = AgentPaths(), locate: @escaping @Sendable () async -> ExecutableLocator = { await .system }, cuepad: URL,
-        isolated: Bool = false
+        isolated: Bool = false, installCommand: @escaping @Sendable (AgentKind, AgentStatus.Presence) -> String = { $0.installCommand($1) }
     ) {
         self.paths = paths
         self.locate = locate
         self.cuepad = cuepad
         self.isolated = isolated
+        self.installCommand = installCommand
     }
 
     public func home(of kind: AgentKind) -> URL { paths.home(of: kind) }
@@ -154,7 +161,8 @@ public struct AgentIntegration: Sendable {
 
     @concurrent public func status(of kind: AgentKind) async -> AgentStatus {
         let found = await detect(kind)
-        return AgentStatus(presence: found.presence, files: files(of: kind), executable: found.executable)
+        let lacking = found.presence == .notFound ? await lacking(kind.installPrerequisite) : nil
+        return AgentStatus(presence: found.presence, files: files(of: kind), executable: found.executable, lacking: lacking)
     }
 
     /// 写入（新装或升级）。隔离运行写不了、Agent 不在或太旧、或同名文件不是 CuePad 写的时拒绝，且什么都不写。
@@ -247,6 +255,17 @@ public struct AgentIntegration: Sendable {
         }
         if kind.minimumVersion == nil, let executable = candidates.first { return (.found(nil), executable) }
         return (kind != .pi && used ? .found(nil) : .notFound, nil)
+    }
+
+    /// 安装脚本会用的那个程序够不够新；够为 nil。脚本按 PATH 取第一个（`command -v`），它的 PATH 是 /bin 之后紧跟找 Agent 的同一组目录
+    /// （`runInstaller`、`ExecutableLocator.environment`），所以只看这组目录里的第一个：后面有新的也不算。
+    private func lacking(_ prerequisite: InstallPrerequisite?) async -> InstallPrerequisite? {
+        guard let prerequisite else { return nil }
+        let locator = await locate()
+        guard let executable = locator.candidates(prerequisite.command).first,
+              let output = await Self.capture(executable, ["--version"], locator: locator),
+              let version = AgentVersion(parsing: output), version >= prerequisite.minimum else { return prerequisite }
+        return nil
     }
 
     /// 运行并取标准输出；超时或无法启动返回 nil。数据目录给一个用完即删的临时目录：OpenCode 每次运行（`--version` 也是）都往

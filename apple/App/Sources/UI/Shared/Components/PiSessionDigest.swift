@@ -117,24 +117,6 @@ extension Callout where Accessory == EmptyView {
     }
 }
 
-extension View {
-    /// 点会话页标题弹出的一句说明（需要 /reload 时怎么接上，`PiShown.explanation`）：iPhone 顶栏中间那块玻璃与 Mac 工具栏标题共用这一份。
-    func explanationPopover(_ text: String?, isPresented: Binding<Bool>) -> some View {
-        popover(isPresented: isPresented) { ExplanationText(text: text ?? "").presentationCompactAdaptation(.popover) }
-    }
-}
-
-private struct ExplanationText: View {
-    let text: String
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        Text(text).font(Typography.secondary).foregroundStyle(palette.ink)
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(16).frame(width: 300)
-    }
-}
-
 /// 提示块的面：对话里是纸，贴在回复框上方是玻璃（与回复框同一层、同样的圆角）。
 private struct CalloutSurface: ViewModifier {
     let docked: Bool
@@ -261,7 +243,7 @@ struct QuestionCard: View {
 
 /// 问题卡上的回答按钮：淡底加细边，或墨色实底（确认的"是"），触摸目标 44pt；按下同 `PressStyle`（`PressFeedback`）。
 /// 不用签名色：确认的常是部署、覆盖这类收不回的事，品牌色不该推着人点"是"。
-/// 指针悬停时（Mac、iPad 触控板）淡底提亮一档、细边加深，看得出可点。
+/// 悬停同全 App 的按钮（`PressFeedback`）。
 private struct AnswerButtonStyle: ButtonStyle {
     let prominent: Bool
 
@@ -273,20 +255,16 @@ private struct AnswerButton: View {
     let configuration: ButtonStyleConfiguration
     @Environment(\.palette) private var palette
     @Environment(\.isEnabled) private var enabled
-    @State private var hovering = false
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
-        let lit = hovering && enabled && !prominent
         configuration.label
             .font(Typography.body.weight(.medium))
             .foregroundStyle(prominent ? palette.paper : palette.ink)
             .padding(.horizontal, 14)
             .frame(minHeight: 44)
-            .background(prominent ? palette.ink : lit ? palette.paperLit : palette.fill, in: shape)
-            .overlay { if !prominent { shape.strokeBorder(lit ? palette.ink2 : palette.hair, lineWidth: 1) } }
-            .onHover { hovering = $0 }
-            .animation(Motion.quick, value: lit)
+            .background(prominent ? palette.ink : palette.fill, in: shape)
+            .overlay { if !prominent { shape.strokeBorder(palette.hair, lineWidth: 1) } }
             .contentShape(shape)
             .modifier(PressFeedback(pressed: configuration.isPressed))
             // 停用（送不到 Mac、已经答了）时变淡，看得出点不了

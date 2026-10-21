@@ -115,7 +115,6 @@ struct SpeakTests {
         #expect(try await presence() == .sending)
 
         #expect(said.trip(at: .always(at: late)) == .failed(.timedOut))
-        #expect(said.trip(at: Speech.Moment(now: late, reachableSince: nil)) == .failed(.offline))
         try backdate(message, by: Speech.receiptLimit + 1)
         #expect(try await presence() == .idle)
         #expect(try await store.cueDuty() != nil)
@@ -123,7 +122,7 @@ struct SpeakTests {
         try await store.recordMacPresence(host: "mac-cue") { false }  // 那台 Mac 将睡眠：标成离线，同步到这里
         #expect(try await presence() == .asleep)
         #expect(try await store.cueDuty() == nil)  // 值班与"在睡觉"同一条
-        #expect(CuePresence.asleep.line(name: "Cue") == "Cue 在睡觉：它运行的那台 Mac 好像没开")
+        #expect(CuePresence.asleep.line(name: "Cue", host: "Mac Studio") == "「Mac Studio」没开")
         #expect(try await presence(reachable: false) == .idle)
 
         try await store.recordMacPresence(host: "mac-cue") { true }  // 醒来续上在线，收下你的话
@@ -150,22 +149,6 @@ struct SpeakTests {
         workspace.resend(.cue(renewed[0], host: "mac-cue"), restoringInto: Bindable(workspace.cue).draft)
         try await eventually("提示撤不回") { workspace.notice?.text == "Cue 已经收到这句了，撤不回" }
         #expect(try await youSaid().map(\.id) == [renewed[0].id])
-    }
-
-    @Test func 对Cue说_写库失败_文字回到输入框_期间新打的字接在后面() async throws {
-        try await enableCue()
-        let workspace = Workspace(services: app.services)
-        try breakWrites(to: "cueMessages")
-        workspace.cue.draft = ComposerDraft(text: "看看发布")
-
-        let writing = workspace.speak(to: .cue, from: Bindable(workspace.cue).draft) { try $0.stored(in: files) }
-        #expect(workspace.cue.draft.text.isEmpty)
-        workspace.cue.draft.text = "再补一句"
-        await writing?.value
-
-        #expect(workspace.cue.draft.text == "看看发布\n\n再补一句")
-        #expect(workspace.notice?.isError == true)
-        #expect(try await youSaid().isEmpty)
     }
 
     /// 图片存不进图片库（磁盘满、目录没权限）：什么都没发，两条去处都一样——草稿原样留着，只看到报错，写出后的那句"已交给"不出现。
@@ -216,8 +199,8 @@ struct SpeakTests {
         #expect(Said.request(try #require(done)).trip(at: .always(at: .now)) == .delivered)
     }
 
-    /// Mac 报的失败写它的原因；没被领取、过了时限是 Mac 迟迟没收下（领取了在执行的不算超时）；重发撤回旧的、写同样内容与方式的新的。
-    @Test func 发给会话_Mac报失败或超时没领取是没能送达_领取了不算超时_重发撤回旧的() async throws {
+    /// Mac 报的失败写它的原因；领取了在执行的过了时限也不算超时（没领取的超时见 `ReceiptTests`）；重发撤回旧的、写同样内容与方式的新的。
+    @Test func 发给会话_Mac报失败是没能送达_领取了不算超时_重发撤回旧的() async throws {
         let target = try await session()
         let workspace = Workspace(services: app.services)
         let box = app.services.settings.replyDraftBinding(for: target.id)
@@ -236,11 +219,8 @@ struct SpeakTests {
         #expect(retried[0].content == "改完再跑一遍" && retried[0].mode == .known(.send) && retried[0].isOpen)
         #expect(box.wrappedValue.text.isEmpty)
 
-        // Mac 一直没领取：过了时限是 Mac 迟迟没收下，本机同步不通时写同步的原因
-        let late = retried[0].createdAt.addingTimeInterval(Speech.receiptLimit + 1)
-        #expect(Said.request(retried[0]).trip(at: .always(at: late)) == .failed(.timedOut))
-        #expect(Said.request(retried[0]).trip(at: Speech.Moment(now: late, reachableSince: nil)) == .failed(.offline))
         // 领取了在执行（如正在唤醒已结束的会话）：还是发送中
+        let late = retried[0].createdAt.addingTimeInterval(Speech.receiptLimit + 1)
         var claimed = retried[0]
         claimed.status = .known(.executing)
         #expect(Said.request(claimed).trip(at: .always(at: late)) == .sending)
@@ -250,20 +230,24 @@ struct SpeakTests {
         #expect(again[0].content == "改完再跑一遍")
     }
 
-    @Test func 发给会话_写库失败_文字回到输入框_期间新打的字接在后面() async throws {
+    /// 写库失败（对 Cue 说、发给会话一样）：文字回到输入框，期间新打的字接在后面，报错，什么都没写下。
+    @Test(arguments: [true, false])
+    func 写库失败_文字回到输入框_期间新打的字接在后面(toCue: Bool) async throws {
+        try await enableCue()
         let target = try await session()
         let workspace = Workspace(services: app.services)
-        try breakWrites(to: "deliveryRequests")
-        let box = app.services.settings.replyDraftBinding(for: target.id)
-        box.wrappedValue = ComposerDraft(text: "把断言也改了")
+        try breakWrites(to: toCue ? "cueMessages" : "deliveryRequests")
+        let box = toCue ? Bindable(workspace.cue).draft : app.services.settings.replyDraftBinding(for: target.id)
+        box.wrappedValue = ComposerDraft(text: "看看发布")
 
-        let writing = workspace.speak(to: .session(target, mode: .send), from: box) { try $0.stored(in: files) }
+        let writing = workspace.speak(to: toCue ? .cue : .session(target, mode: .send), from: box) { try $0.stored(in: files) }
         #expect(box.wrappedValue.text.isEmpty)
-        box.wrappedValue.text = "顺便跑一遍"
+        box.wrappedValue.text = "再补一句"
         await writing?.value
 
-        #expect(box.wrappedValue.text == "把断言也改了\n\n顺便跑一遍")
+        #expect(box.wrappedValue.text == "看看发布\n\n再补一句")
         #expect(workspace.notice?.isError == true)
+        #expect(try await youSaid().isEmpty)
         #expect(try await store.deliveryRequests().isEmpty)
     }
 }

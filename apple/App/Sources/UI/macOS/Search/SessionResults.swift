@@ -7,8 +7,8 @@ struct SessionGroup: Equatable {
     enum Key: Hashable {
         /// 在线的会话。
         case now
-        /// 已结束的，按结束时间分段（`PiHistorySection`）。
-        case ended(PiHistorySection)
+        /// 已结束的，按结束时间分段（`TimeSection`）。
+        case ended(TimeSection)
     }
 
     let key: Key
@@ -18,8 +18,8 @@ struct SessionGroup: Equatable {
         live: [PiSessionState], ended: [PiSessionState], cue: CueDuty? = nil, now: Date, at moment: Speech.Moment,
         calendar: Calendar = .current
     ) -> [SessionGroup] {
-        let current = live.isEmpty ? [] : [SessionGroup(key: .now, sessions: PiSessionState.inListOrder(live, cue: cue, at: moment))]
-        let past = PiHistorySection.split(ended, date: \.stateSince, now: now, calendar: calendar)
+        let current = live.isEmpty ? [] : [SessionGroup(key: .now, sessions: PiSessionState.inListOrder(live, state: \.self, cue: cue, at: moment))]
+        let past = TimeSection.split(ended, date: \.stateSince, now: now, calendar: calendar)
         return current + past.map { SessionGroup(key: .ended($0.section), sessions: $0.items) }
     }
 }
@@ -78,7 +78,7 @@ struct SessionResultList: View {
                     }
                     if more > 0 {
                         Button("显示更多（还有 \(more) 个）", action: loadMore)
-                            .buttonStyle(.plain).font(Typography.meta).foregroundStyle(palette.ink2).padding(.vertical, 10)
+                            .buttonStyle(PressStyle(.inline)).font(Typography.meta).foregroundStyle(palette.ink2).padding(.vertical, 10)
                     }
                 }
                 // 字离滚动区的边 18；行的底向两边让出一截，留在滚动区里

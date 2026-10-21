@@ -8,33 +8,20 @@ import Foundation
 /// 最新状态不等第一个间隔。条件流的第一个值与重给的同一个节奏不立即拉：开始拉取（启动、回到前台）与同步恢复时 App 本来就立即同步，
 /// 那一拉就是这一拉。收到 nil 即停，条件流结束或任务取消时返回。
 public struct SyncPoller: Sendable {
-  /// 怎么拉：几档，每档隔多久拉一次、持续多久（`lasting` 为 nil 是一直），按顺序走；最后一档有期限的，走完就不再拉。
-  /// 例：`Cadence(.every(.seconds(2), for: .seconds(120)), .every(.seconds(10)))` 是先 2 秒一次拉两分钟，之后 10 秒一次一直拉。
+  /// 怎么拉：每 `interval` 拉一次，持续 `lasting`（nil 是一直），到期就不再拉。
   public struct Cadence: Equatable, Sendable {
-    public struct Step: Equatable, Sendable {
-      public var interval: Duration
-      public var lasting: Duration?
+    public var interval: Duration
+    public var lasting: Duration?
 
-      public static func every(_ interval: Duration, for lasting: Duration? = nil) -> Step {
-        Step(interval: interval, lasting: lasting)
-      }
+    public init(every interval: Duration, for lasting: Duration? = nil) {
+      self.interval = interval
+      self.lasting = lasting
     }
 
-    public var steps: [Step]
-
-    public init(_ steps: Step...) {
-      self.steps = steps
-    }
-
-    /// 在等了 `elapsed` 之后该隔多久拉一次；nil：档位走完了，不再拉。
+    /// 在等了 `elapsed` 之后该隔多久拉一次；nil：到期了，不再拉。
     func interval(after elapsed: Duration) -> Duration? {
-      var rest = elapsed
-      for step in steps {
-        guard let lasting = step.lasting else { return step.interval }
-        if rest < lasting { return step.interval }
-        rest -= lasting
-      }
-      return nil
+      if let lasting, elapsed >= lasting { return nil }
+      return interval
     }
   }
 
@@ -84,7 +71,7 @@ extension SyncPoller.Cadence {
   /// Mac：在等（等什么见 `AppServices.pollingCadence`）时每 2 秒，别的设备写来的东西平均约 1 秒、最坏约 2 秒到。
   /// Mac 上会话一连几天，这是一天四万多次；Mac 不收推送，所以不放慢（docs/sync.md「拉取节奏」）。
   public static func mac(waiting: Bool) -> Self? {
-    waiting ? Self(.every(.seconds(2))) : nil
+    waiting ? Self(every: .seconds(2)) : nil
   }
 
   /// 手机：有发往 Mac 还没结果的请求时每 2 秒、每次在等最多 2 分钟（等回执的时限 `Speech.receiptLimit` 是 1 分钟：
@@ -92,9 +79,9 @@ extension SyncPoller.Cadence {
   /// （状态与对话是活的，不只靠推送），离开即停；两者都有时每 2 秒、不限时。
   public static func phone(hasOpenDeliveries: Bool, isWatching: Bool) -> Self? {
     switch (hasOpenDeliveries, isWatching) {
-    case (true, true): Self(.every(.seconds(2)))
-    case (true, false): Self(.every(.seconds(2), for: .seconds(120)))
-    case (false, true): Self(.every(.seconds(3)))
+    case (true, true): Self(every: .seconds(2))
+    case (true, false): Self(every: .seconds(2), for: .seconds(120))
+    case (false, true): Self(every: .seconds(3))
     case (false, false): nil
     }
   }

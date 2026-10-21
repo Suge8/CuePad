@@ -37,7 +37,6 @@ final class Followers {
 }
 
 extension AppServices {
-    /// 起一个常驻的跟随者。
     func follow(_ body: @escaping Followers.Body) {
         tasks.add(body)
     }

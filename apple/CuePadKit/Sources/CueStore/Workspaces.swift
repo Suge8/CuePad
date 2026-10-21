@@ -34,7 +34,7 @@ public struct Workspaces: Equatable, Sendable {
     return name.isEmpty ? Project.untitled : name
   }
 
-  /// 本机路径给人看的写法（Mac 项目页那一行、启用卡里"第一次开工时建好"同一个）：工作区里的从根目录名写起，根在家目录下时带 `~`
+  /// 本机路径给人看的写法（Mac 项目菜单里文件夹那一组的组头、启用卡里"第一次开工时建好"同一个）：工作区里的从根目录名写起，根在家目录下时带 `~`
   /// （`~/CuePad/默认`，隔离运行是 `CuePad/默认`）；别处家目录下的写成 `~/…`，其余照写全路径。
   public func shown(_ path: String) -> String {
     // 只比路径的各段，不经 standardizedFileURL / resolvingSymlinksInPath：它们对已存在与还没建的目录写法不同（/private/tmp 有时去掉 /private）

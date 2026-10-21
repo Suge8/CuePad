@@ -31,6 +31,8 @@ struct PaletteProvider: ViewModifier {
         content.withPalette()
             // 验收时整个窗口按"减弱动态效果"画（`-CuePadReduceMotion`）：不碰系统设置，Mac 上那是用户这台机器的全局设置
             .transformEnvironment(\._accessibilityReduceMotion) { if DebugHooks.preset.reducesMotion { $0 = true } }
+            // 同理按最大的辅助字号画（`-CuePadLargestType`）
+            .transformEnvironment(\.dynamicTypeSize) { if DebugHooks.preset.largestType { $0 = .accessibility5 } }
     }
 }
 

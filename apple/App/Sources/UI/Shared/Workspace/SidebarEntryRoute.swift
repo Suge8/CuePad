@@ -1,5 +1,4 @@
 extension SidebarOutline.Entry {
-    /// 点这一行去的页。
     var route: Route {
         switch self {
         case .tasks: .tasks

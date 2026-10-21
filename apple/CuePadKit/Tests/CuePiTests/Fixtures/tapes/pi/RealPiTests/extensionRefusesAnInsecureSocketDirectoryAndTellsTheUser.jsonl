@@ -2,8 +2,7 @@
 {"c":"p1","k":"eof"}
 {"c":"p1","d":"1.3.0","k":"stdout"}
 {"c":"p1","k":"exit","n":0}
-{"a":["--mode","rpc","--offline","--no-context-files","--no-skills","--no-prompt-templates","--no-themes","--model","fake/echo","--thinking","off","-e","{fixtures}/fake-model.ts","-e","{fixtures}/ui-confirm.ts"],"c":"p2","d":"pi","k":"spawn","p":"/private{tmp:2}/work"}
+{"a":["--mode","rpc","-e","{fixtures}/fake-model.ts","-e","{fixtures}/ui-confirm.ts"],"c":"p2","d":"pi","k":"spawn","p":"/private{tmp:2}/work"}
 {"k":"dir","p":"{tmp:2}/agent/sessions/--private{dtmp:2}-work--"}
-{"c":"p2","d":"{\"type\":\"extension_ui_request\",\"id\":\"f9d45f45-91b5-442a-b9c8-f15fbf4f5c32\",\"method\":\"notify\",\"message\":\"CuePad bridge disabled: {tmp:1} is not a directory owned by you with mode 0700\",\"notifyType\":\"warning\"}","k":"stdout"}
+{"c":"p2","d":"{\"type\":\"extension_ui_request\",\"id\":\"0f66f7d4-a6d8-47f8-8c0b-5aa0d025b9bb\",\"method\":\"notify\",\"message\":\"CuePad bridge disabled: {tmp:1} is not a directory owned by you with mode 0700\",\"notifyType\":\"warning\"}","k":"stdout"}
 {"c":"p2","k":"signal","n":15}
-{"c":"p2","k":"exit","n":143}

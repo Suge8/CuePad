@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 # CuePad 的构建、测试、截图、测量、发布只走这里（Agent 绕开它直接调 xcodebuild、swift build/test、simctl 开关机，
 # 或自己起停 CuePad，会被 .pi/extensions/xc-guard.ts 拦下）。
-#   xc.sh check                                     提交前的门：lint.sh、CuePadKit 的 swift build、iOS 编译
+#   xc.sh check                                     提交前的门：lint.sh、CuePadKit 的 swift build、iOS 编译（连测试目标）
 #   xc.sh build <mac|ios|ipad>
 #   xc.sh test <mac|ios|ipad> [xcodebuild 参数…]     如 -only-testing:CuePadTests/SuiteName；ios、ipad 不带参数时连 CuePadKit 也在模拟器上跑
 #   xc.sh test kit [xcodebuild 参数…]               CuePadKit 在 macOS 上的测试，如 -only-testing:CueSyncTests/PendingTests
+#     test 只打印编译的警告与错误、失败的用例与汇总；完整输出（App 日志、每条用例）在 apple/.derived/test.log
 #   xc.sh shot <mac|ios|ipad> [图.png] [-- 启动参数…]  构建 → 起隔离实例 → 画面就绪后截窗口 → 退出
 #   xc.sh rec  <mac|ios|ipad> [片.mov] [-- 启动参数…]  同上，录 CUEPAD_REC_SECONDS 秒（默认 12）；CUEPAD_REC_LAUNCH=1 从启动前开录（ios、ipad）
-#   xc.sh run  <mac|ios|ipad> [-- 启动参数…]          起着给 bcu、axe 操作，打印 PID（模拟器另带 UDID）；Mac 实例 5 分钟后自己退出
+#   xc.sh run  <mac|ios|ipad> [-- 启动参数…]          起着给 bcu、axe 操作，打印 PID（模拟器另带 UDID）；Mac 实例 5 分钟后自己退出（CUEPAD_RUN_SECONDS 改）
 #   xc.sh stop                                      结束本检出 run 起的 Mac 实例
 #   xc.sh perf <mac|ios> [次数] [启动参数…]            单次交互：点击回合、指令、掉帧（perf-mac.sh、perf-ios.sh）；只有带 -CuePadForeground YES 的 Mac 测量独占机器
 #   xc.sh perf idle <mac|ios> [次数] [秒] [启动参数…]   静置时的 CPU、指令、唤醒、能耗、内存与启动到就绪（perf-idle.sh）
@@ -85,7 +86,8 @@ case "$platform" in
 esac
 
 # 这里的 Mac 构建在包里声明成 UIElement：谁起的（测试宿主、截图、测量、会话自己写的脚本）、怎么结束的，都不进程序坞、不占菜单栏。
-# 写在包里而不按启动时的环境切换：脚本直接起的实例不带那些环境变量，进了程序坞的图标退出后又可能撤不掉（曾攒下上百个）。
+# 写在包里而不按启动时的环境切换：脚本直接起的实例不带那些环境变量，进了程序坞的图标退出后又可能撤不掉。
+# （程序坞里成堆的 CuePad 图标另有来源：挂在正式版底下的 Agent 跑的工具，见 CuePadKit 的 ChildProcess 头注释）
 # 人用 Xcode ⌘R 起的不经这里，照常进程序坞；正式版由 release-mac.sh 构建
 if [ "$platform" = mac ]; then build_settings+=(INFOPLIST_KEY_LSUIElement=YES); fi
 # 系统 SDK 的预编译模块（约 166 个，冷编前 10 秒都在生成它们）所有检出共用一份：Xcode 默认就放在各工程共用的 DerivedData 根下，
@@ -101,6 +103,11 @@ xcb() {
     "${shared_modules[@]}" ${build_settings[@]+"${build_settings[@]}"} 2>&1 \
     | { grep -v 'failed with exit code 0 but produced no further output' || true; }
 }
+
+# Debug 一律连测试目标一起编（build-for-testing），与 test 同一张构建图：测试目标也链接 CuePadKit 时，Xcode 把被几个目标共用的
+# 包产品改编成动态框架，只编 App 时却静态链接。两种编法交替时，一边留下的旧模块会被另一边的 App 编译读到（报"没有这个成员"、
+# 改了存储属性后一启动就崩在 Kit 的释放里），每次切换还要重新链接、签名。测量用的 Release（build-perf）不编测试，不受影响
+xcd() { xcb -quiet build-for-testing "$@"; }
 
 # CUEPAD_SIGN=development：ad-hoc 构建完只给主程序换签名（嵌入描述文件、带 iCloud 权限并写定开发环境）。不在 xcodebuild 里换：
 # 签名设置覆盖到每个 target，框架与命令行工具会要团队、bundle id；内嵌的仍是 ad-hoc，没开 Hardened Runtime 就照常加载。
@@ -127,10 +134,10 @@ case "$cmd" in
     # Kit 的 macOS 构建（CuePi、命令行工具只在这里编到）与 iOS 编译产物目录不同，并行跑
     (cd "$APPLE_DIR/CuePadKit" && swift build --quiet) & kit=$!
     status=0
-    xcb -quiet build || status=$?
+    xcd || status=$?
     wait "$kit" || status=$?
     exit $status ;;
-  build) xcb -quiet build; sign_development ;;
+  build) xcd; sign_development ;;
   build-perf) xcb -quiet build ;;
   test)
     limits=(-test-timeouts-enabled YES -maximum-test-execution-time-allowance "$TEST_TIME_LIMIT")
@@ -138,30 +145,50 @@ case "$cmd" in
     # 再卸掉上一次装的 App：它开着的实时活动在重装时被系统结束，系统随即把 App 叫到后台（不带测试的环境），
     # 正撞上测试宿主的启动，测试进程就连不上（"The test runner hung before establishing connection"）。卸掉时活动一起没了，没有这一下
     if [ -n "${device:-}" ]; then sim_boot "$device"; xcrun simctl uninstall "$device" com.sugeh.cuepad; fi
+    # 屏幕上只留编译的警告与错误、失败的用例（带原因）与汇总：编译的每一步、App 与测试宿主的日志、每条用例的开始与通过一次就是几千行，
+    # 会把失败挤出 Agent 的输出上限。所以先 -quiet 编（只出警告与错误），再不带 -quiet 跑（-quiet 连失败的原因也吞掉），跑的输出滤掉上面那些；
+    # 完整输出写进 log，查失败前后的日志去那里
+    log="$DERIVED/test.log"; : >"$log"
+    zwsp="$(printf '\342\200\213')"  # Swift Testing 在部分行首加零宽空格
+    noise="^($zwsp)*(◇ |✔ Suite .* passed after|✔ Test ([^ (]+\\(|\").* passed after)|^Test (Case|Suite) .* (started|passed)"  # 留着「✔ Test run with」那行汇总
+    noise+='|^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9:.]+[+-][0-9]{4} [^ ]+\[[0-9]+:[0-9a-f]+\] |DVTAssertions|^(Details|Object|Method|Thread): |^Please file a bug|^\{ platform:|^--- xcodebuild: WARNING: Using the first'
+    shown() { tee -a "$log" | { grep -avE "$noise" || true; }; }
+    # 编译只认收窄参数（只编要跑的测试目标）；-test-iterations 这类只给跑的那一步
+    narrowed() { local a; for a in "$@"; do case "$a" in -only-testing:*|-skip-testing:*) printf '%s\0' "$a" ;; esac; done; }
     kit_test() {
-      (cd "$APPLE_DIR/CuePadKit" && xcodebuild test -scheme CuePadKit-Package -destination "$destination" -derivedDataPath "$DERIVED/kit-$platform" "${limits[@]}" "$@" 2>&1) \
+      local narrow=(); while IFS= read -r -d '' a; do narrow+=("$a"); done < <(narrowed "$@")
+      (cd "$APPLE_DIR/CuePadKit" && xcodebuild -quiet build-for-testing -scheme CuePadKit-Package -destination "$destination" -derivedDataPath "$DERIVED/kit-$platform" ${narrow[@]+"${narrow[@]}"} 2>&1 \
+        && xcodebuild test-without-building -scheme CuePadKit-Package -destination "$destination" -derivedDataPath "$DERIVED/kit-$platform" "${limits[@]}" "$@" 2>&1) \
         | { grep -v 'failed with exit code 0 but produced no further output' || true; }
     }
-    if [ "$platform" = kit ]; then kit_test "${@:3}"; exit; fi
     # iOS/iPad：同一个入口也在模拟器上跑 CuePadKit 的测试（iOS 编辑器等只在这里跑；macOS 上的 Kit 测试是 test kit）。
     # 带了收窄参数（-only-testing 等）时只跑 App 那部分；两部分都跑完再按其一失败退出。
     status=0
-    xcb test "${limits[@]}" "${@:3}" || status=$?
-    if [ "$platform" != mac ] && [ "$#" -le 2 ]; then kit_test || status=$?; fi
+    if [ "$platform" = kit ]; then
+      kit_test "${@:3}" | shown || status=$?
+    else
+      narrow=(); while IFS= read -r -d '' a; do narrow+=("$a"); done < <(narrowed "${@:3}")
+      { xcd ${narrow[@]+"${narrow[@]}"} && xcb test-without-building "${limits[@]}" "${@:3}"; } | shown || status=$?
+      if [ "$platform" != mac ] && [ "$#" -le 2 ]; then kit_test | shown || status=$?; fi
+    fi
+    # 点名的测试一个也没对上（名字或所在的 Suite 写错）时 xcodebuild 照样报成功
+    if [[ " ${*:3}" == *" -only-testing:"* ]] && ! grep -aqE 'Test run with [1-9]|Executed [1-9][0-9]* tests?,' "$log"; then
+      echo "-only-testing 一个测试也没对上：Swift Testing 写 <测试目标>/<Suite 类型名>/<函数名>()，用例所在的类型以源码为准" >&2
+      status=1
+    fi
+    echo "完整输出（含 App 日志）：$log"
     exit $status ;;
   shot|rec|run)
     # 截图前先查台前调度：开着就拍不对，不白等一次构建
     if [ "$platform" = mac ]; then python3 "$APPLE_DIR/scripts/app.py" preflight; fi
-    xcb -quiet build
+    xcd
     rest=("${@:3}") target=()
     if [ "${#rest[@]}" -gt 0 ] && [ "${rest[0]}" != -- ]; then target=(--out "${rest[0]}"); rest=("${rest[@]:1}"); fi
     if [ "$platform" != mac ]; then sim_boot "$device"; target+=(--device "$device"); fi
     library="${CUEPAD_SHOT_LIBRARY:-$APPLE_DIR/.derived/library$([ "$platform" = mac ] || echo "-$platform")}"
     exec python3 "$APPLE_DIR/scripts/app.py" "$cmd" "$platform" "$app" "$library" ${target[@]+"${target[@]}"} ${rest[@]+"${rest[@]}"} ;;
   perf)
-    # 构建照普通任务排队。只有在前台量、要和交互预算比的 Mac 测量（-CuePadForeground YES）独占机器：帧、掉帧与回合时长怕别的进程抢。
-    # 其余的前后对比只看指令数（与静置开销的内核记账一样不随机器忙闲变），不独占：独占要先占闸门、等在跑的任务做完，
-    # 其间所有检出的新任务都停在闸门外，几个会话并行时一次就是十几分钟
+    # 构建照普通任务排队；测量只有前台和预算比的 Mac 一种独占（帧与回合时长怕别的进程抢），其余只比指令数，不随机器忙闲变
     "$0" build-perf "$platform" >"$DERIVED/build.log" || { tail -30 "$DERIVED/build.log" >&2; exit 1; }
     mode=plain
     if [ "$platform" = ios ]; then mode=sim

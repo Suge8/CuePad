@@ -28,7 +28,6 @@ struct MacDependencies {
     /// 各 Agent 的接入：发现会话、后台开新会话与接着已结束的会话、结束会话。OpenCode 的会话索引由它的接入直接写进资料库，
     /// 所以等资料库打开后再建（参数就是它）。
     var runtimes: @MainActor (CueStore) -> [AgentKind: any AgentRuntime]
-    /// 复制的去处。
     var pasteboard: NSPasteboard
     var cue: CueDependencies
 
@@ -38,16 +37,22 @@ struct MacDependencies {
         let sockets = AgentHookEnvelope.socketDirectory(environment: environment, isolatedLibrary: location.isIsolated ? location.directory : nil)
         // 隔离运行另起的连接目录也交给 CuePad 起的每个子进程（托管的 Agent 的钩子、Cue 的大脑），它们才连回这个 App 而不是正式版
         if location.isIsolated { setenv("CUEPAD_PI_SOCKET_DIR", sockets.path, 1) }
-        let paths = AgentPaths(pi: PiPaths(socketDirectory: sockets))
+        let agentHome = location.isIsolated ? DebugHooks.agentHome : nil
+        let paths = AgentPaths(pi: PiPaths(socketDirectory: sockets), environment: agentHome.map { home in
+            environment.merging(["HOME": home.path, "PATH": "/usr/bin:/bin:/usr/sbin:/sbin"]) { $1 }
+        } ?? environment)
         let pi = PiBridge(socketDirectory: paths.pi.socketDirectory)
         let hooks = AgentHookServer(path: paths.pi.hookSocket)
         // 隔离运行（开发构建）不碰真实的 `~/.local/bin`：链接放进资料库目录，除非指定了 Pi 目录与链接目录（`PiPaths.isExplicit`）
         let commandLineTool = location.isIsolated && !paths.pi.isExplicit
             ? CommandLineToolInstaller(linkDirectory: location.directory.appending(path: "bin", directoryHint: .isDirectory))
             : CommandLineToolInstaller(linkDirectory: paths.pi.binDirectory)
-        let findsNone = location.isIsolated && DebugHooks.findsNoAgents
         let agents = AgentIntegrations(AgentIntegration(
-            paths: paths, locate: { @Sendable in findsNone ? ExecutableLocator(searchDirectories: []) : await .system },
+            paths: paths,
+            locate: { @Sendable in
+                if let agentHome { return ExecutableLocator(searchDirectories: [agentHome.appending(path: ".local/bin")]) }
+                return await .system
+            },
             cuepad: commandLineTool.helper, isolated: location.isIsolated))
         let hostID = (location.isIsolated ? DebugHooks.hostID : nil) ?? HostIdentity.current()
         return MacDependencies(

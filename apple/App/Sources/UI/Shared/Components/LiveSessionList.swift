@@ -2,17 +2,15 @@ import CueStore
 import SwiftUI
 
 /// "在做"的那一列会话：Mac 菜单栏面板与手机、iPad Cue 页头的面板同一个。行是同一种（`PiSessionRow`，样式与点它做什么由调用处给），
-/// 顺序同一个（`LiveWork.rows`，要你注意的在前）；两个以上需要 /reload 的会话合成一行（`PiReloadFold`），点开再列。
+/// 顺序同一个（`LiveWork.rows`，要你注意的在前）。
 /// `limit` 给了就先列前几个（面板只是一瞥），多出的收成末尾一行"还有 N 个"，点开就地列全、末行换成"收起"——
 /// 看全在原地，不用跳到全部会话页；区头写有几个在跑（`LiveWorkCount`）。
-struct LiveSessionList<Row: View, Fold: View>: View {
+struct LiveSessionList<Row: View>: View {
     let sessions: [PiSessionState]
     var limit: Int?
     var spacing: CGFloat
     var style = PiSessionRow.Style.compact
     @ViewBuilder let row: (PiSessionState) -> Row
-    @ViewBuilder let fold: (_ count: Int, _ expanded: Binding<Bool>) -> Fold
-    @State private var reloadOpen = false
     @State private var showsAll = false
 
     var body: some View {
@@ -20,21 +18,14 @@ struct LiveSessionList<Row: View, Fold: View>: View {
         let shown = hidden > 0 && !showsAll ? Array(sessions.prefix(limit ?? 0)) : sessions
         // 在线的按会话 id 区分：状态变化时那一行不被重建
         VStack(alignment: .leading, spacing: spacing) {
-            ForEach(PiNowRow.rows(shown, state: { $0 })) { nowRow in
-                switch nowRow {
-                case .session(let session): row(session)
-                case .reload(let sessions):
-                    fold(sessions.count, $reloadOpen)
-                    if reloadOpen { ForEach(sessions) { row($0) } }
-                }
-            }
+            ForEach(shown) { row($0) }
             if hidden > 0 { LiveMoreFold(hidden: hidden, expanded: $showsAll, style: style) }
         }
         .animation(Motion.quick, value: showsAll)
     }
 }
 
-/// "在做"列末的那一行：收着时写"还有 N 个"，展开后写"收起"；箭头随之转向，与 /reload 那一行同一种灰字与箭头。
+/// "在做"列末的那一行：收着时写"还有 N 个"，展开后写"收起"；箭头随之转向。
 private struct LiveMoreFold: View {
     let hidden: Int
     @Binding var expanded: Bool
@@ -55,7 +46,7 @@ private struct LiveMoreFold: View {
             .frame(minHeight: 28)
             .contentShape(.rect)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressStyle())
         .accessibilityLabel(expanded ? "收起" : "还有 \(hidden) 个会话")
         .accessibilityExpanded(expanded)
     }
@@ -140,6 +131,6 @@ extension PiSessionState {
     ) -> [PiSessionState] {
         let shown = Set(live.map(\.sessionID))
         let others = recorded.filter { !shown.contains($0.sessionID) }
-        return inListOrder(live + others, deliveries: deliveries, cue: cue, at: moment)
+        return inListOrder(live + others, state: \.self, deliveries: deliveries, cue: cue, at: moment)
     }
 }

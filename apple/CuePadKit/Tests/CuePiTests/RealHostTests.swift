@@ -23,7 +23,7 @@ struct RealHostTests {
 
     /// 空闲时限给得短：测试进程意外退出时，留下的托管进程不久也会自己退。
     private func host(_ pi: PiProcess, _ bridge: PiBridge, idleLimit: Duration = .seconds(120)) -> PiRuntime {
-        PiRuntime(bridge: bridge, paths: pi.paths, pi: { AgentTape.executable("pi") }, idleLimit: idleLimit, extraArguments: PiProcess.quietArguments)
+        PiRuntime(bridge: bridge, paths: pi.paths, pi: { AgentTape.executable("pi") }, idleLimit: idleLimit)
     }
 
     /// 在后台接着这个会话文件，等它上了桥。
@@ -285,18 +285,17 @@ struct RealHostTests {
         let left = try await PiProcess(alongside: pi, sessionFile: file, env: [PiRuntime.hostedVariable: "120"])
         defer { left.stop() }
         try await eventually("旧扩展的托管进程上了桥") {
-            log.changes.contains { if case .appeared(let s) = $0 { s.sessionID == sessionID && s.state == .incompatible && s.hosted } else { false } }
+            log.changes.contains { if case .appeared(let s) = $0 { s.sessionID == sessionID && s.upgrading && s.hosted } else { false } }
         }
 
         let host = host(pi, bridge)
         host.start()
         defer { stopHostedProcesses(bridge) }
-        let newer = PiExtensionBundle.version + 1
-        try current.replacing(/const EXTENSION_VERSION = \d+;/, with: "const EXTENSION_VERSION = \(newer);")
+        try current.replacing(/const EXTENSION_VERSION = \d+;/, with: "const EXTENSION_VERSION = \(PiExtensionBundle.version + 1);")
             .write(to: installed, atomically: true, encoding: .utf8)  // 新 App 装好了新扩展
 
         try await eventually("同一个进程换上新扩展、重新连上") {
-            bridge.sessions.contains { $0.pid == left.pid && $0.extensionVersion == newer && $0.state == .settled }
+            bridge.sessions.contains { $0.pid == left.pid && !$0.upgrading && $0.state == .settled }
         }
         let target = try #require(bridge.sessions.first { $0.pid == left.pid })
         #expect(target.sessionID == sessionID)

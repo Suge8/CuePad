@@ -23,7 +23,6 @@ final class MacPages {
         sidebar = sidebar == .detailOnly ? .all : .detailOnly
     }
 
-    /// 从 `left` 切到 `page`。
     func visit(from left: Route, to page: Route) {
         current = page
         keep(left)

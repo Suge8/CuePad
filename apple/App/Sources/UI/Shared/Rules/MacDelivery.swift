@@ -10,8 +10,6 @@ nonisolated enum PiReply: Equatable {
     case answer(PiQuestion)
     case answerAbove
     case unanswerable
-    /// 会话在跑旧版扩展（`PiWorkState.incompatible`），发不进去
-    case restartPi
 }
 
 /// 回复框主按钮此刻是哪一种（`MacDelivery.button`）。
@@ -73,12 +71,11 @@ nonisolated enum MacDelivery {
         case .message:
             if session.canStop, !hasDraft { return .stop }
             return .send(command ? .command : .send)
-        case .answerAbove, .unanswerable, .restartPi: return nil
+        case .answerAbove, .unanswerable: return nil
         }
     }
 
     static func reply(to session: PiSessionState) -> PiReply {
-        guard session.state != .known(.incompatible) else { return .restartPi }
         guard session.state == .known(.waitingForUser) else { return .message }
         guard let question = session.answerableQuestion else { return .unanswerable }
         return question.acceptsText ? .answer(question) : .answerAbove

@@ -29,10 +29,8 @@ struct CuePage: View {
     #if os(iOS)
     @Environment(Navigation.self) private var navigation
     @Environment(\.horizontalSizeClass) private var sizeClass
-    /// 输入框有焦点：左边的去处圆钮让开，输入框占满整排。
-    @State private var composing = false
-    /// 去处圆钮展开成了三格。
-    @State private var placesOpen = false
+    /// 这一页的输入框占着底边，底部那一排的 Cue 钮把位置交给它（`DockRoot`）。
+    @Environment(\.dockComposer) private var ownsComposer
     #endif
     @State private var thread: CueThread?
     @State private var follow = ChatFollow()
@@ -45,13 +43,13 @@ struct CuePage: View {
     @State private var seen: [UUID: Date] = [:]
 
     #if os(macOS)
-    private static let readingWidth: CGFloat = 760
-    private static let inset: CGFloat = 24
+    static let readingWidth: CGFloat = 760
+    static let inset: CGFloat = 24
     /// "等你"卡与输入框离页底。
-    private static let replyPadding: CGFloat = 16
+    static let replyPadding: CGFloat = 16
     #else
-    private static let readingWidth: CGFloat = 640
-    private static let inset: CGFloat = 16
+    static let readingWidth: CGFloat = 640
+    static let inset: CGFloat = 16
     #endif
 
     private var cue: CueWatch { workspace.cue }
@@ -77,11 +75,11 @@ struct CuePage: View {
     #if os(macOS)
     private var page: some View {
         HStack(spacing: 0) {
-            FloatingReply {
+            FloatingReply(gap: Self.replyPadding) {
                 chat
             } reply: {
                 bottom
-                    .padding(.horizontal, Self.inset).padding(.bottom, Self.replyPadding)
+                    .padding(.horizontal, Self.inset)
                     .frame(maxWidth: Self.readingWidth)
             }
             if cue.showsRun, let keeper = services.cue.keeper {
@@ -90,28 +88,21 @@ struct CuePage: View {
                     .transition(.move(edge: .trailing).combined(with: .opacity))
             }
         }
-        .animation(Motion.panel, value: cue.showsRun)
+        .animation(Motion.snappy, value: cue.showsRun)
         .background(palette.desk)
     }
     #else
     /// 页头浮在对话上（`CueHeader`），对话让出固定的一段：页头展开成面板时对话不重排。窄屏上 Cue 页是导航栈的根、不需要返回，不用系统导航栏（`DockRoot`），
-    /// 页头就是最上面那一排；底部是一排里左边那颗去处圆钮（`DockPlaces`）加输入框。
-    /// "等你"卡与输入框浮在对话底上（`FloatingReply`，同 Mac；在键盘之上）：不做成底下那一栏（安全区）——栏一变矮（发出时输入框收回一行、
-    /// 卡沉下去）可见区当帧变高、系统把对话一下拉下去，发出的话一两帧后才到、再滑上来；栏一变高（卡升起）系统当帧挪、滚动区下一帧才跟上。
-    /// 键盘只经系统的安全区让：输入框有焦点时贴着安全区底边（有键盘就是键盘顶，第三方键盘长高、换键盘、下拖收起都由系统跟），
-    /// 窄屏没焦点时整块伸到屏幕底、底部那一排离屏幕底边同 Dock。不读键盘高：导航栈里的页拿到的键盘是普通安全区，
-    /// `.ignoresSafeArea(.keyboard)` 分不出来，拿它量"没有键盘的底"在键盘弹出时量到的是键盘高，那一排被压回键盘底下。
+    /// 页头就是最上面那一排；底部左边那颗"⋯"是底部那一排（`DockBar`，不在这一页里）收起的样子，这里给它让出位置，右边是输入框。
+    /// "等你"卡与输入框浮在对话底上（`FloatingReply`，同会话页与 Mac，键盘也在那里让）；窄屏底部那一排没有键盘时离屏幕底边同 Dock。
     private var page: some View {
-        let toScreen = docked && !composing
-        return FloatingReply(backed: false) {
-            chat.overlay { if placesOpen { closePlaces } }
+        FloatingReply(backed: false, floor: docked ? Dock.margin : nil) {
+            chat.overlay { if docked, navigation.placesOpen { closePlaces } }
         } reply: {
             bottom
                 .padding(.horizontal, docked ? Dock.margin : 12)
-                .padding(.bottom, toScreen ? Dock.margin : Dock.keyboardGap)
                 .frame(maxWidth: Self.readingWidth)
         }
-            .ignoresSafeArea(edges: toScreen ? .bottom : [])
             .scrollDismissesKeyboard(.interactively)
             .safeAreaPadding(.top, CueHeader.reserve)
             .overlay(alignment: .top) { CueHeader(underBanner: docked) }
@@ -120,35 +111,36 @@ struct CuePage: View {
             .toolbar(removing: .title)
     }
 
-    /// 窄屏导航栈的根（不是 iPad 右侧面板）：底部是去处圆钮加输入框。
+    /// 窄屏导航栈的根（不是 iPad 右侧面板）：底部是"⋯"加输入框。
     private var docked: Bool { !inPanel && sizeClass == .compact }
 
-    /// 去处圆钮展开时铺在对话上的一层：点一下或一划就收起。
+    /// "⋯"展开时铺在对话上的一层：点一下或一划就收起。
     private var closePlaces: some View {
         Color.clear.contentShape(.rect)
-            .onTapGesture(perform: collapsePlaces)
-            .gesture(DragGesture(minimumDistance: 4).onChanged { _ in collapsePlaces() })
+            .onTapGesture { navigation.placesOpen = false }
+            .gesture(DragGesture(minimumDistance: 4).onChanged { _ in navigation.placesOpen = false })
             .accessibilityHidden(true)
     }
 
-    private func collapsePlaces() {
-        withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { placesOpen = false }
-    }
-
-    /// 窄屏底部那一排：左边去处圆钮（输入框有焦点时让开），右边输入框；从三页来时从 Dock 的样子长过来。
+    /// 窄屏底部那一排：左边给"⋯"让出位置（输入框有焦点时不让），右边输入框。"⋯"展开着、换来这一页时 Cue 钮还在长成它，
+    /// 输入框的位置是底部那一排的 Cue 钮，这里的输入框藏着；长到了才接手（`DockRoot.handed`），离开时当场藏起。
     private var dockRow: some View {
-        CueDockRow(
-            placesOpen: $placesOpen, composing: composing,
-            arrival: reduceMotion ? nil : Dock.Arrival(from: navigation.previousRoot, to: .cue)
-        ) { composer }
-            .debugExposesPlaces { withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { placesOpen.toggle() } }
+        HStack(alignment: .bottom, spacing: 0) {
+            if !navigation.cueComposing {
+                Color.clear.frame(width: Dock.slot + Dock.gap, height: Dock.slot)
+            }
+            composer
+                .opacity(ownsComposer ? 1 : 0)
+                .allowsHitTesting(ownsComposer)
+                .accessibilityHidden(!ownsComposer)
+        }
     }
     #endif
 
     #if os(iOS)
     private var composer: some View {
         CueComposer(style: .page, focusRequests: inPanel ? 0 : navigation.cueFocusRequests, sent: { follow.sent() }) { focused in
-            withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { composing = focused }
+            withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { navigation.cueComposing = focused }
         }
     }
     #endif
@@ -222,88 +214,13 @@ struct CuePage: View {
         }
     }
 
-    /// 在跑的那一轮（Cue 此刻的状态记着是哪一行）此刻的结尾；不在跑为 nil。
+    /// 在跑的那一轮（Cue 此刻的状态记着是哪一行，"做完了没"只看它）此刻的结尾；不在跑为 nil。它那台 Mac 此刻不在（`CuePresence.shown` 为空）时
+    /// 这一轮照样没做完，只是不写在做什么。
     private var live: CueLiveRound? {
         let presence = cue.presence
-        guard let round = cue.round, let shown = presence.shown, let progress = presence.progress else { return nil }
+        guard let round = cue.round else { return nil }
+        guard let shown = presence.shown, let progress = presence.progress else { return CueLiveRound(round: round, ending: .took(nil)) }
         return CueLiveRound(round: round, ending: .live(shown, doing: progress, step: presence.isUsingTool ? RoundProcess.icon(.other) : nil))
-    }
-
-    /// 一段约几格；屏上那几段上下各留几段真的（`ChatSegments`）。Cue 的回答长、一段要排几十毫秒（真实库），只留一段的话
-    /// 来回翻几屏时每拆了又建一段就卡一下；留八段时翻动与整段都挂着一样顺，挂着的仍有上限。
-    static let segment = 6, spare = 8
-
-    /// 一格上面空多少：同一边连着说的收成一串，你开始说的新一轮与上一轮拉开，其余（Cue 接你的话、经过、动态、分隔）是一般的间距。
-    /// `speaker`：这一格是谁的气泡（`CueThread.Row.speaker`），不是气泡为 nil。
-    static func gap(before speaker: HorizontalEdge?, joined: Bool) -> CGFloat {
-        if joined { return CueBubble.joinedGap }
-        return speaker == .trailing ? 24 : 16
-    }
-
-    /// 隔了一阵写时间的那一格：时间上面空多少、时间与这一格之间空多少（`ChatTimeMarker`；排的与估高的同用这两个）。
-    static let stampAbove: CGFloat = 16, stampBelow: CGFloat = 4
-
-    /// 打开与往上翻都铺一屏（`conversation`），按每格至少多高（`floor`）从下往上数，只算数到的那几格；打开时最新处停在浮着的那一块上方，
-    /// 只铺它上面那一截（`covered`）。
-    private static func paging(_ thread: CueThread) -> ChatPaging {
-        let rows = thread.rows
-        func count(filling size: CGSize, above: Int) -> Int {
-            // 阅读栏（可见区里去掉两边的边距，`ChatLayout.margin`）
-            let column = min(size.width, readingWidth) - 2 * inset
-            var sum: CGFloat = 0, count = 0
-            for row in rows[..<above].reversed() where sum < size.height {
-                sum += floor(row, shots: thread.shots[row.id]?.count ?? 0, joined: thread.joined.contains(row.id), stamped: thread.stamps[row.id] != nil, column: column)
-                count += 1
-            }
-            return max(count, 1)
-        }
-        return ChatPaging(
-            first: { count(filling: CGSize(width: $0.width, height: $0.height - covered(thread, size: $0)), above: $1) },
-            step: { count(filling: $0, above: $1) })
-    }
-
-    /// 浮在对话底上的那一块（`bottom`）至少多高：对话底下让出它那么高的留白（`chatBottomInset`），最新处停在它上方。
-    /// Mac 上按输入框（`ComposerMetrics`）、底下的边距与"等你"卡（`CueWaitingDock.floor`）的下限算，只能数少；
-    /// 手机上没算这两样的下限，按整屏数（多排几格，不会铺不满）。
-    private static func covered(_ thread: CueThread, size: CGSize) -> CGFloat {
-        #if os(macOS)
-        let composer = ComposerMetrics.textTop + ComposerMetrics.textBottomOpen + ComposerMetrics.slot
-        // 卡与阅读栏同宽（`page` 里回复那一块两边让出同样的边距），至多占对话区的一半
-        let floor = thread.waiting.first.map { CueWaitingDock.floor($0, shots: thread.shots, width: min(size.width, readingWidth) - 2 * inset) } ?? 0
-        let dock = min(floor, size.height / 2)
-        return composer + replyPadding + dock
-        #else
-        0
-        #endif
-    }
-
-    /// 一格至少多高（连同上面的间距与时间）：气泡里的字至少多高（`TextFloor`），点名了图的提问与结果卡另有图（`shots` 张，`CueShots.floor`），
-    /// 结果卡还有下面那件活一行，旁注、经过与分隔至少一行小字（`note`），动态的虚线气泡里至少一行。
-    /// 只能数少、不能数多（数多了第一帧铺不满）；数得越贴，打开时多排的越少。
-    private static func floor(_ row: CueThread.Row, shots: Int, joined: Bool, stamped: Bool, column: CGFloat) -> CGFloat {
-        let note: CGFloat = 12
-        let above = stamped ? stampAbove + note + stampBelow : gap(before: row.speaker, joined: joined)
-        let bubble = CueBubble.padding.top + CueBubble.padding.bottom
-        // 气泡里字排开的宽：气泡最宽占阅读栏的那一份，去掉内边距（`BubbleWidth`）
-        func width(_ fraction: CGFloat) -> CGFloat { column * fraction - CueBubble.padding.leading - CueBubble.padding.trailing }
-        func said(_ text: String) -> CGFloat {
-            TextFloor.plain(CueFormat.plainText(text), width: width(UserBubble<EmptyView>.widthFraction), limit: UserBubble<EmptyView>.foldedLines)
-        }
-        func answer(_ text: String) -> CGFloat { TextFloor.markdown(text, width: width(CueBubble.cueWidth), spacing: Typography.readingLineSpacing) }
-        let body: CGFloat = switch row {
-        case .you(let message): bubble + said(message.text)
-        // 引用那一行至少一行小字，下面是回答
-        case .answer(let question): bubble + note + 6 + said(question.answer ?? "")
-        // 字与图之间隔 8（`CueSays`）
-        case .cue(let message, _): bubble + answer(message.text) + (shots == 0 ? 0 : 8 + CueShots.floor(count: shots, width: width(CueBubble.cueWidth)))
-        // 字、图与那件活（至少 `CueTaskLine` 那么高）之间各隔 12
-        case .result(let message, _):
-            bubble + answer(message.text) + 12 + CueShots.floor(count: shots, width: width(CueBubble.cueWidth)) + 12 + CueTaskLine.lineHeight
-        // 虚线气泡至少一行小字
-        case .notes: bubble + note
-        case .process: note
-        }
-        return above + body
     }
 
     /// 有新内容：多了消息、有一条被答了、"等你"变了、末尾的进展出现或收起。
@@ -323,13 +240,13 @@ struct CuePage: View {
 
     // MARK: 底部
 
-    /// 浮在对话底上的一块："等你"卡、启用卡与输入框。输入框按自己的高、不被挤（`fixedSize`），地方不够时（键盘弹出、小屏、横屏、输入框写了好几行）卡用剩下的。
+    /// 浮在对话底上的一块："等你"卡、启用卡（Mac 上 Cue 运行在别的 Mac 时它说在哪台）与输入框。输入框按自己的高、不被挤（`fixedSize`），地方不够时（键盘弹出、小屏、横屏、输入框写了好几行）卡用剩下的。
     private var bottom: some View {
         VStack(spacing: 0) {
             if let thread {
                 CueWaitingDock(waiting: thread.waiting, tasks: thread.tasks, shots: thread.shots, open: { opened = $0 }, moving: $docking)
             }
-            if !cue.canHear {
+            if !cue.canHear || cue.now.elsewhere != nil {
                 CueEnableCard().padding(.bottom, 8).transition(.opacity)
             }
             #if os(iOS)
@@ -339,153 +256,6 @@ struct CuePage: View {
             #endif
         }
         .animation(Motion.quick, value: cue.canHear)
+        .animation(Motion.quick, value: cue.now.elsewhere)
     }
 }
-
-/// 对话里的一段（约 `CuePage.segment` 格，`ChatSegments`）：只按各格的内容比较。
-private struct CueSegment: View, Equatable {
-    let rows: [CueRow]
-
-    nonisolated static func == (a: Self, b: Self) -> Bool { a.rows.map(\.key) == b.rows.map(\.key) }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ForEach(rows, id: \.row.id) { $0.equatable() }
-        }
-    }
-}
-
-/// 对话里的一格，连同上面的时间与间距。只按自己的输入比较（`equatable()`）：对话里来了一句、Cue 的状态变了，别的格子不重算——
-/// 发出一句的那一刻对话要重排，每格都重算的话那一帧就掉了。要的那件活、在跑的那一轮、"已送达"都只交给用得着的那一格。
-private struct CueRow: View, Equatable {
-    let row: CueThread.Row
-    let ref: CueTaskRef?
-    let shots: [CueShown]
-    let joined: Bool
-    let stamp: Date?
-    /// 你最后一句：气泡旁标已送达（`BubbleTrip.delivered`）。
-    let delivered: Bool
-    let live: CueLiveRound?
-    /// 这一格是新消息：左边一颗小点（`CueUnreadDot`），末尾进出滚动区时报给页面（`CueViewing`）。
-    let unread: Bool
-    @Binding var opened: PreviewOpening?
-    @Binding var seen: [UUID: Date]
-    @Environment(Workspace.self) private var workspace
-    @Environment(AppServices.self) private var services
-
-    /// 这一格排出来什么样只看这几样。
-    nonisolated struct Key: Equatable {
-        let row: CueThread.Row, ref: CueTaskRef?, shots: [CueShown], joined: Bool, stamp: Date?, delivered: Bool, live: CueLiveRound?, unread: Bool
-    }
-
-    nonisolated var key: Key {
-        Key(row: row, ref: ref, shots: shots, joined: joined, stamp: stamp, delivered: delivered, live: live, unread: unread)
-    }
-
-    nonisolated static func == (a: Self, b: Self) -> Bool { a.key == b.key }
-
-    var body: some View {
-        if let stamp { ChatTimeMarker(date: stamp).padding(.top, CuePage.stampAbove) }
-        content
-            .overlay(alignment: .topLeading) {
-                CueUnreadDot(unread: unread).alignmentGuide(.leading) { $0[.trailing] + CueUnreadDot.gap }
-            }
-            .padding(.top, stamp != nil ? CuePage.stampBelow : CuePage.gap(before: row.speaker, joined: joined))
-            .background(alignment: .bottom) {
-                if unread {
-                    CueEndProbe { visible in seen[row.id] = visible ? row.date : nil }
-                }
-            }
-    }
-
-    @ViewBuilder private var content: some View {
-        let cue = workspace.cue
-        switch row {
-        case .you(let message):
-            SpeechBubble(said: .cue(message, host: cue.hostID), box: Bindable(cue).draft, showsDelivered: delivered, look: .cue(joined: joined)) { _ in
-                MessageActions(text: message.text, kind: .cue)
-            }
-        case .answer(let question):
-            CueAnswer(question: question, joined: joined)
-        case .cue(let message, _):
-            CueSays(message: message, task: ref, shots: shots, open: { opened = $0 }, joined: joined, arrives: !swapsInPlace)
-        case .result(let message, _):
-            CueSays(message: message, task: ref, shots: shots, open: { opened = $0 }, card: true)
-        case .notes(let rounds):
-            CueNoteBubble(rounds: rounds, live: live)
-        case .process(let message):
-            RoundProcess(tools: message.tools, ending: CueLiveRound.ending(of: message, in: live)).padding(.leading, CueBubble.noteInset)
-        }
-    }
-
-    /// Cue 的话原位换下正在说的话（Cue 在这台 Mac 值班时），不淡入。
-    private var swapsInPlace: Bool {
-        #if os(macOS)
-        services.cue.keeper != nil
-        #else
-        false
-        #endif
-    }
-}
-
-/// Cue 在跑的那一轮：经过那一行（`round`）此刻的结尾，其余经过不记用时。
-/// 交给对话里各格的是这个值而不是闭包：闭包每次都不相等，Cue 的状态一变（被叫醒、在想→用工具）对话里每一格都要重算。
-nonisolated struct CueLiveRound: Equatable {
-    let round: UUID
-    let ending: RoundProcess.Ending
-
-    static func ending(of message: CueMessage, in live: CueLiveRound?) -> RoundProcess.Ending {
-        guard let live, live.round == message.id else { return .took(nil) }
-        return live.ending
-    }
-}
-
-/// Cue 页对话的末尾：它在做事、这一轮在对话里还没有一格（你发起的一轮还没调过工具，或设置里关了工具步骤）时是一行此刻在做的（`RoundProcess` 的那一行，同会话页）。
-/// Cue 在这台 Mac 值班时，在回答你的一轮出字就换成逐字长出的正在说的话
-/// （`CueKeeper.speech`，同会话页的 `SessionDraft`）：只有这个视图读它，出字时对话列表不重算；它与对话在同一次更新里拿到同一份对话，
-/// 落库了（`PiDraft.landed`）就不再显示，换下是同一帧里的一减一加。已落库而 Cue 的状态还没歇下时也不冒出进展那一行（话已经说完）；
-/// 中途转成工具调用时让位给进展那一行。进展那一行被换下时直接拿掉，不与正在说的话叠着淡出。别的 Mac 与手机只有进展那一行。
-private struct CueEnding: View {
-    /// 对话里最近一条 Cue 的话的时刻
-    let newestSaid: Date?
-    /// 对话最后一格是 Cue 的话：正在说的这句落库后与它连成一串，说着的时候就排成那个样子。
-    let joined: Bool
-    /// 在跑的那一轮在对话里有一格（它的经过，或收着它的动态）：此刻在做的写在那一格里，这里不再写一遍。
-    /// 没有那一格时（你发起的一轮还没调过工具；设置里关了工具步骤，`CueThread.rows` 不排经过）写在这里。
-    let roundInRows: Bool
-    @Environment(Workspace.self) private var workspace
-    @Environment(AppServices.self) private var services
-    #if os(macOS)
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    #endif
-
-    var body: some View {
-        #if os(macOS)
-        let draft = services.cue.keeper?.speech.draft
-        let landed = draft?.landed(newestReply: newestSaid) ?? false
-        if let draft, !landed {
-            // 与落库后的那句（`CueSays`）同一颗气泡、同一个位置，换下时正文不动
-            BubbleWidth(fraction: CueBubble.cueWidth, edge: .leading) {
-                MarkdownText(source: draft.text).equatable().cueBubble(joined: joined)
-            }
-            .padding(.top, CuePage.gap(before: .leading, joined: joined))
-            .transition(.asymmetric(insertion: CueBubble.arrival(.leading, reduceMotion: reduceMotion), removal: .identity))
-        } else if !landed {
-            live
-        }
-        #else
-        live
-        #endif
-    }
-
-    @ViewBuilder private var live: some View {
-        let presence = workspace.cue.presence
-        if !roundInRows, let shown = presence.shown, let progress = presence.progress {
-            RoundProcess(tools: nil, ending: .live(shown, doing: progress, step: nil))
-                .padding(.leading, CueBubble.noteInset)
-                .padding(.top, CuePage.gap(before: nil, joined: false))
-                .transition(.asymmetric(insertion: .entry, removal: .identity))
-        }
-    }
-}
-

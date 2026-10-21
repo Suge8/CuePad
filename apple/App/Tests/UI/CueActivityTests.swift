@@ -3,13 +3,13 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// iPhone 的实时活动（锁屏与灵动岛）与 Cue 那一行读同一批：在管与等你的数、一排格子（每件在管、每件等你、今天做完）、第一件等你；
-/// 在实时活动上"允许一次"走 Cue 页回答的同一个方法，那件回到在管、下一件等你接上来（会话在问的只能打开）；都没了实时活动就该结束。
+/// Cue 此刻（`CueNow`）：Cue 那一行、小组件与 iPhone 的实时活动读同一份——一颗珠子一份活（等你、推进中、刚做完）、那一句、第一件等你；
+/// 在实时活动上"允许一次"走 Cue 页回答的同一个方法，那件回到推进中、下一件等你接上来（会话在问的只能打开）；没活了实时活动就该结束。
 struct CueActivityTests {
     let rig = TestApp()
     var store: CueStore { rig.services.store }
 
-    @Test func 实时活动与Cue那一行同一批_允许一次后那件回到在管_都没了就结束() async throws {
+    @Test func Cue此刻是岛与Cue那一行的同一份_允许一次后那件回到推进中_没活了就结束() async throws {
         let workspace = Workspace(services: rig.services)
         let project = try await store.createProject(name: "圆桌", color: "#000000")
         let release = try await store.createTask("发布 v1.4", in: project.id)
@@ -25,37 +25,55 @@ struct CueActivityTests {
         try await store.bindSession("zoom", to: canvas.id)
         try await recorder.update(sessionID: "zoom", state: .waitingForUser, question: PiQuestion(promptID: "p", kind: .confirm, text: "改锚点？\n会动到缩放"))
 
-        func both() async throws -> (tally: CueTally, activity: CueActivityState) {
-            let reading = try await CueActivityState.Reading.read(from: store)
-            return (try await CueDigest.read(from: store).tally, CueActivityState(reading, at: .always()))
-        }
+        // 实时活动只在 iPhone 上：按手机推（和 iCloud 对过、不是哪台 Mac），Mac 上的本机事实在 CueGateTests
+        func now() async throws -> CueNow { CueNow(try await CueDigest.read(from: store), at: .always(), local: CueNow.Local(waiting: nil, here: nil)) }
+        func kinds(_ now: CueNow) -> [CueNow.Bead.Kind] { now.beads.map(\.kind) }
 
-        // 两件都落在等你上：数与 Cue 那一行同一份，格子是两格等你加一格今天做完的；第一件是 Cue 的提问，能"允许一次"
-        var (tally, activity) = try await both()
-        #expect(tally.managing.isEmpty && tally.waiting.count == 2)
-        #expect(activity.managing == 0 && activity.waiting == 2 && activity.isLive)
-        #expect(activity.cells == [.waiting, .waiting, .done])
-        #expect(activity.lastDone?.title == "README 截图换成 Swift 版")
-        let first = try #require(activity.first)
+        // Cue 还没启用：那一句写原因；两件都落在等你上：两颗等你，加刚做完的那颗；第一件是 Cue 的提问，能"允许一次"
+        var cue = try await now()
+        #expect(kinds(cue) == [.asks, .asks, .done] && cue.advancing == 0 && cue.isLive)
+        #expect(cue.headline == "Cue 还没启用" && cue.focus.word == "不在")
+        let first = try #require(cue.first)
         #expect(first.title == "推送 v1.4 到 TestFlight" && first.detail == "Cue 请你允许推送代码" && first.open == DeepLink.cue.url)
         let allow = try #require(first.allow)
         #expect(allow.message == push.id && allow.choice == CueAsk.once)
 
-        // 允许一次（实时活动在 App 进程里调的就是它）：发布回到在管，会话在问的接上来，只能打开
+        // 允许一次（实时活动在 App 进程里调的就是它）：发布回到推进中、它的会话在跑，会话在问的接上来，只能打开
         try await rig.services.answerCueQuestion(allow.message, allow.choice)
-        (tally, activity) = try await both()
-        #expect(tally.managing.map(\.id) == ["task/\(release.id.uuidString)"] && tally.waiting.count == 1)
-        #expect(activity.managing == 1 && activity.waiting == 1 && activity.cells == [.managing, .waiting, .done])
-        #expect(activity.first == CueActivityState.Wait(
+        cue = try await now()
+        #expect(kinds(cue) == [.asks, .running, .done] && cue.advancing == 1)
+        #expect(cue.beads[1].name == "发布 v1.4" && cue.beads[1].sessions == ["testflight"])
+        #expect(cue.first == CueNow.Wait(
             title: "canvas-zoom", detail: "改锚点？", open: DeepLink.session(PiSessionState.recordID(sessionID: "zoom")).url, allow: nil))
 
-        // 两件都做完、会话都结束：没有在管与等你，实时活动结束；格子只剩做完的
+        // 答完会话的提问：两件都在跑
+        try await recorder.update(sessionID: "zoom", state: .thinking)
+        cue = try await now()
+        #expect(kinds(cue) == [.running, .running, .done])
+
+        // 两件都做完、会话都结束：只剩刚做完的，没活了，实时活动该结束；刚做完的那颗过了一阵自己收掉
         try await workspace.toggle(canvas.id)
         try await workspace.toggle(release.id)
         try await recorder.update(sessionID: "zoom", state: .ended)
         try await recorder.update(sessionID: "testflight", state: .ended)
-        (tally, activity) = try await both()
-        #expect(tally.managing.isEmpty && tally.waiting.isEmpty)
-        #expect(!activity.isLive && activity.first == nil && activity.cells == [.done, .done, .done])
+        cue = try await now()
+        #expect(kinds(cue) == [.done, .done, .done] && !cue.isLive && cue.first == nil)
+        #expect(cue.aged(to: cue.at.addingTimeInterval(CueNow.doneWindow + 1)).beads.isEmpty)
+
+        // 启用 Cue（运行在 mac-cue，那台醒着）：歇着时那一句说刚做完的那件，到点收掉后是静着
+        _ = try await store.updateCueProfile { profile in
+            profile.hostID = "mac-cue"
+            profile.enabledAt = .now
+        }
+        try await store.recordMacPresence(host: "mac-cue") { true }
+        cue = try await now()
+        #expect(cue.headline == "刚做完「发布 v1.4」" && cue.focus.word == "做完")
+        #expect(cue.aged(to: cue.at.addingTimeInterval(CueNow.doneWindow + 1)).headline == CueNow.quiet)
+
+        // Cue 自己开始想：手上没活也算有活，岛开着；过时之后只信慢的事实
+        try await store.setCueState(.thinking)
+        cue = try await now()
+        #expect(cue.isLive && cue.headline == "在想" && cue.focus.word == "在想" && cue.staleAfter == CueNow.fastStale)
+        #expect(cue.settled.headline == "刚做完「发布 v1.4」" && !cue.settled.isLive)
     }
 }

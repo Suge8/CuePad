@@ -135,7 +135,7 @@ public final class ClaudeCodeRuntime: AgentRuntime {
         known: (name: String?, firstMessage: String?)? = nil
     ) async throws -> PiSession.ID {
         let claude = try await executable()
-        let session = try ClaudeHostedSession(
+        let session = try await ClaudeHostedSession(
             executable: claude.url, arguments: arguments, sessionID: sessionID, directory: directory,
             environment: claude.environment.merging([HostMark.variable: sessionID]) { $1 }, bridge: bridge)
         hosted[sessionID] = session
@@ -183,7 +183,7 @@ public final class ClaudeCodeRuntime: AgentRuntime {
         let file = input["transcript_path"]?.string.map { URL(filePath: $0) } ?? ClaudeCode.sessionFile(home: home, cwd: cwd, sessionID: sessionID)
         var session = PiSession(
             id: id, sessionID: sessionID, agent: .claudeCode, sessionFile: file, pid: envelope.pid, cwd: cwd,
-            terminal: PiTerminal(tty: envelope.tty, environment: envelope.environment), extensionVersion: 0, state: .settled, stateSince: .now)
+            terminal: PiTerminal(tty: envelope.tty, environment: envelope.environment), state: .settled, stateSince: .now)
         session.model = input["model"]?.string.map { ClaudeCode.model($0) }
         let terminal = attach(session, inbox: envelope.environment["CLAUDE_CODE_MESSAGING_SOCKET"], runningSince: nil, waiting: false)
         recall(id, sessionID: sessionID)
@@ -275,7 +275,7 @@ public final class ClaudeCodeRuntime: AgentRuntime {
             guard terminals[id] == nil, scope.covers(sessionID: entry.sessionID) else { continue }  // 读文件时钩子先到、已上桥，或范围换了
             let session = PiSession(
                 id: id, sessionID: entry.sessionID, agent: .claudeCode, sessionFile: file,
-                pid: entry.pid, cwd: cwd, terminal: PiTerminal(tty: Self.controllingTerminal(of: entry.pid)), extensionVersion: 0,
+                pid: entry.pid, cwd: cwd, terminal: PiTerminal(tty: Self.controllingTerminal(of: entry.pid)),
                 state: .settled, stateSince: .now)
             _ = attach(session, inbox: inbox(of: entry.pid), runningSince: running, waiting: waiting)
             recall(id, sessionID: entry.sessionID)

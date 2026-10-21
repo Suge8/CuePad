@@ -16,20 +16,23 @@ struct CuePadWidgets: WidgetBundle {
 struct CueActivityWidget: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: CueActivityAttributes.self) { context in
-            CueActivityViews.lockScreen(context.state, stale: context.isStale)
+            CueActivityViews(context.state, stale: context.isStale).lockScreen
                 .widgetURL(DeepLink.cue.url)
         } dynamicIsland: { context in
-            DynamicIsland {
-                DynamicIslandExpandedRegion(.leading) { CueActivityViews.expandedLeading(context.state) }
-                DynamicIslandExpandedRegion(.trailing) { CueActivityViews.expandedTrailing(context.state) }
-                DynamicIslandExpandedRegion(.bottom) { CueActivityViews.expandedBottom(context.state, stale: context.isStale) }
+            let views = CueActivityViews(context.state, stale: context.isStale)
+            return DynamicIsland {
+                DynamicIslandExpandedRegion(.leading) { views.expandedLeading }
+                DynamicIslandExpandedRegion(.trailing) { views.expandedTrailing }
+                DynamicIslandExpandedRegion(.center) { views.expandedCenter }
+                DynamicIslandExpandedRegion(.bottom) { views.expandedBottom }
             } compactLeading: {
-                CueActivityViews.compactLeading(context.state)
+                views.compactLeading()
             } compactTrailing: {
-                CueActivityViews.compactTrailing(context.state)
+                views.compactTrailing()
             } minimal: {
-                CueActivityViews.minimal(context.state)
+                views.minimal
             }
+            .keylineTint(views.keyline)
             .widgetURL(DeepLink.cue.url)
         }
     }
@@ -41,16 +44,19 @@ struct SnapshotEntry<S: SnapshotFile>: TimelineEntry {
 }
 
 /// 数据来自主 App 写在共享容器里的快照；主 App 在快照内容变了时刷新时间线，所以这里不自己定时刷新。
+/// 快照里按时刻会变的（`later`：Cue 此刻过时、刚做完的那颗收掉）预先排成时间线上后面的几条，到点由系统换，不靠 App 醒来。
 struct SnapshotProvider<S: SnapshotFile>: TimelineProvider {
     /// 还没有快照（从没打开过主 App）时显示的。
     let empty: S
+    var later: (S, Date) -> [SnapshotEntry<S>] = { _, _ in [] }
 
     func placeholder(in context: Context) -> SnapshotEntry<S> { SnapshotEntry(date: .now, snapshot: empty) }
 
     func getSnapshot(in context: Context, completion: @escaping (SnapshotEntry<S>) -> Void) { completion(current()) }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<SnapshotEntry<S>>) -> Void) {
-        completion(Timeline(entries: [current()], policy: .never))
+        let entry = current()
+        completion(Timeline(entries: [entry] + later(entry.snapshot, entry.date), policy: .never))
     }
 
     private func current() -> SnapshotEntry<S> {
@@ -59,15 +65,31 @@ struct SnapshotProvider<S: SnapshotFile>: TimelineProvider {
     }
 }
 
+extension CueNow {
+    /// 小组件时间线上后面的几条：过时的那一刻只信慢的事实（`settled`），刚做完的那几颗各在到点时收掉。
+    static func later(_ now: CueNow, after date: Date) -> [SnapshotEntry<CueNow>] {
+        var entries: [SnapshotEntry<CueNow>] = []
+        var shown = now, at = date
+        let stale = now.at.addingTimeInterval(now.staleAfter)
+        while true {
+            let next = [shown.nextChange(after: at), stale > at && shown != shown.settled ? stale : nil].compactMap { $0 }.min()
+            guard let next else { return entries }
+            shown = (next >= stale ? shown.settled : shown).aged(to: next)
+            at = next
+            entries.append(SnapshotEntry(date: next, snapshot: shown))
+        }
+    }
+}
+
 struct CueWidget: Widget {
     static let kind = "CuePadCue"
 
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: Self.kind, provider: SnapshotProvider(empty: CueSnapshot(name: "Cue", managing: 0, waiting: 0, mood: "sleeping"))) { entry in
+        StaticConfiguration(kind: Self.kind, provider: SnapshotProvider(empty: CueNow.empty, later: CueNow.later)) { entry in
             WidgetViews.cue(entry.snapshot)
         }
         .configurationDisplayName("Cue")
-        .description("它在管几件、几件在等你，点一下和它说话。")
+        .description("它此刻在做什么、手上几件活、几件等你拍板，点一下和它说话。")
         .supportedFamilies([.systemSmall, .systemMedium])
     }
 }

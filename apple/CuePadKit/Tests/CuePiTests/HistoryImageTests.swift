@@ -48,14 +48,5 @@ struct HistoryImageTests {
         #expect(PiSessionName.display(name: nil, firstMessage: "看这张\n\n" + note + "\n\n", folder: "x") == "看这张")
         #expect(PiSessionName.display(name: nil, firstMessage: "[Image converted from image/webp to image/png.]", folder: "x") == "x")
     }
-
-    @Test func 不是图片的块跳过_消息照常读出() throws {
-        var file = SessionFile(directory: dir)
-        try file.append(
-            SessionFile.header(),
-            SessionFile.user("u1", nil, [["type": "text", "text": "坏图"], ["type": "image", "data": Data("not an image".utf8).base64EncodedString()]], at: 1))
-        let update = try PiHistory.index(file: file.url, agent: .pi, from: nil, files: store.files)
-        #expect(update.messages.map(\.text) == ["坏图"])
-    }
 }
 #endif

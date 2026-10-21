@@ -19,7 +19,7 @@ public struct CueMCPServer: Sendable {
     runtime == .claudeCode ? claudeToolPrefix + tool : tool
   }
 
-  public init(store: CueStore) { tools = CueTools(store: store) }
+  public init(store: CueStore, wait: TimeInterval) { tools = CueTools(store: store, wait: wait) }
 
   /// 读到 `input` 结束为止，每条回应交给 `output`（一行，不含换行）。
   public func serve(_ input: some AsyncSequence<String, any Error>, output: (String) -> Void) async throws {

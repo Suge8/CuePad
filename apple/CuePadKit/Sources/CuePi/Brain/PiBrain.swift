@@ -27,7 +27,6 @@ final class PiBrain: CueBrain {
     private let session = BrainSession()
     var events: AsyncStream<CueBrainEvent> { session.events }
     private var process: ChildProcess?
-    /// 等回应的命令
     private let replies = PendingReplies<String, JSONValue>(timeout: AgentTimeouts.reply, timeoutError: CueBrainError.rejected("没有及时回应"))
     private var nextID = 0
     private var window: Int?
@@ -62,7 +61,7 @@ final class PiBrain: CueBrain {
             ]
             if let model = config.model { arguments += ["--model", model] }
             if let effort = config.effort { arguments += ["--thinking", effort.rawValue] }
-            let process = try ChildProcess(
+            let process = try await ChildProcess(
                 config.executable, arguments, directory: config.workingDirectory, environment: BrainSession.environment(config, [
                     "PI_CACHE_RETENTION": "long", "CUEPAD_CLAUDE": Self.claude(config), "CUEPAD_CUE_MCP": jsonString(config.mcp),
                 ]),

@@ -83,11 +83,11 @@ struct AttachmentButton<Label: View>: View {
     }
 }
 
-/// 点开带上的卡片：标题在顶栏、正文在下（不重复标题），"展开编辑"把它变成这次要发的文字（只对卡片）。
+/// 点开带上的卡片：标题在顶栏、正文在下（不重复标题），"展开编辑"把它变成这次要发的文字。
 /// 面板按内容定高：短卡片是一张小面板，长的到顶后可拉满屏。
 struct AttachmentSheet: View {
     let outbox: Outbox
-    let expand: (() -> Void)?
+    let expand: () -> Void
     @Environment(\.closePanel) private var close
     @State private var contentHeight: CGFloat = 0
     @State private var detent = PresentationDetent.height(barHeight)
@@ -98,14 +98,12 @@ struct AttachmentSheet: View {
 
     var body: some View {
         NavigationStack {
-            AttachmentBody(content: outbox.content, omitsTitle: true, height: $contentHeight)
+            AttachmentBody(content: outbox.content, height: $contentHeight)
                 .navigationTitle(CardText(outbox.content).label)
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) { Button("关闭", icon: .close, role: .cancel) { close() } }
-                    if let expand {
-                        ToolbarItem(placement: .confirmationAction) { Button("展开编辑", action: expand) }
-                    }
+                    ToolbarItem(placement: .confirmationAction) { Button("展开编辑", action: expand) }
                 }
         }
         .presentationDetents([fitted, .large], selection: $detent)

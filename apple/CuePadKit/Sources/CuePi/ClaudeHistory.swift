@@ -58,22 +58,6 @@ enum ClaudeHistory {
         }
     }
 
-    /// 会话名与第一条你的话（发现已在跑的会话时补上）；文件还没落盘为 nil。
-    static func summary(of file: URL) -> (name: String?, firstMessage: String?)? {
-        guard let data = try? Data(contentsOf: file, options: .mappedIfSafe) else { return nil }
-        var cp = PiHistoryCheckpoint()
-        var ignored = PiHistory.Transcript(fallbackID: "", files: nil)
-        data.withUnsafeBytes { (raw: UnsafeRawBufferPointer) in
-            var start = 0
-            while start < raw.count {
-                let end = raw[start...].firstIndex(of: 0x0A) ?? raw.count
-                try? ingest(UnsafeRawBufferPointer(rebasing: raw[start..<end]), &cp, &ignored)
-                start = end + 1
-            }
-        }
-        return (cp.name, cp.firstMessage)
-    }
-
     private static func user(_ line: Line, _ entry: PiHistory.Entry, into cp: inout PiHistoryCheckpoint, transcript: inout PiHistory.Transcript) throws {
         guard let content = line.message?.content else { return }
         if case .blocks(let blocks) = content, blocks.contains(where: { $0.type == "tool_result" }) {

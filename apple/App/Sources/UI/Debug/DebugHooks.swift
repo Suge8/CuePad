@@ -15,8 +15,6 @@ enum DebugHooks {
         var editorSelection: NSRange?
         /// 每一轮的经过、子代理名册与 Cue 页折起的动态一开始就展开（`-CuePadToolsOpen`）。
         var toolsOpen = false
-        /// 推入页顶栏有说明时直接弹出（`-CuePadExplain`）。
-        var explain = false
         /// 设置里的崩溃报告直接弹出（`-CuePadCrashSheet`）。
         var crashSheet = false
         /// 演示 Mac 在本机库里接手发到 Mac 的话（`-CuePadDemoMac`）：隔离模式没有同步也送得到。
@@ -31,27 +29,35 @@ enum DebugHooks {
         var taskFold = TaskFold()
         /// 整个窗口按"减弱动态效果"画（`-CuePadReduceMotion`，`PaletteProvider`）：验收时不碰系统设置。
         var reducesMotion = false
+        /// 整个窗口按最大的辅助字号画（`-CuePadLargestType`，`PaletteProvider`）：同上，不碰系统设置。
+        var largestType = false
         #if os(macOS)
-        /// 正文以它开头的那张灵感卡、那条任务或那一行（回收站按名字）一出现就画成指针停着的样子（`-CuePadHover`）：后台截图里指针进不来，
-        /// 合成的鼠标移动事件也不触发不在前台的应用的悬停。
-        var hovered: String?
+        /// 窗口里这几点（左上为原点，同 `-CuePadClick`）上的按钮、行与卡一出现就画成指针停着的样子（`-CuePadHover x,y[;x,y…]`，`presetHover`）：
+        /// 后台截图里指针进不来，合成的鼠标移动事件也不触发不在前台的应用的悬停。一张图里看几处时给几个点。
+        var hovered: [CGPoint] = []
         #endif
         /// 任务页做完列的"更早做完的"一开始就展开（`-CuePadShowsDone`）。
         var showsDone = false
+        /// Cue 此刻钉成这一份样例（`-CuePadCueNow <样例>`，`CueNowSamples`）：页头、侧栏、小组件与实时活动都按它画，截各态用。
+        var cueNow: CueNow?
+        /// 会话页一出现就展开额度明细（`-CuePadQuotaOpen YES`）。
+        var quotaOpen = false
         #if os(iOS)
         /// 设置页通知那一行显示的状态（`-CuePadAlertStatus`；演示模式没有同步，真实状态出不来）。
         var alertStatus: PiAlertStatus?
+        /// 手机任务页打开时落在哪一列（`-CuePadColumn 待办|推进中|等你|做完`）。
+        var boardColumn: TaskBoard.Column?
         /// 搜索页一打开在哪个范围（`-CuePadSearchScope sessions`）。
         var searchScope = SearchScreen.Scope.cards
-        /// Cue 页头一出现就展开成面板（`-CuePadCuePanel YES`；`end` 再滚到面板底，看额度与记忆）。
+        /// Cue 页头一出现就展开成面板（`-CuePadCuePanel YES`；`end` 再滚到面板底，看记忆）。
         var cuePanelOpen = false
         var cuePanelEnd = false
+        /// 不弹演示会话的前台横幅（`-CuePadQuiet YES`）。
+        var quietAlerts = false
         #endif
     }
 
     #if os(macOS)
-    /// 正文是这样开头的卡、任务、记忆或这一行（回收站按名字）是否按 `Preset.hovered` 一出现就画成悬停的样子。
-    static func hovers(_ text: String) -> Bool { preset.hovered.map(text.hasPrefix) ?? false }
     #endif
 
     static let preset: Preset = {
@@ -107,10 +113,20 @@ enum DebugHooks {
         #endif
     }
 
-    /// 隔离库下这台 Mac 上一家 Agent 都找不到（`-CuePadNoAgents YES`）：看一家都没装时的接入面板，不用真去卸。
-    static var findsNoAgents: Bool {
+    /// 隔离库下 Agent 当作装在这个家目录里（`-CuePadAgentHome <目录>`）：只在它的 `.local/bin` 里找，装、登录也按它当 HOME、PATH 只有系统目录，
+    /// 像一台什么都没装的 Mac。给一个空目录就是一家都没装；点"安装"真去跑官方脚本，装进这个目录，不碰真实的家目录。
+    static var agentHome: URL? {
         #if DEBUG
-        DebugScene.defaults.bool(forKey: "CuePadNoAgents")
+        DebugScene.defaults.string(forKey: "CuePadAgentHome").map { URL(filePath: $0, directoryHint: .isDirectory) }
+        #else
+        nil
+        #endif
+    }
+
+    /// 隔离库下也像正式版那样首次打开时请工作区决定弹不弹接入面板（`-CuePadOfferSetup YES`，同一个 `Workspace.offerSetup`）：验收老用户升级后自动弹的那一次。
+    static var offersSetup: Bool {
+        #if DEBUG
+        DebugScene.defaults.bool(forKey: "CuePadOfferSetup")
         #else
         false
         #endif
@@ -158,13 +174,6 @@ enum DebugHooks {
     static func mark(_ event: String) {
         #if DEBUG
         PerfProbe.mark(event)
-        #endif
-    }
-
-    /// 对话在上面再排开一段（`SessionChat`），排开后最早一条是全部 `count` 条里的第 `item` 条：`-CuePadBench chatdepth` 从这一刻量。
-    static func chatShowsEarlier(from item: Int, of count: Int) {
-        #if DEBUG && os(iOS)
-        ChatDepthBench.began(from: item, of: count)
         #endif
     }
 
@@ -278,191 +287,3 @@ enum DebugHooks {
     }
     #endif
 }
-
-extension View {
-    #if os(macOS)
-    /// 单次交互（`-CuePadBench interact`）时记下这条任务行在窗口里的位置，前台量的"任务气泡开"用真实点击点它（`InteractionBench`）；平时什么都不挂。
-    @ViewBuilder func benchSpot(_ task: UUID) -> some View {
-        #if DEBUG
-        if InteractionBench.locatesRows {
-            onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { InteractionBench.rows[task] = $0 }
-        } else {
-            self
-        }
-        #else
-        self
-        #endif
-    }
-    #endif
-
-    #if os(iOS)
-    /// 点 Cue 页头开合面板的那条路交给测量（`IOSInteractionBench` 的"开合 Cue 面板"）。
-    func debugExposesCuePanel(_ toggle: @escaping () -> Void) -> some View {
-        #if DEBUG
-        onAppear { DebugScene.toggleCuePanel = toggle }
-        #else
-        self
-        #endif
-    }
-
-    /// 点 Cue 页底部去处圆钮展开、收起三格的那条路交给演示（`dockTourIfAsked`）；`-CuePadPlacesOpen YES` 时第一次出现就展开（就绪前摆好，截得到）。
-    func debugExposesPlaces(_ toggle: @escaping () -> Void) -> some View {
-        #if DEBUG
-        onAppear {
-            DebugScene.togglePlaces = toggle
-            if DebugScene.defaults.bool(forKey: "CuePadPlacesOpen"), !DebugScene.placesOpened {
-                DebugScene.placesOpened = true
-                toggle()
-            }
-        }
-        #else
-        self
-        #endif
-    }
-    #endif
-
-    /// 项目页任务纸点"还有 N 条"的那条路交给测量（两端 `InteractionBench` 的"展开任务"）：看得见的那一页（`active`）的纸。
-    func debugExposesTaskFold(active: Bool = true, _ toggle: @escaping () -> Void) -> some View {
-        #if DEBUG
-        onChange(of: active, initial: true) { if active { DebugScene.toggleTaskFold = toggle } }
-        #else
-        self
-        #endif
-    }
-
-    /// 会话页直接打开 `-CuePadOpenPreview <标题或文件名>` 那张预览（对话里的交付物到了再找）。
-    func debugOpensPreview(in items: [PiChatEntry], session: PiSessionState, _ opened: Binding<PreviewOpening?>) -> some View {
-        #if DEBUG
-        task(id: items.count) {
-            guard let title = DebugScene.defaults.string(forKey: "CuePadOpenPreview") else { return }
-            opened.wrappedValue = items.lazy.flatMap { entry in entry.previews.map { PreviewOpening(preview: $0, batch: entry.previews, group: entry.id.uuidString, reply: .session(session)) } }
-                .first { $0.preview.title == title || $0.preview.name == title }
-        }
-        #else
-        self
-        #endif
-    }
-
-    /// 这一处正在过渡（如编辑页正在淡入）：截图的就绪标记等它停下。SwiftUI 自己驱动的动画在图层上看不出来，由视图自己报。
-    func debugSettling(_ busy: Bool) -> some View {
-        #if DEBUG
-        modifier(DebugSettling(busy: busy))
-        #else
-        self
-        #endif
-    }
-
-    /// `older` 画面：墙排好（`ready`）后滚到"更早"。
-    func debugScrollsToOlder(_ proxy: ScrollViewProxy, ready: Bool) -> some View {
-        #if DEBUG
-        onChange(of: ready) { if ready { DebugScene.scrollIfNeeded(proxy) } }
-        #else
-        self
-        #endif
-    }
-
-    #if os(macOS)
-    /// 主窗口根上：按启动参数摆好调试画面、挂上自检用的布局环，摆好后报"首帧就绪"（`xc.sh shot` 等它再截图）。
-    func debugScene(_ workspace: Workspace) -> some View {
-        #if DEBUG
-        task {
-            await DebugScene.prepare(workspace)
-            await DebugScene.signalReady(workspace.services)
-            // 接力与关窗不挂在窗口内容上：关窗时内容摘下（`MainShellWindow`），内容上的任务跟着停
-            Task { await DebugScene.wakeIfAsked(workspace) }
-            Task {
-                let from = workspace.page
-                await DebugScene.saysIfAsked(workspace.services, visit: { workspace.show(.cue) }, back: { workspace.show(from) })
-            }
-            Task { await DebugScene.awayIfAsked(workspace.services.store) }
-            Task { await DebugScene.relayIfAsked(workspace) }
-            Task { await DebugScene.closeIfAsked(workspace) }
-            Task { await DebugScene.openMenuIfAsked() }
-            Task { await DebugScene.cueFlowIfAsked(workspace) }
-            await DebugScene.cycleIfAsked(workspace.services)
-        }
-        .background { if DebugScene.injectsGeometryLoop { GeometryLoopProbe() } }
-        #else
-        self
-        #endif
-    }
-    #endif
-
-    #if os(iOS)
-    /// 窗口根上：按启动参数摆好调试画面（样板页盖在最上层），摆好后报"首帧就绪"（`xc.sh shot` 等它再截图）。
-    func debugScene(_ workspace: Workspace, _ navigation: Navigation) -> some View {
-        #if DEBUG
-        overlay {
-            // 盖在根上（在注入配色的那层外面），自己按外观取配色
-            Group {
-                switch DebugScene.scene {
-                case "style": StyleBoard()
-                case "icons": IconSheet()
-                case "widgets": DebugWidgetStage()
-                case "activity": DebugActivityStage()
-                case "share": DebugShareStage(location: workspace.services.location)
-                default: EmptyView()
-                }
-            }
-            .withPalette()
-        }
-            .task {
-                await DebugScene.prepare(workspace, navigation)
-                DebugScene.noticeIfAsked(workspace)
-                await DebugScene.signalReady(workspace.services)
-                async let wakes: Void = DebugScene.wakeIfAsked(workspace)
-                let from = (navigation.root, navigation.path)
-                async let says: Void = DebugScene.saysIfAsked(
-                    workspace.services, visit: { navigation.select(.cue) }, back: {
-                        navigation.select(from.0)
-                        navigation.path = from.1
-                    })
-                async let relays: Void = DebugScene.relayIfAsked(workspace)
-                async let flow: Void = DebugScene.cueFlowIfAsked(workspace, navigation)
-                async let away: Void = DebugScene.awayIfAsked(
-                    workspace.services.store, leave: { navigation.show(.tasks) }, back: { navigation.show(.cue) })
-                async let tour: Void = DebugScene.dockTourIfAsked(workspace, navigation)
-                await DebugScene.cycleIfAsked(workspace.services)
-                _ = await (wakes, says, relays, flow, away, tour)
-            }
-        #else
-        self
-        #endif
-    }
-    #endif
-}
-
-#if DEBUG
-private struct DebugSettling: ViewModifier {
-    let busy: Bool
-    @State private var id = UUID()
-
-    func body(content: Content) -> some View {
-        content
-            .onChange(of: busy, initial: true) { DebugScene.settling(id, busy) }
-            .onDisappear { DebugScene.settling(id, false) }
-    }
-}
-#endif
-
-#if os(macOS)
-/// 主窗口的内容：截图只截主窗口，调试画面要拍的另一扇窗（菜单栏面板、项目表单、新会话）放进主窗口里拍；其余是 `main`。
-struct DebugStage<Main: View>: View {
-    let workspace: Workspace
-    @ViewBuilder let main: () -> Main
-
-    var body: some View {
-        #if DEBUG
-        switch DebugScene.scene {
-        case "menubar": DebugMenuBarStage().environment(workspace)
-        case "cuebar": DebugMenuBarStage(cueBar: true).environment(workspace)
-        case "projectform": ProjectForm(project: nil).environment(workspace).frame(maxWidth: .infinity, maxHeight: .infinity)
-        case "newsession": DebugNewSessionForm().environment(workspace).frame(maxWidth: .infinity, maxHeight: .infinity)
-        default: main()
-        }
-        #else
-        main()
-        #endif
-    }
-}
-#endif

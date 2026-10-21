@@ -7,18 +7,25 @@ extension View {
     /// `hidden` 时中间那块与右边的圆钮让开（淡到透明、不可点、读屏跳过），返回钮一直在——随时看得到怎么回去，
     /// 左缘右滑返回照常是系统的；导航栏本身留着：顶栏占的高度与安全区不变，内容的边距不跟着变（会话页看历史时用，
     /// 见 `ChatFollow.showsHeader`）；给了 `reveal` 时让开的那一块仍接点按，点它唤出。
-    /// 标题同时是读屏、返回菜单与多任务切换器里的名字。
-    /// 窄屏导航栈的根（任务、会话、项目三页，`homePage`）不是推入页：顶上那一排是页自己画的（`HomeBar`：左边搜索、右边这个圆钮），
-    /// 系统导航栏藏起，换去处时整排随页推移（`DockRoot`）；不写标题也不写那一行要紧信息——底部那一排的选中格已经说了在哪一页，
-    /// 组标题写着计数；名字照样交给系统（读屏、返回菜单、多任务切换器）。
-    /// `explanation`：点中间那块玻璃弹出的一句说明（会话需要 /reload 时怎么接上）；没有时点它什么也不做。
+    /// 标题同时是读屏、返回菜单与多任务切换器里的名字（窄屏导航栈的根也照样交给系统）。
+    /// 窄屏导航栈的根（任务、会话、项目三页，`homePage`）不是推入页：顶上那一排是页自己画的（`HomeBar`：左边搜索、中间 `center`、右边这个圆钮），
+    /// 系统导航栏藏起，换去处时整排随页推移（`DockRoot`）；不写标题也不写那一行要紧信息——底部那一排的选中格已经说了在哪一页，组标题写着计数。
     func floatingHeader<Detail: View, Trailing: View>(
-        _ title: String, hidden: Bool = false, reveal: (() -> Void)? = nil, explanation: String? = nil,
+        _ title: String, hidden: Bool = false, reveal: (() -> Void)? = nil,
         @ViewBuilder detail: () -> Detail, @ViewBuilder trailing: () -> Trailing
     ) -> some View {
         let label = TitleStack(title: title, detail: detail()).padding(.horizontal, 16)
         return modifier(FloatingHeader(
-            title: title, hidden: hidden, reveal: reveal, explanation: explanation, label: label, trailing: trailing()))
+            title: title, hidden: hidden, reveal: reveal, label: label, center: EmptyView(), trailing: trailing()))
+    }
+
+    /// 任务页、会话页的根：顶上那一排中间放 `center`（项目范围 `ProjectScope`，会话页再接额度环），不写标题。
+    /// 宽屏（iPad 侧栏旁）不是窄屏的根：导航栏里只有右边的圆钮，`center` 浮在内容顶上居中，同 Cue 页头（`CueHeader`）。
+    func floatingHeader<Center: View, Trailing: View>(
+        _ title: String, @ViewBuilder center: () -> Center, @ViewBuilder trailing: () -> Trailing
+    ) -> some View {
+        modifier(FloatingHeader(
+            title: title, hidden: false, reveal: nil, label: EmptyView(), center: center(), trailing: trailing()))
     }
 
     /// 要紧信息是一行字、右边一个圆钮或"⋯"菜单。`detail` 为 nil 时只写标题；要等读库才有的信息先给空串，
@@ -27,7 +34,6 @@ extension View {
         floatingHeader(title, detail: { HeaderDetail(text: detail) }, trailing: trailing)
     }
 
-    /// 没有操作的页。
     func floatingHeader(_ title: String, detail: Dotted? = nil) -> some View {
         floatingHeader(title, detail: detail) { EmptyView() }
     }
@@ -43,12 +49,12 @@ enum FloatingHeaderLayout {
     static let height: CGFloat = 44
 }
 
-private struct FloatingHeader<Label: View, Trailing: View>: ViewModifier {
+private struct FloatingHeader<Label: View, Center: View, Trailing: View>: ViewModifier {
     let title: String
     let hidden: Bool
     let reveal: (() -> Void)?
-    let explanation: String?
     let label: Label
+    let center: Center
     let trailing: Trailing
     @Environment(\.palette) private var palette
     @Environment(\.homePage) private var homePage
@@ -59,7 +65,14 @@ private struct FloatingHeader<Label: View, Trailing: View>: ViewModifier {
             content
                 .navigationTitle(title)
                 .safeAreaPadding(.top, FloatingHeaderLayout.height + Bars.contentGap)
-                .overlay(alignment: .top) { HomeBar(trailing: trailing) }
+                .overlay(alignment: .top) { HomeBar(search: true, center: center, trailing: trailing) }
+        } else if Center.self != EmptyView.self {
+            content
+                .navigationTitle(title)
+                .toolbar(removing: .title)
+                .toolbar { ToolbarItem(placement: .primaryAction) { trailing } }
+                .safeAreaPadding(.top, FloatingHeaderLayout.height + Bars.contentGap)
+                .overlay(alignment: .top) { HomeBar(search: false, center: center, trailing: EmptyView()) }
         } else {
             floating(content)
         }
@@ -75,7 +88,7 @@ private struct FloatingHeader<Label: View, Trailing: View>: ViewModifier {
             .toolbar {
                 // 标题要等读库才有的页（卡片纸页）先透明，读到后淡入
                 ToolbarItem(placement: .principal) {
-                    HeaderTitle(explanation: explanation) { label }
+                    HeaderTitle { label }
                     .opacity(title.isEmpty || hidden ? 0 : 1)
                     .animation(Motion.quick, value: title.isEmpty || hidden)
                     .allowsHitTesting(!hidden)
@@ -103,59 +116,51 @@ private struct FloatingHeader<Label: View, Trailing: View>: ViewModifier {
     }
 }
 
-/// 窄屏三页根上的顶上那一排：左边搜索、右边这一页的那一个操作，两颗玻璃圆钮，位置同推入页导航栏里的返回钮与圆钮。
-private struct HomeBar<Trailing: View>: View {
+/// 窄屏三页根上的顶上那一排：左边搜索、右边这一页的那一个操作，两颗玻璃圆钮，位置同推入页导航栏里的返回钮与圆钮；
+/// 中间是这一页给的 `center`（盖在两颗圆钮之上一层：会话页那颗胶囊长出的面板铺满这一排往下长；提示横幅在时让开）。
+private struct HomeBar<Center: View, Trailing: View>: View {
+    let search: Bool
+    let center: Center
     let trailing: Trailing
     @Environment(Navigation.self) private var navigation
+    @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        HStack {
-            Button("搜索", icon: .search) { navigation.openSearch() }
-            Spacer(minLength: 8)
-            trailing
+        ZStack(alignment: .top) {
+            HStack {
+                if search { Button("搜索", icon: .search) { navigation.openSearch() } }
+                Spacer(minLength: 8)
+                trailing
+            }
+            .labelStyle(.iconOnly)
+            .buttonStyle(ControlButtonStyle(kind: .circular))
+            .frame(height: FloatingHeaderLayout.height)
+            // 提示横幅落在两颗圆钮之间：中间这颗让开，不叠成两层玻璃
+            center
+                .opacity(workspace.notice == nil ? 1 : 0)
+                .animation(NoticeBanner.giveWay(workspace.notice), value: workspace.notice == nil)
         }
-        .labelStyle(.iconOnly)
-        .buttonStyle(ControlButtonStyle(kind: .circular))
         .padding(.horizontal, 16)
-        .frame(height: FloatingHeaderLayout.height)
     }
 }
 
-/// 顶栏中间那块玻璃（多是标题与一行要紧信息）。有说明时整块是一颗按钮，点它弹出说明（状态自己持有：顶栏项推入时就建好，
-/// 改外面的状态不一定重建它）；没有说明时只是标题。
+/// 顶栏中间那块玻璃（多是标题与一行要紧信息）。提示横幅盖在这一格上时让开（它比名牌矮，露一截上沿就是玻璃叠玻璃）。
 private struct HeaderTitle<Label: View>: View {
-    let explanation: String?
     @ViewBuilder let label: Label
     @Environment(Workspace.self) private var workspace
-    @State private var explaining = false
 
     var body: some View {
-        Group {
-            if explanation != nil {
-                Button { explaining = true } label: { plate }.buttonStyle(.plain)
-            } else {
-                plate
-            }
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(explanation == nil ? .isHeader : [.isHeader, .isButton])
-        .accessibilityHint(explanation == nil ? "" : "看说明")
-        .explanationPopover(explanation, isPresented: $explaining)
-        .task(id: explanation) { if explanation != nil, DebugHooks.preset.explain { explaining = true } }
-    }
-
-    /// 提示横幅盖在这一格上时让开（它比名牌矮，露一截上沿就是玻璃叠玻璃）。
-    private var plate: some View {
         label
             .frame(height: FloatingHeaderLayout.height)
             .glass(in: .capsule)
             .contentShape(.capsule)
             .opacity(workspace.notice == nil ? 1 : 0)
             .animation(NoticeBanner.giveWay(workspace.notice), value: workspace.notice == nil)
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isHeader)
     }
 }
 
-/// 标题，下面一行要紧信息。
 private struct TitleStack<Detail: View>: View {
     let title: String
     let detail: Detail

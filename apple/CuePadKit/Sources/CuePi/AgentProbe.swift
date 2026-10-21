@@ -4,8 +4,9 @@ import CueText
 import Foundation
 
 /// 由已检测出的接入状态（`AgentIntegration.status(of:)`）得出这台 Mac 上各家能不能用（同步表 macAgents 里这台的那条）：
-/// 开得出会话的几家（装着、找得到命令行程序；Pi 还要接入，见 `reason`）问出不指定模型时用哪个、能选哪些（`MacAgent`），问得出才算能用；
-/// 其余与问不出的给出原因（`MacAgentProblem`，接在 Agent 名后面读，用户能照着办）。只读，不改任何一家的配置。
+/// 装着、找得到命令行程序的几家问出不指定模型时用哪个、能选哪些（`MacAgent`），问得出、开得出会话才算能用（Pi 还要接入，见 `unconnected`）；
+/// 其余与问不出的给出原因（`MacAgentProblem`，接在 Agent 名后面读，用户能照着办）。没接入的 Pi 也问：先报没登录，登录了才报只差接入，
+/// 接入面板一打开就给对那一步。只读，不改任何一家的配置。
 /// 每家起一个不落会话、不跑钩子、不连 CuePad 的进程，问完让它退出，各家并发、各自至多 `AgentTimeouts.probe`：
 /// - Pi：RPC 模式、不存会话，只加载随包的桥扩展（不加载装好的那份与其他扩展，也就不连 CuePad）并开探测模式（扩展的 `CUEPAD_PROBE`）：
 ///   扩展把会话里上报的同一份模型配置写成一行就收尾。可选的与 Pi 的 /model 同一规则，配了范围（`enabledModels`）就是范围内的。
@@ -25,7 +26,7 @@ struct AgentProbe {
     /// 一家问出的结果：能用，或不能用的原因。
     private enum Outcome: Sendable {
         case usable(MacAgent)
-        case unusable(String)
+        case unusable(MacAgentProblem.Reason)
     }
 
     func run(_ statuses: [AgentKind: AgentStatus]) async -> (agents: [MacAgent], problems: [MacAgentProblem]) {
@@ -45,8 +46,8 @@ struct AgentProbe {
     }
 
     private func outcome(_ kind: AgentKind, _ status: AgentStatus) async -> Outcome {
-        if let reason = Self.reason(kind, status) { return .unusable(reason) }
-        guard let executable = status.executable else { return .unusable("没找到它的命令行程序") }
+        if let reason = Self.absent(kind, status) { return .unusable(reason) }
+        guard let executable = status.executable else { return .unusable(.other("没找到它的命令行程序")) }
         if kind == .opencode { return .usable(MacAgent(kind: kind, model: nil, models: [])) }
         do {
             let agent: MacAgent? = try await withDeadline(AgentTimeouts.probe, orThrow: ProbeError.timedOut) { [self] in
@@ -57,28 +58,33 @@ struct AgentProbe {
                 case .opencode: return nil
                 }
             }
-            return agent.map(Outcome.usable) ?? .unusable("没登录")
+            guard let agent else { return .unusable(.notLoggedIn) }
+            return Self.unconnected(kind, status).map(Outcome.unusable) ?? .usable(agent)
         } catch {
             let message = error.localizedDescription
-            return .unusable("问不出模型（\(message.clipped(Self.messageLimit))）")
+            return .unusable(.other("问不出模型（\(message.clipped(Self.messageLimit))）"))
         }
     }
 
     /// 原因里错误原话的字符数上限（含省略号）：原因跟着同步记录走，界面只显示一行。
     private static let messageLimit = 60
 
-    /// 不能开新会话的原因；能开为 nil。CuePad 写给 Claude Code、Codex、OpenCode 的文件（技能、钩子）只管终端里开的会话与历史，
-    /// 后台开的会话由 CuePad 直接托管（OpenCode 连它的服务），没接入照样开得出；托管的 Pi 经桥扩展上报，没接入就开不出来。
-    private static func reason(_ kind: AgentKind, _ status: AgentStatus) -> String? {
+    /// 没装或太旧的原因（不用问）；装着为 nil。
+    private static func absent(_ kind: AgentKind, _ status: AgentStatus) -> MacAgentProblem.Reason? {
         switch status.presence {
-        case .notFound: return "没装"
-        case .tooOld(let version): return "版本太旧（\(version)，要 \(kind.minimumVersion.map(\.description) ?? "") 或更新）"
-        case .found: break
+        case .notFound: .notInstalled
+        case .tooOld(let version): .other("版本太旧（\(version)，要 \(kind.minimumVersion.map(\.description) ?? "") 或更新）")
+        case .found: nil
         }
+    }
+
+    /// 问得出、却因为没接入开不出会话的原因；开得出为 nil。CuePad 写给 Claude Code、Codex、OpenCode 的文件（技能、钩子）只管终端里开的会话与历史，
+    /// 后台开的会话由 CuePad 直接托管（OpenCode 连它的服务），没接入照样开得出；托管的 Pi 经桥扩展上报，没接入就开不出来。
+    private static func unconnected(_ kind: AgentKind, _ status: AgentStatus) -> MacAgentProblem.Reason? {
         guard kind == .pi else { return nil }
         switch status.files {
-        case .missing: return "还没接入 CuePad（在设置里打开）"
-        case .foreign(let path): return "接不上：\(path) 是别人的同名文件"
+        case .missing: return .notConnected
+        case .foreign(let path): return .other("接不上：\(path) 是别人的同名文件")
         case .current, .outdated: return nil
         }
     }
@@ -132,7 +138,7 @@ struct AgentProbe {
         let arguments = [
             "-p", "--no-session-persistence", "--settings", #"{"disableAllHooks":true}"#, "--strict-mcp-config", "--disable-slash-commands",
         ]
-        let stream = try ClaudeStream(
+        let stream = try await ClaudeStream(
             executable: executable, arguments: arguments, directory: FileManager.default.temporaryDirectory,
             environment: locator.environment(launching: executable, overrides: paths.environment))
         do {

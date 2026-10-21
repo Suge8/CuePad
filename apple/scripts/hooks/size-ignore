@@ -1,0 +1,5 @@
+# size.py 不看的文件（不是手写的），.gitignore 的 glob 语法，从仓库根算
+**/*.lock
+**/*.pbxproj
+# 录下的真 Agent 回放
+**/Fixtures/**

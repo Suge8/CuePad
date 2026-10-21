@@ -44,7 +44,7 @@ struct AskShotsTests {
         #expect(before.shots[question.id]?.map(\.look) == ["方案 1：大按钮占满一行", "方案 2：按钮贴在输入框上"])
         #expect(before.shots[plain.id] == nil)
 
-        try await workspace.answerCueQuestion(question, CueAsk.once)
+        try await workspace.services.answerCueQuestion(question.id, CueAsk.once)
         _ = try await store.addCueMessage(.cue, text: "好，按方案 1 做。", task: task.id)
 
         let after = try await thread()

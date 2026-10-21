@@ -35,7 +35,7 @@ struct ChildProcessTests {
     /// 否则 Claude Code 收到结束信号不走、只能 SIGKILL，收件箱 socket 就留在 /tmp/cc-socks。
     @Test(.timeLimit(.minutes(1))) func aChildEndsOnSIGTERMEvenIfThisProcessIgnoresIt() async throws {
         let previous = signal(SIGTERM, SIG_IGN)
-        let child = try ChildProcess(URL(filePath: "/bin/sleep"), ["30"], placement: .group)
+        let child = try await ChildProcess(URL(filePath: "/bin/sleep"), ["30"], placement: .group)
         signal(SIGTERM, previous)
 
         kill(child.pid, SIGTERM)

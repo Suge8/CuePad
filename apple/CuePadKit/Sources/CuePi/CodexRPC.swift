@@ -52,7 +52,7 @@ final class CodexRPC {
     static func launch(
         _ executable: URL, arguments: [String] = [], environment: [String: String], directory: URL? = nil
     ) async throws -> CodexRPC {
-        let process = try ChildProcess(
+        let process = try await ChildProcess(
             executable, ["app-server", "--listen", "stdio://"] + arguments, directory: directory, environment: environment,
             placement: .group, input: .pipe, output: .lines)
         let rpc = CodexRPC(pid: process.pid, transport: .stdio(process), messages: process.output)
@@ -104,7 +104,6 @@ final class CodexRPC {
         return message["result"] ?? .object([:])
     }
 
-    /// 回一个服务端请求。
     func respond(to id: JSONValue, result: JSONValue) {
         send(["id": id, "result": result])
     }

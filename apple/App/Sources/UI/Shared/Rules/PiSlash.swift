@@ -54,17 +54,6 @@ nonisolated enum PiSlash {
 /// 上下文用量条的读数（同一份规则：颜色档位、文案、是否建议压缩）。刚压缩过、Pi 在下次回答前不知道已用多少时没有读数
 /// （`init?` 给 nil，界面不画这颗胶囊：一道短横或"未知"读着像减号、像控件）。
 nonisolated struct PiContextMeter: Equatable {
-    enum Level: Equatable {
-        /// 余量充足
-        case roomy
-        /// 已用超过七成
-        case tight
-        /// 已用超过九成，接近自动压缩
-        case critical
-    }
-
-    static let tightFraction = 0.7
-    static let criticalFraction = 0.9
     /// 已用到这个比例建议压缩（用量条的说明里给"压缩"）
     static let compactFraction = 0.8
 
@@ -76,12 +65,8 @@ nonisolated struct PiContextMeter: Equatable {
         self.fraction = fraction
     }
 
-    var level: Level { Self.level(of: fraction) }
-
     /// 用量到了哪一档：上下文与订阅额度（`QuotaMeter`）同一个口径。
-    static func level(of fraction: Double) -> Level {
-        fraction >= criticalFraction ? .critical : fraction >= tightFraction ? .tight : .roomy
-    }
+    var level: UsageLevel { UsageLevel(used: fraction) }
 
     var suggestsCompact: Bool { fraction >= Self.compactFraction }
 

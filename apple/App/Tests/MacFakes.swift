@@ -31,7 +31,7 @@ final class RecordingHost: AgentRuntime {
     }
 
     private(set) var calls: [Call] = []
-    /// 已连上桥的假扩展，按 Pi 自己的会话 id。
+    /// 开出的假扩展（起来就记下，不等连上桥），按 Pi 自己的会话 id。
     private(set) var extensions: [String: FakeExtension] = [:]
     /// 给了就让开新会话以这个原因失败（Pi 起来就退出时的样子）
     var openFailure: String?
@@ -72,9 +72,9 @@ final class RecordingHost: AgentRuntime {
     @discardableResult
     func connect(
         _ sessionID: String, cwd: String, busy: Bool = false, hosted: Bool = false,
-        protocolVersion: Int = PiWire.protocolVersion, extensionVersion: Int = 1, sessionFile: String? = nil
+        protocolVersion: Int = PiWire.protocolVersion, sessionFile: String? = nil
     ) async throws -> FakeExtension {
-        var options = FakeExtension.Options(protocolVersion: protocolVersion, extensionVersion: extensionVersion, cwd: cwd, hosted: hosted)
+        var options = FakeExtension.Options(protocolVersion: protocolVersion, cwd: cwd, hosted: hosted)
         if let sessionFile { options.sessionFile = sessionFile }
         let ext = FakeExtension(directory: socketDirectory, sessionID: sessionID, options: options)
         if busy { ext.setState(["kind": "thinking"]) }

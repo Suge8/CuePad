@@ -63,7 +63,7 @@ struct PiTranscriptTests {
     private func live(_ sessionID: String, file: URL) async throws -> CuePi.PiSession {
         let session = CuePi.PiSession(
             id: "\(sessionID).100", sessionID: sessionID, agent: .pi, sessionFile: file, pid: 100, cwd: URL(filePath: "/work/x", directoryHint: .isDirectory),
-            terminal: PiTerminal(), extensionVersion: PiExtensionBundle.version, state: .thinking, stateSince: .now)
+            terminal: PiTerminal(), state: .thinking, stateSince: .now)
         try await services.consumePiChanges(AsyncStream { continuation in
             continuation.yield(.appeared(session))
             continuation.finish()
@@ -159,7 +159,7 @@ struct PiTranscriptTests {
         #expect(reply.tools?.steps == 1 && reply.tools?.steps == reply.tools?.items.count)
     }
 
-    /// 摘要只有对话这一个写者：Pi 桥上的状态变化不改它；会话结束后没有进行中的提问。
+    /// 摘要只有对话这一个写者：Pi 桥上的状态变化不改它。
     @Test func 状态变化不改摘要_会话结束后没有进行中的提问() async throws {
         let file = try sessionFile("s1", at: .now.addingTimeInterval(-60))
         try FileManager.default.removeItem(at: file)
@@ -244,23 +244,6 @@ struct PiTranscriptTests {
         defer { pruning.cancel() }
 
         for try await count in store.observe({ try $0.piMessages(of: "old").count }) where count == 0 { break }
-    }
-
-    /// 写不写对话只看读文件时的判定（索引器按文件修改时间）：最近改过的文件即使里面的时间都旧也写全部消息；
-    /// 只读了摘要的文件即使里面的时间很近也不写消息——持久化不另按内容时间再判一次。
-    @Test func 写不写对话按读文件时的判定_不按文件内容里的时间() async throws {
-        let oldInside = try sessionFile("old-inside", at: .now.addingTimeInterval(-30 * 86_400))
-        let recentInside = try sessionFile("recent-inside", at: .now.addingTimeInterval(-3_600))
-        await services.consumePiHistory(AsyncStream { continuation in
-            continuation.yield(.updated(try! PiHistory.index(file: oldInside, agent: .pi, from: nil, transcript: true, files: store.files)))
-            continuation.yield(.updated(try! PiHistory.index(file: recentInside, agent: .pi, from: nil, transcript: false, files: store.files)))
-            continuation.yield(.backfillFinished(sessionFiles: [oldInside, recentInside]))
-            continuation.finish()
-        }, agent: .pi)
-
-        #expect(try await store.piMessages(of: "old-inside").count == 4)
-        #expect(try await store.piMessages(of: "recent-inside").isEmpty)
-        #expect(try await record("recent-inside").lastReply == "第二答")
     }
 }
 #endif

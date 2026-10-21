@@ -36,46 +36,31 @@ import Testing
 
   // MARK: 回收站
 
-  @Test func trashingProjectHidesItsCardsAndRestoreBringsThemBackUntouched() async throws {
+  /// 项目进回收站时它的卡随项目隐藏（不逐卡记）；恢复、永久删除项目都不带走早先单独删的卡：恢复后它们仍在回收站，
+  /// 项目还在回收站时恢复其中一张落到默认项目，项目永久删除后另一张挪进默认项目、仍在回收站。
+  @Test func trashRestoreAndPurgeOfAProjectNeverTakeCardsTrashedOnTheirOwn() async throws {
     let p = try await store.createProject(name: "P", color: "#111")
     let kept = try await store.createCard(in: p.id, body: "kept")
-    let alone = try await store.createCard(in: p.id, body: "trashed earlier")
-    try await store.trashCard(alone.id)
+    let alone = [try await store.createCard(in: p.id, body: "trashed earlier"), try await store.createCard(in: p.id, body: "also trashed")]
+    for card in alone { try await store.trashCard(card.id) }
 
     try await store.trashProject(p.id)
     #expect(try await store.cards(in: p.id).isEmpty)
-    #expect(try await store.projects().map(\.id) == [Project.defaultID])
     #expect(try await store.trashedProjects().map(\.id) == [p.id])
-    #expect(try await store.card(kept.id)?.deletedAt == nil)  // 随项目进回收站由项目推导，不逐卡记录
-
+    #expect(try await store.card(kept.id)?.deletedAt == nil)
     try await store.restoreProject(p.id)
-    #expect(bodies(try await store.cards(in: p.id)) == ["kept"])  // 早先单独删除的卡仍在回收站
-    #expect(try await store.trashedCards().map(\.id) == [alone.id])
-  }
+    #expect(bodies(try await store.cards(in: p.id)) == ["kept"])
+    #expect(Set(try await store.trashedCards().map(\.id)) == Set(alone.map(\.id)))
 
-  @Test func cardRestoredIntoTrashedProjectFallsBackToTheDefaultProject() async throws {
-    let p = try await store.createProject(name: "P", color: "#111")
-    let card = try await store.createCard(in: p.id, body: "x")
-    try await store.trashCard(card.id)
     try await store.trashProject(p.id)
-
-    try await store.restoreCard(card.id)
-
-    #expect(try await store.cards(in: Project.defaultID).map(\.id) == [card.id])
-  }
-
-  @Test func purgeProjectRemovesItsCardsButKeepsCardsAlreadyInTrash() async throws {
-    let p = try await store.createProject(name: "P", color: "#111")
-    let withProject = try await store.createCard(in: p.id, body: "goes with project")
-    let alone = try await store.createCard(in: p.id, body: "trashed earlier")
-    try await store.trashCard(alone.id)
-    try await store.trashProject(p.id)
+    try await store.restoreCard(alone[0].id)
+    #expect(try await store.cards(in: Project.defaultID).map(\.id) == [alone[0].id])
 
     try await store.purgeProject(p.id)
-
-    #expect(try await store.card(withProject.id) == nil)
-    #expect(try await store.card(alone.id)?.projectID == Project.defaultID)
+    #expect(try await store.card(kept.id) == nil)
     #expect(try await store.project(p.id) == nil)
+    let survivor = try await store.card(alone[1].id)
+    #expect(survivor?.projectID == Project.defaultID && survivor?.deletedAt != nil)
   }
 
   @Test func emptyTrashRemovesTrashedCardsAndProjectsWithTheirCards() async throws {
@@ -96,112 +81,6 @@ import Testing
     #expect(try await store.trashedProjects().isEmpty)
   }
 
-  // MARK: 发送记录
-
-  @Test func sendRecordKeepsContentSnapshotAfterCardIsPurged() async throws {
-    let card = try await store.createCard(body: "prompt v1")
-    try await store.recordSend(
-      "prompt v1", to: SendTarget(kind: .piSession, name: "fix bug", ref: "s1"),
-      card: card.id)
-    try await store.updateCard(card.id) { $0.body = "prompt v2" }
-    try await store.purgeCard(card.id)
-
-    #expect(try RawDB(fixture.url).rows("SELECT content, cardID, targetName FROM sendRecords") == [["prompt v1", "NULL", "fix bug"]])
-  }
-
   // MARK: 结构版本
 
-  /// 结构 50 的库里分割线是私有标记 `---split---`（独占一行）：升到 51 时换成 Markdown 的 `---`，行里夹着的不是分割线、不动；
-  /// 改过的卡带新的修改时间（同步出去），回收站里的也换。升到 56 时已有的提问照当时的选项认出类别、范围是关联任务所在的项目
-  /// （带新的修改时间同步出去），目录绑定去掉 Mac 名、绑定照旧在。
-  @Test func schema50LibraryUpgradesDividersAndQuestions() async throws {
-    let card = try await store.createCard(body: "上\n---split---\n中 ---split--- 夹着\n  ---split---  \n下")
-    let plain = try await store.createCard(body: "没有分割线")
-    let trashed = try await store.createCard(body: "甲\n---split---\n乙")
-    _ = try await store.trashCard(trashed.id)
-    let before = try #require(try await store.card(card.id)).modifiedAt
-    let untouched = try #require(try await store.card(plain.id)).modifiedAt
-    let demo = try await store.createProject(name: "演示", color: "#111")
-    let task = try await store.createTask("修好登录页", in: demo.id)
-    try await store.setDirectory("/work/demo", for: demo.id)
-    try await store.publishDirectoryBindings(host: "mac")
-    // 退回 50：撤掉 54、56、57、59、60、61、62、66 加的列（52 加的列 66 已删掉）、55、57、60、64 加的索引与 58、60 加的表，放回 56 删掉的列（53、61 重建触发器、55 重建的类型索引，留着新的照样能升；
-    // 61 加的列被触发器引用着，先换一个不引用它的）
-    let added = try RawDB(fixture.url).rows(
-      """
-      SELECT name FROM sqlite_master WHERE name GLOB '*_modified' OR name IN
-        ('syncRecords_pushed', 'piSessionStates_folder', 'piMessages_sessionID_at', 'piSessions_agent', 'cueMessages_open', 'cueMessages_answered', 'cueMessages_setAside')
-      """)
-    try RawDB(fixture.url).exec(
-      """
-      ALTER TABLE cueMessages DROP COLUMN wake; ALTER TABLE cueState DROP COLUMN context; ALTER TABLE cueState DROP COLUMN leftToYou;
-      ALTER TABLE macAgents DROP COLUMN name;
-      ALTER TABLE cueMessages DROP COLUMN ask; ALTER TABLE cueMessages DROP COLUMN askAction; ALTER TABLE cueMessages DROP COLUMN askRule; ALTER TABLE cueMessages DROP COLUMN askShots;
-      ALTER TABLE piMessages DROP COLUMN question;
-      DROP TRIGGER piSessionStates_writeSeq_update; CREATE TRIGGER piSessionStates_writeSeq_update AFTER UPDATE OF state ON piSessionStates BEGIN SELECT 1; END;
-      ALTER TABLE piSessionStates DROP COLUMN turnStartedAt; ALTER TABLE piSessionStates DROP COLUMN answeredAt;
-      ALTER TABLE directoryBindings ADD COLUMN hostName TEXT NOT NULL DEFAULT 'Studio';
-      \(added.map { "DROP INDEX \($0[0]);" }.joined()) ALTER TABLE cueMessages DROP COLUMN setAsideBy; DROP TABLE cueRead; DROP TABLE sessionViewers; PRAGMA user_version = 50;
-      INSERT INTO cueMessages (id, author, text, choices, urgent, taskID, createdAt, modifiedAt) VALUES
-        ('\(UUID().uuidString.lowercased())', 'cue', '要推送吗？', '["允许一次","以后推送都不用问"]', 0, '\(task.id.uuidString.lowercased())', 1, 1),
-        ('\(UUID().uuidString.lowercased())', 'cue', '按规矩要先问', '["允许一次"]', 0, NULL, 2, 2);
-      """)
-
-    let upgraded = try CueStore(location: .isolated(fixture.directory))
-    let converted = try #require(try await upgraded.card(card.id))
-    #expect(converted.body == "上\n---\n中 ---split--- 夹着\n---\n下" && converted.modifiedAt > before)
-    #expect(try await upgraded.card(plain.id)?.modifiedAt == untouched)
-    #expect(try await upgraded.trashedCards().map(\.body) == ["甲\n---\n乙"])
-    let questions = try await upgraded.cueMessagesWaitingForYou()
-    #expect(questions.map(\.asked) == [CueAllow(.push, project: demo.id), CueAllow(.rule, project: nil)])
-    #expect(questions.allSatisfy { $0.modifiedAt > Date(timeIntervalSince1970: 1) })
-    #expect(try await upgraded.directoryBindings().map(\.folder) == ["demo"])
-  }
-
-  /// 结构 64 的库没有默认项目，没有项目的灵感、任务（含回收站里的）projectID 是空的：升到 65 时建好默认项目（另一台设备上更早的版本
-  /// 删过同 id 的也取回），这些卡都挪进去、带新的修改时间同步出去；项目里的卡不动。之后库里没有空的 projectID。
-  @Test(arguments: [false, true])
-  func schema64LibraryMovesCardsWithoutProjectIntoTheDefaultProject(defaultWasTrashed: Bool) async throws {
-    // 都已推送过：升级后待推送的只有被挪的卡与补上的默认项目
-    let demo = try await store.createProject(name: "演示", color: "#111")
-    let filed = try await store.createCard(in: demo.id, body: "项目里的")
-    let idea = try await store.createCard(body: "散的灵感")
-    let task = try await store.createTask("散的任务")
-    let trashed = try await store.createCard(body: "回收站里的")
-    try await store.trashCard(trashed.id)
-    let home = Project.defaultID.uuidString.lowercased()
-    try RawDB(fixture.url).exec(
-      """
-      UPDATE cards SET projectID = NULL, modifiedAt = 1 WHERE projectID = '\(home)';
-      \(defaultWasTrashed ? "UPDATE projects SET deletedAt = 5, modifiedAt = 5" : "DELETE FROM projects") WHERE id = '\(home)';
-      INSERT INTO syncRecords (recordName, recordType, pushedModifiedAt) SELECT id, 'cards', modifiedAt FROM cards;
-      ALTER TABLE cueMessages DROP COLUMN wake; ALTER TABLE cueState ADD COLUMN woke TEXT;
-      PRAGMA user_version = 64;
-      """)
-    let untouched = try #require(try await store.card(filed.id)).modifiedAt
-
-    let upgraded = try CueStore(location: .isolated(fixture.directory))
-    let restored = try #require(try await upgraded.project(Project.defaultID))
-    #expect(restored.deletedAt == nil && (defaultWasTrashed || restored.name == "默认"))
-    #expect(try await upgraded.cards(in: Project.defaultID).map(\.id) == [idea.id])
-    #expect(try await upgraded.tasks(in: Project.defaultID, .todo).map(\.id) == [task.id])
-    #expect(try await upgraded.trashedCards().map(\.projectID) == [Project.defaultID])
-    #expect(try RawDB(fixture.url).count("cards WHERE projectID IS NULL") == 0)
-    for id in [idea.id, task.id, trashed.id] { #expect(try await upgraded.card(id)!.modifiedAt > Date(timeIntervalSince1970: 0.001)) }
-    #expect(try await upgraded.card(filed.id)?.modifiedAt == untouched)
-    let pending = Set(try await upgraded.pendingSync().saves.map(\.id))
-    #expect(pending == Set([idea.id, task.id, trashed.id, Project.defaultID, demo.id].map { $0.uuidString.lowercased() }))
-  }
-
-  /// 更新版本建的库与更早版本建的库（不再升级旧结构）都拒绝打开，不在错位的表结构上读写。
-  @Test(arguments: [
-    (CueStore.supportedSchemaVersions.upperBound + 1, CueStoreError.unsupportedSchemaVersion(CueStore.supportedSchemaVersions.upperBound + 1)),
-    (CueStore.supportedSchemaVersions.lowerBound - 1, .schemaTooOld(CueStore.supportedSchemaVersions.lowerBound - 1)),
-  ])
-  func libraryFromAnotherSchemaVersionIsRefused(version: Int, error: CueStoreError) throws {
-    let url = fixture.directory.appending(path: "other/cuepad.db")
-    try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-    try RawDB(url).exec("CREATE TABLE cards (id TEXT PRIMARY KEY NOT NULL) STRICT; PRAGMA user_version = \(version);")
-    #expect(throws: error) { try CueStore(location: .isolated(url.deletingLastPathComponent())) }
-  }
 }

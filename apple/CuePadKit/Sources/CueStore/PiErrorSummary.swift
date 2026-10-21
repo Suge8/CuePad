@@ -40,7 +40,6 @@ public struct PiErrorSummary: Sendable, Equatable {
         kind = Self.kind(status: status, type: error.type, text: raw.lowercased())
     }
 
-    /// 一句中文摘要。
     public var title: String {
         let code = status.map { "（\($0)）" } ?? ""
         return switch kind {

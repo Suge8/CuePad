@@ -16,7 +16,7 @@ struct LastCrashRow: View {
                     Label { Text(report.kind.label) } icon: { FailureMark() }.foregroundStyle(palette.ink)
                 }
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PressStyle())
             .panel(isPresented: $showing) { CrashReportView(report: report) }
         }
     }
@@ -46,10 +46,10 @@ struct CrashReportView: View {
     var body: some View {
         SettingPopover(title: report.kind.label, width: 420) {
             Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 12, verticalSpacing: 6) {
-                ForEach(facts, id: \.0) { title, value in
+                ForEach(facts(date: .abbreviated), id: \.0) { title, value in
                     GridRow {
                         Text(title).foregroundStyle(palette.ink3)
-                        Text(value).foregroundStyle(palette.ink).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+                        Text(value.visible).foregroundStyle(palette.ink).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
                     }
                 }
             }
@@ -64,15 +64,15 @@ struct CrashReportView: View {
             Text(Self.note).font(Typography.meta).foregroundStyle(palette.ink3).fixedSize(horizontal: false, vertical: true)
         }
     }
+    #endif
 
-    private var facts: [(String, String)] {
-        var facts = [("时间", report.date.formatted(date: .abbreviated, time: .standard))]
-        if let exception = report.exception { facts.append(("异常", exception + (report.signal.map { "（\($0)）" } ?? ""))) }
-        if let reason = report.reason { facts.append(("原因", reason)) }
-        if let app = report.app { facts.append(("版本", app.visible)) }
+    private func facts(date: Date.FormatStyle.DateStyle) -> [(String, Dotted)] {
+        var facts: [(String, Dotted)] = [("时间", Dotted(report.date.formatted(date: date, time: .standard)))]
+        if let exception = report.exception { facts.append(("异常", Dotted(exception + (report.signal.map { "（\($0)）" } ?? "")))) }
+        if let reason = report.reason { facts.append(("原因", Dotted(reason))) }
+        if let app = report.app { facts.append(("版本", app)) }
         return facts
     }
-    #endif
 
     private static let note = "只存在这台设备上，不会自动上传；点导出把摘要和原始诊断复制出来，发给开发者。"
 
@@ -80,10 +80,9 @@ struct CrashReportView: View {
     private var list: some View {
         List {
             Section {
-                row("时间", report.date.formatted(date: .complete, time: .standard))
-                if let exception = report.exception { row("异常", exception + (report.signal.map { "（\($0)）" } ?? "")) }
-                if let reason = report.reason { row("原因", reason) }
-                if let app = report.app { row("版本", app) }
+                ForEach(facts(date: .complete), id: \.0) { title, value in
+                    LabeledContent(title) { Text(value).foregroundStyle(palette.ink3).multilineTextAlignment(.trailing).textSelection(.enabled) }
+                }
             }
             if !report.frames.isEmpty {
                 Section("崩溃线程顶部") {
@@ -103,12 +102,6 @@ struct CrashReportView: View {
         .listRowBackground(palette.paper)
         .scrollContentBackground(.hidden)
         .background(palette.desk)
-    }
-
-    private func row(_ title: String, _ value: String) -> some View { row(title, Dotted(value)) }
-
-    private func row(_ title: String, _ value: Dotted) -> some View {
-        LabeledContent(title) { Text(value).foregroundStyle(palette.ink3).multilineTextAlignment(.trailing).textSelection(.enabled) }
     }
     #endif
 }

@@ -3,16 +3,17 @@ import SwiftUI
 
 /// 常驻循环动效的唯一宿主：Agent 在跑的心电线（`heartbeat`）、话在路上的三块实心 V（`climb`）、等你确认的外扩波纹（`ripple`）、
 /// 等待的转圈（`orbit`，经 `Spinner`）、Cue 在做事时头像外绕着的彗星（`comet`）、换模型与思考强度在路上时的呼吸（`pulse`）、进行中文字与最高思考强度上扫过的光（`sheen`）、
-/// Agent 在做时任务气泡里吉祥物的轻轻上下浮动、Cue 在做事时头像里的它上下跳（`float`）。
+/// Agent 在做时任务气泡里吉祥物的轻轻上下浮动（`float`）。
 /// 用 Core Animation 而不是 SwiftUI 的 repeatForever 或符号动效：后两者每帧都在 App 进程里重算，
 /// 列表里有几个在工作的会话时，静止不动也要占约 9% CPU；CA 的动画交给渲染服务，App 进程不参与，离屏不画。
-/// 减弱动态效果时由调用方不放它（或换成静止的样子）。
+/// 减弱动态效果时由调用方不放它（或换成静止的样子）；省电模式看 `LowPowerMode`。
 struct LoopLayer {
     enum Kind: Equatable {
-        /// 一圈淡轨道上一段弧匀速转，1.1s 一圈；线宽默认是直径的 14%，给了就用给的（Cue 头像外的状态环，粗细随头像尺寸另定）。
-        case orbit(lineWidth: CGFloat? = nil)
-        /// Cue 在做事时头像外的状态环：淡轨道上一颗带光的头拖着由浓到淡的尾巴（约六成圈）绕着走，1.6s 一圈。
-        /// 尾巴是锥形渐变裁成环（渲染服务每帧只转一层），头是一颗带光晕的圆点（光晕按给定形状画，不从内容另算）。
+        /// 一圈淡轨道上一段弧匀速转，1.1s 一圈；线宽是直径的 14%。
+        case orbit
+        /// Cue 在做事时头像外的状态环：淡轨道上一颗圆头拖着由浓到淡的尾巴（约六成圈）匀速绕着走，1.6s 一圈。
+        /// 尾巴是锥形渐变裁成环（缓存成位图，渲染服务每帧只转一层），头是与线同宽的圆点，盖住尾巴在渐变接缝处的直切口。
+        /// 头不加光晕：光晕在浅色底上是一团糊边，头尾不干净。
         case comet(lineWidth: CGFloat)
         /// 心电线：淡色的一段心电波形上，一截实色沿波形从左走到右，1.4s 一趟；线宽是边长的 9%，淡波形是三成的颜色。
         case heartbeat
@@ -84,9 +85,9 @@ struct LoopLayer {
             CATransaction.setDisableActions(true)
             let bounds = root.bounds
             switch kind {
-            case .orbit(let line):
+            case .orbit:
                 loop.frame = bounds
-                let width = line ?? min(bounds.width, bounds.height) * 0.14
+                let width = min(bounds.width, bounds.height) * 0.14
                 let ring = CGPath(ellipseIn: CGRect(origin: .zero, size: bounds.size).insetBy(dx: width / 2, dy: width / 2), transform: nil)
                 for (index, shape) in (loop.sublayers ?? []).compactMap({ $0 as? CAShapeLayer }).enumerated() {
                     shape.frame = loop.bounds
@@ -156,8 +157,6 @@ struct LoopLayer {
             head.frame = bounds
             head.path = CGPath(ellipseIn: dot, transform: nil)
             head.fillColor = color
-            head.shadowColor = color
-            head.shadowPath = CGPath(ellipseIn: dot.insetBy(dx: -width * 0.4, dy: -width * 0.4), transform: nil)
         }
 
         private static func make(_ kind: Kind) -> CALayer {
@@ -172,14 +171,12 @@ struct LoopLayer {
                 tail.endPoint = CGPoint(x: 1, y: 0.5)
                 tail.locations = [0, 0.4, 1]
                 let head = CAShapeLayer()
-                head.shadowOpacity = 0.9
-                head.shadowRadius = 3
-                head.shadowOffset = .zero
                 for sublayer in [track, tail, head] { layer.addSublayer(sublayer) }
                 // 头在渐变终点上，顺着角度增大的方向转：头在前、尾巴跟着（层坐标里渐变与旋转同向，两端一样）
                 let spin = CABasicAnimation(keyPath: "transform.rotation.z")
                 spin.byValue = Double.pi * 2
                 spin.duration = 1.6
+                spin.timingFunction = CAMediaTimingFunction(name: .linear)
                 return loop(spin, on: layer)
             case .orbit:
                 let layer = CALayer()
@@ -364,12 +361,26 @@ struct Spinner: View {
                     .overlay { Circle().trim(from: 0, to: 0.3).stroke(palette.ink2, style: StrokeStyle(lineWidth: width, lineCap: .round)) }
                     .padding(width / 2)
             } else {
-                LoopLayer(kind: .orbit(), color: palette.ink2)
+                LoopLayer(kind: .orbit, color: palette.ink2)
             }
         }
         .frame(width: size.side, height: size.side)
         .accessibilityElement()
         .accessibilityLabel("请稍候")
+    }
+}
+
+/// 省电模式开着（`ProcessInfo.isLowPowerModeEnabled`，随系统的变化通知更新）：读它的常驻动效换成静止的样子，同减弱动态效果。
+@Observable final class LowPowerMode {
+    static let shared = LowPowerMode()
+    private(set) var isOn = ProcessInfo.processInfo.isLowPowerModeEnabled
+
+    private init() {
+        Task {
+            for await _ in NotificationCenter.default.notifications(named: .NSProcessInfoPowerStateDidChange) {
+                isOn = ProcessInfo.processInfo.isLowPowerModeEnabled
+            }
+        }
     }
 }
 

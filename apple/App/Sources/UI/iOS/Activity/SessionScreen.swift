@@ -19,7 +19,6 @@ struct SessionScreen: View {
     @State private var follow = ChatFollow()
     @State private var confirmingEnd: PiSessionState?
     @State private var renaming: PiSessionState?
-    private static let barGap: CGFloat = 8
 
     /// `seed`：推入前读好的这一页（`Navigation.openSession`），首帧即用，之后以 Store 的观察流为准。
     init(id: UUID, seed: SessionDigest? = nil) {
@@ -42,15 +41,14 @@ struct SessionScreen: View {
             if let session {
                 // 在看历史时回复框收成短胶囊，点它展开（不挪正在读的内容）
                 SessionDock(session: session, digest: digest, compact: !follow.atNewest, revealNote: { follow.seek($0.entry) }) { follow.sent() }
-                    .padding(.horizontal, 12).padding(.bottom, Self.barGap)
+                    .padding(.horizontal, 12)
                     .frame(maxWidth: Self.readingWidth)
                     .animation(Motion.quick, value: session.question)
             }
         }
         .scrollDismissesKeyboard(.interactively)
         // 看历史时标题与"⋯"让开（返回钮留着），点标题原来的位置唤出，回到最新自动出现（`ChatFollow.showsHeader`）
-        .floatingHeader(digest?.title(at: services.speech) ?? session?.title ?? "", hidden: !follow.showsHeader, reveal: { follow.reveal() },
-                        explanation: session.flatMap { PiShown($0).explanation }) {
+        .floatingHeader(digest?.title(at: services.speech) ?? session?.title ?? "", hidden: !follow.showsHeader, reveal: { follow.reveal() }) {
             if shownEnd == .sending {
                 Text("正在结束…").font(.caption).foregroundStyle(palette.ink3)
             } else if let session {
@@ -59,7 +57,7 @@ struct SessionScreen: View {
         } trailing: {
             if let session {
                 Menu {
-                    // 所在与"后台"不挤在顶栏里：点"⋯"时写在最上面
+                    // 所在不挤在顶栏里：点"⋯"时写在最上面
                     if let title = PiPlace.menuTitle(of: session, project: digest?.project) { Section { } header: { Text(title) } }
                     if MacDelivery.canRename(session) {
                         Button("重命名", icon: .rename) { renaming = session }.disabled(!services.reachesPiHost)

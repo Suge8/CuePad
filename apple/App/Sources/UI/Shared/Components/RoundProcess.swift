@@ -38,7 +38,7 @@ struct RoundProcess: View {
         if let line = PiChat.processLine(tools), let tools {
             VStack(alignment: .leading, spacing: 0) {
                 Button { expanded.toggle() } label: { header(line) }
-                    .buttonStyle(.plain)
+                    .buttonStyle(PressStyle())
                     .accessibilityLabel(spoken(line))
                     .accessibilityExpanded(expanded)
                 if expanded {
@@ -112,7 +112,7 @@ struct RoundProcess: View {
             Button { jump(message) } label: {
                 if item.kind == .said { SaidRow(text: item.target, lines: 1) } else { toolRow(item) }
             }
-            .buttonStyle(.plain).accessibilityHint("回到对话里那一条")
+            .buttonStyle(PressStyle()).accessibilityHint("回到对话里那一条")
         } else if item.kind == .said {
             SaidRow(text: item.target, lines: 3)
         } else if let task = item.task {

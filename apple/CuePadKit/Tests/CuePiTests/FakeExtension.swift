@@ -28,7 +28,6 @@ nonisolated final class FakeExtension: @unchecked Sendable {
 
     struct Options: Sendable {
         var protocolVersion = PiWire.protocolVersion
-        var extensionVersion = 1
         var cwd = "/work/project"
         var mode = "tui"
         var model: WireModel? = WireModel(id: "test-model")
@@ -39,7 +38,6 @@ nonisolated final class FakeExtension: @unchecked Sendable {
         var commands: [WireCommand] = []
         var sessionFile: String? = "/work/session.jsonl"
         var tty: String? = "ttys009"
-        var socketMode: mode_t = 0o600
         /// CuePad 在后台托管的进程（hello 里带 `hosted`）
         var hosted = false
         var env: [String: String] = ["TERM_PROGRAM": "ghostty", "__CFBundleIdentifier": "com.mitchellh.ghostty",
@@ -61,18 +59,19 @@ nonisolated final class FakeExtension: @unchecked Sendable {
     }
     private let shared = Mutex(Shared())
     private var source: DispatchSourceRead?
+    /// start 时 listen 上的那个 socket 文件
+    private var socketFile: PiSocketDirectory.FileIdentity?
     private let queue = DispatchQueue(label: "fake-extension")
     /// 对每条命令回一个 ack 体（不含 t/id）；nil 表示不回。
     var onCommand: @Sendable (_ connection: Int, _ command: [String: Any]) -> [String: Any]? = { _, _ in ["ok": true] }
 
     /// 与真扩展（Node：写已断开的连接只得到 EPIPE）一样，写不会让进程收到 SIGPIPE；写与关闭互斥、关闭后的写丢掉：
     /// 回 ack 与另一条线程上的告别关闭（`close(bye:)`）会交错，关闭后再写会落到已关掉的连接或被复用的描述符上，
-    /// 曾以 SIGPIPE 杀掉整个测试宿主（同 `PiSocket` 的写法）。
+    /// SIGPIPE 会杀掉整个测试宿主（同 `PiSocketConnection` 的写法）。
     private final class Connection: @unchecked Sendable {
         let fd: Int32
         var source: DispatchSourceRead?
         var buffer = Data()
-        /// 已关闭
         private let closed = Mutex(false)
 
         init(fd: Int32) {
@@ -95,12 +94,20 @@ nonisolated final class FakeExtension: @unchecked Sendable {
             }
         }
 
+        /// 停止读、断开连接（shutdown，对端当场读到 EOF）。描述符只在读事件源的取消回调里关（`release`）：事件源还挂在 kqueue 上时就关掉，
+        /// 号码马上被别的测试新开的 socket 复用，这个事件源随后的注销会把那个描述符的读事件一起删掉，那边就再也收不到数据（桥等不到 hello）。
         func close() {
             closed.withLock { closed in
                 guard !closed else { return }
                 closed = true
-                source?.cancel()
                 shutdown(fd, SHUT_RDWR)
+            }
+            source?.cancel()
+        }
+
+        func release() {
+            closed.withLock {
+                $0 = true
                 Darwin.close(fd)
             }
         }
@@ -125,12 +132,14 @@ nonisolated final class FakeExtension: @unchecked Sendable {
         // 与真实扩展一致：在临时名上 listen、定好权限，再改名进来
         let pending = socketURL.deletingPathExtension().appendingPathExtension("tmp")
         let fd = try Self.boundSocket(at: pending)
-        guard listen(fd, 8) == 0, chmod(pending.path, options.socketMode) == 0, rename(pending.path, socketURL.path) == 0 else {
+        guard listen(fd, 8) == 0, chmod(pending.path, 0o600) == 0, rename(pending.path, socketURL.path) == 0 else {
             throw POSIXError(.init(rawValue: errno)!)
         }
         shared.withLock { $0.listenFD = fd }
+        socketFile = PiSocketDirectory.identity(of: socketURL.path)
         let src = DispatchSource.makeReadSource(fileDescriptor: fd, queue: queue)
         src.setEventHandler { [weak self] in self?.accept() }
+        src.setCancelHandler { Darwin.close(fd) }  // 同 Connection.close：事件源注销后才关
         src.resume()
         source = src
     }
@@ -172,6 +181,7 @@ nonisolated final class FakeExtension: @unchecked Sendable {
                 self.handle(line: Data(line), from: index)
             }
         }
+        src.setCancelHandler { conn.release() }
         conn.source = src
         src.resume()
         write(hello(), to: conn)
@@ -188,7 +198,7 @@ nonisolated final class FakeExtension: @unchecked Sendable {
 
     private func hello() -> [String: Any] {
         var msg: [String: Any] = [
-            "t": "hello", "protocol": options.protocolVersion, "extensionVersion": options.extensionVersion,
+            "t": "hello", "protocol": options.protocolVersion, "extensionVersion": 1,
             "sessionId": sessionID, "pid": Int(pid), "cwd": options.cwd, "mode": options.mode,
             "term": options.env,
             "state": Self.object(shared.withLock { $0.state }).merging(["since": Self.nowMillis, "turnSince": shared.withLock { $0.turnSince } ?? NSNull()]) { a, _ in a },
@@ -255,7 +265,8 @@ nonisolated final class FakeExtension: @unchecked Sendable {
     func close(bye reason: String) {
         broadcast(["t": "bye", "reason": reason])
         crash()
-        try? FileManager.default.removeItem(at: socketURL)
+        // 只删自己那个文件：closeAfterReply 排在队列上晚到时，同一会话（同名同 pid）的下一个假扩展可能已在这个路径上 listen 了
+        if let socketFile, PiSocketDirectory.identity(of: socketURL.path) == socketFile { unlink(socketURL.path) }
     }
 
     /// 回完手上这条命令再告别退出（Pi 收到 end 也是先回 ack 再走）：排在处理命令的同一条队列上，ack 一定先于 bye 写出。
@@ -265,13 +276,12 @@ nonisolated final class FakeExtension: @unchecked Sendable {
 
     /// 不告别直接断开并留下 socket 文件（等同 kill -9）。幂等：fd 是进程全局的，重复 close 会误关别的测试刚复用的描述符。
     func crash() {
-        let (listener, open): (Int32, [Connection]) = shared.withLock {
+        let open = shared.withLock {
             defer { $0.listenFD = -1; $0.connections = [] }
-            return ($0.listenFD, $0.connections)
+            return $0.connections
         }
-        source?.cancel()
+        source?.cancel()  // 取消回调里关监听的描述符
         source = nil
-        if listener >= 0 { Darwin.close(listener) }
         for conn in open { conn.close() }
     }
 

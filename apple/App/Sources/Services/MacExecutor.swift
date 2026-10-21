@@ -34,8 +34,6 @@ final class MacExecutor {
         self.reportIssue = reportIssue
     }
 
-    var isRunning: Bool { running != nil }
-
     func start() async throws {
         let executor = DeliveryExecutor(store: store, hostID: hostID, onIssue: { [reportIssue] error in
             let message = "处理投送请求时读写资料库失败：\(error.localizedDescription)"

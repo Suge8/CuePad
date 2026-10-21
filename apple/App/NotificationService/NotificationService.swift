@@ -28,7 +28,8 @@ final class NotificationService: UNNotificationServiceExtension, @unchecked Send
               let recordID = notification.recordID
         else { return handler(request.content) }
         let database = CKContainer(identifier: Self.container).privateCloudDatabase
-        if CueAlertRoute.message(from: userInfo) != nil {
+        switch CloudAlert(userInfo: userInfo) {
+        case .cue:
             pending.withLock { $0 = Pending(content: content, deliver: handler) }
             let profile = CKRecord.ID(recordName: CueProfile.syncRecordName, zoneID: recordID.zoneID)
             database.fetch(withRecordIDs: [recordID, profile]) { result in
@@ -37,14 +38,14 @@ final class NotificationService: UNNotificationServiceExtension, @unchecked Send
                 if let text = CueAlertText.content(message: message, profile: try? records[profile]?.get()) { self.apply(text) }
                 self.finish()
             }
-            return
-        }
-        guard let tap = PiAlertRoute.tap(from: userInfo) else { return handler(request.content) }
-        pending.withLock { $0 = Pending(content: content, deliver: handler) }
-        let kind = tap.kind
-        database.fetch(withRecordID: recordID) { record, _ in
-            if let record, let text = PiAlertText.content(for: record, kind: kind) { self.apply(text) }
-            self.finish()
+        case .session(let tap):
+            pending.withLock { $0 = Pending(content: content, deliver: handler) }
+            let kind = tap.kind
+            database.fetch(withRecordID: recordID) { record, _ in
+                if let record, let text = PiAlertText.content(for: record, kind: kind) { self.apply(text) }
+                self.finish()
+            }
+        case nil: handler(request.content)
         }
     }
 

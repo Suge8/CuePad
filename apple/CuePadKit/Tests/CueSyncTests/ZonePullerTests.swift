@@ -6,7 +6,7 @@ import Testing
 
 @testable import CueSync
 
-/// 没有令牌时（新装、从 CKSyncEngine 的版本升上来、令牌过期）按版本对账：不把整个同步区的正文下载一遍，
+/// 没有令牌时（新装、令牌过期）按版本对账：不把整个同步区的正文下载一遍，
 /// 只取本机没有或较旧的；本机推送过而服务器上已没有的，按在别处删掉处理；之后从存在库里的令牌增量拉。
 @Suite struct ZonePullerTests {
   let rig = try! Rig()
@@ -28,11 +28,12 @@ import Testing
     let stale = try await store.createCard(body: "本机旧版")
     try await rig.simulatePush()
     let sameOnServer = try #require(await rig.coordinator.record(for: rig.recordID(same.id)))
-    let newer = remoteRecord(.cards, id: stale.id, cardFields(project: nil, body: "别处改过", modifiedAt: 9_000_000_000_000))
-    let fresh = remoteRecord(.cards, cardFields(project: nil, body: "别处新建", modifiedAt: 2_000))
+    let home = try #require(await rig.coordinator.record(for: rig.recordID(Project.defaultID)))
+    let newer = remoteRecord(.cards, id: stale.id, cardFields(body: "别处改过", modifiedAt: 9_000_000_000_000))
+    let fresh = remoteRecord(.cards, cardFields(body: "别处新建", modifiedAt: 2_000))
     let zone = FakeZone(
-      [page("v1", [version(of: sameOnServer), version(of: newer)], more: true), page("v2", [version(of: fresh)]), page("t1")],
-      server: [sameOnServer, newer, fresh])
+      [page("v1", [version(of: home), version(of: sameOnServer), version(of: newer)], more: true), page("v2", [version(of: fresh)]), page("t1")],
+      server: [home, sameOnServer, newer, fresh])
     #expect(await rig.coordinator.state.reconciled == false)
 
     try await ZonePuller(source: zone, coordinator: rig.coordinator).pull()
@@ -51,7 +52,8 @@ import Testing
     try await rig.simulatePush()
     let unpushed = try await store.createCard(body: "本机新写的")
     let keptOnServer = try #require(await rig.coordinator.record(for: rig.recordID(kept.id)))
-    let zone = FakeZone([page("v1", [version(of: keptOnServer)]), page("t1")])
+    let home = try #require(await rig.coordinator.record(for: rig.recordID(Project.defaultID)))
+    let zone = FakeZone([page("v1", [version(of: home), version(of: keptOnServer)]), page("t1")])
 
     try await ZonePuller(source: zone, coordinator: rig.coordinator).pull()
 
@@ -61,7 +63,7 @@ import Testing
 
   @Test func anExpiredTokenIsDroppedAndTheZoneIsCaughtUpAgain() async throws {
     try await store.setSyncState(ZonePuller.tokenKey, Data("old".utf8))
-    let fresh = remoteRecord(.cards, cardFields(project: nil, body: "期间新建", modifiedAt: 2_000))
+    let fresh = remoteRecord(.cards, cardFields(body: "期间新建", modifiedAt: 2_000))
     let zone = FakeZone([.failure(CKError(.changeTokenExpired)), page("v1", [version(of: fresh)]), page("t1")], server: [fresh])
 
     try await ZonePuller(source: zone, coordinator: rig.coordinator).pull()
@@ -87,7 +89,7 @@ import Testing
   @Test func aPageThatWasNotAppliedDoesNotMoveTheToken() async throws {
     await rig.coordinator.account("user-a")
     try await store.setSyncState(ZonePuller.tokenKey, Data("t0".utf8))
-    let fresh = remoteRecord(.cards, cardFields(project: nil, body: "别处新建", modifiedAt: 2_000))
+    let fresh = remoteRecord(.cards, cardFields(body: "别处新建", modifiedAt: 2_000))
     let zone = SwitchingZone(page: ZoneChangeBatch(modifications: [fresh], deletions: [], token: Data("t1".utf8), moreComing: false), coordinator: rig.coordinator)
 
     await #expect(throws: (any Error).self) { try await ZonePuller(source: zone, coordinator: rig.coordinator).pull() }

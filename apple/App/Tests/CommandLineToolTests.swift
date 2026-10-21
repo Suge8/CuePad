@@ -18,8 +18,8 @@ struct CommandLineToolTests {
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: helper.path)
     }
 
-    private func makeInstaller(helper: URL? = nil, shellPath: String? = nil) -> CommandLineToolInstaller {
-        CommandLineToolInstaller(helper: helper ?? self.helper, linkDirectory: linkDirectory, shellPath: { shellPath })
+    private func makeInstaller(helper: URL? = nil) -> CommandLineToolInstaller {
+        CommandLineToolInstaller(helper: helper ?? self.helper, linkDirectory: linkDirectory, shellPath: { nil })
     }
 
     private func destination() throws -> String { try FileManager.default.destinationOfSymbolicLink(atPath: link.path) }
@@ -74,17 +74,6 @@ struct CommandLineToolTests {
         try await installer.install()
         #expect(installer.state == .installed)
         #expect(try destination() == helper.path)
-    }
-
-    @Test(arguments: [
-        ("/usr/bin:/bin", false),
-        ("/usr/bin:__LINK__:/bin", true),
-    ])
-    func 提示链接目录是否在shell的PATH里(path: String, included: Bool) async {
-        defer { try? FileManager.default.removeItem(at: root) }
-        let installer = makeInstaller(shellPath: path.replacingOccurrences(of: "__LINK__", with: linkDirectory.path))
-        await installer.refresh()
-        #expect(installer.pathIncludesLinkDirectory == included)
     }
 
     /// 测试宿主就是这次构建出的 CuePad.app：里面必须真的带着 cuepad，经链接调用能运行。

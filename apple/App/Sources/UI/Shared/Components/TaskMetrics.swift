@@ -10,12 +10,12 @@ enum TaskMetrics {
     // 任务行（`TaskLine`）：上级正文字号、步骤小一档，圈也小一档
     static let lineFont = Font.body
     static let stepFont = Font.subheadline
-    static let ring: CGFloat = 20
+    static let ring: CGFloat = 24
     static let stepRing: CGFloat = 16
     /// 圈那一列（也是它的点按区）多宽、与标题隔多少；行没有左右内边距（纸自己留了）。
     static let ringColumn: CGFloat = 44
     static let columnGap: CGFloat = 2
-    /// 任务看板的卡（`BoardTaskCard`、`BoardWaitCard`）：纸的内边距与圆角。
+    /// 任务看板的纸与等你卡（`BoardColumn`）：卡的内边距与圆角。
     static let cardPadding: CGFloat = 14
     static let cardRadius: CGFloat = 14
     #else
@@ -26,10 +26,10 @@ enum TaskMetrics {
     // 任务行（`TaskLine`）：上级正文字号加一点字重、步骤小一档，圈也小一档
     static let lineFont = Typography.body.weight(.medium)
     static let stepFont = Typography.secondary
-    static let ring: CGFloat = 15
+    static let ring: CGFloat = 17
     static let stepRing: CGFloat = 13
     /// 圈那一列多宽（新建行按它缩进，字与任务标题对齐）、与标题隔多少；悬停的淡底是行的底（`RowStyle`），向两边让出去。
-    static let ringColumn: CGFloat = 16
+    static let ringColumn: CGFloat = 18
     static let columnGap: CGFloat = 10
     static let cardPadding: CGFloat = 12
     static let cardRadius: CGFloat = 10

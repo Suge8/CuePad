@@ -43,8 +43,6 @@ enum Typography {
     static let previewTitle = Font.system(size: 17, weight: .bold)
     /// 键帽（快捷键提示）。
     static let keycap = Font.system(size: 11, weight: .medium, design: .rounded)
-    /// 页标题（归档、回收站）。
-    static let pageTitle = Font.system(size: 28, weight: .bold)
     /// 空态的标题。
     static let emptyTitle = Font.system(size: 17, weight: .semibold)
     /// 工具栏：按钮上的字（收起、项目切换），会话页的标题与其后的状态；标题下面还有一行（任务 · 步骤）时标题收小，两行放进一个控件的高度。
@@ -69,6 +67,7 @@ enum Typography {
     static let secondary = Font.subheadline
     static let meta = Font.footnote
     static let label = Font.caption.weight(.semibold)
+    static let sectionTitle = Font.headline
     static let caption = Font.caption
     static let caption2 = Font.caption2
     static let reading = Font.body

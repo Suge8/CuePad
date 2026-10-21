@@ -54,8 +54,7 @@ extension Command {
       try call.args.expect("任务")
       let task = try await call.task(call.args.positionals[0])
       try await call.store.setStatus(task.id, status)
-      guard let fresh = try await call.store.card(task.id) else { throw CLIError.notFound("任务已不存在") }
-      return reply(try await call.cardViews([fresh])[0])
+      return reply(try await call.freshView(task.id))
     }
   }
 }

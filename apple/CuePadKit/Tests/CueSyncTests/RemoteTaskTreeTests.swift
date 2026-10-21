@@ -82,11 +82,11 @@ import Testing
       var deletions: [(id: CKRecord.ID, recordType: String)] = []
       for pick in Set((0..<(1 + random.next(3))).map { _ in random.next(made.count) }) {
         let current = try #require(try await store.card(made[pick].id))
-        var parent = current.parentID, project: UUID? = current.projectID, isTask = current.isTask
+        var parent = current.parentID, project = current.projectID, isTask = current.isTask
         switch random.next(5) {
         case 0: parent = made[random.next(made.count)].id
         case 1: parent = nil
-        case 2: let choices: [UUID?] = [nil, projects[0], projects[1]]; project = choices[random.next(3)]
+        case 2: let choices = [Project.defaultID, projects[0], projects[1]]; project = choices[random.next(3)]
         case 3: isTask.toggle()
         default:
           deletions.append((rig.recordID(current.id), Table.cards.rawValue))
@@ -139,7 +139,7 @@ import Testing
     try await pushed()
 
     func record(_ card: Card, parent: UUID, sortKey: String, done: Bool = false, session: String? = nil) -> CKRecord {
-      var fields = cardFields(project: nil, body: card.body, modifiedAt: millis(card.modifiedAt) + 1_000, sortKey: sortKey)
+      var fields = cardFields(body: card.body, modifiedAt: millis(card.modifiedAt) + 1_000, sortKey: sortKey)
       fields["parentID"] = .text(parent.uuidString.lowercased())
       fields["todoAt"] = .int(1_000)
       fields["completedAt"] = done ? .int(3_000) : .null
@@ -162,7 +162,7 @@ import Testing
     let child = try await store.createTask("备份", under: parent.id)
     try await pushed()
 
-    var fields = cardFields(project: nil, body: "父任务还在路上", modifiedAt: 2_000)
+    var fields = cardFields(body: "父任务还在路上", modifiedAt: 2_000)
     fields["parentID"] = .text(UUID().uuidString.lowercased())
     fields["todoAt"] = .int(1_000)
     let orphan = remoteRecord(.cards, fields)

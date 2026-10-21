@@ -126,7 +126,7 @@ private struct PreviewPager: View {
                     ShareLink(item: file) { Image(.share).accessibilityLabel("分享") }
                 }
             }
-            .buttonStyle(.borderless).foregroundStyle(palette.ink2)
+            .buttonStyle(PressStyle(.inline)).foregroundStyle(palette.ink2)
             PreviewContent(preview: preview, file: file(of: preview)).id(preview.id)
             PreviewReplyBar(reply: opening.reply, about: title, done: dismiss)
                 .frame(maxWidth: 640).padding([.horizontal, .bottom], 16)

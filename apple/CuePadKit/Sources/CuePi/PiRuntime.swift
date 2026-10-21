@@ -21,23 +21,20 @@ public final class PiRuntime: AgentRuntime {
     private let pi: @Sendable () async -> URL?
     private let locate: @Sendable () async -> ExecutableLocator
     private let idleLimit: Duration
-    private let extraArguments: [String]
     private var watcher: Task<Void, Never>?
 
     /// - Parameter pi: 这台 Mac 上够新的 `pi`（检测时挑中的那个，`AgentStatus.executable`；没有为 nil）。
     /// - Parameter idleLimit: 托管进程空闲多久自己退出（交给扩展计时）。
-    /// - Parameter extraArguments: 加在 `pi --mode rpc` 后面的参数（测试用来指定假模型、不联网）。
     public init(
         bridge: PiBridge, paths: PiPaths, pi: @escaping @Sendable () async -> URL?,
         locate: @escaping @Sendable () async -> ExecutableLocator = { await .system },
-        idleLimit: Duration = AgentTimeouts.hostedIdle, extraArguments: [String] = []
+        idleLimit: Duration = AgentTimeouts.hostedIdle
     ) {
         self.bridge = bridge
         self.paths = paths
         self.pi = pi
         self.locate = locate
         self.idleLimit = idleLimit
-        self.extraArguments = extraArguments
     }
 
     /// 开始跟着桥上的会话：让出的托管会话退出后让接手的重新载入。
@@ -87,8 +84,8 @@ public final class PiRuntime: AgentRuntime {
             overrides: paths.launchEnvironment.merging(environment) { $1 }.merging([Self.hostedVariable: String(idleLimit.components.seconds)]) { $1 })
         // 脱离 App：新会话、标准输入是它自己握着两端的管道（RPC 模式读到 EOF 就收尾，这样永远读不到），App 不持有它的任何管道；
         // 标准输出丢掉（RPC 的事件与回应走桥），标准错误留着，没连上就退出时取最后一行当原因
-        let process = try ChildProcess(
-            executable, ["--mode", "rpc"] + arguments + extraArguments, directory: directory, environment: environment,
+        let process = try await ChildProcess(
+            executable, ["--mode", "rpc"] + arguments, directory: directory, environment: environment,
             placement: .detached, input: .lifeline)
         let pid = process.pid
         let session: PiSession
@@ -116,7 +113,7 @@ public final class PiRuntime: AgentRuntime {
             throw error
         }
         // 刚起的就读到不同的扩展：装着的扩展与 App 不配套，它不会自己重新载入，让它退出
-        guard session.hosted, session.state != .incompatible else {
+        guard session.hosted, !session.upgrading else {
             process.end()
             throw PiHostError.extensionMismatch
         }

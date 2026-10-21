@@ -3,19 +3,14 @@ import CueAgent
 import CueStore
 import Foundation
 
-/// Claude Code 当大脑：`claude -p` 的流式输入输出，经接入里的 `ClaudeStream`，标准输入一直开着做多轮。
-/// - 不落会话（`--no-session-persistence`），不进 `claude --resume` 的列表；
-/// - 系统提示整份替换（`--system-prompt-file`）；不读 CLAUDE.md 与自动记忆（`CLAUDE_CODE_DISABLE_CLAUDE_MDS`、
-///   `CLAUDE_CODE_DISABLE_AUTO_MEMORY`），不跑用户的钩子（`--settings` 里的 `disableAllHooks`，也就不会报给 CuePad 成一个会话），
-///   不加载 skill（工具只给了下面几个，用户的 skill 与命令不进输入）；斜杠命令开着，只为开新会话的 `/clear`（见下）；
-/// - 原生工具只有 `Read,Grep,Glob`，MCP 只有 CuePad 的（`--strict-mcp-config`）；这些工具预先放行，其余需要批准的一律拒绝
-///   （`--permission-prompts none`），不会停下来等人；
+/// Claude Code 当大脑：`claude -p` 的流式输入输出，经接入里的 `ClaudeStream`，标准输入一直开着做多轮。启动参数（见 `start`）保证：
+/// 不进 `claude --resume` 的列表；系统提示整份替换，不读 CLAUDE.md、自动记忆与 skill；不跑用户的钩子（也就不会报给 CuePad
+/// 成一个会话）；工具只有只读的三样与 CuePad 的 MCP，其余需要批准的一律拒绝，不会停下来等人。斜杠命令开着，只为开新会话的 `/clear`（见下）。
 /// - 正忙时写进标准输入的话由 Claude Code 并进当前这一轮；
 /// - 提示缓存留 1 小时（`ENABLE_PROMPT_CACHING_1H`：订阅登录多数时候本来就是，API 密钥与超额时默认 5 分钟）；
 /// - 开新会话是写一句 `/clear`：Claude Code 清掉对话（进程、MCP 连接、模型与强度都留着），回一条不调模型的 `result`，
 ///   这一下不报成一轮。斜杠命令因此开着，他的话以 `/` 开头时前面垫一个空格，不被当成命令；
-/// - 思考强度按 Claude Code 的档位夹取（`ClaudeCode.effort`）；就地换模型与强度走控制请求 `set_model` 与 `apply_flag_settings` 的 `effortLevel`
-///   （与托管会话同一份，见 `ClaudeStream`）；
+/// - 思考强度按 Claude Code 的档位夹取（`ClaudeCode.effort`）；就地换模型与强度走控制请求（与托管会话同一份，见 `ClaudeStream`）；
 /// - 一轮从开始请求模型（`ClaudeStream.requestsModel`）到 `result`；停下这一轮走控制请求 `interrupt`；
 /// - 正在说的话用 `ClaudeStream` 累积好的（`onDraft`）；被停下的一轮在 `turnFinished` 前清掉（它的 `result` 不一定标出错）。
 @MainActor
@@ -49,7 +44,7 @@ final class ClaudeBrain: CueBrain {
             let environment = BrainSession.environment(config, [
                 "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1", "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1", "ENABLE_PROMPT_CACHING_1H": "1",
             ])
-            let stream = try ClaudeStream(
+            let stream = try await ClaudeStream(
                 executable: config.executable, arguments: arguments, directory: config.workingDirectory, environment: environment)
             self.stream = stream
             stream.onMessage = { [weak self] in self?.received($0) }

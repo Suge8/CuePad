@@ -58,7 +58,10 @@ struct Palette {
     /// Cue 自己醒来的动态那颗气泡的虚线（`CueNoteBubble`）：说了但没推给你，只描边不铺底。比 `hair` 深，虚线断开后仍看得出边。
     var noteEdge: Color { ink.opacity(highContrast ? 0.55 : (dark ? 0.26 : 0.28)) }
     /// 唯一的浅底：悬停、按下、次按钮、代码与变量。
-    var fill: Color { ink.opacity(dark ? 0.07 : 0.05) }
+    var fill: Color { ink.opacity(fillAmount) }
+    /// `fill` 叠在 `surface` 上合成的实色：悬停的行上露出的操作垫它（`hoverReveal`），盖住压到的字、又和行的淡底接得上。
+    func hovered(_ surface: Color) -> Color { surface.mix(with: ink, by: fillAmount, in: .device) }
+    private var fillAmount: Double { dark ? 0.07 : 0.05 }
     /// 没填满的轨道：用量条、档位条的空格、转圈与头像外圈的轨道。
     var track: Color { ink.opacity(highContrast ? 0.3 : (dark ? 0.16 : 0.14)) }
     /// 模态浮层下面压暗整窗的底（Mac 的 ⌘K、窗口内浮层）。
@@ -120,7 +123,7 @@ struct Palette {
 
     /// 等你确认：赭黄，全 App 只有等你用它（问号圆、"等你 N"、Cue 头像的环）；表达等你经 Waiting.swift。对比度 4.7，深色 6.9。
     var waiting: Color { dark ? Color(hex: 0xEDBD57) : Color(hex: 0x845A06) }
-    /// 等你的角标底（iPhone 底部那一排 Cue 圆钮上的数，`WaitingBadge`）。字 6.0，深色 4.6。
+    /// 等你的实底胶囊（实时活动里等你的数）。字 6.0，深色 4.6。
     var waitingFill: Color { dark ? Color(hex: 0x9C6A08) : Color(hex: 0x845A06) }
     /// 出错与没能送达：胭脂（`Failure`）。对比度 5.0，深色 4.6。
     var failure: Color { dark ? Color(hex: 0xF0789E) : Color(hex: 0xAD2B5C) }

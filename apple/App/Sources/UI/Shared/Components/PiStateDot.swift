@@ -3,7 +3,7 @@ import SwiftUI
 
 extension PiShown {
     /// 状态色：等你确认赭黄、出错与没能送达胭脂、有新回复石绿三种各管一件事；在跑（工作中、话在路上）是正在发生，用签名色靛青；
-    /// 停着的（该你了、新会话、未知）灰，需要 /reload 次要墨色，已结束更淡的灰。
+    /// 停着的（该你了、新会话、未知）与已结束灰。
     func tint(_ palette: Palette) -> Color {
         switch status {
         case .asking, .awaitsReply: palette.waiting
@@ -12,7 +12,6 @@ extension PiShown {
         case .failed, .delivery(.failed): palette.failure
         case .working, .delivery: palette.signature
         case .unread: palette.replied
-        case .restart: palette.ink2
         case .idle, .resting, .fresh, .interrupted, .unknown, .ended: palette.ink3
         }
     }
@@ -21,7 +20,7 @@ extension PiShown {
     var isColored: Bool {
         switch status {
         case .asking, .awaitsReply, .failed, .working, .delivery, .unread: true
-        case .cueAsking, .restart, .idle, .resting, .fresh, .ended, .interrupted, .unknown: false
+        case .cueAsking, .idle, .resting, .fresh, .ended, .interrupted, .unknown: false
         }
     }
 
@@ -51,7 +50,6 @@ extension PiShown {
         // 胭脂圆叹号（`Icon.failure`，与操作出错同一个）：与等你确认的赭黄问号圆靠颜色与里面的字分开
         case .failed: .failure
         case .delivery(.failed): .undelivered
-        case .restart: .needsReload
         case .delivery: .onTheWay
         case .working: .session
         // 铃铛：它回你了，像来了一条通知。不用对勾——对勾只表示完成与记下，任务行旁挨着会话状态时会读成任务做完了

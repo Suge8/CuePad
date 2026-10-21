@@ -62,7 +62,6 @@ struct PiSlashPalette: View {
 }
 
 nonisolated extension Open<PiCommandSource> {
-    /// 来源给人看的名字。
     var label: String {
         switch self {
         case .known(.builtin): "内置"

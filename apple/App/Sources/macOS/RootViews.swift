@@ -35,14 +35,9 @@ private struct MainRoot: View {
 
     var body: some View {
         content
-            // 深链（Mac 上只来自点开的 Cue 通知，主窗口已叫到前面）
+            // 深链在 Mac 上只来自点开的 Cue 通知（主窗口已叫到前面），小组件、分享扩展与实时活动只在 iOS
             .onChange(of: services.pendingDeepLink, initial: true) {
-                guard let link = services.consumeDeepLink() else { return }
-                switch link {
-                case .cue: workspace.show(.cue)
-                case .project(let id): workspace.show(.project(id))
-                case .card, .speak, .session: break  // 小组件、分享扩展与实时活动只在 iOS
-                }
+                if case .cue = services.consumeDeepLink() { workspace.show(.cue) }
             }
             // Cue 与会话之间接力的那一下画在整个窗口上（含工具栏）
             .modifier(CueRelayStage(workspace: workspace))

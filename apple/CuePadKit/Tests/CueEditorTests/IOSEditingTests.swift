@@ -18,7 +18,7 @@ private final class FailingStore: CueImageStore {
 private func transform(_ provider: NSItemProvider, in h: EditorHarness) async -> FakePasteItem {
     let item = FakePasteItem(provider)
     h.textView.pasteDelegate?.textPasteConfigurationSupporting?(h.textView, transform: item)
-    _ = await h.wait { item.resolved }
+    await item.resolved()
     return item
 }
 
@@ -42,30 +42,22 @@ struct IOSEditingTests {
         #expect(h.stored == stored)
     }
 
-    @Test("粘贴/拖入图片文件：委托给出带图片附件的结果，图片经注入的库存入")
-    func pasteImageFile() async throws {
-        let h = EditorHarness()
+    @Test("粘贴/拖入图片文件与剪贴板里的图片对象（相册、截图）：委托给出一个图片附件，图片经注入的库存入")
+    func pasteImage() async throws {
         let png = makePNG(width: 60, height: 40)
-        let file = h.store.directory.appendingPathComponent("dropped.png")
-        try png.write(to: file)
+        for fromFile in [true, false] {
+            let h = EditorHarness()
+            let file = h.store.directory.appendingPathComponent("dropped.png")
+            try png.write(to: file)
+            let provider = fromFile ? try #require(NSItemProvider(contentsOf: file)) : NSItemProvider(object: try #require(UIImage(data: png)))
 
-        let item = await transform(NSItemProvider(contentsOf: file)!, in: h)
+            let item = await transform(provider, in: h)
 
-        let attachment = try #require(attachments(in: item.result).first as? CueImageAttachment)
-        #expect(h.store.storedData == [png])
-        #expect(h.store.fileURL(for: attachment.imageID) != nil)
-        #expect(attachments(in: item.result).count == 1)
-    }
-
-    @Test("剪贴板里的图片对象（相册、截图）同样入库")
-    func pasteImageObject() async throws {
-        let h = EditorHarness()
-        let image = try #require(UIImage(data: makePNG(width: 60, height: 40)))
-
-        let item = await transform(NSItemProvider(object: image), in: h)
-
-        #expect(attachments(in: item.result).first is CueImageAttachment)
-        #expect(h.store.storedData.count == 1)
+            let found = attachments(in: item.result)
+            let attachment = try #require(found.first as? CueImageAttachment)
+            #expect(found.count == 1 && h.store.storedData.count == 1 && h.store.fileURL(for: attachment.imageID) != nil)
+            if fromFile { #expect(h.store.storedData == [png]) }  // 文件原样入库，不重新编码
+        }
     }
 
     @Test("粘贴文本按存储格式解析：图片标记还原成图片，其余（含分割线）原样")
@@ -88,7 +80,7 @@ struct IOSEditingTests {
         let item = FakePasteItem(NSItemProvider(object: try #require(UIImage(data: makePNG(width: 20, height: 20)))))
 
         failing.pasteDelegate?.textPasteConfigurationSupporting?(failing, transform: item)
-        #expect(await h.wait { item.resolved })
+        await item.resolved()
 
         #expect(item.result == nil && !item.usedDefault)
         #expect(errors.count == 1 && errors.first is DiskFull)

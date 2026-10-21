@@ -102,7 +102,6 @@ extension CueBrainError: LocalizedError {
 
 
 extension CueBrainConfig {
-    /// 按 `runtime` 起对应的大脑。
     @MainActor public func startBrain() async throws -> any CueBrain {
         let brain: any CueBrain = switch runtime {
         case .pi: PiBrain()

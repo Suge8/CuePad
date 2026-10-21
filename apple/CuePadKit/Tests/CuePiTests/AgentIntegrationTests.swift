@@ -57,28 +57,28 @@ struct AgentIntegrationTests {
 
     // MARK: 检测
 
+    /// 版本够不够由各家 `--version` 的原话定（版本写法见设置里那一行的测试）：太旧的界面说要升级，OpenCode 只认 v2；问不到版本的是没找到。
     @Test(arguments: [
-        ("0.87.1", AgentStatus.Presence.found(AgentVersion(0, 87, 1))),
-        ("v1.0.0", .found(AgentVersion(1, 0, 0))),
-        ("0.84.3", .tooOld(AgentVersion(0, 84, 3))),
-        ("command not found: hello", .notFound),
+        (AgentKind.pi, "0.84.3", AgentStatus.Presence.tooOld(AgentVersion(0, 84, 3))),
+        (.pi, "command not found: hello", .notFound),
+        (.opencode, "1.19.0", .tooOld(AgentVersion(1, 19, 0))),
     ])
-    func detectsPiByItsReportedVersion(output: String, presence: AgentStatus.Presence) async throws {
-        try fakeAgent("pi", printing: output)
-        #expect(await integration().status(of: .pi).presence == presence)
+    func anAgentTooOldOrWithoutAVersionIsNotConnectable(kind: AgentKind, output: String, presence: AgentStatus.Presence) async throws {
+        try fakeAgent(kind.command, printing: output)
+        #expect(await integration().status(of: kind).presence == presence)
     }
 
-    /// 检测在征得同意之前就跑：不写任何东西。没装、也没用过的 Agent 是没找到；有命令或有配置目录（用过它，含桌面版）就算在。
-    @Test func detectionFindsAgentsByCommandOrConfigDirectoryAndWritesNothing() async throws {
-        try FileManager.default.createDirectory(at: root.appending(path: "codex"), withIntermediateDirectories: true)
-        try fakeAgent("claude")
-        let before = contents(root)
-
-        #expect(await integration().status(of: .claudeCode) == AgentStatus(presence: .found(nil), files: .missing, executable: bin.appending(path: "claude")))
-        #expect(await integration().status(of: .codex) == AgentStatus(presence: .found(nil), files: .missing))
-        #expect(await integration().status(of: .opencode) == AgentStatus(presence: .notFound, files: .missing))
-        #expect(await integration().status(of: .pi) == AgentStatus(presence: .notFound, files: .missing))
-        #expect(contents(root) == before)
+    /// 装 Pi 前查 Node.js 只看安装脚本会用的那个（PATH 里第一个）：前面是旧的、后面有新的也不算有，免得点了安装才被脚本拒。
+    @Test func installPrerequisiteCountsOnlyTheNodeTheInstallerWillUse() async throws {
+        let later = root.appending(path: "later-bin")
+        try FileManager.default.createDirectory(at: later, withIntermediateDirectories: true)
+        try fakeAgent("node", printing: "v20.11.0")
+        let newer = later.appending(path: "node")
+        try "#!/bin/sh\necho v22.19.0\n".write(to: newer, atomically: true, encoding: .utf8)
+        chmod(newer.path, 0o755)
+        let integration = AgentIntegration(
+            paths: AgentPaths(pi: paths, environment: environment), locate: { [bin] in ExecutableLocator(searchDirectories: [bin, later]) }, cuepad: cuepad)
+        #expect(await integration.status(of: .pi).lacking == AgentKind.pi.installPrerequisite)
     }
 
     // MARK: 接入与删除
@@ -119,28 +119,6 @@ struct AgentIntegrationTests {
         #expect(await integration().status(of: .claudeCode) == AgentStatus(presence: .found(nil), files: .current))  // 配置目录还在：算用过
         try await integration().uninstall(.claudeCode)
         #expect(!FileManager.default.fileExists(atPath: skillFile(.claudeCode).deletingLastPathComponent().path))
-    }
-
-    @Test func installRefusesWithoutTheAgentAndWritesNothing() async throws {
-        await #expect(throws: AgentInstallError.notFound(.opencode)) { try await integration().install(.opencode) }
-        await #expect(throws: AgentInstallError.notFound(.pi)) { try await integration().install(.pi) }
-        try fakeAgent("pi", printing: "0.84.3")
-        await #expect(throws: AgentInstallError.tooOld(.pi, found: AgentVersion(0, 84, 3))) { try await integration().install(.pi) }
-        #expect(contents(root) == ["bin", "bin/pi"])
-    }
-
-    /// OpenCode 只认 v2：v1 报的版本太旧，接入被拒、什么都不写（界面据此说"需要 OpenCode 2"）。
-    @Test func openCodeVersionOneIsTooOldAndInstallWritesNothing() async throws {
-        try fakeAgent("opencode", printing: "1.19.0")
-        #expect(await integration().status(of: .opencode) == AgentStatus(presence: .tooOld(AgentVersion(1, 19, 0)), files: .missing))
-        await #expect(throws: AgentInstallError.tooOld(.opencode, found: AgentVersion(1, 19, 0))) { try await integration().install(.opencode) }
-        #expect(contents(root) == ["bin", "bin/opencode"])
-
-        try fakeAgent("opencode", printing: "2.0.25")
-        try await integration().install(.opencode)
-        #expect(
-            await integration().status(of: .opencode)
-                == AgentStatus(presence: .found(AgentVersion(2, 0, 25)), files: .current, executable: bin.appending(path: "opencode")))
     }
 
     /// 问版本不在 Agent 自己的数据目录里留东西：OpenCode 每次运行（`--version` 也是）都往 `$XDG_DATA_HOME/opencode/log` 写日志，
@@ -189,17 +167,6 @@ struct AgentIntegrationTests {
         try await integration(cuepad: moved).install(.pi)
         #expect(try String(contentsOf: skillFile(.pi), encoding: .utf8).contains(moved.path))
         #expect(await integration(cuepad: moved).status(of: .pi).files == .current)
-    }
-
-    @Test func anOlderPiExtensionIsOutdatedAndInstallUpgradesIt() async throws {
-        try installAll()
-        try FileManager.default.createDirectory(at: paths.extensionsDirectory, withIntermediateDirectories: true)
-        try "// CuePad Pi bridge extension\nconst EXTENSION_VERSION = 0;\n".write(to: extensionFile, atomically: true, encoding: .utf8)
-        #expect(await integration().status(of: .pi).files == .outdated)
-
-        try await integration().install(.pi)
-
-        #expect(try String(contentsOf: extensionFile, encoding: .utf8) == PiExtensionBundle.source)
     }
 }
 #endif

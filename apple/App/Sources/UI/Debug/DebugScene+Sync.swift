@@ -10,9 +10,11 @@ extension DebugScene {
     /// `-CuePadSync arrive`：像隔了一阵没打开的手机，启动后的第一次拉取带回别的设备写下的 Cue 的话，分几页陆续到（`ArrivingSync`）。
     /// `-CuePadSync offline`：一开始连不上 iCloud，`-CuePadOfflineSeconds`（默认 6）秒后恢复；配 `-CuePadDemoMac YES` 与
     /// `-CuePadSpeech send` 录"断网时说 → 同步不通 → 恢复 → 送达"（演示 Mac 断网时不接手）。
-    /// `-CuePadSync <noAccount|decide|failed|syncing|restricted|conflicts>`：装上报这个状态的替身，设置里 iCloud 同步那一行、
-    /// 要你决定的两个选择、立即同步与 Mac 工具栏的同步提示都按有同步时的样子出现；`failed` 带两条没能同步的记录，`conflicts` 在演示库里造一份冲突副本；
-    /// `syncing` 还没和 iCloud 对完第一遍（换新 Mac 时：接入面板里 Cue 那一行在等 iCloud）。其余替身都当已对过。
+    /// `-CuePadSync <noAccount|decide|failed|restricted|conflicts>`：装上报这个状态的替身，设置里 iCloud 同步那一行、
+    /// 要你决定的两个选择、立即同步与 Mac 工具栏的同步提示都按有同步时的样子出现；`failed` 带两条没能同步的记录，`conflicts` 在演示库里造一份冲突副本。
+    /// 这些替身都当已和 iCloud 对过。
+    /// `-CuePadSync newmac`：换新 Mac 的第一遍同步，先报同步中、还没对过，`-CuePadReconcileSeconds`（默认 8）秒后带回 Cue 在「Mac Studio」上运行、
+    /// 那台醒着，才报对过（`NewMacSync`）；秒数给得比实例活得久（如 3600）就一直在等。
     static var syncSource: AppServices.SyncSource {
         let issues = [
             SyncIssue(recordType: "Card", recordName: "A1B2", message: "CKError 14: server record changed"),
@@ -24,10 +26,10 @@ extension DebugScene {
         case "noAccount": .custom(StandInSync(SyncState(status: .noAccount, issues: [])))
         case "decide": .custom(StandInSync(SyncState(status: .needsDecision(.accountSwitched), issues: [])))
         case "failed": .custom(StandInSync(SyncState(status: .failed("同步出错"), issues: issues)))
-        case "syncing": .custom(StandInSync(SyncState(status: .syncing, issues: [], reconciled: false)))
         case "restricted": .custom(StandInSync(SyncState(status: .accountRestricted, issues: [])))
-        case "offline": .custom(OfflineSync(seconds: defaults.object(forKey: "CuePadOfflineSeconds") as? Double ?? 6))
+        case "offline": .custom(OfflineSync(seconds: seconds("CuePadOfflineSeconds", default: 6)))
         case "arrive": .custom(ArrivingSync())
+        case "newmac": .custom(NewMacSync(seconds: seconds("CuePadReconcileSeconds", default: 8)))
         default: .iCloud
         }
     }
@@ -60,8 +62,6 @@ extension DebugScene {
         static let pages = 3
         static let perPage = 6
         static let pageGap = Duration.milliseconds(450)
-        /// 资料库在服务建好后才有（替身先建）：摆画面时交过来（`presetSync`）。
-        static let library = AsyncStream<CueStore>.makeStream(bufferingPolicy: .bufferingNewest(1))
         private let first = Mutex<Task<Void, Never>?>(nil)
 
         var stateUpdates: AsyncStream<SyncState> { AsyncStream { $0.yield(SyncState(status: .idle, issues: [], reconciled: true)) } }
@@ -83,8 +83,7 @@ extension DebugScene {
         }
 
         private static func arrive() async {
-            var stores = library.stream.makeAsyncIterator()
-            guard let store = await stores.next() else { return }
+            guard let store = await standInLibrary() else { return }
             let lines = [
                 (CueAuthor.note, "看了圆桌：重连的人拿到了新的加入时间，乱序就是从这来的"),
                 (.note, "让 atlas 改成按首次加入时间排序，正在跑 scheduler 的测试"),
@@ -103,6 +102,43 @@ extension DebugScene {
         }
     }
 
+    /// 往库里写"同步带回的"事实的替身要的资料库：它在服务建好后才有（替身先建），摆画面时交过来（`presetSync`）。
+    private static let library = AsyncStream<CueStore>.makeStream(bufferingPolicy: .bufferingNewest(1))
+
+    private static func standInLibrary() async -> CueStore? {
+        var stores = library.stream.makeAsyncIterator()
+        return await stores.next()
+    }
+
+    /// 换新 Mac：先报还没和 iCloud 对过，过 `seconds` 秒把第一遍拉回的写进库（Cue 在 Mac Studio 上运行、那台醒着、能用 Pi），再报对过，
+    /// 同真实的第一遍同步先应用记录、再报对过。拉取与上传什么都不做。
+    nonisolated final class NewMacSync: SyncControlling {
+        let seconds: Double
+        init(seconds: Double) { self.seconds = seconds }
+        var stateUpdates: AsyncStream<SyncState> {
+            AsyncStream { [seconds] continuation in
+                continuation.yield(SyncState(status: .syncing, issues: [], reconciled: false))
+                let task = Task {
+                    guard let store = await standInLibrary(), (try? await Task.sleep(for: .seconds(seconds))) != nil else { return }
+                    _ = try? await store.recordMacAgents(host: "demo-mac", name: "Mac Studio", [MacAgent(kind: .pi, model: nil, models: [])])
+                    try? await store.recordMacPresence(host: "demo-mac") { true }
+                    _ = try? await store.updateCueProfile { profile in
+                        profile.hostID = "demo-mac"
+                        profile.enabledAt = .now
+                    }
+                    continuation.yield(SyncState(status: .idle, issues: [], reconciled: true))
+                }
+                continuation.onTermination = { _ in task.cancel() }
+            }
+        }
+        func start() async throws {}
+        func stop() async {}
+        func syncNow() async throws {}
+        func send(recordName: String) async -> Bool { true }
+        func push() async {}
+        func resolve(_ resolution: SyncResolution) async throws {}
+    }
+
     /// 报 `state`（默认已同步），其余什么都不做；`stalls` 时立即同步不返回（像网络一直没有回音）。
     nonisolated final class StandInSync: SyncControlling {
         let state: SyncState
@@ -117,10 +153,10 @@ extension DebugScene {
         func resolve(_ resolution: SyncResolution) async throws {}
     }
 
-    /// 摆画面时交给同步替身的：`arrive` 的资料库，`conflicts` 的冲突副本（冲突那一行由有同步时的订阅读出，`AppServices.startSync`）。
+    /// 摆画面时交给同步替身的：`arrive`、`newmac` 的资料库，`conflicts` 的冲突副本（冲突那一行由有同步时的订阅读出，`AppServices.startSync`）。
     static func presetSync(_ services: AppServices) async {
         switch defaults.string(forKey: "CuePadSync") {
-        case "arrive": ArrivingSync.library.continuation.yield(services.store)
+        case "arrive", "newmac": library.continuation.yield(services.store)
         case "conflicts": await seedConflict(services)
         default: break
         }

@@ -17,7 +17,7 @@ struct CueComposer: View {
     /// 每变一次就拿到焦点（手机的 ⌘⇧N、随手记小组件，`Navigation.cueFocusRequests`）。
     var focusRequests = 0
     var sent: () -> Void = {}
-    /// 焦点进出时告诉外面（iPhone Cue 页底部的去处圆钮随它让开）。
+    /// 焦点进出时告诉外面（iPhone Cue 页底部的"⋯"随它让开）。
     var focusChanged: (Bool) -> Void = { _ in }
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette

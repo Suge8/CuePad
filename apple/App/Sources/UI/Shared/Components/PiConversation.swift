@@ -249,8 +249,8 @@ extension PiConversation {
 
 
 /// 会话顶栏（Mac 工具栏标题、手机顶栏）里名字旁的状态，只在在跑或要你注意时出现：在跑（工作中、话在路上）是状态标、状态词与到秒的计时；
-/// 等你确认、出错、没能送达、需要 /reload、已结束只有状态标与状态词（带色）。Mac 不画状态标，只有着色的字：标题玻璃里唯一的圆是任务的完成圈；有没送到的话时接一句胭脂的"N 句没送到"（`PiChat.undeliveredNote`）。
-/// 最前面写是哪家 Agent（`AgentMark`），歇着时也写；歇着（该你了、新会话、有新回复）时只有它。所在与"后台"不放在这里（顶栏一行只说一件事），写在"⋯"菜单的最上面（`PiPlace.menuTitle`）。
+/// 等你确认、出错、没能送达、已结束只有状态标与状态词（带色）。Mac 不画状态标，只有着色的字：标题玻璃里唯一的圆是任务的完成圈；有没送到的话时接一句胭脂的"N 句没送到"（`PiChat.undeliveredNote`）。
+/// 最前面写是哪家 Agent（`AgentMark`），歇着时也写；歇着（该你了、新会话、有新回复）时只有它。所在不放在这里（顶栏一行只说一件事），写在"⋯"菜单的最上面（`PiPlace.menuTitle`）。
 struct PiSessionSubtitle: View {
     let session: PiSessionState
     var undelivered: String?
@@ -262,7 +262,7 @@ struct PiSessionSubtitle: View {
 
     var body: some View {
         let shown = workspace.shownInHeader(session)
-        let speaks = syncing || shown.isLive || shown.needsYou || [.restart, .ended, .cueAsking].contains(shown.status)
+        let speaks = syncing || shown.isRunning || shown.needsYou || [.ended, .cueAsking].contains(shown.status)
         let mark = session.agentMark
         // 什么都不写时也要有一个真的视图：等同步的那个任务挂在它上面
         ZStack(alignment: .leading) {
@@ -277,7 +277,7 @@ struct PiSessionSubtitle: View {
                         if speaks { Dot().foregroundStyle(palette.failure) }
                         Text(undelivered).foregroundStyle(palette.failure)
                     }
-                    if !syncing, shown.isLive, shown.clock != nil {
+                    if !syncing, shown.isRunning, shown.clock != nil {
                         Dot().foregroundStyle(palette.ink3)
                         // 整个 App 只有这一个计时到秒：正看着的这个会话
                         PiElapsed(shown: shown, font: Self.font, style: .header)

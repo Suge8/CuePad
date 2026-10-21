@@ -19,10 +19,20 @@ nonisolated struct QuotaReminder {
     /// "明天04:00 重置，记得用掉"
     let body: String
 
+    /// 会提醒的那个窗口：整个账号的本周。
+    static func window(of quota: AccountQuota) -> QuotaWindow? {
+        quota.windows.first { $0.seconds == QuotaWindow.week && $0.model == nil }
+    }
+
+    /// 这个窗口此刻在提醒的那段里（提醒响过、还没重置）：灵动岛与锁屏的额度那一行把它标出来。
+    static func isNear(_ window: QuotaWindow, at now: Date) -> Bool {
+        now >= window.resetsAt.addingTimeInterval(-lead) && now < window.resetsAt
+    }
+
     /// `now` 之后还要响的提醒，每个账号至多一条。
     static func due(_ quotas: [AccountQuota], at now: Date) -> [QuotaReminder] {
         quotas.compactMap { quota in
-            guard let window = quota.windows.first(where: { $0.seconds == QuotaWindow.week && $0.model == nil }) else { return nil }
+            guard let window = window(of: quota) else { return nil }
             let fireAt = window.resetsAt.addingTimeInterval(-lead)
             guard fireAt > now else { return nil }
             let meter = QuotaMeter.Window(window, at: fireAt)

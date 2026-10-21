@@ -35,7 +35,6 @@ public struct LibraryLocation: Equatable, Sendable {
     /// iOS：App Group 共享容器；没有权限时为 nil。
     case appGroup(container: URL?)
 
-    /// 当前平台的存储。
     public static var platform: Base {
       #if os(iOS)
       .appGroup(container: FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: LibraryLocation.appGroupIdentifier))

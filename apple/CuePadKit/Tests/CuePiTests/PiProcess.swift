@@ -52,7 +52,7 @@ final class PiProcess: @unchecked Sendable {
     /// - Parameter alongside: 与它共用同一个临时 agent 目录、连接目录与工作目录（同一会话的第二个进程）；结束时不删共用的目录。
     /// - Parameter sessionFile: 用 `--session` 打开这个会话文件。
     /// - Parameter discoverSkills: 让 Pi 去它的 skills 目录发现 skill（默认的安静参数里是 `--no-skills`）。
-    /// - Parameter settings: 写进临时 agent 目录的 Pi 设置（`settings.json`），如压缩阈值。
+    /// - Parameter settings: 另外写进临时 agent 目录 Pi 设置（`settings.json`）的项，如压缩阈值（隔离的那几项见 `writeSettings`）。
     init(installBridge: Bool = true, socketDirectory: URL? = nil, extraExtensions: [String] = ["ui-confirm.ts"],
          oneShotPrompt: String? = nil, firecode: Bool = false, modelInAgentDirectory: Bool = false,
          alongside other: PiProcess? = nil, sessionFile: URL? = nil, env: [String: String] = [:], extraArguments: [String] = [], discoverSkills: Bool = false, settings: [String: Any]? = nil) async throws {
@@ -73,16 +73,12 @@ final class PiProcess: @unchecked Sendable {
             tape.watch(paths.sessionsDirectory, paths.agentDirectory.appending(path: "fake-model-gate"), cwd)
         }
 
-        if let settings {
-            try FileManager.default.createDirectory(at: paths.agentDirectory, withIntermediateDirectories: true)
-            try JSONSerialization.data(withJSONObject: settings).write(to: paths.agentDirectory.appending(path: "settings.json"))
-        }
+        if other == nil { try Self.writeSettings(settings ?? [:], discoverSkills: discoverSkills, into: paths.agentDirectory) }
         if firecode { try Self.installFirecode(into: paths.agentDirectory) }
         if modelInAgentDirectory { try Self.installFakeModel(into: paths.agentDirectory) }
         let modelLoaded = firecode || modelInAgentDirectory || other != nil
 
-        var args = (oneShotPrompt.map { ["-p", $0] } ?? ["--mode", "rpc"]) + Self.quietArguments.filter { !(discoverSkills && $0 == "--no-skills") }
-        args += extraArguments
+        var args = (oneShotPrompt.map { ["-p", $0] } ?? ["--mode", "rpc"]) + extraArguments
         if let sessionFile { args += ["--session", sessionFile.path] }
         if !modelLoaded { args += ["-e", fixtures.appending(path: "fake-model.ts").path] }
         for e in extraExtensions { args += ["-e", fixtures.appending(path: e).path] }
@@ -118,10 +114,17 @@ final class PiProcess: @unchecked Sendable {
     private final class Anchor {}
     static var cuepad: URL { Bundle(for: Anchor.self).bundleURL.deletingLastPathComponent().appending(path: "cuepad") }
 
-    /// 不联网、不读用户配置的参数，用假模型（测试里 CuePad 在后台托管的 Pi 也带这些，见 `PiRuntime` 的 `extraArguments`）。
-    static let quietArguments = [
-        "--offline", "--no-context-files", "--no-skills", "--no-prompt-templates", "--no-themes", "--model", "fake/echo", "--thinking", "off",
-    ]
+    /// 临时 agent 目录里的 Pi 设置（终端里起的与 CuePad 后台托管的都读它，同真实用户一样）：默认用假模型、不思考；
+    /// 不加载自动发现的 skill（`~/.agents/skills` 在用户家目录里，不随 agent 目录隔离），`discoverSkills` 时照常发现。
+    /// 上下文文件、提示词模板、主题只从 agent 目录与（受信任的）工作目录找，两处都是临时目录，不用另外关。
+    /// 不联网（`PI_OFFLINE`）由录像带在录制时交给 Pi（`AgentTape`）：Pi 没有对应的设置项。
+    private static func writeSettings(_ extra: [String: Any], discoverSkills: Bool, into agent: URL) throws {
+        var settings: [String: Any] = ["defaultProvider": "fake", "defaultModel": "echo", "defaultThinkingLevel": "off"]
+        if !discoverSkills { settings["skills"] = ["!**"] }
+        settings.merge(extra) { $1 }
+        try FileManager.default.createDirectory(at: agent, withIntermediateDirectories: true)
+        try JSONSerialization.data(withJSONObject: settings, options: [.sortedKeys]).write(to: agent.appending(path: "settings.json"))
+    }
 
     private static func installFakeModel(into agent: URL) throws {
         let fm = FileManager.default

@@ -3,7 +3,7 @@ import CueStore
 import Darwin
 import Foundation
 
-/// OpenCode 后台服务的登记文件（`AgentPaths.openCodeService`）：服务起来时写、停了删。密码明文，所以只认属于当前用户、
+/// OpenCode 后台服务的登记文件（`AgentPaths.openCodeService`，不在官方文档里）：服务起来时写、停了删。密码明文，所以只认属于当前用户、
 /// 只有属主可读写（0600）的普通文件，与 Pi 的 socket 同一条校验。
 struct OpenCodeServiceInfo: Decodable, Equatable, Sendable {
     var id: String
@@ -275,7 +275,6 @@ struct OpenCodeForm: Decodable, Sendable {
     }
 }
 
-/// 待答的权限请求。
 struct OpenCodePermission: Decodable, Sendable {
     var id: String
     var sessionID: String
@@ -345,5 +344,19 @@ struct OpenCodeModel: Decodable, Sendable {
 struct OpenCodeCommand: Decodable, Sendable {
     var name: String
     var description: String?
+}
+
+/// `GET /api/session/active` 的一项（只有 `running`）。
+struct OpenCodeActive: Decodable, Sendable { var type: String }
+
+enum OpenCodeAnswer: Encodable {
+    case string(String), bool(Bool)
+    func encode(to encoder: any Encoder) throws {
+        var container = encoder.singleValueContainer()
+        switch self {
+        case .string(let value): try container.encode(value)
+        case .bool(let value): try container.encode(value)
+        }
+    }
 }
 #endif

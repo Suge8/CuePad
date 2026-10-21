@@ -1,23 +1,23 @@
 import CueStore
 import Foundation
 
-/// 任务看板（Mac 任务页、手机任务页）的四列，按流水排：待办 → 在管 → 等你 → 做完（今天）。列只是任务状态与等你的投影，不另存状态：
-/// 一件任务只在一列：被等你占着的（`CueTally.held`）只在等你，Cue 在做的只在在管，不论它的状态；其余按状态。
+/// 任务看板（Mac 任务页、手机任务页）的四列，按流水排：待办 → 推进中 → 等你 → 做完（今天）。列只是任务状态与等你的投影，不另存状态：
+/// 一件任务只在一列：被等你占着的（`CueTally.held`）只在等你，Cue 在做的只在「推进中」，不论它的状态；其余按状态。
 /// - 待办：没做完、Cue 也没在做的顶层任务（没开始的，和开始过而会话都结束了的），项目顺序、同级手动顺序（拖动排序只在同一项目的顶层里挪，`move`）。
-/// - 在管、等你：就是 `CueStore.cueTally`（Cue 那一行的同一份），"全部"下列头的数与它相等；没绑没做完的任务的活会话在在管里各一张，
+/// - 推进中、等你：就是 `CueStore.cueTally`（Cue 那一行的同一份），"全部"下列头的数与它相等；没绑没做完的任务的活会话在「推进中」里各一张，
 ///   等你每件一张，没落在任务上的（Cue 的一般提问、没绑任务的会话）也在。
 /// - 做完：今天做完的顶层任务（`CueStore.tasksDone`），最近的在前；更早做完的收在列末（`earlier`），没进归档，所以就地展开，不跳去归档页。
 /// 步骤不单列，卡片写进度；会话此刻在做什么看任务此刻干活的叶子（`Item.leaf`）。顶层的口径同 `CueStore.taskCounts`（`TaskTree` 的顶层）。
 nonisolated struct TaskBoard: Sendable, Equatable {
     enum Column: CaseIterable, Identifiable, Sendable {
-        case todo, managing, waiting, done
+        case todo, advancing, waiting, done
 
         var id: Self { self }
 
         var title: String {
             switch self {
             case .todo: "待办"
-            case .managing: "在管"
+            case .advancing: "推进中"
             case .waiting: "等你"
             case .done: "做完"
             }
@@ -33,7 +33,7 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         var id: UUID { task.id }
     }
 
-    /// 在管的一件（`CueTally.managing`）：在做的任务带那件任务，没绑没做完的任务的活会话没有。
+    /// 推进中的一件（`CueTally.advancing`）：在做的任务带那件任务，没绑没做完的任务的活会话没有。
     struct Work: Identifiable, Sendable, Equatable {
         var work: CueWork
         var item: Item?
@@ -66,19 +66,18 @@ nonisolated struct TaskBoard: Sendable, Equatable {
     private static func home(_ session: PiSessionState) -> UUID { session.projectID ?? Project.defaultID }
 
     var todo: [Item]
-    var managing: [Work]
+    var advancing: [Work]
     var waiting: [Wait]
     var done: [Item]
     /// 更早做完的顶层任务，最近的在前。
     var earlier: [Item]
 
-    static let empty = TaskBoard(todo: [], managing: [], waiting: [], done: [], earlier: [])
+    static let empty = TaskBoard(todo: [], advancing: [], waiting: [], done: [], earlier: [])
 
-    /// 列头的数。
     func count(_ column: Column) -> Int {
         switch column {
         case .todo: todo.count
-        case .managing: managing.count
+        case .advancing: advancing.count
         case .waiting: waiting.count
         case .done: done.count
         }
@@ -89,7 +88,7 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         guard let project else { return self }
         let mine = { (item: Item) in item.task.projectID == project }
         return TaskBoard(
-            todo: todo.filter(mine), managing: managing.filter { $0.project == project }, waiting: waiting.filter { $0.project == project },
+            todo: todo.filter(mine), advancing: advancing.filter { $0.project == project }, waiting: waiting.filter { $0.project == project },
             done: done.filter(mine), earlier: earlier.filter(mine))
     }
 
@@ -117,13 +116,13 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         }
         let open = TaskTree(try store.tasks(.inProgress, .todo).flatMap(\.tasks))
         let tally = try store.cueTally()
-        let managed = Set(tally.managing.compactMap(\.task?.id))
+        let advanced = Set(tally.advancing.compactMap(\.task?.id))
         let finished = tally.free(try store.tasksDone())
         let today = Calendar.current.startOfDay(for: now)
         let split = finished.firstIndex { ($0.completedAt ?? .distantPast) < today } ?? finished.endIndex
         return TaskBoard(
-            todo: try tally.free(open.roots.compactMap(open.task).filter { !managed.contains($0.id) }).map(item),
-            managing: try tally.managing.map { work in Work(work: work, item: try work.task.map(item)) },
+            todo: try tally.free(open.roots.compactMap(open.task).filter { !advanced.contains($0.id) }).map(item),
+            advancing: try tally.advancing.map { work in Work(work: work, item: try work.task.map(item)) },
             waiting: try tally.waiting.map { wait in Wait(wait: wait, item: try wait.task.flatMap { try store.card($0) }.map(item)) },
             done: try finished[..<split].map(item),
             earlier: try finished[split...].map(item))

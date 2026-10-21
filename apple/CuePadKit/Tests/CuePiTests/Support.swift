@@ -61,7 +61,6 @@ func makeSocketDirectory() throws -> URL {
     try makeTempDirectory()
 }
 
-/// 一个从 socket 目录里消失的文件。
 func fileGone(_ url: URL) -> Bool { !FileManager.default.fileExists(atPath: url.path) }
 
 /// 已经退出的进程 pid（用于"残留 socket 的属主已死"）。

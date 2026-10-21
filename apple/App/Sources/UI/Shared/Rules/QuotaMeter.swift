@@ -1,10 +1,10 @@
 import CueStore
 import Foundation
 
-/// 一个订阅账号的额度怎么读（Cue 页头面板、Agent 页顶部与菜单栏面板的总览，回复框的模型胶囊，模型菜单的分组标题共用一份）。
+/// 一个订阅账号的额度怎么读（额度环与它展开的明细 `QuotaDetail`、灵动岛与锁屏的那一行，回复框的模型胶囊，模型菜单的分组标题共用一份）。
 /// 口径是还剩多少（剩余，不是已用）：用户要回答的是"还够不够用"，满格是满额、往下掉是在用，同电量一样不用换算。
 /// 读数（含读屏的说法与"照这速度多久用完"）全在 `now` 那一刻算定：过了重置时间的窗口按已重置算（满额），不请求、也不跑定时器——界面只在新观测到达或重画时换读数，
-/// 倒计时是自己走字的计时文字（`Countdown`，与"x 分钟前"的 `PiClock.Live` 同一种做法）。档位按已用算，与上下文用量同一个口径（`PiContextMeter.level(of:)`）。
+/// 倒计时是自己走字的计时文字（`Countdown`，与"x 分钟前"的 `PiClock.Live` 同一种做法）。档位按已用算，与上下文用量同一个口径（`UsageLevel`）。
 nonisolated struct QuotaMeter: Equatable {
     /// 一个窗口此刻的读数。
     struct Window: Equatable, Identifiable {
@@ -15,13 +15,13 @@ nonisolated struct QuotaMeter: Equatable {
         /// 匀速线：按窗口已过的时间，匀速用的话此刻该还剩多少（0 到 1）；已重置为 nil
         let even: Double?
         let resetsAt: Date
-        /// 照这速度还能用多久的短语："约 2 小时 10 分钟"（与"5 小时"同一种写法，取两个单位）；剩的不比匀速线少（重置前用不完）为 nil
+        /// 照这速度还能用多久的短语："约 2 小时"（时长写法同 `PiClock.duration`）；剩的不比匀速线少（重置前用不完）为 nil
         let runway: String?
-        let level: PiContextMeter.Level
+        let level: UsageLevel
         /// 过了重置时间、还没有新的观测：下一次什么时候重置不知道，只写"已重置"
         let hasReset: Bool
         let id: QuotaWindow.ID
-        /// 读屏："5 小时剩 32%，2 小时 14 分钟后重置，照这速度约 1 小时后用完"。
+        /// 读屏："5 小时剩 32%，2 小时后重置，照这速度约 1 小时后用完"。
         let spoken: String
 
         var percent: String { Self.percent(left) }
@@ -35,11 +35,11 @@ nonisolated struct QuotaMeter: Equatable {
             left = 1 - used
             even = pace > 0 ? 1 - pace : nil
             resetsAt = window.resetsAt
-            runway = window.exhaustion(at: now).map { "约 " + QuotaMeter.span(Int($0.timeIntervalSince(now))) }
-            level = PiContextMeter.level(of: used)
+            runway = window.exhaustion(at: now).map { "约 " + PiClock.duration($0.timeIntervalSince(now)) }
+            level = UsageLevel(used: used)
             hasReset = now >= window.resetsAt
             id = window.id
-            let reset = hasReset ? "已重置" : "\(QuotaMeter.span(Int(window.resetsAt.timeIntervalSince(now))))后重置"
+            let reset = hasReset ? "已重置" : "\(Countdown(end: window.resetsAt).format(now))后重置"
             spoken = Dotted("\(name)剩 \(Self.percent(left))", reset, runway.map { "照这速度\($0)后用完" }).spoken
         }
     }
@@ -68,32 +68,26 @@ nonisolated struct QuotaMeter: Equatable {
     /// 读屏：账号与每个窗口剩多少、多久重置。
     var spoken: String { Dotted([account] + windows.map(\.spoken)).spoken }
 
-    /// 一段时长：最大的两个单位，"3 天 4 小时"、"2 小时 10 分钟"、"25 分钟"。
-    static func span(_ seconds: Int) -> String {
-        let minutes = max(seconds / 60, 1), hours = minutes / 60, days = hours / 24
-        if days > 0 { return hours % 24 == 0 ? "\(days) 天" : "\(days) 天 \(hours % 24) 小时" }
-        if hours > 0 { return minutes % 60 == 0 ? "\(hours) 小时" : "\(hours) 小时 \(minutes % 60) 分钟" }
-        return "\(minutes) 分钟"
-    }
-
-    /// 到 `end` 还有多久（`span` 的写法："2 小时 14 分钟"），给 `LiveText` 用：只在字会变的整分钟重画。
-    /// 过了 `end` 不再走（那一刻由 `Moments` 睡到 `nextReset(after:)` 按已重置重画）。
+    /// 到 `end` 还有多久（时长写法同 `PiClock.duration`，最后一分钟也写"1 分钟"、不读秒），给 `LiveText` 用：只在字会变的时刻重画——
+    /// 一小时内每整分钟、一天内每整小时、再往后每整天（都从 `end` 往回数）。过了 `end` 不再走（那一刻由 `Moments` 睡到 `nextReset(after:)` 按已重置重画）。
     struct Countdown: DiscreteFormatStyle {
         let end: Date
 
-        func format(_ now: Date) -> String { QuotaMeter.span(Int(end.timeIntervalSince(now))) }
+        func format(_ now: Date) -> String { PiClock.duration(max(end.timeIntervalSince(now), 60)) }
 
-        /// 剩余的整分钟数变的那一刻：剩 k 分多时，在剩恰好 k 分钟之后（严格晚于 `now`，`Date.tick`）
+        /// 剩的时长在这一档单位里的整数变的那一刻（严格晚于 `now`，`Date.tick`），格子落在整单位之后 1 毫秒。
         func discreteInput(after now: Date) -> Date? {
-            guard end.timeIntervalSince(now) > 60 else { return nil }
-            // 剩的分钟数在每个整分钟刚过时变：格子落在整分钟之后 1 毫秒
-            return end.addingTimeInterval(0.001).tick(every: 60, after: now)
+            let left = end.timeIntervalSince(now)
+            guard left > 60 else { return nil }
+            return end.addingTimeInterval(0.001).tick(every: Self.unit(left), after: now)
         }
 
         func discreteInput(before now: Date) -> Date? {
-            let left = end.timeIntervalSince(now)
-            return end.addingTimeInterval(-((left / 60).rounded(.down) + 1) * 60)
+            let left = end.timeIntervalSince(now), unit = Self.unit(left)
+            return end.addingTimeInterval(-((left / unit).rounded(.down) + 1) * unit)
         }
+
+        private static func unit(_ left: TimeInterval) -> TimeInterval { left < 3600 ? 60 : left < 86_400 ? 3600 : 86_400 }
     }
 
     /// 窗口长度的叫法：5 小时、本周（7 天）、其余按天或小时。

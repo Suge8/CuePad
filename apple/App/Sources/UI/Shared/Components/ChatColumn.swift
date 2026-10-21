@@ -24,7 +24,7 @@ struct ChatColumn<Content: View, Key: Equatable>: View {
     @State private var shown: ArraySlice<UUID>?
     @State private var highlight = ChatHighlight()
     @State private var pendingJump: ChatFollow.Target?
-    /// 这个对话区的身份（`ChatJump` 按它比较）。
+    /// `ChatJump` 按它认是不是这个对话区。
     @State private var column = UUID()
 
     init(
@@ -115,12 +115,10 @@ struct ChatColumn<Content: View, Key: Equatable>: View {
         let first = ids.count - window(size)
         guard first > 0 else { return }
         let from = max(0, first - paging.step(size, first))
-        DebugHooks.chatShowsEarlier(from: from, of: ids.count)
         follow.willPrepend()
         show(from: from)
     }
 
-    /// 从第 `index` 条排起（记下那一条与它后面的）。
     private func show(from index: Int) {
         shown = ids.indices.contains(index) ? ids[index...] : nil
     }

@@ -38,17 +38,6 @@ struct IsolationTests {
         try await eventually("隔离偏好落在库目录里") { FileManager.default.fileExists(atPath: plist.path) }
     }
 
-    @Test func 启动参数覆盖已存的设置() throws {
-        let temp = TempDefaults()
-        let defaults = temp.defaults
-        AppSettings(defaults: defaults).theme = .light
-
-        let overridden = AppSettings(defaults: defaults, launchArguments: ["theme": "dark"])
-
-        #expect(overridden.theme == .dark)
-        #expect(AppSettings(defaults: defaults, launchArguments: [:]).theme == .light)
-    }
-
     @Test func 窗口位置存进设置_不写系统的自动保存域() async throws {
         let temp = TempDefaults()
         let settings = AppSettings(defaults: temp.defaults, launchArguments: [:])

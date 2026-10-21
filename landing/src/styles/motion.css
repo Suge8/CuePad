@@ -1,0 +1,128 @@
+/* 动效系统与响应式：减弱动态效果与窄屏的覆盖，排在最后 */
+
+/* ============================================================
+   Motion systems
+   ============================================================ */
+html.js [data-reveal] {
+	opacity: 0;
+	transform: translateY(28px);
+	transition:
+		opacity 0.85s var(--ease-out),
+		transform 0.85s var(--ease-out);
+	transition-delay: var(--d, 0s);
+}
+html.js [data-reveal].in {
+	opacity: 1;
+	transform: none;
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+	animation-duration: 0.24s;
+	animation-timing-function: ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	html {
+		scroll-behavior: auto;
+	}
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+	}
+	html.js [data-reveal] {
+		opacity: 1;
+		transform: none;
+	}
+	.caret,
+	.t-cursor {
+		animation: none;
+	}
+	.flight-svg,
+	.plane,
+	.burst,
+	.flightpath,
+	.fp-plane,
+	.dl-burst {
+		display: none;
+	}
+}
+
+/* ============================================================
+   Responsive
+   ============================================================ */
+@media (max-width: 62rem) {
+	.hero-grid {
+		grid-template-columns: 1fr;
+	}
+	.hero-art img {
+		margin: 1rem auto 0;
+		max-width: 24rem;
+	}
+	.drench-inner {
+		grid-template-columns: 1fr;
+	}
+	.drench-screen {
+		order: 2;
+	}
+}
+
+@media (max-width: 48rem) {
+	.flight-svg,
+	.plane,
+	.burst,
+	.flightpath,
+	.fp-plane {
+		display: none;
+	}
+	.cinema-night {
+		width: 68%;
+		right: -14%;
+		top: -8%;
+	}
+	.drench-stage {
+		min-height: 0;
+	}
+	.nav-links,
+	.nav-cta {
+		display: none;
+	}
+	.stage {
+		grid-template-columns: 1fr;
+		gap: 0;
+	}
+	.term-cell {
+		margin-left: 8%;
+		margin-top: -1.2rem;
+	}
+	.pad {
+		transform: rotate(-0.5deg);
+	}
+	.mascot-hero {
+		top: -3.2rem;
+		right: 1%;
+	}
+	.steps {
+		grid-template-columns: 1fr;
+	}
+	.feat,
+	.feat.rev {
+		grid-template-columns: 1fr;
+	}
+	.feat-copy,
+	.feat.rev .feat-copy,
+	.feat-media,
+	.feat.rev .feat-media {
+		grid-column: 1 / -1;
+		order: initial;
+	}
+	.duo-media .float {
+		right: 0;
+	}
+	.foot-right {
+		margin-left: 0;
+	}
+}

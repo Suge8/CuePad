@@ -1,10 +1,11 @@
 #if os(macOS)
 import SwiftUI
 
-/// Mac 侧栏最上面的 Cue 名片：头像（大一档，`CueAvatar.Size.header`）、名字，名字下面一行"在管 N · 等你 M"或不在的原因（`CueStatusLine` 的 tally，主窗口里只此一处），
+/// Mac 侧栏最上面的 Cue 名片：头像（大一档，`CueAvatar.Size.header`）、名字，名字下面 Cue 此刻那一行（珠子接那一句，不在时写原因；`CueStatusLine` 的 tally，主窗口里只此一处），
 /// 名字右边新消息数；下面一个纸色气泡放它最近说的话（`CueWatch.lastSaid`，最多三行，没读的是正文墨色），
-/// 左上一个尖角指向头像——是它说的。点开 Cue 页；开着时整张名片是选中底（`RowStyle`），气泡收起：对话就在右边，不重复同一句。
-/// 零件与状态行（`CueStatusRow`：菜单栏面板、输入条、iPad）共用：头像、新消息数、在管与等你那一行。
+/// 左上一个尖角指向头像——是它说的。点开 Cue 页；开着时整张名片是选中底（`RowStyle`）。气泡不随选中出没（同信息、邮件的侧栏，选中的那一行照样留着预览）：
+/// 换页时侧栏一个像素都不挪；它只随 Cue 说的话（数据）变。否决过：开着 Cue 页时收起气泡——每次进出 Cue 页，下面的磁贴与项目整列上下跳。
+/// 零件与状态行（`CueStatusRow`：菜单栏面板、输入条、iPad）共用：头像、新消息数、Cue 此刻那一行。
 struct CueSidebarCard: View {
     let select: (Route) -> Void
     @Environment(Workspace.self) private var workspace
@@ -30,7 +31,7 @@ struct CueSidebarCard: View {
                         CueStatusLine(tally: true).lineLimit(1)
                     }
                 }
-                if !selected, let said = cue.lastSaid {
+                if let said = cue.lastSaid {
                     SaidBubble(text: said, fresh: cue.unread > 0, tailX: CueAvatar.Size.header.box / 2)
                 }
             }
@@ -50,7 +51,7 @@ struct CueSidebarCard: View {
     }
 }
 
-/// 名片里 Cue 最近说的那句：纸色气泡（外形同对话气泡，`BubbleShape`），尾巴从上沿指向头像。
+/// 名片里 Cue 最近说的那句：纸色气泡（外形同对话气泡，`BubbleShape`），尾巴从上沿指向头像；还没读的新消息是正文墨色，不然最淡一档。
 private struct SaidBubble: View {
     let text: String
     let fresh: Bool
@@ -62,7 +63,7 @@ private struct SaidBubble: View {
     var body: some View {
         Text(text)
             .font(Typography.cueCardSaid).lineSpacing(2).lineLimit(3)
-            .foregroundStyle(CueStatusLine.said(fresh: fresh, palette))
+            .foregroundStyle(fresh ? palette.ink : palette.ink3)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 14).padding(.vertical, 11)
             .background(palette.paper, in: BubbleShape(tail: BubbleTail(edge: .top, offset: tailX), radius: Self.radius))

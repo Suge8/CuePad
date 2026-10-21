@@ -14,9 +14,6 @@ public enum PiWorkState: String, Sendable, CaseIterable {
   /// 或 App 启动对账时发现它已经不在（`PiStateRecorder.exited`、`reset`）。与已结束一样只存在于记录里，会话再动起来时换成新状态；
   /// 发话照常（Mac 在后台把它恢复起来再送达）。不进历史，留在"现在"等人接着做。
   case interrupted
-  /// 会话还在跑，但它加载的是不会自己重新载入的旧扩展、协议与 Mac 上的 CuePad 不同：读不到状态、发不了命令，要在终端里 /reload。
-  /// 会自己换上新扩展的不记成它（`CuePi.PiSession.upgrading`）。不是"已结束"，不进历史。
-  case incompatible
 
   /// 粗状态（状态起点只在它变的时候前进）：工作中、等你确认、出错、空闲。
   public var phase: Int {
@@ -32,7 +29,7 @@ public enum PiWorkState: String, Sendable, CaseIterable {
   public var isWorking: Bool {
     switch self {
     case .thinking, .tool, .delegating, .compacting: true
-    case .waitingForUser, .settled, .error, .ended, .interrupted, .incompatible: false
+    case .waitingForUser, .settled, .error, .ended, .interrupted: false
     }
   }
 
@@ -40,7 +37,7 @@ public enum PiWorkState: String, Sendable, CaseIterable {
   public var isTurnRunning: Bool {
     switch self {
     case .thinking, .tool, .waitingForUser, .compacting: true
-    case .delegating, .settled, .error, .ended, .interrupted, .incompatible: false
+    case .delegating, .settled, .error, .ended, .interrupted: false
     }
   }
 
@@ -49,7 +46,7 @@ public enum PiWorkState: String, Sendable, CaseIterable {
   public var hasPendingWork: Bool { isWorking || self == .waitingForUser }
 
   /// 停下等人接手：这一轮做完歇着，或在等回答。会话停下时谁接手（Cue 接着推进，还是留给你回，`CueLeft`）只说这两种。
-  public var isStopped: Bool { self == .settled || self == .waitingForUser }
+  var isStopped: Bool { self == .settled || self == .waitingForUser }
 }
 
 extension PiWorkState {

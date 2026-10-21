@@ -31,6 +31,9 @@ public struct MacAgents: Equatable, Sendable {
 
   public func agent(_ kind: AgentKind) -> MacAgent? { agents.first { $0.kind == kind } }
 
+  /// 这一家为什么不能用；能用或没写过为 nil。
+  public func problem(_ kind: AgentKind) -> MacAgentProblem.Reason? { problems.first { $0.kind == kind }?.reason }
+
   public var kinds: [AgentKind] { agents.map(\.kind) }
 
   /// 开新会话默认用哪家：上次用的（`last`，界面记在本机偏好里；Cue 没有）这台还能用就是它，否则第一家；一家都不能用为 nil。
@@ -64,18 +67,47 @@ public struct MacAgent: Codable, Equatable, Sendable, Identifiable {
     self.models = (missing.map { [$0] } ?? []) + models
   }
 
-  /// 不指定模型时用的那一项。
   public var defaultModel: PiModelOption? { model.flatMap { key in models.first { $0.key == key } } }
 }
 
-/// 一家不能用的原因（给人看的短语，接在 Agent 名后面）。
+/// 一家不能用的原因（`AgentProbe` 写下）。
 public struct MacAgentProblem: Codable, Equatable, Sendable {
   public let kind: AgentKind
-  public let reason: String
+  public let reason: Reason
 
-  public init(kind: AgentKind, reason: String) {
+  public init(kind: AgentKind, reason: Reason) {
     self.kind = kind
     self.reason = reason
+  }
+
+  /// 要你动手的几种（Mac 的接入面板按它给"安装""登录"、勾上接入）与别的（版本太旧、问不出模型……，只写出来）。
+  /// 同步记录里存的是给人看的那句短语（`description`，接在 Agent 名后面读）：各端直接显示它，旧版本写的按同一句读回这几种。
+  public enum Reason: Equatable, Sendable, Codable, CustomStringConvertible {
+    case notInstalled
+    case notLoggedIn
+    /// 登录了、只差接入（只有 Pi：托管的 Pi 经桥扩展上报）
+    case notConnected
+    case other(String)
+
+    private static let named: [(Reason, String)] = [
+      (.notInstalled, "没装"), (.notLoggedIn, "没登录"), (.notConnected, "还没接入 CuePad（在设置里打开）"),
+    ]
+
+    public init(_ text: String) {
+      self = Self.named.first { $0.1 == text }?.0 ?? .other(text)
+    }
+
+    public var description: String {
+      if case .other(let text) = self { return text }
+      return Self.named.first { $0.0 == self }?.1 ?? ""
+    }
+
+    public init(from decoder: any Decoder) throws { self.init(try decoder.singleValueContainer().decode(String.self)) }
+
+    public func encode(to encoder: any Encoder) throws {
+      var container = encoder.singleValueContainer()
+      try container.encode(description)
+    }
   }
 }
 
@@ -108,11 +140,7 @@ extension CueStore {
         return nil
       }
       let record = MacAgents(hostID: host, name: name, agents: agents, problems: problems, modifiedAt: Date.stamp)
-      try db.run(
-        """
-        INSERT INTO macAgents (\(MacAgents.columns.joined(separator: ", "))) VALUES (?, ?, ?, ?, ?, ?)
-        ON CONFLICT(id) DO UPDATE SET name = excluded.name, agents = excluded.agents, problems = excluded.problems, modifiedAt = excluded.modifiedAt
-        """, record.bindings)
+      try upsert(record, updating: ["name", "agents", "problems", "modifiedAt"])
       return MacAgents.recordID(host: host)
     }
   }

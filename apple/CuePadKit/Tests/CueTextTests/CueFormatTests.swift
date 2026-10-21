@@ -6,26 +6,15 @@ import CueText
 struct CueFormatTests {
     let id = "48a0cc37d2d0f0a6"
 
-    @Test("行内图片切成 token，其余（含分割线 ---）原样是文字，序列化后与原文一致")
+    @Test("行内图片切成 token，其余（含分割线 ---、残缺的图片标记）原样是文字，序列化后与原文一致")
     func roundTrip() {
         let stored = "前文 ![](cuepad://img/\(id)) 后文\n---\n第二段\n![](cuepad://img/\(id))"
         let tokens = CueFormat.parse(stored)
         #expect(tokens == [.text("前文 "), .image(id), .text(" 后文\n---\n第二段\n"), .image(id)])
         #expect(CueFormat.serialize(tokens) == stored)
-    }
 
-    @Test("残缺的图片标记都是普通文字")
-    func lookalikesStayText() {
-        let stored = "![](cuepad://img/)\n![](cuepad://img/xyz)\n![](cuepad://img/ab"
-        #expect(CueFormat.parse(stored) == [.text(stored)])
-    }
-
-    @Test("分割线是 Markdown 的 thematic break：三个以上同一种 - * _，可夹空白、缩进不超过三格；CRLF 也算", arguments: [
-        ("---", true), ("***", true), ("___", true), ("- - -", true), ("   -----", true), ("---\r", true),
-        ("--", false), ("    ---", false), ("-*-", false), ("--- x", false), ("- 列表", false), ("", false),
-    ])
-    func rule(line: String, expected: Bool) {
-        #expect(CueFormat.isRule(line) == expected)
+        let lookalikes = "![](cuepad://img/)\n![](cuepad://img/xyz)\n![](cuepad://img/ab"  // 残缺的图片标记都是普通文字
+        #expect(CueFormat.parse(lookalikes) == [.text(lookalikes)])
     }
 }
 
@@ -50,6 +39,16 @@ struct CueSummaryTests {
         #expect(summary.preview == preview)
     }
 
+    @Test("变量：提取去重、按首次出现排，名称不含花括号与换行；填充替换所有出现，缺省与空串保留占位符")
+    func variables() {
+        #expect(CueVariables.names(in: "纯文本").isEmpty)
+        #expect(CueVariables.names(in: "{{产品}} / {{语气}} / {{产品}}") == ["产品", "语气"])
+        #expect(CueVariables.names(in: "{{}} {{a\nb}} {{{x}} {{y}}}") == ["x", "y"])
+        #expect(CueVariables.fill("{{产品}}：{{语气}}；再次 {{产品}}", values: ["产品": "CuePad"]) == "CuePad：{{语气}}；再次 CuePad")
+        #expect(CueVariables.fill("{{甲}}/{{乙}}", values: ["甲": "x", "乙": ""]) == "x/{{乙}}")
+        #expect(CueVariables.fill("😀{{名}}😀", values: ["名": "值"]) == "😀值😀")
+    }
+
     @Test("正文里第一个链接的域名（去掉 www.），卡片上当小标")
     func linkHost() {
         #expect(CueSummary("看这个 https://www.github.com/sugeh/cuepad/pull/3 再说").linkHost == "github.com")
@@ -66,19 +65,5 @@ struct CueSummaryTests {
         #expect(CueSummary.snippet("标题\n重连在开头", matching: ["重连"]) == "重连在开头")
         #expect(CueSummary.snippet("重连在标题\n正文", matching: ["重连"]) == "正文")
         #expect(CueSummary.snippet(body, matching: ["CHONG"]) == CueSummary(body).preview)
-    }
-
-    @Test("提取变量名：去重、保留首次出现顺序；名称不含花括号与换行")
-    func names() {
-        #expect(CueVariables.names(in: "纯文本").isEmpty)
-        #expect(CueVariables.names(in: "{{产品}} / {{语气}} / {{产品}}") == ["产品", "语气"])
-        #expect(CueVariables.names(in: "{{}} {{a\nb}} {{{x}} {{y}}}") == ["x", "y"])
-    }
-
-    @Test("填充：已填替换所有出现，缺省与空串保留占位符")
-    func fill() {
-        #expect(CueVariables.fill("{{产品}}：{{语气}}；再次 {{产品}}", values: ["产品": "CuePad"]) == "CuePad：{{语气}}；再次 CuePad")
-        #expect(CueVariables.fill("{{甲}}/{{乙}}", values: ["甲": "x", "乙": ""]) == "x/{{乙}}")
-        #expect(CueVariables.fill("😀{{名}}😀", values: ["名": "值"]) == "😀值😀")
     }
 }

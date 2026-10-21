@@ -1,18 +1,18 @@
 import CueStore
 import SwiftUI
 
-/// 订阅额度的总览（读数规则在 `QuotaMeter`）：手机 Cue 页头的面板、Mac Agent 页顶部与菜单栏面板，还没有额度记录时整条不出现。
+/// 订阅额度的明细（读数规则在 `QuotaMeter`）：点额度环（`QuotaRings`）才展开——手机会话页顶栏那颗胶囊长出的面板、Mac 会话页的气泡、
+/// 菜单栏面板里就地展开的那一块；还没有额度记录时没有。
 ///
 /// 每个账号一块（`QuotaAccount`），排法同旁边的列表行：头一行是 20 点宽的图标列里的产品标志加账号名（数据陈旧时接"x 分钟前"），
 /// 下面每个窗口一行，与账号名左对齐：窗口名与多久后重置（计时文字，只在整分钟换字，`LiveText`；过了重置时间还没有新观测写"已重置"），
 /// 右边是还剩多少的大号等宽数字，下面一条剩余条（`MarkedBar`，刻线是匀速线）。超了匀速线（照这速度重置前会用完）在条下多一行"照这速度约 X 后用完"。
-/// 主视图把要看的都写出来了，所以不再有点开的明细：总览不是按钮、没有按压。
-/// 宽处（Mac Agent 页）账号并排成等宽的几栏，窄处（手机、菜单栏面板）一个一块往下排（`QuotaColumns`）。
+/// 这就是最后一层，不再有点开的：不是按钮、没有按压。放得下时账号并排成等宽的几栏，否则一个一块往下排（`QuotaColumns`）。
 ///
 /// 配色只用墨：余量足是次要墨色，用过七成是墨色，九成起与用完是胭脂（同上下文快满的口径，不借赭黄、不用靛青）；胭脂时数字一起变色。
 /// 读数在新观测到达时变，另外在每个窗口的重置时刻各变一次（`Moments` 睡到 `nextReset(after:)`：等到重置是业务语义，不是周期刷新）：
 /// 条与匀速线用无回弹弹簧过去、数字滚动换字，减弱动态效果时直接到终态；没有常驻动画与周期定时器。
-struct QuotaStrip: View {
+struct QuotaDetail: View {
     @Environment(AppServices.self) private var services
 
     var body: some View {
@@ -173,7 +173,7 @@ private struct QuotaWindowRow: View {
 /// 还剩随动画插值，档位的颜色直接换。
 struct QuotaRing: View, Animatable {
     private var left: Double
-    private let level: PiContextMeter.Level
+    private let level: UsageLevel
     @Environment(\.palette) private var palette
 
     private static let line: CGFloat = 1.5
@@ -199,5 +199,44 @@ struct QuotaRing: View, Animatable {
                     .rotationEffect(.degrees(-90))
             }
         }
+    }
+}
+
+/// 每个账号一颗小额度环（产品标志在环里，同回复框模型胶囊上那颗 `ModelBadge`）：环是卡着的那个窗口还剩多少，只用颜色说余量、不写数。
+/// 整排是一颗按钮，点它展开明细（`QuotaDetail`，展开在哪由所在的地方定）；`open` 只给读屏说展开没有。
+/// 手机会话页顶栏那颗胶囊的右半、Mac 会话页顶上那一排、菜单栏面板的 Cue 那一行。账号多时只放前 `limit` 颗；还没有额度记录时什么都不画。
+struct QuotaRings: View {
+    let open: Bool
+    let height: CGFloat
+    let action: () -> Void
+    @Environment(AppServices.self) private var services
+    @Environment(\.palette) private var palette
+
+    private static let limit = 3
+
+    var body: some View {
+        let quotas = Array(services.accountQuotas.items.prefix(Self.limit))
+        if !quotas.isEmpty {
+            Button(action: action) {
+                Moments(next: quotas.nextReset(after:)) { now in rings(quotas, at: now) }
+                    .padding(.horizontal, 10)
+                    .frame(height: height)
+                    .contentShape(.rect)
+            }
+            .buttonStyle(PressStyle())
+            .accessibilityExpanded(open)
+            .accessibilityHint(open ? "收起" : "看每个窗口还剩多少、多久后重置")
+        }
+    }
+
+    private func rings(_ quotas: [AccountQuota], at now: Date) -> some View {
+        let rings = quotas.compactMap { quota in quota.binding(at: now).map { (provider: quota.provider, window: QuotaMeter.Window($0, at: now)) } }
+        return HStack(spacing: 6) {
+            ForEach(rings, id: \.provider) { ModelBadge(mark: PiProvider(id: $0.provider).mark, binding: $0.window) }
+        }
+        .foregroundStyle(palette.ink2)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("额度")
+        .accessibilityValue(Dotted(rings.map { "\(PiProvider(id: $0.provider).account) \($0.window.name)剩 \($0.window.percent)" }).spoken)
     }
 }

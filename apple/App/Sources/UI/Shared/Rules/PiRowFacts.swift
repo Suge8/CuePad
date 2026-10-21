@@ -1,20 +1,13 @@
 import CueStore
 import Foundation
 
-/// 会话行状态词后面的读数（全 App 的会话行同一份，`PiSessionRow`）：一个此刻的短词（`Note`）、子代理、快满的上下文、会话自己的模型。
-/// 只写看得见的状态，不写会话在说什么——那在会话页里。已结束的会话没有读数（历史里只看名字与所在）。
+/// 会话行状态词后面的读数（全 App 的会话行同一份，`PiSessionRow`）：一个此刻的短词（`Note`）、子代理（窄处的行）、快满的上下文。
+/// 已结束的会话只有短词。
 nonisolated struct PiRowFacts: Equatable {
     var note: Note?
     var subagents: PiSubagentSummary?
-    /// 上下文用到七成（`PiContextMeter.tightFraction`）起才有：余量足或刚压缩完不知道用量时，行上不写。
+    /// 上下文用到七成（`UsageLevel.tightFraction`）起才有：余量足或刚压缩完不知道用量时，行上不写。
     var context: PiContextMeter?
-    var model: Model?
-
-    /// 会话的模型：标志（`BrandMark.model`）与短名（`PiModelName`），与回复框的模型胶囊同一种写法。
-    struct Model: Equatable {
-        let mark: BrandMark?
-        let name: String
-    }
 
     /// 状态词后的短词，先后：正在结束 → 没能结束 → 没能改名 → 你的话在路上（会话在跑时）→ 正在改名 → 有草稿。
     enum Note: Equatable {
@@ -48,7 +41,6 @@ nonisolated struct PiRowFacts: Equatable {
         guard session.state != .known(.ended) else { return }
         subagents = PiSubagentSummary(session.subagents)
         context = session.context.flatMap(PiContextMeter.init).flatMap { $0.level == .roomy ? nil : $0 }
-        model = session.model.map { Model(mark: .model($0), name: PiModelName.short($0)) }
     }
 }
 

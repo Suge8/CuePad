@@ -15,36 +15,12 @@ import Testing
     Dictionary(uniqueKeysWithValues: try await store.piSessionPage(PiSessionQuery(limit: .max)).items.map { ($0.state.sessionID, $0.state) })
   }
 
-  @Test func 进程退出按有没有留下对话与是不是托管的分三种() async throws {
-    let recorder = recorder
-    for id in ["silent", "terminal", "hosted"] {
-      try await recorder.update(sessionID: id, state: .settled, title: id, hosted: id == "hosted")
-    }
-    try await recorder.exited(sessionID: "silent", spoke: false)
+  /// 没说过话的删掉、托管的歇着到用户结束，见 App 的 HistoryRulesTests；终端里说过话的进程退出就进历史。
+  @Test func 终端里说过话的会话进程退出_进历史() async throws {
+    try await recorder.update(sessionID: "terminal", state: .settled, title: "terminal")
     try await recorder.exited(sessionID: "terminal", spoke: true)
-    try await recorder.exited(sessionID: "hosted", spoke: true)
-
-    let all = try await states()
-    #expect(all["silent"] == nil, "没说过话：记录删掉")
-    #expect(all["terminal"]?.state == .known(.ended), "终端里的 Pi 退出：进历史")
-    #expect(all["hosted"]?.state == .known(.settled) && all["hosted"]?.hosted == true, "托管的：歇着，记录留着")
-    #expect(try await store.piSessionPage(.current).items.map(\.state.sessionID) == ["hosted"], "只有歇着的托管会话在现在")
-
-    // 用户结束它才进历史
-    try await recorder.end(sessionID: "hosted")
-    #expect(try await states()["hosted"]?.state == .known(.ended))
-  }
-
-  /// 进程没了的收尾是一次提交过的写入：订阅它的界面、跨进程通知与同步都收到（在干活时没的，是被打断）。
-  @Test func 托管会话进程没了时订阅收到变更() async throws {
-    let recorder = recorder
-    try await recorder.update(sessionID: "hosted", state: .thinking, title: "hosted", hosted: true)
-    var states = store.observe { try $0.piSessionPage(.current).items.map(\.state.state) }.makeAsyncIterator()
-    #expect(try await states.next() == [.known(.thinking)])
-
-    try await recorder.exited(sessionID: "hosted", spoke: true)
-
-    #expect(try await states.next() == [.known(.interrupted)], "订阅收到被打断")
+    #expect(try await states()["terminal"]?.state == .known(.ended))
+    #expect(try await store.piSessionPage(.current).items.isEmpty)
   }
 
   /// 启动对账收尾的是记下的进程已经不在了的（这里一律判为不在）。

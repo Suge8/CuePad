@@ -76,16 +76,11 @@ nonisolated final class FakeSync: SyncControlling, Sendable {
     /// 为 true 时 `syncNow()` 永不返回（像网络一直没有回音）。
     let syncNowHangs = Mutex(false)
 
-    /// 为 true 时每次 `syncNow()` 等 `pullGate` 放行一次才返回（拉取在途）。
-    let holdsPull = Mutex(false)
-    let pullGate = AsyncStream<Void>.makeStream()
-
     func syncNow() async throws {
         state.withLock {
             $0.syncNows += 1
             $0.events.append("pull")
         }
-        if holdsPull.withLock({ $0 }) { for await _ in pullGate.stream { break } }
         if syncNowHangs.withLock({ $0 }) { try? await Task.sleep(for: .seconds(3600)) }
     }
     /// 马上传过的记录名，按调用顺序。
@@ -161,6 +156,13 @@ final class TestApp {
         return services
     }
 
+    /// 同步报来这台的库和 iCloud 对没对过一遍（`SyncState.reconciled`，启用 Cue 的前提），等服务读到。同步要已经起着
+    /// （`services.start()` 或 `startSync()`）：替身只有一条状态流，起两遍就是两处在读。
+    func syncs(reconciled: Bool = true) async throws {
+        sync.emit(SyncState(status: .idle, issues: [], reconciled: reconciled))
+        try await eventually("对过一遍：\(reconciled)") { services.knowsSyncedFacts == reconciled }
+    }
+
     /// 隔离库的文件（直接改库里的时刻，演"很久以前"）。
     var databaseURL: URL { isolatedLocation.databaseURL }
 
@@ -193,14 +195,30 @@ final class TestApp {
         #expect(services.agents.status(kind)?.files == .current)
     }
 
-    /// 这台 Mac 上装了这家 Agent（还没接入）：放一个只报版本的假可执行文件，Pi 的还能报出模型。
-    func install(_ kind: AgentKind, version: String = "2.1.0") throws {
-        let bin = directory.appending(path: "bin")
-        try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
-        let executable = bin.appending(path: kind.command)
-        let probe = kind == .pi ? "[ -n \"$CUEPAD_PROBE\" ] && { echo '\(Self.piProbeLine)'; exit 0; }\n" : ""
-        try "#!/bin/sh\n\(probe)echo '\(version)'\n".write(to: executable, atomically: true, encoding: .utf8)
-        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executable.path)
+    /// 这台 Mac 上装了这家 Agent（还没接入）：放一个只报版本的假可执行文件，Pi 的还能报出模型（`signedIn` 为 false 时没有模型，是没登录）。
+    func install(_ kind: AgentKind, version: String = "2.1.0", signedIn: Bool = true) throws {
+        let line = signedIn ? Self.piProbeLine : #"{"cuepadProbe":{"model":null,"models":[]}}"#
+        let probe = kind == .pi ? "[ -n \"$CUEPAD_PROBE\" ] && { echo '\(line)'; exit 0; }\n" : ""
+        try executable(kind.command, "#!/bin/sh\n\(probe)echo '\(version)'\n", in: bin)
+    }
+
+    /// 装了 Claude Code、还没登录（同 `offersClaudeInstaller` 备的那个，探测问得出没登录）。
+    func installClaude() throws {
+        try executable(AgentKind.claudeCode.command, Self.fakeClaude(loginFails: false), in: bin)
+    }
+
+    /// 这台 Mac 上的 Node.js（找 Agent 的同一组目录里）：只报版本。
+    func installNode(_ version: String) throws {
+        try executable("node", "#!/bin/sh\necho '\(version)'\n", in: bin)
+    }
+
+    private var bin: URL { directory.appending(path: "bin") }
+
+    private func executable(_ name: String, _ script: String, in directory: URL) throws {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let file = directory.appending(path: name)
+        try script.write(to: file, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: file.path)
     }
 
     private static let piProbeLine = #"{"cuepadProbe":{"model":{"provider":"fake","id":"m","name":"M","thinking":["off"]},"models":[{"provider":"fake","id":"m","name":"M","thinking":["off"]}]}}"#
@@ -224,9 +242,45 @@ final class TestApp {
     }
 
     var agentIntegration: AgentIntegration {
-        AgentIntegration(
-            paths: AgentPaths(pi: piPaths, environment: agentHomes), locate: { [directory] in ExecutableLocator(searchDirectories: [directory.appending(path: "bin")]) },
-            cuepad: helper)
+        let bin = bin, installers = installers.path
+        return AgentIntegration(
+            paths: AgentPaths(pi: piPaths, environment: agentHomes), locate: { ExecutableLocator(searchDirectories: [bin]) },
+            cuepad: helper, installCommand: { kind, _ in "mkdir -p '\(bin.path)' && cp '\(installers)/\(kind.command)' '\(bin.path)/'" })
+    }
+
+    /// "官方安装脚本"的替身（`AgentIntegration.installCommand`）拷的东西：备好了的那家装得上，没备好的 cp 报错、装不上。
+    private var installers: URL { directory.appending(path: "installers") }
+
+    /// 备好一个装得上的 Claude Code：报版本；`auth login` 记下已登录（`loginFails` 时退出码 1、没登录上）；
+    /// 探测时（stream-json 的 initialize）按登录了没有回答账号，同真的 Claude Code。
+    func offersClaudeInstaller(loginFails: Bool = false) throws {
+        try executable(AgentKind.claudeCode.command, Self.fakeClaude(loginFails: loginFails), in: installers)
+    }
+
+    private static func fakeClaude(loginFails: Bool) -> String {
+        """
+        #!/usr/bin/python3
+        import json, os, sys
+        marker = os.path.join(os.path.dirname(os.path.realpath(__file__)), ".logged-in")
+        args = sys.argv[1:]
+        if "--version" in args:
+            print("2.1.0 (Claude Code)"); sys.exit(0)
+        if args[:2] == ["auth", "login"]:
+            if \(loginFails ? "True" : "False"): sys.exit(1)
+            open(marker, "w").close(); sys.exit(0)
+        signed = os.path.exists(marker)
+        for line in sys.stdin:
+            message = json.loads(line)
+            if message.get("type") != "control_request": continue
+            request = message["request"]
+            if request.get("subtype") == "initialize":
+                body = {"account": {"tokenSource": "claude.ai" if signed else "none", "apiProvider": "firstParty"}}
+            else:
+                body = {"applied": {}}
+            reply = {"type": "control_response", "response": {"subtype": "success", "request_id": message["request_id"], "response": body}}
+            print(json.dumps(reply), flush=True)
+
+        """
     }
 
     /// 其余 Agent 的配置目录也在临时目录里，按它们自己认的环境变量给。

@@ -46,7 +46,7 @@ struct OlderList: View {
                         if open { expanded.remove(group.period) } else { expanded.insert(group.period) }
                     }
                 } label: { header }
-                .buttonStyle(.plain)
+                .buttonStyle(PressStyle())
                 .accessibilityValue(open ? "已展开" : "已折叠")
             } else if titled {
                 header.accessibilityAddTraits(.isHeader)
@@ -71,7 +71,7 @@ struct OlderList: View {
     }
 }
 
-/// "更早"与"资料"里的一行：点开编辑页；指针停着时铺行的淡底、露出删除，批量选择里选上的是选中底（`RowStyle`）。
+/// "更早"与"资料"里的一行：点开编辑页；指针停着时铺行的淡底、行尾浮出删除（`hoverReveal`，批量选择时不出），批量选择里选上的是选中底（`RowStyle`）。
 struct OlderRow: View {
     let card: Card
     let lastTarget: String?
@@ -81,7 +81,6 @@ struct OlderRow: View {
         Button(action: open) { OlderRowLine(card: card, lastTarget: lastTarget) }
             .buttonStyle(CardOpenStyle())
             .cardPresence(card.id, in: workspace)
-            .environment(\.rowHoverPreset, DebugHooks.hovers(card.body))
             .contextMenu { CardActions(card: card, selectable: true) }
             .accessibilityElement(children: .combine)
     }
@@ -92,6 +91,7 @@ private struct OlderRowLine: View {
     let card: Card
     let lastTarget: String?
     @Environment(\.cardSelected) private var selected
+    @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -104,24 +104,13 @@ private struct OlderRowLine: View {
             Spacer(minLength: 12)
             AgentDot(card: card.id)
             if let lastTarget { SentMark(target: lastTarget) }
-            HoverDelete(card: card.id)
             Text(DateLabel.short(card.modifiedAt)).monospacedDigit().frame(width: 64, alignment: .trailing)
         }
         .font(Typography.meta).foregroundStyle(palette.ink3)
         .padding(.horizontal, 12).frame(height: 38)
         .contentShape(.rect)
-        .row(selected: selected, hovers: true)
-    }
-}
-
-/// 指针停在行上时露出的删除（批量选择时不出现）。
-private struct HoverDelete: View {
-    let card: UUID
-    @Environment(Workspace.self) private var workspace
-    @Environment(\.rowHovered) private var hovered
-
-    var body: some View {
-        if hovered, !workspace.presses.isSelecting { DeleteCardButton(card: card).transition(.opacity) }
+        .hoverReveal(when: !workspace.presses.isSelecting) { DeleteCardButton(card: card.id).padding(.horizontal, 8) }
+        .row(selected: selected)
     }
 }
 

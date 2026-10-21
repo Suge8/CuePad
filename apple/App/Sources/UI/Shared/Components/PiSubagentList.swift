@@ -45,7 +45,7 @@ struct PiSubagentList: View {
                 }
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressStyle(.inline))
         .accessibilityLabel(Dotted(summary.lead, summary.tail, summary.failure).spoken)
         .accessibilityExpanded(expanded)
     }

@@ -28,16 +28,6 @@ nonisolated struct DefaultProjectSnapshot: Codable, Equatable, Sendable {
     var total: Int
 }
 
-/// Cue 的快照：主 App 写，小组件读（名字、在管与等你、头像）。
-nonisolated struct CueSnapshot: Codable, Equatable, Sendable {
-    var name: String
-    /// "在管 N"与"等你 M"（App 里 `CueStore.cueTally` 的同一份）。
-    var managing: Int
-    var waiting: Int
-    /// 头像的表情（`CueMood` 的原始值，图在小组件自己的资源里）。
-    var mood: String
-}
-
 /// 主 App 写、小组件与分享扩展读的一种快照：每种一个 JSON 文件。
 nonisolated protocol SnapshotFile: Codable, Sendable {
     static var fileName: String { get }
@@ -45,7 +35,6 @@ nonisolated protocol SnapshotFile: Codable, Sendable {
 
 nonisolated extension ProjectsSnapshot: SnapshotFile { static let fileName = "projects.json" }
 nonisolated extension DefaultProjectSnapshot: SnapshotFile { static let fileName = "default-project.json" }
-nonisolated extension CueSnapshot: SnapshotFile { static let fileName = "cue.json" }
 
 /// 快照文件的读写：原子替换，读的一方随时都能读到完整内容。
 nonisolated enum Snapshots {

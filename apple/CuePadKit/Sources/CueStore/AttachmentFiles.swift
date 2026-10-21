@@ -39,7 +39,7 @@ public struct AttachmentFiles: Sendable {
   }
 
   /// 存入任意文件（预览用）：边读边算哈希再拷贝，同哈希已在则不重写。不检查内容是不是图片。
-  public func storeFile(at source: URL) throws -> String {
+  func storeFile(at source: URL) throws -> String {
     let hash = try Self.hash(of: source)
     try place(source, as: hash)
     return hash
@@ -152,5 +152,24 @@ extension CueStore {
     let now = Date.stamp
     try insert(
       Attachment(id: UUID(), hash: hash, byteCount: metadata.byteCount, format: metadata.format, createdAt: now, modifiedAt: now))
+  }
+}
+
+/// 图片附件元数据；文件按内容哈希存在磁盘，缩略图是派生缓存不入库。
+public struct Attachment: Identifiable, Equatable, Sendable {
+  public let id: UUID
+  public var hash: String
+  public var byteCount: Int
+  public var format: String
+  public var createdAt: Date
+  public var modifiedAt: Date
+}
+
+extension Attachment: Record {
+  static let table = Table.attachments
+  static let columns = ["id", "hash", "byteCount", "format", "createdAt", "modifiedAt"]
+  var bindings: [any SQLBindable] { [id, hash, byteCount, format, createdAt, modifiedAt] }
+  init(row: Row) {
+    self.init(id: row.uuid(0), hash: row.text(1), byteCount: Int(row.int(2)), format: row.text(3), createdAt: row.date(4), modifiedAt: row.date(5))
   }
 }

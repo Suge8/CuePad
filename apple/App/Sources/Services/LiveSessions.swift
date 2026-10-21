@@ -44,7 +44,6 @@ final class LiveSessions {
         apply(start.value, at: moment)
     }
 
-    /// 在线的会话（`items` 里没结束的）。
     var live: [PiSessionListItem] { items.filter { $0.state.state != .known(.ended) } }
 
     /// `session` 在最近一次接力里：它的状态标挂锚（`relaySpot`）。

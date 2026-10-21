@@ -39,11 +39,6 @@ final class EditorHarness {
         root.addSubview(textView)
     }
 
-    func load(_ stored: String) {
-        textView.storedText = stored
-        layout()
-    }
-
     func layout() {
         updateTraits()
         root.layoutIfNeeded()
@@ -59,19 +54,8 @@ final class EditorHarness {
     /// 特征（字号档位、深浅色）变了以后，窗口会在下一圈把它往下传、触发变化回调；不在窗口里就由这里推一下。
     private func updateTraits() { root.updateTraitsIfNeeded() }
 
-    /// 条件等待：让出主线程直到条件成立，条件一成立马上返回。上限只是"确实不会来了"的兜底（同 CueTestSupport 的 conditionTimeout）。
-    func wait(timeout: TimeInterval = 5, until condition: () -> Bool) async -> Bool {
-        let deadline = Date().addingTimeInterval(timeout)
-        while !condition() {
-            if Date() > deadline { return false }
-            await pump(0.02)
-        }
-        return true
-    }
-
     func setCaret(_ location: Int) { textView.selectedRange = NSRange(location: location, length: 0) }
     var caret: Int { textView.selectedRange.location }
-    var stored: String { textView.storedText }
 
     func privatePasteboard() -> UIPasteboard {
         UIPasteboard(name: UIPasteboard.Name("cue-editor-tests-\(UUID().uuidString)"), create: true)!
@@ -88,36 +72,29 @@ final class EditorHarness {
     }
 }
 
-/// 变量高亮的可观察结果：直接问 TextKit 渲染属性哪些范围带了主题的变量背景色。
-@MainActor
-func highlightedRanges(in textView: CueTextView, color: UIColor) -> [NSRange] {
-    let layout = textView.textLayoutManager!
-    let content = layout.textContentManager!
-    var ranges: [NSRange] = []
-    layout.enumerateRenderingAttributes(from: content.documentRange.location, reverse: false) { _, attributes, range in
-        if let background = attributes[.backgroundColor] as? UIColor, background == color {
-            let location = content.offset(from: content.documentRange.location, to: range.location)
-            ranges.append(NSRange(location: location, length: content.offset(from: range.location, to: range.endLocation)))
-        }
-        return true
-    }
-    return ranges
-}
-
+/// 粘贴与拖入委托给出结果的那一刻（UIKit 可能在别的线程回调）就交给等它的测试，不轮询。
 final class FakePasteItem: NSObject, UITextPasteItem, @unchecked Sendable {
     let itemProvider: NSItemProvider
     var localObject: Any? { nil }
     var defaultAttributes: [NSAttributedString.Key: Any] { [:] }
     private(set) var result: NSAttributedString?
-    private(set) var resolved = false
     private(set) var usedDefault = false
+    private let (resolutions, resolve) = AsyncStream<Void>.makeStream()
 
     init(_ provider: NSItemProvider) { itemProvider = provider }
 
-    func setResult(string: String) { result = NSAttributedString(string: string); resolved = true }
-    func setResult(attributedString: NSAttributedString) { result = attributedString; resolved = true }
-    func setResult(attachment: NSTextAttachment) { result = NSAttributedString(attachment: attachment); resolved = true }
-    func setDefaultResult() { usedDefault = true; resolved = true }
-    func setNoResult() { resolved = true }
+    /// 等到委托给出结果。
+    func resolved() async { for await _ in resolutions { return } }
+
+    func setResult(string: String) { finish(NSAttributedString(string: string)) }
+    func setResult(attributedString: NSAttributedString) { finish(attributedString) }
+    func setResult(attachment: NSTextAttachment) { finish(NSAttributedString(attachment: attachment)) }
+    func setDefaultResult() { usedDefault = true; resolve.finish() }
+    func setNoResult() { resolve.finish() }
+
+    private func finish(_ value: NSAttributedString) {
+        result = value
+        resolve.finish()
+    }
 }
 #endif

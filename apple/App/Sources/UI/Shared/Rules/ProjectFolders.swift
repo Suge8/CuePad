@@ -25,7 +25,7 @@ nonisolated enum ProjectFolders {
         }
     }
 
-    /// 项目的文件夹在哪，给人看的那一行（手机项目页顶栏）："在 MacBook Pro 上：默认"，绑在几台 Mac 上各写一段。只写文件夹名：
+    /// 项目的文件夹在哪，给人看的那一行（手机项目菜单里文件夹那一组的组头）："在 MacBook Pro 上：默认"，绑在几台 Mac 上各写一段。只写文件夹名：
     /// 同步来的绑定只有末段（完整路径不出那台 Mac）。哪台都没绑时写 `workMac` 开工时会建的那个（`Workspaces.folderName`）；一台 Mac 都没有为空。
     static func places(of project: Project, bindings: [DirectoryBinding], workMac: MacAgents?) -> [String] {
         let own = bindings.filter { $0.projectID == project.id }

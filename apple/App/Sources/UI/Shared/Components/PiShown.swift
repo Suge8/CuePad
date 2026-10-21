@@ -29,16 +29,19 @@ nonisolated extension PiSessionState {
     /// 不看有没有新回复：看一眼就让行换位置，列表会在手下跳。
     /// `cue`：Cue 在值班时的那一份（`LiveSessions.cue`），等它回答的与在跑的同档（`PiShown.Status.cueAsking`），它留给你回的与等你确认同档。
     /// `moment`：此刻（话超时就是没能送达）。
-    static func inListOrder(
-        _ sessions: [PiSessionState], deliveries: [String: DeliveryRequest] = [:], cue: CueDuty? = nil, at moment: Speech.Moment
-    ) -> [PiSessionState] {
-        sessions.enumerated()
-            .map { index, session in
+    /// `state`：一项的会话（会话本身是 `\.self`）。
+    static func inListOrder<Item>(
+        _ items: [Item], state: KeyPath<Item, PiSessionState>, deliveries: [String: DeliveryRequest] = [:], cue: CueDuty? = nil,
+        at moment: Speech.Moment
+    ) -> [Item] {
+        items.enumerated()
+            .map { index, item in
+                let session = item[keyPath: state]
                 let shown = PiShown(session, delivery: deliveries[session.sessionID], cue: cue, at: moment)
-                return (rank: shown.rank, offset: index, session: session)
+                return (rank: shown.rank, offset: index, item: item)
             }
             .sorted { ($0.rank, $0.offset) < ($1.rank, $1.offset) }
-            .map(\.session)
+            .map(\.item)
     }
 
     /// 说过话：对话里有过一轮（做完的或进行中的）。终端里刚开、还没说过话的会话没有，它停在空闲不是"该你了"。
@@ -138,8 +141,6 @@ nonisolated struct PiShown: Hashable, Sendable {
         /// 在等回答，等的是 Cue（`PiSessionState.waitsForCue`），不是你。
         case cueAsking
         case failed
-        /// 在线，但它加载的扩展与这台 Mac 上的 CuePad 不同，要在终端里 /reload。
-        case restart
         case unread
         case idle
         /// Cue 在值班时歇着：不催你（没有"有新回复""该你了"）。
@@ -214,7 +215,6 @@ nonisolated extension PiShown {
         case .thinking, .tool, .delegating, .compacting: .working(state.known!)
         case .waitingForUser: .asking
         case .error: .failed
-        case .incompatible: .restart
         case .settled: .idle
         case .ended: .ended
         case .interrupted: .interrupted
@@ -237,7 +237,6 @@ nonisolated extension PiShown {
         case .awaitsReply: "待回复"
         case .cueAsking: "等 \(cue ?? "") 回答"
         case .failed: "出错"
-        case .restart: "在线，需要 /reload"
         case .unread: "有新回复"
         case .idle: "该你了"
         case .resting: "歇着"
@@ -246,11 +245,6 @@ nonisolated extension PiShown {
         case .interrupted: "被打断"
         case .unknown: "未知状态"
         }
-    }
-
-    /// 会话页顶上点玻璃标题弹出的一句说明：只有需要 /reload（旧版扩展）时有——怎么接上。命令中间不许折行（"/" 后接词连接符）。
-    var explanation: String? {
-        status == .restart ? "这个会话还在用升级前的旧版扩展，CuePad 看不到它的进展、也发不进去。在终端里对这个会话执行 /\u{2060}reload 就能接上。" : nil
     }
 
     /// 只有一个状态标时它说的是什么（读屏标签、悬停提示、项目长按菜单的标题、任务上的会话状态）。
@@ -265,7 +259,6 @@ nonisolated extension PiShown {
         case .awaitsReply: "Agent 在等你回复"
         case .cueAsking: "Agent 在等 \(cue ?? "") 回答"
         case .failed: "Agent 出错"
-        case .restart: "Agent 在线，需要在终端里 /reload"
         case .unread: "Agent 有新回复"
         case .idle: "Agent 在等你说下一句"
         case .resting: "Agent 歇着"
@@ -285,16 +278,7 @@ nonisolated extension PiShown {
     /// 此刻显示为没能送达时的原因（会话行、项目"此刻"、任务浮窗写它）。
     var undelivered: Speech.Failure? { if case .delivery(.failed(let failure)) = status { failure } else { nil } }
 
-    /// 在动：工作中（心电线）、话在路上（三块实心 V）。
-    var isLive: Bool {
-        switch status {
-        case .working, .delivery(.inTransit), .delivery(.delivered): true
-        default: false
-        }
-    }
-
-    /// 会话列表的档：等你确认与待回复 → 出错与没能送达 → 工作中与话在路上 → 停下的 → 已结束。
-    /// 在跑：工作中，或话在路上、已送达而会话还没跟上（没能送达的不算）——状态色、排序与区头"N 个在跑"同一档。
+    /// 在跑：工作中，或话在路上、已送达而会话还没跟上（没能送达的不算）——状态色、动效、排序与区头"N 个在跑"同一档。
     var isRunning: Bool {
         switch status {
         case .working, .delivery(.inTransit), .delivery(.delivered): true
@@ -302,26 +286,24 @@ nonisolated extension PiShown {
         }
     }
 
+    /// 会话列表的档：等你确认与待回复 → 出错与没能送达 → 工作中与话在路上 → 停下的 → 已结束。
     var rank: Int {
         switch status {
         case .asking, .awaitsReply: 0
         case .failed, .delivery(.failed): 1
         case .working, .delivery, .cueAsking: 2
-        // 旧扩展的会话要 /reload 是可以晚点做的维护，不压在在跑的会话上面
-        case .restart: 3
-        case .unread, .idle, .resting, .fresh, .interrupted, .unknown: 4
-        case .ended: 5
+        case .unread, .idle, .resting, .fresh, .interrupted, .unknown: 3
+        case .ended: 4
         }
     }
 
-    /// 选会话时排在前面的（发给 Agent 的会话选单）：等你确认与待回复 → 出错 → 有新回复 → 工作中 → 需要 /reload → 停下的 → 已结束。
+    /// 选会话时排在前面的（发给 Agent 的会话选单）：等你确认与待回复 → 出错 → 有新回复 → 工作中 → 停下的 → 已结束。
     var urgency: Int {
         switch status {
         case .asking, .awaitsReply: 6
         case .failed, .delivery(.failed): 5
         case .unread: 4
-        case .working, .delivery, .cueAsking: 3
-        case .restart: 2
+        case .working, .delivery, .cueAsking: 2
         case .idle, .resting, .fresh, .interrupted, .unknown: 1
         case .ended: 0
         }
@@ -329,7 +311,7 @@ nonisolated extension PiShown {
 }
 
 nonisolated extension PiShown {
-    /// 要你动手：等你确认、待回复、出错、没能送达。只有它们带彩色（需要 /reload 是维护，次要墨色）。
+    /// 要你动手：等你确认、待回复、出错、没能送达。只有它们带彩色。
     var needsYou: Bool {
         switch status {
         case .asking, .awaitsReply, .failed, .delivery(.failed): true
@@ -338,19 +320,16 @@ nonisolated extension PiShown {
     }
 }
 
-extension AppSettings {
-    /// 这个会话在本机界面上显示的状态；`delivery` 是发给它的最近一条投送请求（`PiSessionListItem.delivery`）。
-    /// `cue`：值班的 Cue 的名字（不在值班为 nil）；界面经 `Workspace.shown` 调，名字从那里来。
-    func shown(_ session: PiSessionState, delivery: DeliveryRequest?, cue: CueDuty? = nil, at moment: Speech.Moment) -> PiShown {
-        PiShown(session, delivery: delivery, unread: isUnread(session), seen: sessionSeen[session.sessionID], cue: cue, at: moment)
-    }
-}
-
 extension Workspace {
-    /// 这个会话在本机界面上显示的状态（`AppSettings.shown`）：Cue 在值班时带上用户给 Cue 起的名字（"等 X 回答"），
+    /// 这个会话在本机界面上显示的状态；`delivery` 是发给它的最近一条投送请求（`PiSessionListItem.delivery`）。
+    /// 有没有新回复按本机看过的时刻（`AppSettings`）；Cue 在值班时带上用户给 Cue 起的名字（"等 X 回答"），
     /// 这台 Mac 上它正在出字时说"输出中"（`speaking`）。
     func shown(_ session: PiSessionState, delivery: DeliveryRequest?) -> PiShown {
-        services.settings.shown(session, delivery: delivery, cue: cueDuty, at: services.speech).speaking(speaking(session))
+        let settings = services.settings
+        return PiShown(
+            session, delivery: delivery, unread: settings.isUnread(session), seen: settings.sessionSeen[session.sessionID], cue: cueDuty,
+            at: services.speech
+        ).speaking(speaking(session))
     }
 
     /// 会话页顶栏的状态：只说会话自己的（你的话到哪了写在气泡下面，正在看的会话没有"有新回复"），其余同 `shown`。

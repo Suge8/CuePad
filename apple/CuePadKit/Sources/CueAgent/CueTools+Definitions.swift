@@ -1,0 +1,93 @@
+import CueStore
+import CueText
+import Foundation
+
+extension CueTools {
+  static var definitions: [[String: Any]] {
+    [
+      [
+        "name": "task",
+        "description": """
+          任务与会话。task 写任务的 id 前缀或标题，session 写会话的 id 前缀或会话名（信封与 peek 里有）。body、text 里原样写的 ![](cuepad://img/<hash>) 作为图片交给会话。
+          add{title,project?,steps?,body?,session?}：建任务。body 是正文，开工时连同标题作为会话的第一句（步骤开新会话时先带上顶层任务的标题与正文）；步骤自己的话用 edit 写在步骤上。同一项目里已有同名没做完的任务时不另建，返回那件。带 session 把那个会话绑到新任务上：不写 body（话用 say 说），project 缺省是会话所在的项目；
+          edit{task,title?,body?,steps?,project?,reopen?}：改标题、换掉正文、追加步骤、连同步骤挪到项目；追加步骤与 reopen:true 都让已完成的任务回到没做完；
+          start{task,agent?,model?,effort?,fresh?}：开工叶子（task 有步骤时是第一个没做完的步骤）。同一任务的上一步有会话就接着用它（已结束的先恢复），否则在项目文件夹开新会话：agent 缺省是那台 Mac 的默认，model 写 provider/id（claude、codex 只写 id）。叶子已有会话用 say；fresh:true 开新会话（上一步的会话随之结束）；
+          say{task|session,text,model?,effort?}：对会话说话（给 task 是它在做的叶子的会话；结束了的先恢复）。会话在等回答时 text 就是答案（选项原文、从 1 起的序号或 是/否；允许自己写的题才收别的话）；否则会话在跑时打断这一轮、以这句开新一轮，他发起的那一轮在跑时不说（报错，歇下会叫醒你）。带 model、effort 先给会话换上；
+          say 与接着用上一步会话的 start 等送达结果至多 \(Int(Speech.cueWait)) 秒：已送达、没送到（出错，带原因），或还没结果（之后没送到会作为 [发送失败] 叫醒你）；
+          peek{task?|session?}：只读。都不带：所有没做完的事、不归没做完的事的活会话，和最近完成的几件（各带会话）。带 task：叶子、正文、近况、最近几轮问答（"他"是用户，"你"是你）与最新回答全文、发到手机的文件（带本机路径）。带 session：那个会话；
+          stop{task|session}：停下会话这一轮；
+          leave{task|session}：会话停着（歇下或等回答）、这次该他接手时用，把它留给他回：会话列表显示"待回复"（等回答的回到等他确认）；不用另外 tell，他或你再对它说话就作废；
+          done{task|session,evidence?,show?}：做完。顶层任务要 evidence：1–\(evidenceCount) 条结论，每条宽不过 \(evidenceLimit)（约 20 个汉字，如"\(evidenceExample)"），CuePad 把标题与证据拼成结果告诉用户。show 是结果上挂的图，写法同 tell 的 show（如 look 写"最终版深色：分组标题"）；不带就不挂图，没点名的仍在会话里。下一步还用它的会话就留着，否则结束会话（结束的照样能 say）；已完成的再 done 只结束没人再用的会话，不要 evidence、show。给 session 是收掉那个会话：没做完的事在用、或有话正送进去的不收。
+          """,
+        "inputSchema": schema(
+          [
+            "action": ["type": "string", "enum": ["add", "edit", "start", "say", "peek", "stop", "leave", "done"]],
+            "task": string, "session": string, "title": name, "project": string, "steps": ["type": "array", "items": name], "body": string,
+            "agent": ["type": "string", "enum": AgentKind.allCases.map(\.rawValue)], "model": ["type": "string", "description": "provider/id"],
+            "effort": ["type": "string", "enum": PiThinkingLevel.allCases.map(\.rawValue)], "text": string,
+            "evidence": ["type": "array", "items": ["type": "string", "description": "宽不过 \(evidenceLimit)"], "maxItems": evidenceCount],
+            "show": show, "fresh": ["type": "boolean"], "reopen": ["type": "boolean"],
+          ], required: ["action"]),
+        "annotations": ["readOnlyHint": false, "destructiveHint": true, "idempotentHint": false, "openWorldHint": false],
+      ],
+      [
+        "name": "tell",
+        "description": """
+          对用户说一句（Cue 页里你的一行）。ask 是请他允许、等他回答（进"等你"），只能是这几类：\(CuePrompt.asks)。
+          带 ask 必写 doing：一句说清要他定什么，动词开头写清对象，一行、≤\(CueAsking.phraseLimit) 字（如"推送 scheduler 的重连修复"；几个方案里挑时写你推荐的那个，如"按方案 1 决定单改提问卡"）；ask=rule 还必写 rule：依据他的哪条规矩，照他的原话（如"改数据库结构前先问我"）。
+          卡片、摘要与通知只显示"可以<doing>吗？"、rule 那类的这条规矩、show 的图与选项，不显示 text。
+          show 是回答这个问题必须看的图，至多 \(CueShot.limit) 张，按要他看的先后：file 写 task peek 里"发到手机的"那一份的 id，look 写这张看什么（一行、≤\(CueShot.lookLimit) 字，如"方案 1：大按钮占满一行"）。几个方案就每个方案一张、同一台设备同一种样子，推荐的在前；不用看图就能答的不带。只有 show 里的图上卡片。
+          text 先一句要做的动作，再一句依据（rule 那类写哪条规矩）和不做会怎样；不写 push、rule 这类分类名。
+          选项由 CuePad 给（如推送：\(CueAsk.push.choices(in: "项目名").joined(separator: " / "))；不带 task 时第二项是"\(CueAsk.push.always ?? "")"；rule 只有第一项），他选第二项就照字面记进允许清单。卡上只能选：他在 Cue 页一开口，开着的卡就当场收起，算他直接说了；他那句不是在答它，restore 放回。允许清单里有的（task 所在的项目或所有项目）会被拒：直接做。
+          urgent 推送到手机；task 关联一个任务（按它的项目查允许清单）；withdraw 写"等你"里一条的 id，撤回它（你不用再问了，或他在会话里说了怎么办），可同时带 text 说明；restore 写他开口收起的那条的 id，放回"等你"。
+          """,
+        "inputSchema": schema(
+          [
+            "text": string, "ask": ["type": "string", "enum": CueAsk.allCases.map(\.rawValue)], "doing": string, "rule": string,
+            "urgent": ["type": "boolean"], "task": string, "withdraw": string, "restore": string, "show": show,
+          ],
+          required: []),
+        "annotations": ["readOnlyHint": false, "destructiveHint": false, "idempotentHint": false, "openWorldHint": false],
+      ],
+      [
+        "name": "memory",
+        "description": """
+          你的长期记忆，一行一条（≤\(CueMemoryLine.maxBytes) 字节），序号就是身份。note{text,pin?} 记一条，pin 一直记着（不 pin 的旧行会被并成摘要）；
+          recall{query} 只读：全文找记忆、对话、任务，与你管过的会话里 Agent 的回复原话（带会话名与短 id，可接着 peek）；词之间空格隔开，命中任一个就算，命中多、词少见的排前面；
+          zoom{lo,hi?} 只读：展开记忆视图里的摘要 #lo-hi，给它的两半（摘要或原行）；只给 lo 是那一行；
+          forget{line}；pin{line,pinned}；remind{text,at} 到点叫醒你（ISO 8601 或 yyyy-MM-dd HH:mm）；merge{lo,hi,text} 把待合并的块写成一行摘要；
+          allow{ask,project?,allowed?} 改允许清单：ask 只能是 \(Self.allowable)，不带 project 是所有项目，allowed:false 去掉。
+          """,
+        "inputSchema": schema(
+          [
+            "action": ["type": "string", "enum": ["note", "recall", "zoom", "forget", "pin", "remind", "merge", "allow"]],
+            "text": string, "pin": ["type": "boolean"], "query": string, "line": ["type": ["string", "integer"]],
+            "pinned": ["type": "boolean"], "at": string, "lo": ["type": "integer"], "hi": ["type": "integer"],
+            "ask": ["type": "string", "enum": CueAsk.allCases.filter { $0.always != nil }.map(\.rawValue)], "project": string,
+            "allowed": ["type": "boolean"],
+          ], required: ["action"]),
+        "annotations": ["readOnlyHint": false, "destructiveHint": false, "idempotentHint": false, "openWorldHint": false],
+      ],
+    ]
+  }
+
+  private static var string: [String: Any] { ["type": "string"] }
+  /// 点名要他看的图（tell 的提问与 done 的结果共用）：发到手机的那一份的 id 与看什么。
+  private static var show: [String: Any] {
+    ["type": "array", "maxItems": CueShot.limit, "items": ["type": "object", "properties": ["file": string, "look": string], "required": ["file", "look"]]]
+  }
+  /// 能放进允许清单的几类（规矩那一类不能）。
+  static var allowable: String { CueAsk.allCases.filter { $0.always != nil }.map(\.rawValue).joined(separator: " / ") }
+  private static var name: [String: Any] { ["type": "string", "description": "宽不过 \(CueName.limit)（汉字算 2）"] }
+
+  /// done 的证据：至多这么多条，每条宽不过 `evidenceLimit`（`CueName.width`）。结果消息由 Store 拼（`CueReport.text`）。
+  static let evidenceCount = 3
+  static let evidenceLimit = 40
+  /// 证据的示例（工具说明与证据超长的报错共用）：一句行为上的结论。
+  static let evidenceExample = "登录后进到首页"
+
+
+  private static func schema(_ properties: [String: Any], required: [String]) -> [String: Any] {
+    ["type": "object", "properties": properties, "required": required, "additionalProperties": false]
+  }
+}

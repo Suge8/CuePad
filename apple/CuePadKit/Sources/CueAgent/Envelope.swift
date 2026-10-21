@@ -36,8 +36,7 @@ public enum CueEnvelope {
   }
 
   public static func render(_ input: Input) -> String {
-    let calendar = Calendar(identifier: .gregorian)
-    var lines = ["<cue>", stamp(input.now, calendar)]
+    var lines = ["<cue>", input.now.formatted(stamp)]
 
     lines.append("项目：" + input.projects.map(\.name).joined(separator: "、"))
 
@@ -87,6 +86,7 @@ public enum CueEnvelope {
     case .message: "他发来新消息"
     case .sessionActivity: "会话有动静"
     case .idle: "空闲，例行看一眼"
+    case .tidy: "整理记忆"
     case .reminder: "提醒到点"
     }
   }
@@ -161,7 +161,6 @@ public enum CueEnvelope {
     case .error: "出错"
     case .ended: "已结束"
     case .interrupted: "做到一半被打断"
-    case .incompatible: "旧版扩展，要他在终端里 /reload"
     case nil: state.rawValue
     }
   }
@@ -186,17 +185,15 @@ public enum CueEnvelope {
     return "\(minutes / 1440) 天"
   }
 
-  private static let weekdays = ["日", "一", "二", "三", "四", "五", "六"]
-
-  static func stamp(_ date: Date, _ calendar: Calendar) -> String {
-    let c = calendar.dateComponents([.year, .month, .day, .weekday], from: date)
-    return "\(c.year!)-\(pad(c.month!))-\(pad(c.day!)) 周\(weekdays[c.weekday! - 1]) \(clock(date, calendar))"
+  /// 按此刻的时区现取（Mac 换了时区，下一次就跟着换）。2026-10-21 周三 09:05
+  private static var stamp: Date.VerbatimFormatStyle {
+    .init(
+      format: "\(year: .defaultDigits)-\(month: .twoDigits)-\(day: .twoDigits) 周\(weekday: .narrow) \(hour: .twoDigits(clock: .twentyFourHour, hourCycle: .zeroBased)):\(minute: .twoDigits)",
+      locale: Locale(identifier: "zh_CN"), timeZone: .current, calendar: Calendar(identifier: .gregorian))
   }
-
-  static func clock(_ date: Date, _ calendar: Calendar) -> String {
-    let c = calendar.dateComponents([.hour, .minute], from: date)
-    return "\(pad(c.hour!)):\(pad(c.minute!))"
+  static var clock: Date.VerbatimFormatStyle {
+    .init(
+      format: "\(hour: .twoDigits(clock: .twentyFourHour, hourCycle: .zeroBased)):\(minute: .twoDigits)",
+      timeZone: .current, calendar: Calendar(identifier: .gregorian))
   }
-
-  static func pad(_ value: Int) -> String { value < 10 ? "0\(value)" : "\(value)" }
 }

@@ -1,6 +1,5 @@
 import Foundation
 
-/// 深链接与进入后台前的落盘。
 extension AppServices {
     /// 小组件、分享扩展的链接；不认识的链接忽略。
     func handle(url: URL) {
@@ -32,7 +31,7 @@ extension AppServices {
         await viewer?.settle()
         await sync?.push()
         do {
-            try await writeSnapshots()
+            try await writeSnapshots(resend: true)
         } catch {
             reportIssue(.widgetDataUnavailable("\(error)"))
         }

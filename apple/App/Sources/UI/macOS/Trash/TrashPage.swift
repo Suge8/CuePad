@@ -2,29 +2,30 @@
 import SwiftUI
 
 /// 回收站：删除的项目（连同其卡片）与单独删除的卡片；可恢复、永久删除、清空。
+/// 顶上不写页名（侧栏底下的回收站钮已经说了在哪），顶上那一排（`pageHeader`）右边是"清空回收站"，右上"⋯"里同一下。
 struct TrashPage: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @State private var data: TrashSummary?
-    @State private var confirmEmpty = false
 
     var body: some View {
         ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
-                    HStack(alignment: .lastTextBaseline) {
-                        Text("回收站").font(Typography.pageTitle).foregroundStyle(palette.ink)
-                        Spacer()
-                        if let data, !data.isEmpty {
-                            Button("清空回收站", role: .destructive) { confirmEmpty = true }
-                                .buttonStyle(.glass).controlSize(.large)
-                        }
-                    }
-                    if let data { content(data) }
-                }
-                .padding(.horizontal, Spacing.page).padding(.top, Spacing.pageTop).padding(.bottom, 40)
+            VStack(alignment: .leading, spacing: 24) {
+                if let data { content(data) }
+            }
+            .padding(.horizontal, Spacing.page).padding(.bottom, 40)
         }
-        .dialog("永久删除回收站里的全部内容？", isPresented: $confirmEmpty, message: "此操作无法撤销。发送记录会保留当时的内容快照。", buttons: [
+        .pageHeader {
+            HStack {
+                Spacer(minLength: 0)
+                if let data, !data.isEmpty {
+                    Button("清空回收站…", icon: .trash, role: .destructive) { workspace.confirmsEmptyTrash = true }
+                        .buttonStyle(ControlButtonStyle(kind: .glass))
+                }
+            }
+        }
+        .dialog("永久删除回收站里的全部内容？", isPresented: Bindable(workspace).confirmsEmptyTrash, message: "此操作无法撤销。发送记录会保留当时的内容快照。", buttons: [
             DialogButton(title: "清空", role: .destructive) { workspace.perform { try await $0.emptyTrash() } }
         ])
         .observing(services.store, into: $data, onError: workspace.fail) { store in
@@ -65,7 +66,7 @@ struct TrashPage: View {
     }
 }
 
-/// 回收站的一行：指针停着时铺行的淡底（`RowStyle`），删除时间换成恢复与永久删除（右键菜单里也有）。
+/// 回收站的一行：指针停着时铺行的淡底（`RowStyle`），行尾浮出恢复与永久删除、盖住删除时间（`hoverReveal`；右键菜单里也有）。
 private struct TrashRow<Icon: View>: View {
     let item: TrashItem
     let restore: () -> Void
@@ -80,11 +81,19 @@ private struct TrashRow<Icon: View>: View {
             Text(item.title).font(Typography.body.weight(.medium)).foregroundStyle(palette.ink).lineLimit(1).layoutPriority(1)
             Text(item.detail).font(Typography.secondary).foregroundStyle(palette.ink3).lineLimit(1)
             Spacer(minLength: 12)
-            TrashRowEnd(deletedAt: item.deletedAt, restore: restore, confirm: { confirming = true })
+            if let deletedAt = item.deletedAt {
+                Text("删于 \(DateLabel.short(deletedAt))").font(Typography.meta).foregroundStyle(palette.ink3)
+            }
         }
         .padding(.horizontal, 12).frame(minHeight: 40)
-        .row(hovers: true)
-        .environment(\.rowHoverPreset, DebugHooks.hovers(item.title))
+        .hoverReveal {
+            HStack(spacing: 6) {
+                Button("恢复", action: restore).controlSize(.small)
+                Button("永久删除…") { confirming = true }.controlSize(.small).foregroundStyle(palette.failure)
+            }
+            .padding(.horizontal, 12)
+        }
+        .row()
         .contextMenu {
             Button("恢复", action: restore)
             Button("永久删除…", role: .destructive) { confirming = true }
@@ -95,27 +104,4 @@ private struct TrashRow<Icon: View>: View {
     }
 }
 
-/// 行尾：平时是删除时间，指针停在行上时换成两个操作。
-private struct TrashRowEnd: View {
-    let deletedAt: Date?
-    let restore: () -> Void
-    let confirm: () -> Void
-    @Environment(\.rowHovered) private var hovered
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        ZStack(alignment: .trailing) {
-            if let deletedAt {
-                Text("删于 \(DateLabel.short(deletedAt))").font(Typography.meta).foregroundStyle(palette.ink3)
-                    .opacity(hovered ? 0 : 1)
-            }
-            HStack(spacing: 6) {
-                Button("恢复", action: restore).controlSize(.small)
-                Button("永久删除…", action: confirm).controlSize(.small).foregroundStyle(palette.failure)
-            }
-            .opacity(hovered ? 1 : 0)
-            .allowsHitTesting(hovered)
-        }
-    }
-}
 #endif
