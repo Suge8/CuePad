@@ -8,7 +8,6 @@ import Foundation
 /// 运行时不落会话（三家各用自己不落盘的方式，见各实现的头注释），也不改用户的配置文件，只用参数、环境变量与临时文件。
 public struct CueBrainConfig: Sendable {
     public var runtime: AgentKind
-    /// 运行时的可执行文件（`pi`、`codex`、`claude`）
     public var executable: URL
     /// 运行时自己的模型写法（Pi 是 `提供方/模型`）；nil 用运行时的默认
     public var model: String?
@@ -82,9 +81,7 @@ public protocol CueBrain: AnyObject {
 public enum CueBrainError: Error, Equatable {
     /// 还没启动、已经停了或进程已退出
     case notRunning
-    /// 运行时拒绝了请求（原文）
     case rejected(String)
-    /// 这家 Agent 不能当大脑
     case unsupported(AgentKind)
 }
 
