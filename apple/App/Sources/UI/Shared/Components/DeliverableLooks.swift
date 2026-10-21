@@ -5,7 +5,6 @@ import ImageIO
 import QuickLookThumbnailing
 import SwiftUI
 import UniformTypeIdentifiers
-import Vision
 import WebKit
 
 /// 一份交付物的缩略图里画什么：画面、宽高比（宽 / 高）与类型后面那一截（视频、音频的时长，PDF 的页数）。
@@ -23,7 +22,7 @@ nonisolated struct LookBox: Hashable, Sendable {
     var width: Int
     var height: Int
     var fills: Bool
-    /// 出画面时就裁成框的比例、以显著区域（`DeliverableLooks.salientCrop`）为中心：提问的方形缩略图只为认出是哪张，
+    /// 出画面时就裁成框的比例、取细节最多的那一段（`DeliverableLooks.salientCrop`）：提问的方形缩略图只为认出是哪张，
     /// 截图的中间常是空白，居中裁认不出。裁好的随缩略图存，画的时候居中铺满即可。
     var salient = false
 
@@ -111,42 +110,63 @@ enum DeliverableLooks {
     }
 
     private static func key(_ preview: PiPreview, _ box: LookBox) -> String {
-        "\(preview.hash)@\(box.width)x\(box.height)\(box.fills ? "fill" : "fit")\(box.salient ? "-salient" : "")"
+        "\(preview.hash)@\(box.width)x\(box.height)\(box.fills ? "fill" : "fit")\(box.salient ? "-framed" : "")"
     }
 
-    /// 按宽高比 `aspect` 裁出一块，中心是注意力显著热图（Vision 的 attention saliency）的加权重心，夹在图内；热图全空（或出错）时居中。
-    /// 不用它给的显著区域外框：白底页面上的框很松，常把顶上一行字连主体一起框进去，中心落在两者之间的空白上，还随图的尺寸漂。
+    /// 按宽高比 `aspect` 裁出一块：占满短的那一边，沿长的那一边挪到细节最多的地方（`detail`），细节一样多的几处取中间那处，
+    /// 内容整段放得下时就居中在框里；整张没有细节时居中。截图与页面上有字、有控件的地方细节多，空白的底没有：
+    /// 页面的标题与表单、几张方案图各自不同的那一块都落在框里。
+    /// 不用 Vision 的注意力显著热图：白底页面上它热成一大片，按重心居中常落在两块内容之间的空白上；模拟器上请求出错，截图、录屏里全落到兜底。
     @concurrent private static func salientCrop(_ image: CGImage, aspect: CGFloat) async -> CGImage {
         let width = image.width, height = image.height
-        let cropWidth = CGFloat(width) / CGFloat(height) > aspect ? Int(CGFloat(height) * aspect) : width
-        let cropHeight = cropWidth == width ? Int(CGFloat(width) / aspect) : height
-        let heat = try? await GenerateAttentionBasedSaliencyImageRequest().perform(on: image).heatMap.cgImage
-        let center = heat.flatMap(centroid) ?? CGPoint(x: 0.5, y: 0.5)
-        let x = min(max(Int(center.x * CGFloat(width)) - cropWidth / 2, 0), width - cropWidth)
-        let y = min(max(Int(center.y * CGFloat(height)) - cropHeight / 2, 0), height - cropHeight)
-        return image.cropping(to: CGRect(x: x, y: y, width: cropWidth, height: cropHeight)) ?? image
+        let tall = CGFloat(width) / CGFloat(height) < aspect
+        let cropWidth = tall ? width : Int(CGFloat(height) * aspect)
+        let cropHeight = tall ? Int(CGFloat(width) / aspect) : height
+        let along = tall ? height : width, span = tall ? cropHeight : cropWidth
+        let start = detail(image, rows: tall).map { profile in
+            let first = window(in: profile, covering: CGFloat(span) / CGFloat(along))
+            return Int(CGFloat(first) / CGFloat(profile.count) * CGFloat(along))
+        } ?? (along - span) / 2
+        let offset = min(max(start, 0), along - span)
+        let rect = tall ? CGRect(x: 0, y: offset, width: cropWidth, height: cropHeight) : CGRect(x: offset, y: 0, width: cropWidth, height: cropHeight)
+        return image.cropping(to: rect) ?? image
     }
 
-    /// 灰度热图的加权重心（0…1，原点左上，同 CGImage）；全黑为 nil。
-    nonisolated private static func centroid(_ heat: CGImage) -> CGPoint? {
-        let width = heat.width, height = heat.height
+    /// 长度占 `covering`（0…1）的一框从哪一格起：框里的和最大；差不多大（差 `detailSlack` 以内）的几处取中间那处。
+    nonisolated private static func window(in sums: [Double], covering: CGFloat) -> Int {
+        let length = max(1, min(sums.count, Int((covering * CGFloat(sums.count)).rounded())))
+        let totals = (0...(sums.count - length)).map { sums[$0..<$0 + length].reduce(0, +) }
+        let best = totals.max() ?? 0
+        let near = totals.indices.filter { totals[$0] >= best * (1 - detailSlack) }
+        return near[near.count / 2]
+    }
+
+    nonisolated private static let detailSlack = 0.02
+    /// 量细节时短的那一边缩到这么多像素：够分出一行字，量一次不到一毫秒。
+    nonisolated private static let detailSide = 64
+
+    /// 每一行（`rows`）或每一列的细节：缩小成灰度后相邻像素的明暗差之和（原点左上，同 CGImage）；画不出来为 nil。
+    nonisolated private static func detail(_ image: CGImage, rows: Bool) -> [Double]? {
+        let ratio = CGFloat(max(image.width, image.height)) / CGFloat(min(image.width, image.height))
+        let long = Int((CGFloat(detailSide) * ratio).rounded())
+        let width = rows ? detailSide : long, height = rows ? long : detailSide
         var pixels = [UInt8](repeating: 0, count: width * height)
         let drawn = pixels.withUnsafeMutableBytes { buffer in
             CGContext(
                 data: buffer.baseAddress, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width,
                 space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGImageAlphaInfo.none.rawValue
-            ).map { $0.draw(heat, in: CGRect(x: 0, y: 0, width: width, height: height)) } != nil
+            ).map { $0.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height)) } != nil
         }
         guard drawn else { return nil }
-        var total = 0.0, sumX = 0.0, sumY = 0.0
-        for (index, value) in pixels.enumerated() where value > 0 {
-            let weight = Double(value)
-            total += weight
-            sumX += weight * Double(index % width)
-            sumY += weight * Double(index / width)
+        var sums = [Double](repeating: 0, count: rows ? height : width)
+        for y in 0..<height - 1 {
+            for x in 0..<width - 1 {
+                let here = Int(pixels[y * width + x])
+                let change = abs(here - Int(pixels[y * width + x + 1])) + abs(here - Int(pixels[(y + 1) * width + x]))
+                sums[rows ? y : x] += Double(change)
+            }
         }
-        guard total > 0 else { return nil }
-        return CGPoint(x: (sumX / total + 0.5) / Double(width), y: (sumY / total + 0.5) / Double(height))
+        return sums
     }
 
     /// Markdown 的首屏：纸色底上的 `MarkdownText`，4:3（同网页快照）。只读开头一段，首屏之外的字不进排版；

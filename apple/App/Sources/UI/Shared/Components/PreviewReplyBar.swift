@@ -56,6 +56,7 @@ struct PreviewReplyBar: View {
                 workspace.attempt { try await workspace.services.answerCueQuestion(message.id, option) }
                 done()
             }
+            .frame(maxWidth: .infinity, alignment: .trailing)
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
