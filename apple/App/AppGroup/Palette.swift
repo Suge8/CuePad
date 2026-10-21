@@ -77,6 +77,8 @@ struct Palette {
     /// 压在照片、视频上的图标（播放、移除）：照片的明暗不随外观变，固定白。
     var onMedia: Color { .white }
     var mediaScrim: Color { Color.black.opacity(0.55) }
+    /// 要你看清的图（提问点名的图，`CueShots`）垫的底：透明图照它本来要放的白底看，不随外观变。
+    var mediaGround: Color { .white }
     /// 图的一道实色边（提问点名的图，`CueShots`）：墨或白叠一成的实色，不随图变——`hair` 是带透明度的墨，压在图边上透出图自己的颜色，
     /// 亮图看不出框、深色截图在深色纸上糊成一片。增强对比度时对纸至少 3:1（浅 3.2、深 3.2）。
     var mediaEdge: Color {
