@@ -11,7 +11,6 @@ import Observation
 final class CardPresses {
     /// 编辑页挂在屏上的卡：比 `Workspace.openCard` 晚一步清空，淡出期间仍在。
     private(set) var presented: UUID?
-    /// 在批量选择中（可以一条都还没选）。
     private(set) var isSelecting = false
     /// 选中的卡（批量操作）。只有底部的操作栏读它，卡各自读自己的 `CardPresence.selected`。
     private(set) var selected: Set<UUID> = []
@@ -120,7 +119,6 @@ final class CardPresses {
     }
 }
 
-/// 一张卡的按下状态。
 @Observable
 final class CardPresence {
     /// 鼠标正按着这张卡（见 `CardPresses.mouse(down:)`）。
@@ -129,7 +127,6 @@ final class CardPresence {
     fileprivate(set) var opening = false
     /// 卡显出按下的样子（见 `CardOpenStyle`）。
     var held: Bool { pressing || opening }
-    /// 在批量选择里选上了。
     fileprivate(set) var selected = false
 }
 #endif

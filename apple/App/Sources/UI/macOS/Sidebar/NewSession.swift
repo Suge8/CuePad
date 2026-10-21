@@ -47,7 +47,6 @@ struct NewSessionForm: View {
 
     private enum Stage: Equatable {
         case idle
-        /// 请求发出，等这台 Mac 启动 Pi。
         case opening
         /// Pi 已启动，等它连上（连上后表单关掉、打开新会话）。
         case connecting

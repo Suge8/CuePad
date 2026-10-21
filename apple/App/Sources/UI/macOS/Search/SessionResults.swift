@@ -5,7 +5,6 @@ import SwiftUI
 /// ⌘K"会话"范围里的一组结果。
 struct SessionGroup: Equatable {
     enum Key: Hashable {
-        /// 在线的会话。
         case now
         /// 已结束的，按结束时间分段（`TimeSection`）。
         case ended(TimeSection)

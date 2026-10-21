@@ -91,7 +91,6 @@ private struct WindowPanels: View {
     }
 }
 
-/// 打开的卡的编辑页（含淡出途中）。
 private struct EditorLayer: View {
     @Environment(Workspace.self) private var workspace
 

@@ -6,7 +6,6 @@ import SwiftUI
 /// 面板最高到屏幕可用的高（`MenuBarPanel`），放不下时"在做"那一块在里面滚，其余几块始终整块可见。
 /// 各块各是一片玻璃、中间留空，面板自己没有底（输入框自带玻璃，外面再包一层就是玻璃套玻璃）。资料库读到之前没有输入框；读不出来时说明原因并给"重试"。
 struct MenuBarPad: View {
-    /// 在主窗口里打开一页（会话、Cue 页）。
     var open: (Route) -> Void = { _ in }
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services

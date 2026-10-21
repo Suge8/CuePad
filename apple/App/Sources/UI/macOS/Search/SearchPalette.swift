@@ -288,7 +288,6 @@ struct SearchPalette: View {
         return order.map { ($0, buckets[$0] ?? []) }
     }
 
-    /// 键盘选择按分组后的显示顺序移动。
     private func move(_ step: Int) {
         if scope == .sessions {
             let ids = sessionGroups.flatMap { $0.sessions.map(\.sessionID) }

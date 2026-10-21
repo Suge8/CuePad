@@ -14,7 +14,6 @@ final class SessionHeader {
         var title: String
         var undelivered: String?
         var ending: Bool
-        /// "⋯"最上面写的所在。
         var place: String?
         /// 本机桥上在线、开在终端里、知道是哪个终端的会话（可跳到终端，`PiSession.canJump`）。
         var liveID: CuePi.PiSession.ID?
@@ -191,7 +190,6 @@ struct SessionMenuItems: View {
         }
     }
 
-    /// 解除不改会话，也不改任务状态。
     private func unbind(_ task: UUID) { workspace.perform { try await $0.unbindSession(from: task) } }
 }
 /// 会话属于的事（正在用它的与以前用过它的，含做完了的，先开始的在前）与本项目还能绑的。
