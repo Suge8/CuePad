@@ -32,11 +32,12 @@ enum CueBubble {
     }
 
     /// 新说出的一颗从说话那一边的下角长出来（`Unfold`：占的高从零撑到整颗，气泡同比例放大、淡入）：贴着最新时滚动区底锚（`ChatScroll.pinned`），
-    /// 气泡的下沿第一帧就在终位、不在回复框的玻璃后面，上面的对话随它撑开一路滑上去，不一帧瞬移。消失只淡出。减弱动态效果时只淡入淡出。
+    /// 气泡的下沿第一帧就在终位、不在回复框的玻璃后面，上面的对话随它撑开一路滑上去，不一帧瞬移。撑开的每一帧都要重排对话，所以用定长的 `Motion.move`：
+    /// 弹簧最后那段一两像素的尾巴还要多排两百多毫秒。消失只淡出。减弱动态效果时只淡入淡出。
     static func arrival(_ edge: HorizontalEdge, reduceMotion: Bool) -> AnyTransition {
         guard !reduceMotion else { return .entry }
         let grow = AnyTransition(Unfold.Arrival(anchor: edge == .trailing ? .bottomTrailing : .bottomLeading))
-        return .asymmetric(insertion: grow.animation(Motion.snappy), removal: .entry)
+        return .asymmetric(insertion: grow.animation(Motion.move), removal: .entry)
     }
 }
 
