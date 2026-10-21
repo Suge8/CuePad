@@ -56,7 +56,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         services.alerts = alerts
         alerts.services = services
         alerts.workspace = workspace
-        followAlertTaps(workspace)
+        Task { await alerts.refresh() }
         self.services = services
         self.workspace = workspace
 
@@ -87,18 +87,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         DebugHooks.present(window)
         // 首次打开：接入检测到的 Agent 并启用 Cue（主窗口里的浮层）；隔离库（开发与验收）不弹，验收这一次时给 -CuePadOfferSetup
         if !location.isIsolated || DebugHooks.offersSetup { workspace.offerSetup() }
-    }
-
-    /// 点开的 Agent 通知（含冷启动时点的）：打开那个会话（主窗口已由 `AlertCenter.receive` 叫到前面）。
-    private func followAlertTaps(_ workspace: Workspace) {
-        let alerts = alerts
-        Task { [weak workspace] in
-            await alerts.refresh()
-            for await _ in Observations({ alerts.pendingTap }) {
-                guard let tap = alerts.consumeTap(), let workspace else { continue }
-                await workspace.open(alert: tap)
-            }
-        }
     }
 
     @objc func checkForUpdates(_ sender: Any?) {

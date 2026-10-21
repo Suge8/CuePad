@@ -1,7 +1,7 @@
 #if DEBUG
 import CueStore
 import CueText
-import SwiftUI
+import Foundation
 
 extension DebugScene {
     /// `-CuePadWake <秒>`（配 `-CuePadDemo YES`，画面就绪后开始、一直循环）：每隔这么久 Cue 被在线会话叫醒一次——此刻的状态写成在想、

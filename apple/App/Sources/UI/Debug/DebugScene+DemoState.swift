@@ -1,8 +1,7 @@
 #if DEBUG
 import CueStore
 import CueText
-import OSLog
-import SwiftUI
+import Foundation
 
 extension DebugScene {
     static func seedBindings(_ store: CueStore, projects: [Project]) async {

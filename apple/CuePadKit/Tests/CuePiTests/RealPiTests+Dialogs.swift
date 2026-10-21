@@ -1,8 +1,8 @@
 #if os(macOS)
+import CueStore
 import CueTestSupport
 import Foundation
 import Testing
-import CueStore
 @testable import CuePi
 
 extension RealPiTests {

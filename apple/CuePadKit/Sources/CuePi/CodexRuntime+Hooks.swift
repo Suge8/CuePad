@@ -2,7 +2,6 @@
 import CueStore
 import CueText
 import Foundation
-import OSLog
 
 extension CodexRuntime {
     func hook(_ call: AgentHookCall) {

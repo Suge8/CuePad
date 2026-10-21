@@ -3,12 +3,12 @@ import CueStore
 import CueSync
 import Foundation
 import Testing
-import AppKit
 @testable import CuePad
+
 @testable import CuePi
 
 extension MacSyncTests {
-    // MARK: 订阅额度（Mac 唯一写入，手机只读）
+    // 订阅额度只有 Mac 写，手机只读
 
     /// 桥报来的额度一直写进库（`start()` 里同一条路），直到测试结束。
     func recordingQuotas() {

@@ -2,7 +2,7 @@
 import SwiftUI
 
 /// 回收站：删除的项目（连同其卡片）与单独删除的卡片；可恢复、永久删除、清空。
-/// 顶上不写页名（侧栏底下的回收站钮已经说了在哪），顶上那一排（`pageHeader`）右边是"清空回收站"，右上"⋯"里同一下。
+/// 顶上不写页名（侧栏底下的回收站钮已经说了在哪），也没有顶上那一排：清空回收站在右上"⋯"里（它看回收站有没有东西，页面的数据不进工具栏）。
 struct TrashPage: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -16,15 +16,7 @@ struct TrashPage: View {
             }
             .padding(.horizontal, Spacing.page).padding(.bottom, 40)
         }
-        .pageHeader {
-            HStack {
-                Spacer(minLength: 0)
-                if let data, !data.isEmpty {
-                    Button("清空回收站…", icon: .trash, role: .destructive) { workspace.confirmsEmptyTrash = true }
-                        .buttonStyle(ControlButtonStyle(kind: .glass))
-                }
-            }
-        }
+        .safeAreaPadding(.top, Bars.contentGap)
         .dialog("永久删除回收站里的全部内容？", isPresented: Bindable(workspace).confirmsEmptyTrash, message: "此操作无法撤销。发送记录会保留当时的内容快照。", buttons: [
             DialogButton(title: "清空", role: .destructive) { workspace.perform { try await $0.emptyTrash() } }
         ])

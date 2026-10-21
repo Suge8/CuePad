@@ -16,7 +16,7 @@ struct CueSidebarCard: View {
 
     var body: some View {
         let cue = workspace.cue
-        let selected = workspace.page == .cue
+        let selected = workspace.root == .cue
         Button { select(.cue) } label: {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 12) {

@@ -1,6 +1,3 @@
-#if DEBUG && os(macOS)
-import CueAgent
-#endif
 import CueStore
 import SwiftUI
 
@@ -28,10 +25,10 @@ enum ScrollAnchor {
 /// - 录屏驱动（画面就绪后循环或走一遍，各自的注释写参数）：`-CuePadCycle`（`DebugScene+PiDemo.swift`）；`-CuePadWake`、`-CuePadRelay`、`-CuePadFlightLog`、`-CuePadNoAsks`、
 ///   `-CuePadCueSays`、`-CuePadVisitCue`、`-CuePadClosed`、`-CuePadReopen`（`DebugScene+CueDrivers.swift`）；`-CuePadCueFlow`、`-CuePadCueFlowLog`（`DebugScene+CueFlow.swift`）；
 /// - `-CuePadForeground YES`（仅 Mac）：允许占前台（本机构建默认在后台）；只有下面几项真占，规则见 `DebugForeground` 与 docs/verify.md「占前台」；
-/// - `-CuePadClick x,y[;x,y|esc|return…]`、`-CuePadRightClick x,y`（仅 Mac，要 `-CuePadForeground YES`）：就绪后在主窗口里按顺序左键点几下（`esc`、`return` 是按那个键）、或右键点一下，打开那里的系统菜单、任务气泡再截图、录屏（`openMenuIfAsked`，见 `DebugMenus+Mac.swift`）；
+/// - `-CuePadClick x,y[;x,y|esc|return…]`、`-CuePadRightClick x,y`（仅 Mac；右键与要截系统菜单的要 `-CuePadForeground YES`，其余在后台点）：就绪后在主窗口里按顺序左键点几下（`esc`、`return` 是按那个键）、或右键点一下，打开那里的系统菜单、任务气泡再截图、录屏（`openMenuIfAsked`，见 `DebugMenus+Mac.swift`）；
 /// - `-CuePadCueBrain <可执行文件>`（仅 Mac）：Cue 的大脑换成这个替身（如 `scripts/cue-brain-stub.py`），量值班开销用（docs/verify.md「性能测量」）；
 /// - `-CuePadDockTour YES`（iPhone）：就绪后按固定节奏走一遍底部那一排，录换去处的过渡（`dockTourIfAsked`）；
-///   `-CuePadNotice <文字>`：就绪前弹一条提示（`noticeIfAsked`）；`-CuePadQuiet YES`（iOS）：不弹演示会话的前台横幅；`-CuePadPlacesOpen YES`（配 cue 画面）：Cue 页底部的"⋯"一打开就展开；
+///   `-CuePadNotice <文字>`：就绪前弹一条提示（`noticeIfAsked`）；`-CuePadQuiet YES`（iOS）：不弹演示会话的前台横幅；`-CuePadPlacesOpen YES`（cue 画面）：Cue 页底部的"⋯"展开着；
 ///   `-CuePadCueDraft <文字>`（配 cue 画面）：Cue 的输入框里先有这句草稿；
 /// - `-CuePadReduceMotion YES`：整个窗口按"减弱动态效果"画（`PaletteProvider` 改窗口的环境；不碰系统设置，Mac 上那是用户这台机器的全局设置）；`-CuePadLargestType YES` 同理按最大的辅助字号画；
 /// - `-CuePadCueFocus YES`（配 cue 画面）：Cue 页的输入框一出现就聚焦；`-CuePadSoftKeyboard YES`（iOS）：模拟器里聚焦也弹出系统键盘；`-CuePadLandscape YES`（iPhone）：转成横屏；`-CuePadCompact <宽>`（iPad）：按这么宽的窄窗口画（分屏、台前调度；紧凑尺寸类，底部那一排 `DockRoot`，`debugCompact`）；
@@ -41,7 +38,7 @@ enum ScrollAnchor {
 /// - `-CuePadNoIdeas YES`：`-CuePadProject` 那个项目的灵感都移到回收站，看项目页没有灵感时的空态（改的是库本身，之后的画面也没有这些灵感：配一个新的 `CUEPAD_SHOT_LIBRARY`）；
 /// - `-CuePadTasksOpen YES`：项目页任务纸的"还有 N 条"与"已完成 M"一开始就展开；
 /// - `-CuePadHover x,y[;x,y…]`（仅 Mac）：窗口里这几点上的按钮、行与卡画成指针停着的样子（坐标同 `-CuePadClick`，`presetHover`）；
-/// - `-CuePadShowsDone YES`：任务页做完列的"更早做完的"一开始就展开；`-CuePadColumn <列名>`（iPhone）：任务页打开时落在这一列；
+/// - `-CuePadShowsDone YES`：已完成列的"更早做完的"一开始就展开；`-CuePadColumn <列名>`（iPhone）：任务页打开时落在这一列；
 ///   `-CuePadBusyBoard YES`（配 tasks 画面与 `-CuePadDemo YES`）：推进中里再放几件 Agent 正在多步推进的任务（`seedBusyBoard`）；
 /// - `-CuePadCueNow <woke|delegating|asks|done|quiet|away>`：Cue 此刻钉成这份样例（`CueNowSamples`），页头、侧栏、小组件与实时活动都按它画；
 ///   `-CuePadCueCycle YES`：就绪后轮流走过各份样例（`cueNowTourIfAsked`），录切换；
@@ -81,6 +78,8 @@ enum DebugScene {
     #if os(iOS)
     /// 点 Cue 页头开合面板的那条路（`debugExposesCuePanel`）。
     static var toggleCuePanel: () -> Void = {}
+    /// 展开底部"⋯"的那条路（`debugExposesPlaces`）。
+    static var openPlaces: () -> Void = {}
     #endif
 
     /// 第 `attempt` 次订阅项目目录（`Workspace.catalogAttempt`，从 0 起）是否按 `-CuePadCatalogFailure` 注入失败。

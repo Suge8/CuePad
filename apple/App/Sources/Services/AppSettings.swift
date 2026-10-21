@@ -39,7 +39,7 @@ final class AppSettings {
 
     var theme: Theme { didSet { defaults.set(theme.rawValue, forKey: Key.theme) } }
     #if os(macOS)
-    /// Mac 主窗口上次打开的项目（`Workspace.page` 的唯一事实源）；iOS 的当前项目从导航路径推出，不存偏好。
+    /// Mac 主窗口上次打开的项目：下次打开回到它（`Workspace.openingRoute`），也是菜单栏随手记默认记进的项目；当前项目只看去处（`Workspace.currentProject`）。
     var currentProject: UUID? {
         didSet { defaults.set(currentProject?.uuidString, forKey: Key.currentProject) }
     }

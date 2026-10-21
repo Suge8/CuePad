@@ -53,7 +53,8 @@ nonisolated extension BrandMark {
     static func model(id: String, name: String = "", provider: String?) -> BrandMark? {
         let words = "\(id) \(name)".lowercased().split { !$0.isLetter && !$0.isNumber }
         for family in families where words.contains(where: { word in family.prefixes.contains { word.hasPrefix($0) } }) { return family.mark }
-        if words.contains(where: { $0.wholeMatch(of: /o\d+/) != nil }) { return .openai }
+        // o1、o3 这类：o 跟数字（不用正则字面量，它每次求值都重新编译）
+        if words.contains(where: { $0.count > 1 && $0.first == "o" && $0.dropFirst().allSatisfy(\.isWholeNumber) }) { return .openai }
         return provider.flatMap { PiProvider(id: $0).mark }
     }
 

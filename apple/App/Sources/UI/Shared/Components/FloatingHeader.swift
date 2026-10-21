@@ -122,13 +122,12 @@ private struct HomeBar<Center: View, Trailing: View>: View {
     let search: Bool
     let center: Center
     let trailing: Trailing
-    @Environment(Navigation.self) private var navigation
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
         ZStack(alignment: .top) {
             HStack {
-                if search { Button("搜索", icon: .search) { navigation.openSearch() } }
+                if search { Button("搜索", icon: .search) { workspace.openSearch() } }
                 Spacer(minLength: 8)
                 trailing
             }

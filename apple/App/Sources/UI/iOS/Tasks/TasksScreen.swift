@@ -2,14 +2,13 @@
 import CueStore
 import SwiftUI
 
-/// 任务页：流水看板（`TaskBoard`），待办 → 推进中 → 等你 → 做完（今天）。只看项目范围里的（`Workspace.scopedProject`，同会话页那一份；
-/// 选了项目以后分段与列头的数也只数这个项目），页里不另设筛选；项目范围在顶栏中间（`ProjectScope`）。
+/// 任务页：流水看板（`TaskBoard`），待办 → 推进中 → 等你 → 已完成（今天）。只看项目范围里的（`Workspace.scopedProject`，同会话页那一份；
+/// 选了项目以后卡上不画项目小图形、列头的数也只数这个项目），页里不另设筛选；项目范围在顶栏中间（`ProjectScope`）。
 /// 宽屏（iPad）同 Mac 四列并排（`BoardColumns`）；窄屏一屏一列：带数的分段（`BoardSegments`）、左右滑换列，打开时有等你就落在等你。
 /// 右上角"+"去待办、顶上浮出添加那一行（`NewTaskLine`，落在范围里的项目或当前项目，可换），失焦且没写字时收回。
 struct TasksScreen: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
-    @Environment(Navigation.self) private var navigation
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var board: TaskBoard?
@@ -41,7 +40,7 @@ struct TasksScreen: View {
         .observingBoard(into: $board, store: services.store, onError: workspace.fail)
     }
 
-    private var newTaskProject: UUID? { workspace.scopedProject ?? navigation.currentProject }
+    private var newTaskProject: UUID? { workspace.scopedProject ?? workspace.currentProject }
 
     /// 一屏一列，左右滑换列：列的宽就是可见宽（`containerRelativeFrame`），按页停。
     private func pages(_ board: TaskBoard) -> some View {
@@ -74,12 +73,14 @@ struct TasksScreen: View {
     }
 }
 
-/// 窄屏任务页顶上的分段：四列各一格，写状态图形、列名与数；选中的那格是靛青浅底（`selection`）。点了滑到那一列。
+/// 窄屏任务页顶上的分段：四列各一格，写列头那颗记号（`BoardLaneMark`，小一号）、列名与数；选中的那格是靛青浅底（`selection`）。点了滑到那一列。
 private struct BoardSegments: View {
     let board: TaskBoard
     @Binding var selected: TaskBoard.Column?
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// 记号随分段的字一起缩放，约是字高。
+    @ScaledMetric(relativeTo: .subheadline) private var mark: CGFloat = 14
 
     var body: some View {
         HStack(spacing: 2) {
@@ -89,7 +90,7 @@ private struct BoardSegments: View {
                     withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { selected = column }
                 } label: {
                     HStack(spacing: 4) {
-                        if column == .waiting, board.count(column) > 0 { BoardColumnGlyph(column: column, size: 12) }
+                        BoardLaneMark(column: column, size: mark)
                         Text(column.title).fontWeight(on ? .semibold : .regular)
                         Text("\(board.count(column))").monospacedDigit().foregroundStyle(palette.ink3)
                     }

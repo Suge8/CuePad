@@ -1,33 +1,6 @@
 #if os(iOS)
-import CueStore
 import SwiftUI
 import UIKit
-
-nonisolated private struct SearchData: Sendable, Equatable {
-    var groups: [Group]
-    var total: Int
-    var shown: Int
-    /// iOS 上可选的发送目标：只有本机能产生的（复制到剪贴板）。Pi 与应用投送是 Mac 专有。
-    var targets: [SendTarget]
-
-    /// 结果按项目分组，组按首次出现的顺序（即最相关的在前）。
-    struct Group: Identifiable, Sendable, Equatable {
-        var id: UUID
-        var project: Project?
-        var cards: [CardEntry]
-    }
-
-    static func grouped(_ cards: [Card], projects: [Project]) -> [Group] {
-        let byID = Dictionary(uniqueKeysWithValues: projects.map { ($0.id, $0) })
-        var order: [UUID] = []
-        var buckets: [UUID: [CardEntry]] = [:]
-        for card in cards {
-            if buckets[card.projectID] == nil { order.append(card.projectID) }
-            buckets[card.projectID, default: []].append(CardEntry(card))
-        }
-        return order.map { Group(id: $0, project: byID[$0], cards: buckets[$0] ?? []) }
-    }
-}
 
 /// 卡片搜索的结果（搜索页"灵感与任务"一栏）：筛选胶囊（右边写命中"N 条"）+ 按项目分组的卡片（多个词都要命中，最近修改在前）。
 struct CardSearchResults: View {
@@ -36,7 +9,7 @@ struct CardSearchResults: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @Environment(\.horizontalSizeClass) private var sizeClass
-    @State private var data: SearchData?
+    @State private var data: CardMatches?
     /// 拿去搜的条件：输入法组字（拼音还没上屏）时不跟着变，上屏后再搜，结果不随每个字母闪"未找到"。
     @State private var settled: PaletteQuery?
 
@@ -50,7 +23,11 @@ struct CardSearchResults: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 8) {
-                    FilterChips(query: $query, projects: workspace.catalog?.projects ?? [], targets: data?.targets ?? [])
+                    ChipRow {
+                        SearchFilters(query: $query, targets: data?.targets ?? []) { name, value, on in
+                            Chip(name: name, value: value, on: on)
+                        }
+                    }
                     if let data, !shown.text.isEmpty || shown.isFiltered {
                         Text(CountCopy.hits(data.total)).font(Typography.meta.monospacedDigit()).foregroundStyle(palette.ink3)
                             .contentTransition(.numericText()).animation(Motion.quick, value: data.total)
@@ -63,9 +40,10 @@ struct CardSearchResults: View {
                         EmptyState.noMatch(shown.text).padding(.top, 24)
                     }
                     ForEach(data.groups) { group in
+                        let project = workspace.catalog?.project(group.id)
                         HStack(spacing: 6) {
-                            ProjectGlyph(project: group.project, size: 12)
-                            SectionHeader(title: group.project?.name ?? "", count: nil).padding(.horizontal, -4)
+                            ProjectGlyph(project: project, size: 12)
+                            SectionHeader(title: project?.name ?? "", count: nil).padding(.horizontal, -4)
                         }
                         .padding(.top, 8)
                         LazyVGrid(columns: columns, alignment: .leading, spacing: 12) {
@@ -73,7 +51,7 @@ struct CardSearchResults: View {
                         }
                     }
                     if data.total > data.shown {
-                        Button("还有 \(data.total - data.shown) 条") { query.pages += 1 }
+                        Button(CountCopy.more(data.total - data.shown)) { query.pages += 1 }
                             .frame(maxWidth: .infinity).padding()
                     }
                 }
@@ -85,10 +63,7 @@ struct CardSearchResults: View {
         .onAppear { settled = query }
         .onChange(of: query) { if !TextComposition.isComposing { settled = query } }
         .observing(services.store, id: shown, into: $data, onError: workspace.fail) { [shown] store in
-            let found = try store.search(shown.store(), limit: PaletteQuery.pageSize * shown.pages)
-            return SearchData(
-                groups: SearchData.grouped(found.cards, projects: try store.projects()), total: found.totalCards, shown: found.cards.count,
-                targets: try store.sendTargets())
+            try CardMatches.read(shown, from: store)
         }
     }
 }
@@ -110,52 +85,6 @@ extension UIResponder {
     /// 发给 nil 目标的动作落在第一响应者上：借此拿到它。
     @objc fileprivate func cuepadReportFirstResponder(_ sender: Any) {
         (sender as? FirstResponderProbe)?.responder = self
-    }
-}
-
-/// 筛选胶囊：项目、含图片、发送、时间；生效的填成实心。
-private struct FilterChips: View {
-    @Binding var query: PaletteQuery
-    let projects: [Project]
-    let targets: [SendTarget]
-
-    var body: some View {
-        ChipRow {
-            Menu {
-                Button("全部") { query.project = nil }
-                Divider()
-                ForEach(projects) { project in Button(project.name) { query.project = project.id } }
-            } label: { Chip(name: "项目", value: projectLabel, on: query.project != nil).menuLabel("项目：\(projectLabel)") }
-            Button { query.withImages.toggle() } label: { Chip(name: "含图片", value: nil, on: query.withImages) }
-                .accessibilityAddTraits(query.withImages ? .isSelected : [])
-            Menu {
-                Button("任意") { query.sent = .any }
-                Button("没交给过 Agent") { query.sent = .never }
-                Button("交给过 Agent") { query.sent = .sent() }
-                if !targets.isEmpty {
-                    Divider()
-                    ForEach(targets, id: \.filterID) { target in
-                        Button(target.name) { query.sent = .sent(kind: target.kind, name: target.name) }
-                    }
-                }
-            } label: { Chip(name: "Agent", value: sentLabel, on: query.sent != .any).menuLabel("Agent：\(sentLabel)") }
-            Menu {
-                ForEach(PaletteQuery.Period.allCases, id: \.self) { period in Button(period.label) { query.period = period } }
-            } label: { Chip(name: "时间", value: query.period.label, on: query.period != .any).menuLabel("时间：\(query.period.label)") }
-        }
-    }
-
-    private var projectLabel: String {
-        query.project.flatMap { id in projects.first { $0.id == id }?.name } ?? "全部"
-    }
-
-    private var sentLabel: String {
-        switch query.sent {
-        case .any: "任意"
-        case .never: "没交过"
-        case .sent(_, .some(let name)): name
-        case .sent: "交过"
-        }
     }
 }
 

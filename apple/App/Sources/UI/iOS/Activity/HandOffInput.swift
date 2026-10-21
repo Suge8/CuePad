@@ -10,7 +10,6 @@ struct HandOffInput: View {
     let outbox: Outbox
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
-    @Environment(Navigation.self) private var navigation
     @Environment(\.palette) private var palette
     /// 在线会话各自的模型显示值与可换的模型、命令（按会话记录 id）。
     @State private var digests: [UUID: SessionDigest]?
@@ -39,14 +38,14 @@ struct HandOffInput: View {
         return planned?.bound.flatMap { bound in all.first { $0.state.sessionID == bound.state.sessionID } }
     }
     private var canSend: Bool { services.reachesPiHost && planned != nil }
-    private var draft: ComposerDraft { navigation.handOffDraft }
+    private var draft: ComposerDraft { workspace.handOffDraft }
 
-    /// 草稿在 `Navigation.handOffDraft`：发出即收起，写库失败时放回草稿、重新浮起这个输入框。
+    /// 草稿在 `Workspace.handOffDraft`：发出即收起，写库失败时放回草稿、重新浮起这个输入框。
     private var box: Binding<ComposerDraft> {
-        let navigation = navigation, outbox = outbox
-        return Binding(get: { navigation.handOffDraft }) { draft in
-            navigation.handOffDraft = draft
-            if navigation.outbox == nil, !draft.isEmpty(accepting: [.images, .cards]) { navigation.outbox = outbox }
+        let workspace = workspace, outbox = outbox
+        return Binding(get: { workspace.handOffDraft }) { draft in
+            workspace.handOffDraft = draft
+            if workspace.outbox == nil, !draft.isEmpty(accepting: [.images, .cards]) { workspace.outbox = outbox }
         }
     }
     /// 选中会话的模型与思考强度的显示值（`SessionDigest.config`）。
@@ -130,7 +129,7 @@ struct HandOffInput: View {
         guard canSend else { return }
         guard let session = chosen?.state else {
             guard choice == nil else { return newSession() }
-            return Self.startDefault(draft, card: outbox.card, plan: planned?.plan, opening: planned?.opening, workspace: workspace, navigation: navigation)
+            return Self.startDefault(draft, card: outbox.card, plan: planned?.plan, opening: planned?.opening, workspace: workspace)
         }
         let kinds = session.composerKinds, files = services.store.files
         let saying: Dotted = "已交给 \(session.title)"
@@ -142,20 +141,20 @@ struct HandOffInput: View {
         // 图片存不进图片库时什么都没发：浮框留着、草稿原样，只看到报错
         guard written != nil else { return }
         focused = false
-        navigation.outbox = nil
+        workspace.outbox = nil
     }
 
     /// 默认目标是新会话时点发送，按交到哪的决定：换成新会话的输入框，项目、由哪台 Mac 开、会话名都取自决定。要在别的项目开，从菜单选"新会话…"。
     /// 开新会话时任务带的是 `opening`（步骤带着顶层任务作背景）；交给已有会话的只是这一步自己的。
     static func startDefault(
-        _ draft: ComposerDraft, card: UUID?, plan: HandOffPlan?, opening: String?, workspace: Workspace, navigation: Navigation
+        _ draft: ComposerDraft, card: UUID?, plan: HandOffPlan?, opening: String?, workspace: Workspace
     ) {
-        navigation.handOffToNewSession(draft.retelling(card, as: opening), card: card, plan: plan)
+        workspace.handOffToNewSession(draft.retelling(card, as: opening), card: card, plan: plan)
     }
 
     /// 开新会话交给它：换成新会话的输入框，正文与补的话带过去。
     private func newSession() {
-        navigation.handOffToNewSession(draft.retelling(outbox.card, as: planned?.opening), card: outbox.card, plan: planned?.fresh)
+        workspace.handOffToNewSession(draft.retelling(outbox.card, as: planned?.opening), card: outbox.card, plan: planned?.fresh)
     }
 }
 #endif

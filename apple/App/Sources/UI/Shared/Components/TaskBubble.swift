@@ -1,6 +1,4 @@
-import CueEditor
 import CueStore
-import CueText
 import SwiftUI
 
 /// 任务气泡：点一条任务（项目页与任务页的行、Cue 对话里提到的任务、⌘K、归档、小组件链接），从点的那一下长出来的一张纸
@@ -17,8 +15,8 @@ struct TaskBubble: View {
         let task: UUID
         /// 翻到的步骤；nil 是这件事本身（有步骤时是步骤一览）。
         var step: UUID?
-        /// 从哪长出来（窗口坐标）；nil 是没有落点（\`Workspace.openTask\`）。
-        let anchor: CGPoint?
+        /// 从哪长出来：点的那一下，或没有来源（\`Workspace.openTask\`）。
+        let source: BubbleSource
     }
 
     let request: Request
@@ -70,14 +68,9 @@ struct TaskBubbleSlot: View {
 
     var body: some View {
         @Bindable var workspace = workspace
-        // Mac 上不占地方：浮层把弹出它的视图当锚，点在锚上只是关（`PanelHost`），整窗大的锚会吞掉换条的那一下；手机上铺满，气泡在这一层里摆
-        #if os(macOS)
-        let slot = Color.clear.frame(width: 0, height: 0)
-        #else
-        let slot = Color.clear
-        #endif
-        slot
-            .panel(item: $workspace.openTask, style: .bubble(anchor: workspace.openTask?.anchor)) { TaskBubble(request: $0) }
+        // 铺满：手机上气泡在这一层里摆（Mac 上画在窗口的浮层那一层，`panelHost`）
+        Color.clear
+            .panel(item: $workspace.openTask, style: .bubble(workspace.openTask?.source ?? .unanchored)) { TaskBubble(request: $0) }
     }
 }
 

@@ -37,12 +37,8 @@ struct WindowCardAgents: ViewModifier {
 struct AgentDot: View {
     let card: UUID
     @Environment(\.cardAgents) private var agents
-    @Environment(AppServices.self) private var services
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
-    #if os(iOS)
-    @Environment(Navigation.self) private var navigation
-    #endif
 
     var body: some View {
         if agents.launching.contains(card) {
@@ -54,7 +50,7 @@ struct AgentDot: View {
         } else if let item = agents.items[card] {
             let shown = workspace.shown(item)
             #if os(iOS)
-            Button { navigation.openSession(item.state.id, sessionID: item.state.sessionID, store: services.store) } label: {
+            Button { workspace.openSession(item.state.id, sessionID: item.state.sessionID) } label: {
                 PiStateDot(shown: shown, size: 8).relaySpot(session: item.state.sessionID, row: .task).frame(width: 28, height: 28).contentShape(.rect)
             }
             .buttonStyle(PressStyle(.inline))

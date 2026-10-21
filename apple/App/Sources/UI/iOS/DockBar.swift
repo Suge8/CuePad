@@ -14,6 +14,7 @@ struct DockBar: View {
     let look: DockLook
     /// 底边那一格交给了页里的输入框、它已画上屏：Cue 钮藏起。
     let released: Bool
+    @Binding var placesOpen: Bool
     let width: CGFloat
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -22,13 +23,13 @@ struct DockBar: View {
         let left = places ? Dock.capsule(in: width) : Dock.slot
         let height = places ? Dock.height : Dock.slot
         ZStack(alignment: .bottomLeading) {
-            DockPlaces(route: route, open: places, cell: Dock.cell(in: width))
+            DockPlaces(route: route, open: places, cell: Dock.cell(in: width)) { placesOpen = true }
                 .frame(width: left, height: height, alignment: .leading)
                 .clipShape(.capsule)
                 .glass(in: .capsule, interactive: true, ink: .clear)
                 .opacity(look == .composing ? 0 : 1)
                 .allowsHitTesting(look != .composing)
-            DockCue(places: places)
+            DockCue(places: places) { placesOpen = false }
                 .frame(width: max(0, width - left - Dock.gap), height: height)
                 .clipShape(.capsule)
                 .glass(in: .capsule, interactive: true, ink: .clear)
@@ -48,7 +49,8 @@ private struct DockPlaces: View {
     let route: Route
     let open: Bool
     let cell: CGFloat
-    @Environment(Navigation.self) private var navigation
+    let expand: () -> Void
+    @Environment(Workspace.self) private var workspace
 
     /// 换进来（`entering`）的晚 `handOff` 再淡入，换出去的在 `handOff` 内淡完。
     private static func handOff(in entering: Bool) -> Animation {
@@ -66,7 +68,7 @@ private struct DockPlaces: View {
                 }
                 HStack(spacing: 0) {
                     ForEach(Dock.places, id: \.self) { place in
-                        DockCell(place: place, selected: place.route == route, relays: open) { navigation.select(place.route) }
+                        DockCell(place: place, selected: place.route == route, relays: open) { workspace.select(place.route) }
                             .frame(width: cell)
                     }
                 }
@@ -79,7 +81,7 @@ private struct DockPlaces: View {
             .animation(Self.handOff(in: open), value: open)
             .allowsHitTesting(open)
             .accessibilityHidden(!open)
-            Button { navigation.placesOpen = true } label: {
+            Button(action: expand) {
                 IconImage(.more).font(.system(size: 20, weight: .medium))
                     .frame(width: Dock.slot, height: Dock.slot)
                     .contentShape(.circle)
@@ -151,9 +153,10 @@ private struct DockCell: View {
 private struct DockCue: View {
     /// 是三格那种样子（不是长成输入框）。
     let places: Bool
+    /// 在 Cue 页上（"⋯"展开着）点它是收起、回到输入框。
+    let collapse: () -> Void
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
-    @Environment(Navigation.self) private var navigation
 
     private static let badge: CGFloat = 20
 
@@ -186,11 +189,11 @@ private struct DockCue: View {
 
     /// 在 Cue 页上（"⋯"展开着）点它是收起、回到输入框；在三页上是去 Cue 页。
     private func open() {
-        guard navigation.root != .cue else {
-            navigation.placesOpen = false
+        guard workspace.root != .cue else {
+            collapse()
             return
         }
-        navigation.select(.cue)
+        workspace.select(.cue)
     }
 
     @ViewBuilder private func corner(drafted: Bool) -> some View {

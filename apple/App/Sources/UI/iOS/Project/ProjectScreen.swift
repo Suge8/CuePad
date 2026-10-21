@@ -18,7 +18,6 @@ nonisolated private struct ProjectPage: Sendable, Equatable {
 struct ProjectScreen: View {
     let projectID: UUID
     @Environment(Workspace.self) private var workspace
-    @Environment(Navigation.self) private var navigation
     @Environment(AppServices.self) private var services
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -50,7 +49,7 @@ struct ProjectScreen: View {
         .onChange(of: page?.data.stamps) { rearrange() }
         .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in rearrange() }
         // 打开时就不在了（iPad 恢复窗口时选回的项目已进回收站）也算：退回书架
-        .onChange(of: project == nil, initial: true) { _, gone in if gone { navigation.pop(projectID) } }
+        .onChange(of: project == nil, initial: true) { _, gone in if gone { workspace.pop(projectID) } }
     }
 
     @ViewBuilder
@@ -62,7 +61,7 @@ struct ProjectScreen: View {
             // 行距为 0：同一组的"更早"行拼成一张纸（首尾圆角、行间分隔线），段与段之间的距离各自写在段上
             LazyVStack(alignment: .leading, spacing: 0) {
                 if data.cards.isEmpty {
-                    wall { NewIdeaTile(action: newCard) }
+                    wall { NewIdeaTile(action: workspace.newCard) }
                 }
                 if !arrangement.pinned.isEmpty {
                     // 资料：长期参考的灵感，一行一条压在任务区下面
@@ -124,23 +123,15 @@ struct ProjectScreen: View {
     /// 顶栏右边的"⋯"：新建卡片、看这个项目的会话（任务页与会话页共用的项目范围设成它，再切到会话页），其后是共用的项目操作。
     private var actions: some View {
         Menu("更多", icon: .more) {
-            Button("记一条灵感", icon: .write, action: newCard)
+            Button("记一条灵感", icon: .write, action: workspace.newCard)
             Button("看这个项目的会话", icon: .session) {
                 workspace.projectScope = projectID
-                navigation.select(.agent)
+                workspace.select(.agent)
             }
             if let project {
                 Divider()
-                ProjectActions(project: project) { navigation.projectForm = .init(project: project) }
+                ProjectActions(project: project) { workspace.projectForm = .init(project: project) }
             }
-        }
-    }
-
-    private func newCard() {
-        let project = projectID
-        workspace.attempt {
-            let card = try await workspace.createCard(in: project)
-            navigation.push(.card(card.id))
         }
     }
 

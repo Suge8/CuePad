@@ -16,11 +16,11 @@ struct SearchScreen: View {
         }
     }
 
-    @Environment(Navigation.self) private var navigation
     @State private var query = PaletteQuery()
     @State private var scope = DebugHooks.preset.searchScope
     @State private var sessions = AgentListModel()
     @FocusState private var searching: Bool
+    @Environment(Workspace.self) private var workspace
     @Environment(\.horizontalSizeClass) private var sizeClass
     /// 页宽：导航栏中间那一格不会自己铺满，搜索框按页宽给定宽度（让出左边的返回与两侧页边）。
     @State private var width: CGFloat = 0
@@ -56,7 +56,7 @@ struct SearchScreen: View {
         }
         .onChange(of: query.text, initial: true) { sessions.query = query.text }
         .onAppear { if query.text.isEmpty { query.text = DebugHooks.preset.searchText } }
-        .onChange(of: navigation.searchFocusRequests, initial: true) { focusSearch() }
+        .onChange(of: workspace.searchFocusRequests, initial: true) { focusSearch() }
     }
 
     private var compact: Bool { sizeClass == .compact }

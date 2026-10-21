@@ -14,8 +14,8 @@ struct CueComposer: View {
     }
 
     let style: Style
-    /// 每变一次就拿到焦点（手机的 ⌘⇧N、随手记小组件，`Navigation.cueFocusRequests`）。
-    var focusRequests = 0
+    /// 接"对 Cue 说"的焦点请求（`Workspace.cueFocusPending`）：Cue 页的输入框接，iPad 右侧面板里的不接。
+    var takesFocusRequests = false
     var sent: () -> Void = {}
     /// 焦点进出时告诉外面（iPhone Cue 页底部的"⋯"随它让开）。
     var focusChanged: (Bool) -> Void = { _ in }
@@ -45,7 +45,11 @@ struct CueComposer: View {
             tools: { tools },
             send: { sendButton })
             .onChange(of: opens, initial: true) { if opens != nil || style == .page && DebugHooks.preset.cueFocus { focused = true } }
-            .onChange(of: focusRequests) { focused = true }
+            .onChange(of: takesFocusRequests && workspace.cueFocusPending, initial: true) { _, pending in
+                guard pending else { return }
+                focused = true
+                workspace.cueFocusPending = false
+            }
             .onChange(of: focused) { focusChanged(focused) }
             .onChange(of: workspace.cue.lastYouSaid) { launched = false }
             .task { if style == .page { await DebugHooks.pressSendIfAsked(session: false, send) } }

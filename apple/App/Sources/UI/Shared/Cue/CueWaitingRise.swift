@@ -1,5 +1,3 @@
-import CueStore
-import CueText
 import SwiftUI
 
 /// "等你"卡从输入框后面升起、沉回去：占的高随曲线从 0 长到整高（沉回去反过来），卡不透明、顶边跟着上来，没露出的下半截裁在输入框后面。

@@ -98,7 +98,7 @@ COMMAND_WIDTH = 150
 
 
 def listing(files):
-    """登记的持有者，加上开着 files（在等的锁文件）却没登记的进程（还没换上这版入口的检出）。"""
+    """登记的持有者，加上开着 files（在等的锁文件）却没登记的进程（还没换上这版入口的检出；各检出都换上这版 xc.sh 后删掉这一段）。"""
     now, lines, live = time.time(), [], others()
     known = {h["pid"] for h, _ in live} | {me["pid"]}
     opened = subprocess.run(["lsof", "-t", *[f.name for f in files]], capture_output=True, text=True).stdout.split()

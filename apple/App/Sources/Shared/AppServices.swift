@@ -1,7 +1,6 @@
 import Foundation
 import Observation
 import CueStore
-import CueEditor
 import CueSync
 import os
 #if os(macOS)
@@ -44,6 +43,8 @@ final class AppServices {
     enum SyncSource {
         case iCloud
         case custom(any SyncControlling)
+        /// 用本机的库建的同步：真实的同步代码连替身 iCloud（`CloudSync` 的替身连接），给测试与调试画面。
+        case built((CueStore) -> any SyncControlling)
     }
 
     /// iCloud 同步；没有时 `syncStatus` 是写明原因的 `.unavailable`。状态、问题与冲突见下，动作见 `AppServices+Sync`。
@@ -71,7 +72,7 @@ final class AppServices {
     /// 待用户处理的正文冲突（同一张卡离线并发编辑产生的副本）。
     private(set) var conflicts: [CardConflict] = []
 
-    /// 小组件、分享扩展的链接与点开的 Cue 通知要打开的页，界面处理后调用 `consumeDeepLink()`。
+    /// 小组件、分享扩展、实时活动的链接与点开的通知要打开的页（`handle(url:)`、`AlertCenter.receive`），工作区取走（`Workspace.openLinks`）。
     var pendingDeepLink: DeepLink?
 
     /// 常驻的跟随者（`follow`），一起取消（`cancelBackgroundWork`）。
@@ -158,6 +159,40 @@ final class AppServices {
     ) { [weak self] in self?.windowShell?.toggleFromHotkey() }
     #endif
 
+    nonisolated enum StartupIssue: Equatable {
+        case globalShortcutUnavailable(String)
+        /// 分享扩展留下的内容没能入库（保留在共享容器里，下次再试）。
+        case captureImportFailed(String)
+        /// iCloud 同步（或依赖它的 Mac 端远程功能）没能启动。
+        case syncUnavailable(String)
+        case widgetDataUnavailable(String)
+        #if os(macOS)
+        case piBridgeUnavailable(String)
+        /// Pi 历史索引读写 Store 失败；该会话文件不再写回。
+        case piHistoryUnavailable(String)
+        #endif
+    }
+
+    /// 改 Cue 的设置（同步的 `CueProfile`）：两端的写入口——名字、停用、Agent、模型与思考强度；启用另走 `enableCue`（要按那台 Mac 判断）。
+    /// 写库后马上传这一条，别的设备马上看到；Cue 运行的那台 Mac 的管理器读到就按新设置值班。
+    func updateCue(_ edit: @escaping @Sendable (inout CueProfile) -> Void) async throws {
+        try await store.updateCueProfile(edit)
+        await upload(CueProfile.recordID)
+    }
+
+    /// 让 Cue 运行在 `host` 那台 Mac 并启用（规则 `CueStore.enableCue`）：两端所有入口都经这里，界面读的是同一处判断（`CueGate`）。
+    /// 这台的库还没和 iCloud 对过一遍时拒绝（`CueEnableError.unsynced`）：库里没有 Cue 不等于哪台都没设过，启用了会把它从原来那台抢过来；
+    /// 它正在别的 Mac 上运行时，只有 `moving`（你确认了改在这台运行）才改。是这台 Mac 时先重新探测一次本机的 Agent
+    /// （刚启动还没探测完也不会按旧的或空的判断）；别的 Mac 按它同步来的那条。写完马上传。
+    func enableCue(on host: String, moving: Bool) async throws {
+        guard knowsSyncedFacts else { throw CueEnableError.unsynced }
+        #if os(macOS)
+        if host == hostID { try await macAgents.record() }
+        #endif
+        try await store.enableCue(on: host, moving: moving)
+        await upload(CueProfile.recordID)
+    }
+
     // 资料库是唯一事实源：打不开时不能悄悄换一个空库，也不能带着它往下走——错误交给调用方，启动入口显示失败页
     // （`UnreadableLibraryView`：原因、重试、导出诊断，不给任何写入入口），不终止进程。
     #if os(macOS)
@@ -227,6 +262,16 @@ final class AppServices {
     #if os(iOS)
     func post(_ alert: SessionAlert) { sessionAlert = alert }
     #endif
+
+    /// 这条提示此刻到不到你（`CueStore.reaches`）；读不出就照常提示，宁可多响一次也不悄悄吞掉。
+    func reaches(_ subject: AlertSubject) async -> Bool {
+        do {
+            return try await store.reaches(subject)
+        } catch {
+            Self.log.error("没能读出这条提示到不到你，照常提示：\(error.localizedDescription, privacy: .public)")
+            return true
+        }
+    }
 
     /// 同步从不通变通时立即同步一次（`syncNow`）：断网时没传上去的记录（留在库里待推送）当场传出、在等的回执当场拉回，
     /// 不等发送者的退避；按节奏的拉取也随之重开一个窗口（`pollingCondition`）。

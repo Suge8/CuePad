@@ -1,4 +1,3 @@
-import CueStore
 import SwiftUI
 
 /// 一节的第一行（`NoteLine`，同并起来的那一行）：醒来原因的图标（叫醒它的会话出错是出错的那个）、原因（叫醒它的会话、任务、提醒是墨色的名字，点了去那里；
@@ -10,11 +9,7 @@ struct CueWakeTitle: View {
     /// 接在图标后面的那句话（只有图标时）
     let said: String?
     @Environment(Workspace.self) private var workspace
-    @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
-    #if os(iOS)
-    @Environment(Navigation.self) private var navigation
-    #endif
 
     var body: some View {
         NoteLine(time: at) {
@@ -59,11 +54,7 @@ struct CueWakeTitle: View {
     private func open(_ target: CueWakeHeader.Target) {
         switch target {
         case .session(let session):
-            #if os(macOS)
-            workspace.show(.session(session.sessionID))
-            #else
-            navigation.openSession(session.id, sessionID: session.sessionID, store: services.store)
-            #endif
+            workspace.openSession(session.id, sessionID: session.sessionID)
         case .task(let id):
             workspace.openTask(id: id)
         case .memory:

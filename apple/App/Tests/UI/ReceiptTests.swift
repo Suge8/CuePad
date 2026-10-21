@@ -126,6 +126,26 @@ struct ReceiptTests {
         #expect(try await sessionPresence() == .sending)
     }
 
+    /// 别的设备把最低对端版本抬过了这台（`SyncStatus.outdated`，从云端门槛走到这一步见 SyncWiringTests）：说的话当场没能送达、说明这台要更新，
+    /// 同步那一行也这么说；更新前立即同步按不了。
+    @Test(.timeLimit(.minutes(1)))
+    func 这台要更新时_说的话报要更新发不到Mac_立即同步按不了() async throws {
+        let target = try await session()
+        try await start()
+
+        try await setSync(.outdated)
+        try await eventually("同步不通") { services.speech.reachableSince == nil }
+        let said = try await sayToSession(Workspace(services: services), target, "改完再跑一遍")
+
+        guard case .failed(let failure) = Said.request(said).trip(at: services.speech) else {
+            Issue.record("要更新时说的话不是没能送达：\(Said.request(said).trip(at: services.speech))")
+            return
+        }
+        #expect(failure.text(sync: services.syncStatus) == "这台的 CuePad 要更新，发不到 Mac")
+        #expect(SyncSummary(services.syncStatus).title == "这台的 CuePad 要更新")
+        #expect(!services.canSyncNow)
+    }
+
     /// 会话行与"N 句没送到"跟着同一个"此刻"：过了时限没回执，不用重开页面就翻成没能送达。
     @Test(.timeLimit(.minutes(1)))
     func 发给会话的话过了时限没回执_会话行与计数翻成没能送达() async throws {

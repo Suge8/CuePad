@@ -294,8 +294,8 @@ private struct PiStatusLine: View {
 }
 
 /// 上下文读数："上下文 82%"，与回复框上的用量胶囊同一个说法（不画小图形的理由见 `PiContextGauge`）。行上只有快满的才有（`PiRowFacts.context`）：
-/// 百分比加粗，七成起墨色，九成起胭脂。
-private struct ContextFact: View {
+/// 百分比加粗，七成起墨色，九成起胭脂。推进中的行上快满的也写它（`BoardPulse.fullContext`）。
+struct ContextFact: View {
     let meter: PiContextMeter
     @Environment(\.palette) private var palette
 

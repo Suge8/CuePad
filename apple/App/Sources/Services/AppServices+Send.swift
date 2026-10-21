@@ -4,8 +4,6 @@ import Foundation
 import UniformTypeIdentifiers
 #if os(macOS)
 import CuePi
-#else
-import UIKit
 #endif
 
 /// 复制：正文解析 → 放进系统剪贴板。复制不是发送，不记发送记录；发给 Agent 见 `Workspace.speak`。

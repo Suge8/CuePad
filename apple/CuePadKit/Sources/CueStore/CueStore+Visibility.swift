@@ -1,6 +1,3 @@
-import Foundation
-
-/// 卡片与任务列不列得出来的 SQL 条件：项目、卡片与任务、汇总与搜索的查询共用这几条。
 extension CueStore {
   /// 卡片可见：自身未删除，且所属项目在库里、未删除（项目还没同步到的先不显示）。
   static let cardVisible = """

@@ -2,7 +2,6 @@
 import CueStore
 import CueText
 import Foundation
-import OSLog
 
 extension CodexRuntime {
     func notification(_ method: String, _ params: JSONValue, from pid: Int32) {

@@ -13,49 +13,60 @@ nonisolated enum MarkdownBlock: Equatable, Sendable {
     case rule
 
     /// 摘要用的第一行文字（列表预览：先去符号再截断）：第一个文字块（段落、标题、列表项、引用）的第一行，行内的强调、代码、链接只留文字；
-    /// 表格与代码块跳过，整段只有它们时说它是什么。
+    /// 表格与代码块跳过，整段只有它们时说它是什么。找到就不往下拆（摘要的原文常是整篇长回答）。
     static func firstPlainLine(_ source: String) -> String? {
-        let blocks = parse(source)
-        for block in blocks {
+        var line: String?, table = false, code = false
+        _ = parse(source) { block in
             switch block {
             case .paragraph(let text), .heading(_, let text), .item(_, let text, _), .quote(let text):
-                let line = text.split(whereSeparator: \.isNewline).lazy
+                line = text.split(whereSeparator: \.isNewline).lazy
                     .map { plainInline(String($0)).trimmingCharacters(in: .whitespaces) }.first { !$0.isEmpty }
-                if let line { return line }
-            case .code, .table, .rule: continue
+            case .table: table = true
+            case .code: code = true
+            case .rule: break
             }
+            return line == nil
         }
-        if blocks.contains(where: { if case .table = $0 { true } else { false } }) { return "（一张表格）" }
-        if blocks.contains(where: { if case .code = $0 { true } else { false } }) { return "（一段代码）" }
-        return nil
+        return line ?? (table ? "（一张表格）" : code ? "（一段代码）" : nil)
     }
 
-    /// 一行里的行内记号（强调、代码、链接）只留显示的字。
+    /// 一行里的行内记号（强调、代码、链接、转义、实体）只留显示的字；没有这些记号的行原样（系统的行内解析每行要建一份带属性的文字）。
     static func plainInline(_ text: String) -> String {
-        (try? AttributedString(markdown: text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)))
+        guard text.contains(where: inlineMarks.contains) else { return text }
+        return (try? AttributedString(markdown: text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)))
             .map { String($0.characters) } ?? text
     }
 
-    static func parse(_ source: String) -> [MarkdownBlock] {
+    private static let inlineMarks: Set<Character> = ["*", "_", "`", "[", "]", "\\", "<", "&", "~", "!"]
+
+    /// 拆块；`more` 每拆出一块问一次还要不要往下拆（摘要找到第一行就停）。
+    static func parse(_ source: String, more: (MarkdownBlock) -> Bool = { _ in true }) -> [MarkdownBlock] {
         let lines = source.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
         var blocks: [MarkdownBlock] = []
         var paragraph: [String] = []
         var quote: [String]?
         var code: [String]?
+        var done = false
+        // 停下之后同一行里还会再收（先收起前面的段落、引用，再收这一行的块）：都不要，摘要拿到的才是第一块
+        func add(_ block: MarkdownBlock) {
+            guard !done else { return }
+            blocks.append(block)
+            if !more(block) { done = true }
+        }
         func flush() {
-            if !paragraph.isEmpty { blocks.append(.paragraph(paragraph.joined(separator: "\n"))) }
+            if !paragraph.isEmpty { add(.paragraph(paragraph.joined(separator: "\n"))) }
             paragraph = []
-            if let quote { blocks.append(.quote(quote.joined(separator: "\n"))) }
+            if let quote { add(.quote(quote.joined(separator: "\n"))) }
             quote = nil
         }
         var index = 0
-        while index < lines.count {
+        while index < lines.count, !done {
             let raw = lines[index]
             let line = raw.trimmingCharacters(in: .whitespaces)
             index += 1
             if line.hasPrefix("```") {
                 if let lines = code {
-                    blocks.append(.code(lines.joined(separator: "\n")))
+                    add(.code(lines.joined(separator: "\n")))
                     code = nil
                 } else {
                     flush()
@@ -82,24 +93,67 @@ nonisolated enum MarkdownBlock: Equatable, Sendable {
                     rows.append(Array(cells.prefix(header.count)) + Array(repeating: "", count: max(0, header.count - cells.count)))
                     index += 1
                 }
-                blocks.append(.table(MarkdownTable(alignments: alignments, header: header, rows: rows)))
-            } else if line.wholeMatch(of: /(\*\s*){3,}|(-\s*){3,}|(_\s*){3,}/) != nil {
+                add(.table(MarkdownTable(alignments: alignments, header: header, rows: rows)))
+            } else if Self.isRule(line) {
                 flush()
-                blocks.append(.rule)
-            } else if let heading = line.wholeMatch(of: /(#{1,6})\s+(.+)/) {
+                add(.rule)
+            } else if let heading = Self.heading(line) {
                 flush()
-                blocks.append(.heading(level: heading.1.count, text: String(heading.2)))
-            } else if let item = raw.firstMatch(of: /^(\s*)([-*+]|\d+[.)])\s+(.+)$/) {
+                add(.heading(level: heading.level, text: heading.text))
+            } else if let item = Self.item(raw) {
                 flush()
-                let marker = item.2.first.map { "-*+".contains($0) } == true ? "•" : String(item.2)
-                blocks.append(.item(marker: marker, text: String(item.3), depth: item.1.count / 2))
+                add(.item(marker: item.marker, text: item.text, depth: item.depth))
             } else {
                 paragraph.append(line)
             }
         }
-        if let lines = code { blocks.append(.code(lines.joined(separator: "\n"))) }
-        flush()
+        if !done, let lines = code { add(.code(lines.joined(separator: "\n"))) }
+        if !done { flush() }
         return blocks
+    }
+
+    // 逐行的几种块不用正则：正则字面量每求值一次就新建一份、第一次匹配时再编译，写在逐行的循环里时每行编译一遍
+    // （长回答打开会话页时占了拆块的大半），存成静态的又不能跨线程共用。
+
+    /// 分隔线：同一个记号（`*`、`-`、`_`）至少三个，中间可夹空白。
+    private static func isRule(_ line: String) -> Bool {
+        guard let mark = line.first, "*-_".contains(mark) else { return false }
+        var count = 0
+        for character in line where !character.isWhitespace {
+            guard character == mark else { return false }
+            count += 1
+        }
+        return count >= 3
+    }
+
+    /// 标题：1～6 个 `#`、空白、正文。
+    private static func heading(_ line: String) -> (level: Int, text: String)? {
+        let level = line.prefix { $0 == "#" }.count
+        guard (1...6).contains(level) else { return nil }
+        let rest = line.dropFirst(level)
+        guard rest.first?.isWhitespace == true else { return nil }
+        let text = rest.drop { $0.isWhitespace }
+        return text.isEmpty ? nil : (level, String(text))
+    }
+
+    /// 列表项：缩进（每两格一层）、记号（`-`、`*`、`+`，或数字加 `.`、`)`）、空白、正文；无序的记号显示成"•"。
+    private static func item(_ raw: String) -> (marker: String, text: String, depth: Int)? {
+        let indent = raw.prefix { $0.isWhitespace }
+        let rest = raw.dropFirst(indent.count)
+        guard let first = rest.first else { return nil }
+        let marker: Substring
+        if "-*+".contains(first) {
+            marker = rest.prefix(1)
+        } else {
+            let digits = rest.prefix { $0.unicodeScalars.allSatisfy { $0.properties.numericType == .decimal } }
+            guard !digits.isEmpty, let end = rest.dropFirst(digits.count).first, end == "." || end == ")" else { return nil }
+            marker = rest.prefix(digits.count + 1)
+        }
+        let gap = rest.dropFirst(marker.count).prefix { $0.isWhitespace }
+        guard !gap.isEmpty else { return nil }
+        let text = rest.dropFirst(marker.count + gap.count)
+        guard !text.isEmpty else { return nil }
+        return ("-*+".contains(first) ? "•" : String(marker), String(text), indent.count / 2)
     }
 }
 
@@ -114,7 +168,7 @@ nonisolated struct MarkdownTable: Equatable, Sendable {
     /// 对齐行（"|:---|---:|:-:|"）的每列对齐；不是对齐行时为 nil。
     static func alignments(_ line: String) -> [Alignment]? {
         let cells = cells(line)
-        guard !cells.isEmpty, cells.allSatisfy({ $0.wholeMatch(of: /:?-+:?/) != nil }) else { return nil }
+        guard !cells.isEmpty, cells.allSatisfy(isAlignment) else { return nil }
         return cells.map { cell in
             switch (cell.hasPrefix(":"), cell.hasSuffix(":")) {
             case (true, true): .center
@@ -122,6 +176,14 @@ nonisolated struct MarkdownTable: Equatable, Sendable {
             default: .leading
             }
         }
+    }
+
+    /// 一格对齐记号：可选的冒号、至少一个横线、可选的冒号。
+    private static func isAlignment(_ cell: String) -> Bool {
+        var marks = Substring(cell)
+        if marks.first == ":" { marks = marks.dropFirst() }
+        if marks.last == ":" { marks = marks.dropLast() }
+        return !marks.isEmpty && marks.allSatisfy { $0 == "-" }
     }
 
     /// 一行拆成单元格：去掉首尾的竖线，按没转义的竖线分，"\|" 还原成竖线。

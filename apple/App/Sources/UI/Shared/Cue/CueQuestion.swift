@@ -1,5 +1,4 @@
 import CueStore
-import CueText
 import SwiftUI
 
 /// "等你"那一句要你定什么：两列，左边赭黄问号（全卡唯一的状态色）、右边代码写出的问题（`CueMessage.headline`），规矩那一类下面再一行

@@ -1,6 +1,6 @@
 #if DEBUG
 import CueStore
-import SwiftUI
+import Foundation
 
 /// `-CuePadCueFlow YES`（配 `-CuePadScene cue -CuePadDemo YES`，iOS 与 Mac）：画面就绪后按固定节奏（`FlowBeat`，约 17 秒；给了记录文件再多量 4 秒）走一遍完整的一轮，
 /// 录 Cue 页各处流转的动效用。每一步走真用户与值班的 Mac 走的那条路，写的都是同一份库：
@@ -38,9 +38,9 @@ extension DebugScene {
     private static let flowSession = "cueflow"
 
     #if os(iOS)
-    static func cueFlowIfAsked(_ workspace: Workspace, _ navigation: Navigation) async {
+    static func cueFlowIfAsked(_ workspace: Workspace) async {
         await runCueFlow(workspace) { away in
-            navigation.select(away ? .tasks : .cue)
+            workspace.select(away ? .tasks : .cue)
         }
     }
     #else

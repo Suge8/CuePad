@@ -1,5 +1,4 @@
 import CueStore
-import CueText
 import SwiftUI
 
 /// 对话里的一段（约 `CuePage.segment` 格，`ChatSegments`）：只按各格的内容比较。

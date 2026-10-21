@@ -7,7 +7,7 @@ extension RealHostTests {
         case otherProtocol, oldHostedValue
 
         func rewrite(in installed: URL) throws {
-            let file = installed.appending(path: self == .otherProtocol ? "index.ts" : "hosted.ts")
+            let file = installed.appending(path: self == .otherProtocol ? "index.ts" : "lifecycle.ts")
             let source = try String(contentsOf: file, encoding: .utf8)
             let old = switch self {
             case .otherProtocol: source.replacing(/const PROTOCOL_VERSION = \d+;/, with: "const PROTOCOL_VERSION = 1;")

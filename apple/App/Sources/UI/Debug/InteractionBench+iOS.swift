@@ -37,7 +37,7 @@ enum IOSInteractionBench {
         return row
     }
 
-    static func run(_ workspace: Workspace, _ navigation: Navigation) async {
+    static func run(_ workspace: Workspace) async {
         guard let dir = ProcessInfo.processInfo.environment["CUEPAD_LIBRARY_DIR"] else { return }
         let out = URL(filePath: dir).appending(path: "interact.jsonl")
         try? Data().write(to: out)
@@ -79,27 +79,27 @@ enum IOSInteractionBench {
             measured["name"] = name
             row(measured)
         }
-        navigation.select(.shelf)
+        workspace.select(.shelf)
         try? await Task.sleep(for: .seconds(1))
         // 书架点项目（推入项目页）→ 返回；同一个项目两遍，另一个项目再一遍
         for id in [projects[0], projects[0], projects[1]] {
-            await step("书架点项目") { navigation.push(.project(id)) }
-            await step("返回书架") { navigation.path.removeAll() }
+            await step("书架点项目") { workspace.push(.project(id)) }
+            await step("返回书架") { workspace.path.removeAll() }
         }
         // 项目页任务纸点"还有 N 条"展开、再收起：在没做完的任务最多的项目上（配 `-CuePadManyTasks` 量任务多时）
         guard let busiest = workspace.catalog?.openTasks.max(by: { $0.value < $1.value })?.key else { fail("演示库里没有带任务的项目") }
-        navigation.push(.project(busiest))
+        workspace.push(.project(busiest))
         try? await Task.sleep(for: .seconds(2))
         for _ in 0..<2 {
             await step("展开任务") { DebugScene.toggleTaskFold() }
             await step("收起任务") { DebugScene.toggleTaskFold() }
         }
-        navigation.select(.cue)
+        workspace.select(.cue)
         try? await Task.sleep(for: .seconds(1))
         // 主导航：Cue 页点底部展开的"任务"去任务（配 `-CuePadManyTasks` 量任务多时）、任务页点 Cue 钮回来（点按调的就是 `select`，过渡由 `DockRoot` 接着做）
         for _ in 0..<2 {
-            await step("Cue 进任务") { navigation.select(.tasks) }
-            await step("任务回 Cue") { navigation.select(.cue) }
+            await step("Cue 进任务") { workspace.select(.tasks) }
+            await step("任务回 Cue") { workspace.select(.cue) }
         }
         // Cue 页头开合面板（点页头的那条路）
         for _ in 0..<2 {
@@ -107,25 +107,25 @@ enum IOSInteractionBench {
             await step("收起 Cue 面板") { DebugScene.toggleCuePanel() }
         }
         // 会话页（底部的"会话"）点会话（先读出这一页再推入）→ 返回
-        navigation.select(.agent)
+        workspace.select(.agent)
         try? await Task.sleep(for: .seconds(1))
         for id in [sessions[0], sessions[0], sessions[1]] {
-            await step("进会话页") { navigation.openSession(id, store: store) }
-            await step("返回 Agent") { navigation.path.removeAll() }
+            await step("进会话页") { workspace.openSession(id) }
+            await step("返回 Agent") { workspace.path.removeAll() }
         }
         // Agent 列表滚动：每帧 40pt 往下再往上
         guard let scroll = Self.scrollView(in: Self.window) else { fail("Agent 页上找不到可滚的列表") }
         for _ in 0..<2 { await stepScroll("Agent 列表滚动", scroll, step: { name, action in await step(name, action) }) }
-        navigation.select(.shelf)
+        workspace.select(.shelf)
         try? await Task.sleep(for: .seconds(1))
         for _ in 0..<2 {
             await step("开任务气泡") { workspace.openTask(task) }
             await step("关任务气泡") { workspace.openTask = nil }
         }
-        await typeLong(workspace, navigation, session: sessions[0], card: idea.id, wants: wants, fail: fail, step: { name, action in await step(name, action) })
+        await typeLong(workspace, session: sessions[0], card: idea.id, wants: wants, fail: fail, step: { name, action in await step(name, action) })
         // 最后量长按书架上的项目卡（放在最后：万一菜单没收起，不影响前面各项）：系统的长按菜单在进程内没有入口，由 perf-ios.sh 在模拟器上真按（`AWAIT 名 x y` 是要它按的点，屏幕坐标）。
         // 从手指按下起量 1.5 秒（菜单在按住约半秒后才弹出）；松手后菜单留着，请脚本点一下空白处收起
-        navigation.select(.shelf)
+        workspace.select(.shelf)
         try? await Task.sleep(for: .seconds(1))
         for _ in 0..<2 where wants("长按菜单") {
             guard let card = Self.longPressTarget(in: Self.window) else { fail("书架上找不到有长按菜单的项目卡") }
@@ -157,7 +157,7 @@ enum IOSInteractionBench {
     /// 长文打字：编辑页的正文先写成 `pasted`；输入框（空着）拿到键盘后经剪贴板粘贴进 `pasted`（量这一下：长文粘贴），
     /// 再一个字一个字地敲（每个字一项）。
     private static func typeLong(
-        _ workspace: Workspace, _ navigation: Navigation, session: UUID, card: UUID, wants: (String) -> Bool, fail: (String) -> Never,
+        _ workspace: Workspace, session: UUID, card: UUID, wants: (String) -> Bool, fail: (String) -> Never,
         step: (String, () -> Void) async -> Void
     ) async {
         let text = pasted
@@ -178,21 +178,21 @@ enum IOSInteractionBench {
         if wants("长文打字·编辑页") {
             // 从它所在的项目页推入（同点开它的那条路）：直接从书架推入时 UIKit 的交互转场断言崩溃
             try? await workspace.services.store.updateCard(card) { $0.body = text }
-            navigation.select(.project(Project.defaultID))
+            workspace.select(.project(Project.defaultID))
             try? await Task.sleep(for: .seconds(1.5))
-            navigation.push(.card(card))
+            workspace.push(.card(card))
             await type("编辑页", into: CueTextView.self, pastes: false)
-            navigation.path.removeAll()
+            workspace.path.removeAll()
         }
         if wants("长文打字·回复框") || wants("长文粘贴·回复框") {
-            navigation.select(.cue)
-            navigation.openSession(session, store: workspace.services.store)
+            workspace.select(.cue)
+            workspace.openSession(session)
             await type("回复框", into: GrowingTextView.self)
             workspace.services.settings.setReplyDraft(ComposerDraft(), for: session)
-            navigation.path.removeAll()
+            workspace.path.removeAll()
         }
         if wants("长文打字·对 Cue 说") || wants("长文粘贴·对 Cue 说") {
-            navigation.select(.cue)
+            workspace.select(.cue)
             await type("对 Cue 说", into: GrowingTextView.self)
             workspace.cue.draft = ComposerDraft()
         }
