@@ -132,6 +132,15 @@ final class CueEval {
         }
     }
 
+    /// 工具参数指的是不是这个会话（判定认"对哪个会话"都经这里）：task 写这件任务（编号前缀或标题）；session 写会话（编号前缀或会话名），
+    /// 也认这件任务的编号前缀或标题（指那件任务在做的会话）。
+    static func refers(_ args: [String: Any], to session: String, title: String, cards: [Card]) -> Bool {
+        let isCard = { (ref: String) in cards.contains { $0.id.uuidString.lowercased().hasPrefix(ref) || $0.heading.lowercased() == ref } }
+        if let ref = (args["task"] as? String)?.lowercased(), !ref.isEmpty { return isCard(ref) }
+        guard let ref = (args["session"] as? String)?.lowercased(), !ref.isEmpty else { return false }
+        return session.lowercased().hasPrefix(ref) || title.lowercased() == ref || isCard(ref)
+    }
+
     /// 叫醒之后 Cue 写的消息（tell、回复、动态、完成的结果）
     func said(since: Date? = nil) async throws -> [CueMessage] {
         let from = since ?? start

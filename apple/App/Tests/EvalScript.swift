@@ -157,15 +157,9 @@ class EvalScript {
         return try await eval.said(since: window.lowerBound).last { $0.author == .known(.cue) && $0.choices == nil && $0.taskID == nil && $0.createdAt <= window.upperBound }?.text
     }
 
-    /// 工具参数里的 task（id 前缀或标题）或 session（id 前缀或会话名）指的是哪个会话
+    /// 工具参数指的是哪个会话（`CueEval.refers`）
     func target(_ args: [String: Any]) -> ScriptedSession? {
-        if let ref = (args["task"] as? String)?.lowercased(), !ref.isEmpty {
-            return sessions.first { $0.cards.contains { $0.id.uuidString.lowercased().hasPrefix(ref) || $0.heading.lowercased() == ref } }
-        }
-        if let ref = (args["session"] as? String)?.lowercased(), !ref.isEmpty {
-            return sessions.first { $0.id.lowercased().hasPrefix(ref) || $0.title.lowercased() == ref }
-        }
-        return nil
+        sessions.first { CueEval.refers(args, to: $0.id, title: $0.title, cards: $0.cards) }
     }
 
     static func texts(_ args: [String: Any]) -> String {

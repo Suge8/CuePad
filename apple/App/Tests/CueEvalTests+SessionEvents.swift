@@ -58,13 +58,7 @@ extension CueEvalTests {
                 try await rig.store.writePiTranscript(PiTranscript(
                     sessionID: id, messages: [prompt, reply], recap: PiRecap(lastPrompt: oneLine(first), lastReply: dispatched, answeredAt: due - 1800)))
             }
-            // 给的是这件任务（id 前缀或标题），或它的会话（id 前缀）
-            let toIt = eval.calls("task", "say").filter { call in
-                if let ref = (call.args["task"] as? String)?.lowercased(), !ref.isEmpty {
-                    return ref == Self.title || task.id.uuidString.lowercased().hasPrefix(ref)
-                }
-                return (call.args["session"] as? String).map { !$0.isEmpty && id.hasPrefix($0.lowercased()) } ?? false
-            }
+            let toIt = eval.calls("task", "say").filter { !$0.call.failed && CueEval.refers($0.args, to: id, title: Self.title, cards: [task]) }
             let said = toIt.compactMap { $0.args["text"] as? String }
             return [
                 Check(.result, "对这件任务的会话 say", !toIt.isEmpty),
