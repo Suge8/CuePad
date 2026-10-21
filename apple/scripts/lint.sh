@@ -70,7 +70,7 @@ forbid "界面上请求到哪了只读 Speech.trip（发送中、已送达、没
 forbid "一行里用“·”隔开几段的字只经 Dotted 或 Dot（Atoms.swift）：屏幕写“·”、读屏读逗号；直接拼的分隔点读屏会念出来" \
   '(?: · |Text\("·"\))' 'App/AppGroup/Dotted.swift' '**/Components/Atoms.swift' '**/PiProgress.swift' 'App/Sources/UI/Debug/**' 'App/Tests/**' 'CuePadKit/**'
 forbid "你说出去的话用 SpeechBubble 画（状态只从记录推出，见 Speech）；UserBubble 只给已进对话的话（会话对话与近况）" \
-  '\bUserBubble\s*\(' '**/Components/PiBubbles.swift' '**/Components/PiConversation.swift' '**/Components/PiConversationBlocks.swift'
+  '\bUserBubble\s*\(' '**/Components/PiBubbles.swift' '**/Components/SpeechBubble.swift' '**/Components/PiConversation.swift' '**/Components/PiConversationBlocks.swift'
 
 # 长按菜单带预览要跨行认（菜单闭包在中间），单独一条多行规则
 hits="$(rg -U --pcre2 --line-number --no-heading --type swift --glob '!App/Sources/UI/iOS/Components.swift' \
