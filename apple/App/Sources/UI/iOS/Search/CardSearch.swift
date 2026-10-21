@@ -126,7 +126,7 @@ private struct FilterChips: View {
                 Button("全部") { query.project = nil }
                 Divider()
                 ForEach(projects) { project in Button(project.name) { query.project = project.id } }
-            } label: { Chip(name: "项目", value: projectLabel, on: query.project != nil) }
+            } label: { Chip(name: "项目", value: projectLabel, on: query.project != nil).menuLabel("项目：\(projectLabel)") }
             Button { query.withImages.toggle() } label: { Chip(name: "含图片", value: nil, on: query.withImages) }
                 .accessibilityAddTraits(query.withImages ? .isSelected : [])
             Menu {
@@ -139,10 +139,10 @@ private struct FilterChips: View {
                         Button(target.name) { query.sent = .sent(kind: target.kind, name: target.name) }
                     }
                 }
-            } label: { Chip(name: "Agent", value: sentLabel, on: query.sent != .any) }
+            } label: { Chip(name: "Agent", value: sentLabel, on: query.sent != .any).menuLabel("Agent：\(sentLabel)") }
             Menu {
                 ForEach(PaletteQuery.Period.allCases, id: \.self) { period in Button(period.label) { query.period = period } }
-            } label: { Chip(name: "时间", value: query.period.label, on: query.period != .any) }
+            } label: { Chip(name: "时间", value: query.period.label, on: query.period != .any).menuLabel("时间：\(query.period.label)") }
         }
     }
 

@@ -30,14 +30,12 @@ struct ProjectScope: View {
                         .lineLimit(1).frame(maxWidth: Self.nameWidth)
                     if current == nil { Image(.expand).font(.caption.weight(.semibold)).accessibilityHidden(true) }
                 }
-                // 图标、字与箭头合成一个无障碍元素，读屏只落在菜单按钮上（同 `ProjectScopeMenu`）
-                .accessibilityElement(children: .ignore)
+                .menuLabel(current.map { "项目范围：\($0.name)" } ?? "项目范围：全部项目")
                 .padding(.leading, 14).padding(.trailing, current == nil ? 14 : 4)
                 .frame(height: FloatingHeaderLayout.height)
                 .contentShape(.capsule)
             }
             .buttonStyle(PressStyle())
-            .accessibilityLabel(current.map { "项目范围：\($0.name)" } ?? "项目范围：全部项目")
             if current != nil {
                 Button { workspace.projectScope = nil } label: {
                     Image(.close).font(.caption.weight(.bold))
