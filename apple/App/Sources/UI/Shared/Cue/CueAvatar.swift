@@ -4,7 +4,7 @@ import SwiftUI
 /// 环的颜色与会话状态标同一套（`PiShown.tint`）：在做事（想、用工具）时靛青，环上一颗彗星匀速绕着走（`LoopLayer` 的 `comet`）；
 /// 话在路上靛青实环；等你赭黄实环；刚报了一件做完石绿实环；静着一圈淡墨；睡着或起不来时整个头像变暗。脸一直不动：在做什么只由环说。
 /// 开始与停下时彗星与静止的环交叉淡入淡出（`handoff`）；减弱动态效果或省电模式（`LowPowerMode`）时在做事是一段静止的弧。
-/// 页面消失或 App 不活跃时直接摘掉彗星层，回到前台再起，不让隐藏的头像持有循环动画。
+/// 页面消失或 App 不活跃时直接摘掉彗星层，回到前台再起。前后台与省电的观察只在工作环里，静止时是一层描边，不挂动效容器。
 /// 三档尺寸：行内（任务行、会话标题旁，只露上半身：纸面、折角和眼睛）、侧栏与 Mac 页头的一行、手机 Cue 页头（`header`）。
 /// `size` 是里面那张脸的直径，环画在它外面（外框大一圈）。
 /// 被叫醒、做完时脸软糖地弹一下，在压得最扁时换表情（`Jelly`，同 Cue 的标签图标）。
@@ -37,13 +37,10 @@ struct CueAvatar: View {
     var presence = CuePresence.idle
     var size = Size.row
     @Environment(\.palette) private var palette
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.scenePhase) private var scenePhase
     @State private var visible = false
 
     private var dimmed: Bool { presence.isAway }
     private var working: Bool { if case .working = presence { true } else { false } }
-    private var spinning: Bool { working && visible && scenePhase == .active && !reduceMotion && !LowPowerMode.shared.isOn }
 
     /// 彗星与静止的环换手：只淡入淡出（彗星淡出时照转），比颜色反馈（`Motion.quick`）长一点，看得出是收住、不是消失。
     private static let handoff = Animation.easeInOut(duration: 0.3)
@@ -76,24 +73,39 @@ struct CueAvatar: View {
         }
     }
 
-    /// 静止的环一直在底下，在做事时淡掉，让给彗星或静止的弧：两者都自带靛青的淡轨道。
     private var ring: some View {
-        let inset = size.line / 2
-        return ZStack {
-            Circle().stroke(ringTint, lineWidth: size.line).padding(inset)
-                .transaction { $0.animation = nil }
-                .opacity(working ? 0 : 1)
-            if spinning {
-                LoopLayer(kind: .comet(lineWidth: size.line), color: palette.signature).transition(.opacity)
-            } else if working {
-                Circle().trim(from: 0, to: 0.3).stroke(palette.signature, style: StrokeStyle(lineWidth: size.line, lineCap: .round)).padding(inset)
-                    .background { Circle().stroke(palette.selection, lineWidth: size.line).padding(inset) }
-                    .transition(.opacity)
+        Group {
+            if working {
+                WorkingRing(lineWidth: size.line, visible: visible).transition(.opacity)
+            } else {
+                Circle().stroke(ringTint, lineWidth: size.line).padding(size.line / 2).transition(.opacity)
             }
         }
         .animation(Self.handoff, value: working)
-        .animation(Self.handoff, value: spinning)
-        .transaction { if !visible || scenePhase != .active { $0.animation = nil } }
+    }
+
+    private struct WorkingRing: View {
+        let lineWidth: CGFloat
+        let visible: Bool
+        @Environment(\.palette) private var palette
+        @Environment(\.accessibilityReduceMotion) private var reduceMotion
+        @Environment(\.scenePhase) private var scenePhase
+
+        private var spinning: Bool { visible && scenePhase == .active && !reduceMotion && !LowPowerMode.shared.isOn }
+
+        var body: some View {
+            Group {
+                if spinning {
+                    LoopLayer(kind: .comet(lineWidth: lineWidth), color: palette.signature).transition(.opacity)
+                } else {
+                    Circle().trim(from: 0, to: 0.3).stroke(palette.signature, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)).padding(lineWidth / 2)
+                        .background { Circle().stroke(palette.selection, lineWidth: lineWidth).padding(lineWidth / 2) }
+                        .transition(.opacity)
+                }
+            }
+            .animation(CueAvatar.handoff, value: spinning)
+            .transaction { if !visible || scenePhase != .active { $0.animation = nil } }
+        }
     }
 
     private var ringTint: Color {
