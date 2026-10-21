@@ -18,7 +18,7 @@ nonisolated struct CueTiming: Sendable {
     var sayWait: TimeInterval = Speech.cueWait
     /// 打扰时段（本地钟点）：不巡视。通知不看它，免打扰只认系统的专注模式。
     var quietHours: Set<Int> = [23, 0, 1, 2, 3, 4, 5, 6, 7]
-    /// 信封第一行写的此刻（LongMemEval 评测把它定在题目的提问时刻）；别的时间规则都照真实时钟。
+    /// 信封第一行写的此刻（记忆基准评测把它定在题目的提问时刻）；别的时间规则都照真实时钟。
     var clock: @Sendable () -> Date = { .now }
 
     func isQuiet(_ date: Date) -> Bool { quietHours.contains(Calendar.current.component(.hour, from: date)) }

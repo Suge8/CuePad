@@ -42,7 +42,7 @@ enum EvalSuite: String {
     case short = "短场景"
     case long = "长程"
     case days = "多日"
-    case lme = "LongMemEval"
+    case bench = "记忆基准"
 }
 
 /// 出错的工具调用按原因分：参数校验退回、对象找不到（含对上了好几个）、没有这个工具、其他（会话没送到、读的文件不在等）。
@@ -120,7 +120,7 @@ extension CueEval {
     /// `prompt` 是这一遍的系统提示：记下长度与估算的 token（非 ASCII 每字算 1、ASCII 每 4 字符算 1；工具说明另算）。
     /// Pi 当大脑时另记模型请求带没带 Claude 订阅的计费标识（`EvalBrain` 的只读扩展记下的）。
     func writeScore(_ name: String, suite: EvalSuite, checks: [Check], failure: (any Error)?, prompt: String, to output: URL) async throws {
-        guard suite != .lme else { return }  // LongMemEval 自己判分（lme.py），它的目录里 .json 都是题
+        guard suite != .bench else { return }  // 记忆基准自己判分（bench.py），它的目录里 .json 都是题
         let wide = prompt.unicodeScalars.count { !$0.isASCII }, ascii = prompt.unicodeScalars.count { $0.isASCII }
         var score: [String: Any] = [
             "name": name, "suite": suite.rawValue, "brain": EvalBrain.current.label, "error": failure.map { "\($0)" } ?? NSNull(),
