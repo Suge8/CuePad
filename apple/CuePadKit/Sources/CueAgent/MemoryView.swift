@@ -3,7 +3,7 @@ import Foundation
 
 /// Cue 的记忆视图（OptMem 的读法）：一直记着的全部列出（在系统提示里，`pinnedText`）；其余按序号铺成对齐的 2 的幂块，越新越细、总行数固定在预算内
 /// （按预算二分 alpha，见 `cover`），放在新会话的第一条输入里（`viewText`）。块有摘要用摘要，没有就拆成两半直到有摘要或单行；
-/// 缺的摘要列成"待合并"（`merges`），视图里不列，换新时一并交给 Cue 写（`mergeText`）。摘要可以一层层展开（`zoom`）。
+/// 缺的摘要列成"待合并"（`merges`，由小到大、一批合到顶），视图里不列，换新时一并交给 Cue 写（`mergeText`）。摘要可以一层层展开（`zoom`）。
 /// 参考 https://github.com/VictorTaelin/OptMem 的 `_cover` / `cover`。
 public struct CueMemoryView: Equatable, Sendable {
   public enum Entry: Equatable, Sendable {
@@ -11,7 +11,7 @@ public struct CueMemoryView: Equatable, Sendable {
     case summary(lo: Int, hi: Int, text: String)
   }
 
-  /// 待合并的一块：区间与原文（小块是原行，不含忘掉的与一直记着的；大块是两半的摘要）。
+  /// 待合并的一块：区间与原文（小块是原行，不含忘掉的与一直记着的；大块是两半的摘要，还没有的指向同一批里排在前面的那一半）。
   public struct Merge: Equatable, Sendable {
     public var lo: Int
     public var hi: Int
@@ -50,21 +50,18 @@ public struct CueMemoryView: Equatable, Sendable {
         expand((lo + hi) / 2, hi)
       }
     }
+    // 缺摘要的大块连同缺摘要的两半一起列出（小块排在前面）：一次换新就合到顶，不用等两半写好再等下一次换新
     func pending(_ lo: Int, _ hi: Int) {
       guard summaries[[lo, hi]] == nil else { return }
-      let mid = (lo + hi) / 2
       if hi - lo <= Self.rawMax {
         let raw = (lo..<hi).filter { lines[$0].deletedAt == nil && !lines[$0].pinned }.map { "#\($0) \(lines[$0].text)" }
         merges.append(Merge(lo: lo, hi: hi, source: raw.joined(separator: "\n")))
         return
       }
-      let halves = [(lo, mid), (mid, hi)]
-      let ready = halves.compactMap { half in summaries[[half.0, half.1]].map { "#\(half.0)-\(half.1 - 1) \($0)" } }
-      if ready.count == 2 {
-        merges.append(Merge(lo: lo, hi: hi, source: ready.joined(separator: "\n")))
-      } else {
-        for half in halves { pending(half.0, half.1) }
-      }
+      let halves = [(lo, (lo + hi) / 2), ((lo + hi) / 2, hi)]
+      for half in halves { pending(half.0, half.1) }
+      let source = halves.map { half in "#\(half.0)-\(half.1 - 1) " + (summaries[[half.0, half.1]] ?? "（上面先合的这一块写成的那一行）") }
+      merges.append(Merge(lo: lo, hi: hi, source: source.joined(separator: "\n")))
     }
     for (lo, hi) in Self.cover(lines.count, budget: max(0, budget - pinned.count)) {
       expand(lo, hi)
