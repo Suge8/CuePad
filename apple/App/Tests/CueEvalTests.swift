@@ -96,7 +96,8 @@ struct CueEvalTests {
                 Check("一次成（证据没因超宽被退回）", !done.isEmpty && done.allSatisfy { !$0.call.failed }),
                 Check("证据 1–3 条", (1...3).contains(evidence.count)),
                 Check("没另外 tell", eval.calls("tell").isEmpty),
-                Check("打开看了截图（附加）", eval.calls("read").contains { ($0.args["file_path"] as? String)?.hasSuffix(".png") == true }),
+                // 读文件的参数名 Claude Code 是 file_path、Pi 是 path
+                Check("打开看了截图（附加）", eval.calls("read").contains { (($0.args["file_path"] ?? $0.args["path"]) as? String)?.hasSuffix(".png") == true }),
             ]
         }
     }
