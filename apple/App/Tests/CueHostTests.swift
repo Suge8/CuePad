@@ -20,7 +20,6 @@ nonisolated let realPi = FileManager.default.homeDirectoryForCurrentUser.appendi
 @Suite(.enabled(if: FileManager.default.isExecutableFile(atPath: realPi.path), "需要 ~/.local/bin/pi"), .serialized, .timeLimit(.minutes(2)))
 struct CueHostTests {
     /// 你的话送进 Cue 不受库忙不忙影响：十个会话的状态一刻不停地写着，说的话照样马上交给 Cue。
-    /// （别的设备上说的话经主动拉取到达这台 Mac，那一段见 CueSync 的 `CueMessageArrivalTests`。）
     @Test func 库正忙时你的话马上送进Cue() async throws {
         let rig = try await Rig()
         let store = rig.store
@@ -75,7 +74,6 @@ struct CueHostTests {
         await rig.stop()
     }
 
-    /// 你请 Cue 把图转给干活的会话：Cue 把图的引用写进 task say，会话收到的投送里就是这张图。
     @Test func 你的图_Cue转给会话() async throws {
         let rig = try await Rig()
         try await rig.settleTask(titled: "修好登录页 转图")
@@ -90,7 +88,6 @@ struct CueHostTests {
         await rig.stop()
     }
 
-    /// 刚启用那一轮已经用 tell 对你说过话了：最后那句回复不再另写一条，开场只有一条。
     @Test func 刚启用说过话_开场只有一条() async throws {
         let rig = try await Rig(asksOnEnable: true)
         try await eventually("回了最后一句") { rig.model.answered("已告诉用户") }

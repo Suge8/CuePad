@@ -72,7 +72,6 @@ private struct FilterToken<Items: View>: View {
     }
 }
 
-/// 筛选胶囊：生效时填成实心。
 private struct FilterCapsule: View {
     let name: String
     let value: String?

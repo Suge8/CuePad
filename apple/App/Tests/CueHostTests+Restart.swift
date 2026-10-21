@@ -11,9 +11,7 @@ import Synchronization
 import Testing
 @testable import CuePad
 
-// 大脑被打断与换班：一轮中途被杀、并行的步骤被打断、重启时托管会话还活着、写交接后换新班次。
 extension CueHostTests {
-    /// 大脑在一轮中途被杀：这一轮里交出去的你的话退回，重起后重新交给新的大脑，照常回答。
     @Test func 一轮中途被杀_你的话重新交出() async throws {
         let rig = try await Rig()
         let first = try #require(rig.brainPIDs.first)

@@ -61,7 +61,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         self.workspace = workspace
 
         let panel = MenuBarPanel()
-        // 菜单栏面板点会话或 Cue：收起面板、把主窗口叫到前面，在它的内容区打开那一页（与侧栏同一处）
         panel.setContent(RootViews.menuBarPad(services, workspace: workspace) { [weak panel] route in
             panel?.hide()
             window.show()

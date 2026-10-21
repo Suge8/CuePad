@@ -96,7 +96,6 @@ private struct GeneralSections: View {
 }
 
 /// 一个全局快捷键（显示/隐藏 CuePad、对 Cue 说）：点键帽后按下新的组合键，Esc 取消；注册失败时保留原快捷键，原因写在名称下面。
-/// 悬停时键帽左边露出"更改"。
 /// 快捷键那一格：指针停在上面（`buttonHovered`）时左边露出"更改"（占着位置、只是透明，露出时键帽不挪）。
 private struct ShortcutKey: View {
     let text: String

@@ -153,7 +153,6 @@ final class Navigation {
         if top != .search { push(.search) }
     }
 
-    /// 在搜索页上时退出（Esc），同返回。
     func closeSearch() {
         if top == .search { path.removeLast() }
     }
@@ -203,7 +202,6 @@ final class Navigation {
         }
     }
 
-    /// 此刻屏幕上最上面的页。
     var top: Route { path.last ?? root }
 
     /// 屏幕上最上面那一页是会话页时是它（这台手机开着哪个会话，`ViewerKeeper`）。
@@ -270,7 +268,6 @@ extension EnvironmentValues {
 }
 
 extension View {
-    /// 作为卡片缩放过渡的起点。
     @ViewBuilder func zoomSource(_ id: UUID, in namespace: Namespace.ID?) -> some View {
         if let namespace { matchedTransitionSource(id: id, in: namespace) } else { self }
     }

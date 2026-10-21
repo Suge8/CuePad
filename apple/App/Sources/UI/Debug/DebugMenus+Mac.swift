@@ -42,7 +42,6 @@ extension DebugScene {
 
     private static let pressHold: Duration = .milliseconds(90)
 
-    /// 能按的键：名字、键码与字符。
     private static let keys: [String: (code: UInt16, character: String)] = ["esc": (53, "\u{1b}"), "return": (36, "\r")]
 
     private static func post(_ type: NSEvent.EventType, in window: NSWindow, key: (code: UInt16, character: String)) {

@@ -3,7 +3,6 @@ import CueStore
 import CueText
 import SwiftUI
 
-// 量接力的开销：前后各量一段的帧、主线程 CPU、指令数与能量（`-CuePadFlightLog`）。
 extension DebugScene {
     /// 覆盖三道错开的接力与最后一圈落点反馈。
     static let flightProbe = 2.4

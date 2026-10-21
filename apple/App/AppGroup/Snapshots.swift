@@ -22,9 +22,7 @@ nonisolated struct DefaultProjectSnapshot: Codable, Equatable, Sendable {
     }
 
     var name: String
-    /// 最近修改的几张灵感，新的在前。
     var cards: [Card]
-    /// 默认项目里的灵感总数。
     var total: Int
 }
 

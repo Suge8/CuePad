@@ -2,8 +2,8 @@
 import SwiftUI
 
 /// 任务页（侧栏"任务"、⌘⇧T）：流水看板（`TaskBoard`）四列并排——待办 → 推进中 → 等你 → 做完（今天），每列各自滚动（`BoardColumn`），列头随列一起滚。
-/// 顶上不写页名（侧栏的选中格已经说了在哪一页），顶上那一排（`pageHeader`）左边是项目范围（`ProjectScopeMenu`，同会话页那一份；选了项目以后列头的数也只数这个项目）、
-/// 右边"新任务"（待办顶上浮出添加那一行，落在范围里的项目或当前项目；右上"⋯"里同一下）。
+/// 顶上不写页名（侧栏的选中格已经说了），顶上那一排（`pageHeader`）左边是项目范围（`ProjectScopeMenu`，同会话页那一份；选了项目以后列头的数也只数这个项目）、
+/// 右边"新任务"（落在范围里的项目或当前项目）。
 struct TaskBoardPage: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services

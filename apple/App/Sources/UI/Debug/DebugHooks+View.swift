@@ -4,7 +4,6 @@ import SwiftUI
 import AppKit
 #endif
 
-// 视图上的调试钩子：产品视图挂上它们，Release 里什么都不挂（同 `DebugHooks`，两种构建都编译）。
 extension View {
     #if os(macOS)
     /// 单次交互（`-CuePadBench interact`）时记下这条任务行在窗口里的位置，前台量的"任务气泡开"用真实点击点它（`InteractionBench`）；平时什么都不挂。

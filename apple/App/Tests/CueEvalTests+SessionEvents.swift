@@ -11,7 +11,6 @@ import SwiftUI
 import Testing
 @testable import CuePad
 
-// 会话的动静叫醒 Cue：出错、额度用完、子代理停住、会话在问、做完的事收尾。
 extension CueEvalTests {
     @Test func f会话出错() async throws {
         try await CueEval.run("f1-会话出错", expect: "会话报 API 500：say 让它继续（重试一次）或换模型，不打扰用户") { eval in

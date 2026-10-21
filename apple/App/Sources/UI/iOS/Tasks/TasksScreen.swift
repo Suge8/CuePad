@@ -2,10 +2,9 @@
 import CueStore
 import SwiftUI
 
-/// 任务页（iPhone 底部一排的"任务"、宽屏侧栏的"任务"）：流水看板（`TaskBoard`），待办 → 推进中 → 等你 → 做完（今天）。
-/// 只看项目范围里的（`Workspace.scopedProject`，同会话页那一份；选了项目以后分段与列头的数也只数这个项目），页里不另设筛选。
-/// 顶上不写页名，项目范围在顶栏中间（`ProjectScope`，宽窄同一个顶栏）。宽屏（iPad）同 Mac 四列并排（`BoardColumns`）；窄屏一屏一列：
-/// 顶上一排带数的分段（`BoardSegments`），左右滑换列（分页滚动），点分段滑过去；打开时有等你就落在等你。
+/// 任务页：流水看板（`TaskBoard`），待办 → 推进中 → 等你 → 做完（今天）。只看项目范围里的（`Workspace.scopedProject`，同会话页那一份；
+/// 选了项目以后分段与列头的数也只数这个项目），页里不另设筛选；项目范围在顶栏中间（`ProjectScope`）。
+/// 宽屏（iPad）同 Mac 四列并排（`BoardColumns`）；窄屏一屏一列：带数的分段（`BoardSegments`）、左右滑换列，打开时有等你就落在等你。
 /// 右上角"+"去待办、顶上浮出添加那一行（`NewTaskLine`，落在范围里的项目或当前项目，可换），失焦且没写字时收回。
 struct TasksScreen: View {
     @Environment(Workspace.self) private var workspace

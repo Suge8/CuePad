@@ -47,7 +47,6 @@ struct NewSessionForm: View {
 
     private enum Stage: Equatable {
         case idle
-        /// 请求发出，等这台 Mac 启动 Pi。
         case opening
         /// Pi 已启动，等它连上（连上后表单关掉、打开新会话）。
         case connecting
@@ -60,7 +59,6 @@ struct NewSessionForm: View {
     var body: some View {
         let places = ProjectFolders.launchPlaces(
             projects: workspace.catalog?.projects ?? [], bindings: workspace.catalog?.bindings ?? [], host: workspace.localHost, workMac: nil)
-        // 没选过时默认当前项目
         let place = places.first { $0.id == chosen } ?? places.first { $0.project.id == workspace.currentProject } ?? places.first
         let agent = agents?.preferred(services.settings.lastAgent)
         VStack(alignment: .leading, spacing: 12) {

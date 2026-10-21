@@ -58,7 +58,6 @@ private struct ReplyNoteLayer: ViewModifier {
 
 /// 一条回答的可选文本页：正文是渲染后的可选文字（`MarkdownText.proseTexts`，段间空一行），选区才换算得成批注的位置；
 /// 系统编辑菜单最前面是"批注"（跨段的选区截到起点那一段），批注过的几处同对话里一样高亮，点它改或删那一条。
-/// "选择文本"与"批注"打开的是这同一页，只是标题与提示不同。
 struct ReplyTextSheet: View {
     enum Purpose { case select, annotate }
 

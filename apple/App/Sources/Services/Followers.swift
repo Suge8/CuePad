@@ -8,7 +8,6 @@ final class Followers {
     private var sink: AsyncStream<Body>.Continuation?
     private var supervisor: Task<Void, Never>?
 
-    /// 起过跟随者、还没取消。
     var isRunning: Bool { sink != nil }
 
     func add(_ body: @escaping Body) {

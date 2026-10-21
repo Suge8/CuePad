@@ -11,7 +11,6 @@ import Observation
 /// 隔离运行（开发构建）只写配置目录经环境变量换走了的那几家（`AgentIntegration.isWritable`），其余只检测。
 @Observable
 final class AgentIntegrations {
-    /// 第一次检测完成前为空
     private(set) var statuses: [AgentKind: AgentStatus] = [:]
     /// 在后台装、登录的那几家（接入面板的"安装""登录"）与没做成的原因；做成了就没有这一项，之后看检测与探测。
     private(set) var jobs: [AgentKind: AgentJob] = [:]
@@ -158,14 +157,12 @@ final class AgentIntegrations {
         }
     }
 
-    /// 删掉 CuePad 写给它的全部文件。
     func uninstall(_ kind: AgentKind) async throws {
         let executable = statuses[kind]?.executable
         try await change(kind) { try await $0.uninstall(kind, executable: executable) }
         await uninstalled(kind)
     }
 
-    /// 改完（成功或失败）都重读这一个的状态。
     private func change(_ kind: AgentKind, _ body: (AgentIntegration) async throws -> Void) async throws {
         do {
             try await body(integration)

@@ -12,7 +12,6 @@ struct Prewarm: View {
     @State private var step = Step.idle
     /// 预热的对话区的贴底状态（没人读，只是滚动区要一份）。
     @State private var follow = ChatFollow()
-    /// 预热任务气泡用的那条任务。
     @State private var warmTask: TaskBubble.Request?
 
     /// 读到资料库后等多久开始：首屏出来、用户还没动手。⌘K 面板同一时机常驻挂上（`keptPanel`）。

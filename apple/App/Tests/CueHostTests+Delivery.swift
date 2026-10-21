@@ -11,7 +11,6 @@ import Synchronization
 import Testing
 @testable import CuePad
 
-// Cue 说的话没送达：过了时限、当场报过、断开后才失败、重试送到，以及晚到的歇下与失败。
 extension CueHostTests {
     /// Cue 对开着的会话说话，过了说话工具等结果的时限（`CueTiming.sayWait`）Mac 才回报没送达（会话已关闭）：工具如实说还没送达；
     /// 失败一到就叫醒 Cue，信封里是"[发送失败] 任务 · 原因"；会话页那句话的气泡写着同一个原因。

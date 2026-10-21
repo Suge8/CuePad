@@ -24,7 +24,6 @@ final class AccountQuotas {
         }
     }
 
-    /// 还一条都没有，或有一条陈旧了。
     private func needsRefresh(at now: Date) -> Bool { items.isEmpty || items.contains { $0.isStale(at: now) } }
 
     /// 需要时用 `refresh` 查一次（Mac 经在线会话里的扩展，手机请 Mac 查）；正在查就等那一次。

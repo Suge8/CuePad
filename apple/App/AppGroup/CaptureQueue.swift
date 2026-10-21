@@ -52,7 +52,6 @@ nonisolated enum CaptureQueue {
         try encoder.encode(capture).write(to: directory.appending(path: manifestName), options: .atomic)
     }
 
-    /// 已写完的条目，按创建时间先后。
     static func pending(in queue: URL) -> [Entry] {
         let directories = (try? FileManager.default.contentsOfDirectory(at: queue, includingPropertiesForKeys: nil)) ?? []
         return directories.compactMap { directory -> Entry? in

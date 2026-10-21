@@ -22,7 +22,6 @@ enum PerfLibrary {
     private static let boundProjects = 10
     /// 带对话的历史会话（`perf-0`…）各有多少轮，长短悬殊。
     static let chatRounds = [3, 6, 10, 16, 24, 36, 50, 70, 100, 140, 200, 300]
-    /// 最长的那段对话。
     static var longestChat: String { "perf-\(chatRounds.count - 1)" }
 
     static func seed(_ store: CueStore) async throws {
@@ -110,7 +109,6 @@ enum PerfLibrary {
         try await DebugScene.writeChat(sessionID, turns, store: store)
     }
 
-    /// 一轮回答：长段落、列表、表格、代码块轮换。
     private static func answer(_ random: inout SeededRandom, round: Int) -> String {
         let chinese = round % 2 == 0
         func paragraph(_ random: inout SeededRandom) -> String {
@@ -220,7 +218,6 @@ enum PerfLibrary {
     ]
 }
 
-/// 可复现的伪随机数（SplitMix64）。
 nonisolated struct SeededRandom {
     private var state: UInt64
 
@@ -234,10 +231,8 @@ nonisolated struct SeededRandom {
         return z ^ (z >> 31)
     }
 
-    /// 0..<upperBound
     mutating func next(_ upperBound: Int) -> Int { Int(nextUInt64() % UInt64(upperBound)) }
 
-    /// 0..<1
     mutating func unit() -> Double { Double(nextUInt64() >> 11) / Double(1 << 53) }
 }
 #endif

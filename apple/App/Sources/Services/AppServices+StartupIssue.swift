@@ -5,7 +5,6 @@ extension AppServices {
         case captureImportFailed(String)
         /// iCloud 同步（或依赖它的 Mac 端远程功能）没能启动。
         case syncUnavailable(String)
-        /// 小组件与分享扩展用的快照写不出来。
         case widgetDataUnavailable(String)
         #if os(macOS)
         case piBridgeUnavailable(String)

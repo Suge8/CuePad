@@ -4,7 +4,6 @@ import Foundation
 import Observation
 
 nonisolated enum CommandLineToolError: Error, Equatable, LocalizedError {
-    /// App 包里没有命令行二进制。
     case unavailable
     /// 链接的位置已被别的东西占用，不覆盖。
     case occupied(String)
@@ -38,7 +37,6 @@ final class CommandLineToolInstaller {
     let helper: URL
     let linkDirectory: URL
     var link: URL { linkDirectory.appending(path: "cuepad") }
-    /// 给人看的链接目录（主目录写成 ~）。
     var linkDirectoryDisplay: String { (linkDirectory.path as NSString).abbreviatingWithTildeInPath }
     /// 让 shell 找得到链接要加进 shell 配置的那一行。
     var pathExport: String {

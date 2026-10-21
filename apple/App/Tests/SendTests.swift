@@ -24,7 +24,6 @@ struct SendTests {
         return ext
     }
 
-    /// 等唯一的那条请求有结果。
     func settled() async throws -> DeliveryRequest {
         try await eventually(services.store, { try $0.deliveryRequests().first }) { $0?.isOpen == false }!
     }

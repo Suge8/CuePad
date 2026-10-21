@@ -4,7 +4,6 @@ import CueText
 import OSLog
 import SwiftUI
 
-// 演示 Mac：接手发给它的话与对 Cue 说的话、送达再回状态；scratch 会话循环走过各种状态。
 extension DebugScene {
     static func runDemoMac(_ services: AppServices) async {
         let store = services.store, host = "demo-mac"

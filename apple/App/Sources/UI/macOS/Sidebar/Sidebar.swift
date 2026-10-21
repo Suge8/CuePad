@@ -269,7 +269,6 @@ private struct ProjectRows: View {
     }
 }
 
-/// 项目行尾的状态标：哪个会话、显示成什么。
 private struct ProjectMark: Equatable {
     let shown: PiShown
     let session: String

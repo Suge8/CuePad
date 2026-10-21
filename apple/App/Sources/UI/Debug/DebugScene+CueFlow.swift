@@ -62,7 +62,6 @@ extension DebugScene {
         let store = workspace.services.store
         try await beat(FlowBeat.lead)
 
-        // 1. 写一句、按发送钮、话在路上、送达
         for count in 1...flowSaid.count {
             workspace.cue.draft.text = String(flowSaid.prefix(count))
             try await beat(FlowBeat.keystroke)
@@ -83,7 +82,6 @@ extension DebugScene {
         let startedAt = Date.now
         try await store.markCueMessagesDelivered([said.id], at: startedAt)
 
-        // 2. 在想 → 用工具，两步进展
         let context = try await store.cueState()?.context
         try await store.setCueState(.thinking, context: context)
         try await beat(FlowBeat.thinking)
@@ -100,12 +98,10 @@ extension DebugScene {
         try await store.setCueState(.tool, detail: "跟会话说话", round: row, context: context)
         try await beat(FlowBeat.toolStep)
 
-        // 3. 回复落库，歇下
         _ = try await store.addCueMessage(.cue, text: "复现了：回调里等 token 刷新时没设超时，网络慢时会一直挂着。改成 10 秒超时、超时后回登录页重新授权，测试在跑。", task: task.id)
         try await store.setCueState(.settled, context: context)
         try await beat(FlowBeat.reply)
 
-        // 4. 结果卡，再一条"等你"，停一会儿替你选一项
         await seedEvidence(store, session: flowSession, title: "登录页（超时后）")
         _ = try await store.finishTask(task.id, evidence: ["网络断开时 10 秒后回到登录页", "重连用例 4 个都过了"])
         try await beat(FlowBeat.result)
@@ -114,7 +110,6 @@ extension DebugScene {
         try await workspace.services.answerCueQuestion(asked.id, CueAsk.once)
         try await beat(FlowBeat.answered)
 
-        // 5. 切走再回来
         leave(true)
         try await beat(FlowBeat.away)
         leave(false)

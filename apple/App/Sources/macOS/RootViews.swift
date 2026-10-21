@@ -39,7 +39,6 @@ private struct MainRoot: View {
             .onChange(of: services.pendingDeepLink, initial: true) {
                 if case .cue = services.consumeDeepLink() { workspace.show(.cue) }
             }
-            // Cue 与会话之间接力的那一下画在整个窗口上（含工具栏）
             .modifier(CueRelayStage(workspace: workspace))
             .modifier(PaletteProvider())
             .onChange(of: services.settings.theme, initial: true) { _, theme in

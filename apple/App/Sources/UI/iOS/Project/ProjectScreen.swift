@@ -155,10 +155,9 @@ struct ProjectScreen: View {
     }
 }
 
-/// 顶栏下总是一张纸（同 Mac 项目页）：本项目任务（前 3 条没做完的顶层任务连同步骤，可拖动、缩进，同任务页；纸里不写"任务"二字，行首的任务圈已经说了）；
-/// 纸底一行左边"添加任务"，右边是没列出的与最近完成的个数，点了在纸里原地展开（无回弹弹簧）、各自开合，见 `TaskFold`；收起其余任务时纸底那一行留在原处、
-/// 位置一步到位、纸上留下的几行淡入，见 `TaskFoldAnchor`）。会话不在页上，"⋯"里"看这个项目的会话"去会话页。
-/// 三种项目（多、少、只有任务）是同一个结构，切换项目时眼睛不用重新找。
+/// 顶栏下总是一张纸（同 Mac 项目页）：本项目任务（前 3 条没做完的顶层任务连同步骤，可拖动、缩进，同任务页）；纸底一行左边"添加任务"，
+/// 右边是没列出的与最近完成的个数，点了在纸里原地展开（无回弹弹簧）、各自开合，见 `TaskFold`、`TaskFoldAnchor`。
+/// 会话不在页上，"⋯"里"看这个项目的会话"去会话页。三种项目（多、少、只有任务）是同一个结构，切换项目时眼睛不用重新找。
 private struct FocusCard: View {
     let data: ProjectPageData
     @Binding var fold: TaskFold
@@ -227,7 +226,6 @@ private struct FocusCard: View {
         withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { fold[keyPath: key].toggle() }
     }
 
-    /// 纸底展开或收起的一格。
     private func toggleButton(_ title: String, open: Bool, _ key: WritableKeyPath<TaskFold, Bool>) -> some View {
         Button { toggle(key) } label: {
             HStack(spacing: 4) {

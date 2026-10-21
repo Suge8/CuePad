@@ -116,7 +116,6 @@ struct SetupRow: Equatable, Identifiable {
     var id: AgentKind { kind }
 }
 
-/// 一家这一步要你做什么。
 enum SetupStep: Equatable {
     /// 还在检测，或装好、登录后还没问过它能不能用
     case checking
@@ -129,7 +128,6 @@ enum SetupStep: Equatable {
     case logIn(String?)
     /// 在等你在浏览器里登录完："重新登录"
     case loggingIn
-    /// 勾上接入（同设置里打开开关）
     case connect
     /// 别的原因（问不出模型……），只写出来
     case problem(String)

@@ -4,7 +4,6 @@ import CueText
 import OSLog
 import SwiftUI
 
-// 演示库里会话之外的状态：两台 Mac 的目录绑定、任务的状态、会话发来的预览。
 extension DebugScene {
     static func seedBindings(_ store: CueStore, projects: [Project]) async {
         try? await store.publishDirectoryBindings(host: "demo-mac")

@@ -18,7 +18,6 @@ final class MacAgentsRecorder {
     private let sync: (any SyncControlling)?
     private let host: String
     private let agents: AgentIntegrations
-    /// 最近排上的那一次
     private var latest: Task<MacAgents, any Error>?
     /// 最近一次问用的接入状态
     private var probed: [AgentKind: AgentStatus]?
@@ -48,7 +47,6 @@ final class MacAgentsRecorder {
         return try await round.value
     }
 
-    /// 跟着接入状态与系统唤醒问，直到任务取消。
     func keep(notifications center: NotificationCenter) async throws {
         let statuses = Observations { [agents] in agents.statuses }
         try await withThrowingDiscardingTaskGroup { group in

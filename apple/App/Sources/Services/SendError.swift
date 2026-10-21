@@ -1,9 +1,7 @@
 import Foundation
 
 nonisolated enum SendError: Error, Equatable {
-    /// 正文引用的图片找不到或读不出来。
     case imageUnavailable(String)
-    /// 目标只收文字，而正文含图片。
     case imagesNotSupported
     /// 手机指定的 Pi 会话已结束，或不在这台 Mac 上。
     case sessionNotOnThisMac(String)

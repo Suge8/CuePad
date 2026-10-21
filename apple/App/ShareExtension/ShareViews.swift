@@ -33,7 +33,6 @@ private struct ShareForm: View {
                     .listRowBackground(palette.paper)
                 }
             }
-            // 纸与墨：桌面色的底、纸色的行、墨色的字与按钮（tint 由 withPalette 设成墨），不是系统灰底蓝字
             .scrollContentBackground(.hidden)
             .background(palette.desk)
             .foregroundStyle(palette.ink)

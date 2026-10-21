@@ -11,7 +11,6 @@ import Synchronization
 import Testing
 @testable import CuePad
 
-// 开工与会话的动静：建任务开出会话、会话歇下或等回答叫醒 Cue、开工失败。
 extension CueHostTests {
     /// Cue 经工具建任务并开工：执行器在项目文件夹开出会话，会话名是任务标题、模型与思考强度是 Cue 指定的（启动参数，一步生效），再送进草稿。
     @Test func 建任务开工_会话名模型强度照Cue指定的开() async throws {

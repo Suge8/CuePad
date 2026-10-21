@@ -55,7 +55,6 @@ final class MacPages {
     /// 先挂上、还没去过的页（`premount`）：去过的页都记着最后一次看它。
     func isPremounted(_ page: Route) -> Bool { lastSeen[page] == nil }
 
-    /// 进了回收站或删掉的项目不再留着它的页。
     func forget(projectsNotIn ids: Set<UUID>) {
         let gone = kept.filter { if case .project(let id) = $0 { !ids.contains(id) } else { false } }
         if !gone.isEmpty { kept.removeAll { gone.contains($0) } }
