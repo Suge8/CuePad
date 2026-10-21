@@ -18,15 +18,17 @@ final class MacPages {
     @ObservationIgnored private var trimTask: Task<Void, Never>?
     static let keptPages = 4
 
-    /// 开合侧栏的动画里详情区里的页摆在哪（`SidebarMotion`）：动画结束时的左缘与宽度；不在动时 nil。
-    private(set) var detailHold: DetailHold?
-    @ObservationIgnored private var detailFrame = CGRect.zero
+    /// 开合侧栏的动画里详情区里的页按终点排好的左缘（`SidebarMotion`，宽是从它到详情区的右缘）；不在动时 nil。
+    /// 一变就把详情区这一栏的图层平移到侧栏此刻的边（`slide`）。
+    private(set) var held: CGFloat? { didSet { slide() } }
     /// 侧栏开着、不在动时详情区的左缘：展开后详情区从哪起（侧栏这一栏的宽另有内边距，不能拿它算）。还没见过侧栏开着时为 nil。
     @ObservationIgnored private var openedMinX: CGFloat?
+    /// 详情区这一栏的图层（`ColumnFinder`）与侧栏这一帧的边（详情区的左侧安全区）：平移量是边减 `held`。
+    @ObservationIgnored weak var column: CALayer?
+    @ObservationIgnored private var edge: CGFloat = 0
     @ObservationIgnored private var motions = 0
     /// 收起正在动时又按了展开：等收起动完再展开（`toggleSidebar`）。
     @ObservationIgnored private var reopen = false
-    @ObservationIgnored let slide = ColumnSlide()
     /// 页滑动时两边多铺的底色，不小于侧栏最宽的那一栏。
     static let slideOverscan: CGFloat = 400
 
@@ -35,21 +37,18 @@ final class MacPages {
     /// 收起途中再按展开不打断：分栏不支持这样反向，会先一步跳到收起、下一帧再不带动画地跳到展开（侧栏闪没一帧）；改成收起动完接着展开，再按一次就取消。
     func toggleSidebar() {
         let opening = sidebar == .detailOnly
-        if opening, detailHold != nil {
+        if opening, held != nil {
             reopen.toggle()
             return
         }
-        let leading = opening ? openedMinX : 0
-        detailHold = leading.map { DetailHold(leading: $0, width: detailFrame.maxX - $0) }
-        slide.hold(detailHold)
+        held = opening ? openedMinX : 0
         motions += 1
         let motion = motions
         withAnimation(Motion.snappy, completionCriteria: .removed) {
             sidebar = opening ? .all : .detailOnly
         } completion: { [weak self] in
             guard let self, motion == motions else { return }
-            detailHold = nil
-            slide.hold(nil)
+            held = nil
             if reopen {
                 reopen = false
                 toggleSidebar()
@@ -57,38 +56,20 @@ final class MacPages {
         }
     }
 
-    /// 详情区这一栏的图层：动画里平移到侧栏这一帧的边，页按终点排好、左缘贴着侧栏走；不在动时复位。
-    /// 侧栏的边就是详情区的左侧安全区，它与侧栏在同一次布局里变，平移跟着同一次提交上屏；按下开合的那一下就平移，页按终点排好的那一帧不会先跳过去。
-    @MainActor
-    final class ColumnSlide {
-        weak var layer: CALayer?
-        private var edge: CGFloat = 0
-        private var leading: CGFloat?
-
-        func follow(edge: CGFloat) {
-            self.edge = edge
-            apply()
-        }
-
-        func hold(_ hold: DetailHold?) {
-            leading = hold?.leading
-            apply()
-        }
-
-        private func apply() {
-            layer?.setAffineTransform(CGAffineTransform(translationX: leading.map { edge - $0 } ?? 0, y: 0))
-        }
+    /// 侧栏这一帧的边（几何读数，`SidebarMotion` 写）。它与侧栏在同一次布局里变，平移跟着同一次提交上屏；
+    /// 按下开合的那一下（`held` 变）就平移，页按终点排好的那一帧不会先跳过去。
+    func follow(edge: CGFloat) {
+        self.edge = edge
+        slide()
     }
 
-    struct DetailHold: Equatable {
-        var leading: CGFloat
-        var width: CGFloat
+    /// 详情区在窗口里的左缘（几何读数，`MainWindow` 写；不触发重算）。
+    func detailMoved(toMinX minX: CGFloat) {
+        if sidebar != .detailOnly, held == nil { openedMinX = minX }
     }
 
-    /// 详情区在窗口里的位置（几何读数，`MainWindow` 写；不触发重算）。
-    func detailMoved(to frame: CGRect) {
-        detailFrame = frame
-        if sidebar != .detailOnly, detailHold == nil { openedMinX = frame.minX }
+    private func slide() {
+        column?.setAffineTransform(CGAffineTransform(translationX: held.map { edge - $0 } ?? 0, y: 0))
     }
 
     func visit(from left: Route, to page: Route) {
