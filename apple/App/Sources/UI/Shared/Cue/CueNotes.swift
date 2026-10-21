@@ -43,8 +43,8 @@ nonisolated struct CueNoteRound: Identifiable, Equatable, Sendable {
     }
 }
 
-/// 一节的第一行：为什么醒，与叫醒它的那几处（点了去那里）。写法只在这里：会话的动静写"atlas 停下了"（几处时"atlas 等 3 处有动静"），
-/// 提醒写"提醒到点 · 那条记忆"，其余是一句固定的话（界面上不出现换新、班次，换新后接着做写"接着上次做"）。名字读的时候查好（`CueWakeNames`）。
+/// 一节的第一行：为什么醒，与叫醒它的那几处（点了去那里）。为什么醒只画图标（`CueWake.icon`），字只写图标说不出的：会话的动静写"atlas 停下了"
+/// （几处时"atlas 等 3 处有动静"），提醒写那条记忆；其余只有图标。一句固定的话（`reason`）只给读屏。名字读的时候查好（`CueWakeNames`）。
 nonisolated struct CueWakeHeader: Equatable, Sendable {
     /// 点了去哪
     enum Target: Equatable, Sendable {
@@ -59,8 +59,6 @@ nonisolated struct CueWakeHeader: Equatable, Sendable {
     }
 
     let wake: CueWake
-    /// 名字前面的话（"提醒到点"、"空闲时看了一眼"）
-    let lead: String?
     /// 叫醒它的那一处叫什么（墨色加粗）
     let name: String?
     /// 名字后面的话（"停下了"）
@@ -84,25 +82,27 @@ nonisolated struct CueWakeHeader: Equatable, Sendable {
                 }
             }
             let latest = stirs.last
-            (lead, name) = (places.isEmpty ? Self.phrase(wake) : nil, places.first?.title)
+            name = places.first?.title
             trail = places.isEmpty ? nil : places.count > 1 ? "等 \(places.count) 处有动静" : latest.map { Self.verb($0.kind) }
             failed = latest.map { [.failed, .undelivered].contains($0.kind) } ?? false
             targets = places.compactMap { place in place.target.map { Place(title: place.title, target: $0) } }
         case .reminder(let ids):
             let first = ids.lazy.compactMap { names.lines[$0] }.first
-            (lead, name, failed) = (Self.phrase(wake), first.map { PiProgress.firstLine($0) ?? $0 }, false)
+            (name, failed) = (first.map { PiProgress.firstLine($0) ?? $0 }, false)
             trail = ids.count > 1 ? "等 \(ids.count) 条" : nil
             targets = first.map { [Place(title: $0, target: .memory)] } ?? []
-        case .enabled, .message, .idle, .renewed, .settingsChanged:
-            (lead, name, trail, failed, targets) = (Self.phrase(wake), nil, nil, false, [])
+        case .enabled, .message, .idle, .tidy, .renewed, .settingsChanged:
+            (name, trail, failed, targets) = (nil, nil, false, [])
         }
     }
 
-    private static func phrase(_ wake: CueWake) -> String {
+    /// 为什么醒的一句话（读屏读，界面上是图标）
+    var reason: String {
         switch wake {
         case .enabled: "刚启用"
         case .message: "你发来消息"
         case .idle: "空闲时看了一眼"
+        case .tidy: "整理记忆"
         case .renewed: "接着上次做"
         case .settingsChanged: "设置改了"
         case .sessionActivity: "会话有动静"
@@ -144,7 +144,7 @@ nonisolated struct CueWakeNames: Equatable, Sendable {
                 sessionIDs += stirs.compactMap(\.session)
                 taskIDs.formUnion(stirs.compactMap(\.task))
             case .reminder(let ids): lineIDs += ids
-            case .enabled, .message, .idle, .renewed, .settingsChanged: break
+            case .enabled, .message, .idle, .tidy, .renewed, .settingsChanged: break
             }
         }
         var names = CueWakeNames()

@@ -100,6 +100,7 @@ public enum CueEnvelope {
     case .message: "他发来新消息"
     case .sessionActivity: "会话有动静"
     case .idle: "空闲，例行看一眼"
+    case .tidy: "整理记忆"
     case .reminder: "提醒到点"
     case .renewed: "换了新上下文，从接上的地方接着做"
     case .settingsChanged: "他改了你的设置"

@@ -163,6 +163,7 @@ nonisolated struct CueDigest: Equatable, Sendable {
         switch wake {
         case .message: return "在回你的话"
         case .idle: return "例行查看"
+        case .tidy: return "在整理记忆"
         case .reminder: return "提醒到点"
         case .enabled: return "刚启用"
         case .renewed, .settingsChanged: return nil

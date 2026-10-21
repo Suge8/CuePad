@@ -340,11 +340,12 @@ public enum CueWake: StoredJSON, Equatable, Sendable {
   case message
   /// 在做的事里有动静（`CueChange`）：哪几处，按事件时刻从早到晚
   case sessionActivity([CueStir])
-  /// 空闲时的例行查看（含合并记忆）
+  /// 空闲巡视
   case idle
+  case tidy  // 合并记忆
   /// 提醒到点：到点的那几条记忆
   case reminder([UUID])
-  /// 写下交接、换了新上下文：接着做（交接在信封的"接上"里）
+  /// 换了新上下文：接着做（交接在信封的"接上"里）
   case renewed
   /// 他改了要换大脑的设置（名字、Agent，或模型、强度回到默认）：先写交接
   case settingsChanged
