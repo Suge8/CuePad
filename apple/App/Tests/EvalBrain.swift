@@ -6,10 +6,12 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 当 Cue 的大脑的真 Agent：缺省 Claude Code（opus · medium，同用户的 Cue）；`CUEPAD_CUE_EVAL_RUNTIME=pi` 换成 Pi（anthropic/claude-sonnet-5-5 · medium）；
+/// 当 Cue 的大脑的真 Agent：缺省 Claude Code（opus · medium，同用户的 Cue）；`CUEPAD_CUE_EVAL_RUNTIME=pi` 换成 Pi（anthropic/claude-sonnet-5-5 · medium），
+/// `=codex` 换成 Codex（gpt-6.1-sol · medium）；
 /// `CUEPAD_CUE_EVAL_MODEL`、`CUEPAD_CUE_EVAL_EFFORT` 换模型与强度。`launch` 写一个起它的外壳，配置与 HOME 在临时目录，
 /// 继承来的 ANTHROPIC_*、XDG_* 清掉，登录在外壳起进程时现取、只进它的环境：
 /// - Claude Code 用它自己存在钥匙串里的那条（`ClaudeLogin`），配置目录 `CLAUDE_CONFIG_DIR` 在临时目录（不碰 ~/.claude）；
+/// - Codex 的配置目录 `CODEX_HOME` 在临时目录，只拷进 ~/.codex/auth.json（同"陌生人第一次打开"：没有 config.toml）；
 /// - Pi 用 `ANTHROPIC_OAUTH_TOKEN`，从 ~/.pi/agent/auth.json 的 anthropic.access 只读地取。不拷 auth.json、不替它刷新：
 ///   刷新会用掉一次性的刷新令牌，把用户挤下线；令牌过期就起不来，等他自己的 Pi 续上。`PI_CODING_AGENT_DIR` 在临时目录。
 /// 开销从评测这边取：外壳把大脑的 stdout 另存一份到 `usage` 目录（每个大脑进程一个文件，`BrainUsage` 读），
@@ -20,14 +22,26 @@ struct EvalBrain {
     let effort: PiThinkingLevel
 
     static let current: EvalBrain = {
-        let pi = evalEnvironment["CUEPAD_CUE_EVAL_RUNTIME"] == "pi"
+        let runtime: AgentKind = switch evalEnvironment["CUEPAD_CUE_EVAL_RUNTIME"] {
+        case "pi": .pi
+        case "codex": .codex
+        default: .claudeCode
+        }
+        let model = switch runtime {
+        case .pi: "anthropic/claude-sonnet-5-5"
+        case .codex: "gpt-6.1-sol"
+        default: "opus"
+        }
         return EvalBrain(
-            runtime: pi ? .pi : .claudeCode, model: evalEnvironment["CUEPAD_CUE_EVAL_MODEL"] ?? (pi ? "anthropic/claude-sonnet-5-5" : "opus"),
+            runtime: runtime, model: evalEnvironment["CUEPAD_CUE_EVAL_MODEL"] ?? model,
             effort: evalEnvironment["CUEPAD_CUE_EVAL_EFFORT"].flatMap(PiThinkingLevel.init(rawValue:)) ?? .medium)
     }()
 
     /// .md 与 score.json 里写的大脑：大脑、模型与强度
     var label: String { "\(runtime.name) · \(model) · \(effort.rawValue)" }
+
+    /// Codex 的登录：用户的 Codex 存的那一份，拷一份进临时的配置目录
+    private static let codexAuth = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".codex/auth.json")
 
     /// Pi 的登录：用户的 Pi 存的那一份，只读
     private static let piAuth = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".pi/agent/auth.json")
@@ -67,6 +81,12 @@ struct EvalBrain {
                 export ANTHROPIC_OAUTH_TOKEN PI_CODING_AGENT_DIR='\(agent.path)' CUEPAD_EVAL_BILLING_LOG='\(BrainUsage.billingLog(in: root).path)'
                 """
             extra = " -e '\(billing.path)'"
+        case .codex:
+            executable = try #require(ExecutableLocator.standard.candidates("codex").first, "需要 codex")
+            let config = root.appending(path: "codex-home")
+            try FileManager.default.createDirectory(at: config, withIntermediateDirectories: true)
+            try FileManager.default.copyItem(at: Self.codexAuth, to: config.appending(path: "auth.json"))
+            login = "export CODEX_HOME='\(config.path)'"
         default:
             executable = try #require(ExecutableLocator.standard.candidates("claude").first, "需要 claude")
             let config = root.appending(path: "claude-config")

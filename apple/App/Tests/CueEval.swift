@@ -36,7 +36,7 @@ final class CueEval {
         self.output = output
     }
 
-    /// 起 Rig、等刚启用那一轮做完，跑 `body`（摆状态、叫醒、判定）；不论成败都把现场写完、停掉大脑，再报没过的判定。
+    /// 起 Rig（值班起来、对过刚启用），跑 `body`（摆状态、叫醒、判定）；不论成败都把现场写完、停掉大脑，再报没过的判定。
     static func run(
         _ name: String, expect: String, suite: EvalSuite = .short, output: URL = evalOutput,
         rig makeRig: () async throws -> CueHostTests.Rig = { try await CueHostTests.Rig(brain: .current) }, _ body: (CueEval) async throws -> [Check]
@@ -44,7 +44,6 @@ final class CueEval {
         let eval = CueEval(try await makeRig(), output: output)
         var checks: [Check] = [], failure: (any Error)?
         do {
-            try await eventually("刚启用那一轮做完", timeout: .seconds(300)) { eval.rig.rounds.contains { $0.wake == .enabled && $0.finishedAt != nil } }
             checks = try await body(eval)
             checks.append(try await eval.showsNoIDs())
         } catch {

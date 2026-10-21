@@ -135,14 +135,15 @@ struct CuePage: View {
     // MARK: 对话
 
     /// 读不出来时也排一个真的视图：读库的订阅挂在页上，等视图出现才启动（docs/ui.md）。
-    /// 还没说过话时是空态（`EmptyState`）：它自我介绍，下一步就是下面的输入框；没启用时启用那一步（`CueEnableCard`）就接在那一句下面。
+    /// 还没说过话时是空态（`EmptyState`）：它自我介绍，下一步就是下面的输入框；没启用时启用那一步（`CueEnableCard`）就接在那一句下面，
+    /// 启用了接几句能直接说的话（`CueStarters`）。
     @ViewBuilder private var chat: some View {
         Group {
             if let thread, !thread.rows.isEmpty {
                 conversation(thread)
             } else if thread != nil {
                 EmptyState(mascot: .hello, title: "我是 \(cue.name)", message: greeting, waitsForSync: true) {
-                    if offersEnable { CueEnableCard(framed: false) }
+                    if offersEnable { CueEnableCard(framed: false) } else { CueStarters() }
                 }
                     .padding(.horizontal, Self.inset)
                     .frame(maxWidth: Self.readingWidth, maxHeight: .infinity)
@@ -153,9 +154,10 @@ struct CuePage: View {
         }
     }
 
-    /// 空态的那句：启用了就请他直接说；没启用时说启用后怎么用，启用卡只放启用那一步。
+    /// 空态的那句：启用了就请他直接说（下面接着几句能说的话）；没启用时说启用后怎么用，启用卡只放启用那一步。
     private var greeting: String {
-        cue.canHear ? "要做什么，直接在下面跟我说" : "启用后说一件想做的事，我来开工，要你拿主意时再找你"
+        guard offersEnable else { return "要做什么，直接跟我说，比如：" }
+        return cue.canHear ? "要做什么，直接在下面跟我说" : "启用后说一件想做的事，我来开工，要你拿主意时再找你"
     }
 
     /// 启用卡在不在（还没启用，或 Mac 上 Cue 运行在别的 Mac）：对话空着时在空态里，说过话之后在输入框上方。
