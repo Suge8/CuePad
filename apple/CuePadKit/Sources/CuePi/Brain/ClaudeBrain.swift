@@ -7,7 +7,7 @@ import Foundation
 /// - 不落会话（`--no-session-persistence`），不进 `claude --resume` 的列表；
 /// - 系统提示整份替换（`--system-prompt-file`）；不读 CLAUDE.md 与自动记忆（`CLAUDE_CODE_DISABLE_CLAUDE_MDS`、
 ///   `CLAUDE_CODE_DISABLE_AUTO_MEMORY`），不跑用户的钩子（`--settings` 里的 `disableAllHooks`，也就不会报给 CuePad 成一个会话），
-///   不加载 skill 与斜杠命令（`--disable-slash-commands`；原型开关 `CueFresh` 开时不加，要用 `/clear` 开新会话）；
+///   不加载 skill（工具只给了下面几个，用户的 skill 与命令不进输入）；斜杠命令开着，只为开新会话的 `/clear`（见下）；
 /// - 原生工具只有 `Read,Grep,Glob`，MCP 只有 CuePad 的（`--strict-mcp-config`）；这些工具预先放行，其余需要批准的一律拒绝
 ///   （`--permission-prompts none`），不会停下来等人；
 /// - 正忙时写进标准输入的话由 Claude Code 并进当前这一轮；
@@ -44,7 +44,6 @@ final class ClaudeBrain: CueBrain {
                 "--allowedTools", "Read,Grep,Glob,\(CueMCPServer.toolPrefix)*", "--permission-prompts", "none", "--strict-mcp-config",
                 "--mcp-config", jsonString(mcp), "--settings", #"{"disableAllHooks":true}"#,
             ]
-            if !CueFresh.on { arguments.append("--disable-slash-commands") }
             if let model = config.model { arguments += ["--model", model] }
             if let effort = config.effort { arguments += ["--effort", ClaudeCode.effort(effort)] }
             let environment = BrainSession.environment(config, [

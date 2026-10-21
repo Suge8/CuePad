@@ -5,7 +5,7 @@ import Foundation
 // 对话（`cueMessages`）、记忆（`cueLines` 与本机的摘要缓存 `cueSummaries`）、设置（`cueProfile`）、此刻在做什么（`cueState`）。
 // 值班时它管没做完的事与不归没做完的事的活会话（`CueStore.cueBoard`），不另记"由谁跟进"。
 
-/// Cue 页对话里一行是谁的。
+/// Cue 页对话里一行是谁的。不认识的（旧版本写下的交接备忘 `handoff`、更新版本的新种类）界面不列、不交给大脑。
 public enum CueAuthor: String, Sendable, CaseIterable {
   /// 你对 Cue 说的
   case you
@@ -13,8 +13,6 @@ public enum CueAuthor: String, Sendable, CaseIterable {
   case cue
   /// Cue 自己醒来那一轮的动态（不推送，Cue 页收进一颗虚线气泡）：没有正文的是那一轮的经过，带着它为什么醒（`wake`）与做了什么（`tools`）
   case note
-  /// Cue 请求换新上下文时写的交接备忘
-  case handoff
   /// 你发起的一轮的经过（`tools`，没有正文）：排在这一轮开始的位置，这一轮说的话与结果都在它之后（`CueStore.recordCueRound`）。
   /// Cue 自己醒来的一轮的经过是一条没有正文的动态（`note`），跟着动态收起
   case round
@@ -70,22 +68,6 @@ public struct CueMessage: Identifiable, Equatable, Sendable {
 
   /// 要提示你的 Cue 消息（手机推送与 Mac 通知同一条规则）：Cue 对你说的，带选项来问（"等你"）或 `urgent`。
   public var alerts: Bool { author == .known(.cue) && (choices != nil || urgent) }
-}
-
-/// 新上下文接上的（`CueStore.cueResume`）：最近一份交接备忘与它之后的对话。
-public struct CueResume: Equatable, Sendable {
-  /// 没写过交接为 nil
-  public var handoff: CueMessage?
-  /// 交接之后的对话，从早到晚
-  public var messages: [CueMessage]
-  /// 更早的还有，没取
-  public var truncated: Bool
-
-  public init(handoff: CueMessage?, messages: [CueMessage], truncated: Bool) {
-    self.handoff = handoff
-    self.messages = messages
-    self.truncated = truncated
-  }
 }
 
 extension CueMessage: Record {
@@ -303,8 +285,8 @@ public enum CueEnableError: LocalizedError, Equatable {
   }
 }
 
-/// Cue 此刻的上下文（一个班次一份）：用了多少 token、模型的窗口（大脑没报为 nil）、这个班次几点起。用到 `renewAt` 后，
-/// 下一次醒来的信封要它先写交接备忘再换新（`CueEnvelope`）。随 `CueState` 同步，各端的上下文用量只读它。
+/// Cue 此刻的上下文（一个会话一份）：用了多少 token、模型的窗口（大脑没报为 nil）、这个会话几点起。用到 `renewAt` 后，
+/// 下一次醒来先开新会话（`CueKeeper`）。随 `CueState` 同步，各端的上下文用量只读它。
 public struct CueContext: StoredJSON, Equatable, Sendable {
   public var used: Int
   public var window: Int?
@@ -327,6 +309,7 @@ public struct CueContext: StoredJSON, Equatable, Sendable {
 
 /// Cue 这一轮为什么醒（值班的管理器起一轮时定下）。交给大脑的信封照它写"醒来："；Cue 自己醒来的一轮把它记在这一轮的经过那一行上
 /// （`CueMessage.wake`，随那一行同步），Cue 页那一节的第一行照它写、点了去叫醒它的会话，叫醒的接力（`CueFlight`）也只读它。
+/// 旧版本存下的、已不再有的原因（换新、改了设置）读出为 nil，那一节照没有醒来原因的旧动态显示。
 public enum CueWake: StoredJSON, Equatable, Sendable {
   /// 刚启用：第一次醒来
   case enabled
@@ -338,10 +321,6 @@ public enum CueWake: StoredJSON, Equatable, Sendable {
   case idle
   /// 提醒到点：到点的那几条记忆
   case reminder([UUID])
-  /// 写下交接、换了新上下文：接着做（交接在信封的"接上"里）
-  case renewed
-  /// 他改了要换大脑的设置（名字、Agent，或模型、强度回到默认）：先写交接
-  case settingsChanged
 }
 
 /// 叫醒 Cue 的一处动静：`CueChange` 里界面要的那点——出了什么事、在哪个会话、哪件任务。

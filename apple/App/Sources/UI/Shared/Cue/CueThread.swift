@@ -48,8 +48,6 @@ nonisolated struct CueThread: Equatable, Sendable {
             switch row {
             case .you(let message): ChatMark(id: message.id, kind: .said, preview: ChatMark.firstLine(message.text))
             case .answer(let question): ChatMark(id: row.id, kind: .said, preview: ChatMark.firstLine(question.answer ?? ""))
-            case .renewed(let handoff):
-                ChatMark(id: handoff.id, kind: .boundary, preview: Dotted("换了新上下文", handoff.createdAt.formatted(date: .omitted, time: .shortened)).visible)
             case .cue, .result, .notes, .process: nil
             }
         })
@@ -83,7 +81,7 @@ nonisolated struct CueThread: Equatable, Sendable {
 
     /// 对话里的一格：你的话、你发起的一轮的经过（这一轮说的话与结果都在它之后）、Cue 的话（第一次提到一件活时下面一行这件活；
     /// 做完的结果点了名的图是结果卡，见 `rows`），
-    /// 连着的几轮 Cue 自己醒来（每轮是它的经过那一行与它说的话，`CueNoteRound`）收成一格，隔了 `ChatTime.gap` 以上或跨了天另起一格；换新的地方一条分隔（点开是交接备忘）。
+    /// 连着的几轮 Cue 自己醒来（每轮是它的经过那一行与它说的话，`CueNoteRound`）收成一格，隔了 `ChatTime.gap` 以上或跨了天另起一格。
     /// 还在等你的不在对话里（只在输入框上方的"等你"里，一处），结束了才回到它原来的位置；你答了的，答的那一刻另有一格你的回答（`answer`）。
     /// 设置里关了工具步骤时（`AppSettings.showsCueSteps`）不排经过：没有你发起的一轮的经过，动态里只留为什么醒与它说的话；
     /// 它在做的事，自己醒来的一轮写在动态里那一节，你发起的一轮在末尾一行（`CueEnding`）。
@@ -98,12 +96,10 @@ nonisolated struct CueThread: Equatable, Sendable {
         case notes([CueNoteRound])
         /// 你发起的一轮的经过（`CueAuthor.round`）
         case process(CueMessage)
-        /// Cue 从这里起换了新上下文：写下的那份交接备忘（`CueAuthor.handoff`）就是这里的全部数据。
-        case renewed(CueMessage)
 
         var id: UUID {
             switch self {
-            case .you(let message), .cue(let message, _), .result(let message, _), .renewed(let message), .process(let message): message.id
+            case .you(let message), .cue(let message, _), .result(let message, _), .process(let message): message.id
             case .answer(let question): Self.answerID(of: question.id)
             case .notes(let rounds): rounds[0].id
             }
@@ -111,7 +107,7 @@ nonisolated struct CueThread: Equatable, Sendable {
 
         var date: Date {
             switch self {
-            case .you(let message), .cue(let message, _), .result(let message, _), .renewed(let message), .process(let message): message.createdAt
+            case .you(let message), .cue(let message, _), .result(let message, _), .process(let message): message.createdAt
             case .answer(let question): question.answeredAt ?? question.createdAt
             case .notes(let rounds): rounds[0].date
             }
@@ -129,7 +125,7 @@ nonisolated struct CueThread: Equatable, Sendable {
             switch self {
             case .cue(_, let task): task
             case .result(_, let task): task
-            case .you, .answer, .notes, .process, .renewed: nil
+            case .you, .answer, .notes, .process: nil
             }
         }
 
@@ -138,7 +134,7 @@ nonisolated struct CueThread: Equatable, Sendable {
             switch self {
             case .process(let message): message.id == round
             case .notes(let rounds): rounds.contains { $0.row?.id == round }
-            case .you, .answer, .cue, .result, .renewed: false
+            case .you, .answer, .cue, .result: false
             }
         }
 
@@ -147,7 +143,7 @@ nonisolated struct CueThread: Equatable, Sendable {
             switch self {
             case .you, .answer: .trailing
             case .cue: .leading
-            case .result, .notes, .process, .renewed: nil
+            case .result, .notes, .process: nil
             }
         }
     }
@@ -158,7 +154,6 @@ nonisolated struct CueThread: Equatable, Sendable {
         let calendar = Calendar.current
         for row in rows {
             defer { previous = row.date }
-            if case .renewed = row { continue }
             guard let previous else {
                 stamps[row.id] = row.date
                 continue
@@ -214,8 +209,8 @@ nonisolated struct CueThread: Equatable, Sendable {
                     group[group.count - 1].said.append(message)
                 }
                 rows.append(.notes(group))
-            case .handoff: rows.append(.renewed(message))
             case .round: if showsSteps { rows.append(.process(message)) }
+            // 认不出的（旧版本写下的交接备忘、更新版本的新种类）不列
             case nil: break
             }
         }

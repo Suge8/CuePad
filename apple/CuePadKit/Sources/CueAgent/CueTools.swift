@@ -79,16 +79,17 @@ public struct CueTools: Sendable {
       [
         "name": "memory",
         "description": """
-          你的长期记忆，一行一条（≤\(CueMemoryLine.maxBytes) 字节），序号就是身份。note{text,pin?} 记一条，pin 一直记着（不 pin 的旧行会被并成摘要）；recall{query} 只读：全文找记忆、对话、任务，与你管过的会话里 Agent 的回复原话（带会话名与短 id，可接着 peek）；
+          你的长期记忆，一行一条（≤\(CueMemoryLine.maxBytes) 字节），序号就是身份。note{text,pin?} 记一条，pin 一直记着（不 pin 的旧行会被并成摘要）；
+          recall{query} 只读：全文找记忆、对话、任务，与你管过的会话里 Agent 的回复原话（带会话名与短 id，可接着 peek）；词之间空格隔开，命中任一个就算，命中多、词少见的排前面；
+          zoom{lo,hi?} 只读：展开记忆视图里的摘要 #lo-hi，给它的两半（摘要或原行）；只给 lo 是那一行；
           forget{line}；pin{line,pinned}；remind{text,at} 到点叫醒你（ISO 8601 或 yyyy-MM-dd HH:mm）；merge{lo,hi,text} 把待合并的块写成一行摘要；
-          renew{handoff} 写交接备忘，然后换新上下文：只写你在管的事各自做到哪、下一步，和他之间没了结的事，至多 \(handoffLimit) 字；
           allow{ask,project?,allowed?} 改允许清单：ask 只能是 \(Self.allowable)，不带 project 是所有项目，allowed:false 去掉。
           """,
         "inputSchema": schema(
           [
-            "action": ["type": "string", "enum": ["note", "recall", "forget", "pin", "remind", "merge", "renew", "allow"]],
+            "action": ["type": "string", "enum": ["note", "recall", "zoom", "forget", "pin", "remind", "merge", "allow"]],
             "text": string, "pin": ["type": "boolean"], "query": string, "line": ["type": ["string", "integer"]],
-            "pinned": ["type": "boolean"], "at": string, "lo": ["type": "integer"], "hi": ["type": "integer"], "handoff": string,
+            "pinned": ["type": "boolean"], "at": string, "lo": ["type": "integer"], "hi": ["type": "integer"],
             "ask": ["type": "string", "enum": CueAsk.allCases.filter { $0.always != nil }.map(\.rawValue)], "project": string,
             "allowed": ["type": "boolean"],
           ], required: ["action"]),
@@ -109,8 +110,6 @@ public struct CueTools: Sendable {
   /// done 的证据：至多这么多条，每条宽不过 `evidenceLimit`（`CueName.width`）。结果消息由 Store 拼（`CueReport.text`）。
   static let evidenceCount = 3
   static let evidenceLimit = 40
-  /// 交接备忘至多这么多字：新上下文每次接上都带着它，在做的事信封里本来就有。
-  static let handoffLimit = 600
   /// 证据的示例（工具说明与证据超长的报错共用）：一句行为上的结论。
   static let evidenceExample = "登录后进到首页"
 
@@ -594,12 +593,13 @@ public struct CueTools: Sendable {
 
   // MARK: memory
 
-  /// 回复里命中的那一段：从第一个命中的词前面一点起，至多 `excerptLimit` 字（回复常有几千字，开头多半不是要找的）。
+  /// 命中的那一段，至多 `excerptLimit` 字：截在最少见的命中词（在这段话里出现得最少的，一样少取最长的）第一次出现处前面一点，
+  /// 不从开头截——长回复的开头多半不是要找的，常见的词（"测试""完成"）也定位不到要找的地方。
   static func excerpt(_ text: String, around words: [String]) -> String {
-    let flat = CueEnvelope.clip(text, Int.max)
-    guard let hit = words.compactMap({ flat.range(of: $0, options: .caseInsensitive) }).min(by: { $0.lowerBound < $1.lowerBound }) else {
-      return flat.clipped(excerptLimit)
-    }
+    let flat = CueEnvelope.clip(text, Int.max), lowered = flat.lowercased()
+    let ranked = words.map { $0.lowercased() }.filter { !$0.isEmpty }.map { ($0, lowered.components(separatedBy: $0).count - 1) }
+      .filter { $0.1 > 0 }.min { ($0.1, -$0.0.count) < ($1.1, -$1.0.count) }
+    guard let word = ranked?.0, let hit = flat.range(of: word, options: .caseInsensitive) else { return flat.clipped(excerptLimit) }
     let start = flat.index(hit.lowerBound, offsetBy: -excerptLead, limitedBy: flat.startIndex) ?? flat.startIndex
     return (start == flat.startIndex ? "" : "…") + String(flat[start...]).clipped(excerptLimit)
   }
@@ -613,11 +613,12 @@ public struct CueTools: Sendable {
       let (line, index) = try await store.noteCueLine(try args.required("text"), source: .cue, pinned: args.bool("pin") ?? false)
       return .ok("记下了 #\(index)\(line.pinned ? "，一直记着" : "")。")
     case "recall":
-      let found = try await store.recallCue(try args.required("query"))
+      let query = try args.required("query")
+      let found = try await store.recallCue(query)
+      let words = CueStore.recallWords(query)
       var lines = found.lines.map { "#\($0.index) \($0.line.text)" + ($0.line.deletedAt == nil ? "" : "（已忘掉）") }
-      lines += found.messages.map { "对话 \(iso($0.createdAt)) \($0.author.rawValue)：\(CueEnvelope.clip(CueFormat.plainText($0.text), 160))" }
+      lines += found.messages.map { "对话 \(iso($0.createdAt)) \($0.author.rawValue)：\(Self.excerpt(CueFormat.plainText($0.text), around: words))" }
       lines += found.cards.map { "\($0.isTask ? "任务" : "灵感")「\($0.heading)」（\($0.id.shortID)）" }
-      let words = (try args.required("query")).split(whereSeparator: \.isWhitespace).map(String.init)
       lines += found.replies.map { reply in
         let name = reply.session.map(CueEnvelope.sessionName) ?? "会话（\(reply.message.sessionID.prefix(8))）"
         return "\(name) \(iso(reply.message.at)) 回复：\(Self.excerpt(reply.message.text, around: words))"
@@ -642,15 +643,14 @@ public struct CueTools: Sendable {
       guard let lo = args.int("lo"), let hi = args.int("hi") else { throw Failure("merge 要给 lo 与 hi（区间 [lo, hi)）") }
       try await store.setCueSummary(lo: lo, hi: hi, text: try args.required("text"))
       return .ok("#\(lo)-\(hi - 1) 合成了一行。")
-    case "renew":
-      let handoff = try args.required("handoff")
-      guard handoff.count <= Self.handoffLimit else {
-        throw Failure("交接 \(handoff.count) 字，上限 \(Self.handoffLimit)，没写：只写你在管的事各自做到哪、下一步，和他之间没了结的事，每件一两句")
+    case "zoom":
+      guard let lo = args.int("lo") else { throw Failure("zoom 要给 lo（与 hi，同记忆视图里的 #lo-hi）") }
+      guard let text = CueMemoryView(try await store.cueMemory()).zoom(lo: lo, hi: args.int("hi") ?? lo) else {
+        throw Failure("展开不了 #\(lo)-\(args.int("hi") ?? lo)：照记忆视图或摘要里出现过的 #a-b 写，单行只给 lo")
       }
-      let message = try await store.addCueMessage(.handoff, text: handoff)
-      return .ok("交接备忘写好了，接下来换新上下文。（\(message.id.shortID)）")
+      return .ok(text)
     case "allow": return try await allow(args)
-    case let other: throw Failure("memory 没有 \(other)：可用 note / recall / forget / pin / remind / merge / renew / allow")
+    case let other: throw Failure("memory 没有 \(other)：可用 note / recall / zoom / forget / pin / remind / merge / allow")
     }
   }
 

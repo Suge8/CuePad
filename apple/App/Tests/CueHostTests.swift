@@ -602,14 +602,15 @@ struct CueHostTests {
         await rig.stop()
     }
 
-    /// 上下文到了换新线（刚启用那一轮就用到了）：下一次醒来提示先写交接；交接写好、这一轮结束后换新班次，第一轮带着交接醒来。
-    @Test func 写交接后新班次接上() async throws {
+    /// 上下文到了换新线（每一轮都用到了）：每次醒来先开新会话，第一条输入带着对话视图，前面说的话照样接得上；大脑还是同一个进程。
+    @Test func 到了换新线_开新会话_对话视图接上前面说的() async throws {
         let rig = try await Rig(usage: 70_000)
         let first = try #require(rig.brainPIDs.first)
-        try await rig.say("第一句")
-        try await rig.message(.handoff, containing: "交接：在跟登录页")
-        try await rig.message(.cue, containing: "接上了：交接：在跟登录页")  // 写下交接的那一轮是你发起的：换新后照样给你看
-        #expect(rig.brainPIDs.count == 1 && rig.brainPIDs.first != first)
+        try await rig.say("暗号是 PAPAYA")
+        try await rig.message(.cue, containing: "收到：暗号是 PAPAYA")
+        try await rig.say("暗号是什么？")
+        try await rig.message(.cue, containing: "从视图接上：暗号是 PAPAYA")
+        #expect(rig.brainPIDs == [first])
         await rig.stop()
     }
 }
@@ -781,7 +782,10 @@ nonisolated final class FakeModel: Sendable {
                 default: ""
                 }
             }
-            return say(earlier.lazy.compactMap { $0.firstMatch(of: /暗号是 (\S+)/)?.1 }.last.map { "记得，暗号是 \($0)" } ?? "不记得暗号")
+            if let code = earlier.lazy.compactMap({ $0.firstMatch(of: /暗号是 (\S+)/)?.1 }).last { return say("记得，暗号是 \(code)") }
+            // 开了新会话：前面的话不在上下文里，只在这一条输入开头的对话视图里
+            if let view = text.firstMatch(of: /<view>[\s\S]*<\/view>/)?.0, let code = view.firstMatch(of: /暗号是 (\S+)/)?.1 { return say("从视图接上：暗号是 \(code)") }
+            return say("不记得暗号")
         }
         if last["role"] as? String == "tool" {
             if text.contains("建好了"), let id = text.firstMatch(of: /（([0-9a-f]{8})）/)?.1 {
@@ -791,8 +795,6 @@ nonisolated final class FakeModel: Sendable {
             return say("办好了")
         }
         if let answer = text.firstMatch(of: /他回答了「.*」：(.+)/)?.1 { return say("知道了：\(answer)") }
-        if text.contains("醒来：换了新上下文"), let handoff = text.firstMatch(of: /(交接：.+)/)?.1 { return say("接上了：\(handoff)") }
-        if text.contains("memory renew 写交接") { return call("memory", ["action": "renew", "handoff": "交接：在跟登录页"]) }
         if text.contains("请把这张图转给登录页"), let image = text.firstMatch(of: /!\[\]\(cuepad:\/\/img\/[0-9a-f]+\)/)?.0 {
             return call("task", ["action": "say", "task": "修好登录页 转图", "text": "看这张\n\(image)"])
         }

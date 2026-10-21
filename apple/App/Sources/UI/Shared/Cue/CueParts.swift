@@ -332,8 +332,6 @@ extension CueWake {
         case .sessionActivity: .wakeActivity
         case .idle: .wakeIdle
         case .reminder: .wakeReminder
-        case .renewed: .renew
-        case .settingsChanged: .wakeSettings
         }
     }
 }

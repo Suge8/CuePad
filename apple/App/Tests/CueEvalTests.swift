@@ -595,8 +595,8 @@ struct EvalBrain {
             effort: evalEnvironment["CUEPAD_CUE_EVAL_EFFORT"].flatMap(PiThinkingLevel.init(rawValue:)) ?? .medium)
     }()
 
-    /// .md 与 summary.md 开头那一行：大脑、模型与强度、哪种上下文做法（`CueFresh`）
-    var label: String { "\(runtime.name) · \(model) · \(effort.rawValue) · \(CueFresh.on ? "混合做法（平时往后加，到换新线开新会话、用对话视图接上）" : "现做法")" }
+    /// .md 与 summary.md 开头那一行：大脑、模型与强度
+    var label: String { "\(runtime.name) · \(model) · \(effort.rawValue)" }
 
     /// Pi 的登录：用户的 Pi 存的那一份，只读
     private static let piAuth = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".pi/agent/auth.json")
@@ -803,7 +803,7 @@ final class CueEval {
         try await eventually("Cue 做完被叫醒的那一轮", timeout: .seconds(420)) { self.round?.finishedAt != nil }
     }
 
-    /// 叫醒 Cue，等它把这次引起的都做完才返回：至少一轮做完、没有在跑的、歇着、话都交了、没有写下了还没接上的交接，
+    /// 叫醒 Cue，等它把这次引起的都做完才返回：至少一轮做完、没有在跑的、歇着、话都交了，
     /// 再稳住几秒没有新的一轮（空闲合并记忆这类紧跟着的醒来）。返回这次醒来的时段；没叫醒（等不到一轮开始）为 nil。
     func settle(_ wake: () async throws -> Void) async throws -> ClosedRange<Date>? {
         let from = mark()
@@ -833,14 +833,11 @@ final class CueEval {
     private func idle(since from: Date) async throws -> Bool {
         let rounds = rig.rounds
         guard rounds.contains(where: { $0.startedAt >= from && $0.finishedAt != nil }), rounds.allSatisfy({ $0.finishedAt != nil }) else { return false }
-        guard try await rig.store.cueState()?.state == .known(.settled), try await rig.store.cueMessagesToDeliver().isEmpty else { return false }
-        // 写下交接的那一轮做完、新班次接着的一轮还没开始
-        let handoff = try await rig.store.cueMessages(limit: 50).last { $0.author == .known(.handoff) }
-        return !(handoff.map { handoff in rounds.last.map { handoff.createdAt >= $0.startedAt } ?? false } ?? false)
+        guard try await rig.store.cueState()?.state == .known(.settled) else { return false }
+        return try await rig.store.cueMessagesToDeliver().isEmpty
     }
 
-    /// 换新后的第一轮：上下文比前一轮骤降（前一轮至少 2 万、这一轮不到它的一半）。两种做法都成立：现做法写交接后起新班次，
-    /// 混合做法在醒来开始时开新会话，都只看大脑报的上下文用量（`CueRound.context`），不靠哪种做法独有的记录。
+    /// 换新后的第一轮：上下文比前一轮骤降（前一轮至少 2 万、这一轮不到它的一半），只看大脑报的上下文用量（`CueRound.context`）。
     static func renewals(_ rounds: [CueRound]) -> [CueRound] {
         zip(rounds, rounds.dropFirst()).compactMap { previous, round in
             guard let before = previous.context, let after = round.context, before >= 20_000, after * 2 < before else { return nil }

@@ -11,7 +11,7 @@ import CuePi
 /// 同一边连着说的几颗收紧成一串，隔了一阵的地方居中写几点（`ChatTimeMarker`）；经过、动态与分隔不是气泡，是旁注与居中的标记（`NoteLine`、`ChatMarker`），
 /// 你发起的一轮在你的话之后先是这一轮的经过（`RoundProcess`，同会话页：在跑时实时展开，做完收成一行；设置里可关，`AppSettings.showsCueSteps`），这一轮说的话与结果按先后在它之后；
 /// 经过清单里"对你说"那一条点它回到对话里的原处。Cue 自己醒来的连着几轮收进一颗虚线气泡（`CueNoteBubble`：每轮写为什么醒，点了去叫醒它的会话），
-/// 它换了新上下文的地方一条分隔（`CueRenewal`，点开是交接备忘），末尾是它此刻在做什么（`CueEnding`）；
+/// 末尾是它此刻在做什么（`CueEnding`）；
 /// 对话区与会话页是同一个（`ChatColumn`：排开、刻度滑条、跳转与描圈）；底部是"等你"（`CueWaitingDock`）与输入框（`CueComposer`）。
 /// 对话第一帧就排好（`observing` 当场读），停在最新处；有新消息时从第一条读起，还没读的气泡旁一颗小点（`CueViewing`）。
 /// Cue 运行在别的设备上、本机正在和 iCloud 对时（`AppServices.isCatchingUp(on:)`）页头写"正在同步"，这期间到的话先不滑上来，
@@ -301,7 +301,7 @@ struct CuePage: View {
             bubble + answer(message.text) + 12 + CueShots.floor(count: shots, width: width(CueBubble.cueWidth)) + 12 + CueTaskLine.lineHeight
         // 虚线气泡至少一行小字
         case .notes: bubble + note
-        case .process, .renewed: note
+        case .process: note
         }
         return above + body
     }
@@ -415,8 +415,6 @@ private struct CueRow: View, Equatable {
             CueNoteBubble(rounds: rounds, live: live)
         case .process(let message):
             RoundProcess(tools: message.tools, ending: CueLiveRound.ending(of: message, in: live)).padding(.leading, CueBubble.noteInset)
-        case .renewed(let handoff):
-            CueRenewal(handoff: handoff, name: cue.name)
         }
     }
 
@@ -439,17 +437,6 @@ nonisolated struct CueLiveRound: Equatable {
     static func ending(of message: CueMessage, in live: CueLiveRound?) -> RoundProcess.Ending {
         guard let live, live.round == message.id else { return .took(nil) }
         return live.ending
-    }
-}
-
-/// Cue 从这里起换了新上下文：与会话页的压缩同一条分隔（`ContextBoundary`），点开是换新时写下的交接备忘；从刻度滑条跳过来时描一圈。
-private struct CueRenewal: View {
-    let handoff: CueMessage
-    let name: String
-    @Environment(\.chatHighlight) private var highlight
-
-    var body: some View {
-        ContextBoundary(title: "从这里起 \(name) 换了新上下文", time: handoff.createdAt, memo: handoff.text, highlighted: highlight == handoff.id)
     }
 }
 

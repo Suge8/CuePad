@@ -5,7 +5,7 @@ import SwiftUI
 
 /// 演示库里的 Cue（`-CuePadScene cue`、`cuememory`，配 `-CuePadDemo YES`）：在演示 Mac 上值班，管着圆桌的"乱序"（步骤在 Agent 会话里跑，
 /// 部署那一步发来一张截图、在等你允许推送）与 CuePad 的"导入旧数据"（会话出错）；"README 截图换成 Swift 版"Cue 确认做完了（结果带证据与截图）。
-/// 对话里有你的话（一句带图）、Cue 的话、折起的动态、一次换新（交接备忘）、一条结果与一条"等你"（正文带一段测试输出）；atlas 会话里有一句 Cue 发的话；
+/// 对话里有你的话（一句带图）、Cue 的话、折起的动态、一条结果与一条"等你"（正文带一段测试输出）；atlas 会话里有一句 Cue 发的话；
 /// 记忆有钉住的与其他，还有一条忘掉的；上下文用到换新线的七成（`CueContext`）。cuerun（仅 Mac）让 Cue 运行在这台 Mac，"运行情况"才有。
 /// `-CuePadCuePresence <answered|thinking|tool|sending|asleep|disabled>`：answered 是"等你"那一条你选了"可以"（回到对话里、带着你的回答），
 /// 之后你又说了一句、Cue 跑了一轮（经过那一行）、连着回了两句（看问询回到对话里的样子、一串气泡；配 `-showsCueSteps YES` 看工具步骤那一行）；你的最后一句已交给 Cue（气泡旁的纸飞机）、它在想（thinking）或在用工具（tool：看会话进展）、
@@ -110,18 +110,6 @@ extension DebugScene {
                 try await store.recordCueRound(nil, startedAt: .now, answersYou: false, tools: tools, wake: wake)
                 if !note.isEmpty { _ = try await store.addCueMessage(.note, text: note) }
             }
-            // 上下文到了换新线：写下交接，从这里起换了新上下文（对话里一条分隔，点开是这份备忘）
-            _ = try await store.addCueMessage(.handoff, text: """
-                **在做**
-                - 圆桌「5 人以上乱序」：已复现，原因是重连拿到新的加入时间；atlas 正在改成按首次加入时间排序，测试在跑。
-                - CuePad「导入旧数据」：会话出错（prompt 太长），等他回来再定怎么拆。
-
-                **下一步**
-                - atlas 测试过了就派「补 3 个重连用例」，然后部署到预发、截图给他看。
-
-                **和他之间没了结的**
-                - 推送到 origin/main 要先问他（会触发正式环境部署）。
-                """)
             try await seedDeliveries(store)
             let shot = CueFormat.imageMarkup(id: try store.files.store(swatchPNG()))
             try await you("README 的截图也交给你，换成 Swift 版的样子，参考这张\n" + shot)
@@ -424,7 +412,7 @@ extension DebugScene {
         }
     }
 
-    /// `-CuePadLongChat YES`：演示对话前面多 110 轮更早的来回（比 Cue 页读得到的 `CueThread.limit` 条多：来一句新的，最早那条就掉出去，同真实库），中间换过三次新上下文（看 Cue 页往上翻、刻度滑条与换新的分隔）。
+    /// `-CuePadLongChat YES`：演示对话前面多 110 轮更早的来回（比 Cue 页读得到的 `CueThread.limit` 条多：来一句新的，最早那条就掉出去，同真实库）（看 Cue 页往上翻与刻度滑条）。
     /// Cue 的回答高矮悬殊：一句话与会话页长对话同一套长段落、40 行代码块、宽表、长列表轮换（`longChatReply`）；你每 25 轮贴进来一段长文，每 15 轮带一张图。
     /// 量 Cue 页的长对话滚动（`-CuePadBench chatscroll`）就用这一段。
     private static func seedLongCueChat(you: (String) async throws -> Void, store: CueStore) async throws {
@@ -433,9 +421,6 @@ extension DebugScene {
                        "记下了，周五不发版。", "浅色那张换好了，深色的还在拍。", "加了 2 个，第 3 个等排序改完再补。"]
         let shot = CueFormat.imageMarkup(id: try store.files.store(swatchPNG()))
         for round in 0..<110 {
-            if round % 30 == 12 {
-                _ = try await store.addCueMessage(.handoff, text: "**在做**\n- 圆桌乱序：在改排序，测试在跑。\n\n**下一步**\n- 测试过了派重连用例，再部署预发。")
-            }
             let ask = round % 25 == 0 ? longChatPrompt(round) : "第 \(round + 1) 句：" + asks[round % asks.count]
             try await you(round % 15 == 7 ? ask + "\n" + shot : ask)
             _ = try await store.addCueMessage(.cue, text: round % 3 == 0 ? replies[round % replies.count] : longChatReply(round))

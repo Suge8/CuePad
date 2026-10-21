@@ -209,16 +209,6 @@ extension CueStore {
     try select(CueMessage.self, orderBy: "createdAt DESC, rowid DESC", limit: limit).reversed()
   }
 
-  /// 新上下文从哪接上（唯一规则）：最近一份交接备忘与它之后的对话（你的话、Cue 的话、动态），从早到晚，只取最近的 `limit` 条；
-  /// 没写过交接就从头算。界面在交接处画"换了新上下文"的分隔，说的是分隔以下都在 Cue 眼前：新班次第一次醒来把这些交给大脑（`CueKeeper`），这句话才一直成立。
-  public func cueResume(limit: Int) throws -> CueResume {
-    let handoff = try select(CueMessage.self, where: "author = 'handoff'", orderBy: "createdAt DESC, rowid DESC", limit: 1).first
-    let after = try select(
-      CueMessage.self, where: "author IN ('you', 'cue', 'note') AND text != '' AND createdAt > ?", [handoff?.createdAt ?? .distantPast],
-      orderBy: "createdAt DESC, rowid DESC", limit: limit + 1)
-    return CueResume(handoff: handoff, messages: after.prefix(limit).reversed(), truncated: after.count > limit)
-  }
-
   /// 在等你回答的消息，从早到晚："在等你"就是还开着的提问（`openQuestion`），直到你回答、你开口收起（Cue 可放回）或 Cue 撤回。
   /// 不看关联任务的状态：要问的几类（`CueAsk`）本来就在任务做完之后问（推送、合并、发布），按任务完成算过期会让刚问的那条立刻消失；
   /// 情况变了由 Cue 撤回。
@@ -423,7 +413,7 @@ extension CueStore {
 extension CueStore {
   /// Cue 页的新消息（唯一的规则），从早到晚：Cue 对你说的话里，晚于你读到的地方（`CueRead`）与你最近一句的
   /// （答了的提问也算：它在对话里是你那边的一句）。
-  /// 带选项的不算：开着时在"等你"里，结束了是你答过的或它撤回的。它自己醒来的动态、一轮的经过、交接备忘不是对你说的话。
+  /// 带选项的不算：开着时在"等你"里，结束了是你答过的或它撤回的。它自己醒来的动态、一轮的经过不是对你说的话。
   public func cueUnread() throws -> [UUID] {
     try db.query(
       """
@@ -557,28 +547,58 @@ extension CueStore {
     """
 
   /// 全文找：记忆（含忘掉的，标着）、对话、灵感与任务（同 `search`），与 Cue 管过的会话（`cueSessions`）里 Agent 的回复原话（同步来的那份对话，
-  /// `PiChatMessage`）。每个词都要命中，不分大小写；每类至多 `limit` 条，最近的在前。
+  /// `PiChatMessage`）。词之间空格隔开，不分大小写，命中任一个就算；每类先取最近的 `pool` 条候选，按命中的词数、再按命中词有多少见排（`ranked`），
+  /// 至多 `limit` 条。
   public func recallCue(_ query: String, limit: Int = 20) throws -> CueRecall {
-    let words = query.split(whereSeparator: \.isWhitespace).map(String.init)
+    let words = Self.recallWords(query)
     guard !words.isEmpty else { return CueRecall(lines: [], messages: [], cards: [], replies: []) }
-    let like = words.map { _ in "text LIKE ? ESCAPE '\\'" }.joined(separator: " AND ")
+    let like = "(" + words.map { _ in "text LIKE ? ESCAPE '\\'" }.joined(separator: " OR ") + ")"
     let patterns: [any SQLBindable] = words.map {
       "%" + $0.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "%", with: "\\%").replacingOccurrences(of: "_", with: "\\_") + "%"
     }
+    let pool = Self.recallPool
     let lines = try db.query(
       """
       SELECT * FROM (SELECT \(CueMemoryLine.columns.joined(separator: ", ")), ROW_NUMBER() OVER (ORDER BY createdAt, id) - 1 FROM cueLines)
-      WHERE \(like) ORDER BY createdAt DESC, id DESC LIMIT \(limit)
+      WHERE \(like) ORDER BY createdAt DESC, id DESC LIMIT \(pool)
       """, patterns
     ) { row in CueIndexedLine(index: Int(row.int(Int32(CueMemoryLine.columns.count))), line: CueMemoryLine(row: row)) }
-    let messages = try select(CueMessage.self, where: like, patterns, orderBy: "createdAt DESC, rowid DESC", limit: limit)
-    let cards = try search(SearchQuery(text: query), limit: limit).cards
+    let messages = try select(CueMessage.self, where: like, patterns, orderBy: "createdAt DESC, rowid DESC", limit: pool)
+    var cards: [Card] = [], seen = Set<UUID>()
+    for word in words {
+      for card in try search(SearchQuery(text: word), limit: pool).cards where seen.insert(card.id).inserted { cards.append(card) }
+    }
     let found = try select(
       PiChatMessage.self, where: "role = '\(PiChatRole.pi.rawValue)' AND \(like) AND sessionID IN (\(Self.cueSessions))", patterns,
-      orderBy: "at DESC, id", limit: limit)
+      orderBy: "at DESC, id", limit: pool)
+    let picked = Self.ranked(found, words, limit) { $0.text }
     var sessions: [String: PiSessionState] = [:]
-    for id in Set(found.map(\.sessionID)) { sessions[id] = try sessionState(id) }
-    let replies = found.map { CueRecall.Reply(message: $0, session: sessions[$0.sessionID]) }
-    return CueRecall(lines: lines, messages: messages, cards: cards, replies: replies)
+    for id in Set(picked.map(\.sessionID)) { sessions[id] = try sessionState(id) }
+    return CueRecall(
+      lines: Self.ranked(lines, words, limit) { $0.line.text }, messages: Self.ranked(messages, words, limit) { $0.text },
+      cards: Self.ranked(cards.sorted { $0.modifiedAt > $1.modifiedAt }, words, limit) { $0.body },
+      replies: picked.map { CueRecall.Reply(message: $0, session: sessions[$0.sessionID]) })
+  }
+
+  /// 查询里的词：空格隔开、去重，保持先后。
+  public static func recallWords(_ query: String) -> [String] {
+    var seen = Set<String>()
+    return query.split(whereSeparator: \.isWhitespace).map(String.init).filter { seen.insert($0.lowercased()).inserted }
+  }
+
+  /// 每类候选取最近的这么多条再排：够覆盖"命中多的在更早"的情形，读得也快
+  static let recallPool = 200
+
+  /// 按命中的词数排，一样多的按命中词的少见程度（每个词记 1 / 候选里含它的条数，加起来），再一样按原来的先后（最近的在前）。
+  static func ranked<T>(_ items: [T], _ words: [String], _ limit: Int, text: (T) -> String) -> [T] {
+    let lowered = words.map { $0.lowercased() }
+    let hits = items.map { item in Set(lowered.filter(text(item).lowercased().contains)) }
+    var counts: [String: Int] = [:]
+    for found in hits { for word in found { counts[word, default: 0] += 1 } }
+    func score(_ found: Set<String>) -> (Int, Double) { (found.count, found.reduce(0) { $0 + 1 / Double(counts[$1] ?? 1) }) }
+    return items.indices.sorted { a, b in
+      let (x, y) = (score(hits[a]), score(hits[b]))
+      return x != y ? x > y : a < b
+    }.prefix(limit).map { items[$0] }
   }
 }

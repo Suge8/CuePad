@@ -2,13 +2,12 @@ import CueStore
 import CueText
 import Foundation
 
-/// 原型（`CueFresh`）：换新后第一条输入里的对话视图，放在信封前面，接上此前的经过。从库里的对话现拼：他的话、你的回复与 tell、你的动态、
+/// 新会话第一条输入里的对话视图（`CueKeeper`），在记忆视图之后、信封之前，接上此前的经过。从库里的对话现拼：他的话、你的回复与 tell、你的动态、
 /// 每一轮的经过（那一行的清单，`CueStore.recordCueRound`），一条一行，带序号与绝对时刻，从早到晚；从最新的往前取到 `budget` 字。
 /// 提问的回答另起一行，排在回答的时刻。换新之后的各轮照常留在会话里，下一次换新时再并进视图。
 public enum CueView {
-  /// 约 1.2 万字：中文一字约一个 token，换新后的起点是固定前缀（系统提示与工具说明，约 1.1 万）加视图，约 2.3 万，
-  /// 在软线（`CueFresh.softLine`，3 万）之下、离换新线（6 万）还有三万多给之后原样往后加的几十轮。最近的几轮之后原样跟在会话里，
-  /// 视图只要接上更早的；够放三四十轮来回与各轮的经过（一轮的经过一行至多 `roundLimit` 字），更早的靠 memory recall。
+  /// 约 1.2 万字：中文一字约一个 token，换新后的起点是固定前缀（系统提示与工具说明，约 1.1 万）加记忆视图（至多约 8k）与这份视图，约 3 万，
+  /// 离换新线（6 万）还有三万给之后原样往后加的几十轮。最近的几轮之后原样跟在会话里，视图只要接上更早的；够放三四十轮来回与各轮的经过（一轮的经过一行至多 `roundLimit` 字），更早的靠 memory recall。
   public static let budget = 12_000
   /// 从库里读最近这么多条对话来拼（一行至少十来个字，读这么多够填满预算）
   public static let fetched = 1000
@@ -65,7 +64,7 @@ public enum CueView {
       case .note, .round:
         guard let round = round(message.tools) else { continue }
         entries.append((Entry(at: message.createdAt, text: round), order))
-      case .handoff, nil:
+      case nil:
         continue
       }
     }
