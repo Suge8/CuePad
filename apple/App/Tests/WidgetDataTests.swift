@@ -28,6 +28,8 @@ struct WidgetDataTests {
         #expect(home.cards.dropFirst().map(\.title) == ["卡片 7", "卡片 6", "卡片 5", "卡片 4"])
     }
 
+    #if os(iOS)
+    // 跟着库改快照只有 iPhone（`AppServices.start`）：它的那份 Cue 现状同一次读带着小组件另要的（`CueFeed`），Mac 的不带
     @Test func 资料库变化后快照自动更新() async throws {
         services.startSnapshots()
         defer { services.cancelBackgroundWork() }
@@ -40,6 +42,7 @@ struct WidgetDataTests {
                 && Snapshots.read(DefaultProjectSnapshot.self, from: snapshots)?.cards.map(\.title) == ["默认项目里的"]
         }
     }
+    #endif
 
     @Test func 进入后台前先跑完登记的落盘_再刷新快照() async throws {
         var order: [String] = []
