@@ -24,17 +24,24 @@ struct RelayFlight {
         return hypot(a.x - b.x, a.y - b.y)
     }
 
+    /// 会话那头的一处：在根层里的位置（光飞向这里）与锚自己的层（接住的那几圈画在锚上：落点之后挪了——页头随换句重新居中、
+    /// 列表重排——光圈跟着它走，也压在它后面的字底下，不盖住"+N"）。锚的层随视图的动画移动由渲染服务插值，App 进程不逐帧参与。
+    struct Landing {
+        let point: CGPoint
+        let host: CALayer?
+    }
+
     /// `cue` 是头像在屏上的那块，`ends` 是会话那头在屏上的几处（都可能不在）。交给的光落到第几处时调 `landed`（落点那圈环开始扩的那一刻）。
-    func play(_ direction: CueFlight.Direction, cue: CGRect?, ends: [CGPoint], in root: CALayer, landed: @escaping (Int) -> Void) {
+    func play(_ direction: CueFlight.Direction, cue: CGRect?, ends: [Landing], in root: CALayer, landed: @escaping (Int) -> Void) {
         guard !ends.isEmpty || cue != nil else { return }
         stage(in: root) { scene in
             if reduceMotion {
                 if let cue { scene.glow(ring: cue) }
-                for end in ends { scene.glow(dot: end) }
+                for end in ends { scene.glow(dot: end.point) }
                 ends.indices.forEach(landed)
             } else {
                 switch direction {
-                case .wake: wake(scene, from: ends, to: cue)
+                case .wake: wake(scene, from: ends.map(\.point), to: cue)
                 case .relay: relay(scene, from: cue, to: ends, landed: landed)
                 }
             }
@@ -57,16 +64,19 @@ struct RelayFlight {
         }
     }
 
-    /// 在窗口根层最上面铺一层画布交给 `draw` 画，所有动画一次提交给 Core Animation，播完画布拿掉。
+    /// 在窗口根层最上面铺一层画布交给 `draw` 画（挂在锚上的几圈另记在 `pads`），所有动画一次提交给 Core Animation，播完一并拿掉。
     private func stage(in root: CALayer, _ draw: (Scene) -> Void) {
-        let canvas = CALayer()
+        let canvas = CALayer(), pads = Scene.Pads()
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        CATransaction.setCompletionBlock { canvas.removeFromSuperlayer() }
+        CATransaction.setCompletionBlock {
+            canvas.removeFromSuperlayer()
+            pads.layers.forEach { $0.removeFromSuperlayer() }
+        }
         canvas.frame = root.bounds
         canvas.zPosition = 10_000
         root.addSublayer(canvas)
-        draw(Scene(canvas: canvas, color: color, now: canvas.convertTime(CACurrentMediaTime(), from: nil), up: Self.up(in: root)))
+        draw(Scene(canvas: canvas, pads: pads, color: color, up: Self.up(in: root)))
         CATransaction.commit()
     }
 
@@ -85,18 +95,18 @@ struct RelayFlight {
         if sources.isEmpty, let target { scene.land(on: target, delay: 0) }
     }
 
-    private func relay(_ scene: Scene, from source: CGRect?, to targets: [CGPoint], landed: @escaping (Int) -> Void) {
+    private func relay(_ scene: Scene, from source: CGRect?, to targets: [Landing], landed: @escaping (Int) -> Void) {
         guard let source else {
             for (index, target) in targets.enumerated() {
-                scene.depart(at: target, delay: Double(index) * Self.stagger, fills: true) { landed(index) }
+                scene.receive(at: target, delay: Double(index) * Self.stagger) { landed(index) }
             }
             return
         }
         scene.send(from: source)
         for (index, target) in targets.enumerated() {
             let start = Self.release + Double(index) * Self.stagger
-            let duration = scene.fly(from: source.center, to: target, head: .ring, delay: start)
-            scene.depart(at: target, delay: start + duration * Self.arrival, fills: true) { landed(index) }
+            let duration = scene.fly(from: source.center, to: target.point, head: .ring, delay: start)
+            scene.receive(at: target, delay: start + duration * Self.arrival) { landed(index) }
         }
         // 会话不在屏上：从头像朝窗口中间那侧的边上飘出一段（从页头往下、从窗口下沿的头像往上）——从脸的中心起飘，还没出头像就淡了
         if targets.isEmpty {

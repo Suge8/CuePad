@@ -31,6 +31,8 @@ import SwiftUI
 /// 空锚不做插入转场：继承到父级动画时，默认淡入会让新锚的宿主层首帧透明，把本来可见的落点误判成不在屏上。
 /// 播的那一刻沿层树把锚换算到窗口根层的坐标，一并算进父层的裁切、隐藏与透明（滚出屏的、被盖住的页、开合到 0 的都算不在），
 /// 工具栏、导航容器、分栏这些各自托管的视图都在同一棵层树里，不需要逐层换算。
+/// 接住的那几圈挂在落点的锚自己的层上（`RelayFlight.Landing`）：量过之后落点又挪了（页头随换句重新居中、列表重排）圈也跟着锚走，
+/// 且压在锚后面的字底下；飞的那道光仍沿播的那一刻量出的弧，落下那一下由渲染服务按锚此刻的位置画，不另量、不逐帧读几何。
 /// 否决了 SwiftUI 的覆盖层加锚点偏好：偏好过不了 Mac 工具栏与 iOS 导航容器的托管边界，覆盖层也盖不住 Mac 的工具栏。
 struct CueRelayStage: ViewModifier {
     let workspace: Workspace
@@ -89,13 +91,13 @@ struct CueRelayStage: ViewModifier {
 
         /// 会话那头在屏上的位置：最具体的那一级（`EndSpot.rank`），同一级几处都在时取离头像近的。
         /// 刚开出的会话那一行正透明着等光落下（`relayArrival`），量它时不看透明度。
-        private static func place(of end: RelayEnd, among anchors: [RelayAnchorView], in root: CALayer, near cue: CGPoint?) -> CGPoint? {
-            anchors.compactMap { anchor -> (rank: Int, point: CGPoint)? in
+        private static func place(of end: RelayEnd, among anchors: [RelayAnchorView], in root: CALayer, near cue: CGPoint?) -> RelayFlight.Landing? {
+            anchors.compactMap { anchor -> (rank: Int, landing: RelayFlight.Landing)? in
                 guard case .end(let spot) = anchor.role, let rank = spot.rank(for: end),
                       let frame = anchor.frame(in: root, seesThrough: end.opens && rank == EndSpot.Row.own.rawValue) else { return nil }
-                return (rank, frame.center)
+                return (rank, RelayFlight.Landing(point: frame.center, host: anchor.hostLayer))
             }
-            .min { ($0.rank, RelayFlight.distance($0.point, cue)) < ($1.rank, RelayFlight.distance($1.point, cue)) }?.point
+            .min { ($0.rank, RelayFlight.distance($0.landing.point, cue)) < ($1.rank, RelayFlight.distance($1.landing.point, cue)) }?.landing
         }
     }
 
@@ -184,6 +186,9 @@ final class RelayAnchorView: RelayAnchorBase {
     #endif
 
     static func all(in window: AnyObject) -> [RelayAnchorView] { anchors.allObjects.filter { $0.window === window } }
+
+    /// 锚自己的层：接住的光圈画在上面，随锚移动（`RelayFlight.Landing`）。
+    var hostLayer: CALayer? { layer }
 
     /// Cue 那头在屏上的那块：几处都在时取 `CueSpot` 排在前面的。
     static func cue(among anchors: [RelayAnchorView], in root: CALayer) -> CGRect? {
