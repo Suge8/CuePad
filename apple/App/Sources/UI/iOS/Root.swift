@@ -31,7 +31,7 @@ struct IOSRoot: View {
                     if let outbox = workspace.outbox { HandOffInput(outbox: outbox).id(outbox.id) }
                 }
             }
-            .sheet(item: $workspace.projectForm) { ProjectFormSheet(project: $0.project) }
+            .sheet(item: $workspace.projectForm) { ProjectFormSheet($0) }
             .sheet(item: Binding(get: { workspace.folderPicker }, set: { workspace.folderPicker = $0 })) { FolderPickerSheet(project: $0) }
             .overlay { TaskBubbleSlot() }
         }

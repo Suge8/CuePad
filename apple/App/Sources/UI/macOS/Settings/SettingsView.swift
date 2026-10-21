@@ -66,23 +66,13 @@ private struct GeneralSections: View {
     @Environment(CueBar.self) private var cueBar: CueBar?
 
     var body: some View {
-        @Bindable var settings = services.settings
         Section {
             SyncRow()
             if !services.conflicts.isEmpty { ConflictsRow() }
         }
         if let alerts = services.alerts { NotificationSection(alerts: alerts) }
         Section {
-            SettingRow(title: "外观", icon: Image(.appearance)) {
-                Picker("外观", selection: $settings.theme) {
-                    Text("跟随系统").tag(AppSettings.Theme.system)
-                    Text("浅色").tag(AppSettings.Theme.light)
-                    Text("深色").tag(AppSettings.Theme.dark)
-                }
-                .labelsHidden()
-                .pickerStyle(.segmented)
-                .fixedSize()
-            }
+            SettingRow(title: "外观", icon: Image(.appearance)) { ThemePicker() }
             ShortcutRow(title: "显示/隐藏", icon: .hotkey, accelerator: services.hotkey.accelerator, apply: services.hotkey.set)
             if let cueBar {
                 ShortcutRow(title: "对 Cue 说", icon: .talkToCue, accelerator: cueBar.hotkey.accelerator, apply: cueBar.hotkey.set)
@@ -267,7 +257,7 @@ private struct ConflictsRow: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @State private var showing = false
-    @State private var failure: String?
+    @State private var choices = SyncChoices()
 
     var body: some View {
         SettingRow(
@@ -290,32 +280,27 @@ private struct ConflictsRow: View {
                     ForEach(services.conflicts, id: \.copy.id) { conflict in
                         VStack(alignment: .leading, spacing: 8) {
                             Text(CardText(conflict.original.body).label).font(Typography.bodyStrong)
-                            version("这台设备的版本", conflict.original, keep: .original, copy: conflict.copy.id)
-                            version("另一台设备的版本", conflict.copy, keep: .copy, copy: conflict.copy.id)
+                            ForEach(conflict.versions) { version($0, of: conflict) }
                         }
                     }
                 }
             }
             .frame(maxHeight: 480)
             .fixedSize(horizontal: false, vertical: true)
-            if let failure { Text(failure).font(Typography.meta).foregroundStyle(palette.failure) }
+            if let failure = choices.failure { Text(failure).font(Typography.meta).foregroundStyle(palette.failure) }
         }
     }
 
-    private func version(_ label: String, _ card: Card, keep choice: ConflictChoice, copy: UUID) -> some View {
+    private func version(_ version: ConflictVersion, of conflict: CardConflict) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text(Dotted(label, DateLabel.short(card.modifiedAt))).font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink3)
+                Text(Dotted(version.label, DateLabel.short(version.card.modifiedAt))).font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink3)
                 Spacer()
-                Button("保留这一份") {
-                    failure = nil
-                    Task {
-                        do { try await services.resolveConflict(copy: copy, keep: choice) } catch { failure = error.localizedDescription }
-                    }
-                }
-                .settingButton()
+                Button(SyncChoices.keep) { choices.keep(version.keep, of: conflict, services) }
+                    .settingButton()
+                    .disabled(choices.working)
             }
-            Text(Outgoing.text(of: card)).font(Typography.secondary).foregroundStyle(palette.ink2)
+            Text(Outgoing.text(of: version.card)).font(Typography.secondary).foregroundStyle(palette.ink2)
                 .lineLimit(6).frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(10)

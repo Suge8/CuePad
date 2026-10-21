@@ -20,43 +20,36 @@ enum ProjectDirectory {
 
 /// 新建或编辑项目：名称、一句话介绍、图标、颜色；新建时还可以选文件夹（不选的第一次开工时建工作区，之后在项目菜单里换）。
 struct ProjectForm: View {
-    let project: Project?
     @Environment(Workspace.self) private var workspace
     @Environment(\.closePanel) private var close
     @Environment(\.palette) private var palette
-    @State private var name = ""
-    @State private var intro = ""
-    @State private var icon = ProjectIcon.folder
-    @State private var color = Palette.projectColors[0].stored
+    @State private var draft: ProjectDraft
     /// 新建时选的文件夹（完整路径）；编辑项目不在这里改绑定，项目菜单里改。
     @State private var folder: String?
 
+    init(_ request: ProjectFormRequest) {
+        _draft = State(initialValue: ProjectDraft(request))
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text(project == nil ? "新建项目" : "编辑项目").font(Typography.bodyStrong)
-            TextField("名称", text: $name).textFieldStyle(.roundedBorder).onSubmit(save)
-            TextField("一句话介绍（可不填）", text: $intro).textFieldStyle(.roundedBorder).onSubmit(save)
-            ProjectStylePicker(icon: $icon, color: $color, cell: 30)
-            if project == nil { folderRow }
+            Text(draft.title).font(Typography.bodyStrong)
+            TextField(ProjectDraft.namePrompt, text: $draft.name).textFieldStyle(.roundedBorder).onSubmit(save)
+            TextField(ProjectDraft.introPrompt, text: $draft.intro).textFieldStyle(.roundedBorder).onSubmit(save)
+            ProjectStylePicker(icon: $draft.icon, color: $draft.color, cell: 30)
+            if draft.project == nil { folderRow }
             HStack {
                 Spacer()
                 // Esc 由弹层接（关掉即取消）
                 Button("取消", role: .cancel) { close() }
-                Button(project == nil ? "创建" : "保存", action: save)
+                Button(draft.confirm, action: save)
                     .keyboardShortcut(.defaultAction)
-                    .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
+                    .disabled(!draft.canSave)
             }
         }
         .padding(20)
         .frame(width: 340)
         .background(palette.desk)
-        .onAppear {
-            guard let project else { return }
-            name = project.name
-            intro = project.intro ?? ""
-            icon = ProjectIcon(stored: project.icon)
-            color = project.color
-        }
     }
 
     /// 文件夹：没选时是"选择…"，选了写末段名（悬停看完整路径）并可清掉。
@@ -75,17 +68,12 @@ struct ProjectForm: View {
     }
 
     private func save() {
-        let name = name.trimmingCharacters(in: .whitespaces)
-        guard !name.isEmpty else { return }
-        let project = project, intro = intro, icon = icon, color = color, folder = folder
-        workspace.attempt {
-            let id = try await workspace.saveProject(project, name: name, intro: intro, icon: icon, color: color)
-            if project == nil {
-                if let folder { try await workspace.services.store.setDirectory(folder, for: id) }
-                workspace.show(.project(id))
-            }
+        let folder = folder
+        let saved = draft.save(in: workspace) { id in
+            if let folder { try await workspace.services.store.setDirectory(folder, for: id) }
+            workspace.show(.project(id))
         }
-        close()
+        if saved { close() }
     }
 }
 #endif
