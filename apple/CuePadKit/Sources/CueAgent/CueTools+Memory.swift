@@ -33,6 +33,11 @@ extension CueTools {
         let name = reply.session.map(CueEnvelope.sessionName) ?? "会话（\(reply.message.sessionID.prefix(8))）"
         return "\(name) \(iso(reply.message.at)) 回复：\(Self.excerpt(reply.message.text, around: words))"
       }
+      let more = found.unlisted
+      let unlisted = [("记忆", more.lines), ("对话", more.messages), ("任务", more.cards), ("会话回复", more.replies)].filter { $0.1 > 0 }
+      if !unlisted.isEmpty {
+        lines.append("还有命中没列出：" + unlisted.map { "\($0.0) \($0.1) 条" }.joined(separator: "、") + "。要查全就加上更具体的词、换个说法再查。")
+      }
       return .ok(lines.isEmpty ? "没找到。" : lines.joined(separator: "\n"))
     case "forget":
       let (line, index) = try await line(args)
@@ -50,9 +55,9 @@ extension CueTools {
       let (_, index) = try await store.noteCueLine(try args.required("text"), source: .cue, remindAt: at)
       return .ok("记下了 #\(index)，\(iso(at)) 叫醒你。")
     case "merge":
-      guard let lo = args.int("lo"), let hi = args.int("hi") else { throw Failure("merge 要给 lo 与 hi（区间 [lo, hi)）") }
-      try await store.setCueSummary(lo: lo, hi: hi, text: try args.required("text"))
-      return .ok("#\(lo)-\(hi - 1) 合成了一行。")
+      guard let lo = args.int("lo"), let hi = args.int("hi") else { throw Failure("merge 要给 lo 与 hi（同待合并里的 #lo-hi，hi 含在内）") }
+      try await store.setCueSummary(lo: lo, hi: hi + 1, text: try args.required("text"))
+      return .ok("#\(lo)-\(hi) 合成了一行。")
     case "zoom":
       guard let lo = args.int("lo") else { throw Failure("zoom 要给 lo（与 hi，同记忆视图里的 #lo-hi）") }
       guard let text = CueMemoryView(try await store.cueMemory()).zoom(lo: lo, hi: args.int("hi") ?? lo) else {

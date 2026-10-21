@@ -76,7 +76,6 @@ extension CueKeeper {
             // 等子代理停住不写库：到点由定时器叫醒对账
             if let stall = try await store.nextCueStall(after: now) { deadlines.append(stall) }
 
-            let timing = setup.timing
             let changes = try await self.changes(at: now)
             // 出错之后：有新变化就是新事件，照常；没有就等重试的时刻，过了这一次就只等新变化
             if let held = setback {
@@ -84,7 +83,7 @@ extension CueKeeper {
                     setback = nil
                 } else if let retryAt = held.retryAt, now >= retryAt {
                     setback?.retryAt = nil
-                    return _ = try await wakeUp(held.wake, as: held.author, extra: held.extra)
+                    return _ = try await wakeUp(held.wake, as: held.author)
                 } else {
                     return schedule([deadlines.min(), held.retryAt].compactMap { $0 }.min())
                 }
@@ -109,16 +108,6 @@ extension CueKeeper {
                     return _ = try await wakeUp(.idle)
                 }
                 deadlines.append(due)
-            }
-
-            let memory = CueMemoryView(try await store.cueMemory())
-            if let merge = memory.merges.first(where: { !shift.mergesTried.contains([$0.lo, $0.hi]) }) {
-                let ready = lastTurnEnd + timing.mergeAfter.seconds
-                if now >= ready {
-                    updateShift { $0.mergesTried.insert([merge.lo, merge.hi]) }
-                    return _ = try await wakeUp(.tidy, extra: CueMemoryView.mergePrompt(merge))
-                }
-                deadlines.append(ready)
             }
             schedule(deadlines.min())
         } catch {

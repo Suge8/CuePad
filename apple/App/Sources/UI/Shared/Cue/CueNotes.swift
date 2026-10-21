@@ -91,20 +91,8 @@ nonisolated struct CueWakeHeader: Equatable, Sendable {
             (name, failed) = (first.map { PiProgress.firstLine($0) ?? $0 }, false)
             trail = ids.count > 1 ? "等 \(ids.count) 条" : nil
             targets = first.map { [Place(title: $0, target: .memory)] } ?? []
-        case .enabled, .message, .idle, .tidy:
+        case .enabled, .message, .idle:
             (name, trail, failed, targets) = (nil, nil, false, [])
-        }
-    }
-
-    /// 为什么醒的一句话（读屏读，界面上是图标）
-    var reason: String {
-        switch wake {
-        case .enabled: "刚启用"
-        case .message: "你发来消息"
-        case .idle: "空闲时看了一眼"
-        case .tidy: "整理记忆"
-        case .sessionActivity: "会话有动静"
-        case .reminder: "提醒到点"
         }
     }
 
@@ -121,6 +109,17 @@ nonisolated struct CueWakeHeader: Equatable, Sendable {
 }
 
 extension CueWake {
+    /// 为什么醒的一句话（Cue 页那一节的第一行给读屏读、界面上是图标；Mac 的运行情况照写）。
+    var reason: String {
+        switch self {
+        case .enabled: "刚启用"
+        case .message: "你发来消息"
+        case .idle: "空闲时看了一眼"
+        case .sessionActivity: "会话有动静"
+        case .reminder: "提醒到点"
+        }
+    }
+
     /// 醒来原因的图标（Cue 页那一节的第一行、Mac 的运行情况）。
     var icon: Icon {
         switch self {
@@ -128,7 +127,6 @@ extension CueWake {
         case .message: .wakeMessage
         case .sessionActivity: .wakeActivity
         case .idle: .wakeIdle
-        case .tidy: .memory
         case .reminder: .wakeReminder
         }
     }
@@ -156,7 +154,7 @@ nonisolated struct CueWakeNames: Equatable, Sendable {
                 sessionIDs += stirs.compactMap(\.session)
                 taskIDs.formUnion(stirs.compactMap(\.task))
             case .reminder(let ids): lineIDs += ids
-            case .enabled, .message, .idle, .tidy: break
+            case .enabled, .message, .idle: break
             }
         }
         var names = CueWakeNames()

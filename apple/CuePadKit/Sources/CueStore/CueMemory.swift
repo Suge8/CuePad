@@ -28,12 +28,10 @@ public struct CueMemoryLine: Identifiable, Equatable, Sendable {
   }
 }
 
-/// 记忆的版本读数：行数、最后改动（记、忘、钉、提醒）与摘要的变化，任一变了它就变。管理器订阅它，不必每次读整份记忆。
+/// 记忆的版本读数：行数与最后改动（记、忘、钉、提醒），任一变了它就变。管理器订阅它，不必每次读整份记忆；摘要不在内：管理器不看摘要。
 public struct CueMemoryVersion: Equatable, Sendable {
-  public var lines: Int
-  var linesModifiedAt: Date?
-  public var summaries: Int
-  var summariesWrittenAt: Date?
+  var lines: Int
+  var modifiedAt: Date?
 }
 
 extension CueMemoryLine: Record {

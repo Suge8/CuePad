@@ -16,7 +16,7 @@ struct CueWakeTitle: View {
             if header.failed { FailureMark() } else { Image(header.wake.icon) }
         } label: {
             if let said {
-                Text(said).font(Typography.secondary).foregroundStyle(palette.ink2).lineLimit(2).accessibilityLabel("\(header.reason)，\(said)")
+                Text(said).font(Typography.secondary).foregroundStyle(palette.ink2).lineLimit(2).accessibilityLabel("\(header.wake.reason)，\(said)")
             } else {
                 reason
             }
@@ -35,7 +35,7 @@ struct CueWakeTitle: View {
             if !header.targets.isEmpty { Image(.forward).font(.system(size: 8, weight: .semibold)).foregroundStyle(palette.ink3) }
         }
         .lineLimit(1)
-        .menuLabel([header.reason, header.name, header.trail, quiet ? "没动手" : nil].compactMap(\.self).joined(separator: "，"))
+        .menuLabel([header.wake.reason, header.name, header.trail, quiet ? "没动手" : nil].compactMap(\.self).joined(separator: "，"))
     }
 
     @ViewBuilder private var reason: some View {

@@ -3,11 +3,10 @@
 	import { gsap, REDUCED } from '$lib/gsap';
 	import { i18n, t, LINKS } from '$lib/i18n.svelte';
 	import Icon from './Icon.svelte';
-	import Sim from './Sim.svelte';
 	import Canvas from './Canvas.svelte';
 
 	let hero: HTMLElement;
-	let stageEl: HTMLElement | undefined = $state();
+	let stageEl: HTMLElement;
 	let artEl: HTMLElement;
 	let squiggle: SVGSVGElement;
 
@@ -73,7 +72,7 @@
 				scrollTrigger: { trigger: hero, start: 'top top', end: 'bottom top', scrub: true }
 			});
 
-			if (window.matchMedia('(pointer: fine)').matches && stageEl) {
+			if (window.matchMedia('(pointer: fine)').matches) {
 				const stage = stageEl;
 				/* Mouse: stage tilt + art parallax */
 				const xTo = gsap.quickTo(artEl, 'x', { duration: 0.7, ease: 'power3.out' });
@@ -130,8 +129,8 @@
 			}
 		}, hero);
 
-		/* Scroll parallax on the sim windows */
-		if (window.matchMedia('(min-width: 48rem)').matches && stageEl) {
+		/* Scroll parallax on the stage shot */
+		if (window.matchMedia('(min-width: 48rem)').matches) {
 			const cells = stageEl.querySelectorAll('[data-px]');
 			let ticking = false;
 			const onScroll = () => {
@@ -211,5 +210,18 @@
 		</div>
 	</div>
 
-	<Sim bind:stageEl={stageEl} />
+	<div class="stage" bind:this={stageEl}>
+		<div class="cell" data-px="12">
+			<img
+				class="stage-shot"
+				src="/assets/shots/board-light.webp"
+				width="1600"
+				height="1000"
+				fetchpriority="high"
+				decoding="async"
+				alt={t('hero.img')}
+			/>
+		</div>
+		<img class="mascot-hero bob" src="/assets/mascot-hello.webp" width="560" height="496" alt="" />
+	</div>
 </section>

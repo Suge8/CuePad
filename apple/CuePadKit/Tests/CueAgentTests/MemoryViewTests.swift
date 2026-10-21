@@ -3,7 +3,7 @@ import CueStore
 import CueTestSupport
 import Testing
 
-/// 记忆视图（OptMem 的读法）：Cue 按"待合并"把块写成摘要之后，视图的行数固定在预算内，一直记着的全列、最新的原样。
+/// 记忆视图（OptMem 的读法）：Cue 按"待合并"把块一次写成摘要之后，视图的行数固定在预算内，一直记着的全列、最新的原样。
 @Suite struct MemoryViewTests {
   let fixture = try! Fixture()
   var store: CueStore { fixture.store }
@@ -17,10 +17,8 @@ import Testing
     var view = CueMemoryView(try await store.cueMemory())
     #expect(!view.merges.isEmpty)
 
-    for _ in 0..<10 where !view.merges.isEmpty {
-      for merge in view.merges { try await store.setCueSummary(lo: merge.lo, hi: merge.hi, text: "#\(merge.lo)-\(merge.hi - 1) 的摘要") }
-      view = CueMemoryView(try await store.cueMemory())
-    }
+    for merge in view.merges { try await store.setCueSummary(lo: merge.lo, hi: merge.hi, text: "#\(merge.lo)-\(merge.hi - 1) 的摘要") }
+    view = CueMemoryView(try await store.cueMemory())
 
     #expect(view.merges.isEmpty)
     #expect(view.pinned.map(\.line.text) == ["第 5 条"])

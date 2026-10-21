@@ -8,7 +8,7 @@ extension CueTools {
       [
         "name": "task",
         "description": """
-          任务与会话。task 写任务的 id 前缀或标题，session 写会话的 id 前缀或会话名（信封与 peek 里有）。body、text 里原样写的 ![](cuepad://img/<hash>) 作为图片交给会话。
+          任务与会话。task 写任务的 id 前缀或标题，session 写会话的 id 前缀或会话名（信封与 peek 里有），写任务的也认、指它在做的会话（done 除外）。body、text 里原样写的 ![](cuepad://img/<hash>) 作为图片交给会话。
           add{title,project?,steps?,body?,session?}：建任务。body 是正文，开工时连同标题作为会话的第一句（步骤开新会话时先带上顶层任务的标题与正文）；步骤自己的话用 edit 写在步骤上。同一项目里已有同名没做完的任务时不另建，返回那件。带 session 把那个会话绑到新任务上：不写 body（话用 say 说），project 缺省是会话所在的项目；
           edit{task,title?,body?,steps?,project?,reopen?}：改标题、换掉正文、追加步骤、连同步骤挪到项目；追加步骤与 reopen:true 都让已完成的任务回到没做完；
           start{task,agent?,model?,effort?,fresh?}：开工叶子（task 有步骤时是第一个没做完的步骤）。同一任务的上一步有会话就接着用它（已结束的先恢复），否则在项目文件夹开新会话：agent 缺省是那台 Mac 的默认，model 写 provider/id（claude、codex 只写 id）。叶子已有会话用 say；fresh:true 开新会话（上一步的会话随之结束）；
@@ -53,9 +53,9 @@ extension CueTools {
         "name": "memory",
         "description": """
           你的长期记忆，一行一条（≤\(CueMemoryLine.maxBytes) 字节），序号就是身份。note{text,pin?} 记一条，pin 一直记着（不 pin 的旧行会被并成摘要）；
-          recall{query} 只读：全文找记忆、对话、任务，与你管过的会话里 Agent 的回复原话（带会话名与短 id，可接着 peek）；词之间空格隔开，命中任一个就算，命中多、词少见的排前面；
+          recall{query} 只读：全文找记忆、对话、任务，与你管过的会话里 Agent 的回复原话（带会话名与短 id，可接着 peek）；词之间空格隔开，命中任一个就算，命中的词越少见、越多越靠前（太常见的词不算），列不下的报条数；
           zoom{lo,hi?} 只读：展开记忆视图里的摘要 #lo-hi，给它的两半（摘要或原行）；只给 lo 是那一行；
-          forget{line}；pin{line,pinned}；remind{text,at} 到点叫醒你（ISO 8601 或 yyyy-MM-dd HH:mm）；merge{lo,hi,text} 把待合并的块写成一行摘要；
+          forget{line}；pin{line,pinned}；remind{text,at} 到点叫醒你（ISO 8601 或 yyyy-MM-dd HH:mm）；merge{lo,hi,text} 把 <merge> 里待合并的块 #lo-hi 写成一行摘要；
           allow{ask,project?,allowed?} 改允许清单：ask 只能是 \(Self.allowable)，不带 project 是所有项目，allowed:false 去掉。
           """,
         "inputSchema": schema(

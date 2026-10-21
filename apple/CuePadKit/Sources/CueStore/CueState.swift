@@ -56,7 +56,7 @@ public struct CueContext: StoredJSON, Equatable, Sendable {
 
 /// Cue 这一轮为什么醒（值班的管理器起一轮时定下）。交给大脑的信封照它写"醒来："；Cue 自己醒来的一轮把它记在这一轮的经过那一行上
 /// （`CueMessage.wake`，随那一行同步），Cue 页那一节的第一行照它写、点了去叫醒它的会话，叫醒的接力（`CueFlight`）也只读它。
-/// 旧版本存下的、已不再有的原因（换新、改了设置）读出为 nil，那一节照没有醒来原因的旧动态显示。
+/// 旧版本存下的、已不再有的原因（换新、改了设置、整理记忆）读出为 nil，那一节照没有醒来原因的旧动态显示。
 public enum CueWake: StoredJSON, Equatable, Sendable {
   /// 刚启用：第一次醒来
   case enabled
@@ -66,7 +66,6 @@ public enum CueWake: StoredJSON, Equatable, Sendable {
   case sessionActivity([CueStir])
   /// 空闲巡视
   case idle
-  case tidy  // 合并记忆
   /// 提醒到点：到点的那几条记忆
   case reminder([UUID])
 }

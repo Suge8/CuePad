@@ -18,7 +18,8 @@ import os
 /// （`CueTiming.cacheLifetime`：缓存过期后接着用要把整段原价重写，换新只写固定前缀与视图，从不更贵）。满足就让大脑开新会话（`CueBrain.newSession`），
 /// 不多跑一轮、不先写交接（实测缓存热时先写交接再换没有带来提升，交接还每次写超 600 字）；一直记着的在这个班次起来后变过（钉上、取消、忘掉），就改成换个班次，让系统提示跟上。
 /// 新会话从哪接上只有一条规则：不论怎么来的（换新、换大脑、App 重启、意外退出后重起、起不来再试），第一条输入是记忆视图（`CueMemoryView`，一直记着的除外）、
-/// 平铺的对话视图（`CueView`，最近的对话与每一轮的经过）加信封；之后同一个会话里只往后加信封。
+/// 平铺的对话视图（`CueView`，最近的对话与每一轮的经过）、记忆里待合并的块（`CueMemoryView.mergeText`，一次给齐，它先合并再处理醒来的事）加信封；
+/// 之后同一个会话里只往后加信封。没合完的块下次换新还在，不另记、不另叫醒。
 /// 生命周期只有一个 `Phase`：起大脑中 → 值班（可能在跑一轮）→ 出问题后等着重起 → 次数用完停在起不来；Cue 此刻在做什么（`work`）由它直接得出，
 /// 每次对完账写进库（`PiStateRecorder.updateCue`；值班结束时由 `CueService` 写回歇着）。
 ///
@@ -34,8 +35,7 @@ import os
 ///    等子代理停住（`CueChange.Kind.stalled`）不随写入出现，按下一次停住的时刻（`CueStore.nextCueStall`）排定时器，到点对账时它就在变化里。
 ///    会话停下归谁接手由 `CueStore.cueChanges` 定：归他的不叫醒 Cue，记下（`Progress.held`）等他离开再报；还在场就按最早的离开时刻排一次对账，
 ///    设备开着会话的记录一变也重对。
-/// 6. 空闲巡视：没有在做的事（`CueStore.cueBoardActive`）、你很久没说话、不在打扰时段（`CueTiming.quietHours`），每段空闲最多一次、每天最多 3 次。
-/// 7. 记忆有待合并的块且空闲够久：醒来附上合并提示（同一块一个班次只请一次）。
+/// 6. 空闲巡视：没有在做的事（`CueStore.cueBoardActive`）、你最近一句（`CueStore.cueLastYou`，还没说过从启用算起）之后很久没说话、不在打扰时段（`CueTiming.quietHours`），每段空闲最多一次、每天最多 3 次。
 ///
 /// 回复是这一轮做完时大脑还留着的正在说的话（`CueBrainEvent.speaking`），一轮结束时才写进对话（`cueMessages` 是 Cue 对话唯一的事实源）。
 /// 说的过程只在这台 Mac 的内存里给 Cue 页逐字显示（`speech`），只显示在回答你的一轮（`Turn.answersYou`）：
@@ -46,7 +46,7 @@ import os
 /// 你发来的图按发给会话的同一个转换交给大脑（文字里的图片引用照留，Cue 能原样转给会话）；模型看不了图就不交，并对你说一声。
 /// 基线（变化从哪算起）只在一轮做完且没出错时前移：出错的一轮里 Cue 没看完的变化下次还在。变化按本机写入序号分新旧
 /// （`CueStore.lastWrite`），不按事件时刻：事件可能晚到（机器忙、从别的设备同步来），时刻早于上次醒来也照样是新的。
-/// Cue 自己醒来（刚启用、提醒与 5–7）的一轮出错后，隔 `CueTiming.retryWake` 再醒一次，再错就等下一个新变化；额度、登录类的错不重试。
+/// Cue 自己醒来（刚启用、提醒与 5–6）的一轮出错后，隔 `CueTiming.retryWake` 再醒一次，再错就等下一个新变化；额度、登录类的错不重试。
 /// 出错写一条 Cue 消息告诉你：你发起的一轮、不重试的错立刻说；会重试的那次先不说，重试也错了才说。回答你的一轮的回复与出错（一轮只响一次）、起不来都提示你（`CueMessage.urgent`）。
 /// 大脑意外退出或起不来按 `CueTiming.restarts` 退避重试，
 /// 那一轮里交出去的你的话清掉送达、重起后重新交；连续失败超过次数写一条 Cue 消息、停在"起不来"，等你的下一条消息再试。
@@ -87,7 +87,6 @@ final class CueKeeper {
     /// 此刻（或上一次试起）的大脑用的设置
     var brainSettings: BrainSettings?
     var shifts = 0
-    var lastTurnEnd = Date.now
     var lastFailure: String?
     var setback: Setback?
     var timer: Task<Void, Never>?
@@ -148,7 +147,8 @@ final class CueKeeper {
                 do {
                     for try await _ in store.observe({ store in
                         Signal(
-                            messages: try store.cueMessages(limit: 50), active: try store.cueBoardActive(), memory: try store.cueMemoryVersion(),
+                            toDeliver: try store.cueMessagesToDeliver().map(\.id), lastYou: try store.cueLastYou()?.said,
+                            active: try store.cueBoardActive(), memory: try store.cueMemoryVersion(),
                             profile: try store.cueProfile(), viewing: try store.viewers().compactMap(\.sessionID), written: try store.lastWrite())
                     }) { input.yield(.kick) }
                 } catch {

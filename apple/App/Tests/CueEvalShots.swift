@@ -1,10 +1,6 @@
 #if os(macOS)
 import AppKit
-import CueAgent
-import CuePi
 import CueStore
-import CueTestSupport
-import CueText
 import Foundation
 import SwiftUI
 import Testing
@@ -89,7 +85,13 @@ func mockShot(_ name: String) throws -> Data {
     }
     .padding(20).frame(width: mac ? 520 : 300, height: mac ? 340 : 600)
     .background(dark ? Color.black : Color(white: 0.96)).foregroundStyle(ink)
-    let renderer = ImageRenderer(content: shot)
+    return try png(shot)
+}
+
+/// 画成 2 倍的 PNG：假会话发到手机的图都经这里
+@MainActor
+func png(_ view: some View) throws -> Data {
+    let renderer = ImageRenderer(content: view)
     renderer.scale = 2
     let image = try #require(renderer.cgImage)
     return try #require(NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]))
@@ -128,9 +130,17 @@ func loginShot() throws -> Data {
         }
     }
     .padding(20).background(Color(white: 0.95)).foregroundStyle(.black)
-    let renderer = ImageRenderer(content: shot)
-    renderer.scale = 2
-    let image = try #require(renderer.cgImage)
-    return try #require(NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]))
+    return try png(shot)
+}
+
+/// 一张写着字的页面截图（README 新截图、Lighthouse 报告）：Cue 用读文件工具打开看。
+@MainActor
+func pageShot(_ title: String, _ lines: [String]) throws -> Data {
+    let page = VStack(alignment: .leading, spacing: 10) {
+        Text(title).font(.title2.bold())
+        ForEach(lines, id: \.self) { Text($0).font(.body.monospaced()) }
+    }
+    .padding(24).frame(width: 640, alignment: .leading).background(.white).foregroundStyle(.black)
+    return try png(page)
 }
 #endif

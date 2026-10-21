@@ -1,13 +1,8 @@
 #if os(macOS)
-import AppKit
-import CueAgent
 import CuePi
 import CueStore
 import CueTestSupport
-import CueText
-import Darwin
 import Foundation
-import SwiftUI
 import Testing
 @testable import CuePad
 
@@ -42,8 +37,8 @@ struct EvalBrain {
             effort: evalEnvironment["CUEPAD_CUE_EVAL_EFFORT"].flatMap(PiThinkingLevel.init(rawValue:)) ?? .medium)
     }()
 
-    /// .md 与 summary.md 开头那一行：大脑、模型与强度、上下文做法
-    var label: String { "\(runtime.name) · \(model) · \(effort.rawValue) · 精简混合（到换新线或缓存过期开新会话，用记忆视图与最近对话接上）" }
+    /// .md 与 score.json 里写的大脑：大脑、模型与强度
+    var label: String { "\(runtime.name) · \(model) · \(effort.rawValue)" }
 
     /// Codex 的登录：用户的 Codex 存的那一份，拷一份进临时的配置目录
     private static let codexAuth = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".codex/auth.json")
@@ -51,18 +46,15 @@ struct EvalBrain {
     /// Pi 的登录：用户的 Pi 存的那一份，只读
     private static let piAuth = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".pi/agent/auth.json")
 
-    /// 评测给 Pi 多加载的只读扩展：每次请求模型前记下 user-agent 与系统提示首块是不是计费标识（在大脑自己的扩展之后加载，看到的是它们改过的），
+    /// 评测给 Pi 多加载的只读扩展：每次请求模型前记下系统提示首块是不是计费标识（在大脑自己的扩展之后加载，看到的是它们改过的），
     /// 证明请求走的是带 Claude 订阅计费标识的那条路；什么都不改。
     private static let billingLog = """
         import { appendFileSync } from "node:fs";
         const log = process.env.CUEPAD_EVAL_BILLING_LOG;
         export default function (pi: any) {
-          pi.on("before_provider_headers", (event: any) => {
-            if (log) appendFileSync(log, JSON.stringify({ kind: "headers", ua: event.headers?.["user-agent"] ?? null }) + "\\n");
-          });
           pi.on("before_provider_request", (event: any) => {
             const first = Array.isArray(event.payload?.system) ? event.payload.system[0]?.text : undefined;
-            if (log) appendFileSync(log, JSON.stringify({ kind: "request", billing: typeof first === "string" && first.startsWith("x-anthropic-billing-header:") }) + "\\n");
+            if (log) appendFileSync(log, JSON.stringify({ billing: typeof first === "string" && first.startsWith("x-anthropic-billing-header:") }) + "\\n");
           });
         }
         """

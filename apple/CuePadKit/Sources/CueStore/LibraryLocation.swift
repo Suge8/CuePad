@@ -27,7 +27,6 @@ public enum LibraryLocationError: Error, Equatable, LocalizedError {
 /// 偏好、待处理内容、快照等其他放在库目录里的东西由 App 层自己定名。
 public struct LibraryLocation: Equatable, Sendable {
   public static let environmentKey = "CUEPAD_LIBRARY_DIR"
-  public static let appGroupIdentifier = AppIdentity.appGroup
 
   public enum Base: Sendable {
     /// macOS：应用支持目录。
@@ -37,7 +36,7 @@ public struct LibraryLocation: Equatable, Sendable {
 
     public static var platform: Base {
       #if os(iOS)
-      .appGroup(container: FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: LibraryLocation.appGroupIdentifier))
+      .appGroup(container: FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: AppIdentity.appGroup))
       #else
       .applicationSupport(URL.applicationSupportDirectory)
       #endif
@@ -79,7 +78,7 @@ public struct LibraryLocation: Equatable, Sendable {
     }
     switch base {
     case .appGroup(let container):
-      guard let container else { throw LibraryLocationError.appGroupUnavailable(appGroupIdentifier) }
+      guard let container else { throw LibraryLocationError.appGroupUnavailable(AppIdentity.appGroup) }
       return LibraryLocation(directory: container.appending(path: "Library", directoryHint: .isDirectory), origin: .release)
     case .applicationSupport(let support):
       #if os(macOS)

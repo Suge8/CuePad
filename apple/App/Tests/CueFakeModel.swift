@@ -188,7 +188,9 @@ nonisolated final class FakeModel: Sendable {
         if text.contains("请问我一个问题") { return call("tell", ["text": "要推送吗？", "ask": "push", "doing": "推送登录页的修复"]) }
         if last["role"] as? String == "user", let key = failingOnce.first(where: text.contains), once("fail:" + key) { return fail() }
         if text.contains("请慢慢想"), once("hang") { return .hang }
-        if text.contains("写回：memory merge") { return tell("记忆合并好了") }
+        if let block = text.firstMatch(of: /<merge>[\s\S]*?\n#(\d+)-(\d+)\n/) {
+            return call("memory", ["action": "merge", "lo": Int(block.1)!, "hi": Int(block.2)!, "text": "合起来的偏好"])
+        }
         if text.contains("三步并行"), let board = text.firstMatch(of: /在做 \d+ 件：\n((?:[ -][^\n]*\n)+)/)?.1 {
             return text.contains("醒来：会话有动静") ? tell("看板：\n" + board) : say("看板：\n" + board)
         }

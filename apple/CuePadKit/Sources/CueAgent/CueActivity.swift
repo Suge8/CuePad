@@ -43,19 +43,22 @@ public enum CueActivity {
     }
   }
 
-  /// 做完的一次调用在经过清单里的一条：动到的任务按 Cue 写的引用认（与工具同一个认法），清单里点它打开那件任务；
-  /// 认不出（写错了、调用失败）就照它写的引用列出，不带任务。给的是会话（say、peek、stop 带 session）就写会话名，不带任务。
+  /// 做完的一次调用在经过清单里的一条：动到的任务与会话按 Cue 写的引用认（与工具同一个认法：session 写成任务的编号也认作那件任务），
+  /// 清单里点它打开那件任务；认不出（写错了、调用失败）就照它写的引用列出，不带任务。给的是会话就写会话名，不带任务。
   /// 对你说的话（tell）已在对话里：清单里只留首行，带着那条消息，点它跳回原处。
   public static func item(tool: String, arguments: String, failed: Bool, store: CueStore) async -> PiChatMessage.Tools.Item {
-    let args = Parsed(arguments)
-    let task: Card?
-    if let ref = args.line("task") ?? (tool == "task" && args.line("action") == "add" ? args.line("title") : nil) {
-      task = try? await CueTools(store: store).task(ref)
-    } else {
-      task = nil
-    }
+    let args = Parsed(arguments), tools = CueTools(store: store)
     let session = args.line("session")
-    let sessionName = await session.asyncMap { ref in (try? await store.sessions(matching: ref).first?.title) ?? ref }
+    var task: Card?, sessionName: String?
+    if let ref = args.line("task") ?? (tool == "task" && args.line("action") == "add" ? args.line("title") : nil) {
+      task = try? await tools.task(ref)
+    } else if let session {
+      switch try? await tools.sessionRef(session) {
+      case .session(let found): sessionName = found.title
+      case .task(let card): task = card
+      case nil: sessionName = session
+      }
+    }
     let named = "「\(task?.heading ?? args.line("task") ?? args.line("title") ?? sessionName ?? "")」"
     func item(_ kind: PiChatMessage.Tools.Kind, _ target: String, message: UUID? = nil) -> PiChatMessage.Tools.Item {
       .init(kind: kind, target: target.clipped(PiChatMessage.Tools.targetLimit), failed: failed, task: task?.id, message: message)

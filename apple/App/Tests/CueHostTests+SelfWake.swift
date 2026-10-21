@@ -65,11 +65,17 @@ extension CueHostTests {
         await rig.stop()
     }
 
-    /// 你在别处记下的记忆多到要合并（超过视图预算）：空闲一会儿后 Cue 醒来，按合并提示写摘要。没有别的事件也会醒。
-    @Test func 记忆待合并时空闲后醒来合并() async throws {
-        let rig = try await Rig()
+    /// 你在别处记下的记忆多到要合并（超过视图预算）：Cue 不为合并另醒；下一次换新（这里每次醒来都到了换新线）的第一轮带上待合并的块，
+    /// 它在回你话的同一轮里写回摘要。
+    @Test func 记忆待合并_换新那一轮顺手合并_同一轮回你() async throws {
+        let rig = try await Rig(usage: CueContext.renewAt + 10_000)
         for index in 0..<(CueMemoryView.budget + 4) { try await rig.store.noteCueLine("偏好 \(index)", source: .you) }
-        try await rig.message(.cue, containing: "记忆合并好了")
+        let before = CueMemoryView(try await rig.store.cueMemory()).merges
+        #expect(!before.isEmpty)
+        try await rig.say("你好")
+        try await rig.message(.cue, containing: "办好了")
+        let summaries = try await rig.store.cueMemory().summaries
+        #expect(summaries.contains { $0.lo == before[0].lo && $0.hi == before[0].hi })
         await rig.stop()
     }
 }

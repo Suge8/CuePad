@@ -18,9 +18,58 @@ final class MacPages {
     @ObservationIgnored private var trimTask: Task<Void, Never>?
     static let keptPages = 4
 
-    /// 侧栏开合一步到位：只改可见性，不包动画（分栏动画约 0.3 秒里每帧整窗重排、重算鼠标跟踪区，掉帧十几次）。
+    /// 开合侧栏的动画里详情区里的页按终点排好的左缘（`SidebarMotion`，宽是从它到详情区的右缘）；不在动时 nil。
+    /// 一变就把详情区这一栏的图层平移到侧栏此刻的边（`slide`）。
+    private(set) var held: CGFloat? { didSet { slide() } }
+    /// 侧栏开着、不在动时详情区的左缘：展开后详情区从哪起（侧栏这一栏的宽另有内边距，不能拿它算）。还没见过侧栏开着时为 nil。
+    @ObservationIgnored private var openedMinX: CGFloat?
+    /// 详情区这一栏的图层（`ColumnFinder`）与侧栏这一帧的边（详情区的左侧安全区）：平移量是边减 `held`。
+    @ObservationIgnored weak var column: CALayer?
+    @ObservationIgnored private var edge: CGFloat = 0
+    @ObservationIgnored private var motions = 0
+    /// 收起正在动时又按了展开：等收起动完再展开（`toggleSidebar`）。
+    @ObservationIgnored private var reopen = false
+    /// 页滑动时两边多铺的底色，不小于侧栏最宽的那一栏。
+    static let slideOverscan: CGFloat = 400
+
+    /// 开合侧栏：分栏照常动画，详情区里的页在动之前按终点排好，动画里只平移图层、左缘贴着侧栏的边走（`SidebarMotion`）。
+    /// 跟着每帧的宽度重排时每帧主线程约 16ms、800ms 里掉帧十几次；这样每帧约 6ms。展开途中再按收起，按新的终点重新排一次、从当前位置收回。
+    /// 收起途中再按展开不打断：分栏不支持这样反向，会先一步跳到收起、下一帧再不带动画地跳到展开（侧栏闪没一帧）；改成收起动完接着展开，再按一次就取消。
     func toggleSidebar() {
-        sidebar = sidebar == .detailOnly ? .all : .detailOnly
+        let opening = sidebar == .detailOnly
+        if opening, held != nil {
+            reopen.toggle()
+            return
+        }
+        held = opening ? openedMinX : 0
+        motions += 1
+        let motion = motions
+        withAnimation(Motion.snappy, completionCriteria: .removed) {
+            sidebar = opening ? .all : .detailOnly
+        } completion: { [weak self] in
+            guard let self, motion == motions else { return }
+            held = nil
+            if reopen {
+                reopen = false
+                toggleSidebar()
+            }
+        }
+    }
+
+    /// 侧栏这一帧的边（几何读数，`SidebarMotion` 写）。它与侧栏在同一次布局里变，平移跟着同一次提交上屏；
+    /// 按下开合的那一下（`held` 变）就平移，页按终点排好的那一帧不会先跳过去。
+    func follow(edge: CGFloat) {
+        self.edge = edge
+        slide()
+    }
+
+    /// 详情区在窗口里的左缘（几何读数，`MainWindow` 写；不触发重算）。
+    func detailMoved(toMinX minX: CGFloat) {
+        if sidebar != .detailOnly, held == nil { openedMinX = minX }
+    }
+
+    private func slide() {
+        column?.setAffineTransform(CGAffineTransform(translationX: held.map { edge - $0 } ?? 0, y: 0))
     }
 
     func visit(from left: Route, to page: Route) {

@@ -2,15 +2,23 @@ import CueStore
 
 /// Cue 的记忆视图（OptMem 的读法）：一直记着的全部列出（在系统提示里，`pinnedText`）；其余按序号铺成对齐的 2 的幂块，越新越细、总行数固定在预算内
 /// （按预算二分 alpha，见 `cover`），放在新会话的第一条输入里（`viewText`）。块有摘要用摘要，没有就拆成两半直到有摘要或单行；
-/// 缺的摘要列成"待合并"（`merges`），由值班的管理器空闲时逐块请 Cue 写，视图里不列。摘要可以一层层展开（`zoom`）。
+/// 缺的摘要列成"待合并"（`merges`，由小到大、一批合到顶），视图里不列，换新时一并交给 Cue 写（`mergeText`）。摘要可以一层层展开（`zoom`）。
 /// 参考 https://github.com/VictorTaelin/OptMem 的 `_cover` / `cover`。
 public struct CueMemoryView: Equatable, Sendable {
   public enum Entry: Equatable, Sendable {
     case line(index: Int, text: String)
     case summary(lo: Int, hi: Int, text: String)
+
+    /// 视图里的写法：#序号 或 #a-b（b 含在内）
+    var text: String {
+      switch self {
+      case .line(let index, let text): "#\(index) \(text)"
+      case .summary(let lo, let hi, let text): "#\(lo)-\(hi - 1) \(text)"
+      }
+    }
   }
 
-  /// 待合并的一块：区间与原文（小块是原行，不含忘掉的与一直记着的；大块是两半的摘要）。
+  /// 待合并的一块：区间与原文（小块是原行，不含忘掉的与一直记着的；大块是两半显示成的那一行，还要先合的指向同一批里排在前面的那一半）。
   public struct Merge: Equatable, Sendable {
     public var lo: Int
     public var hi: Int
@@ -38,35 +46,34 @@ public struct CueMemoryView: Equatable, Sendable {
     pinned = lines.enumerated().filter { $1.pinned && $1.deletedAt == nil }.map { CueIndexedLine(index: $0, line: $1) }
     pinnedOverBudget = pinned.count > budget
     var entries: [Entry] = [], merges: [Merge] = []
-    func expand(_ lo: Int, _ hi: Int) {
+    // 区间在视图里显示成的几行：有摘要用摘要，没有就拆成两半，单行只列没忘掉、没一直记着的
+    func expand(_ lo: Int, _ hi: Int) -> [Entry] {
       if hi - lo == 1 {
         let line = lines[lo]
-        if line.deletedAt == nil, !line.pinned { entries.append(.line(index: lo, text: line.text)) }
-      } else if let text = summaries[[lo, hi]] {
-        entries.append(.summary(lo: lo, hi: hi, text: text))
-      } else {
-        expand(lo, (lo + hi) / 2)
-        expand((lo + hi) / 2, hi)
+        return line.deletedAt == nil && !line.pinned ? [.line(index: lo, text: line.text)] : []
       }
+      if let text = summaries[[lo, hi]] { return [.summary(lo: lo, hi: hi, text: text)] }
+      return expand(lo, (lo + hi) / 2) + expand((lo + hi) / 2, hi)
     }
+    // 显示不止一行的块才待合并（全是一直记着的、忘掉的，或只剩一行，合了也不省行）；缺摘要的大块连同缺摘要的两半一起列出（小块排在前面）：
+    // 一次换新就合到顶，不用等两半写好再等下一次换新
     func pending(_ lo: Int, _ hi: Int) {
-      guard summaries[[lo, hi]] == nil else { return }
-      let mid = (lo + hi) / 2
+      guard summaries[[lo, hi]] == nil, expand(lo, hi).count > 1 else { return }
       if hi - lo <= Self.rawMax {
         let raw = (lo..<hi).filter { lines[$0].deletedAt == nil && !lines[$0].pinned }.map { "#\($0) \(lines[$0].text)" }
         merges.append(Merge(lo: lo, hi: hi, source: raw.joined(separator: "\n")))
         return
       }
-      let halves = [(lo, mid), (mid, hi)]
-      let ready = halves.compactMap { half in summaries[[half.0, half.1]].map { "#\(half.0)-\(half.1 - 1) \($0)" } }
-      if ready.count == 2 {
-        merges.append(Merge(lo: lo, hi: hi, source: ready.joined(separator: "\n")))
-      } else {
-        for half in halves { pending(half.0, half.1) }
+      let halves = [(lo, (lo + hi) / 2), ((lo + hi) / 2, hi)]
+      for half in halves { pending(half.0, half.1) }
+      let source = halves.compactMap { half -> String? in
+        let shown = expand(half.0, half.1)
+        return shown.count > 1 ? "#\(half.0)-\(half.1 - 1)（上面先合的这一块写成的那一行）" : shown.first?.text
       }
+      merges.append(Merge(lo: lo, hi: hi, source: source.joined(separator: "\n")))
     }
     for (lo, hi) in Self.cover(lines.count, budget: max(0, budget - pinned.count)) {
-      expand(lo, hi)
+      entries += expand(lo, hi)
       if hi - lo > 1 { pending(lo, hi) }
     }
     self.entries = entries
@@ -84,13 +91,7 @@ public struct CueMemoryView: Equatable, Sendable {
   /// 新会话第一条输入里的 `<memory>` 块：其余的记忆，从早到晚、越早越粗；没有为 nil。
   public var viewText: String? {
     guard !entries.isEmpty else { return nil }
-    let lines = entries.map {
-      switch $0 {
-      case .line(let index, let text): "#\(index) \(text)"
-      case .summary(let lo, let hi, let text): "#\(lo)-\(hi - 1) \(text)"
-      }
-    }
-    return (["<memory>", "你的记忆（一直记着的在系统提示里；其余从早到晚，越早越粗，#a-b 是摘要，用 memory zoom 展开）："] + lines + ["</memory>"])
+    return (["<memory>", "你的记忆（一直记着的在系统提示里；其余从早到晚，越早越粗，#a-b 是摘要，用 memory zoom 展开）："] + entries.map(\.text) + ["</memory>"])
       .joined(separator: "\n")
   }
 
@@ -114,12 +115,15 @@ public struct CueMemoryView: Equatable, Sendable {
     return "#\(index) \(line.text)" + (line.deletedAt != nil ? "（已忘掉）" : line.pinned ? "（一直记着）" : "")
   }
 
-  public static func mergePrompt(_ merge: Merge) -> String {
-    """
-    把记忆 #\(merge.lo)-\(merge.hi - 1) 合成一行（至多 \(CueMemoryLine.maxBytes) 字节），留下有长期影响的，不编造：
-    \(merge.source)
-    写回：memory merge {lo: \(merge.lo), hi: \(merge.hi), text}
-    """
+  /// 新会话第一条输入里的 `<merge>` 块：待合并的块一次给齐（管理器不另叫醒它合并，没写回的下次换新还在）；没有为 nil。
+  public var mergeText: String? {
+    guard !merges.isEmpty else { return nil }
+    let head = """
+      记忆里有 \(merges.count) 块待合并。先逐块合成一行（至多 \(CueMemoryLine.maxBytes) 字节），留下有长期影响的，不编造，\
+      #lo-hi 写回：memory merge {lo, hi, text}；合并不用告诉他，合完再照常处理下面的 <cue>。
+      """
+    let blocks = merges.map { "#\($0.lo)-\($0.hi - 1)\n\($0.source)" }
+    return (["<merge>", head] + blocks + ["</merge>"]).joined(separator: "\n")
   }
 
   /// 用对齐的 2 的幂块铺满 [0, T)：块的大小不超过它年龄的 alpha 倍就整块保留。alpha 越大越粗、行越少。
