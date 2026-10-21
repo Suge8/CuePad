@@ -239,6 +239,19 @@ final class ClaudeHostedSession: SessionLink {
         began()
     }
 
+    /// 发出的话（斜杠命令也是）一定开始一轮：从发出那一刻算，不等它的 `system/init`（中间隔着钩子）；为它停下的那一轮收尾时已经开了。
+    private func began() {
+        if !facts.running { starting = [] }
+        beginTurn()
+        publish(at: .now)
+    }
+
+    /// 这一轮开跑了（或没跑就结束了）：放行等着它的停止。
+    private func started() {
+        starting?.forEach { $0.resume() }
+        starting = nil
+    }
+
     /// 停下在跑的这一轮并等它收尾；还没开跑的（`starting`）先等它开跑。歇着什么都不做。
     func stop(restarting: Bool) async throws {
         if starting != nil { await withCheckedContinuation { starting?.append($0) } }

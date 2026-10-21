@@ -1,9 +1,8 @@
 #if os(macOS)
+import CueStore
 import CueTestSupport
 import Foundation
-import Synchronization
 import Testing
-import CueStore
 @testable import CuePi
 
 /// 对话里每句你的话，回答是它之后、下一句你的话之前的最后一段助手文字。在 Codex 里插话（`turn/steer`）并进同一轮：

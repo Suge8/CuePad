@@ -146,4 +146,9 @@ extension String {
     public func clipped(_ limit: Int) -> String {
         count <= limit ? self : String(prefix(limit - 1)) + "…"
     }
+
+    /// 第一个非空行，去掉首尾空格；没有为 nil。
+    public var firstLine: String? {
+        split(whereSeparator: \.isNewline).lazy.map { $0.trimmingCharacters(in: .whitespaces) }.first { !$0.isEmpty }
+    }
 }

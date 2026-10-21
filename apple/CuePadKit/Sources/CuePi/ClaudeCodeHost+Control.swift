@@ -23,19 +23,6 @@ extension ClaudeHostedSession {
         try await say(.string(line), uuid: UUID().uuidString)
     }
 
-    /// 发出的话（斜杠命令也是）一定开始一轮：从发出那一刻算，不等它的 `system/init`（中间隔着钩子）；为它停下的那一轮收尾时已经开了。
-    func began() {
-        if !facts.running { starting = [] }
-        beginTurn()
-        publish(at: .now)
-    }
-
-    /// 这一轮开跑了（或没跑就结束了）：放行等着它的停止。
-    func started() {
-        starting?.forEach { $0.resume() }
-        starting = nil
-    }
-
     func abort(_: PiSession.ID) async throws {
         try await stop(restarting: false)
     }

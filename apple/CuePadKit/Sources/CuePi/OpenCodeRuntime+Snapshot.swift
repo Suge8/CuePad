@@ -1,7 +1,6 @@
 #if os(macOS)
 import CueStore
 import Foundation
-import OSLog
 
 extension OpenCodeRuntime {
     func snapshot(_ connection: Connection) async throws {

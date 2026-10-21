@@ -6,17 +6,15 @@
 //   CuePad → 扩展  send（文字+图片，以这句开新一轮，在跑就先打断）/ command（斜杠命令，由 Pi 展开执行）/ answer（回答等你确认的弹窗）/ config（会话名、模型、思考强度）/ end（结束会话）/ abort（停止这一轮）/ quota（查一次订阅额度）
 // 只在 tui/rpc 模式启用；无客户端时不做任何 socket 写入。
 //
-// 这里只接线：会话的状态与轮次在 session，Pi 事件在 events，CuePad 的命令在 commands，socket 在 socket；
-// 正在说的话 draft、额度 quota、弹窗 dialogs、托管 hosted、自己重新载入 reload、上报的近况 info。
+// 这里只接线：会话的状态、轮次与正在说的话在 session，Pi 事件与弹窗在 events，socket 与 CuePad 的命令在 connection，
+// 上报的近况在 info，额度在 quota，托管自退与自己重新载入在 lifecycle。
 
 import fs from "node:fs";
 import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { captureDialogs } from "./dialogs.ts";
-import { follow } from "./events.ts";
-import { INTERNAL_COMMAND, modelInfo, subagentsOf } from "./info.ts";
+import { listen } from "./connection.ts";
+import { captureDialogs, follow } from "./events.ts";
+import { INTERNAL_COMMAND, modelInfo, reason, subagentsOf } from "./info.ts";
 import { Session, type Firecode } from "./session.ts";
-import { listen } from "./socket.ts";
-import { reason } from "./text.ts";
 
 const EXTENSION_VERSION = 38;
 const PROTOCOL_VERSION = 16;
