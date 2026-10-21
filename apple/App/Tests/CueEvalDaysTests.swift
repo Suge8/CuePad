@@ -17,7 +17,7 @@ struct CueEvalDaysTests {
         let history = DaysHistory()
         try await CueEval.run("多日", expect: Days.expect, rig: {
             try await CueHostTests.Rig(
-                brain: .current, mergeAfter: Days.mergeAfter, cacheLifetime: Days.cacheLifetime, prepare: { try await history.write(into: $0) })
+                brain: .current, cacheLifetime: Days.cacheLifetime, prepare: { try await history.write(into: $0) })
         }) { try await Days($0, history).play() }
     }
 }

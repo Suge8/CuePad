@@ -225,7 +225,6 @@ private enum CueRunFormat {
         case .message: "你发来消息"
         case .sessionActivity(let stirs): "会话有动静（\(stirs.count) 处）"
         case .idle: "空闲巡视"
-        case .tidy: "整理记忆"
         case .reminder(let lines): "提醒到点（\(lines.count) 条）"
         }
     }

@@ -3,7 +3,7 @@ import Foundation
 
 /// Cue 的记忆视图（OptMem 的读法）：一直记着的全部列出（在系统提示里，`pinnedText`）；其余按序号铺成对齐的 2 的幂块，越新越细、总行数固定在预算内
 /// （按预算二分 alpha，见 `cover`），放在新会话的第一条输入里（`viewText`）。块有摘要用摘要，没有就拆成两半直到有摘要或单行；
-/// 缺的摘要列成"待合并"（`merges`），由值班的管理器空闲时逐块请 Cue 写，视图里不列。摘要可以一层层展开（`zoom`）。
+/// 缺的摘要列成"待合并"（`merges`），视图里不列，换新时一并交给 Cue 写（`mergeText`）。摘要可以一层层展开（`zoom`）。
 /// 参考 https://github.com/VictorTaelin/OptMem 的 `_cover` / `cover`。
 public struct CueMemoryView: Equatable, Sendable {
   public enum Entry: Equatable, Sendable {
@@ -115,12 +115,15 @@ public struct CueMemoryView: Equatable, Sendable {
     return "#\(index) \(line.text)" + (line.deletedAt != nil ? "（已忘掉）" : line.pinned ? "（一直记着）" : "")
   }
 
-  public static func mergePrompt(_ merge: Merge) -> String {
-    """
-    把记忆 #\(merge.lo)-\(merge.hi - 1) 合成一行（至多 \(CueMemoryLine.maxBytes) 字节），留下有长期影响的，不编造：
-    \(merge.source)
-    写回：memory merge {lo: \(merge.lo), hi: \(merge.hi), text}
-    """
+  /// 新会话第一条输入里的 `<merge>` 块：待合并的块一次给齐（管理器不另叫醒它合并，没写回的下次换新还在）；没有为 nil。
+  public var mergeText: String? {
+    guard !merges.isEmpty else { return nil }
+    let head = """
+      记忆里有 \(merges.count) 块待合并。先逐块合成一行（至多 \(CueMemoryLine.maxBytes) 字节），留下有长期影响的，不编造，\
+      写回：memory merge {lo, hi, text}；合并不用告诉他，合完再照常处理下面的 <cue>。
+      """
+    let blocks = merges.map { "#\($0.lo)-\($0.hi - 1)（lo: \($0.lo), hi: \($0.hi)）\n\($0.source)" }
+    return (["<merge>", head] + blocks + ["</merge>"]).joined(separator: "\n")
   }
 
   /// 用对齐的 2 的幂块铺满 [0, T)：块的大小不超过它年龄的 alpha 倍就整块保留。alpha 越大越粗、行越少。
