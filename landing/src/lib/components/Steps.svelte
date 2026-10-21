@@ -92,22 +92,22 @@
 				<span>{t('how.1.h')}</span>
 			</h3>
 			<p>{t('how.1.p')}</p>
+			<span class="kbd">⌥ ⇧ Space</span>
 		</li>
 		<li class="step" data-reveal style="--d: 0.1s">
 			<h3>
-				<Icon name="command" class="step-ic" />
+				<Icon name="send" class="step-ic" />
 				<span>{t('how.2.h')}</span>
 			</h3>
 			<p>{t('how.2.p')}</p>
-			<span class="kbd">⌥ Space</span>
 		</li>
 		<li class="step" data-reveal style="--d: 0.2s">
 			<h3>
-				<Icon name="send" class="step-ic" />
+				<Icon name="check" class="step-ic" />
 				<span>{t('how.3.h')}</span>
 			</h3>
 			<p>{t('how.3.p')}</p>
-			<span class="kbd">⇧ ↵</span>
+			<span class="kbd">{t('how.3.k')}</span>
 		</li>
 	</ol>
 </section>

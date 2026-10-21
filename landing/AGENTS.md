@@ -8,7 +8,7 @@ bun run dev       # http://localhost:8931/
 bun run build     # runtime 在 svelte.config.js 固定为 nodejs22.x：不固定时 adapter 按本地 Node（≥26）选，Vercel 不认
 ```
 
-- 截图用 `design/readme/` 里演示库拍的真实界面图（与 README 同一套）。
-- 重生成 `static/art/` 的插画时，prompt 要精确描述吉祥物：白色圆角方形纸片、右上折角、黑椭圆眼、腰间黑色圆环，3D clay 风格，底色 #f4f1ea；描述少一项，生成出来就不像同一个角色。
+- 截图都是演示库拍的真实界面：浅色的用 `xc.sh shot mac <图> -- -CuePadDemo YES -CuePadWindowSize 1600x1000 -theme light -CuePadScene <画面>` 拍，深色看板、手机图与 og 图取自 `design/readme/`（与 README 同一套），转成 webp 放 `static/assets/shots/`。
+- 重生成吉祥物素材（`static/assets/mascot-*`、`static/assets/loops/`）时，prompt 要精确描述吉祥物：白色圆角方形纸片、右上折角、黑椭圆眼、腰间黑色圆环，3D clay 风格，底色 #f4f1ea；描述少一项，生成出来就不像同一个角色。
 - GSAP 全部在 `onMount` + `gsap.context(scope)` 内创建，卸载时 `ctx.revert()`：不 revert 的话 ScrollTrigger 的 pin 与滚动监听会留在页面上。移动端（<48rem）与 reduced-motion 跳过 pin、飞行与粒子。
 - 文案只改 `DICT`（双语同改）；产品事实以根 [README.md](../README.md) 为准。

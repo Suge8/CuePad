@@ -55,31 +55,18 @@
 				<li>{t('f1.t3')}</li>
 			</ul>
 		</div>
-		<div class="feat-media duo-media">
+		<div class="feat-media">
 			<div class="clipframe">
-				<video
+				<img
 					class="par"
-					src="/assets/pan-editor.mp4"
-					poster="/assets/shots/editor-light.webp"
-					autoplay
-					muted
-					loop
-					playsinline
-					preload="metadata"
+					src="/assets/shots/cue-light.webp"
 					width="1600"
-					height="1014"
-					aria-label={t('f1.img1')}
-				></video>
+					height="1200"
+					loading="lazy"
+					decoding="async"
+					alt={t('f1.img')}
+				/>
 			</div>
-			<img
-				class="shot float"
-				src="/assets/shots/selection-light.webp"
-				width="1600"
-				height="1013"
-				loading="lazy"
-				decoding="async"
-				alt={t('f1.img2')}
-			/>
 		</div>
 	</article>
 
@@ -96,9 +83,9 @@
 			<div class="clipframe">
 				<img
 					class="par"
-					src="/assets/shots/variables-light.webp"
+					src="/assets/shots/session-light.webp"
 					width="1600"
-					height="1013"
+					height="1000"
 					loading="lazy"
 					decoding="async"
 					alt={t('f2.img')}
@@ -116,9 +103,9 @@
 			<div class="clipframe">
 				<img
 					class="par"
-					src="/assets/shots/search-light.webp"
-					width="1600"
-					height="1013"
+					src="/assets/shots/iphone-remote.webp"
+					width="1440"
+					height="1160"
 					loading="lazy"
 					decoding="async"
 					alt={t('f3.img')}
@@ -130,15 +117,15 @@
 	<article class="feat rev" data-reveal>
 		<div class="feat-copy">
 			<h3>{t('f4.h')}</h3>
-			<p>{t('f4.p')}</p>
+			<p>{@html t('f4.p')}</p>
 		</div>
 		<div class="feat-media">
 			<div class="clipframe">
 				<img
 					class="par"
-					src="/assets/shots/tasks-light.webp"
+					src="/assets/shots/project-light.webp"
 					width="1600"
-					height="1013"
+					height="1000"
 					loading="lazy"
 					decoding="async"
 					alt={t('f4.img')}
