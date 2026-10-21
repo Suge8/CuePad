@@ -5,6 +5,7 @@ import SwiftUI
 
 nonisolated private struct PaletteData: Sendable, Equatable {
     var cards: [Card]
+    var groups: [CardGroup]
     var total: Int
     var projects: [Project]
     var lastSends: [UUID: LastSend]
@@ -69,7 +70,7 @@ struct SearchPalette: View {
                 }
                 let subtasks = try store.subtaskProgress(of: found.cards.filter(\.isTask).map(\.id))
                 return PaletteData(
-                    cards: found.cards, total: found.totalCards, projects: try store.projects(),
+                    cards: found.cards, groups: CardGroup.byProject(found.cards), total: found.totalCards, projects: try store.projects(),
                     lastSends: lastSends, targets: try store.sendTargets(), parents: parents, subtasks: subtasks)
             }
             .onChange(of: data?.cards.map(\.id)) {
@@ -170,8 +171,8 @@ struct SearchPalette: View {
                                 .font(Typography.secondary).foregroundStyle(palette.ink2)
                                 .padding(.vertical, 16)
                         }
-                        ForEach(groups(data), id: \.owner) { group in
-                            let project = data.projects.first { $0.id == group.owner }
+                        ForEach(data.groups) { group in
+                            let project = data.projects.first { $0.id == group.id }
                             HStack(spacing: 6) {
                                 ProjectGlyph(project: project, size: 11)
                                 Text(project?.name ?? "")
@@ -277,16 +278,6 @@ struct SearchPalette: View {
         .opacity(0).frame(width: 0, height: 0).accessibilityHidden(true)
     }
 
-    private func groups(_ data: PaletteData) -> [(owner: UUID, cards: [Card])] {
-        var order: [UUID] = []
-        var buckets: [UUID: [Card]] = [:]
-        for card in data.cards {
-            if buckets[card.projectID] == nil { order.append(card.projectID) }
-            buckets[card.projectID, default: []].append(card)
-        }
-        return order.map { ($0, buckets[$0] ?? []) }
-    }
-
     private func move(_ step: Int) {
         if scope == .sessions {
             let ids = sessionGroups.flatMap { $0.sessions.map(\.sessionID) }
@@ -296,7 +287,7 @@ struct SearchPalette: View {
             return
         }
         guard let data else { return }
-        let ids = groups(data).flatMap { $0.cards.map(\.id) }
+        let ids = data.groups.flatMap { $0.cards.map(\.id) }
         guard !ids.isEmpty else { return }
         let index = selection.flatMap(ids.firstIndex) ?? -step
         selection = ids[min(max(index + step, 0), ids.count - 1)]

@@ -16,7 +16,6 @@ nonisolated struct PaletteQuery: Equatable {
         }
     }
 
-
     var text = ""
     /// nil 不限。
     var project: UUID?
@@ -28,6 +27,21 @@ nonisolated struct PaletteQuery: Equatable {
     static let pageSize = 30
 
     var isFiltered: Bool { project != nil || withImages || sent != .any || period != .any }
+
+    /// 项目筛选此刻的取值：选的项目名，没选是"全部"。
+    func projectLabel(in projects: [Project]) -> String {
+        project.flatMap { id in projects.first { $0.id == id }?.name } ?? "全部"
+    }
+
+    /// "发给过谁"筛选此刻的取值。
+    var sentLabel: String {
+        switch sent {
+        case .any: "任意"
+        case .never: "没发过"
+        case .sent(_, .some(let name)): name
+        case .sent: "发过"
+        }
+    }
 
     func store(now: Date = .now) -> SearchQuery {
         var query = SearchQuery(text: text)
@@ -42,4 +56,25 @@ nonisolated struct PaletteQuery: Equatable {
 nonisolated extension SendTarget {
     /// "发给过谁"筛选菜单里的一项（`CueStore.sendTargets` 按种类与名字各出一条）。
     var filterID: String { "\(kind.rawValue)/\(name)" }
+}
+
+/// 搜索结果里一个项目的那几张（`id` 是项目）。
+nonisolated struct CardGroup: Identifiable, Equatable, Sendable {
+    let id: UUID
+    var cards: [Card]
+
+    /// 按项目分组，组按首次出现的顺序：结果最相关的在前，组也一样。
+    static func byProject(_ cards: [Card]) -> [CardGroup] {
+        var groups: [CardGroup] = []
+        var index: [UUID: Int] = [:]
+        for card in cards {
+            if let at = index[card.projectID] {
+                groups[at].cards.append(card)
+            } else {
+                index[card.projectID] = groups.count
+                groups.append(CardGroup(id: card.projectID, cards: [card]))
+            }
+        }
+        return groups
+    }
 }
