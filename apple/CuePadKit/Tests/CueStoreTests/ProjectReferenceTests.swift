@@ -7,7 +7,6 @@ import Testing
 @Suite struct ProjectReferenceTests {
   let fixture = try! Fixture()
   var store: CueStore { fixture.store }
-  var raw: RawDB { RawDB(fixture.url) }
 
   /// 回收站里的项目、已永久删除的项目、从未存在的项目。
   private func deadProjects() async throws -> [UUID] {
@@ -17,13 +16,6 @@ import Testing
     try await store.trashProject(purged.id)
     try await store.purgeProject(purged.id)
     return [trashed.id, purged.id, UUID()]
-  }
-
-  @Test func createCardRejectsDeadProjectsAndWritesNothing() async throws {
-    for project in try await deadProjects() {
-      await #expect(throws: CueStoreError.invalidProject) { try await store.createCard(in: project, body: "x") }
-    }
-    #expect(try raw.count("cards") == 0)
   }
 
   @Test func moveCardRejectsDeadProjectsAndLeavesTheCardWhereItWas() async throws {

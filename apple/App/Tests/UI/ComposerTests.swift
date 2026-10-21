@@ -15,7 +15,7 @@ struct ComposerTests {
         return try #require(try await store.allPiSessionStates().first)
     }
 
-    @Test func 回复带图片和卡片_正文依次是卡片_文字_图片_原图入库() async throws {
+    @Test func 回复带图片和卡片_正文依次是卡片_文字_图片_原图入库_只有图片也能发() async throws {
         let target = try await session()
         let photo = pngData(shade: 0.3)
         let hash = try store.files.store(pngData(shade: 0.8))
@@ -30,6 +30,10 @@ struct ComposerTests {
         #expect(request.content == "\(card.body)\n\n照这个改\n\n![](cuepad://img/\(photoHash))")
         #expect(app.services.store.files.fileURL(for: photoHash) != nil)
         #expect(request.hostID == "mac-a" && request.mode == .known(.send))
+
+        // 只有一张图片也能发
+        let onlyPhoto = try await Workspace(services: app.services).said(ComposerDraft(images: [PickedImage(data: pngData())]), to: target, mode: .send)
+        #expect(CueFormat.imageHashes(in: onlyPhoto.content).count == 1 && !onlyPhoto.content.contains("\n"))
     }
 
     /// 发给 Agent 时用"＋ 选灵感"带上本项目的资料：卡片作为这次消息的附件跟着发出（任务的正文在前、资料在后），
@@ -77,13 +81,6 @@ struct ComposerTests {
         handed = try await store.handedSessions()
         #expect(handed[task.id] == .session("atlas") && handed[reference.id] == nil)
         #expect(try await store.card(reference.id)?.piSessionID == nil)
-    }
-
-    @Test func 草稿只有一张图片也能发() async throws {
-        let target = try await session()
-
-        let request = try await Workspace(services: app.services).said(ComposerDraft(images: [PickedImage(data: pngData())]), to: target, mode: .send)
-        #expect(CueFormat.imageHashes(in: request.content).count == 1 && !request.content.contains("\n"))
     }
 
     @Test func 回答存为卡片_进会话所属项目_没有项目进默认项目_提示落点并可点过去() async throws {

@@ -59,6 +59,9 @@ import Testing
     #expect(try await w.cards(["card", "list", "--project", "Beta"]) == ["共同词 beta"])
     #expect(try await w.cards(["card", "list", "--project", "默认"]) == ["共同词 默认"])
     #expect(try await w.cards(["card", "list", "--all-projects"]) == ["共同词 alpha", "共同词 beta", "共同词 默认"])
+    #expect(try await w.cards(["card", "list"], cwd: nil) == ["共同词 alpha", "共同词 beta", "共同词 默认"])  // 不在绑定了目录的项目里：列所有项目
+    try await w.sb.store.updateCard(w.inBeta.id) { $0.isPinned = true }
+    #expect(try await w.cards(["card", "list", "--pinned"], cwd: nil) == ["共同词 beta"])
     #expect(try await w.cards(["search", "共同词", "--all-projects"]).count == 3)
     #expect(try await w.tasks(["--project", "默认"]) == ["默认任务"])
     #expect(try await w.tasks(["--all-projects"]) == ["alpha 任务", "默认任务"])

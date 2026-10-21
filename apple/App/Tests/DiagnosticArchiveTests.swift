@@ -36,22 +36,19 @@ struct DiagnosticArchiveTests {
         """.utf8)
     }
 
-    @Test func 按时间存档_设置页取最新一份() throws {
+    /// 新的在前；同一份重复送达只存一份；没有诊断内容的包不存，读不出的文件跳过。
+    @Test func 按时间存档_设置页取最新一份_重复与坏的不算() throws {
         let archive = archive()
         try archive.store(Self.payload(end: "2026-10-08 22:00:00"))
         try archive.store(Self.payload(end: "2026-10-09 03:40:12", kind: "hangDiagnostics"))
+        try archive.store(Self.payload(end: "2026-10-09 03:40:12", kind: "hangDiagnostics"))
+        try archive.store(Data(#"{"timeStampEnd": "2026-10-09 05:00:00"}"#.utf8))
+        try Data("不是 JSON".utf8).write(to: archive.directory.appending(path: "2026-10-09T06-00-00Z-crash.json"))
 
         let reports = archive.reports()
-        #expect(reports.map(\.kind) == [.hang, .crash])  // 新的在前
+        #expect(reports.map(\.kind) == [.hang, .crash])
         #expect(reports.first?.date == Date(timeIntervalSince1970: 1_791_517_212))
         #expect(reports.first?.id == "2026-10-09T03-40-12Z-hang.json")
-    }
-
-    @Test func 同一份重复送达只存一份() throws {
-        let archive = archive()
-        try archive.store(Self.payload())
-        try archive.store(Self.payload())
-        #expect(archive.reports().count == 1)
     }
 
     @Test func 摘要_异常类型_信号_原因_崩溃线程顶部的帧() throws {
@@ -66,13 +63,4 @@ struct DiagnosticArchiveTests {
         #expect(report.frames == ["CuePad +0x1000", "SwiftUI +0x12c", "CuePad +0x7d0", "dyld +0x64"])
     }
 
-    @Test func 没有诊断内容的包不存_读不出的文件跳过() throws {
-        let archive = archive()
-        try archive.store(Data(#"{"timeStampEnd": "2026-10-09 03:40:12"}"#.utf8))
-        #expect(archive.reports().isEmpty)
-
-        try FileManager.default.createDirectory(at: archive.directory, withIntermediateDirectories: true)
-        try Data("不是 JSON".utf8).write(to: archive.directory.appending(path: "2026-10-09T03-40-12Z-crash.json"))
-        #expect(archive.reports().isEmpty)
-    }
 }

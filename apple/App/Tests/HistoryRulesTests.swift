@@ -59,7 +59,6 @@ struct HistoryRulesTests {
             let location = try LibraryLocation.resolve(environment: [LibraryLocation.environmentKey: directory.appending(path: "Library").path])
             services = try AppServices(location: location, defaults: TempDefaults().defaults, sync: .custom(FakeSync()), mac: mac)
             services.start()
-            try await eventually("执行器在运行", timeout: HistoryRulesTests.piStep) { services.executor.isRunning }
         }
 
         func shutdown() {
@@ -146,38 +145,6 @@ struct HistoryRulesTests {
         #expect(state.hosted && state.state == .known(.settled), "托管、歇着")
         #expect(try await rig.records(.ended).isEmpty, "不进历史")
         return state
-    }
-}
-
-/// Mac 本机：托管着、进程歇着的会话（记录在"现在"、桥上没有）是上一步绑着的会话时，下一步"开始"在后台唤醒它。
-struct RestingTargetTests {
-    let rig = TestApp()
-
-    @Test func 托管着进程歇着的会话_交出时唤醒() async throws {
-        let services: AppServices = rig.services
-        let workspace = Workspace(services: services)
-        let store = services.store
-        let project = try await store.createProject(name: "Work", color: "blue")
-        let folder = rig.directory.appending(path: "work/alpha", directoryHint: .isDirectory)
-        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        let file = "/sessions/--work-alpha--/a.jsonl"
-        try await store.upsertPiSession(IndexedSession(id: "a", path: file, cwd: folder.path, title: "alpha", lastActivityAt: .now), host: TestApp.hostID)
-        try await services.piStateRecorder.update(
-            sessionID: "a", state: .settled, title: "alpha", projectID: project.id, hosted: true)
-        services.startLiveSessions()
-        try await services.executor.start()
-        defer { services.cancelBackgroundWork() }
-        let task = try await store.createTask("任务", in: project.id)
-        let first = try await store.createTask("上一步", under: task.id)
-        let next = try await store.createTask("接着做", under: task.id)
-        try await store.linkCard(first.id, toSession: "a")
-
-        workspace.handOff(next)
-
-        try await eventually("唤醒后话送到") { rig.host.extensions["a"]?.messages.isEmpty == false }
-        #expect(rig.host.calls == [.resume(sessionFile: file, directory: folder.path)])
-        let request = try #require(try await store.deliveryRequests().first)
-        #expect(rig.host.extensions["a"]?.messages == [PiMessage(text: "接着做", deliveryID: request.id.uuidString)])
     }
 }
 

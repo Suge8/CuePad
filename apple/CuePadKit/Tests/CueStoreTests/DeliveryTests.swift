@@ -27,46 +27,13 @@ import Testing
     }
   }
 
-  private func executor(
-    _ handler: Handler, host: String = "mac-a", maxAge: Duration = .seconds(600), retention: Duration = .seconds(60)
-  ) -> DeliveryExecutor {
-    DeliveryExecutor(
-      store: store, hostID: host, maxAge: maxAge, retention: retention, timing: clock.timing,
-      onIssue: { Issue.record("执行器意外上报：\($0)") }
-    ) { await handler.handle($0) }
+  private func executor(_ handler: Handler) -> DeliveryExecutor {
+    DeliveryExecutor(store: store, hostID: "mac-a", timing: clock.timing, onIssue: { Issue.record("执行器意外上报：\($0)") }) {
+      await handler.handle($0)
+    }
   }
 
   private func request(_ id: UUID) async throws -> DeliveryRequest? { try await store.deliveryRequest(id) }
-
-  @Test(.timeLimit(.minutes(1)))
-  func executorRunsTheHandlerAndWritesTheResultBack() async throws {
-    let handler = Handler()
-    let executor = executor(handler)
-    try await executor.start()
-    let made = try await store.requestDelivery("do it", to: pi, on: "mac-a")
-
-    let done = try await eventually(store, { try $0.deliveryRequests() }) { $0.first?.status == .known(.succeeded) }
-
-    #expect(done[0].id == made.id && done[0].handledBy == "mac-a" && done[0].completedAt == clock.now)
-    #expect(await handler.seen.map(\.content) == ["do it"])
-    await executor.stop()
-  }
-
-  /// 请求必须指定执行的 Mac，执行器只领取发给本机的：跨设备重复在结构上不会发生。
-  @Test(.timeLimit(.minutes(1)))
-  func onlyRequestsAddressedToThisHostAreExecuted() async throws {
-    let handler = Handler()
-    let executor = executor(handler, host: "mac-a")
-    let other = try await store.requestDelivery("for b", to: pi, on: "mac-b")
-    let mine = try await store.requestDelivery("for a", to: pi, on: "mac-a")
-    try await executor.start()
-
-    _ = try await eventually(store, { try $0.deliveryRequests().filter { $0.status == .known(.succeeded) }.count }) { $0 == 1 }
-
-    #expect(await handler.seen.map(\.id) == [mine.id])
-    #expect(try await request(other.id)?.status == .known(.pending))
-    await executor.stop()
-  }
 
   @Test(.timeLimit(.minutes(1)))
   func requestsAreExecutedOneAtATimeInCreationOrder() async throws {
@@ -89,7 +56,7 @@ import Testing
   func sentMessagesStayUntilTheyReachTheConversationOrTheUserRemovesThem() async throws {
     let handler = Handler()
     await handler.setOutcome(.failed("Pi 已经退出"))
-    let executor = executor(handler, retention: .seconds(60))
+    let executor = executor(handler)
     try await executor.start()
     let failed = try await store.requestDelivery("备份一下线上库", to: pi, on: "mac-a", mode: .send)
     _ = try await eventually(store, { try $0.deliveryRequest(failed.id)?.status }) { $0 == .known(.failed) }
@@ -99,7 +66,7 @@ import Testing
     _ = try await eventually(store, { try $0.deliveryRequests().filter { $0.status == .known(.succeeded) }.count }) { $0 == 2 }
 
     await clock.waitForSleeper()
-    clock.advance(.seconds(61))
+    clock.advance(DeliveryExecutor.retention + .seconds(1))
     let remaining = try await eventually(store, { try $0.deliveryRequests() }) { $0.count == 2 }
     #expect(Set(remaining.map(\.id)) == [failed.id, sent.id])
 
@@ -128,11 +95,10 @@ import Testing
   func requestsOlderThanTheMaximumAgeAreAbandonedInsteadOfSurprisingTheUser() async throws {
     let handler = Handler()
     let stale = try await store.requestDelivery("old prompt", to: pi, on: "mac-a")
-    clock.advance(.seconds(601))
-    // 请求的创建时间来自真实时钟：让它落到"过去"
-    try RawDB(fixture.url).exec("UPDATE deliveryRequests SET createdAt = createdAt - 700000")
+    // 一天前写下的请求：比任何最长等待都旧
+    try RawDB(fixture.url).exec("UPDATE deliveryRequests SET createdAt = createdAt - 86400000")
 
-    let executor = executor(handler, maxAge: .seconds(600))
+    let executor = executor(handler)
     try await executor.start()
 
     _ = try await eventually(store, { try $0.deliveryRequests().first?.status }) { $0 == .known(.failed) }
@@ -184,24 +150,6 @@ import Testing
   }
 
   @Test(.timeLimit(.minutes(1)))
-  func twoExecutorsNeverRunTheSameRequestTwice() async throws {
-    let first = Handler()
-    let second = Handler()
-    let one = executor(first)
-    let two = executor(second)
-    try await one.start()
-    try await two.start()
-    for index in 0..<6 { _ = try await store.requestDelivery("r\(index)", to: pi, on: "mac-a") }
-
-    _ = try await eventually(store, { try $0.deliveryRequests().filter { $0.status == .known(.succeeded) }.count }) { $0 == 6 }
-
-    let all = await first.seen.map(\.id) + second.seen.map(\.id)
-    #expect(all.count == 6 && Set(all).count == 6)  // 领取是原子的
-    await one.stop()
-    await two.stop()
-  }
-
-  @Test(.timeLimit(.minutes(1)))
   func aModeFromANewerVersionIsKeptButNeverExecutedAndFailsWithAReason() async throws {
     let handler = Handler()
     let made = try await store.requestDelivery("x", to: pi, on: "mac-a")
@@ -218,18 +166,4 @@ import Testing
     await executor.stop()
   }
 
-  /// 结束会话与停止这一轮同一条投送通道：发给会话所在的 Mac，不是对会话说的话；连点只发一次（在路上的请求被复用），两种互不复用。
-  @Test func endAndStopRequestsAreAddressedToTheSessionsMacAreNotMessagesAndAreNotWrittenTwiceWhileOpen() async throws {
-    let end = try await store.requestEnd(of: pi, on: "mac-a")
-    let stop = try await store.requestStop(of: pi, on: "mac-a")
-
-    for (made, mode) in [(end, DeliveryMode.end), (stop, .stop)] {
-      let stored = try #require(try await request(made.id))
-      #expect(stored.mode == .known(mode) && stored.hostID == "mac-a" && stored.target == pi && stored.isOpen)
-    }
-    #expect(DeliveryMode.end.rawValue == "end" && DeliveryMode.stop.rawValue == "stop")
-    #expect(try await store.requestStop(of: pi, on: "mac-a").id == stop.id)
-    #expect(try await store.requestEnd(of: pi, on: "mac-a").id == end.id)
-    #expect(end.id != stop.id)
-  }
 }

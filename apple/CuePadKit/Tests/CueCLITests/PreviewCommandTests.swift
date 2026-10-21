@@ -17,14 +17,15 @@ import Testing
   /// 一次给几个文件：按给的顺序存成同一次（对话里一张卡），每个文件一个 --title（按先后），每个文件一项报告。
   @Test func showStoresTheFilesTogetherForTheSessionFromTheEnvironmentAndReportsEach() async throws {
     let sb = try Sandbox()
-    let files = [try page(sb, "demo.html", "<link rel=\"stylesheet\" href=\"a.css\">"), try page(sb, "beep.m4a", "m4a"), try page(sb, "notes.docx", "docx")]
-    let titles = ["登录页：首屏", "提示音", "需求文稿"]
+    // .ts 是 TypeScript（系统认作视频流）：按文本发
+    let files = [try page(sb, "demo.html", "<link rel=\"stylesheet\" href=\"a.css\">"), try page(sb, "beep.m4a", "m4a"), try page(sb, "notes.docx", "docx"), try page(sb, "app.ts", "let a = 1")]
+    let titles = ["登录页：首屏", "提示音", "需求文稿", "入口"]
     let reply = try array(try await sb.jsonValue(["show"] + files + titles.flatMap { ["--title", $0] }, environment: ["PI_SESSION_ID": "s1"]))
 
     let stored = try await sb.store.previews(of: "s1")
-    #expect(stored.map(\.name) == ["demo.html", "beep.m4a", "notes.docx"] && Set(stored.map(\.createdAt)).count == 1)
+    #expect(stored.map(\.name) == ["demo.html", "beep.m4a", "notes.docx", "app.ts"] && Set(stored.map(\.createdAt)).count == 1)
     #expect(reply.map { $0.string("id") } == stored.map { $0.id.uuidString.lowercased() })
-    #expect(reply.map { $0.string("kind") } == ["web", "audio", "document"] && reply.allSatisfy { $0.string("session") == "s1" })
+    #expect(reply.map { $0.string("kind") } == ["web", "audio", "document", "text"] && reply.allSatisfy { $0.string("session") == "s1" })
     #expect(reply.map { $0.string("title") } == titles && stored.map(\.title) == titles)
     #expect(reply[0]["bytes"] as? Int == stored[0].byteCount && reply[0]["outsideReferences"] as? [String] == ["a.css"])
   }
@@ -56,11 +57,5 @@ import Testing
     #expect(try await sb.store.previews(of: "s1").isEmpty)
   }
 
-  /// .ts、.mts 是 TypeScript（系统认作视频流）：按文本发，交给快速查看看纯文本。
-  @Test func typeScriptFilesAreSentAsText() async throws {
-    let sb = try Sandbox()
-    let reply = try array(try await sb.jsonValue(["show", try page(sb, "app.ts", "let a = 1"), try page(sb, "mod.mts", "export {}"), "--title", "入口", "--title", "模块"], environment: ["PI_SESSION_ID": "s1"]))
-    #expect(reply.map { $0.string("kind") } == ["text", "text"])
-  }
 }
 #endif

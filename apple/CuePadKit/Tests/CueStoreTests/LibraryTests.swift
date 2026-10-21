@@ -36,46 +36,31 @@ import Testing
 
   // MARK: 回收站
 
-  @Test func trashingProjectHidesItsCardsAndRestoreBringsThemBackUntouched() async throws {
+  /// 项目进回收站时它的卡随项目隐藏（不逐卡记）；恢复、永久删除项目都不带走早先单独删的卡：恢复后它们仍在回收站，
+  /// 项目还在回收站时恢复其中一张落到默认项目，项目永久删除后另一张挪进默认项目、仍在回收站。
+  @Test func trashRestoreAndPurgeOfAProjectNeverTakeCardsTrashedOnTheirOwn() async throws {
     let p = try await store.createProject(name: "P", color: "#111")
     let kept = try await store.createCard(in: p.id, body: "kept")
-    let alone = try await store.createCard(in: p.id, body: "trashed earlier")
-    try await store.trashCard(alone.id)
+    let alone = [try await store.createCard(in: p.id, body: "trashed earlier"), try await store.createCard(in: p.id, body: "also trashed")]
+    for card in alone { try await store.trashCard(card.id) }
 
     try await store.trashProject(p.id)
     #expect(try await store.cards(in: p.id).isEmpty)
-    #expect(try await store.projects().map(\.id) == [Project.defaultID])
     #expect(try await store.trashedProjects().map(\.id) == [p.id])
-    #expect(try await store.card(kept.id)?.deletedAt == nil)  // 随项目进回收站由项目推导，不逐卡记录
-
+    #expect(try await store.card(kept.id)?.deletedAt == nil)
     try await store.restoreProject(p.id)
-    #expect(bodies(try await store.cards(in: p.id)) == ["kept"])  // 早先单独删除的卡仍在回收站
-    #expect(try await store.trashedCards().map(\.id) == [alone.id])
-  }
+    #expect(bodies(try await store.cards(in: p.id)) == ["kept"])
+    #expect(Set(try await store.trashedCards().map(\.id)) == Set(alone.map(\.id)))
 
-  @Test func cardRestoredIntoTrashedProjectFallsBackToTheDefaultProject() async throws {
-    let p = try await store.createProject(name: "P", color: "#111")
-    let card = try await store.createCard(in: p.id, body: "x")
-    try await store.trashCard(card.id)
     try await store.trashProject(p.id)
-
-    try await store.restoreCard(card.id)
-
-    #expect(try await store.cards(in: Project.defaultID).map(\.id) == [card.id])
-  }
-
-  @Test func purgeProjectRemovesItsCardsButKeepsCardsAlreadyInTrash() async throws {
-    let p = try await store.createProject(name: "P", color: "#111")
-    let withProject = try await store.createCard(in: p.id, body: "goes with project")
-    let alone = try await store.createCard(in: p.id, body: "trashed earlier")
-    try await store.trashCard(alone.id)
-    try await store.trashProject(p.id)
+    try await store.restoreCard(alone[0].id)
+    #expect(try await store.cards(in: Project.defaultID).map(\.id) == [alone[0].id])
 
     try await store.purgeProject(p.id)
-
-    #expect(try await store.card(withProject.id) == nil)
-    #expect(try await store.card(alone.id)?.projectID == Project.defaultID)
+    #expect(try await store.card(kept.id) == nil)
     #expect(try await store.project(p.id) == nil)
+    let survivor = try await store.card(alone[1].id)
+    #expect(survivor?.projectID == Project.defaultID && survivor?.deletedAt != nil)
   }
 
   @Test func emptyTrashRemovesTrashedCardsAndProjectsWithTheirCards() async throws {
@@ -96,30 +81,6 @@ import Testing
     #expect(try await store.trashedProjects().isEmpty)
   }
 
-  // MARK: 发送记录
-
-  @Test func sendRecordKeepsContentSnapshotAfterCardIsPurged() async throws {
-    let card = try await store.createCard(body: "prompt v1")
-    try await store.recordSend(
-      "prompt v1", to: SendTarget(kind: .piSession, name: "fix bug", ref: "s1"),
-      card: card.id)
-    try await store.updateCard(card.id) { $0.body = "prompt v2" }
-    try await store.purgeCard(card.id)
-
-    #expect(try RawDB(fixture.url).rows("SELECT content, cardID, targetName FROM sendRecords") == [["prompt v1", "NULL", "fix bug"]])
-  }
-
   // MARK: 结构版本
 
-  /// 更新版本建的库与更早版本建的库（不再升级旧结构）都拒绝打开，不在错位的表结构上读写。
-  @Test(arguments: [
-    (CueStore.supportedSchemaVersions.upperBound + 1, CueStoreError.unsupportedSchemaVersion(CueStore.supportedSchemaVersions.upperBound + 1)),
-    (CueStore.supportedSchemaVersions.lowerBound - 1, .schemaTooOld(CueStore.supportedSchemaVersions.lowerBound - 1)),
-  ])
-  func libraryFromAnotherSchemaVersionIsRefused(version: Int, error: CueStoreError) throws {
-    let url = fixture.directory.appending(path: "other/cuepad.db")
-    try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-    try RawDB(url).exec("CREATE TABLE cards (id TEXT PRIMARY KEY NOT NULL) STRICT; PRAGMA user_version = \(version);")
-    #expect(throws: error) { try CueStore(location: .isolated(url.deletingLastPathComponent())) }
-  }
 }

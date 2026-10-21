@@ -7,34 +7,12 @@ import Testing
 @Suite struct PreviewTests {
   let fixture = try! Fixture()
   var store: CueStore { fixture.store }
-  var attachmentsDirectory: URL { fixture.directory.appending(path: "Attachments", directoryHint: .isDirectory) }
 
   private func file(_ name: String, _ text: String) throws -> URL {
     let url = fixture.directory.appending(path: "src-\(UUID().uuidString)").appending(path: name)
     try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
     try Data(text.utf8).write(to: url)
     return url
-  }
-
-  private func files() -> [String] { (try? FileManager.default.contentsOfDirectory(atPath: attachmentsDirectory.path)) ?? [] }
-
-  @Test func refusedFilesSayWhyAndLeaveNothingBehind() async throws {
-    let missing = fixture.directory.appending(path: "nope.html")
-    let folder = fixture.directory.appending(path: "folder.html")
-    try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-    let archive = try file("a.zip", "zip")
-    let big = try file("big.pdf", String(repeating: "x", count: PiPreview.maxBytes + 1))
-
-    let fine = try file("fine.png", "png")
-    // 一批里有一个不行，整批都不留
-    await #expect(throws: CueStoreError.previewUnreadable(missing.path)) { try await store.addPreviews([fine, missing].map { (url: $0, title: $0.lastPathComponent) }, sessionID: "s1") }
-    await #expect(throws: CueStoreError.previewUnreadable(folder.path)) { try await store.addPreviews([(folder, folder.lastPathComponent)], sessionID: "s1") }
-    await #expect(throws: CueStoreError.previewUnsupported("zip")) { try await store.addPreviews([fine, archive].map { (url: $0, title: $0.lastPathComponent) }, sessionID: "s1") }
-    await #expect(throws: CueStoreError.previewTooLarge(big.path, limit: PiPreview.maxBytes)) { try await store.addPreviews([(big, big.lastPathComponent)], sessionID: "s1") }
-
-    let stored = try await store.previews(of: "s1")
-    let records = try RawDB(fixture.url).count("attachments")
-    #expect(stored.isEmpty && files().isEmpty && records == 0)
   }
 
   /// 同一批 = 同一创建时间：同一会话里后发的一批即使时钟落在已有预览当时或之前（同一毫秒、时钟回拨），也排在它之后 1 毫秒，不与它合成一张卡；

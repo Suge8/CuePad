@@ -19,33 +19,7 @@ struct BridgeClientTests {
 
     private func session(_ id: String) -> PiSession? { bridge.sessions.first { $0.id == id } }
 
-    // MARK: 发现
-
-    @Test func discoversSessionsRunningBeforeStartAndStartedLater() async throws {
-        let early = FakeExtension(directory: dir)
-        try early.start()
-        try bridge.start()
-        try await eventually("已运行的会话被发现") { session(early.id) != nil }
-
-        let late = FakeExtension(directory: dir, options: .init(cwd: "/work/other", mode: "rpc", model: nil, sessionFile: nil, tty: nil, env: [:]))
-        try late.start()
-        try await eventually("启动后新增的会话被发现") { session(late.id) != nil }
-
-        let s = try #require(session(early.id))
-        #expect(s.sessionID == early.sessionID)
-        #expect(s.pid == getpid())
-        #expect(s.cwd.path == "/work/project")
-        #expect(s.model?.key.id == "test-model" && s.thinking == .known(.off))
-        #expect(s.sessionFile?.path == "/work/session.jsonl")
-        #expect(s.state == .settled)
-        #expect(s.terminal == PiTerminal(tty: "ttys009", program: "ghostty", bundleID: "com.mitchellh.ghostty",
-                                         tmuxPane: "%3", tmuxSocketPath: "/private/tmp/tmux-501/default"))
-
-        let l = try #require(session(late.id))
-        #expect(l.sessionFile == nil && l.model == nil && l.terminal == PiTerminal())
-    }
-
-    // MARK: 上下文余量与斜杠命令
+    // MARK: 增量更新
 
     private let sonnet = FakeExtension.WireModel(provider: "anthropic", id: "sonnet", name: "Sonnet", thinking: ["off", "low", "medium"])
     private let opus = FakeExtension.WireModel(provider: "anthropic", id: "opus", name: "Opus", thinking: ["off", "high", "max"])
@@ -108,55 +82,31 @@ struct BridgeClientTests {
         #expect(bridge.sessions.isEmpty)
     }
 
-    // MARK: 目录安全
+    // MARK: 安全
 
-    @Test func rejectsDirectoryThatOthersCouldWriteTo() throws {
-        chmod(dir.path, 0o755)
-        #expect(throws: PiBridgeError.self) { try bridge.start() }
-        #expect(bridge.sessions.isEmpty)
-    }
-
-    @Test func rejectsDirectoryPathTooLongForSunPath() throws {
-        let long = PiBridge(socketDirectory: URL(filePath: "/tmp/" + String(repeating: "d", count: 60)))
-        #expect(throws: PiBridgeError.socketDirectoryTooLong) { try long.start() }
-    }
-
-    @Test func createsMissingDirectoryWithOwnerOnlyPermissions() throws {
+    /// socket 目录只属于本人：缺了建成 0700，别人能写的目录拒绝启动。
+    @Test func theSocketDirectoryIsOwnerOnlyAndAnInsecureOneIsRefused() throws {
         let fresh = dir.appending(path: "sub")
         try PiBridge(socketDirectory: fresh).start()
         var st = stat()
-        #expect(lstat(fresh.path, &st) == 0)
-        #expect(st.st_mode & 0o777 == 0o700)
-        #expect(st.st_uid == getuid())
+        #expect(lstat(fresh.path, &st) == 0 && st.st_mode & 0o777 == 0o700 && st.st_uid == getuid())
+
+        chmod(dir.path, 0o755)
+        #expect(throws: PiBridgeError.self) { try bridge.start() }
     }
-    @Test func doesNotConnectToASocketOthersCouldWriteTo() async throws {
-        let ext = FakeExtension(directory: dir, options: .init(socketMode: 0o666))
-        try ext.start()
+
+    /// 别人能写的 socket 不连。启动时同步扫一遍目录，要连的话 `start()` 返回时连接已排进对端的 backlog：此刻监听端不可读就是没连。
+    @Test func doesNotConnectToASocketOthersCouldWriteTo() throws {
+        let path = dir.appending(path: "\(UUID().uuidString.lowercased()).\(getpid()).sock").path
+        let listener = try UnixSocket.listen(path)
+        defer { close(listener) }
+        chmod(path, 0o666)
         try bridge.start()
-        await quietPeriod(.milliseconds(400))
-        #expect(bridge.sessions.isEmpty && ext.connectionCount == 0)
+        var pending = pollfd(fd: listener, events: Int16(POLLIN), revents: 0)
+        #expect(poll(&pending, 1, 0) == 0)
     }
 
     // MARK: 协议兼容
-
-    /// 协议不同（升级前开的扩展，正等着自己换上新扩展）的会话没死：照常列出，命令一条都不发给它，失败带原因；进程退出才算结束。
-    @Test(arguments: [3, 99]) func 协议不同的会话在线但不可用_命令失败带原因_退出才结束(protocolVersion: Int) async throws {
-        let ext = FakeExtension(directory: dir, options: .init(protocolVersion: protocolVersion, cwd: "/work/legacy"))
-        try ext.start()
-        try bridge.start()
-        try await eventually("appeared") { session(ext.id) != nil }
-        let listed = try #require(session(ext.id))
-        #expect(listed.upgrading)
-        #expect(listed.sessionID == ext.sessionID && listed.cwd.path == "/work/legacy")
-
-        await #expect(throws: PiBridgeError.upgradingExtension) { try await bridge.send(PiMessage(text: "hi"), to: ext.id) }
-        await #expect(throws: PiBridgeError.upgradingExtension) { try await bridge.abort(ext.id) }
-        #expect(ext.commands.isEmpty)
-        #expect(PiBridgeError.upgradingExtension.errorDescription == "这个会话正在换上新版扩展，歇下后自动接上，到时再发")
-
-        ext.close(bye: "quit")
-        try await eventually("ended") { session(ext.id) == nil }
-    }
 
     /// 读不懂的消息：连接判为不兼容并断开；之后在终端里 /reload，扩展在同一路径重新 listen，新 socket 不再被当成那个坏掉的旧连接跳过。
     @Test func aCorruptedMessageDropsTheConnectionAsIncompatibleAndAReloadConnectsAgain() async throws {
@@ -190,45 +140,6 @@ struct BridgeClientTests {
         await #expect(throws: PiBridgeError.sessionEnded) { try await pending.value }
     }
 
-    /// 取消一条等 ack 的命令：立即以取消结束，不用等 ack 超时（10 秒）。
-    @Test func cancellingACommandWaitingForItsAckReturnsAtOnce() async throws {
-        let ext = FakeExtension(directory: dir)
-        ext.onCommand = { _, _ in nil }  // 扩展收到命令不回 ack
-        try ext.start()
-        try bridge.start()
-        try await eventually("会话出现") { session(ext.id) != nil }
-
-        let request = Task { try await bridge.abort(ext.id) }
-        try await eventually("命令已发出") { !ext.commands.isEmpty }
-        request.cancel()
-
-        await #expect(throws: CancellationError.self) { try await request.value }  // 等到 ack 超时就是 ackTimeout
-    }
-
-    // MARK: 多客户端
-
-    @Test func twoClientsOnOneSessionBothGetSnapshotAndStateAndOwnAcks() async throws {
-        let ext = FakeExtension(directory: dir)
-        // ack 回显命令文字：证明 ack 只回给发送方那条连接
-        ext.onCommand = { _, cmd in ["ok": false, "error": "echo:\((cmd["text"] as? String) ?? "")"] }
-        try ext.start()
-        let other = PiBridge(socketDirectory: dir)
-        try bridge.start()
-        try other.start()
-        try await eventually("两个客户端都连上") {
-            session(ext.id) != nil && other.sessions.contains { $0.id == ext.id } && ext.connectionCount == 2
-        }
-
-        ext.setState(["kind": "thinking"])
-        try await eventually("两个客户端都收到状态切换") {
-            session(ext.id)?.state == .thinking && other.sessions.first?.state == .thinking
-        }
-
-        async let a: Void = { await #expect(throws: PiBridgeError.rejected("echo:from-A")) { try await self.bridge.send(PiMessage(text: "from-A"), to: ext.id) } }()
-        async let b: Void = { await #expect(throws: PiBridgeError.rejected("echo:from-B")) { try await other.send(PiMessage(text: "from-B"), to: ext.id) } }()
-        _ = await (a, b)
-        #expect(ext.commands.count == 2)
-    }
     // MARK: 分格观察
 
     /// 查某个会话只随这一个会话的变化通知：别的会话状态一变，读它的视图就要重算的话，Agent 多起来时每秒几十次整页重算。

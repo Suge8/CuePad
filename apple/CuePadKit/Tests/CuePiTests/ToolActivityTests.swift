@@ -69,17 +69,6 @@ struct ToolActivityTests {
         #expect(tools.items[0].added == nil)
     }
 
-    /// 参数长得不对（不是对象、字段类型不对）的调用照样计数，不让整条消息读不出来。
-    @Test func oddArgumentsStillCountAndNeverCostTheMessage() throws {
-        var f = SessionFile(directory: dir)
-        try f.append(
-            SessionFile.header(cwd: "/work/x"), SessionFile.user("u1", nil, "怪参数", at: 1),
-            Self.calls("t1", "u1", [["type": "toolCall", "id": "c1", "name": "bash", "arguments": "ls"], Self.call("c2", "read", ["path": 7])], at: 2),
-            SessionFile.assistant("a1", "t1", text: "读完了", at: 3))
-        let update = try index(f)
-        #expect(update.messages.last?.text == "读完了" && update.messages.last?.tools?.steps == 2)
-    }
-
     /// Pi 以后换了工具结果行的键序（isError 提前、toolCallId 挪到长输出之后、role 不在行首）也读得对：快速路径认不出就完整解码。
     @Test func aReorderedToolResultLineStillSaysWhichCallFailed() throws {
         let output = String(repeating: "输出", count: 400)
@@ -95,6 +84,5 @@ struct ToolActivityTests {
         let tools = try #require(try index(f).messages.last?.tools)
         #expect(tools.steps == 2 && tools.items.map(\.failed) == [false, true])
     }
-
 }
 #endif

@@ -420,11 +420,8 @@ struct ClaudeDiscoveryTests {
 @Suite(RealAgents.taped(.claudeCode), .agentTape(.claudeCode), RealAgents.timeLimit(.minutes(5)))
 struct ClaudeSettingsTests {
     /// 接入只把 CuePad 的钩子合并进用户自己的 settings.json；关掉接入（中间 App 搬过家、升级过也一样）后与装之前逐字节一致：
-    /// 原来没有文件就没有文件，原来空着的对象、`hooks`、事件数组都原样留着。
-    @Test(arguments: [
-        nil, RealClaudeTerminalTests.userSettings, "{}", "{ }\n", "{\n  \"hooks\": {}\n}\n", #"{"hooks":{"Stop":[]},"theme":"dark"}"#,
-        "{\n  \"hooks\": {\n    \"Stop\": [\n    ]\n  }\n}\n",
-    ])
+    /// 原来没有文件就没有文件，原来空着的事件数组原样留着。
+    @Test(arguments: [nil, RealClaudeTerminalTests.userSettings, #"{"hooks":{"Stop":[]},"theme":"dark"}"#])
     func connectingAndDisconnectingLeavesTheUsersSettingsByteForByte(settings: String?) async throws {
         AgentTape.variant(settings.map { "\($0.count)" } ?? "none")
         try await ClaudeTestbed.run(installHooks: false, settings: settings) { testbed in

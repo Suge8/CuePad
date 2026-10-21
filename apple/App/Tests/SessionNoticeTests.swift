@@ -19,7 +19,8 @@ struct SessionNoticeTests {
         return app.services.liveSessions.live
     }
 
-    @Test func 第一次读到只记基线_之后的转换才提示_同一版本不重复() async throws {
+    /// 第一次读到只记基线，之后的转换才提示，同一版本不重复；等你确认带问题首行，做完了不带。
+    @Test func 第一次读到只记基线_之后的转换才提示一次_等你确认带问题首行() async throws {
         let recorder = recorder()
         var tracker = SessionAlertTracker()
         try await recorder.update(sessionID: "s1", state: .thinking, title: "homepage")
@@ -27,28 +28,15 @@ struct SessionNoticeTests {
 
         try await recorder.update(sessionID: "s1", state: .settled)
         let settled = try await live()
-        let alerts = tracker.alerts(for: settled, cue: nil, since: .distantPast)
-        #expect(alerts.map(\.kind) == [.settled] && alerts.first?.title == "homepage")
-        #expect(alerts.first?.session == settled.first?.id)
+        let done = tracker.alerts(for: settled, cue: nil, since: .distantPast)
+        #expect(done.map(\.kind) == [.settled] && done.first?.text.visible == "homepage · 完成了")
+        #expect(done.first?.session == settled.first?.id)
         #expect(tracker.alerts(for: settled, cue: nil, since: .distantPast).isEmpty)
-    }
-
-    @Test func 等你确认带问题首行_做完了不带() async throws {
-        let recorder = recorder()
-        var tracker = SessionAlertTracker()
-        try await recorder.update(sessionID: "s1", state: .thinking, title: "homepage")
-        _ = tracker.alerts(for: try await live(), cue: nil, since: .distantPast)
 
         let question = PiQuestion(promptID: "p", kind: .select, text: "要覆盖 feed.xml 吗？\n会丢掉手写的条目", options: ["覆盖", "取消"])
         try await recorder.update(sessionID: "s1", state: .waitingForUser, question: question)
         let waiting = try #require(tracker.alerts(for: try await live(), cue: nil, since: .distantPast).first)
         #expect(waiting.kind == .waitingForUser && waiting.text.visible == "homepage 在等你 · 要覆盖 feed.xml 吗？")
-
-        try await recorder.update(sessionID: "s1", state: .thinking)
-        _ = tracker.alerts(for: try await live(), cue: nil, since: .distantPast)
-        try await recorder.update(sessionID: "s1", state: .settled)
-        let settled = try #require(tracker.alerts(for: try await live(), cue: nil, since: .distantPast).first)
-        #expect(settled.kind == .settled && settled.text.visible == "homepage · 完成了")
     }
 
     /// App 不在前台时发生的转换（冷启动、从后台回来后才同步到）不在前台补报：那一下系统推送已经提示过了。

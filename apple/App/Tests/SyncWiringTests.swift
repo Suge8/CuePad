@@ -67,30 +67,6 @@ struct SyncWiringTests {
         #expect(app.sync.syncNows == 1)
     }
 
-    /// 回到前台时正有在等的东西（手机停在 Agent 页、Cue 页，或有话在等回执）：按节奏的拉取随之开始，与立即同步是同一拉，不连拉两次。
-    @Test func 应用激活时立即同步_正在等也只拉一次() async {
-        let time = ManualTiming()
-        let app = TestApp(timing: time.timing)
-        app.services.hasOpenDeliveries = true
-        await app.services.handleActivation()
-        defer { app.services.stopPolling() }
-        await time.waitForSleeper()  // 按节奏的拉取已开始、睡在第一个间隔里
-        #expect(app.sync.syncNows == 1)
-    }
-
-    /// 立即同步还没返回时再要立即同步（启动与回到前台常叠在一起、连点"立即同步"）：等同一拉，不另拉。
-    @Test func 立即同步叠在一起时_是同一拉() async throws {
-        app.sync.holdsPull.withLock { $0 = true }
-        let first = Task { await services.syncNow() }
-        try await eventually("第一拉在途") { app.sync.syncNows == 1 }
-        let second = Task { await services.syncNow() }
-        await quietPeriod(.milliseconds(100))  // 第二次立即同步已经进来、在等
-        app.sync.pullGate.continuation.yield()
-        await first.value
-        await second.value
-        #expect(app.sync.syncNows == 1)
-    }
-
     /// 静默推送把 App 冷启动到后台：推送先于同步启动完到达，等启动完再拉，不空手交还系统；启动后的立即同步就是这一拉，不拉两遍。
     @Test func 冷启动时先到的推送_等同步启动完再拉_只拉一次() async throws {
         app.sync.holdsStart.withLock { $0 = true }

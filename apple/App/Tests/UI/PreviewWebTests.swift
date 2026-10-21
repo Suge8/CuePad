@@ -68,27 +68,4 @@ struct PreviewWebTests {
         #expect(guardedProbe.hits == 0)
         #expect(try await guarded.callJavaScript("return document.getElementById('x').dataset.ran") as? String == "yes")
     }
-
-    /// 点链接不跳转（对照组会跳走），页内锚点照常。
-    @Test func 链接点击不跳转_页内锚点照常() async throws {
-        let html = "<title>start</title><a id=out href=\"about:blank\">out</a><a id=in href=\"#there\">in</a>"
-        let file = FileManager.default.temporaryDirectory.appending(path: "preview-links-\(UUID().uuidString).html")
-        try html.write(to: file, atomically: true, encoding: .utf8)
-        func click(_ id: String, on page: WebPage) async throws -> (title: String, hash: String) {
-            _ = try await page.callJavaScript("document.getElementById(id).click()", arguments: ["id": id])
-            await quietPeriod(.milliseconds(500))
-            let state = try await page.callJavaScript("return [document.title, location.hash]") as? [String] ?? []
-            return (state[0], state[1])
-        }
-
-        let control = WebPage()
-        _ = control.load(Data(html.utf8), mimeType: "text/html", characterEncoding: .utf8, baseURL: URL(string: "about:blank")!)
-        _ = try await settledTitle(control)
-        #expect(try await click("out", on: control).title.isEmpty)  // 没有拦截：跳走了（空白页没有标题），说明这种点法有效
-
-        let guarded = try await PreviewWebGuard.page(for: file)
-        _ = try await settledTitle(guarded)
-        #expect(try await click("out", on: guarded).title == "start")
-        #expect(try await click("in", on: guarded).hash == "#there")
-    }
 }

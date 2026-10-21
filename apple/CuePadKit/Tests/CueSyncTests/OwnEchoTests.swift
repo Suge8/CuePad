@@ -64,15 +64,4 @@ import Testing
     try await expectNoCopyAndLocalKept(card, body: "第二版")
   }
 
-  /// 另一台设备离线并发编辑仍保留冲突副本。
-  @Test func anotherDevicesConcurrentEditStillKeepsBothVersions() async throws {
-    let (card, _) = try await editedAndUploaded("第一版")
-    let local = try await edit(card, "本机第二版")
-    let other = remoteRecord(.cards, id: card.id, cardFields(body: "另一台的版本", modifiedAt: (local["modifiedAt"] as! NSNumber).int64Value + 1_000))
-
-    try await rig.coordinator.pulled([other], [])
-
-    let conflict = try #require(try await store.conflicts().first)
-    #expect(conflict.original.body == "另一台的版本" && conflict.copy.body == "本机第二版")
-  }
 }

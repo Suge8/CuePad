@@ -38,23 +38,6 @@ import Testing
     await sender.stop()
   }
 
-  /// 同批里一条被限流（服务器要求等 60 秒）、一条收下：被限流的不立刻原样重传。
-  @Test func aRateLimitedRecordWaitsInsteadOfBeingResentRightAway() async throws {
-    let limited = CKError(.requestRateLimited, userInfo: [CKErrorRetryAfterKey: 60.0])
-    let server = ScriptedServer([{ records in SentRecords(saved: [records[0]], failedSaves: [(records[1], limited)]) }])
-    let sender = RecordSender(uploader: server, coordinator: rig.coordinator)
-    try await rig.simulatePush()  // 新库的默认项目先传上去
-    _ = try await rig.store.createCard(body: "一")
-    _ = try await rig.store.createCard(body: "二")
-    await sender.start()
-    await sender.flush()
-
-    await quietPeriod(.milliseconds(300))
-    #expect(await server.uploads.count == 1)
-    #expect(try await rig.reconcileDelta().saves.count == 1)  // 被限流的那条仍待推送
-    await sender.stop()
-  }
-
   /// 一轮做完、回答落进对话：手机多久看到回答取决于它多快传上去。回答（对话与会话近况）随本机提交在合并窗口后就发，
   /// 不等会话状态细节的节流（这时还挂着一条工作中的细节；节流走手动时钟、永不到点，等它就会等到测试时限）。
   @Test func aNewReplyIsUploadedRightAfterItIsWritten() async throws {

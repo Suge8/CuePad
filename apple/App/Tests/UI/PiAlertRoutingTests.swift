@@ -21,12 +21,16 @@ struct PiAlertRoutingTests {
         ]
     }
 
-    /// 推在正看着的页上（返回回到原处）。
-    @Test func 点Pi通知_打开该会话的近况() {
+    /// 推在正看着的页上（返回回到原处）；别的通知不改导航。
+    @Test func 点Pi通知_打开该会话的近况_别的通知不改导航() {
         let session = UUID()
         let alerts = AlertCenter()
         let navigation = Navigation(settings: AppSettings(defaults: UserDefaults(suiteName: UUID().uuidString)!, launchArguments: [:]))
         navigation.select(.project(Project.defaultID))
+
+        alerts.receive(payload(subscription: "somebody.else", record: UUID()))
+        navigation.open(alert: alerts.consumeTap())
+        #expect(navigation.root == .project(Project.defaultID) && navigation.path.isEmpty)
 
         alerts.receive(payload(subscription: "cuepad.pi.waiting", record: session))
         navigation.open(alert: alerts.consumeTap())
@@ -50,16 +54,6 @@ struct PiAlertRoutingTests {
         navigation.open(alert: alerts.consumeTap())
 
         #expect(navigation.path.count == 1)
-    }
-
-    @Test func 别的通知_不改导航() {
-        let alerts = AlertCenter()
-        let navigation = Navigation(settings: AppSettings(defaults: UserDefaults(suiteName: UUID().uuidString)!, launchArguments: [:]))
-
-        alerts.receive(payload(subscription: "somebody.else", record: UUID()))
-        navigation.open(alert: alerts.consumeTap())
-
-        #expect(navigation.root == .cue && navigation.path.isEmpty)
     }
 
     /// 系统（UIKit）交来的完成块只能在主线程调用，否则抛异常崩溃（真机点锁屏通知进 App 的崩溃）。

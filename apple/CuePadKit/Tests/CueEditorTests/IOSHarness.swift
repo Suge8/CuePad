@@ -72,20 +72,29 @@ final class EditorHarness {
     }
 }
 
+/// 粘贴与拖入委托给出结果的那一刻（UIKit 可能在别的线程回调）就交给等它的测试，不轮询。
 final class FakePasteItem: NSObject, UITextPasteItem, @unchecked Sendable {
     let itemProvider: NSItemProvider
     var localObject: Any? { nil }
     var defaultAttributes: [NSAttributedString.Key: Any] { [:] }
     private(set) var result: NSAttributedString?
-    private(set) var resolved = false
     private(set) var usedDefault = false
+    private let (resolutions, resolve) = AsyncStream<Void>.makeStream()
 
     init(_ provider: NSItemProvider) { itemProvider = provider }
 
-    func setResult(string: String) { result = NSAttributedString(string: string); resolved = true }
-    func setResult(attributedString: NSAttributedString) { result = attributedString; resolved = true }
-    func setResult(attachment: NSTextAttachment) { result = NSAttributedString(attachment: attachment); resolved = true }
-    func setDefaultResult() { usedDefault = true; resolved = true }
-    func setNoResult() { resolved = true }
+    /// 等到委托给出结果。
+    func resolved() async { for await _ in resolutions { return } }
+
+    func setResult(string: String) { finish(NSAttributedString(string: string)) }
+    func setResult(attributedString: NSAttributedString) { finish(attributedString) }
+    func setResult(attachment: NSTextAttachment) { finish(NSAttributedString(attachment: attachment)) }
+    func setDefaultResult() { usedDefault = true; resolve.finish() }
+    func setNoResult() { resolve.finish() }
+
+    private func finish(_ value: NSAttributedString) {
+        result = value
+        resolve.finish()
+    }
 }
 #endif

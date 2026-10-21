@@ -45,30 +45,19 @@ struct SessionControlsTests {
         #expect(MacDelivery.reply(to: session) == (allowsOther ? .answer(question) : .answerAbove))
     }
 
-    @Test func 换了模型_立即显示新值并标在路上() async throws {
+    /// 换了立即显示新值并标着在路上；没换成回到会话当前的值并写原因；会话结束了照样能换。
+    @Test func 换模型_立即显示新值_没换成回到当前值写原因_结束了照样能换() async throws {
         let atlas = try await session()
-        _ = try await app.services.configure(PiConfig(model: luna.key, thinking: .high), for: atlas)
-
+        let request = try await app.services.configure(PiConfig(model: luna.key, thinking: .high), for: atlas)
         #expect(try await shown(atlas) == PiConfigShown(model: luna, thinking: .high, pending: true, failure: nil))
-    }
 
-    @Test func 会话结束了_照样能换模型_换了立即显示新值() async throws {
-        let atlas = try await session()
+        _ = try await execute(request, failing: "Pi 没在运行")
+        #expect(try await shown(atlas) == PiConfigShown(model: opus, thinking: .low, pending: false, failure: .reported("Pi 没在运行")))
+
         try await PiStateRecorder(store: store, hostID: "mac-a").end(sessionID: "atlas")
         let ended = try #require(try await store.allPiSessionStates().first)
         #expect(ended.state == .known(.ended))
-        #expect(try await SessionDigest.read(ended.id, sessionID: ended.sessionID, from: store).catalog?.models == [opus, luna])
-
         _ = try await app.services.configure(PiConfig(model: luna.key), for: ended)
-
         #expect(try await shown(ended).model == luna)
-    }
-
-    @Test func 没换成_回到会话当前的值并写原因() async throws {
-        let atlas = try await session()
-        let request = try await app.services.configure(PiConfig(thinking: .high), for: atlas)
-        _ = try await execute(request, failing: "Pi 没在运行")
-
-        #expect(try await shown(atlas) == PiConfigShown(model: opus, thinking: .low, pending: false, failure: .reported("Pi 没在运行")))
     }
 }

@@ -49,7 +49,12 @@ struct ShellChromeTests {
         #expect(ended == ["sheet", "nested"])
     }
 
-    @Test func 系统报告弹窗结束之前不继续退出() {
+    /// 没有弹窗时立即继续退出；有弹窗时，系统报告它结束之前不继续。
+    @Test func 系统报告弹窗结束之前不继续退出_没有弹窗时立即继续() {
+        var bare = false
+        CuePadApplication.dismissPresentations(in: [NSWindow(contentRect: .zero, styleMask: [.titled], backing: .buffered, defer: true)]) { bare = true }
+        #expect(bare)
+
         let slow = SlowSheetWindow()
         var proceeded = false
 
@@ -58,15 +63,6 @@ struct ShellChromeTests {
         #expect(slow.endRequested)
         #expect(!proceeded, "收起动画还没结束就继续退出，系统会以 blocked by modal sheet 拒绝")
         slow.finishDismissal()
-        #expect(proceeded)
-    }
-
-    @Test func 没有弹窗时立即继续退出() {
-        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 200, height: 100), styleMask: [.titled], backing: .buffered, defer: true)
-        var proceeded = false
-
-        CuePadApplication.dismissPresentations(in: [window]) { proceeded = true }
-
         #expect(proceeded)
     }
 }

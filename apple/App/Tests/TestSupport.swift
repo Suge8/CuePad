@@ -76,16 +76,11 @@ nonisolated final class FakeSync: SyncControlling, Sendable {
     /// 为 true 时 `syncNow()` 永不返回（像网络一直没有回音）。
     let syncNowHangs = Mutex(false)
 
-    /// 为 true 时每次 `syncNow()` 等 `pullGate` 放行一次才返回（拉取在途）。
-    let holdsPull = Mutex(false)
-    let pullGate = AsyncStream<Void>.makeStream()
-
     func syncNow() async throws {
         state.withLock {
             $0.syncNows += 1
             $0.events.append("pull")
         }
-        if holdsPull.withLock({ $0 }) { for await _ in pullGate.stream { break } }
         if syncNowHangs.withLock({ $0 }) { try? await Task.sleep(for: .seconds(3600)) }
     }
     /// 马上传过的记录名，按调用顺序。

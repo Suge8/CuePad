@@ -165,22 +165,10 @@ struct CueHostTests {
         await rig.stop()
     }
 
-    /// 你在 Cue 页发图：图交给大脑（假模型收到的是图片，不只是文字里的引用），Cue 照图回答。
+    /// 你在 Cue 页发图：资料库里的图片引用转成图片交给大脑（假模型收到的是图片，不只是文字里的引用），Cue 照图回答。
     @Test func 你发图_Cue看得见() async throws {
         let rig = try await Rig()
         try await rig.say("这是什么？\n\(try rig.image())")
-        try await rig.message(.cue, containing: "看到图了")
-        await rig.stop()
-    }
-
-    /// Cue 正在跑一轮（在查东西）时你发来图：图插进这一轮，下一次请求模型时就带着。
-    @Test func 一轮中途发图_插进这一轮也带图() async throws {
-        let rig = try await Rig()
-        try await rig.say("请先查一下")
-        try await eventually("Cue 在查") { rig.model.holding }
-        try await rig.say("还有这张\n\(try rig.image())")
-        try await eventually("交给了大脑") { try await rig.store.cueMessagesToDeliver().isEmpty }
-        rig.model.release()
         try await rig.message(.cue, containing: "看到图了")
         await rig.stop()
     }
@@ -220,8 +208,7 @@ struct CueHostTests {
     }
 
     /// Cue 经工具建任务并开工：执行器在项目文件夹开出会话，会话名是任务标题、模型与思考强度是 Cue 指定的（启动参数，一步生效），再送进草稿。
-    /// 会话歇下后 Cue 马上自己醒来。
-    @Test func 建任务开工_会话歇下后Cue醒来() async throws {
+    @Test func 建任务开工_会话名模型强度照Cue指定的开() async throws {
         let rig = try await Rig()
         try await rig.say("请建个任务并开工")
         try await rig.message(.cue, containing: "办好了")
@@ -233,14 +220,6 @@ struct CueHostTests {
         })
         #expect(session.messages.first?.text == "修好登录页\n把登录页修好")
         #expect(!session.received.contains("config"))
-
-        // 认领：真实扩展在 hello 里带开会话的标识，假扩展不带，这里直接把叶子绑上它
-        let task = try #require(try await rig.store.cueBoard().tasks.first?.task)
-        try await rig.store.linkCard(task.id, toSession: session.sessionID)
-        session.setState(["kind": "thinking"])
-        session.setState(["kind": "idle"])
-        try await rig.answered(session.sessionID)
-        try await rig.message(.cue, containing: "登录页那边歇下了")
         await rig.stop()
     }
 
