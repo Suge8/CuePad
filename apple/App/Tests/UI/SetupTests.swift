@@ -15,16 +15,10 @@ struct SetupTests {
     let app = TestApp()
     var services: AppServices { app.services }
 
-    /// 同步报来这台的库和 iCloud 对没对过一遍（`SyncState.reconciled`）。
-    private func sync(reconciled: Bool) async throws {
-        app.sync.emit(SyncState(status: .idle, issues: [], reconciled: reconciled))
-        try await eventually("对过一遍：\(reconciled)") { services.knowsSyncedFacts == reconciled }
-    }
-
     /// 像启动时那样请工作区决定弹不弹（`AppDelegate` 同一个调用），再像面板打开时那样检测全部 Agent。
     private func launch(reconciled: Bool = true) async throws -> Workspace {
         services.startSync()
-        try await sync(reconciled: reconciled)
+        try await app.syncs(reconciled: reconciled)
         return await reopen()
     }
 
@@ -75,7 +69,7 @@ struct SetupTests {
         try app.install(.pi)
         let workspace = try await launch(reconciled: false)
         #expect(workspace.showsSetup)
-        #expect(workspace.setupCue == .waiting)
+        #expect(workspace.setupCue == .waiting("正在从 iCloud 同步…"))
 
         let following = Task { await workspace.followCue() }
         defer { following.cancel() }
@@ -83,7 +77,7 @@ struct SetupTests {
             profile.hostID = "mac-old"
             profile.enabledAt = .now
         }
-        try await sync(reconciled: true)
+        try await app.syncs()
         try await eventually("Cue 那一行没了") { workspace.setupCue == .none }
         #expect(services.agents.connectable == [.pi])  // 接入照常
     }

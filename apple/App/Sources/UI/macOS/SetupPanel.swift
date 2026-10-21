@@ -17,9 +17,9 @@ extension Workspace {
     enum SetupCue: Equatable {
         /// Cue 已启用（这台或别的 Mac）：没有这一行，面板只管接入
         case none
-        /// 这台的库还没和 iCloud 对过一遍（`AppServices.knowsSyncedFacts`，换新 Mac 时）：Cue 也许已在别的 Mac 上设过，
-        /// 先不提议在这台启用，免得把它从那台抢过来
-        case waiting
+        /// 这台的库还没和 iCloud 对过一遍（`CueGate.waiting`，换新 Mac 时）：Cue 也许已在别的 Mac 上设过，
+        /// 先不提议在这台启用，免得把它从那台抢过来；写 `why`
+        case waiting(String)
         /// 能当 Cue 的 Agent（`CueProfile.runtimes`）这台一家都没装：给装法
         case needsAgent
         /// 能勾：在这台启用
@@ -27,10 +27,13 @@ extension Workspace {
     }
 
     var setupCue: SetupCue {
-        if cue.canHear { return .none }
-        if !services.knowsSyncedFacts { return .waiting }
-        let agents = services.agents
-        return CueProfile.runtimes.contains { agents.status($0)?.isAvailable == true } ? .enable : .needsAgent
+        switch CueGate.of(services, running: cue.canHear ? cue.hostID : nil, name: cue.hostName) {
+        case .runs: return .none
+        case .waiting(let why): return .waiting(why)
+        case .open:
+            let agents = services.agents
+            return CueProfile.runtimes.contains { agents.status($0)?.isAvailable == true } ? .enable : .needsAgent
+        }
     }
 
     /// 接入面板的主按钮：接入勾选的几家（同设置里打开开关），`enablingCue` 时再让 Cue 在这台 Mac 上启用（`AppServices.enableCue`），
@@ -39,7 +42,7 @@ extension Workspace {
         var failures = SetupFailures(agents: await services.agents.install(kinds))
         guard enablingCue else { return failures }
         do {
-            try await services.enableCue(on: services.hostID)
+            try await services.enableCue(on: services.hostID, moving: false)
             show(.cue)
         } catch CueEnableError.noRuntime(let why) {
             failures.cue = why
@@ -61,7 +64,7 @@ struct SetupFailures: Equatable {
 /// 接入 Agent 并启用 Cue，一处做完：首次打开出现一次（`Workspace.offerSetup`），Cue 页的启用卡、会话页的"接入"也打开它；之后在设置里逐个开关。
 /// 打开时重新检测这台 Mac 上的 Agent（检测完之前只写检测中），回到 App 时再测一次（用户可能刚照着装法在终端里装好）。
 /// 列出检测到、还没接入的几家（`AgentIntegrations.connectable`）与 Cue 那一行（`Workspace.setupCue`：还没和 iCloud 对过时写在等什么、不能勾；
-/// 能当 Cue 的一家都没装时换成各家的安装命令），默认全选；每行写它会写什么、会做什么，点主按钮就是同意（`Workspace.setUp`）。
+/// 能当 Cue 的一家都没装时换成各家的安装命令），默认全选；每行写它会写什么或做什么，点主按钮就是同意（`Workspace.setUp`）。
 /// 没做成的那一行写原因，都做成就收起。"以后再说"关掉就是不接。
 struct SetupPanel: View {
     @Environment(Workspace.self) private var workspace
@@ -82,7 +85,8 @@ struct SetupPanel: View {
     private var cueName: String { workspace.cue.name }
     private var setupCue: Workspace.SetupCue { workspace.setupCue }
     /// 列出 Cue 那一行：能勾的，或在等 iCloud 的。
-    private var cueRowShown: Bool { setupCue == .enable || setupCue == .waiting }
+    private var cueRowShown: Bool { setupCue == .enable || waiting != nil }
+    private var waiting: String? { if case .waiting(let why) = setupCue { why } else { nil } }
     private var enablingCue: Bool { setupCue == .enable && !skipsCue }
     /// 检测完了，有行：还没接入的几家或 Cue 那一行。
     private var hasRows: Bool { agents.detected && (!kinds.isEmpty || cueRowShown) }
@@ -119,14 +123,7 @@ struct SetupPanel: View {
                 .scaleEffect(shown || reduceMotion ? 1 : 0.9)
                 .opacity(shown ? 1 : 0)
                 .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(setupCue == .none ? "接入 Agent" : "接入 Agent，启用 \(cueName)").font(Typography.heading).foregroundStyle(palette.ink)
-                Text(setupCue == .none
-                    ? "接入后，终端和桌面版里的会话与历史也出现在 CuePad。"
-                    : "\(cueName) 用这台 Mac 上的 Agent 替你开会话做事；接入后，终端和桌面版里的会话与历史也出现在 CuePad。")
-                    .font(Typography.secondary).foregroundStyle(palette.ink2)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            Text(setupCue == .none ? "接入 Agent" : "接入 Agent，启用 \(cueName)").font(Typography.heading).foregroundStyle(palette.ink)
         }
     }
 
@@ -134,7 +131,7 @@ struct SetupPanel: View {
         if !agents.detected {
             HStack(spacing: 8) {
                 Spinner(.small)
-                Text("正在检测这台 Mac 上的 Agent…").foregroundStyle(palette.ink2)
+                Text("正在检测 Agent…").foregroundStyle(palette.ink2)
             }
             .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 12).padding(.vertical, 9)
             .background(palette.paper, in: .rect(cornerRadius: 10, style: .continuous))
@@ -147,7 +144,7 @@ struct SetupPanel: View {
             }
             if needsAgent { guide }
             if done {
-                Text("检测到的 Agent 都接入了").foregroundStyle(palette.ink2)
+                Text("都已接入").foregroundStyle(palette.ink2)
                     .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 12).padding(.vertical, 9)
                     .background(palette.paper, in: .rect(cornerRadius: 10, style: .continuous))
             }
@@ -167,24 +164,20 @@ struct SetupPanel: View {
         }
     }
 
-    /// 启用 Cue 那一行：它会做什么；默认项目还没有文件夹时写它第一次开工时建在哪（`Workspaces`）。没启用成的写原因。
+    /// 启用 Cue 那一行：默认项目还没有文件夹时写它第一次开工时建在哪（`Workspaces`）。没启用成的写原因。
     /// 在等 iCloud 时写在等什么、转圈，勾不上。
     private var cueRow: some View {
-        let waiting = setupCue == .waiting
-        let (tone, line) = failures.cue.map { (StatusTone.failure, Dotted($0)) }
-            ?? (StatusTone.calm, waiting ? Dotted(waitingLine) : Dotted("用这里的 Agent 替你开会话", folder))
+        let waiting = self.waiting
+        let (tone, line): (StatusTone, Dotted?) = failures.cue.map { (.failure, Dotted($0)) }
+            ?? (.calm, waiting.map { Dotted($0) } ?? Dotted(folder).nonEmpty)
         return SettingRow(
-            title: "在这台 Mac 上启用 \(cueName)", icon: Image(.cue), tone: tone, busy: waiting || working && enablingCue, status: line, help: nil
+            title: "在这台 Mac 上启用", icon: Image(.cue), tone: tone, busy: waiting != nil || working && enablingCue, status: line, help: nil
         ) {
-            check("在这台 Mac 上启用 \(cueName)", isOn: Binding(get: { !waiting && !skipsCue }, set: { skipsCue = !$0 }))
-                .disabled(waiting)
+            check("在这台 Mac 上启用 \(cueName)", isOn: Binding(get: { waiting == nil && !skipsCue }, set: { skipsCue = !$0 }))
+                .disabled(waiting != nil)
         } fix: {
             EmptyView()
         }
-    }
-
-    private var waitingLine: String {
-        services.syncStatus == .offline ? "连上 iCloud 后才知道 \(cueName) 是否已在别的 Mac 上启用" : "正在从 iCloud 取 \(cueName) 的设置…"
     }
 
     private var folder: String? {
@@ -200,7 +193,7 @@ struct SetupPanel: View {
     /// 一家能当 Cue 的 Agent 都没装：各家一行安装命令（`InstallCommand`，Pi 太旧时是升级命令），装好回来就重新检测。
     private var guide: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("这台 Mac 上还没有能当 \(cueName) 的 Agent，在终端里装一个：").font(Typography.secondary).foregroundStyle(palette.ink2)
+            Text("先在终端装一个能当 \(cueName) 的 Agent：").font(Typography.secondary).foregroundStyle(palette.ink2)
                 .fixedSize(horizontal: false, vertical: true)
             ForEach(AgentKind.allCases.filter(CueProfile.runtimes.contains)) { kind in
                 VStack(alignment: .leading, spacing: 4) {
@@ -214,7 +207,7 @@ struct SetupPanel: View {
 
     private var footer: some View {
         HStack(alignment: .center, spacing: 12) {
-            Text(needsAgent ? "装好后回到 CuePad，这里会重新检测" : "之后在设置里随时改")
+            Text(needsAgent ? "装好后回到这里" : "可在设置里改")
                 .font(Typography.meta).foregroundStyle(palette.ink3)
             Spacer(minLength: 8)
             if done {
@@ -236,8 +229,8 @@ struct SetupPanel: View {
     }
 
     private var primaryTitle: String {
-        if working { return enablingCue ? "正在启用…" : "接入中…" }
-        if chosen.isEmpty { return cueRowShown ? "启用 \(cueName)" : "接入" }
+        if working { return enablingCue ? "启用中…" : "接入中…" }
+        if chosen.isEmpty { return cueRowShown ? "启用" : "接入" }
         return enablingCue ? "接入并启用" : "接入"
     }
 

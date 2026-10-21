@@ -161,6 +161,13 @@ final class TestApp {
         return services
     }
 
+    /// 同步报来这台的库和 iCloud 对没对过一遍（`SyncState.reconciled`，启用 Cue 的前提），等服务读到。同步要已经起着
+    /// （`services.start()` 或 `startSync()`）：替身只有一条状态流，起两遍就是两处在读。
+    func syncs(reconciled: Bool = true) async throws {
+        sync.emit(SyncState(status: .idle, issues: [], reconciled: reconciled))
+        try await eventually("对过一遍：\(reconciled)") { services.knowsSyncedFacts == reconciled }
+    }
+
     /// 隔离库的文件（直接改库里的时刻，演"很久以前"）。
     var databaseURL: URL { isolatedLocation.databaseURL }
 
