@@ -57,8 +57,7 @@ extension CueKeeper {
 
             if progress.greeted != profile.enabledAt {
                 progress.greeted = profile.enabledAt
-                let board = try await store.cueBoard()
-                guard board.tasks.isEmpty, board.sessions.isEmpty, try await store.cueMessagesWaitingForYou().isEmpty else {
+                guard try await handsEmpty() else {
                     _ = try await wakeUp(.enabled)
                     return
                 }
@@ -99,7 +98,7 @@ extension CueKeeper {
             if let lapse = changes.lapse { deadlines.append(lapse) }
 
             let idleSince = try await store.cueLastYou()?.said ?? profile.enabledAt ?? shift.startedAt
-            if try await !store.cueBoardActive(), let due = patrolDue(idleSince: idleSince, now: now) {
+            if try await !store.cueBoardActive(), let due = patrolDue(idleSince: idleSince, now: now), try await !handsEmpty() {
                 if due <= now {
                     let today = Self.day(now)
                     progress.patrols = (progress.patrolDay == today ? progress.patrols : 0) + 1
@@ -146,6 +145,14 @@ extension CueKeeper {
         case .starting, .running:
             break
         }
+    }
+
+    /// 手上什么都没有：没做完的任务、不归它们的活会话（含出错、在等回答的）、等你的卡一样都没有。刚启用与空闲巡视这时都不醒：
+    /// 醒来只能说一句没有事，留下一行"没动手"。
+    private func handsEmpty() async throws -> Bool {
+        let board = try await store.cueBoard()
+        guard board.tasks.isEmpty, board.sessions.isEmpty else { return false }
+        return try await store.cueMessagesWaitingForYou().isEmpty
     }
 
     /// 什么时候可以巡视；这段空闲巡视过了、今天次数用完（等到明天）、整天都是打扰时段为 nil。
