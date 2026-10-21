@@ -76,14 +76,24 @@ extension CueEval {
         let asks = tells.filter { $0.args["ask"] != nil }
         let spoken = tells.filter { $0.args["ask"] == nil && $0.args["withdraw"] == nil && $0.args["restore"] == nil && ($0.args["text"] as? String)?.isEmpty == false }
         let leaves = Self.calls(in: counted, "task", ["leave"]).filter { !$0.call.failed }
-        let messages = ((try? await rig.store.cueMessages(limit: 5000)) ?? []).filter { $0.author == .known(.cue) && $0.createdAt >= (counted.first?.startedAt ?? .distantFuture) }
+        let conversation = (try? await rig.store.cueMessages(limit: 5000)) ?? []
+        let messages = conversation.filter { $0.author == .known(.cue) && $0.createdAt >= (counted.first?.startedAt ?? .distantFuture) }
+        let his = conversation.filter { $0.author == .known(.you) }
         let toldTexts = Set(spoken.compactMap { $0.args["text"] as? String })
         let answering = counted.filter { $0.wake == .message }
         let isReply = { (message: CueMessage) in answering.contains { round in message.createdAt >= round.startedAt && message.createdAt <= (round.finishedAt ?? .distantFuture) } }
         // 他会收到推送、又不是 tell 与回他的话的（出错、起不来这类管理器写的 urgent）
         let otherPushes = messages.filter { $0.urgent && $0.choices == nil && !toldTexts.contains($0.text) && !isReply($0) }
         let replies = messages.filter { $0.choices == nil && $0.taskID == nil && !toldTexts.contains($0.text) && isReply($0) }
-        let overlong = replies.count { sentences($0.text) > Self.sentenceLimit } + toldTexts.count { sentences($0) > Self.sentenceLimit }
+        // 他问进展的那一轮：系统提示要的是逐件一句，不受两句的限——上限是两句与件数（非空的行）里大的那个
+        let asksProgress = { (reply: CueMessage) in
+            let round = answering.first { reply.createdAt >= $0.startedAt && reply.createdAt <= ($0.finishedAt ?? .distantFuture) }
+            return round.flatMap { round in his.last { $0.createdAt <= round.startedAt } }?.text.contains(Self.progressQuestion) == true
+        }
+        let overlong = replies.count { reply in
+            let items = reply.text.split(separator: "\n").count { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+            return sentences(reply.text) > (asksProgress(reply) ? max(Self.sentenceLimit, items) : Self.sentenceLimit)
+        } + toldTexts.count { sentences($0) > Self.sentenceLimit }
         var failed = Dictionary(uniqueKeysWithValues: CallFailure.allCases.map { ($0.rawValue, 0) })
         for call in calls where call.failed { failed[CallFailure(call.result ?? "").rawValue, default: 0] += 1 }
         let usage = (rig.brainDirectory.map(BrainUsage.rounds(in:)) ?? []).reduce(BrainUsage(), +)
@@ -99,6 +109,8 @@ extension CueEval {
 
     /// 回他的话与 tell 至多几句（系统提示：回复至多两句，tell 至多两句）
     static let sentenceLimit = 2
+    /// 他在问进展（系统提示："问进展就逐件一句（做到哪、下一步、卡在哪）"）
+    static let progressQuestion = /做到哪|进展|进度|到哪了|怎么样了|开工了吗/
 
     /// 成绩单读的那一份：判定（类别、身份、过没过、计不计）与指标，写在 `<场景>.score.json`。
     func writeScore(_ name: String, suite: EvalSuite, checks: [Check], failure: (any Error)?, to output: URL) async throws {
