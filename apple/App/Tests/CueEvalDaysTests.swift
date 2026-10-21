@@ -198,8 +198,6 @@ private final class Days: EvalScript, Playable {
                 .joined(separator: "；"),
             "- 记忆视图行数（摘要条数）：" + snapshots.map { "\($0.label) \($0.lines)（\($0.summaries)）" }.joined(separator: " → "),
         ]
-        eval.extra["merges"] = merged
-        eval.extra["viewLines"] = snapshots.map { ["after": $0.label, "lines": $0.lines, "summaries": $0.summaries] }
         // 单列：补记以后第一次换新的那一轮，与那次换新起第一次写了摘要的那一轮（合并可能推到更后的换新）；同一轮只列一行。
         // 合并在空闲时醒来的方案在换新前就合完了，只有第一行
         let renewed = all.indices.first { all[$0].startedAt >= notedAt ?? .distantFuture && CueEval.opensSession(all[$0]) }

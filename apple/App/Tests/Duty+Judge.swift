@@ -95,9 +95,6 @@ extension Duty {
             "- 醒来 \(rounds.count) 次（不含预热；剧本叫醒 \(steps.count) 次），换新 \(renewals.count) 次（大脑开了新的对话）\(renewedAt.isEmpty ? "" : "，在" + renewedAt.joined(separator: "、"))",
         ]
         eval.report = lines + stepTable()
-        eval.extra["renewals"] = renewalModes.map { round, mode in
-            ["mode": mode, "step": steps.first { $0.window?.contains(round.startedAt) == true }?.label ?? "—"]
-        }
     }
 }
 #endif

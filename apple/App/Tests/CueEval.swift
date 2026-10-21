@@ -29,7 +29,7 @@ final class CueEval {
     private var archive: [Int: CueRound] = [:]
     /// 场景自己要写进 .md 的段落（长程、多日的统计）
     var report: [String] = []
-    /// 场景自己要写进成绩单的（长程的换新方式、多日的记忆合并），JSON 能表示的值
+    /// 场景自己要写进成绩单的（多日单列的轮，score.py 的"单列的轮"表），JSON 能表示的值
     var extra: [String: Any] = [:]
 
     private init(_ rig: CueHostTests.Rig, output: URL) {
