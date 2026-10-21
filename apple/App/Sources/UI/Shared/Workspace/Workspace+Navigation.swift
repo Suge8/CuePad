@@ -69,6 +69,13 @@ extension Workspace {
         if let route = sessionRoute(id, sessionID: sessionID) { show(route) }
     }
 
+    /// 点提示条去它说的地方（两端的提示共用）：会话经 `openSession`（同其他打开会话的入口先读好这一页），其余经 `show`。
+    func go(to link: Route) {
+        notice = nil
+        guard case .session(let route) = link else { return show(link) }
+        openSession(route.id, sessionID: route.sessionID)
+    }
+
     /// 去"下一步"：打开会话，或把任务的正文交给 Agent（`handOff`）。
     func follow(_ next: TaskNext) {
         switch next {

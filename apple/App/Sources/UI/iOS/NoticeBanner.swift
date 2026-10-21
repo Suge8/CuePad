@@ -79,7 +79,7 @@ private struct NoticeCapsule: View {
     /// 字排出来多高就多高（不截）：`ViewThatFits` 按它判断放不放得进这一排；最后一种只排一行，放不下就截断。
     private func row(font: Font, lines: Int, inset: CGFloat) -> some View {
         HStack(spacing: 0) {
-            Button { if let link = notice.link { workspace.notice = nil; workspace.show(link) } } label: {
+            Button { if let link = notice.link { workspace.go(to: link) } } label: {
                 HStack(spacing: 6) {
                     Label { Text(notice.text) } icon: {
                         if let status = notice.status { PiStateGlyph(status: status) }
