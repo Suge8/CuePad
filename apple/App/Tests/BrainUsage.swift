@@ -4,8 +4,7 @@ import Foundation
 /// 大脑一轮的开销，从大脑 stdout 的副本里读：
 /// - Claude Code：每轮的 result 事件里 `modelUsage`（各模型的 token）与 `total_cost_usd` 是这个进程到此的累计，
 ///   同一进程相邻两轮相减得这一轮（含 Claude Code 自己顺带的小模型请求）；
-/// - Pi：一轮从 `agent_start` 到 `agent_settled`，这一轮里每条助手消息 `message_end` 的 usage（input、cacheRead、cacheWrite、output、cost.total）相加；
-///   同一轮的 `agent_end` 里也带着这次运行的消息，是 Pi 自报的同一份数，拿来对账（`piMismatches`）。
+/// - Pi：一轮从 `agent_start` 到 `agent_settled`，这一轮里每条助手消息 `message_end` 的 usage（input、cacheRead、cacheWrite、output、cost.total）相加。
 nonisolated struct BrainUsage {
     var input = 0, cacheRead = 0, cacheWrite = 0, output = 0
     var cost = 0.0
@@ -28,7 +27,12 @@ nonisolated struct BrainUsage {
     static func directory(in root: URL) -> URL { root.appending(path: "usage", directoryHint: .isDirectory) }
 
     /// 每个大脑进程一个文件，按起进程的先后；每轮一项
-    static func rounds(in root: URL) -> [BrainUsage] { parsed(root).map(\.usage) }
+    static func rounds(in root: URL) -> [BrainUsage] {
+        files(root).flatMap { file in
+            let events = events(file)
+            return claude(events) + pi(events)
+        }
+    }
 
     /// 大脑在哪几轮开了新的对话（轮的序号同 `rounds`）：第一个进程之后每个进程的第一轮，和 Pi 回应过 new_session 之后的那一轮
     static func renewed(in root: URL) -> [Int] {
@@ -64,20 +68,7 @@ nonisolated struct BrainUsage {
         }
     }
 
-    /// Pi 的轮里，逐条累加与 `agent_end` 自报对不上的轮数（Claude Code 的轮不算）
-    static func piMismatches(in root: URL) -> (pi: Int, mismatched: Int) {
-        let pi = parsed(root).compactMap { round in round.reported.map { (round.usage, $0) } }
-        return (pi.count, pi.count { !$0.0.close(to: $0.1) })
-    }
-
-    private static func parsed(_ root: URL) -> [(usage: BrainUsage, reported: BrainUsage?)] {
-        files(root).flatMap { file in
-            let events = events(file)
-            return claude(events) + pi(events)
-        }
-    }
-
-    private static func claude(_ events: [[String: Any]]) -> [(usage: BrainUsage, reported: BrainUsage?)] {
+    private static func claude(_ events: [[String: Any]]) -> [BrainUsage] {
         var previous = BrainUsage()
         return events.filter { $0["type"] as? String == "result" }.map { event in
             var sofar = BrainUsage(cost: event["total_cost_usd"] as? Double ?? 0)
@@ -88,34 +79,29 @@ nonisolated struct BrainUsage {
                 sofar.output += model["outputTokens"] as? Int ?? 0
             }
             defer { previous = sofar }
-            return (sofar - previous, nil)
+            return sofar - previous
         }
     }
 
-    private static func pi(_ events: [[String: Any]]) -> [(usage: BrainUsage, reported: BrainUsage?)] {
-        var rounds: [(usage: BrainUsage, reported: BrainUsage?)] = [], round: (usage: BrainUsage, reported: BrainUsage)?
-        func assistant(_ message: Any?) -> BrainUsage {
-            guard let message = message as? [String: Any], message["role"] as? String == "assistant", let usage = message["usage"] as? [String: Any] else { return BrainUsage() }
-            return BrainUsage(
-                input: usage["input"] as? Int ?? 0, cacheRead: usage["cacheRead"] as? Int ?? 0, cacheWrite: usage["cacheWrite"] as? Int ?? 0,
-                output: usage["output"] as? Int ?? 0, cost: (usage["cost"] as? [String: Any])?["total"] as? Double ?? 0)
-        }
+    private static func pi(_ events: [[String: Any]]) -> [BrainUsage] {
+        var rounds: [BrainUsage] = [], round: BrainUsage?
         for event in events {
             switch event["type"] as? String {
-            case "agent_start": if round == nil { round = (BrainUsage(), BrainUsage()) }
-            case "message_end": if let current = round { round?.usage = current.usage + assistant(event["message"]) }
-            case "agent_end": if let current = round { round?.reported = (event["messages"] as? [Any] ?? []).map(assistant).reduce(current.reported, +) }
+            case "agent_start": if round == nil { round = BrainUsage() }
+            case "message_end":
+                guard let current = round, let message = event["message"] as? [String: Any], message["role"] as? String == "assistant",
+                    let usage = message["usage"] as? [String: Any]
+                else { continue }
+                round = current + BrainUsage(
+                    input: usage["input"] as? Int ?? 0, cacheRead: usage["cacheRead"] as? Int ?? 0, cacheWrite: usage["cacheWrite"] as? Int ?? 0,
+                    output: usage["output"] as? Int ?? 0, cost: (usage["cost"] as? [String: Any])?["total"] as? Double ?? 0)
             case "agent_settled":
-                if let done = round { rounds.append((done.usage, done.reported)) }
+                if let done = round { rounds.append(done) }
                 round = nil
             default: break
             }
         }
         return rounds
-    }
-
-    private func close(to other: BrainUsage) -> Bool {
-        input == other.input && cacheRead == other.cacheRead && cacheWrite == other.cacheWrite && output == other.output && abs(cost - other.cost) < 1e-9
     }
 
     /// 汇总行里的那几格（`cells`）读回来

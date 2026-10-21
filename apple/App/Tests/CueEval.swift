@@ -190,8 +190,7 @@ final class CueEval {
         if usage.count != rounds.count {
             lines += ["大脑报了 \(usage.count) 轮，记下的轮有 \(rounds.count) 轮，下表按先后对齐，合计以大脑报的为准。", ""]
         }
-        if let directory = rig.brainDirectory, case let check = BrainUsage.piMismatches(in: directory), check.pi > 0 {
-            lines += ["Pi 自报（agent_end）与逐条助手消息累加：\(check.pi - check.mismatched)/\(check.pi) 轮一致。", ""]
+        if let directory = rig.brainDirectory, EvalBrain.current.runtime == .pi {
             let billing = BrainUsage.billing(in: directory)
             lines += [
                 "<!-- billing: \(billing.requests) \(billing.marked) \(billing.agents.sorted().joined(separator: ";")) -->",
