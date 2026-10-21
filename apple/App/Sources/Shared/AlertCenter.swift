@@ -6,8 +6,8 @@ import UserNotifications
 import UIKit
 #endif
 
-/// 系统通知，两端一份：通知代理、通知权限、点开的通知去哪。点开时按种类路由（`AlertRoute`）：Agent 的打开那个会话（`pendingTap`，
-/// 界面取走），Cue 的打开 Cue 页（`AppServices.pendingDeepLink = .cue`），周额度提醒只打开 App。进程只有一个，由 App 代理持有并在启动完成前设为代理，
+/// 系统通知，两端一份：通知代理、通知权限、点开的通知去哪。点开时按种类路由（`AlertRoute`），交给链接同一个入口（`AppServices.pendingDeepLink`，
+/// 工作区取走，`Workspace.openLinks`）：Agent 的打开那个会话，Cue 的打开 Cue 页，周额度提醒只打开 App。进程只有一个，由 App 代理持有并在启动完成前设为代理，
 /// 冷启动时点开的通知才不会丢。
 /// 提示到不到你只有一条规则（`CueStore.reaches`：该不该你接、你在不在哪台在线的 Mac 上开着那一页）；手机自己前台收到推送时
 /// 再按本机此刻开着哪一页定弹不弹。
@@ -17,9 +17,8 @@ import UIKit
 /// - 周额度提醒（`remind`）两端都经 `post` 排成定时本地通知：到点时 App 不必在跑，手机上也不靠推送。
 @Observable
 final class AlertCenter: NSObject, UNUserNotificationCenterDelegate {
-    private(set) var pendingTap: PiAlertTap?
     private(set) var authorization: UNAuthorizationStatus = .notDetermined
-    /// 点开的 Cue 通知交给它（`pendingDeepLink`）；资料库打开后接上（早于系统交来点开的通知）。
+    /// 点开的通知交给它（`pendingDeepLink`）；资料库打开后接上（早于系统交来点开的通知）。
     @ObservationIgnored weak var services: AppServices?
     #if os(macOS)
     /// 主窗口：前台怎么呈现、你在不在看（`Workspace.presentation`）。
@@ -57,7 +56,7 @@ final class AlertCenter: NSObject, UNUserNotificationCenterDelegate {
     /// 点开的通知；不是 Agent 或 Cue 的通知则忽略。Mac 上同时把主窗口叫到前面。
     func receive(_ userInfo: [AnyHashable: Any]) {
         switch AlertRoute(userInfo: userInfo) {
-        case .session(let tap): pendingTap = tap
+        case .session(let tap): services?.pendingDeepLink = .session(tap.sessionState)
         case .cue: services?.pendingDeepLink = .cue
         case .quota: break
         case nil: return
@@ -65,11 +64,6 @@ final class AlertCenter: NSObject, UNUserNotificationCenterDelegate {
         #if os(macOS)
         services?.windowShell?.show()
         #endif
-    }
-
-    func consumeTap() -> PiAlertTap? {
-        defer { pendingTap = nil }
-        return pendingTap
     }
 
     /// 系统回调：必须留在主 actor。async 的 @objc 代理方法由编译器生成转接，在方法所属的 executor 上调系统交来的完成块；

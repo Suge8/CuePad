@@ -275,12 +275,13 @@ private struct PanelLayer: View {
                 .shadow(color: palette.panelShadow, radius: 28, y: 10)
                 .accessibilityAddTraits(.isModal)
                 .padding(Self.margin)
-                // 常驻的浮层收起时：透明、点不到、读屏与按键快捷键都停用，订阅暂停
+                // 常驻的浮层收起时：透明、点不到、读屏与按键快捷键都停用，订阅暂停，还没读过的先读一份
                 .opacity(shown.open ? 1 : 0)
                 .allowsHitTesting(shown.open)
                 .disabled(!shown.open)
                 .accessibilityHidden(!shown.open)
                 .environment(\.pageActive, shown.open)
+                .environment(\.pagePrefetch, !shown.open)
         }
     }
 

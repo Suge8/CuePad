@@ -9,17 +9,16 @@ struct IOSWorkflowTests {
     let app = TestApp()
     var store: CueStore { app.services.store }
 
-    /// 一条带着正文的叶子任务，带着它打开发给 Agent 输入框（`Navigation.handToAgent` 带进来的那样），按默认的去处开新会话，返回写下的请求。
+    /// 一条带着正文的叶子任务，带着它打开发给 Agent 输入框（`Workspace.handOff` 带进来的那样），按默认的去处开新会话，返回写下的请求。
     private func handOff(in project: UUID) async throws -> (task: Card, request: DeliveryRequest) {
         let task = try await store.createTask("修乱序\n先复现", in: project)
         let draft = ComposerDraft(attachments: [Outbox(content: Outgoing.text(of: task), card: task.id, project: task.projectID)])
         let plan = try await store.handOffPlan(task.id, host: nil)
-        let workspace = Workspace(services: app.services), navigation = Navigation(settings: app.services.settings)
+        let workspace = Workspace(services: app.services)
 
-        HandOffInput.startDefault(
-            draft, card: task.id, plan: plan, opening: try await store.opening(of: task.id, true), workspace: workspace, navigation: navigation)
+        HandOffInput.startDefault(draft, card: task.id, plan: plan, opening: try await store.opening(of: task.id, true), workspace: workspace)
 
-        let start = try #require(navigation.newSession)
+        let start = try #require(workspace.newSession)
         let places = ProjectFolders.launchPlaces(
             projects: try await store.projects(), bindings: try await store.directoryBindings(), host: nil, workMac: try await store.workMac())
         let place = try #require(start.place(among: places)), host = try #require(place.host)

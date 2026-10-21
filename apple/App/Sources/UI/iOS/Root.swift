@@ -2,23 +2,19 @@
 import CueStore
 import SwiftUI
 
-/// iOS/iPadOS 一个窗口的根视图（建出本窗口的 `Workspace` 与 `Navigation`）：宽屏是分栏（`SplitRoot`），窄屏（iPhone 与窄窗口 iPad）
-/// 是以当前去处为根的导航栈加底部一排（`DockRoot`）。两种容器读写同一份 `Navigation`。
+/// iOS/iPadOS 一个窗口的根视图（建出本窗口的 `Workspace`）：宽屏是分栏（`SplitRoot`），窄屏（iPhone 与窄窗口 iPad）
+/// 是以当前去处为根的导航栈加底部一排（`DockRoot`）。两种容器读写同一份去处（`Workspace.root`、`path`），按尺寸类换 `Workspace.layout`。
 struct IOSRoot: View {
     @State private var workspace: Workspace
-    @State private var navigation: Navigation
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Namespace private var zoom
-    let alerts: AlertCenter
 
-    init(services: AppServices, alerts: AlertCenter) {
+    init(services: AppServices) {
         _workspace = State(initialValue: Workspace(services: services))
-        _navigation = State(initialValue: Navigation(settings: services.settings))
-        self.alerts = alerts
     }
 
     var body: some View {
-        @Bindable var navigation = navigation
+        @Bindable var workspace = workspace
         CatalogGate {
             Group {
                 if sizeClass == .regular { SplitRoot() } else { DockRoot() }
@@ -26,16 +22,16 @@ struct IOSRoot: View {
             .background { RootShortcuts() }
             // 会写资料库的面板挂在门内：读不出资料库时不弹出，读到后再弹；新会话与发给 Agent 都是浮在键盘上方的输入框
             .overlay {
-                FloatingInput(isPresented: navigation.newSession != nil, close: { navigation.newSession = nil }) {
-                    if let start = navigation.newSession { NewSessionInput(start: start).id(start.id) }
+                FloatingInput(isPresented: workspace.newSession != nil, close: { workspace.newSession = nil }) {
+                    if let start = workspace.newSession { NewSessionInput(start: start).id(start.id) }
                 }
             }
             .overlay {
-                FloatingInput(isPresented: navigation.outbox != nil, close: { navigation.outbox = nil }) {
-                    if let outbox = navigation.outbox { HandOffInput(outbox: outbox).id(outbox.id) }
+                FloatingInput(isPresented: workspace.outbox != nil, close: { workspace.outbox = nil }) {
+                    if let outbox = workspace.outbox { HandOffInput(outbox: outbox).id(outbox.id) }
                 }
             }
-            .sheet(item: $navigation.projectForm) { ProjectFormSheet(project: $0.project) }
+            .sheet(item: $workspace.projectForm) { ProjectFormSheet($0) }
             .sheet(item: Binding(get: { workspace.folderPicker }, set: { workspace.folderPicker = $0 })) { FolderPickerSheet(project: $0) }
             .overlay { TaskBubbleSlot() }
         }
@@ -52,25 +48,11 @@ struct IOSRoot: View {
         .environment(\.zoomNamespace, zoom)
         .modifier(PaletteProvider())
         .environment(workspace)
-        .environment(navigation)
         .environment(workspace.services)
-        .onChange(of: sizeClass, initial: true) { navigation.compact = sizeClass != .regular }
+        .onChange(of: sizeClass, initial: true) { workspace.layout = sizeClass == .regular ? .split : .dock }
         .task { await workspace.follow() }
-        .modifier(SessionViewing(keeper: workspace.services.viewer, navigation: navigation))
-        .onChange(of: workspace.services.pendingDeepLink, initial: true) {
-            if let link = workspace.services.consumeDeepLink() { open(link) }
-        }
-        .onChange(of: alerts.pendingTap, initial: true) { navigation.open(alert: alerts.consumeTap()) }
-        .debugScene(workspace, navigation)
-    }
-
-    /// 小组件与分享扩展的链接：任务开它的气泡（没有落点，在上方居中），其余交给导航。
-    private func open(_ link: DeepLink) {
-        guard case .card(let id) = link else { return navigation.open(link) }
-        let store = workspace.services.store, workspace = workspace, navigation = navigation
-        workspace.attempt {
-            if let card = try await store.card(id), card.isTask { workspace.openTask(card) } else { navigation.open(link) }
-        }
+        .modifier(SessionViewing(keeper: workspace.services.viewer, workspace: workspace))
+        .debugScene(workspace)
     }
 }
 
@@ -137,36 +119,26 @@ struct RouteView: View {
 /// ⌘⇧N 对 Cue 说、⌘⇧T 任务、⌘, 设置。
 struct RootShortcuts: View {
     @Environment(Workspace.self) private var workspace
-    @Environment(Navigation.self) private var navigation
-
-    /// 新卡放进正在看的项目（不在项目里时进默认项目），随即打开。
-    private func newCard() {
-        let project = navigation.currentProject ?? Project.defaultID
-        workspace.attempt {
-            let card = try await workspace.createCard(in: project)
-            navigation.push(.card(card.id))
-        }
-    }
 
     var body: some View {
         ZStack {
-            Button("搜索") { navigation.openSearch() }.keyboardShortcut("k")
-            Button("搜索") { navigation.openSearch() }.keyboardShortcut("f")
+            Button("搜索") { workspace.openSearch() }.keyboardShortcut("k")
+            Button("搜索") { workspace.openSearch() }.keyboardShortcut("f")
             // 搜索框没有焦点时 Esc 退出搜索（有焦点时第一下 Esc 由系统收起输入）
-            if navigation.top == .search {
-                Button("退出搜索") { navigation.closeSearch() }.keyboardShortcut(.escape, modifiers: [])
+            if workspace.top == .search {
+                Button("退出搜索") { workspace.closeSearch() }.keyboardShortcut(.escape, modifiers: [])
             }
-            Button("记一条灵感", action: newCard).keyboardShortcut("n")
-            Button("对 Cue 说") { navigation.speakToCue() }.keyboardShortcut("n", modifiers: [.command, .shift])
-            Button("设置") { navigation.select(.settings) }.keyboardShortcut(",")
+            Button("记一条灵感") { workspace.newCard() }.keyboardShortcut("n")
+            Button("对 Cue 说") { workspace.speakToCue() }.keyboardShortcut("n", modifiers: [.command, .shift])
+            Button("设置") { workspace.select(.settings) }.keyboardShortcut(",")
             Button("侧栏") {
-                withAnimation(Motion.snappy) { navigation.sidebar = navigation.sidebar == .detailOnly ? .automatic : .detailOnly }
+                withAnimation(Motion.snappy) { workspace.sidebar = workspace.sidebar == .detailOnly ? .automatic : .detailOnly }
             }
             .keyboardShortcut("\\")
-            Button("任务") { navigation.show(.tasks) }.keyboardShortcut("t", modifiers: [.command, .shift])
-            ForEach(Array((workspace.catalog?.projects ?? []).prefix(9).enumerated()), id: \.offset) { index, project in
-                Button("项目 \(index + 1)") { navigation.show(.project(project.id)) }
-                    .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")))
+            Button("任务") { workspace.show(.tasks) }.keyboardShortcut("t", modifiers: [.command, .shift])
+            ForEach(Array(1...9).prefix(workspace.catalog?.projects.count ?? 0), id: \.self) { number in
+                Button("项目 \(number)") { workspace.showProject(number: number) }
+                    .keyboardShortcut(KeyEquivalent(Character("\(number)")))
             }
         }
         .opacity(0)

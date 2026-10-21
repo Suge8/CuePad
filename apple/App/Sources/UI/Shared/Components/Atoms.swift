@@ -10,7 +10,7 @@ extension EnvironmentValues {
     /// 这一页此刻在前台。Mac 的内容区把去过的页都挂着（`Workspace.mountedPages`），不在前台的页暂停订阅（`observing`）、
     /// 不读实时状态；其余地方没有"挂着不看"的页，默认 true。
     @Entry var pageActive = true
-    /// 不在前台、但要先读一份数据的页：空闲时先挂上、还没去过的（`Workspace.premount`）。只读第一份，不跟着变。
+    /// 不在前台、但要先读一份数据的页：空闲时先挂上、还没去过的（`Workspace.premount`），收着的常驻浮层（⌘K）。只读第一份，不跟着变。
     @Entry var pagePrefetch = false
 }
 

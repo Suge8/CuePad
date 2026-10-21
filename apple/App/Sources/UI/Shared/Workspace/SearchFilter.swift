@@ -16,7 +16,6 @@ nonisolated struct PaletteQuery: Equatable {
         }
     }
 
-
     var text = ""
     /// nil 不限。
     var project: UUID?
@@ -28,6 +27,21 @@ nonisolated struct PaletteQuery: Equatable {
     static let pageSize = 30
 
     var isFiltered: Bool { project != nil || withImages || sent != .any || period != .any }
+
+    /// 项目筛选此刻的取值：选的项目名，没选是"全部"。
+    func projectLabel(in projects: [Project]) -> String {
+        project.flatMap { id in projects.first { $0.id == id }?.name } ?? "全部"
+    }
+
+    /// "发给过谁"筛选此刻的取值。
+    var sentLabel: String {
+        switch sent {
+        case .any: "任意"
+        case .never: "没发过"
+        case .sent(_, .some(let name)): name
+        case .sent: "发过"
+        }
+    }
 
     func store(now: Date = .now) -> SearchQuery {
         var query = SearchQuery(text: text)
@@ -42,4 +56,42 @@ nonisolated struct PaletteQuery: Equatable {
 nonisolated extension SendTarget {
     /// "发给过谁"筛选菜单里的一项（`CueStore.sendTargets` 按种类与名字各出一条）。
     var filterID: String { "\(kind.rawValue)/\(name)" }
+}
+
+/// 卡片搜索读到的一页（Mac ⌘K 与手机搜索页同一份读法）：按项目分组的结果、总数，与"发给过谁"菜单里能选的目标。
+/// 摘要在 Store 执行体上算好（`CardEntry`），渲染时不解析正文；项目名与图标从 `Workspace.catalog` 读，这里不另存一份。
+nonisolated struct CardMatches: Sendable, Equatable {
+    var groups: [CardGroup]
+    var total: Int
+    var targets: [SendTarget]
+
+    /// 按分组的顺序排开，即界面上从上到下（方向键也照这个走）。
+    var entries: [CardEntry] { groups.flatMap(\.cards) }
+    var shown: Int { groups.reduce(0) { $0 + $1.cards.count } }
+
+    static func read(_ query: PaletteQuery, from store: isolated CueStore) throws -> CardMatches {
+        let found = try store.search(query.store(), limit: PaletteQuery.pageSize * query.pages)
+        return CardMatches(groups: CardGroup.byProject(found.cards), total: found.totalCards, targets: try store.sendTargets())
+    }
+}
+
+/// 搜索结果里一个项目的那几张（`id` 是项目）。
+nonisolated struct CardGroup: Identifiable, Equatable, Sendable {
+    let id: UUID
+    var cards: [CardEntry]
+
+    /// 按项目分组，组按首次出现的顺序：结果最相关的在前，组也一样。
+    static func byProject(_ cards: [Card]) -> [CardGroup] {
+        var groups: [CardGroup] = []
+        var index: [UUID: Int] = [:]
+        for card in cards {
+            if let at = index[card.projectID] {
+                groups[at].cards.append(CardEntry(card))
+            } else {
+                index[card.projectID] = groups.count
+                groups.append(CardGroup(id: card.projectID, cards: [CardEntry(card)]))
+            }
+        }
+        return groups
+    }
 }

@@ -35,7 +35,7 @@ struct PageMenuSlot: View {
     }
 
     private var content: Content {
-        switch workspace.page {
+        switch workspace.root {
         case .session: .session(workspace.shownSessionHeader)
         case .project(let id): .project(id)
         case .cue: .cue

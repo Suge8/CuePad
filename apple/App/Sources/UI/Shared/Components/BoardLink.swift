@@ -13,10 +13,6 @@ struct BoardLink<Label: View>: View {
     var card = false
     @ViewBuilder let label: Label
     @Environment(Workspace.self) private var workspace
-    #if os(iOS)
-    @Environment(AppServices.self) private var services
-    @Environment(Navigation.self) private var navigation
-    #endif
 
     var body: some View {
         let button = Button(action: open) {
@@ -37,19 +33,10 @@ struct BoardLink<Label: View>: View {
 
     private func open() {
         switch to {
-        case .session(let session):
-            #if os(macOS)
-            workspace.show(.session(session.sessionID))
-            #else
-            navigation.openSession(session.id, sessionID: session.sessionID, store: services.store)
-            #endif
+        case .session(let session): workspace.openSession(session.id, sessionID: session.sessionID)
         case .question(let id):
             workspace.cueAsking = id
-            #if os(macOS)
             workspace.show(.cue)
-            #else
-            navigation.show(.cue)
-            #endif
         }
     }
 }

@@ -23,7 +23,6 @@ struct CuePage: View {
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     #if os(iOS)
-    @Environment(Navigation.self) private var navigation
     @Environment(\.horizontalSizeClass) private var sizeClass
     /// 这一页的输入框占着底边，底部那一排的 Cue 钮把位置交给它（`DockRoot`）。
     @Environment(\.dockComposer) private var ownsComposer
@@ -127,7 +126,7 @@ struct CuePage: View {
 
     #if os(iOS)
     private var composer: some View {
-        CueComposer(style: .page, focusRequests: inPanel ? 0 : navigation.cueFocusRequests, sent: { follow.sent() }) { focused in
+        CueComposer(style: .page, takesFocusRequests: !inPanel, sent: { follow.sent() }) { focused in
             withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { composing?.wrappedValue = focused }
         }
     }
@@ -240,7 +239,7 @@ struct CuePage: View {
             #if os(iOS)
             Group { if docked { dockRow } else { composer } }.fixedSize(horizontal: false, vertical: true)
             #else
-            CueComposer(style: .page) { follow.sent() }.fixedSize(horizontal: false, vertical: true)
+            CueComposer(style: .page, takesFocusRequests: true) { follow.sent() }.fixedSize(horizontal: false, vertical: true)
             #endif
         }
         .animation(Motion.quick, value: cue.canHear)

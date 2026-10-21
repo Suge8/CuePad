@@ -13,7 +13,7 @@ import SwiftUI
 /// 长成输入框的那条弹簧做完（动画的完成回调）才交还给页里的输入框。不按延时交接：玻璃不跟延时的不透明度动画，当场就藏了。
 /// 不用折叠的分栏：那个容器本身冷启动就多约 3000M 指令。
 struct DockRoot: View {
-    @Environment(Navigation.self) private var navigation
+    @Environment(Workspace.self) private var workspace
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.palette) private var palette
     /// 屏上已经交给用户的去处：换去处时推完之前它还是旧的（出现前为 nil）。
@@ -32,14 +32,14 @@ struct DockRoot: View {
     @State private var width: CGFloat = 0
 
     var body: some View {
-        @Bindable var navigation = navigation
-        let root = navigation.root
+        @Bindable var workspace = workspace
+        let root = workspace.root
         let leaving = shown.flatMap { $0 == root ? nil : $0 }
         let settled = leaving == nil || arrived == root
         // 新页从哪一侧进来：去处在右边就从右边推进来
         let side: CGFloat = leaving.map { Dock.order($0) < Dock.order(root) ? 1 : -1 } ?? 0
         let target = DockLook(route: arrived ?? root, placesOpen: placesOpen, composing: composing)
-        NavigationStack(path: $navigation.path) {
+        NavigationStack(path: $workspace.path) {
             ZStack {
                 // 按去处认页：换去处时旧页留着推走，不重建
                 ForEach([leaving, root].compactMap(\.self), id: \.self) { route in
@@ -92,9 +92,9 @@ struct DockRoot: View {
             Task {
                 await NextFrame.wait()
                 withAnimation(reduceMotion ? Motion.crossfade : Motion.dock) {
-                    arrived = navigation.root
+                    arrived = workspace.root
                 } completion: {
-                    shown = navigation.root
+                    shown = workspace.root
                 }
             }
         }

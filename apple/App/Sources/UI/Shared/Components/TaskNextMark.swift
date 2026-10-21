@@ -11,10 +11,6 @@ struct TaskNextMark: View {
     @Environment(\.rowHovered) private var lit
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
-    #if os(iOS)
-    @Environment(AppServices.self) private var services
-    @Environment(Navigation.self) private var navigation
-    #endif
 
     var body: some View {
         Button(action: follow) { label }
@@ -70,33 +66,5 @@ struct TaskNextMark: View {
         }
     }
 
-    private func follow() {
-        #if os(macOS)
-        workspace.follow(next)
-        #else
-        navigation.follow(next, store: services.store)
-        #endif
-    }
+    private func follow() { workspace.follow(next) }
 }
-
-#if os(macOS)
-extension Workspace {
-    /// 去"下一步"：打开会话，或把任务的正文交给 Agent。
-    func follow(_ next: TaskNext) {
-        switch next {
-        case .agent(_, let session): show(.session(session.sessionID))
-        case .start(let leaf): handOff(leaf)
-        }
-    }
-}
-#else
-extension Navigation {
-    /// 去"下一步"：推入会话页，或浮起发给 Agent 的输入框带着这条任务。
-    func follow(_ next: TaskNext, store: CueStore) {
-        switch next {
-        case .agent(_, let session): openSession(session.id, sessionID: session.sessionID, store: store)
-        case .start(let leaf): handToAgent(leaf)
-        }
-    }
-}
-#endif

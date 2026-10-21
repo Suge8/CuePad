@@ -24,8 +24,6 @@ struct TaskLine: View {
     @Environment(\.cardAgents) private var agents
     @Environment(\.palette) private var palette
     #if os(iOS)
-    @Environment(AppServices.self) private var services
-    @Environment(Navigation.self) private var navigation
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.dynamicTypeSize) private var typeSize
     #endif
@@ -111,12 +109,7 @@ struct TaskLine: View {
     private func open() { workspace.openTask(task) }
 
     private func start(_ next: TaskNext?) {
-        guard let next else { return }
-        #if os(macOS)
-        workspace.follow(next)
-        #else
-        navigation.follow(next, store: services.store)
-        #endif
+        if let next { workspace.follow(next) }
     }
 
     #if os(iOS)

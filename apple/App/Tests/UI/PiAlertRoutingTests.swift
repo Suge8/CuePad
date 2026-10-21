@@ -1,16 +1,36 @@
-#if os(iOS)
 import CueStore
+import CueSync
 import Foundation
-import ObjectiveC
 import SwiftUI
 import Testing
-import UIKit
-import Vision
 import UserNotifications
 @testable import CuePad
+#if os(iOS)
+import ObjectiveC
+import UIKit
+import Vision
+#endif
 
-/// 点开锁屏上的 Pi 通知：直接打开触发它的那个会话的近况页；别的通知不改导航。
+/// 点开 Agent 的通知：直接打开触发它的那个会话；别的通知不改去处。点开的通知同链接一样交给工作区（`Workspace.openLinks`）。
 struct PiAlertRoutingTests {
+    let app = TestApp()
+
+    /// 系统交来的通知交给这个 App（App 代理在打开资料库后接上，`AlertCenter.services`）。
+    private func alertCenter() -> AlertCenter {
+        let alerts = AlertCenter()
+        alerts.services = app.services
+        return alerts
+    }
+
+    /// 点开的这条通知说的是 `record` 那个会话：手机上是 CloudKit 查询订阅的推送，Mac 上是本机发的通知（`AlertRoute.userInfo`）。
+    private func tapped(_ record: UUID) -> [AnyHashable: Any] {
+        #if os(iOS)
+        payload(subscription: "cuepad.pi.waiting", record: record)
+        #else
+        AlertRoute.session(PiAlertTap(kind: .waitingForUser, sessionState: record)).userInfo
+        #endif
+    }
+
     /// CloudKit 查询订阅通知的 userInfo（形状同 CueSync 的路由测试）。
     private func payload(subscription: String, record: UUID) -> [AnyHashable: Any] {
         [
@@ -21,39 +41,47 @@ struct PiAlertRoutingTests {
         ]
     }
 
-    /// 推在正看着的页上（返回回到原处）；别的通知不改导航。
-    @Test func 点Pi通知_打开该会话的近况_别的通知不改导航() {
-        let session = UUID()
-        let alerts = AlertCenter()
-        let navigation = Navigation(settings: AppSettings(defaults: UserDefaults(suiteName: UUID().uuidString)!, launchArguments: [:]))
-        navigation.select(.project(Project.defaultID))
+    /// 手机推在正看着的页上（返回回到原处），Mac 换到那个会话页；别的通知不改去处。
+    @Test func 点Pi通知_打开该会话_别的通知不改去处() async throws {
+        try await PiStateRecorder(store: app.services.store, hostID: "mac-a").update(sessionID: "atlas", state: .settled, title: "atlas")
+        let session = try #require(try await app.services.store.allPiSessionStates().first)
+        let alerts = alertCenter()
+        let workspace = Workspace(services: app.services)
+        let following = Task { await workspace.follow() }
+        defer { following.cancel() }
+        workspace.show(.project(Project.defaultID))
 
         alerts.receive(payload(subscription: "somebody.else", record: UUID()))
-        navigation.open(alert: alerts.consumeTap())
-        #expect(navigation.root == .project(Project.defaultID) && navigation.path.isEmpty)
+        #expect(app.services.pendingDeepLink == nil && workspace.top == .project(Project.defaultID))
 
-        alerts.receive(payload(subscription: "cuepad.pi.waiting", record: session))
-        navigation.open(alert: alerts.consumeTap())
+        alerts.receive(tapped(session.id))
+        try await eventually("打开那个会话") { workspace.top == .session(session.id) }
 
-        #expect(navigation.root == .project(Project.defaultID) && navigation.path == [.session(session)])
-        #expect(!navigation.showsAlert(about: session))  // 正看着它：前台不再弹它的提示
-        #expect(alerts.consumeTap() == nil)
+        #expect(workspace.shownSession == ViewerKeeper.Page(id: session.id, sessionID: "atlas"))
+        #expect(app.services.pendingDeepLink == nil)
+        #if os(iOS)
+        #expect(workspace.root == .project(Project.defaultID))
+        #endif
     }
 
+    #if os(iOS)
+
     /// 会话页带着推入前读好的首帧推入后，点同一个会话的通知不再叠一页（路由身份只看会话 id）。
-    @Test func 已在看的会话_点它的通知不重复推入() {
+    @Test func 已在看的会话_点它的通知不重复推入() async throws {
         let id = UUID()
         let seed = PiSessionState(
             id: id, sessionID: "s", hostID: "mac", title: "s", projectID: nil, state: .known(.waitingForUser), detail: nil, folder: nil,
             lastPrompt: nil, lastReply: nil, question: nil, notify: nil, stateSince: .now, busySince: nil, createdAt: .now, modifiedAt: .now)
-        let alerts = AlertCenter()
-        let navigation = Navigation(settings: AppSettings(defaults: UserDefaults(suiteName: UUID().uuidString)!, launchArguments: [:]))
-        navigation.path = [.session(id, seed: SessionDigest(session: seed, project: nil, deliveries: []))]
+        let alerts = alertCenter()
+        let workspace = Workspace(services: app.services)
+        let following = Task { await workspace.follow() }
+        defer { following.cancel() }
+        workspace.path = [.session(id, seed: SessionDigest(session: seed, project: nil, deliveries: []))]
 
         alerts.receive(payload(subscription: "cuepad.pi.waiting", record: id))
-        navigation.open(alert: alerts.consumeTap())
+        try await eventually("工作区取走了通知") { app.services.pendingDeepLink == nil }
 
-        #expect(navigation.path.count == 1)
+        #expect(workspace.path.count == 1)
     }
 
     /// 系统（UIKit）交来的完成块只能在主线程调用，否则抛异常崩溃（真机点锁屏通知进 App 的崩溃）。
@@ -73,7 +101,7 @@ struct PiAlertRoutingTests {
         }
         typealias Entry = @convention(c) (AnyObject, Selector, UNUserNotificationCenter, UNNotificationResponse, @convention(block) () -> Void) -> Void
         let selector = NSSelectorFromString("userNotificationCenter:didReceiveNotificationResponse:withCompletionHandler:")
-        let alerts = AlertCenter()
+        let alerts = alertCenter()
         let entry = unsafeBitCast(class_getMethodImplementation(AlertCenter.self, selector), to: Entry.self)
         let response = unsafeBitCast(Response(payload(subscription: "cuepad.pi.waiting", record: UUID())), to: UNNotificationResponse.self)
 
@@ -83,7 +111,7 @@ struct PiAlertRoutingTests {
         }
 
         #expect(onMain)
-        #expect(alerts.pendingTap != nil)
+        #expect(app.services.pendingDeepLink != nil)
     }
 
     // MARK: 点通知进会话页
@@ -108,19 +136,18 @@ struct PiAlertRoutingTests {
 
     /// 冷启动点通知：点开的通知在界面建好之前就记下了，页面带着只有记录 id 的路由挂上，打开后要能读到对话。
     @Test func 点通知进会话页_对话显示出来() async throws {
-        let app = TestApp()
         let store = app.services.store
         try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "atlas", state: .settled, title: "atlas")
         let session = try #require(try await store.allPiSessionStates().first)
         let said = PiChatMessage(sessionID: "atlas", entryID: "u1", seq: 1, role: .user, text: "接口约定改成 v2", at: .now)
         try await store.writePiTranscript(PiTranscript(sessionID: "atlas", messages: [said], recap: PiRecap(pendingPrompt: said.text)))
 
-        let alerts = AlertCenter()
+        let alerts = alertCenter()
         alerts.receive(payload(subscription: "cuepad.pi.waiting", record: session.id))
-        let window = try show(IOSRoot(services: app.services, alerts: alerts).environment(alerts))
+        let window = try show(IOSRoot(services: app.services).environment(alerts))
         defer { window.isHidden = true }
 
         try await eventually("会话页显示对话") { try visibleText(in: window).contains("接口约定") }
     }
+    #endif
 }
-#endif

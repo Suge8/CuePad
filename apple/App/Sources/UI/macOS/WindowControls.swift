@@ -27,7 +27,7 @@ struct SidebarToggle: View {
         // 点画在标签里：工具栏把"字 + 图标"的标签换成系统按钮，挂在按钮外面的会被丢掉
         Button { workspace.pages.toggleSidebar() } label: {
             Image(.sidebar).overlay(alignment: .topTrailing) {
-                if workspace.pages.sidebar == .detailOnly, workspace.page != .cue { CueDot().offset(x: 5, y: -4) }
+                if workspace.pages.sidebar == .detailOnly, workspace.root != .cue { CueDot().offset(x: 5, y: -4) }
             }
         }
         .accessibilityLabel("侧栏")
@@ -69,7 +69,7 @@ struct ScopeSlot: View {
     static let width: CGFloat = 200
 
     var body: some View {
-        let shown = workspace.page == .tasks || workspace.page == .agent
+        let shown = workspace.root == .tasks || workspace.root == .agent
         // 一直挂着、别的页只是看不见（同 `SwitcherSlot`）：换页时不现建整份项目菜单
         ProjectScopeMenu()
             .frame(maxWidth: Self.width, alignment: .leading)
@@ -86,7 +86,7 @@ struct PageActionSlot: View {
     static let width: CGFloat = 96
 
     var body: some View {
-        let shown = workspace.page == .tasks
+        let shown = workspace.root == .tasks
         // 工具栏把"图标 + 字"的标签只画成图标：写明两样都要
         Button("新任务", icon: .add) { workspace.addsTask.toggle() }
             .labelStyle(.titleAndIcon)

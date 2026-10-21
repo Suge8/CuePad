@@ -40,7 +40,7 @@ struct Sidebar: View {
         // 选中样式本身就标出了位置，不再套系统焦点环
         .focusEffectDisabled()
         .onMoveCommand { direction in
-            guard let order = pages?.order, let page = Self.page(after: workspace.page, in: order, moving: direction) else { return }
+            guard let order = pages?.order, let page = Self.page(after: workspace.root, in: order, moving: direction) else { return }
             workspace.show(page)
         }
         // 侧栏比桌面深一档：浅色、深色都能看出分层，与内容同一色温
@@ -113,7 +113,7 @@ private struct SidebarScroll<Content: View>: View {
             ScrollView { content }
                 .scrollBounceBehavior(.basedOnSize)
                 .onScrollGeometryChange(for: Bool.self) { $0.visibleRect.maxY < $0.contentSize.height - 1 } action: { continues = $1 }
-                .onChange(of: workspace.page, initial: true) { _, page in proxy.scrollTo(page) }
+                .onChange(of: workspace.root, initial: true) { _, page in proxy.scrollTo(page) }
         }
         .overlay(alignment: .bottom) {
             if continues {
@@ -180,10 +180,10 @@ private struct PlaceTiles: View {
             ForEach(SidebarOutline.places, id: \.self) { entry in
                 switch entry {
                 case .tasks:
-                    PlaceTile(entry: entry, count: entry.count(in: workspace), selected: workspace.page == entry.route) { select(entry.route) }
+                    PlaceTile(entry: entry, count: entry.count(in: workspace), selected: workspace.root == entry.route) { select(entry.route) }
                         .help("任务（⌘⇧T）")
                 default:
-                    PlaceTile(entry: entry, count: entry.count(in: workspace), running: workspace.liveWork.running, selected: workspace.page == entry.route) {
+                    PlaceTile(entry: entry, count: entry.count(in: workspace), running: workspace.liveWork.running, selected: workspace.root == entry.route) {
                         select(entry.route)
                     }
                     .relaySpot(dock: true)
@@ -245,7 +245,7 @@ private struct ProjectRows: View {
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        let current = workspace.page
+        let current = workspace.root
         let marks = marks()
         VStack(spacing: SidebarMetrics.rowGap) {
             ForEach(pages.outline.projects) { project in
@@ -342,7 +342,7 @@ private struct FooterPage: View {
     private var title: String { count > 0 ? "\(entry.title)，\(count) 项" : entry.title }
 
     var body: some View {
-        let selected = workspace.page == entry.route
+        let selected = workspace.root == entry.route
         Button { select(entry.route) } label: {
             IconImage(entry.icon, accent: selected ? .lit : .none).font(.system(size: 15))
                 .foregroundStyle(selected ? palette.ink : palette.ink2)

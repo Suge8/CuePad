@@ -91,7 +91,7 @@ private struct WindowPanels: View {
                 guard (try? await Task.sleep(for: Prewarm.delay)) != nil else { return }
                 mountsPalette = true
             }
-            .panel(item: $workspace.projectForm) { ProjectForm(project: $0.project) }
+            .panel(item: $workspace.projectForm) { ProjectForm($0) }
             .panel(isPresented: $workspace.showsSetup) { SetupPanel() }
     }
 }
@@ -114,7 +114,7 @@ private struct CaptureSlot: View {
     var body: some View {
         if workspace.isLibraryReady, workspace.presses.presented == nil, workspace.presses.isSelecting {
             SelectionBar().padding(.bottom, 16).transition(.opacity)
-        } else if workspace.isLibraryReady, workspace.presses.presented == nil, workspace.page.takesCapture {
+        } else if workspace.isLibraryReady, workspace.presses.presented == nil, workspace.root.takesCapture {
             let searching = workspace.searching
             CaptureBar(project: workspace.currentProject).padding(.bottom, 16)
                 .opacity(searching ? 0 : 1)
@@ -157,19 +157,6 @@ private struct SyncAlert: View {
 }
 
 extension Workspace {
-    /// ⌘1–9：打开侧栏里此刻的第 number 个项目。快捷键只绑数字，按下的那一刻才按项目目录当前的顺序取：
-    /// 顺序随最近活动与置顶变化，绑在某个项目上会在顺序变了之后打开错的。没有那么多个项目时什么也不做。
-    func showProject(number: Int) {
-        guard let projects = catalog?.projects, projects.indices.contains(number - 1) else { return }
-        show(.project(projects[number - 1].id))
-    }
-
-    /// ⌘N（"文件 › 记一条灵感"）：在当前项目里新记一条灵感并打开它；不在项目页时记进默认项目。
-    func newCard() {
-        let project = currentProject ?? Project.defaultID
-        attempt { self.open(try await self.createCard(in: project)) }
-    }
-
     /// ⌥⌘N（"文件 › 新会话"）：去会话页、从那一页的 + 弹出新会话的表单（表单只有这一个出处）。
     func newSession() {
         show(.agent)

@@ -103,7 +103,7 @@ extension View {
             // 接力与关窗不挂在窗口内容上：关窗时内容摘下（`MainShellWindow`），内容上的任务跟着停
             Task { await DebugScene.wakeIfAsked(workspace) }
             Task {
-                let from = workspace.page
+                let from = workspace.root
                 await DebugScene.saysIfAsked(workspace.services, visit: { workspace.show(.cue) }, back: { workspace.show(from) })
             }
             Task { await DebugScene.awayIfAsked(workspace.services.store) }
@@ -122,7 +122,7 @@ extension View {
 
     #if os(iOS)
     /// 窗口根上：按启动参数摆好调试画面（样板页盖在最上层），摆好后报"首帧就绪"（`xc.sh shot` 等它再截图）。
-    func debugScene(_ workspace: Workspace, _ navigation: Navigation) -> some View {
+    func debugScene(_ workspace: Workspace) -> some View {
         #if DEBUG
         overlay {
             // 盖在根上（在注入配色的那层外面），自己按外观取配色
@@ -139,21 +139,21 @@ extension View {
             .withPalette()
         }
             .task {
-                await DebugScene.prepare(workspace, navigation)
+                await DebugScene.prepare(workspace)
                 DebugScene.noticeIfAsked(workspace)
                 await DebugScene.signalReady(workspace.services)
                 async let wakes: Void = DebugScene.wakeIfAsked(workspace)
-                let from = (navigation.root, navigation.path)
+                let from = (workspace.root, workspace.path)
                 async let says: Void = DebugScene.saysIfAsked(
-                    workspace.services, visit: { navigation.select(.cue) }, back: {
-                        navigation.select(from.0)
-                        navigation.path = from.1
+                    workspace.services, visit: { workspace.select(.cue) }, back: {
+                        workspace.select(from.0)
+                        workspace.path = from.1
                     })
                 async let relays: Void = DebugScene.relayIfAsked(workspace)
-                async let flow: Void = DebugScene.cueFlowIfAsked(workspace, navigation)
+                async let flow: Void = DebugScene.cueFlowIfAsked(workspace)
                 async let away: Void = DebugScene.awayIfAsked(
-                    workspace.services.store, leave: { navigation.show(.tasks) }, back: { navigation.show(.cue) })
-                async let tour: Void = DebugScene.dockTourIfAsked(workspace, navigation)
+                    workspace.services.store, leave: { workspace.show(.tasks) }, back: { workspace.show(.cue) })
+                async let tour: Void = DebugScene.dockTourIfAsked(workspace)
                 async let cueNow: Void = DebugScene.cueNowTourIfAsked(workspace.cue)
                 await DebugScene.cycleIfAsked(workspace.services)
                 _ = await (wakes, says, relays, flow, away, tour, cueNow)
@@ -189,7 +189,7 @@ struct DebugStage<Main: View>: View {
         switch DebugScene.scene {
         case "menubar": DebugMenuBarStage().environment(workspace)
         case "cuebar": DebugMenuBarStage(cueBar: true).environment(workspace)
-        case "projectform": ProjectForm(project: nil).environment(workspace).frame(maxWidth: .infinity, maxHeight: .infinity)
+        case "projectform": ProjectForm(ProjectFormRequest()).environment(workspace).frame(maxWidth: .infinity, maxHeight: .infinity)
         case "newsession": DebugNewSessionForm().environment(workspace).frame(maxWidth: .infinity, maxHeight: .infinity)
         default: main()
         }

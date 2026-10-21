@@ -19,10 +19,6 @@ struct BoardTaskCard: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.cardAgents) private var agents
     @Environment(\.palette) private var palette
-    #if os(iOS)
-    @Environment(AppServices.self) private var services
-    @Environment(Navigation.self) private var navigation
-    #endif
 
     private var task: Card { item.task }
     private var advancing: Bool { column == .advancing }
@@ -91,12 +87,7 @@ struct BoardTaskCard: View {
     }
 
     private func follow(_ next: TaskNext?) {
-        guard let next else { return }
-        #if os(macOS)
-        workspace.follow(next)
-        #else
-        navigation.follow(next, store: services.store)
-        #endif
+        if let next { workspace.follow(next) }
     }
 
     #if os(macOS)

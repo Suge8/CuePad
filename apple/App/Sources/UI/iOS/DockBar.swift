@@ -50,7 +50,7 @@ private struct DockPlaces: View {
     let open: Bool
     let cell: CGFloat
     let expand: () -> Void
-    @Environment(Navigation.self) private var navigation
+    @Environment(Workspace.self) private var workspace
 
     /// 换进来（`entering`）的晚 `handOff` 再淡入，换出去的在 `handOff` 内淡完。
     private static func handOff(in entering: Bool) -> Animation {
@@ -68,7 +68,7 @@ private struct DockPlaces: View {
                 }
                 HStack(spacing: 0) {
                     ForEach(Dock.places, id: \.self) { place in
-                        DockCell(place: place, selected: place.route == route, relays: open) { navigation.select(place.route) }
+                        DockCell(place: place, selected: place.route == route, relays: open) { workspace.select(place.route) }
                             .frame(width: cell)
                     }
                 }
@@ -157,7 +157,6 @@ private struct DockCue: View {
     let collapse: () -> Void
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
-    @Environment(Navigation.self) private var navigation
 
     private static let badge: CGFloat = 20
 
@@ -190,11 +189,11 @@ private struct DockCue: View {
 
     /// 在 Cue 页上（"⋯"展开着）点它是收起、回到输入框；在三页上是去 Cue 页。
     private func open() {
-        guard navigation.root != .cue else {
+        guard workspace.root != .cue else {
             collapse()
             return
         }
-        navigation.select(.cue)
+        workspace.select(.cue)
     }
 
     @ViewBuilder private func corner(drafted: Bool) -> some View {

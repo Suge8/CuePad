@@ -9,7 +9,6 @@ import SwiftUI
 struct TasksScreen: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
-    @Environment(Navigation.self) private var navigation
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var board: TaskBoard?
@@ -41,7 +40,7 @@ struct TasksScreen: View {
         .observingBoard(into: $board, store: services.store, onError: workspace.fail)
     }
 
-    private var newTaskProject: UUID? { workspace.scopedProject ?? navigation.currentProject }
+    private var newTaskProject: UUID? { workspace.scopedProject ?? workspace.currentProject }
 
     /// 一屏一列，左右滑换列：列的宽就是可见宽（`containerRelativeFrame`），按页停。
     private func pages(_ board: TaskBoard) -> some View {

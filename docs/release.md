@@ -42,7 +42,7 @@ xcrun cktool export-schema $C --output-file /tmp/dev.ckdb   # 回读：服务端
 生产环境只能在 CloudKit 控制台网页点「Deploy Schema Changes」部署开发环境的结构（cktool 不能部署），由 agent 自己做，不找用户：
 
 1. 部署前回读开发与生产（生产加 `--environment production`）与 `cuepad.ckdb` 逐类型对比：开发环境除系统的 `Users` 外与 `cuepad.ckdb` 一致（别的检出导入过的试验类型会随部署永久进生产；重新导入 `cuepad.ckdb` 会把它们从开发环境去掉）。
-2. 用 better-browser-use 的 `--login` 车道打开控制台（未登录时 `bbu import apple.com icloud.developer.apple.com developer.apple.com idmsa.apple.com`），开发环境点「Deploy Schema Changes…」，确认页列出的改动只有这次新增的，再点 Deploy。
+2. 用 better-browser-use 的 `--mine` 车道（用户自己已登录 Apple 开发者账号的浏览器）打开控制台，开发环境点「Deploy Schema Changes…」，确认页列出的改动只有这次新增的，再点 Deploy。
 3. 再回读生产与 `cuepad.ckdb` 对比；交回时附确认页与部署完成的截图。
 
 发布带新字段或新记录类型的版本前先部署：生产里写未部署的字段或类型会让整条记录保存失败。`release mac` 打包前由 `ck-production.sh` 核对，缺的先部署再发。生产结构只能增不能删：已下线的类型与字段在 `CloudKitSchema.retiredTypes` / `retiredFields` 照原样声明。

@@ -9,8 +9,7 @@ struct SyncRow: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @Environment(\.openURL) private var openURL
-    @State private var working = false
-    @State private var failure: String?
+    @State private var choices = SyncChoices()
     @State private var showsDecision = false
     @State private var showsIssues = false
     @State private var confirmErase = false
@@ -48,9 +47,7 @@ struct SyncRow: View {
                 EmptyView()
             }
         }
-        .dialog("丢弃本机数据，改用云端的？", isPresented: $confirmErase, message: "本机的灵感、任务、项目与图片会被删除，无法撤销。", buttons: [
-            DialogButton(title: "用云端数据替换本机", role: .destructive) { resolve(.eraseLocal) }
-        ])
+        .confirmsErase($confirmErase, choices: choices, services: services)
     }
 
     private var fix: Fix? {
@@ -62,11 +59,11 @@ struct SyncRow: View {
     }
 
     private func tone(_ summary: SyncSummary) -> StatusTone {
-        failure != nil || !services.syncIssues.isEmpty ? .failure : summary.tone
+        choices.failure != nil || !services.syncIssues.isEmpty ? .failure : summary.tone
     }
 
     private func status(_ summary: SyncSummary, fix: Fix?) -> Dotted {
-        if let failure { return Dotted(failure) }
+        if let failure = choices.failure { return Dotted(failure) }
         return switch fix {
         case .issues: Dotted(summary.title, "\(services.syncIssues.count) 条记录没能同步")
         case .decide, .openSettings: Dotted(summary.title)
@@ -77,26 +74,26 @@ struct SyncRow: View {
     private func decision(_ summary: SyncSummary) -> some View {
         SettingPopover(title: "同步已暂停") {
             if let detail = summary.detail { Text(detail).foregroundStyle(palette.ink2) }
-            choice("上传本机数据", "本机数据作为新内容传到当前账号", primary: true) {
+            choice(SyncChoices.upload, primary: true) {
                 showsDecision = false
-                resolve(.uploadLocal)
+                choices.resolve(.uploadLocal, services)
             }
-            choice("用云端数据替换本机…", "丢弃本机的灵感、任务、项目与图片，从当前账号的云端重新下载", destructive: true) {
+            choice(SyncChoices.erase, destructive: true) {
                 showsDecision = false
                 confirmErase = true
             }
         }
-        .disabled(working)
+        .disabled(choices.working)
     }
 
     private func choice(
-        _ title: String, _ consequence: String, primary: Bool = false, destructive: Bool = false, action: @escaping () -> Void
+        _ choice: SyncChoices.Choice, primary: Bool = false, destructive: Bool = false, action: @escaping () -> Void
     ) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             // 会删东西的那颗字用胭脂，与确认框里同一颗一致
-            Button(action: action) { Text(title).foregroundStyle(destructive ? palette.failure : primary ? palette.onFill : palette.ink) }
+            Button(action: action) { Text(choice.title).foregroundStyle(destructive ? palette.failure : primary ? palette.onFill : palette.ink) }
                 .settingButton(primary: primary)
-            Text(consequence).font(Typography.meta).foregroundStyle(palette.ink3).fixedSize(horizontal: false, vertical: true)
+            Text(choice.consequence).font(Typography.meta).foregroundStyle(palette.ink3).fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -116,15 +113,6 @@ struct SyncRow: View {
             .frame(maxHeight: 360)
             .fixedSize(horizontal: false, vertical: true)
             Text(SyncSummary.failedDetail).font(Typography.meta).foregroundStyle(palette.ink3)
-        }
-    }
-
-    private func resolve(_ resolution: SyncResolution) {
-        working = true
-        failure = nil
-        Task {
-            defer { working = false }
-            do { try await services.resolveSync(resolution) } catch { failure = error.localizedDescription }
         }
     }
 }

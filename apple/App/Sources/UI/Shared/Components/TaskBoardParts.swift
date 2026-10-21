@@ -50,9 +50,6 @@ struct BoardColumn: View {
     @Environment(\.cardAgents) private var agents
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    #if os(iOS)
-    @Environment(Navigation.self) private var navigation
-    #endif
     @State private var showsEarlier = DebugHooks.preset.showsDone
     @State private var targeted = false
     /// 拖到已完成的那件与它这一下（同点完成圈，`taskCheck`）。
@@ -212,13 +209,7 @@ struct BoardColumn: View {
         }
     }
 
-    private func start(_ task: Card) {
-        #if os(macOS)
-        workspace.handOff(task)
-        #else
-        navigation.handToAgent(task)
-        #endif
-    }
+    private func start(_ task: Card) { workspace.handOff(task) }
 
     /// 同点完成圈（`Workspace.tap`，确认、停留与写入同 `taskCheck`）。
     private func finish(_ item: TaskBoard.Item) {
