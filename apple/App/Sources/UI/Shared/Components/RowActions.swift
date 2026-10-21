@@ -73,8 +73,9 @@ extension View {
         modifier(ListSwipes(swipes: swipes))
     }
 
-    /// 不在 `List` 里的行（任务大纲、卡片墙）：自绘出与系统轻扫同样的观感与行为——跟手露出圆角按钮，
+    /// 自绘的行（任务大纲、卡片墙、会话列表）：自绘出与系统轻扫同样的观感与行为——跟手露出圆角按钮，
     /// 松手过半停开、点按钮执行，一滑到底执行最外侧那个（过线一下触感），同一时刻只开一行；没有动作的一边只给一点阻力。
+    /// 只认慢慢拖开：快甩、贴着屏幕两边起手是切页与返回（`HorizontalPan`），在行上也照样切页、返回。
     /// `clipped`：滑开的内容裁在行内（拼在一张纸里的行）；单独的一张卡整张移开，不裁。
     /// 读屏：两边的动作同样挂成这一行的读屏动作（系统 `List` 的轻扫自带），露出的按钮本身不进读屏。
     func rowSwipes(_ swipes: RowSwipes, clipped: Bool = true) -> some View {
@@ -118,6 +119,8 @@ private struct SwipeRow: ViewModifier {
     private static let resistance: CGFloat = 12
     /// 行至少这么高才在按钮下写字（矮的任务行只放图标）。
     private static let labelHeight: CGFloat = 72
+    /// 开始那一刻横向快过这个（点/秒）算快甩：是要切页、返回，不是要露出行的动作（慢慢拖开、看着按钮出来）。
+    private static let flick: CGFloat = 600
 
     private var side: [RowAction] { offset > 0 ? swipes.leading : offset < 0 ? swipes.trailing : [] }
     private var tray: CGFloat { CGFloat(side.count) * Self.slot }
@@ -134,7 +137,7 @@ private struct SwipeRow: ViewModifier {
             .background(alignment: offset > 0 ? .leading : .trailing) { if !side.isEmpty { buttons } }
         return Group { if clipped { moved.clipped() } else { moved } }
             .onGeometryChange(for: CGSize.self) { $0.size } action: { size = $0 }
-            .gesture(HorizontalPan(allows: { rest != 0 || !($0 > 0 ? swipes.leading : swipes.trailing).isEmpty }, changed: drag, ended: end))
+            .gesture(HorizontalPan(allows: claims, changed: drag, ended: end))
             .sensoryFeedback(.impact(weight: .medium), trigger: armed) { !$0 && $1 }
             .onChange(of: OpenSwipe.shared.row) { _, open in if open != row, offset != 0 { settle(0) } }
             .accessibilityActions { RowActionButtons(actions: swipes.leading + swipes.trailing) }
@@ -178,6 +181,11 @@ private struct SwipeRow: ViewModifier {
         .accessibilityHidden(true)
     }
 
+    /// 这一拖归不归这一行（`velocity` 是开始那一刻的横向速度）：停开着时都归它（拖回去收起）；否则要慢拖、那个方向有动作，快甩让给页上的横拖。
+    private func claims(_ velocity: CGFloat) -> Bool {
+        rest != 0 || abs(velocity) < Self.flick && !(velocity > 0 ? swipes.leading : swipes.trailing).isEmpty
+    }
+
     private func drag(_ translation: CGFloat) {
         if OpenSwipe.shared.row != row { OpenSwipe.shared.row = row }
         let raw = rest + translation
@@ -206,8 +214,8 @@ private struct SwipeRow: ViewModifier {
     }
 }
 
-/// 只接横向的拖：开始时横向速度明显大于纵向、不在屏幕左缘（那里是返回手势）、这一行在那个方向有动作（`allows`，按手指方向的正负）才开始，不抢列表滚动；
-/// 没有动作的方向让给页上的横拖（内容区右滑返回、根上切页），有动作时它们等这一行先判。
+/// 只接横向的拖：开始时横向速度明显大于纵向、不贴屏幕两边起手（贴边是返回与切页）、这一行要它（`allows`，按开始那一刻的横向速度）才开始，不抢列表滚动；
+/// 页上的横拖（内容区右滑返回、根上切页）等这一行先判：行不要的（快甩、那个方向没有动作）才归它们。
 private struct HorizontalPan: UIGestureRecognizerRepresentable {
     let allows: (CGFloat) -> Bool
     let changed: (CGFloat) -> Void
@@ -242,7 +250,8 @@ private struct HorizontalPan: UIGestureRecognizerRepresentable {
         func gestureRecognizerShouldBegin(_ recognizer: UIGestureRecognizer) -> Bool {
             guard let pan = recognizer as? UIPanGestureRecognizer else { return false }
             let velocity = pan.velocity(in: pan.view)
-            return abs(velocity.x) > abs(velocity.y) * 1.5 && pan.location(in: nil).x > Self.edge && allows(velocity.x)
+            let x = pan.location(in: nil).x, width = pan.view?.window?.bounds.width ?? .infinity
+            return abs(velocity.x) > abs(velocity.y) * 1.5 && x > Self.edge && x < width - Self.edge && allows(velocity.x)
         }
 
         /// 外层的横拖（导航栈的返回、根上切页）等这一行先判。

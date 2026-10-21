@@ -39,7 +39,7 @@ private struct ScopeQuota: View {
 
 /// 会话列表（会话页、搜索页的会话一栏同一个，数据是两端共用的 `PiSessionList`）："现在"置顶（按要你注意的先后：等你确认 → 出错 → 工作中 → 空闲），
 /// "历史"按结束时间分段、滑到底才读下一页。搜索词在 `model.query`，命中的字高亮。点开看近况、回复（历史会话看最后一轮，回复时 Mac 在后台恢复它）。
-/// 在线会话长按或左滑可结束（确认后发给它所在的 Mac，对话留着）。
+/// 在线会话长按或慢慢左滑可结束（确认后发给它所在的 Mac，对话留着）。
 struct SessionList: View {
     @Bindable var model: AgentListModel
     let filter: UUID?
@@ -113,7 +113,7 @@ struct SessionList: View {
             .listRowBackground(Color.clear).listRowSeparator(.hidden)
     }
 
-    /// 一张卡片：长按与左滑都有"结束会话"（在线的）与"重命名"（读得到的会话；Mac 够不着时置灰，会话页"⋯"里同一个说法）。
+    /// 一张卡片：长按与慢慢左滑都有"结束会话"（在线的）与"重命名"（读得到的会话；Mac 够不着时置灰，会话页"⋯"里同一个说法）；快甩是切页（`rowSwipes`）。
     private func row(_ item: PiSessionListItem, in list: PiSessionList, end: Speech.Trip?) -> some View {
         let endable = item.state.canEnd && end != .sending
         let renamable = MacDelivery.canRename(item.state)
@@ -122,7 +122,7 @@ struct SessionList: View {
             + (renamable ? [RowAction("重命名", icon: .rename, tone: .quiet, enabled: services.reachesPiHost) { model.renaming = item.state }] : [])
         return SessionRow(item: item, showsPlace: list.showsPlace, end: end)
             .cardRow()
-            .listSwipes(RowSwipes(trailing: trailing))
+            .rowSwipes(RowSwipes(trailing: trailing), clipped: false)
             .contextMenu {
                 MarkUnreadButton(session: item.state)
                 RowActionButtons(actions: trailing.reversed())

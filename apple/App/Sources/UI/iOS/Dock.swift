@@ -48,7 +48,10 @@ struct DockRoot: View {
             .environment(\.dockComposing, $composing)
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
             .toolbarVisibility(.hidden, for: .navigationBar)
-            .navigationDestination(for: Route.self) { RouteView(route: $0).leaveShot($0, into: shot) }
+            // 只有推在 Cue 页上的页能前进回来：只有它们离开前拍快照
+            .navigationDestination(for: Route.self) { route in
+                if root == .cue { RouteView(route: route).leaveShot(route, into: shot) } else { RouteView(route: route) }
+            }
         }
         .onChange(of: target, initial: true) { morph(to: target) }
         .debugExposesPlaces { placesOpen = true }
