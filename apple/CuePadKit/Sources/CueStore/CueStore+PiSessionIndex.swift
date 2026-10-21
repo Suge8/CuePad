@@ -104,3 +104,22 @@ extension CueStore {
       """, [title, folder, projectID, session.lastActivityAt, now, id])
   }
 }
+
+extension CueStore {
+  /// 会话的检查点（服务层存入的不透明字节）；会话不存在或尚未索引返回 nil。
+  public func piCheckpoint(of session: String) throws -> Data? {
+    try db.first("SELECT checkpoint FROM piSessions WHERE id = ?", [session]) { $0.blobOrNil(0) } ?? nil
+  }
+
+  /// 全部会话索引各从哪接着读（按会话文件路径）：检查点，与本机有没有它的对话。历史索引启动时一次读出，不逐个文件查。
+  public func piIndexStarts() throws -> [String: IndexedSessionStart] {
+    let rows = try db.query(
+      "SELECT path, id, checkpoint, EXISTS (SELECT 1 FROM piMessages m WHERE m.sessionID = s.id) FROM piSessions s"
+    ) { ($0.text(0), IndexedSessionStart(id: $0.text(1), checkpoint: $0.blobOrNil(2), hasMessages: $0.int(3) != 0)) }
+    return Dictionary(rows, uniquingKeysWith: { first, _ in first })
+  }
+
+  public func piSessions() throws -> [IndexedSession] {
+    try select(IndexedSession.self, orderBy: "lastActivityAt DESC, id")
+  }
+}
