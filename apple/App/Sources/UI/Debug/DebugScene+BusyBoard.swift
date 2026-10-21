@@ -34,7 +34,7 @@ extension DebugScene {
         let first = try? await store.createTask("列出所有回调地址", under: mute.id)
         let second = try? await store.createTask("换成统一网关并跑测试", under: mute.id)
         _ = try? await store.createTask("补超时重试的用例", under: mute.id)
-        // 先开工、隔几秒做完第一步：行尾按做完的那一步估剩下两步"约 N 秒"（`TaskPace`）
+        // 先开工（开始时刻记在第一步上）、隔几秒做完它：行尾按它的用时估剩下两步，不足一分钟写"约 1 分钟"（`TaskPace`）
         try? await store.setStatus(mute.id, .inProgress)
         try? await Task.sleep(for: .seconds(3))
         if let first { try? await store.setStatus(first.id, .done) }
