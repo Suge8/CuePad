@@ -529,7 +529,7 @@ struct CueHostTests {
         let first = try #require(rig.brainPIDs.first)
         try await rig.say("请慢慢想")
         try await eventually("交给了大脑") { try await rig.store.cueMessagesToDeliver().isEmpty }
-        try await eventually("Cue 在想") { try await rig.store.cueState()?.state.isWorking == true }
+        try await eventually("请求挂在模型那里") { rig.model.hanging }
         kill(first, SIGKILL)
         try await rig.message(.cue, containing: "收到：请慢慢想")
         #expect(!rig.brainPIDs.contains(first))

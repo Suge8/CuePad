@@ -64,6 +64,9 @@ nonisolated final class FakeModel: Sendable {
 
     func stop() { listener.cancel() }
 
+    /// 有挂着不回的请求（"请慢慢想"那一轮已经到了模型这里）
+    var hanging: Bool { hung.withLock { !$0.isEmpty } }
+
     /// 有压着没回的请求
     var holding: Bool { held.withLock { $0 != nil } }
 
