@@ -9,9 +9,10 @@ import SwiftUI
 /// 经过清单里"对你说"那一条点它回到对话里的原处。Cue 自己醒来的连着几轮收进一颗虚线气泡（`CueNoteBubble`：每轮写为什么醒，点了去叫醒它的会话），
 /// 末尾是它此刻在做什么（`CueEnding`）；
 /// 对话区与会话页是同一个（`ChatColumn`：排开、刻度滑条、跳转与描圈）；底部是"等你"（`CueWaitingDock`）与输入框（`CueComposer`）。
+/// 首次见面与启用只有一处（`CueWelcome`）：还没说过话时在正中，说过话后停用了在输入框正上方。
 /// 对话第一帧就排好（`observing` 当场读），停在最新处；有新消息时从第一条读起，还没读的气泡旁一颗小点（`CueViewing`）。
 /// Cue 运行在别的设备上、本机正在和 iCloud 对时（`AppServices.isCatchingUp(on:)`）页头写"正在同步"，这期间到的话先不滑上来，
-/// 对完一次滑到最新（`ChatColumn` 的 `holding`）。
+/// 对完一次滑上来（`ChatColumn` 的 `holding`）：对完才算开始看，有新消息就到第一条新消息、从它读起，没有才到最新处（`CueViewing`）。
 /// Cue 在做的事在任务与 Agent 页里看，这里不另列。
 /// 页面只读写库：写一条你的消息就是对 Cue 说话，Cue 运行在哪台 Mac 都一样。"Cue 记得什么"（`CueMemoryPage`）在 Mac 的"⋯"里、手机页头的面板里；
 /// Cue 在这台 Mac 值班时 Mac 的"⋯"里还有"运行情况"，在右侧开一栏（`CueRunPanel`）。
@@ -52,10 +53,17 @@ struct CuePage: View {
     private var catchingUp: Bool { services.isCatchingUp(on: cue.hostID) }
     private var showsSteps: Bool { services.settings.showsCueSteps }
 
+    /// 读对话按什么重读：设置里关没关工具步骤、"等你"卡要露哪条（`CueThread.read`）。
+    private struct Reading: Equatable {
+        let showsSteps: Bool
+        let asking: UUID?
+    }
+
     var body: some View {
         page
-            .observing(services.store, id: showsSteps, into: $thread, onError: workspace.fail) { [showsSteps] in
-                try CueThread.read(from: $0, showsSteps: showsSteps)
+            .observing(services.store, id: Reading(showsSteps: showsSteps, asking: workspace.cueAsking), into: $thread, onError: workspace.fail) {
+                [showsSteps, asking = workspace.cueAsking] in
+                try CueThread.read(from: $0, showsSteps: showsSteps, asking: asking)
             }
             .previewPresenter($opened)
             .panel(isPresented: Bindable(cue).showsMemory) { CueMemoryPage() }
@@ -135,16 +143,13 @@ struct CuePage: View {
     // MARK: 对话
 
     /// 读不出来时也排一个真的视图：读库的订阅挂在页上，等视图出现才启动（docs/ui.md）。
-    /// 还没说过话时是空态（`EmptyState`）：它自我介绍，下一步就是下面的输入框；没启用时启用那一步（`CueEnableCard`）就接在那一句下面，
-    /// 启用了接几句能直接说的话（`CueStarters`）。
+    /// 还没说过话时正中是首次见面（`CueWelcome`：自我介绍，没启用时连同启用那一步，启用了接几句能直接说的话）。
     @ViewBuilder private var chat: some View {
         Group {
             if let thread, !thread.rows.isEmpty {
                 conversation(thread)
             } else if thread != nil {
-                EmptyState(mascot: .hello, title: "我是 \(cue.name)", message: greeting, waitsForSync: true) {
-                    if offersEnable { CueEnableCard(framed: false) } else { CueStarters() }
-                }
+                CueWelcome(intro: true)
                     .padding(.horizontal, Self.inset)
                     .frame(maxWidth: Self.readingWidth, maxHeight: .infinity)
                     .frame(maxWidth: .infinity)
@@ -153,15 +158,6 @@ struct CuePage: View {
             }
         }
     }
-
-    /// 空态的那句：启用了就请他直接说（下面接着几句能说的话）；没启用时说启用后怎么用，启用卡只放启用那一步。
-    private var greeting: String {
-        guard offersEnable else { return "要做什么，直接跟我说，比如：" }
-        return cue.canHear ? "要做什么，直接在下面跟我说" : "启用后说一件想做的事，我来开工，要你拿主意时再找你"
-    }
-
-    /// 启用卡在不在（还没启用，或 Mac 上 Cue 运行在别的 Mac）：对话空着时在空态里，说过话之后在输入框上方。
-    private var offersEnable: Bool { !cue.canHear || cue.now.elsewhere != nil }
 
     /// 只排开铺满可见区要的那几格（`paging`）：打开时铺一屏，离最早那头不到一屏时（打开后紧接着就是）往上再铺一屏；
     /// 约 `segment` 格一段地排，离屏远的段换成同高的空白（`ChatSegments`），发出一句时只重排最新那段。一格多高要排出来才知道，
@@ -172,7 +168,8 @@ struct CuePage: View {
         return ChatColumn(
             followKey: FollowKey(thread, live: cue.presence.progress != nil), readingWidth: Self.readingWidth, inset: Self.inset, follow: $follow,
             marks: thread.marks, ids: rows.map(\.id), paging: Self.paging(thread),
-            holding: catchingUp || docking
+            holding: catchingUp || docking,
+            arrival: rows.last.flatMap { CueRow.arrives($0, swapsInPlace: services.cueSwapsInPlace) ? $0.id : nil }
         ) { window in
             let first = max(0, rows.count - window.count)
             let lastYou = thread.messages.last { $0.author == .known(.you) }?.id
@@ -232,14 +229,13 @@ struct CuePage: View {
 
     // MARK: 底部
 
-    /// 浮在对话底上的一块："等你"卡、启用卡（说过话之后才在这里；Mac 上 Cue 运行在别的 Mac 时它说在哪台）与输入框。输入框按自己的高、不被挤（`fixedSize`），地方不够时（键盘弹出、小屏、横屏、输入框写了好几行）卡用剩下的。
+    /// 浮在对话底上的一块："等你"卡、停用时的启用与输入框。输入框按自己的高、不被挤（`fixedSize`），地方不够时（键盘弹出、小屏、横屏、输入框写了好几行）卡用剩下的。
     private var bottom: some View {
         VStack(spacing: 0) {
             if let thread {
-                CueWaitingDock(waiting: workspace.leadingAsk(thread.waiting), tasks: thread.tasks, shots: thread.shots, open: { opened = $0 }, moving: $docking)
-            }
-            if offersEnable, thread?.rows.isEmpty == false {
-                CueEnableCard().padding(.bottom, 8).transition(.opacity)
+                CueWaitingDock(waiting: thread.waiting, tasks: thread.tasks, shots: thread.shots, open: { opened = $0 }, moving: $docking)
+                // 说过话后停用了：启用就在输入框正上方（`CueWelcome`），是这时唯一的主动作
+                if !thread.rows.isEmpty, !cue.canHear { CueWelcome(intro: false).fixedSize(horizontal: false, vertical: true).padding(.bottom, 8).transition(.opacity) }
             }
             #if os(iOS)
             Group { if docked { dockRow } else { composer } }.fixedSize(horizontal: false, vertical: true)
@@ -248,6 +244,5 @@ struct CuePage: View {
             #endif
         }
         .animation(Motion.quick, value: cue.canHear)
-        .animation(Motion.quick, value: cue.now.elsewhere)
     }
 }

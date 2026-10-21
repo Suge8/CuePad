@@ -16,14 +16,15 @@ enum Note {
 struct NoteLine<Glyph: View, Label: View>: View {
     /// 能展开时是此刻开没开（末尾的箭头）；不能展开为 nil。
     var open: Bool?
-    /// 行末的几点（Cue 页动态里一节的第一行）：按自己的宽排、不换行，地方不够时截左边的字。
+    /// 行末的几点（Cue 页动态里一节的第一行）：按自己的宽排、不换行，对着第一行；地方不够时左边的字折行（各行自己定折不折）。
     var time: Date?
     @ViewBuilder let glyph: Glyph
     @ViewBuilder let label: Label
     @Environment(\.palette) private var palette
 
     var body: some View {
-        HStack(spacing: Note.spacing) {
+        // 按第一行字对齐：字折成两行时图标与几点对着第一行
+        HStack(alignment: .firstTextBaseline, spacing: Note.spacing) {
             glyph.foregroundStyle(palette.ink3).frame(width: Note.glyphWidth).accessibilityHidden(true)
             // 行末有几点时字先占满（几点按自己的宽、不被挤），不和中间的空白平分
             label.layoutPriority(time == nil ? 0 : 1)

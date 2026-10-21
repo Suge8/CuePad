@@ -47,7 +47,7 @@ extension DebugScene {
         let asks = ["今天先看哪件？", "把计费那个会话的进展说一下", "圆桌的预发什么时候能好？", "帮我记一下：周五不发版", "README 截图换完了吗？", "重连用例加了几个？"]
         let replies = ["先看圆桌：乱序会影响所有 5 人以上的房间。", "计费会话卡在额度接口的签名上，我让它先把请求原文打出来。", "测试在跑，大概二十分钟后能部署到预发。",
                        "记下了，周五不发版。", "浅色那张换好了，深色的还在拍。", "加了 2 个，第 3 个等排序改完再补。"]
-        let shot = CueFormat.imageMarkup(id: try store.files.store(swatchPNG()))
+        let shot = CueFormat.imageMarkup(id: try store.files.store(stagingOrderPNG()))
         for round in 0..<110 {
             let ask = round % 25 == 0 ? longChatPrompt(round) : "第 \(round + 1) 句：" + asks[round % asks.count]
             try await you(round % 15 == 7 ? ask + "\n" + shot : ask)
@@ -93,25 +93,12 @@ extension DebugScene {
         try await store.leaveToYou("cue-claude-short")
     }
 
-    /// 会话发来一张截图：卡片与"等你"上的证据。
+    /// 会话发来一张截图（`png`）：卡片与"等你"上的证据。
     @discardableResult
-    static func seedEvidence(_ store: CueStore, session: String, title: String) async -> PiPreview? {
+    static func seedEvidence(_ store: CueStore, session: String, title: String, png: Data) async -> PiPreview? {
         let file = FileManager.default.temporaryDirectory.appending(path: "cuepad-demo-\(session).png")
-        try? swatchPNG().write(to: file)
+        try? png.write(to: file)
         return try? await store.addPreviews([(file, title)], sessionID: session).first?.preview
-    }
-
-    static func swatchPNG() -> Data {
-        let view = VStack(alignment: .leading, spacing: 10) {
-            Text("发言顺序").font(.system(size: 22, weight: .bold))
-            ForEach(["小林", "阿杰", "Mia", "老王", "Sora", "Kai"], id: \.self) { name in
-                HStack { Circle().fill(.indigo.opacity(0.7)).frame(width: 18); Text(name) }
-            }
-        }
-        .padding(24).frame(width: 300, height: 360, alignment: .topLeading).background(Color(red: 0.95, green: 0.96, blue: 1))
-        let renderer = ImageRenderer(content: view)
-        renderer.scale = 2
-        return renderer.cgImage.map { DemoLibrary.encode($0) } ?? Data()
     }
 }
 #endif

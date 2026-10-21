@@ -24,8 +24,10 @@ import SwiftUI
 
 /// 一行 Cue 的现状（菜单栏面板、输入条、iPad 侧栏最上面；Mac 侧栏是名片 `CueSidebarCard`，用同一套零件）：头像（`CueEntryAvatar`）、名字，
 /// 下面 Cue 此刻那一行（`CueStatusLine` 的 tally），有新消息的在行尾写几条（石绿，`UnreadCount`）。有新消息时同会话行的"有新回复"：名字加粗。
+/// `status` 为假时不写此刻那一行（iPad 上 Cue 页开着时页头已写了这一句）。
 struct CueStatusRow<Trailing: View>: View {
     var font = Typography.body.weight(.semibold)
+    var status = true
     @ViewBuilder var trailing: Trailing
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
@@ -36,7 +38,7 @@ struct CueStatusRow<Trailing: View>: View {
             CueEntryAvatar()
             VStack(alignment: .leading, spacing: 1) {
                 Text(cue.name).font(font).fontWeight(cue.unread > 0 ? .bold : nil).foregroundStyle(palette.ink).lineLimit(1)
-                CueStatusLine(tally: true).lineLimit(1)
+                if status { CueStatusLine(tally: true).lineLimit(1).transition(.opacity) }
             }
             Spacer(minLength: 6)
             UnreadCount(count: cue.unread).font(Typography.meta)
@@ -44,6 +46,7 @@ struct CueStatusRow<Trailing: View>: View {
         }
         .animation(Motion.quick, value: cue.unread)
         .animation(Motion.quick, value: cue.presence)
+        .animation(Motion.quick, value: status)
     }
 }
 
@@ -162,5 +165,5 @@ struct CueTitle: View {
 #endif
 
 extension CueStatusRow where Trailing == EmptyView {
-    init(font: Font = Typography.body.weight(.semibold)) { self.init(font: font) { EmptyView() } }
+    init(font: Font = Typography.body.weight(.semibold), status: Bool = true) { self.init(font: font, status: status) { EmptyView() } }
 }

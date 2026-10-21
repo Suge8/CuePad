@@ -31,19 +31,17 @@ enum CueBubble {
         }
     }
 
-    /// 新说出的一颗从说话那一边的下角长出来（淡入并从 92% 放大到位）：你发出的从输入框那一角冒出，与对话上滑是同一段；只动变换，不改排版。
-    /// 消失只淡出。减弱动态效果时只淡入淡出。
-    static func arrival(_ edge: HorizontalEdge, reduceMotion: Bool) -> AnyTransition {
-        guard !reduceMotion else { return .entry }
-        let grow = AnyTransition.opacity.combined(with: .scale(scale: 0.92, anchor: edge == .trailing ? .bottomTrailing : .bottomLeading))
-        return .asymmetric(insertion: grow.animation(Motion.snappy), removal: .entry)
-    }
+    /// 新说出的一颗淡入。贴着最新时它还从下角放大、把上面的对话撑上去（`ChatLift`，滚动区给），插进来那一次就排在终位、之后只动变换。
+    static let arrival = AnyTransition.opacity.animation(Motion.move)
 }
 
 /// Cue 说的一句：靠左的一颗纸做的气泡（`cueBubble`），里面是 Markdown（同会话里 Agent 的回答），下面是它点名的图（`CueShots`：结束了回到问的位置的提问，
 /// 你的回答在答的那一刻另成一格，见 `CueAnswer`、`CueThread.rows`）；它第一次提到一件活时底下一行这件活（`CueTaskLine`）。
 /// `card`：结果卡（点名了图的做完，哪句算只在 `CueThread.rows` 定）——不是气泡而是一张纸（`paper`），不与上下的气泡连成一串；
 /// 第一行是一句平常的话时（"「X」做完了"）单独加粗作标题，一眼先读到做完了什么，再看证据与图。
+/// 结束了的提问（答了、撤回、你没选直接说了）回到对话里时字与"等你"卡上同一句：代码写的问句（`CueAsking.question`，规矩那一类下面一行引的规矩），
+/// 淡一档（次一级的墨、不加粗：已经过去了，与还在等你的那一格 `CueWaitingAsk` 一眼分开），Cue 的原话收着、点"原话"展开（`CueOriginalToggle`）；
+/// 答之前读的与答之后回看的不是两种说法，你回答气泡里引的也是这一句。
 /// 长按（Mac 右键）是消息菜单（`MessageMenu.Kind.cue`），预览就是这颗气泡或这张纸。
 struct CueSays: View {
     let message: CueMessage
@@ -54,11 +52,10 @@ struct CueSays: View {
     var card = false
     /// 上面紧挨着 Cue 的另一句（`CueBubble.shape`）。
     var joined = false
-    /// 新到的从左下角长出来；原位换下正在说的话时（`CueEnding`）直接出现
-    var arrives = true
     @Environment(\.palette) private var palette
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var selecting = false
+    /// 提问的原话展开着。
+    @State private var reading = false
 
     var body: some View {
         BubbleWidth(fraction: CueBubble.cueWidth, edge: .leading) {
@@ -73,10 +70,34 @@ struct CueSays: View {
         #if os(iOS)
         .sheet(isPresented: $selecting) { SelectableTextSheet(text: message.text) }
         #endif
-        .transition(arrives ? CueBubble.arrival(.leading, reduceMotion: reduceMotion) : .identity)
     }
 
     @ViewBuilder private var words: some View {
+        if let asking = message.asking, !card {
+            asked(asking)
+        } else {
+            said
+        }
+    }
+
+    private func asked(_ asking: CueAsking) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(CueQuestionLine.keepingTail(asking.question)).font(Typography.reading).foregroundStyle(palette.ink2)
+                .lineSpacing(Typography.readingLineSpacing)
+                .fixedSize(horizontal: false, vertical: true)
+            if let why = asking.why {
+                Text(CueQuestionLine.keepingTail(why)).font(Typography.secondary).foregroundStyle(palette.ink2).fixedSize(horizontal: false, vertical: true)
+            }
+            if reading {
+                MarkdownText(source: message.text).equatable().font(Typography.secondary).foregroundStyle(palette.ink2).padding(.top, 6)
+                    .transition(.opacity)
+            }
+            CueOriginalToggle(open: $reading)
+        }
+        .animation(Motion.quick, value: reading)
+    }
+
+    @ViewBuilder private var said: some View {
         let parts: (title: String?, body: String) = card ? Self.headline(message.text) : (nil, message.text)
         if let title = parts.title {
             VStack(alignment: .leading, spacing: 6) {
@@ -130,17 +151,18 @@ private struct CueSaysSurface: ViewModifier {
     }
 }
 
-/// 你对 Cue 一条提问的回答（`CueThread.Row.answer`）：你那一边的一颗气泡（`AnswerBubble`，同会话里的作答），字上面一行答的是哪张卡（`CueMessage.headline`，
-/// 点它跳回问的那句），下面是选的那一项（更旧版本存下的另外一句照原文）。从刻度滑条跳过来时描一圈。
+/// 你对 Cue 一条提问的回答（`CueThread.Row.answer`）：你那一边的一颗气泡（`AnswerBubble`，同会话里的作答），是选的那一项（更旧版本存下的另外一句照原文）；
+/// 问的那句隔开了（`quoted`）才在字上面引一行答的是哪张卡（`CueMessage.headline`，点它跳回问的那句）。从刻度滑条跳过来时描一圈。
 struct CueAnswer: View {
     let question: CueMessage
+    let quoted: Bool
     var joined = false
     @Environment(\.chatHighlight) private var highlight
 
     var body: some View {
         let id = CueThread.Row.answerID(of: question.id), answer = question.answer ?? ""
         AnswerBubble(
-            answer: answer, quote: question.headline.map { BubbleQuote(text: $0, target: question.id) }, look: .cue(joined: joined),
+            answer: answer, quote: quoted ? question.headline.map { BubbleQuote(text: $0, target: question.id) } : nil, look: .cue(joined: joined),
             highlighted: highlight == id
         ) {
             MessageActions(text: answer, kind: .cue)

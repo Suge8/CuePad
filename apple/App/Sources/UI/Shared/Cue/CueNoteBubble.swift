@@ -108,8 +108,8 @@ private struct CueNoteSection: View {
 
     var body: some View {
         let indent = round.header == nil ? 0 : Note.glyphWidth + Note.spacing
-        // 只有图标的第一行（没有名字）把第一句话接在图标后面，不空占一行
-        let inline = round.header?.name == nil ? round.said.first : nil
+        // 只有图标的第一行（没有名字）把第一句话接在图标后面，不空占一行；没有第一行（旧的动态只有说的话）时照常逐句列
+        let inline = round.header.flatMap { $0.name == nil ? round.said.first : nil }
         VStack(alignment: .leading, spacing: 3) {
             if let header = round.header {
                 CueWakeTitle(header: header, at: round.date, quiet: round.quiet(live: live?.round), said: inline.map { CueFormat.plainText($0.text) })

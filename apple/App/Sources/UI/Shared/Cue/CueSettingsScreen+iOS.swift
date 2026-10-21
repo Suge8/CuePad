@@ -50,6 +50,8 @@ struct CueSettingsScreen: View {
                             Text(host.note).font(.footnote).foregroundStyle(host.usable ? palette.ink3 : palette.failure)
                         }
                         .tag(Optional(host.id))
+                        // 一家都不能当大脑的那台列着、写为什么，选不了（同 Cue 页启用菜单的停用项）
+                        .disabled(!host.selectable)
                     }
                 }
                 .pickerStyle(.inline).labelsHidden()

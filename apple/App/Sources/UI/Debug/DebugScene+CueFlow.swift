@@ -8,7 +8,7 @@ import Foundation
 /// 2. Cue 在想，再用工具（建任务、开工两步进展，同值班的管理器写下的经过与此刻的状态）；
 /// 3. Cue 回复：直接落库。逐字长出的正在说的话（`CueKeeper.speech`）只在 Cue 于这台 Mac 值班时有，演示库里 Cue 运行在演示 Mac 上；
 ///    让它在这台值班就会真起大脑，管理器每次对账还把此刻的状态写回它自己的（歇着、起不来），盖掉这里写的在想与用工具，所以不喂；
-/// 4. 第 2 步建的任务交来一张截图后做完（结果卡，同演示库的 `seedEvidence` 加 `finishTask`），再来一条"等你"，停 2 秒替你选"可以"（同点卡上的选项）；
+/// 4. 第 2 步建的任务交来一张截图后做完、点名这张（结果卡，同演示库的 `seedEvidence` 加 `finishTask`），再来一条"等你"，停 2 秒替你选"可以"（同点卡上的选项）；
 ///    演示库原有的那条"等你"写入时就答掉（`seedCue`），这张卡是"等你"里唯一的一张，出现与消失都看得到；
 /// 5. 切页：Mac 侧栏点"任务"再点 Cue；iPhone 点底部那一排去任务再点 Cue 回来，iPad 侧栏点"任务"再点 Cue。
 /// `-CuePadCueFlowLog <路径>`：同 `measureFlight` 的量法，量"发送"（send：从按下起）与"静止"（idle：走完之后 Cue 歇着、页面不动）各一段，一段一行 JSON 追加进这个文件。
@@ -85,7 +85,8 @@ extension DebugScene {
         let context = try await store.cueState()?.context
         try await store.setCueState(.thinking, context: context)
         try await beat(FlowBeat.thinking)
-        let task = try await store.createTask("登录回调超时")
+        let roundtable = try await store.projects().first { $0.name == "圆桌" }?.id
+        let task = try await store.createTask("登录回调超时", in: roundtable ?? Project.defaultID)
         var tools = PiChatMessage.Tools()
         tools.record(.init(kind: .read, target: "看板"))
         tools.record(.init(kind: .add, target: "建任务「登录回调超时」", task: task.id))
@@ -95,15 +96,17 @@ extension DebugScene {
         try await store.linkCard(task.id, toSession: flowSession)
         tools.record(.init(kind: .start, target: "开工「登录回调超时」", task: task.id))
         _ = try await store.recordCueRound(row, startedAt: startedAt, answersYou: true, tools: tools)
-        try await store.setCueState(.tool, detail: "跟会话说话", round: row, context: context)
+        try await store.setCueState(.tool, detail: "对「登录回调超时」说", round: row, context: context)
         try await beat(FlowBeat.toolStep)
 
         _ = try await store.addCueMessage(.cue, text: "复现了：回调里等 token 刷新时没设超时，网络慢时会一直挂着。改成 10 秒超时、超时后回登录页重新授权，测试在跑。", task: task.id)
         try await store.setCueState(.settled, context: context)
         try await beat(FlowBeat.reply)
 
-        await seedEvidence(store, session: flowSession, title: "登录页（超时后）")
-        _ = try await store.finishTask(task.id, evidence: ["网络断开时 10 秒后回到登录页", "重连用例 4 个都过了"])
+        let evidence = await seedEvidence(store, session: flowSession, title: "登录页（超时后）", png: loginTimeoutPNG())
+        _ = try await store.finishTask(
+            task.id, evidence: ["等授权超过 10 秒就回到登录页，说明了原因", "超时用例 3 个都过了"],
+            shots: evidence.map { [CueShot(preview: $0.id, look: "超时后回到登录页")] } ?? [])
         try await beat(FlowBeat.result)
         let asked = try await store.addCueMessage(.cue, text: "登录回调的修复验过了，要**推送到 origin/main** 吗？", ask: try CueAsking(.push, action: "把登录回调的超时修复推送到 origin/main"), task: task.id)
         try await beat(FlowBeat.asking)

@@ -11,8 +11,11 @@ extension ChatScroll {
 
     func margin(_ width: CGFloat) -> CGFloat { ChatLayout.margin(width, readingWidth: readingWidth, inset: inset) }
 
+    /// 内容变高矮时底锚：贴着最新、用户没在滚、没在等和 iCloud 对完（或自己要回到最新）。滚走了、在对的期间新的长在下面，正在读的不动。
+    var pinned: Bool { follow.wrappedValue.atNewest && !follow.wrappedValue.scrolling && (!holding || unheld) && !deferred }
+
     /// 内容底下让出浮着的回复框（Mac，`chatBottomInset`）的留白。发出时回复框当下收起，发出的话要等写进库才到：那之前留白不跟着变矮，
-    /// 那句到了（内容真的长高）再收，对话从回复框让出的地方滑上去；跟着变矮的话贴着最新的整段对话先被拉下来一两帧，再一下顶上去。
+    /// 那句到了（内容真的长高）再收，与它出现在同一帧；跟着变矮的话贴着最新的整段对话先被拉下来一两帧，再一下顶上去。
     /// 看内容长高，不看 `followKey`：它还算着别的（之前那句的送达情况），可能比那句先变。
     /// 排在内容里而不是内容边距：Mac 的滚动区改边距要晚一次排版才生效，那时它自己把偏移一下挪到底，就滑不起来了。
     /// 键盘是安全区，不在这里：发出时键盘随即收起，对话跟着键盘的动画走，不留。
@@ -29,8 +32,8 @@ extension ChatScroll {
             /// 上一次交给 action 的读数。不用 action 给的旧值：那是上一次求值，中间几次变化（打开时排开更早的一段）可能求了值却没调 action，
             /// 拿它比内容变没变高会漏掉。
             var delivered: Reading?
-            /// 补滚换着用的两种写法（`scroll(to:)`）：这一次用不用"滚到那一点"。
-            var byPoint = false
+            /// 上一次读数时的最新一条新到的（`arrival`）；第一次读数前没记过。
+            var arrival: UUID??
         }
 
         private let values = Mutex(Values())
@@ -53,7 +56,14 @@ extension ChatScroll {
             }
         }
 
-        func flip() -> Bool { values.withLock { $0.byPoint.toggle(); return $0.byPoint } }
+        /// 换上这次读数时的 `arrival`，返回它是不是刚换成的一条（第一次读数只记下：打开时已在的不算新到）。
+        func arrived(_ arrival: UUID?) -> Bool {
+            values.withLock { values in
+                defer { values.arrival = arrival }
+                guard let last = values.arrival else { return false }
+                return arrival != nil && last != arrival
+            }
+        }
     }
 
     /// 滚动区的读数：只留下会让状态改变的几条越线（离最新处近不近、超没超一屏、离最早处近不近）与内容高、边距，每帧都变的偏移不进来。
@@ -74,18 +84,18 @@ extension ChatScroll {
         var container: CGFloat
     }
 
-    /// 内容在下面长出来了，整段滑到最新处（减弱动态效果时直接到）。用定长的 `Motion.move`，不用弹簧：弹簧最后那段一两像素的尾巴
+    /// 对完一次（`holding` 期间长在下面的）、键盘升起时，整段滑到最新处（减弱动态效果时直接到）；贴着最新时来的新内容不经这里，底锚当帧就排好（`pinned`）。用定长的 `Motion.move`，不用弹簧：弹簧最后那段一两像素的尾巴
     /// 要再画两百多毫秒，正好压在发出的话送达、状态变了的那几次更新上，那几帧本来不用画，一画就掉帧。
-    /// 等长出来的这一帧提交了再滑：这一帧要排出新的一条，排版重；动画从这一帧起算的话，第一帧画出来时已经走了一大截，看着是一跳。
+    /// 等这一帧提交了再滑：动画从这一帧起算的话，第一帧画出来时已经走了一大截，看着是一跳。
     /// 滑到的是那时的最新处（留白收起之后）；等的这一帧里用户开始滚了就不滑了。
-    func slide() {
+    func slide(_ reader: ScrollViewProxy) {
         sliding?.cancel()
         sliding = Task {
             await NextFrame.wait()
             guard !Task.isCancelled else { return }
             sliding = nil
             guard follow.wrappedValue.atNewest, !follow.wrappedValue.scrolling else { return }
-            withAnimation(Motion.spatial(Motion.move, reduceMotion: reduceMotion)) { scroll(to: offset.end) }
+            withAnimation(Motion.spatial(Motion.move, reduceMotion: reduceMotion)) { toEnd(reader) }
         }
     }
 
@@ -93,27 +103,40 @@ extension ChatScroll {
     /// 下一帧还没到最新处就再补一次。只补一次，不轮询。带上滑同一条曲线：正赶上整段在往上滑时（这时也还没到最新处）是顺着它
     /// 改个终点，不把滑到一半的截成一跳（滚动位置的动画没有可靠的"滑完了"回调，分不出这两种）。
     /// 在上面排开一段后停回最新处（`prepending`）也会被截在半路（打开时排开的那一段与上一次上滑挤在相邻两帧），那时不带动画：正在读的就是最新处，不该看到一段滑动。
-    func settle(animated: Bool = true) {
+    func settle(_ reader: ScrollViewProxy, animated: Bool = true) {
         Task {
             await NextFrame.wait()
             guard follow.wrappedValue.atNewest, !follow.wrappedValue.scrolling, sliding == nil, offset.read < offset.end else { return }
-            withAnimation(animated ? Motion.spatial(Motion.move, reduceMotion: reduceMotion) : nil) { scroll(to: offset.end) }
+            withAnimation(animated ? Motion.spatial(Motion.move, reduceMotion: reduceMotion) : nil) { toEnd(reader) }
         }
     }
 
     /// 回到最新（点圆钮、发出一句）。发出时记下回复框此刻的高（`bottomPadding`）。已经在最新处就不用滚。
-    func toNewest(sent: Bool) {
+    func toNewest(sent: Bool, _ reader: ScrollViewProxy) {
         held = sent ? bottomInset : nil
         if holding { unheld = true }
         // 对的期间报着"在最新处"，下面其实还压着没滑上来的
         guard !follow.wrappedValue.atNewest || deferred else { return }
         deferred = false
-        withAnimation(reduceMotion ? nil : Motion.quick) { scroll(to: offset.end) }
+        withAnimation(reduceMotion ? nil : Motion.quick) { toEnd(reader) }
     }
 
-    /// 滚到偏移 `y`。不滚到底边：停在底边时内容一变高，滚动区自己就一下跳过去了。同一个请求再发一次时滚动位置的值不变、滚动区不动
-    /// （偏移被内容边距的变化挪走、用户又没碰过时就是这样），所以在"滚到 y"与"滚到 (0, y)"两种等价的写法之间换着发。
-    func scroll(to y: CGFloat) {
-        if offset.flip() { position.scrollTo(point: CGPoint(x: 0, y: y)) } else { position.scrollTo(y: y) }
+    /// 新到的那一条长高了 `height`：整段内容先往下挪这么多（上面的对话看着还在原处），下一帧起无回弹地归零（`ChatLift`）。
+    /// 只动变换：插进来那一次已排在终位，之后每帧不重排、不读几何。减弱动态效果时不挪，新的一条只淡入（`CueBubble.arrival`）。
+    func rise(by height: CGFloat) {
+        guard !reduceMotion else { return }
+        withTransaction(\.disablesAnimations, true) { lift = ChatLift(id: arrival, height: height, by: height) }
+        Task {
+            await NextFrame.wait()
+            withAnimation(Motion.move) { lift.by = 0 }
+        }
     }
+
+    /// 内容末尾那个不占高的点（`toEnd`）。
+    static var end: String { "chat.end" }
+
+    /// 滚到最新处：内容末尾那个点贴着可见区下沿（按条的 id 跳，`ScrollViewReader`）。不写进滚动位置（`position`）：那里存着的点
+    /// 内容一变就过时了，之后哪次更新滚动区把它再用一遍，整段就退回那时的最新处（Mac 上发出一句后退回发送前、之后的全在下面看不见）；
+    /// 每长一下改记一次又要多排一遍版。也不用滚动位置的"滚到底边"：存着它时内容一变高滚动区自己就一下跳过去，在对的期间、跳去某一条之后都不该跟。
+    func toEnd(_ reader: ScrollViewProxy) { reader.scrollTo(Self.end, anchor: .bottom) }
 }
