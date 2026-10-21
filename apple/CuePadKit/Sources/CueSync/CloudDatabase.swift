@@ -35,7 +35,6 @@ enum CloudKitLimits {
   static let recordsPerRequest = 400
 }
 
-/// 私有数据库里的一个同步区。
 struct CloudDatabase: ZoneChangeSource, RecordUploader {
   let database: CKDatabase
   let zoneID: CKRecordZone.ID

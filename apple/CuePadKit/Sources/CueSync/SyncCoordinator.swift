@@ -54,7 +54,6 @@ actor SyncCoordinator {
 
   // MARK: 状态订阅
 
-  /// 先给出当前快照，之后状态或问题列表每次变化给出新快照。
   nonisolated var stateUpdates: AsyncStream<SyncState> {
     AsyncStream { continuation in
       let token = UUID()
@@ -158,7 +157,6 @@ actor SyncCoordinator {
 
   // MARK: 拉取器、发送者与账号检查交进来的
 
-  /// 发送者开始、结束一轮上传。
   func setSending(_ busy: Bool) { facts.sending = busy }
 
   /// 拉取器开始、结束拉积压（没有令牌时的对账，或一拉不止一页）。
