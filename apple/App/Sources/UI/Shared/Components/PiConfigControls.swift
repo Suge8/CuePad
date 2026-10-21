@@ -63,8 +63,6 @@ struct PiConfigControls<Trailing: View>: View {
     let opening: Binding<PiConfigPick?>
     let trailing: Trailing
     @Environment(AppServices.self) var services
-    /// 这一排拿到的宽度：模型胶囊最宽是它的一半（`PiModelLabel.capsuleWidth`）。
-    @State private var available: CGFloat = 0
     #if os(macOS)
     /// 键盘弹出的菜单贴着哪枚胶囊。
     @State var anchors = [PiConfigPick.model: PopUpAnchor(), .thinking: PopUpAnchor()]
@@ -86,13 +84,12 @@ struct PiConfigControls<Trailing: View>: View {
     }
 
     var body: some View {
-        // 放得下时思考强度写"思考 中"，窄处（手机）只写档名"中"：三枚胶囊都不截断
+        // 放得下时思考强度写"思考 中"，窄处（手机）只写档名"中"；还放不下，模型名截断（`ConfigRow`）
         ViewThatFits(in: .horizontal) {
             row(wordy: true)
             row(wordy: false)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { available = $0 }
         #if os(macOS)
         .onChange(of: opening.wrappedValue) { _, pick in
             guard let pick else { return }
@@ -107,9 +104,9 @@ struct PiConfigControls<Trailing: View>: View {
     }
 
     private func row(wordy: Bool) -> some View {
-        HStack(spacing: 6) {
+        ConfigRow {
             if let agent { PiAgentCapsule(pick: agent) }
-            modelCapsule
+            modelCapsule.layoutValue(key: Squeezes.self, value: true)
             if let meter = PiThinkingMeter(levels: levels, current: shown.thinking) {
                 PiThinkingDial(meter: meter, pending: shown.pending, wordy: wordy, choose: chooseThinking)
                     #if os(macOS)
@@ -118,19 +115,52 @@ struct PiConfigControls<Trailing: View>: View {
             }
             trailing
         }
-        .fixedSize()
     }
 
     private var modelCapsule: some View {
         #if os(macOS)
         PiModelCapsule(models: models, current: shown.model, unnamed: unnamed, pending: shown.pending,
-                       maxWidth: PiModelLabel.capsuleWidth(available: available), quotas: services.accountQuotas.items) { open(.model) }
+                       quotas: services.accountQuotas.items) { open(.model) }
             .popUpAnchor(anchors[.model])
         #else
         PiModelCapsule(models: models, current: shown.model, unnamed: unnamed, pending: shown.pending,
-                       maxWidth: PiModelLabel.capsuleWidth(available: available), quotas: services.accountQuotas.items)
+                       quotas: services.accountQuotas.items)
         #endif
     }
+}
+
+/// 工具排：胶囊按内容宽从左排成一行，竖直居中。模型胶囊（`Squeezes`）最宽是给这一排的宽的一半（`PiModelLabel.capsuleWidth`），
+/// 放不下时只有它让、名字截断，整排不超出给的宽：超出的话输入框跟着撑宽，伸出屏幕两边。
+private struct ConfigRow: Layout {
+    private static let spacing: CGFloat = 6
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let widths = widths(in: proposal.width, subviews)
+        let height = zip(subviews, widths).map { $0.sizeThatFits(ProposedViewSize(width: $1, height: proposal.height)).height }.max() ?? 0
+        return CGSize(width: widths.reduce(0, +) + Self.spacing * CGFloat(max(subviews.count - 1, 0)), height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x = bounds.minX
+        for (subview, width) in zip(subviews, widths(in: proposal.width, subviews)) {
+            subview.place(at: CGPoint(x: x, y: bounds.midY), anchor: .leading, proposal: ProposedViewSize(width: width, height: bounds.height))
+            x += width + Self.spacing
+        }
+    }
+
+    /// 各枚按内容宽；给了宽时模型胶囊不超过它的上限，也不超过其余几枚用剩的（截断后的字可能比给的窄，按它实际的宽）。
+    private func widths(in available: CGFloat?, _ subviews: Subviews) -> [CGFloat] {
+        var widths = subviews.map { $0.sizeThatFits(.unspecified).width }
+        guard let available, let squeezed = subviews.firstIndex(where: { $0[Squeezes.self] }) else { return widths }
+        let others = widths.reduce(0, +) - widths[squeezed] + Self.spacing * CGFloat(subviews.count - 1)
+        let room = max(min(widths[squeezed], PiModelLabel.capsuleWidth(available: available), available - others), 0)
+        widths[squeezed] = subviews[squeezed].sizeThatFits(ProposedViewSize(width: room, height: nil)).width
+        return widths
+    }
+}
+
+nonisolated private struct Squeezes: LayoutValueKey {
+    static let defaultValue = false
 }
 
 

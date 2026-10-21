@@ -10,7 +10,6 @@ struct PiModelCapsule: View {
     let current: PiModelOption?
     let unnamed: String
     let pending: Bool
-    let maxWidth: CGFloat
     let quotas: [AccountQuota]
     #if os(macOS)
     /// 弹出 AppKit 的模型菜单。
@@ -50,9 +49,7 @@ struct PiModelCapsule: View {
         }
         .font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink2)
         .padding(.leading, badged ? 6 : 11).padding(.trailing, 11)
-        // 按内容宽，最宽 `maxWidth`，再长截断
-        .frame(maxWidth: maxWidth, alignment: .leading)
-        .fixedSize(horizontal: true, vertical: false)
+        // 按内容宽，给的窄了截断（最宽多少由工具排定）
         .frame(height: 30)
         .background(palette.fill, in: .capsule)
         .frame(minHeight: 44)
