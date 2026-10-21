@@ -68,8 +68,8 @@ extension CuePage {
         case .you(let message): bubble + said(message.text)
         // 带引用时那一行至少一行小字，下面是回答
         case .answer(let question, let quoted): bubble + (quoted ? note + 6 : 0) + said(question.answer ?? "")
-        // 字与图之间隔 8（`CueSays`）
-        case .cue(let message, _): bubble + answer(message.text) + (shots == 0 ? 0 : 8 + CueShots.floor(count: shots, width: width(CueBubble.cueWidth)))
+        // 字与图之间隔 8（`CueSays`）；结束了的提问只露代码写的问句，原话收着
+        case .cue(let message, _): bubble + answer(message.asking?.question ?? message.text) + (shots == 0 ? 0 : 8 + CueShots.floor(count: shots, width: width(CueBubble.cueWidth)))
         // 字、图与那件活（至少 `CueTaskLine` 那么高）之间各隔 12
         case .result(let message, _):
             bubble + answer(message.text) + 12 + CueShots.floor(count: shots, width: width(CueBubble.cueWidth)) + 12 + CueTaskLine.lineHeight

@@ -47,10 +47,12 @@ struct CueQuestionLine: View {
 /// 窄屏（手机、窄窗口的 iPad）竖排："可以"铺满一行在上，次级按钮同宽在它下面、长了折行。摆法不随选项的字长变，主按钮总在同一处、最好按。
 /// 宽处（Mac、宽屏 iPad）横排在一行尾端：次级按钮在"可以"左边，"可以"不窄过 `onceWidth`、不随卡宽铺开；一行放不下或辅助功能字号时照样竖排、按字宽收着。
 /// `hint`：点名的图里"可以"选的是其中一张时（`CueShots.chosen`），一句告诉你选别的去哪说，竖排在按钮下面、横排在按钮左边。
+/// `paused`：Cue 停用着答不了时的原因（"启用 Cue 后再答"），写在 `hint` 的位置；选项全降成次级、停用，不和启用那颗主按钮抢（同屏只一个主动作），启用后恢复。
 struct CueChoices: View {
     let options: [String]
     var disabled = false
     var hint: String?
+    var paused: String?
     let pick: (String) -> Void
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.palette) private var palette
@@ -71,9 +73,10 @@ struct CueChoices: View {
     private static let inset: CGFloat = 32
 
     var body: some View {
-        let once = options.first ?? CueAsk.once, others = Array(options.dropFirst())
+        let once = options.first ?? CueAsk.once, others = Array(options.dropFirst()), hint = paused ?? hint
+        let main: ControlButtonStyle.Kind = paused == nil ? .primary : .secondary
         let stacked = VStack(spacing: Self.stackGap) {
-            button(once, kind: .primary, fill: true)
+            button(once, kind: main, fill: true)
             ForEach(others, id: \.self) { button($0, kind: .secondary, fill: true) }
             if let hint { note(hint).multilineTextAlignment(.center) }
         }
@@ -82,7 +85,7 @@ struct CueChoices: View {
         let row = HStack(spacing: 8) {
             if let hint { note(hint).lineLimit(1).padding(.trailing, 4) }
             ForEach(others, id: \.self) { button($0, kind: .secondary).lineLimit(1).fixedSize() }
-            button(once, kind: .primary, minWidth: Self.onceWidth).lineLimit(1)
+            button(once, kind: main, minWidth: Self.onceWidth).lineLimit(1)
         }
         if stacks || typeSize.isAccessibilitySize {
             stacked
@@ -107,13 +110,14 @@ struct CueChoices: View {
                 .frame(minWidth: max(0, minWidth - Self.inset), maxWidth: fill ? .infinity : nil)
         }
         .buttonStyle(ControlButtonStyle(kind: kind))
-        .disabled(disabled)
+        .disabled(disabled || paused != nil)
     }
 }
 
 /// Cue 点名要你看的图（提问卡与结果卡，`CueShown`，至多 `CueShot.limit` 张），按 Cue 给的先后：一排靠左、一行排完不横滑，每张同样大的方形缩略图
 /// （边长 `ShotRow`：放得下就是 `side`，不然几张平分可用宽），取细节最多的那一段填满（`LookBox.salient`）。缩略图本来看不全、都要点开，它只管认出是哪张、邀请点开；
 /// 要看什么由每张正下方那一句说（与图同宽、向下换行；含"："的拆两行，前半加粗是名字、后半是说明），辅助功能字号下也一样。
+/// 格窄、一行只排得下七八个字，折行时句尾几个字粘成一块（`CueQuestionLine.keepingTail`），不剩一两个字挂在下一行。
 /// 点一张全屏看整张，左右翻的就是这几张，页顶写看什么；底栏按 `reply`（"等你"里是那几个选项）。
 /// `chosen`："可以"选的就是其中这一张（`chosen(for:in:)`），它描一圈主按钮的靛青。
 struct CueShots: View {
@@ -168,8 +172,8 @@ struct CueShots: View {
     private func caption(_ look: String) -> some View {
         let parts = look.split(separator: "：", maxSplits: 1).map(String.init)
         return VStack(alignment: .leading, spacing: 1) {
-            Text(parts.first ?? look).fontWeight(.semibold).foregroundStyle(palette.ink)
-            if parts.count > 1 { Text(parts[1]).foregroundStyle(palette.ink2) }
+            Text(CueQuestionLine.keepingTail(parts.first ?? look)).fontWeight(.semibold).foregroundStyle(palette.ink)
+            if parts.count > 1 { Text(CueQuestionLine.keepingTail(parts[1])).foregroundStyle(palette.ink2) }
         }
         .font(Typography.meta)
         .fixedSize(horizontal: false, vertical: true)
@@ -193,4 +197,27 @@ private struct ShotRow: Layout {
                 at: CGPoint(x: bounds.minX + CGFloat(index) * (cell + CueShots.gap), y: bounds.minY), proposal: ProposedViewSize(width: cell, height: nil))
         }
     }
+}
+
+/// "原话"开关：问句是代码写的（`CueAsking.question`），Cue 的原话收着、点它展开。"等你"卡与答完回到对话里的那一问共用。
+struct CueOriginalToggle: View {
+    @Binding var open: Bool
+    var height: CGFloat = 0
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        Button { open.toggle() } label: {
+            HStack(spacing: 4) {
+                Text("原话")
+                Image(.expand).font(.system(size: 9, weight: .semibold)).rotationEffect(.degrees(open ? 180 : 0))
+            }
+            .font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink2)
+            // 对话里那一问下面不另占一行高：按得到的范围往外扩一圈，不撑高气泡
+            .frame(minHeight: height).contentShape(.rect.inset(by: -Self.reach))
+        }
+        .buttonStyle(PressStyle(.inline))
+        .accessibilityLabel(open ? "收起原话" : "看 Cue 的原话")
+    }
+
+    private static let reach: CGFloat = 10
 }
