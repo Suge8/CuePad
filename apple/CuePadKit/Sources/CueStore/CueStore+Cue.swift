@@ -175,8 +175,8 @@ extension CueStore {
     }
   }
 
-  /// 待交给 Cue 的大脑的（唯一定义），交出去都叫醒它：你说了还没交的话，与还没交、或交过之后又从别处同步来另一个回答的回答。
-  private static let toDeliver = """
+  /// 待交给 Cue 的大脑的（唯一定义，也是它的部分索引的条件），交出去都叫醒它：你说了还没交的话，与还没交、或交过之后又从别处同步来另一个回答的回答。
+  static let toDeliver = """
     ((author = 'you' AND deliveredAt IS NULL)
       OR (author = 'cue' AND answer IS NOT NULL AND (deliveredAt IS NULL OR deliveredAt < answeredAt)))
     """

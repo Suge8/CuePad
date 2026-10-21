@@ -721,8 +721,10 @@ extension CueStore {
     Set(try db.query(Self.hostedSessionsSQL, [host, agent.rawValue]) { $0.text(0) })
   }
 
-  private static let hostedSessionsSQL =
-    "SELECT sessionID FROM piSessionStates WHERE hostID = ? AND \(agentOf) = ? AND (hosted = 1 OR launchToken IS NOT NULL)"
+  private static let hostedSessionsSQL = "SELECT sessionID FROM piSessionStates WHERE hostID = ? AND \(agentOf) = ? AND \(hostedOrLaunched)"
+
+  /// 托管着的或 CuePad 开的会话记录（唯一定义，也是它的部分索引的条件）。
+  static let hostedOrLaunched = "(hosted = 1 OR launchToken IS NOT NULL)"
 
   /// 全部目录绑定（各台 Mac 的），按项目、Mac 名（`MacAgents.name`）排。
   public func directoryBindings() throws -> [DirectoryBinding] {

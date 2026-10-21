@@ -54,6 +54,8 @@ enum Schema {
         \(syncRecordsIndexes)
         """)
     },
+    // 68：启动与每次会话、Cue 对话变化都要读的几处走索引（各自的理由见下面的定义）
+    "DROP INDEX piSessionStates_state; \(stateIndex) \(launchTokenIndex) \(hostedIndex) \(toDeliverIndex)",
   ]
 
   /// 升级腾出了大量空页（如 67 把系统字段压小）时整理一遍，把它们还给磁盘：库不开自动整理，空页只等以后的写入复用，文件不会变小。
@@ -114,6 +116,17 @@ enum Schema {
   private static let openQuestionIndex = "CREATE INDEX cueMessages_open ON cueMessages(createdAt) WHERE \(CueStore.openQuestion);"
   /// 你开口收起的提问（`CueStore.cueQuestionsSetAside`，每次把你的话交给 Cue 都读）：部分索引只收这几条，条件同出 `CueStore.setAside`。
   private static let setAsideIndex = "CREATE INDEX cueMessages_setAside ON cueMessages(createdAt) WHERE \(CueStore.setAside);"
+  /// 待交给 Cue 的大脑的（`CueStore.cueMessagesToDeliver`，Cue 的对话每变一次都读）：部分索引只收这几条，条件同出 `CueStore.toDeliver`。
+  /// 整表扫一次要读一千多条带正文的行。
+  private static let toDeliverIndex = "CREATE INDEX cueMessages_toDeliver ON cueMessages(createdAt) WHERE \(CueStore.toDeliver);"
+  /// 按状态取会话（结束的按项目各取最近几条、按项目计数，`CueStore.piSessionGroups`，会话列表每次变化都读）：带上项目与 id 只读索引，
+  /// 不回表读带问答长文的会话记录（真实库四千多条结束的，冷读从约一千五百页降到一百多页）。
+  private static let stateIndex = "CREATE INDEX piSessionStates_state ON piSessionStates(state, stateSince, projectID, id);"
+  /// 开新会话的请求按认领标识对会话记录（认领、等认领、Cue 开出的会话，`CueStore.launchUnclaimed` 等）：没有它时每对一次都现建一份自动索引或整表扫，
+  /// 真实库里启动时这几条占读库指令的大半。只有 CuePad 开的会话带标识。
+  private static let launchTokenIndex = "CREATE INDEX piSessionStates_launchToken ON piSessionStates(launchToken) WHERE launchToken IS NOT NULL;"
+  /// 这台 Mac 托管过的会话（`CueStore.hostedPiSessionIDs`，启动时没接入的每家各读一次、删索引时再读）：几千条记录里只有几十条，条件同出 `CueStore.hostedOrLaunched`。
+  private static let hostedIndex = "CREATE INDEX piSessionStates_hosted ON piSessionStates(hostID, sessionID) WHERE \(CueStore.hostedOrLaunched);"
 
   /// 本机写入序号（`CueStore.lastWrite`）的计数器与盖序号的触发器：Cue 的变化按本机收到的先后分新旧，不按事件时刻（晚到的事件时刻可能早于上次醒来）。
   /// 构成 Cue 的变化的那几列真的变了（不只是被写了一遍）时，计数器加一、那一行记下它；本机写入与同步落库走的都是 INSERT / UPDATE，一处覆盖两条路。
@@ -201,7 +214,9 @@ enum Schema {
     ) STRICT;
     CREATE INDEX piSessionStates_hostID ON piSessionStates(hostID);
     CREATE INDEX piSessionStates_sessionID ON piSessionStates(sessionID);
-    CREATE INDEX piSessionStates_state ON piSessionStates(state, stateSince);
+    \(stateIndex)
+    \(launchTokenIndex)
+    \(hostedIndex)
     CREATE INDEX piSessionStates_projectID ON piSessionStates(projectID, stateSince);
     -- 指向带模型的目录记录的只有在线会话，进程没了的只指向只有命令的那几份：回收没人用的目录时不必翻全部历史
     CREATE INDEX piSessionStates_catalogID ON piSessionStates(catalogID) WHERE catalogID IS NOT NULL;
@@ -275,6 +290,7 @@ enum Schema {
     \(openQuestionIndex)
     \(answeredIndex)
     \(setAsideIndex)
+    \(toDeliverIndex)
     CREATE TABLE cueLines (
       id TEXT PRIMARY KEY NOT NULL, text TEXT NOT NULL, pinned INTEGER NOT NULL, source TEXT NOT NULL, remindAt INTEGER,
       createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL, deletedAt INTEGER
