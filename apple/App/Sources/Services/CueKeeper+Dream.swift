@@ -5,15 +5,27 @@ import CueStore
 import Foundation
 
 extension CueKeeper {
-    /// 后台整理记忆（做梦）：记忆一变（订阅记忆的版本，摘要不在内，写摘要不会再叫醒它）就看有没有待合并的块（`CueMemoryView.merges`），
-    /// 有就另起一个一次性的大脑合，跑完收掉。一个个按序处理：同一时刻只跑一个，跑时又变了，跑完由排着的那次变化再看一遍；
-    /// 合不成的（出错、没写全）不另记，等下一次记忆变化自然再看。值班到 `run` 结束。
+    /// 后台整理记忆（做梦）：记忆变了（订阅记忆的版本，摘要不在内，写摘要不会再叫醒它）、Cue 又没在跑一轮，就看有没有待合并的块
+    /// （`CueMemoryView.merges`），有就另起一个一次性的大脑合，跑完收掉。Cue 一轮里接连记下的几条等这一轮做完一起合，也不和回你的那一轮抢模型。
+    /// 一个个按序处理：同一时刻只跑一个，跑时又变了，跑完由排着的那次变化再看一遍；合不成的（出错、没写全）不另记，等下一次记忆变化自然再看。
+    /// 值班到 `run` 结束。
     func dreams() async {
+        var seen: CueMemoryVersion?
         do {
-            for try await _ in store.observe({ try $0.cueMemoryVersion() }) { await dream() }
+            for try await moment in store.observe({ DreamMoment(memory: try $0.cueMemoryVersion(), busy: try $0.cueState()?.state.known?.isWorking == true) })
+            where !moment.busy && moment.memory != seen {
+                seen = moment.memory
+                await dream()
+            }
         } catch {
             Self.log.error("Cue 订阅记忆失败：\(error.localizedDescription, privacy: .public)")
         }
+    }
+
+    /// 做梦看的读数：记忆的版本与 Cue 在不在跑一轮（库里它此刻的状态）。
+    private nonisolated struct DreamMoment: Equatable, Sendable {
+        var memory: CueMemoryVersion
+        var busy: Bool
     }
 
     /// 合一次：Cue 的那家与模型、强度用低档（一行行的摘要用不着深想，模型照用户给 Cue 选的，三家都起得来、不另猜模型名），
