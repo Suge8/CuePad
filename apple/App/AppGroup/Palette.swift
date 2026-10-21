@@ -145,12 +145,13 @@ struct Palette {
     // MARK: 任务看板的泳道（`BoardLane`）
 
     // 整列铺这一列状态色的浅调实色：不拿状态色叠透明度（压得深的状态色叠出来发灰）。待办没有状态色，用比桌面暗一点的暖灰才与桌面分得开。
-    // 深色同色相、明度落在桌面与纸之间：四列彼此认得出，纸色的卡仍浮在上面。上沿一线高光是 `sheen`。
+    // 深色四列同一个明度（OKLCH L 0.235，在桌面 0.215 与纸 0.263 之间，纸色的卡仍浮在上面），只差色相：彩度给到认得出靛青、赭黄、石绿
+    // （0.028～0.032），不提明度——提亮了泳道比卡还抢眼。待办几乎不带彩（暖灰）。上沿一线高光是 `sheen`。
 
-    var laneTodo: Color { dark ? Color(hex: 0x23211D) : Color(hex: 0xECE9E3) }
-    var laneAdvancing: Color { dark ? Color(hex: 0x1D2029) : Color(hex: 0xECEFF7) }
-    var laneWaiting: Color { dark ? Color(hex: 0x28231A) : Color(hex: 0xF5EFE1) }
-    var laneDone: Color { dark ? Color(hex: 0x1B241E) : Color(hex: 0xEAF3ED) }
+    var laneTodo: Color { dark ? Color(hex: 0x201E1A) : Color(hex: 0xECE9E3) }
+    var laneAdvancing: Color { dark ? Color(hex: 0x181E2D) : Color(hex: 0xECEFF7) }
+    var laneWaiting: Color { dark ? Color(hex: 0x251D0E) : Color(hex: 0xF5EFE1) }
+    var laneDone: Color { dark ? Color(hex: 0x122219) : Color(hex: 0xEAF3ED) }
     /// 泳道上 Cue 的气泡（等你那一列）：浅色是纯白，比纸亮一级才从淡色的泳道上浮出来；深色是纸的上沿色。
     var laneBubble: Color { dark ? paperLit : Color(hex: 0xFFFFFF) }
 

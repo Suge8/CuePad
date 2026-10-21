@@ -2,11 +2,12 @@ import CueStore
 import SwiftUI
 
 extension View {
-    /// 看板上一张卡的外形（四列同一种）：纸面（`paper`），同一种卡一样高（`TaskMetrics.cardHeight`），左右内边距与圆角见 `TaskMetrics`。
-    /// 平放的纸不加模糊阴影（侧栏开合时整面墙每帧重画，`paper` 的注释）：靠泳道的淡色把纸托出来。
-    func boardCard() -> some View {
-        padding(.horizontal, TaskMetrics.cardPadding)
-            .frame(maxWidth: .infinity, minHeight: TaskMetrics.cardHeight, maxHeight: TaskMetrics.cardHeight, alignment: .leading)
+    /// 看板上一张卡的外形（四列同一种）：纸面（`paper`），同一种卡一样高（`BoardCardMetrics`：推进中带线的卡 `advancingHeight`，其余 `TaskMetrics.cardHeight`），
+    /// 左右内边距与圆角见 `TaskMetrics`。平放的纸不加模糊阴影（侧栏开合时整面墙每帧重画，`paper` 的注释）：靠泳道的淡色把纸托出来。
+    func boardCard(advancing: Bool) -> some View {
+        let height = advancing ? BoardCardMetrics.advancingHeight : TaskMetrics.cardHeight
+        return padding(.horizontal, TaskMetrics.cardPadding)
+            .frame(maxWidth: .infinity, minHeight: height, maxHeight: height, alignment: .leading)
             .paper(radius: TaskMetrics.cardRadius)
             .contentShape(.rect(cornerRadius: TaskMetrics.cardRadius, style: .continuous))
     }
@@ -88,7 +89,7 @@ struct BoardSessionCard: View {
                 if let project { BoardProjectGlyph(project: project) }
                 Text(session.title).font(TaskMetrics.lineFont).foregroundStyle(resting ? palette.ink2 : palette.ink).lineLimit(1)
             }
-            .boardCard()
+            .boardCard(advancing: true)
         }
         .help(Dotted(project?.name, PiClock.duration(Date.now.timeIntervalSince(pulse.shown?.clock?.since ?? session.stateSince)), session.agentMark).visible)
         .accessibilityLabel(Dotted(session.title, pulse.fullContext.map { $0.help.spoken } ?? pulse.shown?.label).spoken)
@@ -123,18 +124,19 @@ struct BoardCardLayout<Lead: View, Trailing: View>: View {
             if advancing, pulse.speaks { word }
             trailing
         }
-        .frame(height: advancing ? Self.titleRow : nil)
+        .frame(height: advancing ? BoardCardMetrics.titleRow : nil)
         .frame(maxHeight: .infinity, alignment: advancing ? .top : .center)
-        .padding(.top, advancing ? Self.titleTop : 0)
-        .overlay(alignment: .bottomLeading) {
+        .padding(.top, advancing ? BoardCardMetrics.titleTop : 0)
+        .overlay(alignment: .topLeading) {
             if advancing {
-                VStack(spacing: 2) {
+                // 线从离标题 `waveGap` 处起（带子代理细轨的线往下多占几点，不往上挤）；步骤的分段压在线那一格的底边，线最低处也在它上面
+                ZStack(alignment: .bottomLeading) {
                     BoardWave(trace: pulse.trace, moves: moves)
                     if let steps, steps.total >= 2 { BoardSteps(steps: steps) }
                 }
+                .frame(minHeight: WaveStrip.height, alignment: .bottomLeading)
                 .padding(.leading, TaskMetrics.cardLead + Self.gap)
-                // 带子代理细轨的线高一些，往下多让一点，不碰标题
-                .padding(.bottom, pulse.trace.hasTracks ? Self.waveBottom / 2 : Self.waveBottom)
+                .padding(.top, BoardCardMetrics.waveTop)
             }
         }
     }
@@ -149,15 +151,6 @@ struct BoardCardLayout<Lead: View, Trailing: View>: View {
     }
 
     static var gap: CGFloat { 8 }
-    #if os(macOS)
-    private static var titleRow: CGFloat { 20 }
-    private static var titleTop: CGFloat { 8 }
-    private static var waveBottom: CGFloat { 4 }
-    #else
-    private static var titleRow: CGFloat { 24 }
-    private static var titleTop: CGFloat { 10 }
-    private static var waveBottom: CGFloat { 6 }
-    #endif
 }
 
 /// 推进中有步骤的卡下沿的分段：一步一段，做完的墨色、此刻那一步靛青、没到的轨道色。

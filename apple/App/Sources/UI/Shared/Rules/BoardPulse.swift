@@ -68,11 +68,6 @@ struct BoardPulse: Equatable {
     }
 }
 
-extension BoardPulse.Trace {
-    /// 在跑而且有子代理细轨（线高一些，`WaveStrip.height`）。
-    var hasTracks: Bool { if case .running(_, let subagents) = self { subagents > 0 } else { false } }
-}
-
 extension Workspace {
     /// 任务卡此刻的样子：看此刻干活的叶子交给的会话，没有再看任务自己的（同"下一步"的先后）；会话歇着、"下一步"不写它时也照样看，
     /// 快满的上下文不因此漏掉。都没交给会话是歇着。

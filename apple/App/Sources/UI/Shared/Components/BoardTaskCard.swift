@@ -41,7 +41,7 @@ struct BoardTaskCard: View {
             #if os(macOS)
             .overlay(alignment: .trailing) { StartReveal(next: next) }
             #endif
-            .boardCard()
+            .boardCard(advancing: advancing)
         }
         .help(tip)
         .taskSpoken(task, subtasks: item.steps, next: next, check: $check, open: open, follow: { follow(next) }) {
