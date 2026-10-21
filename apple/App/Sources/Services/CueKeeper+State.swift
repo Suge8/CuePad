@@ -50,8 +50,6 @@ extension CueKeeper {
         var context: CueContext?
         /// 最近一次模型请求的时刻（报上下文用量的那一刻）：据此判断提示缓存过没过期（`renewDue`）
         var lastRequest: Date?
-        /// 这个班次里请过合并的块（同一块只请一次）
-        var mergesTried: Set<[Int]> = []
         /// 起好之前连续失败的次数：一轮做完清零
         var failures: Int
     }
@@ -75,8 +73,8 @@ extension CueKeeper {
         var author: CueAuthor
         /// 这一轮的经过：醒来的时刻（Cue 在这之后用 tell 说过话，自己醒来的这一轮最后就不再写 note）、在用的工具、报的错都在这里
         var round: CueRound
-        /// Cue 自己醒来（不是你发来消息）的这一轮为什么醒、附了什么（出错要退避、重试同一次醒来）；你发起的为 nil
-        var selfStarted: (wake: CueWake, extra: String?)?
+        /// Cue 自己醒来（不是你发来消息）的这一轮为什么醒（出错要退避、重试同一次醒来）；你发起的为 nil
+        var selfStarted: CueWake?
         /// 这一轮里交出去的你的消息与回答：大脑中途退出时清掉送达。Cue 自己醒来的一轮里有它，就是中途插进了你的话
         var delivered: [UUID] = []
         /// 大脑此刻正在说的话：做完时还留着的就是这一轮的回复
@@ -89,13 +87,13 @@ extension CueKeeper {
         /// 这一轮是在回答你：你发起的、中途插进了你的话，或写成 cue 的（中途插过你的话、出错后重试的那一轮）。不是的（Cue 自己醒来、
         /// 含刚启用）已经用 tell 对你说过话，最后的回复就不再写
         var answersYou: Bool {
-            guard let wake = selfStarted?.wake else { return true }
+            guard let wake = selfStarted else { return true }
             return !delivered.isEmpty || (wake != .enabled && author == .cue)
         }
 
         /// 最后的话写不写进对话：回答你的一轮、刚启用的招呼照写；Cue 自己醒来的其余各轮没动过手（`CueRound.acted`）就不写——
         /// 系统提示里"什么都没做就不写"只在这里定。
-        var writesReply: Bool { answersYou || selfStarted?.wake == .enabled || round.acted }
+        var writesReply: Bool { answersYou || selfStarted == .enabled || round.acted }
     }
 
     /// Cue 自己醒来的一轮出错了：之后自己醒来先等着，直到 `retryAt`（只一次）或有新变化（写入序号大于 `latest`，或在 `since` 之后才到的等子代理停住）。
@@ -104,7 +102,6 @@ extension CueKeeper {
         var since: Date
         var retryAt: Date?
         var wake: CueWake
-        var extra: String?
         var author: CueAuthor
     }
 
@@ -113,7 +110,7 @@ extension CueKeeper {
         case brain(Int, CueBrainEvent)
     }
 
-    /// 触发对账的读数：变了就对一次账（内容不用，对账自己读）。记忆的版本在内：记一条、忘掉、合并都可能改变待合并的块。
+    /// 触发对账的读数：变了就对一次账（内容不用，对账自己读）。记忆的版本在内：提醒在记忆里，记下、清掉都要重排定时器。
     /// 看板只取对账用到的那一点：在不在做事（变了才可能该排巡视）；其余变化（会话歇下、事做完）都在写入序号里。
     nonisolated struct Signal: Equatable, Sendable {
         var messages: [CueMessage]

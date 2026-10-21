@@ -112,7 +112,7 @@ TEST_RUNNER_CUEPAD_CUE_EVAL=1 TEST_RUNNER_CUEPAD_CUE_EVAL_OUT=/tmp/cue-eval/afte
 TEST_RUNNER_CUEPAD_CUE_EVAL=1 TEST_RUNNER_CUEPAD_CUE_EVAL_OUT=/tmp/cue-eval/long TEST_RUNNER_CUEPAD_CUE_EVAL_RUNS=2 CUEPAD_TEST_TIME_LIMIT=3600 \
   apple/scripts/xc.sh test mac -parallel-testing-enabled YES -only-testing:CuePadTests/CueEvalLongTests
 ```
-- 多日记忆（`CueEvalDaysTests`，一次十分钟左右）单独跑：启用前预置两周历史（对话一千五百多条、做完的任务与会话回复、九十多行记忆），开跑前等 Cue 静下来（没有在跑的轮、再静 5 秒：合并在空闲时醒来的方案在这段里把预置的待合并块合完，开销单列），再问起不同年纪埋下的事；缓存时长缩到 20 秒、场景里插几段静止，看冷醒来开没开新会话（从大脑的输出里数：新进程或 Pi 的 new_session）。`-only-testing:CuePadTests/CueEvalDaysTests`，`CUEPAD_TEST_TIME_LIMIT=1700`。
+- 多日记忆（`CueEvalDaysTests`，一次十分钟左右）单独跑：启用前预置两周历史（对话一千五百多条、做完的任务与会话回复、九十多行记忆），开跑前等 Cue 静下来（没有在跑的轮、再静 5 秒），换新后的第一轮顺手合并记忆（合并开销单列），再问起不同年纪埋下的事；后段补记 10 条记忆让视图超出预算、有块待合并，再由他发消息触发一次冷换新（问刚补记的车位），这一轮的用时与费用单列；缓存时长缩到 20 秒、场景里插几段静止，看冷醒来开没开新会话（从大脑的输出里数：新进程或 Pi 的 new_session）。`-only-testing:CuePadTests/CueEvalDaysTests`，`CUEPAD_TEST_TIME_LIMIT=1700`。
 - 模型每次答得不完全一样，结论看两遍以上。
 
 ### 成绩单
@@ -132,7 +132,7 @@ python3 apple/scripts/score.py /tmp/cue-eval/base-short-{1,2} /tmp/cue-eval/base
   - 回复与 tell 超两句（系统提示的上限，逐件报进展也算进去）、换新次数（从大脑的输出里数）、token 与费用、每轮用时中位。
 - 怎么看：先看组内差（同一设置几遍之间最大减最小），差值没超过它的不算改动的效果；再看翻转（改前改后通过率不同的判定）、组内不稳与每遍都没过的。
 - 问与打扰专门的场景：v（会话把删数据说成清理的一步：该问）、w（他亲口放行过推送：不该问）、x（提醒到点：该打扰、该 urgent）；他发起的一轮与会话的常规停下另判"没 tell"。
-- 多日另记记忆合并：每次合并在哪一轮（是不是换新的那一轮、在哪一步）、写了几条摘要、之后记忆视图几行，在 .md 的「多日」与 score.json 的 extra 里。
+- 多日另记记忆合并：按写下的摘要认，每次合并在哪一轮（是不是新会话的第一轮，即带了视图的那一轮）、在哪一步、写了几条摘要、之后记忆视图几行，在 .md 的「多日」与 score.json 的 extra 里；成绩单单列"冷换新且有块要合"那一轮。
 
 ## LongMemEval
 

@@ -136,7 +136,6 @@ extension CueKeeper {
                 $0.turn = nil
                 $0.failures = 0
             }
-            lastTurnEnd = .now
             if let failure = finished.round.failure {
                 if let woke = finished.selfStarted { await setBack(failure, retrying: woke, as: finished.author) }
             } else {
@@ -157,7 +156,7 @@ extension CueKeeper {
         guard let turn, !turn.round.calls.isEmpty else { return }
         do {
             let row = try await store.recordCueRound(
-                turn.round.row, startedAt: turn.round.startedAt, answersYou: turn.answersYou, tools: turn.round.process, wake: turn.selfStarted?.wake)
+                turn.round.row, startedAt: turn.round.startedAt, answersYou: turn.answersYou, tools: turn.round.process, wake: turn.selfStarted)
             updateShift { $0.turn?.round.row = row }
         } catch {
             Self.log.error("Cue 这一轮的经过没能写进资料库：\(error.localizedDescription, privacy: .public)")
@@ -205,11 +204,11 @@ extension CueKeeper {
     }
 
     /// Cue 自己醒来的一轮出错：第一次出错（且不是额度、登录）隔一会儿再醒一次，否则等新变化。
-    private func setBack(_ failure: String, retrying woke: (wake: CueWake, extra: String?), as author: CueAuthor) async {
+    private func setBack(_ failure: String, retrying wake: CueWake, as author: CueAuthor) async {
         let latest = try? await changes().due.map(\.seq).max()
         let retry = setback == nil && Self.retryable(PiErrorSummary(failure))
         setback = Setback(
-            latest: latest, since: .now, retryAt: retry ? .now + setup.timing.retryWake.seconds : nil, wake: woke.wake, extra: woke.extra, author: author)
+            latest: latest, since: .now, retryAt: retry ? .now + setup.timing.retryWake.seconds : nil, wake: wake, author: author)
     }
 }
 #endif
