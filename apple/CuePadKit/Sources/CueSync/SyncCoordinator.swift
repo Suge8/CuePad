@@ -97,7 +97,7 @@ actor SyncCoordinator {
 
   // MARK: 上传批次
 
-  /// 下一批要上传的：`first` 里待推送的排在前面，至多 `limit` 条；没有可传的（或此刻不能同步）为 nil。
+  /// 下一批要上传的：`first` 里待推送的排在前面，至多 `limit` 条；没有可传的（或此刻不能同步）为 nil。交出一批即算同步中，到这一轮结束（`finishedSending`）。
   /// 上次确定没有可传的之后只看其后的提交碰过的记录（`drained`）。
   func nextBatch(first: Set<String>, limit: Int) async -> (saves: [CKRecord], deletes: [CKRecord.ID])? {
     if drained?.sending != nil { drained = nil }  // 上一批整个没传成（没有结果）
@@ -134,6 +134,9 @@ actor SyncCoordinator {
       report(error, recordName: nil)
       return nil
     }
+    // 构造这批时可能停下了（拉到过高的门槛、要你决定）：停下后不再交出新的一批
+    guard canSync else { return nil }
+    facts.sending = true
     return batch
   }
 
@@ -160,7 +163,8 @@ actor SyncCoordinator {
 
   // MARK: 拉取器、发送者与账号检查交进来的
 
-  func setSending(_ busy: Bool) { facts.sending = busy }
+  /// 一轮上传结束（开始是 `nextBatch` 交出一批时）。
+  func finishedSending() { facts.sending = false }
 
   /// 拉取器开始、结束拉积压（没有令牌时的对账，或一拉不止一页）。
   func setCatchingUp(_ busy: Bool) { facts.catchingUp = busy }

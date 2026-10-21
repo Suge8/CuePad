@@ -15,11 +15,11 @@ import os
 /// 推：库里推导的待推送是唯一队列，同一时刻只有一批在路上。
 public actor CloudSync {
   private static let containerIdentifier = "iCloud.com.sugeh.cuepad"
-  private let zoneID = CKRecordZone.ID(zoneName: "CuePad", ownerName: CKCurrentUserDefaultName)
+  static let zoneID = CKRecordZone.ID(zoneName: "CuePad", ownerName: CKCurrentUserDefaultName)
   private let coordinator: SyncCoordinator
-  /// `start()` 里才建：没有 entitlement 的进程一建容器就崩。
-  private var container: CKContainer?
-  private var database: CloudDatabase?
+  /// 连上 iCloud（`SyncCloud`）：`start()` 里才连，没有 entitlement 的进程一建容器就崩。
+  private let connect: @Sendable () -> any SyncCloud
+  private var cloud: (any SyncCloud)?
   private var puller: ZonePuller?
   private var sender: RecordSender?
   /// 认过账号、拉取与上传都开始了。认不了（离线、没登录）时不拉也不传：本机的同步元数据可能属于上一个账号。
@@ -39,7 +39,12 @@ public actor CloudSync {
   #endif
 
   public init(store: CueStore) {
-    coordinator = SyncCoordinator(store: store, zoneID: zoneID)
+    self.init(store: store) { CloudDatabase(container: CKContainer(identifier: Self.containerIdentifier), zoneID: Self.zoneID) }
+  }
+
+  init(store: CueStore, connect: @escaping @Sendable () -> any SyncCloud) {
+    coordinator = SyncCoordinator(store: store, zoneID: Self.zoneID)
+    self.connect = connect
   }
 
   /// 先给出当前快照，之后状态或问题列表每次变化给出新快照。
@@ -47,22 +52,20 @@ public actor CloudSync {
 
   public func start() async throws {
     guard sender == nil else { return }
-    let container = CKContainer(identifier: Self.containerIdentifier)
-    let database = CloudDatabase(database: container.privateCloudDatabase, zoneID: zoneID)
-    self.container = container
-    self.database = database
-    puller = ZonePuller(source: database, coordinator: coordinator)
-    sender = RecordSender(uploader: database, coordinator: coordinator)
+    let cloud = connect()
+    self.cloud = cloud
+    puller = ZonePuller(source: cloud, coordinator: coordinator)
+    sender = RecordSender(uploader: cloud, coordinator: coordinator)
     await coordinator.loadToken()
     accountWatcher = Task { [weak self] in
       for await _ in NotificationCenter.default.notifications(named: .CKAccountChanged) {
         guard let self else { return }
-        guard await self.checkAccount(container) else { continue }
-        await self.ensureAlertSubscriptions(container)  // 账号切换后新账号的数据库里还没有订阅
+        guard await self.checkAccount(cloud) else { continue }
+        await self.ensureAlertSubscriptions(cloud)  // 账号切换后新账号的数据库里还没有订阅
         await self.pull()
       }
     }
-    if await checkAccount(container) { await ensureAlertSubscriptions(container) }
+    if await checkAccount(cloud) { await ensureAlertSubscriptions(cloud) }
   }
 
   public func stop() async {
@@ -71,8 +74,7 @@ public actor CloudSync {
     await sender?.stop()
     sender = nil
     puller = nil
-    database = nil
-    container = nil
+    cloud = nil
     ready = false
   }
 
@@ -80,13 +82,13 @@ public actor CloudSync {
   /// 已开始后的账号变化（退出、受限、换了账号）由协调器停下（`canSync`）。返回此刻是否已开始。
   /// 认不了（离线）的，下一次立即同步或账号变化时再认。拉取由调用方接着发起（`syncNow`、账号变化）。
   @discardableResult
-  private func checkAccount(_ container: CKContainer) async -> Bool {
+  private func checkAccount(_ cloud: any SyncCloud) async -> Bool {
     let available: Bool
     do {
-      let status = try await container.accountStatus()
+      let status = try await cloud.accountStatus()
       await coordinator.accountStatus(status)
       available = status == .available
-      if available { await coordinator.account(try await container.userRecordID().recordName) }
+      if available { await coordinator.account(try await cloud.accountName()) }
     } catch {
       Self.log.notice("认 iCloud 账号失败，稍后再认：\(error.brief, privacy: .public)")
       if ready { return true }
@@ -94,8 +96,8 @@ public actor CloudSync {
       return false
     }
     if ready { return true }
-    guard available, await coordinator.canSync, let sender, let database else { return false }
-    do { try await PeerFloor(zoneID: zoneID).settle(database, coordinator: coordinator) } catch {
+    guard available, await coordinator.canSync, let sender else { return false }
+    do { try await PeerFloor(zoneID: Self.zoneID).settle(cloud, coordinator: coordinator) } catch {
       guard !(error is SyncPaused) else { return false }
       await coordinator.reached(error)
       Self.log.notice("对最低对端版本失败，暂不上传：\(error.brief, privacy: .public)")
@@ -111,13 +113,13 @@ public actor CloudSync {
   /// 立即同步：拉一次（返回时拉完），顺带把待推送发出去（不等）。下拉刷新、立即同步按钮、回到前台、按节奏的拉取（`SyncPoller`）、
   /// 手机收到推送都只调它。通知订阅没建成的话顺带在后台重试（见 `alertsAttemptedAt`）。
   public func syncNow() async throws {
-    guard let container else { return }
-    if !ready { await checkAccount(container) }
+    guard let cloud else { return }
+    if !ready { await checkAccount(cloud) }
     guard ready, let puller, let sender else { return }
     if Self.subscribesToAlerts, await coordinator.alertSubscription != .active,
       alertsAttemptedAt.map({ ContinuousClock.now - $0 >= Self.alertRetryInterval }) ?? true
     {
-      Task { await ensureAlertSubscriptions(container) }
+      Task { await ensureAlertSubscriptions(cloud) }
     }
     Task { await sender.flush() }
     try await puller.pull()
@@ -141,10 +143,10 @@ public actor CloudSync {
     await sender?.flush()
   }
 
-  private func ensureAlertSubscriptions(_ container: CKContainer) async {
+  private func ensureAlertSubscriptions(_ cloud: any SyncCloud) async {
     guard Self.subscribesToAlerts else { return }
     alertsAttemptedAt = .now
-    let status = await AlertSubscriptions(zoneID: zoneID).ensure(in: DatabaseSubscriptions(database: container.privateCloudDatabase))
+    let status = await AlertSubscriptions(zoneID: Self.zoneID).ensure(in: cloud)
     await coordinator.setAlerts(status)
   }
 

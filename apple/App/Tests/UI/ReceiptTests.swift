@@ -126,7 +126,7 @@ struct ReceiptTests {
         #expect(try await sessionPresence() == .sending)
     }
 
-    /// 别的设备把最低对端版本抬过了这台（`SyncStatus.outdated`，判定见 CueSync 的 PeerFloorTests）：说的话当场没能送达、说明这台要更新，
+    /// 别的设备把最低对端版本抬过了这台（`SyncStatus.outdated`，从云端门槛走到这一步见 SyncWiringTests）：说的话当场没能送达、说明这台要更新，
     /// 同步那一行也这么说；更新前立即同步按不了。
     @Test(.timeLimit(.minutes(1)))
     func 这台要更新时_说的话报要更新发不到Mac_立即同步按不了() async throws {

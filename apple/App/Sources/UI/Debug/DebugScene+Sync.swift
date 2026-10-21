@@ -10,7 +10,9 @@ extension DebugScene {
     /// `-CuePadSync arrive`：像隔了一阵没打开的手机，启动后的第一次拉取带回别的设备写下的 Cue 的话，分几页陆续到（`ArrivingSync`）。
     /// `-CuePadSync offline`：一开始连不上 iCloud，`-CuePadOfflineSeconds`（默认 6）秒后恢复；配 `-CuePadDemoMac YES` 与
     /// `-CuePadSpeech send` 录"断网时说 → 同步不通 → 恢复 → 送达"（演示 Mac 断网时不接手）。
-    /// `-CuePadSync <noAccount|decide|outdated|failed|restricted|conflicts>`：装上报这个状态的替身，设置里 iCloud 同步那一行、
+    /// `-CuePadSync outdated`：真实的同步代码连内存里的 iCloud 替身，替身里的最低对端版本高于这台（`CloudSync.simulated`）：
+    /// 同步停下、提示更新，本机照记、改动不上传（替身收下的条数记在日志的 sync 类别里）。
+    /// `-CuePadSync <noAccount|decide|failed|restricted|conflicts>`：装上报这个状态的替身，设置里 iCloud 同步那一行、
     /// 要你决定的两个选择、立即同步与 Mac 工具栏的同步提示都按有同步时的样子出现；`failed` 带两条没能同步的记录，`conflicts` 在演示库里造一份冲突副本。
     /// 这些替身都当已和 iCloud 对过。
     /// `-CuePadSync newmac`：换新 Mac 的第一遍同步，先报同步中、还没对过，`-CuePadReconcileSeconds`（默认 8）秒后带回 Cue 在「Mac Studio」上运行、
@@ -25,7 +27,7 @@ extension DebugScene {
         case "conflicts": .custom(StandInSync())
         case "noAccount": .custom(StandInSync(.noAccount))
         case "decide": .custom(StandInSync(.needsDecision(.accountSwitched)))
-        case "outdated": .custom(StandInSync(.outdated))
+        case "outdated": .built { CloudSync.simulated(store: $0, peerFloor: CueStore.supportedSchemaVersions.upperBound + 1) }
         case "failed": .custom(StandInSync(.failed("同步出错"), issues: issues))
         case "restricted": .custom(StandInSync(.accountRestricted))
         case "offline": .custom(OfflineSync(seconds: seconds("CuePadOfflineSeconds", default: 6)))

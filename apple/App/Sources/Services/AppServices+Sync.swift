@@ -14,6 +14,7 @@ extension AppServices {
         let reason: String
         switch source {
         case .custom(let sync): return (sync, .starting)
+        case .built(let make): return (make(store), .starting)
         case .iCloud where location.isIsolated && !DebugHooks.syncsIsolatedLibrary: reason = "开发用的隔离资料库，不连 iCloud"
         case .iCloud where !Entitlements.hasCloudKit: reason = "这个构建没有 iCloud 权限（本机开发构建），不会同步"
         case .iCloud: return (CloudSync(store: store), .starting)
