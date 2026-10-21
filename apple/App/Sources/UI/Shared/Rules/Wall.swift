@@ -20,7 +20,6 @@ nonisolated struct WallArrangement: Equatable, Sendable {
 
     var project: UUID
     var arrangedAt: Date
-    /// 资料（`Card.isPinned`）。
     var pinned: [UUID]
     var wall: [UUID]
     var older: [UUID]

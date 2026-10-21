@@ -68,7 +68,6 @@ nonisolated struct PiConfigShown: Equatable {
     var thinking: PiThinkingLevel?
     /// 上下文余量（会话记录上的，用量条显示；没有模型时为 nil）。
     var context: PiContextUsage?
-    /// 换的请求还在路上。
     var pending: Bool
     /// 最近一次没换成的原因（`Speech`：Mac 报的，或超时、本机同步不通）。
     var failure: Speech.Failure?

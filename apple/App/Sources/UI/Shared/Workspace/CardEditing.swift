@@ -48,13 +48,11 @@ final class CardEditing {
         #endif
     }
 
-    /// 编辑器报来的正文。
     func changed(_ next: String) {
         text = next
         autosave?.changed(next)
     }
 
-    /// "已保存"亮过一会儿之后回到平时。
     func settleSaved() { if saveState == .saved { saveState = .idle } }
 
     /// 写下没保存的字，再读库里此刻的这条（任务气泡的"开始"、编辑器里的 ⌘↩ 交给 Agent 的就是它）。
@@ -63,7 +61,6 @@ final class CardEditing {
         return try await workspace.services.store.card(cardID)
     }
 
-    /// 离开编辑：写下没保存的字，空白的不留下。
     func leave() {
         workspace.leaveEditing(cardID, flush: autosave)
         #if os(iOS)

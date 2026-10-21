@@ -6,7 +6,6 @@ nonisolated enum Route: Hashable {
     /// 项目书架：全部项目（iPhone、iPad 侧栏的"全部项目"）。
     case shelf
     case project(UUID)
-    /// 归档的灵感与任务。
     case archive
     case trash
     case settings

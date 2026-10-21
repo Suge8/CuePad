@@ -41,7 +41,6 @@ nonisolated struct ChatFollow: Equatable {
     /// 已请滚动区跳到某一条（`jump(to:)`）、还没离开最新处：跳的那一下顶栏让开、回复框收起，滚动区排好了下一帧才滚过去，
     /// 这期间的读数还报着在最新处，不算回到了最新。离开最新处（跳过去了）、用户自己滚、回到最新时放掉；跳到的就在最新处时，用户一滚就重新贴上。
     private var jumping = false
-    /// 最近一次读数里离最新处不超过 `slack`。
     private var withinSlack = true
     /// 在看历史时点顶部唤出了顶栏。
     private var revealed = false
@@ -56,7 +55,6 @@ nonisolated struct ChatFollow: Equatable {
         var landing = Landing.flash
         let request = UUID()
 
-        /// 跳到后它在可见区的哪里。
         var anchor: UnitPoint { landing == .read ? .top : .center }
     }
 

@@ -21,7 +21,6 @@ extension View {
 
 /// 玻璃上的字要多好读。
 enum GlassInk {
-    /// 只有图标的圆钮。
     case clear
     /// 写着字的（默认；顶栏标题、输入框、搜索框、提示横幅、状态行）：玻璃里垫九成实的页面底色，边缘仍是玻璃的光。内容一直滚到这些玻璃后面，
     /// 背后什么都有可能（亮的截图、深的代码块）：只着色不垫底的话，深色下一张亮图就把玻璃衬成浅灰、米白的字只剩 1.7:1，
@@ -54,7 +53,6 @@ private struct PaperSurface: ViewModifier {
 }
 
 extension Palette {
-    /// 纸面的底：从上沿极轻地亮到纸色。
     var paperFill: LinearGradient {
         LinearGradient(colors: [paperLit, paper], startPoint: .top, endPoint: .init(x: 0.5, y: 0.35))
     }
@@ -150,7 +148,6 @@ enum Press {
     case inline
 }
 
-/// 按钮的按下反馈，按种类（`Press`）。
 struct PressStyle: ButtonStyle {
     let kind: Press
 

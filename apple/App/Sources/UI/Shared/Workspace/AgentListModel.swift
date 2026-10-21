@@ -14,7 +14,6 @@ final class AgentListModel {
 
     var searching: Bool { !query.trimmingCharacters(in: .whitespaces).isEmpty }
 
-    /// 还有没读的历史。
     var hasMore: Bool { list?.hasMore ?? false }
 
     func resetPaging() { limit = PiSessionList.pageSize }
