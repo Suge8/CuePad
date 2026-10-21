@@ -39,6 +39,8 @@ private final class Days: EvalScript {
     private let history: DaysHistory
     /// 记忆的样子：预置后、开跑前与每一步做完时有几条摘要、记忆视图几行（看合并发生在哪、合并后视图多大）
     private var snapshots: [(label: String, at: Date, summaries: Int, lines: Int)] = []
+    /// 补记那段记忆的时刻：之后第一次换新、那次换新起第一次写摘要的那一轮单列
+    private var notedAt: Date?
 
     init(_ eval: CueEval, _ history: DaysHistory) {
         self.history = history
@@ -91,6 +93,7 @@ private final class Days: EvalScript {
     /// 他发消息触发冷换新、恰好有块要合：一口气补记 10 条记忆（Cue 记下的，第一条是后面要问的车位），记忆视图（开跑前 90 行，预算 96）超出预算、有块待合并。
     /// 合并在空闲时醒来的方案在随后等它静下来时合掉，他这句仍是冷换新；挪到换新那一轮的方案在他这句触发的冷换新里合。
     private func overBudget() async throws {
+        notedAt = .now
         for line in DaysScript.notedLater { _ = try await rig.store.noteCueLine(line, source: .cue) }
         try await snapshot("补记 \(DaysScript.notedLater.count) 条后")
     }
@@ -214,16 +217,23 @@ private final class Days: EvalScript {
         ]
         eval.extra["merges"] = merged
         eval.extra["viewLines"] = snapshots.map { ["after": $0.label, "lines": $0.lines, "summaries": $0.summaries] }
-        // 单列：他发消息触发冷换新、恰好有块要合的那一轮（问车位那一步里他的消息叫醒的那一轮）
-        if let step = steps.first(where: { $0.label.contains("有块要合") }), let round = self.rounds(step).first(where: { $0.wake == .message }), let index = all.firstIndex(where: { $0.id == round.id }) {
-            let used = cost([index]), took = round.finishedAt.map { $0.timeIntervalSince(round.startedAt) } ?? 0
+        // 单列：补记以后第一次换新的那一轮，与那次换新起第一次写了摘要的那一轮（合并可能推到更后的换新）；同一轮只列一行。
+        // 合并在空闲时醒来的方案在换新前就合完了，只有第一行
+        let renewed = all.indices.first { all[$0].startedAt >= notedAt ?? .distantFuture && CueEval.opensSession(all[$0]) }
+        let wrote = renewed.flatMap { first in merged.compactMap { $0["round"] as? Int }.first { $0 >= first } }
+        var singled: [[String: Any]] = []
+        for (label, index) in [("补记后第一次换新", renewed), ("补记后换新时写摘要的那一轮", wrote == renewed ? nil : wrote)] {
+            guard let index else { continue }
+            let round = all[index], used = cost([index]), took = round.finishedAt.map { $0.timeIntervalSince(round.startedAt) } ?? 0
             let summaries = merged.first { $0["round"] as? Int == index }?["summaries"] as? Int ?? 0
-            lines.append("- 冷换新且有块要合的那一轮（第 \(index) 轮）：用时 \(seconds(took))，\(CueEval.opensSession(round) ? "新会话的第一轮" : "接着原会话")，写了 \(summaries) 条摘要；\(cells(used))")
-            eval.extra["rounds"] = [[
-                "label": "冷换新且有块要合", "seconds": took, "renewal": CueEval.opensSession(round), "summaries": summaries,
+            let step = steps.first { $0.window?.contains(round.startedAt) == true }?.label ?? "步与步之间"
+            lines.append("- \(label)（第 \(index) 轮，\(step)）：用时 \(seconds(took))，\(CueEval.opensSession(round) ? "新会话的第一轮" : "接着原会话")，写了 \(summaries) 条摘要；\(cells(used))")
+            singled.append([
+                "label": label, "seconds": took, "renewal": CueEval.opensSession(round), "summaries": summaries,
                 "input": used.input, "cacheRead": used.cacheRead, "cacheWrite": used.cacheWrite, "output": used.output, "cost": used.cost,
-            ]]
+            ])
         }
+        eval.extra["rounds"] = singled
         lines += notes.map { "- \($0)" }
         lines += ["", "| 步 | 叫醒的事 | 轮数 | 工具调用 |", "| --- | --- | --- | --- |"]
         for (index, step) in steps.enumerated() {
