@@ -2,7 +2,8 @@ import QuartzCore
 import SwiftUI
 
 /// 推进中卡下沿那条线（`BoardPulse.Trace`）：装饰，不对应真实事件。在跑的按在干的活挑一条预先画好的周期线，派了子代理的主线压扁到上沿、
-/// 下面每个在跑的子代理一条细轨（长划短空、节奏各不相同，横移时看得出各走各的），最多 `maxTracks` 条、多的写 +N；停住的是一条平线、末端一个点。
+/// 下面每个在跑的子代理一条细轨（长划短空、节奏各不相同，横移时看得出各走各的），最多 `maxTracks` 条、多的写 +N；停住的是一条平线、末端一个点；
+/// 歇着的是一条淡灰实线（`track`），同线宽、不带点。
 /// 动只靠整条横移一个周期，交给 Core Animation（`LoopLayer` 的 `wave`）：线不逐帧重画，App 进程不参与。
 /// SwiftUI 的 repeatForever 偏移虽也不重画线，却每帧在 App 进程里重算动画与显示列表（同 `LoopLayer` 头注释的实测），一列几条就常驻占 CPU。
 /// 只有看得见的在动：卡在懒加载栈里，出屏就不存在；页不在前台（`pageActive`）、窗口不是活跃窗口或场景到了后台、减弱动态效果、省电模式时静止；
@@ -25,10 +26,15 @@ struct BoardWave: View {
 
     static let maxMoving = 8
     static let maxTracks = 3
+    /// 停住与歇着的平线的线宽。
+    private static let stoppedLine: CGFloat = 1.6
 
     var body: some View {
         switch trace {
-        case .none: EmptyView()
+        case .resting:
+            StoppedLine(full: true).stroke(palette.track, lineWidth: Self.stoppedLine)
+                .frame(height: WaveStrip.height)
+                .accessibilityHidden(true)
         case .running(let gait, let subagents):
             let strip = WaveStrip(gait: gait, tracks: min(subagents, Self.maxTracks))
             HStack(spacing: 4) {
@@ -50,7 +56,7 @@ struct BoardWave: View {
             }
             .accessibilityHidden(true)
         case .stopped(let stop):
-            StoppedLine().stroke(tint(stop), style: StrokeStyle(lineWidth: 1.6, lineCap: .round, dash: stop == .interrupted ? [10, 6] : []))
+            StoppedLine().stroke(tint(stop), style: StrokeStyle(lineWidth: Self.stoppedLine, lineCap: .round, dash: stop == .interrupted ? [10, 6] : []))
                 .overlay(alignment: .trailing) { Circle().fill(tint(stop)).frame(width: 5.2, height: 5.2).padding(.trailing, 4.4) }
                 .frame(height: WaveStrip.height)
                 .accessibilityHidden(true)
@@ -201,12 +207,14 @@ nonisolated private struct WaveTracks: Shape {
     }
 }
 
-/// 停住的平线：竖直居中，右端让出末端那个点。
+/// 停住与歇着的平线：竖直居中；停住的右端让出末端那个点，歇着的（`full`）画满。
 nonisolated private struct StoppedLine: Shape {
+    var full = false
+
     func path(in rect: CGRect) -> Path {
         Path { path in
             path.move(to: CGPoint(x: 0, y: rect.midY))
-            path.addLine(to: CGPoint(x: rect.maxX - 7, y: rect.midY))
+            path.addLine(to: CGPoint(x: full ? rect.maxX : rect.maxX - 7, y: rect.midY))
         }
     }
 }

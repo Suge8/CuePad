@@ -5,7 +5,7 @@ import CueStore
 /// - 要你管：写出状态词的（`PiShown.speaksOnTask`：出错、被打断、没能送达、待回复、有新回复），与上下文用到九成起的
 ///   （`UsageLevel.critical`，状态词就是"上下文 94%"）；线停住；
 /// - 在跑：`PiShown.isRunning`，线在动；
-/// - 歇着：其余（会话停着、等 Cue 回答、还没开会话），没有线、标题淡一档。
+/// - 歇着：其余（会话停着、等 Cue 回答、还没开会话），一条静止的淡灰实线、标题淡一档。
 struct BoardPulse: Equatable {
     enum Tier: Int, CaseIterable, Comparable {
         case needsYou, running, resting
@@ -17,9 +17,10 @@ struct BoardPulse: Equatable {
     enum Trace: Equatable {
         /// 在跑：按在干的活挑一种预先画好的线；派了子代理的另有在跑的子代理各一条细轨。
         case running(Gait, subagents: Int)
-        /// 停住：出错类（出错、没能送达、上下文快满）是胭脂平线，被打断是灰色断线，其余（待回复、有新回复）是状态词那种颜色的平线。
+        /// 停住：出错类（出错、没能送达、上下文快满）是胭脂平线，被打断是灰色断线，其余（待回复、有新回复）是状态词那种颜色的平线；都带末端一个点。
         case stopped(Stop)
-        case none
+        /// 歇着：一条淡灰实线、不带点——横线就是"没在动"；与被打断靠断线与点分开。等高的卡下沿不空着，不像没画完。
+        case resting
     }
 
     /// 在干哪类活：在想（含输出、话在路上）是慢而平的起伏，用工具是平线上几个尖峰，压缩上下文是细密的波纹。
@@ -50,9 +51,9 @@ struct BoardPulse: Equatable {
     }
 
     var trace: Trace {
-        guard let shown else { return .none }
+        guard let shown else { return .resting }
         switch tier {
-        case .resting: return .none
+        case .resting: return .resting
         case .needsYou:
             if shown.status == .failed || shown.undelivered != nil || fullContext != nil { return .stopped(.failure) }
             return .stopped(shown.status == .interrupted ? .interrupted : .quiet)
