@@ -280,7 +280,7 @@ final class DaysHistory {
 }
 
 /// 预置的一条对话：谁、写什么、在什么时刻；他的话记成当时就交给了 Cue。
-struct Seeded {
+nonisolated struct Seeded: Sendable {
     let author: CueAuthor
     let text: String
     let at: Date
