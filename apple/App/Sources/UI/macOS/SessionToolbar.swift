@@ -44,7 +44,7 @@ final class SessionHeader {
 extension Workspace {
     /// 当前会话页的标题与菜单要显示的值；不是会话页时为 nil。
     var shownSessionHeader: SessionHeader.State? {
-        guard case .session(let route) = page, let state = sessionHeader.state, state.session.sessionID == route.sessionID else { return nil }
+        guard case .session(let route) = root, let state = sessionHeader.state, state.session.sessionID == route.sessionID else { return nil }
         return state
     }
 }
@@ -69,7 +69,7 @@ struct PageTitleSlot: View {
     var body: some View {
         if let state = workspace.shownSessionHeader {
             title(state)
-        } else if workspace.page == .cue, workspace.pages.sidebar == .detailOnly {
+        } else if workspace.root == .cue, workspace.pages.sidebar == .detailOnly {
             CueTitle()
                 .frame(height: Spacing.toolbarControl)
                 .glass(in: .capsule)

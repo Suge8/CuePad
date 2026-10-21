@@ -1,7 +1,7 @@
 #if os(macOS)
 import SwiftUI
 
-/// 主窗口内容区挂着哪些页、侧栏开合（Mac）。当前页本身在 `Workspace.page`，这里只管"去过的页留着"。
+/// 主窗口内容区挂着哪些页、侧栏开合（Mac）。当前页本身在 `Workspace.root`，这里只管"去过的页留着"。
 @Observable
 final class MacPages {
     var sidebar: NavigationSplitViewVisibility = .all

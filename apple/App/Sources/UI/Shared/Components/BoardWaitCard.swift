@@ -94,25 +94,13 @@ private struct BoardSessionLink<Label: View>: View {
     let session: PiSessionState
     @ViewBuilder let label: Label
     @Environment(Workspace.self) private var workspace
-    #if os(iOS)
-    @Environment(AppServices.self) private var services
-    @Environment(Navigation.self) private var navigation
-    #endif
 
     var body: some View {
-        Button(action: open) {
+        Button { workspace.openSession(session.id, sessionID: session.sessionID) } label: {
             label.frame(maxWidth: .infinity, alignment: .leading).contentShape(.rect)
         }
         .buttonStyle(.row)
         .accessibilityHint("打开会话")
-    }
-
-    private func open() {
-        #if os(macOS)
-        workspace.show(.session(session.sessionID))
-        #else
-        navigation.openSession(session.id, sessionID: session.sessionID, store: services.store)
-        #endif
     }
 }
 

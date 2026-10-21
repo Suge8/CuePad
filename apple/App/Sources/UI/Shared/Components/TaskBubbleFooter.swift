@@ -32,12 +32,7 @@ private struct AgentStrip: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.cardAgents) private var agents
     @Environment(\.palette) private var palette
-    @Environment(\.closePanel) private var close
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    #if os(iOS)
-    @Environment(AppServices.self) private var services
-    @Environment(Navigation.self) private var navigation
-    #endif
 
     var body: some View {
         if let item = agents.items[leaf.id] {
@@ -48,7 +43,7 @@ private struct AgentStrip: View {
             #endif
             let shown = workspace.shown(state, delivery: item.delivery)
             let look = TaskAgentLook(shown, line: PiProgress.note(of: state, failure: shown.undelivered?.text(sync: workspace.services.syncStatus)))
-            Button { open(shown, state) } label: { strip(look, shown: shown, session: state.sessionID) }
+            Button { workspace.openSession(state.id, sessionID: state.sessionID) } label: { strip(look, shown: shown, session: state.sessionID) }
                 .buttonStyle(PressStyle(.wide))
                 .accessibilityElement(children: .combine)
                 .accessibilityHint("打开会话")
@@ -77,15 +72,6 @@ private struct AgentStrip: View {
         .background(palette.fill, in: .rect(cornerRadius: BubbleMetrics.stripRadius, style: .continuous))
         .contentShape(.rect)
     }
-
-    private func open(_ shown: PiShown, _ session: PiSessionState) {
-        #if os(macOS)
-        workspace.show(.session(session.sessionID))
-        #else
-        close()
-        navigation.follow(.agent(shown, session: session), store: services.store)
-        #endif
-    }
 }
 
 /// 还没交出去的叶子："开始"——正文连同标题作为第一句交给 Agent（先写下正文里没保存的字）。Mac 左边另有"绑定会话"。
@@ -96,10 +82,6 @@ private struct StartBar: View {
     let editing: CardEditing?
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
-    @Environment(\.closePanel) private var close
-    #if os(iOS)
-    @Environment(Navigation.self) private var navigation
-    #endif
 
     var body: some View {
         HStack(spacing: BubbleMetrics.gap) {
@@ -126,18 +108,9 @@ private struct StartBar: View {
 
     private func start() {
         let workspace = workspace, editing = editing, leaf = leaf
-        #if os(iOS)
-        let navigation = navigation
-        close()
-        #endif
         Task {
             do {
-                let card = try await editing?.flushed() ?? leaf
-                #if os(macOS)
-                workspace.handOff(card)
-                #else
-                navigation.handToAgent(card)
-                #endif
+                workspace.handOff(try await editing?.flushed() ?? leaf)
             } catch {
                 workspace.fail(error)
             }

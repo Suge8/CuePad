@@ -6,10 +6,9 @@ import SwiftUI
 /// Cue 可在右侧面板里与项目并排看。窄屏不用它（`DockRoot`）：折叠后的分栏这个容器本身比导航栈多约 3000M 指令（冷启动同口径交替量）。
 struct SplitRoot: View {
     @Environment(Workspace.self) private var workspace
-    @Environment(Navigation.self) private var navigation
     @Environment(\.statusBarBottom) private var statusBar
     @State private var width: CGFloat = 0
-    /// 侧栏选中的项目（宽屏恢复窗口时选回它；选的不是项目时为空）。只存这一个：当前项目由路径推出（`Navigation.currentProject`）
+    /// 侧栏选中的项目（宽屏恢复窗口时选回它；选的不是项目时为空）。只存这一个：当前项目由路径推出（`Workspace.currentProject`）
     @SceneStorage("splitProject") private var storedProject = ""
 
     private static let threeColumnWidth: CGFloat = 1100
@@ -20,8 +19,8 @@ struct SplitRoot: View {
     private static let maxPanelWidth: CGFloat = 480
 
     var body: some View {
-        @Bindable var navigation = navigation
-        NavigationSplitView(columnVisibility: $navigation.sidebar) {
+        @Bindable var workspace = workspace
+        NavigationSplitView(columnVisibility: $workspace.sidebar) {
             SplitSidebar()
                 .navigationSplitViewColumnWidth(
                     min: 240, ideal: min(sidebarWidth, Self.maxSidebarWidth), max: max(340, min(sidebarWidth, Self.maxSidebarWidth)))
@@ -32,7 +31,7 @@ struct SplitRoot: View {
                 // 提示横幅在右边这一栏里居中：按整个窗口居中时盖住侧栏顶上的圆钮。竖直按状态栏下沿排，与窄屏同一排：
                 // 这一栏的上安全区还含着分栏的工具栏那一排，按它排就掉到页头上了
                 stack.overlay(alignment: .top) { NoticeBanner().padding(.top, statusBar).ignoresSafeArea(edges: .top) }
-                if navigation.agentPanel {
+                if workspace.agentPanel {
                     Divider().ignoresSafeArea()
                     AgentPanel()
                         .frame(width: min(panelWidth, Self.maxPanelWidth))
@@ -42,22 +41,22 @@ struct SplitRoot: View {
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
         // 窄窗口（竖屏、分屏）放不下三栏：打开右侧面板或卡片纸页时收起侧栏，纸页盖住整个右侧
-        .onChange(of: navigation.agentPanel) { _, shown in
+        .onChange(of: workspace.agentPanel) { _, shown in
             if shown { collapseSidebarIfNarrow() }
         }
-        .onChange(of: navigation.path) { _, path in
+        .onChange(of: workspace.path) { _, path in
             if case .card = path.last { collapseSidebarIfNarrow() }
         }
-        .onAppear { navigation.restore(project: UUID(uuidString: storedProject), catalog: workspace.catalog) }
-        .onChange(of: navigation.root) { _, root in
+        .onAppear { workspace.restore(project: UUID(uuidString: storedProject)) }
+        .onChange(of: workspace.root) { _, root in
             if case .project(let id) = root { storedProject = id.uuidString } else { storedProject = "" }
         }
     }
 
     private var stack: some View {
-        @Bindable var navigation = navigation
-        return NavigationStack(path: $navigation.path) {
-            page(navigation.root)
+        @Bindable var workspace = workspace
+        return NavigationStack(path: $workspace.path) {
+            page(workspace.root)
                 .navigationDestination(for: Route.self) { page($0) }
         }
     }
@@ -74,20 +73,19 @@ struct SplitRoot: View {
     }
 
     private func collapseSidebarIfNarrow() {
-        guard width < Self.threeColumnWidth, navigation.sidebar != .detailOnly else { return }
-        withAnimation(Motion.snappy) { navigation.sidebar = .detailOnly }
+        guard width < Self.threeColumnWidth, workspace.sidebar != .detailOnly else { return }
+        withAnimation(Motion.snappy) { workspace.sidebar = .detailOnly }
     }
 }
 
 /// 右侧 Cue 面板的开关（和项目并排看 Cue）；有等你或新消息时带点（`CueDot`）。
 private struct AgentPanelButton: View {
-    @Environment(Navigation.self) private var navigation
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
         let waiting = workspace.cue.waiting, unread = workspace.cue.unread
-        Button { withAnimation(Motion.snappy) { navigation.agentPanel.toggle() } } label: {
-            Label { Text(workspace.cue.name) } icon: { CueMark(selected: navigation.agentPanel) }
+        Button { withAnimation(Motion.snappy) { workspace.agentPanel.toggle() } } label: {
+            Label { Text(workspace.cue.name) } icon: { CueMark(selected: workspace.agentPanel) }
                 .overlay(alignment: .topTrailing) { CueDot().offset(x: 3, y: -2) }
         }
         .accessibilityValue(unread > 0 ? "\(unread) 条新消息" : waiting > 0 ? "等你 \(waiting)" : "")
@@ -112,7 +110,6 @@ private struct AgentPanel: View {
 /// （末尾"全部项目"），底部归档、回收站与设置（同步到不了 Mac 时设置那一行带一个点）。选中的那一行垫选中底。
 private struct SplitSidebar: View {
     @Environment(Workspace.self) private var workspace
-    @Environment(Navigation.self) private var navigation
     @Environment(\.palette) private var palette
     @Environment(AppServices.self) private var services
     /// 各项目的进行中任务，最近开始的在前（项目行的"此刻"，`ProjectNow`）。
@@ -124,7 +121,7 @@ private struct SplitSidebar: View {
             .background(palette.sidebar)
             .navigationTitle("CuePad")
             .toolbar {
-                Button("新建项目", icon: .newProject) { navigation.projectForm = .init() }
+                Button("新建项目", icon: .newProject) { workspace.projectForm = .init() }
             }
     }
 
@@ -183,11 +180,11 @@ private struct SplitSidebar: View {
 
 /// 列表顶上的搜索框：点它把搜索页推在当前页上，那里的搜索框接着拿到键盘（同 ⌘K）。长相同搜索页的搜索框（`SearchCapsule`）。
 private struct SidebarSearchField: View {
-    @Environment(Navigation.self) private var navigation
+    @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
     var body: some View {
-        Button { navigation.openSearch() } label: {
+        Button { workspace.openSearch() } label: {
             HStack(spacing: 6) {
                 Image(.search).foregroundStyle(palette.ink3)
                 // 窄侧栏（iPad）放不下整句时只写"搜索"，不截成半句
@@ -211,11 +208,11 @@ private struct SidebarSearchField: View {
 
 /// 侧栏最上面的 Cue：头像、名字与 Cue 此刻那一行（`CueStatusRow`），点开 Cue 页。
 private struct CueSidebarItem: View {
-    @Environment(Navigation.self) private var navigation
 
+    @Environment(Workspace.self) private var workspace
     var body: some View {
-        let selected = navigation.root == .cue
-        Button { navigation.select(.cue) } label: {
+        let selected = workspace.root == .cue
+        Button { workspace.select(.cue) } label: {
             CueStatusRow(font: .body.weight(selected ? .semibold : .medium)).frame(minHeight: 60).contentShape(.rect)
         }
         .buttonStyle(RowStyle(selected: selected))
@@ -239,15 +236,15 @@ private struct SidebarRow: View {
     /// 项目行的"此刻"（项目行总留着这一行的高度）。
     var now: ProjectNow?
     var alert: Alert?
-    @Environment(Navigation.self) private var navigation
+    @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     @Environment(\.dynamicTypeSize) private var typeSize
     /// 图标随字号放大（侧栏列表里的符号默认不跟随辅助字号）。
     @ScaledMetric(relativeTo: .body) private var glyph: CGFloat = 16
 
     var body: some View {
-        let selected = navigation.root == route
-        Button { navigation.select(route) } label: {
+        let selected = workspace.root == route
+        Button { workspace.select(route) } label: {
             Label {
                 VStack(alignment: .leading, spacing: 1) {
                     // 辅助字号下名称独占一行、可换行，计数排到下一行：名称不被挤成"…"或从词中间断开

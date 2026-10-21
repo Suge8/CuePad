@@ -20,12 +20,6 @@ enum ProjectDirectory {
 
 /// 新建或编辑项目：名称、一句话介绍、图标、颜色；新建时还可以选文件夹（不选的第一次开工时建工作区，之后在项目菜单里换）。
 struct ProjectForm: View {
-    /// 新建（`project` 为 nil）或编辑哪个项目（`Workspace.projectForm`）。
-    struct Request: Identifiable {
-        let id = UUID()
-        var project: Project?
-    }
-
     let project: Project?
     @Environment(Workspace.self) private var workspace
     @Environment(\.closePanel) private var close

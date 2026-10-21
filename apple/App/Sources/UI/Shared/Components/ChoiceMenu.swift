@@ -51,8 +51,8 @@ struct MenuButton<Label: View>: View {
     @ViewBuilder let label: () -> Label
 
     #if os(iOS)
-    @Environment(Navigation.self) private var navigation: Navigation?
     @Environment(\.isEnabled) private var isEnabled
+    @Environment(Workspace.self) private var workspace: Workspace?
     @State private var pressed = false
 
     var body: some View {
@@ -62,7 +62,7 @@ struct MenuButton<Label: View>: View {
             .overlay {
                 MenuTrigger(
                     sections: sections, primary: primary, isEnabled: isEnabled, label: accessibilityLabel, value: value, hint: hint,
-                    pressed: { pressed = $0 }, presented: { navigation?.menuOpen = $0 })
+                    pressed: { pressed = $0 }, presented: { workspace?.menuOpen = $0 })
             }
     }
     #else
@@ -202,7 +202,7 @@ extension ChoiceMenu.Glyph {
     }
 }
 
-/// 系统菜单开着的这段（`Navigation.menuOpen`）锁住键盘上方的位置：内容的框与底部安全区（含键盘）都定在菜单开之前那一刻，
+/// 系统菜单开着的这段（`Workspace.menuOpen`）锁住键盘上方的位置：内容的框与底部安全区（含键盘）都定在菜单开之前那一刻，
 /// 这段里不跟键盘走（候选栏收起、键盘变矮）；关了之后等键盘回到原高再放开，键盘因菜单里的动作往下收（比开着时还矮）就立刻放开、跟着它走。
 /// 锁成一个写死高度（原高加原底部安全区）、顶边对齐的框，放在不随孩子撑大的框（minHeight 0）里：忽略安全区不放大外面给的尺寸，
 /// 只垫底部安全区的话内容（有最小高度，如 Cue 页的页头、等你卡片与输入框）加垫的那截超出外面给的高度，撑大的这一层被外面居中，顶边被挤出屏幕；
@@ -211,7 +211,7 @@ extension ChoiceMenu.Glyph {
 /// 键盘变矮的通知可能比"菜单开了"的状态先到这里，所以锁的是菜单开之前最后一次的读数，不是开的那一刻的。
 /// 读数记在引用里（不进状态），只在开、关与放开时取用，不形成布局反馈环。
 struct KeyboardHold: ViewModifier {
-    @Environment(Navigation.self) private var navigation
+    @Environment(Workspace.self) private var workspace
     @State private var held: Reading?
     @State private var readings = Readings()
 
@@ -238,15 +238,15 @@ struct KeyboardHold: ViewModifier {
             // 读的是外面给的：挂在背景上，不受上面这层忽略的影响
             .background { Color.clear.onGeometryChange(for: Reading.self) { Reading(height: $0.size.height, bottom: $0.safeAreaInsets.bottom) } action: { now in
                 readings.now = now
-                guard held != nil || navigation.menuOpen else {
+                guard held != nil || workspace.menuOpen else {
                     readings.steady = now
                     return
                 }
                 let lower = now.bottom < readings.lowest - 0.5
                 readings.lowest = min(readings.lowest, now.bottom)
-                if let held, !navigation.menuOpen, now.bottom >= held.bottom - 0.5 || lower { release() }
+                if let held, !workspace.menuOpen, now.bottom >= held.bottom - 0.5 || lower { release() }
             } }
-            .onChange(of: navigation.menuOpen) { _, open in
+            .onChange(of: workspace.menuOpen) { _, open in
                 if open {
                     held = readings.steady
                     readings.lowest = min(readings.steady.bottom, readings.now.bottom)

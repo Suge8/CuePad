@@ -38,9 +38,9 @@ extension DebugScene {
     private static let flowSession = "cueflow"
 
     #if os(iOS)
-    static func cueFlowIfAsked(_ workspace: Workspace, _ navigation: Navigation) async {
+    static func cueFlowIfAsked(_ workspace: Workspace) async {
         await runCueFlow(workspace) { away in
-            navigation.select(away ? .tasks : .cue)
+            workspace.select(away ? .tasks : .cue)
         }
     }
     #else

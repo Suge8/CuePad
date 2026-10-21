@@ -10,7 +10,6 @@ struct SessionScreen: View {
     let id: UUID
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
-    @Environment(Navigation.self) private var navigation
     @Environment(\.palette) private var palette
     @State private var digest: SessionDigest?
     /// 最后一次读到的会话记录：记录被删后仍显示它。
@@ -19,7 +18,7 @@ struct SessionScreen: View {
     @State private var confirmingEnd: PiSessionState?
     @State private var renaming: PiSessionState?
 
-    /// `seed`：推入前读好的这一页（`Navigation.openSession`），首帧即用，之后以 Store 的观察流为准。
+    /// `seed`：推入前读好的这一页（`Workspace.openSession`），首帧即用，之后以 Store 的观察流为准。
     init(id: UUID, seed: SessionDigest? = nil) {
         self.id = id
         _digest = State(initialValue: seed)

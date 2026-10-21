@@ -35,10 +35,6 @@ private struct MainRoot: View {
 
     var body: some View {
         content
-            // 深链在 Mac 上只来自点开的 Cue 通知（主窗口已叫到前面），小组件、分享扩展与实时活动只在 iOS
-            .onChange(of: services.pendingDeepLink, initial: true) {
-                if case .cue = services.consumeDeepLink() { workspace.show(.cue) }
-            }
             .modifier(CueRelayStage(workspace: workspace))
             .modifier(PaletteProvider())
             .onChange(of: services.settings.theme, initial: true) { _, theme in

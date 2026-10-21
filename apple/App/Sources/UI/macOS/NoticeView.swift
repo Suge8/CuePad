@@ -26,7 +26,7 @@ struct NoticeView: View {
         ZStack {
             if let notice = workspace.notice {
                 HStack(spacing: 0) {
-                    Button { if let link = notice.link { workspace.show(link); workspace.notice = nil } } label: {
+                    Button { if let link = notice.link { workspace.go(to: link) } } label: {
                         HStack(spacing: 6) {
                             Label { Text(notice.text) } icon: { Image(notice.isError ? .failure : .done) }
                             if notice.link != nil { Image(.forward).font(.system(size: 10, weight: .semibold)).accessibilityHidden(true) }
