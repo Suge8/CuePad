@@ -11,7 +11,6 @@ import SwiftUI
 import Testing
 @testable import CuePad
 
-// 他说话与离开：底下回了卡上的事或别的事，他走开后的常规问题与接着推进。
 extension CueEvalTests {
     @Test func l底下直接回了卡上的事() async throws {
         try await CueEval.run(

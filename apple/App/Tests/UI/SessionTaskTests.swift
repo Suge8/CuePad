@@ -47,7 +47,6 @@ struct SessionTaskTests {
         #expect(try await store.cueBoard().sessions.isEmpty)
     }
 
-    /// 回复框与 Cue 的 say 同一条规则：会话在等 CuePad 答得了的提问时，说的话就是答案（选项原文或序号），否则照常发出。
     /// 说话不改任务的状态：对已完成的事的会话说的话、作的答送到了，任务仍是完成。状态只由明确的动作改：
     /// Cue 的 edit reopen 同你点掉圆圈（没完成的不让改回），加步骤回到进行中。
     @Test func 对已完成任务的会话说话_任务仍是完成_改回或加步骤才变() async throws {
