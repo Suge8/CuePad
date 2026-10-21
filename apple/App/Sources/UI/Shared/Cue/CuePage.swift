@@ -94,7 +94,7 @@ struct CuePage: View {
     /// "等你"卡与输入框浮在对话底上（`FloatingReply`，同会话页与 Mac，键盘也在那里让）；窄屏底部那一排没有键盘时离屏幕底边同 Dock。
     private var page: some View {
         FloatingReply(backed: false, floor: docked ? Dock.margin : nil) {
-            chat.overlay { if docked, navigation.placesOpen { closePlaces } }
+            chat
         } reply: {
             bottom
                 .padding(.horizontal, docked ? Dock.margin : 12)
@@ -110,14 +110,6 @@ struct CuePage: View {
 
     /// 窄屏导航栈的根（不是 iPad 右侧面板）：底部是"⋯"加输入框。
     private var docked: Bool { !inPanel && sizeClass == .compact }
-
-    /// "⋯"展开时铺在对话上的一层：点一下或一划就收起。
-    private var closePlaces: some View {
-        Color.clear.contentShape(.rect)
-            .onTapGesture { navigation.placesOpen = false }
-            .gesture(DragGesture(minimumDistance: 4).onChanged { _ in navigation.placesOpen = false })
-            .accessibilityHidden(true)
-    }
 
     /// 窄屏底部那一排：左边给"⋯"让出位置（输入框有焦点时不让），右边输入框；Cue 钮长成它之前藏着（`DockRoot.handed`）。
     private var dockRow: some View {

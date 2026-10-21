@@ -28,7 +28,7 @@ enum ScrollAnchor {
 /// - `-CuePadClick x,y[;x,y|esc|return…]`、`-CuePadRightClick x,y`（仅 Mac，要 `-CuePadForeground YES`）：就绪后在主窗口里按顺序左键点几下（`esc`、`return` 是按那个键）、或右键点一下，打开那里的系统菜单、任务气泡再截图、录屏（`openMenuIfAsked`，见 `DebugMenus+Mac.swift`）；
 /// - `-CuePadCueBrain <可执行文件>`（仅 Mac）：Cue 的大脑换成这个替身（如 `scripts/cue-brain-stub.py`），量值班开销用（docs/verify.md「性能测量」）；
 /// - `-CuePadDockTour YES`（iPhone）：就绪后按固定节奏走一遍底部那一排，录换去处的过渡（`dockTourIfAsked`）；
-///   `-CuePadNotice <文字>`：就绪前弹一条提示（`noticeIfAsked`）；`-CuePadQuiet YES`（iOS）：不弹演示会话的前台横幅；`-CuePadPlacesOpen YES`（配 cue 画面）：Cue 页底部的"⋯"一打开就展开；
+///   `-CuePadNotice <文字>`：就绪前弹一条提示（`noticeIfAsked`）；`-CuePadQuiet YES`（iOS）：不弹演示会话的前台横幅；`-CuePadPlacesOpen YES`（cue 画面）：Cue 页底部的"⋯"展开着；
 ///   `-CuePadCueDraft <文字>`（配 cue 画面）：Cue 的输入框里先有这句草稿；
 /// - `-CuePadReduceMotion YES`：整个窗口按"减弱动态效果"画（`PaletteProvider` 改窗口的环境；不碰系统设置，Mac 上那是用户这台机器的全局设置）；`-CuePadLargestType YES` 同理按最大的辅助字号画；
 /// - `-CuePadCueFocus YES`（配 cue 画面）：Cue 页的输入框一出现就聚焦；`-CuePadSoftKeyboard YES`（iOS）：模拟器里聚焦也弹出系统键盘；`-CuePadLandscape YES`（iPhone）：转成横屏；`-CuePadCompact <宽>`（iPad）：按这么宽的窄窗口画（分屏、台前调度；紧凑尺寸类，底部那一排 `DockRoot`，`debugCompact`）；
@@ -78,6 +78,8 @@ enum DebugScene {
     #if os(iOS)
     /// 点 Cue 页头开合面板的那条路（`debugExposesCuePanel`）。
     static var toggleCuePanel: () -> Void = {}
+    /// 展开底部"⋯"的那条路（`debugExposesPlaces`）。
+    static var openPlaces: () -> Void = {}
     #endif
 
     /// 第 `attempt` 次订阅项目目录（`Workspace.catalogAttempt`，从 0 起）是否按 `-CuePadCatalogFailure` 注入失败。
