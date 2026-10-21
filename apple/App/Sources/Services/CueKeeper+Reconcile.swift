@@ -4,12 +4,8 @@ import CuePi
 import CueStore
 import CueText
 import Foundation
-import Observation
-import os
 
 extension CueKeeper {
-    // MARK: 对账
-
     func reconcile() async {
         timer?.cancel()
         timer = nil
@@ -59,8 +55,6 @@ extension CueKeeper {
                 return
             }
 
-            let messages = try await store.cueMessages(limit: 50)
-
             if progress.greeted != profile.enabledAt {
                 progress.greeted = profile.enabledAt
                 _ = try await wakeUp(.enabled)
@@ -100,8 +94,7 @@ extension CueKeeper {
             }
             if let lapse = changes.lapse { deadlines.append(lapse) }
 
-            let lastSpoke = messages.last { $0.author == .known(.you) }?.createdAt
-            let idleSince = lastSpoke ?? profile.enabledAt ?? shift.startedAt
+            let idleSince = try await store.cueLastYou()?.said ?? profile.enabledAt ?? shift.startedAt
             if try await !store.cueBoardActive(), let due = patrolDue(idleSince: idleSince, now: now) {
                 if due <= now {
                     let today = Self.day(now)

@@ -113,7 +113,7 @@ nonisolated struct CueDigest: Equatable, Sendable {
     var state: CueState?
     /// 在跑的这一轮为什么醒（`CueStore.cueWaking`）：醒的时刻与"被谁叫醒"那一截；歇着、这一轮没记为 nil。
     var woke: Woke?
-    /// 今天做完的顶层任务（被等你占着的不算，同任务看板的做完列），最近的在前。
+    /// 今天做完的顶层任务（被等你占着的不算，同任务看板的已完成列），最近的在前。
     var done: [Card]
 
     static let empty = CueDigest(

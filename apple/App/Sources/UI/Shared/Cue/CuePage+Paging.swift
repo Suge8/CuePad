@@ -1,4 +1,3 @@
-import CueStore
 import CueText
 import SwiftUI
 
@@ -43,7 +42,8 @@ extension CuePage {
         #if os(macOS)
         let composer = ComposerMetrics.textTop + ComposerMetrics.textBottomOpen + ComposerMetrics.slot
         // 卡与阅读栏同宽（`page` 里回复那一块两边让出同样的边距），至多占对话区的一半
-        let floor = thread.waiting.first.map { CueWaitingDock.floor($0, shots: thread.shots, width: min(size.width, readingWidth) - 2 * inset) } ?? 0
+        // 露哪一条可能被换到最前（`Workspace.leadingAsk`）：取几条里最矮的，仍只数少
+        let floor = thread.waiting.map { CueWaitingDock.floor($0, shots: thread.shots, width: min(size.width, readingWidth) - 2 * inset) }.min() ?? 0
         let dock = min(floor, size.height / 2)
         return composer + replyPadding + dock
         #else

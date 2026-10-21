@@ -1,4 +1,3 @@
-import CueText
 import Foundation
 
 /// Cue 的设置（同步，只有一行）。

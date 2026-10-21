@@ -7,9 +7,6 @@ struct ArchiveList: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
-    #if os(iOS)
-    @Environment(Navigation.self) private var navigation
-    #endif
     @State private var cards: [Card]?
 
     var body: some View {
@@ -77,11 +74,5 @@ struct ArchiveList: View {
             trailing: [CardMenu.Item.trash.rowAction(on: card, in: workspace)].compactMap { $0 })
     }
 
-    private func open(_ card: Card) {
-        #if os(iOS)
-        if card.isTask { workspace.openTask(card) } else { navigation.push(.card(card.id)) }
-        #else
-        workspace.open(card)
-        #endif
-    }
+    private func open(_ card: Card) { workspace.open(card) }
 }

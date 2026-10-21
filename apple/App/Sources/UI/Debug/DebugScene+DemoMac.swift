@@ -1,8 +1,8 @@
 #if DEBUG
 import CueStore
 import CueText
-import OSLog
-import SwiftUI
+import Foundation
+import Observation
 
 extension DebugScene {
     static func runDemoMac(_ services: AppServices) async {

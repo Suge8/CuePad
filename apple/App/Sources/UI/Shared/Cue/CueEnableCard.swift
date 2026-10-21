@@ -1,5 +1,3 @@
-import CueStore
-import CueText
 import SwiftUI
 
 /// 还没启用时 Cue 页输入框上方的那一块，两端同一个：只放启用这一步，启用后怎么用由 Cue 页空态那一句说（同一屏不说两遍）。选一台 Mac 启用（能运行 Cue 的几台，`CueSettings.hosts`）——

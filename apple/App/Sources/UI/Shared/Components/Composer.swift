@@ -1,5 +1,4 @@
 import CueStore
-import CueText
 import SwiftUI
 
 /// 随手记、新会话与 Pi 会话回复框共用的输入框（iOS 与 Mac 同一份；文字区各用平台的文本视图，见 `ComposerField`；图片来源与带上的卡片的菜单、面板

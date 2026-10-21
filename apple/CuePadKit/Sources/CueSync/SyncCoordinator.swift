@@ -71,10 +71,13 @@ actor SyncCoordinator {
 
   private func unsubscribe(_ token: UUID) { subscribers[token] = nil }
 
-  /// 能不能和服务器同步：有可用的账号，也没有停下来等你决定。
+  /// 能不能和服务器同步：有可用的账号，也没有停下（`stopped`）。
   var canSync: Bool {
-    needsDecision == nil && ![.noAccount, .accountRestricted].contains(status)
+    !stopped && ![.noAccount, .accountRestricted].contains(status)
   }
+
+  /// 停下了：等你决定，或这台要更新（`SyncStatus.outdated`）。停下时不拉、不传，账号、同步区与上传失败都不改状态。
+  var stopped: Bool { needsDecision != nil || status == .outdated }
 
   var alertSubscription: PiAlertSubscriptionStatus { facts.alerts }
   func setAlerts(_ alerts: PiAlertSubscriptionStatus) { facts.alerts = alerts }
@@ -94,7 +97,7 @@ actor SyncCoordinator {
 
   // MARK: 上传批次
 
-  /// 下一批要上传的：`first` 里待推送的排在前面，至多 `limit` 条；没有可传的（或此刻不能同步）为 nil。
+  /// 下一批要上传的：`first` 里待推送的排在前面，至多 `limit` 条；没有可传的（或此刻不能同步）为 nil。交出一批即算同步中，到这一轮结束（`finishedSending`）。
   /// 上次确定没有可传的之后只看其后的提交碰过的记录（`drained`）。
   func nextBatch(first: Set<String>, limit: Int) async -> (saves: [CKRecord], deletes: [CKRecord.ID])? {
     if drained?.sending != nil { drained = nil }  // 上一批整个没传成（没有结果）
@@ -131,6 +134,9 @@ actor SyncCoordinator {
       report(error, recordName: nil)
       return nil
     }
+    // 构造这批时可能停下了（拉到过高的门槛、要你决定）：停下后不再交出新的一批
+    guard canSync else { return nil }
+    facts.sending = true
     return batch
   }
 
@@ -157,7 +163,8 @@ actor SyncCoordinator {
 
   // MARK: 拉取器、发送者与账号检查交进来的
 
-  func setSending(_ busy: Bool) { facts.sending = busy }
+  /// 一轮上传结束（开始是 `nextBatch` 交出一批时）。
+  func finishedSending() { facts.sending = false }
 
   /// 拉取器开始、结束拉积压（没有令牌时的对账，或一拉不止一页）。
   func setCatchingUp(_ busy: Bool) { facts.catchingUp = busy }
@@ -179,10 +186,11 @@ actor SyncCoordinator {
     do { _ = try await token() } catch { report(error, recordName: nil) }
   }
 
-  /// 拉取器拉到的一页：应用完才返回；整页没能应用（库写不进去、停下来等你决定）时抛出，拉取器不前移令牌。
-  /// 单条记录不合法只报告（见 `ZonePuller`）。
+  /// 拉取器拉到的一页：应用完才返回；整页没能应用（库写不进去、停下了）时抛出，拉取器不前移令牌。
+  /// 单条记录不合法只报告（见 `ZonePuller`）。页里的门槛高于这台的，整页不应用，更新后从这页接着拉。
   func pulled(_ modifications: [CKRecord], _ deletions: [(id: CKRecord.ID, recordType: String)]) async throws {
-    guard needsDecision == nil else { throw SyncPaused() }
+    guard !stopped else { throw SyncPaused() }
+    try meet(modifications)
     guard !modifications.isEmpty || !deletions.isEmpty else { return }
     do {
       try await applyFetched(modifications, deletions)
@@ -194,9 +202,16 @@ actor SyncCoordinator {
     reached(nil)
   }
 
+  /// 云端的最低对端版本（`PeerFloor`）高于这台能同步的结构版本：停下，抛出 `SyncPaused`。
+  func meet(_ records: [CKRecord]) throws {
+    guard let floor = PeerFloor.version(in: records), floor > CueStore.supportedSchemaVersions.upperBound else { return }
+    facts.status = .outdated
+    throw SyncPaused()
+  }
+
   /// 上传结果：记账，并告诉发送者这批有没有进展、要不要停下来等。
   func sent(_ sent: SentRecords) async -> SendOutcome {
-    guard needsDecision == nil else { return SendOutcome(progressed: false, blocked: true, zoneMissing: false) }
+    guard !stopped else { return SendOutcome(progressed: false, blocked: true, zoneMissing: false) }
     reached(nil)
     do {
       return try await processSent(sent)
@@ -211,7 +226,7 @@ actor SyncCoordinator {
   }
 
   func accountStatus(_ account: CKAccountStatus) {
-    guard needsDecision == nil else { return }
+    guard !stopped else { return }
     switch account {
     case .available:
       if [.starting, .noAccount, .accountRestricted, .accountUnavailable].contains(status) { facts.status = .idle }
@@ -224,7 +239,7 @@ actor SyncCoordinator {
 
   /// 此刻登录的 iCloud 账号（用户记录名）。第一次同步记下；和上次同步的不是同一个时，本机数据属于上一个账号，停下来等你决定。
   func account(_ name: String) async {
-    guard needsDecision == nil else { return }
+    guard !stopped else { return }
     let current = Data(name.utf8)
     do {
       guard let last = try await store.syncState(Self.accountKey) else { return try await store.setSyncState(Self.accountKey, current) }
@@ -237,7 +252,7 @@ actor SyncCoordinator {
   /// 同步区不在了（`deletedByUser`：你在 iCloud 设置里删了 CuePad 的数据）：同步过的（有令牌或推送过的记录）是云端数据被删除或重置，
   /// 停下来等你决定；从没同步过的不用管，第一次上传时建区。
   func zoneMissing(deletedByUser: Bool) async {
-    guard needsDecision == nil else { return }
+    guard !stopped else { return }
     do {
       let hadToken = try await token() != nil
       let pushedAny = try await !store.syncedRecords().isEmpty
@@ -252,5 +267,5 @@ actor SyncCoordinator {
   func recordID(_ name: String) -> CKRecord.ID { CKRecord.ID(recordName: name, zoneID: zoneID) }
 }
 
-/// 停下来等你决定：这一页不应用，令牌不前移。
+/// 停下了（等你决定，或这台要更新）：这一页不应用，令牌不前移。
 struct SyncPaused: Error {}

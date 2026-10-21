@@ -75,19 +75,4 @@ struct ReplyTests {
         #expect(toClaude.content.contains("按钮改圆角") && toClaude.content.contains("按这张改"))
         #expect(toPi.content.contains(image))
     }
-
-    #if os(iOS)
-    @Test func 发到Mac带来的卡片写进同一份草稿_已经写的字还在() {
-        let session = UUID()
-        let settings = settings("drafts-\(UUID())")
-        var draft = settings.replyDraft(for: session)
-        draft.text = "补一句"
-        settings.setReplyDraft(draft, for: session)
-
-        Navigation(settings: settings).openSession(session, draft: Outbox(content: "接口约定", card: UUID()), store: TestApp().services.store)
-
-        #expect(settings.replyDraft(for: session).text == "补一句")
-        #expect(settings.replyDraft(for: session).attachments.first?.content == "接口约定")
-    }
-    #endif
 }

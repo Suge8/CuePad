@@ -1,5 +1,4 @@
 import CueStore
-import Foundation
 import Testing
 
 /// 由 CueSync 把同步表映射为 CKRecord（record type = 表名，recordName = id）。

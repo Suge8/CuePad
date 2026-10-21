@@ -96,17 +96,6 @@ nonisolated struct CueWakeHeader: Equatable, Sendable {
         }
     }
 
-    /// 为什么醒的一句话（读屏读，界面上是图标）
-    var reason: String {
-        switch wake {
-        case .enabled: "刚启用"
-        case .message: "你发来消息"
-        case .idle: "空闲时看了一眼"
-        case .sessionActivity: "会话有动静"
-        case .reminder: "提醒到点"
-        }
-    }
-
     private static func verb(_ kind: CueChange.Kind) -> String {
         switch kind {
         case .settled: "停下了"
@@ -120,6 +109,17 @@ nonisolated struct CueWakeHeader: Equatable, Sendable {
 }
 
 extension CueWake {
+    /// 为什么醒的一句话（Cue 页那一节的第一行给读屏读、界面上是图标；Mac 的运行情况照写）。
+    var reason: String {
+        switch self {
+        case .enabled: "刚启用"
+        case .message: "你发来消息"
+        case .idle: "空闲时看了一眼"
+        case .sessionActivity: "会话有动静"
+        case .reminder: "提醒到点"
+        }
+    }
+
     /// 醒来原因的图标（Cue 页那一节的第一行、Mac 的运行情况）。
     var icon: Icon {
         switch self {

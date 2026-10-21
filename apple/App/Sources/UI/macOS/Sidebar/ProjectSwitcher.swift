@@ -73,13 +73,13 @@ struct ProjectSwitcher: View {
     }
 }
 
-/// 胶囊里的当前页：单独一个视图读 `workspace.page`，切页时只重算它，不重算上面那份包含全部项目的菜单。Mac 的每一页都有一个写法（`MainWindow.pageView`），胶囊不空着只剩箭头。
+/// 胶囊里的当前页：单独一个视图读 `workspace.root`，切页时只重算它，不重算上面那份包含全部项目的菜单。Mac 的每一页都有一个写法（`MainWindow.pageView`），胶囊不空着只剩箭头。
 private struct CurrentPage: View {
     let projects: [Project]
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        switch workspace.page {
+        switch workspace.root {
         case .cue:
             Image(.cue).accessibilityHidden(true)
             Text(workspace.cue.name)

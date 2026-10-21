@@ -10,10 +10,13 @@ struct Moments<Content: View>: View {
     @ViewBuilder let content: (Date) -> Content
     /// 睡到的那个时刻：读数不早于它（醒来与重画之间读 `.now` 不会还差一丝没到）
     @State private var reached = Date.distantPast
+    /// 挂着看不见的页（Mac 留着的页、先挂上的 Agent 页）不睡也不醒：醒来换字要连带整页重排（额度栏的倒计时曾每约 15 秒排一次 10–16ms）；
+    /// 回到前台时它变了、这里重画，按那一刻的字排。
+    @Environment(\.pageActive) private var active
 
     var body: some View {
         let now = max(Date.now, reached)
-        let next = next(now)
+        let next = active ? next(now) : nil
         content(now)
             .task(id: next) {
                 guard let next, (try? await Task.sleep(for: .seconds(next.timeIntervalSinceNow))) != nil else { return }

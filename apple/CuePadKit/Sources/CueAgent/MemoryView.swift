@@ -1,5 +1,4 @@
 import CueStore
-import Foundation
 
 /// Cue 的记忆视图（OptMem 的读法）：一直记着的全部列出（在系统提示里，`pinnedText`）；其余按序号铺成对齐的 2 的幂块，越新越细、总行数固定在预算内
 /// （按预算二分 alpha，见 `cover`），放在新会话的第一条输入里（`viewText`）。块有摘要用摘要，没有就拆成两半直到有摘要或单行；

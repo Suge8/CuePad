@@ -53,14 +53,3 @@ struct ProjectStylePicker: View {
         }
     }
 }
-
-extension Workspace {
-    /// 新建（`project` 为 nil）或更新项目的名称、图标与颜色；返回项目 id。
-    /// `intro` 是项目的一句话介绍，空白即没有。
-    func saveProject(_ project: Project?, name: String, intro: String, icon: ProjectIcon, color: String) async throws -> UUID {
-        let store = services.store, intro = intro.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty
-        let id = if let existing = project?.id { existing } else { try await store.createProject(name: name, color: color, icon: icon.rawValue).id }
-        try await store.updateProject(id) { $0.name = name; $0.intro = intro; $0.icon = icon.rawValue; $0.color = color }
-        return id
-    }
-}

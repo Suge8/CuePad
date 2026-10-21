@@ -3,12 +3,12 @@ import CueStore
 import CueSync
 import Foundation
 import Testing
-import AppKit
 @testable import CuePad
+
 @testable import CuePi
 
 extension MacSyncTests {
-    // MARK: 手机请这台 Mac 绑定文件夹（Mac 才有完整路径；绑定只有这一条写入：本机的目录绑定）
+    // 绑定由 Mac 执行（只有它有完整路径），写入只有这一条：本机的目录绑定
 
     func bound(_ bind: PiBind) async throws -> DeliveryRequest {
         try await services.executor.start()

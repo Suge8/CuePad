@@ -1,7 +1,6 @@
 #if os(macOS) && DEBUG
 import AppKit
 import CueStore
-import QuartzCore
 import SwiftUI
 
 extension DebugScene {

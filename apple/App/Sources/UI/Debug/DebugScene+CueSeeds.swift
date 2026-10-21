@@ -94,10 +94,11 @@ extension DebugScene {
     }
 
     /// 会话发来一张截图：卡片与"等你"上的证据。
-    static func seedEvidence(_ store: CueStore, session: String, title: String) async {
+    @discardableResult
+    static func seedEvidence(_ store: CueStore, session: String, title: String) async -> PiPreview? {
         let file = FileManager.default.temporaryDirectory.appending(path: "cuepad-demo-\(session).png")
         try? swatchPNG().write(to: file)
-        _ = try? await store.addPreviews([(file, title)], sessionID: session)
+        return try? await store.addPreviews([(file, title)], sessionID: session).first?.preview
     }
 
     static func swatchPNG() -> Data {

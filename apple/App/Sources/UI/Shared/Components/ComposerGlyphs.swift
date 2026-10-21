@@ -7,9 +7,9 @@ struct CircleGlyph<Content: View>: View {
 
     var body: some View {
         content()
-            .frame(width: 40, height: 40)
+            .frame(width: ComposerMetrics.glyph, height: ComposerMetrics.glyph)
             .background(fill, in: .circle)
-            .frame(width: 44, height: 44)
+            .frame(width: ComposerMetrics.glyphTarget, height: ComposerMetrics.glyphTarget)
             .contentShape(.circle)
     }
 }

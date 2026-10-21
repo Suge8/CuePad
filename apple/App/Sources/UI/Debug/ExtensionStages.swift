@@ -1,7 +1,6 @@
 #if os(iOS) && DEBUG
 import CueStore
 import SwiftUI
-import UIKit
 import WidgetKit
 
 /// `-CuePadScene widgets`：两种小组件（Cue、默认项目）的小号与中号，用小组件自己的视图（`WidgetViews`，主 App 也编进了它）

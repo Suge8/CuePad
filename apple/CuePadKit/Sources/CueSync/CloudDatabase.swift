@@ -35,9 +35,27 @@ enum CloudKitLimits {
   static let recordsPerRequest = 400
 }
 
-struct CloudDatabase: ZoneChangeSource, RecordUploader {
-  let database: CKDatabase
+/// 同步连着的 iCloud：账号、同步区与订阅。正式的是 `CloudDatabase`；`SimulatedCloud` 是内存里的替身，测试与调试画面用它跑真实的同步代码。
+protocol SyncCloud: ZoneChangeSource, RecordUploader, SubscriptionStore {
+  func accountStatus() async throws -> CKAccountStatus
+  /// 此刻登录的账号（用户记录名）。
+  func accountName() async throws -> String
+}
+
+struct CloudDatabase: SyncCloud {
+  let container: CKContainer
   let zoneID: CKRecordZone.ID
+  private var database: CKDatabase { container.privateCloudDatabase }
+
+  func accountStatus() async throws -> CKAccountStatus { try await container.accountStatus() }
+  func accountName() async throws -> String { try await container.userRecordID().recordName }
+
+  func subscriptions() async throws -> [CKSubscription.ID: CKSubscription] {
+    Dictionary(uniqueKeysWithValues: try await database.allSubscriptions().map { ($0.subscriptionID, $0) })
+  }
+
+  func save(_ subscription: CKSubscription) async throws { _ = try await database.save(subscription) }
+  func delete(_ id: CKSubscription.ID) async throws { _ = try await database.deleteSubscription(withID: id) }
 
   func changes(since token: Data?, keys: [String]?) async throws -> ZoneChangeBatch {
     let since = try token.flatMap { try NSKeyedUnarchiver.unarchivedObject(ofClass: CKServerChangeToken.self, from: $0) }

@@ -3,15 +3,26 @@ import CueStore
 import CueText
 import SwiftUI
 
+/// 两端同一份的结果，加上只有右侧预览要写的：最近发去哪里、任务的上级标题与步骤进度。
 nonisolated private struct PaletteData: Sendable, Equatable {
-    var cards: [Card]
-    var total: Int
-    var projects: [Project]
+    var matches: CardMatches
     var lastSends: [UUID: LastSend]
-    var targets: [SendTarget]
-    /// 结果里的任务：上级的标题与步骤各自做完没有，预览里写它的进度。
     var parents: [UUID: String]
     var subtasks: [UUID: TaskProgress]
+
+    static func read(_ query: PaletteQuery, from store: isolated CueStore) throws -> PaletteData {
+        let matches = try CardMatches.read(query, from: store)
+        let cards = matches.entries.map(\.card), tasks = cards.filter(\.isTask)
+        var lastSends: [UUID: LastSend] = [:]
+        for group in matches.groups {
+            lastSends.merge(try store.lastSends(in: group.id)) { current, _ in current }
+        }
+        var parents: [UUID: String] = [:]
+        for task in tasks {
+            if let parent = task.parentID { parents[task.id] = try store.card(parent)?.title }
+        }
+        return PaletteData(matches: matches, lastSends: lastSends, parents: parents, subtasks: try store.subtaskProgress(of: tasks.map(\.id)))
+    }
 }
 
 /// ⌘K：两个范围。卡片——跨项目搜索，四个筛选（项目、含图片、发送目标、时间），结果按项目分组，右侧纸面预览；
@@ -39,18 +50,22 @@ struct SearchPalette: View {
 
     var body: some View {
         panel
-            // 常驻（`keptPanel`）：开合不重建，每次开时聚焦，收起时清掉上一次的查询与结果
+            // 常驻（`keptPanel`）：开合不重建，每次开时聚焦、从空的查询看起。收起时查询本来就是空的，结果留着：再开只是现出来，订阅回到前台后库变了再换；
+            // 每次都清掉的话每次开都要当场重读、重建整列结果（真实库约多 150M 条指令）。查过别的才清掉，收着时先读好空查询的那份（`pagePrefetch`）
             .onChange(of: active, initial: true) {
                 focused = active
                 if active {
                     if query.text.isEmpty { query.text = DebugHooks.preset.searchText }
-                } else {
+                    return
+                }
+                if query != PaletteQuery() || sessionPages != 1 {
                     query = PaletteQuery()
+                    sessionPages = 1
                     data = nil
                     sessions = nil
-                    selection = nil
-                    sessionSelection = nil
                 }
+                selection = cardIDs.first
+                sessionSelection = sessionGroups.first?.sessions.first?.sessionID
             }
             .onChange(of: query.text) {
                 query.pages = 1
@@ -58,22 +73,10 @@ struct SearchPalette: View {
             }
             .background { if scope == .cards { shortcuts } }
             .observing(services.store, id: query, into: $data, onError: workspace.fail) { [query] store in
-                let found = try store.search(query.store(), limit: PaletteQuery.pageSize * query.pages)
-                var lastSends: [UUID: LastSend] = [:]
-                for owner in Set(found.cards.map(\.projectID)) {
-                    lastSends.merge(try store.lastSends(in: owner)) { current, _ in current }
-                }
-                var parents: [UUID: String] = [:]
-                for task in found.cards where task.isTask {
-                    if let parent = task.parentID { parents[task.id] = try store.card(parent)?.title }
-                }
-                let subtasks = try store.subtaskProgress(of: found.cards.filter(\.isTask).map(\.id))
-                return PaletteData(
-                    cards: found.cards, total: found.totalCards, projects: try store.projects(),
-                    lastSends: lastSends, targets: try store.sendTargets(), parents: parents, subtasks: subtasks)
+                try PaletteData.read(query, from: store)
             }
-            .onChange(of: data?.cards.map(\.id)) {
-                if let ids = data?.cards.map(\.id), selection.map(ids.contains) != true { selection = ids.first }
+            .onChange(of: cardIDs) {
+                if selection.map(cardIDs.contains) != true { selection = cardIDs.first }
             }
             .modifier(sessionObservation)
     }
@@ -110,7 +113,7 @@ struct SearchPalette: View {
                 .focused($focused)
                 .onSubmit {
                     switch scope {
-                    case .cards: selected.map(open)
+                    case .cards: selected.map { open($0.card) }
                     case .sessions: sessionSelection.map(openSession)
                     }
                 }
@@ -127,7 +130,7 @@ struct SearchPalette: View {
     }
 
     @ViewBuilder private var cardsContent: some View {
-        FilterBar(query: $query, projects: data?.projects ?? [], targets: data?.targets ?? [], total: data?.total)
+        FilterBar(query: $query, targets: data?.matches.targets ?? [], total: data?.matches.total)
             .padding(.horizontal, 14).padding(.bottom, 10)
         Divider()
         // 放得下就列表 + 预览并排，否则只留列表（最小窗口下详情区不到 500 宽）
@@ -153,7 +156,10 @@ struct SearchPalette: View {
         workspace.show(.session(sessionID))
     }
 
-    private var selected: Card? { data?.cards.first { $0.id == selection } }
+    private var selected: CardEntry? { data?.matches.entries.first { $0.id == selection } }
+
+    /// 结果从上到下的顺序：方向键照它走，结果一变就选中第一张（原来选的还在就不动）。
+    private var cardIDs: [UUID] { data?.matches.entries.map(\.id) ?? [] }
 
     /// 本机在线的会话换上桥上的实时状态（同步记录按节流写，会落后几秒）。
     private var sessionGroups: [SessionGroup] {
@@ -164,14 +170,14 @@ struct SearchPalette: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 2) {
-                    if let data {
-                        if data.cards.isEmpty {
+                    if let data = data?.matches {
+                        if data.groups.isEmpty {
                             Text(query.text.isEmpty && !query.isFiltered ? "输入关键词，或用上面的筛选" : "没有找到灵感或任务")
                                 .font(Typography.secondary).foregroundStyle(palette.ink2)
                                 .padding(.vertical, 16)
                         }
-                        ForEach(groups(data), id: \.owner) { group in
-                            let project = data.projects.first { $0.id == group.owner }
+                        ForEach(data.groups) { group in
+                            let project = workspace.catalog?.project(group.id)
                             HStack(spacing: 6) {
                                 ProjectGlyph(project: project, size: 11)
                                 Text(project?.name ?? "")
@@ -179,10 +185,10 @@ struct SearchPalette: View {
                             }
                             .font(Typography.label).foregroundStyle(palette.ink2)
                             .padding(.top, 10).padding(.bottom, 2)
-                            ForEach(group.cards) { card in row(card).id(card.id) }
+                            ForEach(group.cards) { entry in row(entry).id(entry.id) }
                         }
-                        if data.total > data.cards.count {
-                            Button("显示更多（还有 \(data.total - data.cards.count) 条）") { query.pages += 1 }
+                        if data.total > data.shown {
+                            Button(CountCopy.more(data.total - data.shown)) { query.pages += 1 }
                                 .buttonStyle(PressStyle(.inline)).font(Typography.meta).foregroundStyle(palette.ink2)
                                 .padding(.vertical, 10)
                         }
@@ -195,8 +201,8 @@ struct SearchPalette: View {
         }
     }
 
-    private func row(_ card: Card) -> some View {
-        let text = CardText(card.body)
+    private func row(_ entry: CardEntry) -> some View {
+        let card = entry.card, text = entry.text
         let isSelected = card.id == selection
         return HStack(spacing: 10) {
             Group {
@@ -223,11 +229,11 @@ struct SearchPalette: View {
 
     /// 右侧预览：标题、项目与时间、任务的上级与进度、首图、标题之后的全文（搜着词时从命中处起、命中标色）；按内容高度收起，快捷键提示紧跟在下面。
     @ViewBuilder private var preview: some View {
-        if let card = selected, let data {
-            let text = CardText(card.body)
+        if let entry = selected, let data {
+            let card = entry.card, text = entry.text
             // 搜着词时从第一处命中往前一点开始显示，命中不会落在下面看不到的地方
             let rest = CueSummary.snippet(card.body, matching: query.text.split(whereSeparator: \.isWhitespace).map(String.init), whole: true)
-            let project = data.projects.first { $0.id == card.projectID }
+            let project = workspace.catalog?.project(card.projectID)
             VStack(alignment: .leading, spacing: 10) {
                 Text(text.label).font(Typography.previewTitle).foregroundStyle(palette.ink)
                 HStack(spacing: 6) {
@@ -271,20 +277,10 @@ struct SearchPalette: View {
 
     private var shortcuts: some View {
         ZStack {
-            Button("复制") { if let card = selected { workspace.copy(Outgoing.text(of: card)) } }
+            Button("复制") { if let entry = selected { workspace.copy(Outgoing.text(of: entry.card)) } }
                 .keyboardShortcut("c", modifiers: [.command, .shift])
         }
         .opacity(0).frame(width: 0, height: 0).accessibilityHidden(true)
-    }
-
-    private func groups(_ data: PaletteData) -> [(owner: UUID, cards: [Card])] {
-        var order: [UUID] = []
-        var buckets: [UUID: [Card]] = [:]
-        for card in data.cards {
-            if buckets[card.projectID] == nil { order.append(card.projectID) }
-            buckets[card.projectID, default: []].append(card)
-        }
-        return order.map { ($0, buckets[$0] ?? []) }
     }
 
     private func move(_ step: Int) {
@@ -295,8 +291,7 @@ struct SearchPalette: View {
             sessionSelection = ids[min(max(index + step, 0), ids.count - 1)]
             return
         }
-        guard let data else { return }
-        let ids = groups(data).flatMap { $0.cards.map(\.id) }
+        let ids = cardIDs
         guard !ids.isEmpty else { return }
         let index = selection.flatMap(ids.firstIndex) ?? -step
         selection = ids[min(max(index + step, 0), ids.count - 1)]

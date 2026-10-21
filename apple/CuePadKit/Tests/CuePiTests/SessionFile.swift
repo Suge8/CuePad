@@ -1,9 +1,7 @@
 #if os(macOS)
+import CueStore
 import CueTestSupport
 import Foundation
-import Synchronization
-import Testing
-import CueStore
 @testable import CuePi
 
 /// 造 Pi 会话 JSONL（v3 树结构）的最小写手。字段名来自 Pi 的 session-format 文档。

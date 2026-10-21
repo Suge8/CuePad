@@ -34,7 +34,7 @@ import os
 ///    等子代理停住（`CueChange.Kind.stalled`）不随写入出现，按下一次停住的时刻（`CueStore.nextCueStall`）排定时器，到点对账时它就在变化里。
 ///    会话停下归谁接手由 `CueStore.cueChanges` 定：归他的不叫醒 Cue，记下（`Progress.held`）等他离开再报；还在场就按最早的离开时刻排一次对账，
 ///    设备开着会话的记录一变也重对。
-/// 6. 空闲巡视：没有在做的事（`CueStore.cueBoardActive`）、你很久没说话、不在打扰时段（`CueTiming.quietHours`），每段空闲最多一次、每天最多 3 次。
+/// 6. 空闲巡视：没有在做的事（`CueStore.cueBoardActive`）、你最近一句（`CueStore.cueLastYou`，还没说过从启用算起）之后很久没说话、不在打扰时段（`CueTiming.quietHours`），每段空闲最多一次、每天最多 3 次。
 ///
 /// 回复是这一轮做完时大脑还留着的正在说的话（`CueBrainEvent.speaking`），一轮结束时才写进对话（`cueMessages` 是 Cue 对话唯一的事实源）。
 /// 说的过程只在这台 Mac 的内存里给 Cue 页逐字显示（`speech`），只显示在回答你的一轮（`Turn.answersYou`）：
@@ -146,7 +146,8 @@ final class CueKeeper {
                 do {
                     for try await _ in store.observe({ store in
                         Signal(
-                            messages: try store.cueMessages(limit: 50), active: try store.cueBoardActive(), memory: try store.cueMemoryVersion(),
+                            toDeliver: try store.cueMessagesToDeliver().map(\.id), lastYou: try store.cueLastYou()?.said,
+                            active: try store.cueBoardActive(), memory: try store.cueMemoryVersion(),
                             profile: try store.cueProfile(), viewing: try store.viewers().compactMap(\.sessionID), written: try store.lastWrite())
                     }) { input.yield(.kick) }
                 } catch {

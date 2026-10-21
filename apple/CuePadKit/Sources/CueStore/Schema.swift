@@ -1,6 +1,3 @@
-import CueText
-import Foundation
-
 /// 表分两类。
 ///
 /// 同步表（`Table.synced`，由 CueSync 映射为 CKRecord，record type = 表名，recordName = id）。约束：
@@ -29,9 +26,9 @@ enum Schema {
     init(_ run: @escaping @Sendable (SQLite) throws -> Void) { self.run = run }
   }
 
-  /// 能打开的最老结构版本（`upgrades` 的起点）：更早的库不升级、不打开（`schemaTooOld`）。
-  /// 发出的版本把用户的库都升过了某一版，就把那一版及以前的步骤折进 `create`、起点挪到那一版：`create` 建的就是最新结构，
-  /// 升级步骤只留还有库没跑过的。
+  /// 能打开的最老结构版本（`upgrades` 的起点），也是这台要求的最低对端版本（CueSync 的 `PeerFloor`）：更早的库不升级、不打开
+  /// （`schemaTooOld`），更早的设备不再同步。发出的版本把用户的库都升过了某一版，就把那一版及以前的步骤折进 `create`、起点挪到那一版：
+  /// `create` 建的就是最新结构，升级步骤只留还有库没跑过的，给更早设备留的兼容一并删掉。
   static let baseVersion = 66
 
   /// `upgrades[i]` 把结构版本 `baseVersion + i` 升到 `baseVersion + i + 1`；改结构时在末尾追加一步，同时更新 `create`

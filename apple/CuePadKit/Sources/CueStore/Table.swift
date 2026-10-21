@@ -1,5 +1,3 @@
-import Foundation
-
 /// 可观察的表；`CueStore.observe` 按它们订阅变更。
 public enum Table: String, Codable, Sendable, CaseIterable {
   case projects, cards, sendRecords, attachments, piSessions, projectDirectories

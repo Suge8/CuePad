@@ -9,7 +9,7 @@ struct PageStack: View {
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        let current = workspace.page
+        let current = workspace.root
         let pages = workspace.mountedPages
         let leaving = workspace.pages.leaving
         PageStackLayout(active: current) {

@@ -45,7 +45,6 @@ struct SessionList: View {
     let filter: UUID?
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
-    @Environment(Navigation.self) private var navigation
     @Environment(\.palette) private var palette
 
     /// 最上面那一行的 id：换项目范围时滚回它。
@@ -135,12 +134,12 @@ struct SessionList: View {
             EmptyState.noMatch(model.query).padding(.top, 40)
         } else if let filter {
             EmptyState(mascot: .empty, title: AgentListModel.noneTitle(filter: filter), waitsForSync: true) {
-                EmptyStateButton(title: "新会话", icon: .add, action: { navigation.newSession = .init(project: filter) })
+                EmptyStateButton(title: "新会话", icon: .add, action: { workspace.newSession = .init(project: filter) })
             }
             .padding(.top, 40)
         } else {
             EmptyState(mascot: .empty, title: AgentListModel.noneTitle(filter: nil), message: "在 Mac 的终端里开一个 Agent，或在这里开新会话", waitsForSync: true) {
-                EmptyStateButton(title: "新会话", icon: .add, action: { navigation.newSession = .init() })
+                EmptyStateButton(title: "新会话", icon: .add, action: { workspace.newSession = .init() })
             }
             .padding(.top, 40)
         }
@@ -149,10 +148,10 @@ struct SessionList: View {
 
 private struct NewSessionButton: View {
     let project: UUID?
-    @Environment(Navigation.self) private var navigation
 
+    @Environment(Workspace.self) private var workspace
     var body: some View {
-        Button("新会话", icon: .add) { navigation.newSession = .init(project: project) }
+        Button("新会话", icon: .add) { workspace.newSession = .init(project: project) }
             .accessibilityHint("让 Mac 开一个 Agent 会话")
     }
 }
@@ -163,12 +162,12 @@ private struct SessionRow: View {
     let showsPlace: Bool
     /// 此刻要显示的结束请求（`DeliveryRequest.shownEnd`）。
     var end: Speech.Trip?
-    @Environment(Navigation.self) private var navigation
+    @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
 
     var body: some View {
         let session = item.state
-        Button { navigation.openSession(session.id, sessionID: session.sessionID, store: services.store) } label: {
+        Button { workspace.openSession(session.id, sessionID: session.sessionID) } label: {
             PiSessionRow(session: session, project: showsPlace ? item.project : nil, delivery: item.delivery, end: end, rename: item.rename, undelivered: item.undelivered(at: services.speech), style: .page).equatable()
                 .contentShape(.rect(cornerRadius: SessionCard.radius))
         }

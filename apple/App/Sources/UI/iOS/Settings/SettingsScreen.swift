@@ -9,7 +9,6 @@ struct SettingsScreen: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        @Bindable var settings = services.settings
         SettingsForm {
             Section {
                 NavigationLink(value: Route.cueSettings) {
@@ -23,16 +22,8 @@ struct SettingsScreen: View {
             SyncSection()
             if services.sync != nil || Self.previewsAlerts { AlertSection() }
             Section {
-                // 三项分段，同 Mac：选中哪个一眼看得到，不用点开菜单
                 LabeledContent {
-                    Picker("外观", selection: $settings.theme) {
-                        Text("跟随系统").tag(AppSettings.Theme.system)
-                        Text("浅色").tag(AppSettings.Theme.light)
-                        Text("深色").tag(AppSettings.Theme.dark)
-                    }
-                    .labelsHidden()
-                    .pickerStyle(.segmented)
-                    .fixedSize()
+                    ThemePicker()
                 } label: {
                     Label("外观", icon: .appearance)
                 }
@@ -125,8 +116,8 @@ private struct AlertSection: View {
 /// iCloud 同步：一行状态，需要决定时给出两个选择，否则是立即同步；有两个版本的灵感或任务时一行推入处理，没能同步的记录可展开。
 private struct SyncSection: View {
     @Environment(AppServices.self) private var services
-    @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
+    @State private var choices = SyncChoices()
     @State private var confirmErase = false
 
     var body: some View {
@@ -148,11 +139,17 @@ private struct SyncSection: View {
             }
             // 要你决定、冲突与没能同步的记录都只在有同步时出现，按状态排；立即同步要有同步才点得动
             if case .needsDecision = services.syncStatus {
-                Button("上传本机数据", icon: .uploadLocal) { resolve(.uploadLocal) }
-                Button("用云端数据替换本机…", icon: .replaceWithCloud, role: .destructive) { confirmErase = true }
+                Group {
+                    Button(SyncChoices.upload.title, icon: .uploadLocal) { choices.resolve(.uploadLocal, services) }
+                    Button(SyncChoices.erase.title, icon: .replaceWithCloud, role: .destructive) { confirmErase = true }
+                }
+                .disabled(choices.working)
             } else if services.sync != nil {
                 Button("立即同步", icon: .syncNow) { Task { await services.syncNow() } }
                     .disabled(!services.canSyncNow)
+            }
+            if let failure = choices.failure {
+                Label { Text(failure).font(.footnote) } icon: { FailureMark() }
             }
             if !services.conflicts.isEmpty {
                 NavigationLink(value: Route.conflicts) {
@@ -174,20 +171,10 @@ private struct SyncSection: View {
             Text("iCloud 同步")
         } footer: {
             if case .needsDecision = services.syncStatus {
-                Text("上传：本机数据作为新内容传到当前账号。替换：丢弃本机的灵感、任务、项目与图片，从当前账号的云端重新下载。")
+                Text("上传：\(SyncChoices.upload.consequence)。替换：\(SyncChoices.erase.consequence)。")
             }
         }
-        .dialog("丢弃本机数据，改用云端的？", isPresented: $confirmErase, message: "本机的灵感、任务、项目与图片会被删除，无法撤销。", buttons: [
-            DialogButton(title: "用云端数据替换本机", role: .destructive) { resolve(.eraseLocal) },
-        ])
-    }
-
-    private func resolve(_ resolution: SyncResolution) {
-        let done: Dotted = if case .uploadLocal = resolution { "已开始上传本机数据" } else { "正在从云端重新下载" }
-        workspace.attempt {
-            try await services.resolveSync(resolution)
-            workspace.say(done)
-        }
+        .confirmsErase($confirmErase, choices: choices, services: services)
     }
 }
 #endif

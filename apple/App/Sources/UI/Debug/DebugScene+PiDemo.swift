@@ -1,8 +1,8 @@
 #if DEBUG
 import CueStore
 import CueText
+import Foundation
 import OSLog
-import SwiftUI
 
 /// 演示库里的 Pi：Mac 同步来的会话状态（含历史）、几段对话与发到 Mac 的请求（iOS 与 Mac 的 session 画面共用）。
 extension DebugScene {

@@ -1,13 +1,10 @@
-#if os(macOS)
-import CuePi
-#endif
 import CueStore
 import Foundation
 import Observation
 import SwiftUI
 
-/// 一个窗口（场景）的界面状态：项目目录、打开的卡、浮层、提示；Mac 另有选中的页与发送目标。数据本身不在这里，界面直接订阅 Store。
-/// Mac 的当前项目只存在 `AppSettings.currentProject`（整个 App 一个），这里只记非项目页；iOS 的当前项目从导航路径推出（`Navigation.currentProject`）。
+/// 一个窗口（场景）的界面状态：去处、项目目录、打开的卡、浮层、提示；Mac 另有挂着的页与发送目标。数据本身不在这里，界面直接订阅 Store。
+/// 去处只在这里一份（`root` 与 `path`，规则见 `Workspace+Navigation`）：两端都经 `show`、`open` 去，平台只决定怎么摆（`Layout`）。
 @Observable
 final class Workspace {
     struct Notice: Identifiable, Equatable {
@@ -33,6 +30,23 @@ final class Workspace {
     }
 
     let services: AppServices
+    /// 当前去处（Mac 的内容区、iPad 右边那一栏、窄屏导航栈的根）：打开 App 先到 `openingRoute`。只经 `select` 换（`Workspace+Navigation`）。
+    var root: Route
+    /// 根页上推入的页（iOS 的卡片纸页、会话页……）；Mac 没有历史，总是空的。
+    var path: [Route] = []
+    /// 去处怎么摆：Mac 固定是 `.pages`，iOS 随尺寸类在 `.split` 与 `.dock` 之间换（`IOSRoot`）。变窄时把宽屏的去处推到它所属的那一页上。
+    var layout = Layout.native {
+        didSet {
+            guard layout == .dock, oldValue != .dock, let home = root.home, home != root else { return }
+            path.insert(root, at: 0)
+            root = home
+        }
+    }
+    /// 新建（`project` 为 nil）或编辑项目的表单：侧栏、书架与项目页的入口都经这里，窗口的根弹出。
+    var projectForm: ProjectFormRequest?
+    /// 请过"对 Cue 说"拿到焦点（`speakToCue`：随手记小组件、手机的 ⌘⇧N），Cue 页的输入框还没接：它出现时或已在屏上时接下并清掉。
+    /// 不用计数：从别的页过来时输入框是新建的，看不到数变过。
+    var cueFocusPending = false
     /// Cue 的现状与 Cue 页的草稿（`CueWatch`，`follow` 跟着）。
     let cue: CueWatch
     /// 本窗口的项目目录（建工作区时当场读到，`follow` 接着订阅）；nil 表示读取失败。
@@ -49,8 +63,7 @@ final class Workspace {
     let pages = MacPages()
     let presses = CardPresses()
     let sendState: SendState
-    private(set) var nonProjectPage: Route?
-    /// 打开的卡（编辑页；iOS 打开卡片是推入导航，见 `Navigation.push`）。设成某张卡时编辑页立即挂上；
+    /// 打开的卡（编辑页，盖在当前页上；iOS 打开卡片是推入纸页，见 `showEditor`）。设成某张卡时编辑页立即挂上；
     /// 清空时编辑页先淡出，淡完才卸下（`CardEditorPage`）。
     var openCard: UUID? {
         didSet { if let openCard { presses.present(openCard) } }
@@ -64,8 +77,6 @@ final class Workspace {
     @ObservationIgnored var closedTask: (task: UUID, at: ContinuousClock.Instant)?
     @ObservationIgnored var press = PressPoint()
     #if os(macOS)
-    /// 新建或编辑项目的表单（`ProjectForm`；侧栏与项目页的入口都经这里，主窗口弹出）。
-    var projectForm: ProjectForm.Request?
     /// ⌘K 搜索开着（`SearchPalette`）。
     var searching = false
     /// 接入 Agent 并启用 Cue 的面板（`SetupPanel`；首次打开由 `offerSetup` 置起，Cue 页的启用卡与会话页的"接入"也打开它，主窗口弹出）。
@@ -76,9 +87,29 @@ final class Workspace {
     var addsTask = false
     /// 清空回收站的确认开着（回收站页上与"⋯"里的"清空回收站…"同一下）。
     var confirmsEmptyTrash = false
+    /// 指针此刻停在哪个项目上（侧栏的项目行、看板卡上的项目小图形）：看板上别的项目的卡淡下去（`boardDim`）。侧栏与看板读写这一份。
+    var hoveredProject: UUID?
+    #else
+    /// 这个窗口有系统菜单开着（`MenuButton`）：这段里贴着键盘的那一层不跟键盘走（`KeyboardHold`）。
+    var menuOpen = false
+    /// 发给 Agent 的输入框（`HandOffInput`，`handOff` 浮起）。
+    var outbox: Outbox? {
+        didSet { if let outbox, outbox.id != oldValue?.id { handOffDraft = ComposerDraft(attachments: [outbox]) } }
+    }
+    /// 发给 Agent 输入框的草稿（换了一件任务就重来）：放在这里而不在输入框里，发出即收起后写库失败还能放回、重新浮起。
+    var handOffDraft = ComposerDraft()
+    /// 新会话的输入框（`NewSessionInput`）。
+    var newSession: NewSessionInput.Start?
+    var sidebar: NavigationSplitViewVisibility = .automatic
+    /// 宽屏：右侧的 Cue 面板是否展开。
+    var agentPanel = false
+    /// 每次 ⌘K（或点搜索钮、侧栏顶上的搜索框）加一：搜索页据此聚焦搜索框并全选已有文字，已在搜索页时同样生效。
+    var searchFocusRequests = 0
     #endif
     /// 项目范围：任务页与会话页共用这一份（顶栏中间那颗显示它、点 ✕ 清掉；项目页"⋯"里的"看这个项目的会话"设成这个项目再切到会话页），nil 是全部项目。
     var projectScope: UUID?
+    /// Cue 页的"等你"卡先露哪条提问（`CueWaitingDock` 露在等的第一条）：从任务看板点一张 Cue 问的等你卡的抬头时设成它；它结束了就不再起作用。
+    var cueAsking: UUID?
     var notice: Notice?
     /// 正在给哪个项目选文件夹（iOS：根视图据此弹候选；Mac 直接弹系统的选文件夹面板，不经这里）。
     var folderPicker: Project?
@@ -111,6 +142,7 @@ final class Workspace {
     /// 项目目录与 Cue 的现状当场读（`CueStore.snapshot`）：第一帧就是读到的样子，没有"还没读到"这一态。
     init(services: AppServices) {
         self.services = services
+        root = Self.openingRoute(services)
         let digest = try? services.store.snapshot { try CueDigest.read(from: $0) }
         // 读不出来时目录也读不出来，失败页盖住页面，空摘要不会露面
         cue = CueWatch(digest, at: services.speech, local: services.cueLocal)
@@ -121,49 +153,12 @@ final class Workspace {
     }
 
     #if os(macOS)
-    /// 此刻的页：切到的非项目页，否则上次打开的项目（`show` 记下），都没有是 `Route.first`。
-    var page: Route {
-        if let nonProjectPage { return nonProjectPage }
-        return services.settings.currentProject.map(Route.project) ?? .first
-    }
-
-    /// 当前项目；不在项目页（回收站、会话页……）时没有。
-    var currentProject: UUID? {
-        if case .project(let id) = page { id } else { nil }
-    }
-
-    /// 此刻挂着的页：留着的加上当前页（首屏、目录纠正出来的页还没经过 `show`；会话页只在是当前页时在里面）。
-    var mountedPages: [Route] { pages.kept.contains(page) ? pages.kept : pages.kept + [page] }
+    /// 此刻挂着的页：留着的加上当前页（首屏、目录纠正出来的页还没经过 `select`；会话页只在是当前页时在里面）。
+    var mountedPages: [Route] { pages.kept.contains(root) ? pages.kept : pages.kept + [root] }
 
     func finishClosingCard() {
         guard openCard == nil else { return }
         presses.dismiss()
-    }
-
-    /// 打开一条灵感或任务：任务在气泡里看（`openTask`）；
-    /// 灵感（挂在任务下的资料也一样）进整页的编辑页。
-    func open(_ card: Card) {
-        presses.clearSelection()
-        if card.isTask { return openTask(card) }
-        openTask = nil
-        openCard = card.id
-    }
-
-    /// 切到一页（侧栏点哪就是哪）；开着的编辑页与任务气泡随之收起。没有历史，也没有上一层：Mac 的导航都在侧栏。
-    func show(_ page: Route) {
-        openCard = nil
-        openTask = nil
-        presses.clearSelection()
-        presses.dismiss()
-        pages.visit(from: self.page, to: page)
-        // 打开了这个会话：它那一组通知撤掉（点通知进来的也走这里）
-        if case .session(let route) = page, let alerts = services.alerts { Task { await alerts.dismiss(session: route.id) } }
-        if case .project(let id) = page {
-            nonProjectPage = nil
-            services.settings.currentProject = id
-        } else {
-            nonProjectPage = page
-        }
     }
     #endif
 
@@ -190,18 +185,19 @@ final class Workspace {
 
     // MARK: 项目目录、当前项目与新建位置
 
-    /// 工作区的全部订阅，直到所在任务取消：项目目录（读不出来时按"重试"重新订阅）、交给了会话的卡、文件夹引导、Cue 的现状，
-    /// Mac 上还有会话归属的项目；会话摘要由 App 级的 `LiveSessions` 跟。页面只读这里存下的那几项，不各自订阅。
+    /// 工作区的全部订阅，直到所在任务取消：项目目录（读不出来时按"重试"重新订阅）、交给了会话的卡、文件夹引导、Cue 的现状、
+    /// 待打开的链接与点开的通知（`openLinks`），Mac 上还有会话归属的项目；会话摘要由 App 级的 `LiveSessions` 跟。页面只读这里存下的那几项，不各自订阅。
     /// Mac 的工作区随 App 常驻、主窗口与两个面板共用一个，由 App 启动时跟：不挂在哪个视图上，窗口关上、内容摘下（`MainShellWindow`）
     /// 面板也照常更新；iOS 每个窗口一份，由窗口的根视图跟。
     func follow() async {
         async let catalog: Void = followCatalog()
         async let links: Void = followAgentLinks()
         async let cue: Void = followCue()
+        async let opens: Void = openLinks()
         #if os(macOS)
         await followSessionPlacement()
         #endif
-        _ = await (catalog, links, cue)
+        _ = await (catalog, links, cue, opens)
     }
 
     private func followCatalog() async {
@@ -233,8 +229,8 @@ final class Workspace {
                 catalog = next
                 if membershipChanged {
                     #if os(macOS)
-                    pages.forget(projectsNotIn: Set(next.projects.map(\.id)))
                     await reconcileCurrentProject()
+                    pages.forget(projectsNotIn: Set(next.projects.map(\.id)))
                     #endif
                 }
             }
@@ -251,7 +247,7 @@ final class Workspace {
     }
 
     #if os(macOS)
-    /// 保存的当前项目以 Store 为准：不存在或已进回收站时清掉设置（首屏由目录推出，见 `defaultProject`）。
+    /// 保存的当前项目以 Store 为准：不存在或已进回收站时清掉设置，正开着它就回到 `Route.first`（不经 `select`：不把失效的页记成去过的）。
     /// 项目表每次变化后、写入撞上失效项目时调用。
     func reconcileCurrentProject() async {
         let settings = services.settings
@@ -260,6 +256,7 @@ final class Workspace {
             let projects = try await services.store.projects()
             guard !projects.contains(where: { $0.id == saved }) else { return }
             if settings.currentProject == saved { settings.currentProject = nil }
+            if root == .project(saved) { root = .first }
         } catch {
             fail(error)
         }

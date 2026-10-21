@@ -1,6 +1,4 @@
 import CueStore
-import CueSync
-import CueText
 import SwiftUI
 
 /// 你的话到哪了（气泡自己画出来）：进了对话、在路上（会话这边的说法，`PiDelivery.Transit`）、已送达（来回用时）、没能送达。

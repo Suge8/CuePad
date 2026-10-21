@@ -1,14 +1,10 @@
 import { execFile } from "node:child_process";
 import type net from "node:net";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import type { Asking } from "./dialogs.ts";
-import { Draft } from "./draft.ts";
-import { IdleExit, IS_HOSTED } from "./hosted.ts";
-import { commandInfo, contextInfo, firstUserMessage, INTERNAL_COMMAND, modelInfo, type Info, type Subagent } from "./info.ts";
+import { phaseOf, StateTracker, type Asking, type Clock, type Phase } from "./events.ts";
+import { commandInfo, contextInfo, firstUserMessage, INTERNAL_COMMAND, modelInfo, reason, replyText, type Info, type Subagent } from "./info.ts";
+import { IdleExit, IS_HOSTED, SelfReload } from "./lifecycle.ts";
 import { QuotaFetcher, type Quota } from "./quota.ts";
-import { SelfReload } from "./reload.ts";
-import { phaseOf, StateTracker, type Clock, type Phase } from "./state.ts";
-import { reason } from "./text.ts";
 
 /** 交给 CuePad 用来定位终端的环境变量 */
 const TERMINAL_ENV_KEYS = ["TERM_PROGRAM", "__CFBundleIdentifier", "TMUX", "TMUX_PANE"];
@@ -17,11 +13,11 @@ type UserContent = Parameters<ExtensionAPI["sendUserMessage"]>[0];
 export type Ack = (fields: object) => void;
 /** 一句要开新一轮的话：交给 Pi 的内容、斜杠开头的要不要由 Pi 展开，与认它的文字（会话里落成的那条用户消息的文字）。
  * CuePad 发来的话（`send`）另带投送请求 id 与它的确认。 */
-export type Said = { content: UserContent; expand: boolean; text: string; id?: string; ack?: Ack };
+type Said = { content: UserContent; expand: boolean; text: string; id?: string; ack?: Ack };
 /** FireCode 在本扩展实例的事件总线上发布的最新事实 */
 export type Firecode = { inFlight: number; subagents: Subagent[] };
 /** 一个扩展实例的身份：版本与 CuePad 交给它的认领标识 */
-export type Identity = { protocol: number; extensionVersion: number; launchToken: string | null };
+type Identity = { protocol: number; extensionVersion: number; launchToken: string | null };
 
 function readTTY(): Promise<string | null> {
 	return new Promise((resolve) => {
@@ -249,5 +245,72 @@ export class Session {
 				this.ctx.ui.notify(`CuePad：${what}没交给 Pi：${reason(error)}`, "error");
 			}
 		});
+	}
+}
+
+/** 正在说的话（`draft`）最多每这么久上报一次：增量在这里合并，这条说完时立即补发最后一次 */
+const DRAFT_INTERVAL_MS = 100;
+
+/**
+ * 正在说的话（`draft`）：主会话当前这条助手消息到目前为止的正文，给 CuePad 逐字显示；思考与工具参数不算，FireCode 的子代理是别的会话、不经这里。
+ * 增量合并到每 `DRAFT_INTERVAL_MS` 一次，这条说完时立即补发全文；它转成工具调用、被停下或出错、下一条助手消息开始时清掉（`text: null`）。
+ * 正常说完的不清：CuePad 在对话（读会话文件）里出现这一条后自己换下。`since` 是这条开始出字的时刻。
+ */
+class Draft {
+	private draft: { text: string; since: number } | null = null;
+	/** 这条消息已转成工具调用：之后的正文不再算草稿 */
+	private closed = false;
+	private sentAt = 0;
+	private timer: ReturnType<typeof setTimeout> | undefined;
+
+	private readonly broadcast: (message: object) => void;
+
+	constructor(broadcast: (message: object) => void) {
+		this.broadcast = broadcast;
+	}
+
+	/** 一条新的助手消息开始了 */
+	restart() {
+		this.closed = false;
+		this.clear();
+	}
+
+	/** 这条消息转成了工具调用 */
+	close() {
+		this.closed = true;
+		this.clear();
+	}
+
+	/** `now`：这条说完了，不等合并的间隔 */
+	grow(message: object, now = false) {
+		const text = replyText(message);
+		if (this.closed || !text || text === this.draft?.text) {
+			if (now && this.timer) this.send();
+			return;
+		}
+		this.draft = { text, since: this.draft?.since ?? Date.now() };
+		if (now) return this.send();
+		if (this.timer) return;
+		const wait = this.sentAt + DRAFT_INTERVAL_MS - Date.now();
+		if (wait <= 0) this.send();
+		else this.timer = setTimeout(() => this.send(), wait);
+	}
+
+	clear() {
+		if (!this.draft) return;
+		this.draft = null;
+		this.send();
+	}
+
+	/** 会话关闭：不再补发 */
+	cancel() {
+		clearTimeout(this.timer);
+	}
+
+	private send() {
+		clearTimeout(this.timer);
+		this.timer = undefined;
+		this.sentAt = Date.now();
+		this.broadcast({ t: "draft", text: this.draft?.text ?? null, since: this.draft?.since ?? null });
 	}
 }

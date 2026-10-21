@@ -1,5 +1,4 @@
 #if os(iOS)
-import CueStore
 import SwiftUI
 
 /// 手机上 Cue 的设置（Cue 面板的齿轮与设置页的 Cue 一行推入），按要紧排，与 Mac 设置窗口的 Cue 那一页同一套（`CueSettingsPane`）：

@@ -5,7 +5,7 @@ import os
 extension SyncCoordinator {
   func applyFetched(_ modifications: [CKRecord], _ deletions: [(id: CKRecord.ID, recordType: String)]) async throws {
     var changes: [RemoteChange] = []
-    for record in modifications {
+    for record in modifications where record.recordType != PeerFloor.recordType {  // 门槛不进库，`meet` 看过了
       guard let row = RecordMapper.row(from: record) else {
         report("未知的记录类型「\(record.recordType)」，已跳过（可能来自更新版本的 CuePad）", recordType: record.recordType, recordName: record.recordID.recordName)
         continue
@@ -110,6 +110,7 @@ extension SyncCoordinator {
   /// 把 CloudKit 错误映射到状态。返回 true 表示这类失败不应立刻重试。瞬时网络类错误由发送者退避重试（RecordSender）。
   @discardableResult
   func classify(_ error: CKError, recordType: String? = nil, recordName: String?) -> Bool {
+    guard !stopped else { return true }
     switch error.code {
     case .quotaExceeded:
       facts.status = .quotaExceeded
@@ -157,7 +158,7 @@ extension SyncCoordinator {
     // 停下后每次重试都会再报同一个错：问题列表里已有的不再加，免得被它刷满
     if !next.issues.contains(issue) { next.issues.append(issue) }
     if next.issues.count > Self.issueLimit { next.issues.removeFirst(next.issues.count - Self.issueLimit) }
-    if failed, needsDecision == nil { next.status = .failed(message) }
+    if failed, !stopped { next.status = .failed(message) }
     facts = next  // 问题与状态一次送达
   }
 }

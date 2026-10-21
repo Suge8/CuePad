@@ -1,4 +1,3 @@
-import CueText
 import Foundation
 
 public enum CueLineSource: String, Sendable, CaseIterable {

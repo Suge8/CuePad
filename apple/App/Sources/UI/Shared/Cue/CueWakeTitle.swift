@@ -1,4 +1,3 @@
-import CueStore
 import SwiftUI
 
 /// 一节的第一行（`NoteLine`，同并起来的那一行）：醒来原因的图标（叫醒它的会话出错是出错的那个）、原因（叫醒它的会话、任务、提醒是墨色的名字，点了去那里；
@@ -10,18 +9,14 @@ struct CueWakeTitle: View {
     /// 接在图标后面的那句话（只有图标时）
     let said: String?
     @Environment(Workspace.self) private var workspace
-    @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
-    #if os(iOS)
-    @Environment(Navigation.self) private var navigation
-    #endif
 
     var body: some View {
         NoteLine(time: at) {
             if header.failed { FailureMark() } else { Image(header.wake.icon) }
         } label: {
             if let said {
-                Text(said).font(Typography.secondary).foregroundStyle(palette.ink2).lineLimit(2).accessibilityLabel("\(header.reason)，\(said)")
+                Text(said).font(Typography.secondary).foregroundStyle(palette.ink2).lineLimit(2).accessibilityLabel("\(header.wake.reason)，\(said)")
             } else {
                 reason
             }
@@ -40,7 +35,7 @@ struct CueWakeTitle: View {
             if !header.targets.isEmpty { Image(.forward).font(.system(size: 8, weight: .semibold)).foregroundStyle(palette.ink3) }
         }
         .lineLimit(1)
-        .menuLabel([header.reason, header.name, header.trail, quiet ? "没动手" : nil].compactMap(\.self).joined(separator: "，"))
+        .menuLabel([header.wake.reason, header.name, header.trail, quiet ? "没动手" : nil].compactMap(\.self).joined(separator: "，"))
     }
 
     @ViewBuilder private var reason: some View {
@@ -59,11 +54,7 @@ struct CueWakeTitle: View {
     private func open(_ target: CueWakeHeader.Target) {
         switch target {
         case .session(let session):
-            #if os(macOS)
-            workspace.show(.session(session.sessionID))
-            #else
-            navigation.openSession(session.id, sessionID: session.sessionID, store: services.store)
-            #endif
+            workspace.openSession(session.id, sessionID: session.sessionID)
         case .task(let id):
             workspace.openTask(id: id)
         case .memory:

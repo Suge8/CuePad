@@ -2,7 +2,6 @@
 import CueStore
 import Darwin
 import Foundation
-import Observation
 
 extension PiBridge {
     /// CuePad 重开前各会话记下的状态与计时（启动对账时从同步记录里取，`PiStateRecorder.reset`）。

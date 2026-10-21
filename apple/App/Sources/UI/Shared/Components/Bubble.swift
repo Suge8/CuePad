@@ -1,9 +1,19 @@
 import SwiftUI
 
-/// 从被点的那一下长出来的气泡（任务气泡用它，`PanelStyle.bubble`）：纸色的底、一根指着那一下的尾巴，不压暗、点外面或 Esc 关。
-/// 摆法只在 `BubblePlacement` 算一次，两端同一套：摆在那一行下面、让开整行（那一下在行里，只知道点不知道行，按半行高 `reach` 让），
-/// 尾巴从上沿靠左角伸出、对着那一下，气泡往右铺；下面放不下摆上面、尾巴在下沿。不摆左右：摆在旁边会盖住被点的那一行、尾巴落在字上。
-/// 不知道点在哪（键盘、⌘K 里按 ↩、小组件链接）时没有尾巴、在窗口上方居中。气泡的高贴着内容，放不下就在里面滚。
+/// 气泡从哪长出来（窗口坐标）。摆法只认这一份，两端同一套（`BubblePlacement`）。
+nonisolated enum BubbleSource: Equatable {
+    /// 从一个控件（按钮、圆钮、胶囊）长出来：它的框。气泡横向对着它居中。
+    case control(CGRect)
+    /// 从一行里点的那一下（任务行）：行成百上千，不给每行挂几何读数，只知道点不知道行，按半行高（`BubblePlacement.reach`）让开整行；
+    /// 尾巴靠左角对着那一下，气泡往右铺（顺着读的方向，不往回盖住侧栏）。
+    case press(CGPoint)
+    /// 没有来源（键盘、⌘K 里按 ↩、小组件链接）：没有尾巴，在窗口上方居中。
+    case unanchored
+}
+
+/// 长出来的气泡（`PanelStyle.bubble`：任务气泡、Mac 会话页的额度明细）：纸色的底、一根指着来源的尾巴，不压暗、点外面或 Esc 关。
+/// 摆在来源下面、让开它（控件的框，或那一下所在的整行），尾巴尖贴着它的下沿；下面放不下摆上面、尾巴在下沿。
+/// 不摆左右：摆在旁边会盖住被点的那一行、尾巴落在字上。气泡的高贴着内容，放不下就在里面滚。
 /// 不量自己的高：摆在上面时按底边对齐（`bottom`）——摆法从不读回排版的结果，没有几何读数回写的环（ui.md）。
 nonisolated struct BubblePlacement: Equatable {
     var x: CGFloat
@@ -13,31 +23,40 @@ nonisolated struct BubblePlacement: Equatable {
     var width: CGFloat
     var maxHeight: CGFloat
     var tail: BubbleTail?
-    /// 进出场从哪边来：朝着那一下（尾巴尖）那一侧，-1 是上面、1 是下面。
+    /// 进出场从哪边来：朝着来源（尾巴尖）那一侧，-1 是上面、1 是下面。
     var side: CGFloat = -1
 
-    /// `anchor`：那一下在容器里的位置；`insets`：容器四周不放气泡的那一圈（安全区、工具栏与页边）。
-    init(anchor: CGPoint?, container: CGSize, insets: EdgeInsets) {
+    /// `container`：气泡那一层在窗口里的框（与来源同一套坐标）；`insets`：容器四周不放气泡的那一圈（安全区、工具栏与页边）。
+    init(source: BubbleSource, container: CGRect, insets: EdgeInsets) {
         let bounds = CGRect(
             x: insets.leading, y: insets.top,
             width: max(container.width - insets.leading - insets.trailing, 0), height: max(container.height - insets.top - insets.bottom, 0))
         width = min(Self.width, bounds.width)
-        guard let anchor else {
+        // 要让开的那一块（容器里的坐标）与气泡想放的左边
+        let target: CGRect, left: CGFloat
+        switch source {
+        case .unanchored:
             x = bounds.midX - width / 2
             top = bounds.minY + Self.unanchoredTop
             maxHeight = bounds.height - Self.unanchoredTop
             return
+        case .control(let frame):
+            target = frame.offsetBy(dx: -container.minX, dy: -container.minY)
+            left = target.midX - width / 2
+        case .press(let point):
+            target = CGRect(x: point.x - container.minX, y: point.y - container.minY - Self.reach, width: 0, height: Self.reach * 2)
+            left = target.midX - Self.lead
         }
-        // 尾巴靠左角、气泡往右铺（顺着读的方向，不往回盖住侧栏）；靠右放不下时往左挪
-        x = min(max(anchor.x - Self.lead, bounds.minX), bounds.maxX - width)
-        let along = min(max(anchor.x - x, Self.tailInset), width - Self.tailInset)
-        let below = bounds.maxY - anchor.y - Self.gap, above = anchor.y - Self.gap - bounds.minY
+        x = min(max(left, bounds.minX), bounds.maxX - width)
+        let along = min(max(target.midX - x, Self.tailInset), width - Self.tailInset)
+        let gap = BubbleTail.length
+        let below = bounds.maxY - target.maxY - gap, above = target.minY - gap - bounds.minY
         if below >= Self.roomy || below >= above {
-            top = anchor.y + Self.gap
+            top = target.maxY + gap
             maxHeight = below
             tail = BubbleTail(edge: .top, offset: along)
         } else {
-            bottom = anchor.y - Self.gap
+            bottom = target.minY - gap
             maxHeight = above
             tail = BubbleTail(edge: .bottom, offset: along)
             side = 1
@@ -53,7 +72,7 @@ nonisolated struct BubblePlacement: Equatable {
         side = 1
     }
 
-    /// 从那一下那一侧浮出来：朝尾巴尖挪一小段加淡入；减弱动态效果时只淡入淡出。挂在气泡自己（只有气泡那么大）上。
+    /// 从来源那一侧浮出来：朝尾巴尖挪一小段加淡入；减弱动态效果时只淡入淡出。挂在气泡自己（只有气泡那么大）上。
     /// 不缩放（实测，Instruments）：缩放时每一帧字都按新的大小重画一遍（字形重新栅格化），开合各约 400ms 里主线程三成在重画字，掉帧；
     /// 平移不改字的大小，一次画好跟着走，开合的指令数降到原来的三成。缩放铺满整窗的一层更糟：AppKit 每帧重排整窗、重算鼠标跟踪区。
     func transition(reduceMotion: Bool) -> AnyTransition {
@@ -69,8 +88,6 @@ nonisolated struct BubblePlacement: Equatable {
     #endif
     /// 那一下离所在那一行上下沿的距离（半行高）：气泡让开整行，尾巴尖贴着行沿。
     static let reach: CGFloat = TaskMetrics.rowHeight / 2
-    /// 那一下到气泡边：让开半行，再加尾巴的长。
-    static let gap: CGFloat = reach + BubbleTail.length
     /// 尾巴离气泡角的最小距离：不画到圆角上。
     static let tailInset: CGFloat = radius + BubbleTail.base / 2 + 4
     /// 尾巴尖离气泡左边多远（放得下时）。

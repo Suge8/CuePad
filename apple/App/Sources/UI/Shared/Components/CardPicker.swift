@@ -77,7 +77,7 @@ struct CardPicker: View {
                     }
                     rows(data.rest, showsProject: true)
                     if data.total > data.shown {
-                        Button("还有 \(data.total - data.shown) 条") { pages += 1 }.frame(maxWidth: .infinity).padding()
+                        Button(CountCopy.more(data.total - data.shown)) { pages += 1 }.frame(maxWidth: .infinity).padding()
                     }
                 }
             }

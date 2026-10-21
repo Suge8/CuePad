@@ -1,5 +1,6 @@
+import CloudKit
 import CueStore
-import CueSync
+@testable import CueSync
 import Foundation
 import Testing
 @testable import CuePad
@@ -27,6 +28,58 @@ struct SyncWiringTests {
 
         app.sync.emit(SyncState(status: .needsDecision(.accountSwitched), issues: [issue]))
         try await eventually("services.syncStatus == .needsDecision(.accountSwitched)") { services.syncStatus == .needsDecision(.accountSwitched) }
+    }
+
+    /// 真实的同步代码连内存里的 iCloud 替身（`SimulatedCloud`），从 AppServices 启动：云端最低对端版本高于这台时，
+    /// 设置里说要更新、立即同步按不了，本机照记，改动不上传。
+    @Test(.timeLimit(.minutes(1)))
+    func 云端门槛高于这台时_提示更新_本机照记_改动不上传() async throws {
+        let cloud = SimulatedCloud([Self.floor(CueStore.supportedSchemaVersions.upperBound + 1)])
+        let app = TestApp(sync: .built { CloudSync(store: $0) { cloud } })
+        let services = app.services!
+        services.startSync()
+        defer { services.cancelBackgroundWork() }
+
+        try await eventually("提示更新") { services.syncStatus == .outdated }
+        #expect(SyncSummary(services.syncStatus).title == "这台的 CuePad 要更新")
+        #expect(!services.canSyncNow)
+
+        let card = try await Workspace(services: services).createCard(body: "要更新时照记", in: Project.defaultID)
+        await services.upload(card.id)
+        #expect(try await services.store.card(card.id)?.body == "要更新时照记")
+        #expect(await cloud.saved.isEmpty)
+    }
+
+    /// 云端门槛低于这台要求的（能打开的最老库）：先把门槛抬上去，之后才传内容；别的设备换了更新的版本、把门槛抬过这台，
+    /// 拉到就停下提示更新，之后的改动不再上传。
+    @Test(.timeLimit(.minutes(1)))
+    func 门槛先抬再传内容_别的设备抬过这台后停下不再上传() async throws {
+        let cloud = SimulatedCloud([Self.floor(CueStore.supportedSchemaVersions.lowerBound - 1)])
+        let app = TestApp(sync: .built { CloudSync(store: $0) { cloud } })
+        let services = app.services!
+        let workspace = Workspace(services: services)
+        services.startSync()
+        defer { services.cancelBackgroundWork() }
+
+        let before = try await workspace.createCard(body: "门槛之后才传", in: Project.defaultID)
+        try await eventually("传上去") { await cloud.saved.contains(before.id.uuidString.lowercased()) }
+        let saved = await cloud.saved
+        #expect(saved.first == PeerFloor.recordType)
+        #expect(PeerFloor.version(in: await cloud.records([PeerFloor(zoneID: CloudSync.zoneID).id])) == CueStore.supportedSchemaVersions.lowerBound)
+
+        await cloud.put(Self.floor(CueStore.supportedSchemaVersions.upperBound + 1))
+        await services.syncNow()
+        try await eventually("拉到就停下") { services.syncStatus == .outdated }
+        let after = try await workspace.createCard(body: "停下之后写的", in: Project.defaultID)
+        await services.upload(after.id)
+        #expect(await cloud.saved == saved)
+        #expect(try await services.store.card(after.id)?.body == "停下之后写的")
+    }
+
+    private static func floor(_ version: Int) -> CKRecord {
+        let record = CKRecord(recordType: PeerFloor.recordType, recordID: PeerFloor(zoneID: CloudSync.zoneID).id)
+        record[PeerFloor.field] = version as NSNumber
+        return record
     }
 
     struct NoEntitlement: Error {}

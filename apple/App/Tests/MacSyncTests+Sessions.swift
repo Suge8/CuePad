@@ -3,13 +3,11 @@ import CueStore
 import CueSync
 import Foundation
 import Testing
-import AppKit
 @testable import CuePad
+
 @testable import CuePi
 
 extension MacSyncTests {
-    // MARK: 后台恢复、开新会话
-
     func launched(_ launch: PiLaunch, title: String = "app", card: UUID? = nil) async throws -> DeliveryRequest {
         try await services.executor.start()
         let request = try await services.store.requestLaunch(launch, title: title, on: TestApp.hostID, card: card)

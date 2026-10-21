@@ -4,12 +4,8 @@ import CuePi
 import CueStore
 import CueText
 import Foundation
-import Observation
-import os
 
 extension CueKeeper {
-    // MARK: 班次
-
     var shift: Shift? {
         if case .running(let shift) = phase { shift } else { nil }
     }
