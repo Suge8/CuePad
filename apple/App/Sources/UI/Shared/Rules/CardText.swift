@@ -28,7 +28,6 @@ nonisolated struct CardText: Equatable, Sendable {
 }
 
 nonisolated extension Card {
-    /// 列表与看板里的一行（`CardText.label`）。
     var title: String { CardText(body).label }
 }
 
