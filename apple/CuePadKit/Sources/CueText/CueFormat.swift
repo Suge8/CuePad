@@ -11,7 +11,7 @@ public enum CueToken: Equatable, Sendable {
 /// 编辑器里图片显示成附件（U+FFFC），其余照原文编辑。
 public enum CueFormat {
     /// 编辑器运行时正文里图片占的一个占位字符（NSTextAttachment 用的 U+FFFC）。
-    public static let objectCharacter: UniChar = 0xFFFC
+    static let objectCharacter: UniChar = 0xFFFC
 
     /// 图片引用的开头；其后是内容哈希（小写十六进制）与 `)`。
     public static let imagePrefix = "![](cuepad://img/"

@@ -100,7 +100,7 @@ extension CueStore {
 
   /// 在问你的会话："等你"里会话那一半（规则在 `PiSessionState.asksYou`，汇总在 `cueTally`）。只读在等回答的与 Cue 留给你回的那几条，订阅也只依赖它们（`narrow`）：
   /// 别的会话变状态时"等你"不重读。
-  public func sessionsAskingYou() throws -> [PiSessionState] {
+  func sessionsAskingYou() throws -> [PiSessionState] {
     let cue = try cueDuty()
     let waiting = PiWorkState.waitingForUser.rawValue, settled = PiWorkState.settled.rawValue
     let left = JSONColumn.encode(cue?.left.map(\.sessionID) ?? []).replacingOccurrences(of: "'", with: "''")

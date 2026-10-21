@@ -80,9 +80,9 @@ actor SyncCoordinator {
   var alertSubscription: PiAlertSubscriptionStatus { facts.alerts }
   func setAlerts(_ alerts: PiAlertSubscriptionStatus) { facts.alerts = alerts }
 
-  /// 用户对 `needsDecision` 的选择。之后重新开始同步（元数据、令牌与账号这里已清掉）。
+  /// 用户对 `needsDecision` 的选择。之后重新开始同步（元数据、令牌与账号这里已清掉）。没有等你决定的事什么都不做：免得误擦数据。
   func resolve(_ resolution: SyncResolution) async throws {
-    guard needsDecision != nil else { throw SyncError.nothingToResolve }
+    guard needsDecision != nil else { return }
     switch resolution {
     case .uploadLocal: try await store.resetSyncMetadata()
     case .eraseLocal: try await store.eraseSyncedData()
@@ -209,11 +209,6 @@ actor SyncCoordinator {
     }
   }
 
-  /// 整个上传请求失败（不是单条记录被拒）且不会自己好起来：记下原因与状态。
-  func uploadFailed(_ error: CKError) {
-    classify(error, recordName: nil)
-  }
-
   private var needsDecision: SyncDecision? {
     if case .needsDecision(let decision) = status { decision } else { nil }
   }
@@ -261,7 +256,7 @@ actor SyncCoordinator {
 
   private func applyFetched(_ modifications: [CKRecord], _ deletions: [(id: CKRecord.ID, recordType: String)]) async throws {
     var changes: [RemoteChange] = []
-    for record in modifications where !CloudKitSchema.retiredTypeNames.contains(record.recordType) {
+    for record in modifications {
       guard let row = RecordMapper.row(from: record) else {
         report("未知的记录类型「\(record.recordType)」，已跳过（可能来自更新版本的 CuePad）", recordType: record.recordType, recordName: record.recordID.recordName)
         continue
@@ -270,7 +265,7 @@ actor SyncCoordinator {
       if row.table == .attachments, try !adoptAsset(of: record, row) { continue }
       changes.append(.save(row, systemFields: RecordMapper.encodeSystemFields(record)))
     }
-    for (id, recordType) in deletions where !CloudKitSchema.retiredTypeNames.contains(recordType) {
+    for (id, recordType) in deletions {
       guard let table = RecordMapper.table(named: recordType) else {
         report("未知的记录类型「\(recordType)」的删除，已跳过", recordType: recordType, recordName: id.recordName)
         continue
@@ -347,13 +342,10 @@ actor SyncCoordinator {
     }
     for (id, error) in sent.failedDeletes {
       switch error.code {
-      case .unknownItem:
+      case .unknownItem, .zoneNotFound:
         try await store.dropSyncMetadata(id.recordName)
         outcome.progressed = true
       case .batchRequestFailed: outcome.progressed = true
-      case .zoneNotFound:
-        try await store.dropSyncMetadata(id.recordName)
-        outcome.progressed = true
       default:
         outcome.blocked = classify(error, recordName: id.recordName) || outcome.blocked
         outcome.wait(for: error)
@@ -366,9 +358,12 @@ actor SyncCoordinator {
     return outcome
   }
 
+  /// 连不上 iCloud 的错误码：显示离线（`reached`），发送者退避重试（`RecordSender.retryable`）。
+  static let offlineCodes: Set<CKError.Code> = [.networkFailure, .networkUnavailable, .serviceUnavailable, .serverResponseLost]
+
   /// 把 CloudKit 错误映射到状态。返回 true 表示这类失败不应立刻重试。瞬时网络类错误由发送者退避重试（RecordSender）。
   @discardableResult
-  private func classify(_ error: CKError, recordType: String? = nil, recordName: String?) -> Bool {
+  func classify(_ error: CKError, recordType: String? = nil, recordName: String?) -> Bool {
     switch error.code {
     case .quotaExceeded:
       facts.status = .quotaExceeded
@@ -376,7 +371,7 @@ actor SyncCoordinator {
     case .notAuthenticated:
       facts.status = .noAccount
       return true
-    case .networkFailure, .networkUnavailable, .serviceUnavailable, .serverResponseLost:
+    case let code where Self.offlineCodes.contains(code):
       reached(error)
       return false
     case .zoneBusy, .requestRateLimited, .operationCancelled, .accountTemporarilyUnavailable, .limitExceeded:
@@ -399,12 +394,9 @@ actor SyncCoordinator {
   }
 
   private static func isOffline(_ error: any Error) -> Bool {
-    guard let error = error as? CKError else { return (error as? URLError) != nil }
-    switch error.code {
-    case .networkFailure, .networkUnavailable, .serviceUnavailable, .serverResponseLost: return true
-    case .partialFailure: return error.partialErrorsByItemID?.values.contains { isOffline($0) } ?? false
-    default: return false
-    }
+    guard let error = error as? CKError else { return error is URLError }
+    guard error.code == .partialFailure else { return offlineCodes.contains(error.code) }
+    return error.partialErrorsByItemID?.values.contains { isOffline($0) } ?? false
   }
 
   // MARK: 报告

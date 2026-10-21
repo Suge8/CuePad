@@ -123,15 +123,15 @@ func remoteRecord(_ table: Table, id: UUID = UUID(), _ fields: [String: SQLValue
 func projectFields(name: String, modifiedAt: Int64) -> [String: SQLValue] {
   [
     "name": .text(name), "icon": .null, "color": .text("#111"), "isPinned": .int(0),
-    "deletedAt": .null, "createdAt": .int(1_000), "modifiedAt": .int(modifiedAt), "goalCardID": .null,
+    "deletedAt": .null, "createdAt": .int(1_000), "modifiedAt": .int(modifiedAt),
   ]
 }
 
 func cardFields(
-  project: UUID?, body: String, modifiedAt: Int64, sortKey: String = "V", conflictOf: UUID? = nil
+  project: UUID = Project.defaultID, body: String, modifiedAt: Int64, sortKey: String = "V", conflictOf: UUID? = nil
 ) -> [String: SQLValue] {
   [
-    "projectID": project.map { .text($0.uuidString.lowercased()) } ?? .null, "body": .text(body),
+    "projectID": .text(project.uuidString.lowercased()), "body": .text(body),
     "isPinned": .int(0), "variableValues": .text("{}"),
     "sortKey": .text(sortKey), "deletedAt": .null, "createdAt": .int(1_000), "modifiedAt": .int(modifiedAt),
     "conflictOf": conflictOf.map { .text($0.uuidString.lowercased()) } ?? .null,
@@ -141,7 +141,7 @@ func cardFields(
 func sendFields(kind: String, modifiedAt: Int64) -> [String: SQLValue] {
   [
     "content": .text("snapshot"), "targetKind": .text(kind), "targetName": .text("somewhere"),
-    "targetRef": .null, "cardID": .null, "taskID": .null, "sentAt": .int(2_000), "modifiedAt": .int(modifiedAt),
+    "targetRef": .null, "cardID": .null, "sentAt": .int(2_000), "modifiedAt": .int(modifiedAt),
   ]
 }
 

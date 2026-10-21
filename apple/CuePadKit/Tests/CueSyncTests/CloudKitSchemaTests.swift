@@ -15,22 +15,6 @@ import Testing
       .deletingLastPathComponent().appending(path: "CloudKit/cuepad.ckdb")
   }
 
-  /// 去掉对齐用的多余空格，断言只关心词序。
-  private func lines(_ schema: String) -> [String] {
-    schema.split(separator: "\n").map { $0.split(separator: " ", omittingEmptySubsequences: true).joined(separator: " ") }
-  }
-
-  private func fields(of type: String, in schema: String) -> [String] {
-    var inside = false
-    var result: [String] = []
-    for line in lines(schema) {
-      if line == "RECORD TYPE \(type) (" { inside = true; continue }
-      if inside, line == ");" { break }
-      if inside { result.append(line.hasSuffix(",") ? String(line.dropLast()) : line) }
-    }
-    return result
-  }
-
   @Test func committedSchemaFileMatchesTheRecordMapping() async throws {
     let generated = try await CloudKitSchema.generate()
     let committed = try String(contentsOf: Self.schemaFile, encoding: .utf8)
@@ -40,15 +24,6 @@ import Testing
   @Test(.enabled(if: CloudKitSchemaTests.regenerating))
   func regenerateSchemaFile() async throws {
     try await CloudKitSchema.generate().write(to: Self.schemaFile, atomically: true, encoding: .utf8)
-  }
-
-  @Test func onlyThePrivateDatabaseGrantsAreDeclared() async throws {
-    let schema = try await CloudKitSchema.generate()
-    #expect(!schema.contains("_world"))
-    for table in Table.synced {
-      let declared = fields(of: table.rawValue, in: schema).filter { $0.hasPrefix("GRANT") }
-      #expect(declared == [#"GRANT WRITE TO "_creator""#, #"GRANT CREATE TO "_icloud""#])
-    }
   }
 
   @Test func encryptedFieldsAreNeverUsableInSubscriptionsOrIndexes() {

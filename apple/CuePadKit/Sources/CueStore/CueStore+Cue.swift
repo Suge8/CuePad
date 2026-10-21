@@ -294,7 +294,6 @@ extension CueStore {
 
   public func cueLine(_ id: UUID) throws -> CueMemoryLine? { try find(CueMemoryLine.self, id) }
 
-  /// 一条的序号。
   public func cueLineIndex(_ id: UUID) throws -> Int? {
     try find(CueMemoryLine.self, id).map(index(of:))
   }
@@ -432,11 +431,7 @@ extension CueStore {
     edit(&profile)
     if let stored, profile == stored { return stored }
     profile.modifiedAt = Date.stamp
-    try db.run(
-      """
-      INSERT INTO cueProfile (\(CueProfile.columns.joined(separator: ", "))) VALUES (\(CueProfile.columns.map { _ in "?" }.joined(separator: ", ")))
-      ON CONFLICT(id) DO UPDATE SET \(CueProfile.columns.dropFirst().map { "\($0) = excluded.\($0)" }.joined(separator: ", "))
-      """, profile.bindings)
+    try upsert(profile)
     return profile
   }
 }
@@ -503,11 +498,7 @@ extension CueStore {
       let next = CueState(
         state: current?.state ?? .known(.settled), detail: current?.detail, round: current?.round, context: current?.context, left: left,
         modifiedAt: Date.stamp)
-      try db.run(
-        """
-        INSERT INTO cueState (\(CueState.columns.joined(separator: ", "))) VALUES (?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(id) DO UPDATE SET leftToYou = excluded.leftToYou, modifiedAt = excluded.modifiedAt
-        """, next.bindings)
+      try upsert(next, updating: ["leftToYou", "modifiedAt"])
       return CueState.recordID
     }
   }
@@ -537,12 +528,7 @@ extension CueStore {
     let current = try cueState()
     let next = CueState(state: .known(state), detail: detail, round: round, context: context, left: current?.left ?? [], modifiedAt: Date.stamp)
     if let current, (current.state, current.detail, current.round, current.context) == (next.state, next.detail, next.round, next.context) { return }
-    try db.run(
-      """
-      INSERT INTO cueState (\(CueState.columns.joined(separator: ", "))) VALUES (?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(id) DO UPDATE SET state = excluded.state, detail = excluded.detail, modifiedAt = excluded.modifiedAt, round = excluded.round,
-        context = excluded.context
-      """, next.bindings)
+    try upsert(next, updating: ["state", "detail", "modifiedAt", "round", "context"])
   }
 }
 

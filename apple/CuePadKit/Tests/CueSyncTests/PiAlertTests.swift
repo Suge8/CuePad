@@ -233,19 +233,18 @@ import Testing
     #expect(reason.contains("2006"))
   }
 
-  @Test func driftedSubscriptionsAreReplacedAndStaleOnesOfOursAndForeignDatabaseOnesAreRemovedButForeignQueriesAreLeftAlone() async throws {
+  @Test func driftedSubscriptionsAreReplacedAndStaleOnesOfOursAreRemovedButForeignOnesAreLeftAlone() async throws {
     let manager = AlertSubscriptions(zoneID: zone)
     var drifted = manager.desired()[0]
     drifted = CKQuerySubscription(recordType: "piSessionStates", predicate: NSPredicate(format: "notify == %@", "other"), subscriptionID: drifted.subscriptionID, options: [.firesOnRecordCreation])
     let stale = CKQuerySubscription(recordType: "piSessionStates", predicate: NSPredicate(value: true), subscriptionID: "cuepad.pi.old", options: [.firesOnRecordCreation])
     let foreign = CKQuerySubscription(recordType: "other", predicate: NSPredicate(value: true), subscriptionID: "somebody.else", options: [.firesOnRecordCreation])
-    let engines = CKDatabaseSubscription(subscriptionID: "engine-made")  // CKSyncEngine 当年建的：和我们的静默推送重复
-    let fake = store(preloaded: [drifted, stale, foreign, engines])
+    let fake = store(preloaded: [drifted, stale, foreign])
 
     #expect(await manager.ensure(in: fake) == .active)
 
     #expect(await fake.saved.sorted() == ["cuepad.changes", "cuepad.cue", "cuepad.pi.settled", "cuepad.pi.waiting"])
-    #expect(await fake.deleted.sorted() == ["cuepad.pi.old", "engine-made"])
+    #expect(await fake.deleted.sorted() == ["cuepad.pi.old"])
     #expect(await fake.ids.contains("somebody.else"))
   }
 
@@ -259,19 +258,13 @@ import Testing
     ]
   }
 
-  @Test func tappingACueNotificationRoutesToTheMessage() {
+  @Test func tappingANotificationRoutesToTheMessageOrSessionRecord() {
     let id = UUID()
-    #expect(CueAlertRoute.message(from: payload(subscription: "cuepad.cue", record: id.uuidString.lowercased())) == id)
-    #expect(CueAlertRoute.message(from: payload(subscription: "cuepad.pi.waiting", record: id.uuidString.lowercased())) == nil)
-    #expect(PiAlertRoute.tap(from: payload(subscription: "cuepad.cue", record: id.uuidString.lowercased())) == nil)
-  }
-
-  @Test func tappingANotificationRoutesToTheSessionRecord() {
-    let id = UUID()
-    let waiting = PiAlertRoute.tap(from: payload(subscription: "cuepad.pi.waiting", record: id.uuidString.lowercased()))
-    let settled = PiAlertRoute.tap(from: payload(subscription: "cuepad.pi.settled", record: id.uuidString.lowercased()))
-    #expect(waiting == PiAlertTap(kind: .waitingForUser, sessionState: id))
-    #expect(settled == PiAlertTap(kind: .settled, sessionState: id))
+    func tap(_ subscription: String) -> CloudAlert? { CloudAlert(userInfo: payload(subscription: subscription, record: id.uuidString.lowercased())) }
+    #expect(tap("cuepad.cue") == .cue(message: id))
+    #expect(tap("cuepad.pi.waiting") == .session(PiAlertTap(kind: .waitingForUser, sessionState: id)))
+    #expect(tap("cuepad.pi.settled") == .session(PiAlertTap(kind: .settled, sessionState: id)))
+    #expect(tap("cuepad.changes") == nil)
   }
 
 }

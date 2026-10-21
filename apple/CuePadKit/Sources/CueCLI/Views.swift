@@ -103,6 +103,12 @@ extension Call {
     let names = try await projectNames()
     return cards.map { CardView(card: $0, project: names[$0.projectID] ?? "") }
   }
+
+  /// 改完再读回这张卡。
+  func freshView(_ id: UUID) async throws -> CardView {
+    guard let card = try await store.card(id) else { throw CLIError.notFound("\(id.uuidString.lowercased()) 已不存在") }
+    return try await cardViews([card])[0]
+  }
 }
 
 func listReply(_ lines: [String], json: [JSONObject]) -> Reply {

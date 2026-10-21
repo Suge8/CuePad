@@ -280,13 +280,7 @@ extension CueStore {
 
   private func overwrite(_ row: SyncRow) throws {
     let columns = row.table.columns
-    let placeholders = columns.map { _ in "?" }.joined(separator: ", ")
-    let assignments = columns.dropFirst().map { "\($0) = excluded.\($0)" }.joined(separator: ", ")
-    try db.run(
-      """
-      INSERT INTO \(row.table.rawValue) (\(columns.joined(separator: ", "))) VALUES (\(placeholders))
-      ON CONFLICT(id) DO UPDATE SET \(assignments)
-      """, columns.map { row.fields[$0] ?? .null })
+    try db.run(Self.upsertSQL(row.table, columns), columns.map { row.fields[$0] ?? .null })
   }
 
   /// 返回被删附件的哈希（提交后回收文件）。
@@ -297,10 +291,7 @@ extension CueStore {
       if key.table == .attachments {
         hash = try db.first("SELECT hash FROM attachments WHERE id = ?", [key.id]) { $0.text(0) }
       }
-      // 默认项目不能删：别处更早的版本永久删了它，本机的那条留着、忘掉元数据就重新传上去
-      if key.table != .projects || key.id != Project.defaultID.uuidString.lowercased() {
-        try db.run("DELETE FROM \(key.table.rawValue) WHERE id = ?", [key.id])
-      }
+      try db.run("DELETE FROM \(key.table.rawValue) WHERE id = ?", [key.id])
       try db.run("DELETE FROM syncRecords WHERE recordName = ?", [key.id])
       if key.table == .projects {
         // 项目已在别处永久删除，不会再"稍后到达"：本机遗留在它名下的卡片（多半是离线期间新写的），
@@ -337,10 +328,6 @@ extension CueStore {
     var remote = remote
     // 通知标志只由置位的那台 Mac 上传、上传即清：远端带回来的（含自己上传的回声）不能再让本机的下一次改动带上它
     if Table.notifyFlagged.contains(remote.table) { remote.fields["notify"] = .null }
-    // 每张卡都在一个项目里：更早的版本记下的没有项目的卡只在这里归到默认项目，库里没有空的项目；
-    // 默认项目不能删，别处更早的版本把它放进回收站的不算
-    if remote.table == .cards, remote.fields["projectID"] ?? .null == .null { remote.fields["projectID"] = Project.defaultID.sqlValue }
-    if remote.table == .projects, remote.id == Project.defaultID.uuidString.lowercased() { remote.fields["deletedAt"] = .null }
     let table = remote.table
     let (pushed, sent) = try db.first("SELECT pushedModifiedAt, sentModifiedAt FROM syncRecords WHERE recordName = ?", [remote.id]) {
       ($0.intOrNil(0), $0.intOrNil(1))
