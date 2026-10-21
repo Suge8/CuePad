@@ -13,7 +13,6 @@ import Testing
 
 private let output = URL(filePath: ProcessInfo.processInfo.environment["CUEPAD_CUE_EVAL_OUT"] ?? "/tmp/cue-eval/latest", directoryHint: .isDirectory)
 
-/// 一条判定：用户看得到的一项行为。
 struct Check {
     let label: String
     let passed: Bool
@@ -65,7 +64,6 @@ final class CueEval {
         try await eventually("Cue 做完被叫醒的那一轮", timeout: .seconds(420)) { self.round?.finishedAt != nil }
     }
 
-    /// 被叫醒的那一轮
     var round: CueRound? { rig.rounds.first { $0.startedAt >= start } }
 
     /// 那一轮里调的 `tool`（只看 `action` 这一种）与它的参数
@@ -90,7 +88,6 @@ final class CueEval {
         return Check("他看得到的字里没有编号", !written.contains { text in ids.contains { text.contains($0) } })
     }
 
-    /// 回答你的那句
     func reply() async throws -> CueMessage? { try await said().last { $0.author == .known(.cue) && $0.choices == nil && $0.taskID == nil } }
 
     private func write(_ name: String, expect: String, checks: [Check], failure: (any Error)?) async {

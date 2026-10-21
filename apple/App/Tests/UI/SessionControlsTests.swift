@@ -45,7 +45,6 @@ struct SessionControlsTests {
         #expect(MacDelivery.reply(to: session) == (allowsOther ? .answer(question) : .answerAbove))
     }
 
-    /// 换了立即显示新值并标着在路上；没换成回到会话当前的值并写原因；会话结束了照样能换。
     @Test func 换模型_立即显示新值_没换成回到当前值写原因_结束了照样能换() async throws {
         let atlas = try await session()
         let request = try await app.services.configure(PiConfig(model: luna.key, thinking: .high), for: atlas)

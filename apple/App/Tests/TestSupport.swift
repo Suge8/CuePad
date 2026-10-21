@@ -83,7 +83,6 @@ nonisolated final class FakeSync: SyncControlling, Sendable {
         }
         if syncNowHangs.withLock({ $0 }) { try? await Task.sleep(for: .seconds(3600)) }
     }
-    /// 马上传过的记录名，按调用顺序。
     let uploads = AsyncStream<String>.makeStream()
     func send(recordName: String) async -> Bool {
         uploads.continuation.yield(recordName)
@@ -104,7 +103,6 @@ final class TestApp {
     static let hostID = "mac-test"
     let wakeCenter = NotificationCenter()
     let hotkeys = InMemoryHotkeys()
-    /// 复制的去处（私有命名剪贴板，不碰系统的）。
     let pasteboard = NSPasteboard(name: .init("cuepad-tests-\(UUID().uuidString)"))
     /// socket 路径有 104 字节上限，所以假扩展的目录放在短路径下。
     let socketDirectory = URL(filePath: "/tmp/cat-\(UUID().uuidString.prefix(8))", directoryHint: .isDirectory)

@@ -23,7 +23,6 @@ struct PiTranscriptTests {
         #"{"type":"message","id":"\#(id)","parentId":"\#(parent)","timestamp":"\#(at.formatted(Self.iso))","message":{"role":"assistant","stopReason":"stop","content":[{"type":"text","text":"\#(text)"}],"timestamp":2}}"#
     }
 
-    /// 一个会话文件：两轮问答，时间在 `at`。
     private func sessionFile(_ sessionID: String, at: Date) throws -> URL {
         let directory = rig.piPaths.sessionsDirectory.appending(path: "--work-x--")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
