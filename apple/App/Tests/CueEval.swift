@@ -144,6 +144,9 @@ final class CueEval {
         return session.lowercased().hasPrefix(ref) || title.lowercased() == ref || isCard(ref)
     }
 
+    /// 这次 add 真建了一件任务：成了、且工具没认出同名没做完的那件（"已有没做完的…，没再建"）
+    static func built(_ call: CueToolCall) -> Bool { !call.failed && call.result?.hasPrefix("已有没做完的") != true }
+
     /// 叫醒之后 Cue 写的消息（tell、回复、动态、完成的结果）
     func said(since: Date? = nil) async throws -> [CueMessage] {
         let from = since ?? start

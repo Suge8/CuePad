@@ -23,7 +23,7 @@ extension Duty {
         key: Points
     ) async throws -> [Check] {
         for session in sessions { try await session.refresh(rig) }
-        let adds = CueEval.calls(in: rounds(after: steps.first!), "task", ["add"]).filter { !$0.call.failed }
+        let adds = CueEval.calls(in: rounds(after: steps.first!), "task", ["add"]).filter { CueEval.built($0.call) }
         let topics: [(String, Regex<Substring>)] = [
             ("忘记密码", /忘记密码|重置密码/), ("邮件服务", /服务|额度|哪家/), ("设置页", /设置页/), ("官网性能", /Lighthouse|性能/),
             ("README", /README/), ("依赖", /依赖/), ("周报", /周报/), ("死链", /死链/), ("SendGrid", /SendGrid/),
