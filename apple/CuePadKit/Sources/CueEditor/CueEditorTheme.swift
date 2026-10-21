@@ -10,7 +10,6 @@ public typealias CueColor = UIColor
 public typealias CueFont = UIFont
 #endif
 
-/// 编辑器的全部样式参数。
 // NSFont/NSColor 未标 Sendable，但主题只保存不可变的样式值。
 public struct CueEditorTheme: @unchecked Sendable {
     public var font: CueFont
@@ -19,21 +18,17 @@ public struct CueEditorTheme: @unchecked Sendable {
     public var codeFont: CueFont
     /// 标题、列表、围栏等标记字符的颜色：保持可见，降低存在感。
     public var markerColor: CueColor
-    /// 代码块整行底色与行内 code 底色。
     public var codeBackground: CueColor
     public var textColor: CueColor
     public var backgroundColor: CueColor
     public var variableColor: CueColor
     public var variableBackground: CueColor
-    /// 图片加载中或缺失时的底色。
     public var imagePlaceholderColor: CueColor
-    /// 文字离编辑区左右边的最小距离。
     public var horizontalInset: CGFloat
     /// 一行字最宽多少（AppKit）：编辑区更宽时左右留白加大，让这一列字居中；nil 时只有 `horizontalInset`。
     public var maxTextWidth: CGFloat?
     public var verticalInset: CGFloat
     public var lineSpacing: CGFloat
-    /// `# ` 标题行上方的额外间距。
     public var headingSpacing: CGFloat
     public var imageCornerRadius: CGFloat
 

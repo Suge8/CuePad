@@ -26,7 +26,6 @@ public final class ProcessExit: Sendable {
     try process.run()
   }
 
-  /// 退出码。
   public var value: Int32 { get async { await value(within: nil)! } }
 
   /// 至多等 `limit`（nil 不限），没退出为 nil。
@@ -70,7 +69,6 @@ public final class ProcessExit: Sendable {
 }
 
 extension Process {
-  /// 起它并等它退出，返回退出码。
   public func runToExit() async throws -> Int32 {
     try await ProcessExit(launching: self).value
   }

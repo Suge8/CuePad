@@ -5,7 +5,6 @@ import Foundation
 public struct QuotaWindow: Sendable, Equatable, Codable, Identifiable {
   /// 窗口长度（秒）
   public var seconds: Int
-  /// 周窗口的长度（"本周"）
   public static let week = 7 * 86_400
   /// 这个窗口已用的比例，0 到 1（到顶后提供方可能报得略超 1）
   public var used: Double

@@ -131,7 +131,6 @@ public struct CueSummary: Equatable, Sendable {
         return "…" + (whole ? tail : tail.prefix(previewLimit))
     }
 
-    /// 标题之后的全部文字，各行以 `separator` 连接。
     private static func rest(_ stored: String, separator: String = "\n") -> String {
         CueLines.contentLines(stored).dropFirst().joined(separator: separator)
     }

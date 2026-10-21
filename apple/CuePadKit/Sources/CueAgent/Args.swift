@@ -2,7 +2,6 @@ import CueStore
 import CueText
 import Foundation
 
-/// 工具参数（JSON 对象）。
 struct Args {
   let raw: [String: Any]
 

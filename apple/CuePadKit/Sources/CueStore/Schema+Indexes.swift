@@ -33,7 +33,7 @@ extension Schema {
   /// 待交给 Cue 的大脑的（`CueStore.cueMessagesToDeliver`，Cue 的对话每变一次都读）：部分索引只收这几条，条件同出 `CueStore.toDeliver`。
   /// 整表扫一次要读一千多条带正文的行。
   static let toDeliverIndex = "CREATE INDEX cueMessages_toDeliver ON cueMessages(createdAt) WHERE \(CueStore.toDeliver);"
-  /// 按状态取会话（结束的按项目各取最近几条、按项目计数，`CueStore.piSessionGroups`，会话列表每次变化都读）：带上项目与 id 只读索引，
+  /// 按状态取会话（结束的按项目各取最近几条、按项目计数，`CueStore.piSessionPage`，会话列表每次变化都读）：带上项目与 id 只读索引，
   /// 不回表读带问答长文的会话记录（真实库四千多条结束的，冷读从约一千五百页降到一百多页）。
   static let stateIndex = "CREATE INDEX piSessionStates_state ON piSessionStates(state, stateSince, projectID, id);"
   /// 开新会话的请求按认领标识对会话记录（认领、等认领、Cue 开出的会话，`CueStore.launchUnclaimed` 等）：没有它时每对一次都现建一份自动索引或整表扫，

@@ -3,7 +3,6 @@ import CueText
 import Foundation
 
 extension CueTools {
-  /// `agent` 的取值。
   static let agents = AgentKind.allCases.map(\.rawValue).joined(separator: " / ")
 
   func say(_ args: Args) async throws -> Result {

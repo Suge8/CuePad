@@ -53,7 +53,7 @@ extension CueStore {
     }
   }
 
-  /// 一行是哪家 Agent 的（会话索引与会话记录都是）：早于多家接入的行没写，是 Pi。也是 Agent 索引（`Schema` 第 55 步）的表达式。
+  /// 一行是哪家 Agent 的（会话索引与会话记录都是）：早于多家接入的行没写，是 Pi。也是 Agent 索引（`Schema.agentIndex`）的表达式。
   static let agentOf = "COALESCE(agent, '\(AgentKind.pi.rawValue)')"
 
   /// 删掉一家 Agent 的本机会话索引（断开接入时）：会话同步记录与对话不动。`host` 这台 Mac 托管过的会话（`hostedPiSessionIDs`）留着：

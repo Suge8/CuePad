@@ -22,7 +22,6 @@ public final class CueTextView: UITextView, CueEditorHost {
     /// 图片入库失败（磁盘满、文件不可读）。失败的图片不会插入。
     public var onError: ((any Error) -> Void)?
 
-    /// 复制与剪切写入的剪贴板。
     var pasteboard: UIPasteboard = .general
     private(set) var core: EditorCore!
     private var isLoading = false
@@ -162,7 +161,6 @@ public final class CueTextView: UITextView, CueEditorHost {
         }
     }
 
-    /// 有没有选区变了就报告。
     func reportSelection() {
         let selecting = selectedRange.length > 0
         guard selecting != reportedSelection else { return }

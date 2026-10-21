@@ -56,7 +56,6 @@ enum Schema {
       + "\n  id 是小写 UUID；时间是 UTC ISO 8601 含毫秒；没有值是 null。"
   }
 
-  /// 没有 --project 时的默认范围说明。
   static func defaultScope(otherwise fallback: String) -> String {
     "默认范围：省略时用绑定了当前目录（或其上层目录）的项目；没有则\(fallback)。"
   }

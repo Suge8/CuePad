@@ -107,7 +107,6 @@ public enum CueEnvelope {
     }
   }
 
-  /// 要换新上下文时的那一行。
   private static let renew = "要换新上下文：先 memory renew 写交接，再结束这一轮。"
 
   /// 接上：交接原样，之后的对话每条一行，从最近的往前取到 `resumeCharacters` 字。
@@ -171,7 +170,6 @@ public enum CueEnvelope {
     return parts.joined(separator: " · ")
   }
 
-  /// 它留给他回的会话在看板与 peek 上的那一句（`CueLeft`）。
   static let leftNote = "已留给他回"
 
   /// 会话在 Cue 眼里的称呼：会话名与短 id（Cue 的工具给 session 时写它）。
