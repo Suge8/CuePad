@@ -74,9 +74,6 @@ struct AgentPage: View {
             QuotaRings(open: quota != nil, height: Spacing.toolbarControl, action: toggleQuota)
                 .glass(in: .capsule, interactive: true)
             NewSessionButton(showing: Bindable(workspace).showsNewSession)
-                .font(.system(size: 14, weight: .semibold))
-                .frame(width: 36, height: 36)
-                .glass(in: .circle, interactive: true, ink: .clear)
         }
     }
 

@@ -13,11 +13,8 @@ struct NewSessionButton: View {
 
     var body: some View {
         let none = agents?.agents.isEmpty != false
-        // 标签铺满外面给的框（会话页那一排里的玻璃圆钮）：悬停的底就是那一圈
-        Button { showing = true } label: {
-            Image(.add).frame(maxWidth: .infinity, maxHeight: .infinity).contentShape(.circle)
-        }
-        .buttonStyle(PressStyle(.button))
+        Button { showing = true } label: { Image(.add) }
+        .buttonStyle(ControlButtonStyle(kind: .circular))
         .accessibilityLabel("新会话")
         .disabled(none)
         .help(none ? agents.map { "开不了新会话：\($0.whyNone)" } ?? "" : "开一个新的 Agent 会话")

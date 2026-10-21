@@ -37,7 +37,7 @@ struct TaskLine: View {
     var body: some View {
         let next = workspace.next(for: task, lead: lead, in: agents, steps: subtasks)
         let done = check.done(task)
-        framed(line(next: next, done: done), next: done ? nil : next)
+        framed(line(next: next, done: done))
             // 读屏把一行当一个元素："任务内容，步骤 1/4，下一步"，值是状态（文案见 TaskSpeech）；默认动作勾选（与圈同一个动作）
             .accessibilityElement(children: .ignore)
             .accessibilityLabel([task.title, subtasks.map(TaskCopy.progress), next?.speech].compactMap { $0 }.joined(separator: "，"))
@@ -81,6 +81,9 @@ struct TaskLine: View {
             }
         }
         .frame(minHeight: TaskMetrics.rowHeight)
+        #if os(macOS)
+        .hoverReveal(when: !done && next.map { !Self.inlines($0) } ?? false) { if let next { TaskNextMark(next: next).padding(.leading, 4) } }
+        #endif
         .animation(Motion.quick, value: done)
     }
 
@@ -109,7 +112,7 @@ struct TaskLine: View {
         if !done, let next, Self.inlines(next) { TaskNextMark(next: next).yields(first: false, ever: !next.speaks).transition(.opacity) }
     }
 
-    /// "下一步"排在行里还是悬停才浮出来：Mac 上"开始"只在悬停时浮在行尾（`framed`）。
+    /// "下一步"排在行里还是悬停才浮出来：Mac 上"开始"只在悬停时浮在行尾（`hoverReveal`）。
     private static func inlines(_ next: TaskNext) -> Bool {
         #if os(macOS)
         if case .start = next { return false }
@@ -139,7 +142,7 @@ struct TaskLine: View {
     /// 长按提起的那一行的外形：与列表那张纸同一个圆角。
     private static let liftRadius: CGFloat = 16
 
-    private func framed(_ content: some View, next: TaskNext?) -> some View {
+    private func framed(_ content: some View) -> some View {
         content
             .contentShape(.rect)
             .onTapGesture(perform: open)
@@ -152,10 +155,9 @@ struct TaskLine: View {
     private static let titlePadding: CGFloat = 0
     private static let ringTarget: CGFloat = TaskMetrics.ring
 
-    private func framed(_ content: some View, next: TaskNext?) -> some View {
+    private func framed(_ content: some View) -> some View {
         content
             .contentShape(.rect)
-            .hoverReveal(when: next.map { !Self.inlines($0) } ?? false) { if let next { TaskNextMark(next: next).padding(.leading, 4) } }
             .row()
             .benchSpot(task.id)
             .onTapGesture(perform: open)

@@ -19,8 +19,6 @@ struct TaskBoardPage: View {
             .background(palette.desk)
             .animation(Motion.quick, value: workspace.addsTask)
             .onChange(of: workspace.scopedProject) { workspace.addsTask = false }
-            // "⋯"里的"全部归档做完的"按它置灰：归档的是所有项目里做完的，不看范围
-            .onChange(of: board.map { !$0.done.isEmpty || !$0.earlier.isEmpty }, initial: true) { workspace.hasDoneTasks = $1 ?? false }
             .observingBoard(into: $board, store: services.store, onError: workspace.fail)
     }
 
@@ -28,7 +26,8 @@ struct TaskBoardPage: View {
         HStack(spacing: 16) {
             ProjectScopeMenu()
             Spacer(minLength: 0)
-            PageHeaderButton(title: "新任务", icon: .add) { workspace.addsTask.toggle() }
+            Button("新任务", icon: .add) { workspace.addsTask.toggle() }
+                .buttonStyle(ControlButtonStyle(kind: .glass))
                 .help("在待办里添加任务")
         }
     }

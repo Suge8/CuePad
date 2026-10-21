@@ -43,23 +43,17 @@ struct SidebarToggle: View {
 /// 没有编辑页时它不占位置。
 struct CloseButton: View {
     @Environment(Workspace.self) private var workspace
-    @Environment(\.palette) private var palette
 
     var body: some View {
         if workspace.openCard != nil {
             Button { workspace.openCard = nil } label: {
                 HStack(spacing: 4) {
                     Image(.back).font(.system(size: 13, weight: .semibold))
-                    Text("收起").font(Typography.toolbarLabel)
+                    Text("收起")
                 }
-                .foregroundStyle(palette.ink2)
-                .padding(.leading, 10).padding(.trailing, 14)
-                .frame(height: Spacing.toolbarControl)
-                .contentShape(.capsule)
             }
-            .buttonStyle(PressStyle())
+            .buttonStyle(ControlButtonStyle(kind: .glass))
             .keyboardShortcut(.cancelAction)
-            .glass(in: .capsule, interactive: true)
             .help("收起（Esc）")
         }
     }
