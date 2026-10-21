@@ -125,6 +125,9 @@ class EvalScript {
 
     /// 他问起早先的事：答对才过；没答对时标出是说不知道还是答错（乱编）
     /// `fabricated`：没答对、也没说不知道时，这句是不是给了一个具体的错答案（编造）。
+    /// 去掉引号里转述的原话（“”「」""）
+    static func unquoted(_ text: String) -> String { text.replacing(/“[^”]*”|「[^」]*」|"[^"]*"/, with: "") }
+
     func recalled(
         _ label: String, _ step: Step, kind: CheckKind = .memory, fabricated: ((String) -> Bool)? = nil, _ correct: (String) -> Bool
     ) async throws -> Check {

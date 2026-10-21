@@ -159,7 +159,10 @@ private final class Days: EvalScript, Playable {
             Check(.memory, "5 天前否掉的：会话问迁不迁 S3，答留在 R2", s3Said.contains { $0.contains(/B|R2|不迁|留在/) } && !s3Said.contains { $0.trimmingCharacters(in: .whitespaces) == "A" }),
             Check(.memory, "5 天前否掉的理由：贵、团队没人熟 AWS（答出至少一条）", reasons.contains(/贵|成本|费用|AWS|不熟|没人熟/), note: reasons.isEmpty ? "（没回）" : ""),
             Check(.memory, "1 天前改的偏好：派活时带的是新的（中文提交信息）", preference.hasPrefix("带了新的"), note: "——\(preference)"),
-            try await recalled("1 天前改的偏好：问起时答中文", key.language, fabricated: { $0.contains("英文") }) { $0.contains("中文") && !$0.contains(/现在.{0,6}英文|用英文写/) },
+            // 引号里的是他从前的原话（"比之前「用英文写」的新"），不算答成英文
+            try await recalled("1 天前改的偏好：问起时答中文", key.language, fabricated: { Self.unquoted($0).contains("英文") }) {
+                Self.unquoted($0).contains("中文") && !Self.unquoted($0).contains(/现在.{0,6}英文|用英文写/)
+            },
             try await recalled("补记后有块要合、他触发冷换新：问车位答 B2 层 117", key.parking, fabricated: { $0.contains(/[A-Z]?\d+ ?层|\d{2,3} ?号/) }) {
                 $0.contains("B2") && $0.contains("117")
             },
