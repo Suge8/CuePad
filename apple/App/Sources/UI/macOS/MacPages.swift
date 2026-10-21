@@ -24,13 +24,17 @@ final class MacPages {
     /// 侧栏开着、不在动时详情区的左缘：展开后详情区从哪起（侧栏这一栏的宽另有内边距，不能拿它算）。还没见过侧栏开着时为 nil。
     @ObservationIgnored private var openedMinX: CGFloat?
     @ObservationIgnored private var motions = 0
+    @ObservationIgnored let slide = ColumnSlide()
+    /// 页滑动时两边多铺的底色，不小于侧栏最宽的那一栏。
+    static let slideOverscan: CGFloat = 400
 
-    /// 开合侧栏：分栏照常动画，详情区里的页在动之前按终点排好、摆到终点，动画里只有侧栏在滑（`SidebarMotion`）。
+    /// 开合侧栏：分栏照常动画，详情区里的页在动之前按终点排好，动画里只平移图层、左缘贴着侧栏的边走（`SidebarMotion`）。
     /// 跟着每帧的宽度重排时每帧主线程约 16ms、800ms 里掉帧十几次；这样每帧约 6ms。动画中途再按，按新的终点重新排一次。
     func toggleSidebar() {
         let opening = sidebar == .detailOnly
         let leading = opening ? openedMinX : 0
         detailHold = leading.map { DetailHold(leading: $0, width: detailFrame.maxX - $0) }
+        slide.hold(detailHold)
         motions += 1
         let motion = motions
         withAnimation(Motion.snappy) {
@@ -38,6 +42,34 @@ final class MacPages {
         } completion: { [weak self] in
             guard let self, motion == motions else { return }
             detailHold = nil
+            slide.hold(nil)
+        }
+    }
+
+    /// 详情区这一栏的图层：动画里平移到侧栏这一帧的边，页按终点排好、左缘贴着侧栏走；不在动时复位。
+    /// 侧栏的边就是详情区的左侧安全区，它与侧栏在同一次布局里变，平移跟着同一次提交上屏；按下开合的那一下就平移，页按终点排好的那一帧不会先跳过去。
+    @MainActor
+    final class ColumnSlide {
+        weak var layer: CALayer?
+        private var edge: CGFloat = 0
+        private var leading: CGFloat?
+
+        func follow(edge: CGFloat) {
+            self.edge = edge
+            apply()
+        }
+
+        func hold(_ hold: DetailHold?) {
+            leading = hold?.leading
+            apply()
+        }
+
+        private func apply() {
+            guard let layer else { return }
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            layer.setAffineTransform(CGAffineTransform(translationX: leading.map { edge - $0 } ?? 0, y: 0))
+            CATransaction.commit()
         }
     }
 
