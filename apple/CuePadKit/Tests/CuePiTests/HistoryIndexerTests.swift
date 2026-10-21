@@ -1,9 +1,9 @@
 #if os(macOS)
+import CueStore
 import CueTestSupport
 import Foundation
 import Synchronization
 import Testing
-import CueStore
 @testable import CuePi
 
 final class HistoryEventLog: Sendable {

@@ -2,7 +2,6 @@
 import CueStore
 import CueText
 import Foundation
-import OSLog
 
 extension CodexRuntime {
     public func send(_ message: PiMessage, in id: PiSession.ID) async throws {

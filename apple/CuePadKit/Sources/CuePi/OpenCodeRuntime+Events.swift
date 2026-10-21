@@ -1,7 +1,6 @@
 #if os(macOS)
 import CueStore
 import Foundation
-import OSLog
 
 extension OpenCodeRuntime {
     func apply(_ event: OpenCodeEvent, _ connection: Connection) async {
