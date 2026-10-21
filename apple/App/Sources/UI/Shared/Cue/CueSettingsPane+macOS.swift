@@ -2,7 +2,8 @@
 import CueStore
 import SwiftUI
 
-/// 设置窗口 Cue 那一页，每项一行 `SettingRow`（同其他各页），按要紧排：在哪台 Mac 上运行（这台排第一，"不启用"是停用；没能写成的原因写在这一行）；
+/// 设置窗口 Cue 那一页，每项一行 `SettingRow`（同其他各页），按要紧排：在哪台 Mac 上运行（这台排第一，"不启用"是停用；没能写成的原因写在这一行；
+/// 能不能选读 `CueGate`：还没和 iCloud 对过时写在等什么、选不了，正在别的 Mac 上运行时换过去先确认）；
 /// 不用先问的事（允许清单 `CueProfile.allows`：每类一个开关，只管一个项目的那几项各一行、可撤销）；对话里显示不显示工具步骤（`CueStepsSetting`，存本机）与名字。
 /// 用哪个 Agent、模型与思考强度在 Cue 页输入框上（`CueConfigControls`），这里不重复。读写都经两端同一份 `CueSettingsModel`（手机上是 `CueSettingsScreen`）。
 struct CueSettingsPane: View {
@@ -47,17 +48,22 @@ struct CueSettingsPane: View {
     }
 
     private func host(_ settings: CueSettings) -> some View {
-        let here = services.hostID
+        let hosts = settings.hosts(here: services.hostID)
+        let waiting = settings.gate(services).waitingReason
         return SettingRow(
             title: CueSettings.hostTitle, icon: Image(.mac), tone: model.failure == nil ? .calm : .failure,
-            busy: model.enabling != nil, status: model.failure.map { Dotted($0) }
+            busy: model.enabling != nil || waiting != nil, status: (model.failure ?? waiting).map { Dotted($0) }
         ) {
-            Picker(CueSettings.hostTitle, selection: Binding(get: { settings.profile.activeHost }, set: { model.run(on: $0, services) })) {
+            Picker(CueSettings.hostTitle, selection: Binding(
+                get: { settings.profile.activeHost },
+                set: { id in model.choose(hosts.first { $0.id == id }, services) }
+            )) {
                 Text("不启用").tag(String?.none)
                 Divider()
-                ForEach(settings.hosts(here: here)) { Text($0.name).tag(Optional($0.id)) }
+                ForEach(hosts) { Text($0.name).tag(Optional($0.id)) }
             }
             .labelsHidden().fixedSize()
+            .disabled(waiting != nil)
         }
     }
 

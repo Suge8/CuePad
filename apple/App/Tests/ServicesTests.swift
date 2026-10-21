@@ -202,15 +202,23 @@ struct AgentIndexingTests {
 /// Agent 里没有它）才换成第一家能用的，模型属于原来那家，一并清掉，强度留着（交给运行时取档）。全新的设置强度是"低"（大脑默认要快）。
 /// 一家都不能用时报出各家为什么。
 struct CueEnableTests {
-    @Test func 全新设置启用后强度是低() async throws {
+    /// 起一个对过 iCloud 的 App（启用的前提）。
+    private func launch() async throws -> TestApp {
         let app = TestApp()
+        app.services.startSync()
+        try await app.syncs()
+        return app
+    }
+
+    @Test func 全新设置启用后强度是低() async throws {
+        let app = try await launch()
         try await app.connect(.pi)
-        try await app.services.enableCue(on: TestApp.hostID)
+        try await app.services.enableCue(on: TestApp.hostID, moving: false)
         #expect(try await app.services.store.cueProfile()?.effort == .known(.low))
     }
 
     @Test func 启用不动你选的Agent与模型() async throws {
-        let app = TestApp()
+        let app = try await launch()
         try await app.connect(.pi)
         let services: AppServices = app.services, store = app.services.store
         func profile() async throws -> CueProfile { try #require(try await store.cueProfile()) }
@@ -220,25 +228,25 @@ struct CueEnableTests {
             $0.model = "fake/m"
             $0.effort = .known(.high)
         }
-        try await services.enableCue(on: TestApp.hostID)
+        try await services.enableCue(on: TestApp.hostID, moving: false)
         var now = try await profile()
         #expect(now.activeHost == TestApp.hostID && now.runtime == .known(.pi) && now.model == "fake/m" && now.effort == .known(.high))
 
         try await services.disableCue()
-        try await services.enableCue(on: TestApp.hostID)
+        try await services.enableCue(on: TestApp.hostID, moving: false)
         now = try await profile()
         #expect(now.activeHost == TestApp.hostID && now.model == "fake/m" && now.effort == .known(.high))
 
         try await app.services.updateCue { $0.runtime = .known(.claudeCode) }
-        try await services.enableCue(on: TestApp.hostID)
+        try await services.enableCue(on: TestApp.hostID, moving: false)
         now = try await profile()
         #expect(now.runtime == .known(.pi) && now.model == nil && now.effort == .known(.high))
     }
 
     @Test func 一家都不能用时启用报出各家为什么() async throws {
-        let app = TestApp()
+        let app = try await launch()
         await #expect {
-            try await app.services.enableCue(on: TestApp.hostID)
+            try await app.services.enableCue(on: TestApp.hostID, moving: false)
         } throws: {
             $0.localizedDescription == "那台 Mac 上没有能当 Cue 的 Agent：Pi 没装 · Claude Code 没装 · Codex 没装 · OpenCode 没装"
         }

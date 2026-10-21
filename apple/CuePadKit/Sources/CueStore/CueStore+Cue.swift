@@ -385,9 +385,13 @@ extension CueStore {
 
   /// 让 Cue 运行在 `host` 那台 Mac 并启用（另一台上的会停下）——手机与 Mac 同一条规则，按那台写下的能用的 Agent（`MacAgents`）判断：
   /// 选的 Agent 那台用不了才换成 `CueProfile.runtimes` 里第一家能用的，模型属于原来那家、一并清掉；强度留着（运行时自己取档）。
-  /// 那台一家都不能用时抛 `CueEnableError`，带上各家为什么。
-  public func enableCue(on host: String) throws {
+  /// 那台一家都不能用时抛 `CueEnableError`，带上各家为什么。Cue 正在另一台上运行时只有 `moving`（你确认了要换过去）才换，否则抛
+  /// `CueEnableError.runsElsewhere`：同一个事务里读、判、写，读到别的设备刚同步来的启用也不会悄悄把它抢过来。
+  public func enableCue(on host: String, moving: Bool) throws {
     try write {
+      if let running = try cueProfile()?.activeHost, running != host, !moving {
+        throw CueEnableError.runsElsewhere(try macAgents(on: running).shownName)
+      }
       let usable = try macAgents(on: host)
       let available = CueProfile.runtimes.filter(usable.kinds.contains)
       guard let first = available.first else { throw CueEnableError.noRuntime(usable.whyNone) }
