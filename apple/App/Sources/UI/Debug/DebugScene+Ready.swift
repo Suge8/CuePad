@@ -3,8 +3,6 @@ import CueStore
 import SwiftUI
 
 extension DebugScene {
-    // MARK: 截图的首帧就绪
-
     /// 还没做完的摆画面的事（`later`）。
     private static var pending = 0
     /// 正在过渡的视图（`debugSettling`）。

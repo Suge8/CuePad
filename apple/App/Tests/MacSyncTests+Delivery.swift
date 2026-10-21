@@ -3,13 +3,11 @@ import CueStore
 import CueSync
 import Foundation
 import Testing
-import AppKit
 @testable import CuePad
+
 @testable import CuePi
 
 extension MacSyncTests {
-    // MARK: 手机发来的投送请求
-
     /// 等请求有结果；10 秒没有就失败并说明（观察流不会自己结束，没有上限会无声挂住整个测试宿主）。
     func awaitFinished(_ id: UUID) async throws -> DeliveryRequest {
         let store = services.store
