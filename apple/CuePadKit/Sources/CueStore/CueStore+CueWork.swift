@@ -731,7 +731,10 @@ extension CueStore {
     let tasks = try topTasks(where: "(t.completedAt IS NULL OR t.writeSeq > ?) AND \(Self.hasSession)", [marks.tasks])
     var changes: [CueChange] = []
     let leaves = try tasks.flatMap { task in try leaves(of: task).map { (task: task, leaf: $0) } }
-    let sessions = try sessionStates(leaves.compactMap(\.leaf.piSessionID))
+    // 要看的会话：这些事的叶子绑着的，与不归没做完的事的活会话；各归哪件事只看 `sessionOwners`
+    var sessions = try sessionStates(leaves.compactMap(\.leaf.piSessionID))
+    for session in try select(PiSessionState.self, where: Self.isLoose("piSessionStates")) { sessions[session.sessionID] = session }
+    let owners = try sessionOwners(Array(sessions.keys))
     let cardSeqs = try writeSeqs(of: .cards, "id", (leaves.map(\.leaf.id) + tasks.map(\.id)).map { $0.uuidString.lowercased() })
     let sessionSeqs = try writeSeqs(of: .piSessionStates, "sessionID", Array(sessions.keys))
     func seq(_ card: Card) -> Int { cardSeqs[card.id.uuidString.lowercased()] ?? 0 }
@@ -748,32 +751,25 @@ extension CueStore {
     for task in tasks where task.completedAt != nil && seq(task) > marks.tasks {
       changes.append(CueChange(kind: .done, task: task, at: task.completedAt!, seq: seq(task), recap: try latestRecap(of: task.id)))
     }
-    for (task, leaf) in leaves {
-      if leaf.id != task.id, let done = leaf.completedAt, seq(leaf) > marks.tasks {
-        changes.append(CueChange(kind: .done, task: task, leaf: leaf, at: done, seq: seq(leaf), recap: leaf.piSessionID.flatMap { sessions[$0] }?.recap))
-      }
-      guard let session = leaf.piSessionID.flatMap({ sessions[$0] }), let written = sessionSeqs[session.sessionID] else { continue }
-      stall(session, seq: written, task: task, leaf: leaf)
-      guard written > marks.sessions else { continue }
-      try report(session, seq: written, task: task, leaf: leaf)
+    for (task, leaf) in leaves where leaf.id != task.id {
+      guard let done = leaf.completedAt, seq(leaf) > marks.tasks else { continue }
+      changes.append(CueChange(kind: .done, task: task, leaf: leaf, at: done, seq: seq(leaf), recap: leaf.piSessionID.flatMap { sessions[$0] }?.recap))
     }
-    let loose = try selectWritten(PiSessionState.self, where: "\(Self.isLoose("piSessionStates"))", [], orderBy: "writeSeq")
-    // 刚完成的事的会话两边都有：算在那件事上，不报第二遍
-    for (session, written) in loose where sessions[session.sessionID] == nil {
-      stall(session, seq: written, task: nil, leaf: nil)
+    // 一个会话一处变化：算在它归的那件事上，没归哪件事的算在它自己上
+    for session in sessions.values.sorted(by: { $0.sessionID < $1.sessionID }) {
+      guard let written = sessionSeqs[session.sessionID] else { continue }
+      let owner = owners[session.sessionID]
+      stall(session, seq: written, task: owner?.task, leaf: owner?.leaf)
       guard written > marks.sessions else { continue }
-      try report(session, seq: written, task: nil, leaf: nil)
+      try report(session, seq: written, task: owner?.task, leaf: owner?.leaf)
     }
-    // 一个会话可以绑好几件事：没带卡的失败算在它绑着的每件事上（同一件事的几个叶子共用它时只报一次）；不归没做完的事的会话算在它自己上
-    let bySession = Dictionary(grouping: leaves.filter { $0.leaf.piSessionID != nil }, by: { $0.leaf.piSessionID! })
-      .mapValues { pairs in pairs.filter { pair in pairs.first { $0.task.id == pair.task.id }!.leaf.id == pair.leaf.id } }
-      .mapValues { $0.map { (task: Optional($0.task), leaf: Optional($0.leaf)) } }
-    let looseByID = Dictionary(loose.map { ($0.0.sessionID, [(task: Card?.none, leaf: Card?.none)]) }, uniquingKeysWith: { first, _ in first })
     let failed = try selectWritten(
       DeliveryRequest.self, where: "origin = '\(DeliveryOrigin.cue.rawValue)' AND status = 'failed' AND cueToldAt IS NULL AND writeSeq > ?",
       [marks.sessions], orderBy: "writeSeq")
     for (request, written) in failed {
-      let pairs = try request.cardID.map(failedLeaf) ?? request.target.ref.flatMap { bySession[$0] ?? looseByID[$0] } ?? []
+      // 没带卡的失败算在会话归的那件事上（同上）
+      let pairs = try request.cardID.map(failedLeaf)
+        ?? request.target.ref.flatMap { ref in sessions[ref].map { _ in [(task: owners[ref]?.task, leaf: owners[ref]?.leaf)] } } ?? []
       let at = request.resultReceivedAt ?? request.completedAt ?? request.createdAt
       let spoken = request.mode.known.map(DeliveryMode.toSession.contains) == true
       let reason = request.failure ?? DeliveryRequest.unexplainedFailure
@@ -840,11 +836,10 @@ extension CueStore {
     let left = try cueState()?.left ?? []
     let sessions = try select(PiSessionState.self, where: "sessionID IN (SELECT value FROM json_each(?))", [JSONColumn.encode(held.keys.sorted())])
     let seqs = try writeSeqs(of: .piSessionStates, "sessionID", sessions.map(\.sessionID))
-    let bound = try boundLeaves(sessions.map(\.sessionID))
+    let owners = try sessionOwners(sessions.map(\.sessionID))
     for session in sessions where session.stateSince.stored == held[session.sessionID]?.stored && !left.contains(where: { $0.holds(for: session) }) {
-      let leaf = bound[session.sessionID]
-      let task = try leaf.flatMap { try find(Card.self, try topTask(of: $0.id)) }
-      guard let change = try sessionChange(session, seq: seqs[session.sessionID] ?? 0, task: task, leaf: leaf), change.isStop else { continue }
+      let owner = owners[session.sessionID]
+      guard let change = try sessionChange(session, seq: seqs[session.sessionID] ?? 0, task: owner?.task, leaf: owner?.leaf), change.isStop else { continue }
       if let presence = try hisStop(session.sessionID) {
         result.held[session.sessionID] = session.stateSince
         if let lapse = presence.lapse { result.lapse = min(result.lapse ?? lapse, lapse) }

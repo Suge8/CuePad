@@ -49,4 +49,23 @@ import Testing
     #expect(ends.compactMap(\.target.ref) == ["s2"] && ends.allSatisfy { $0.mode == .known(.end) })
     #expect(try await store.toggleDone(other.id).ended.compactMap(\.target.ref) == ["s1"])
   }
+
+  /// 会话归哪件事只有一条规则：绑着它的任务里最近修改的那件，做完了的也算（问题没答就还是在等你）。
+  /// 等你落在哪件事上与报给 Cue 的变化归到同一件，一个会话只报一次。
+  @Test func aSessionBoundToSeveralTasksBelongsToTheLatestOneEvenWhenItIsDone() async throws {
+    let older = try await store.createTask("旧的那件")
+    let latest = try await store.createTask("新的那件")
+    try await store.linkCard(older.id, toSession: "s1")
+    try await store.linkCard(latest.id, toSession: "s1")
+    try await store.setStatus(latest.id, .done)
+    try RawDB(fixture.url).exec("UPDATE cards SET modifiedAt = 1 WHERE id = '\(older.id.uuidString.lowercased())'")
+    let since = CueMarks(try await store.lastWrite())
+
+    try await PiStateRecorder(store: store, hostID: "mac").update(sessionID: "s1", state: .waitingForUser, detail: "确认写入？")
+
+    #expect(try await store.cueTally().waiting.map(\.task) == [latest.id])
+    let changes = try await store.cueChanges(after: since).due.filter { $0.session?.sessionID == "s1" }
+    #expect(changes.map(\.kind) == [.waitingForUser])
+    #expect(changes.map(\.task?.id) == [latest.id] && changes.map(\.leaf?.id) == [latest.id])
+  }
 }
