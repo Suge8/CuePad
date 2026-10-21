@@ -8,6 +8,8 @@
 #   CUEPAD_PERF_SEED=<库目录>（如真实库的只读副本）：只量这份库，每次从它克隆，换掉演示库与大库；配 -CuePadProject <库里的项目名>（单次交互从项目页起）。
 #   -CuePadInteractOnly 项,项 只量列出的几项（前后对比省下整套流程），用法见 docs/verify.md。
 #   前台量时"任务气泡开"是真实点击：App 写 AWAIT click x y，这里用 hid.swift 经 HID 点那一行（会移动真实指针，量完放回）。
+#   每次量的原始行（每次启动每项一行 JSON，键同 InteractionBench 的 INTERACT 行，另加"库"）留在 apple/.derived-perf/Build/interact.jsonl，
+#   表里的中位数就从它算；下一次 perf mac 开跑时清空重写，要留着比就先拷走。
 #   CUEPAD_TRACE=<xctrace 模板>（如 'Animation Hitches'、'Time Profiler'）：每次量的同时按 PID 录整段 trace，存 /tmp/cuepad-perf/interact-<库>-<第几次>.trace。
 # xc.sh 构建好 Release（带 DEBUG 条件，只为留下测量代码；预算按用户拿到的构建定，产物在 apple/.derived-perf，Instruments 也用这份）、
 # 带 -CuePadForeground YES 时独占机器（别的编译、测试同时跑，指令数之外的数都会被拖歪；后台量只比指令数，不独占）后调这里，第一个参数是 CuePad.app。iOS 的单次交互见 perf-ios.sh。
