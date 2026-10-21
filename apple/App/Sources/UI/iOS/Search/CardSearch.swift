@@ -40,7 +40,6 @@ struct CardSearchResults: View {
     /// 拿去搜的条件：输入法组字（拼音还没上屏）时不跟着变，上屏后再搜，结果不随每个字母闪"未找到"。
     @State private var settled: PaletteQuery?
 
-    /// 宽屏上结果按可用宽度排成多列。
     private var columns: [GridItem] {
         sizeClass == .regular ? [GridItem(.adaptive(minimum: 320), spacing: 12, alignment: .top)] : [GridItem(.flexible())]
     }

@@ -227,7 +227,6 @@ private struct FocusCard: View {
         withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { fold[keyPath: key].toggle() }
     }
 
-    /// 纸底展开或收起的一格。
     private func toggleButton(_ title: String, open: Bool, _ key: WritableKeyPath<TaskFold, Bool>) -> some View {
         Button { toggle(key) } label: {
             HStack(spacing: 4) {

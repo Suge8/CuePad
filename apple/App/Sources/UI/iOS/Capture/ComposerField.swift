@@ -106,7 +106,6 @@ final class GrowingTextView: UITextView {
     var images: (([Data]) -> Void)?
     /// 外部刚写进文字：之后的排版里滚到末尾，直到高度不再变。
     var revealsEnd = false { didSet { revealedHeight = nil } }
-    /// 上次对齐末尾时的高度。
     private var revealedHeight: CGFloat?
 
     /// 最大高度：同一字体下排满 `maxLines` 行中文量出来的高度（中文行比西文行高，首行与后续行也不一样），
@@ -130,7 +129,6 @@ final class GrowingTextView: UITextView {
     private struct RulerKey: Hashable { var lines: Int; var size: CGFloat }
     private static var rulerHeights: [RulerKey: CGFloat] = [:]
 
-    /// 这个字体排满 `lines` 行中文的高。
     static func rulerHeight(font: UIFont, lines: Int) -> CGFloat {
         let key = RulerKey(lines: lines, size: font.pointSize)
         if let height = rulerHeights[key] { return height }

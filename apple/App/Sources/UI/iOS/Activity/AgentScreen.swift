@@ -150,7 +150,6 @@ struct SessionList: View {
     }
 }
 
-/// 新会话；筛着某个项目时新会话先选它。
 private struct NewSessionButton: View {
     let project: UUID?
     @Environment(Navigation.self) private var navigation

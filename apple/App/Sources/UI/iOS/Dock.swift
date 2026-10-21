@@ -123,13 +123,11 @@ private struct HomePage: View {
     }
 }
 
-/// 底部那一排的尺寸与顺序。
 enum Dock {
     static let height: CGFloat = 62
     static let margin: CGFloat = 21
     /// 两块玻璃之间、Cue 页"⋯"与输入框之间的空。
     static let gap: CGFloat = 8
-    /// 选中滴离胶囊的边。
     static let inset: CGFloat = 4
     /// Cue 页上收起时那颗"⋯"（与输入框同高）。
     static let slot = ComposerMetrics.slot

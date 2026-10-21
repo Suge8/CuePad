@@ -86,7 +86,6 @@ private struct PinnedShelfCard: View {
     let now: ProjectNow?
     var wide = false
     @Environment(\.palette) private var palette
-    /// 项目图标随字号放大。
     @ScaledMetric(relativeTo: .title3) private var glyph: CGFloat = 22
 
     private static let radius: CGFloat = 20

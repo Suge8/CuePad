@@ -63,7 +63,6 @@ struct SearchScreen: View {
 
     private var field: some View { SearchCapsule(prompt: "搜索灵感、任务与会话", query: $query.text, focus: $searching) }
 
-    /// 聚焦搜索框，不做动画。
     private func focusSearch() {
         var instant = Transaction()
         instant.disablesAnimations = true
