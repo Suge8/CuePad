@@ -46,7 +46,9 @@ nonisolated enum TaskNext: Equatable, Sendable {
 extension Workspace {
     /// 一条任务"下一步"那一格（任务行、步骤行都走这里，两端不各自判断）：会话取窗口那一份交给的会话（`agents`，行从环境里取），
     /// Mac 上本机在线的会话换上桥上的实时状态；完成了的不写。有步骤（`steps` 不为 nil）的不是叶子，不开工；正在开会话的不再给"开始"。
-    func next(for task: Card, in agents: AgentLinks, steps: TaskProgress?) -> TaskNext? {
+    /// `lead`：上级收成一行时（任务看板）此刻干活的叶子（`TaskBoard.Item.leaf`），先看它，它没有"下一步"再看这件自己。
+    func next(for task: Card, lead: Card? = nil, in agents: AgentLinks, steps: TaskProgress?) -> TaskNext? {
+        if let lead, let next = next(for: lead, in: agents, steps: nil) { return next }
         guard task.status != .done else { return nil }
         #if os(macOS)
         let agent = agents.items[task.id].map(withLiveState)
@@ -56,4 +58,16 @@ extension Workspace {
         let startable = steps == nil && !agents.launching.contains(task.id) ? task : nil
         return TaskNext(shown: agent.map(shown), session: agent?.state, startable: startable)
     }
+}
+
+extension TaskNext {
+    /// 行上写出了状态词（`PiShown.speaksOnTask`）。
+    var speaks: Bool { if case .agent(let shown, _) = self { shown.speaksOnTask } else { false } }
+    /// 会话此刻在跑（圈上那一段走流光）。
+    var isRunning: Bool { if case .agent(let shown, _) = self { shown.isRunning } else { false } }
+}
+
+extension PiShown {
+    /// 任务行上要写出状态词的：要你动手的（`needsYou`），加上停在半路（被打断）与做完一轮你还没看的。在跑的只有会动的线。
+    var speaksOnTask: Bool { needsYou || status == .interrupted || status == .unread }
 }

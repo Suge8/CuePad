@@ -109,7 +109,7 @@ struct BoardColumn: View {
             if board.advancing.isEmpty { empty("拖一件待办到这里开始") }
         case .waiting:
             ForEach(BoardSection.of(board.waiting, by: \.project)) { section in
-                if workspace.scopedProject == nil { BoardProjectHeading(id: section.id, first: section.first).padding(.leading, BoardInset.ring + TaskMetrics.cardPadding - Self.inset) }
+                BoardProjectHeading(id: section.id, first: section.first).padding(.leading, BoardInset.ring + TaskMetrics.cardPadding - Self.inset)
                 ForEach(section.rows) { wait in
                     if let item = wait.item {
                         BoardWaitCard(wait: wait).draggable(item.id.uuidString)

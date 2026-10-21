@@ -37,7 +37,7 @@ struct BoardWaitCard: View {
         }
     }
 
-    /// 要你定什么那一句；Cue 问的前面写它的名字。不再画问号：列名与任务行尾的状态标已经说了在等你。
+    /// 要你定什么那一句；Cue 问的前面写它的名字。不画问号：列名与任务行尾的状态标已经说了在等你。
     private func question(_ text: String, by asker: String?) -> some View {
         Text([asker, CueQuestionLine.keepingTail(text)].compactMap(\.self).joined(separator: " "))
             .font(Typography.secondary.weight(.medium))
@@ -51,7 +51,6 @@ struct BoardWaitCard: View {
             try await workspace.services.answerCueQuestion(message.id, choice)
         }
     }
-
 }
 
 /// 推进中那一列里一个没绑没做完的任务的活会话（终端里开的、"新会话"、只有已完成的事绑着的）：就是会话列表的那一行（`PiSessionRow`，菜单栏面板、Cue 页头面板同一种），
