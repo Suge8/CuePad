@@ -55,6 +55,7 @@ enum BubbleLook: Equatable {
 
 /// 你的一句话：右侧气泡（样子见 `BubbleLook`），最宽到所在一栏的 `widthFraction`；到哪了画在气泡左下角外（`BubbleTrip`）。长按（Mac 右键）是 `menu`，预览就是这颗气泡。
 /// `stored` 是存储格式正文（`CueFormat`）：文字在气泡里，带的图片是气泡下面的缩略图（`ChatImages`）；送达前后同一个样子。
+/// 用斜杠技能说的（`PiSkillCall`）气泡里是你发的样子，技能正文收在气泡下，点开看（`SkillBody`）。
 struct UserBubble<Menu: View>: View {
     /// 长的话折到这么多行，点"展开"看全：会话页的重点是回答，你自己写的长提示词不该是整屏最重的一块。
     static var foldedLines: Int { 6 }
@@ -74,17 +75,18 @@ struct UserBubble<Menu: View>: View {
     @State private var truncated = false
 
     var body: some View {
-        let text = CueFormat.plainText(stored), images = CueFormat.imageHashes(in: stored)
+        let text = CueFormat.plainText(stored), images = CueFormat.imageHashes(in: stored), skill = PiSkillCall.parse(text)
         BubbleWidth(fraction: Self.widthFraction, edge: .trailing) {
             VStack(alignment: .trailing, spacing: 6) {
                 if fromCue { CueByline() }
                 // 到哪了的记号挂在最下面那一块（文字气泡，带图时是图）的左边
                 if !text.isEmpty || images.isEmpty {
                     BubbleText(
-                        text: text, look: look, highlighted: highlighted, trip: trip, lineLimit: expanded ? nil : Self.foldedLines,
+                        text: skill?.line ?? text, look: look, highlighted: highlighted, trip: trip, lineLimit: expanded ? nil : Self.foldedLines,
                         truncated: $truncated, expand: truncated && !expanded ? { expanded = true } : nil, quote: quote)
                     .tripMark(images.isEmpty ? trip : .arrived, above: look.padding.bottom)
                 }
+                if let skill, !skill.body.isEmpty { SkillBody(skill: skill) }
                 if !images.isEmpty { ChatImages(hashes: images, trip: trip).tripMark(trip, above: 0) }
             }
             #if os(iOS)
@@ -93,6 +95,27 @@ struct UserBubble<Menu: View>: View {
             .contextMenu { menu }
         }
         .transition(.entry)
+    }
+}
+
+
+/// 技能正文：气泡下一行旁注"技能 名字 的正文"，点开在细线下看全文（与机器消息的卡片同一种收放），占满气泡这一栏的宽。
+private struct SkillBody: View {
+    let skill: PiSkillCall
+    @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var open = false
+
+    var body: some View {
+        VStack(alignment: .trailing, spacing: 0) {
+            Button { open.toggle() } label: {
+                NoteLine(icon: .readFile, open: open) { Text("技能 \(skill.name) 的正文").foregroundStyle(palette.ink3) }
+            }
+            .buttonStyle(.plain)
+            .accessibilityExpanded(open)
+            if open { NoteThread { MarkdownText(source: skill.body).equatable() }.frame(maxWidth: .infinity, alignment: .leading) }
+        }
+        .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: open)
     }
 }
 

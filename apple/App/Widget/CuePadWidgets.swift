@@ -1,3 +1,4 @@
+import ActivityKit
 import CueStore
 import SwiftUI
 import WidgetKit
@@ -5,8 +6,32 @@ import WidgetKit
 @main
 struct CuePadWidgets: WidgetBundle {
     var body: some Widget {
-        UnfiledWidget()
+        DefaultProjectWidget()
         CueWidget()
+        CueActivityWidget()
+    }
+}
+
+/// Cue 的实时活动（App 开、改、结束，`CueLiveActivity`）：各态的样子在 `CueActivityViews`，点卡片空白处进 Cue 页。
+struct CueActivityWidget: Widget {
+    var body: some WidgetConfiguration {
+        ActivityConfiguration(for: CueActivityAttributes.self) { context in
+            CueActivityViews.lockScreen(context.state, stale: context.isStale)
+                .widgetURL(DeepLink.cue.url)
+        } dynamicIsland: { context in
+            DynamicIsland {
+                DynamicIslandExpandedRegion(.leading) { CueActivityViews.expandedLeading(context.state) }
+                DynamicIslandExpandedRegion(.trailing) { CueActivityViews.expandedTrailing(context.state) }
+                DynamicIslandExpandedRegion(.bottom) { CueActivityViews.expandedBottom(context.state, stale: context.isStale) }
+            } compactLeading: {
+                CueActivityViews.compactLeading(context.state)
+            } compactTrailing: {
+                CueActivityViews.compactTrailing(context.state)
+            } minimal: {
+                CueActivityViews.minimal(context.state)
+            }
+            .widgetURL(DeepLink.cue.url)
+        }
     }
 }
 
@@ -38,24 +63,24 @@ struct CueWidget: Widget {
     static let kind = "CuePadCue"
 
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: Self.kind, provider: SnapshotProvider(empty: CueSnapshot(name: "Cue", waiting: 0, lastSaid: nil, mood: "sleeping"))) { entry in
+        StaticConfiguration(kind: Self.kind, provider: SnapshotProvider(empty: CueSnapshot(name: "Cue", managing: 0, waiting: 0, mood: "sleeping"))) { entry in
             WidgetViews.cue(entry.snapshot)
         }
         .configurationDisplayName("Cue")
-        .description("等你的几件事和它最近说的一句，点一下和它说话。")
+        .description("它在管几件、几件在等你，点一下和它说话。")
         .supportedFamilies([.systemSmall, .systemMedium])
     }
 }
 
-struct UnfiledWidget: Widget {
+struct DefaultProjectWidget: Widget {
     /// 已放到桌面的小组件按这个字符串认，改了它们会消失；与代码里的叫法不同是有意保留。
     static let kind = "CuePadInbox"
 
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: Self.kind, provider: SnapshotProvider(empty: UnfiledSnapshot(cards: [], total: 0))) { entry in
-            WidgetViews.unfiled(entry.snapshot)
+        StaticConfiguration(kind: Self.kind, provider: SnapshotProvider(empty: DefaultProjectSnapshot(name: "默认", cards: [], total: 0))) { entry in
+            WidgetViews.defaultProject(entry.snapshot)
         }
-        .configurationDisplayName("未分类")
+        .configurationDisplayName("默认")
         .description("最近记下的灵感，点一下对 Cue 说。")
         .supportedFamilies([.systemSmall, .systemMedium])
     }

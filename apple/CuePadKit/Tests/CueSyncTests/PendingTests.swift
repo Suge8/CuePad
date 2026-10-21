@@ -29,7 +29,7 @@ import Testing
     let sender = RecordSender(uploader: server, coordinator: rig.coordinator)
     await sender.start()
     let cli = try CueStore(location: .isolated(rig.fixture.directory))  // 另一个进程
-    let card = try await cli.createCard(in: nil, body: "written by cli")
+    let card = try await cli.createCard(body: "written by cli")
     await server.uploaded(rig.id(card.id))
 
     try await store.purgeCard(card.id)
@@ -43,7 +43,7 @@ import Testing
     let server = FakeUploader(holding: true)
     let sender = RecordSender(uploader: server, coordinator: rig.coordinator)
     await sender.start()
-    let card = try await store.createCard(in: nil, body: "v1")
+    let card = try await store.createCard(body: "v1")
     let id = rig.id(card.id)
     await server.uploaded(id)
 

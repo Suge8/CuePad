@@ -19,9 +19,10 @@ struct CueTaskButton<Label: View>: View {
     }
 }
 
-/// 还没启用时 Cue 页输入框上方的那一块，两端同一个：一句说明，下面直接选一台 Mac 启用（能运行 Cue 的几台，`CueSettings.hosts`）——
+/// 还没启用时 Cue 页输入框上方的那一块，两端同一个：只放启用这一步，启用后怎么用由 Cue 页空态那一句说（同一屏不说两遍）。选一台 Mac 启用（能运行 Cue 的几台，`CueSettings.hosts`）——
 /// 一台就是一颗"在那台上启用"的主按钮；几台是点开选哪台的菜单（`MenuButton`，每台下面写能当大脑的几家或为什么不能用），
-/// Mac 上点按是在这台运行、长按选别的。没写成的原因就地写在下面（`CueSettingsModel`）。手机上还没有哪台 Mac 写下过自己时，
+/// Mac 上点按是在这台运行、长按选别的。在这台 Mac 上启用打开接入面板（`SetupPanel`：先检测、接入这台的 Agent，一家都没装时给装法，
+/// 同一下启用），别的 Mac 直接启用，没写成的原因就地写在下面（`CueSettingsModel`）。手机上还没有哪台 Mac 写下过自己时，
 /// 说先到 Mac 上打开 CuePad。没启用时输入框发出去是记下灵感。
 struct CueEnableCard: View {
     @Environment(Workspace.self) private var workspace
@@ -32,11 +33,8 @@ struct CueEnableCard: View {
     var body: some View {
         let hosts = (model.settings ?? .empty).hosts(here: here)
         VStack(alignment: .leading, spacing: 10) {
-            Text("启用后 \(workspace.cue.name) 在你选的一台 Mac 上运行，替你派活、跟进，只在要你拿主意时找你")
-                .font(Typography.secondary).foregroundStyle(palette.ink2)
-                .fixedSize(horizontal: false, vertical: true)
             if hosts.isEmpty {
-                Label("先到 Mac 上打开 CuePad，它会出现在这里", icon: .mac)
+                Label(CueSettings.noHost, icon: .mac)
                     .font(Typography.secondary).foregroundStyle(palette.ink3)
             } else {
                 HStack(spacing: 8) {
@@ -66,18 +64,28 @@ struct CueEnableCard: View {
         #endif
     }
 
+    private func enable(on host: String) {
+        #if os(macOS)
+        guard host != here else {
+            workspace.showsSetup = true
+            return
+        }
+        #endif
+        model.enable(on: host, services)
+    }
+
     @ViewBuilder private func enableButton(_ hosts: [CueSettings.Host]) -> some View {
         if hosts.count == 1, let host = hosts.first {
-            Button(title(host)) { model.enable(on: host.id, services) }
+            Button(title(host)) { enable(on: host.id) }
                 .buttonStyle(ControlButtonStyle(kind: .primary))
         } else {
             MenuButton(
                 sections: [ChoiceMenu.Section(choices: hosts.map { host in
                     ChoiceMenu.Choice(title: host.name, subtitle: host.note.isEmpty ? nil : host.note, image: .icon(.mac)) {
-                        model.enable(on: host.id, services)
+                        enable(on: host.id)
                     }
                 })],
-                primary: here.map { here in { model.enable(on: here, services) } },
+                primary: here.map { here in { enable(on: here) } },
                 accessibilityLabel: here == nil ? "选一台 Mac 启用" : "在这台 Mac 上启用", hint: here == nil ? nil : "长按选别的 Mac"
             ) {
                 HStack(spacing: 6) {
@@ -129,46 +137,202 @@ struct CueTaskLine: View {
     }
 }
 
-/// 连着的几条动态（Cue 自己醒来的那几轮：每轮先是它的经过，再是它说的那句；没推给你）：一行旁注（`NoteLine`），
-/// 图标是一颗收着的话（与气泡里对你说的话分开：没有纸、不靠气泡、字小一档），写最新一条的首行（没有正文的写它的经过）与条数；
-/// 点开在细线下按先后列全（`NoteThread`）——经过与回答注脚同一个样子（`RoundProcess`），说的话是小字。展开后那一行只写条数，最新一条就在列表末尾，不写两遍。
-struct CueNotes: View {
-    let notes: [CueMessage]
-    /// 在跑的那一轮在这几条里时有（`CueLiveRound`）
+/// 连着的几轮 Cue 自己醒来（`CueThread.Row.notes`）：靠左的一颗虚线气泡，形状同 Cue 的气泡（`CueBubble.shape`），只描边不铺底——
+/// 是它说的话，但没推给你，与纸做的实底气泡（对你说的）一眼分开。每轮一节（`CueNoteSection`）：第一行为什么醒与几点，下面是它说的话（小一档的次要墨色），
+/// 调过工具的再一行经过（`RoundProcess`，设置里关了工具步骤时没有；在跑的那一轮总有，写此刻在做的）。做完了、只看了看、没说话的一轮只占一行"…… · 没动手"，
+/// 连着几次并成一行"看了 N 次，都没动手"；在跑的那一轮还不算（它随时会动手、说话，算了就要在并起来与分开之间来回跳）。
+/// 超过 `foldAfter` 节时只露最近 `shownWhenFolded` 节，上面一行"更早还醒过 N 次"，点它或点并起来的那一行原地全部展开（各节分开列）。
+struct CueNoteBubble: View {
+    let rounds: [CueNoteRound]
+    /// 在跑的那一轮在这几节里时有（`CueLiveRound`）
     let live: CueLiveRound?
     @State private var expanded = DebugHooks.preset.toolsOpen
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Button { expanded.toggle() } label: {
-                NoteLine(icon: .thinking, open: expanded) {
-                    Text(expanded ? "\(notes.count) 条动态" : Dotted(notes.last.flatMap(Self.line), notes.count > 1 ? "\(notes.count) 条" : nil))
-                        .lineLimit(1)
-                }
+    /// 多于这么多节（并起来的没动手算一节）才折
+    static let foldAfter = 4
+    static let shownWhenFolded = 3
+
+    /// 气泡里的一节：一轮，或连着几轮没动手的并成的一行。
+    enum Unit: Identifiable {
+        case round(CueNoteRound)
+        case quiet([CueNoteRound])
+
+        var id: UUID {
+            switch self {
+            case .round(let round): round.id
+            case .quiet(let rounds): rounds[0].id
             }
-            .buttonStyle(.plain)
-            .accessibilityHint(expanded ? "收起" : "展开")
-            if expanded {
-                NoteThread {
-                    ForEach(notes) { note in
-                        if note.tools != nil {
-                            RoundProcess(tools: note.tools, ending: CueLiveRound.ending(of: note, in: live))
-                        } else {
-                            SaidRow(text: CueFormat.plainText(note.text))
+        }
+
+        var count: Int {
+            switch self {
+            case .round: 1
+            case .quiet(let rounds): rounds.count
+            }
+        }
+    }
+
+    var body: some View {
+        let units = expanded ? rounds.map(Unit.round) : Self.merged(rounds, live: live?.round)
+        let folded = !expanded && units.count > Self.foldAfter
+        let shown = folded ? Array(units.suffix(Self.shownWhenFolded)) : units
+        BubbleWidth(fraction: CueBubble.cueWidth, edge: .leading) {
+            VStack(alignment: .leading, spacing: Self.sectionGap) {
+                if folded {
+                    let earlier = units.dropLast(Self.shownWhenFolded).reduce(0) { $0 + $1.count }
+                    Button { expanded = true } label: {
+                        NoteLine(icon: .earlier) { Text("更早还醒过 \(earlier) 次") }
+                    }
+                    .buttonStyle(.plain)
+                }
+                ForEach(shown) { unit in
+                    switch unit {
+                    case .round(let round): CueNoteSection(round: round, live: live)
+                    case .quiet(let rounds):
+                        // 图标与几点是最近那次的
+                        Button { expanded = true } label: {
+                            NoteLine(icon: rounds[rounds.count - 1].header?.wake.icon ?? .wakeIdle, open: false, time: rounds[rounds.count - 1].date) {
+                                Text("看了 \(rounds.count) 次，都没动手")
+                            }
                         }
+                        .buttonStyle(.plain)
                     }
                 }
             }
+            .padding(CueBubble.padding)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background { CueBubble.shape(.leading).strokeBorder(palette.noteEdge, style: StrokeStyle(lineWidth: 1, dash: [4, 3])) }
+            .contentShape(CueBubble.shape(.leading))
         }
         .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: expanded)
         .transition(.entry)
     }
 
-    /// 一条动态收成一行：它说的那句的首行；经过那一行写经过那一句。
-    private static func line(_ note: CueMessage) -> String? {
-        PiProgress.firstLine(CueFormat.plainText(note.text)) ?? PiChat.processLine(note.tools)?.visible
+    #if os(macOS)
+    static let sectionGap: CGFloat = 12
+    #else
+    static let sectionGap: CGFloat = 14
+    #endif
+
+    /// 连着几轮没动手并成一节；只有一轮的照常一节。
+    static func merged(_ rounds: [CueNoteRound], live: UUID?) -> [Unit] {
+        var units: [Unit] = [], run: [CueNoteRound] = []
+        func flush() {
+            if run.count == 1 { units.append(.round(run[0])) } else if !run.isEmpty { units.append(.quiet(run)) }
+            run = []
+        }
+        for round in rounds {
+            if round.quiet(live: live) { run.append(round) } else {
+                flush()
+                units.append(.round(round))
+            }
+        }
+        flush()
+        return units
+    }
+}
+
+/// 虚线气泡里的一轮：为什么醒（`CueWakeTitle`），它说的话，调过工具的一行经过。旧的动态没有醒来原因，只有说的话。
+private struct CueNoteSection: View {
+    let round: CueNoteRound
+    let live: CueLiveRound?
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        let indent = round.header == nil ? 0 : Note.glyphWidth + Note.spacing
+        VStack(alignment: .leading, spacing: 3) {
+            if let header = round.header { CueWakeTitle(header: header, at: round.date, quiet: round.quiet(live: live?.round)) }
+            ForEach(round.said) { note in
+                Text(CueFormat.plainText(note.text)).font(Typography.secondary).foregroundStyle(palette.ink2)
+                    .lineSpacing(2).fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.leading, indent)
+            if let row = round.row, row.tools != nil || row.id == live?.round {
+                RoundProcess(tools: row.tools, ending: CueLiveRound.ending(of: row, in: live)).padding(.leading, indent)
+            }
+        }
+    }
+}
+
+/// 一节的第一行（`NoteLine`，同并起来的那一行）：醒来原因的图标（叫醒它的会话出错是出错的那个）、原因（叫醒它的会话、任务、提醒是墨色的名字，点了去那里；
+/// 几处时点开列出来选），行末几点。只看了看的一轮在后面接"· 没动手"。
+private struct CueWakeTitle: View {
+    let header: CueWakeHeader
+    let at: Date
+    var quiet = false
+    @Environment(Workspace.self) private var workspace
+    @Environment(AppServices.self) private var services
+    @Environment(\.palette) private var palette
+    #if os(iOS)
+    @Environment(Navigation.self) private var navigation
+    #endif
+
+    var body: some View {
+        NoteLine(time: at) {
+            if header.failed { FailureMark() } else { Image(header.wake.icon) }
+        } label: {
+            reason
+        }
+    }
+
+    /// 名字太长时只截名字，前后的话留全。
+    private var words: some View {
+        HStack(spacing: 4) {
+            if let lead = header.lead { Text(lead).foregroundStyle(palette.ink2).fixedSize() }
+            if header.lead != nil, header.name != nil { Dot().foregroundStyle(palette.ink3) }
+            if let name = header.name { Text(name).fontWeight(.medium).foregroundStyle(palette.ink) }
+            if let trail = header.trail { Text(trail).foregroundStyle(palette.ink2).fixedSize() }
+            if !header.targets.isEmpty { Image(.forward).font(.system(size: 8, weight: .semibold)).foregroundStyle(palette.ink3) }
+            if quiet {
+                Dot().foregroundStyle(palette.ink3)
+                Text("没动手").foregroundStyle(palette.ink3).fixedSize()
+            }
+        }
+        .lineLimit(1)
+    }
+
+    @ViewBuilder private var reason: some View {
+        let label = words.contentShape(.rect)
+        switch header.targets.count {
+        case 0: label
+        case 1: Button { open(header.targets[0].target) } label: { label }.buttonStyle(.plain)
+        default:
+            Menu {
+                ForEach(header.targets, id: \.title) { place in Button(place.title) { open(place.target) } }
+            } label: { label }
+            .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden)
+        }
+    }
+
+    private func open(_ target: CueWakeHeader.Target) {
+        switch target {
+        case .session(let session):
+            #if os(macOS)
+            workspace.show(.session(session.sessionID))
+            #else
+            navigation.openSession(session.id, sessionID: session.sessionID, store: services.store)
+            #endif
+        case .task(let id):
+            let store = services.store
+            workspace.attempt { if let card = try await store.card(id) { workspace.openTask(card) } }
+        case .memory:
+            workspace.cue.showsMemory = true
+        }
+    }
+}
+
+extension CueWake {
+    /// 醒来原因的图标（Cue 页那一节的第一行、Mac 的运行情况）。
+    var icon: Icon {
+        switch self {
+        case .enabled: .wakeEnabled
+        case .message: .wakeMessage
+        case .sessionActivity: .wakeActivity
+        case .idle: .wakeIdle
+        case .reminder: .wakeReminder
+        }
     }
 }
 
@@ -213,42 +377,93 @@ enum CueBubble {
 }
 
 
-/// Cue 说的一句：靠左的一颗纸做的气泡（`cueBubble`），里面是 Markdown（同会话里 Agent 的回答）；它第一次提到一件活时气泡底下一行这件活（`CueTaskLine`）。
-/// 问过你的，结束后（`CueQuestionEnd`）回到问的位置，这句话下面是它点名的图（`CueShots`）；你的回答在答的那一刻另成一格（`CueAnswer`，还在等的不在对话里，见 `CueThread.rows`）。
-/// 长按（Mac 右键）是消息菜单（`MessageMenu.Kind.cue`），预览就是这颗气泡。
+/// Cue 说的一句：靠左的一颗纸做的气泡（`cueBubble`），里面是 Markdown（同会话里 Agent 的回答），下面是它点名的图（`CueShots`：结束了回到问的位置的提问，
+/// 你的回答在答的那一刻另成一格，见 `CueAnswer`、`CueThread.rows`）；它第一次提到一件活时底下一行这件活（`CueTaskLine`）。
+/// `card`：结果卡（点名了图的做完，哪句算只在 `CueThread.rows` 定）——不是气泡而是一张纸（`paper`），不与上下的气泡连成一串；
+/// 第一行是一句平常的话时（"「X」做完了"）单独加粗作标题，一眼先读到做完了什么，再看证据与图。
+/// 长按（Mac 右键）是消息菜单（`MessageMenu.Kind.cue`），预览就是这颗气泡或这张纸。
 struct CueSays: View {
     let message: CueMessage
     var task: CueTaskRef?
-    /// 提问点名的图（`CueThread.shots`）与点开一张
+    /// Cue 点名的图（`CueThread.shots`）与点开一张：全屏左右翻的就是这几张，底栏是关于它对 Cue 说
     var shots: [CueShown] = []
     var open: (PreviewOpening) -> Void = { _ in }
+    var card = false
     /// 上面紧挨着 Cue 的另一句（`CueBubble.shape`）。
     var joined = false
     /// 新到的从左下角长出来；原位换下正在说的话时（`CueEnding`）直接出现
     var arrives = true
+    @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var selecting = false
 
     var body: some View {
-        let shape = CueBubble.shape(.leading, joined: joined)
-        VStack(alignment: .leading, spacing: 4) {
-            BubbleWidth(fraction: CueBubble.cueWidth, edge: .leading) {
-                VStack(alignment: .leading, spacing: 8) {
-                    MarkdownText(source: message.text).equatable()
-                    if !shots.isEmpty { CueShots(shots: shots, group: message.id.uuidString, reply: .cue, open: open) }
-                    if let task { CueTaskLine(ref: task) }
-                }
-                .cueBubble(joined: joined)
-                #if os(iOS)
-                .contentShape(.contextMenuPreview, shape)
-                #endif
-                .contextMenu { MessageActions(text: message.text, kind: .cue, selectText: { selecting = true }) }
+        BubbleWidth(fraction: CueBubble.cueWidth, edge: .leading) {
+            VStack(alignment: .leading, spacing: card ? 12 : 8) {
+                words
+                if !shots.isEmpty { CueShots(shots: shots, group: message.id.uuidString, reply: .cue, open: open) }
+                if let task { CueTaskLine(ref: task) }
             }
+            .modifier(CueSaysSurface(card: card, joined: joined))
+            .contextMenu { MessageActions(text: message.text, kind: .cue, selectText: { selecting = true }) }
         }
         #if os(iOS)
         .sheet(isPresented: $selecting) { SelectableTextSheet(text: message.text) }
         #endif
         .transition(arrives ? CueBubble.arrival(.leading, reduceMotion: reduceMotion) : .identity)
+    }
+
+    @ViewBuilder private var words: some View {
+        let parts: (title: String?, body: String) = card ? Self.headline(message.text) : (nil, message.text)
+        if let title = parts.title {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(Self.inline(title)).font(Typography.reading.weight(.semibold)).foregroundStyle(palette.ink)
+                    .lineSpacing(Typography.readingLineSpacing)
+                    .fixedSize(horizontal: false, vertical: true)
+                if !parts.body.isEmpty { MarkdownText(source: parts.body).equatable() }
+            }
+        } else {
+            MarkdownText(source: parts.body).equatable()
+        }
+    }
+
+    /// 第一行是平常的一句话（不是标题、列表、引用、代码、表格）时拆出来作标题，其余是正文。
+    private static func headline(_ text: String) -> (title: String?, body: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let lines = trimmed.split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: false)
+        guard let first = lines.first.map(String.init), !first.isEmpty, !Self.isMarkup(first) else { return (nil, trimmed) }
+        let rest = lines.count > 1 ? String(lines[1]).trimmingCharacters(in: .whitespacesAndNewlines) : ""
+        return (first, rest)
+    }
+
+    /// 标题行里的行内记号（粗体、代码、链接）照样认，不露出星号与反引号。
+    private static func inline(_ line: String) -> AttributedString {
+        (try? AttributedString(markdown: line, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(line)
+    }
+
+    private static func isMarkup(_ line: String) -> Bool {
+        if ["#", "-", "*", "+", ">", "`", "|", "!["].contains(where: line.hasPrefix) { return true }
+        return line.prefix { $0.isNumber }.count > 0 && line.drop { $0.isNumber }.hasPrefix(".")
+    }
+}
+
+/// `CueSays` 的底：气泡（`cueBubble`），或结果卡的一张纸；长按的预览照这个形状裁。
+private struct CueSaysSurface: ViewModifier {
+    let card: Bool
+    let joined: Bool
+
+    func body(content: Content) -> some View {
+        if card {
+            content.padding(CueBubble.padding).frame(maxWidth: .infinity, alignment: .leading).paper(radius: CueBubble.radius)
+                #if os(iOS)
+                .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: CueBubble.radius, style: .continuous))
+                #endif
+        } else {
+            content.cueBubble(joined: joined)
+                #if os(iOS)
+                .contentShape(.contextMenuPreview, CueBubble.shape(.leading, joined: joined))
+                #endif
+        }
     }
 }
 
@@ -328,22 +543,24 @@ struct CueQuestionLine: View {
     private static let tailLength = 4
 }
 
-/// "等你"的选项：只有第一项"可以"是实底主按钮（全卡唯一的靛青）；第二项（"以后……不用问"）是无底色的文字按钮、宽按文字，在"可以"左边，
-/// 一行放不下（项目名长）或辅助功能字号时竖排在"可以"下面、居中。"等你"卡与全屏预览的底栏共用。
-/// 手机上"可以"伸满剩下的宽（只有它时占满一行）；Mac 上排在一行尾端，"可以"不窄过 `onceWidth`。
+/// "等你"的选项：只有第一项"可以"是实底主按钮（全卡唯一的靛青），其余（"以后……不用问"）是无底色的文字按钮。"等你"卡、任务看板的等你卡与全屏预览的底栏共用。
+/// `stacks`（手机上一律，Mac 上任务看板的窄卡）：竖排——"可以"铺满一行在上，文字按钮在它下面居中、长了折行。摆法不随选项的字长变：
+/// "以后「项目」里……不用问"带着项目名，长短不一，按放不放得下挑横竖时并排的两张卡会一横一竖；主按钮也总在同一处、最好按。
+/// 不竖排时（Mac 的 Cue 页与预览底栏，地方宽）文字按钮在"可以"左边、排在一行尾端，"可以"不窄过 `onceWidth`；一行放不下或辅助功能字号时照样竖排、按字宽收着。
 struct CueChoices: View {
     let options: [String]
     var disabled = false
+    var stacks = Self.stacksByDefault
     let pick: (String) -> Void
     @Environment(\.dynamicTypeSize) private var typeSize
 
     #if os(macOS)
     static let onceWidth: CGFloat = 96
-    private static let fills = false
+    private static let stacksByDefault = false
     private static let stackGap: CGFloat = 4
     #else
     static let onceWidth: CGFloat = 88
-    private static let fills = true
+    private static let stacksByDefault = true
     /// 文字按钮自带可点的高，竖排时与"可以"不另留间距
     private static let stackGap: CGFloat = 0
     #endif
@@ -356,17 +573,17 @@ struct CueChoices: View {
             button(once, kind: .primary, fill: true)
             ForEach(others, id: \.self) { button($0, kind: .quiet) }
         }
-        // Mac 上竖排也按字宽收着（"可以"与文字按钮同宽），不铺满整行
-        .fixedSize(horizontal: !Self.fills, vertical: false)
+        // 不铺满时竖排也按字宽收着（"可以"与文字按钮同宽）
+        .fixedSize(horizontal: !stacks, vertical: false)
         if others.isEmpty {
-            button(once, kind: .primary, fill: Self.fills, minWidth: Self.onceWidth)
-        } else if typeSize.isAccessibilitySize {
+            button(once, kind: .primary, fill: stacks, minWidth: Self.onceWidth)
+        } else if stacks || typeSize.isAccessibilitySize {
             stacked
         } else {
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: 8) {
                     ForEach(others, id: \.self) { button($0, kind: .quiet).lineLimit(1).fixedSize() }
-                    button(once, kind: .primary, fill: Self.fills, minWidth: Self.onceWidth).lineLimit(1)
+                    button(once, kind: .primary, minWidth: Self.onceWidth).lineLimit(1)
                 }
                 stacked
             }
@@ -383,7 +600,7 @@ struct CueChoices: View {
     }
 }
 
-/// 提问点名要你看的图（`CueShown`，至多 `CueShot.limit` 张），按 Cue 给的先后：一排靠左、一行排完不横滑，每张同样大的方形缩略图
+/// Cue 点名要你看的图（提问卡与结果卡，`CueShown`，至多 `CueShot.limit` 张），按 Cue 给的先后：一排靠左、一行排完不横滑，每张同样大的方形缩略图
 /// （边长 `ShotRow`：放得下就是 `side`，不然几张平分可用宽），按显著区域裁切填满（`LookBox.salient`）。缩略图本来看不全、都要点开，它只管认出是哪张、邀请点开；
 /// 要看什么由每张正下方那一句说（与图同宽、向下换行；含"："的拆两行，前半加粗是名字、后半是说明），辅助功能字号下也一样。
 /// 点一张全屏看整张，左右翻的就是这几张，页顶写看什么；底栏按 `reply`（"等你"里是那几个选项）。
@@ -399,7 +616,7 @@ struct CueShots: View {
     #else
     static let side: CGFloat = 120
     #endif
-    fileprivate static let gap = DeliverableStrip.gap
+    fileprivate static let gap = PreviewBatch.gap
 
     /// 在 `width` 宽里排 `count` 张时每张的边长（`ShotRow` 照它排）：放得下是 `side`，不然几张平分。
     static func cell(count: Int, width: CGFloat) -> CGFloat {
@@ -463,7 +680,7 @@ private struct ShotRow: Layout {
 /// "等你"：固定在输入框上方，最早的那一条，收得紧。第一句是要你定什么，由代码按 Cue 写的动作短语写出
 /// （`CueAsking.question`），不靠 Cue 的措辞；Cue 的原话默认收起，点"原话"再看（长了在里面滚）。下面是 Cue 点名要你看的图与各看什么
 /// （`CueShots`，没点名的没有图；点开全屏时底栏就是这几个选项，看完当场定）、选项（`CueChoices`），末行是关联的任务与原话的开关
-/// （Mac 上连同选项；辅助功能字号下各占一行），Mac 与手机同一结构；还有几条在等由页头与侧栏的"等你 N"说。卡上只能选：别的话在 Cue 页底下的输入框说，
+/// （Mac 上连同选项；辅助功能字号下各占一行），Mac 与手机同一结构；还有几条在等由页头与侧栏的"等你 M"说。卡上只能选：别的话在 Cue 页底下的输入框说，
 /// 一开口卡就收起（Cue 判断不是在答它会放回，见 `CueQuestionEnd`）。没有关掉。
 /// 列表与数量只来自 `cueMessagesWaitingForYou()`：回答后等库里那条结束才换下一条，写的时候按钮停用；没写成就报错、按钮恢复，可以再点。
 struct CueWaitingDock: View {
@@ -574,7 +791,7 @@ struct CueWaitingDock: View {
     /// 整张 → 紧凑（去掉那排图；问句与选项钉住，展开的原话在中间滚，末行放得下才露）→ 只剩问句一行（`folded`）。
     /// 紧凑那档的理想高只算问句与选项（原话与末行都是 `Yielding`），所以"问句加选项都放不下"才收成一行；哪一档都不会截出半截字或半张图。
     /// 放得下时不进滚动区：滚动区里的按钮按下要晚一下才有反馈。Mac 上不挑（挑的话几份都要建，第一次打开 Cue 页时卡多建一遍）。
-    /// 手机上选项一行、任务与原话一行（辅助功能字号下各占一行）；Mac 上合成一行，右下角是"可以"。
+    /// 手机上选项竖排（`CueChoices`）、下面任务与原话一行（辅助功能字号下各占一行）；Mac 上合成一行，右下角是"可以"。
     private func card(_ message: CueMessage) -> some View {
         let ref = message.taskID.flatMap { tasks[$0] }
         let choices = CueChoices(options: message.choices ?? [], disabled: ending == message.id) { answer(message, $0) }

@@ -150,7 +150,7 @@ struct RealCodexHostedTests {
             try await eventually("回填完") { history.finishedBackfill }
             // 主会话文件在这一轮歇下后可能还在写，会多一次更新：只看更新了哪些会话
             #expect(Set(history.updates.map(\.checkpoint.sessionID)) == [main])
-            let indexed = history.events.compactMap { if case .backfillFinished(let files) = $0 { files } else { nil } }.first
+            let indexed = history.events.compactMap { if case .backfillFinished(let files?) = $0 { files } else { nil } }.first
             #expect(indexed?.map(\.lastPathComponent).allSatisfy { $0.contains(main) } == true && indexed?.count == 1)
         }
     }

@@ -1,4 +1,5 @@
 #if os(iOS)
+import AppIntents
 import Observation
 import UIKit
 import UserNotifications
@@ -15,6 +16,8 @@ final class IOSAppDelegate: NSObject, UIApplicationDelegate {
         launch = Launch.make()
         super.init()
         connect()
+        // 实时活动的"允许一次"在 App 进程里执行，可能是被叫到后台、没有窗口的时候：由这里答（`AllowOnceIntent`）
+        AppDependencyManager.shared.add { self as any CueQuestionAnswering }
     }
 
     /// 资料库打不开时失败页的重试。
@@ -24,7 +27,9 @@ final class IOSAppDelegate: NSObject, UIApplicationDelegate {
     }
 
     private func connect() {
-        if case .ready(let services) = launch { alerts.services = services }
+        guard case .ready(let services) = launch else { return }
+        alerts.services = services
+        services.alerts = alerts
     }
 
     func application(
@@ -42,11 +47,23 @@ final class IOSAppDelegate: NSObject, UIApplicationDelegate {
         alerts.registrationFailed(error)
     }
 
-    /// 同步区有变化的静默推送（后台也会把 App 叫起来一会儿）：拉到推送说的变化再交还系统（冷启动时等同步启动完，见 `AppServices.pull`）。
+    /// 同步区有变化的静默推送与带 content-available 的等你类推送（后台也会把 App 叫起来一会儿）：拉到推送说的变化再交还系统
+    /// （冷启动时等同步启动完，见 `AppServices.pull`）；拉到的变化经快照那条观察改实时活动（`CueLiveActivity`）。
     func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable: Any]) async -> UIBackgroundFetchResult {
         guard case .ready(let services) = launch else { return .noData }
         await services.pull()
         return .newData
+    }
+}
+
+extension IOSAppDelegate: CueQuestionAnswering {
+    func answerCueQuestion(_ message: UUID, _ choice: String) async throws {
+        guard case .ready(let services) = launch else { throw LibraryClosed() }
+        try await services.answerCueQuestion(message, choice)
+    }
+
+    private struct LibraryClosed: LocalizedError {
+        var errorDescription: String? { "CuePad 的资料库没打开，到 App 里看看" }
     }
 }
 #endif

@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// 对话里除了谁对谁说的话（气泡、回答）以外的东西只有两种样子，没有底色块、没有边框，与说的话一眼分开：
-/// - 旁注（`NoteLine`）：属于一边的一行小字——一轮的经过、Cue 自己醒来那几轮的动态、此刻在做什么、这一轮怎么结束的。你的话到哪了不是一行，是气泡左下角外的记号（`BubbleTrip`）。
+/// 对话里除了谁对谁说的话（气泡、回答，Cue 自己醒来的动态是虚线气泡 `CueNoteBubble`）以外的东西只有两种样子，没有底色块、没有边框，与说的话一眼分开：
+/// - 旁注（`NoteLine`）：属于一边的一行小字——一轮的经过、此刻在做什么、这一轮怎么结束的。你的话到哪了不是一行，是气泡左下角外的记号（`BubbleTrip`）。
 ///   前面一个图标位，能展开的末尾一个箭头，展开的清单挂在标题图标下的一条细线右边（`NoteThread`）。贴着哪一边、离边多远由所在的页面给
 ///   （Cue 页与气泡里的字对齐，会话页与回答对齐）。
 /// - 居中的标记（`ChatMarker`）：不属于哪一边的一行——几点、哪天（`ChatTime`），上下文从这里换了，上面还有更早的。
@@ -16,6 +16,8 @@ enum Note {
 struct NoteLine<Glyph: View, Label: View>: View {
     /// 能展开时是此刻开没开（末尾的箭头）；不能展开为 nil。
     var open: Bool?
+    /// 行末的几点（Cue 页动态里一节的第一行）：按自己的宽排、不换行，地方不够时截左边的字。
+    var time: Date?
     @ViewBuilder let glyph: Glyph
     @ViewBuilder let label: Label
     @Environment(\.palette) private var palette
@@ -23,8 +25,13 @@ struct NoteLine<Glyph: View, Label: View>: View {
     var body: some View {
         HStack(spacing: Note.spacing) {
             glyph.foregroundStyle(palette.ink3).frame(width: Note.glyphWidth).accessibilityHidden(true)
-            label
+            // 行末有几点时字先占满（几点按自己的宽、不被挤），不和中间的空白平分
+            label.layoutPriority(time == nil ? 0 : 1)
             if let open { DisclosureChevron(open: open) }
+            if let time {
+                Spacer(minLength: 8)
+                Text(ChatTime.time(time)).foregroundStyle(palette.ink3).fixedSize()
+            }
         }
         .font(Typography.caption.monospacedDigit()).foregroundStyle(palette.ink2)
         .frame(minHeight: Note.lineHeight)
@@ -33,8 +40,8 @@ struct NoteLine<Glyph: View, Label: View>: View {
 }
 
 extension NoteLine where Glyph == Image {
-    init(icon: Icon, open: Bool? = nil, @ViewBuilder label: () -> Label) {
-        self.init(open: open, glyph: { Image(icon) }, label: label)
+    init(icon: Icon, open: Bool? = nil, time: Date? = nil, @ViewBuilder label: () -> Label) {
+        self.init(open: open, time: time, glyph: { Image(icon) }, label: label)
     }
 }
 
@@ -56,7 +63,7 @@ struct NoteThread<Content: View>: View {
 }
 
 /// 对话中间居中的一行小字。`ruled`：两边各一条细线（上下文从这里换了，线以上的它不再逐句看得到）；
-/// `highlighted`：从刻度滑条跳过来时垫一层选中色；给了 `action` 是一颗按钮（看交接备忘、排开更早的）。
+/// `highlighted`：从刻度滑条跳过来时垫一层选中色；给了 `action` 是一颗按钮（排开更早的）。
 struct ChatMarker<Label: View>: View {
     var ruled = false
     var highlighted = false

@@ -2,7 +2,7 @@ import SwiftUI
 
 /// 去 Cue 的入口角上的小点：不在 Cue 页时，Cue 那边有事一眼看得到，不打断。新消息（石绿，有新回复的颜色，`CueWatch.unread`）
 /// 先于等你（赭黄，"等你"只有它，见 `WaitingCount`）：刚来的那句是此刻的事，等你一直在、在 Cue 页与会话里各有它的卡；都没有不画。
-/// 又来一句时点上漾开一圈（`CueArrival`）。挂在 iPad 右侧 Cue 面板的开关、Mac 侧栏收起时的侧栏钮（侧栏的 Cue 一行看不见了）、
+/// 又来一句时点上漾开一圈（`CueArrival`）。挂在 iPad 右侧 Cue 面板的开关、Mac 侧栏收起时的侧栏钮（侧栏的 Cue 名片看不见了）、
 /// iPhone 底部 Dock 的 Cue 圆钮（没有等你时；有等你时那里是等你的数）。
 struct CueDot: View {
     @Environment(Workspace.self) private var workspace

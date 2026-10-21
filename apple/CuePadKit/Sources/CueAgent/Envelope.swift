@@ -2,40 +2,14 @@ import CueStore
 import CueText
 import Foundation
 
-/// Cue 这次为什么醒来。
-public enum CueWake: Equatable, Sendable {
-  /// 刚启用：第一次醒来
-  case enabled
-  /// 你发来新消息
-  case message
-  /// 在做的事里的会话有动静
-  case sessionActivity
-  /// 空闲时的例行查看
-  case idle
-  /// 提醒到点（到点的那几条记忆）
-  case reminder([CueIndexedLine])
-  /// 写下交接、换了新上下文：接着做（交接在信封的"接上"里）
-  case renewed
-  /// 他改了要换大脑的设置（名字、Agent，或模型、强度回到默认，`CueKeeper.BrainSettings.needsNewBrain`）：先写交接
-  case settingsChanged
-}
-
 /// 交给 Cue 的大脑的一轮输入里的 `<cue>` 块（用户的话若有，由值班的管理器接在块后面）。
-/// 块里第一行是时间，然后是项目、变化、在做的事（在做的任务与不归没做完的事的活会话，`CueBoard`）、等你、
-/// 接上的（新上下文第一次醒来才有）、醒来的原因；该换新上下文时（上下文用到 `CueContext.renewAt`，或 `CueWake.settingsChanged`）末尾一行要它先写交接：这一条只在这里判断。
-/// 信封与系统提示里"你"是 Cue、"他"是用户。
+/// 块里第一行是时间，然后是项目、变化、在做的事（在做的任务与不归没做完的事的活会话，`CueBoard`）、等你、醒来的原因。
+/// 新会话的第一条输入里，它前面还有记忆视图与对话视图（`CueKeeper`）。信封与系统提示里"你"是 Cue、"他"是用户。
 public enum CueEnvelope {
-  /// 接上的对话至多这么多条、这么多字（从最近的往前取，一条也放不下时截短最近那条）。只为接上最近几轮来回（一轮一到三条），
-  /// 合起来约是换新线（`CueContext.renewAt`，6 万 token）的十分之一，新上下文一开始不至于离换新线太近；更早的事在记忆与交接里。
-  public static let resumeMessages = 30
-  public static let resumeCharacters = 6000
-
   public struct Input: Sendable {
     public var now: Date
-    /// 上下文已用多少 token；不知道为 nil。
-    public var contextUsed: Int?
-    /// 所有项目（`CueStore.cueProjects`）：Cue 据此把活放进项目。
-    public var projects: [CueProject]
+    /// 所有项目（`CueStore.projects`）：Cue 据此把活放进项目。
+    public var projects: [Project]
     public var changes: [CueChange]
     /// 看板（`CueStore.cueBoard`）：只写在做的。
     public var board: CueBoard
@@ -43,17 +17,16 @@ public enum CueEnvelope {
     /// 它留给他回的会话（`CueState.left`）：看板上这几个写"留给他回"。
     public var left: [CueLeft]
     public var wake: CueWake
-    /// 新上下文第一次醒来：接上的交接与对话（不含这次交出去的话）；其余为 nil
-    public var resume: CueResume?
+    /// 提醒到点（`CueWake.reminder`）时到点的那几条记忆，带序号
+    public var reminders: [CueIndexedLine]
 
     public init(
-      now: Date, contextUsed: Int?, projects: [CueProject], changes: [CueChange],
-      board: CueBoard, waiting: [CueMessage], left: [CueLeft] = [], wake: CueWake, resume: CueResume? = nil
+      now: Date, projects: [Project], changes: [CueChange],
+      board: CueBoard, waiting: [CueMessage], left: [CueLeft] = [], wake: CueWake, reminders: [CueIndexedLine] = []
     ) {
+      self.reminders = reminders
       self.left = left
-      self.resume = resume
       self.now = now
-      self.contextUsed = contextUsed
       self.projects = projects
       self.changes = changes
       self.board = board
@@ -66,23 +39,25 @@ public enum CueEnvelope {
     let calendar = Calendar(identifier: .gregorian)
     var lines = ["<cue>", stamp(input.now, calendar)]
 
-    lines.append("项目：" + (input.projects.isEmpty ? "无" : input.projects.map { $0.name + ($0.hasFolder ? "" : "（没绑文件夹）") }.joined(separator: "、")))
+    lines.append("项目：" + input.projects.map(\.name).joined(separator: "、"))
 
     lines.append("变化（上次醒来之后）：" + (input.changes.isEmpty ? "无" : ""))
     lines += input.changes.map { "- \(change($0))" }
 
-    let active = input.board.tasks.filter(\.isActive), sessions = input.board.sessions
-    lines.append("在做 \(active.count + sessions.count) 件" + (active.isEmpty && sessions.isEmpty ? "" : "："))
-    lines += active.map { "- \(boardLine($0, now: input.now, left: input.left))" }
-    lines += sessions.map { "- \(sessionLine($0, now: input.now, left: input.left))" }
+    let active = input.board.active
+    lines.append("在做 \(active.count) 件" + (active.isEmpty ? "" : "："))
+    lines += active.map { work in
+      switch work {
+      case .task(let item): "- \(boardLine(item, now: input.now, left: input.left))"
+      case .session(let session): "- \(sessionLine(session, now: input.now, left: input.left))"
+      }
+    }
 
     lines.append("等你 \(input.waiting.count) 件" + (input.waiting.isEmpty ? "" : "："))
     lines += input.waiting.map { "- " + question($0) }
 
-    if let resume = input.resume { lines += self.resume(resume, calendar) }
     lines.append("醒来：" + wake(input.wake))
-    if case .reminder(let due) = input.wake { lines += due.map { "- #\($0.index) \($0.line.text)" } }
-    if !CueFresh.on, input.wake == .settingsChanged || (input.contextUsed ?? 0) >= CueContext.renewAt { lines.append(renew) }
+    if case .reminder = input.wake { lines += input.reminders.map { "- #\($0.index) \($0.line.text)" } }
     lines.append("</cue>")
     return lines.joined(separator: "\n")
   }
@@ -113,65 +88,20 @@ public enum CueEnvelope {
     case .sessionActivity: "会话有动静"
     case .idle: "空闲，例行看一眼"
     case .reminder: "提醒到点"
-    case .renewed: "换了新上下文，从接上的地方接着做"
-    case .settingsChanged: "他改了你的设置"
-    }
-  }
-
-  /// 要换新上下文时的那一行。
-  private static let renew = "要换新上下文：先 memory renew 写交接，再结束这一轮。"
-
-  /// 接上：交接原样，之后的对话每条一行，从最近的往前取到 `resumeCharacters` 字。
-  private static func resume(_ resume: CueResume, _ calendar: Calendar) -> [String] {
-    guard resume.handoff != nil || !resume.messages.isEmpty else { return [] }
-    var budget = resumeCharacters, kept: [String] = []
-    for message in resume.messages.reversed() {
-      let author = switch message.author.known {
-      case .you: "他"
-      case .cue: "你"
-      default: "你的动态"
-      }
-      var text = CueFormat.plainText(message.text)
-      if let answer = message.answer { text += "（他回答：\(answer)）" }
-      let line = clip(text, kept.isEmpty ? budget : Int.max)
-      guard line.count <= budget else { break }
-      budget -= line.count
-      kept.append("- \(author) \(clock(message.createdAt, calendar))：\(line)")
-    }
-    let truncated = resume.truncated || kept.count < resume.messages.count
-    return ["接上（新上下文：上一段的交接备忘与它之后的对话）：", "交接备忘：" + (resume.handoff == nil ? "没有，从头算起" : ""),
-      resume.handoff.map(\.text), "之后的对话" + (truncated ? "（更早的略去）" : "") + (kept.isEmpty ? "：无" : "：")
-    ].compactMap { $0 } + kept.reversed()
-  }
-
-  /// 原型（`CueFresh`）：Cue 自己醒来的一轮因何醒来，一句（进日志，`PiChatMessage.Tools.woke`）：会话的动静逐件写"状态 在哪"，
-  /// 他发来消息为 nil（他的话本身就在日志里）。
-  public static func woke(_ wake: CueWake, changes: [CueChange]) -> String? {
-    let text: String
-    switch wake {
-    case .message: return nil
-    case .sessionActivity: text = changes.isEmpty ? self.wake(wake) : changes.map { "\(label($0)) \(where_($0))" }.joined(separator: "；")
-    case .reminder(let due): text = "提醒到点：" + due.map(\.line.text).joined(separator: "；")
-    default: text = self.wake(wake)
-    }
-    return clip(text, wokeLimit)
-  }
-
-  static let wokeLimit = 120
-
-  private static func label(_ change: CueChange) -> String {
-    switch change.kind {
-    case .settled: change.interrupted ? state(.known(.interrupted)) : "歇下"
-    case .waitingForUser: "等回答"
-    case .failed: "出错"
-    case .undelivered: "发送失败"
-    case .done: "完成"
-    case .stalled: "等子代理 \(Int(PiSessionState.stallAfter / 60)) 分钟没动静"
     }
   }
 
   private static func change(_ change: CueChange) -> String {
-    var text = "[\(label(change))\(change.byUser ? " · 他说的" : "")] \(where_(change))"
+    let label: String =
+      switch change.kind {
+      case .settled: change.interrupted ? state(.known(.interrupted)) : "歇下"
+      case .waitingForUser: "等回答"
+      case .failed: "出错"
+      case .undelivered: "发送失败"
+      case .done: "完成"
+      case .stalled: "等子代理 \(Int(PiSessionState.stallAfter / 60)) 分钟没动静"
+      }
+    var text = "[\(label)\(change.byUser ? " · 他说的" : "")] \(where_(change))"
     if let detail = change.detail, !detail.isEmpty { text += "：\(clip(detail, 120))" }
     if let reply = change.recap?.lastReply { text += " · 回复：\(clip(reply, 160))" }
     return text
@@ -224,7 +154,8 @@ public enum CueEnvelope {
   /// 会话状态在 Cue 眼里的说法（看板、变化与 peek 共用）。
   static func state(_ state: Open<PiWorkState>) -> String {
     switch state.known {
-    case .thinking, .tool, .delegating, .compacting: "工作中"
+    case .thinking, .tool, .compacting: "工作中"
+    case .delegating: "等子代理交回"
     case .waitingForUser: "等回答"
     case .settled: "歇着"
     case .error: "出错"

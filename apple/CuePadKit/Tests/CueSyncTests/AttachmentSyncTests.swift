@@ -30,7 +30,7 @@ import Testing
   /// 存入图片并在卡片里引用它（引用时登记附件记录），返回哈希与附件记录的 id。
   private func referencedImage(_ data: Data) async throws -> (hash: String, id: String) {
     let hash = try store.files.store(data)
-    _ = try await store.createCard(in: nil, body: "![](cuepad://img/\(hash))")
+    _ = try await store.createCard(body: "![](cuepad://img/\(hash))")
     let id = try #require(try RawDB(rig.fixture.url).rows("SELECT id FROM attachments WHERE hash = '\(hash)'").first?[0])
     return (hash, id)
   }
@@ -58,6 +58,7 @@ import Testing
     let hash = sha256(data)
     let record = remoteRecord(.attachments, attachmentFields(hash: hash, byteCount: data.count))
     record["file"] = CKAsset(fileURL: try assetFile(data))
+    try await rig.simulatePush()  // 新库的默认项目先传上去
 
     try await rig.coordinator.pulled([record], [])
 
@@ -85,7 +86,7 @@ import Testing
   @Test func remoteAttachmentDeletionRemovesTheFileUnlessACardStillReferencesIt() async throws {
     let free = try await referencedImage(pngData(width: 4, height: 4, shade: 0.1))
     let used = try await referencedImage(pngData(width: 4, height: 4, shade: 0.9))
-    let freeCard = try #require(try await store.cards(in: nil).first { $0.body.contains(free.hash) })
+    let freeCard = try #require(try await store.cards(in: Project.defaultID).first { $0.body.contains(free.hash) })
     try await store.updateCard(freeCard.id) { $0.body = "图片删掉了" }
     try await rig.simulatePush()
 

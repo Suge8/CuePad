@@ -29,14 +29,14 @@ import Testing
     let b = try await store.createProject(name: "B", color: "#111")
     let release = try await store.createTask("上线", in: a.id)
     let step = try await store.createTask("备份", under: release.id)
-    try await store.moveCard(try await store.createCard(in: nil, body: "资料").id, to: .under(release.id), after: nil)
+    try await store.moveCard(try await store.createCard(body: "资料").id, to: .under(release.id), after: nil)
     try await store.setStatus(step.id, .done)
     let other = try await store.createTask("别处", in: b.id)
-    try await store.moveCard(try await store.createCard(in: nil, body: "别处的资料").id, to: .under(other.id), after: nil)
-    let loose = try await store.createTask("散的", in: nil)
+    try await store.moveCard(try await store.createCard(body: "别处的资料").id, to: .under(other.id), after: nil)
+    let loose = try await store.createTask("散的")
     _ = try await store.createTask("散的步骤", under: loose.id)
 
-    for project in [a.id, b.id, nil] {
+    for project in [a.id, b.id, Project.defaultID] {
       let all = try await store.tasks(.inProgress, .todo, .done).flatMap(\.tasks).filter { $0.projectID == project }
       #expect(try await store.tasks(in: project, .inProgress, .todo, .done) == all)
       let open = all.filter { $0.status != .done }

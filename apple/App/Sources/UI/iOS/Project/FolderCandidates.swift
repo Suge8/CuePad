@@ -71,7 +71,7 @@ struct FolderCandidateList: View {
     }
 }
 
-/// 项目操作菜单里"绑定文件夹…／换文件夹…"弹出的页：选一个候选，请那台 Mac 绑；Mac 绑好（结果写回）才收起，没成功就在下面写原因、可以再选。
+/// 项目操作菜单里"换文件夹…"弹出的页：选一个候选，请那台 Mac 绑；Mac 绑好（结果写回）才收起，没成功就在下面写原因、可以再选。
 struct FolderPickerSheet: View {
     let project: Project
     @Environment(Workspace.self) private var workspace

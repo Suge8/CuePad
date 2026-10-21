@@ -141,31 +141,22 @@ enum Mascot: String {
     }
 }
 
-/// 项目页与未分类还没有灵感：任务存在时用轻量纸卡；完全空时复用 EmptyState 的整页布局。
+/// 项目页还没有灵感：任务存在时用轻量纸卡；完全空时复用 EmptyState 的整页布局。
 /// iOS 新建一条并打开它的纸页，Mac 聚焦底部输入栏；两端按钮、图标、按压与出现动效共用。
+/// 项目里还没有灵感：新用户第一次进来（默认项目）也是它，所以给两条路——想到什么记一条，要动手的事去 Cue 页说。
 struct EmptyIdeas: View {
     var compact = false
     let write: () -> Void
+    let speak: () -> Void
 
     var body: some View {
-        EmptyState(mascot: .empty, title: "还没有灵感", message: "随时记下新的想法", compact: compact, waitsForSync: true) {
-            EmptyStateButton(title: "记一条", icon: .write, kind: compact ? .small : .primary, action: write)
-                .accessibilityLabel("记一条灵感")
+        EmptyState(mascot: .empty, title: "还没有灵感", message: "想到什么记一条；要动手的事对 Cue 说，它拆成任务交给 Agent", compact: compact, waitsForSync: true) {
+            HStack(spacing: 8) {
+                EmptyStateButton(title: "记一条", icon: .write, kind: compact ? .small : .primary, action: write)
+                    .accessibilityLabel("记一条灵感")
+                EmptyStateButton(title: "对 Cue 说", icon: .cue, kind: .small, action: speak)
+            }
         }
     }
 }
 
-/// 空库首次打开：两端同一套图标与标题，动作按钮由平台给；说法按平台的写入口（Mac 下方的随手记，手机的"对 Cue 说"）。
-struct EmptyLibrary<Action: View>: View {
-    @ViewBuilder let action: Action
-
-    #if os(macOS)
-    private static var message: String { "建一个项目放灵感，或者先在下方随手记一条" }
-    #else
-    private static var message: String { "建一个项目放灵感，要做的事对 Cue 说" }
-    #endif
-
-    var body: some View {
-        EmptyState(mascot: .welcome, title: "还没有项目", message: Self.message, waitsForSync: true) { action }
-    }
-}

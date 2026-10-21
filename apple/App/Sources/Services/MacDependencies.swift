@@ -13,6 +13,8 @@ struct MacDependencies {
     var agents: AgentIntegrations
     var terminal: PiTerminalJumper
     var hostID: String
+    /// 项目工作区的根目录（`Workspaces`）：隔离运行与测试放进隔离目录。
+    var workspaces: Workspaces
     /// 系统睡眠与唤醒通知所在的通知中心（生产是 NSWorkspace 的）。
     var wakeNotifications: NotificationCenter
     /// 资料库里随时间变的读与在线记录续期用的时钟（`CueStore.timing`）；测试换成手动推进的。
@@ -43,7 +45,10 @@ struct MacDependencies {
         let commandLineTool = location.isIsolated && !paths.pi.isExplicit
             ? CommandLineToolInstaller(linkDirectory: location.directory.appending(path: "bin", directoryHint: .isDirectory))
             : CommandLineToolInstaller(linkDirectory: paths.pi.binDirectory)
-        let agents = AgentIntegrations(AgentIntegration(paths: paths, cuepad: commandLineTool.helper, isolated: location.isIsolated))
+        let findsNone = location.isIsolated && DebugHooks.findsNoAgents
+        let agents = AgentIntegrations(AgentIntegration(
+            paths: paths, locate: { @Sendable in findsNone ? ExecutableLocator(searchDirectories: []) : await .system },
+            cuepad: commandLineTool.helper, isolated: location.isIsolated))
         let hostID = (location.isIsolated ? DebugHooks.hostID : nil) ?? HostIdentity.current()
         return MacDependencies(
             pi: pi,
@@ -52,6 +57,7 @@ struct MacDependencies {
             agents: agents,
             terminal: PiTerminalJumper(),
             hostID: hostID,
+            workspaces: Workspaces.resolve(isolatedLibrary: location.isIsolated ? location.directory : nil),
             wakeNotifications: NSWorkspace.shared.notificationCenter,
             commandLineTool: commandLineTool,
             updater: location.isIsolated ? DebugHooks.updater : SparkleUpdater(),

@@ -46,7 +46,7 @@ struct CueSettingsScreen: View {
         let hosts = settings.hosts(here: nil)
         Section {
             if hosts.isEmpty {
-                Label("先到 Mac 上打开 CuePad，它会出现在这里", icon: .mac).foregroundStyle(palette.ink3)
+                Label(CueSettings.noHost, icon: .mac).foregroundStyle(palette.ink3)
             } else {
                 Picker(CueSettings.hostTitle, selection: Binding(get: { settings.profile.activeHost }, set: { model.run(on: $0, services) })) {
                     Text("不启用").tag(String?.none)

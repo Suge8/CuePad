@@ -41,20 +41,6 @@ import Testing
     #expect(record["state"] as? String == "thinking")
   }
 
-  /// 仍在等你确认、只是问题文本变了：上传前标志必须还在，服务端才会通知。
-  @Test func aSameStateUpdateBeforeUploadKeepsTheFlag() async throws {
-    let rig = try Rig()
-    let recorder = PiStateRecorder(store: rig.store, hostID: "mac", timing: ManualTiming().timing)
-    try await recorder.update(sessionID: "s1", state: .thinking)
-    try await recorder.update(sessionID: "s1", state: .waitingForUser, detail: "要不要覆盖？")
-    try await recorder.update(sessionID: "s1", state: .waitingForUser, detail: "要覆盖 a.txt 吗？")
-
-    let id = try #require(try await rig.store.allPiSessionStates().first).id
-    let record = try #require(await rig.coordinator.record(for: rig.recordID(id)))
-    #expect(record["notify"] as? String == "waitingForUser")
-    #expect(record.encryptedValues["detail"] as? String == "要覆盖 a.txt 吗？")
-  }
-
   /// 标志已经上传过，之后同状态的更新不再带标志，订阅不会为同一次等待重复通知。
   @Test func aSameStateUpdateAfterUploadDoesNotAlertAgain() async throws {
     let rig = try Rig()
@@ -87,11 +73,12 @@ import Testing
       #expect(subscription.zoneID == zone)
       #expect(subscription.querySubscriptionOptions == [.firesOnRecordCreation, .firesOnRecordUpdate])  // 删除不通知
       let info: CKSubscription.NotificationInfo? = subscription.notificationInfo
-      #expect(info?.shouldSendContentAvailable == false)  // 可见通知，不是静默推送
       #expect(info?.shouldSendMutableContent == true)  // 手机上的通知服务扩展先拿到，改写成会话名与问题
       #expect(info?.alertBody == nil && info?.alertLocalizationArgs == nil && info?.desiredKeys == nil)
     }
     #expect(subscriptions.map { $0.notificationInfo?.alertLocalizationKey } == ["pi_alert_waiting", "pi_alert_settled", "cue_alert"])
+    // 等你类的可见通知同时叫醒 App 拉一次（实时活动随之更新），做完的不叫
+    #expect(subscriptions.map { $0.notificationInfo?.shouldSendContentAvailable } == [true, false, true])
   }
 
   /// 通知服务扩展取回记录、在设备上解密后改写文案：等你确认是"会话名 在等你" + 问题首行，完成是会话名 + "完成了"。
@@ -117,9 +104,10 @@ import Testing
     try await rig.store.updateCueProfile { $0.name = "小管家" }
     let file = FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString).png")
     try Data("png".utf8).write(to: file)
-    let shot = try #require(try await rig.store.addPreviews(filesAt: [file], title: "登录页", sessionID: "s1").first).preview
+    let shot = try #require(try await rig.store.addPreviews([(file, "登录页")], sessionID: "s1").first).preview
     let message = try await rig.store.addCueMessage(
-      .cue, text: "要合并到 main 吗？", ask: try CueAsking(.merge, action: "把登录页修复合并进 main", shots: [CueShot(preview: shot.id, look: "改后的登录页")]))
+      .cue, text: "要合并到 main 吗？", ask: try CueAsking(.merge, action: "把登录页修复合并进 main"),
+      shots: [CueShot(preview: shot.id, look: "改后的登录页")])
 
     let record = try #require(await rig.coordinator.record(for: rig.recordID(message.id)))
     #expect(record["notify"] as? String == "cue" && record.encryptedValues["text"] as? String == "要合并到 main 吗？" && record["ask"] as? String == "merge")

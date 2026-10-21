@@ -49,7 +49,7 @@ struct ArchiveList: View {
                 .accessibilityLabel(card.isTask ? "任务" : "灵感")
                 VStack(alignment: .leading, spacing: 2) {
                     Text(card.title).foregroundStyle(palette.ink).lineLimit(1)
-                    Text(project?.name ?? CaptureCopy.unfiled).font(Typography.meta).foregroundStyle(palette.ink3).lineLimit(1)
+                    Text(project?.name ?? "").font(Typography.meta).foregroundStyle(palette.ink3).lineLimit(1)
                 }
                 Spacer(minLength: 8)
                 if let archivedAt = card.archivedAt {

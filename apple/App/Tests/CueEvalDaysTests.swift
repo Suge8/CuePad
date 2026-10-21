@@ -8,7 +8,7 @@ import Testing
 @testable import CuePad
 
 /// 多日记忆：Cue 已值了两周班，库里预置这两周的历史（对话、动态与每轮经过一千五百条以上，若干做完的任务与会话回复，记忆九十多行），
-/// 远超一次视图能原样放下；启用 Cue 之前写好，新班次从库里接上（现做法是交接与之后的对话，混合做法是对话视图）。
+/// 远超一次视图能原样放下；启用 Cue 之前写好，新班次从库里接上（记忆视图与最近对话的视图）。
 /// 在不同年纪埋下事实：13 天前他顺口说的事、9 天前会话报告里顺带的细节、5 天前他否掉的方案与理由、2 天前 Cue 答应他的事、1 天前他改过的偏好。
 /// 先给 Cue 空闲合并记忆的机会（合并的开销单列），再逐件问起；缓存时长缩短，场景里插几段静止模拟隔了一阵才回来（冷醒来）。跑法见 docs/verify.md「Cue 评测」。
 @Suite(.enabled(if: evalEnvironment["CUEPAD_CUE_EVAL"] == "1", "CUEPAD_CUE_EVAL=1 才跑"), .timeLimit(.minutes(60)))
@@ -34,7 +34,7 @@ private final class Days: EvalScript {
     static let mergeAfter = Duration.seconds(10)
     static let cacheLifetime = Duration.seconds(20)
     static let away = Duration.seconds(40)
-    /// 开跑前至多等这么多次合并醒来：现做法的记忆树预置成正好 4 块待合并；日志树一次醒来成批合并，两周积压约 3 次清完
+    /// 开跑前至多等这么多次合并醒来：记忆预置成正好 4 块待合并，刚启用那一轮它若又记下几条，多出的块也在这里等
     static let merges = 6
 
     private let history: DaysHistory
@@ -92,12 +92,10 @@ private final class Days: EvalScript {
         notes.append("开跑前合并醒来 \(mergeRounds.count) 次，还剩 \(try await pending()) 块待合并")
     }
 
-    /// 待合并的块：日志树（`CueFresh`）是日志的，现做法是记忆树的
-    private func pending() async throws -> Int {
-        CueFresh.on ? CueLog(try await rig.store.cueLogSource()).merges.count : CueMemoryView(try await rig.store.cueMemory()).merges.count
-    }
+    /// 记忆树上待合并的块
+    private func pending() async throws -> Int { CueMemoryView(try await rig.store.cueMemory()).merges.count }
 
-    /// 合并的醒来：两种做法请合并的话里都有这句
+    /// 合并的醒来：请合并的话里有这句
     private static func isMerge(_ round: CueRound) -> Bool { round.sent.contains { $0.contains("写回：memory merge") } }
 
     // MARK: 判定
@@ -216,7 +214,6 @@ final class DaysHistory {
         log.append(Seeded(.cue, "图片存储我打算迁到 S3：生命周期规则和 CloudFront 都现成，压缩做完一起迁。你点头我就让会话准备。", at(5, 5 * 60)))
         log.append(Seeded(.you, "不用 S3，太贵，而且团队没人熟 AWS，就继续用 R2。", at(5, 5 * 60 + 6)))
         log.append(Seeded(.cue, "好，图片存储留在 R2，不迁 S3。", at(5, 5 * 60 + 7)))
-        log.append(Seeded(.handoff, Script.handoff, at(3, 9 * 60)))
         log.append(Seeded(.you, "官网十月周报那件，数据出来告诉我访问量。", at(2, 6 * 60)))
         log.append(Seeded(.cue, "好，周报数据一出来我就告诉你访问量。", at(2, 6 * 60 + 1)))
         log.append(Seeded(.you, "提交信息以后改用中文写吧，英文的大家看着费劲。", at(1, 4 * 60)))
@@ -357,11 +354,6 @@ private enum Script {
         改法：缓存键改成 lockfile 内容去掉 lockfileVersion 后的哈希；e2e 并发改回 4。改完三次构建分别是 6 分 10 秒、5 分 58 秒、6 分 05 秒。
 
         顺带记一下环境：runner 用的镜像是 node:20.11.1-bookworm，缓存目录挂在 /mnt/ci-cache，磁盘还剩 61%。
-        """
-
-    static let handoff = """
-        在管：1 优化图片存储（演示）：会话在做压缩，留在 R2（他否掉了 S3）。2 设置页反馈整理完，等他看。\
-        3 这周发版等他允许推送。和他没了结的：无。
         """
 
     static let weeklyShot = [

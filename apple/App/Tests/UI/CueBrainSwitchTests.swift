@@ -5,8 +5,8 @@ import SwiftUI
 import Testing
 @testable import CuePad
 
-/// 在 Cue 页输入框的选择器里给值班的 Cue 换脑子，按用户看得到的写：换模型、思考强度，Cue 下一轮就用新的，前面说的话它还记得，
-/// 对话里没有"换了新上下文"的分隔；换 Agent 要换大脑，对话里出现那条分隔（点开是交接备忘）。
+/// 在 Cue 页输入框的选择器里给值班的 Cue 换脑子，按用户看得到的写：换模型、思考强度，Cue 下一轮就用新的，同一个会话里前面说的话它还记得；
+/// 换名字（在系统提示里）要换大脑，新大脑的第一条输入带着对话视图，前面说的话照样接得上。
 /// 选择器写设置走 `AppServices.updateCue`，写法照它的菜单项（`CueConfigControls`）；说话走 `Workspace.speak`。
 /// 大脑是真的 Pi，模型是 `CueHostTests` 的假端点（看得到每一轮用的模型与强度）。
 @MainActor
@@ -20,12 +20,7 @@ struct CueBrainSwitchTests {
         try await rig.message(.cue, containing: reply)
     }
 
-    /// 对话里"换了新上下文"的分隔（交接备忘）。
-    private func boundaries(_ rig: CueHostTests.Rig) async throws -> [CueMessage] {
-        try await CueThread.read(from: rig.store, showsSteps: true).rows.compactMap { if case .renewed(let handoff) = $0 { handoff } else { nil } }
-    }
-
-    @Test func 选别的模型和思考强度_Cue下一轮就用新的_前面说的话还记得_没有换新分隔() async throws {
+    @Test func 选别的模型和思考强度_Cue下一轮就用新的_前面说的话还记得() async throws {
         let rig = try await CueHostTests.Rig()
         try await say("暗号是 PAPAYA", to: rig, expecting: "收到：暗号是 PAPAYA")
 
@@ -38,24 +33,17 @@ struct CueBrainSwitchTests {
 
         let used = try #require(rig.model.requests.last)
         #expect(used.model == "fake-model-2" && used.effort == "high", "\(rig.model.requests)")
-        #expect(try await boundaries(rig).isEmpty)
         await rig.stop()
     }
 
-    @Test func 换Agent_Cue先写交接_对话里出现换新分隔() async throws {
+    @Test func 换名字_换了大脑_新大脑接上前面说的() async throws {
         let rig = try await CueHostTests.Rig()
+        let first = try #require(rig.brainPIDs.first)
         try await say("暗号是 PAPAYA", to: rig, expecting: "收到：暗号是 PAPAYA")
 
-        try await rig.services.updateCue {  // 模型菜单里 Codex 那组标着默认的那项
-            $0.runtime = .known(.codex)
-            $0.model = nil
-        }
-
-        try await eventually("出现换新分隔") { try await !self.boundaries(rig).isEmpty }
-        let rows = try await CueThread.read(from: rig.store, showsSteps: true).rows
-        let said = try #require(rows.firstIndex { if case .you(let message) = $0 { message.text == "暗号是 PAPAYA" } else { false } })
-        let boundary = try #require(rows.firstIndex { if case .renewed = $0 { true } else { false } })
-        #expect(boundary > said)
+        try await rig.services.updateCue { $0.name = "小满" }
+        try await eventually("换了大脑") { rig.brainPIDs.count == 1 && rig.brainPIDs.first != first }
+        try await say("暗号是什么？", to: rig, expecting: "从视图接上：暗号是 PAPAYA")
         await rig.stop()
     }
 }

@@ -10,8 +10,8 @@ import CuePi
 /// 中间是对话：你的话是右侧牛皮纸色的气泡，Cue 的话是左侧纸做的气泡（`CueBubble`、`CueSays`），它第一次提到一件活时气泡底下一行这件活（`CueTaskLine`），
 /// 同一边连着说的几颗收紧成一串，隔了一阵的地方居中写几点（`ChatTimeMarker`）；经过、动态与分隔不是气泡，是旁注与居中的标记（`NoteLine`、`ChatMarker`），
 /// 你发起的一轮在你的话之后先是这一轮的经过（`RoundProcess`，同会话页：在跑时实时展开，做完收成一行；设置里可关，`AppSettings.showsCueSteps`），这一轮说的话与结果按先后在它之后；
-/// 经过清单里"对你说"那一条点它回到对话里的原处。连着的动态（含 Cue 自己醒来那几轮的经过）折成一行旁注（`CueNotes`），
-/// 它换了新上下文的地方一条分隔（`CueRenewal`，点开是交接备忘），末尾是它此刻在做什么（`CueEnding`）；
+/// 经过清单里"对你说"那一条点它回到对话里的原处。Cue 自己醒来的连着几轮收进一颗虚线气泡（`CueNoteBubble`：每轮写为什么醒，点了去叫醒它的会话），
+/// 末尾是它此刻在做什么（`CueEnding`）；
 /// 对话区与会话页是同一个（`ChatColumn`：排开、刻度滑条、跳转与描圈）；底部是"等你"（`CueWaitingDock`）与输入框（`CueComposer`）。
 /// 对话第一帧就排好（`observing` 当场读），停在最新处；有新消息时从第一条读起，还没读的气泡旁一颗小点（`CueViewing`）。
 /// Cue 运行在别的设备上、本机正在和 iCloud 对时（`AppServices.isCatchingUp(on:)`）页头写"正在同步"，这期间到的话先不滑上来，
@@ -156,13 +156,13 @@ struct CuePage: View {
     // MARK: 对话
 
     /// 读不出来时也排一个真的视图：读库的订阅挂在页上，等视图出现才启动（docs/ui.md）。
-    /// 还没说过话时是空态（`EmptyState`）：它自我介绍，下一步就是下面的输入框（没启用时是启用卡）。
+    /// 还没说过话时是空态（`EmptyState`）：它自我介绍，下一步就是下面的输入框（没启用时是启用卡，说清启用后活放进默认项目）。
     @ViewBuilder private var chat: some View {
         Group {
             if let thread, !thread.rows.isEmpty {
                 conversation(thread)
             } else if thread != nil {
-                EmptyState(mascot: .hello, title: "我是 \(cue.name)", message: cue.canHear ? "要做什么，直接在下面跟我说" : nil, waitsForSync: true)
+                EmptyState(mascot: .hello, title: "我是 \(cue.name)", message: greeting, waitsForSync: true)
                     .padding(.horizontal, Self.inset)
                     .frame(maxWidth: Self.readingWidth, maxHeight: .infinity)
                     .frame(maxWidth: .infinity)
@@ -170,6 +170,13 @@ struct CuePage: View {
                 Color.clear
             }
         }
+    }
+
+    /// 空态的那句：启用了就请他直接说；没启用时说启用后怎么用（说一件事，它放进默认项目里开工），启用卡只放启用那一步。
+    private var greeting: String {
+        guard !cue.canHear else { return "要做什么，直接在下面跟我说" }
+        let home = workspace.catalog?.project(Project.defaultID)?.name ?? ""
+        return "启用后说一件想做的事，我放进「\(home)」项目里开工，只在要你拿主意时找你"
     }
 
     /// 只排开铺满可见区要的那几格（`paging`）：打开时铺一屏，离最早那头不到一屏时（打开后紧接着就是）往上再铺一屏；
@@ -270,8 +277,8 @@ struct CuePage: View {
         #endif
     }
 
-    /// 一格至少多高（连同上面的间距与时间）：气泡里的字至少多高（`TextFloor`），带图的提问另有图（`shots` 张，`CueShots.floor`），
-    /// 结果卡另有交付物（`DeliverableStrip.floor`）与下面那件活一行，旁注、经过与分隔至少一行小字（`note`）。
+    /// 一格至少多高（连同上面的间距与时间）：气泡里的字至少多高（`TextFloor`），点名了图的提问与结果卡另有图（`shots` 张，`CueShots.floor`），
+    /// 结果卡还有下面那件活一行，旁注、经过与分隔至少一行小字（`note`），动态的虚线气泡里至少一行。
     /// 只能数少、不能数多（数多了第一帧铺不满）；数得越贴，打开时多排的越少。
     private static func floor(_ row: CueThread.Row, shots: Int, joined: Bool, stamped: Bool, column: CGFloat) -> CGFloat {
         let note: CGFloat = 12
@@ -289,10 +296,12 @@ struct CuePage: View {
         case .answer(let question): bubble + note + 6 + said(question.answer ?? "")
         // 字与图之间隔 8（`CueSays`）
         case .cue(let message, _): bubble + answer(message.text) + (shots == 0 ? 0 : 8 + CueShots.floor(count: shots, width: width(CueBubble.cueWidth)))
-        // 字、交付物与那件活（至少 `CueTaskLine` 那么高）之间各隔 12
-        case .result(let message, _, let deliverables):
-            bubble + answer(message.text) + 12 + DeliverableStrip.floor(count: deliverables.count, size: .result, width: width(CueBubble.cueWidth)) + 12 + CueTaskLine.lineHeight
-        case .notes, .process, .renewed: note
+        // 字、图与那件活（至少 `CueTaskLine` 那么高）之间各隔 12
+        case .result(let message, _):
+            bubble + answer(message.text) + 12 + CueShots.floor(count: shots, width: width(CueBubble.cueWidth)) + 12 + CueTaskLine.lineHeight
+        // 虚线气泡至少一行小字
+        case .notes: bubble + note
+        case .process: note
         }
         return above + body
     }
@@ -400,14 +409,12 @@ private struct CueRow: View, Equatable {
             CueAnswer(question: question, joined: joined)
         case .cue(let message, _):
             CueSays(message: message, task: ref, shots: shots, open: { opened = $0 }, joined: joined, arrives: !swapsInPlace)
-        case .result(let message, _, let deliverables):
-            if let ref { CueResultCard(message: message, ref: ref, deliverables: deliverables) { opened = $0 } }
-        case .notes(let notes):
-            CueNotes(notes: notes, live: live).padding(.leading, CueBubble.noteInset)
+        case .result(let message, _):
+            CueSays(message: message, task: ref, shots: shots, open: { opened = $0 }, card: true)
+        case .notes(let rounds):
+            CueNoteBubble(rounds: rounds, live: live)
         case .process(let message):
             RoundProcess(tools: message.tools, ending: CueLiveRound.ending(of: message, in: live)).padding(.leading, CueBubble.noteInset)
-        case .renewed(let handoff):
-            CueRenewal(handoff: handoff, name: cue.name)
         }
     }
 
@@ -433,18 +440,7 @@ nonisolated struct CueLiveRound: Equatable {
     }
 }
 
-/// Cue 从这里起换了新上下文：与会话页的压缩同一条分隔（`ContextBoundary`），点开是换新时写下的交接备忘；从刻度滑条跳过来时描一圈。
-private struct CueRenewal: View {
-    let handoff: CueMessage
-    let name: String
-    @Environment(\.chatHighlight) private var highlight
-
-    var body: some View {
-        ContextBoundary(title: "从这里起 \(name) 换了新上下文", time: handoff.createdAt, memo: handoff.text, highlighted: highlight == handoff.id)
-    }
-}
-
-/// Cue 页对话的末尾：它在做事、这一轮在对话里还没有一格（还没调过工具，或设置里关了工具步骤）时是一行此刻在做的（`RoundProcess` 的那一行，同会话页）。
+/// Cue 页对话的末尾：它在做事、这一轮在对话里还没有一格（你发起的一轮还没调过工具，或设置里关了工具步骤）时是一行此刻在做的（`RoundProcess` 的那一行，同会话页）。
 /// Cue 在这台 Mac 值班时，在回答你的一轮出字就换成逐字长出的正在说的话
 /// （`CueKeeper.speech`，同会话页的 `SessionDraft`）：只有这个视图读它，出字时对话列表不重算；它与对话在同一次更新里拿到同一份对话，
 /// 落库了（`PiDraft.landed`）就不再显示，换下是同一帧里的一减一加。已落库而 Cue 的状态还没歇下时也不冒出进展那一行（话已经说完）；
@@ -455,7 +451,7 @@ private struct CueEnding: View {
     /// 对话最后一格是 Cue 的话：正在说的这句落库后与它连成一串，说着的时候就排成那个样子。
     let joined: Bool
     /// 在跑的那一轮在对话里有一格（它的经过，或收着它的动态）：此刻在做的写在那一格里，这里不再写一遍。
-    /// 没有那一格时（还没调过工具；设置里关了工具步骤，`CueThread.rows` 不排经过）写在这里。
+    /// 没有那一格时（你发起的一轮还没调过工具；设置里关了工具步骤，`CueThread.rows` 不排经过）写在这里。
     let roundInRows: Bool
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services

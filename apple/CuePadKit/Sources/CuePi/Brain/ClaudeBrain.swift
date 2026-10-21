@@ -7,7 +7,7 @@ import Foundation
 /// - 不落会话（`--no-session-persistence`），不进 `claude --resume` 的列表；
 /// - 系统提示整份替换（`--system-prompt-file`）；不读 CLAUDE.md 与自动记忆（`CLAUDE_CODE_DISABLE_CLAUDE_MDS`、
 ///   `CLAUDE_CODE_DISABLE_AUTO_MEMORY`），不跑用户的钩子（`--settings` 里的 `disableAllHooks`，也就不会报给 CuePad 成一个会话），
-///   不加载 skill 与斜杠命令（`--disable-slash-commands`；原型开关 `CueFresh` 开时不加，要用 `/clear` 开新会话）；
+///   不加载 skill（工具只给了下面几个，用户的 skill 与命令不进输入）；斜杠命令开着，只为开新会话的 `/clear`（见下）；
 /// - 原生工具只有 `Read,Grep,Glob`，MCP 只有 CuePad 的（`--strict-mcp-config`）；这些工具预先放行，其余需要批准的一律拒绝
 ///   （`--permission-prompts none`），不会停下来等人；
 /// - 正忙时写进标准输入的话由 Claude Code 并进当前这一轮；
@@ -16,7 +16,7 @@ import Foundation
 ///   这一下不报成一轮。斜杠命令因此开着，他的话以 `/` 开头时前面垫一个空格，不被当成命令；
 /// - 思考强度按 Claude Code 的档位夹取（`ClaudeCode.effort`）；就地换模型与强度走控制请求 `set_model` 与 `apply_flag_settings` 的 `effortLevel`
 ///   （与托管会话同一份，见 `ClaudeStream`）；
-/// - 一轮从 `system/init` 到 `result`；停下这一轮走控制请求 `interrupt`；
+/// - 一轮从开始请求模型（`ClaudeStream.requestsModel`）到 `result`；停下这一轮走控制请求 `interrupt`；
 /// - 正在说的话用 `ClaudeStream` 累积好的（`onDraft`）；被停下的一轮在 `turnFinished` 前清掉（它的 `result` 不一定标出错）。
 @MainActor
 final class ClaudeBrain: CueBrain {
@@ -44,7 +44,6 @@ final class ClaudeBrain: CueBrain {
                 "--allowedTools", "Read,Grep,Glob,\(CueMCPServer.toolPrefix)*", "--permission-prompts", "none", "--strict-mcp-config",
                 "--mcp-config", jsonString(mcp), "--settings", #"{"disableAllHooks":true}"#,
             ]
-            if !CueFresh.on { arguments.append("--disable-slash-commands") }
             if let model = config.model { arguments += ["--model", model] }
             if let effort = config.effort { arguments += ["--effort", ClaudeCode.effort(effort)] }
             let environment = BrainSession.environment(config, [
@@ -115,7 +114,7 @@ final class ClaudeBrain: CueBrain {
             guard let id = event["request_id"]?.string else { return }
             try? stream?.write(["type": "control_response", "response": ["subtype": "error", "request_id": .string(id), "error": "CuePad does not handle this request"]])
         case "system":
-            guard event["subtype"]?.string == "init", turn == nil else { return }
+            guard ClaudeStream.requestsModel(event), turn == nil else { return }
             turn = Turn()
             session.emit(.turnStarted)
         case "assistant":

@@ -49,7 +49,7 @@ python3 "$APPLE_DIR/scripts/provision.py" profiles
 read -ra versions <<<"$(release_versions)"
 archive="$(release_archive mac "${versions[@]}")"
 xcodebuild archive -project "$APPLE_DIR/CuePad.xcodeproj" -scheme CuePad -destination 'generic/platform=macOS' \
-  -archivePath "$archive" -derivedDataPath "$DERIVED" "${versions[@]}"
+  -archivePath "$archive" -derivedDataPath "$DERIVED" "${versions[@]}" "${team_signing[@]}"
 
 export_options "$OUT/export.plist" developer-id "Developer ID Application" com.sugeh.cuepad="CuePad macOS DeveloperID"
 xcodebuild -exportArchive -archivePath "$archive" -exportOptionsPlist "$OUT/export.plist" \

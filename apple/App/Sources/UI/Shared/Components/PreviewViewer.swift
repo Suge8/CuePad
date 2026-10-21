@@ -82,7 +82,7 @@ private struct PreviewPager: View {
     private var batch: [PiPreview] { opening.batch }
     private var index: Int { batch.firstIndex { $0.id == current } ?? 0 }
     private var preview: PiPreview { batch[index] }
-    private var title: String { opening.looks[preview.id] ?? DeliverableStrip.label(of: preview, in: batch) }
+    private var title: String { opening.looks[preview.id] ?? preview.title }
     /// "2 / 3 · 图片"，只有一份时只写类型
     private var position: Dotted { Dotted(batch.count > 1 ? "\(index + 1) / \(batch.count)" : nil, preview.kind?.label) }
 

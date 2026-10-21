@@ -53,6 +53,8 @@ final class AppServices {
     private(set) var syncIssues: [SyncIssue] = []
     /// 同步在一页页地拉积压（`SyncState.catchingUp`）；界面只经 `isCatchingUp` 读。
     private(set) var syncCatchingUp = false
+    /// 这台的库和 iCloud 对过至少一遍（`SyncState.reconciled`）；界面只经 `knowsSyncedFacts` 读。
+    private(set) var syncReconciled = false
     /// Pi 锁屏通知的服务端订阅（只有 iOS 建立）；设置页与权限、注册状态一起显示。
     private(set) var alertSubscription: PiAlertSubscriptionStatus = .off
     #if os(iOS)
@@ -107,8 +109,15 @@ final class AppServices {
     /// 进入后台前要落盘的界面状态（如编辑中的草稿）；见 `prepareForBackground()`。
     @ObservationIgnored var backgroundFlushes: [UUID: @MainActor () async -> Void] = [:]
 
+    /// 系统通知（App 代理持有的那一个，`start()` 前接上）；测试没有，不发真实通知。
+    @ObservationIgnored weak var alerts: AlertCenter?
+
     #if os(iOS)
     @ObservationIgnored let pasteboard: UIPasteboard
+    /// 锁屏与灵动岛上的那一个实时活动（`startSnapshots` 跟着库开、改、结束它）。隔离库（测试、脚本起的调试实例）里没有：
+    /// 实例被结束时开着的活动留在系统里，下次装 App 时系统为它把 App 叫到后台，正好撞上测试宿主的启动（测试进程连不上）；
+    /// 验收实时活动时用 `-CuePadLiveActivity YES` 打开（`DebugHooks.opensLiveActivity`）。
+    @ObservationIgnored let cueActivity: CueLiveActivity?
     #endif
 
     #if os(macOS)
@@ -120,8 +129,6 @@ final class AppServices {
     let updates: UpdateService
     /// 主窗口（显隐规则在它身上）；全局快捷键经它。测试没有窗口。
     @ObservationIgnored var windowShell: MainShellWindow?
-    /// 系统通知（App 代理持有的那一个，`start()` 前接上）；测试没有，不发真实通知。
-    @ObservationIgnored weak var alerts: AlertCenter?
 
     @ObservationIgnored let paths: AgentPaths
     @ObservationIgnored let terminal: PiTerminalJumper
@@ -132,6 +139,8 @@ final class AppServices {
     @ObservationIgnored let hotkeyBackend: any HotkeyBackend
     /// 这台 Mac 的稳定标识：Pi 状态记录与投送请求都靠它区分是哪台 Mac。
     @ObservationIgnored let hostID: String
+    /// 项目的工作区放在哪（`Workspaces`）：没绑文件夹的项目在这台 Mac 开工时建在这里。
+    @ObservationIgnored let workspaces: Workspaces
     @ObservationIgnored let wakeNotifications: NotificationCenter
     @ObservationIgnored let piStateRecorder: PiStateRecorder
     /// 这台 Mac 的在线记录；`start()` 时开始续期，退出时写成离线。
@@ -140,7 +149,7 @@ final class AppServices {
     @ObservationIgnored let macAgents: MacAgentsRecorder
     /// 执行发给这台 Mac 的投送请求（手机发来的与本机界面写的）；`start()` 时启动。
     @ObservationIgnored lazy var executor = MacExecutor(
-        store: store, pi: pi, runtimes: runtimes, hostID: hostID, recorder: piStateRecorder,
+        store: store, pi: pi, runtimes: runtimes, hostID: hostID, workspaces: workspaces, recorder: piStateRecorder,
         upload: { [weak self] id in await self?.upload(id) },
         refreshQuota: { [weak self] in try await self?.refreshQuotaForRequest() },
         reportIssue: { [weak self] message in self?.reportIssue(.syncUnavailable(message)) })
@@ -286,6 +295,7 @@ final class AppServices {
         liveSessions = try LiveSessions(store: store, endedOn: mac.hostID, at: speechClock.moment)
         timing = mac.timing
         hostID = mac.hostID
+        workspaces = mac.workspaces
         wakeNotifications = mac.wakeNotifications
         piStateRecorder = PiStateRecorder(store: store, hostID: mac.hostID)
         presence = MacPresenceKeeper(store: store, sync: self.sync, host: mac.hostID)
@@ -321,6 +331,7 @@ final class AppServices {
         liveSessions = try LiveSessions(store: store, endedOn: nil, at: speechClock.moment)
         self.timing = timing
         self.pasteboard = pasteboard
+        cueActivity = !location.isIsolated || DebugHooks.opensLiveActivity ? CueLiveActivity() : nil
         viewer = UIDevice.current.identifierForVendor.map { [sync = self.sync] in
             ViewerKeeper(store: store, sync: sync, device: $0.uuidString)
         }
@@ -358,6 +369,7 @@ final class AppServices {
         if recovered { Task { await syncNow() } }
         syncIssues = state.issues
         syncCatchingUp = state.catchingUp
+        syncReconciled = state.reconciled
         alertSubscription = state.alerts
     }
 

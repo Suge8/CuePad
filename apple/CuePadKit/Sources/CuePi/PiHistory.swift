@@ -96,8 +96,30 @@ public struct PiHistoryUpdate: Sendable {
 public enum PiHistoryEvent: Sendable {
     case updated(PiHistoryUpdate)
     /// 首次回填（按修改时间倒序）全部完成；之后只有文件变化触发的 `updated`。
-    /// `sessionFiles` 是此刻全部会话文件：不在其中的旧索引（文件已删除的）可以丢掉
-    case backfillFinished(sessionFiles: [URL])
+    /// `sessionFiles` 是此刻全部会话文件：不在其中的旧索引（文件已删除的）可以丢掉；只回填了一部分（`PiHistoryScope.sessions`）为 nil，
+    /// 不能据此丢
+    case backfillFinished(sessionFiles: [URL]?)
+}
+
+/// 一家 Agent 的哪些会话归 CuePad 管：接入了的是全部（会话目录整个回填，终端里开的会话接上桥）；没接入的只有 CuePad 托管过的
+/// （`CueStore.hostedPiSessionIDs`），终端里开的不回填、不上桥。接入的含义只在这里：索引与各家接入（`AgentRuntime.follow`）都按它。
+public enum PiHistoryScope: Sendable, Equatable {
+    case all
+    case sessions(Set<String>)
+
+    public func covers(sessionID: String) -> Bool {
+        switch self {
+        case .all: true
+        case .sessions(let ids): ids.contains(sessionID.lowercased())
+        }
+    }
+
+    /// 三家的会话文件名都以会话 id 结尾（Claude Code `<id>.jsonl`，Pi `<时刻>_<id>.jsonl`，Codex `rollout-<时刻>-<id>.jsonl`）。
+    func covers(_ file: URL) -> Bool {
+        covers(sessionID: String(file.deletingPathExtension().lastPathComponent.suffix(Self.idLength)))
+    }
+
+    private static let idLength = 36
 }
 
 /// 一家 Agent 的会话文件怎么认、怎么读：唯一的一处（会话目录本身在 `AgentPaths.sessionsDirectory`）。OpenCode 的会话在它的数据库里，没有。
@@ -505,25 +527,25 @@ extension PiHistoryCheckpoint {
     }
 
     /// 你说的一句：第一条有文字的成为标题（`PiSessionName.firstMessage`），开始一轮，进对话、成为进行中的提问（单行，≤`PiRecap.promptLimit`）。
-    /// 整条是信封的（`PiEnvelope`）是扩展借你的名义投进来的机器消息，按 `machine` 处理。
+    /// 整条是信封的（`PiEnvelope`）是扩展借你的名义投进来的机器消息，按 `machine` 处理。用斜杠技能说的，提问写你发的样子（`PiSkillCall`）。
     /// 一轮在跑时插进来的你的话：前一句已有的回答先归给前一句，之后的话与工具活动算这一句的。
     mutating func said(_ said: PiHistory.Said, _ entry: PiHistory.Entry, deliveryID: String?, into transcript: inout PiHistory.Transcript) {
         if firstMessage == nil { firstMessage = PiSessionName.firstMessage(said.text) }
-        guard PiEnvelope.parse(said.text) == nil else { return machine(said.text, entry, into: &transcript) }
+        guard PiEnvelope.parse(said.text) == nil else { return machine(said.text, entry, deliveryID: deliveryID, into: &transcript) }
         if reply != nil {
             settleReply(into: &transcript)
             round = Round(startedAt: entry.at)
         }
         if round?.startedAt == nil { round = Round(startedAt: entry.at, tools: round?.tools ?? PiToolLog()) }
         transcript.add(self, entry, role: .user, text: said.stored, deliveryID: deliveryID)
-        recap.pendingPrompt = PiHistory.clip(PiHistory.collapsed(said.text), PiRecap.promptLimit)
+        recap.pendingPrompt = PiHistory.clip(PiHistory.collapsed(PiSkillCall.shown(said.text)), PiRecap.promptLimit)
     }
 
     /// 扩展投进会话的机器消息（FireCode 交回子代理结果、审查结论……）：原样进对话（`machine`），开始一轮（在跑时接着这一轮），
-    /// 但不是提问，也不把前面说的那段归成回答。
-    mutating func machine(_ text: String, _ entry: PiHistory.Entry, into transcript: inout PiHistory.Transcript) {
+    /// 但不是提问，也不把前面说的那段归成回答。CuePad 送进去的（`deliveryID`，话恰好整条是信封）照样带上请求 id：气泡由它接替。
+    mutating func machine(_ text: String, _ entry: PiHistory.Entry, deliveryID: String? = nil, into transcript: inout PiHistory.Transcript) {
         if round?.startedAt == nil { round = Round(startedAt: entry.at, tools: round?.tools ?? PiToolLog()) }
-        transcript.add(self, entry, role: .machine, text: text)
+        transcript.add(self, entry, role: .machine, text: text, deliveryID: deliveryID)
     }
 
     /// 这一轮开始（Agent 自己标出开始的，如 Codex 的 `task_started`）：重新计时、清掉工具活动。

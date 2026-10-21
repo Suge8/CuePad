@@ -2,7 +2,7 @@
 # xc.sh 的入口锁，三条规则：
 # 1. 同一检出一次一个任务（<检出>/apple/.derived/xc.lock）：同一产物目录上的两个 xcodebuild 会抢构建数据库、互相覆盖产物。
 #    不同检出之间不设上限：实测同时 9 个增量编译测试，不排队比限 3 个快（链接、签名、起测试宿主时 CPU 空着，并发正好填上）。
-# 2. 交互性能测量的那一段独占机器（xc.sh perf 先照普通任务构建，再进这把锁）：普通任务持 /tmp/cuepad-xc-<uid>/machine 的共享锁，测量要独占锁；测量先占闸门（gate），
+# 2. 在前台和交互预算比的 Mac 测量独占机器（xc.sh perf mac … -CuePadForeground YES，先照普通任务构建，再进这把锁；别的测量只比指令数，不独占）：普通任务持 /tmp/cuepad-xc-<uid>/machine 的共享锁，测量要独占锁；测量先占闸门（gate），
 #    后来的普通任务停在闸门外，测量不会被源源不断的新任务饿死。
 # 3. iOS 的测试、截图、录屏从固定的 SIM_POOL 台模拟器里领一台（每台一把锁，见 _sim.sh），全占着就等空出一台。
 #    先领模拟器再进 machine：排队等模拟器的任务不占着机器（曾经占着，测量就跟着整条模拟器队列一起等）。
@@ -12,7 +12,7 @@
 # 被 KILL 留下的、PID 已不是那个进程的，读的人当场清掉。排队时开头与每 LOCK_REPORT 秒列一次持有者：每把锁持有了多久（不含排队），命令截成一行，
 # 停住的进程标出来（它不受时限管）；
 # 等满 LOCK_WAIT 秒还没轮到就列出持有者、以 75 退出，不静默挂着。
-# 用法：xc_enter <plain|sim|exclusive> <命令…>，在锁里 exec 这条命令（通常是 "$0" "$@"）；exclusive 是交互的性能测量（用 0 号模拟器）。
+# 用法：xc_enter <plain|sim|exclusive> <命令…>，在锁里 exec 这条命令（通常是 "$0" "$@"）；exclusive 只给前台的 Mac 交互测量。
 
 SIM_POOL=3
 HOLD_LIMIT=1800
@@ -23,6 +23,11 @@ LOCK_WAIT=${CUEPAD_LOCK_WAIT:-$((HOLD_LIMIT + 300))}
 
 xc_enter() {
   [ -z "${CUEPAD_SIM+set}" ] || return 0
+  # 独占期间所有检出的新任务都停在闸门外（实测有脚本借它录一批屏，挡了别人 15 分钟以上）：只给前台的交互测量
+  if [ "$1" = exclusive ] && [ "${2##*/}" != perf-mac.sh ]; then
+    echo "独占机器只给前台和预算比的交互测量（xc.sh perf mac … -CuePadForeground YES）；录屏、截图与别的测量照普通任务跑，前后对比看指令数" >&2
+    exit 2
+  fi
   mkdir -p "$APPLE_DIR/.derived"
   # 不用 "$(cat <<'PY' …)"：macOS 自带的 bash 3.2 解析命令替换里的这段时会把它重复成两个参数
   local script
@@ -177,7 +182,6 @@ try:
     if mode == "exclusive":
         acquire([(gate, "闸门（独占）")], fcntl.LOCK_EX, "另一个性能测量在跑")
         acquire([(machine, "机器（独占）")], fcntl.LOCK_EX, "等在跑的编译、测试做完（性能测量独占机器）")
-        sim = "0"
     else:
         acquire([(gate, "闸门")], fcntl.LOCK_SH, "性能测量在跑，它独占机器")
         fcntl.flock(machine, fcntl.LOCK_SH)  # 测量拿到 machine 前先占着 gate，过了 gate 这里就不会等

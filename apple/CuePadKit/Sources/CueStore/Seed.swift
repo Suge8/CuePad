@@ -14,7 +14,7 @@ public struct SeedProject: Sendable {
 public struct SeedCard: Sendable {
   public enum Kind: Sendable { case idea, task, doneTask }
 
-  /// 所属项目在 `seed(projects:cards:)` 的 `projects` 里的下标；nil 是未分类。
+  /// 所属项目在 `seed(projects:cards:)` 的 `projects` 里的下标；nil 是默认项目。
   public var project: Int?
   public var body: String
   public var pinned: Bool
@@ -65,7 +65,7 @@ extension CueStore {
         for (card, key) in zip(group, SortKey.sequence(count: group.count)) {
           try insert(
             Card(
-              id: UUID(), projectID: card.project.map { ids[$0] }, body: card.body, isPinned: card.pinned, variableValues: [:],
+              id: UUID(), projectID: card.project.map { ids[$0] } ?? Project.defaultID, body: card.body, isPinned: card.pinned, variableValues: [:],
               conflictOf: nil, sortKey: key, deletedAt: nil, createdAt: card.modifiedAt, modifiedAt: card.modifiedAt,
               todoAt: card.kind == .idea ? nil : card.modifiedAt, completedAt: card.kind == .doneTask ? card.modifiedAt : nil))
         }

@@ -144,6 +144,7 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				CuePadWidgets.swift,
+				Symbols.xcassets,
 			);
 			platformFiltersByRelativePath = {
 				WidgetViews.swift = (ios, );

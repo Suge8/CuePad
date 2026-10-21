@@ -8,11 +8,11 @@ import SwiftUI
 import Testing
 @testable import CuePad
 
-/// 长程值班：Cue 值一段班，被叫醒二十多次（他的话、会话歇下带长回复、会话提问、出错），回复撑大上下文，现做法至少跨一次换新线。
+/// 长程值班：Cue 值一段班，被叫醒二十多次（他的话、会话歇下带长回复、会话提问、出错），回复撑大上下文，至少跨一次换新线。
 /// 中后段的判定点只有记得前面才答得对：他口头交代、没让记成规矩的细节，早先会话交回的事实，正在推进的事不重做不丢，他否掉的方案不再提；
 /// 换新之后还有三处 Cue 当场没理由落库的：他顺口说的与任务无关的事实、已完成的事里会话顺带提的细节、他要它查完时告诉他的事。
 /// 要等收尾才兑现的两处（升版本号、证书签发方）看那一步 Cue 有没有收尾：没收尾的升版本号不算，签发方照样要说。
-/// 只经库与假会话驱动、只读库与工具调用判定，不碰哪种上下文做法独有的内部状态（换新次数数库里的交接备忘）。跑法见 docs/verify.md「Cue 评测」。
+/// 只经库与假会话驱动、只读库与工具调用判定，不碰 Cue 的内部状态（换新次数按上下文骤降数）。跑法见 docs/verify.md「Cue 评测」。
 @Suite(.enabled(if: evalEnvironment["CUEPAD_CUE_EVAL"] == "1", "CUEPAD_CUE_EVAL=1 才跑"), .timeLimit(.minutes(60)))
 struct CueEvalLongTests {
     /// 同时跑几遍（`CUEPAD_CUE_EVAL_RUNS`，缺省 1）：多遍时第 n 遍写到"输出目录-n"
@@ -487,7 +487,7 @@ final class ScriptedSession {
     func deliver(_ png: Data, title: String, rig: CueHostTests.Rig) async throws {
         let file = rig.app.directory.appending(path: "\(title).png")
         try png.write(to: file)
-        _ = try await rig.store.addPreviews(filesAt: [file], title: title, sessionID: id)
+        _ = try await rig.store.addPreviews([(file, title)], sessionID: id)
     }
 
     /// 收下 Cue 送进来的话（像会话文件那样记成带投送 id 的一条），在干活写进库。

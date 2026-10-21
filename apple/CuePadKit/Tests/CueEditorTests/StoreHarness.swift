@@ -28,3 +28,20 @@ final class DirectoryImageStore: CueImageStore, Sendable {
 
     func fileURL(for id: String) -> URL? { stored.withLock { $0.files[id] } }
 }
+
+#if canImport(AppKit)
+import AppKit
+#elseif canImport(UIKit)
+import UIKit
+#endif
+
+/// 分片预布局走到了文末：每一段都已真正排好，不再是估算高度。
+@MainActor
+func laidOutToTheEnd(_ layout: NSTextLayoutManager) -> Bool {
+    var done = true
+    layout.enumerateTextLayoutFragments(from: nil, options: []) { fragment in
+        done = fragment.state == .layoutAvailable
+        return done
+    }
+    return done
+}

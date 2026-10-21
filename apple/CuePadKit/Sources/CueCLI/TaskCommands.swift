@@ -7,15 +7,15 @@ extension Command {
     Command(
       path: ["task", "list"], summary: "列出任务（默认只列未完成：进行中与待办，按项目分组、组内按层级与手动顺序）",
       options: [
-        .project("只列该项目的任务"), .global, .allProjects, Opt("done", "只列已完成（最近完成在前）"),
+        .project("只列该项目的任务"), .allProjects, Opt("done", "只列已完成（最近完成在前）"),
         Opt("all", "未完成与已完成都列"),
       ],
-      notes: Schema.defaultProject(otherwise: "列所有项目的任务") + "\n" + Schema.output("[Card]", Schema.card)
+      notes: Schema.defaultScope(otherwise: "列所有项目的任务") + "\n" + Schema.output("[Card]", Schema.card)
     ) { call in
       try call.args.expect()
       let args = call.args
       if args.has("done") && args.has("all") { throw CLIError.usage("--done 与 --all 只能选一个") }
-      let scope = try await call.scope(nullFlag: "global")
+      let scope = try await call.scope()
       var tasks: [Card] = []
       if !args.has("done") { tasks += try await call.store.tasks(.inProgress, .todo).flatMap(\.tasks) }
       if args.has("done") || args.has("all") { tasks += try await call.store.tasks(.done).flatMap(\.tasks) }
@@ -25,10 +25,10 @@ extension Command {
     Command(
       path: ["task", "add"], summary: "新建任务（顶层的放在项目最前，步骤放在上级的下级最后）", arguments: "<正文...>",
       options: [
-        .project("挂到该项目"), .global,
+        .project("挂到该项目"),
         Opt("parent", "作为该任务的步骤（项目随它；任务 → 步骤，最多 \(Card.maxTaskDepth) 级）", value: "任务"),
       ],
-      notes: Schema.defaultProject(otherwise: "是全局任务") + "；给了 --parent 时不能再给 --project / --global。\n"
+      notes: Schema.defaultScope(otherwise: Schema.defaultTarget) + "；给了 --parent 时不能再给 --project。\n"
         + "正文取所有位置参数，以空格连接：第一行是标题，其余几行是它的正文（开始时连同标题发给 Agent）。已有的灵感用 cuepad card todo 变成任务。\n"
         + Schema.output("新建的 Card", Schema.card)
     ) { call in
@@ -37,10 +37,10 @@ extension Command {
       let body = args.positionals.joined(separator: " ")
       let task: Card
       if let ref = args.value("parent") {
-        if args.has("global") || args.value("project") != nil { throw CLIError.usage("--parent 与 --project / --global 只能选一个") }
+        if args.value("project") != nil { throw CLIError.usage("--parent 与 --project 只能选一个") }
         task = try await call.store.createTask(body, under: try await call.task(ref).id)
       } else {
-        task = try await call.store.createTask(body, in: try await call.scope(nullFlag: "global").target)
+        task = try await call.store.createTask(body, in: try await call.scope().target)
       }
       return reply(try await call.cardViews([task])[0])
     },

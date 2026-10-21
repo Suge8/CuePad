@@ -67,21 +67,22 @@ final class Workspace {
     #if os(macOS)
     /// 新建或编辑项目的表单（`ProjectForm`；侧栏与项目页的入口都经这里，主窗口弹出）。
     var projectForm: ProjectForm.Request?
+    /// 项目范围：任务页与会话页共用这一份（顶栏中间那颗显示它、点 ✕ 清掉；项目页的"全部 N 个会话"设成这个项目再切到会话页），nil 是全部项目。
+    var projectScope: UUID?
     /// ⌘K 搜索开着（`SearchPalette`）。
     var searching = false
-    /// 右上角的任务面板开着（`TasksPanel`）。
-    var showsTasks = false
-    /// 接入 Agent 的面板（`AgentSetupPanel`；首次打开由 `offerAgentSetup` 置起，主窗口弹出）。
-    var showsAgentSetup = false
+    /// 接入 Agent 并启用 Cue 的面板（`SetupPanel`；首次打开由 `offerSetup` 置起，Cue 页的启用卡与会话页的"接入"也打开它，主窗口弹出）。
+    var showsSetup = false
+    /// 新会话的表单开着（`NewSessionForm`，从会话页的 + 弹出；菜单"文件 › 新会话"先去会话页再置起，`newSession`）。
+    var showsNewSession = false
     #endif
     var notice: Notice?
     /// 正在给哪个项目选文件夹（iOS：根视图据此弹候选；Mac 直接弹系统的选文件夹面板，不经这里）。
     var folderPicker: Project?
 
-    /// 交给了会话的灵感与任务（`AgentLinks`，卡与行上的状态点读它）、文件夹绑定引导（`FolderGuide`）：整个窗口一份，页面直接读，
+    /// 交给了会话的灵感与任务（`AgentLinks`，卡与行上的状态点读它）：整个窗口一份，页面直接读，
     /// 不各自订阅（挂着的页也不会在每次回到前台时重读一遍）。读到和已有的相同不送来（`observe(after:)` 在读取一侧比较），免得页面白算。
     private(set) var agentLinks = AgentLinks(items: [:], launching: [])
-    private(set) var folderGuide: FolderGuide?
 
     private func follow<T: Sendable & Equatable>(
         _ value: ReferenceWritableKeyPath<Workspace, T>, _ read: @escaping @Sendable (isolated CueStore) throws -> T
@@ -108,7 +109,7 @@ final class Workspace {
     /// 项目目录与 Cue 的现状当场读（`CueStore.snapshot`）：第一帧就是读到的样子，没有"还没读到"这一态。
     init(services: AppServices) {
         self.services = services
-        let digest = try? services.store.snapshot { try CueWatch.Reading.read(from: $0) }
+        let digest = try? services.store.snapshot { try CueDigest.read(from: $0) }
         // 读不出来时目录也读不出来，失败页盖住页面，空摘要不会露面
         cue = CueWatch(digest, at: services.speech)
         #if os(macOS)
@@ -118,16 +119,13 @@ final class Workspace {
     }
 
     #if os(macOS)
+    /// 此刻的页：切到的非项目页，否则上次打开的项目（`show` 记下），都没有是 `Route.first`。
     var page: Route {
         if let nonProjectPage { return nonProjectPage }
-        return (services.settings.currentProject ?? defaultProject).map(Route.project) ?? .unfiled
+        return services.settings.currentProject.map(Route.project) ?? .first
     }
 
-    /// 没打开过项目（第一次打开、打开过的进了回收站）时首屏是项目目录顺序的第一个：由目录当场推出、不写进"上次打开"，
-    /// 项目陆续同步进来时跟着目录走；只有用户切换项目才记下（`show`）。
-    private var defaultProject: UUID? { catalog?.projects.first?.id }
-
-    /// 当前项目（未分类为 nil）。回收站页没有项目。
+    /// 当前项目；不在项目页（回收站、会话页……）时没有。
     var currentProject: UUID? {
         if case .project(let id) = page { id } else { nil }
     }
@@ -141,13 +139,12 @@ final class Workspace {
         presses.dismiss()
     }
 
-    /// 打开一条灵感或任务：任务在气泡里看（`openTask`，右上角的任务面板留着）；
+    /// 打开一条灵感或任务：任务在气泡里看（`openTask`）；
     /// 灵感（挂在任务下的资料也一样）进整页的编辑页。
     func open(_ card: Card) {
         presses.clearSelection()
         if card.isTask { return openTask(card) }
         openTask = nil
-        showsTasks = false
         openCard = card.id
     }
 
@@ -199,12 +196,11 @@ final class Workspace {
     func follow() async {
         async let catalog: Void = followCatalog()
         async let links: Void = followAgentLinks()
-        async let guide: Void = followFolderGuide()
         async let cue: Void = followCue()
         #if os(macOS)
         await followSessionPlacement()
         #endif
-        _ = await (catalog, links, guide, cue)
+        _ = await (catalog, links, cue)
     }
 
     private func followCatalog() async {
@@ -212,8 +208,6 @@ final class Workspace {
     }
 
     private func followAgentLinks() async { await follow(\.agentLinks) { try AgentLinks.read(from: $0) } }
-
-    private func followFolderGuide() async { await follow(\.folderGuide) { [host = localHost] in try FolderGuide.read(host: host, from: $0) } }
 
     private func readCatalog() {
         do {
@@ -272,27 +266,27 @@ final class Workspace {
     #endif
 
     /// 新建卡片。项目是否有效由 Store 在写事务里判定：项目已不存在或在回收站（`invalidProject`）时，
-    /// 重新核对当前项目，卡片落到未分类并提示，不会写进看不见的地方。
-    func createCard(body: String = "", in project: UUID?) async throws -> Card {
+    /// 重新核对当前项目，卡片落到默认项目并提示，不会写进看不见的地方。
+    func createCard(body: String = "", in project: UUID) async throws -> Card {
         let store = services.store
         return try await fallingBack(from: project) { try await store.createCard(in: $0, body: body) }
     }
 
-    /// 新建任务；项目失效时同样回落，任务归为未分类并提示。
-    func createTask(_ body: String, in project: UUID?) async throws -> Card {
+    /// 新建任务；项目失效时同样回落，任务进默认项目并提示。
+    func createTask(_ body: String, in project: UUID) async throws -> Card {
         let store = services.store
         return try await fallingBack(from: project) { try await store.createTask(body, in: $0) }
     }
 
-    private func fallingBack<T>(from project: UUID?, _ write: (UUID?) async throws -> T) async throws -> T {
+    private func fallingBack<T>(from project: UUID, _ write: (UUID) async throws -> T) async throws -> T {
         do {
             return try await write(project)
-        } catch CueStoreError.invalidProject where project != nil {
+        } catch CueStoreError.invalidProject where project != Project.defaultID {
             #if os(macOS)
             await reconcileCurrentProject()
             #endif
-            let result = try await write(nil)
-            say("原项目已不存在或在回收站，已放到未分类", isError: true)
+            let result = try await write(Project.defaultID)
+            say("原项目已不存在或在回收站，已放到默认项目", isError: true)
             return result
         }
     }

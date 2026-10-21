@@ -9,6 +9,7 @@ import OSLog
 ///
 /// - 终端会话：第一次钩子调用时上桥，id 是 `<会话 id>.<进程 pid>`；同一进程里 /clear、/resume 换了会话，旧的下桥、新的上桥；
 ///   进程退出（kqueue）时下桥。CuePad 启动时已经在跑的会话（还没触发钩子）从 `claude agents --json` 补上。
+///   只接归 CuePad 管的（`follow` 给的范围，没接入时只有托管过的会话）：钩子与补上都按它，出了范围的下桥。
 ///   会话名与首条消息随钩子来（`session_title`、`UserPromptSubmit`）；重新上桥（托管接着、CuePad 重开后补上、钩子先到）时先取会话索引里记下的
 ///   （`remembered`，不在这里读会话文件），钩子带来新的再换。
 /// - 托管会话：开新会话（`--session-id`）与接着已结束的会话（`--resume`，带上 CuePad 记下的这个会话最后的模型）；接着之前先确认它没开在别处（终端里开着时两边会各写各的）。
@@ -28,6 +29,8 @@ public final class ClaudeCodeRuntime: AgentRuntime {
     /// 每个终端进程一个退出监视；进程里此刻的会话见 `terminals`
     private var exitWatchers: [Int32: ProcessExitWatcher] = [:]
     private var hosted: [String: ClaudeHostedSession] = [:]  // 会话 id → 托管进程
+    /// 终端会话哪些接上桥（`follow`）；给之前一个都不接
+    private var scope = PiHistoryScope.sessions([])
 
     public init(
         bridge: PiBridge, paths: AgentPaths, hooks: AgentHookServer, store: CueStore, claude: @escaping @Sendable () async -> URL?,
@@ -69,7 +72,12 @@ public final class ClaudeCodeRuntime: AgentRuntime {
 
     public func start() throws {
         hooks.handle(.claudeCode) { [weak self] call in self?.received(call) }
-        Task { await discover() }
+    }
+
+    public func follow(_ scope: PiHistoryScope) {
+        self.scope = scope
+        for id in terminals.keys where !scope.covers(sessionID: bridge.session(id: id)?.sessionID ?? "") { settle(id, reason: nil) }
+        if scope != .sessions([]) { Task { await discover() } }
     }
 
     /// 托管的进程关了输入还不走就 SIGTERM、再不走 SIGKILL（`ChildProcess.stop`）；终端会话挂着的钩子放掉。
@@ -162,6 +170,7 @@ public final class ClaudeCodeRuntime: AgentRuntime {
             settle(id, reason: input["reason"]?.string)
             return call.finish()
         }
+        guard terminals[id] != nil || scope.covers(sessionID: sessionID) else { return call.finish() }
         let terminal = terminals[id] ?? appear(id: id, sessionID: sessionID, input: input, envelope: envelope)
         refresh(terminal, from: envelope)
         terminal.handle(event, input, call: call)
@@ -255,7 +264,7 @@ public final class ClaudeCodeRuntime: AgentRuntime {
         } catch {
             return Self.log.notice("没能补上已在跑的 Claude Code 会话：\(String(describing: error))")
         }
-        for entry in list where hosted[entry.sessionID] == nil && kill(entry.pid, 0) == 0 {
+        for entry in list where hosted[entry.sessionID] == nil && scope.covers(sessionID: entry.sessionID) && kill(entry.pid, 0) == 0 {
             let id = PiSession.claudeID(sessionID: entry.sessionID, pid: entry.pid)
             guard terminals[id] == nil else { continue }
             let cwd = URL(filePath: entry.cwd, directoryHint: .isDirectory)
@@ -263,7 +272,7 @@ public final class ClaudeCodeRuntime: AgentRuntime {
             let waiting = entry.status == "waiting"
             let running = waiting || entry.status == "busy"
                 ? await Self.lastTurnStart(in: file, from: checkpoint(of: entry.sessionID), files: store.files) ?? listed : nil
-            guard terminals[id] == nil else { continue }  // 读文件时钩子先到、已上桥
+            guard terminals[id] == nil, scope.covers(sessionID: entry.sessionID) else { continue }  // 读文件时钩子先到、已上桥，或范围换了
             let session = PiSession(
                 id: id, sessionID: entry.sessionID, agent: .claudeCode, sessionFile: file,
                 pid: entry.pid, cwd: cwd, terminal: PiTerminal(tty: Self.controllingTerminal(of: entry.pid)), extensionVersion: 0,

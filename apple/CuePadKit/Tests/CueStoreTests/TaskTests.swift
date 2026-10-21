@@ -33,7 +33,7 @@ import Testing
 
     // 层级：只有任务能当上级；步骤与挂在下面的灵感跟随上级的项目，任务最多两级
     let top = try await store.createTask("修重连", in: project.id)
-    let shot = try await store.createCard(in: nil, body: "候选图截图")
+    let shot = try await store.createCard(body: "候选图截图")
     try await store.moveCard(shot.id, to: .under(top.id), after: nil)
     let second = try await store.createTask("改排序", under: top.id)
     #expect(try await store.children(of: top.id).map(\.id) == [shot.id, second.id])
@@ -66,7 +66,6 @@ import Testing
     try await store.linkCard(step.id, toSession: "s1")
     #expect(try await card(plan.id).status == .inProgress)
     #expect(try await store.taskCounts()[project.id] == TaskCounts(inProgress: 2, todo: 0, done: 0))
-    #expect(try await store.startedTasks(topLevelOnly: true).map(\.id) == [plan.id, top.id])
 
     // 开始只记在叶子上：开始了的叶子加了第一个步骤，开始移到这一步，上级照样进行中（从步骤推出）
     let solo = try await store.createTask("写发布说明", in: project.id)
@@ -79,9 +78,9 @@ import Testing
   @Test func 移动_不能成环或任务超两级_换项目带着子树_取消要做与进回收站时下级上提() async throws {
     let site = try await store.createProject(name: "网站", color: "#111")
     let table = try await store.createProject(name: "圆桌", color: "#111")
-    let a = try await store.createTask("a", in: nil)
+    let a = try await store.createTask("a")
     let a1 = try await store.createTask("a1", under: a.id)
-    let b = try await store.createTask("b", in: nil)
+    let b = try await store.createTask("b")
     let b1 = try await store.createTask("b1", under: b.id)
 
     await #expect(throws: CueStoreError.invalidParent) { try await store.moveCard(a.id, to: .under(a1.id), after: nil) }
@@ -90,7 +89,7 @@ import Testing
 
     // 挂到别的项目的任务下：整棵子树换到那个项目，同级按放的位置排
     let moving = try await store.createTask("换首图", in: site.id)
-    let child = try await store.createCard(in: nil, body: "裁图")
+    let child = try await store.createCard(body: "裁图")
     try await store.moveCard(child.id, to: .under(moving.id), after: nil)
     let parent = try await store.createTask("上线", in: table.id)
     let first = try await store.createTask("备份", under: parent.id)
@@ -131,12 +130,12 @@ import Testing
     try await store.unarchive(idea.id)
     #expect(try await store.cards(in: project.id).map(\.id) == [idea.id])
 
-    let done = try await store.createTask("上线", in: nil)
+    let done = try await store.createTask("上线")
     let sub = try await store.createTask("备份", under: done.id)
-    let prompt = try await store.createCard(in: nil, body: "日志")
+    let prompt = try await store.createCard(body: "日志")
     try await store.moveCard(prompt.id, to: .under(done.id), after: nil)
     try await store.setStatus(done.id, .done)
-    let open = try await store.createTask("还在做", in: nil)
+    let open = try await store.createTask("还在做")
     let doneStep = try await store.createTask("已复现", under: open.id)
     try await store.setStatus(doneStep.id, .done)  // 没做完的任务下已完成的步骤算在上级的进度里，不单独归档
 
@@ -148,8 +147,8 @@ import Testing
   }
 
   @Test func 交给Agent的任务关联会话并进行中_灵感也记下会话但不变成任务() async throws {
-    let task = try await store.createTask("修重连", in: nil)
-    let idea = try await store.createCard(in: nil, body: "随便问问")
+    let task = try await store.createTask("修重连")
+    let idea = try await store.createCard(body: "随便问问")
     let atlas = SendTarget(kind: .piSession, name: "atlas", ref: "s1")
     try await store.recordSend("修重连", to: atlas, card: task.id)
     try await store.recordSend("随便问问", to: atlas, card: idea.id)

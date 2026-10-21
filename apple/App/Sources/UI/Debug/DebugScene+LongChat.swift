@@ -252,7 +252,7 @@ enum ChatScrollBench {
         guard let (window, scroll) = found else { print("CHATSCROLL-ERR 找不到对话的滚动视图"); fflush(stdout); exit(1) }
         try? await Task.sleep(for: .seconds(3))
         if driver != .direct {
-            guard DebugForeground.borrow(window) else { print("CHATSCROLL-ERR \(driver.rawValue) 要占前台：加 -CuePadForeground YES"); fflush(stdout); exit(1) }
+            DebugForeground.require(window, for: "CuePadScrollDriver \(driver.rawValue)")
             try? await Task.sleep(for: .seconds(1))
         }
         let primaryHeight = NSScreen.screens[0].frame.height
@@ -331,7 +331,7 @@ enum ChatScrollBench {
             for _ in 0..<20 {
                 ready = NSWindow.windowNumber(at: NSEvent.mouseLocation, belowWindowWithWindowNumber: 0) == window.windowNumber
                 if ready { break }
-                _ = DebugForeground.borrow(window)
+                DebugForeground.require(window, for: "CuePadScrollDriver hid")
                 try? await Task.sleep(for: .milliseconds(500))
             }
             guard ready else {

@@ -17,7 +17,7 @@ import AppKit
 nonisolated enum Icon: Hashable, Sendable {
     // 导航与页面入口
     case cue, cueAsleep, cueLooking, cueHappy
-    case idea, task, session, search, settings, unfiled, archive, trash, sidebar
+    case idea, task, session, search, settings, archive, trash, sidebar
     case agent, allProjects, all, filter, extensionNote
     // 状态
     case waiting, cueAsking, failure, undelivered, needsReload, onTheWay, replied, yourTurn, fresh, ended, interrupted, unknown
@@ -26,7 +26,7 @@ nonisolated enum Icon: Hashable, Sendable {
     case alertsPending, alertsOn, alertsOff
     // 任务与卡片操作
     case complete, reopen, restore, start, add, indent, outdent, link, unlink
-    case projects, folder, newProject, unbindFolder, folderMissing, resource, isResource, pin, unpin
+    case projects, folder, newProject, unbindFolder, resource, isResource, pin, unpin
     case copy, share, saveAsIdea, write, rename, close, remove, clear, more
     case forward, back, expand, collapse, choose, conflict, enlarge
     // 输入、发送与会话
@@ -36,7 +36,7 @@ nonisolated enum Icon: Hashable, Sendable {
     case terminal, terminalWindow, readFile, editFile, pondering, tool, said, started, added, branch, markUnread, fireCode, thinking
     case researcher, engineer, batchWorker, designer, sentinel, subagent
     // Cue 与设置
-    case memory, wakeEnabled, wakeMessage, wakeActivity, wakeIdle, wakeReminder, wakeSettings, mail
+    case memory, wakeEnabled, wakeMessage, wakeActivity, wakeIdle, wakeReminder, mail
     case name, autoApprove, hotkey, talkToCue, appearance, updates
     // 文件与交付物：没有画面的音频、列表里的文字卡、还在下载、视频的播放标、认不出类型的文件、转动查看 3D 模型
     case audio, document, downloading, play, file, inspect3D
@@ -63,7 +63,6 @@ nonisolated enum Icon: Hashable, Sendable {
         case .session: .ink("session")
         case .search: .ink("search")
         case .settings: .ink("settings")
-        case .unfiled: .ink("inbox")
         case .archive: .ink("archive")
         case .trash: .ink("trash")
         case .sidebar: .ink("sidebar")
@@ -116,7 +115,6 @@ nonisolated enum Icon: Hashable, Sendable {
         case .folder, .projects: .ink("folder")
         case .newProject: .ink("folder.add")
         case .unbindFolder: .ink("folder.remove")
-        case .folderMissing: .ink("folder.missing")
         case .resource, .isResource: .ink("books")
         case .pin: .ink("pin")
         case .unpin: .ink("unpin")
@@ -176,7 +174,6 @@ nonisolated enum Icon: Hashable, Sendable {
         case .wakeMessage, .talkToCue: .ink("bubble")
         case .wakeIdle: .ink("eye")
         case .wakeReminder: .ink("alarm")
-        case .wakeSettings: .ink("swap")
         case .mail: .ink("mail")
         case .name: .ink("tag")
         case .autoApprove: .ink("shield.tick")

@@ -2,7 +2,7 @@
 import Synchronization
 import SwiftUI
 
-/// 每个窗口的壳：注入通知、处理深链接、进入后台前落盘、后台里换了外观当场画完（`AppearanceSettle`）；有同步时开启 Pi 通知。
+/// 每个窗口的壳：注入通知、处理深链接、进入后台前落盘、定场景的外观（`SceneAppearance`）；有同步时开启 Pi 通知。
 /// 这里的 body 不随什么重算（前后台在 `ScenePhaseWork` 里看）：窗口的根视图只建一次，建工作区时当场读库（`Workspace.init`）不白读。
 struct SceneRoot: View {
     let services: AppServices
@@ -19,7 +19,7 @@ struct SceneRoot: View {
             .task { if services.sync != nil { await alerts.enable() } }
             .onOpenURL { services.handle(url: $0) }
             .modifier(ScenePhaseWork(services: services, alerts: alerts))
-            .background { AppearanceSettle() }
+            .background { SceneAppearance(settings: services.settings) }
     }
 }
 
@@ -64,42 +64,60 @@ enum BackgroundWork {
     }
 }
 
-/// 进后台时系统把窗口切到另一种外观拍一张快照再切回来（App 切换器里备用的那张）。切过去的那一遍在快照里当场画完；切回来的那一遍
-/// SwiftUI 只排进主队列，等到时快照的后台任务已经结束，整窗的字按新外观重排（几十到几百毫秒）只靠别的后台任务碰巧撑着，
-/// 进程等不到它画完就被挂起时窗口停在另一种外观上，回前台先露出它再翻回来——浅色下切回来闪一下深色。
-/// 这里盯着本窗口的宿主视图：后台里它的外观一变（SwiftUI 此时已拿到新外观），就在撑住进程的这一下里把宿主和它弹出的页当场画完、提交给渲染，
-/// SwiftUI 排着的那一遍到时已无事可做。
-private struct AppearanceSettle: UIViewRepresentable {
-    func makeUIView(context: Context) -> Hook {
-        let hook = Hook()
-        hook.isUserInteractionEnabled = false
-        return hook
+/// 场景的外观只在这里定（`UIWindowScene.traitOverrides`）：设置里选了浅色、深色就钉成它；跟随系统时在前台不钉，进后台时钉在当时的外观，回前台再放开。
+/// 不钉时，系统每次进后台都把场景切到另一种外观拍一张备用快照再切回来，SwiftUI 在后台把整窗按两种外观各重画一遍；
+/// 切回那遍没赶在挂起前画完，或回前台时拿到那张备用快照，就先露出另一种外观再翻回来。钉住后两张快照都是当时的外观，后台不重画。
+/// 代价：App 挂起期间系统外观真变了，回来时快照还是旧外观，放开后才翻成新的（选了浅色、深色本来就这样）。
+private struct SceneAppearance: View {
+    let settings: AppSettings
+
+    var body: some View { Applier(theme: settings.theme) }
+
+    private struct Applier: UIViewRepresentable {
+        let theme: AppSettings.Theme
+
+        func makeUIView(context: Context) -> Hook {
+            let hook = Hook()
+            hook.isUserInteractionEnabled = false
+            return hook
+        }
+
+        func updateUIView(_ hook: Hook, context: Context) { hook.theme = theme }
     }
-    func updateUIView(_ hook: Hook, context: Context) {}
 
     final class Hook: UIView {
-        private weak var host: UIView?
-        private var registration: (any UITraitChangeRegistration)?
+        var theme = AppSettings.Theme.system { didSet { apply() } }
+        private var backgrounded = false
+        private var observers: [any NSObjectProtocol] = []
 
         override func didMoveToWindow() {
             super.didMoveToWindow()
-            if let registration { host?.unregisterForTraitChanges(registration) }
-            host = window?.rootViewController?.view
-            registration = host?.registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (host: UIView, _) in Self.settle(host) }
+            observers.forEach(NotificationCenter.default.removeObserver)
+            let scene = window?.windowScene
+            backgrounded = scene?.activationState == .background
+            observers = [UIScene.didEnterBackgroundNotification, UIScene.willEnterForegroundNotification].map { name in
+                NotificationCenter.default.addObserver(forName: name, object: scene, queue: .main) { [weak self] _ in
+                    MainActor.assumeIsolated {
+                        self?.backgrounded = name == UIScene.didEnterBackgroundNotification
+                        self?.apply()
+                    }
+                }
+            }
+            apply()
         }
 
-        private static func settle(_ host: UIView) {
-            guard let window = host.window, window.windowScene?.activationState == .background else { return }
-            let task = UIApplication.shared.beginBackgroundTask(withName: "CuePad.appearance")
-            defer { UIApplication.shared.endBackgroundTask(task) }
-            var controller = window.rootViewController
-            while let shown = controller {
-                // SwiftUI 拿到新外观只排了一遍异步重画、宿主并不脏：标脏再排，才当场按新外观画
-                shown.view.setNeedsLayout()
-                shown.view.layoutIfNeeded()
-                controller = shown.presentedViewController
+        private func apply() {
+            guard let scene = window?.windowScene else { return }
+            let pinned: UIUserInterfaceStyle? = switch theme {
+            case .light: .light
+            case .dark: .dark
+            case .system: backgrounded ? scene.traitCollection.userInterfaceStyle : nil
             }
-            CATransaction.flush()
+            if let pinned {
+                scene.traitOverrides.userInterfaceStyle = pinned
+            } else {
+                scene.traitOverrides.remove(UITraitUserInterfaceStyle.self)
+            }
         }
     }
 }

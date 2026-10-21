@@ -11,11 +11,11 @@ extension CueStore {
     return PiSessionPage(items: try listItems(states), total: total)
   }
 
-  /// 按项目分组的会话：每组（项目或未分类）最近的 `each` 条与这一组一共几条，条件同 `piSessionPage`（`query.project`、分页不用）。
+  /// 按项目分组的会话（`PiSessionListItem.home`）：每组最近的 `each` 条与这一组一共几条，条件同 `piSessionPage`（`query.project`、分页不用）。
   /// 会话页不按项目筛时的历史读它：几千条历史只按组各读开头几条，两条语句（排名取前几、按组计数）。
-  public func piSessionGroups(_ query: PiSessionQuery, each: Int) throws -> [PiSessionProject: PiSessionPage] {
+  public func piSessionGroups(_ query: PiSessionQuery, each: Int) throws -> [UUID: PiSessionPage] {
     let (condition, arguments) = Self.condition(query)
-    let group = "CASE WHEN \(Self.unfiled) THEN NULL ELSE projectID END"
+    let group = Self.home
     let states = try select(
       PiSessionState.self,
       where: """
@@ -23,14 +23,16 @@ extension CueStore {
           FROM piSessionStates WHERE \(condition)) WHERE rank <= ?)
         """, arguments + [each], orderBy: "stateSince DESC, id")
     let totals = Dictionary(uniqueKeysWithValues: try db.query("SELECT \(group), count(*) FROM piSessionStates WHERE \(condition) GROUP BY 1", arguments) {
-      (PiSessionProject($0.uuidOrNil(0)), Int($0.int(1)))
+      ($0.uuid(0), Int($0.int(1)))
     })
-    let items = Dictionary(grouping: try listItems(states)) { PiSessionProject($0.project?.id) }
+    let items = Dictionary(grouping: try listItems(states), by: \.home)
     return totals.reduce(into: [:]) { groups, entry in groups[entry.key] = PiSessionPage(items: items[entry.key] ?? [], total: entry.value) }
   }
 
-  /// 不在哪个项目里：没有项目，或项目已删（列表项也不带它，`listItems`）。
-  private static let unfiled = "(projectID IS NULL OR projectID NOT IN (SELECT id FROM projects WHERE deletedAt IS NULL))"
+  /// 会话归在哪个项目（同 `PiSessionListItem.home`）：没有项目或项目已删（列表项也不带它，`listItems`）的归默认项目。
+  private static let home = """
+    CASE WHEN projectID IN (SELECT id FROM projects WHERE deletedAt IS NULL) THEN projectID ELSE '\(Project.defaultID.uuidString.lowercased())' END
+    """
 
   private static func condition(_ query: PiSessionQuery) -> (String, [any SQLBindable]) {
     var conditions: [String] = []
@@ -52,12 +54,10 @@ extension CueStore {
       conditions.append("(title LIKE ? ESCAPE '\\' OR folder LIKE ? ESCAPE '\\' OR lastPrompt LIKE ? ESCAPE '\\')")
       arguments += [pattern, pattern, pattern]
     }
-    switch query.project {
-    case .project(let id):
-      conditions.append("projectID = ?")
-      arguments.append(id)
-    case .unfiled: conditions.append(unfiled)
-    case nil: break
+    if let project = query.project {
+      // 别的项目走 projectID 的索引；默认项目还收没有项目的
+      conditions.append(project == Project.defaultID ? "\(home) = ?" : "projectID = ?")
+      arguments.append(project)
     }
     if let token = query.launchToken {
       conditions.append("launchToken = ?")
@@ -169,14 +169,6 @@ extension CueStore {
   /// 各台 Mac 上跑过 Agent 的文件夹（会话记录的文件夹名，同一台 Mac 同名的算一个）：会话数、最近的那个会话与它归的项目；最近有会话的在前，同样近的会话多的在前。临时目录的会话没有文件夹名（`folderName(ofWorkingDirectory:)`），不在其中。
   /// 手机据此建议给项目绑哪个文件夹（见 `PiBind`）；几千条历史聚合成几十行，不整表读。
   public func sessionFolders() throws -> [SessionFolder] { try folders(where: Self.hasFolder, []) }
-
-  /// 同上，只要名字（小写）在 `names` 里的文件夹（不分大小写，同 `ProjectFolders.suggestions`）。订阅只依赖这些文件夹里的会话（`narrow`）：
-  /// 别的会话状态变化不叫醒它——项目引导曾在每次会话状态变化时把全部会话按文件夹重新聚合一遍。
-  public func sessionFolders(named names: Set<String>) throws -> [SessionFolder] {
-    try narrow(.piSessionStates, column: "folder", candidates: Self.hasFolder, to: { names.contains($0.lowercased()) }) { rows in
-      rows.isEmpty ? [] : try folders(where: "rowid IN (SELECT value FROM json_each(?))", [JSONColumn.encode(rows.sorted())])
-    }
-  }
 
   /// 记着文件夹的会话：也是文件夹索引（`Schema` 第 55 步）的部分条件，不一样就用不上。
   static let hasFolder = "folder IS NOT NULL AND folder != ''"

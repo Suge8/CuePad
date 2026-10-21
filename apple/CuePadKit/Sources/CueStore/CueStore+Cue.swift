@@ -7,13 +7,17 @@ import Foundation
 extension CueStore {
   /// 写一条对话。正文不能为空。你说的一句同时收起还开着的提问（`CueQuestionEnd`）。带 `ask` 的是 Cue 请你允许的提问（"等你"）：问的是什么（类别、动作、规矩，`CueAsking`）、
   /// 范围（关联任务此刻所在的项目，`CueMessage.asked`）与按范围写出的选项（`CueAsk.choices`）一起存下；
+  /// 点名要你看的图（`shots`，`CueShot.checked` 过的）跟着写下。
   /// 允许清单里有这类事（`CueProfile.allowing`，按同一个项目）就抛 `alreadyAllowed`、点名的图不在发到手机的里抛 `shotMissing`，什么都不写。
   @discardableResult
-  public func addCueMessage(_ author: CueAuthor, text: String, ask: CueAsking? = nil, urgent: Bool = false, task: UUID? = nil) throws -> CueMessage {
+  public func addCueMessage(
+    _ author: CueAuthor, text: String, ask: CueAsking? = nil, shots: [CueShot] = [], urgent: Bool = false, task: UUID? = nil
+  ) throws -> CueMessage {
     guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw CueStoreError.blankDeliveryContent }
     return try write {
+      try checkShots(shots)
       guard let ask else {
-        let message = try insertCueMessage(author, text: text, urgent: urgent, task: task)
+        let message = try insertCueMessage(author, text: text, shots: shots, urgent: urgent, task: task)
         if author == .you { _ = try endQuestions(setAsideBy: message.id, where: "1", []) }
         return message
       }
@@ -21,37 +25,43 @@ extension CueStore {
       if let allowed = try cueProfile()?.allowing(ask.ask, in: project?.id) {
         throw CueStoreError.alreadyAllowed(try allowed.project.flatMap { try find(Project.self, $0)?.name })
       }
-      for shot in ask.shots where try find(PiPreview.self, shot.preview) == nil { throw CueStoreError.shotMissing(shot.preview.uuidString.lowercased()) }
-      return try insertCueMessage(author, text: text, asking: ask, in: project, urgent: urgent, task: task)
+      return try insertCueMessage(author, text: text, asking: ask, shots: shots, in: project, urgent: urgent, task: task)
     }
   }
 
-  /// 写一条对话（在写事务内调用）。`asking` 是提问问的什么，`project` 是它的范围；`at`：排在对话里的时刻，缺省是此刻（一轮的经过排在这一轮开始的时刻）。
+  /// 点名的图都在发到手机的里，不在的抛 `shotMissing`（在写事务内调用）。
+  func checkShots(_ shots: [CueShot]) throws {
+    for shot in shots where try find(PiPreview.self, shot.preview) == nil { throw CueStoreError.shotMissing(shot.preview.uuidString.lowercased()) }
+  }
+
+  /// 写一条对话（在写事务内调用）。`asking` 是提问问的什么，`project` 是它的范围，`shots` 是点名要你看的图；`at`：排在对话里的时刻，缺省是此刻（一轮的经过排在这一轮开始的时刻）。
   /// 要提示你的（`CueMessage.alerts`）同时置手机推送标志，到不到你只看 `reaches`。
   func insertCueMessage(
-    _ author: CueAuthor, text: String, asking: CueAsking? = nil, in project: Project? = nil, urgent: Bool = false, task: UUID? = nil,
-    tools: PiChatMessage.Tools? = nil, at time: Date? = nil
+    _ author: CueAuthor, text: String, asking: CueAsking? = nil, shots: [CueShot] = [], in project: Project? = nil, urgent: Bool = false,
+    task: UUID? = nil, tools: PiChatMessage.Tools? = nil, wake: CueWake? = nil, at time: Date? = nil
   ) throws -> CueMessage {
     let now = Date.stamp
     var message = CueMessage(
       id: UUID(), author: .known(author), text: text, choices: asking?.ask.choices(in: project?.name),
-      asked: asking.map { CueAllow($0.ask, project: project?.id) }, askAction: asking?.action, askRule: asking?.rule, askShots: asking?.shots ?? [],
+      asked: asking.map { CueAllow($0.ask, project: project?.id) }, askAction: asking?.action, askRule: asking?.rule, shots: shots,
       urgent: urgent, taskID: task,
-      answer: nil, answeredAt: nil, setAsideBy: nil, deliveredAt: nil, createdAt: time ?? now, modifiedAt: now, tools: tools, notify: false)
+      answer: nil, answeredAt: nil, setAsideBy: nil, deliveredAt: nil, createdAt: time ?? now, modifiedAt: now, tools: tools, wake: wake, notify: false)
     message.notify = try message.alerts && reaches(.cue)
     try insert(message)
     try registerImages(in: text)
     return message
   }
 
-  /// 一轮的经过那一行（值班的管理器写，`CueMessage.tools`）：这一轮第一次调工具时在它开始的位置写下（`id` 为 nil，返回新行的 id），
-  /// 之后每做完一步、以及这一轮做完时改它的清单与是谁的那一轮（你中途插话，Cue 自己醒来的一轮就成了回答你的）。
-  /// 这一轮说的话与结果都在它之后。你发起的写成 `round`；Cue 自己醒来的写成没有正文的动态（`note`），跟着动态收起。
+  /// 一轮的经过那一行（值班的管理器写，`CueMessage.tools`）：在这一轮开始的位置写下（`id` 为 nil，返回新行的 id；Cue 自己醒来的一轮醒来时就写，
+  /// 带着为什么醒 `wake`，你发起的第一次调工具时写），之后每做完一步、以及这一轮做完时改它的清单与是谁的那一轮（你中途插话，Cue 自己醒来的一轮就成了回答你的）。
+  /// 这一轮说的话与结果都在它之后。你发起的写成 `round`；Cue 自己醒来的写成没有正文的动态（`note`），Cue 页里是那一节的第一行。
   @discardableResult
-  public func recordCueRound(_ id: UUID?, startedAt: Date, answersYou: Bool, tools: PiChatMessage.Tools?) throws -> UUID {
+  public func recordCueRound(
+    _ id: UUID?, startedAt: Date, answersYou: Bool, tools: PiChatMessage.Tools?, wake: CueWake? = nil
+  ) throws -> UUID {
     let author: CueAuthor = answersYou ? .round : .note
     return try write {
-      guard let id else { return try insertCueMessage(author, text: "", tools: tools, at: startedAt).id }
+      guard let id else { return try insertCueMessage(author, text: "", tools: tools, wake: wake, at: startedAt).id }
       try db.run(
         "UPDATE cueMessages SET author = ?1, tools = ?2, modifiedAt = ?3 WHERE id = ?4 AND (author IS NOT ?1 OR tools IS NOT ?2)",
         [author.rawValue, tools?.stored, Date.stamp, id])
@@ -68,22 +78,6 @@ extension CueStore {
       let said = try select(CueMessage.self, where: "author = 'cue' AND createdAt >= ?", [startedAt])
       guard answersYou || said.isEmpty else { return }
       _ = try insertCueMessage(author, text: reply, urgent: answersYou && !said.contains(where: \.alerts))
-    }
-  }
-
-  /// Cue 被会话叫醒、看过没动手的那一轮补的一行动态（`note`，灰字、不推送）："看过「会话名」，不打算行动"。
-  /// 对话里最后一条就是上一行这样的动态（`after`）就并进去，看过几个会话写成"看过 N 个会话"。返回这一行与它看过的会话。
-  public func noteCueGlance(_ sessionIDs: [String], after previous: CueGlance?) throws -> CueGlance {
-    try write {
-      let last = try select(CueMessage.self, orderBy: "createdAt DESC, rowid DESC", limit: 1).first
-      let merging = previous.flatMap { $0.row == last?.id ? $0 : nil }
-      var sessions = merging?.sessions ?? []
-      for id in sessionIDs where !sessions.contains(id) { sessions.append(id) }
-      let title = sessions.count == 1 ? try sessionState(sessions[0])?.title : nil
-      let text = "看过" + (title.map { "「\($0)」" } ?? " \(sessions.count) 个会话") + "，不打算行动"
-      guard let merging else { return CueGlance(row: try insertCueMessage(.note, text: text).id, sessions: sessions) }
-      try db.run("UPDATE cueMessages SET text = ?, modifiedAt = ? WHERE id = ?", [text, Date.stamp, merging.row])
-      return CueGlance(row: merging.row, sessions: sessions)
     }
   }
 
@@ -124,7 +118,7 @@ extension CueStore {
     return true
   }
 
-  /// 任务所在的项目；没有任务或任务不在项目里为 nil。
+  /// 任务所在的项目；没有任务为 nil。
   private func projectID(of task: UUID?) throws -> UUID? {
     try task.flatMap { try find(Card.self, $0) }?.projectID
   }
@@ -215,16 +209,6 @@ extension CueStore {
     try select(CueMessage.self, orderBy: "createdAt DESC, rowid DESC", limit: limit).reversed()
   }
 
-  /// 新上下文从哪接上（唯一规则）：最近一份交接备忘与它之后的对话（你的话、Cue 的话、动态），从早到晚，只取最近的 `limit` 条；
-  /// 没写过交接就从头算。界面在交接处画"换了新上下文"的分隔，说的是分隔以下都在 Cue 眼前：新班次第一次醒来把这些交给大脑（`CueKeeper`），这句话才一直成立。
-  public func cueResume(limit: Int) throws -> CueResume {
-    let handoff = try select(CueMessage.self, where: "author = 'handoff'", orderBy: "createdAt DESC, rowid DESC", limit: 1).first
-    let after = try select(
-      CueMessage.self, where: "author IN ('you', 'cue', 'note') AND text != '' AND createdAt > ?", [handoff?.createdAt ?? .distantPast],
-      orderBy: "createdAt DESC, rowid DESC", limit: limit + 1)
-    return CueResume(handoff: handoff, messages: after.prefix(limit).reversed(), truncated: after.count > limit)
-  }
-
   /// 在等你回答的消息，从早到晚："在等你"就是还开着的提问（`openQuestion`），直到你回答、你开口收起（Cue 可放回）或 Cue 撤回。
   /// 不看关联任务的状态：要问的几类（`CueAsk`）本来就在任务做完之后问（推送、合并、发布），按任务完成算过期会让刚问的那条立刻消失；
   /// 情况变了由 Cue 撤回。
@@ -284,6 +268,12 @@ extension CueStore {
   /// 一条的序号。
   public func cueLineIndex(_ id: UUID) throws -> Int? {
     try find(CueMemoryLine.self, id).map(index(of:))
+  }
+
+  /// 这几条记忆与它们的序号，按给的先后（到点提醒叫醒的一轮：信封里列它们、Cue 页那一节写第一条）；不在了的跳过。
+  public func cueLines(_ ids: [UUID]) throws -> [CueIndexedLine] {
+    let found = try select(CueMemoryLine.self, where: "id IN (SELECT value FROM json_each(?))", [Self.idList(ids)])
+    return try ids.compactMap { id in try found.first { $0.id == id }.map { CueIndexedLine(index: try index(of: $0), line: $0) } }
   }
 
   private func index(of line: CueMemoryLine) throws -> Int {
@@ -365,31 +355,6 @@ extension CueStore {
     }
   }
 
-  /// 原型（`CueFresh`）：日志要的全部（`CueLogSource`）。对话按 (createdAt, rowid)，记忆按序号。
-  public func cueLogSource() throws -> CueLogSource {
-    let summaries = try db.query("SELECT lo, hi, text, lineIDs FROM cueSummaries ORDER BY lo, hi") { row in
-      CueStoredSummary(lo: Int(row.int(0)), hi: Int(row.int(1)), text: row.text(2), fingerprint: row.text(3))
-    }
-    return CueLogSource(
-      messages: try select(CueMessage.self, orderBy: "createdAt, rowid"), lines: try select(CueMemoryLine.self, orderBy: Self.lineOrder),
-      summaries: summaries)
-  }
-
-  /// 原型（`CueFresh`）：写日志里一块的摘要（覆盖旧的）。区间与指纹由日志算好、校验过（`CueLog.merge`）；与记忆的摘要同一张缓存表，
-  /// 两种做法的指纹互不相认，切换做法时对方的摘要读出即作废。
-  public func setCueLogSummary(lo: Int, hi: Int, text: String, fingerprint: String) throws {
-    let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !text.isEmpty else { throw CueStoreError.blankTaskContent }
-    guard CueMemoryLine.fits(text) else { throw CueStoreError.memoryLineTooLong(CueMemoryLine.maxBytes) }
-    try write {
-      try db.run(
-        """
-        INSERT INTO cueSummaries (lo, hi, text, lineIDs, createdAt) VALUES (?, ?, ?, ?, ?)
-        ON CONFLICT(lo, hi) DO UPDATE SET text = excluded.text, lineIDs = excluded.lineIDs, createdAt = excluded.createdAt
-        """, [lo, hi, text, fingerprint, Date.stamp])
-    }
-  }
-
   private static func fingerprint(_ lines: ArraySlice<CueMemoryLine>) -> String {
     SHA256.hash(data: Data(lines.map { $0.id.uuidString + ($0.deletedAt == nil ? "" : "-") }.joined(separator: ",").utf8)).prefix(12).hex
   }
@@ -448,7 +413,7 @@ extension CueStore {
 extension CueStore {
   /// Cue 页的新消息（唯一的规则），从早到晚：Cue 对你说的话里，晚于你读到的地方（`CueRead`）与你最近一句的
   /// （答了的提问也算：它在对话里是你那边的一句）。
-  /// 带选项的不算：开着时在"等你"里，结束了是你答过的或它撤回的。它自己醒来的动态、一轮的经过、交接备忘不是对你说的话。
+  /// 带选项的不算：开着时在"等你"里，结束了是你答过的或它撤回的。它自己醒来的动态、一轮的经过不是对你说的话。
   public func cueUnread() throws -> [UUID] {
     try db.query(
       """
@@ -502,11 +467,12 @@ extension CueStore {
       let sessions = try select(
         PiSessionState.self, where: "sessionID IN (SELECT value FROM json_each(?))", [JSONColumn.encode(others.map(\.sessionID))])
       let left = others.filter { entry in sessions.contains(where: entry.holds) } + [CueLeft(sessionID: sessionID, since: session.stateSince)]
-      let next = CueState(state: current?.state ?? .known(.settled), detail: current?.detail, round: current?.round, woke: current?.woke,
-        context: current?.context, left: left, modifiedAt: Date.stamp)
+      let next = CueState(
+        state: current?.state ?? .known(.settled), detail: current?.detail, round: current?.round, context: current?.context, left: left,
+        modifiedAt: Date.stamp)
       try db.run(
         """
-        INSERT INTO cueState (\(CueState.columns.joined(separator: ", "))) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO cueState (\(CueState.columns.joined(separator: ", "))) VALUES (?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET leftToYou = excluded.leftToYou, modifiedAt = excluded.modifiedAt
         """, next.bindings)
       return CueState.recordID
@@ -521,24 +487,25 @@ extension CueStore {
     }
   }
 
+  /// Cue 在跑的这一轮为什么醒、几点醒的（这一轮经过那一行上的 `CueMessage.wake`）；歇着、这一轮还没有那一行为 nil。各端画叫醒的那一下只读它。
+  public func cueWaking() throws -> (at: Date, wake: CueWake)? {
+    guard let round = try cueState()?.round, let row = try find(CueMessage.self, round), let wake = row.wake else { return nil }
+    return (row.createdAt, wake)
+  }
+
   /// 值班的 Mac 写下 Cue 此刻的样子（在做什么、这个班次的上下文），整行一次写；和库里一样就不写（不触发同步）。不在值班写歇着、没有上下文。
   public func setCueState(
-    _ state: PiWorkState, detail: String? = nil, round: UUID? = nil, woke: CueWoke? = nil, context: CueContext? = nil
+    _ state: PiWorkState, detail: String? = nil, round: UUID? = nil, context: CueContext? = nil
   ) throws {
     try write {
       let current = try cueState()
-      let next = CueState(
-        state: .known(state), detail: detail, round: round, woke: woke, context: context, left: current?.left ?? [], modifiedAt: Date.stamp)
-      if let current,
-        (current.state, current.detail, current.round, current.woke, current.context) == (next.state, next.detail, next.round, next.woke, next.context)
-      {
-        return
-      }
+      let next = CueState(state: .known(state), detail: detail, round: round, context: context, left: current?.left ?? [], modifiedAt: Date.stamp)
+      if let current, (current.state, current.detail, current.round, current.context) == (next.state, next.detail, next.round, next.context) { return }
       try db.run(
         """
-        INSERT INTO cueState (\(CueState.columns.joined(separator: ", "))) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO cueState (\(CueState.columns.joined(separator: ", "))) VALUES (?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET state = excluded.state, detail = excluded.detail, modifiedAt = excluded.modifiedAt, round = excluded.round,
-          woke = excluded.woke, context = excluded.context
+          context = excluded.context
         """, next.bindings)
     }
   }
@@ -580,28 +547,58 @@ extension CueStore {
     """
 
   /// 全文找：记忆（含忘掉的，标着）、对话、灵感与任务（同 `search`），与 Cue 管过的会话（`cueSessions`）里 Agent 的回复原话（同步来的那份对话，
-  /// `PiChatMessage`）。每个词都要命中，不分大小写；每类至多 `limit` 条，最近的在前。
+  /// `PiChatMessage`）。词之间空格隔开，不分大小写，命中任一个就算；每类先取最近的 `pool` 条候选，按命中的词数、再按命中词有多少见排（`ranked`），
+  /// 至多 `limit` 条。
   public func recallCue(_ query: String, limit: Int = 20) throws -> CueRecall {
-    let words = query.split(whereSeparator: \.isWhitespace).map(String.init)
+    let words = Self.recallWords(query)
     guard !words.isEmpty else { return CueRecall(lines: [], messages: [], cards: [], replies: []) }
-    let like = words.map { _ in "text LIKE ? ESCAPE '\\'" }.joined(separator: " AND ")
+    let like = "(" + words.map { _ in "text LIKE ? ESCAPE '\\'" }.joined(separator: " OR ") + ")"
     let patterns: [any SQLBindable] = words.map {
       "%" + $0.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "%", with: "\\%").replacingOccurrences(of: "_", with: "\\_") + "%"
     }
+    let pool = Self.recallPool
     let lines = try db.query(
       """
       SELECT * FROM (SELECT \(CueMemoryLine.columns.joined(separator: ", ")), ROW_NUMBER() OVER (ORDER BY createdAt, id) - 1 FROM cueLines)
-      WHERE \(like) ORDER BY createdAt DESC, id DESC LIMIT \(limit)
+      WHERE \(like) ORDER BY createdAt DESC, id DESC LIMIT \(pool)
       """, patterns
     ) { row in CueIndexedLine(index: Int(row.int(Int32(CueMemoryLine.columns.count))), line: CueMemoryLine(row: row)) }
-    let messages = try select(CueMessage.self, where: like, patterns, orderBy: "createdAt DESC, rowid DESC", limit: limit)
-    let cards = try search(SearchQuery(text: query), limit: limit).cards
+    let messages = try select(CueMessage.self, where: like, patterns, orderBy: "createdAt DESC, rowid DESC", limit: pool)
+    var cards: [Card] = [], seen = Set<UUID>()
+    for word in words {
+      for card in try search(SearchQuery(text: word), limit: pool).cards where seen.insert(card.id).inserted { cards.append(card) }
+    }
     let found = try select(
       PiChatMessage.self, where: "role = '\(PiChatRole.pi.rawValue)' AND \(like) AND sessionID IN (\(Self.cueSessions))", patterns,
-      orderBy: "at DESC, id", limit: limit)
+      orderBy: "at DESC, id", limit: pool)
+    let picked = Self.ranked(found, words, limit) { $0.text }
     var sessions: [String: PiSessionState] = [:]
-    for id in Set(found.map(\.sessionID)) { sessions[id] = try sessionState(id) }
-    let replies = found.map { CueRecall.Reply(message: $0, session: sessions[$0.sessionID]) }
-    return CueRecall(lines: lines, messages: messages, cards: cards, replies: replies)
+    for id in Set(picked.map(\.sessionID)) { sessions[id] = try sessionState(id) }
+    return CueRecall(
+      lines: Self.ranked(lines, words, limit) { $0.line.text }, messages: Self.ranked(messages, words, limit) { $0.text },
+      cards: Self.ranked(cards.sorted { $0.modifiedAt > $1.modifiedAt }, words, limit) { $0.body },
+      replies: picked.map { CueRecall.Reply(message: $0, session: sessions[$0.sessionID]) })
+  }
+
+  /// 查询里的词：空格隔开、去重，保持先后。
+  public static func recallWords(_ query: String) -> [String] {
+    var seen = Set<String>()
+    return query.split(whereSeparator: \.isWhitespace).map(String.init).filter { seen.insert($0.lowercased()).inserted }
+  }
+
+  /// 每类候选取最近的这么多条再排：够覆盖"命中多的在更早"的情形，读得也快
+  static let recallPool = 200
+
+  /// 按命中的词数排，一样多的按命中词的少见程度（每个词记 1 / 候选里含它的条数，加起来），再一样按原来的先后（最近的在前）。
+  static func ranked<T>(_ items: [T], _ words: [String], _ limit: Int, text: (T) -> String) -> [T] {
+    let lowered = words.map { $0.lowercased() }
+    let hits = items.map { item in Set(lowered.filter(text(item).lowercased().contains)) }
+    var counts: [String: Int] = [:]
+    for found in hits { for word in found { counts[word, default: 0] += 1 } }
+    func score(_ found: Set<String>) -> (Int, Double) { (found.count, found.reduce(0) { $0 + 1 / Double(counts[$1] ?? 1) }) }
+    return items.indices.sorted { a, b in
+      let (x, y) = (score(hits[a]), score(hits[b]))
+      return x != y ? x > y : a < b
+    }.prefix(limit).map { items[$0] }
   }
 }

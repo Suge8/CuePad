@@ -24,8 +24,8 @@ import Testing
   }
 
   @Test func catchingUpFetchesOnlyWhatIsNewerAndThenPullsFromTheSavedToken() async throws {
-    let same = try await store.createCard(in: nil, body: "已同步")
-    let stale = try await store.createCard(in: nil, body: "本机旧版")
+    let same = try await store.createCard(body: "已同步")
+    let stale = try await store.createCard(body: "本机旧版")
     try await rig.simulatePush()
     let sameOnServer = try #require(await rig.coordinator.record(for: rig.recordID(same.id)))
     let newer = remoteRecord(.cards, id: stale.id, cardFields(project: nil, body: "别处改过", modifiedAt: 9_000_000_000_000))
@@ -33,27 +33,29 @@ import Testing
     let zone = FakeZone(
       [page("v1", [version(of: sameOnServer), version(of: newer)], more: true), page("v2", [version(of: fresh)]), page("t1")],
       server: [sameOnServer, newer, fresh])
+    #expect(await rig.coordinator.state.reconciled == false)
 
     try await ZonePuller(source: zone, coordinator: rig.coordinator).pull()
 
     #expect(await zone.calls.map(\.keys) == [ZonePuller.versionKeys, ZonePuller.versionKeys, nil])
     #expect(await zone.calls.last?.token == Data("v2".utf8))
     #expect(Set(await zone.fetches.flatMap { $0 }) == [newer.recordID, fresh.recordID])  // 已同步的那条不取
-    #expect(Set(try await store.cards(in: nil).map(\.body)) == ["已同步", "别处改过", "别处新建"])
+    #expect(Set(try await store.cards(in: Project.defaultID).map(\.body)) == ["已同步", "别处改过", "别处新建"])
     #expect(try await store.syncState(ZonePuller.tokenKey) == Data("t1".utf8))
+    #expect(await rig.coordinator.state.reconciled)  // 对过一遍：别的设备写下的事实都到了
   }
 
   @Test func recordsPushedBeforeButGoneFromTheServerAreDeletedAndUnpushedOnesKept() async throws {
-    let kept = try await store.createCard(in: nil, body: "还在")
-    let goneElsewhere = try await store.createCard(in: nil, body: "别处删了")
+    let kept = try await store.createCard(body: "还在")
+    let goneElsewhere = try await store.createCard(body: "别处删了")
     try await rig.simulatePush()
-    let unpushed = try await store.createCard(in: nil, body: "本机新写的")
+    let unpushed = try await store.createCard(body: "本机新写的")
     let keptOnServer = try #require(await rig.coordinator.record(for: rig.recordID(kept.id)))
     let zone = FakeZone([page("v1", [version(of: keptOnServer)]), page("t1")])
 
     try await ZonePuller(source: zone, coordinator: rig.coordinator).pull()
 
-    #expect(Set(try await store.cards(in: nil).map(\.id)) == [kept.id, unpushed.id])
+    #expect(Set(try await store.cards(in: Project.defaultID).map(\.id)) == [kept.id, unpushed.id])
     #expect(!(try await rig.reconcileDelta().deletes.contains(rig.id(goneElsewhere.id))))  // 不再向服务器删一遍
   }
 
@@ -65,12 +67,12 @@ import Testing
     try await ZonePuller(source: zone, coordinator: rig.coordinator).pull()
 
     #expect(await zone.calls.first?.token == Data("old".utf8))
-    #expect(try await store.cards(in: nil).map(\.body) == ["期间新建"])
+    #expect(try await store.cards(in: Project.defaultID).map(\.body) == ["期间新建"])
     #expect(try await store.syncState(ZonePuller.tokenKey) == Data("t1".utf8))
   }
 
   @Test func aRecordDeletedWhileTheZoneWasBeingScannedIsDeletedHere() async throws {
-    let card = try await store.createCard(in: nil, body: "翻的途中在别处删了")
+    let card = try await store.createCard(body: "翻的途中在别处删了")
     try await rig.simulatePush()
     let onServer = try #require(await rig.coordinator.record(for: rig.recordID(card.id)))
     let deleted = ZoneChangeBatch(modifications: [], deletions: [(onServer.recordID, "cards")], token: Data("v2".utf8), moreComing: false)
@@ -78,7 +80,7 @@ import Testing
 
     try await ZonePuller(source: zone, coordinator: rig.coordinator).pull()
 
-    #expect(try await store.cards(in: nil).isEmpty)
+    #expect(try await store.cards(in: Project.defaultID).isEmpty)
   }
 
   /// 拉到的一页没能应用（这里是期间换了账号、停下来等你决定）：令牌不前移，之后从同一处再拉。
@@ -91,7 +93,7 @@ import Testing
     await #expect(throws: (any Error).self) { try await ZonePuller(source: zone, coordinator: rig.coordinator).pull() }
 
     #expect(try await store.syncState(ZonePuller.tokenKey) == Data("t0".utf8))
-    #expect(try await store.cards(in: nil).isEmpty)
+    #expect(try await store.cards(in: Project.defaultID).isEmpty)
   }
 
   /// 带着文件的附件记录（`declaredHash` 不给就是内容的真哈希）。

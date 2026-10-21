@@ -106,14 +106,14 @@ struct ProjectGlyph: View {
     var body: some View {
         Image(Self.icon(project))
             .font(.system(size: size, weight: .medium))
-            // 未分类（没有项目）是墨色，不借系统灰或系统强调色（侧栏列表会把 Label 的图标染成强调蓝）
+            // 项目还没同步到时是墨色，不借系统灰或系统强调色（侧栏列表会把 Label 的图标染成强调蓝）
             .foregroundStyle(project.map { palette.project($0.color) } ?? palette.ink2)
             .frame(width: size + 6)
             .accessibilityHidden(true) // 项目名总在旁边，图标只是装饰
     }
 
-    /// 项目的图标；没有项目（未分类）是未分类的托盘。
-    static func icon(_ project: Project?) -> Icon { project.map { .project(ProjectIcon(stored: $0.icon)) } ?? .unfiled }
+    /// 项目的图标；项目还没同步到时是文件夹。
+    static func icon(_ project: Project?) -> Icon { .project(ProjectIcon(stored: project?.icon)) }
 }
 
 /// 项目图标的闭合表：项目表单只给这 24 种（Mac 表单一行 8 个，三行排满），写库写 `rawValue`；图在 `Icon.project`。

@@ -18,18 +18,15 @@ enum ProjectDirectory {
     }
 }
 
-/// 新建或编辑项目：名称、一句话介绍、图标、颜色；新建时还可以选文件夹（可不选，之后在项目菜单里绑也行）。
+/// 新建或编辑项目：名称、一句话介绍、图标、颜色；新建时还可以选文件夹（不选的第一次开工时建工作区，之后在项目菜单里换）。
 struct ProjectForm: View {
     /// 新建（`project` 为 nil）或编辑哪个项目（`Workspace.projectForm`）。
     struct Request: Identifiable {
         let id = UUID()
         var project: Project?
-        /// 新建好之后接着做的（从新会话来的：回到新会话）；没有时打开新项目的页。
-        var created: ((UUID) -> Void)?
     }
 
     let project: Project?
-    var created: ((UUID) -> Void)?
     @Environment(Workspace.self) private var workspace
     @Environment(\.closePanel) private var close
     @Environment(\.palette) private var palette
@@ -86,12 +83,12 @@ struct ProjectForm: View {
     private func save() {
         let name = name.trimmingCharacters(in: .whitespaces)
         guard !name.isEmpty else { return }
-        let project = project, intro = intro, icon = icon, color = color, folder = folder, created = created
+        let project = project, intro = intro, icon = icon, color = color, folder = folder
         workspace.attempt {
             let id = try await workspace.saveProject(project, name: name, intro: intro, icon: icon, color: color)
             if project == nil {
                 if let folder { try await workspace.services.store.setDirectory(folder, for: id) }
-                if let created { created(id) } else { workspace.show(.project(id)) }
+                workspace.show(.project(id))
             }
         }
         close()

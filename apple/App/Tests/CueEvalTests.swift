@@ -87,7 +87,7 @@ struct CueEvalTests {
             let work = try await rig.working(Self.title, Self.body)
             let shot = rig.app.directory.appending(path: "登录页改前改后.png")
             try loginShot().write(to: shot)
-            _ = try await rig.store.addPreviews(filesAt: [shot], title: "登录页 忘记密码 改前改后", sessionID: work.id)
+            _ = try await rig.store.addPreviews([(shot, "登录页 忘记密码 改前改后")], sessionID: work.id)
             try await eval.trigger { try await rig.settle(work, reply: Self.doneReply) }
             let done = eval.calls("task", "done")
             let evidence = done.first { !$0.call.failed }?.args["evidence"] as? [String] ?? []
@@ -306,7 +306,48 @@ struct CueEvalTests {
                 Check("show 每个方案一张（3 张、各是一个方案）", shown.count == 3 && Set(shown.map(\.title)).count == 3 && shown.allSatisfy { $0.title.hasPrefix("提问卡方案") }),
                 Check("同一种样子（同一台设备、同一种外观）", !shown.isEmpty && variants.count == 1),
                 Check("每张一句看什么", (asked.last?.args["show"] as? [[String: Any]])?.allSatisfy { ($0["look"] as? String)?.isEmpty == false } == true),
-                Check("没带别的改动的图", !shown.contains { $0.title == "上一轮的改动" }),
+                Check("没带别的改动的图", !shown.contains { $0.title.hasPrefix("上一轮的改动") }),
+            ]
+        }
+    }
+
+    @Test func u做完只挂最终成果() async throws {
+        try await CueEval.run(
+            "u-做完只挂最终成果",
+            expect: "会话做完侧栏改版，一路发过方案稿、中途两版与最终版浅深两张（共 6 份），回复带证据："
+                + "done 的 show 挂最终版浅色、深色，每张一句看什么；方案稿、中途稿不挂"
+        ) { eval in
+            let rig = eval.rig
+            let work = try await rig.working(
+                "收口 Mac 侧栏", "Mac 侧栏收口：去掉 Agent 区，会话数并进项目行。做完的标准：项目已有的检查通过；最终版浅色、深色截图发到手机。")
+            for batch in [
+                [("plan-a-mac.png", "方案稿 A：会话单列一区"), ("plan-b-mac.png", "方案稿 B：会话数并进项目行")],
+                [("wip-1-mac.png", "中途一版：分组标题太挤"), ("wip-2-mac-dark.png", "中途二版：深色下状态标错位")],
+                [("final-light-mac.png", "最终版浅色：项目行带会话数"), ("final-dark-mac.png", "最终版深色：项目行带会话数")],
+            ] {
+                var sent: [(url: URL, title: String)] = []
+                for (name, title) in batch {
+                    let file = rig.app.directory.appending(path: name)
+                    try mockShot(name).write(to: file)
+                    sent.append((file, title))
+                }
+                _ = try await rig.store.addPreviews(sent, sessionID: work.id)
+            }
+            try await eval.trigger { try await rig.settle(work, reply: Self.sidebarReply) }
+            let previews = try await rig.store.previews(of: work.id)
+            let done = eval.calls("task", "done").last { !$0.call.failed }
+            let picked = done?.args["show"] as? [[String: Any]] ?? []
+            let shown = picked.compactMap { item -> PiPreview? in
+                guard let key = (item["file"] as? String)?.lowercased(), !key.isEmpty else { return nil }
+                return previews.first { $0.id.uuidString.lowercased().hasPrefix(key) }
+            }
+            let report = try await eval.said().last { $0.taskID == work.task.id && $0.choices == nil }
+            return [
+                Check("done 了", done != nil),
+                Check("挂了最终版浅色与深色", Set(shown.map(\.name)).isSuperset(of: ["final-light-mac.png", "final-dark-mac.png"])),
+                Check("只挂最终版（方案稿、中途稿不挂）", !shown.isEmpty && shown.allSatisfy { $0.title.hasPrefix("最终版") }),
+                Check("每张一句看什么", !picked.isEmpty && picked.allSatisfy { ($0["look"] as? String)?.isEmpty == false }),
+                Check("结果上就是点名的这几张", report?.shots.map(\.preview) == shown.map(\.id)),
             ]
         }
     }
@@ -398,7 +439,7 @@ struct CueEvalTests {
             let work = try await rig.working(Self.title, Self.body)
             let shot = rig.app.directory.appending(path: "登录页改前改后.png")
             try loginShot().write(to: shot)
-            _ = try await rig.store.addPreviews(filesAt: [shot], title: "登录页 忘记密码 改前改后", sessionID: work.id)
+            _ = try await rig.store.addPreviews([(shot, "登录页 忘记密码 改前改后")], sessionID: work.id)
             try await eval.trigger {
                 try await rig.settleCueTurn(
                     work, his: "进度怎么样了？", ago: 7 * 60, cue: "把测试输出和改前改后的截图补上。", reply: Self.doneReply)
@@ -442,12 +483,12 @@ struct CueEvalTests {
         for (slug, title) in proposals {
             let file = rig.app.directory.appending(path: "\(slug)-iphone.png")
             try await mockShot(file.lastPathComponent).write(to: file)
-            let preview = try #require(try await rig.store.addPreviews(filesAt: [file], title: title, sessionID: work.id).first).preview
+            let preview = try #require(try await rig.store.addPreviews([(file, title)], sessionID: work.id).first).preview
             shots.append(CueShot(preview: preview.id, look: title.replacingOccurrences(of: "提问卡", with: "")))
         }
-        let asking = try CueAsking(.rule, action: "按方案 1 决定单改提问卡", rule: "重做界面设计要先给几个方案让我选", shots: shots)
+        let asking = try CueAsking(.rule, action: "按方案 1 决定单改提问卡", rule: "重做界面设计要先给几个方案让我选")
         let question = try await rig.store.addCueMessage(
-            .cue, text: "三个提问卡方案做好了，我推荐 1 决定单：点一下就答完。", ask: asking, task: work.task.id)
+            .cue, text: "三个提问卡方案做好了，我推荐 1 决定单：点一下就答完。", ask: asking, shots: shots, task: work.task.id)
         return (work, question)
     }
 
@@ -456,17 +497,22 @@ struct CueEvalTests {
         let rig = eval.rig
         try await eval.trigger { try await rig.say("以后重做界面设计，先给我几个方案，交回时在卡上让我选") }
         let work = try await rig.working("重做提问卡", "提问卡出三个视觉方案：决定单、对话里问、郑重放行。做完的标准：每个方案的效果图（手机浅色、深色、原样与 Mac）发到手机。")
-        func send(_ names: [String], title: String) async throws {
-            var files: [URL] = []
-            for name in names {
-                files.append(rig.app.directory.appending(path: name))
-                try await mockShot(name).write(to: files[files.count - 1])
+        func send(_ files: [(name: String, title: String)]) async throws {
+            var sent: [(url: URL, title: String)] = []
+            for file in files {
+                let url = rig.app.directory.appending(path: file.name)
+                try await mockShot(file.name).write(to: url)
+                sent.append((url, file.title))
             }
-            _ = try await rig.store.addPreviews(filesAt: files, title: title, sessionID: work.id)
+            _ = try await rig.store.addPreviews(sent, sessionID: work.id)
         }
-        try await send(["1-01-改前-长按菜单.png", "1-02-改后-长按菜单.png", "2-01-改前-设置.png", "2-02-改后-设置.png"], title: "上一轮的改动")
+        try await send([
+            ("1-01-改前-长按菜单.png", "上一轮的改动：改前长按菜单"), ("1-02-改后-长按菜单.png", "上一轮的改动：改后长按菜单"),
+            ("2-01-改前-设置.png", "上一轮的改动：改前设置"), ("2-02-改后-设置.png", "上一轮的改动：改后设置"),
+        ])
+        let looks = [("iphone", "手机浅色"), ("iphone-dark", "手机深色"), ("iphone-original", "现在的样子"), ("mac", "Mac")]
         for (slug, title) in proposals {
-            try await send(["iphone", "iphone-dark", "iphone-original", "mac"].map { "\(slug)-\($0).png" }, title: title)
+            try await send(looks.map { ("\(slug)-\($0.0).png", "\(title) · \($0.1)") })
         }
         try await eval.trigger { try await rig.settle(work, reply: proposalReply) }
         return work
@@ -483,6 +529,17 @@ struct CueEvalTests {
         2. 对话里问：卡片留在对话里，按钮贴在输入框上方，答完卡片原地变成回答。
         3. 郑重放行：滑过去才算同意，"以后不用问"是个开关，适合推送、删除这类收不回的事。
         我推荐 1：信息最集中、一步答完；3 的滑动在 Mac 上不顺手。
+        """
+
+    private static let sidebarReply = """
+        侧栏收口做完了：Agent 区去掉，每个项目行末尾带在跑的会话数，状态标只在项目行上出一处。
+
+        验证：
+        ```
+        $ apple/scripts/xc.sh check
+        lint ✔  CuePadKit build ✔  iOS build ✔
+        ```
+        截图都发到手机了：一路的方案稿 A/B、中途两版，和最终版浅色、深色各一张。
         """
 
     static let doneReply = """
@@ -538,8 +595,8 @@ struct EvalBrain {
             effort: evalEnvironment["CUEPAD_CUE_EVAL_EFFORT"].flatMap(PiThinkingLevel.init(rawValue:)) ?? .medium)
     }()
 
-    /// .md 与 summary.md 开头那一行：大脑、模型与强度、哪种上下文做法（`CueFresh`）
-    var label: String { "\(runtime.name) · \(model) · \(effort.rawValue) · \(CueFresh.on ? "日志树（所有经过进日志、越早越粗、能 zoom）" : "现做法")" }
+    /// .md 与 summary.md 开头那一行：大脑、模型与强度、上下文做法
+    var label: String { "\(runtime.name) · \(model) · \(effort.rawValue) · 精简混合（到 6 万或缓存过期开新会话，用记忆视图与最近对话接上）" }
 
     /// Pi 的登录：用户的 Pi 存的那一份，只读
     private static let piAuth = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".pi/agent/auth.json")
@@ -560,7 +617,7 @@ struct EvalBrain {
         }
         """
 
-    func launch(in root: URL) throws -> CueLaunch {
+    func launch(in root: URL) throws -> CuePad.CueLaunch {
         let home = root.appending(path: "home"), usage = BrainUsage.directory(in: root)
         for directory in [home, usage] { try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true) }
         let script = root.appending(path: "brain")
@@ -602,7 +659,7 @@ struct EvalBrain {
             exec '\#(executable.path)' "$@"\#(extra)
             """#.write(to: script, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
-        return CueLaunch(executable: script, path: executable.deletingLastPathComponent().path + ":/usr/bin:/bin", agents: [])
+        return CuePad.CueLaunch(executable: script, path: executable.deletingLastPathComponent().path + ":/usr/bin:/bin", agents: [])
     }
 
     /// 启用、运行在这台 Mac、用这个大脑、模型与强度。不经 `enableCue`：它先探测本机能用的 Agent，测试里的报不出来。
@@ -731,6 +788,7 @@ final class CueEval {
         do {
             try await eventually("刚启用那一轮做完", timeout: .seconds(300)) { eval.rig.rounds.contains { $0.wake == .enabled && $0.finishedAt != nil } }
             checks = try await body(eval)
+            checks.append(try await eval.showsNoIDs())
         } catch {
             failure = error
         }
@@ -748,7 +806,7 @@ final class CueEval {
         try await eventually("Cue 做完被叫醒的那一轮", timeout: .seconds(420)) { self.round?.finishedAt != nil }
     }
 
-    /// 叫醒 Cue，等它把这次引起的都做完才返回：至少一轮做完、没有在跑的、歇着、话都交了、没有写下了还没接上的交接，
+    /// 叫醒 Cue，等它把这次引起的都做完才返回：至少一轮做完、没有在跑的、歇着、话都交了，
     /// 再稳住几秒没有新的一轮（空闲合并记忆这类紧跟着的醒来）。返回这次醒来的时段；没叫醒（等不到一轮开始）为 nil。
     func settle(_ wake: () async throws -> Void) async throws -> ClosedRange<Date>? {
         let from = mark()
@@ -778,14 +836,12 @@ final class CueEval {
     private func idle(since from: Date) async throws -> Bool {
         let rounds = rig.rounds
         guard rounds.contains(where: { $0.startedAt >= from && $0.finishedAt != nil }), rounds.allSatisfy({ $0.finishedAt != nil }) else { return false }
-        guard try await rig.store.cueState()?.state == .known(.settled), try await rig.store.cueMessagesToDeliver().isEmpty else { return false }
-        // 写下交接的那一轮做完、新班次接着的一轮还没开始
-        let handoff = try await rig.store.cueMessages(limit: 50).last { $0.author == .known(.handoff) }
-        return !(handoff.map { handoff in rounds.last.map { handoff.createdAt >= $0.startedAt } ?? false } ?? false)
+        guard try await rig.store.cueState()?.state == .known(.settled) else { return false }
+        return try await rig.store.cueMessagesToDeliver().isEmpty
     }
 
-    /// 换新后的第一轮：大脑开了新的对话的那一轮（`BrainUsage.renewed`，从大脑的输出里数：现做法起新班次是新进程，混合做法是 Pi 的 new_session），
-    /// 两种做法都成立，不靠哪种做法独有的记录。大脑报的轮与记下的轮按先后对齐。
+    /// 换新后的第一轮：大脑开了新的对话的那一轮（`BrainUsage.renewed`，从大脑的输出里数：新进程，或 Pi 回应了 new_session）。
+    /// 不看上下文用量：缓存过期时开新会话、接上的视图可能比原来的上下文还长。大脑报的轮与记下的轮按先后对齐。
     var renewals: [CueRound] {
         let rounds = rounds
         return (rig.brainDirectory.map(BrainUsage.renewed(in:)) ?? []).filter { $0 < rounds.count }.map { rounds[$0] }
@@ -818,6 +874,14 @@ final class CueEval {
     func said(since: Date? = nil) async throws -> [CueMessage] {
         let from = since ?? start
         return try await rig.store.cueMessages(limit: 2000).filter { $0.createdAt >= from && $0.author != .known(.you) && !$0.text.isEmpty }
+    }
+
+    /// 他看得到的字（消息与记下的记忆）没抄信封、工具结果里括号中的编号：每个场景都判。
+    func showsNoIDs() async throws -> Check {
+        let seen = rig.rounds.filter { $0.startedAt >= start }.flatMap { $0.sent + $0.calls.compactMap(\.result) }
+        let ids = Set(seen.flatMap { $0.matches(of: /（((?:s-)?[0-9a-f]{6,8})）/).map { String($0.1) } })
+        let written = try await said().map(\.text) + calls("memory", "note").compactMap { $0.args["text"] as? String }
+        return Check("他看得到的字里没有编号", !written.contains { text in ids.contains { text.contains($0) } })
     }
 
     /// 回答你的那句
@@ -1068,7 +1132,7 @@ nonisolated struct BrainUsage {
 func seconds(_ interval: TimeInterval) -> String { String(format: "%.1fs", interval) }
 
 /// 会话发来的一张效果图：按文件名画出那个方案的提问卡（决定单、对话里问、郑重放行；original 是现在的提问卡，作对比），手机或 Mac、浅色或深色；
-/// 别的改动的截图是一页设置。Cue 用读文件工具打开看得出是哪个方案、哪一种样子。
+/// 侧栏改版的几张（plan-、wip-、final- 开头）是一列项目行，在跑的带会话数与一颗状态点；别的改动的截图是一页设置。Cue 用读文件工具打开看得出是哪个方案、哪一种样子。
 @MainActor
 private func mockShot(_ name: String) throws -> Data {
     let dark = name.contains("dark"), mac = name.contains("mac")
@@ -1117,6 +1181,19 @@ private func mockShot(_ name: String) throws -> Data {
                 }
                 .padding(4).background(fill, in: .capsule)
                 HStack { Text("以后不用问").font(.callout); Spacer(); Capsule().fill(fill).frame(width: 44, height: 24) }
+            }
+        } else if ["plan-", "wip-", "final-"].contains(where: name.hasPrefix) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("项目").font(.caption).foregroundStyle(.secondary)
+                ForEach([("圆桌", 3), ("CuePad", 2), ("个人网站", 0)], id: \.0) { project, running in
+                    HStack {
+                        Circle().fill(running > 0 ? Color.green : fill).frame(width: 8, height: 8)
+                        Text(project).font(.callout).foregroundStyle(ink)
+                        Spacer()
+                        if running > 0 { Text("\(running) 个会话在跑").font(.caption).foregroundStyle(.secondary) }
+                    }
+                    .padding(8).background(fill, in: .rect(cornerRadius: 8))
+                }
             }
         } else {
             VStack(alignment: .leading, spacing: 10) {

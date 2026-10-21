@@ -9,12 +9,12 @@ nonisolated extension PiSessionState {
 }
 
 nonisolated extension PiSessionListItem {
-    /// 列在"现在"（侧栏的在做、Agent 页）：没结束的，与正在唤醒的——唤醒中当场列出、写"正在唤醒"，上了桥就是在线的那一行。
+    /// 列在"现在"（"在做"、Agent 页）：没结束的，与正在唤醒的——唤醒中当场列出、写"正在唤醒"，上了桥就是在线的那一行。
     func isCurrent(at moment: Speech.Moment) -> Bool {
         state.state != .known(.ended) || state.isWaking(by: delivery, at: moment)
     }
 
-    /// 此刻没能送达的话有几句，按 Pi 的会话 id（只留有的）：手里只有会话记录的行（Mac 侧栏、菜单栏、⌘K、项目页 Agent 栏）按它找自己的数。
+    /// 此刻没能送达的话有几句，按 Pi 的会话 id（只留有的）：手里只有会话记录的行（Mac 菜单栏、⌘K、项目页 Agent 栏）按它找自己的数。
     static func undelivered(_ items: [PiSessionListItem], at moment: Speech.Moment) -> [String: Int] {
         Dictionary(items.compactMap { item in
             let count = item.undelivered(at: moment)
@@ -24,7 +24,7 @@ nonisolated extension PiSessionListItem {
 }
 
 nonisolated extension PiSessionState {
-    /// 会话列表的顺序（Agent 页、Mac 侧栏）：要你注意的在前（`PiShown.rank`），同一档保持原来的先后（最近进入当前状态的在前）。
+    /// 会话列表的顺序（Agent 页、"在做"）：要你注意的在前（`PiShown.rank`），同一档保持原来的先后（最近进入当前状态的在前）。
     /// `deliveries` 是发给各会话（按 Pi 的会话 id）的最近一条投送请求：话在路上的与工作中同档，发出那一刻就挪到位。
     /// 不看有没有新回复：看一眼就让行换位置，列表会在手下跳。
     /// `cue`：Cue 在值班时的那一份（`LiveSessions.cue`），等它回答的与在跑的同档（`PiShown.Status.cueAsking`），它留给你回的与等你确认同档。
@@ -80,7 +80,7 @@ nonisolated enum PiDelivery: Hashable, Sendable {
 
     /// `request` 是发给 `session` 的最近一条（`DeliveryMode.toSession` 的方式）。会话状态的时间（`stateSince`）与送达时间
     /// （`completedAt`）都是 Mac 的钟；发出时间是发起设备的钟，只拿来判断"发出之后会话动起来了"，跨设备的钟差最多让"发送中"早一点让位。
-    /// 送到了的请求过一会儿就被执行它的 Mac 清理，"已送达"不会一直挂着；没能送达的留着（等你重发或移除），
+    /// 送到了的请求不会一直挂着（发出的话进了对话就随之收走，别的请求过一会儿由执行它的 Mac 清理）；没能送达的留着（等你重发或移除），
     /// 在你看过这个会话（`seen`，本机最后一次看它）之前一直显示，会话之后动过也不算数。
     static func phase(of request: DeliveryRequest?, for session: PiSessionState, seen: Date? = nil, at moment: Speech.Moment) -> PiDelivery? {
         guard let request, let mode = request.mode.known, DeliveryMode.toSession.contains(mode) else { return nil }
@@ -282,7 +282,7 @@ nonisolated extension PiShown {
     /// 名字与状态词加粗：做完了你还没看。
     var isUnread: Bool { status == .unread }
 
-    /// 此刻显示为没能送达时的原因（会话行、项目"此刻"、Mac 任务面板写它）。
+    /// 此刻显示为没能送达时的原因（会话行、项目"此刻"、任务浮窗写它）。
     var undelivered: Speech.Failure? { if case .delivery(.failed(let failure)) = status { failure } else { nil } }
 
     /// 在动：工作中（心电线）、话在路上（三块实心 V）。

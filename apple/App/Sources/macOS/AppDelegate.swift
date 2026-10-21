@@ -78,14 +78,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
         services.start()
         services.follow { await services.viewer?.follow(workspace) }
+        // Dock 角标是"等你"的件数：读 Cue 那一行的同一份（`CueWatch.waiting`），不另订阅库
+        services.follow { [alerts] in for await count in Observations({ workspace.cue.waiting }) { await alerts.showBadge(count) } }
         let cueBar = CueBar(services: services, workspace: workspace)
         self.cueBar = cueBar
         settingsWindow = SettingsWindowController(cueName: { workspace.cue.name }) {
             RootViews.settings($0, services, cueBar: cueBar)
         }
         DebugHooks.present(window)
-        // 首次打开请你接入检测到的 Agent（主窗口里的浮层），之后在设置里改；隔离库（开发与验收）不弹
-        if !location.isIsolated { Task { await workspace.offerAgentSetup() } }
+        // 首次打开：接入检测到的 Agent 并启用 Cue（主窗口里的浮层）；隔离库（开发与验收）不弹
+        if !location.isIsolated { workspace.offerSetup() }
     }
 
     /// 点开的 Agent 通知（含冷启动时点的）：打开那个会话（主窗口已由 `AlertCenter.receive` 叫到前面）。
@@ -111,10 +113,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     /// 主菜单里写"等 N 个 Agent 做完再装"的那一行（停用，只是说明）。
     static let updateNoteTag = 1
 
-    /// 主菜单"显示"里的搜索（⌘K）、任务面板（⌘⇧T）与侧栏（⌃⌘S）：命令本身是开关，开着时同一条命令把它关掉。放在主菜单而不是窗口里的快捷键：
-    /// 模态浮层（⌘K 自己就是）开着时只把 ⌘ 组合键交给主菜单（`PanelHost`）。
+    /// 主菜单"显示"里的搜索（⌘K）、任务（⌘⇧T）与侧栏（⌃⌘S）：搜索与侧栏是开关，开着时同一条命令把它关掉；任务是去任务页（收起开着的搜索）。
+    /// 放在主菜单而不是窗口里的快捷键：模态浮层（⌘K 自己就是）开着时只把 ⌘ 组合键交给主菜单（`PanelHost`）。
     @objc func toggleSearch(_ sender: Any?) { workspace?.searching.toggle() }
-    @objc func toggleTasks(_ sender: Any?) { workspace?.showsTasks.toggle() }
+    @objc func showTasks(_ sender: Any?) {
+        workspace?.searching = false
+        workspace?.show(.tasks)
+    }
+    @objc func newCard(_ sender: Any?) { workspace?.newCard() }
+    @objc func newSession(_ sender: Any?) { workspace?.newSession() }
     /// 不叫 `toggleSidebar(_:)`：AppKit 的分栏控制器自己响应那个动作，在响应链上先接走，带着分栏动画开合。
     @objc func toggleCueSidebar(_ sender: Any?) { workspace?.pages.toggleSidebar() }
 
@@ -122,8 +129,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         switch item.action {
         case #selector(checkForUpdates(_:)): services?.updates.canCheckForUpdates ?? false
         case #selector(installUpdateNow(_:)): showsUpdateWait(item)
-        // 资料库读不出来时：搜索结果能打开卡片、任务面板能增改任务，都是写入入口
-        case #selector(toggleSearch(_:)), #selector(toggleTasks(_:)): workspace?.isLibraryReady == true && NSApp.mainWindow === services?.windowShell
+        // 资料库读不出来时：搜索结果能打开卡片、任务页能增改任务，都是写入入口
+        case #selector(toggleSearch(_:)), #selector(showTasks(_:)), #selector(newCard(_:)), #selector(newSession(_:)):
+            workspace?.isLibraryReady == true && NSApp.mainWindow === services?.windowShell
         case #selector(toggleCueSidebar(_:)): NSApp.mainWindow === services?.windowShell
         default: true
         }

@@ -1,9 +1,9 @@
 import CueText
 import Foundation
 
-/// 卡片可见：自身未删除，且所属项目（如果有）未删除。
+/// 卡片可见：自身未删除，且所属项目在库里、未删除（项目还没同步到的先不显示）。
 private let cardVisible = """
-  deletedAt IS NULL AND (projectID IS NULL OR projectID IN (SELECT id FROM projects WHERE deletedAt IS NULL))
+  deletedAt IS NULL AND projectID IN (SELECT id FROM projects WHERE deletedAt IS NULL)
   """
 
 /// 在列表里：可见且没归档（归档的只在"归档"里，搜索照样搜得到）。
@@ -14,8 +14,9 @@ private let looseIdea = """
   todoAt IS NULL AND (parentID IS NULL OR parentID NOT IN (SELECT id FROM cards WHERE deletedAt IS NULL AND todoAt IS NOT NULL))
   """
 
-/// 列得出来的任务（`t` 是任务表，`p` 是它左连接的项目表）：要做、没删除、没归档，且所属项目（如果有）没删除。`tasks` 与 `taskCounts` 共用。
-private let visibleTask = "t.todoAt IS NOT NULL AND t.deletedAt IS NULL AND t.archivedAt IS NULL AND (t.projectID IS NULL OR p.deletedAt IS NULL)"
+/// 列得出来的任务（`t` 是任务表，`p` 是它左连接的项目表）：要做、没删除、没归档，且所属项目没删除（还没同步到的项目照列，同 `taskProjectOrder`）。
+/// `tasks` 与 `taskCounts` 共用。
+private let visibleTask = "t.todoAt IS NOT NULL AND t.deletedAt IS NULL AND t.archivedAt IS NULL AND p.deletedAt IS NULL"
 
 /// 正文不是空白（与 `Card.isBlank` 同一条规则）。
 private let notBlank = "TRIM(body, char(32, 9, 10, 13)) <> ''"
@@ -35,9 +36,9 @@ extension CueStore {
     """
   }
 
-  /// 任务（`t`，左连接项目 `p`）按所属项目排：项目顺序同 `projectOrder`，未分类在后。项目还没同步到的任务（引用先于项目送达）
+  /// 任务（`t`，左连接项目 `p`）按所属项目排：项目顺序同 `projectOrder`。项目还没同步到的任务（引用先于项目送达）
   /// 项目那几个键全是空值，再按 `t.projectID` 排：同一项目的任务总是连在一起，按项目分组时每个项目只成一组。
-  static let taskProjectOrder = "t.projectID IS NULL, \(projectOrder("p")), t.projectID"
+  static let taskProjectOrder = "\(projectOrder("p")), t.projectID"
 
   /// 回收站里的条数：删除的项目加单独删除的卡片（`trashedProjects()` 与 `trashedCards()` 的个数之和），只数不读正文。
   public func trashCount() throws -> Int {
@@ -117,10 +118,10 @@ extension CueStore {
     return String(cString: resolved)
   }
 
-  /// 某项目（nil = 未分类）里可见的灵感（不含任务，也不含挂在任务下的），按手动顺序：卡片墙、未分类与 `card list` 列的就是它们。
+  /// 某项目里可见的灵感（不含任务，也不含挂在任务下的），按手动顺序：卡片墙与 `card list` 列的就是它们。
   /// 任务见 `tasks(_:)`，挂在任务下的见 `children(of:)`。
-  public func cards(in project: UUID?) throws -> [Card] {
-    try select(Card.self, where: "(\(cardActive)) AND (\(looseIdea)) AND projectID IS ?", [project], orderBy: "sortKey, id")
+  public func cards(in project: UUID) throws -> [Card] {
+    try select(Card.self, where: "(\(cardActive)) AND (\(looseIdea)) AND projectID = ?", [project], orderBy: "sortKey, id")
   }
 
   /// 回收站里单独删除的卡片，最近删除的在前；随项目删除的卡归在该项目名下，不在这里。
@@ -168,24 +169,24 @@ extension CueStore {
     try select(Card.self, where: "parentID = ? AND deletedAt IS NULL AND archivedAt IS NULL", [parent], orderBy: "sortKey, id")
   }
 
-  /// 这几种状态的任务，按项目分组：项目顺序同 `projects()`，未分类的在最后。组内是整棵任务树的先序（同级按手动顺序，
+  /// 这几种状态的任务，按项目分组：项目顺序同 `projects()`。组内是整棵任务树的先序（同级按手动顺序，
   /// 步骤紧跟上级）再按状态筛：上级被筛掉的步骤就排在上级原来的位置。只要完成的时不按树，最近完成在前。
   /// 回收站里的任务与回收站项目的任务不列。
   public func tasks(_ statuses: TaskStatus...) throws -> [TaskGroup] {
     try taskGroups(Set(statuses))
   }
 
-  /// 一个项目（nil = 未分类）里这几种状态的任务，排法同 `tasks(_:)` 的一组：只读这个项目，页面不必读全库再过滤。
-  public func tasks(in project: UUID?, _ statuses: TaskStatus...) throws -> [Card] {
+  /// 一个项目里这几种状态的任务，排法同 `tasks(_:)` 的一组：只读这个项目，页面不必读全库再过滤。
+  public func tasks(in project: UUID, _ statuses: TaskStatus...) throws -> [Card] {
     try taskGroups(Set(statuses), project: project).flatMap(\.tasks)
   }
 
-  private func taskGroups(_ wanted: Set<TaskStatus>, project: UUID?? = nil) throws -> [TaskGroup] {
+  private func taskGroups(_ wanted: Set<TaskStatus>, project: UUID? = nil) throws -> [TaskGroup] {
     let doneOnly = wanted == [.done]
     let tasks = try db.query(
       """
       SELECT \(Card.selection(as: "t")) FROM cards t LEFT JOIN projects p ON p.id = t.projectID
-      WHERE \(visibleTask) \(doneOnly ? " AND t.completedAt IS NOT NULL" : "") \(project == nil ? "" : " AND t.projectID IS ?")
+      WHERE \(visibleTask) \(doneOnly ? " AND t.completedAt IS NOT NULL" : "") \(project == nil ? "" : " AND t.projectID = ?")
       ORDER BY \(Self.taskProjectOrder), \(doneOnly ? "t.completedAt DESC, t.id" : "t.sortKey, t.id")
       """, project.map { [$0] } ?? []
     ) { Card(row: $0) }
@@ -220,22 +221,22 @@ extension CueStore {
   /// 可当上级的任务：列得出来的（没删除、没归档）要做卡片。上级不在这里的步骤当顶层，与 `tasks(_:)` 列出的一致。
   private static let liveTask = "u.deletedAt IS NULL AND u.archivedAt IS NULL AND u.todoAt IS NOT NULL"
 
-  /// 任务（`t`）连着它的项目（`p`）与列得出来的上级（`u`）；顶层的条件见 `topLevel`。`taskCounts` 与 `startedTasks` 共用。
+  /// 任务（`t`）连着它的项目（`p`）与列得出来的上级（`u`）；顶层的条件见 `topLevel`。`taskCounts`、`startedTasks` 与 `tasksDone` 共用。
   private static let taskWithParent =
     "FROM cards t LEFT JOIN projects p ON p.id = t.projectID LEFT JOIN cards u ON u.id = t.parentID AND \(liveTask)"
   private static let topLevel = "(u.id IS NULL OR (t.completedAt IS NULL AND u.completedAt IS NOT NULL))"
 
-  /// 各项目（nil = 未分类）的顶层任务按状态的个数——给用户看的任务数与完成数只有这一处定义。顶层是显示在顶层的任务：
+  /// 各项目的顶层任务按状态的个数——给用户看的任务数与完成数只有这一处定义。顶层是显示在顶层的任务：
   /// 没有上级、上级不在（没到、在回收站、归档了），或自己没完成而上级已完成（看板上它在顶层）；步骤的进度见 `subtaskProgress`。
   /// 灵感不算；没有任务的项目不在结果里；回收站里的任务与回收站项目不算。
-  public func taskCounts() throws -> [UUID?: TaskCounts] { try taskCounts(scope: "", []) }
+  public func taskCounts() throws -> [UUID: TaskCounts] { try taskCounts(scope: "", []) }
 
-  /// 一个项目（nil = 未分类）的顶层任务数，口径同 `taskCounts()`；没有任务为 `.zero`。
-  public func taskCounts(in project: UUID?) throws -> TaskCounts {
-    try taskCounts(scope: "AND t.projectID IS ?", [project])[project] ?? .zero
+  /// 一个项目的顶层任务数，口径同 `taskCounts()`；没有任务为 `.zero`。
+  public func taskCounts(in project: UUID) throws -> TaskCounts {
+    try taskCounts(scope: "AND t.projectID = ?", [project])[project] ?? .zero
   }
 
-  private func taskCounts(scope: String, _ arguments: [any SQLBindable]) throws -> [UUID?: TaskCounts] {
+  private func taskCounts(scope: String, _ arguments: [any SQLBindable]) throws -> [UUID: TaskCounts] {
     // GROUP BY 写成 +t.projectID：不然 SQLite 为省排序沿 cards_projectID_modifiedAt 逐张翻全部卡片，而不走 cards_todoAt 只翻任务
     let rows = try db.query(
       """
@@ -244,31 +245,52 @@ extension CueStore {
       WHERE \(visibleTask) AND \(Self.topLevel) \(scope)) t
       GROUP BY +t.projectID
       """, arguments
-    ) { (project: $0.uuidOrNil(0), counts: TaskCounts(inProgress: Int($0.int(1)), todo: Int($0.int(2)), done: Int($0.int(3)))) }
+    ) { (project: $0.uuid(0), counts: TaskCounts(inProgress: Int($0.int(1)), todo: Int($0.int(2)), done: Int($0.int(3)))) }
     return Dictionary(uniqueKeysWithValues: rows.map { ($0.project, $0.counts) })
   }
 
   /// 进行中的任务（开始过、没完成，`Card.startedAt`），最近开始的在前，同刻按项目顺序与手动顺序；回收站、归档的不列。
-  /// `topLevelOnly` 只要显示在顶层的（口径同 `taskCounts`：步骤跟着上级，上级也没完成时不单列）。
-  public func startedTasks(topLevelOnly: Bool = false) throws -> [Card] {
+  public func startedTasks() throws -> [Card] {
     try db.query(
       """
       SELECT \(Card.selection(as: "t")) AS began \(Self.taskWithParent)
-      WHERE \(visibleTask) AND t.completedAt IS NULL \(topLevelOnly ? "AND \(Self.topLevel)" : "") AND began IS NOT NULL
+      WHERE \(visibleTask) AND t.completedAt IS NULL AND began IS NOT NULL
       ORDER BY began DESC, \(Self.taskProjectOrder), t.sortKey, t.id
       """
     ) { Card(row: $0) }
   }
 
+  /// 做完的顶层任务，最近做完的在前——给用户看的"做完了哪些"只有这一处：任务看板的做完列与更早做完的、实时活动的"今天做完"、项目页的"已完成"。
+  /// 顶层与可见的口径同 `taskCounts`（做完的步骤跟着上级，归档、回收站里的与回收站项目的不算）。
+  /// `since` 只要这一刻以来做完的，`project` 只要这个项目的，`limit` 至多几条。
+  public func tasksDone(since: Date? = nil, in project: UUID? = nil, limit: Int? = nil) throws -> [Card] {
+    var scope = "", arguments: [any SQLBindable] = []
+    if let since {
+      scope += " AND t.completedAt >= ?"
+      arguments.append(since)
+    }
+    if let project {
+      scope += " AND t.projectID = ?"
+      arguments.append(project)
+    }
+    return try db.query(
+      """
+      SELECT \(Card.selection(as: "t")) \(Self.taskWithParent)
+      WHERE \(visibleTask) AND t.completedAt IS NOT NULL AND \(Self.topLevel)\(scope)
+      ORDER BY t.completedAt DESC, t.id\(limit.map { " LIMIT \($0)" } ?? "")
+      """, arguments
+    ) { Card(row: $0) }
+  }
+
   /// 每条任务的步骤完成了几个、一共几个：任务行的完成圈与"步骤 n/m"由它推出；没有步骤的不在结果里。
-  /// 不带参数读全库；`of` 只读这几条任务的；`in` 只读一个项目（nil = 未分类）里的（下级与上级同项目）。
+  /// 不带参数读全库；`of` 只读这几条任务的；`in` 只读一个项目里的（下级与上级同项目）。
   public func subtaskProgress() throws -> [UUID: TaskProgress] { try subtaskProgress(scope: "", []) }
 
   public func subtaskProgress(of parents: some Sequence<UUID>) throws -> [UUID: TaskProgress] {
     try subtaskProgress(scope: "AND parentID IN (SELECT value FROM json_each(?))", [Self.idList(parents)])
   }
 
-  public func subtaskProgress(in project: UUID?) throws -> [UUID: TaskProgress] { try subtaskProgress(scope: "AND projectID IS ?", [project]) }
+  public func subtaskProgress(in project: UUID) throws -> [UUID: TaskProgress] { try subtaskProgress(scope: "AND projectID = ?", [project]) }
 
   private func subtaskProgress(scope: String, _ arguments: [any SQLBindable]) throws -> [UUID: TaskProgress] {
     let rows = try db.query(
@@ -281,14 +303,14 @@ extension CueStore {
     return Dictionary(uniqueKeysWithValues: rows.map { ($0.parent, $0.progress) })
   }
 
-  /// 项目（nil = 未分类）里可见卡片的最近一次发送（时间与目标）：卡片 id → `LastSend`；从未发送的卡不在结果里。
+  /// 项目里可见卡片的最近一次发送（时间与目标）：卡片 id → `LastSend`；从未发送的卡不在结果里。
   /// 一次查询覆盖整个项目，界面据此判断"未发送"和工作集，不必逐卡查询。
-  public func lastSends(in project: UUID?) throws -> [UUID: LastSend] {
+  public func lastSends(in project: UUID) throws -> [UUID: LastSend] {
     Dictionary(
       uniqueKeysWithValues: try db.query(
         """
         SELECT s.cardID, s.sentAt, s.targetKind, s.targetName, s.targetRef FROM sendRecords s
-        WHERE s.cardID IN (SELECT id FROM cards WHERE (\(cardVisible)) AND projectID IS ?)
+        WHERE s.cardID IN (SELECT id FROM cards WHERE (\(cardVisible)) AND projectID = ?)
           AND s.id = (SELECT t.id FROM sendRecords t WHERE t.cardID = s.cardID ORDER BY t.sentAt DESC, t.id DESC LIMIT 1)
         """, [project]
       ) {
@@ -336,13 +358,12 @@ extension CueStore {
 
   // MARK: 汇总与搜索
 
-  /// 每个活动项目（按手动顺序）和未分类（最后）的灵感数：散放在列表里、不是空白的灵感。一次查询，不必读全部卡片。
+  /// 每个活动项目（按项目顺序）的灵感数：散放在列表里、不是空白的灵感。一次查询，不必读全部卡片。
   public func projectSummaries() throws -> [ProjectSummary] {
     let counts = Dictionary(uniqueKeysWithValues: try db.query(
       "SELECT projectID, COUNT(*) FROM cards WHERE (\(cardActive)) AND (\(looseIdea)) AND \(notBlank) GROUP BY projectID"
-    ) { ($0.uuidOrNil(0), Int($0.int(1))) })
-    let owners: [UUID?] = try projects().map(\.id) + [nil]
-    return owners.map { ProjectSummary(projectID: $0, cardCount: counts[$0] ?? 0) }
+    ) { ($0.uuid(0), Int($0.int(1))) })
+    return try projects().map { ProjectSummary(projectID: $0.id, cardCount: counts[$0.id] ?? 0) }
   }
 
   /// 卡片搜索：FTS5 索引匹配文字（可选），再按项目、图片、发送目标、修改时间筛选，最后排序分页。
@@ -383,14 +404,8 @@ extension CueStore {
       arguments.append(Self.likePattern(term))
     }
     if let projects = query.projects {
-      let ids = projects.compactMap { $0 }
-      var alternatives: [String] = []
-      if !ids.isEmpty {
-        alternatives.append("projectID IN (\(ids.map { _ in "?" }.joined(separator: ", ")))")
-        arguments += ids
-      }
-      if projects.contains(UUID?.none) { alternatives.append("projectID IS NULL") }
-      parts.append(alternatives.isEmpty ? "0" : "(\(alternatives.joined(separator: " OR ")))")
+      parts.append("projectID IN (SELECT value FROM json_each(?))")
+      arguments.append(Self.idList(projects))
     }
     if let hasImages = query.hasImages {
       parts.append("instr(body, '\(CueFormat.imagePrefix)') \(hasImages ? ">" : "=") 0")

@@ -10,7 +10,7 @@ import Testing
   /// Cue 请会话停下没能做到（会话所在的 Mac 报错）：是一条变化，带上动作与原因；完成的请求过了保留期就清理，它也还在，
   /// Cue 醒来时一定看得到。你自己发起的请求失败了不报（界面上看得见）。
   @Test func aFailedRequestFromCueIsAChangeThatOutlivesCleanup() async throws {
-    let task = try await store.createTask("发布", in: nil)
+    let task = try await store.createTask("发布")
     try await store.linkCard(task.id, toSession: "s1")
     try await PiStateRecorder(store: store, hostID: "mac").update(sessionID: "s1", state: .thinking)  // 正在跑一轮：停得了才发得出停下
     let since = CueMarks(try await store.lastWrite())
@@ -31,9 +31,9 @@ import Testing
   /// Cue 收尾整件事：还有步骤没做完时不行（说还剩几个）；步骤都做完了，任务完成，各步骤上的会话请它结束——
   /// 只结束绑着的事都做完了的：一个会话还绑着别的没做完的事就留着，那件事完成（你点圆圈也一样）时才结束。
   @Test func aTaskWithStepsCompletesOnlyWhenEveryStepIsDone() async throws {
-    let task = try await store.createTask("发布", in: nil)
+    let task = try await store.createTask("发布")
     let steps = [try await store.createTask("改脚本", under: task.id), try await store.createTask("跑检查", under: task.id)]
-    let other = try await store.createTask("写周报", in: nil)
+    let other = try await store.createTask("写周报")
     let recorder = PiStateRecorder(store: store, hostID: "mac")
     for (step, session) in zip(steps, ["s1", "s2"]) {
       try await store.linkCard(step.id, toSession: session)

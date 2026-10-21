@@ -32,8 +32,8 @@ public struct PiSessionQuery: Sendable, Equatable {
   public var scope: PiSessionScope
   /// 在会话名、文件夹名、最后的提问里找（不分大小写）；nil 或空白表示全部。
   public var text: String?
-  /// 只要归入这个项目的，或不在哪个项目里的（`unfiled`）；nil 表示不限。
-  public var project: PiSessionProject?
+  /// 只要归在这个项目的（`PiSessionListItem.home`）；nil 表示不限。
+  public var project: UUID?
   /// 只要带这个认领标识的（新会话认领用，精确取一条）。
   public var launchToken: String?
   /// 只要这一条记录（`PiSessionState.id`）。
@@ -43,7 +43,7 @@ public struct PiSessionQuery: Sendable, Equatable {
   public var limit: Int
 
   public init(
-    scope: PiSessionScope = .all, text: String? = nil, project: PiSessionProject? = nil, launchToken: String? = nil, id: UUID? = nil,
+    scope: PiSessionScope = .all, text: String? = nil, project: UUID? = nil, launchToken: String? = nil, id: UUID? = nil,
     offset: Int = 0, limit: Int = 50
   ) {
     self.scope = scope
@@ -61,16 +61,6 @@ public struct PiSessionQuery: Sendable, Equatable {
   public static let current = PiSessionQuery(scope: .current, limit: .max)
 }
 
-/// 会话归在哪：一个项目，或不在哪个项目里（没有项目或项目已删；界面上叫"未分类"）。会话页按它分组、按它筛。
-public enum PiSessionProject: Hashable, Sendable {
-  case project(UUID)
-  case unfiled
-
-  public init(_ id: UUID?) { self = id.map(Self.project) ?? .unfiled }
-
-  public var id: UUID? { if case .project(let id) = self { id } else { nil } }
-}
-
 /// 列表里的一个会话、它所属的项目（没有绑定项目或项目已删为 nil；文件夹名在 `state.folder`），
 /// 以及发给它的最近一条投送请求（界面据此在 Mac 吸收它之前就显示"发送中"等）。
 public struct PiSessionListItem: Identifiable, Sendable, Equatable {
@@ -82,6 +72,8 @@ public struct PiSessionListItem: Identifiable, Sendable, Equatable {
   /// 发给它、还没有回执或失败了的话（说话的方式，没被领取或失败、还没重发或移除的）：哪几句没能送达按说的话那条规则看此刻（`undelivered`）。
   public var unsettled: [DeliveryRequest]
   public var id: UUID { state.id }
+  /// 会话归在哪个项目（会话页按它分组、按它筛）：它的项目还在就是它，没有项目或项目已删的归默认项目。
+  public var home: UUID { project?.id ?? Project.defaultID }
 
   public init(
     state: PiSessionState, project: Project? = nil, delivery: DeliveryRequest? = nil, rename: DeliveryRequest? = nil,

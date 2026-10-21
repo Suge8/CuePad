@@ -79,7 +79,7 @@ struct RealCueStartTests {
             }
         case .claudeCode:
             try await ClaudeTestbed.run { testbed in
-                try testbed.runtime.start()
+                try testbed.startConnected()
                 try await body(testbed.runtime, testbed.bridge, testbed.work, PiModelKey(provider: ClaudeCode.provider, id: claudeOtherModel))
             }
         case .opencode:

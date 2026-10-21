@@ -27,9 +27,11 @@ enum ClaudeCode {
     }
 
     /// 控制请求 `initialize` 回应里的模型清单（`value` 是别名或完整 id，`resolvedModel` 是它此刻解析到的完整 id）。
+    /// 去掉 `default` 那项（"Default (recommended)"）：它解析到的是推荐的模型，不一定是配置的，名字也不说是哪个模型；
+    /// 按解析出的 id 认回模型时（探测的默认、托管会话报的模型）落到同一个模型的别名上（`sonnet` 排在完整 id 前面）。
     static func models(in info: JSONValue) -> [(option: PiModelOption, resolved: String?)] {
         (info["models"]?.array ?? []).compactMap { model in
-            guard let value = model["value"]?.string else { return nil }
+            guard let value = model["value"]?.string, value != "default" else { return nil }
             let levels = model["supportedEffortLevels"]?.array?.compactMap { $0.string.flatMap(PiThinkingLevel.init(rawValue:)) } ?? []
             return (self.model(value, name: model["displayName"]?.string, levels: levels), model["resolvedModel"]?.string)
         }

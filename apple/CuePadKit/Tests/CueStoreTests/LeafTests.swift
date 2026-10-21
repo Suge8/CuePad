@@ -10,7 +10,7 @@ import Testing
   var store: CueStore { fixture.store }
 
   @Test func 加第一个步骤时_叶子的会话移到这个步骤上() async throws {
-    let task = try await store.createTask("修乱序", in: nil)
+    let task = try await store.createTask("修乱序")
     try await store.linkCard(task.id, toSession: "s1")
 
     let step = try await store.createTask("复现", under: task.id)
@@ -28,7 +28,7 @@ import Testing
   /// 收不了图片的只交文字，停不了这一轮就报停不了，结束不了的会话事做完了也留着。
   @Test func 交给其他Agent的会话_只做它做得到的() async throws {
     let recorder = PiStateRecorder(store: store, hostID: "mac")
-    let claude = try await store.createTask("修乱序", in: nil)
+    let claude = try await store.createTask("修乱序")
     let first = try await store.createTask("复现", under: claude.id)
     try await store.linkCard(first.id, toSession: "claude-1")
     try await recorder.update(sessionID: "claude-1", state: .settled, agent: .claudeCode)
@@ -38,7 +38,7 @@ import Testing
     try await recorder.update(sessionID: "claude-1", state: .thinking, title: "修乱序", agent: .claudeCode)
     await #expect(throws: CueStoreError.cannotStop("修乱序")) { try await store.stopSession("claude-1", host: "mac") }
 
-    let codex = try await store.createTask("改文案", in: nil)
+    let codex = try await store.createTask("改文案")
     try await store.linkCard(codex.id, toSession: "codex-1")
     try await recorder.update(sessionID: "codex-1", state: .settled, agent: .codex)
     #expect(try await store.finishTask(codex.id, evidence: ["文案改好了"]).ended.isEmpty)
@@ -65,7 +65,7 @@ import Testing
 
     let step = try await store.createTask("复现", under: second.id)
     await #expect(throws: CueStoreError.notALeaf) { try await store.bindSession("s3", to: second.id) }
-    await #expect(throws: CueStoreError.notATask) { try await store.bindSession("s3", to: try await store.createCard(in: nil, body: "灵感").id) }
+    await #expect(throws: CueStoreError.notATask) { try await store.bindSession("s3", to: try await store.createCard(body: "灵感").id) }
     try await store.bindSession("s3", to: step.id)
     #expect(try await store.tasks(boundTo: "s3").map { [$0.task.id, $0.parent?.id] } == [[step.id, second.id]])
   }
@@ -91,7 +91,7 @@ import Testing
     let step = try await store.createTask("备份", under: top.id)
     let taken = try await store.createTask("已有会话", in: project.id)
     let finished = try await store.createTask("做完了", in: project.id)
-    let loneBound = try await store.createTask("别的项目", in: nil)
+    let loneBound = try await store.createTask("别的项目")
     try await store.bindSession("s1", to: taken.id)
     try await store.setStatus(finished.id, .done)
     _ = loneBound

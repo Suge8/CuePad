@@ -311,7 +311,7 @@ struct ConversationRuleTests {
     }
 }
 
-// MARK: - 后台索引器：首次按修改时间倒序，之后跟随文件变化
+// MARK: - 后台索引器：首次按修改时间倒序，之后跟着在线会话的文件
 
 /// 订阅索引器事件流并记录。
 final class HistoryEventLog: Sendable {
@@ -319,8 +319,9 @@ final class HistoryEventLog: Sendable {
     /// 订阅的任务要引用自己，只能在初始化完成后起，所以放在锁里补上。
     private let task = Mutex<Task<Void, Never>?>(nil)
 
-    init(_ indexer: PiHistoryIndexer) {
-        let stream = indexer.events()
+    /// `live` 是在线会话的文件（桥给的，`PiBridge.sessionFiles`）；只看回填的不给。
+    init(_ indexer: PiHistoryIndexer, following live: some AsyncSequence<Set<URL>, Never> & Sendable = AsyncStream { $0.finish() }) {
+        let stream = indexer.events(following: live, scope: .all)
         task.withLock { $0 = Task { [weak self] in for await e in stream { self?.recorded.withLock { $0.append(e) } } } }
     }
     deinit { task.withLock { $0?.cancel() } }
@@ -368,14 +369,16 @@ struct HistoryIndexerTests {
     @Test func subagentSessionsAreNotHistoryLikePisSessionList() async throws {
         let top = try makeSession("p1", "a.jsonl", prompt: "top", modified: Date())
         try makeSession("p1/subagents", "w.jsonl", prompt: "worker", modified: Date())
-        let log = HistoryEventLog(PiHistoryIndexer(sessions: root))
+        let (live, files) = AsyncStream<Set<URL>>.makeStream()
+        let log = HistoryEventLog(PiHistoryIndexer(sessions: root), following: live)
         try await eventually("回填完成") { log.finishedBackfill }
         #expect(log.updates.map { $0.file.lastPathComponent } == ["a.jsonl"])
-        guard case .backfillFinished(let files) = log.events.last! else { Issue.record("backfillFinished 应是最后一个事件"); return }
-        #expect(files.map(\.lastPathComponent) == [top.url.lastPathComponent])
+        guard case .backfillFinished(let found?) = log.events.last! else { Issue.record("backfillFinished 应是最后一个事件"); return }
+        #expect(found.map(\.lastPathComponent) == [top.url.lastPathComponent])
 
-        try makeSession("p1/subagents", "w2.jsonl", prompt: "worker 2", modified: Date())
-        try makeSession("p2", "b.jsonl", prompt: "later", modified: Date())
+        let worker = try makeSession("p1/subagents", "w2.jsonl", prompt: "worker 2", modified: Date())
+        let later = try makeSession("p2", "b.jsonl", prompt: "later", modified: Date())
+        files.yield([worker.url, later.url])
         try await eventually("之后的顶层会话被索引") { log.updates.contains { $0.file.lastPathComponent == "b.jsonl" } }
         #expect(!log.updates.contains { $0.file.path.contains("/subagents/") })
     }
@@ -383,7 +386,9 @@ struct HistoryIndexerTests {
     @Test func liveAppendsAndNewFilesAreIndexedIncrementally() async throws {
         let f = try makeSession("p1", "a.jsonl", prompt: "first", modified: Date())
         // 调用方从不返回检查点：索引器自己对回填之后被触碰的文件保留，之后的增量不能退化成重读
-        let log = HistoryEventLog(PiHistoryIndexer(sessions: root))
+        let (live, files) = AsyncStream<Set<URL>>.makeStream()
+        files.yield([f.url])
+        let log = HistoryEventLog(PiHistoryIndexer(sessions: root), following: live)
         try await eventually("回填完成") { log.finishedBackfill }
 
         let firstAppend = [SessionFile.user("u2", "a", "second", at: 3), SessionFile.assistant("a2", "u2", text: "r2", at: 4)]
@@ -398,8 +403,9 @@ struct HistoryIndexerTests {
         #expect(update.bytesRead == secondAppend.utf8.count + 1)
         #expect(update.history.displayName == "first")
 
-        try makeSession("p3", "fresh.jsonl", prompt: "brand new", modified: Date())
-        try await eventually("新文件被索引") { log.updates.contains { $0.file.lastPathComponent == "fresh.jsonl" } }
+        let fresh = try makeSession("p3", "fresh.jsonl", prompt: "brand new", modified: Date())
+        files.yield([f.url, fresh.url])
+        try await eventually("新上桥的会话被索引") { log.updates.contains { $0.file.lastPathComponent == "fresh.jsonl" } }
     }
 
     /// Codex 会话文件的一行（`{timestamp, type, payload}`）。
@@ -407,83 +413,40 @@ struct HistoryIndexerTests {
         Data((SessionFile.line(["timestamp": SessionFile.stamp(second), "type": type, "payload": payload]) + "\n").utf8)
     }
 
-    /// 在 `day` 下放 `count` 个已经写完、修改时间在一年前的 Codex 会话文件（历史会话）。
-    private func oldCodexSessions(_ count: Int, in day: URL) throws {
-        try FileManager.default.createDirectory(at: day, withIntermediateDirectories: true)
-        for n in 0..<count {
-            let url = day.appending(path: "rollout-old-\(n).jsonl")
-            try codexLine("session_meta", 1, ["id": "old-\(n)", "cwd": "/work"]).write(to: url)
-            try FileManager.default.setAttributes([.modificationDate: Date.now.addingTimeInterval(-365 * 86400)], ofItemAtPath: url.path)
-        }
-    }
-
-    /// Codex 的常驻服务整段会话都开着会话文件写，FSEvents 只在关闭时报内容变化：开着写的会话等着的时候，
-    /// 比另盯上限还多的旧会话文件被读到（挪进来的历史会话），它之后的追加照样跟上。
+    /// Codex 的常驻服务整段会话都开着会话文件写，文件先建出来、文件头（`session_meta`）随后才写：回填读到空文件不记成会话，
+    /// 文件头与之后的每次追加都当场读到（歇下要等回答读到才算），只记成文件头里的那个会话，不按文件名多记一个。
     @Test(.timeLimit(.minutes(1)))
-    func codexSessionKeptOpenStaysFollowedWhileManyOldFilesAreRead() async throws {
+    func anOpenCodexSessionIsReadAsItIsWrittenAndOnlyUnderItsRealID() async throws {
         let day = root.appending(path: "2026/10/14")
+        let url = day.appending(path: "rollout-2026-10-14T15-57-42-live.jsonl")
         try FileManager.default.createDirectory(at: day, withIntermediateDirectories: true)
-        let log = HistoryEventLog(PiHistoryIndexer(sessions: root, agent: .codex))
-        try await eventually("回填完成") { log.finishedBackfill }
-
-        let url = day.appending(path: "rollout-live.jsonl")
         FileManager.default.createFile(atPath: url.path, contents: nil)
+        let log = HistoryEventLog(PiHistoryIndexer(sessions: root, agent: .codex), following: AsyncStream { $0.yield([url]) })
+        try await eventually("回填完成") { log.finishedBackfill }
+        #expect(log.updates.isEmpty)
+
         let live = try FileHandle(forWritingTo: url)
         defer { try? live.close() }
         try live.write(contentsOf: codexLine("session_meta", 1, ["id": "live", "cwd": "/work"]))
         try await eventually("开着写的会话被索引") { log.updates.contains { $0.history.sessionID == "live" } }
 
-        let staging = root.appending(path: "staging")
-        try oldCodexSessions(70, in: staging)
-        for name in try FileManager.default.contentsOfDirectory(atPath: staging.path) {
-            try FileManager.default.moveItem(at: staging.appending(path: name), to: day.appending(path: name))
-        }
-        try await eventually("挪进来的旧会话都被读到") {
-            Set(log.updates.compactMap(\.history.sessionID).filter { $0.hasPrefix("old-") }).count == 70
-        }
-
         try live.write(contentsOf: codexLine("event_msg", 9, ["type": "task_started"]))
         try await eventually("开着写的会话之后的追加被索引") {
             log.updates.contains { $0.history.sessionID == "live" && $0.history.lastActivity == SessionFile.date(9) }
         }
+        #expect(log.updates.allSatisfy { $0.sessionID == "live" })
     }
 
-    /// 整体重扫（这里是会话目录后建出来）读到比上限还多的历史会话时，最新的、还开着写的那个仍在盯。
+    /// 新用户常见顺序是先开 CuePad、后装 Pi：桥报出会话时它的文件连同会话目录都还不存在（Pi 第一条回答落盘前不建文件）。
+    /// 之后建出目录、写入会话（会话还没结束），历史要当场跟上；目录被删掉再建也要恢复。
     @Test(.timeLimit(.minutes(1)))
-    func codexRescanOverManyOldFilesKeepsTheLiveSessionFollowed() async throws {
-        let sessions = root.appending(path: "sessions")
-        let log = HistoryEventLog(PiHistoryIndexer(sessions: sessions, agent: .codex))
-        try await eventually("回填完成") { log.finishedBackfill }
-
-        let staging = root.appending(path: "staging")
-        let day = staging.appending(path: "2026/10/14")
-        try oldCodexSessions(70, in: day)
-        let url = day.appending(path: "rollout-live.jsonl")
-        FileManager.default.createFile(atPath: url.path, contents: nil)
-        let live = try FileHandle(forWritingTo: url)
-        defer { try? live.close() }
-        try live.write(contentsOf: codexLine("session_meta", 1, ["id": "live", "cwd": "/work"]))
-        try FileManager.default.moveItem(at: staging, to: sessions)
-        try await eventually("重扫读到开着写的会话") { log.updates.contains { $0.history.sessionID == "live" } }
-        try await eventually("重扫读完旧会话") {
-            Set(log.updates.compactMap(\.history.sessionID).filter { $0.hasPrefix("old-") }).count == 70
-        }
-
-        try live.write(contentsOf: codexLine("event_msg", 9, ["type": "task_started"]))
-        try await eventually("重扫之后开着写的会话的追加被索引") {
-            log.updates.contains { $0.history.sessionID == "live" && $0.history.lastActivity == SessionFile.date(9) }
-        }
-    }
-
-    /// 新用户常见顺序是先开 CuePad、后装 Pi：开始监听时会话目录还不存在。之后建出目录、写入会话（会话还没结束），
-    /// 历史要跟上；目录被删掉再建也要恢复。
-    @Test(.timeLimit(.minutes(1)))
-    func sessionsDirectoryCreatedAfterStartIsWatchedAndSurvivesRecreation() async throws {
+    func aLiveSessionsFileIsReadOnceItAppearsUnderADirectoryCreatedLater() async throws {
         let sessions = root.appending(path: "agent/sessions")  // 连上层目录也还不存在
-        let log = HistoryEventLog(PiHistoryIndexer(sessions: sessions))
+        let project = sessions.appending(path: "--work-x--")
+        let files = [project.appending(path: "a.jsonl"), project.appending(path: "b.jsonl")]
+        let log = HistoryEventLog(PiHistoryIndexer(sessions: sessions), following: AsyncStream { $0.yield(Set(files)) })
         try await eventually("回填完成") { log.finishedBackfill }
 
-        let project = sessions.appending(path: "--work-x--")
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
         var first = SessionFile(directory: project, name: "a.jsonl")
         try first.append(SessionFile.header(id: "a"), SessionFile.user("u", nil, "after pi was installed", at: 1))

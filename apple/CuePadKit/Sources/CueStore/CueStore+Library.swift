@@ -33,8 +33,9 @@ extension CueStore {
     guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw CueStoreError.blankProjectName }
   }
 
-  /// 进回收站；它的卡片随之隐藏（由项目推导），卡片行不动。
+  /// 进回收站；它的卡片随之隐藏（由项目推导），卡片行不动。默认项目不能删（`defaultProjectUndeletable`）。
   public func trashProject(_ id: UUID) throws {
+    guard id != Project.defaultID else { throw CueStoreError.defaultProjectUndeletable }
     try write {
       try db.run(
         "UPDATE projects SET deletedAt = ?1, modifiedAt = ?1 WHERE id = ?2 AND deletedAt IS NULL",
@@ -48,12 +49,12 @@ extension CueStore {
     }
   }
 
-  /// 永久删除：连同随项目进回收站的卡片；更早单独进回收站的卡片留在回收站（归入未分类）。
+  /// 永久删除：连同随项目进回收站的卡片；更早单独进回收站的卡片留在回收站（归入默认项目）。
   public func purgeProject(_ id: UUID) throws {
     try reportingFileFailures { try write {
       let now = Date.stamp
       let orphaned = try purgeCards(where: "projectID = ? AND deletedAt IS NULL", [id])
-      try db.run("UPDATE cards SET projectID = NULL, modifiedAt = ? WHERE projectID = ?", [now, id])
+      try db.run("UPDATE cards SET projectID = ?, modifiedAt = ? WHERE projectID = ?", [Project.defaultID, now, id])
       try db.run("DELETE FROM projectDirectories WHERE projectID = ?", [id])
       try db.run("DELETE FROM projects WHERE id = ?", [id])
       return try reclaimAttachments(orphaned)
@@ -112,8 +113,8 @@ extension CueStore {
 // MARK: 卡片（灵感与任务）
 
 extension CueStore {
-  /// 新灵感放在所在项目（nil = 未分类）的最前。项目必须存在且未在回收站，否则抛 `invalidProject`。
-  public func createCard(in project: UUID?, body: String = "") throws -> Card {
+  /// 新灵感放在所在项目的最前（没指定的进默认项目）。项目必须存在且未在回收站，否则抛 `invalidProject`。
+  public func createCard(in project: UUID = Project.defaultID, body: String = "") throws -> Card {
     try write {
       try requireLiveProject(project)
       return try insertCard(body, project: project, parent: nil, todo: false, sortKey: SortKey.before(firstTopKey(in: project)))
@@ -121,7 +122,7 @@ extension CueStore {
   }
 
   /// 新任务（要做的卡片）放在所在项目顶层的最前。正文不能为空，否则抛 `blankTaskContent`；第一行是标题，其余是它的正文（`CueLines.split`）。
-  public func createTask(_ body: String, in project: UUID?) throws -> Card {
+  public func createTask(_ body: String, in project: UUID = Project.defaultID) throws -> Card {
     try requireContent(body)
     return try write {
       try requireLiveProject(project)
@@ -324,7 +325,7 @@ extension CueStore {
     }
   }
 
-  /// 恢复；如果所属项目仍在回收站，卡片回到未分类，否则会不可见。
+  /// 恢复；如果所属项目仍在回收站，卡片回到默认项目，否则会不可见。
   public func restoreCard(_ id: UUID) throws {
     try write { try restoreRow(id) }
   }
@@ -334,9 +335,9 @@ extension CueStore {
       """
       UPDATE cards SET deletedAt = NULL, modifiedAt = ?,
         projectID = CASE WHEN projectID IN (SELECT id FROM projects WHERE deletedAt IS NOT NULL)
-                         THEN NULL ELSE projectID END
+                         THEN ? ELSE projectID END
       WHERE id = ?
-      """, [Date.stamp, id])
+      """, [Date.stamp, Project.defaultID, id])
     // 恢复回原来的上级下的步骤：上级的会话按叶子的规则放好
     if let parent = try find(Card.self, id)?.parentID { try settle(around: [parent]) }
   }
@@ -453,11 +454,11 @@ extension CueStore {
   }
 
   /// 项目顶层（灵感与任务共用一个手动顺序）最前面的排序键。
-  private func firstTopKey(in project: UUID?) throws -> String? {
-    try db.first("SELECT MIN(sortKey) FROM cards WHERE projectID IS ? AND parentID IS NULL", [project]) { $0.textOrNil(0) } ?? nil
+  private func firstTopKey(in project: UUID) throws -> String? {
+    try db.first("SELECT MIN(sortKey) FROM cards WHERE projectID = ? AND parentID IS NULL", [project]) { $0.textOrNil(0) } ?? nil
   }
 
-  private func insertCard(_ body: String, project: UUID?, parent: UUID?, todo: Bool, sortKey: String) throws -> Card {
+  private func insertCard(_ body: String, project: UUID, parent: UUID?, todo: Bool, sortKey: String) throws -> Card {
     let now = Date.stamp
     let card = Card(
       id: UUID(), projectID: project, body: body, isPinned: false, variableValues: [:], conflictOf: nil, sortKey: sortKey,
@@ -487,7 +488,7 @@ extension CueStore {
 
   /// 同级的范围：同一上级下，或同一项目的顶层。
   private static func siblingScope(_ link: CardLinks.Link) -> String {
-    link.parent == nil ? "parentID IS NULL AND projectID IS ?" : "parentID = ?"
+    link.parent == nil ? "parentID IS NULL AND projectID = ?" : "parentID = ?"
   }
 
   static func idList(_ ids: some Sequence<UUID>) -> String {
@@ -632,9 +633,9 @@ extension CueStore {
   }
 
   /// 能绑会话的叶子（没完成、没绑会话、没删除、没归档）：步骤带着上级一起给，界面写"上级 · 步骤"。顺序同 `tasks(in:_:)`
-  /// （项目页的任务顺序：同级手动顺序，步骤紧跟上级）。`project` 是会话所在的项目，nil 是没归项目的。
+  /// （项目页的任务顺序：同级手动顺序，步骤紧跟上级）。`project` 是会话所在的项目；会话没归项目（文件夹没绑给哪个项目）时列默认项目的。
   public func bindableTasks(in project: UUID?) throws -> [LeafTask] {
-    let open = try tasks(in: project, .todo, .inProgress)
+    let open = try tasks(in: project ?? Project.defaultID, .todo, .inProgress)
     let byID = Dictionary(open.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
     let leaves = try Set(db.query("SELECT id FROM cards c WHERE c.todoAt IS NOT NULL AND \(Self.isLeaf("c"))") { $0.uuid(0) })
     var result: [LeafTask] = []
@@ -705,10 +706,23 @@ extension CueStore {
   /// 一行是哪家 Agent 的（会话索引与会话记录都是）：早于多家接入的行没写，是 Pi。也是 Agent 索引（`Schema` 第 55 步）的表达式。
   static let agentOf = "COALESCE(agent, '\(AgentKind.pi.rawValue)')"
 
-  /// 删掉一家 Agent 的本机会话索引（断开接入时）：会话同步记录与对话不动。
-  public func deletePiSessions(of agent: AgentKind) throws {
-    try write { try db.run("DELETE FROM piSessions WHERE \(Self.agentOf) = ?", [agent.rawValue]) }
+  /// 删掉一家 Agent 的本机会话索引（断开接入时）：会话同步记录与对话不动。`host` 这台 Mac 托管过的会话（`hostedPiSessionIDs`）留着：
+  /// 没接入也照样开、照样读对话，闲置退出或结束后再发话要靠索引接着它（`MacExecutor`）。
+  public func deletePiSessions(of agent: AgentKind, keepingHostedOn host: String) throws {
+    try write {
+      try db.run(
+        "DELETE FROM piSessions WHERE \(Self.agentOf) = ? AND id NOT IN (\(Self.hostedSessionsSQL))", [agent.rawValue, host, agent.rawValue])
+    }
   }
+
+  /// `host` 这台 Mac 托管过的这家的会话：CuePad 开的（带认领标识，结束了也留着），与此刻托管着的（接着已结束的会话时不带标识）。
+  /// 没接入的 Agent 只索引这些（`PiHistoryScope.sessions`）。
+  public func hostedPiSessionIDs(of agent: AgentKind, host: String) throws -> Set<String> {
+    Set(try db.query(Self.hostedSessionsSQL, [host, agent.rawValue]) { $0.text(0) })
+  }
+
+  private static let hostedSessionsSQL =
+    "SELECT sessionID FROM piSessionStates WHERE hostID = ? AND \(agentOf) = ? AND (hosted = 1 OR launchToken IS NOT NULL)"
 
   /// 全部目录绑定（各台 Mac 的），按项目、Mac 名（`MacAgents.name`）排。
   public func directoryBindings() throws -> [DirectoryBinding] {
@@ -770,10 +784,9 @@ extension CueStore {
 // MARK: 引用校验
 
 extension CueStore {
-  /// 卡片只能归属存在且未在回收站的项目（或不归属）。必须在写事务内调用，
-  /// 与随后的写入之间没有别的写入可以插进来。失效时报错，不静默改成未分类。
-  fileprivate func requireLiveProject(_ project: UUID?) throws {
-    guard let project else { return }
+  /// 卡片只能归属存在且未在回收站的项目。必须在写事务内调用，
+  /// 与随后的写入之间没有别的写入可以插进来。失效时报错，不静默改去别处。
+  fileprivate func requireLiveProject(_ project: UUID) throws {
     let live = try db.first("SELECT 1 FROM projects WHERE id = ? AND deletedAt IS NULL", [project]) { _ in true }
     guard live != nil else { throw CueStoreError.invalidProject }
   }

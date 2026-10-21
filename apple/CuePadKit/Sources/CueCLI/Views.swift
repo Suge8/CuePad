@@ -52,27 +52,27 @@ struct ProjectView {
 
 struct CardView {
   let card: Card
-  let project: String?
+  let project: String
 
   private static let mark: [TaskStatus: String] = [.todo: "[ ] ", .inProgress: "[~] ", .done: "[x] "]
 
   var json: JSONObject {
     [
       "id": uuid(card.id), "kind": card.isTask ? "task" : "idea", "status": nullable(card.status?.rawValue),
-      "projectId": uuid(card.projectID), "project": nullable(project), "parentId": uuid(card.parentID), "body": card.body,
+      "projectId": uuid(card.projectID), "project": project, "parentId": uuid(card.parentID), "body": card.body,
       "pinned": card.isPinned, "conflictOf": uuid(card.conflictOf), "startedAt": iso(card.startedAt), "completedAt": iso(card.completedAt),
       "archivedAt": iso(card.archivedAt), "deletedAt": iso(card.deletedAt), "createdAt": iso(card.createdAt), "modifiedAt": iso(card.modifiedAt),
     ]
   }
 
   var line: String {
-    "\(card.status.flatMap { Self.mark[$0] } ?? "")\(card.id.shortID)  \(project ?? "未分类")  \(card.isPinned ? "★ " : "")\(title(card.body))"
+    "\(card.status.flatMap { Self.mark[$0] } ?? "")\(card.id.shortID)  \(project)  \(card.isPinned ? "★ " : "")\(title(card.body))"
       + (card.parentID.map { "  ↳ \($0.shortID)" } ?? "")
   }
 
   /// `card show` 的文本：元信息，空行，正文原样。
   var detail: String {
-    var rows = ["id: \(card.id.uuidString.lowercased())", "项目: \(project ?? "未分类")"]
+    var rows = ["id: \(card.id.uuidString.lowercased())", "项目: \(project)"]
     if let status = card.status { rows.append("任务: \(status.rawValue)") }
     if let parent = card.parentID { rows.append("上级: \(parent.uuidString.lowercased())") }
     if card.isPinned { rows.append("资料: 是") }
@@ -101,7 +101,7 @@ extension Call {
 
   func cardViews(_ cards: [Card]) async throws -> [CardView] {
     let names = try await projectNames()
-    return cards.map { CardView(card: $0, project: $0.projectID.flatMap { names[$0] }) }
+    return cards.map { CardView(card: $0, project: names[$0.projectID] ?? "") }
   }
 }
 

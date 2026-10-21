@@ -36,7 +36,7 @@ nonisolated struct TrashItem: Identifiable, Sendable, Equatable {
         if project != nil { try await store.purgeProject(id) } else { try await store.purgeCard(id) }
     }
 
-    /// 恢复后落在哪个项目（nil 是未分类）：卡片所在的项目还在回收站时回到未分类，所以要在恢复之后读。
+    /// 恢复后落在哪个项目：卡片所在的项目还在回收站时回到默认项目，所以要在恢复之后读。
     func landing(_ store: CueStore) async throws -> Project? {
         if let project { return project }
         guard let id = try await store.card(id)?.projectID else { return nil }
@@ -67,7 +67,7 @@ extension Workspace {
         attempt {
             try await item.restore(store)
             let project = try await item.landing(store)
-            self.say(Dotted("已恢复到 \(CaptureCopy.destination(project))"), link: .place(project?.id))
+            self.say(Dotted("已恢复到 \(project?.name ?? "")"), link: project.map { .project($0.id) })
         }
     }
     func purge(_ item: TrashItem) { perform { try await item.purge($0) } }

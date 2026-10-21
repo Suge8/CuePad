@@ -28,9 +28,10 @@ struct SessionTaskTests {
         session.name = "修登录"
         try await bridge(.appeared(session))
 
-        #expect(try await TaskBoard.read(from: store).order.isEmpty)
+        let empty = try await TaskBoard.read(from: store)
+        #expect(empty.todo.isEmpty && empty.managing.map(\.id) == ["session/s1"])
         let envelope = CueEnvelope.render(CueEnvelope.Input(
-            now: .now, contextUsed: nil, projects: [], changes: [], board: try await store.cueBoard(), waiting: [],
+            now: .now, projects: [], changes: [], board: try await store.cueBoard(), waiting: [],
             wake: .idle))
         #expect(envelope.contains("在做 1 件：\n- 会话「修登录」（s1） · 歇着"))
 
@@ -41,7 +42,7 @@ struct SessionTaskTests {
 
         let added = try #require(await cue.call("task", ["action": "add", "title": "修好登录", "session": "s1"]))
         #expect(!added.isError)
-        let row = try #require(try await TaskBoard.read(from: store).inProgress.first)
+        let row = try #require(try await TaskBoard.read(from: store).managing.first?.item)
         #expect(row.task.title == "修好登录" && row.project?.id == project.id && row.task.piSessionID == "s1")
         #expect(try await store.cueBoard().sessions.isEmpty)
     }
@@ -51,7 +52,7 @@ struct SessionTaskTests {
     /// Cue 的 edit reopen 同你点掉圆圈（没完成的不让改回），加步骤回到进行中。
     @Test func 对已完成任务的会话说话_任务仍是完成_改回或加步骤才变() async throws {
         try await enableCue()
-        let task = try await store.createTask("修登录", in: nil)
+        let task = try await store.createTask("修登录")
         let recorder = PiStateRecorder(store: store, hostID: services.hostID)
         try await recorder.update(sessionID: "s1", state: .settled, title: "修登录")
         let workspace = Workspace(services: services)
@@ -65,7 +66,7 @@ struct SessionTaskTests {
         try await reply("登录后还是白屏", to: "s1", in: workspace)
         let sent = try #require(try await store.deliveryRequests(toSession: "s1").last)
         #expect(sent.mode == .known(.send))
-        #expect(try await store.outcome(of: sent.id).status == .known(.succeeded))
+        #expect(try await store.outcome(of: sent).status == .known(.succeeded))
         #expect(try await store.card(task.id)?.status == .done)
 
         let question = PiQuestion(promptID: "p1", kind: .select, text: "旧数据怎么办？", options: ["覆盖", "跳过"])
@@ -78,7 +79,7 @@ struct SessionTaskTests {
         #expect(!answered.isError && answered.text.contains("回答"))
         let answer = try #require(try await store.deliveryRequests(toSession: "s1").last)
         #expect(answer.answer == PiAnswer(promptID: "p1", value: .option("覆盖")))
-        #expect(try await store.outcome(of: answer.id).status == .known(.succeeded))
+        #expect(try await store.outcome(of: answer).status == .known(.succeeded))
         #expect(try await store.card(task.id)?.status == .done)
 
         let reopened = try #require(await cue.call("task", ["action": "edit", "task": task.id.uuidString, "reopen": true]))
@@ -113,7 +114,7 @@ struct SessionTaskTests {
         let board = try await store.cueBoard()
         #expect(board.sessions.map(\.sessionID) == ["s1"])
         let envelope = CueEnvelope.render(CueEnvelope.Input(
-            now: .now, contextUsed: nil, projects: [], changes: [], board: board, waiting: [], wake: .idle))
+            now: .now, projects: [], changes: [], board: board, waiting: [], wake: .idle))
         #expect(envelope.contains("在做 1 件：\n- 会话「修登录」（s1） · 歇着"))
         // 分步做完的事：会话在前一步上，最后一步是手点完成的、没绑会话，列的仍是它用过的会话
         let stepped = try await store.createTask("加语言参数", in: project.id)
@@ -132,7 +133,7 @@ struct SessionTaskTests {
 
         let added = try #require(await cue.call("task", ["action": "add", "title": "补注册页", "session": "s1"]))
         #expect(!added.isError)
-        let fresh = try #require(try await TaskBoard.read(from: store).inProgress.first?.task)
+        let fresh = try #require(try await TaskBoard.read(from: store).managing.first?.item?.task)
         #expect(fresh.title == "补注册页" && fresh.piSessionID == "s1")
         let kept = try #require(try await store.card(old.id))
         #expect(kept.status == .done && kept.piSessionID == "s1")
@@ -145,7 +146,7 @@ struct SessionTaskTests {
     /// 没绑任务的会话（他开的）done 给 session 结束；没做完的事还在用的会话不收，报出原因。
     @Test func 不再用的会话_Cue收得掉_在用的不收() async throws {
         try await enableCue()
-        let task = try await store.createTask("修登录", in: nil)
+        let task = try await store.createTask("修登录")
         let recorder = PiStateRecorder(store: store, hostID: services.hostID)
         for (id, title) in [("s1", "修登录"), ("s2", "随便问问")] {
             try await recorder.update(sessionID: id, state: .settled, title: title, hosted: true, agent: .pi)
@@ -161,7 +162,7 @@ struct SessionTaskTests {
         /// 最近那条结束请求执行完（执行器先把会话记成已结束再报成功）后会话是不是已结束。
         func ended(_ id: String) async throws -> Bool {
             let end = try #require(try await store.deliveryRequests(toSession: id).last { $0.mode == .known(.end) })
-            #expect(try await store.outcome(of: end.id).status == .known(.succeeded))
+            #expect(try await store.outcome(of: end).status == .known(.succeeded))
             return try await store.piSessions(sessionIDs: [id])[id]?.state.state == .known(.ended)
         }
 
@@ -227,7 +228,7 @@ struct SessionTaskTests {
             $0.hostID = "mac-b"
             $0.enabledAt = .now
         }
-        let task = try await store.createTask("修登录", in: nil)
+        let task = try await store.createTask("修登录")
         try await store.linkCard(task.id, toSession: "s1")
         let recorder = PiStateRecorder(store: store, hostID: services.hostID)
         try await recorder.update(sessionID: "s1", state: .settled, title: "修登录")
@@ -261,19 +262,19 @@ struct SessionTaskTests {
         #expect(!interrupted.isError && interrupted.text.contains("对「修登录」的会话说"))
 
         // 终端里的 Claude Code 在跑：CuePad 打断不了它，谁开的这一轮都不说
-        let terminal = try await store.createTask("修注册", in: nil)
+        let terminal = try await store.createTask("修注册")
         try await store.linkCard(terminal.id, toSession: "s2")
         try await recorder.update(sessionID: "s2", state: .tool, title: "修注册", agent: .claudeCode)
         let blocked = try #require(await cue.call("task", ["action": "say", "task": terminal.id.uuidString, "text": "先停一下"]))
         #expect(blocked.isError && blocked.text.contains("打断不了"))
     }
 
-    /// 会话停下归谁接手看这一轮是谁开的（会话里最近一条你一方或机器的消息）与他在不在场（开着它，或 10 分钟内在里面说过话）：
-    /// Cue 说的那句开的归 Cue，他刚在里面说过话也照常报给它；他开的、FireCode 这类扩展投进来的机器消息开的，他在场就归他、不报给 Cue，
-    /// 不在场才报，他开的标"他说的"。机器消息开的一轮在跑时 Cue 照常能插话。
-    @Test func 停下归谁接手_Cue开的归Cue_他或机器开的他在场时归他() async throws {
+    /// 会话停下归谁接手看这一轮是谁开的（会话里最近一句你一方的话）与他在不在场（开着它，或 10 分钟内在里面说过话）：
+    /// Cue 说的那句开的归 Cue，他刚在里面说过话也照常报给它；他开的，他在场就归他、不报给 Cue，不在场才报，标"他说的"。
+    /// FireCode 这类扩展投进来的机器消息（子代理交回）开的轮跟着它之前那句：他的照样归他、在跑时 Cue 不插嘴，Cue 的照样报给 Cue。
+    @Test func 停下归谁接手_Cue开的归Cue_他开的他在场时归他_子代理交回跟着开它的那句() async throws {
         try await enableCue()
-        let task = try await store.createTask("修登录", in: nil)
+        let task = try await store.createTask("修登录")
         try await store.linkCard(task.id, toSession: "s1")
         let recorder = PiStateRecorder(store: store, hostID: services.hostID)
         try await recorder.update(sessionID: "s1", state: .settled, title: "修登录")
@@ -295,7 +296,7 @@ struct SessionTaskTests {
             try await recorder.update(sessionID: "s1", state: .settled)
             let changes = try await store.cueChanges(after: CueMarks(mark))
             let envelope = CueEnvelope.render(CueEnvelope.Input(
-                now: .now, contextUsed: nil, projects: [], changes: changes.due, board: try await store.cueBoard(), waiting: [], wake: .sessionActivity))
+                now: .now, projects: [], changes: changes.due, board: try await store.cueBoard(), waiting: [], wake: .sessionActivity([])))
             return (envelope.split(separator: "\n").first { $0.hasPrefix("- [歇下") }.map(String.init), changes.held["s1"] != nil)
         }
 
@@ -309,10 +310,11 @@ struct SessionTaskTests {
         stop = try await settle(after: try await open(.user, "别动登录页样式", delivery: byPad))
         #expect(stop.line == nil && stop.his)
 
-        // 机器消息开的一轮：在跑时 Cue 照常能插话；停下时他在场，同样归他
-        let machine = try await open(.machine, "<firecode_master_event>\n子代理交回：测试全过\n</firecode_master_event>")
+        // 他那句派出的子代理交回、机器消息开的一轮：在跑时 Cue 不插嘴；停下时他在场，同样归他
+        let returned = "<firecode_master_event>\n子代理交回：测试全过\n</firecode_master_event>"
+        var machine = try await open(.machine, returned)
         let said = try #require(await CueTools(store: store, wait: 0).call("task", ["action": "say", "task": task.id.uuidString, "text": "顺便跑一遍 lint"]))
-        #expect(!said.isError && said.text.contains("对「修登录」的会话说"))
+        #expect(said.isError && said.text.contains("他发起的一轮"))
         stop = try await settle(after: machine)
         #expect(stop.line == nil && stop.his)
 
@@ -320,6 +322,11 @@ struct SessionTaskTests {
         let byCue = UUID()
         try await store.recordSend("再跑一遍", to: target, delivery: byCue, origin: .known(.cue))
         stop = try await settle(after: try await open(.user, "再跑一遍", delivery: byCue))
+        #expect(stop.line?.hasPrefix("- [歇下] 修登录") == true && !stop.his)
+
+        // Cue 那句派出的子代理交回、接着跑完的一轮：他在场也报给 Cue
+        machine = try await open(.machine, returned)
+        stop = try await settle(after: machine)
         #expect(stop.line?.hasPrefix("- [歇下] 修登录") == true && !stop.his)
     }
 

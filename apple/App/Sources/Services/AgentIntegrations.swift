@@ -4,14 +4,17 @@ import CueStore
 import Foundation
 import Observation
 
-/// CuePad 接入各个 Agent 的状态与开关（`AgentIntegration` 之上唯一的一份，设置、首次接入与侧栏都读它）。
-/// 装只在用户点了之后（首次接入面板的"接入"、设置的开关、侧栏的"接入"）；装过的在 `refresh()` 发现与这个版本的 App 要写的不同时
+/// CuePad 接入各个 Agent 的状态与开关（`AgentIntegration` 之上唯一的一份，设置、接入面板与会话页都读它）。
+/// 装只在用户点了之后（接入面板的主按钮、设置的开关）；装过的在 `refresh()` 发现与这个版本的 App 要写的不同时
 /// （App 更新了，或 App 被移动后技能里的 cuepad 路径变了）静默升级，不再询问——App 启动时就会 `refresh()`。
 /// 隔离运行（开发构建）只写配置目录经环境变量换走了的那几家（`AgentIntegration.isWritable`），其余只检测。
 @Observable
 final class AgentIntegrations {
     /// 第一次检测完成前为空
     private(set) var statuses: [AgentKind: AgentStatus] = [:]
+
+    /// 每一家都检测过了（之前的"有哪些"还说不准，界面写检测中）。
+    var detected: Bool { statuses.count == AgentKind.allCases.count }
     @ObservationIgnored private let integration: AgentIntegration
     /// 移除成功之后（关掉开关）：收起 CuePad 为它起的东西（如 CuePad 拉起的 OpenCode 服务）
     @ObservationIgnored var uninstalled: (AgentKind) async -> Void = { _ in }
@@ -31,7 +34,7 @@ final class AgentIntegrations {
         integration.writtenFiles(of: kind).map { ($0.path as NSString).abbreviatingWithTildeInPath }
     }
 
-    /// 重新检测一个 Agent（设置与接入面板里它那一行出现时：用户可能刚装了它）。不写任何文件。
+    /// 重新检测一个 Agent（设置里它那一行出现时：用户可能刚装了它）。不写任何文件。
     func detect(_ kind: AgentKind) async {
         statuses[kind] = await integration.status(of: kind)
     }
@@ -61,12 +64,7 @@ final class AgentIntegrations {
         }
     }
 
-    /// 首次打开该不该请你接入：全部检测完、一家都没接入过、有能接的。
-    var needsSetup: Bool {
-        statuses.count == AgentKind.allCases.count && !statuses.values.contains(where: \.isConnected) && !connectable.isEmpty
-    }
-
-    /// 一键接入这几家（接入面板的"接入"，同设置里逐个打开开关）：逐家装，返回没装上的与原因。
+    /// 一键接入这几家（接入面板的主按钮，同设置里逐个打开开关）：逐家装，返回没装上的与原因。
     func install(_ kinds: [AgentKind]) async -> [AgentKind: String] {
         var failures: [AgentKind: String] = [:]
         for kind in kinds {

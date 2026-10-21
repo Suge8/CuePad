@@ -77,23 +77,23 @@ struct SpeakTests {
         #expect(Said.cue(delivered, host: "mac-cue").trip(at: .always(at: .now)) == .delivered)
     }
 
-    /// 对 Cue 说的输入框也是随手记：长按发送"只记下"，或 Cue 没启用时按发送，这句不交给 Cue，记成未分类的一条灵感
-    /// （不选项目；文字在前、图片在后），输入框立刻空，提示落点；Cue 那边不多一句你的话。
+    /// 对 Cue 说的输入框也是随手记：长按发送"只记下"，或 Cue 没启用时按发送，这句不交给 Cue，记成默认项目里的一条灵感
+    /// （不选项目；文字在前、图片按顺序在后），输入框立刻空，提示落点；Cue 那边不多一句你的话。
     @Test(arguments: [true, false])
-    func 只记下或Cue没启用时发送_记成未分类的灵感_输入框立刻空_不对Cue说(cueEnabled: Bool) async throws {
+    func 只记下或Cue没启用时发送_记成默认项目里的灵感_输入框立刻空_不对Cue说(cueEnabled: Bool) async throws {
         if cueEnabled { try await enableCue() }
         let workspace = Workspace(services: app.services)
-        let photo = PickedImage(data: pngData())
-        workspace.cue.draft = ComposerDraft(text: "  周末读完第三章  ", images: [photo])
+        let photos = [PickedImage(data: pngData(shade: 0.1)), PickedImage(data: pngData(shade: 0.9))]
+        workspace.cue.draft = ComposerDraft(text: "  周末读完第三章  ", images: photos)
         let box = Bindable(workspace.cue).draft
 
         let writing = cueEnabled ? workspace.note(from: box) : workspace.sayToCue(from: box)
         #expect(workspace.cue.draft.isEmpty(accepting: .images))
         await writing?.value
 
-        let hash = try files.store(photo.data)
-        #expect(try await store.cards(in: nil).map(\.body) == ["周末读完第三章\n\n![](cuepad://img/\(hash))"])
-        #expect(workspace.notice?.text == "已记到 未分类")
+        let hashes = try photos.map { try files.store($0.data) }
+        #expect(try await store.cards(in: Project.defaultID).map(\.body) == ["周末读完第三章\n\n![](cuepad://img/\(hashes[0]))\n![](cuepad://img/\(hashes[1]))"])
+        #expect(workspace.notice?.text == "已记到 默认")
         #expect(try await youSaid().isEmpty)
     }
 

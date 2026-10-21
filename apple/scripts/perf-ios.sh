@@ -6,8 +6,8 @@
 #   模拟器的合成与 GPU 和真机不同：只看主线程 CPU 与指令数，掉帧只作参考；第一次的数里有模拟器才有的 Swift 一致性查找，真机要另量。
 #   长按菜单在进程内没有入口：App 写 `AWAIT 名 x y`，这里用 axe（https://github.com/cameroncooke/AXe）在模拟器上真按（长按菜单按住 0.8 秒；收起在 App 里做）。
 #   某一次没写完（App 写了 FAIL、中途退出或超时）整次失败、以 1 退出，不出部分结果的表。
-# xc.sh 构建好 Release（带 DEBUG 条件，只为留下测量代码；产物在 apple/.derived-perf）、独占机器后调这里，第一个参数是 CuePad.app；
-# 设备是 0 号模拟器（机型 CUEPAD_IOS_DEVICE，默认 iPhone 17；见 _sim.sh）。
+# xc.sh 构建好 Release（带 DEBUG 条件，只为留下测量代码；产物在 apple/.derived-perf）、领到一台模拟器后调这里（不独占机器：只比指令数与主线程 CPU），第一个参数是 CuePad.app；
+# 设备是领到的那台（机型 CUEPAD_IOS_DEVICE，默认 iPhone 17；见 _sim.sh）。
 set -euo pipefail
 command -v axe >/dev/null || { echo "需要 axe（brew install cameroncooke/axe/axe）" >&2; exit 1; }
 
@@ -69,8 +69,8 @@ for line in open(sys.argv[1]):
     k = (r["name"], seen[key])
     if k not in rows: order.append(k)
     rows.setdefault(k, []).append(r)
-print("交互\t第几次\t点击回合ms\t合计ms\t最重一圈ms\t指令百万\t掉帧")
+print("交互\t第几次\t点击回合ms\t其中指令百万\tGHz\t合计ms\t最重一圈ms\t指令百万\t掉帧")
 for k in order:
     m = lambda f: statistics.median(r[f] for r in rows[k])
-    print(f"{k[0]}\t{k[1]}\t{m('clickMs'):.1f}\t{m('totalMs'):.1f}\t{m('maxTurnMs'):.1f}\t{m('instructionsM'):.0f}\t{m('hitches'):.0f}")
+    print(f"{k[0]}\t{k[1]}\t{m('clickMs'):.1f}\t{m('clickInstructionsM'):.0f}\t{m('clickGHz'):.2f}\t{m('totalMs'):.1f}\t{m('maxTurnMs'):.1f}\t{m('instructionsM'):.0f}\t{m('hitches'):.0f}")
 PY

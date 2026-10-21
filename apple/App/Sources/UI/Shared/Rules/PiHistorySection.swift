@@ -1,7 +1,7 @@
 import Foundation
 
-/// Pi 历史（已结束的会话）按结束时间分段：今天 / 昨天 / 本周 / 本月 / 更早。手机 Agent 页与 Mac ⌘K 的会话范围共用。
-/// 查询按结束时间从新到旧分页，所以分段只在末尾增长，下一页不会插进上面的段。
+/// 按时间分段：今天 / 昨天 / 本周 / 本月 / 更早。会话历史（已结束的会话按结束时间，手机会话页、Mac 会话页与 ⌘K）与 Cue 的记忆（按记下的时间）共用。
+/// 会话历史按结束时间从新到旧分页，所以分段只在末尾增长，下一页不会插进上面的段。
 nonisolated enum PiHistorySection: Sendable {
     case today, yesterday, thisWeek, thisMonth, earlier
 
@@ -31,7 +31,7 @@ nonisolated enum PiHistorySection: Sendable {
         var items: [Item]
     }
 
-    /// 按从新到旧排好的会话切成相连的段。
+    /// 按从新到旧排好的条目切成相连的段。
     static func split<Item>(_ items: [Item], date: (Item) -> Date, now: Date, calendar: Calendar = .current) -> [Run<Item>] {
         var runs: [Run<Item>] = []
         for item in items {

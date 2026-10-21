@@ -10,7 +10,7 @@ nonisolated struct ProjectPageData: Sendable, Equatable {
     var lastSends: [UUID: LastSend]
     /// 本项目没完成的任务的层级，同级按手动顺序。
     var tasks: TaskTree
-    /// 本项目最近完成的顶层任务（`TaskBoard.recentlyDone`）：纸底"已完成"展开时列出。
+    /// 本项目最近做完的顶层任务（`CueStore.tasksDone`，至多 `doneLimit` 条）：纸底"已完成"展开时列出。
     var done: [Card]
     /// 本项目顶层任务的个数（`CueStore.taskCounts`）：纸底的"还有 N 条"与"已完成 M"。
     var taskCounts: TaskCounts
@@ -27,16 +27,19 @@ nonisolated struct ProjectPageData: Sendable, Equatable {
         })
     }
 
-    static func read(_ project: UUID?, from store: isolated CueStore) throws -> ProjectPageData {
+    /// "已完成"列多少条。
+    static let doneLimit = 30
+
+    static func read(_ project: UUID, from store: isolated CueStore) throws -> ProjectPageData {
         // 层级限制按本项目全部任务（含已完成）算
         let all = try store.tasks(in: project, .inProgress, .todo, .done)
         let cards = try store.cards(in: project), lastSends = try store.lastSends(in: project)
         return ProjectPageData(
-            project: try project.flatMap { try store.project($0) },
+            project: try store.project(project),
             cards: cards,
             lastSends: lastSends,
             tasks: TaskTree(all.filter { $0.status != .done }, all: all),
-            done: TaskBoard.recentlyDone(all),
+            done: try store.tasksDone(in: project, limit: doneLimit),
             taskCounts: try store.taskCounts(in: project),
             subtasks: try store.subtaskProgress(in: project),
             stamps: cards.map { CardStamp(id: $0.id, modifiedAt: $0.modifiedAt, lastSentAt: lastSends[$0.id]?.sentAt, isPinned: $0.isPinned) })
@@ -50,7 +53,7 @@ nonisolated struct WallBoard: Equatable, Sendable {
 
     /// 用最新数据更新分区；返回是否是第一次排墙（调用方据此决定要不要动画）。
     @discardableResult
-    mutating func refresh(with data: ProjectPageData, project: UUID?, now: Date = .now, calendar: Calendar = .current) -> Bool {
+    mutating func refresh(with data: ProjectPageData, project: UUID, now: Date = .now, calendar: Calendar = .current) -> Bool {
         guard let previous = arrangement else {
             arrangement = WallArrangement.arrange(data.stamps, project: project, now: now)
             return true

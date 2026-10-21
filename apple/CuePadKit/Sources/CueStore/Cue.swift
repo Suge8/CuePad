@@ -5,23 +5,21 @@ import Foundation
 // 对话（`cueMessages`）、记忆（`cueLines` 与本机的摘要缓存 `cueSummaries`）、设置（`cueProfile`）、此刻在做什么（`cueState`）。
 // 值班时它管没做完的事与不归没做完的事的活会话（`CueStore.cueBoard`），不另记"由谁跟进"。
 
-/// Cue 页对话里一行是谁的。
+/// Cue 页对话里一行是谁的。不认识的（旧版本写下的交接备忘 `handoff`、更新版本的新种类）界面不列、不交给大脑。
 public enum CueAuthor: String, Sendable, CaseIterable {
   /// 你对 Cue 说的
   case you
   /// Cue 对你说的；带选项的是"等你"
   case cue
-  /// Cue 自己醒来那一轮的动态（折叠显示）；没有正文的是那一轮的经过（`tools`）
+  /// Cue 自己醒来那一轮的动态（不推送，Cue 页收进一颗虚线气泡）：没有正文的是那一轮的经过，带着它为什么醒（`wake`）与做了什么（`tools`）
   case note
-  /// Cue 请求换新上下文时写的交接备忘
-  case handoff
   /// 你发起的一轮的经过（`tools`，没有正文）：排在这一轮开始的位置，这一轮说的话与结果都在它之后（`CueStore.recordCueRound`）。
   /// Cue 自己醒来的一轮的经过是一条没有正文的动态（`note`），跟着动态收起
   case round
 }
 
 /// Cue 页的对话：Cue 对话唯一的事实源（不读运行时的会话文件）。写入后只有提问的结束（`answer`、`answeredAt`）与送达（`deliveredAt`）会变；
-/// 一轮的经过那一行（`round`，或没有正文的 `note`）随这一轮做到哪改它的清单；"看过……，不打算行动"那一行动态并进紧接着的下一轮（`CueStore.noteCueGlance`）。
+/// 一轮的经过那一行（`round`，或没有正文的 `note`）随这一轮做到哪改它的清单。
 /// 带选项的是提问，只有一个状态：`answeredAt` 为空是开着，有值是结束了（`CueQuestionEnd`）；结束了不再变，只有你开口收起的 Cue 放得回。
 public struct CueMessage: Identifiable, Equatable, Sendable {
   public let id: UUID
@@ -31,19 +29,20 @@ public struct CueMessage: Identifiable, Equatable, Sendable {
   /// 给你的选项；有选项的 Cue 消息在等你（规则见 `CueStore.cueMessagesWaitingForYou`）。选项只由 `CueAsk.choices` 在写入时按 `asked` 写出、
   /// Cue 不能自拟；写下就不再变，卡片与通知照它显示。
   public var choices: [String]?
-  /// 提问的类别与范围（明文、同步，写入时定下）：哪一类事，与关联任务当时所在的项目（不在项目里为 nil，是所有项目）。
+  /// 提问的类别与范围（明文、同步，写入时定下）：哪一类事，与关联任务当时所在的项目（没关联任务为 nil，是所有项目）。
   /// 选项里"以后……不用问"照它写，选了就把它原样记进允许清单（`CueStore.endCueQuestion`），所以字面范围与实际放行的一致。
   /// 结构 56 之前写的提问由升级按当时的选项补上（`Schema.backfillAsked`）。
   public var asked: CueAllow?
   /// 提问要做的动作与依据的规矩（`CueAsking`；用户内容，加密同步）。
   public var askAction: String?
   public var askRule: String?
-  /// 提问要你看的图（`CueAsking.shots`；看什么是用户内容，加密同步）。
-  public var askShots: [CueShot] = []
+  /// Cue 点名要你看的图，按它给的先后（`CueShot.checked`）：提问的是回答它必须看的，做完的结果是证明结论的最终成果（`CueStore.finishTask`）。
+  /// 卡片、通知与全屏预览只读它，没点名的没有图。看什么是用户内容，加密同步；列与同步字段沿用最初只有提问时的名字 askShots（同步表不改已有列）。
+  public var shots: [CueShot] = []
   /// 提问是哪一类事。
   public var ask: CueAsk? { asked?.ask.known }
   /// 提问问的是什么（`CueAsking.init(stored:)`）；不是提问，或是认不出类别、没有动作短语的提问为 nil。
-  public var asking: CueAsking? { CueAsking(stored: ask, action: askAction, rule: askRule, shots: askShots) }
+  public var asking: CueAsking? { CueAsking(stored: ask, action: askAction, rule: askRule) }
   /// 要提示你（推到手机、Mac 发通知）：Cue 用 tell 标的急事，与你在等的——回答你那一轮的回复或出错（这一轮还没提示过你时，`replyCueRound`），
   /// Cue 起不来（`CueKeeper`）。
   public var urgent: Bool
@@ -61,6 +60,8 @@ public struct CueMessage: Identifiable, Equatable, Sendable {
   public var modifiedAt: Date
   /// 一轮的经过那一行的清单（Cue 那一轮调过的工具，`CueActivity`），与回答注脚同一个样子；别的行没有。
   public var tools: PiChatMessage.Tools?
+  /// Cue 自己醒来的那一轮为什么醒（只在它的经过那一行上，起这一轮时写下、不再变）：Cue 页那一节的第一行与叫醒的接力都只读它。
+  public var wake: CueWake? = nil
   /// 手机推送的标志（明文、可查询，服务端订阅按它出通知）：写下时按 `alerts` 与他在不在 Mac 上开着 Cue 页置位（`CueStore.insertCueMessage`），
   /// 随那一次上传送出后清掉，远端带回来的不留（同 `PiSessionState.notify`，见 docs/sync.md「Agent 与 Cue 的通知」）。
   var notify: Bool = false
@@ -69,49 +70,28 @@ public struct CueMessage: Identifiable, Equatable, Sendable {
   public var alerts: Bool { author == .known(.cue) && (choices != nil || urgent) }
 }
 
-/// Cue 看过会话、不打算行动的那一行动态（`CueStore.noteCueGlance`）：哪一行，与并进去的会话（Pi 的会话 id）。
-public struct CueGlance: Equatable, Sendable {
-  public var row: UUID
-  public var sessions: [String]
-}
-
-/// 新上下文接上的（`CueStore.cueResume`）：最近一份交接备忘与它之后的对话。
-public struct CueResume: Equatable, Sendable {
-  /// 没写过交接为 nil
-  public var handoff: CueMessage?
-  /// 交接之后的对话，从早到晚
-  public var messages: [CueMessage]
-  /// 更早的还有，没取
-  public var truncated: Bool
-
-  public init(handoff: CueMessage?, messages: [CueMessage], truncated: Bool) {
-    self.handoff = handoff
-    self.messages = messages
-    self.truncated = truncated
-  }
-}
-
 extension CueMessage: Record {
   static let table = Table.cueMessages
   static let columns = [
     "id", "author", "text", "choices", "urgent", "taskID", "answer", "answeredAt", "deliveredAt", "createdAt", "modifiedAt", "notify", "tools",
-    "ask", "askAction", "askRule", "askShots", "setAsideBy",
+    "ask", "askAction", "askRule", "askShots", "setAsideBy", "wake",
   ]
   /// `notify` 的值（订阅的谓词按它）。
   package static let notifyFlag = "cue"
   var bindings: [any SQLBindable] {
     [
       id, author.rawValue, text, choices.map { JSONColumn.encode($0) }, urgent, taskID, answer, answeredAt, deliveredAt, createdAt, modifiedAt,
-      notify ? Self.notifyFlag : nil, tools?.stored, asked?.stored, askAction, askRule, JSONColumn.encodeList(askShots), setAsideBy,
+      notify ? Self.notifyFlag : nil, tools?.stored, asked?.stored, askAction, askRule, JSONColumn.encodeList(shots), setAsideBy, wake?.stored,
     ]
   }
   init(row: Row) {
     self.init(
       id: row.uuid(0), author: Open(rawValue: row.text(1)), text: row.text(2),
       choices: JSONColumn.decode([String].self, from: row.textOrNil(3)), asked: row.textOrNil(13).flatMap(CueAllow.init(stored:)),
-      askAction: row.textOrNil(14), askRule: row.textOrNil(15), askShots: JSONColumn.decodeList(CueShot.self, from: row.textOrNil(16)), urgent: row.bool(4), taskID: row.uuidOrNil(5),
+      askAction: row.textOrNil(14), askRule: row.textOrNil(15), shots: JSONColumn.decodeList(CueShot.self, from: row.textOrNil(16)), urgent: row.bool(4), taskID: row.uuidOrNil(5),
       answer: row.textOrNil(6), answeredAt: row.dateOrNil(7), setAsideBy: row.uuidOrNil(17), deliveredAt: row.dateOrNil(8), createdAt: row.date(9),
-      modifiedAt: row.date(10), tools: row.textOrNil(12).flatMap(PiChatMessage.Tools.init(stored:)), notify: row.textOrNil(11) != nil)
+      modifiedAt: row.date(10), tools: row.textOrNil(12).flatMap(PiChatMessage.Tools.init(stored:)), wake: row.textOrNil(18).flatMap(CueWake.init(stored:)),
+      notify: row.textOrNil(11) != nil)
   }
 }
 
@@ -183,22 +163,6 @@ public struct CueMemorySummary: Equatable, Sendable {
   public var createdAt: Date
 }
 
-/// 原型（`CueFresh`）：拼 Cue 的日志（`CueAgent` 的 `CueLog`）要的一切，一次读出——全部对话、全部记忆（含一直记着与忘掉的）与摘要缓存里的全部行。
-/// 摘要是否还有效由日志按条目指纹判断（`CueStoredSummary.fingerprint`），这里不筛。
-public struct CueLogSource: Sendable {
-  public var messages: [CueMessage]
-  public var lines: [CueMemoryLine]
-  public var summaries: [CueStoredSummary]
-}
-
-/// 摘要缓存（`cueSummaries`，本机、不同步）里的一行：区间 [lo, hi) 与写下时区间内条目的指纹。
-public struct CueStoredSummary: Sendable {
-  public var lo: Int
-  public var hi: Int
-  public var text: String
-  public var fingerprint: String
-}
-
 /// 记忆的全貌：全部行（序号即下标，含忘掉的）与仍然有效的摘要，一次读出。记忆视图（`CueAgent`）从它算。
 public struct CueMemory: Equatable, Sendable {
   public var lines: [CueMemoryLine]
@@ -252,7 +216,7 @@ public struct CueProfile: Equatable, Sendable {
     self.modifiedAt = modifiedAt
   }
 
-  /// 这类事在这个项目里（`project` 为 nil 是不在项目里的事）已允许：清单里有不分项目的那一项，或这个项目的那一项。返回对上的那一项。
+  /// 这类事在这个项目里（`project` 为 nil 是不关联任务的事）已允许：清单里有不分项目的那一项，或这个项目的那一项。返回对上的那一项。
   public func allowing(_ ask: CueAsk, in project: UUID?) -> CueAllow? {
     [CueAllow(ask, project: nil), project.map { CueAllow(ask, project: $0) }].compactMap(\.self).first(where: allows.contains)
   }
@@ -282,8 +246,6 @@ public struct CueState: Equatable, Sendable {
   public var detail: String?
   /// 在跑的这一轮的经过那一行（`CueStore.recordCueRound`）；还没调过工具、歇着时没有
   public var round: UUID?
-  /// 在跑的这一轮是会话的动静叫醒的（`CueWake.sessionActivity`）；别的原因醒来、歇着时没有
-  public var woke: CueWoke?
   /// 它这个班次的上下文（`CueContext`），值班的 Mac 随状态写；不在值班、这个班次还没请求过模型为 nil
   public var context: CueContext?
   /// 它留给你回的会话（`CueLeft`，只由 `CueStore.leaveToYou` 写，`setCueState` 不动它）
@@ -291,14 +253,12 @@ public struct CueState: Equatable, Sendable {
   public var modifiedAt: Date
 
   public init(
-    state: Open<PiWorkState>, detail: String? = nil, round: UUID? = nil, woke: CueWoke? = nil, context: CueContext? = nil, left: [CueLeft] = [],
-    modifiedAt: Date = .now
+    state: Open<PiWorkState>, detail: String? = nil, round: UUID? = nil, context: CueContext? = nil, left: [CueLeft] = [], modifiedAt: Date = .now
   ) {
     self.left = left
     self.state = state
     self.detail = detail
     self.round = round
-    self.woke = woke
     self.context = context
     self.modifiedAt = modifiedAt
   }
@@ -325,8 +285,8 @@ public enum CueEnableError: LocalizedError, Equatable {
   }
 }
 
-/// Cue 此刻的上下文（一个班次一份）：用了多少 token、模型的窗口（大脑没报为 nil）、这个班次几点起。用到 `renewAt` 后，
-/// 下一次醒来的信封要它先写交接备忘再换新（`CueEnvelope`）。随 `CueState` 同步，各端的上下文用量只读它。
+/// Cue 此刻的上下文（一个会话一份）：用了多少 token、模型的窗口（大脑没报为 nil）、这个会话几点起。用到 `renewAt` 后，
+/// 下一次醒来先开新会话（`CueKeeper`）。随 `CueState` 同步，各端的上下文用量只读它。
 public struct CueContext: StoredJSON, Equatable, Sendable {
   public var used: Int
   public var window: Int?
@@ -347,15 +307,38 @@ public struct CueContext: StoredJSON, Equatable, Sendable {
   }
 }
 
-/// 叫醒 Cue 这一轮的会话动静：醒来的时刻（一轮一个，接连几次叫醒各是各的）与带来变化的那几个会话（`CueChange.session`；
-/// 只有任务完成、不在会话上的变化时为空）。只在值班的 Mac 起这一轮时定下、随 `CueState` 同步，各端画"叫醒"的那一下只读它。
-public struct CueWoke: StoredJSON, Equatable, Sendable {
-  public var at: Date
-  public var sessions: [String]
+/// Cue 这一轮为什么醒（值班的管理器起一轮时定下）。交给大脑的信封照它写"醒来："；Cue 自己醒来的一轮把它记在这一轮的经过那一行上
+/// （`CueMessage.wake`，随那一行同步），Cue 页那一节的第一行照它写、点了去叫醒它的会话，叫醒的接力（`CueFlight`）也只读它。
+/// 旧版本存下的、已不再有的原因（换新、改了设置）读出为 nil，那一节照没有醒来原因的旧动态显示。
+public enum CueWake: StoredJSON, Equatable, Sendable {
+  /// 刚启用：第一次醒来
+  case enabled
+  /// 你发来新消息
+  case message
+  /// 在做的事里有动静（`CueChange`）：哪几处，按事件时刻从早到晚
+  case sessionActivity([CueStir])
+  /// 空闲时的例行查看（含合并记忆）
+  case idle
+  /// 提醒到点：到点的那几条记忆
+  case reminder([UUID])
+}
 
-  public init(at: Date, sessions: [String]) {
-    self.at = at
-    self.sessions = sessions
+/// 叫醒 Cue 的一处动静：`CueChange` 里界面要的那点——出了什么事、在哪个会话、哪件任务。
+public struct CueStir: Codable, Equatable, Sendable {
+  public var kind: CueChange.Kind
+  /// Pi 的会话 id；任务完成这类不在会话上的为 nil
+  public var session: String?
+  /// 变化所在的那件（叶子，任务本身的变化是任务）
+  public var task: UUID?
+
+  public init(kind: CueChange.Kind, session: String? = nil, task: UUID? = nil) {
+    self.kind = kind
+    self.session = session
+    self.task = task
+  }
+
+  public init(_ change: CueChange) {
+    self.init(kind: change.kind, session: change.session?.sessionID, task: (change.leaf ?? change.task)?.id)
   }
 }
 
@@ -393,15 +376,14 @@ public struct CueDuty: Equatable, Sendable {
 
 extension CueState: Record {
   static let table = Table.cueState
-  static let columns = ["id", "state", "detail", "modifiedAt", "round", "woke", "context", "leftToYou"]
+  static let columns = ["id", "state", "detail", "modifiedAt", "round", "context", "leftToYou"]
   var bindings: [any SQLBindable] {
-    [Self.recordID, state.rawValue, detail, modifiedAt, round, woke?.stored, context?.stored, left.isEmpty ? nil : JSONColumn.encode(left)]
+    [Self.recordID, state.rawValue, detail, modifiedAt, round, context?.stored, left.isEmpty ? nil : JSONColumn.encode(left)]
   }
   init(row: Row) {
     self.init(
-      state: Open(rawValue: row.text(1)), detail: row.textOrNil(2), round: row.uuidOrNil(4), woke: row.textOrNil(5).flatMap(CueWoke.init(stored:)),
-      context: row.textOrNil(6).flatMap(CueContext.init(stored:)), left: JSONColumn.decodeList(CueLeft.self, from: row.textOrNil(7)),
-      modifiedAt: row.date(3))
+      state: Open(rawValue: row.text(1)), detail: row.textOrNil(2), round: row.uuidOrNil(4), context: row.textOrNil(5).flatMap(CueContext.init(stored:)),
+      left: JSONColumn.decodeList(CueLeft.self, from: row.textOrNil(6)), modifiedAt: row.date(3))
   }
 }
 
@@ -457,7 +439,7 @@ public enum CueAsk: String, CaseIterable, Sendable {
   public func choices(in project: String?) -> [String] { [Self.once] + (always(in: project).map { [$0] } ?? []) }
 }
 
-/// Cue 的一次提问问的是什么（`CueStore.addCueMessage`）：哪一类、要做的动作，规矩那一类还有是哪条规矩，以及要你看的那几张图。
+/// Cue 的一次提问问的是什么（`CueStore.addCueMessage`）：哪一类、要做的动作，规矩那一类还有是哪条规矩；要你看的图在消息上（`CueMessage.shots`）。
 /// 动作、规矩与每张图看什么是 Cue 写的短语，卡片、侧栏与菜单栏的摘要、小组件、本机与手机通知都只露这些，不露 Cue 的原话。
 public struct CueAsking: Equatable, Sendable {
   public let ask: CueAsk
@@ -465,38 +447,31 @@ public struct CueAsking: Equatable, Sendable {
   public let action: String
   /// 规矩那一类依据的规矩（"改数据库结构前先问我"）；别的类没有。
   public let rule: String?
-  /// 回答这个问题要看的图（Cue 点名、按它给的先后），卡片、通知与全屏预览只读它；没点名的没有图。
-  public let shots: [CueShot]
 
   /// 动作与规矩各至多这么多字。
   public static let phraseLimit = 30
 
-  /// Cue 提问时给的：动作必填，规矩那一类还要写规矩；都是一行、不超过 `phraseLimit` 字，不合要求抛 `askPhrase`。
-  /// 图至多 `CueShot.limit` 张、不重复，每张一句看什么（`CueShot.lookLimit` 字以内），不合要求抛 `askShots`。
-  public init(_ ask: CueAsk, action: String?, rule: String? = nil, shots: [CueShot] = []) throws {
+  /// Cue 提问时给的：动作必填，规矩那一类还要写规矩；都是一行、不超过 `phraseLimit` 字，不合要求抛 `phrase`。
+  public init(_ ask: CueAsk, action: String?, rule: String? = nil) throws {
     self.ask = ask
-    self.action = try Self.phrase(action, "doing", "要做的动作，如“推送 scheduler 的重连修复”", limit: Self.phraseLimit)
-    self.rule = ask == .rule ? try Self.phrase(rule, "rule", "依据的规矩，照他的原话，如“改数据库结构前先问我”", limit: Self.phraseLimit) : nil
-    guard shots.count <= CueShot.limit, Set(shots.map(\.preview)).count == shots.count else { throw CueStoreError.askShots(limit: CueShot.limit) }
-    self.shots = try shots.map {
-      CueShot(preview: $0.preview, look: try Self.phrase($0.look, "show 的 look", "这张看什么，如“方案 1：大按钮占满一行”", limit: CueShot.lookLimit))
-    }
+    self.action = try Self.phrase(action, "带 ask 要写 doing", "要做的动作，如“推送 scheduler 的重连修复”", limit: Self.phraseLimit)
+    self.rule = ask == .rule ? try Self.phrase(rule, "带 ask 要写 rule", "依据的规矩，照他的原话，如“改数据库结构前先问我”", limit: Self.phraseLimit) : nil
   }
 
   /// 照存下的读回（`CueMessage.asking`、通知服务扩展读的同步记录）：认不出类别（更新的版本写的）、没有动作短语（结构 56 之前写的，
   /// 或规矩那一类没写规矩）的不算，卡片、摘要与通知照普通的话写它的第一行，回答的引用也是这一行。
-  package init?(stored ask: CueAsk?, action: String?, rule: String?, shots: [CueShot]) {
+  package init?(stored ask: CueAsk?, action: String?, rule: String?) {
     guard let ask, let action, ask != .rule || rule != nil else { return nil }
     self.ask = ask
     self.action = action
     self.rule = rule
-    self.shots = shots
   }
 
-  private static func phrase(_ text: String?, _ field: String, _ hint: String, limit: Int) throws -> String {
+  /// Cue 写的短语：去掉首尾空白与句末标点，一行、不空、不超过 `limit` 字，不合要求抛 `phrase`（`field` 是报错的开头）。
+  fileprivate static func phrase(_ text: String?, _ field: String, _ hint: String, limit: Int) throws -> String {
     let trimmed = (text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "。？?！!"))
     guard !trimmed.isEmpty, trimmed.count <= limit, !trimmed.contains(where: \.isNewline) else {
-      throw CueStoreError.askPhrase(field: field, hint: hint, limit: limit)
+      throw CueStoreError.phrase(field: field, hint: hint, limit: limit)
     }
     return trimmed
   }
@@ -512,12 +487,12 @@ public struct CueAsking: Equatable, Sendable {
   public var why: String? { rule.map { "你说过「\($0)」。" } }
 }
 
-/// 提问要你看的一张图：发到手机的哪一份（`PiPreview.id`）与看它的什么（Cue 写的一句）。写下就不再变；那一份不在了（会话的预览过期删掉）就不显示。
+/// Cue 点名要你看的一张图（`CueMessage.shots`）：发到手机的哪一份（`PiPreview.id`）与看它的什么（Cue 写的一句）。写下就不再变；那一份不在了（会话的预览过期删掉）就不显示。
 public struct CueShot: Codable, Hashable, Sendable {
   public let preview: UUID
   public let look: String
 
-  /// 一次提问至多这么多张：只挑回答这个问题必须看的。
+  /// 一条消息至多这么多张：只挑回答问题必须看的、证明结论的。
   public static let limit = 4
   /// 看什么至多这么多字。
   public static let lookLimit = 20
@@ -525,6 +500,14 @@ public struct CueShot: Codable, Hashable, Sendable {
   public init(preview: UUID, look: String) {
     self.preview = preview
     self.look = look
+  }
+
+  /// Cue 点名的一组：至多 `limit` 张、不重复，每张一句看什么（一行、`lookLimit` 字以内）；多了或重复抛 `shots`，看什么不合要求抛 `phrase`。
+  public static func checked(_ shots: [CueShot]) throws -> [CueShot] {
+    guard shots.count <= limit, Set(shots.map(\.preview)).count == shots.count else { throw CueStoreError.shots(limit: limit) }
+    return try shots.map {
+      CueShot(preview: $0.preview, look: try CueAsking.phrase($0.look, "show 每张要写 look", "这张看什么，如“方案 1：大按钮占满一行”", limit: lookLimit))
+    }
   }
 }
 
@@ -560,15 +543,15 @@ public enum CueReport {
 }
 
 /// Cue 通知的文案（Mac 本机通知与手机锁屏通知同一条规则）：标题是 Cue 的名字（空的用 `CueProfile.defaultName`）；
-/// "等你"的正文是要你定什么、规矩那一类引的规矩（`CueAsking`）、要看的图各看什么，接选项，与卡片同源；其余（读不出 `CueAsking` 的提问也是）是 Cue 的原话
+/// "等你"的正文是要你定什么、规矩那一类引的规矩（`CueAsking`）、要看的图各看什么（`looks`），接选项，与卡片同源；其余（读不出 `CueAsking` 的提问也是）是 Cue 的原话
 /// （去掉图片，行内的 Markdown 记号只留字，至多 `bodyLimit` 字）。
 public enum CueAlert {
   public static let bodyLimit = 300
 
-  public static func content(name: String?, text: String, asking: CueAsking?, choices: [String]?) -> (title: String, body: String) {
+  public static func content(name: String?, text: String, asking: CueAsking?, choices: [String]?, looks: [String]) -> (title: String, body: String) {
     let body: String
     if let asking, let choices {
-      let shots = asking.shots.isEmpty ? [] : ["看图：" + asking.shots.map(\.look).joined(separator: "；")]
+      let shots = looks.isEmpty ? [] : ["看图：" + looks.joined(separator: "；")]
       body = ([asking.question] + [asking.why].compactMap(\.self) + shots + [choices.joined(separator: " / ")]).joined(separator: "\n")
     } else {
       let plain = CueFormat.plainText(text)

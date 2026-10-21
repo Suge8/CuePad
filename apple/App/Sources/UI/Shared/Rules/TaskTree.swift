@@ -20,7 +20,7 @@ nonisolated struct TaskDrop: Equatable, Sendable {
     var mark: Mark
 }
 
-/// 一组任务的层级（手机任务页与项目页、Mac 任务面板与项目页共用）：按输入顺序（同级的手动顺序）建树，上级不在这组里的当顶层；
+/// 一组任务的层级（手机与 Mac 的项目页、任务看板的顶层共用）：按输入顺序（同级的手动顺序）建树，上级不在这组里的当顶层；
 /// 排出可见的行（只有两级，全部列出、不折起），算缩进、反缩进与拖放落点各是哪一次移动。任务最多几级只在 `Card.maxTaskDepth`。
 nonisolated struct TaskTree: Equatable, Sendable {
     struct Row: Identifiable, Equatable, Sendable {
@@ -58,7 +58,7 @@ nonisolated struct TaskTree: Equatable, Sendable {
     /// 要显示的任务，按输入顺序。
     var ordered: [Card] { order }
 
-    /// 只留这些顶层任务和它们的子树（看板的一组、项目页显示的前几条），顶层按给的先后排（看板的进行中按开始时间）：
+    /// 只留这些顶层任务和它们的子树（项目页显示的前几条），顶层按给的先后排：
     /// 排出的行、缩进、反缩进与拖放的落点都按这个顺序算，与看到的一致。
     func scoped(to roots: [UUID]) -> TaskTree {
         TaskTree(roots.flatMap { [$0] + descendants(of: $0) }.compactMap { tasks[$0] }, all: everything)
@@ -94,16 +94,15 @@ nonisolated struct TaskTree: Equatable, Sendable {
     /// 成为原上级的下一个同级；顶层为 nil。
     func outdent(_ id: UUID) -> TaskMove? {
         guard let parent = parents[id] else { return nil }
-        return TaskMove(slot: slot(under: parents[parent], project: tasks[parent]?.projectID), after: parent)
+        return TaskMove(slot: slot(under: parents[parent], project: project(of: parent)), after: parent)
     }
 
     // MARK: 拖放
 
     /// 拖着 `dragged` 停在 `point`（与 `frames` 同一坐标系）时的落点。`rows` 是可见的行，`depthShift` 是手指横向挪了几级
     /// （右正左负）。停在一行中部是成为它的步骤（排在最后）；在两行之间时，层级取原层级加横移、夹在这个位置可取的范围内。
-    /// 不能落进自己的子树；与原位置相同时为 nil。`gaps` 为 false 时这组行的先后不是同级的手动顺序（看板的进行中按开始时间排），
-    /// 两行之间不成落点（不改顺序、不改项目），只有停在一行中部成为它的步骤。
-    func drop(_ dragged: UUID, rows: [Row], frames: [UUID: CGRect], at point: CGPoint, depthShift: Int, gaps: Bool = true) -> TaskDrop? {
+    /// 不能落进自己的子树；与原位置相同时为 nil。
+    func drop(_ dragged: UUID, rows: [Row], frames: [UUID: CGRect], at point: CGPoint, depthShift: Int) -> TaskDrop? {
         let excluded = Set([dragged] + descendants(of: dragged))
         let candidates = rows.filter { !excluded.contains($0.id) && frames[$0.id] != nil }
         let height = structure.height(of: dragged)
@@ -111,10 +110,8 @@ nonisolated struct TaskTree: Equatable, Sendable {
         if let (index, fraction) = hit(point, in: candidates, frames: frames) {
             let row = candidates[index]
             if (0.25..<0.75).contains(fraction), fits(dragged, under: row.id) { return onto(row.id, dragged: dragged) }
-            guard gaps else { return nil }
             gap = fraction < 0.5 ? index : index + 1
         } else {
-            guard gaps else { return nil }
             gap = candidates.filter { frames[$0.id]!.midY < point.y }.count
         }
         let previous = gap > 0 ? candidates[gap - 1] : nil
@@ -153,7 +150,7 @@ nonisolated struct TaskTree: Equatable, Sendable {
         if let previous, depth == previous.depth + 1 { return TaskMove(slot: .under(previous.id), after: nil) }
         // 上一行在这一级（或更深处）的祖先就是新的上一个同级
         let sibling = previous.map { ancestor(of: $0.id, atDepth: depth) }
-        let project = (sibling ?? next.map { ancestor(of: $0.id, atDepth: 0) }).flatMap { tasks[$0]?.projectID } ?? tasks[dragged]?.projectID
+        let project = project(of: sibling ?? next.map { ancestor(of: $0.id, atDepth: 0) } ?? dragged)
         return TaskMove(slot: slot(under: sibling.flatMap { parents[$0] }, project: project), after: sibling)
     }
 
@@ -168,13 +165,16 @@ nonisolated struct TaskTree: Equatable, Sendable {
         return cursor
     }
 
-    private func slot(under parent: UUID?, project: UUID?) -> CardSlot {
+    private func slot(under parent: UUID?, project: UUID) -> CardSlot {
         parent.map(CardSlot.under) ?? .top(project: project)
     }
 
+    /// 树里一条任务所在的项目（树里的 id 都在 `tasks` 里）。
+    private func project(of id: UUID) -> UUID { tasks[id]!.projectID }
+
     /// 原位置：同级（顶层按同一项目算，与 Store 的同级范围一致）里的上一条。
     private func current(_ id: UUID) -> TaskMove {
-        let project = tasks[id]?.projectID
+        let project = project(of: id)
         let siblings = parents[id].map(children(of:)) ?? roots.filter { tasks[$0]?.projectID == project }
         let index = siblings.firstIndex(of: id) ?? 0
         return TaskMove(slot: slot(under: parents[id], project: project), after: index > 0 ? siblings[index - 1] : nil)

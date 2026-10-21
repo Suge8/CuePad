@@ -1,5 +1,5 @@
 """CuePad 自家的图标（墨块）：从几何直接生成自定义 SF Symbol（模板 7.0，Ultralight / Regular / Black 三个母版插值），
-整个重写 App 资源目录的 Symbols 下（两端共用，资源名 cue.<名>），并生成 LoopLayer 取用的"话在路上"三块 V 的路径（`ClimbBlocks.swift`）
+整个重写 App 资源目录的 Symbols 下（两端共用，资源名 cue.<名>），小组件与实时活动要的几个另拷一份进小组件自己的资源目录（`WIDGET_SYMBOLS`，扩展里没有 App 的资源），并生成 LoopLayer 取用的"话在路上"三块 V 的路径（`ClimbBlocks.swift`）
 与图标总览（`IconSheet`）列的全部符号名（`InkSymbols.swift`，只在 Debug 构建里）。
 用法：python3 design/tools/cue-symbols.py（只用标准库）。
 
@@ -26,6 +26,8 @@ ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "apple/App/Sources/Assets.xcassets/Symbols"
 CLIMB_SWIFT = ROOT / "apple/App/Sources/UI/Shared/Theme/ClimbBlocks.swift"
 NAMES_SWIFT = ROOT / "apple/App/Sources/UI/Debug/InkSymbols.swift"
+WIDGET_OUT = ROOT / "apple/App/Widget/Symbols.xcassets"
+WIDGET_SYMBOLS = ("waiting", "done")  # 小组件与实时活动用到的（`WidgetIcon`）
 PREFIX = "cue"
 
 G = 35.6 / 12  # 一格的模板单位（系统 circle 在 S 号 100pt 下中线半径 35.6）
@@ -447,15 +449,6 @@ def settings(m):
             a = math.radians(k * 60 - 90 + da); pts.append((R * math.cos(a), R * math.sin(a))); radii.append(rr)
     hr = 4.9 - g
     return [Layer("gear", [rpoly(pts, radii), disc((0, 0), hr, hole=True)]), Layer("axle", [disc((0, 0), hr - c - 0.3)], "secondary")]
-
-
-def inbox(m):
-    """未分类：一只托盘（上沿中间凹下去一块），上方一张小纸条（点睛）正落进去。"""
-    g, c = GROW[m], CARVE[m]
-    tray = grown([(-11, -1.2), (-5.2, -1.2), (-3.6, 2.0), (3.6, 2.0), (5.2, -1.2), (11, -1.2), (11, 8.4), (-11, 8.4)],
-                 [0.8, 0.5, 0.6, 0.6, 0.5, 0.8, 2.8, 2.8], g)
-    slip = grown([(-3.2, -8.6), (3.2, -8.6), (3.2, -1.2 - c - 2 * g), (-3.2, -1.2 - c - 2 * g)], [1.0, 1.0, 0, 0], g)
-    return [Layer("tray", [tray]), Layer("slip", [slip], "secondary")]
 
 
 def archive(m):
@@ -1783,7 +1776,6 @@ SYMBOLS = {
     "session": session,
     "search": search(),
     "settings": settings,
-    "inbox": inbox,
     "archive": archive,
     "trash": trash,
     "sidebar": sidebar,
@@ -1834,7 +1826,6 @@ SYMBOLS = {
     "folder": folder(),
     "folder.add": folder(mark_plus),
     "folder.remove": folder(mark_minus),
-    "folder.missing": folder(lambda c, s, w: mark_question(c, s * 0.8, w)),
     "books": books,
     "pin": pin,
     "unpin": unpin,
@@ -2016,6 +2007,14 @@ def write_symbols():
             f'      "filename" : "{full}.svg",\n      "idiom" : "universal"\n    }}\n  ]\n}}\n')
 
 
+def write_widget_symbols():
+    shutil.rmtree(WIDGET_OUT, ignore_errors=True)
+    WIDGET_OUT.mkdir(parents=True)
+    (WIDGET_OUT / "Contents.json").write_text(INFO)
+    for name in WIDGET_SYMBOLS:
+        shutil.copytree(OUT / f"{PREFIX}.{name}.symbolset", WIDGET_OUT / f"{PREFIX}.{name}.symbolset")
+
+
 def write_climb():
     blocks = ",\n".join("        [" + ", ".join(f"CGPoint(x: {fmt(x)}, y: {fmt(y)})" for x, y in climb_block(tip)) + "]" for tip in CLIMB_TIPS)
     CLIMB_SWIFT.write_text(
@@ -2041,5 +2040,6 @@ def write_names():
 
 if __name__ == "__main__":
     write_symbols()
+    write_widget_symbols()
     write_climb()
     write_names()

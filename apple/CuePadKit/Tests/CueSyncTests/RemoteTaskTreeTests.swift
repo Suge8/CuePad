@@ -27,8 +27,8 @@ import Testing
   }
 
   @Test func 两台设备互相挂成环_环里id最小的回到顶层_修正被推送() async throws {
-    let a = try await store.createTask("a", in: nil)
-    let b = try await store.createTask("b", in: nil)
+    let a = try await store.createTask("a")
+    let b = try await store.createTask("b")
     try await pushed()
     try await store.moveCard(a.id, to: .under(b.id), after: nil)
     let movedB = try #require(try await store.card(b.id))
@@ -61,7 +61,7 @@ import Testing
       let projects = [try await store.createProject(name: "甲", color: "#111").id, try await store.createProject(name: "乙", color: "#111").id]
       var made: [(id: UUID, isTask: Bool, depth: Int)] = []
       for index in 0..<(8 + random.next(25)) {
-        let project: UUID? = random.next(3) == 0 ? nil : projects[random.next(2)]
+        let project = random.next(3) == 0 ? Project.defaultID : projects[random.next(2)]
         let parents = made.filter { $0.isTask && $0.depth < 2 }
         let parent = parents.isEmpty || random.next(3) == 0 ? nil : parents[random.next(parents.count)]
         let isTask = random.next(2) == 0
@@ -70,7 +70,7 @@ import Testing
         case (true, let parent?): card = try await store.createTask("t\(index)", under: parent.id)
         case (true, nil): card = try await store.createTask("t\(index)", in: project)
         case (false, let parent?):
-          card = try await store.createCard(in: nil, body: "i\(index)")
+          card = try await store.createCard(body: "i\(index)")
           try await store.moveCard(card.id, to: .under(parent.id), after: nil)
         case (false, nil): card = try await store.createCard(in: project, body: "i\(index)")
         }
@@ -82,7 +82,7 @@ import Testing
       var deletions: [(id: CKRecord.ID, recordType: String)] = []
       for pick in Set((0..<(1 + random.next(3))).map { _ in random.next(made.count) }) {
         let current = try #require(try await store.card(made[pick].id))
-        var parent = current.parentID, project = current.projectID, isTask = current.isTask
+        var parent = current.parentID, project: UUID? = current.projectID, isTask = current.isTask
         switch random.next(5) {
         case 0: parent = made[random.next(made.count)].id
         case 1: parent = nil
@@ -116,11 +116,11 @@ import Testing
   }
 
   @Test func 并发挪出第三级任务_提到第二级_挂在下面的灵感跟着() async throws {
-    let a = try await store.createTask("a", in: nil)
+    let a = try await store.createTask("a")
     let a1 = try await store.createTask("a1", under: a.id)
-    let b = try await store.createTask("b", in: nil)
+    let b = try await store.createTask("b")
     let b1 = try await store.createTask("b1", under: b.id)
-    let note = try await store.createCard(in: nil, body: "备注")
+    let note = try await store.createCard(body: "备注")
     try await store.moveCard(note.id, to: .under(b1.id), after: nil)
     try await pushed()
 
@@ -132,9 +132,9 @@ import Testing
   }
 
   @Test func 会话只在叶子上_远端让叶子有了步骤_会话落到第一个没完成的步骤() async throws {
-    let top = try await store.createTask("上线", in: nil)
-    let first = try await store.createTask("备份", in: nil)
-    let second = try await store.createTask("发布", in: nil)
+    let top = try await store.createTask("上线")
+    let first = try await store.createTask("备份")
+    let second = try await store.createTask("发布")
     try await store.linkCard(top.id, toSession: "s1")
     try await pushed()
 
