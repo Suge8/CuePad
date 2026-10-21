@@ -34,7 +34,7 @@ struct ComposerField: NSViewRepresentable {
         view.delegate = context.coordinator
         view.font = GrowingTextView.bodyFont
         view.defaultParagraphStyle = GrowingTextView.paragraph
-        view.typingAttributes = GrowingTextView.attributes
+        view.typingAttributes = GrowingTextView.attributes(ink)
         view.drawsBackground = false
         view.isRichText = false
         view.allowsUndo = true
@@ -65,7 +65,8 @@ struct ComposerField: NSViewRepresentable {
         if text != context.coordinator.sent, !view.hasMarkedText() {
             context.coordinator.sent = text
             view.string = text
-            view.textStorage?.setAttributes(GrowingTextView.attributes, range: NSRange(location: 0, length: (text as NSString).length))
+            // 整篇重铺的属性要带上字色：只铺字体与段落时颜色被清掉、落回黑色（深色下草稿字发黑），之后接着打的字也照它的属性继承成黑的
+            view.textStorage?.setAttributes(GrowingTextView.attributes(ink), range: NSRange(location: 0, length: (text as NSString).length))
             view.textChanged()
             view.setSelectedRange(NSRange(location: (text as NSString).length, length: 0))
             view.revealsEnd = true
@@ -77,6 +78,7 @@ struct ComposerField: NSViewRepresentable {
         if ink != context.coordinator.ink {
             context.coordinator.ink = ink
             view.textColor = NSColor(ink)
+            view.typingAttributes = GrowingTextView.attributes(ink)
             view.insertionPointColor = NSColor(ink)
         }
         view.setAccessibilityLabel(label)
@@ -148,7 +150,9 @@ final class GrowingTextView: NSTextView {
         style.lineSpacing = Typography.readingLineSpacing
         return style
     }()
-    static let attributes: [NSAttributedString.Key: Any] = [.font: bodyFont, .paragraphStyle: paragraph]
+    /// 量高只看字体与段落。
+    private static let metrics: [NSAttributedString.Key: Any] = [.font: bodyFont, .paragraphStyle: paragraph]
+    static func attributes(_ ink: Color) -> [NSAttributedString.Key: Any] { metrics.merging([.foregroundColor: NSColor(ink)]) { $1 } }
     var placeholder = ""
     var placeholderColor = NSColor.clear
     var maxLines = 1
@@ -183,7 +187,7 @@ final class GrowingTextView: NSTextView {
     func textChanged() { heights.textChanged() }
 
     private static func height(of string: String, width: CGFloat) -> CGFloat {
-        let storage = NSTextStorage(string: string, attributes: attributes)
+        let storage = NSTextStorage(string: string, attributes: metrics)
         let layout = NSLayoutManager()
         let container = NSTextContainer(size: CGSize(width: width, height: .greatestFiniteMagnitude))
         container.lineFragmentPadding = 0

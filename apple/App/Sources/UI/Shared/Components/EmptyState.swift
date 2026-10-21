@@ -73,14 +73,30 @@ struct EmptyState<Action: View>: View {
 private struct PhraseLines: View {
     let text: String
 
-    private static let breaks: Set<Character> = ["，", "。", "；", "：", "！", "？"]
+    fileprivate static let breaks: Set<Character> = ["，", "。", "；", "：", "！", "？"]
 
     var body: some View {
         Flow {
-            ForEach(Array(Self.phrases(text).enumerated()), id: \.offset) { Text($0.element) }
+            ForEach(Array(Self.phrases(text).enumerated()), id: \.offset) { Phrase(text: $0.element) }
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(text)
+    }
+
+    /// 一截：末尾的全角标点单放在一个字宽的格子里。整截一个 `Text` 时，排版把行尾的全角标点挤成半角（每截都在行尾），逗号句号就贴着字。
+    private struct Phrase: View {
+        let text: String
+
+        var body: some View {
+            if let last = text.last, PhraseLines.breaks.contains(last) {
+                HStack(spacing: 0) {
+                    Text(text.dropLast())
+                    Text(verbatim: "中").hidden().overlay(alignment: .leading) { Text(String(last)) }
+                }
+            } else {
+                Text(text)
+            }
+        }
     }
 
     static func phrases(_ text: String) -> [String] {

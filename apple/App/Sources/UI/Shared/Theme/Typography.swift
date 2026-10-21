@@ -54,9 +54,8 @@ enum Typography {
     /// 侧栏：行、分组标题。
     static let sidebarRow = Font.system(size: 14)
     static let sidebarHeader = Font.system(size: 12, weight: .semibold)
-    /// 侧栏最上面的 Cue 名片：名字，与气泡里它最近说的话（比侧栏的行小半号：是引一句，不跟名字抢）。
+    /// 侧栏最上面的 Cue 名片的名字。
     static let cueCardName = Font.system(size: 18, weight: .semibold)
-    static let cueCardSaid = Font.system(size: 13.5)
     /// 侧栏磁贴（任务、会话）右上的数。
     static let sidebarTileCount = Font.system(size: 22, weight: .medium).monospacedDigit()
     /// 多行正文的行距：苹方的默认行高偏紧，加上这些约是 1.5 倍行高。

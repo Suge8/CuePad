@@ -1,5 +1,17 @@
 import SwiftUI
 
+/// 同一处先后换两样东西（状态的一句、你的话到哪了的记号、横幅让回页头）：旧的 `gap` 内淡完、新的晚 `gap` 再淡入——
+/// 长短不同的两句同时交叉淡，中间几帧叠成读不出的一团。App 与扩展同一份（`Motion.quick`、`Motion.handOff` 取自这里）。
+enum HandOff {
+    static let quick = Animation.easeOut(duration: 0.16)
+    static let gap: Double = 0.08
+}
+
+extension AnyTransition {
+    static let handOff = AnyTransition.asymmetric(
+        insertion: .opacity.animation(HandOff.quick.delay(HandOff.gap)), removal: .opacity.animation(.easeOut(duration: HandOff.gap)))
+}
+
 /// "Cue 此刻"（`CueNow`）的现成样子，App、小组件、灵动岛与锁屏同一份：珠子（`BeadDot`、`CueBeads`）、珠子加那一句（`CueNowLine`），
 /// 扩展里的头像（`CueNowFace`：静止的脸加一圈状态色的环；App 里的头像是会动的 `CueAvatar`，环的颜色同一套）。
 /// 颜色只按意思取：在跑与等子代理靛青（实心是在跑，空心是交出去了、等交回）、等你赭黄、刚做完石绿、歇着灰。
@@ -21,7 +33,7 @@ struct BeadDot: View {
     }
 }
 
-/// 一排珠子：前 `limit` 颗，多出的写"+N"（连同 `hidden`）。`bead` 给每颗加东西（App 里挂接力的落点）。
+/// 一排珠子：前 `limit` 颗，多出的写"+N"（连同 `hidden`；排满时它的位置一直留着）。`bead` 给每颗加东西（App 里挂接力的落点）。
 struct CueBeads<Decorated: View>: View {
     let beads: [CueNow.Bead]
     var hidden = 0
@@ -36,8 +48,12 @@ struct CueBeads<Decorated: View>: View {
             ForEach(beads.prefix(limit)) { item in
                 bead(item, BeadDot(kind: item.kind, size: size)).transition(.scale.combined(with: .opacity))
             }
-            if more > 0 {
-                Text("+\(more)").font(.system(size: size * 1.45, weight: .semibold)).monospacedDigit().foregroundStyle(palette.ink2)
+            // 排满 `limit` 颗时"+N"的位置一直留着、按两位数的宽：N 变了位数或收没了，前面的珠子与后面那一句都不横移
+            if beads.count >= limit || more > 0 {
+                Text(verbatim: "+99").hidden().overlay(alignment: .leading) {
+                    if more > 0 { Text("+\(more)").contentTransition(.numericText(value: Double(more))).transition(.opacity) }
+                }
+                .font(.system(size: size * 1.45, weight: .semibold)).monospacedDigit().foregroundStyle(palette.ink2)
             }
         }
         .accessibilityHidden(true)
@@ -63,10 +79,14 @@ struct CueNowLine<Decorated: View>: View {
                 // 珠子与"+N"按自己的宽排、不被挤：窄处让位的是后面那一句（截成省略号），计数截成"+…"就读不出几件了
                 CueBeads(beads: now.beads, hidden: now.hidden, limit: limit, bead: bead).fixedSize()
             }
-            // 换一句原地换字：变的只是数时数字滚过去，换了说法逐字淡换（扩展里也画得出）。
-            // 否决过整句换视图上推：新旧两句在一行的高里上下错开叠着，越出所在的页头与行
-            Text(now.headline).foregroundStyle(tint).lineLimit(1)
-                .contentTransition(.numericText())
+            // 换一句原地换：只变了数时数字滚过去（"2 件"到"1 件"）；换了说法整句先淡掉再淡入（`HandOff`），叠在同一处。
+            // 否决过：整句上推（新旧两句上下错开叠着、越出页头）；整句按数字滚（不同的字逐字纵滚加模糊，中间帧混成"在 路上"）
+            ZStack(alignment: .leading) {
+                Text(now.headline).foregroundStyle(tint).lineLimit(1)
+                    .contentTransition(.numericText())
+                    .id(now.headline.filter { !$0.isNumber })
+                    .transition(.handOff)
+            }
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(now.spoken)
