@@ -189,8 +189,7 @@ struct SetupPanel: View {
 
     private var folder: String? {
         guard let home = workspace.catalog?.project(Project.defaultID), workspace.catalog?.directories[home.id] == nil else { return nil }
-        let workspaces = services.workspaces
-        return "任务在 \(workspaces.shown(workspaces.directory(for: home.name).path(percentEncoded: false))) 里做"
+        return "任务在 \(Workspaces.shown(services.workspaces.directory(for: home.name).path(percentEncoded: false))) 里做"
     }
 
     private func check(_ name: String, isOn: Binding<Bool>) -> some View {

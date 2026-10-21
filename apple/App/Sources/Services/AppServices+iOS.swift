@@ -18,7 +18,7 @@ extension AppServices {
         if let viewer {
             follow(reporting: { .syncUnavailable("这台手机开着的页没能写下：\($0)") }) { try await viewer.keep() }
         }
-        if !location.isIsolated { diagnostics.start() }
+        if location.touchesRealWorld { diagnostics.start() }
     }
 
     /// 前台提示：本机已同步来的在线会话（`LiveSessions`）每次变化，由 `SessionAlertTracker` 认出"等你"、"做完了"，到得了你的（`CueStore.reaches`）交给界面。

@@ -44,9 +44,9 @@ struct ProjectActions<Extra: View>: View {
     /// 文件夹那一组的组头：Mac 写本机的路径（短写，`Workspaces.shown`；没绑时写开工时会建好的工作区），手机写在哪台 Mac 上（`ProjectFolders.places`）。
     private var folderPlace: String {
         #if os(macOS)
-        if let directory = workspace.catalog?.directories[project.id] { return workspace.services.workspaces.shown(directory) }
+        if let directory = workspace.catalog?.directories[project.id] { return Workspaces.shown(directory) }
         let workspaces = workspace.services.workspaces
-        return "\(workspaces.shown(workspaces.directory(for: project.name).path(percentEncoded: false)))（开工时建好）"
+        return "\(Workspaces.shown(workspaces.directory(for: project.name).path(percentEncoded: false)))（开工时建好）"
         #else
         guard let catalog = workspace.catalog else { return "" }
         return ProjectFolders.places(of: project, bindings: catalog.bindings, workMac: catalog.workMac).joined(separator: "；")
