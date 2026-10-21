@@ -2,7 +2,7 @@ import CueStore
 
 /// Cue 的记忆视图（OptMem 的读法）：一直记着的全部列出（在系统提示里，`pinnedText`）；其余按序号铺成对齐的 2 的幂块，越新越细、总行数固定在预算内
 /// （按预算二分 alpha，见 `cover`），放在新会话的第一条输入里（`viewText`）。块有摘要用摘要，没有就拆成两半直到有摘要或单行；
-/// 缺的摘要列成"待合并"（`merges`，由小到大、一批合到顶），视图里不列，换新时一并交给 Cue 写（`mergeText`）。摘要可以一层层展开（`zoom`）。
+/// 缺的摘要列成"待合并"（`merges`，由小到大、一批合到顶），视图里不列，由后台整理记忆的一次性大脑写（`mergeText`，`CueKeeper` 起）。摘要可以一层层展开（`zoom`）。
 /// 参考 https://github.com/VictorTaelin/OptMem 的 `_cover` / `cover`。
 public struct CueMemoryView: Equatable, Sendable {
   public enum Entry: Equatable, Sendable {
@@ -84,7 +84,7 @@ public struct CueMemoryView: Equatable, Sendable {
   public var pinnedText: String {
     guard !pinned.isEmpty else { return "还没有。" }
     var out = pinned.map { "#\($0.index) \($0.line.text)" }
-    if pinnedOverBudget { out.append("（一直记着的太多，超出了记忆的预算：把能并的用 memory merge 合并，或 pin false 取消一些）") }
+    if pinnedOverBudget { out.append("（一直记着的太多，超出了记忆的预算：过时的 forget，不必一直记着的 pin false）") }
     return out.joined(separator: "\n")
   }
 
@@ -115,15 +115,10 @@ public struct CueMemoryView: Equatable, Sendable {
     return "#\(index) \(line.text)" + (line.deletedAt != nil ? "（已忘掉）" : line.pinned ? "（一直记着）" : "")
   }
 
-  /// 新会话第一条输入里的 `<merge>` 块：待合并的块一次给齐（管理器不另叫醒它合并，没写回的下次换新还在）；没有为 nil。
+  /// 交给整理记忆的大脑的待合并的块（规则在它的系统提示里，`CuePrompt.dream`）：由小到大，大块里还要先合的那一半指向排在前面的块；没有为 nil。
   public var mergeText: String? {
     guard !merges.isEmpty else { return nil }
-    let head = """
-      记忆里有 \(merges.count) 块待合并。先逐块合成一行（至多 \(CueMemoryLine.maxBytes) 字节），留下有长期影响的，不编造，\
-      #lo-hi 写回：memory merge {lo, hi, text}；合并不用告诉他，合完再照常处理下面的 <cue>。
-      """
-    let blocks = merges.map { "#\($0.lo)-\($0.hi - 1)\n\($0.source)" }
-    return (["<merge>", head] + blocks + ["</merge>"]).joined(separator: "\n")
+    return merges.map { "#\($0.lo)-\($0.hi - 1)\n\($0.source)" }.joined(separator: "\n\n")
   }
 
   /// 用对齐的 2 的幂块铺满 [0, T)：块的大小不超过它年龄的 alpha 倍就整块保留。alpha 越大越粗、行越少。

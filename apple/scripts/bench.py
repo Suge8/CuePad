@@ -119,7 +119,7 @@ def report(bench: Bench, runs: list):
     lines = [
         f"# {bench.title} · Cue", "",
         f"- {len(ids)} 道题（{bench.strata}），每个目录是一遍：{'、'.join(names)}。",
-        f"- 每题一个隔离库，{bench.setup}；等刚启用那一轮做完，问题作为他的话交给 Cue，答案是这一轮 Cue 对他说的话。",
+        f"- 每题一个隔离库，{bench.setup}；等值班起来，问题作为他的话交给 Cue，答案是这一轮 Cue 对他说的话。",
         f"- 判分：{JUDGE_MODEL}（经 Pi，thinking off），{bench.judging}。",
     ]
     lines += [f"- {n} 的大脑：{'、'.join(sorted({r.get('brain', '—') for r in results[n].values()}))}" for n in names]
@@ -130,7 +130,7 @@ def report(bench: Bench, runs: list):
     abstain = [i for i in ids if ref[i]["abstain"]]
     lines.append("| 其中拒答题 | " + " | ".join(pct([results[n][i] for i in abstain]) for n in names) + " |")
 
-    lines += ["", "## 开销与用时（问题那一轮；合计含刚启用那一轮）", "", "| 一遍 | 用时中位 | 用时均值 | 费用均值（问题轮） | 费用均值（合计） | 输入+缓存读 均值 | recall 次数均值 |", "| --- | --- | --- | --- | --- | --- | --- |"]
+    lines += ["", "## 开销与用时（问题那一轮；合计含问题之前的轮）", "", "| 一遍 | 用时中位 | 用时均值 | 费用均值（问题轮） | 费用均值（合计） | 输入+缓存读 均值 | recall 次数均值 |", "| --- | --- | --- | --- | --- | --- | --- |"]
     for n in names:
         rows = [results[n][i] for i in ids]
         el = sorted(r["elapsed"] for r in rows)

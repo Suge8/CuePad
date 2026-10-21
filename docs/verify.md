@@ -120,36 +120,36 @@ TEST_RUNNER_CUEPAD_CUE_EVAL=1 TEST_RUNNER_CUEPAD_CUE_EVAL_OUT=/tmp/cue-eval/afte
   apple/scripts/xc.sh test mac -parallel-testing-enabled YES -only-testing:CuePadTests/CueEvalTests
 ```
 
-- 大脑缺省用这台 Mac 上 Claude Code 自己的登录（opus · medium）；`TEST_RUNNER_CUEPAD_CUE_EVAL_RUNTIME=pi` 换成 Pi（sonnet · medium，令牌从 ~/.pi/agent/auth.json 只读地取、不替它刷新，过期就起不来）；`TEST_RUNNER_CUEPAD_CUE_EVAL_MODEL`、`_EFFORT` 换模型与强度。
+- 大脑缺省用这台 Mac 上 Claude Code 自己的登录（opus · medium）；`TEST_RUNNER_CUEPAD_CUE_EVAL_RUNTIME=pi` 换成 Pi（sonnet · medium，令牌从 ~/.pi/agent/auth.json 只读地取、不替它刷新，过期就起不来），`=codex` 换成 Codex（gpt-6.1-sol · medium，配置目录在临时目录、只拷进 ~/.codex/auth.json，同陌生人第一次打开；开销一栏是空的）；`TEST_RUNNER_CUEPAD_CUE_EVAL_MODEL`、`_EFFORT` 换模型与强度。
 - 输出目录每个场景一个 .md（含每一轮的开销）与一份 `<场景>.score.json`，这一遍的系统提示在 `system-prompt.md`；汇总、对比都用下面的成绩单（score.py）。有场景没过时非零退出，输出照样写完。每个场景的库留在 `<场景>.library`，用 `CUEPAD_SHOT_LIBRARY=<它> xc.sh shot mac out.png -- -CuePadScene cue` 看。
-- 开销是大脑自报的 token 与费用；提示缓存跨场景命中一小时，先后跑的同一套场景缓存读写会不同，比开销看两遍以上。
+- 开销是大脑自报的 token 与费用。后台做梦的大脑（工具服务带 `--dream`）输出另存 `usage/dream`，每个进程一行列在开销表下；逐轮开销与换新只数 Cue 的。缓存跨场景命中一小时，先后跑的缓存读写会不同；模型每次答得不同，结论看两遍以上。
 - 长程场景（`CueEvalLongTests`，十分钟左右）单独跑：换新线经 `CueTiming.renewAt` 缩到 4.2 万、缓存时长缩到 30 秒，中途他走开一阵，热换新、冷换新都有；会话交回的细节、他托付的事、它对方案的判断、逐页推进的多步活在换新前埋下、换新后考，每处标出跨了哪种换新。`TEST_RUNNER_CUEPAD_CUE_EVAL_RUNS=2` 同时跑两遍、第 n 遍写到"输出目录-n"：
 
 ```bash
 TEST_RUNNER_CUEPAD_CUE_EVAL=1 TEST_RUNNER_CUEPAD_CUE_EVAL_OUT=/tmp/cue-eval/long TEST_RUNNER_CUEPAD_CUE_EVAL_RUNS=2 CUEPAD_TEST_TIME_LIMIT=3600 \
   apple/scripts/xc.sh test mac -parallel-testing-enabled YES -only-testing:CuePadTests/CueEvalLongTests
 ```
-- 多日记忆（`CueEvalDaysTests`，一次十分钟左右）单独跑：启用前预置两周历史（对话一千五百多条、做完的任务与会话回复、九十多行记忆），开跑前等 Cue 静下来（没有在跑的轮、再静 5 秒），换新后的第一轮顺手合并记忆（合并开销单列），再问起不同年纪埋下的事；后段补记 10 条记忆让视图超出预算、有块待合并，再由他发消息触发一次冷换新（问刚补记的车位）；补记以后第一次换新的那一轮、与那次换新起第一次写摘要的那一轮（合并可能推到更后的换新）单列用时与费用，同一轮只列一行；缓存时长缩到 20 秒、场景里插几段静止，看冷醒来开没开新会话（从大脑的输出里数：新进程或 Pi 的 new_session）。`-only-testing:CuePadTests/CueEvalDaysTests`，`CUEPAD_TEST_TIME_LIMIT=1700`。
-- 模型每次答得不完全一样，结论看两遍以上。
+- 多日记忆（`CueEvalDaysTests`，十分钟左右）单独跑：预置两周历史（对话一千五百多条、九十多行记忆），等 Cue 静下来（没有在跑的轮、再静 5 秒）再问起不同年纪埋下的事；后段补记 10 条记忆让视图超预算，他再发消息触发冷换新（问刚补记的车位）。单列补记后第一次换新那一轮，和合并：在 Cue 的轮里时是那次换新起第一次写摘要的那一轮（同一轮只列一行），在后台时是补记后他开口前的做梦。缓存时长缩到 20 秒、插几段静止，看冷醒来开没开新会话（新进程或 Pi 的 new_session）。`-only-testing:CuePadTests/CueEvalDaysTests`，`CUEPAD_TEST_TIME_LIMIT=1700`。
 
 ### 成绩单
 
-改系统提示、工具、记忆前后，短场景、长程、多日各跑两遍（Pi + sonnet · medium，同一设置的几遍先后跑），每遍一个目录、目录名各不相同，再比：
+改系统提示、工具、记忆前后，短场景、长程、多日各跑两遍（Pi + sonnet · medium），每遍一个目录，再比：
 
 ```bash
 python3 apple/scripts/score.py /tmp/cue-eval/base-short-{1,2} /tmp/cue-eval/base-long-{1,2} /tmp/cue-eval/base-days-{1,2} \
   --vs /tmp/cue-eval/new-short-{1,2} /tmp/cue-eval/new-long-{1,2} /tmp/cue-eval/new-days-{1,2}
 ```
 
-- 每个场景另写一份 `<场景>.score.json`（判定、指标、系统提示的估算长度，Pi 当大脑时还有计费标识），score.py 只读它，按套汇总，写最后一个目录的 score.md；只给一组时出基线成绩单。
+- 每个场景另写一份 `<场景>.score.json`（判定、指标、系统提示估算长度、Pi 的计费标识），score.py 只读它、按套汇总，写最后一个目录的 score.md；只给一组时出基线成绩单。
 - 每条判定标一个类别（`CheckKind`）：结果（事做对没）、问（该问的问了、不该问的没问）、打扰（tell、urgent、推送是否必要）、工具（参数填对、没白调）、接续（换新后接得上）、记忆（以前的事答对）。前提这一遍没出现的（那件事没收尾、埋点与考题之间没换新）记"不计"，不进通过数。
 - 指标是一遍的合计（短场景是各场景相加），轮不含刚启用那一轮、开销含：
   - 工具调用与每次醒来的调用数；出错的调用按工具结果的原文分（`CallFailure`）：参数校验退回、对象找不到（含对上了好几个）、没有这个工具（Pi 报的 Tool … not found）、其他。
   - ask：tell 带 ask 成了的次数。打扰：tell（不含 ask、撤回、放回）、task leave（他收到"待回复"）、其他推送（管理器写的 urgent，如出错）之和，回他的话不算；urgent 是其中 tell 带 urgent 的。
-  - 回复与 tell 超两句（系统提示的上限；他问进展的那一轮照系统提示逐件一句，上限是两句与件数（非空的行）里大的那个）、换新次数（从大脑的输出里数）、token 与费用、每轮用时中位。
+  - 回复与 tell 超两句（系统提示的上限；他问进展的那一轮照系统提示逐件一句，上限是两句与件数（非空的行）里大的那个）、换新次数（从大脑的输出里数）、token、费用（含后台合并）、每轮用时中位。
+  - 有做梦时另列：做梦次数、用时、开销，Cue 的轮里的 merge 调用（应为 0），摘要写在后台（写入时刻在做梦进程起止里）与轮里的条数。
 - 怎么看：先看组内差（同一设置几遍之间最大减最小），差值没超过它的不算改动的效果；再看翻转（改前改后通过率不同的判定）、组内不稳与每遍都没过的。
 - 问与打扰专门的场景：v（会话把删数据说成清理的一步：该问）、w（他亲口放行过推送：不该问）、x（提醒到点：该打扰、该 urgent）；他发起的一轮与会话的常规停下另判"没 tell"。
-- 多日另记记忆合并：按写下的摘要认，每次合并在哪一轮（是不是新会话的第一轮，即带了视图的那一轮）、在哪一步、写了几条摘要、之后记忆视图几行，在 .md 的「多日」与 score.json 的 extra 里；成绩单另出"单列的轮"表。
+- 多日另记合并（按摘要认）：在哪一轮、哪一步、几条摘要、之后视图几行，见 .md 的「多日」；单列的轮成绩单另出一表。
 
 ## 记忆基准
 

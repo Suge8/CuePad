@@ -1,10 +1,8 @@
 #if os(macOS)
-import AppKit
 import CuePi
 import CueStore
 import CueTestSupport
 import Foundation
-import SwiftUI
 import Testing
 @testable import CuePad
 
@@ -95,7 +93,9 @@ class EvalScript {
         for (id, fake) in extensions where id.hasPrefix("new-") && !sessions.contains(where: { $0.id == id }) {
             guard let leaf = try await rig.store.tasks(boundTo: id).first else { continue }
             let top = leaf.parent ?? leaf.task
-            guard "\(top.body)\n\(leaf.task.body)".contains(topic) else { continue }
+            // 新开在原来那件上的（那件已结束、照原任务另开新会话）新交代不在正文里，在 Cue 随后送进来的话里
+            let said = fake.commands.compactMap { $0.json["text"] as? String }
+            guard ([top.body, leaf.task.body] + said).joined(separator: "\n").contains(topic) else { continue }
             fake.setState(["kind": "thinking"])  // 开场白在接手前就到了：像真会话那样在干活
             return ScriptedSession(session: fake, task: top)
         }
@@ -123,11 +123,11 @@ class EvalScript {
         steps.flatMap { calls($0, "task", ["say"]) }.filter { !$0.call.failed && target($0.args) === session }.compactMap { $0.args["text"] as? String }
     }
 
-    /// 他问起早先的事：答对才过；没答对时标出是说不知道还是答错（乱编）
-    /// `fabricated`：没答对、也没说不知道时，这句是不是给了一个具体的错答案（编造）。
     /// 去掉引号里转述的原话（“”「」""）
     static func unquoted(_ text: String) -> String { text.replacing(/“[^”]*”|「[^」]*」|"[^"]*"/, with: "") }
 
+    /// 他问起早先的事：答对才过；没答对时标出是说不知道还是答错（乱编）
+    /// `fabricated`：没答对、也没说不知道时，这句是不是给了一个具体的错答案（编造）。
     func recalled(
         _ label: String, _ step: Step, kind: CheckKind = .memory, fabricated: ((String) -> Bool)? = nil, _ correct: (String) -> Bool
     ) async throws -> Check {
@@ -168,15 +168,6 @@ class EvalScript {
             let said = says(steps, to: session)
             return said.indices.contains { i in said[(i + 1)...].contains { Self.similar($0, said[i]) } }
         }
-    }
-
-    /// 每轮用时的中位（不含刚启用那一轮；偶数轮取中间两轮的平均）
-    func medianRoundTime() -> String {
-        let durations = eval.rounds.filter { $0.wake != .enabled }
-            .compactMap { round in round.finishedAt.map { $0.timeIntervalSince(round.startedAt) } }.sorted()
-        guard !durations.isEmpty else { return "—" }
-        let middle = durations.count / 2
-        return seconds(durations.count.isMultiple(of: 2) ? (durations[middle - 1] + durations[middle]) / 2 : durations[middle])
     }
 
     /// .md 里统计段的尾巴：剧本没按预想走的地方，与每一步叫醒了几轮、调了哪些工具

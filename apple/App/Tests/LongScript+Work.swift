@@ -1,12 +1,5 @@
 #if os(macOS)
-import AppKit
-import CuePi
-import CueStore
-import CueTestSupport
 import Foundation
-import SwiftUI
-import Testing
-@testable import CuePad
 
 extension LongScript {
     static let backendDone = """

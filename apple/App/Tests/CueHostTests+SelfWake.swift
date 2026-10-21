@@ -31,7 +31,8 @@ extension CueHostTests {
     /// Cue 自己醒来的一轮出错（多是网络偶发）：先不告诉你，基线不前移；隔一会儿再醒一次，成了就照常。
     /// 刚启用那一轮出错，重试后照常看一眼；会话有动静那一轮出错，重试时看到的还是同一处变化，成了照常。
     @Test func 自己醒来出错后隔一会儿重试() async throws {
-        let rig = try await Rig(failingOnce: ["醒来：刚启用"])  // 等到"我看了一眼"才返回
+        let rig = try await Rig(failingOnce: ["醒来：刚启用"], prepare: Rig.handOverWork)
+        try await rig.message(.cue, containing: "我看了一眼")
         #expect(rig.model.errors == 1)
         try await rig.settleTask(titled: "修好登录页 先出一次错")  // 假模型据此第一次报错
         try await rig.message(.cue, containing: "登录页那边歇下了")
@@ -64,17 +65,18 @@ extension CueHostTests {
         await rig.stop()
     }
 
-    /// 你在别处记下的记忆多到要合并（超过视图预算）：Cue 不为合并另醒；下一次换新（这里每次醒来都到了换新线）的第一轮带上待合并的块，
-    /// 它在回你话的同一轮里写回摘要。
-    @Test func 记忆待合并_换新那一轮顺手合并_同一轮回你() async throws {
+    /// 你在别处记下的记忆多到要合并（超过视图预算）：后台另起的大脑把待合并的块写成摘要（假模型合第一块）；Cue 不为它醒，换新的第一轮
+    /// （这里每次醒来都到了换新线）也不带待合并的块，回你的话照常。
+    @Test func 记忆待合并_后台合并_Cue的轮里没有合并() async throws {
         let rig = try await Rig(usage: CueContext.renewAt + 10_000)
         for index in 0..<(CueMemoryView.budget + 4) { try await rig.store.noteCueLine("偏好 \(index)", source: .you) }
-        let before = CueMemoryView(try await rig.store.cueMemory()).merges
-        #expect(!before.isEmpty)
+        try await eventually("后台写了摘要") { try await !rig.store.cueMemory().summaries.isEmpty }
         try await rig.say("你好")
-        try await rig.message(.cue, containing: "办好了")
-        let summaries = try await rig.store.cueMemory().summaries
-        #expect(summaries.contains { $0.lo == before[0].lo && $0.hi == before[0].hi })
+        try await rig.message(.cue, containing: "收到：你好")
+        let keeper = try #require(rig.services.cue.keeper)
+        #expect(keeper.rounds.map(\.wake) == [.message])  // 空库启用不醒，记忆待合并也不叫醒 Cue
+        // 待合并的块的写法：块头 #lo-hi 独占一行，下面是原行
+        #expect(!keeper.rounds.contains { $0.sent.contains { $0.contains(/\n#\d+-\d+\n#\d+\s/) } })
         await rig.stop()
     }
 }

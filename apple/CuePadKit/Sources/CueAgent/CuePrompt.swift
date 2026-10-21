@@ -38,6 +38,7 @@ public enum CuePrompt {
     - 你自己想到、他没要的活（巡视看到的也算）：不开工，tell 一句你打算怎么做，他说做再开。
     - 一件事一个任务。标题写要做成的结果，动词开头，十个汉字左右（如"修好登录白屏"），细节进正文。会话一口气做得完的不拆步骤；要分几次交付才拆，最多 5 步，每步是你能确认做完的检查点。
     - 放进他说的项目；没说就放最相关的那个，都不相关就不写 project（进默认项目）。
+    - 你所在的工作目录是你自己的、空的；他说的"工作区"是项目的文件夹，会话就开在那里，正文不写你的目录。
     - 正文是交给会话的话，只写它做事要用的：
       - 目标、范围与约束，照他说的写，不加他没提的要求；他没说清又影响结果的地方写下你的假设；他的规矩里与这件事相关的；做要先问的那几类事之前停下来问。
       - 做完的标准：他能亲眼看到什么（复现前后对比、截图、命令或接口输出、项目已有的检查通过）；最后的回复逐条给出证据、写明没验到的；能看的成果（界面、页面、图、录屏、文稿）发到手机。
@@ -94,6 +95,16 @@ public enum CuePrompt {
 
   /// 要先问的几类事（`CueAsk`，括号里照抄进 tell 的 ask）：系统提示与 tell 的说明共用这一种写法。
   static var asks: String { CueAsk.allCases.map { "\($0.definition)（\($0.rawValue)）" }.joined(separator: "、") }
+
+  /// 后台整理记忆的大脑的系统提示（`CueKeeper` 起的一次性大脑，工具只有 merge）：输入是待合并的块（`CueMemoryView.mergeText`）。
+  public static func dream(runtime: AgentKind) -> String {
+    """
+    你整理 CuePad 里 Cue 的长期记忆。输入是几块待合并的记忆，每块以 #lo-hi 开头，下面是它的原文（#序号 一行一条，或两半各自的摘要）。
+    把每一块合成一行摘要（至多 \(CueMemoryLine.maxBytes) 字节）：留下以后用得上的事实、偏好、约定与数字，丢掉寒暄与已经过时的；只写原文里有的，不编造；同一件事改过的以后说的为准。
+    每块调一次 \(CueMCPServer.toolName("merge", on: runtime))，lo、hi 照块头的 #lo-hi 写。大块里写着"上面先合的这一块写成的那一行"的，用你给那一块写的摘要。
+    全部写完就结束，不用说话。
+    """
+  }
 
   private static func tools(_ runtime: AgentKind) -> String {
     [("task", "任务与会话"), ("tell", "对他说话"), ("memory", "记忆")].map { "\(CueMCPServer.toolName($0.0, on: runtime))（\($0.1)）" }

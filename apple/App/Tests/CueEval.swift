@@ -3,7 +3,6 @@ import CueAgent
 import CuePi
 import CueStore
 import CueTestSupport
-import CueText
 import Foundation
 import Testing
 @testable import CuePad
@@ -29,7 +28,7 @@ final class CueEval {
     private var archive: [Int: CueRound] = [:]
     /// 场景自己要写进 .md 的段落（长程、多日的统计）
     var report: [String] = []
-    /// 场景自己要写进成绩单的（长程的换新方式、多日的记忆合并），JSON 能表示的值
+    /// 场景自己要写进成绩单的（多日单列的轮，score.py 的"单列的轮"表），JSON 能表示的值
     var extra: [String: Any] = [:]
 
     private init(_ rig: CueHostTests.Rig, output: URL) {
@@ -37,7 +36,7 @@ final class CueEval {
         self.output = output
     }
 
-    /// 起 Rig、等刚启用那一轮做完，跑 `body`（摆状态、叫醒、判定）；不论成败都把现场写完、停掉大脑，再报没过的判定。
+    /// 起 Rig（值班起来、对过刚启用），跑 `body`（摆状态、叫醒、判定）；不论成败都把现场写完、停掉大脑，再报没过的判定。
     static func run(
         _ name: String, expect: String, suite: EvalSuite = .short, output: URL = evalOutput,
         rig makeRig: () async throws -> CueHostTests.Rig = { try await CueHostTests.Rig(brain: .current) }, _ body: (CueEval) async throws -> [Check]
@@ -45,7 +44,6 @@ final class CueEval {
         let eval = CueEval(try await makeRig(), output: output)
         var checks: [Check] = [], failure: (any Error)?
         do {
-            try await eventually("刚启用那一轮做完", timeout: .seconds(300)) { eval.rig.rounds.contains { $0.wake == .enabled && $0.finishedAt != nil } }
             checks = try await body(eval)
             checks.append(try await eval.showsNoIDs())
         } catch {
@@ -66,7 +64,7 @@ final class CueEval {
     }
 
     /// 叫醒 Cue，等它把这次引起的都做完才返回：至少一轮做完、没有在跑的、歇着、话都交了，
-    /// 再稳住几秒没有新的一轮（空闲合并记忆这类紧跟着的醒来）。返回这次醒来的时段；没叫醒（等不到一轮开始）为 nil。
+    /// 再稳住几秒没有新的一轮（紧跟着的醒来）。返回这次醒来的时段；没叫醒（等不到一轮开始）为 nil。
     func settle(_ wake: () async throws -> Void) async throws -> ClosedRange<Date>? {
         let from = mark()
         try await wake()
@@ -181,15 +179,9 @@ final class CueEval {
             let took = greeting.finishedAt.map { seconds($0.timeIntervalSince(greeting.startedAt)) } ?? "没做完"
             lines.append("- 刚启用那一轮（预热，不评）：\(took)，上下文 \(greeting.context.map(String.init) ?? "—")，工具 \(greeting.calls.map(\.name).joined(separator: "、"))")
         }
-        lines += ["", "## 开销（每轮，含预热；Claude Code 每轮 result 事件报的）", ""]
+        lines += ["", "## 开销（每轮，含预热；大脑报的，`BrainUsage`）", ""]
         if usage.count != rounds.count {
             lines += ["大脑报了 \(usage.count) 轮，记下的轮有 \(rounds.count) 轮，下表按先后对齐，合计以大脑报的为准。", ""]
-        }
-        if let directory = rig.brainDirectory, EvalBrain.current.runtime == .pi {
-            let billing = BrainUsage.billing(in: directory)
-            lines += [
-                "计费标识：\(billing.marked)/\(billing.requests) 次模型请求的系统提示首块是 Claude 订阅的计费标识，user-agent：\(billing.agents.sorted().joined(separator: "、"))。", "",
-            ]
         }
         lines += ["| 轮 | 醒来 | 用时 | 上下文 | \(BrainUsage.header) |", "| --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
         for index in 0..<max(usage.count, rounds.count) {
@@ -198,6 +190,14 @@ final class CueEval {
             lines.append("| \(index) | \(round.map { "\($0.wake)" } ?? "—") | \(took) | \(round?.context.map(String.init) ?? "—") | \(index < usage.count ? usage[index].cells : "— | — | — | — | —") |")
         }
         lines.append("| 合计 | | | | \(total.cells) |")
+        let dreams = rig.brainDirectory.map(BrainUsage.dreams(in:)) ?? []
+        if !dreams.isEmpty {
+            lines += ["", "后台合并（做梦，每个一次性进程一行；不在上表里）：", "", "| 次 | 起 | 用时 | \(BrainUsage.header) |", "| --- | --- | --- | --- | --- | --- | --- | --- |"]
+            for (index, dream) in dreams.enumerated() {
+                lines.append("| \(index + 1) | \(dream.started.formatted(date: .omitted, time: .standard)) | \(seconds(dream.finished.timeIntervalSince(dream.started))) | \(dream.usage.cells) |")
+            }
+            lines.append("| 合计 | | | \(dreams.map(\.usage).reduce(BrainUsage(), +).cells) |")
+        }
         for (index, round) in rounds.filter({ $0.startedAt >= begin ?? start }).enumerated() {
             let setup = round.startedAt < start ? "（铺垫）" : ""
             lines += ["", "## 第 \(index + 1) 轮（醒来：\(round.wake)）\(setup)\(round.finishedAt == nil ? "（写下时还没做完）" : "")", "", "### 发给大脑的"]

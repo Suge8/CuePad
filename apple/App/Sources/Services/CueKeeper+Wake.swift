@@ -38,8 +38,7 @@ extension CueKeeper {
                 }
             }
             // 还没交给它的你的话不进对话视图：它们这次随信封交出去（`CueView` 只列已送达的）
-            let memory = CueMemoryView(try await store.cueMemory())
-            let views = [memory.viewText, CueView.render(try await store.cueMessages(limit: CueView.fetched)), memory.mergeText]
+            let views = [CueMemoryView(try await store.cueMemory()).viewText, CueView.render(try await store.cueMessages(limit: CueView.fetched))]
             parts.insert(contentsOf: views.compactMap { $0 }, at: 0)
         }
         if let said { parts.append(said) }

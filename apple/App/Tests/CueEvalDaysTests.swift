@@ -32,8 +32,7 @@ private final class Days: EvalScript, Playable {
     /// 缓存时长缩短；他走开的时长比它长，回来就是冷醒来，中途若冒出别的醒来，他回来时离那次请求也已过了缓存时长，仍是冷醒来。
     static let cacheLifetime = Duration.seconds(20)
     static let away = Duration.seconds(40)
-    /// 开跑前要静这么久：长于空闲合并的间隔（合并在空闲时醒来的方案，测试骨架里空闲 1 秒就请合并），有待合并的块它就在这段里醒；
-    /// 又要远短于缓存时长：最后一次请求到那一轮做完还有几秒，静 15 秒第一问就冷了（实测）
+    /// 开跑前要静这么久：紧跟着的醒来（巡视这类）在这段里冒出来；又要远短于缓存时长：最后一次请求到那一轮做完还有几秒，静 15 秒第一问就冷了（实测）
     static let quiet = Duration.seconds(5)
 
     private let history: DaysHistory
@@ -80,15 +79,14 @@ private final class Days: EvalScript, Playable {
     }
 
     /// 他发消息触发冷换新、恰好有块要合：一口气补记 10 条记忆（Cue 记下的，第一条是后面要问的车位），记忆视图（开跑前 90 行，预算 96）超出预算、有块待合并。
-    /// 合并在空闲时醒来的方案在随后等它静下来时合掉，他这句仍是冷换新；挪到换新那一轮的方案在他这句触发的冷换新里合。
+    /// 合并在换新那一轮（`CueMemoryView.mergeText`，他这句触发的冷换新里合），或在后台做梦（补记一完就起，不等他开口）。
     private func overBudget() async throws {
         notedAt = .now
         for line in DaysScript.notedLater { _ = try await rig.store.noteCueLine(line, source: .cue) }
         try await snapshot("补记 \(DaysScript.notedLater.count) 条后")
     }
 
-    /// 开跑前等 Cue 静下来：没有在跑的轮，且之后静了 `quiet` 没有新的一轮。合并在空闲时醒来的方案（预置了 4 块待合并）在这段里合完；
-    /// 合并挪到换新那一轮的方案没有这种醒来，刚启用那一轮做完、静 `quiet` 就开跑。
+    /// 等 Cue 静下来：没有在跑的轮，且之后静了 `quiet` 没有新的一轮。预置的待合并块在刚启用那一轮（新会话的第一轮）里合。
     private func settleDown() async throws {
         while true {
             try await eventually("Cue 没有在跑的轮", timeout: .seconds(300)) { self.eval.rounds.allSatisfy { $0.finishedAt != nil } }
@@ -110,10 +108,13 @@ private final class Days: EvalScript, Playable {
     }
 
     /// 合并发生在哪几轮：摘要写下的时刻落在哪一轮（一轮可写几条），那一轮是不是新会话的第一轮（带了视图，`CueEval.opensSession`）、
-    /// 在哪一步，那一步做完时视图几行。合并在空闲时醒来还是挪进换新那一轮，都按写下的摘要认。
+    /// 在哪一步，那一步做完时视图几行。
+    /// Cue 的轮里写了摘要的轮（后台做梦写的不在内）
     private func merges() async -> [[String: Any]] {
         let all = eval.rounds
-        let made = ((try? await rig.store.cueMemory().summaries) ?? []).filter { $0.createdAt >= (all.first?.startedAt ?? .distantFuture) }
+        let dreams = rig.brainDirectory.map(BrainUsage.dreams(in:)) ?? []
+        let made = ((try? await rig.store.cueMemory().summaries) ?? [])
+            .filter { summary in summary.createdAt >= (all.first?.startedAt ?? .distantFuture) && !dreams.contains { $0.contains(summary.createdAt) } }
         let byRound = Dictionary(grouping: made) { summary in all.lastIndex { $0.startedAt <= summary.createdAt } ?? 0 }
         return byRound.keys.sorted().map { index in
             let round = all[index], at = byRound[index]!.map(\.createdAt).max()!
@@ -179,13 +180,13 @@ private final class Days: EvalScript, Playable {
 
     func summarize() async {
         let rounds = eval.rounds.filter { $0.wake != .enabled }
-        let median = medianRoundTime()
         let usage = rig.brainDirectory.map(BrainUsage.rounds(in:)) ?? []
         let all = eval.rounds
         let merged = await merges()
+        let dreams = rig.brainDirectory.map(BrainUsage.dreams(in:)) ?? []
+        let background = ((try? await rig.store.cueMemory().summaries) ?? []).count { summary in dreams.contains { $0.contains(summary.createdAt) } }
         // 开销按轮对齐（大脑报的与记下的轮按先后对应）
         let cost = { (indices: [Int]) in indices.filter { $0 < usage.count }.map { usage[$0] }.reduce(BrainUsage(), +) }
-        let total = usage.reduce(BrainUsage(), +)
         let renewals = eval.renewals
         let renewedAt = renewals.compactMap { round in steps.firstIndex { $0.window?.contains(round.startedAt) == true }.map { "第 \($0 + 1) 步「\(steps[$0].label)」" } }
         let cells = { (usage: BrainUsage) in usage.cells.replacingOccurrences(of: " | ", with: "、") }
@@ -194,18 +195,16 @@ private final class Days: EvalScript, Playable {
             "- 预置历史：对话 \(history.logged) 条、记忆 \(history.memoryLines) 行（\(history.pinned) 行一直记着）、做完的任务 \(history.doneTasks) 件",
             "- 醒来 \(rounds.count) 次（不含预热；剧本叫醒 \(steps.count) 次），换新 \(renewals.count) 次（大脑开了新的对话）"
                 + (renewedAt.isEmpty ? "" : "，在" + renewedAt.joined(separator: "、")),
-            "- 每轮用时中位 \(median)",
-            "- 合计（含预热）：\(BrainUsage.header.replacingOccurrences(of: " | ", with: "、")) = \(cells(total))",
             "- 其中合并的轮（写了摘要的轮，第 \(merged.map { "\($0["round"]!)" }.joined(separator: "、")) 轮）：\(cells(cost(merged.map { $0["round"] as! Int })))",
             "- 合并 \(merged.count) 轮、写了 \(merged.reduce(0) { $0 + ($1["summaries"] as! Int) }) 条摘要："
                 + merged.map { "第 \($0["round"]!) 轮（\(($0["renewal"] as! Bool) ? "新会话的第一轮" : "接着原会话")，\($0["step"]!)，\($0["summaries"]!) 条），之后视图 \($0["viewLines"]!) 行" }
                 .joined(separator: "；"),
             "- 记忆视图行数（摘要条数）：" + snapshots.map { "\($0.label) \($0.lines)（\($0.summaries)）" }.joined(separator: " → "),
         ]
-        eval.extra["merges"] = merged
-        eval.extra["viewLines"] = snapshots.map { ["after": $0.label, "lines": $0.lines, "summaries": $0.summaries] }
-        // 单列：补记以后第一次换新的那一轮，与那次换新起第一次写了摘要的那一轮（合并可能推到更后的换新）；同一轮只列一行。
-        // 合并在空闲时醒来的方案在换新前就合完了，只有第一行
+        if !dreams.isEmpty {
+            lines.append("- 后台合并（做梦）\(dreams.count) 次，摘要写在后台的 \(background) 条：\(cells(dreams.map(\.usage).reduce(BrainUsage(), +)))")
+        }
+        // 单列：补记以后第一次换新的那一轮，与那次换新起第一次写了摘要的那一轮（那次没写回的推到更后的换新）；同一轮只列一行
         let renewed = all.indices.first { all[$0].startedAt >= notedAt ?? .distantFuture && CueEval.opensSession(all[$0]) }
         let wrote = renewed.flatMap { first in merged.compactMap { $0["round"] as? Int }.first { $0 >= first } }
         var singled: [[String: Any]] = []
@@ -216,6 +215,18 @@ private final class Days: EvalScript, Playable {
             let step = steps.first { $0.window?.contains(round.startedAt) == true }?.label ?? "步与步之间"
             lines.append("- \(label)（第 \(index) 轮，\(step)）：用时 \(seconds(took))，\(CueEval.opensSession(round) ? "新会话的第一轮" : "接着原会话")，写了 \(summaries) 条摘要；\(cells(used))")
             singled.append(used.json.merging(["label": label, "seconds": took, "renewal": CueEval.opensSession(round), "summaries": summaries]) { $1 })
+        }
+        // 后台做梦时：单列补记引起的做梦（补记之后、他下一次开口之前起的；补记一条条写，一次没合完的排着接着合），
+        // 从补记到这些做梦的摘要写完（没写就到进程收掉）用了多久、一共花了多少
+        if let noted = notedAt {
+            let asked = steps.compactMap(\.window?.lowerBound).first { $0 >= noted } ?? .distantFuture
+            let after = dreams.filter { $0.started >= noted && $0.started < asked }
+            if let last = after.last {
+                let written = ((try? await rig.store.cueMemory().summaries) ?? []).filter { summary in after.contains { $0.contains(summary.createdAt) } }
+                let took = (written.map(\.createdAt).max() ?? last.finished).timeIntervalSince(noted), used = after.map(\.usage).reduce(BrainUsage(), +)
+                lines.append("- 补记后的后台做梦：\(after.count) 次，到摘要写完 \(seconds(took))，写了 \(written.count) 条摘要；\(cells(used))")
+                singled.append(used.json.merging(["label": "补记后的后台做梦", "seconds": took, "summaries": written.count, "dreams": after.count]) { $1 })
+            }
         }
         eval.extra["rounds"] = singled
         eval.report = lines + stepTable()
