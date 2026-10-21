@@ -46,7 +46,7 @@ struct HookFile: AgentHookConfig {
 
     /// Claude Code：用户级的 `<配置目录>/settings.json`（Claude Code 把各层配置的钩子合并着跑）。
     /// 上报状态的事件同步跑（保持先后），CuePad 当场放行；要人作答的挡住等 CuePad 答复：权限确认（终端里同时照常弹出，哪边先答算哪边）、
-    /// AskUserQuestion（官方的作答路径是它的 PreToolUse：返回 allow 与带答案的 `updatedInput`）、MCP 服务要你填的表单（Elicitation）。
+    /// AskUserQuestion（官方的作答路径是它的 PreToolUse：返回 allow 与带答案的 `updatedInput`；PermissionRequest 会不会为它触发文档没写）、MCP 服务要你填的表单（Elicitation）。
     /// 一次工具调用只触发一组：其余工具的 PreToolUse 用排除 AskUserQuestion 的正则（Claude Code 的 matcher 是 JavaScript 正则）。
     static func claudeCode(home: URL, skillDirectory: URL) -> HookFile {
         let quick = ["SessionStart", "SessionEnd", "UserPromptSubmit", "PostToolUse", "PostToolUseFailure", "Stop", "StopFailure",

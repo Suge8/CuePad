@@ -3,35 +3,29 @@ import CueStore
 import SwiftUI
 
 /// 任务页（iPhone 底部一排的"任务"、宽屏侧栏的"任务"）：流水看板（`TaskBoard`），待办 → 推进中 → 等你 → 做完（今天）。
-/// 宽屏（iPad）同 Mac 四列并排（`BoardColumns`），顶上不写页名，第一排是按项目筛的胶囊。窄屏一屏一列：顶上一排带数的分段（`BoardSegments`），左右滑换列（分页滚动），
-/// 点分段滑过去；打开时有等你就落在等你。分段下面一行"全部项目"菜单按项目筛（筛了以后分段的数也只数这个项目）。
-/// 右上角"+"去待办、顶上浮出添加那一行（`NewTaskLine`，落在筛的项目或当前项目，可换），失焦且没写字时收回。
+/// 只看项目范围里的（`Workspace.projectScope`，同会话页那一份；选了项目以后分段与列头的数也只数这个项目），页里不另设筛选。
+/// 顶上不写页名，项目范围在顶栏中间（`ProjectScope`，宽窄同一个顶栏）。宽屏（iPad）同 Mac 四列并排（`BoardColumns`）；窄屏一屏一列：
+/// 顶上一排带数的分段（`BoardSegments`），左右滑换列（分页滚动），点分段滑过去；打开时有等你就落在等你。
+/// 右上角"+"去待办、顶上浮出添加那一行（`NewTaskLine`，落在范围里的项目或当前项目，可换），失焦且没写字时收回。
 struct TasksScreen: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(Navigation.self) private var navigation
-    @Environment(\.palette) private var palette
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var board: TaskBoard?
-    @State private var project: UUID?
     @State private var adding = false
     /// 窄屏此刻看的那一列（分页滚动的位置）。
     @State private var column: TaskBoard.Column?
 
     var body: some View {
-        let whole = board ?? .empty
-        let shown = whole.only(project)
+        let shown = (board ?? .empty).only(scope)
         Group {
             if sizeClass == .regular {
-                VStack(alignment: .leading, spacing: 14) {
-                    BoardProjectChips(projects: whole.projects(in: workspace.catalog), selected: $project).padding(.horizontal, 16)
-                    BoardColumns(board: shown, adding: $adding, newTaskProject: newTaskProject).padding(.horizontal, 12)
-                }
+                BoardColumns(board: shown, adding: $adding, newTaskProject: newTaskProject).padding(.horizontal, 12)
             } else {
                 VStack(alignment: .leading, spacing: 10) {
                     BoardSegments(board: shown, selected: $column).padding(.horizontal, 16)
-                    filterMenu(whole).padding(.horizontal, 16)
                     pages(shown)
                 }
             }
@@ -42,13 +36,15 @@ struct TasksScreen: View {
             Button("添加任务", icon: .add) { add() }
         }
         .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: adding)
-        .onChange(of: project) { adding = false }
+        .onChange(of: workspace.projectScope) { adding = false }
         .onAppear { if let board { land(board) } }
         .onChange(of: board == nil) { if let board { land(board) } }
         .observingBoard(into: $board, store: services.store, onError: workspace.fail)
     }
 
-    private var newTaskProject: UUID? { project ?? navigation.currentProject }
+    private var newTaskProject: UUID? { scope ?? navigation.currentProject }
+
+    private var scope: UUID? { workspace.scopedProject }
 
     /// 一屏一列，左右滑换列：列的宽就是可见宽（`containerRelativeFrame`），按页停。
     private func pages(_ board: TaskBoard) -> some View {
@@ -68,32 +64,9 @@ struct TasksScreen: View {
         .scrollIndicators(.never)
     }
 
-    /// "全部项目"：按项目筛，只列看板上有事的项目。
-    private func filterMenu(_ whole: TaskBoard) -> some View {
-        let current = workspace.catalog?.project(project)
-        return Menu {
-            Picker("按项目看", selection: $project) {
-                Label("全部项目", icon: .all).tag(UUID?.none)
-                ForEach(whole.projects(in: workspace.catalog)) { item in
-                    Label { Text(item.name) } icon: { ProjectGlyph(project: item) }.tag(Optional(item.id))
-                }
-            }
-        } label: {
-            HStack(spacing: 5) {
-                if let current { ProjectGlyph(project: current, size: 13) }
-                Text(current?.name ?? "全部项目").lineLimit(1)
-                Image(.expand).font(.caption.weight(.semibold)).accessibilityHidden(true)
-            }
-            .font(.subheadline).foregroundStyle(palette.ink2)
-            .padding(.horizontal, 12).frame(minHeight: 36)
-            .background(palette.fill, in: .capsule)
-            .contentShape(.capsule)
-        }
-        .accessibilityLabel(current.map { "按项目看：\($0.name)" } ?? "按项目看")
-    }
-
     /// 打开时落在哪一列：有等你就是等你（要你拍板的事在那里就能处理），否则推进中、再否则待办。
     private func land(_ board: TaskBoard) {
+        if let column = DebugHooks.preset.boardColumn { return self.column = column }
         column = !board.waiting.isEmpty ? .waiting : !board.advancing.isEmpty ? .advancing : .todo
     }
 

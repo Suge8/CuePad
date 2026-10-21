@@ -58,7 +58,7 @@ public enum AgentKind: String, CaseIterable, Sendable, Identifiable, Codable {
 }
 
 /// 从 CuePad 能对一个会话做什么（发文字总能做，不在其中）。只由 Agent 与会话在哪跑定：Mac 与手机按同一条规则从会话记录推出，
-/// 界面据此只露出做得到的操作，执行端不另做判断。各家能力的出处见 CuePi README「接入 Agent」。
+/// 界面据此只露出做得到的操作，执行端不另做判断。各家能力的出处见各家接入的头注释（`ClaudeTerminalSession`、`CodexRuntime`、`OpenCodeRuntime`）。
 public struct AgentCapabilities: OptionSet, Sendable, Hashable {
   public let rawValue: Int
   public init(rawValue: Int) { self.rawValue = rawValue }

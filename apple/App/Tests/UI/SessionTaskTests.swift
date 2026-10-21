@@ -23,7 +23,7 @@ struct SessionTaskTests {
         try await services.resetPiState()  // Mac 启动
         var session = CuePi.PiSession(
             id: "s1.100", sessionID: "s1", agent: .pi, sessionFile: URL(filePath: "/tmp/never-\(UUID().uuidString).jsonl"), pid: 100,
-            cwd: URL(filePath: "/work/x", directoryHint: .isDirectory), terminal: PiTerminal(), extensionVersion: PiExtensionBundle.version,
+            cwd: URL(filePath: "/work/x", directoryHint: .isDirectory), terminal: PiTerminal(),
             state: .settled, stateSince: .now)
         session.name = "修登录"
         try await bridge(.appeared(session))

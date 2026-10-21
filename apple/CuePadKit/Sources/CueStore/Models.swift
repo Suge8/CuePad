@@ -187,14 +187,17 @@ public struct TaskCounts: Equatable, Sendable {
   }
 }
 
-/// 步骤完成了几个、一共几个（任务的直接步骤，见 `CueStore.subtaskProgress`）。
+/// 步骤完成了几个、一共几个（任务的直接步骤，见 `CueStore.subtaskProgress`），与做完的步骤平均每步用了多久（任务行估还要多久，`TaskPace`）。
 public struct TaskProgress: Equatable, Sendable {
   public let done: Int
   public let total: Int
+  /// 做完的步骤里记着自己开始时刻的，从开始到做完的平均秒数；一步都没有时为 nil（直接勾掉、没开过工的步骤量不出用时）。
+  public let stepTime: TimeInterval?
 
-  public init(done: Int, total: Int) {
+  public init(done: Int, total: Int, stepTime: TimeInterval? = nil) {
     self.done = done
     self.total = total
+    self.stepTime = stepTime
   }
 }
 

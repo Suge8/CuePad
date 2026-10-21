@@ -70,7 +70,7 @@ extension AppServices {
     var canRefreshQuota: Bool { quotaSession != nil }
 
     /// 能问的会话：协议对得上的在线会话（与 `canRefreshQuota` 同一个判定，视图不会在问不了时一出现就走一次刷新）。
-    private var quotaSession: PiBridge.Slot? { pi.slots.first { $0.session.state != .incompatible } }
+    private var quotaSession: PiBridge.Slot? { pi.slots.first { !$0.session.upgrading } }
 
     /// 手机发来的刷新请求（投送方式 `quota`）：与本机视图同一套节流，失败照常写回原因（手机不提示）。
     func refreshQuotaForRequest() async throws {

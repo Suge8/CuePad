@@ -2,7 +2,7 @@
 import CueStore
 import Foundation
 
-/// 各 Agent 在这台 Mac 上的目录，唯一权威来源：环境变量与各家自己认的一致（隔离测试靠它们指到临时目录）。
+/// 各 Agent 在这台 Mac 上的目录，唯一权威来源（Pi 与桥的在 `pi`）：环境变量与各家自己认的一致（隔离测试靠它们指到临时目录）。
 public struct AgentPaths: Sendable, Equatable {
     public var pi: PiPaths
     public var environment: [String: String]
@@ -12,7 +12,6 @@ public struct AgentPaths: Sendable, Equatable {
         self.environment = environment
     }
 
-    /// Agent 的配置目录。
     public func home(of kind: AgentKind) -> URL {
         switch kind {
         case .pi: pi.agentDirectory

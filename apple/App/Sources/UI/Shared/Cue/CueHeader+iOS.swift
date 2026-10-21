@@ -230,8 +230,6 @@ private struct CueNowPanel: View {
                 }
                 .buttonStyle(.row)
                 .modifier(FadesUnderHeader(header: headerHeight))
-            } fold: { count, expanded in
-                PiReloadFold(count: count, expanded: expanded).modifier(FadesUnderHeader(header: headerHeight))
             }
         }
         link("全部会话", count: live.total) {

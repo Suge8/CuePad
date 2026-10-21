@@ -65,8 +65,6 @@ struct MenuBarPad: View {
                 .onTapGesture { open(.session(session.sessionID)) }
                 .accessibilityAddTraits(.isButton)
                 .accessibilityAction { open(.session(session.sessionID)) }
-        } fold: { count, expanded in
-            PiReloadFold(count: count, expanded: expanded)
         }
     }
 

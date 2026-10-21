@@ -229,7 +229,7 @@ final class ClaudeTerminalSession: SessionLink {
     // MARK: SessionLink
 
     /// 只在歇着时送到（在跑时桥先拒收，见 `AgentCapabilities.speakBlocked`）：`next` 让它马上开这一轮。
-    func send(_ message: PiMessage) async throws {
+    func send(_ message: PiMessage, in _: PiSession.ID) async throws {
         guard !message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw PiBridgeError.rejected("empty") }
         var line: [String: JSONValue] = [
             "type": "user", "message": ["role": "user", "content": .string(ClaudeInbox.userNote + message.text)], "priority": "next",
@@ -238,16 +238,16 @@ final class ClaudeTerminalSession: SessionLink {
         try await post(.object(line))
     }
 
-    func command(_ line: String) async throws { throw PiBridgeError.unsupported }
-    func abort() async throws { throw PiBridgeError.unsupported }
+    func command(_ line: String, in _: PiSession.ID) async throws { throw PiBridgeError.unsupported }
+    func abort(_: PiSession.ID) async throws { throw PiBridgeError.unsupported }
 
-    func configure(model: PiModelKey?, thinking: PiThinkingLevel?, name: String?) async throws {
+    func configure(model: PiModelKey?, thinking: PiThinkingLevel?, name: String?, in _: PiSession.ID) async throws {
         guard let name else { throw PiBridgeError.unsupported }
         try await post(["type": "control", "action": "rename", "name": .string(name)])
         bridge?.update(id) { $0.name = name }
     }
 
-    func answer(_ answer: PiAnswerValue, to promptID: String) async throws {
+    func answer(_ answer: PiAnswerValue, to promptID: String, in _: PiSession.ID) async throws {
         guard let index = pending.firstIndex(where: { $0.question.promptID == promptID }), let call = pending[index].call else {
             throw PiBridgeError.rejected(pending.contains { $0.call != nil } ? "stale_prompt" : "no_prompt")
         }
@@ -276,7 +276,7 @@ final class ClaudeTerminalSession: SessionLink {
         }
     }
 
-    func end() async throws {
+    func end(_: PiSession.ID) async throws {
         guard kill(pid, SIGINT) == 0 else { throw PiBridgeError.sessionEnded }
     }
 

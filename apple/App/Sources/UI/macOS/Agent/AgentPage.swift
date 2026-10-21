@@ -13,8 +13,7 @@ struct AgentPage: View {
     @Environment(\.palette) private var palette
     @State private var model = AgentListModel()
 
-    /// 项目范围里的项目进了回收站时是全部。
-    private var filter: UUID? { workspace.catalog?.project(workspace.projectScope)?.id }
+    private var filter: UUID? { workspace.scopedProject }
 
     /// 列表的宽度：一行读得完，不至于横跨整个大窗口。
     private static let width: CGFloat = 720
@@ -47,7 +46,7 @@ struct AgentPage: View {
     /// 顶上一排：左边项目范围，中间搜索，右边新会话。
     private var topRow: some View {
         HStack(spacing: 10) {
-            filterMenu
+            ProjectScopeMenu()
             HStack(spacing: 6) {
                 Image(.search).foregroundStyle(palette.ink3).accessibilityHidden(true)
                 TextField(searchPrompt, text: $model.query, palette: palette).textFieldStyle(.plain)
@@ -72,36 +71,13 @@ struct AgentPage: View {
 
     private static let prompt = "搜会话、目录、说过的话"
 
-    private var filterMenu: some View {
-        let current = workspace.catalog?.project(filter)
-        return Menu {
-            Picker("按项目看", selection: Bindable(workspace).projectScope) {
-                Label("全部项目", icon: .all).tag(UUID?.none)
-                ForEach(workspace.catalog?.projects ?? []) { project in
-                    Label { Text(project.name) } icon: { ProjectGlyph(project: project) }.tag(Optional(project.id))
-                }
-            }
-            .pickerStyle(.inline)
-        } label: {
-            HStack(spacing: 6) {
-                if filter == nil { Image(.filter) } else { ProjectGlyph(project: current, size: 13) }
-                Text(current?.name ?? "全部项目").lineLimit(1)
-            }
-            .font(Typography.toolbarLabel).foregroundStyle(palette.ink2)
-            .padding(.horizontal, 12).frame(height: 36)
-            .glass(in: .capsule, interactive: true)
-        }
-        .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
-        .accessibilityLabel(current.map { "按项目看：\($0.name)" } ?? "按项目看")
-    }
-
     @ViewBuilder private func sessions(_ list: PiSessionList) -> some View {
         if list.isEmpty {
             if !ConnectAgents.needed(services) { empty.padding(.top, 60) }
         } else {
             if !list.now.isEmpty {
                 title("现在")
-                cards { nowRows(list.now, in: list) }
+                cards { ForEach(list.now) { row($0, in: list, end: list.ends[$0.id]) } }
             }
             ForEach(Array(list.historyRuns.enumerated()), id: \.element.section) { index, run in
                 if index == 0 { title("历史") }
@@ -113,19 +89,6 @@ struct AgentPage: View {
                 // 滑到这里才读下一页
                 Spinner(.small).frame(maxWidth: .infinity).padding(16)
                     .task(id: list.loaded) { model.loadMore() }
-            }
-        }
-    }
-
-    /// 在线的会话，两个以上需要 /reload 的合成一行（`PiNowRow`）。
-    @ViewBuilder private func nowRows(_ items: [PiSessionListItem], in list: PiSessionList) -> some View {
-        ForEach(PiNowRow.rows(items, state: \.state)) { nowRow in
-            switch nowRow {
-            case .session(let item): row(item, in: list, end: list.ends[item.id])
-            case .reload(let items):
-                PiReloadFold(count: items.count, expanded: $model.reloadOpen, style: .page)
-                    .sessionCard()
-                if model.reloadOpen { ForEach(items) { row($0, in: list, end: list.ends[$0.id]) } }
             }
         }
     }

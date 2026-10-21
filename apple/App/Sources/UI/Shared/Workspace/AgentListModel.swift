@@ -11,7 +11,6 @@ final class AgentListModel {
     private(set) var limit = PiSessionList.pageSize
     var confirmingEnd: PiSessionState?
     var renaming: PiSessionState?
-    var reloadOpen = false
 
     var searching: Bool { !query.trimmingCharacters(in: .whitespaces).isEmpty }
 

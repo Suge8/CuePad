@@ -116,7 +116,7 @@ public final class PiRuntime: AgentRuntime {
             throw error
         }
         // 刚起的就读到不同的扩展：装着的扩展与 App 不配套，它不会自己重新载入，让它退出
-        guard session.hosted, session.state != .incompatible else {
+        guard session.hosted, !session.upgrading else {
             process.end()
             throw PiHostError.extensionMismatch
         }

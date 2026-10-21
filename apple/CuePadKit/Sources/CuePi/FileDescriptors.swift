@@ -75,13 +75,11 @@ enum UnixSocket {
         return fd
     }
 
-    /// 对端是当前用户的进程。
     static func peerIsOwner(_ fd: Int32) -> Bool {
         var euid: uid_t = 0, egid: gid_t = 0
         return getpeereid(fd, &euid, &egid) == 0 && euid == getuid()
     }
 
-    /// 对端进程号。
     static func peerPID(_ fd: Int32) -> pid_t {
         var pid: pid_t = 0
         var length = socklen_t(MemoryLayout<pid_t>.size)

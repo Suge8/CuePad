@@ -62,8 +62,6 @@ extension Workspace {
 struct PageTitleSlot: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
-    /// 点标题弹出的说明（需要 /reload 时）开着。
-    @State private var explaining = false
 
     /// 工具栏里标题一块最宽多少：名字长时截断，不把右边的按钮挤走。
     private static let width: CGFloat = 420
@@ -104,10 +102,6 @@ struct PageTitleSlot: View {
         .frame(height: Spacing.toolbarControl)
         .glass(in: .capsule)
         .accessibilityElement(children: .contain)
-        // 需要 /reload 的会话：状态就写在这块玻璃里，点它看怎么接上（不在对话上另浮一张卡）
-        .contentShape(.capsule)
-        .onTapGesture { if state.showsHeader, PiShown(session).explanation != nil { explaining = true } }
-        .explanationPopover(PiShown(session).explanation, isPresented: $explaining)
         // 标题位的宽度只看工具栏给多少（玻璃只画到内容那么宽）：随内容变时换会话整条工具栏重排、整窗重算鼠标跟踪区，掉帧 8 次到 4～5 次
         .frame(maxWidth: .infinity)
         .frame(minWidth: Self.minWidth, idealWidth: Self.width, maxWidth: Self.width)

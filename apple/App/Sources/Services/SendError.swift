@@ -13,7 +13,7 @@ nonisolated enum SendError: Error, Equatable {
     case unsupportedMode(String)
     /// 发给 Pi 的投送请求没能送达（附执行器写回的原因）。
     case notDelivered(String)
-    /// 问题只能在 Pi 里回答（多行编辑、自定义界面，或旧版本扩展只给了文案）。
+    /// 问题只能在 Pi 里回答（多行编辑、自定义界面）。
     case unanswerable
     /// 这台 Mac 上找不到这个会话的会话文件（被删了，或不是这台 Mac 上的会话）。
     case piSessionNotOnThisMac
