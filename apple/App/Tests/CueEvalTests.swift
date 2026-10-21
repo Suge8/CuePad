@@ -9,7 +9,7 @@ import Testing
 @testable import CuePad
 
 /// Cue 的真模型评测：给改提示词（`CuePrompt`、`CueTools` 的说明、`CueEnvelope`）做前后对比。只在 `CUEPAD_CUE_EVAL=1` 时跑，跑法见 docs/verify.md「Cue 评测」。
-/// 大脑是真的 Claude Code（同用户的 Cue：默认 opus、medium），系统提示、工具与信封全走生产路径（`CueKeeper` 起班次）；
+/// 大脑是真的 Agent（`EvalBrain`：缺省 Claude Code，可换 Pi），系统提示、工具与信封全走生产路径（`CueKeeper` 起班次）；
 /// 其余沿用 `CueHostTests.Rig`：真 `cuepad mcp`、隔离库、执行器开的会话由假扩展扮演。每个场景先等刚启用那一轮做完，
 /// 再直接在库与假会话上摆好状态，让 Cue 被你的话或会话的动静自然叫醒，只评被叫醒的那一轮。
 /// 每个场景把信封、工具调用与结果、Cue 写的消息、判定与每一轮的开销（`BrainUsage`）写进 `CUEPAD_CUE_EVAL_OUT`（缺省 /tmp/cue-eval/latest）的一个 .md，判定与指标写进 <场景>.score.json（成绩单读它，`score.py`）。
