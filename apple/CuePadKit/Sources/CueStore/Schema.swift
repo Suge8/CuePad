@@ -41,16 +41,18 @@ enum Schema {
   /// 一步里任何会因数据冲突失败的语句（加唯一索引、NOT NULL、按假定的数据形状改写）都会让启动失败、库打不开：
   /// 要按别的设备已经同步来的、任意形状的数据写。
   static let upgrades: [Upgrade] = [
-    // 67：同步元数据的系统字段压缩存（`SystemFields`），真实库从 65MB 降到约 8MB。原地改写的行仍各占一页，所以整表重建，
-    // 腾出的页由升级后的整理还给磁盘（`reclaim`）
+    // 67：同步元数据的系统字段压缩存（`SystemFields`），真实库从 65MB 降到约 10MB。原地改写的行仍各占一页，所以整表重建：
+    // 一条 INSERT … SELECT 按行压缩，建好再补索引；腾出的页由升级后的整理还给磁盘（`reclaim`）
     Upgrade { db in
-      let rows = try db.query("SELECT recordName, recordType, systemFields, pushedModifiedAt, sentModifiedAt FROM syncRecords") { row -> [any SQLBindable] in
-        [row.text(0), row.text(1), row.blobOrNil(2).map(SystemFields.pack), row.intOrNil(3), row.intOrNil(4)]
-      }
-      try db.exec("DROP TABLE syncRecords; \(syncRecordsTable) \(syncRecordsIndexes)")
-      for row in rows {
-        try db.run("INSERT INTO syncRecords (recordName, recordType, systemFields, pushedModifiedAt, sentModifiedAt) VALUES (?, ?, ?, ?, ?)", row)
-      }
+      try db.define("packSystemFields", SystemFields.pack)
+      try db.exec(
+        """
+        ALTER TABLE syncRecords RENAME TO syncRecordsOld; DROP INDEX syncRecords_recordType; DROP INDEX syncRecords_pushed;
+        \(syncRecordsTable)
+        INSERT INTO syncRecords SELECT recordName, recordType, packSystemFields(systemFields), pushedModifiedAt, sentModifiedAt FROM syncRecordsOld;
+        DROP TABLE syncRecordsOld;
+        \(syncRecordsIndexes)
+        """)
     },
   ]
 

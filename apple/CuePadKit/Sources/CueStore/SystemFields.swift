@@ -1,64 +1,110 @@
 import Foundation
-import zlib
 
 /// 同步元数据里每条记录的系统字段（`CKRecord.encodeSystemFields` 的归档，上传时以它为底才过得了服务器的版本校验）在库里的存法。
-/// 归档每条约 2.4KB，几乎全是各条相同的键名与类名，真正因记录而异的只有记录名、版本标签与几个时刻；整条存下时一页只放得下一行，
-/// 真实库 1.7 万条占了 65MB。这里用一份典型归档作 zlib 预设字典压成 raw deflate，平均约 420 字节。
-/// 不带字典压缩（只省一半）、只存版本标签（`CKRecord` 没有公开的写法把它放回去）、不存而上传前先取一遍（每次改都多一次请求）都比它差。
+/// 归档每条约 2.4KB，几乎全是各条相同的键名、类名与结构，因记录而异的只有记录名、版本标签与几个时刻；整条存下时一页只放得下一行，
+/// 真实库 1.7 万条占了 65MB。这里只对一份典型归档（`dictionary`）做匹配：与它相同的片段记成（位置、长度），其余原样，平均约 460 字节。
+/// 格式是一串"字面长度、字面字节、字典位置、匹配长度"，以最后一段字面结束，长度与位置都是 LEB128 变长整数。
+/// 不用 zlib 预设字典（约 420 字节）：deflate 每条约 20 万条指令，升级时 1.7 万条要多花半秒；这里压一条约 2.3 万条、解约 1.6 万条。
+/// 只存版本标签不行（`CKRecord` 没有公开的写法把它放回去），不存而上传前先取一遍每次改都多一次请求。
 /// `dictionary` 是库里已存数据的一部分：改了它，存下的就解不开。
 enum SystemFields {
   static func pack(_ archive: Data) -> Data {
-    var stream = z_stream()
-    guard deflateInit2_(&stream, Z_BEST_SPEED, Z_DEFLATED, -MAX_WBITS, 8, Z_DEFAULT_STRATEGY, ZLIB_VERSION, Int32(MemoryLayout<z_stream>.size)) == Z_OK
-    else { preconditionFailure("deflateInit2") }
-    defer { deflateEnd(&stream) }
-    dictionary.withUnsafeBytes { _ = deflateSetDictionary(&stream, $0.baseAddress!.assumingMemoryBound(to: Bytef.self), uInt($0.count)) }
-    var packed = Data(count: Int(deflateBound(&stream, uLong(archive.count))))
-    let status = archive.withUnsafeBytes { input in
-      packed.withUnsafeMutableBytes { output in
-        stream.next_in = UnsafeMutablePointer(mutating: input.baseAddress?.assumingMemoryBound(to: Bytef.self))
-        stream.avail_in = uInt(input.count)
-        stream.next_out = output.baseAddress!.assumingMemoryBound(to: Bytef.self)
-        stream.avail_out = uInt(output.count)
-        return deflate(&stream, Z_FINISH)
+    Data(archive.withUnsafeBytes(pack))
+  }
+
+  static func pack(_ input: UnsafeRawBufferPointer) -> [UInt8] {
+    var out: [UInt8] = []
+    out.reserveCapacity(input.count / 4)
+    let count = input.count
+    dictionary.withUnsafeBytes { dictionary in
+      starts.withUnsafeBufferPointer { starts in
+        var at = 0, literal = 0
+        while at + 4 <= count {
+          let key = input.loadUnaligned(fromByteOffset: at, as: UInt32.self)
+          let start = Int(starts[slot(key)]) - 1
+          guard start >= 0, dictionary.loadUnaligned(fromByteOffset: start, as: UInt32.self) == key else {
+            at += 1
+            continue
+          }
+          var length = 4
+          while start + length + 8 <= dictionary.count, at + length + 8 <= count {
+            let difference = dictionary.loadUnaligned(fromByteOffset: start + length, as: UInt64.self)
+              ^ input.loadUnaligned(fromByteOffset: at + length, as: UInt64.self)
+            guard difference == 0 else { break }
+            length += 8
+          }
+          while start + length < dictionary.count, at + length < count, dictionary[start + length] == input[at + length] { length += 1 }
+          append(at - literal, to: &out)
+          out.append(contentsOf: input[literal..<at])
+          append(start, to: &out)
+          append(length, to: &out)
+          at += length
+          literal = at
+        }
+        append(count - literal, to: &out)
+        out.append(contentsOf: input[literal..<count])
       }
     }
-    precondition(status == Z_STREAM_END, "deflate 的输出按 deflateBound 分配，一次就写得完")
-    packed.count = Int(stream.total_out)
-    return packed
+    return out
   }
 
   /// 解不开（坏数据）为 nil：调用方按没有系统字段处理，上传时作为新记录，服务器以版本冲突带回它的那一份。
   static func unpack(_ packed: Data) -> Data? {
-    var stream = z_stream()
-    guard inflateInit2_(&stream, -MAX_WBITS, ZLIB_VERSION, Int32(MemoryLayout<z_stream>.size)) == Z_OK else { return nil }
-    defer { inflateEnd(&stream) }
-    let set = dictionary.withUnsafeBytes { inflateSetDictionary(&stream, $0.baseAddress!.assumingMemoryBound(to: Bytef.self), uInt($0.count)) }
-    guard set == Z_OK else { return nil }
-    var archive = Data()
-    var chunk = [UInt8](repeating: 0, count: 4096)
-    return packed.withUnsafeBytes { input -> Data? in
-      stream.next_in = UnsafeMutablePointer(mutating: input.baseAddress?.assumingMemoryBound(to: Bytef.self))
-      stream.avail_in = uInt(input.count)
-      while true {
-        let (status, produced) = chunk.withUnsafeMutableBufferPointer { buffer in
-          stream.next_out = buffer.baseAddress
-          stream.avail_out = uInt(buffer.count)
-          return (inflate(&stream, Z_NO_FLUSH), buffer.count - Int(stream.avail_out))
-        }
-        archive.append(contentsOf: chunk[..<produced])
-        switch status {
-        case Z_STREAM_END: return archive
-        case Z_OK: continue
-        default: return nil
+    packed.withUnsafeBytes { input in
+      dictionary.withUnsafeBufferPointer { dictionary -> Data? in
+        var out: [UInt8] = []
+        out.reserveCapacity(dictionary.count + 256)
+        var at = 0
+        while true {
+          guard let literal = read(input, &at), literal <= input.count - at else { return nil }
+          out.append(contentsOf: input[at..<at + literal])
+          at += literal
+          if at == input.count { return Data(out) }
+          guard let start = read(input, &at), let length = read(input, &at), start <= dictionary.count - length else { return nil }
+          out.append(contentsOf: dictionary[start..<start + length])
         }
       }
     }
   }
 
+  private static func append(_ value: Int, to out: inout [UInt8]) {
+    var value = UInt(value)
+    while value >= 0x80 {
+      out.append(UInt8(truncatingIfNeeded: value) | 0x80)
+      value >>= 7
+    }
+    out.append(UInt8(value))
+  }
+
+  private static func read(_ input: UnsafeRawBufferPointer, _ at: inout Int) -> Int? {
+    var value = 0, shift = 0
+    while at < input.count, shift < 35 {
+      let byte = input[at]
+      at += 1
+      value |= Int(byte & 0x7F) << shift
+      if byte < 0x80 { return value }
+      shift += 7
+    }
+    return nil
+  }
+
+  private static func slot(_ key: UInt32) -> Int { Int((key &* 2_654_435_761) >> 20) }
+
+  /// 字典里每个 4 字节片段第一次出现的位置（加 1，0 是没有），按片段的散列放。
+  private static let starts: [UInt16] = {
+    var starts = [UInt16](repeating: 0, count: 1 << 12)
+    dictionary.withUnsafeBytes { dictionary in
+      for start in stride(from: dictionary.count - 4, through: 0, by: -1) {
+        starts[slot(dictionary.loadUnaligned(fromByteOffset: start, as: UInt32.self))] = UInt16(start + 1)
+      }
+    }
+    return starts
+  }()
+
   /// 一条会话消息记录的系统字段归档（记录名换成全 0）。
-  private static let dictionary = Data(
-    base64Encoded: """
+  private static let dictionary = [UInt8](
+    Data(
+      base64Encoded: """
     YnBsaXN0MDDUAQIDBAUGB2ZYJHZlcnNpb25ZJGFyY2hpdmVyVCR0b3BYJG9iamVjdHMSAAGGoF8QD05TS2V5ZWRBcmNoaXZlct8QLwgJCgsMDQ4PEBESExQV
     FhcYGRobHB0eHyAhIiMkJSYnKCkqKywtLi8wMTIzNDU2Nzg3Ojc8OD43Nzc4ODc3NzhISTc3Nzc3Tzc3Nzg3N1Y3NzhaWzg3OF83YWI3ODdfEBZUb21ic3Rv
     bmVkUHVibGljS2V5SURzXxAZSGFzVXBkYXRlZFBhcmVudFJlZmVyZW5jZV8QE0NoYWluUHJvdGVjdGlvbkRhdGFdS25vd25Ub1NlcnZlcllCYXNlVG9rZW5f
@@ -86,5 +132,5 @@ enum SystemFields {
     bARuBHAEcgRzBHUEmgSgBKsEsgS5BMQEywTNBM8E0QT4BQMFFgUqBTQFPQU/BUEFQwVFBUcFTgVhBWYFcQV6BYkFjAWVBZoFpQWoBa8FtAW7Bb0FvwXBBcYF
     0wXVBdcF3AYABgMGJwYsBjQGNgY4Bj0GRwZJBksGTgZTBl0GYAZlBn0GgAaYBp0GsQa0BsgGzwbRBtMG1QbaBucG6QbrBvAG8gb0BvkG+wb9BwIHBwcPBxgH
     GgcfByYHKQcuBzcHOQdAB0IHRAdGB1kHZAdmB2gHagdsB3kHgAeCB4QHhgeZB54AAAAAAAACAQAAAAAAAADTAAAAAAAAAAAAAAAAAAAHrQ==
-    """, options: .ignoreUnknownCharacters)!
+    """, options: .ignoreUnknownCharacters)!)
 }
