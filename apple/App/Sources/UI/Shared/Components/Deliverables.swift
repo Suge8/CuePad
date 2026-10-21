@@ -175,6 +175,7 @@ struct DeliverableTile: View {
 
     private var radius: CGFloat {
         switch shape {
+        case .strip(let height) where height < 30: 4
         case .strip(let height) where height < 80: 8
         case .shot: 10
         default: 12

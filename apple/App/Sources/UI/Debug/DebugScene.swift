@@ -40,7 +40,7 @@ enum ScrollAnchor {
 /// - `-CuePadNoIdeas YES`：`-CuePadProject` 那个项目的灵感都移到回收站，看项目页没有灵感时的空态（改的是库本身，之后的画面也没有这些灵感：配一个新的 `CUEPAD_SHOT_LIBRARY`）；
 /// - `-CuePadTasksOpen YES`：项目页任务纸的"还有 N 条"与"已完成 M"一开始就展开；
 /// - `-CuePadHover <正文开头>`（仅 Mac）：那张灵感卡、那条任务、那条记忆或那一行（"更早"、任务气泡的步骤；回收站按名字）一出现就画成指针停着的样子（"设为任务"、亮起的"开始"、记忆行尾的钉住与忘掉、行的淡底）；
-/// - `-CuePadShowsDone YES`：任务页做完列的"更早做完的"一开始就展开；`-CuePadColumn <列名>`（iPhone）：任务页打开时落在这一列；
+/// - `-CuePadShowsDone YES`：已完成列的"更早做完的"一开始就展开；`-CuePadColumn <列名>`（iPhone）：任务页打开时落在这一列；
 ///   `-CuePadBusyBoard YES`（配 tasks 画面与 `-CuePadDemo YES`）：推进中里再放几件 Agent 正在多步推进的任务（`seedBusyBoard`）；
 /// - `-CuePadCueNow <woke|delegating|asks|done|quiet|away>`：Cue 此刻钉成这份样例（`CueNowSamples`），页头、侧栏、小组件与实时活动都按它画；
 ///   `-CuePadCueCycle YES`：就绪后轮流走过各份样例（`cueNowTourIfAsked`），录切换；

@@ -101,6 +101,22 @@ nonisolated enum PiClock: Hashable, Sendable, Codable {
     }
 }
 
+nonisolated extension PiClock {
+    /// 只写过了多久（"42 秒""12 分钟"，不写"刚刚"、不带前缀）：任务行的用时（`TaskPace`）、推进中会话行的时长、等你卡等了多久。
+    /// 换字的时刻同走字的会话计时（`Style.header`：第一分钟每秒、一小时内每整分钟、再往后每整小时），字跟着时长写法走到哪一档。
+    struct Elapsed: DiscreteFormatStyle {
+        let since: Date
+
+        private var clock: Live { PiClock.running(since: since).live(.header) }
+
+        func format(_ now: Date) -> String { PiClock.duration(now.timeIntervalSince(since)) }
+
+        func discreteInput(after now: Date) -> Date? { clock.discreteInput(after: now) }
+
+        func discreteInput(before now: Date) -> Date? { clock.discreteInput(before: now) }
+    }
+}
+
 nonisolated extension Date {
     /// 从这一刻起每隔 `step` 一格（往前往后都排），严格晚于 `now` 的第一格。按倍数算出来的那格因浮点误差不晚于 `now` 时取下一格：
     /// 按时刻重画的文字（`LiveText`）睡到这一刻，给出的时刻不晚于此刻就再也醒不过来。

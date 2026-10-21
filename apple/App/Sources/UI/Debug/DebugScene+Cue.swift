@@ -64,7 +64,7 @@ extension DebugScene {
             if let importing { try await store.linkCard(importing.id, toSession: "billing") }
             // 截图是 notes 会话做的（歇着）：Cue 值班，侧栏与会话列表里它只说"歇着"
             if let panel { try await store.linkCard(panel.id, toSession: "notes") }
-            await seedEvidence(store, session: "notes", title: "README 截图（浅色）")
+            let evidence = await seedEvidence(store, session: "notes", title: "README 截图（浅色）")
             // Cue 发进 atlas 会话的一句（还在路上）：会话页的气泡上标着 Cue
             _ = try await store.requestDelivery(
                 "排序改完后把 scheduler 的测试全跑一遍，结果贴给我", to: SendTarget(kind: .piSession, name: "atlas", ref: "atlas"), on: "demo-mac", cue: true)
@@ -126,7 +126,11 @@ extension DebugScene {
             let shot = CueFormat.imageMarkup(id: try store.files.store(swatchPNG()))
             try await you("README 的截图也交给你，换成 Swift 版的样子，参考这张\n" + shot)
             // Cue 确认做完了：结果的正文与 Cue 的 done 同一个拼法（`CueReport.text`）
-            if let panel { _ = try await store.finishTask(panel.id, evidence: ["浅色深色各一张，都按你给的参考图", "README 里的旧截图都换掉了"]) }
+            if let panel {
+                _ = try await store.finishTask(
+                    panel.id, evidence: ["浅色深色各一张，都按你给的参考图", "README 里的旧截图都换掉了"],
+                    shots: evidence.map { [CueShot(preview: $0.id, look: "浅色：新的 README 截图")] } ?? [])
+            }
             let asked = try await store.addCueMessage(
                 .cue, text: """
                     预发上验过了，截图在这里。重连用例都过了：
@@ -488,26 +492,6 @@ extension DebugScene {
     }
 
     /// 会话发来一张截图：卡片与"等你"上的证据。
-    static func seedEvidence(_ store: CueStore, session: String, title: String) async {
-        let file = FileManager.default.temporaryDirectory.appending(path: "cuepad-demo-\(session).png")
-        try? swatchPNG().write(to: file)
-        _ = try? await store.addPreviews([(file, title)], sessionID: session)
-    }
-
-    /// 一张像截图的演示图：浅底上一列名单。
-    private static func swatchPNG() -> Data {
-        let view = VStack(alignment: .leading, spacing: 10) {
-            Text("发言顺序").font(.system(size: 22, weight: .bold))
-            ForEach(["小林", "阿杰", "Mia", "老王", "Sora", "Kai"], id: \.self) { name in
-                HStack { Circle().fill(.indigo.opacity(0.7)).frame(width: 18); Text(name) }
-            }
-        }
-        .padding(24).frame(width: 300, height: 360, alignment: .topLeading).background(Color(red: 0.95, green: 0.96, blue: 1))
-        let renderer = ImageRenderer(content: view)
-        renderer.scale = 2
-        return renderer.cgImage.map { DemoLibrary.encode($0) } ?? Data()
-    }
-
     /// `-CuePadCueCycle YES`：就绪后 Cue 此刻每 2.6 秒换成下一份样例（`CueNowSamples.tour`），页头、侧栏与实时活动的调试画面同一份一起变，录切换的动效。
     static func cueNowTourIfAsked(_ cue: CueWatch) async {
         guard defaults.bool(forKey: "CuePadCueCycle") else { return }

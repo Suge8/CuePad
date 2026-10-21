@@ -32,11 +32,13 @@ struct BoardColumns: View {
     }
 }
 
-/// 看板的一列（`TaskBoard`；Mac 与宽屏 iPad 四列并排，手机一屏一列）：待办、推进中、做完各是一张纸（`BoardPaper`），等你每件一张卡（`BoardWaitCard`），
-/// 都在懒加载栈里（列可能很长，只建看得见的）。推进中按要不要你管排（`Workspace.byAttention`）。
-/// 拖放：行拖到推进中是开始（同"开始"：Mac 交给 Agent，手机浮起发给 Agent 的输入框）、拖到做完是做完（同点完成圈，还有没完成的步骤、
+/// 看板的一列（`TaskBoard`；Mac 与宽屏 iPad 四列并排，手机一屏一列）：待办、推进中、已完成各是一张纸（`BoardPaper`），等你每件一张卡（`BoardWaitCard`），
+/// 都在懒加载栈里（列可能很长，只建看得见的）。推进中按档排（要你管 → 在跑 → 歇着，`Workspace.byAttention`）。看全部项目时每行行尾一个项目小图标。
+/// 点击去处：待办、已完成的行开任务气泡；推进中的任务行进此刻干活的会话（没有会话的开气泡），会话行进会话；等你卡点抬头去回答的地方。
+/// 已完成行尾的成果图点开全屏看（这一列挂一个 `previewPresenter`）。
+/// 拖放：行拖到推进中是开始（同"开始"：Mac 交给 Agent，手机浮起发给 Agent 的输入框）、拖到已完成是做完（同点完成圈，还有没完成的步骤、
 /// Agent 还在做时先问一句，`TaskCheck`）；待办里拖到一行前面是排序（`TaskBoard.move`），拖进来不改状态。别的拖法不接。
-/// 做完列末尾是"更早做完的 N"：原地展开（它们没进归档，跳去归档页看到的是别的），展开后旁边是"全部归档"。
+/// 已完成列末尾是"更早做完的 N"：原地展开（它们没进归档，跳去归档页看到的是别的），展开后旁边是"全部归档"。
 struct BoardColumn: View {
     let column: TaskBoard.Column
     /// 按项目范围筛过的看板。
@@ -53,9 +55,11 @@ struct BoardColumn: View {
     #endif
     @State private var showsEarlier = DebugHooks.preset.showsDone
     @State private var targeted = false
-    /// 拖到做完的那件与它这一下（同点完成圈，`taskCheck`）。
+    /// 拖到已完成的那件与它这一下（同点完成圈，`taskCheck`）。
     @State private var finishing: TaskBoard.Item?
     @State private var check = TaskCheck()
+    /// 点开的成果图（已完成列）。
+    @State private var opened: PreviewOpening?
 
     var body: some View {
         ScrollView {
@@ -73,6 +77,7 @@ struct BoardColumn: View {
             drop(ids, before: nil)
         } isTargeted: { targeted = $0 && column != .todo && column != .waiting }
         .taskCheck(finishing?.task, subtasks: finishing?.steps, check: $check)
+        .modifier(ShotPresenter(column: column, opened: $opened))
     }
 
     private static let gap: CGFloat = 8
@@ -94,40 +99,43 @@ struct BoardColumn: View {
             if adding {
                 newTask.transition(Motion.item)
             }
-            BoardPaper(rows: board.todo, project: \.task.projectID) { item in
+            BoardPaper(rows: board.todo) { item in
                 line(item).draggable(item.id.uuidString).modifier(InsertBefore(id: item.id) { drop($0, before: item.id) })
             }
             if board.todo.isEmpty && !adding { empty("没有待办") }
         case .advancing:
-            BoardPaper(rows: workspace.byAttention(board.advancing, agents: agents), project: \.project) { work in
+            BoardPaper(groups: workspace.byAttention(board.advancing, agents: agents)) { work in
                 if let item = work.item {
-                    line(item).draggable(item.id.uuidString)
+                    line(item, advancing: true).draggable(item.id.uuidString)
                 } else if case .session(let session) = work.work {
-                    BoardSessionRow(session: session)
+                    BoardSessionLine(session: session, project: glyph(workspace.catalog?.project(work.project)))
                 }
             }
             if board.advancing.isEmpty { empty("拖一件待办到这里开始") }
         case .waiting:
-            ForEach(BoardSection.of(board.waiting, by: \.project)) { section in
-                BoardProjectHeading(id: section.id, first: section.first).padding(.leading, BoardInset.ring + TaskMetrics.cardPadding - Self.inset)
-                ForEach(section.rows) { wait in
-                    if let item = wait.item {
-                        BoardWaitCard(wait: wait).draggable(item.id.uuidString)
-                    } else {
-                        BoardWaitCard(wait: wait)
-                    }
+            ForEach(board.waiting) { wait in
+                if let item = wait.item {
+                    BoardWaitCard(wait: wait).draggable(item.id.uuidString)
+                } else {
+                    BoardWaitCard(wait: wait)
                 }
             }
             if board.waiting.isEmpty { empty("没有要你拍板的事") }
         case .done:
-            BoardPaper(rows: board.done, project: \.task.projectID, content: line)
+            BoardPaper(rows: board.done) { line($0) }
             if board.done.isEmpty && board.earlier.isEmpty { empty("今天还没做完的") }
             if !board.earlier.isEmpty { earlierToggle }
-            if showsEarlier { BoardPaper(rows: board.earlier, project: \.task.projectID, content: line) }
+            if showsEarlier { BoardPaper(rows: board.earlier) { line($0) } }
         }
     }
 
-    private func line(_ item: TaskBoard.Item) -> TaskLine { TaskLine(task: item.task, subtasks: item.steps, lead: item.leaf) }
+    private func line(_ item: TaskBoard.Item, advancing: Bool = false) -> TaskLine {
+        let look = BoardLook(project: glyph(item.project), shot: item.shot, openShot: { opened = $0 }, advancing: advancing)
+        return TaskLine(task: item.task, subtasks: item.steps, lead: item.leaf, board: look)
+    }
+
+    /// 行尾的项目小图标：只看一个项目时不画（范围已经说了）。
+    private func glyph(_ project: Project?) -> Project? { workspace.scopedProject == nil ? project : nil }
 
     @ViewBuilder private var newTask: some View {
         #if os(macOS)
@@ -223,6 +231,16 @@ extension TaskBoard {
     }
 }
 
+/// 已完成列点开的成果图（`BoardShot`）：一页只这一列挂全屏预览。
+private struct ShotPresenter: ViewModifier {
+    let column: TaskBoard.Column
+    @Binding var opened: PreviewOpening?
+
+    func body(content: Content) -> some View {
+        if column == .done { content.previewPresenter($opened) } else { content }
+    }
+}
+
 /// 待办里一张卡的落点：拖到它上面就是排到它前面，卡的上沿画一条插入线（同大纲的插入线：墨色、起点一个小圈）。
 private struct InsertBefore: ViewModifier {
     let id: UUID
@@ -247,7 +265,7 @@ private struct InsertBefore: ViewModifier {
     }
 }
 
-/// 列头：列的状态图形、列名、数（做完写"今天"）。图形只用现成的：待办空圈、推进中半圈（`TaskRingView`）、等你赭黄问号（`PiStateGlyph`）、做完对勾。
+/// 列头：列的状态图形、列名、数（已完成写"今天"）。图形只用现成的：待办空圈、推进中半圈（`TaskRingView`）、等你赭黄问号（`PiStateGlyph`）、已完成对勾。
 struct BoardColumnHeader: View {
     let column: TaskBoard.Column
     let count: Int

@@ -2,7 +2,7 @@ import CueStore
 import CueText
 import SwiftUI
 
-/// "等你"：固定在输入框上方，最早的那一条，收得紧。第一句是要你定什么，由代码按 Cue 写的动作短语写出
+/// "等你"：固定在输入框上方，最早的那一条（从任务看板点进来的那条先露，`Workspace.leadingAsk`），收得紧。第一句是要你定什么，由代码按 Cue 写的动作短语写出
 /// （`CueAsking.question`），不靠 Cue 的措辞；Cue 的原话默认收起，点"原话"再看（长了在里面滚）。下面是 Cue 点名要你看的图与各看什么
 /// （`CueShots`，没点名的没有图；点开全屏时底栏就是这几个选项，看完当场定）、选项（`CueChoices`），末行是关联的任务与原话的开关
 /// （Mac 上连同选项；辅助功能字号下各占一行），Mac 与手机同一结构；还有几条在等由页头与侧栏的"等你 M"说。卡上只能选：别的话在 Cue 页底下的输入框说，
@@ -250,5 +250,15 @@ struct CueWaitingDock: View {
             defer { ending = nil }
             try await workspace.services.answerCueQuestion(message.id, choice)
         }
+    }
+}
+
+extension Workspace {
+    /// "等你"卡露的先后：从任务看板点进来的那条（`cueAsking`）还在等就排到最前，其余照旧从早到晚。
+    func leadingAsk(_ waiting: [CueMessage]) -> [CueMessage] {
+        guard let id = cueAsking, let index = waiting.firstIndex(where: { $0.id == id }), index > 0 else { return waiting }
+        var ordered = waiting
+        ordered.insert(ordered.remove(at: index), at: 0)
+        return ordered
     }
 }
