@@ -27,6 +27,19 @@ import Testing
     #expect(literal.cards.map(\.id) == [percent.id])
   }
 
+  /// Cue 的 recall：命中词多的旧卡片排在只命中一个词的大批新卡片前面，不被按新旧先截掉。
+  @Test func cueRecallRanksTheOlderCardHittingMoreWordsFirst() async throws {
+    let old = try await store.createCard(body: "ALPHA BETA 旧的那张")
+    try setModified(old, 1)
+    for i in 0..<250 {
+      _ = try await store.createCard(body: "ALPHA \(i)")
+      _ = try await store.createCard(body: "BETA \(i)")
+    }
+    let cards = try await store.recallCue("ALPHA BETA GAMMA", limit: 3).cards
+    #expect(cards.first?.id == old.id)
+    #expect(cards.count == 3)
+  }
+
   @Test func indexFollowsEditsAndPurges() async throws {
     let card = try await store.createCard(body: "alpha")
     try await store.updateCard(card.id) { $0.body = "bravo" }
