@@ -2,7 +2,7 @@ import Foundation
 
 /// 按时间分段：今天 / 昨天 / 本周 / 本月 / 更早。会话历史（已结束的会话按结束时间，手机会话页、Mac 会话页与 ⌘K）与 Cue 的记忆（按记下的时间）共用。
 /// 会话历史按结束时间从新到旧分页，所以分段只在末尾增长，下一页不会插进上面的段。
-nonisolated enum PiHistorySection: Sendable {
+nonisolated enum TimeSection: Sendable {
     case today, yesterday, thisWeek, thisMonth, earlier
 
     var title: String {
@@ -16,7 +16,7 @@ nonisolated enum PiHistorySection: Sendable {
     }
 
     /// 昨天先于本周、本月判断：周一的昨天、月初的昨天都算昨天。一周总从周一算起，不随地区设置（时区仍用传入的日历）。
-    static func of(_ date: Date, now: Date, calendar: Calendar = .current) -> PiHistorySection {
+    static func of(_ date: Date, now: Date, calendar: Calendar = .current) -> TimeSection {
         var calendar = calendar
         calendar.firstWeekday = 2
         if calendar.isDate(date, inSameDayAs: now) { return .today }
@@ -27,7 +27,7 @@ nonisolated enum PiHistorySection: Sendable {
     }
 
     struct Run<Item> {
-        let section: PiHistorySection
+        let section: TimeSection
         var items: [Item]
     }
 
@@ -42,5 +42,5 @@ nonisolated enum PiHistorySection: Sendable {
     }
 }
 
-extension PiHistorySection.Run: Sendable where Item: Sendable {}
-extension PiHistorySection.Run: Equatable where Item: Equatable {}
+extension TimeSection.Run: Sendable where Item: Sendable {}
+extension TimeSection.Run: Equatable where Item: Equatable {}

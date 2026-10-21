@@ -62,8 +62,7 @@ final class Workspace {
     }
     /// 刚收起的气泡是哪件事、什么时候：按在它那一行上收起的（按下就关，松开时那一行又要打开它），这一下不再打开。
     @ObservationIgnored var closedTask: (task: UUID, at: ContinuousClock.Instant)?
-    /// 这个窗口里最近按下的那一下（窗口坐标与时刻；Mac 的鼠标、手机的手指，由窗口的按下监听报来）：任务气泡从这里长出来。
-    @ObservationIgnored var press: (point: CGPoint, at: ContinuousClock.Instant)?
+    @ObservationIgnored var press = PressPoint()
     #if os(macOS)
     /// 新建或编辑项目的表单（`ProjectForm`；侧栏与项目页的入口都经这里，主窗口弹出）。
     var projectForm: ProjectForm.Request?

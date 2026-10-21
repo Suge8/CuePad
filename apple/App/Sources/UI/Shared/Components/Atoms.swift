@@ -160,15 +160,27 @@ nonisolated enum ProjectIcon: String, CaseIterable, Sendable {
 }
 
 // MARK: 小件
-/// 分段标题：小号半粗次要色。
+/// 列表里的大段标题（会话页的"现在""历史"）：页面的骨架，不比行里的字弱。左右缩进由所在列表给，同那一列卡片的左缘。
+struct SectionTitle: View {
+    let text: String
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        Text(text).font(Typography.sectionTitle).foregroundStyle(palette.ink).accessibilityAddTraits(.isHeader)
+    }
+}
+
+/// 组头：小号半粗次要色，可带一个图标（"一直记着"的钉子）。按时间分的段（`TimeSection`：会话历史、记忆）与别的小组都用它。
+/// 不用 `Label`：iOS 的 Label 给图标留一格固定宽，小图标与字之间空得太开。左右缩进与上下留白由所在列表给。
 struct SectionLabel: View {
     let text: Dotted
     var icon: Icon?
     @Environment(\.palette) private var palette
 
     var body: some View {
-        Group {
-            if let icon { Label { Text(text) } icon: { Image(icon) } } else { Text(text) }
+        HStack(spacing: 5) {
+            if let icon { Image(icon) }
+            Text(text)
         }
         .font(Typography.label)
         .foregroundStyle(palette.ink3)

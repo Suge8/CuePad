@@ -23,6 +23,8 @@ struct ProjectScopeMenu: View {
                 if let current { ProjectGlyph(project: current, size: 13) } else { Image(.filter) }
                 Text(current?.name ?? "全部项目").lineLimit(1)
             }
+            // 图标与字合成一个无障碍元素：分开时 Mac 的菜单按钮拆成两颗，菜单项只挂在图标那颗下，读屏落在字那颗上打开的是空壳
+            .accessibilityElement(children: .ignore)
             .font(Typography.toolbarLabel).foregroundStyle(palette.ink2)
             .padding(.horizontal, 12).frame(height: Spacing.toolbarControl)
             .glass(in: .capsule, interactive: true)

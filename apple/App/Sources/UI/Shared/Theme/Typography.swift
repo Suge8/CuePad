@@ -69,6 +69,7 @@ enum Typography {
     static let secondary = Font.subheadline
     static let meta = Font.footnote
     static let label = Font.caption.weight(.semibold)
+    static let sectionTitle = Font.headline
     static let caption = Font.caption
     static let caption2 = Font.caption2
     static let reading = Font.body

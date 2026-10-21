@@ -2,7 +2,7 @@ import CueStore
 import SwiftUI
 
 /// 会话页读到的会话（Mac 与手机同一份）：一条列表，"现在"置顶——全部在线的与正在唤醒的（`PiSessionListItem.isCurrent`；不多，不分页），
-/// 按要你注意的先后；"历史"接在下面——已结束的（"现在"里有的不再列），按结束时间从新到旧分页读（分段见 `PiHistorySection`）。
+/// 按要你注意的先后；"历史"接在下面——已结束的（"现在"里有的不再列），按结束时间从新到旧分页读（分段见 `TimeSection`）。
 /// 两部分用同一个搜索词与项目范围（`Workspace.projectScope`）。
 nonisolated struct PiSessionList: Sendable, Equatable {
     static let pageSize = 40
@@ -151,7 +151,8 @@ struct PiSessionRow: View {
     /// 历史卡的第二行：最后一句回答的首句，没有时是所在的文件夹；都没有是一个空格，占着这一行。
     private var recap: Text {
         if let reply = PiProgress.line(of: session) { return Text(reply) }
-        if let folder = session.folder { return Text("\(Image(.folder)) \(folder)") }
+        // 读屏不念图标的符号名
+        if let folder = session.folder { return Text("\(Image(.folder)) \(folder)").accessibilityLabel("在 \(folder)") }
         return Text(verbatim: " ")
     }
 

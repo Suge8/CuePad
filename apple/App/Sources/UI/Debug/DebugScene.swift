@@ -195,6 +195,7 @@ enum DebugScene {
         #if os(macOS)
         preset.hovered = defaults.string(forKey: "CuePadHover")
         #endif
+        preset.quotaOpen = defaults.bool(forKey: "CuePadQuotaOpen")
         #if os(iOS)
         preset.alertStatus = alertStatus
         if defaults.string(forKey: "CuePadSearchScope") == "sessions" { preset.searchScope = .sessions }
@@ -202,7 +203,6 @@ enum DebugScene {
         let panel = defaults.string(forKey: "CuePadCuePanel")
         preset.cuePanelEnd = panel == "end"
         preset.cuePanelOpen = preset.cuePanelEnd || defaults.bool(forKey: "CuePadCuePanel")
-        preset.quotaOpen = defaults.bool(forKey: "CuePadQuotaOpen")
         preset.quietAlerts = defaults.bool(forKey: "CuePadQuiet")
         #endif
         return preset

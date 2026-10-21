@@ -7,8 +7,8 @@ struct SessionGroup: Equatable {
     enum Key: Hashable {
         /// 在线的会话。
         case now
-        /// 已结束的，按结束时间分段（`PiHistorySection`）。
-        case ended(PiHistorySection)
+        /// 已结束的，按结束时间分段（`TimeSection`）。
+        case ended(TimeSection)
     }
 
     let key: Key
@@ -19,7 +19,7 @@ struct SessionGroup: Equatable {
         calendar: Calendar = .current
     ) -> [SessionGroup] {
         let current = live.isEmpty ? [] : [SessionGroup(key: .now, sessions: PiSessionState.inListOrder(live, state: \.self, cue: cue, at: moment))]
-        let past = PiHistorySection.split(ended, date: \.stateSince, now: now, calendar: calendar)
+        let past = TimeSection.split(ended, date: \.stateSince, now: now, calendar: calendar)
         return current + past.map { SessionGroup(key: .ended($0.section), sessions: $0.items) }
     }
 }

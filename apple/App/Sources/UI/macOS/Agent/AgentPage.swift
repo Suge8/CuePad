@@ -2,8 +2,8 @@
 import CueStore
 import SwiftUI
 
-/// 会话页（侧栏的"会话"进来）：没有页标题（侧栏那块选中就说了在哪），最上面就是一排（项目范围、搜索、新会话），下面是订阅额度的总览（`QuotaStrip`，没有额度记录时没有）。
-/// 列表同手机一条（`PiSessionList`）："现在"置顶（按要你注意的先后：等你确认 → 出错 → 工作中 → 空闲），"历史"按结束时间分段接在下面（`PiHistorySection`），读到底再接一页；
+/// 会话页（侧栏的"会话"进来）：没有页标题（侧栏那块选中就说了在哪），最上面就是一排：项目范围、搜索、额度环（`QuotaRings`，同手机；点它从那一下长出明细的气泡 `QuotaDetail`，点外面或 Esc 收回）、新会话。
+/// 列表同手机一条（`PiSessionList`）："现在"置顶（按要你注意的先后：等你确认 → 出错 → 工作中 → 空闲），"历史"按结束时间分段接在下面（`TimeSection`），读到底再接一页；
 /// 看全部项目时卡上放所在项目的图标。项目范围与任务页共用一份（`Workspace.projectScope`）。
 /// 行与手机同一种（`PiSessionRow`），点行在内容区打开会话页；在线会话右键可结束（确认后发给它所在的 Mac，对话留着）。
 /// 这台 Mac 检测到 Agent 却一家都没接入时，最上面是接入小卡（`ConnectAgents`）：没接入时本机的会话在这里看不到。
@@ -12,6 +12,9 @@ struct AgentPage: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @State private var model = AgentListModel()
+    /// 额度明细的气泡开着时从哪一下长出来；收起的时刻（按在环上收起的，松开时不再打开，`PressPoint.reopens`）。
+    @State private var quota = DebugHooks.preset.quotaOpen ? QuotaBubble(anchor: nil) : nil
+    @State private var quotaClosed: ContinuousClock.Instant?
 
     private var filter: UUID? { workspace.scopedProject }
 
@@ -27,6 +30,13 @@ struct AgentPage: View {
         .background(palette.desk)
         .agentList(model, filter: filter)
         .refreshesQuota()
+        .panel(item: $quota, style: .bubble(anchor: quota?.anchor)) { _ in QuotaDetail().padding(16) }
+        .onChange(of: quota == nil) { _, closed in if closed { quotaClosed = .now } }
+    }
+
+    private func toggleQuota() {
+        if quota != nil || PressPoint.reopens(closedAt: quotaClosed) { return quota = nil }
+        quota = QuotaBubble(anchor: workspace.pressAnchor)
     }
 
     private static let top = "top"
@@ -34,7 +44,6 @@ struct AgentPage: View {
     private var column: some View {
         LazyVStack(alignment: .leading, spacing: 0, pinnedViews: []) {
             topRow.padding(.bottom, 16).id(Self.top)
-            QuotaStrip().padding(.horizontal, 4).padding(.bottom, 12)
             ConnectAgents().padding(.bottom, 12)
             if let list = model.list { sessions(list) }
         }
@@ -43,7 +52,7 @@ struct AgentPage: View {
         .frame(maxWidth: .infinity)
     }
 
-    /// 顶上一排：左边项目范围，中间搜索，右边新会话。
+    /// 顶上一排：左边项目范围，中间搜索，右边额度环与新会话。
     private var topRow: some View {
         HStack(spacing: 10) {
             ProjectScopeMenu()
@@ -58,6 +67,8 @@ struct AgentPage: View {
             .font(Typography.body)
             .padding(.horizontal, 14).frame(height: 36)
             .glass(in: .capsule)
+            QuotaRings(open: quota != nil, height: Spacing.toolbarControl, action: toggleQuota)
+                .glass(in: .capsule, interactive: true)
             NewSessionButton(showing: Bindable(workspace).showsNewSession)
                 .font(.system(size: 14, weight: .semibold))
                 .frame(width: 36, height: 36)
@@ -81,7 +92,7 @@ struct AgentPage: View {
             }
             ForEach(Array(list.historyRuns.enumerated()), id: \.element.section) { index, run in
                 if index == 0 { title("历史") }
-                Text(run.section.title).font(Typography.label).foregroundStyle(palette.ink3)
+                SectionLabel(text: Dotted(run.section.title))
                     .padding(.horizontal, 4).padding(.top, index == 0 ? 0 : 14).padding(.bottom, 6)
                 cards { ForEach(run.items) { row($0, in: list, end: nil) } }
             }
@@ -94,9 +105,7 @@ struct AgentPage: View {
     }
 
     private func title(_ text: String) -> some View {
-        Text(text).font(Typography.sectionTitle).foregroundStyle(palette.ink)
-            .padding(.horizontal, 4).padding(.top, 18).padding(.bottom, 8)
-            .accessibilityAddTraits(.isHeader)
+        SectionTitle(text: text).padding(.horizontal, 4).padding(.top, 18).padding(.bottom, 8)
     }
 
     /// 一组会话卡片（每张自带卡片面，`sessionCard`）。组里的卡片也懒加载：历史的"更早"一组可能有几千张，普通 VStack 会把它们全建出来
@@ -124,6 +133,12 @@ struct AgentPage: View {
                        message: "在终端里开一个 Agent，或点右上角开新会话（⌥⌘N）", waitsForSync: true) { EmptyView() }
         }
     }
+}
+
+/// 额度明细的气泡：从点环的那一下长出来（`Workspace.pressAnchor`）。
+private struct QuotaBubble: Identifiable {
+    let id = 0
+    let anchor: CGPoint?
 }
 
 /// 接入 Agent 的小卡：这台 Mac 检测到 Agent、一家都没接入、桥上也没有会话时才有（没接入时本机的会话在这一页看不到，列表空着时它就是如实的空态，不再叠吉祥物）。
