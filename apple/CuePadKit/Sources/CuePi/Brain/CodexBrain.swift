@@ -11,9 +11,11 @@ import Foundation
 /// - MCP：先读出用户配置里的 MCP 服务（`config/read`），在这个线程上逐个停用，只开 CuePad 的 `cuepad`，它的工具一律放行
 ///   （`default_tools_approval_mode`）：新版 Codex 的 MCP 工具默认要批准，在"从不请求批准"下就是直接拒掉；
 /// - 关掉会在 Cue 身上留下痕迹或替它动手的功能（见 `disabledFeatures`），回合结束不跑用户的 `notify`、不联网搜索；
-/// - 模型看到的输入只有系统提示、沙箱说明与环境（工作目录、日期）：用户的 skill 清单（`skills.include_instructions`）、
+/// - 模型看到的输入只有系统提示与环境（工作目录、日期）。Codex 自己的权限说明（`include_permissions_instructions`："只读沙箱、
+///   从不请求批准、不许提权"）关掉：它说的是大脑自己的沙箱，Cue 回答会话的权限确认时会当成会话的规矩、照它拒掉会话写工作区。
+///   用户的 skill 清单（`skills.include_instructions`）、
 ///   工作目录里的 AGENTS.md（`project_doc_max_bytes` 为 0）、子代理的角色说明与工具（`agents.enabled`；只停用 `multi_agent` 功能不够，
-///   模型表声明了 v2 的模型照样开着）、协作模式说明（`include_collaboration_mode_instructions`）都关掉，见 `overrides`；
+///   模型表声明了 v2 的模型照样开着）、协作模式说明（`include_collaboration_mode_instructions`）也都关掉，见 `overrides`；
 ///   `<CODEX_HOME>/AGENTS.md` 没有开关（只换配置目录才挡得住，换了会丢登录），用户写了就会进来；
 /// - 图以 data URL 随输入交；模型能不能看图、支持哪些强度都看 `model/list` 里的这个模型；
 /// - 模型与思考强度每轮随 `turn/start` 给（就地换就是改下一轮给的）：强度按 `model/list` 里这个模型支持的档位夹取（`PiThinkingLevel.clamped`）；
@@ -44,7 +46,7 @@ final class CodexBrain: CueBrain {
     /// 盖过用户配置的项（`-c`，值是 TOML），键名见 Codex 的 config.schema.json。
     static let overrides = [
         "notify=[]", #"web_search="disabled""#, "skills.include_instructions=false", "project_doc_max_bytes=0", "agents.enabled=false",
-        "include_collaboration_mode_instructions=false",
+        "include_collaboration_mode_instructions=false", "include_permissions_instructions=false",
     ]
 
     func start(_ config: CueBrainConfig) async throws {
