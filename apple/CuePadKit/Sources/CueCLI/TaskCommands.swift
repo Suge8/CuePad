@@ -1,5 +1,4 @@
 import CueStore
-import Foundation
 
 /// 任务是要做的卡片：这里只管任务特有的事（列出、新建、步骤、三态）；正文、移动、回收站用 card 命令。
 extension Command {

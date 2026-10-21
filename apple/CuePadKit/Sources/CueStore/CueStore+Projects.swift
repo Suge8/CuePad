@@ -1,4 +1,3 @@
-import CueText
 import Foundation
 
 extension CueStore {

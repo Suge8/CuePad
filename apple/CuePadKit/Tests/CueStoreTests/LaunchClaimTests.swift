@@ -1,6 +1,5 @@
 import CueStore
 import CueTestSupport
-import Foundation
 import Testing
 
 /// 从灵感或任务"新会话"发给 Agent：开会话的请求带着这条灵感或任务，Mac 开好、会话记录带回认领标识（launchToken）时，
