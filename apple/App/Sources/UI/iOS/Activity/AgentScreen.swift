@@ -93,7 +93,7 @@ struct SessionList: View {
             Group {
                 if !list.now.isEmpty {
                     header { SectionTitle(text: "现在") }
-                    nowRows(list.now, in: list)
+                    ForEach(list.now) { row($0, in: list, end: list.ends[$0.id]) }
                 }
                 ForEach(Array(list.historyRuns.enumerated()), id: \.element.section) { index, run in
                     header {
@@ -115,20 +115,6 @@ struct SessionList: View {
             .animation(Motion.quick, value: list.now.map(\.state.state))
             .animation(Motion.quick, value: (list.now + list.ended).map(\.delivery?.status))
             .animation(Motion.quick, value: list.ends)
-        }
-    }
-
-    /// 在线的会话，两个以上需要 /reload 的合成一行（`PiNowRow`）。
-    @ViewBuilder private func nowRows(_ items: [PiSessionListItem], in list: PiSessionList) -> some View {
-        ForEach(PiNowRow.rows(items, state: \.state)) { nowRow in
-            switch nowRow {
-            case .session(let item): row(item, in: list, end: list.ends[item.id])
-            case .reload(let items):
-                PiReloadFold(count: items.count, expanded: $model.reloadOpen, style: .page)
-                    .sessionCard()
-                    .cardRow()
-                if model.reloadOpen { ForEach(items) { row($0, in: list, end: list.ends[$0.id]) } }
-            }
         }
     }
 

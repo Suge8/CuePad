@@ -44,9 +44,10 @@ public struct PiSession: Identifiable, Sendable, Equatable {
     public let cwd: URL
     /// 启动时从会话列表补上的会话没有终端的环境变量，第一次钩子才带来
     public internal(set) var terminal: PiTerminal
-    /// 该会话加载的 Pi 扩展版本（其他 Agent 为 0）：协议号不同时会不会自己重新载入看它（`PiBridge.selfReloadingExtension`、`upgrading`）
-    public let extensionVersion: Int
     public internal(set) var state: PiWorkState
+    /// 扩展的协议号与 CuePad 不同：扩展换了新版本后会在歇下时自己重新载入、以新协议连回。这段时间读不到它在做什么（`state` 只是填的歇着）、
+    /// 也发不进命令；同步记录不写、界面不换上桥上的状态，都照它最后一次读到的样子。
+    public internal(set) var upgrading = false
     /// 一句话说明（同步记录的 `detail`）：工具名与调用目标、等你回答的弹窗标题、出错的摘要；其余状态为 nil
     public internal(set) var detail: String? = nil
     /// 出错时 Pi 上报的原文（会话行悬停看）；`detail` 里是摘要
@@ -82,10 +83,6 @@ public struct PiSession: Identifiable, Sendable, Equatable {
 
     /// 从 CuePad 能对它做什么（与同步记录上的 `PiSessionState.capabilities` 同一条规则）。
     public var capabilities: AgentCapabilities { .of(agent, hosted: hosted, model: model) }
-
-    /// 协议号不同（`.incompatible`）、又会自己换上新扩展（`PiBridge.selfReloadingExtension` 起）：这段时间读不到它在做什么、也发不进命令，
-    /// 同步记录不写、界面不换上桥上的状态，都照它最后一次读到的样子。更早的扩展同步记录写成 `.incompatible`，提示在终端里 /reload。
-    public var upgrading: Bool { state == .incompatible && extensionVersion >= PiBridge.selfReloadingExtension }
 
     /// 重新上桥时沿用的状态与计时（`PiBridge.attach`）
     var carried: (state: PiWorkState, times: PiTimes) { (state, PiTimes(stateSince: stateSince, busySince: busySince)) }
@@ -156,7 +153,7 @@ public enum PiSessionChange: Sendable, Equatable {
     /// 会话名、首条消息或近况变了（`displayName` 可能随之改变）
     case infoChanged(PiSession)
     case ended(PiSession, reason: PiSessionEndReason)
-    /// 消息损坏（读不出会话或之后的消息格式不对）；连接已关闭，不会出现在 `sessions` 里。协议版本不同的会话不在此列，它以 `.incompatible` 状态出现
+    /// 消息损坏（读不出会话或之后的消息格式不对）；连接已关闭，不会出现在 `sessions` 里。协议版本不同的会话不在此列（`PiSession.upgrading`）
     case incompatible(id: String, detail: String)
     /// 某个会话的扩展观测到订阅额度（回复里带回的，或 `PiBridge.refreshQuota` 查到的）：属于账号，记到 `AccountQuota` 上
     case quota(QuotaReport)
@@ -196,9 +193,7 @@ public enum PiBridgeError: Error, Equatable {
     case rejected(String)
     /// 这个 Agent 的模型表里没有要换的模型（Pi 扩展回 `unknown_model`，其余几家的接入自己判断）
     case unknownModel(AgentKind)
-    /// 会话的扩展协议版本与 CuePad 不同，不发命令：终端里的旧扩展（见 `PiWorkState.incompatible`）
-    case incompatibleExtension
-    /// 同上，但它正自己换上新扩展（`PiSession.upgrading`）
+    /// 会话的扩展协议版本与 CuePad 不同、正自己换上新扩展（`PiSession.upgrading`），不发命令
     case upgradingExtension
     /// 这个 Agent 的这类会话做不到（见 `AgentCapabilities`）
     case unsupported
@@ -214,7 +209,6 @@ extension PiBridgeError: LocalizedError {
         case .insecureSocketDirectory(let path): "Agent 连接目录 \(path) 不安全：必须属于当前用户且权限为 0700"
         case .socketDirectoryTooLong: "Agent 连接目录的路径太长"
         case .unknownSession: "这个 Agent 会话已经结束"
-        case .incompatibleExtension: "这个会话正在终端里运行旧版扩展，在终端里执行 /reload 后再发"
         case .upgradingExtension: "这个会话正在换上新版扩展，歇下后自动接上，到时再发"
         case .unsupported: "这个 Agent 会话不支持这样操作"
         case .notEnded: "会话没有按时结束，可能还在等你在终端里处理"

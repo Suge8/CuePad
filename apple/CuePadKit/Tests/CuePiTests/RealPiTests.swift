@@ -42,7 +42,6 @@ struct RealPiTests {
             #expect(s.pid == pi.pid)
             #expect(s.cwd.resolvingSymlinksInPath().path == pi.cwd.resolvingSymlinksInPath().path)
             #expect(s.model?.key.id == "echo" && s.thinking == .known(.off))
-            #expect(s.extensionVersion == PiExtensionBundle.version)
             #expect(s.state == .settled)
             #expect(s.terminal.program == "test-term" && s.terminal.bundleID == "com.example.term")
             #expect(s.terminal.tmuxPane == "%9" && s.terminal.tmuxSocketPath == "/tmp/tmux-test/default")

@@ -40,7 +40,6 @@ struct BridgeClientTests {
         #expect(s.state == .settled)
         #expect(s.terminal == PiTerminal(tty: "ttys009", program: "ghostty", bundleID: "com.mitchellh.ghostty",
                                          tmuxPane: "%3", tmuxSocketPath: "/private/tmp/tmux-501/default"))
-        #expect(s.extensionVersion == 1)
 
         let l = try #require(session(late.id))
         #expect(l.sessionFile == nil && l.model == nil && l.terminal == PiTerminal())
@@ -140,20 +139,20 @@ struct BridgeClientTests {
 
     // MARK: 协议兼容
 
-    /// 协议不同（升级前开的旧扩展）的会话没死：照常列出、状态是"需要 /reload"，命令一条都不发给它，失败带原因；进程退出才算结束。
+    /// 协议不同（升级前开的扩展，正等着自己换上新扩展）的会话没死：照常列出，命令一条都不发给它，失败带原因；进程退出才算结束。
     @Test(arguments: [3, 99]) func 协议不同的会话在线但不可用_命令失败带原因_退出才结束(protocolVersion: Int) async throws {
         let ext = FakeExtension(directory: dir, options: .init(protocolVersion: protocolVersion, cwd: "/work/legacy"))
         try ext.start()
         try bridge.start()
         try await eventually("appeared") { session(ext.id) != nil }
         let listed = try #require(session(ext.id))
-        #expect(listed.state == .incompatible)
+        #expect(listed.upgrading)
         #expect(listed.sessionID == ext.sessionID && listed.cwd.path == "/work/legacy")
 
-        await #expect(throws: PiBridgeError.incompatibleExtension) { try await bridge.send(PiMessage(text: "hi"), to: ext.id) }
-        await #expect(throws: PiBridgeError.incompatibleExtension) { try await bridge.abort(ext.id) }
+        await #expect(throws: PiBridgeError.upgradingExtension) { try await bridge.send(PiMessage(text: "hi"), to: ext.id) }
+        await #expect(throws: PiBridgeError.upgradingExtension) { try await bridge.abort(ext.id) }
         #expect(ext.commands.isEmpty)
-        #expect(PiBridgeError.incompatibleExtension.errorDescription == "这个会话正在终端里运行旧版扩展，在终端里执行 /reload 后再发")
+        #expect(PiBridgeError.upgradingExtension.errorDescription == "这个会话正在换上新版扩展，歇下后自动接上，到时再发")
 
         ext.close(bye: "quit")
         try await eventually("ended") { session(ext.id) == nil }

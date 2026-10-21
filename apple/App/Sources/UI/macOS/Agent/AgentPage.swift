@@ -77,7 +77,7 @@ struct AgentPage: View {
         } else {
             if !list.now.isEmpty {
                 title("现在")
-                cards { nowRows(list.now, in: list) }
+                cards { ForEach(list.now) { row($0, in: list, end: list.ends[$0.id]) } }
             }
             ForEach(Array(list.historyRuns.enumerated()), id: \.element.section) { index, run in
                 if index == 0 { title("历史") }
@@ -89,19 +89,6 @@ struct AgentPage: View {
                 // 滑到这里才读下一页
                 Spinner(.small).frame(maxWidth: .infinity).padding(16)
                     .task(id: list.loaded) { model.loadMore() }
-            }
-        }
-    }
-
-    /// 在线的会话，两个以上需要 /reload 的合成一行（`PiNowRow`）。
-    @ViewBuilder private func nowRows(_ items: [PiSessionListItem], in list: PiSessionList) -> some View {
-        ForEach(PiNowRow.rows(items, state: \.state)) { nowRow in
-            switch nowRow {
-            case .session(let item): row(item, in: list, end: list.ends[item.id])
-            case .reload(let items):
-                PiReloadFold(count: items.count, expanded: $model.reloadOpen, style: .page)
-                    .sessionCard()
-                if model.reloadOpen { ForEach(items) { row($0, in: list, end: list.ends[$0.id]) } }
             }
         }
     }

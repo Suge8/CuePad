@@ -99,8 +99,6 @@ private struct EndSession: ViewModifier {
 }
 
 extension MacDelivery {
-    /// 能改名：做得到（`AgentCapabilities.rename`）、读得到的会话（旧版扩展的收不到设置）；已结束的也能改，Mac 先在后台恢复它。
-    static func canRename(_ session: PiSessionState) -> Bool {
-        session.capabilities.contains(.rename) && session.state != .known(.incompatible)
-    }
+    /// 能改名：做得到（`AgentCapabilities.rename`）；已结束的也能改，Mac 先在后台恢复它。
+    static func canRename(_ session: PiSessionState) -> Bool { session.capabilities.contains(.rename) }
 }

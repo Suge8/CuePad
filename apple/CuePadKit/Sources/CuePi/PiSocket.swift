@@ -62,7 +62,6 @@ final class PiSocketConnection: Sendable {
     /// fd 是进程全局的：关闭后排队中的写入不能落到被复用的描述符上，所以写与关闭互斥；值是 fd 是否已关闭
     private let closed = Mutex(false)
 
-    /// 连接到本机 socket：本地 connect 是微秒级；对端进程被冻结时也由内核 backlog 接住，不会阻塞。
     convenience init(path: String) throws {
         try self.init(peer: try UnixSocket.connect(path))
     }

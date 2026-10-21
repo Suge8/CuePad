@@ -343,8 +343,8 @@ struct TaskNextMark: View {
 }
 
 extension PiShown {
-    /// 任务行上要写出状态词的：要你动手的（`needsYou`），加上停在半路（被打断、需要 /reload）与做完一轮你还没看的。在跑的只有会动的线。
-    var speaksOnTask: Bool { needsYou || status == .interrupted || status == .restart || status == .unread }
+    /// 任务行上要写出状态词的：要你动手的（`needsYou`），加上停在半路（被打断）与做完一轮你还没看的。在跑的只有会动的线。
+    var speaksOnTask: Bool { needsYou || status == .interrupted || status == .unread }
 }
 
 extension TaskNext {

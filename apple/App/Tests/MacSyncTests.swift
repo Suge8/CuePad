@@ -23,7 +23,7 @@ struct MacSyncTests {
         }
         return CuePi.PiSession(
             id: "\(sessionID).\(pid)", sessionID: sessionID, agent: .pi, sessionFile: file, pid: pid, cwd: URL(filePath: cwd, directoryHint: .isDirectory),
-            terminal: PiTerminal(), extensionVersion: PiExtensionBundle.version, state: state, stateSince: .now)
+            terminal: PiTerminal(), state: state, stateSince: .now)
     }
 
     private func changes(_ items: [PiSessionChange]) -> AsyncStream<PiSessionChange> {
@@ -713,31 +713,6 @@ struct MacSyncTests {
         #expect(rig.host.calls.isEmpty)
     }
 
-    /// 不会自己重新载入的旧扩展会话：记成需要 /reload；在终端里 /reload 后新扩展接回同一个会话，记录与它的摘要留着，不变成"新会话"。
-    @Test(.timeLimit(.minutes(1)))
-    func 旧协议会话重载接回_摘要还在() async throws {
-        let changes = rig.pi.changes()
-        try rig.pi.start()
-        let services: AppServices = services
-        let consuming = Task { try await services.consumePiChanges(changes) }
-        defer { consuming.cancel() }
-        let file = FileManager.default.temporaryDirectory.appending(path: "mac-sync-\(UUID().uuidString).jsonl")
-        FileManager.default.createFile(atPath: file.path, contents: Data())
-        let store = services.store
-
-        let old = try await rig.host.connect("s1", cwd: "/work/app", protocolVersion: 3, sessionFile: file.path)
-        _ = try await eventually(store, { try $0.allPiSessionStates().first }, until: { $0?.state == .known(.incompatible) })
-        try await store.writePiTranscript(PiTranscript(
-            sessionID: "s1", messages: [PiChatMessage(sessionID: "s1", entryID: "u1", seq: 1, role: .user, text: "修登录", at: .now)],
-            recap: PiRecap(lastPrompt: "修登录", lastReply: "改好了")))
-
-        old.close(bye: "reload")
-        try await rig.host.connect("s1", cwd: "/work/app", sessionFile: file.path)
-
-        let back = try await eventually(store, { try $0.allPiSessionStates().first }, until: { $0?.state == .known(.settled) })
-        #expect(back?.recap == PiRecap(lastPrompt: "修登录", lastReply: "改好了"))
-    }
-
     /// App 更新后，开着的会话歇下后自己重新载入扩展、接回（新载入的扩展没见过这一轮：开始报空、起点是此刻）。
     /// 协议号变了的（`upgrading`）这期间读不到状态，记录停在更新前的样子；没变的照常读着。更新前在跑、重载前做完了这一轮的，
     /// 接回时照常算一次歇下，Cue 被叫醒（他不在场：那句话说在半小时前）；更新前就歇着的，接回不是新的歇下，不叫醒。
@@ -763,8 +738,7 @@ struct MacSyncTests {
         defer { consuming.cancel() }
 
         let old = try await rig.host.connect(
-            "s1", cwd: "/work/app", busy: running, protocolVersion: upgrading ? 3 : PiWire.protocolVersion,
-            extensionVersion: PiBridge.selfReloadingExtension, sessionFile: file.path)
+            "s1", cwd: "/work/app", busy: running, protocolVersion: upgrading ? 3 : PiWire.protocolVersion, sessionFile: file.path)
         if running {
             try await store.writePiTranscript(PiTranscript(
                 sessionID: "s1", messages: [said], recap: PiRecap(lastPrompt: "发版", lastReply: "发好了", answeredAt: .now)))
@@ -773,7 +747,7 @@ struct MacSyncTests {
         try await rig.host.connect("s1", cwd: "/work/app", sessionFile: file.path)
 
         // 接回的那一次写入落了盘（记录的状态与起点跟上桥上的）才看 Cue 的变化，不然歇着的那一例还没写就判过了
-        try await eventually("桥上以新协议接回") { services.pi.session(sessionID: "s1").map { $0.state == .settled && $0.extensionVersion == 1 } == true }
+        try await eventually("桥上以新协议接回") { services.pi.session(sessionID: "s1").map { $0.state == .settled && !$0.upgrading } == true }
         let live = try #require(services.pi.session(sessionID: "s1"))
         _ = try await eventually(store, { try $0.allPiSessionStates().first }, until: {
             $0?.state == .known(.settled) && abs(($0?.stateSince ?? .distantPast).timeIntervalSince(live.stateSince)) < 0.001
@@ -833,22 +807,6 @@ struct MacSyncTests {
 
         try await services.store.setDirectory(nil, for: project.id)
         for try await bindings in services.store.observe({ try $0.directoryBindings() }) where bindings.isEmpty { break }
-    }
-
-    /// 升级前开的旧协议会话没死：桥上有它，就不能当成已结束去后台唤醒（唤醒只会再起一个进程、永远"正在唤醒"）；按桥给的原因失败写回。
-    @Test func 旧协议的会话还在运行_请求不唤醒_带原因失败() async throws {
-        try await rig.host.connect("sess-old", cwd: "/work/old", protocolVersion: 3)
-        _ = try await indexed("sess-old", cwd: try folder("old"))
-        try await services.executor.start()
-        defer { services.cancelBackgroundWork() }
-
-        let request = try await services.store.requestDelivery(
-            "hi", to: SendTarget(kind: .piSession, name: "old", ref: "sess-old"), on: TestApp.hostID)
-        let done = try await awaitFinished(request.id)
-
-        #expect(done.status == .known(.failed))
-        #expect(done.resultDetail == "这个会话正在终端里运行旧版扩展，在终端里执行 /reload 后再发")
-        #expect(rig.host.calls.isEmpty)
     }
 
     /// 投送到应用已经下线：旧版本写来的发到应用、复制到剪贴板的请求按失败写回，不碰任何应用与剪贴板。

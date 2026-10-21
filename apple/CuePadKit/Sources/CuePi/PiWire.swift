@@ -4,7 +4,7 @@ import Foundation
 
 /// 桥协议的线上格式：一行一个 JSON。扩展端见 `Extension/cuepad-bridge.ts`。
 enum PiWire {
-    /// 客户端说的协议版本；hello 的版本不同就不往下解析（命令一条不发），会话只当"需要 /reload"（`OtherProtocolHello`）
+    /// 客户端说的协议版本；hello 的版本不同就不往下解析（命令一条不发），会话等它换上新扩展（`OtherProtocolHello`、`PiSession.upgrading`）
     static let protocolVersion = 16
 
     struct State: Decodable {
@@ -20,7 +20,7 @@ enum PiWire {
         /// 主会话最后一次模型回合开始的时间（毫秒）；还没开过为 nil
         var turnSince: Double?
 
-        /// 同步记录的状态与一句话说明（`PiSession.detail`）；不认识的种类为 nil。扩展还报的在跑工具全集、`aborted`、弹窗种类没有人读，不解码。
+        /// 同步记录的状态与一句话说明（`PiSession.detail`）；不认识的种类为 nil。
         var work: (state: PiWorkState, detail: String?)? {
             switch kind {
             case "idle", "done": (.settled, nil)
@@ -43,7 +43,6 @@ enum PiWire {
 
     struct Hello: Decodable {
         var protocolVersion: Int
-        var extensionVersion: Int
         var sessionId: String
         var sessionFile: String?
         var pid: Int32
@@ -60,13 +59,12 @@ enum PiWire {
 
         enum CodingKeys: String, CodingKey {
             case protocolVersion = "protocol"
-            case extensionVersion, sessionId, sessionFile, pid, cwd, tty, term, state, launchToken, hosted
+            case sessionId, sessionFile, pid, cwd, tty, term, state, launchToken, hosted
         }
 
         init(from decoder: any Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
             protocolVersion = try c.decode(Int.self, forKey: .protocolVersion)
-            extensionVersion = try c.decode(Int.self, forKey: .extensionVersion)
             sessionId = try c.decode(String.self, forKey: .sessionId)
             sessionFile = try c.decodeIfPresent(String.self, forKey: .sessionFile)
             pid = try c.decode(Int32.self, forKey: .pid)
@@ -85,7 +83,6 @@ enum PiWire {
     /// `sessionFile` 也读：进程退出时说没说过话（`PiSession.spoke`）看它，读不到就会把说过话的会话当成没说话、删掉记录与摘要。
     struct OtherProtocolHello: Decodable {
         var protocolVersion: Int
-        var extensionVersion: Int
         var sessionId: String
         var sessionFile: String?
         var pid: Int32
@@ -96,13 +93,12 @@ enum PiWire {
 
         enum CodingKeys: String, CodingKey {
             case protocolVersion = "protocol"
-            case extensionVersion, sessionId, sessionFile, pid, cwd, name, firstMessage, hosted
+            case sessionId, sessionFile, pid, cwd, name, firstMessage, hosted
         }
 
         init(from decoder: any Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
             protocolVersion = try c.decode(Int.self, forKey: .protocolVersion)
-            extensionVersion = (try? c.decode(Int.self, forKey: .extensionVersion)) ?? 0
             sessionId = try c.decode(String.self, forKey: .sessionId)
             sessionFile = try? c.decode(String.self, forKey: .sessionFile)
             pid = try c.decode(Int32.self, forKey: .pid)
@@ -274,7 +270,7 @@ enum PiWire {
     }
 
     static func sendCommand(id: String, _ message: PiMessage) throws -> Data {
-        try encode(Command(
+        try encodeLine(Command(
             t: "send", id: id, text: message.text,
             images: message.images.isEmpty ? nil : message.images.map { .init(mimeType: $0.mimeType, data: $0.data.base64EncodedString()) },
             deliveryId: message.deliveryID))
@@ -282,36 +278,16 @@ enum PiWire {
 
     /// 斜杠命令：`text` 是以 / 开头的整行。
     static func slashCommand(id: String, line: String) throws -> Data {
-        try encode(Command(t: "command", id: id, text: line))
+        try encodeLine(Command(t: "command", id: id, text: line))
     }
 
-    private struct ReloadCommand: Encodable {
-        var t = "reload"
+    private struct Bare: Encodable {
+        var t: String
         var id: String
     }
 
-    static func reloadCommand(id: String) throws -> Data { try encodeLine(ReloadCommand(id: id)) }
-
-    private struct EndCommand: Encodable {
-        var t = "end"
-        var id: String
-    }
-
-    static func endCommand(id: String) throws -> Data { try encodeLine(EndCommand(id: id)) }
-
-    private struct AbortCommand: Encodable {
-        var t = "abort"
-        var id: String
-    }
-
-    static func abortCommand(id: String) throws -> Data { try encodeLine(AbortCommand(id: id)) }
-
-    private struct QuotaCommand: Encodable {
-        var t = "quota"
-        var id: String
-    }
-
-    static func quotaCommand(id: String) throws -> Data { try encodeLine(QuotaCommand(id: id)) }
+    /// 只有种类的命令：`reload`、`end`、`abort`、`quota`。
+    static func bare(_ t: String, id: String) throws -> Data { try encodeLine(Bare(t: t, id: id)) }
 
     private struct ConfigCommand: Encodable {
         var t = "config"
@@ -342,7 +318,5 @@ enum PiWire {
     private static func encodeLine(_ command: some Encodable) throws -> Data {
         try JSONEncoder().encode(command) + Data([0x0A])
     }
-
-    private static func encode(_ command: Command) throws -> Data { try encodeLine(command) }
 }
 #endif

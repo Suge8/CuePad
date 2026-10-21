@@ -96,42 +96,42 @@ public final class PiBridge {
 
         var session: PiSession? { id.flatMap { bridge?.session(id: $0) } }
 
-        func send(_ message: PiMessage) async throws { _ = try await request { try PiWire.sendCommand(id: $0, message) } }
+        func send(_ message: PiMessage, in _: PiSession.ID) async throws { _ = try await request { try PiWire.sendCommand(id: $0, message) } }
 
-        func command(_ line: String) async throws { _ = try await request { try PiWire.slashCommand(id: $0, line: line) } }
+        func command(_ line: String, in _: PiSession.ID) async throws { _ = try await request { try PiWire.slashCommand(id: $0, line: line) } }
 
-        func reload() async throws { _ = try await request { try PiWire.reloadCommand(id: $0) } }
+        func reload() async throws { _ = try await request { try PiWire.bare("reload", id: $0) } }
 
         /// 托管的（没有终端界面）给进程发 SIGTERM，Pi 优雅收尾（扩展先发 bye），不论这一轮在不在跑；
         /// 终端里开的由扩展走 Pi 的正常退出（终端恢复原样、提示怎么恢复这个会话）。
-        func end() async throws {
+        func end(_: PiSession.ID) async throws {
             guard let session else { throw PiBridgeError.sessionEnded }
             if session.hosted {
                 kill(session.pid, SIGTERM)
             } else {
-                _ = try await request { try PiWire.endCommand(id: $0) }
+                _ = try await request { try PiWire.bare("end", id: $0) }
             }
         }
 
-        func abort() async throws { _ = try await request { try PiWire.abortCommand(id: $0) } }
+        func abort(_: PiSession.ID) async throws { _ = try await request { try PiWire.bare("abort", id: $0) } }
 
-        func answer(_ answer: PiAnswerValue, to promptID: String) async throws {
+        func answer(_ answer: PiAnswerValue, to promptID: String, in _: PiSession.ID) async throws {
             _ = try await request { try PiWire.answerCommand(id: $0, promptID: promptID, answer) }
         }
 
         /// 强度先在这里按目标模型夹好（`PiThinkingLevel.clamped`）：Pi 自己的夹法与之不同，界面按这一条显示。
-        func configure(model: PiModelKey?, thinking: PiThinkingLevel?, name: String?) async throws {
+        func configure(model: PiModelKey?, thinking: PiThinkingLevel?, name: String?, in _: PiSession.ID) async throws {
             let key = model ?? session?.model?.key
             let levels = session?.availableModels.first { $0.key == key }?.thinkingLevels ?? []
             let thinking = thinking?.clamped(to: levels)
             _ = try await request { try PiWire.configCommand(id: $0, model: model, thinking: thinking, name: name) }
         }
 
-        func refreshQuota() async throws { _ = try await request { try PiWire.quotaCommand(id: $0) } }
+        func refreshQuota() async throws { _ = try await request { try PiWire.bare("quota", id: $0) } }
 
         private func request(encode: (String) throws -> Data) async throws -> PiWire.Ack {
             guard let session else { throw PiBridgeError.sessionEnded }
-            guard session.state != .incompatible else { throw session.upgrading ? PiBridgeError.upgradingExtension : .incompatibleExtension }
+            guard !session.upgrading else { throw PiBridgeError.upgradingExtension }
             nextCommand += 1
             let commandID = "c\(nextCommand)"
             let data = try encode(commandID)
@@ -196,14 +196,14 @@ public final class PiBridge {
         if let session = session(id: id), let why = session.capabilities.speakBlocked(in: session.state, agent: session.agent) {
             throw PiBridgeError.rejected("failed: \(why)")
         }
-        try await link.send(message)
+        try await link.send(message, in: id)
     }
 
     /// 执行一条斜杠命令（整行，以 / 开头）：Pi 的内置命令由扩展调 Pi 的接口做，扩展命令、提示词模板与 skill 由 Pi 派发；会开一轮的
     /// （模板与 skill 展开成这一轮的提示词）与 `send` 同一规则，在跑就先打断。受理只表示已收下，命令自己的输出只出现在 Agent 的界面里；
     /// 清单里没有的命令抛 `rejected("unknown_command")`，必填参数没给抛 `rejected("missing_argument")`。
     public func command(_ line: String, in id: PiSession.ID) async throws {
-        try await control(id, needs: .commands).command(line)
+        try await control(id, needs: .commands).command(line, in: id)
     }
 
     /// 让该会话从会话文件重新载入到最新（同一会话的另一个进程刚写过文件后）；扩展判断能否安全重载，不能就提示用户。只有 Pi 有。
@@ -215,7 +215,7 @@ public final class PiBridge {
     public func end(_ id: PiSession.ID) async throws {
         let link = try control(id, needs: .end)
         let changes = changes()  // 先订阅再动手：下线的那一刻不会漏
-        try await link.end()
+        try await link.end(id)
         try await withDeadline(AgentTimeouts.end, orThrow: PiBridgeError.notEnded) {
             for await change in changes {
                 if case .ended(let ended, _) = change, ended.id == id { return }
@@ -227,12 +227,12 @@ public final class PiBridge {
     /// 停止该会话正在跑的这一轮（相当于在 Agent 里按 Esc）：受理即返回，会话随后歇下（`.settled`），能接着说。
     /// 已经空闲时什么也不发生（也成功）；只停它自己这一轮，它派出的子代理照常跑。
     public func abort(_ id: PiSession.ID) async throws {
-        try await control(id, needs: .abort).abort()
+        try await control(id, needs: .abort).abort(id)
     }
 
     /// 回答该会话正在等的弹窗；`promptID` 不是正在等的那个、或答案对不上时抛 `PiBridgeError.rejected`。
     public func answer(_ answer: PiAnswerValue, to promptID: String, in id: PiSession.ID) async throws {
-        try await control(id, needs: .answer).answer(answer, to: promptID)
+        try await control(id, needs: .answer).answer(answer, to: promptID, in: id)
     }
 
     /// 换该会话的模型、思考强度或会话名（至少给一项，会话名不能是空白）：先换模型再设强度，强度按新模型支持的范围夹取。
@@ -242,7 +242,7 @@ public final class PiBridge {
         guard model != nil || thinking != nil || name != nil, name?.isEmpty != true else { throw PiBridgeError.rejected("bad_request") }
         var needs: AgentCapabilities = model != nil || thinking != nil ? .model : []
         if name != nil { needs.insert(.rename) }
-        try await control(id, needs: needs).configure(model: model, thinking: thinking, name: name)
+        try await control(id, needs: needs).configure(model: model, thinking: thinking, name: name, in: id)
     }
 
     /// 请该会话查一次所有 OAuth 订阅的额度：查到的随 `changes()` 的 `.quota` 报出（与回复里带回的同一条路），
@@ -251,7 +251,7 @@ public final class PiBridge {
         try await pi(id).refreshQuota()
     }
 
-    /// 会话的控制通道；这个 Agent 的这类会话做不到（`AgentCapabilities`）就抛 `unsupported`：能做什么只看能力表，通道不再判断。
+    /// 会话的控制通道；这个 Agent 的这类会话做不到（`AgentCapabilities`）就抛 `unsupported`：能做什么只看能力表，通道不判断。
     private func control(_ id: PiSession.ID, needs: AgentCapabilities) throws -> any SessionLink {
         guard let link = controls[id], let session = session(id: id) else { throw PiBridgeError.unknownSession(id) }
         guard session.capabilities.isSuperset(of: needs) else { throw PiBridgeError.unsupported }
@@ -275,8 +275,8 @@ public final class PiBridge {
     public func attach(_ session: PiSession, via link: any SessionLink) {
         controls[session.id] = link
         var session = session
-        let before = slots.first { $0.id == session.id && $0.session.state != .incompatible }.map(\.session.carried)
-            ?? (session.state == .incompatible ? nil : carried.removeValue(forKey: session.sessionID))
+        let before = slots.first { $0.id == session.id && !$0.session.upgrading }.map(\.session.carried)
+            ?? (session.upgrading ? nil : carried.removeValue(forKey: session.sessionID))
         if let before, before.state.phase == session.state.phase {
             session.stateSince = before.times.stateSince
             session.busySince = before.times.busySince ?? session.busySince
@@ -316,14 +316,11 @@ public final class PiBridge {
         releasing.remove(id)
         guard let index = slots.firstIndex(where: { $0.id == id }) else { return }
         let session = slots.remove(at: index).session
-        if reason == .reload, session.state != .incompatible { carried[session.sessionID] = session.carried }
+        if reason == .reload, !session.upgrading { carried[session.sessionID] = session.carried }
         emit(.ended(session, reason: reason))
     }
 
     // MARK: 托管的会话
-
-    /// 从这个扩展版本起，扩展换了新版本就在空闲时自己重新载入（`PiSession.upgrading`）；更早的协议号不同时要在终端里 /reload。
-    nonisolated static let selfReloadingExtension = 29
 
     /// 托管的会话什么时候请它退出（不算结束，发话时再接着）：同一会话在别处（终端里）也开着、自己又空闲的（两边会各写各的；正在跑一轮的等它做完、状态变化时再看）；
     /// 歇着满 `hostedIdle` 的（为自己起了进程的 Claude Code、Codex；Pi 自己计时，App 退出后照常在；OpenCode 的会话在它的服务里，没有进程要关）。
@@ -351,7 +348,7 @@ public final class PiBridge {
     private func release(_ id: PiSession.ID) {
         guard let link = controls[id], releasing.insert(id).inserted else { return }
         idleTimers.removeValue(forKey: id)?.cancel()
-        Task { try? await link.end() }
+        Task { try? await link.end(id) }
     }
 
     // MARK: 发现
@@ -395,7 +392,7 @@ public final class PiBridge {
     private func consume(_ link: Link, name: String) async {
         for await line in link.connection.lines {
             // 协议版本不同的会话：之后的消息格式不可知，只认告别（同 hello 只读认得出的一项：重载的告别要认得出，`PiSessionEndReason.reload`），等连接断开
-            if link.session?.state == .incompatible {
+            if link.session?.upgrading == true {
                 link.bye = PiWire.otherProtocolBye(line) ?? link.bye
                 continue
             }
@@ -418,7 +415,7 @@ public final class PiBridge {
             var session = PiSession(
                 id: name, sessionID: hello.sessionId, agent: .pi, sessionFile: hello.sessionFile.map { URL(filePath: $0) }, pid: hello.pid,
                 cwd: URL(filePath: hello.cwd, directoryHint: .isDirectory), terminal: PiTerminal(tty: hello.tty, environment: hello.term),
-                extensionVersion: hello.extensionVersion, state: work.state, detail: work.detail,
+                state: work.state, detail: work.detail,
                 errorMessage: hello.state.errorMessage, stateSince: hello.state.sinceDate, busySince: hello.state.busySinceDate)
             session.turnStartedAt = hello.state.turnSinceDate
             hello.info.apply(to: &session)
@@ -430,7 +427,7 @@ public final class PiBridge {
             guard "\(hello.sessionId).\(hello.pid)" == name else { throw HandlingError.nameMismatch }
             var session = PiSession(
                 id: name, sessionID: hello.sessionId, agent: .pi, sessionFile: hello.sessionFile.map { URL(filePath: $0) }, pid: hello.pid, cwd: URL(filePath: hello.cwd, directoryHint: .isDirectory),
-                terminal: PiTerminal(), extensionVersion: hello.extensionVersion, state: .incompatible, stateSince: Date())
+                terminal: PiTerminal(), state: .settled, upgrading: true, stateSince: Date())
             session.name = hello.name
             session.firstMessage = hello.firstMessage
             session.hosted = hello.hosted

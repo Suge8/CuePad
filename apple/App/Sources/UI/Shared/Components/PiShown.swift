@@ -141,8 +141,6 @@ nonisolated struct PiShown: Hashable, Sendable {
         /// 在等回答，等的是 Cue（`PiSessionState.waitsForCue`），不是你。
         case cueAsking
         case failed
-        /// 在线，但它加载的扩展与这台 Mac 上的 CuePad 不同，要在终端里 /reload。
-        case restart
         case unread
         case idle
         /// Cue 在值班时歇着：不催你（没有"有新回复""该你了"）。
@@ -217,7 +215,6 @@ nonisolated extension PiShown {
         case .thinking, .tool, .delegating, .compacting: .working(state.known!)
         case .waitingForUser: .asking
         case .error: .failed
-        case .incompatible: .restart
         case .settled: .idle
         case .ended: .ended
         case .interrupted: .interrupted
@@ -240,7 +237,6 @@ nonisolated extension PiShown {
         case .awaitsReply: "待回复"
         case .cueAsking: "等 \(cue ?? "") 回答"
         case .failed: "出错"
-        case .restart: "在线，需要 /reload"
         case .unread: "有新回复"
         case .idle: "该你了"
         case .resting: "歇着"
@@ -249,11 +245,6 @@ nonisolated extension PiShown {
         case .interrupted: "被打断"
         case .unknown: "未知状态"
         }
-    }
-
-    /// 会话页顶上点玻璃标题弹出的一句说明：只有需要 /reload（旧版扩展）时有——怎么接上。命令中间不许折行（"/" 后接词连接符）。
-    var explanation: String? {
-        status == .restart ? "这个会话还在用升级前的旧版扩展，CuePad 看不到它的进展、也发不进去。在终端里对这个会话执行 /\u{2060}reload 就能接上。" : nil
     }
 
     /// 只有一个状态标时它说的是什么（读屏标签、悬停提示、项目长按菜单的标题、任务上的会话状态）。
@@ -268,7 +259,6 @@ nonisolated extension PiShown {
         case .awaitsReply: "Agent 在等你回复"
         case .cueAsking: "Agent 在等 \(cue ?? "") 回答"
         case .failed: "Agent 出错"
-        case .restart: "Agent 在线，需要在终端里 /reload"
         case .unread: "Agent 有新回复"
         case .idle: "Agent 在等你说下一句"
         case .resting: "Agent 歇着"
@@ -302,21 +292,18 @@ nonisolated extension PiShown {
         case .asking, .awaitsReply: 0
         case .failed, .delivery(.failed): 1
         case .working, .delivery, .cueAsking: 2
-        // 旧扩展的会话要 /reload 是可以晚点做的维护，不压在在跑的会话上面
-        case .restart: 3
-        case .unread, .idle, .resting, .fresh, .interrupted, .unknown: 4
-        case .ended: 5
+        case .unread, .idle, .resting, .fresh, .interrupted, .unknown: 3
+        case .ended: 4
         }
     }
 
-    /// 选会话时排在前面的（发给 Agent 的会话选单）：等你确认与待回复 → 出错 → 有新回复 → 工作中 → 需要 /reload → 停下的 → 已结束。
+    /// 选会话时排在前面的（发给 Agent 的会话选单）：等你确认与待回复 → 出错 → 有新回复 → 工作中 → 停下的 → 已结束。
     var urgency: Int {
         switch status {
         case .asking, .awaitsReply: 6
         case .failed, .delivery(.failed): 5
         case .unread: 4
-        case .working, .delivery, .cueAsking: 3
-        case .restart: 2
+        case .working, .delivery, .cueAsking: 2
         case .idle, .resting, .fresh, .interrupted, .unknown: 1
         case .ended: 0
         }
@@ -324,7 +311,7 @@ nonisolated extension PiShown {
 }
 
 nonisolated extension PiShown {
-    /// 要你动手：等你确认、待回复、出错、没能送达。只有它们带彩色（需要 /reload 是维护，次要墨色）。
+    /// 要你动手：等你确认、待回复、出错、没能送达。只有它们带彩色。
     var needsYou: Bool {
         switch status {
         case .asking, .awaitsReply, .failed, .delivery(.failed): true

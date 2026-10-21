@@ -2,7 +2,7 @@ import CueStore
 import Foundation
 
 /// 项目的"此刻"一行：每个项目只挑一件最该知道的事（iPad 侧栏、手机项目页与 Mac 侧栏行尾的状态标共用这一处规则）。
-/// 按优先取第一个：Agent 等你确认（它在问什么）→ 出错与没能送达（原因，本机同步不通只写"没能送达"；没能送达看过那个会话就不算，同会话行）→ Agent 在跑与话在路上（在做什么）→ 需要 /reload
+/// 按优先取第一个：Agent 等你确认（它在问什么）→ 出错与没能送达（原因，本机同步不通只写"没能送达"；没能送达看过那个会话就不算，同会话行）→ Agent 在跑与话在路上（在做什么）
 /// → 有新回复（回复第一句）→ 最近开始的进行中任务 → 项目介绍（会话之间的先后就是会话列表的档 `PiShown.rank`）；都没有就是 nil，行照样留着高度。状态标与颜色都按 `PiShown`：只有要你动手的带色。
 nonisolated struct ProjectNow: Hashable, Sendable {
     enum Source: Hashable, Sendable {
@@ -71,7 +71,7 @@ nonisolated struct ProjectNow: Hashable, Sendable {
     }
 
     /// 会话进得了"此刻"的档，就是会话列表的档（`PiShown.rank`，Agent 页同一套）：等你确认 → 出错与没能送达 → 在跑与话在路上
-    /// → 需要 /reload → 有新回复；停着、已结束的不算。
+    /// → 有新回复；停着、已结束的不算。
     static func tier(_ shown: PiShown) -> Int? {
         switch shown.status {
         case .idle, .resting, .fresh, .ended, .interrupted, .unknown: nil
@@ -81,7 +81,6 @@ nonisolated struct ProjectNow: Hashable, Sendable {
 
     private static func sentence(_ item: PiSessionListItem, _ shown: PiShown) -> String {
         switch shown.status {
-        case .restart: "要在终端里重载"
         case .delivery(.failed): gist(item, shown) ?? shown.presence
         case .delivery: shown.presence
         default: gist(item, shown) ?? shown.presence
@@ -94,7 +93,7 @@ nonisolated struct ProjectNow: Hashable, Sendable {
     private static func gist(_ item: PiSessionListItem, _ shown: PiShown) -> String? {
         switch shown.status {
         case .delivery(.failed(let failure)): failure.reason
-        case .delivery, .restart: nil
+        case .delivery: nil
         default: PiProgress.line(of: item.state)
         }
     }

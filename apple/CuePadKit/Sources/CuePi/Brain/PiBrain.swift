@@ -22,7 +22,6 @@ final class PiBrain: CueBrain {
     private let session = BrainSession()
     var events: AsyncStream<CueBrainEvent> { session.events }
     private var process: ChildProcess?
-    /// 等回应的命令
     private let replies = PendingReplies<String, JSONValue>(timeout: AgentTimeouts.reply, timeoutError: CueBrainError.rejected("没有及时回应"))
     private var nextID = 0
     private var window: Int?

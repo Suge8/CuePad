@@ -223,7 +223,7 @@ extension PiSessionRow: Equatable {
     }
 }
 
-/// Agent 页的一张会话卡片（会话、合成的"需要 /reload"）：留白、纸色圆角面，要你看的状态换成这种状态的淡底（`PiShown.wash`），
+/// Agent 页的一张会话卡片：留白、纸色圆角面，要你看的状态换成这种状态的淡底（`PiShown.wash`），
 /// 换状态时淡入淡出。静态内容卡：不加阴影与描边，靠纸比桌面亮一档分层。
 struct SessionCard: ViewModifier {
     var wash: Color?
@@ -335,60 +335,6 @@ private struct FactsLayout: Layout {
 private extension View {
     /// 读数一行里的一项：能被排成 0 宽并裁掉（`FactsLayout`）。
     func fact() -> some View { frame(minWidth: 0, alignment: .leading).clipped() }
-}
-
-/// "现在"里的一行：一个会话，或两个以上需要 /reload 的会话（旧扩展，`PiShown.Status.restart`）合成的一行，点开再列出来。
-/// 它们按 `PiShown.rank` 排在一起（工作中之后），所以合成的行落在原来那一段的位置。
-enum PiNowRow<Item: Identifiable>: Identifiable {
-    case session(Item)
-    case reload([Item])
-
-    var id: AnyHashable {
-        switch self {
-        case .session(let item): AnyHashable(item.id)
-        case .reload: AnyHashable("reload")
-        }
-    }
-
-    static func rows(_ items: [Item], state: (Item) -> PiSessionState) -> [PiNowRow] {
-        let reload = items.filter { state($0).state == .known(.incompatible) }
-        guard reload.count > 1 else { return items.map(PiNowRow.session) }
-        var rows: [PiNowRow] = []
-        for item in items {
-            if state(item).state != .known(.incompatible) {
-                rows.append(.session(item))
-            } else if !rows.contains(where: { if case .reload = $0 { true } else { false } }) {
-                rows.append(.reload(reload))
-            }
-        }
-        return rows
-    }
-}
-
-/// 合成的那一行："N 个会话需要 /reload"，点它展开或收起（展开的会话由调用方接在下面）。
-struct PiReloadFold: View {
-    let count: Int
-    @Binding var expanded: Bool
-    var style = PiSessionRow.Style.compact
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        Button { expanded.toggle() } label: {
-            HStack(alignment: .firstTextBaseline, spacing: style.dot + 2) {
-                PiStateDot(shown: PiShown(status: .restart), size: style.dot)
-                Text("\(count) 个会话需要 /reload").font(style.name).foregroundStyle(palette.ink2).lineLimit(1)
-                Spacer(minLength: 4)
-                Image(.forward).font(style.line.weight(.semibold)).foregroundStyle(palette.ink3)
-                    .rotationEffect(.degrees(expanded ? 90 : 0))
-                    .accessibilityHidden(true)
-            }
-            .contentShape(.rect)
-        }
-        .buttonStyle(.plain)
-        .animation(Motion.quick, value: expanded)
-        .accessibilityExpanded(expanded)
-        .accessibilityHint("旧版扩展的会话，在终端里对它们执行 /reload")
-    }
 }
 
 /// 会话行长按（Mac 右键）菜单里的"标为未读"：做完一轮停着、你看过了的会话才有（`PiUnread.canMarkUnread`）；
