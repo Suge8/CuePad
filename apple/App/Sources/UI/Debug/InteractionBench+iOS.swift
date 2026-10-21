@@ -115,8 +115,10 @@ enum IOSInteractionBench {
             await step("返回 Agent") { workspace.path.removeAll() }
         }
         // Agent 列表滚动：每帧 40pt 往下再往上
-        guard let scroll = Self.scrollView(in: Self.window) else { fail("Agent 页上找不到可滚的列表") }
-        for _ in 0..<2 { await stepScroll("Agent 列表滚动", scroll, step: { name, action in await step(name, action) }) }
+        if wants("Agent 列表滚动") {
+            guard let scroll = Self.scrollView(in: Self.window) else { fail("Agent 页上找不到可滚的列表") }
+            for _ in 0..<2 { await stepScroll("Agent 列表滚动", scroll, step: { name, action in await step(name, action) }) }
+        }
         workspace.select(.shelf)
         try? await Task.sleep(for: .seconds(1))
         for _ in 0..<2 {
@@ -211,10 +213,12 @@ enum IOSInteractionBench {
 
     private static func stepScroll(_ name: String, _ scroll: UIScrollView, step: (String, () -> Void) async -> Void) async {
         // 滚动是持续的：量 40 帧里每帧的主线程回合与掉帧（动作只触发第一帧，之后由 display link 推）
+        // 量完滚回原处（顶上是负的上内边距，不是 0）：根上的页常驻，滚到哪后面的项就从哪接着看
+        let start = scroll.contentOffset
         let driver = ScrollDriver(scroll)
         await step(name) { driver.start() }
         driver.stop()
-        scroll.setContentOffset(.zero, animated: false)
+        scroll.setContentOffset(start, animated: false)
     }
 
     static var window: UIWindow? {
@@ -225,7 +229,8 @@ enum IOSInteractionBench {
         guard let view else { return nil }
         if let scroll = view as? UIScrollView, scroll.contentSize.height > scroll.bounds.height, !view.isHidden, view.window != nil,
            scroll.bounds.height > 300 { return scroll }
-        for sub in view.subviews where !sub.isHidden { if let found = scrollView(in: sub) { return found } }
+        // 叠在原处不画的邻页（透明）不算
+        for sub in view.subviews where !sub.isHidden && sub.alpha > 0 { if let found = scrollView(in: sub) { return found } }
         return nil
     }
 

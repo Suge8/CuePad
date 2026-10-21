@@ -66,7 +66,7 @@ extension IOSInteractionBench {
         }
     }
 
-    /// 量完时停在哪：根与推入的页（`cue`、`cue>session`），露出了行的轻扫按钮记"+行动作"，会话页的列表没停在顶上记偏了多少，任务页记看板此刻那一列。
+    /// 量完时停在哪：根与推入的页（`cue`、`cue>session`），露出了行的轻扫按钮记"+行动作"，任务页记看板此刻那一列。
     static func landed(_ workspace: Workspace) -> String {
         func brief(_ route: Route) -> String {
             switch route {
@@ -78,11 +78,6 @@ extension IOSInteractionBench {
         }
         var text = ([workspace.root] + workspace.path).map(brief).joined(separator: ">")
         if revealsRowActions(in: window) { text += "+行动作" }
-        // 会话页的列表该停在顶上（量的项里没有滚它的）
-        if workspace.root == .agent, workspace.path.isEmpty, let list = sessionList(in: window)?.list {
-            let off = list.contentOffset.y + list.adjustedContentInset.top
-            if abs(off) >= 1 { text += " 列表偏上\(Int(off))" }
-        }
         if workspace.root == .tasks, let column = boardColumn(in: window) { text += " 列=\(column)" }
         return text
     }
@@ -112,19 +107,11 @@ extension IOSInteractionBench {
         return [view] + view.subviews.flatMap { all(in: $0) }
     }
 
-    /// 屏上的会话列表（SwiftUI 的 List）与它屏上的第一行。
-    private static func sessionList(in window: UIWindow?) -> (list: UICollectionView, row: CGRect)? {
-        guard let window else { return nil }
-        let cells = all(in: window).compactMap { $0 as? UICollectionViewCell }.filter { onScreen($0, window) != nil }
-        guard let list = cells.lazy.compactMap({ $0.superview as? UICollectionView }).first,
-              let row = cells.compactMap({ onScreen($0, window) }).filter({ $0.height >= 44 }).min(by: { $0.minY < $1.minY })
-        else { return nil }
-        return (list, row)
-    }
-
-    /// 屏上第一行；不替列表滚回顶上：没停在顶上是界面的毛病，照实滑、在落点里记"列表偏上"。
+    /// 会话列表（SwiftUI 的 List）里屏上的第一行。
     private static func sessionRow(in window: UIWindow?, fail: (String) -> Never) -> CGRect {
-        guard let row = sessionList(in: window)?.row else { fail("会话页上找不到会话行") }
+        guard let window, let row = all(in: window).compactMap({ $0 as? UICollectionViewCell }).compactMap({ onScreen($0, window) })
+            .filter({ $0.height >= 44 }).min(by: { $0.minY < $1.minY })
+        else { fail("会话页上找不到会话行") }
         return row
     }
 
