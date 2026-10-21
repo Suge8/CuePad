@@ -17,7 +17,7 @@ extension CueStore {
       var answer: PiAnswer?
       if let question = session.state?.answerableQuestion, let promptID = question.promptID, let kind = question.kind.known {
         let value = CueFormat.plainText(content).trimmingCharacters(in: .whitespacesAndNewlines)
-        answer = PiAnswer(promptID: promptID, value: try Self.answerValue(value, kind: kind, options: question.options, allowsOther: question.allowsOther))
+        answer = PiAnswer(promptID: promptID, value: try Self.answerValue(value, kind: kind, options: question.options, allowsOther: question.allowsOther, leading: cue))
       }
       try requestConfig(config, in: session, host: host, cue: cue)
       if let answer {
@@ -77,8 +77,10 @@ extension CueStore {
   enum TurnOpener { case user, cue }
 
   /// 一句话作为提问的答案：选择题给选项原文或从 1 起的序号，收自己写的回答的（`PiQuestion.allowsOther`）其余文字照写；
+  /// 不收的，Cue 说的（`leading`）开头正好是一个选项、后面紧跟标点或空白（"B. Redis，多实例共享"、照抄提问的"A. 新建表…"）就按那个选项答，
+  /// 后面的说明不送，工具结果会告诉它；你在回复框里写的不这样截，免得说明悄悄丢掉。只认开头：说明里才提到选项（"不换，仍按 A"）猜不准。
   /// 确认题给是或否；文字题照写。答不上抛 `invalidAnswer`。
-  private static func answerValue(_ value: String, kind: PiQuestionKind, options: [String], allowsOther: Bool) throws -> PiAnswerValue {
+  private static func answerValue(_ value: String, kind: PiQuestionKind, options: [String], allowsOther: Bool, leading: Bool) throws -> PiAnswerValue {
     switch kind {
     case .text: return .text(value)
     case .select:
@@ -87,6 +89,12 @@ extension CueStore {
       }
       if let number = Int(value), options.indices.contains(number - 1) { return .option(options[number - 1]) }
       if allowsOther, !value.isEmpty { return .text(value) }
+      let opening = options.filter { option in
+        guard leading, !option.isEmpty, value.count > option.count, value.lowercased().hasPrefix(option.lowercased()) else { return false }
+        let next = value[value.index(value.startIndex, offsetBy: option.count)]
+        return next.isWhitespace || next.isPunctuation
+      }
+      if opening.count == 1 { return .option(opening[0]) }
       throw CueStoreError.invalidAnswer(options)
     case .confirm:
       switch value.lowercased() {

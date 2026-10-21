@@ -10,10 +10,17 @@ extension CueTools {
     let host = try await host()
     let config = try await config(args, of: target.session)
     let switched = config.map { "先换成 " + [$0.model.map { "\($0.provider)/\($0.id)" }, $0.thinking?.rawValue].compactMap { $0 }.joined(separator: " ") + "，再" } ?? ""
-    let request = try await store.speak(
-      try args.required("text"), to: target.session, card: target.card, config: config, host: host, cue: true)
-    let what = request.mode == .known(.answer) ? "\(switched)回答\(target.label)的提问" : "\(switched)对\(target.label)说"
+    let text = try args.required("text")
+    let request = try await store.speak(text, to: target.session, card: target.card, config: config, host: host, cue: true)
+    var what = request.mode == .known(.answer) ? "\(switched)回答\(target.label)的提问" : "\(switched)对\(target.label)说"
+    if case .option(let option)? = request.answer?.value, Self.saidMore(text, than: option) { what += "（按开头的选项「\(option)」作答，后面的话没送）" }
     return try await spoken(request, what, tail: target.short)
+  }
+
+  /// 作答的话比认出的那个选项多（"B. Redis，多实例共享"按 B 答了）：多出的部分没送到会话，要在结果里告诉 Cue。
+  private static func saidMore(_ text: String, than option: String) -> Bool {
+    let value = CueFormat.plainText(text).trimmingCharacters(in: .whitespacesAndNewlines)
+    return Int(value) == nil && value.caseInsensitiveCompare(option) != .orderedSame
   }
 
   /// say、stop、leave 对的会话：给 task（或 session 写的是任务）是它在做的叶子绑着的会话（带上叶子），给 session 是那个会话。`label` 是工具结果里对它的称呼。
