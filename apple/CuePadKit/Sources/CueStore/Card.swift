@@ -1,3 +1,4 @@
+import CueText
 import Foundation
 
 /// 唯一的内容记录。界面上叫灵感或任务：同一种记录，差别只是 `todoAt`（"设为任务"时写上，"改回灵感"时清掉）。
@@ -128,6 +129,22 @@ public enum CardChange: Sendable, Equatable {
   case trash(id: UUID, lifted: [UUID])
   /// 挪动：原来的位置与原来的前一个同级。
   case move(id: UUID, from: CardSlot, after: UUID?)
+}
+
+extension Card {
+  /// 标题（`CueSummary` 的规则，唯一一处）：Cue 的工具、信封与界面都用它。空白的卡是空串（App 的 `title` 另给占位说法）。
+  public var heading: String { CueSummary(body).title }
+
+  /// 任务正文里标题下面的话（`CueLines.split`）：开工时连同标题一起发出。没有为 nil；写它只换这部分，标题那一行不动。
+  public var rest: String? {
+    get { CueLines.split(body).rest }
+    set { body = CueLines.joined(title: CueLines.split(body).title, rest: newValue) }
+  }
+}
+
+extension UUID {
+  /// 给 Cue 与人看的短 id：小写的前 8 位（Cue 的工具接受至少 4 位的前缀）。
+  public var shortID: String { String(uuidString.lowercased().prefix(8)) }
 }
 
 extension Card: Record {

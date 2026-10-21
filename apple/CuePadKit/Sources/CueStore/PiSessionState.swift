@@ -247,6 +247,11 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
   public static func recordID(sessionID: String) -> UUID { DeterministicID.uuid("pi-session/\(sessionID)") }
 }
 
+extension PiSessionState {
+  /// 给 Cue 看的会话短 id：会话 id 的前 8 位（Cue 的工具接受至少 4 位的前缀）。
+  public var shortID: String { String(sessionID.prefix(8)) }
+}
+
 extension PiSessionState: Record {
   static let table = Table.piSessionStates
   /// 对话的投影（见 `PiRecap`），只由 `writePiTranscript` 写

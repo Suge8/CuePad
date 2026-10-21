@@ -128,6 +128,12 @@ extension PiChatMessage: Record {
 }
 
 extension PiChatMessage {
+  /// 用户一方的这句是 Cue 发进会话的（`cueSent` 是 `CueStore.cueSentDeliveries` 认出的请求 id）；其余都是用户说的——
+  /// 在终端里打的与在 CuePad 里发的一样。会话页的气泡与 Cue 的 peek 都只认它。
+  public func saidByCue(_ cueSent: Set<UUID>) -> Bool { role == .known(.user) && deliveryID.map(cueSent.contains) == true }
+}
+
+extension PiChatMessage {
   /// 一轮的经过：调了几次工具（失败的也算，读、改同一个文件只算一次；界面上的"跑了 N 步"）和一份按先后的清单——
   /// 每次调用一条（自己标成败），中途说的每段话也一条（`said`，不是调用）；最后那段话是回答，不在清单里。
   /// Agent 会话的由 Mac 从会话文件汇出，Cue 的由值班的管理器从这一轮的调用汇出（`CueActivity`）；同步记录里存为 JSON（加密字段）。
