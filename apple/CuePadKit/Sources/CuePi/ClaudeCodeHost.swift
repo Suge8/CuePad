@@ -47,10 +47,10 @@ final class ClaudeHostedSession: SessionLink {
     private var resolved: [String: String] = [:]
 
     /// 启动进程（`arguments` 接在 stream-json 的参数后面），开始读它的输出。
-    init(executable: URL, arguments: [String], sessionID: String, directory: URL, environment: [String: String], bridge: PiBridge) throws {
+    init(executable: URL, arguments: [String], sessionID: String, directory: URL, environment: [String: String], bridge: PiBridge) async throws {
         self.sessionID = sessionID
         self.bridge = bridge
-        stream = try ClaudeStream(
+        stream = try await ClaudeStream(
             executable: executable, arguments: ["--permission-prompt-tool", "stdio", "--permission-mode", "auto"] + arguments,
             directory: directory, environment: environment)
         stream.onMessage = { [weak self] in self?.received($0) }

@@ -37,7 +37,7 @@ final class ClaudeBrain: CueBrain {
             if let model = config.model { arguments += ["--model", model] }
             if let effort = config.effort { arguments += ["--effort", ClaudeCode.effort(effort)] }
             let environment = BrainSession.environment(config, ["CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1", "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1"])
-            let stream = try ClaudeStream(
+            let stream = try await ClaudeStream(
                 executable: config.executable, arguments: arguments, directory: config.workingDirectory, environment: environment)
             self.stream = stream
             stream.onMessage = { [weak self] in self?.received($0) }

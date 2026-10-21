@@ -135,7 +135,7 @@ public final class ClaudeCodeRuntime: AgentRuntime {
         known: (name: String?, firstMessage: String?)? = nil
     ) async throws -> PiSession.ID {
         let claude = try await executable()
-        let session = try ClaudeHostedSession(
+        let session = try await ClaudeHostedSession(
             executable: claude.url, arguments: arguments, sessionID: sessionID, directory: directory,
             environment: claude.environment.merging([HostMark.variable: sessionID]) { $1 }, bridge: bridge)
         hosted[sessionID] = session

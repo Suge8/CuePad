@@ -5,14 +5,16 @@ import Synchronization
 
 /// CuePad 起的一个子进程：起进程、读写、等退出、停进程只经这里（大脑、托管的 Claude Code 与 Codex 说行协议的长驻进程，
 /// 后台托管的 Pi，一次性的命令 `run`）。
+/// - 不挂在 App 底下：经 `/bin/sh` 中转（`relay`）起，中转报出它的 PID 就退出，它挂到 launchd 下。LaunchServices 给没有包的进程
+///   （osascript、swift 脚本、xctest 这类一碰窗口服务就登记成应用的）认的是进程树上最近的应用：挂在 App 下，Agent 跑的这些工具
+///   都登记成前台的 CuePad，程序坞每次多一个图标、退出后不撤（攒下过几百个）。否决 `responsibility_spawnattrs_setdisclaim`：
+///   LaunchServices 不看责任进程（实测照样登记成 CuePad），却会让 Agent 失去 App 拿到的隐私授权；中转不改责任进程，授权照旧；
 /// - 只继承列出的描述符（`POSIX_SPAWN_CLOEXEC_DEFAULT`）：App 打开的文件与连接不漏进去；
-/// - 退出由内核的进程事件得知（不占线程、不轮询），随即回收，不留僵尸；
+/// - 退出与退出码由 kqueue 的进程事件得知（`NOTE_EXITSTATUS`，不是子进程也给；不占线程、不轮询），launchd 回收；
 /// - 输出用读事件读，按 `\n` 切行（JSON 字符串里的 U+2028/2029 不是行界）；写入排在一条串行队列上（大图片写进管道时不卡调用方，
 ///   先后不变），写端设了 `F_SETNOSIGPIPE`：进程已退出时写入只是失败；关了输入之后的写入丢掉（描述符号可能已被别的文件复用）。
 public final class ChildProcess: Sendable {
     enum Placement: Sendable {
-        /// 跟 App 同一个进程组（一次性的命令）
-        case inline
         /// 自成一个进程组：退出后把组里剩下的（它起的、没跟着走的子进程）一并结束，不留孤儿；停它时整组结束
         case group
         /// 新会话：App 所在会话与进程组的信号碰不到它，App 退出、崩溃它照常在（后台托管的 Pi）
@@ -43,7 +45,7 @@ public final class ChildProcess: Sendable {
     private let input: Int32?
     private let writes = DispatchQueue(label: "cuepad.child.write")
 
-    private struct State {
+    struct State {
         var inputOpen = true
         var stopping = false
         var stderr = Data()
@@ -53,7 +55,7 @@ public final class ChildProcess: Sendable {
         var waiters: [UUID: CheckedContinuation<Bool, Never>] = [:]
     }
     /// 回收与读事件的回调和调用方共享（`Mutex` 不可复制，放进引用里）
-    private final class Shared: Sendable { let state = Mutex(State()) }
+    final class Shared: Sendable { let state = Mutex(State()) }
     private let shared = Shared()
     /// 脱离 App 的进程的标准错误：已删掉名字的临时文件（只剩描述符），进程退出后随最后一个描述符关闭而释放
     private let errorFile: Int32?
@@ -64,15 +66,15 @@ public final class ChildProcess: Sendable {
     init(
         _ executable: URL, _ arguments: [String], directory: URL? = nil, environment: [String: String]? = nil,
         placement: Placement, input inputMode: Input = .null, output outputMode: Output = .null, keepErrors: Bool = true
-    ) throws {
-        var opened: [Int32] = []
-        defer { for fd in opened { close(fd) } }  // 本进程这端以外的都在启动后关掉
+    ) async throws {
+        // 起不来的（不存在、不可执行）当场抛错，不等中转里的 exec 失败
+        guard access(executable.path, X_OK) == 0 else { throw POSIXError(.init(rawValue: errno) ?? .ENOENT) }
+        var opened: [Int32] = []  // 子进程那端：起完就关
+        defer { for fd in opened { close(fd) } }
         func pipe() throws -> (read: Int32, write: Int32) {
             var fds: [Int32] = [0, 0]
             guard Darwin.pipe(&fds) == 0 else { throw POSIXError(.init(rawValue: errno) ?? .EIO) }
-            // 本进程这端不进别的子进程（同时起的其他进程若继承了写端，这边就永远等不到 EOF）
-            for fd in fds { _ = fcntl(fd, F_SETFD, FD_CLOEXEC) }
-            return (fds[0], fds[1])
+            return (try Self.lifted(fds[0]), try Self.lifted(fds[1]))
         }
 
         var actions: posix_spawn_file_actions_t? = nil
@@ -118,6 +120,10 @@ public final class ChildProcess: Sendable {
             posix_spawn_file_actions_adddup2(&actions, err.write, STDERR_FILENO)
         }
         if let directory { posix_spawn_file_actions_addchdir(&actions, directory.path) }
+        let reported = try pipe(), go = try pipe()
+        opened += [reported.write, go.read]
+        posix_spawn_file_actions_adddup2(&actions, reported.write, Self.reportFD)
+        posix_spawn_file_actions_adddup2(&actions, go.read, Self.goFD)
 
         var attributes: posix_spawnattr_t? = nil
         posix_spawnattr_init(&attributes)
@@ -128,22 +134,31 @@ public final class ChildProcess: Sendable {
         posix_spawnattr_setsigdefault(&attributes, &signals)
         sigemptyset(&signals)
         posix_spawnattr_setsigmask(&attributes, &signals)
-        let placed: Int32 = switch placement {
-        case .inline: 0
-        case .group: POSIX_SPAWN_SETPGROUP
-        case .detached: POSIX_SPAWN_SETSID
-        }
-        posix_spawnattr_setflags(&attributes, Int16(POSIX_SPAWN_CLOEXEC_DEFAULT | POSIX_SPAWN_SETSIGDEF | POSIX_SPAWN_SETSIGMASK | placed))
-        if placement == .group { posix_spawnattr_setpgroup(&attributes, 0) }
-        let argv = ([executable.path] + arguments).map { strdup($0) } + [nil]
+        let session: Int32 = placement == .detached ? POSIX_SPAWN_SETSID : 0
+        posix_spawnattr_setflags(&attributes, Int16(POSIX_SPAWN_CLOEXEC_DEFAULT | POSIX_SPAWN_SETSIGDEF | POSIX_SPAWN_SETSIGMASK | session))
+        let argv = (["/bin/sh", "-c", Self.relay, "sh", executable.path] + arguments).map { strdup($0) } + [nil]
         let envp = (environment ?? ProcessInfo.processInfo.environment).map { strdup("\($0.key)=\($0.value)") } + [nil]
         defer { (argv + envp).forEach { free($0) } }
-        var pid: pid_t = 0
-        let code = posix_spawn(&pid, executable.path, &actions, &attributes, argv, envp)
+        var relay: pid_t = 0
+        let code = posix_spawn(&relay, "/bin/sh", &actions, &attributes, argv, envp)
+        for fd in opened { close(fd) }
+        opened = []
+        let ours = [input, stdout, stderr, errorFile].compactMap { $0 }
         guard code == 0 else {
-            opened += [input, stdout, stderr, errorFile].compactMap { $0 }
+            (ours + [reported.read, go.write]).forEach { close($0) }
             throw POSIXError(.init(rawValue: code) ?? .EIO)
         }
+        // 中转报完 PID 就退出（报告管道读到 EOF）；它是 App 的子进程，这里回收
+        let report = await Self.readToEnd(reported.read)
+        var relayStatus: Int32 = 0
+        waitpid(relay, &relayStatus, 0)
+        guard let pid = pid_t(String(decoding: report, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)) else {
+            (ours + [go.write]).forEach { close($0) }
+            throw POSIXError(.ECHILD)
+        }
+        // 先登记退出事件再放它 exec：已经被 launchd 回收的进程登记不上，退出码就丢了
+        Self.watchExit(pid, group: placement == .group, shared: shared)
+        close(go.write)
         self.pid = pid
         self.placement = placement
         self.input = input
@@ -169,7 +184,6 @@ public final class ChildProcess: Sendable {
                 }
             } done: {}
         }
-        Self.reap(pid, group: placement == .group, shared: shared)
     }
 
     deinit {
@@ -185,7 +199,7 @@ public final class ChildProcess: Sendable {
         _ executable: URL, _ arguments: [String], directory: URL? = nil, environment: [String: String]? = nil, timeout: Duration? = nil,
         collect: Bool = true
     ) async -> (status: Int32, output: String)? {
-        guard let process = try? ChildProcess(
+        guard let process = try? await ChildProcess(
             executable, arguments, directory: directory, environment: environment, placement: .group, output: collect ? .raw : .null,
             keepErrors: false)
         else { return nil }
@@ -201,8 +215,8 @@ public final class ChildProcess: Sendable {
     }
 
     /// 起一个要等人的命令（打开浏览器登录）：标准输入、输出、错误都是空设备，自成进程组。`waitForExit()` 等它结束，`end()` 提前结束它。
-    public static func launch(_ executable: URL, _ arguments: [String], environment: [String: String]) throws -> ChildProcess {
-        try ChildProcess(executable, arguments, environment: environment, placement: .group, keepErrors: false)
+    public static func launch(_ executable: URL, _ arguments: [String], environment: [String: String]) async throws -> ChildProcess {
+        try await ChildProcess(executable, arguments, environment: environment, placement: .group, keepErrors: false)
     }
 
     /// 等它退出，返回退出码（被信号结束为 nil）；不随调用方取消提前返回。
@@ -310,53 +324,6 @@ public final class ChildProcess: Sendable {
                 }
             }
         } onCancel: { giveUp() }
-    }
-
-    // MARK: 底层
-
-    /// 进程退出事件到了就回收（注册前就已退出的事件不会来：注册后再非阻塞地回收一次兜住），自成进程组的再结束组里剩下的。
-    /// 事件源在进程退出前一直握着自己，与这个对象的生死无关（脱离 App 的 Pi 由它回收）。
-    private static func reap(_ pid: pid_t, group: Bool, shared: Shared) {
-        let source = DispatchSource.makeProcessSource(identifier: pid, eventMask: .exit, queue: .global())
-        let collect: @Sendable (Int32) -> Void = { options in
-            var status: Int32 = 0
-            guard waitpid(pid, &status, options) == pid else { return }
-            source.cancel()
-            if group { killpg(pid, SIGKILL) }
-            let waiters = shared.state.withLock { s in
-                s.status = status
-                defer { s.waiters = [:] }
-                return s.waiters.values
-            }
-            for waiter in waiters { waiter.resume(returning: true) }
-        }
-        source.setEventHandler { collect(0) }
-        source.resume()
-        collect(WNOHANG)
-    }
-
-    /// 读到 EOF：每次读事件读出的块交给 `chunk`，结束时关描述符、调 `done`。
-    private static func read(_ fd: Int32, chunk: @escaping @Sendable (Data) -> Void, done: @escaping @Sendable () -> Void) {
-        let source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: DispatchQueue(label: "cuepad.child.read"))
-        let buffer = ReadBuffer()
-        source.setEventHandler {
-            guard let data = buffer.read(from: fd) else { return source.cancel() }
-            chunk(data)
-        }
-        source.setCancelHandler {
-            close(fd)
-            done()
-        }
-        source.resume()
-    }
-
-    private static func scratchFile() throws -> Int32 {
-        var template = Array((NSTemporaryDirectory() + "cuepad-child-XXXXXX").utf8CString)
-        let fd = mkstemp(&template)
-        guard fd >= 0 else { throw POSIXError(.init(rawValue: errno) ?? .EIO) }
-        template.withUnsafeBufferPointer { _ = unlink($0.baseAddress!) }
-        _ = fcntl(fd, F_SETFD, FD_CLOEXEC)
-        return fd
     }
 }
 
