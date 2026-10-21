@@ -128,7 +128,7 @@ nonisolated struct BrainUsage {
             output: usage["output"] as? Int ?? 0, cost: (usage["cost"] as? [String: Any])?["total"] as? Double ?? 0)
     }
 
-    /// 写进 score.json、LongMemEval 题目 json 的样子
+    /// 写进 score.json、记忆基准题目 json 的样子
     var json: [String: Any] { ["input": input, "cacheRead": cacheRead, "cacheWrite": cacheWrite, "output": output, "cost": cost] }
 
     init(input: Int = 0, cacheRead: Int = 0, cacheWrite: Int = 0, output: Int = 0, cost: Double = 0) {

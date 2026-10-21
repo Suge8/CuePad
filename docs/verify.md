@@ -151,21 +151,22 @@ python3 apple/scripts/score.py /tmp/cue-eval/base-short-{1,2} /tmp/cue-eval/base
 - 问与打扰专门的场景：v（会话把删数据说成清理的一步：该问）、w（他亲口放行过推送：不该问）、x（提醒到点：该打扰、该 urgent）；他发起的一轮与会话的常规停下另判"没 tell"。
 - 多日另记合并（按摘要认）：在哪一轮、哪一步、几条摘要、之后视图几行，见 .md 的「多日」；单列的轮成绩单另出一表。
 
-## LongMemEval
+## 记忆基准
 
-改 Cue 的提示词或 recall 前后各跑一遍，用 LongMemEval（longmemeval_s cleaned）给长期记忆打分（一遍 100 题，同时 8 题约四五分钟）：
+改 Cue 的提示词或 recall 前后各跑一遍，用 LongMemEval（`lme`）、LoCoMo（`locomo`）、ConvoMem（`convomem`）给长期记忆打分。三家同一种跑法，各按题型分层抽固定的 100 题（拒答题都在内），同时 8 题一遍约四五分钟：
 
 ```bash
-python3 apple/scripts/lme.py sample        # 下载数据到 /tmp/lme，按题型分层抽 100 题（种子 42）写成 /tmp/lme/sample.jsonl
-TEST_RUNNER_CUEPAD_LME_DATA=/tmp/lme/sample.jsonl TEST_RUNNER_CUEPAD_CUE_EVAL_RUNTIME=pi TEST_RUNNER_CUEPAD_CUE_EVAL_OUT=/tmp/cue-eval/lme-after \
-  CUEPAD_TEST_TIME_LIMIT=7200 apple/scripts/xc.sh test mac -only-testing:CuePadTests/CueEvalLMETests
-python3 apple/scripts/lme.py judge /tmp/cue-eval/lme-before /tmp/cue-eval/lme-after   # 判分，按先后比这几遍，写最后一遍的 report.md
+B=locomo
+python3 apple/scripts/bench.py sample $B   # 数据缺时下到 /tmp/bench/$B（ConvoMem 约 1.8GB），抽题（种子 42）写成 sample.jsonl
+TEST_RUNNER_CUEPAD_BENCH_DATA=/tmp/bench/$B/sample.jsonl TEST_RUNNER_CUEPAD_CUE_EVAL_RUNTIME=pi TEST_RUNNER_CUEPAD_CUE_EVAL_OUT=/tmp/cue-eval/$B-after \
+  CUEPAD_TEST_TIME_LIMIT=7200 apple/scripts/xc.sh test mac -only-testing:CuePadTests/CueEvalBenchTests
+python3 apple/scripts/bench.py judge /tmp/cue-eval/$B-before /tmp/cue-eval/$B-after   # 判分，按先后比这几遍，写最后一遍的 report.md
 ```
 
-- 改提示词时在 sample 上挑改法，在留出集上验：`lme.py sample --holdout` 另抽一份与它不相交、各层题数相同的 100 题（/tmp/lme/holdout.jsonl），`CUEPAD_LME_DATA` 指向它跑。
-- 每题一个隔离库：历史会话按原时刻写成 Cue 的对话（用户的话是他的，助手的话是 Cue 的回复），信封上的此刻定在提问时刻（`CueTiming.clock`），问题作为他的话交给 Cue。
-- 每题一个 `<输出>/<题号>.json`（回复、用时、开销、recall 的查询）与 CueEval 的 .md，已有的跳过，中断后重跑接着做；`TEST_RUNNER_CUEPAD_LME_ONLY=<题号,…>` 只跑几题，`_LANES` 同时跑几题（缺省 8）。
-- 判分用官方分题型提示，经 Pi 用 claude-sonnet-5-5（thinking off），登录只读 ~/.pi/agent/auth.json；判过的存在 .json 里，重判先删掉 `label`。同一份回答重判结果一致，大脑那边一遍之间差几题，结论看两遍以上。
+- 改提示词时在 sample 上挑改法，在留出集上验：`sample $B --holdout` 另抽一份不相交、各层题数相同的 holdout.jsonl。
+- 每题一个隔离库：历史按给的时刻写成 Cue 的对话，信封上的此刻定在提问时刻（`CueTiming.clock`），问题作为他的话交给 Cue。各家怎么排成他与 Cue 的话、用哪份判分提示，见 benches/ 里各家的头注释。
+- 每题一个 `<输出>/<题号>.json` 与 CueEval 的 .md，已有的跳过，中断后接着做；`TEST_RUNNER_CUEPAD_BENCH_ONLY=<题号,…>` 只跑几题，`_LANES` 同时跑几题（缺省 8）。
+- 判分经 Pi 用 claude-sonnet-5-5（thinking off），登录只读 ~/.pi/agent/auth.json；判过的存在 .json 里，重判先删掉 `label`。大脑那边一遍之间差几题，结论看两遍以上。
 
 ## 崩溃诊断
 
