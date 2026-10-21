@@ -1,5 +1,4 @@
 #if os(macOS)
-import CueStore
 import SwiftUI
 
 /// 设置窗口 Cue 那一页，每项一行 `SettingRow`（同其他各页），按要紧排：在哪台 Mac 上运行（这台排第一，"不启用"是停用；没能写成的原因写在这一行；

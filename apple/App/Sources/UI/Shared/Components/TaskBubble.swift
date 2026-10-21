@@ -1,6 +1,4 @@
-import CueEditor
 import CueStore
-import CueText
 import SwiftUI
 
 /// 任务气泡：点一条任务（项目页与任务页的行、Cue 对话里提到的任务、⌘K、归档、小组件链接），从点的那一下长出来的一张纸

@@ -1,5 +1,4 @@
 import CueStore
-import CueText
 import SwiftUI
 
 /// Cue 页的对话气泡（你的话、Cue 的话）：只有 Cue 页是两边对说，会话页你的话是另一种（`BubbleLook.session`）。

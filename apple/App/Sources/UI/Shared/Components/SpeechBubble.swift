@@ -1,6 +1,5 @@
 import CueStore
 import CueSync
-import CueText
 import SwiftUI
 
 /// 你说出去的一句（会话页末尾还没进对话的话、Cue 页里你的话）：全 App 只此一个，状态只从记录推出（`Speech`）。

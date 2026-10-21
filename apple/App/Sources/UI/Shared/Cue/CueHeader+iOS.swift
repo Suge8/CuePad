@@ -1,5 +1,4 @@
 #if os(iOS)
-import CueStore
 import SwiftUI
 
 /// 手机与 iPad 的 Cue 页头：一块实底玻璃，平时是左右各离屏边 `edge`、高 `height` 的一条——头像在左端、展开的箭头在右端，

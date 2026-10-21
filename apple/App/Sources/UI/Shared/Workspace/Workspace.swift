@@ -1,6 +1,3 @@
-#if os(macOS)
-import CuePi
-#endif
 import CueStore
 import Foundation
 import Observation
