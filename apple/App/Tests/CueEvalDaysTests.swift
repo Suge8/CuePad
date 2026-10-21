@@ -154,7 +154,7 @@ private final class Days: EvalScript {
         let cold = [key.image, key.csv, key.parking, key.wrap]
         let renewed = cold.filter { step in eval.renewals.contains { step.window?.contains($0.startedAt) == true } }
         let after = steps.filter { ($0.window?.lowerBound ?? .distantFuture) >= (key.image.window?.lowerBound ?? .distantFuture) }
-        let adds = after.flatMap { calls($0, "task", ["add"]) }.filter { !$0.call.failed }
+        let adds = after.flatMap { calls($0, "task", ["add"]) }.filter { CueEval.built($0.call) }
         let extra = adds.filter { ($0.args["title"] as? String)?.contains(/CSV|导出/) != true }
         let toHim = try await eval.said(since: key.date.window?.lowerBound).filter { $0.author == .known(.cue) }.map(\.text)
         let repeatedQuestions = toHim.filter { $0.contains(/？|\?/) }
