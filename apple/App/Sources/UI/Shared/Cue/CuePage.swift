@@ -27,6 +27,7 @@ struct CuePage: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     /// 这一页的输入框占着底边，底部那一排的 Cue 钮把位置交给它（`DockRoot`）。
     @Environment(\.dockComposer) private var ownsComposer
+    @Environment(\.dockComposing) private var composing
     #endif
     @State private var thread: CueThread?
     @State private var follow = ChatFollow()
@@ -93,7 +94,7 @@ struct CuePage: View {
     /// "等你"卡与输入框浮在对话底上（`FloatingReply`，同会话页与 Mac，键盘也在那里让）；窄屏底部那一排没有键盘时离屏幕底边同 Dock。
     private var page: some View {
         FloatingReply(backed: false, floor: docked ? Dock.margin : nil) {
-            chat.overlay { if docked, navigation.placesOpen { closePlaces } }
+            chat
         } reply: {
             bottom
                 .padding(.horizontal, docked ? Dock.margin : 12)
@@ -110,19 +111,10 @@ struct CuePage: View {
     /// 窄屏导航栈的根（不是 iPad 右侧面板）：底部是"⋯"加输入框。
     private var docked: Bool { !inPanel && sizeClass == .compact }
 
-    /// "⋯"展开时铺在对话上的一层：点一下或一划就收起。
-    private var closePlaces: some View {
-        Color.clear.contentShape(.rect)
-            .onTapGesture { navigation.placesOpen = false }
-            .gesture(DragGesture(minimumDistance: 4).onChanged { _ in navigation.placesOpen = false })
-            .accessibilityHidden(true)
-    }
-
-    /// 窄屏底部那一排：左边给"⋯"让出位置（输入框有焦点时不让），右边输入框。"⋯"展开着、换来这一页时 Cue 钮还在长成它，
-    /// 输入框的位置是底部那一排的 Cue 钮，这里的输入框藏着；长到了才接手（`DockRoot.handed`），离开时当场藏起。
+    /// 窄屏底部那一排：左边给"⋯"让出位置（输入框有焦点时不让），右边输入框；Cue 钮长成它之前藏着（`DockRoot.handed`）。
     private var dockRow: some View {
         HStack(alignment: .bottom, spacing: 0) {
-            if !navigation.cueComposing {
+            if composing?.wrappedValue != true {
                 Color.clear.frame(width: Dock.slot + Dock.gap, height: Dock.slot)
             }
             composer
@@ -136,7 +128,7 @@ struct CuePage: View {
     #if os(iOS)
     private var composer: some View {
         CueComposer(style: .page, focusRequests: inPanel ? 0 : navigation.cueFocusRequests, sent: { follow.sent() }) { focused in
-            withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { navigation.cueComposing = focused }
+            withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { composing?.wrappedValue = focused }
         }
     }
     #endif

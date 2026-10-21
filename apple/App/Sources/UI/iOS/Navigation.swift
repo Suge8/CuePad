@@ -51,13 +51,7 @@ final class Navigation {
     }
 
     /// 当前去处（宽屏右边那一栏、窄屏导航栈的根）：打开 App 先到 `Route.first`。
-    private(set) var root: Route = .first {
-        didSet {
-            guard root != oldValue else { return }
-            // 回到 Cue 页总是收起的样子；离开时不收：收起再长回三格就是换去处时那一下来回。输入框离开页就没了焦点
-            if root == .cue { placesOpen = false } else { cueComposing = false }
-        }
-    }
+    private(set) var root: Route = .first
     /// 根页上推入的页（打开的卡片纸页、会话页……）。
     var path: [Route] = []
     /// 窄屏：去处只有底部那一排的四个（`IOSRoot` 按尺寸类设）。变窄时把宽屏的去处推到它所属的那一页上。
@@ -67,12 +61,6 @@ final class Navigation {
             path.insert(root, at: 0)
             root = home
         }
-    }
-    /// 窄屏 Cue 页底部的"⋯"展开成了三格（`DockBar`），点对话、滚动或点 Cue 钮收起。
-    var placesOpen = false
-    /// 窄屏 Cue 页的输入框有焦点：底部那一排让开，输入框占满整排（`DockBar`）；有焦点时"⋯"收起。
-    var cueComposing = false {
-        didSet { if cueComposing { placesOpen = false } }
     }
     /// 每次请"对 Cue 说"拿到焦点（⌘⇧N、随手记小组件）加一：Cue 页的输入框看它变了就聚焦。
     private(set) var cueFocusRequests = 0
