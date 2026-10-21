@@ -7,7 +7,7 @@ import Testing
 
 /// 用 LongMemEval（longmemeval_s cleaned）给 Cue 的长期记忆打分：改提示词、recall 前后各跑一遍比分数。跑法见 docs/verify.md「LongMemEval」。
 /// 每题一个隔离库：启用 Cue 之前把它的历史会话按原时刻写成 Cue 的对话（用户的话是"他"的、已交给 Cue，助手的话是 Cue 的回复）；
-/// 信封上的此刻定在提问时刻（`CueTiming.clock`），别的时间规则照真实时钟。等刚启用那一轮做完，把问题作为他的话交给 Cue，收下这一轮 Cue 对他说的话。
+/// 信封上的此刻定在提问时刻（`CueTiming.clock`），别的时间规则照真实时钟。等值班起来，把问题作为他的话交给 Cue，收下这一轮 Cue 对他说的话。
 /// 题目由 `apple/scripts/lme.py sample` 抽好（`CUEPAD_LME_DATA`），每题写一个 <输出>/<题号>.json（回复、用时、开销、recall 的查询）
 /// 与 CueEval 的 .md；已有 .json 的跳过，中断后重跑接着做。判分与报告由 `lme.py judge` 做。
 @Suite(.enabled(if: evalEnvironment["CUEPAD_LME_DATA"] != nil, "CUEPAD_LME_DATA 给了题目才跑"), .timeLimit(.minutes(1000)))

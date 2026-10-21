@@ -31,7 +31,8 @@ extension CueHostTests {
     /// Cue 自己醒来的一轮出错（多是网络偶发）：先不告诉你，基线不前移；隔一会儿再醒一次，成了就照常。
     /// 刚启用那一轮出错，重试后照常看一眼；会话有动静那一轮出错，重试时看到的还是同一处变化，成了照常。
     @Test func 自己醒来出错后隔一会儿重试() async throws {
-        let rig = try await Rig(failingOnce: ["醒来：刚启用"])  // 等到"我看了一眼"才返回
+        let rig = try await Rig(failingOnce: ["醒来：刚启用"], prepare: Rig.handOverWork)
+        try await rig.message(.cue, containing: "我看了一眼")
         #expect(rig.model.errors == 1)
         try await rig.settleTask(titled: "修好登录页 先出一次错")  // 假模型据此第一次报错
         try await rig.message(.cue, containing: "登录页那边歇下了")

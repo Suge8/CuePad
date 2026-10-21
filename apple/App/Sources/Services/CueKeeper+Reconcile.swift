@@ -57,8 +57,12 @@ extension CueKeeper {
 
             if progress.greeted != profile.enabledAt {
                 progress.greeted = profile.enabledAt
-                _ = try await wakeUp(.enabled)
-                return
+                let board = try await store.cueBoard()
+                guard board.tasks.isEmpty, board.sessions.isEmpty, try await store.cueMessagesWaitingForYou().isEmpty else {
+                    _ = try await wakeUp(.enabled)
+                    return
+                }
+                save()
             }
 
             let due = try await store.dueCueReminders(at: now)

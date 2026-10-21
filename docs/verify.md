@@ -120,7 +120,7 @@ TEST_RUNNER_CUEPAD_CUE_EVAL=1 TEST_RUNNER_CUEPAD_CUE_EVAL_OUT=/tmp/cue-eval/afte
   apple/scripts/xc.sh test mac -parallel-testing-enabled YES -only-testing:CuePadTests/CueEvalTests
 ```
 
-- 大脑缺省用这台 Mac 上 Claude Code 自己的登录（opus · medium）；`TEST_RUNNER_CUEPAD_CUE_EVAL_RUNTIME=pi` 换成 Pi（sonnet · medium，令牌从 ~/.pi/agent/auth.json 只读地取、不替它刷新，过期就起不来）；`TEST_RUNNER_CUEPAD_CUE_EVAL_MODEL`、`_EFFORT` 换模型与强度。
+- 大脑缺省用这台 Mac 上 Claude Code 自己的登录（opus · medium）；`TEST_RUNNER_CUEPAD_CUE_EVAL_RUNTIME=pi` 换成 Pi（sonnet · medium，令牌从 ~/.pi/agent/auth.json 只读地取、不替它刷新，过期就起不来），`=codex` 换成 Codex（gpt-6.1-sol · medium，配置目录在临时目录、只拷进 ~/.codex/auth.json，同陌生人第一次打开；开销一栏是空的）；`TEST_RUNNER_CUEPAD_CUE_EVAL_MODEL`、`_EFFORT` 换模型与强度。
 - 输出目录每个场景一个 .md（含每一轮的开销），`summary.md` 汇总；有场景没过时非零退出，输出照样写完。每个场景的库留在 `<场景>.library`，用 `CUEPAD_SHOT_LIBRARY=<它> xc.sh shot mac out.png -- -CuePadScene cue` 看。
 - 开销是大脑自报的 token 与费用；提示缓存跨场景命中一小时，先后跑的同一套场景缓存读写会不同，比开销看两遍以上。
 - 长程场景（`CueEvalLongTests`，十分钟左右）单独跑：换新线经 `CueTiming.renewAt` 缩到 4.2 万、缓存时长缩到 30 秒，中途他走开一阵，热换新、冷换新都有；会话交回的细节、他托付的事、它对方案的判断、逐页推进的多步活在换新前埋下、换新后考，每处标出跨了哪种换新。`TEST_RUNNER_CUEPAD_CUE_EVAL_RUNS=2` 同时跑两遍、第 n 遍写到"输出目录-n"：
