@@ -21,6 +21,8 @@
    给了 -CuePadForeground YES 的实例要占前台时写 FRONT，front_keeper 经系统事件把它拉到前台（App 自己 activate 会被系统忽略）。
 5. Mac 截图、录屏按窗口拍（wincap.swift，尺寸对不上就失败）；启动参数没给窗口尺寸时用 WINDOW。
 iOS、iPadOS：模拟器里本就隔离，同一台上再 launch 就换掉旧的；状态栏固定成 9:41、满格满电，做完 terminate，run 留着。
+   模拟器的系统外观跟 -theme 走（没给是浅色）：App 钉的外观与系统的不同时，启动屏与状态栏先按系统的画、App 起来后状态栏才淡过去，
+   空库这类一起来就就绪的画面会拍到半途的状态栏（深色下 9:41 还是黑字）。
 """
 import fcntl
 import hashlib
@@ -358,6 +360,8 @@ def stop_recording(proc):
 def sim(cmd, device, app, library, out, args):
     ready = f"{RUNTIME}/ready-{device}"
     simctl("install", device, app)
+    theme = args[args.index("-theme") + 1] if "-theme" in args[:-1] else "light"
+    simctl("ui", device, "appearance", "dark" if theme == "dark" else "light")
     simctl("status_bar", device, "override", "--time", "9:41", "--batteryState", "charged", "--batteryLevel", "100",
            "--cellularMode", "active", "--cellularBars", "4", "--wifiBars", "3")
     signal.alarm(HOLD + int(REC_SECONDS if cmd == "rec" else 0))

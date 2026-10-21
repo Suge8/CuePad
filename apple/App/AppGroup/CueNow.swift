@@ -21,7 +21,7 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
     /// 第一件等你：说什么、"打开"去哪，只有 Cue 带选项的提问能"允许一次"（会话在问的只给打开）。
     var first: Wait?
     var at: Date
-    /// Mac 上它运行在别的 Mac 时那一句（"在「Mac Studio」上运行"）：静着、手上没有事时那一句写它；Cue 页的启用卡也写它。这台或手机上为 nil。
+    /// Mac 上它运行在别的 Mac 时那一句（"在「Mac Studio」上运行"）：静着、手上没有事时那一句写它；Mac Cue 页输入框工具排末尾的旁注也写它。这台或手机上为 nil。
     var elsewhere: String? = nil
 
     enum Brain: Codable, Hashable, Sendable {

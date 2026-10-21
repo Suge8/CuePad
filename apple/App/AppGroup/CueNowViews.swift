@@ -62,10 +62,10 @@ struct CueNowLine<Decorated: View>: View {
             if !now.beads.isEmpty {
                 CueBeads(beads: now.beads, hidden: now.hidden, limit: limit, bead: bead)
             }
+            // 换一句原地换字：变的只是数时数字滚过去，换了说法逐字淡换（扩展里也画得出）。
+            // 否决过整句换视图上推：新旧两句在一行的高里上下错开叠着，越出所在的页头与行
             Text(now.headline).foregroundStyle(tint).lineLimit(1)
-                // 换一句是换一个视图：旧的往上推走、新的从下面推上来（扩展里也画得出的转场）
-                .id(now.headline)
-                .transition(.push(from: .bottom))
+                .contentTransition(.numericText())
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(now.spoken)

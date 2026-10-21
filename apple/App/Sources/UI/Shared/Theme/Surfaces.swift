@@ -26,6 +26,9 @@ enum GlassInk {
     /// 背后什么都有可能（亮的截图、深的代码块）：只着色不垫底的话，深色下一张亮图就把玻璃衬成浅灰、米白的字只剩 1.7:1，
     /// 垫了底才在任何背景上都够 4.5:1（docs/ui.md）。
     case solid
+    /// 同 `solid`，但放在系统顶栏里（推入页顶栏中间那块 `FloatingHeader`、搜索页的搜索框 `SearchCapsule`）：iOS 把它连同里面的东西提到栏那一层上画、再提亮一档，
+    /// 垫在里面的反而发灰，所以只垫在玻璃下面。
+    case solidInBar
 }
 
 private struct PaperSurface: ViewModifier {
@@ -70,25 +73,30 @@ private struct GlassSurface<S: Shape>: ViewModifier {
             content
                 .background(palette.paper, in: shape)
                 .overlay(shape.stroke(palette.hair))
-        } else if ink == .solid {
-            // 实底垫在哪一层两个平台不同：Mac 的玻璃会在它下面那层上再压暗、提亮一档，只垫在玻璃下面整块发灰，所以玻璃里要垫；
-            // 玻璃下面也垫，不然浮在桌面上的（Cue 条、菜单栏面板）透出壁纸的颜色。iOS 的顶栏把玻璃连同里面的东西提到它那一层上画、
-            // 再提亮一档，垫在里面的反而发灰，所以只垫在玻璃下面
+        } else if ink == .solidInBar {
             #if os(macOS)
-            content.background(palette.solidGlass, in: shape).glassEffect(glass, in: shape).background(palette.solidGlass, in: shape)
+            solid(content)
             #else
             content.glassEffect(glass, in: shape).background(palette.solidGlass, in: shape)
             #endif
+        } else if ink == .solid {
+            solid(content)
         } else {
             content.glassEffect(glass, in: shape)
         }
+    }
+
+    /// 玻璃里外各垫一层：只垫在下面时玻璃的折射与边缘的光仍从背后取样，背后一张亮图、一段字照样从玻璃里透出来（手机页头深色下最显）；
+    /// Mac 的玻璃还会在它下面那层上再压暗、提亮一档，只垫在下面整块发灰。下面那层让浮在桌面上的（Cue 条、菜单栏面板）不透出壁纸的颜色。
+    private func solid(_ content: Content) -> some View {
+        content.background(palette.solidGlass, in: shape).glassEffect(glass, in: shape).background(palette.solidGlass, in: shape)
     }
 
     /// 全 App 自绘玻璃都是 `.regular`：内容一直滚到顶栏、回复框后面，玻璃是唯一的遮挡，栏后面不再垫模糊或渐变带。
     /// 否决了 `.clear`（加淡色 tint 也一样）：我们玻璃后面是文字，它几乎不糊开背后的字，栏上的标题、标签与问题卡和背后的字叠在一起读不出
     /// （系统规范也只把 clear 用在照片、视频这类背景上）；系统自己的返回钮与工具栏圆钮也是 regular，两种并排会不一致。
     private var glass: Glass {
-        guard ink == .solid else { return .regular.interactive(interactive) }
+        guard ink != .clear else { return .regular.interactive(interactive) }
         return .regular.tint(palette.glassTint).interactive(interactive)
     }
 }

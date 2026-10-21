@@ -7,7 +7,8 @@ import SwiftUI
 /// - Cue 页输入框有焦点（`.composing`）：都让开，输入框占满整排。
 /// 三页之间换只是滴滑到新那一格；Cue 页点开"⋯"本来就是三页的样子，选一格去那里什么都不换形。与屏幕圆角同心（同系统悬浮标签栏），只是玻璃：栏后面不垫渐变或模糊。字号固定、不随动态字体放大，辅助字号下长按弹出大内容查看器
 /// （同系统标签栏：栏高固定，字放大只会挤掉图标）。"项目"那一格在同步到不了 Mac 时带一个点（`AppServices.macAlert`）。
-/// 接力的"会话"那一头（`relaySpot(dock:)`）：三格展开时是"会话"那一格，收起时是"⋯"。减弱动态效果时不换形，直接到新样子。
+/// 接力的"会话"那一头（`relaySpot(dock:)`）只在三格展开时的"会话"那一格；收起的"⋯"不接力：光落进"⋯"读不出是去了哪，深色下只剩一团发光的靛青点。
+/// 减弱动态效果时不换形，直接到新样子。
 struct DockBar: View {
     /// 推到了哪个去处（`DockRoot` 在推移的动画里改它，选中的滴与页同一个动画滑过去）。
     let route: Route
@@ -87,7 +88,6 @@ private struct DockPlaces: View {
                     .contentShape(.circle)
             }
             .buttonStyle(PressStyle(.button))
-            .relaySpot(dock: !open)
             .accessibilityLabel("去处")
             .accessibilityHint("展开项目、任务、会话")
             .opacity(open ? 0 : 1)

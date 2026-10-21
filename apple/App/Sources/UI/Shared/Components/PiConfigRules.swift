@@ -23,11 +23,15 @@ nonisolated enum PiModelLabel {
 }
 
 
-/// 思考强度条：格是当前模型支持的档位里除"关"以外的几档，当前档以下填满；关着时格全空。
-/// 拖动时按横向位置均分所有档（含"关"，在最左）。
+/// 思考强度条：格是一把固定的尺，除"关"以外的六档（最低到最高）各一格，当前档以下填满——同一档在哪个模型上都是同样几格（"低"总是两格），
+/// 换了模型不换样子；模型不支持的档照样有格，指到那里取最近的支持档（`PiThinkingLevel.clamped(to:)`）。关着时格全空。
+/// 拖动时按横向位置均分这把尺（模型能关时"关"在最左多占一份）。最高档的那道光给这个模型支持的最高一档。
 nonisolated struct PiThinkingMeter: Equatable {
+    /// 模型支持的档（空时没有这个条）。
     let levels: [PiThinkingLevel]
     private(set) var current: PiThinkingLevel?
+
+    static let scale = PiThinkingLevel.allCases.filter { $0 != .off }
 
     /// 模型不报档位时没有这个条：拖动换算档位要从档位里取。
     init?(levels: [PiThinkingLevel], current: PiThinkingLevel?) {
@@ -43,16 +47,17 @@ nonisolated struct PiThinkingMeter: Equatable {
         return meter
     }
 
-    var bars: [PiThinkingLevel] { levels.filter { $0 != .off } }
-    var filled: Int { current.flatMap { bars.firstIndex(of: $0) }.map { $0 + 1 } ?? 0 }
+    var bars: [PiThinkingLevel] { Self.scale }
+    var filled: Int { current.flatMap { Self.scale.firstIndex(of: $0) }.map { $0 + 1 } ?? 0 }
     var isOff: Bool { current == .off }
     /// 档名；Agent 没报此刻的强度时（如终端里的 Codex 用模型的缺省）是"默认"，照样能点能换。
     var label: String { current?.label ?? "默认" }
-    var isMax: Bool { !bars.isEmpty && filled == bars.count }
+    var isMax: Bool { current != .off && current == PiThinkingLevel.allCases.last(where: levels.contains) }
 
     func level(at fraction: Double) -> PiThinkingLevel {
-        let index = Int((min(max(fraction, 0), 0.999) * Double(levels.count)).rounded(.down))
-        return levels[min(index, levels.count - 1)]
+        let stops = (levels.contains(.off) ? [.off] : []) + Self.scale
+        let index = Int((min(max(fraction, 0), 0.999) * Double(stops.count)).rounded(.down))
+        return stops[min(index, stops.count - 1)].clamped(to: levels)
     }
 
     /// 读屏的上一档、下一档。

@@ -2,8 +2,8 @@ import CueStore
 import Observation
 import SwiftUI
 
-/// Cue 的设置，两端同一份：Mac 设置窗口的 Cue 那一页（`CueSettingsPane`）、手机的 Cue 设置页（`CueSettingsScreen`）与两端的启用卡
-/// （`CueEnableCard`）都读写它。读的是同步的设置（`CueProfile`）、各台 Mac 自报的名字与能用的 Agent（`CueStore.allMacAgents`，Cue 能在
+/// Cue 的设置，两端同一份：Mac 设置窗口的 Cue 那一页（`CueSettingsPane`）、手机的 Cue 设置页（`CueSettingsScreen`）与两端 Cue 页的启用
+/// （`CueWelcome`）都读写它。读的是同步的设置（`CueProfile`）、各台 Mac 自报的名字与能用的 Agent（`CueStore.allMacAgents`，Cue 能在
 /// 哪台上运行就是这几台）与项目名（允许清单里写）；动作是改名、在哪台运行并启用（`AppServices.enableCue`，规则在 `CueStore.enableCue`）、停用、
 /// 允许清单的一项（`CueStore.setCueAllow`），写完都立即上传。没写成的原因存在 `failure`，页面就地写出，下一次动作先清掉。
 /// 能不能启用、改 Mac 要不要先确认只读 `CueGate`。
@@ -167,8 +167,9 @@ nonisolated struct CueSettings: Equatable, Sendable {
 
     /// 两端同一套写法：选在哪台运行的那一项，与允许清单那一节（开关打开的那类在所有项目里都不用问）。
     static let hostTitle = "在哪台 Mac 上运行"
-    /// 手机上还没有哪台 Mac 写下过自己（`hosts` 为空）时的那句：启用卡与 Cue 设置同一句。
+    /// 手机上还没有哪台 Mac 写下过自己（`hosts` 为空）时 Cue 设置里那句；Cue 页上给的动作是发出 Mac 版的下载链接（`macDownload`）。
     static let noHost = "先在 Mac 上打开 CuePad"
+    static let macDownload = URL(string: "https://github.com/Suge8/CuePad/releases/latest")!
     static let allowsTitle = "不用先问的事"
     static func allowsNote(_ name: String) -> String {
         "推送、删除这类收不回的事，\(name) 做之前会先问你；打开的那类在所有项目里直接做。在它的提问上选\u{201C}以后……不用问\u{201D}也记在这里。"
