@@ -74,7 +74,7 @@ extension CueHostTests {
         try await rig.say("你好")
         try await rig.message(.cue, containing: "收到：你好")
         let keeper = try #require(rig.services.cue.keeper)
-        #expect(keeper.rounds.map(\.wake) == [.enabled, .message])
+        #expect(keeper.rounds.map(\.wake) == [.message])  // 空库启用不醒，记忆待合并也不叫醒 Cue
         // 待合并的块的写法：块头 #lo-hi 独占一行，下面是原行
         #expect(!keeper.rounds.contains { $0.sent.contains { $0.contains(/\n#\d+-\d+\n#\d+\s/) } })
         await rig.stop()
