@@ -86,8 +86,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             RootViews.settings($0, services, cueBar: cueBar)
         }
         DebugHooks.present(window)
-        // 首次打开请你接入检测到的 Agent（主窗口里的浮层），之后在设置里改；隔离库（开发与验收）不弹
-        if !location.isIsolated { Task { await workspace.offerAgentSetup() } }
+        // 首次打开：接入检测到的 Agent 并启用 Cue（主窗口里的浮层）；隔离库（开发与验收）不弹
+        if !location.isIsolated { workspace.offerSetup() }
     }
 
     /// 点开的 Agent 通知（含冷启动时点的）：打开那个会话（主窗口已由 `AlertCenter.receive` 叫到前面）。

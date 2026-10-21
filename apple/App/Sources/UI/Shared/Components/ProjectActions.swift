@@ -1,7 +1,7 @@
 import CueStore
 import SwiftUI
 
-/// 项目操作（Mac 右键、iOS 长按与项目页"更多"共用）：置顶、编辑名称与图标、绑定或更换文件夹与解除绑定（规则 `ProjectFolders.menu`）、移到回收站。
+/// 项目操作（Mac 右键、iOS 长按与项目页"更多"共用）：置顶、编辑名称与图标、文件夹一组（组头写文件夹在哪，下面更换与解除绑定，规则 `ProjectFolders.menu`）、移到回收站。
 /// 编辑表单由调用方弹出（菜单收起后它所在的视图就没了）；平台专有的操作放进 `extra`，排在移到回收站之前。
 struct ProjectActions<Extra: View>: View {
     let project: Project
@@ -15,10 +15,17 @@ struct ProjectActions<Extra: View>: View {
             workspace.perform { try await $0.updateProject(id) { $0.isPinned = pinned } }
         }
         Button("编辑名称与图标…", icon: .rename, action: edit)
-        let folders = ProjectFolders.menu(for: id, bindings: workspace.catalog?.bindings ?? [], host: workspace.localHost)
-        Button("换文件夹…", icon: .folder) { workspace.chooseFolder(for: project) }
-        ForEach(folders.unbinds, id: \.binding.id) { unbind in
-            Button { workspace.unbindFolder(unbind.binding, of: project) } label: { Label { Text(unbind.title) } icon: { Image(.unbindFolder) } }
+        Section(folderPlace) {
+            #if os(macOS)
+            if let directory = workspace.catalog?.directories[id] {
+                Button("在访达中显示", icon: .folder) { NSWorkspace.shared.activateFileViewerSelecting([URL(filePath: directory, directoryHint: .isDirectory)]) }
+            }
+            #endif
+            Button("换文件夹…", icon: .folder) { workspace.chooseFolder(for: project) }
+            let folders = ProjectFolders.menu(for: id, bindings: workspace.catalog?.bindings ?? [], host: workspace.localHost)
+            ForEach(folders.unbinds, id: \.binding.id) { unbind in
+                Button { workspace.unbindFolder(unbind.binding, of: project) } label: { Label { Text(unbind.title) } icon: { Image(.unbindFolder) } }
+            }
         }
         extra
         // 默认项目不能删（`CueStore.trashProject` 也拒绝）
@@ -32,6 +39,18 @@ struct ProjectActions<Extra: View>: View {
                 workspace.perform { try await $0.trashProject(id) }
             }
         }
+    }
+
+    /// 文件夹那一组的组头：Mac 写本机的路径（短写，`Workspaces.shown`；没绑时写开工时会建好的工作区），手机写在哪台 Mac 上（`ProjectFolders.places`）。
+    private var folderPlace: String {
+        #if os(macOS)
+        if let directory = workspace.catalog?.directories[project.id] { return workspace.services.workspaces.shown(directory) }
+        let workspaces = workspace.services.workspaces
+        return "\(workspaces.shown(workspaces.directory(for: project.name).path(percentEncoded: false)))（开工时建好）"
+        #else
+        guard let catalog = workspace.catalog else { return "" }
+        return ProjectFolders.places(of: project, bindings: catalog.bindings, workMac: catalog.workMac).joined(separator: "；")
+        #endif
     }
 }
 

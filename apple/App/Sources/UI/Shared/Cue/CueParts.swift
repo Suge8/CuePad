@@ -13,16 +13,14 @@ struct CueTaskButton<Label: View>: View {
             .buttonStyle(PressStyle(.card))
     }
 
-    private func open() {
-        let store = workspace.services.store, id = task
-        workspace.attempt { if let card = try await store.card(id) { workspace.openTask(card) } }
-    }
+    private func open() { workspace.openTask(id: task) }
 }
 
-/// 还没启用时 Cue 页输入框上方的那一块，两端同一个：只放启用这一步，启用后怎么用由 Cue 页空态那一句说（同一屏不说两遍）。直接选一台 Mac 启用（能运行 Cue 的几台，`CueSettings.hosts`）——
+/// 还没启用时 Cue 页输入框上方的那一块，两端同一个：只放启用这一步，启用后怎么用由 Cue 页空态那一句说（同一屏不说两遍）。选一台 Mac 启用（能运行 Cue 的几台，`CueSettings.hosts`）——
 /// 一台就是一颗"在那台上启用"的主按钮；几台是点开选哪台的菜单（`MenuButton`，每台下面写能当大脑的几家或为什么不能用），
-/// Mac 上点按是在这台运行、长按选别的。没写成的原因就地写在下面（`CueSettingsModel`）。手机上还没有哪台 Mac 写下过自己时，
-/// 说先到 Mac 上打开 CuePad。没启用时输入框发出去是记下灵感。Mac 上默认项目还没有文件夹时写一句它第一次开工时建在哪（`Workspaces`）。
+/// Mac 上点按是在这台运行、长按选别的。在这台 Mac 上启用打开接入面板（`SetupPanel`：先检测、接入这台的 Agent，一家都没装时给装法，
+/// 同一下启用），别的 Mac 直接启用，没写成的原因就地写在下面（`CueSettingsModel`）。能不能启用读 `CueGate`：这台还没和 iCloud 对过时
+/// 只写在等什么、没有按钮。手机上还没有哪台 Mac 写下过自己时，说先到 Mac 上打开 CuePad。没启用时输入框发出去是记下灵感。
 struct CueEnableCard: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -30,16 +28,15 @@ struct CueEnableCard: View {
     @State private var model = CueSettingsModel()
 
     var body: some View {
-        let hosts = (model.settings ?? .empty).hosts(here: here)
+        let settings = model.settings ?? .empty
+        let hosts = settings.hosts(here: workspace.localHost)
         VStack(alignment: .leading, spacing: 10) {
-            #if os(macOS)
-            if let home = workspace.catalog?.project(Project.defaultID), workspace.catalog?.directories[home.id] == nil {
-                let workspaces = services.workspaces
-                Label("第一次开工时建好 \(workspaces.shown(workspaces.directory(for: home.name).path(percentEncoded: false)))", icon: .folder)
-                    .font(Typography.meta).foregroundStyle(palette.ink3)
-            }
-            #endif
-            if hosts.isEmpty {
+            if let why = settings.gate(services).waitingReason {
+                HStack(spacing: 8) {
+                    Spinner(.small)
+                    Text(why).font(Typography.secondary).foregroundStyle(palette.ink3)
+                }
+            } else if hosts.isEmpty {
                 Label(CueSettings.noHost, icon: .mac)
                     .font(Typography.secondary).foregroundStyle(palette.ink3)
             } else {
@@ -61,27 +58,29 @@ struct CueEnableCard: View {
         .animation(Motion.quick, value: model.failure)
     }
 
-    /// 这台 Mac（手机没有）：Mac 上它排第一、点按就在这台运行。
-    private var here: String? {
+    private func enable(on host: CueSettings.Host) {
         #if os(macOS)
-        services.hostID
-        #else
-        nil
+        guard host.id != workspace.localHost else {
+            workspace.showsSetup = true
+            return
+        }
         #endif
+        model.choose(host, services)
     }
 
     @ViewBuilder private func enableButton(_ hosts: [CueSettings.Host]) -> some View {
+        let here = workspace.localHost
         if hosts.count == 1, let host = hosts.first {
-            Button(title(host)) { model.enable(on: host.id, services) }
+            Button(title(host)) { enable(on: host) }
                 .buttonStyle(ControlButtonStyle(kind: .primary))
         } else {
             MenuButton(
                 sections: [ChoiceMenu.Section(choices: hosts.map { host in
                     ChoiceMenu.Choice(title: host.name, subtitle: host.note.isEmpty ? nil : host.note, image: .icon(.mac)) {
-                        model.enable(on: host.id, services)
+                        enable(on: host)
                     }
                 })],
-                primary: here.map { here in { model.enable(on: here, services) } },
+                primary: here == nil ? nil : { if let first = hosts.first { enable(on: first) } },
                 accessibilityLabel: here == nil ? "选一台 Mac 启用" : "在这台 Mac 上启用", hint: here == nil ? nil : "长按选别的 Mac"
             ) {
                 HStack(spacing: 6) {
@@ -94,12 +93,12 @@ struct CueEnableCard: View {
     }
 
     private func title(_ host: CueSettings.Host) -> String {
-        host.id == here ? "在这台 Mac 上启用" : "在「\(host.name)」上启用"
+        host.id == workspace.localHost ? "在这台 Mac 上启用" : "在「\(host.name)」上启用"
     }
 }
 
 /// 一件活收成一行（对话里 Cue 的话下面、"等你"里关联的那件）：任务圈、标题、步骤数，点它打开任务；行尾是这件活交给的会话的状态标
-/// （`AgentDot`：正在开会话、在跑、等你……，点它看那个会话；没交出去不画）。Cue 交给会话时接力落在这一行（圈与状态标都挂着锚，`CueRelay`），
+/// （`AgentDot`：正在开会话、在跑、等你……，点它看那个会话；没交出去不画）。Cue 交给会话时接力落在这一行（圈与状态标都挂着锚，`CueRelayStage`），
 /// 落下后状态标自己换成会话的真实状态。
 struct CueTaskLine: View {
     /// 平时可点的高（对话里、结果卡里）；Cue 页数格子时按它算那一行至少多高（`CuePage.floor`）。
@@ -135,7 +134,8 @@ struct CueTaskLine: View {
 
 /// 连着的几轮 Cue 自己醒来（`CueThread.Row.notes`）：靠左的一颗虚线气泡，形状同 Cue 的气泡（`CueBubble.shape`），只描边不铺底——
 /// 是它说的话，但没推给你，与纸做的实底气泡（对你说的）一眼分开。每轮一节（`CueNoteSection`）：第一行为什么醒与几点，下面是它说的话（小一档的次要墨色），
-/// 调过工具的再一行经过（`RoundProcess`，设置里关了工具步骤时没有）。只看了看、没说话的一轮只占一行"…… · 没动手"，连着几次并成一行"看了 N 次，都没动手"。
+/// 调过工具的再一行经过（`RoundProcess`，设置里关了工具步骤时没有；在跑的那一轮总有，写此刻在做的）。做完了、只看了看、没说话的一轮只占一行"…… · 没动手"，
+/// 连着几次并成一行"看了 N 次，都没动手"；在跑的那一轮还不算（它随时会动手、说话，算了就要在并起来与分开之间来回跳）。
 /// 超过 `foldAfter` 节时只露最近 `shownWhenFolded` 节，上面一行"更早还醒过 N 次"，点它或点并起来的那一行原地全部展开（各节分开列）。
 struct CueNoteBubble: View {
     let rounds: [CueNoteRound]
@@ -170,7 +170,7 @@ struct CueNoteBubble: View {
     }
 
     var body: some View {
-        let units = expanded ? rounds.map(Unit.round) : Self.merged(rounds)
+        let units = expanded ? rounds.map(Unit.round) : Self.merged(rounds, live: live?.round)
         let folded = !expanded && units.count > Self.foldAfter
         let shown = folded ? Array(units.suffix(Self.shownWhenFolded)) : units
         BubbleWidth(fraction: CueBubble.cueWidth, edge: .leading) {
@@ -186,7 +186,15 @@ struct CueNoteBubble: View {
                     switch unit {
                     case .round(let round): CueNoteSection(round: round, live: live)
                     case .quiet(let rounds):
-                        Button { expanded = true } label: { CueQuietLine(rounds: rounds) }.buttonStyle(.plain)
+                        // 图标与几点是最近那次的
+                        Button { expanded = true } label: {
+                            NoteLine(icon: rounds[rounds.count - 1].header?.wake.icon ?? .wakeIdle, open: false, time: rounds[rounds.count - 1].date) {
+                                Text("看了 \(rounds.count) 次")
+                                Dot().foregroundStyle(palette.ink3)
+                                Text("都没动手")
+                            }
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
             }
@@ -206,14 +214,14 @@ struct CueNoteBubble: View {
     #endif
 
     /// 连着几轮没动手并成一节；只有一轮的照常一节。
-    static func merged(_ rounds: [CueNoteRound]) -> [Unit] {
+    static func merged(_ rounds: [CueNoteRound], live: UUID?) -> [Unit] {
         var units: [Unit] = [], run: [CueNoteRound] = []
         func flush() {
             if run.count == 1 { units.append(.round(run[0])) } else if !run.isEmpty { units.append(.quiet(run)) }
             run = []
         }
         for round in rounds {
-            if round.quiet { run.append(round) } else {
+            if round.quiet(live: live) { run.append(round) } else {
                 flush()
                 units.append(.round(round))
             }
@@ -232,25 +240,25 @@ private struct CueNoteSection: View {
     var body: some View {
         let indent = round.header == nil ? 0 : Note.glyphWidth + Note.spacing
         VStack(alignment: .leading, spacing: 3) {
-            if let header = round.header { CueWakeTitle(header: header, at: round.date, quiet: round.quiet) }
+            if let header = round.header { CueWakeTitle(header: header, at: round.date, quiet: round.quiet(live: live?.round)) }
             ForEach(round.said) { note in
                 Text(CueFormat.plainText(note.text)).font(Typography.secondary).foregroundStyle(palette.ink2)
                     .lineSpacing(2).fixedSize(horizontal: false, vertical: true)
             }
             .padding(.leading, indent)
-            if let row = round.row, row.tools != nil {
+            if let row = round.row, row.tools != nil || row.id == live?.round {
                 RoundProcess(tools: row.tools, ending: CueLiveRound.ending(of: row, in: live)).padding(.leading, indent)
             }
         }
     }
 }
 
-/// 一节的第一行：醒来原因的图标（叫醒它的会话出错是出错的那个）、原因（叫醒它的会话、任务、提醒是墨色的名字，点了去那里；几处时点开列出来选），行末几点。
-/// 只看了看的一轮在后面接"· 没动手"。
+/// 一节的第一行（`NoteLine`，同并起来的那一行）：醒来原因的图标（叫醒它的会话出错是出错的那个）、原因（叫醒它的会话、任务、提醒是墨色的名字，点了去那里；
+/// 几处时点开列出来选），行末几点。几段之间一律隔一个点（"提醒到点 · 周会"、"atlas 停下了 · 没动手"），点得进去的末尾一个箭头。
 private struct CueWakeTitle: View {
     let header: CueWakeHeader
     let at: Date
-    var quiet = false
+    let quiet: Bool
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
@@ -259,18 +267,11 @@ private struct CueWakeTitle: View {
     #endif
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: Note.spacing) {
-            glyph.frame(width: Note.glyphWidth)
-            reason.layoutPriority(1)
-            Spacer(minLength: 8)
-            Text(ChatTime.time(at)).foregroundStyle(palette.ink3)
+        NoteLine(time: at) {
+            if header.failed { FailureMark() } else { Image(header.wake.icon) }
+        } label: {
+            reason
         }
-        .font(Typography.caption.monospacedDigit())
-        .frame(minHeight: Note.lineHeight)
-    }
-
-    @ViewBuilder private var glyph: some View {
-        if header.failed { FailureMark() } else { Image(header.wake.icon).foregroundStyle(palette.ink3) }
     }
 
     /// 名字太长时只截名字，前后的话留全。
@@ -280,11 +281,11 @@ private struct CueWakeTitle: View {
             if header.lead != nil, header.name != nil { Dot().foregroundStyle(palette.ink3) }
             if let name = header.name { Text(name).fontWeight(.medium).foregroundStyle(palette.ink) }
             if let trail = header.trail { Text(trail).foregroundStyle(palette.ink2).fixedSize() }
-            if !header.targets.isEmpty { Image(.forward).font(.system(size: 8, weight: .semibold)).foregroundStyle(palette.ink3) }
             if quiet {
                 Dot().foregroundStyle(palette.ink3)
                 Text("没动手").foregroundStyle(palette.ink3).fixedSize()
             }
+            if !header.targets.isEmpty { Image(.forward).font(.system(size: 8, weight: .semibold)).foregroundStyle(palette.ink3) }
         }
         .lineLimit(1)
     }
@@ -298,7 +299,7 @@ private struct CueWakeTitle: View {
             Menu {
                 ForEach(header.targets, id: \.title) { place in Button(place.title) { open(place.target) } }
             } label: { label }
-            .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
+            .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden)
         }
     }
 
@@ -311,30 +312,10 @@ private struct CueWakeTitle: View {
             navigation.openSession(session.id, sessionID: session.sessionID, store: services.store)
             #endif
         case .task(let id):
-            let store = services.store
-            workspace.attempt { if let card = try await store.card(id) { workspace.openTask(card) } }
+            workspace.openTask(id: id)
         case .memory:
             workspace.cue.showsMemory = true
         }
-    }
-}
-
-/// 连着几轮只看了看、没说话：并成一行"看了 N 次，都没动手"，图标是最近那次的，行末几点也是最近那次的；点它展开各节（`CueNoteBubble`）。
-private struct CueQuietLine: View {
-    let rounds: [CueNoteRound]
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: Note.spacing) {
-            Image(rounds.last?.header?.wake.icon ?? .wakeIdle).foregroundStyle(palette.ink3).frame(width: Note.glyphWidth)
-            Text("看了 \(rounds.count) 次，都没动手").foregroundStyle(palette.ink2)
-            DisclosureChevron(open: false)
-            Spacer(minLength: 8)
-            if let last = rounds.last { Text(ChatTime.time(last.date)).foregroundStyle(palette.ink3) }
-        }
-        .font(Typography.caption.monospacedDigit())
-        .frame(minHeight: Note.lineHeight)
-        .contentShape(.rect)
     }
 }
 
@@ -940,7 +921,7 @@ struct CueWaitingDock: View {
         ending = message.id
         workspace.attempt {
             defer { ending = nil }
-            try await workspace.answerCueQuestion(message, choice)
+            try await workspace.services.answerCueQuestion(message.id, choice)
         }
     }
 }

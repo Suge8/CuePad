@@ -79,7 +79,8 @@ nonisolated struct CueTiming: Sendable {
 /// 每一轮的经过（`rounds`）只在这里，在跑的一轮就是 `Turn.round`，做完收进最近的几轮；Mac 的"运行情况"读它；上下文随状态写进库，各端读 `CueState.context`。
 /// 给人看的经过由它推出（`CueRound.process`），写在对话里这一轮开始的位置那一行上（`recordRound`）：Cue 自己醒来的一轮醒来时就写下、带着为什么醒
 /// （`CueMessage.wake`：Cue 页那一节的第一行，各端画"叫醒"的那一下也读它），你发起的第一次调工具时写下；每做完一步改一次，
-/// 此刻的状态记着在跑的是哪一行；各端 Cue 页读库。只看了看、没动手的一轮也留着这一行：Cue 页写"没动手"，连着几次并成一行。
+/// 此刻的状态记着在跑的是哪一行；各端 Cue 页读库。一轮做完时最后一次改这一行、写回复与歇着在同一次写入里（`finish`）：别的设备同步来时一起到，
+/// "做完了"只看此刻的状态。只看了看、没动手的一轮也留着这一行：Cue 页写"没动手"，连着几次并成一行。
 @Observable
 final class CueKeeper {
     nonisolated static let patrolsPerDay = 3
@@ -456,12 +457,10 @@ final class CueKeeper {
             let text = "这一轮出错了：\(line)"
             if let turn, turn.answersYou { await reply(text, in: turn) } else { await say(.cue, text) }
         case .turnFinished:
-            guard let finished = turn else { return }
-            await recordRound()  // 中途插了你的话：这一轮成了回答你的
-            if finished.writesReply, let text = finished.speaking?.text, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                lastFailure = nil
-                await reply(text, in: finished)
-            }
+            guard var finished = turn else { return }
+            let reply = finished.writesReply ? finished.speaking?.text : nil
+            if reply?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false { lastFailure = nil }
+            finished.round.row = await finish(finished, reply: reply)
             archive(finished.round)
             updateShift {
                 $0.turn = nil
@@ -490,10 +489,22 @@ final class CueKeeper {
         guard let turn, !turn.round.calls.isEmpty else { return }
         do {
             let row = try await setup.store.recordCueRound(
-                turn.round.row, startedAt: turn.round.startedAt, answersYou: turn.answersYou, tools: turn.round.process)
+                turn.round.row, startedAt: turn.round.startedAt, answersYou: turn.answersYou, tools: turn.round.process, wake: turn.selfStarted?.wake)
             updateShift { $0.turn?.round.row = row }
         } catch {
             Self.log.error("Cue 这一轮的经过没能写进资料库：\(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// 一轮做完：经过那一行最后一次改（中途插了你的话，这一轮成了回答你的）、这一轮写给你的话与歇着一次写下（`CueStore.finishCueRound`），返回那一行。
+    private func finish(_ turn: Turn, reply: String?) async -> UUID? {
+        do {
+            return try await setup.store.finishCueRound(
+                turn.round.row, startedAt: turn.round.startedAt, answersYou: turn.answersYou, tools: turn.round.calls.isEmpty ? nil : turn.round.process,
+                reply: reply, as: turn.author, context: shift?.context)
+        } catch {
+            Self.log.error("Cue 这一轮的收尾没能写进资料库：\(error.localizedDescription, privacy: .public)")
+            return turn.round.row
         }
     }
 

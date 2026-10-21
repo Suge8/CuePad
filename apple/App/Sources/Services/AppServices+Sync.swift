@@ -147,8 +147,8 @@ extension AppServices {
             await pull()
             settle.finish()
         }
-        let deadline = Task {
-            try? await Task.sleep(for: Self.syncWaitLimit)
+        let deadline = Task { [timing] in
+            try? await timing.sleep(Self.syncWaitLimit)
             settle.finish()
         }
         for await _ in settled {}
@@ -161,6 +161,15 @@ extension AppServices {
     /// 至多 `syncWaitLimit`），或在一页页地拉积压（第一次同步、离线久了，`SyncState.catchingUp`）。上传不算：那是本机的改动在往外走。
     /// 按节奏的拉取与收到推送的拉取也不算：它们一拉就完，算上的话页头每几秒闪一次。
     var isCatchingUp: Bool { isSyncingNow || syncCatchingUp }
+
+    /// 别的设备写下的事实（Cue 在哪台启用）本机库里已经有了：和 iCloud 对过至少一遍，或没有可对的（没有同步、没登录 iCloud、账号受限）。
+    /// 换新 Mac、还没对完时为 false：这时库里没有 Cue 不等于哪台都没设过。
+    var knowsSyncedFacts: Bool {
+        switch syncStatus {
+        case .unavailable, .noAccount, .accountRestricted: true
+        default: syncReconciled
+        }
+    }
 
     /// 事实写在 `host` 上的这一页（Cue 运行的 Mac、会话所在的 Mac）此刻可能不是最新：本机就是它时库里就是最新的，不用等（Mac）。
     func isCatchingUp(on host: String?) -> Bool {

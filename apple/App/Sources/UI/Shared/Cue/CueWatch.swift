@@ -3,9 +3,8 @@ import Foundation
 import Observation
 
 /// 一个窗口里 Cue 的现状和 Cue 页的输入草稿：侧栏、菜单栏面板与 Cue 页都读这一份，不各自订阅。
-/// 事实只有库里那一页摘要（`CueDigest`）与此刻（`SpeechClock`）；这里按读的人要的粒度把它拆成一项项存下，每项只在变了时才写——
-/// Observation 按存储属性追踪，存整份摘要时任何一项变（在想→用工具、Cue 此刻……），读名字的每一行会话（`Workspace.cueOnDuty`）、
-/// 书架与侧栏都要跟着重算。
+/// 事实只有库里那一页摘要（`CueDigest`）与此刻（`SpeechClock`）；这里按读的人要的粒度把它拆成一项项存下——
+/// Observation 按存储属性追踪（值没变的写不通知），存整份摘要时任何一项变（在想→用工具、Cue 此刻……），书架与侧栏都要跟着重算。
 /// 在不在、话在不在路上随库与此刻重算：它那台 Mac 的在线期限由订阅到点重读（`CueStore.macOnline`），你最近一句的时限与同步通断由
 /// 此刻给，这里不另计时。
 /// 第一份在建工作区时当场读到（`Workspace.init`），之后从它接着订阅：没有"还没读到"时的默认现状。
@@ -68,23 +67,24 @@ final class CueWatch {
     }
 
     private func apply(_ digest: CueDigest, at moment: Speech.Moment) {
-        set(\.name, digest.name)
+        name = digest.name
         let presence = CuePresence.derive(digest, at: moment)
-        set(\.presence, presence)
-        set(\.canHear, presence != .disabled)
-        set(\.sending, presence == .sending)
-        set(\.lastYouSaid, digest.lastYou?.said)
-        set(\.busy, presence.shown != nil)
-        set(\.expression, CueMood.of(presence, waiting: digest.waiting, justDone: digest.lastSaidDone))
+        self.presence = presence
+        canHear = presence != .disabled
+        sending = presence == .sending
+        lastYouSaid = digest.lastYou?.said
+        busy = presence.shown != nil
+        expression = CueMood.of(presence, waiting: digest.waiting, justDone: digest.lastSaidDone)
+        // 推出的时刻每次都不同：内容一样就不写，免得读它的每一行跟着重算
         let next = AppServices.cueNow(digest, at: moment)
         if !next.same(as: now), !isPinned { now = next }
-        set(\.waiting, digest.waiting)
-        set(\.unread, digest.unread)
-        set(\.lastSaid, digest.lastSaid)
-        set(\.hostID, digest.hostID)
-        set(\.hostName, digest.hostName)
-        set(\.round, digest.state?.round)
-        set(\.context, digest.state?.context)
+        waiting = digest.waiting
+        unread = digest.unread
+        lastSaid = digest.lastSaid
+        hostID = digest.hostID
+        hostName = digest.hostName
+        round = digest.state?.round
+        context = digest.state?.context
     }
 
     /// 调试画面手动换的 Cue 此刻（`-CuePadCueCycle` 轮流走各态，`DebugScene.cueNowTourIfAsked`）：换过就不再随库变。
@@ -93,9 +93,5 @@ final class CueWatch {
     func pin(_ next: CueNow) {
         isPinned = true
         now = next
-    }
-
-    private func set<Value: Equatable>(_ path: ReferenceWritableKeyPath<CueWatch, Value>, _ value: Value) {
-        if self[keyPath: path] != value { self[keyPath: path] = value }
     }
 }

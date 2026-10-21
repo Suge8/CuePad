@@ -1,32 +1,12 @@
 # Contributing to CuePad
 
-Thanks for your interest in CuePad. This guide covers how to set up the project, run the checks, and open a pull request.
-
-## Prerequisites
-
-- macOS with Xcode 27 (the app targets macOS 26 and iOS/iPadOS 27)
-- No developer account is needed: local builds and tests are ad-hoc signed. Only the release commands need App Store Connect credentials (see [docs/release.md](../docs/release.md)).
-
-## Setup and common commands
-
-```bash
-git clone https://github.com/Suge8/CuePad.git
-cd CuePad
-apple/scripts/xc.sh build mac     # build the Mac app
-apple/scripts/xc.sh test mac      # app tests (Mac)
-apple/scripts/xc.sh build ios     # build for the iPhone simulator
-apple/scripts/xc.sh test kit      # shared package: store, sync, editor, Pi bridge, command line
-```
-
-`xc.sh` builds into the checkout's `apple/.derived/`; runs in the same checkout wait for each other, and iOS runs share a small fixed pool of simulators.
-
-Conventions and guardrails are in [AGENTS.md](../AGENTS.md); UI, sync, verification, and release notes are in [docs/](../docs/). Run `apple/scripts/xc.sh check` before committing.
+Thanks for your interest in CuePad. To build and run it, follow [Build from source](../README.md#build-from-source) in the README. Project conventions, commands and guardrails are in [AGENTS.md](../AGENTS.md), with topic notes in [docs/](../docs/).
 
 ## Before you open a pull request
 
-1. Run the checks that cover your change: `xc.sh test kit` for package changes, `xc.sh test mac` for app changes, and `xc.sh build ios` when you touch shared code.
+1. Run `apple/scripts/xc.sh check`, plus the tests that cover your change: `xc.sh test kit` for the shared package, `xc.sh test mac` for the app.
 2. Keep the diff scoped to the change at hand. Match the existing code style; don't reformat unrelated files.
-3. Update the docs when interfaces or user-facing behavior change. Tests cover user-visible flows end to end (`apple/App/Tests/UI`, driven through `Workspace`); don't add unit tests that restate the implementation.
+3. Update the docs when interfaces or user-facing behavior change. Tests follow the rules in AGENTS.md: end-to-end flows only, no unit tests that restate the implementation.
 
 ## Commit and PR conventions
 

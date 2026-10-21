@@ -173,17 +173,15 @@ struct SessionList<Top: View>: View {
     }
 
     @ViewBuilder private var empty: some View {
-        let empty = model.empty(filter: filter)
-        switch empty {
-        case .noMatch(let query):
-            EmptyState.noMatch(query).padding(.top, 40)
-        case .none(.some):
-            EmptyState(mascot: .empty, title: empty.noneTitle, waitsForSync: true) {
+        if model.searching {
+            EmptyState.noMatch(model.query).padding(.top, 40)
+        } else if let filter {
+            EmptyState(mascot: .empty, title: AgentListModel.noneTitle(filter: filter), waitsForSync: true) {
                 EmptyStateButton(title: "新会话", icon: .add, action: { navigation.newSession = .init(project: filter) })
             }
             .padding(.top, 40)
-        case .none(nil):
-            EmptyState(mascot: .empty, title: empty.noneTitle, message: "在 Mac 的终端里开一个 Agent，或在这里开新会话", waitsForSync: true) {
+        } else {
+            EmptyState(mascot: .empty, title: AgentListModel.noneTitle(filter: nil), message: "在 Mac 的终端里开一个 Agent，或在这里开新会话", waitsForSync: true) {
                 EmptyStateButton(title: "新会话", icon: .add, action: { navigation.newSession = .init() })
             }
             .padding(.top, 40)

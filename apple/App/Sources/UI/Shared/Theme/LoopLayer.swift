@@ -9,8 +9,8 @@ import SwiftUI
 /// 减弱动态效果时由调用方不放它（或换成静止的样子）；省电模式看 `LowPowerMode`。
 struct LoopLayer {
     enum Kind: Equatable {
-        /// 一圈淡轨道上一段弧匀速转，1.1s 一圈；线宽默认是直径的 14%，给了就用给的（Cue 头像外的状态环，粗细随头像尺寸另定）。
-        case orbit(lineWidth: CGFloat? = nil)
+        /// 一圈淡轨道上一段弧匀速转，1.1s 一圈；线宽是直径的 14%。
+        case orbit
         /// Cue 在做事时头像外的状态环：淡轨道上一颗圆头拖着由浓到淡的尾巴（约六成圈）匀速绕着走，1.6s 一圈。
         /// 尾巴是锥形渐变裁成环（缓存成位图，渲染服务每帧只转一层），头是与线同宽的圆点，盖住尾巴在渐变接缝处的直切口。
         /// 头不加光晕：光晕在浅色底上是一团糊边，头尾不干净。
@@ -85,9 +85,9 @@ struct LoopLayer {
             CATransaction.setDisableActions(true)
             let bounds = root.bounds
             switch kind {
-            case .orbit(let line):
+            case .orbit:
                 loop.frame = bounds
-                let width = line ?? min(bounds.width, bounds.height) * 0.14
+                let width = min(bounds.width, bounds.height) * 0.14
                 let ring = CGPath(ellipseIn: CGRect(origin: .zero, size: bounds.size).insetBy(dx: width / 2, dy: width / 2), transform: nil)
                 for (index, shape) in (loop.sublayers ?? []).compactMap({ $0 as? CAShapeLayer }).enumerated() {
                     shape.frame = loop.bounds
@@ -361,7 +361,7 @@ struct Spinner: View {
                     .overlay { Circle().trim(from: 0, to: 0.3).stroke(palette.ink2, style: StrokeStyle(lineWidth: width, lineCap: .round)) }
                     .padding(width / 2)
             } else {
-                LoopLayer(kind: .orbit(), color: palette.ink2)
+                LoopLayer(kind: .orbit, color: palette.ink2)
             }
         }
         .frame(width: size.side, height: size.side)

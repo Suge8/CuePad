@@ -16,18 +16,10 @@ import Testing
     Data((0..<900_000).map { UInt8(truncatingIfNeeded: ($0 * 31 + seed) % 251) })
   }
 
-  @Test func checkpointRoundTripsByteForByte() async throws {
-    let data = blob(seed: 1)
-    try await store.upsertPiSession(session(), checkpoint: data, host: "mac-a")
-    #expect(try await store.piCheckpoint(of: "s1") == data)
-
-    try await store.upsertPiSession(session(), checkpoint: Data(), host: "mac-a")
-    #expect(try await store.piCheckpoint(of: "s1") == Data())
-  }
-
-  @Test func metadataUpdatesKeepTheCheckpointAndNewCheckpointsReplaceIt() async throws {
+  @Test func checkpointRoundTripsByteForByteSurvivesMetadataUpdatesAndIsReplacedByANewOne() async throws {
     let first = blob(seed: 1)
     try await store.upsertPiSession(session(), checkpoint: first, host: "mac-a")
+    #expect(try await store.piCheckpoint(of: "s1") == first)
 
     try await store.upsertPiSession(session(title: "renamed"), host: "mac-a")  // 只更新元数据
     #expect(try await store.piCheckpoint(of: "s1") == first)
@@ -36,6 +28,8 @@ import Testing
     let second = blob(seed: 2)
     try await store.upsertPiSession(session(title: "renamed"), checkpoint: second, host: "mac-a")
     #expect(try await store.piCheckpoint(of: "s1") == second)
+    try await store.upsertPiSession(session(title: "renamed"), checkpoint: Data(), host: "mac-a")
+    #expect(try await store.piCheckpoint(of: "s1") == Data())
     #expect(try await store.piSessions().count == 1)
   }
 }

@@ -53,6 +53,8 @@ final class AppServices {
     private(set) var syncIssues: [SyncIssue] = []
     /// 同步在一页页地拉积压（`SyncState.catchingUp`）；界面只经 `isCatchingUp` 读。
     private(set) var syncCatchingUp = false
+    /// 这台的库和 iCloud 对过至少一遍（`SyncState.reconciled`）；界面只经 `knowsSyncedFacts` 读。
+    private(set) var syncReconciled = false
     /// Pi 锁屏通知的服务端订阅（只有 iOS 建立）；设置页与权限、注册状态一起显示。
     private(set) var alertSubscription: PiAlertSubscriptionStatus = .off
     #if os(iOS)
@@ -201,13 +203,16 @@ final class AppServices {
         await upload(CueProfile.recordID)
     }
 
-    /// 让 Cue 运行在 `host` 那台 Mac 并启用（规则 `CueStore.enableCue`）：两端同一个入口。是这台 Mac 时先重新探测一次本机的 Agent
+    /// 让 Cue 运行在 `host` 那台 Mac 并启用（规则 `CueStore.enableCue`）：两端所有入口都经这里，界面读的是同一处判断（`CueGate`）。
+    /// 这台的库还没和 iCloud 对过一遍时拒绝（`CueEnableError.unsynced`）：库里没有 Cue 不等于哪台都没设过，启用了会把它从原来那台抢过来；
+    /// 它正在别的 Mac 上运行时，只有 `moving`（你确认了换过去）才换。是这台 Mac 时先重新探测一次本机的 Agent
     /// （刚启动还没探测完也不会按旧的或空的判断）；别的 Mac 按它同步来的那条。写完马上传。
-    func enableCue(on host: String) async throws {
+    func enableCue(on host: String, moving: Bool) async throws {
+        guard knowsSyncedFacts else { throw CueEnableError.unsynced }
         #if os(macOS)
         if host == hostID { try await macAgents.record() }
         #endif
-        try await store.enableCue(on: host)
+        try await store.enableCue(on: host, moving: moving)
         await upload(CueProfile.recordID)
     }
 
@@ -367,6 +372,7 @@ final class AppServices {
         if recovered { Task { await syncNow() } }
         syncIssues = state.issues
         syncCatchingUp = state.catchingUp
+        syncReconciled = state.reconciled
         alertSubscription = state.alerts
     }
 

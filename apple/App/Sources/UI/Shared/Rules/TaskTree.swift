@@ -2,7 +2,7 @@ import CoreGraphics
 import CueStore
 import Foundation
 
-/// 一次结构上的移动：挂到哪、排在哪条同级之后（nil = 最前）。交给 `CueStore.moveTask`。
+/// 一次结构上的移动：挂到哪、排在哪条同级之后（nil = 最前）。交给 `CueStore.moveCard`。
 nonisolated struct TaskMove: Hashable, Sendable {
     var slot: CardSlot
     var after: UUID?
@@ -27,8 +27,6 @@ nonisolated struct TaskTree: Equatable, Sendable {
         var task: Card
         /// 0 起。
         var depth: Int
-        /// 这组里的直接步骤数。
-        var childCount: Int
         var id: UUID { task.id }
     }
 
@@ -73,7 +71,7 @@ nonisolated struct TaskTree: Equatable, Sendable {
         var rows: [Row] = []
         func visit(_ id: UUID, _ depth: Int) {
             guard let task = tasks[id] else { return }
-            rows.append(Row(task: task, depth: depth, childCount: children(of: id).count))
+            rows.append(Row(task: task, depth: depth))
             for child in children(of: id) { visit(child, depth + 1) }
         }
         for root in roots ?? self.roots { visit(root, 0) }

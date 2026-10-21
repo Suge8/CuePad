@@ -42,11 +42,6 @@ extension Workspace {
         }
     }
 
-    /// 回答 Cue 的一条"等你"（卡上、全屏预览底栏，`AppServices.answerCueQuestion`）。
-    func answerCueQuestion(_ message: CueMessage, _ choice: String) async throws {
-        try await services.answerCueQuestion(message.id, choice)
-    }
-
     // MARK: 记忆
 
     func noteCueLine(_ text: String) async throws {
@@ -54,18 +49,14 @@ extension Workspace {
         await services.upload(line.id)
     }
 
-    func forgetCueLine(_ id: UUID) {
-        let store = services.store, services = services
-        attempt {
-            try await store.forgetCueLine(id)
-            await services.upload(id)
-        }
-    }
+    func forgetCueLine(_ id: UUID) { writeCueLine(id) { try await $0.forgetCueLine(id) } }
 
-    func pinCueLine(_ id: UUID, _ pinned: Bool) {
+    func pinCueLine(_ id: UUID, _ pinned: Bool) { writeCueLine(id) { try await $0.pinCueLine(id, pinned) } }
+
+    private func writeCueLine(_ id: UUID, _ write: @escaping @Sendable (CueStore) async throws -> Void) {
         let store = services.store, services = services
         attempt {
-            try await store.pinCueLine(id, pinned)
+            try await write(store)
             await services.upload(id)
         }
     }

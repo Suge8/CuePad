@@ -54,7 +54,7 @@ struct SendTests {
 
         let request = try await settled()
         #expect(request.status == .known(.succeeded))
-        #expect(request.hostID == TestApp.hostID)
+        #expect(request.hostID == TestApp.hostID && request.handledBy == TestApp.hostID)
         #expect(request.target == SendTarget(kind: .piSession, name: "work", ref: "sess-1"))
         #expect(ext.messages == [
             PiMessage(text: "before\n\nafter", images: [PiImage(mimeType: "image/png", data: png)], deliveryID: request.id.uuidString)
@@ -82,6 +82,7 @@ struct SendTests {
         Workspace(services: services).send("hi", to: AgentTarget(session: "nope"))
 
         #expect(try await settled().failure != nil)
+        #expect(rig.host.calls.isEmpty)
         #expect(try RawDB(services.location.databaseURL).count("sendRecords") == 0)
     }
 

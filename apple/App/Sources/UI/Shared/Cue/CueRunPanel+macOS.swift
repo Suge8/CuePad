@@ -204,7 +204,6 @@ private struct TraceText: View {
     }
 }
 
-/// 运行情况里的写法。
 private enum CueRunFormat {
     /// 24 小时制到秒：排查时要对得上日志。
     static func clock(_ date: Date) -> String {

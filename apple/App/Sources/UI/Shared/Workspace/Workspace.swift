@@ -51,7 +51,7 @@ final class Workspace {
     let sendState: SendState
     private(set) var nonProjectPage: Route?
     /// 打开的卡（编辑页；iOS 打开卡片是推入导航，见 `Navigation.push`）。设成某张卡时编辑页立即挂上；
-    /// 清空时编辑页先淡出，淡完才卸下（见 `presentedCard`）。
+    /// 清空时编辑页先淡出，淡完才卸下（`CardEditorPage`）。
     var openCard: UUID? {
         didSet { if let openCard { presses.present(openCard) } }
     }
@@ -69,11 +69,13 @@ final class Workspace {
     var projectForm: ProjectForm.Request?
     /// ⌘K 搜索开着（`SearchPalette`）。
     var searching = false
-    /// 接入 Agent 的面板（`AgentSetupPanel`；首次打开由 `offerAgentSetup` 置起，主窗口弹出）。
-    var showsAgentSetup = false
+    /// 接入 Agent 并启用 Cue 的面板（`SetupPanel`；首次打开由 `offerSetup` 置起，Cue 页的启用卡与会话页的"接入"也打开它，主窗口弹出）。
+    var showsSetup = false
     /// 新会话的表单开着（`NewSessionForm`，从会话页的 + 弹出；菜单"文件 › 新会话"先去会话页再置起，`newSession`）。
     var showsNewSession = false
     #endif
+    /// 项目范围：任务页与会话页共用这一份（顶栏中间那颗显示它、点 ✕ 清掉；项目页"⋯"里的"看这个项目的会话"设成这个项目再切到会话页），nil 是全部项目。
+    var projectScope: UUID?
     var notice: Notice?
     /// 正在给哪个项目选文件夹（iOS：根视图据此弹候选；Mac 直接弹系统的选文件夹面板，不经这里）。
     var folderPicker: Project?
@@ -131,7 +133,6 @@ final class Workspace {
     /// 此刻挂着的页：留着的加上当前页（首屏、目录纠正出来的页还没经过 `show`；会话页只在是当前页时在里面）。
     var mountedPages: [Route] { pages.kept.contains(page) ? pages.kept : pages.kept + [page] }
 
-    /// 编辑页淡出结束。
     func finishClosingCard() {
         guard openCard == nil else { return }
         presses.dismiss()
@@ -321,6 +322,12 @@ final class Workspace {
         if openCard == id { openCard = nil }
         #endif
         if openTask?.task == id { openTask = nil }
+    }
+
+    /// 按 id 打开任务的气泡（Cue 页里提到的任务）：先从库里读到它，再同 `openTask(_:)`。
+    func openTask(id: UUID) {
+        let store = services.store
+        attempt { if let card = try await store.card(id) { self.openTask(card) } }
     }
 
     /// 窗口里按下了一下（窗口坐标）。

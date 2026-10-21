@@ -59,13 +59,30 @@ extension CueStore {
   public func recordCueRound(
     _ id: UUID?, startedAt: Date, answersYou: Bool, tools: PiChatMessage.Tools?, wake: CueWake? = nil
   ) throws -> UUID {
+    try write { try putCueRound(id, startedAt: startedAt, answersYou: answersYou, tools: tools, wake: wake) }
+  }
+
+  private func putCueRound(_ id: UUID?, startedAt: Date, answersYou: Bool, tools: PiChatMessage.Tools?, wake: CueWake? = nil) throws -> UUID {
     let author: CueAuthor = answersYou ? .round : .note
-    return try write {
-      guard let id else { return try insertCueMessage(author, text: "", tools: tools, wake: wake, at: startedAt).id }
-      try db.run(
-        "UPDATE cueMessages SET author = ?1, tools = ?2, modifiedAt = ?3 WHERE id = ?4 AND (author IS NOT ?1 OR tools IS NOT ?2)",
-        [author.rawValue, tools?.stored, Date.stamp, id])
-      return id
+    guard let id else { return try insertCueMessage(author, text: "", tools: tools, wake: wake, at: startedAt).id }
+    try db.run(
+      "UPDATE cueMessages SET author = ?1, tools = ?2, modifiedAt = ?3 WHERE id = ?4 AND (author IS NOT ?1 OR tools IS NOT ?2)",
+      [author.rawValue, tools?.stored, Date.stamp, id])
+    return id
+  }
+
+  /// 一轮做完（值班的管理器调）：经过那一行的最终清单（`tools`；没调过工具为 nil，那一行不动）、这一轮写给你的话（`reply`，规则同 `replyCueRound`）
+  /// 与歇着（`setCueState`）在同一个事务里写下，返回那一行。"这一轮做完了"只看此刻的状态（`CueState.round`），各端都照它判断：
+  /// 分开写的话同步可能先把歇着带到别的设备、话与清单还在路上，那里的 Cue 页就把这一轮先当成没动手，话到了再改回来。
+  @discardableResult
+  public func finishCueRound(
+    _ id: UUID?, startedAt: Date, answersYou: Bool, tools: PiChatMessage.Tools?, reply: String?, as author: CueAuthor, context: CueContext?
+  ) throws -> UUID? {
+    try write {
+      let row = try tools.map { try putCueRound(id, startedAt: startedAt, answersYou: answersYou, tools: $0) } ?? id
+      if let reply { try putCueReply(startedAt: startedAt, reply: reply, as: author, answersYou: answersYou) }
+      try putCueState(.settled, detail: nil, round: nil, context: context)
+      return row
     }
   }
 
@@ -73,12 +90,14 @@ extension CueStore {
   /// （tell、done 的结果），最后那句只是复述，不写。回答你的一轮要提示你（`urgent`：你说完多半就离开了，在等它），一轮只响一次：
   /// 这一轮已经提示过你（提问卡、急事、出错）就不再提示。
   public func replyCueRound(startedAt: Date, reply: String, as author: CueAuthor, answersYou: Bool) throws {
+    try write { try putCueReply(startedAt: startedAt, reply: reply, as: author, answersYou: answersYou) }
+  }
+
+  private func putCueReply(startedAt: Date, reply: String, as author: CueAuthor, answersYou: Bool) throws {
     guard !reply.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-    try write {
-      let said = try select(CueMessage.self, where: "author = 'cue' AND createdAt >= ?", [startedAt])
-      guard answersYou || said.isEmpty else { return }
-      _ = try insertCueMessage(author, text: reply, urgent: answersYou && !said.contains(where: \.alerts))
-    }
+    let said = try select(CueMessage.self, where: "author = 'cue' AND createdAt >= ?", [startedAt])
+    guard answersYou || said.isEmpty else { return }
+    _ = try insertCueMessage(author, text: reply, urgent: answersYou && !said.contains(where: \.alerts))
   }
 
   /// Cue 说的、正文就是 `text` 的最近一条（经过清单里"对你说"那一条点它跳回原处）。
@@ -385,9 +404,13 @@ extension CueStore {
 
   /// 让 Cue 运行在 `host` 那台 Mac 并启用（另一台上的会停下）——手机与 Mac 同一条规则，按那台写下的能用的 Agent（`MacAgents`）判断：
   /// 选的 Agent 那台用不了才换成 `CueProfile.runtimes` 里第一家能用的，模型属于原来那家、一并清掉；强度留着（运行时自己取档）。
-  /// 那台一家都不能用时抛 `CueEnableError`，带上各家为什么。
-  public func enableCue(on host: String) throws {
+  /// 那台一家都不能用时抛 `CueEnableError`，带上各家为什么。Cue 正在另一台上运行时只有 `moving`（你确认了要换过去）才换，否则抛
+  /// `CueEnableError.runsElsewhere`：同一个事务里读、判、写，读到别的设备刚同步来的启用也不会悄悄把它抢过来。
+  public func enableCue(on host: String, moving: Bool) throws {
     try write {
+      if let running = try cueProfile()?.activeHost, running != host, !moving {
+        throw CueEnableError.runsElsewhere(try macAgents(on: running).shownName)
+      }
       let usable = try macAgents(on: host)
       let available = CueProfile.runtimes.filter(usable.kinds.contains)
       guard let first = available.first else { throw CueEnableError.noRuntime(usable.whyNone) }
@@ -507,17 +530,19 @@ extension CueStore {
   public func setCueState(
     _ state: PiWorkState, detail: String? = nil, round: UUID? = nil, context: CueContext? = nil
   ) throws {
-    try write {
-      let current = try cueState()
-      let next = CueState(state: .known(state), detail: detail, round: round, context: context, left: current?.left ?? [], modifiedAt: Date.stamp)
-      if let current, (current.state, current.detail, current.round, current.context) == (next.state, next.detail, next.round, next.context) { return }
-      try db.run(
-        """
-        INSERT INTO cueState (\(CueState.columns.joined(separator: ", "))) VALUES (?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(id) DO UPDATE SET state = excluded.state, detail = excluded.detail, modifiedAt = excluded.modifiedAt, round = excluded.round,
-          context = excluded.context
-        """, next.bindings)
-    }
+    try write { try putCueState(state, detail: detail, round: round, context: context) }
+  }
+
+  private func putCueState(_ state: PiWorkState, detail: String?, round: UUID?, context: CueContext?) throws {
+    let current = try cueState()
+    let next = CueState(state: .known(state), detail: detail, round: round, context: context, left: current?.left ?? [], modifiedAt: Date.stamp)
+    if let current, (current.state, current.detail, current.round, current.context) == (next.state, next.detail, next.round, next.context) { return }
+    try db.run(
+      """
+      INSERT INTO cueState (\(CueState.columns.joined(separator: ", "))) VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET state = excluded.state, detail = excluded.detail, modifiedAt = excluded.modifiedAt, round = excluded.round,
+        context = excluded.context
+      """, next.bindings)
   }
 }
 

@@ -51,6 +51,7 @@ public actor CloudSync {
     self.container = container
     puller = ZonePuller(source: database, coordinator: coordinator)
     sender = RecordSender(uploader: database, coordinator: coordinator)
+    await coordinator.loadToken()
     accountWatcher = Task { [weak self] in
       for await _ in NotificationCenter.default.notifications(named: .CKAccountChanged) {
         guard let self else { return }

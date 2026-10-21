@@ -54,11 +54,12 @@ struct CueHostTests {
             try await app.services.store.setDirectory(folder.path, for: project.id)
             try await app.connect(.pi)
             app.services.start()
+            try await app.syncs()
             if let claude {
                 try await claude.enable(self)
                 return
             }
-            try await app.services.enableCue(on: TestApp.hostID)
+            try await app.services.enableCue(on: TestApp.hostID, moving: false)
             try await message(.cue, containing: asksOnEnable ? "要交给我跟进吗？" : "我看了一眼")  // 刚启用的第一次醒来：你正看着屏幕，正常显示
         }
 
@@ -142,13 +143,11 @@ struct CueHostTests {
             }
         }
         defer { busy.cancel() }
-        try await Task.sleep(for: .milliseconds(300))  // 写入已经跑起来
-        let start = ContinuousClock.now
+        try await eventually("写入已经跑起来") { try await store.allPiSessionStates().count == 10 }
         try await rig.say("库正忙时说的")
         try await eventually("交给 Cue", timeout: .milliseconds(500)) {
             try await store.cueMessages().contains { $0.text == "库正忙时说的" && $0.deliveredAt != nil }
         }
-        print("送进 Cue：\(ContinuousClock.now - start)")
         busy.cancel()
         await rig.stop()
     }
@@ -261,7 +260,7 @@ struct CueHostTests {
         }
         func glanced(_ round: CueNoteRound) -> Bool {
             guard case .session(let target)? = round.header?.targets.first?.target else { return false }
-            return round.quiet && round.header?.name == title && round.header?.trail == "停下了" && target.sessionID == session.sessionID
+            return round.quiet(live: nil) && round.header?.name == title && round.header?.trail == "停下了" && target.sessionID == session.sessionID
         }
         let first = try await notes()
         #expect(first.count == 1 && first.allSatisfy(glanced), "\(first)")
@@ -469,7 +468,7 @@ struct CueHostTests {
         let question = try await rig.message(.cue, containing: "要推送吗？")
         #expect(question.choices == ["可以", "以后推送代码都不用问"])
         try await rig.message(.cue, containing: "办好了")
-        try await Workspace(services: rig.services).answerCueQuestion(question, "以后推送代码都不用问")
+        try await rig.services.answerCueQuestion(question.id, "以后推送代码都不用问")
         try await rig.message(.cue, containing: "知道了：以后推送代码都不用问")
         try await eventually("每一轮响一次") {
             rig.notifier.posted.map(\.body) == ["可以推送登录页的修复吗？\n可以 / 以后推送代码都不用问", "知道了：以后推送代码都不用问"]

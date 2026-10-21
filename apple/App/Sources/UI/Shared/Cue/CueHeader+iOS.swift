@@ -8,7 +8,7 @@ import SwiftUI
 /// 全部会话、额度、记忆、设置），手机上 Cue 的这些只有这一个入口。
 /// 与 Mac 侧栏的 Cue 名片、菜单栏面板是同一套件、同一份数据（`CueWatch`、`Workspace.liveWork`）。
 /// 点页头、点面板外、在页头上往上划都收起；点面板里的一项先收起再去那里。
-/// 动效：玻璃随无回弹弹簧（`Motion.panel`，0.25 秒）长大，面板的几行只淡入、下移 6 点，箭头转半圈；减弱动态效果时直接到终态。
+/// 动效：玻璃随无回弹弹簧（`Motion.snappy`，0.25 秒）长大，面板的几行只淡入、下移 6 点，箭头转半圈；减弱动态效果时直接到终态。
 /// 页头浮在对话上（对话让出固定的 `reserve`），展开不改对话的布局，长大的只有这一小块；展开与否只在这里（不进 `CueWatch`：侧栏也读它）。
 /// 打开时只读大脑那一行（设置与那台 Mac 的 Agent，`CueConfigControls.read`，当场读）；其余都是已经在订阅的。
 struct CueHeader: View {
@@ -99,7 +99,7 @@ struct CueHeader: View {
     }
 
     private func toggle() {
-        withAnimation(Motion.spatial(Motion.panel, reduceMotion: reduceMotion)) { expanded.toggle() }
+        withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { expanded.toggle() }
     }
 }
 
@@ -284,7 +284,7 @@ private struct CueNowPanel: View {
     }
 }
 
-/// 钉住的"在做"区头不铺底，滚到它下面的行就地淡去：铺什么颜色都与面板的玻璃对不上（玻璃的光随背后变，深色下曾是一条直角色带），
+/// 钉住的"在做"区头不铺底，滚到它下面的行就地淡去：铺什么颜色都与面板的玻璃对不上（玻璃的光随背后变，深色下是一条直角色带），
 /// 不铺底它就是玻璃本身。行顶离区头下沿还有 `fade` 的一半时开始淡，碰到区头的字之前淡完，字不会叠在一起。
 /// 读的是渲染时的几何（`visualEffect`），不进状态、不挂几何回调：滚动时每帧只改透明度。
 private struct FadesUnderHeader: ViewModifier {

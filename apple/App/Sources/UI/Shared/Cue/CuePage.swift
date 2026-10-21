@@ -90,7 +90,7 @@ struct CuePage: View {
                     .transition(.move(edge: .trailing).combined(with: .opacity))
             }
         }
-        .animation(Motion.panel, value: cue.showsRun)
+        .animation(Motion.snappy, value: cue.showsRun)
         .background(palette.desk)
     }
     #else
@@ -222,10 +222,12 @@ struct CuePage: View {
         }
     }
 
-    /// 在跑的那一轮（Cue 此刻的状态记着是哪一行）此刻的结尾；不在跑为 nil。
+    /// 在跑的那一轮（Cue 此刻的状态记着是哪一行，"做完了没"只看它）此刻的结尾；不在跑为 nil。它那台 Mac 此刻不在（`CuePresence.shown` 为空）时
+    /// 这一轮照样没做完，只是不写在做什么。
     private var live: CueLiveRound? {
         let presence = cue.presence
-        guard let round = cue.round, let shown = presence.shown, let progress = presence.progress else { return nil }
+        guard let round = cue.round else { return nil }
+        guard let shown = presence.shown, let progress = presence.progress else { return CueLiveRound(round: round, ending: .took(nil)) }
         return CueLiveRound(round: round, ending: .live(shown, doing: progress, step: presence.isUsingTool ? RoundProcess.icon(.other) : nil))
     }
 
@@ -453,7 +455,7 @@ private struct CueRenewal: View {
     }
 }
 
-/// Cue 页对话的末尾：它在做事、这一轮在对话里还没有一格（还没调过工具，或设置里关了工具步骤）时是一行此刻在做的（`RoundProcess` 的那一行，同会话页）。
+/// Cue 页对话的末尾：它在做事、这一轮在对话里还没有一格（你发起的一轮还没调过工具，或设置里关了工具步骤）时是一行此刻在做的（`RoundProcess` 的那一行，同会话页）。
 /// Cue 在这台 Mac 值班时，在回答你的一轮出字就换成逐字长出的正在说的话
 /// （`CueKeeper.speech`，同会话页的 `SessionDraft`）：只有这个视图读它，出字时对话列表不重算；它与对话在同一次更新里拿到同一份对话，
 /// 落库了（`PiDraft.landed`）就不再显示，换下是同一帧里的一减一加。已落库而 Cue 的状态还没歇下时也不冒出进展那一行（话已经说完）；
@@ -464,7 +466,7 @@ private struct CueEnding: View {
     /// 对话最后一格是 Cue 的话：正在说的这句落库后与它连成一串，说着的时候就排成那个样子。
     let joined: Bool
     /// 在跑的那一轮在对话里有一格（它的经过，或收着它的动态）：此刻在做的写在那一格里，这里不再写一遍。
-    /// 没有那一格时（还没调过工具；设置里关了工具步骤，`CueThread.rows` 不排经过）写在这里。
+    /// 没有那一格时（你发起的一轮还没调过工具；设置里关了工具步骤，`CueThread.rows` 不排经过）写在这里。
     let roundInRows: Bool
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services

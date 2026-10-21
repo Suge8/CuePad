@@ -104,11 +104,10 @@ import Testing
     #expect(try await mac.store.deliveryRequest(made.id)?.config == config)
   }
 
+  /// 发出的话：手机写、Mac 执行，结果回到手机；Mac 把这句写进对话时收走请求，收走也同步到手机，气泡由对话里那条接替。
   @Test(.timeLimit(.minutes(1)))
   func deliveryRequestTravelsFromPhoneToMacAndTheResultComesBackThenIsCleanedUp() async throws {
-    let executor = DeliveryExecutor(
-      store: mac.store, hostID: "mac", retention: .seconds(60), timing: clock.timing, onIssue: { Issue.record("\($0)") }
-    ) { _ in .succeeded }
+    let executor = DeliveryExecutor(store: mac.store, hostID: "mac", timing: clock.timing, onIssue: { Issue.record("\($0)") }) { _ in .succeeded }
     try await executor.start()
     let request = try await phone.store.requestDelivery("run this", to: SendTarget(kind: .piSession, name: "fix bug", ref: "s1"), on: "mac")
 
@@ -121,11 +120,12 @@ import Testing
     #expect(roundTrip >= .zero && roundTrip < .seconds(60))
     #expect(try await mac.store.deliveryRequest(request.id)?.roundTrip == nil)  // 执行方不算往返
 
-    await clock.waitForSleeper()
-    clock.advance(.seconds(61))
-    _ = try await eventually(mac.store, { try $0.deliveryRequests().count }) { $0 == 0 }
-    try await cloud.exchange()  // 清理同步过去
+    let said = PiChatMessage(sessionID: "s1", entryID: "u1", seq: 1, role: .user, text: request.content, at: .now, deliveryID: request.id)
+    try await mac.store.writePiTranscript(PiTranscript(sessionID: "s1", messages: [said], recap: PiRecap()))
+    #expect(try await mac.store.deliveryRequest(request.id) == nil)
+    try await cloud.exchange()  // 收走同步过去
     #expect(try await phone.store.deliveryRequest(request.id) == nil)
+    #expect(try await phone.store.piMessages(of: "s1").map(\.deliveryID) == [request.id])
     await executor.stop()
   }
 

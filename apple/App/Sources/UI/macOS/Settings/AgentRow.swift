@@ -99,7 +99,7 @@ struct AgentRow: View {
     }
 }
 
-/// 设置与接入面板里一个 Agent 那一行的状态（`AgentRow`、`AgentSetupPanel`）：接入了的四家同一种写法"已接入 · 名字 版本"，报不出版本的（桌面版）只写"已接入"。
+/// 设置与接入面板里一个 Agent 那一行的状态（`AgentRow`、`SetupPanel`）：接入了的四家同一种写法"已接入 · 名字 版本"，报不出版本的（桌面版）只写"已接入"。
 enum AgentLine {
     static func of(_ kind: AgentKind, _ status: AgentStatus?, writable: Bool) -> (StatusTone, Dotted?) {
         guard let status else { return (.calm, "检测中…") }

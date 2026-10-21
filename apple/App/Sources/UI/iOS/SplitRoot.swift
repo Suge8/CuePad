@@ -75,7 +75,7 @@ struct SplitRoot: View {
 
     private func collapseSidebarIfNarrow() {
         guard width < Self.threeColumnWidth, navigation.sidebar != .detailOnly else { return }
-        withAnimation(Motion.panel) { navigation.sidebar = .detailOnly }
+        withAnimation(Motion.snappy) { navigation.sidebar = .detailOnly }
     }
 }
 
@@ -86,7 +86,7 @@ private struct AgentPanelButton: View {
 
     var body: some View {
         let waiting = workspace.cue.waiting, unread = workspace.cue.unread
-        Button { withAnimation(Motion.panel) { navigation.agentPanel.toggle() } } label: {
+        Button { withAnimation(Motion.snappy) { navigation.agentPanel.toggle() } } label: {
             Label { Text(workspace.cue.name) } icon: { CueMark(selected: navigation.agentPanel) }
                 .overlay(alignment: .topTrailing) { CueDot().offset(x: 3, y: -2) }
         }

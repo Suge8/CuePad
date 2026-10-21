@@ -23,9 +23,9 @@ struct AnswerLineTests {
         let gone = try await store.addCueMessage(.cue, text: "要发布吗？", ask: try CueAsking(.release, action: "发布 1.4.3"))
         _ = try await store.addCueMessage(.cue, text: "重连用例我也补上了。")
 
-        try await workspace.answerCueQuestion(push, CueAsk.once)
+        try await workspace.services.answerCueQuestion(push.id, CueAsk.once)
         let always = try #require(delete.choices?.last)
-        try await workspace.answerCueQuestion(delete, always)
+        try await workspace.services.answerCueQuestion(delete.id, always)
         _ = try await store.endCueQuestion(gone.id, .withdrawn)
 
         let thread = try await thread()
@@ -47,7 +47,7 @@ struct AnswerLineTests {
     @Test func 早先的提问_答完引用仍回得去() async throws {
         let old = try await store.addCueMessage(.cue, text: "要删掉旧脚本吗？", ask: try CueAsking(.delete, action: "删掉 scripts/billing-legacy 目录"))
         for index in 0..<CueThread.limit { _ = try await store.addCueMessage(.cue, text: "第 \(index) 句") }
-        try await Workspace(services: app.services).answerCueQuestion(old, CueAsk.once)
+        try await app.services.answerCueQuestion(old.id, CueAsk.once)
 
         let rows = try await thread().rows
         guard case .answer(let question) = rows.last else { Issue.record("最新的是你的回答"); return }

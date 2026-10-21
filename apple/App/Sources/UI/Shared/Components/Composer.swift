@@ -121,7 +121,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
         .modifier(CardPanels(on: accepts.contains(.cards), picking: $source.isOn(.cards), previewing: $previewing) {
             CardPicker(project: cardsFrom) { draft.attach($0) }
         } preview: { outbox in
-            AttachmentSheet(outbox: outbox, expand: { expand(outbox) })
+            AttachmentSheet(outbox: outbox) { expand(outbox) }
         })
         .task { await DebugHooks.presetComposer($draft, source: $source, store: workspace.services.store) }
     }

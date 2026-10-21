@@ -21,7 +21,7 @@ struct PageMenuSlot: View {
         var help: String {
             switch self {
             case .session: "完成或绑定任务、重命名、跳到终端、结束会话"
-            case .project: "选择灵感、新建任务、项目操作"
+            case .project: "选择灵感、看这个项目的会话、项目操作"
             case .cue: "记得什么"
             case .none: ""
             }
@@ -67,7 +67,8 @@ struct PageMenuSlot: View {
     }
 }
 
-/// 项目页"⋯"里的几项：进入批量选择（`CardPresses`，一条都还没选，点卡再选）、项目的操作。添加任务就在页上的任务区里。
+/// 项目页"⋯"里的几项：进入批量选择（`CardPresses`，一条都还没选，点卡再选）、看这个项目的会话（任务页与会话页共用的项目范围设成它，再去会话页）、项目的操作。
+/// 添加任务就在页上的任务区里。
 private struct ProjectMenuItems: View {
     let projectID: UUID
     @Environment(Workspace.self) private var workspace
@@ -76,6 +77,10 @@ private struct ProjectMenuItems: View {
         let ready = workspace.isLibraryReady
         Button("选择灵感", icon: CardMenu.Item.select.icon) { workspace.presses.beginSelecting() }
             .disabled(!ready || (workspace.catalog?.cardCounts[projectID] ?? 0) == 0)
+        Button("看这个项目的会话", icon: .session) {
+            workspace.projectScope = projectID
+            workspace.show(.agent)
+        }
         if let project = workspace.catalog?.project(projectID) {
             Divider()
             ProjectActions(project: project) { workspace.projectForm = .init(project: project) }

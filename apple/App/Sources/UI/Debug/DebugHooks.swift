@@ -31,6 +31,8 @@ enum DebugHooks {
         var taskFold = TaskFold()
         /// 整个窗口按"减弱动态效果"画（`-CuePadReduceMotion`，`PaletteProvider`）：验收时不碰系统设置。
         var reducesMotion = false
+        /// 整个窗口按最大的辅助字号画（`-CuePadLargestType`，`PaletteProvider`）：同上，不碰系统设置。
+        var largestType = false
         #if os(macOS)
         /// 正文以它开头的那张灵感卡、那条任务或那一行（回收站按名字）一出现就画成指针停着的样子（`-CuePadHover`）：后台截图里指针进不来，
         /// 合成的鼠标移动事件也不触发不在前台的应用的悬停。
@@ -106,6 +108,15 @@ enum DebugHooks {
         DebugScene.defaults.string(forKey: "CuePadCueBrain").map { URL(filePath: $0) }
         #else
         nil
+        #endif
+    }
+
+    /// 隔离库下这台 Mac 上一家 Agent 都找不到（`-CuePadNoAgents YES`）：看一家都没装时的接入面板，不用真去卸。
+    static var findsNoAgents: Bool {
+        #if DEBUG
+        DebugScene.defaults.bool(forKey: "CuePadNoAgents")
+        #else
+        false
         #endif
     }
 

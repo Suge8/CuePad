@@ -33,6 +33,7 @@ import Testing
     let zone = FakeZone(
       [page("v1", [version(of: sameOnServer), version(of: newer)], more: true), page("v2", [version(of: fresh)]), page("t1")],
       server: [sameOnServer, newer, fresh])
+    #expect(await rig.coordinator.state.reconciled == false)
 
     try await ZonePuller(source: zone, coordinator: rig.coordinator).pull()
 
@@ -41,6 +42,7 @@ import Testing
     #expect(Set(await zone.fetches.flatMap { $0 }) == [newer.recordID, fresh.recordID])  // 已同步的那条不取
     #expect(Set(try await store.cards(in: Project.defaultID).map(\.body)) == ["已同步", "别处改过", "别处新建"])
     #expect(try await store.syncState(ZonePuller.tokenKey) == Data("t1".utf8))
+    #expect(await rig.coordinator.state.reconciled)  // 对过一遍：别的设备写下的事实都到了
   }
 
   @Test func recordsPushedBeforeButGoneFromTheServerAreDeletedAndUnpushedOnesKept() async throws {

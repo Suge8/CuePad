@@ -85,7 +85,8 @@ nonisolated struct CueThread: Equatable, Sendable {
     /// 做完的结果点了名的图是结果卡，见 `rows`），
     /// 连着的几轮 Cue 自己醒来（每轮是它的经过那一行与它说的话，`CueNoteRound`）收成一格，隔了 `ChatTime.gap` 以上或跨了天另起一格；换新的地方一条分隔（点开是交接备忘）。
     /// 还在等你的不在对话里（只在输入框上方的"等你"里，一处），结束了才回到它原来的位置；你答了的，答的那一刻另有一格你的回答（`answer`）。
-    /// 设置里关了工具步骤时（`AppSettings.showsCueSteps`）不排经过：没有你发起的一轮的经过，动态里只留为什么醒与它说的话；它在做的事只在末尾一行（`CueEnding`）。
+    /// 设置里关了工具步骤时（`AppSettings.showsCueSteps`）不排经过：没有你发起的一轮的经过，动态里只留为什么醒与它说的话；
+    /// 它在做的事，自己醒来的一轮写在动态里那一节，你发起的一轮在末尾一行（`CueEnding`）。
     enum Row: Identifiable, Equatable, Sendable {
         case you(CueMessage)
         /// 你对一条提问的回答（选的那一项，`CueMessage.answer`；更旧版本存下的另外一句照原文），排在答的那一刻（`answeredAt`）；数据就是那条提问本身，
@@ -132,11 +133,11 @@ nonisolated struct CueThread: Equatable, Sendable {
             }
         }
 
-        /// 在跑的那一轮（`CueLiveRound.round`）的经过在这一格里：你发起的一轮的经过，或动态里调过工具的那一节（还没调过、关了工具步骤时在末尾一行）。
+        /// 在跑的那一轮（`CueLiveRound.round`）在这一格里：你发起的一轮的经过，或动态里它那一节（醒来时就写下了）。
         func contains(round: UUID) -> Bool {
             switch self {
             case .process(let message): message.id == round
-            case .notes(let rounds): rounds.contains { $0.row?.id == round && $0.row?.tools != nil }
+            case .notes(let rounds): rounds.contains { $0.row?.id == round }
             case .you, .answer, .cue, .result, .renewed: false
             }
         }

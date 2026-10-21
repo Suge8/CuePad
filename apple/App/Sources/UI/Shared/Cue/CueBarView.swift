@@ -113,8 +113,6 @@ struct CueStatusLine: View {
         .pending(services.isCatchingUp(on: cue.hostID), shown: $syncing)
     }
 
-    /// Cue 最近一句的墨色（Mac 侧栏名片的气泡）：是还没读的新消息时用正文墨色，不然最淡一档。
-    static func said(fresh: Bool, _ palette: Palette) -> Color { fresh ? palette.ink : palette.ink3 }
 
     private var shown: PiShown? {
         #if os(macOS)

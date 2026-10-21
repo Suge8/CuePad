@@ -68,8 +68,7 @@ nonisolated struct PiSessionList: Sendable, Equatable {
         let live = try store.piSessionPage(PiSessionQuery(scope: .current, text: text, project: project, limit: .max)).items
             .filter { $0.isCurrent(at: moment) }
         let deliveries = Dictionary(live.compactMap { item in item.delivery.map { (item.state.sessionID, $0) } }) { first, _ in first }
-        let order = Dictionary(uniqueKeysWithValues: PiSessionState.inListOrder(live.map(\.state), deliveries: deliveries, cue: try store.cueDuty(), at: moment).enumerated().map { ($1.id, $0) })
-        let now = live.sorted { order[$0.id, default: 0] < order[$1.id, default: 0] }
+        let now = PiSessionState.inListOrder(live, state: \.state, deliveries: deliveries, cue: try store.cueDuty(), at: moment)
         let history: History
         if project == nil, text.trimmingCharacters(in: .whitespaces).isEmpty {
             let ended = try store.piSessionGroups(PiSessionQuery(scope: .ended, text: text), each: groupHead)

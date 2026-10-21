@@ -2,8 +2,8 @@
 import CueStore
 import SwiftUI
 
-/// 项目页：最上面一行次要字（介绍、目录与灵感条数，`ProjectLine`）→ 任务 → 资料 → 工作集卡片墙 → 更早。
-/// 不写项目名作大标题：侧栏开着时名字就在选中的那一行，收起时工具栏的切换胶囊写它（`ProjectSwitcher`）。
+/// 项目页（与手机项目页同构）：最上面一行项目的一句介绍（没有就没有这一行）→ 任务那张纸（`FocusBand`）→ 资料 → 工作集卡片墙 → 更早；一条灵感都没有时墙上只有"记一条灵感"那一格（`NewIdeaTile`）。
+/// 不写项目名作大标题：侧栏开着时名字就在选中的那一行，收起时工具栏的切换胶囊写它（`ProjectSwitcher`）。文件夹在哪写在"⋯"里文件夹那一组的组头（`ProjectActions`）。
 struct ProjectPage: View {
     let projectID: UUID
     @Environment(Workspace.self) private var workspace
@@ -33,8 +33,6 @@ struct ProjectPage: View {
     private static let minColumnWidth: CGFloat = 260
     private static let maxColumns = 12
     private static let wallSpacing: CGFloat = 16
-    /// 空项目那一行"添加任务"的宽度上限：只是一行输入，跟着内容，不铺满整页（下面的空态是纸，与页面同宽）。
-    private static let emptyLineWidth: CGFloat = 460
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -51,7 +49,7 @@ struct ProjectPage: View {
                 // 不随滚动位置这种布局读数变（工具栏一变就重排整个窗口，跟着滚动位置变会形成布局循环）
                 if collapsed, let data, !data.tasks.isEmpty {
                     CompactFocus(data: data) {
-                        withAnimation(Motion.spatial(Motion.panel, reduceMotion: reduceMotion)) { proxy.scrollTo("top", anchor: .top) }
+                        withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { proxy.scrollTo("top", anchor: .top) }
                     }
                     .padding(.top, 8)
                     .ignoresSafeArea(edges: .top)
@@ -79,11 +77,13 @@ struct ProjectPage: View {
         }
     }
 
-    /// 最上面那行（介绍、目录、条数）取自项目目录，切换项目的第一帧就是新项目；卡片与任务读到后在其下出现。
+    /// 最上面那行介绍取自项目目录，切换项目的第一帧就是新项目；卡片与任务读到后在其下出现。
     @ViewBuilder private var content: some View {
-        let catalog = workspace.catalog
         VStack(alignment: .leading, spacing: Spacing.sectionTitle) {
-            ProjectLine(project: catalog?.project(projectID), directory: catalog?.directories[projectID], cardCount: catalog?.cardCounts[projectID] ?? 0)
+            if let intro = workspace.catalog?.project(projectID)?.intro {
+                Text(intro).font(Typography.secondary).foregroundStyle(palette.ink2)
+                    .lineLimit(1).truncationMode(.tail).help(intro).textSelection(.enabled)
+            }
             VStack(alignment: .leading, spacing: Spacing.section) {
                 if let data, let arrangement = board.arrangement, let shape { page(data, arrangement, shape) }
             }
@@ -95,18 +95,12 @@ struct ProjectPage: View {
     private func page(_ data: ProjectPageData, _ arrangement: WallArrangement, _ shape: PageShape) -> some View {
         let byID = shape.byID
         let lastTarget = shape.lastTarget
-        if stage < .focus {
-            EmptyView()
-        } else if !data.tasks.isEmpty || data.taskCounts.done > 0 {
-            // 没做完的都做完了也留着任务纸：纸底的"已完成"要能原地展开、点圆圈回到待办
-            FocusBand(data: data, position: $position, anchor: anchor)
-        } else {
-            // 一条任务都没有：不画一个只装着空态的大框，收成一行添加任务
-            NewTaskField(project: projectID).frame(maxWidth: Self.emptyLineWidth, alignment: .leading)
-        }
+        if stage >= .focus { FocusBand(data: data, position: $position, anchor: anchor) }
         if stage >= .wall {
             if data.cards.isEmpty {
-                EmptyProject(compact: !data.tasks.isEmpty)
+                MasonryLayout(minColumnWidth: Self.minColumnWidth, maxColumns: Self.maxColumns, spacing: Self.wallSpacing) {
+                    NewIdeaTile(action: workspace.focusCapture)
+                }
             } else {
                 if !arrangement.pinned.isEmpty { resources(arrangement.pinned.compactMap { byID[$0] }, lastTarget: lastTarget) }
                 if !arrangement.wall.isEmpty {
@@ -186,59 +180,6 @@ private struct PageShape: Equatable {
         byID = Dictionary(uniqueKeysWithValues: data.cards.map { ($0.id, $0) })
         lastTarget = data.lastTarget
         older = data.olderGroups(arrangement)
-    }
-}
-
-/// 项目页最上面的一行次要字：介绍（一行，截断时悬停看全文）· 项目在这台 Mac 上的文件夹（绑着的写路径，带"在访达中显示"；
-/// 没绑的写开工时会建好的工作区）与"换文件夹…" · 几条灵感。路径写短（`Workspaces.shown`，悬停看全路径）：它说的是活在哪干，
-/// 一眼认得出就够，不收进菜单。
-private struct ProjectLine: View {
-    let project: Project?
-    /// 这台 Mac 上绑着的文件夹；没绑为 nil。
-    let directory: String?
-    let cardCount: Int
-    @Environment(Workspace.self) private var workspace
-    @Environment(AppServices.self) private var services
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        HStack(spacing: 4) {
-            if let intro = project?.intro {
-                Text(intro).foregroundStyle(palette.ink2).lineLimit(1).truncationMode(.tail).help(intro).textSelection(.enabled)
-                Dot()
-            }
-            if let project { folder(project).layoutPriority(1) }
-            if cardCount > 0 {
-                Dot()
-                Text("\(cardCount) 条灵感").monospacedDigit().layoutPriority(1)
-            }
-        }
-        .font(Typography.secondary).foregroundStyle(palette.ink3)
-    }
-
-    private func folder(_ project: Project) -> some View {
-        let path = directory ?? services.workspaces.directory(for: project.name).path(percentEncoded: false)
-        return HStack(spacing: 8) {
-            Label(services.workspaces.shown(path), icon: .folder).lineLimit(1).truncationMode(.middle).textSelection(.enabled)
-                .help(directory == nil ? "第一次在这台 Mac 上开工时建好" : path)
-            if let directory {
-                Button("在访达中显示") { NSWorkspace.shared.activateFileViewerSelecting([URL(filePath: directory, directoryHint: .isDirectory)]) }
-                    .buttonStyle(ControlButtonStyle(kind: .secondary, compact: true))
-            } else {
-                Text("开工时建好").lineLimit(1)
-            }
-            Button("换文件夹…") { workspace.chooseFolder(for: project) }
-                .buttonStyle(ControlButtonStyle(kind: .secondary, compact: true))
-        }
-    }
-}
-
-private struct EmptyProject: View {
-    let compact: Bool
-    @Environment(Workspace.self) private var workspace
-
-    var body: some View {
-        EmptyIdeas(compact: compact, write: workspace.focusCapture, speak: { workspace.show(.cue) }).padding(.top, compact ? 0 : 48)
     }
 }
 

@@ -11,7 +11,7 @@ extension PiConfigControls where Trailing == EmptyView {
     ) {
         self.init(
             agent: choice.agent.map { PiAgentPick(kinds: choice.agents.map(\.kind), current: $0, choose: chooseAgent) },
-            groups: choice.groups(choose: chooseModel), shown: PiConfigShown(model: choice.current, thinking: choice.shownThinking, pending: false),
+            models: choice.menu(choose: chooseModel), shown: PiConfigShown(model: choice.current, thinking: choice.shownThinking, pending: false),
             unnamed: "默认模型", levels: choice.levels, opening: opening, chooseThinking: chooseThinking)
     }
 }
@@ -46,16 +46,10 @@ nonisolated struct AgentModelChoice: Equatable, Sendable {
 
     var shownThinking: PiThinkingLevel? { thinking.map { $0.clamped(to: levels) } }
 
-    @MainActor func groups(choose: @escaping (PiModelKey?) -> Void) -> [PiModelGroup] {
-        guard let brain else { return [] }
-        let current = current?.key
-        return PiModelLabel.groups(brain.models).map { group in
-            PiModelGroup(id: group.provider.id, provider: group.provider, items: group.models.map { option in
-                let isDefault = option.key == brain.model
-                return PiModelGroup.Item(id: "\(option.key.provider)/\(option.key.id)", model: option, isDefault: isDefault, checked: option.key == current) {
-                    choose(isDefault ? nil : option.key)
-                }
-            })
+    /// 选了不指定时用的那项写回 nil：跟着这家的默认走。
+    @MainActor func menu(choose: @escaping (PiModelKey?) -> Void) -> PiModelMenu {
+        PiModelMenu(models: brain?.models ?? [], defaultModel: brain?.model, current: current?.key) { option in
+            choose(option.key == brain?.model ? nil : option.key)
         }
     }
 }

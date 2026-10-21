@@ -31,8 +31,8 @@ nonisolated struct CueNoteRound: Identifiable, Equatable, Sendable {
 
     var id: UUID { row?.id ?? said[0].id }
     var date: Date { row?.createdAt ?? said[0].createdAt }
-    /// 只看了看：没动手、没说话（写"没动手"，连着几次并成一行）
-    var quiet: Bool { said.isEmpty && !acted && header != nil }
+    /// 只看了看：做完了（不是在跑的 `live` 那一轮）、没动手、没说话（写"没动手"，连着几次并成一行）
+    func quiet(live: UUID?) -> Bool { said.isEmpty && !acted && header != nil && id != live }
     /// 什么都不显示：没有醒来原因、没说话、清单也不显示
     var isEmpty: Bool { header == nil && said.isEmpty && row?.tools == nil }
 
@@ -84,13 +84,13 @@ nonisolated struct CueWakeHeader: Equatable, Sendable {
                 }
             }
             let latest = stirs.last
-            (lead, name) = (places.isEmpty ? "会话有动静" : nil, places.first?.title)
+            (lead, name) = (places.isEmpty ? Self.phrase(wake) : nil, places.first?.title)
             trail = places.isEmpty ? nil : places.count > 1 ? "等 \(places.count) 处有动静" : latest.map { Self.verb($0.kind) }
             failed = latest.map { [.failed, .undelivered].contains($0.kind) } ?? false
             targets = places.compactMap { place in place.target.map { Place(title: place.title, target: $0) } }
         case .reminder(let ids):
             let first = ids.lazy.compactMap { names.lines[$0] }.first
-            (lead, name, failed) = ("提醒到点", first.map { PiProgress.firstLine($0) ?? $0 }, false)
+            (lead, name, failed) = (Self.phrase(wake), first.map { PiProgress.firstLine($0) ?? $0 }, false)
             trail = ids.count > 1 ? "等 \(ids.count) 条" : nil
             targets = first.map { [Place(title: $0, target: .memory)] } ?? []
         case .enabled, .message, .idle, .renewed, .settingsChanged:

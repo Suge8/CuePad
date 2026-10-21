@@ -50,11 +50,11 @@ struct AttachmentButton<Label: View>: View {
     }
 }
 
-/// 点开带上的卡片：标题在顶栏、正文在下（不重复标题），"展开编辑"把它变成这次要发的文字（只对卡片）。
+/// 点开带上的卡片：标题在顶栏、正文在下（不重复标题），"展开编辑"把它变成这次要发的文字。
 /// 面板宽固定、高随内容，最高到 `macSize`，再长就在里面滚。
 struct AttachmentSheet: View {
     let outbox: Outbox
-    let expand: (() -> Void)?
+    let expand: () -> Void
     @Environment(\.palette) private var palette
     @State private var contentHeight: CGFloat = 0
 
@@ -65,9 +65,9 @@ struct AttachmentSheet: View {
     var body: some View {
         VStack(spacing: 10) {
             PanelHeader(title: CardText(outbox.content).label) {
-                if let expand { Button("展开编辑", action: expand) }
+                Button("展开编辑", action: expand)
             }
-            AttachmentBody(content: outbox.content, omitsTitle: true, height: $contentHeight)
+            AttachmentBody(content: outbox.content, height: $contentHeight)
         }
         .padding(.top, 18)
         .frame(width: Self.macSize.width, height: min(Self.macSize.height, contentHeight + Self.macBar))

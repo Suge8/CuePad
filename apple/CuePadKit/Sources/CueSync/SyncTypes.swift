@@ -100,12 +100,18 @@ public struct SyncState: Equatable, Sendable {
   public var alerts: PiAlertSubscriptionStatus
   /// 在一页页地拉积压（没有令牌时的对账，或一拉不止一页）：本机的数据还没跟上服务器。上传不算（`status` 的 `.syncing` 两者都算）。
   public var catchingUp: Bool
+  /// 这台的库和 iCloud 完整对过至少一遍：库里有同步区令牌（拉完第一遍才存，换账号、云端数据被删或重置时清掉）。
+  /// 没对过时，别的设备写下的事实（Cue 在哪台启用）可能还没到。
+  public var reconciled: Bool
 
-  public init(status: SyncStatus, issues: [SyncIssue], alerts: PiAlertSubscriptionStatus = .off, catchingUp: Bool = false) {
+  public init(
+    status: SyncStatus, issues: [SyncIssue], alerts: PiAlertSubscriptionStatus = .off, catchingUp: Bool = false, reconciled: Bool = false
+  ) {
     self.status = status
     self.issues = issues
     self.alerts = alerts
     self.catchingUp = catchingUp
+    self.reconciled = reconciled
   }
 }
 

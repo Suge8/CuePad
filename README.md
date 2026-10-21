@@ -42,7 +42,7 @@ cuepad task done <id>
 
 Run inside a directory that a project is bound to and it works on that project by default. `--json` gives stable output for agents. `cuepad --help` and `cuepad <command> --help` are the full reference.
 
-**Works with Pi, Claude Code, Codex and OpenCode — both ways.** On first launch (and any time in Settings → Agent) flip a switch per agent. CuePad then sees that agent's sessions live, sends your tasks and messages into them, answers its questions and permission requests from your Mac or phone, starts sessions in the background, and the agent can put ideas, tasks and phone previews into CuePad with `cuepad`. Each agent gets one small skill in its own folder (`~/.pi/agent/skills`, `~/.claude/skills`, `~/.codex/skills`, `~/.config/opencode/skills`); Pi also gets the bridge extension, Claude Code and Codex get hooks in their settings, and OpenCode (version 2) needs nothing more — CuePad talks to its background server. Nothing is written until you flip it, and switching it off removes everything CuePad wrote. The same place can link `cuepad` into `~/.local/bin` for your own terminal.
+**Works with Pi, Claude Code, Codex and OpenCode — both ways.** On first launch one panel connects the agents it finds and turns on Cue on this Mac, in one click; later, flip a switch per agent in Settings → Agent. CuePad then sees that agent's sessions live, sends your tasks and messages into them, answers its questions and permission requests from your Mac or phone, starts sessions in the background, and the agent can put ideas, tasks and phone previews into CuePad with `cuepad`. Each agent gets one small skill in its own folder (`~/.pi/agent/skills`, `~/.claude/skills`, `~/.codex/skills`, `~/.config/opencode/skills`); Pi also gets the bridge extension, Claude Code and Codex get hooks in their settings, and OpenCode (version 2) needs nothing more — CuePad talks to its background server. Nothing is written until you confirm, and switching it off removes everything CuePad wrote. The same place can link `cuepad` into `~/.local/bin` for your own terminal.
 
 ## Download
 
@@ -50,20 +50,23 @@ Get the latest Mac build from [GitHub Releases](https://github.com/Suge8/CuePad/
 
 ## Build from source
 
-Requires Xcode 27. Local builds are ad-hoc signed, so no developer account is needed.
+Requires macOS 26 and Xcode 27; no developer account or signing setup.
 
 ```bash
 git clone https://github.com/Suge8/CuePad.git
-cd CuePad
-apple/scripts/xc.sh build mac    # also: build ios, test mac, shot mac
-apple/scripts/xc.sh test kit     # shared package tests
+open CuePad/apple/CuePad.xcodeproj    # choose My Mac as the destination, then ⌘R
 ```
 
-Commands and conventions for contributors: [AGENTS.md](AGENTS.md) and [docs/](docs/).
+Your build is ad-hoc signed and keeps its own library in `~/Library/Application Support/CuePad Dev`, apart from the released app's. From the command line (`check` needs `brew install ripgrep`):
+
+```bash
+cd CuePad
+apple/scripts/xc.sh build mac    # also: build ios, test mac, test kit, check
+```
 
 ## Contributing
 
-Contributions are welcome — see [CONTRIBUTING.md](.github/CONTRIBUTING.md), and [SECURITY.md](.github/SECURITY.md) for reporting vulnerabilities.
+Contributions are welcome — see [CONTRIBUTING.md](.github/CONTRIBUTING.md) (project conventions live in [AGENTS.md](AGENTS.md)), and [SECURITY.md](.github/SECURITY.md) for reporting vulnerabilities.
 
 ## License
 

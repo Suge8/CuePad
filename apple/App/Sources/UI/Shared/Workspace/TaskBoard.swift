@@ -74,7 +74,6 @@ nonisolated struct TaskBoard: Sendable, Equatable {
 
     static let empty = TaskBoard(todo: [], advancing: [], waiting: [], done: [], earlier: [])
 
-    /// 列头的数。
     func count(_ column: Column) -> Int {
         switch column {
         case .todo: todo.count

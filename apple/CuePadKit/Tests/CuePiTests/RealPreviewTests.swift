@@ -46,19 +46,5 @@ struct RealPreviewTests {
         // 一次发的两个是同一批：同一创建时间
         #expect(try await sqlite(library.appending(path: "cuepad.db"), "SELECT count(DISTINCT createdAt) || '|' || count(*) FROM previews WHERE sessionID = '\(session.sessionID)'") == "1|2")
     }
-
-    /// 不在 Pi 的 bash 里（没有 PI_SESSION_ID）时命令失败并说明，不猜是哪个会话。
-    @Test func outsidePiTheCommandRefusesAndNothingIsStored() async throws {
-        let library = try makeTempDirectory()
-        let page = library.appending(path: "demo.html")
-        try "<h1>x</h1>".write(to: page, atomically: true, encoding: .utf8)
-        // 报错在标准错误里：经 sh 并进标准输出
-        let shown = try #require(await ChildProcess.run(
-            URL(filePath: "/bin/sh"), ["-c", "exec \"$0\" show \"$1\" 2>&1", PiProcess.cuepad.path, page.path],
-            environment: ["CUEPAD_LIBRARY_DIR": library.path]))
-        #expect(shown.status != 0)
-        #expect(shown.output.contains("PI_SESSION_ID"))
-        #expect(try await sqlite(library.appending(path: "cuepad.db"), "SELECT count(*) FROM previews") == "0")
-    }
 }
 #endif

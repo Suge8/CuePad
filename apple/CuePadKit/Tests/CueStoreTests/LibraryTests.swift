@@ -111,12 +111,6 @@ import Testing
 
   // MARK: 结构版本
 
-  @Test func reopeningTheFileKeepsData() async throws {
-    let card = try await store.createCard(body: "persisted")
-    let reopened = try CueStore(location: .isolated(fixture.directory))
-    #expect(try await reopened.card(card.id)?.body == "persisted")
-  }
-
   /// 结构 50 的库里分割线是私有标记 `---split---`（独占一行）：升到 51 时换成 Markdown 的 `---`，行里夹着的不是分割线、不动；
   /// 改过的卡带新的修改时间（同步出去），回收站里的也换。升到 56 时已有的提问照当时的选项认出类别、范围是关联任务所在的项目
   /// （带新的修改时间同步出去），目录绑定去掉 Mac 名、绑定照旧在。

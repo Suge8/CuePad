@@ -175,7 +175,7 @@ struct RootShortcuts: View {
             Button("对 Cue 说") { navigation.speakToCue() }.keyboardShortcut("n", modifiers: [.command, .shift])
             Button("设置") { navigation.select(.settings) }.keyboardShortcut(",")
             Button("侧栏") {
-                withAnimation(Motion.panel) { navigation.sidebar = navigation.sidebar == .detailOnly ? .automatic : .detailOnly }
+                withAnimation(Motion.snappy) { navigation.sidebar = navigation.sidebar == .detailOnly ? .automatic : .detailOnly }
             }
             .keyboardShortcut("\\")
             Button("任务") { navigation.show(.tasks) }.keyboardShortcut("t", modifiers: [.command, .shift])

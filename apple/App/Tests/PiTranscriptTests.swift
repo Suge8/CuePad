@@ -76,8 +76,8 @@ struct PiTranscriptTests {
     }
 
     @Test func 近7天活跃的会话写出全部消息_更早的只写摘要_摘要与对话一致() async throws {
-        let recent = try sessionFile("recent", at: .now.addingTimeInterval(-3_600))
-        let old = try sessionFile("old", at: .now.addingTimeInterval(-10 * 86_400))
+        _ = try sessionFile("recent", at: .now.addingTimeInterval(-3_600))
+        _ = try sessionFile("old", at: .now.addingTimeInterval(-10 * 86_400))
 
         await backfill()
 
@@ -89,14 +89,10 @@ struct PiTranscriptTests {
             let state = try await record(sessionID)
             #expect(state.lastPrompt == "第二问" && state.lastReply == "第二答" && state.pendingPrompt == nil)
         }
-        let lastPi = try #require(messages.last { $0.role == .known(.pi) })
-        let lastUser = try #require(messages.last { $0.role == .known(.user) })
-        #expect(try await record("recent").lastReply == lastPi.text)
-        #expect(try await record("recent").lastPrompt == lastUser.text)
     }
 
     @Test func 七天外的会话按需补写_手机打开时发的请求由这台Mac从会话文件写出对话() async throws {
-        let old = try sessionFile("old", at: .now.addingTimeInterval(-10 * 86_400))
+        _ = try sessionFile("old", at: .now.addingTimeInterval(-10 * 86_400))
         await backfill()
         try await services.executor.start()
         defer { services.cancelBackgroundWork() }

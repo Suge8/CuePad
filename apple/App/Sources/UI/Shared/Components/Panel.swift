@@ -10,7 +10,6 @@ extension EnvironmentValues {
     @Entry var closePanel = ClosePanel {}
 }
 
-/// 弹层的摆法。
 enum PanelStyle: Equatable {
     /// Mac 上居中浮层的圆角（内容自己画底时也用它，如 ⌘K 的玻璃）。
     static let radius: CGFloat = 16

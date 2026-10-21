@@ -89,8 +89,9 @@ nonisolated enum PiModelName {
         return name.isEmpty ? model : name
     }
 
-    /// 有显示名用显示名，没有用 id。
-    static func short(_ model: PiModelOption) -> String {
-        short(model.name.isEmpty ? model.key.id : model.name)
-    }
+    static func short(_ model: PiModelOption) -> String { short(model.displayName) }
+}
+
+nonisolated extension PiModelOption {
+    var displayName: String { name.isEmpty ? key.id : name }
 }

@@ -22,44 +22,25 @@ struct PiAgentPick {
 }
 
 
-/// 模型菜单的一组：一家提供方与它能选的模型（组名是提供方的名字，这家有订阅额度时带用量，`PiModelLabel.title`，到了重置时刻随即更新）；
-/// 选了做什么由调用方给。
-struct PiModelGroup: Identifiable {
-    let id: String
-    let provider: PiProvider
-    let items: [Item]
+/// 模型菜单，两端同一份：可选的模型按提供方分组（`PiModelLabel.groups`），组名写提供方与它的额度用量（`PiModelLabel.title`，到了 `now` 按已重置算）；
+/// 每项的名字与标志按模型定（`BrandMark.model`），不指定模型时用的那项（`defaultModel`，新会话与 Cue）在名字下注"默认"，当前打勾。选了做什么由调用方给。
+struct PiModelMenu {
+    let models: [PiModelOption]
+    var defaultModel: PiModelKey?
+    let current: PiModelKey?
+    let choose: (PiModelOption) -> Void
 
-    /// 一项：一个模型。名字与标志都按模型定（`BrandMark.model`），这里一处；不指定模型时用的那项（新会话与 Cue）在名字下注"默认"。
-    struct Item: Identifiable {
-        let id: String
-        let model: PiModelOption
-        var isDefault = false
-        let checked: Bool
-        let choose: () -> Void
-
-        var name: String { model.displayName }
-        var note: String? { isDefault ? "默认" : nil }
-        var mark: BrandMark? { BrandMark.model(model) }
-    }
-}
-
-extension [PiModelGroup] {
-    /// 模型菜单的内容，两端同一份：组名写提供方与它的额度用量（`PiModelLabel.title`，到了 `now` 按已重置算）。
-    func menu(quotas: [AccountQuota], at now: Date) -> [ChoiceMenu.Section] {
-        map { group in
+    func sections(quotas: [AccountQuota], at now: Date) -> [ChoiceMenu.Section] {
+        PiModelLabel.groups(models).map { group in
             ChoiceMenu.Section(
                 title: PiModelLabel.title(group.provider, quotas: quotas, at: now), image: group.provider.mark.map(ChoiceMenu.Glyph.brand),
-                choices: group.items.map { item in
+                choices: group.models.map { model in
                     ChoiceMenu.Choice(
-                        title: item.name, subtitle: item.note, image: item.mark.map(ChoiceMenu.Glyph.brand), checked: item.checked, choose: item.choose)
+                        title: model.displayName, subtitle: model.key == defaultModel ? "默认" : nil, image: BrandMark.model(model).map(ChoiceMenu.Glyph.brand),
+                        checked: model.key == current) { choose(model) }
                 })
         }
     }
-}
-
-extension PiModelOption {
-    /// 有显示名用显示名，没有用 id。
-    var displayName: String { name.isEmpty ? key.id : name }
 }
 
 
@@ -71,7 +52,7 @@ extension PiModelOption {
 struct PiConfigControls<Trailing: View>: View {
     /// 最左的 Agent 胶囊；会话的 Agent 换不了，不给。
     var agent: PiAgentPick?
-    let groups: [PiModelGroup]
+    let models: PiModelMenu
     let shown: PiConfigShown
     /// 胶囊上没有当前模型时写的。
     let unnamed: String
@@ -90,12 +71,12 @@ struct PiConfigControls<Trailing: View>: View {
     #endif
 
     init(
-        agent: PiAgentPick? = nil, groups: [PiModelGroup], shown: PiConfigShown, unnamed: String = "模型", levels: [PiThinkingLevel],
+        agent: PiAgentPick? = nil, models: PiModelMenu, shown: PiConfigShown, unnamed: String = "模型", levels: [PiThinkingLevel],
         opening: Binding<PiConfigPick?> = .constant(nil), chooseThinking: @escaping (PiThinkingLevel) -> Void,
         @ViewBuilder trailing: () -> Trailing = { EmptyView() }
     ) {
         self.agent = agent
-        self.groups = groups
+        self.models = models
         self.shown = shown
         self.unnamed = unnamed
         self.levels = levels
@@ -142,11 +123,11 @@ struct PiConfigControls<Trailing: View>: View {
 
     private var modelCapsule: some View {
         #if os(macOS)
-        PiModelCapsule(groups: groups, current: shown.model, unnamed: unnamed, pending: shown.pending,
+        PiModelCapsule(models: models, current: shown.model, unnamed: unnamed, pending: shown.pending,
                        maxWidth: PiModelLabel.capsuleWidth(available: available), quotas: services.accountQuotas.items) { open(.model) }
             .popUpAnchor(anchors[.model])
         #else
-        PiModelCapsule(groups: groups, current: shown.model, unnamed: unnamed, pending: shown.pending,
+        PiModelCapsule(models: models, current: shown.model, unnamed: unnamed, pending: shown.pending,
                        maxWidth: PiModelLabel.capsuleWidth(available: available), quotas: services.accountQuotas.items)
         #endif
     }
@@ -166,21 +147,15 @@ struct SessionConfigControls: View {
     @Environment(AppServices.self) private var services
 
     var body: some View {
-        PiConfigControls(groups: groups, shown: shown, levels: shown.model?.thinkingLevels ?? [], opening: opening) {
+        PiConfigControls(models: menu, shown: shown, levels: shown.model?.thinkingLevels ?? [], opening: opening) {
             configure(PiConfig(thinking: $0))
         } trailing: {
             if let meter = shown.context.flatMap(PiContextMeter.init) { PiContextGauge(session: session, meter: meter) }
         }
     }
 
-    private var groups: [PiModelGroup] {
-        PiModelLabel.groups(models).map { group in
-            PiModelGroup(id: group.provider.id, provider: group.provider, items: group.models.map { model in
-                PiModelGroup.Item(id: "\(model.key.provider)/\(model.key.id)", model: model, checked: shown.model?.key == model.key) {
-                    configure(PiConfig(model: model.key))
-                }
-            })
-        }
+    private var menu: PiModelMenu {
+        PiModelMenu(models: models, current: shown.model?.key) { configure(PiConfig(model: $0.key)) }
     }
 
     private func configure(_ config: PiConfig) {

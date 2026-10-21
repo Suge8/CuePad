@@ -6,7 +6,7 @@ import SwiftUI
 /// 有订阅额度的提供方：标志外一圈细环是卡着的那个窗口还剩多少（`ModelBadge`），没给组名的分组标题写各窗口还剩多少
 /// （`PiModelLabel.title`，Mac 的 AppKit 菜单同一份，见 `PiConfigControls.open`）；到了重置时刻随即按已重置画（`Moments`）。
 struct PiModelCapsule: View {
-    let groups: [PiModelGroup]
+    let models: PiModelMenu
     let current: PiModelOption?
     let unnamed: String
     let pending: Bool
@@ -29,7 +29,7 @@ struct PiModelCapsule: View {
             .accessibilityLabel("模型")
             .accessibilityValue(spoken(at: now))
         #else
-        MenuButton(sections: groups.menu(quotas: quotas, at: now), accessibilityLabel: "模型", value: spoken(at: now)) {
+        MenuButton(sections: models.sections(quotas: quotas, at: now), accessibilityLabel: "模型", value: spoken(at: now)) {
             label(at: now)
         }
         #endif

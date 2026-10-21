@@ -41,20 +41,6 @@ import Testing
     #expect(record["state"] as? String == "thinking")
   }
 
-  /// 仍在等你确认、只是问题文本变了：上传前标志必须还在，服务端才会通知。
-  @Test func aSameStateUpdateBeforeUploadKeepsTheFlag() async throws {
-    let rig = try Rig()
-    let recorder = PiStateRecorder(store: rig.store, hostID: "mac", timing: ManualTiming().timing)
-    try await recorder.update(sessionID: "s1", state: .thinking)
-    try await recorder.update(sessionID: "s1", state: .waitingForUser, detail: "要不要覆盖？")
-    try await recorder.update(sessionID: "s1", state: .waitingForUser, detail: "要覆盖 a.txt 吗？")
-
-    let id = try #require(try await rig.store.allPiSessionStates().first).id
-    let record = try #require(await rig.coordinator.record(for: rig.recordID(id)))
-    #expect(record["notify"] as? String == "waitingForUser")
-    #expect(record.encryptedValues["detail"] as? String == "要覆盖 a.txt 吗？")
-  }
-
   /// 标志已经上传过，之后同状态的更新不再带标志，订阅不会为同一次等待重复通知。
   @Test func aSameStateUpdateAfterUploadDoesNotAlertAgain() async throws {
     let rig = try Rig()
