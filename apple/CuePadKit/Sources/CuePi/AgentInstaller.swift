@@ -57,7 +57,8 @@ extension AgentIntegration {
     /// 起这家的命令行登录（`AgentKind.loginArguments`），用检测挑中的那个可执行文件；返回时进程已起，它打开浏览器、等你登录完。
     public func startLogin(_ kind: AgentKind, executable: URL) async throws -> ChildProcess {
         let environment = await locate().environment(launching: executable, overrides: paths.environment)
-        return try await ChildProcess.launch(executable, kind.loginArguments ?? [], environment: environment)
+        // 标准输入、输出、错误都是空设备，自成进程组：调用方 `waitForExit()` 等它结束、`end()` 提前结束它
+        return try await ChildProcess(executable, kind.loginArguments ?? [], environment: environment, placement: .group, keepErrors: false)
     }
 
     /// 开终端登录 Pi 的脚本（Pi 只能在它的终端界面里 /login）：带上 CuePad 起 Pi 时的家目录、PATH（node 在里面）与 Pi 的环境
