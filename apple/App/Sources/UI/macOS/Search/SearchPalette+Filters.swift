@@ -4,7 +4,6 @@ import SwiftUI
 
 struct FilterBar: View {
     @Binding var query: PaletteQuery
-    let projects: [Project]
     let targets: [SendTarget]
     let total: Int?
     @Environment(\.palette) private var palette
@@ -14,7 +13,7 @@ struct FilterBar: View {
         HStack(spacing: 12) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
-                    SearchFilters(query: $query, projects: projects, targets: targets) { name, value, on in
+                    SearchFilters(query: $query, targets: targets) { name, value, on in
                         FilterCapsule(name: name, value: value, on: on)
                     }
                 }

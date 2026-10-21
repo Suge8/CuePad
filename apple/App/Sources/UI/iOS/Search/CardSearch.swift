@@ -1,25 +1,6 @@
 #if os(iOS)
-import CueStore
 import SwiftUI
 import UIKit
-
-nonisolated private struct SearchData: Sendable, Equatable {
-    var groups: [Group]
-    var total: Int
-    var shown: Int
-    var targets: [SendTarget]
-
-    struct Group: Identifiable, Sendable, Equatable {
-        var id: UUID
-        var project: Project?
-        var cards: [CardEntry]
-    }
-
-    static func grouped(_ cards: [Card], projects: [Project]) -> [Group] {
-        let byID = Dictionary(uniqueKeysWithValues: projects.map { ($0.id, $0) })
-        return CardGroup.byProject(cards).map { Group(id: $0.id, project: byID[$0.id], cards: $0.cards.map(CardEntry.init)) }
-    }
-}
 
 /// 卡片搜索的结果（搜索页"灵感与任务"一栏）：筛选胶囊（右边写命中"N 条"）+ 按项目分组的卡片（多个词都要命中，最近修改在前）。
 struct CardSearchResults: View {
@@ -28,7 +9,7 @@ struct CardSearchResults: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @Environment(\.horizontalSizeClass) private var sizeClass
-    @State private var data: SearchData?
+    @State private var data: CardMatches?
     /// 拿去搜的条件：输入法组字（拼音还没上屏）时不跟着变，上屏后再搜，结果不随每个字母闪"未找到"。
     @State private var settled: PaletteQuery?
 
@@ -43,7 +24,7 @@ struct CardSearchResults: View {
             LazyVStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 8) {
                     ChipRow {
-                        SearchFilters(query: $query, projects: workspace.catalog?.projects ?? [], targets: data?.targets ?? []) { name, value, on in
+                        SearchFilters(query: $query, targets: data?.targets ?? []) { name, value, on in
                             Chip(name: name, value: value, on: on)
                         }
                     }
@@ -59,9 +40,10 @@ struct CardSearchResults: View {
                         EmptyState.noMatch(shown.text).padding(.top, 24)
                     }
                     ForEach(data.groups) { group in
+                        let project = workspace.catalog?.project(group.id)
                         HStack(spacing: 6) {
-                            ProjectGlyph(project: group.project, size: 12)
-                            SectionHeader(title: group.project?.name ?? "", count: nil).padding(.horizontal, -4)
+                            ProjectGlyph(project: project, size: 12)
+                            SectionHeader(title: project?.name ?? "", count: nil).padding(.horizontal, -4)
                         }
                         .padding(.top, 8)
                         LazyVGrid(columns: columns, alignment: .leading, spacing: 12) {
@@ -69,7 +51,7 @@ struct CardSearchResults: View {
                         }
                     }
                     if data.total > data.shown {
-                        Button("还有 \(data.total - data.shown) 条") { query.pages += 1 }
+                        Button(CountCopy.more(data.total - data.shown)) { query.pages += 1 }
                             .frame(maxWidth: .infinity).padding()
                     }
                 }
@@ -81,10 +63,7 @@ struct CardSearchResults: View {
         .onAppear { settled = query }
         .onChange(of: query) { if !TextComposition.isComposing { settled = query } }
         .observing(services.store, id: shown, into: $data, onError: workspace.fail) { [shown] store in
-            let found = try store.search(shown.store(), limit: PaletteQuery.pageSize * shown.pages)
-            return SearchData(
-                groups: SearchData.grouped(found.cards, projects: try store.projects()), total: found.totalCards, shown: found.cards.count,
-                targets: try store.sendTargets())
+            try CardMatches.read(shown, from: store)
         }
     }
 }

@@ -58,10 +58,27 @@ nonisolated extension SendTarget {
     var filterID: String { "\(kind.rawValue)/\(name)" }
 }
 
+/// 卡片搜索读到的一页（Mac ⌘K 与手机搜索页同一份读法）：按项目分组的结果、总数，与"发给过谁"菜单里能选的目标。
+/// 摘要在 Store 执行体上算好（`CardEntry`），渲染时不解析正文；项目名与图标从 `Workspace.catalog` 读，这里不另存一份。
+nonisolated struct CardMatches: Sendable, Equatable {
+    var groups: [CardGroup]
+    var total: Int
+    var targets: [SendTarget]
+
+    /// 按分组的顺序排开，即界面上从上到下（方向键也照这个走）。
+    var entries: [CardEntry] { groups.flatMap(\.cards) }
+    var shown: Int { groups.reduce(0) { $0 + $1.cards.count } }
+
+    static func read(_ query: PaletteQuery, from store: isolated CueStore) throws -> CardMatches {
+        let found = try store.search(query.store(), limit: PaletteQuery.pageSize * query.pages)
+        return CardMatches(groups: CardGroup.byProject(found.cards), total: found.totalCards, targets: try store.sendTargets())
+    }
+}
+
 /// 搜索结果里一个项目的那几张（`id` 是项目）。
 nonisolated struct CardGroup: Identifiable, Equatable, Sendable {
     let id: UUID
-    var cards: [Card]
+    var cards: [CardEntry]
 
     /// 按项目分组，组按首次出现的顺序：结果最相关的在前，组也一样。
     static func byProject(_ cards: [Card]) -> [CardGroup] {
@@ -69,10 +86,10 @@ nonisolated struct CardGroup: Identifiable, Equatable, Sendable {
         var index: [UUID: Int] = [:]
         for card in cards {
             if let at = index[card.projectID] {
-                groups[at].cards.append(card)
+                groups[at].cards.append(CardEntry(card))
             } else {
                 index[card.projectID] = groups.count
-                groups.append(CardGroup(id: card.projectID, cards: [card]))
+                groups.append(CardGroup(id: card.projectID, cards: [CardEntry(card)]))
             }
         }
         return groups

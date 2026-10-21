@@ -2,15 +2,17 @@ import CueStore
 import SwiftUI
 
 /// 搜索的四个筛选（项目、含图片、发给过哪个 Agent、时间）：有哪几项、菜单里列什么、生效时写什么两端同一份，胶囊的样子由调用方给（`chip`）。
-/// 菜单与按钮的样式跟外面的环境（Mac 在外面套 `PressStyle`）。
+/// 项目列表读 `Workspace.catalog`，目标读这一页结果（`CardMatches.targets`）。菜单与按钮的样式跟外面的环境（Mac 在外面套 `PressStyle`）。
 struct SearchFilters<Chip: View>: View {
     @Binding var query: PaletteQuery
-    let projects: [Project]
     let targets: [SendTarget]
     /// 名字、取值（开关没有取值，也没有菜单）、生效没有。
     @ViewBuilder let chip: (_ name: String, _ value: String?, _ on: Bool) -> Chip
 
+    @Environment(Workspace.self) private var workspace
+
     var body: some View {
+        let projects = workspace.catalog?.projects ?? []
         menu("项目", query.projectLabel(in: projects), on: query.project != nil) {
             Button("全部") { query.project = nil }
             Divider()
