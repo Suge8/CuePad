@@ -52,6 +52,8 @@ enum DebugHooks {
         var cuePanelEnd = false
         /// 会话页顶栏那颗胶囊一出现就长出额度总览（`-CuePadQuotaOpen YES`）。
         var quotaOpen = false
+        /// 不弹演示会话的前台横幅（`-CuePadQuiet YES`）。
+        var quietAlerts = false
         #endif
     }
 
@@ -311,7 +313,7 @@ extension View {
         #endif
     }
 
-    /// 点 Cue 页底部"⋯"展开、收起三格的那条路交给演示（`dockTourIfAsked`）；`-CuePadPlacesOpen YES` 时第一次出现就展开（就绪前摆好，截得到）。
+    /// 点 Cue 页底部"⋯"的那条路交给演示（`dockTourIfAsked`）；`-CuePadPlacesOpen YES` 时第一次出现就展开。
     func debugExposesPlaces(_ toggle: @escaping () -> Void) -> some View {
         #if DEBUG
         onAppear {
@@ -350,7 +352,7 @@ extension View {
     }
 
     #if os(iOS)
-    /// `-CuePadCompact <宽>`：窗口根按这么宽、紧凑尺寸类画，同分屏与台前调度里的窄窗口（模拟器没有从代码开分屏的接口）。
+    /// `-CuePadCompact <宽>`：按这么宽的窄窗口画（模拟器开不了分屏）。
     @ViewBuilder func debugCompact() -> some View {
         #if DEBUG
         let width = DebugScene.defaults.double(forKey: "CuePadCompact")
