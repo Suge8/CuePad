@@ -597,7 +597,7 @@ struct EvalBrain {
     }()
 
     /// .md 与 summary.md 开头那一行：大脑、模型与强度、上下文做法
-    var label: String { "\(runtime.name) · \(model) · \(effort.rawValue) · 精简混合（到 6 万或缓存过期开新会话，用记忆视图与最近对话接上）" }
+    var label: String { "\(runtime.name) · \(model) · \(effort.rawValue) · 精简混合（到换新线或缓存过期开新会话，用记忆视图与最近对话接上）" }
 
     /// Pi 的登录：用户的 Pi 存的那一份，只读
     private static let piAuth = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".pi/agent/auth.json")
