@@ -98,7 +98,7 @@ private struct CompactLeading: View {
     }
 }
 
-/// 紧凑态右边：一排珠子接走秒；横屏窄处只留最前那颗珠子与总数。
+/// 紧凑态右边：最前三颗珠子接走秒（不写"+N"：摄像头旁放不下，会被截成省略号，总数在展开态）；横屏窄处只留最前那颗珠子与总数。
 private struct CompactTrailing: View {
     let now: CueNow
     let forced: Bool?
@@ -112,7 +112,7 @@ private struct CompactTrailing: View {
                 if let first = now.beads.first { BeadDot(kind: first.kind, size: 8) }
                 Text("\(now.beads.count + now.hidden)").font(.system(size: 14, weight: .semibold)).monospacedDigit().foregroundStyle(palette.ink)
             } else {
-                if !now.beads.isEmpty { CueBeads(beads: now.beads, hidden: now.hidden, size: 7, limit: 3) }
+                if !now.beads.isEmpty { CueBeads(beads: Array(now.beads.prefix(Self.beads)), size: 7, limit: Self.beads) }
                 if let since = now.clock {
                     Clock(since: since).font(.system(size: 14, weight: .semibold)).foregroundStyle(now.tint(palette))
                 }
@@ -121,6 +121,8 @@ private struct CompactTrailing: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(now.spoken)
     }
+
+    private static let beads = 3
 }
 
 /// 展开态右上：走秒在上，珠子在下（从紧凑态的位置原地长出来）。

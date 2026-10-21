@@ -32,7 +32,7 @@ extension AppServices {
         await viewer?.settle()
         await sync?.push()
         do {
-            try await writeSnapshots()
+            try await writeSnapshots(resend: true)
         } catch {
             reportIssue(.widgetDataUnavailable("\(error)"))
         }

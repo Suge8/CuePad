@@ -48,13 +48,13 @@ final class IOSAppDelegate: NSObject, UIApplicationDelegate {
     }
 
     /// 同步区有变化的静默推送与带 content-available 的等你类推送（后台也会把 App 叫起来一会儿）：拉到推送说的变化再交还系统
-    /// （冷启动时等同步启动完，见 `AppServices.pull`）；拉完当场改实时活动（`CueLiveActivity`）再交还：回调一返回系统就可能挂起 App，
-    /// 快照那条观察是异步的，靠它改岛常常来不及。
+    /// （冷启动时等同步启动完，见 `AppServices.pull`）；拉完当场改实时活动与小组件（`AppServices.writeSnapshots`）再交还：
+    /// 回调一返回系统就可能挂起 App，快照那条观察是异步的，靠它改岛常常来不及。
     func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable: Any]) async -> UIBackgroundFetchResult {
         guard case .ready(let services) = launch else { return .noData }
         await services.pull()
         do {
-            try await services.showCueActivityNow()
+            try await services.writeSnapshots()
         } catch {
             return .failed
         }

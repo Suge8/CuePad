@@ -16,48 +16,48 @@ enum CueNowSamples {
         allow: CueNow.Allow(message: UUID(), choice: CueAsk.once))
 
     private static func now(
-        _ mood: String, _ cue: CueNow.Brain, _ beads: [CueNow.Bead], advancing: Int, first: CueNow.Wait? = nil, resting: String = "listening"
+        _ mood: CueMood, _ cue: CueNow.Brain, _ beads: [CueNow.Bead], advancing: Int, first: CueNow.Wait? = nil, resting: CueMood = .listening
     ) -> CueNow {
         CueNow(name: "Cue", mood: mood, restingMood: resting, cue: cue, beads: beads, hidden: 0, advancing: advancing, first: first, at: .now)
     }
 
     /// 被会话叫醒、在看它交回的结果；一件在跑、一件等子代理。
-    static let woke = now("thinking", .working(woke: "被 canvas-zoom 叫醒", doing: "读取 Sources/Zoom.swift", since: ago(0.7)), [
+    static let woke = now(.thinking, .working(woke: "被 canvas-zoom 叫醒", doing: "读取 Sources/Zoom.swift", since: ago(0.7)), [
         bead("homepage", .running, "首页改版", 0.97),
         bead("notes", .delegating, "发言顺序修复", 12.05, subagents: 2),
         bead("canvas", .resting, "画布缩放", 2),
     ], advancing: 3)
 
     /// Cue 歇着，交出去的活在跑、等子代理交回。
-    static let delegating = now("listening", .idle, [
+    static let delegating = now(.listening, .idle, [
         bead("canvas", .running, "画布缩放", 4.2),
         bead("notes", .delegating, "发言顺序修复", 12.05, subagents: 2),
         bead("homepage", .delegating, "首页改版", 6.5, subagents: 1),
     ], advancing: 3)
 
     /// 一件要你拍板（推送），其余在跑。
-    static let asks = now("waiting", .idle, [
+    static let asks = now(.waiting, .idle, [
         bead("ask", .asks, "推送 v1.4 到 TestFlight", 3),
         bead("canvas", .running, "画布缩放", 4.2),
         bead("notes", .delegating, "发言顺序修复", 12.05, subagents: 2),
-    ], advancing: 2, first: push, resting: "waiting")
+    ], advancing: 2, first: push, resting: .waiting)
 
     /// 刚做完一件，还有一件在跑。
-    static let done = now("done", .idle, [
+    static let done = now(.done, .idle, [
         bead("canvas", .running, "画布缩放", 4.2),
         bead("readme", .done, "README 截图换成 Swift 版", 0.5),
-    ], advancing: 1, resting: "done")
+    ], advancing: 1, resting: .done)
 
     /// 推进中的都歇着：实时活动结束，页头照写。
-    static let quiet = now("listening", .idle, [
+    static let quiet = now(.listening, .idle, [
         bead("canvas", .resting, "画布缩放", 18),
         bead("notes", .resting, "发言顺序修复", 40),
     ], advancing: 2)
 
     /// 它运行的那台 Mac 没开。
-    static let away = now("sleeping", .away("Cue 在睡觉：它运行的那台 Mac 好像没开", failed: false), [
+    static let away = now(.sleeping, .away("Cue 在睡觉：它运行的那台 Mac 好像没开", failed: false), [
         bead("canvas", .resting, "画布缩放", 60),
-    ], advancing: 1, resting: "sleeping")
+    ], advancing: 1, resting: .sleeping)
 
     static let all: [String: CueNow] = [
         "woke": woke, "delegating": delegating, "asks": asks, "done": done, "quiet": quiet, "away": away,

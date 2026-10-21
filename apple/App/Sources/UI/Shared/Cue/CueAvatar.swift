@@ -108,14 +108,8 @@ struct CueAvatar: View {
         }
     }
 
-    private var ringTint: Color {
-        if let shown = presence.shown { return shown.tint(palette) }
-        return switch mood {
-        case .waiting: palette.waiting
-        case .done: palette.replied
-        case .thinking, .sleeping, .listening: palette.track
-        }
-    }
+    /// 话在路上同会话的状态色，其余跟着表情（`CueMood.ring`，扩展里的头像同一条）。
+    private var ringTint: Color { presence.shown?.tint(palette) ?? mood.ring(palette) }
 }
 
 /// 会话里 Cue 说的话上面那一行：小头像与名字（`UserBubble.fromCue`）。

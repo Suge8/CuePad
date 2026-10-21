@@ -9,9 +9,9 @@ import Foundation
 /// 刚做完的珠子只留 `doneWindow`：到点由读的一方按时刻收掉（`aged(to:)`、`nextChange(after:)`），不另计时。
 nonisolated struct CueNow: Codable, Hashable, Sendable {
     var name: String
-    /// 头像的表情（`CueMood` 的原始值，图在 CueFaces 里）；歇下来时的那一个（`restingMood`）给过时的那份用。
-    var mood: String
-    var restingMood: String
+    /// 头像的表情；歇下来时的那一个（`restingMood`）给过时的那份用。
+    var mood: CueMood
+    var restingMood: CueMood
     var cue: Brain
     /// 至多 `beadLimit` 颗，多出的只记个数（`hidden`）。
     var beads: [Bead]
@@ -189,7 +189,14 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
     }
 
     static let empty = CueNow(
-        name: "Cue", mood: "sleeping", restingMood: "sleeping", cue: .idle, beads: [], hidden: 0, advancing: 0, first: nil, at: .distantPast)
+        name: "Cue", mood: .sleeping, restingMood: .sleeping, cue: .idle, beads: [], hidden: 0, advancing: 0, first: nil, at: .distantPast)
 }
 
 nonisolated extension CueNow: SnapshotFile { static let fileName = "cue.json" }
+
+/// 头像的表情（`Assets` 里的 mascot-cue-*）。App 里按 Cue 在不在、有没有等你推（`CueMood.of`），扩展只读 Cue 此刻里存的那个。
+nonisolated enum CueMood: String, Codable, Sendable {
+    case thinking, waiting, done, sleeping, listening
+
+    var asset: String { "mascot-cue-\(rawValue)" }
+}

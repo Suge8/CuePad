@@ -74,10 +74,12 @@ final class CueWatch {
         sending = presence == .sending
         lastYouSaid = digest.lastYou?.said
         busy = presence.shown != nil
-        expression = CueMood.of(presence, waiting: digest.waiting, justDone: digest.lastSaidDone)
         // 推出的时刻每次都不同：内容一样就不写，免得读它的每一行跟着重算
         let next = AppServices.cueNow(digest, at: moment)
-        if !next.same(as: now), !isPinned { now = next }
+        if !isPinned {
+            expression = CueMood.of(presence, waiting: digest.waiting, justDone: digest.lastSaidDone)
+            if !next.same(as: now) { now = next }
+        }
         waiting = digest.waiting
         unread = digest.unread
         lastSaid = digest.lastSaid
@@ -87,11 +89,12 @@ final class CueWatch {
         context = digest.state?.context
     }
 
-    /// 调试画面手动换的 Cue 此刻（`-CuePadCueCycle` 轮流走各态，`DebugScene.cueNowTourIfAsked`）：换过就不再随库变。
+    /// 调试画面手动换的 Cue 此刻（`-CuePadCueCycle` 轮流走各态，`DebugScene.cueNowTourIfAsked`）：换过就不再随库变，头像的表情跟着它。
     @ObservationIgnored private var isPinned = false
 
     func pin(_ next: CueNow) {
         isPinned = true
         now = next
+        expression = next.mood
     }
 }

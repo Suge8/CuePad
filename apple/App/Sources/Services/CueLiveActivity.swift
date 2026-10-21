@@ -5,8 +5,8 @@ import OSLog
 
 /// iPhone 锁屏与灵动岛上的实时活动（内容见 `CueActivityState`）：有活（`CueNow.isLive`：Cue 在一轮里、有在跑或等子代理的、有等你的）且 App 在前台时开一个（只一个），
 /// 变了就更新，没活了带着最后一份结束：刚做完一件时那一份在锁屏留 `CueNow.doneWindow`，否则当场收起。
-/// 没有服务端，内容只由 App 改：前台时库一变就改；后台靠推送把 App 叫起来——等你类的可见推送带 content-available，与同步区的静默推送一样让 App 拉一次
-/// （`IOSAppDelegate`），拉到的变化经小组件快照那同一条观察到这里（`AppServices.startSnapshots`），不另起轮询。推送会被系统合并、被划掉的 App 叫不醒，
+/// 没有服务端，内容只由 App 改：前台时库一变就改（`AppServices.startSnapshots`）；后台靠推送把 App 叫起来——等你类的可见推送带 content-available，
+/// 与同步区的静默推送一样让 App 拉一次，拉完当场改（`IOSAppDelegate` → `AppServices.writeSnapshots`），不另起轮询。推送会被系统合并、被划掉的 App 叫不醒，
 /// 所以每份都带过时时刻（`CueNow.staleAfter`：Cue 在想这类快的事实几分钟，其余一刻钟）：过了还没有新的，岛只信慢的事实（`CueNow.settled`），
 /// 锁屏变淡、写"x 分钟前"，不装作是新的；回到前台、进后台前按此刻重发一次，过时时刻从那时算。走秒的计时交给系统（`Text(timerInterval:)`），不靠更新。
 /// 系统只许前台开启，所以后台读到有事时只改已开着的，回前台时再开。

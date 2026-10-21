@@ -8,8 +8,8 @@ nonisolated extension CueNow {
         let presence = CuePresence.derive(digest, at: moment)
         let beads = Self.beads(digest, at: moment.now)
         self.init(
-            name: digest.name, mood: digest.mood(at: moment).rawValue,
-            restingMood: CueMood.of(.idle, waiting: digest.waiting, justDone: digest.lastSaidDone).rawValue,
+            name: digest.name, mood: digest.mood(at: moment),
+            restingMood: CueMood.of(.idle, waiting: digest.waiting, justDone: digest.lastSaidDone),
             cue: Self.brain(presence, digest: digest, at: moment.now),
             beads: Array(beads.prefix(Self.beadLimit)), hidden: max(beads.count - Self.beadLimit, 0), advancing: digest.advancing,
             first: digest.tally.waiting.first.map { Self.wait($0, name: digest.name) }, at: moment.now)

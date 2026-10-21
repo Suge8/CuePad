@@ -91,11 +91,23 @@ struct CueNowFace: View {
         let line = max(size * 0.075, 1.5)
         ZStack {
             Circle().stroke(now.ring(palette), lineWidth: line).padding(line / 2)
-            Image("mascot-cue-\(now.mood)").resizable().scaledToFit().padding(line + size * 0.08)
+            Image(now.mood.asset).resizable().scaledToFit().padding(line + size * 0.08)
         }
         .frame(width: size, height: size)
         .opacity(now.isAway ? 0.55 : 1)
         .accessibilityHidden(true)
+    }
+}
+
+extension CueMood {
+    /// 头像那圈环的颜色，App 的头像（`CueAvatar`，在做事时换成彗星）与扩展里的同一条：在想靛青，等你赭黄，刚报了做完石绿，其余淡灰。
+    func ring(_ palette: Palette) -> Color {
+        switch self {
+        case .thinking: palette.signature
+        case .waiting: palette.waiting
+        case .done: palette.replied
+        case .sleeping, .listening: palette.track
+        }
     }
 }
 
@@ -122,15 +134,10 @@ extension CueNow.Bead.Kind {
 }
 
 extension CueNow {
-    /// 头像那圈环：在一轮里与话在路上靛青，有等你赭黄，刚做完石绿，其余淡灰。
+    /// 头像那圈环：话在路上靛青，其余跟着表情（`CueMood.ring`，App 里的头像同一条）。
     func ring(_ palette: Palette) -> Color {
-        switch cue {
-        case .working, .hearing: return palette.signature
-        case .away: return palette.track
-        case .idle: break
-        }
-        if asks > 0 { return palette.waiting }
-        return justDone != nil ? palette.replied : palette.track
+        if case .hearing = cue { return palette.signature }
+        return mood.ring(palette)
     }
 
     /// 短词与走秒的颜色：是谁的事（同 `word` 的先后）。

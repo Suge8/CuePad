@@ -7,18 +7,13 @@ import WidgetKit
 
 /// 给小组件与分享扩展的快照：跟随资料库变化写进共享容器。扩展不打开资料库。
 /// 只写内容真正变了的那份；小组件显示默认项目与 Cue，只有这两份变了才刷新它们（刷新次数有系统预算）。
-/// iPhone 的实时活动（`CueLiveActivity`）读同一条观察：后台被推送叫醒、拉到变化时也由它更新。
+/// iPhone 的实时活动（`CueLiveActivity`）与小组件读同一份 Cue 此刻，每次都先改岛：后台被推送叫醒时剩的时间不多。
 extension AppServices {
     /// 项目或卡片变化、此刻变了（Cue 的表情随它，`observeTimed`）时重读快照，直到任务取消。
     func startSnapshots() {
         follow(reporting: { .widgetDataUnavailable("\($0)") }) {
             for try await (content, moment) in self.observeTimed({ try $0.widgetContent() }) {
-                let now = Self.cueNow(content.cue, at: moment)
-                // 岛先改：后台被推送叫醒时剩的时间不多，写快照、刷新小组件排在它后面
-                #if os(iOS)
-                await self.cueActivity?.show(CueActivityState(now: now, quotas: content.quotas, at: moment.now), foreground: Self.isActive)
-                #endif
-                try self.publish(WidgetSnapshots(content, now: now))
+                try await self.present(content, at: moment)
             }
         }
         #if os(iOS)
@@ -42,24 +37,19 @@ extension AppServices {
         DebugHooks.preset.cueNow ?? CueNow(digest, at: moment)
     }
 
-    /// 立即按当前库内容更新快照（进入后台前）；实时活动按此刻重发一次，过时时刻从这时算。
-    func writeSnapshots() async throws {
-        let content = try await store.widgetContent()
-        let now = Self.cueNow(content.cue, at: speech)
+    /// 立即按当前库内容更新，不等快照那条异步的观察：进入后台前（`resend`：岛按此刻重发一次，过时时刻从这时算）、
+    /// 推送叫醒拉完之后（回调一返回系统就可能挂起 App，`IOSAppDelegate`）。
+    func writeSnapshots(resend: Bool = false) async throws {
+        try await present(try await store.widgetContent(), at: speech, resend: resend)
+    }
+
+    private func present(_ content: WidgetContent, at moment: Speech.Moment, resend: Bool = false) async throws {
+        let now = Self.cueNow(content.cue, at: moment)
         #if os(iOS)
-        await cueActivity?.show(CueActivityState(now: now, quotas: content.quotas, at: speech.now), resend: true, foreground: Self.isActive)
+        await cueActivity?.show(CueActivityState(now: now, quotas: content.quotas, at: moment.now), resend: resend, foreground: Self.isActive)
         #endif
         try publish(WidgetSnapshots(content, now: now))
     }
-
-    #if os(iOS)
-    /// 推送叫醒、拉完之后当场改岛：快照那条观察是异步的，回调一返回系统就可能挂起 App，等它可能来不及（`IOSAppDelegate`）。
-    func showCueActivityNow() async throws {
-        let content = try await store.widgetContent()
-        let now = Self.cueNow(content.cue, at: speech)
-        await cueActivity?.show(CueActivityState(now: now, quotas: content.quotas, at: speech.now), foreground: Self.isActive)
-    }
-    #endif
 
     private func publish(_ snapshots: WidgetSnapshots) throws {
         let old = publishedSnapshots

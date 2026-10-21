@@ -72,12 +72,7 @@ nonisolated enum CuePresence: Equatable, Sendable {
     }
 }
 
-/// 头像的表情（`Assets` 里的 mascot-cue-*）。
-nonisolated enum CueMood: String, Sendable {
-    case thinking, waiting, done, sleeping, listening
-
-    var asset: String { "mascot-cue-\(rawValue)" }
-
+nonisolated extension CueMood {
     /// 哪个表情只在这里定：睡着、起不来闭眼；在做事；话在路上（在听）；有等你的；你正在写（在听）；它刚报了一件做完的；平时在听。
     static func of(_ presence: CuePresence, waiting: Int, composing: Bool = false, justDone: Bool = false) -> CueMood {
         switch presence {
