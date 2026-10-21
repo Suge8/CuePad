@@ -34,9 +34,9 @@
 
 | | |
 |:-:|:-:|
-| <img src="design/readme/cue.png" alt="Cue 带着证据回来交差，做过的事折成一行" /> | <img src="design/readme/board.png" alt="任务看板：推进中与等你" /> |
+| <img src="design/readme/cue.png" alt="Cue 带着证据回来交差，做过的事折成一行" width="400" /> | <img src="design/readme/board.png" alt="任务看板：推进中与等你" /> |
 | Cue 带着证据交差，只问要你拍板的事 | 所有任务一块看板，Cue 的提问点一下就答 |
-| <img src="design/readme/session.png" alt="在 Agent 的回答里批注" /> | <img src="design/readme/iphone-demo.png" alt="在 iPhone 上看 Agent 发来的成果" /> |
+| <img src="design/readme/session.png" alt="在 Agent 的回答里批注" width="400" /> | <img src="design/readme/iphone-demo.png" alt="在 iPhone 上看 Agent 发来的成果" /> |
 | Agent 把页面、截图发进对话，回答里任意一段都能批注 | 在手机上验收 Agent 的成果 |
 
 ## 快速上手
