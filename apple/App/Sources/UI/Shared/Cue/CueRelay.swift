@@ -29,6 +29,7 @@ import SwiftUI
 ///
 /// 性能：飞行整个交给 Core Animation（渲染服务插值，App 进程不逐帧参与），只在播时把一层画布挂到窗口的根层最上面，播完拿掉。
 /// 不在每一行挂几何读数：只有此刻在接力的珠子、会话状态标与任务行挂一个空的锚视图，Cue 的几处头像各挂一个；
+/// 空锚不做插入转场：继承到父级动画时，默认淡入会让新锚的宿主层首帧透明，把本来可见的落点误判成不在屏上。
 /// 播的那一刻沿层树把锚换算到窗口根层的坐标，一并算进父层的裁切、隐藏与透明（滚出屏的、被盖住的页、开合到 0 的都算不在），
 /// 工具栏、导航容器、分栏这些各自托管的视图都在同一棵层树里，不需要逐层换算。
 /// 否决了 SwiftUI 的覆盖层加锚点偏好：偏好过不了 Mac 工具栏与 iOS 导航容器的托管边界，覆盖层也盖不住 Mac 的工具栏。
@@ -234,7 +235,7 @@ private struct BeadSpot: ViewModifier {
     func body(content: Content) -> some View {
         let flying = sessions.filter { workspace.services.liveSessions.relays(session: $0) }
         content.background {
-            if !flying.isEmpty { RelayAnchor(role: .end(.bead(flying))) }
+            if !flying.isEmpty { RelayAnchor(role: .end(.bead(flying))).transition(.identity) }
         }
     }
 }
@@ -247,7 +248,7 @@ private struct SessionSpot: ViewModifier {
     func body(content: Content) -> some View {
         let flying = session.flatMap { workspace.services.liveSessions.relays(session: $0) ? $0 : nil }
         content.modifier(Arrival(session: session)).background {
-            if let flying { RelayAnchor(role: .end(.session(flying, row))) }
+            if let flying { RelayAnchor(role: .end(.session(flying, row))).transition(.identity) }
         }
     }
 }
@@ -263,7 +264,7 @@ private struct TaskSpot: ViewModifier {
         let session = agents.items[task]?.state.sessionID
         let flying = live.relays(task: task) || session.map(live.relays(session:)) == true
         content.background {
-            if flying { RelayAnchor(role: .end(.task(task, session: session))) }
+            if flying { RelayAnchor(role: .end(.task(task, session: session))).transition(.identity) }
         }
     }
 }
