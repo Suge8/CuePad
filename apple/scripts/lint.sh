@@ -63,7 +63,7 @@ forbid "图标只经 Icon（Theme/Icon.swift）按意思取自家墨块符号（
   '\b(?:systemName|systemImage|systemSymbolName)\b|\b(?:Image|UIImage|NSImage)\((?:named:\s*|symbolName:\s*)?"cue\.' \
   'App/Widget/WidgetIcon.swift'
 forbid "说的话只有一条路 Workspace.speak（Speaking.swift）：同步清空输入框、写一条记录、后台立即上传，界面不等上传与结果；别处直接写记录会长出第二套发消息的写法" \
-  '(\baddCueMessage\(\s*\.you\b|\bstore\.(requestDelivery|speak)\()' '**/Workspace/Speaking.swift' '**/CueAgent/CueTools.swift' '**/Tests/**' 'App/Sources/UI/Debug/**'
+  '(\baddCueMessage\(\s*\.you\b|\bstore\.(requestDelivery|speak)\()' '**/Workspace/Speaking.swift' '**/CueAgent/CueTools+Say.swift' '**/Tests/**' 'App/Sources/UI/Debug/**'
 forbid "界面上请求到哪了只读 Speech.trip（发送中、已送达、没能送达，含超时与本机同步不通）：直接看请求的原始状态会长出第二套状态机，超时与断网时说法对不上" \
   '\.isOpen\b|\.status\s*[!=]=\s*\.known\(\.(?:pending|executing|succeeded|failed)\)|\.status\.known\b' \
   'App/Sources/[!U]*/**' 'App/Sources/*.swift' 'App/Sources/UI/Debug/**' 'App/Tests/**' 'CuePadKit/**'
