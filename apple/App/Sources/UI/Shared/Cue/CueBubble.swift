@@ -31,13 +31,8 @@ enum CueBubble {
         }
     }
 
-    /// 新说出的一颗从说话那一边的下角长出来（淡入并从 92% 放大到位）：你发出的从输入框那一角冒出，与对话上滑是同一段；只动变换，不改排版。
-    /// 消失只淡出。减弱动态效果时只淡入淡出。
-    static func arrival(_ edge: HorizontalEdge, reduceMotion: Bool) -> AnyTransition {
-        guard !reduceMotion else { return .entry }
-        let grow = AnyTransition.opacity.combined(with: .scale(scale: 0.92, anchor: edge == .trailing ? .bottomTrailing : .bottomLeading))
-        return .asymmetric(insertion: grow.animation(Motion.snappy), removal: .entry)
-    }
+    /// 新说出的一颗淡入。贴着最新时它还从下角放大、把上面的对话撑上去（`ChatLift`，滚动区给），插进来那一次就排在终位、之后只动变换。
+    static let arrival = AnyTransition.opacity.animation(Motion.move)
 }
 
 /// Cue 说的一句：靠左的一颗纸做的气泡（`cueBubble`），里面是 Markdown（同会话里 Agent 的回答），下面是它点名的图（`CueShots`：结束了回到问的位置的提问，
@@ -57,10 +52,7 @@ struct CueSays: View {
     var card = false
     /// 上面紧挨着 Cue 的另一句（`CueBubble.shape`）。
     var joined = false
-    /// 新到的从左下角长出来；原位换下正在说的话时（`CueEnding`）直接出现
-    var arrives = true
     @Environment(\.palette) private var palette
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var selecting = false
     /// 提问的原话展开着。
     @State private var reading = false
@@ -78,7 +70,6 @@ struct CueSays: View {
         #if os(iOS)
         .sheet(isPresented: $selecting) { SelectableTextSheet(text: message.text) }
         #endif
-        .transition(arrives ? CueBubble.arrival(.leading, reduceMotion: reduceMotion) : .identity)
     }
 
     @ViewBuilder private var words: some View {
