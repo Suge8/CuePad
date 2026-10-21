@@ -26,7 +26,7 @@ Local-first: everything lives in a SQLite database on your device; iCloud sync u
 - **Selections and variables.** Turn selected lines into tasks; fill `{{variables}}` right before sending, each one remembers its last values.
 - **Search everywhere.** `⌘K` searches projects, ideas and tasks, filtered by project, images, whether it went to an agent, or time.
 - **Mac.** Glass sidebar, a menu bar scratch pad for quick ideas, a global shortcut (`Option + Space` by default) to bring CuePad up from anywhere, and `Option + Shift + Space` to talk to Cue.
-- **iPhone and iPad.** iPhone opens on Cue, with tasks, sessions and projects one tap away along the bottom; iPad has the same sidebar as the Mac. A project bookshelf, quick capture bar, share extension and widgets. Ideas written on the phone are on the Mac a moment later, and the phone can send text to an agent session on your Mac.
+- **iPhone and iPad.** iPhone opens on Cue, with projects, tasks and sessions one tap away along the bottom; iPad has the same sidebar as the Mac. A project bookshelf, quick capture bar, share extension and widgets. Ideas written on the phone are on the Mac a moment later, and the phone can send text to an agent session on your Mac.
 - **iCloud sync.** Per-record sync; if the same idea or task is edited offline on two devices, both versions are kept for you to choose from.
 
 ## `cuepad`: memory for your agents

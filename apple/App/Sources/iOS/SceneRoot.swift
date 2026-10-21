@@ -15,6 +15,7 @@ struct SceneRoot: View {
 
     var body: some View {
         IOSRoot(services: services, alerts: alerts)
+            .debugCompact()
             .environment(alerts)
             .task { if services.sync != nil { await alerts.enable() } }
             .onOpenURL { services.handle(url: $0) }
