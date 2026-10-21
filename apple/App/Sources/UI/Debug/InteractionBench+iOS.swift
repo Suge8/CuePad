@@ -54,7 +54,7 @@ enum IOSInteractionBench {
         }
         let only = UserDefaults.standard.string(forKey: "CuePadInteractOnly").map { Set($0.split(separator: ",").map(String.init)) }
         func wants(_ name: String) -> Bool { only?.contains(name) ?? true }
-        func row(_ row: [String: Any]) { write("INTERACT " + String(decoding: try! JSONSerialization.data(withJSONObject: row, options: [.sortedKeys]), as: UTF8.self)) }
+        func row(_ row: [String: Any]) { write(jsonLine("INTERACT", row)) }
         let cold = await cold()
         if wants("冷启动·Cue 页") { row(cold) }
         // 只量冷启动时不要求库里有别的项（真实库的副本不一定有演示库那几样）
@@ -87,7 +87,7 @@ enum IOSInteractionBench {
             await step("返回书架") { navigation.path.removeAll() }
         }
         // 项目页任务纸点"还有 N 条"展开、再收起：在没做完的任务最多的项目上（配 `-CuePadManyTasks` 量任务多时）
-        guard let busiest = workspace.catalog?.openTasks.filter({ $0.key != nil }).max(by: { $0.value < $1.value })?.key else { fail("演示库里没有带任务的项目") }
+        guard let busiest = workspace.catalog?.openTasks.max(by: { $0.value < $1.value })?.key else { fail("演示库里没有带任务的项目") }
         navigation.push(.project(busiest))
         try? await Task.sleep(for: .seconds(2))
         for _ in 0..<2 {

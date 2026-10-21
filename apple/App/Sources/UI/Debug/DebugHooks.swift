@@ -179,13 +179,6 @@ enum DebugHooks {
         #endif
     }
 
-    /// 对话在上面再排开一段（`SessionChat`），排开后最早一条是全部 `count` 条里的第 `item` 条：`-CuePadBench chatdepth` 从这一刻量。
-    static func chatShowsEarlier(from item: Int, of count: Int) {
-        #if DEBUG && os(iOS)
-        ChatDepthBench.began(from: item, of: count)
-        #endif
-    }
-
     /// 输入框出现时按 `-CuePadComposer` 摆好要拍的样子（打开选卡片面板、预填文字或附件）。
     static func presetComposer(_ draft: Binding<ComposerDraft>, source: Binding<ComposerSource?>, store: CueStore) async {
         #if DEBUG

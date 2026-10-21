@@ -21,11 +21,11 @@ extension DebugScene {
 /// - host：有在线会话的 Mac（会话由脚本的假扩展给）。别的设备对 Cue 说的话一到库里就记 `cue-arrived lag=`（创建到本机库，同一台机器的时钟）。
 ///   Cue 不值班（隔离目录里没有登录的运行时），所以只量到达、不量 Cue 的回复。
 /// - remote：代替开着 Agent 页的手机，拉取节奏也换成手机那档（`DebugHooks.pollsLikePhone`）。等 host 的会话同步过来后，每 `-CuePadSyncBenchEvery` 秒（默认 30）一轮：对 host 的一个在线会话说一句，
-///   与手机同一条路（写请求、立即上传），等结果回到本机记 `send total= upload= toMac= back=`（分段同 `AppServices.PingTiming`）；
+///   与手机同一条路（写请求、立即上传），等结果回到本机记 `send total= upload= toMac= back=`（全程、写出到传完、传完到 Mac 写回、写回到本机看到）；
 ///   对 Cue 说一句（`Workspace.sayToCue` 同一条路）；立即同步一次记 `syncNow took=`。
 enum SyncBench {
     static let log = Logger(subsystem: AppServices.bundleID, category: "bench")
-    /// 一句话等结果最多这么久（同连接测试），超时记一次失败、接着下一轮
+    /// 一句话等结果最多这么久，超时记一次失败、接着下一轮
     private static let timeout = Duration.seconds(60)
 
     static func run(_ services: AppServices) async {

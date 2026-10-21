@@ -19,8 +19,7 @@ nonisolated struct PendingCapture: Codable, Equatable, Sendable {
     var text: String?
     var urls: [URL]
     var imageFiles: [String]
-    /// 选的项目；nil 是没选（更早的版本写的），进默认项目。
-    var project: UUID?
+    var project: UUID
     var createdAt: Date
 }
 
@@ -40,7 +39,7 @@ nonisolated enum CaptureQueue {
         func imageURLs() -> [URL] { capture.imageFiles.map { directory.appending(path: $0) } }
     }
 
-    static func enqueue(_ content: ShareContent, project: UUID?, into queue: URL, now: Date = .now) throws {
+    static func enqueue(_ content: ShareContent, project: UUID, into queue: URL, now: Date = .now) throws {
         let directory = queue.appending(path: UUID().uuidString, directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         var files: [String] = []

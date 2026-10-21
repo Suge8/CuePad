@@ -28,7 +28,6 @@ struct MacDependencies {
     /// 各 Agent 的接入：发现会话、后台开新会话与接着已结束的会话、结束会话。OpenCode 的会话索引由它的接入直接写进资料库，
     /// 所以等资料库打开后再建（参数就是它）。
     var runtimes: @MainActor (CueStore) -> [AgentKind: any AgentRuntime]
-    /// 复制的去处。
     var pasteboard: NSPasteboard
     var cue: CueDependencies
 

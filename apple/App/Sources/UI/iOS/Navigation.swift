@@ -105,7 +105,6 @@ final class Navigation {
         return nil
     }
 
-    /// 在当前页上推入一页。
     func push(_ route: Route) { path.append(route) }
 
     /// 发给 Agent：浮起发给 Agent 的输入框，正文带在里面（`HandOffInput`）。

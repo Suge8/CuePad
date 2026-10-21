@@ -39,8 +39,6 @@ extension DebugScene {
     /// 两台 Mac 的项目目录绑定（名字是各自报的，`seedMacAgents`）：Mac Studio 绑了全部带目录的项目，MacBook Air 只绑了 CuePad（新会话里 CuePad 要选 Mac）。
     /// 绑定由本机目录推导，所以先只留 CuePad 的目录发布第二台，再把目录放回去。
     private static func seedBindings(_ store: CueStore, projects: [Project]) async {
-        // 只用来写绑定记录里的文件夹名，不建目录
-        let workspaces = Workspaces.resolve(isolatedLibrary: nil)
         try? await store.publishDirectoryBindings(host: "demo-mac")
         guard let directories = try? await store.projectDirectories() else { return }
         let others = projects.filter { $0.name != "CuePad" }.map(\.id)

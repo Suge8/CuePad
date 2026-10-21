@@ -38,7 +38,7 @@ protocol CueNotifying: AnyObject {
 }
 
 /// Mac 上的 Cue：界面的唯一接口（`services.cue`）。手机与别的 Mac 不跑这里，界面直接读写库（`cueProfile` 等）。
-/// - 启用、停用不经这里：两端同一个入口（`AppServices.enableCue(on:)`、`disableCue`，规则在 `CueStore.enableCue`）；
+/// - 启用、停用不经这里：两端同一个入口（`AppServices.enableCue(on:)`、`updateCue`，规则在 `CueStore.enableCue`）；
 ///   另一台 Mac 启用就是接管，这台看到 `activeHost` 不是自己就停下。
 /// - `activeHost` 是这台时起一个 `CueKeeper` 值班，不是就停掉；名字、运行时、模型、强度变了由值班的它自己对上（就地换或写交接后换大脑）。
 /// - 通知：哪几条要提示你只在 `CueMessage.alerts`；手机推送标志在写下时就置好（`CueStore.insertCueMessage`），这里只给值班的这台 Mac

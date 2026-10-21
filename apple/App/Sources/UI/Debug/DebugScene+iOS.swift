@@ -118,7 +118,6 @@ extension DebugScene {
                 navigation.openSession(session.id, sessionID: session.sessionID, store: workspace.services.store)
             }
             if defaults.bool(forKey: "CuePadStream") { Task { await stream(session.sessionID, store: workspace.services.store) } }
-            if defaults.string(forKey: "CuePadBench") == "chatdepth" { Task { await ChatDepthBench.run() } }
         case "newsession":
             navigation.show(.agent)
             var sheet = Navigation.NewSession(project: project)  // -CuePadProject 闲鱼：先选中还没绑文件夹的项目（交给 Cue 那台 Mac 建工作区）

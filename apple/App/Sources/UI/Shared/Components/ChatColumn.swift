@@ -115,7 +115,6 @@ struct ChatColumn<Content: View, Key: Equatable>: View {
         let first = ids.count - window(size)
         guard first > 0 else { return }
         let from = max(0, first - paging.step(size, first))
-        DebugHooks.chatShowsEarlier(from: from, of: ids.count)
         follow.willPrepend()
         show(from: from)
     }

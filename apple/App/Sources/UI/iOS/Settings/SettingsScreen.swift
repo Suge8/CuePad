@@ -179,11 +179,9 @@ private struct SyncSection: View {
                 Text("上传：本机数据作为新内容传到当前账号。替换：丢弃本机的灵感、任务、项目与图片，从当前账号的云端重新下载。")
             }
         }
-        .confirmationDialog("丢弃本机数据，改用云端的？", isPresented: $confirmErase, titleVisibility: .visible) {
-            Button("用云端数据替换本机", role: .destructive) { resolve(.eraseLocal) }
-        } message: {
-            Text("本机的灵感、任务、项目与图片会被删除，无法撤销。")
-        }
+        .dialog("丢弃本机数据，改用云端的？", isPresented: $confirmErase, message: "本机的灵感、任务、项目与图片会被删除，无法撤销。", buttons: [
+            DialogButton(title: "用云端数据替换本机", role: .destructive) { resolve(.eraseLocal) },
+        ])
     }
 
     private func resolve(_ resolution: SyncResolution) {

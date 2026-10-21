@@ -22,7 +22,6 @@ nonisolated enum CommandLineToolError: Error, Equatable, LocalizedError {
 @Observable
 final class CommandLineToolInstaller {
     enum State: Equatable {
-        /// App 包里没有命令行二进制。
         case unavailable
         case notInstalled
         case installed
