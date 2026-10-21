@@ -43,7 +43,7 @@ struct CueEvalLMETests {
         do {
             try await CueEval.run(
                 question.id, expect: "LongMemEval \(question.type)（\(question.date)）：\(question.question) → \(question.answer)",
-                output: output,
+                suite: .lme, output: output,
                 rig: {
                     try await CueHostTests.Rig(
                         brain: brain, patrolAfter: Self.never, clock: { asked }, prepare: { try await $0.store.seed(question.log) })
@@ -55,7 +55,7 @@ struct CueEvalLMETests {
                 let round = try #require(eval.round)
                 let replies = try await eval.said().filter { $0.author == .known(.cue) }.map(\.text)
                 try write(question, eval: eval, round: round, replies: replies)
-                return [Check("回了他", !replies.isEmpty)]
+                return [Check(.result, "回了他", !replies.isEmpty)]
             }
         } catch {
             Issue.record("\(question.id)：\(error)")
