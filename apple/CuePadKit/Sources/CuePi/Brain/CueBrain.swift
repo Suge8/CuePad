@@ -100,11 +100,6 @@ extension CueBrainError: LocalizedError {
     }
 }
 
-/// 工具名去掉 CuePad 的 MCP 前缀（`CueMCPServer.toolPrefix`）并小写（Claude Code 的 `Read`）。
-func brainToolName(_ name: String) -> String {
-    let prefix = CueMCPServer.toolPrefix
-    return (name.hasPrefix(prefix) ? String(name.dropFirst(prefix.count)) : name).lowercased()
-}
 
 extension CueBrainConfig {
     /// 按 `runtime` 起对应的大脑。

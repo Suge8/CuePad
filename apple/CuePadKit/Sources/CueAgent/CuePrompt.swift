@@ -6,11 +6,12 @@ import Foundation
 /// （`CueTools.definitions`），此刻的事实每一轮由信封（`CueEnvelope`）带来，这里只写什么时候做什么。
 public enum CuePrompt {
   /// `agents` 是这台 Mac 上开会话时能用的 Agent 与模型（同步表 macAgents 里这台的那条）；空时不列，开工不指定、用默认。
-  public static func system(name: String, memory: CueMemoryView, agents: [MacAgent]) -> String {
+  /// `runtime` 是当大脑的那家：工具名照它给模型的写（`CueMCPServer.toolName`）。
+  public static func system(name: String, memory: CueMemoryView, agents: [MacAgent], runtime: AgentKind) -> String {
     """
     你是 \(name)，用户在 CuePad 里的 Cue。他把工作和生活里的事交给你：你把他的话变成任务，派给 Agent 会话去做，亲自核实做完，再用一两句告诉他结果。衡量你的只有一件事：每做成一件事打扰他几次，越少越好；收不回的事一定先问。
 
-    你只经三个工具做事：\(tools)。读文件、搜索这类只读工具用来核对证据。写代码、改文件、跑命令、调研、写东西都开任务交给会话。
+    你只经三个工具做事：\(tools(runtime))。读文件、搜索这类只读工具用来核对证据。写代码、改文件、跑命令、调研、写东西都开任务交给会话。
 
     # 自己定，还是先问
     - 先问他（tell 带 ask，他允许了再做）只有这几类：\(asks)。允许只认他在卡上选了允许、这次亲口要你做，或允许清单里有；"好的""嗯"这类含糊的话不算。
@@ -98,9 +99,9 @@ public enum CuePrompt {
   /// 要先问的几类事（`CueAsk`，括号里照抄进 tell 的 ask）：系统提示与 tell 的说明共用这一种写法。
   static var asks: String { CueAsk.allCases.map { "\($0.definition)（\($0.rawValue)）" }.joined(separator: "、") }
 
-  /// 模型看到的三个工具名（`CueMCPServer.toolPrefix`）：只写 task 时模型多半先按 task 调、被运行时拒掉。
-  private static var tools: String {
-    [("task", "任务与会话"), ("tell", "对他说话"), ("memory", "记忆")].map { "\(CueMCPServer.toolPrefix)\($0.0)（\($0.1)）" }.joined(separator: "、")
+  private static func tools(_ runtime: AgentKind) -> String {
+    [("task", "任务与会话"), ("tell", "对他说话"), ("memory", "记忆")].map { "\(CueMCPServer.toolName($0.0, on: runtime))（\($0.1)）" }
+      .joined(separator: "、")
   }
 
   /// 清单多于这么多个就只写默认的：Pi 没配范围时可选的是已配好密钥的全部，可能几百个，而系统提示每个班次都带着它。

@@ -954,7 +954,7 @@ final class CueEval {
             let library = output.appending(path: "\(name).library", directoryHint: .isDirectory)
             try? FileManager.default.removeItem(at: library)
             try FileManager.default.copyItem(at: rig.app.databaseURL.deletingLastPathComponent(), to: library)
-            let prompt = CuePrompt.system(name: CueProfile.defaultName, memory: CueMemoryView(try await rig.store.cueMemory()), agents: [])
+            let prompt = CuePrompt.system(name: CueProfile.defaultName, memory: CueMemoryView(try await rig.store.cueMemory()), agents: [], runtime: EvalBrain.current.runtime)
             try summarize(prompt: prompt)
         } catch {
             Issue.record("评测输出没写成：\(error)")

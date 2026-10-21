@@ -370,7 +370,7 @@ final class CueKeeper {
             let memory = CueMemoryView(try await setup.store.cueMemory())
             let config = CueBrainConfig(
                 runtime: runtime, executable: launch.executable, model: profile.model, effort: profile.effort?.known,
-                systemPrompt: CuePrompt.system(name: profile.name, memory: memory, agents: launch.agents), workingDirectory: work,
+                systemPrompt: CuePrompt.system(name: profile.name, memory: memory, agents: launch.agents, runtime: runtime), workingDirectory: work,
                 mcp: [setup.helper.path, "mcp"],
                 environment: ["CUEPAD_LIBRARY_DIR": setup.library.path, "PI_CODING_AGENT_DIR": setup.piAgentDirectory.path, "PATH": launch.path])
             let brain = try await config.startBrain()

@@ -41,7 +41,7 @@ final class ClaudeBrain: CueBrain {
             let mcp = ["mcpServers": [CueMCPServer.name: ["command": config.mcp[0], "args": Array(config.mcp.dropFirst()), "env": config.environment]]]
             var arguments = [
                 "-p", "--no-session-persistence", "--system-prompt-file", prompt.path, "--tools", "Read,Grep,Glob",
-                "--allowedTools", "Read,Grep,Glob,\(CueMCPServer.toolPrefix)*", "--permission-prompts", "none", "--strict-mcp-config",
+                "--allowedTools", "Read,Grep,Glob,\(CueMCPServer.claudeToolPrefix)*", "--permission-prompts", "none", "--strict-mcp-config",
                 "--mcp-config", jsonString(mcp), "--settings", #"{"disableAllHooks":true}"#,
             ]
             if let model = config.model { arguments += ["--model", model] }
@@ -122,7 +122,7 @@ final class ClaudeBrain: CueBrain {
             guard event["parent_tool_use_id"] == nil || event["parent_tool_use_id"] == .null else { return }
             for block in event["message"]?["content"]?.array ?? [] where block["type"]?.string == "tool_use" {
                 let arguments = String(decoding: (block["input"] ?? [:]).data, as: UTF8.self)
-                session.emit(.tool(id: block["id"]?.string ?? "", name: brainToolName(block["name"]?.string ?? "?"), arguments: arguments))
+                session.emit(.tool(id: block["id"]?.string ?? "", name: Self.toolName(block["name"]?.string ?? "?"), arguments: arguments))
             }
             guard let usage = event["message"]?["usage"] else { return }
             let used = Int(["input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"].compactMap { usage[$0]?.number }.reduce(0, +))
@@ -140,6 +140,12 @@ final class ClaudeBrain: CueBrain {
         default:
             break
         }
+    }
+
+    /// 报给管理器的工具名：去掉 CuePad 的 MCP 前缀（`CueMCPServer.claudeToolPrefix`）并小写（Claude Code 的 `Read`），同另两家。
+    private static func toolName(_ name: String) -> String {
+        let prefix = CueMCPServer.claudeToolPrefix
+        return (name.hasPrefix(prefix) ? String(name.dropFirst(prefix.count)) : name).lowercased()
     }
 
     private func finish(_ result: JSONValue) {

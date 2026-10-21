@@ -151,7 +151,7 @@ final class CodexBrain: CueBrain {
             guard turn != nil, let item = params["item"] else { return }
             switch item["type"]?.string {
             case "mcpToolCall":
-                let name = brainToolName(item["tool"]?.string ?? "?")
+                let name = item["tool"]?.string ?? "?"
                 session.emit(.tool(id: item["id"]?.string ?? "", name: name, arguments: String(decoding: (item["arguments"] ?? [:]).data, as: UTF8.self)))
             case "commandExecution":
                 let command = jsonString(["command": item["command"]?.string ?? ""])

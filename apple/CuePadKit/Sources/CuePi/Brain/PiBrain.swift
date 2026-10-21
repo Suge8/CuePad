@@ -5,18 +5,19 @@ import Foundation
 
 /// Pi 当大脑：RPC 模式（`pi --mode rpc`，协议见 Pi 的 docs/rpc.md），一行一条 JSON（`ChildProcess`）。
 /// - 不落会话（`--no-session`）；不发现扩展（`-ne`，CuePad 的桥扩展也不加载，所以它不在 Agent 会话列表里），
-///   只加载内置的 MCP 支持与一个临时扩展，后者用 `pi.registerMcpServer` 登记 CuePad 的 MCP 服务（工具直接声明给模型）；
+///   只加载随包的 cue-tools.ts：它当 CuePad 的 MCP 服务的客户端，把工具照原名（task、tell、memory）登记给模型，不走 Pi 内置 MCP 的
+///   `mcp__cuepad__` 命名（见它的头注释）；服务的命令行经环境变量 `CUEPAD_CUE_MCP` 交给它；
 ///   不读工作目录里的项目文件（`-na`：项目的 `.pi/` 设置、扩展与 MCP 配置都不信任），也不加载 skill、上下文文件、提示词模板；
 /// - 系统提示整份替换（`--system-prompt` 盖过 `SYSTEM.md`）；Pi 只在没给 `--append-system-prompt` 时才去找 `APPEND_SYSTEM.md`
 ///   追加上去，所以给一个空的追加项挡掉它（空串不追加任何东西）；
-/// - 工具只有 `read,grep,find,ls` 与 `mcp__cuepad__*`：清单里有 `mcp__` 开头的项时，其余 MCP 服务的工具都不给；
+/// - 工具只有扩展登记的与内置的 `read,grep,find,ls`（`-nbt` 关掉内置工具、留着扩展的，`+名字` 再加回这几个）；
 /// - 图随 `prompt` 的 `images` 交；模型能不能看图看 `get_state` 里模型的 `input`；
 /// - 思考强度原样交给 `--thinking`（Pi 自己按模型支持的档位夹取）；就地换走 `set_model`（`提供方/模型` 拆开）再 `set_thinking_level`
 ///   （换模型时 Pi 会按新模型重取强度，所以强度在后）；都只改这个进程，不写 Pi 的设置；
 /// - 用 Claude 订阅时把请求标成 Claude Code 的（随包的扩展 claude-subscription.ts，见它的头注释）：`-ne` 下用户自己装的同类扩展不加载，
 ///   不带这些标识的订阅请求会扣额外用量；
 /// - 提示缓存用长的一档（`PI_CACHE_RETENTION=long`：Anthropic 1 小时，OpenAI 24 小时，提供方不支持的照常）；
-/// - 开新会话走 `new_session`：Pi 按启动参数重建整个运行时（扩展、MCP 连接都重起），所以就地换过的模型与强度随后再交一次；
+/// - 开新会话走 `new_session`：Pi 按启动参数重建整个运行时（扩展与它起的工具服务都重起），所以就地换过的模型与强度随后再交一次；
 /// - 发话一律带 `streamingBehavior: steer`：正忙时 Pi 在当前回合的工具调用做完后、下一次请求模型前把它交给模型，空闲时照常开始一轮；
 /// - 一轮从第一个 `agent_start` 到 `agent_settled`（重试、压缩、插话都在其中）；
 /// - 正在说的话（拼法见 `DraftParts`）：段号是 `contentIndex`，`message_update` 的 `text_delta` 追加（RPC 只发增量，见 Pi 的 docs/json.md
@@ -32,6 +33,7 @@ final class PiBrain: CueBrain {
     private var window: Int?
     private(set) var seesImages = false
     static let subscription = Bundle.module.url(forResource: "claude-subscription", withExtension: "ts")!
+    static let tools = Bundle.module.url(forResource: "cue-tools", withExtension: "ts")!
 
     /// 本机的 Claude Code（`claude-subscription.ts` 取它的版本号）：先找大脑的 PATH，再找常见安装目录；没有就交 `claude`，扩展用保底版本号。
     private static func claude(_ config: CueBrainConfig) -> String {
@@ -54,20 +56,16 @@ final class PiBrain: CueBrain {
             let directory = try session.makeDirectory()
             let prompt = directory.appending(path: "system-prompt.md")
             try config.systemPrompt.write(to: prompt, atomically: true, encoding: .utf8)
-            let mcpExtension = directory.appending(path: "cuepad-mcp.ts")
-            let server: [String: Any] = [
-                "command": config.mcp[0], "args": Array(config.mcp.dropFirst()), "env": config.environment, "exposure": "direct",
-            ]
-            try "export default function (pi: any) { pi.registerMcpServer(\"\(CueMCPServer.name)\", \(jsonString(server))); }\n"
-                .write(to: mcpExtension, atomically: true, encoding: .utf8)
             var arguments = [
-                "--mode", "rpc", "--no-session", "--offline", "-ne", "-na", "-e", "builtin:mcp", "-e", mcpExtension.path, "-e", Self.subscription.path,
-                "-ns", "-nc", "-np", "--no-themes", "--system-prompt", prompt.path, "--append-system-prompt", "", "--tools", "read,grep,find,ls,\(CueMCPServer.toolPrefix)*",
+                "--mode", "rpc", "--no-session", "--offline", "-ne", "-na", "-e", Self.tools.path, "-e", Self.subscription.path,
+                "-ns", "-nc", "-np", "--no-themes", "--system-prompt", prompt.path, "--append-system-prompt", "", "-nbt", "--tools", "+read,+grep,+find,+ls",
             ]
             if let model = config.model { arguments += ["--model", model] }
             if let effort = config.effort { arguments += ["--thinking", effort.rawValue] }
             let process = try ChildProcess(
-                config.executable, arguments, directory: config.workingDirectory, environment: BrainSession.environment(config, ["PI_CACHE_RETENTION": "long", "CUEPAD_CLAUDE": Self.claude(config)]),
+                config.executable, arguments, directory: config.workingDirectory, environment: BrainSession.environment(config, [
+                    "PI_CACHE_RETENTION": "long", "CUEPAD_CLAUDE": Self.claude(config), "CUEPAD_CUE_MCP": jsonString(config.mcp),
+                ]),
                 placement: .group, input: .pipe, output: .lines)
             self.process = process
             Task {
@@ -153,7 +151,7 @@ final class PiBrain: CueBrain {
         // 嵌套的调用（工具里再调工具）带 parentToolCallId，不报
         case "tool_execution_start" where event["parentToolCallId"] == nil:
             guard turn != nil, let id = event["toolCallId"]?.string, let name = event["toolName"]?.string else { return }
-            session.emit(.tool(id: id, name: brainToolName(name), arguments: String(decoding: (event["args"] ?? [:]).data, as: UTF8.self)))
+            session.emit(.tool(id: id, name: name, arguments: String(decoding: (event["args"] ?? [:]).data, as: UTF8.self)))
         case "tool_execution_end" where event["parentToolCallId"] == nil:
             guard turn != nil, let id = event["toolCallId"]?.string else { return }
             session.emit(.toolDone(id: id, result: brainText(event["result"]?["content"]), failed: event["isError"]?.bool == true))
