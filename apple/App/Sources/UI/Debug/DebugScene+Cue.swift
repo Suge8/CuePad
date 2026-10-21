@@ -115,12 +115,12 @@ extension DebugScene {
             if let variant = defaults.string(forKey: "CuePadCueAsk") { try await seedAsk(variant, store: store, task: order?.id) }
             let forgotten = try await store.noteCueLine("旧的计费脚本还在用", source: .cue)
             try await store.forgetCueLine(forgotten.line.id)
-            // 对话末尾 Cue 自己又醒了四轮（一颗虚线气泡）：两次空闲巡视（换新后的第一轮顺手合并了记忆），中间一件任务的子代理卡住了（名字长、只看了看），
+            // 对话末尾 Cue 自己又醒了四轮（一颗虚线气泡）：两次空闲巡视，中间一件任务的子代理卡住了（名字长、只看了看），
             // 最后它与另一个会话一起叫醒（几处、名字长、只看了看）
             for (wake, note, tools) in [
-                (CueWake.idle, "记忆整理：#86-87 合成一行", process(step(.other, "合并记忆 #86-87"))),
+                (CueWake.idle, "巡视了一圈：「导入旧数据」的会话停了两小时，我提醒它接着做", process(step(.read, "看板"), step(.talk, "对「导入旧数据时保留回收站」说：接着做", importing))),
                 (.sessionActivity([CueStir(kind: .stalled, task: importing?.id)]), "", process(step(.read, "看「导入旧数据时保留回收站」的近况", importing))),
-                (.idle, "记忆整理：#40-43 合成一行", process(step(.other, "合并记忆 #40-43"))),
+                (.idle, "巡视了一圈，没有要你管的", process(step(.read, "看板"))),
                 (.sessionActivity([CueStir(kind: .settled, session: "billing"), CueStir(kind: .stalled, task: importing?.id)]), "", process(step(.read, "看板"))),
             ] {
                 try await store.recordCueRound(nil, startedAt: .now, answersYou: false, tools: tools, wake: wake)

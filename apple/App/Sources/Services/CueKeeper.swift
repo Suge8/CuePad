@@ -18,8 +18,8 @@ import os
 /// （`CueTiming.cacheLifetime`：缓存过期后接着用要把整段原价重写，换新只写固定前缀与视图，从不更贵）。满足就让大脑开新会话（`CueBrain.newSession`），
 /// 不多跑一轮、不先写交接（实测缓存热时先写交接再换没有带来提升，交接还每次写超 600 字）；一直记着的在这个班次起来后变过（钉上、取消、忘掉），就改成换个班次，让系统提示跟上。
 /// 新会话从哪接上只有一条规则：不论怎么来的（换新、换大脑、App 重启、意外退出后重起、起不来再试），第一条输入是记忆视图（`CueMemoryView`，一直记着的除外）、
-/// 平铺的对话视图（`CueView`，最近的对话与每一轮的经过）、记忆里待合并的块（`CueMemoryView.mergeText`，一次给齐，它先合并再处理醒来的事）加信封；
-/// 之后同一个会话里只往后加信封。没合完的块下次换新还在，不另记、不另叫醒。
+/// 平铺的对话视图（`CueView`，最近的对话与每一轮的经过）加信封；之后同一个会话里只往后加信封。
+/// 记忆的待合并的块不进 Cue 的轮：后台另起一次性的大脑合（`dreams`），不碰 Cue 的上下文与缓存，回你的那一轮不等它。
 /// 生命周期只有一个 `Phase`：起大脑中 → 值班（可能在跑一轮）→ 出问题后等着重起 → 次数用完停在起不来；Cue 此刻在做什么（`work`）由它直接得出，
 /// 每次对完账写进库（`PiStateRecorder.updateCue`；值班结束时由 `CueService` 写回歇着）。
 ///
@@ -154,6 +154,7 @@ final class CueKeeper {
                     Self.log.error("Cue 订阅资料库失败：\(error.localizedDescription, privacy: .public)")
                 }
             }
+            group.addTask { await self.dreams() }
             // 一上班就是歇着：上一次没收好尾（崩溃）留下的"在想"马上清掉，不等大脑起好
             await publish()
             if progress.marks == nil {
