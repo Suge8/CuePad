@@ -82,12 +82,12 @@ if [ "$rc" = 0 ]; then
 fi
 
 # 调试目录与产品同一个 target：文件不整个包在 DEBUG 里，Debug 构建与测试照过，Release 编不过或把调试代码发出去（350b9a47）。
-# DebugHooks.swift 是两种构建共用的入口，例外
+# DebugHooks*.swift 是两种构建共用的入口，例外
 for file in App/Sources/UI/Debug/*.swift; do
-  [ "${file##*/}" = DebugHooks.swift ] && continue
+  case "${file##*/}" in DebugHooks*.swift) continue ;; esac
   first="$(grep -m1 -E '^[[:space:]]*#if\b' "$file" || true)"
   [[ "$first" == *DEBUG* ]] && continue
-  printf '%s\n  → 调试目录的文件整个包在 #if DEBUG（可加平台条件）里，第一条 #if 就要带 DEBUG；两种构建都要的放 DebugHooks.swift\n\n' "$file"
+  printf '%s\n  → 调试目录的文件整个包在 #if DEBUG（可加平台条件）里，第一条 #if 就要带 DEBUG；两种构建都要的放 DebugHooks*.swift\n\n' "$file"
   status=1
 done
 

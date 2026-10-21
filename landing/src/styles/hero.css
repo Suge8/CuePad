@@ -1,0 +1,515 @@
+/* 顶栏与首屏：标题、入场编排、派活演示舞台、背景粒子 */
+
+/* ============================================================
+   Header
+   ============================================================ */
+.site-head {
+	position: fixed;
+	inset: 0 0 auto 0;
+	z-index: var(--z-header);
+	border-bottom: 1px solid transparent;
+	transition:
+		background 0.4s,
+		border-color 0.4s;
+}
+.site-head.scrolled {
+	background: color-mix(in oklch, var(--canvas) 84%, transparent);
+	backdrop-filter: blur(14px) saturate(1.15);
+	-webkit-backdrop-filter: blur(14px) saturate(1.15);
+	border-bottom-color: var(--border);
+}
+.nav {
+	width: min(76rem, 100% - 2.5rem);
+	margin-inline: auto;
+	display: flex;
+	align-items: center;
+	gap: 1.8rem;
+	padding-block: 0.8rem;
+}
+.brand {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.55rem;
+	font-family: var(--font-display);
+	font-weight: 700;
+	font-size: 1.15rem;
+	letter-spacing: -0.01em;
+	color: var(--ink);
+}
+.nav-links {
+	display: flex;
+	gap: 1.6rem;
+	margin-inline: auto;
+}
+.nav-links a {
+	font-size: 0.95rem;
+	font-weight: 550;
+	color: var(--muted);
+	transition: color 0.25s;
+}
+.nav-links a:hover {
+	color: var(--ink);
+}
+.nav-tools {
+	display: flex;
+	align-items: center;
+	gap: 0.8rem;
+}
+.lang {
+	display: inline-flex;
+	padding: 0.18rem;
+	border: 1px solid var(--border-strong);
+	border-radius: 999px;
+	background: oklch(99.7% 0.005 95.1 / 0.55);
+}
+.lang button {
+	padding: 0.28rem 0.7rem;
+	border-radius: 999px;
+	font-size: 0.85rem;
+	font-weight: 600;
+	white-space: nowrap;
+	color: var(--muted);
+	transition:
+		background 0.3s var(--ease-out),
+		color 0.3s;
+}
+.lang button[aria-pressed='true'] {
+	background: var(--ink);
+	color: var(--canvas);
+}
+.nav-cta {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+	padding: 0.5rem 1.05rem;
+	border-radius: 999px;
+	background: var(--ink);
+	color: var(--canvas);
+	font-size: 0.9rem;
+	font-weight: 600;
+	transition:
+		background 0.3s,
+		transform 0.3s var(--ease-out);
+}
+.nav-cta:hover {
+	background: var(--sage-ink);
+	transform: translateY(-1px);
+}
+.nav-cta .ic {
+	width: 1em;
+	height: 1em;
+}
+.gh-link {
+	display: inline-flex;
+	padding: 0.45rem;
+	border-radius: 999px;
+	color: var(--text);
+	transition:
+		background 0.3s,
+		transform 0.3s var(--ease-out);
+}
+.gh-link:hover {
+	background: oklch(30% 0.02 70 / 0.07);
+	transform: translateY(-1px);
+}
+.gh-link .ic {
+	width: 1.15rem;
+	height: 1.15rem;
+}
+
+/* ============================================================
+   Hero
+   ============================================================ */
+.hero {
+	position: relative;
+	overflow: clip;
+	padding: clamp(7rem, 13vh, 9.5rem) clamp(1.25rem, 4vw, 3rem) 0;
+}
+.hero-grid {
+	position: relative;
+	z-index: 1;
+	width: min(78rem, 100%);
+	margin-inline: auto;
+	display: grid;
+	grid-template-columns: 10fr 9fr;
+	gap: clamp(1rem, 3vw, 3rem);
+	align-items: center;
+}
+@media (min-width: 62rem) {
+	/* First viewport holds only copy + film; the sim rises below the fold */
+	.hero-grid {
+		min-height: calc(100svh - clamp(7rem, 13vh, 9.5rem) - 3rem);
+	}
+}
+.display {
+	font-family: var(--font-display);
+	font-weight: 720;
+	font-size: clamp(2.9rem, 5vw + 1.3rem, 5.6rem);
+	line-height: 1.03;
+	letter-spacing: -0.028em;
+	color: var(--ink);
+	text-wrap: balance;
+}
+html[lang^='zh'] .display {
+	letter-spacing: 0.01em;
+	line-height: 1.16;
+	font-weight: 700;
+}
+/* Load choreography (CSS-driven, GSAP handles scroll work) */
+.display .l {
+	display: block;
+	overflow: hidden;
+	padding-bottom: 0.08em;
+	margin-bottom: -0.08em;
+}
+.display .li {
+	display: inline-block;
+	will-change: transform;
+}
+html.js .display .li {
+	transform: translateY(112%);
+	animation: line-rise 1s var(--ease-out) forwards;
+}
+.display .l:nth-child(2) .li {
+	animation-delay: 0.12s;
+}
+@keyframes line-rise {
+	to {
+		transform: translateY(0);
+	}
+}
+html.js .hero-sub,
+html.js .hero-ctas {
+	opacity: 0;
+	transform: translateY(18px);
+	animation: fade-up 0.9s var(--ease-out) forwards;
+}
+html.js .hero-sub {
+	animation-delay: 0.4s;
+}
+html.js .hero-ctas {
+	animation-delay: 0.55s;
+}
+@keyframes fade-up {
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+html.js .stage {
+	opacity: 0;
+	transform: translateY(44px);
+	animation: stage-in 1.1s var(--ease-out) 0.75s forwards;
+}
+@keyframes stage-in {
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+html.js .mascot-hero {
+	opacity: 0;
+	scale: 0.55;
+	animation: pop 0.9s var(--ease-out) 1.25s forwards;
+}
+@keyframes pop {
+	to {
+		opacity: 1;
+		scale: 1;
+	}
+}
+html.js .hero-art {
+	opacity: 0;
+	translate: 70px 0;
+	rotate: 5deg;
+	animation: art-in 1.3s var(--ease-out) 0.3s forwards;
+}
+@keyframes art-in {
+	to {
+		opacity: 1;
+		translate: 0 0;
+		rotate: 0deg;
+	}
+}
+
+.squig {
+	position: relative;
+	font-style: normal;
+	white-space: nowrap;
+}
+.squiggle {
+	position: absolute;
+	left: -1%;
+	right: -1%;
+	bottom: -0.16em;
+	width: 102%;
+	height: 0.24em;
+	overflow: visible;
+	clip-path: inset(-30% -2% -40% -2%);
+}
+html.js .squiggle:not(.drawn) {
+	clip-path: inset(-30% 102% -40% -2%);
+}
+html.js .squiggle.drawn {
+	transition: clip-path 0.9s var(--ease-out);
+}
+.squiggle path {
+	fill: none;
+	stroke: var(--sage);
+	stroke-width: 5;
+	stroke-linecap: round;
+	vector-effect: non-scaling-stroke;
+}
+.hero-sub {
+	max-width: 56ch;
+	margin-top: 1.6rem;
+	font-size: clamp(1.05rem, 0.6vw + 0.95rem, 1.22rem);
+	line-height: 1.7;
+	color: var(--muted);
+	text-wrap: pretty;
+}
+.hero-ctas {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.9rem;
+	margin-top: 2.2rem;
+}
+.hero-art {
+	position: relative;
+	pointer-events: none;
+}
+.hero-art video {
+	width: 100%;
+	max-width: 40rem;
+	margin-left: auto;
+	mask-image: radial-gradient(ellipse 88% 86% at 50% 46%, #000 55%, transparent 76%);
+	-webkit-mask-image: radial-gradient(ellipse 88% 86% at 50% 46%, #000 55%, transparent 76%);
+	will-change: translate;
+	animation: hero-float 7s ease-in-out infinite;
+}
+@keyframes hero-float {
+	50% {
+		translate: 0 -10px;
+	}
+}
+
+/* ---- Hero stage: the dispatch sim ---- */
+.stage {
+	position: relative;
+	z-index: 1;
+	width: min(66rem, 100%);
+	margin: clamp(2.5rem, 5vw, 4rem) auto 0;
+	padding-bottom: clamp(3rem, 6vw, 4.5rem);
+	display: grid;
+	grid-template-columns: 13fr 9fr;
+	align-items: end;
+	perspective: 1400px;
+}
+.cell {
+	transform: translate3d(0, var(--py, 0px), 0);
+	will-change: transform;
+}
+.pad-cell {
+	position: relative;
+	z-index: 2;
+}
+.term-cell {
+	margin-left: clamp(-3rem, -3vw, -1.5rem);
+}
+.window {
+	background: var(--paper);
+	border: 1px solid var(--border);
+	border-radius: 16px;
+	box-shadow: var(--shadow-window);
+	text-align: left;
+	overflow: hidden;
+}
+.wbar {
+	display: flex;
+	align-items: center;
+	gap: 0.45rem;
+	padding: 0.7rem 0.9rem;
+	border-bottom: 1px solid var(--border);
+}
+.tl {
+	width: 0.7rem;
+	height: 0.7rem;
+	border-radius: 50%;
+	background: #ff5f57;
+}
+.tl:nth-child(2) {
+	background: #febc2e;
+}
+.tl:nth-child(3) {
+	background: #28c840;
+}
+.wmark {
+	width: 1rem;
+	height: 1rem;
+	margin-left: 0.5rem;
+	background: var(--ink);
+	-webkit-mask: url('/assets/mark.png') center / contain no-repeat;
+	mask: url('/assets/mark.png') center / contain no-repeat;
+}
+.wtitle {
+	margin-left: 0.35rem;
+	font-size: 0.82rem;
+	font-weight: 600;
+	color: var(--muted);
+}
+.pad {
+	transform: rotate(-0.7deg) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+}
+.term {
+	transform: rotate(0.6deg) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+	background: var(--drench-2);
+	border-color: oklch(99.7% 0.005 95.1 / 0.09);
+}
+.term .wbar {
+	border-bottom-color: oklch(99.7% 0.005 95.1 / 0.08);
+}
+.term .wtitle {
+	color: oklch(95.9% 0.01 87.5 / 0.45);
+}
+.pad-body {
+	min-height: clamp(8rem, 13vw, 11rem);
+	padding: 1.3rem 1.5rem 1rem;
+}
+.pad-text {
+	font-size: clamp(0.95rem, 0.4vw + 0.85rem, 1.1rem);
+	line-height: 1.8;
+	color: var(--ink);
+	word-break: break-word;
+}
+.caret {
+	display: inline-block;
+	width: 2px;
+	height: 1.05em;
+	translate: 0 0.18em;
+	background: var(--sage-strong);
+	animation: blink 1.05s steps(1) infinite;
+}
+.pad-foot {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
+	padding: 0.85rem 1.1rem;
+	border-top: 1px solid var(--border);
+}
+.pin {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.45rem;
+	font-family: var(--font-mono);
+	font-size: 0.8rem;
+	color: var(--muted);
+}
+.pin .ic {
+	width: 0.95rem;
+	height: 0.95rem;
+	color: var(--sage-strong);
+}
+.dispatch {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.45rem;
+	padding: 0.5rem 1.05rem;
+	border-radius: 999px;
+	background: var(--sage-strong);
+	color: var(--paper);
+	font-weight: 650;
+	font-size: 0.9rem;
+	box-shadow: 0 8px 18px -8px oklch(51.1% 0.06 159.4 / 0.7);
+}
+.dispatch .ic {
+	width: 0.95rem;
+	height: 0.95rem;
+}
+.dispatch.pulse {
+	animation: pulse 0.55s var(--ease-out);
+}
+@keyframes pulse {
+	35% {
+		transform: scale(1.07);
+		box-shadow: 0 0 0 10px oklch(56.1% 0.061 157.6 / 0.18);
+	}
+}
+@keyframes blink {
+	50% {
+		opacity: 0;
+	}
+}
+.term-body {
+	padding: 1.15rem 1.3rem 1.4rem;
+	font-family: var(--font-mono);
+	font-size: clamp(0.78rem, 0.3vw + 0.72rem, 0.92rem);
+	line-height: 2;
+	color: oklch(95.9% 0.01 87.5 / 0.92);
+	word-break: break-all;
+}
+.t-dim {
+	color: oklch(95.9% 0.01 87.5 / 0.38);
+}
+.t-ok {
+	color: var(--sage-light);
+}
+.t-prompt {
+	color: var(--sage-light);
+	margin-right: 0.4em;
+}
+.t-cursor {
+	display: inline-block;
+	width: 0.55em;
+	height: 1.1em;
+	translate: 0 0.2em;
+	background: var(--sage-light);
+	animation: blink 1.05s steps(1) infinite;
+}
+
+.chip {
+	position: fixed;
+	z-index: var(--z-chip);
+	max-width: 15rem;
+	padding: 0.55rem 0.85rem;
+	background: var(--paper);
+	border: 1px solid oklch(51.1% 0.06 159.4 / 0.45);
+	border-radius: 10px;
+	box-shadow: 0 14px 30px -12px oklch(20% 0.01 75 / 0.35);
+	font-size: 0.8rem;
+	line-height: 1.45;
+	color: var(--ink);
+	pointer-events: none;
+	opacity: 0;
+}
+
+.mascot-hero {
+	position: absolute;
+	right: -1%;
+	top: -4.2rem;
+	width: clamp(96px, 11vw, 148px);
+	transform: rotate(4deg);
+	filter: drop-shadow(0 18px 24px oklch(20% 0.01 75 / 0.22));
+	pointer-events: none;
+}
+.bob {
+	animation: bob 5.5s ease-in-out 2.2s infinite;
+}
+@keyframes bob {
+	50% {
+		translate: 0 -8px;
+	}
+}
+
+/* Ambient canvases */
+.dust,
+.sparks {
+	position: absolute;
+	inset: 0;
+	z-index: 0;
+	pointer-events: none;
+}
+.hero > *:not(.dust) {
+	position: relative;
+	z-index: 1;
+}
