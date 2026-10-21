@@ -1,13 +1,10 @@
 #if os(iOS)
 import SwiftUI
 
-/// 窄屏（iPhone 与窄窗口 iPad）的容器：一个导航栈，根是当前去处的页（`HomePage`），推入的页照常由系统返回与左缘右滑回去。
-/// 根只有底部那一排的四个去处（项目、任务、会话、Cue，`Route.home`），其余去处推在所属的那一页上（`Navigation.select`）；打开 App 落在 Cue。
-/// 换去处时两页在栈的根里水平推移（按底部那一排从左到右的顺序，`Dock.order`），推的是 SwiftUI 自己画的内容，逐帧插值；
-/// 导航栈托管在 UIKit 里，挪整个栈（几个栈交替）时 SwiftUI 不逐帧挪它，旧页停着、最后一下才跳走，就是换去处时闪回旧页的那一下。
-/// 先排后动（docs/ui.md 渲染性能）：新页先在屏外那一侧建好、画好、交出一帧，下一帧两页一起推（`arrived`）。推完才拿掉旧页，它这时已在屏外：
-/// 位置只由 `arrived` 推出，拿掉时不回到原处。减弱动态效果时不推，新页在原处淡入。
-/// 底部那一排整个窗口只有一份（`DockBar`），挂在栈的根上、不在哪一页里：换去处时它不重建、不跟着推，与页同一条弹簧原地换形（`morph`）。
+/// 窄屏（iPhone 与窄窗口 iPad）的容器：一个导航栈，根是底部那一排的四个去处横排成的一条（项目、任务、会话、Cue，`HomePager`：左右滑跟手切页），
+/// 推入的页照常由系统返回（返回钮、内容区右滑），返回后在 Cue 页左滑前进回刚才那页。其余去处推在所属的那一页上（`Navigation.select`）；打开 App 落在 Cue。
+/// 导航栈托管在 UIKit 里，几个栈交替时 SwiftUI 不逐帧挪它（旧页停着、最后一下才跳走）：所以只有一个栈，切页挪的是栈根里 SwiftUI 自己画的页。
+/// 底部那一排整个窗口只有一份（`DockBar`），挂在栈的根上、不在哪一页里：切页时它不重建、不跟着滑，与页同一刻原地换形（`morph`）。
 /// 每页各建一排时，新页那一排要从旧的样子摆出第一帧再长回来，"⋯"展开着换去处就是收成圆再长开的一下来回。
 /// Cue 页的输入框在页里（随键盘升起），底边那一格同一时刻只有一个主人（`handed`）：换形一开始离开输入框的样子就交给 Cue 钮，
 /// 长成输入框的那条弹簧做完（动画的完成回调）才交还给页里的输入框。不按延时交接：玻璃不跟延时的不透明度动画，当场就藏了。
@@ -15,11 +12,6 @@ import SwiftUI
 struct DockRoot: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.palette) private var palette
-    /// 屏上已经交给用户的去处：换去处时推完之前它还是旧的（出现前为 nil）。
-    @State private var shown: Route?
-    /// 推到了哪个去处：等于当前去处时新页在原处、旧页在屏外。
-    @State private var arrived: Route?
     /// 底部那一排此刻画成的样子：跟着该有的样子（`DockLook.init`）换形，出现前为 nil。
     @State private var look: DockLook?
     /// 底边那一格交给了 Cue 页里的输入框；Cue 钮等输入框画上屏才藏起（`released`）。
@@ -30,56 +22,33 @@ struct DockRoot: View {
     /// Cue 页底部的"⋯"展开成了三格：点别处、滚动或点 Cue 钮收起，回到 Cue 页总是收起的。同样只活在窄屏的容器里。
     @State private var placesOpen = false
     @State private var width: CGFloat = 0
+    /// 推入的页离开前拍的快照（左滑前进时跟手用）。
+    @State private var shot = LeaveShot()
 
     var body: some View {
         @Bindable var workspace = workspace
         let root = workspace.root
-        let leaving = shown.flatMap { $0 == root ? nil : $0 }
-        let settled = leaving == nil || arrived == root
-        // 新页从哪一侧进来：去处在右边就从右边推进来
-        let side: CGFloat = leaving.map { Dock.order($0) < Dock.order(root) ? 1 : -1 } ?? 0
-        let target = DockLook(route: arrived ?? root, placesOpen: placesOpen, composing: composing)
+        let target = DockLook(route: root, placesOpen: placesOpen, composing: composing)
         NavigationStack(path: $workspace.path) {
-            ZStack {
-                // 按去处认页：换去处时旧页留着推走，不重建
-                ForEach([leaving, root].compactMap(\.self), id: \.self) { route in
-                    let current = route == root
-                    let shift = reduceMotion ? 0 : (current ? (settled ? 0 : side) : (settled ? -side : 0)) * width
-                    HomePage(route: route)
-                        // 推着的两页各自铺满底色，不透出对方
-                        .background(palette.desk)
-                        .offset(x: shift)
-                        .opacity(reduceMotion && current && !settled ? 0 : 1)
-                        .allowsHitTesting(current)
-                        .accessibilityHidden(!current)
+            HomePager(composing: composing, shot: shot) {
+                ZStack(alignment: .bottom) {
+                    // "⋯"展开时铺在 Cue 页上的一层：点一下或一划就收起
+                    if placesOpen, root == .cue {
+                        Color.clear.contentShape(.rect)
+                            .onTapGesture { placesOpen = false }
+                            .gesture(DragGesture(minimumDistance: 4).onChanged { _ in placesOpen = false })
+                            .accessibilityHidden(true)
+                    }
+                    DockBar(route: root, look: look ?? target, released: released, placesOpen: $placesOpen, width: max(0, width - Dock.margin * 2))
+                        .padding(.bottom, Dock.margin).ignoresSafeArea(edges: .bottom)
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
             }
             .environment(\.dockComposer, handed)
             .environment(\.dockComposing, $composing)
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
-            // "⋯"展开时铺在 Cue 页上的一层：点一下或一划就收起
-            .overlay {
-                if placesOpen, root == .cue {
-                    Color.clear.contentShape(.rect)
-                        .onTapGesture { placesOpen = false }
-                        .gesture(DragGesture(minimumDistance: 4).onChanged { _ in placesOpen = false })
-                        .accessibilityHidden(true)
-                }
-            }
-            // 推入的页盖住它
-            .overlay(alignment: .bottom) {
-                DockBar(
-                    route: arrived ?? root, look: look ?? target, released: released, placesOpen: $placesOpen, width: max(0, width - Dock.margin * 2))
-                    .padding(.bottom, Dock.margin).ignoresSafeArea(edges: .bottom)
-            }
-            // 推移是 SwiftUI 逐帧插值的位移，图层上看不出在动：截图要等旧页拿掉（推完）再拍，不然拍到两页各露一截
-            .debugSettling(leaving != nil)
             .toolbarVisibility(.hidden, for: .navigationBar)
-            .navigationDestination(for: Route.self) { RouteView(route: $0) }
-        }
-        .onAppear {
-            shown = root
-            arrived = root
+            .navigationDestination(for: Route.self) { RouteView(route: $0).leaveShot($0, into: shot) }
         }
         .onChange(of: target, initial: true) { morph(to: target) }
         .debugExposesPlaces { placesOpen = true }
@@ -89,14 +58,6 @@ struct DockRoot: View {
             // 输入框离开页就没了焦点；回到 Cue 页是收起的样子，离开时不收：收起再长回三格就是换去处时那一下来回
             composing = false
             if root == .cue { placesOpen = false }
-            Task {
-                await NextFrame.wait()
-                withAnimation(reduceMotion ? Motion.crossfade : Motion.dock) {
-                    arrived = workspace.root
-                } completion: {
-                    shown = workspace.root
-                }
-            }
         }
     }
 
@@ -129,7 +90,7 @@ struct DockRoot: View {
 
 /// 栈的根上的一个去处：它的页。项目、任务、会话三页顶上那一排左边一颗搜索钮、右边这一页的那一个操作，不写标题
 /// （`homePage`：底部的选中格已经说了在哪一页），内容一直滚到底部那一排后面；Cue 页顶上是页头，输入框在它自己的页里（随键盘升起）。
-private struct HomePage: View {
+struct HomePage: View {
     let route: Route
     /// 安全区底边离屏幕底边多远（键盘弹出时是键盘高）。
     @State private var safeBottom: CGFloat = 0
@@ -155,13 +116,14 @@ enum Dock {
     static let maxCell: CGFloat = 76
     /// 三个去处，从左到右：项目、任务、会话（会话挨着 Cue：接力的光从 Cue 落到它那一格最近）。
     static let places: [SidebarOutline.Entry] = [.allProjects, .tasks, .sessions]
+    /// 根上的四页从左到右（三格去处，Cue 在最右）：左右滑切页与点按换去处时整条滑的顺序（`HomePager`）。
+    static let pages: [Route] = places.map(\.route) + [.cue]
 
     /// 一格多宽：整排按五格分（三格去处、两格 Cue），中间不空。
     static func cell(in width: CGFloat) -> CGFloat { min(maxCell, (width - gap - inset * 2) / 5) }
     static func capsule(in width: CGFloat) -> CGFloat { cell(in: width) * CGFloat(places.count) + inset * 2 }
 
-    /// 四个去处在底部那一排里从左到右的位置（三格，Cue 在最右）：换去处时新页从它那一侧推进来（`DockRoot`）。
-    static func order(_ route: Route) -> Int { places.firstIndex { $0.route == route } ?? places.count }
+    static func order(_ route: Route) -> Int { pages.firstIndex(of: route) ?? pages.count - 1 }
 
     /// 内容在安全区之上还要给 Dock 让出的高度（栏顶再隔 `Bars.contentGap` 到安全区底边）：滚到底时最后一行完整停在栏上面；键盘盖住 Dock 时为 0。
     static func reserve(above safeBottom: CGFloat) -> CGFloat { max(0, height + margin + Bars.contentGap - safeBottom) }

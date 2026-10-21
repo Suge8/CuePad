@@ -117,17 +117,31 @@ private struct DigestKey: Equatable {
 
 #if os(iOS)
 extension View {
-    /// Agent 页与会话近况页：显示期间算作"正在看 Pi"，手机按 3 秒主动拉，状态与近况是活的（见 `AppServices.pollingCadence`）。
+    /// Agent 页与会话近况页：在屏上（出现了、又是前台的页，`pageActive`）期间算作"正在看 Pi"，手机按 3 秒主动拉，状态与近况是活的（见 `AppServices.pollingCadence`）。
     func countsAsPiViewer() -> some View { modifier(PiViewing()) }
 }
 
 private struct PiViewing: ViewModifier {
     @Environment(AppServices.self) private var services
+    @Environment(\.pageActive) private var active
+    @State private var appeared = false
+    @State private var counted = false
 
     func body(content: Content) -> some View {
         content
-            .onAppear { services.piViewers += 1 }
-            .onDisappear { services.piViewers -= 1 }
+            .onAppear { appeared = true }
+            // 页拆掉时 onChange 不再来：在这里收回
+            .onDisappear {
+                appeared = false
+                count(false)
+            }
+            .onChange(of: appeared && active, initial: true) { _, on in count(on) }
+    }
+
+    private func count(_ on: Bool) {
+        guard on != counted else { return }
+        counted = on
+        services.piViewers += on ? 1 : -1
     }
 }
 #endif
