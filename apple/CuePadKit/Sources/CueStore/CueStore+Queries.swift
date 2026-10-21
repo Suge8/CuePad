@@ -2,7 +2,7 @@ import CueText
 import Foundation
 
 /// 卡片可见：自身未删除，且所属项目在库里、未删除（项目还没同步到的先不显示）。
-private let cardVisible = """
+let cardVisible = """
   deletedAt IS NULL AND projectID IN (SELECT id FROM projects WHERE deletedAt IS NULL)
   """
 

@@ -11,7 +11,7 @@ public struct CueMemoryView: Equatable, Sendable {
     case summary(lo: Int, hi: Int, text: String)
   }
 
-  /// 待合并的一块：区间与原文（小块是原行，大块是两半的摘要）。
+  /// 待合并的一块：区间与原文（小块是原行，不含忘掉的与一直记着的；大块是两半的摘要）。
   public struct Merge: Equatable, Sendable {
     public var lo: Int
     public var hi: Int
@@ -54,7 +54,7 @@ public struct CueMemoryView: Equatable, Sendable {
       guard summaries[[lo, hi]] == nil else { return }
       let mid = (lo + hi) / 2
       if hi - lo <= Self.rawMax {
-        let raw = (lo..<hi).filter { lines[$0].deletedAt == nil }.map { "#\($0) \(lines[$0].text)" }
+        let raw = (lo..<hi).filter { lines[$0].deletedAt == nil && !lines[$0].pinned }.map { "#\($0) \(lines[$0].text)" }
         merges.append(Merge(lo: lo, hi: hi, source: raw.joined(separator: "\n")))
         return
       }
