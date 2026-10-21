@@ -332,8 +332,8 @@ import Testing
     }
     let task = try await store.createTask("修好登录页\n登录页白屏，查一下", in: project.id)
     try await store.recordMacAgents(
-      host: "mac-a", name: nil, [MacAgent(kind: .claudeCode, model: nil, models: []), MacAgent(kind: .codex, model: nil, models: [])],
-      problems: [MacAgentProblem(kind: .pi, reason: "没登录")])
+      host: "mac-a", name: nil, [AgentKind.claudeCode, .codex].map { MacAgent(kind: $0, model: nil, models: []) },
+      problems: [MacAgentProblem(kind: .pi, reason: .notLoggedIn)])
     try await Server.run(library: sandbox.directory) { server in
       for bad in [["agent": "pi"], ["agent": "opencode", "model": "big-pickle"], ["agent": "cursor"]] {
         try await server.refused("task", ["action": "start", "task": task.id.uuidString].merging(bad) { $1 })

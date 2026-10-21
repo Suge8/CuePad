@@ -81,8 +81,7 @@ final class AgentIntegrations {
     /// 在后台跑这家的官方安装脚本（`AgentKind.installCommand`），装完重新检测它；没装上的原因记在 `jobs`（脚本输出的最后一句）。
     func installAgent(_ kind: AgentKind) async {
         jobs[kind] = .installing
-        let upgrading = if case .tooOld = statuses[kind]?.presence { true } else { false }
-        let result = await integration.runInstaller(kind, upgrading: upgrading)
+        let result = await integration.runInstaller(kind, statuses[kind]?.presence ?? .notFound)
         await detect(kind)
         jobs[kind] = switch result {
         case nil: .failed("安装超时")

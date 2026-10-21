@@ -13,7 +13,7 @@ enum ScrollAnchor {
 /// - `-CuePadDemo YES`：库为空（只有默认项目）时写入演示数据；
 /// - `-CuePadSeed perf`（仅 Mac）：库为空（只有默认项目）时写入性能测量用的大资料库（`PerfLibrary`），配合 `-CuePadBench interact`；
 /// - `-CuePadProject <名称>`：打开该项目；
-/// - `-CuePadScene <画面>`：初始画面。Mac：collapsed、older、editor（-CuePadCard 那张散放的灵感进编辑页）、task（打开本项目第一条任务的气泡，没有落点、在上方居中；给了 `-CuePadTask <标题开头>` 是那一条）、search、tasks（任务页；配 -CuePadDemo 时写入演示会话与 Cue 的等你，推进中的带会话状态）、agentsetup（首次打开的接入面板：接入 Agent 并启用 Cue；配 `-CuePadAgentHome <空目录>` 看一家都没装时的安装与登录（点安装真跑官方脚本，装进那个目录），配 `-CuePadSync syncing` 看换新 Mac、还没和 iCloud 对过时 Cue 那一行在等）、connected（几家 Agent 接进隔离目录、打开 Agent 页：看接入后的会话页与 + 的新会话里选 Agent；配 `-CuePadFolder <路径>` 再建一个绑着这个文件夹的项目，给隔离实例里真跑 Cue 派活用）、select（批量选择本页前三条灵感）、wallgap（配 -CuePadProject Flow：新记两条再删最早那条，看删卡后卡片墙的排布）、trash、archive、settings（拍真的设置窗口，主窗口收起；`-CuePadSettingsPane cue|general|agents` 翻到那一页）、menubar、cuebar（"对 Cue 说"的输入条）、projectform；
+/// - `-CuePadScene <画面>`：初始画面。Mac：collapsed、older、editor（-CuePadCard 那张散放的灵感进编辑页）、task（打开本项目第一条任务的气泡，没有落点、在上方居中；给了 `-CuePadTask <标题开头>` 是那一条）、search、tasks（任务页；配 -CuePadDemo 时写入演示会话与 Cue 的等你，推进中的带会话状态）、agentsetup（首次打开的接入面板：接入 Agent 并启用 Cue；配 `-CuePadAgentHome <空目录>` 看一家都没装时的安装与登录（点安装真跑官方脚本，装进那个目录），配 `-CuePadSync newmac` 看换新 Mac、还没和 iCloud 对过时 Cue 那一行在等）、connected（几家 Agent 接进隔离目录、打开 Agent 页：看接入后的会话页与 + 的新会话里选 Agent；配 `-CuePadFolder <路径>` 再建一个绑着这个文件夹的项目，给隔离实例里真跑 Cue 派活用）、select（批量选择本页前三条灵感）、wallgap（配 -CuePadProject Flow：新记两条再删最早那条，看删卡后卡片墙的排布）、trash、archive、settings（拍真的设置窗口，主窗口收起；`-CuePadSettingsPane cue|general|agents` 翻到那一页）、menubar、cuebar（"对 Cue 说"的输入条）、projectform；
 ///   cue 打开 Cue 页、cuememory 再打开"Cue 记得什么"、cuerun 再打开"运行情况"（仅 Mac；演示数据里 Cue 这时运行在这台，见 `DebugScene+Cue.swift`）；
 ///   agent 打开 Agent 整页列表，session 整页打开 `-CuePadSession <会话名>`（这两个画面配 `-CuePadDemo YES` 时写入 Mac 同步来的演示会话，见 `DebugScene+PiDemo.swift`；notes 里你的话带一张图、relay 里发出还没进对话的话带一张图，核对对话里的图片；长对话与追加中的对话见 `DebugScene+LongChat.swift`）；
 ///   iOS 见 `DebugScene+iOS.swift`；
@@ -46,9 +46,9 @@ enum ScrollAnchor {
 ///   `-CuePadCueCycle YES`：就绪后轮流走过各份样例（`cueNowTourIfAsked`），录切换；
 /// - `-CuePadCatalogFailure YES`：项目目录读取直接报错（重试也一样），核对读取失败画面；
 ///   `-CuePadCatalogFailure once`：每个窗口（含菜单栏面板）只有第一次读取报错，按"重试"后恢复，核对重试路径。
-/// - `-CuePadSync <noAccount|decide|failed|syncing|restricted|conflicts>`：装上报这个状态的同步替身，设置里 iCloud 同步与 Mac 工具栏的同步提示按它显示（`DebugScene+Sync.swift`；`syncing` 还没和 iCloud 对过一遍）；
+/// - `-CuePadSync <noAccount|decide|failed|restricted|conflicts>`：装上报这个状态的同步替身，设置里 iCloud 同步与 Mac 工具栏的同步提示按它显示（`DebugScene+Sync.swift`）；
 ///   `-CuePadSync stalled`：装上同步永不返回的替身，核对下拉刷新的圈有时限；`-CuePadSync arrive`：启动后的第一次拉取分几页带回别的设备写下的 Cue 的话（`ArrivingSync`），核对"同步中"与对完一次滑上来；
-///   `-CuePadSync newmac`：换新 Mac 的第一遍同步，`-CuePadReconcileSeconds <秒>`（默认 8）后带回 Cue 在「Mac Studio」上运行（`NewMacSync`），核对各入口先等、对过后写它在哪台；
+///   `-CuePadSync newmac`：换新 Mac 的第一遍同步，`-CuePadReconcileSeconds <秒>`（默认 8）后带回 Cue 在「Mac Studio」上运行（`NewMacSync`），核对各入口先等、对过后写它在哪台（秒数给大就一直在等）；
 /// - `-CuePadOfferSetup YES`（仅 Mac）：隔离库也像正式版那样首次打开时决定弹不弹接入面板（`Workspace.offerSetup`，只弹一次记在隔离库的偏好里），核对老用户升级后自动弹的那一次；
 /// - `-CuePadSampleCrash YES`：存一份样例崩溃诊断（配 `-CuePadCrashSheet YES` 直接打开摘要）；
 /// - `-CuePadNotifications YES`：隔离库下也要通知权限、发真实的系统通知（两端，规则见 docs/verify.md「通知」）；
