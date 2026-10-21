@@ -73,11 +73,14 @@ extension Duty {
         ]
     }
 
-    /// 说到分标签页、又不是在否定它（前面几个字里没有不、别、没、无）；"按标签定位"这类说的是别的标签
+    /// 说到分标签页、又是在提议它：按句看（句号、问号、分号、换行断开），不靠字距——这句说到标签页，
+    /// 整句（去掉"要不要"这类问法里的"不"）没有否定或否掉的表态（不、别、没、非、保持、一页、长列表、按你说的…），
+    /// 也不是在转述别人的问题（问、提到、提出）。"按标签定位"这类说的是别的标签。
     static func proposesTabs(_ text: String) -> Bool {
-        text.ranges(of: /标签页|页签|tab ?页|tabs/.ignoresCase()).contains { range in
-            let from = text.index(range.lowerBound, offsetBy: -8, limitedBy: text.startIndex) ?? text.startIndex
-            return !text[from..<range.lowerBound].contains(/不|别|没|无|免|否/)
+        text.split(whereSeparator: { "。！？!?；;\n".contains($0) }).contains { sentence in
+            guard sentence.contains(/标签页|页签|tab ?页|tabs/.ignoresCase()) else { return false }
+            let stance = sentence.replacing(/要不要|是不是|能不能/, with: "")
+            return !stance.contains(/不|别|没|无|非|否|保持|一页|长列表|按你说的|照你说的/) && !sentence.contains(/问|提到|提出/)
         }
     }
 
