@@ -146,7 +146,8 @@ final class CueKeeper {
                 do {
                     for try await _ in store.observe({ store in
                         Signal(
-                            messages: try store.cueMessages(limit: 50), active: try store.cueBoardActive(), memory: try store.cueMemoryVersion(),
+                            toDeliver: try store.cueMessagesToDeliver().map(\.id), lastYou: try store.cueLastYou()?.said,
+                            active: try store.cueBoardActive(), memory: try store.cueMemoryVersion(),
                             profile: try store.cueProfile(), viewing: try store.viewers().compactMap(\.sessionID), written: try store.lastWrite())
                     }) { input.yield(.kick) }
                 } catch {

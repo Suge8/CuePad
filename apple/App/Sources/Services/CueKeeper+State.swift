@@ -110,10 +110,12 @@ extension CueKeeper {
         case brain(Int, CueBrainEvent)
     }
 
-    /// 触发对账的读数：变了就对一次账（内容不用，对账自己读）。记忆的版本在内：提醒在记忆里，记下、清掉都要重排定时器。
+    /// 触发对账的读数：变了就对一次账（内容不用，对账自己读）。对话只取对账用到的：待交给它的你的话与回答、你最近一句的时刻（巡视从它算空闲）；
+    /// Cue 自己写的经过、回复不叫醒对账。记忆的版本在内：提醒在记忆里，记下、清掉都要重排定时器。
     /// 看板只取对账用到的那一点：在不在做事（变了才可能该排巡视）；其余变化（会话歇下、事做完）都在写入序号里。
     nonisolated struct Signal: Equatable, Sendable {
-        var messages: [CueMessage]
+        var toDeliver: [UUID]
+        var lastYou: Date?
         var active: Bool
         var memory: CueMemoryVersion
         var profile: CueProfile?
