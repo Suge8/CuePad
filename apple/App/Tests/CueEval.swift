@@ -181,15 +181,9 @@ final class CueEval {
             let took = greeting.finishedAt.map { seconds($0.timeIntervalSince(greeting.startedAt)) } ?? "没做完"
             lines.append("- 刚启用那一轮（预热，不评）：\(took)，上下文 \(greeting.context.map(String.init) ?? "—")，工具 \(greeting.calls.map(\.name).joined(separator: "、"))")
         }
-        lines += ["", "## 开销（每轮，含预热；Claude Code 每轮 result 事件报的）", ""]
+        lines += ["", "## 开销（每轮，含预热；大脑报的，`BrainUsage`）", ""]
         if usage.count != rounds.count {
             lines += ["大脑报了 \(usage.count) 轮，记下的轮有 \(rounds.count) 轮，下表按先后对齐，合计以大脑报的为准。", ""]
-        }
-        if let directory = rig.brainDirectory, EvalBrain.current.runtime == .pi {
-            let billing = BrainUsage.billing(in: directory)
-            lines += [
-                "计费标识：\(billing.marked)/\(billing.requests) 次模型请求的系统提示首块是 Claude 订阅的计费标识，user-agent：\(billing.agents.sorted().joined(separator: "、"))。", "",
-            ]
         }
         lines += ["| 轮 | 醒来 | 用时 | 上下文 | \(BrainUsage.header) |", "| --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
         for index in 0..<max(usage.count, rounds.count) {

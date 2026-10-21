@@ -86,18 +86,13 @@ extension Duty {
     /// 写进 .md 的长程统计
     func summarize() async {
         let rounds = eval.rounds.filter { $0.wake != .enabled }
-        let median = medianRoundTime()
         let renewals = eval.renewals
         let renewedAt = renewalModes.compactMap { round, mode in
             steps.firstIndex { $0.window?.contains(round.startedAt) == true }.map { "第 \($0 + 1) 步「\(steps[$0].label)」（\(mode)）" }
         }
-        let usage = rig.brainDirectory.map(BrainUsage.rounds(in:)) ?? []
-        let total = usage.reduce(BrainUsage(), +)
-        var lines = [
+        let lines = [
             "", "## 长程", "",
             "- 醒来 \(rounds.count) 次（不含预热；剧本叫醒 \(steps.count) 次），换新 \(renewals.count) 次（大脑开了新的对话）\(renewedAt.isEmpty ? "" : "，在" + renewedAt.joined(separator: "、"))",
-            "- 每轮用时中位 \(median)",
-            "- 合计（含预热，大脑报了 \(usage.count) 轮）：\(BrainUsage.header.replacingOccurrences(of: " | ", with: "、")) = \(total.cells.replacingOccurrences(of: " | ", with: "、"))",
         ]
         eval.report = lines + stepTable()
         eval.extra["renewals"] = renewalModes.map { round, mode in

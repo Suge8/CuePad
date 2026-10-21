@@ -179,13 +179,11 @@ private final class Days: EvalScript, Playable {
 
     func summarize() async {
         let rounds = eval.rounds.filter { $0.wake != .enabled }
-        let median = medianRoundTime()
         let usage = rig.brainDirectory.map(BrainUsage.rounds(in:)) ?? []
         let all = eval.rounds
         let merged = await merges()
         // 开销按轮对齐（大脑报的与记下的轮按先后对应）
         let cost = { (indices: [Int]) in indices.filter { $0 < usage.count }.map { usage[$0] }.reduce(BrainUsage(), +) }
-        let total = usage.reduce(BrainUsage(), +)
         let renewals = eval.renewals
         let renewedAt = renewals.compactMap { round in steps.firstIndex { $0.window?.contains(round.startedAt) == true }.map { "第 \($0 + 1) 步「\(steps[$0].label)」" } }
         let cells = { (usage: BrainUsage) in usage.cells.replacingOccurrences(of: " | ", with: "、") }
@@ -194,8 +192,6 @@ private final class Days: EvalScript, Playable {
             "- 预置历史：对话 \(history.logged) 条、记忆 \(history.memoryLines) 行（\(history.pinned) 行一直记着）、做完的任务 \(history.doneTasks) 件",
             "- 醒来 \(rounds.count) 次（不含预热；剧本叫醒 \(steps.count) 次），换新 \(renewals.count) 次（大脑开了新的对话）"
                 + (renewedAt.isEmpty ? "" : "，在" + renewedAt.joined(separator: "、")),
-            "- 每轮用时中位 \(median)",
-            "- 合计（含预热）：\(BrainUsage.header.replacingOccurrences(of: " | ", with: "、")) = \(cells(total))",
             "- 其中合并的轮（写了摘要的轮，第 \(merged.map { "\($0["round"]!)" }.joined(separator: "、")) 轮）：\(cells(cost(merged.map { $0["round"] as! Int })))",
             "- 合并 \(merged.count) 轮、写了 \(merged.reduce(0) { $0 + ($1["summaries"] as! Int) }) 条摘要："
                 + merged.map { "第 \($0["round"]!) 轮（\(($0["renewal"] as! Bool) ? "新会话的第一轮" : "接着原会话")，\($0["step"]!)，\($0["summaries"]!) 条），之后视图 \($0["viewLines"]!) 行" }
