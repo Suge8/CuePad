@@ -57,14 +57,12 @@ import os
 @Observable
 final class CueKeeper {
     nonisolated static let patrolsPerDay = 3
-    /// 运行情况里留最近这么多轮
     nonisolated static let roundsKept = 50
 
     struct Setup {
         var recorder: PiStateRecorder
         /// 找起大脑要的可执行文件等（不问登录）
         var launch: @Sendable (AgentKind) async throws -> CueLaunch?
-        /// `cuepad` 命令行（MCP 服务）
         var helper: URL
         /// App 正在用的资料库目录：MCP 服务经 `CUEPAD_LIBRARY_DIR` 打开同一个库
         var library: URL
@@ -102,7 +100,6 @@ final class CueKeeper {
         progress = (try? JSONDecoder().decode(Progress.self, from: Data(contentsOf: setup.directory.appending(path: "keeper.json")))) ?? Progress()
     }
 
-    /// 最近的几轮，旧的在前，在跑的一轮在最后。
     var rounds: [CueRound] { turn.map { history + [$0.round] } ?? history }
     /// 在回答你的这一轮正在说的话（只在内存，不进 `cueState`、不入库、不同步）：只有 Cue 页末尾读它，出字时对话列表不重算。
     /// 说完的留着，由 Cue 页在对话里出现它之后换下；下一轮开始、大脑出问题时清掉。

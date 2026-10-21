@@ -56,7 +56,6 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
   public var target: SendTarget
   /// 指定执行的那台 Mac（只有它会领取）。必填。
   public var hostID: String
-  /// 请求的方式（见 `DeliveryMode`）。
   public var mode: Open<DeliveryMode>
   public var cardID: UUID?
   public var status: Open<DeliveryStatus>

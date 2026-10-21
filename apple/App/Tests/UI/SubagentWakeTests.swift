@@ -99,13 +99,11 @@ struct SubagentWakeTests {
         await rig.stop()
     }
 
-    /// 你在 Cue 页说一句。
     private func say(_ text: String, in workspace: Workspace, _ rig: CueHostTests.Rig) async throws {
         workspace.cue.draft = ComposerDraft(text: text)
         await workspace.speak(to: .cue, from: Bindable(workspace.cue).draft) { try $0.stored(in: rig.store.files) }?.value
     }
 
-    /// FireCode 名册里的一项（线上格式）。
     private static func ui(_ state: String, action: String) -> [String: Any] {
         ["name": "ui", "role": "工程师", "state": state, "action": action, "startedAt": FakeExtension.nowMillis, "settledAt": NSNull(), "model": NSNull()]
     }

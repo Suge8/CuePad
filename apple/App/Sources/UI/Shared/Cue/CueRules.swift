@@ -97,7 +97,6 @@ nonisolated struct CueDigest: Equatable, Sendable {
     var tally: CueTally
     /// "等你 M"。
     var waiting: Int { tally.waiting.count }
-    /// 推进中几件。
     var advancing: Int { tally.advancing.count }
     /// 新消息有几条（`CueStore.cueUnread`）。
     var unread: Int
@@ -247,7 +246,6 @@ nonisolated struct CueFlight: Equatable, Sendable {
             return [woke, relay].compactMap { $0 }.max { $0.at < $1.at }
         }
 
-        /// 读到的最新时刻。
         var latest: Date? { ([woke?.at] + handed.map(\.at)).compactMap { $0 }.max() }
     }
 }

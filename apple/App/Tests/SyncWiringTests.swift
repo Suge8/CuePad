@@ -96,8 +96,6 @@ struct SyncWiringTests {
         try await eventually("services.conflicts.isEmpty") { services.conflicts.isEmpty }
     }
 
-    /// 正式组装（`.iCloud`）没有创建引擎时，状态写明原因，不显示成"已同步"。
-    /// 真机上的事故：两个入口都绕开了创建引擎的那条路，引擎从未运行，界面却一直是已同步。
     @Test func 正式组装没有创建同步时状态写明原因() {
         let app = TestApp(sync: .iCloud)  // 测试宿主在隔离目录里
         #expect(app.services.sync == nil)

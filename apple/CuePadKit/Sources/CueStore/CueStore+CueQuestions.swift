@@ -94,6 +94,6 @@ extension CueStore {
       [oldest.createdAt, Self.idList(recent.map(\.id))], orderBy: "createdAt, rowid")
   }
 
-  /// 你答了的提问（撤回的 answer 为空）：也是它的部分索引（`Schema` 第 57 步）的条件，不一样就用不上。
+  /// 你答了的提问（撤回的 answer 为空）：也是它的部分索引（`Schema.answeredIndex`）的条件，不一样就用不上。
   static let answered = "choices IS NOT NULL AND answer IS NOT NULL"
 }

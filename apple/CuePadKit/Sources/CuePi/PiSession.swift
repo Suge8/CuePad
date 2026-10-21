@@ -76,7 +76,6 @@ public struct PiSession: Identifiable, Sendable, Equatable {
     public internal(set) var availableModels: [PiModelOption] = []
     /// 上下文余量：没有模型时为 nil
     public internal(set) var context: PiContextUsage? = nil
-    /// 此刻能用的斜杠命令
     public internal(set) var commands: [PiSlashCommand] = []
 
     public var modelState: PiModelState { PiModelState(model: model, thinking: thinking, models: availableModels) }

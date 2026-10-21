@@ -6,7 +6,6 @@ import Foundation
 /// 读数（含读屏的说法与"照这速度多久用完"）全在 `now` 那一刻算定：过了重置时间的窗口按已重置算（满额），不请求、也不跑定时器——界面只在新观测到达或重画时换读数，
 /// 倒计时是自己走字的计时文字（`Countdown`，与"x 分钟前"的 `PiClock.Live` 同一种做法）。档位按已用算，与上下文用量同一个口径（`UsageLevel`）。
 nonisolated struct QuotaMeter: Equatable {
-    /// 一个窗口此刻的读数。
     struct Window: Equatable, Identifiable {
         /// "5 小时"、"本周"、"Fable 本周"
         let name: String

@@ -18,7 +18,6 @@ nonisolated struct Dotted: Hashable, Sendable, ExpressibleByStringLiteral, Expre
     var visible: String { parts.joined(separator: Self.separator) }
     var spoken: String { parts.joined(separator: "，") }
 
-    /// 非空才有值：为空时整句不写。
     var nonEmpty: Dotted? { isEmpty ? nil : self }
 
     static func + (lhs: Dotted, rhs: Dotted) -> Dotted { Dotted(lhs.parts + rhs.parts) }

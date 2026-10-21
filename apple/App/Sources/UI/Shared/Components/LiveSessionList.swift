@@ -58,9 +58,7 @@ private struct LiveMoreFold: View {
 /// 子代理只数会话自己报上来的（同步记录的 `PiSessionState.subagents`，四家同一个来源；报不出的那家就是 0，不估算）。
 nonisolated struct LiveWork: Equatable {
     let rows: [PiSessionState]
-    /// 此刻在跑的会话数。
     let running: Int
-    /// 在跑的子代理数。
     let subagents: Int
 
     init(rows: [PiSessionState], running: (PiSessionState) -> Bool) {

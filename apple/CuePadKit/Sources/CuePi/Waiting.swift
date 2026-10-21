@@ -11,7 +11,6 @@ public enum AgentTimeouts {
     public static let probe: Duration = .seconds(20)
     /// 起进程到上桥、拉起后台服务
     public static let launch: Duration = .seconds(30)
-    /// 请会话结束后等它下桥
     public static let end: Duration = .seconds(10)
     /// 请托管的进程退出后等它自己收尾多久，过了就强杀（Pi 的收尾实测 80 次里 11 次停住超过这个数）
     public static let endGrace: Duration = .seconds(5)
@@ -48,7 +47,6 @@ final class PendingReplies<ID: Hashable & Sendable, Reply: Sendable> {
         self.timeoutError = timeoutError
     }
 
-    /// 连接断了之后为 true（`closeAll` 之后）。
     var isClosed: Bool { closed != nil }
 
     /// 登记 `id`、用 `send` 发出请求，等回应。`send` 抛错时不等，原样抛出。

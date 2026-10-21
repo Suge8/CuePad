@@ -201,7 +201,6 @@ extension AppServices {
         try await sync?.resolve(resolution)
     }
 
-    /// 冲突副本：选定保留的版本，另一份删除。
     func resolveConflict(copy id: UUID, keep choice: ConflictChoice) async throws {
         try await store.resolveConflict(copy: id, keep: choice)
     }

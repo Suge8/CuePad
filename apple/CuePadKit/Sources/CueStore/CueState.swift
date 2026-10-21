@@ -118,7 +118,6 @@ public struct CueDuty: Equatable, Sendable {
     self.left = left
   }
 
-  /// Cue 把会话此刻的这次停下留给了你。
   public func leftToYou(_ session: PiSessionState) -> Bool { left.contains { $0.holds(for: session) } }
 }
 

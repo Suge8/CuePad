@@ -96,7 +96,6 @@ extension CueHostTests {
 
         func say(_ text: String) async throws { try await store.addCueMessage(.you, text: text) }
 
-        /// 存一张图进库，返回写进正文的引用。
         func image() throws -> String { CueFormat.imageMarkup(id: try store.files.store(pngData(shade: 0.5))) }
 
         /// 等到出现一条 `author` 写的、含 `text` 的消息。默认上限比条件等待宽：中间隔着真 Pi 大脑起进程、读剧本。

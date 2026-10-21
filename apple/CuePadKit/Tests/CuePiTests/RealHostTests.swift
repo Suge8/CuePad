@@ -26,7 +26,6 @@ struct RealHostTests {
         PiRuntime(bridge: bridge, paths: pi.paths, pi: { AgentTape.executable("pi") }, idleLimit: idleLimit)
     }
 
-    /// 在后台接着这个会话文件，等它上了桥。
     private func resume(_ host: PiRuntime, _ file: URL, in pi: PiProcess, on bridge: PiBridge) async throws -> PiSession {
         let id = try await host.resume(IndexedSession(id: "", path: file.path, cwd: pi.cwd.path, lastActivityAt: .now))
         return try #require(bridge.session(id: id))
@@ -278,9 +277,12 @@ struct RealHostTests {
         defer { bridge.stop(); pi.stop() }
         try bridge.start()
         let (file, sessionID) = try await endedSession(pi, bridge)
-        let installed = pi.paths.extensionsDirectory.appending(path: "cuepad-bridge.ts")
-        let current = try String(contentsOf: installed, encoding: .utf8)
-        try OldExtension.otherProtocol.rewrite(current).write(to: installed, atomically: true, encoding: .utf8)
+        let installed = PiExtensionFiles(extensionsDirectory: pi.paths.extensionsDirectory)
+        try OldExtension.otherProtocol.rewrite(in: installed.directory)
+        let entry = installed.directory.appending(path: "index.ts")
+        try String(contentsOf: entry, encoding: .utf8)
+            .replacing(/const EXTENSION_VERSION = \d+;/, with: "const EXTENSION_VERSION = \(PiExtensionBundle.version - 1);")
+            .write(to: entry, atomically: true, encoding: .utf8)
         let log = ChangeLog(bridge)
         let left = try await PiProcess(alongside: pi, sessionFile: file, env: [PiRuntime.hostedVariable: "120"])
         defer { left.stop() }
@@ -291,8 +293,7 @@ struct RealHostTests {
         let host = host(pi, bridge)
         host.start()
         defer { stopHostedProcesses(bridge) }
-        try current.replacing(/const EXTENSION_VERSION = \d+;/, with: "const EXTENSION_VERSION = \(PiExtensionBundle.version + 1);")
-            .write(to: installed, atomically: true, encoding: .utf8)  // 新 App 装好了新扩展
+        try installed.install(legacyInUse: false)  // 新 App 装好了新扩展
 
         try await eventually("同一个进程换上新扩展、重新连上") {
             bridge.sessions.contains { $0.pid == left.pid && !$0.upgrading && $0.state == .settled }
@@ -313,8 +314,7 @@ struct RealHostTests {
         defer { bridge.stop(); pi.stop() }
         try bridge.start()
         let (file, sessionID) = try await endedSession(pi, bridge)
-        let installed = pi.paths.extensionsDirectory.appending(path: "cuepad-bridge.ts")
-        try old.rewrite(String(contentsOf: installed, encoding: .utf8)).write(to: installed, atomically: true, encoding: .utf8)
+        try old.rewrite(in: pi.paths.extensionsDirectory.appending(path: "cuepad-bridge"))
         let host = host(pi, bridge)
         host.start()
         let changes = bridge.changes()
@@ -328,18 +328,6 @@ struct RealHostTests {
         let pid = try #require(launched)
         defer { kill(pid, SIGTERM) }  // 见红时别留下
         try await eventually("起出的进程退出了") { kill(pid, 0) != 0 }
-    }
-
-    /// 读不懂托管约定的旧扩展：协议号不同的，与把 `CUEPAD_HOSTED` 当作 "1" 来认的（协议号没变）。
-    enum OldExtension: CaseIterable, Sendable {
-        case otherProtocol, oldHostedValue
-
-        func rewrite(_ source: String) -> String {
-            switch self {
-            case .otherProtocol: source.replacing(/const PROTOCOL_VERSION = \d+;/, with: "const PROTOCOL_VERSION = 1;")
-            case .oldHostedValue: source.replacing(/const IS_HOSTED = .*;/, with: "const IS_HOSTED = process.env[HOSTED_ENV] === \"1\";")
-            }
-        }
     }
 }
 #endif

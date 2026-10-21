@@ -16,7 +16,6 @@ struct CueDependencies {
     var timing = CueTiming()
 }
 
-/// 起一个大脑要的本机信息。
 nonisolated struct CueLaunch: Equatable, Sendable {
     var executable: URL
     /// 给大脑与 MCP 服务的 PATH（`ExecutableLocator.system`）：App 自己的 PATH 很短，运行时起的 node 等靠它找到。
@@ -49,7 +48,6 @@ final class CueService {
     var onDuty: Bool { duty != nil }
     /// 在这台 Mac 值班的管理器：Cue 页的"运行情况"读它的经过与上下文；不在这里值班为 nil。
     var keeper: CueKeeper? { duty?.keeper }
-    /// 每次值班起管理器用的同一份
     @ObservationIgnored private let setup: CueKeeper.Setup
     @ObservationIgnored private let hostID: String
     @ObservationIgnored private let notifier: any CueNotifying
@@ -68,7 +66,6 @@ final class CueService {
         notifier = dependencies.notifier
     }
 
-    /// 跟着设置值班，直到任务取消。
     func follow() async throws {
         do {
             for try await profile in store.observe({ try $0.cueProfile() }) { await apply(profile) }

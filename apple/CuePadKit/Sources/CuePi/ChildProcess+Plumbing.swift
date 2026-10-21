@@ -102,7 +102,6 @@ extension ChildProcess {
         source.resume()
     }
 
-    /// 读到 EOF，返回读到的全部。
     private static func readToEnd(_ fd: Int32) async -> Data {
         final class Collected: Sendable { let data = Mutex(Data()) }
         let collected = Collected()

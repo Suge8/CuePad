@@ -241,7 +241,6 @@ private final class SelectionWatch: NSView {
         let text: String
         let range: NSRange
         let at: CGPoint
-        /// 这段字在对话区里的框。
         let frame: CGRect
     }
 
@@ -294,7 +293,6 @@ private final class SelectionWatch: NSView {
         return candidates.min { $0.1 < $1.1 }?.0
     }
 
-    /// 对话区里的可选文字。
     private var texts: [NSView] {
         window?.contentView.map { Self.texts(in: $0, within: convert(bounds, to: nil)) } ?? []
     }
@@ -306,7 +304,6 @@ private final class SelectionWatch: NSView {
         return own + view.subviews.flatMap { texts(in: $0, within: area) }
     }
 
-    /// 指针此刻在对话区里的位置。
     var pointer: CGPoint { local(window?.mouseLocationOutsideOfEventStream ?? .zero) }
 
     private func local(_ point: NSPoint) -> CGPoint {

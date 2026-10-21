@@ -83,7 +83,6 @@ final class FakePasteItem: NSObject, UITextPasteItem, @unchecked Sendable {
 
     init(_ provider: NSItemProvider) { itemProvider = provider }
 
-    /// 等到委托给出结果。
     func resolved() async { for await _ in resolutions { return } }
 
     func setResult(string: String) { finish(NSAttributedString(string: string)) }

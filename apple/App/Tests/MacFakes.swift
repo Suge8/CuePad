@@ -91,7 +91,6 @@ final class RecordingHost: AgentRuntime {
 }
 
 extension FakeExtension {
-    /// 收到的命令种类，按到达顺序。
     var received: [String] { commands.compactMap { $0.json["t"] as? String } }
 
     /// 收到的 `send` 命令，还原成交给桥的消息。

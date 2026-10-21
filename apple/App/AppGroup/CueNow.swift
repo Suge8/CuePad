@@ -20,7 +20,6 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
     var advancing: Int
     /// 第一件等你：说什么、"打开"去哪，只有 Cue 带选项的提问能"允许一次"（会话在问的只给打开）。
     var first: Wait?
-    /// 这一份是什么时候推出的。
     var at: Date
     /// Mac 上它运行在别的 Mac 时那一句（"在「Mac Studio」上运行"）：静着、手上没有事时那一句写它；Cue 页的启用卡也写它。这台或手机上为 nil。
     var elsewhere: String? = nil
@@ -56,7 +55,6 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
         var name: String
         /// 停在这个样子的起点（计时从它走；刚做完的是做完的时刻）。
         var since: Date
-        /// 在跑的子代理几个（等子代理交回时）。
         var subagents: Int
         /// 这份活的 Pi 会话 id：接力落在这颗珠子上（`relaySpot(bead:)`）。
         var sessions: [String]

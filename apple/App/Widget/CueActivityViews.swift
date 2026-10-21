@@ -6,11 +6,9 @@ import WidgetKit
 /// 实时活动的几种样子（`CueActivityState`）。小组件扩展按系统给的态画（`CueActivityWidget`）；主 App 也编进了这个文件，
 /// 调试画面用同一份视图画出各态（`DebugActivityStage`）：系统的上下文（`ActivityViewContext`）造不出来，这里只吃内容与过没过时。
 /// 珠子、那一句与头像就是 App 里 Cue 那一行的同一份（`CueNowViews`）；过时了（`staleDate` 到了还没有新的一份）只信慢的事实（`CueNow.settled`）。
-/// - 紧凑态：摄像头两侧贴紧——左边头像（环是 Cue 此刻的颜色）接一个短词，右边一排珠子接走秒（短词、走秒起点与颜色同出 `CueNow.focus`；走秒系统自己走，不耗推送）；
-///   横屏窄紧凑态（`isDynamicIslandLimitedInWidth`）左边只留头像，右边只留最前那颗珠子与总数。最小态只有头像。
-/// - 展开态：左上头像，右上走秒与珠子，摄像头下那一句（`CueNow.headline`，此刻那一步另起一行），下面第一件等你（"允许一次"，`AllowOnceIntent`）、
-///   放得下的几份活一份一行（名字、样子、走秒），最后一行各家额度（快重置时倒数，`QuotaReminder.isNear`）。展开态与锁屏都不高过 160 点。
-/// - 锁屏：同展开态的内容排在纸上，随系统深浅；过时时整张变淡，右上写这一份是多久前的。
+/// - 紧凑态：短词、走秒起点与颜色同出 `CueNow.focus`（走秒系统自己走，不耗推送）；横屏窄紧凑态（`isDynamicIslandLimitedInWidth`）只留头像与最前那颗珠子加总数。
+/// - 展开态：第一件等你带"允许一次"（`AllowOnceIntent`），最后一行各家额度（快重置时倒数，`QuotaReminder.isNear`）。展开态与锁屏都不高过 160 点。
+/// - 锁屏：同展开态的内容排在纸上；过时时整张变淡，右上写这一份是多久前的。
 /// 灵动岛的底永远是黑的，岛里一律按深色取色板。
 struct CueActivityViews {
     /// 画的那一份：过时了在这里一次换成只信慢的事实，各态都画它。
@@ -40,7 +38,6 @@ struct CueActivityViews {
 
     var expandedBottom: some View { Details(state: state, island: true).padding(.horizontal, 2).island() }
 
-    /// 灵动岛外圈的描边色：同头像的环。
     var keyline: Color { state.now.ring(Palette(dark: true)) }
 
     /// 过时时整张的不透明度。
@@ -48,7 +45,6 @@ struct CueActivityViews {
 }
 
 private extension View {
-    /// 灵动岛里：底是黑的，按深色取色板。
     func island() -> some View { withPalette().environment(\.colorScheme, .dark) }
 }
 

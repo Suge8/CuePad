@@ -168,7 +168,6 @@ extension MacSyncTests {
         #expect(try await services.store.deliveryRequest(request.id)?.isOpen == false)
     }
 
-    /// 投送到应用已经下线：旧版本写来的发到应用、复制到剪贴板的请求按失败写回，不碰任何应用与剪贴板。
     @Test func 旧版本写来的发到应用请求按失败写回() async throws {
         try await services.executor.start()
         defer { services.cancelBackgroundWork() }

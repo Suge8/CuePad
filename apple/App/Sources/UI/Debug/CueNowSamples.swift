@@ -62,7 +62,6 @@ enum CueNowSamples {
     static let all: [String: CueNow] = [
         "woke": woke, "delegating": delegating, "asks": asks, "done": done, "quiet": quiet, "away": away,
     ]
-    /// 录切换时轮流走的先后。
     static let tour = [woke, delegating, asks, done, quiet]
 
     /// 实时活动里的额度一瞥：Claude 本周快重置（倒数），Codex 宽松。

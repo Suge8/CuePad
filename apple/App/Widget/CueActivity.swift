@@ -10,7 +10,6 @@ nonisolated struct CueActivityState: Codable, Hashable, Sendable {
     var now: CueNow
     var quotas: [Quota]
 
-    /// 一个订阅账号：账号名与几个窗口此刻还剩多少。
     struct Quota: Codable, Hashable, Sendable {
         var account: String
         var windows: [Window]
@@ -29,7 +28,6 @@ nonisolated struct CueActivityState: Codable, Hashable, Sendable {
         }
     }
 
-    /// 内容一样（不看推出的时刻）：一样的就不重发。
     func same(as other: CueActivityState) -> Bool { now.same(as: other.now) && quotas == other.quotas }
 }
 

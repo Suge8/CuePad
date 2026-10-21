@@ -173,7 +173,6 @@ struct AlertSubscriptions {
   }
 }
 
-/// 私有数据库作为订阅存储。
 struct DatabaseSubscriptions: SubscriptionStore {
   let database: CKDatabase
 

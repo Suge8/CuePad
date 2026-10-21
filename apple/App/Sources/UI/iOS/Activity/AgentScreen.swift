@@ -3,10 +3,8 @@ import CueStore
 import SwiftUI
 
 /// 会话页（iPhone 底部一排与宽屏侧栏的"会话"；也从 Cue 页头面板的"全部会话"推入，项目页"⋯"里的"看这个项目的会话"设好项目范围再换到这里）：
-/// 只回答"每个会话在做什么、现在到哪了、结果或卡点是什么"。会话列表是 `SessionList`，不写标题，右边新会话；
-/// 顶栏中间一颗玻璃胶囊（`ScopeQuota`）：左半项目范围（`ProjectScope`，与任务页共用 `Workspace.projectScope`），右半每个账号一颗额度环（`QuotaRings`），
-/// 两半各点各的——点环从胶囊原地长出额度明细（`GrowPanel`，同 Cue 页头），再点或点外面收回。
-/// 搜会话在搜索页（iPhone 顶栏左边的搜索钮、iPad 侧栏顶上的搜索框），这里不另放搜索框。
+/// 只回答"每个会话在做什么、现在到哪了、结果或卡点是什么"。顶栏中间一颗玻璃胶囊（`ScopeQuota`）：左半项目范围（与任务页共用 `Workspace.projectScope`），
+/// 右半每个账号一颗额度环，两半各点各的——点环从胶囊原地长出额度明细（`GrowPanel`，同 Cue 页头）。搜会话在搜索页，这里不另放搜索框。
 struct AgentScreen: View {
     @Environment(Workspace.self) private var workspace
     @State private var model = AgentListModel()
@@ -39,10 +37,9 @@ private struct ScopeQuota: View {
     }
 }
 
-/// 会话列表（会话页、搜索页的会话一栏同一个，数据是两端共用的 `PiSessionList`）：一条列表，"现在"置顶（按要你注意的先后：等你确认 → 出错 → 工作中 → 空闲），
-/// "历史"接在下面、按结束时间分段（今天、昨天……），滑到底才读下一页；看全部项目时卡上放所在项目的图标。
-/// 搜索词在 `model.query` 里（搜索页给），命中的字高亮。点开看近况、回复（历史会话看最后一轮，回复时 Mac 在后台恢复它）。
-/// 在线会话长按或左滑可结束（确认后发给它所在的 Mac，对话留着）。换项目范围时回到顶上。
+/// 会话列表（会话页、搜索页的会话一栏同一个，数据是两端共用的 `PiSessionList`）："现在"置顶（按要你注意的先后：等你确认 → 出错 → 工作中 → 空闲），
+/// "历史"按结束时间分段、滑到底才读下一页。搜索词在 `model.query`，命中的字高亮。点开看近况、回复（历史会话看最后一轮，回复时 Mac 在后台恢复它）。
+/// 在线会话长按或左滑可结束（确认后发给它所在的 Mac，对话留着）。
 struct SessionList: View {
     @Bindable var model: AgentListModel
     let filter: UUID?
@@ -150,7 +147,6 @@ struct SessionList: View {
     }
 }
 
-/// 新会话；筛着某个项目时新会话先选它。
 private struct NewSessionButton: View {
     let project: UUID?
     @Environment(Navigation.self) private var navigation

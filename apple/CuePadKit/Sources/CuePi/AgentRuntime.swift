@@ -58,7 +58,6 @@ enum HostMark {
 /// 投送执行器开会话、接着会话只经这里（按会话的 Agent 找到它）；对在线会话的一切（含结束）经桥。
 @MainActor
 public protocol AgentRuntime: AnyObject {
-    /// 开始发现与跟随这台 Mac 上的会话。
     func start() throws
     /// 关掉托管的会话与连接；返回的等待在它们都结束后结束，不需要主线程（App 退出时限时等）。
     func stop() -> @concurrent @Sendable () async -> Void
@@ -110,9 +109,7 @@ extension AgentRuntime {
 public enum AgentRuntimeError: Error, Equatable {
     /// 这台 Mac 上没有找到它（或版本太旧）
     case notInstalled(AgentKind)
-    /// 等它启动、上桥超时
     case launchTimedOut(AgentKind)
-    /// 启动失败（原因）
     case launchFailed(AgentKind, String)
     /// 这个会话此刻开在别处（如终端里），后台不能再开一份（两边会各写各的）
     case openElsewhere

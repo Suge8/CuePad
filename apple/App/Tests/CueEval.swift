@@ -11,7 +11,6 @@ import SwiftUI
 import Testing
 @testable import CuePad
 
-/// 一条判定：用户看得到的一项行为。
 struct Check {
     let label: String
     let passed: Bool
@@ -118,7 +117,6 @@ final class CueEval {
         return (rig.brainDirectory.map(BrainUsage.renewed(in:)) ?? []).filter { $0 < rounds.count }.map { rounds[$0] }
     }
 
-    /// 被叫醒的那一轮
     var round: CueRound? { rig.rounds.first { $0.startedAt >= start } }
 
     /// 场景到此的每一轮（含预热），从早到晚
@@ -155,7 +153,6 @@ final class CueEval {
         return Check("他看得到的字里没有编号", !written.contains { text in ids.contains { text.contains($0) } })
     }
 
-    /// 回答你的那句
     func reply(since: Date? = nil) async throws -> CueMessage? {
         try await said(since: since).last { $0.author == .known(.cue) && $0.choices == nil && $0.taskID == nil }
     }

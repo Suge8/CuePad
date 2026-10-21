@@ -67,7 +67,6 @@ final class EditorHarness {
         return frames
     }
 
-    /// 把文本视图的一块区域真实绘制出来后读取中心像素。
     func renderedCenterColor(of rect: CGRect) -> NSColor? {
         let rep = textView.bitmapImageRepForCachingDisplay(in: rect)!
         textView.cacheDisplay(in: rect, to: rep)

@@ -232,7 +232,6 @@ public final class ClaudeCodeRuntime: AgentRuntime {
 
     // MARK: 已在跑的会话
 
-    /// `claude agents --json` 列出的一个在跑的会话。
     private struct Running: Decodable {
         var pid: Int32
         var sessionID: String

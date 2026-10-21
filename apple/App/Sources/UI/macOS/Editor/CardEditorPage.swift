@@ -23,10 +23,8 @@ struct CardEditorPage: View {
     @State private var editing: CardEditing?
     /// 编辑器与底栏已挂上（不可见，见 `prepare`）。
     @State private var mounted = false
-    /// 编辑页看得见（淡入、淡出的终点）。
     @State private var shown = false
     @State private var settled = false
-    /// 收起的淡出走完了（之后才卸下）。
     @State private var gone = false
 
     /// 一行字最宽：苹方 15.5pt 约 44 个字，再宽读到行尾回头找下一行就费劲。
@@ -106,7 +104,6 @@ struct CardEditorPage: View {
         }
     }
 
-    /// 原地淡出，淡完卸下。
     private func collapse() {
         withAnimation(Motion.quick) {
             shown = false

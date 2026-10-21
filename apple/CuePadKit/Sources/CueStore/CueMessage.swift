@@ -5,9 +5,8 @@ import Foundation
 // 对话（`cueMessages`）、记忆（`cueLines` 与本机的摘要缓存 `cueSummaries`）、设置（`cueProfile`）、此刻在做什么（`cueState`）。
 // 值班时它管没做完的事与不归没做完的事的活会话（`CueStore.cueBoard`），不另记"由谁跟进"。
 
-/// Cue 页对话里一行是谁的。不认识的（旧版本写下的交接备忘 `handoff`、更新版本的新种类）界面不列、不交给大脑。
+/// 不认识的（旧版本写下的交接备忘 `handoff`、更新版本的新种类）界面不列、不交给大脑。
 public enum CueAuthor: String, Sendable, CaseIterable {
-  /// 你对 Cue 说的
   case you
   /// Cue 对你说的；带选项的是"等你"
   case cue
@@ -31,7 +30,6 @@ public struct CueMessage: Identifiable, Equatable, Sendable {
   public var choices: [String]?
   /// 提问的类别与范围（明文、同步，写入时定下）：哪一类事，与关联任务当时所在的项目（没关联任务为 nil，是所有项目）。
   /// 选项里"以后……不用问"照它写，选了就把它原样记进允许清单（`CueStore.endCueQuestion`），所以字面范围与实际放行的一致。
-  /// 结构 56 之前写的提问由升级按当时的选项补上（`Schema.backfillAsked`）。
   public var asked: CueAllow?
   /// 提问要做的动作与依据的规矩（`CueAsking`；用户内容，加密同步）。
   public var askAction: String?
@@ -39,18 +37,15 @@ public struct CueMessage: Identifiable, Equatable, Sendable {
   /// Cue 点名要你看的图，按它给的先后（`CueShot.checked`）：提问的是回答它必须看的，做完的结果是证明结论的最终成果（`CueStore.finishTask`）。
   /// 卡片、通知与全屏预览只读它，没点名的没有图。看什么是用户内容，加密同步；列与同步字段沿用最初只有提问时的名字 askShots（同步表不改已有列）。
   public var shots: [CueShot] = []
-  /// 提问是哪一类事。
   public var ask: CueAsk? { asked?.ask.known }
   /// 提问问的是什么（`CueAsking.init(stored:)`）；不是提问，或是认不出类别、没有动作短语的提问为 nil。
   public var asking: CueAsking? { CueAsking(stored: ask, action: askAction, rule: askRule) }
   /// 要提示你（推到手机、Mac 发通知）：Cue 用 tell 标的急事，与你在等的——回答你那一轮的回复或出错（这一轮还没提示过你时，`replyCueRound`），
   /// Cue 起不来（`CueKeeper`）。
   public var urgent: Bool
-  /// 关联的卡片。
   public var taskID: UUID?
   /// 你选的那一项（`choices` 之一；更旧版本存下的可能是卡上另外写的一句，照原文显示）；收起、撤回的为 nil。
   public var answer: String?
-  /// 提问结束的时刻。
   public var answeredAt: Date?
   /// 你开口收起这条提问的那句话（你的消息的 id，`CueQuestionEnd`）；放回"等你"时清掉。
   public var setAsideBy: UUID?

@@ -129,7 +129,6 @@ public enum CueEnvelope {
     return parts.joined(separator: " · ")
   }
 
-  /// 它留给他回的会话在看板与 peek 上的那一句（`CueLeft`）。
   static let leftNote = "已留给他回"
 
   /// 会话在 Cue 眼里的称呼：会话名与短 id（Cue 的工具给 session 时写它）。

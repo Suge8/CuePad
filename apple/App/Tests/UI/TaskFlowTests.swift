@@ -61,7 +61,6 @@ struct TaskFlowTests {
     // MARK: 会话与任务
 
     #if os(macOS)
-    /// 一个会话绑两件事：绑定不发正文（话在会话里说）；做完一件会话照常，都做完才请它所在的 Mac 结束。
     @Test func 一个会话绑两件事_绑定不发正文_都做完才结束会话() async throws {
         let workspace = Workspace(services: rig.services)
         let project = try await store.createProject(name: "圆桌", color: "#000000")

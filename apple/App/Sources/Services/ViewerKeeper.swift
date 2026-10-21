@@ -163,7 +163,6 @@ nonisolated extension ViewerKeeper {
         for await _ in inputs { return }
     }
 
-    /// 退出时：写成离开并上传。
     func signOff() async {
         state.withLock { _ = $0.away.insert(.quitting) }
         await settle()

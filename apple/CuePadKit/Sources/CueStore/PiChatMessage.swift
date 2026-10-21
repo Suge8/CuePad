@@ -1,7 +1,6 @@
 import CueText
 import Foundation
 
-/// 对话里一条消息的说话人。
 public enum PiChatRole: String, Sendable, CaseIterable {
   /// 你说的（含 CuePad 替你发的）；扩展投进来的机器消息不算，那是 `machine`
   case user

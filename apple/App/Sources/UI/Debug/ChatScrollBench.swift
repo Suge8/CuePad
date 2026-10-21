@@ -72,7 +72,6 @@ enum ChatScrollBench {
             let clip = scroll.contentView
             switch driver {
             case .direct:
-                // 直接挪裁剪区的原点
                 var origin = clip.bounds.origin
                 origin.y -= event.dy * (event.lines ? 10 : 1)
                 clip.scroll(to: clip.constrainBoundsRect(NSRect(origin: origin, size: clip.bounds.size)).origin)

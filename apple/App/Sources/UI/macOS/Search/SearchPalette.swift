@@ -188,7 +188,7 @@ struct SearchPalette: View {
                         }
                     }
                 }
-                // 字离滚动区的边 18；行的底向两边让出一截，留在滚动区里
+                // 行的底向两边让出一截，留在滚动区里
                 .padding(.vertical, 8).padding(.horizontal, 18)
             }
             .onChange(of: selection) { if let selection { proxy.scrollTo(selection) } }
@@ -199,7 +199,6 @@ struct SearchPalette: View {
         let text = CardText(card.body)
         let isSelected = card.id == selection
         return HStack(spacing: 10) {
-            // 任务用全 App 同一个任务圈打头，灵感是文档或图片
             Group {
                 if card.isTask {
                     TaskRingView(status: card.status, done: false, size: 14)
@@ -288,7 +287,6 @@ struct SearchPalette: View {
         return order.map { ($0, buckets[$0] ?? []) }
     }
 
-    /// 键盘选择按分组后的显示顺序移动。
     private func move(_ step: Int) {
         if scope == .sessions {
             let ids = sessionGroups.flatMap { $0.sessions.map(\.sessionID) }

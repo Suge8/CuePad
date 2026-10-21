@@ -5,7 +5,6 @@ import SwiftUI
 /// 界面对 Cue 的写入（iOS 与 Mac 同一份）：都只写库，写完马上传这一条（排在其余待推送前面）。
 /// 对 Cue 说话就是写一条你的消息（经 `Workspace.speak`），Cue 运行的那台 Mac 的管理器读到再交给它。
 extension Workspace {
-    /// 跟随 Cue 的现状（`follow` 里）。
     func followCue() async {
         let services = services
         do {

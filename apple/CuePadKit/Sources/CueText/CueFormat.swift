@@ -39,7 +39,6 @@ public enum CueFormat {
         return parse(stored).compactMap { if case .image(let hash) = $0 { hash } else { nil } }
     }
 
-    /// 按原顺序切成文字与图片。
     public static func parse(_ stored: String) -> [CueToken] {
         var tokens: [CueToken] = []
         var rest = Substring(stored)

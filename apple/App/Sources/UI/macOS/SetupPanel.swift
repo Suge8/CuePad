@@ -43,7 +43,6 @@ struct SetupPanel: View {
     private var logsInFirst: Bool {
         rows.contains { if case .logIn = $0.step { true } else { $0.step == .loggingIn } }
     }
-    /// 检测完了，没有要做的。
     private var done: Bool { checked && rows.isEmpty && !cueRowShown }
 
     var body: some View {

@@ -211,7 +211,6 @@ private final class ReplyDraftSlot {
         notes = saved.notes
     }
 
-    /// 存进偏好的那份；空草稿不存。
     var saved: SavedDraft? {
         draft.text.allSatisfy(\.isWhitespace) && notes.isEmpty ? nil : SavedDraft(text: draft.text, notes: notes)
     }

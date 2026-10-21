@@ -104,7 +104,6 @@ extension PiHistoryCheckpoint {
         round?.tools.finish(id: id, failed: failed)
     }
 
-    /// 你拒绝了它要用的工具（权限确认答了"否"）。
     mutating func toolDeclined(id: String) {
         round?.tools.finish(id: id, failed: true)
         round?.declined = true

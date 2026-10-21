@@ -7,7 +7,6 @@ import Foundation
 import Observation
 import os
 
-// 醒来与写回：发信封、读提醒、记送达、转图、写回复与消息、排定时器、存进度。
 extension CueKeeper {
     /// 发一个信封让 Cue 醒来，这一轮的回复写成谁的按醒来原因定（`author(of:)`）；`said`、`images`、`delivering` 是随信封交出去的你的消息与回答，
     /// 发出去就记下送达。发不进去时按大脑出了问题处理，返回 false。

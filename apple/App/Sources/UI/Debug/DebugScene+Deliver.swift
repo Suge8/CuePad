@@ -107,7 +107,6 @@ extension DebugScene {
         return render(view)
     }
 
-    /// 一张宽屏截图（16:9）。
     private static func widePNG() -> Data {
         let view = HStack(spacing: 16) {
             ForEach(["基础", "专业", "团队"], id: \.self) { tier in
@@ -129,7 +128,6 @@ extension DebugScene {
         return renderer.cgImage.map { DemoLibrary.encode($0) } ?? Data()
     }
 
-    /// 两页的 PDF：表格样子的对比。
     static func reportPDF() -> Data {
         let page = VStack(alignment: .leading, spacing: 12) {
             Text("定价对比").font(.system(size: 28, weight: .bold))

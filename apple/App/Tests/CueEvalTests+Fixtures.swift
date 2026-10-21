@@ -11,7 +11,6 @@ import SwiftUI
 import Testing
 @testable import CuePad
 
-// 场景共用的那件事（忘记密码）与方案提问的夹具。
 extension CueEvalTests {
     static let request = """
         给演示项目的登录页加一个「忘记密码」：点了之后让用户填邮箱，发一封重置密码的邮件。几条要求：重置链接 30 分钟内有效、只能用一次；\

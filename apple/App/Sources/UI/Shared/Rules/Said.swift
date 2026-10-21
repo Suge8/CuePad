@@ -21,7 +21,6 @@ nonisolated enum Said: Equatable, Sendable {
         }
     }
 
-    /// 接收它的那台 Mac。
     var host: String? {
         switch self {
         case .cue(_, let host): host

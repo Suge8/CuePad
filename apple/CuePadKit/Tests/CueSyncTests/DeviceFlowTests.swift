@@ -188,7 +188,6 @@ import Testing
     await executor.stop()
   }
 
-  /// 没有网络：整个上传请求失败。
   private struct Offline: RecordUploader {
     func upload(saving records: [CKRecord], deleting ids: [CKRecord.ID]) async throws -> SentRecords { throw CKError(.networkUnavailable) }
     func saveZone() async throws { throw CKError(.networkUnavailable) }

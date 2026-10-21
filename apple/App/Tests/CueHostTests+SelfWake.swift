@@ -11,7 +11,6 @@ import Synchronization
 import Testing
 @testable import CuePad
 
-// Cue 自己醒来：等你被回答、出错后重试、做完告诉你结果、记忆待合并。
 extension CueHostTests {
     /// Cue 请你允许推送；你选"以后推送代码都不用问"后 Cue 被唤醒，回答写成 Cue 说的，允许清单记上推送（不进记忆）；
     /// 它再问推送就被拒、叫它直接做。回答你的一轮只响一次：问你的那一轮响的是"等你"（正文是要你定什么），那一轮的回复不再响；

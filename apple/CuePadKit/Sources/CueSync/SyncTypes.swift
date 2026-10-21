@@ -12,7 +12,6 @@ public enum SyncStatus: Equatable, Sendable {
   /// 连不上 iCloud（没有网络、服务暂不可用）：最近一次拉取或上传因网络失败。本机改动留在库里待推送，发送者按退避重试；
   /// 下一次拉取或上传成功时回到空闲。
   case offline
-  /// 未登录 iCloud。
   case noAccount
   /// iCloud 账号受限（家长控制或设备管理）。
   case accountRestricted
@@ -103,13 +102,11 @@ public struct SyncState: Equatable, Sendable {
   }
 }
 
-/// 一批上传之后发送者怎么接着做。
 struct SendOutcome: Sendable {
   /// 有记录被收下，或被拒的已处理好（带上了服务器的版本标签等），接着发下一批不会原样再被拒
   var progressed: Bool
   /// 配额、登录或未预期的失败：先停下，等下一次明确的触发
   var blocked: Bool
-  /// 同步区不在：先建区
   var zoneMissing: Bool
   /// 有记录因限流、服务忙等可重试的原因被拒：先等再发。里面是服务器给的等待（没给为 nil，退避）；没有这种记录时整个为 nil。
   var throttled: Duration?? = nil

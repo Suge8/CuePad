@@ -9,7 +9,6 @@ struct Jelly<Value: Equatable, Content: View>: View {
     let move: (Value, Value) -> JellyMove?
     @ViewBuilder let content: (Value, Bool) -> Content
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// 正在放的这一下。
     @State private var play = Play()
 
     /// 放的动作、换之前的值、第几下（关键帧的触发）：三样总是一起换。

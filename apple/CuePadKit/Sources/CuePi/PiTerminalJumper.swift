@@ -129,7 +129,6 @@ public struct PiTerminalJumper: Sendable {
 
     // MARK: 系统
 
-    /// 运行外部命令（如 `tmux`），返回退出码与标准输出
     private func run(_ executable: String, _ arguments: [String]) async -> (status: Int32, output: String) {
         let env = URL(filePath: "/usr/bin/env")
         return await ChildProcess.run(env, [executable] + arguments, environment: ExecutableLocator.standard.environment(launching: env)) ?? (-1, "")

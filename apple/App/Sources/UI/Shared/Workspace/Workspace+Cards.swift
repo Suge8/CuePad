@@ -73,7 +73,6 @@ extension Workspace {
         attempt { if let card = try await store.card(id) { self.openTask(card) } }
     }
 
-    /// 窗口里按下了一下（窗口坐标）。
     func pressed(at point: CGPoint) { press.record(point) }
 
     /// 打开一条任务的气泡（项目页与任务页的行、Cue 对话里的任务、⌘K、归档、小组件链接都经这里）：从刚按下的那一下长出来；
@@ -113,7 +112,6 @@ extension Workspace {
         say(ids.count > 1 ? "已删除 \(ids.count) 条" : "已删除", action: .undo(undo))
     }
 
-    /// 一键归档"最近完成"的任务。
     func archiveCompletedTasks() async throws {
         let count = try await services.store.archiveCompletedTasks()
         if count > 0 { say("已归档 \(count) 项任务") }
@@ -129,7 +127,6 @@ extension Workspace {
         }
     }
 
-    /// 点提示里的动作（撤销、归档）：收起提示，做那件事。
     func run(_ action: NoticeAction) {
         notice = nil
         attempt { try await action.run() }

@@ -11,7 +11,6 @@ final class LiveSessions {
     /// 此刻有事的会话：未结束的在前，各自按进入当前状态的时间从新到旧（`piSessionPage` 的顺序）。
     /// 第一份在 App 打开资料库时当场读到（`init`），之后从它接着订阅：没有"还没读到"这一态。
     private(set) var items: [PiSessionListItem] = []
-    /// 全部会话记录数（含历史）。
     private(set) var total = 0
     /// "在做"列的会话（`PiSessionListItem.isCurrent`）：在线的与正在唤醒的。
     private(set) var current: [PiSessionListItem] = []

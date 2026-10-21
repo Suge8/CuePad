@@ -23,7 +23,6 @@ public final class ChildProcess: Sendable {
 
     enum Input: Sendable {
         case null
-        /// 经 `write` 一行一条写入
         case pipe
         /// 一根管道的读端，写端也交给它自己（放在 3 号）：还有写端开着，读端永远读不到 EOF（Pi 的 RPC 模式读到 EOF 就收尾）。
         /// App 这边启动后立刻关掉两端，不持有它的任何管道。否决 `/dev/null`（立刻 EOF）与命名管道（要在磁盘上建、要清理）
@@ -32,9 +31,7 @@ public final class ChildProcess: Sendable {
 
     enum Output: Sendable {
         case null
-        /// `output` 一行一条
         case lines
-        /// `output` 原样的块
         case raw
     }
 
@@ -249,7 +246,7 @@ public final class ChildProcess: Sendable {
         shared.state.withLock { $0.status }.flatMap { ($0 & 0x7F) == 0 ? ($0 >> 8) & 0xFF : nil }
     }
 
-    /// 标准错误的末尾（至多 4 KB），去掉首尾空白。
+    /// 标准错误的末尾（至多 `stderrLimit`），去掉首尾空白。
     var stderrTail: String {
         var data = shared.state.withLock { $0.stderr }
         if let errorFile {

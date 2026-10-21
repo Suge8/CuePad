@@ -11,7 +11,6 @@ import Observation
 /// 隔离运行（开发构建）只写配置目录经环境变量换走了的那几家（`AgentIntegration.isWritable`），其余只检测。
 @Observable
 final class AgentIntegrations {
-    /// 第一次检测完成前为空
     private(set) var statuses: [AgentKind: AgentStatus] = [:]
     /// 在后台装、登录的那几家（接入面板的"安装""登录"）与没做成的原因；做成了就没有这一项，之后看检测与探测。
     private(set) var jobs: [AgentKind: AgentJob] = [:]
@@ -141,6 +140,7 @@ final class AgentIntegrations {
         where isWritable(kind) && statuses[kind]?.files == .outdated && statuses[kind]?.isAvailable == true {
             do { try await install(kind) } catch { failure = failure ?? error }
         }
+        do { try await integration.retireLegacyPiExtension() } catch { failure = failure ?? error }
         if let failure { throw failure }
     }
 
@@ -149,14 +149,20 @@ final class AgentIntegrations {
         try await change(kind) { try await $0.install(kind) }
     }
 
-    /// 删掉 CuePad 写给它的全部文件。
+    /// 过渡：Pi 会话上线、下线（含换上新扩展时的重连）时复查旧单文件扩展的存根还要不要留（`AgentIntegration.retireLegacyPiExtension`）。
+    func retireLegacyPiExtension(following changes: AsyncStream<PiSessionChange>) async throws {
+        for await change in changes {
+            if case .appeared = change { try await integration.retireLegacyPiExtension() }
+            if case .ended = change { try await integration.retireLegacyPiExtension() }
+        }
+    }
+
     func uninstall(_ kind: AgentKind) async throws {
         let executable = statuses[kind]?.executable
         try await change(kind) { try await $0.uninstall(kind, executable: executable) }
         await uninstalled(kind)
     }
 
-    /// 改完（成功或失败）都重读这一个的状态。
     private func change(_ kind: AgentKind, _ body: (AgentIntegration) async throws -> Void) async throws {
         do {
             try await body(integration)

@@ -24,7 +24,6 @@ struct ChatColumn<Content: View, Key: Equatable>: View {
     @State private var shown: ArraySlice<UUID>?
     @State private var highlight = ChatHighlight()
     @State private var pendingJump: ChatFollow.Target?
-    /// `ChatJump` 按它认是不是这个对话区。
     @State private var column = UUID()
 
     init(

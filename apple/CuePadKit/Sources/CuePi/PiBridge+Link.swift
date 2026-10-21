@@ -5,14 +5,14 @@ import Foundation
 import Observation
 
 extension PiBridge {
-    /// 一条已连接的 Pi socket 及其未完成的命令。
     final class Link: SessionLink {
         let connection: PiSocketConnection
-        /// 连上时的那个 socket 文件
         let file: PiSocketDirectory.FileIdentity
         weak var bridge: PiBridge?
         /// 收到 hello 之后的会话
         var id: PiSession.ID?
+        /// hello 里报的扩展版本（协议号不同的不读）
+        var extensionVersion: Int?
         let replies = PendingReplies<String, PiWire.Ack>(timeout: AgentTimeouts.ack, timeoutError: PiBridgeError.ackTimeout)
         var nextCommand = 0
         var bye: PiWire.Bye?
@@ -71,5 +71,9 @@ extension PiBridge {
             return ack
         }
     }
+
+    /// 连着的 Pi 会话都报了这个扩展版本（还没 hello 的、协议号不同的都不算）：过渡时判断旧单文件扩展还有没有会话在用
+    /// （`AgentIntegration.retireLegacyPiExtension`）。连接在扫描 socket 目录时同步建立，所以已在跑的会话都算在内。
+    public func allRun(extensionVersion version: Int) -> Bool { links.values.allSatisfy { $0.extensionVersion == version } }
 }
 #endif

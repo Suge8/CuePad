@@ -4,7 +4,6 @@ import CueText
 import OSLog
 import SwiftUI
 
-// 演示会话的对话：一轮的写法、几段对话（工具活动、截图、长文、斜杠技能）。
 extension DebugScene {
     /// 会话里的一轮：你的话、Pi 的回答（还没答完是 nil）与这一轮的工具活动，问与答的时刻。
     struct ChatTurn {
