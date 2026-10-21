@@ -84,7 +84,6 @@ extension View {
 
 private struct ListSwipes: ViewModifier {
     let swipes: RowSwipes
-    @Environment(\.palette) private var palette
 
     func body(content: Content) -> some View {
         content

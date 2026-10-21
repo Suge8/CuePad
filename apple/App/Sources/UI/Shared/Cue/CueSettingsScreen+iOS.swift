@@ -10,8 +10,6 @@ struct CueSettingsScreen: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @State private var model = CueSettingsModel()
-    @State private var name = ""
-    @FocusState private var editing: Bool
 
     var body: some View {
         let settings = model.settings ?? .empty
@@ -24,21 +22,11 @@ struct CueSettingsScreen: View {
                 Text(CueStepsSetting.note)
             }
             Section {
-                LabeledContent("名字") {
-                    TextField("名字", text: $name, prompt: Text(CueProfile.defaultName))
-                        .multilineTextAlignment(.trailing)
-                        .focused($editing)
-                        .submitLabel(.done)
-                        .onSubmit { model.rename(name, services) }
-                }
+                LabeledContent("名字") { CueNameField(model: model).submitLabel(.done) }
             }
         }
         .scrollDismissesKeyboard(.interactively)
         .floatingHeader(settings.profile.name)
-        .onChange(of: editing) { left, _ in
-            if left { model.rename(name, services) }
-        }
-        .onChange(of: settings.profile.name, initial: true) { _, saved in name = saved }
         .cueSettings(model)
     }
 

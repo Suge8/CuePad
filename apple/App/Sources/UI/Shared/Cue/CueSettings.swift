@@ -51,6 +51,25 @@ final class CueSettingsModel {
     }
 }
 
+/// Cue 的名字输入框（两端设置同一个）：回车或离开输入框时写入（`CueSettingsModel.rename`），库里的名字变了跟着回填。
+struct CueNameField: View {
+    let model: CueSettingsModel
+    @Environment(AppServices.self) private var services
+    @State private var name = ""
+    @FocusState private var editing: Bool
+
+    var body: some View {
+        TextField("名字", text: $name, prompt: Text(CueProfile.defaultName))
+            .multilineTextAlignment(.trailing)
+            .focused($editing)
+            .onSubmit { model.rename(name, services) }
+            .onChange(of: editing) { left, _ in
+                if left { model.rename(name, services) }
+            }
+            .onChange(of: (model.settings ?? .empty).profile.name, initial: true) { _, saved in name = saved }
+    }
+}
+
 /// Cue 页对话里显示不显示工具步骤（`AppSettings.showsCueSteps`，存本机、不同步：只管这台设备上怎么看），两端设置里同一句话。
 enum CueStepsSetting {
     static let title = "显示工具步骤"

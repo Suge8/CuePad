@@ -1,18 +1,18 @@
-import Foundation
+import CueStore
 import Testing
 @testable import CuePad
 
-/// 自动保存：停手后写入的那次保存要在正常（未取消）的任务里跑，否则写库和保存后的状态提示都会被提前打断。
+/// 自动保存：编辑器里停手一小会儿，正文就写进库，不用离开页面。
 struct AutosaveTests {
-    @Test func 停手后的自动保存不在已取消的任务里执行() async {
-        let (saves, sink) = AsyncStream.makeStream(of: Bool.self)
-        let autosave = Autosave(save: { _ in sink.yield(Task.isCancelled) }, onError: { _ in })
+    @Test func 编辑正文停手后写进库() async throws {
+        let app = TestApp()
+        let store = app.services.store
+        let card = try await store.createCard(body: "续费域名")
+        let editing = CardEditing(card, workspace: Workspace(services: app.services))
 
-        autosave.changed("正文")
-        var iterator = saves.makeAsyncIterator()
-        let cancelled = await iterator.next()
+        editing.changed("续费域名\n顺便把证书也续了")
 
-        withExtendedLifetime(autosave) {}
-        #expect(cancelled == false)
+        _ = try await eventually(store, { try $0.card(card.id)?.body }) { $0 == "续费域名\n顺便把证书也续了" }
+        withExtendedLifetime(editing) {}
     }
 }

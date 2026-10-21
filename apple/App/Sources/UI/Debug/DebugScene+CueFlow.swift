@@ -111,7 +111,7 @@ extension DebugScene {
         try await beat(FlowBeat.result)
         let asked = try await store.addCueMessage(.cue, text: "登录回调的修复验过了，要**推送到 origin/main** 吗？", ask: try CueAsking(.push, action: "把登录回调的超时修复推送到 origin/main"), task: task.id)
         try await beat(FlowBeat.asking)
-        try await workspace.answerCueQuestion(asked, CueAsk.once)
+        try await workspace.services.answerCueQuestion(asked.id, CueAsk.once)
         try await beat(FlowBeat.answered)
 
         // 5. 切走再回来

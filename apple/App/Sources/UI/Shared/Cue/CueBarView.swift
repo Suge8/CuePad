@@ -117,9 +117,6 @@ struct CueStatusLine: View {
 
     private static let tallyID = "tally"
 
-    /// Cue 最近一句的墨色（Mac 侧栏名片的气泡）：是还没读的新消息时用正文墨色，不然最淡一档。
-    static func said(fresh: Bool, _ palette: Palette) -> Color { fresh ? palette.ink : palette.ink3 }
-
     private var shown: PiShown? {
         #if os(macOS)
         workspace.cue.presence.shown?.speaking(workspace.services.cue.keeper?.speech.draft != nil)

@@ -189,12 +189,10 @@ struct AgentPage: View {
     }
 
     @ViewBuilder private var empty: some View {
-        let empty = model.empty(filter: filter)
-        switch empty {
-        case .noMatch(let query):
-            EmptyState.noMatch(query)
-        case .none:
-            EmptyState(mascot: .empty, title: empty.noneTitle,
+        if model.searching {
+            EmptyState.noMatch(model.query)
+        } else {
+            EmptyState(mascot: .empty, title: AgentListModel.noneTitle(filter: filter),
                        message: "在终端里开一个 Agent，或点右上角开新会话（⌥⌘N）", waitsForSync: true) { EmptyView() }
         }
     }

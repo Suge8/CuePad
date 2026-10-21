@@ -34,8 +34,17 @@ nonisolated struct LaunchProgress: Sendable, Equatable {
         }
     }
 
-    static func read(request: UUID, token: String, from store: isolated CueStore) throws -> LaunchProgress {
+}
+
+/// 请一台 Mac 在后台开新会话的那一次（Mac 的新会话表单与发给 Agent、手机的新会话输入框都经 `AppServices.launchSession`）：
+/// 投送请求与这次生成的认领标识；会话连上时带着这个标识，进度按它读。
+nonisolated struct SessionLaunch: Equatable, Sendable {
+    let request: UUID
+    let token: String
+
+    func progress(from store: isolated CueStore) throws -> LaunchProgress {
         let claimed = try store.piSessionPage(PiSessionQuery(launchToken: token, limit: 1)).items.first
-        return LaunchProgress(request: try store.deliveryRequest(request), claimed: claimed.map { Claimed(id: $0.id, sessionID: $0.state.sessionID) })
+        return LaunchProgress(
+            request: try store.deliveryRequest(request), claimed: claimed.map { .init(id: $0.id, sessionID: $0.state.sessionID) })
     }
 }

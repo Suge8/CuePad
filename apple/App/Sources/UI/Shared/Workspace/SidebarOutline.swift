@@ -35,7 +35,6 @@ nonisolated struct SidebarOutline: Equatable {
 
     /// Cue 下面的去处。
     static let places: [Entry] = [.tasks, .sessions]
-    /// 底部。
     static let footer: [Entry] = [.archive, .trash, .settings]
 
     #if os(macOS)

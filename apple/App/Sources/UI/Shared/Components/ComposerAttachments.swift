@@ -1,16 +1,15 @@
 import CueText
 import SwiftUI
 
-/// 带上的卡片或任务的全文：文字、图片按原来的顺序。`omitsTitle`：标题已写在面板顶上时正文从标题之后开始。
+/// 带上的卡片或任务的全文：文字、图片按原来的顺序；标题已写在面板顶上，正文从标题之后开始。
 /// `height` 报出内容的高度，面板按它定高。
 struct AttachmentBody: View {
     let content: String
-    var omitsTitle = false
-    var height: Binding<CGFloat>?
+    @Binding var height: CGFloat
     @Environment(\.palette) private var palette
 
     var body: some View {
-        let blocks = Self.blocks(content, omitsTitle: omitsTitle)
+        let blocks = Self.blocks(content)
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
@@ -22,15 +21,15 @@ struct AttachmentBody: View {
             }
             .padding(blocks.isEmpty ? 0 : 20)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height?.wrappedValue = $0 }
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height = $0 }
         }
         .background(palette.paper, in: .rect)
     }
 
-    /// 文字与图片按原顺序各成一块；去掉标题时删掉正文开头的标题那一行。
-    private static func blocks(_ content: String, omitsTitle: Bool) -> [CueToken] {
+    /// 文字与图片按原顺序各成一块，删掉正文开头的标题那一行。
+    private static func blocks(_ content: String) -> [CueToken] {
         var blocks = CueFormat.parse(content)
-        if omitsTitle, case .text(let first)? = blocks.first {
+        if case .text(let first)? = blocks.first {
             let title = CardText(content).title
             var lines = first.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
             if let index = lines.firstIndex(where: { !$0.allSatisfy(\.isWhitespace) }),
