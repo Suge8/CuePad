@@ -17,6 +17,11 @@ extension View {
             key: isPresented.wrappedValue ? AnyHashable(true) : nil, retained: mounted, style: .sheet,
             close: ClosePanel { isPresented.wrappedValue = false }, panel: content))
     }
+
+    /// 从这个控件（按钮、圆钮、胶囊）长出的气泡：挂在它的框下（放不下挂上面），尾巴指它的中线；点、键盘、读屏打开都一样。
+    func bubble(isPresented: Binding<Bool>, @ViewBuilder content: @escaping () -> some View) -> some View {
+        modifier(ControlBubble(isPresented: isPresented, panel: content))
+    }
 }
 
 extension View {
@@ -43,7 +48,7 @@ final class PanelHost {
     @ObservationIgnored fileprivate weak var window: NSWindow?
     /// 模态浮层弹出前的焦点，收起后交还（同系统 sheet）；弹出时先让窗口交出焦点，打字不会落进下面的编辑器。
     @ObservationIgnored private var responders: [UUID: Weak<NSResponder>] = [:]
-    /// 各浮层占的地方与弹出它的视图（`takes`）。
+    /// 各浮层占的地方（`takes`）。
     @ObservationIgnored fileprivate var areas: [UUID: Weak<NSView>] = [:]
     /// 有浮层时本窗口的按键与点按先经这里（`takes`）。
     @ObservationIgnored private var monitor: Any?
@@ -173,7 +178,8 @@ private struct WindowPanel<Panel: View>: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .onChange(of: Mode(key: key, retained: retained), initial: true) { _, mode in
+            // 样式也算：从控件长出的气泡，控件的框变了（窗口改大小、调试参数一出现就开时框还没量到）气泡跟着
+            .onChange(of: Mode(key: key, retained: retained, style: style), initial: true) { _, mode in
                 if mode.key != nil || mode.retained {
                     host.show(token, style: style, content: AnyView(panel().environment(\.closePanel, close)), close: close, open: mode.key != nil)
                 } else {
@@ -187,6 +193,20 @@ private struct WindowPanel<Panel: View>: ViewModifier {
 private struct Mode: Equatable {
     let key: AnyHashable?
     let retained: Bool
+    let style: PanelStyle
+}
+
+/// 从控件长出的气泡（`View.bubble(isPresented:)`）：只这一个视图读几何（自己的框），开销可忽略；行里的气泡不走这里（`BubbleSource.press`）。
+private struct ControlBubble<Panel: View>: ViewModifier {
+    @Binding var isPresented: Bool
+    @ViewBuilder let panel: () -> Panel
+    @State private var frame: CGRect?
+
+    func body(content: Content) -> some View {
+        content
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame = $0 }
+            .panel(isPresented: $isPresented, style: .bubble(frame.map(BubbleSource.control) ?? .unanchored), content: panel)
+    }
 }
 
 private struct PanelHostModifier: ViewModifier {
@@ -269,8 +289,8 @@ private struct PanelLayer: View {
         GeometryReader { proxy in
             BubbleStage {
                 ForEach(host.shown) { shown in
-                    if case .bubble(let anchor) = shown.style {
-                        let placement = BubblePlacement(anchor: anchor, container: proxy.size, insets: Self.bubbleInsets)
+                    if case .bubble(let source) = shown.style {
+                        let placement = BubblePlacement(source: source, container: proxy.frame(in: .global), insets: Self.bubbleInsets)
                         BubbleFrame(placement: placement) { shown.content } area: { area(shown.id) }
                             .transition(placement.transition(reduceMotion: reduceMotion))
                     }
