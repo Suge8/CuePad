@@ -64,7 +64,6 @@ public struct MacAgent: Codable, Equatable, Sendable, Identifiable {
     self.models = (missing.map { [$0] } ?? []) + models
   }
 
-  /// 不指定模型时用的那一项。
   public var defaultModel: PiModelOption? { model.flatMap { key in models.first { $0.key == key } } }
 }
 
@@ -108,11 +107,7 @@ extension CueStore {
         return nil
       }
       let record = MacAgents(hostID: host, name: name, agents: agents, problems: problems, modifiedAt: Date.stamp)
-      try db.run(
-        """
-        INSERT INTO macAgents (\(MacAgents.columns.joined(separator: ", "))) VALUES (?, ?, ?, ?, ?, ?)
-        ON CONFLICT(id) DO UPDATE SET name = excluded.name, agents = excluded.agents, problems = excluded.problems, modifiedAt = excluded.modifiedAt
-        """, record.bindings)
+      try upsert(record, updating: ["name", "agents", "problems", "modifiedAt"])
       return MacAgents.recordID(host: host)
     }
   }

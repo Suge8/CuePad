@@ -288,7 +288,7 @@ extension PiChatMessage {
     /// 清单，按发生先后。落了结果的（`Kind.acts`）与说的话总在里面；其余调用至多列到 `itemLimit` 条，超出的只进计数
     public var items: [Item]
 
-    public static let itemLimit = 30
+    static let itemLimit = 30
     /// 清单里一条调用的目标至多这么多字符
     public static let targetLimit = 120
     /// 一段说的话至多这么多字符：够读出它在想什么。进行中这一轮的清单每做完一步就随会话记录整份上传一次，不让长话把它撑大

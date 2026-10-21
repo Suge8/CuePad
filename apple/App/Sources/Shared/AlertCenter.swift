@@ -260,12 +260,10 @@ nonisolated enum AlertRoute: Equatable {
             else { return nil }
             self = .session(PiAlertTap(kind: kind, sessionState: record))
         default:
-            if let tap = PiAlertRoute.tap(from: userInfo) {
-                self = .session(tap)
-            } else if CueAlertRoute.message(from: userInfo) != nil {
-                self = .cue
-            } else {
-                return nil
+            switch CloudAlert(userInfo: userInfo) {
+            case .session(let tap): self = .session(tap)
+            case .cue: self = .cue
+            case nil: return nil
             }
         }
     }

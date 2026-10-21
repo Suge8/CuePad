@@ -309,7 +309,7 @@ extension View {
         #endif
     }
 
-    /// 点 Cue 页底部去处圆钮展开、收起三格的那条路交给演示（`dockTourIfAsked`）；`-CuePadPlacesOpen YES` 时第一次出现就展开（就绪前摆好，截得到）。
+    /// 点 Cue 页底部"⋯"展开、收起三格的那条路交给演示（`dockTourIfAsked`）；`-CuePadPlacesOpen YES` 时第一次出现就展开（就绪前摆好，截得到）。
     func debugExposesPlaces(_ toggle: @escaping () -> Void) -> some View {
         #if DEBUG
         onAppear {
@@ -346,6 +346,22 @@ extension View {
         self
         #endif
     }
+
+    #if os(iOS)
+    /// `-CuePadCompact <宽>`：窗口根按这么宽、紧凑尺寸类画，同分屏与台前调度里的窄窗口（模拟器没有从代码开分屏的接口）。
+    @ViewBuilder func debugCompact() -> some View {
+        #if DEBUG
+        let width = DebugScene.defaults.double(forKey: "CuePadCompact")
+        if width > 0 {
+            environment(\.horizontalSizeClass, .compact).frame(width: width).frame(maxWidth: .infinity, alignment: .leading)
+        } else {
+            self
+        }
+        #else
+        self
+        #endif
+    }
+    #endif
 
     /// 这一处正在过渡（如编辑页正在淡入）：截图的就绪标记等它停下。SwiftUI 自己驱动的动画在图层上看不出来，由视图自己报。
     func debugSettling(_ busy: Bool) -> some View {

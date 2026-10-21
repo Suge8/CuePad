@@ -50,11 +50,7 @@ extension CueStore {
       let current = try find(Viewer.self, id)
       guard current.map({ $0.sessionID != sessionID || $0.cue != cue }) ?? (sessionID != nil || cue) else { return nil }
       let viewer = Viewer(device: device, sessionID: sessionID, cue: cue, modifiedAt: Date.stamp)
-      try db.run(
-        """
-        INSERT INTO sessionViewers (\(Viewer.columns.joined(separator: ", "))) VALUES (?, ?, ?, ?, ?)
-        ON CONFLICT(id) DO UPDATE SET sessionID = excluded.sessionID, cue = excluded.cue, modifiedAt = excluded.modifiedAt
-        """, viewer.bindings)
+      try upsert(viewer, updating: ["sessionID", "cue", "modifiedAt"])
       return id
     }
   }

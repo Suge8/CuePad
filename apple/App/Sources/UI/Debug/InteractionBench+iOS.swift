@@ -96,7 +96,7 @@ enum IOSInteractionBench {
         }
         navigation.select(.cue)
         try? await Task.sleep(for: .seconds(1))
-        // 主导航：Cue 页点底部的去处去任务（配 `-CuePadManyTasks` 量任务多时）、任务页点 Cue 圆钮回来（点按调的就是 `select`，过渡由 `DockRoot` 接着做）
+        // 主导航：Cue 页点底部展开的"任务"去任务（配 `-CuePadManyTasks` 量任务多时）、任务页点 Cue 钮回来（点按调的就是 `select`，过渡由 `DockRoot` 接着做）
         for _ in 0..<2 {
             await step("Cue 进任务") { navigation.select(.tasks) }
             await step("任务回 Cue") { navigation.select(.cue) }

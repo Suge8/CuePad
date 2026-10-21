@@ -156,9 +156,9 @@ public struct CueMemoryLine: Identifiable, Equatable, Sendable {
 /// 记忆的版本读数：行数、最后改动（记、忘、钉、提醒）与摘要的变化，任一变了它就变。管理器订阅它，不必每次读整份记忆。
 public struct CueMemoryVersion: Equatable, Sendable {
   public var lines: Int
-  public var linesModifiedAt: Date?
+  var linesModifiedAt: Date?
   public var summaries: Int
-  public var summariesWrittenAt: Date?
+  var summariesWrittenAt: Date?
 }
 
 extension CueMemoryLine: Record {
@@ -235,7 +235,7 @@ public struct CueProfile: Equatable, Sendable {
   }
 
   /// 这类事在这个项目里（`project` 为 nil 是不关联任务的事）已允许：清单里有不分项目的那一项，或这个项目的那一项。返回对上的那一项。
-  public func allowing(_ ask: CueAsk, in project: UUID?) -> CueAllow? {
+  func allowing(_ ask: CueAsk, in project: UUID?) -> CueAllow? {
     [CueAllow(ask, project: nil), project.map { CueAllow(ask, project: $0) }].compactMap(\.self).first(where: allows.contains)
   }
 }
@@ -316,7 +316,7 @@ public struct CueContext: StoredJSON, Equatable, Sendable {
   public var window: Int?
   public var since: Date
 
-  /// 换新线：6 万 token。
+  /// 换新线（token）。
   public static let renewAt = 60_000
 
   /// token 数的写法（各端的上下文用量与 Mac 的运行情况同一种）：不到一千写原数，往上写 5.3k、128k。
@@ -573,7 +573,7 @@ public enum CueReport {
 /// "等你"的正文是要你定什么、规矩那一类引的规矩（`CueAsking`）、要看的图各看什么（`looks`），接选项，与卡片同源；其余（读不出 `CueAsking` 的提问也是）是 Cue 的原话
 /// （去掉图片，行内的 Markdown 记号只留字，至多 `bodyLimit` 字）。
 public enum CueAlert {
-  public static let bodyLimit = 300
+  static let bodyLimit = 300
 
   public static func content(name: String?, text: String, asking: CueAsking?, choices: [String]?, looks: [String]) -> (title: String, body: String) {
     let body: String

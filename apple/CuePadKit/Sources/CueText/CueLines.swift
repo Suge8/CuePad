@@ -90,7 +90,7 @@ public enum CueName {
 /// 摘要 = 标题之后的第一段（跳过开头的空行，到下一个空行、分割线或只有图片的行为止），各行以空格连接，最多 `previewLimit` 字——
 /// 一张卡只露出开头那一段，卡与卡之间才看得出差别。
 public struct CueSummary: Equatable, Sendable {
-    public static let previewLimit = 240
+    static let previewLimit = 240
     /// 搜索摘要里命中处之前留的字数。
     public static let snippetLead = 12
 

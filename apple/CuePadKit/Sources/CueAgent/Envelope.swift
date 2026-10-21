@@ -8,7 +8,7 @@ import Foundation
 /// 信封与系统提示里"你"是 Cue、"他"是用户。
 public enum CueEnvelope {
   /// 接上的对话至多这么多条、这么多字（从最近的往前取，一条也放不下时截短最近那条）。只为接上最近几轮来回（一轮一到三条），
-  /// 合起来约是换新线（`CueContext.renewAt`，6 万 token）的十分之一，新上下文一开始不至于离换新线太近；更早的事在记忆与交接里。
+  /// 合起来约是换新线（`CueContext.renewAt`）的十分之一，新上下文一开始不至于离换新线太近；更早的事在记忆与交接里。
   public static let resumeMessages = 30
   public static let resumeCharacters = 6000
 
@@ -48,8 +48,7 @@ public enum CueEnvelope {
   }
 
   public static func render(_ input: Input) -> String {
-    let calendar = Calendar(identifier: .gregorian)
-    var lines = ["<cue>", stamp(input.now, calendar)]
+    var lines = ["<cue>", input.now.formatted(stamp)]
 
     lines.append("项目：" + input.projects.map(\.name).joined(separator: "、"))
 
@@ -68,7 +67,7 @@ public enum CueEnvelope {
     lines.append("等你 \(input.waiting.count) 件" + (input.waiting.isEmpty ? "" : "："))
     lines += input.waiting.map { "- " + question($0) }
 
-    if let resume = input.resume { lines += self.resume(resume, calendar) }
+    if let resume = input.resume { lines += self.resume(resume) }
     lines.append("醒来：" + wake(input.wake))
     if case .reminder = input.wake { lines += input.reminders.map { "- #\($0.index) \($0.line.text)" } }
     if input.wake == .settingsChanged || (input.contextUsed ?? 0) >= CueContext.renewAt { lines.append(renew) }
@@ -111,7 +110,7 @@ public enum CueEnvelope {
   private static let renew = "要换新上下文：先 memory renew 写交接，再结束这一轮。"
 
   /// 接上：交接原样，之后的对话每条一行，从最近的往前取到 `resumeCharacters` 字。
-  private static func resume(_ resume: CueResume, _ calendar: Calendar) -> [String] {
+  private static func resume(_ resume: CueResume) -> [String] {
     guard resume.handoff != nil || !resume.messages.isEmpty else { return [] }
     var budget = resumeCharacters, kept: [String] = []
     for message in resume.messages.reversed() {
@@ -125,7 +124,7 @@ public enum CueEnvelope {
       let line = clip(text, kept.isEmpty ? budget : Int.max)
       guard line.count <= budget else { break }
       budget -= line.count
-      kept.append("- \(author) \(clock(message.createdAt, calendar))：\(line)")
+      kept.append("- \(author) \(message.createdAt.formatted(clock))：\(line)")
     }
     let truncated = resume.truncated || kept.count < resume.messages.count
     return ["接上（新上下文：上一段的交接备忘与它之后的对话）：", "交接备忘：" + (resume.handoff == nil ? "没有，从头算起" : ""),
@@ -228,17 +227,15 @@ public enum CueEnvelope {
     return "\(minutes / 1440) 天"
   }
 
-  private static let weekdays = ["日", "一", "二", "三", "四", "五", "六"]
-
-  private static func stamp(_ date: Date, _ calendar: Calendar) -> String {
-    let c = calendar.dateComponents([.year, .month, .day, .weekday], from: date)
-    return "\(c.year!)-\(pad(c.month!))-\(pad(c.day!)) 周\(weekdays[c.weekday! - 1]) \(clock(date, calendar))"
+  /// 按此刻的时区现取（Mac 换了时区，下一次就跟着换）。2026-10-21 周三 09:05
+  private static var stamp: Date.VerbatimFormatStyle {
+    .init(
+      format: "\(year: .defaultDigits)-\(month: .twoDigits)-\(day: .twoDigits) 周\(weekday: .narrow) \(hour: .twoDigits(clock: .twentyFourHour, hourCycle: .zeroBased)):\(minute: .twoDigits)",
+      locale: Locale(identifier: "zh_CN"), timeZone: .current, calendar: Calendar(identifier: .gregorian))
   }
-
-  private static func clock(_ date: Date, _ calendar: Calendar) -> String {
-    let c = calendar.dateComponents([.hour, .minute], from: date)
-    return "\(pad(c.hour!)):\(pad(c.minute!))"
+  private static var clock: Date.VerbatimFormatStyle {
+    .init(
+      format: "\(hour: .twoDigits(clock: .twentyFourHour, hourCycle: .zeroBased)):\(minute: .twoDigits)",
+      timeZone: .current, calendar: Calendar(identifier: .gregorian))
   }
-
-  private static func pad(_ value: Int) -> String { value < 10 ? "0\(value)" : "\(value)" }
 }

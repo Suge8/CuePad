@@ -10,14 +10,12 @@ public typealias CueColor = UIColor
 public typealias CueFont = UIFont
 #endif
 
-/// 编辑器的全部样式参数。视觉方向确定后只需提供新的主题值。
+/// 编辑器的全部样式参数。
 // NSFont/NSColor 未标 Sendable，但主题只保存不可变的样式值。
 public struct CueEditorTheme: @unchecked Sendable {
-    /// 正文字体。
     public var font: CueFont
     /// `# ` `## ` 等标题行的字体（各级同一个）。
     public var headingFont: CueFont
-    /// 代码块与行内 code 的字体。
     public var codeFont: CueFont
     /// 标题、列表、围栏等标记字符的颜色：保持可见，降低存在感。
     public var markerColor: CueColor

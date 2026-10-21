@@ -18,7 +18,7 @@ final class CueImageAttachment: NSTextAttachment {
     let imageID: String
     let fileURL: URL?
     weak var core: EditorCore?
-    private lazy var pointSize: CGSize? = fileURL.flatMap(ImageLoading.pointSize(at:))
+    private lazy var pointSize: CGSize? = fileURL.flatMap(Thumbnails.pointSize(at:))
 
     init(id: String, fileURL: URL?) {
         imageID = id

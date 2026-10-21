@@ -43,7 +43,7 @@ public enum Speech {
 
   /// Mac 执行器遇上暂时性错误（会话正在起、还没连上桥）后隔多久重试一次。假扩展与真实 Pi 起来后连上桥都在 0.3 秒内
   /// （桥用 kqueue 盯 socket 目录），取 2 秒留出余量；执行器按先后一条条执行，等得再久会拖住后面的请求。
-  public static let retryDelay: Duration = .seconds(2)
+  static let retryDelay: Duration = .seconds(2)
 
   // MARK: 规则
 

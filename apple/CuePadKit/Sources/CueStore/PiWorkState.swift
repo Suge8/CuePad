@@ -49,7 +49,7 @@ public enum PiWorkState: String, Sendable, CaseIterable {
   public var hasPendingWork: Bool { isWorking || self == .waitingForUser }
 
   /// 停下等人接手：这一轮做完歇着，或在等回答。会话停下时谁接手（Cue 接着推进，还是留给你回，`CueLeft`）只说这两种。
-  public var isStopped: Bool { self == .settled || self == .waitingForUser }
+  var isStopped: Bool { self == .settled || self == .waitingForUser }
 }
 
 extension PiWorkState {

@@ -50,7 +50,7 @@ extension Command {
       let card = try await call.card(call.args.positionals[0])
       let body = try call.bodyInput()
       try await call.store.updateCard(card.id) { $0.body = body }
-      return reply(try await fresh(call, card.id))
+      return reply(try await call.freshView(card.id))
     },
     Command(
       path: ["card", "move"], summary: "把灵感或任务移到另一个项目", arguments: "<灵感或任务>",
@@ -66,7 +66,7 @@ extension Command {
       var previous: UUID?
       if let after = call.args.value("after") { previous = try await call.card(after).id }
       try await call.store.moveCard(card.id, to: .top(project: scope.target), after: previous)
-      return reply(try await fresh(call, card.id))
+      return reply(try await call.freshView(card.id))
     },
     Command(
       path: ["card", "todo"], summary: "设为任务（待办）；--off 改回灵感", arguments: "<灵感或任务>",
@@ -76,7 +76,7 @@ extension Command {
       try call.args.expect("灵感或任务")
       let card = try await call.card(call.args.positionals[0])
       try await call.store.setTodo(card.id, !call.args.has("off"))
-      return reply(try await fresh(call, card.id))
+      return reply(try await call.freshView(card.id))
     },
     Command(
       path: ["card", "archive"], summary: "归档（连同下级）：不占列表、仍可搜；--off 取回", arguments: "<灵感或任务>",
@@ -86,7 +86,7 @@ extension Command {
       try call.args.expect("灵感或任务")
       let card = try await call.card(call.args.positionals[0])
       if call.args.has("off") { try await call.store.unarchive(card.id) } else { try await call.store.archive(card.id) }
-      return reply(try await fresh(call, card.id))
+      return reply(try await call.freshView(card.id))
     },
     Command(
       path: ["card", "trash"], summary: "移进回收站（它的下级提到它的位置）", arguments: "<灵感或任务>",
@@ -95,7 +95,7 @@ extension Command {
       try call.args.expect("灵感或任务")
       let card = try await call.card(call.args.positionals[0])
       try await call.store.trashCard(card.id)
-      return reply(try await fresh(call, card.id))
+      return reply(try await call.freshView(card.id))
     },
     Command(
       path: ["card", "restore"], summary: "从回收站恢复（原项目仍在回收站时回到默认项目）", arguments: "<灵感或任务>",
@@ -104,7 +104,7 @@ extension Command {
       try call.args.expect("灵感或任务")
       let card = try await call.card(call.args.positionals[0])
       try await call.store.restoreCard(card.id)
-      return reply(try await fresh(call, card.id))
+      return reply(try await call.freshView(card.id))
     },
   ]
 
@@ -119,10 +119,5 @@ extension Command {
       for project in try await call.store.projects() { cards += try await call.store.cards(in: project.id) }
       return cards
     }
-  }
-
-  private static func fresh(_ call: Call, _ id: UUID) async throws -> CardView {
-    guard let card = try await call.store.card(id) else { throw CLIError.notFound("\(id.uuidString.lowercased()) 已不存在") }
-    return try await call.cardViews([card])[0]
   }
 }

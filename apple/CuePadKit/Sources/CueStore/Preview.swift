@@ -100,7 +100,7 @@ public struct PiPreview: Identifiable, Equatable, Sendable {
   public var kind: PiPreviewKind? { PiPreviewKind(fileName: name) }
 
   /// 本机交给系统（快速查看、缩略图）的那份文件叫什么：系统认错类型的扩展名（.ts 等）另接 .txt，按这里归的类打开。
-  public var systemFileName: String { PiPreviewKind.systemFileName(name) }
+  var systemFileName: String { PiPreviewKind.systemFileName(name) }
 
   public init(id: UUID = UUID(), sessionID: String, hash: String, name: String, title: String, byteCount: Int, createdAt: Date? = nil) {
     let createdAt = createdAt ?? .stamp
@@ -142,7 +142,7 @@ public struct PiPreviewAdded: Equatable, Sendable {
   /// 页面引用的本地文件或网络地址（预览只读单个文件、不联网）：缺的会显示不全，给 Agent 看，让它改成单文件再发。最多 `PiPreviewAdded.referenceLimit` 个
   public var outsideReferences: [String]
 
-  public static let referenceLimit = 5
+  static let referenceLimit = 5
 }
 
 extension CueStore {

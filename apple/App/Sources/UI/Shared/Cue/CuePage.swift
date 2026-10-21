@@ -29,10 +29,8 @@ struct CuePage: View {
     #if os(iOS)
     @Environment(Navigation.self) private var navigation
     @Environment(\.horizontalSizeClass) private var sizeClass
-    /// 输入框有焦点：左边的去处圆钮让开，输入框占满整排。
-    @State private var composing = false
-    /// 去处圆钮展开成了三格。
-    @State private var placesOpen = false
+    /// 这一页的输入框占着底边，底部那一排的 Cue 钮把位置交给它（`DockRoot`）。
+    @Environment(\.dockComposer) private var ownsComposer
     #endif
     @State private var thread: CueThread?
     @State private var follow = ChatFollow()
@@ -95,16 +93,16 @@ struct CuePage: View {
     }
     #else
     /// 页头浮在对话上（`CueHeader`），对话让出固定的一段：页头展开成面板时对话不重排。窄屏上 Cue 页是导航栈的根、不需要返回，不用系统导航栏（`DockRoot`），
-    /// 页头就是最上面那一排；底部是一排里左边那颗去处圆钮（`DockPlaces`）加输入框。
+    /// 页头就是最上面那一排；底部左边那颗"⋯"是底部那一排（`DockBar`，不在这一页里）收起的样子，这里给它让出位置，右边是输入框。
     /// "等你"卡与输入框浮在对话底上（`FloatingReply`，同 Mac；在键盘之上）：不做成底下那一栏（安全区）——栏一变矮（发出时输入框收回一行、
     /// 卡沉下去）可见区当帧变高、系统把对话一下拉下去，发出的话一两帧后才到、再滑上来；栏一变高（卡升起）系统当帧挪、滚动区下一帧才跟上。
     /// 键盘只经系统的安全区让：输入框有焦点时贴着安全区底边（有键盘就是键盘顶，第三方键盘长高、换键盘、下拖收起都由系统跟），
     /// 窄屏没焦点时整块伸到屏幕底、底部那一排离屏幕底边同 Dock。不读键盘高：导航栈里的页拿到的键盘是普通安全区，
     /// `.ignoresSafeArea(.keyboard)` 分不出来，拿它量"没有键盘的底"在键盘弹出时量到的是键盘高，那一排被压回键盘底下。
     private var page: some View {
-        let toScreen = docked && !composing
+        let toScreen = docked && !navigation.cueComposing
         return FloatingReply(backed: false) {
-            chat.overlay { if placesOpen { closePlaces } }
+            chat.overlay { if docked, navigation.placesOpen { closePlaces } }
         } reply: {
             bottom
                 .padding(.horizontal, docked ? Dock.margin : 12)
@@ -120,10 +118,10 @@ struct CuePage: View {
             .toolbar(removing: .title)
     }
 
-    /// 窄屏导航栈的根（不是 iPad 右侧面板）：底部是去处圆钮加输入框。
+    /// 窄屏导航栈的根（不是 iPad 右侧面板）：底部是"⋯"加输入框。
     private var docked: Bool { !inPanel && sizeClass == .compact }
 
-    /// 去处圆钮展开时铺在对话上的一层：点一下或一划就收起。
+    /// "⋯"展开时铺在对话上的一层：点一下或一划就收起。
     private var closePlaces: some View {
         Color.clear.contentShape(.rect)
             .onTapGesture(perform: collapsePlaces)
@@ -132,23 +130,29 @@ struct CuePage: View {
     }
 
     private func collapsePlaces() {
-        withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { placesOpen = false }
+        navigation.placesOpen = false
     }
 
-    /// 窄屏底部那一排：左边去处圆钮（输入框有焦点时让开），右边输入框；从三页来时从 Dock 的样子长过来。
+    /// 窄屏底部那一排：左边给"⋯"让出位置（输入框有焦点时不让），右边输入框。"⋯"展开着、换来这一页时 Cue 钮还在长成它，
+    /// 输入框的位置是底部那一排的 Cue 钮，这里的输入框藏着；长到了才接手（`DockRoot.handed`），离开时当场藏起。
     private var dockRow: some View {
-        CueDockRow(
-            placesOpen: $placesOpen, composing: composing,
-            arrival: reduceMotion ? nil : Dock.Arrival(from: navigation.previousRoot, to: .cue)
-        ) { composer }
-            .debugExposesPlaces { withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { placesOpen.toggle() } }
+        let shows = ownsComposer
+        return HStack(alignment: .bottom, spacing: 0) {
+            if !navigation.cueComposing {
+                Color.clear.frame(width: Dock.slot + Dock.gap, height: Dock.slot)
+            }
+            composer
+                .opacity(shows ? 1 : 0)
+                .allowsHitTesting(shows)
+                .accessibilityHidden(!shows)
+        }
     }
     #endif
 
     #if os(iOS)
     private var composer: some View {
         CueComposer(style: .page, focusRequests: inPanel ? 0 : navigation.cueFocusRequests, sent: { follow.sent() }) { focused in
-            withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { composing = focused }
+            withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { navigation.cueComposing = focused }
         }
     }
     #endif

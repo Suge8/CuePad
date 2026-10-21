@@ -68,7 +68,7 @@ import Testing
   @Test func anotherDevicesConcurrentEditStillKeepsBothVersions() async throws {
     let (card, _) = try await editedAndUploaded("第一版")
     let local = try await edit(card, "本机第二版")
-    let other = remoteRecord(.cards, id: card.id, cardFields(project: nil, body: "另一台的版本", modifiedAt: (local["modifiedAt"] as! NSNumber).int64Value + 1_000))
+    let other = remoteRecord(.cards, id: card.id, cardFields(body: "另一台的版本", modifiedAt: (local["modifiedAt"] as! NSNumber).int64Value + 1_000))
 
     try await rig.coordinator.pulled([other], [])
 

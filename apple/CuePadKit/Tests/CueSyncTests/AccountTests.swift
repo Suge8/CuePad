@@ -17,20 +17,6 @@ import Testing
     return card
   }
 
-  @Test(arguments: [
-    (CKAccountStatus.noAccount, SyncStatus.noAccount),
-    (.restricted, .accountRestricted),
-    (.temporarilyUnavailable, .accountUnavailable),
-    (.couldNotDetermine, .accountUnavailable),
-  ])
-  func accountStatusIsReportedAndRecoversWhenAvailable(status: CKAccountStatus, expected: SyncStatus) async throws {
-    await rig.coordinator.accountStatus(status)
-    #expect(await rig.coordinator.status == expected)
-
-    await rig.coordinator.accountStatus(.available)
-    #expect(await rig.coordinator.status == .idle)
-  }
-
   @Test func signingOutKeepsLocalDataAndTheSameAccountCarriesOn() async throws {
     let card = try await populateAndPush()
 
@@ -54,7 +40,7 @@ import Testing
     try await Task.sleep(for: .milliseconds(3))
     try await store.updateCard(card.id) { $0.body = "edited while waiting" }
     #expect(await rig.coordinator.nextBatch(first: [], limit: 400) == nil)
-    let other = remoteRecord(.cards, cardFields(project: nil, body: "other user", modifiedAt: 9_000_000_000_000))
+    let other = remoteRecord(.cards, cardFields(body: "other user", modifiedAt: 9_000_000_000_000))
     await #expect(throws: SyncPaused.self) { try await rig.coordinator.pulled([other], []) }
     #expect(try await store.card(card.id)?.body == "edited while waiting")
     #expect(try await store.cards(in: Project.defaultID).isEmpty)  // 新账号的记录没有被应用

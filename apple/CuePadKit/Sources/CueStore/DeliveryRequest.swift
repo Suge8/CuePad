@@ -71,7 +71,6 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
   /// 谁写的（见 `DeliveryOrigin`）；nil 是你。
   public var origin: Open<DeliveryOrigin>?
 
-  /// Cue 写的请求。
   public var isFromCue: Bool { origin == .known(.cue) }
 
   /// 还没有结果（等待执行或执行中）。

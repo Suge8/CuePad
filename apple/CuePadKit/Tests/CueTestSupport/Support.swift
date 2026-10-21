@@ -175,8 +175,8 @@ public final class ManualTiming: Sendable {
 }
 
 /// 等不到时抛出：写明在等什么，测试就停在这里（接着往下跑只会在别处空等）。
-public struct TimedOut: Error, CustomStringConvertible {
-  public let description: String
+struct TimedOut: Error, CustomStringConvertible {
+  let description: String
 }
 
 /// 条件等待的默认上限。条件本该几毫秒就成立（替身、手动时钟、回放），上限只是"确实不会来了"的兜底：写错的测试几秒内就红，
@@ -218,7 +218,7 @@ public func eventually<T: Sendable & Equatable>(
   }
 }
 
-public struct RawError: Error { public let message: String }
+struct RawError: Error { let message: String }
 
 extension CueStore {
   /// 全部会话记录（测试核对用；界面按范围与页读，见 `piSessionPage`）。
