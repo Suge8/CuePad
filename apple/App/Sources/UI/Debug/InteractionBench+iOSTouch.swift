@@ -17,7 +17,10 @@ extension IOSInteractionBench {
     static let swipeWindow = Duration.milliseconds(1000)
 
     /// 手势切页、返回与前进（每项两遍），再在会话行与任务看板上横滑核对没被切页抢走。改前（切页还是点底部那一排）1、2、4 什么都不发生，3 是系统的返回。
-    static func gestures(_ workspace: Workspace, session: UUID, wants: (String) -> Bool, fail: (String) -> Never, step: Step) async {
+    /// `press`：请脚本按或滑一下、不量（收起滑出的行动作）。
+    static func gestures(
+        _ workspace: Workspace, session: UUID, wants: (String) -> Bool, fail: (String) -> Never, press: (String, Finger) async -> Void, step: Step
+    ) async {
         guard let bounds = window?.bounds else { return }
         let left = bounds.width / 4, right = bounds.width * 3 / 4, mid = bounds.midY
         func land(_ root: Route) async {
@@ -33,7 +36,7 @@ extension IOSInteractionBench {
             // 会话页的中部满是会话行（行上左滑露出行的动作），切页滑在第一行上面的分组标题那一条
             if wants("滑动切页·会话→Cue") {
                 await land(.agent)
-                guard let row = sessionRow(in: window) else { fail("会话页上找不到会话行") }
+                guard let row = await sessionRow(in: window) else { fail("会话页上找不到会话行") }
                 let y = row.minY - 20
                 await step("滑动切页·会话→Cue", swipeWindow, .swipe(from: CGPoint(x: right, y: y), to: CGPoint(x: left, y: y))) {}
             }
@@ -48,8 +51,12 @@ extension IOSInteractionBench {
         for _ in 0..<2 where wants("误触·会话行左滑") {
             await land(.cue)
             await land(.agent)
-            guard let row = sessionRow(in: window)?.midY else { fail("会话页上找不到会话行") }
+            guard let row = await sessionRow(in: window)?.midY else { fail("会话页上找不到会话行") }
             await step("误触·会话行左滑", swipeWindow, .swipe(from: CGPoint(x: right, y: row), to: CGPoint(x: left, y: row))) {}
+            // 四页常驻、页不重建：滑出的行动作点一下行收起，不留给下一遍（没滑出时这一下会打开会话，也算没收起）
+            await press("收起行动作", .press(CGPoint(x: left, y: row)))
+            try? await Task.sleep(for: .seconds(1))
+            if revealsRowActions(in: window) || !workspace.path.isEmpty { fail("点一下没收起行动作：\(landed(workspace))") }
         }
         for _ in 0..<2 where wants("误触·看板左滑") || wants("误触·看板右滑") {
             await land(.tasks)
@@ -87,10 +94,12 @@ extension IOSInteractionBench {
         }
     }
 
-    /// 屏上的视图（排在屏外的页不算）。
+    /// 手指按得到的视图：整个在屏内，中心点的命中落在它里面。根上四页都建着，挪到屏外的页 UIKit 的 frame 可能还在屏内，只看 frame 会认错页。
     private static func onScreen(_ view: UIView, _ window: UIWindow) -> CGRect? {
         let frame = view.convert(view.bounds, to: window)
-        return !view.isHidden && view.alpha > 0 && window.bounds.contains(frame) ? frame : nil
+        guard !view.isHidden, view.alpha > 0, window.bounds.contains(frame),
+              window.hitTest(CGPoint(x: frame.midX, y: frame.midY), with: nil)?.isDescendant(of: view) == true else { return nil }
+        return frame
     }
 
     private static func all(in view: UIView?) -> [UIView] {
@@ -98,11 +107,14 @@ extension IOSInteractionBench {
         return [view] + view.subviews.flatMap { all(in: $0) }
     }
 
-    /// 会话列表（SwiftUI 的 List）里屏上的第一行。
-    private static func sessionRow(in window: UIWindow?) -> CGRect? {
+    /// 会话列表（SwiftUI 的 List）里屏上的第一行。先滚回顶上（分组标题露出来）。
+    private static func sessionRow(in window: UIWindow?) async -> CGRect? {
         guard let window else { return nil }
-        let cells = all(in: window).compactMap { $0 as? UICollectionViewCell }.compactMap { onScreen($0, window) }.filter { $0.height >= 44 }
-        return cells.min { $0.minY < $1.minY }
+        func cells() -> [UICollectionViewCell] { all(in: window).compactMap { $0 as? UICollectionViewCell }.filter { onScreen($0, window) != nil } }
+        guard let list = cells().lazy.compactMap({ $0.superview as? UICollectionView }).first else { return nil }
+        list.setContentOffset(CGPoint(x: 0, y: -list.adjustedContentInset.top), animated: false)
+        try? await Task.sleep(for: .milliseconds(300))
+        return cells().compactMap { onScreen($0, window) }.filter { $0.height >= 44 }.min { $0.minY < $1.minY }
     }
 
     /// 任务看板（一屏一列横着翻的滚动区）：屏上最里层那个，外面可能还套着翻页的容器。

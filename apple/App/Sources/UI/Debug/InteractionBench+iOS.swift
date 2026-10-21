@@ -97,7 +97,7 @@ enum IOSInteractionBench {
         }
         workspace.select(.cue)
         try? await Task.sleep(for: .seconds(1))
-        // 主导航：Cue 页点底部展开的"任务"去任务（配 `-CuePadManyTasks` 量任务多时）、任务页点 Cue 钮回来（点按调的就是 `select`，过渡由 `DockRoot` 接着做）
+        // 主导航：Cue 页点底部展开的"任务"去任务（配 `-CuePadManyTasks` 量任务多时）、任务页点 Cue 钮回来（点按调的就是 `select`，过渡由 `HomePager` 接着做）
         for _ in 0..<2 {
             await step("Cue 进任务") { workspace.select(.tasks) }
             await step("任务回 Cue") { workspace.select(.cue) }
@@ -123,7 +123,7 @@ enum IOSInteractionBench {
             await step("开任务气泡") { workspace.openTask(task) }
             await step("关任务气泡") { workspace.openTask = nil }
         }
-        await gestures(workspace, session: sessions[0], wants: wants, fail: fail) { name, window, finger, action in
+        await gestures(workspace, session: sessions[0], wants: wants, fail: fail, press: { await Self.touch(write, $0, $1) }) { name, window, finger, action in
             await step(name, window: window, finger: finger, action)
         }
         await typeLong(workspace, session: sessions[0], card: idea.id, wants: wants, fail: fail, step: { name, action in await step(name, action) })
