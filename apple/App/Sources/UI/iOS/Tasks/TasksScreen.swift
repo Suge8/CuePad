@@ -3,7 +3,7 @@ import CueStore
 import SwiftUI
 
 /// 任务页（iPhone 底部一排的"任务"、宽屏侧栏的"任务"）：流水看板（`TaskBoard`），待办 → 推进中 → 等你 → 做完（今天）。
-/// 只看项目范围里的（`Workspace.projectScope`，同会话页那一份；选了项目以后分段与列头的数也只数这个项目），页里不另设筛选。
+/// 只看项目范围里的（`Workspace.scopedProject`，同会话页那一份；选了项目以后分段与列头的数也只数这个项目），页里不另设筛选。
 /// 顶上不写页名，项目范围在顶栏中间（`ProjectScope`，宽窄同一个顶栏）。宽屏（iPad）同 Mac 四列并排（`BoardColumns`）；窄屏一屏一列：
 /// 顶上一排带数的分段（`BoardSegments`），左右滑换列（分页滚动），点分段滑过去；打开时有等你就落在等你。
 /// 右上角"+"去待办、顶上浮出添加那一行（`NewTaskLine`，落在范围里的项目或当前项目，可换），失焦且没写字时收回。
@@ -19,7 +19,7 @@ struct TasksScreen: View {
     @State private var column: TaskBoard.Column?
 
     var body: some View {
-        let shown = (board ?? .empty).only(scope)
+        let shown = (board ?? .empty).only(workspace.scopedProject)
         Group {
             if sizeClass == .regular {
                 BoardColumns(board: shown, adding: $adding, newTaskProject: newTaskProject).padding(.horizontal, 12)
@@ -36,15 +36,13 @@ struct TasksScreen: View {
             Button("添加任务", icon: .add) { add() }
         }
         .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: adding)
-        .onChange(of: workspace.projectScope) { adding = false }
+        .onChange(of: workspace.scopedProject) { adding = false }
         .onAppear { if let board { land(board) } }
         .onChange(of: board == nil) { if let board { land(board) } }
         .observingBoard(into: $board, store: services.store, onError: workspace.fail)
     }
 
-    private var newTaskProject: UUID? { scope ?? navigation.currentProject }
-
-    private var scope: UUID? { workspace.scopedProject }
+    private var newTaskProject: UUID? { workspace.scopedProject ?? navigation.currentProject }
 
     /// 一屏一列，左右滑换列：列的宽就是可见宽（`containerRelativeFrame`），按页停。
     private func pages(_ board: TaskBoard) -> some View {

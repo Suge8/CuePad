@@ -21,7 +21,7 @@ struct TaskBoardPage: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(palette.desk)
         .animation(Motion.quick, value: adding)
-        .onChange(of: workspace.projectScope) { adding = false }
+        .onChange(of: workspace.scopedProject) { adding = false }
         .observingBoard(into: $board, store: services.store, onError: workspace.fail)
     }
 

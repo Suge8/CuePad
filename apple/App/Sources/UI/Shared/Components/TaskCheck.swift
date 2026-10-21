@@ -46,9 +46,8 @@ extension Workspace {
 struct TaskCheckButton: View {
     let task: Card
     var subtasks: TaskProgress?
-    var agentBusy = false
-    /// 此刻那一步的会话在跑（圈上那一段走流光，`TaskRingView`）。
-    var running = false
+    /// 这件事的"下一步"（`TaskNext`）：会话在做或在等你时完成前先问一句，在跑时圈上此刻那一段走流光（`TaskRingView`）。
+    var next: TaskNext?
     let size: CGFloat
     let target: CGSize
     @Binding var check: TaskCheck
@@ -64,7 +63,7 @@ struct TaskCheckButton: View {
     }
 
     private var ring: some View {
-        TaskRingView(status: task.status, done: check.done(task), size: size, steps: subtasks, running: running)
+        TaskRingView(status: task.status, done: check.done(task), size: size, steps: subtasks, running: next?.isRunning ?? false)
             .relaySpot(task: task.id)
             .frame(width: target.width, height: target.height)
             .contentShape(.rect)
@@ -76,7 +75,7 @@ struct TaskCheckButton: View {
     private var trigger: some View { Button(action: tap) { ring }.buttonStyle(PressStyle(.button)) }
     #endif
 
-    private func tap() { workspace.tap($check, task: task, subtasks: subtasks, agentBusy: agentBusy) }
+    private func tap() { workspace.tap($check, task: task, subtasks: subtasks, agentBusy: next?.agentBusy ?? false) }
 }
 
 extension View {

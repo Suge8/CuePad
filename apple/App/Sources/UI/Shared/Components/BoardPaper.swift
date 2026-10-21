@@ -13,7 +13,7 @@ struct BoardPaper<Row: Identifiable, Content: View>: View {
         if !rows.isEmpty {
             LazyVStack(alignment: .leading, spacing: 0) {
                 ForEach(BoardSection.of(rows, by: project)) { section in
-                    if workspace.scopedProject == nil { BoardProjectHeading(id: section.id, first: section.first).padding(.leading, BoardInset.ring) }
+                    BoardProjectHeading(id: section.id, first: section.first).padding(.leading, BoardInset.ring)
                     ForEach(section.rows) { content($0) }
                 }
             }
@@ -24,8 +24,7 @@ struct BoardPaper<Row: Identifiable, Content: View>: View {
     }
 }
 
-/// 看板一列里按项目分的一段，段的先后是它第一次出现的先后；不属于哪个项目的（Cue 的一般提问）在最前，不写段头。
-/// 只看一个项目时不分段写头（范围已经说了）。
+/// 看板一列里按项目分的一段，段的先后是它第一次出现的先后；不属于哪个项目的（Cue 的一般提问）在最前。
 struct BoardSection<Row: Identifiable>: Identifiable {
     var id: UUID?
     var rows: [Row]
@@ -43,7 +42,7 @@ struct BoardSection<Row: Identifiable>: Identifiable {
     }
 }
 
-/// 段头：项目小图标与名字，淡墨小字；第一段贴着上沿，其后的与上一段隔一点。
+/// 段头：项目小图标与名字，淡墨小字；第一段贴着上沿，其后的与上一段隔一点。不属于哪个项目的段、只看一个项目时（范围已经说了，`Workspace.scopedProject`）不写。
 struct BoardProjectHeading: View {
     let id: UUID?
     let first: Bool
@@ -51,7 +50,7 @@ struct BoardProjectHeading: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        if let project = workspace.catalog?.project(id) {
+        if workspace.scopedProject == nil, let project = workspace.catalog?.project(id) {
             HStack(spacing: 5) {
                 ProjectGlyph(project: project, size: Self.glyph)
                 Text(project.name).lineLimit(1)

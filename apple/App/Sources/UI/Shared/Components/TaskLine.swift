@@ -88,9 +88,9 @@ struct TaskLine: View {
         let size = step ? TaskMetrics.stepRing : TaskMetrics.ring
         let target = CGSize(width: TaskMetrics.ringColumn, height: Self.ringTarget)
         #if os(macOS)
-        return TaskCheckButton(task: task, subtasks: subtasks, agentBusy: next?.agentBusy ?? false, running: next?.isRunning ?? false, size: size, target: target, check: $check, rowTap: open)
+        return TaskCheckButton(task: task, subtasks: subtasks, next: next, size: size, target: target, check: $check, rowTap: open)
         #else
-        return TaskCheckButton(task: task, subtasks: subtasks, agentBusy: next?.agentBusy ?? false, running: next?.isRunning ?? false, size: size, target: target, check: $check)
+        return TaskCheckButton(task: task, subtasks: subtasks, next: next, size: size, target: target, check: $check)
         #endif
     }
 
@@ -339,25 +339,6 @@ struct TaskNextMark: View {
         #else
         navigation.follow(next, store: services.store)
         #endif
-    }
-}
-
-extension PiShown {
-    /// 任务行上要写出状态词的：要你动手的（`needsYou`），加上停在半路（被打断）与做完一轮你还没看的。在跑的只有会动的线。
-    var speaksOnTask: Bool { needsYou || status == .interrupted || status == .unread }
-}
-
-extension TaskNext {
-    /// 行上写出了状态词（`PiShown.speaksOnTask`）。
-    var speaks: Bool { if case .agent(let shown, _) = self { shown.speaksOnTask } else { false } }
-    /// 会话此刻在跑（圈上那一段走流光）。
-    var isRunning: Bool { if case .agent(let shown, _) = self { shown.isRunning } else { false } }
-}
-
-extension Workspace {
-    /// 一行的"下一步"：给了此刻干活的叶子（`lead`）看它，否则看这件自己。
-    func next(for task: Card, lead: Card?, in agents: AgentLinks, steps: TaskProgress?) -> TaskNext? {
-        lead.map { next(for: $0, in: agents, steps: nil) } ?? next(for: task, in: agents, steps: steps)
     }
 }
 
