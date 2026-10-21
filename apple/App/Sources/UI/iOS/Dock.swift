@@ -138,8 +138,6 @@ struct Dock: View {
     static let margin: CGFloat = 21
     /// 两块玻璃之间、Cue 页圆钮与输入框之间的空。
     static let gap: CGFloat = 8
-    /// Cue 页的输入框贴着安全区底边（键盘弹出时就是键盘顶）时离它的距离：窄屏输入框有焦点时、iPad 的 Cue 面板。
-    static let keyboardGap: CGFloat = 8
     /// 选中滴离胶囊的边。
     static let inset: CGFloat = 4
     static let cellWidth: CGFloat = 76

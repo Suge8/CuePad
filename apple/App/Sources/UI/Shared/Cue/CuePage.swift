@@ -77,11 +77,11 @@ struct CuePage: View {
     #if os(macOS)
     private var page: some View {
         HStack(spacing: 0) {
-            FloatingReply {
+            FloatingReply(gap: Self.replyPadding) {
                 chat
             } reply: {
                 bottom
-                    .padding(.horizontal, Self.inset).padding(.bottom, Self.replyPadding)
+                    .padding(.horizontal, Self.inset)
                     .frame(maxWidth: Self.readingWidth)
             }
             if cue.showsRun, let keeper = services.cue.keeper {
@@ -96,22 +96,15 @@ struct CuePage: View {
     #else
     /// 页头浮在对话上（`CueHeader`），对话让出固定的一段：页头展开成面板时对话不重排。窄屏上 Cue 页是导航栈的根、不需要返回，不用系统导航栏（`DockRoot`），
     /// 页头就是最上面那一排；底部是一排里左边那颗去处圆钮（`DockPlaces`）加输入框。
-    /// "等你"卡与输入框浮在对话底上（`FloatingReply`，同 Mac；在键盘之上）：不做成底下那一栏（安全区）——栏一变矮（发出时输入框收回一行、
-    /// 卡沉下去）可见区当帧变高、系统把对话一下拉下去，发出的话一两帧后才到、再滑上来；栏一变高（卡升起）系统当帧挪、滚动区下一帧才跟上。
-    /// 键盘只经系统的安全区让：输入框有焦点时贴着安全区底边（有键盘就是键盘顶，第三方键盘长高、换键盘、下拖收起都由系统跟），
-    /// 窄屏没焦点时整块伸到屏幕底、底部那一排离屏幕底边同 Dock。不读键盘高：导航栈里的页拿到的键盘是普通安全区，
-    /// `.ignoresSafeArea(.keyboard)` 分不出来，拿它量"没有键盘的底"在键盘弹出时量到的是键盘高，那一排被压回键盘底下。
+    /// "等你"卡与输入框浮在对话底上（`FloatingReply`，同会话页与 Mac，键盘也在那里让）；窄屏底部那一排没有键盘时离屏幕底边同 Dock。
     private var page: some View {
-        let toScreen = docked && !composing
-        return FloatingReply(backed: false) {
+        FloatingReply(backed: false, floor: docked ? Dock.margin : nil) {
             chat.overlay { if placesOpen { closePlaces } }
         } reply: {
             bottom
                 .padding(.horizontal, docked ? Dock.margin : 12)
-                .padding(.bottom, toScreen ? Dock.margin : Dock.keyboardGap)
                 .frame(maxWidth: Self.readingWidth)
         }
-            .ignoresSafeArea(edges: toScreen ? .bottom : [])
             .scrollDismissesKeyboard(.interactively)
             .safeAreaPadding(.top, CueHeader.reserve)
             .overlay(alignment: .top) { CueHeader(underBanner: docked) }

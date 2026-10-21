@@ -19,7 +19,6 @@ struct SessionScreen: View {
     @State private var follow = ChatFollow()
     @State private var confirmingEnd: PiSessionState?
     @State private var renaming: PiSessionState?
-    private static let barGap: CGFloat = 8
 
     /// `seed`：推入前读好的这一页（`Navigation.openSession`），首帧即用，之后以 Store 的观察流为准。
     init(id: UUID, seed: SessionDigest? = nil) {
@@ -42,7 +41,7 @@ struct SessionScreen: View {
             if let session {
                 // 在看历史时回复框收成短胶囊，点它展开（不挪正在读的内容）
                 SessionDock(session: session, digest: digest, compact: !follow.atNewest, revealNote: { follow.seek($0.entry) }) { follow.sent() }
-                    .padding(.horizontal, 12).padding(.bottom, Self.barGap)
+                    .padding(.horizontal, 12)
                     .frame(maxWidth: Self.readingWidth)
                     .animation(Motion.quick, value: session.question)
             }
