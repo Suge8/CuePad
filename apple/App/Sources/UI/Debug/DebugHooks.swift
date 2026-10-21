@@ -40,6 +40,8 @@ enum DebugHooks {
         var showsDone = false
         /// Cue 此刻钉成这一份样例（`-CuePadCueNow <样例>`，`CueNowSamples`）：页头、侧栏、小组件与实时活动都按它画，截各态用。
         var cueNow: CueNow?
+        /// 会话页一出现就展开额度明细（`-CuePadQuotaOpen YES`）。
+        var quotaOpen = false
         #if os(iOS)
         /// 设置页通知那一行显示的状态（`-CuePadAlertStatus`；演示模式没有同步，真实状态出不来）。
         var alertStatus: PiAlertStatus?
@@ -50,8 +52,6 @@ enum DebugHooks {
         /// Cue 页头一出现就展开成面板（`-CuePadCuePanel YES`；`end` 再滚到面板底，看记忆）。
         var cuePanelOpen = false
         var cuePanelEnd = false
-        /// 会话页顶栏那颗胶囊一出现就长出额度总览（`-CuePadQuotaOpen YES`）。
-        var quotaOpen = false
         /// 不弹演示会话的前台横幅（`-CuePadQuiet YES`）。
         var quietAlerts = false
         #endif

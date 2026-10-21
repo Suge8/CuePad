@@ -15,7 +15,7 @@ final class SessionHeader {
         var undelivered: String?
         var ending: Bool
         /// "⋯"最上面写的所在。
-        var place: Dotted?
+        var place: String?
         /// 本机桥上在线、开在终端里、知道是哪个终端的会话（可跳到终端，`PiSession.canJump`）。
         var liveID: CuePi.PiSession.ID?
         var canEnd: Bool

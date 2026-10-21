@@ -5,7 +5,7 @@ import SwiftUI
 /// 会话页（iPhone 底部一排与宽屏侧栏的"会话"；也从 Cue 页头面板的"全部会话"推入，项目页"⋯"里的"看这个项目的会话"设好项目范围再换到这里）：
 /// 只回答"每个会话在做什么、现在到哪了、结果或卡点是什么"。会话列表是 `SessionList`，不写标题，右边新会话；
 /// 顶栏中间一颗玻璃胶囊（`ScopeQuota`）：左半项目范围（`ProjectScope`，与任务页共用 `Workspace.projectScope`），右半每个账号一颗额度环（`QuotaRings`），
-/// 两半各点各的——点环从胶囊原地长出额度总览（`GrowPanel`，同 Cue 页头），再点或点外面收回。
+/// 两半各点各的——点环从胶囊原地长出额度明细（`GrowPanel`，同 Cue 页头），再点或点外面收回。
 /// 搜会话在搜索页（iPhone 顶栏左边的搜索钮、iPad 侧栏顶上的搜索框），这里不另放搜索框。
 struct AgentScreen: View {
     @Environment(Workspace.self) private var workspace
@@ -22,29 +22,19 @@ struct AgentScreen: View {
     }
 }
 
-/// 会话页顶栏中间那颗胶囊：左半项目范围，右半额度环（还没有额度记录时没有右半，只剩项目范围）；点环长出额度总览。
+/// 会话页顶栏中间那颗胶囊：左半项目范围，右半额度环（还没有额度记录时没有右半，只剩项目范围）；点环长出额度明细。
 private struct ScopeQuota: View {
-    @Environment(AppServices.self) private var services
-    @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var open = DebugHooks.preset.quotaOpen
 
     var body: some View {
-        let quotas = !services.accountQuotas.items.isEmpty
         GrowPanel(open: $open, radius: FloatingHeaderLayout.height / 2, fills: false) {
             HStack(spacing: 0) {
                 ProjectScope()
-                if quotas {
-                    Button { $open.grow(reduceMotion: reduceMotion) } label: {
-                        QuotaRings().padding(.leading, 6).padding(.trailing, 12)
-                            .frame(height: FloatingHeaderLayout.height).contentShape(.rect)
-                    }
-                    .buttonStyle(PressStyle())
-                    .accessibilityHint(open ? "收起" : "看每个窗口还剩多少、多久后重置")
-                }
+                QuotaRings(open: open, height: FloatingHeaderLayout.height) { $open.grow(reduceMotion: reduceMotion) }
             }
         } panel: {
-            QuotaStrip().padding(.horizontal, 16).padding(.top, 4).padding(.bottom, 18)
+            QuotaDetail().padding(.horizontal, 16).padding(.top, 4).padding(.bottom, 18)
         }
     }
 }
@@ -92,15 +82,16 @@ struct SessionList: View {
         } else {
             Group {
                 if !list.now.isEmpty {
-                    header { SectionTitle(text: "现在") }
+                    header { SectionTitle(text: "现在").padding(.horizontal, 4) }
                     ForEach(list.now) { row($0, in: list, end: list.ends[$0.id]) }
                 }
                 ForEach(Array(list.historyRuns.enumerated()), id: \.element.section) { index, run in
                     header {
                         VStack(alignment: .leading, spacing: 10) {
                             if index == 0 { SectionTitle(text: "历史") }
-                            Text(run.section.title).font(.footnote.weight(.medium)).foregroundStyle(palette.ink3).padding(.horizontal, 4)
+                            SectionLabel(text: Dotted(run.section.title))
                         }
+                        .padding(.horizontal, 4)
                     }
                     ForEach(run.items) { row($0, in: list, end: list.ends[$0.id]) }
                 }
@@ -167,18 +158,6 @@ private struct NewSessionButton: View {
     var body: some View {
         Button("新会话", icon: .add) { navigation.newSession = .init(project: project) }
             .accessibilityHint("让 Mac 开一个 Agent 会话")
-    }
-}
-
-private struct SectionTitle: View {
-    let text: String
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        // 分组标题是页面的骨架：不比行里的字弱
-        Text(text).font(.headline).foregroundStyle(palette.ink)
-            .padding(.horizontal, 4)
-            .accessibilityAddTraits(.isHeader)
     }
 }
 

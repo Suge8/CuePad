@@ -58,7 +58,7 @@ struct SessionScreen: View {
         } trailing: {
             if let session {
                 Menu {
-                    // 所在与"后台"不挤在顶栏里：点"⋯"时写在最上面
+                    // 所在不挤在顶栏里：点"⋯"时写在最上面
                     if let title = PiPlace.menuTitle(of: session, project: digest?.project) { Section { } header: { Text(title) } }
                     if MacDelivery.canRename(session) {
                         Button("重命名", icon: .rename) { renaming = session }.disabled(!services.reachesPiHost)

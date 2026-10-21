@@ -2,7 +2,7 @@ import CueStore
 import SwiftUI
 
 /// "Cue 记得什么"（Cue 页上打开的弹层，入口见 `CuePage`；手机与 Mac 同一张列表）：没忘掉的记忆，"一直记着"（钉住的）一组在前，其余按记下的时间分段
-/// （今天、昨天、本周、本月、更早，同会话历史 `PiHistorySection`），组内从新到旧。顶上不写标题，一条只剩正文：时间在组头，
+/// （今天、昨天、本周、本月、更早，同会话历史 `TimeSection`），组内从新到旧。顶上不写标题，一条只剩正文：时间在组头，
 /// 来源（"你记的"）与确切日期只在长按（右键）菜单的抬头与读屏里——一屏要看得到十来条。
 /// 记一条是浮在底部的玻璃胶囊，列表从它后面透过；记下的算你记的，一条超过 `CueMemoryLine.maxBytes` 字节时在胶囊里说明、不写。
 /// 钉住与忘掉（另有复制）按平台惯例收起：手机右滑钉住、左滑忘掉、长按出菜单；Mac 右键出菜单，指针停在一行时铺行的淡底（`RowStyle`）、右下角露出两颗小钮。
@@ -36,11 +36,11 @@ struct CueMemoryPage: View {
         return ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
                 if !pinned.isEmpty {
-                    MemoryGroupTitle(title: "一直记着", icon: .pin)
+                    groupTitle("一直记着", icon: .pin)
                     ForEach(pinned) { row($0).transition(Motion.item) }
                 }
-                ForEach(PiHistorySection.split(others, date: \.createdAt, now: .now), id: \.section) { run in
-                    MemoryGroupTitle(title: run.section.title)
+                ForEach(TimeSection.split(others, date: \.createdAt, now: .now), id: \.section) { run in
+                    groupTitle(run.section.title)
                     ForEach(run.items) { row($0).transition(Motion.item) }
                 }
             }
@@ -75,6 +75,10 @@ struct CueMemoryPage: View {
         .padding(.horizontal, 18)
         .glass(in: .rect(cornerRadius: Metrics.field / 2, style: .continuous))
         .padding(.horizontal, 16).padding(.bottom, Metrics.fieldBottom)
+    }
+
+    private func groupTitle(_ title: String, icon: Icon? = nil) -> some View {
+        SectionLabel(text: Dotted(title), icon: icon).padding(.horizontal, Metrics.inset).padding(.top, 20).padding(.bottom, 2)
     }
 
     private func row(_ line: CueMemoryLine) -> MemoryRow {
@@ -125,23 +129,6 @@ struct CueMemoryPage: View {
 }
 
 /// 一组记忆的组头：小号、第三档墨，"一直记着"带一枚钉；上面空出一段把组分开。
-private struct MemoryGroupTitle: View {
-    let title: String
-    var icon: Icon?
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        HStack(spacing: 5) {
-            if let icon { Image(icon).accessibilityHidden(true) }
-            Text(title)
-        }
-        .font(Typography.label).foregroundStyle(palette.ink3)
-        .padding(.horizontal, Metrics.inset)
-        .padding(.top, 20).padding(.bottom, 2)
-        .accessibilityAddTraits(.isHeader)
-    }
-}
-
 /// 记忆的一行：只有正文，占满宽度。手机上钉住在右滑、忘掉在左滑；菜单与读屏是全部三项，菜单抬头与读屏另说什么时候、是不是你记的。
 private struct MemoryRow: View {
     let line: CueMemoryLine
