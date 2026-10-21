@@ -1,73 +1,78 @@
 <p align="right">English | <a href="README.zh-CN.md">简体中文</a></p>
 
-<!-- TODO 截图待更新：以下图片仍是旧版界面，Swift 版截图另行安排，路径保持不变即可替换 -->
 <p align="center">
-  <img src="design/promo/visual/hero-readme-en-2400x1260.png" alt="CuePad: write your prompt, hand it to your agent" width="820" />
+  <img src="design/readme/hero-en.png" alt="CuePad. Say it once. Cue keeps your agents moving." width="820" />
+</p>
+
+<p align="center">
+  <b>A calm notebook that runs your coding agents.</b><br />
+  Jot it down; Cue hands it to Claude Code, Codex, Pi or OpenCode, keeps them moving, and only asks you what really needs you.<br />
+  Native on Mac, iPhone and iPad. Local-first, no account, no server.
+</p>
+
+<p align="center">
+  <a href="https://github.com/Suge8/CuePad/releases/latest"><b>Download for Mac</b></a> ·
+  <a href="#quick-start">Build from source</a> ·
+  <a href="https://cue-pad.com">cue-pad.com</a>
 </p>
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License: Apache 2.0" /></a>
-  <img src="https://img.shields.io/badge/platform-macOS%2026%20%7C%20iOS%2027-111111.svg" alt="Platform: macOS 26, iOS/iPadOS 27" />
+  <img src="https://img.shields.io/badge/macOS-26%2B-111111.svg" alt="macOS 26+" />
+  <img src="https://img.shields.io/badge/iOS%20%7C%20iPadOS-27%2B-111111.svg" alt="iOS and iPadOS 27+" />
 </p>
 
-**CuePad is a thinking space for working with coding agents.** Jot down ideas, turn the ones to do into tasks, see what your agents are doing, and hand text to them in one tap. A calm, paper-like notebook, native on Mac, iPhone and iPad, synced through iCloud.
+<p align="center"><img src="design/readme/flow.gif" alt="Tell Cue what you want; it starts an agent session and reports back" width="820" /></p>
 
-Local-first: everything lives in a SQLite database on your device; iCloud sync uses your own private CloudKit database. No account, no server, no telemetry.
+## Why CuePad
 
-## Features
+- **Cue runs your agents for you.** Say what you want, typed on the Mac or from your phone. Cue turns it into tasks, starts and names agent sessions, answers their routine questions, checks their evidence and signs off finished work. It comes back only for what can't be undone (pushing, releasing, deleting): everything waiting on you is one number, *Waiting N*, one tap each.
+- **Every agent on one board.** Tasks move through four lanes — to do, advancing, waiting on you, done — with each session's live state next to them: thinking, running a tool, waiting, finished.
+- **Your phone is the remote.** Answer an agent's question or permission request from anywhere. Agents send you screenshots, pages, PDFs and recordings to check, each captioned with what to look at.
+- **Ideas first.** Plain Markdown with inline images and `{{variables}}`. When it's time to act, an idea becomes a task in one tap; every send is logged and can be resent.
+- **Yours.** Everything lives in a SQLite library on your device and syncs through your own private iCloud database. No account, no server, no telemetry.
 
-- **Cue, your agent lead.** Tell Cue what you want, by text or from your phone. It turns that into tasks, starts and names agent sessions, keeps them moving, checks their evidence, answers their routine questions and signs off finished work itself, then tells you the result — with only the few final screenshots that prove it, each saying what to look at. What it did in each round (who it talked to, which tasks it created, started or signed off, what it asked you) folds into one line right where the round starts, with its words and results after it; open it to see every step, tap one to jump to its task or back to what it told you. It only asks before things that can't be undone, like pushing, releasing or deleting: everything waiting on you is one number, *Waiting N*, and one tap answers it. Cue runs on your Mac with the agent you are already signed in to (Pi, Codex or Claude Code) and hands each job to whichever agent fits — Pi, Claude Code, Codex or OpenCode, following rules like "docs go to Claude Code, code to Codex". It remembers the rules you give it, and you can rename it.
-- **Idea → task → agent.** Ideas are your library — plain Markdown with inline images and `{{variables}}`. When it's time to act, turn an idea into a task: the first line is its title, the rest is what you hand to the agent. Tap Start to hand it over and see whether the agent has replied; add a checklist of steps if needed. Projects are just containers with a one-line intro; anything you jot down without picking one lands in the Default project, which every library starts with. Everything autosaves.
-- **Send to agents.** A task's text goes straight to a running agent session ([Pi](https://pi.dev), Claude Code, Codex or OpenCode; images where the session accepts them). Every send is logged with a snapshot and can be resent; you can always copy the text too.
-- **See your agents.** Agent sessions show live state (thinking, running a tool, waiting for you, done) and history; sessions file under the project bound to their working directory. Twelve hours before a Claude or Codex weekly quota resets, a notification tells you how much is left so you can use it up.
-- **Annotate replies (Mac).** Select any part of an agent's reply and leave a note; your notes go out with your next message as short quotes, so a long reply doesn't get sent back.
-- **Demos on your phone.** An agent can send you a page, screenshot, PDF, report, recording, video or Office document: each send is one card in the session on your phone, every file captioned with what it is and where to look, and tapping it opens a full-screen preview where you step through the files. (CuePad's skill teaches every agent to run `cuepad show <files…> --title <caption>…`.)
-- **Projects that know your code.** Every project has a folder on your Mac: point it at an existing code directory, or let CuePad create `~/CuePad/<project name>` the first time work starts there. Agent sessions and the `cuepad` command line pick the right project from where they run.
-- **Selections and variables.** Turn selected lines into tasks; fill `{{variables}}` right before sending, each one remembers its last values.
-- **Search everywhere.** `⌘K` searches projects, ideas and tasks, filtered by project, images, whether it went to an agent, or time.
-- **Mac.** Glass sidebar, a menu bar scratch pad for quick ideas, a global shortcut (`Option + Space` by default) to bring CuePad up from anywhere, and `Option + Shift + Space` to talk to Cue.
-- **iPhone and iPad.** iPhone opens on Cue, with projects, tasks and sessions one tap away along the bottom; iPad has the same sidebar as the Mac. A project bookshelf, quick capture bar, share extension and widgets. Ideas written on the phone are on the Mac a moment later, and the phone can send text to an agent session on your Mac.
-- **iCloud sync.** Per-record sync; if the same idea or task is edited offline on two devices, both versions are kept for you to choose from.
+| | |
+|:-:|:-:|
+| <img src="design/readme/cue.png" alt="Cue reports back with evidence; what it did folds into one line" /> | <img src="design/readme/board.png" alt="Task board with four lanes" /> |
+| Cue reports back with proof, and asks only what needs you | Every task and agent session on one board |
+| <img src="design/readme/session.png" alt="Annotate any part of an agent's reply" /> | <img src="design/readme/iphone-demo.png" alt="An agent's work, previewed on the iPhone" /> |
+| Agents send you pages and screenshots; annotate any part of a reply | Check an agent's work from your phone |
 
-## `cuepad`: memory for your agents
+> The interface is in Simplified Chinese for now.
 
-`cuepad` is a command line that reads and writes the same library as the app, so an agent can look things up, take notes and keep a to-do list between sessions:
+## Quick start
 
-```bash
-cuepad search deploy script        # find ideas and tasks (every word must match)
-printf 'Release checklist…' | cuepad card add   # save an idea
-cuepad task add Write release notes
-cuepad task done <id>
-```
-
-Run inside a directory that a project is bound to and it works on that project by default. `--json` gives stable output for agents. `cuepad --help` and `cuepad <command> --help` are the full reference.
-
-**Works with Pi, Claude Code, Codex and OpenCode — both ways.** On first launch one panel connects the agents it finds and turns on Cue on this Mac; a missing or signed-out Claude Code, Codex or Pi is one click to install (official script) or sign in right there. Later, flip a switch per agent in Settings → Agent. CuePad then sees that agent's sessions live, sends your tasks and messages into them, answers its questions and permission requests from your Mac or phone, starts sessions in the background, and the agent can put ideas, tasks and phone previews into CuePad with `cuepad`. Each agent gets one small skill in its own folder (`~/.pi/agent/skills`, `~/.claude/skills`, `~/.codex/skills`, `~/.config/opencode/skills`); Pi also gets the bridge extension, Claude Code and Codex get hooks in their settings, and OpenCode (version 2) needs nothing more — CuePad talks to its background server. Nothing is written until you confirm, and switching it off removes everything CuePad wrote. The same place can link `cuepad` into `~/.local/bin` for your own terminal.
-
-## Download
-
-Get the latest Mac build from [GitHub Releases](https://github.com/Suge8/CuePad/releases/latest) (Developer ID signed and notarized; macOS 26 or later). iPhone and iPad builds ship through TestFlight. Product site: [cue-pad.com](https://cue-pad.com).
-
-## Build from source
-
-Requires macOS 26 and Xcode 27; no developer account or signing setup.
+**1. Get the app.** Download the notarized Mac build from [Releases](https://github.com/Suge8/CuePad/releases/latest) (macOS 26+), or build it yourself — macOS 26 and Xcode 27, no Apple developer account needed:
 
 ```bash
 git clone https://github.com/Suge8/CuePad.git
-open CuePad/apple/CuePad.xcodeproj    # choose My Mac as the destination, then ⌘R
+open CuePad/apple/CuePad.xcodeproj    # pick the CuePad scheme and My Mac, then ⌘R
 ```
 
-Your build is ad-hoc signed and keeps its own library in `~/Library/Application Support/CuePad Dev`, apart from the released app's. From the command line (`check` needs `brew install ripgrep`):
+A build from source is ad-hoc signed, keeps its own library in `~/Library/Application Support/CuePad Dev` and doesn't update itself (`git pull` and build again). If the released app is also on this Mac, the source build leaves your agents' settings and notifications to it. iCloud sync and the iPhone/iPad apps need your own Apple developer account ([docs/release.md](docs/release.md#换成自己的身份fork)).
+
+**2. Connect your agents.** On first launch CuePad finds the agents on this Mac — [Pi](https://pi.dev), Claude Code, Codex, OpenCode — and connects the ones you tick; one that's missing or signed out is one click to install or sign in. Each row says what it will write before anything is written, and turning an agent off later removes all of it. Work happens in the project's folder, `~/CuePad/<project>` unless you point it at your own code.
+
+**3. Hand off your first job.** Press `Option + Shift + Space` anywhere and tell Cue what you want, e.g. *"Add a dark mode toggle to ~/code/my-app and show me a screenshot."* Or write a task and press **Start**. Cue picks the agent, starts the session, and the result lands back in CuePad.
+
+## `cuepad` for your agents
+
+Every connected agent also gets `cuepad`, a command line over the same library, so it can look things up, take notes, keep a to-do list across sessions and send you previews:
 
 ```bash
-cd CuePad
-apple/scripts/xc.sh build mac    # also: build ios, test mac, test kit, check
+cuepad search deploy script                 # find ideas and tasks
+printf 'Release checklist…' | cuepad card add
+cuepad task add Write release notes
+cuepad show shot.png --title "The new toggle, top right"
 ```
+
+`cuepad --help` is the full reference. Inside a folder bound to a project it works on that project; `--json` gives stable output.
 
 ## Contributing
 
-Contributions are welcome — see [CONTRIBUTING.md](.github/CONTRIBUTING.md) (project conventions live in [AGENTS.md](AGENTS.md)), and [SECURITY.md](.github/SECURITY.md) for reporting vulnerabilities.
+Issues and pull requests are welcome — see [CONTRIBUTING.md](.github/CONTRIBUTING.md). Project conventions for humans and coding agents are in [AGENTS.md](AGENTS.md); report security issues as described in [SECURITY.md](.github/SECURITY.md).
 
 ## License
 
-Apache License 2.0. See [LICENSE](LICENSE).
+[Apache 2.0](LICENSE). Third-party components are listed in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
