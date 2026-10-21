@@ -104,15 +104,6 @@ nonisolated struct BrainUsage {
         return rounds
     }
 
-    /// 汇总行里的那几格（`cells`）读回来
-    init?(row: String) {
-        let cells = row.split(separator: "|").map { $0.trimmingCharacters(in: .whitespaces) }.suffix(5)
-        guard cells.count == 5, let cost = Double(cells.last!.dropFirst()) else { return nil }
-        let counts = cells.dropLast().compactMap { Int($0) }
-        guard counts.count == 4 else { return nil }
-        (input, cacheRead, cacheWrite, output, self.cost) = (counts[0], counts[1], counts[2], counts[3], cost)
-    }
-
     init(input: Int = 0, cacheRead: Int = 0, cacheWrite: Int = 0, output: Int = 0, cost: Double = 0) {
         (self.input, self.cacheRead, self.cacheWrite, self.output, self.cost) = (input, cacheRead, cacheWrite, output, cost)
     }

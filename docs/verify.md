@@ -104,7 +104,7 @@ TEST_RUNNER_CUEPAD_CUE_EVAL=1 TEST_RUNNER_CUEPAD_CUE_EVAL_OUT=/tmp/cue-eval/afte
 ```
 
 - 大脑缺省用这台 Mac 上 Claude Code 自己的登录（opus · medium）；`TEST_RUNNER_CUEPAD_CUE_EVAL_RUNTIME=pi` 换成 Pi（sonnet · medium，令牌从 ~/.pi/agent/auth.json 只读地取、不替它刷新，过期就起不来）；`TEST_RUNNER_CUEPAD_CUE_EVAL_MODEL`、`_EFFORT` 换模型与强度。
-- 输出目录每个场景一个 .md（含每一轮的开销），`summary.md` 汇总；有场景没过时非零退出，输出照样写完。每个场景的库留在 `<场景>.library`，用 `CUEPAD_SHOT_LIBRARY=<它> xc.sh shot mac out.png -- -CuePadScene cue` 看。
+- 输出目录每个场景一个 .md（含每一轮的开销）与一份 `<场景>.score.json`，这一遍的系统提示在 `system-prompt.md`；汇总、对比都用下面的成绩单（score.py）。有场景没过时非零退出，输出照样写完。每个场景的库留在 `<场景>.library`，用 `CUEPAD_SHOT_LIBRARY=<它> xc.sh shot mac out.png -- -CuePadScene cue` 看。
 - 开销是大脑自报的 token 与费用；提示缓存跨场景命中一小时，先后跑的同一套场景缓存读写会不同，比开销看两遍以上。
 - 长程场景（`CueEvalLongTests`，十分钟左右）单独跑：换新线经 `CueTiming.renewAt` 缩到 4.2 万、缓存时长缩到 30 秒，中途他走开一阵，热换新、冷换新都有；会话交回的细节、他托付的事、它对方案的判断、逐页推进的多步活在换新前埋下、换新后考，每处标出跨了哪种换新。`TEST_RUNNER_CUEPAD_CUE_EVAL_RUNS=2` 同时跑两遍、第 n 遍写到"输出目录-n"：
 
@@ -124,7 +124,7 @@ python3 apple/scripts/score.py /tmp/cue-eval/base-short-{1,2} /tmp/cue-eval/base
   --vs /tmp/cue-eval/new-short-{1,2} /tmp/cue-eval/new-long-{1,2} /tmp/cue-eval/new-days-{1,2}
 ```
 
-- 每个场景另写一份 `<场景>.score.json`（判定与指标，`CueEvalScore`），score.py 只读它，按套汇总，写最后一个目录的 score.md；只给一组时出基线成绩单。
+- 每个场景另写一份 `<场景>.score.json`（判定、指标、系统提示的估算长度，Pi 当大脑时还有计费标识），score.py 只读它，按套汇总，写最后一个目录的 score.md；只给一组时出基线成绩单。
 - 每条判定标一个类别（`CheckKind`）：结果（事做对没）、问（该问的问了、不该问的没问）、打扰（tell、urgent、推送是否必要）、工具（参数填对、没白调）、接续（换新后接得上）、记忆（以前的事答对）。前提这一遍没出现的（那件事没收尾、埋点与考题之间没换新）记"不计"，不进通过数。
 - 指标是一遍的合计（短场景是各场景相加），轮不含刚启用那一轮、开销含：
   - 工具调用与每次醒来的调用数；出错的调用按工具结果的原文分（`CallFailure`）：参数校验退回、对象找不到（含对上了好几个）、没有这个工具（Pi 报的 Tool … not found）、其他。

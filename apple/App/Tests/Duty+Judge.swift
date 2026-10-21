@@ -86,7 +86,7 @@ extension Duty {
 
     // MARK: 统计
 
-    /// 写进 .md 的长程统计，与汇总行的两格
+    /// 写进 .md 的长程统计
     func summarize() async {
         let rounds = eval.rounds.filter { $0.wake != .enabled }
         let durations = rounds.compactMap { round in round.finishedAt.map { $0.timeIntervalSince(round.startedAt) } }.sorted()
@@ -98,7 +98,6 @@ extension Duty {
         }
         let usage = rig.brainDirectory.map(BrainUsage.rounds(in:)) ?? []
         let total = usage.reduce(BrainUsage(), +)
-        eval.overview = (rounds.reduce(0) { $0 + $1.calls.count }, "中位 \(median)")
         var lines = [
             "", "## 长程", "",
             "- 醒来 \(rounds.count) 次（不含预热；剧本叫醒 \(steps.count) 次），换新 \(renewals.count) 次（大脑开了新的对话）\(renewedAt.isEmpty ? "" : "，在" + renewedAt.joined(separator: "、"))",

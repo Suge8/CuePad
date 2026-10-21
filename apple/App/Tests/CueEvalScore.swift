@@ -46,6 +46,7 @@ enum EvalSuite: String {
 }
 
 /// 出错的工具调用按原因分：参数校验退回、对象找不到（含对上了好几个）、没有这个工具、其他（会话没送到、读的文件不在等）。
+/// 认法是对工具结果的原文做正则：跟着 CueTools 与 CueStoreError 的报错措辞走，那边改了措辞这里要一起改（工具结果不另带机器可读的类别）。
 enum CallFailure: String, CaseIterable {
     case invalid = "参数校验退回"
     case missing = "对象找不到"
@@ -113,13 +114,20 @@ extension CueEval {
     static let progressQuestion = /做到哪|到哪了|进展|进度|怎么样了|开工了吗/
 
     /// 成绩单读的那一份：判定（类别、身份、过没过、计不计）与指标，写在 `<场景>.score.json`。
-    func writeScore(_ name: String, suite: EvalSuite, checks: [Check], failure: (any Error)?, to output: URL) async throws {
+    /// `prompt` 是这一遍的系统提示：记下长度与估算的 token（非 ASCII 每字算 1、ASCII 每 4 字符算 1；工具说明另算）。
+    /// Pi 当大脑时另记模型请求带没带 Claude 订阅的计费标识（`EvalBrain` 的只读扩展记下的）。
+    func writeScore(_ name: String, suite: EvalSuite, checks: [Check], failure: (any Error)?, prompt: String, to output: URL) async throws {
         guard suite != .lme else { return }  // LongMemEval 自己判分（lme.py），它的目录里 .json 都是题
-        let score: [String: Any] = [
+        let wide = prompt.unicodeScalars.count { !$0.isASCII }, ascii = prompt.unicodeScalars.count { $0.isASCII }
+        var score: [String: Any] = [
             "name": name, "suite": suite.rawValue, "brain": EvalBrain.current.label, "error": failure.map { "\($0)" } ?? NSNull(),
             "checks": checks.map { ["kind": $0.kind.rawValue, "label": $0.label, "passed": $0.passed, "counted": $0.counted, "note": $0.note] },
-            "metrics": await metrics(), "extra": extra,
+            "metrics": await metrics(), "extra": extra, "prompt": ["chars": prompt.count, "tokens": wide + ascii / 4],
         ]
+        if let directory = rig.brainDirectory, EvalBrain.current.runtime == .pi {
+            let billing = BrainUsage.billing(in: directory)
+            score["billing"] = ["requests": billing.requests, "marked": billing.marked, "agents": billing.agents.sorted()]
+        }
         let data = try JSONSerialization.data(withJSONObject: score, options: [.prettyPrinted, .sortedKeys])
         try data.write(to: output.appending(path: "\(name).score.json"))
     }

@@ -167,6 +167,18 @@ def suite_report(suite: str, groups: list, names: list, runs: dict) -> list:
     return lines + [""]
 
 
+def prompt_tokens(suites: dict) -> str:
+    """一遍的系统提示估算 token（各场景同一份提示，记忆不同时取各场景里的最小与最大）"""
+    tokens = sorted({s["prompt"]["tokens"] for ss in suites.values() for s in ss if "prompt" in s})
+    return "—" if not tokens else f"≈{tokens[0]:,}" if len(tokens) == 1 else f"≈{tokens[0]:,}–{tokens[-1]:,}"
+
+
+def billing(suites: dict):
+    """一遍里 Pi 的模型请求：(带计费标识的, 全部)；不是 Pi 为 None"""
+    marks = [s["billing"] for ss in suites.values() for s in ss if "billing" in s]
+    return (sum(b["marked"] for b in marks), sum(b["requests"] for b in marks)) if marks else None
+
+
 def kind_of(per: dict, key) -> str:
     return next(v[0] for p in per.values() for k, v in p.items() if k == key)
 
@@ -185,7 +197,11 @@ def main():
     brains = sorted({s["brain"] for suites in runs.values() for ss in suites.values() for s in ss})
     lines = ["# Cue 评测成绩单", ""]
     lines += [f"- 改前：{'、'.join(groups[0])}", f"- 改后：{'、'.join(groups[1])}"] if len(groups) == 2 else [f"- 各遍：{'、'.join(groups[0])}"]
-    lines += [f"- 大脑：{'；'.join(brains)}", "- ✓ 过、✗ 没过、— 这一遍没测到（不计）。组内差是同一设置几遍之间最大减最小：差值小于它的不算改动的效果。", ""]
+    lines += [f"- 大脑：{'；'.join(brains)}", "- 系统提示（估算 token，工具说明另算）：" + "、".join(f"{n} {prompt_tokens(runs[n])}" for g in groups for n in g)]
+    billed = {n: billing(runs[n]) for g in groups for n in g}
+    if any(billed.values()):
+        lines.append("- 计费标识（Pi，带 Claude 订阅计费标识的模型请求 / 全部）：" + "、".join(f"{n} {b[0]}/{b[1]}" for n, b in billed.items() if b))
+    lines += ["- ✓ 过、✗ 没过、— 这一遍没测到（不计）。组内差是同一设置几遍之间最大减最小：差值小于它的不算改动的效果。", ""]
     for suite in SUITES:
         lines += suite_report(suite, groups, names, runs)
     out = groups[-1][-1]

@@ -201,7 +201,6 @@ private final class Days: EvalScript {
         let renewals = eval.renewals
         let renewedAt = renewals.compactMap { round in steps.firstIndex { $0.window?.contains(round.startedAt) == true }.map { "第 \($0 + 1) 步「\(steps[$0].label)」" } }
         let cells = { (usage: BrainUsage) in usage.cells.replacingOccurrences(of: " | ", with: "、") }
-        eval.overview = (rounds.reduce(0) { $0 + $1.calls.count }, "中位 \(median)")
         var lines = [
             "", "## 多日", "",
             "- 预置历史：对话 \(history.logged) 条、记忆 \(history.memoryLines) 行（\(history.pinned) 行一直记着）、做完的任务 \(history.doneTasks) 件",

@@ -5,7 +5,6 @@ import CuePi
 import CueStore
 import CueTestSupport
 import CueText
-import Darwin
 import Foundation
 import SwiftUI
 import Testing
@@ -30,9 +29,8 @@ final class CueEval {
     private var begin: Date?
     /// 场景里的每一轮（含预热）按 id 留着：运行情况只留最近 `CueKeeper.roundsKept` 轮
     private var archive: [Int: CueRound] = [:]
-    /// 场景自己要写进 .md 的段落（长程的统计），与汇总行"工具调用""用时"两格（缺省是被叫醒那一轮的）
+    /// 场景自己要写进 .md 的段落（长程、多日的统计）
     var report: [String] = []
-    var overview: (calls: Int, elapsed: String)?
     /// 场景自己要写进成绩单的（长程的换新方式、多日的记忆合并），JSON 能表示的值
     var extra: [String: Any] = [:]
 
@@ -171,10 +169,9 @@ final class CueEval {
         let round = round, rounds = rounds
         let usage = rig.brainDirectory.map(BrainUsage.rounds(in:)) ?? []
         let total = usage.reduce(BrainUsage(), +)
-        let elapsed = overview?.elapsed ?? round?.finishedAt.map { seconds($0.timeIntervalSince(round!.startedAt)) } ?? "—"
+        let elapsed = round?.finishedAt.map { seconds($0.timeIntervalSince(round!.startedAt)) } ?? "—"
         let context = (round ?? rounds.last)?.context.map(String.init) ?? "—"
         var lines = [
-            "<!-- row: | \(name) | \(verdict) | \(overview?.calls ?? round?.calls.count ?? 0) | \(elapsed) | \(context) | \(total.cells) | -->",
             "# \(name)", "", "期望：\(expect)", "", "大脑：\(EvalBrain.current.label)", "",
             "## 判定：\(verdict)", "",
         ]
@@ -193,7 +190,6 @@ final class CueEval {
         if let directory = rig.brainDirectory, EvalBrain.current.runtime == .pi {
             let billing = BrainUsage.billing(in: directory)
             lines += [
-                "<!-- billing: \(billing.requests) \(billing.marked) \(billing.agents.sorted().joined(separator: ";")) -->",
                 "计费标识：\(billing.marked)/\(billing.requests) 次模型请求的系统提示首块是 Claude 订阅的计费标识，user-agent：\(billing.agents.sorted().joined(separator: "、"))。", "",
             ]
         }
@@ -225,44 +221,16 @@ final class CueEval {
         do {
             try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
             try lines.joined(separator: "\n").appending("\n").write(to: output.appending(path: "\(name).md"), atomically: true, encoding: .utf8)
-            try await writeScore(name, suite: suite, checks: checks, failure: failure, to: output)
+            let prompt = CuePrompt.system(name: CueProfile.defaultName, memory: CueMemoryView(try await rig.store.cueMemory()), agents: [], runtime: EvalBrain.current.runtime)
+            try prompt.write(to: output.appending(path: "system-prompt.md"), atomically: true, encoding: .utf8)
+            try await writeScore(name, suite: suite, checks: checks, failure: failure, prompt: prompt, to: output)
             // 资料库留一份，看这一场在 Cue 页上的样子（docs/verify.md「Cue 评测」）
             let library = output.appending(path: "\(name).library", directoryHint: .isDirectory)
             try? FileManager.default.removeItem(at: library)
             try FileManager.default.copyItem(at: rig.app.databaseURL.deletingLastPathComponent(), to: library)
-            let prompt = CuePrompt.system(name: CueProfile.defaultName, memory: CueMemoryView(try await rig.store.cueMemory()), agents: [], runtime: EvalBrain.current.runtime)
-            try summarize(prompt: prompt)
         } catch {
             Issue.record("评测输出没写成：\(error)")
         }
-    }
-
-    /// 汇总目录里各场景的那一行，写 summary.md 与这次的系统提示；并行的场景（可能在别的进程里）按文件锁轮流写。
-    private func summarize(prompt: String) throws {
-        let lock = open(output.appending(path: ".lock").path, O_CREAT | O_RDWR, 0o644)
-        flock(lock, LOCK_EX)
-        defer { flock(lock, LOCK_UN); close(lock) }
-        try prompt.write(to: output.appending(path: "system-prompt.md"), atomically: true, encoding: .utf8)
-        let rows = try FileManager.default.contentsOfDirectory(at: output, includingPropertiesForKeys: nil)
-            .filter { $0.pathExtension == "md" && !["summary", "system-prompt"].contains($0.deletingPathExtension().lastPathComponent) }
-            .sorted { $0.lastPathComponent < $1.lastPathComponent }
-            .compactMap { try? String(contentsOf: $0, encoding: .utf8).firstMatch(of: /<!-- row: (.*) -->/)?.1 }
-            .map(String.init)
-        let total = rows.compactMap(BrainUsage.init(row:)).reduce(BrainUsage(), +)
-        let billings = try FileManager.default.contentsOfDirectory(at: output, includingPropertiesForKeys: nil).filter { $0.pathExtension == "md" }
-            .compactMap { try? String(contentsOf: $0, encoding: .utf8).firstMatch(of: /<!-- billing: (\d+) (\d+) ?(.*) -->/) }
-        let requests = billings.reduce(0) { $0 + Int($1.1)! }, marked = billings.reduce(0) { $0 + Int($1.2)! }
-        let agents = Set(billings.flatMap { $0.3.split(separator: ";").map(String.init) }).sorted()
-        let billingLine = billings.isEmpty ? [] : ["计费标识（Pi）：\(marked)/\(requests) 次模型请求带 Claude 订阅的计费标识，user-agent：\(agents.joined(separator: "、"))。", ""]
-        let wide = prompt.unicodeScalars.count { !$0.isASCII }, ascii = prompt.unicodeScalars.count { $0.isASCII }
-        let summary = [
-            "# Cue 评测", "", "大脑：\(EvalBrain.current.label)", "",
-            "系统提示 \(prompt.count) 字，估算 ≈\(wide + ascii / 4) token（非 ASCII 每字算 1、ASCII 每 4 字符算 1；工具说明另算）", "",
-            "工具调用与用时是被叫醒的那一轮的（长程是全程合计与每轮中位）；开销是场景里每一轮（含预热）的合计。", "",
-        ] + billingLine + [
-            "| 场景 | 判定 | 工具调用 | 用时 | 结束时上下文 token | \(BrainUsage.header) |", "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
-        ] + rows + ["| 合计 | | | | | \(total.cells) |"]
-        try summary.joined(separator: "\n").appending("\n").write(to: output.appending(path: "summary.md"), atomically: true, encoding: .utf8)
     }
 }
 
