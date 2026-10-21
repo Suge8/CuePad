@@ -1,5 +1,4 @@
 import CueText
-import Foundation
 
 extension Schema {
   /// 推导待推送（`CueStore.pendingSync`）只读每条记录的 id 与修改时间、同步元数据的记录名、类型与收下的修改时间：

@@ -1,6 +1,5 @@
 #if canImport(AppKit)
 import AppKit
-import CueText
 import Testing
 @testable import CueEditor
 

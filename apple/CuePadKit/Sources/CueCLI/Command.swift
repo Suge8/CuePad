@@ -1,5 +1,4 @@
 import CueStore
-import Foundation
 
 /// 选项声明：帮助、解析、用法行都从它生成；`value` 为 nil 表示开关。
 struct Opt {

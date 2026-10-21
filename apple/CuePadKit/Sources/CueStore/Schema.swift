@@ -1,6 +1,3 @@
-import CueText
-import Foundation
-
 /// 表分两类。
 ///
 /// 同步表（`Table.synced`，由 CueSync 映射为 CKRecord，record type = 表名，recordName = id）。约束：

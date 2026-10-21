@@ -1,5 +1,4 @@
 import CloudKit
-import Foundation
 
 /// 对外的同步状态，界面直接显示。本机数据在任何状态下都完好，可继续使用。
 public enum SyncStatus: Equatable, Sendable {
