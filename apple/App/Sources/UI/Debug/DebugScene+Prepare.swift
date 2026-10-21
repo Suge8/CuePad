@@ -25,7 +25,7 @@ extension DebugScene {
             for index in 1...many { _ = try? await store.createTask("压力任务 \(index)：画布与节点的一段说明", in: project.id) }
         }
         if defaults.bool(forKey: "CuePadNoIdeas") {
-            for card in (try? await store.cards(in: project.id)) ?? [] { try? await store.trashCard(card.id) }
+            for card in (try? await store.cards(in: project.id)) ?? [] { _ = try? await store.trashCard(card.id) }
         }
         #if os(macOS)
         workspace.show(.project(project.id))

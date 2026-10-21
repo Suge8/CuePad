@@ -180,7 +180,7 @@ enum InteractionBench {
         }
         // 项目页任务纸点"还有 N 条"展开、再收起：在没做完的任务最多的项目上（配 `-CuePadManyTasks` 量任务多时）
         if only.map({ $0.contains("展开任务") || $0.contains("收起任务") }) ?? true,
-           let busiest = workspace.catalog?.openTasks.filter({ $0.key != nil }).max(by: { $0.value < $1.value })?.key {
+           let busiest = workspace.catalog?.openTasks.max(by: { $0.value < $1.value })?.key {
             workspace.show(.project(busiest))
             try? await Task.sleep(for: .seconds(2))
             for _ in 0..<2 {
@@ -189,7 +189,7 @@ enum InteractionBench {
             }
         }
         // 侧栏开合在卡最多的项目页上量：整页内容要跟着详情区的宽度重排。走 ⌃⌘S 那条路（主菜单动作经响应链），不直接调方法
-        if let big = workspace.catalog?.cardCounts.filter({ $0.key != nil }).max(by: { $0.value < $1.value })?.key {
+        if let big = workspace.catalog?.cardCounts.max(by: { $0.value < $1.value })?.key {
             await step("页面回访") { workspace.show(.project(big)) }
             for _ in 0..<2 {
                 await step("侧栏收起") { NSApp.sendAction(#selector(AppDelegate.toggleCueSidebar(_:)), to: nil, from: nil) }
