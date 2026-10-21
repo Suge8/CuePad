@@ -64,7 +64,7 @@ def judge_one(prompt: str, home: Path) -> str:
         "--system-prompt", "You are a helpful assistant.", "--model", JUDGE_MODEL, "--thinking", "off", prompt,
     ]
     for attempt in range(4):
-        done = subprocess.run(command, env=env, capture_output=True, text=True, timeout=300)
+        done = subprocess.run(command, env=env, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=300)
         if done.returncode == 0 and done.stdout.strip():
             return done.stdout.strip()
         time.sleep(5 * (attempt + 1))
