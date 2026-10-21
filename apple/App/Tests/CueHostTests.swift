@@ -26,7 +26,7 @@ struct CueHostTests {
             while !Task.isCancelled {
                 round += 1
                 for index in 0..<10 {
-                    try? await recorder.update(sessionID: "busy-\(index)", state: round.isMultiple(of: 2) ? .thinking : .tool, title: "会话 \(index)")
+                    _ = try? await recorder.update(sessionID: "busy-\(index)", state: round.isMultiple(of: 2) ? .thinking : .tool, title: "会话 \(index)")
                 }
                 try? await Task.sleep(for: .milliseconds(20))
             }

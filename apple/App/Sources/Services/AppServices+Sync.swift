@@ -57,7 +57,7 @@ extension AppServices {
         let waiting = pollingCondition()
         let poller = SyncPoller(timing: timing)
         polling = Task {
-            await poller.run(while: waiting) { [weak self] in await self?.pull() }
+            await poller.run(while: waiting) { await self.pull() }
         }
     }
 

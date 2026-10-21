@@ -20,7 +20,7 @@ public enum CueFormat {
 
     /// Markdown 的分割线（thematic break）：一行里只有三个以上同一种 `-` `*` `_`，中间可夹空白，行首缩进不超过三格。
     public static func isRule(_ line: String) -> Bool {
-        guard line.prefix { $0 == " " }.count <= 3 else { return false }
+        guard line.prefix(while: { $0 == " " }).count <= 3 else { return false }
         let marks = line.filter { !$0.isWhitespace }
         guard marks.count >= 3, let mark = marks.first, "-*_".contains(mark) else { return false }
         return marks.allSatisfy { $0 == mark }

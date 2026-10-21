@@ -48,7 +48,7 @@ struct PreviewBatch: View {
             preview: preview, label: preview.title, shape: shape, captioned: true, zoom: PreviewZoomKey(group: group, preview: preview.id), open: open)
     }
 
-    static let gap: CGFloat = 8
+    nonisolated static let gap: CGFloat = 8
     private static let inset: CGFloat = 12
 
     #if os(macOS)

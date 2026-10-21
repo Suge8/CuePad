@@ -112,14 +112,14 @@ struct CueShots: View {
     @Environment(\.palette) private var palette
 
     #if os(macOS)
-    static let side: CGFloat = 140
+    nonisolated static let side: CGFloat = 140
     #else
-    static let side: CGFloat = 120
+    nonisolated static let side: CGFloat = 120
     #endif
-    fileprivate static let gap = PreviewBatch.gap
+    nonisolated fileprivate static let gap = PreviewBatch.gap
 
     /// 在 `width` 宽里排 `count` 张时每张的边长（`ShotRow` 照它排）：放得下是 `side`，不然几张平分。
-    static func cell(count: Int, width: CGFloat) -> CGFloat {
+    nonisolated static func cell(count: Int, width: CGFloat) -> CGFloat {
         let gaps = gap * CGFloat(count - 1)
         guard width.isFinite else { return side }
         return max(0, min(side, ((width - gaps) / CGFloat(count)).rounded(.down)))

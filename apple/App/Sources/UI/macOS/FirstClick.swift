@@ -8,9 +8,10 @@ enum FirstClick {
     private static var keyAt: TimeInterval = 0
 
     /// 启动时装一次：之后每次有窗口成为主窗口都记下时刻。
+    /// 投到主队列的回调就在主线程上跑（`assumeIsolated` 是这条保证）；主线程版的通知消息（`NSWindow.DidBecomeKeyMessage`）要 macOS 27。
     static func install() {
         NotificationCenter.default.addObserver(forName: NSWindow.didBecomeKeyNotification, object: nil, queue: .main) { _ in
-            keyAt = ProcessInfo.processInfo.systemUptime
+            MainActor.assumeIsolated { keyAt = ProcessInfo.processInfo.systemUptime }
         }
     }
 
