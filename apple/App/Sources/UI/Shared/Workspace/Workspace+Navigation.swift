@@ -50,11 +50,19 @@ extension Workspace {
         let home = layout == .dock ? route.home : route
         let next = home ?? root
         willSelect(route, root: next)
-        root = next
+        // 先换路径再换根：换了去处就没有可前进的页（`forward`），清掉推入的页不算返回
         path = home == route ? [] : [route]
+        root = next
     }
 
     func push(_ route: Route) { path.append(route) }
+
+    /// 推回刚返回离开的那一页（`forward`）。会话页按此刻重读首帧（同 `openSession`）：离开后对话可能又长了。
+    func goForward() {
+        guard let forward else { return }
+        guard case .session(let route) = forward else { return push(forward) }
+        push(sessionRoute(route.id, sessionID: route.sessionID) ?? forward)
+    }
 
     /// 打开一条灵感或任务：任务在气泡里看（`openTask`）；灵感（挂在任务下的资料也一样）进编辑页（`showEditor`）。
     func open(_ card: Card) {

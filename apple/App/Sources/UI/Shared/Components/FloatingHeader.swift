@@ -9,7 +9,7 @@ extension View {
     /// 见 `ChatFollow.showsHeader`）；给了 `reveal` 时让开的那一块仍接点按，点它唤出。
     /// 标题同时是读屏、返回菜单与多任务切换器里的名字（窄屏导航栈的根也照样交给系统）。
     /// 窄屏导航栈的根（任务、会话、项目三页，`homePage`）不是推入页：顶上那一排是页自己画的（`HomeBar`：左边搜索、中间 `center`、右边这个圆钮），
-    /// 系统导航栏藏起，换去处时整排随页推移（`DockRoot`）；不写标题也不写那一行要紧信息——底部那一排的选中格已经说了在哪一页，组标题写着计数。
+    /// 系统导航栏藏起，切页时整排随页滑（`HomePager`）；不写标题也不写那一行要紧信息——底部那一排的选中格已经说了在哪一页，组标题写着计数。
     func floatingHeader<Detail: View, Trailing: View>(
         _ title: String, hidden: Bool = false, reveal: (() -> Void)? = nil,
         @ViewBuilder detail: () -> Detail, @ViewBuilder trailing: () -> Trailing
