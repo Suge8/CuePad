@@ -86,7 +86,7 @@ private struct WindowPanels: View {
                 guard (try? await Task.sleep(for: Prewarm.delay)) != nil else { return }
                 mountsPalette = true
             }
-            .panel(item: $workspace.projectForm) { ProjectForm(project: $0.project) }
+            .panel(item: $workspace.projectForm) { ProjectForm($0) }
             .panel(isPresented: $workspace.showsSetup) { SetupPanel() }
     }
 }
