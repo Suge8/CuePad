@@ -113,11 +113,11 @@ public struct AgentIntegration: Sendable {
     /// 隔离运行（开发构建）：配置目录是缺省真实位置的那几家只检测、不写
     private let isolated: Bool
     /// 装一家用的命令（`runInstaller`）：官方的那条，测试换成放替身的
-    let installCommand: @Sendable (AgentKind, _ upgrading: Bool) -> String
+    let installCommand: @Sendable (AgentKind, AgentStatus.Presence) -> String
 
     public init(
         paths: AgentPaths = AgentPaths(), locate: @escaping @Sendable () async -> ExecutableLocator = { await .system }, cuepad: URL,
-        isolated: Bool = false, installCommand: @escaping @Sendable (AgentKind, _ upgrading: Bool) -> String = { $0.installCommand(upgrading: $1) }
+        isolated: Bool = false, installCommand: @escaping @Sendable (AgentKind, AgentStatus.Presence) -> String = { $0.installCommand($1) }
     ) {
         self.paths = paths
         self.locate = locate

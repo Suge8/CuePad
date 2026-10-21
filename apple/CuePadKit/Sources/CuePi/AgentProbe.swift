@@ -26,7 +26,7 @@ struct AgentProbe {
     /// 一家问出的结果：能用，或不能用的原因。
     private enum Outcome: Sendable {
         case usable(MacAgent)
-        case unusable(String)
+        case unusable(MacAgentProblem.Reason)
     }
 
     func run(_ statuses: [AgentKind: AgentStatus]) async -> (agents: [MacAgent], problems: [MacAgentProblem]) {
@@ -47,7 +47,7 @@ struct AgentProbe {
 
     private func outcome(_ kind: AgentKind, _ status: AgentStatus) async -> Outcome {
         if let reason = Self.absent(kind, status) { return .unusable(reason) }
-        guard let executable = status.executable else { return .unusable("没找到它的命令行程序") }
+        guard let executable = status.executable else { return .unusable(.other("没找到它的命令行程序")) }
         if kind == .opencode { return .usable(MacAgent(kind: kind, model: nil, models: [])) }
         do {
             let agent: MacAgent? = try await withDeadline(AgentTimeouts.probe, orThrow: ProbeError.timedOut) { [self] in
@@ -58,11 +58,11 @@ struct AgentProbe {
                 case .opencode: return nil
                 }
             }
-            guard let agent else { return .unusable(MacAgentProblem.notLoggedIn) }
+            guard let agent else { return .unusable(.notLoggedIn) }
             return Self.unconnected(kind, status).map(Outcome.unusable) ?? .usable(agent)
         } catch {
             let message = error.localizedDescription
-            return .unusable("问不出模型（\(message.clipped(Self.messageLimit))）")
+            return .unusable(.other("问不出模型（\(message.clipped(Self.messageLimit))）"))
         }
     }
 
@@ -70,21 +70,21 @@ struct AgentProbe {
     private static let messageLimit = 60
 
     /// 没装或太旧的原因（不用问）；装着为 nil。
-    private static func absent(_ kind: AgentKind, _ status: AgentStatus) -> String? {
+    private static func absent(_ kind: AgentKind, _ status: AgentStatus) -> MacAgentProblem.Reason? {
         switch status.presence {
-        case .notFound: MacAgentProblem.notInstalled
-        case .tooOld(let version): "版本太旧（\(version)，要 \(kind.minimumVersion.map(\.description) ?? "") 或更新）"
+        case .notFound: .notInstalled
+        case .tooOld(let version): .other("版本太旧（\(version)，要 \(kind.minimumVersion.map(\.description) ?? "") 或更新）")
         case .found: nil
         }
     }
 
     /// 问得出、却因为没接入开不出会话的原因；开得出为 nil。CuePad 写给 Claude Code、Codex、OpenCode 的文件（技能、钩子）只管终端里开的会话与历史，
     /// 后台开的会话由 CuePad 直接托管（OpenCode 连它的服务），没接入照样开得出；托管的 Pi 经桥扩展上报，没接入就开不出来。
-    private static func unconnected(_ kind: AgentKind, _ status: AgentStatus) -> String? {
+    private static func unconnected(_ kind: AgentKind, _ status: AgentStatus) -> MacAgentProblem.Reason? {
         guard kind == .pi else { return nil }
         switch status.files {
-        case .missing: return MacAgentProblem.notConnected
-        case .foreign(let path): return "接不上：\(path) 是别人的同名文件"
+        case .missing: return .notConnected
+        case .foreign(let path): return .other("接不上：\(path) 是别人的同名文件")
         case .current, .outdated: return nil
         }
     }

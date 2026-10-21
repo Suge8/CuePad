@@ -26,14 +26,14 @@ extension Workspace {
         case enable
     }
 
-    /// `here` 是这台写下的各家能不能用（`CueStore.macAgents`）。有一家能用就能启用；登录了、只差接入的 Pi 也算（勾上接入、同一下启用）。
+    /// `here` 是这台写下的各家能不能用（`CueStore.macAgents`）。能当 Cue 的有一家能用、或只差接入（勾上接入、同一下启用）就能启用。
     func setupCue(here: MacAgents) -> SetupCue {
         switch CueGate.of(services, running: cue.canHear ? cue.hostID : nil, name: cue.hostName) {
         case .runs: return .none
         case .waiting(let why): return .waiting(why)
         case .open:
-            let usable = CueProfile.runtimes.contains(where: here.kinds.contains)
-                || here.problems.contains(MacAgentProblem(kind: .pi, reason: MacAgentProblem.notConnected)) && services.agents.connectable.contains(.pi)
+            let connectable = services.agents.connectable
+            let usable = CueProfile.runtimes.contains { here.kinds.contains($0) || here.problem($0) == .notConnected && connectable.contains($0) }
             return usable ? .enable : .needsAgent
         }
     }
@@ -62,12 +62,12 @@ extension Workspace {
         }
         guard let status = agents.status(kind) else { return .checking }
         guard status.isAvailable else { return status.lacking.map(SetupStep.needs) ?? .install(failure) }
-        let problem = here.problems.first { $0.kind == kind }?.reason
-        if problem == MacAgentProblem.notLoggedIn { return .logIn(failure) }
+        let problem = here.problem(kind)
+        if problem == .notLoggedIn { return .logIn(failure) }
         if agents.connectable.contains(kind) { return .connect }
         switch problem {
-        case nil, MacAgentProblem.notInstalled: return failure.map(SetupStep.problem) ?? (here.kinds.contains(kind) ? nil : .checking)
-        case let reason?: return .problem(reason)
+        case nil, .notInstalled?: return failure.map(SetupStep.problem) ?? (here.kinds.contains(kind) ? nil : .checking)
+        case let reason?: return .problem(reason.description)
         }
     }
 
@@ -269,7 +269,7 @@ struct SetupPanel: View {
                     .buttonStyle(ControlButtonStyle(kind: .secondary))
                     .accessibilityLabel("\(prerequisite.name) 官网")
             case .logIn:
-                action(kind == .pi ? "打开终端" : "登录", kind) { await workspace.logIn(kind) }
+                action(kind.loginArguments == nil ? "打开终端" : "登录", kind) { await workspace.logIn(kind) }
             case .loggingIn:
                 action("重新登录", kind) { await workspace.logIn(kind) }
             case .checking, .installing, .problem:
@@ -293,7 +293,7 @@ struct SetupPanel: View {
         case .needs(let prerequisite):
             return (.notice, Dotted("需要 \(prerequisite.name) \(prerequisite.minimum.major).\(prerequisite.minimum.minor) 以上"), false)
         case .installing: return (.calm, "安装中，可能要几分钟", true)
-        case .logIn: return (.calm, kind == .pi ? "在 Pi 里输入 /login" : "在浏览器里登录", false)
+        case .logIn: return (.calm, kind.loginArguments == nil ? "在 \(kind.name) 里输入 /login" : "在浏览器里登录", false)
         case .loggingIn: return (.calm, "在浏览器里登录完回到这里", true)
         case .problem(let why): return (.notice, Dotted(why), false)
         }

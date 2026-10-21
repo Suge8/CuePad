@@ -10,10 +10,11 @@ extension DebugScene {
     /// `-CuePadSync arrive`：像隔了一阵没打开的手机，启动后的第一次拉取带回别的设备写下的 Cue 的话，分几页陆续到（`ArrivingSync`）。
     /// `-CuePadSync offline`：一开始连不上 iCloud，`-CuePadOfflineSeconds`（默认 6）秒后恢复；配 `-CuePadDemoMac YES` 与
     /// `-CuePadSpeech send` 录"断网时说 → 同步不通 → 恢复 → 送达"（演示 Mac 断网时不接手）。
-    /// `-CuePadSync <noAccount|decide|failed|syncing|restricted|conflicts>`：装上报这个状态的替身，设置里 iCloud 同步那一行、
-    /// 要你决定的两个选择、立即同步与 Mac 工具栏的同步提示都按有同步时的样子出现；`failed` 带两条没能同步的记录，`conflicts` 在演示库里造一份冲突副本；
-    /// `syncing` 还没和 iCloud 对完第一遍（换新 Mac 时：接入面板里 Cue 那一行在等 iCloud）。其余替身都当已对过。
-    /// `-CuePadSync newmac`：换新 Mac 的第一遍同步，`-CuePadReconcileSeconds`（默认 8）秒后带回 Cue 在「Mac Studio」上运行、那台醒着，才报对过（`NewMacSync`）。
+    /// `-CuePadSync <noAccount|decide|failed|restricted|conflicts>`：装上报这个状态的替身，设置里 iCloud 同步那一行、
+    /// 要你决定的两个选择、立即同步与 Mac 工具栏的同步提示都按有同步时的样子出现；`failed` 带两条没能同步的记录，`conflicts` 在演示库里造一份冲突副本。
+    /// 这些替身都当已和 iCloud 对过。
+    /// `-CuePadSync newmac`：换新 Mac 的第一遍同步，先报同步中、还没对过，`-CuePadReconcileSeconds`（默认 8）秒后带回 Cue 在「Mac Studio」上运行、
+    /// 那台醒着，才报对过（`NewMacSync`）；秒数给得比实例活得久（如 3600）就一直在等。
     static var syncSource: AppServices.SyncSource {
         let issues = [
             SyncIssue(recordType: "Card", recordName: "A1B2", message: "CKError 14: server record changed"),
@@ -25,7 +26,6 @@ extension DebugScene {
         case "noAccount": .custom(StandInSync(SyncState(status: .noAccount, issues: [])))
         case "decide": .custom(StandInSync(SyncState(status: .needsDecision(.accountSwitched), issues: [])))
         case "failed": .custom(StandInSync(SyncState(status: .failed("同步出错"), issues: issues)))
-        case "syncing": .custom(StandInSync(SyncState(status: .syncing, issues: [], reconciled: false)))
         case "restricted": .custom(StandInSync(SyncState(status: .accountRestricted, issues: [])))
         case "offline": .custom(OfflineSync(seconds: seconds("CuePadOfflineSeconds", default: 6)))
         case "arrive": .custom(ArrivingSync())

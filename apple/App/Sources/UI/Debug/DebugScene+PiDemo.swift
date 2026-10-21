@@ -487,9 +487,7 @@ extension DebugScene {
             return MacAgent(kind: kind, model: state.model?.key, models: state.models)
         }
         let full = [agent(.pi), agent(.claudeCode), agent(.codex)]
-        let bare = [
-            MacAgentProblem(kind: .pi, reason: "没登录"), MacAgentProblem(kind: .claudeCode, reason: "没装"), MacAgentProblem(kind: .codex, reason: "没装"),
-        ]
+        let bare = [MacAgentProblem(kind: .pi, reason: .notLoggedIn)] + [.claudeCode, .codex].map { MacAgentProblem(kind: $0, reason: .notInstalled) }
         let store = services.store
         _ = try? await store.recordMacAgents(host: "demo-mac", name: "Mac Studio", full)
         _ = try? await store.recordMacAgents(host: "demo-mini", name: "Mac mini", [agent(.claudeCode), agent(.codex)])
