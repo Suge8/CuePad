@@ -1,6 +1,11 @@
 import CueStore
 import SwiftUI
 
+/// 工具排里各枚胶囊（Agent、模型、思考强度、上下文用量 `PiContextGauge`）同样高。
+enum ConfigCapsule {
+    static let height: CGFloat = 30
+}
+
 /// 模型胶囊：模型的标志（`BrandMark.model`）+ 模型短名（没有当前模型时写 `unnamed`）。iOS 点开是系统菜单（`MenuButton`）；Mac 点开与 ⌘⇧M 是同一个 AppKit 菜单（`ChoiceMenu`，
 /// SwiftUI 在 Mac 上把菜单项里的图片丢掉）：分组标题带这一组的标志（提供方或 Agent 的产品标志），每个模型带它自己的标志。
 /// 有订阅额度的提供方：标志外一圈细环是卡着的那个窗口还剩多少（`ModelBadge`），没给组名的分组标题写各窗口还剩多少
@@ -50,7 +55,7 @@ struct PiModelCapsule: View {
         .font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink2)
         .padding(.leading, badged ? 6 : 11).padding(.trailing, 11)
         // 按内容宽，给的窄了截断（最宽多少由工具排定）
-        .frame(height: 30)
+        .frame(height: ConfigCapsule.height)
         .background(palette.fill, in: .capsule)
         .frame(minHeight: 44)
         .contentShape(.capsule)
@@ -103,7 +108,7 @@ struct PiAgentCapsule: View {
         .font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink2)
         .padding(.leading, 6).padding(.trailing, 11)
         .fixedSize()
-        .frame(height: 30)
+        .frame(height: ConfigCapsule.height)
         .background(palette.fill, in: .capsule)
         .frame(minHeight: 44)
         .contentShape(.capsule)
@@ -138,8 +143,6 @@ struct ModelBadge: View {
 struct PiThinkingDial: View {
     let meter: PiThinkingMeter
     let pending: Bool
-    /// 写"思考 中"；窄处只写档名。
-    let wordy: Bool
     let choose: (PiThinkingLevel) -> Void
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -165,17 +168,18 @@ struct PiThinkingDial: View {
     var body: some View {
         let drawn = drawn
         HStack(spacing: 6) {
-            // 写出档名（与"上下文 86%"同一种写法）：只有一个脑图标加几根竖条要猜；按着时跟着指到的档变
-            Text("\(wordy ? "思考 " : "")\(Text(drawn.label).fontWeight(.medium).foregroundStyle(palette.ink2))")
-                .font(Typography.meta).foregroundStyle(palette.ink3)
-                .contentTransition(.opacity)
-                .fixedSize()
-                .accessibilityHidden(true)
+            // 写出档名（与"上下文 86%"同一种写法）：只有一个脑图标加几根竖条要猜；按着时跟着指到的档变。
+            // 工具排放不下时（`ConfigRow`）只写档名
+            ViewThatFits(in: .horizontal) {
+                reading(drawn, wordy: true)
+                reading(drawn, wordy: false)
+            }
+            .accessibilityHidden(true)
             meterBars(drawn)
                 .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(Self.space)) } action: { track = $0 }
         }
         .padding(.horizontal, 10)
-        .frame(height: 30)
+        .frame(height: ConfigCapsule.height)
         .background(palette.fill, in: .capsule)
         .overlay(alignment: .top) {
             if let bubble {
@@ -215,6 +219,13 @@ struct PiThinkingDial: View {
             let next = direction == .increment ? meter.step(1) : meter.step(-1)
             if let next, next != meter.current { choose(next) }
         }
+    }
+
+    private func reading(_ drawn: PiThinkingMeter, wordy: Bool) -> some View {
+        Text("\(wordy ? "思考 " : "")\(Text(drawn.label).fontWeight(.medium).foregroundStyle(palette.ink2))")
+            .font(Typography.meta).foregroundStyle(palette.ink3)
+            .contentTransition(.opacity)
+            .fixedSize()
     }
 
     /// 按下与拖动：在竖格上就调到指着的档；按在"思考 中"那几个字上（还没拖动）只浮出现在的档。

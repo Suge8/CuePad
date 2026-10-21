@@ -10,11 +10,6 @@ nonisolated enum PiModelLabel {
         quotas.first { $0.provider == provider.id }.map { QuotaMeter($0, at: now).menuTitle.visible } ?? provider.name
     }
 
-    /// 胶囊最宽是这一排宽度的一半，至少 96（短名放得下）、至多 240（iPad、Mac 宽屏不至于拉得过长）。
-    static func capsuleWidth(available: CGFloat) -> CGFloat {
-        min(max(available * 0.5, 96), 240)
-    }
-
     /// 菜单里的分组：提供方按第一次出现的顺序。
     static func groups(_ models: [PiModelOption]) -> [(provider: PiProvider, models: [PiModelOption])] {
         var order: [String] = []

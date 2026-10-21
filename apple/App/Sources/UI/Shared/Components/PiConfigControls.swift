@@ -84,10 +84,17 @@ struct PiConfigControls<Trailing: View>: View {
     }
 
     var body: some View {
-        // 放得下时思考强度写"思考 中"，窄处（手机）只写档名"中"；还放不下，模型名截断（`ConfigRow`）
-        ViewThatFits(in: .horizontal) {
-            row(wordy: true)
-            row(wordy: false)
+        ConfigRow {
+            if let agent { PiAgentCapsule(pick: agent) }
+            modelCapsule.layoutValue(key: ConfigGive.self, value: .name)
+            if let meter = PiThinkingMeter(levels: levels, current: shown.thinking) {
+                PiThinkingDial(meter: meter, pending: shown.pending, choose: chooseThinking)
+                    #if os(macOS)
+                    .popUpAnchor(anchors[.thinking])
+                    #endif
+                    .layoutValue(key: ConfigGive.self, value: .wording)
+            }
+            trailing
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         #if os(macOS)
@@ -103,20 +110,6 @@ struct PiConfigControls<Trailing: View>: View {
         #endif
     }
 
-    private func row(wordy: Bool) -> some View {
-        ConfigRow {
-            if let agent { PiAgentCapsule(pick: agent) }
-            modelCapsule.layoutValue(key: Squeezes.self, value: true)
-            if let meter = PiThinkingMeter(levels: levels, current: shown.thinking) {
-                PiThinkingDial(meter: meter, pending: shown.pending, wordy: wordy, choose: chooseThinking)
-                    #if os(macOS)
-                    .popUpAnchor(anchors[.thinking])
-                    #endif
-            }
-            trailing
-        }
-    }
-
     private var modelCapsule: some View {
         #if os(macOS)
         PiModelCapsule(models: models, current: shown.model, unnamed: unnamed, pending: shown.pending,
@@ -129,38 +122,69 @@ struct PiConfigControls<Trailing: View>: View {
     }
 }
 
-/// 工具排：胶囊按内容宽从左排成一行，竖直居中。模型胶囊（`Squeezes`）最宽是给这一排的宽的一半（`PiModelLabel.capsuleWidth`），
-/// 放不下时只有它让、名字截断，整排不超出给的宽：超出的话输入框跟着撑宽，伸出屏幕两边。
+/// 工具排：胶囊按内容宽从左排成一行，竖直居中，整排不超出给的宽（超出的话输入框跟着撑宽、伸出屏幕两边）。
+/// 放不下时按 `Give` 的次序一步步让，够了就停。模型胶囊另有上限：最宽是这一排的一半，至少 96（短名放得下）、至多 240（宽屏不至于拉得过长）。
 private struct ConfigRow: Layout {
+    /// 让的次序：先去掉思考强度前的"思考"二字（`PiThinkingDial`），再收紧间距，再把"上下文"收成圆环（`PiContextGauge`），最后才截模型名。
+    enum Give: CaseIterable { case wording, spacing, context, name }
+
     private static let spacing: CGFloat = 6
+    private static let tightSpacing: CGFloat = 2
+    private static let nameShare: CGFloat = 0.5
+    private static let nameMin: CGFloat = 96
+    private static let nameMax: CGFloat = 240
+
+    private struct Arrangement {
+        var widths: [CGFloat]
+        var spacing: CGFloat
+        var width: CGFloat { widths.reduce(0, +) + spacing * CGFloat(max(widths.count - 1, 0)) }
+    }
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let widths = widths(in: proposal.width, subviews)
-        let height = zip(subviews, widths).map { $0.sizeThatFits(ProposedViewSize(width: $1, height: proposal.height)).height }.max() ?? 0
-        return CGSize(width: widths.reduce(0, +) + Self.spacing * CGFloat(max(subviews.count - 1, 0)), height: height)
+        let row = arrange(in: proposal.width, subviews)
+        let height = zip(subviews, row.widths).map { $0.sizeThatFits(ProposedViewSize(width: $1, height: proposal.height)).height }.max() ?? 0
+        return CGSize(width: row.width, height: height)
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let row = arrange(in: proposal.width, subviews)
         var x = bounds.minX
-        for (subview, width) in zip(subviews, widths(in: proposal.width, subviews)) {
+        for (subview, width) in zip(subviews, row.widths) {
             subview.place(at: CGPoint(x: x, y: bounds.midY), anchor: .leading, proposal: ProposedViewSize(width: width, height: bounds.height))
-            x += width + Self.spacing
+            x += width + row.spacing
         }
     }
 
-    /// 各枚按内容宽；给了宽时模型胶囊不超过它的上限，也不超过其余几枚用剩的（截断后的字可能比给的窄，按它实际的宽）。
-    private func widths(in available: CGFloat?, _ subviews: Subviews) -> [CGFloat] {
-        var widths = subviews.map { $0.sizeThatFits(.unspecified).width }
-        guard let available, let squeezed = subviews.firstIndex(where: { $0[Squeezes.self] }) else { return widths }
-        let others = widths.reduce(0, +) - widths[squeezed] + Self.spacing * CGFloat(subviews.count - 1)
-        let room = max(min(widths[squeezed], PiModelLabel.capsuleWidth(available: available), available - others), 0)
-        widths[squeezed] = subviews[squeezed].sizeThatFits(ProposedViewSize(width: room, height: nil)).width
-        return widths
+    private func arrange(in available: CGFloat?, _ subviews: Subviews) -> Arrangement {
+        var row = Arrangement(widths: subviews.map { $0.sizeThatFits(.unspecified).width }, spacing: Self.spacing)
+        guard let available else { return row }
+        let name = subviews.firstIndex { $0[ConfigGive.self] == .name }
+        let cap = min(max(available * Self.nameShare, Self.nameMin), Self.nameMax)
+        if let name, row.widths[name] > cap { row.widths[name] = width(of: subviews[name], in: cap) }
+        for give in Give.allCases where row.width > available {
+            switch give {
+            case .spacing:
+                row.spacing = Self.tightSpacing
+            case .name:
+                if let name { row.widths[name] = width(of: subviews[name], in: max(available - row.width + row.widths[name], 0)) }
+            case .wording, .context:
+                for index in subviews.indices where subviews[index][ConfigGive.self] == give {
+                    row.widths[index] = width(of: subviews[index], in: 0)
+                }
+            }
+        }
+        return row
+    }
+
+    /// 给 `room` 宽时实际占的宽：截断后的字可能比给的窄，收成的短写法可能比给的宽。
+    private func width(of subview: LayoutSubview, in room: CGFloat) -> CGFloat {
+        subview.sizeThatFits(ProposedViewSize(width: room, height: nil)).width
     }
 }
 
-nonisolated private struct Squeezes: LayoutValueKey {
-    static let defaultValue = false
+/// 工具排里这一枚放不下时怎么让（`ConfigRow.Give`）；没标的按内容宽不让。
+nonisolated private struct ConfigGive: LayoutValueKey {
+    static let defaultValue: ConfigRow.Give? = nil
 }
 
 
@@ -180,7 +204,9 @@ struct SessionConfigControls: View {
         PiConfigControls(models: menu, shown: shown, levels: shown.model?.thinkingLevels ?? [], opening: opening) {
             configure(PiConfig(thinking: $0))
         } trailing: {
-            if let meter = shown.context.flatMap(PiContextMeter.init) { PiContextGauge(session: session, meter: meter) }
+            if let meter = shown.context.flatMap(PiContextMeter.init) {
+                PiContextGauge(session: session, meter: meter).layoutValue(key: ConfigGive.self, value: .context)
+            }
         }
     }
 
