@@ -1,4 +1,3 @@
-import CueEditor
 import CueStore
 import CueText
 import SwiftUI
@@ -74,7 +73,7 @@ struct BubblePage: View {
                 .frame(width: BubbleMetrics.moreTarget, height: BubbleMetrics.moreTarget).contentShape(.rect)
         }
         #if os(macOS)
-        .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
+        .menuStyle(.button).buttonStyle(PressStyle(.button)).menuIndicator(.hidden).fixedSize()
         #endif
         .accessibilityLabel("更多")
         .padding(.top, -4).padding(.trailing, -8)
@@ -111,7 +110,7 @@ private struct BriefField: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(.rect)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PressStyle(.wide))
             .accessibilityLabel(card.rest.map { "正文，\(CueFormat.plainText($0))" } ?? "写正文")
             .accessibilityHint("编辑正文")
         }

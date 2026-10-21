@@ -17,7 +17,6 @@ enum ChangeNotification {
 }
 
 extension Sequence<UInt8> {
-  /// 小写十六进制。
   var hex: String {
     let digits = Array("0123456789abcdef".utf8)
     return String(decoding: flatMap { [digits[Int($0 >> 4)], digits[Int($0 & 15)]] }, as: UTF8.self)

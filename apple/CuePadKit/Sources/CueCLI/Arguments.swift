@@ -1,5 +1,3 @@
-import Foundation
-
 /// 解析后的命令行：位置参数、开关、带值选项（可重复）。`--` 之后全是位置参数。
 struct Arguments {
   private(set) var positionals: [String] = []

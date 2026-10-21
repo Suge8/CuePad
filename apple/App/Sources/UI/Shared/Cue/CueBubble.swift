@@ -1,5 +1,4 @@
 import CueStore
-import CueText
 import SwiftUI
 
 /// Cue 页的对话气泡（你的话、Cue 的话）：只有 Cue 页是两边对说，会话页你的话是另一种（`BubbleLook.session`）。
@@ -13,7 +12,6 @@ enum CueBubble {
     #else
     static let padding = EdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16)
     #endif
-    /// 同一边连着说的两颗之间。
     static let joinedGap: CGFloat = 4
     /// 气泡旁的旁注（经过、动态，`NoteLine`）离那一边的距离：图标对着气泡里的字。
     static let noteInset: CGFloat = padding.leading

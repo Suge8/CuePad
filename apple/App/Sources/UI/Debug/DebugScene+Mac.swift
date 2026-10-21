@@ -1,7 +1,6 @@
 #if os(macOS) && DEBUG
 import AppKit
 import CueStore
-import QuartzCore
 import SwiftUI
 
 extension DebugScene {
@@ -42,7 +41,6 @@ extension DebugScene {
             let cards = (try? await workspace.services.store.cards(in: project)) ?? []
             if let oldest = cards.filter({ !$0.isTask }).min(by: { $0.modifiedAt < $1.modifiedAt }) { try? await workspace.trash(oldest.id) }
         case "select":
-            // 批量选择：选上本页前三条灵感
             try? await Task.sleep(for: .seconds(1))
             for id in workspace.presses.selectable.prefix(3) { workspace.presses.toggle(id) }
         case "task":
@@ -97,7 +95,6 @@ extension DebugScene {
         case "trash": workspace.show(.trash)
         case "archive": workspace.show(.archive)
         case "editor":
-            // 散放的灵感进编辑页
             if let id = await card(in: workspace.currentProject ?? Project.defaultID, store: workspace.services.store),
                let card = try? await workspace.services.store.card(id) { workspace.open(card) }
         case "session":

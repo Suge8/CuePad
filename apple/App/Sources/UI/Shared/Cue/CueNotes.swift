@@ -91,7 +91,7 @@ nonisolated struct CueWakeHeader: Equatable, Sendable {
             (name, failed) = (first.map { PiProgress.firstLine($0) ?? $0 }, false)
             trail = ids.count > 1 ? "等 \(ids.count) 条" : nil
             targets = first.map { [Place(title: $0, target: .memory)] } ?? []
-        case .enabled, .message, .idle, .tidy, .renewed, .settingsChanged:
+        case .enabled, .message, .idle, .tidy:
             (name, trail, failed, targets) = (nil, nil, false, [])
         }
     }
@@ -103,8 +103,6 @@ nonisolated struct CueWakeHeader: Equatable, Sendable {
         case .message: "你发来消息"
         case .idle: "空闲时看了一眼"
         case .tidy: "整理记忆"
-        case .renewed: "接着上次做"
-        case .settingsChanged: "设置改了"
         case .sessionActivity: "会话有动静"
         case .reminder: "提醒到点"
         }
@@ -132,8 +130,6 @@ extension CueWake {
         case .idle: .wakeIdle
         case .tidy: .memory
         case .reminder: .wakeReminder
-        case .renewed: .renew
-        case .settingsChanged: .wakeSettings
         }
     }
 }
@@ -160,7 +156,7 @@ nonisolated struct CueWakeNames: Equatable, Sendable {
                 sessionIDs += stirs.compactMap(\.session)
                 taskIDs.formUnion(stirs.compactMap(\.task))
             case .reminder(let ids): lineIDs += ids
-            case .enabled, .message, .idle, .tidy, .renewed, .settingsChanged: break
+            case .enabled, .message, .idle, .tidy: break
             }
         }
         var names = CueWakeNames()

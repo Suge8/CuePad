@@ -104,7 +104,6 @@ public struct PiSessionPage: Sendable, Equatable {
 public struct PiSessionState: Identifiable, Equatable, Sendable {
   public let id: UUID
   public var sessionID: String
-  /// 写入它的那台 Mac。
   public var hostID: String
   public var title: String
   public var projectID: UUID?
@@ -193,7 +192,6 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
 
   // 下面几条是界面与 Cue 共用的唯一一份：做不到的操作界面上不露出，Cue 要做时报错。
 
-  /// 能结束：做得到，且没结束。
   public var canEnd: Bool {
     capabilities.contains(.end) && state != .known(.ended)
   }
@@ -245,6 +243,11 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
 
   /// 一个 Pi 会话对应的记录 id（每个会话一条，任何设备上算出来都一样）。
   public static func recordID(sessionID: String) -> UUID { DeterministicID.uuid("pi-session/\(sessionID)") }
+}
+
+extension PiSessionState {
+  /// 给 Cue 看的会话短 id：会话 id 的前 8 位（Cue 的工具接受至少 4 位的前缀）。
+  public var shortID: String { String(sessionID.prefix(8)) }
 }
 
 extension PiSessionState: Record {

@@ -52,7 +52,6 @@ struct PreviewBatch: View {
     private static let inset: CGFloat = 12
 
     #if os(macOS)
-    /// 三份起那一排的高
     private static let stripHeight: CGFloat = 176
     private static let heroMaxHeight: CGFloat = 320
     #else
@@ -61,7 +60,6 @@ struct PreviewBatch: View {
     #endif
 }
 
-/// 放大与缩回认的那张缩略图。
 struct PreviewZoomKey: Hashable {
     let group: String
     let preview: UUID
@@ -86,7 +84,6 @@ struct DeliverableTile: View {
         case shot(side: CGFloat)
     }
 
-    /// 画面与下面那行字之间。
     static let captionGap: CGFloat = 5
 
     let preview: PiPreview
@@ -103,7 +100,6 @@ struct DeliverableTile: View {
     @State private var arrived: Bool?
     @State private var look: DeliverableLook?
     @State private var located = Located()
-    @State private var hovering = false
 
     /// 本机的那份文件（`AttachmentFiles.url(of:)` 要查几次文件系统，第一次还要拷一份）：同一次"到没到"只找一次，
     /// 视图体里用到它的几处不再各找一遍。
@@ -193,23 +189,9 @@ struct DeliverableTile: View {
         case .shot:
             picture.aspectRatio(1, contentMode: .fit)
                 .overlay(alignment: .topTrailing) {
-                    GeometryReader { frame in if frame.size.width >= Self.enlargeMinWidth { enlarge.frame(maxWidth: .infinity, alignment: .trailing) } }
+                    GeometryReader { frame in if frame.size.width >= Self.enlargeMinWidth { EnlargeMark().frame(maxWidth: .infinity, alignment: .trailing) } }
                 }
-                #if os(macOS)
-                .onHover { inside in withAnimation(Motion.quick) { hovering = inside } }
-                #endif
         }
-    }
-
-    /// 右上角的放大记号：只是提示，整张图都可点。
-    private var enlarge: some View {
-        Image(.enlarge).font(.system(size: 12, weight: .semibold)).foregroundStyle(palette.onMedia)
-            .frame(width: 20, height: 20).background(palette.mediaScrim, in: .circle)
-            .padding(6)
-            #if os(macOS)
-            .opacity(hovering ? 1 : 0)
-            #endif
-            .accessibilityHidden(true)
     }
 
     /// 画面铺满给的框（比例夹过的多出来的裁掉）；没有画面的写类型。
@@ -285,5 +267,23 @@ private extension View {
         #else
         self
         #endif
+    }
+}
+
+/// 截图右上角的放大记号：只是提示，整张图都可点。Mac 上指针停在这份交付物上（`buttonHovered`）才露出，手机一直在。
+private struct EnlargeMark: View {
+    @Environment(\.palette) private var palette
+    #if os(macOS)
+    @Environment(\.buttonHovered) private var lit
+    #endif
+
+    var body: some View {
+        Image(.enlarge).font(.system(size: 12, weight: .semibold)).foregroundStyle(palette.onMedia)
+            .frame(width: 20, height: 20).background(palette.mediaScrim, in: .circle)
+            .padding(6)
+            #if os(macOS)
+            .opacity(lit ? 1 : 0)
+            #endif
+            .accessibilityHidden(true)
     }
 }

@@ -55,7 +55,6 @@ final class GlobalHotkey {
         accelerator = defaults.string(forKey: key) ?? defaultAccelerator
     }
 
-    /// 注册存着的那个（启动时）。
     func registerSaved() throws {
         try register(accelerator)
     }

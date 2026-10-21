@@ -1,4 +1,3 @@
-import CueStore
 import SwiftUI
 
 /// 一节的第一行（`NoteLine`，同并起来的那一行）：醒来原因的图标（叫醒它的会话出错是出错的那个）、原因（叫醒它的会话、任务、提醒是墨色的名字，点了去那里；
@@ -47,12 +46,12 @@ struct CueWakeTitle: View {
         let label = words.contentShape(.rect)
         switch header.targets.count {
         case 0: label
-        case 1: Button { open(header.targets[0].target) } label: { label }.buttonStyle(.plain)
+        case 1: Button { open(header.targets[0].target) } label: { label }.buttonStyle(PressStyle(.inline))
         default:
             Menu {
                 ForEach(header.targets, id: \.title) { place in Button(place.title) { open(place.target) } }
             } label: { label }
-            .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden)
+            .menuStyle(.button).buttonStyle(PressStyle(.inline)).menuIndicator(.hidden)
         }
     }
 

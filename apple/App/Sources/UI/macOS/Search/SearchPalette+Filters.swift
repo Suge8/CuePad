@@ -68,11 +68,10 @@ private struct FilterToken<Items: View>: View {
 
     var body: some View {
         Menu { items() } label: { FilterCapsule(name: name, value: value, on: on).menuLabel("\(name)：\(value)") }
-            .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
+            .menuStyle(.button).buttonStyle(PressStyle()).menuIndicator(.hidden).fixedSize()
     }
 }
 
-/// 筛选胶囊：生效时填成实心。
 private struct FilterCapsule: View {
     let name: String
     let value: String?

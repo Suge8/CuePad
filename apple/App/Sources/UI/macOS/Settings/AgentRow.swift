@@ -38,7 +38,7 @@ struct AgentRow: View {
             }
         } fix: {
             if let status, Self.needsSetup(status) {
-                Button(kind == .pi && status.presence != .notFound ? "升级方法" : "安装方法") { showsGuide = true }
+                Button(kind.upgrades(status.presence) ? "升级方法" : "安装方法") { showsGuide = true }
                     .settingFix()
                     .popover(isPresented: $showsGuide, arrowEdge: .bottom) { AgentSetupGuide(kind: kind, presence: status.presence) }
             }

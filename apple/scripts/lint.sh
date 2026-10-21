@@ -63,7 +63,7 @@ forbid "图标只经 Icon（Theme/Icon.swift）按意思取自家墨块符号（
   '\b(?:systemName|systemImage|systemSymbolName)\b|\b(?:Image|UIImage|NSImage)\((?:named:\s*|symbolName:\s*)?"cue\.' \
   'App/Widget/WidgetIcon.swift'
 forbid "说的话只有一条路 Workspace.speak（Speaking.swift）：同步清空输入框、写一条记录、后台立即上传，界面不等上传与结果；别处直接写记录会长出第二套发消息的写法" \
-  '(\baddCueMessage\(\s*\.you\b|\bstore\.(requestDelivery|speak)\()' '**/Workspace/Speaking.swift' '**/CueAgent/CueTools.swift' '**/Tests/**' 'App/Sources/UI/Debug/**'
+  '(\baddCueMessage\(\s*\.you\b|\bstore\.(requestDelivery|speak)\()' '**/Workspace/Speaking.swift' '**/CueAgent/CueTools+Say.swift' '**/Tests/**' 'App/Sources/UI/Debug/**'
 forbid "界面上请求到哪了只读 Speech.trip（发送中、已送达、没能送达，含超时与本机同步不通）：直接看请求的原始状态会长出第二套状态机，超时与断网时说法对不上" \
   '\.isOpen\b|\.status\s*[!=]=\s*\.known\(\.(?:pending|executing|succeeded|failed)\)|\.status\.known\b' \
   'App/Sources/[!U]*/**' 'App/Sources/*.swift' 'App/Sources/UI/Debug/**' 'App/Tests/**' 'CuePadKit/**'
@@ -71,6 +71,9 @@ forbid "一行里用“·”隔开几段的字只经 Dotted 或 Dot（Atoms.swif
   '(?: · |Text\("·"\))' 'App/AppGroup/Dotted.swift' '**/Components/Atoms.swift' '**/PiProgress.swift' 'App/Sources/UI/Debug/**' 'App/Tests/**' 'CuePadKit/**'
 forbid "你说出去的话用 SpeechBubble 画（状态只从记录推出，见 Speech）；UserBubble 只给已进对话的话（会话对话与近况）" \
   '\bUserBubble\s*\(' '**/Components/PiBubbles.swift' '**/Components/SpeechBubble.swift' '**/Components/PiConversation.swift' '**/Components/PiConversationBlocks.swift'
+# 例外：小组件与实时活动（扩展里没有 PressStyle）；设置里的网页链接（下划线、手形，同系统链接）；输入框里图片角上的移除（压在图片的暗底上，不铺悬停底）
+forbid "自绘的可点控件用 PressStyle（按种类 Press）或 RowStyle，不用 .plain/.borderless：Mac 的悬停淡底与按下只在这两处，用了 plain 指针过去没有回应（docs/ui.md 悬停）" \
+  'buttonStyle\(\.(?:plain|borderless)\)' 'App/Sources/UI/iOS/**' '**/*+iOS.swift' 'App/Widget/**' '**/Settings/SettingRow.swift' '**/Components/Composer+Attachments.swift'
 
 # 长按菜单带预览要跨行认（菜单闭包在中间），单独一条多行规则
 hits="$(rg -U --pcre2 --line-number --no-heading --type swift --glob '!App/Sources/UI/iOS/Components.swift' \
@@ -82,12 +85,12 @@ if [ "$rc" = 0 ]; then
 fi
 
 # 调试目录与产品同一个 target：文件不整个包在 DEBUG 里，Debug 构建与测试照过，Release 编不过或把调试代码发出去（350b9a47）。
-# DebugHooks.swift 是两种构建共用的入口，例外
+# DebugHooks*.swift 是两种构建共用的入口，例外
 for file in App/Sources/UI/Debug/*.swift; do
-  [ "${file##*/}" = DebugHooks.swift ] && continue
+  case "${file##*/}" in DebugHooks*.swift) continue ;; esac
   first="$(grep -m1 -E '^[[:space:]]*#if\b' "$file" || true)"
   [[ "$first" == *DEBUG* ]] && continue
-  printf '%s\n  → 调试目录的文件整个包在 #if DEBUG（可加平台条件）里，第一条 #if 就要带 DEBUG；两种构建都要的放 DebugHooks.swift\n\n' "$file"
+  printf '%s\n  → 调试目录的文件整个包在 #if DEBUG（可加平台条件）里，第一条 #if 就要带 DEBUG；两种构建都要的放 DebugHooks*.swift\n\n' "$file"
   status=1
 done
 

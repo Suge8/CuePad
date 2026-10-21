@@ -24,8 +24,8 @@ final class ClaudeStream {
     private var inputClosed = false
 
     /// 启动进程（`arguments` 接在 stream-json 的参数后面），开始读它的输出。
-    init(executable: URL, arguments: [String], directory: URL, environment: [String: String]) throws {
-        process = try ChildProcess(
+    init(executable: URL, arguments: [String], directory: URL, environment: [String: String]) async throws {
+        process = try await ChildProcess(
             executable, ["--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages"] + arguments,
             directory: directory, environment: environment, placement: .group, input: .pipe, output: .lines)
         let lines = process.output

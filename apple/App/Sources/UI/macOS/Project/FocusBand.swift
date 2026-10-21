@@ -7,7 +7,6 @@ import SwiftUI
 /// 收起其余任务时纸底那一行留在原来的屏幕位置（`TaskFoldAnchor`），长列表底部收起不会跳到卡片墙。
 /// 纸上不写"任务"的段标题：侧栏的"任务"磁贴一直在旁边，纸又是页面最上面的第一块、行首都是任务圈，不用标题也认得出（读屏念"任务"）。
 /// 行是全 App 共用的那一种（`TaskLine`），标题后一格"下一步"（`TaskNext`）：交给的 Agent 要你做什么，或还没交出去的"开始"；要 Agent 做什么写在任务的正文里（任务气泡）。
-/// 纸与下面的资料、卡片墙同宽，行铺满纸：行尾的进度贴着纸的右边成一列。
 struct FocusBand: View {
     let data: ProjectPageData
     @Binding var position: ScrollPosition
@@ -76,7 +75,7 @@ struct FocusBand: View {
             .fixedSize()
             .contentShape(.rect)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressStyle(.inline))
         .accessibilityValue(open ? "已展开" : "已折叠")
     }
 }
@@ -100,14 +99,8 @@ struct CompactFocus: View {
                         .accessibilityLabel("\(data.taskCounts.open) 个任务没做完")
                 }
             }
-            .font(Typography.toolbarLabel)
-            .foregroundStyle(palette.ink)
-            .padding(.horizontal, 16).frame(height: Spacing.toolbarControl)
-            .glass(in: .capsule, interactive: true)
         }
-        .buttonStyle(PressStyle())
-        // 放在工具栏里时系统默认只显示图标
-        .labelStyle(.titleAndIcon)
+        .buttonStyle(ControlButtonStyle(kind: .glass))
         .help("回到顶部")
     }
 }

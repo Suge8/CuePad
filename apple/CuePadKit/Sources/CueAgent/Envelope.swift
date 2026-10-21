@@ -3,19 +3,11 @@ import CueText
 import Foundation
 
 /// 交给 Cue 的大脑的一轮输入里的 `<cue>` 块（用户的话若有，由值班的管理器接在块后面）。
-/// 块里第一行是时间，然后是项目、变化、在做的事（在做的任务与不归没做完的事的活会话，`CueBoard`）、等你、
-/// 接上的（新上下文第一次醒来才有）、醒来的原因；该换新上下文时（上下文用到 `CueContext.renewAt`，或 `CueWake.settingsChanged`）末尾一行要它先写交接：这一条只在这里判断。
-/// 信封与系统提示里"你"是 Cue、"他"是用户。
+/// 块里第一行是时间，然后是项目、变化、在做的事（在做的任务与不归没做完的事的活会话，`CueBoard`）、等你、醒来的原因。
+/// 新会话的第一条输入里，它前面还有记忆视图与对话视图（`CueKeeper`）。信封与系统提示里"你"是 Cue、"他"是用户。
 public enum CueEnvelope {
-  /// 接上的对话至多这么多条、这么多字（从最近的往前取，一条也放不下时截短最近那条）。只为接上最近几轮来回（一轮一到三条），
-  /// 合起来约是换新线（`CueContext.renewAt`）的十分之一，新上下文一开始不至于离换新线太近；更早的事在记忆与交接里。
-  public static let resumeMessages = 30
-  public static let resumeCharacters = 6000
-
   public struct Input: Sendable {
     public var now: Date
-    /// 上下文已用多少 token；不知道为 nil。
-    public var contextUsed: Int?
     /// 所有项目（`CueStore.projects`）：Cue 据此把活放进项目。
     public var projects: [Project]
     public var changes: [CueChange]
@@ -27,18 +19,14 @@ public enum CueEnvelope {
     public var wake: CueWake
     /// 提醒到点（`CueWake.reminder`）时到点的那几条记忆，带序号
     public var reminders: [CueIndexedLine]
-    /// 新上下文第一次醒来：接上的交接与对话（不含这次交出去的话）；其余为 nil
-    public var resume: CueResume?
 
     public init(
-      now: Date, contextUsed: Int?, projects: [Project], changes: [CueChange],
-      board: CueBoard, waiting: [CueMessage], left: [CueLeft] = [], wake: CueWake, reminders: [CueIndexedLine] = [], resume: CueResume? = nil
+      now: Date, projects: [Project], changes: [CueChange],
+      board: CueBoard, waiting: [CueMessage], left: [CueLeft] = [], wake: CueWake, reminders: [CueIndexedLine] = []
     ) {
       self.reminders = reminders
       self.left = left
-      self.resume = resume
       self.now = now
-      self.contextUsed = contextUsed
       self.projects = projects
       self.changes = changes
       self.board = board
@@ -67,10 +55,8 @@ public enum CueEnvelope {
     lines.append("等你 \(input.waiting.count) 件" + (input.waiting.isEmpty ? "" : "："))
     lines += input.waiting.map { "- " + question($0) }
 
-    if let resume = input.resume { lines += self.resume(resume) }
     lines.append("醒来：" + wake(input.wake))
     if case .reminder = input.wake { lines += input.reminders.map { "- #\($0.index) \($0.line.text)" } }
-    if input.wake == .settingsChanged || (input.contextUsed ?? 0) >= CueContext.renewAt { lines.append(renew) }
     lines.append("</cue>")
     return lines.joined(separator: "\n")
   }
@@ -85,7 +71,7 @@ public enum CueEnvelope {
       }
       let cards = setAside.filter { $0.setAsideBy == message.id }
       guard !cards.isEmpty else { return message.text }
-      return ([message.text, "", "（他开口收起了等你里的 \(cards.count) 张：）"] + cards.map { "- " + question($0) }).joined(separator: "\n")
+      return ([message.text, "", "（他开口收起了等你里的 \(cards.count) 张；他这句与它无关就 tell restore 放回：）"] + cards.map { "- " + question($0) }).joined(separator: "\n")
     }.joined(separator: "\n\n")
   }
 
@@ -102,35 +88,7 @@ public enum CueEnvelope {
     case .idle: "空闲，例行看一眼"
     case .tidy: "整理记忆"
     case .reminder: "提醒到点"
-    case .renewed: "换了新上下文，从接上的地方接着做"
-    case .settingsChanged: "他改了你的设置"
     }
-  }
-
-  /// 要换新上下文时的那一行。
-  private static let renew = "要换新上下文：先 memory renew 写交接，再结束这一轮。"
-
-  /// 接上：交接原样，之后的对话每条一行，从最近的往前取到 `resumeCharacters` 字。
-  private static func resume(_ resume: CueResume) -> [String] {
-    guard resume.handoff != nil || !resume.messages.isEmpty else { return [] }
-    var budget = resumeCharacters, kept: [String] = []
-    for message in resume.messages.reversed() {
-      let author = switch message.author.known {
-      case .you: "他"
-      case .cue: "你"
-      default: "你的动态"
-      }
-      var text = CueFormat.plainText(message.text)
-      if let answer = message.answer { text += "（他回答：\(answer)）" }
-      let line = clip(text, kept.isEmpty ? budget : Int.max)
-      guard line.count <= budget else { break }
-      budget -= line.count
-      kept.append("- \(author) \(message.createdAt.formatted(clock))：\(line)")
-    }
-    let truncated = resume.truncated || kept.count < resume.messages.count
-    return ["接上（新上下文：上一段的交接备忘与它之后的对话）：", "交接备忘：" + (resume.handoff == nil ? "没有，从头算起" : ""),
-      resume.handoff.map(\.text), "之后的对话" + (truncated ? "（更早的略去）" : "") + (kept.isEmpty ? "：无" : "：")
-    ].compactMap { $0 } + kept.reversed()
   }
 
   private static func change(_ change: CueChange) -> String {
@@ -171,7 +129,6 @@ public enum CueEnvelope {
     return parts.joined(separator: " · ")
   }
 
-  /// 它留给他回的会话在看板与 peek 上的那一句（`CueLeft`）。
   static let leftNote = "已留给他回"
 
   /// 会话在 Cue 眼里的称呼：会话名与短 id（Cue 的工具给 session 时写它）。
@@ -233,7 +190,7 @@ public enum CueEnvelope {
       format: "\(year: .defaultDigits)-\(month: .twoDigits)-\(day: .twoDigits) 周\(weekday: .narrow) \(hour: .twoDigits(clock: .twentyFourHour, hourCycle: .zeroBased)):\(minute: .twoDigits)",
       locale: Locale(identifier: "zh_CN"), timeZone: .current, calendar: Calendar(identifier: .gregorian))
   }
-  private static var clock: Date.VerbatimFormatStyle {
+  static var clock: Date.VerbatimFormatStyle {
     .init(
       format: "\(hour: .twoDigits(clock: .twentyFourHour, hourCycle: .zeroBased)):\(minute: .twoDigits)",
       timeZone: .current, calendar: Calendar(identifier: .gregorian))

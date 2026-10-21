@@ -1,4 +1,3 @@
-import CueStore
 import QuartzCore
 import SwiftUI
 
@@ -15,7 +14,6 @@ nonisolated struct RelayEnd: Equatable, Sendable {
 enum CueSpot: Int {
     /// 侧栏最上面的 Cue（Mac 是名片 `CueSidebarCard`、iPad 是那一行，头像都是 `CueEntryAvatar`；菜单栏面板、输入条在别的窗口，不参与）。
     case entry
-    /// Cue 页的页头。
     case header
     /// iPhone 三页底部那一排的 Cue 钮。
     case dock

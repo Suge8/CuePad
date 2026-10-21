@@ -4,8 +4,8 @@ import SwiftUI
 /// 任务行上"下一步"那一格（`TaskNext`），Mac 与手机同一份，不垫底、不成胶囊——一屏可能有十几格，胶囊排成一列就成了一墙按钮：
 /// 会话那边的事是会话状态标（`PiStateDot`，在做时那条心电线自己会动），要你管的（`PiShown.speaksOnTask`）旁边写状态词，点了打开会话；
 /// 还没交出去的叶子是一个"▶"，点了把任务的正文交给 Agent（Mac 直接交出，手机浮起发给 Agent 的输入框带着它）。
-/// Mac 上指针停在这一行时（`rowHovered`）"▶ 开始"以靛青露出来；没停时它透明、位置照占（悬停不挤动标题，签名色只给焦点，ui.md）。
-/// 不要你管的状态词悬停也不写出来（读屏与悬停提示里有）：写出来就把行尾撑宽、挤动标题。
+/// 指针停在这一行时（`rowHovered`）"▶ 开始"是靛青（签名色只给焦点，ui.md）；Mac 上"开始"只在那时浮在行尾（`TaskLine.inlines`）。
+/// 状态词只看要不要你管，不随悬停出没：出没会挤动标题与时间，状态标的说明在悬停提示里。
 struct TaskNextMark: View {
     let next: TaskNext
     @Environment(\.rowHovered) private var lit
@@ -22,9 +22,6 @@ struct TaskNextMark: View {
             .help(next.starts ? help : Dotted(next.speech, help).visible)
             .accessibilityLabel(next.speech)
             .accessibilityHint(help)
-            .opacity(hidden ? 0 : 1)
-            .allowsHitTesting(!hidden)
-            .accessibilityHidden(hidden)
     }
 
     private var label: some View {
@@ -51,14 +48,11 @@ struct TaskNextMark: View {
     }
 
     #if os(macOS)
-    /// "开始"只在指针停在这一行时露出来。
-    private var hidden: Bool { next.starts && !lit }
     private var edge: Alignment { .leading }
     private static let dot: CGFloat = 6
     private static let glyph = Font.system(size: 8, weight: .bold)
     private static let target: CGFloat = 20
     #else
-    private var hidden: Bool { false }
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.dynamicTypeSize) private var typeSize
     /// 跟着 `TaskLine` 的排法：手机行尾一列时贴右，紧跟标题或换到标题下面时贴左。

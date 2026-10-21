@@ -15,7 +15,7 @@ import SwiftUI
 /// （"下一步"是会话时，没有会话的仍开气泡），Mac 右键菜单第一项"打开任务"。Mac 右键是 `CardActions`；
 /// 手机长按直接拖动（`TaskOutline`），不挂长按菜单：系统长按菜单弹出后，把预览往下拉是收起菜单、拖不起来，
 /// 往下面的组或项目段拖就做不到。菜单那几项各有入口：完成点圈、删除轻扫、归档在任务气泡的"⋯"。
-/// Mac 上指针停在行上时铺行的淡底（`RowStyle`），"开始"在留好的位置露出来（`TaskNextMark` 读 `rowHovered`），不挤动布局。
+/// Mac 上指针停在行上时铺行的淡底（`RowStyle`），还没交出去的叶子的"开始"这时才浮在行尾（`hoverReveal`，不占排版，标题与时间一个字都不挪；看板上盖住行尾的项目图标）。
 struct TaskLine: View {
     let task: Card
     /// 步骤进度（有它的不是叶子，不给"开始"）。
@@ -87,6 +87,9 @@ struct TaskLine: View {
             }
         }
         .frame(minHeight: TaskMetrics.rowHeight)
+        #if os(macOS)
+        .hoverReveal(when: !done && next.map { !Self.inlines($0) } ?? false) { if let next { TaskNextMark(next: next).padding(.leading, 4) } }
+        #endif
         .animation(Motion.quick, value: done)
     }
 
@@ -108,10 +111,10 @@ struct TaskLine: View {
     }
 
     /// 旁注："下一步"、快满的上下文与多久；做完的不写，要你管的状态词写出来时不写多久。放不下时谁先让（`TaskLineLayout.yields`）：
-    /// 先是时间，再是没写状态词的标。看板上行尾最后是成果图与项目小图标（`BoardRowEnd`，"开始"也在那一格）。
+    /// 先是时间，再是没写状态词的标。看板上行尾最后是成果图与项目小图标（`BoardRowEnd`）。
     @ViewBuilder private func notes(next: TaskNext?, done: Bool) -> some View {
-        let pulse = workspace.pulse(for: task, lead: lead, in: agents), start = board != nil && next?.starts == true
-        if !done, let next, !start, board?.advancing != true || pulse.showsMark { TaskNextMark(next: next).yields(first: false, ever: !next.speaks).transition(.opacity) }
+        let pulse = workspace.pulse(for: task, lead: lead, in: agents)
+        if !done, let next, Self.inlines(next), board?.advancing != true || pulse.showsMark { TaskNextMark(next: next).yields(first: false, ever: !next.speaks).transition(.opacity) }
         if !done, !(next?.speaks ?? false), let meter = pulse.fullContext { ContextFact(meter: meter).font(TaskMetrics.caption).fixedSize() }
         if !done, !pulse.speaks, let pace = TaskPace.of(task, steps: subtasks) {
             Group {
@@ -123,11 +126,19 @@ struct TaskLine: View {
             .font(TaskMetrics.caption).monospacedDigit().foregroundStyle(palette.ink3)
             .yields(first: true)
         }
-        if let board, board.hasEnd || start {
-            BoardRowEnd(project: board.project, start: start && !done ? next : nil) {
+        if let board, board.hasEnd {
+            BoardRowEnd(project: board.project) {
                 if let shot = board.shot { BoardShot(shot: shot, group: task.id.uuidString, open: board.openShot) }
             }
         }
+    }
+
+    /// "下一步"排在行里还是悬停才浮出来：Mac 上"开始"只在悬停时浮在行尾（`hoverReveal`）。
+    private static func inlines(_ next: TaskNext) -> Bool {
+        #if os(macOS)
+        if case .start = next { return false }
+        #endif
+        return true
     }
 
     private func open() { workspace.openTask(task) }
@@ -174,8 +185,7 @@ struct TaskLine: View {
     private func framed(_ content: some View, next: TaskNext?) -> some View {
         content
             .contentShape(.rect)
-            .row(hovers: true)
-            .environment(\.rowHoverPreset, DebugHooks.hovers(task.body))
+            .row()
             .benchSpot(task.id)
             .onTapGesture { tapRow(next) }
             .contextMenu {

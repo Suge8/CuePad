@@ -1,6 +1,3 @@
-#if os(macOS)
-import CuePi
-#endif
 import CueStore
 import Foundation
 import Observation
@@ -72,6 +69,10 @@ final class Workspace {
     var showsSetup = false
     /// 新会话的表单开着（`NewSessionForm`，从会话页的 + 弹出；菜单"文件 › 新会话"先去会话页再置起，`newSession`）。
     var showsNewSession = false
+    /// 任务页待办顶上浮出添加那一行（页上的"新任务"与右上"⋯"里的同一下）。
+    var addsTask = false
+    /// 清空回收站的确认开着（回收站页上与"⋯"里的"清空回收站…"同一下）。
+    var confirmsEmptyTrash = false
     #endif
     /// 项目范围：任务页与会话页共用这一份（顶栏中间那颗显示它、点 ✕ 清掉；项目页"⋯"里的"看这个项目的会话"设成这个项目再切到会话页），nil 是全部项目。
     var projectScope: UUID?
@@ -100,7 +101,6 @@ final class Workspace {
     /// 请底部输入栏聚焦的次数（空态的"记一条"）：输入栏的焦点在它自己那里，只看这个数变了就聚焦。
     private(set) var captureFocusRequests = 0
     func focusCapture() { captureFocusRequests += 1 }
-    /// 会话页放在窗口工具栏上的标题与菜单（`SessionHeader`）。
     let sessionHeader = SessionHeader()
 
     #endif

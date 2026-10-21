@@ -33,7 +33,6 @@ nonisolated struct SidebarOutline: Equatable {
         }
     }
 
-    /// Cue 下面的去处。
     static let places: [Entry] = [.tasks, .sessions]
     static let footer: [Entry] = [.archive, .trash, .settings]
 
@@ -54,6 +53,5 @@ nonisolated struct SidebarOutline: Equatable {
         recent = Array(catalog.projects.filter { !$0.isPinned }.prefix(Self.recentLimit))
     }
 
-    /// 列出的项目，按显示顺序。
     var projects: [Project] { pinned + recent }
 }

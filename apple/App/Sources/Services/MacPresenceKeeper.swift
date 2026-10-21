@@ -26,7 +26,6 @@ nonisolated final class MacPresenceKeeper: Sendable {
         self.host = host
     }
 
-    /// 跟着系统的睡眠与唤醒续期，直到任务取消。
     func keep(notifications center: NotificationCenter) async throws {
         let sleeping = center.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: nil) { [self] _ in
             goingToSleep()
@@ -47,7 +46,6 @@ nonisolated final class MacPresenceKeeper: Sendable {
         }
     }
 
-    /// 退出时：写成离线并上传。
     func signOff() async {
         awake.withLock { $0 = false }
         do { try await publish() } catch { Self.log.error("退出时没能写下这台 Mac 离线：\(error.localizedDescription, privacy: .public)") }

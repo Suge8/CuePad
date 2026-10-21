@@ -1,6 +1,3 @@
-#if os(macOS)
-import CuePi
-#endif
 import CueStore
 import Foundation
 import Observation
@@ -73,7 +70,6 @@ extension Workspace {
         attempt { if let card = try await store.card(id) { self.openTask(card) } }
     }
 
-    /// 窗口里按下了一下（窗口坐标）。
     func pressed(at point: CGPoint) { press.record(point) }
 
     /// 打开一条任务的气泡（项目页与任务页的行、Cue 对话里的任务、⌘K、归档、小组件链接都经这里）：从刚按下的那一下长出来；
@@ -86,11 +82,8 @@ extension Workspace {
             return
         }
         if let closed = closedTask, closed.task == task, PressPoint.reopens(closedAt: closed.at) { return closedTask = nil }
-        openTask = TaskBubble.Request(task: task, step: step, anchor: pressAnchor)
+        openTask = TaskBubble.Request(task: task, step: step, source: press.source)
     }
-
-    /// 刚按下的那一下（`PressPoint.anchor`）：从它长出的气泡落在这里。
-    var pressAnchor: CGPoint? { press.anchor }
 
     /// 归档（连同下级）：不占列表、仍可搜；提示里可撤销。
     func archive(_ id: UUID) async throws {
@@ -113,7 +106,6 @@ extension Workspace {
         say(ids.count > 1 ? "已删除 \(ids.count) 条" : "已删除", action: .undo(undo))
     }
 
-    /// 一键归档"最近完成"的任务。
     func archiveCompletedTasks() async throws {
         let count = try await services.store.archiveCompletedTasks()
         if count > 0 { say("已归档 \(count) 项任务") }
@@ -129,7 +121,6 @@ extension Workspace {
         }
     }
 
-    /// 点提示里的动作（撤销、归档）：收起提示，做那件事。
     func run(_ action: NoticeAction) {
         notice = nil
         attempt { try await action.run() }

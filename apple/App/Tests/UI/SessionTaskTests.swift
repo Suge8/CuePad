@@ -31,7 +31,7 @@ struct SessionTaskTests {
         let empty = try await TaskBoard.read(from: store)
         #expect(empty.todo.isEmpty && empty.advancing.map(\.id) == ["session/s1"])
         let envelope = CueEnvelope.render(CueEnvelope.Input(
-            now: .now, contextUsed: nil, projects: [], changes: [], board: try await store.cueBoard(), waiting: [],
+            now: .now, projects: [], changes: [], board: try await store.cueBoard(), waiting: [],
             wake: .idle))
         #expect(envelope.contains("在做 1 件：\n- 会话「修登录」（s1） · 歇着"))
 
@@ -47,7 +47,6 @@ struct SessionTaskTests {
         #expect(try await store.cueBoard().sessions.isEmpty)
     }
 
-    /// 回复框与 Cue 的 say 同一条规则：会话在等 CuePad 答得了的提问时，说的话就是答案（选项原文或序号），否则照常发出。
     /// 说话不改任务的状态：对已完成的事的会话说的话、作的答送到了，任务仍是完成。状态只由明确的动作改：
     /// Cue 的 edit reopen 同你点掉圆圈（没完成的不让改回），加步骤回到进行中。
     @Test func 对已完成任务的会话说话_任务仍是完成_改回或加步骤才变() async throws {
@@ -114,7 +113,7 @@ struct SessionTaskTests {
         let board = try await store.cueBoard()
         #expect(board.sessions.map(\.sessionID) == ["s1"])
         let envelope = CueEnvelope.render(CueEnvelope.Input(
-            now: .now, contextUsed: nil, projects: [], changes: [], board: board, waiting: [], wake: .idle))
+            now: .now, projects: [], changes: [], board: board, waiting: [], wake: .idle))
         #expect(envelope.contains("在做 1 件：\n- 会话「修登录」（s1） · 歇着"))
         // 分步做完的事：会话在前一步上，最后一步是手点完成的、没绑会话，列的仍是它用过的会话
         let stepped = try await store.createTask("加语言参数", in: project.id)

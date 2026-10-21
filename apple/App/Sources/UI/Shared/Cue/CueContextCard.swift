@@ -3,8 +3,8 @@ import SwiftUI
 
 /// Cue 的上下文用量，两端同一个视图（Mac"运行情况"的顶上、手机 Cue 面板里）：只读随状态同步来的 `CueState.context`（`CueWatch.context`），
 /// 哪台都看得到值班那台的同一份。第一行"上下文"与已用 / 换新线（`CueContext.renewAt`），一条刻度尺量到窗口（不知道窗口时量到
-/// 换新线往后一截），换新线是尺上一道刻线；末行还差多远、窗口多大、这个班次几点起。用到换新线的七成、九成按会话上下文同一口径
-/// 加深与转胭脂（`UsageLevel`）。还没跑过一轮时写"还没请求过模型"。上次几点换新在对话里那条换新的分隔上看，这里不写两遍。
+/// 换新线往后一截），换新线是尺上一道刻线；末行还差多远、窗口多大、这个会话几点起（换新就是开新会话）。用到换新线的七成、九成按会话上下文同一口径
+/// 加深与转胭脂（`UsageLevel`）。还没跑过一轮时写"还没请求过模型"。
 struct CueContextCard: View {
     let context: CueContext?
     @Environment(\.palette) private var palette
@@ -37,10 +37,10 @@ struct CueContextCard: View {
     }
 
     private var facts: Dotted {
-        guard let context else { return "这个班次还没请求过模型" }
+        guard let context else { return "这个会话还没请求过模型" }
         let used = context.used
         let left = used < renewAt
-            ? "离换新线还差 \(CueContext.tokens(renewAt - used))" : "过了换新线 \(CueContext.tokens(used - renewAt))，下次醒来先写交接"
+            ? "离换新线还差 \(CueContext.tokens(renewAt - used))" : "过了换新线 \(CueContext.tokens(used - renewAt))，下次醒来换新"
         return Dotted(left, context.window.map { "窗口 \(CueContext.tokens($0))" }, "\(Self.since(context.since)) 起")
     }
 

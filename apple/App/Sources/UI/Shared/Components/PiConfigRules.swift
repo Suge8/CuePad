@@ -10,11 +10,6 @@ nonisolated enum PiModelLabel {
         quotas.first { $0.provider == provider.id }.map { QuotaMeter($0, at: now).menuTitle.visible } ?? provider.name
     }
 
-    /// 胶囊最宽是这一排宽度的一半，至少 96（短名放得下）、至多 240（iPad、Mac 宽屏不至于拉得过长）。
-    static func capsuleWidth(available: CGFloat) -> CGFloat {
-        min(max(available * 0.5, 96), 240)
-    }
-
     /// 菜单里的分组：提供方按第一次出现的顺序。
     static func groups(_ models: [PiModelOption]) -> [(provider: PiProvider, models: [PiModelOption])] {
         var order: [String] = []
@@ -53,7 +48,6 @@ nonisolated struct PiThinkingMeter: Equatable {
     var isOff: Bool { current == .off }
     /// 档名；Agent 没报此刻的强度时（如终端里的 Codex 用模型的缺省）是"默认"，照样能点能换。
     var label: String { current?.label ?? "默认" }
-    /// 填到最高一档。
     var isMax: Bool { !bars.isEmpty && filled == bars.count }
 
     func level(at fraction: Double) -> PiThinkingLevel {

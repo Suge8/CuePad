@@ -65,7 +65,7 @@ private struct CueRoundRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Button { withAnimation(Motion.snappy) { expanded.toggle() } } label: { header }
-                .buttonStyle(.plain)
+                .buttonStyle(PressStyle())
                 .accessibilityValue(expanded ? "已展开" : "已收起")
             if expanded { detail.transition(.opacity) }
         }
@@ -119,7 +119,7 @@ private struct CueRoundRow: View {
                     .font(Typography.caption).foregroundStyle(palette.ink2)
                     .frame(minHeight: 22).contentShape(.rect)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(PressStyle())
                 if showsSent { TraceText(text: round.sent.joined(separator: "\n\n— 插话 —\n\n")).transition(.opacity) }
             }
             ForEach(round.calls) { CueCallRow(call: $0) }
@@ -143,7 +143,7 @@ private struct CueCallRow: View {
                 ToolRow(icon: CueRunFormat.icon(tool: call.name), target: target, truncation: .tail) { status }
                     .frame(minHeight: 22).contentShape(.rect)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PressStyle())
             .accessibilityValue(expanded ? "已展开" : "已收起")
             if expanded {
                 VStack(alignment: .leading, spacing: 6) {
@@ -227,8 +227,6 @@ private enum CueRunFormat {
         case .idle: "空闲巡视"
         case .tidy: "整理记忆"
         case .reminder(let lines): "提醒到点（\(lines.count) 条）"
-        case .renewed: "换新后接着做"
-        case .settingsChanged: "换班次前写交接"
         }
     }
 

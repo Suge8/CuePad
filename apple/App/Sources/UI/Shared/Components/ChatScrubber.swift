@@ -10,7 +10,6 @@ import SwiftUI
 /// 键盘弹着时淡出让开（手机、iPad）：这时在写字，可见区只剩键盘上面一截，刻度挤在输入框旁边只是碍眼；键盘收起再淡回来。
 struct ChatScrubber: View {
     let marks: [ChatMark]
-    /// 用户正在滚对话。
     let scrolling: Bool
     let jump: (UUID) -> Void
     @Environment(\.palette) private var palette
@@ -50,7 +49,6 @@ struct ChatScrubber: View {
     private static let minGap: CGFloat = 3
     /// 放大波及的范围（离手指多远的刻度还跟着变长）。
     private static let reach: CGFloat = 44
-    /// 右缘接住手指的宽度。
     static let width: CGFloat = 28
     /// 刻度离右缘：手机上让开系统的滚动指示条（Mac 由 `ChatColumn` 让开窗口的滚动条）。
     #if os(iOS)

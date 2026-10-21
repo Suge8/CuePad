@@ -117,7 +117,6 @@ struct PickedImage: Identifiable {
     let preview: Image
 
     static let quality = 0.85
-    /// 图片条里一格的边长（点）。
     static let previewSide: CGFloat = 64
 
     init(data: Data) {

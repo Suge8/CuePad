@@ -60,7 +60,6 @@ public enum Speech {
       self.localHost = localHost
     }
 
-    /// 同步一直通着。
     public static func always(at now: Date = .now) -> Moment { Moment(now: now, reachableSince: .distantPast) }
 
     /// 到 `host` 那台 Mac 的同步从什么时候起通着；nil 是此刻不通。

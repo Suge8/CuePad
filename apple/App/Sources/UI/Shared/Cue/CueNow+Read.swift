@@ -58,8 +58,7 @@ nonisolated extension CueNow {
                     ? Bead(id: "done/\(task.id.uuidString)", kind: .done, name: task.title, since: at, subagents: 0, sessions: []) : nil
             }
         }
-        let order: [Bead.Kind] = [.asks, .running, .delegating, .resting, .done]
-        return order.flatMap { kind in (asks + works + done).filter { $0.kind == kind } }
+        return Bead.Kind.allCases.flatMap { kind in (asks + works + done).filter { $0.kind == kind } }
     }
 
     /// 推进中的一件：有会话在跑（在想、用工具、压缩，或正在开、话正送进去）是在跑，从最早在跑的那一轮起算；

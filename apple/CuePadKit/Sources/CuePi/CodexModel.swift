@@ -2,7 +2,6 @@
 import CueStore
 import CueText
 import Foundation
-import OSLog
 
 /// `model/list` 里的一个模型：强度是 Codex 的 `ReasoningEffort`（`none` 即关闭；`ultra` 等 CuePad 没有的档丢掉）。
 struct CodexModel {

@@ -53,7 +53,6 @@ nonisolated struct TaskTree: Equatable, Sendable {
     private var parents: [UUID: UUID] { links.parents }
 
     var isEmpty: Bool { tasks.isEmpty }
-    /// 要显示的任务，按输入顺序。
     var ordered: [Card] { order }
 
     /// 只留这些顶层任务和它们的子树（项目页显示的前几条），顶层按给的先后排：

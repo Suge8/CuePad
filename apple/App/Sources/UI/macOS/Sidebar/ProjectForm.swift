@@ -73,7 +73,7 @@ struct ProjectForm: View {
             if let folder {
                 Text(URL(filePath: folder).lastPathComponent).lineLimit(1).help(folder)
                 Button("不绑了", icon: .clear) { self.folder = nil }
-                    .labelStyle(.iconOnly).buttonStyle(.plain).foregroundStyle(palette.ink2)
+                    .labelStyle(.iconOnly).buttonStyle(PressStyle(.inline)).foregroundStyle(palette.ink2)
             } else {
                 Button("选择…") { Task { folder = await ProjectDirectory.pick() } }
             }

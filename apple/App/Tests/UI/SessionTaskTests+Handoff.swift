@@ -114,7 +114,7 @@ extension SessionTaskTests {
             try await recorder.update(sessionID: "s1", state: .settled)
             let changes = try await store.cueChanges(after: CueMarks(mark))
             let envelope = CueEnvelope.render(CueEnvelope.Input(
-                now: .now, contextUsed: nil, projects: [], changes: changes.due, board: try await store.cueBoard(), waiting: [], wake: .sessionActivity([])))
+                now: .now, projects: [], changes: changes.due, board: try await store.cueBoard(), waiting: [], wake: .sessionActivity([])))
             return (envelope.split(separator: "\n").first { $0.hasPrefix("- [歇下") }.map(String.init), changes.held["s1"] != nil)
         }
 

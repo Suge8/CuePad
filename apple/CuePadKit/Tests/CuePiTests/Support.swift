@@ -112,7 +112,6 @@ final class ChangeLog {
         changes.compactMap { if case .ended(let s, let r) = $0 { (s, r) } else { nil } }
     }
 
-    /// 每次状态变化时的一句话说明（`PiSession.detail`）
     var details: [String?] {
         changes.compactMap { if case .stateChanged(let s, _) = $0 { s.detail } else { nil } }
     }

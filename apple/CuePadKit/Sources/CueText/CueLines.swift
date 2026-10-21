@@ -131,7 +131,6 @@ public struct CueSummary: Equatable, Sendable {
         return "…" + (whole ? tail : tail.prefix(previewLimit))
     }
 
-    /// 标题之后的全部文字，各行以 `separator` 连接。
     private static func rest(_ stored: String, separator: String = "\n") -> String {
         CueLines.contentLines(stored).dropFirst().joined(separator: separator)
     }
@@ -146,5 +145,10 @@ extension String {
     /// 至多 `limit` 个字符，超出的以省略号结尾（省略号算在内）。
     public func clipped(_ limit: Int) -> String {
         count <= limit ? self : String(prefix(limit - 1)) + "…"
+    }
+
+    /// 第一个非空行，去掉首尾空格；没有为 nil。
+    public var firstLine: String? {
+        split(whereSeparator: \.isNewline).lazy.map { $0.trimmingCharacters(in: .whitespaces) }.first { !$0.isEmpty }
     }
 }

@@ -5,7 +5,8 @@ import AppKit
 /// - `-CuePadClick x,y[;x,y|esc|return…]`：左键点；几下之间用分号隔开，隔 `-CuePadClickGap` 秒（默认 1.5），`esc`、`return` 是按一下那个键。
 /// - `-CuePadRightClick x,y`：右键点，弹出那里的右键菜单。
 /// 事件进事件队列（同真点）：窗口的本地事件监听（浮层的关法、任务气泡的落点）照样看得到。
-/// 后台 App 的菜单整份画成停用的灰：要占前台，配 `-CuePadForeground YES`（`DebugForeground`，退出时还回去）。坐标是主窗口里的点，左上为原点。只给本进程的窗口发合成事件，不碰别的应用。菜单开着时主线程在菜单的事件循环里，截完由外面结束实例。
+/// 事件只在本进程里合成、不经窗口服务器，后台的窗口照样按点处理（不先"激活"），点开浮层、气泡、按钮看逻辑与摆位不占前台；截出来是未激活窗口的样子。
+/// 系统菜单在后台 App 里整份画成停用的灰：右键点必须占前台（`-CuePadForeground YES`，`DebugForeground`，退出时还回去），左键点开的是系统菜单时也加它。坐标是主窗口里的点，左上为原点。只给本进程的窗口发合成事件，不碰别的应用。菜单开着时主线程在菜单的事件循环里，截完由外面结束实例。
 extension DebugScene {
     static func openMenuIfAsked() async {
         let clicks: [(String, NSEvent.EventType, NSEvent.EventType)] = [
@@ -16,7 +17,7 @@ extension DebugScene {
         else { return }
         let steps = defaults.string(forKey: key)!.split(separator: ";").map { $0.trimmingCharacters(in: .whitespaces) }
         let gap = seconds("CuePadClickGap", default: 1.5)
-        DebugForeground.require(window, for: key)
+        if down == .rightMouseDown { DebugForeground.require(window, for: key) } else { _ = DebugForeground.borrow(window) }
         try? await Task.sleep(for: .milliseconds(500))
         for (index, step) in steps.enumerated() {
             if index > 0 { try? await Task.sleep(for: .seconds(gap)) }
@@ -42,7 +43,6 @@ extension DebugScene {
 
     private static let pressHold: Duration = .milliseconds(90)
 
-    /// 能按的键：名字、键码与字符。
     private static let keys: [String: (code: UInt16, character: String)] = ["esc": (53, "\u{1b}"), "return": (36, "\r")]
 
     private static func post(_ type: NSEvent.EventType, in window: NSWindow, key: (code: UInt16, character: String)) {

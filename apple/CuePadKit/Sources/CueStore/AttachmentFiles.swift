@@ -154,3 +154,22 @@ extension CueStore {
       Attachment(id: UUID(), hash: hash, byteCount: metadata.byteCount, format: metadata.format, createdAt: now, modifiedAt: now))
   }
 }
+
+/// 图片附件元数据；文件按内容哈希存在磁盘，缩略图是派生缓存不入库。
+public struct Attachment: Identifiable, Equatable, Sendable {
+  public let id: UUID
+  public var hash: String
+  public var byteCount: Int
+  public var format: String
+  public var createdAt: Date
+  public var modifiedAt: Date
+}
+
+extension Attachment: Record {
+  static let table = Table.attachments
+  static let columns = ["id", "hash", "byteCount", "format", "createdAt", "modifiedAt"]
+  var bindings: [any SQLBindable] { [id, hash, byteCount, format, createdAt, modifiedAt] }
+  init(row: Row) {
+    self.init(id: row.uuid(0), hash: row.text(1), byteCount: Int(row.int(2)), format: row.text(3), createdAt: row.date(4), modifiedAt: row.date(5))
+  }
+}

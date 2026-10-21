@@ -14,6 +14,7 @@ extension AppServices {
         let reason: String
         switch source {
         case .custom(let sync): return (sync, .starting)
+        case .built(let make): return (make(store), .starting)
         case .iCloud where location.isIsolated && !DebugHooks.syncsIsolatedLibrary: reason = "开发用的隔离资料库，不连 iCloud"
         case .iCloud where !Entitlements.hasCloudKit: reason = "这个构建没有 iCloud 权限（本机开发构建），不会同步"
         case .iCloud: return (CloudSync(store: store), .starting)
@@ -189,11 +190,13 @@ extension AppServices {
         }
     }
 
-    /// "立即同步"按钮（Mac 设置与手机设置共用）能不能按：有同步、不在等你决定、上一次立即同步已经返回。
+    /// "立即同步"按钮（Mac 设置与手机设置共用）能不能按：有同步、没停下（等你决定、这台要更新）、上一次立即同步已经返回。
     var canSyncNow: Bool {
         guard sync != nil, !isSyncingNow else { return false }
-        if case .needsDecision = syncStatus { return false }
-        return true
+        switch syncStatus {
+        case .needsDecision, .outdated: return false
+        default: return true
+        }
     }
 
     /// 处理 `syncStatus == .needsDecision`：用户选择后同步重新开始。
@@ -201,7 +204,6 @@ extension AppServices {
         try await sync?.resolve(resolution)
     }
 
-    /// 冲突副本：选定保留的版本，另一份删除。
     func resolveConflict(copy id: UUID, keep choice: ConflictChoice) async throws {
         try await store.resolveConflict(copy: id, keep: choice)
     }

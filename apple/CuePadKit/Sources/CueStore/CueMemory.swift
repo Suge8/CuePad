@@ -1,0 +1,63 @@
+import Foundation
+
+public enum CueLineSource: String, Sendable, CaseIterable {
+  case you, cue
+}
+
+/// Cue 的一条记忆。只追加，位置就是身份：按 (`createdAt`, `id`) 排的序号（含忘掉的）。
+/// 只有 `pinned`、`remindAt`、`deletedAt` 会变；忘掉是软删，位置不变。
+public struct CueMemoryLine: Identifiable, Equatable, Sendable {
+  public let id: UUID
+  public var text: String
+  /// 一直记着：记忆视图里总是全文列出。
+  public var pinned: Bool
+  public var source: Open<CueLineSource>
+  /// 到点叫醒 Cue。
+  public var remindAt: Date?
+  public var createdAt: Date
+  public var modifiedAt: Date
+  public var deletedAt: Date?
+
+  /// 一条最多这么多字节（UTF-8），超了拒绝。
+  public static let maxBytes = 280
+
+  /// 这段话能记成一条（去掉首尾空白后不空、不超过 `maxBytes` 字节）：界面输入时与写入时同一个判断。
+  public static func fits(_ text: String) -> Bool {
+    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    return !trimmed.isEmpty && trimmed.utf8.count <= maxBytes
+  }
+}
+
+/// 记忆的版本读数：行数、最后改动（记、忘、钉、提醒）与摘要的变化，任一变了它就变。管理器订阅它，不必每次读整份记忆。
+public struct CueMemoryVersion: Equatable, Sendable {
+  public var lines: Int
+  var linesModifiedAt: Date?
+  public var summaries: Int
+  var summariesWrittenAt: Date?
+}
+
+extension CueMemoryLine: Record {
+  static let table = Table.cueLines
+  static let columns = ["id", "text", "pinned", "source", "remindAt", "createdAt", "modifiedAt", "deletedAt"]
+  var bindings: [any SQLBindable] { [id, text, pinned, source.rawValue, remindAt, createdAt, modifiedAt, deletedAt] }
+  init(row: Row) {
+    self.init(
+      id: row.uuid(0), text: row.text(1), pinned: row.bool(2), source: Open(rawValue: row.text(3)), remindAt: row.dateOrNil(4),
+      createdAt: row.date(5), modifiedAt: row.date(6), deletedAt: row.dateOrNil(7))
+  }
+}
+
+/// 记忆里对齐的 2 的幂区间 [lo, hi) 的一行摘要（本机缓存，不同步）。区间里有行在摘要写下之后被忘掉（含同步晚到的）、或行序变了
+/// （别处同步来更早的行），它就作废：读出时已滤掉（`CueStore.cueMemory`）。
+public struct CueMemorySummary: Equatable, Sendable {
+  public var lo: Int
+  public var hi: Int
+  public var text: String
+  public var createdAt: Date
+}
+
+/// 记忆的全貌：全部行（序号即下标，含忘掉的）与仍然有效的摘要，一次读出。记忆视图（`CueAgent`）从它算。
+public struct CueMemory: Equatable, Sendable {
+  public var lines: [CueMemoryLine]
+  public var summaries: [CueMemorySummary]
+}

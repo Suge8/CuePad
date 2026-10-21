@@ -27,7 +27,6 @@ final class Sandbox: @unchecked Sendable {
     await call(arguments, stdin: stdin, cwd: cwd, environment: environment)
   }
 
-  /// 期望成功并解析 stdout 的 JSON。
   func json(_ arguments: String..., stdin: String? = nil, cwd: String? = nil) async throws -> Any {
     try await jsonValue(arguments, stdin: stdin, cwd: cwd)
   }

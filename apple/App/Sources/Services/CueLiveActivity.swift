@@ -16,7 +16,6 @@ actor CueLiveActivity {
 
     /// 开着的那一个（`Activity.id`）：只记 id，用时从系统的列表里取，系统的对象不跨隔离带着走。上次运行开着的接着用，多出来的结束。
     private var id: String?
-    /// 最近读到的一份与最近发出去的一份。
     private var latest: CueActivityState?
     private var sent: CueActivityState?
 
@@ -32,7 +31,6 @@ actor CueLiveActivity {
         await apply(resend: resend, foreground: foreground)
     }
 
-    /// 按最近读到的那份重发（回到前台）。
     func resend(foreground: Bool) async { await apply(resend: true, foreground: foreground) }
 
     private func apply(resend: Bool, foreground: Bool) async {

@@ -8,6 +8,10 @@ nonisolated struct CueTiming: Sendable {
     var patrolAfter: Duration = .seconds(2 * 3600)
     /// 记忆有待合并的块时，空闲这么久才叫它合并。
     var mergeAfter: Duration = .seconds(600)
+    /// 提示缓存的时长（两家大脑都开了 1 小时的，见 `ClaudeBrain`、`PiBrain`）：距上一次模型请求超过它，缓存已过期，醒来就换新。
+    var cacheLifetime: Duration = .seconds(3600)
+    /// 换新线（token）：上下文用到它，醒来就换新。数与理由见 `CueContext.renewAt`。
+    var renewAt = CueContext.renewAt
     /// 大脑意外退出或起不来后，第 n 次重试前等多久；都失败就停在"起不来"。
     var restarts: [Duration] = [.seconds(2), .seconds(10), .seconds(60)]
     /// Cue 自己醒来的一轮出错后，隔这么久再醒一次（只一次）。
@@ -16,6 +20,8 @@ nonisolated struct CueTiming: Sendable {
     var sayWait: TimeInterval = Speech.cueWait
     /// 打扰时段（本地钟点）：不巡视。通知不看它，免打扰只认系统的专注模式。
     var quietHours: Set<Int> = [23, 0, 1, 2, 3, 4, 5, 6, 7]
+    /// 信封第一行写的此刻（LongMemEval 评测把它定在题目的提问时刻）；别的时间规则都照真实时钟。
+    var clock: @Sendable () -> Date = { .now }
 
     func isQuiet(_ date: Date) -> Bool { quietHours.contains(Calendar.current.component(.hour, from: date)) }
 

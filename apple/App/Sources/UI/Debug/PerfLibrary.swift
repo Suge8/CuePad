@@ -10,7 +10,7 @@ import UniformTypeIdentifiers
 /// 50 个项目、5000 张卡（一个大项目 1200 张、默认项目 300 张，其余分给 49 个项目），其中 300 张带 4032×3024 的 JPEG；
 /// 修改时间分布在一年内；另有 200 条任务、500 条发送记录、200 个 Pi 历史会话，其中前 \(chatRounds.count) 个带对话（轮数见 `chatRounds`，
 /// 回答混着长段落、列表、表格、代码块与工具活动，给会话页滚动与切换用）；Cue 运行在另一台 Mac 上，对话 \(cueRounds) 轮
-/// （你的话、这一轮的经过、它的回答，中间夹着动态，每 \(cueRenewEvery) 轮换一次新上下文），给 Cue 页首访用。内容由固定种子生成，每次一样。
+/// （你的话、这一轮的经过、它的回答，中间夹着动态），给 Cue 页首访用。内容由固定种子生成，每次一样。
 enum PerfLibrary {
     static let projectCount = 50
     static let cardCount = 5000
@@ -22,7 +22,6 @@ enum PerfLibrary {
     private static let boundProjects = 10
     /// 带对话的历史会话（`perf-0`…）各有多少轮，长短悬殊。
     static let chatRounds = [3, 6, 10, 16, 24, 36, 50, 70, 100, 140, 200, 300]
-    /// 最长的那段对话。
     static var longestChat: String { "perf-\(chatRounds.count - 1)" }
 
     static func seed(_ store: CueStore) async throws {
@@ -77,7 +76,6 @@ enum PerfLibrary {
     }
 
     private static let cueRounds = 60
-    private static let cueRenewEvery = 25
 
     private static func seedCue(random: inout SeededRandom, store: CueStore) async throws {
         _ = try await store.updateCueProfile { profile in
@@ -85,9 +83,6 @@ enum PerfLibrary {
             profile.enabledAt = .now
         }
         for round in 0..<cueRounds {
-            if round > 0, round % cueRenewEvery == 0 {
-                _ = try await store.addCueMessage(.handoff, text: "**在做**\n- " + sentence(&random, chinese: true, words: 8...20))
-            }
             let you = try await store.addCueMessage(.you, text: sentence(&random, chinese: round % 3 != 0, words: 6...30))
             try await store.markCueMessagesDelivered([you.id])
             _ = try await store.recordCueRound(nil, startedAt: .now, answersYou: true, tools: tools(&random))
@@ -110,7 +105,6 @@ enum PerfLibrary {
         try await DebugScene.writeChat(sessionID, turns, store: store)
     }
 
-    /// 一轮回答：长段落、列表、表格、代码块轮换。
     private static func answer(_ random: inout SeededRandom, round: Int) -> String {
         let chinese = round % 2 == 0
         func paragraph(_ random: inout SeededRandom) -> String {
@@ -220,7 +214,6 @@ enum PerfLibrary {
     ]
 }
 
-/// 可复现的伪随机数（SplitMix64）。
 nonisolated struct SeededRandom {
     private var state: UInt64
 
@@ -234,10 +227,8 @@ nonisolated struct SeededRandom {
         return z ^ (z >> 31)
     }
 
-    /// 0..<upperBound
     mutating func next(_ upperBound: Int) -> Int { Int(nextUInt64() % UInt64(upperBound)) }
 
-    /// 0..<1
     mutating func unit() -> Double { Double(nextUInt64() >> 11) / Double(1 << 53) }
 }
 #endif

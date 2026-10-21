@@ -54,7 +54,7 @@ struct TaskHeading: View {
                     .font(font).foregroundStyle(empty || task.status == .done ? palette.ink3 : palette.ink)
                     .lineLimit(Self.lines).frame(maxWidth: .infinity, alignment: .leading).contentShape(.rect)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PressStyle())
             .accessibilityHint("改标题")
         }
     }

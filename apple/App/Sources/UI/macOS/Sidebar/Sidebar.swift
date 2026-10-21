@@ -24,6 +24,7 @@ struct Sidebar: View {
             VStack(alignment: .leading, spacing: 0) {
                 SidebarHeader(title: "项目") {
                     Button("新建项目", icon: .add) { workspace.projectForm = .init() }.disabled(!workspace.isLibraryReady)
+                        .help("新建项目")
                 }
                 SidebarScroll {
                     if let catalog, let pages {
@@ -71,13 +72,13 @@ struct Sidebar: View {
                 FooterPage(entry: .trash, count: trashCount, select: select)
                 Spacer()
                 let settings = SidebarOutline.Entry.settings
-                Button(settings.title, icon: settings.icon) { SettingsPane.open() }
-                    .labelStyle(.iconOnly)
-                    .buttonStyle(.borderless)
-                    .font(.system(size: 15))
-                    .foregroundStyle(palette.ink2)
-                    .frame(width: 32, height: 32)
-                    .help("设置（⌘,）")
+                Button { SettingsPane.open() } label: {
+                    Image(settings.icon).font(.system(size: 15)).foregroundStyle(palette.ink2)
+                        .frame(width: SidebarMetrics.footerButton, height: SidebarMetrics.footerButton).contentShape(.circle)
+                }
+                .buttonStyle(PressStyle(.button))
+                .help("设置（⌘,）")
+                .accessibilityLabel(settings.title)
             }
             .padding(.horizontal, SidebarMetrics.edge)
             .padding(.bottom, 10)
@@ -93,6 +94,8 @@ enum SidebarMetrics {
     static let column = edge + RowMetrics.bleed
     static let rowGap: CGFloat = 2
     static let titleGap: CGFloat = 8
+    /// 底栏图标钮（归档、回收站、设置）的边长：悬停与选中的底是这么大的圆。
+    static let footerButton: CGFloat = 32
 }
 
 /// 项目区的滚动：放得下时不弹；下面还有没露出的行时底边淡出一截，看得出能往下滚（只换一层遮盖，不影响排版）。
@@ -134,13 +137,20 @@ private struct SidebarHeader<Action: View>: View {
             Text(title).font(Typography.sidebarHeader).foregroundStyle(palette.ink3)
             Spacer()
             action
-                .labelStyle(.iconOnly)
-                .buttonStyle(.borderless)
+                .labelStyle(SidebarHeaderAction())
+                .buttonStyle(PressStyle(.button))
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(palette.ink2)
         }
-        .padding(.leading, SidebarMetrics.column).padding(.trailing, SidebarMetrics.edge + 4)
-        .padding(.top, 10).padding(.bottom, 4)
+        .padding(.leading, SidebarMetrics.column).padding(.trailing, SidebarMetrics.edge)
+        .padding(.top, 6)
+    }
+}
+
+/// 区头的动作钮只露图标，框是 24 的圆：悬停的底（`PressFeedback`）就这么大。
+private struct SidebarHeaderAction: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.icon.frame(width: 24, height: 24).contentShape(.circle)
     }
 }
 
@@ -219,7 +229,7 @@ private struct PlaceTile: View {
             .background(selected ? palette.selection : palette.paper, in: shape)
             .contentShape(shape)
         }
-        .buttonStyle(PressStyle())
+        .buttonStyle(PressStyle(.card))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(running > 0 ? "\(entry.title)，\(count)，\(running) 个在跑" : "\(entry.title)，\(count)")
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
@@ -259,7 +269,6 @@ private struct ProjectRows: View {
     }
 }
 
-/// 项目行尾的状态标：哪个会话、显示成什么。
 private struct ProjectMark: Equatable {
     let shown: PiShown
     let session: String
@@ -332,11 +341,11 @@ private struct FooterPage: View {
         Button { select(entry.route) } label: {
             IconImage(entry.icon, accent: selected ? .lit : .none).font(.system(size: 15))
                 .foregroundStyle(selected ? palette.ink : palette.ink2)
-                .frame(width: 32, height: 32)
-                .background(selected ? palette.selection : .clear, in: .rect(cornerRadius: 8))
-                .contentShape(.rect)
+                .frame(width: SidebarMetrics.footerButton, height: SidebarMetrics.footerButton)
+                .background(selected ? palette.selection : .clear, in: .circle)
+                .contentShape(.circle)
         }
-        .buttonStyle(PressStyle())
+        .buttonStyle(PressStyle(.button))
         .help(title)
         .accessibilityLabel(title)
         .accessibilityAddTraits(selected ? .isSelected : [])
@@ -357,7 +366,7 @@ private struct StartupIssues: View {
                 Label { Text("\(services.startupIssues.count) 个启动问题") } icon: { FailureMark() }
                     .font(Typography.meta).foregroundStyle(palette.failure)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PressStyle(.inline))
             .popover(isPresented: $showing) {
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(Array(services.startupIssues.enumerated()), id: \.offset) { _, issue in

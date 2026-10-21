@@ -52,7 +52,7 @@ final class CodexRPC {
     static func launch(
         _ executable: URL, arguments: [String] = [], environment: [String: String], directory: URL? = nil
     ) async throws -> CodexRPC {
-        let process = try ChildProcess(
+        let process = try await ChildProcess(
             executable, ["app-server", "--listen", "stdio://"] + arguments, directory: directory, environment: environment,
             placement: .group, input: .pipe, output: .lines)
         let rpc = CodexRPC(pid: process.pid, transport: .stdio(process), messages: process.output)
@@ -249,7 +249,6 @@ extension CodexRPCError: LocalizedError {
 /// 否决 `NWConnection` + `NWProtocolWebSocket`：要拿对端进程号（`LOCAL_PEERPID`，会话按承载进程认）与校验对端属主，它都不给。
 private final class WebSocket: @unchecked Sendable {
     let fd: Int32
-    /// 对端进程号
     let peer: Int32
     private let queue = DispatchQueue(label: "cuepad.codex-ws")
     private var open = true

@@ -3,15 +3,20 @@ import CueStore
 import Foundation
 
 extension AgentKind {
-    /// 官方安装命令（取自各家官网的安装页，唯一一份）：接入面板的"安装"在后台跑它，设置里的安装方法给你复制它。
-    /// Pi 太旧时是它自带的升级命令；OpenCode 是 v2 的安装命令（v1 的服务接口不同）。
-    public func installCommand(upgrading: Bool) -> String {
+    /// 这台上的它（`presence`）要跑的官方命令（取自各家官网的安装页，唯一一份）：接入面板的"安装"在后台跑它，设置里的安装方法给你复制它。
+    /// 要升级的 Pi 是它自带的升级命令（`upgrades`）；OpenCode 是 v2 的安装命令（v1 的服务接口不同，装 v2 替换它）。
+    public func installCommand(_ presence: AgentStatus.Presence) -> String {
         switch self {
-        case .pi: upgrading ? "pi update --self" : "curl -fsSL https://pi.dev/install.sh | sh"
+        case .pi: upgrades(presence) ? "pi update --self" : "curl -fsSL https://pi.dev/install.sh | sh"
         case .claudeCode: "curl -fsSL https://claude.ai/install.sh | bash"
         case .codex: "curl -fsSL https://chatgpt.com/codex/install.sh | sh"
         case .opencode: "curl -fsSL https://opencode.ai/v2/install | bash"
         }
+    }
+
+    /// 这台上的它要升级、不是新装（"升级方法""升级 Pi"）：只有 Pi 有自带的升级命令，太旧时用它；别家太旧也是重跑安装命令。
+    public func upgrades(_ presence: AgentStatus.Presence) -> Bool {
+        if self == .pi, case .tooOld = presence { true } else { false }
     }
 
     /// 官方脚本要这台先有的（检测时查，`AgentStatus.lacking`）：Pi 的脚本要 Node.js（下限是脚本里写的），没有时只报一句英文就退出。
@@ -42,17 +47,18 @@ public struct InstallPrerequisite: Sendable, Equatable {
 /// 在后台装一家 Agent、登录它。三家的官方脚本都装进 `~/.local/bin`（检测本来就查那里），没有终端时不问问题。
 extension AgentIntegration {
     /// 跑这家的安装命令（`installCommand`），等它结束：返回退出码与输出（标准错误并在一起，失败时取末尾给人看）；起不来或超过 `installLimit` 为 nil。
-    @concurrent public func runInstaller(_ kind: AgentKind, upgrading: Bool) async -> (status: Int32, output: String)? {
+    @concurrent public func runInstaller(_ kind: AgentKind, _ presence: AgentStatus.Presence) async -> (status: Int32, output: String)? {
         let shell = URL(filePath: "/bin/sh")
         let environment = await locate().environment(launching: shell, overrides: paths.environment)
         return await ChildProcess.run(
-            shell, ["-c", "{ \(installCommand(kind, upgrading)); } 2>&1"], environment: environment, timeout: Self.installLimit)
+            shell, ["-c", "{ \(installCommand(kind, presence)); } 2>&1"], environment: environment, timeout: Self.installLimit)
     }
 
     /// 起这家的命令行登录（`AgentKind.loginArguments`），用检测挑中的那个可执行文件；返回时进程已起，它打开浏览器、等你登录完。
     public func startLogin(_ kind: AgentKind, executable: URL) async throws -> ChildProcess {
         let environment = await locate().environment(launching: executable, overrides: paths.environment)
-        return try ChildProcess.launch(executable, kind.loginArguments ?? [], environment: environment)
+        // 标准输入、输出、错误都是空设备，自成进程组：调用方 `waitForExit()` 等它结束、`end()` 提前结束它
+        return try await ChildProcess(executable, kind.loginArguments ?? [], environment: environment, placement: .group, keepErrors: false)
     }
 
     /// 开终端登录 Pi 的脚本（Pi 只能在它的终端界面里 /login）：带上 CuePad 起 Pi 时的家目录、PATH（node 在里面）与 Pi 的环境

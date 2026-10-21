@@ -2,7 +2,7 @@
 import CueStore
 import Foundation
 
-/// 桥协议的线上格式：一行一个 JSON。扩展端见 `Extension/cuepad-bridge.ts`。
+/// 桥协议的线上格式：一行一个 JSON。扩展端见 `Extension/cuepad-bridge/`。
 enum PiWire {
     /// 客户端说的协议版本；hello 的版本不同就不往下解析（命令一条不发），会话等它换上新扩展（`OtherProtocolHello`、`PiSession.upgrading`）
     static let protocolVersion = 16
@@ -43,6 +43,7 @@ enum PiWire {
 
     struct Hello: Decodable {
         var protocolVersion: Int
+        var extensionVersion: Int?
         var sessionId: String
         var sessionFile: String?
         var pid: Int32
@@ -52,19 +53,19 @@ enum PiWire {
         var state: State
         /// CuePad 开的新会话：启动时经环境变量交给扩展的认领标识（其余会话没有）
         var launchToken: String?
-        /// CuePad 在后台托管的 Pi
         var hosted: Bool?
         /// 与 `info` 消息同样的字段，平铺在 hello 里
         var info: Info
 
         enum CodingKeys: String, CodingKey {
             case protocolVersion = "protocol"
-            case sessionId, sessionFile, pid, cwd, tty, term, state, launchToken, hosted
+            case extensionVersion, sessionId, sessionFile, pid, cwd, tty, term, state, launchToken, hosted
         }
 
         init(from decoder: any Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
             protocolVersion = try c.decode(Int.self, forKey: .protocolVersion)
+            extensionVersion = try c.decodeIfPresent(Int.self, forKey: .extensionVersion)
             sessionId = try c.decode(String.self, forKey: .sessionId)
             sessionFile = try c.decodeIfPresent(String.self, forKey: .sessionFile)
             pid = try c.decode(Int32.self, forKey: .pid)

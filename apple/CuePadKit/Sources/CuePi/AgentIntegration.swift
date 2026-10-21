@@ -2,103 +2,6 @@
 import CueStore
 import Foundation
 
-/// Agent 报的版本（`--version` 输出里的第一个 `x.y.z`）。
-public struct AgentVersion: Sendable, Equatable, Comparable, CustomStringConvertible {
-    public var major: Int, minor: Int, patch: Int
-    public init(_ major: Int, _ minor: Int, _ patch: Int) { self.major = major; self.minor = minor; self.patch = patch }
-
-    /// 从 `--version` 的输出里取第一个 `x.y.z`（容忍前缀 `v`）
-    init?(parsing output: String) {
-        guard let m = output.firstMatch(of: /(\d+)\.(\d+)\.(\d+)/),
-              let major = Int(m.1), let minor = Int(m.2), let patch = Int(m.3) else { return nil }
-        self.init(major, minor, patch)
-    }
-
-    public var description: String { "\(major).\(minor).\(patch)" }
-    public static func < (a: AgentVersion, b: AgentVersion) -> Bool { (a.major, a.minor, a.patch) < (b.major, b.minor, b.patch) }
-}
-
-extension AgentKind {
-    /// CuePad 要求的最低版本：Pi 要有 `ui_prompt_*` 事件；OpenCode 只认 v2（v1 的服务接口不同，不做兼容；Homebrew 与官方脚本装的是 v2，
-    /// npm 上 v2 是 `@opencode/cli`，旧包 `opencode-ai` 仍是 1.x）。其余没有要求。
-    public var minimumVersion: AgentVersion? {
-        switch self {
-        case .pi: AgentVersion(0, 84, 4)
-        case .opencode: AgentVersion(2, 0, 0)
-        case .claudeCode, .codex: nil
-        }
-    }
-
-    /// 指定它配置目录的环境变量（OpenCode 另认 `XDG_CONFIG_HOME`）；隔离运行没给它时不接入这家（`AgentInstallError.isolated`）。
-    public var homeVariable: String {
-        switch self {
-        case .pi: "PI_CODING_AGENT_DIR"
-        case .claudeCode: "CLAUDE_CONFIG_DIR"
-        case .codex: "CODEX_HOME"
-        case .opencode: "OPENCODE_CONFIG_DIR"
-        }
-    }
-}
-
-/// 一个 Agent 在这台 Mac 上的情况，与 CuePad 写给它的文件——唯一的一份状态。
-public struct AgentStatus: Sendable, Equatable {
-    public enum Presence: Sendable, Equatable {
-        case notFound
-        /// 比 `AgentKind.minimumVersion` 旧
-        case tooOld(AgentVersion)
-        /// 有版本要求的报出版本，其余为 nil
-        case found(AgentVersion?)
-    }
-
-    /// CuePad 写给它的文件（技能，加 Pi 的扩展或钩子配置，合起来算）。
-    public enum Files: Sendable, Equatable {
-        case missing
-        case current
-        /// 是 CuePad 写的，但与这个版本的 App 要写的不同（旧版、缺一样、App 移动后路径变了）
-        case outdated
-        /// 同名文件不是 CuePad 写的，不碰（参数是它的位置，`~` 缩写）
-        case foreign(String)
-    }
-
-    public var presence: Presence
-    public var files: Files
-    /// 检测时挑中的可执行文件（`found` 时；只有配置目录、比如只装了桌面版时为 nil）：开会话、起大脑、问模型都用这一个，不另找。
-    public var executable: URL?
-    /// 没装、而装它要先有的这台还没有（`AgentKind.installPrerequisite`）：先装这个，官方脚本才跑得成。
-    public var lacking: InstallPrerequisite?
-
-    public init(presence: Presence, files: Files, executable: URL? = nil, lacking: InstallPrerequisite? = nil) {
-        self.presence = presence
-        self.files = files
-        self.executable = executable
-        self.lacking = lacking
-    }
-
-    public var isAvailable: Bool { if case .found = presence { true } else { false } }
-    /// CuePad 的文件在（最新或待升级）：接入了。
-    public var isConnected: Bool { files == .current || files == .outdated }
-}
-
-public enum AgentInstallError: Error, Equatable {
-    case notFound(AgentKind)
-    case tooOld(AgentKind, found: AgentVersion)
-    /// 同名文件不是 CuePad 写的（参数是它的位置）
-    case foreign(String)
-    /// 隔离运行（开发构建）而这家的配置目录是缺省的真实位置：不写，免得把正式版写的条目改成指向开发构建
-    case isolated(AgentKind)
-}
-
-extension AgentInstallError: LocalizedError {
-    public var errorDescription: String? {
-        switch self {
-        case .notFound(let kind): "没有找到 \(kind.name)"
-        case .tooOld(let kind, let found): "\(kind.name) \(found) 太旧，需要 \(kind.minimumVersion.map(\.description) ?? "") 或更新"
-        case .foreign(let path): "\(path) 是别人的同名文件，没有改动"
-        case .isolated(let kind): "开发构建用的隔离资料库：先用 \(kind.homeVariable) 指定 \(kind.name) 的目录再接入"
-        }
-    }
-}
-
 /// CuePad 接入各个 Agent：检测、安装、升级与卸载它们的技能与上报通道（Pi 是桥扩展，Claude Code、Codex 是钩子；OpenCode 直连它的服务，不用装），一起装、一起升级。
 /// `status` 没有任何副作用；写入只发生在 `install`，调用方要先征得用户同意；`uninstall` 删掉 CuePad 写的全部文件和因此空出来的目录。
 /// 技能只写进每个 Agent 自己的配置目录（`<目录>/skills/cuepad/SKILL.md`），不写几家共用的 `~/.agents/skills`：
@@ -113,17 +16,21 @@ public struct AgentIntegration: Sendable {
     /// 隔离运行（开发构建）：配置目录是缺省真实位置的那几家只检测、不写
     private let isolated: Bool
     /// 装一家用的命令（`runInstaller`）：官方的那条，测试换成放替身的
-    let installCommand: @Sendable (AgentKind, _ upgrading: Bool) -> String
+    let installCommand: @Sendable (AgentKind, AgentStatus.Presence) -> String
+    /// 还有 Pi 会话开着旧单文件扩展（`PiExtensionBundle.legacyFileName`）：App 里是桥上连着的会话没都报随包版本（`PiBridge.allRun`），缺省没有 Pi 在跑
+    let legacyPiExtensionInUse: @Sendable () async -> Bool
 
     public init(
         paths: AgentPaths = AgentPaths(), locate: @escaping @Sendable () async -> ExecutableLocator = { await .system }, cuepad: URL,
-        isolated: Bool = false, installCommand: @escaping @Sendable (AgentKind, _ upgrading: Bool) -> String = { $0.installCommand(upgrading: $1) }
+        isolated: Bool = false, installCommand: @escaping @Sendable (AgentKind, AgentStatus.Presence) -> String = { $0.installCommand($1) },
+        legacyPiExtensionInUse: @escaping @Sendable () async -> Bool = { false }
     ) {
         self.paths = paths
         self.locate = locate
         self.cuepad = cuepad
         self.isolated = isolated
         self.installCommand = installCommand
+        self.legacyPiExtensionInUse = legacyPiExtensionInUse
     }
 
     public func home(of kind: AgentKind) -> URL { paths.home(of: kind) }
@@ -152,11 +59,11 @@ public struct AgentIntegration: Sendable {
     }
 
     func skillFile(_ kind: AgentKind) -> URL { skillDirectory(of: kind).appending(path: AgentSkill.fileName) }
-    private var extensionFile: URL { pi.extensionsDirectory.appending(path: PiExtensionBundle.fileName) }
+    private var piExtension: PiExtensionFiles { PiExtensionFiles(extensionsDirectory: pi.extensionsDirectory) }
 
     /// CuePad 写给这家的文件：技能，Pi 的扩展，钩子配置（只改其中 CuePad 的条目）。界面据此说明会写哪里。
     public func writtenFiles(of kind: AgentKind) -> [URL] {
-        [skillFile(kind)] + (kind == .pi ? [extensionFile] : []) + (hooks(kind)?.writtenFiles ?? [])
+        [skillFile(kind)] + (kind == .pi ? [piExtension.directory] : []) + (hooks(kind)?.writtenFiles ?? [])
     }
 
     @concurrent public func status(of kind: AgentKind) async -> AgentStatus {
@@ -175,10 +82,7 @@ public struct AgentIntegration: Sendable {
         case .found: break
         }
         if case .foreign(let path) = files(of: kind) { throw AgentInstallError.foreign(path) }
-        if kind == .pi {
-            try FileManager.default.createDirectory(at: pi.extensionsDirectory, withIntermediateDirectories: true)
-            try Data(PiExtensionBundle.source.utf8).write(to: extensionFile, options: .atomic)
-        }
+        if kind == .pi { try piExtension.install(legacyInUse: await legacyPiExtensionInUse()) }
         try FileManager.default.createDirectory(at: skillDirectory(of: kind), withIntermediateDirectories: true)
         try Data(AgentSkill.text(for: kind, cuepad: cuepad).utf8).write(to: skillFile(kind), options: .atomic)
         try await hooks(kind, codex: found.executable)?.install(command: hookCommand(kind))
@@ -187,15 +91,18 @@ public struct AgentIntegration: Sendable {
     /// 删掉 CuePad 写给这个 Agent 的全部文件，以及因此空出来的目录（`skills/cuepad`，空了的 `skills`、`extensions`）。
     /// Agent 已经卸掉了也能删；隔离运行写不了、有别人的同名文件时什么都不删。`executable` 是检测时挑中的那个（`AgentStatus.executable`）：
     /// Codex 删信任要起它，其余不用。
+    /// 过渡：旧单文件扩展的存根没有会话再用时删掉（见 `PiExtensionBundle.legacyFileName`）。App 在 Pi 会话上线、下线与启动检查时调。
+    @concurrent public func retireLegacyPiExtension() async throws {
+        guard isWritable(.pi) else { return }
+        try piExtension.retireLegacyFile(inUse: await legacyPiExtensionInUse())
+    }
+
     @concurrent public func uninstall(_ kind: AgentKind, executable: URL? = nil) async throws {
         guard isWritable(kind) else { throw AgentInstallError.isolated(kind) }
         if case .foreign(let path) = files(of: kind) { throw AgentInstallError.foreign(path) }
         try await hooks(kind, codex: executable)?.uninstall()
-        var files = [skillFile(kind)]
-        if kind == .pi { files.append(extensionFile) }
-        for file in files where FileManager.default.fileExists(atPath: file.path) {
-            try FileManager.default.removeItem(at: file)
-        }
+        if FileManager.default.fileExists(atPath: skillFile(kind).path) { try FileManager.default.removeItem(at: skillFile(kind)) }
+        if kind == .pi { try piExtension.uninstall() }
         var directories = [skillDirectory(of: kind), skillDirectory(of: kind).deletingLastPathComponent()]
         if kind == .pi { directories.append(pi.extensionsDirectory) }
         for directory in directories where (try? FileManager.default.contentsOfDirectory(atPath: directory.path))?.isEmpty == true {
@@ -214,11 +121,8 @@ public struct AgentIntegration: Sendable {
         let skillState: AgentStatus.Files = skill.map { $0 == AgentSkill.text(for: kind, cuepad: cuepad) ? .current : .outdated } ?? .missing
         let other: AgentStatus.Files
         if kind == .pi {
-            let installed = read(extensionFile)
-            if installed.map({ $0 != PiExtensionBundle.source && !$0.hasPrefix(PiExtensionBundle.ownershipMarker) }) ?? unreadable(extensionFile) {
-                return .foreign(abbreviated(extensionFile))
-            }
-            other = installed.map { $0 == PiExtensionBundle.source ? .current : .outdated } ?? .missing
+            other = piExtension.state
+            if case .foreign = other { return other }
         } else {
             other = hooks(kind)?.files(command: hookCommand(kind)) ?? skillState
         }
@@ -276,70 +180,6 @@ public struct AgentIntegration: Sendable {
         defer { try? FileManager.default.removeItem(at: scratch) }
         let environment = locator.environment(launching: executable, overrides: ["PI_OFFLINE": "1", "XDG_DATA_HOME": scratch.path])
         return await ChildProcess.run(executable, arguments, environment: environment, timeout: timeout)?.output
-    }
-}
-
-/// 随包分发的 Pi 扩展（`Extension/cuepad-bridge.ts`）。文件里的 `EXTENSION_VERSION` 是唯一的版本来源。
-public enum PiExtensionBundle {
-    static let fileName = "cuepad-bridge.ts"
-    /// 扩展文件首行；用它区分"CuePad 写的"与同名的用户文件
-    static let ownershipMarker = "// CuePad Pi bridge extension"
-
-    /// 随包的那份文件：探测模型时 Pi 直接加载它（`AgentIntegration.probe`），不经装到 Pi 扩展目录的那份。
-    static let url: URL = {
-        guard let url = Bundle.module.url(forResource: "cuepad-bridge", withExtension: "ts", subdirectory: "Extension") else {
-            preconditionFailure("bundled cuepad-bridge.ts is missing from the CuePi resource bundle")
-        }
-        return url
-    }()
-
-    static let source: String = {
-        guard let text = try? String(contentsOf: url, encoding: .utf8) else {
-            preconditionFailure("bundled cuepad-bridge.ts is unreadable")
-        }
-        return text
-    }()
-
-    public static let version: Int = {
-        guard let version = source.firstMatch(of: /const EXTENSION_VERSION = (\d+);/).flatMap({ Int($0.1) }) else {
-            preconditionFailure("bundled cuepad-bridge.ts declares no EXTENSION_VERSION")
-        }
-        return version
-    }()
-}
-
-/// 写给 Agent 的技能：CuePad 是什么、怎么把文件发到手机、做 HTML 页给手机看的约定（只写在这里），其余让 Agent 看 `--help`（命令行唯一的文档）。
-/// 正文写 App 里 `cuepad` 的绝对路径，不用先把命令装进 PATH；App 被移动后路径变了，它就成了旧版，启动时重写。
-/// Codex 默认在沙箱里跑命令，资料库在沙箱外，写入要申请。
-enum AgentSkill {
-    static let name = "cuepad"
-    static let fileName = "SKILL.md"
-    /// 文件末尾的标记行；用它区分"CuePad 写的"与同名的用户文件
-    static let ownershipMarker = "<!-- 由 CuePad 写入"
-
-    static func text(for kind: AgentKind, cuepad: URL) -> String {
-        let command = shellQuoted(cuepad.path)
-        let lines = [
-            "description: 交付能看的成果（截图、录屏、网页、PDF、文稿）给用户验收，或用户提到 CuePad、灵感、任务时用：把文件发到用户手机上的 CuePad，读写其中的灵感与任务。CuePad 是用户记灵感、管任务、指挥 Agent 的 App。",
-            "---",
-            "用户多在手机上看你的成果，本机路径（如 /tmp/x.png）他打不开。做完时把能看的成果发到手机，回答里说一句发了什么；指挥你的 Cue 也在那里核对。",
-            "",
-            "发到手机：`\(command) show <文件…> --title <标题>…`。用户看到的是标题、不是文件名：按文件的先后每个一句，说清这是什么、看哪里，用和用户对话的语言、约 20 字以内（如 `--title \"深色：会话列表的分组标题\"`）。一次给几个文件是同一张卡，点开后左右切换。",
-            "",
-            "做 HTML 页给手机看时：",
-            "- 手机顶栏已显示标题：页面里不写标题、页眉、导语和说明页脚，内容直接开始。",
-            "- 按手机宽度排版，跟随深浅色（`prefers-color-scheme`）。",
-            "- 能用原生控件（`button`、`input`、`select`、`details`）就不自绘。",
-            "- 单个文件、不联网：样式与脚本写进同一个 HTML，图片用 `data:` 地址内联。",
-            "",
-            "其余命令（灵感、任务、搜索）：`\(command) --help`。",
-        ] + (kind == .codex ? ["资料库在沙箱外：写入的命令（show、add、done、move 等）申请在沙箱外运行。"] : [])
-        return (["---", "name: \(name)"] + lines + ["\(ownershipMarker)，升级时整文件覆盖 -->", ""]).joined(separator: "\n")
-    }
-
-    /// 路径里有空格等字符时 Agent 的 shell 会拆开它。
-    static func shellQuoted(_ path: String) -> String {
-        path.allSatisfy { $0.isLetter || $0.isNumber || "/._-+".contains($0) } ? path : "'" + path.replacingOccurrences(of: "'", with: "'\\''") + "'"
     }
 }
 #endif

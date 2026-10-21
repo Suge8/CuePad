@@ -4,11 +4,11 @@ Pi、Claude Code、Codex、OpenCode 的会话都登记在同一个桥上（`PiBr
 
 ## 协议
 
-Pi 的桥扩展（`Extension/cuepad-bridge.ts`）与 `PiWire` 之间的线上约定。字段的语义与上报时机见扩展源码的注释；这里只列消息与字段。
+Pi 的桥扩展（`Extension/cuepad-bridge/`，装成 Pi 扩展目录下的同名目录）与 `PiWire` 之间的线上约定。字段的语义与上报时机见扩展源码的注释；这里只列消息与字段。
 
 - 传输：Unix socket，一行一个 JSON（`\n` 结尾）。路径 `<socket 目录>/<sessionId>.<pid>.sock`，缺省目录 `/tmp/cuepad-<uid>`（`sun_path` 上限 104 字节，所以不用 `$TMPDIR`）。目录 0700、socket 0600；客户端还校验 socket 属主与对端 uid。扩展在 `.tmp` 名上 listen、收紧权限后才改名成 `.sock`。
 - 版本：`PROTOCOL_VERSION` 只认相等，不协商。每加一条命令或改了 CuePad 读的格式就升一号；协议号不同的会话只读出身份，等它换上新扩展（`PiSession.upgrading`）。只删 CuePad 不读的字段不升。
-- `EXTENSION_VERSION` 是扩展版本的唯一来源（`PiExtensionBundle.version` 从文件解析）。扩展的行为变了就升：在跑的扩展看到磁盘上的版本不同，歇下时自己重新载入。
+- `EXTENSION_VERSION`（入口 `index.ts` 里）是扩展版本的唯一来源（`PiExtensionBundle.version` 从文件解析）。扩展的行为变了就升：在跑的扩展看到磁盘上的版本不同，歇下时自己重新载入。
 - 结束 = 连接断开。有 `bye` 是正常退出，没有就是进程被强杀。
 - 扩展只在 `tui`、`rpc` 模式启用；`print`/`json`（`pi -p`、FireCode 子代理的同进程子会话）不开 socket。
 

@@ -1,8 +1,8 @@
 import CueStore
-import Foundation
 
-/// Cue 的记忆视图（OptMem 的读法）：一直记着的全部列出；其余按序号铺成对齐的 2 的幂块，越新越细、总行数固定在预算内
-/// （按预算二分 alpha，见 `cover`）。块有摘要用摘要，没有就拆成两半直到有摘要或单行；缺的摘要列成"待合并"（`merges`），由值班的管理器空闲时逐块请 Cue 写，视图里不列（系统提示一个班次不变，列了也会过时）。
+/// Cue 的记忆视图（OptMem 的读法）：一直记着的全部列出（在系统提示里，`pinnedText`）；其余按序号铺成对齐的 2 的幂块，越新越细、总行数固定在预算内
+/// （按预算二分 alpha，见 `cover`），放在新会话的第一条输入里（`viewText`）。块有摘要用摘要，没有就拆成两半直到有摘要或单行；
+/// 缺的摘要列成"待合并"（`merges`），由值班的管理器空闲时逐块请 Cue 写，视图里不列。摘要可以一层层展开（`zoom`）。
 /// 参考 https://github.com/VictorTaelin/OptMem 的 `_cover` / `cover`。
 public struct CueMemoryView: Equatable, Sendable {
   public enum Entry: Equatable, Sendable {
@@ -10,7 +10,7 @@ public struct CueMemoryView: Equatable, Sendable {
     case summary(lo: Int, hi: Int, text: String)
   }
 
-  /// 待合并的一块：区间与原文（小块是原行，大块是两半的摘要）。
+  /// 待合并的一块：区间与原文（小块是原行，不含忘掉的与一直记着的；大块是两半的摘要）。
   public struct Merge: Equatable, Sendable {
     public var lo: Int
     public var hi: Int
@@ -22,6 +22,8 @@ public struct CueMemoryView: Equatable, Sendable {
   public var merges: [Merge]
   /// 一直记着的已超出预算：视图里提示合并或取消一些。
   public var pinnedOverBudget: Bool
+  private let lines: [CueMemoryLine]
+  private let summaries: [[Int]: String]
 
   /// 预算：视图最多这么多行（约 8k token）。
   public static let budget = 96
@@ -32,6 +34,7 @@ public struct CueMemoryView: Equatable, Sendable {
     let budget = Self.budget
     let lines = memory.lines
     let summaries = Dictionary(memory.summaries.map { ([$0.lo, $0.hi], $0.text) }, uniquingKeysWith: { _, last in last })
+    (self.lines, self.summaries) = (lines, summaries)
     pinned = lines.enumerated().filter { $1.pinned && $1.deletedAt == nil }.map { CueIndexedLine(index: $0, line: $1) }
     pinnedOverBudget = pinned.count > budget
     var entries: [Entry] = [], merges: [Merge] = []
@@ -50,7 +53,7 @@ public struct CueMemoryView: Equatable, Sendable {
       guard summaries[[lo, hi]] == nil else { return }
       let mid = (lo + hi) / 2
       if hi - lo <= Self.rawMax {
-        let raw = (lo..<hi).filter { lines[$0].deletedAt == nil }.map { "#\($0) \(lines[$0].text)" }
+        let raw = (lo..<hi).filter { lines[$0].deletedAt == nil && !lines[$0].pinned }.map { "#\($0) \(lines[$0].text)" }
         merges.append(Merge(lo: lo, hi: hi, source: raw.joined(separator: "\n")))
         return
       }
@@ -70,24 +73,45 @@ public struct CueMemoryView: Equatable, Sendable {
     self.merges = merges.sorted { ($0.hi - $0.lo, $0.lo) < ($1.hi - $1.lo, $1.lo) }
   }
 
-  public var text: String {
-    var out: [String] = []
-    if !pinned.isEmpty {
-      out.append("一直记着：")
-      out += pinned.map { "#\($0.index) \($0.line.text)" }
-      if pinnedOverBudget { out.append("（一直记着的太多，超出了记忆的预算：把能并的用 memory merge 合并，或 pin false 取消一些）") }
-    }
-    if !entries.isEmpty {
-      out.append("其余（从早到晚，越早越粗）：")
-      out += entries.map {
-        switch $0 {
-        case .line(let index, let text): "#\(index) \(text)"
-        case .summary(let lo, let hi, let text): "#\(lo)-\(hi - 1) \(text)"
-        }
+  /// 系统提示里的一直记着的（班次内不变）。
+  public var pinnedText: String {
+    guard !pinned.isEmpty else { return "还没有。" }
+    var out = pinned.map { "#\($0.index) \($0.line.text)" }
+    if pinnedOverBudget { out.append("（一直记着的太多，超出了记忆的预算：把能并的用 memory merge 合并，或 pin false 取消一些）") }
+    return out.joined(separator: "\n")
+  }
+
+  /// 新会话第一条输入里的 `<memory>` 块：其余的记忆，从早到晚、越早越粗；没有为 nil。
+  public var viewText: String? {
+    guard !entries.isEmpty else { return nil }
+    let lines = entries.map {
+      switch $0 {
+      case .line(let index, let text): "#\(index) \(text)"
+      case .summary(let lo, let hi, let text): "#\(lo)-\(hi - 1) \(text)"
       }
     }
-    if out.isEmpty { out.append("还没有记忆。") }
-    return out.joined(separator: "\n")
+    return (["<memory>", "你的记忆（一直记着的在系统提示里；其余从早到晚，越早越粗，#a-b 是摘要，用 memory zoom 展开）："] + lines + ["</memory>"])
+      .joined(separator: "\n")
+  }
+
+  /// 展开 #lo-hi（hi 含在内，同视图里的写法）：两半各是摘要或原行，单行就是那一行。只展开对齐的块（视图与摘要里的 #a-b 都是）。
+  public func zoom(lo: Int, hi: Int) -> String? {
+    guard lo >= 0, hi >= lo, hi < lines.count else { return nil }
+    if lo == hi { return raw(lo) }
+    let size = hi + 1 - lo
+    guard size & (size - 1) == 0, lo % size == 0 else { return nil }
+    let mid = lo + size / 2
+    return [(lo, mid), (mid, hi + 1)].map { half in
+      let (start, end) = half
+      if let text = summaries[[start, end]] { return "#\(start)-\(end - 1) \(text)" }
+      if end - start > Self.rawMax { return "#\(start)-\(end - 1)（还没合并，再 zoom 展开）" }
+      return (start..<end).map(raw).joined(separator: "\n")
+    }.joined(separator: "\n")
+  }
+
+  private func raw(_ index: Int) -> String {
+    let line = lines[index]
+    return "#\(index) \(line.text)" + (line.deletedAt != nil ? "（已忘掉）" : line.pinned ? "（一直记着）" : "")
   }
 
   public static func mergePrompt(_ merge: Merge) -> String {

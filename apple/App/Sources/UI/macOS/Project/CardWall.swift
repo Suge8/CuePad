@@ -67,7 +67,7 @@ struct CardTile: View {
         Button(action: open) {
         CardFace(card: card, lastTarget: lastTarget, floated: floated)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .paper(radius: Self.radius, lifted: hovering)
+        .paper(radius: Self.radius)
         .overlay { SelectedFrame(radius: Self.radius) }
         .contentShape(.rect(cornerRadius: Self.radius))
         }
@@ -83,11 +83,7 @@ struct CardTile: View {
         }
         .cardPresence(card.id, in: workspace)
         .onHover { hovering = $0 }
-        .onAppear {
-            guard DebugHooks.hovers(card.body) else { return }
-            hovering = true
-            workspace.presses.hover(card.id, inside: true)
-        }
+        .presetHover($hovering)
         .animation(Motion.quick, value: hovering)
         .contextMenu { CardActions(card: card, selectable: true) }
         .accessibilityElement(children: .combine)
@@ -110,30 +106,36 @@ struct CardTile: View {
 private struct MakeTaskButton: View {
     let card: UUID
     @Environment(Workspace.self) private var workspace
-    @Environment(\.palette) private var palette
-    @State private var hovering = false
 
     var body: some View {
-            Button {
-                let id = card
-                workspace.attempt { try await workspace.setTodo(id, true) }
-            } label: {
-                HStack(spacing: 5) {
-                    Circle().strokeBorder(hovering ? palette.onFill : palette.ink2, lineWidth: 1.3).frame(width: 11, height: 11)
-                    Text("设为任务").fontWeight(.medium)
-                }
-                .font(Typography.meta)
-                .foregroundStyle(hovering ? palette.onFill : palette.ink)
-                .padding(.horizontal, 9).frame(height: 24)
-                .background(hovering ? palette.signatureFill : palette.paperLit, in: .capsule)
-                .overlay(Capsule().strokeBorder(palette.hair).opacity(hovering ? 0 : 1))
-                .shadow(color: palette.shadow, radius: 6, y: 2)
-                .contentShape(.capsule)
-            }
-            .buttonStyle(PressStyle())
-            .onHover { hovering = $0 }
-            .animation(Motion.quick, value: hovering)
-            .help("设为任务：第一行做任务名，其余成为交给 Agent 的话")
+        Button {
+            let id = card
+            workspace.attempt { try await workspace.setTodo(id, true) }
+        } label: {
+            MakeTaskChip()
+        }
+        .buttonStyle(PressStyle())
+        .help("设为任务：第一行做任务名，其余成为交给 Agent 的话")
+    }
+}
+
+/// "设为任务"的样子：指针停在钮上（`buttonHovered`）时铺成靛青实底——要变成任务了。
+private struct MakeTaskChip: View {
+    @Environment(\.buttonHovered) private var lit
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Circle().strokeBorder(lit ? palette.onFill : palette.ink2, lineWidth: 1.3).frame(width: 11, height: 11)
+            Text("设为任务").fontWeight(.medium)
+        }
+        .font(Typography.meta)
+        .foregroundStyle(lit ? palette.onFill : palette.ink)
+        .padding(.horizontal, 9).frame(height: 24)
+        .background(lit ? palette.signatureFill : palette.paperLit, in: .capsule)
+        .overlay(Capsule().strokeBorder(palette.hair).opacity(lit ? 0 : 1))
+        .shadow(color: palette.shadow, radius: 6, y: 2)
+        .contentShape(.capsule)
     }
 }
 
@@ -142,28 +144,34 @@ private struct MakeTaskButton: View {
 struct DeleteCardButton: View {
     let card: UUID
     @Environment(Workspace.self) private var workspace
-    @Environment(\.palette) private var palette
-    @State private var hovering = false
 
     var body: some View {
         Button {
             let id = card
             workspace.attempt { try await workspace.trash(id) }
         } label: {
-            Image(.trash)
-                .font(Typography.meta.weight(.medium))
-                .foregroundStyle(hovering ? palette.failure : palette.ink2)
-                .frame(width: 24, height: 24)
-                .background(palette.paperLit, in: .circle)
-                .overlay(Circle().strokeBorder(palette.hair))
-                .shadow(color: palette.shadow, radius: 6, y: 2)
-                .contentShape(.circle)
+            DeleteGlyph()
         }
-        .buttonStyle(PressStyle())
-        .onHover { hovering = $0 }
-        .animation(Motion.quick, value: hovering)
+        .buttonStyle(PressStyle(.button))
         .help("删除（⌘⌫），可撤销")
         .accessibilityLabel("删除")
+    }
+}
+
+/// 删除钮的样子：指针停在钮上（`buttonHovered`）时垃圾桶变成出错色。
+private struct DeleteGlyph: View {
+    @Environment(\.buttonHovered) private var lit
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        Image(.trash)
+            .font(Typography.meta.weight(.medium))
+            .foregroundStyle(lit ? palette.failure : palette.ink2)
+            .frame(width: 24, height: 24)
+            .background(palette.paperLit, in: .circle)
+            .overlay(Circle().strokeBorder(palette.hair))
+            .shadow(color: palette.shadow, radius: 6, y: 2)
+            .contentShape(.circle)
     }
 }
 

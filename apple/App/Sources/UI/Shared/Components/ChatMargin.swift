@@ -63,7 +63,7 @@ struct NoteThread<Content: View>: View {
 }
 
 /// 对话中间居中的一行小字。`ruled`：两边各一条细线（上下文从这里换了，线以上的它不再逐句看得到）；
-/// `highlighted`：从刻度滑条跳过来时垫一层选中色；给了 `action` 是一颗按钮（看交接备忘、排开更早的）。
+/// `highlighted`：从刻度滑条跳过来时垫一层选中色；给了 `action` 是一颗按钮（排开更早的）。
 struct ChatMarker<Label: View>: View {
     var ruled = false
     var highlighted = false

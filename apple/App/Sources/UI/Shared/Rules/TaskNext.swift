@@ -35,7 +35,6 @@ nonisolated enum TaskNext: Equatable, Sendable {
         }
     }
 
-    /// 读屏念的那一格。
     var speech: String {
         switch self {
         case .agent(let shown, _): shown.label
@@ -77,7 +76,6 @@ extension Workspace {
 }
 
 extension TaskNext {
-    /// 行上写出了状态词（`PiShown.speaksOnTask`）。
     var speaks: Bool { if case .agent(let shown, _) = self { shown.speaksOnTask } else { false } }
     /// 还没交出去的叶子，"开始"。
     var starts: Bool { if case .start = self { true } else { false } }

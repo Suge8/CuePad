@@ -1,4 +1,3 @@
-import CueStore
 import SwiftUI
 import UniformTypeIdentifiers
 #if os(iOS)
@@ -117,7 +116,6 @@ struct TaskOutline<Line: View>: View {
         return true
     }
 
-    /// 任务挪到新位置。
     private func commit(_ id: UUID, _ move: TaskMove) {
         commits += 1
         workspace.perform { try await $0.moveCard(id, to: move.slot, after: move.after) }

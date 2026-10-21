@@ -16,7 +16,6 @@ extension AppServices {
         }
     }
 
-    /// 收到扩展的通知就入库，直到任务取消。
     func startCaptureIngest() {
         follow {
             await self.drainCaptures()

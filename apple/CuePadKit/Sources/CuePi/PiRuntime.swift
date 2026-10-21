@@ -84,7 +84,7 @@ public final class PiRuntime: AgentRuntime {
             overrides: paths.launchEnvironment.merging(environment) { $1 }.merging([Self.hostedVariable: String(idleLimit.components.seconds)]) { $1 })
         // 脱离 App：新会话、标准输入是它自己握着两端的管道（RPC 模式读到 EOF 就收尾，这样永远读不到），App 不持有它的任何管道；
         // 标准输出丢掉（RPC 的事件与回应走桥），标准错误留着，没连上就退出时取最后一行当原因
-        let process = try ChildProcess(
+        let process = try await ChildProcess(
             executable, ["--mode", "rpc"] + arguments, directory: directory, environment: environment,
             placement: .detached, input: .lifeline)
         let pid = process.pid

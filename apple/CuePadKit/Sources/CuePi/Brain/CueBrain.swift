@@ -8,7 +8,6 @@ import Foundation
 /// 运行时不落会话（三家各用自己不落盘的方式，见各实现的头注释），也不改用户的配置文件，只用参数、环境变量与临时文件。
 public struct CueBrainConfig: Sendable {
     public var runtime: AgentKind
-    /// 运行时的可执行文件（`pi`、`codex`、`claude`）
     public var executable: URL
     /// 运行时自己的模型写法（Pi 是 `提供方/模型`）；nil 用运行时的默认
     public var model: String?
@@ -70,6 +69,8 @@ public protocol CueBrain: AnyObject {
     var seesImages: Bool { get }
     /// 说一句话（可带图，按各家原生的图片输入交）：空闲时开始一轮，正忙时插进当前这一轮
     func send(_ text: String, images: [PiImage]) async throws
+    /// 开新会话：清掉此前的对话，系统提示、工具、模型与强度不变，下一句从空白的对话说起。只在空闲时调
+    func newSession() async throws
     /// 就地换模型（运行时自己的写法，同 `CueBrainConfig.model`）与思考强度：进程与上下文不动，下一次请求模型起生效（`seesImages` 随新模型）。
     /// nil 的那项不动：运行时的默认取不回来，回到默认要换大脑。运行时不认（没有这个模型、没登录这家提供方……）时抛，在用的不变
     func configure(model: String?, effort: PiThinkingLevel?) async throws
@@ -82,9 +83,7 @@ public protocol CueBrain: AnyObject {
 public enum CueBrainError: Error, Equatable {
     /// 还没启动、已经停了或进程已退出
     case notRunning
-    /// 运行时拒绝了请求（原文）
     case rejected(String)
-    /// 这家 Agent 不能当大脑
     case unsupported(AgentKind)
 }
 
@@ -98,11 +97,6 @@ extension CueBrainError: LocalizedError {
     }
 }
 
-/// 工具名去掉 CuePad 的 MCP 前缀（`CueMCPServer.toolPrefix`）并小写（Claude Code 的 `Read`）。
-func brainToolName(_ name: String) -> String {
-    let prefix = CueMCPServer.toolPrefix
-    return (name.hasPrefix(prefix) ? String(name.dropFirst(prefix.count)) : name).lowercased()
-}
 
 extension CueBrainConfig {
     @MainActor public func startBrain() async throws -> any CueBrain {

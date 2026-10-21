@@ -1,5 +1,4 @@
 import CueStore
-import CueText
 import SwiftUI
 
 /// "等你"：固定在输入框上方，最早的那一条（从任务看板点进来的那条先露，`Workspace.leadingAsk`），收得紧。第一句是要你定什么，由代码按 Cue 写的动作短语写出
@@ -181,7 +180,7 @@ struct CueWaitingDock: View {
             .frame(minHeight: Self.footerHeight)
             .contentShape(.rect)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressStyle())
         .accessibilityHint("收起键盘，展开这张卡")
     }
     #endif
@@ -240,7 +239,7 @@ struct CueWaitingDock: View {
             .font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink2)
             .frame(minHeight: Self.footerHeight).contentShape(.rect)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressStyle(.inline))
         .accessibilityLabel(open ? "收起原话" : "看 Cue 的原话")
     }
 

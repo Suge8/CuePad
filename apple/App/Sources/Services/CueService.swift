@@ -16,7 +16,6 @@ struct CueDependencies {
     var timing = CueTiming()
 }
 
-/// 起一个大脑要的本机信息。
 nonisolated struct CueLaunch: Equatable, Sendable {
     var executable: URL
     /// 给大脑与 MCP 服务的 PATH（`ExecutableLocator.system`）：App 自己的 PATH 很短，运行时起的 node 等靠它找到。
@@ -40,7 +39,7 @@ protocol CueNotifying: AnyObject {
 /// Mac 上的 Cue：界面的唯一接口（`services.cue`）。手机与别的 Mac 不跑这里，界面直接读写库（`cueProfile` 等）。
 /// - 启用、停用不经这里：两端同一个入口（`AppServices.enableCue(on:)`、`updateCue`，规则在 `CueStore.enableCue`）；
 ///   另一台 Mac 启用就是接管，这台看到 `activeHost` 不是自己就停下。
-/// - `activeHost` 是这台时起一个 `CueKeeper` 值班，不是就停掉；名字、运行时、模型、强度变了由值班的它自己对上（就地换或写交接后换大脑）。
+/// - `activeHost` 是这台时起一个 `CueKeeper` 值班，不是就停掉；名字、运行时、模型、强度变了由值班的它自己对上（就地换或换大脑）。
 /// - 通知：哪几条要提示你只在 `CueMessage.alerts`；手机推送标志在写下时就置好（`CueStore.insertCueMessage`），这里只给值班的这台 Mac
 ///   发本机通知（算"等你"那种提示，开关、提示音与你在不在看都在 `AlertCenter`）。免打扰只认系统的专注模式，不看打扰时段（那只管 Cue 自己巡视，`CueTiming.quietHours`）。
 @Observable
@@ -49,7 +48,6 @@ final class CueService {
     var onDuty: Bool { duty != nil }
     /// 在这台 Mac 值班的管理器：Cue 页的"运行情况"读它的经过与上下文；不在这里值班为 nil。
     var keeper: CueKeeper? { duty?.keeper }
-    /// 每次值班起管理器用的同一份
     @ObservationIgnored private let setup: CueKeeper.Setup
     @ObservationIgnored private let hostID: String
     @ObservationIgnored private let notifier: any CueNotifying
@@ -68,7 +66,6 @@ final class CueService {
         notifier = dependencies.notifier
     }
 
-    /// 跟着设置值班，直到任务取消。
     func follow() async throws {
         do {
             for try await profile in store.observe({ try $0.cueProfile() }) { await apply(profile) }

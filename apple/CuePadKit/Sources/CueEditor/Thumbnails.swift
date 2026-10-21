@@ -65,11 +65,11 @@ public enum Thumbnails {
 
     private static func key(_ url: URL, _ maxPixel: Int) -> NSString { "\(url.path)@\(maxPixel)" as NSString }
 
-    private static let cache: ImageCache = {
-        let cache = ImageCache()
+    /// 各线程都来取（后台降采样）。NSCache 自带锁、文档写明可跨线程增删查不另加锁，取出的 CGImage 不可变；
+    /// SDK 却把 NSCache 标成不能 Sendable（子类补的 `@unchecked Sendable` 也不认），换成 `Mutex` 又要把不是 Sendable 的 CGImage 送出锁外。
+    nonisolated(unsafe) private static let cache: NSCache<NSString, CGImage> = {
+        let cache = NSCache<NSString, CGImage>()
         cache.totalCostLimit = 128 * 1024 * 1024
         return cache
     }()
 }
-
-private final class ImageCache: NSCache<NSString, CGImage>, @unchecked Sendable {}

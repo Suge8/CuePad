@@ -1,5 +1,4 @@
 import CueStore
-import CueText
 import SwiftUI
 
 /// 对话里的一段（约 `CuePage.segment` 格，`ChatSegments`）：只按各格的内容比较。
@@ -75,8 +74,6 @@ struct CueRow: View, Equatable {
             CueNoteBubble(rounds: rounds, live: live)
         case .process(let message):
             RoundProcess(tools: message.tools, ending: CueLiveRound.ending(of: message, in: live)).padding(.leading, CueBubble.noteInset)
-        case .renewed(let handoff):
-            CueRenewal(handoff: handoff, name: cue.name)
         }
     }
 
@@ -99,17 +96,6 @@ nonisolated struct CueLiveRound: Equatable {
     static func ending(of message: CueMessage, in live: CueLiveRound?) -> RoundProcess.Ending {
         guard let live, live.round == message.id else { return .took(nil) }
         return live.ending
-    }
-}
-
-/// Cue 从这里起换了新上下文：与会话页的压缩同一条分隔（`ContextBoundary`），点开是换新时写下的交接备忘；从刻度滑条跳过来时描一圈。
-private struct CueRenewal: View {
-    let handoff: CueMessage
-    let name: String
-    @Environment(\.chatHighlight) private var highlight
-
-    var body: some View {
-        ContextBoundary(title: "从这里起 \(name) 换了新上下文", time: handoff.createdAt, memo: handoff.text, highlighted: highlight == handoff.id)
     }
 }
 

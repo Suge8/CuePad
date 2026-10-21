@@ -28,7 +28,6 @@ struct Palette {
     var paper: Color { dark ? Color(hex: 0x282420) : Color(hex: 0xFCFBF8) }
     /// 纸的上沿：比纸略亮一点，纸面从上往下极轻地过渡到纸色，像有一层向上的光（`paper()`）。
     var paperLit: Color { dark ? Color(hex: 0x2E2A25) : Color(hex: 0xFFFFFD) }
-    /// 纸和玻璃上沿的一线高光。
     var sheen: Color { Color.white.opacity(dark ? 0.07 : 0.9) }
 
     /// 你的话的气泡底：比桌面深一级的暖灰（牛皮纸）、字是墨——回答才是会话页的主角，你的话不该是一屏最重的一块；
@@ -58,7 +57,10 @@ struct Palette {
     /// Cue 自己醒来的动态那颗气泡的虚线（`CueNoteBubble`）：说了但没推给你，只描边不铺底。比 `hair` 深，虚线断开后仍看得出边。
     var noteEdge: Color { ink.opacity(highContrast ? 0.55 : (dark ? 0.26 : 0.28)) }
     /// 唯一的浅底：悬停、按下、次按钮、代码与变量。
-    var fill: Color { ink.opacity(dark ? 0.07 : 0.05) }
+    var fill: Color { ink.opacity(fillAmount) }
+    /// `fill` 叠在 `surface` 上合成的实色：悬停的行上露出的操作垫它（`hoverReveal`），盖住压到的字、又和行的淡底接得上。
+    func hovered(_ surface: Color) -> Color { surface.mix(with: ink, by: fillAmount, in: .device) }
+    private var fillAmount: Double { dark ? 0.07 : 0.05 }
     /// 没填满的轨道：用量条、档位条的空格、转圈与头像外圈的轨道。
     var track: Color { ink.opacity(highContrast ? 0.3 : (dark ? 0.16 : 0.14)) }
     /// 模态浮层下面压暗整窗的底（Mac 的 ⌘K、窗口内浮层）。
@@ -72,7 +74,6 @@ struct Palette {
 
     /// 压在照片、视频上的图标（播放、移除）：照片的明暗不随外观变，固定白。
     var onMedia: Color { .white }
-    /// 照片上图标下面垫的暗底。
     var mediaScrim: Color { Color.black.opacity(0.55) }
     /// 图的一道实色边（提问点名的图，`CueShots`）：墨或白叠一成的实色，不随图变——`hair` 是带透明度的墨，压在图边上透出图自己的颜色，
     /// 亮图看不出框、深色截图在深色纸上糊成一片。增强对比度时对纸至少 3:1（浅 3.2、深 3.2）。
@@ -126,7 +127,6 @@ struct Palette {
     var failure: Color { dark ? Color(hex: 0xF0789E) : Color(hex: 0xAD2B5C) }
     /// 删除钮、轻扫删除的胭脂底。字 6.3，深色 5.6。
     var failureFill: Color { dark ? Color(hex: 0xB8325F) : Color(hex: 0xAD2B5C) }
-    /// 用量快满了的那段轨道。
     var failureTrack: Color { failure.opacity(0.2) }
     /// 有新回复（这轮答完了、你还没看）：石绿。对比度 4.7，深色 5.0，增强对比度 ≥ 7。
     var replied: Color {
@@ -185,7 +185,6 @@ struct Palette {
         return Color(hex: dark ? entry.dark : entry.light)
     }
 
-    /// 项目色铺的淡底（项目页置顶卡）。
     func projectWash(_ stored: String) -> Color { project(stored).opacity(dark ? 0.16 : 0.1) }
 }
 

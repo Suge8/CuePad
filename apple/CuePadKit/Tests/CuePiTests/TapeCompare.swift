@@ -1,11 +1,8 @@
 #if os(macOS)
 import CueStore
-import CryptoKit
 import CueTestSupport
 import Darwin
 import Foundation
-import Synchronization
-import Testing
 @testable import CuePi
 
 /// 输入与录下的比对：UUID 不同记成替换（之后的输出里换成这次的），时间与 JSON-RPC 的请求号不同不算；其余不同返回说明。

@@ -25,11 +25,8 @@ struct AgentSetupGuide: View {
     }
 
     private var title: String {
-        switch (kind, presence) {
-        case (.opencode, _): "安装 OpenCode 2"
-        case (_, .tooOld): "升级 \(kind.name)"
-        default: "安装 \(kind.name)"
-        }
+        if kind.upgrades(presence) { return "升级 \(kind.name)" }
+        return kind == .opencode ? "安装 OpenCode 2" : "安装 \(kind.name)"
     }
 
     private static func site(_ kind: AgentKind) -> URL {
@@ -68,7 +65,7 @@ struct InstallCommand: View {
     }
 
     private var command: String {
-        kind.installCommand(upgrading: { if case .tooOld = presence { true } else { false } }())
+        kind.installCommand(presence)
     }
 }
 #endif

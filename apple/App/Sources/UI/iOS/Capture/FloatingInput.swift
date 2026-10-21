@@ -11,7 +11,6 @@ struct FloatingInput<Content: View>: View {
     /// 没拖够松手时弹回原位。
     @GestureState(resetTransaction: Transaction(animation: Motion.snappy)) private var drag: CGFloat = 0
 
-    /// 往下拖过这么多（或甩出去会过）就收起。
     private static var dismissDistance: CGFloat { 60 }
     private static var maxWidth: CGFloat { 600 }
 

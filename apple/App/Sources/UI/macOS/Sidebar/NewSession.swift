@@ -13,17 +13,18 @@ struct NewSessionButton: View {
 
     var body: some View {
         let none = agents?.agents.isEmpty != false
-        Button("新会话", icon: .add) { showing = true }
-            .labelStyle(.iconOnly).buttonStyle(.borderless)
-            .disabled(none)
-            .help(none ? agents.map { "开不了新会话：\($0.whyNone)" } ?? "" : "开一个新的 Agent 会话")
-            .observing(services.store, into: $agents, onError: workspace.fail) { [host = services.hostID] in try $0.macAgents(on: host) }
-            .panel(isPresented: $showing) {
-                NewSessionForm(agents: agents) { id in
-                    showing = false
-                    workspace.show(.session(id))
-                }
+        Button { showing = true } label: { Image(.add) }
+        .buttonStyle(ControlButtonStyle(kind: .circular))
+        .accessibilityLabel("新会话")
+        .disabled(none)
+        .help(none ? agents.map { "开不了新会话：\($0.whyNone)" } ?? "" : "开一个新的 Agent 会话")
+        .observing(services.store, into: $agents, onError: workspace.fail) { [host = services.hostID] in try $0.macAgents(on: host) }
+        .panel(isPresented: $showing) {
+            NewSessionForm(agents: agents) { id in
+                showing = false
+                workspace.show(.session(id))
             }
+        }
     }
 }
 
@@ -46,7 +47,6 @@ struct NewSessionForm: View {
 
     private enum Stage: Equatable {
         case idle
-        /// 请求发出，等这台 Mac 启动 Pi。
         case opening
         /// Pi 已启动，等它连上（连上后表单关掉、打开新会话）。
         case connecting
@@ -59,7 +59,6 @@ struct NewSessionForm: View {
     var body: some View {
         let places = ProjectFolders.launchPlaces(
             projects: workspace.catalog?.projects ?? [], bindings: workspace.catalog?.bindings ?? [], host: workspace.localHost, workMac: nil)
-        // 没选过时默认当前项目
         let place = places.first { $0.id == chosen } ?? places.first { $0.project.id == workspace.currentProject } ?? places.first
         let agent = agents?.preferred(services.settings.lastAgent)
         VStack(alignment: .leading, spacing: 12) {
@@ -119,7 +118,8 @@ struct NewSessionForm: View {
                 ProjectGlyph(project: place.project, size: 13)
                 Text(place.project.name).foregroundStyle(palette.ink).lineLimit(1)
                 Spacer(minLength: 4)
-                if selected { Image(.checked).foregroundStyle(palette.ink2).accessibilityHidden(true) }
+                // 对勾一直占着位置、只随选中显隐：换选中时名字不跟着让位
+                Image(.checked).foregroundStyle(palette.ink2).opacity(selected ? 1 : 0).accessibilityHidden(true)
             }
             .padding(.vertical, 5)
             .contentShape(.rect)

@@ -1,5 +1,4 @@
 import CueStore
-import CueSync
 import CueText
 import SwiftUI
 
@@ -108,7 +107,7 @@ private struct SkillBody: View {
             Button { open.toggle() } label: {
                 NoteLine(icon: .readFile, open: open) { Text("技能 \(skill.name) 的正文").foregroundStyle(palette.ink3) }
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PressStyle())
             .accessibilityExpanded(open)
             if open { NoteThread { MarkdownText(source: skill.body).equatable() }.frame(maxWidth: .infinity, alignment: .leading) }
         }
@@ -159,7 +158,7 @@ struct BubbleText: View {
             LinearGradient(colors: [palette.bubble.opacity(0), palette.bubble], startPoint: .leading, endPoint: .trailing).frame(width: 36)
             Button("展开", action: expand)
                 .font(Typography.reading.weight(.semibold)).foregroundStyle(palette.ink2)
-                .buttonStyle(.plain)
+                .buttonStyle(PressStyle(.inline))
                 .padding(.leading, 4)
                 .background(palette.bubble)
         }
@@ -217,7 +216,7 @@ private struct QuoteLine: View {
             .font(Typography.secondary).foregroundStyle(palette.ink2)
             .accessibilityLabel("回答：\(quote.text)")
         if let target = quote.target, let jump {
-            Button { jump(target) } label: { line }.buttonStyle(.plain).accessibilityHint("回到那个问题")
+            Button { jump(target) } label: { line }.buttonStyle(PressStyle()).accessibilityHint("回到那个问题")
         } else {
             line
         }

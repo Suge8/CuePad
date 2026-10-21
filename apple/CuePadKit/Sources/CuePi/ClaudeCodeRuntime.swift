@@ -135,7 +135,7 @@ public final class ClaudeCodeRuntime: AgentRuntime {
         known: (name: String?, firstMessage: String?)? = nil
     ) async throws -> PiSession.ID {
         let claude = try await executable()
-        let session = try ClaudeHostedSession(
+        let session = try await ClaudeHostedSession(
             executable: claude.url, arguments: arguments, sessionID: sessionID, directory: directory,
             environment: claude.environment.merging([HostMark.variable: sessionID]) { $1 }, bridge: bridge)
         hosted[sessionID] = session
@@ -232,7 +232,6 @@ public final class ClaudeCodeRuntime: AgentRuntime {
 
     // MARK: 已在跑的会话
 
-    /// `claude agents --json` 列出的一个在跑的会话。
     private struct Running: Decodable {
         var pid: Int32
         var sessionID: String

@@ -13,19 +13,20 @@ apple/scripts/xc.sh rec ios out.mov -- -CuePadDemo YES -CuePadCycle YES
 
 - Mac 按窗口拍，图的像素是窗口在屏上的像素：这台 Mac 接的是 1x 屏。报窗口被缩小显示时是调度中心或台前调度开着：请用户收起，不发系统按键。
 - 后台窗口里的网页过几秒就成空白，截图不可信：用 `-CuePadWebSnapshot`。
+- Mac 浮层与气泡（点开后的样子、摆在哪）：`xc.sh rec mac -- … -CuePadClick x,y` 在后台点开，取录屏末帧，不占前台。
 - Mac 系统菜单：`xc.sh run mac -- … -CuePadForeground YES -CuePadClick x,y` 让实例自己点开，再按窗口截菜单那扇窗（`screencapture -l`，窗口号从 CGWindowList 按 PID 取），截完 `xc.sh stop`。iPhone、iPad 的菜单没有从代码打开的接口：`xc.sh run` 后用 axe 点开。
 - iPhone 系统返回（返回钮、左缘滑动）只能真操作：另起 axe 点或滑（`axe swipe --start-x 5 … --duration 1 --delta 5`；从 x=1 起或滑得快，系统不认作边缘滑动），每步后 `axe describe-ui` 看左上那颗钮核对回到了哪。
 - 改了图标生成器先看 `-CuePadScene icons`（iPad）。模拟器桌面上加小组件脚本不做，看 `-CuePadScene widgets`。
 - 灵动岛 `simctl io screenshot` 拍不到：录一小段取最后一帧。
 - 录屏只在画面变时出帧，逐帧看用 `ffmpeg -i out.mov -fps_mode vfr …`；铺成一张图：`ffmpeg -i out.mov -vf "fps=8,crop=宽:高:x:y,tile=8x2" -frames:v 1 strip.png`。裁图、缩放用 `sips`（本机没装 ImageMagick）。
-- 验收用户装着的版本前，核对 `~/Applications/CuePad.app` 的 `CFBundleVersion` 与 `~/.pi/agent/extensions/cuepad-bridge.ts` 的 `EXTENSION_VERSION` 就是要验的那一版（只读）。
+- 验收用户装着的版本前，核对 `~/Applications/CuePad.app` 的 `CFBundleVersion` 与 `~/.pi/agent/extensions/cuepad-bridge/index.ts` 的 `EXTENSION_VERSION` 就是要验的那一版（只读）。
 
 ## 占前台
 
 本机构建（Debug、测试宿主、perf 的 Release）一律在后台、窗口排最后；截图按窗口拍、模拟器不开 Simulator.app、bcu 与 axe 按进程投递，都不动用户的前台和指针。借前台只经 `DebugForeground`（启动参数 `-CuePadForeground YES`，量完把前台与指针还回去），非占不可的只有：
 
 - 和交互预算比的 `xc.sh perf mac`：后台没有玻璃合成与动画，帧与掉帧偏乐观。
-- `-CuePadClick`、`-CuePadRightClick`：后台 App 的菜单是停用的灰，没激活的窗口里点一下只是激活。
+- `-CuePadRightClick`，以及 `-CuePadClick` 点开的是系统菜单时：后台 App 的菜单是停用的灰。`-CuePadClick` 的其余点按在后台照样生效（事件在本进程里合成，不经窗口服务器、不先激活），浮层、气泡、按钮的逻辑与摆位不占前台验；截图是未激活窗口的样子，看激活态的强调色、焦点、悬停与真实首次点击的手感仍要前台或人工。
 - `-CuePadBench chatscroll` 的 process、hid 驱动：真实滚轮与指针。
 
 只在用户说过这段时间不用电脑、或明确要这几样数字时给；平时用后台的数（指令数照样能前后对比）。新加的自动化要占前台也只经 `DebugForeground`，并补进这张单子。真实按键（⌘V、全局热键）与跨应用粘贴不自动化，只人工验证。
@@ -103,9 +104,33 @@ TEST_RUNNER_CUEPAD_CUE_EVAL=1 TEST_RUNNER_CUEPAD_CUE_EVAL_OUT=/tmp/cue-eval/afte
   apple/scripts/xc.sh test mac -parallel-testing-enabled YES -only-testing:CuePadTests/CueEvalTests
 ```
 
-- 大脑用这台 Mac 上 Claude Code 自己的登录；`TEST_RUNNER_CUEPAD_CUE_EVAL_MODEL`、`_EFFORT` 换模型与强度。
-- 输出目录每个场景一个 .md，`summary.md` 汇总；有场景没过时非零退出，输出照样写完。每个场景的库留在 `<场景>.library`，用 `CUEPAD_SHOT_LIBRARY=<它> xc.sh shot mac out.png -- -CuePadScene cue` 看。
+- 大脑缺省用这台 Mac 上 Claude Code 自己的登录（opus · medium）；`TEST_RUNNER_CUEPAD_CUE_EVAL_RUNTIME=pi` 换成 Pi（sonnet · medium，令牌从 ~/.pi/agent/auth.json 只读地取、不替它刷新，过期就起不来）；`TEST_RUNNER_CUEPAD_CUE_EVAL_MODEL`、`_EFFORT` 换模型与强度。
+- 输出目录每个场景一个 .md（含每一轮的开销），`summary.md` 汇总；有场景没过时非零退出，输出照样写完。每个场景的库留在 `<场景>.library`，用 `CUEPAD_SHOT_LIBRARY=<它> xc.sh shot mac out.png -- -CuePadScene cue` 看。
+- 开销是大脑自报的 token 与费用；提示缓存跨场景命中一小时，先后跑的同一套场景缓存读写会不同，比开销看两遍以上。
+- 长程场景（`CueEvalLongTests`，十分钟左右）单独跑：换新线经 `CueTiming.renewAt` 缩到 4.2 万、缓存时长缩到 30 秒，中途他走开一阵，热换新、冷换新都有；会话交回的细节、他托付的事、它对方案的判断、逐页推进的多步活在换新前埋下、换新后考，每处标出跨了哪种换新。`TEST_RUNNER_CUEPAD_CUE_EVAL_RUNS=2` 同时跑两遍、第 n 遍写到"输出目录-n"：
+
+```bash
+TEST_RUNNER_CUEPAD_CUE_EVAL=1 TEST_RUNNER_CUEPAD_CUE_EVAL_OUT=/tmp/cue-eval/long TEST_RUNNER_CUEPAD_CUE_EVAL_RUNS=2 CUEPAD_TEST_TIME_LIMIT=3600 \
+  apple/scripts/xc.sh test mac -parallel-testing-enabled YES -only-testing:CuePadTests/CueEvalLongTests
+```
+- 多日记忆（`CueEvalDaysTests`，一次十分钟左右）单独跑：启用前预置两周历史（对话一千五百多条、做完的任务与会话回复、九十多行记忆），先等它空闲合并记忆（合并开销单列），再问起不同年纪埋下的事；缓存时长缩到 20 秒、场景里插几段静止，看冷醒来开没开新会话（从大脑的输出里数：新进程或 Pi 的 new_session）。`-only-testing:CuePadTests/CueEvalDaysTests`，`CUEPAD_TEST_TIME_LIMIT=1700`。
 - 模型每次答得不完全一样，结论看两遍以上。
+
+## LongMemEval
+
+改 Cue 的提示词或 recall 前后各跑一遍，用 LongMemEval（longmemeval_s cleaned）给长期记忆打分（一遍 100 题，同时 8 题约四五分钟）：
+
+```bash
+python3 apple/scripts/lme.py sample        # 下载数据到 /tmp/lme，按题型分层抽 100 题（种子 42）写成 /tmp/lme/sample.jsonl
+TEST_RUNNER_CUEPAD_LME_DATA=/tmp/lme/sample.jsonl TEST_RUNNER_CUEPAD_CUE_EVAL_RUNTIME=pi TEST_RUNNER_CUEPAD_CUE_EVAL_OUT=/tmp/cue-eval/lme-after \
+  CUEPAD_TEST_TIME_LIMIT=7200 apple/scripts/xc.sh test mac -only-testing:CuePadTests/CueEvalLMETests
+python3 apple/scripts/lme.py judge /tmp/cue-eval/lme-before /tmp/cue-eval/lme-after   # 判分，按先后比这几遍，写最后一遍的 report.md
+```
+
+- 改提示词时在 sample 上挑改法，在留出集上验：`lme.py sample --holdout` 另抽一份与它不相交、各层题数相同的 100 题（/tmp/lme/holdout.jsonl），`CUEPAD_LME_DATA` 指向它跑。
+- 每题一个隔离库：历史会话按原时刻写成 Cue 的对话（用户的话是他的，助手的话是 Cue 的回复），信封上的此刻定在提问时刻（`CueTiming.clock`），问题作为他的话交给 Cue。
+- 每题一个 `<输出>/<题号>.json`（回复、用时、开销、recall 的查询）与 CueEval 的 .md，已有的跳过，中断后重跑接着做；`TEST_RUNNER_CUEPAD_LME_ONLY=<题号,…>` 只跑几题，`_LANES` 同时跑几题（缺省 8）。
+- 判分用官方分题型提示，经 Pi 用 claude-sonnet-5-5（thinking off），登录只读 ~/.pi/agent/auth.json；判过的存在 .json 里，重判先删掉 `label`。同一份回答重判结果一致，大脑那边一遍之间差几题，结论看两遍以上。
 
 ## 崩溃诊断
 

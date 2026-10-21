@@ -16,7 +16,7 @@ struct LastCrashRow: View {
                     Label { Text(report.kind.label) } icon: { FailureMark() }.foregroundStyle(palette.ink)
                 }
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PressStyle())
             .panel(isPresented: $showing) { CrashReportView(report: report) }
         }
     }

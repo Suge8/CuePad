@@ -12,7 +12,6 @@ struct Prewarm: View {
     @State private var step = Step.idle
     /// 预热的对话区的贴底状态（没人读，只是滚动区要一份）。
     @State private var follow = ChatFollow()
-    /// 预热任务气泡用的那条任务。
     @State private var warmTask: TaskBubble.Request?
 
     /// 读到资料库后等多久开始：首屏出来、用户还没动手。⌘K 面板同一时机常驻挂上（`keptPanel`）。
@@ -51,7 +50,7 @@ struct Prewarm: View {
             case .newSession: NewSessionForm(agents: nil) { _ in }
             case .taskBubble:
                 if let warmTask {
-                    BubbleFrame(placement: BubblePlacement(anchor: nil, container: Self.size, insets: EdgeInsets())) {
+                    BubbleFrame(placement: BubblePlacement(source: .unanchored, container: CGRect(origin: .zero, size: Self.size), insets: EdgeInsets())) {
                         // 气泡的内容是读库回来才建的：这一格要订阅（外面整块 `pageActive` 为 false 时不读库）
                         TaskBubble(request: warmTask).environment(\.pageActive, true)
                     } area: {
@@ -72,7 +71,7 @@ struct Prewarm: View {
             workspace.pages.premount(.agent)
             let tasks = try? await workspace.services.store.tasks(.inProgress, .todo)
             if let task = tasks?.lazy.flatMap(\.tasks).first(where: { $0.parentID == nil }) {
-                warmTask = TaskBubble.Request(task: task.id, step: nil, anchor: nil)
+                warmTask = TaskBubble.Request(task: task.id, step: nil, source: .unanchored)
             }
             await NextFrame.wait()
             await NextFrame.wait()

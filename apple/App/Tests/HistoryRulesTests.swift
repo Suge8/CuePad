@@ -77,7 +77,6 @@ struct HistoryRulesTests {
             try await store.piSessionPage(PiSessionQuery(scope: scope, limit: .max)).items.map(\.state)
         }
 
-        /// 这个会话在会话文件里的全部回答。
         func replies(of sessionID: String) async throws -> [String] {
             guard let indexed = try await store.piSession(sessionID) else { return [] }
             let text = (try? String(contentsOf: URL(filePath: indexed.path), encoding: .utf8)) ?? ""

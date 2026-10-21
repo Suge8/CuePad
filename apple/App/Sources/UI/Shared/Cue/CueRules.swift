@@ -97,7 +97,6 @@ nonisolated struct CueDigest: Equatable, Sendable {
     var tally: CueTally
     /// "等你 M"。
     var waiting: Int { tally.waiting.count }
-    /// 推进中几件。
     var advancing: Int { tally.advancing.count }
     /// 新消息有几条（`CueStore.cueUnread`）。
     var unread: Int
@@ -123,7 +122,7 @@ nonisolated struct CueDigest: Equatable, Sendable {
 
     struct Woke: Equatable, Sendable {
         var at: Date
-        var text: String?
+        var text: String
     }
 
     struct LastYou: Equatable, Sendable {
@@ -153,15 +152,14 @@ nonisolated struct CueDigest: Equatable, Sendable {
             done: tally.free(try store.tasksDone(since: Calendar.current.startOfDay(for: .now))))
     }
 
-    /// 这一轮为什么醒，写成那一句的开头（"被 canvas-zoom 叫醒"）；换上下文、改设置这类内部的事不说，按在想写。
-    private static func woke(_ wake: CueWake, store: isolated CueStore) throws -> String? {
+    /// 这一轮为什么醒，写成那一句的开头（"被 canvas-zoom 叫醒"）。
+    private static func woke(_ wake: CueWake, store: isolated CueStore) throws -> String {
         switch wake {
         case .message: return "在回你的话"
         case .idle: return "例行查看"
         case .tidy: return "在整理记忆"
         case .reminder: return "提醒到点"
         case .enabled: return "刚启用"
-        case .renewed, .settingsChanged: return nil
         case .sessionActivity(let stirs):
             var seen = Set<String>()
             let ids = stirs.compactMap(\.session).filter { seen.insert($0).inserted }
@@ -248,7 +246,6 @@ nonisolated struct CueFlight: Equatable, Sendable {
             return [woke, relay].compactMap { $0 }.max { $0.at < $1.at }
         }
 
-        /// 读到的最新时刻。
         var latest: Date? { ([woke?.at] + handed.map(\.at)).compactMap { $0 }.max() }
     }
 }

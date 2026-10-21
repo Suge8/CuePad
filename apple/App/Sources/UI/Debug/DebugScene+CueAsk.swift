@@ -107,7 +107,6 @@ extension DebugScene {
         return render(view)
     }
 
-    /// 预发的一页：版本与四处改动。
     private static func stagingPNG() -> Data {
         let view = VStack(alignment: .leading, spacing: 10) {
             Text("预发 1.4.2").font(.system(size: 22, weight: .bold)).padding(.top, 40)
@@ -125,7 +124,6 @@ extension DebugScene {
         return render(view)
     }
 
-    /// 一张横的证据图（16:9）：一行大字。
     private static func evidencePNG(_ headline: String, tint: Color) -> Data {
         let view = Text(headline).font(.system(size: 40, weight: .heavy)).foregroundStyle(tint)
             .frame(width: 640, height: 360).background(Color(white: 0.97))

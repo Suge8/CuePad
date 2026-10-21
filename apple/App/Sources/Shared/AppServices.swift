@@ -1,7 +1,6 @@
 import Foundation
 import Observation
 import CueStore
-import CueEditor
 import CueSync
 import os
 #if os(macOS)
@@ -31,7 +30,6 @@ final class AppServices {
     let cue: CueService
     #endif
 
-    /// 设备本地偏好（主题、快捷键、当前项目）。
     let settings: AppSettings
     /// 启动期间没能完成的事；界面据此提示，不静默。
     private(set) var startupIssues: [StartupIssue] = []
@@ -45,6 +43,8 @@ final class AppServices {
     enum SyncSource {
         case iCloud
         case custom(any SyncControlling)
+        /// 用本机的库建的同步：真实的同步代码连替身 iCloud（`CloudSync` 的替身连接），给测试与调试画面。
+        case built((CueStore) -> any SyncControlling)
     }
 
     /// iCloud 同步；没有时 `syncStatus` 是写明原因的 `.unavailable`。状态、问题与冲突见下，动作见 `AppServices+Sync`。
@@ -153,7 +153,6 @@ final class AppServices {
         refreshQuota: { [weak self] in try await self?.refreshQuotaForRequest() },
         reportIssue: { [weak self] message in self?.reportIssue(.syncUnavailable(message)) })
 
-    /// "显示或隐藏 CuePad"的全局快捷键。
     @ObservationIgnored lazy var hotkey = GlobalHotkey(
         label: "显示或隐藏 CuePad", key: AppSettings.Key.globalShortcut, defaultAccelerator: "Alt+Space", defaults: settings.defaults,
         backend: hotkeyBackend
@@ -166,34 +165,12 @@ final class AppServices {
         case captureImportFailed(String)
         /// iCloud 同步（或依赖它的 Mac 端远程功能）没能启动。
         case syncUnavailable(String)
-        /// 小组件与分享扩展用的快照写不出来。
         case widgetDataUnavailable(String)
         #if os(macOS)
         case piBridgeUnavailable(String)
         /// Pi 历史索引读写 Store 失败；该会话文件不再写回。
         case piHistoryUnavailable(String)
         #endif
-    }
-
-    /// 撤回一句说出去的话（重发或移除没能送达的话）：发给会话的，还没被 Mac 领取的才撤得回，没能送达的直接删；
-    /// 对 Cue 说的，还没交给它的才撤得回。撤了立即把删除传上去，免得 Mac 先拉到它；撤不回时抛出原因。
-    func withdraw(_ said: Said) async throws {
-        switch said {
-        case .request(let request) where request.status == .known(.failed):
-            try await store.deleteDelivery(request.id)
-        case .request(let request):
-            guard try await store.withdrawDelivery(request.id) else { throw SendError.alreadyHanded }
-        case .cue(let message, _):
-            guard try await store.withdrawCueMessage(message.id) else { throw SendError.alreadyHeard }
-        }
-        Task { await upload(said.id, deleted: true) }
-    }
-
-    /// 投送请求（发送、作答、配置、结束、停止、开会话、绑定、补对话）都走同一条投送通道，Mac 本机也走它、由执行器交给扩展；
-    /// 写出后立即上传（不等它完成），结果用 `CueStore.outcome(of:)` 等。
-    func uploaded(_ request: DeliveryRequest) -> DeliveryRequest {
-        Task { await upload(request.id) }
-        return request
     }
 
     /// 改 Cue 的设置（同步的 `CueProfile`）：两端的写入口——名字、停用、Agent、模型与思考强度；启用另走 `enableCue`（要按那台 Mac 判断）。
@@ -214,62 +191,6 @@ final class AppServices {
         #endif
         try await store.enableCue(on: host, moving: moving)
         await upload(CueProfile.recordID)
-    }
-
-    /// 马上传这一条（`SyncControlling.upload`）：手机写出投送请求、Mac 写回结果、Mac 写出带通知标志的会话状态后都调用。没有同步时什么也不做。
-    func upload(_ record: UUID, deleted: Bool = false) async {
-        await sync?.upload(record, deleted: deleted)
-    }
-
-    /// 回答会话正在等的弹窗：写一条作答请求给会话所在的 Mac。
-    /// 问题不能从这里作答（没有标识或种类不认识）时抛 `SendError.unanswerable`。
-    func answer(_ value: PiAnswerValue, to session: PiSessionState) async throws -> DeliveryRequest {
-        guard let question = session.question, question.isAnswerable, let promptID = question.promptID else {
-            throw SendError.unanswerable
-        }
-        return uploaded(try await store.requestAnswer(
-            PiAnswer(promptID: promptID, value: value, question: question.text), to: session.target,
-            on: session.hostID))
-    }
-
-    /// 换会话的模型或思考强度：当前值与可选项读会话状态的 `model`、`thinking`、`models`。
-    func configure(_ config: PiConfig, for session: PiSessionState) async throws -> DeliveryRequest {
-        uploaded(try await store.requestConfig(config, to: session.target, on: session.hostID))
-    }
-
-    /// 结束会话：请会话所在的 Mac 让它的 Pi 进程正常退出。会话记录与对话都留着，之后再给它发消息会在后台恢复；已经结束的会话也算成功。
-    func end(_ session: PiSessionState) async throws -> DeliveryRequest {
-        uploaded(try await store.requestEnd(of: session.target, on: session.hostID))
-    }
-
-    /// 停止这一轮：请会话所在的 Mac 中止它正在跑的回合（相当于在 Pi 里按 Esc）。会话随后回到等你下一句（状态记录里是"完成"，被中止）；
-    /// 只停指挥官自己这一轮，子代理照常跑；已经结束或空闲的会话也算成功。界面只在会话 `state.isTurnRunning` 时给入口（等子代理时指挥官没有在跑的一轮）。
-    func stop(_ session: PiSessionState) async throws -> DeliveryRequest {
-        uploaded(try await store.requestStop(of: session.target, on: session.hostID))
-    }
-
-    /// 请 `host` 那台 Mac 在项目的文件夹里用 `agent` 开新会话（`model`、`thinking` 为 nil 是这家的默认），`prompt` 作开场。
-    /// `title` 是给人看的目标名（会话名或项目名）。这里生成这一次的认领标识：同步记录上出现带同一个 `launchToken` 的会话就是它（`SessionLaunch`）。
-    /// `card`：从这条灵感或任务开的（开好后它关联到新会话、会话名按它定，见 `CueStore.requestLaunch`、`CueStore.claimLaunchedCards`）。
-    func launchSession(
-        in project: UUID, prompt: String?, title: String, on host: String, card: UUID?, agent: AgentKind,
-        model: PiModelKey? = nil, thinking: PiThinkingLevel? = nil
-    ) async throws -> SessionLaunch {
-        let token = UUID().uuidString
-        let request = uploaded(try await store.requestLaunch(
-            PiLaunch(project: project, prompt: prompt, token: token, agent: agent, model: model, thinking: thinking), title: title, on: host, card: card))
-        return SessionLaunch(request: request.id, token: token)
-    }
-
-    /// 请 `host` 那台 Mac 给项目绑定文件夹（`PiBind.folder` 为 nil 是解除；手机没有完整路径，由那台 Mac 解析并写本机的目录绑定）；
-    /// 绑好后目录绑定记录随同步回来。
-    func requestBind(_ bind: PiBind, title: String, on host: String) async throws -> DeliveryRequest {
-        uploaded(try await store.requestBind(bind, title: title, on: host))
-    }
-
-    /// 请会话所在的 Mac 把这个会话的对话补写进来（7 天前活跃过、还没有对话的会话打开时调用）。
-    func requestTranscript(of session: PiSessionState) async throws -> DeliveryRequest {
-        uploaded(try await store.requestTranscript(of: session))
     }
 
     // 资料库是唯一事实源：打不开时不能悄悄换一个空库，也不能带着它往下走——错误交给调用方，启动入口显示失败页
@@ -373,9 +294,4 @@ final class AppServices {
         Self.log.error("\(String(describing: issue))")
         startupIssues.append(issue)
     }
-}
-
-nonisolated extension PiSessionState {
-    /// 投送请求里指这个会话的目标（`ref` 是 Pi 自己的会话 id）。
-    var target: SendTarget { SendTarget(kind: .piSession, name: title, ref: sessionID) }
 }

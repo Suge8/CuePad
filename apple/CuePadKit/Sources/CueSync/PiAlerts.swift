@@ -49,15 +49,11 @@ public enum PiAlertText {
   public static func content(title: String, question: String?, reply: String?, kind: PiAlert) -> (title: String, body: String) {
     switch kind {
     case .waitingForUser:
-      let first = [question, reply].lazy.compactMap { $0.flatMap(Self.firstLine) }.first
+      let first = [question, reply].lazy.compactMap { $0.flatMap(\.firstLine) }.first
       return ("\(title) 在等你", first ?? "去看看它在问什么")
     case .settled:
       return (title, "完成了")
     }
-  }
-
-  private static func firstLine(_ text: String) -> String? {
-    text.split(whereSeparator: \.isNewline).lazy.map { $0.trimmingCharacters(in: .whitespaces) }.first { !$0.isEmpty }
   }
 }
 
@@ -77,7 +73,7 @@ public enum CueAlertText {
   }
 }
 
-/// 一个账号私有数据库里的订阅（真实实现是 CKDatabase）。
+/// 一个账号私有数据库里的订阅（真实实现是 `CloudDatabase`）。
 protocol SubscriptionStore: Sendable {
   func subscriptions() async throws -> [CKSubscription.ID: CKSubscription]
   func save(_ subscription: CKSubscription) async throws
@@ -171,16 +167,4 @@ struct AlertSubscriptions {
       && existing.notificationInfo?.shouldSendContentAvailable == wanted.notificationInfo?.shouldSendContentAvailable
       && existing.notificationInfo?.shouldSendMutableContent == wanted.notificationInfo?.shouldSendMutableContent
   }
-}
-
-/// 私有数据库作为订阅存储。
-struct DatabaseSubscriptions: SubscriptionStore {
-  let database: CKDatabase
-
-  func subscriptions() async throws -> [CKSubscription.ID: CKSubscription] {
-    Dictionary(uniqueKeysWithValues: try await database.allSubscriptions().map { ($0.subscriptionID, $0) })
-  }
-
-  func save(_ subscription: CKSubscription) async throws { _ = try await database.save(subscription) }
-  func delete(_ id: CKSubscription.ID) async throws { _ = try await database.deleteSubscription(withID: id) }
 }

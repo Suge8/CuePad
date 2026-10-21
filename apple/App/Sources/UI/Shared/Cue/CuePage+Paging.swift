@@ -1,10 +1,9 @@
-import CueStore
 import CueText
 import SwiftUI
 
 extension CuePage {
     /// 一段约几格；屏上那几段上下各留几段真的（`ChatSegments`）。Cue 的回答长、一段要排几十毫秒（真实库），只留一段的话
-    /// 来回翻几屏时每拆了又建一段就卡一下；留八段时翻动与整段都挂着一样顺，挂着的仍有上限。
+    /// 来回翻几屏时每拆了又建一段就卡一下；留 `spare` 段时翻动与整段都挂着一样顺，挂着的仍有上限。
     static let segment = 6, spare = 8
 
     /// 一格上面空多少：同一边连着说的收成一串，你开始说的新一轮与上一轮拉开，其余（Cue 接你的话、经过、动态、分隔）是一般的间距。
@@ -76,7 +75,7 @@ extension CuePage {
             bubble + answer(message.text) + 12 + CueShots.floor(count: shots, width: width(CueBubble.cueWidth)) + 12 + CueTaskLine.lineHeight
         // 虚线气泡至少一行小字
         case .notes: bubble + note
-        case .process, .renewed: note
+        case .process: note
         }
         return above + body
     }

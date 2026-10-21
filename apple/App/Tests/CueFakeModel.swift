@@ -165,7 +165,10 @@ nonisolated final class FakeModel: Sendable {
                 default: ""
                 }
             }
-            return say(earlier.lazy.compactMap { $0.firstMatch(of: /暗号是 (\S+)/)?.1 }.last.map { "记得，暗号是 \($0)" } ?? "不记得暗号")
+            if let code = earlier.lazy.compactMap({ $0.firstMatch(of: /暗号是 (\S+)/)?.1 }).last { return say("记得，暗号是 \(code)") }
+            // 开了新会话：前面的话不在上下文里，只在这一条输入开头的对话视图里
+            if let view = text.firstMatch(of: /<view>[\s\S]*<\/view>/)?.0, let code = view.firstMatch(of: /暗号是 (\S+)/)?.1 { return say("从视图接上：暗号是 \(code)") }
+            return say("不记得暗号")
         }
         if last["role"] as? String == "tool" {
             if text.contains("建好了"), let id = text.firstMatch(of: /（([0-9a-f]{8})）/)?.1 {
@@ -175,8 +178,6 @@ nonisolated final class FakeModel: Sendable {
             return say("办好了")
         }
         if let answer = text.firstMatch(of: /他回答了「.*」：(.+)/)?.1 { return say("知道了：\(answer)") }
-        if text.contains("醒来：换了新上下文"), let handoff = text.firstMatch(of: /(交接：.+)/)?.1 { return say("接上了：\(handoff)") }
-        if text.contains("memory renew 写交接") { return call("memory", ["action": "renew", "handoff": "交接：在跟登录页"]) }
         if text.contains("请把这张图转给登录页"), let image = text.firstMatch(of: /!\[\]\(cuepad:\/\/img\/[0-9a-f]+\)/)?.0 {
             return call("task", ["action": "say", "task": "修好登录页 转图", "text": "看这张\n\(image)"])
         }

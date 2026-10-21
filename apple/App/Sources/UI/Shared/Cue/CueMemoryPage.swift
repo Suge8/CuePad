@@ -163,9 +163,8 @@ private struct MemoryRow: View {
             .contextMenu { menu }
             .rowSwipes(RowSwipes(leading: [pin], trailing: [forget]))
             #else
-            .overlay(alignment: .bottomTrailing) { MemoryHoverActions(actions: [pin, forget]) }
-            .row(hovers: true)
-            .environment(\.rowHoverPreset, DebugHooks.hovers(line.text))
+            .hoverReveal(.bottomTrailing) { MemoryHoverActions(actions: [pin, forget]) }
+            .row()
             .contextMenu { menu }
             .accessibilityActions { RowActionButtons(actions: [copy, pin, forget]) }
             #endif
@@ -173,31 +172,25 @@ private struct MemoryRow: View {
 }
 
 #if os(macOS)
-/// 指针停在行上时（`rowHovered`）右下角的钉住与忘掉：叠在行上、不挤正文，垫一块与悬停的行同色的实底（页底叠行的淡底）免得压着最后一行的字。
+/// 指针停在行上时右下角浮出的钉住与忘掉（`hoverReveal`）。
 private struct MemoryHoverActions: View {
     let actions: [RowAction]
-    @Environment(\.rowHovered) private var hovered
     @Environment(\.palette) private var palette
 
     var body: some View {
-        if hovered {
-            HStack(spacing: 2) {
-                ForEach(actions.keyed, id: \.key) { item in
-                    Button(item.action.title, icon: item.action.icon, action: item.action.run)
-                        .labelStyle(.iconOnly)
-                        .font(Typography.meta.weight(.medium))
-                        .foregroundStyle(item.action.tone == .destructive ? palette.failure : palette.ink2)
-                        .frame(width: 24, height: 24)
-                        .contentShape(.rect)
-                        .buttonStyle(PressStyle(.button))
-                        .help(item.action.title)
-                }
+        HStack(spacing: 2) {
+            ForEach(actions.keyed, id: \.key) { item in
+                Button(item.action.title, icon: item.action.icon, action: item.action.run)
+                    .labelStyle(.iconOnly)
+                    .font(Typography.meta.weight(.medium))
+                    .foregroundStyle(item.action.tone == .destructive ? palette.failure : palette.ink2)
+                    .frame(width: 24, height: 24)
+                    .contentShape(.rect)
+                    .buttonStyle(PressStyle(.button))
+                    .help(item.action.title)
             }
-            .padding(.horizontal, 4)
-            .background(palette.fill, in: .capsule).background(palette.desk, in: .capsule)
-            .padding(.bottom, 4)
-            .transition(.opacity)
         }
+        .padding(.leading, 4)
     }
 }
 #endif

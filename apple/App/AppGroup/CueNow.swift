@@ -4,7 +4,7 @@ import Foundation
 /// iPhone 的灵动岛与锁屏读的唯一一份。App 由库推出（`CueNow.init(_:at:)`，从 Cue 的摘要 `CueDigest`），这里只有规则，各处只画（`CueNowViews`）。
 /// - Cue 自己（`cue`）：不在（没启用、睡着、起不来，带那一句原因）、歇着、你的话在路上、在一轮里（谁叫醒的、此刻那一步、从几点起）。
 /// - 手上的活（`beads`）：一颗珠子一份——等你的每一件，推进中的每一件（在跑、等子代理交回、歇着），刚做完的顶层任务；按这个先后排。
-/// - 那一句（`sentence`，窄处写 `headline`）：先说 Cue 自己，再说要你拍板的，再说刚做完的、交出去的活，最后是静着。
+/// - 那一句（`headline`）：先说 Cue 自己，再说要你拍板的，再说刚做完的、交出去的活，最后是静着；紧凑态说的那一件是 `focus`。
 /// - 快的事实（Cue 在想、话在路上）几分钟就变，后台的岛不一定等得到下一份：过了 `staleAfter` 只信慢的（`settled`）。
 /// 刚做完的珠子只留 `doneWindow`：到点由读的一方按时刻收掉（`aged(to:)`、`nextChange(after:)`），不另计时。
 nonisolated struct CueNow: Codable, Hashable, Sendable {
@@ -20,7 +20,6 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
     var advancing: Int
     /// 第一件等你：说什么、"打开"去哪，只有 Cue 带选项的提问能"允许一次"（会话在问的只给打开）。
     var first: Wait?
-    /// 这一份是什么时候推出的。
     var at: Date
     /// Mac 上它运行在别的 Mac 时那一句（"在「Mac Studio」上运行"）：静着、手上没有事时那一句写它；Cue 页的启用卡也写它。这台或手机上为 nil。
     var elsewhere: String? = nil
@@ -36,7 +35,8 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
     }
 
     struct Bead: Codable, Hashable, Sendable, Identifiable {
-        enum Kind: String, Codable, Sendable {
+        /// 声明的先后就是排的先后（珠子、读屏）。
+        enum Kind: String, Codable, Sendable, CaseIterable {
             /// 等你拍板
             case asks
             /// 有会话在跑（在想、用工具、正在开、话正送进去）
@@ -55,7 +55,6 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
         var name: String
         /// 停在这个样子的起点（计时从它走；刚做完的是做完的时刻）。
         var since: Date
-        /// 在跑的子代理几个（等子代理交回时）。
         var subagents: Int
         /// 这份活的 Pi 会话 id：接力落在这颗珠子上（`relaySpot(bead:)`）。
         var sessions: [String]
@@ -82,11 +81,6 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
     static let slowStale: TimeInterval = 15 * 60
     static let quiet = "手上没有事"
 
-    var asks: Int { beads.count { $0.kind == .asks } }
-    var running: Int { beads.count { $0.kind == .running } }
-    var subagents: Int { beads.filter { $0.kind == .delegating }.reduce(0) { $0 + $1.subagents } }
-    var delegating: Int { beads.count { $0.kind == .delegating } }
-    var resting: Int { beads.count { $0.kind == .resting } }
     var justDone: Bead? { beads.first { $0.kind == .done } }
 
     var isAway: Bool { if case .away = cue { true } else { false } }
@@ -98,7 +92,7 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
     }
 
     /// 有活才开着实时活动：Cue 在一轮里或话在路上、有等你的、有在跑或等子代理的；只剩歇着与刚做完的就结束。
-    var isLive: Bool { isFast || beads.contains { [.asks, .running, .delegating].contains($0.kind) } }
+    var isLive: Bool { isFast || beads.contains { $0.kind.tone == .asks || $0.kind.tone == .moving } }
 
     /// 这一份过多久不可信。
     var staleAfter: TimeInterval { isFast ? Self.fastStale : Self.slowStale }
@@ -124,20 +118,15 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
         beads.filter { $0.kind == .done }.map { $0.since.addingTimeInterval(Self.doneWindow) }.filter { $0 > date }.min()
     }
 
-    /// 那一句（岛的展开、锁屏）。
-    var sentence: String { line(full: true) }
-    /// 窄处那一句（Cue 那一行、紧凑处）：在一轮里只说谁叫醒的，不带此刻那一步。
-    var headline: String { line(full: false) }
-
-    private func line(full: Bool) -> String {
+    /// 那一句（Cue 那一行、岛与锁屏的头一行）：在一轮里只说谁叫醒的，此刻那一步另起一行（`doing`）。
+    var headline: String {
         switch cue {
         case .away(let reason, _): return reason
         case .hearing: return "你的话在路上"
-        case .working(let woke, let doing, _):
-            let woke = woke ?? "在想"
-            guard full, let doing else { return woke }
-            return Dotted(woke, doing).visible
+        case .working(let woke, _, _): return woke ?? "在想"
         case .idle:
+            let asks = count(.asks), running = count(.running)
+            let subagents = beads.filter { $0.kind == .delegating }.reduce(0) { $0 + $1.subagents }
             if asks > 0 { return "\(asks) 件等你拍板" }
             if let done = justDone { return "刚做完「\(done.name)」" }
             if subagents > 0 { return "等 \(subagents) 个子代理交回" }
@@ -147,37 +136,21 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
         }
     }
 
-    /// Cue 歇着时紧凑态说的那份活，先后同那一句：最早等你的、刚做完的、最早等子代理交回的、最早在跑的；都没有（只剩歇着的）为 nil。
-    /// 短词、走秒与颜色都跟着它，不会出现词说做完、秒在计另一件的。
-    var lead: Bead? {
-        if let done = justDone, asks == 0 { return done }
-        for kind in [Bead.Kind.asks, .delegating, .running] {
-            if let first = beads.filter({ $0.kind == kind }).min(by: { $0.since < $1.since }) { return first }
-        }
-        return nil
-    }
+    private func count(_ kind: Bead.Kind) -> Int { beads.count { $0.kind == kind } }
 
-    /// 灵动岛紧凑态头像旁的一个短词：Cue 在一轮里最先（它正在动），否则是 `lead` 的样子。
-    var word: String {
+    /// 灵动岛紧凑态头像旁说的那一件：短词、走秒的起点与颜色只在这里一起定，不会词说做完、秒在计另一件。
+    /// Cue 在一轮里或话在路上最先（它正在动），不在写不在；歇着时是手上最该看的那份活，先后同那一句：
+    /// 最早等你的、刚做完的、推进中（在跑与等子代理交回，WORDS.md）最早的那份；只剩歇着的写歇着、不计时。
+    var focus: (word: String, tone: Tone, since: Date?) {
         switch cue {
-        case .away: return "不在"
-        case .hearing: return "在听"
-        case .working: return "在想"
+        case .away: return ("不在", .quiet, nil)
+        case .hearing: return ("在听", .moving, nil)
+        case .working(_, _, let since): return ("在想", .moving, since)
         case .idle:
-            switch lead?.kind {
-            case .asks: return "等你"
-            case .done: return "做完"
-            case .delegating: return "等交回"
-            case .running: return "在跑"
-            case .resting, nil: return "歇着"
-            }
+            let earliest = { (tone: Tone) in self.beads.filter { $0.kind.tone == tone }.min { $0.since < $1.since } }
+            guard let lead = earliest(.asks) ?? justDone ?? earliest(.moving) else { return ("歇着", .quiet, nil) }
+            return (lead.kind.word, lead.kind.tone, lead.since)
         }
-    }
-
-    /// 紧凑态与展开态走秒的起点，跟着短词说的那件：Cue 这一轮从几点起，否则 `lead` 从几点起（做完是做完了多久）。
-    var clock: Date? {
-        if case .working(_, _, let since) = cue { return since }
-        return lead?.since
     }
 
     /// 在一轮里此刻那一步（"读取 Sources/Zoom.swift"）；没在用工具为 nil。
@@ -195,6 +168,43 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
 }
 
 nonisolated extension CueNow: SnapshotFile { static let fileName = "cue.json" }
+
+nonisolated extension CueNow {
+    /// 颜色的意思，各处只按它取色（`Tone.color`）：在动（在跑、等子代理交回、Cue 在想或话在路上）、等你、刚做完、其余。
+    enum Tone { case moving, asks, done, quiet }
+}
+
+nonisolated extension CueNow.Bead.Kind {
+    var tone: CueNow.Tone {
+        switch self {
+        case .asks: .asks
+        case .running, .delegating: .moving
+        case .done: .done
+        case .resting: .quiet
+        }
+    }
+
+    /// 紧凑态的短词：在跑与等子代理交回都是推进中，两者靠珠子的实心、空心与那一句分。
+    var word: String {
+        switch self {
+        case .asks: "等你"
+        case .running, .delegating: "推进中"
+        case .done: "做完"
+        case .resting: "歇着"
+        }
+    }
+
+    /// 这颗珠子的样子写成字（展开态与锁屏的每一行、读屏）。
+    var label: String {
+        switch self {
+        case .asks: "等你拍板"
+        case .running: "在跑"
+        case .delegating: "等子代理"
+        case .resting: "歇着"
+        case .done: "做完"
+        }
+    }
+}
 
 /// 头像的表情（`Assets` 里的 mascot-cue-*）。App 里按 Cue 在不在、有没有等你推（`CueMood.of`），扩展只读 Cue 此刻里存的那个。
 nonisolated enum CueMood: String, Codable, Sendable {

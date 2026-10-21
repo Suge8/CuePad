@@ -2,8 +2,8 @@
 import SwiftUI
 
 /// 搜索页（窄屏三页根上的搜索钮、宽屏侧栏顶上的搜索框或 ⌘K，同 Mac 的 ⌘K）：各宽度都推在当前页上，退出就是返回。
-/// 搜索框在窄屏的导航栏中间（左边是系统的返回）；宽屏导航栏里还有侧栏钮与 Cue 面板钮，放不下一整条，搜索框在导航栏下面那一排。下面两个范围——灵感与任务（`CardSearchResults`，筛选胶囊、按项目分组）、
-/// 会话（`SessionList`，现在与历史）；一个搜索词两边共用，换范围不清空。进入、在搜索页上再点搜索框或再按 ⌘K 都聚焦搜索框。
+/// 宽屏导航栏里还有侧栏钮与 Cue 面板钮，放不下一整条，搜索框在导航栏下面那一排。两个范围——灵感与任务（`CardSearchResults`）、会话（`SessionList`）；
+/// 一个搜索词两边共用，换范围不清空。进入、在搜索页上再点搜索框或再按 ⌘K 都聚焦搜索框。
 struct SearchScreen: View {
     enum Scope: Hashable, CaseIterable {
         case cards, sessions
@@ -63,7 +63,6 @@ struct SearchScreen: View {
 
     private var field: some View { SearchCapsule(prompt: "搜索灵感、任务与会话", query: $query.text, focus: $searching) }
 
-    /// 聚焦搜索框，不做动画。
     private func focusSearch() {
         var instant = Transaction()
         instant.disablesAnimations = true

@@ -1,9 +1,5 @@
 import CueStore
-import CueText
 import SwiftUI
-#if os(macOS)
-import CuePi
-#endif
 
 /// Cue 页（Mac 内容区的一页、iPhone 与 iPad 侧栏最上面那一行点进的页、iPad 右侧面板；iPhone 打开 App 就在这一页），与会话页同一套消息版式：
 /// 页头一直在（头像、名字、此刻在做什么；Mac 在窗口工具栏，是 `CueTitle`；手机与 iPad 是浮在对话上的 `CueHeader`，点开是在做、等你与记忆的面板）；
@@ -11,7 +7,7 @@ import CuePi
 /// 同一边连着说的几颗收紧成一串，隔了一阵的地方居中写几点（`ChatTimeMarker`）；经过、动态与分隔不是气泡，是旁注与居中的标记（`NoteLine`、`ChatMarker`），
 /// 你发起的一轮在你的话之后先是这一轮的经过（`RoundProcess`，同会话页：在跑时实时展开，做完收成一行；设置里可关，`AppSettings.showsCueSteps`），这一轮说的话与结果按先后在它之后；
 /// 经过清单里"对你说"那一条点它回到对话里的原处。Cue 自己醒来的连着几轮收进一颗虚线气泡（`CueNoteBubble`：每轮写为什么醒，点了去叫醒它的会话），
-/// 它换了新上下文的地方一条分隔（`CueRenewal`，点开是交接备忘），末尾是它此刻在做什么（`CueEnding`）；
+/// 末尾是它此刻在做什么（`CueEnding`）；
 /// 对话区与会话页是同一个（`ChatColumn`：排开、刻度滑条、跳转与描圈）；底部是"等你"（`CueWaitingDock`）与输入框（`CueComposer`）。
 /// 对话第一帧就排好（`observing` 当场读），停在最新处；有新消息时从第一条读起，还没读的气泡旁一颗小点（`CueViewing`）。
 /// Cue 运行在别的设备上、本机正在和 iCloud 对时（`AppServices.isCatchingUp(on:)`）页头写"正在同步"，这期间到的话先不滑上来，
@@ -31,6 +27,7 @@ struct CuePage: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     /// 这一页的输入框占着底边，底部那一排的 Cue 钮把位置交给它（`DockRoot`）。
     @Environment(\.dockComposer) private var ownsComposer
+    @Environment(\.dockComposing) private var composing
     #endif
     @State private var thread: CueThread?
     @State private var follow = ChatFollow()
@@ -97,7 +94,7 @@ struct CuePage: View {
     /// "等你"卡与输入框浮在对话底上（`FloatingReply`，同会话页与 Mac，键盘也在那里让）；窄屏底部那一排没有键盘时离屏幕底边同 Dock。
     private var page: some View {
         FloatingReply(backed: false, floor: docked ? Dock.margin : nil) {
-            chat.overlay { if docked, navigation.placesOpen { closePlaces } }
+            chat
         } reply: {
             bottom
                 .padding(.horizontal, docked ? Dock.margin : 12)
@@ -114,19 +111,10 @@ struct CuePage: View {
     /// 窄屏导航栈的根（不是 iPad 右侧面板）：底部是"⋯"加输入框。
     private var docked: Bool { !inPanel && sizeClass == .compact }
 
-    /// "⋯"展开时铺在对话上的一层：点一下或一划就收起。
-    private var closePlaces: some View {
-        Color.clear.contentShape(.rect)
-            .onTapGesture { navigation.placesOpen = false }
-            .gesture(DragGesture(minimumDistance: 4).onChanged { _ in navigation.placesOpen = false })
-            .accessibilityHidden(true)
-    }
-
-    /// 窄屏底部那一排：左边给"⋯"让出位置（输入框有焦点时不让），右边输入框。"⋯"展开着、换来这一页时 Cue 钮还在长成它，
-    /// 输入框的位置是底部那一排的 Cue 钮，这里的输入框藏着；长到了才接手（`DockRoot.handed`），离开时当场藏起。
+    /// 窄屏底部那一排：左边给"⋯"让出位置（输入框有焦点时不让），右边输入框；Cue 钮长成它之前藏着（`DockRoot.handed`）。
     private var dockRow: some View {
         HStack(alignment: .bottom, spacing: 0) {
-            if !navigation.cueComposing {
+            if composing?.wrappedValue != true {
                 Color.clear.frame(width: Dock.slot + Dock.gap, height: Dock.slot)
             }
             composer
@@ -140,7 +128,7 @@ struct CuePage: View {
     #if os(iOS)
     private var composer: some View {
         CueComposer(style: .page, focusRequests: inPanel ? 0 : navigation.cueFocusRequests, sent: { follow.sent() }) { focused in
-            withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { navigation.cueComposing = focused }
+            withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { composing?.wrappedValue = focused }
         }
     }
     #endif

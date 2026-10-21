@@ -96,32 +96,38 @@ private struct GeneralSections: View {
 }
 
 /// 一个全局快捷键（显示/隐藏 CuePad、对 Cue 说）：点键帽后按下新的组合键，Esc 取消；注册失败时保留原快捷键，原因写在名称下面。
-/// 悬停时键帽左边露出"更改"。
+/// 快捷键那一格：指针停在上面（`buttonHovered`）时左边露出"更改"（占着位置、只是透明，露出时键帽不挪）。
+private struct ShortcutKey: View {
+    let text: String
+    let recording: Bool
+    @Environment(\.buttonHovered) private var lit
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text("更改").font(Typography.meta).foregroundStyle(palette.ink3).opacity(lit && !recording ? 1 : 0)
+            Keycap(text: text)
+        }
+        .contentShape(.rect)
+    }
+}
+
 private struct ShortcutRow: View {
     let title: String
     let icon: Icon
     let accelerator: String
     /// 注册新的组合键；失败时抛出，原来的照用。
     let apply: (String) throws -> Void
-    @Environment(\.palette) private var palette
     @State private var recording = false
-    @State private var hovering = false
     @State private var monitor: Any?
     @State private var error: String?
 
     var body: some View {
         SettingRow(title: title, icon: Image(icon), tone: error == nil ? .calm : .failure, status: error.map { Dotted($0) }) {
             Button { recording ? stop() : start() } label: {
-                HStack(spacing: 8) {
-                    Text("更改").font(Typography.meta).foregroundStyle(palette.ink3)
-                        .opacity(hovering && !recording ? 1 : 0)
-                    Keycap(text: recording ? "请按下组合键…" : ShortcutText.display(accelerator))
-                }
-                .contentShape(.rect)
+                ShortcutKey(text: recording ? "请按下组合键…" : ShortcutText.display(accelerator), recording: recording)
             }
-            .buttonStyle(.plain)
-            .onHover { hovering = $0 }
-            .animation(Motion.quick, value: hovering)
+            .buttonStyle(PressStyle(.inline))
             .help("点一下，按下新的组合键（Esc 取消）")
         }
         .onDisappear(perform: stop)

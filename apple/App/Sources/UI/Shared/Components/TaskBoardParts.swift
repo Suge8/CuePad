@@ -1,7 +1,7 @@
 import CueStore
 import SwiftUI
 
-/// 四列并排（Mac 任务页、宽屏 iPad）：列头（`BoardColumnHeader`）加一列卡（`BoardColumn`），各自滚动。
+/// 四列并排（Mac 任务页、宽屏 iPad）：每列（`BoardColumn`）各自滚动，列头（`BoardColumnHeader`）在列里、随卡一起滚到顶上那一排后面。
 /// 列按可见宽四等分，窄到一列放不下 `minColumn` 时整排横向滚动。
 struct BoardColumns: View {
     let board: TaskBoard
@@ -20,11 +20,8 @@ struct BoardColumns: View {
         ScrollView(.horizontal) {
             HStack(alignment: .top, spacing: Self.gap) {
                 ForEach(TaskBoard.Column.allCases) { column in
-                    VStack(alignment: .leading, spacing: 10) {
-                        BoardColumnHeader(column: column, count: board.count(column)).padding(.horizontal, 8)
-                        BoardColumn(column: column, board: board, adding: $adding, newTaskProject: newTaskProject)
-                    }
-                    .containerRelativeFrame(.horizontal) { width, _ in max(Self.minColumn, (width - Self.gap * 3) / 4) }
+                    BoardColumn(column: column, board: board, adding: $adding, newTaskProject: newTaskProject, titled: true)
+                        .containerRelativeFrame(.horizontal) { width, _ in max(Self.minColumn, (width - Self.gap * 3) / 4) }
                 }
             }
         }
@@ -46,6 +43,8 @@ struct BoardColumn: View {
     /// 待办顶上浮出添加任务那一行（"+ 新任务"）；新任务落在 `newTaskProject`。
     @Binding var adding: Bool
     let newTaskProject: UUID?
+    /// 最上面带列头（四列并排时；手机一屏一列由顶上的分段写列名与数）。
+    var titled = false
     @Environment(Workspace.self) private var workspace
     @Environment(\.cardAgents) private var agents
     @Environment(\.palette) private var palette
@@ -94,6 +93,9 @@ struct BoardColumn: View {
     }
 
     @ViewBuilder private var content: some View {
+        if titled {
+            BoardColumnHeader(column: column, count: board.count(column)).padding(.horizontal, 8 - Self.inset).padding(.bottom, 2)
+        }
         switch column {
         case .todo:
             if adding {
@@ -167,13 +169,15 @@ struct BoardColumn: View {
                 }
                 .frame(minHeight: TaskMetrics.chipTarget).contentShape(.rect)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PressStyle())
             .accessibilityValue(showsEarlier ? "已展开" : "已折叠")
             Spacer(minLength: 0)
             if showsEarlier {
                 // 做完的一键收走：归档后不占列表，照样搜得到
-                Button("全部归档") { workspace.attempt { try await workspace.archiveCompletedTasks() } }
-                    .buttonStyle(.plain).frame(minHeight: TaskMetrics.chipTarget)
+                Button { workspace.attempt { try await workspace.archiveCompletedTasks() } } label: {
+                    Text("全部归档").frame(minHeight: TaskMetrics.chipTarget).contentShape(.rect)
+                }
+                .buttonStyle(PressStyle())
                     .help("把做完的任务全部归档：不占列表，照样搜得到")
             }
         }

@@ -32,7 +32,7 @@ struct CueActivityTests {
         // Cue 还没启用：那一句写原因；两件都落在等你上：两颗等你，加刚做完的那颗；第一件是 Cue 的提问，能"允许一次"
         var cue = try await now()
         #expect(kinds(cue) == [.asks, .asks, .done] && cue.advancing == 0 && cue.isLive)
-        #expect(cue.headline == "Cue 还没启用" && cue.word == "不在")
+        #expect(cue.headline == "Cue 还没启用" && cue.focus.word == "不在")
         let first = try #require(cue.first)
         #expect(first.title == "推送 v1.4 到 TestFlight" && first.detail == "Cue 请你允许推送代码" && first.open == DeepLink.cue.url)
         let allow = try #require(first.allow)
@@ -67,13 +67,13 @@ struct CueActivityTests {
         }
         try await store.recordMacPresence(host: "mac-cue") { true }
         cue = try await now()
-        #expect(cue.headline == "刚做完「发布 v1.4」" && cue.word == "做完")
+        #expect(cue.headline == "刚做完「发布 v1.4」" && cue.focus.word == "做完")
         #expect(cue.aged(to: cue.at.addingTimeInterval(CueNow.doneWindow + 1)).headline == CueNow.quiet)
 
         // Cue 自己开始想：手上没活也算有活，岛开着；过时之后只信慢的事实
         try await store.setCueState(.thinking)
         cue = try await now()
-        #expect(cue.isLive && cue.headline == "在想" && cue.word == "在想" && cue.staleAfter == CueNow.fastStale)
+        #expect(cue.isLive && cue.headline == "在想" && cue.focus.word == "在想" && cue.staleAfter == CueNow.fastStale)
         #expect(cue.settled.headline == "刚做完「发布 v1.4」" && !cue.settled.isLive)
     }
 }

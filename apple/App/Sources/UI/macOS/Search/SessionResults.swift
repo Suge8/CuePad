@@ -5,7 +5,6 @@ import SwiftUI
 /// ⌘K"会话"范围里的一组结果。
 struct SessionGroup: Equatable {
     enum Key: Hashable {
-        /// 在线的会话。
         case now
         /// 已结束的，按结束时间分段（`TimeSection`）。
         case ended(TimeSection)
@@ -78,10 +77,10 @@ struct SessionResultList: View {
                     }
                     if more > 0 {
                         Button("显示更多（还有 \(more) 个）", action: loadMore)
-                            .buttonStyle(.plain).font(Typography.meta).foregroundStyle(palette.ink2).padding(.vertical, 10)
+                            .buttonStyle(PressStyle(.inline)).font(Typography.meta).foregroundStyle(palette.ink2).padding(.vertical, 10)
                     }
                 }
-                // 字离滚动区的边 18；行的底向两边让出一截，留在滚动区里
+                // 行的底向两边让出一截，留在滚动区里
                 .padding(.vertical, 8).padding(.horizontal, 18)
             }
             .onChange(of: selection) { if let selection { proxy.scrollTo(selection) } }

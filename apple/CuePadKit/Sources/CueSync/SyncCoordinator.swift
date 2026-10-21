@@ -5,8 +5,8 @@ import os
 /// 同步逻辑：远端变更应用、上传批次与结果处理、账号与状态。不碰网络：拉取器（`ZonePuller.pulled`）、发送者（`sent`、`nextBatch`）
 /// 与账号检查（`CloudSync`）把服务器给的直接交进来。待推送只有库里推导的一份（`CueStore.pendingSync`）。
 actor SyncCoordinator {
-  private static let issueLimit = 50
-  private static let log = Logger(subsystem: "com.sugeh.cuepad", category: "delivery")
+  static let issueLimit = 50
+  static let log = Logger(subsystem: "com.sugeh.cuepad", category: "delivery")
   static let accountKey = "account"
 
   let store: CueStore
@@ -16,10 +16,10 @@ actor SyncCoordinator {
   private var unsendable: [String: Int64] = [:]
   /// 库里没有可传的待推送，截至推导时的同步变更代数（`CueStore.pendingSync(since:)`）：之后只复查其后的提交碰过的记录，不再全量推导，
   /// 代数没变（按节奏的拉取每次顺带的那一轮）就什么都不查。`sending` 是在路上的这一批带走了推导出的全部、这批的条数：整批收下才算没有了（`processSent`）。
-  private var drained: (generation: Int, sending: Int?)?
+  var drained: (generation: Int, sending: Int?)?
 
   /// 协调器自己记的事实。`status` 不含 `.syncing`；上传与拉积压的忙闲分开记。对外的快照只在发布处推出（`state`）。
-  private struct Facts {
+  struct Facts {
     var status = SyncStatus.starting
     var sending = false
     var catchingUp = false
@@ -36,7 +36,7 @@ actor SyncCoordinator {
     }
   }
 
-  private var facts = Facts() {
+  var facts = Facts() {
     didSet {
       let state = facts.state
       if state != oldValue.state { for continuation in subscribers.values { continuation.yield(state) } }
@@ -54,7 +54,6 @@ actor SyncCoordinator {
 
   // MARK: 状态订阅
 
-  /// 先给出当前快照，之后状态或问题列表每次变化给出新快照。
   nonisolated var stateUpdates: AsyncStream<SyncState> {
     AsyncStream { continuation in
       let token = UUID()
@@ -72,10 +71,13 @@ actor SyncCoordinator {
 
   private func unsubscribe(_ token: UUID) { subscribers[token] = nil }
 
-  /// 能不能和服务器同步：有可用的账号，也没有停下来等你决定。
+  /// 能不能和服务器同步：有可用的账号，也没有停下（`stopped`）。
   var canSync: Bool {
-    needsDecision == nil && ![.noAccount, .accountRestricted].contains(status)
+    !stopped && ![.noAccount, .accountRestricted].contains(status)
   }
+
+  /// 停下了：等你决定，或这台要更新（`SyncStatus.outdated`）。停下时不拉、不传，账号、同步区与上传失败都不改状态。
+  var stopped: Bool { needsDecision != nil || status == .outdated }
 
   var alertSubscription: PiAlertSubscriptionStatus { facts.alerts }
   func setAlerts(_ alerts: PiAlertSubscriptionStatus) { facts.alerts = alerts }
@@ -95,7 +97,7 @@ actor SyncCoordinator {
 
   // MARK: 上传批次
 
-  /// 下一批要上传的：`first` 里待推送的排在前面，至多 `limit` 条；没有可传的（或此刻不能同步）为 nil。
+  /// 下一批要上传的：`first` 里待推送的排在前面，至多 `limit` 条；没有可传的（或此刻不能同步）为 nil。交出一批即算同步中，到这一轮结束（`finishedSending`）。
   /// 上次确定没有可传的之后只看其后的提交碰过的记录（`drained`）。
   func nextBatch(first: Set<String>, limit: Int) async -> (saves: [CKRecord], deletes: [CKRecord.ID])? {
     if drained?.sending != nil { drained = nil }  // 上一批整个没传成（没有结果）
@@ -132,6 +134,9 @@ actor SyncCoordinator {
       report(error, recordName: nil)
       return nil
     }
+    // 构造这批时可能停下了（拉到过高的门槛、要你决定）：停下后不再交出新的一批
+    guard canSync else { return nil }
+    facts.sending = true
     return batch
   }
 
@@ -158,8 +163,8 @@ actor SyncCoordinator {
 
   // MARK: 拉取器、发送者与账号检查交进来的
 
-  /// 发送者开始、结束一轮上传。
-  func setSending(_ busy: Bool) { facts.sending = busy }
+  /// 一轮上传结束（开始是 `nextBatch` 交出一批时）。
+  func finishedSending() { facts.sending = false }
 
   /// 拉取器开始、结束拉积压（没有令牌时的对账，或一拉不止一页）。
   func setCatchingUp(_ busy: Bool) { facts.catchingUp = busy }
@@ -181,10 +186,11 @@ actor SyncCoordinator {
     do { _ = try await token() } catch { report(error, recordName: nil) }
   }
 
-  /// 拉取器拉到的一页：应用完才返回；整页没能应用（库写不进去、停下来等你决定）时抛出，拉取器不前移令牌。
-  /// 单条记录不合法只报告（见 `ZonePuller`）。
+  /// 拉取器拉到的一页：应用完才返回；整页没能应用（库写不进去、停下了）时抛出，拉取器不前移令牌。
+  /// 单条记录不合法只报告（见 `ZonePuller`）。页里的门槛高于这台的，整页不应用，更新后从这页接着拉。
   func pulled(_ modifications: [CKRecord], _ deletions: [(id: CKRecord.ID, recordType: String)]) async throws {
-    guard needsDecision == nil else { throw SyncPaused() }
+    guard !stopped else { throw SyncPaused() }
+    try meet(modifications)
     guard !modifications.isEmpty || !deletions.isEmpty else { return }
     do {
       try await applyFetched(modifications, deletions)
@@ -196,9 +202,16 @@ actor SyncCoordinator {
     reached(nil)
   }
 
+  /// 云端的最低对端版本（`PeerFloor`）高于这台能同步的结构版本：停下，抛出 `SyncPaused`。
+  func meet(_ records: [CKRecord]) throws {
+    guard let floor = PeerFloor.version(in: records), floor > CueStore.supportedSchemaVersions.upperBound else { return }
+    facts.status = .outdated
+    throw SyncPaused()
+  }
+
   /// 上传结果：记账，并告诉发送者这批有没有进展、要不要停下来等。
   func sent(_ sent: SentRecords) async -> SendOutcome {
-    guard needsDecision == nil else { return SendOutcome(progressed: false, blocked: true, zoneMissing: false) }
+    guard !stopped else { return SendOutcome(progressed: false, blocked: true, zoneMissing: false) }
     reached(nil)
     do {
       return try await processSent(sent)
@@ -208,12 +221,12 @@ actor SyncCoordinator {
     }
   }
 
-  private var needsDecision: SyncDecision? {
+  var needsDecision: SyncDecision? {
     if case .needsDecision(let decision) = status { decision } else { nil }
   }
 
   func accountStatus(_ account: CKAccountStatus) {
-    guard needsDecision == nil else { return }
+    guard !stopped else { return }
     switch account {
     case .available:
       if [.starting, .noAccount, .accountRestricted, .accountUnavailable].contains(status) { facts.status = .idle }
@@ -226,7 +239,7 @@ actor SyncCoordinator {
 
   /// 此刻登录的 iCloud 账号（用户记录名）。第一次同步记下；和上次同步的不是同一个时，本机数据属于上一个账号，停下来等你决定。
   func account(_ name: String) async {
-    guard needsDecision == nil else { return }
+    guard !stopped else { return }
     let current = Data(name.utf8)
     do {
       guard let last = try await store.syncState(Self.accountKey) else { return try await store.setSyncState(Self.accountKey, current) }
@@ -239,7 +252,7 @@ actor SyncCoordinator {
   /// 同步区不在了（`deletedByUser`：你在 iCloud 设置里删了 CuePad 的数据）：同步过的（有令牌或推送过的记录）是云端数据被删除或重置，
   /// 停下来等你决定；从没同步过的不用管，第一次上传时建区。
   func zoneMissing(deletedByUser: Bool) async {
-    guard needsDecision == nil else { return }
+    guard !stopped else { return }
     do {
       let hadToken = try await token() != nil
       let pushedAny = try await !store.syncedRecords().isEmpty
@@ -251,190 +264,8 @@ actor SyncCoordinator {
     }
   }
 
-  // MARK: 远端变更
-
-  private func applyFetched(_ modifications: [CKRecord], _ deletions: [(id: CKRecord.ID, recordType: String)]) async throws {
-    var changes: [RemoteChange] = []
-    for record in modifications {
-      guard let row = RecordMapper.row(from: record) else {
-        report("未知的记录类型「\(record.recordType)」，已跳过（可能来自更新版本的 CuePad）", recordType: record.recordType, recordName: record.recordID.recordName)
-        continue
-      }
-      if row.table == .deliveryRequests { traceArrival(of: record, row) }
-      if row.table == .attachments, try !adoptAsset(of: record, row) { continue }
-      changes.append(.save(row, systemFields: RecordMapper.encodeSystemFields(record)))
-    }
-    for (id, recordType) in deletions {
-      guard let table = RecordMapper.table(named: recordType) else {
-        report("未知的记录类型「\(recordType)」的删除，已跳过", recordType: recordType, recordName: id.recordName)
-        continue
-      }
-      changes.append(.delete(SyncKey(table: table, id: id.recordName)))
-    }
-    for failure in try await store.applyRemote(changes) {
-      report(failure.message, recordType: nil, recordName: failure.recordName)
-    }
-  }
-
-  /// 投送请求（及其结果）到达的时间线：创建 → 服务器（对端上传用了多久）→ 本机（拉取用了多久）。
-  private func traceArrival(of record: CKRecord, _ row: SyncRow) {
-    guard case .int(let created)? = row.fields["createdAt"], case .text(let status)? = row.fields["status"],
-      let stored = record.modificationDate
-    else { return }
-    let toServer = stored.timeIntervalSince(Date(timeIntervalSince1970: Double(created) / 1000))
-    Self.log.info(
-      "投送请求到达 \(record.recordID.recordName.prefix(8), privacy: .public) \(status, privacy: .public)：创建后 \(toServer, format: .fixed(precision: 1)) 秒到服务器，再 \(Date.now.timeIntervalSince(stored), format: .fixed(precision: 1)) 秒到本机")
-  }
-
-  /// 附件记录必须带文件且内容与哈希一致，才把文件放进附件目录；记录本身坏了拒绝这条记录并报告（返回 false）。
-  /// 本机写不进去（读下载的文件、建目录、拷贝、改名失败）抛出：这一页没应用完，拉取器不前移令牌，之后再拉。
-  private func adoptAsset(of record: CKRecord, _ row: SyncRow) throws -> Bool {
-    let name = record.recordID.recordName
-    guard case .text(let hash)? = row.fields["hash"], let file = (record["file"] as? CKAsset)?.fileURL else {
-      report("附件记录没有文件，已拒绝", recordType: record.recordType, recordName: name)
-      return false
-    }
-    do {
-      try store.files.adopt(fileAt: file, hash: hash)
-      return true
-    } catch let error as CueStoreError where [.invalidAttachmentHash, .attachmentHashMismatch].contains(error) {
-      report("附件文件校验失败，已拒绝：\(error)", recordType: record.recordType, recordName: name)
-      return false
-    }
-  }
-
-  // MARK: 发送结果
-
-  private func processSent(_ sent: SentRecords) async throws -> SendOutcome {
-    if let drained, let count = drained.sending {
-      self.drained = sent.saved.count + sent.deleted.count == count ? (drained.generation, nil) : nil
-    }
-    var outcome = SendOutcome(progressed: !sent.saved.isEmpty || !sent.deleted.isEmpty, blocked: false, zoneMissing: false)
-    try await store.markPushed(sent.saved.compactMap { record in RecordMapper.row(from: record).map { ($0, RecordMapper.encodeSystemFields(record)) } })
-    try await store.dropSyncMetadata(sent.deleted.map(\.recordName))
-
-    // 没收下的仍是待推送（库里推导），下一批自然带上；这里只处理要先改本机状态才能成功的
-    for (record, error) in sent.failedSaves {
-      let name = record.recordID.recordName
-      switch error.code {
-      case .serverRecordChanged:
-        if let server = error.serverRecord {
-          try await applyFetched([server], [])  // 带上服务器的版本标签；本机版本胜出的话下一批重传
-          outcome.progressed = true
-        } else {
-          report("保存冲突但没有服务器版本：\(error)", recordType: record.recordType, recordName: name)
-        }
-      case .batchRequestFailed:
-        outcome.progressed = true  // 同批里别的记录被拒，这条自己没问题
-      case .unknownItem, .zoneNotFound:
-        // 服务器上没有这条记录（或整个同步区没了）：忘掉旧系统字段，作为新记录重新上传
-        if error.code == .zoneNotFound { outcome.zoneMissing = true }
-        try await store.dropSyncMetadata([name])
-        outcome.progressed = true
-      default:
-        outcome.blocked = classify(error, recordType: record.recordType, recordName: name) || outcome.blocked
-        outcome.wait(for: error)
-      }
-    }
-    for (id, error) in sent.failedDeletes {
-      switch error.code {
-      case .unknownItem, .zoneNotFound:
-        try await store.dropSyncMetadata([id.recordName])
-        outcome.progressed = true
-      case .batchRequestFailed: outcome.progressed = true
-      default:
-        outcome.blocked = classify(error, recordName: id.recordName) || outcome.blocked
-        outcome.wait(for: error)
-      }
-    }
-    // 收下了：之前的失败与空间不足都过去了
-    if !sent.saved.isEmpty || !sent.deleted.isEmpty, sent.failedSaves.isEmpty, sent.failedDeletes.isEmpty, status.isSettledFailure {
-      facts.status = .idle
-    }
-    return outcome
-  }
-
-  /// 连不上 iCloud 的错误码：显示离线（`reached`），发送者退避重试（`RecordSender.retryable`）。
-  static let offlineCodes: Set<CKError.Code> = [.networkFailure, .networkUnavailable, .serviceUnavailable, .serverResponseLost]
-
-  /// 把 CloudKit 错误映射到状态。返回 true 表示这类失败不应立刻重试。瞬时网络类错误由发送者退避重试（RecordSender）。
-  @discardableResult
-  func classify(_ error: CKError, recordType: String? = nil, recordName: String?) -> Bool {
-    switch error.code {
-    case .quotaExceeded:
-      facts.status = .quotaExceeded
-      return true
-    case .notAuthenticated:
-      facts.status = .noAccount
-      return true
-    case let code where Self.offlineCodes.contains(code):
-      reached(error)
-      return false
-    case .zoneBusy, .requestRateLimited, .operationCancelled, .accountTemporarilyUnavailable, .limitExceeded:
-      return false
-    default:
-      report(error, recordType: recordType, recordName: recordName)
-      return true
-    }
-  }
-
-  /// 一次拉取或上传的结果（nil 是成功）：网络类失败时连不上 iCloud（`SyncStatus.offline`），之后任何一次成功回到空闲。
-  /// 只在正常状态之间切换：账号、配额、要你决定这些更要紧的状态不被它盖过。
-  func reached(_ error: (any Error)?) {
-    if let error {
-      guard Self.isOffline(error), status == .idle || status == .starting else { return }
-      facts.status = .offline
-    } else if status == .offline {
-      facts.status = .idle
-    }
-  }
-
-  private static func isOffline(_ error: any Error) -> Bool {
-    guard let error = error as? CKError else { return error is URLError }
-    guard error.code == .partialFailure else { return offlineCodes.contains(error.code) }
-    return error.partialErrorsByItemID?.values.contains { isOffline($0) } ?? false
-  }
-
-  // MARK: 报告
-
-  private func report(_ error: Error, recordType: String? = nil, recordName: String?) {
-    report(error.diagnosis, recordType: recordType, recordName: recordName, failed: true)
-  }
-
-  private func report(_ message: String, recordType: String?, recordName: String?, failed: Bool = false) {
-    var next = facts
-    let issue = SyncIssue(recordType: recordType, recordName: recordName, message: message)
-    // 停下后每次重试都会再报同一个错：问题列表里已有的不再加，免得被它刷满
-    if !next.issues.contains(issue) { next.issues.append(issue) }
-    if next.issues.count > Self.issueLimit { next.issues.removeFirst(next.issues.count - Self.issueLimit) }
-    if failed, needsDecision == nil { next.status = .failed(message) }
-    facts = next  // 问题与状态一次送达
-  }
-
-  private func recordID(_ name: String) -> CKRecord.ID { CKRecord.ID(recordName: name, zoneID: zoneID) }
+  func recordID(_ name: String) -> CKRecord.ID { CKRecord.ID(recordName: name, zoneID: zoneID) }
 }
 
-extension SyncStatus {
-  /// 一次成功的上传就能清掉的状态。
-  fileprivate var isSettledFailure: Bool {
-    switch self {
-    case .failed, .quotaExceeded: true
-    default: false
-    }
-  }
-}
-
-/// 停下来等你决定：这一页不应用，令牌不前移。
+/// 停下了（等你决定，或这台要更新）：这一页不应用，令牌不前移。
 struct SyncPaused: Error {}
-
-extension SendOutcome {
-  /// 这条被拒的原因是可重试的（限流、服务忙等）：记下要等，取服务器给的最长等待。
-  fileprivate mutating func wait(for error: CKError) {
-    guard RecordSender.retryable.contains(error.code) else { return }
-    let given = error.retryAfterSeconds.map { Duration.seconds($0) }
-    switch throttled {
-    case nil: throttled = .some(given)
-    case .some(let current): throttled = .some([current, given].compactMap { $0 }.max())
-    }
-  }
-}

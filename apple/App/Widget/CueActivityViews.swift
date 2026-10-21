@@ -6,57 +6,45 @@ import WidgetKit
 /// 实时活动的几种样子（`CueActivityState`）。小组件扩展按系统给的态画（`CueActivityWidget`）；主 App 也编进了这个文件，
 /// 调试画面用同一份视图画出各态（`DebugActivityStage`）：系统的上下文（`ActivityViewContext`）造不出来，这里只吃内容与过没过时。
 /// 珠子、那一句与头像就是 App 里 Cue 那一行的同一份（`CueNowViews`）；过时了（`staleDate` 到了还没有新的一份）只信慢的事实（`CueNow.settled`）。
-/// - 紧凑态：摄像头两侧贴紧——左边头像（环是 Cue 此刻的颜色）接一个短词（`CueNow.word`），右边一排珠子接走秒（`CueNow.clock`，系统自己走，不耗推送）；
-///   横屏窄紧凑态（`isDynamicIslandLimitedInWidth`）左边只留头像，右边只留最前那颗珠子与总数。最小态只有头像。
-/// - 展开态：左上头像，右上走秒与珠子，摄像头下那一句（`CueNow.sentence`），下面第一件等你（"允许一次"，`AllowOnceIntent`）、
-///   放得下的几份活一份一行（名字、样子、走秒），最后一行各家额度（快重置时倒数，`QuotaReminder.isNear`）。展开态与锁屏都不高过 160 点。
-/// - 锁屏：同展开态的内容排在纸上，随系统深浅；过时时整张变淡，右上写这一份是多久前的。
+/// - 紧凑态：短词、走秒起点与颜色同出 `CueNow.focus`（走秒系统自己走，不耗推送）；横屏窄紧凑态（`isDynamicIslandLimitedInWidth`）只留头像与最前那颗珠子加总数。
+/// - 展开态：第一件等你带"允许一次"（`AllowOnceIntent`），最后一行各家额度（快重置时倒数，`QuotaReminder.isNear`）。展开态与锁屏都不高过 160 点。
+/// - 锁屏：同展开态的内容排在纸上；过时时整张变淡，右上写这一份是多久前的。
 /// 灵动岛的底永远是黑的，岛里一律按深色取色板。
-enum CueActivityViews {
-    static func lockScreen(_ state: CueActivityState, stale: Bool) -> some View {
-        LockScreen(state: state.shown(stale: stale), stale: stale).withPalette()
+struct CueActivityViews {
+    /// 画的那一份：过时了在这里一次换成只信慢的事实，各态都画它。
+    private let state: CueActivityState
+    private let stale: Bool
+
+    init(_ state: CueActivityState, stale: Bool) {
+        var shown = state
+        if stale { shown.now = state.now.settled }
+        (self.state, self.stale) = (shown, stale)
     }
+
+    var lockScreen: some View { LockScreen(state: state, stale: stale).withPalette() }
 
     /// `limited`：横屏窄紧凑态；不给时读系统的（`isDynamicIslandLimitedInWidth`，只有系统能设，调试画面直接给）。
-    static func compactLeading(_ state: CueActivityState, stale: Bool, limited: Bool? = nil) -> some View {
-        CompactLeading(now: state.shown(stale: stale).now, forced: limited).island()
-    }
+    func compactLeading(limited: Bool? = nil) -> some View { CompactLeading(now: state.now, forced: limited).island() }
 
-    static func compactTrailing(_ state: CueActivityState, stale: Bool, limited: Bool? = nil) -> some View {
-        CompactTrailing(now: state.shown(stale: stale).now, forced: limited).island()
-    }
+    func compactTrailing(limited: Bool? = nil) -> some View { CompactTrailing(now: state.now, forced: limited).island() }
 
-    static func minimal(_ state: CueActivityState, stale: Bool) -> some View { CueNowFace(now: state.shown(stale: stale).now, size: 24).island() }
+    var minimal: some View { CueNowFace(now: state.now, size: 24).island() }
 
-    static func expandedLeading(_ state: CueActivityState, stale: Bool) -> some View {
-        CueNowFace(now: state.shown(stale: stale).now, size: 44).padding(.leading, 2).island()
-    }
+    var expandedLeading: some View { CueNowFace(now: state.now, size: 44).padding(.leading, 2).island() }
 
-    static func expandedTrailing(_ state: CueActivityState, stale: Bool) -> some View { ExpandedTrailing(now: state.shown(stale: stale).now).island() }
+    var expandedTrailing: some View { ExpandedTrailing(now: state.now).island() }
 
-    static func expandedCenter(_ state: CueActivityState, stale: Bool) -> some View { Sentence(now: state.shown(stale: stale).now, island: true).island() }
+    var expandedCenter: some View { Sentence(now: state.now, island: true).island() }
 
-    static func expandedBottom(_ state: CueActivityState, stale: Bool) -> some View {
-        Details(state: state.shown(stale: stale), island: true).padding(.horizontal, 2).island()
-    }
+    var expandedBottom: some View { Details(state: state, island: true).padding(.horizontal, 2).island() }
 
-    /// 灵动岛外圈的描边色：同头像的环。
-    static func keyline(_ state: CueActivityState, stale: Bool, palette: Palette) -> Color { state.shown(stale: stale).now.ring(palette) }
+    var keyline: Color { state.now.ring(Palette(dark: true)) }
 
     /// 过时时整张的不透明度。
     static let staleOpacity = 0.55
 }
 
-private extension CueActivityState {
-    func shown(stale: Bool) -> CueActivityState {
-        var state = self
-        if stale { state.now = now.settled }
-        return state
-    }
-}
-
 private extension View {
-    /// 灵动岛里：底是黑的，按深色取色板。
     func island() -> some View { withPalette().environment(\.colorScheme, .dark) }
 }
 
@@ -88,7 +76,7 @@ private struct CompactLeading: View {
         HStack(spacing: 5) {
             CueNowFace(now: now, size: 24)
             if !limited {
-                Text(now.word).font(.system(size: 14, weight: .semibold)).foregroundStyle(now.tint(palette))
+                Text(now.focus.word).font(.system(size: 14, weight: .semibold)).foregroundStyle(now.focus.tone.color(palette))
                     .lineLimit(1).fixedSize()
                     .contentTransition(.opacity)
             }
@@ -113,8 +101,8 @@ private struct CompactTrailing: View {
                 Text("\(now.beads.count + now.hidden)").font(.system(size: 14, weight: .semibold)).monospacedDigit().foregroundStyle(palette.ink)
             } else {
                 if !now.beads.isEmpty { CueBeads(beads: Array(now.beads.prefix(Self.beads)), size: 7, limit: Self.beads) }
-                if let since = now.clock {
-                    Clock(since: since).font(.system(size: 14, weight: .semibold)).foregroundStyle(now.tint(palette))
+                if let since = now.focus.since {
+                    Clock(since: since).font(.system(size: 14, weight: .semibold)).foregroundStyle(now.focus.tone.color(palette))
                 }
             }
         }
@@ -132,7 +120,7 @@ private struct ExpandedTrailing: View {
 
     var body: some View {
         VStack(alignment: .trailing, spacing: 6) {
-            if let since = now.clock { Clock(since: since).font(.system(size: 16, weight: .semibold)).foregroundStyle(now.tint(palette)) }
+            if let since = now.focus.since { Clock(since: since).font(.system(size: 16, weight: .semibold)).foregroundStyle(now.focus.tone.color(palette)) }
             if !now.beads.isEmpty { CueBeads(beads: now.beads, hidden: now.hidden, size: 8, limit: 5) }
         }
         .padding(.trailing, 2)
@@ -191,7 +179,7 @@ private struct Works: View {
                     BeadDot(kind: bead.kind, size: 8)
                     Text(bead.name).font(.subheadline.weight(.medium)).foregroundStyle(palette.ink).lineLimit(1)
                     Text(bead.kind == .delegating && bead.subagents > 0 ? "等 \(bead.subagents) 个子代理" : bead.kind.label)
-                        .font(.footnote).foregroundStyle(bead.kind.tint(palette)).lineLimit(1).fixedSize()
+                        .font(.footnote).foregroundStyle(bead.kind.tone.color(palette)).lineLimit(1).fixedSize()
                     Spacer(minLength: 6)
                     if bead.kind == .done || bead.kind == .resting {
                         Text(bead.since, style: .relative).font(.footnote).monospacedDigit().foregroundStyle(palette.ink3)
@@ -263,7 +251,7 @@ private struct LockScreen: View {
                         .multilineTextAlignment(.trailing).frame(width: 72, alignment: .trailing)
                 } else {
                     VStack(alignment: .trailing, spacing: 5) {
-                        if let since = now.clock { Clock(since: since).font(.subheadline.weight(.semibold)).foregroundStyle(now.tint(palette)) }
+                        if let since = now.focus.since { Clock(since: since).font(.subheadline.weight(.semibold)).foregroundStyle(now.focus.tone.color(palette)) }
                         if !now.beads.isEmpty { CueBeads(beads: now.beads, hidden: now.hidden, size: 8, limit: 5) }
                     }
                 }

@@ -1,8 +1,7 @@
 #if os(iOS)
-import CueStore
 import SwiftUI
 
-/// 手机与 iPad 的 Cue 页头：一块实底玻璃，平时是左右各离屏边 21 点、56 点高的一条——头像在左端、展开的箭头在右端，
+/// 手机与 iPad 的 Cue 页头：一块实底玻璃，平时是左右各离屏边 `edge`、高 `height` 的一条——头像在左端、展开的箭头在右端，
 /// 名字与下面那一行（Cue 此刻：珠子接一句，`CueStatusLine`）在整条里居中（`HeadLayout`）；
 /// 点它从顶部长出面板（`GrowPanel`，同一块玻璃长高）：手机上 Cue 的总面板（`CueNowPanel`：大脑、上下文、等你、在做、
 /// 全部会话、记忆、设置），手机上 Cue 的这些只有这一个入口（额度在会话页顶栏中间那颗胶囊里）。

@@ -5,7 +5,7 @@ import Foundation
 
 /// Codex 当大脑：`codex app-server`，经接入里的 `CodexRPC`（协议见 https://developers.openai.com/codex/app-server ；
 /// 本机版本的完整类型用 `codex app-server generate-ts` 生成）。
-/// - 线程是临时的（`thread/start` 的 `ephemeral`）：不写会话文件，不进 Codex 的历史；
+/// - 线程是临时的（`thread/start` 的 `ephemeral`）：不写会话文件，不进 Codex 的历史；开新会话就是另开一个这样的线程（模型与强度每轮随 `turn/start` 给，不受影响）；
 /// - 系统提示经 `baseInstructions` 整份替换内置提示（与配置里的 `model_instructions_file` 同一处，参数优先）；
 /// - 沙箱只读、从不请求批准：Codex 读文件靠 shell，写入被沙箱拒绝；
 /// - MCP：先读出用户配置里的 MCP 服务（`config/read`），在这个线程上逐个停用，只开 CuePad 的 `cuepad`，它的工具一律放行
@@ -25,6 +25,8 @@ final class CodexBrain: CueBrain {
     var events: AsyncStream<CueBrainEvent> { session.events }
     private var rpc: CodexRPC?
     private var thread: String?
+    /// 开线程的参数（`thread/start`）：开新会话时原样再开一个
+    private var threadParams: JSONValue = [:]
     /// `model/list` 里的模型（连隐藏的）：就地换模型时认模型、取它支持的强度
     private var models: [CodexModel] = []
     /// 在用的模型（没给时是 `thread/start` 定下的默认）与要的强度：每轮随 `turn/start` 给
@@ -61,6 +63,7 @@ final class CodexBrain: CueBrain {
                 Task { self?.session.exited(await process?.exited()) }
             }
             try await threadStart(config, on: rpc)
+            level = config.effort
         } catch {
             await session.abandon(stop())
             throw error
@@ -80,11 +83,16 @@ final class CodexBrain: CueBrain {
             "baseInstructions": .string(config.systemPrompt), "config": .object(overrides),
         ]
         if let model = config.model { params["model"] = .string(model) }
-        let started = try await rpc.call("thread/start", .object(params))
+        threadParams = .object(params)
+        let started = try await rpc.call("thread/start", threadParams)
         thread = started["thread"]?["id"]?.string
         models = try await CodexModel.list(rpc, hidden: true)
         model = models.first { $0.id == started["model"]?.string }
-        level = config.effort
+    }
+
+    func newSession() async throws {
+        guard let rpc, thread != nil else { throw CueBrainError.notRunning }
+        thread = try await rpc.call("thread/start", threadParams)["thread"]?["id"]?.string
     }
 
     func configure(model id: String?, effort: PiThinkingLevel?) async throws {
@@ -142,7 +150,7 @@ final class CodexBrain: CueBrain {
             guard turn != nil, let item = params["item"] else { return }
             switch item["type"]?.string {
             case "mcpToolCall":
-                let name = brainToolName(item["tool"]?.string ?? "?")
+                let name = item["tool"]?.string ?? "?"
                 session.emit(.tool(id: item["id"]?.string ?? "", name: name, arguments: String(decoding: (item["arguments"] ?? [:]).data, as: UTF8.self)))
             case "commandExecution":
                 let command = jsonString(["command": item["command"]?.string ?? ""])

@@ -114,7 +114,7 @@ private struct MachineCard: View {
                         .lineLimit(open ? nil : 2).frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PressStyle())
             // 没有全文可看时只是不接点按，不停用：停用的按钮 iOS 整块压淡
             .allowsHitTesting(!note.detail.isEmpty)
             .accessibilityLabel("\(note.who)：\(note.line)")

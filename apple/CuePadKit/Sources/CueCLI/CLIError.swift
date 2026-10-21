@@ -18,7 +18,6 @@ struct CLIError: Error {
 }
 
 extension CLIError {
-  /// Store 抛出的错误翻成可操作的说明。
   init(_ error: any Error) {
     switch error {
     case let error as CLIError:

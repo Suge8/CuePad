@@ -16,32 +16,18 @@ struct BoardLook {
 }
 
 /// 看板行尾的最后一格（任务行与推进中的会话行同一种）：前面可放成果图，末尾是项目小图标（项目色只上图形）。
-/// Mac 上还没交出去的叶子的"▶ 开始"与项目小图标叠在同一格：悬停时图标让位、"开始"在留好的位置露出来，标题不被挤动。
+/// Mac 上还没交出去的叶子的"▶ 开始"悬停时浮在行尾（`TaskLine` 的 `hoverReveal`），盖住这一格，不占排版。
 struct BoardRowEnd<Extra: View>: View {
     let project: Project?
-    /// "开始"（`TaskNext.start`）；不是能开始的叶子为 nil。
-    var start: TaskNext?
     @ViewBuilder var extra: Extra
-    @Environment(\.rowHovered) private var lit
 
     var body: some View {
         HStack(spacing: TaskLineLayout.gap) {
             extra
-            #if os(macOS)
-            ZStack(alignment: .trailing) {
-                if let project { glyph(project).opacity(start != nil && lit ? 0 : 1) }
-                if let start { TaskNextMark(next: start) }
-            }
-            .animation(Motion.quick, value: lit)
-            #else
-            if let start { TaskNextMark(next: start) }
-            if let project { glyph(project) }
-            #endif
+            if let project { ProjectGlyph(project: project, size: Self.glyph).help(project.name) }
         }
         .fixedSize()
     }
-
-    private func glyph(_ project: Project) -> some View { ProjectGlyph(project: project, size: Self.glyph).help(project.name) }
 
     #if os(macOS)
     private static var glyph: CGFloat { 10 }
@@ -52,7 +38,7 @@ struct BoardRowEnd<Extra: View>: View {
 
 extension BoardRowEnd where Extra == EmptyView {
     init(project: Project?) {
-        self.init(project: project, start: nil) { EmptyView() }
+        self.init(project: project) { EmptyView() }
     }
 }
 

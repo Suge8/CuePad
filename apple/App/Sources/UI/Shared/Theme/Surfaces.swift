@@ -21,7 +21,6 @@ extension View {
 
 /// 玻璃上的字要多好读。
 enum GlassInk {
-    /// 只有图标的圆钮。
     case clear
     /// 写着字的（默认；顶栏标题、输入框、搜索框、提示横幅、状态行）：玻璃里垫九成实的页面底色，边缘仍是玻璃的光。内容一直滚到这些玻璃后面，
     /// 背后什么都有可能（亮的截图、深的代码块）：只着色不垫底的话，深色下一张亮图就把玻璃衬成浅灰、米白的字只剩 1.7:1，
@@ -38,6 +37,7 @@ private struct PaperSurface: ViewModifier {
     func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
         content
+            .environment(\.rowSurface, wash ?? palette.paper)
             // 影子只挂在底那块形状上：挂在整块内容上时，里面的字、图与按钮要先离屏合成一遍再糊影子，转场与按压的每帧都重算。
             // 平放的纸只用描边：每张卡一个模糊阴影，侧栏开合时整面墙每帧都要重画这些阴影
             .background {
@@ -53,7 +53,6 @@ private struct PaperSurface: ViewModifier {
 }
 
 extension Palette {
-    /// 纸面的底：从上沿极轻地亮到纸色。
     var paperFill: LinearGradient {
         LinearGradient(colors: [paperLit, paper], startPoint: .top, endPoint: .init(x: 0.5, y: 0.35))
     }
@@ -131,6 +130,10 @@ enum Motion {
 /// 手机：按下快、松开带一点回弹，按种类缩到不同比例，按下有一下轻触感；行只亮底不缩放（一屏几十行，缩放会让列表显得软）；减弱动态效果时只降透明度。
 /// Mac 照原生控件（访达、邮件、备忘录的按钮、列表与卡片都这样）：按下的那一刻变淡（卡片压暗一层），松开即复原，
 /// 不缩放、不回弹、不震动——缩放与回弹是触屏的习惯，在指针下显得软、慢；触控板的震动在 macOS 只给对齐这类反馈，点按钮不震。
+/// Mac 悬停：指针一进来就有回应（同 macOS 26 工具栏玻璃钮的悬停，与 Linear、Raycast、Arc），淡入淡出 `Motion.quick`、不挪位置不缩放：
+/// 按钮在自己的框上浮一层淡底（`fill`，形状随框：方的、矮的是圆与胶囊，高的是圆角矩形），卡片整张亮一档（按下压暗的一半）。
+/// 指针照 HIG 与访达、邮件：按钮、行、卡片都是箭头，手形只给打开网页的链接（`pointerStyle(.link)`）——手形在 Mac 上读作"这是网页链接"。
+/// iPad 的指针用系统给按钮的悬停效果（自定义样式的按钮照样有），行另见 `RowStyle`。
 enum Press {
     /// 圆钮、图标按钮。
     case button
@@ -140,9 +143,11 @@ enum Press {
     case card
     /// 整宽的一条（虚线框的"写正文"）。
     case wide
+    /// 字里行间的小钮（"显示更多"、折叠开合、行内的链与清掉）：标签就是那几个字或一个图标、不另画框。
+    /// Mac 的悬停底向外宽出一圈（`HoverShape.inlineOutset`），不贴着字；手机按下只变淡、不缩放不震（同系统的 plain），一行字缩一下显得软。
+    case inline
 }
 
-/// 按钮的按下反馈，按种类（`Press`）。
 struct PressStyle: ButtonStyle {
     let kind: Press
 
@@ -160,19 +165,35 @@ struct PressFeedback: ViewModifier {
 
     #if os(macOS)
     @Environment(\.palette) private var palette
-    /// 按钮按下时内容的透明度；卡片不变淡（整张变淡像停用），压暗一层。
+    @State private var hovering = false
+    /// 按钮按下时内容的透明度；卡片不变淡（整张变淡像停用），压暗一层，悬停时亮一半。
     private static let dimmed = 0.6
     private static let shade = 0.05
 
-    /// 原生控件的高亮没有过渡：按下、松开都在那一帧到位，外层的动画（列表挪位、开合）也不带它。
+    /// 原生控件的高亮没有过渡：按下、松开都在那一帧到位，外层的动画（列表挪位、开合）也不带它；悬停的进出淡一下。
     /// 每种只挂自己要的那一个效果：亮度滤镜挂在每颗按钮上，按钮里的字都要另画一遍。
     func body(content: Content) -> some View {
         let active = pressed && isEnabled
-        if kind == .card {
-            content.brightness(active ? (palette.dark ? Self.shade : -Self.shade) : 0).animation(nil, value: active)
-        } else {
-            content.opacity(active ? Self.dimmed : 1).animation(nil, value: active)
+        let lit = hovering && isEnabled
+        Group {
+            if kind == .card {
+                content.brightness((active ? Self.shade : lit ? Self.shade / 2 : 0) * (palette.dark ? 1 : -1))
+            } else {
+                content
+                    .overlay {
+                        if lit {
+                            HoverShape().fill(palette.fill).padding(kind == .inline ? HoverShape.inlineOutset : EdgeInsets())
+                                .allowsHitTesting(false).transition(.opacity)
+                        }
+                    }
+                    .opacity(active ? Self.dimmed : 1)
+            }
         }
+        .environment(\.buttonHovered, lit)
+        .onHover { hovering = $0 }
+        .presetHover($hovering)
+        .animation(Motion.quick, value: lit)
+        .animation(nil, value: active)
     }
     #else
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -184,6 +205,7 @@ struct PressFeedback: ViewModifier {
         case .control: 0.95
         case .card: 0.97
         case .wide: 0.98
+        case .inline: 1
         }
     }
 
@@ -193,12 +215,46 @@ struct PressFeedback: ViewModifier {
         content
             .scaleEffect(active && !reduceMotion ? scale : 1)
             .brightness(active && card ? -0.02 : 0)
-            .opacity(active && (reduceMotion || !card) ? 0.9 : 1)
+            .opacity(active && (reduceMotion || !card) ? (kind == .inline ? Self.inlineDimmed : 0.9) : 1)
             .animation(active ? Motion.pressDown : Motion.pressUp, value: active)
-            .sensoryFeedback(.impact(flexibility: .soft, intensity: 0.55), trigger: active) { _, now in now }
+            .sensoryFeedback(.impact(flexibility: .soft, intensity: 0.55), trigger: active) { _, now in now && kind != .inline }
     }
+
+    /// 字里行间的小钮按下时变淡到多少（同系统 plain 按钮）。
+    private static let inlineDimmed = 0.5
     #endif
 }
+
+#if os(macOS)
+extension EnvironmentValues {
+    /// 指针此刻停在所在的这颗按钮上（`PressFeedback` 给标签里的内容）：悬停时要换颜色、露出记号的按钮读它，不各自再挂 `onHover`。
+    @Entry var buttonHovered = false
+}
+
+extension View {
+    /// 调试预设（`-CuePadHover`，`DebugHooks.Preset.hovered`）：这块盖住其中一点时画成指针停着的样子——后台截图里指针进不来；
+    /// 按钮、行与卡的悬停都经它，平时什么都不挂。
+    @ViewBuilder func presetHover(_ hovering: Binding<Bool>) -> some View {
+        let points = DebugHooks.preset.hovered
+        if !points.isEmpty {
+            onGeometryChange(for: Bool.self) { frame in points.contains { frame.frame(in: .global).contains($0) } } action: { hovering.wrappedValue = $0 }
+        } else {
+            self
+        }
+    }
+}
+
+/// 按钮悬停那层淡底的形状：随按钮的框——方的是圆、矮的是胶囊（同圆钮与胶囊控件），高的是圆角不超过 `maxRadius` 的圆角矩形。
+nonisolated private struct HoverShape: Shape {
+    private static let maxRadius: CGFloat = 18
+    /// 字里行间的小钮（`Press.inline`）的悬停底比字宽出的一圈。
+    static let inlineOutset = EdgeInsets(top: -2, leading: -6, bottom: -2, trailing: -6)
+
+    func path(in rect: CGRect) -> Path {
+        Path(roundedRect: rect, cornerRadius: min(min(rect.width, rect.height) / 2, Self.maxRadius), style: .continuous)
+    }
+}
+#endif
 
 /// 圆钮、胶囊与行尾动作的几何：可见尺寸按平台，iPhone 的命中高度始终至少 44。
 enum ControlMetrics {
@@ -216,14 +272,15 @@ enum ControlMetrics {
 
 /// 控件只有一套外形与按压实现，空态、绑定引导和搜索栏共用；签名色只给主动作，其余是墨色。
 /// 外形单拆成 `ControlSurface`：点开菜单的按钮（`MenuButton`）不是 `Button`，要同一个样子时直接挂它。
+/// `glass`：浮在内容上的玻璃胶囊（Mac 工具栏与页顶那一排的项目范围、新任务、收起、清空回收站），与 `circular` 的玻璃圆钮同高；毁掉东西的（`role: .destructive`）字是出错色。
 struct ControlButtonStyle: ButtonStyle {
-    enum Kind { case primary, highlight, secondary, quiet, circular }
+    enum Kind { case primary, highlight, secondary, quiet, circular, glass }
     var kind = Kind.secondary
     var compact = false
     @Environment(\.isEnabled) private var isEnabled
 
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label.modifier(ControlSurface(kind: kind, compact: compact))
+        configuration.label.modifier(ControlSurface(kind: kind, compact: compact, destructive: configuration.role == .destructive))
             .modifier(PressFeedback(pressed: configuration.isPressed, kind: kind == .circular ? .button : .control))
             .opacity(isEnabled ? 1 : ControlMetrics.disabledOpacity)
     }
@@ -233,20 +290,30 @@ struct ControlButtonStyle: ButtonStyle {
 struct ControlSurface: ViewModifier {
     var kind = ControlButtonStyle.Kind.secondary
     var compact = false
+    var destructive = false
     @Environment(\.palette) private var palette
 
     func body(content: Content) -> some View {
-        if kind == .circular {
+        switch kind {
+        case .circular:
             content
                 .font(Typography.body.weight(.medium))
-                .foregroundStyle(palette.ink)
+                .foregroundStyle(ink)
                 .frame(width: ControlMetrics.height, height: ControlMetrics.height)
                 .contentShape(.circle)
                 .glass(in: .circle, interactive: true, ink: .clear)
-        } else {
+        case .glass:
+            content
+                .font(Typography.secondary.weight(.medium))
+                .foregroundStyle(ink)
+                .padding(.horizontal, 14)
+                .frame(height: ControlMetrics.height)
+                .contentShape(.capsule)
+                .glass(in: .capsule, interactive: true)
+        default:
             content
                 .font((compact ? Typography.meta : Typography.secondary).weight(.medium))
-                .foregroundStyle(kind == .primary ? palette.onFill : kind == .highlight ? palette.signature : palette.ink)
+                .foregroundStyle(kind == .primary ? palette.onFill : kind == .highlight ? palette.signature : ink)
                 .padding(.horizontal, compact ? 10 : 16)
                 .padding(.vertical, 6)
                 .frame(minHeight: compact ? ControlMetrics.compactHeight : ControlMetrics.height)
@@ -259,11 +326,13 @@ struct ControlSurface: ViewModifier {
         }
     }
 
+    private var ink: Color { destructive ? palette.failure : palette.ink }
+
     private var background: Color {
         switch kind {
         case .primary: palette.signatureFill
         case .highlight: palette.selection
-        case .quiet: .clear
+        case .quiet, .glass: .clear
         case .secondary, .circular: palette.fill
         }
     }

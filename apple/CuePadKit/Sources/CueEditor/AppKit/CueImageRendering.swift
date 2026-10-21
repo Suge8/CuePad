@@ -1,7 +1,6 @@
 #if canImport(AppKit)
 import AppKit
 
-/// 附件图像的像素渲染（macOS）。
 enum CueImageRendering {
     static let stub = NSImage(size: NSSize(width: 1, height: 1))
 

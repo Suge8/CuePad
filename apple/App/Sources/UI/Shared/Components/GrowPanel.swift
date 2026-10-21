@@ -45,7 +45,6 @@ struct GrowPanel<Head: View, Panel: View>: View {
 }
 
 extension Binding<Bool> {
-    /// 开合一块长出的面板（`GrowPanel`）。
     func grow(reduceMotion: Bool) {
         withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { wrappedValue.toggle() }
     }

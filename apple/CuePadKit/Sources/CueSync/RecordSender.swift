@@ -7,7 +7,7 @@ import os
 /// 推：库里推导的待推送（`CueStore.pendingSync`）是唯一的队列，这里只决定什么时候发、一批发哪些。
 ///
 /// 触发：本机提交让记录变成待推送（攒 `gatherWindow` 合成一批）、"马上传这几条"（`send`，这几条排在最前）、
-/// 立即同步与回到前台（`kick`）、网络恢复。每批至多 400 条，`.ifServerRecordUnchanged`；结果交给协调器记账（`SyncCoordinator.sent`）。
+/// 立即同步与回到前台（`kick`）、网络恢复。每批至多 `CloudKitLimits.recordsPerRequest` 条，`.ifServerRecordUnchanged`；结果交给协调器记账（`SyncCoordinator.sent`）。
 /// 同一时刻只有一批在路上：同一条记录不会有两个版本同时上传、互相以版本冲突拒绝，结果也按发出的先后回来。
 ///
 /// 失败：整个请求可重试的（离线、限流、服务忙）按服务器给的 `retryAfterSeconds` 或指数退避定时再发，网络恢复与明确的触发不等退避
@@ -28,11 +28,9 @@ actor RecordSender {
   private var commits: Task<Void, Never>?
   private var network: NWPathMonitor?
 
-  /// 下一轮排在最前的记录名。
   private var first: Set<String> = []
   /// 下一轮是明确要求的（不攒窗口、不等停顿与退避）。
   private var explicit = false
-  /// 等某几条记录有结果的调用方（`send`）。
   private var waiters: [(names: Set<String>, continuation: CheckedContinuation<Bool, Never>)] = []
   private var retry: Task<Void, Never>?
   private var failures = 0
@@ -128,15 +126,15 @@ actor RecordSender {
     notBefore = nil
 
     let end = await batches()
-    await coordinator.setSending(false)
+    await coordinator.finishedSending()
     finish(end)
   }
 
   private func batches() async -> End {
     var zoneCreated = false
     for _ in 0..<Self.batchesPerRound {
+      // 有一批要发才算同步中（`nextBatch` 交出时记下）：没有要传的一轮（每次拉取顺带的）界面不跟着闪
       guard let batch = await coordinator.nextBatch(first: first, limit: limit) else { return .done }
-      await coordinator.setSending(true)  // 有一批要发才算同步中：没有要传的一轮（每次拉取顺带的）界面不跟着闪
       let names = Set(batch.saves.map(\.recordID.recordName) + batch.deletes.map(\.recordName))
       first.subtract(names)
       do {

@@ -51,7 +51,6 @@ struct SessionFacts {
         self.failure = failure
     }
 
-    /// 在跑时换成在做 `activity`（思考、输出、调工具）。
     mutating func work(_ activity: PiWorkState, detail: String? = nil) {
         self.activity = activity
         activityDetail = detail
@@ -82,7 +81,7 @@ struct SessionFacts {
     mutating func settleSubagent(_ id: String, _ phase: PiSubagentPhase, summary: String?, at now: Date) {
         updateSubagent(id, at: now) { agent in
             agent.phase = .known(phase)
-            agent.action = summary.flatMap(ToolDetail.firstLine).map { $0.clipped(ToolDetail.limit) } ?? ""
+            agent.action = summary.flatMap(\.firstLine).map { $0.clipped(ToolDetail.limit) } ?? ""
             agent.settledAt = now
         }
     }
@@ -96,7 +95,6 @@ struct SessionFacts {
         return (.settled, nil)
     }
 
-    /// 此刻显示的那一问
     var question: PiQuestion? { questions.first ?? standingQuestion }
 
     mutating func publish(to session: inout PiSession, at now: Date = .now) {
@@ -169,13 +167,9 @@ enum ToolDetail {
 
     /// 调用的目标：命令、搜索、网址、说明取首个非空行，文件取文件名。
     static func target(_ input: JSONValue?) -> String? {
-        let line = ["command", "pattern", "query", "url", "description"].lazy.compactMap { input?[$0]?.string }.first.flatMap(firstLine)
+        let line = ["command", "pattern", "query", "url", "description"].lazy.compactMap { input?[$0]?.string }.first.flatMap(\.firstLine)
         let file = (input?["file_path"]?.string ?? input?["path"]?.string ?? input?["notebook_path"]?.string).map { URL(filePath: $0).lastPathComponent }
         return line ?? file
-    }
-
-    static func firstLine(_ text: String) -> String? {
-        text.split(whereSeparator: \.isNewline).lazy.map { $0.trimmingCharacters(in: .whitespaces) }.first { !$0.isEmpty }
     }
 
     /// 多行并成一行（行之间用说明的分隔符）。
@@ -192,7 +186,6 @@ enum ToolDetail {
 @MainActor
 final class PresenceGate {
     private let presence: any UserPresence
-    /// 挂住的：人回来时放行
     private var held: [UUID: @MainActor () -> Void] = [:]
     private var watch: Task<Void, Never>?
 

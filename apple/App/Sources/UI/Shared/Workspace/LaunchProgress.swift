@@ -13,7 +13,6 @@ nonisolated struct LaunchProgress: Sendable, Equatable {
     }
 
     enum Phase: Equatable {
-        /// 还没有发出。
         case idle
         /// 请求在路上，或 Mac 还没执行完：Mac 接没接手（`PiDelivery.Transit`）。
         case sending(PiDelivery.Transit)

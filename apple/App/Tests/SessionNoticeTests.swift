@@ -19,7 +19,6 @@ struct SessionNoticeTests {
         return app.services.liveSessions.live
     }
 
-    /// 第一次读到只记基线，之后的转换才提示，同一版本不重复；等你确认带问题首行，做完了不带。
     @Test func 第一次读到只记基线_之后的转换才提示一次_等你确认带问题首行() async throws {
         let recorder = recorder()
         var tracker = SessionAlertTracker()
@@ -63,7 +62,6 @@ struct SessionNoticeTests {
         Navigation(settings: AppSettings(defaults: UserDefaults(suiteName: UUID().uuidString)!, launchArguments: [:]))
     }
 
-    /// 开着那个会话时不弹它的前台提示（与系统通知同一条：开着那一页才算在看）；别处照弹，Agent 列表也照弹。
     @Test func 开着那个会话时不弹提示_别处照弹() {
         let session = UUID()
         let navigation = navigation()

@@ -1,5 +1,4 @@
 import CloudKit
-import Foundation
 
 /// 对外的同步状态，界面直接显示。本机数据在任何状态下都完好，可继续使用。
 public enum SyncStatus: Equatable, Sendable {
@@ -12,7 +11,6 @@ public enum SyncStatus: Equatable, Sendable {
   /// 连不上 iCloud（没有网络、服务暂不可用）：最近一次拉取或上传因网络失败。本机改动留在库里待推送，发送者按退避重试；
   /// 下一次拉取或上传成功时回到空闲。
   case offline
-  /// 未登录 iCloud。
   case noAccount
   /// iCloud 账号受限（家长控制或设备管理）。
   case accountRestricted
@@ -22,6 +20,8 @@ public enum SyncStatus: Equatable, Sendable {
   case quotaExceeded
   /// 需要用户决定如何处理本机数据后才会继续同步，见 `SyncDecision`。
   case needsDecision(SyncDecision)
+  /// 云端的最低对端版本（`PeerFloor`）高于这台的结构版本：停下同步，更新 CuePad 后继续；本机改动留在库里。
+  case outdated
   /// 出现了未预期的失败（描述给用户看，详情在 `issues`）；下一次本机改动会重试。
   case failed(String)
   /// 这台设备没有在同步（原因给用户看）：没有同步（隔离模式、构建没有 iCloud 权限）或同步没能启动。由 App 层设置。
@@ -103,13 +103,11 @@ public struct SyncState: Equatable, Sendable {
   }
 }
 
-/// 一批上传之后发送者怎么接着做。
 struct SendOutcome: Sendable {
   /// 有记录被收下，或被拒的已处理好（带上了服务器的版本标签等），接着发下一批不会原样再被拒
   var progressed: Bool
   /// 配额、登录或未预期的失败：先停下，等下一次明确的触发
   var blocked: Bool
-  /// 同步区不在：先建区
   var zoneMissing: Bool
   /// 有记录因限流、服务忙等可重试的原因被拒：先等再发。里面是服务器给的等待（没给为 nil，退避）；没有这种记录时整个为 nil。
   var throttled: Duration?? = nil

@@ -47,10 +47,10 @@ final class ClaudeHostedSession: SessionLink {
     private var resolved: [String: String] = [:]
 
     /// 启动进程（`arguments` 接在 stream-json 的参数后面），开始读它的输出。
-    init(executable: URL, arguments: [String], sessionID: String, directory: URL, environment: [String: String], bridge: PiBridge) throws {
+    init(executable: URL, arguments: [String], sessionID: String, directory: URL, environment: [String: String], bridge: PiBridge) async throws {
         self.sessionID = sessionID
         self.bridge = bridge
-        stream = try ClaudeStream(
+        stream = try await ClaudeStream(
             executable: executable, arguments: ["--permission-prompt-tool", "stdio", "--permission-mode", "auto"] + arguments,
             directory: directory, environment: environment)
         stream.onMessage = { [weak self] in self?.received($0) }
@@ -61,7 +61,6 @@ final class ClaudeHostedSession: SessionLink {
         stream.onClose = { [weak self] in self?.ended() }
     }
 
-    /// 托管的进程（退出原因、进程号）
     var process: ChildProcess { stream.process }
 
     /// 握手（`initialize` 拿到可换的模型与命令）并上桥；接着已结束的会话时 `known` 是索引里记下的名字与首条消息，
@@ -238,6 +237,19 @@ final class ClaudeHostedSession: SessionLink {
             "uuid": .string(uuid), "priority": "next",
         ])
         began()
+    }
+
+    /// 发出的话（斜杠命令也是）一定开始一轮：从发出那一刻算，不等它的 `system/init`（中间隔着钩子）；为它停下的那一轮收尾时已经开了。
+    private func began() {
+        if !facts.running { starting = [] }
+        beginTurn()
+        publish(at: .now)
+    }
+
+    /// 这一轮开跑了（或没跑就结束了）：放行等着它的停止。
+    private func started() {
+        starting?.forEach { $0.resume() }
+        starting = nil
     }
 
     /// 停下在跑的这一轮并等它收尾；还没开跑的（`starting`）先等它开跑。歇着什么都不做。
