@@ -12,7 +12,7 @@ struct TaskBoardPage: View {
     @State private var adding = false
 
     var body: some View {
-        let scope = workspace.catalog?.project(workspace.projectScope)?.id  // 选中的项目进了回收站就当作全部项目
+        let scope = workspace.boardScope
         VStack(alignment: .leading, spacing: 18) {
             topRow
             BoardColumns(board: (board ?? .empty).only(scope), adding: $adding, newTaskProject: scope ?? workspace.currentProject)

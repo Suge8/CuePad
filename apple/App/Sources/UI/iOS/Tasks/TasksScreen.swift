@@ -44,8 +44,7 @@ struct TasksScreen: View {
 
     private var newTaskProject: UUID? { scope ?? navigation.currentProject }
 
-    /// 项目范围；选中的项目进了回收站就当作全部项目（同顶栏的 `ProjectScope`）。
-    private var scope: UUID? { workspace.catalog?.project(workspace.projectScope)?.id }
+    private var scope: UUID? { workspace.boardScope }
 
     /// 一屏一列，左右滑换列：列的宽就是可见宽（`containerRelativeFrame`），按页停。
     private func pages(_ board: TaskBoard) -> some View {
