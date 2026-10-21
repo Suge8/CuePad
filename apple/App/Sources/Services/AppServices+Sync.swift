@@ -189,11 +189,13 @@ extension AppServices {
         }
     }
 
-    /// "立即同步"按钮（Mac 设置与手机设置共用）能不能按：有同步、不在等你决定、上一次立即同步已经返回。
+    /// "立即同步"按钮（Mac 设置与手机设置共用）能不能按：有同步、没停下（等你决定、这台要更新）、上一次立即同步已经返回。
     var canSyncNow: Bool {
         guard sync != nil, !isSyncingNow else { return false }
-        if case .needsDecision = syncStatus { return false }
-        return true
+        switch syncStatus {
+        case .needsDecision, .outdated: return false
+        default: return true
+        }
     }
 
     /// 处理 `syncStatus == .needsDecision`：用户选择后同步重新开始。

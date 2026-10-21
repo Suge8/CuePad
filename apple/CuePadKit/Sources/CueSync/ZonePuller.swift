@@ -14,8 +14,8 @@ import Foundation
 /// 一次只跑一个拉取：在跑时再来的排在它后面（排着的只有一个，后来的都等它），不会用同一个令牌拉两遍、旧令牌也不会盖掉新的。
 actor ZonePuller {
   static let tokenKey = "zoneToken"
-  /// 对账那一遍带回的字段。
-  static let versionKeys = ["modifiedAt"]
+  /// 对账那一遍带回的字段（门槛记录的版本在这一遍就看，`SyncCoordinator.meet`）。
+  static let versionKeys = ["modifiedAt", PeerFloor.field]
 
   private let source: any ZoneChangeSource
   private let coordinator: SyncCoordinator
@@ -97,6 +97,7 @@ actor ZonePuller {
     var token: Data?
     repeat {
       batch = try await source.changes(since: token, keys: Self.versionKeys)
+      try await coordinator.meet(batch.modifications)
       for record in batch.modifications where RecordMapper.table(named: record.recordType) != nil {
         seen[record.recordID] = (record["modifiedAt"] as? NSNumber)?.int64Value ?? .max
       }

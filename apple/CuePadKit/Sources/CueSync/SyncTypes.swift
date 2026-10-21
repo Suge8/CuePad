@@ -20,6 +20,8 @@ public enum SyncStatus: Equatable, Sendable {
   case quotaExceeded
   /// 需要用户决定如何处理本机数据后才会继续同步，见 `SyncDecision`。
   case needsDecision(SyncDecision)
+  /// 云端的最低对端版本（`PeerFloor`）高于这台的结构版本：停下同步，更新 CuePad 后继续；本机改动留在库里。
+  case outdated
   /// 出现了未预期的失败（描述给用户看，详情在 `issues`）；下一次本机改动会重试。
   case failed(String)
   /// 这台设备没有在同步（原因给用户看）：没有同步（隔离模式、构建没有 iCloud 权限）或同步没能启动。由 App 层设置。

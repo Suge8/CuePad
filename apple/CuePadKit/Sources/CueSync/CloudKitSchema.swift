@@ -1,7 +1,7 @@
 import Foundation
 
 /// CloudKit 数据结构（cktool 的 .ckdb 文本），由记录映射推出，不手写第二份：
-/// 每个同步表一个记录类型；字段名与类型取自表的真实列（TEXT→STRING，INTEGER→INT64）；
+/// 每个同步表一个记录类型，另有最低对端版本（`PeerFloor`）；字段名与类型取自表的真实列（TEXT→STRING，INTEGER→INT64）；
 /// `RecordMapper.encryptedColumns` 里的字段声明为加密；`RecordMapper.queryableColumns` 里的字段与每个类型的
 /// recordName 建可查询索引；附件记录另有资产字段 `file`。权限只给私有库所需的创建者与 iCloud 用户。
 /// 提交的文件是 `apple/CloudKit/cuepad.ckdb`，测试保证它与这里的输出一致。
@@ -63,6 +63,7 @@ enum CloudKitSchema {
       fields += retiredFields[table.rawValue] ?? []
       types.append(recordType(table.rawValue, fields))
     }
+    types.append(recordType(PeerFloor.recordType, [("\"___recordID\"", "REFERENCE QUERYABLE"), (PeerFloor.field, "INT64")]))
     for retired in retiredTypes {
       types.append(recordType(retired.name, [("\"___recordID\"", "REFERENCE QUERYABLE")] + retired.fields))
     }

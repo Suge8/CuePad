@@ -5,7 +5,7 @@ import os
 /// iCloud 同步入口：私有数据库里一个自定义同步区，自己的同步循环——一个拉取器（`ZonePuller`）、一个发送者（`RecordSender`），
 /// 逻辑在协调器（`SyncCoordinator`）。
 ///
-/// 用法：`let sync = CloudSync(store: store)`；`try await sync.start()` 认账号、开始上传，第一次拉由 App 发起（`syncNow`，它等得到拉完）；界面订阅 `stateUpdates`，
+/// 用法：`let sync = CloudSync(store: store)`；`try await sync.start()` 认账号与最低对端版本（`PeerFloor`）、开始上传，第一次拉由 App 发起（`syncNow`，它等得到拉完）；界面订阅 `stateUpdates`，
 /// 状态为 `.needsDecision` 时让用户选择后调用 `resolve(_:)`。冲突副本由 `CueStore.conflicts()` 提供。
 /// 需要 App 带 iCloud（CloudKit）entitlement 与容器；没有 entitlement 的进程（命令行测试）不能调用 `start()`。
 ///
@@ -19,6 +19,7 @@ public actor CloudSync {
   private let coordinator: SyncCoordinator
   /// `start()` 里才建：没有 entitlement 的进程一建容器就崩。
   private var container: CKContainer?
+  private var database: CloudDatabase?
   private var puller: ZonePuller?
   private var sender: RecordSender?
   /// 认过账号、拉取与上传都开始了。认不了（离线、没登录）时不拉也不传：本机的同步元数据可能属于上一个账号。
@@ -49,6 +50,7 @@ public actor CloudSync {
     let container = CKContainer(identifier: Self.containerIdentifier)
     let database = CloudDatabase(database: container.privateCloudDatabase, zoneID: zoneID)
     self.container = container
+    self.database = database
     puller = ZonePuller(source: database, coordinator: coordinator)
     sender = RecordSender(uploader: database, coordinator: coordinator)
     await coordinator.loadToken()
@@ -69,11 +71,12 @@ public actor CloudSync {
     await sender?.stop()
     sender = nil
     puller = nil
+    database = nil
     container = nil
     ready = false
   }
 
-  /// 认账号：状态交给协调器，可用时再认是不是上次同步的那个账号（换了就停下来等你决定）。还没开始的，认过且能同步就开始上传；
+  /// 认账号：状态交给协调器，可用时再认是不是上次同步的那个账号（换了就停下来等你决定）。还没开始的，认过、对过门槛（`PeerFloor.settle`）且能同步就开始上传；
   /// 已开始后的账号变化（退出、受限、换了账号）由协调器停下（`canSync`）。返回此刻是否已开始。
   /// 认不了（离线）的，下一次立即同步或账号变化时再认。拉取由调用方接着发起（`syncNow`、账号变化）。
   @discardableResult
@@ -91,7 +94,15 @@ public actor CloudSync {
       return false
     }
     if ready { return true }
-    guard available, await coordinator.canSync, let sender else { return false }
+    guard available, await coordinator.canSync, let sender, let database else { return false }
+    do { try await PeerFloor(zoneID: zoneID).settle(database, coordinator: coordinator) } catch {
+      guard !(error is SyncPaused) else { return false }
+      await coordinator.reached(error)
+      Self.log.notice("对最低对端版本失败，暂不上传：\(error.brief, privacy: .public)")
+      return false
+    }
+    // 对门槛时可能有另一次认账号先开始了
+    guard await coordinator.canSync, !ready else { return ready }
     ready = true
     await sender.start()
     return true
