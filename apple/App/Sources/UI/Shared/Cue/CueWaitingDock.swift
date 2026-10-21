@@ -1,7 +1,7 @@
 import CueStore
 import SwiftUI
 
-/// "等你"：固定在输入框上方，最早的那一条（从任务看板点进来的那条先露，`Workspace.leadingAsk`），收得紧。第一句是要你定什么，由代码按 Cue 写的动作短语写出
+/// "等你"：固定在输入框上方，最早的那一条（从任务看板点进来、在对话里点了"去答"的那条先露，`CueThread.leading`），收得紧。第一句是要你定什么，由代码按 Cue 写的动作短语写出
 /// （`CueAsking.question`），不靠 Cue 的措辞；Cue 的原话默认收起，点"原话"再看（长了在里面滚）。下面是 Cue 点名要你看的图与各看什么
 /// （`CueShots`，没点名的没有图；点开全屏时底栏就是这几个选项，看完当场定；"可以"选的是其中一张时那张描靛青圈、选项旁一句"要选别的，在下面跟 Cue 说"）、
 /// 选项（`CueChoices`），末行是关联的任务与原话的开关
@@ -89,7 +89,8 @@ struct CueWaitingDock: View {
             guard shown != nil else { return }
             guard animated else { return leave() }
             leaving = true
-            move(to: 0, .easeOut(duration: Motion.handOff), holds: false) { if waiting.isEmpty { leave() } }
+            // 收尾看此刻的状态（`leaving`）：闭包里的 `waiting` 是排这一段时那一份，淡的这 80ms 里又来了一条时它还是空的，会把新来的那张拿掉
+            move(to: 0, .easeOut(duration: Motion.handOff), holds: false) { if leaving { leave() } }
             return
         }
         let swapping = shown != nil
@@ -261,15 +262,5 @@ struct CueWaitingDock: View {
             defer { ending = nil }
             try await workspace.services.answerCueQuestion(message.id, choice)
         }
-    }
-}
-
-extension Workspace {
-    /// "等你"卡露的先后：从任务看板点进来的那条（`cueAsking`）还在等就排到最前，其余照旧从早到晚。
-    func leadingAsk(_ waiting: [CueMessage]) -> [CueMessage] {
-        guard let id = cueAsking, let index = waiting.firstIndex(where: { $0.id == id }), index > 0 else { return waiting }
-        var ordered = waiting
-        ordered.insert(ordered.remove(at: index), at: 0)
-        return ordered
     }
 }
