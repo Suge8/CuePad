@@ -1,13 +1,9 @@
 #if os(macOS)
-import AppKit
-import CueAgent
 import CuePi
 import CueStore
 import CueTestSupport
 import CueText
-import Darwin
 import Foundation
-import SwiftUI
 import Testing
 @testable import CuePad
 
@@ -128,10 +124,7 @@ extension CueEvalTests {
             let work = try await Self.proposalsDelivered(eval)
             let previews = try await rig.store.previews(of: work.id)
             let asked = eval.calls("tell").filter { $0.args["ask"] as? String == "rule" && !$0.call.failed }
-            let shown = (asked.last?.args["show"] as? [[String: Any]] ?? []).compactMap { item -> PiPreview? in
-                guard let key = (item["file"] as? String)?.lowercased(), !key.isEmpty else { return nil }
-                return previews.first { $0.id.uuidString.lowercased().hasPrefix(key) }
-            }
+            let shown = Self.shown(asked.last?.args["show"], in: previews)
             let variants = Set(shown.map { name in Self.proposals.map(\.slug).reduce(name.name) { $0.replacingOccurrences(of: $1, with: "") } })
             return [
                 Check(.ask, "请他选（tell 带 ask=rule、关联这件任务）", try await eval.said().contains { $0.choices != nil && $0.taskID == work.task.id } && !asked.isEmpty),
@@ -164,10 +157,7 @@ extension CueEvalTests {
             let previews = try await rig.store.previews(of: work.id)
             let done = eval.calls("task", "done").last { !$0.call.failed }
             let picked = done?.args["show"] as? [[String: Any]] ?? []
-            let shown = picked.compactMap { item -> PiPreview? in
-                guard let key = (item["file"] as? String)?.lowercased(), !key.isEmpty else { return nil }
-                return previews.first { $0.id.uuidString.lowercased().hasPrefix(key) }
-            }
+            let shown = Self.shown(picked, in: previews)
             let report = try await eval.said().last { $0.taskID == work.task.id && $0.choices == nil }
             return [
                 Check(.result, "done 了", done != nil),
@@ -176,6 +166,14 @@ extension CueEvalTests {
                 Check(.tool, "每张一句看什么", !picked.isEmpty && picked.allSatisfy { ($0["look"] as? String)?.isEmpty == false }),
                 Check(.tool, "结果上就是点名的这几张", report?.shots.map(\.preview) == shown.map(\.id)),
             ]
+        }
+    }
+
+    /// show 点名的图（file 写编号前缀）是会话发来的哪几张；认不出的略过
+    static func shown(_ show: Any?, in previews: [PiPreview]) -> [PiPreview] {
+        (show as? [[String: Any]] ?? []).compactMap { item in
+            guard let key = (item["file"] as? String)?.lowercased(), !key.isEmpty else { return nil }
+            return previews.first { $0.id.uuidString.lowercased().hasPrefix(key) }
         }
     }
 }
