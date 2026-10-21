@@ -12,7 +12,7 @@ import SwiftUI
 /// 点圈完成（`TaskCheck`），点行的其余地方打开任务气泡（`Workspace.openTask`；气泡里的步骤行是翻到这一步）。Mac 右键是 `CardActions`；
 /// 手机长按直接拖动（`TaskOutline`），不挂长按菜单：系统长按菜单弹出后，把预览往下拉是收起菜单、拖不起来，
 /// 往下面的组或项目段拖就做不到。菜单那几项各有入口：完成点圈、删除轻扫、归档在任务气泡的"⋯"。
-/// Mac 上指针停在行上时铺行的淡底（`RowStyle`），"开始"与状态词这时才露出来（`TaskNextMark` 读 `rowHovered`）。
+/// Mac 上指针停在行上时铺行的淡底（`RowStyle`），还没交出去的叶子的"开始"这时才浮在行尾（`hoverReveal`，不占排版，标题与时间一个字都不挪）。
 struct TaskLine: View {
     let task: Card
     /// 步骤进度（有它的不是叶子，不给"开始"）。
@@ -37,7 +37,7 @@ struct TaskLine: View {
     var body: some View {
         let next = workspace.next(for: task, lead: lead, in: agents, steps: subtasks)
         let done = check.done(task)
-        framed(line(next: next, done: done))
+        framed(line(next: next, done: done), next: done ? nil : next)
             // 读屏把一行当一个元素："任务内容，步骤 1/4，下一步"，值是状态（文案见 TaskSpeech）；默认动作勾选（与圈同一个动作）
             .accessibilityElement(children: .ignore)
             .accessibilityLabel([task.title, subtasks.map(TaskCopy.progress), next?.speech].compactMap { $0 }.joined(separator: "，"))
@@ -106,7 +106,15 @@ struct TaskLine: View {
             .font(TaskMetrics.caption).monospacedDigit().foregroundStyle(palette.ink3)
             .yields(first: true)
         }
-        if !done, let next { TaskNextMark(next: next).yields(first: false, ever: !next.speaks).transition(.opacity) }
+        if !done, let next, Self.inlines(next) { TaskNextMark(next: next).yields(first: false, ever: !next.speaks).transition(.opacity) }
+    }
+
+    /// "下一步"排在行里还是悬停才浮出来：Mac 上"开始"只在悬停时浮在行尾（`framed`）。
+    private static func inlines(_ next: TaskNext) -> Bool {
+        #if os(macOS)
+        if case .start = next { return false }
+        #endif
+        return true
     }
 
     private func open() { workspace.openTask(task) }
@@ -131,7 +139,7 @@ struct TaskLine: View {
     /// 长按提起的那一行的外形：与列表那张纸同一个圆角。
     private static let liftRadius: CGFloat = 16
 
-    private func framed(_ content: some View) -> some View {
+    private func framed(_ content: some View, next: TaskNext?) -> some View {
         content
             .contentShape(.rect)
             .onTapGesture(perform: open)
@@ -144,11 +152,11 @@ struct TaskLine: View {
     private static let titlePadding: CGFloat = 0
     private static let ringTarget: CGFloat = TaskMetrics.ring
 
-    private func framed(_ content: some View) -> some View {
+    private func framed(_ content: some View, next: TaskNext?) -> some View {
         content
             .contentShape(.rect)
-            .row(hovers: true)
-            .environment(\.rowHoverPreset, DebugHooks.hovers(task.body))
+            .hoverReveal(when: next.map { !Self.inlines($0) } ?? false) { if let next { TaskNextMark(next: next).padding(.leading, 4) } }
+            .row()
             .benchSpot(task.id)
             .onTapGesture(perform: open)
             .contextMenu { CardActions(card: task, leaf: subtasks == nil) }
@@ -261,7 +269,8 @@ extension View {
 /// 任务行上"下一步"那一格（`TaskNext`），Mac 与手机同一份，不垫底、不成胶囊——一屏可能有十几格，胶囊排成一列就成了一墙按钮：
 /// 会话那边的事是会话状态标（`PiStateDot`，在做时那条心电线自己会动），要你管的（`PiShown.speaksOnTask`）旁边写状态词，点了打开会话；
 /// 还没交出去的叶子是一个"▶"，点了把任务的正文交给 Agent（Mac 直接交出，手机浮起发给 Agent 的输入框带着它）。
-/// Mac 上指针停在这一行时（`rowHovered`）"▶ 开始"以靛青露出来、状态标旁写出状态词；没停时"开始"不画（签名色只给焦点，ui.md）。
+/// 指针停在这一行时（`rowHovered`）"▶ 开始"是靛青（签名色只给焦点，ui.md）；Mac 上"开始"只在那时浮在行尾（`TaskLine.inlines`）。
+/// 状态词只看要不要你管，不随悬停出没：出没会挤动标题与时间，状态标的说明在悬停提示里。
 struct TaskNextMark: View {
     let next: TaskNext
     @Environment(\.rowHovered) private var lit
@@ -273,13 +282,11 @@ struct TaskNextMark: View {
     #endif
 
     var body: some View {
-        if shows {
-            Button(action: follow) { label }
-                .buttonStyle(PressStyle())
-                .help(help)
-                .accessibilityLabel(next.speech)
-                .accessibilityHint(help)
-        }
+        Button(action: follow) { label }
+            .buttonStyle(PressStyle())
+            .help(help)
+            .accessibilityLabel(next.speech)
+            .accessibilityHint(help)
     }
 
     private var label: some View {
@@ -287,7 +294,7 @@ struct TaskNextMark: View {
             switch next {
             case .agent(let shown, let session):
                 PiStateDot(shown: shown, size: Self.dot).relaySpot(session: session.sessionID, row: .task)
-                if shown.speaksOnTask || lit { Text(shown.label).foregroundStyle(shown.labelTint(palette)) }
+                if shown.speaksOnTask { Text(shown.label).foregroundStyle(shown.labelTint(palette)) }
             case .start:
                 Image(.start).font(Self.glyph)
                 #if os(macOS)
@@ -308,14 +315,11 @@ struct TaskNextMark: View {
     private var starts: Bool { if case .start = next { true } else { false } }
 
     #if os(macOS)
-    /// "开始"只在指针停在这一行时出现。
-    private var shows: Bool { !starts || lit }
     private var edge: Alignment { .leading }
     private static let dot: CGFloat = 6
     private static let glyph = Font.system(size: 8, weight: .bold)
     private static let target: CGFloat = 20
     #else
-    private var shows: Bool { true }
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.dynamicTypeSize) private var typeSize
     /// 跟着 `TaskLine` 的排法：手机行尾一列时贴右，紧跟标题或换到标题下面时贴左。

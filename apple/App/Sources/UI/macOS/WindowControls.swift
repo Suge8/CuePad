@@ -57,7 +57,7 @@ struct CloseButton: View {
                 .frame(height: Spacing.toolbarControl)
                 .contentShape(.capsule)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PressStyle())
             .keyboardShortcut(.cancelAction)
             .glass(in: .capsule, interactive: true)
             .help("收起（Esc）")

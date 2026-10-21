@@ -10,7 +10,7 @@ struct CueTaskButton<Label: View>: View {
 
     var body: some View {
         Button(action: open) { label.contentShape(.rect) }
-            .buttonStyle(PressStyle(.card))
+            .buttonStyle(PressStyle())
     }
 
     private func open() { workspace.openTask(id: task) }

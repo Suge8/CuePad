@@ -28,7 +28,7 @@ struct ProjectScopeMenu: View {
             .padding(.horizontal, 12).frame(height: Spacing.toolbarControl)
             .glass(in: .capsule, interactive: true)
         }
-        .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
+        .menuStyle(.button).buttonStyle(PressStyle()).menuIndicator(.hidden).fixedSize()
     }
 }
 #endif

@@ -28,7 +28,7 @@ struct JumpToNewest: View {
                 .frame(width: Self.size, height: Self.size)
                 .contentShape(.circle)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressStyle(.button))
         .accessibilityLabel(unseen ? "回到最新，有新内容" : "回到最新")
     }
 }

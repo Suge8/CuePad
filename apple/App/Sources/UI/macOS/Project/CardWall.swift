@@ -67,7 +67,7 @@ struct CardTile: View {
         Button(action: open) {
         CardFace(card: card, lastTarget: lastTarget, floated: floated)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .paper(radius: Self.radius, lifted: hovering)
+        .paper(radius: Self.radius)
         .overlay { SelectedFrame(radius: Self.radius) }
         .contentShape(.rect(cornerRadius: Self.radius))
         }
@@ -83,11 +83,7 @@ struct CardTile: View {
         }
         .cardPresence(card.id, in: workspace)
         .onHover { hovering = $0 }
-        .onAppear {
-            guard DebugHooks.hovers(card.body) else { return }
-            hovering = true
-            workspace.presses.hover(card.id, inside: true)
-        }
+        .presetHover($hovering)
         .animation(Motion.quick, value: hovering)
         .contextMenu { CardActions(card: card, selectable: true) }
         .accessibilityElement(children: .combine)

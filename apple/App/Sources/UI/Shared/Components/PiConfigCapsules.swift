@@ -29,7 +29,7 @@ struct PiModelCapsule: View {
     @ViewBuilder private func capsule(at now: Date) -> some View {
         #if os(macOS)
         Button(action: pick) { label(at: now) }
-            .buttonStyle(.plain)
+            .buttonStyle(PressStyle())
             .accessibilityLabel("模型")
             .accessibilityValue(spoken(at: now))
         #else
@@ -89,7 +89,7 @@ struct PiAgentCapsule: View {
         } else {
             #if os(macOS)
             Button { if let view = anchor.view { ChoiceMenu.popUp(pick.menu, below: view) } } label: { label }
-                .buttonStyle(.plain)
+                .buttonStyle(PressStyle())
                 .popUpAnchor(anchor)
                 .accessibilityLabel("Agent")
                 .accessibilityValue(pick.current.name)

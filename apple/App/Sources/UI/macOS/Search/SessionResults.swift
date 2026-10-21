@@ -78,7 +78,7 @@ struct SessionResultList: View {
                     }
                     if more > 0 {
                         Button("显示更多（还有 \(more) 个）", action: loadMore)
-                            .buttonStyle(.plain).font(Typography.meta).foregroundStyle(palette.ink2).padding(.vertical, 10)
+                            .buttonStyle(PressStyle(.inline)).font(Typography.meta).foregroundStyle(palette.ink2).padding(.vertical, 10)
                     }
                 }
                 // 字离滚动区的边 18；行的底向两边让出一截，留在滚动区里

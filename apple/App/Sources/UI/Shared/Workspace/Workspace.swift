@@ -72,6 +72,13 @@ final class Workspace {
     var showsSetup = false
     /// 新会话的表单开着（`NewSessionForm`，从会话页的 + 弹出；菜单"文件 › 新会话"先去会话页再置起，`newSession`）。
     var showsNewSession = false
+    /// 任务页待办顶上浮出添加那一行（页上的"新任务"与右上"⋯"里的同一下）。
+    var addsTask = false
+    /// 清空回收站的确认开着（回收站页上与"⋯"里的"清空回收站…"同一下）。
+    var confirmsEmptyTrash = false
+    /// 页面读到后交给"⋯"（`PageMenuSlot`）按它置灰的：有没有做完的任务（任务页）、回收站里有没有东西（回收站页）。
+    var hasDoneTasks = false
+    var hasTrash = false
     #endif
     /// 项目范围：任务页与会话页共用这一份（顶栏中间那颗显示它、点 ✕ 清掉；项目页"⋯"里的"看这个项目的会话"设成这个项目再切到会话页），nil 是全部项目。
     var projectScope: UUID?

@@ -2,7 +2,7 @@
 import CueStore
 import SwiftUI
 
-/// 会话页（侧栏的"会话"进来）：没有页标题（侧栏那块选中就说了在哪），最上面就是一排：项目范围、搜索、额度环（`QuotaRings`，同手机；点它从那一下长出明细的气泡 `QuotaDetail`，点外面或 Esc 收回）、新会话。
+/// 会话页（侧栏的"会话"进来）：没有页标题（侧栏那块选中就说了在哪），顶上那一排（`pageHeader`，列表滚到它后面）：项目范围、搜索、额度环（`QuotaRings`，同手机；点它从那一下长出明细的气泡 `QuotaDetail`，点外面或 Esc 收回）、新会话（右上"⋯"里同一下，还有接入 Agent）。
 /// 列表同手机一条（`PiSessionList`）："现在"置顶（按要你注意的先后：等你确认 → 出错 → 工作中 → 空闲），"历史"按结束时间分段接在下面（`TimeSection`），读到底再接一页；
 /// 看全部项目时卡上放所在项目的图标。项目范围与任务页共用一份（`Workspace.projectScope`）。
 /// 行与手机同一种（`PiSessionRow`），点行在内容区打开会话页；在线会话右键可结束（确认后发给它所在的 Mac，对话留着）。
@@ -27,6 +27,7 @@ struct AgentPage: View {
             // 换了项目范围：回到顶上，从这个项目的第一条看起
             .onChange(of: filter) { proxy.scrollTo(Self.top, anchor: .top) }
         }
+        .pageHeader { topRow.frame(maxWidth: Self.width - Spacing.page * 2) }
         .background(palette.desk)
         .agentList(model, filter: filter)
         .refreshesQuota()
@@ -43,11 +44,11 @@ struct AgentPage: View {
 
     private var column: some View {
         LazyVStack(alignment: .leading, spacing: 0, pinnedViews: []) {
-            topRow.padding(.bottom, 16).id(Self.top)
+            Color.clear.frame(height: 0).id(Self.top)
             ConnectAgents().padding(.bottom, 12)
             if let list = model.list { sessions(list) }
         }
-        .padding(.horizontal, Spacing.page).padding(.vertical, Spacing.pageTop)
+        .padding(.horizontal, Spacing.page).padding(.bottom, Spacing.pageTop)
         .frame(maxWidth: Self.width)
         .frame(maxWidth: .infinity)
     }
@@ -60,8 +61,11 @@ struct AgentPage: View {
                 Image(.search).foregroundStyle(palette.ink3).accessibilityHidden(true)
                 TextField(searchPrompt, text: $model.query, palette: palette).textFieldStyle(.plain)
                 if !model.query.isEmpty {
-                    Button("清除", icon: .clear) { model.query = "" }
-                        .labelStyle(.iconOnly).buttonStyle(.plain).foregroundStyle(palette.ink3)
+                    Button { model.query = "" } label: {
+                        Image(.clear).frame(width: 24, height: 24).contentShape(.circle)
+                    }
+                    .buttonStyle(PressStyle(.button)).foregroundStyle(palette.ink3)
+                    .accessibilityLabel("清除")
                 }
             }
             .font(Typography.body)

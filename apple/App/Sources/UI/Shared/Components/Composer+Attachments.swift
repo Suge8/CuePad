@@ -45,7 +45,7 @@ extension Composer {
                 Button("不带了", icon: .remove) { drop(outbox) }
                     .labelStyle(.iconOnly).foregroundStyle(palette.ink3)
                     .frame(width: 44, height: 44).contentShape(.rect)
-                    .buttonStyle(.plain)
+                    .buttonStyle(PressStyle(.button))
             }
         }
         .background(palette.fill, in: shape)

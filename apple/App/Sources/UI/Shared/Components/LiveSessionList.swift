@@ -46,7 +46,7 @@ private struct LiveMoreFold: View {
             .frame(minHeight: 28)
             .contentShape(.rect)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressStyle())
         .accessibilityLabel(expanded ? "收起" : "还有 \(hidden) 个会话")
         .accessibilityExpanded(expanded)
     }

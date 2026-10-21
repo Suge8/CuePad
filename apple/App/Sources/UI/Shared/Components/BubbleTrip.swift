@@ -71,7 +71,7 @@ private struct TripMark: View {
                 } label: {
                     PiStateGlyph.undelivered
                 }
-                .menuStyle(.button).buttonStyle(.plain)
+                .menuStyle(.button).buttonStyle(PressStyle(.inline))
                 #if os(macOS)
                 .menuIndicator(.hidden)
                 #endif

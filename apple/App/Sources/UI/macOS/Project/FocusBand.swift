@@ -76,7 +76,7 @@ struct FocusBand: View {
             .fixedSize()
             .contentShape(.rect)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressStyle(.inline))
         .accessibilityValue(open ? "已展开" : "已折叠")
     }
 }
@@ -106,8 +106,6 @@ struct CompactFocus: View {
             .glass(in: .capsule, interactive: true)
         }
         .buttonStyle(PressStyle())
-        // 放在工具栏里时系统默认只显示图标
-        .labelStyle(.titleAndIcon)
         .help("回到顶部")
     }
 }

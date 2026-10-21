@@ -119,7 +119,7 @@ private struct ShortcutRow: View {
                 }
                 .contentShape(.rect)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PressStyle(.inline))
             .onHover { hovering = $0 }
             .animation(Motion.quick, value: hovering)
             .help("点一下，按下新的组合键（Esc 取消）")

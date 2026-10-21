@@ -45,7 +45,7 @@ struct NewTaskField: View {
                     }
                     .contentShape(.rect)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(PressStyle())
                 .accessibilityLabel(prompt)
             }
             #if os(macOS)

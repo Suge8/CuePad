@@ -43,7 +43,7 @@ struct AttachmentButton<Label: View>: View {
 
     var body: some View {
         Button(action: open, label: content)
-            .buttonStyle(.plain)
+            .buttonStyle(PressStyle(.button))
             .accessibilityLabel(label)
             .accessibilityHint("看全文")
             .contextMenu { ChoiceMenuItems(sections: menu) }

@@ -28,7 +28,7 @@ struct ProjectStylePicker: View {
                             .overlay { if selected { shape.strokeBorder(palette.ink, lineWidth: 2) } }
                             .contentShape(.rect)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(PressStyle(.button))
                     .foregroundStyle(palette.project(color))
                     .accessibilityLabel("图标：\(choice.name)")
                     .accessibilityAddTraits(selected ? .isSelected : [])
@@ -44,7 +44,7 @@ struct ProjectStylePicker: View {
                             .frame(width: cell, height: cell)
                             .contentShape(.rect)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(PressStyle(.button))
                     .accessibilityLabel("颜色：\(choice.name)")
                     .accessibilityAddTraits(selected ? .isSelected : [])
                     .help(choice.name)

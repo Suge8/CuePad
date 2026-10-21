@@ -61,6 +61,7 @@ struct MenuBarPad: View {
                 delivery: services.liveSessions.deliveries[session.sessionID], rename: services.liveSessions.renames[session.sessionID],
                 undelivered: services.liveSessions.undelivered[session.sessionID] ?? 0).equatable()
                 .contentShape(.rect)
+                .row()
                 .onTapGesture { open(.session(session.sessionID)) }
                 .accessibilityAddTraits(.isButton)
                 .accessibilityAction { open(.session(session.sessionID)) }
