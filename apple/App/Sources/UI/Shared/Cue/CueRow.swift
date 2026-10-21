@@ -26,11 +26,16 @@ struct CueRow: View, Equatable {
     let delivered: Bool
     let live: CueLiveRound?
     /// 这一格是新消息：左边一颗小点（`CueUnreadDot`），末尾进出滚动区时报给页面（`CueViewing`）。
+    /// 页边距放得下时在气泡外隔一条缝；窄屏（iPhone、窄窗口的 iPad）页边距只有一条缝那么宽，点骑在气泡左缘上（`straddlesDot`），离屏缘约 12 点：
+    /// 挤在屏边与气泡之间时离屏缘只剩 3 点，像被切掉一半。
     let unread: Bool
     @Binding var opened: PreviewOpening?
     @Binding var seen: [UUID: Date]
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
+    #if os(iOS)
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    #endif
 
     /// 这一格排出来什么样只看这几样。
     nonisolated struct Key: Equatable {
@@ -47,7 +52,9 @@ struct CueRow: View, Equatable {
         if let stamp { ChatTimeMarker(date: stamp).padding(.top, CuePage.stampAbove) }
         content
             .overlay(alignment: .topLeading) {
-                CueUnreadDot(unread: unread).alignmentGuide(.leading) { $0[.trailing] + CueUnreadDot.gap }
+                CueUnreadDot(unread: unread).alignmentGuide(.leading) { [straddlesDot] in
+                    straddlesDot ? $0[HorizontalAlignment.center] : $0[.trailing] + CueUnreadDot.gap
+                }
             }
             .padding(.top, stamp != nil ? CuePage.stampBelow : CuePage.gap(before: row.speaker, joined: joined))
             .background(alignment: .bottom) {
@@ -75,6 +82,14 @@ struct CueRow: View, Equatable {
         case .process(let message):
             RoundProcess(tools: message.tools, ending: CueLiveRound.ending(of: message, in: live)).padding(.leading, CueBubble.noteInset)
         }
+    }
+
+    private var straddlesDot: Bool {
+        #if os(iOS)
+        sizeClass == .compact
+        #else
+        false
+        #endif
     }
 
     /// Cue 的话原位换下正在说的话（Cue 在这台 Mac 值班时），不淡入。
