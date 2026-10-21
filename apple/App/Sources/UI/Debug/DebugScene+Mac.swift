@@ -110,12 +110,23 @@ extension DebugScene {
         default: break
         }
         if defaults.bool(forKey: "CuePadDemoMac") { Task { await runDemoMac(workspace.services) } }
+        if defaults.bool(forKey: "CuePadSidebarCycle") { Task { await cycleSidebar() } }
         await presetSpeech(workspace)
         switch defaults.string(forKey: "CuePadBench") {
         case "churn": await benchChurn(workspace)
         case "interact": await InteractionBench.run(workspace)
         case "chatscroll": Task { await ChatScrollBench.run() }
         default: break
+        }
+    }
+
+    /// `-CuePadSidebarCycle YES`（配录屏）：画面就绪后每 1.5 秒开合一次侧栏，走 ⌃⌘S 那条路（主菜单动作经响应链），看开合的动效。
+    private static func cycleSidebar() async {
+        try? await Task.sleep(for: .seconds(1.5))
+        while !Task.isCancelled {
+            NSApp.sendAction(#selector(AppDelegate.toggleCueSidebar(_:)), to: nil, from: nil)
+            // 两次之间停多久是录屏的节奏，不是在等别的事
+            try? await Task.sleep(for: .seconds(1.5))
         }
     }
 
