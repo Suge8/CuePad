@@ -13,7 +13,7 @@ private let cjkCommand = "echo " + String(repeating: "你", count: 130)
 @Suite(RealAgents.taped(.pi), .agentTape(.pi), RealAgents.serialWhenRecording(.pi), RealAgents.timeLimit(.minutes(5)))
 struct RealPiTests {
     /// 起 Pi、等桥发现它，测试体结束后停掉 Pi 与桥（Pi 进程的生命周期必须覆盖整个测试体）。
-    private func withRig(_ body: (PiProcess, PiBridge, PiSession) async throws -> Void) async throws {
+    func withRig(_ body: (PiProcess, PiBridge, PiSession) async throws -> Void) async throws {
         let pi = try await PiProcess()
         let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
         defer { bridge.stop(); pi.stop() }
@@ -23,7 +23,7 @@ struct RealPiTests {
     }
 
     /// 会话文件里的消息（文件顺序）：角色、文字、图片数。真实 Pi 写出的内容，作为投送是否到达模型的证据。
-    private func messages(of session: PiSession) -> [(role: String, text: String, images: Int)] {
+    func messages(of session: PiSession) -> [(role: String, text: String, images: Int)] {
         guard let file = session.sessionFile, let text = try? String(contentsOf: file, encoding: .utf8) else { return [] }
         return text.split(separator: "\n").compactMap { line in
             guard let object = try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any],
@@ -35,7 +35,7 @@ struct RealPiTests {
         }
     }
 
-    private func replies(of session: PiSession) -> [String] { messages(of: session).filter { $0.role == "assistant" }.map(\.text) }
+    func replies(of session: PiSession) -> [String] { messages(of: session).filter { $0.role == "assistant" }.map(\.text) }
 
     @Test func installedExtensionIsLoadedByPiAndReportsTheSession() async throws {
         try await withRig { pi, _, s in
@@ -95,52 +95,6 @@ struct RealPiTests {
         try bridge.start()
         try await eventually("桥发现真实 Pi 会话") { !bridge.sessions.isEmpty }
         #expect(bridge.sessions[0].availableModels.map(\.key.id).sorted() == ["echo", "echo-think"])  // echo 是当前模型，不在范围内也列出
-    }
-
-    /// 正在等你确认时结束会话或停止这一轮：弹窗被取消（不取消 Pi 会一直等下去），会话不卡在等你。
-    /// 结束走扩展接口 `ctx.shutdown`；测试驱动的是 RPC 进程，它在下一条命令后才检查退出请求，所以结束只验证弹窗被取消。
-    @Test(arguments: ["end", "abort"]) func endingOrStoppingCancelsThePendingDialog(_ action: String) async throws {
-        AgentTape.variant(action)
-        try await withRig { pi, bridge, s in
-            try pi.prompt("/ask")
-            try await eventually("确认框") { bridge.sessions.first?.question?.kind == .known(.confirm) }
-
-            let request = Task { action == "end" ? try await bridge.end(s.id) : try await bridge.abort(s.id) }
-            defer { request.cancel() }
-
-            _ = try await pi.waitForEvent("扩展拿到取消") { $0["method"] as? String == "notify" && $0["message"] as? String == "confirmed:false" }
-            try await eventually("弹窗收起") { bridge.sessions.first?.question == nil }
-        }
-    }
-
-    /// 停止这一轮：正在跑的一轮被中止、会话回到空闲等下一句（终态是"被中止"），会话还在、能接着说；空闲时停止直接成功、什么也不发生。
-    @Test func abortStopsTheRunningTurnAndTheSessionTakesTheNextMessage() async throws {
-        try await withRig { pi, bridge, s in
-            try await bridge.abort(s.id)  // 空闲：成功，不改状态
-            #expect(bridge.sessions.first?.state == .settled)
-
-            try pi.prompt("[[slow]] 很长的一轮")
-            try await eventually("在跑") { bridge.sessions.first?.state == .thinking }
-            try await bridge.abort(s.id)
-            try await eventually("回到等下一句") { bridge.sessions.first?.state == .settled }
-
-            try pi.prompt("接着说")
-            try await eventually("还能接着说") { recap(of: bridge.sessions.first)?.lastReply == "ECHO 接着说 IMAGES[]" }
-        }
-    }
-
-    /// 工具跑着时停止，而 Pi 把这一轮记成了 error（工具被中止后的那次请求因中止失败，见 fake-model 的 [[abort-as-error]]）：
-    /// 这一轮收到过停止，按被停下报，会话歇着、不显示出错；对话里是"已停止"，不是一轮出错的空回答。
-    @Test func abortDuringAToolIsAStopEvenWhenPiRecordsAnError() async throws {
-        try await withRig { pi, bridge, s in
-            try pi.prompt("[[tool:sleep 30]] [[abort-as-error]] 跑个慢命令")
-            try await eventually("在跑工具") { bridge.sessions.first?.state == .tool }
-            try await bridge.abort(s.id)
-            try await eventually("这一轮结束", timeout: .seconds(30)) { [.settled, .error].contains(bridge.sessions.first?.state) }
-            #expect(bridge.sessions.first?.state == .settled, "\(String(describing: bridge.sessions.first?.detail))")
-            let messages = try PiHistory.index(file: #require(s.sessionFile), from: nil).messages
-            #expect(messages.map(\.text) == ["[[tool:sleep 30]] [[abort-as-error]] 跑个慢命令", PiNotice.stopped.rawValue])
-        }
     }
 
     /// 显示名与 Pi 自己的会话列表同一规则：`/name` 设的名字 → 首条用户消息（单行）→ 工作目录名。
@@ -227,183 +181,6 @@ struct RealPiTests {
             try await eventually("一轮结束") { log.states.last == .settled }
             try await eventually("日志记下了") { log.details.contains("write · hello.txt") }
         }
-    }
-
-    @Test func sendDeliversTextAndImageIntoTheModelContext() async throws {
-        try await withRig { _, bridge, s in
-            try await bridge.send(PiMessage(text: "look", images: [PiImage(mimeType: "image/png", data: tinyPNG)]), to: s.id)
-            try await eventually("回复写入") { !self.replies(of: s).isEmpty }
-            let prompt = try #require(messages(of: s).first { $0.role == "user" })
-            #expect(prompt.text.hasPrefix("look") && prompt.images == 1)
-            let reply = replies(of: s)[0]
-            #expect(reply.contains("IMAGES[image/png:"), "假模型看到了图片：\(reply)")
-        }
-    }
-
-    /// 会话正忙时发来的话先停下在跑的这一轮（连同跑着的工具），再作为新一轮开始；接连发两句，每句都是新的一轮——
-    /// 前一句开的那一轮也被下一句停下，只有最后一句得到回答。每句都带着自己的投送请求 id。
-    /// 前一句的那一轮停住（`[[slow]]`）：第二句到达时它不论已经开始还是还在等着，结果都一样。
-    @Test func aMessageSentWhileBusyStopsTheRunningTurnAndStartsANewOneWithIt() async throws {
-        try await withRig { pi, bridge, s in
-            try pi.prompt("[[tool:sleep 30]] 跑个慢命令")
-            try await eventually("在跑工具") { bridge.sessions.first?.state == .tool }
-            let first = UUID(), second = UUID(), log = ChangeLog(bridge)
-            try await bridge.send(PiMessage(text: "[[slow]] FIRST", deliveryID: first.uuidString), to: s.id)
-            try await bridge.send(PiMessage(text: "SECOND", deliveryID: second.uuidString), to: s.id)
-
-            try await eventually("最后一句答完", timeout: .seconds(20)) {
-                self.replies(of: s).last?.hasPrefix("ECHO SECOND") == true && bridge.sessions.first?.state == .settled && log.states.last == .settled
-            }
-            #expect(log.settles == 1, "被停下的两轮都不算歇下：\(log.states)")
-            let messages = try PiHistory.index(file: #require(s.sessionFile), from: nil).messages
-            let users = messages.filter { $0.role == .known(.user) }
-            #expect(users.map(\.text) == ["[[tool:sleep 30]] 跑个慢命令", "[[slow]] FIRST", "SECOND"])
-            #expect(users.map(\.deliveryID) == [nil, first, second])
-            #expect(!replies(of: s).contains { $0 == "TOOL_DONE" || $0.contains("FIRST") }, "被停下的两轮都没有做完")
-            // Pi 把这两轮记成 error（"The operation was aborted."）：对话里照停下处理，各留一行"已停止"
-            #expect(messages.map(\.text).filter { $0 == PiNotice.stopped.rawValue }.count == 2, "\(messages.map(\.text))")
-        }
-    }
-
-    /// 等待用户时 `question` 是弹窗：种类、文案（确认框的标题与说明，换行分隔）、选项与这次弹窗的标识；在 Pi 里回答后清空。
-    @Test func extensionDialogShowsWaitingUserWithTheQuestionThenResumes() async throws {
-        try await withRig { pi, bridge, _ in
-            try pi.prompt("/ask")
-            try await eventually("等待用户") {
-                bridge.sessions.first?.state == .waitingForUser && bridge.sessions.first?.detail == "Proceed?"
-            }
-            let confirm = try #require(bridge.sessions.first?.question)
-            #expect(confirm.kind == .known(.confirm) && confirm.text == "Proceed?\ntest dialog" && confirm.options.isEmpty && confirm.promptID != nil)
-            let dialog = try await pi.waitForEvent("对话框请求") { $0["method"] as? String == "confirm" }
-            try pi.send(["type": "extension_ui_response", "id": dialog["id"] as Any, "confirmed": true])
-            try await eventually("回到空闲") { bridge.sessions.first?.state == .settled }
-            #expect(bridge.sessions.first?.question == nil)
-
-            try pi.prompt("/pick")
-            try await eventually("选择框的问题带选项") { bridge.sessions.first?.question?.options == ["Alpha", "Beta"] }
-            #expect(bridge.sessions.first?.question?.kind == .known(.select) && bridge.sessions.first?.question?.text == "Which one?")
-            let select = try await pi.waitForEvent("选择框请求") { $0["method"] as? String == "select" }
-            try pi.send(["type": "extension_ui_response", "id": select["id"] as Any, "value": "Alpha"])
-            try await eventually("回答后清空") { bridge.sessions.first?.question == nil }
-        }
-    }
-
-    /// 从 CuePad 作答：选择框选中第二项、确认框答"是"，Pi 那边的调用拿到这个答案，弹窗收起、问题清空。
-    @Test func answeringThroughTheBridgeResolvesThePiDialog() async throws {
-        try await withRig { pi, bridge, s in
-            try pi.prompt("/pick")
-            try await eventually("选择框") { bridge.sessions.first?.question?.options == ["Alpha", "Beta"] }
-            let pick = try #require(bridge.sessions.first?.question?.promptID)
-            try await bridge.answer(.option("Beta"), to: pick, in: s.id)
-            _ = try await pi.waitForEvent("扩展拿到选中的第二项") { $0["method"] as? String == "notify" && $0["message"] as? String == "picked:Beta" }
-            try await eventually("问题清空") { bridge.sessions.first?.question == nil }
-
-            try pi.prompt("/ask")
-            try await eventually("确认框") { bridge.sessions.first?.question?.kind == .known(.confirm) }
-            let ask = try #require(bridge.sessions.first?.question?.promptID)
-            try await bridge.answer(.confirmed(true), to: ask, in: s.id)
-            _ = try await pi.waitForEvent("扩展拿到确认") { $0["method"] as? String == "notify" && $0["message"] as? String == "confirmed:true" }
-            try await eventually("问题清空") { bridge.sessions.first?.question == nil }
-        }
-    }
-
-    /// 弹窗已经答过（或换了一个）时，拿旧标识作答被拒绝，不会答到别的弹窗上。
-    @Test func answeringAStalePromptIsRejected() async throws {
-        try await withRig { pi, bridge, s in
-            try pi.prompt("/pick")
-            try await eventually("选择框") { bridge.sessions.first?.question?.promptID != nil }
-            let first = try #require(bridge.sessions.first?.question?.promptID)
-            try await bridge.answer(.option("Alpha"), to: first, in: s.id)
-            try await eventually("问题清空") { bridge.sessions.first?.question == nil }
-            await #expect(throws: PiBridgeError.rejected("no_prompt")) { try await bridge.answer(.option("Alpha"), to: first, in: s.id) }
-
-            try pi.prompt("/pick")
-            try await eventually("新的选择框") { bridge.sessions.first?.question?.promptID.map { $0 != first } == true }
-            await #expect(throws: PiBridgeError.rejected("stale_prompt")) { try await bridge.answer(.option("Alpha"), to: first, in: s.id) }
-            let current = try #require(bridge.sessions.first?.question?.promptID)
-            await #expect(throws: PiBridgeError.rejected("bad_answer")) { try await bridge.answer(.option("Gamma"), to: current, in: s.id) }
-        }
-    }
-
-    /// 摘要（读会话文件）：你说的话单行、回答保留换行；块之间夹着真人文字的算你说的；超长截断。
-    @Test func recapKeepsYourWordsOnOneLineAndTruncatesLongOnes() async throws {
-        try await withRig { pi, _, s in
-            try pi.prompt("第一行\n第二行")
-            try await eventually("回答到了") { recap(of: s)?.lastReply == "ECHO 第一行\n第二行 IMAGES[]" }
-            #expect(recap(of: s)?.lastPrompt == "第一行 第二行")
-
-            // 块与块之间夹着真人文字不是机器消息（整条都是块的见 `RealTranscriptTests`）
-            let mixed = "<some_event>\n机器一\n</some_event>\n请解释这个结果\n<some_event>\n机器二\n</some_event>"
-            try pi.prompt(mixed)
-            try await eventually("夹着真人文字的那轮回答") { recap(of: s)?.lastReply?.contains("请解释这个结果") == true }
-            #expect(recap(of: s)?.lastPrompt?.contains("请解释这个结果") == true)
-
-            let long = String(repeating: "长", count: 1300)
-            try pi.prompt(long)
-            try await eventually("长回答截断") { recap(of: s)?.lastReply?.hasPrefix("ECHO 长") == true }
-            let summary = try #require(recap(of: s))
-            #expect(summary.lastPrompt?.count == 500 && summary.lastPrompt?.hasSuffix("…") == true)
-            #expect(summary.lastReply?.count == 1200 && summary.lastReply?.hasSuffix("…") == true)
-        }
-    }
-
-    /// 上次在一轮中途退出（工具还在跑）的会话：摘要仍是之前那一轮做完的问答，不把半截的助手消息当成回答。
-    @Test func anInterruptedRoundLeavesTheLastCompletedExchangeInTheRecap() async throws {
-        try await withRig { pi, bridge, s in
-            try pi.prompt("第一问")
-            try await eventually("第一轮做完") { recap(of: s)?.lastReply == "ECHO 第一问 IMAGES[]" }
-            try pi.prompt("[[tool:sleep 30]]")
-            try await eventually("工具在跑") {
-                if case .tool = bridge.sessions.first?.state { true } else { false }
-            }
-            pi.kill(SIGKILL)
-            try await eventually("会话结束") { bridge.sessions.isEmpty }
-
-            let summary = try #require(recap(of: s))
-            #expect(summary.lastPrompt == "第一问" && summary.lastReply == "ECHO 第一问 IMAGES[]")
-        }
-    }
-
-    @Test func modelFailureShowsError() async throws {
-        try await withRig { pi, bridge, _ in
-            try pi.prompt("[[fail]]")
-            try await eventually("error 状态") {
-                bridge.sessions.first?.errorMessage?.contains("fake model failure") == true
-            }
-        }
-    }
-
-    /// Pi 退出：被强杀是断开，正常退出是告别（quit）；两种都结束会话、删掉它的 socket。
-    @Test(arguments: [SIGKILL, SIGTERM]) func anExitedPiEndsTheSessionAndItsSocketIsRemoved(_ signal: Int32) async throws {
-        AgentTape.variant(signal == SIGKILL ? "kill" : "term")
-        try await withRig { pi, bridge, s in
-            let log = ChangeLog(bridge)
-            pi.kill(signal)
-            try await eventually("会话结束") { !log.ended.isEmpty }
-            try await eventually("日志记下了") { log.ended.first?.1 == (signal == SIGKILL ? .disconnected : .closed(reason: "quit")) }
-            try await eventually("socket 被删") { fileGone(pi.paths.socketDirectory.appending(path: "\(s.id).sock")) }
-        }
-    }
-
-    @Test func extensionRefusesAnInsecureSocketDirectoryAndTellsTheUser() async throws {
-        let dir = try makeTempDirectory()
-        chmod(dir.path, 0o755)
-        let pi = try await PiProcess(socketDirectory: dir)
-        _ = try await pi.waitForEvent("Pi 提示桥被禁用") {
-            $0["method"] as? String == "notify" && ($0["message"] as? String)?.contains("CuePad") == true
-        }
-        let sockets = (try? FileManager.default.contentsOfDirectory(atPath: dir.path).filter { $0.hasSuffix(".sock") }) ?? []
-        #expect(sockets.isEmpty)
-    }
-
-    /// `pi -p` 是脚本、其他工具的一次性调用：没有界面，不开 socket、不出现在会话列表里。
-    @Test func oneShotPrintRunsDoNotOpenASocket() async throws {
-        let socketDirectory = try makeTempDirectory()
-        let pi = try await PiProcess(socketDirectory: socketDirectory, oneShotPrompt: "[[slow]] hello")
-        try await pi.waitUntilHeld()  // 假模型停住：扩展早已加载过，要开 socket 此刻已开
-        #expect(try FileManager.default.contentsOfDirectory(atPath: socketDirectory.path).filter { $0.hasSuffix(".sock") }.isEmpty)
-        try pi.release()
-        await pi.waitUntilExit()
     }
 }
 #endif
