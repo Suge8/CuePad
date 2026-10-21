@@ -2,8 +2,8 @@
 import SwiftUI
 
 /// 任务页（侧栏"任务"、⌘⇧T）：流水看板（`TaskBoard`）四列并排——待办 → 推进中 → 等你 → 已完成（今天），每列各自滚动（`BoardColumn`），列头随列一起滚。
-/// 顶上不写页名（侧栏的选中格已经说了），顶上那一排（`pageHeader`）左边是项目范围（`ProjectScopeMenu`，同会话页那一份；选了项目以后列头的数也只数这个项目）、
-/// 右边"新任务"（落在范围里的项目或当前项目）。
+/// 顶上不写页名（侧栏的选中格已经说了），也不另起一排：项目范围（`ProjectScopeMenu`，同会话页那一份；选了项目以后列头的数也只数这个项目）
+/// 与"新任务"（落在范围里的项目或当前项目）在窗口最顶那一排的工具栏里（`ScopeSlot`、`PageActionSlot`），列从工具栏下面起、滚到它后面。
 struct TaskBoardPage: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -14,22 +14,13 @@ struct TaskBoardPage: View {
         let scope = workspace.scopedProject
         BoardColumns(board: (board ?? .empty).only(scope), adding: Bindable(workspace).addsTask, newTaskProject: scope ?? workspace.currentProject)
             .padding(.horizontal, Spacing.page - 8)
-            .pageHeader { topRow }
+            // 让在安全区里（不是内边距）：列照样滚到工具栏后面，静止时第一行在它下面隔一点
+            .safeAreaPadding(.top, Bars.contentGap)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .background(palette.desk)
             .animation(Motion.quick, value: workspace.addsTask)
             .onChange(of: workspace.scopedProject) { workspace.addsTask = false }
             .observingBoard(into: $board, store: services.store, onError: workspace.fail)
-    }
-
-    private var topRow: some View {
-        HStack(spacing: 16) {
-            ProjectScopeMenu()
-            Spacer(minLength: 0)
-            Button("新任务", icon: .add) { workspace.addsTask.toggle() }
-                .buttonStyle(ControlButtonStyle(kind: .glass))
-                .help("在待办里添加任务")
-        }
     }
 }
 #endif

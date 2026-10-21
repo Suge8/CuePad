@@ -1,9 +1,11 @@
 #if os(macOS)
 import SwiftUI
 
-/// 项目范围（`Workspace.projectScope`，任务页与会话页共用一份）在 Mac 上的入口，任务页与会话页顶上一排的最左边都是它：全部项目或一个项目，列全部项目。
+/// 项目范围（`Workspace.projectScope`，任务页与会话页共用一份）在 Mac 上的入口：任务页在工具栏左边（`ScopeSlot`），会话页在顶上一排的最左边：全部项目或一个项目，列全部项目。
 /// 手机与 iPad 的入口在顶栏中间（`ProjectScope`）。选中的项目进了回收站就当作全部项目（`Workspace.scopedProject`）。
 struct ProjectScopeMenu: View {
+    /// 给了就不宽过它、项目名在里面截断（工具栏里固定宽度的那一格，`ScopeSlot`）；nil 是按字宽。
+    var maxWidth: CGFloat?
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
@@ -24,7 +26,9 @@ struct ProjectScopeMenu: View {
             }
             .menuLabel(current.map { "项目范围：\($0.name)" } ?? "项目范围：全部项目")
         }
-        .menuStyle(.button).buttonStyle(ControlButtonStyle(kind: .glass)).menuIndicator(.hidden).fixedSize()
+        .menuStyle(.button).buttonStyle(ControlButtonStyle(kind: .glass)).menuIndicator(.hidden)
+        .fixedSize(horizontal: maxWidth == nil, vertical: true)
+        .frame(maxWidth: maxWidth, alignment: .leading)
     }
 }
 #endif
