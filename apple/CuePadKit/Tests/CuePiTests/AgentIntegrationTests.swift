@@ -68,6 +68,19 @@ struct AgentIntegrationTests {
         #expect(await integration().status(of: kind).presence == presence)
     }
 
+    /// 装 Pi 前查 Node.js 只看安装脚本会用的那个（PATH 里第一个）：前面是旧的、后面有新的也不算有，免得点了安装才被脚本拒。
+    @Test func installPrerequisiteCountsOnlyTheNodeTheInstallerWillUse() async throws {
+        let later = root.appending(path: "later-bin")
+        try FileManager.default.createDirectory(at: later, withIntermediateDirectories: true)
+        try fakeAgent("node", printing: "v20.11.0")
+        let newer = later.appending(path: "node")
+        try "#!/bin/sh\necho v22.19.0\n".write(to: newer, atomically: true, encoding: .utf8)
+        chmod(newer.path, 0o755)
+        let integration = AgentIntegration(
+            paths: AgentPaths(pi: paths, environment: environment), locate: { [bin] in ExecutableLocator(searchDirectories: [bin, later]) }, cuepad: cuepad)
+        #expect(await integration.status(of: .pi).lacking == AgentKind.pi.installPrerequisite)
+    }
+
     // MARK: 接入与删除
 
     /// 每家的技能写进它自己文档里的个人技能目录，正文写着 App 里 cuepad 的绝对路径与手机预览（show），Codex 的提醒沙箱。

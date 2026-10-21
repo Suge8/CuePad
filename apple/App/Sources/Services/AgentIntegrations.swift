@@ -92,9 +92,13 @@ final class AgentIntegrations {
         }
     }
 
-    /// 命令行登录（`AgentKind.loginArguments`，会打开浏览器），等它结束；再点一次就结束旧的、重来。没登录成的记在 `jobs`。
+    /// 命令行登录（`AgentKind.loginArguments`，会打开浏览器），等它结束；再点一次就结束旧的、等它退出（放开 Codex 的固定端口）再重来。
+    /// 没登录成的记在 `jobs`。
     func logIn(_ kind: AgentKind) async {
-        logins.removeValue(forKey: kind)?.end()
+        if let previous = logins.removeValue(forKey: kind) {
+            previous.end()
+            _ = await previous.waitForExit()
+        }
         guard let executable = statuses[kind]?.executable else { return }
         jobs[kind] = .loggingIn
         do {

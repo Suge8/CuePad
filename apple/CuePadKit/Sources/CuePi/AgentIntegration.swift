@@ -257,15 +257,15 @@ public struct AgentIntegration: Sendable {
         return (kind != .pi && used ? .found(nil) : .notFound, nil)
     }
 
-    /// 在找 Agent 的同一组目录里（安装脚本的 PATH 也是它们，`runInstaller`）有没有够新的那个程序；有为 nil。
+    /// 安装脚本会用的那个程序够不够新；够为 nil。脚本按 PATH 取第一个（`command -v`），它的 PATH 是 /bin 之后紧跟找 Agent 的同一组目录
+    /// （`runInstaller`、`ExecutableLocator.environment`），所以只看这组目录里的第一个：后面有新的也不算。
     private func lacking(_ prerequisite: InstallPrerequisite?) async -> InstallPrerequisite? {
         guard let prerequisite else { return nil }
         let locator = await locate()
-        for executable in locator.candidates(prerequisite.command) {
-            if let output = await Self.capture(executable, ["--version"], locator: locator),
-               let version = AgentVersion(parsing: output), version >= prerequisite.minimum { return nil }
-        }
-        return prerequisite
+        guard let executable = locator.candidates(prerequisite.command).first,
+              let output = await Self.capture(executable, ["--version"], locator: locator),
+              let version = AgentVersion(parsing: output), version >= prerequisite.minimum else { return prerequisite }
+        return nil
     }
 
     /// 运行并取标准输出；超时或无法启动返回 nil。数据目录给一个用完即删的临时目录：OpenCode 每次运行（`--version` 也是）都往
