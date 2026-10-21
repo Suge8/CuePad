@@ -12,7 +12,9 @@ import Testing
 /// 中后段的判定点只有记得前面才答得对：他口头交代、没让记成规矩的细节，早先会话交回的事实，正在推进的事不重做不丢，他否掉的方案不再提；
 /// 换新之后还有三处 Cue 当场没理由落库的：他顺口说的与任务无关的事实、已完成的事里会话顺带提的细节、他要它查完时告诉他的事。
 /// 要等收尾才兑现的两处（升版本号、证书签发方）看那一步 Cue 有没有收尾：没收尾的升版本号不算，签发方照样要说。
-/// 只经库与假会话驱动、只读库与工具调用判定，不碰 Cue 的内部状态（换新次数按上下文骤降数）。跑法见 docs/verify.md「Cue 评测」。
+/// 换新那一刻丢没丢东西：换新线缩到场景跑得到的值（`renewAt`），缓存时长缩短、中途他走开一阵（冷换新）；几样只在原始上下文里出现过的
+/// （会话交回里的细节、他托付给它的打算、它对方案的判断、一件逐页推进的多步活）在换新前埋下、换新后考，每处标出跨了哪种换新（热、冷）。
+/// 只经库与假会话驱动、只读库与工具调用判定，不碰 Cue 的内部状态（换新次数从大脑的输出里数）。跑法见 docs/verify.md「Cue 评测」。
 @Suite(.enabled(if: evalEnvironment["CUEPAD_CUE_EVAL"] == "1", "CUEPAD_CUE_EVAL=1 才跑"), .timeLimit(.minutes(60)))
 struct CueEvalLongTests {
     /// 同时跑几遍（`CUEPAD_CUE_EVAL_RUNS`，缺省 1）：多遍时第 n 遍写到"输出目录-n"
@@ -20,7 +22,9 @@ struct CueEvalLongTests {
 
     @Test(arguments: 1...runs) func 长程值班(_ run: Int) async throws {
         let output = Self.runs == 1 ? evalOutput : URL(filePath: evalOutput.path + "-\(run)", directoryHint: .isDirectory)
-        try await CueEval.run("长程", expect: Duty.expect, output: output) { try await Duty($0).play() }
+        try await CueEval.run("长程", expect: Duty.expect, output: output, rig: {
+            try await CueHostTests.Rig(brain: .current, cacheLifetime: Duty.cacheLifetime, renewAt: Duty.renewAt)
+        }) { try await Duty($0).play() }
     }
 }
 
@@ -205,8 +209,16 @@ final class Duty: EvalScript {
     static let expect = """
         值一段班（三十来次醒来）：中后段记得他口头交代的（这件做完后升版本号记 CHANGELOG、这周不跑 e2e）、早先会话查清的事实（发信走 Postmark）、\
         他否掉的方案（设置页不分标签页）；换新前后在做的事不重建、不重复说；\
-        换新之后答得出他顺口说的行程、已完成的调研里顺带的细节（退信里邮箱不存在的 13 封），证书查完时照他要的说是哪家签发的
+        换新之后答得出他顺口说的行程、已完成的调研里顺带的细节（退信里邮箱不存在的 13 封），证书查完时照他要的说是哪家签发的；\
+        换新前埋下、换新后考的：依赖清单建议 Node 升到几、设置页那版没改成立刻存的两项、忘记密码做完才派删 SendGrid、挂件不换成它否掉的 B、\
+        逐页查死链接着下一页不重查
         """
+
+    /// 换新线：场景前段就跨过，后段还能再跨一次
+    static let renewAt = 42_000
+    /// 提示缓存的时长缩短：他走开（`away`）比它长，回来就是冷换新；剧本平常两步之间远比它短
+    static let cacheLifetime = Duration.seconds(30)
+    static let away = Duration.seconds(45)
 
 
 
@@ -242,13 +254,17 @@ final class Duty: EvalScript {
                 options: ["A", "B"], rig: rig)
         }
         try await event("邮件服务：交回调研（长）", on: mail) { try await mail.settle(Script.mailReport, rig: rig) }
+        let sendgrid = try await say("他：SendGrid 等忘记密码做完再删（托付）", "邮件那件看到了。SendGrid 那套旧配置要删，但等忘记密码那件做完再派会话去删——它现在也在动发信代码，两边别撞。你记着这事，到时候自己派，不用再问我。")
         let depsAsk = try await say("他：出依赖升级清单", "演示项目的依赖好久没升了，让会话出一份升级清单：哪些该升、风险多大。先别动手升。")
         let deps = try await adopt(/依赖|升级/, after: depsAsk, title: "出依赖升级清单", in: "演示")
-        try await event("依赖：交回清单（长）", on: deps) { try await deps.settle(Script.depsReport, rig: rig) }
+        let depsListed = try await event("依赖：交回清单（长）", on: deps) { try await deps.settle(Script.depsReport, rig: rig) }
+        let linksAsk = try await say("他：官网逐页查死链（多步）", "官网 4 个页面逐页查一下死链：首页、价格、博客、文档。一页一页来，每页查完先把死链数告诉我，再让它查下一页，别一次全派出去。")
+        let links = try await adopt(/死链/, after: linksAsk, title: "官网逐页查死链", in: "官网")
         try await say("他：设置页重新设计（带反馈，长）", "演示项目的设置页太乱了，重新设计一下。下面是客服整理的用户反馈，转给会话参考：\n\n" + Script.feedback)
         let go = try await say("他：开工、不要标签页", "可以，按你说的开工。别做成分标签页那种，我不喜欢点来点去，就一页长列表、分组加小标题。")
         let settings = try await adopt(/设置/, after: go, title: "重新设计设置页", in: "演示")
         try await say("他：这周不跑 e2e（口头）", "这周 e2e 环境坏了，这周派出去的活都别跑 e2e，单元测试和 lint 过了就行。")
+        let page1 = try await event("死链：首页查完", on: links) { try await links.settle(Script.linksHome, rig: rig) }
         try await event("忘记密码：API 500", on: login) {
             try await login.fail(#"500 {"type":"error","error":{"type":"api_error","message":"Internal server error"}}"#, rig: rig)
         }
@@ -265,10 +281,15 @@ final class Duty: EvalScript {
         let cert = try await adopt(/证书|SSL/, after: certAsk, title: "查官网证书到期", in: "官网")
         try await say("他：证书查完告诉他签发方", "证书那件查完的时候顺便告诉我是哪家签发的，我要跟采购对一下账。")
         try await event("官网：交回分析（长）", on: website) { try await website.settle(Script.lighthouseAnalysis, rig: rig) }
+        let widget = try await event("官网：问挂件怎么改（它来判断）", on: website) {
+            try await website.ask(said: "开始按 1 → 2 → 3 改了，Hero 图已经转好。客服挂件有两种改法，想先跟你确认。", question: Script.widgetQuestion, options: ["A", "B"], rig: rig)
+        }
         try await say("他：转来安全扫描报告（长）", Script.securityScan)
         try await event("忘记密码：后端做完（长）", on: login) { try await login.settle(Script.backendDone, rig: rig) }
+        let page2 = try await event("死链：价格查完", on: links) { try await links.settle(Script.linksPricing, rig: rig) }
+        let node = try await say("他：问依赖清单里 Node 的事", "依赖清单里顺带提了 Node 的事：Node 20 是什么时候停止维护的？建议升到几？")
         let progress = try await say("他：问登录页进展", "登录页那件做到哪了？")
-        try await event("设置页：布局改完一版（长）", on: settings) { try await settings.settle(Script.layoutDone, rig: rig) }
+        let layout = try await event("设置页：布局改完一版（长）", on: settings) { try await settings.settle(Script.layoutDone, rig: rig) }
         try await event("忘记密码：前端做了一半（长）", on: login) { try await login.settle(Script.frontendHalf, rig: rig) }
 
         // 中后段：判定点（放在换新线之后）
@@ -293,6 +314,16 @@ final class Duty: EvalScript {
                 said: "分组的长列表在手机上有 3 屏半长，\"高级\"组在最底下要滑一阵才到。",
                 question: "设置项太多、页面太长，要不要拆成「通用 / 账号 / 通知」三个标签页？", options: ["拆成标签页", "保持一页长列表"], rig: rig)
         }
+
+        // 他走开一阵：回来时缓存已过期，冷换新
+        try await Task.sleep(for: Self.away)
+        let page3 = try await event("死链：博客查完（冷）", on: links) { try await links.settle(Script.linksBlog, rig: rig) }
+        let widgetAgain = try await event("官网：问要不要换成 B", on: website) {
+            try await website.ask(
+                said: "挂件按 A 改完了，但占位按钮在 Safari 上偶尔要点两下才打开挂件，在查原因。",
+                question: "要不要干脆换成 B（脚本 async 照常加载），省得折腾占位按钮？", options: ["换成 B", "保持 A，接着修占位按钮"], rig: rig)
+        }
+        let instant = try await say("他：问设置页哪两项没改成立刻存", "设置页那一版里，原来要点保存的那些项，有两项没改成立刻存，是哪两项？为什么？")
         let e2e = try await event("官网：问跑不跑 e2e", on: website) {
             try await website.ask(
                 said: "首页改好了：hero 图换成 AVIF 并按屏宽出图，字体改成 font-display: swap 并预加载，客服挂件改成点了才加载。本地 Lighthouse 移动端性能 63 → 92，单元测试 31 个全过，lint 干净。",
@@ -312,15 +343,98 @@ final class Duty: EvalScript {
             try await login.deliver(pageShot("MailHog：两封邮件并排", ["左：验证你的邮箱（注册验证邮件）", "右：重置你的密码（重置邮件）", "同一页眉、按钮样式与页脚"]), title: "重置邮件与注册验证邮件并排", rig: rig)
             try await login.settle(Script.loginDone, rig: rig)
         }
+        // 它记得升版本号、没收尾：会话补上，让托付（忘记密码做完才删 SendGrid）有个兑现的时候
+        let loginClosed = { (step: Step) in self.calls(step, "task", ["done"]).contains { !$0.call.failed && self.target($0.args) === login } }
+        var closed = finish
+        if !loginClosed(finish) {
+            let bumped = try await event("忘记密码：补上版本号与 CHANGELOG", on: login) { try await login.settle(Script.bumpDone, rig: rig) }
+            if loginClosed(bumped) { closed = bumped }
+        }
         try await event("官网：做完交回", on: website) {
             try await website.deliver(pageShot("Lighthouse 移动端 · 首页", Script.lighthouseShot), title: "首页 Lighthouse 改前改后", rig: rig)
             try await website.settle(Script.lighthouseDone, rig: rig)
         }
         let wrap = try await say("他：问今天的事", "今天这些事现在都怎么样了？")
 
-        return try await judge(login: login, settings: settings, site: website, digest: digest, key: Points(
+        var checks = try await judge(login: login, settings: settings, site: website, digest: digest, key: Points(
             go: go, progress: progress, readmeStatus: readmeStatus, provider: provider, tabs: tabs, e2e: e2e, trip: trip, bounce: bounce,
             finish: finish, certified: certified, wrap: wrap, cert: cert))
+        checks += try await probes(Probes(
+            depsListed: depsListed, node: node, layout: layout, instant: instant, sendgrid: sendgrid, finish: closed,
+            widget: widget, widgetAgain: widgetAgain, page1: page1, page2: page2, page3: page3, links: links, site: website, loginTask: login.task.id))
+        return checks
+    }
+
+    // MARK: 换新前埋下、换新后考
+
+    struct Probes {
+        let depsListed, node, layout, instant, sendgrid, finish, widget, widgetAgain, page1, page2, page3: Step
+        let links, site: ScriptedSession
+        let loginTask: UUID
+    }
+
+    /// 每次换新与它的方式：前一轮做完到这一轮醒来超过缓存时长为"冷"（缓存过期换的），否则"热"（到了换新线）
+    var renewalModes: [(round: CueRound, mode: String)] {
+        let all = eval.rounds
+        return eval.renewals.map { round in
+            guard let index = all.firstIndex(where: { $0.id == round.id }), index > 0 else { return (round, "热") }
+            let before = all[index - 1]
+            let gap = round.startedAt.timeIntervalSince(before.finishedAt ?? before.startedAt)
+            return (round, gap > Self.cacheLifetime.seconds ? "冷" : "热")
+        }
+    }
+
+    /// 埋下那一步的第一轮之后、考的那一步第一轮为止（含）的换新
+    private func crossed(_ plant: Step, _ exam: Step) -> [String] {
+        guard let from = rounds(plant).first?.startedAt, let to = rounds(exam).first?.startedAt else { return [] }
+        return renewalModes.filter { $0.round.startedAt > from && $0.round.startedAt <= to }.map(\.mode)
+    }
+
+    private func probe(_ check: Check, _ plant: Step, _ exam: Step) -> Check {
+        let modes = crossed(plant, exam)
+        return Check(check.label + (modes.isEmpty ? "〔没跨换新〕" : "〔跨了：\(modes.joined(separator: "、"))〕"), check.passed)
+    }
+
+    private static let recommends24 = /(建议|升到)[^。；，]{0,6}(Node ?)?24/
+
+    private func probes(_ p: Probes) async throws -> [Check] {
+        // 逐页查死链：这一步告诉了他这一页的死链数，对会话说的是接着下一页，没让它重查、没另建任务
+        // 接着下一页：对会话说下一页，或开工这件的下一步（它把四页排成了步骤）
+        func next(_ step: Step, count: Regex<Substring>, page: Regex<Substring>, upcoming: Regex<Substring>) async throws -> (told: Bool, next: Bool, redo: Bool) {
+            let told = try await messages(step) + calls(step, "tell").compactMap { $0.args["text"] as? String }
+            let said = says([step], to: p.links)
+            let started = calls(step, "task", ["start"]).contains { !$0.call.failed && target($0.args) === p.links }
+            let rebuilt = calls(step, "task", ["add", "start"]).contains { !$0.call.failed && Self.texts($0.args).contains(/死链/) }
+            return (told.contains { $0.contains(count) && $0.contains(page) },
+                    started || said.contains { $0.contains(upcoming) || $0.contains(/下一页|继续|接着/) },
+                    rebuilt || said.contains { $0.contains(/重新查|再查一遍|重查|从头/) })
+        }
+        let hot = try await next(p.page2, count: /2 ?个|两个/, page: /价格/, upcoming: /博客|blog/)
+        let cold = try await next(p.page3, count: /5 ?个|五个/, page: /博客/, upcoming: /文档|docs/)
+        // 挂件：它当时选的（A），他走开回来后会话再问要不要换成它否掉的 B
+        let picked = says([p.widget], to: p.site)
+        let pickedA = picked.contains { $0.contains(/A|点了|占位/) } && !picked.contains { $0.trimmingCharacters(in: .whitespaces) == "B" }
+        let again = says([p.widgetAgain], to: p.site)
+        let keeps = again.contains { $0.contains(/保持|不换|别换|不要换|接着修|继续修|修占位/) } && !again.contains { $0.contains(/^换成 ?B|^B$|^1$/) }
+        let leftToHim = calls(p.widgetAgain, "tell").contains { $0.args["ask"] != nil } || calls(p.widgetAgain, "task", ["leave"]).contains { !$0.call.failed }
+        // SendGrid：忘记密码收尾那一步起才开工删，之前没开工
+        let finishIndex = steps.firstIndex { $0.label == p.finish.label } ?? steps.count
+        let loginClosed = calls(p.finish, "task", ["done"]).contains { !$0.call.failed && target($0.args)?.task.id == p.loginTask }
+        let startsSendGrid = { (step: Step) in self.calls(step, "task", ["start"]).contains { !$0.call.failed && ($0.call.result ?? "").localizedCaseInsensitiveContains("SendGrid") } }
+        let early = steps[..<finishIndex].contains(where: startsSendGrid), onTime = steps[finishIndex...].contains(where: startsSendGrid)
+        return [
+            // 停止维护的日子模型自己也知道，考的是清单的建议（22）：凭常识答成 24 的是答错
+            probe(try await recalled("(P1 细节) 依赖清单里的 Node：建议升 22", p.node, fabricated: { $0.contains(Self.recommends24) }) {
+                $0.contains(/(建议|升到)[^。；，]{0,6}22/) && !$0.contains(Self.recommends24)
+            }, p.depsListed, p.node),
+            probe(try await recalled("(P1 细节) 设置页那版没改成立刻存的两项：登录邮箱、手机号", p.instant) { $0.contains("邮箱") && $0.contains("手机") }, p.layout, p.instant),
+            probe(Check("(P2 托付) 忘记密码做完才派删 SendGrid" + (early ? "（提前派了）" : !loginClosed ? "（忘记密码没收尾，不算）" : onTime ? "" : "（没派）"),
+                        !early && (onTime || !loginClosed)), p.sendgrid, p.finish),
+            Check("(P3 判断·当时) 挂件选了 A（B 有重复会话的风险）", pickedA),
+            probe(Check("(P3 判断) 会话再问换不换成 B：保持 A" + (leftToHim ? "（留给了他）" : ""), pickedA && keeps), p.widget, p.widgetAgain),
+            probe(Check("(P4 多步) 价格页查完：告诉他 2 个、接着派博客、不重查" + (hot.redo ? "（重查或另建了）" : ""), hot.told && hot.next && !hot.redo), p.page1, p.page2),
+            probe(Check("(P4 多步) 博客页查完：告诉他 5 个、接着派文档、不重查" + (cold.redo ? "（重查或另建了）" : ""), cold.told && cold.next && !cold.redo), p.page2, p.page3),
+        ]
     }
 
     // MARK: 判定
@@ -339,7 +453,7 @@ final class Duty: EvalScript {
         let adds = CueEval.calls(in: rounds(after: steps.first!), "task", ["add"]).filter { !$0.call.failed }
         let topics: [(String, Regex<Substring>)] = [
             ("忘记密码", /忘记密码|重置密码/), ("邮件服务", /服务|额度|哪家/), ("设置页", /设置页/), ("官网性能", /Lighthouse|性能/),
-            ("README", /README/), ("依赖", /依赖/), ("周报", /周报/),
+            ("README", /README/), ("依赖", /依赖/), ("周报", /周报/), ("死链", /死链/), ("SendGrid", /SendGrid/),
         ]
         let duplicated = topics.filter { _, topic in adds.count { ($0.args["title"] as? String)?.contains(topic) == true } > 1 }.map(\.0)
         let readmeAdds = adds.count { ($0.args["title"] as? String)?.contains(/README/) == true }
@@ -403,7 +517,9 @@ final class Duty: EvalScript {
         let median = durations.isEmpty ? "—" : seconds(durations.count.isMultiple(of: 2)
             ? (durations[durations.count / 2 - 1] + durations[durations.count / 2]) / 2 : durations[durations.count / 2])
         let renewals = eval.renewals
-        let renewedAt = renewals.compactMap { round in steps.firstIndex { $0.window?.contains(round.startedAt) == true }.map { "第 \($0 + 1) 步「\(steps[$0].label)」" } }
+        let renewedAt = renewalModes.compactMap { round, mode in
+            steps.firstIndex { $0.window?.contains(round.startedAt) == true }.map { "第 \($0 + 1) 步「\(steps[$0].label)」（\(mode)）" }
+        }
         let usage = rig.brainDirectory.map(BrainUsage.rounds(in:)) ?? []
         let total = usage.reduce(BrainUsage(), +)
         eval.overview = (rounds.reduce(0) { $0 + $1.calls.count }, "中位 \(median)")
@@ -986,6 +1102,53 @@ private enum Script {
         ```
 
         后端那 21 个测试也重跑了一遍，都还是绿的。接下来做 /reset 页。
+        """
+
+    static let bumpDone = """
+        补上了：package.json 的版本号 2.3.0 → 2.3.1，CHANGELOG.md 加了一条。
+
+        ```
+        $ git diff --stat
+         CHANGELOG.md | 6 ++++++
+         package.json | 2 +-
+         2 files changed, 7 insertions(+), 1 deletion(-)
+        $ sed -n 1,8p CHANGELOG.md
+        ## 2.3.1 - 2026-10-21
+        ### 新增
+        - 登录页「忘记密码」：邮件重置链接 30 分钟有效、只能用一次；同一邮箱一分钟最多发一次
+        ```
+
+        都只在本地，没有推送。
+        """
+
+    static let widgetQuestion = """
+        客服挂件怎么改？
+        A. 点了「联系我们」才加载脚本，先放一个同尺寸的占位按钮（多写约 40 行，CLS 与长任务都能消掉）
+        B. 只把挂件脚本改成 async 照常加载（改一行；但悬浮按钮照样晚出现，CLS 的 0.09 消不掉，而且 async 后这个挂件偶尔会初始化两次，客服后台会收到重复会话）
+        """
+
+    static let linksHome = """
+        首页查完了：3 个死链。
+        - /about/team-2023 → 404（团队页去年改版后换成了 /about/team）
+        - 页脚「合作伙伴」链到 partners.example-old.com，域名已过期
+        - 首页博客卡片里的 /blog/launch-week → 404（那篇文章 9 月被删了）
+        其余 41 个链接都正常（HEAD 请求 200，或 301 到正确的地址）。只查了首页，等你说查下一页。
+        """
+
+    static let linksPricing = """
+        价格页查完了：2 个死链。
+        - 「企业版」按钮链到 /pricing/enterprise → 404（企业版页面上个月并进了 /contact-sales）
+        - 底部「旧版套餐说明」链到 /legacy-plans → 410
+        其余 18 个链接正常。只查了价格页，等你说查下一页。
+        """
+
+    static let linksBlog = """
+        博客页查完了：5 个死链，都是文章里引用的外站。
+        - 《我们为什么换掉 Webpack》引用的 webpack-perf.example.dev/bench → 域名解析不到
+        - 《首页提速 40%》引用的 web.dev/lcp-2022 → 404
+        - 《远程协作这一年》里的两张 imgur 外链图 → 404
+        - 《团队空间预告》链到 /spaces-beta → 404（内测页还没上线）
+        其余 63 个链接正常。只查了博客页，等你说查下一页。
         """
 
     static let tsErrors = """
