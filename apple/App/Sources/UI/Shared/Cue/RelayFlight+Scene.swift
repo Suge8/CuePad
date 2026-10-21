@@ -21,23 +21,38 @@ extension RelayFlight {
         private static let avatar = 0.78
         private static let easeOut = CAMediaTimingFunction(controlPoints: 0.16, 1, 0.3, 1)
 
+        /// 挂在锚上的那几层：播完与画布一起拿掉。
+        final class Pads {
+            var layers: [CALayer] = []
+        }
+
         let canvas: CALayer
+        let pads: Pads
         let color: CGColor
-        let now: CFTimeInterval
         let up: CGFloat
 
+        /// 接住：有锚的层就画在锚上（以锚心为心，随锚挪动、在锚后面的字底下），没有才画在画布上的落点。
+        func receive(at landing: Landing, delay: Double, started: @escaping @MainActor () -> Void) {
+            guard let host = landing.host else { return depart(at: landing.point, delay: delay, fills: true, started: started) }
+            let pad = CALayer()
+            pad.frame = host.bounds
+            host.addSublayer(pad)
+            pads.layers.append(pad)
+            depart(at: CGPoint(x: host.bounds.midX, y: host.bounds.midY), in: pad, delay: delay, fills: true, started: started)
+        }
+
         /// 起飞时只漾一圈；接住时珠心先亮、停住，再随外圈淡下去。只叠画光，不改珠子本身的视图与布局。
-        func depart(at point: CGPoint, delay: Double, fills: Bool = false, started: (@MainActor () -> Void)? = nil) {
-            animate(circle(at: point, radius: 6, line: 1.5, glows: true), delay: delay, duration: Self.depart,
+        func depart(at point: CGPoint, in parent: CALayer? = nil, delay: Double, fills: Bool = false, started: (@MainActor () -> Void)? = nil) {
+            animate(circle(at: point, radius: 6, line: 1.5, glows: true, in: parent), delay: delay, duration: Self.depart,
                     timing: Self.easeOut, started: started, [
                         Self.keyframes("transform.scale", [0.8, 2.6]), Self.keyframes("opacity", [1, 0]),
                     ])
             if fills {
-                animate(circle(at: point, radius: 4, fill: 0.95, glows: true), delay: delay, duration: Self.reception, [
+                animate(circle(at: point, radius: 4, fill: 0.95, glows: true, in: parent), delay: delay, duration: Self.reception, [
                     Self.keyframes("opacity", [0, 1, 1, 0], times: [0, 0.1, 0.42, 1]),
                     Self.keyframes("transform.scale", [0.9, 1.25, 1, 1], times: [0, 0.18, 0.42, 1]),
                 ])
-                animate(circle(at: point, radius: BeadHalo.radius, fill: 0.18), delay: delay, duration: Self.reception, [Self.hold()])
+                animate(circle(at: point, radius: BeadHalo.radius, fill: 0.18, in: parent), delay: delay, duration: Self.reception, [Self.hold()])
             }
         }
 
@@ -176,7 +191,7 @@ extension RelayFlight {
         }
 
         /// 以 `point` 为心的一个圆：给了线宽是描边（`glows` 时描边外带一圈同色的光晕），否则按 `fill` 的透明度填色。
-        private func circle(at point: CGPoint, radius: CGFloat, line: CGFloat? = nil, fill: CGFloat = 0, glows: Bool = false) -> CAShapeLayer {
+        private func circle(at point: CGPoint, radius: CGFloat, line: CGFloat? = nil, fill: CGFloat = 0, glows: Bool = false, in parent: CALayer? = nil) -> CAShapeLayer {
             let shape = CAShapeLayer()
             shape.bounds = CGRect(x: 0, y: 0, width: radius * 2, height: radius * 2)
             shape.position = point
@@ -196,7 +211,7 @@ extension RelayFlight {
                 shape.shadowOffset = .zero
             }
             shape.opacity = 0
-            canvas.addSublayer(shape)
+            (parent ?? canvas).addSublayer(shape)
             return shape
         }
 
@@ -209,7 +224,8 @@ extension RelayFlight {
             let group = CAAnimationGroup()
             group.animations = animations
             group.duration = duration
-            group.beginTime = now + delay
+            // 各层按自己的时间轴算起点（画布与锚在不同的父层里）
+            group.beginTime = layer.convertTime(CACurrentMediaTime(), from: nil) + delay
             group.timingFunction = timing
             group.delegate = started.map(Started.init)
             layer.add(group, forKey: nil)
