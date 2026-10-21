@@ -47,9 +47,11 @@ enum DebugHooks {
         var alertStatus: PiAlertStatus?
         /// 搜索页一打开在哪个范围（`-CuePadSearchScope sessions`）。
         var searchScope = SearchScreen.Scope.cards
-        /// Cue 页头一出现就展开成面板（`-CuePadCuePanel YES`；`end` 再滚到面板底，看额度与记忆）。
+        /// Cue 页头一出现就展开成面板（`-CuePadCuePanel YES`；`end` 再滚到面板底，看记忆）。
         var cuePanelOpen = false
         var cuePanelEnd = false
+        /// 会话页顶栏那颗胶囊一出现就长出额度总览（`-CuePadQuotaOpen YES`）。
+        var quotaOpen = false
         #endif
     }
 

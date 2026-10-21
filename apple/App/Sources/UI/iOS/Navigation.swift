@@ -252,7 +252,7 @@ extension Route {
         case .cue, .cueSettings: .cue
         case .tasks: .tasks
         case .agent: .agent
-        case .shelf, .project, .archive, .trash, .settings, .conflicts, .projectSessions: .shelf
+        case .shelf, .project, .archive, .trash, .settings, .conflicts: .shelf
         case .search, .card, .session: nil
         }
     }

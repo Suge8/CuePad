@@ -31,7 +31,7 @@ final class RecordingHost: AgentRuntime {
     }
 
     private(set) var calls: [Call] = []
-    /// 已连上桥的假扩展，按 Pi 自己的会话 id。
+    /// 开出的假扩展（起来就记下，不等连上桥），按 Pi 自己的会话 id。
     private(set) var extensions: [String: FakeExtension] = [:]
     /// 给了就让开新会话以这个原因失败（Pi 起来就退出时的样子）
     var openFailure: String?

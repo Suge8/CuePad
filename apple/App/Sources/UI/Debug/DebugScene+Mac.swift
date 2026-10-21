@@ -55,10 +55,6 @@ extension DebugScene {
                 await seedCue(workspace.services)
             }
             workspace.show(.agent)
-        case "projectagent":
-            // 项目页（-CuePadProject）的 Agent 栏，演示会话与同名文件夹的会话都在；圆桌的任务下，开了工的步骤带会话状态
-            if defaults.bool(forKey: "CuePadDemo") { await seedRemote(workspace.services) }
-            if defaults.bool(forKey: "CuePadNoAsks") { await settleAsks(workspace.services.store) }
         case "cue", "cuememory", "cuerun":
             // Cue 页（演示数据见 `DebugScene+Cue.swift`）；cuememory 再打开"Cue 记得什么"，cuerun 打开"运行情况"（Cue 在这台值班时才有）
             if defaults.bool(forKey: "CuePadDemo") {

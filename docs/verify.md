@@ -48,7 +48,7 @@ CUEPAD_SHOT_LIBRARY=/tmp/cuepad-copy apple/scripts/xc.sh shot mac …
 改了菜单、输入框、浮窗、提示这类接线就走一遍：流程测试证明不了它们接上了。Mac 先读 better-computer-use skill，用 `bcu` 操作 `xc.sh run mac` 起的隔离实例：
 
 ```bash
-pid=$(apple/scripts/xc.sh run mac -- -CuePadDemo YES -CuePadScene projectagent -CuePadProject 圆桌)
+pid=$(apple/scripts/xc.sh run mac -- -CuePadDemo YES -CuePadScene agent)
 bcu find-roots --app CuePad    # 用 "pid $pid" 那一行的 window 根
 apple/scripts/xc.sh stop       # 验完就收；忘了 5 分钟后也会自己退出
 ```

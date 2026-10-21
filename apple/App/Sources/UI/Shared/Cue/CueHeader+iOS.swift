@@ -4,11 +4,10 @@ import SwiftUI
 
 /// 手机与 iPad 的 Cue 页头：一块实底玻璃，平时是左右各离屏边 21 点、56 点高的一条——头像在左端、展开的箭头在右端，
 /// 名字与下面那一行（Cue 此刻：珠子接一句，`CueStatusLine`）在整条里居中（`HeadLayout`）；
-/// 点它从顶部长出面板（同一块玻璃长高）：手机上 Cue 的总面板（`CueNowPanel`：大脑、上下文、等你、在做、
-/// 全部会话、额度、记忆、设置），手机上 Cue 的这些只有这一个入口。
+/// 点它从顶部长出面板（`GrowPanel`，同一块玻璃长高）：手机上 Cue 的总面板（`CueNowPanel`：大脑、上下文、等你、在做、
+/// 全部会话、记忆、设置），手机上 Cue 的这些只有这一个入口（额度在会话页顶栏中间那颗胶囊里）。
 /// 与 Mac 侧栏的 Cue 名片、菜单栏面板是同一套件、同一份数据（`CueWatch`、`Workspace.liveWork`）。
-/// 点页头、点面板外、在页头上往上划都收起；点面板里的一项先收起再去那里。
-/// 动效：玻璃随无回弹弹簧（`Motion.snappy`，0.25 秒）长大，面板的几行只淡入、下移 6 点，箭头转半圈；减弱动态效果时直接到终态。
+/// 点页头、点面板外、在页头上往上划都收起；点面板里的一项先收起再去那里。开合的动效在 `GrowPanel`，箭头跟着转半圈。
 /// 页头浮在对话上（对话让出固定的 `reserve`），展开不改对话的布局，长大的只有这一小块；展开与否只在这里（不进 `CueWatch`：侧栏也读它）。
 /// 打开时只读大脑那一行（设置与那台 Mac 的 Agent，`CueConfigControls.read`，当场读）；其余都是已经在订阅的。
 struct CueHeader: View {
@@ -30,48 +29,27 @@ struct CueHeader: View {
     static let reserve = top + height + 10
 
     var body: some View {
-        ZStack(alignment: .top) {
-            if expanded {
-                // 面板外点一下收起；背后的页面不压色（同浮起的输入框）
-                Color.clear.contentShape(.rect).ignoresSafeArea()
-                    .onTapGesture(perform: toggle)
-                    .accessibilityHidden(true)
-            }
-            glass
-                // 提示横幅暂时盖住这一排：页头让开，不与横幅叠成两层玻璃、露出半个头像
-                .opacity(underBanner && workspace.notice != nil && !expanded ? 0 : 1)
-                .animation(NoticeBanner.giveWay(workspace.notice), value: workspace.notice != nil)
-                .padding(.horizontal, Self.edge).padding(.top, Self.top)
-        }
-        .frame(maxWidth: .infinity, maxHeight: expanded ? .infinity : nil, alignment: .top)
-        .sensoryFeedback(.impact(weight: .light), trigger: expanded)
-        .onDisappear { expanded = false }
-        .debugExposesCuePanel(toggle)
-    }
-
-    private var glass: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        // 提示横幅暂时盖住这一排：页头让开，不与横幅叠成两层玻璃、露出半个头像
+        GrowPanel(
+            open: $expanded, radius: Self.radius, hidden: underBanner && workspace.notice != nil,
+            margin: EdgeInsets(top: Self.top, leading: Self.edge, bottom: 0, trailing: Self.edge), rowGap: Self.rowGap
+        ) {
             // 往上划收起只认页头那一条：面板里放不下时要往上划着滚
             Button(action: toggle) {
                 // 面板开着时横幅只盖住头那一排：这一排让开，面板照常
                 head.opacity(underBanner && workspace.notice != nil ? 0 : 1).animation(NoticeBanner.giveWay(workspace.notice), value: workspace.notice != nil)
             }
-                .buttonStyle(.plain)
-                .simultaneousGesture(DragGesture(minimumDistance: 16).onEnded { drag in
-                    if expanded, drag.translation.height < -24 { toggle() }
-                })
-                .accessibilityAddTraits(.isHeader)
-                .accessibilityHint(expanded ? "收起" : "换模型，看上下文、在做的会话、等你的事、记忆与设置")
-            if expanded {
-                CueNowPanel(close: toggle)
-                    .transition(.opacity.combined(with: .offset(y: -6)))
-            }
+            .buttonStyle(.plain)
+            .simultaneousGesture(DragGesture(minimumDistance: 16).onEnded { drag in
+                if expanded, drag.translation.height < -24 { toggle() }
+            })
+            .accessibilityAddTraits(.isHeader)
+            .accessibilityHint(expanded ? "收起" : "换模型，看上下文、在做的会话、等你的事、记忆与设置")
+        } panel: {
+            CueNowPanel(close: toggle)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        // 面板的几行按长大后的位置排好、淡入：玻璃还在长的那几帧里不画到玻璃外面
-        .clipShape(.rect(cornerRadius: Self.radius, style: .continuous))
-        .rowContainer(.rect(cornerRadius: Self.radius, style: .continuous), gap: Self.rowGap)
-        .glass(in: .rect(cornerRadius: Self.radius, style: .continuous))
+        .animation(NoticeBanner.giveWay(workspace.notice), value: workspace.notice != nil)
+        .debugExposesCuePanel(toggle)
     }
 
     private var head: some View {
@@ -98,9 +76,7 @@ struct CueHeader: View {
         .accessibilityElement(children: .combine)
     }
 
-    private func toggle() {
-        withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { expanded.toggle() }
-    }
+    private func toggle() { $expanded.grow(reduceMotion: reduceMotion) }
 }
 
 /// 页头那一条的排法：头一个子视图贴左、第二个贴右，其余是居中的几行，自上而下、整组上下居中。
@@ -141,7 +117,7 @@ private struct HeadLayout: Layout {
 /// 第一行左边是它的大脑（Agent、模型与思考强度，`CueConfigControls`；还没选在哪台运行时没有），右边是它在哪台运行与齿轮，点它推入设置
 /// （`CueSettingsScreen`：在哪台 Mac 上运行、不用先问的事、工具步骤与名字；放在第一行是因为下面的会话一多，面板就要滚，末尾的入口看不见）；
 /// 启用了接着是上下文用量（`CueContextCard`，与 Mac 同一个），然后是等你（卡片就在页面下方，点它收起面板）、在做（前几个，
-/// 同 Mac 菜单栏面板；区头写一共几个会话、几个子代理在跑，多出的在列末就地展开）、全部会话（推入 Agent 整页）、额度与记忆。
+/// 同 Mac 菜单栏面板；区头写一共几个会话、几个子代理在跑，多出的在列末就地展开）、全部会话（推入 Agent 整页）与记忆。
 /// 放不下时面板里面滚。
 private struct CueNowPanel: View {
     let close: () -> Void
@@ -160,7 +136,6 @@ private struct CueNowPanel: View {
             ScrollView { content }.scrollBounceBehavior(.basedOnSize)
                 .defaultScrollAnchor(DebugHooks.preset.cuePanelEnd ? .bottom : nil)
         }
-        .refreshesQuota()
     }
 
     private var content: some View {
@@ -174,7 +149,6 @@ private struct CueNowPanel: View {
             if cue.canHear { CueContextCard(context: cue.context) }
             if cue.waiting > 0 { waiting(cue.waiting) }
             sessions
-            QuotaStrip()
             link("记忆", icon: .memory) {
                 close()
                 cue.showsMemory = true

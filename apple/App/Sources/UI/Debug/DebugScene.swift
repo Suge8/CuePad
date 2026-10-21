@@ -206,6 +206,7 @@ enum DebugScene {
         let panel = defaults.string(forKey: "CuePadCuePanel")
         preset.cuePanelEnd = panel == "end"
         preset.cuePanelOpen = preset.cuePanelEnd || defaults.bool(forKey: "CuePadCuePanel")
+        preset.quotaOpen = defaults.bool(forKey: "CuePadQuotaOpen")
         #endif
         return preset
     }

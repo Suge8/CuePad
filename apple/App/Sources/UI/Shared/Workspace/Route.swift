@@ -19,8 +19,6 @@ nonisolated enum Route: Hashable {
     case cueSettings
     /// Agent 页：全部 Pi 会话（iPhone 底部与 iPad 侧栏的"会话"）。
     case agent
-    /// 一个项目的全部 Pi 会话（同 Agent 页，只列这个项目的）。
-    case projectSessions(UUID)
     case search
     case card(UUID)
     /// 一个 Pi 会话的整页（近况与回复）。

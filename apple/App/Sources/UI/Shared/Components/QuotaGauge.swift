@@ -1,12 +1,12 @@
 import CueStore
 import SwiftUI
 
-/// 订阅额度的总览（读数规则在 `QuotaMeter`）：手机 Cue 页头的面板、Mac Agent 页顶部与菜单栏面板，还没有额度记录时整条不出现。
+/// 订阅额度的总览（读数规则在 `QuotaMeter`）：手机会话页点额度环长出的面板（`QuotaRings`）、Mac 会话页顶部与菜单栏面板，还没有额度记录时整条不出现。
 ///
 /// 每个账号一块（`QuotaAccount`），排法同旁边的列表行：头一行是 20 点宽的图标列里的产品标志加账号名（数据陈旧时接"x 分钟前"），
 /// 下面每个窗口一行，与账号名左对齐：窗口名与多久后重置（计时文字，只在整分钟换字，`LiveText`；过了重置时间还没有新观测写"已重置"），
 /// 右边是还剩多少的大号等宽数字，下面一条剩余条（`MarkedBar`，刻线是匀速线）。超了匀速线（照这速度重置前会用完）在条下多一行"照这速度约 X 后用完"。
-/// 主视图把要看的都写出来了，所以不再有点开的明细：总览不是按钮、没有按压。
+/// 总览本身就是明细，不再有点开的下一层：不是按钮、没有按压。
 /// 宽处（Mac Agent 页）账号并排成等宽的几栏，窄处（手机、菜单栏面板）一个一块往下排（`QuotaColumns`）。
 ///
 /// 配色只用墨：余量足是次要墨色，用过七成是墨色，九成起与用完是胭脂（同上下文快满的口径，不借赭黄、不用靛青）；胭脂时数字一起变色。
@@ -198,6 +198,29 @@ struct QuotaRing: View, Animatable {
                     .stroke(level.ink(palette), style: StrokeStyle(lineWidth: Self.line, lineCap: .round))
                     .rotationEffect(.degrees(-90))
             }
+        }
+    }
+}
+
+/// 每个账号一颗小额度环（产品标志在环里，同回复框模型胶囊上那颗 `ModelBadge`）：环是卡着的那个窗口还剩多少，只用颜色说余量、不写数。
+/// 手机会话页顶栏中间那颗胶囊的右半，点它长出总览（`QuotaStrip`）。账号多时只放前 `limit` 颗；读屏念每个账号卡着的窗口还剩多少。
+struct QuotaRings: View {
+    @Environment(AppServices.self) private var services
+    @Environment(\.palette) private var palette
+
+    private static let limit = 3
+
+    var body: some View {
+        let quotas = Array(services.accountQuotas.items.prefix(Self.limit))
+        Moments(next: quotas.nextReset(after:)) { now in
+            let rings = quotas.compactMap { quota in quota.binding(at: now).map { (provider: quota.provider, window: QuotaMeter.Window($0, at: now)) } }
+            HStack(spacing: 6) {
+                ForEach(rings, id: \.provider) { ModelBadge(mark: PiProvider(id: $0.provider).mark, binding: $0.window) }
+            }
+            .foregroundStyle(palette.ink2)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("额度")
+            .accessibilityValue(Dotted(rings.map { "\(PiProvider(id: $0.provider).account) \($0.window.name)剩 \($0.window.percent)" }).spoken)
         }
     }
 }

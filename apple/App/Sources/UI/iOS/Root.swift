@@ -121,7 +121,6 @@ struct RouteView: View {
         case .cue: CuePage().countsAsPiViewer()
         case .cueSettings: CueSettingsScreen()
         case .agent: AgentScreen().countsAsPiViewer()
-        case .projectSessions(let id): AgentScreen(project: id).countsAsPiViewer()
         case .search: SearchScreen()
         case .session(let route): SessionScreen(id: route.id, seed: route.seed).countsAsPiViewer()
         case .card(let id):

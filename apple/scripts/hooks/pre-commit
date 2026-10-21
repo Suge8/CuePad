@@ -15,4 +15,8 @@ if [ "$git_dir" = "$common_dir" ] && ! git rev-parse -q --verify MERGE_HEAD >/de
 EOF
   exit 1
 fi
-exec apple/scripts/lint.sh --staged
+status=0
+# 文件大小（size.py）：合并提交里是两边各自提交时已经过了这道检查的改动，不再查
+git rev-parse -q --verify MERGE_HEAD >/dev/null || python3 apple/scripts/hooks/size.py || status=1
+apple/scripts/lint.sh --staged || status=1
+exit $status

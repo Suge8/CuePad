@@ -4,12 +4,11 @@ import CueSync
 import SwiftUI
 import UIKit
 
-/// iOS 画面（`-CuePadScene`）：shelf（书架，窄屏底部的"项目"、宽屏侧栏的"全部项目"）、cue（Cue 页，iPad 侧栏展开；`-CuePadCuePanel YES` 页头一出现就展开成面板（`end` 再滚到面板底），`-CuePadPanelCycle YES` 就绪后反复开合；`-CuePadCuePresence disabled` 看启用卡）、cuememory（再打开"Cue 记得什么"）、cuesettings（再推入 Cue 的设置）、project、older、editor、tasks（任务页，窄屏底部与宽屏侧栏的"任务"）、agent（会话页，窄屏底部与宽屏侧栏的"会话"）、send、search、trash、archive、settings、sidebar（iPad 展开侧栏）；不给是打开 App 的第一屏（Cue 页）。
+/// iOS 画面（`-CuePadScene`）：shelf（书架，窄屏底部的"项目"、宽屏侧栏的"全部项目"）、cue（Cue 页，iPad 侧栏展开；`-CuePadCuePanel YES` 页头一出现就展开成面板（`end` 再滚到面板底），`-CuePadPanelCycle YES` 就绪后反复开合；`-CuePadCuePresence disabled` 看启用卡）、cuememory（再打开"Cue 记得什么"）、cuesettings（再推入 Cue 的设置）、project、older、editor、tasks（任务页，窄屏底部与宽屏侧栏的"任务"）、agent（会话页，窄屏底部与宽屏侧栏的"会话"；给了 `-CuePadProject` 先把项目范围设成它，`-CuePadQuotaOpen YES` 顶栏胶囊长出额度总览）、send、search、trash、archive、settings、sidebar（iPad 展开侧栏）；不给是打开 App 的第一屏（Cue 页）。
 /// search 是搜索页，出现即聚焦并填入 `-CuePadSearch`；`-CuePadSearchScope sessions` 打开在会话那一栏。
 /// task 打开进行中第一条的任务气泡（没有落点、在上方居中；没有进行中的就是第一条待办；给了 `-CuePadTask <标题开头>` 是那一条）。
 /// session：打开 `-CuePadSession <会话名>`（默认 homepage）的近况页（`-CuePadNotify YES`：走点锁屏通知的那条路进去；长对话与追加中的对话见 `DebugScene+LongChat.swift`）；send 是从卡片"发到 Mac"先选会话。
 /// projectform：项目表单（给了 `-CuePadProject` 是编辑该项目，否则新建）。
-/// projectagent：在 `-CuePadProject` 的项目页上推入它的 Agent 页（筛着这个项目）。
 /// style：视觉样板（`StyleBoard`）盖在最上层；icons：图标总览（`IconSheet`，iPad 竖屏一屏）。
 /// widgets：小组件的小号与中号（`DebugWidgetStage`）；activity：实时活动的各态（`DebugActivityStage`）；share：分享扩展的表单（`DebugShareStage`）。都盖在最上层。
 /// newsession：Agent 页上浮起新会话输入框；给了 `-CuePadLaunch YES` 则已经替你在圆桌发出（看送达中）。
@@ -128,11 +127,8 @@ extension DebugScene {
             // 给 -CuePadProject（默认闲鱼，演示里没绑文件夹）选文件夹的候选页
             let name = defaults.string(forKey: "CuePadProject") ?? "闲鱼"
             workspace.folderPicker = try? await workspace.services.store.projects().first { $0.name == name }
-        case "projectagent":
-            // 从项目页的"全部 N 个会话"进来的 Agent 页：先筛着这个项目
-            if let project { open(.project(project)); navigation.push(.projectSessions(project)) }
         case "agent":
-            if let project { open(.project(project)) }
+            workspace.projectScope = project
             navigation.show(.agent)
         case "search":
             navigation.openSearch()
