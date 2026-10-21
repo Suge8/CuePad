@@ -20,7 +20,7 @@ struct ProjectNowLine: View {
                 .transition(.opacity)
             }
         }
-        .animation(Motion.quick, value: now?.text)
+        .animation(HandOff.quick, value: now?.text)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(now.map { now in now.shown.map { "\($0.presence)：\(now.text)" } ?? now.text } ?? "")
     }

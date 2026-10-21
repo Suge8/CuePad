@@ -42,7 +42,7 @@ struct EmptyState<Action: View>: View {
 
     private func appear() {
         guard !shown else { return }
-        withAnimation(reduceMotion ? Motion.quick : Motion.snappy) { shown = true }
+        withAnimation(reduceMotion ? HandOff.quick : Motion.snappy) { shown = true }
     }
 
     private var illustration: some View {
@@ -115,14 +115,22 @@ private struct PhraseLines: View {
     private struct Flow: Layout {
         private static let lineGap: CGFloat = 2
 
-        func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-            let rows = rows(width: proposal.width ?? .infinity, subviews)
+        /// 按哪个宽分的行：量过的宽摆放时直接用，不再分一遍（子视图一变，系统按 `makeCache` 重建）。
+        struct Cache {
+            var width: CGFloat?
+            var rows: [Row] = []
+        }
+
+        func makeCache(subviews: Subviews) -> Cache { Cache() }
+
+        func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout Cache) -> CGSize {
+            let rows = rows(width: proposal.width ?? .infinity, subviews, cache: &cache)
             return CGSize(width: rows.map(\.width).max() ?? 0, height: height(rows))
         }
 
-        func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Cache) {
             var y = bounds.minY
-            for row in rows(width: bounds.width, subviews) {
+            for row in rows(width: bounds.width, subviews, cache: &cache) {
                 var x = bounds.midX - row.width / 2
                 for (index, size) in row.items {
                     subviews[index].place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
@@ -132,10 +140,18 @@ private struct PhraseLines: View {
             }
         }
 
-        private struct Row {
+        struct Row {
             var items: [(Int, CGSize)] = []
             var width: CGFloat = 0
             var height: CGFloat = 0
+        }
+
+        private func rows(width: CGFloat, _ subviews: Subviews, cache: inout Cache) -> [Row] {
+            if cache.width != width {
+                cache.rows = rows(width: width, subviews)
+                cache.width = width
+            }
+            return cache.rows
         }
 
         private func rows(width: CGFloat, _ subviews: Subviews) -> [Row] {

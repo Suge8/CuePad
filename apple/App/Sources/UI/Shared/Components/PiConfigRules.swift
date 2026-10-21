@@ -31,6 +31,7 @@ nonisolated struct PiThinkingMeter: Equatable {
     let levels: [PiThinkingLevel]
     private(set) var current: PiThinkingLevel?
 
+    /// 那把尺：一格一档。
     static let scale = PiThinkingLevel.allCases.filter { $0 != .off }
 
     /// 模型不报档位时没有这个条：拖动换算档位要从档位里取。
@@ -47,7 +48,6 @@ nonisolated struct PiThinkingMeter: Equatable {
         return meter
     }
 
-    var bars: [PiThinkingLevel] { Self.scale }
     var filled: Int { current.flatMap { Self.scale.firstIndex(of: $0) }.map { $0 + 1 } ?? 0 }
     var isOff: Bool { current == .off }
     /// 档名；Agent 没报此刻的强度时（如终端里的 Codex 用模型的缺省）是"默认"，照样能点能换。

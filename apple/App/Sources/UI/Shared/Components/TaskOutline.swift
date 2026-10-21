@@ -183,7 +183,7 @@ private struct InsertionLine: View {
             }
         }
         .allowsHitTesting(false)
-        .animation(Motion.quick, value: drag.drop?.mark)
+        .animation(HandOff.quick, value: drag.drop?.mark)
         .sensoryFeedback(.selection, trigger: drag.drop?.mark) { _, mark in mark != nil }
     }
 }

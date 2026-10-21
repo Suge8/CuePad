@@ -1,8 +1,9 @@
 import SwiftUI
 
 /// 同一处先后换两样东西（状态的一句、你的话到哪了的记号、横幅让回页头）：旧的 `gap` 内淡完、新的晚 `gap` 再淡入——
-/// 长短不同的两句同时交叉淡，中间几帧叠成读不出的一团。App 与扩展同一份（`Motion.quick`、`Motion.handOff` 取自这里）。
+/// 长短不同的两句同时交叉淡，中间几帧叠成读不出的一团。App 与扩展同一份。
 enum HandOff {
+    /// 颜色、透明度、悬停这类不移动位置的反馈，全 App 同一条（也是新的那样淡入的曲线）。
     static let quick = Animation.easeOut(duration: 0.16)
     static let gap: Double = 0.08
 }
@@ -16,8 +17,13 @@ extension AnyTransition {
 /// 扩展里的头像（`CueNowFace`：静止的脸加一圈状态色的环；App 里的头像是会动的 `CueAvatar`，环的颜色同一套）。
 /// 颜色只按意思取：在跑与等子代理靛青（实心是在跑，空心是交出去了、等交回）、等你赭黄、刚做完石绿、歇着灰。
 struct BeadDot: View {
+    /// 一排里珠子的直径（Cue 那一行、页头）；扩展里另给。
+    static let standard: CGFloat = 7
+    /// 一排里相邻两颗之间：直径的这么多倍，挨得近、看得出是一串。
+    static func gap(_ size: CGFloat) -> CGFloat { size * 0.55 }
+
     let kind: CueNow.Bead.Kind
-    var size: CGFloat = 7
+    var size = standard
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -45,14 +51,15 @@ enum BeadHalo {
 struct CueBeads<Decorated: View>: View {
     let beads: [CueNow.Bead]
     var hidden = 0
-    var size: CGFloat = 7
+    var size = BeadDot.standard
     var limit = 4
     @ViewBuilder var bead: (CueNow.Bead, BeadDot) -> Decorated
     @Environment(\.palette) private var palette
 
     var body: some View {
         let more = max(beads.count - limit, 0) + hidden
-        HStack(spacing: size * 0.55) {
+        let gap = BeadDot.gap(size)
+        HStack(spacing: gap) {
             ForEach(beads.prefix(limit)) { item in
                 bead(item, BeadDot(kind: item.kind, size: size)).transition(.scale.combined(with: .opacity))
             }
@@ -62,7 +69,7 @@ struct CueBeads<Decorated: View>: View {
                     if more > 0 { Text("+\(more)").contentTransition(.numericText(value: Double(more))).transition(.opacity) }
                 }
                 .font(.system(size: size * 1.45, weight: .semibold)).monospacedDigit().foregroundStyle(palette.ink2)
-                .padding(.leading, max(0, BeadHalo.clearance(bead: size) - size * 0.55))
+                .padding(.leading, max(0, BeadHalo.clearance(bead: size) - gap))
             }
         }
         .accessibilityHidden(true)
@@ -70,7 +77,7 @@ struct CueBeads<Decorated: View>: View {
 }
 
 extension CueBeads where Decorated == BeadDot {
-    init(beads: [CueNow.Bead], hidden: Int = 0, size: CGFloat = 7, limit: Int = 4) {
+    init(beads: [CueNow.Bead], hidden: Int = 0, size: CGFloat = BeadDot.standard, limit: Int = 4) {
         self.init(beads: beads, hidden: hidden, size: size, limit: limit) { _, dot in dot }
     }
 }
@@ -84,7 +91,7 @@ struct CueNowLine<Decorated: View>: View {
 
     var body: some View {
         // 珠子与那一句之间至少让出接力光圈（`BeadHalo`），光落在最后一颗上时不压到头一个字
-        HStack(spacing: max(7, BeadHalo.clearance(bead: 7))) {
+        HStack(spacing: BeadHalo.clearance(bead: BeadDot.standard)) {
             if !now.beads.isEmpty {
                 // 珠子与"+N"按自己的宽排、不被挤：窄处让位的是后面那一句（截成省略号），计数截成"+…"就读不出几件了
                 CueBeads(beads: now.beads, hidden: now.hidden, limit: limit, bead: bead).fixedSize()

@@ -17,7 +17,7 @@ struct BoardLane: View {
             shape.fill(column.lane(palette)).padding(.top, 1)
             if targeted { shape.fill(palette.selection).transition(.opacity) }
         }
-        .animation(Motion.quick, value: targeted)
+        .animation(HandOff.quick, value: targeted)
         .ignoresSafeArea(edges: .bottom)
     }
 }

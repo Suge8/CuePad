@@ -55,7 +55,7 @@ struct PiContextGauge: View {
         .popover(isPresented: $showsDetail) { detail.presentationCompactAdaptation(.popover) }
         .accessibilityLabel("上下文")
         .accessibilityValue(meter.help.spoken)
-        .animation(Motion.quick, value: meter)
+        .animation(HandOff.quick, value: meter)
     }
 
     private var percent: some View {

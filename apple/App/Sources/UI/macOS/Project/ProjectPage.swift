@@ -43,7 +43,7 @@ struct ProjectPage: View {
                 .scrollPosition($position)
                 .taskFoldScroll(anchor)
                 .onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y > Self.collapseOffset } action: { _, isCollapsed in
-                    withAnimation(Motion.quick) { collapsed = isCollapsed }
+                    withAnimation(HandOff.quick) { collapsed = isCollapsed }
                 }
                 // 下滚后收成的一行：浮在工具栏下面，不放进工具栏——工具栏内容只随用户操作变，
                 // 不随滚动位置这种布局读数变（工具栏一变就重排整个窗口，跟着滚动位置变会形成布局循环）

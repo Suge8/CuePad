@@ -232,7 +232,7 @@ nonisolated extension PiShown {
         case .working(.tool): "运行工具"
         case .working(.delegating): "子代理工作中"
         case .working(.compacting): "正在压缩上下文"
-        case .working: speaking ? "输出中" : "思考中"
+        case .working: speaking ? "输出中" : CueNow.thinking
         case .asking: "等你\(waitWord)"
         case .awaitsReply: "待回复"
         case .cueAsking: "等 \(cue ?? "") 回答"

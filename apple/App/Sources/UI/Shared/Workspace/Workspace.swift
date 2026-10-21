@@ -88,7 +88,7 @@ final class Workspace {
     #if os(macOS)
     /// ⌘K 搜索开着（`SearchPalette`）。
     var searching = false
-    /// 接入 Agent 并启用 Cue 的面板（`SetupPanel`；首次打开由 `offerSetup` 置起，Cue 页的启用卡与会话页的"接入"也打开它，主窗口弹出）。
+    /// 接入 Agent 并启用 Cue 的面板（`SetupPanel`；首次打开由 `offerSetup` 置起，Cue 页的启用钮（`CueWelcome`）与会话页的"接入"也打开它，主窗口弹出）。
     var showsSetup = false
     /// 新会话的表单开着（`NewSessionForm`，从会话页的 + 弹出；菜单"文件 › 新会话"先去会话页再置起，`newSession`）。
     var showsNewSession = false

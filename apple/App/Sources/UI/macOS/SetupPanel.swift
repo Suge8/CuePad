@@ -4,7 +4,7 @@ import CuePi
 import CueStore
 import SwiftUI
 
-/// 接入 Agent 并启用 Cue，一处做完：首次打开出现一次（`Workspace.offerSetup`），Cue 页的启用卡、会话页的"接入"也打开它；之后在设置里逐个开关。
+/// 接入 Agent 并启用 Cue，一处做完：首次打开出现一次（`Workspace.offerSetup`），Cue 页的启用钮（`CueWelcome`）、会话页的"接入"也打开它；之后在设置里逐个开关。
 /// 打开时与回到 App 时重新检测这台的 Agent、问它们能不能用（`Workspace.recheckAgents`：用户可能刚在终端里登录了 Pi、装了 Node.js），
 /// 打开后第一次问完之前只写检测中：没登录的那家一出来就是"登录"，不先给勾选再在启用时报错。
 /// Agent 那几行与 Cue 那一行只读 `Workspace.setupRows`、`setupCue`：能当 Cue 的一家都用不了时，一行一个按钮（安装、登录），
@@ -59,8 +59,8 @@ struct SetupPanel: View {
         }
         .frame(width: 520)
         .background(palette.desk)
-        .animation(Motion.quick, value: checked)
-        .onAppear { withAnimation(reduceMotion ? Motion.quick : Motion.snappy) { shown = true } }
+        .animation(HandOff.quick, value: checked)
+        .onAppear { withAnimation(reduceMotion ? HandOff.quick : Motion.snappy) { shown = true } }
         .observing(services.store, into: $here, onError: workspace.fail) { [host = services.hostID] in try $0.macAgents(on: host) }
         .task {
             await workspace.recheckAgents()

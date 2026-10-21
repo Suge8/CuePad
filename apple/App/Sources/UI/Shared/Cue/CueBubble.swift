@@ -94,7 +94,7 @@ struct CueSays: View {
             }
             CueOriginalToggle(open: $reading)
         }
-        .animation(Motion.quick, value: reading)
+        .animation(HandOff.quick, value: reading)
     }
 
     @ViewBuilder private var said: some View {

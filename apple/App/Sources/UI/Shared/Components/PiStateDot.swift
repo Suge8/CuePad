@@ -120,7 +120,7 @@ struct PiStateDot: View {
             }
         }
         .frame(width: box, height: box)
-        .animation(Motion.quick, value: shown)
+        .animation(HandOff.quick, value: shown)
         .onChange(of: shown.isUnread) { _, unread in if unread, !reduceMotion { rings += 1 } }
         // 旁边是字时按第一行对齐（`.firstTextBaseline`）：每种标都把自己的中心放在那一行字的中线上。不能用各自的基线——
         // 符号有基线、自绘的动效没有（落到底边），同一列里就高高低低；标的大小跟着旁边的字走，中线离基线约是字高的四成

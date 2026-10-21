@@ -33,7 +33,7 @@ struct CueContextCard: View {
         .padding(12)
         .background(palette.fill, in: ChatBlock.shape)
         .accessibilityElement(children: .combine)
-        .animation(Motion.quick, value: context)
+        .animation(HandOff.quick, value: context)
     }
 
     private var facts: Dotted {

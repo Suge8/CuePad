@@ -128,6 +128,6 @@ private struct Arrival: ViewModifier {
         let waits = session.map { stage?.arriving.contains($0) == true } == true
         content
             .opacity(waits ? 0 : 1)
-            .animation(waits ? nil : Motion.quick, value: waits)
+            .animation(waits ? nil : HandOff.quick, value: waits)
     }
 }

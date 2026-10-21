@@ -94,7 +94,7 @@ struct ChatScrubber: View {
                         .allowsHitTesting(false)
                 }
             }
-            .animation(reduceMotion ? nil : Motion.quick, value: active)
+            .animation(reduceMotion ? nil : HandOff.quick, value: active)
             // 只有刻度区接手指：上面的顶栏区与下面的回复框附近照常滚对话
             .contentShape(Rectangle().path(in: CGRect(x: 0, y: band.top, width: Self.width, height: band.bottom - band.top)))
             .gesture(
@@ -135,7 +135,7 @@ struct ChatScrubber: View {
         .opacity(keyboard ? 0 : 1)
         .allowsHitTesting(!keyboard)
         .accessibilityHidden(keyboard)
-        .animation(reduceMotion ? nil : Motion.quick, value: keyboard)
+        .animation(reduceMotion ? nil : HandOff.quick, value: keyboard)
         #if os(iOS)
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in keyboard = true }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in keyboard = false }

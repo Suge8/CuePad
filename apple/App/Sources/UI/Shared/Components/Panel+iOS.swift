@@ -53,7 +53,7 @@ private struct BubbleLayer<Item: Identifiable, Panel: View>: View {
                 }
             }
         }
-        .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion) ?? Motion.quick, value: item?.id)
+        .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion) ?? HandOff.quick, value: item?.id)
         .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: keyboardUp)
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in if item != nil { keyboardUp = true } }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in keyboardUp = false }

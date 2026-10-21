@@ -20,7 +20,7 @@ struct ConflictsScreen: View {
                 ForEach(services.conflicts, id: \.copy.id) { ConflictPair(conflict: $0, choices: choices) }
             }
             .padding(16)
-            .animation(Motion.quick, value: services.conflicts.map(\.copy.id))
+            .animation(HandOff.quick, value: services.conflicts.map(\.copy.id))
         }
         .floatingHeader("两个版本", detail: services.conflicts.isEmpty ? nil : "\(services.conflicts.count) 处")
     }
