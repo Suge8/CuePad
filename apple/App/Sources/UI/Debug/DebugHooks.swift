@@ -313,20 +313,6 @@ extension View {
         #endif
     }
 
-    /// 点 Cue 页底部"⋯"的那条路交给演示（`dockTourIfAsked`）；`-CuePadPlacesOpen YES` 时第一次出现就展开。
-    func debugExposesPlaces(_ toggle: @escaping () -> Void) -> some View {
-        #if DEBUG
-        onAppear {
-            DebugScene.togglePlaces = toggle
-            if DebugScene.defaults.bool(forKey: "CuePadPlacesOpen"), !DebugScene.placesOpened {
-                DebugScene.placesOpened = true
-                toggle()
-            }
-        }
-        #else
-        self
-        #endif
-    }
     #endif
 
     /// 项目页任务纸点"还有 N 条"的那条路交给测量（两端 `InteractionBench` 的"展开任务"）：看得见的那一页（`active`）的纸。

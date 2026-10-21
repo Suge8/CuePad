@@ -80,6 +80,7 @@ extension DebugScene {
             if defaults.bool(forKey: "CuePadDemo") { await seedCue(workspace.services) }
             if let draft = defaults.string(forKey: "CuePadCueDraft") { workspace.cue.draft.text = draft }
             navigation.show(.cue)
+            navigation.placesOpen = defaults.bool(forKey: "CuePadPlacesOpen")
             navigation.sidebar = .all
             if scene == "cuememory" { workspace.cue.showsMemory = true }
             if scene == "cuesettings" { navigation.push(.cueSettings) }
@@ -168,7 +169,7 @@ extension DebugScene {
             navigation.openSession(sessions[index].id, sessionID: sessions[index].sessionID, store: workspace.services.store)
         }
         await beat()
-        togglePlaces()
+        navigation.placesOpen = true
         await beat()
         navigation.select(.tasks)
         await beat()

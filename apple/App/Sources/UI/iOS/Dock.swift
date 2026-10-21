@@ -166,7 +166,7 @@ enum DockLook {
 
 /// 底部那一排：左边一块玻璃，右边 Cue 钮，按此刻的样子（`DockLook`）原地换形，不换身份。
 /// - 三页上、Cue 页点开"⋯"时（`.places`）：左边三格胶囊（图标在上字在下，选中那一格是一层中性淡墨的滴加靛青的图标与字），右边 Cue 钮占两格宽（`DockCue`）。
-/// - Cue 页（`.cue`）：左边收成一颗"⋯"（与输入框同高），Cue 钮长成输入框那么宽、那么高，交给页里真的输入框（`Dock.handOver`）。
+/// - Cue 页（`.cue`）：左边收成一颗"⋯"（与输入框同高），Cue 钮长成输入框那么宽、那么高，交给页里真的输入框（`DockRoot.handed`）。
 /// - Cue 页输入框有焦点（`.composing`）：都让开，输入框占满整排。
 /// 三页之间换只是滴滑到新那一格；Cue 页点开"⋯"本来就是三页的样子，选一格去那里什么都不换形。离屏幕左右与底边都是 21、高 62
 /// （与屏幕圆角同心，同系统悬浮标签栏），只是玻璃：栏后面不垫渐变或模糊。字号固定、不随动态字体放大，辅助字号下长按弹出大内容查看器
@@ -179,7 +179,6 @@ private struct DockBar: View {
     /// 底边那一格交给了页里的输入框、它已画上屏：Cue 钮藏起。
     let released: Bool
     let width: CGFloat
-    @Environment(Navigation.self) private var navigation
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -203,7 +202,6 @@ private struct DockBar: View {
                 .accessibilityHidden(!places)
         }
         .frame(width: width, height: height, alignment: .bottomLeading)
-        .debugExposesPlaces { navigation.placesOpen.toggle() }
         .transaction { if reduceMotion { $0.animation = nil } }
     }
 }
@@ -338,7 +336,7 @@ private struct DockCue: View {
                     .frame(width: Dock.height)
                     .overlay(alignment: .topTrailing) { corner(drafted: drafted) }
             }
-            // 长成输入框时里面先淡掉，只剩玻璃在长，输入框的字随后淡入
+            // 长成输入框时里面先淡掉，只剩玻璃在长，长到了交给页里的输入框
             .animation(.easeOut(duration: Motion.handOff)) {
                 $0.opacity(places ? 1 : 0)
             }
@@ -382,10 +380,8 @@ private struct DockTally: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
-    static let quiet = "手上没有事"
-
     static func spoken(_ cue: CueWatch) -> String {
-        guard cue.now.advancing > 0 || cue.waiting > 0 else { return quiet }
+        guard cue.now.advancing > 0 || cue.waiting > 0 else { return CueNow.quiet }
         return Dotted(cue.now.advancing > 0 ? "推进中 \(cue.now.advancing)" : nil, cue.waiting > 0 ? "等你 \(cue.waiting)" : nil).spoken
     }
 
@@ -398,7 +394,7 @@ private struct DockTally: View {
             }
             WaitingCount(count: cue.waiting)
             if cue.now.advancing == 0, cue.waiting == 0 {
-                Text(Self.quiet).foregroundStyle(palette.ink3)
+                Text(CueNow.quiet).foregroundStyle(palette.ink3)
             }
         }
         .font(.system(size: 12, weight: .medium))
