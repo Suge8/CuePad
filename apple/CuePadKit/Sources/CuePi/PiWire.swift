@@ -2,7 +2,7 @@
 import CueStore
 import Foundation
 
-/// 桥协议的线上格式：一行一个 JSON。扩展端见 `Extension/cuepad-bridge.ts`。
+/// 桥协议的线上格式：一行一个 JSON。扩展端见 `Extension/cuepad-bridge/`。
 enum PiWire {
     /// 客户端说的协议版本；hello 的版本不同就不往下解析（命令一条不发），会话等它换上新扩展（`OtherProtocolHello`、`PiSession.upgrading`）
     static let protocolVersion = 16

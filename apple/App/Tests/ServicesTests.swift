@@ -108,6 +108,7 @@ struct AgentLineTests {
 
 struct AgentUpgradeTests {
     /// 装过的不再询问：App 更新后启动检查就把旧版的扩展静默升级到随包版本，缺的技能一起补上。
+    /// 旧版是单文件扩展（v37 及更早）：装上目录，旧文件换成空扩展（在跑的旧扩展看到版本变了自己换上目录里的，桥只有一份）。
     @Test func 已装旧版扩展时启动检查静默升级到随包版本() async throws {
         let rig = TestApp()
         let bin = rig.directory.appending(path: "bin")
@@ -115,15 +116,16 @@ struct AgentUpgradeTests {
         let script = bin.appending(path: "pi")
         try "#!/bin/sh\necho 0.90.0\n".write(to: script, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
-        let installed = rig.piPaths.extensionsDirectory.appending(path: "cuepad-bridge.ts")
+        let legacy = rig.piPaths.extensionsDirectory.appending(path: "cuepad-bridge.ts")
         try FileManager.default.createDirectory(at: rig.piPaths.extensionsDirectory, withIntermediateDirectories: true)
-        let old = PiExtensionBundle.source.replacing(/const EXTENSION_VERSION = \d+;/, with: "const EXTENSION_VERSION = 1;")
-        try old.write(to: installed, atomically: true, encoding: .utf8)
+        try "\(PiExtensionBundle.ownershipMarker)\nconst EXTENSION_VERSION = 37;\n".write(to: legacy, atomically: true, encoding: .utf8)
 
         try await rig.services.agents.refresh()
 
         #expect(rig.services.agents.status(.pi)?.files == .current)
-        #expect(try String(contentsOf: installed, encoding: .utf8) == PiExtensionBundle.source)
+        let entry = rig.piPaths.extensionsDirectory.appending(path: "cuepad-bridge/index.ts")
+        #expect(try String(contentsOf: entry, encoding: .utf8) == PiExtensionBundle.entry)
+        #expect(try String(contentsOf: legacy, encoding: .utf8) == PiExtensionBundle.legacyStub)
         #expect(FileManager.default.fileExists(atPath: rig.piPaths.agentDirectory.appending(path: "skills/cuepad/SKILL.md").path))
     }
 

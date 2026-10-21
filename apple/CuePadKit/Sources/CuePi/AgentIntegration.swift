@@ -152,11 +152,11 @@ public struct AgentIntegration: Sendable {
     }
 
     func skillFile(_ kind: AgentKind) -> URL { skillDirectory(of: kind).appending(path: AgentSkill.fileName) }
-    private var extensionFile: URL { pi.extensionsDirectory.appending(path: PiExtensionBundle.fileName) }
+    private var piExtension: PiExtensionFiles { PiExtensionFiles(extensionsDirectory: pi.extensionsDirectory) }
 
     /// CuePad 写给这家的文件：技能，Pi 的扩展，钩子配置（只改其中 CuePad 的条目）。界面据此说明会写哪里。
     public func writtenFiles(of kind: AgentKind) -> [URL] {
-        [skillFile(kind)] + (kind == .pi ? [extensionFile] : []) + (hooks(kind)?.writtenFiles ?? [])
+        [skillFile(kind)] + (kind == .pi ? [piExtension.directory] : []) + (hooks(kind)?.writtenFiles ?? [])
     }
 
     @concurrent public func status(of kind: AgentKind) async -> AgentStatus {
@@ -175,10 +175,7 @@ public struct AgentIntegration: Sendable {
         case .found: break
         }
         if case .foreign(let path) = files(of: kind) { throw AgentInstallError.foreign(path) }
-        if kind == .pi {
-            try FileManager.default.createDirectory(at: pi.extensionsDirectory, withIntermediateDirectories: true)
-            try Data(PiExtensionBundle.source.utf8).write(to: extensionFile, options: .atomic)
-        }
+        if kind == .pi { try piExtension.install() }
         try FileManager.default.createDirectory(at: skillDirectory(of: kind), withIntermediateDirectories: true)
         try Data(AgentSkill.text(for: kind, cuepad: cuepad).utf8).write(to: skillFile(kind), options: .atomic)
         try await hooks(kind, codex: found.executable)?.install(command: hookCommand(kind))
@@ -191,11 +188,8 @@ public struct AgentIntegration: Sendable {
         guard isWritable(kind) else { throw AgentInstallError.isolated(kind) }
         if case .foreign(let path) = files(of: kind) { throw AgentInstallError.foreign(path) }
         try await hooks(kind, codex: executable)?.uninstall()
-        var files = [skillFile(kind)]
-        if kind == .pi { files.append(extensionFile) }
-        for file in files where FileManager.default.fileExists(atPath: file.path) {
-            try FileManager.default.removeItem(at: file)
-        }
+        if FileManager.default.fileExists(atPath: skillFile(kind).path) { try FileManager.default.removeItem(at: skillFile(kind)) }
+        if kind == .pi { try piExtension.uninstall() }
         var directories = [skillDirectory(of: kind), skillDirectory(of: kind).deletingLastPathComponent()]
         if kind == .pi { directories.append(pi.extensionsDirectory) }
         for directory in directories where (try? FileManager.default.contentsOfDirectory(atPath: directory.path))?.isEmpty == true {
@@ -214,11 +208,8 @@ public struct AgentIntegration: Sendable {
         let skillState: AgentStatus.Files = skill.map { $0 == AgentSkill.text(for: kind, cuepad: cuepad) ? .current : .outdated } ?? .missing
         let other: AgentStatus.Files
         if kind == .pi {
-            let installed = read(extensionFile)
-            if installed.map({ $0 != PiExtensionBundle.source && !$0.hasPrefix(PiExtensionBundle.ownershipMarker) }) ?? unreadable(extensionFile) {
-                return .foreign(abbreviated(extensionFile))
-            }
-            other = installed.map { $0 == PiExtensionBundle.source ? .current : .outdated } ?? .missing
+            other = piExtension.state
+            if case .foreign = other { return other }
         } else {
             other = hooks(kind)?.files(command: hookCommand(kind)) ?? skillState
         }
@@ -277,35 +268,6 @@ public struct AgentIntegration: Sendable {
         let environment = locator.environment(launching: executable, overrides: ["PI_OFFLINE": "1", "XDG_DATA_HOME": scratch.path])
         return await ChildProcess.run(executable, arguments, environment: environment, timeout: timeout)?.output
     }
-}
-
-/// 随包分发的 Pi 扩展（`Extension/cuepad-bridge.ts`）。文件里的 `EXTENSION_VERSION` 是唯一的版本来源。
-public enum PiExtensionBundle {
-    static let fileName = "cuepad-bridge.ts"
-    /// 扩展文件首行；用它区分"CuePad 写的"与同名的用户文件
-    static let ownershipMarker = "// CuePad Pi bridge extension"
-
-    /// 随包的那份文件：探测模型时 Pi 直接加载它（`AgentIntegration.probe`），不经装到 Pi 扩展目录的那份。
-    static let url: URL = {
-        guard let url = Bundle.module.url(forResource: "cuepad-bridge", withExtension: "ts", subdirectory: "Extension") else {
-            preconditionFailure("bundled cuepad-bridge.ts is missing from the CuePi resource bundle")
-        }
-        return url
-    }()
-
-    static let source: String = {
-        guard let text = try? String(contentsOf: url, encoding: .utf8) else {
-            preconditionFailure("bundled cuepad-bridge.ts is unreadable")
-        }
-        return text
-    }()
-
-    public static let version: Int = {
-        guard let version = source.firstMatch(of: /const EXTENSION_VERSION = (\d+);/).flatMap({ Int($0.1) }) else {
-            preconditionFailure("bundled cuepad-bridge.ts declares no EXTENSION_VERSION")
-        }
-        return version
-    }()
 }
 
 /// 写给 Agent 的技能：CuePad 是什么、怎么把文件发到手机、做 HTML 页给手机看的约定（只写在这里），其余让 Agent 看 `--help`（命令行唯一的文档）。
