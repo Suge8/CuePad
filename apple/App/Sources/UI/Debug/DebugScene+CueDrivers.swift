@@ -3,7 +3,6 @@ import CueStore
 import CueText
 import SwiftUI
 
-// 录屏驱动：叫醒、撤回等你、Cue 自己说一句、离开很久后回来、交给会话、关窗再开、Cue 此刻轮换。
 extension DebugScene {
     /// `-CuePadWake <秒>`（配 `-CuePadDemo YES`，画面就绪后开始、一直循环）：每隔这么久 Cue 被在线会话叫醒一次——此刻的状态写成在想、
     /// 带上叫醒它的会话（这一轮的经过那一行上的 `CueMessage.wake`，同值班的 Mac 起一轮时写下的样子，对话里随之多一节动态），醒 1.5 秒后歇下；叫醒的会话从在线会话的前三个里轮着挑，

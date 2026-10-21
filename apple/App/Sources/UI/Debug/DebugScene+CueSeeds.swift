@@ -3,7 +3,6 @@ import CueStore
 import CueText
 import SwiftUI
 
-// 演示 Cue 用到的数据件：记忆、部署会话的截图、更早的长对话、cuerows 的会话、截图证据与演示图。
 extension DebugScene {
     /// 演示记忆：长短不一（一句话到接近一条的上限）、钉住的与其他、你记的与 Cue 记的，时间从刚刚到几个月前。
     static var demoMemory: [SeedCueLine] {

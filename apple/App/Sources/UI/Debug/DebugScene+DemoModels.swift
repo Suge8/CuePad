@@ -4,7 +4,6 @@ import CueText
 import OSLog
 import SwiftUI
 
-// 演示的 Agent、模型、斜杠命令与上下文用量，以及两台 Mac 报上来的 Agent。
 extension DebugScene {
     static func model(_ provider: String, _ id: String, _ name: String, _ levels: [PiThinkingLevel]) -> PiModelOption {
         PiModelOption(key: PiModelKey(provider: provider, id: id), name: name, thinkingLevels: levels)
