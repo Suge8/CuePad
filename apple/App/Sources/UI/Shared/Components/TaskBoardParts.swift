@@ -1,7 +1,7 @@
 import CueStore
 import SwiftUI
 
-/// 四列并排（Mac 任务页、宽屏 iPad）：每列（`BoardColumn`）各自滚动，列头（`BoardColumnHeader`）在列里、随卡一起滚到顶上那一排后面。
+/// 四列并排（Mac 任务页、宽屏 iPad）：每列（`BoardColumn`）是一条泳道，列头钉在泳道顶上（`BoardColumnHeader`），卡在下面各自滚动。
 /// 列按可见宽四等分，窄到一列放不下 `minColumn` 时整排横向滚动。
 struct BoardColumns: View {
     let board: TaskBoard
@@ -11,10 +11,10 @@ struct BoardColumns: View {
     #if os(macOS)
     private static let minColumn: CGFloat = 230
     #else
-    /// 一行要放下 44pt 的圈、两行标题与行尾的时间和状态标：iPad 竖屏放三列多一点，横滑看第四列。
+    /// 一张卡要放下圈、项目小图形与一行够读的标题：iPad 竖屏放三列多一点，横滑看第四列。
     private static let minColumn: CGFloat = 260
     #endif
-    private static let gap: CGFloat = 14
+    private static let gap: CGFloat = 12
 
     var body: some View {
         ScrollView(.horizontal) {
@@ -29,10 +29,11 @@ struct BoardColumns: View {
     }
 }
 
-/// 看板的一列（`TaskBoard`；Mac 与宽屏 iPad 四列并排，手机一屏一列）：待办、推进中、已完成各是一张纸（`BoardPaper`），等你每件一张卡（`BoardWaitCard`），
-/// 都在懒加载栈里（列可能很长，只建看得见的）。推进中按档排（要你管 → 在跑 → 歇着，`Workspace.byAttention`）。看全部项目时每行行尾一个项目小图标。
-/// 点击去处：待办、已完成的行开任务气泡；推进中的任务行进此刻干活的会话（没有会话的开气泡），会话行进会话；等你卡点抬头去回答的地方。
-/// 已完成行尾的成果图点开全屏看（这一列挂一个 `previewPresenter`）。
+/// 看板的一列（`TaskBoard`；Mac 与宽屏 iPad 四列并排，手机一屏一列）：一条按列上色的泳道（`BoardLane`），一件一张卡——
+/// 待办、推进中、已完成是任务卡（`BoardTaskCard`）、没绑任务的会话卡（`BoardSessionCard`），等你是 Cue 的气泡（`BoardWaitCard`），都在懒加载栈里（列可能很长，只建看得见的）。
+/// 推进中按档排（要你管 → 在跑 → 歇着，`Workspace.byAttention`），档与档之间多空一截；在跑的那一档只有前 `BoardWave.maxMoving` 张的线在动。
+/// 看全部项目时卡上标题前一个项目小图形。点击去处：待办、已完成的卡开任务气泡；推进中的任务卡进此刻干活的会话（没有会话的开气泡），会话卡进会话；
+/// 等你卡点抬头去回答的地方。已完成卡尾的成果图点开全屏看（这一列挂一个 `previewPresenter`）。
 /// 拖放：行拖到推进中是开始（同"开始"：Mac 交给 Agent，手机浮起发给 Agent 的输入框）、拖到已完成是做完（同点完成圈，还有没完成的步骤、
 /// Agent 还在做时先问一句，`TaskCheck`）；待办里拖到一行前面是排序（`TaskBoard.move`），拖进来不改状态。别的拖法不接。
 /// 已完成列末尾是"更早做完的 N"：原地展开（它们没进归档，跳去归档页看到的是别的），展开后旁边是"全部归档"。
@@ -61,27 +62,24 @@ struct BoardColumn: View {
     @State private var opened: PreviewOpening?
 
     var body: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: Self.gap) { content }
-                .padding(.horizontal, Self.inset).padding(.bottom, 24)
-                .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: ids)
+        VStack(spacing: 0) {
+            if titled {
+                BoardColumnHeader(column: column, count: board.count(column)).padding(.horizontal, TaskMetrics.cardPadding + BoardCardMetrics.inset)
+            }
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: BoardCardMetrics.gap) { content }
+                    .padding(.horizontal, BoardCardMetrics.inset).padding(.top, titled ? 0 : BoardCardMetrics.inset).padding(.bottom, 24)
+                    .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: ids)
+            }
+            .scrollBounceBehavior(.basedOnSize)
         }
-        .scrollBounceBehavior(.basedOnSize)
-        .background {
-            RoundedRectangle(cornerRadius: TaskMetrics.cardRadius + Self.inset, style: .continuous)
-                .fill(targeted ? palette.selection : .clear)
-                .animation(Motion.quick, value: targeted)
-        }
+        .background { BoardLane(column: column, targeted: targeted) }
         .dropDestination(for: String.self) { ids, _ in
             drop(ids, before: nil)
         } isTargeted: { targeted = $0 && column != .todo && column != .waiting }
         .taskCheck(finishing?.task, subtasks: finishing?.steps, check: $check)
         .modifier(ShotPresenter(column: column, opened: $opened))
     }
-
-    private static let gap: CGFloat = 8
-    /// 纸离列边的空：拖进来时铺的淡底比纸宽出这一截。
-    private static let inset: CGFloat = 4
 
     private var ids: [String] {
         switch column {
@@ -93,24 +91,28 @@ struct BoardColumn: View {
     }
 
     @ViewBuilder private var content: some View {
-        if titled {
-            BoardColumnHeader(column: column, count: board.count(column)).padding(.horizontal, 8 - Self.inset).padding(.bottom, 2)
-        }
         switch column {
         case .todo:
             if adding {
                 newTask.transition(Motion.item)
             }
-            BoardPaper(rows: board.todo) { item in
-                line(item).draggable(item.id.uuidString).modifier(InsertBefore(id: item.id) { drop($0, before: item.id) })
+            ForEach(board.todo) { item in
+                card(item).draggable(item.id.uuidString).modifier(InsertBefore(id: item.id) { drop($0, before: item.id) })
             }
             if board.todo.isEmpty && !adding { empty("没有待办") }
         case .advancing:
-            BoardPaper(groups: workspace.byAttention(board.advancing, agents: agents)) { work in
-                if let item = work.item {
-                    line(item, advancing: true).draggable(item.id.uuidString)
-                } else if case .session(let session) = work.work {
-                    BoardSessionLine(session: session, project: glyph(workspace.catalog?.project(work.project)))
+            let groups = workspace.byAttention(board.advancing, agents: agents)
+            ForEach(groups, id: \.tier) { group in
+                // 档与档之间多空一截：栈里一格零高的空，前后各一个行距
+                if group.tier != groups.first?.tier { Color.clear.frame(height: 0) }
+                ForEach(Array(group.work.enumerated()), id: \.element.id) { index, work in
+                    let moves = group.tier == .running && index < BoardWave.maxMoving
+                    if let item = work.item {
+                        card(item, moves: moves).draggable(item.id.uuidString)
+                    } else if case .session(let session) = work.work {
+                        BoardSessionCard(session: session, project: glyph(workspace.catalog?.project(work.project)), moves: moves)
+                            .boardDim(project: work.project)
+                    }
                 }
             }
             if board.advancing.isEmpty { empty("拖一件待办到这里开始") }
@@ -124,19 +126,19 @@ struct BoardColumn: View {
             }
             if board.waiting.isEmpty { empty("没有要你拍板的事") }
         case .done:
-            BoardPaper(rows: board.done) { line($0) }
+            ForEach(board.done) { card($0) }
             if board.done.isEmpty && board.earlier.isEmpty { empty("今天还没做完的") }
             if !board.earlier.isEmpty { earlierToggle }
-            if showsEarlier { BoardPaper(rows: board.earlier) { line($0) } }
+            if showsEarlier { ForEach(board.earlier) { card($0) } }
         }
     }
 
-    private func line(_ item: TaskBoard.Item, advancing: Bool = false) -> TaskLine {
-        let look = BoardLook(project: glyph(item.project), shot: item.shot, openShot: { opened = $0 }, advancing: advancing)
-        return TaskLine(task: item.task, subtasks: item.steps, lead: item.leaf, board: look)
+    private func card(_ item: TaskBoard.Item, moves: Bool = false) -> some View {
+        BoardTaskCard(item: item, column: column, project: glyph(item.project), moves: moves) { opened = $0 }
+            .boardDim(project: item.task.projectID)
     }
 
-    /// 行尾的项目小图标：只看一个项目时不画（范围已经说了）。
+    /// 卡上的项目小图形：只看一个项目时不画（范围已经说了）。
     private func glyph(_ project: Project?) -> Project? { workspace.scopedProject == nil ? project : nil }
 
     @ViewBuilder private var newTask: some View {
@@ -266,47 +268,6 @@ private struct InsertBefore: ViewModifier {
             .dropDestination(for: String.self) { ids, _ in perform(ids) } isTargeted: { targeted = $0 }
             .animation(Motion.quick, value: targeted)
             .sensoryFeedback(.selection, trigger: targeted) { _, now in now }
-    }
-}
-
-/// 列头：列的状态图形、列名、数（已完成写"今天"）。图形只用现成的：待办空圈、推进中半圈（`TaskRingView`）、等你赭黄问号（`PiStateGlyph`）、已完成对勾。
-struct BoardColumnHeader: View {
-    let column: TaskBoard.Column
-    let count: Int
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 6) {
-            BoardColumnGlyph(column: column)
-            Text(column.title).font(Self.font).foregroundStyle(palette.ink)
-            if column == .done { Text("今天").font(Self.countFont).foregroundStyle(palette.ink3) }
-            Text("\(count)").font(Self.countFont).monospacedDigit().foregroundStyle(palette.ink3).counting(count)
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isHeader)
-    }
-
-    #if os(macOS)
-    private static let font = Typography.secondary.weight(.semibold)
-    private static let countFont = Typography.meta
-    #else
-    private static let font = Font.headline
-    private static let countFont = Font.subheadline
-    #endif
-}
-
-/// 一列的状态图形（列头、手机的分段胶囊）。
-struct BoardColumnGlyph: View {
-    let column: TaskBoard.Column
-    var size: CGFloat = 13
-
-    var body: some View {
-        switch column {
-        case .todo: TaskRingView(status: .todo, done: false, size: size)
-        case .advancing: TaskRingView(status: .inProgress, done: false, size: size)
-        case .waiting: PiStateGlyph(status: .asking).font(.system(size: size))
-        case .done: TaskRingView(status: .done, done: true, size: size)
-        }
     }
 }
 

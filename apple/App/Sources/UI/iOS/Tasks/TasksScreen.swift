@@ -3,7 +3,7 @@ import CueStore
 import SwiftUI
 
 /// 任务页：流水看板（`TaskBoard`），待办 → 推进中 → 等你 → 已完成（今天）。只看项目范围里的（`Workspace.scopedProject`，同会话页那一份；
-/// 选了项目以后行尾不画项目图标、列头的数也只数这个项目），页里不另设筛选；项目范围在顶栏中间（`ProjectScope`）。
+/// 选了项目以后卡上不画项目小图形、列头的数也只数这个项目），页里不另设筛选；项目范围在顶栏中间（`ProjectScope`）。
 /// 宽屏（iPad）同 Mac 四列并排（`BoardColumns`）；窄屏一屏一列：带数的分段（`BoardSegments`）、左右滑换列，打开时有等你就落在等你。
 /// 右上角"+"去待办、顶上浮出添加那一行（`NewTaskLine`，落在范围里的项目或当前项目，可换），失焦且没写字时收回。
 struct TasksScreen: View {
@@ -74,7 +74,7 @@ struct TasksScreen: View {
     }
 }
 
-/// 窄屏任务页顶上的分段：四列各一格，写状态图形、列名与数；选中的那格是靛青浅底（`selection`）。点了滑到那一列。
+/// 窄屏任务页顶上的分段：四列各一格，写列名与数，等你有事时前面带列头那颗记号（`BoardLaneMark`）；选中的那格是靛青浅底（`selection`）。点了滑到那一列。
 private struct BoardSegments: View {
     let board: TaskBoard
     @Binding var selected: TaskBoard.Column?
@@ -89,7 +89,7 @@ private struct BoardSegments: View {
                     withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { selected = column }
                 } label: {
                     HStack(spacing: 4) {
-                        if column == .waiting, board.count(column) > 0 { BoardColumnGlyph(column: column, size: 12) }
+                        if column == .waiting, board.count(column) > 0 { BoardLaneMark(column: column, size: 14) }
                         Text(column.title).fontWeight(on ? .semibold : .regular)
                         Text("\(board.count(column))").monospacedDigit().foregroundStyle(palette.ink3)
                     }

@@ -73,6 +73,8 @@ final class Workspace {
     var addsTask = false
     /// 清空回收站的确认开着（回收站页上与"⋯"里的"清空回收站…"同一下）。
     var confirmsEmptyTrash = false
+    /// 指针此刻停在哪个项目上（侧栏的项目行、看板卡上的项目小图形）：看板上别的项目的卡淡下去（`boardDim`）。侧栏与看板读写这一份。
+    var hoveredProject: UUID?
     #endif
     /// 项目范围：任务页与会话页共用这一份（顶栏中间那颗显示它、点 ✕ 清掉；项目页"⋯"里的"看这个项目的会话"设成这个项目再切到会话页），nil 是全部项目。
     var projectScope: UUID?

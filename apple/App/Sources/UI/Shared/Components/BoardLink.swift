@@ -7,9 +7,10 @@ enum BoardDestination {
     case question(UUID)
 }
 
-/// 看板上点了去别处的一块（推进中的会话行、等你卡的抬头）：一行（`RowStyle`，悬停与按下铺淡底）。
+/// 看板上点了去别处的一块：等你卡的抬头是一行（`RowStyle`，悬停与按下铺淡底），推进中的会话卡（`card`）是一张卡（`PressStyle(.card)`，悬停亮一档）。
 struct BoardLink<Label: View>: View {
     let to: BoardDestination
+    var card = false
     @ViewBuilder let label: Label
     @Environment(Workspace.self) private var workspace
     #if os(iOS)
@@ -18,10 +19,12 @@ struct BoardLink<Label: View>: View {
     #endif
 
     var body: some View {
-        Button(action: open) {
+        let button = Button(action: open) {
             label.frame(maxWidth: .infinity, alignment: .leading).contentShape(.rect)
         }
-        .buttonStyle(.row)
+        Group {
+            if card { button.buttonStyle(PressStyle(.card)) } else { button.buttonStyle(.row) }
+        }
         .accessibilityHint(hint)
     }
 
