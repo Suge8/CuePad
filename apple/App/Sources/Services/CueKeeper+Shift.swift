@@ -136,7 +136,6 @@ extension CueKeeper {
                 $0.turn = nil
                 $0.failures = 0
             }
-            lastTurnEnd = .now
             if let failure = finished.round.failure {
                 if let woke = finished.selfStarted { await setBack(failure, retrying: woke, as: finished.author) }
             } else {

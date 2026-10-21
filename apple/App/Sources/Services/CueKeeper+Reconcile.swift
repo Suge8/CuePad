@@ -78,7 +78,6 @@ extension CueKeeper {
             // 等子代理停住不写库：到点由定时器叫醒对账
             if let stall = try await store.nextCueStall(after: now) { deadlines.append(stall) }
 
-            let timing = setup.timing
             let changes = try await self.changes(at: now)
             // 出错之后：有新变化就是新事件，照常；没有就等重试的时刻，过了这一次就只等新变化
             if let held = setback {
