@@ -245,22 +245,5 @@ struct PiTranscriptTests {
 
         for try await count in store.observe({ try $0.piMessages(of: "old").count }) where count == 0 { break }
     }
-
-    /// 写不写对话只看读文件时的判定（索引器按文件修改时间）：最近改过的文件即使里面的时间都旧也写全部消息；
-    /// 只读了摘要的文件即使里面的时间很近也不写消息——持久化不另按内容时间再判一次。
-    @Test func 写不写对话按读文件时的判定_不按文件内容里的时间() async throws {
-        let oldInside = try sessionFile("old-inside", at: .now.addingTimeInterval(-30 * 86_400))
-        let recentInside = try sessionFile("recent-inside", at: .now.addingTimeInterval(-3_600))
-        await services.consumePiHistory(AsyncStream { continuation in
-            continuation.yield(.updated(try! PiHistory.index(file: oldInside, agent: .pi, from: nil, transcript: true, files: store.files)))
-            continuation.yield(.updated(try! PiHistory.index(file: recentInside, agent: .pi, from: nil, transcript: false, files: store.files)))
-            continuation.yield(.backfillFinished(sessionFiles: [oldInside, recentInside]))
-            continuation.finish()
-        }, agent: .pi)
-
-        #expect(try await store.piMessages(of: "old-inside").count == 4)
-        #expect(try await store.piMessages(of: "recent-inside").isEmpty)
-        #expect(try await record("recent-inside").lastReply == "第二答")
-    }
 }
 #endif

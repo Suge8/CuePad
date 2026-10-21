@@ -85,9 +85,7 @@ struct CueEvalTests {
         try await CueEval.run("c-验收证据充分", expect: "回复有测试输出与前后对比、发来一张截图：done 带 1–3 条短证据，不另外 tell") { eval in
             let rig = eval.rig
             let work = try await rig.working(Self.title, Self.body)
-            let shot = rig.app.directory.appending(path: "登录页改前改后.png")
-            try loginShot().write(to: shot)
-            _ = try await rig.store.addPreviews([(shot, "登录页 忘记密码 改前改后")], sessionID: work.id)
+            try await rig.shots([("登录页改前改后.png", "登录页 忘记密码 改前改后")], from: work, drawing: { _ in try loginShot() })
             try await eval.trigger { try await rig.settle(work, reply: Self.doneReply) }
             let done = eval.calls("task", "done")
             let evidence = done.first { !$0.call.failed }?.args["evidence"] as? [String] ?? []
@@ -325,13 +323,7 @@ struct CueEvalTests {
                 [("wip-1-mac.png", "中途一版：分组标题太挤"), ("wip-2-mac-dark.png", "中途二版：深色下状态标错位")],
                 [("final-light-mac.png", "最终版浅色：项目行带会话数"), ("final-dark-mac.png", "最终版深色：项目行带会话数")],
             ] {
-                var sent: [(url: URL, title: String)] = []
-                for (name, title) in batch {
-                    let file = rig.app.directory.appending(path: name)
-                    try mockShot(name).write(to: file)
-                    sent.append((file, title))
-                }
-                _ = try await rig.store.addPreviews(sent, sessionID: work.id)
+                try await rig.shots(batch, from: work)
             }
             try await eval.trigger { try await rig.settle(work, reply: Self.sidebarReply) }
             let previews = try await rig.store.previews(of: work.id)
@@ -437,9 +429,7 @@ struct CueEvalTests {
         ) { eval in
             let rig = eval.rig
             let work = try await rig.working(Self.title, Self.body)
-            let shot = rig.app.directory.appending(path: "登录页改前改后.png")
-            try loginShot().write(to: shot)
-            _ = try await rig.store.addPreviews([(shot, "登录页 忘记密码 改前改后")], sessionID: work.id)
+            try await rig.shots([("登录页改前改后.png", "登录页 忘记密码 改前改后")], from: work, drawing: { _ in try loginShot() })
             try await eval.trigger {
                 try await rig.settleCueTurn(
                     work, his: "进度怎么样了？", ago: 7 * 60, cue: "把测试输出和改前改后的截图补上。", reply: Self.doneReply)
@@ -481,9 +471,7 @@ struct CueEvalTests {
         let work = try await rig.working("重做提问卡", "提问卡出三个视觉方案：决定单、对话里问、郑重放行。做完的标准：每个方案的效果图发到手机，他选定后再实现。")
         var shots: [CueShot] = []
         for (slug, title) in proposals {
-            let file = rig.app.directory.appending(path: "\(slug)-iphone.png")
-            try await mockShot(file.lastPathComponent).write(to: file)
-            let preview = try #require(try await rig.store.addPreviews([(file, title)], sessionID: work.id).first).preview
+            let preview = try #require(try await rig.shots([("\(slug)-iphone.png", title)], from: work).first).preview
             shots.append(CueShot(preview: preview.id, look: title.replacingOccurrences(of: "提问卡", with: "")))
         }
         let asking = try CueAsking(.rule, action: "按方案 1 决定单改提问卡", rule: "重做界面设计要先给几个方案让我选")
@@ -497,22 +485,13 @@ struct CueEvalTests {
         let rig = eval.rig
         try await eval.trigger { try await rig.say("以后重做界面设计，先给我几个方案，交回时在卡上让我选") }
         let work = try await rig.working("重做提问卡", "提问卡出三个视觉方案：决定单、对话里问、郑重放行。做完的标准：每个方案的效果图（手机浅色、深色、原样与 Mac）发到手机。")
-        func send(_ files: [(name: String, title: String)]) async throws {
-            var sent: [(url: URL, title: String)] = []
-            for file in files {
-                let url = rig.app.directory.appending(path: file.name)
-                try await mockShot(file.name).write(to: url)
-                sent.append((url, file.title))
-            }
-            _ = try await rig.store.addPreviews(sent, sessionID: work.id)
-        }
-        try await send([
+        try await rig.shots([
             ("1-01-改前-长按菜单.png", "上一轮的改动：改前长按菜单"), ("1-02-改后-长按菜单.png", "上一轮的改动：改后长按菜单"),
             ("2-01-改前-设置.png", "上一轮的改动：改前设置"), ("2-02-改后-设置.png", "上一轮的改动：改后设置"),
-        ])
+        ], from: work)
         let looks = [("iphone", "手机浅色"), ("iphone-dark", "手机深色"), ("iphone-original", "现在的样子"), ("mac", "Mac")]
         for (slug, title) in proposals {
-            try await send(looks.map { ("\(slug)-\($0.0).png", "\(title) · \($0.1)") })
+            try await rig.shots(looks.map { ("\(slug)-\($0.0).png", "\(title) · \($0.1)") }, from: work)
         }
         try await eval.trigger { try await rig.settle(work, reply: proposalReply) }
         return work
@@ -651,6 +630,18 @@ extension CueHostTests.Rig {
         try await store.writePiTranscript(PiTranscript(sessionID: id, messages: [prompt], recap: PiRecap(pendingPrompt: oneLine(first))))
         try await eventually("会话在干活写进库") { try await self.store.sessions(matching: id).first?.state.isWorking == true }
         return Working(task: task, session: session, prompt: prompt)
+    }
+
+    /// 会话发来几张效果图（默认按文件名画，见 `mockShot`）。
+    @MainActor @discardableResult
+    fileprivate func shots(_ files: [(name: String, title: String)], from work: Working, drawing: @MainActor (String) throws -> Data = mockShot) async throws -> [PiPreviewAdded] {
+        var sent: [(url: URL, title: String)] = []
+        for (name, title) in files {
+            let url = app.directory.appending(path: name)
+            try drawing(name).write(to: url)
+            sent.append((url, title))
+        }
+        return try await store.addPreviews(sent, sessionID: work.id)
     }
 
     func reply(_ work: Working, _ text: String) -> PiChatMessage {

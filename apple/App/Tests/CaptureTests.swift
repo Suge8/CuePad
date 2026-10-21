@@ -40,18 +40,11 @@ struct CaptureTests {
         #expect(Set(try await services.store.cards(in: Project.defaultID).map(\.body)) == ["a", "b", "c"])
     }
 
-    @Test func 没写完的条目被跳过_不删除() async throws {
+    /// 扩展还没写完的条目跳过、不删；入库失败的条目保留并报告；都不挡其他条目。
+    @Test func 没写完与入库失败的条目都留着_不影响其他条目() async throws {
         let unfinished = queue.appending(path: "half-written", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: unfinished, withIntermediateDirectories: true)
         try png.write(to: unfinished.appending(path: "image-1.png"))
-
-        await services.drainCaptures()
-
-        #expect(try await services.store.cards(in: Project.defaultID).isEmpty)
-        #expect(FileManager.default.fileExists(atPath: unfinished.path))
-    }
-
-    @Test func 入库失败的条目保留并报告_不影响其他条目() async throws {
         try CaptureQueue.enqueue(
             ShareContent(text: "坏图", images: [.init(data: Data("not an image".utf8), fileExtension: "png")]),
             project: nil, into: queue, now: Date(timeIntervalSince1970: 1))
@@ -61,6 +54,7 @@ struct CaptureTests {
 
         #expect(try await services.store.cards(in: Project.defaultID).map(\.body) == ["好的"])
         #expect(CaptureQueue.pending(in: queue).map(\.capture.text) == ["坏图"])
+        #expect(FileManager.default.fileExists(atPath: unfinished.path))
         #expect(services.startupIssues.count == 1)
     }
 

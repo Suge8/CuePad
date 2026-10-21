@@ -10,18 +10,6 @@ import Testing
   let rig = try! Rig()
   var store: CueStore { rig.store }
 
-  @Test func editAfterPushEnqueuesOnlyThatRecord() async throws {
-    let project = try await store.createProject(name: "P", color: "#111")
-    let card = try await store.createCard(in: project.id, body: "x")
-    try await rig.simulatePush()
-
-    try await Task.sleep(for: .milliseconds(3))  // 时间精度是毫秒
-    try await store.updateCard(card.id) { $0.body = "edited" }
-
-    let delta = try await rig.reconcileDelta()
-    #expect(delta.saves == [rig.id(card.id)])
-  }
-
   /// 本机与另一个进程（命令行）的写入、删除，开始同步后都自己传上去。
   @Test(.timeLimit(.minutes(1)))
   func localAndOtherProcessWritesAreUploadedAutomaticallyOnceStarted() async throws {

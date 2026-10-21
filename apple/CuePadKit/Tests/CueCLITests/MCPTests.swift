@@ -11,11 +11,12 @@ import Testing
     Bundle(for: Anchor.self).bundleURL.deletingLastPathComponent().appending(path: "cuepad")
   }
 
-  /// 一个 `cuepad mcp` 子进程：写一行请求，读一行回应。
+  /// 一个 `cuepad mcp` 子进程：写一行请求，读一行回应。回应由它自己的线程读：两个子进程同时有调用在等（一个工具在等送达结果时
+  /// 另一个照常回应）也互不挡着，`FileHandle.bytes` 的读取会把它们排成一队。
   private final class Server: @unchecked Sendable {
     let process = Process()
     let input = Pipe(), output = Pipe()
-    var lines: AsyncLineSequence<FileHandle.AsyncBytes>.AsyncIterator
+    var lines: AsyncStream<String>.Iterator
     var next = 0
     private let exit: ProcessExit
 
@@ -25,7 +26,20 @@ import Testing
       process.environment = ["CUEPAD_LIBRARY_DIR": library.path]
       process.standardInput = input
       process.standardOutput = output
-      lines = output.fileHandleForReading.bytes.lines.makeAsyncIterator()
+      let (replies, reply) = AsyncStream<String>.makeStream()
+      lines = replies.makeAsyncIterator()
+      let reader = output.fileHandleForReading
+      Thread.detachNewThread {
+        var buffer = Data()
+        while case let chunk = reader.availableData, !chunk.isEmpty {
+          buffer.append(chunk)
+          while let end = buffer.firstIndex(of: UInt8(ascii: "\n")) {
+            reply.yield(String(decoding: buffer[..<end], as: UTF8.self))
+            buffer.removeSubrange(...end)
+          }
+        }
+        reply.finish()
+      }
       exit = try ProcessExit(launching: process)
     }
 
@@ -47,7 +61,7 @@ import Testing
       next += 1
       let message: [String: Any] = ["jsonrpc": "2.0", "id": next, "method": method, "params": params]
       input.fileHandleForWriting.write(try JSONSerialization.data(withJSONObject: message) + Data("\n".utf8))
-      let line = try #require(try await lines.next())
+      let line = try #require(await lines.next())
       let reply = try #require(try JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any])
       #expect(reply["id"] as? Int == next)
       return try #require(reply["result"] as? [String: Any], "\(reply)")
@@ -352,9 +366,9 @@ import Testing
 
   /// 分步做一件事（常规的"完成 → 开工下一步"）：上一步收尾时下一步还没开工，会话留着；下一步开工接着用它——草稿作为下一句发进去，不开新会话；
   /// 话送到时这一步才绑上那个会话（同界面、同开新会话"开成了才绑"），送到前看板与 peek 写"发送中"、不能再开工或说话；
-  /// 下一步还没有草稿时开工报错，不先绑上。最后一步做完，会话结束（界面点圆圈同一条规则，见 App 的 `TaskFlowTests`）。
-  /// 草稿发进已有会话是说话：工具等结果至多 `Speech.cueWait`，这里没有 Mac 执行，到点如实说还没送达。
-  @Test(.timeLimit(.minutes(2))) func stepsOfATaskContinueInTheSameSession() async throws {
+  /// 最后一步做完，会话结束（界面点圆圈同一条规则，见 App 的 `TaskFlowTests`）。
+  /// 开工的工具等送达结果时，另一个 `cuepad mcp`（Cue 的下一次调用）看到的是送到前的样子；Mac 送到后工具说已送达。
+  @Test(.timeLimit(.minutes(1))) func stepsOfATaskContinueInTheSameSession() async throws {
     let sandbox = try Sandbox()
     let store = sandbox.store
     let project = try await sandbox.project("演示")
@@ -373,16 +387,19 @@ import Testing
       #expect(try await store.deliveryRequests().isEmpty)
 
       try await store.updateCard(second.id) { $0.body += "\n照调研结论改 release.sh" }
-      #expect(try await server.call("task", ["action": "start", "task": second.id.uuidString]).contains("已发出，还没送达"))
-      let sent = try await store.deliveryRequests()
+      async let started = server.call("task", ["action": "start", "task": second.id.uuidString])
+      let sent = try await eventually(store, { try $0.deliveryRequests() }) { !$0.isEmpty }
       #expect(sent.map(\.mode) == [.known(.send)] && sent.allSatisfy { $0.isFromCue && $0.target.ref == "s1" })
       #expect(sent.first?.content == "\(second.heading)\n照调研结论改 release.sh")
       // 送到前：还没绑上，看板写发送中，不能再开工或说话
       #expect(try await store.card(second.id)?.piSessionID == nil)
-      #expect(try await server.call("task", ["action": "peek"]).contains("改脚本 › 发送中"))
-      #expect(try await server.call("task", ["action": "peek", "task": task.id.uuidString]).contains("发送中"))
-      #expect(try await server.refused("task", ["action": "start", "task": second.id.uuidString]).contains("送到"))
-      #expect(try await server.refused("task", ["action": "say", "task": second.id.uuidString, "text": "还有"]).contains("送到"))
+      try await Server.run(library: sandbox.directory) { cue in
+        let board = try await cue.call("task", ["action": "peek"])
+        let peek = try await cue.call("task", ["action": "peek", "task": task.id.uuidString])
+        let start = try await cue.refused("task", ["action": "start", "task": second.id.uuidString])
+        let say = try await cue.refused("task", ["action": "say", "task": second.id.uuidString, "text": "还有"])
+        #expect(board.contains("改脚本 › 发送中") && peek.contains("发送中") && start.contains("送到") && say.contains("送到"))
+      }
 
       // Mac 送到：记下这次发送，这一步绑上会话
       let executor = DeliveryExecutor(store: store, hostID: "mac-a", onIssue: { Issue.record("\($0)") }) { [store] request in
@@ -390,6 +407,8 @@ import Testing
         return .succeeded
       }
       try await executor.start()
+      let said = try await started
+      #expect(said.contains("已送达"), "\(said)")
       _ = try await eventually(store, { try $0.card(second.id)?.piSessionID }) { $0 == "s1" }
       await executor.stop()
 
@@ -514,7 +533,7 @@ import Testing
     try await recorder.update(sessionID: "c1", state: .error, title: "改文案", agent: .claudeCode)
     try await Server.run(library: sandbox.directory) { server in
       // 这台 Mac 一收到就办成：说话、作答的工具等得到结果，马上返回
-      let executor = DeliveryExecutor(store: store, hostID: "mac-a", retention: .seconds(600), onIssue: { Issue.record("\($0)") }) { _ in .succeeded }
+      let executor = DeliveryExecutor(store: store, hostID: "mac-a", onIssue: { Issue.record("\($0)") }) { _ in .succeeded }
       try await executor.start()
       defer { Task { await executor.stop() } }
 

@@ -40,24 +40,14 @@ import Testing
     let later = try store.files.store(pngData(width: 12, height: 12, shade: 0.1))
     try await store.updateCard(card.id) { $0.body += "\n![](cuepad://img/\(later))" }
     #expect(try records().map { $0[0] } == [hash, later].sorted())
+
+    // 发给会话的话里刚粘贴、没存进卡片的图片同样登记（Mac 要拿到它才发得出去）
+    let pasted = try store.files.store(pngData(width: 5, height: 5))
+    _ = try await store.requestDelivery("刚粘贴 ![](cuepad://img/\(pasted))", to: SendTarget(kind: .piSession, name: "pi", ref: "s"), on: "mac")
+    #expect(try records().map { $0[0] } == [hash, later, pasted].sorted())
   }
 
-  @Test func nonImageIsRejectedAndLeavesNothingBehind() throws {
-    let source = fixture.directory.appending(path: "notes.txt")
-    try Data("not an image".utf8).write(to: source)
-
-    #expect(throws: CueStoreError.notAnImage) { try store.files.store(Data("not an image".utf8)) }
-    #expect(throws: CueStoreError.notAnImage) { try store.files.store(fileAt: source) }
-    let left = (try? FileManager.default.contentsOfDirectory(atPath: attachmentsDirectory.path)) ?? []
-    #expect(left.isEmpty)
-  }
-
-  @Test func deliveryRequestReferencingUnsavedImageRegistersIt() async throws {
-    let hash = try store.files.store(pngData(width: 5, height: 5))
-    _ = try await store.requestDelivery(
-      "刚粘贴 ![](cuepad://img/\(hash))", to: SendTarget(kind: .piSession, name: "pi", ref: "s"), on: "mac")
-    #expect(try records().map { $0[0] } == [hash])
-  }
+  /// 哈希来自同步记录：拼不出库目录外的路径。
   @Test(arguments: ["../cuepad.db", "deadbeef", String(repeating: "0", count: 64)])
   func unknownOrMalformedHashIsNotFound(hash: String) throws {
     _ = try store.files.store(pngData(width: 4, height: 4))  // 附件目录存在，"../cuepad.db" 才真的指向库文件

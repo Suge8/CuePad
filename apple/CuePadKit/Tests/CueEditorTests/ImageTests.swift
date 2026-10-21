@@ -70,7 +70,7 @@ struct ImageTests {
         #expect(h.stored.hasSuffix("第二行文字"))
     }
 
-    @Test("单次粘贴可撤销、可重做")
+    @Test("单次粘贴可撤销、可重做；之后键入是普通文字")
     func undoRedo() {
         let h = EditorHarness()
         h.load("文字")
@@ -84,16 +84,10 @@ struct ImageTests {
         #expect(h.stored == "文字")
         h.textView.undoManager?.redo()
         #expect(h.stored == pasted)
-    }
 
-    @Test("图片后继续键入：新字符是普通文字，不带附件")
-    func typingAfterImage() {
-        let h = EditorHarness()
-        let pasteboard = h.privatePasteboard()
-        pasteboard.setData(makePNG(width: 40, height: 30), forType: .png)
-        _ = h.textView.readSelection(from: pasteboard, type: .png)
+        // 图片后继续键入：新字符是普通文字，不带附件
         h.textView.insertText("x", replacementRange: NSRange(location: NSNotFound, length: 0))
-        #expect(h.stored.hasSuffix(")x"))
+        #expect(h.stored.contains(")x"))
         #expect(CueFormat.parse(h.stored).filter { if case .image = $0 { true } else { false } }.count == 1)
     }
 

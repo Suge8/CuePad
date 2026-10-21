@@ -18,8 +18,8 @@ struct SendTests {
     }
 
     /// 发给 Pi 走本机投送请求：会话要连着桥，执行器要在运行。
-    func connectedSession(busy: Bool = false) async throws -> FakeExtension {
-        let ext = try await rig.host.connect("sess-1", cwd: "/work/work", busy: busy)
+    func connectedSession() async throws -> FakeExtension {
+        let ext = try await rig.host.connect("sess-1", cwd: "/work/work")
         try await services.executor.start()
         return ext
     }
@@ -29,11 +29,15 @@ struct SendTests {
         try await eventually(services.store, { try $0.deliveryRequests().first }) { $0?.isOpen == false }!
     }
 
-    // MARK: 路由
+    /// 复制不是发送，不记发送记录；图片文件缺失就报错，剪贴板不动。
+    @Test func 复制_文字与图片按原顺序放进剪贴板_图片缺失就报错() async throws {
+        let missing = String(repeating: "a", count: 64)
+        rig.pasteboard.clearContents()
+        rig.pasteboard.setString("原有", forType: .string)
+        #expect(throws: SendError.imageUnavailable(missing)) { try services.copy("x \(CueFormat.imageMarkup(id: missing))") }
+        #expect(rig.pasteboard.string(forType: .string) == "原有")
 
-    @Test func 复制_文字与图片按原顺序放进剪贴板_不是发送不记发送记录() async throws {
         let body = try await bodyWithImage()
-
         try services.copy(body)
 
         #expect(rig.pasteboard.string(forType: .string) == "before\n\nafter")
@@ -62,63 +66,6 @@ struct SendTests {
         #expect(try await services.store.deliveryRequests().count == 1)
         let records = try RawDB(services.location.databaseURL).rows("SELECT targetKind, targetName, targetRef, content, cardID FROM sendRecords")
         #expect(records == [["piSession", "work", "sess-1", body, task.id.uuidString.lowercased()]])
-    }
-
-    /// 会话在跑时发话不先问、不排队：交给桥（打断这一轮由各家接入做），会话页那句是已送达。
-    @Test func 会话在跑时发话_直接交给它() async throws {
-        let ext = try await connectedSession(busy: true)
-        let session = try #require(services.pi.session(sessionID: ext.sessionID))
-        _ = await Workspace(services: services).speak("hi", to: .session(session.sendTarget, host: TestApp.hostID, mode: .send, card: nil)).value
-
-        let request = try await settled()
-        #expect(Said.request(request).trip(at: .always(at: .now)) == .delivered)
-        #expect(ext.messages == [PiMessage(text: "hi", deliveryID: request.id.uuidString)])
-    }
-
-    /// 桥上没有、记录里也不在线的会话当作已结束：写给本机，由执行器去唤醒；这台 Mac 上没有它的会话文件就带原因没能送达，不记发送。
-    @Test func 不在这台Mac上的会话_没能送达带原因且不记发送() async throws {
-        try await services.executor.start()
-
-        Workspace(services: services).send("hi", to: AgentTarget(session: "nope"))
-
-        #expect(try await settled().failure != nil)
-        #expect(rig.host.calls.isEmpty)
-        #expect(try RawDB(services.location.databaseURL).count("sendRecords") == 0)
-    }
-
-    /// Cue 发进会话的话（投送请求 origin 是 cue）进了对话，请求随之收走、气泡由对话里那条接替，那条仍标着 Cue：认的是发送记录，不是请求。
-    @Test(.timeLimit(.minutes(1)))
-    @MainActor
-    func Cue发进会话的话_进了对话请求随之收走_会话页仍标着Cue() async throws {
-        let ext = try await connectedSession()
-        let store = services.store
-        let request = try await store.requestDelivery(
-            "跑一遍测试", to: SendTarget(kind: .piSession, name: "work", ref: ext.sessionID), on: TestApp.hostID, cue: true)
-        for try await status in store.observe({ try $0.deliveryRequest(request.id)?.status }) {
-            if status == .known(.succeeded) { break }
-        }
-        let said = PiChatMessage(sessionID: ext.sessionID, entryID: "u0", seq: 0, role: .user, text: "跑一遍测试", at: .now, deliveryID: request.id)
-        try await store.writePiTranscript(PiTranscript(sessionID: ext.sessionID, messages: [said], recap: PiRecap(lastPrompt: said.text)))
-
-        let digest = try await SessionDigest.read(PiSessionState.recordID(sessionID: ext.sessionID), sessionID: ext.sessionID, from: store)
-        let derived = ChatDerived()
-        derived.refresh(digest)
-
-        #expect(digest.deliveries.isEmpty)
-        let entry = try #require(derived.items.first)
-        #expect(entry.fromCue)
-    }
-
-    @Test func 复制时图片文件缺失就报错_剪贴板不动() async throws {
-        let missing = CueFormat.imageMarkup(id: String(repeating: "a", count: 64))
-        rig.pasteboard.clearContents()
-        rig.pasteboard.setString("原有", forType: .string)
-
-        #expect(throws: SendError.imageUnavailable(String(repeating: "a", count: 64))) {
-            try services.copy("x \(missing)")
-        }
-        #expect(rig.pasteboard.string(forType: .string) == "原有")
-        #expect(try RawDB(services.location.databaseURL).count("sendRecords") == 0)
     }
 }
 #endif

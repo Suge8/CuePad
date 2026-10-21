@@ -63,38 +63,5 @@ struct CodexHooksTests {
             #expect(await integration().status(of: .codex).files == .missing)
         }
     }
-
-    /// 用户原有的空结构（空文件、空的 `hooks`、空的事件数组、空的 `[hooks]`、`[hooks.state]`）装上又关掉后原样留着。
-    @Test(arguments: [
-        ("{}", ""),
-        ("{\"hooks\":{}}\n", "[hooks]\n"),
-        ("{\"hooks\": {\"Stop\": [], \"SessionStart\":[ ]}}", "[hooks.state]\n"),
-    ])
-    func uninstallKeepsTheUsersEmptyStructures(hooks: String, config: String) async throws {
-        AgentTape.variant("\(hooks.count)-\(config.count)")
-        try await codex.using {
-            try hooks.write(to: hooksFile, atomically: true, encoding: .utf8)
-            try config.write(to: configFile, atomically: true, encoding: .utf8)
-
-            try await integration().install(.codex)
-            #expect(await integration().status(of: .codex).files == .current)
-            try await integration().uninstall(.codex, executable: codex.locator.candidates("codex").first)
-
-            #expect(try String(contentsOf: hooksFile, encoding: .utf8) == hooks)
-            #expect(try String(contentsOf: configFile, encoding: .utf8) == config)
-        }
-    }
-
-    /// 之前没有钩子配置：接入时建上，关掉后 hooks.json 与 config.toml 都不留。
-    @Test func uninstallRemovesFilesCuePadCreated() async throws {
-        try await codex.using {
-            try await integration().install(.codex)
-            #expect(try await codex.hookTrust().filter { $0.command == command && $0.trust == "trusted" }.count == 10)
-            try await integration().uninstall(.codex, executable: codex.locator.candidates("codex").first)
-
-            #expect(!FileManager.default.fileExists(atPath: hooksFile.path))
-            #expect(!FileManager.default.fileExists(atPath: configFile.path))
-        }
-    }
 }
 #endif

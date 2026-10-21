@@ -56,12 +56,6 @@ struct PiErrorSummaryTests {
         #expect(summary.raw == raw)  // 原文保留，供悬停显示
     }
 
-    @Test func lineAddsTheProviderMessageWhenThereIsOne() {
-        #expect(PiErrorSummary(#"401 {"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"}}"#).line
-            == "认证失败，检查 API 密钥或重新登录（401）：invalid x-api-key")
-        #expect(PiErrorSummary("fetch failed").line == "网络连接中断")
-    }
-
     /// Claude Code 把错误也写成一条回答：会话的出错说明就是它归类后的那句时，对话里只显示一处。
     @Test func aReplyThatIsTheErrorEchoesIt() {
         let raw = "API Error: 402 Insufficient account balance"

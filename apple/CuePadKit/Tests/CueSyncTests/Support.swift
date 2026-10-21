@@ -5,7 +5,6 @@ import Foundation
 
 @testable import CueSync
 
-
 /// 按顺序回放的同步区替身：记下每次被要的令牌与要哪些字段（nil：整条），以及每次按 ID 取了哪些记录。
 actor FakeZone: ZoneChangeSource {
   private(set) var calls: [(token: Data?, keys: [String]?)] = []

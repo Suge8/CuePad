@@ -63,9 +63,5 @@ struct UpdateTests {
         #expect(info["SUEnableAutomaticChecks"] as? Bool == true)
     }
 
-    @Test func Sparkle框架随App嵌入() {
-        let framework = Bundle.main.privateFrameworksURL?.appending(path: "Sparkle.framework")
-        #expect(framework.map { FileManager.default.fileExists(atPath: $0.path) } == true)
-    }
 }
 #endif

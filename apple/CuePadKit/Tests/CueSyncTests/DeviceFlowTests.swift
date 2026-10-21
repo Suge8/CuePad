@@ -134,7 +134,7 @@ import Testing
   @Test(.timeLimit(.minutes(1)))
   func anAnswerLineOutlivesItsRequestOnThePhone() async throws {
     let executor = DeliveryExecutor(
-      store: mac.store, hostID: "mac", retention: .seconds(60), timing: clock.timing, onIssue: { Issue.record("\($0)") }
+      store: mac.store, hostID: "mac", timing: clock.timing, onIssue: { Issue.record("\($0)") }
     ) { _ in .succeeded }
     try await executor.start()
     let target = SendTarget(kind: .piSession, name: "fix bug", ref: "s1")
@@ -142,7 +142,7 @@ import Testing
     try await cloud.exchange()
     _ = try await eventually(mac.store, { try $0.deliveryRequests().allSatisfy { $0.status == .known(.succeeded) } }) { $0 }
     await clock.waitForSleeper()
-    clock.advance(.seconds(61))
+    clock.advance(DeliveryExecutor.retention + .seconds(1))
     _ = try await eventually(mac.store, { try $0.deliveryRequests().count }) { $0 == 0 }
     try await cloud.exchange()
 

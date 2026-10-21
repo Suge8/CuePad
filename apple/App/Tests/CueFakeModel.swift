@@ -23,8 +23,6 @@ nonisolated final class FakeModel: Sendable {
     var errors: Int { errorCount.withLock { $0 } }
     private let failingOnce: [String]
     private let asksOnEnable: Bool
-    /// 压着没回的请求（"请先查一下"那一轮）：`release()` 时才回，回的是调一次 ls
-    private let held = Mutex<NWConnection?>(nil)
     /// 回过最后一句的工具结果（工具调用之后这一轮就结束）
     private let finishedAfter = Mutex<[String]>([])
     /// 不回的请求的连接：留着，免得释放时断开
@@ -34,8 +32,6 @@ nonisolated final class FakeModel: Sendable {
         case delta([String: Any], finish: String)
         case error(String)
         case hang
-        /// 先压着，`release()` 时再回
-        case held
     }
 
     init(usage: Int, failingOnce: [String] = [], asksOnEnable: Bool = false) throws {
@@ -66,16 +62,6 @@ nonisolated final class FakeModel: Sendable {
 
     /// 有挂着不回的请求（"请慢慢想"那一轮已经到了模型这里）
     var hanging: Bool { hung.withLock { !$0.isEmpty } }
-
-    /// 有压着没回的请求
-    var holding: Bool { held.withLock { $0 != nil } }
-
-    /// 回压着的那个请求。
-    func release() {
-        guard let connection = held.withLock({ value in defer { value = nil }; return value }) else { return }
-        let call: [String: Any] = ["index": 0, "id": "call-ls", "type": "function", "function": ["name": "ls", "arguments": #"{"path":"."}"#]]
-        send(connection, .delta(["role": "assistant", "tool_calls": [call]], finish: "tool_calls"))
-    }
 
     private func serve(_ connection: NWConnection) {
         connection.start(queue: queue)
@@ -115,7 +101,6 @@ nonisolated final class FakeModel: Sendable {
     private func send(_ connection: NWConnection, _ reply: Reply) {
         let delta: [String: Any], finish: String
         switch reply {
-        case .held: return held.withLock { $0 = connection }
         case .hang: return hung.withLock { $0.append(connection) }
         case .error(let message):
             let json = String(decoding: try! JSONSerialization.data(withJSONObject: ["error": ["message": message, "type": "invalid_request_error"]]), as: UTF8.self)
@@ -197,7 +182,6 @@ nonisolated final class FakeModel: Sendable {
             return call("task", ["action": "say", "task": "修好登录页 转图", "text": "看这张\n\(image)"])
         }
         if sawImage { return say("看到图了") }
-        if text.contains("请先查一下") { return .held }
         if text.contains("请对登录页说继续") { return call("task", ["action": "say", "task": "修好登录页 说不出去", "text": "继续"]) }
         if let path = text.firstMatch(of: /请读一下关卡 (\S+)/)?.1 { return call("read", ["path": String(path)]) }
         if text.contains("请建个任务并开工") { return call("task", ["action": "add", "title": "修好登录页", "project": "演示", "body": "把登录页修好"]) }

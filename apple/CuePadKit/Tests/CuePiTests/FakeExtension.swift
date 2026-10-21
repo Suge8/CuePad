@@ -38,7 +38,6 @@ nonisolated final class FakeExtension: @unchecked Sendable {
         var commands: [WireCommand] = []
         var sessionFile: String? = "/work/session.jsonl"
         var tty: String? = "ttys009"
-        var socketMode: mode_t = 0o600
         /// CuePad 在后台托管的进程（hello 里带 `hosted`）
         var hosted = false
         var env: [String: String] = ["TERM_PROGRAM": "ghostty", "__CFBundleIdentifier": "com.mitchellh.ghostty",
@@ -133,7 +132,7 @@ nonisolated final class FakeExtension: @unchecked Sendable {
         // 与真实扩展一致：在临时名上 listen、定好权限，再改名进来
         let pending = socketURL.deletingPathExtension().appendingPathExtension("tmp")
         let fd = try Self.boundSocket(at: pending)
-        guard listen(fd, 8) == 0, chmod(pending.path, options.socketMode) == 0, rename(pending.path, socketURL.path) == 0 else {
+        guard listen(fd, 8) == 0, chmod(pending.path, 0o600) == 0, rename(pending.path, socketURL.path) == 0 else {
             throw POSIXError(.init(rawValue: errno)!)
         }
         shared.withLock { $0.listenFD = fd }

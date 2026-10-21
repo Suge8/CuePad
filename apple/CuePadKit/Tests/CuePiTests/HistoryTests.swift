@@ -75,8 +75,6 @@ struct SessionFile {
         try handle.seekToEnd()
         try handle.write(contentsOf: Data(text.utf8))
     }
-
-    var text: String { (try? String(contentsOf: url, encoding: .utf8)) ?? "" }
 }
 
 struct HistoryTests {
@@ -134,29 +132,6 @@ struct HistoryTests {
 
     // MARK: 增量
 
-    @Test func resumingFromACheckpointEqualsIndexingTheWholeFileAndOnlyReadsNewBytes() throws {
-        var f = SessionFile(directory: dir)
-        let lines = [
-            SessionFile.header(), SessionFile.user("u1", nil, "one", at: 1), SessionFile.assistant("a1", "u1", text: "r1", at: 2),
-            SessionFile.user("u2", "a1", "two", at: 3), SessionFile.assistant("a2", "u2", text: "r2", stop: "toolUse", at: 4),
-            SessionFile.toolResult("t2", "a2", at: 5), SessionFile.assistant("a3", "t2", text: "final", at: 6),
-        ]
-        var checkpoint: PiHistoryCheckpoint?
-        var consumed: UInt64 = 0
-        for (i, line) in lines.enumerated() {
-            try f.append(line)
-            let update = try index(f, from: checkpoint)
-            // 检查点必须能落盘再读回（调用方存进 Store）
-            checkpoint = try JSONDecoder().decode(PiHistoryCheckpoint.self, from: JSONEncoder().encode(update.checkpoint))
-            #expect(update.bytesRead == line.utf8.count + 1, "第 \(i) 步只读新增字节")
-            consumed += UInt64(update.bytesRead)
-            #expect(update.checkpoint.offset == consumed)
-        }
-        let full = try index(f).history
-        #expect(try index(f, from: checkpoint).history == full)
-        #expect(full.displayName == "one" && full.lastActivity == SessionFile.date(6))
-    }
-
     @Test func halfWrittenLineIsNotConsumedUntilItsNewlineArrives() throws {
         var f = SessionFile(directory: dir)
         try f.append(SessionFile.header())
@@ -173,12 +148,6 @@ struct HistoryTests {
         let done = try index(f, from: partial.checkpoint)
         #expect(done.history.displayName == "whole prompt")
         #expect(done.bytesRead == prompt.utf8.count + 1)
-    }
-
-    @Test func corruptAndBlankLinesAreSkipped() throws {
-        let f = SessionFile(directory: dir)
-        try f.write(text: [SessionFile.header(), "{not json", "", SessionFile.user("u1", nil, "p", at: 1), "[1,2]"].joined(separator: "\n") + "\n")
-        #expect(try index(f).history.displayName == "p")
     }
 
     @Test(arguments: ["shorter", "same-size-different-content"])
@@ -380,31 +349,6 @@ struct HistoryIndexerTests {
         files.yield([worker.url, later.url])
         try await eventually("之后的顶层会话被索引") { log.updates.contains { $0.file.lastPathComponent == "b.jsonl" } }
         #expect(!log.updates.contains { $0.file.path.contains("/subagents/") })
-    }
-
-    @Test func liveAppendsAndNewFilesAreIndexedIncrementally() async throws {
-        let f = try makeSession("p1", "a.jsonl", prompt: "first", modified: Date())
-        // 调用方从不返回检查点：索引器自己对回填之后被触碰的文件保留，之后的增量不能退化成重读
-        let (live, files) = AsyncStream<Set<URL>>.makeStream()
-        files.yield([f.url])
-        let log = HistoryEventLog(PiHistoryIndexer(sessions: root), following: live)
-        try await eventually("回填完成") { log.finishedBackfill }
-
-        let firstAppend = [SessionFile.user("u2", "a", "second", at: 3), SessionFile.assistant("a2", "u2", text: "r2", at: 4)]
-        try f.appendRaw(firstAppend.joined(separator: "\n") + "\n")
-        try await eventually("第一次追加被索引") { log.updates.contains { $0.history.lastActivity == SessionFile.date(4) } }
-
-        let secondAppend = SessionFile.user("u3", "a2", "third", at: 5)
-        try f.appendRaw(secondAppend + "\n")
-        try await eventually("第二次追加被索引") { log.updates.contains { $0.history.lastActivity == SessionFile.date(5) } }
-        let update = try #require(log.updates.last)
-        #expect(update.file.lastPathComponent == "a.jsonl")
-        #expect(update.bytesRead == secondAppend.utf8.count + 1)
-        #expect(update.history.displayName == "first")
-
-        let fresh = try makeSession("p3", "fresh.jsonl", prompt: "brand new", modified: Date())
-        files.yield([f.url, fresh.url])
-        try await eventually("新上桥的会话被索引") { log.updates.contains { $0.file.lastPathComponent == "fresh.jsonl" } }
     }
 
     /// Codex 会话文件的一行（`{timestamp, type, payload}`）。

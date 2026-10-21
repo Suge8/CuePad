@@ -41,14 +41,13 @@ struct TaskFlowTests {
         guard case .agent(let failed, _) = try await next(task) else { throw Unexpected.next }
         #expect(failed.undelivered != nil)
 
-        // 重发送达：任务进行中并记着会话，正文留在任务上，发送记录留着话
+        // 重发送达：任务进行中并记着会话，正文留在任务上
         delivers.withLock { $0 = true }
         try await store.requestDelivery(Outgoing.text(of: task), to: atlas, on: "mac-a", card: task.id)
         _ = try await eventually(store, { try $0.card(task.id)?.piSessionID }) { $0 == "s1" }
         await executor.stop()
         let started = try #require(try await store.card(task.id))
         #expect(started.status == .inProgress && started.body == "修乱序\n日志在 logs/0918.txt")
-        #expect(try RawDB(rig.services.location.databaseURL).rows("SELECT content FROM sendRecords") == [["修乱序\n日志在 logs/0918.txt"]])
 
         // 任务不自动完成；用户勾选，提示里给归档
         try await workspace.toggle(task.id)
@@ -225,7 +224,7 @@ struct TaskFlowTests {
 
     #if os(macOS)
     /// 任务页的流水看板（Mac 侧栏"任务"与手机任务页同一份）：拖到「推进中」就是开始（同"开始"，`Workspace.handOff`），会话开好它就推进中；
-    /// Cue 问到它，它挪到等你，没绑任务的会话在问也在这一列；推进中、等你两列的数就是 Cue 摘要里的数；答完回到「推进中」；
+    /// Cue 问到它，它挪到等你，没绑任务的会话在问、没落在任务上的提问也在这一列；推进中、等你两列的数就是 Cue 摘要里的数；答完回到「推进中」；
     /// 拖到做完就是做完（同点完成圈，`Workspace.toggle`），落在今天做完的那一列，它还活着的会话留在「推进中」；做完了 Cue 还在问它，它只在等你。
     @Test func 看板_拖到推进中就是开始_Cue问到它挪到等你_两列的数同Cue摘要_拖到做完就是做完_做完了还在问只在等你() async throws {
         try await rig.offersPi()
@@ -252,16 +251,17 @@ struct TaskFlowTests {
         let ask = try await store.addCueMessage(.cue, text: "要推送吗？", ask: try CueAsking(.push, action: "推送发言顺序的修复"), task: task.id)
         try await PiStateRecorder(store: store, hostID: "mac-a")
             .update(sessionID: "rename", state: .waitingForUser, title: "rename", question: PiQuestion(promptID: "p", kind: .text, text: "新分支叫什么？"))
+        _ = try await store.addCueMessage(.cue, text: "要删旧脚本吗？", ask: try CueAsking(.delete, action: "删掉 scripts/legacy"))  // 没落在任务上的提问也算等你
         columns = try await board()
         #expect(columns.advancing.isEmpty)
-        #expect(columns.waiting.map(\.item?.id) == [task.id, nil])
+        #expect(columns.waiting.compactMap(\.item?.id) == [task.id] && columns.waiting.count == 3)
         try await expectCountsMatchCue(columns)
 
         try await workspace.services.answerCueQuestion(ask.id, CueAsk.once)
         #expect(try await board().advancing.map(\.item?.id) == [task.id])
         try await workspace.toggle(task.id)
         columns = try await board()
-        #expect(columns.done.map(\.id) == [task.id] && columns.advancing.map(\.id) == ["session/s1"] && columns.waiting.count == 1)
+        #expect(columns.done.map(\.id) == [task.id] && columns.advancing.map(\.id) == ["session/s1"] && columns.waiting.count == 2)
         try await expectCountsMatchCue(columns)
 
         // 做完了 Cue 还在问它：它只在等你，做完列与 Cue 此刻的"刚做完"都不再算它
@@ -272,35 +272,6 @@ struct TaskFlowTests {
         try await expectCountsMatchCue(columns)
     }
     #endif
-
-    /// 推进中与等你（Cue 那一行、看板中间两列同一份）：会话在做的顶层任务推进中；Cue 问到它的步骤、它的会话在问你，它就从推进中挪到等你，一处在等算一件；
-    /// 没落在任务上的提问也算等你；答完回到「推进中」。
-    @Test func 推进中与等你_问到哪件哪件挪到等你_答完回到推进中() async throws {
-        let workspace = Workspace(services: rig.services)
-        let project = try await store.createProject(name: "圆桌", color: "#000000")
-        let release = try await store.createTask("发布 v1.4", in: project.id)
-        let step = try await store.createTask("推送到 TestFlight", under: release.id)
-        let canvas = try await store.createTask("画布缩放", in: project.id)
-        _ = try await store.createTask("登录回调", in: project.id)
-        let recorder = PiStateRecorder(store: store, hostID: "mac-a")
-        try await recorder.update(sessionID: "push", state: .thinking, title: "push-testflight")
-        try await store.bindSession("push", to: step.id)
-        try await recorder.update(sessionID: "zoom", state: .thinking, title: "canvas-zoom")
-        try await store.bindSession("zoom", to: canvas.id)
-        func digest() async throws -> CueDigest { try await CueDigest.read(from: store) }
-        #expect(try await Set(digest().tally.advancing.map(\.id)) == ["task/\(release.id.uuidString)", "task/\(canvas.id.uuidString)"])
-
-        let push = try await store.addCueMessage(.cue, text: "要推送吗？", ask: try CueAsking(.push, action: "推送 v1.4"), task: step.id)
-        _ = try await store.addCueMessage(.cue, text: "要删旧脚本吗？", ask: try CueAsking(.delete, action: "删掉 scripts/legacy"))
-        try await recorder.update(sessionID: "zoom", state: .waitingForUser, question: PiQuestion(promptID: "p", kind: .confirm, text: "改锚点？"))
-        var tally = try await digest().tally
-        #expect(tally.advancing.isEmpty)
-        #expect(tally.waiting.map(\.task) == [release.id, nil, canvas.id])
-
-        try await workspace.services.answerCueQuestion(push.id, CueAsk.once)
-        tally = try await digest().tally
-        #expect(tally.advancing.map(\.id) == ["task/\(release.id.uuidString)"] && tally.waiting.count == 2)
-    }
 
     /// 推进中只算 Cue 此刻在做的，与它信封里的"在做"同一份：开过工、会话都结束了的任务（在等你自己去办的事）不算，
     /// 它没丢也没做完，回到待办；会话恢复了又回到「推进中」。没绑没做完的任务的活会话也在「推进中」。

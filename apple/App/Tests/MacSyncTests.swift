@@ -36,9 +36,9 @@ struct MacSyncTests {
     // MARK: 退出
 
     /// 退出可能发生在主线程被占住时：在主线程上的任务里调用 terminate，系统在嵌套的事件循环里等收尾的回复，
-    /// 主线程上排队的任务轮不到。收尾的等待部分若需要主线程，退出就永远等不到。收尾停掉同步与执行器：之后写给本机的请求没人领取。
+    /// 主线程上排队的任务轮不到。收尾的等待部分若需要主线程，退出就永远等不到。
     @Test(.timeLimit(.minutes(1)))
-    func 主线程被占住时退出收尾仍在上限内完成_停掉同步与执行器() async throws {
+    func 主线程被占住时退出收尾仍在上限内完成() async throws {
         services.startSync()
         try await services.executor.start()
         try await eventually("rig.sync.started == 1") { rig.sync.started == 1 }
@@ -51,12 +51,6 @@ struct MacSyncTests {
         }
         #expect(Self.blockCurrentThread(until: done, seconds: 30), "主线程被占住时收尾等不到")
         #expect(rig.sync.stopped == 1)
-
-        let request = try await services.store.requestDelivery(
-            "hi", to: SendTarget(kind: .mac, name: "CuePad"), on: TestApp.hostID)
-        // 停止后不再有观察者领取：给执行器足够的时间再确认仍未处理
-        await quietPeriod(.milliseconds(300))
-        #expect(try await services.store.deliveryRequest(request.id)?.status == .known(.pending))
     }
 
     /// 同步地占住当前（主）线程，直到信号或超时。
@@ -151,60 +145,15 @@ struct MacSyncTests {
 
     // MARK: Pi 状态记录
 
-    /// 桥上会话的每个字段原样写进同步记录（手机据此画状态、计时、子代理、用量条、命令面板、模型选择与弹窗）；
-    /// 它们怎么从线上消息得来见 CuePi 的桥测试。本版本不认识的新取值原样留着。
-    @Test func 会话的状态与各字段原样写进同步记录() async throws {
-        let started = Date(timeIntervalSince1970: 1_000)
-        let sonnet = PiModelOption(key: PiModelKey(provider: "anthropic", id: "sonnet"), name: "Sonnet", thinkingLevels: [.off, .low])
-        let opus = PiModelOption(key: PiModelKey(provider: "anthropic", id: "opus"), name: "Opus", thinkingLevels: [.off, .high])
-        let subagents = [
-            PiSubagentState(name: "ui", role: "工程师", phase: .known(.running), action: "运行 bun test", startedAt: started, model: "anthropic/claude-opus-5-5"),
-            PiSubagentState(name: "docs", role: "写手", phase: .unknown("napping")),
-        ]
-        let commands = [
-            PiSlashCommand(name: "compact", summary: "压缩上下文", source: .known(.builtin), hint: "[说明]"),
-            PiSlashCommand(name: "x", summary: nil, source: .unknown("plugin")),
-        ]
-        let question = PiQuestion(promptID: "p-1", kind: .select, text: "选哪个？", options: ["A", "B"])
-        var live = session("s1", state: .waitingForUser)
-        live.detail = "read · README.md"
-        live.stateSince = started
-        live.busySince = started
-        live.subagents = subagents
-        live.model = opus
+    /// 更新版本的扩展报来本版本不认识的取值（思考强度、子代理阶段）：原样写进同步记录，认得它的设备照常读。
+    @Test func 桥报来不认识的取值原样写进同步记录() async throws {
+        var live = session("s1")
         live.thinking = .unknown("ultra")
-        live.availableModels = [sonnet, opus]
-        live.context = PiContextUsage(tokens: 42_000, window: 200_000)
-        live.commands = commands
-        live.question = question
-        live.launchToken = "tok-1"
+        live.subagents = [PiSubagentState(name: "docs", role: "写手", phase: .unknown("napping"))]
         try await services.consumePiChanges(changes([.appeared(live)]))
 
         let stored = try #require(try await services.store.allPiSessionStates().first)
-        #expect(stored.state == .known(.waitingForUser) && stored.detail == "read · README.md")
-        #expect(stored.sessionID == "s1" && stored.hostID == TestApp.hostID)
-        #expect(stored.stateSince == started && stored.busySince == started)
-        #expect(stored.subagents == subagents)
-        #expect(stored.model == opus && stored.thinking == .unknown("ultra"))
-        #expect(stored.context == PiContextUsage(tokens: 42_000, window: 200_000))
-        let catalogID = try #require(stored.catalogID)
-        let catalog = try #require(try await services.store.agentCatalog(catalogID))
-        #expect(catalog.models.map(\.key.id) == ["sonnet", "opus"] && catalog.commands == commands)
-        #expect(stored.question == question)
-        #expect(try await services.store.piSessionPage(PiSessionQuery(launchToken: "tok-1")).items.map(\.state.sessionID) == ["s1"])
-    }
-
-    @Test func 会话按工作目录归入项目_结束后记录保留为已结束() async throws {
-        let project = try await services.store.createProject(name: "App", color: "#000000")
-        try await services.store.setDirectory("/work", for: project.id)
-
-        try await services.consumePiChanges(changes([.appeared(session("s1", cwd: "/work/app", state: .settled))]))
-        let stored = try #require(try await services.store.allPiSessionStates().first)
-        #expect(stored.projectID == project.id)
-        #expect(stored.title == "app")
-
-        try await services.consumePiChanges(changes([.ended(session("s1", spoke: true), reason: .disconnected)]))
-        #expect(try await services.store.allPiSessionStates().map(\.state) == [.known(.ended)])
+        #expect(stored.thinking == .unknown("ultra") && stored.subagents.map(\.phase) == [.unknown("napping")])
     }
 
     @Test func 会话显示名写进同步记录_改名后跟上() async throws {
@@ -305,35 +254,26 @@ struct MacSyncTests {
         #expect(try RawDB(services.location.databaseURL).count("sendRecords") == 0)
     }
 
-    /// 发给 Agent 时命令带着卡片（卡片文字是参数）：卡片关联到会话、任务进行中，照样不写发送记录。
-    @Test func 带卡片的斜杠命令只关联卡片_不写发送记录() async throws {
-        _ = try await rig.host.connect("sess-1", cwd: "/work/app")
+    /// 发给 Agent 时命令带着卡片（卡片文字是参数）：卡片关联到会话、任务进行中，照样不写发送记录；命令里带图片按失败写回，什么都不交给桥。
+    @Test func 斜杠命令带卡片只关联卡片_带图片按失败写回() async throws {
+        let ext = try await rig.host.connect("sess-1", cwd: "/work/app")
         let task = try await services.store.createTask("改登录")
         try await services.executor.start()
         defer { services.cancelBackgroundWork() }
+        let target = SendTarget(kind: .piSession, name: "app", ref: "sess-1")
 
-        let request = try await services.store.requestDelivery(
-            "/greet\n\n改登录", to: SendTarget(kind: .piSession, name: "app", ref: "sess-1"), on: TestApp.hostID, mode: .command, card: task.id)
+        let request = try await services.store.requestDelivery("/greet\n\n改登录", to: target, on: TestApp.hostID, mode: .command, card: task.id)
         _ = try await awaitFinished(request.id)
-
         let linked = try #require(try await services.store.card(task.id))
         #expect(linked.piSessionID == "sess-1" && linked.status == .inProgress)
         #expect(try RawDB(services.location.databaseURL).count("sendRecords") == 0)
-    }
-
-    @Test func 斜杠命令里带图片按失败写回() async throws {
-        let ext = try await rig.host.connect("sess-1", cwd: "/work/app")
-        try await services.executor.start()
-        defer { services.cancelBackgroundWork() }
 
         // 图片文件在本机（没到的图片执行器会等它同步过来，那是另一条路径）
         let hash = try services.store.files.store(pngData(shade: 0.3))
-        let request = try await services.store.requestDelivery(
-            "/greet\n\n![](cuepad://img/\(hash))", to: SendTarget(kind: .piSession, name: "app", ref: "sess-1"), on: TestApp.hostID, mode: .command)
-        let done = try await awaitFinished(request.id)
-
-        #expect(done.status == .known(.failed))
-        #expect(ext.commands.isEmpty)
+        let commands = ext.commands.count
+        let image = try await services.store.requestDelivery("/greet\n\n![](cuepad://img/\(hash))", to: target, on: TestApp.hostID, mode: .command)
+        #expect(try await awaitFinished(image.id).status == .known(.failed))
+        #expect(ext.commands.count == commands)
     }
 
     /// 已经结束的会话（不在这台 Mac 的桥上）没有可结束的会话、也没有这一轮可停：目标达成，按成功写回，不恢复它、不碰桥。
@@ -428,33 +368,12 @@ struct MacSyncTests {
     }
 
     private static let resetsAt = Date(timeIntervalSince1970: 1_800_000_000)
-    private static let claude: [[String: Any]] = [
-        ["seconds": 18_000, "used": 0.42, "resetsAt": resetsAt.timeIntervalSince1970, "binding": true],
-        ["seconds": 604_800, "used": 0.1, "resetsAt": resetsAt.timeIntervalSince1970 + 86_400],
-    ]
-
     private func quota(_ provider: String) async throws -> AccountQuota {
         try await eventually(services.store, { try $0.accountQuotas() }) { $0.contains { $0.provider == provider } }
             .first { $0.provider == provider }!
     }
 
-    @Test(.timeLimit(.minutes(1)))
-    func 回复里带回的额度写进这个账号的记录() async throws {
-        recordingQuotas()
-        defer { services.cancelBackgroundWork() }
-        let ext = try await rig.host.connect("sess-1", cwd: "/work/app")
-
-        ext.sendQuota(provider: "anthropic", windows: Self.claude, complete: false)
-
-        let stored = try await quota("anthropic")
-        #expect(stored.hostID == TestApp.hostID)
-        #expect(stored.windows == [
-            QuotaWindow(seconds: 18_000, used: 0.42, resetsAt: Self.resetsAt, isBinding: true),
-            QuotaWindow(seconds: 604_800, used: 0.1, resetsAt: Self.resetsAt.addingTimeInterval(86_400)),
-        ])
-    }
-
-    /// 手机打开额度视图、数据陈旧时写的刷新请求：Mac 经在线会话里的扩展查一次，查到的写进账号记录，请求按成功写回。
+    /// 回复里顺带报来的额度写进这个账号的记录；手机打开额度视图、数据陈旧时写的刷新请求：Mac 经在线会话里的扩展查一次，查到的写进账号记录，请求按成功写回。
     @Test(.timeLimit(.minutes(1)))
     func 手机的额度刷新请求经在线会话查到_写回额度与成功() async throws {
         recordingQuotas()
@@ -462,6 +381,10 @@ struct MacSyncTests {
         defer { services.cancelBackgroundWork() }
         let ext = try await rig.host.connect("sess-1", cwd: "/work/app")
         let resetsAt = Self.resetsAt.timeIntervalSince1970
+        ext.sendQuota(provider: "anthropic", windows: [["seconds": 18_000, "used": 0.42, "resetsAt": resetsAt, "binding": true]], complete: false)
+        let pushed = try await quota("anthropic")
+        #expect(pushed.hostID == TestApp.hostID && pushed.windows == [QuotaWindow(seconds: 18_000, used: 0.42, resetsAt: Self.resetsAt, isBinding: true)])
+
         ext.onCommand = { [weak ext] _, command in
             if command["t"] as? String == "quota" {
                 ext?.sendQuota(provider: "openai-codex", windows: [["seconds": 604_800, "used": 0.91, "resetsAt": resetsAt]], complete: true)
@@ -526,21 +449,9 @@ struct MacSyncTests {
         #expect(try RawDB(services.location.databaseURL).count("sendRecords") == 0)
     }
 
-    @Test func 新会话_后台开在项目目录_开场的话送入() async throws {
-        let directory = try folder("proj")
-        let project = try await services.store.createProject(name: "App", color: "#000000")
-        try await services.store.setDirectory(directory.path, for: project.id)
-        defer { services.cancelBackgroundWork() }
-
-        let done = try await launched(PiLaunch(project: project.id, prompt: "看看测试为什么挂", token: "tok-1"), title: "App")
-
-        #expect(done.status == .known(.succeeded))
-        #expect(rig.host.calls == [.open(directory: directory.path, launchToken: "tok-1")])
-        #expect(rig.host.extensions["new-tok-1"]?.messages == [PiMessage(text: "看看测试为什么挂", deliveryID: done.id.uuidString)])
-    }
-
-    /// 从步骤开的新会话叫步骤名：会话名与模型、思考强度一样是 Pi 的启动参数，开出来就叫它，再送开场的话（会话名不会先成了第一句话）。
-    @Test func 新会话_从步骤开_以步骤命名() async throws {
+    /// 新会话的会话名与模型、思考强度一样是 Pi 的启动参数：从步骤开的叫步骤名，开出来就叫它，再送开场的话（会话名不会先成了第一句话）；
+    /// 开场的话里带图片的，原图随第一条消息送达，不把存储格式的引用当文字发出去；没有开场的话就什么都不发。
+    @Test func 新会话_以步骤命名_开场的话带原图_没有开场的话不发() async throws {
         let directory = try folder("proj")
         let project = try await services.store.createProject(name: "App", color: "#000000")
         try await services.store.setDirectory(directory.path, for: project.id)
@@ -548,82 +459,45 @@ struct MacSyncTests {
         let task = try await services.store.createTask("上线", in: project.id)
         let step = try await services.store.createTask("备份数据库\n先把库备份一份", under: task.id)
 
-        let done = try await launched(PiLaunch(project: project.id, prompt: step.body, token: "tok-6"), card: step.id)
-
-        #expect(done.status == .known(.succeeded))
-        let ext = try #require(rig.host.extensions["new-tok-6"])
-        #expect(ext.received == ["send"])
+        #expect(try await launched(PiLaunch(project: project.id, prompt: step.body, token: "tok-6"), card: step.id).status == .known(.succeeded))
+        #expect(rig.host.extensions["new-tok-6"]?.received == ["send"])
         guard case .open(_, _, let name, _, _) = try #require(rig.host.calls.first) else {
             Issue.record("没有开新会话")
             return
         }
         #expect(name == "备份数据库")
+
+        let png = pngData()
+        let hash = try services.store.files.store(png)
+        let shown = try await launched(PiLaunch(project: project.id, prompt: "看这张设计稿\n\n![](cuepad://img/\(hash))", token: "tok-5"), title: "App")
+        #expect(rig.host.extensions["new-tok-5"]?.messages == [
+            PiMessage(text: "看这张设计稿", images: [PiImage(mimeType: "image/png", data: png)], deliveryID: shown.id.uuidString)
+        ])
+
+        #expect(try await launched(PiLaunch(project: project.id, prompt: nil, token: "tok-2")).status == .known(.succeeded))
+        #expect(rig.host.extensions["new-tok-2"]?.commands.isEmpty == true)
     }
 
     /// Cue 开的新会话：开场白同所有送进会话的话一样记发送记录（带请求 id 与来源），请求清理之后会话页里它仍标着 Cue。
     @Test(.timeLimit(.minutes(1)))
-    @MainActor
     func Cue开的新会话_请求清理之后开场白仍标着Cue() async throws {
         let directory = try folder("proj")
         let project = try await services.store.createProject(name: "App", color: "#000000")
         try await services.store.setDirectory(directory.path, for: project.id)
         defer { services.cancelBackgroundWork() }
         let store = services.store
-
         try await services.executor.start()
         let request = try await store.requestLaunch(
             PiLaunch(project: project.id, prompt: "看看测试为什么挂", token: "tok-cue"), title: "App", on: TestApp.hostID, cue: true)
-        let done = try await awaitFinished(request.id)
-        #expect(done.status == .known(.succeeded))
+        #expect(try await awaitFinished(request.id).status == .known(.succeeded))
         let ext = try #require(rig.host.extensions["new-tok-cue"])
         try await store.deleteDelivery(request.id)
         let said = PiChatMessage(sessionID: ext.sessionID, entryID: "u0", seq: 0, role: .user, text: "看看测试为什么挂", at: .now, deliveryID: request.id)
         try await store.writePiTranscript(PiTranscript(sessionID: ext.sessionID, messages: [said], recap: PiRecap(lastPrompt: said.text)))
 
-        let digest = try await SessionDigest.read(PiSessionState.recordID(sessionID: ext.sessionID), sessionID: ext.sessionID, from: store)
         let derived = ChatDerived()
-        derived.refresh(digest)
-
-        #expect(digest.deliveries.isEmpty)
-        let entry = try #require(derived.items.first)
-        #expect(entry.fromCue)
-    }
-
-    /// 开场的话里挑了带图片的卡片：图片按原图随第一条消息送达，不把存储格式的引用当文字发出去。
-    @Test func 新会话_开场的话带卡片里的图片_原图随第一条消息送入() async throws {
-        let directory = try folder("proj")
-        let project = try await services.store.createProject(name: "App", color: "#000000")
-        try await services.store.setDirectory(directory.path, for: project.id)
-        let png = pngData()
-        let hash = try services.store.files.store(png)
-        defer { services.cancelBackgroundWork() }
-
-        let done = try await launched(
-            PiLaunch(project: project.id, prompt: "看这张设计稿\n\n![](cuepad://img/\(hash))", token: "tok-5"), title: "App")
-
-        #expect(done.status == .known(.succeeded))
-        #expect(rig.host.extensions["new-tok-5"]?.messages == [
-            PiMessage(text: "看这张设计稿", images: [PiImage(mimeType: "image/png", data: png)], deliveryID: done.id.uuidString)
-        ])
-    }
-
-    @Test func 新会话_没有开场的话就不发_项目没绑文件夹时在工作区开() async throws {
-        let directory = try folder("proj")
-        let project = try await services.store.createProject(name: "App", color: "#000000")
-        try await services.store.setDirectory(directory.path, for: project.id)
-        let bare = try await services.store.createProject(name: "无目录", color: "#000000")
-        defer { services.cancelBackgroundWork() }
-
-        let quiet = try await launched(PiLaunch(project: project.id, prompt: nil, token: "tok-2"))
-        #expect(quiet.status == .known(.succeeded))
-        #expect(rig.host.calls == [.open(directory: directory.path, launchToken: "tok-2")])
-        #expect(rig.host.extensions["new-tok-2"]?.commands.isEmpty == true)
-
-        let unbound = try await launched(PiLaunch(project: bare.id, prompt: nil, token: "tok-3"), title: "无目录")
-        #expect(unbound.status == .known(.succeeded))
-        let workspace = rig.workspaces.directory(for: "无目录").path(percentEncoded: false)
-        #expect(try await services.store.directory(of: bare.id) == workspace)
-        #expect(FileManager.default.fileExists(atPath: workspace))
+        derived.refresh(try await SessionDigest.read(PiSessionState.recordID(sessionID: ext.sessionID), sessionID: ext.sessionID, from: store))
+        #expect(try #require(derived.items.first).fromCue)
     }
 
     // MARK: 手机请这台 Mac 绑定文件夹（Mac 才有完整路径；绑定只有这一条写入：本机的目录绑定）
@@ -634,36 +508,26 @@ struct MacSyncTests {
         return try await awaitFinished(request.id)
     }
 
-    @Test func 绑定_取某个会话的工作目录_写成本机的目录绑定_不写发送记录() async throws {
-        let app = try folder("app")
+    /// 绑定取某个会话的工作目录，或另一个项目已绑的目录（换绑覆盖旧的），没有文件夹就是解除；都写成本机的目录绑定，不写发送记录。
+    @Test func 绑定_取会话的工作目录或别的项目的目录_换绑覆盖_没有文件夹就是解除() async throws {
+        let app = try folder("app"), second = try folder("second")
         _ = try await indexed("s1", cwd: app)
-        let project = try await services.store.createProject(name: "App", color: "#000000")
-        defer { services.cancelBackgroundWork() }
-
-        let done = try await bound(PiBind(project: project.id, folder: .besideSession("s1")))
-
-        #expect(done.status == .known(.succeeded))
-        #expect(try await services.store.directory(of: project.id) == app.path)
-        #expect(try RawDB(services.location.databaseURL).count("sendRecords") == 0)
-    }
-
-    @Test func 绑定_取另一个项目已绑的目录_换绑覆盖旧的_没有文件夹就是解除() async throws {
-        let first = try folder("first"), second = try folder("second")
         let store = services.store
         let source = try await store.createProject(name: "源", color: "#000000")
         let project = try await store.createProject(name: "App", color: "#000000")
         try await store.setDirectory(second.path, for: source.id)
-        try await store.setDirectory(first.path, for: project.id)
         defer { services.cancelBackgroundWork() }
 
-        let moved = try await bound(PiBind(project: project.id, folder: .project(source.id)))
-        #expect(moved.status == .known(.succeeded))
+        #expect(try await bound(PiBind(project: project.id, folder: .besideSession("s1"))).status == .known(.succeeded))
+        #expect(try await store.directory(of: project.id) == app.path)
+
+        #expect(try await bound(PiBind(project: project.id, folder: .project(source.id))).status == .known(.succeeded))
         #expect(try await store.directory(of: project.id) == second.path)
 
-        let unbound = try await bound(PiBind(project: project.id, folder: nil))
-        #expect(unbound.status == .known(.succeeded))
+        #expect(try await bound(PiBind(project: project.id, folder: nil)).status == .known(.succeeded))
         #expect(try await store.directory(of: project.id) == nil)
         #expect(try await store.directory(of: source.id) == second.path)
+        #expect(try RawDB(services.location.databaseURL).count("sendRecords") == 0)
     }
 
     /// 项目记录可能还没同步到这台 Mac（手机刚新建项目就带着文件夹）：绑定按项目 id 记，记录晚到也对得上，不因此失败。

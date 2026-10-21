@@ -60,22 +60,20 @@ struct WidgetDataTests {
         services.removeBackgroundFlush(token)
     }
 
+    /// 小组件、通知与旧版本写出的链接：认得的解析与生成互逆，不认识的忽略。
     @Test(arguments: [
         ("cuepad://speak", DeepLink.speak),
         ("cuepad://project/6f0c1a7e-0000-4000-8000-000000000002", DeepLink.project(UUID(uuidString: "6f0c1a7e-0000-4000-8000-000000000002")!)),
         ("cuepad://card/6f0c1a7e-0000-4000-8000-000000000003", DeepLink.card(UUID(uuidString: "6f0c1a7e-0000-4000-8000-000000000003")!)),
         ("cuepad://cue", DeepLink.cue),
         ("cuepad://session/6f0c1a7e-0000-4000-8000-000000000004", DeepLink.session(UUID(uuidString: "6f0c1a7e-0000-4000-8000-000000000004")!)),
-    ])
-    func 深链接解析与生成互逆(text: String, link: DeepLink) {
-        #expect(DeepLink(url: URL(string: text)!) == link)
-        #expect(link.url == URL(string: text))
-    }
-
-    @Test(arguments: ["https://example.com", "cuepad://unknown", "cuepad://project/not-a-uuid", "cuepad://project", "cuepad://capture"])
-    func 不认识的链接被忽略(text: String) {
-        #expect(DeepLink(url: URL(string: text)!) == nil)
-        services.handle(url: URL(string: text)!)
-        #expect(services.pendingDeepLink == nil)
+        ("https://example.com", nil), ("cuepad://unknown", nil), ("cuepad://project/not-a-uuid", nil), ("cuepad://project", nil), ("cuepad://capture", nil),
+    ] as [(String, DeepLink?)])
+    func 深链接解析与生成互逆_不认识的忽略(text: String, link: DeepLink?) {
+        let url = URL(string: text)!
+        #expect(DeepLink(url: url) == link)
+        if let link { #expect(link.url == url) }
+        services.handle(url: url)
+        #expect(services.pendingDeepLink == link)
     }
 }

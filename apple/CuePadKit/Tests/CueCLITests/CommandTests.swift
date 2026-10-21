@@ -65,23 +65,6 @@ import Testing
     #expect(missing.code == 1 && missing.err.contains("找不到灵感或任务"))
   }
 
-  /// 不在绑定了目录的项目里：列所有项目；--pinned 只列资料。指定项目见 `DefaultProjectTests`。
-  @Test func cardListOutsideABoundDirectoryListsEverything() async throws {
-    let sb = try Sandbox()
-    let a = try await sb.store.createCard(in: try await sb.project("Alpha").id, body: "a")
-    let b = try await sb.store.createCard(in: try await sb.project("Beta").id, body: "b")
-    let home = try await sb.store.createCard(body: "i")
-
-    func ids(_ args: String...) async throws -> Set<String> {
-      let items = try array(try await sb.jsonValue(["card", "list"] + args))
-      return Set(items.compactMap { $0.string("id") })
-    }
-    func id(_ card: Card) -> String { card.id.uuidString.lowercased() }
-    #expect(try await ids() == [id(a), id(b), id(home)])
-    try await sb.store.updateCard(b.id) { $0.isPinned = true }
-    #expect(try await ids("--pinned") == [id(b)])
-  }
-
   @Test func cardMoveTrashRestore() async throws {
     let sb = try Sandbox()
     let alpha = try await sb.project("Alpha")

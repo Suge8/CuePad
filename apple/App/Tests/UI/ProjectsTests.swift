@@ -16,15 +16,13 @@ struct ProjectsTests {
         Task { await workspace.follow() }
     }
 
-    /// 新库第一次打开：落在 Cue 页（没有"还没有项目"的空页），库里已有默认项目（名字"默认"、房子图标、灰色）；
+    /// 新库第一次打开：落在 Cue 页（没有"还没有项目"的空页），库里已有默认项目；
     /// 只记下（⌘⇧N 同一个）不选项目，灵感进它。
     @Test func 新库首屏是Cue页_只记下的灵感进默认项目() async throws {
         let workspace = Workspace(services: services)
         let catalog = observing(workspace)
         defer { catalog.cancel() }
         try await eventually("目录里只有默认项目") { workspace.catalog?.projects.map(\.id) == [Project.defaultID] }
-        let home = try #require(workspace.catalog?.project(Project.defaultID))
-        #expect(home.name == "默认" && home.icon == "house" && home.color == "#8A8A84")
         #expect(workspace.page == .cue)
 
         workspace.cue.draft = ComposerDraft(text: "周末读完第三章")

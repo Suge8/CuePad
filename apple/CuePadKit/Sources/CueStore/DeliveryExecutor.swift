@@ -287,8 +287,10 @@ extension CueStore {
 public actor DeliveryExecutor {
   private let store: CueStore
   private let hostID: String
-  private let maxAge: Duration
-  private let retention: Duration
+  /// 创建后多久还没执行就放弃。
+  package static let maxAge: Duration = .seconds(600)
+  /// 完成的请求保留多久。
+  package static let retention: Duration = .seconds(60)
   private let timing: Timing
   private let onIssue: @Sendable (any Error) -> Void
   private let onWritten: @Sendable (DeliveryRequest.ID) async -> Void
@@ -300,15 +302,13 @@ public actor DeliveryExecutor {
   private var rerun = false
 
   public init(
-    store: CueStore, hostID: String, maxAge: Duration = .seconds(600), retention: Duration = .seconds(60),
+    store: CueStore, hostID: String,
     timing: Timing = .system, onIssue: @escaping @Sendable (any Error) -> Void,
     onWritten: @escaping @Sendable (DeliveryRequest.ID) async -> Void = { _ in },
     handler: @escaping @Sendable (DeliveryRequest) async -> DeliveryOutcome
   ) {
     self.store = store
     self.hostID = hostID
-    self.maxAge = maxAge
-    self.retention = retention
     self.timing = timing
     self.onIssue = onIssue
     self.onWritten = onWritten
@@ -351,8 +351,8 @@ public actor DeliveryExecutor {
   private func nextActionable() async -> DeliveryRequest? {
     guard let candidates = await reporting({ try await store.pendingDeliveries(for: hostID) }) else { return nil }
     for request in candidates {
-      if timing.now().timeIntervalSince(request.createdAt) > maxAge.seconds {
-        await finish(request, .failed("请求创建后超过 \(Int(maxAge.seconds)) 秒仍未执行，已放弃"))
+      if timing.now().timeIntervalSince(request.createdAt) > Self.maxAge.seconds {
+        await finish(request, .failed("请求创建后超过 \(Int(Self.maxAge.seconds)) 秒仍未执行，已放弃"))
         continue
       }
       if case .unknown(let raw) = request.mode {
@@ -407,8 +407,8 @@ public actor DeliveryExecutor {
 
   private func scheduleCleanup() {
     guard cleanup == nil else { return }
-    cleanup = Task { [timing, retention] in
-      guard (try? await timing.sleep(retention)) != nil else { return }
+    cleanup = Task { [timing] in
+      guard (try? await timing.sleep(Self.retention)) != nil else { return }
       let remaining = await self.reporting { try await self.deleteExpired() }
       self.cleanupFinished(rescheduling: remaining ?? true)
     }
@@ -418,7 +418,7 @@ public actor DeliveryExecutor {
   private func deleteExpired() async throws -> Bool {
     let now = timing.now()
     return try await store.deleteCompletedDeliveries(
-      before: now.addingTimeInterval(-retention.seconds), claimCutoff: now.addingTimeInterval(-maxAge.seconds),
+      before: now.addingTimeInterval(-Self.retention.seconds), claimCutoff: now.addingTimeInterval(-Self.maxAge.seconds),
       keptCutoff: now.addingTimeInterval(-Self.keptRetention))
   }
 

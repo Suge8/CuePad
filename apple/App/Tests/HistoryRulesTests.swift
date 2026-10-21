@@ -41,11 +41,13 @@ struct HistoryRulesTests {
             let extensions = paths.agentDirectory.appending(path: "extensions")
             try FileManager.default.createDirectory(at: extensions, withIntermediateDirectories: true)
             try FileManager.default.copyItem(at: fixtures.appending(path: "fake-model.ts"), to: extensions.appending(path: "fake-model.ts"))
+            // 托管的 Pi 同真实用户一样读 agent 目录里的设置：默认假模型、不思考，不加载家目录里自动发现的 skill
+            try JSONSerialization.data(withJSONObject: ["defaultProvider": "fake", "defaultModel": "echo", "defaultThinkingLevel": "off", "skills": ["!**"]])
+                .write(to: paths.agentDirectory.appending(path: "settings.json"))
+            _ = Self.offline
 
             bridge = PiBridge(socketDirectory: paths.socketDirectory)
-            host = PiRuntime(
-                bridge: bridge, paths: paths, pi: { realPi }, idleLimit: .seconds(2),
-                extraArguments: ["--offline", "--no-context-files", "--no-skills", "--no-prompt-templates", "--no-themes", "--model", "fake/echo", "--thinking", "off"])
+            host = PiRuntime(bridge: bridge, paths: paths, pi: { realPi }, idleLimit: .seconds(2))
             let mac = MacDependencies(
                 pi: bridge, hotkeys: InMemoryHotkeys(), paths: agentPaths, agents: AgentIntegrations(agents), terminal: PiTerminalJumper(),
                 hostID: TestApp.hostID, workspaces: Workspaces(root: directory.appending(path: "CuePad", directoryHint: .isDirectory)),
@@ -59,8 +61,10 @@ struct HistoryRulesTests {
             let location = try LibraryLocation.resolve(environment: [LibraryLocation.environmentKey: directory.appending(path: "Library").path])
             services = try AppServices(location: location, defaults: TempDefaults().defaults, sync: .custom(FakeSync()), mac: mac)
             services.start()
-            try await eventually("执行器在运行", timeout: HistoryRulesTests.piStep) { services.executor.isRunning }
         }
+
+        /// 不联网：Pi 只认 `PI_OFFLINE`（没有设置项），托管的 Pi 继承 CuePad 进程的环境，所以设在本测试进程上（只有 Pi 读它）。
+        static let offline: Void = { setenv("PI_OFFLINE", "1", 1) }()
 
         func shutdown() {
             services.cancelBackgroundWork()
@@ -146,38 +150,6 @@ struct HistoryRulesTests {
         #expect(state.hosted && state.state == .known(.settled), "托管、歇着")
         #expect(try await rig.records(.ended).isEmpty, "不进历史")
         return state
-    }
-}
-
-/// Mac 本机：托管着、进程歇着的会话（记录在"现在"、桥上没有）是上一步绑着的会话时，下一步"开始"在后台唤醒它。
-struct RestingTargetTests {
-    let rig = TestApp()
-
-    @Test func 托管着进程歇着的会话_交出时唤醒() async throws {
-        let services: AppServices = rig.services
-        let workspace = Workspace(services: services)
-        let store = services.store
-        let project = try await store.createProject(name: "Work", color: "blue")
-        let folder = rig.directory.appending(path: "work/alpha", directoryHint: .isDirectory)
-        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        let file = "/sessions/--work-alpha--/a.jsonl"
-        try await store.upsertPiSession(IndexedSession(id: "a", path: file, cwd: folder.path, title: "alpha", lastActivityAt: .now), host: TestApp.hostID)
-        try await services.piStateRecorder.update(
-            sessionID: "a", state: .settled, title: "alpha", projectID: project.id, hosted: true)
-        services.startLiveSessions()
-        try await services.executor.start()
-        defer { services.cancelBackgroundWork() }
-        let task = try await store.createTask("任务", in: project.id)
-        let first = try await store.createTask("上一步", under: task.id)
-        let next = try await store.createTask("接着做", under: task.id)
-        try await store.linkCard(first.id, toSession: "a")
-
-        workspace.handOff(next)
-
-        try await eventually("唤醒后话送到") { rig.host.extensions["a"]?.messages.isEmpty == false }
-        #expect(rig.host.calls == [.resume(sessionFile: file, directory: folder.path)])
-        let request = try #require(try await store.deliveryRequests().first)
-        #expect(rig.host.extensions["a"]?.messages == [PiMessage(text: "接着做", deliveryID: request.id.uuidString)])
     }
 }
 

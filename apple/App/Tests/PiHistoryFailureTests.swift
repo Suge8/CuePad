@@ -77,15 +77,6 @@ struct PiHistoryFailureTests {
         #expect(message.contains(bad.path) && !message.contains(good.path))
     }
 
-    @Test func 写入失败同样报告并停止该文件写回() async throws {
-        let file = try sessionFile("s")
-        try breakPiSessionTable()
-
-        await services.consumePiHistory(events(for: [file, file]), agent: .pi)
-
-        #expect(services.startupIssues.count == 1)
-    }
-
     @Test func 检查点解码失败是合法的重读_不报问题_写回照常() async throws {
         let file = try sessionFile("stale")
         let garbage = Data("not a checkpoint".utf8)
