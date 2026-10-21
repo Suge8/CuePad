@@ -14,7 +14,7 @@ import os
 /// 拉：令牌只有库里一份，什么时候拉由 App 定（有等待理由时按节奏、回到前台、立即同步、手机收到推送）。
 /// 推：库里推导的待推送是唯一队列，同一时刻只有一批在路上。
 public actor CloudSync {
-  private static let containerIdentifier = "iCloud.com.sugeh.cuepad"
+  private static let containerIdentifier = AppIdentity.iCloudContainer
   static let zoneID = CKRecordZone.ID(zoneName: "CuePad", ownerName: CKCurrentUserDefaultName)
   private let coordinator: SyncCoordinator
   /// 连上 iCloud（`SyncCloud`）：`start()` 里才连，没有 entitlement 的进程一建容器就崩。
@@ -28,7 +28,7 @@ public actor CloudSync {
   /// 上一次建通知订阅的时刻：没建成时 `syncNow` 顺带重试，至多每 `alertRetryInterval` 一次（它也是按节奏的拉取，每两三秒一次）。
   private var alertsAttemptedAt: ContinuousClock.Instant?
   private static let alertRetryInterval = Duration.seconds(60)
-  private static let log = Logger(subsystem: "com.sugeh.cuepad", category: "sync")
+  private static let log = Logger(subsystem: AppIdentity.id, category: "sync")
 
   /// 是否在私有数据库建立服务端订阅（`AlertSubscriptions`：同步区有变化的静默推送，"Pi 等你确认 / 完成"与 Cue 消息的可见通知）。
   /// 只有 iOS 建立：Mac 不注册推送，靠等待理由驱动的拉取。App 需要请求通知权限并注册远程通知。

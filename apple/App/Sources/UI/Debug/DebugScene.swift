@@ -16,7 +16,7 @@ enum ScrollAnchor {
 ///   agent 打开 Agent 整页列表，session 整页打开 `-CuePadSession <会话名>`（这两个画面配 `-CuePadDemo YES` 时写入 Mac 同步来的演示会话，见 `DebugScene+PiDemo.swift`；notes 里你的话带一张图、relay 里发出还没进对话的话带一张图，核对对话里的图片；长对话与追加中的对话见 `DebugScene+LongChat.swift`）；
 ///   iOS 见 `DebugScene+iOS.swift`；
 /// - `-CuePadSearch <关键词>`：search 画面的预填关键词；`-CuePadCard <正文开头>`：editor 画面打开哪张卡；`-CuePadSelect <起点:长度>`：编辑器载入后选中这一段（看选区操作）；
-/// - `-CuePadWindowSize 1280x800`（仅 Mac）：主窗口尺寸（内容铺满标题栏，即整窗尺寸）；`-CuePadSidebar hidden`（仅 Mac）：任何画面都先收起侧栏；
+/// - `-CuePadWindowSize 1280x800`（仅 Mac）：主窗口尺寸（内容铺满标题栏，即整窗尺寸）；`-CuePadSidebar hidden`（仅 Mac）：任何画面都先收起侧栏；`-CuePadSidebarCycle YES`（仅 Mac）：就绪后反复开合侧栏（录开合的动效），`fast` 在动画中途反向；
 /// - `-CuePadBench <interact|chatscroll|churn>`（量完退出）：interact 是单次交互的点击回合与掉帧，与交互预算比较（Mac 见 `InteractionBench`，iOS 见 `IOSInteractionBench`，`-CuePadInteractOnly 项,项` 只量列出的几项）；
 ///   chatscroll（仅 Mac）是长对话里滚动的每圈主线程 CPU、指令数与掉帧（`ChatScrollBench`；`-CuePadScrollDriver`、`-CuePadScrollPointer` 与方法限制见它的注释）；
 ///   churn（仅 Mac）边加卡边逐点拉宽窗口，查布局反馈环（`layout-stress.sh`）；
@@ -47,7 +47,9 @@ enum ScrollAnchor {
 /// - `-CuePadSync <noAccount|decide|failed|restricted|conflicts>`：装上报这个状态的同步替身，设置里 iCloud 同步与 Mac 工具栏的同步提示按它显示（`DebugScene+Sync.swift`）；
 ///   `-CuePadSync stalled`：装上同步永不返回的替身，核对下拉刷新的圈有时限；`-CuePadSync arrive`：启动后的第一次拉取分几页带回别的设备写下的 Cue 的话（`ArrivingSync`），核对"同步中"与对完一次滑上来；
 ///   `-CuePadSync newmac`：换新 Mac 的第一遍同步，`-CuePadReconcileSeconds <秒>`（默认 8）后带回 Cue 在「Mac Studio」上运行（`NewMacSync`），核对各入口先等、对过后写它在哪台（秒数给大就一直在等）；
-/// - `-CuePadOfferSetup YES`（仅 Mac）：隔离库也像正式版那样首次打开时决定弹不弹接入面板（`Workspace.offerSetup`，只弹一次记在隔离库的偏好里），核对老用户升级后自动弹的那一次；
+/// - `-CuePadActsAs development|stranger`（仅 Mac）：隔离库当作本机构建的开发库来定碰不碰真实世界（`DebugHooks.actsAs`）：development 照真的找这台装没装正式版，
+///   stranger 当作没装，碰真实世界的几处照正式版走（接入写各家配置、发通知），这些目录仍由 xc.sh 的环境变量换进隔离库；配 `-CuePadOfferSetup YES` 走克隆仓库自己编的人第一次打开的那一遍；
+/// - `-CuePadOfferSetup YES`（仅 Mac）：脚本起的实例也像正式版与从 Xcode 直接打开的那样首次打开时决定弹不弹接入面板（`Workspace.offerSetup`，只弹一次记在隔离库的偏好里），核对第一次打开与老用户升级后自动弹的那一次；
 /// - `-CuePadSampleCrash YES`：存一份样例崩溃诊断（配 `-CuePadCrashSheet YES` 直接打开摘要）；
 /// - `-CuePadNotifications YES`：隔离库下也要通知权限、发真实的系统通知（两端，规则见 docs/verify.md「通知」）；
 ///   `-CuePadQuotaRemindIn <秒>`（配 `-CuePadDemo YES -CuePadNotifications YES` 与空库）：演示额度里 Claude 的本周这么多秒后到提醒时刻（`DemoLibrary.seedQuotas`，核对周额度提醒）；

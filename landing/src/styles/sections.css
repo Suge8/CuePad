@@ -29,7 +29,7 @@
 }
 
 /* ============================================================
-   Drench — the pinned dispatch sequence
+   Drench — the pinned Cue sequence
    ============================================================ */
 .drench {
 	position: relative;
@@ -304,22 +304,6 @@ html[lang^='zh'] .feat-copy h3 {
 	scale: 1.14;
 	will-change: transform;
 }
-.duo-media {
-	position: relative;
-}
-.duo-media .float {
-	--rot: 1.6deg;
-	position: absolute;
-	right: -3%;
-	bottom: -12%;
-	width: 46%;
-	z-index: 2;
-}
-.duo-media:hover .float {
-	--rot: 0.8deg;
-	translate: 0 -4px;
-}
-
 /* ============================================================
    Desk band — generated art breather
    ============================================================ */

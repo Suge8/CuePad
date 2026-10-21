@@ -10,7 +10,7 @@ actor SimulatedCloud: SyncCloud {
   private var seq = 0
   /// 收下的上传（记录名），按先后。
   private(set) var saved: [String] = []
-  private static let log = Logger(subsystem: "com.sugeh.cuepad", category: "sync")
+  private static let log = Logger(subsystem: AppIdentity.id, category: "sync")
 
   init(_ records: [CKRecord] = []) {
     for record in records {

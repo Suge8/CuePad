@@ -2,6 +2,7 @@
 // 绕开它：多一份冷编译、多一台反复冷启动的模拟器；自己起的 CuePad 不隔离、不受"每个检出一份"管；
 // 按名字或 bundle id 起停会碰到用户正在用的正式版（它与调试构建同一个 bundle id）。这里拦下 Agent 直接这样做的命令。
 // 只看每段命令的第一个词（跳过变量赋值与 env、xcrun 这类前缀），grep、日志里出现这些词不算。
+import { readFileSync } from "node:fs";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 const PREFIXES = new Set(["env", "command", "exec", "time", "nohup", "nice", "caffeinate", "timeout", "xcrun", "sudo"]);
@@ -15,7 +16,9 @@ const INSTANCE =
 	"CuePad 调试实例只经 xc.sh shot|rec|run 起（隔离、每个检出一份、一定退出），run 起的用 xc.sh stop 收，" +
 	"别的进程按自己拿到的 PID 结束。按名字或 bundle id 起停会碰到用户在用的正式版。";
 // 指向 CuePad 本身：名字、bundle id 或 .app 包（不含路径里的 CuePad 检出目录名）
-const CUEPAD = /^(?:CuePad|com\.sugeh\.cuepad)$|(?:^|\/)CuePad\.app(?:\/|$)/i;
+// bundle id 是 Signing.xcconfig 的 CUEPAD_APP_ID（唯一定义）
+const APP_ID = readFileSync(new URL("../../apple/App/Config/Signing.xcconfig", import.meta.url), "utf8").match(/^CUEPAD_APP_ID *= *(\S+)/m)![1];
+const CUEPAD = new RegExp(`^(?:CuePad|${APP_ID.replaceAll(".", "\\.")})$|(?:^|/)CuePad\\.app(?:/|$)`, "i");
 
 /** 只留 shell 真正执行的结构：去掉 heredoc 正文；单引号里全是字面量，双引号里只有 $( 与反引号还会执行，其余分隔符都不切。 */
 function structure(command: string): string {

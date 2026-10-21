@@ -76,7 +76,7 @@ final class CueKeeper {
     }
     var store: CueStore { setup.recorder.store }
 
-    nonisolated static let log = Logger(subsystem: "com.sugeh.cuepad", category: "cue")
+    nonisolated static let log = Logger(subsystem: AppIdentity.id, category: "cue")
 
     let setup: Setup
     private let inputs: AsyncStream<Input>

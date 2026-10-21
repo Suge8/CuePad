@@ -68,6 +68,7 @@
 			bind:this={night}
 			class="cinema-night"
 			src="/assets/loops/night-loop.mp4"
+			poster="/assets/loops/night-loop.jpg"
 			autoplay
 			muted
 			loop
@@ -80,8 +81,8 @@
 			bind:this={img}
 			class="shot"
 			src="/assets/shots/board-dark.webp"
-			width="1920"
-			height="1216"
+			width="1600"
+			height="1000"
 			loading="lazy"
 			decoding="async"
 			alt={t('cinema.img')}

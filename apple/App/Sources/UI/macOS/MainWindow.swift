@@ -17,7 +17,10 @@ struct MainWindow: View {
                 .toolbar { ToolbarItem { SidebarToggle() } }
                 .navigationSplitViewColumnWidth(min: 210, ideal: 256, max: 320)
         } detail: {
-            detail
+            SidebarMotion { detail }
+                // 页的图层在滑（`MacPages.ColumnSlide`）：底色两边多铺一截，滑开的地方不露出窗口的底
+                .background { palette.desk.padding(.horizontal, -MacPages.slideOverscan).ignoresSafeArea() }
+                .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { workspace.pages.detailMoved(to: $0) }
         }
         .background { WindowPanels(workspace: workspace) }
         .background { TaskBubbleSlot() }
@@ -30,7 +33,6 @@ struct MainWindow: View {
 
     private var detail: some View {
         ZStack {
-            palette.desk.ignoresSafeArea()
             page
             EditorLayer().zIndex(1)
         }
@@ -72,6 +74,69 @@ struct MainWindow: View {
         ToolbarItem(placement: .primaryAction) { PageMenuSlot() }
             .sharedBackgroundVisibility(.hidden)
     }
+}
+
+/// 开合侧栏时详情区里的页（`MacPages.detailHold`）：动之前按动画结束时的位置与宽度排好一次，动画里不再跟着变。
+/// 侧栏这一栏浮在详情区上面，它的宽是详情区左边的安全区：动画的每一帧安全区都在变，页里的滚动区伸进安全区、跟着每帧变宽重排。
+/// 动的时候这一块不让安全区的左边，页按终点排好一次；每帧只把详情区这一栏的图层平移到侧栏的边（`MacPages.ColumnSlide`），页的左缘贴着侧栏走、不重排。
+/// 否决的方案：用 SwiftUI 的偏移（`offset` 一类几何效果）逐帧挪——每帧在主线程重新摆整页、挪平台视图、重算点按与拖动区域，开合十次 27G 对 10G 指令；
+/// 图层上加 Core Animation 补间——分栏的侧栏是主线程逐帧摆的，不是图层动画，两边各走各的钟，实测差出一帧（中段 30 点上下）。
+/// 单独一个视图读它：主窗口的视图体不读。
+private struct SidebarMotion<Content: View>: View {
+    @Environment(Workspace.self) private var workspace
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        let pages = workspace.pages
+        HoldPlace(hold: pages.detailHold) { content }
+            .ignoresSafeArea(.container, edges: pages.detailHold == nil ? [] : .leading)
+            .background { ColumnFinder(slide: pages.slide) }
+            .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.leading } action: { pages.slide.follow(edge: $0) }
+    }
+}
+
+/// 找详情区这一栏的承载视图交给 `MacPages.ColumnSlide`：分栏里每一栏包在一层里，再往上是分栏本身。
+private struct ColumnFinder: NSViewRepresentable {
+    let slide: MacPages.ColumnSlide
+
+    func makeNSView(context: Context) -> Probe { Probe(slide: slide) }
+    func updateNSView(_ view: Probe, context: Context) {}
+
+    final class Probe: NSView {
+        let slide: MacPages.ColumnSlide
+
+        init(slide: MacPages.ColumnSlide) {
+            self.slide = slide
+            super.init(frame: .zero)
+        }
+
+        required init?(coder: NSCoder) { nil }
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            guard window != nil else { return }
+            slide.layer = sequence(first: self, next: \.superview).first { $0.superview?.superview is NSSplitView }?.layer
+        }
+    }
+}
+
+private struct HoldPlace: Layout {
+    let hold: MacPages.DetailHold?
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        proposal.replacingUnspecifiedDimensions()
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let origin = CGPoint(x: bounds.minX + (hold?.leading ?? 0), y: bounds.minY)
+        for subview in subviews {
+            subview.place(at: origin, anchor: .topLeading, proposal: ProposedViewSize(width: hold?.width ?? bounds.width, height: bounds.height))
+        }
+    }
+
+    // 不回答对齐查询：默认实现会递归问遍整页子树
+    func explicitAlignment(of guide: HorizontalAlignment, in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGFloat? { nil }
+    func explicitAlignment(of guide: VerticalAlignment, in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGFloat? { nil }
 }
 
 /// 本窗口的浮层与确认框（都经 `panel`）。单独一个视图读它们的开合：主窗口的视图体读了，开合的那一帧就要重算整个窗口、重新提交整条工具栏。

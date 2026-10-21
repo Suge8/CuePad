@@ -9,11 +9,12 @@ import WidgetKit
 /// 只写内容真正变了的那份；小组件显示默认项目与 Cue，只有这两份变了才刷新它们（刷新次数有系统预算）。
 /// iPhone 的实时活动（`CueLiveActivity`）与小组件读同一份 Cue 此刻，每次都先改岛：后台被推送叫醒时剩的时间不多。
 extension AppServices {
-    /// 项目或卡片变化、此刻变了（Cue 的表情随它，`observeTimed`）时重读快照，直到任务取消。
+    /// 项目或卡片变化、此刻变了（Cue 的表情随它，`observeTimed`）时按 Cue 的现状（`CueFeed`，同一次读带着小组件另要的）改快照，直到任务取消。
     func startSnapshots() {
         follow(reporting: { .widgetDataUnavailable("\($0)") }) {
-            for try await (content, moment, local) in self.observeCue({ try $0.widgetContent() }) {
-                try await self.present(content, at: moment, local: local)
+            for try await seen in self.cueUpdates() {
+                guard let widget = seen.read.widget else { continue }
+                try await self.present(widget, seen.read.digest, at: seen.moment, local: seen.local)
             }
         }
         #if os(iOS)
@@ -50,11 +51,14 @@ extension AppServices {
     /// 立即按当前库内容更新，不等快照那条异步的观察：进入后台前（`resend`：岛按此刻重发一次，过时时刻从这时算）、
     /// 推送叫醒拉完之后（回调一返回系统就可能挂起 App，`IOSAppDelegate`）。
     func writeSnapshots(resend: Bool = false) async throws {
-        try await present(try await store.widgetContent(), at: speech, local: cueLocal, resend: resend)
+        let read = try await CueFeed.Read.read(from: store, widget: true)
+        try await present(read.widget!, read.digest, at: speech, local: cueLocal, resend: resend)
     }
 
-    private func present(_ content: WidgetContent, at moment: Speech.Moment, local: CueNow.Local, resend: Bool = false) async throws {
-        let now = Self.cueNow(content.cue, at: moment, local: local)
+    private func present(
+        _ content: WidgetContent, _ digest: CueDigest, at moment: Speech.Moment, local: CueNow.Local, resend: Bool = false
+    ) async throws {
+        let now = Self.cueNow(digest, at: moment, local: local)
         #if os(iOS)
         await cueActivity?.show(CueActivityState(now: now, quotas: content.quotas, at: moment.now), resend: resend, foreground: Self.isActive)
         #endif
@@ -118,11 +122,10 @@ extension CueActivityState {
     }
 }
 
-/// 快照里从库里读的那份（`observeTimed` 订阅它）。
+/// 小组件除 Cue 之外从库里读的那份（与 Cue 的摘要同一次读，`CueFeed.Read`）。
 nonisolated struct WidgetContent: Equatable, Sendable {
     var projects: ProjectsSnapshot
     var home: DefaultProjectSnapshot
-    var cue: CueDigest
     /// 各家订阅额度（只给实时活动）。
     var quotas: [AccountQuota]
 }
@@ -130,7 +133,7 @@ nonisolated struct WidgetContent: Equatable, Sendable {
 extension CueStore {
     fileprivate static let widgetCardLimit = 5
 
-    fileprivate func widgetContent() throws -> WidgetContent {
+    func widgetContent() throws -> WidgetContent {
         let cards = try cards(in: Project.defaultID)
         let latest = cards.sorted { $0.modifiedAt > $1.modifiedAt }.prefix(Self.widgetCardLimit)
         return WidgetContent(
@@ -143,7 +146,6 @@ extension CueStore {
                     DefaultProjectSnapshot.Card(id: $0.id, title: $0.heading, modifiedAt: $0.modifiedAt)
                 },
                 total: cards.count),
-            cue: try CueDigest.read(from: self),
             quotas: try accountQuotas())
     }
 }

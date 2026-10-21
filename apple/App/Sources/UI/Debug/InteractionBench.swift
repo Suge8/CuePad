@@ -18,7 +18,7 @@ import os
 /// 默认在后台量：指令数照样能前后对比，帧与掉帧偏乐观（前台才有玻璃等实际合成）。和预算比要在前台量（`-CuePadForeground YES`，见 `DebugForeground`），
 /// 每行的 `foreground` 记这次在不在前台；量完退出，退出时把前台还回去。
 enum InteractionBench {
-    private static let signposter = OSSignposter(logHandle: OSLog(subsystem: "com.sugeh.cuepad", category: .pointsOfInterest))
+    private static let signposter = OSSignposter(logHandle: OSLog(subsystem: AppIdentity.id, category: .pointsOfInterest))
     /// 每项的预算：点击回合上限（毫秒）与掉帧次数上限。预算是目标，不是现状：没达到的项如实报超预算，不改数字迁就。
     /// 依据：144Hz 一帧 6.9ms；对点击的回应在两帧（14ms）内人感觉是"跟手"，要建内容的在四帧（28ms）内不觉得顿；掉帧最多两次。
     /// 回访页面、收起、关闭只是换可见性，对点击要跟手；首访、打开要建视图，给四帧。
@@ -180,7 +180,7 @@ enum InteractionBench {
         }
         // 项目页任务纸点"还有 N 条"展开、再收起：在没做完的任务最多的项目上（配 `-CuePadManyTasks` 量任务多时）
         if only.map({ $0.contains("展开任务") || $0.contains("收起任务") }) ?? true,
-           let busiest = workspace.catalog?.openTasks.filter({ $0.key != nil }).max(by: { $0.value < $1.value })?.key {
+           let busiest = workspace.catalog?.openTasks.max(by: { $0.value < $1.value })?.key {
             workspace.show(.project(busiest))
             try? await Task.sleep(for: .seconds(2))
             for _ in 0..<2 {
@@ -189,7 +189,7 @@ enum InteractionBench {
             }
         }
         // 侧栏开合在卡最多的项目页上量：整页内容要跟着详情区的宽度重排。走 ⌃⌘S 那条路（主菜单动作经响应链），不直接调方法
-        if let big = workspace.catalog?.cardCounts.filter({ $0.key != nil }).max(by: { $0.value < $1.value })?.key {
+        if let big = workspace.catalog?.cardCounts.max(by: { $0.value < $1.value })?.key {
             await step("页面回访") { workspace.show(.project(big)) }
             for _ in 0..<2 {
                 await step("侧栏收起") { NSApp.sendAction(#selector(AppDelegate.toggleCueSidebar(_:)), to: nil, from: nil) }

@@ -13,11 +13,13 @@ set -euo pipefail
 APPLE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 # shellcheck source=_sim.sh source-path=SCRIPTDIR
 . "$APPLE_DIR/scripts/_sim.sh"
+# shellcheck source=_signing.sh source-path=SCRIPTDIR
+. "$APPLE_DIR/scripts/_signing.sh"
 APP="$1" platform="$2" runs="${3:-3}" seconds="${4:-30}"
 args=("${@:5}")
 settle="${CUEPAD_IDLE_SETTLE:-5}"
 derived="$(dirname "$(dirname "$(dirname "$APP")")")"
-BUNDLE_ID=com.sugeh.cuepad
+BUNDLE_ID=$CUEPAD_APP_ID
 if [ "$platform" = ios ]; then
   udid="$(sim_udid "${CUEPAD_IOS_DEVICE:-iPhone 17}")"
   # 每次从刚开机的模拟器量（理由见 perf-ios.sh）

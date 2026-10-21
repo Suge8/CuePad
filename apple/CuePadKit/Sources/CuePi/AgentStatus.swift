@@ -29,7 +29,7 @@ extension AgentKind {
         }
     }
 
-    /// 指定它配置目录的环境变量（OpenCode 另认 `XDG_CONFIG_HOME`）；隔离运行没给它时不接入这家（`AgentInstallError.isolated`）。
+    /// 指定它配置目录的环境变量（OpenCode 另认 `XDG_CONFIG_HOME`）；不碰真实世界时没给它就不接入这家（`AgentInstallError.isolated`）。
     public var homeVariable: String {
         switch self {
         case .pi: "PI_CODING_AGENT_DIR"
@@ -82,7 +82,7 @@ public enum AgentInstallError: Error, Equatable {
     case notFound(AgentKind)
     case tooOld(AgentKind, found: AgentVersion)
     case foreign(String)
-    /// 隔离运行（开发构建）而这家的配置目录是缺省的真实位置：不写，免得把正式版写的条目改成指向开发构建
+    /// 不碰真实世界（装着正式版的 Mac 上的本机构建、测试与验收）而这家的配置目录是缺省的真实位置：不写，免得把正式版写的条目改成指向开发构建
     case isolated(AgentKind)
 }
 
@@ -92,7 +92,7 @@ extension AgentInstallError: LocalizedError {
         case .notFound(let kind): "没有找到 \(kind.name)"
         case .tooOld(let kind, let found): "\(kind.name) \(found) 太旧，需要 \(kind.minimumVersion.map(\.description) ?? "") 或更新"
         case .foreign(let path): "\(path) 是别人的同名文件，没有改动"
-        case .isolated(let kind): "开发构建用的隔离资料库：先用 \(kind.homeVariable) 指定 \(kind.name) 的目录再接入"
+        case .isolated(let kind): "这台 Mac 装着正式版，本机构建不改它在用的配置：先用 \(kind.homeVariable) 指定 \(kind.name) 的目录再接入"
         }
     }
 }

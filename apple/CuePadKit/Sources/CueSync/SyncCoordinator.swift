@@ -6,7 +6,7 @@ import os
 /// 与账号检查（`CloudSync`）把服务器给的直接交进来。待推送只有库里推导的一份（`CueStore.pendingSync`）。
 actor SyncCoordinator {
   static let issueLimit = 50
-  static let log = Logger(subsystem: "com.sugeh.cuepad", category: "delivery")
+  static let log = Logger(subsystem: AppIdentity.id, category: "delivery")
   static let accountKey = "account"
 
   let store: CueStore

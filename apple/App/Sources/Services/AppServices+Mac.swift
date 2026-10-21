@@ -13,7 +13,7 @@ extension AppServices {
         guard !tasks.isRunning else { return }
         Self.raiseFileLimit()
         register(hotkey)
-        if !location.isIsolated { diagnostics.start() }
+        if location.touchesRealWorld { diagnostics.start() }
         let piChanges = pi.changes() // 先订阅再启动桥与各家的接入：启动时发现的会话不能漏
         let legacyPiChanges = pi.changes()
         // 关掉 OpenCode 的开关：CuePad 拉起的服务一并停掉（本来就在跑的不动）
@@ -104,7 +104,7 @@ extension AppServices {
         let signingOff = Task.detached { [presence] in await presence.signOff() }
         let leaving = Task.detached { [viewer] in await viewer?.signOff() }
         let stopExecutor = executor.beginStop(), stopCue = cue.stop(), sync = sync
-        let log = Logger(subsystem: Self.bundleID, category: "shutdown")
+        let log = Logger(subsystem: AppIdentity.id, category: "shutdown")
         return { @concurrent in
             let late = await ShutdownSteps.run([
                 ("远程投送执行器", stopExecutor),

@@ -35,7 +35,7 @@ struct PiAlertRoutingTests {
     private func payload(subscription: String, record: UUID) -> [AnyHashable: Any] {
         [
             "aps": ["alert": ["loc-key": "pi_alert_waiting"]],
-            "ck": ["ce": 2, "cid": "iCloud.com.sugeh.cuepad", "nid": "n",
+            "ck": ["ce": 2, "cid": "iCloud.com.example.cuepad", "nid": "n",
                    "qry": ["dbs": 1, "fo": 1, "rid": record.uuidString.lowercased(), "sid": subscription, "zid": "CuePad",
                            "zoid": "__defaultOwner__"]],
         ]

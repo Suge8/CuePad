@@ -14,10 +14,12 @@ command -v axe >/dev/null || { echo "需要 axe（brew install cameroncooke/axe/
 APPLE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 # shellcheck source=_sim.sh source-path=SCRIPTDIR
 . "$APPLE_DIR/scripts/_sim.sh"
+# shellcheck source=_signing.sh source-path=SCRIPTDIR
+. "$APPLE_DIR/scripts/_signing.sh"
 APP="$1"
 runs="${2:-3}"
 DERIVED="$(dirname "$(dirname "$(dirname "$APP")")")"
-BUNDLE_ID=com.sugeh.cuepad
+BUNDLE_ID=$CUEPAD_APP_ID
 udid="$(sim_udid "${CUEPAD_IOS_DEVICE:-iPhone 17}")"
 
 # 每次从刚开机的模拟器量：开着很久的模拟器上（尤其用过 axe 查界面、点按之后）同一交互的指令数能高出一倍。量完开着留给别的任务

@@ -9,41 +9,69 @@ struct Jelly<Value: Equatable, Content: View>: View {
     let move: (Value, Value) -> JellyMove?
     @ViewBuilder let content: (Value, Bool) -> Content
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var play = Play()
-
-    /// 放的动作、换之前的值、第几下（关键帧的触发）：三样总是一起换。
-    private struct Play {
-        var move: JellyMove?
-        var before: Value?
-        var count = 0
-    }
+    @State private var play = JellyPlay<Value>()
 
     var body: some View {
-        content(value, false)
-            .keyframeAnimator(initialValue: JellyPose(), trigger: play.count) { [before = play.before, value] _, pose in
-                content(pose.swap < 0.5 ? before ?? value : value, pose.swap < 0.5)
+        JellyShown(value: value, before: play.before, content: content)
+            .modifier(JellyAnimation(move: play.move, count: play.count))
+            // 减弱动态效果：换的那一下淡入淡出
+            .transaction(value: value) { if reduceMotion { $0.animation = Motion.crossfade } }
+            .onChange(of: value) { old, new in
+                guard !reduceMotion, let next = move(old, new) else { return }
+                play = JellyPlay(move: next, before: old, count: play.count + 1)
+            }
+    }
+}
+
+/// 放的动作、换之前的值、第几下（关键帧的触发）：三样总是一起换。
+/// 不嵌在 `Jelly` 里：嵌着就带上 `Value: Equatable`、`Content: View` 两份协议实现，`@State` 在非隔离处用它们会报可能被隔离。
+private struct JellyPlay<Value> {
+    var move: JellyMove?
+    var before: Value?
+    var count = 0
+}
+
+/// 此刻该画的值：换之前那一小段（`jellyLeaving`）画旧值。
+private struct JellyShown<Value: Equatable, Content: View>: View {
+    let value: Value
+    let before: Value?
+    let content: (Value, Bool) -> Content
+    @Environment(\.jellyLeaving) private var leaving
+
+    var body: some View { content(leaving ? before ?? value : value, leaving) }
+}
+
+/// 放一次关键帧。关键帧的画法是 Sendable 的、可能不在主线程上跑：只改占位的样子，画旧值还是新值经环境交给 `JellyShown`；
+/// 不随 `Jelly` 的类型参数泛型，那两个类型的协议实现才不会被带进那个闭包。
+private struct JellyAnimation: ViewModifier {
+    let move: JellyMove?
+    let count: Int
+
+    func body(content: Content) -> some View {
+        content
+            .keyframeAnimator(initialValue: JellyPose(), trigger: count) { shown, pose in
+                shown
+                    .environment(\.jellyLeaving, pose.swap < 0.5)
                     .scaleEffect(x: pose.sx, y: pose.sy, anchor: .bottom)
                     .rotationEffect(.degrees(pose.rot), anchor: .bottom)
                     .visualEffect { content, proxy in content.offset(y: pose.y * proxy.size.height) }
-            } keyframes: { _ in
-                let steps = play.move?.steps ?? []
+            } keyframes: { [move] _ in
+                let steps = move?.steps ?? []
                 KeyframeTrack(\.sx) { for step in steps { CubicKeyframe(step.pose.sx, duration: step.time) } }
                 KeyframeTrack(\.sy) { for step in steps { CubicKeyframe(step.pose.sy, duration: step.time) } }
                 KeyframeTrack(\.rot) { for step in steps { CubicKeyframe(step.pose.rot, duration: step.time) } }
                 KeyframeTrack(\.y) { for step in steps { CubicKeyframe(step.pose.y, duration: step.time) } }
                 KeyframeTrack(\.swap) {
                     MoveKeyframe(0)
-                    LinearKeyframe(0, duration: play.move?.swapAt ?? 0)
+                    LinearKeyframe(0, duration: move?.swapAt ?? 0)
                     MoveKeyframe(1)
                 }
             }
-            // 减弱动态效果：换的那一下淡入淡出
-            .transaction(value: value) { if reduceMotion { $0.animation = Motion.crossfade } }
-            .onChange(of: value) { old, new in
-                guard !reduceMotion, let next = move(old, new) else { return }
-                play = Play(move: next, before: old, count: play.count + 1)
-            }
     }
+}
+
+nonisolated extension EnvironmentValues {
+    @Entry fileprivate var jellyLeaving = false
 }
 
 /// 形变的一帧：横竖缩放、绕底边转（度）、竖直位移（按高度的比例，向上为负）；`swap` 0 画之前的值、1 画现在的。

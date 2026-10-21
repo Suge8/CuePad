@@ -5,12 +5,19 @@ import Foundation
 /// 跨进程变更通知（Darwin 通知，系统事件，不轮询）。任一进程提交写事务后 post，
 /// 其他进程的 `CueStore` 收到后用 `PRAGMA data_version` 判断是否真有别的连接提交过——
 /// 本进程自己的提交不改变该值，因此自己的通知、合并的通知、无关的通知都不会产生多余的重读。
-/// 名称带 App Group 前缀（沙盒内的进程只能收发这个前缀的通知），并按库文件的真实路径区分，隔离目录互不干扰。
+/// 名称按库文件的真实路径区分，隔离目录互不干扰。iOS 上带 App Group 前缀（沙盒内的主 App 与扩展只能收发这个前缀的通知）；
+/// Mac 上没有沙盒，前缀不随身份：自己编的命令行不在 App 包里、认不出身份（`AppIdentity.unbundled`），开同一个开发库时也要和开发版 App 互通。
 enum ChangeNotification {
+  #if os(iOS)
+  static let prefix = AppIdentity.appGroup
+  #else
+  static let prefix = "cuepad"
+  #endif
+
   static func name(forDatabase url: URL) -> String {
     let path = url.resolvingSymlinksInPath().standardized.path
     let digest = SHA256.hash(data: Data(path.utf8)).prefix(8).hex
-    return "\(LibraryLocation.appGroupIdentifier).store.\(digest)"
+    return "\(prefix).store.\(digest)"
   }
 
   static func post(_ name: String) { notify_post(name) }

@@ -37,10 +37,6 @@ html.js [data-reveal].in {
 		opacity: 1;
 		transform: none;
 	}
-	.caret,
-	.t-cursor {
-		animation: none;
-	}
 	.flight-svg,
 	.plane,
 	.burst,
@@ -58,7 +54,7 @@ html.js [data-reveal].in {
 	.hero-grid {
 		grid-template-columns: 1fr;
 	}
-	.hero-art img {
+	.hero-art video {
 		margin: 1rem auto 0;
 		max-width: 24rem;
 	}
@@ -90,17 +86,6 @@ html.js [data-reveal].in {
 	.nav-cta {
 		display: none;
 	}
-	.stage {
-		grid-template-columns: 1fr;
-		gap: 0;
-	}
-	.term-cell {
-		margin-left: 8%;
-		margin-top: -1.2rem;
-	}
-	.pad {
-		transform: rotate(-0.5deg);
-	}
 	.mascot-hero {
 		top: -3.2rem;
 		right: 1%;
@@ -118,9 +103,6 @@ html.js [data-reveal].in {
 	.feat.rev .feat-media {
 		grid-column: 1 / -1;
 		order: initial;
-	}
-	.duo-media .float {
-		right: 0;
 	}
 	.foot-right {
 		margin-left: 0;

@@ -15,6 +15,8 @@ struct SwitcherSlot: View {
             .frame(width: collapsed ? nil : 0, alignment: .leading)
             .clipped()
             .opacity(collapsed ? 1 : 0)
+            // 不跟着侧栏的动画变宽：工具栏项每帧变一次宽，整条工具栏就每帧重新约束一遍
+            .animation(nil, value: collapsed)
             .accessibilityHidden(!collapsed)
     }
 }

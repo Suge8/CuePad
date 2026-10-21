@@ -19,7 +19,10 @@ extension CueStore {
     let leaves = try tasks.flatMap { task in try leaves(of: task).map { (task: task, leaf: $0) } }
     // 要看的会话：这些事的叶子绑着的，与不归没做完的事的活会话；各归哪件事只看 `sessionOwners`
     var sessions = try sessionStates(leaves.compactMap(\.leaf.piSessionID))
-    for session in try select(PiSessionState.self, where: Self.isLoose("piSessionStates")) { sessions[session.sessionID] = session }
+    // 按状态索引的排序取：缺省的 rowid 排序会扫遍几千条已结束的会话
+    for session in try select(PiSessionState.self, where: Self.isLoose("piSessionStates"), orderBy: "stateSince DESC, id") {
+      sessions[session.sessionID] = session
+    }
     let owners = try sessionOwners(Array(sessions.keys))
     let cardSeqs = try writeSeqs(of: .cards, "id", (leaves.map(\.leaf.id) + tasks.map(\.id)).map { $0.uuidString.lowercased() })
     let sessionSeqs = try writeSeqs(of: .piSessionStates, "sessionID", Array(sessions.keys))

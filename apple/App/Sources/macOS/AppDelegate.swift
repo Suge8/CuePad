@@ -85,8 +85,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             RootViews.settings($0, services, cueBar: cueBar)
         }
         DebugHooks.present(window)
-        // 首次打开：接入检测到的 Agent 并启用 Cue（主窗口里的浮层）；隔离库（开发与验收）不弹，验收这一次时给 -CuePadOfferSetup
-        if !location.isIsolated || DebugHooks.offersSetup { workspace.offerSetup() }
+        // 首次打开：接入检测到的 Agent 并启用 Cue（主窗口里的浮层）。从 Xcode 编出来直接打开的也弹（克隆仓库自己编的人，开发库就是他的库）；
+        // 脚本起的实例（截图、录屏、测量）不弹，免得盖住要拍的画面，验收这一次时给 -CuePadOfferSetup
+        if !DebugHooks.scripted || DebugHooks.offersSetup { workspace.offerSetup() }
     }
 
     @objc func checkForUpdates(_ sender: Any?) {
@@ -177,7 +178,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
 
     private func showLibraryFailure(_ failure: LibraryFailure) {
-        Logger(subsystem: AppServices.bundleID, category: "launch").error("资料库没能打开：\(failure.reason, privacy: .public)")
+        Logger(subsystem: AppIdentity.id, category: "launch").error("资料库没能打开：\(failure.reason, privacy: .public)")
         let content = UnreadableLibraryView(failure: failure) { [weak self] in self?.launch() }
             .frame(width: 520, height: 420)
             .modifier(PaletteProvider())
@@ -195,7 +196,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
     /// 配置有误时不能带着错误的位置去读写数据：说明原因后退出。
     private func abortLaunch(_ error: any Error) {
-        Logger(subsystem: AppServices.bundleID, category: "launch").error("\(error.localizedDescription, privacy: .public)")
+        Logger(subsystem: AppIdentity.id, category: "launch").error("\(error.localizedDescription, privacy: .public)")
         FileHandle.standardError.write(Data("CuePad 无法启动：\(error.localizedDescription)\n".utf8))
         let alert = NSAlert(error: error)
         alert.messageText = "CuePad 无法启动"

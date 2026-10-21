@@ -1,5 +1,6 @@
 #if os(iOS)
 import ActivityKit
+import CueStore
 import Foundation
 import OSLog
 
@@ -12,7 +13,7 @@ import OSLog
 /// 系统只许前台开启，所以后台读到有事时只改已开着的，回前台时再开。
 /// 状态（开着哪一个、发出去的是哪份）只在 actor 里、只在挂起前改：两次调用交错时，后发的那份按发出的先后落在系统里。
 actor CueLiveActivity {
-    private static let log = Logger(subsystem: "com.sugeh.cuepad", category: "live-activity")
+    private static let log = Logger(subsystem: AppIdentity.id, category: "live-activity")
 
     /// 开着的那一个（`Activity.id`）：只记 id，用时从系统的列表里取，系统的对象不跨隔离带着走。上次运行开着的接着用，多出来的结束。
     private var id: String?

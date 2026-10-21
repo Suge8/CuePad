@@ -121,9 +121,9 @@ sign_development() {
     if security cms -D -i "$f" > "$decoded" 2>/dev/null && [ "$(plutil -extract Name raw "$decoded")" = "CuePad macOS Development" ]; then echo "$f"; fi; done | head -1)"
   [ -n "$profile" ] || { echo "没有「CuePad macOS Development」描述文件：先 provision.py profiles" >&2; exit 1; }
   cp "$profile" "$app/Contents/embedded.provisionprofile"
-  cp "$APPLE_DIR/App/Config/CuePad-macOS.entitlements" "$entitlements"
+  sed "s/\$(CUEPAD_APP_ID)/$CUEPAD_APP_ID/g" "$APPLE_DIR/App/Config/CuePad-macOS.entitlements" > "$entitlements"
   /usr/libexec/PlistBuddy -c "Add :com.apple.developer.icloud-container-environment string Development" \
-    -c "Add :com.apple.application-identifier string $CUEPAD_TEAM_ID.com.sugeh.cuepad" -c "Add :com.apple.developer.team-identifier string $CUEPAD_TEAM_ID" "$entitlements"
+    -c "Add :com.apple.application-identifier string $CUEPAD_TEAM_ID.$CUEPAD_APP_ID" -c "Add :com.apple.developer.team-identifier string $CUEPAD_TEAM_ID" "$entitlements"
   # 证书只认专用钥匙串里那份（描述文件按它建）；登录钥匙串里可能有同名的另一张
   codesign --force --keychain "$HOME/.appstoreconnect/cuepad-signing.keychain-db" --sign "Apple Development" --entitlements "$entitlements" "$app"
 }
@@ -144,7 +144,7 @@ case "$cmd" in
     # 先开好领到的模拟器（停用 PosterBoard，见 _sim.sh），xcodebuild 就用开着的这台。
     # 再卸掉上一次装的 App：它开着的实时活动在重装时被系统结束，系统随即把 App 叫到后台（不带测试的环境），
     # 正撞上测试宿主的启动，测试进程就连不上（"The test runner hung before establishing connection"）。卸掉时活动一起没了，没有这一下
-    if [ -n "${device:-}" ]; then sim_boot "$device"; xcrun simctl uninstall "$device" com.sugeh.cuepad; fi
+    if [ -n "${device:-}" ]; then sim_boot "$device"; xcrun simctl uninstall "$device" "$CUEPAD_APP_ID"; fi
     # 屏幕上只留编译的警告与错误、失败的用例（带原因）与汇总：编译的每一步、App 与测试宿主的日志、每条用例的开始与通过一次就是几千行，
     # 会把失败挤出 Agent 的输出上限。所以先 -quiet 编（只出警告与错误），再不带 -quiet 跑（-quiet 连失败的原因也吞掉），跑的输出滤掉上面那些；
     # 完整输出写进 log，查失败前后的日志去那里

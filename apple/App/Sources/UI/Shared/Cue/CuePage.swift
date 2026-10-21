@@ -135,13 +135,15 @@ struct CuePage: View {
     // MARK: 对话
 
     /// 读不出来时也排一个真的视图：读库的订阅挂在页上，等视图出现才启动（docs/ui.md）。
-    /// 还没说过话时是空态（`EmptyState`）：它自我介绍，下一步就是下面的输入框（没启用时是启用卡，说清启用后活放进默认项目）。
+    /// 还没说过话时是空态（`EmptyState`）：它自我介绍，下一步就是下面的输入框；没启用时启用那一步（`CueEnableCard`）就接在那一句下面。
     @ViewBuilder private var chat: some View {
         Group {
             if let thread, !thread.rows.isEmpty {
                 conversation(thread)
             } else if thread != nil {
-                EmptyState(mascot: .hello, title: "我是 \(cue.name)", message: greeting, waitsForSync: true)
+                EmptyState(mascot: .hello, title: "我是 \(cue.name)", message: greeting, waitsForSync: true) {
+                    if offersEnable { CueEnableCard(framed: false) }
+                }
                     .padding(.horizontal, Self.inset)
                     .frame(maxWidth: Self.readingWidth, maxHeight: .infinity)
                     .frame(maxWidth: .infinity)
@@ -151,12 +153,13 @@ struct CuePage: View {
         }
     }
 
-    /// 空态的那句：启用了就请他直接说；没启用时说启用后怎么用（说一件事，它放进默认项目里开工），启用卡只放启用那一步。
+    /// 空态的那句：启用了就请他直接说；没启用时说启用后怎么用，启用卡只放启用那一步。
     private var greeting: String {
-        guard !cue.canHear else { return "要做什么，直接在下面跟我说" }
-        let home = workspace.catalog?.project(Project.defaultID)?.name ?? ""
-        return "启用后说一件想做的事，我放进「\(home)」项目里开工，只在要你拿主意时找你"
+        cue.canHear ? "要做什么，直接在下面跟我说" : "启用后说一件想做的事，我来开工，要你拿主意时再找你"
     }
+
+    /// 启用卡在不在（还没启用，或 Mac 上 Cue 运行在别的 Mac）：对话空着时在空态里，说过话之后在输入框上方。
+    private var offersEnable: Bool { !cue.canHear || cue.now.elsewhere != nil }
 
     /// 只排开铺满可见区要的那几格（`paging`）：打开时铺一屏，离最早那头不到一屏时（打开后紧接着就是）往上再铺一屏；
     /// 约 `segment` 格一段地排，离屏远的段换成同高的空白（`ChatSegments`），发出一句时只重排最新那段。一格多高要排出来才知道，
@@ -227,13 +230,13 @@ struct CuePage: View {
 
     // MARK: 底部
 
-    /// 浮在对话底上的一块："等你"卡、启用卡（Mac 上 Cue 运行在别的 Mac 时它说在哪台）与输入框。输入框按自己的高、不被挤（`fixedSize`），地方不够时（键盘弹出、小屏、横屏、输入框写了好几行）卡用剩下的。
+    /// 浮在对话底上的一块："等你"卡、启用卡（说过话之后才在这里；Mac 上 Cue 运行在别的 Mac 时它说在哪台）与输入框。输入框按自己的高、不被挤（`fixedSize`），地方不够时（键盘弹出、小屏、横屏、输入框写了好几行）卡用剩下的。
     private var bottom: some View {
         VStack(spacing: 0) {
             if let thread {
                 CueWaitingDock(waiting: workspace.leadingAsk(thread.waiting), tasks: thread.tasks, shots: thread.shots, open: { opened = $0 }, moving: $docking)
             }
-            if !cue.canHear || cue.now.elsewhere != nil {
+            if offersEnable, thread?.rows.isEmpty == false {
                 CueEnableCard().padding(.bottom, 8).transition(.opacity)
             }
             #if os(iOS)

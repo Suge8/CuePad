@@ -1,8 +1,10 @@
 # shellcheck shell=bash
-# 被 xc.sh 与发布脚本 source：读取 App Store Connect 凭据与团队，产出发布与真机构建给 xcodebuild 的签名设置 team_signing。
+# 被 xc.sh、perf 与发布脚本 source：读取 App 身份前缀、App Store Connect 凭据与团队，产出发布与真机构建给 xcodebuild 的签名设置 team_signing。
 # 凭据文件（默认 ~/.appstoreconnect/cuepad.env，可用 CUEPAD_ASC_ENV 指定）字段：ASC_KEY_ID、ASC_ISSUER_ID、ASC_KEY_PATH、CUEPAD_TEAM_ID。
 # 文件缺失时 team_signing 为空：本机 ad-hoc 构建与测试照常，只有发布命令会报错（require_asc）。绝不回显凭据内容。
 # 工程默认是本机 ad-hoc（Signing.xcconfig）；team_signing 换上团队与带 iCloud 的 macOS 权限文件，证书与描述文件名在工程的各 target 里。
+# App 身份前缀（bundle id 与由它派生的 App Group、iCloud 容器）：唯一定义在 Signing.xcconfig 的 CUEPAD_APP_ID
+CUEPAD_APP_ID="$(sed -n 's/^CUEPAD_APP_ID *= *//p' "$APPLE_DIR/App/Config/Signing.xcconfig")"
 ASC_ENV="${CUEPAD_ASC_ENV:-$HOME/.appstoreconnect/cuepad.env}"
 team_signing=()
 if [ -f "$ASC_ENV" ]; then

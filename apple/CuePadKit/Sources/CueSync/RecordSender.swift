@@ -18,7 +18,7 @@ actor RecordSender {
   static let maxBackoff = Duration.seconds(300)
   /// 一轮至多发这么多批，余下的接着下一轮（防止被拒又处理不好的记录让一轮停不下来）。
   static let batchesPerRound = 100
-  private static let log = Logger(subsystem: "com.sugeh.cuepad", category: "sync")
+  private static let log = Logger(subsystem: AppIdentity.id, category: "sync")
 
   private let uploader: any RecordUploader
   private let coordinator: SyncCoordinator
@@ -59,7 +59,7 @@ actor RecordSender {
       guard path.status == .satisfied else { return }
       Task { await self?.networkReturned() }
     }
-    monitor.start(queue: DispatchQueue(label: "com.sugeh.cuepad.sync.network"))
+    monitor.start(queue: DispatchQueue(label: "\(AppIdentity.id).sync.network"))
     network = monitor
     poke()
   }

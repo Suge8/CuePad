@@ -13,7 +13,7 @@ struct MacDependencies {
     var agents: AgentIntegrations
     var terminal: PiTerminalJumper
     var hostID: String
-    /// 项目工作区的根目录（`Workspaces`）：隔离运行与测试放进隔离目录。
+    /// 项目工作区的根目录（`Workspaces`）：不碰真实世界时与测试放进隔离目录。
     var workspaces: Workspaces
     /// 系统睡眠与唤醒通知所在的通知中心（生产是 NSWorkspace 的）。
     var wakeNotifications: NotificationCenter
@@ -21,7 +21,7 @@ struct MacDependencies {
     var timing: Timing = .system
     /// 命令行工具 `cuepad` 的链接（设置里的开关；Agent 的技能与钩子写的是 App 里那份的绝对路径，不依赖它）。
     var commandLineTool: CommandLineToolInstaller
-    /// 自动更新器；隔离模式与测试为 nil。
+    /// 自动更新器；只有正式版签名的有，本机构建与测试为 nil。
     var updater: (any AppUpdater)?
     /// Agent 钩子转发到 CuePad 的监听端（Claude Code、Codex 的接入用它）。
     var hooks: AgentHookServer
@@ -31,20 +31,23 @@ struct MacDependencies {
     var pasteboard: NSPasteboard
     var cue: CueDependencies
 
-    /// 自动更新随正式位置启用；隔离模式（开发与验收）不去读真实的更新源与偏好。
+    /// 碰不碰真实世界（各家的配置、命令行链接、连接目录、工作区、主机标识）只看 `LibraryLocation.touchesRealWorld`；
+    /// 自动更新只看是不是正式版签名：本机构建装不了 Sparkle 发来的正式版，也不去读真实的更新源与偏好。
     static func live(location: LibraryLocation, alerts: AlertCenter) -> MacDependencies {
         let environment = ProcessInfo.processInfo.environment
-        let sockets = AgentHookEnvelope.socketDirectory(environment: environment, isolatedLibrary: location.isIsolated ? location.directory : nil)
-        // 隔离运行另起的连接目录也交给 CuePad 起的每个子进程（托管的 Agent 的钩子、Cue 的大脑），它们才连回这个 App 而不是正式版
-        if location.isIsolated { setenv("CUEPAD_PI_SOCKET_DIR", sockets.path, 1) }
-        let agentHome = location.isIsolated ? DebugHooks.agentHome : nil
+        let isolated = !location.touchesRealWorld
+        AppServices.log.notice("库：\(String(describing: location.origin), privacy: .public)，碰真实世界：\(!isolated, privacy: .public)")
+        let sockets = AgentHookEnvelope.socketDirectory(environment: environment, isolatedLibrary: isolated ? location.directory : nil)
+        // 另起的连接目录也交给 CuePad 起的每个子进程（托管的 Agent 的钩子、Cue 的大脑），它们才连回这个 App 而不是正式版
+        if isolated { setenv("CUEPAD_PI_SOCKET_DIR", sockets.path, 1) }
+        let agentHome = isolated ? DebugHooks.agentHome : nil
         let paths = AgentPaths(pi: PiPaths(socketDirectory: sockets), environment: agentHome.map { home in
             environment.merging(["HOME": home.path, "PATH": "/usr/bin:/bin:/usr/sbin:/sbin"]) { $1 }
         } ?? environment)
         let pi = PiBridge(socketDirectory: paths.pi.socketDirectory)
         let hooks = AgentHookServer(path: paths.pi.hookSocket)
-        // 隔离运行（开发构建）不碰真实的 `~/.local/bin`：链接放进资料库目录，除非指定了 Pi 目录与链接目录（`PiPaths.isExplicit`）
-        let commandLineTool = location.isIsolated && !paths.pi.isExplicit
+        // 不碰真实世界时不碰真实的 `~/.local/bin`：链接放进资料库目录，除非指定了 Pi 目录与链接目录（`PiPaths.isExplicit`）
+        let commandLineTool = isolated && !paths.pi.isExplicit
             ? CommandLineToolInstaller(linkDirectory: location.directory.appending(path: "bin", directoryHint: .isDirectory))
             : CommandLineToolInstaller(linkDirectory: paths.pi.binDirectory)
         let agents = AgentIntegrations(AgentIntegration(
@@ -53,9 +56,9 @@ struct MacDependencies {
                 if let agentHome { return ExecutableLocator(searchDirectories: [agentHome.appending(path: ".local/bin")]) }
                 return await .system
             },
-            cuepad: commandLineTool.helper, isolated: location.isIsolated,
+            cuepad: commandLineTool.helper, isolated: isolated,
             legacyPiExtensionInUse: { await !pi.allRun(extensionVersion: PiExtensionBundle.version) }))
-        let hostID = (location.isIsolated ? DebugHooks.hostID : nil) ?? HostIdentity.current()
+        let hostID = (isolated ? DebugHooks.hostID : nil) ?? HostIdentity.current()
         return MacDependencies(
             pi: pi,
             hotkeys: CarbonHotkeyBackend(),
@@ -63,10 +66,10 @@ struct MacDependencies {
             agents: agents,
             terminal: PiTerminalJumper(),
             hostID: hostID,
-            workspaces: Workspaces.resolve(isolatedLibrary: location.isIsolated ? location.directory : nil),
+            workspaces: Workspaces.resolve(isolatedLibrary: isolated ? location.directory : nil),
             wakeNotifications: NSWorkspace.shared.notificationCenter,
             commandLineTool: commandLineTool,
-            updater: location.isIsolated ? DebugHooks.updater : SparkleUpdater(),
+            updater: LibraryLocation.isReleaseSigned ? SparkleUpdater() : DebugHooks.updater,
             hooks: hooks,
             runtimes: { store in [
                 .pi: PiRuntime(bridge: pi, paths: paths.pi, pi: { await agents.executable(.pi) }),

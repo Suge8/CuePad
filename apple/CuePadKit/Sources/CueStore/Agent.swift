@@ -128,7 +128,7 @@ public struct AgentHookEnvelope: Codable, Sendable, Equatable {
   }
 
   /// Pi 会话与钩子 socket 所在的目录（`CUEPAD_PI_SOCKET_DIR`，缺省 `/tmp/cuepad-<uid>`）：`sun_path` 上限 104 字节，所以不用 `$TMPDIR`；
-  /// Pi 扩展用同一缺省值。隔离运行（开发构建，`isolatedLibrary` 是它的资料库目录）没给时按资料库目录另起一个：缺省目录是正式版的，
+  /// Pi 扩展用同一缺省值。不碰真实世界的进程（`isolatedLibrary` 是它的资料库目录）没给时按资料库目录另起一个：缺省目录是正式版的，
   /// 用它桥会连上用户正在跑的会话，钩子 socket 也会把正式版的抢走。
   public static func socketDirectory(environment: [String: String], isolatedLibrary: URL? = nil) -> URL {
     if let given = environment["CUEPAD_PI_SOCKET_DIR"], !given.isEmpty { return URL(filePath: given, directoryHint: .isDirectory) }

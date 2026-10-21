@@ -13,7 +13,7 @@ public struct PiPaths: Sendable, Equatable {
     public var sessionsDirectory: URL { agentDirectory.appending(path: "sessions", directoryHint: .isDirectory) }
     /// `cuepad` 命令行链接所在的目录（`CUEPAD_BIN_DIR`，缺省 `~/.local/bin`：不需要管理员权限）
     public var binDirectory: URL
-    /// Pi 目录与链接目录都是指定的（参数或环境变量），不是缺省的真实位置。隔离运行（开发构建）只在这时接入 Agent，
+    /// Pi 目录与链接目录都是指定的（参数或环境变量），不是缺省的真实位置。不碰真实世界的进程（装着正式版的 Mac 上的本机构建）只在这时接入 Agent，
     /// 不会把真实 `~/.pi` 与 `~/.local/bin` 里的东西改成指向开发构建。
     public var isExplicit: Bool
     /// Agent 钩子转发到 CuePad 的 socket（`AgentHookServer`），与 Pi 会话的 socket 同目录
