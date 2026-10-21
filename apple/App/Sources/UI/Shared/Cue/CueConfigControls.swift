@@ -1,8 +1,8 @@
 import CueStore
 import SwiftUI
 
-/// Cue 用哪个 Agent、模型与思考强度（`PiConfigControls.init(choice:)`，与新会话同一排）：选的是 Cue 的大脑。Mac 在 Cue 页输入框的工具排里与设置里，
-/// 手机在 Cue 面板的第一行（`CueHeader`）与 Cue 的设置里。
+/// Cue 用哪个 Agent、模型与思考强度（`PiConfigControls.init(choice:)`，与新会话同一排）：选的是 Cue 的大脑。
+/// Mac 在 Cue 页输入框的工具排与设置里，手机在 Cue 面板第一行（`CueHeader`）与设置里。
 /// 值只在同步的 `CueProfile`（`runtime`、`model`、`effort`），选了经 `AppServices.updateCue` 写入并上传；Cue 运行的那台 Mac 读到就按它值班。
 /// 能选的是那台 Mac 上能用、又能当大脑（`CueProfile.runtimes`）、有模型可选的几家；还没选在哪台运行、那台还没报过时一家都没有。
 /// 读不出、写不成的原因交给 `fail`（Cue 页与面板是窗口的提示，设置里就地写在那一节）：Mac 的设置窗口没有 `Workspace`。
