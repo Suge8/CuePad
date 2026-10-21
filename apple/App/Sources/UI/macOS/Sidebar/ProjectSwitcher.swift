@@ -40,11 +40,11 @@ struct ProjectSwitcher: View {
                 }
             }
             .font(Typography.toolbarLabel.weight(.semibold))
+            .menuLabel("当前项目，点按切换")
         }
         .menuIndicator(.hidden)
         .fixedSize()
         .help("切换项目（⌘1–9）")
-        .accessibilityLabel("当前项目，点按切换")
     }
 
     /// 菜单项里 SwiftUI 的前景色不生效，用带项目色的非模板符号图。

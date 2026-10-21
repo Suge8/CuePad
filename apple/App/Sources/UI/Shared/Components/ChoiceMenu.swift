@@ -69,13 +69,12 @@ struct MenuButton<Label: View>: View {
     var body: some View {
         Group {
             if let primary {
-                Menu { ChoiceMenuItems(sections: sections) } label: { label() } primaryAction: { primary() }
+                Menu { ChoiceMenuItems(sections: sections) } label: { label().menuLabel(accessibilityLabel) } primaryAction: { primary() }
             } else {
-                Menu { ChoiceMenuItems(sections: sections) } label: { label() }
+                Menu { ChoiceMenuItems(sections: sections) } label: { label().menuLabel(accessibilityLabel) }
             }
         }
         .menuStyle(.button).buttonStyle(PressStyle(press)).menuIndicator(.hidden).fixedSize()
-        .accessibilityLabel(accessibilityLabel)
         .accessibilityValue(value ?? "")
         .accessibilityHint(hint ?? "")
     }

@@ -62,9 +62,9 @@ struct NewTaskField: View {
                     .padding(.horizontal, 8).frame(height: 24)
                     .background(palette.fill, in: .capsule)
                     .contentShape(.capsule)
+                    .menuLabel("挂到 \(current?.name ?? "")")
                 }
                 .menuStyle(.button).buttonStyle(PressStyle()).menuIndicator(.hidden).fixedSize()
-                .accessibilityLabel("挂到 \(projects.first { $0.id == target }?.name ?? "")")
             }
             #endif
         }

@@ -40,8 +40,7 @@ struct CueWakeTitle: View {
             if !header.targets.isEmpty { Image(.forward).font(.system(size: 8, weight: .semibold)).foregroundStyle(palette.ink3) }
         }
         .lineLimit(1)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel([header.reason, header.name, header.trail, quiet ? "没动手" : nil].compactMap(\.self).joined(separator: "，"))
+        .menuLabel([header.reason, header.name, header.trail, quiet ? "没动手" : nil].compactMap(\.self).joined(separator: "，"))
     }
 
     @ViewBuilder private var reason: some View {
