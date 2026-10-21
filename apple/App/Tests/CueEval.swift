@@ -11,15 +11,6 @@ import SwiftUI
 import Testing
 @testable import CuePad
 
-struct Check {
-    let label: String
-    let passed: Bool
-    init(_ label: String, _ passed: Bool) {
-        self.label = label
-        self.passed = passed
-    }
-}
-
 /// 一件 Cue 开过工、正在做的任务：开工时送进会话的第一句记在发送记录里（会话里那句因此认作 Cue 说的，不是"他说的"），
 /// 会话是本机开着的假扩展（Cue 对它说话、作答都送得到）。
 struct Working {
@@ -42,6 +33,8 @@ final class CueEval {
     /// 场景自己要写进 .md 的段落（长程的统计），与汇总行"工具调用""用时"两格（缺省是被叫醒那一轮的）
     var report: [String] = []
     var overview: (calls: Int, elapsed: String)?
+    /// 场景自己要写进成绩单的（长程的换新方式、多日的记忆合并），JSON 能表示的值
+    var extra: [String: Any] = [:]
 
     private init(_ rig: CueHostTests.Rig, output: URL) {
         self.rig = rig
@@ -50,7 +43,7 @@ final class CueEval {
 
     /// 起 Rig、等刚启用那一轮做完，跑 `body`（摆状态、叫醒、判定）；不论成败都把现场写完、停掉大脑，再报没过的判定。
     static func run(
-        _ name: String, expect: String, output: URL = evalOutput,
+        _ name: String, expect: String, suite: EvalSuite = .short, output: URL = evalOutput,
         rig makeRig: () async throws -> CueHostTests.Rig = { try await CueHostTests.Rig(brain: .current) }, _ body: (CueEval) async throws -> [Check]
     ) async throws {
         let eval = CueEval(try await makeRig(), output: output)
@@ -62,10 +55,10 @@ final class CueEval {
         } catch {
             failure = error
         }
-        await eval.write(name, expect: expect, checks: checks, failure: failure)
+        await eval.write(name, expect: expect, suite: suite, checks: checks, failure: failure)
         await eval.rig.stop()
         #expect(eval.rig.brainPIDs.isEmpty, "大脑停掉了")
-        for check in checks where !check.passed { Issue.record("\(name)：\(check.label)") }
+        for check in checks where check.failed { Issue.record("\(name)：\(check.shown)") }
         if let failure { throw failure }
     }
 
@@ -150,15 +143,15 @@ final class CueEval {
         let seen = rig.rounds.filter { $0.startedAt >= start }.flatMap { $0.sent + $0.calls.compactMap(\.result) }
         let ids = Set(seen.flatMap { $0.matches(of: /（((?:s-)?[0-9a-f]{6,8})）/).map { String($0.1) } })
         let written = try await said().map(\.text) + calls("memory", "note").compactMap { $0.args["text"] as? String }
-        return Check("他看得到的字里没有编号", !written.contains { text in ids.contains { text.contains($0) } })
+        return Check(.tool, "他看得到的字里没有编号", !written.contains { text in ids.contains { text.contains($0) } })
     }
 
     func reply(since: Date? = nil) async throws -> CueMessage? {
         try await said(since: since).last { $0.author == .known(.cue) && $0.choices == nil && $0.taskID == nil }
     }
 
-    private func write(_ name: String, expect: String, checks: [Check], failure: (any Error)?) async {
-        let passed = failure == nil && !checks.isEmpty && checks.allSatisfy(\.passed)
+    private func write(_ name: String, expect: String, suite: EvalSuite, checks: [Check], failure: (any Error)?) async {
+        let passed = failure == nil && !checks.isEmpty && !checks.contains(where: \.failed)
         let verdict = failure != nil ? "出错" : passed ? "通过" : "不通过"
         let round = round, rounds = rounds
         let usage = rig.brainDirectory.map(BrainUsage.rounds(in:)) ?? []
@@ -170,7 +163,7 @@ final class CueEval {
             "# \(name)", "", "期望：\(expect)", "", "大脑：\(EvalBrain.current.label)", "",
             "## 判定：\(verdict)", "",
         ]
-        lines += checks.map { "- [\($0.passed ? "x" : " ")] \($0.label)" }
+        lines += checks.map { "- [\($0.passed ? "x" : " ")] \($0.shown)" }
         if let failure { lines += ["", "出错：\(failure)"] }
         lines += report
         lines += ["", "## 用时与上下文", "", "- 被叫醒的这一轮：\(elapsed)，结束时上下文 \(context) token"]
@@ -218,6 +211,7 @@ final class CueEval {
         do {
             try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
             try lines.joined(separator: "\n").appending("\n").write(to: output.appending(path: "\(name).md"), atomically: true, encoding: .utf8)
+            try await writeScore(name, suite: suite, checks: checks, failure: failure, to: output)
             // 资料库留一份，看这一场在 Cue 页上的样子（docs/verify.md「Cue 评测」）
             let library = output.appending(path: "\(name).library", directoryHint: .isDirectory)
             try? FileManager.default.removeItem(at: library)

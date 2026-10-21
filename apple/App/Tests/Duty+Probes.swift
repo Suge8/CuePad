@@ -35,9 +35,13 @@ extension Duty {
         return renewalModes.filter { $0.round.startedAt > from && $0.round.startedAt <= to }.map(\.mode)
     }
 
+    /// 埋点与考题之间没换新的，这一遍没测到换新，不计
     func probe(_ check: Check, _ plant: Step, _ exam: Step) -> Check {
         let modes = crossed(plant, exam)
-        return Check(check.label + (modes.isEmpty ? "〔没跨换新〕" : "〔跨了：\(modes.joined(separator: "、"))〕"), check.passed)
+        var probed = check
+        probed.note += modes.isEmpty ? "〔没跨换新〕" : "〔跨了：\(modes.joined(separator: "、"))〕"
+        probed.counted = check.counted && !modes.isEmpty
+        return probed
     }
 
     static let recommends24 = /(建议|升到)[^。；，]{0,6}(Node ?)?24/
@@ -73,12 +77,12 @@ extension Duty {
                 $0.contains(/(建议|升到)[^。；，]{0,6}22/) && !$0.contains(Self.recommends24)
             }, p.depsListed, p.node),
             probe(try await recalled("(P1 细节) 设置页那版没改成立刻存的两项：登录邮箱、手机号", p.instant) { $0.contains("邮箱") && $0.contains("手机") }, p.layout, p.instant),
-            probe(Check("(P2 托付) 忘记密码做完才派删 SendGrid" + (early ? "（提前派了）" : !loginClosed ? "（忘记密码没收尾，不算）" : onTime ? "" : "（没派）"),
-                        !early && (onTime || !loginClosed)), p.sendgrid, p.finish),
-            Check("(P3 判断·当时) 挂件选了 A（B 有重复会话的风险）", pickedA),
-            probe(Check("(P3 判断) 会话再问换不换成 B：保持 A" + (leftToHim ? "（留给了他）" : ""), pickedA && keeps), p.widget, p.widgetAgain),
-            probe(Check("(P4 多步) 价格页查完：告诉他 2 个、接着派博客、不重查" + (hot.redo ? "（重查或另建了）" : ""), hot.told && hot.next && !hot.redo), p.page1, p.page2),
-            probe(Check("(P4 多步) 博客页查完：告诉他 5 个、接着派文档、不重查" + (cold.redo ? "（重查或另建了）" : ""), cold.told && cold.next && !cold.redo), p.page2, p.page3),
+            probe(Check(.carry, "(P2 托付) 忘记密码做完才派删 SendGrid", !early && onTime,
+                        note: early ? "（提前派了）" : !loginClosed ? "（忘记密码没收尾）" : onTime ? "" : "（没派）", counted: early || loginClosed), p.sendgrid, p.finish),
+            Check(.result, "(P3 判断·当时) 挂件选了 A（B 有重复会话的风险）", pickedA),
+            probe(Check(.carry, "(P3 判断) 会话再问换不换成 B：保持 A", pickedA && keeps, note: leftToHim ? "（留给了他）" : ""), p.widget, p.widgetAgain),
+            probe(Check(.carry, "(P4 多步) 价格页查完：告诉他 2 个、接着派博客、不重查", hot.told && hot.next && !hot.redo, note: hot.redo ? "（重查或另建了）" : ""), p.page1, p.page2),
+            probe(Check(.carry, "(P4 多步) 博客页查完：告诉他 5 个、接着派文档、不重查", cold.told && cold.next && !cold.redo, note: cold.redo ? "（重查或另建了）" : ""), p.page2, p.page3),
         ]
     }
 }

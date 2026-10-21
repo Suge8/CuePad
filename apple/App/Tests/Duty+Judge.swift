@@ -53,23 +53,23 @@ extension Duty {
         let wrapUp = CueEval.calls(in: rounds(key.finish), "task", ["say", "edit", "add"]).map { Self.texts($0.args) } + started
         let planned = try await rig.store.cueTaskDetail(login.task.id).leaves.contains { $0.leaf.status != .done && $0.leaf.body.contains(bump) }
         return [
-            Check("(a) 他口头交代的升 2.3.1、记 CHANGELOG：收尾时交代了，或排成了下一步" + (loginDone ? "" : "（这件没收尾，不算）"),
-                  !loginDone || wrapUp.contains { $0.contains(bump) } || planned),
-            Check("(a) 他口头交代的：官网问跑不跑 e2e，答只跑单元测试", e2eSaid.contains { $0.contains(/单元|只跑|不跑|别跑/) } && !e2eSaid.contains { $0.contains("跑 e2e 回归") || $0 == "1" }),
-            Check("(b) 早先会话查清的：周报邮件问走哪家发信，答 Postmark", providerSaid.contains { $0.localizedCaseInsensitiveContains("Postmark") } && !providerSaid.contains { $0 == "SendGrid" || $0 == "1" }),
-            Check("(c) README 只建了一个任务（问进展时没另建）", readmeAdds == 1 && calls(key.readmeStatus, "task", ["add", "start"]).isEmpty),
-            Check("(c) 每件事只建一个任务" + (duplicated.isEmpty ? "" : "（重复：\(duplicated.joined(separator: "、"))）"), duplicated.isEmpty),
-            Check("(c) 没对同一个会话把同一件事说两遍" + (repeated.isEmpty ? "" : "（\(repeated.map(\.title).joined(separator: "、"))）"), repeated.isEmpty),
-            Check("(c) 会话的每次动静都有接手" + (unhandled.isEmpty ? "" : "（没接：\(unhandled.map(\.label).joined(separator: "、"))）"), unhandled.isEmpty),
-            Check("(d) 设置页问拆不拆标签页：按他说的保持一页，不留给他、不问他",
+            Check(.carry, "(a) 他口头交代的升 2.3.1、记 CHANGELOG：收尾时交代了，或排成了下一步",
+                  wrapUp.contains { $0.contains(bump) } || planned, note: loginDone ? "" : "（这件没收尾）", counted: loginDone),
+            Check(.memory, "(a) 他口头交代的：官网问跑不跑 e2e，答只跑单元测试", e2eSaid.contains { $0.contains(/单元|只跑|不跑|别跑/) } && !e2eSaid.contains { $0.contains("跑 e2e 回归") || $0 == "1" }),
+            Check(.memory, "(b) 早先会话查清的：周报邮件问走哪家发信，答 Postmark", providerSaid.contains { $0.localizedCaseInsensitiveContains("Postmark") } && !providerSaid.contains { $0 == "SendGrid" || $0 == "1" }),
+            Check(.carry, "(c) README 只建了一个任务（问进展时没另建）", readmeAdds == 1 && calls(key.readmeStatus, "task", ["add", "start"]).isEmpty),
+            Check(.carry, "(c) 每件事只建一个任务", duplicated.isEmpty, note: duplicated.isEmpty ? "" : "（重复：\(duplicated.joined(separator: "、"))）"),
+            Check(.carry, "(c) 没对同一个会话把同一件事说两遍", repeated.isEmpty, note: repeated.isEmpty ? "" : "（\(repeated.map(\.title).joined(separator: "、"))）"),
+            Check(.result, "(c) 会话的每次动静都有接手", unhandled.isEmpty, note: unhandled.isEmpty ? "" : "（没接：\(unhandled.map(\.label).joined(separator: "、"))）"),
+            Check(.ask, "(d) 设置页问拆不拆标签页：按他说的保持一页，不留给他、不问他",
                   tabsSaid.contains { $0.contains(/一页|不拆|保持|不分|别拆|不要/) } && !tabsSaid.contains { $0 == "拆成标签页" || $0 == "1" }
                     && calls(key.tabs, "tell").allSatisfy { $0.args["ask"] == nil }),
-            Check("(d) 他否掉之后没再提分标签页", !afterRejection.contains(where: Self.proposesTabs)),
+            Check(.memory, "(d) 他否掉之后没再提分标签页", !afterRejection.contains(where: Self.proposesTabs)),
             try await recalled("(e) 他顺口说的行程：答出下周三下午 3 点", key.trip) { $0.contains(/周三|28/) && $0.contains(/3 ?点|15[:：]|三点/) },
             try await recalled("(f) 已完成的调研里顺带的细节：答出 13 封", key.bounce) { $0.contains(/13|十三/) },
-            Check("(g) 证书查完时照他要的说了是哪家签发的" + (certDone ? "" : "（这一步没收尾）"), certSaid.contains { $0.localizedCaseInsensitiveContains("Sectigo") }),
-            Check("问登录页进展：答了进展、没派新活", try await reply(key.progress)?.contains(/后端|前端|测试|接口/) == true && calls(key.progress, "task", ["add", "start"]).isEmpty),
-            Check("问今天的事：回了他、没派新活", try await reply(key.wrap) != nil && calls(key.wrap, "task", ["add", "start"]).isEmpty),
+            Check(.carry, "(g) 证书查完时照他要的说了是哪家签发的", certSaid.contains { $0.localizedCaseInsensitiveContains("Sectigo") }, note: certDone ? "" : "（这一步没收尾）"),
+            Check(.result, "问登录页进展：答了进展、没派新活", try await reply(key.progress)?.contains(/后端|前端|测试|接口/) == true && calls(key.progress, "task", ["add", "start"]).isEmpty),
+            Check(.result, "问今天的事：回了他、没派新活", try await reply(key.wrap) != nil && calls(key.wrap, "task", ["add", "start"]).isEmpty),
         ]
     }
 
@@ -109,6 +109,9 @@ extension Duty {
             lines.append("| \(index + 1) | \(step.label) | \(rounds.count) | \(rounds.flatMap(\.calls).map(\.name).joined(separator: "、")) |")
         }
         eval.report = lines
+        eval.extra["renewals"] = renewalModes.map { round, mode in
+            ["mode": mode, "step": steps.first { $0.window?.contains(round.startedAt) == true }?.label ?? "—"]
+        }
     }
 }
 #endif

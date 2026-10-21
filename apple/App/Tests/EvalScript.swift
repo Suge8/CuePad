@@ -125,15 +125,17 @@ class EvalScript {
 
     /// 他问起早先的事：答对才过；没答对时标出是说不知道还是答错（乱编）
     /// `fabricated`：没答对、也没说不知道时，这句是不是给了一个具体的错答案（编造）。
-    func recalled(_ label: String, _ step: Step, fabricated: ((String) -> Bool)? = nil, _ correct: (String) -> Bool) async throws -> Check {
+    func recalled(
+        _ label: String, _ step: Step, kind: CheckKind = .memory, fabricated: ((String) -> Bool)? = nil, _ correct: (String) -> Bool
+    ) async throws -> Check {
         // 这一步里回他的每一句都算：碰上换新时，答他的那句之后新班次还会再回一句
         let answers = try await replies(step)
-        if answers.contains(where: correct) { return Check(label, true) }
+        if answers.contains(where: correct) { return Check(kind, label, true) }
         if answers.contains(where: { $0.contains(/不记得|不确定|没找到|查不到|没有记录|没查到|不知道|答不出|答不上|报不出|没统计|没查退信|没有.{0,6}记录/) }) {
-            return Check(label + "（说不知道）", false)
+            return Check(kind, label, false, note: "（说不知道）")
         }
         let made = fabricated.map { answers.contains(where: $0) } ?? false
-        return Check(label + (made ? "（答错，编造）" : "（答错）"), false)
+        return Check(kind, label, false, note: made ? "（答错，编造）" : "（答错）")
     }
 
     /// 这一步里 Cue 写的消息（回复、tell、动态、完成的结果）

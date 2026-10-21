@@ -17,8 +17,8 @@ extension CueEvalTests {
             let work = try await eval.rig.working(Self.title, Self.body)
             try await eval.trigger { work.session.setState(["kind": "error", "error": #"500 {"type":"error","error":{"type":"api_error","message":"Internal server error"}}"#]) }
             return [
-                Check("对会话 say（继续或换模型）", !eval.calls("task", "say").isEmpty),
-                Check("没打扰用户（没 tell）", eval.calls("tell").isEmpty),
+                Check(.result, "对会话 say（继续或换模型）", !eval.calls("task", "say").isEmpty),
+                Check(.interrupt, "没打扰用户（没 tell）", eval.calls("tell").isEmpty),
             ]
         }
     }
@@ -29,7 +29,7 @@ extension CueEvalTests {
             let quota = #"400 {"type":"error","error":{"type":"invalid_request_error","message":"You have reached your specified API usage limits. You will regain access on 2026-11-01 at 00:00 UTC."}}"#
             try await eval.trigger { work.session.setState(["kind": "error", "error": quota]) }
             let told = try await eval.said().contains { $0.author == .known(.cue) }
-            return [Check("tell 告诉用户", !eval.calls("tell").isEmpty && told)]
+            return [Check(.interrupt, "tell 告诉用户", !eval.calls("tell").isEmpty && told)]
         }
     }
 
@@ -67,10 +67,10 @@ extension CueEvalTests {
             }
             let said = toIt.compactMap { $0.args["text"] as? String }
             return [
-                Check("对这件任务的会话 say", !toIt.isEmpty),
-                Check("say 点名 e2e 与多久没动静", said.contains { $0.contains("e2e") && $0.contains(/20|二十/) }),
-                Check("没打扰他（没 tell）", eval.calls("tell").isEmpty),
-                Check("没停会话（没 stop、没 done）", eval.calls("task", "stop").isEmpty && eval.calls("task", "done").isEmpty),
+                Check(.result, "对这件任务的会话 say", !toIt.isEmpty),
+                Check(.result, "say 点名 e2e 与多久没动静", said.contains { $0.contains("e2e") && $0.contains(/20|二十/) }),
+                Check(.interrupt, "没打扰他（没 tell）", eval.calls("tell").isEmpty),
+                Check(.result, "没停会话（没 stop、没 done）", eval.calls("task", "stop").isEmpty && eval.calls("task", "done").isEmpty),
             ]
         }
     }
@@ -92,8 +92,9 @@ extension CueEvalTests {
             try await eval.trigger { try await rig.say("登录页那件做到哪了？") }
             let reply = try await eval.reply()
             return [
-                Check("没派新活（没 add、start）", eval.calls("task", "add").isEmpty && eval.calls("task", "start").isEmpty),
-                Check("回答了进展（提到后端、前端或测试）", reply?.text.contains(/后端|前端|测试|接口|表单/) == true),
+                Check(.result, "没派新活（没 add、start）", eval.calls("task", "add").isEmpty && eval.calls("task", "start").isEmpty),
+                Check(.result, "回答了进展（提到后端、前端或测试）", reply?.text.contains(/后端|前端|测试|接口|表单/) == true),
+                Check(.interrupt, "他发起的一轮不另 tell", eval.calls("tell").isEmpty),
             ]
         }
     }
@@ -114,10 +115,11 @@ extension CueEvalTests {
             }
             let ended = try await rig.store.deliveryRequests(toSession: work.id).contains { $0.mode == .known(.end) }
             return [
-                Check("再 done 了这件事", eval.calls("task", "done").contains { !$0.call.failed }),
-                Check("请会话结束", ended),
-                Check("没另开活（没 add、start）", eval.calls("task", "add").isEmpty && eval.calls("task", "start").isEmpty),
-                Check("没发等你", try await eval.said().allSatisfy { $0.choices == nil }),
+                Check(.result, "再 done 了这件事", eval.calls("task", "done").contains { !$0.call.failed }),
+                Check(.result, "请会话结束", ended),
+                Check(.result, "没另开活（没 add、start）", eval.calls("task", "add").isEmpty && eval.calls("task", "start").isEmpty),
+                Check(.ask, "没发等你", try await eval.said().allSatisfy { $0.choices == nil }),
+                Check(.interrupt, "没打扰他（没 tell）", eval.calls("tell").isEmpty),
             ]
         }
     }
@@ -138,12 +140,12 @@ extension CueEvalTests {
             }
             let variants = Set(shown.map { name in Self.proposals.map(\.slug).reduce(name.name) { $0.replacingOccurrences(of: $1, with: "") } })
             return [
-                Check("请他选（tell 带 ask=rule、关联这件任务）", try await eval.said().contains { $0.choices != nil && $0.taskID == work.task.id } && !asked.isEmpty),
-                Check("doing 写推荐的方案", (asked.last?.args["doing"] as? String)?.contains(/方案|决定单|对话里问|郑重放行/) == true),
-                Check("show 每个方案一张（3 张、各是一个方案）", shown.count == 3 && Set(shown.map(\.title)).count == 3 && shown.allSatisfy { $0.title.hasPrefix("提问卡方案") }),
-                Check("同一种样子（同一台设备、同一种外观）", !shown.isEmpty && variants.count == 1),
-                Check("每张一句看什么", (asked.last?.args["show"] as? [[String: Any]])?.allSatisfy { ($0["look"] as? String)?.isEmpty == false } == true),
-                Check("没带别的改动的图", !shown.contains { $0.title.hasPrefix("上一轮的改动") }),
+                Check(.ask, "请他选（tell 带 ask=rule、关联这件任务）", try await eval.said().contains { $0.choices != nil && $0.taskID == work.task.id } && !asked.isEmpty),
+                Check(.tool, "doing 写推荐的方案", (asked.last?.args["doing"] as? String)?.contains(/方案|决定单|对话里问|郑重放行/) == true),
+                Check(.tool, "show 每个方案一张（3 张、各是一个方案）", shown.count == 3 && Set(shown.map(\.title)).count == 3 && shown.allSatisfy { $0.title.hasPrefix("提问卡方案") }),
+                Check(.tool, "同一种样子（同一台设备、同一种外观）", !shown.isEmpty && variants.count == 1),
+                Check(.tool, "每张一句看什么", (asked.last?.args["show"] as? [[String: Any]])?.allSatisfy { ($0["look"] as? String)?.isEmpty == false } == true),
+                Check(.tool, "没带别的改动的图", !shown.contains { $0.title.hasPrefix("上一轮的改动") }),
             ]
         }
     }
@@ -174,11 +176,11 @@ extension CueEvalTests {
             }
             let report = try await eval.said().last { $0.taskID == work.task.id && $0.choices == nil }
             return [
-                Check("done 了", done != nil),
-                Check("挂了最终版浅色与深色", Set(shown.map(\.name)).isSuperset(of: ["final-light-mac.png", "final-dark-mac.png"])),
-                Check("只挂最终版（方案稿、中途稿不挂）", !shown.isEmpty && shown.allSatisfy { $0.title.hasPrefix("最终版") }),
-                Check("每张一句看什么", !picked.isEmpty && picked.allSatisfy { ($0["look"] as? String)?.isEmpty == false }),
-                Check("结果上就是点名的这几张", report?.shots.map(\.preview) == shown.map(\.id)),
+                Check(.result, "done 了", done != nil),
+                Check(.tool, "挂了最终版浅色与深色", Set(shown.map(\.name)).isSuperset(of: ["final-light-mac.png", "final-dark-mac.png"])),
+                Check(.tool, "只挂最终版（方案稿、中途稿不挂）", !shown.isEmpty && shown.allSatisfy { $0.title.hasPrefix("最终版") }),
+                Check(.tool, "每张一句看什么", !picked.isEmpty && picked.allSatisfy { ($0["look"] as? String)?.isEmpty == false }),
+                Check(.tool, "结果上就是点名的这几张", report?.shots.map(\.preview) == shown.map(\.id)),
             ]
         }
     }

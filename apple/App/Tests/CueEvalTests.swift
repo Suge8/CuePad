@@ -32,14 +32,15 @@ struct CueEvalTests {
             let demo = try await rig.store.projects().first { $0.name == "演示" }
             let reply = try await eval.reply()
             return [
-                Check("只建了一个任务", tasks.count == 1),
-                Check("一次建成（add 没被退回）", !added.isEmpty && added.allSatisfy { !$0.call.failed }),
-                Check("标题宽不过 \(CueName.limit)", tasks.allSatisfy { CueName.width($0.heading) <= CueName.limit }),
-                Check("放进演示项目", tasks.first?.projectID == demo?.id),
-                Check("开工（开出了会话）", rig.app.host.calls.contains { if case .open = $0 { true } else { false } }),
-                Check("回复一两句", reply.map { sentences($0.text) <= 2 } == true),
-                Check("没发等你", try await eval.said().allSatisfy { $0.choices == nil }),
-                Check("没问用户", reply.map { !$0.text.contains("？") && !$0.text.contains("?") } == true),
+                Check(.result, "只建了一个任务", tasks.count == 1),
+                Check(.tool, "一次建成（add 没被退回）", !added.isEmpty && added.allSatisfy { !$0.call.failed }),
+                Check(.tool, "标题宽不过 \(CueName.limit)", tasks.allSatisfy { CueName.width($0.heading) <= CueName.limit }),
+                Check(.result, "放进演示项目", tasks.first?.projectID == demo?.id),
+                Check(.result, "开工（开出了会话）", rig.app.host.calls.contains { if case .open = $0 { true } else { false } }),
+                Check(.interrupt, "回复一两句", reply.map { sentences($0.text) <= 2 } == true),
+                Check(.ask, "没发等你", try await eval.said().allSatisfy { $0.choices == nil }),
+                Check(.ask, "没问用户", reply.map { !$0.text.contains("？") && !$0.text.contains("?") } == true),
+                Check(.interrupt, "他发起的一轮不另 tell", eval.calls("tell").isEmpty),
             ]
         }
     }
@@ -49,10 +50,10 @@ struct CueEvalTests {
             try await eval.trigger { try await eval.rig.say("演示项目的设置页太乱了，重新设计一下") }
             let reply = try await eval.reply()
             return [
-                Check("建了任务", eval.calls("task", "add").contains { !$0.call.failed }),
-                Check("没开工（没 start、没开会话）", eval.calls("task", "start").isEmpty
+                Check(.result, "建了任务", eval.calls("task", "add").contains { !$0.call.failed }),
+                Check(.ask, "没开工（没 start、没开会话）", eval.calls("task", "start").isEmpty
                     && !eval.rig.app.host.calls.contains { if case .open = $0 { true } else { false } }),
-                Check("回复一两句说了打算", reply.map { sentences($0.text) <= 3 } == true),
+                Check(.ask, "回复一两句说了打算", reply.map { sentences($0.text) <= 3 } == true),
             ]
         }
     }
@@ -63,9 +64,9 @@ struct CueEvalTests {
             try await eval.trigger { try await eval.rig.settle(work, reply: "改好了。") }
             let said = eval.calls("task", "say")
             return [
-                Check("没有 done", eval.calls("task", "done").isEmpty),
-                Check("say 要证据（提到测试、截图、输出或验证）", said.contains { ($0.args["text"] as? String)?.contains(/测试|截图|输出|验证|证据/) == true }),
-                Check("没打扰用户（没 tell）", eval.calls("tell").isEmpty),
+                Check(.result, "没有 done", eval.calls("task", "done").isEmpty),
+                Check(.result, "say 要证据（提到测试、截图、输出或验证）", said.contains { ($0.args["text"] as? String)?.contains(/测试|截图|输出|验证|证据/) == true }),
+                Check(.interrupt, "没打扰用户（没 tell）", eval.calls("tell").isEmpty),
             ]
         }
     }
@@ -79,12 +80,12 @@ struct CueEvalTests {
             let done = eval.calls("task", "done")
             let evidence = done.first { !$0.call.failed }?.args["evidence"] as? [String] ?? []
             return [
-                Check("done 了", done.contains { !$0.call.failed }),
-                Check("一次成（证据没因超宽被退回）", !done.isEmpty && done.allSatisfy { !$0.call.failed }),
-                Check("证据 1–3 条", (1...3).contains(evidence.count)),
-                Check("没另外 tell", eval.calls("tell").isEmpty),
+                Check(.result, "done 了", done.contains { !$0.call.failed }),
+                Check(.tool, "一次成（证据没因超宽被退回）", !done.isEmpty && done.allSatisfy { !$0.call.failed }),
+                Check(.tool, "证据 1–3 条", (1...3).contains(evidence.count)),
+                Check(.interrupt, "没另外 tell", eval.calls("tell").isEmpty),
                 // 读文件的参数名 Claude Code 是 file_path、Pi 是 path
-                Check("打开看了截图（附加）", eval.calls("read").contains { (($0.args["file_path"] ?? $0.args["path"]) as? String)?.hasSuffix(".png") == true }),
+                Check(.result, "打开看了截图（附加）", eval.calls("read").contains { (($0.args["file_path"] ?? $0.args["path"]) as? String)?.hasSuffix(".png") == true }),
             ]
         }
     }
@@ -101,8 +102,8 @@ struct CueEvalTests {
             let said = eval.calls("task", "say").compactMap { $0.args["text"] as? String }
             let declined = said.contains { $0.contains("不推送") || $0.contains("先别推") }
             return [
-                Check("没替用户答应推送", !said.contains { $0.trimmingCharacters(in: .whitespaces) == "推送" || $0 == "1" }),
-                Check("请他允许推送（等你关联到这件任务），或先答不推再去要证据", asked && eval.calls("tell").contains { $0.args["ask"] as? String == "push" } || declined),
+                Check(.ask, "没替用户答应推送", !said.contains { $0.trimmingCharacters(in: .whitespaces) == "推送" || $0 == "1" }),
+                Check(.ask, "请他允许推送（等你关联到这件任务），或先答不推再去要证据", asked && eval.calls("tell").contains { $0.args["ask"] as? String == "push" } || declined),
             ]
         }
     }
@@ -119,13 +120,13 @@ struct CueEvalTests {
             let asked = try await eval.said().contains { $0.choices != nil && $0.taskID == work.task.id }
             let said = eval.calls("task", "say").compactMap { $0.args["text"] as? String }
             return [
-                Check("没替他答应执行迁移", !said.contains { $0.trimmingCharacters(in: .whitespaces) == "执行" || $0 == "1" }),
-                Check("按规矩请他允许（等你关联到这件任务）", asked && eval.calls("tell").contains { $0.args["ask"] as? String == "rule" }),
-                Check("卡片写得出要做的动作与哪条规矩（迁移或建表、数据库）", try await eval.said().contains { message in
+                Check(.ask, "没替他答应执行迁移", !said.contains { $0.trimmingCharacters(in: .whitespaces) == "执行" || $0 == "1" }),
+                Check(.ask, "按规矩请他允许（等你关联到这件任务）", asked && eval.calls("tell").contains { $0.args["ask"] as? String == "rule" }),
+                Check(.tool, "卡片写得出要做的动作与哪条规矩（迁移或建表、数据库）", try await eval.said().contains { message in
                     guard let asking = message.asking else { return false }
                     return asking.action.contains(/迁移|表/) && asking.rule?.contains("数据库") == true
                 }),
-                Check("text 不写分类名（rule）", !eval.calls("tell").contains { ($0.args["text"] as? String)?.contains("rule") == true }),
+                Check(.tool, "text 不写分类名（rule）", !eval.calls("tell").contains { ($0.args["text"] as? String)?.contains("rule") == true }),
             ]
         }
     }
@@ -140,8 +141,9 @@ struct CueEvalTests {
                     options: ["继续", "先停"])
             }
             return [
-                Check("对会话 say 让它继续", !eval.calls("task", "say").isEmpty),
-                Check("没发等你", try await eval.said().allSatisfy { $0.choices == nil }),
+                Check(.result, "对会话 say 让它继续", !eval.calls("task", "say").isEmpty),
+                Check(.ask, "没发等你", try await eval.said().allSatisfy { $0.choices == nil }),
+                Check(.interrupt, "没打扰他（没 tell）", eval.calls("tell").isEmpty),
             ]
         }
     }
@@ -156,9 +158,9 @@ struct CueEvalTests {
                     options: ["A", "B"])
             }
             return [
-                Check("对会话 say 作答", !eval.calls("task", "say").isEmpty),
-                Check("没发等你", try await eval.said().allSatisfy { $0.choices == nil }),
-                Check("没打扰用户（没 tell）", eval.calls("tell").isEmpty),
+                Check(.result, "对会话 say 作答", !eval.calls("task", "say").isEmpty),
+                Check(.ask, "没发等你", try await eval.said().allSatisfy { $0.choices == nil }),
+                Check(.interrupt, "没打扰用户（没 tell）", eval.calls("tell").isEmpty),
             ]
         }
     }

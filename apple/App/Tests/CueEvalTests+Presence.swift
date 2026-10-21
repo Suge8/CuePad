@@ -23,11 +23,11 @@ extension CueEvalTests {
             let said = eval.calls("task", "say").compactMap { $0.args["text"] as? String }
             let card = try await eval.rig.store.cueMessages().first { $0.id == question.id }
             return [
-                Check("让会话照方案 2 做（说到 2 或对话里问）", said.contains { $0.contains(/2|二|对话里问/) }),
-                Check("带上按钮再小一点", said.contains { $0.contains(/小/) }),
-                Check("卡收起着（没放回）", card?.setAsideBy != nil),
-                Check("没再为这件事发等你", !eval.calls("tell").contains { $0.args["ask"] != nil }),
-                Check("没收掉这件事（没 done）", eval.calls("task", "done").isEmpty && work.task.status != .done),
+                Check(.result, "让会话照方案 2 做（说到 2 或对话里问）", said.contains { $0.contains(/2|二|对话里问/) }),
+                Check(.result, "带上按钮再小一点", said.contains { $0.contains(/小/) }),
+                Check(.result, "卡收起着（没放回）", card?.setAsideBy != nil),
+                Check(.ask, "没再为这件事发等你", !eval.calls("tell").contains { $0.args["ask"] != nil }),
+                Check(.result, "没收掉这件事（没 done）", eval.calls("task", "done").isEmpty && work.task.status != .done),
             ]
         }
     }
@@ -40,9 +40,9 @@ extension CueEvalTests {
             let (_, question) = try await Self.proposalsAsked(eval)
             try await eval.trigger { try await eval.rig.say("README 截图那件做到哪了？") }
             return [
-                Check("没撤回", !eval.calls("tell").contains { $0.args["withdraw"] != nil }),
-                Check("放回了等你", try await eval.rig.store.cueMessagesWaitingForYou().contains { $0.id == question.id }),
-                Check("回了他", try await eval.reply() != nil),
+                Check(.tool, "没撤回", !eval.calls("tell").contains { $0.args["withdraw"] != nil }),
+                Check(.tool, "放回了等你", try await eval.rig.store.cueMessagesWaitingForYou().contains { $0.id == question.id }),
+                Check(.result, "回了他", try await eval.reply() != nil),
             ]
         }
     }
@@ -59,9 +59,10 @@ extension CueEvalTests {
                     reply: "登录接口的限流加好了骨架。计数放哪里还没定：A. 进程内存（简单，但多实例不共享）；B. Redis（项目里已经在用，多实例共享）。你选哪个？我倾向 B。")
             }
             return [
-                Check("对会话 say 作答（说到 Redis 或 B）", eval.calls("task", "say").contains { ($0.args["text"] as? String)?.contains(/Redis|B/) == true }),
-                Check("没留给他（没 leave）", eval.calls("task", "leave").isEmpty),
-                Check("没发等你", try await eval.said().allSatisfy { $0.choices == nil }),
+                Check(.result, "对会话 say 作答（说到 Redis 或 B）", eval.calls("task", "say").contains { ($0.args["text"] as? String)?.contains(/Redis|B/) == true }),
+                Check(.ask, "没留给他（没 leave）", eval.calls("task", "leave").isEmpty),
+                Check(.ask, "没发等你", try await eval.said().allSatisfy { $0.choices == nil }),
+                Check(.interrupt, "没打扰他（没 tell）", eval.calls("tell").isEmpty),
             ]
         }
     }
@@ -81,11 +82,11 @@ extension CueEvalTests {
             let session = try #require(try await rig.store.sessions(matching: work.id).first)
             let duty = try await rig.store.cueDuty()
             return [
-                Check("没对会话说话（没 say）", eval.calls("task", "say").isEmpty),
-                Check("留给了他（leave 成了）", eval.calls("task", "leave").contains { !$0.call.failed }),
-                Check("会话行显示待回复", PiShown(session, cue: duty, at: .always()).label == "待回复"),
-                Check("没发等你", try await eval.said().allSatisfy { $0.choices == nil }),
-                Check("留给他了就不补「不打算行动」", try await eval.said().allSatisfy { !$0.text.contains("不打算行动") }),
+                Check(.result, "没对会话说话（没 say）", eval.calls("task", "say").isEmpty),
+                Check(.ask, "留给了他（leave 成了）", eval.calls("task", "leave").contains { !$0.call.failed }),
+                Check(.result, "会话行显示待回复", PiShown(session, cue: duty, at: .always()).label == "待回复"),
+                Check(.ask, "没发等你", try await eval.said().allSatisfy { $0.choices == nil }),
+                Check(.interrupt, "留给他了就不补「不打算行动」", try await eval.said().allSatisfy { !$0.text.contains("不打算行动") }),
             ]
         }
     }
@@ -103,8 +104,8 @@ extension CueEvalTests {
                     work, his: "进度怎么样了？", ago: 7 * 60, cue: "把测试输出和改前改后的截图补上。", reply: Self.doneReply)
             }
             return [
-                Check("被叫醒（这一停没标他说的）", eval.round?.sent.contains { $0.contains("[歇下] \(Self.title)") } == true),
-                Check("done 了", eval.calls("task", "done").contains { !$0.call.failed }),
+                Check(.result, "被叫醒（这一停没标他说的）", eval.round?.sent.contains { $0.contains("[歇下] \(Self.title)") } == true),
+                Check(.result, "done 了", eval.calls("task", "done").contains { !$0.call.failed }),
             ]
         }
     }
@@ -126,9 +127,9 @@ extension CueEvalTests {
             }
             try await eval.trigger { try await rig.store.recordViewing(device: "phone", sessionID: nil, cue: false) }
             return [
-                Check("他开着时没叫醒 Cue（之后只有他离开后那一轮）", rig.rounds.filter { $0.startedAt >= viewing }.count == 1),
-                Check("他离开后被叫醒（信封里这一停标着他说的）", eval.round?.sent.contains { $0.contains("他说的") } == true),
-                Check("接着推进（say 说到 Redis 或 B）", eval.calls("task", "say").contains { ($0.args["text"] as? String)?.contains(/Redis|B/) == true }),
+                Check(.interrupt, "他开着时没叫醒 Cue（之后只有他离开后那一轮）", rig.rounds.filter { $0.startedAt >= viewing }.count == 1),
+                Check(.result, "他离开后被叫醒（信封里这一停标着他说的）", eval.round?.sent.contains { $0.contains("他说的") } == true),
+                Check(.result, "接着推进（say 说到 Redis 或 B）", eval.calls("task", "say").contains { ($0.args["text"] as? String)?.contains(/Redis|B/) == true }),
             ]
         }
     }
