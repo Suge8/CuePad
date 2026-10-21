@@ -36,7 +36,7 @@ extension IOSInteractionBench {
             // 会话页的中部满是会话行（行上左滑露出行的动作），切页滑在第一行上面的分组标题那一条
             if wants("滑动切页·会话→Cue") {
                 await land(.agent)
-                guard let row = await sessionRow(in: window) else { fail("会话页上找不到会话行") }
+                let row = sessionRow(in: window, fail: fail)
                 let y = row.minY - 20
                 await step("滑动切页·会话→Cue", swipeWindow, .swipe(from: CGPoint(x: right, y: y), to: CGPoint(x: left, y: y))) {}
             }
@@ -51,7 +51,7 @@ extension IOSInteractionBench {
         for _ in 0..<2 where wants("误触·会话行左滑") {
             await land(.cue)
             await land(.agent)
-            guard let row = await sessionRow(in: window)?.midY else { fail("会话页上找不到会话行") }
+            let row = sessionRow(in: window, fail: fail).midY
             await step("误触·会话行左滑", swipeWindow, .swipe(from: CGPoint(x: right, y: row), to: CGPoint(x: left, y: row))) {}
             // 四页常驻、页不重建：滑出的行动作点一下行收起，不留给下一遍（没滑出时这一下会打开会话，也算没收起）
             await press("收起行动作", .press(CGPoint(x: left, y: row)))
@@ -66,7 +66,7 @@ extension IOSInteractionBench {
         }
     }
 
-    /// 量完时停在哪：根与推入的页（`cue`、`cue>session`），露出了行的轻扫按钮记"+行动作"，任务页记看板此刻那一列。
+    /// 量完时停在哪：根与推入的页（`cue`、`cue>session`），露出了行的轻扫按钮记"+行动作"，会话页的列表没停在顶上记偏了多少，任务页记看板此刻那一列。
     static func landed(_ workspace: Workspace) -> String {
         func brief(_ route: Route) -> String {
             switch route {
@@ -78,6 +78,11 @@ extension IOSInteractionBench {
         }
         var text = ([workspace.root] + workspace.path).map(brief).joined(separator: ">")
         if revealsRowActions(in: window) { text += "+行动作" }
+        // 会话页的列表该停在顶上（量的项里没有滚它的）
+        if workspace.root == .agent, workspace.path.isEmpty, let list = sessionList(in: window)?.list {
+            let off = list.contentOffset.y + list.adjustedContentInset.top
+            if abs(off) >= 1 { text += " 列表偏上\(Int(off))" }
+        }
         if workspace.root == .tasks, let column = boardColumn(in: window) { text += " 列=\(column)" }
         return text
     }
@@ -107,14 +112,20 @@ extension IOSInteractionBench {
         return [view] + view.subviews.flatMap { all(in: $0) }
     }
 
-    /// 会话列表（SwiftUI 的 List）里屏上的第一行。先滚回顶上（分组标题露出来）。
-    private static func sessionRow(in window: UIWindow?) async -> CGRect? {
+    /// 屏上的会话列表（SwiftUI 的 List）与它屏上的第一行。
+    private static func sessionList(in window: UIWindow?) -> (list: UICollectionView, row: CGRect)? {
         guard let window else { return nil }
-        func cells() -> [UICollectionViewCell] { all(in: window).compactMap { $0 as? UICollectionViewCell }.filter { onScreen($0, window) != nil } }
-        guard let list = cells().lazy.compactMap({ $0.superview as? UICollectionView }).first else { return nil }
-        list.setContentOffset(CGPoint(x: 0, y: -list.adjustedContentInset.top), animated: false)
-        try? await Task.sleep(for: .milliseconds(300))
-        return cells().compactMap { onScreen($0, window) }.filter { $0.height >= 44 }.min { $0.minY < $1.minY }
+        let cells = all(in: window).compactMap { $0 as? UICollectionViewCell }.filter { onScreen($0, window) != nil }
+        guard let list = cells.lazy.compactMap({ $0.superview as? UICollectionView }).first,
+              let row = cells.compactMap({ onScreen($0, window) }).filter({ $0.height >= 44 }).min(by: { $0.minY < $1.minY })
+        else { return nil }
+        return (list, row)
+    }
+
+    /// 屏上第一行；不替列表滚回顶上：没停在顶上是界面的毛病，照实滑、在落点里记"列表偏上"。
+    private static func sessionRow(in window: UIWindow?, fail: (String) -> Never) -> CGRect {
+        guard let row = sessionList(in: window)?.row else { fail("会话页上找不到会话行") }
+        return row
     }
 
     /// 任务看板（一屏一列横着翻的滚动区）：屏上最里层那个，外面可能还套着翻页的容器。
