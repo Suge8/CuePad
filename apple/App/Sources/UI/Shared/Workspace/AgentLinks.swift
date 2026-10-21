@@ -57,7 +57,7 @@ struct AgentDot: View {
             Button { navigation.openSession(item.state.id, sessionID: item.state.sessionID, store: services.store) } label: {
                 PiStateDot(shown: shown, size: 8).relaySpot(session: item.state.sessionID, row: .task).frame(width: 28, height: 28).contentShape(.rect)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PressStyle(.inline))
             .accessibilityLabel("\(item.state.title) \(shown.presence)")
             .accessibilityHint("看 Agent 的会话")
             #else

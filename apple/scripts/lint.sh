@@ -71,6 +71,9 @@ forbid "一行里用“·”隔开几段的字只经 Dotted 或 Dot（Atoms.swif
   '(?: · |Text\("·"\))' 'App/AppGroup/Dotted.swift' '**/Components/Atoms.swift' '**/PiProgress.swift' 'App/Sources/UI/Debug/**' 'App/Tests/**' 'CuePadKit/**'
 forbid "你说出去的话用 SpeechBubble 画（状态只从记录推出，见 Speech）；UserBubble 只给已进对话的话（会话对话与近况）" \
   '\bUserBubble\s*\(' '**/Components/PiBubbles.swift' '**/Components/SpeechBubble.swift' '**/Components/PiConversation.swift' '**/Components/PiConversationBlocks.swift'
+# 例外：小组件与实时活动（扩展里没有 PressStyle）；设置里的网页链接（下划线、手形，同系统链接）；输入框里图片角上的移除（压在图片的暗底上，不铺悬停底）
+forbid "自绘的可点控件用 PressStyle（按种类 Press）或 RowStyle，不用 .plain/.borderless：Mac 的悬停淡底与按下只在这两处，用了 plain 指针过去没有回应（docs/ui.md 悬停）" \
+  'buttonStyle\(\.(?:plain|borderless)\)' 'App/Sources/UI/iOS/**' '**/*+iOS.swift' 'App/Widget/**' '**/Settings/SettingRow.swift' '**/Components/Composer+Attachments.swift'
 
 # 长按菜单带预览要跨行认（菜单闭包在中间），单独一条多行规则
 hits="$(rg -U --pcre2 --line-number --no-heading --type swift --glob '!App/Sources/UI/iOS/Components.swift' \
