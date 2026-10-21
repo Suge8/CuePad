@@ -27,8 +27,8 @@ extension CueEvalTests {
             }
             let answers = work.session.commands.filter { $0.json["t"] as? String == "answer" }.compactMap { $0.json["value"] as? Bool }
             return [
-                Check("答了允许", answers == [true]),
-                Check("没打扰他（没 tell）", eval.calls("tell").isEmpty),
+                Check(.result, "答了允许", answers == [true]),
+                Check(.interrupt, "没打扰他（没 tell）", eval.calls("tell").isEmpty),
             ]
         }
     }
@@ -40,8 +40,8 @@ extension CueEvalTests {
             try await eval.trigger { try await rig.say("在工作区里建一个 hello.txt，写一句 hello") }
             let tasks = try await rig.store.cueBoard().tasks.map(\.task)
             return [
-                Check("开工（开出了会话）", rig.app.host.calls.contains { if case .open = $0 { true } else { false } }),
-                Check("正文没指到 Cue 的工作目录", !tasks.isEmpty && tasks.allSatisfy { !$0.body.contains("Cue/work") }),
+                Check(.result, "开工（开出了会话）", rig.app.host.calls.contains { if case .open = $0 { true } else { false } }),
+                Check(.result, "正文没指到 Cue 的工作目录", !tasks.isEmpty && tasks.allSatisfy { !$0.body.contains("Cue/work") }),
             ]
         }
     }
