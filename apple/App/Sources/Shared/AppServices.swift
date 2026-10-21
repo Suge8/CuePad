@@ -160,118 +160,6 @@ final class AppServices {
     ) { [weak self] in self?.windowShell?.toggleFromHotkey() }
     #endif
 
-    nonisolated enum StartupIssue: Equatable {
-        case globalShortcutUnavailable(String)
-        /// 分享扩展留下的内容没能入库（保留在共享容器里，下次再试）。
-        case captureImportFailed(String)
-        /// iCloud 同步（或依赖它的 Mac 端远程功能）没能启动。
-        case syncUnavailable(String)
-        /// 小组件与分享扩展用的快照写不出来。
-        case widgetDataUnavailable(String)
-        #if os(macOS)
-        case piBridgeUnavailable(String)
-        /// Pi 历史索引读写 Store 失败；该会话文件不再写回。
-        case piHistoryUnavailable(String)
-        #endif
-    }
-
-    /// 撤回一句说出去的话（重发或移除没能送达的话）：发给会话的，还没被 Mac 领取的才撤得回，没能送达的直接删；
-    /// 对 Cue 说的，还没交给它的才撤得回。撤了立即把删除传上去，免得 Mac 先拉到它；撤不回时抛出原因。
-    func withdraw(_ said: Said) async throws {
-        switch said {
-        case .request(let request) where request.status == .known(.failed):
-            try await store.deleteDelivery(request.id)
-        case .request(let request):
-            guard try await store.withdrawDelivery(request.id) else { throw SendError.alreadyHanded }
-        case .cue(let message, _):
-            guard try await store.withdrawCueMessage(message.id) else { throw SendError.alreadyHeard }
-        }
-        Task { await upload(said.id, deleted: true) }
-    }
-
-    /// 投送请求（发送、作答、配置、结束、停止、开会话、绑定、补对话）都走同一条投送通道，Mac 本机也走它、由执行器交给扩展；
-    /// 写出后立即上传（不等它完成），结果用 `CueStore.outcome(of:)` 等。
-    func uploaded(_ request: DeliveryRequest) -> DeliveryRequest {
-        Task { await upload(request.id) }
-        return request
-    }
-
-    /// 改 Cue 的设置（同步的 `CueProfile`）：两端的写入口——名字、停用、Agent、模型与思考强度；启用另走 `enableCue`（要按那台 Mac 判断）。
-    /// 写库后马上传这一条，别的设备马上看到；Cue 运行的那台 Mac 的管理器读到就按新设置值班。
-    func updateCue(_ edit: @escaping @Sendable (inout CueProfile) -> Void) async throws {
-        try await store.updateCueProfile(edit)
-        await upload(CueProfile.recordID)
-    }
-
-    /// 让 Cue 运行在 `host` 那台 Mac 并启用（规则 `CueStore.enableCue`）：两端所有入口都经这里，界面读的是同一处判断（`CueGate`）。
-    /// 这台的库还没和 iCloud 对过一遍时拒绝（`CueEnableError.unsynced`）：库里没有 Cue 不等于哪台都没设过，启用了会把它从原来那台抢过来；
-    /// 它正在别的 Mac 上运行时，只有 `moving`（你确认了改在这台运行）才改。是这台 Mac 时先重新探测一次本机的 Agent
-    /// （刚启动还没探测完也不会按旧的或空的判断）；别的 Mac 按它同步来的那条。写完马上传。
-    func enableCue(on host: String, moving: Bool) async throws {
-        guard knowsSyncedFacts else { throw CueEnableError.unsynced }
-        #if os(macOS)
-        if host == hostID { try await macAgents.record() }
-        #endif
-        try await store.enableCue(on: host, moving: moving)
-        await upload(CueProfile.recordID)
-    }
-
-    /// 马上传这一条（`SyncControlling.upload`）：手机写出投送请求、Mac 写回结果、Mac 写出带通知标志的会话状态后都调用。没有同步时什么也不做。
-    func upload(_ record: UUID, deleted: Bool = false) async {
-        await sync?.upload(record, deleted: deleted)
-    }
-
-    /// 回答会话正在等的弹窗：写一条作答请求给会话所在的 Mac。
-    /// 问题不能从这里作答（没有标识或种类不认识）时抛 `SendError.unanswerable`。
-    func answer(_ value: PiAnswerValue, to session: PiSessionState) async throws -> DeliveryRequest {
-        guard let question = session.question, question.isAnswerable, let promptID = question.promptID else {
-            throw SendError.unanswerable
-        }
-        return uploaded(try await store.requestAnswer(
-            PiAnswer(promptID: promptID, value: value, question: question.text), to: session.target,
-            on: session.hostID))
-    }
-
-    /// 换会话的模型或思考强度：当前值与可选项读会话状态的 `model`、`thinking`、`models`。
-    func configure(_ config: PiConfig, for session: PiSessionState) async throws -> DeliveryRequest {
-        uploaded(try await store.requestConfig(config, to: session.target, on: session.hostID))
-    }
-
-    /// 结束会话：请会话所在的 Mac 让它的 Pi 进程正常退出。会话记录与对话都留着，之后再给它发消息会在后台恢复；已经结束的会话也算成功。
-    func end(_ session: PiSessionState) async throws -> DeliveryRequest {
-        uploaded(try await store.requestEnd(of: session.target, on: session.hostID))
-    }
-
-    /// 停止这一轮：请会话所在的 Mac 中止它正在跑的回合（相当于在 Pi 里按 Esc）。会话随后回到等你下一句（状态记录里是"完成"，被中止）；
-    /// 只停指挥官自己这一轮，子代理照常跑；已经结束或空闲的会话也算成功。界面只在会话 `state.isTurnRunning` 时给入口（等子代理时指挥官没有在跑的一轮）。
-    func stop(_ session: PiSessionState) async throws -> DeliveryRequest {
-        uploaded(try await store.requestStop(of: session.target, on: session.hostID))
-    }
-
-    /// 请 `host` 那台 Mac 在项目的文件夹里用 `agent` 开新会话（`model`、`thinking` 为 nil 是这家的默认），`prompt` 作开场。
-    /// `title` 是给人看的目标名（会话名或项目名）。这里生成这一次的认领标识：同步记录上出现带同一个 `launchToken` 的会话就是它（`SessionLaunch`）。
-    /// `card`：从这条灵感或任务开的（开好后它关联到新会话、会话名按它定，见 `CueStore.requestLaunch`、`CueStore.claimLaunchedCards`）。
-    func launchSession(
-        in project: UUID, prompt: String?, title: String, on host: String, card: UUID?, agent: AgentKind,
-        model: PiModelKey? = nil, thinking: PiThinkingLevel? = nil
-    ) async throws -> SessionLaunch {
-        let token = UUID().uuidString
-        let request = uploaded(try await store.requestLaunch(
-            PiLaunch(project: project, prompt: prompt, token: token, agent: agent, model: model, thinking: thinking), title: title, on: host, card: card))
-        return SessionLaunch(request: request.id, token: token)
-    }
-
-    /// 请 `host` 那台 Mac 给项目绑定文件夹（`PiBind.folder` 为 nil 是解除；手机没有完整路径，由那台 Mac 解析并写本机的目录绑定）；
-    /// 绑好后目录绑定记录随同步回来。
-    func requestBind(_ bind: PiBind, title: String, on host: String) async throws -> DeliveryRequest {
-        uploaded(try await store.requestBind(bind, title: title, on: host))
-    }
-
-    /// 请会话所在的 Mac 把这个会话的对话补写进来（7 天前活跃过、还没有对话的会话打开时调用）。
-    func requestTranscript(of session: PiSessionState) async throws -> DeliveryRequest {
-        uploaded(try await store.requestTranscript(of: session))
-    }
-
     // 资料库是唯一事实源：打不开时不能悄悄换一个空库，也不能带着它往下走——错误交给调用方，启动入口显示失败页
     // （`UnreadableLibraryView`：原因、重试、导出诊断，不给任何写入入口），不终止进程。
     #if os(macOS)
@@ -342,16 +230,6 @@ final class AppServices {
     func post(_ alert: SessionAlert) { sessionAlert = alert }
     #endif
 
-    /// 这条提示此刻到不到你（`CueStore.reaches`）；读不出就照常提示，宁可多响一次也不悄悄吞掉。
-    func reaches(_ subject: AlertSubject) async -> Bool {
-        do {
-            return try await store.reaches(subject)
-        } catch {
-            Self.log.error("没能读出这条提示到不到你，照常提示：\(error.localizedDescription, privacy: .public)")
-            return true
-        }
-    }
-
     /// 同步从不通变通时立即同步一次（`syncNow`）：断网时没传上去的记录（留在库里待推送）当场传出、在等的回执当场拉回，
     /// 不等发送者的退避；按节奏的拉取也随之重开一个窗口（`pollingCondition`）。
     func setSyncState(_ state: SyncState) {
@@ -373,9 +251,4 @@ final class AppServices {
         Self.log.error("\(String(describing: issue))")
         startupIssues.append(issue)
     }
-}
-
-nonisolated extension PiSessionState {
-    /// 投送请求里指这个会话的目标（`ref` 是 Pi 自己的会话 id）。
-    var target: SendTarget { SendTarget(kind: .piSession, name: title, ref: sessionID) }
 }

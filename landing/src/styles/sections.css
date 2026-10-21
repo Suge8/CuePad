@@ -1,0 +1,524 @@
+/* 首屏以下各节：滚动字带、钉住的派活序列、怎么用、功能、两段喘息、下载、页脚 */
+
+/* ============================================================
+   Ghost kinetic band
+   ============================================================ */
+.ghost {
+	overflow: clip;
+	padding: clamp(1.5rem, 3.5vw, 3rem) 0;
+}
+.ghost-track {
+	display: flex;
+	width: max-content;
+	white-space: nowrap;
+	font-family: var(--font-display);
+	font-weight: 800;
+	font-size: clamp(4.5rem, 11vw, 10rem);
+	line-height: 1.08;
+	letter-spacing: -0.02em;
+	color: transparent;
+	-webkit-text-stroke: 2px oklch(51.1% 0.06 159.4 / 0.38);
+	will-change: transform;
+}
+.ghost-track span {
+	padding-right: 0.35em;
+}
+.ghost-track .fill {
+	color: oklch(51.1% 0.06 159.4 / 0.16);
+	-webkit-text-stroke: 2px transparent;
+}
+
+/* ============================================================
+   Drench — the pinned dispatch sequence
+   ============================================================ */
+.drench {
+	position: relative;
+	overflow: hidden;
+	background:
+		radial-gradient(120% 90% at 85% 0%, oklch(36% 0.045 158 / 0.55) 0%, transparent 55%),
+		linear-gradient(168deg, var(--drench) 0%, var(--drench-2) 100%);
+	color: var(--canvas);
+}
+.drench-stage {
+	position: relative;
+	min-height: 100vh;
+	display: flex;
+	align-items: center;
+	padding: clamp(3rem, 6vw, 5rem) clamp(1.25rem, 4vw, 3rem);
+}
+.drench-inner {
+	position: relative;
+	z-index: 1;
+	width: min(74rem, 100%);
+	margin-inline: auto;
+	display: grid;
+	grid-template-columns: 5fr 7fr;
+	gap: clamp(2.5rem, 5vw, 5rem);
+	align-items: center;
+}
+.drench-h {
+	color: var(--canvas);
+	font-size: clamp(2.1rem, 3.6vw + 0.8rem, 3.4rem);
+}
+.drench-inner p {
+	margin-top: 1.4rem;
+	color: oklch(95.9% 0.01 87.5 / 0.78);
+	max-width: 46ch;
+	text-wrap: pretty;
+}
+.meta-line {
+	margin-top: 2.2rem;
+	font-family: var(--font-mono);
+	font-size: 0.85rem;
+	letter-spacing: 0.02em;
+	color: oklch(95.9% 0.01 87.5 / 0.55);
+}
+.drench-screen {
+	position: relative;
+}
+.drench-screen video {
+	width: 100%;
+	border: 1px solid oklch(95.9% 0.01 87.5 / 0.24);
+	border-radius: 10px;
+	background: var(--drench-2);
+	box-shadow: 0 48px 96px -40px oklch(12% 0.02 160 / 0.85);
+}
+.flight-svg {
+	position: absolute;
+	inset: 0;
+	z-index: 2;
+	width: 100%;
+	height: 100%;
+	pointer-events: none;
+	overflow: visible;
+}
+.flight-svg .trail {
+	fill: none;
+	stroke: var(--gold);
+	stroke-width: 2.5;
+	stroke-linecap: round;
+	opacity: 0.85;
+}
+.plane {
+	position: absolute;
+	top: 0;
+	left: 0;
+	z-index: 3;
+	width: clamp(34px, 4vw, 52px);
+	color: var(--paper);
+	filter: drop-shadow(0 8px 14px oklch(15% 0.02 160 / 0.55));
+	pointer-events: none;
+}
+.burst {
+	position: absolute;
+	z-index: 4;
+	pointer-events: none;
+}
+.burst i {
+	position: absolute;
+	width: 12px;
+	height: 12px;
+	opacity: 0;
+	background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M8 1c.7 3.9 3.1 6.3 7 7-3.9.7-6.3 3.1-7 7-.7-3.9-3.1-6.3-7-7 3.9-.7 6.3-3.1 7-7Z' fill='%23c8a24a'/%3E%3C/svg%3E")
+		center / contain no-repeat;
+}
+.burst i:nth-child(even) {
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M8 1c.7 3.9 3.1 6.3 7 7-3.9.7-6.3 3.1-7 7-.7-3.9-3.1-6.3-7-7 3.9-.7 6.3-3.1 7-7Z' fill='%23a9c4b4'/%3E%3C/svg%3E");
+}
+.local-line {
+	position: relative;
+	z-index: 1;
+	width: min(74rem, 100%);
+	margin: 0 auto;
+	padding: clamp(1.6rem, 3vw, 2.4rem) clamp(1.25rem, 4vw, 3rem) clamp(2.5rem, 4vw, 3.5rem);
+	display: flex;
+	align-items: baseline;
+	gap: 0.7rem;
+	font-family: var(--font-mono);
+	font-size: 0.88rem;
+	line-height: 1.8;
+	color: oklch(95.9% 0.01 87.5 / 0.68);
+}
+.local-line .brandmark {
+	width: 1.05rem;
+	height: 1.05rem;
+	flex: none;
+	translate: 0 0.18em;
+	color: var(--sage-light);
+}
+
+/* ============================================================
+   How it works
+   ============================================================ */
+.how {
+	position: relative;
+	width: min(74rem, 100% - 2.5rem);
+	margin-inline: auto;
+	padding: clamp(5rem, 10vw, 8.5rem) 0 clamp(3rem, 6vw, 5rem);
+}
+.flightpath {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	pointer-events: none;
+	overflow: visible;
+}
+.fp-trail {
+	fill: none;
+	stroke: var(--sage);
+	stroke-width: 2.5;
+	stroke-linecap: round;
+	stroke-dasharray: 0.5 10;
+	opacity: 0.55;
+}
+.fp-plane {
+	position: absolute;
+	top: 0;
+	left: 0;
+	z-index: 2;
+	width: clamp(26px, 2.6vw, 38px);
+	color: var(--sage-strong);
+	filter: drop-shadow(0 6px 10px oklch(20% 0.01 75 / 0.25));
+	pointer-events: none;
+}
+.steps {
+	position: relative;
+	z-index: 1;
+	list-style: none;
+	counter-reset: step;
+	padding: 0;
+	margin-top: clamp(2.5rem, 5vw, 4rem);
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: clamp(1.75rem, 3.5vw, 3.25rem);
+}
+.step {
+	position: relative;
+	counter-increment: step;
+}
+.step::before {
+	content: counter(step, decimal-leading-zero);
+	display: block;
+	font-family: var(--font-display);
+	font-weight: 800;
+	font-size: clamp(3rem, 4.5vw, 4.2rem);
+	line-height: 1;
+	letter-spacing: -0.03em;
+	color: var(--sage-strong);
+	margin-bottom: 1.1rem;
+	opacity: 0.9;
+}
+.step h3 {
+	display: flex;
+	align-items: center;
+	gap: 0.55rem;
+	font-family: var(--font-display);
+	font-weight: 680;
+	font-size: 1.3rem;
+	letter-spacing: -0.01em;
+	color: var(--ink);
+	margin-bottom: 0.6rem;
+}
+.step-ic {
+	width: 1.15em;
+	height: 1.15em;
+	flex: none;
+	color: var(--sage-strong);
+}
+.step p {
+	font-size: 0.98rem;
+	color: var(--muted);
+	text-wrap: pretty;
+}
+.step .kbd {
+	margin-top: 1.1rem;
+}
+
+/* ============================================================
+   Features
+   ============================================================ */
+.features {
+	width: min(76rem, 100% - 2.5rem);
+	margin-inline: auto;
+	padding-top: clamp(3rem, 6vw, 5rem);
+}
+.feat {
+	display: grid;
+	grid-template-columns: repeat(12, 1fr);
+	gap: clamp(2rem, 4.5vw, 4rem);
+	align-items: center;
+	padding: clamp(3rem, 7vw, 6rem) 0;
+}
+.feat-copy {
+	grid-column: 1 / 6;
+}
+.feat-media {
+	grid-column: 6 / 13;
+	transform: translate3d(0, var(--py, 0px), 0);
+}
+.feat.rev .feat-copy {
+	grid-column: 8 / 13;
+	order: 2;
+}
+.feat.rev .feat-media {
+	grid-column: 1 / 8;
+	order: 1;
+}
+.feat-copy h3 {
+	font-family: var(--font-display);
+	font-weight: 680;
+	font-size: clamp(1.5rem, 1.7vw + 1rem, 2.1rem);
+	line-height: 1.15;
+	letter-spacing: -0.02em;
+	color: var(--ink);
+	text-wrap: balance;
+}
+html[lang^='zh'] .feat-copy h3 {
+	letter-spacing: 0;
+}
+.feat-copy p {
+	margin-top: 1rem;
+	color: var(--muted);
+	max-width: 42ch;
+	text-wrap: pretty;
+}
+.feat-copy code {
+	font-family: var(--font-mono);
+	font-size: 0.86em;
+	padding: 0.12em 0.4em;
+	background: oklch(56.1% 0.061 157.6 / 0.12);
+	border-radius: 6px;
+	color: var(--sage-ink);
+}
+.clipframe {
+	position: relative;
+	overflow: hidden;
+	border-radius: 18px;
+	box-shadow: var(--shadow-shot);
+	will-change: clip-path;
+}
+.clipframe .par {
+	width: 100%;
+	display: block;
+	scale: 1.14;
+	will-change: transform;
+}
+.duo-media {
+	position: relative;
+}
+.duo-media .float {
+	--rot: 1.6deg;
+	position: absolute;
+	right: -3%;
+	bottom: -12%;
+	width: 46%;
+	z-index: 2;
+}
+.duo-media:hover .float {
+	--rot: 0.8deg;
+	translate: 0 -4px;
+}
+
+/* ============================================================
+   Desk band — generated art breather
+   ============================================================ */
+.desk {
+	position: relative;
+	height: clamp(20rem, 52vh, 32rem);
+	overflow: clip;
+}
+.desk video {
+	position: absolute;
+	inset: -13% 0;
+	width: 100%;
+	height: 126%;
+	object-fit: cover;
+	object-position: center 42%;
+	will-change: transform;
+}
+.desk-line {
+	position: absolute;
+	inset: 0;
+	display: grid;
+	place-items: end center;
+	padding: 0 1.5rem clamp(1.8rem, 6vh, 3.5rem);
+	text-align: center;
+	font-family: var(--font-display);
+	font-weight: 700;
+	font-size: clamp(1.5rem, 2.8vw, 2.4rem);
+	letter-spacing: -0.01em;
+	color: var(--ink);
+	text-shadow: 0 1px 12px oklch(95.9% 0.01 87.5 / 0.9);
+	text-wrap: balance;
+}
+
+/* ============================================================
+   Cinema — dark breather with ambient night loop
+   ============================================================ */
+.cinema {
+	position: relative;
+	overflow: hidden;
+	background:
+		radial-gradient(110% 85% at 12% 0%, oklch(36% 0.045 158 / 0.5) 0%, transparent 55%),
+		linear-gradient(168deg, var(--drench) 0%, var(--drench-2) 100%);
+	padding: clamp(4.5rem, 9vw, 7.5rem) clamp(1.25rem, 4vw, 3rem) clamp(4rem, 8vw, 6.5rem);
+	text-align: center;
+}
+.cinema .sec-head {
+	margin-inline: auto;
+}
+.cinema .sec-head h2 {
+	color: var(--canvas);
+}
+.cinema p {
+	margin-top: 1rem;
+	color: oklch(95.9% 0.01 87.5 / 0.72);
+}
+.cinema-stage {
+	position: relative;
+	width: min(72rem, 100%);
+	margin: clamp(2.5rem, 5vw, 4rem) auto 0;
+}
+.cinema-night {
+	position: absolute;
+	z-index: 2;
+	right: -8%;
+	top: -16%;
+	width: min(38rem, 52%);
+	mix-blend-mode: screen;
+	mask-image: radial-gradient(ellipse 82% 82% at 50% 50%, #000 50%, transparent 73%);
+	-webkit-mask-image: radial-gradient(ellipse 82% 82% at 50% 50%, #000 50%, transparent 73%);
+	pointer-events: none;
+}
+.cinema .shot {
+	position: relative;
+	z-index: 1;
+	width: min(68rem, 100%);
+	margin: 0 auto;
+	border-radius: 16px;
+	box-shadow:
+		0 2px 4px oklch(12% 0.02 160 / 0.25),
+		0 48px 96px -40px oklch(12% 0.02 160 / 0.85);
+}
+
+/* ============================================================
+   Download
+   ============================================================ */
+.download {
+	position: relative;
+	text-align: center;
+	overflow: clip;
+	padding: clamp(4.5rem, 9vw, 8rem) clamp(1.25rem, 4vw, 3rem) clamp(5rem, 9vw, 8rem);
+}
+.mascot-dl {
+	width: clamp(180px, 21vw, 260px);
+	margin: 0 auto;
+	mask-image: radial-gradient(ellipse 80% 78% at 50% 50%, #000 55%, transparent 76%);
+	-webkit-mask-image: radial-gradient(ellipse 80% 78% at 50% 50%, #000 55%, transparent 76%);
+}
+.download h2 {
+	letter-spacing: -0.025em;
+}
+.download > div > p {
+	max-width: 52ch;
+	margin: 1.1rem auto 0;
+	color: var(--muted);
+}
+.dl-ctas {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: center;
+	gap: 0.9rem;
+	margin-top: 2.3rem;
+}
+.reqs {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: center;
+	gap: 0.6rem;
+	margin-top: 1.8rem;
+}
+.req {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+	padding: 0.45rem 1rem;
+	border: 1px solid var(--border-strong);
+	border-radius: 999px;
+	font-family: var(--font-mono);
+	font-size: 0.82rem;
+	color: var(--muted);
+	background: oklch(99.7% 0.005 95.1 / 0.5);
+}
+.note {
+	max-width: 46ch;
+	margin: 1.4rem auto 0;
+	font-size: 0.92rem;
+	color: var(--muted);
+}
+.dl-source {
+	margin-top: 1.8rem;
+	font-size: 0.95rem;
+}
+.dl-source a {
+	color: var(--sage-ink);
+	font-weight: 600;
+	text-decoration: underline;
+	text-decoration-color: oklch(51.1% 0.06 159.4 / 0.4);
+	text-underline-offset: 3px;
+	transition: text-decoration-color 0.3s;
+}
+.dl-source a:hover {
+	text-decoration-color: var(--sage-ink);
+}
+.dl-burst {
+	position: absolute;
+	left: 50%;
+	top: 22%;
+	z-index: 2;
+	pointer-events: none;
+}
+.dl-burst i {
+	position: absolute;
+	width: 13px;
+	height: 13px;
+	opacity: 0;
+	background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M8 1c.7 3.9 3.1 6.3 7 7-3.9.7-6.3 3.1-7 7-.7-3.9-3.1-6.3-7-7 3.9-.7 6.3-3.1 7-7Z' fill='%23c8a24a'/%3E%3C/svg%3E")
+		center / contain no-repeat;
+}
+.dl-burst i:nth-child(3n) {
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M8 1c.7 3.9 3.1 6.3 7 7-3.9.7-6.3 3.1-7 7-.7-3.9-3.1-6.3-7-7 3.9-.7 6.3-3.1 7-7Z' fill='%23568067'/%3E%3C/svg%3E");
+}
+
+/* ============================================================
+   Footer
+   ============================================================ */
+.foot-inner {
+	width: min(76rem, 100% - 2.5rem);
+	margin-inline: auto;
+	padding: 1.8rem 0 2.2rem;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 1rem 2rem;
+	font-size: 0.9rem;
+	color: var(--muted);
+}
+.foot-brand {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.5rem;
+	font-weight: 650;
+	color: var(--text);
+}
+.foot-brand .brandmark {
+	width: 1.1rem;
+	height: 1.1rem;
+}
+.foot-right {
+	margin-left: auto;
+	display: flex;
+	align-items: center;
+	gap: 1.4rem;
+}
