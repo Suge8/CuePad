@@ -42,7 +42,6 @@ nonisolated enum Icon: Hashable, Sendable {
     case audio, document, downloading, play, file, inspect3D
     /// Mac 菜单栏里的 CuePad（单色模板图）。
     case menuBar
-    /// 项目的图标（闭合表 `ProjectIcon`）。
     case project(ProjectIcon)
 
     private enum Source {
@@ -236,7 +235,6 @@ nonisolated enum Icon: Hashable, Sendable {
 }
 
 nonisolated private extension ProjectIcon {
-    /// 闭合表里每一种画成哪个墨块符号。
     var symbol: String {
         switch self {
         case .folder: "folder"
