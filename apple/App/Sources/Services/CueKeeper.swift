@@ -15,6 +15,8 @@ nonisolated struct CueTiming: Sendable {
     var mergeAfter: Duration = .seconds(600)
     /// 提示缓存的时长（两家大脑都开了 1 小时的，见 `ClaudeBrain`、`PiBrain`）：距上一次模型请求超过它，缓存已过期，醒来就换新。
     var cacheLifetime: Duration = .seconds(3600)
+    /// 换新线（token）：上下文用到它，醒来就换新。数与理由见 `CueContext.renewAt`。
+    var renewAt = CueContext.renewAt
     /// 大脑意外退出或起不来后，第 n 次重试前等多久；都失败就停在"起不来"。
     var restarts: [Duration] = [.seconds(2), .seconds(10), .seconds(60)]
     /// Cue 自己醒来的一轮出错后，隔这么久再醒一次（只一次）。
@@ -43,9 +45,9 @@ nonisolated struct CueTiming: Sendable {
 ///   大脑不认就把设置改回它在用的，并告诉你。
 /// - 换了名字（在系统提示里）、Agent，或模型、强度回到运行时默认（就地取不回默认）：要换大脑。正在跑的一轮先做完、你的话先交，再按新设置起新班次。
 ///   大脑没在跑（等着重起、停在起不来）就直接按新设置起。
-/// 换新（开新会话）只在一次醒来开始时判断，规则只在 `renewDue`：上下文到了换新线（`CueContext.renewAt`），或距上一次模型请求超过提示缓存的时长
+/// 换新（开新会话）只在一次醒来开始时判断，规则只在 `renewDue`：上下文到了换新线（`CueTiming.renewAt`），或距上一次模型请求超过提示缓存的时长
 /// （`CueTiming.cacheLifetime`：缓存过期后接着用要把整段原价重写，换新只写固定前缀与视图，从不更贵）。满足就让大脑开新会话（`CueBrain.newSession`），
-/// 不多跑一轮；一直记着的在这个班次起来后变过（钉上、取消、忘掉），就改成换个班次，让系统提示跟上。
+/// 不多跑一轮、不先写交接（实测缓存热时先写交接再换没有带来提升，交接还每次写超 600 字）；一直记着的在这个班次起来后变过（钉上、取消、忘掉），就改成换个班次，让系统提示跟上。
 /// 新会话从哪接上只有一条规则：不论怎么来的（换新、换大脑、App 重启、意外退出后重起、起不来再试），第一条输入是记忆视图（`CueMemoryView`，一直记着的除外）、
 /// 平铺的对话视图（`CueView`，最近的对话与每一轮的经过）加信封；之后同一个会话里只往后加信封。
 /// 生命周期只有一个 `Phase`：起大脑中 → 值班（可能在跑一轮）→ 出问题后等着重起 → 次数用完停在起不来；Cue 此刻在做什么（`work`）由它直接得出，
@@ -776,7 +778,7 @@ final class CueKeeper {
     /// 换新只写固定前缀与视图，从不更贵）。还没请求过模型的会话不换。
     private func renewDue(_ shift: Shift, now: Date) -> Bool {
         guard let used = shift.context?.used, let last = shift.lastRequest else { return false }
-        return used >= CueContext.renewAt || now.timeIntervalSince(last) > setup.timing.cacheLifetime.seconds
+        return used >= setup.timing.renewAt || now.timeIntervalSince(last) > setup.timing.cacheLifetime.seconds
     }
 
     /// 记下送达并立即上传（不等上传完就接着对账）。

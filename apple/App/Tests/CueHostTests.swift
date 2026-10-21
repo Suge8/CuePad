@@ -608,7 +608,7 @@ struct CueHostTests {
 
     /// 上下文到了换新线（每一轮都用到了）：每次醒来先开新会话，第一条输入带着对话视图，前面说的话照样接得上；大脑还是同一个进程。
     @Test func 到了换新线_开新会话_对话视图接上前面说的() async throws {
-        let rig = try await Rig(usage: 70_000)
+        let rig = try await Rig(usage: CueContext.renewAt + 10_000)
         let first = try #require(rig.brainPIDs.first)
         try await rig.say("暗号是 PAPAYA")
         try await rig.message(.cue, containing: "收到：暗号是 PAPAYA")
