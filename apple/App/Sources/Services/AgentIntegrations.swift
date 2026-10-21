@@ -110,10 +110,10 @@ final class AgentIntegrations {
     }
 
     /// Pi 只能在它的终端界面里登录：开一个终端窗口跑 Pi（带上 CuePad 起它时的环境），你在里面输入 /login。
-    func openPiLogin() throws {
+    func openPiLogin() async throws {
         guard let executable = statuses[.pi]?.executable else { return }
         let script = FileManager.default.temporaryDirectory.appending(path: "cuepad-pi-login.command")
-        try Data(integration.piLoginScript(executable: executable).utf8).write(to: script, options: .atomic)
+        try await Data(integration.piLoginScript(executable: executable).utf8).write(to: script, options: .atomic)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
         NSWorkspace.shared.open(script)
     }

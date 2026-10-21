@@ -72,9 +72,11 @@ public struct MacAgentProblem: Codable, Equatable, Sendable {
   public let kind: AgentKind
   public let reason: String
 
-  /// 两种要你动手的原因（`AgentProbe` 写下，Mac 的接入面板按它给"安装""登录"）：原因随记录同步，各端直接显示这句。
+  /// 要你动手的原因（`AgentProbe` 写下，Mac 的接入面板按它给"安装""登录"、勾上接入）：原因随记录同步，各端直接显示这句。
   public static let notInstalled = "没装"
   public static let notLoggedIn = "没登录"
+  /// 登录了、只差接入（只有 Pi：托管的 Pi 经桥扩展上报）
+  public static let notConnected = "还没接入 CuePad（在设置里打开）"
 
   public init(kind: AgentKind, reason: String) {
     self.kind = kind

@@ -11,7 +11,8 @@
    （isolated_env 是唯一一份，sync-bench.py 也用它），不碰真实资料库、~/.pi、~/.local/bin、~/CuePad（项目工作区）与 ~/Applications/CuePad.app。
 2. Mac 每个检出最多一份：看守进程（就是本进程）持 apple/.derived/mac-app.lock 的 flock，锁随看守进程释放，崩了也不留；
    新起的直接换掉 run 留着的旧实例。检出之间互不等待：几个 Agent 并行开发时各自截图、验收。
-3. 一定退出：做完、出错、被打断（TERM、INT、HUP）、超时（截图类 HOLD 秒，run 是 RUN_TTL，验完就 stop）都走 quit：先 TERM 走 App 的正常退出，
+3. 一定退出：做完、出错、被打断（TERM、INT、HUP）、超时（截图类 HOLD 秒，run 是 RUN_TTL，
+   CUEPAD_RUN_SECONDS 改它，验完就 stop）都走 quit：先 TERM 走 App 的正常退出，
    5 秒不退再 KILL，连同它起的子进程（Cue 的 pi、cuepad mcp）一起结束。exec 起的 bench 由调用方按 PID 结束，锁随 CuePad 进程释放。
    看守或调用方自己被 KILL、来不及收时，实例发现父进程没了也会正常退出（DebugHooks.exitsWithParent）。
 4. 不靠固定等待：Debug 构建摆好画面后写就绪文件（CUEPAD_SHOT_READY，DebugScene.signalReady），这里用 kqueue 等它出现或 App 退出。
@@ -46,7 +47,8 @@ BUILD = re.compile(r".*/apple/\.derived[^/]*/Build/Products/[^/]+/CuePad\.app")
 WINDOW = "1440x900"
 READY_TIMEOUT = 60
 HOLD = 300  # 截图类的看守上限（另加录屏、测量的秒数）：卡在哪一步都不留实例
-RUN_TTL = 5 * 60  # 一轮 bcu 交互验收用不完；不够就再 run 一次（换掉旧的）。忘了收的实例曾活过 14 小时
+# 一轮 bcu 交互验收用不完；不够就再 run 一次（换掉旧的），要等长任务（在 App 里装 Agent）时用 CUEPAD_RUN_SECONDS 放长。忘了收的实例曾活过 14 小时
+RUN_TTL = int(os.environ.get("CUEPAD_RUN_SECONDS", 5 * 60))
 REC_SECONDS = float(os.environ.get("CUEPAD_REC_SECONDS", 12))
 
 

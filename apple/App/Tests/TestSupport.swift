@@ -195,14 +195,30 @@ final class TestApp {
         #expect(services.agents.status(kind)?.files == .current)
     }
 
-    /// 这台 Mac 上装了这家 Agent（还没接入）：放一个只报版本的假可执行文件，Pi 的还能报出模型。
-    func install(_ kind: AgentKind, version: String = "2.1.0") throws {
-        let bin = directory.appending(path: "bin")
-        try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
-        let executable = bin.appending(path: kind.command)
-        let probe = kind == .pi ? "[ -n \"$CUEPAD_PROBE\" ] && { echo '\(Self.piProbeLine)'; exit 0; }\n" : ""
-        try "#!/bin/sh\n\(probe)echo '\(version)'\n".write(to: executable, atomically: true, encoding: .utf8)
-        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executable.path)
+    /// 这台 Mac 上装了这家 Agent（还没接入）：放一个只报版本的假可执行文件，Pi 的还能报出模型（`signedIn` 为 false 时没有模型，是没登录）。
+    func install(_ kind: AgentKind, version: String = "2.1.0", signedIn: Bool = true) throws {
+        let line = signedIn ? Self.piProbeLine : #"{"cuepadProbe":{"model":null,"models":[]}}"#
+        let probe = kind == .pi ? "[ -n \"$CUEPAD_PROBE\" ] && { echo '\(line)'; exit 0; }\n" : ""
+        try executable(kind.command, "#!/bin/sh\n\(probe)echo '\(version)'\n", in: bin)
+    }
+
+    /// 装了 Claude Code、还没登录（同 `offersClaudeInstaller` 备的那个，探测问得出没登录）。
+    func installClaude() throws {
+        try executable(AgentKind.claudeCode.command, Self.fakeClaude(loginFails: false), in: bin)
+    }
+
+    /// 这台 Mac 上的 Node.js（找 Agent 的同一组目录里）：只报版本。
+    func installNode(_ version: String) throws {
+        try executable("node", "#!/bin/sh\necho '\(version)'\n", in: bin)
+    }
+
+    private var bin: URL { directory.appending(path: "bin") }
+
+    private func executable(_ name: String, _ script: String, in directory: URL) throws {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let file = directory.appending(path: name)
+        try script.write(to: file, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: file.path)
     }
 
     private static let piProbeLine = #"{"cuepadProbe":{"model":{"provider":"fake","id":"m","name":"M","thinking":["off"]},"models":[{"provider":"fake","id":"m","name":"M","thinking":["off"]}]}}"#
@@ -226,10 +242,10 @@ final class TestApp {
     }
 
     var agentIntegration: AgentIntegration {
-        let bin = directory.appending(path: "bin").path, installers = installers.path
+        let bin = bin, installers = installers.path
         return AgentIntegration(
-            paths: AgentPaths(pi: piPaths, environment: agentHomes), locate: { [directory] in ExecutableLocator(searchDirectories: [directory.appending(path: "bin")]) },
-            cuepad: helper, installCommand: { kind, _ in "mkdir -p '\(bin)' && cp '\(installers)/\(kind.command)' '\(bin)/'" })
+            paths: AgentPaths(pi: piPaths, environment: agentHomes), locate: { ExecutableLocator(searchDirectories: [bin]) },
+            cuepad: helper, installCommand: { kind, _ in "mkdir -p '\(bin.path)' && cp '\(installers)/\(kind.command)' '\(bin.path)/'" })
     }
 
     /// "官方安装脚本"的替身（`AgentIntegration.installCommand`）拷的东西：备好了的那家装得上，没备好的 cp 报错、装不上。
@@ -238,10 +254,7 @@ final class TestApp {
     /// 备好一个装得上的 Claude Code：报版本；`auth login` 记下已登录（`loginFails` 时退出码 1、没登录上）；
     /// 探测时（stream-json 的 initialize）按登录了没有回答账号，同真的 Claude Code。
     func offersClaudeInstaller(loginFails: Bool = false) throws {
-        try FileManager.default.createDirectory(at: installers, withIntermediateDirectories: true)
-        let script = installers.appending(path: AgentKind.claudeCode.command)
-        try Self.fakeClaude(loginFails: loginFails).write(to: script, atomically: true, encoding: .utf8)
-        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
+        try executable(AgentKind.claudeCode.command, Self.fakeClaude(loginFails: loginFails), in: installers)
     }
 
     private static func fakeClaude(loginFails: Bool) -> String {

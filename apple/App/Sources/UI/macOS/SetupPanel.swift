@@ -13,7 +13,7 @@ extension Workspace {
         showsSetup = true
     }
 
-    /// 接入面板里 Cue 那一行（`SetupPanel`）：什么时候有、能不能勾只在这里定。检测完这台的 Agent 之后读（之前面板只写检测中）。
+    /// 接入面板里 Cue 那一行（`SetupPanel`）：什么时候有、能不能勾只在这里定。检测完、问过这台的 Agent 之后读（之前面板只写检测中）。
     enum SetupCue: Equatable {
         /// Cue 已启用（这台或别的 Mac）：没有这一行，面板只管接入
         case none
@@ -26,34 +26,34 @@ extension Workspace {
         case enable
     }
 
-    /// `here` 是这台写下的各家能不能用（`CueStore.macAgents`）。有一家能用就能启用；只差接入的 Pi 也算（勾上接入、同一下启用，
-    /// 没登录的话启用报出原因，再探测后转成"登录"）。
+    /// `here` 是这台写下的各家能不能用（`CueStore.macAgents`）。有一家能用就能启用；登录了、只差接入的 Pi 也算（勾上接入、同一下启用）。
     func setupCue(here: MacAgents) -> SetupCue {
         switch CueGate.of(services, running: cue.canHear ? cue.hostID : nil, name: cue.hostName) {
         case .runs: return .none
         case .waiting(let why): return .waiting(why)
         case .open:
-            let usable = CueProfile.runtimes.contains(where: here.kinds.contains) || services.agents.connectable.contains(.pi)
+            let usable = CueProfile.runtimes.contains(where: here.kinds.contains)
+                || here.problems.contains(MacAgentProblem(kind: .pi, reason: MacAgentProblem.notConnected)) && services.agents.connectable.contains(.pi)
             return usable ? .enable : .needsAgent
         }
     }
 
-    /// 接入面板的 Agent 那几行（只在这里推）：平时是检测到、还没接入的几家（勾上接入）；能当 Cue 的一家都用不了时，
-    /// 换成能当 Cue 的几家各要你做的那一步，推荐 Claude Code：它与已经装了的摆出来，其余收进"其他"。没接入的别家（OpenCode）照常可勾。
+    /// 接入面板的 Agent 那几行（只在这里推）：各家还要你做的那一步（`setupStep`），没事可做的不列。平时只列可勾的与要登录的；
+    /// 能当 Cue 的一家都用不了时，能当 Cue 的几家都列上，推荐 Claude Code：它与已经装了的摆出来，没装的收进"其他"。
     func setupRows(here: MacAgents) -> (shown: [SetupRow], others: [SetupRow]) {
-        let agents = services.agents
-        let connect = agents.connectable.map { SetupRow(kind: $0, step: .connect) }
-        guard setupCue(here: here) == .needsAgent else { return (connect, []) }
-        let runtimes = Self.runtimeOrder.map { SetupRow(kind: $0, step: setupStep($0, here: here)) }
-        let shown = runtimes.filter { $0.kind == .claudeCode || !$0.step.isInstall }
-        return (shown + connect.filter { !CueProfile.runtimes.contains($0.kind) }, runtimes.filter { !shown.contains($0) })
+        let needsAgent = setupCue(here: here) == .needsAgent
+        let rows = Self.rowOrder.compactMap { kind in
+            setupStep(kind, here: here).map { SetupRow(kind: kind, step: $0) }
+        }.filter { $0.step.isActionable || needsAgent && CueProfile.runtimes.contains($0.kind) }
+        let others = rows.filter { $0.kind != .claudeCode && $0.step.isInstall }
+        return (rows.filter { !others.contains($0) }, others)
     }
 
-    private static let runtimeOrder: [AgentKind] = [.claudeCode, .codex, .pi]
+    private static let rowOrder: [AgentKind] = [.claudeCode, .codex, .pi, .opencode]
 
-    /// 能当 Cue 的一家这一步要你做什么：在装、在登录的看 `AgentIntegrations.jobs`；没装是"安装"；Pi 还没接入是勾上接入（接入了才问得出登录没有）；
-    /// 探测说没登录是"登录"；还没按装好后的样子问过是检查中；别的原因照写。
-    private func setupStep(_ kind: AgentKind, here: MacAgents) -> SetupStep {
+    /// 一家这一步要你做什么，没有为 nil：在装、在登录的看 `AgentIntegrations.jobs`；没装是"安装"（缺前提时先装前提）；
+    /// 探测说没登录是"登录"（Pi 没接入也问得出）；没接入是勾上接入；还没按装好后的样子问过是检查中；别的原因照写。
+    private func setupStep(_ kind: AgentKind, here: MacAgents) -> SetupStep? {
         let agents = services.agents
         var failure: String?
         switch agents.jobs[kind] {
@@ -63,11 +63,12 @@ extension Workspace {
         case nil: break
         }
         guard let status = agents.status(kind) else { return .checking }
-        guard status.isAvailable else { return .install(failure) }
-        if kind == .pi, agents.connectable.contains(.pi) { return .connect }
-        switch here.problems.first(where: { $0.kind == kind })?.reason {
-        case MacAgentProblem.notLoggedIn: return .logIn(failure)
-        case nil, MacAgentProblem.notInstalled: return failure.map(SetupStep.problem) ?? .checking
+        guard status.isAvailable else { return status.lacking.map(SetupStep.needs) ?? .install(failure) }
+        let problem = here.problems.first { $0.kind == kind }?.reason
+        if problem == MacAgentProblem.notLoggedIn { return .logIn(failure) }
+        if agents.connectable.contains(kind) { return .connect }
+        switch problem {
+        case nil, MacAgentProblem.notInstalled: return failure.map(SetupStep.problem) ?? (here.kinds.contains(kind) ? nil : .checking)
         case let reason?: return .problem(reason)
         }
     }
@@ -80,7 +81,10 @@ extension Workspace {
 
     /// 登录这一家（接入面板的"登录"）：Claude Code、Codex 打开浏览器、等你登录完；Pi 开终端，你回到 CuePad 时再问（`recheckAgents`）。
     func logIn(_ kind: AgentKind) async {
-        guard kind.loginArguments != nil else { return attempt { [agents = services.agents] in try agents.openPiLogin() } }
+        guard kind.loginArguments != nil else {
+            do { try await services.agents.openPiLogin() } catch { fail(error) }
+            return
+        }
         await services.agents.logIn(kind)
         await recheckAgents()
     }
@@ -120,6 +124,8 @@ enum SetupStep: Equatable {
     case checking
     /// 没装（或太旧）："安装"，带上次没装成的原因
     case install(String?)
+    /// 没装，装它要先有的这台没有（`AgentStatus.lacking`）：给官网
+    case needs(InstallPrerequisite)
     case installing
     /// 装了没登录："登录"，带上次没登录成的原因
     case logIn(String?)
@@ -130,7 +136,20 @@ enum SetupStep: Equatable {
     /// 别的原因（问不出模型……），只写出来
     case problem(String)
 
-    var isInstall: Bool { if case .install = self { true } else { false } }
+    var isInstall: Bool {
+        switch self {
+        case .install, .needs: true
+        default: false
+        }
+    }
+
+    /// 平时也列出来的：要你点的（勾上接入、登录）
+    var isActionable: Bool {
+        switch self {
+        case .connect, .logIn, .loggingIn, .installing: true
+        default: false
+        }
+    }
 }
 
 /// 接入面板的主按钮没做成的：哪家没装上与原因、Cue 为什么没启用（这台 Mac 上的 Agent 都在这里，只写各家为什么）。
@@ -142,7 +161,8 @@ struct SetupFailures: Equatable {
 }
 
 /// 接入 Agent 并启用 Cue，一处做完：首次打开出现一次（`Workspace.offerSetup`），Cue 页的启用卡、会话页的"接入"也打开它；之后在设置里逐个开关。
-/// 打开时与回到 App 时重新检测这台的 Agent、问它们能不能用（`Workspace.recheckAgents`：用户可能刚在终端里登录了 Pi），检测完之前只写检测中。
+/// 打开时与回到 App 时重新检测这台的 Agent、问它们能不能用（`Workspace.recheckAgents`：用户可能刚在终端里登录了 Pi、装了 Node.js），
+/// 打开后第一次问完之前只写检测中：没登录的那家一出来就是"登录"，不先给勾选再在启用时报错。
 /// Agent 那几行与 Cue 那一行只读 `Workspace.setupRows`、`setupCue`：能当 Cue 的一家都用不了时，一行一个按钮（安装、登录），
 /// 装、登录都在后台做、就地写进度与原因，不用开终端粘命令；平时是勾选要接入的几家。每行写它会写什么或做什么，点按钮就是同意。
 /// 没做成的那一行写原因，都做成就收起。"以后再说"关掉就是不接。
@@ -153,6 +173,8 @@ struct SetupPanel: View {
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var shown = false
+    /// 打开后第一次检测、问完了
+    @State private var checked = false
     /// 这台写下的各家能不能用（读库）
     @State private var here: MacAgents?
     /// 去掉勾的几家与 Cue 那一行（面板开着时的选择，不存）
@@ -173,11 +195,11 @@ struct SetupPanel: View {
     private var waiting: String? { if case .waiting(let why) = setupCue { why } else { nil } }
     private var enablingCue: Bool { setupCue == .enable && !skipsCue }
     /// 检测完了，有可勾的：要接入的几家或 Cue 那一行。
-    private var hasChoices: Bool { agents.detected && (rows.shown.contains { $0.step == .connect } || cueRowShown) }
+    private var hasChoices: Bool { checked && (rows.shown.contains { $0.step == .connect } || cueRowShown) }
     /// 摆出来的几家里还有没装的（提示写"先装"，否则写"先登录"）。
     private var installsFirst: Bool { rows.shown.contains { $0.step.isInstall || $0.step == .installing } }
     /// 检测完了，没有要做的。
-    private var done: Bool { agents.detected && rows.shown.isEmpty && !cueRowShown }
+    private var done: Bool { checked && rows.shown.isEmpty && !cueRowShown }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -193,12 +215,13 @@ struct SetupPanel: View {
         }
         .frame(width: 520)
         .background(palette.desk)
-        .animation(Motion.quick, value: agents.detected)
+        .animation(Motion.quick, value: checked)
         .animation(Motion.quick, value: showsOthers)
         .onAppear { withAnimation(reduceMotion ? Motion.quick : Motion.snappy) { shown = true } }
         .observing(services.store, into: $here, onError: workspace.fail) { [host = services.hostID] in try $0.macAgents(on: host) }
         .task {
             await workspace.recheckAgents()
+            checked = true
             for await _ in NotificationCenter.default.notifications(named: NSApplication.didBecomeActiveNotification) { await workspace.recheckAgents() }
         }
     }
@@ -214,7 +237,7 @@ struct SetupPanel: View {
     }
 
     @ViewBuilder private var content: some View {
-        if !agents.detected {
+        if !checked {
             note { Spinner(.small); Text("正在检测 Agent…") }
         } else {
             if setupCue == .needsAgent {
@@ -267,6 +290,10 @@ struct SetupPanel: View {
                     set: { if $0 { skipped.remove(kind) } else { skipped.insert(kind) } }))
             case .install:
                 action("安装", kind) { await workspace.installAgent(kind) }
+            case .needs(let prerequisite):
+                Link("去官网", destination: prerequisite.site)
+                    .buttonStyle(ControlButtonStyle(kind: .secondary))
+                    .accessibilityLabel("\(prerequisite.name) 官网")
             case .logIn:
                 action(kind == .pi ? "打开终端" : "登录", kind) { await workspace.logIn(kind) }
             case .loggingIn:
@@ -289,6 +316,8 @@ struct SetupPanel: View {
         case .checking: return (.calm, "检查中…", true)
         case .install(let failure?), .logIn(let failure?): return (.failure, Dotted(failure), false)
         case .install: return (.calm, Dotted(kind == .claudeCode ? "推荐" : nil, "运行官方安装脚本"), false)
+        case .needs(let prerequisite):
+            return (.notice, Dotted("需要 \(prerequisite.name) \(prerequisite.minimum.major).\(prerequisite.minimum.minor) 以上"), false)
         case .installing: return (.calm, "安装中，可能要几分钟", true)
         case .logIn: return (.calm, kind == .pi ? "在 Pi 里输入 /login" : "在浏览器里登录", false)
         case .loggingIn: return (.calm, "在浏览器里登录完回到这里", true)

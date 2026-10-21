@@ -14,6 +14,11 @@ extension AgentKind {
         }
     }
 
+    /// 官方脚本要这台先有的（检测时查，`AgentStatus.lacking`）：Pi 的脚本要 Node.js（下限是脚本里写的），没有时只报一句英文就退出。
+    public var installPrerequisite: InstallPrerequisite? {
+        self == .pi ? InstallPrerequisite(name: "Node.js", command: "node", minimum: AgentVersion(22, 19, 0), site: URL(string: "https://nodejs.org")!) : nil
+    }
+
     /// 命令行登录的参数：打开浏览器，在网页上登录完它自己退出（不要终端）。Pi 没有，只能在它的终端界面里输入 /login。
     public var loginArguments: [String]? {
         switch self {
@@ -24,8 +29,17 @@ extension AgentKind {
     }
 }
 
-/// 在后台装一家 Agent、登录它。三家的官方脚本都装进 `~/.local/bin`（检测本来就查那里），没有终端时不问问题；
-/// Pi 的脚本要 Node.js 22 以上，没有时不能在后台装，报出脚本自己的那句。
+/// 装一家之前要先有的程序（`AgentKind.installPrerequisite`）。
+public struct InstallPrerequisite: Sendable, Equatable {
+    public let name: String
+    /// 可执行文件名，`--version` 报出版本
+    public let command: String
+    public let minimum: AgentVersion
+    /// 官网：没有时给人去装
+    public let site: URL
+}
+
+/// 在后台装一家 Agent、登录它。三家的官方脚本都装进 `~/.local/bin`（检测本来就查那里），没有终端时不问问题。
 extension AgentIntegration {
     /// 跑这家的安装命令（`installCommand`），等它结束：返回退出码与输出（标准错误并在一起，失败时取末尾给人看）；起不来或超过 `installLimit` 为 nil。
     @concurrent public func runInstaller(_ kind: AgentKind, upgrading: Bool) async -> (status: Int32, output: String)? {
@@ -41,10 +55,13 @@ extension AgentIntegration {
         return try ChildProcess.launch(executable, kind.loginArguments ?? [], environment: environment)
     }
 
-    /// 开终端登录 Pi 的脚本（Pi 只能在它的终端界面里 /login）：带上 CuePad 起 Pi 时的环境（`PiPaths.launchEnvironment`），登录进同一个配置目录。
-    public func piLoginScript(executable: URL) -> String {
-        let exports = paths.pi.launchEnvironment.sorted { $0.key < $1.key }.map { "export \($0.key)=\(AgentSkill.shellQuoted($0.value))" }
-        return (["#!/bin/sh", "clear"] + exports + ["exec \(AgentSkill.shellQuoted(executable.path))"]).joined(separator: "\n") + "\n"
+    /// 开终端登录 Pi 的脚本（Pi 只能在它的终端界面里 /login）：带上 CuePad 起 Pi 时的家目录、PATH（node 在里面）与 Pi 的环境
+    /// （`PiPaths.launchEnvironment`），登录进 CuePad 用的同一个配置目录；在家目录里起（终端默认的目录，隔离运行时是换走的那个）。
+    public func piLoginScript(executable: URL) async -> String {
+        let launching = await locate().environment(launching: executable, overrides: paths.environment)
+        let environment = paths.pi.launchEnvironment.merging(["HOME": launching["HOME"] ?? NSHomeDirectory(), "PATH": launching["PATH"] ?? ""]) { $1 }
+        let exports = environment.sorted { $0.key < $1.key }.map { "export \($0.key)=\(AgentSkill.shellQuoted($0.value))" }
+        return (["#!/bin/sh", "clear"] + exports + ["cd \"$HOME\"", "exec \(AgentSkill.shellQuoted(executable.path))"]).joined(separator: "\n") + "\n"
     }
 
     /// 实测（2026-10）Claude Code 下载约 260 MB，慢的网络要七八分钟

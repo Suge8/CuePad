@@ -64,11 +64,14 @@ public struct AgentStatus: Sendable, Equatable {
     public var files: Files
     /// 检测时挑中的可执行文件（`found` 时；只有配置目录、比如只装了桌面版时为 nil）：开会话、起大脑、问模型都用这一个，不另找。
     public var executable: URL?
+    /// 没装、而装它要先有的这台还没有（`AgentKind.installPrerequisite`）：先装这个，官方脚本才跑得成。
+    public var lacking: InstallPrerequisite?
 
-    public init(presence: Presence, files: Files, executable: URL? = nil) {
+    public init(presence: Presence, files: Files, executable: URL? = nil, lacking: InstallPrerequisite? = nil) {
         self.presence = presence
         self.files = files
         self.executable = executable
+        self.lacking = lacking
     }
 
     public var isAvailable: Bool { if case .found = presence { true } else { false } }
@@ -158,7 +161,8 @@ public struct AgentIntegration: Sendable {
 
     @concurrent public func status(of kind: AgentKind) async -> AgentStatus {
         let found = await detect(kind)
-        return AgentStatus(presence: found.presence, files: files(of: kind), executable: found.executable)
+        let lacking = found.presence == .notFound ? await lacking(kind.installPrerequisite) : nil
+        return AgentStatus(presence: found.presence, files: files(of: kind), executable: found.executable, lacking: lacking)
     }
 
     /// 写入（新装或升级）。隔离运行写不了、Agent 不在或太旧、或同名文件不是 CuePad 写的时拒绝，且什么都不写。
@@ -251,6 +255,17 @@ public struct AgentIntegration: Sendable {
         }
         if kind.minimumVersion == nil, let executable = candidates.first { return (.found(nil), executable) }
         return (kind != .pi && used ? .found(nil) : .notFound, nil)
+    }
+
+    /// 在找 Agent 的同一组目录里（安装脚本的 PATH 也是它们，`runInstaller`）有没有够新的那个程序；有为 nil。
+    private func lacking(_ prerequisite: InstallPrerequisite?) async -> InstallPrerequisite? {
+        guard let prerequisite else { return nil }
+        let locator = await locate()
+        for executable in locator.candidates(prerequisite.command) {
+            if let output = await Self.capture(executable, ["--version"], locator: locator),
+               let version = AgentVersion(parsing: output), version >= prerequisite.minimum { return nil }
+        }
+        return prerequisite
     }
 
     /// 运行并取标准输出；超时或无法启动返回 nil。数据目录给一个用完即删的临时目录：OpenCode 每次运行（`--version` 也是）都往

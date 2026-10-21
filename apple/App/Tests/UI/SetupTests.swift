@@ -1,4 +1,5 @@
 #if os(macOS)
+import CuePi
 import CueStore
 import CueSync
 import CueTestSupport
@@ -9,6 +10,7 @@ import Testing
 
 /// 首次打开的接入面板：Cue 从没在哪台 Mac 上设过时自己弹一次，一处接入检测到的 Agent 并在这台启用 Cue，之后对 Cue 说的话直接交给它；
 /// 能当 Cue 的一家都用不了时，推荐 Claude Code，一行一个按钮：安装（后台跑官方脚本）→ 登录（打开浏览器）→ 启用，没做成的就地写原因、可再点；
+/// 装了没登录的一打开就是登录，Pi 缺 Node.js 时先给官网；
 /// 换新 Mac、还没和 iCloud 对过时不提议在这台启用，对过发现 Cue 在别处就只管接入；已接入只差 Cue 的老用户也弹一次，停用过 Cue 的不弹。
 @MainActor
 struct SetupTests {
@@ -80,6 +82,36 @@ struct SetupTests {
 
         #expect(await workspace.setUp(connecting: [.claudeCode], enablingCue: true).isEmpty)
         #expect(try await services.store.cueProfile()?.runtime == .known(.claudeCode))
+    }
+
+    @Test func 装了没登录_一打开就是登录_不用先点启用再失败() async throws {
+        try app.installClaude()
+        try app.install(.pi, signedIn: false)  // 也还没接入
+        let workspace = try await launch()
+        var now = try await panel(workspace)
+        #expect(now.cue == .needsAgent)
+        #expect(now.shown == [SetupRow(kind: .claudeCode, step: .logIn(nil)), SetupRow(kind: .pi, step: .logIn(nil))])
+        #expect(now.others.map(\.kind) == [.codex])
+
+        await workspace.logIn(.claudeCode)
+        now = try await panel(workspace)
+        #expect(now.cue == .enable)
+        #expect(now.shown == [SetupRow(kind: .claudeCode, step: .connect), SetupRow(kind: .pi, step: .logIn(nil))])  // Pi 仍要登录才勾得上
+    }
+
+    @Test func Pi缺够新的NodeJS_先给官网_装上了才给安装() async throws {
+        let node = try #require(AgentKind.pi.installPrerequisite)
+        let workspace = try await launch()
+        func pi() async throws -> SetupStep? { try await panel(workspace).others.first { $0.kind == .pi }?.step }
+        #expect(try await pi() == .needs(node))
+
+        try app.installNode("v20.11.0")
+        await workspace.recheckAgents()
+        #expect(try await pi() == .needs(node))
+
+        try app.installNode("v22.19.0")
+        await workspace.recheckAgents()  // 面板在回到 App 时这样重查
+        #expect(try await pi() == .install(nil))
     }
 
     @Test func 装不上或没登录上_就地写原因_可再点() async throws {
