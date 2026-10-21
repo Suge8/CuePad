@@ -76,12 +76,30 @@ public struct CueTools: Sendable {
 
   /// 会话：会话 id 至少 4 位的前缀或会话名（`CueStore.sessions(matching:)`）；同名的几个里只有一个没结束就是它。
   func session(_ ref: String) async throws -> PiSessionState {
+    switch try await sessionOrLeaf(ref) {
+    case .session(let session): return session
+    case .leaf(let leaf):
+      let id = try await store.leafSession(leaf.id)
+      guard let session = try await store.sessions(matching: id).first else { throw Failure("找不到「\(leaf.heading)」的会话：用 task peek 看看") }
+      return session
+    }
+  }
+
+  /// session 写的引用：对不上会话时也认任务的 id 前缀或标题，指那件任务在做的叶子（它绑着的会话）。
+  /// 信封与看板按任务列会话、只写任务的编号，"对会话说"时模型自然把它填进 session：两套编号在这里收成一个参数都认。
+  func sessionOrLeaf(_ ref: String) async throws -> SessionOrLeaf {
     let hits = try await store.sessions(matching: ref)
     let live = hits.filter { $0.state != .known(.ended) }
-    if hits.count == 1 { return hits[0] }
-    if live.count == 1 { return live[0] }
-    if hits.isEmpty { throw Failure("找不到会话「\(ref)」：用 task peek 看会话的 id") }
-    throw Failure("「\(ref)」对上了 \(hits.count) 个会话：用会话 id（peek 里有）")
+    if hits.count == 1 { return .session(hits[0]) }
+    if live.count == 1 { return .session(live[0]) }
+    if hits.count > 1 { throw Failure("「\(ref)」对上了 \(hits.count) 个会话：用会话 id（peek 里有）") }
+    guard let card = try? await task(ref) else { throw Failure("找不到会话或任务「\(ref)」：用 task peek 看 id") }
+    return .leaf(try await store.workingLeaf(of: card.id))
+  }
+
+  enum SessionOrLeaf {
+    case session(PiSessionState)
+    case leaf(Card)
   }
 
   /// 任务此刻在做的叶子（给顶层任务时是它在做的那个步骤）。

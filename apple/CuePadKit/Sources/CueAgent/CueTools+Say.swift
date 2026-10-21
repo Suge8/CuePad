@@ -16,15 +16,19 @@ extension CueTools {
     return try await spoken(request, what, tail: target.short)
   }
 
-  /// say、stop 对的会话：给 task 是它在做的叶子绑着的会话（带上叶子），给 session 是那个会话。`label` 是工具结果里对它的称呼。
+  /// say、stop、leave 对的会话：给 task（或 session 写的是任务）是它在做的叶子绑着的会话（带上叶子），给 session 是那个会话。`label` 是工具结果里对它的称呼。
   func speaker(_ args: Args) async throws -> (session: String, card: UUID?, label: String, short: String) {
+    let leaf: Card
     if let ref = args.string("task") {
-      let leaf = try await workingLeaf(ref)
-      return (try await store.leafSession(leaf.id), leaf.id, "「\(leaf.heading)」的会话", leaf.id.shortID)
+      leaf = try await workingLeaf(ref)
+    } else {
+      guard let ref = args.string("session") else { throw Failure("要给 task 或 session") }
+      switch try await sessionOrLeaf(ref) {
+      case .session(let session): return (session.sessionID, nil, "会话「\(session.title)」", session.shortID)
+      case .leaf(let found): leaf = found
+      }
     }
-    guard let ref = args.string("session") else { throw Failure("要给 task 或 session") }
-    let session = try await session(ref)
-    return (session.sessionID, nil, "会话「\(session.title)」", session.shortID)
+    return (try await store.leafSession(leaf.id), leaf.id, "「\(leaf.heading)」的会话", leaf.id.shortID)
   }
 
   /// 说的话写下后等结果，至多到写下后 `wait`：结果按说的话那条规则（`Speech`）读——已送达、没送到（工具结果标成出错，带 Mac 报的原因），

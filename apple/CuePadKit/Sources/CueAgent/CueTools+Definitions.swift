@@ -8,7 +8,7 @@ extension CueTools {
       [
         "name": "task",
         "description": """
-          任务与会话。task 写任务的 id 前缀或标题，session 写会话的 id 前缀或会话名（信封与 peek 里有）。body、text 里原样写的 ![](cuepad://img/<hash>) 作为图片交给会话。
+          任务与会话。task 写任务的 id 前缀或标题，session 写会话的 id 前缀或会话名（信封与 peek 里有），写任务的也认、指它在做的会话（done 除外）。body、text 里原样写的 ![](cuepad://img/<hash>) 作为图片交给会话。
           add{title,project?,steps?,body?,session?}：建任务。body 是正文，开工时连同标题作为会话的第一句（步骤开新会话时先带上顶层任务的标题与正文）；步骤自己的话用 edit 写在步骤上。同一项目里已有同名没做完的任务时不另建，返回那件。带 session 把那个会话绑到新任务上：不写 body（话用 say 说），project 缺省是会话所在的项目；
           edit{task,title?,body?,steps?,project?,reopen?}：改标题、换掉正文、追加步骤、连同步骤挪到项目；追加步骤与 reopen:true 都让已完成的任务回到没做完；
           start{task,agent?,model?,effort?,fresh?}：开工叶子（task 有步骤时是第一个没做完的步骤）。同一任务的上一步有会话就接着用它（已结束的先恢复），否则在项目文件夹开新会话：agent 缺省是那台 Mac 的默认，model 写 provider/id（claude、codex 只写 id）。叶子已有会话用 say；fresh:true 开新会话（上一步的会话随之结束）；
