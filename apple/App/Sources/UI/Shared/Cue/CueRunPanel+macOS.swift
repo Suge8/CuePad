@@ -219,13 +219,12 @@ private enum CueRunFormat {
         }
     }
 
+    /// 醒来原因（同 Cue 页，`CueWake.reason`）带上几处、几条。
     static func reason(_ wake: CueWake) -> String {
         switch wake {
-        case .enabled: "刚启用"
-        case .message: "你发来消息"
-        case .sessionActivity(let stirs): "会话有动静（\(stirs.count) 处）"
-        case .idle: "空闲巡视"
-        case .reminder(let lines): "提醒到点（\(lines.count) 条）"
+        case .sessionActivity(let stirs): "\(wake.reason)（\(stirs.count) 处）"
+        case .reminder(let lines): "\(wake.reason)（\(lines.count) 条）"
+        case .enabled, .message, .idle: wake.reason
         }
     }
 
