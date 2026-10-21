@@ -1,4 +1,5 @@
 #if os(macOS)
+import AppKit
 import CuePi
 import CueStore
 import Foundation
@@ -12,6 +13,10 @@ import Observation
 final class AgentIntegrations {
     /// 第一次检测完成前为空
     private(set) var statuses: [AgentKind: AgentStatus] = [:]
+    /// 在后台装、登录的那几家（接入面板的"安装""登录"）与没做成的原因；做成了就没有这一项，之后看检测与探测。
+    private(set) var jobs: [AgentKind: AgentJob] = [:]
+    /// 在等你在浏览器里登录完的进程：再点一次登录先结束旧的（Codex 的登录占着固定端口）。
+    @ObservationIgnored private var logins: [AgentKind: ChildProcess] = [:]
 
     /// 每一家都检测过了（之前的"有哪些"还说不准，界面写检测中）。
     var detected: Bool { statuses.count == AgentKind.allCases.count }
@@ -73,6 +78,52 @@ final class AgentIntegrations {
         return failures
     }
 
+    /// 在后台跑这家的官方安装脚本（`AgentKind.installCommand`），装完重新检测它；没装上的原因记在 `jobs`（脚本输出的最后一句）。
+    func installAgent(_ kind: AgentKind) async {
+        jobs[kind] = .installing
+        let upgrading = if case .tooOld = statuses[kind]?.presence { true } else { false }
+        let result = await integration.runInstaller(kind, upgrading: upgrading)
+        await detect(kind)
+        jobs[kind] = switch result {
+        case nil: .failed("安装超时")
+        case let (status, output)? where status != 0: .failed(Self.lastLine(output) ?? "安装没成功")
+        case _ where statuses[kind]?.isAvailable != true: .failed("装好了，但找不到 \(kind.command)")
+        default: nil
+        }
+    }
+
+    /// 命令行登录（`AgentKind.loginArguments`，会打开浏览器），等它结束；再点一次就结束旧的、重来。没登录成的记在 `jobs`。
+    func logIn(_ kind: AgentKind) async {
+        logins.removeValue(forKey: kind)?.end()
+        guard let executable = statuses[kind]?.executable else { return }
+        jobs[kind] = .loggingIn
+        do {
+            let process = try await integration.startLogin(kind, executable: executable)
+            logins[kind] = process
+            let status = await process.waitForExit()
+            guard logins[kind] === process else { return }  // 被重来的那次换掉了
+            logins[kind] = nil
+            jobs[kind] = status == 0 ? nil : .failed("没登录成功")
+        } catch {
+            jobs[kind] = .failed(error.localizedDescription)
+        }
+    }
+
+    /// Pi 只能在它的终端界面里登录：开一个终端窗口跑 Pi（带上 CuePad 起它时的环境），你在里面输入 /login。
+    func openPiLogin() throws {
+        guard let executable = statuses[.pi]?.executable else { return }
+        let script = FileManager.default.temporaryDirectory.appending(path: "cuepad-pi-login.command")
+        try Data(integration.piLoginScript(executable: executable).utf8).write(to: script, options: .atomic)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
+        NSWorkspace.shared.open(script)
+    }
+
+    /// 输出里最后一句话（去掉终端的颜色控制符）：失败时给人看的原因。
+    private static func lastLine(_ output: String) -> String? {
+        output.replacing(/\u{1B}\[[0-9;?]*[A-Za-z]/, with: "").split(whereSeparator: \.isNewline)
+            .map { $0.trimmingCharacters(in: .whitespaces) }.last { !$0.isEmpty }
+    }
+
     /// 各家能不能用与模型（`AgentIntegration.probe`）：按此刻检测出的状态。能开新会话的几家各起一个进程问，慢；
     /// 只给写同步表 macAgents 的那一处（`MacAgentsRecorder`），界面读库。
     func probe() async -> (agents: [MacAgent], problems: [MacAgentProblem]) {
@@ -112,5 +163,13 @@ final class AgentIntegrations {
         }
         await detect(kind)
     }
+}
+
+/// 在后台装、登录一家的进度（`AgentIntegrations.jobs`）。
+enum AgentJob: Equatable {
+    case installing
+    case loggingIn
+    /// 上次没做成的原因（下次动手时清掉）
+    case failed(String)
 }
 #endif

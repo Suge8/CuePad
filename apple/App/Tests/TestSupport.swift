@@ -226,9 +226,48 @@ final class TestApp {
     }
 
     var agentIntegration: AgentIntegration {
-        AgentIntegration(
+        let bin = directory.appending(path: "bin").path, installers = installers.path
+        return AgentIntegration(
             paths: AgentPaths(pi: piPaths, environment: agentHomes), locate: { [directory] in ExecutableLocator(searchDirectories: [directory.appending(path: "bin")]) },
-            cuepad: helper)
+            cuepad: helper, installCommand: { kind, _ in "mkdir -p '\(bin)' && cp '\(installers)/\(kind.command)' '\(bin)/'" })
+    }
+
+    /// "官方安装脚本"的替身（`AgentIntegration.installCommand`）拷的东西：备好了的那家装得上，没备好的 cp 报错、装不上。
+    private var installers: URL { directory.appending(path: "installers") }
+
+    /// 备好一个装得上的 Claude Code：报版本；`auth login` 记下已登录（`loginFails` 时退出码 1、没登录上）；
+    /// 探测时（stream-json 的 initialize）按登录了没有回答账号，同真的 Claude Code。
+    func offersClaudeInstaller(loginFails: Bool = false) throws {
+        try FileManager.default.createDirectory(at: installers, withIntermediateDirectories: true)
+        let script = installers.appending(path: AgentKind.claudeCode.command)
+        try Self.fakeClaude(loginFails: loginFails).write(to: script, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
+    }
+
+    private static func fakeClaude(loginFails: Bool) -> String {
+        """
+        #!/usr/bin/python3
+        import json, os, sys
+        marker = os.path.join(os.path.dirname(os.path.realpath(__file__)), ".logged-in")
+        args = sys.argv[1:]
+        if "--version" in args:
+            print("2.1.0 (Claude Code)"); sys.exit(0)
+        if args[:2] == ["auth", "login"]:
+            if \(loginFails ? "True" : "False"): sys.exit(1)
+            open(marker, "w").close(); sys.exit(0)
+        signed = os.path.exists(marker)
+        for line in sys.stdin:
+            message = json.loads(line)
+            if message.get("type") != "control_request": continue
+            request = message["request"]
+            if request.get("subtype") == "initialize":
+                body = {"account": {"tokenSource": "claude.ai" if signed else "none", "apiProvider": "firstParty"}}
+            else:
+                body = {"applied": {}}
+            reply = {"type": "control_response", "response": {"subtype": "success", "request_id": message["request_id"], "response": body}}
+            print(json.dumps(reply), flush=True)
+
+        """
     }
 
     /// 其余 Agent 的配置目录也在临时目录里，按它们自己认的环境变量给。

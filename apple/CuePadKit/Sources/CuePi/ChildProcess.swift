@@ -200,6 +200,17 @@ public final class ChildProcess: Sendable {
         }.value
     }
 
+    /// 起一个要等人的命令（打开浏览器登录）：标准输入、输出、错误都是空设备，自成进程组。`waitForExit()` 等它结束，`end()` 提前结束它。
+    public static func launch(_ executable: URL, _ arguments: [String], environment: [String: String]) throws -> ChildProcess {
+        try ChildProcess(executable, arguments, environment: environment, placement: .group, keepErrors: false)
+    }
+
+    /// 等它退出，返回退出码（被信号结束为 nil）；不随调用方取消提前返回。
+    public func waitForExit() async -> Int32? {
+        _ = await Task { await exited(within: nil) }.value
+        return status
+    }
+
     // MARK: 读写
 
     /// 写一行（补上换行）。
@@ -225,7 +236,7 @@ public final class ChildProcess: Sendable {
     // MARK: 停与等
 
     /// 请它马上退出、不等：SIGTERM，宽限期过了还没走就 SIGKILL（自成进程组的整组结束）。之后等它退出的一定等得到。
-    func end(grace: Duration = AgentTimeouts.endGrace) {
+    public func end(grace: Duration = AgentTimeouts.endGrace) {
         Darwin.kill(pid, SIGTERM)
         Task { [self] in
             if await !exited(within: grace) { kill() }

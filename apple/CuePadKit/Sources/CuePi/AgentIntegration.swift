@@ -102,22 +102,25 @@ extension AgentInstallError: LocalizedError {
 /// 那里是用户自己维护的，且会被好几家同时读到。OpenCode 也读 `~/.claude/skills`，两份同名同内容，按名字去重。
 /// 写入不做事务：哪一样没写上，状态就是 `outdated`，下次启动的静默升级补上。
 public struct AgentIntegration: Sendable {
-    private let paths: AgentPaths
+    let paths: AgentPaths
     private var pi: PiPaths { paths.pi }
-    private let locate: @Sendable () async -> ExecutableLocator
+    let locate: @Sendable () async -> ExecutableLocator
     /// App 里的命令行工具（`Contents/Helpers/cuepad`），技能里写它的绝对路径
     private let cuepad: URL
     /// 隔离运行（开发构建）：配置目录是缺省真实位置的那几家只检测、不写
     private let isolated: Bool
+    /// 装一家用的命令（`runInstaller`）：官方的那条，测试换成放替身的
+    let installCommand: @Sendable (AgentKind, _ upgrading: Bool) -> String
 
     public init(
         paths: AgentPaths = AgentPaths(), locate: @escaping @Sendable () async -> ExecutableLocator = { await .system }, cuepad: URL,
-        isolated: Bool = false
+        isolated: Bool = false, installCommand: @escaping @Sendable (AgentKind, _ upgrading: Bool) -> String = { $0.installCommand(upgrading: $1) }
     ) {
         self.paths = paths
         self.locate = locate
         self.cuepad = cuepad
         self.isolated = isolated
+        self.installCommand = installCommand
     }
 
     public func home(of kind: AgentKind) -> URL { paths.home(of: kind) }

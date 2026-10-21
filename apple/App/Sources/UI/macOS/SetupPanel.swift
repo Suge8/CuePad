@@ -20,20 +20,74 @@ extension Workspace {
         /// 这台的库还没和 iCloud 对过一遍（`CueGate.waiting`，换新 Mac 时）：Cue 也许已在别的 Mac 上设过，
         /// 先不提议在这台启用，免得把它从那台抢过来；写 `why`
         case waiting(String)
-        /// 能当 Cue 的 Agent（`CueProfile.runtimes`）这台一家都没装：给装法
+        /// 能当 Cue 的 Agent（`CueProfile.runtimes`）这台一家都用不了：带着装、登录的那几行（`setupRows`）
         case needsAgent
         /// 能勾：在这台启用
         case enable
     }
 
-    var setupCue: SetupCue {
+    /// `here` 是这台写下的各家能不能用（`CueStore.macAgents`）。有一家能用就能启用；只差接入的 Pi 也算（勾上接入、同一下启用，
+    /// 没登录的话启用报出原因，再探测后转成"登录"）。
+    func setupCue(here: MacAgents) -> SetupCue {
         switch CueGate.of(services, running: cue.canHear ? cue.hostID : nil, name: cue.hostName) {
         case .runs: return .none
         case .waiting(let why): return .waiting(why)
         case .open:
-            let agents = services.agents
-            return CueProfile.runtimes.contains { agents.status($0)?.isAvailable == true } ? .enable : .needsAgent
+            let usable = CueProfile.runtimes.contains(where: here.kinds.contains) || services.agents.connectable.contains(.pi)
+            return usable ? .enable : .needsAgent
         }
+    }
+
+    /// 接入面板的 Agent 那几行（只在这里推）：平时是检测到、还没接入的几家（勾上接入）；能当 Cue 的一家都用不了时，
+    /// 换成能当 Cue 的几家各要你做的那一步，推荐 Claude Code：它与已经装了的摆出来，其余收进"其他"。没接入的别家（OpenCode）照常可勾。
+    func setupRows(here: MacAgents) -> (shown: [SetupRow], others: [SetupRow]) {
+        let agents = services.agents
+        let connect = agents.connectable.map { SetupRow(kind: $0, step: .connect) }
+        guard setupCue(here: here) == .needsAgent else { return (connect, []) }
+        let runtimes = Self.runtimeOrder.map { SetupRow(kind: $0, step: setupStep($0, here: here)) }
+        let shown = runtimes.filter { $0.kind == .claudeCode || !$0.step.isInstall }
+        return (shown + connect.filter { !CueProfile.runtimes.contains($0.kind) }, runtimes.filter { !shown.contains($0) })
+    }
+
+    private static let runtimeOrder: [AgentKind] = [.claudeCode, .codex, .pi]
+
+    /// 能当 Cue 的一家这一步要你做什么：在装、在登录的看 `AgentIntegrations.jobs`；没装是"安装"；Pi 还没接入是勾上接入（接入了才问得出登录没有）；
+    /// 探测说没登录是"登录"；还没按装好后的样子问过是检查中；别的原因照写。
+    private func setupStep(_ kind: AgentKind, here: MacAgents) -> SetupStep {
+        let agents = services.agents
+        var failure: String?
+        switch agents.jobs[kind] {
+        case .installing: return .installing
+        case .loggingIn: return .loggingIn
+        case .failed(let why): failure = why
+        case nil: break
+        }
+        guard let status = agents.status(kind) else { return .checking }
+        guard status.isAvailable else { return .install(failure) }
+        if kind == .pi, agents.connectable.contains(.pi) { return .connect }
+        switch here.problems.first(where: { $0.kind == kind })?.reason {
+        case MacAgentProblem.notLoggedIn: return .logIn(failure)
+        case nil, MacAgentProblem.notInstalled: return failure.map(SetupStep.problem) ?? .checking
+        case let reason?: return .problem(reason)
+        }
+    }
+
+    /// 装这一家（接入面板的"安装"）：后台跑官方安装脚本，装完再问一遍这台各家能不能用。
+    func installAgent(_ kind: AgentKind) async {
+        await services.agents.installAgent(kind)
+        await recheckAgents()
+    }
+
+    /// 登录这一家（接入面板的"登录"）：Claude Code、Codex 打开浏览器、等你登录完；Pi 开终端，你回到 CuePad 时再问（`recheckAgents`）。
+    func logIn(_ kind: AgentKind) async {
+        guard kind.loginArguments != nil else { return attempt { [agents = services.agents] in try agents.openPiLogin() } }
+        await services.agents.logIn(kind)
+        await recheckAgents()
+    }
+
+    /// 重新检测这台的 Agent 并问它们能不能用（面板打开、回到 App、装完、登录完）：写进库，面板读库。
+    func recheckAgents() async {
+        do { try await services.macAgents.record(redetecting: true) } catch { fail(error) }
     }
 
     /// 接入面板的主按钮：接入勾选的几家（同设置里打开开关），`enablingCue` 时再让 Cue 在这台 Mac 上启用（`AppServices.enableCue`），
@@ -53,6 +107,32 @@ extension Workspace {
     }
 }
 
+/// 接入面板里一家 Agent 那一行（`Workspace.setupRows`）。
+struct SetupRow: Equatable, Identifiable {
+    let kind: AgentKind
+    let step: SetupStep
+    var id: AgentKind { kind }
+}
+
+/// 一家这一步要你做什么。
+enum SetupStep: Equatable {
+    /// 还在检测，或装好、登录后还没问过它能不能用
+    case checking
+    /// 没装（或太旧）："安装"，带上次没装成的原因
+    case install(String?)
+    case installing
+    /// 装了没登录："登录"，带上次没登录成的原因
+    case logIn(String?)
+    /// 在等你在浏览器里登录完："重新登录"
+    case loggingIn
+    /// 勾上接入（同设置里打开开关）
+    case connect
+    /// 别的原因（问不出模型……），只写出来
+    case problem(String)
+
+    var isInstall: Bool { if case .install = self { true } else { false } }
+}
+
 /// 接入面板的主按钮没做成的：哪家没装上与原因、Cue 为什么没启用（这台 Mac 上的 Agent 都在这里，只写各家为什么）。
 struct SetupFailures: Equatable {
     var agents: [AgentKind: String] = [:]
@@ -62,9 +142,9 @@ struct SetupFailures: Equatable {
 }
 
 /// 接入 Agent 并启用 Cue，一处做完：首次打开出现一次（`Workspace.offerSetup`），Cue 页的启用卡、会话页的"接入"也打开它；之后在设置里逐个开关。
-/// 打开时重新检测这台 Mac 上的 Agent（检测完之前只写检测中），回到 App 时再测一次（用户可能刚照着装法在终端里装好）。
-/// 列出检测到、还没接入的几家（`AgentIntegrations.connectable`）与 Cue 那一行（`Workspace.setupCue`：还没和 iCloud 对过时写在等什么、不能勾；
-/// 能当 Cue 的一家都没装时换成各家的安装命令），默认全选；每行写它会写什么或做什么，点主按钮就是同意（`Workspace.setUp`）。
+/// 打开时与回到 App 时重新检测这台的 Agent、问它们能不能用（`Workspace.recheckAgents`：用户可能刚在终端里登录了 Pi），检测完之前只写检测中。
+/// Agent 那几行与 Cue 那一行只读 `Workspace.setupRows`、`setupCue`：能当 Cue 的一家都用不了时，一行一个按钮（安装、登录），
+/// 装、登录都在后台做、就地写进度与原因，不用开终端粘命令；平时是勾选要接入的几家。每行写它会写什么或做什么，点按钮就是同意。
 /// 没做成的那一行写原因，都做成就收起。"以后再说"关掉就是不接。
 struct SetupPanel: View {
     @Environment(Workspace.self) private var workspace
@@ -73,27 +153,31 @@ struct SetupPanel: View {
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var shown = false
+    /// 这台写下的各家能不能用（读库）
+    @State private var here: MacAgents?
     /// 去掉勾的几家与 Cue 那一行（面板开着时的选择，不存）
     @State private var skipped: Set<AgentKind> = []
     @State private var skipsCue = false
+    @State private var showsOthers = false
     @State private var working = false
     @State private var failures = SetupFailures()
 
     private var agents: AgentIntegrations { services.agents }
-    private var kinds: [AgentKind] { agents.connectable }
-    private var chosen: [AgentKind] { kinds.filter { !skipped.contains($0) } }
+    private var mac: MacAgents { here ?? MacAgents(hostID: services.hostID, agents: [], modifiedAt: .distantPast) }
+    private var rows: (shown: [SetupRow], others: [SetupRow]) { workspace.setupRows(here: mac) }
+    private var chosen: [AgentKind] { rows.shown.filter { $0.step == .connect && !skipped.contains($0.kind) }.map(\.kind) }
     private var cueName: String { workspace.cue.name }
-    private var setupCue: Workspace.SetupCue { workspace.setupCue }
+    private var setupCue: Workspace.SetupCue { workspace.setupCue(here: mac) }
     /// 列出 Cue 那一行：能勾的，或在等 iCloud 的。
     private var cueRowShown: Bool { setupCue == .enable || waiting != nil }
     private var waiting: String? { if case .waiting(let why) = setupCue { why } else { nil } }
     private var enablingCue: Bool { setupCue == .enable && !skipsCue }
-    /// 检测完了，有行：还没接入的几家或 Cue 那一行。
-    private var hasRows: Bool { agents.detected && (!kinds.isEmpty || cueRowShown) }
-    /// 检测完了，能当 Cue 的一家都没装：给装法。
-    private var needsAgent: Bool { agents.detected && setupCue == .needsAgent }
+    /// 检测完了，有可勾的：要接入的几家或 Cue 那一行。
+    private var hasChoices: Bool { agents.detected && (rows.shown.contains { $0.step == .connect } || cueRowShown) }
+    /// 摆出来的几家里还有没装的（提示写"先装"，否则写"先登录"）。
+    private var installsFirst: Bool { rows.shown.contains { $0.step.isInstall || $0.step == .installing } }
     /// 检测完了，没有要做的。
-    private var done: Bool { agents.detected && !hasRows && !needsAgent }
+    private var done: Bool { agents.detected && rows.shown.isEmpty && !cueRowShown }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -110,10 +194,12 @@ struct SetupPanel: View {
         .frame(width: 520)
         .background(palette.desk)
         .animation(Motion.quick, value: agents.detected)
+        .animation(Motion.quick, value: showsOthers)
         .onAppear { withAnimation(reduceMotion ? Motion.quick : Motion.snappy) { shown = true } }
+        .observing(services.store, into: $here, onError: workspace.fail) { [host = services.hostID] in try $0.macAgents(on: host) }
         .task {
-            await agents.redetect()
-            for await _ in NotificationCenter.default.notifications(named: NSApplication.didBecomeActiveNotification) { await agents.redetect() }
+            await workspace.recheckAgents()
+            for await _ in NotificationCenter.default.notifications(named: NSApplication.didBecomeActiveNotification) { await workspace.recheckAgents() }
         }
     }
 
@@ -129,39 +215,91 @@ struct SetupPanel: View {
 
     @ViewBuilder private var content: some View {
         if !agents.detected {
-            HStack(spacing: 8) {
-                Spinner(.small)
-                Text("正在检测 Agent…").foregroundStyle(palette.ink2)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 12).padding(.vertical, 9)
-            .background(palette.paper, in: .rect(cornerRadius: 10, style: .continuous))
+            note { Spinner(.small); Text("正在检测 Agent…") }
         } else {
-            if hasRows {
+            if setupCue == .needsAgent {
+                Text("先\(installsFirst ? "装" : "登录")一个能当 \(cueName) 的 Agent").font(Typography.secondary).foregroundStyle(palette.ink2)
+                    .padding(.horizontal, 4)
+            }
+            if !rows.shown.isEmpty || cueRowShown {
                 group {
-                    ForEach(kinds) { row($0) }
+                    ForEach(rows.shown) { row($0) }
                     if cueRowShown { cueRow }
                 }
             }
-            if needsAgent { guide }
-            if done {
-                Text("都已接入").foregroundStyle(palette.ink2)
-                    .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 12).padding(.vertical, 9)
-                    .background(palette.paper, in: .rect(cornerRadius: 10, style: .continuous))
-            }
+            if !rows.others.isEmpty { others }
+            if done { note { Text("都已接入") } }
         }
     }
 
-    /// 一家一行：勾选、名字、会写什么（`AgentLine`），没装上的写原因。
-    private func row(_ kind: AgentKind) -> some View {
-        let (tone, line) = failures.agents[kind].map { (StatusTone.failure, Dotted($0)) }
-            ?? AgentLine.of(kind, agents.status(kind), writable: agents.isWritable(kind))
-        return SettingRow(title: kind.name, icon: kind.mark.image, tone: tone, busy: working && chosen.contains(kind), status: line, help: nil) {
-            check(kind.name, isOn: Binding(
-                get: { !skipped.contains(kind) },
-                set: { if $0 { skipped.remove(kind) } else { skipped.insert(kind) } }))
+    /// 一行一句的提示（检测中、都已接入）：纸色底。
+    private func note(@ViewBuilder _ content: () -> some View) -> some View {
+        HStack(spacing: 8) { content() }.foregroundStyle(palette.ink2)
+            .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 12).padding(.vertical, 9)
+            .background(palette.paper, in: .rect(cornerRadius: 10, style: .continuous))
+    }
+
+    /// 没推荐的那几家（Codex、Pi）：点"其他"展开。
+    private var others: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Button { showsOthers.toggle() } label: {
+                HStack(spacing: 4) {
+                    Text("其他")
+                    Image(showsOthers ? .collapse : .expand).font(.system(size: 9, weight: .semibold))
+                }
+                .font(Typography.secondary).foregroundStyle(palette.ink2).contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 4)
+            if showsOthers { group { ForEach(rows.others) { row($0) } } }
+        }
+    }
+
+    /// 一家一行：这一步写什么、右边放什么（勾选、安装、登录）。
+    private func row(_ row: SetupRow) -> some View {
+        let kind = row.kind
+        let (tone, line, busy) = describe(row)
+        return SettingRow(title: kind.name, icon: kind.mark.image, tone: tone, busy: busy, status: line, help: nil) {
+            switch row.step {
+            case .connect:
+                check(kind.name, isOn: Binding(
+                    get: { !skipped.contains(kind) },
+                    set: { if $0 { skipped.remove(kind) } else { skipped.insert(kind) } }))
+            case .install:
+                action("安装", kind) { await workspace.installAgent(kind) }
+            case .logIn:
+                action(kind == .pi ? "打开终端" : "登录", kind) { await workspace.logIn(kind) }
+            case .loggingIn:
+                action("重新登录", kind) { await workspace.logIn(kind) }
+            case .checking, .installing, .problem:
+                EmptyView()
+            }
         } fix: {
             EmptyView()
         }
+    }
+
+    private func describe(_ row: SetupRow) -> (StatusTone, Dotted?, Bool) {
+        let kind = row.kind
+        switch row.step {
+        case .connect:
+            let (tone, line) = failures.agents[kind].map { (StatusTone.failure, Dotted($0)) }
+                ?? AgentLine.of(kind, agents.status(kind), writable: agents.isWritable(kind))
+            return (tone, line, working && chosen.contains(kind))
+        case .checking: return (.calm, "检查中…", true)
+        case .install(let failure?), .logIn(let failure?): return (.failure, Dotted(failure), false)
+        case .install: return (.calm, Dotted(kind == .claudeCode ? "推荐" : nil, "运行官方安装脚本"), false)
+        case .installing: return (.calm, "安装中，可能要几分钟", true)
+        case .logIn: return (.calm, kind == .pi ? "在 Pi 里输入 /login" : "在浏览器里登录", false)
+        case .loggingIn: return (.calm, "在浏览器里登录完回到这里", true)
+        case .problem(let why): return (.notice, Dotted(why), false)
+        }
+    }
+
+    private func action(_ title: String, _ kind: AgentKind, _ run: @escaping () async -> Void) -> some View {
+        Button(title) { Task { await run() } }
+            .buttonStyle(ControlButtonStyle(kind: .secondary))
+            .accessibilityLabel("\(title) \(kind.name)")
     }
 
     /// 启用 Cue 那一行：默认项目还没有文件夹时写它第一次开工时建在哪（`Workspaces`）。没启用成的写原因。
@@ -190,25 +328,9 @@ struct SetupPanel: View {
         Toggle(name, isOn: isOn).labelsHidden().toggleStyle(.checkbox).disabled(working)
     }
 
-    /// 一家能当 Cue 的 Agent 都没装：各家一行安装命令（`InstallCommand`，Pi 太旧时是升级命令），装好回来就重新检测。
-    private var guide: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("先在终端装一个能当 \(cueName) 的 Agent：").font(Typography.secondary).foregroundStyle(palette.ink2)
-                .fixedSize(horizontal: false, vertical: true)
-            ForEach(AgentKind.allCases.filter(CueProfile.runtimes.contains)) { kind in
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(kind.name).font(Typography.meta).foregroundStyle(palette.ink2)
-                    InstallCommand(kind: kind, presence: agents.status(kind)?.presence ?? .notFound)
-                }
-            }
-        }
-        .padding(.horizontal, 4)
-    }
-
     private var footer: some View {
         HStack(alignment: .center, spacing: 12) {
-            Text(needsAgent ? "装好后回到这里" : "可在设置里改")
-                .font(Typography.meta).foregroundStyle(palette.ink3)
+            Text("可在设置里改").font(Typography.meta).foregroundStyle(palette.ink3)
             Spacer(minLength: 8)
             if done {
                 Button("完成") { close() }
@@ -218,7 +340,7 @@ struct SetupPanel: View {
                 Button("以后再说") { close() }
                     .buttonStyle(ControlButtonStyle(kind: .secondary))
                     .keyboardShortcut(.cancelAction)
-                if hasRows {
+                if hasChoices {
                     Button(primaryTitle) { setUp() }
                         .buttonStyle(ControlButtonStyle(kind: .primary))
                         .keyboardShortcut(.defaultAction)

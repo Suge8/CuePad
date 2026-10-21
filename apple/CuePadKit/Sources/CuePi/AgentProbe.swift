@@ -57,7 +57,7 @@ struct AgentProbe {
                 case .opencode: return nil
                 }
             }
-            return agent.map(Outcome.usable) ?? .unusable("没登录")
+            return agent.map(Outcome.usable) ?? .unusable(MacAgentProblem.notLoggedIn)
         } catch {
             let message = error.localizedDescription
             return .unusable("问不出模型（\(message.clipped(Self.messageLimit))）")
@@ -71,7 +71,7 @@ struct AgentProbe {
     /// 后台开的会话由 CuePad 直接托管（OpenCode 连它的服务），没接入照样开得出；托管的 Pi 经桥扩展上报，没接入就开不出来。
     private static func reason(_ kind: AgentKind, _ status: AgentStatus) -> String? {
         switch status.presence {
-        case .notFound: return "没装"
+        case .notFound: return MacAgentProblem.notInstalled
         case .tooOld(let version): return "版本太旧（\(version)，要 \(kind.minimumVersion.map(\.description) ?? "") 或更新）"
         case .found: break
         }

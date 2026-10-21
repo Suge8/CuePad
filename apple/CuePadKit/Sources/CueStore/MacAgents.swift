@@ -72,6 +72,10 @@ public struct MacAgentProblem: Codable, Equatable, Sendable {
   public let kind: AgentKind
   public let reason: String
 
+  /// 两种要你动手的原因（`AgentProbe` 写下，Mac 的接入面板按它给"安装""登录"）：原因随记录同步，各端直接显示这句。
+  public static let notInstalled = "没装"
+  public static let notLoggedIn = "没登录"
+
   public init(kind: AgentKind, reason: String) {
     self.kind = kind
     self.reason = reason
