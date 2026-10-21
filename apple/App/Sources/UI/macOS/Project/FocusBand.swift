@@ -100,12 +100,8 @@ struct CompactFocus: View {
                         .accessibilityLabel("\(data.taskCounts.open) 个任务没做完")
                 }
             }
-            .font(Typography.toolbarLabel)
-            .foregroundStyle(palette.ink)
-            .padding(.horizontal, 16).frame(height: Spacing.toolbarControl)
-            .glass(in: .capsule, interactive: true)
         }
-        .buttonStyle(PressStyle())
+        .buttonStyle(ControlButtonStyle(kind: .glass))
         .help("回到顶部")
     }
 }

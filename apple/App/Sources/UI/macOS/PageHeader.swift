@@ -14,26 +14,6 @@ extension View {
     }
 }
 
-/// 顶上那一排右边的文字钮（新任务、清空回收站…）：一块玻璃胶囊，与项目范围同高；毁掉东西的写成出错色。
-struct PageHeaderButton: View {
-    let title: LocalizedStringKey
-    let icon: AppIcon
-    var destructive = false
-    let action: () -> Void
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        Button(action: action) {
-            Label(title, icon: icon)
-                .font(Typography.secondary.weight(.semibold)).foregroundStyle(destructive ? palette.failure : palette.ink)
-                .padding(.horizontal, 14).frame(height: Spacing.toolbarControl)
-                .glass(in: .capsule, interactive: true)
-                .contentShape(.capsule)
-        }
-        .buttonStyle(PressStyle())
-    }
-}
-
 /// 工具栏那一条（窗口顶到工具栏安全区的下沿）的页底色渐变：摆在安全区上沿、往上伸满那一条，不量尺寸。
 struct ToolbarFade: View {
     @Environment(\.palette) private var palette

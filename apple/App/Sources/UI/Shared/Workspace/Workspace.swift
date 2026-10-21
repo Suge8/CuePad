@@ -76,9 +76,6 @@ final class Workspace {
     var addsTask = false
     /// 清空回收站的确认开着（回收站页上与"⋯"里的"清空回收站…"同一下）。
     var confirmsEmptyTrash = false
-    /// 页面读到后交给"⋯"（`PageMenuSlot`）按它置灰的：有没有做完的任务（任务页）、回收站里有没有东西（回收站页）。
-    var hasDoneTasks = false
-    var hasTrash = false
     #endif
     /// 项目范围：任务页与会话页共用这一份（顶栏中间那颗显示它、点 ✕ 清掉；项目页"⋯"里的"看这个项目的会话"设成这个项目再切到会话页），nil 是全部项目。
     var projectScope: UUID?

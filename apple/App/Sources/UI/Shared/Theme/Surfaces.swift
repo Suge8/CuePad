@@ -192,6 +192,7 @@ struct PressFeedback: ViewModifier {
                     .opacity(active ? Self.dimmed : 1)
             }
         }
+        .environment(\.buttonHovered, lit)
         .onHover { hovering = $0 }
         .presetHover($hovering)
         .animation(Motion.quick, value: lit)
@@ -228,6 +229,11 @@ struct PressFeedback: ViewModifier {
 }
 
 #if os(macOS)
+extension EnvironmentValues {
+    /// 指针此刻停在所在的这颗按钮上（`PressFeedback` 给标签里的内容）：悬停时要换颜色、露出记号的按钮读它，不各自再挂 `onHover`。
+    @Entry var buttonHovered = false
+}
+
 extension View {
     /// 调试预设（`-CuePadHover`，`DebugHooks.Preset.hovered`）：这块盖住其中一点时画成指针停着的样子——后台截图里指针进不来；
     /// 按钮、行与卡的悬停都经它，平时什么都不挂。
@@ -269,14 +275,15 @@ enum ControlMetrics {
 
 /// 控件只有一套外形与按压实现，空态、绑定引导和搜索栏共用；签名色只给主动作，其余是墨色。
 /// 外形单拆成 `ControlSurface`：点开菜单的按钮（`MenuButton`）不是 `Button`，要同一个样子时直接挂它。
+/// `glass`：浮在内容上的玻璃胶囊（Mac 工具栏与页顶那一排的项目范围、新任务、收起、清空回收站），与 `circular` 的玻璃圆钮同高；毁掉东西的（`role: .destructive`）字是出错色。
 struct ControlButtonStyle: ButtonStyle {
-    enum Kind { case primary, highlight, secondary, quiet, circular }
+    enum Kind { case primary, highlight, secondary, quiet, circular, glass }
     var kind = Kind.secondary
     var compact = false
     @Environment(\.isEnabled) private var isEnabled
 
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label.modifier(ControlSurface(kind: kind, compact: compact))
+        configuration.label.modifier(ControlSurface(kind: kind, compact: compact, destructive: configuration.role == .destructive))
             .modifier(PressFeedback(pressed: configuration.isPressed, kind: kind == .circular ? .button : .control))
             .opacity(isEnabled ? 1 : ControlMetrics.disabledOpacity)
     }
@@ -286,20 +293,30 @@ struct ControlButtonStyle: ButtonStyle {
 struct ControlSurface: ViewModifier {
     var kind = ControlButtonStyle.Kind.secondary
     var compact = false
+    var destructive = false
     @Environment(\.palette) private var palette
 
     func body(content: Content) -> some View {
-        if kind == .circular {
+        switch kind {
+        case .circular:
             content
                 .font(Typography.body.weight(.medium))
-                .foregroundStyle(palette.ink)
+                .foregroundStyle(ink)
                 .frame(width: ControlMetrics.height, height: ControlMetrics.height)
                 .contentShape(.circle)
                 .glass(in: .circle, interactive: true, ink: .clear)
-        } else {
+        case .glass:
+            content
+                .font(Typography.secondary.weight(.medium))
+                .foregroundStyle(ink)
+                .padding(.horizontal, 14)
+                .frame(height: ControlMetrics.height)
+                .contentShape(.capsule)
+                .glass(in: .capsule, interactive: true)
+        default:
             content
                 .font((compact ? Typography.meta : Typography.secondary).weight(.medium))
-                .foregroundStyle(kind == .primary ? palette.onFill : kind == .highlight ? palette.signature : palette.ink)
+                .foregroundStyle(kind == .primary ? palette.onFill : kind == .highlight ? palette.signature : ink)
                 .padding(.horizontal, compact ? 10 : 16)
                 .padding(.vertical, 6)
                 .frame(minHeight: compact ? ControlMetrics.compactHeight : ControlMetrics.height)
@@ -312,11 +329,13 @@ struct ControlSurface: ViewModifier {
         }
     }
 
+    private var ink: Color { destructive ? palette.failure : palette.ink }
+
     private var background: Color {
         switch kind {
         case .primary: palette.signatureFill
         case .highlight: palette.selection
-        case .quiet: .clear
+        case .quiet, .glass: .clear
         case .secondary, .circular: palette.fill
         }
     }

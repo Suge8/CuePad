@@ -19,15 +19,15 @@ struct TrashPage: View {
         .pageHeader {
             HStack {
                 Spacer(minLength: 0)
-                if workspace.hasTrash {
-                    PageHeaderButton(title: "清空回收站…", icon: .trash, destructive: true) { workspace.confirmsEmptyTrash = true }
+                if let data, !data.isEmpty {
+                    Button("清空回收站…", icon: .trash, role: .destructive) { workspace.confirmsEmptyTrash = true }
+                        .buttonStyle(ControlButtonStyle(kind: .glass))
                 }
             }
         }
         .dialog("永久删除回收站里的全部内容？", isPresented: Bindable(workspace).confirmsEmptyTrash, message: "此操作无法撤销。发送记录会保留当时的内容快照。", buttons: [
             DialogButton(title: "清空", role: .destructive) { workspace.perform { try await $0.emptyTrash() } }
         ])
-        .onChange(of: data.map { !$0.isEmpty }, initial: true) { workspace.hasTrash = $1 ?? false }
         .observing(services.store, into: $data, onError: workspace.fail) { store in
             try TrashSummary.read(from: store)
         }

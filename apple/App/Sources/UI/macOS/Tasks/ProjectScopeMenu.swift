@@ -5,7 +5,6 @@ import SwiftUI
 /// 手机与 iPad 的入口在顶栏中间（`ProjectScope`）。选中的项目进了回收站就当作全部项目（`Workspace.scopedProject`）。
 struct ProjectScopeMenu: View {
     @Environment(Workspace.self) private var workspace
-    @Environment(\.palette) private var palette
 
     var body: some View {
         @Bindable var workspace = workspace
@@ -24,11 +23,8 @@ struct ProjectScopeMenu: View {
                 Text(current?.name ?? "全部项目").lineLimit(1)
             }
             .menuLabel(current.map { "项目范围：\($0.name)" } ?? "项目范围：全部项目")
-            .font(Typography.toolbarLabel).foregroundStyle(palette.ink2)
-            .padding(.horizontal, 12).frame(height: Spacing.toolbarControl)
-            .glass(in: .capsule, interactive: true)
         }
-        .menuStyle(.button).buttonStyle(PressStyle()).menuIndicator(.hidden).fixedSize()
+        .menuStyle(.button).buttonStyle(ControlButtonStyle(kind: .glass)).menuIndicator(.hidden).fixedSize()
     }
 }
 #endif
