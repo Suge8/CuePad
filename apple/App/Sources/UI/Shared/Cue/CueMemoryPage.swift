@@ -1,7 +1,7 @@
 import CueStore
 import SwiftUI
 
-/// "Cue 记得什么"（Cue 页"⋯"打开的弹层，手机与 Mac 同一张列表）：没忘掉的记忆，"一直记着"（钉住的）一组在前，其余按记下的时间分段
+/// "Cue 记得什么"（Cue 页上打开的弹层，入口见 `CuePage`；手机与 Mac 同一张列表）：没忘掉的记忆，"一直记着"（钉住的）一组在前，其余按记下的时间分段
 /// （今天、昨天、本周、本月、更早，同会话历史 `PiHistorySection`），组内从新到旧。顶上不写标题，一条只剩正文：时间在组头，
 /// 来源（"你记的"）与确切日期只在长按（右键）菜单的抬头与读屏里——一屏要看得到十来条。
 /// 记一条是浮在底部的玻璃胶囊，列表从它后面透过；记下的算你记的，一条超过 `CueMemoryLine.maxBytes` 字节时在胶囊里说明、不写。
@@ -112,7 +112,7 @@ struct CueMemoryPage: View {
             list
                 .background(palette.desk)
                 .navigationTitle(title)
-                // 标题只给读屏与多任务：顶上不写标题
+                // 标题只给读屏与多任务，顶上不写：移除标题项只去掉小标题，大标题还要靠 inline 才不出现
                 .toolbar(removing: .title)
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
