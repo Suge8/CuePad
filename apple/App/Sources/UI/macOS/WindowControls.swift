@@ -27,7 +27,7 @@ struct SidebarToggle: View {
         // 点画在标签里：工具栏把"字 + 图标"的标签换成系统按钮，挂在按钮外面的会被丢掉
         Button { workspace.pages.toggleSidebar() } label: {
             Image(.sidebar).overlay(alignment: .topTrailing) {
-                if workspace.pages.sidebar == .detailOnly, workspace.page != .cue { CueDot().offset(x: 5, y: -4) }
+                if workspace.pages.sidebar == .detailOnly, workspace.root != .cue { CueDot().offset(x: 5, y: -4) }
             }
         }
         .accessibilityLabel("侧栏")

@@ -24,7 +24,7 @@ extension DebugScene {
         for mode in UITextInputMode.activeInputModes where mode.responds(to: selector) { mode.perform(selector, with: nil) }
     }
 
-    static func prepare(_ workspace: Workspace, _ navigation: Navigation) async {
+    static func prepare(_ workspace: Workspace) async {
         if defaults.string(forKey: "CuePadBench") == "interact" { IOSInteractionBench.beginCold() }
         dumpAccessibilityIfAsked()
         if defaults.bool(forKey: "CuePadSoftKeyboard") { showSoftwareKeyboard() }
@@ -36,13 +36,13 @@ extension DebugScene {
         if defaults.bool(forKey: "CuePadDemoMac") { Task { await runDemoMac(workspace.services) } }
         if defaults.bool(forKey: "CuePadNoAsks") { await settleAsks(workspace.services.store) }
         if defaults.string(forKey: "CuePadBench") == "interact" {
-            Task { await IOSInteractionBench.run(workspace, navigation) }
+            Task { await IOSInteractionBench.run(workspace) }
             return
         }
-        func open(_ route: Route) { navigation.select(route) }
+        func open(_ route: Route) { workspace.select(route) }
         func openCard() async {
             if let project { open(.project(project)) }
-            if let card = await card(in: project ?? Project.defaultID, store: workspace.services.store) { navigation.push(.card(card)) }
+            if let card = await card(in: project ?? Project.defaultID, store: workspace.services.store) { workspace.push(.card(card)) }
         }
         switch scene {
         case "shelf": open(.shelf)
@@ -50,10 +50,10 @@ extension DebugScene {
         case "projectform":
             // 给了项目是编辑它，否则新建
             let existing = if let project { try? await workspace.services.store.project(project) } else { Project?.none }
-            navigation.projectForm = .init(project: existing)
+            workspace.projectForm = .init(project: existing)
         case "sidebar":
             if let project { open(.project(project)) }
-            navigation.sidebar = .all
+            workspace.sidebar = .all
         case "trash": open(.trash)
         case "archive": open(.archive)
         case "settings": open(.settings)
@@ -66,32 +66,36 @@ extension DebugScene {
                 // 给了 -CuePadSession 就当已选好会话，直接进它的近况页（卡片预填在回复框里）
                 if let title = defaults.string(forKey: "CuePadSession"),
                    let session = try? await workspace.services.store.piSessionPage(PiSessionQuery(text: title)).items.first(where: { $0.state.title == title })?.state {
-                    navigation.openSession(session.id, sessionID: session.sessionID, draft: outbox, store: workspace.services.store)
+                    let settings = workspace.services.settings
+                    var reply = settings.replyDraft(for: session.id)
+                    reply.attachments = [outbox]
+                    settings.setReplyDraft(reply, for: session.id)
+                    workspace.openSession(session.id, sessionID: session.sessionID)
                 } else {
-                    navigation.outbox = outbox
+                    workspace.outbox = outbox
                 }
             }
         case "cue", "cuememory", "cuesettings":
             // 一夜里来的话要在不看 Cue 页时写（看着时写当场就读掉了）：先离开、写完再回来，才是"回来时有新消息"的样子
             if defaults.string(forKey: "CuePadCuePresence") == "away" {
-                navigation.show(.tasks)
+                workspace.show(.tasks)
                 await NextFrame.wait()
             }
             if defaults.bool(forKey: "CuePadDemo") { await seedCue(workspace.services) }
             if let draft = defaults.string(forKey: "CuePadCueDraft") { workspace.cue.draft.text = draft }
-            navigation.show(.cue)
+            workspace.show(.cue)
             if defaults.bool(forKey: "CuePadPlacesOpen") { openPlaces() }
-            navigation.sidebar = .all
+            workspace.sidebar = .all
             if scene == "cuememory" { workspace.cue.showsMemory = true }
-            if scene == "cuesettings" { navigation.push(.cueSettings) }
+            if scene == "cuesettings" { workspace.push(.cueSettings) }
             if defaults.bool(forKey: "CuePadPanelCycle") { Task { await cyclePanel() } }
         case "cuepanel":
             if defaults.bool(forKey: "CuePadDemo") { await seedCue(workspace.services) }
             open(project.map(Route.project) ?? .shelf)
-            navigation.agentPanel = true
+            workspace.agentPanel = true
         case "cuerows":
             await seedCueRows(workspace.services)
-            navigation.show(.agent)
+            workspace.show(.agent)
         case "tasks":
             // 看板的等你列：配 -CuePadDemo 时写入 Cue 的等你（会话在问的随演示 Mac 的会话来）
             if defaults.bool(forKey: "CuePadDemo") {
@@ -99,7 +103,7 @@ extension DebugScene {
                 await seedBusyBoard(workspace.services.store)
             }
             workspace.projectScope = project
-            navigation.show(.tasks)
+            workspace.show(.tasks)
         case "task":
             let store = workspace.services.store
             let tasks = (try? await store.tasks(.inProgress, .todo).flatMap(\.tasks)) ?? []
@@ -112,30 +116,30 @@ extension DebugScene {
             if defaults.bool(forKey: "CuePadDemo") { await seedCue(workspace.services) }
             guard let session = try? await workspace.services.store.piSessionPage(PiSessionQuery(text: title)).items.first(where: { $0.state.title == title })?.state else { break }
             if defaults.bool(forKey: "CuePadNotify") {
-                navigation.open(alert: PiAlertTap(kind: .settled, sessionState: session.id))  // 点锁屏通知进来：只带记录 id、没有首帧
+                workspace.open(DeepLink.session(session.id))  // 点锁屏通知进来：只带记录 id
             } else {
-                navigation.show(.agent)
-                navigation.openSession(session.id, sessionID: session.sessionID, store: workspace.services.store)
+                workspace.show(.agent)
+                workspace.openSession(session.id, sessionID: session.sessionID)
             }
             if defaults.bool(forKey: "CuePadStream") { Task { await stream(session.sessionID, store: workspace.services.store) } }
         case "newsession":
-            navigation.show(.agent)
-            var sheet = Navigation.NewSession(project: project)  // -CuePadProject 闲鱼：先选中还没绑文件夹的项目（交给 Cue 那台 Mac 建工作区）
+            workspace.show(.agent)
+            var sheet = NewSessionInput.Start(project: project)  // -CuePadProject 闲鱼：先选中还没绑文件夹的项目（交给 Cue 那台 Mac 建工作区）
             if defaults.bool(forKey: "CuePadLaunch"),
                let table = try? await workspace.services.store.projects().first(where: { $0.name == "圆桌" })?.id {
                 sheet.launched = try? await workspace.services.launchSession(
                     in: table, prompt: "看看 scheduler 的重连问题", title: "圆桌", on: "demo-mac", card: nil, agent: .pi)
             }
-            navigation.newSession = sheet
+            workspace.newSession = sheet
         case "folderpicker":
             // 给 -CuePadProject（默认闲鱼，演示里没绑文件夹）选文件夹的候选页
             let name = defaults.string(forKey: "CuePadProject") ?? "闲鱼"
             workspace.folderPicker = try? await workspace.services.store.projects().first { $0.name == name }
         case "agent":
             workspace.projectScope = project
-            navigation.show(.agent)
+            workspace.show(.agent)
         case "search":
-            navigation.openSearch()
+            workspace.openSearch()
         default: break
         }
         await presetSpeech(workspace)
@@ -158,49 +162,49 @@ extension DebugScene {
     /// `-CuePadDockTour YES`（iPhone，配 `-CuePadDemo YES`）：画面就绪后每一拍走一步，每步走点按调的那条路：Cue 页展开"⋯" → 去任务 →
     /// 去会话 → 推入一个会话 → 返回 → 去项目 → 推入搜索 → 返回 → 推入一个会话再换去任务（推入的页清掉）→ 回 Cue →
     /// 不经"⋯"直接去会话（快捷键、通知的那条路）→ 回 Cue → 直接去项目 → 去会话（隔一格）→ 回 Cue → 聚焦输入框（"⋯"让开）。
-    static func dockTourIfAsked(_ workspace: Workspace, _ navigation: Navigation) async {
+    static func dockTourIfAsked(_ workspace: Workspace) async {
         guard defaults.bool(forKey: "CuePadDockTour") else { return }
         let sessions = ((try? await workspace.services.store.piSessionPage(PiSessionQuery(limit: 2)))?.items ?? []).map(\.state)
         // 节奏是要录的内容，不是在等别的事
         func beat() async { try? await Task.sleep(for: .seconds(1.6)) }
         func open(_ index: Int) {
             guard sessions.indices.contains(index) else { return }
-            navigation.openSession(sessions[index].id, sessionID: sessions[index].sessionID, store: workspace.services.store)
+            workspace.openSession(sessions[index].id, sessionID: sessions[index].sessionID)
         }
         await beat()
         openPlaces()
         await beat()
-        navigation.select(.tasks)
+        workspace.select(.tasks)
         await beat()
-        navigation.select(.agent)
+        workspace.select(.agent)
         await beat()
         open(0)
         await beat()
-        navigation.path.removeAll()
+        workspace.path.removeAll()
         await beat()
-        navigation.select(.shelf)
+        workspace.select(.shelf)
         await beat()
-        navigation.openSearch()
+        workspace.openSearch()
         await beat()
-        navigation.closeSearch()
+        workspace.closeSearch()
         await beat()
         open(1)
         await beat()
-        navigation.select(.tasks)
+        workspace.select(.tasks)
         await beat()
-        navigation.select(.cue)
+        workspace.select(.cue)
         await beat()
-        navigation.select(.agent)
+        workspace.select(.agent)
         await beat()
-        navigation.select(.cue)
+        workspace.select(.cue)
         await beat()
-        navigation.select(.shelf)
+        workspace.select(.shelf)
         await beat()
-        navigation.select(.agent)
+        workspace.select(.agent)
         await beat()
-        navigation.select(.cue)
+        workspace.select(.cue)
         await beat()
-        navigation.speakToCue()
+        workspace.speakToCue()
     }
 
     /// `-CuePadPanelCycle YES`（配 cue 画面录屏）：画面就绪后每 1.5 秒点一下 Cue 页头，开合面板几遍，看动效。

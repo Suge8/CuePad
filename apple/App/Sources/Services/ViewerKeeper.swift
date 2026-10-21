@@ -10,8 +10,8 @@ import os
 import Synchronization
 
 /// 这台设备此刻开着哪一页（`Viewer`，规则在它的头注释）只由这里写，只在开着的页变了时写一次，写成立即上传；没有心跳。
-/// 开着的那一页由界面报来：会话页（`show`）Mac 是人看得到主窗口时内容区的会话页（`Workspace.openSession`），手机是场景前台活跃时导航最上面的会话页
-/// （`Navigation.shownSession`；iPad 开几个窗口各报各的，取最近开的那个）；Cue 页（`showCue`）两端都由 `CueViewing` 报（iPad 上它可以在面板里、
+/// 开着的那一页由界面报来：会话页（`show`）Mac 是人看得到主窗口时内容区的会话页，手机是场景前台活跃时导航最上面的会话页
+/// （都是 `Workspace.shownSession`；iPad 开几个窗口各报各的，取最近开的那个）；Cue 页（`showCue`）两端都由 `CueViewing` 报（iPad 上它可以在面板里、
 /// 不在导航最上面）。Mac 上人不在跟前（系统将睡眠、屏幕睡了、锁屏、退出，或 `SessionPresence.window` 没动过键盘鼠标）时一概算没开着，
 /// 回来再按界面报的算；将睡眠与退出同步写完、传完才放行（做法同 `MacPresenceKeeper`），手机进后台时写完、传完。
 /// 写的那一刻在 Store 的隔离域里读开着哪一页：几路写入谁先谁后，库里留下的都是最后的那个状态。
@@ -182,7 +182,7 @@ nonisolated extension ViewerKeeper {
     }
 
     /// 跟着主窗口，直到任务取消：把这台 Mac 上的人看不看得到主窗口交给界面（`AppServices.seesMainWindow` 的两半：窗口露没露在屏上、
-    /// 人在不在跟前），再报开着的会话页（`Workspace.openSession`，页一换或看得到与否一变就重算）。
+    /// 人在不在跟前），再报开着的会话页（`Workspace.shownSession`，页一换或看得到与否一变就重算）。
     @MainActor func follow(_ workspace: Workspace) async {
         let services = workspace.services, window = UUID()
         let away = Task { for await away in aways { services.away = away } }
@@ -191,7 +191,7 @@ nonisolated extension ViewerKeeper {
             away.cancel()
             exposure.cancel()
         }
-        for await page in Observations({ workspace.openSession }) { show(page, in: window) }
+        for await page in Observations({ services.seesMainWindow ? workspace.shownSession : nil }) { show(page, in: window) }
     }
 
     @MainActor private static func followExposure(_ services: AppServices) async {
@@ -207,13 +207,13 @@ nonisolated extension ViewerKeeper {
 /// 这个窗口在前台活跃时导航最上面的会话页，报给 `ViewerKeeper`；窗口关掉时收回。
 struct SessionViewing: ViewModifier {
     let keeper: ViewerKeeper?
-    let navigation: Navigation
+    let workspace: Workspace
     @Environment(\.scenePhase) private var phase
     @State private var window = UUID()
 
     func body(content: Content) -> some View {
         content
-            .onChange(of: phase == .active ? navigation.shownSession : nil, initial: true) { _, page in
+            .onChange(of: phase == .active ? workspace.shownSession : nil, initial: true) { _, page in
                 keeper?.show(page, in: window)
             }
             .onDisappear { keeper?.show(nil, in: window) }

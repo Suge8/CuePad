@@ -1,7 +1,8 @@
 import CueStore
 import Foundation
 
-/// 去哪一页：Mac 内容区挂哪一页与 iOS 导航栈里推入哪一页是同一个类型，平台只差呈现（Mac 只用其中的 `project`、`archive`、`trash`、`tasks`、`cue`、`agent`、`session`）。
+/// 去哪一页：两端同一个值，都经 `Workspace.show` 去；Mac 内容区挂哪一页与 iOS 导航栈里推入哪一页只差呈现（`Workspace.Layout`）
+/// （Mac 只用其中的 `project`、`archive`、`trash`、`tasks`、`cue`、`agent`、`session`）。
 nonisolated enum Route: Hashable {
     /// 项目书架：全部项目（iPhone、iPad 侧栏的"全部项目"）。
     case shelf
@@ -26,13 +27,24 @@ nonisolated enum Route: Hashable {
     /// 打开 App 没有要回去的项目时（第一次打开、上次的项目进了回收站）落在哪：Cue 页。两端只在这里定。
     static let first: Route = .cue
 
-    /// 会话页；`seed` 是推入前读好的这一页（iOS 的 `openSession`），通知跳转等只有记录 id 的入口不带。
+    /// 会话页；`seed` 是去之前读好的这一页（`Workspace.openSession`，iOS 推入的第一帧用它）。
     static func session(_ id: UUID, sessionID: String? = nil, seed: SessionDigest? = nil) -> Route {
         .session(SessionRoute(id: id, sessionID: sessionID, seed: seed))
     }
 
-    /// 从 Pi 的会话 id 去会话页（Mac 的侧栏、搜索、通知）。
+    /// 从 Pi 的会话 id 去会话页（Mac 的侧栏、搜索）。
     static func session(_ sessionID: String) -> Route { .session(PiSessionState.recordID(sessionID: sessionID), sessionID: sessionID) }
+
+    /// 窄屏（`Workspace.Layout.dock`）上它所属的去处（底部那一排的四个之一）：去处本身是它自己；卡片纸页、会话页、搜索不属于哪一页（推在当前页上），为 nil。
+    var home: Route? {
+        switch self {
+        case .cue, .cueSettings: .cue
+        case .tasks: .tasks
+        case .agent: .agent
+        case .shelf, .project, .archive, .trash, .settings, .conflicts: .shelf
+        case .search, .card, .session: nil
+        }
+    }
 }
 
 /// 会话页的路由：身份是会话记录 id（`PiSessionState.id`，由 Pi 的会话 id 算出，锁屏通知只带它）。`sessionID` 是 Pi 的会话 id

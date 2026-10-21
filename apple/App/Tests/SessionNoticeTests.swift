@@ -58,35 +58,31 @@ struct SessionNoticeTests {
 
     // MARK: 正看着
 
-    private func navigation() -> Navigation {
-        Navigation(settings: AppSettings(defaults: UserDefaults(suiteName: UUID().uuidString)!, launchArguments: [:]))
-    }
-
     @Test func 开着那个会话时不弹提示_别处照弹() {
         let session = UUID()
-        let navigation = navigation()
-        #expect(navigation.showsAlert(about: session))  // Cue 页
-        navigation.select(.agent)
-        #expect(navigation.showsAlert(about: session))
-        navigation.push(.session(UUID()))  // 列表上推了别的会话
-        #expect(navigation.showsAlert(about: session))
-        navigation.path = [.session(session)]
-        #expect(!navigation.showsAlert(about: session))
-        navigation.select(.cue)
-        navigation.push(.session(session))  // Cue 页里点进了这个会话
-        #expect(!navigation.showsAlert(about: session))
+        let workspace = Workspace(services: app.services)
+        #expect(workspace.showsAlert(about: session))  // Cue 页
+        workspace.select(.agent)
+        #expect(workspace.showsAlert(about: session))
+        workspace.push(.session(UUID()))  // 列表上推了别的会话
+        #expect(workspace.showsAlert(about: session))
+        workspace.path = [.session(session)]
+        #expect(!workspace.showsAlert(about: session))
+        workspace.select(.cue)
+        workspace.push(.session(session))  // Cue 页里点进了这个会话
+        #expect(!workspace.showsAlert(about: session))
     }
 
     /// 提示弹出后才进了那个会话：横幅当场撤下，不在正看着的会话页上停满 5 秒。
     @Test func 进了提示说的那个会话_横幅撤下_别的提示留着() {
         let session = UUID()
-        let navigation = navigation()
+        let workspace = Workspace(services: app.services)
         let banner = Workspace.Notice(text: "notes · 完成了", isError: false, link: .session(session))
         let other = Workspace.Notice(text: "已复制", isError: false)
-        #expect(navigation.keeps(banner) && navigation.keeps(other))
+        #expect(workspace.keeps(banner) && workspace.keeps(other))
 
-        navigation.show(.session(session))
-        #expect(!navigation.keeps(banner) && navigation.keeps(other))
+        workspace.show(.session(session))
+        #expect(!workspace.keeps(banner) && workspace.keeps(other))
     }
 
 }

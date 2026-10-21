@@ -23,7 +23,7 @@ struct ProjectsTests {
         let catalog = observing(workspace)
         defer { catalog.cancel() }
         try await eventually("目录里只有默认项目") { workspace.catalog?.projects.map(\.id) == [Project.defaultID] }
-        #expect(workspace.page == .cue)
+        #expect(workspace.root == .cue)
 
         workspace.cue.draft = ComposerDraft(text: "周末读完第三章")
         await workspace.note(from: Bindable(workspace.cue).draft)?.value
@@ -41,26 +41,26 @@ struct ProjectsTests {
         let catalog = observing(workspace)
         defer { catalog.cancel() }
         try await eventually("目录读到三个项目，失效设置清掉") { workspace.catalog?.projects.count == 3 && services.settings.currentProject == nil }
-        #expect(workspace.page == .cue)
+        #expect(workspace.root == .cue)
 
         // 打开过的项目：下次打开回到它
         services.settings.currentProject = pinned.id
         let fresh = Workspace(services: services)
         let freshCatalog = observing(fresh)
         defer { freshCatalog.cancel() }
-        #expect(fresh.page == .project(pinned.id))
+        #expect(fresh.root == .project(pinned.id))
         let last = try await store.createProject(name: "C", color: "#000000")
         try await store.updateProject(last.id) { $0.isPinned = true }
         try await eventually("fresh.catalog?.projects.first?.id == last.id") { fresh.catalog?.projects.first?.id == last.id }
 
         // ⌘N 打开侧栏里此刻的第 N 个：顺序变了不能还绑在旧顺序上；没有那么多个就不动
         fresh.showProject(number: 1)
-        #expect(fresh.page == .project(last.id) && services.settings.currentProject == last.id)
+        #expect(fresh.root == .project(last.id) && services.settings.currentProject == last.id)
         fresh.showProject(number: 3)
         let third = try #require(fresh.catalog?.projects[2].id)
-        #expect(fresh.page == .project(third) && third != last.id)
+        #expect(fresh.root == .project(third) && third != last.id)
         fresh.showProject(number: 9)
-        #expect(fresh.page == .project(third))
+        #expect(fresh.root == .project(third))
 
         // 当前项目进了回收站：回到 Cue 页；默认项目删不掉
         services.settings.currentProject = third
@@ -68,7 +68,7 @@ struct ProjectsTests {
         await #expect(throws: CueStoreError.defaultProjectUndeletable) { try await store.trashProject(Project.defaultID) }
         let only = Workspace(services: services)
         await only.reconcileCurrentProject()
-        #expect(only.page == .cue && services.settings.currentProject == nil)
+        #expect(only.root == .cue && services.settings.currentProject == nil)
     }
 
     @Test func 往失效项目存东西_落到默认项目_写入时被删则纠正并提示() async throws {
@@ -83,7 +83,7 @@ struct ProjectsTests {
         #expect(try await workspace.createCard(body: "想法", in: live.id).projectID == live.id)
 
         // 竞态：选中项目之后、写入之前项目被删——Store 在写事务里拒绝，入口回落并提示
-        services.settings.currentProject = live.id
+        workspace.show(.project(live.id))
         let target = workspace.currentProject
         try await store.trashProject(live.id)
         let card = try await workspace.createCard(body: "晚了一步", in: try #require(target))
@@ -98,18 +98,17 @@ struct ProjectsTests {
 #endif
 
 #if os(iOS)
-/// iPhone/iPad 上"现在在哪个项目"只有一份：从导航路径推出（`Navigation.currentProject`）。
+/// iPhone/iPad 上"现在在哪个项目"只有一份：从导航路径推出（`Workspace.currentProject`）。
 struct ProjectsNavigationTests {
     let app = TestApp()
     var store: CueStore { app.services.store }
 
-    private func navigation() -> Navigation { Navigation(settings: app.services.settings) }
+    private func navigation() -> Workspace { Workspace(services: app.services) }
 
     @Test func 书架点进项目_新建落在这个项目_iPad恢复窗口_深链进项目() async throws {
         let project = try await store.createProject(name: "圆桌", color: "#000000")
         let trashed = try await store.createProject(name: "装修", color: "#000000")
         try await store.trashProject(trashed.id)
-        let catalog = try await ProjectCatalog.read(from: store)
         let workspace = Workspace(services: app.services)
 
         let phone = navigation()
@@ -124,15 +123,15 @@ struct ProjectsNavigationTests {
 
         // iPad 恢复窗口：选回上次的项目；已进回收站时留在打开 App 的那一页；侧栏选别的页后不再算在项目里
         let pad = navigation()
-        pad.restore(project: project.id, catalog: catalog)
+        pad.restore(project: project.id)
         #expect(pad.root == .project(project.id))
         pad.push(.card(UUID()))
-        pad.restore(project: project.id, catalog: catalog)  // 窗口宽窄变化、分栏重建
+        pad.restore(project: project.id)  // 窗口宽窄变化、分栏重建
         #expect(pad.path.count == 1 && pad.currentProject == project.id)
         pad.select(.tasks)
         #expect(pad.currentProject == nil)
         let gone = navigation()
-        gone.restore(project: trashed.id, catalog: catalog)
+        gone.restore(project: trashed.id)
         #expect(gone.root == .cue)
     }
 }

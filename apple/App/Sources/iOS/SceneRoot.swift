@@ -9,7 +9,7 @@ struct SceneRoot: View {
     let alerts: AlertCenter
 
     var body: some View {
-        IOSRoot(services: services, alerts: alerts)
+        IOSRoot(services: services)
             .debugCompact()
             .environment(alerts)
             .task { if services.sync != nil { await alerts.enable() } }

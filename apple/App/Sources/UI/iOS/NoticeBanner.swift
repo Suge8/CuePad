@@ -6,7 +6,6 @@ import SwiftUI
 /// 提示与会话前台提示的变化只在这里读：根视图读了的话，每弹一条、消一条整个窗口（分栏的每一栏）都要重算一遍。
 struct NoticeBanner: View {
     @Environment(Workspace.self) private var workspace
-    @Environment(Navigation.self) private var navigation
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// 两侧让出的宽度：页边距、一颗圆钮与它和中间那块的间距，返回钮与右边的圆钮不被盖住。
@@ -42,11 +41,11 @@ struct NoticeBanner: View {
         }
         // 前台时会话"等你确认"、"做完了"的提示：开着那个会话时不弹；后台走系统推送
         .onChange(of: workspace.services.sessionAlert) { _, alert in
-            guard !DebugHooks.preset.quietAlerts, let alert, navigation.showsAlert(about: alert.session) else { return }
+            guard !DebugHooks.preset.quietAlerts, let alert, workspace.showsAlert(about: alert.session) else { return }
             workspace.say(alert.text, status: alert.status, link: .session(alert.session), duration: .seconds(5))
         }
         // 弹出后才进了那个会话（或 Agent 列表）：当场撤下
-        .onChange(of: workspace.notice.map(navigation.keeps)) { _, keeps in if keeps == false { workspace.notice = nil } }
+        .onChange(of: workspace.notice.map(workspace.keeps)) { _, keeps in if keeps == false { workspace.notice = nil } }
     }
 }
 
@@ -56,7 +55,6 @@ struct NoticeBanner: View {
 private struct NoticeCapsule: View {
     let notice: Workspace.Notice
     @Environment(Workspace.self) private var workspace
-    @Environment(Navigation.self) private var navigation
     @Environment(\.palette) private var palette
 
     /// 两行时上下的边距：两行小一号的字刚好放进这一排。
@@ -81,7 +79,7 @@ private struct NoticeCapsule: View {
     /// 字排出来多高就多高（不截）：`ViewThatFits` 按它判断放不放得进这一排；最后一种只排一行，放不下就截断。
     private func row(font: Font, lines: Int, inset: CGFloat) -> some View {
         HStack(spacing: 0) {
-            Button { if let link = notice.link { workspace.notice = nil; navigation.show(link) } } label: {
+            Button { if let link = notice.link { workspace.notice = nil; workspace.show(link) } } label: {
                 HStack(spacing: 6) {
                     Label { Text(notice.text) } icon: {
                         if let status = notice.status { PiStateGlyph(status: status) }

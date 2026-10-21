@@ -122,7 +122,6 @@ private struct CueNowPanel: View {
     let close: () -> Void
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
-    @Environment(Navigation.self) private var navigation
     @Environment(\.palette) private var palette
 
     /// 面板只是一瞥：在做的会话最多列这么多，全部在 Agent 整页里。
@@ -161,7 +160,7 @@ private struct CueNowPanel: View {
         let home = cue.home
         return Button {
             close()
-            navigation.push(.cueSettings)
+            workspace.push(.cueSettings)
         } label: {
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: 6) {
@@ -219,7 +218,7 @@ private struct CueNowPanel: View {
             LiveSessionList(sessions: work.rows, limit: Self.limit, spacing: CueHeader.rowGap) { session in
                 Button {
                     close()
-                    navigation.openSession(session.id, sessionID: session.sessionID, store: services.store)
+                    workspace.openSession(session.id, sessionID: session.sessionID)
                 } label: {
                     PiSessionRow(
                         session: session, project: workspace.catalog?.project(session.projectID), delivery: live.deliveries[session.sessionID],
@@ -233,7 +232,7 @@ private struct CueNowPanel: View {
         }
         link("全部会话", count: live.total) {
             close()
-            navigation.push(.agent)
+            workspace.push(.agent)
         }
         .modifier(FadesUnderHeader(header: headerHeight))
     }

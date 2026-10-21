@@ -7,7 +7,6 @@ import SwiftUI
 /// 窄屏（iPhone）没有侧栏，末尾一组归档、回收站、设置（同步到不了 Mac 时设置那一行带点，`AppServices.macAlert`）推在这一页上；宽屏这一组在侧栏里，这里不放。
 struct ShelfScreen: View {
     @Environment(Workspace.self) private var workspace
-    @Environment(Navigation.self) private var navigation
     @Environment(AppServices.self) private var services
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -22,7 +21,7 @@ struct ShelfScreen: View {
         }
         .refreshable { await services.syncNow() }
         .floatingHeader(narrow ? "项目" : SidebarOutline.Entry.allProjects.title, detail: workspace.catalog.map { "\($0.projects.count) 个项目" } ?? "") {
-            Button("新建项目", icon: .newProject) { navigation.projectForm = .init() }
+            Button("新建项目", icon: .newProject) { workspace.projectForm = .init() }
         }
         .observing(services.store, into: $leading, onError: workspace.fail) { ProjectNow.leading(try $0.startedTasks()) }
     }

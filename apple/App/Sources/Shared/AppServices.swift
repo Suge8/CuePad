@@ -72,7 +72,7 @@ final class AppServices {
     /// 待用户处理的正文冲突（同一张卡离线并发编辑产生的副本）。
     private(set) var conflicts: [CardConflict] = []
 
-    /// 小组件、分享扩展的链接与点开的 Cue 通知要打开的页，界面处理后调用 `consumeDeepLink()`。
+    /// 小组件、分享扩展、实时活动的链接与点开的通知要打开的页（`handle(url:)`、`AlertCenter.receive`），工作区取走（`Workspace.openLinks`）。
     var pendingDeepLink: DeepLink?
 
     /// 常驻的跟随者（`follow`），一起取消（`cancelBackgroundWork`）。
