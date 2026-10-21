@@ -18,7 +18,7 @@ import os
 /// 默认在后台量：指令数照样能前后对比，帧与掉帧偏乐观（前台才有玻璃等实际合成）。和预算比要在前台量（`-CuePadForeground YES`，见 `DebugForeground`），
 /// 每行的 `foreground` 记这次在不在前台；量完退出，退出时把前台还回去。
 enum InteractionBench {
-    private static let signposter = OSSignposter(logHandle: OSLog(subsystem: "com.sugeh.cuepad", category: .pointsOfInterest))
+    private static let signposter = OSSignposter(logHandle: OSLog(subsystem: AppIdentity.id, category: .pointsOfInterest))
     /// 每项的预算：点击回合上限（毫秒）与掉帧次数上限。预算是目标，不是现状：没达到的项如实报超预算，不改数字迁就。
     /// 依据：144Hz 一帧 6.9ms；对点击的回应在两帧（14ms）内人感觉是"跟手"，要建内容的在四帧（28ms）内不觉得顿；掉帧最多两次。
     /// 回访页面、收起、关闭只是换可见性，对点击要跟手；首访、打开要建视图，给四帧。

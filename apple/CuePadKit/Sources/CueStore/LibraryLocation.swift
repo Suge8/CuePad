@@ -17,7 +17,7 @@ public enum LibraryLocationError: Error, Equatable, LocalizedError {
 
 /// 资料库的位置（唯一规则）。库文件 `cuepad.db` 在 `directory` 下，附件目录由 `CueStore.files` 管。
 /// - macOS：`~/Library/Application Support/CuePad/Library/`；
-/// - iOS：App Group `group.com.sugeh.cuepad` 共享容器下的 `Library/`（分享扩展、小组件与主 App 共用）；
+/// - iOS：App Group（`AppIdentity.appGroup`）共享容器下的 `Library/`（分享扩展、小组件与主 App 共用）；
 /// - 环境变量 `CUEPAD_LIBRARY_DIR`（绝对路径）指向隔离目录，各平台通用。
 /// Mac 上只有正式版（Developer ID 签名的 App 与随它分发的命令行）打开真实资料库：本机构建的代码一打开就会就地升级库结构、改写数据，
 /// 装着的正式版之后就打不开它了，还会把改动同步出去（日常构建、测量构建、自己编的命令行都误开过）。所以没给环境变量的本机构建
@@ -26,7 +26,7 @@ public enum LibraryLocationError: Error, Equatable, LocalizedError {
 /// 偏好、待处理内容、快照等其他放在库目录里的东西由 App 层自己定名。
 public struct LibraryLocation: Equatable, Sendable {
   public static let environmentKey = "CUEPAD_LIBRARY_DIR"
-  public static let appGroupIdentifier = "group.com.sugeh.cuepad"
+  public static let appGroupIdentifier = AppIdentity.appGroup
 
   public enum Base: Sendable {
     /// macOS：应用支持目录。

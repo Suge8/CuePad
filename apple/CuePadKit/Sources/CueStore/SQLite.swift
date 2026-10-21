@@ -109,7 +109,7 @@ final class SQLite {
   /// 编译好的语句，按 SQL 文本复用，连同它读到的表。用时取出、用完放回：同一条 SQL 在回调里被重入时，重入的那次临时编译一条，不共用游标。
   private var statements: [String: Compiled] = [:]
   private static let statementLimit = 128
-  private static let log = Logger(subsystem: "com.sugeh.cuepad", category: "sqlite")
+  private static let log = Logger(subsystem: AppIdentity.id, category: "sqlite")
   /// `tracking` 期间读到的表。
   private var tracked: Set<Table>?
 

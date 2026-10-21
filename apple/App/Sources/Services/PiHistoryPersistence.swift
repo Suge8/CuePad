@@ -12,7 +12,7 @@ import os
 /// Store 读写失败时，该文件的索引不再写回：库异常时反复重写只会放大问题。失败作为错误抛给调用方报告。
 /// 检查点解码失败（格式随 CuePi 升级失效）是合法的"从头重读"：当作没有检查点，回填完成时汇总记一行。
 actor PiHistoryPersistence {
-    private static let log = Logger(subsystem: "com.sugeh.cuepad", category: "pi-history")
+    private static let log = Logger(subsystem: AppIdentity.id, category: "pi-history")
     /// 自动同步对话的范围：这么久之内活跃过的会话；对话也在会话安静这么久之后清理
     static let transcriptWindow: TimeInterval = 7 * 86_400
 

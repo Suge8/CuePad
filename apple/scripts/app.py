@@ -35,7 +35,8 @@ import time
 
 APPLE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CHECKOUT = os.path.dirname(APPLE)
-BUNDLE_ID = "com.sugeh.cuepad"
+# App 身份前缀：唯一定义在 Signing.xcconfig 的 CUEPAD_APP_ID
+BUNDLE_ID = re.search(r"^CUEPAD_APP_ID *= *(\S+)", open(f"{APPLE}/App/Config/Signing.xcconfig").read(), re.M)[1]
 RUNTIME = f"/tmp/cuepad-xc-{os.getuid()}"  # 与 _lock.sh 同一处；模拟器的就绪文件放这里（按设备分）
 SLOT, READY = f"{APPLE}/.derived/mac-app.lock", f"{APPLE}/.derived/mac-ready"
 # 实例借着前台却没到前台时写它（DebugForeground），看守替它拉到前台：别的应用在前台时 App 自己 activate 会被系统忽略

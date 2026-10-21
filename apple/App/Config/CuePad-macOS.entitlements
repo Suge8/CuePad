@@ -4,7 +4,7 @@
 <dict>
 	<key>com.apple.developer.icloud-container-identifiers</key>
 	<array>
-		<string>iCloud.com.sugeh.cuepad</string>
+		<string>iCloud.$(CUEPAD_APP_ID)</string>
 	</array>
 	<key>com.apple.developer.icloud-services</key>
 	<array>

@@ -1,3 +1,4 @@
+import CueStore
 import Foundation
 
 /// 分享扩展收到的内容。图片是原始字节与文件扩展名。
@@ -28,7 +29,7 @@ nonisolated struct PendingCapture: Codable, Equatable, Sendable {
 /// 每条是一个目录：先写图片，最后原子写 `capture.json`；没有 json 的目录是尚未写完的，读取时跳过。
 nonisolated enum CaptureQueue {
     /// 扩展写完后发出的进程间通知，主 App 收到后入库。
-    static let notification = "com.sugeh.cuepad.capture-enqueued"
+    static let notification = "\(AppIdentity.id).capture-enqueued"
 
     private static let manifestName = "capture.json"
 

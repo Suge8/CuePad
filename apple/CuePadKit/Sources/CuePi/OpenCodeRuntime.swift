@@ -19,7 +19,7 @@ import OSLog
 ///   （它自己的终端界面也一样）。CuePad 不补，会话页显示实际用的模型。
 @MainActor
 public final class OpenCodeRuntime: AgentRuntime, SessionLink {
-    static let log = Logger(subsystem: "com.sugeh.cuepad", category: "opencode")
+    static let log = Logger(subsystem: AppIdentity.id, category: "opencode")
     static let sessionPage = 200
     /// 权限请求的三个选项（作答时按原文认）
     static let allowOnce = "允许", allowAlways = "总是允许", reject = "拒绝"

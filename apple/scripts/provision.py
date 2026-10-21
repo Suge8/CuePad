@@ -26,7 +26,7 @@ KEYCHAIN = os.path.join(HOME, "cuepad-signing.keychain-db")
 KEYCHAIN_PASS = os.path.join(HOME, "keychain.pass")
 PROFILES_DIR = os.path.expanduser("~/Library/Developer/Xcode/UserData/Provisioning Profiles")
 
-APP_ID = "com.sugeh.cuepad"
+from app import BUNDLE_ID as APP_ID  # noqa: E402
 # (标识, 名称, 平台, 描述文件名前缀, 能力)
 BUNDLES = [
     (APP_ID, "CuePad", "UNIVERSAL", "CuePad", ["APP_GROUPS", "PUSH_NOTIFICATIONS", "ICLOUD"]),

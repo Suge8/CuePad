@@ -3,6 +3,11 @@
 // 发布与真机构建由脚本带上团队（凭据文件的 CUEPAD_TEAM_ID，见 _signing.sh 的 team_signing）与完整权限文件；用手动签名，
 // 各 target 的证书与描述文件名在工程里（描述文件由 scripts/provision.py 经 App Store Connect API 创建，
 // 因为 Xcode 的自动签名用 API 密钥时管不了 App Group 与 iCloud 容器）。
+// App 身份前缀（唯一定义）：各 target 的 bundle id、App Group（group.<前缀>）、iCloud 容器（iCloud.<前缀>）、偏好域与日志 subsystem 都由它派生。
+// 经构建设置展开进工程、权限文件与 Info.plist 的 CuePadAppID（Swift 运行期只读这个键，见 CuePadKit 的 AppIdentity）；脚本也从这一行读。
+// 正式版已按这个值发布：改它就是另一个 App（偏好、资料库容器与同步数据都不通）。fork 换成自己的见 docs/release.md。
+CUEPAD_APP_ID = com.sugeh.cuepad
+
 CODE_SIGN_STYLE = Automatic
 CODE_SIGN_IDENTITY = -
 DEVELOPMENT_TEAM =
