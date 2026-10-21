@@ -247,13 +247,13 @@ struct CuePage: View {
 
     // MARK: 底部
 
-    /// 浮在对话底上的一块："等你"卡、启用卡与输入框。输入框按自己的高、不被挤（`fixedSize`），地方不够时（键盘弹出、小屏、横屏、输入框写了好几行）卡用剩下的。
+    /// 浮在对话底上的一块："等你"卡、启用卡（Mac 上 Cue 运行在别的 Mac 时它说在哪台）与输入框。输入框按自己的高、不被挤（`fixedSize`），地方不够时（键盘弹出、小屏、横屏、输入框写了好几行）卡用剩下的。
     private var bottom: some View {
         VStack(spacing: 0) {
             if let thread {
                 CueWaitingDock(waiting: thread.waiting, tasks: thread.tasks, shots: thread.shots, open: { opened = $0 }, moving: $docking)
             }
-            if !cue.canHear {
+            if !cue.canHear || cue.now.elsewhere != nil {
                 CueEnableCard().padding(.bottom, 8).transition(.opacity)
             }
             #if os(iOS)
@@ -263,5 +263,6 @@ struct CuePage: View {
             #endif
         }
         .animation(Motion.quick, value: cue.canHear)
+        .animation(Motion.quick, value: cue.now.elsewhere)
     }
 }

@@ -125,6 +125,15 @@ enum DebugHooks {
         #endif
     }
 
+    /// 隔离库下也像正式版那样首次打开时请工作区决定弹不弹接入面板（`-CuePadOfferSetup YES`，同一个 `Workspace.offerSetup`）：验收老用户升级后自动弹的那一次。
+    static var offersSetup: Bool {
+        #if DEBUG
+        DebugScene.defaults.bool(forKey: "CuePadOfferSetup")
+        #else
+        false
+        #endif
+    }
+
     /// 脚本起的实例（带就绪文件 `DebugScene.readyFile`：截图、录屏、交互验收、测量）；测试宿主不算。Mac 上当作有人在看（`CueViewing`）。
     static var scripted: Bool {
         #if DEBUG

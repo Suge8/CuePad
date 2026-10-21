@@ -110,7 +110,7 @@ final class Workspace {
         self.services = services
         let digest = try? services.store.snapshot { try CueDigest.read(from: $0) }
         // 读不出来时目录也读不出来，失败页盖住页面，空摘要不会露面
-        cue = CueWatch(digest, at: services.speech)
+        cue = CueWatch(digest, at: services.speech, local: services.cueLocal)
         #if os(macOS)
         sendState = SendState(services: services)
         #endif

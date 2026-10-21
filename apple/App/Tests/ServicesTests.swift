@@ -232,7 +232,7 @@ struct CueEnableTests {
         await #expect {
             try await app.services.enableCue(on: TestApp.hostID, moving: false)
         } throws: {
-            $0.localizedDescription == "那台 Mac 上没有能当 Cue 的 Agent：Pi 没装 · Claude Code 没装 · Codex 没装 · OpenCode 没装"
+            $0.localizedDescription == "没有能当 Cue 的 Agent：Pi 没装 · Claude Code 没装 · Codex 没装 · OpenCode 没装"
         }
         #expect(try await app.services.store.cueProfile()?.enabledAt == nil)
     }

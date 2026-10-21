@@ -12,8 +12,8 @@ extension AppServices {
     /// 项目或卡片变化、此刻变了（Cue 的表情随它，`observeTimed`）时重读快照，直到任务取消。
     func startSnapshots() {
         follow(reporting: { .widgetDataUnavailable("\($0)") }) {
-            for try await (content, moment) in self.observeTimed({ try $0.widgetContent() }) {
-                try await self.present(content, at: moment)
+            for try await (content, moment, local) in self.observeCue({ try $0.widgetContent() }) {
+                try await self.present(content, at: moment, local: local)
             }
         }
         #if os(iOS)
@@ -33,18 +33,28 @@ extension AppServices {
     #endif
 
     /// Cue 此刻：小组件、实时活动与 Cue 那一行（`CueWatch`）都经这里推（调试时可钉成一份样例，`-CuePadCueNow`）。
-    static func cueNow(_ digest: CueDigest, at moment: Speech.Moment) -> CueNow {
-        DebugHooks.preset.cueNow ?? CueNow(digest, at: moment)
+    static func cueNow(_ digest: CueDigest, at moment: Speech.Moment, local: CueNow.Local) -> CueNow {
+        DebugHooks.preset.cueNow ?? CueNow(digest, at: moment, local: local)
+    }
+
+    /// Cue 此刻要的本机事实：还没和 iCloud 对过时为什么等（与启用入口同一处判断 `CueGate`），这台 Mac 是哪台。
+    var cueLocal: CueNow.Local {
+        #if os(macOS)
+        let here: String? = hostID
+        #else
+        let here: String? = nil
+        #endif
+        return CueNow.Local(waiting: CueGate.of(self, running: nil, name: nil).waitingReason, here: here)
     }
 
     /// 立即按当前库内容更新，不等快照那条异步的观察：进入后台前（`resend`：岛按此刻重发一次，过时时刻从这时算）、
     /// 推送叫醒拉完之后（回调一返回系统就可能挂起 App，`IOSAppDelegate`）。
     func writeSnapshots(resend: Bool = false) async throws {
-        try await present(try await store.widgetContent(), at: speech, resend: resend)
+        try await present(try await store.widgetContent(), at: speech, local: cueLocal, resend: resend)
     }
 
-    private func present(_ content: WidgetContent, at moment: Speech.Moment, resend: Bool = false) async throws {
-        let now = Self.cueNow(content.cue, at: moment)
+    private func present(_ content: WidgetContent, at moment: Speech.Moment, local: CueNow.Local, resend: Bool = false) async throws {
+        let now = Self.cueNow(content.cue, at: moment, local: local)
         #if os(iOS)
         await cueActivity?.show(CueActivityState(now: now, quotas: content.quotas, at: moment.now), resend: resend, foreground: Self.isActive)
         #endif

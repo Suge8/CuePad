@@ -2,22 +2,34 @@ import CueStore
 import Foundation
 
 /// Cue 此刻（`CueNow`）从库里怎么推：只从 Cue 的摘要来（`CueDigest`，推进中与等你只读 `CueStore.cueTally`），按此刻（`moment`）推 Cue 在不在、
-/// 话在不在路上、表情与刚做完的那几颗。Cue 那一行（`CueWatch.now`）、小组件快照与 iPhone 的实时活动（`AppServices.startSnapshots`）都经这里。
+/// 话在不在路上、表情与刚做完的那几颗，再配上库里没有的本机事实（`Local`）：还没和 iCloud 对过时不说没启用、写在等什么；
+/// Mac 上它运行在别的 Mac 时静着那句写在哪台。Cue 那一行（`CueWatch.now`）、小组件快照与 iPhone 的实时活动（`AppServices.startSnapshots`）都经这里。
 nonisolated extension CueNow {
-    init(_ digest: CueDigest, at moment: Speech.Moment) {
+    /// 本机知道、库里没有的（`AppServices.cueLocal`）：还没和 iCloud 对过时为什么等（`CueGate.waiting`，对过为 nil），这台 Mac 是哪台（手机为 nil）。
+    struct Local: Equatable, Sendable {
+        var waiting: String?
+        var here: String?
+    }
+
+    init(_ digest: CueDigest, at moment: Speech.Moment, local: Local) {
         let presence = CuePresence.derive(digest, at: moment)
         let beads = Self.beads(digest, at: moment.now)
+        let host = digest.hostName ?? MacAgents.unnamed
         self.init(
             name: digest.name, mood: digest.mood(at: moment),
             restingMood: CueMood.of(.idle, waiting: digest.waiting, justDone: digest.lastSaidDone),
-            cue: Self.brain(presence, digest: digest, at: moment.now),
+            cue: Self.brain(presence, digest: digest, local: local, at: moment.now),
             beads: Array(beads.prefix(Self.beadLimit)), hidden: max(beads.count - Self.beadLimit, 0), advancing: digest.advancing,
-            first: digest.tally.waiting.first.map { Self.wait($0, name: digest.name) }, at: moment.now)
+            first: digest.tally.waiting.first.map { Self.wait($0, name: digest.name) }, at: moment.now,
+            elsewhere: digest.enabled && local.here != nil && digest.hostID != local.here ? "在「\(host)」上运行" : nil)
     }
 
-    private static func brain(_ presence: CuePresence, digest: CueDigest, at now: Date) -> Brain {
-        switch presence {
-        case .disabled, .asleep, .unreachable: .away(presence.line(name: digest.name) ?? digest.name, failed: presence.isUnreachable)
+    private static func brain(_ presence: CuePresence, digest: CueDigest, local: Local, at now: Date) -> Brain {
+        // 库里没有 Cue 不等于哪台都没启用：还没和 iCloud 对过时写在等什么（同启用入口读的 `CueGate`）
+        if presence == .disabled, let waiting = local.waiting { return .away(waiting, failed: false) }
+        return switch presence {
+        case .disabled, .asleep, .unreachable:
+            .away(presence.line(name: digest.name, host: digest.hostName ?? MacAgents.unnamed) ?? digest.name, failed: presence.isUnreachable)
         case .idle: .idle
         case .sending: .hearing
         case .working:

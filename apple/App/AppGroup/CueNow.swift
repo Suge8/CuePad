@@ -22,9 +22,11 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
     var first: Wait?
     /// 这一份是什么时候推出的。
     var at: Date
+    /// Mac 上它运行在别的 Mac 时那一句（"在「Mac Studio」上运行"）：静着、手上没有事时那一句写它；Cue 页的启用卡也写它。这台或手机上为 nil。
+    var elsewhere: String? = nil
 
     enum Brain: Codable, Hashable, Sendable {
-        /// 此刻不会接话：那一句原因（"Cue 在睡觉：它运行的那台 Mac 好像没开"），起不来时 `failed`。
+        /// 此刻不会接话：那一句原因（"「Mac Studio」没开"、换新 Mac 时"正在从 iCloud 同步…"），起不来时 `failed`。
         case away(String, failed: Bool)
         case idle
         /// 你最近一句还在路上。
@@ -141,7 +143,7 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
             if subagents > 0 { return "等 \(subagents) 个子代理交回" }
             if running > 0 { return "\(running) 件在跑" }
             if advancing > 0 { return "推进中 \(advancing) 件，都歇着" }
-            return Self.quiet
+            return elsewhere ?? Self.quiet
         }
     }
 

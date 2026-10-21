@@ -61,11 +61,11 @@ nonisolated enum CuePresence: Equatable, Sendable {
         return detail.flatMap(PiProgress.action) ?? shown?.label
     }
 
-    /// 它不在时那一句（页头、侧栏、菜单栏面板）；在路上、在做事写状态词（`shown`），空闲不写。
-    func line(name: String) -> String? {
+    /// 它不在时那一句（Cue 此刻的原因，`CueNow.Brain.away`；等同步时那句由 `CueNow.Local` 给），`host` 是它运行的那台 Mac 的名字（睡着时只写哪台没开：名字就在上一行）；在路上、在做事写状态词（`shown`），空闲不写。
+    func line(name: String, host: String) -> String? {
         switch self {
         case .disabled: "\(name) 还没启用"
-        case .asleep: "\(name) 在睡觉：它运行的那台 Mac 好像没开"
+        case .asleep: "「\(host)」没开"
         case .unreachable(let reason): reason
         case .idle, .sending, .working: nil
         }

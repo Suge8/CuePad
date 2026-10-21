@@ -295,15 +295,15 @@ enum CueRead {
 public enum CueEnableError: LocalizedError, Equatable {
   /// 那台 Mac 上没有能当大脑的 Agent（参数是各家为什么不能用，`MacAgents.whyNone`）
   case noRuntime(String)
-  /// Cue 正在另一台 Mac 上运行（参数是那台的名字，`MacAgents.shownName`），这次没说要换过去
+  /// Cue 正在另一台 Mac 上运行（参数是那台的名字，`MacAgents.shownName`），这次没确认要改过来
   case runsElsewhere(String)
   /// 这台的库还没和 iCloud 对过一遍：不知道 Cue 是否已在别的 Mac 上启用（App 层判断，`AppServices.enableCue`）
   case unsynced
 
   public var errorDescription: String? {
     switch self {
-    case .noRuntime(let why): "那台 Mac 上没有能当 Cue 的 Agent：\(why)"
-    case .runsElsewhere(let name): "正在「\(name)」上运行，换过去需先确认"
+    case .noRuntime(let why): "没有能当 Cue 的 Agent：\(why)"
+    case .runsElsewhere(let name): "正在「\(name)」上运行，改过来要先确认"
     case .unsynced: "还没和 iCloud 同步完"
     }
   }

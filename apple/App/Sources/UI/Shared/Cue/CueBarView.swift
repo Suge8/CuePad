@@ -80,7 +80,7 @@ struct UnreadCount: View {
 }
 
 /// Cue 那一行的第二行（`tally`：Mac 侧栏名片、iPad 侧栏、菜单栏面板、输入条与手机、iPad 的页头）或 Mac Cue 页头里此刻在做什么的那一句。
-/// `tally` 时就是 Cue 此刻（`CueNowRow`：珠子接那一句，不在时写原因）；不写 tally 时不在写原因（`CuePresence.line`，起不来是失败色，其余次要灰），
+/// `tally` 时就是 Cue 此刻（`CueNowRow`：珠子接那一句，不在时写原因）；不写 tally 时不在写 Cue 此刻的那句原因（`CueNow.Brain.away`，起不来是失败色，其余次要灰），
 /// 话在路上、在做事与会话顶栏同一个样子（`PiShownLabel`），空闲不写。
 /// Cue 在这台 Mac 值班、正在说回答你的话（`CueKeeper.speech`）时状态词是"输出中"（`PiShown.speaking`）。
 /// 它运行在别的设备上、本机正在和 iCloud 对时（`AppServices.isCatchingUp(on:)`，久过 `Pending.delay` 才出）写"正在同步"：那时写下的状态与数可能已经过时。
@@ -101,8 +101,8 @@ struct CueStatusLine: View {
                 SyncingLabel().transition(.handOff)
             } else if tally {
                 CueNowRow(now: cue.now).transition(.handOff)
-            } else if let line = cue.presence.line(name: cue.name) {
-                Text(line).foregroundStyle(cue.presence.isUnreachable ? palette.failure : palette.ink3).id(line).transition(.handOff)
+            } else if case .away(let line, let failed) = cue.now.cue {
+                Text(line).foregroundStyle(failed ? palette.failure : palette.ink3).id(line).transition(.handOff)
             } else if let shown {
                 PiShownLabel(shown: shown).id(shown.label).transition(.handOff)
             }

@@ -3,7 +3,7 @@ import Foundation
 import Observation
 
 /// 一个窗口里 Cue 的现状和 Cue 页的输入草稿：侧栏、菜单栏面板与 Cue 页都读这一份，不各自订阅。
-/// 事实只有库里那一页摘要（`CueDigest`）与此刻（`SpeechClock`）；这里按读的人要的粒度把它拆成一项项存下——
+/// 事实只有库里那一页摘要（`CueDigest`）、此刻（`SpeechClock`）与本机事实（`AppServices.cueLocal`）；这里按读的人要的粒度把它拆成一项项存下——
 /// Observation 按存储属性追踪（值没变的写不通知），存整份摘要时任何一项变（在想→用工具、Cue 此刻……），书架与侧栏都要跟着重算。
 /// 在不在、话在不在路上随库与此刻重算：它那台 Mac 的在线期限由订阅到点重读（`CueStore.macOnline`），你最近一句的时限与同步通断由
 /// 此刻给，这里不另计时。
@@ -49,9 +49,9 @@ final class CueWatch {
     var showsRun = false
     #endif
 
-    init(_ start: Snapshot<CueDigest>?, at moment: Speech.Moment) {
+    init(_ start: Snapshot<CueDigest>?, at moment: Speech.Moment, local: CueNow.Local) {
         self.start = start
-        if let digest = start?.value { apply(digest, at: moment) }
+        if let digest = start?.value { apply(digest, at: moment, local: local) }
     }
 
     /// 你正在写时：闲着没人等的 Cue 在听（"刚做完"让给它）；不在写就是此刻的表情。
@@ -61,12 +61,12 @@ final class CueWatch {
 
     /// 跟随资料库与此刻直到任务取消。
     func follow(_ services: AppServices) async throws {
-        for try await (digest, moment) in services.observeTimed(from: start, { try CueDigest.read(from: $0) }) {
-            apply(digest, at: moment)
+        for try await (digest, moment, local) in services.observeCue(from: start, { try CueDigest.read(from: $0) }) {
+            apply(digest, at: moment, local: local)
         }
     }
 
-    private func apply(_ digest: CueDigest, at moment: Speech.Moment) {
+    private func apply(_ digest: CueDigest, at moment: Speech.Moment, local: CueNow.Local) {
         name = digest.name
         let presence = CuePresence.derive(digest, at: moment)
         self.presence = presence
@@ -75,7 +75,7 @@ final class CueWatch {
         lastYouSaid = digest.lastYou?.said
         busy = presence.shown != nil
         // 推出的时刻每次都不同：内容一样就不写，免得读它的每一行跟着重算
-        let next = AppServices.cueNow(digest, at: moment)
+        let next = AppServices.cueNow(digest, at: moment, local: local)
         if !isPinned {
             expression = CueMood.of(presence, waiting: digest.waiting, justDone: digest.lastSaidDone)
             if !next.same(as: now) { now = next }
