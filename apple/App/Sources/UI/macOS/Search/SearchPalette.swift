@@ -50,18 +50,22 @@ struct SearchPalette: View {
 
     var body: some View {
         panel
-            // 常驻（`keptPanel`）：开合不重建，每次开时聚焦，收起时清掉上一次的查询与结果
+            // 常驻（`keptPanel`）：开合不重建，每次开时聚焦、从空的查询看起。收起时查询本来就是空的，结果留着：再开只是现出来，订阅回到前台后库变了再换；
+            // 每次都清掉的话每次开都要当场重读、重建整列结果（真实库约多 150M 条指令）。查过别的才清掉，收着时先读好空查询的那份（`pagePrefetch`）
             .onChange(of: active, initial: true) {
                 focused = active
                 if active {
                     if query.text.isEmpty { query.text = DebugHooks.preset.searchText }
-                } else {
+                    return
+                }
+                if query != PaletteQuery() || sessionPages != 1 {
                     query = PaletteQuery()
+                    sessionPages = 1
                     data = nil
                     sessions = nil
-                    selection = nil
-                    sessionSelection = nil
                 }
+                selection = cardIDs.first
+                sessionSelection = sessionGroups.first?.sessions.first?.sessionID
             }
             .onChange(of: query.text) {
                 query.pages = 1
