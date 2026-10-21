@@ -30,10 +30,7 @@ extension Duty {
         ]
         let duplicated = topics.filter { _, topic in adds.count { ($0.args["title"] as? String)?.contains(topic) == true } > 1 }.map(\.0)
         let readmeAdds = adds.count { ($0.args["title"] as? String)?.contains(/README/) == true }
-        let repeated = sessions.filter { session in
-            let said = says(steps, to: session)
-            return said.indices.contains { i in said[(i + 1)...].contains { Self.similar($0, said[i]) } }
-        }
+        let repeated = resaid()
         let unhandled = steps.filter { step in
             guard let session = step.session else { return false }
             return !calls(step, "task").contains { !$0.call.failed && target($0.args) === session } && calls(step, "tell").isEmpty
@@ -48,7 +45,7 @@ extension Duty {
         }
         // 他要的：证书查完时告诉他签发方（会话交回里写着 Sectigo）
         let certDone = calls(key.certified, "task", ["done", "leave"]).contains { !$0.call.failed && target($0.args) === key.cert }
-        let certSaid = try await messages(key.certified) + calls(key.certified, "tell").compactMap { $0.args["text"] as? String }
+        let certSaid = try await told(key.certified)
         let loginDone = calls(key.finish, "task", ["done"]).contains { !$0.call.failed && target($0.args) === login }
         let wrapUp = CueEval.calls(in: rounds(key.finish), "task", ["say", "edit", "add"]).map { Self.texts($0.args) } + started
         let planned = try await rig.store.cueTaskDetail(login.task.id).leaves.contains { $0.leaf.status != .done && $0.leaf.body.contains(bump) }
@@ -104,13 +101,7 @@ extension Duty {
             "- 每轮用时中位 \(median)",
             "- 合计（含预热，大脑报了 \(usage.count) 轮）：\(BrainUsage.header.replacingOccurrences(of: " | ", with: "、")) = \(total.cells.replacingOccurrences(of: " | ", with: "、"))",
         ]
-        lines += notes.map { "- \($0)" }
-        lines += ["", "| 步 | 叫醒的事 | 轮数 | 工具调用 |", "| --- | --- | --- | --- |"]
-        for (index, step) in steps.enumerated() {
-            let rounds = self.rounds(step)
-            lines.append("| \(index + 1) | \(step.label) | \(rounds.count) | \(rounds.flatMap(\.calls).map(\.name).joined(separator: "、")) |")
-        }
-        eval.report = lines
+        eval.report = lines + stepTable()
         eval.extra["renewals"] = renewalModes.map { round, mode in
             ["mode": mode, "step": steps.first { $0.window?.contains(round.startedAt) == true }?.label ?? "—"]
         }

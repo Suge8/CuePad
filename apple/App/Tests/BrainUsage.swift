@@ -104,6 +104,9 @@ nonisolated struct BrainUsage {
         return rounds
     }
 
+    /// 写进 score.json、LongMemEval 题目 json 的样子
+    var json: [String: Any] { ["input": input, "cacheRead": cacheRead, "cacheWrite": cacheWrite, "output": output, "cost": cost] }
+
     init(input: Int = 0, cacheRead: Int = 0, cacheWrite: Int = 0, output: Int = 0, cost: Double = 0) {
         (self.input, self.cacheRead, self.cacheWrite, self.output, self.cost) = (input, cacheRead, cacheWrite, output, cost)
     }

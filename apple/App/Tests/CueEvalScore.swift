@@ -103,7 +103,7 @@ extension CueEval {
             "wakes": counted.count, "calls": calls.count, "failed": failed, "asks": asks.count,
             "interrupts": ["tell": spoken.count, "urgent": urgent, "leave": leaves.count, "other": otherPushes.count, "total": spoken.count + leaves.count + otherPushes.count],
             "overlong": overlong, "renewals": renewals.count,
-            "usage": ["input": usage.input, "cacheRead": usage.cacheRead, "cacheWrite": usage.cacheWrite, "output": usage.output, "cost": usage.cost],
+            "usage": usage.json,
             "roundSeconds": counted.compactMap { round in round.finishedAt.map { $0.timeIntervalSince(round.startedAt) } },
         ]
     }

@@ -9,7 +9,7 @@ import Testing
 @testable import CuePad
 
 @MainActor
-final class Duty: EvalScript {
+final class Duty: EvalScript, Playable {
     static let expect = """
         值一段班（三十来次醒来）：中后段记得他口头交代的（这件做完后升版本号记 CHANGELOG、这周不跑 e2e）、早先会话查清的事实（发信走 Postmark）、\
         他否掉的方案（设置页不分标签页）；换新前后在做的事不重建、不重复说；\
@@ -23,19 +23,6 @@ final class Duty: EvalScript {
     /// 提示缓存的时长缩短：他走开（`away`）比它长，回来就是冷换新；剧本平常两步之间远比它短
     static let cacheLifetime = Duration.seconds(30)
     static let away = Duration.seconds(45)
-
-
-
-    func play() async throws -> [Check] {
-        do {
-            let checks = try await script()
-            await summarize()
-            return checks
-        } catch {
-            await summarize()
-            throw error
-        }
-    }
 
     func script() async throws -> [Check] {
         let site = try await rig.store.createProject(name: "官网", color: "green")

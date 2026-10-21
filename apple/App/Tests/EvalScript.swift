@@ -152,9 +152,28 @@ class EvalScript {
     }
 
     /// 回答他的那句（这一步里）
-    func reply(_ step: Step) async throws -> String? {
-        guard let window = step.window else { return nil }
-        return try await eval.said(since: window.lowerBound).last { $0.author == .known(.cue) && $0.choices == nil && $0.taskID == nil && $0.createdAt <= window.upperBound }?.text
+    func reply(_ step: Step) async throws -> String? { try await replies(step).last }
+
+    /// 这一步里告诉他的：Cue 写的消息，加 tell 的 text
+    func told(_ step: Step) async throws -> [String] {
+        try await messages(step) + calls(step, "tell").compactMap { $0.args["text"] as? String }
+    }
+
+    /// 对同一个会话把同一件事说了两遍的会话（`similar`）
+    func resaid() -> [ScriptedSession] {
+        sessions.filter { session in
+            let said = says(steps, to: session)
+            return said.indices.contains { i in said[(i + 1)...].contains { Self.similar($0, said[i]) } }
+        }
+    }
+
+    /// .md 里统计段的尾巴：剧本没按预想走的地方，与每一步叫醒了几轮、调了哪些工具
+    func stepTable() -> [String] {
+        notes.map { "- \($0)" } + ["", "| 步 | 叫醒的事 | 轮数 | 工具调用 |", "| --- | --- | --- | --- |"]
+            + steps.enumerated().map { index, step in
+                let rounds = rounds(step)
+                return "| \(index + 1) | \(step.label) | \(rounds.count) | \(rounds.flatMap(\.calls).map(\.name).joined(separator: "、")) |"
+            }
     }
 
     /// 工具参数指的是哪个会话（`CueEval.refers`）
@@ -179,5 +198,23 @@ class EvalScript {
 
 }
 
-/// 一段值班的剧本与判定。
+/// 一段剧本：跑完判定（`script`），写进 .md 的统计（`summarize`）不论跑没跑完都写。
+@MainActor
+protocol Playable: EvalScript {
+    func script() async throws -> [Check]
+    func summarize() async
+}
+
+extension Playable {
+    func play() async throws -> [Check] {
+        do {
+            let checks = try await script()
+            await summarize()
+            return checks
+        } catch {
+            await summarize()
+            throw error
+        }
+    }
+}
 #endif

@@ -67,13 +67,10 @@ struct CueEvalLMETests {
         let rounds = eval.rounds
         let usage = eval.rig.brainDirectory.map(BrainUsage.rounds(in:)) ?? []
         let index = rounds.firstIndex { $0.id == round.id } ?? rounds.count
-        func cells(_ usage: BrainUsage) -> [String: Any] {
-            ["input": usage.input, "cacheRead": usage.cacheRead, "cacheWrite": usage.cacheWrite, "output": usage.output, "cost": usage.cost]
-        }
         let record: [String: Any] = [
             "id": question.id, "type": question.type, "brain": EvalBrain.current.label, "hypothesis": replies.joined(separator: "\n\n"),
             "elapsed": round.finishedAt.map { $0.timeIntervalSince(round.startedAt) } ?? 0,
-            "usage": cells(index < usage.count ? usage[index] : BrainUsage()), "total": cells(usage.reduce(BrainUsage(), +)),
+            "usage": (index < usage.count ? usage[index] : BrainUsage()).json, "total": usage.reduce(BrainUsage(), +).json,
             "recalls": CueEval.calls(in: [round], "memory", ["recall"]).filter { !$0.call.failed }.compactMap { $0.args["query"] as? String },
             "calls": round.calls.map(\.name), "context": round.context ?? 0,
         ]

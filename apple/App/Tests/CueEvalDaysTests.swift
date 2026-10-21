@@ -24,7 +24,7 @@ struct CueEvalDaysTests {
 
 /// 剧本与判定。
 @MainActor
-private final class Days: EvalScript {
+private final class Days: EvalScript, Playable {
     static let expect = """
         已值两周班，逐件问起不同年纪的事：13 天前顺口说的考级日期、9 天前 CI 报告里的镜像版本、5 天前否掉的 S3 与理由、\
         2 天前答应的告诉他访问量、1 天前改成中文的提交信息；冷醒来换新后不重做、不重复问
@@ -48,18 +48,7 @@ private final class Days: EvalScript {
         sessions = [history.storage, history.weekly].compactMap(\.self)
     }
 
-    func play() async throws -> [Check] {
-        do {
-            let checks = try await script()
-            await summarize()
-            return checks
-        } catch {
-            await summarize()
-            throw error
-        }
-    }
-
-    private func script() async throws -> [Check] {
+    func script() async throws -> [Check] {
         try await snapshot("预置")
         try await settleDown()
         try await snapshot("开跑前")
@@ -150,7 +139,7 @@ private final class Days: EvalScript {
         let reasons = try await replies(key.why).joined(separator: "\n")
         let csvTexts = CueEval.calls(in: rounds(key.csv), "task", ["add", "edit", "say", "start"]).map { Self.texts($0.args) }.joined(separator: "\n")
         let preference = csvTexts.contains(/中文/) ? "带了新的（中文）" : csvTexts.contains(/英文|English/) ? "带了旧的（英文）" : "没提"
-        let told = try await messages(key.report) + calls(key.report, "tell").compactMap { $0.args["text"] as? String }
+        let told = try await self.told(key.report)
         let cold = [key.image, key.csv, key.parking, key.wrap]
         let renewed = cold.filter { step in eval.renewals.contains { step.window?.contains($0.startedAt) == true } }
         let after = steps.filter { ($0.window?.lowerBound ?? .distantFuture) >= (key.image.window?.lowerBound ?? .distantFuture) }
@@ -159,10 +148,7 @@ private final class Days: EvalScript {
         let toHim = try await eval.said(since: key.date.window?.lowerBound).filter { $0.author == .known(.cue) }.map(\.text)
         let repeatedQuestions = toHim.filter { $0.contains(/？|\?/) }
         let askedTwice = repeatedQuestions.indices.contains { i in repeatedQuestions[(i + 1)...].contains { Self.similar($0, repeatedQuestions[i]) } }
-        let resaid = sessions.filter { session in
-            let said = says(steps, to: session)
-            return said.indices.contains { i in said[(i + 1)...].contains { Self.similar($0, said[i]) } }
-        }
+        let resaid = self.resaid()
         return [
             try await recalled("13 天前顺口说的：考级是 11 月 18 号", key.date, fabricated: { $0.contains(/\d+ ?月 ?\d+|\d+ ?号|\d+\/\d+/) }) {
                 $0.contains(/11 ?月 ?18|11\/18|11-18/)
@@ -227,19 +213,10 @@ private final class Days: EvalScript {
             let summaries = merged.first { $0["round"] as? Int == index }?["summaries"] as? Int ?? 0
             let step = steps.first { $0.window?.contains(round.startedAt) == true }?.label ?? "步与步之间"
             lines.append("- \(label)（第 \(index) 轮，\(step)）：用时 \(seconds(took))，\(CueEval.opensSession(round) ? "新会话的第一轮" : "接着原会话")，写了 \(summaries) 条摘要；\(cells(used))")
-            singled.append([
-                "label": label, "seconds": took, "renewal": CueEval.opensSession(round), "summaries": summaries,
-                "input": used.input, "cacheRead": used.cacheRead, "cacheWrite": used.cacheWrite, "output": used.output, "cost": used.cost,
-            ])
+            singled.append(used.json.merging(["label": label, "seconds": took, "renewal": CueEval.opensSession(round), "summaries": summaries]) { $1 })
         }
         eval.extra["rounds"] = singled
-        lines += notes.map { "- \($0)" }
-        lines += ["", "| 步 | 叫醒的事 | 轮数 | 工具调用 |", "| --- | --- | --- | --- |"]
-        for (index, step) in steps.enumerated() {
-            let rounds = self.rounds(step)
-            lines.append("| \(index + 1) | \(step.label) | \(rounds.count) | \(rounds.flatMap(\.calls).map(\.name).joined(separator: "、")) |")
-        }
-        eval.report = lines
+        eval.report = lines + stepTable()
     }
 }
 #endif

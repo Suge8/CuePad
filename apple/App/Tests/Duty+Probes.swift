@@ -50,7 +50,7 @@ extension Duty {
         // 逐页查死链：这一步告诉了他这一页的死链数，对会话说的是接着下一页，没让它重查、没另建任务
         // 接着下一页：对会话说下一页，或开工这件的下一步（它把四页排成了步骤）
         func next(_ step: Step, count: Regex<Substring>, page: Regex<Substring>, upcoming: Regex<Substring>) async throws -> (told: Bool, next: Bool, redo: Bool) {
-            let told = try await messages(step) + calls(step, "tell").compactMap { $0.args["text"] as? String }
+            let told = try await self.told(step)
             let said = says([step], to: p.links)
             let started = calls(step, "task", ["start"]).contains { !$0.call.failed && target($0.args) === p.links }
             let rebuilt = calls(step, "task", ["add", "start"]).contains { !$0.call.failed && Self.texts($0.args).contains(/死链/) }
