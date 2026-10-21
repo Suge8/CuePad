@@ -1,8 +1,7 @@
 #if DEBUG
 import CueStore
 import CueText
-import OSLog
-import SwiftUI
+import Foundation
 
 extension DebugScene {
     static func model(_ provider: String, _ id: String, _ name: String, _ levels: [PiThinkingLevel]) -> PiModelOption {

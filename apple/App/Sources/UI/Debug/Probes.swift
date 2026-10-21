@@ -3,8 +3,6 @@ import Darwin
 import QuartzCore
 #if os(macOS)
 import AppKit
-#else
-import UIKit
 #endif
 
 /// Mac 与 iOS 的 `-CuePadBench` 共用的两个探针：每一帧的时间戳（`FrameRecorder`）与每圈主线程 run loop 的墙钟与 CPU（`TurnLog`）。

@@ -1,8 +1,6 @@
 #if os(macOS)
-import AppKit
 import CuePi
 import CueStore
-import SwiftUI
 
 extension Workspace {
     /// 首次打开：面板没出现过、Cue 从没在哪台 Mac 上设过（`CueProfile.hostID`，停用后仍留着），就弹出它，只这一次（不等检测与同步，面板里写在等什么）。

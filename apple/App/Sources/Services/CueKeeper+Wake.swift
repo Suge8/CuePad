@@ -4,8 +4,6 @@ import CuePi
 import CueStore
 import CueText
 import Foundation
-import Observation
-import os
 
 extension CueKeeper {
     /// 发一个信封让 Cue 醒来，这一轮的回复写成谁的按醒来原因定（`author(of:)`）；`said`、`images`、`delivering` 是随信封交出去的你的消息与回答，

@@ -1,7 +1,6 @@
 #if DEBUG
 import CueStore
 import CueText
-import OSLog
 import SwiftUI
 
 extension DebugScene {
