@@ -33,7 +33,15 @@ struct BeadDot: View {
     }
 }
 
+/// 接力落在一颗珠子上时那一圈淡光（`RelayFlight` 画在窗口最上层，盖得住字）：多大、珠子后面的字离珠心至少多远。
+enum BeadHalo {
+    static let radius: CGFloat = 11
+    /// 珠子边到后面第一个字的最小距离：光圈不压到"+N"与那一句的头一个字。
+    static func clearance(bead size: CGFloat) -> CGFloat { radius - size / 2 + 0.5 }
+}
+
 /// 一排珠子：前 `limit` 颗，多出的写"+N"（连同 `hidden`；排满时它的位置一直留着）。`bead` 给每颗加东西（App 里挂接力的落点）。
+/// 珠子之间挨得近，"+N"与最后一颗之间让出接力光圈的半径（`BeadHalo`）。
 struct CueBeads<Decorated: View>: View {
     let beads: [CueNow.Bead]
     var hidden = 0
@@ -54,6 +62,7 @@ struct CueBeads<Decorated: View>: View {
                     if more > 0 { Text("+\(more)").contentTransition(.numericText(value: Double(more))).transition(.opacity) }
                 }
                 .font(.system(size: size * 1.45, weight: .semibold)).monospacedDigit().foregroundStyle(palette.ink2)
+                .padding(.leading, max(0, BeadHalo.clearance(bead: size) - size * 0.55))
             }
         }
         .accessibilityHidden(true)
@@ -74,7 +83,8 @@ struct CueNowLine<Decorated: View>: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        HStack(spacing: 7) {
+        // 珠子与那一句之间至少让出接力光圈（`BeadHalo`），光落在最后一颗上时不压到头一个字
+        HStack(spacing: max(7, BeadHalo.clearance(bead: 7))) {
             if !now.beads.isEmpty {
                 // 珠子与"+N"按自己的宽排、不被挤：窄处让位的是后面那一句（截成省略号），计数截成"+…"就读不出几件了
                 CueBeads(beads: now.beads, hidden: now.hidden, limit: limit, bead: bead).fixedSize()

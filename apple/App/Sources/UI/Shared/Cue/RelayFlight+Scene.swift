@@ -37,7 +37,7 @@ extension RelayFlight {
                     Self.keyframes("opacity", [0, 1, 1, 0], times: [0, 0.1, 0.42, 1]),
                     Self.keyframes("transform.scale", [0.9, 1.25, 1, 1], times: [0, 0.18, 0.42, 1]),
                 ])
-                animate(circle(at: point, radius: 11, fill: 0.18), delay: delay, duration: Self.reception, [Self.hold()])
+                animate(circle(at: point, radius: BeadHalo.radius, fill: 0.18), delay: delay, duration: Self.reception, [Self.hold()])
             }
         }
 
