@@ -55,12 +55,13 @@ extension CueKeeper {
                 return
             }
 
-            let messages = try await store.cueMessages(limit: 50)
-
             if progress.greeted != profile.enabledAt {
                 progress.greeted = profile.enabledAt
-                _ = try await wakeUp(.enabled)
-                return
+                guard try await handsEmpty() else {
+                    _ = try await wakeUp(.enabled)
+                    return
+                }
+                save()
             }
 
             let due = try await store.dueCueReminders(at: now)
@@ -74,7 +75,6 @@ extension CueKeeper {
             // 等子代理停住不写库：到点由定时器叫醒对账
             if let stall = try await store.nextCueStall(after: now) { deadlines.append(stall) }
 
-            let timing = setup.timing
             let changes = try await self.changes(at: now)
             // 出错之后：有新变化就是新事件，照常；没有就等重试的时刻，过了这一次就只等新变化
             if let held = setback {
@@ -82,7 +82,7 @@ extension CueKeeper {
                     setback = nil
                 } else if let retryAt = held.retryAt, now >= retryAt {
                     setback?.retryAt = nil
-                    return _ = try await wakeUp(held.wake, as: held.author, extra: held.extra)
+                    return _ = try await wakeUp(held.wake, as: held.author)
                 } else {
                     return schedule([deadlines.min(), held.retryAt].compactMap { $0 }.min())
                 }
@@ -97,9 +97,8 @@ extension CueKeeper {
             }
             if let lapse = changes.lapse { deadlines.append(lapse) }
 
-            let lastSpoke = messages.last { $0.author == .known(.you) }?.createdAt
-            let idleSince = lastSpoke ?? profile.enabledAt ?? shift.startedAt
-            if try await !store.cueBoardActive(), let due = patrolDue(idleSince: idleSince, now: now) {
+            let idleSince = try await store.cueLastYou()?.said ?? profile.enabledAt ?? shift.startedAt
+            if try await !store.cueBoardActive(), let due = patrolDue(idleSince: idleSince, now: now), try await !handsEmpty() {
                 if due <= now {
                     let today = Self.day(now)
                     progress.patrols = (progress.patrolDay == today ? progress.patrols : 0) + 1
@@ -108,16 +107,6 @@ extension CueKeeper {
                     return _ = try await wakeUp(.idle)
                 }
                 deadlines.append(due)
-            }
-
-            let memory = CueMemoryView(try await store.cueMemory())
-            if let merge = memory.merges.first(where: { !shift.mergesTried.contains([$0.lo, $0.hi]) }) {
-                let ready = lastTurnEnd + timing.mergeAfter.seconds
-                if now >= ready {
-                    updateShift { $0.mergesTried.insert([merge.lo, merge.hi]) }
-                    return _ = try await wakeUp(.tidy, extra: CueMemoryView.mergePrompt(merge))
-                }
-                deadlines.append(ready)
             }
             schedule(deadlines.min())
         } catch {
@@ -156,6 +145,14 @@ extension CueKeeper {
         case .starting, .running:
             break
         }
+    }
+
+    /// 手上什么都没有：没做完的任务、不归它们的活会话（含出错、在等回答的）、等你的卡一样都没有。刚启用与空闲巡视这时都不醒：
+    /// 醒来只能说一句没有事，留下一行"没动手"。
+    private func handsEmpty() async throws -> Bool {
+        let board = try await store.cueBoard()
+        guard board.tasks.isEmpty, board.sessions.isEmpty else { return false }
+        return try await store.cueMessagesWaitingForYou().isEmpty
     }
 
     /// 什么时候可以巡视；这段空闲巡视过了、今天次数用完（等到明天）、整天都是打扰时段为 nil。

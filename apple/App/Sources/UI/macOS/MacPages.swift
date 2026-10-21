@@ -18,9 +18,16 @@ final class MacPages {
     @ObservationIgnored private var trimTask: Task<Void, Never>?
     static let keptPages = 4
 
-    /// 侧栏开合一步到位：只改可见性，不包动画（分栏动画约 0.3 秒里每帧整窗重排、重算鼠标跟踪区，掉帧十几次）。
+    /// 开合侧栏时随侧栏滑的那些图层（`SidebarSlide`）。
+    let slide = SidebarSlide()
+    /// 开合侧栏时详情区这一栏的图层滑开的地方两边多铺的底色（`MainWindow`），不小于侧栏最宽的那一栏。
+    static let slideOverscan: CGFloat = 400
+
+    /// 开合侧栏：分栏不带动画地换到终点，看得见的滑动由 `SidebarSlide` 交给 Core Animation。
     func toggleSidebar() {
-        sidebar = sidebar == .detailOnly ? .all : .detailOnly
+        let opening = sidebar == .detailOnly
+        slide.expect(opening: opening)
+        sidebar = opening ? .all : .detailOnly
     }
 
     func visit(from left: Route, to page: Route) {

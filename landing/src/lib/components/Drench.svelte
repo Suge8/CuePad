@@ -114,7 +114,7 @@
 	});
 </script>
 
-<section class="drench" id="dispatch" bind:this={section}>
+<section class="drench" id="cue" bind:this={section}>
 	<Canvas kind="spark" />
 	<div class="drench-stage" bind:this={stage}>
 		<div class="drench-inner">
@@ -126,8 +126,10 @@
 			<div class="drench-screen" bind:this={screen} data-reveal style="--d: 0.12s">
 				<video
 					bind:this={video}
-					src="/assets/demo-dispatch.mp4"
-					poster="/assets/dispatch-poster.webp"
+					src="/assets/flow.mp4"
+					poster="/assets/flow-poster.webp"
+					width="1280"
+					height="800"
 					autoplay
 					muted
 					loop

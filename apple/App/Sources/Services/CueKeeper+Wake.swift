@@ -9,7 +9,7 @@ extension CueKeeper {
     /// 发一个信封让 Cue 醒来，这一轮的回复写成谁的按醒来原因定（`author(of:)`）；`said`、`images`、`delivering` 是随信封交出去的你的消息与回答，
     /// 发出去就记下送达。发不进去时按大脑出了问题处理，返回 false。
     func wakeUp(
-        _ wake: CueWake, as chosen: CueAuthor? = nil, said: String? = nil, images: [PiImage] = [], delivering: [UUID] = [], extra: String? = nil
+        _ wake: CueWake, as chosen: CueAuthor? = nil, said: String? = nil, images: [PiImage] = [], delivering: [UUID] = []
     ) async throws -> Bool {
         guard let shift else { return false }
         let author = chosen ?? Self.author(of: wake)
@@ -41,7 +41,6 @@ extension CueKeeper {
             let views = [CueMemoryView(try await store.cueMemory()).viewText, CueView.render(try await store.cueMessages(limit: CueView.fetched))]
             parts.insert(contentsOf: views.compactMap { $0 }, at: 0)
         }
-        if let extra { parts.append(extra) }
         if let said { parts.append(said) }
         Self.log.notice("Cue 醒来：\(String(describing: wake).prefix(60), privacy: .public)，回复写成 \(author.rawValue, privacy: .public)")
         let sent = parts.joined(separator: "\n")
@@ -52,7 +51,7 @@ extension CueKeeper {
             return false
         }
         var turn = Turn(
-            author: author, round: beginRound(wake, sent: [sent], at: now), selfStarted: wake == .message ? nil : (wake, extra), delivered: delivering,
+            author: author, round: beginRound(wake, sent: [sent], at: now), selfStarted: wake == .message ? nil : wake, delivered: delivering,
             mark: mark, held: changes.held)
         // Cue 自己醒来的一轮醒来就写下经过那一行：为什么醒在它上面，各端马上画得出叫醒的那一下
         if !turn.answersYou {
@@ -150,7 +149,7 @@ extension CueKeeper {
     static func author(of wake: CueWake) -> CueAuthor {
         switch wake {
         case .message, .enabled: .cue
-        case .sessionActivity, .idle, .tidy, .reminder: .note
+        case .sessionActivity, .idle, .reminder: .note
         }
     }
 

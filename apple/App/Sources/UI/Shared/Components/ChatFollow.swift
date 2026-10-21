@@ -133,7 +133,7 @@ struct ChatJump: Equatable {
     nonisolated static func == (a: Self, b: Self) -> Bool { a.column == b.column }
 }
 
-enum ChatLayout {
+nonisolated enum ChatLayout {
     /// 对话最新那头与最早那头的留白：最后一行离回复框（含问题卡）至少这么远。
     static let edge: CGFloat = 16
     /// 浮在对话底上的那一块离对话区底边（手机上是安全区底边，键盘弹出时是键盘顶，`FloatingReply`）。

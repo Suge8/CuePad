@@ -1,6 +1,16 @@
 # Contributing to CuePad
 
-Thanks for your interest in CuePad. To build and run it, follow [Build from source](../README.md#build-from-source) in the README. Project conventions, commands and guardrails are in [AGENTS.md](../AGENTS.md), with topic notes in [docs/](../docs/).
+Thanks for your interest in CuePad. To build and run it, follow [Quick start](../README.md#quick-start) in the README. Project conventions, commands and guardrails are in [AGENTS.md](../AGENTS.md), with topic notes in [docs/](../docs/). Code comments and docs are mostly in Chinese; issues and PRs in English are fine.
+
+## Setup
+
+```bash
+brew install ripgrep                          # used by the lint step of xc.sh check
+git config core.hooksPath apple/scripts/hooks # pre-commit: lint and file-size gate
+apple/scripts/xc.sh build mac                 # every build, test and screenshot goes through xc.sh
+```
+
+Builds from source never touch the released app's library: they open `~/Library/Application Support/CuePad Dev`, and `xc.sh run|shot` starts each instance with its own throwaway library.
 
 ## Before you open a pull request
 

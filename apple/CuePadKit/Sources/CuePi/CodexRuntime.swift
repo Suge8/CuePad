@@ -36,7 +36,7 @@ import OSLog
 ///     托管会话的经 `item/tool/requestUserInput` 发给 CuePad，只有一个问题时能从 CuePad 答。
 @MainActor
 public final class CodexRuntime: AgentRuntime, SessionLink {
-    static let log = Logger(subsystem: "com.sugeh.cuepad", category: "codex")
+    static let log = Logger(subsystem: AppIdentity.id, category: "codex")
     let bridge: PiBridge
     private let paths: AgentPaths
     private let hooks: AgentHookServer
@@ -146,7 +146,7 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
         in directory: URL, launchToken: String, name: String?, model: PiModelKey?, thinking: PiThinkingLevel?
     ) async throws -> PiSession.ID {
         let id = try await launch { rpc in
-            let started = try await rpc.call("thread/start", ["cwd": .string(directory.path)])
+            let started = try await rpc.call("thread/start", .object(try await self.sandbox(in: directory.path, on: rpc).merging(["cwd": .string(directory.path)]) { $1 }))
             return self.attachHosted(started, rpc: rpc, launchToken: launchToken)
         }
         return try await configure(opened: id, name: name, model: model, thinking: thinking, on: bridge)
@@ -159,8 +159,8 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
         if let id = try await adoptFromDaemon(session.id) { return id }
         do {
             return try await launch { rpc in
-                let resumed = try await rpc.call(
-                    "thread/resume", ["threadId": .string(session.id), "path": .string(session.path), "excludeTurns": true])
+                let params: [String: JSONValue] = ["threadId": .string(session.id), "path": .string(session.path), "excludeTurns": true]
+                let resumed = try await rpc.call("thread/resume", .object(try await self.sandbox(in: session.cwd, on: rpc).merging(params) { $1 }))
                 return self.attachHosted(resumed, rpc: rpc, launchToken: nil)
             }
         } catch CodexRPCError.server(_, let message) where message.contains("active writer") {
@@ -170,6 +170,14 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
     }
 
     // MARK: 托管进程
+
+    /// 托管会话的沙箱：用户、项目或管理配置定过（`sandbox_mode`，或权限档 `default_permissions`，含比工作区更宽的）就照它，不传；
+    /// 都没定时 Codex 对没被信任过的目录用只读——终端里第一次进目录会问信不信任，托管的会话没人回答，写工作区的每一步都要申请。
+    /// CuePad 开的会话就是叫它在这个目录里干活：这时给工作区写权限（同信任过的目录的缺省）。`thread/resume` 不留开线程时的沙箱，接着时也要给。
+    private func sandbox(in directory: String, on rpc: CodexRPC) async throws -> [String: JSONValue] {
+        let origins = try await rpc.call("config/read", ["cwd": .string(directory)])["origins"]?.object ?? [:]
+        return origins.keys.contains("sandbox_mode") || origins.keys.contains("default_permissions") ? [:] : ["sandbox": "workspace-write"]
+    }
 
     /// `codex` 与给它的环境：配置目录与钩子 socket 目录照 `AgentPaths` 定（隔离测试里指到临时目录）。
     func executable() async throws -> (url: URL, environment: [String: String]) {

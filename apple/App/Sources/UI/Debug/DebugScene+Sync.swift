@@ -125,7 +125,7 @@ extension DebugScene {
                 let task = Task {
                     guard let store = await standInLibrary(), (try? await Task.sleep(for: .seconds(seconds))) != nil else { return }
                     _ = try? await store.recordMacAgents(host: "demo-mac", name: "Mac Studio", [MacAgent(kind: .pi, model: nil, models: [])])
-                    try? await store.recordMacPresence(host: "demo-mac") { true }
+                    _ = try? await store.recordMacPresence(host: "demo-mac") { true }
                     _ = try? await store.updateCueProfile { profile in
                         profile.hostID = "demo-mac"
                         profile.enabledAt = .now

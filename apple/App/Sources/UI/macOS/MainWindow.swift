@@ -18,6 +18,9 @@ struct MainWindow: View {
                 .navigationSplitViewColumnWidth(min: 210, ideal: 256, max: 320)
         } detail: {
             detail
+                .background { ColumnFinder(pages: workspace.pages) }
+                // 开合侧栏时详情区这一栏的图层在滑（`SidebarSlide`）：底色两边多铺一截，滑开的地方不露出窗口的底
+                .background { palette.desk.padding(.horizontal, -MacPages.slideOverscan).ignoresSafeArea() }
         }
         .background { WindowPanels(workspace: workspace) }
         .background { TaskBubbleSlot() }
@@ -30,7 +33,6 @@ struct MainWindow: View {
 
     private var detail: some View {
         ZStack {
-            palette.desk.ignoresSafeArea()
             page
             EditorLayer().zIndex(1)
         }
@@ -71,6 +73,43 @@ struct MainWindow: View {
         }
         ToolbarItem(placement: .primaryAction) { PageMenuSlot() }
             .sharedBackgroundVisibility(.hidden)
+    }
+}
+
+/// 找详情区这一栏的承载视图交给 `SidebarSlide.column`（分栏里每一栏包在一层里，再往上是分栏本身），分栏每次摆完交给 `SidebarSlide.splitResized`。
+private struct ColumnFinder: NSViewRepresentable {
+    let pages: MacPages
+
+    func makeNSView(context: Context) -> Probe { Probe(pages: pages) }
+    func updateNSView(_ view: Probe, context: Context) {}
+
+    final class Probe: NSView {
+        let pages: MacPages
+        private var observer: NSObjectProtocol?
+
+        init(pages: MacPages) {
+            self.pages = pages
+            super.init(frame: .zero)
+        }
+
+        required init?(coder: NSCoder) { nil }
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            observer.map(NotificationCenter.default.removeObserver)
+            observer = nil
+            pages.slide.leaveWindow()
+            guard window != nil, let column = sequence(first: self, next: \.superview).first(where: { $0.superview?.superview is NSSplitView }) else { return }
+            pages.slide.column = column
+            // 同步投递（queue 为 nil）：要在分栏这一次布局里处理
+            observer = NotificationCenter.default.addObserver(forName: NSSplitView.didResizeSubviewsNotification, object: column.superview?.superview, queue: nil) { [weak self] _ in
+                MainActor.assumeIsolated { self?.splitResized() }
+            }
+        }
+
+        private func splitResized() {
+            if let split = pages.slide.column?.superview?.superview as? NSSplitView { pages.slide.splitResized(split) }
+        }
     }
 }
 

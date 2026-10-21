@@ -15,13 +15,12 @@ import UIKit
 /// 发送记录也只在这里写。
 @Observable
 final class AppServices {
-    nonisolated static let bundleID = "com.sugeh.cuepad"
     /// 给人看的版本："0.1.0（1）"。
     static let version: String = {
         let info = Bundle.main.infoDictionary
         return "\(info?["CFBundleShortVersionString"] as? String ?? "?")（\(info?["CFBundleVersion"] as? String ?? "?")）"
     }()
-    static let log = Logger(subsystem: bundleID, category: "services")
+    static let log = Logger(subsystem: AppIdentity.id, category: "services")
 
     let store: CueStore
     #if os(macOS)
@@ -67,6 +66,8 @@ final class AppServices {
     @ObservationIgnored let timing: Timing
     /// 此刻有事的 Pi 会话，整个 App 一份（打开资料库时当场读到第一份，`start()` 接着跟随）：界面与服务都从这里取，不各自订阅。
     let liveSessions: LiveSessions
+    /// Cue 的现状，整个 App 一份：Cue 那一行与 iPhone 的小组件快照都从这里取（`cueUpdates`）。
+    let cueFeed: CueFeed
     /// 订阅账号的额度，整个 App 一份（`start()` 开始跟随）。
     let accountQuotas = AccountQuotas()
     /// 待用户处理的正文冲突（同一张卡离线并发编辑产生的副本）。
@@ -114,7 +115,7 @@ final class AppServices {
 
     #if os(iOS)
     @ObservationIgnored let pasteboard: UIPasteboard
-    /// 锁屏与灵动岛上的那一个实时活动（`startSnapshots` 跟着库开、改、结束它）。隔离库（测试、脚本起的调试实例）里没有：
+    /// 锁屏与灵动岛上的那一个实时活动（`startSnapshots` 跟着库开、改、结束它）。不碰真实世界时（`LibraryLocation.touchesRealWorld`：测试、脚本起的调试实例）没有：
     /// 实例被结束时开着的活动留在系统里，下次装 App 时系统为它把 App 叫到后台，正好撞上测试宿主的启动（测试进程连不上）；
     /// 验收实时活动时用 `-CuePadLiveActivity YES` 打开（`DebugHooks.opensLiveActivity`）。
     @ObservationIgnored let cueActivity: CueLiveActivity?
@@ -206,6 +207,7 @@ final class AppServices {
         (self.sync, syncStatus) = (engine, status)
         speechClock = SpeechClock(localHost: mac.hostID, reachable: status.reachesMac, alwaysReachable: DebugHooks.preset.alwaysReachable, timing: mac.timing)
         liveSessions = try LiveSessions(store: store, endedOn: mac.hostID, at: speechClock.moment)
+        cueFeed = CueFeed(store: store, widget: false)
         timing = mac.timing
         hostID = mac.hostID
         workspaces = mac.workspaces
@@ -242,9 +244,10 @@ final class AppServices {
         (self.sync, syncStatus) = (engine, status)
         speechClock = SpeechClock(localHost: nil, reachable: status.reachesMac, alwaysReachable: DebugHooks.preset.alwaysReachable, timing: timing)
         liveSessions = try LiveSessions(store: store, endedOn: nil, at: speechClock.moment)
+        cueFeed = CueFeed(store: store, widget: true)
         self.timing = timing
         self.pasteboard = pasteboard
-        cueActivity = !location.isIsolated || DebugHooks.opensLiveActivity ? CueLiveActivity() : nil
+        cueActivity = location.touchesRealWorld || DebugHooks.opensLiveActivity ? CueLiveActivity() : nil
         viewer = UIDevice.current.identifierForVendor.map { [sync = self.sync] in
             ViewerKeeper(store: store, sync: sync, device: $0.uuidString)
         }

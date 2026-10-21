@@ -1,5 +1,6 @@
 <script lang="ts">
-	/* Split heading: zh per character, en per word; re-splits when its text changes */
+	/* Split heading: each CJK character (with the punctuation that follows it) and each
+	   Latin word is one unit, so zh lines never break inside "Cue" or before "，" */
 	let { text, class: cls = '' }: { text: string; class?: string } = $props();
 	let el: HTMLElement;
 
@@ -7,7 +8,7 @@
 		const current = text;
 		if (!el) return;
 		el.textContent = '';
-		const units = /[\u4e00-\u9fff]/.test(current) ? Array.from(current) : current.split(/(\s+)/);
+		const units = current.match(/[\u4e00-\u9fff][\u3000-\u303f\uff00-\uffef]*|[^\s\u4e00-\u9fff]+|\s+/g) ?? [];
 		let i = 0;
 		for (const unit of units) {
 			if (/^\s+$/.test(unit)) {

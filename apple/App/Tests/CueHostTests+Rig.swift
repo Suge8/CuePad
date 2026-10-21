@@ -21,18 +21,18 @@ extension CueHostTests {
         var store: CueStore { services.store }
 
         /// `failingOnce`：信封里有这些话的请求，假模型第一次报错。
-        /// `seesImages`：假模型能不能看图（Pi 的模型表里写的输入）。`asksOnEnable`：刚启用那一轮先用 tell 问你一句，再写最后的回复。
-        /// `brain`：大脑换成真的 Agent（`CueEvalTests`），假模型的剧本不再用上。`patrolAfter`：空闲多久巡视一次；`mergeAfter`：记忆有待合并的块时空闲多久请它合并；
+        /// `seesImages`：假模型能不能看图（Pi 的模型表里写的输入）。`asksOnEnable`：刚启用那一轮（手上有事才有，`prepare` 摆）先用 tell 问你一句，再写最后的回复。
+        /// `brain`：大脑换成真的 Agent（`CueEvalTests`），假模型的剧本不再用上。`patrolAfter`：空闲多久巡视一次；
         /// `cacheLifetime`：提示缓存算多久过期；`renewAt`：换新线。`clock`：信封上写的此刻。`prepare`：启用 Cue 之前在库里摆好的（多日评测预置的历史）。
         init(
             usage: Int = 100, failingOnce: [String] = [], seesImages: Bool = true, asksOnEnable: Bool = false, brain: EvalBrain? = nil,
-            patrolAfter: Duration = .seconds(3600), mergeAfter: Duration = .seconds(1), cacheLifetime: Duration = .seconds(3600),
+            patrolAfter: Duration = .seconds(3600), cacheLifetime: Duration = .seconds(3600),
             renewAt: Int = CueContext.renewAt, clock: @escaping @Sendable () -> Date = { .now }, prepare: ((Rig) async throws -> Void)? = nil
         ) async throws {
             model = try FakeModel(usage: usage, failingOnce: failingOnce, asksOnEnable: asksOnEnable)
             let port = try await model.start()
             let timing = CueTiming(
-                patrolAfter: patrolAfter, mergeAfter: mergeAfter, cacheLifetime: cacheLifetime, renewAt: renewAt,
+                patrolAfter: patrolAfter, cacheLifetime: cacheLifetime, renewAt: renewAt,
                 restarts: [.milliseconds(200), .milliseconds(200), .milliseconds(200)], retryWake: .seconds(1), sayWait: 5, quietHours: [], clock: clock)
             let launch = CuePad.CueLaunch(executable: realPi, path: realPi.deletingLastPathComponent().path + ":/usr/bin:/bin", agents: [])
             let directory = brain.map { _ in TestLibraries.makeDirectory() }
@@ -55,10 +55,17 @@ extension CueHostTests {
             try await prepare?(self)
             if let brain {
                 try await brain.enable(self)
-                return
+            } else {
+                try await app.services.enableCue(on: TestApp.hostID, moving: false)
             }
-            try await app.services.enableCue(on: TestApp.hostID, moving: false)
-            try await message(.cue, containing: asksOnEnable ? "要交给我跟进吗？" : "我看了一眼")  // 刚启用的第一次醒来：你正看着屏幕，正常显示
+            // 值班起来、对过刚启用这一步：手上有事的（`prepare` 摆了）这时醒来看一眼，用例自己等它说的话
+            try await eventually("刚启用对过账", timeout: .seconds(300)) { self.services.cue.keeper?.progress.greeted != nil }
+        }
+
+        /// 启用前手上已有一件没开工的事：刚启用时 Cue 醒来看一眼。
+        static func handOverWork(_ rig: Rig) async throws {
+            let project = try #require(try await rig.store.projects().first { $0.name == "演示" })
+            _ = try await rig.store.createTask("整理周报", in: project.id)
         }
 
         func stop() async {

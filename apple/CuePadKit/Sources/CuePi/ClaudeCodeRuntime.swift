@@ -16,7 +16,7 @@ import OSLog
 ///   让出与空闲退出由桥决定（`PiBridge` 的托管会话一节）。
 @MainActor
 public final class ClaudeCodeRuntime: AgentRuntime {
-    private static let log = Logger(subsystem: "com.sugeh.cuepad", category: "claude")
+    private static let log = Logger(subsystem: AppIdentity.id, category: "claude")
     private let bridge: PiBridge
     private let paths: AgentPaths
     private let hooks: AgentHookServer

@@ -37,7 +37,7 @@ public enum CueActivity {
       case "forget": return "忘掉一条"
       case "remind": return "定提醒"
       case "allow": return "改允许清单"
-      default: return "整理记忆"
+      default: return "用记忆"
       }
     case "bash": return line(tool, args.line("command"))
     case "grep", "find", "glob": return line(tool == "glob" ? "find" : tool, args.line("pattern"))
@@ -45,8 +45,8 @@ public enum CueActivity {
     }
   }
 
-  /// 做完的一次调用在经过清单里的一条：动到的任务按 Cue 写的引用认（`named`），清单里点它打开那件任务；
-  /// 认不出（写错了、调用失败）就照它写的引用列出，不带任务。给的是会话（say、peek、stop 带 session）就写会话名，不带任务。
+  /// 做完的一次调用在经过清单里的一条：动到的任务与会话按 Cue 写的引用认（`named`），清单里点它打开那件任务；
+  /// 认不出（写错了、调用失败）就照它写的引用列出，不带任务。给的是会话就写会话名，不带任务。
   /// 对你说的话（tell）已在对话里：清单里只留首行，带着那条消息，点它跳回原处。记忆的序号是 Cue 内部的身份，不写给人看。
   public static func item(tool: String, arguments: String, failed: Bool, store: CueStore) async -> PiChatMessage.Tools.Item {
     let args = Parsed(arguments)
@@ -81,7 +81,9 @@ public enum CueActivity {
       case "allow":
         let ask = args.line("ask").map { CueAsk(rawValue: $0)?.name ?? $0 } ?? ""
         return item(.other, "允许清单：\(ask)" + ((args.raw["allowed"] as? Bool) == false ? "又要先问" : "以后不用问"))
-      default: return item(.other, "整理记忆")
+      case "forget": return item(.other, "忘掉一条记忆")
+      case "pin": return item(.other, (args.raw["pinned"] as? Bool) == false ? "一条记忆不再一直记着" : "一条记忆一直记着")
+      default: return item(.other, "memory")
       }
     case "bash": return item(.command, args.line("command") ?? tool)
     case "grep", "find", "glob": return item(.search, args.line("pattern") ?? tool)
@@ -90,18 +92,24 @@ public enum CueActivity {
     }
   }
 
-  /// Cue 写的那件活或那个会话：任务按它写的引用认（与工具同一个认法），给的是会话就查会话名；`quoted` 是给人看的"「名字」"，认不出照它写的。
+  /// Cue 写的那件活或那个会话，与工具同一个认法（session 写成任务的编号也认作那件任务）；`quoted` 是给人看的"「名字」"，认不出照它写的。
   private struct Named {
     let task: Card?
     let quoted: String
 
     init(_ args: Parsed, tool: String, store: CueStore) async {
+      let tools = CueTools(store: store)
+      var task: Card?, sessionName: String?
       if let ref = args.line("task") ?? (tool == "task" && args.line("action") == "add" ? args.line("title") : nil) {
-        task = try? await CueTools(store: store).task(ref)
-      } else {
-        task = nil
+        task = try? await tools.task(ref)
+      } else if let session = args.line("session") {
+        switch try? await tools.sessionRef(session) {
+        case .session(let found): sessionName = found.title
+        case .task(let card): task = card
+        case nil: sessionName = session
+        }
       }
-      let sessionName = await args.line("session").asyncMap { ref in (try? await store.sessions(matching: ref).first?.title) ?? ref }
+      self.task = task
       quoted = "「\(task?.heading ?? args.line("task") ?? args.line("title") ?? sessionName ?? "")」"
     }
   }

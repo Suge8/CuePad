@@ -1,10 +1,11 @@
 #!/bin/sh
 # 启用：git config core.hooksPath apple/scripts/hooks（见 xc.sh 头注释）。钩子在检出根目录运行。
-# 主检出只收合并：别人没提交的改动常在那里，普通提交会和它们混在一起。合并没冲突时不经过这个钩子，
-# 有冲突、解决后提交时 MERGE_HEAD 在，照常放行。
+# 设了 git config cuepad.mainMergeOnly true 的仓库，主检出只收合并：多个 Agent 并行时别人没提交的改动常在那里，
+# 普通提交会和它们混在一起。只有一个检出的贡献者不设它。合并没冲突时不经过这个钩子，有冲突、解决后提交时 MERGE_HEAD 在，照常放行。
 git_dir="$(git rev-parse --absolute-git-dir)"
 common_dir="$(git rev-parse --path-format=absolute --git-common-dir)"
-if [ "$git_dir" = "$common_dir" ] && ! git rev-parse -q --verify MERGE_HEAD >/dev/null; then
+if [ "$(git config --bool cuepad.mainMergeOnly)" = true ] && [ "$git_dir" = "$common_dir" ] \
+  && ! git rev-parse -q --verify MERGE_HEAD >/dev/null; then
   cat >&2 <<'EOF'
 主检出只收合并，不在这里提交（这里常有别人没提交的改动）。
 在主检出里开一个自己的检出，改动在那里提交，再回主检出合并：

@@ -8,7 +8,7 @@ import Observation
 /// CuePad 接入各个 Agent 的状态与开关（`AgentIntegration` 之上唯一的一份，设置、接入面板与会话页都读它）。
 /// 装只在用户点了之后（接入面板的主按钮、设置的开关）；装过的在 `refresh()` 发现与这个版本的 App 要写的不同时
 /// （App 更新了，或 App 被移动后技能里的 cuepad 路径变了）静默升级，不再询问——App 启动时就会 `refresh()`。
-/// 隔离运行（开发构建）只写配置目录经环境变量换走了的那几家（`AgentIntegration.isWritable`），其余只检测。
+/// 不碰真实世界时（`LibraryLocation.touchesRealWorld`）只写配置目录经环境变量换走了的那几家（`AgentIntegration.isWritable`），其余只检测。
 @Observable
 final class AgentIntegrations {
     private(set) var statuses: [AgentKind: AgentStatus] = [:]

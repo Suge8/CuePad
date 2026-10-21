@@ -29,7 +29,7 @@
 	<nav class="nav" aria-label="Main">
 		<a class="brand" href="#top"><span class="brandmark" aria-hidden="true"></span>CuePad</a>
 		<div class="nav-links">
-			<a href="#dispatch">{t('nav.dispatch')}</a>
+			<a href="#cue">{t('nav.cue')}</a>
 			<a href="#how">{t('nav.how')}</a>
 			<a href="#features">{t('nav.features')}</a>
 			<a href="#download">{t('nav.download')}</a>

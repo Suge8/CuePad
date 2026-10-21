@@ -1,7 +1,7 @@
 import CueStore
 import Foundation
 
-/// Cue 的工具经 MCP 提供（`cuepad mcp`）：stdio，一行一个 JSON-RPC 消息。只做握手版：initialize、notifications/initialized、ping、
+/// Cue 的工具经 MCP 提供（`cuepad mcp`；后台整理记忆的大脑用 `cuepad mcp --dream`，只有 merge）：stdio，一行一个 JSON-RPC 消息。只做握手版：initialize、notifications/initialized、ping、
 /// tools/list、tools/call；不做 resources、prompts、sampling、tasks。请求按到达顺序一个个处理。
 public struct CueMCPServer: Sendable {
   let tools: CueTools
@@ -19,7 +19,7 @@ public struct CueMCPServer: Sendable {
     runtime == .claudeCode ? claudeToolPrefix + tool : tool
   }
 
-  public init(store: CueStore, wait: TimeInterval) { tools = CueTools(store: store, wait: wait) }
+  public init(store: CueStore, wait: TimeInterval, toolset: CueTools.Toolset = .cue) { tools = CueTools(store: store, wait: wait, toolset: toolset) }
 
   /// 读到 `input` 结束为止，每条回应交给 `output`（一行，不含换行）。
   public func serve(_ input: some AsyncSequence<String, any Error>, output: (String) -> Void) async throws {
@@ -54,7 +54,7 @@ public struct CueMCPServer: Sendable {
     case "ping":
       return Self.result(id: id, [:])
     case "tools/list":
-      return Self.result(id: id, ["tools": CueTools.definitions])
+      return Self.result(id: id, ["tools": CueTools.definitions(tools.toolset)])
     case "tools/call":
       guard let name = params["name"] as? String else { return Self.error(id: id, code: -32602, "缺少工具名") }
       guard let result = await tools.call(name, params["arguments"] as? [String: Any] ?? [:]) else {

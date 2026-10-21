@@ -1,6 +1,4 @@
 #if os(macOS)
-import AppKit
-import CueAgent
 import CuePi
 import CueStore
 import CueTestSupport

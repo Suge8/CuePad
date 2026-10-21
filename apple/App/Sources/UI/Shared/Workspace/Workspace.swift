@@ -139,13 +139,11 @@ final class Workspace {
 
     @ObservationIgnored private var noticeTask: Task<Void, Never>?
 
-    /// 项目目录与 Cue 的现状当场读（`CueStore.snapshot`）：第一帧就是读到的样子，没有"还没读到"这一态。
+    /// 项目目录当场读（`CueStore.snapshot`），Cue 的现状取整个 App 手里那份（`CueFeed.latest`）：第一帧就是读到的样子，没有"还没读到"这一态。
     init(services: AppServices) {
         self.services = services
         root = Self.openingRoute(services)
-        let digest = try? services.store.snapshot { try CueDigest.read(from: $0) }
-        // 读不出来时目录也读不出来，失败页盖住页面，空摘要不会露面
-        cue = CueWatch(digest, at: services.speech, local: services.cueLocal)
+        cue = CueWatch(services.cueFeed.latest()?.digest, at: services.speech, local: services.cueLocal)
         #if os(macOS)
         sendState = SendState(services: services)
         #endif

@@ -27,15 +27,11 @@ extension CueKeeper {
             guard let runtime = profile.runtime.known, let launch = try await setup.launch(runtime) else {
                 return await broke("这台 Mac 上没有找到 \(profile.runtime.rawValue)")
             }
-            let work = setup.directory.appending(path: "work", directoryHint: .isDirectory)
-            try FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
             let memory = CueMemoryView(try await store.cueMemory())
-            let config = CueBrainConfig(
-                runtime: runtime, executable: launch.executable, model: profile.model, effort: profile.effort?.known,
-                systemPrompt: CuePrompt.system(name: profile.name, memory: memory, agents: launch.agents, runtime: runtime), workingDirectory: work,
-                mcp: [setup.helper.path, "mcp", "--wait", "\(setup.timing.sayWait)"],
-                environment: ["CUEPAD_LIBRARY_DIR": setup.library.path, "PI_CODING_AGENT_DIR": setup.piAgentDirectory.path, "PATH": launch.path])
-            let brain = try await config.startBrain()
+            let brain = try await startBrain(
+                runtime, launch, model: profile.model, effort: profile.effort?.known,
+                systemPrompt: CuePrompt.system(name: profile.name, memory: memory, agents: launch.agents, runtime: runtime),
+                tools: ["--wait", "\(setup.timing.sayWait)"])
             shifts += 1
             let id = shifts, input = input
             phase = .running(Shift(id: id, brain: brain, pinned: memory.pinned.map(\.line.id), failures: failures))
@@ -44,6 +40,19 @@ extension CueKeeper {
         } catch {
             await broke(error.localizedDescription)
         }
+    }
+
+    /// 按这家起一个大脑（Cue 的班次与后台整理记忆的都经这里）：工作目录是 Cue 自己的空目录，`tools` 是 `cuepad mcp` 后面的参数（给哪一组工具）。
+    func startBrain(
+        _ runtime: AgentKind, _ launch: CueLaunch, model: String?, effort: PiThinkingLevel?, systemPrompt: String, tools: [String]
+    ) async throws -> any CueBrain {
+        let work = setup.directory.appending(path: "work", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
+        return try await CueBrainConfig(
+            runtime: runtime, executable: launch.executable, model: model, effort: effort, systemPrompt: systemPrompt, workingDirectory: work,
+            mcp: [setup.helper.path, "mcp"] + tools,
+            environment: ["CUEPAD_LIBRARY_DIR": setup.library.path, "PI_CODING_AGENT_DIR": setup.piAgentDirectory.path, "PATH": launch.path]
+        ).startBrain()
     }
 
     /// 大脑起不来、发不进去或意外退出：这一轮交出去的你的话清掉送达，退避重试，都失败就停在"起不来"。
@@ -133,7 +142,6 @@ extension CueKeeper {
                 $0.turn = nil
                 $0.failures = 0
             }
-            lastTurnEnd = .now
             if let failure = finished.round.failure {
                 if let woke = finished.selfStarted { await setBack(failure, retrying: woke, as: finished.author) }
             } else {
@@ -154,7 +162,7 @@ extension CueKeeper {
         guard let turn, !turn.round.calls.isEmpty else { return }
         do {
             let row = try await store.recordCueRound(
-                turn.round.row, startedAt: turn.round.startedAt, answersYou: turn.answersYou, tools: turn.round.process, wake: turn.selfStarted?.wake)
+                turn.round.row, startedAt: turn.round.startedAt, answersYou: turn.answersYou, tools: turn.round.process, wake: turn.selfStarted)
             updateShift { $0.turn?.round.row = row }
         } catch {
             Self.log.error("Cue 这一轮的经过没能写进资料库：\(error.localizedDescription, privacy: .public)")
@@ -202,11 +210,11 @@ extension CueKeeper {
     }
 
     /// Cue 自己醒来的一轮出错：第一次出错（且不是额度、登录）隔一会儿再醒一次，否则等新变化。
-    private func setBack(_ failure: String, retrying woke: (wake: CueWake, extra: String?), as author: CueAuthor) async {
+    private func setBack(_ failure: String, retrying wake: CueWake, as author: CueAuthor) async {
         let latest = try? await changes().due.map(\.seq).max()
         let retry = setback == nil && Self.retryable(PiErrorSummary(failure))
         setback = Setback(
-            latest: latest, since: .now, retryAt: retry ? .now + setup.timing.retryWake.seconds : nil, wake: woke.wake, extra: woke.extra, author: author)
+            latest: latest, since: .now, retryAt: retry ? .now + setup.timing.retryWake.seconds : nil, wake: wake, author: author)
     }
 }
 #endif

@@ -44,7 +44,7 @@ struct CueContextCard: View {
         return Dotted(left, context.window.map { "窗口 \(CueContext.tokens($0))" }, "\(Self.since(context.since)) 起")
     }
 
-    /// 班次起点：今天写几点，更早的带上日期。
+    /// 这个会话几点起（换新就是开新会话）：今天写几点，更早的带上日期。
     private static func since(_ date: Date) -> String {
         Calendar.current.isDateInToday(date) ? date.formatted(date: .omitted, time: .shortened) : date.formatted(.dateTime.month().day().hour().minute())
     }

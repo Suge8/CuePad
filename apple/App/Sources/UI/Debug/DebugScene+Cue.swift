@@ -7,7 +7,7 @@ import Foundation
 /// 部署那一步发来一张截图、在等你允许推送）与 CuePad 的"导入旧数据"（会话出错）；"README 截图换成 Swift 版"Cue 确认做完了（结果带证据与截图）。
 /// 对话里有你的话（一句带图）、Cue 的话、折起的动态、一条结果与一条"等你"（正文带一段测试输出）；atlas 会话里有一句 Cue 发的话；
 /// 记忆有钉住的与其他，还有一条忘掉的；上下文用到换新线的七成（`CueContext`）。cuerun（仅 Mac）让 Cue 运行在这台 Mac，"运行情况"才有。
-/// `-CuePadCuePresence <answered|thinking|tool|sending|asleep|disabled>`：answered 是"等你"那一条你选了"可以"（回到对话里、带着你的回答），
+/// `-CuePadCuePresence <fresh|answered|thinking|tool|sending|asleep|disabled>`：fresh 是刚启用、还没说过话（空态里那几句能直接说的话，`CueStarters`）；answered 是"等你"那一条你选了"可以"（回到对话里、带着你的回答），
 /// 之后你又说了一句、Cue 跑了一轮（经过那一行）、连着回了两句（看问询回到对话里的样子、一串气泡；配 `-showsCueSteps YES` 看工具步骤那一行）；你的最后一句已交给 Cue（气泡旁的纸飞机）、它在想（thinking）或在用工具（tool：看会话进展）、
 /// 刚说的还没交出去（sending：话在路上，时限内气泡转圈）、
 /// 演示 Mac 不在线、两分钟前说的一直没交出去（asleep：它在睡觉，气泡过了等回执的时限 `Speech.receiptLimit`、没能送达可重发；
@@ -30,6 +30,7 @@ extension DebugScene {
                 profile.enabledAt = presence == "disabled" ? nil : .now
             }
             if presence != "asleep" { try await store.recordMacPresence(host: host) { true } }
+            if presence == "fresh" { return }
             let tasks = try await store.tasks(.todo, .inProgress, .done).flatMap(\.tasks)
             func task(_ prefix: String) -> Card? { tasks.first { $0.parentID == nil && $0.body.hasPrefix(prefix) } }
             let order = task("发言轮次"), importing = task("导入旧数据"), panel = task("README 截图")
@@ -120,10 +121,10 @@ extension DebugScene {
             if let variant = defaults.string(forKey: "CuePadCueAsk") { try await seedAsk(variant, store: store, task: order?.id) }
             let forgotten = try await store.noteCueLine("旧的计费脚本还在用", source: .cue)
             try await store.forgetCueLine(forgotten.line.id)
-            // 对话末尾 Cue 自己又醒了四轮（一颗虚线气泡，隔几分钟到十几分钟一轮）：整理记忆（说了并了什么）、一件任务的子代理卡住了（名字长、只看了看）、
+            // 对话末尾 Cue 自己又醒了四轮（一颗虚线气泡，隔几分钟到十几分钟一轮）：空闲巡视（动手催了一句）、一件任务的子代理卡住了（名字长、只看了看）、
             // atlas 停下了（动手催了一句）、两个会话一起叫醒（几处、只看了看）
             for (minutes, wake, note, tools) in [
-                (9.0, CueWake.tidy, "合并了圆桌三条部署记忆", process(step(.other, "整理记忆"))),
+                (9.0, CueWake.idle, "巡视了一圈：「导入旧数据」的会话停了两小时，我提醒它接着做", process(step(.read, "看板"), step(.talk, "对「导入旧数据时保留回收站」说：接着做", importing))),
                 (14, .sessionActivity([CueStir(kind: .stalled, task: importing?.id)]), "", process(step(.read, "看「导入旧数据时保留回收站」的近况", importing))),
                 (6, stirred(.settled, "atlas"), "atlas 的 scheduler 测试全过了，让它接着补 3 个重连用例", process(
                     step(.read, "看「发言轮次乱序」的近况", order), step(.talk, "对「发言轮次乱序」说：测试过了，接着补 3 个重连用例", order))),

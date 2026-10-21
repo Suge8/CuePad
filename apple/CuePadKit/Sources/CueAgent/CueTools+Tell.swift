@@ -14,12 +14,18 @@ extension CueTools {
     if ask == nil, !shots.isEmpty { throw Failure("show 只跟着 ask：要他看的图放在提问上") }
     var done: [String] = []
     if let ref = args.string("withdraw") {
-      let question = try await question(ref, in: store.cueMessagesWaitingForYou(), missing: "等你里没有 \(ref)：他可能已经答了，看信封里的等你")
-      try await store.endCueQuestion(question.id, .withdrawn)
-      done.append("已撤回「\(CueEnvelope.clip(CueFormat.plainText(question.text), 40))」。")
+      // 他开口收起的卡已经不在等你里，算他直接说了：撤回是多余的一步，不当错（模型照他那句话撤回它很自然）；
+      // 随撤回带的 text 是撤回的理由，卡没撤也就不发，免得多一条打扰他
+      if ask == nil, args.string("restore") == nil, let aside = try Self.question(ref, in: await store.cueQuestionsSetAside()) {
+        return .ok("「\(CueEnvelope.clip(CueFormat.plainText(aside.text), 40))」他开口时已收起，不在等你里，不用撤回" + (args.string("text") == nil ? "。" : "，text 也没发。"))
+      } else {
+        let question = try Self.question(ref, in: await store.cueMessagesWaitingForYou(), missing: "等你里没有 \(ref)：他可能已经答了，看信封里的等你")
+        try await store.endCueQuestion(question.id, .withdrawn)
+        done.append("已撤回「\(CueEnvelope.clip(CueFormat.plainText(question.text), 40))」。")
+      }
     }
     if let ref = args.string("restore") {
-      let question = try await question(ref, in: store.cueQuestionsSetAside(), missing: "他开口收起的里没有 \(ref)：照他那句话后面列的 id 写")
+      let question = try Self.question(ref, in: await store.cueQuestionsSetAside(), missing: "他开口收起的里没有 \(ref)：照他那句话后面列的 id 写")
       try await store.restoreCueQuestion(question.id)
       done.append("已放回「\(CueEnvelope.clip(CueFormat.plainText(question.text), 40))」。")
     }
@@ -47,11 +53,18 @@ extension CueTools {
     return shots
   }
 
-  /// `candidates` 里 id 或前缀是 `ref` 的那一条提问。
-  private func question(_ ref: String, in candidates: [CueMessage], missing: String) throws -> CueMessage {
+  /// `candidates` 里 id 或前缀是 `ref` 的那一条提问；对不上报 `missing`。
+  private static func question(_ ref: String, in candidates: [CueMessage], missing: String) throws -> CueMessage {
+    guard let question = try question(ref, in: candidates) else { throw Failure(missing) }
+    return question
+  }
+
+  /// 同上，对不上为 nil；对上好几条照样报错（要多写几位，不是没有）。
+  private static func question(_ ref: String, in candidates: [CueMessage]) throws -> CueMessage? {
     let key = ref.trimmingCharacters(in: .whitespaces).lowercased()
-    let hits = candidates.filter { id($0.id).hasPrefix(key) }
-    guard !key.isEmpty, hits.count == 1 else { throw Failure(hits.isEmpty ? missing : "前缀 \(ref) 对上了 \(hits.count) 条：多写几位") }
-    return hits[0]
+    guard !key.isEmpty else { return nil }
+    let hits = candidates.filter { $0.id.uuidString.lowercased().hasPrefix(key) }
+    if hits.count > 1 { throw Failure("前缀 \(ref) 对上了 \(hits.count) 条：多写几位") }
+    return hits.first
   }
 }

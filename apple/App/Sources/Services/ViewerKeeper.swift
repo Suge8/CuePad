@@ -49,7 +49,7 @@ nonisolated final class ViewerKeeper: Sendable {
     /// 人在不在跟前变了（Mac：`Away` 有没有），界面据此算在不在看（`AppServices.seesMainWindow`）。
     private let aways: AsyncStream<Bool>
     private let awayChanged: AsyncStream<Bool>.Continuation
-    private static let log = Logger(subsystem: AppServices.bundleID, category: "services")
+    private static let log = Logger(subsystem: AppIdentity.id, category: "services")
 
     init(store: CueStore, sync: (any SyncControlling)?, device: String) {
         self.store = store

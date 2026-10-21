@@ -1,3 +1,4 @@
+import CueStore
 import Foundation
 import ImageIO
 import UniformTypeIdentifiers
@@ -12,7 +13,7 @@ nonisolated enum ShareError: Error, LocalizedError {
 /// 把系统分享面板给的 `NSItemProvider` 读成 `ShareContent`：图片优先，其次网址，最后文字。
 /// 一个条目只取一种（网页分享常同时带网址与标题文字，标题不重复保存）。读不出的条目跳过并记一条日志。
 nonisolated enum ShareItemLoader {
-    private static let log = Logger(subsystem: "com.sugeh.cuepad", category: "share")
+    private static let log = Logger(subsystem: AppIdentity.id, category: "share")
 
     static func load(from providers: [NSItemProvider]) async throws -> ShareContent {
         var content = ShareContent()

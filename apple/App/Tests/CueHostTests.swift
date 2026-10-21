@@ -26,7 +26,7 @@ struct CueHostTests {
             while !Task.isCancelled {
                 round += 1
                 for index in 0..<10 {
-                    try? await recorder.update(sessionID: "busy-\(index)", state: round.isMultiple(of: 2) ? .thinking : .tool, title: "会话 \(index)")
+                    _ = try? await recorder.update(sessionID: "busy-\(index)", state: round.isMultiple(of: 2) ? .thinking : .tool, title: "会话 \(index)")
                 }
                 try? await Task.sleep(for: .milliseconds(20))
             }
@@ -86,11 +86,22 @@ struct CueHostTests {
     }
 
     @Test func 刚启用说过话_开场只有一条() async throws {
-        let rig = try await Rig(asksOnEnable: true)
+        let rig = try await Rig(asksOnEnable: true, prepare: Rig.handOverWork)
         try await eventually("回了最后一句") { rig.model.answered("已告诉用户") }
         try await eventually("这一轮做完") { try await rig.store.cueState()?.state == .known(.settled) }
         let said = try await rig.store.cueMessages().filter { $0.author == .known(.cue) }
         #expect(said.map(\.text) == ["要交给我跟进吗？"])
+        await rig.stop()
+    }
+
+    /// 手上什么都没有时启用、巡视也到点了：Cue 都不醒来说"没有在做的事"，对话里只有你说的与它的回答，没有"没动手"那一行
+    /// （Cue 页空着时是能说什么的空态）。
+    @Test func 空库启用与巡视_不说空话() async throws {
+        let rig = try await Rig(patrolAfter: .zero)
+        try await rig.say("你好")
+        try await rig.message(.cue, containing: "收到：你好")
+        let said = try await rig.store.cueMessages().filter { $0.author != .known(.you) }
+        #expect(said.map(\.text) == ["收到：你好"])
         await rig.stop()
     }
 }

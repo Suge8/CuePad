@@ -13,7 +13,7 @@ token="$(security find-generic-password -a cuepad -s cuepad-cloudkit-management-
 production="$(mktemp)"
 trap 'rm -f "$production"' EXIT
 CLOUDKIT_MANAGEMENT_TOKEN="$token" xcrun cktool export-schema --team-id "$CUEPAD_TEAM_ID" \
-  --container-id iCloud.com.sugeh.cuepad --environment production --output-file "$production"
+  --container-id "iCloud.$CUEPAD_APP_ID" --environment production --output-file "$production"
 
 # 每个字段一行"记录类型 字段 定义"：去掉行尾逗号、引号，空白归一（服务端导出时按字母序重排并补系统字段，只比本地有的）
 fields() {

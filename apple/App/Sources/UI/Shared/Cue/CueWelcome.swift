@@ -3,7 +3,8 @@ import SwiftUI
 
 /// Cue 页的首次见面与启用，两端同一张纸（`EmptyState`）：吉祥物、一句它是谁、一句现在能做什么、一个此刻就能做的主动作。
 /// 空态与启用合成这一处，同一屏不说两遍；输入框上方不另放一块。
-/// - 还没说过话（`intro`）：自我介绍"我是 Cue"，在对话那一块正中。启用了只请你在下面直接说，没有按钮。
+/// - 还没说过话（`intro`）：自我介绍"我是 Cue"，在对话那一块正中。启用了请你直接说，下面接几句能直接说的话（`CueStarters`，点一句放进输入框），
+///   没有主按钮。
 /// - 说过话、后来停用了：一小张纸排在输入框正上方（"等你"卡之下，离你下一步最近），不画吉祥物、不再自我介绍，只说启用后它接着干活。
 /// 没启用时启用是唯一的主动作：选一台 Mac（能运行 Cue 的几台，`CueSettings.hosts`；按钮的样子见 `enableButton`，选不了的写为什么，
 /// `CueSettings.Host.selectable`）；菜单里每台下面写能当大脑的几家。在这台 Mac 上启用打开接入面板
@@ -18,7 +19,7 @@ struct CueWelcome: View {
     var body: some View {
         let cue = workspace.cue
         if cue.canHear {
-            EmptyState(mascot: .hello, title: "我是 \(cue.name)", message: "要做什么，直接在下面跟我说", waitsForSync: true)
+            EmptyState(mascot: .hello, title: "我是 \(cue.name)", message: "要做什么，直接跟我说，比如：", waitsForSync: true) { CueStarters() }
         } else {
             CueEnable(intro: intro)
         }
@@ -68,8 +69,7 @@ private struct CueEnable: View {
 
     private func message(_ hosts: [CueSettings.Host]) -> String {
         guard !hosts.isEmpty else { return "我在你的 Mac 上干活。在 Mac 上打开 CuePad 就能叫我，这之前想到的先在下面记下" }
-        let home = workspace.catalog?.project(Project.defaultID)?.name ?? ""
-        return "启用后说一件想做的事，我放进「\(home)」项目里开工，只在要你拿主意时找你"
+        return "启用后说一件想做的事，我来开工，要你拿主意时再找你"
     }
 
     @ViewBuilder private func action(_ settings: CueSettings, _ hosts: [CueSettings.Host]) -> some View {

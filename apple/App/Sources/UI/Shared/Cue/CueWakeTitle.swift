@@ -16,7 +16,7 @@ struct CueWakeTitle: View {
             if header.failed { FailureMark() } else { Image(header.wake.icon) }
         } label: {
             if let said {
-                Text(said).font(Typography.secondary).foregroundStyle(palette.ink2).lineLimit(2).accessibilityLabel("\(header.reason)，\(said)")
+                Text(said).font(Typography.secondary).foregroundStyle(palette.ink2).lineLimit(2).accessibilityLabel("\(header.wake.reason)，\(said)")
             } else {
                 reason
             }
@@ -37,7 +37,7 @@ struct CueWakeTitle: View {
             }
         }
         .fixedSize(horizontal: false, vertical: true)
-        .menuLabel([header.reason, header.name, header.trail, quiet ? "没动手" : nil].compactMap(\.self).joined(separator: "，"))
+        .menuLabel([header.wake.reason, header.name, header.trail, quiet ? "没动手" : nil].compactMap(\.self).joined(separator: "，"))
     }
 
     private func phrase(quietAfter gap: String) -> Text {
