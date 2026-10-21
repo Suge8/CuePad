@@ -170,10 +170,12 @@ struct BoardReply: View {
     private var canSend: Bool { services.reachesPiHost && !box.wrappedValue.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
     var body: some View {
+        // 一行时字与发送钮同一条中线（字的格至少与钮同高、竖直居中）；写成几行长高时钮贴在最后一行旁（底对齐，上下边距让最后一行对着钮的中线）
         HStack(alignment: .bottom, spacing: 6) {
             TextField("回答", text: box.text, palette: palette, axis: .vertical)
                 .textFieldStyle(.plain).font(Typography.secondary).lineLimit(1...4)
-                .padding(.vertical, 7)
+                .padding(.vertical, Self.textInset)
+                .frame(minHeight: ComposerMetrics.glyphTarget)
                 .onSubmit(send)
             Button(action: send) { SendGlyph(canSend ? .ready : .idle) }
                 .buttonStyle(PressStyle(.button))
@@ -183,6 +185,9 @@ struct BoardReply: View {
         .padding(.leading, 12).padding(.trailing, 3).padding(.vertical, 3)
         .background(palette.fill, in: .rect(cornerRadius: 18, style: .continuous))
     }
+
+    /// 字上下各让出的空：一行字（约 16）加两边正好是钮的点按高，多行时最后一行仍落在钮的中线附近。
+    private static let textInset: CGFloat = 12
 
     private func send() {
         guard canSend else { return }
