@@ -93,18 +93,4 @@ final class ScriptedSession {
         messages.append(PiChatMessage(sessionID: id, entryID: "e\(seq)", seq: seq, role: role, text: text, at: .now, deliveryID: delivery))
     }
 }
-
-/// 一张写着字的页面截图（README 新截图、Lighthouse 报告）：Cue 用读文件工具打开看。
-@MainActor
-func pageShot(_ title: String, _ lines: [String]) throws -> Data {
-    let page = VStack(alignment: .leading, spacing: 10) {
-        Text(title).font(.title2.bold())
-        ForEach(lines, id: \.self) { Text($0).font(.body.monospaced()) }
-    }
-    .padding(24).frame(width: 640, alignment: .leading).background(.white).foregroundStyle(.black)
-    let renderer = ImageRenderer(content: page)
-    renderer.scale = 2
-    let image = try #require(renderer.cgImage)
-    return try #require(NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]))
-}
 #endif
