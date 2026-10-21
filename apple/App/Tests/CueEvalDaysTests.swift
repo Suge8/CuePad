@@ -10,14 +10,14 @@ import Testing
 /// 多日记忆：Cue 已值了两周班，库里预置这两周的历史（对话、动态与每轮经过一千五百条以上，若干做完的任务与会话回复，记忆九十多行），
 /// 远超一次视图能原样放下；启用 Cue 之前写好，新班次从库里接上（记忆视图与最近对话的视图）。
 /// 在不同年纪埋下事实：13 天前他顺口说的事、9 天前会话报告里顺带的细节、5 天前他否掉的方案与理由、2 天前 Cue 答应他的事、1 天前他改过的偏好。
-/// 先给 Cue 空闲合并记忆的机会（合并的开销单列），再逐件问起；缓存时长缩短，场景里插几段静止模拟隔了一阵才回来（冷醒来）。跑法见 docs/verify.md「Cue 评测」。
+/// 开跑前等 Cue 静下来（`settleDown`），再逐件问起；缓存时长缩短，场景里插几段静止模拟隔了一阵才回来（冷醒来）。跑法见 docs/verify.md「Cue 评测」。
 @Suite(.enabled(if: evalEnvironment["CUEPAD_CUE_EVAL"] == "1", "CUEPAD_CUE_EVAL=1 才跑"), .timeLimit(.minutes(60)))
 struct CueEvalDaysTests {
     @Test func 多日记忆() async throws {
         let history = DaysHistory()
         try await CueEval.run("多日", expect: Days.expect, suite: .days, rig: {
             try await CueHostTests.Rig(
-                brain: .current, mergeAfter: Days.mergeAfter, cacheLifetime: Days.cacheLifetime, prepare: { try await history.write(into: $0) })
+                brain: .current, cacheLifetime: Days.cacheLifetime, prepare: { try await history.write(into: $0) })
         }) { try await Days($0, history).play() }
     }
 }
@@ -29,17 +29,16 @@ private final class Days: EvalScript {
         已值两周班，逐件问起不同年纪的事：13 天前顺口说的考级日期、9 天前 CI 报告里的镜像版本、5 天前否掉的 S3 与理由、\
         2 天前答应的告诉他访问量、1 天前改成中文的提交信息；冷醒来换新后不重做、不重复问
         """
-    /// 三个时长的先后照正式的（空闲 10 分钟合并、缓存 1 小时）缩短：合并在缓存还热时醒来；他走开的时长比合并加缓存还长，
-    /// 中途若冒出合并醒来，他回来时离那次请求也已过了缓存时长，仍是冷醒来。
-    static let mergeAfter = Duration.seconds(10)
+    /// 缓存时长缩短；他走开的时长比它长，回来就是冷醒来，中途若冒出别的醒来，他回来时离那次请求也已过了缓存时长，仍是冷醒来。
     static let cacheLifetime = Duration.seconds(20)
     static let away = Duration.seconds(40)
-    /// 开跑前至多等这么多次合并醒来：记忆预置成正好 4 块待合并，刚启用那一轮它若又记下几条，多出的块也在这里等
-    static let merges = 6
+    /// 开跑前要静这么久：长于空闲合并的间隔（合并在空闲时醒来的方案，测试骨架里空闲 1 秒就请合并），有待合并的块它就在这段里醒；
+    /// 又要远短于缓存时长：最后一次请求到那一轮做完还有几秒，静 15 秒第一问就冷了（实测）
+    static let quiet = Duration.seconds(5)
 
     private let history: DaysHistory
     private var mergeRounds: [CueRound] = []
-    /// 记忆的样子：预置后、开跑前合并后与每一步做完时有几条摘要、记忆视图几行（看合并发生在哪、合并后视图多大）
+    /// 记忆的样子：预置后、开跑前与每一步做完时有几条摘要、记忆视图几行（看合并发生在哪、合并后视图多大）
     private var snapshots: [(label: String, at: Date, summaries: Int, lines: Int)] = []
 
     init(_ eval: CueEval, _ history: DaysHistory) {
@@ -61,8 +60,8 @@ private final class Days: EvalScript {
 
     private func script() async throws -> [Check] {
         try await snapshot("预置")
-        try await letItMerge()
-        try await snapshot("开跑前合并后")
+        try await settleDown()
+        try await snapshot("开跑前")
         let date = try await say("他：问考级日期", "我女儿钢琴考级是哪天来着？")
         await quietPeriod(Self.away)
         let image = try await say("他：问 CI 报告里的镜像（冷）", "之前查 CI 变慢那份报告里，runner 用的镜像是哪个版本？")
@@ -85,15 +84,18 @@ private final class Days: EvalScript {
         return try await judge(Points(date: date, image: image, s3: s3, why: why, csv: csv, language: language, report: report, wrap: wrap, storage: storage))
     }
 
-    /// 开跑前给它空闲合并记忆的机会：等到没有待合并的块，或合并醒来满 `merges` 次。
-    private func letItMerge() async throws {
+    /// 开跑前等 Cue 静下来：没有在跑的轮，且之后静了 `quiet` 没有新的一轮。合并在空闲时醒来的方案（预置了 4 块待合并）在这段里合完；
+    /// 合并挪到换新那一轮的方案没有这种醒来，刚启用那一轮做完、静 `quiet` 就开跑。
+    private func settleDown() async throws {
         let from = Date.now
-        try? await eventually("记忆合并完", timeout: .seconds(Double(Self.merges) * 40 + 120)) {
-            let done = self.eval.rounds.filter { $0.startedAt >= from && Self.isMerge($0) }
-            return (try await self.pending() == 0 || done.count >= Self.merges) && done.allSatisfy { $0.finishedAt != nil } && self.eval.rounds.allSatisfy { $0.finishedAt != nil }
+        while true {
+            try await eventually("Cue 没有在跑的轮", timeout: .seconds(300)) { self.eval.rounds.allSatisfy { $0.finishedAt != nil } }
+            let count = eval.rounds.count
+            await quietPeriod(Self.quiet)
+            if eval.rounds.count == count, eval.rounds.allSatisfy({ $0.finishedAt != nil }) { break }
         }
         mergeRounds = eval.rounds.filter { $0.startedAt >= from && Self.isMerge($0) }
-        notes.append("开跑前合并醒来 \(mergeRounds.count) 次，还剩 \(try await pending()) 块待合并")
+        notes.append("开跑前空闲合并醒来 \(mergeRounds.count) 次，还剩 \(try await pending()) 块待合并")
     }
 
     override func step(_ label: String, on session: ScriptedSession?, _ act: () async throws -> Void) async throws -> Step {
@@ -192,11 +194,11 @@ private final class Days: EvalScript {
         var lines = [
             "", "## 多日", "",
             "- 预置历史：对话 \(history.logged) 条、记忆 \(history.memoryLines) 行（\(history.pinned) 行一直记着）、做完的任务 \(history.doneTasks) 件",
-            "- 醒来 \(rounds.count) 次（不含预热；其中合并 \(mergeRounds.count) 次，剧本叫醒 \(steps.count) 次），换新 \(renewals.count) 次（大脑开了新的对话）"
+            "- 醒来 \(rounds.count) 次（不含预热；其中开跑前空闲合并 \(mergeRounds.count) 次，剧本叫醒 \(steps.count) 次），换新 \(renewals.count) 次（大脑开了新的对话）"
                 + (renewedAt.isEmpty ? "" : "，在" + renewedAt.joined(separator: "、")),
             "- 每轮用时中位 \(median)",
-            "- 合计（含预热与合并）：\(BrainUsage.header.replacingOccurrences(of: " | ", with: "、")) = \(cells(total))",
-            "- 其中合并：\(cells(mergeUsage))",
+            "- 合计（含预热与空闲合并）：\(BrainUsage.header.replacingOccurrences(of: " | ", with: "、")) = \(cells(total))",
+            "- 其中空闲合并醒来：\(cells(mergeUsage))",
         ]
         let merged = await merges()
         lines.append("- 记忆合并 \(merged.count) 次（写了 \(merged.reduce(0) { $0 + ($1["summaries"] as! Int) }) 条摘要）"
