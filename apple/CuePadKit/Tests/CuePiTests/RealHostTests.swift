@@ -26,7 +26,6 @@ struct RealHostTests {
         PiRuntime(bridge: bridge, paths: pi.paths, pi: { AgentTape.executable("pi") }, idleLimit: idleLimit)
     }
 
-    /// 在后台接着这个会话文件，等它上了桥。
     private func resume(_ host: PiRuntime, _ file: URL, in pi: PiProcess, on bridge: PiBridge) async throws -> PiSession {
         let id = try await host.resume(IndexedSession(id: "", path: file.path, cwd: pi.cwd.path, lastActivityAt: .now))
         return try #require(bridge.session(id: id))

@@ -10,7 +10,6 @@ import Testing
 @MainActor
 @Suite(.timeLimit(.minutes(1)))
 struct BrainLifecycleTests {
-    /// 写一个假运行时，返回它的配置与记 pid 的文件。
     private func fakeRuntime(_ runtime: AgentKind, _ body: String) throws -> (CueBrainConfig, pid: URL) {
         let directory = try makeTempDirectory()
         let script = directory.appending(path: "fake-\(runtime.rawValue)")
@@ -41,7 +40,7 @@ struct BrainLifecycleTests {
         #expect(kill(try pid(in: file), 0) != 0)
     }
 
-    /// 运行时不理会输入关闭、也忽略 SIGTERM：stop() 在两个宽限期（各 5 秒）后结束整个进程组，报告退出。
+    /// 运行时不理会输入关闭、也忽略 SIGTERM：stop() 在两个宽限期后结束整个进程组，报告退出。
     @Test func stopEndsARuntimeThatIgnoresEOFAndSIGTERM() async throws {
         let (config, file) = try fakeRuntime(.claudeCode, "trap '' TERM\nexec sleep 300")
         let brain = try await config.startBrain()

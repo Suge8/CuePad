@@ -14,7 +14,6 @@ struct ToolActivityTests {
         ["type": "toolCall", "id": id, "name": name, "arguments": arguments]
     }
 
-    /// 一条带工具调用的助手消息（中途调工具）。
     private static func calls(_ id: String, _ parent: String, _ blocks: [[String: Any]], at second: Int) -> String {
         SessionFile.line(["type": "message", "id": id, "parentId": parent, "timestamp": SessionFile.stamp(second),
                           "message": ["role": "assistant", "stopReason": "toolUse", "timestamp": second, "content": blocks]])

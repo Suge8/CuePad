@@ -75,7 +75,6 @@ struct HistoryIndexerTests {
         #expect(!log.updates.contains { $0.file.path.contains("/subagents/") })
     }
 
-    /// Codex 会话文件的一行（`{timestamp, type, payload}`）。
     private func codexLine(_ type: String, _ second: Int, _ payload: [String: Any]) -> Data {
         Data((SessionFile.line(["timestamp": SessionFile.stamp(second), "type": type, "payload": payload]) + "\n").utf8)
     }
