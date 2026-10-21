@@ -1,9 +1,6 @@
-import CueEditor
 import CueStore
-import CueText
 import SwiftUI
 
-/// 气泡最下面"下一步"那一条。
 struct BubbleFooter: View {
     let data: BubbleData
     let focus: Card
