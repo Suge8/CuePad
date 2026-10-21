@@ -7,7 +7,6 @@ import Foundation
 import Observation
 import os
 
-// 值班的状态：生命周期、大脑在用的设置、班次与在跑的一轮、对账进度、出错后的退避、对账的输入与读数。
 extension CueKeeper {
     enum Phase {
         /// 正在起大脑；参数是此前连续失败了几次
