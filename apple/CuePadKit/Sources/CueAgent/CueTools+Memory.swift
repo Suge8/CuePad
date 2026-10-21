@@ -33,6 +33,11 @@ extension CueTools {
         let name = reply.session.map(CueEnvelope.sessionName) ?? "会话（\(reply.message.sessionID.prefix(8))）"
         return "\(name) \(iso(reply.message.at)) 回复：\(Self.excerpt(reply.message.text, around: words))"
       }
+      let more = found.unlisted
+      let unlisted = [("记忆", more.lines), ("对话", more.messages), ("任务", more.cards), ("会话回复", more.replies)].filter { $0.1 > 0 }
+      if !unlisted.isEmpty {
+        lines.append("还有命中没列出：" + unlisted.map { "\($0.0) \($0.1) 条" }.joined(separator: "、") + "。要查全就加上更具体的词、换个说法再查。")
+      }
       return .ok(lines.isEmpty ? "没找到。" : lines.joined(separator: "\n"))
     case "forget":
       let (line, index) = try await line(args)
