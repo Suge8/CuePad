@@ -109,8 +109,8 @@ extension CueEval {
 
     /// 回他的话与 tell 至多几句（系统提示：回复至多两句，tell 至多两句）
     static let sentenceLimit = 2
-    /// 他在问进展（系统提示："问进展就逐件一句（做到哪、下一步、卡在哪）"）
-    static let progressQuestion = /做到哪|进展|进度|到哪了|怎么样了|开工了吗/
+    /// 他在问进展（系统提示："问进展时逐件一句，不受这个限"）：问进展的几种常见说法
+    static let progressQuestion = /做到哪|到哪了|进展|进度|怎么样了|开工了吗/
 
     /// 成绩单读的那一份：判定（类别、身份、过没过、计不计）与指标，写在 `<场景>.score.json`。
     func writeScore(_ name: String, suite: EvalSuite, checks: [Check], failure: (any Error)?, to output: URL) async throws {
