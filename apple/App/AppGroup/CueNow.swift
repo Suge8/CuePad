@@ -26,7 +26,7 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
     var elsewhere: String? = nil
 
     enum Brain: Codable, Hashable, Sendable {
-        /// 此刻不会接话：那一句原因（"Cue 在睡觉：「Mac Studio」好像没开"、换新 Mac 时"正在从 iCloud 同步…"），起不来时 `failed`。
+        /// 此刻不会接话：那一句原因（"「Mac Studio」没开"、换新 Mac 时"正在从 iCloud 同步…"），起不来时 `failed`。
         case away(String, failed: Bool)
         case idle
         /// 你最近一句还在路上。

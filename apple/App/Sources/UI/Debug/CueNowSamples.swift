@@ -55,7 +55,7 @@ enum CueNowSamples {
     ], advancing: 2)
 
     /// 它运行的那台 Mac 没开。
-    static let away = now(.sleeping, .away("Cue 在睡觉：它运行的那台 Mac 好像没开", failed: false), [
+    static let away = now(.sleeping, .away("「Mac Studio」没开", failed: false), [
         bead("canvas", .resting, "画布缩放", 60),
     ], advancing: 1, resting: .sleeping)
 
