@@ -31,7 +31,6 @@ final class AppServices {
     let cue: CueService
     #endif
 
-    /// 设备本地偏好（主题、快捷键、当前项目）。
     let settings: AppSettings
     /// 启动期间没能完成的事；界面据此提示，不静默。
     private(set) var startupIssues: [StartupIssue] = []
@@ -153,7 +152,6 @@ final class AppServices {
         refreshQuota: { [weak self] in try await self?.refreshQuotaForRequest() },
         reportIssue: { [weak self] message in self?.reportIssue(.syncUnavailable(message)) })
 
-    /// "显示或隐藏 CuePad"的全局快捷键。
     @ObservationIgnored lazy var hotkey = GlobalHotkey(
         label: "显示或隐藏 CuePad", key: AppSettings.Key.globalShortcut, defaultAccelerator: "Alt+Space", defaults: settings.defaults,
         backend: hotkeyBackend

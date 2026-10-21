@@ -122,7 +122,6 @@ extension CueActivityState {
 nonisolated struct WidgetContent: Equatable, Sendable {
     var projects: ProjectsSnapshot
     var home: DefaultProjectSnapshot
-    /// Cue 的摘要（推出 Cue 此刻）。
     var cue: CueDigest
     /// 各家订阅额度（只给实时活动）。
     var quotas: [AccountQuota]

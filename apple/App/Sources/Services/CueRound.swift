@@ -25,7 +25,6 @@ struct CueRound: Identifiable {
     /// 记下的结果至多这么多字符：记忆、看板的结果可能很长，留住开头够排查
     static let resultLimit = 20_000
 
-    /// 正在调的那个工具（最后一个还没做完的）
     var running: CueToolCall? { calls.last { $0.finishedAt == nil } }
 
     /// 这一轮动过手：有一次做完的调用不只是看看（`Kind.looks`）。Cue 自己醒来的一轮动过手才写下最后的话（`CueKeeper`）。

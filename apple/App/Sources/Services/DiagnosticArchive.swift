@@ -45,7 +45,6 @@ nonisolated struct CrashReport: Identifiable, Equatable, Sendable {
     enum Kind: String, CaseIterable, Sendable {
         case crash, hang, cpu, disk
 
-        /// 包里的诊断数组键。
         fileprivate var key: String {
             switch self {
             case .crash: "crashDiagnostics"
@@ -72,7 +71,6 @@ nonisolated struct CrashReport: Identifiable, Equatable, Sendable {
         var label: String { "上次" + name }
     }
 
-    /// 文件名。
     let id: String
     let kind: Kind
     let date: Date
@@ -105,7 +103,6 @@ nonisolated struct CrashReport: Identifiable, Equatable, Sendable {
         json = String(decoding: data, as: UTF8.self)
     }
 
-    /// 导出文本：摘要加原始 JSON。
     var diagnostics: String {
         var lines = ["CuePad \(kind.name)诊断", "时间：\(date.formatted(.iso8601))"]
         if let exception { lines.append("异常：\(exception)\(signal.map { "（\($0)）" } ?? "")") }

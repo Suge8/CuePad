@@ -36,7 +36,6 @@ extension CueKeeper {
         }
     }
 
-    /// 一个班次：一个大脑进程与它这一段的状况。
     struct Shift {
         let id: Int
         let brain: any CueBrain
