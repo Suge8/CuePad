@@ -49,7 +49,8 @@ struct CueSettingsPane: View {
             )) {
                 Text("不启用").tag(String?.none)
                 Divider()
-                ForEach(hosts) { Text($0.name).tag(Optional($0.id)) }
+                // 一家都不能当大脑的那台选不了（同 Cue 页启用菜单的停用项）
+                ForEach(hosts) { Text($0.name).tag(Optional($0.id)).disabled(!$0.selectable) }
             }
             .labelsHidden().fixedSize()
             .disabled(waiting != nil)

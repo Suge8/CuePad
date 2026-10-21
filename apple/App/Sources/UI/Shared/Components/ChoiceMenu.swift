@@ -19,6 +19,8 @@ enum ChoiceMenu {
         /// nil 是动作（不打勾），否则是选项、当前的打勾。
         var checked: Bool? = nil
         var destructive = false
+        /// 停用项：照常列出（副标题写为什么不能选），点不了，同系统菜单的停用项。
+        var disabled = false
         let choose: () -> Void
     }
 
@@ -102,9 +104,9 @@ struct ChoiceMenuItems: View {
 
     @ViewBuilder private func item(_ choice: ChoiceMenu.Choice) -> some View {
         if let checked = choice.checked {
-            Toggle(isOn: Binding(get: { checked }, set: { if $0 { choice.choose() } })) { content(choice) }
+            Toggle(isOn: Binding(get: { checked }, set: { if $0 { choice.choose() } })) { content(choice) }.disabled(choice.disabled)
         } else {
-            Button(role: choice.destructive ? .destructive : nil, action: choice.choose) { content(choice) }
+            Button(role: choice.destructive ? .destructive : nil, action: choice.choose) { content(choice) }.disabled(choice.disabled)
         }
     }
 
@@ -168,7 +170,8 @@ private final class TriggerButton: UIButton {
                 title: sections.count > 1 ? section.title ?? "" : "", image: section.image?.uiImage, options: .displayInline,
                 children: section.choices.map { choice in
                     let action = UIAction(title: choice.title, subtitle: choice.subtitle, image: choice.image?.uiImage) { _ in choice.choose() }
-                    if choice.destructive { action.attributes = .destructive }
+                    if choice.destructive { action.attributes.insert(.destructive) }
+                    if choice.disabled { action.attributes.insert(.disabled) }
                     action.state = choice.checked == true ? .on : .off
                     return action
                 })
