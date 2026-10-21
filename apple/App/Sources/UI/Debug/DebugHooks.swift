@@ -345,6 +345,22 @@ extension View {
         #endif
     }
 
+    #if os(iOS)
+    /// `-CuePadCompact <宽>`：窗口根按这么宽、紧凑尺寸类画，同分屏与台前调度里的窄窗口（模拟器没有从代码开分屏的接口）。
+    @ViewBuilder func debugCompact() -> some View {
+        #if DEBUG
+        let width = DebugScene.defaults.double(forKey: "CuePadCompact")
+        if width > 0 {
+            environment(\.horizontalSizeClass, .compact).frame(width: width).frame(maxWidth: .infinity, alignment: .leading)
+        } else {
+            self
+        }
+        #else
+        self
+        #endif
+    }
+    #endif
+
     /// 这一处正在过渡（如编辑页正在淡入）：截图的就绪标记等它停下。SwiftUI 自己驱动的动画在图层上看不出来，由视图自己报。
     func debugSettling(_ busy: Bool) -> some View {
         #if DEBUG

@@ -41,7 +41,7 @@ enum ScrollAnchor {
 ///   录换去处的过渡（`dockTourIfAsked`，见 `DebugScene+iOS.swift`）；`-CuePadNotice <文字>`：就绪前弹一条提示（`noticeIfAsked`）；`-CuePadPlacesOpen YES`（配 cue 画面）：Cue 页底部的"⋯"一出现就展开（`debugExposesPlaces`）；
 ///   `-CuePadCueDraft <文字>`（配 cue 画面）：Cue 的输入框里先有这句草稿；
 /// - `-CuePadReduceMotion YES`：整个窗口按"减弱动态效果"画（`PaletteProvider` 改窗口的环境；不碰系统设置，Mac 上那是用户这台机器的全局设置）；`-CuePadLargestType YES` 同理按最大的辅助字号画；
-/// - `-CuePadCueFocus YES`（配 cue 画面）：Cue 页的输入框一出现就聚焦；`-CuePadSoftKeyboard YES`（iOS）：模拟器里聚焦也弹出系统键盘；`-CuePadLandscape YES`（iPhone）：转成横屏；
+/// - `-CuePadCueFocus YES`（配 cue 画面）：Cue 页的输入框一出现就聚焦；`-CuePadSoftKeyboard YES`（iOS）：模拟器里聚焦也弹出系统键盘；`-CuePadLandscape YES`（iPhone）：转成横屏；`-CuePadCompact <宽>`（iPad）：按这么宽的窄窗口画（分屏、台前调度；紧凑尺寸类，底部那一排 `DockRoot`，`debugCompact`）；
 /// - `-CuePadToolsOpen YES`：每一轮的经过、子代理名册与 Cue 页折起的动态一开始就全部展开（`RoundProcess`、`PiSubagentList`、`CueNoteBubble`）；
 /// - `-CuePadManyTasks <条数>`：给 `-CuePadProject` 那个项目再加这么多条待办（没做完的还不到这么多时），量任务多时的项目页（`perf-ios.sh 3 -CuePadManyTasks 150 -CuePadProject CuePad`）；
 /// - `-CuePadAllKinds YES|<批数>`（配 `-CuePadDemo YES -CuePadScene session -CuePadSession scratch`）：scratch 会话里发每种类型各一份的交付物、一个 3D 模型与一张"下载中"，两份一批（`seedAllKinds`）；
