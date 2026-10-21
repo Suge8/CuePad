@@ -82,7 +82,10 @@ extension CueEval {
         let his = conversation.filter { $0.author == .known(.you) }
         let toldTexts = Set(spoken.compactMap { $0.args["text"] as? String })
         let answering = counted.filter { $0.wake == .message }
-        let isReply = { (message: CueMessage) in answering.contains { round in message.createdAt >= round.startedAt && message.createdAt <= (round.finishedAt ?? .distantFuture) } }
+        // 消息的时刻入库时四舍五入到毫秒（Date.stamp）：回复写下后不到半毫秒这一轮就收尾，回复的时刻会进位到收尾之后，所以收尾放宽 1 毫秒
+        let isReply = { (message: CueMessage) in
+            answering.contains { round in message.createdAt >= round.startedAt && message.createdAt <= (round.finishedAt ?? .distantFuture).addingTimeInterval(0.001) }
+        }
         // 他会收到推送、又不是 tell 与回他的话的（出错、起不来这类管理器写的 urgent）
         let otherPushes = messages.filter { $0.urgent && $0.choices == nil && !toldTexts.contains($0.text) && !isReply($0) }
         let replies = messages.filter { $0.choices == nil && $0.taskID == nil && !toldTexts.contains($0.text) && isReply($0) }
