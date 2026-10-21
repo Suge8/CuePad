@@ -122,6 +122,22 @@ nonisolated struct CueWakeHeader: Equatable, Sendable {
     }
 }
 
+extension CueWake {
+    /// 醒来原因的图标（Cue 页那一节的第一行、Mac 的运行情况）。
+    var icon: Icon {
+        switch self {
+        case .enabled: .wakeEnabled
+        case .message: .wakeMessage
+        case .sessionActivity: .wakeActivity
+        case .idle: .wakeIdle
+        case .tidy: .memory
+        case .reminder: .wakeReminder
+        case .renewed: .renew
+        case .settingsChanged: .wakeSettings
+        }
+    }
+}
+
 /// Cue 自己醒来的那几轮，叫醒它的会话、任务与提醒此刻叫什么（`CueThread.read` 一次读好，不在主线程）：改了名跟着变，名字不另存。
 nonisolated struct CueWakeNames: Equatable, Sendable {
     struct Session: Equatable, Sendable {

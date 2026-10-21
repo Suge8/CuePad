@@ -72,19 +72,3 @@ struct CueWakeTitle: View {
         }
     }
 }
-
-extension CueWake {
-    /// 醒来原因的图标（Cue 页那一节的第一行、Mac 的运行情况）。
-    var icon: Icon {
-        switch self {
-        case .enabled: .wakeEnabled
-        case .message: .wakeMessage
-        case .sessionActivity: .wakeActivity
-        case .idle: .wakeIdle
-        case .tidy: .memory
-        case .reminder: .wakeReminder
-        case .renewed: .renew
-        case .settingsChanged: .wakeSettings
-        }
-    }
-}
