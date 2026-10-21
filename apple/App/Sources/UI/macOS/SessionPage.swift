@@ -46,8 +46,8 @@ extension SessionDigest {
 }
 
 /// 一个 Agent 会话的整页（侧栏、Agent 页、⌘K、菜单栏面板、任务上的会话状态都进这里），对话（`SessionChat`）、回复框（`PiReplyBar`，Mac 上一直是两层）
-/// 与顶栏规则（`ChatFollow.showsHeader`）与手机同一套。页头全在窗口工具栏上（会话名与状态 `PiSessionSubtitle` 居中、绑着的任务 `PageTitleSlot`、右上"⋯"），
-/// 内容区里不另起一行。看历史时标题让开，"⋯"不让开：工具栏一直在，让开只留一格空位；Mac 没有状态栏可点，鼠标移到标题原来的位置（或点它）就唤出。
+/// 与顶栏规则（`ChatFollow.showsHeader`）与手机同一套。页头全在窗口工具栏上，内容区里不另起一行。
+/// 看历史时标题让开，"⋯"不让开：工具栏一直在，让开只留一格空位；Mac 没有状态栏可点，鼠标移到标题原来的位置（或点它）就唤出。
 /// 很久以前的会话没有对话时请它所在的 Mac 补写。是一页（`Route.session`），左上不放返回：去别处靠侧栏。
 struct SessionPage: View {
     let sessionID: String

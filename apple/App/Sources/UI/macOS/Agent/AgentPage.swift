@@ -2,10 +2,8 @@
 import CueStore
 import SwiftUI
 
-/// 会话页（侧栏的"会话"进来）：没有页标题（侧栏那块选中就说了在哪），顶上那一排（`pageHeader`，列表滚到它后面）：项目范围、搜索、额度环（`QuotaRings`，同手机；点它从那一下长出明细的气泡 `QuotaDetail`，点外面或 Esc 收回）、新会话（右上"⋯"里同一下，还有接入 Agent）。
-/// 列表同手机一条（`PiSessionList`）："现在"置顶（按要你注意的先后：等你确认 → 出错 → 工作中 → 空闲），"历史"按结束时间分段接在下面（`TimeSection`），读到底再接一页；
-/// 看全部项目时卡上放所在项目的图标。项目范围与任务页共用一份（`Workspace.projectScope`）。
-/// 行与手机同一种（`PiSessionRow`），点行在内容区打开会话页；在线会话右键可结束（确认后发给它所在的 Mac，对话留着）。
+/// 会话页（侧栏的"会话"进来）：没有页标题，顶上那一排（`pageHeader`，列表滚到它后面）：项目范围（与任务页共用 `Workspace.projectScope`）、搜索、额度环（`QuotaRings`，同手机；点它从那一下长出明细的气泡 `QuotaDetail`，点外面或 Esc 收回）、新会话（右上"⋯"里同一下，还有接入 Agent）。
+/// 列表与行同手机（`PiSessionList`、`PiSessionRow`），点行在内容区打开会话页；在线会话右键可结束（确认后发给它所在的 Mac，对话留着）。
 /// 这台 Mac 检测到 Agent 却一家都没接入时，最上面是接入小卡（`ConnectAgents`）：没接入时本机的会话在这里看不到。
 struct AgentPage: View {
     @Environment(Workspace.self) private var workspace
@@ -24,7 +22,6 @@ struct AgentPage: View {
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView { column }
-            // 换了项目范围：回到顶上，从这个项目的第一条看起
             .onChange(of: filter) { proxy.scrollTo(Self.top, anchor: .top) }
         }
         .pageHeader { topRow.frame(maxWidth: Self.width - Spacing.page * 2) }
