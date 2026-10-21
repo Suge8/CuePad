@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """单个文件不超过 LIMIT 个令牌（字节数 ÷ 4，约 20KB）：Agent 一次读得完、改得准。
-用法：size.py           查暂存区（提交钩子用）：新增的文件超标，或已超标的文件变大，就拦下并给出拆法，退出 1
-      size.py --report  列出仓库里此刻超标的文件（从大到小）
-已超标的文件改小或不变照常放行：存量随手拆，不卡住并行改它们的会话；拆完后规则不变，就是全拦。
-不是 Agent 写的文件（锁文件、生成物、录制的回放、资源、第三方代码）列在同目录的 size-ignore；二进制文件不看。
+用法：size.py           查暂存区（提交钩子）：新文件超标、已超标的文件变大就拦下，给出拆法，退出 1
+      size.py --report  列出此刻超标的文件
+已超标的文件改小或不变照常放行：存量随手拆，不卡并行改它们的会话；拆完后就是全拦。不是手写的文件列在同目录的 size-ignore，二进制不看。
 """
 import glob
 import os
@@ -13,188 +12,138 @@ import sys
 
 LIMIT = 5000
 BYTES_PER_TOKEN = 4
-# 拆出来的每份留出余量：刚好卡在上限的文件，下一次改动又超了
-TARGET = LIMIT * 3 // 4
+TARGET = LIMIT * 3 // 4  # 拆出的每份留余量：卡在上限的文件下次一改又超
 IGNORE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "size-ignore")
+HEADER = "文件开头"
+# 切分点：顶层声明（name 组）与分段标记、标题（mark 组）；整段搬，不从中间切
+SPLITS = {
+    ".swift": re.compile(r"^(?:\s*//\s*MARK:\s*-?\s*(?P<mark>.+)|(?:@\w+(?:\([^)]*\))?\s+)*(?:(?:public|package|internal|fileprivate|private|final|nonisolated|indirect)\s+)*(?:struct|class|enum|actor|protocol|extension|func)\s+(?P<name>[\w.]+))"),
+    ".ts": re.compile(r"^(?://\s*(?:MARK:|---+)\s*(?P<mark>.+)|(?:export\s+)?(?:default\s+)?(?:async\s+)?(?:function|class|interface|type|const|enum)\b\s*(?P<name>\w+)?)"),
+    ".md": re.compile(r"^#{1,3}\s+(?P<mark>.+)"),
+}
+# 一段自己就超了时再按一级成员切（类型里的方法、Suite 里的用例），搬成扩展
+MEMBERS = {
+    ".swift": re.compile(r"^(?: {4}|\t)(?:@\w+(?:\([^)]*\))?\s+)*(?:(?:public|package|internal|fileprivate|private|final|nonisolated|static|override|mutating|lazy|convenience|required)\s+)*(?:func|init|struct|class|enum|actor|var|let)\b"),
+    ".ts": re.compile(r"^(?:  |\t)(?:(?:async\s+)?function\s+\w+|(?:const|let)\s+\w+\s*=|\w+\.on\(|\w+\.register\w*\()"),
+}
+HOW = {
+    ".swift": "每个顶层类型一个文件；类型太大按 MARK 段或成员拆成 <类型>+<职责>.swift 扩展，搬走的代码用到的 private 去掉；测试按 Suite 拆",
+    ".md": "入口留概述与链接，每个大节一篇，改了路径同时改指向它的链接",
+}
 
 
-def git(*args, binary=False):
-    out = subprocess.run(["git", *args], capture_output=True, check=True).stdout
-    return out if binary else out.decode()
+def git(*args):
+    return subprocess.run(["git", *args], capture_output=True, check=True).stdout.decode()
 
 
-def ignored():
-    with open(IGNORE) as f:
-        patterns = [line.strip() for line in f if line.strip() and not line.startswith("#")]
-    return [re.compile(glob.translate(p, recursive=True, include_hidden=True)) for p in patterns]
+def blob(spec):
+    """spec（:path、HEAD:path）的内容；不存在为 None。"""
+    result = subprocess.run(["git", "cat-file", "blob", spec], capture_output=True)
+    return result.stdout if result.returncode == 0 else None
 
 
 def tokens(size):
     return size // BYTES_PER_TOKEN
 
 
-def blob(spec):
-    """spec（如 :path、HEAD:path）的内容；不存在为 None。"""
-    result = subprocess.run(["git", "cat-file", "blob", spec], capture_output=True)
-    return result.stdout if result.returncode == 0 else None
+def oversized(data):
+    return tokens(len(data)) > LIMIT and b"\0" not in data[:8000]  # 二进制同 git 的判断
 
 
-def is_binary(data):
-    return b"\0" in data[:8000]  # 同 git 的判断
-
-
-# 每种文件的切分点：顶层声明、分段标记、标题。拆的时候整段搬，不从一段中间切开
-SPLITS = {
-    ".swift": re.compile(r"^(?:\s*//\s*MARK:\s*-?\s*(?P<mark>.+)|(?:@\w+(?:\([^)]*\))?\s+)*(?:(?:public|package|internal|fileprivate|private|final|nonisolated|indirect)\s+)*(?P<kind>struct|class|enum|actor|protocol|extension|func)\s+(?P<name>[\w.]+))"),
-    ".ts": re.compile(r"^(?://\s*(?:MARK:|---+)\s*(?P<mark>.+)|(?:export\s+)?(?:default\s+)?(?:async\s+)?(?P<kind>function|class|interface|type|const|enum)\b\s*(?P<name>\w+)?)"),
-    ".py": re.compile(r"^(?:#\s*-{3,}\s*(?P<mark>[^-].*?)\s*-*$|(?P<kind>def|class)\s+(?P<name>\w+))"),
-    ".sh": re.compile(r"^(?:#\s*-{3,}\s*(?P<mark>.+)|(?P<name>[\w-]+)\(\)\s*\{)"),
-    ".md": re.compile(r"^(?P<mark>#{1,3}\s+.+)"),
-}
-HEADER = "文件开头（import、常量）"
-# 类型里的一级成员：一段太大时在这里再切
-MEMBERS = {
-    ".swift": re.compile(r"^(?: {4}|\t)(?:@\w+(?:\([^)]*\))?\s+)*(?:(?:public|package|internal|fileprivate|private|final|nonisolated|static|override|mutating|lazy|convenience|required)\s+)*(?:func|init|struct|class|enum|actor|var|let)\b"),
-    ".ts": re.compile(r"^(?:  |\t)(?:(?:async\s+)?function\s+\w+|(?:const|let)\s+\w+\s*=|\w+\.on\(|\w+\.register\w*\()"),
-}
-HOW = {
-    ".swift": "按职责拆：每个顶层类型一个文件，命名同类型名；一个类型太大就按 MARK 段拆成扩展，命名 <类型>+<职责>.swift（同 CueStore+Sync.swift）。"
-              "搬进别的文件的扩展用到的 private 成员改成不带 private（同模块可见），或连同它们一起搬走。测试按被测的行为分 Suite，一个 Suite 一个文件。",
-    ".ts": "按职责拆成几个模块，入口文件只留接线与导出；共用的类型放一个 types 文件。",
-    ".py": "按职责拆成几个模块，入口脚本只留参数解析与调度。",
-    ".sh": "把成块的逻辑拆成同目录的 _<职责>.sh，由入口 source（同 _lock.sh、_sim.sh）。",
-    ".md": "按二级标题拆：入口文档留概述与指向各篇的链接，每个大节一篇；改了路径就同时改指向它的链接（AGENTS.md 的「碰到这些先读」）。",
-}
+def ignored():
+    with open(IGNORE) as f:
+        patterns = [line.strip() for line in f if line.strip() and not line.startswith("#")]
+    rules = [re.compile(glob.translate(p, recursive=True, include_hidden=True)) for p in patterns]
+    return lambda path: any(rule.match(path) for rule in rules)
 
 
 def sections(path, data):
-    """(起始行号, 标题) 的列表，按切分点；第一段从第 1 行起。"""
+    """[(起行, 止行, 标题, 字节数, 顶层声明名或 None)]"""
     ext = os.path.splitext(path)[1]
-    pattern = SPLITS.get(ext)
     lines = data.decode(errors="replace").splitlines(keepends=True)
-    cuts = [(1, HEADER, None)]
-    if pattern:
-        for number, line in enumerate(lines, 1):
-            m = pattern.match(line)
-            if not m:
-                continue
-            mark, name = m.group("mark"), m.groupdict().get("name")
-            title = mark.strip().lstrip("#").strip() if mark else " ".join(x for x in (m.groupdict().get("kind"), name) if x)
-            entry = (number, title, None if mark else name)
-            if number == 1:
-                cuts[0] = entry
-            else:
-                cuts.append(entry)
     offsets = [0]
     for line in lines:
         offsets.append(offsets[-1] + len(line.encode()))
-    def size(start, end):
-        return offsets[end] - offsets[start - 1]
-
+    cuts = [(1, HEADER, None)]
+    for number, line in enumerate(lines, 1):
+        m = SPLITS[ext].match(line) if ext in SPLITS else None
+        if m:
+            entry = (number, (m["mark"] or line.split("{")[0]).strip()[:60], m.groupdict().get("name"))
+            cuts = [entry] if number == 1 else [*cuts, entry]
     result = []
     for i, (start, title, name) in enumerate(cuts):
-        end = (cuts[i + 1][0] if i + 1 < len(cuts) else len(lines) + 1) - 1
-        member = MEMBERS.get(ext)
-        inner = [n for n in range(start + 1, end + 1) if member and member.match(lines[n - 1])] if tokens(size(start, end)) > LIMIT else []
-        if not inner:
-            result.append((start, end, title, size(start, end), name, None))
-            continue
-        # 一段自己就超了：再按它的成员（类型里的方法、Suite 里的用例）切开，搬成扩展
+        end = cuts[i + 1][0] - 1 if i + 1 < len(cuts) else len(lines)
+        inner = []
+        if tokens(offsets[end] - offsets[start - 1]) > LIMIT and ext in MEMBERS:
+            inner = [n for n in range(start + 1, end + 1) if MEMBERS[ext].match(lines[n - 1])]
         bounds = [start, *inner, end + 1]
         for a, b in zip(bounds, bounds[1:]):
             label = title if a == start else lines[a - 1].strip()[:60]
-            found = None if a == start else re.search(r"(?:func|init|var|let|const|function|struct|class|enum|actor)\s+(\w+)", lines[a - 1])
-            result.append((a, b - 1, label, size(a, b - 1), name if a == start else None, found and found[1]))
+            result.append((a, b - 1, label, offsets[b - 1] - offsets[a - 1], name if a == start else None))
     return result
 
 
 def plan(path, data):
-    """把相邻的段依次装进不超过 TARGET 的几份，输出每份放哪几段；装不下的单段原样列出（要在段内再按职责拆）。"""
-    ext = os.path.splitext(path)[1]
-    stem = os.path.splitext(os.path.basename(path))[0]
-    parts, current = [], []
+    """相邻的段依次装进不超过 TARGET 的几份；文件开头跟着后一段走。"""
+    stem, ext = os.path.splitext(os.path.basename(path))
+    parts = []
     for section in sections(path, data):
-        # 文件开头（import）跟着后面那段走，不单独成一份
-        only_header = len(current) == 1 and current[0][2] == HEADER
-        if current and not only_header and tokens(sum(s[3] for s in current) + section[3]) > TARGET:
-            parts.append(current)
-            current = []
-        current.append(section)
-    if current:
-        parts.append(current)
-    out = [f"  怎么拆：{HOW.get(ext, '按职责拆成几个文件，每个只管一件事；入口文件只留接线。')}",
-           f"  按现有的分段依次装成 {len(parts)} 份，每份不超过约 {TARGET} 令牌（文件名取这份的第一段，按它真正的职责改成项目惯用的英文名）："]
-    def named(n, part):
-        first = part[1] if part[0][2] == HEADER and len(part) > 1 else part[0]  # 第一份的开头是 import，按其后那段命名
-        if first[4]:
-            return f"{first[4]}{ext}"  # 顶层声明：以它命名
-        return f"{stem}{'-' if ext == '.md' else '+'}{first[5] or re.sub(r'[^\w]+', '', first[2])[:24] or n}{ext}"
-
-    names = [named(n, part) for n, part in enumerate(parts, 1)]
-    if os.path.basename(path) not in names:
-        names[0] = os.path.basename(path)  # 第一份留在原文件里
+        last = parts[-1] if parts else None
+        if last and (last == [last[0]] and last[0][2] == HEADER or tokens(sum(s[3] for s in last) + section[3]) <= TARGET):
+            last.append(section)
+        else:
+            parts.append([section])
+    out = [f"  拆法：{HOW.get(ext, '按职责拆成几个文件，入口只留接线')}。按现有分段装成 {len(parts)} 份（名字按职责改）："]
     for n, part in enumerate(parts, 1):
-        name = names[n - 1]
-        out.append(f"    {name}（约 {tokens(sum(s[3] for s in part))} 令牌）：")
-        shown = part if len(part) <= 6 else [*part[:3], None, *part[-2:]]
-        for section in shown:
+        named = next((s[4] for s in part if s[4]), None)
+        name = os.path.basename(path) if n == 1 else f"{named}{ext}" if named else f"{stem}+{re.sub(r'\W+', '', part[0][2])[:24] or n}{ext}"
+        out.append(f"    {name}（约 {tokens(sum(s[3] for s in part))} 令牌）")
+        for section in part if len(part) <= 5 else [*part[:2], None, *part[-2:]]:
             if section is None:
-                out.append(f"      …（这份共 {len(part)} 段）")
+                out.append(f"      …共 {len(part)} 段")
                 continue
-            start, end, title, size = section[:4]
-            flag = "  ← 这一段自己就超了，要在段内再按职责拆" if tokens(size) > LIMIT else ""
-            out.append(f"      第 {start}–{end} 行  {title[:70]}（{tokens(size)}）{flag}")
+            start, end, title, size, _ = section
+            flag = "  ← 单段超标，段内再拆" if tokens(size) > LIMIT else ""
+            out.append(f"      {start}–{end} 行 {title}（{tokens(size)}）{flag}")
     return "\n".join(out)
 
 
-def report():
-    patterns = ignored()
+def report(skip):
     rows = []
-    for path in git("ls-files", "-z").split("\0"):
-        if not path or any(p.match(path) for p in patterns) or not os.path.isfile(path):
-            continue
-        with open(path, "rb") as f:
-            data = f.read()
-        if tokens(len(data)) > LIMIT and not is_binary(data):
-            rows.append((tokens(len(data)), path))
+    for path in filter(None, git("ls-files", "-z").split("\0")):
+        if not skip(path) and os.path.isfile(path):
+            with open(path, "rb") as f:
+                data = f.read()
+            if oversized(data):
+                rows.append((tokens(len(data)), path))
     for count, path in sorted(rows, reverse=True):
         print(f"{count:>7}  {path}")
     print(f"共 {len(rows)} 个文件超过 {LIMIT} 令牌")
 
 
-def staged():
-    patterns = ignored()
-    # 改名与复制按原文件比大小：搬个家不算新增
-    entries = git("diff", "--cached", "--name-status", "-z", "-M", "--diff-filter=ACMR").split("\0")
+def staged(skip):
+    fields = iter(git("diff", "--cached", "--name-status", "-z", "-M", "--diff-filter=AMR").split("\0"))
     failures = []
-    i = 0
-    while i < len(entries) - 1:
-        status = entries[i]
-        if status[0] in "RC":
-            source, path = entries[i + 1], entries[i + 2]
-            i += 3
-        else:
-            source = path = entries[i + 1]
-            i += 2
-        if any(p.match(path) for p in patterns):
+    for status in fields:
+        if not status:
             continue
+        source = next(fields)
+        path = next(fields) if status[0] == "R" else source  # 改名按原文件比：搬家不算新增
         data = blob(f":{path}")
-        if data is None or is_binary(data) or tokens(len(data)) <= LIMIT:
+        if skip(path) or data is None or not oversized(data):
             continue
         before = blob(f"HEAD:{source}")
-        now = tokens(len(data))
         if before is not None and len(data) <= len(before):
             continue
-        why = (f"新文件 {now} 令牌" if before is None
-               else f"{tokens(len(before))} → {now} 令牌（已超标的文件只能改小，不能再变大）")
-        failures.append(f"{path}：{why}，上限 {LIMIT}（字节数 ÷ {BYTES_PER_TOKEN}）\n{plan(path, data)}")
+        why = f"新文件 {tokens(len(data))}" if before is None else f"{tokens(len(before))} → {tokens(len(data))}，超标的文件只能改小"
+        failures.append(f"{path}：{why}（令牌，上限 {LIMIT}）\n{plan(path, data)}")
     if failures:
-        print("单个文件超过上限：Agent 一次读不完、改不准。拆完再提交（只拆不改行为；拆的提交里文件都变小了，照常放行）。\n", file=sys.stderr)
+        print(f"文件超过 {LIMIT} 令牌（字节数 ÷ {BYTES_PER_TOKEN}）就拦：先拆再提交，只拆不改行为。\n", file=sys.stderr)
         print("\n\n".join(failures), file=sys.stderr)
-        print(f"\n不是手写的文件（生成物、录制的回放、资源）加进 {os.path.relpath(IGNORE)}。", file=sys.stderr)
+        print(f"\n不是手写的文件加进 {os.path.relpath(IGNORE)}。", file=sys.stderr)
         sys.exit(1)
 
 
 if __name__ == "__main__":
     os.chdir(git("rev-parse", "--show-toplevel").strip())
-    report() if sys.argv[1:] == ["--report"] else staged()
+    (report if sys.argv[1:] == ["--report"] else staged)(ignored())

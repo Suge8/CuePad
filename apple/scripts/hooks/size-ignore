@@ -1,13 +1,5 @@
-# size.py 不看的文件：不是 Agent 手写的。语法同 .gitignore 的 glob（** 跨目录），从仓库根算；二进制文件本来就不看
-# 锁文件与工具生成的工程文件
+# size.py 不看的文件（不是手写的），.gitignore 的 glob 语法，从仓库根算
 **/*.lock
-**/Package.resolved
 **/*.pbxproj
-# 资源：素材目录、生成的符号与插图、落地页的静态资源
-**/*.xcassets/**
-**/*.svg
-landing/static/**
-# 录制的真 Agent 回放（CuePiTests 的 RealAgents 录下）
+# 录下的真 Agent 回放
 **/Fixtures/**
-# 第三方代码
-apple/Vendor/**

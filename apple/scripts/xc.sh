@@ -187,9 +187,7 @@ case "$cmd" in
     library="${CUEPAD_SHOT_LIBRARY:-$APPLE_DIR/.derived/library$([ "$platform" = mac ] || echo "-$platform")}"
     exec python3 "$APPLE_DIR/scripts/app.py" "$cmd" "$platform" "$app" "$library" ${target[@]+"${target[@]}"} ${rest[@]+"${rest[@]}"} ;;
   perf)
-    # 构建照普通任务排队。只有在前台量、要和交互预算比的 Mac 测量（-CuePadForeground YES）独占机器：帧、掉帧与回合时长怕别的进程抢。
-    # 其余的前后对比只看指令数（与静置开销的内核记账一样不随机器忙闲变），不独占：独占要先占闸门、等在跑的任务做完，
-    # 其间所有检出的新任务都停在闸门外，几个会话并行时一次就是十几分钟
+    # 构建照普通任务排队；测量只有前台和预算比的 Mac 一种独占（帧与回合时长怕别的进程抢），其余只比指令数，不随机器忙闲变
     "$0" build-perf "$platform" >"$DERIVED/build.log" || { tail -30 "$DERIVED/build.log" >&2; exit 1; }
     mode=plain
     if [ "$platform" = ios ]; then mode=sim
