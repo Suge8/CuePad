@@ -138,6 +138,8 @@ struct ChatJump: Equatable {
 enum ChatLayout {
     /// 对话最新那头与最早那头的留白：最后一行离回复框（含问题卡）至少这么远。
     static let edge: CGFloat = 16
+    /// 浮在对话底上的那一块离对话区底边（手机上是安全区底边，键盘弹出时是键盘顶，`FloatingReply`）。
+    static let replyGap: CGFloat = 8
 
     /// 阅读栏两边的边距：窄时是 `inset`，宽时把栏居中。滚动区（`ChatScroll`）与叠在对话区上的空态（`BlankChat`）共用。
     static func margin(_ width: CGFloat, readingWidth: CGFloat, inset: CGFloat) -> CGFloat { max(inset, (width - readingWidth) / 2 + inset) }
