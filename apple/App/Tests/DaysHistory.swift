@@ -136,6 +136,13 @@ extension CueStore {
 
 /// 预置历史与会话交回的文字。
 enum DaysScript {
+    /// 多日后段补记的记忆（Cue 记下的），让视图超出预算、有块待合并；第一条是后面要问的车位
+    static let notedLater = [
+        "他的车停在公司地库 B2 层 117 号车位", "官网的 CDN 是 Cloudflare，缓存规则在 Page Rules 里", "演示项目的预发环境每晚 2 点自动重置数据",
+        "他周五下午一般不开会", "看板的拖拽在 Safari 15 上有已知闪烁", "设计组的图标库 v2 月底出", "演示项目的数据库每周日凌晨全量备份",
+        "R2 的桶叫 demo-uploads", "官网首页的首图在 public/images", "他的时区是东八区",
+    ]
+
     struct Routine {
         let ask: String, reply: String, note: String
         let step: PiChatMessage.Tools.Item
