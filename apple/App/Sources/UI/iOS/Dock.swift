@@ -25,6 +25,8 @@ struct DockRoot: View {
     /// 底边那一格交给了 Cue 页里的输入框；Cue 钮等输入框画上屏才藏起（`released`）。
     @State private var handed = false
     @State private var released = false
+    /// Cue 页的输入框有焦点：底部那一排让开，输入框占满整排。只活在窄屏的容器里，宽屏没有它，变宽再变窄也不留旧值。
+    @State private var composing = false
     @State private var width: CGFloat = 0
 
     var body: some View {
@@ -34,7 +36,7 @@ struct DockRoot: View {
         let settled = leaving == nil || arrived == root
         // 新页从哪一侧进来：去处在右边就从右边推进来
         let side: CGFloat = leaving.map { Dock.order($0) < Dock.order(root) ? 1 : -1 } ?? 0
-        let target = DockLook(route: arrived ?? root, navigation: navigation)
+        let target = DockLook(route: arrived ?? root, placesOpen: navigation.placesOpen, composing: composing)
         NavigationStack(path: $navigation.path) {
             ZStack {
                 // 按去处认页：换去处时旧页留着推走，不重建
@@ -51,6 +53,7 @@ struct DockRoot: View {
                 }
             }
             .environment(\.dockComposer, handed)
+            .environment(\.dockComposing, $composing)
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
             // 推入的页盖住它
             .overlay(alignment: .bottom) {
@@ -67,7 +70,11 @@ struct DockRoot: View {
             arrived = root
         }
         .onChange(of: target, initial: true) { morph(to: target) }
+        // 有焦点时"⋯"收起
+        .onChange(of: composing) { if composing { navigation.placesOpen = false } }
         .onChange(of: root) {
+            // 输入框离开页就没了焦点
+            composing = false
             Task {
                 await NextFrame.wait()
                 withAnimation(reduceMotion ? Motion.crossfade : Motion.dock) {
@@ -150,12 +157,12 @@ enum Dock {
 enum DockLook {
     case places, cue, composing
 
-    init(route: Route, navigation: Navigation) {
-        guard route == .cue, !navigation.placesOpen else {
+    init(route: Route, placesOpen: Bool, composing: Bool) {
+        guard route == .cue, !placesOpen else {
             self = .places
             return
         }
-        self = navigation.cueComposing ? .composing : .cue
+        self = composing ? .composing : .cue
     }
 }
 
@@ -168,5 +175,7 @@ extension SidebarOutline.Entry {
 extension EnvironmentValues {
     /// 底边那一格交给了 Cue 页里的输入框（`DockRoot.handed`）：没交过来时输入框藏着，那里是长成它的 Cue 钮。
     @Entry var dockComposer = true
+    /// Cue 页输入框的焦点交给底部那一排（`DockRoot.composing`）；宽屏没有底部那一排，为 nil。
+    @Entry var dockComposing: Binding<Bool>?
 }
 #endif

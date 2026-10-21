@@ -27,6 +27,7 @@ struct CuePage: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     /// 这一页的输入框占着底边，底部那一排的 Cue 钮把位置交给它（`DockRoot`）。
     @Environment(\.dockComposer) private var ownsComposer
+    @Environment(\.dockComposing) private var composing
     #endif
     @State private var thread: CueThread?
     @State private var follow = ChatFollow()
@@ -118,11 +119,10 @@ struct CuePage: View {
             .accessibilityHidden(true)
     }
 
-    /// 窄屏底部那一排：左边给"⋯"让出位置（输入框有焦点时不让），右边输入框。"⋯"展开着、换来这一页时 Cue 钮还在长成它，
-    /// 输入框的位置是底部那一排的 Cue 钮，这里的输入框藏着；长到了才接手（`DockRoot.handed`），离开时当场藏起。
+    /// 窄屏底部那一排：左边给"⋯"让出位置（输入框有焦点时不让），右边输入框；Cue 钮长成它之前藏着（`DockRoot.handed`）。
     private var dockRow: some View {
         HStack(alignment: .bottom, spacing: 0) {
-            if !navigation.cueComposing {
+            if composing?.wrappedValue != true {
                 Color.clear.frame(width: Dock.slot + Dock.gap, height: Dock.slot)
             }
             composer
@@ -136,7 +136,7 @@ struct CuePage: View {
     #if os(iOS)
     private var composer: some View {
         CueComposer(style: .page, focusRequests: inPanel ? 0 : navigation.cueFocusRequests, sent: { follow.sent() }) { focused in
-            withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { navigation.cueComposing = focused }
+            withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { composing?.wrappedValue = focused }
         }
     }
     #endif
