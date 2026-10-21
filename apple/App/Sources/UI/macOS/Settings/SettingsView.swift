@@ -215,7 +215,7 @@ private struct NotificationSection: View {
     }
 
     private func openSystemSettings() {
-        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension?id=\(Bundle.main.bundleIdentifier ?? AppServices.bundleID)")!)
+        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension?id=\(AppIdentity.id)")!)
     }
 }
 

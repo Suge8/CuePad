@@ -15,13 +15,12 @@ import UIKit
 /// 发送记录也只在这里写。
 @Observable
 final class AppServices {
-    nonisolated static let bundleID = AppIdentity.id
     /// 给人看的版本："0.1.0（1）"。
     static let version: String = {
         let info = Bundle.main.infoDictionary
         return "\(info?["CFBundleShortVersionString"] as? String ?? "?")（\(info?["CFBundleVersion"] as? String ?? "?")）"
     }()
-    static let log = Logger(subsystem: bundleID, category: "services")
+    static let log = Logger(subsystem: AppIdentity.id, category: "services")
 
     let store: CueStore
     #if os(macOS)

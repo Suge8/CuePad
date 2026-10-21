@@ -18,7 +18,7 @@ nonisolated final class MacPresenceKeeper: Sendable {
     private let sync: (any SyncControlling)?
     private let host: String
     private let awake = Mutex(true)
-    private static let log = Logger(subsystem: AppServices.bundleID, category: "services")
+    private static let log = Logger(subsystem: AppIdentity.id, category: "services")
 
     init(store: CueStore, sync: (any SyncControlling)?, host: String) {
         self.store = store

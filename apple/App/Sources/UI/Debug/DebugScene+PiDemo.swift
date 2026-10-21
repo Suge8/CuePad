@@ -7,7 +7,7 @@ import OSLog
 /// 演示库里的 Pi：Mac 同步来的会话状态（含历史）、几段对话与发到 Mac 的请求（iOS 与 Mac 的 session 画面共用）。
 extension DebugScene {
     /// 演示脚本自己出的错（读写演示库失败）：演示画面因此停在半路，记下来，不当作没事。
-    static let demoLog = Logger(subsystem: AppServices.bundleID, category: "demo")
+    static let demoLog = Logger(subsystem: AppIdentity.id, category: "demo")
 
     /// 演示会话的摘要与弹窗：摘要写成对话的投影，弹窗交给状态记录器（与真实来源一致）。
     private struct DemoRecap {

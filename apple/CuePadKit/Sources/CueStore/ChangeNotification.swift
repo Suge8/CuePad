@@ -9,7 +9,7 @@ import Foundation
 /// Mac 上没有沙盒，前缀不随身份：自己编的命令行不在 App 包里、认不出身份（`AppIdentity.unbundled`），开同一个开发库时也要和开发版 App 互通。
 enum ChangeNotification {
   #if os(iOS)
-  static let prefix = LibraryLocation.appGroupIdentifier
+  static let prefix = AppIdentity.appGroup
   #else
   static let prefix = "cuepad"
   #endif
