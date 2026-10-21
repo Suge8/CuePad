@@ -37,6 +37,12 @@ enum InteractionBench {
         "任务气泡开": (28, 2),
         "任务气泡关": (14, 2),
         "进任务页": (28, 2),
+        "任务页→会话页": (90, 2),
+        "会话页→任务页": (14, 1),
+        "任务页→项目页": (14, 1),
+        "项目页→任务页": (14, 1),
+        "换项目范围": (28, 2),
+        "清项目范围": (28, 2),
         "回 Cue 页": (14, 2),
         "⌘K 面板开": (28, 2),
         "⌘K 面板关": (14, 2),
@@ -157,6 +163,19 @@ enum InteractionBench {
             await step("回 Cue 页") { workspace.show(.cue) }
             await step("⌘K 面板开") { workspace.searching = true }
             await step("⌘K 面板关") { workspace.searching = false }
+        }
+        // 任务页与会话页、项目页之间来回，与任务页上换项目范围：量顶栏（工具栏常驻项只换内容）跟着换页、换范围的开销
+        if let a, let id = sessions.first {
+            workspace.show(.tasks)
+            try? await Task.sleep(for: .seconds(1))
+            for _ in 0..<2 {
+                await step("任务页→会话页") { workspace.show(.session(id)) }
+                await step("会话页→任务页") { workspace.show(.tasks) }
+                await step("任务页→项目页") { workspace.show(.project(a)) }
+                await step("项目页→任务页") { workspace.show(.tasks) }
+                await step("换项目范围") { workspace.projectScope = a }
+                await step("清项目范围") { workspace.projectScope = nil }
+            }
         }
         // 项目页任务纸点"还有 N 条"展开、再收起：在没做完的任务最多的项目上（配 `-CuePadManyTasks` 量任务多时）
         if only.map({ $0.contains("展开任务") || $0.contains("收起任务") }) ?? true,
