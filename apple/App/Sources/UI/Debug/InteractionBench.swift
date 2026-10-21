@@ -37,7 +37,7 @@ enum InteractionBench {
         "任务气泡开": (28, 2),
         "任务气泡关": (14, 2),
         "进任务页": (28, 2),
-        "任务页→会话页": (90, 2),
+        "任务页→会话页": (28, 2),
         "会话页→任务页": (14, 1),
         "任务页→项目页": (14, 1),
         "项目页→任务页": (14, 1),
@@ -164,12 +164,13 @@ enum InteractionBench {
             await step("⌘K 面板开") { workspace.searching = true }
             await step("⌘K 面板关") { workspace.searching = false }
         }
-        // 任务页与会话页、项目页之间来回，与任务页上换项目范围：量顶栏（工具栏常驻项只换内容）跟着换页、换范围的开销
-        if let a, let id = sessions.first {
+        // 任务页与会话页（侧栏"会话"的列表页，同任务页用项目范围）、项目页之间来回，与任务页上换项目范围：
+        // 量顶栏（工具栏常驻项只换内容）跟着换页、换范围的开销
+        if let a {
             workspace.show(.tasks)
             try? await Task.sleep(for: .seconds(1))
             for _ in 0..<2 {
-                await step("任务页→会话页") { workspace.show(.session(id)) }
+                await step("任务页→会话页") { workspace.show(.agent) }
                 await step("会话页→任务页") { workspace.show(.tasks) }
                 await step("任务页→项目页") { workspace.show(.project(a)) }
                 await step("项目页→任务页") { workspace.show(.tasks) }
