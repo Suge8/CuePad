@@ -157,7 +157,8 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
         return nil
     }
 
-    /// 灵动岛紧凑态头像旁的一个短词：Cue 在一轮里最先（它正在动），否则是 `lead` 的样子。
+    /// 灵动岛紧凑态头像旁的一个短词：Cue 在一轮里最先（它正在动），否则是 `lead` 的样子。在跑与等子代理交回都是推进中（WORDS.md）：
+    /// 两者靠珠子的实心、空心与那一句分，短词只用用户在看板、底部那一排已经认得的词。
     var word: String {
         switch cue {
         case .away: return "不在"
@@ -167,8 +168,7 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
             switch lead?.kind {
             case .asks: return "等你"
             case .done: return "做完"
-            case .delegating: return "等交回"
-            case .running: return "在跑"
+            case .delegating, .running: return "推进中"
             case .resting, nil: return "歇着"
             }
         }
