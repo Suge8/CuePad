@@ -345,4 +345,18 @@ struct OpenCodeCommand: Decodable, Sendable {
     var name: String
     var description: String?
 }
+
+/// `GET /api/session/active` 的一项（只有 `running`）。
+struct OpenCodeActive: Decodable, Sendable { var type: String }
+
+enum OpenCodeAnswer: Encodable {
+    case string(String), bool(Bool)
+    func encode(to encoder: any Encoder) throws {
+        var container = encoder.singleValueContainer()
+        switch self {
+        case .string(let value): try container.encode(value)
+        case .bool(let value): try container.encode(value)
+        }
+    }
+}
 #endif
