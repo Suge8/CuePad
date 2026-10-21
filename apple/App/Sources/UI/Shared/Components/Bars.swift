@@ -6,19 +6,32 @@ import SwiftUI
 /// 否决过：顶栏后面的整条淡出（为了返回钮与页头之间的窄缝不露半截字）把内容遮住了。
 /// 窗口最顶上那一条例外（iOS 的状态栏、Mac 红绿灯与工具栏圆钮那一条）：内容照样透到最顶，只在那一条垫一层页底色的渐变（`TopFade`，
 /// iOS 在 `RouteView`、Mac 在主窗口的详情区，各一处，各页不写），上半截实，往下淡完——状态栏的字、红绿灯是系统画的、没有玻璃可垫，
-/// 不垫就和内容叠成一团。否决过：整条裁掉只留页底色，灵动岛下面那一截空着像被遮住。页里浮着的东西都摆在这一条下面，不被它盖到。
+/// 不垫就和内容叠成一团。iOS 上那一条只到灵动岛（刘海）的下沿（`statusStrip`），几乎全实、到下沿才淡完：时间与电量压在实底上，
+/// 灵动岛下沿到安全区上沿那一截不垫，内容清楚透出来。否决过：整条裁掉只留页底色，灵动岛下面那一截空着像被遮住；
+/// 渐变伸到安全区上沿、上半截才实，时间与电量下半截跟滚过去的字打架。页里浮着的东西都摆在这一条下面，不被它盖到。
 /// 内容离栏多远靠内容边距（`contentGap`）：推入页由 `RouteView` 一处让出（上安全区再加这么多），自带顶上一排的页（Cue、搜索、Mac 的会话页）让到那一排下面；Mac 其余页的控件在工具栏里，内容让到工具栏下面再隔这么多。
 enum Bars {
     static let contentGap: CGFloat = 12
+
+    #if os(iOS)
+    /// 状态栏那一条垫多高：有灵动岛、刘海的屏（上安全区比无刘海的状态栏高得多）到它的下沿为止——系统不给它的框，
+    /// 下沿比上安全区上沿高约 11pt（14 Pro 59/48、16 Pro 62/51）；没有的（带 Home 键的 iPhone、iPad）就是整条状态栏。
+    static func statusStrip(below statusBar: CGFloat) -> CGFloat { statusBar > housedStatusBar ? statusBar - islandGap : statusBar }
+    private static let housedStatusBar: CGFloat = 40
+    private static let islandGap: CGFloat = 11
+    #endif
 }
 
-/// 窗口最顶上那一条的页底色渐变（`Bars`）：上半截实、到那一条下沿淡完，没有一条看得见的边。不接点按、读屏跳过。
+/// 窗口最顶上那一条的页底色渐变（`Bars`）：`solid` 以上实、往下缓缓淡完到那一条下沿，没有一条看得见的边。不接点按、读屏跳过。
 struct TopFade: View {
     let color: Color
-    private static let stops: [(alpha: Double, at: CGFloat)] = [(1, 0), (1, 0.55), (0.75, 0.7), (0.35, 0.85), (0, 1)]
+    var solid: CGFloat = 0.55
+    private static let fade: [Double] = [0.75, 0.35, 0]
 
     var body: some View {
-        LinearGradient(stops: Self.stops.map { .init(color: color.opacity($0.alpha), location: $0.at) }, startPoint: .top, endPoint: .bottom)
+        let step = (1 - solid) / CGFloat(Self.fade.count)
+        let fading = Self.fade.enumerated().map { Gradient.Stop(color: color.opacity($1), location: solid + step * CGFloat($0 + 1)) }
+        LinearGradient(stops: [.init(color: color, location: 0), .init(color: color, location: solid)] + fading, startPoint: .top, endPoint: .bottom)
             .allowsHitTesting(false)
             .accessibilityHidden(true)
     }
