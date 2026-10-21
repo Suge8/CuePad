@@ -39,14 +39,12 @@ extension Workspace {
     }
 
     /// 接入面板的 Agent 那几行（只在这里推）：各家还要你做的那一步（`setupStep`），没事可做的不列。平时只列可勾的与要登录的；
-    /// 能当 Cue 的一家都用不了时，能当 Cue 的几家都列上，推荐 Claude Code：它与已经装了的摆出来，没装的收进"其他"。
-    func setupRows(here: MacAgents) -> (shown: [SetupRow], others: [SetupRow]) {
+    /// 能当 Cue 的一家都用不了时，能当 Cue 的几家平行列上，推荐的 Claude Code 排第一。
+    func setupRows(here: MacAgents) -> [SetupRow] {
         let needsAgent = setupCue(here: here) == .needsAgent
-        let rows = Self.rowOrder.compactMap { kind in
+        return Self.rowOrder.compactMap { kind in
             setupStep(kind, here: here).map { SetupRow(kind: kind, step: $0) }
         }.filter { $0.step.isActionable || needsAgent && CueProfile.runtimes.contains($0.kind) }
-        let others = rows.filter { $0.kind != .claudeCode && $0.step.isInstall }
-        return (rows.filter { !others.contains($0) }, others)
     }
 
     private static let rowOrder: [AgentKind] = [.claudeCode, .codex, .pi, .opencode]
@@ -136,13 +134,6 @@ enum SetupStep: Equatable {
     /// 别的原因（问不出模型……），只写出来
     case problem(String)
 
-    var isInstall: Bool {
-        switch self {
-        case .install, .needs: true
-        default: false
-        }
-    }
-
     /// 平时也列出来的：要你点的（勾上接入、登录）
     var isActionable: Bool {
         switch self {
@@ -180,14 +171,13 @@ struct SetupPanel: View {
     /// 去掉勾的几家与 Cue 那一行（面板开着时的选择，不存）
     @State private var skipped: Set<AgentKind> = []
     @State private var skipsCue = false
-    @State private var showsOthers = false
     @State private var working = false
     @State private var failures = SetupFailures()
 
     private var agents: AgentIntegrations { services.agents }
     private var mac: MacAgents { here ?? MacAgents(hostID: services.hostID, agents: [], modifiedAt: .distantPast) }
-    private var rows: (shown: [SetupRow], others: [SetupRow]) { workspace.setupRows(here: mac) }
-    private var chosen: [AgentKind] { rows.shown.filter { $0.step == .connect && !skipped.contains($0.kind) }.map(\.kind) }
+    private var rows: [SetupRow] { workspace.setupRows(here: mac) }
+    private var chosen: [AgentKind] { rows.filter { $0.step == .connect && !skipped.contains($0.kind) }.map(\.kind) }
     private var cueName: String { workspace.cue.name }
     private var setupCue: Workspace.SetupCue { workspace.setupCue(here: mac) }
     /// 列出 Cue 那一行：能勾的，或在等 iCloud 的。
@@ -195,11 +185,13 @@ struct SetupPanel: View {
     private var waiting: String? { if case .waiting(let why) = setupCue { why } else { nil } }
     private var enablingCue: Bool { setupCue == .enable && !skipsCue }
     /// 检测完了，有可勾的：要接入的几家或 Cue 那一行。
-    private var hasChoices: Bool { checked && (rows.shown.contains { $0.step == .connect } || cueRowShown) }
-    /// 摆出来的几家里还有没装的（提示写"先装"，否则写"先登录"）。
-    private var installsFirst: Bool { rows.shown.contains { $0.step.isInstall || $0.step == .installing } }
+    private var hasChoices: Bool { checked && (rows.contains { $0.step == .connect } || cueRowShown) }
+    /// 有一家装好了只差登录（提示写"先登录"，否则写"先装"）。
+    private var logsInFirst: Bool {
+        rows.contains { if case .logIn = $0.step { true } else { $0.step == .loggingIn } }
+    }
     /// 检测完了，没有要做的。
-    private var done: Bool { checked && rows.shown.isEmpty && !cueRowShown }
+    private var done: Bool { checked && rows.isEmpty && !cueRowShown }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -216,7 +208,6 @@ struct SetupPanel: View {
         .frame(width: 520)
         .background(palette.desk)
         .animation(Motion.quick, value: checked)
-        .animation(Motion.quick, value: showsOthers)
         .onAppear { withAnimation(reduceMotion ? Motion.quick : Motion.snappy) { shown = true } }
         .observing(services.store, into: $here, onError: workspace.fail) { [host = services.hostID] in try $0.macAgents(on: host) }
         .task {
@@ -241,16 +232,15 @@ struct SetupPanel: View {
             note { Spinner(.small); Text("正在检测 Agent…") }
         } else {
             if setupCue == .needsAgent {
-                Text("先\(installsFirst ? "装" : "登录")一个能当 \(cueName) 的 Agent").font(Typography.secondary).foregroundStyle(palette.ink2)
+                Text("先\(logsInFirst ? "登录" : "装")一个能当 \(cueName) 的 Agent").font(Typography.secondary).foregroundStyle(palette.ink2)
                     .padding(.horizontal, 4)
             }
-            if !rows.shown.isEmpty || cueRowShown {
+            if !rows.isEmpty || cueRowShown {
                 group {
-                    ForEach(rows.shown) { row($0) }
+                    ForEach(rows) { row($0) }
                     if cueRowShown { cueRow }
                 }
             }
-            if !rows.others.isEmpty { others }
             if done { note { Text("都已接入") } }
         }
     }
@@ -260,22 +250,6 @@ struct SetupPanel: View {
         HStack(spacing: 8) { content() }.foregroundStyle(palette.ink2)
             .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 12).padding(.vertical, 9)
             .background(palette.paper, in: .rect(cornerRadius: 10, style: .continuous))
-    }
-
-    /// 没推荐的那几家（Codex、Pi）：点"其他"展开。
-    private var others: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Button { showsOthers.toggle() } label: {
-                HStack(spacing: 4) {
-                    Text("其他")
-                    Image(showsOthers ? .collapse : .expand).font(.system(size: 9, weight: .semibold))
-                }
-                .font(Typography.secondary).foregroundStyle(palette.ink2).contentShape(.rect)
-            }
-            .buttonStyle(.plain)
-            .padding(.horizontal, 4)
-            if showsOthers { group { ForEach(rows.others) { row($0) } } }
-        }
     }
 
     /// 一家一行：这一步写什么、右边放什么（勾选、安装、登录）。

@@ -33,10 +33,9 @@ struct SetupTests {
     }
 
     /// 面板此刻的 Cue 那一行与 Agent 那几行（读这台写下的各家能不能用，同面板）。
-    private func panel(_ workspace: Workspace) async throws -> (cue: Workspace.SetupCue, shown: [SetupRow], others: [SetupRow]) {
+    private func panel(_ workspace: Workspace) async throws -> (cue: Workspace.SetupCue, rows: [SetupRow]) {
         let here = try await services.store.macAgents(on: TestApp.hostID)
-        let rows = workspace.setupRows(here: here)
-        return (workspace.setupCue(here: here), rows.shown, rows.others)
+        return (workspace.setupCue(here: here), workspace.setupRows(here: here))
     }
 
     @Test func 首次打开_一键接入检测到的Agent并启用Cue_接着对Cue说的话交给它() async throws {
@@ -68,17 +67,18 @@ struct SetupTests {
         #expect(workspace.showsSetup)
         var now = try await panel(workspace)
         #expect(now.cue == .needsAgent)
-        #expect(now.shown == [SetupRow(kind: .claudeCode, step: .install(nil))])
-        #expect(now.others.map(\.kind) == [.codex, .pi])
+        let node = try #require(AgentKind.pi.installPrerequisite)
+        let codex = SetupRow(kind: .codex, step: .install(nil)), pi = SetupRow(kind: .pi, step: .needs(node))
+        #expect(now.rows == [SetupRow(kind: .claudeCode, step: .install(nil)), codex, pi])  // 三家平行列出，推荐的排第一
 
         await workspace.installAgent(.claudeCode)
         now = try await panel(workspace)
-        #expect(now.shown == [SetupRow(kind: .claudeCode, step: .logIn(nil))])
+        #expect(now.rows == [SetupRow(kind: .claudeCode, step: .logIn(nil)), codex, pi])
 
         await workspace.logIn(.claudeCode)
         now = try await panel(workspace)
         #expect(now.cue == .enable)
-        #expect(now.shown == [SetupRow(kind: .claudeCode, step: .connect)])
+        #expect(now.rows == [SetupRow(kind: .claudeCode, step: .connect)])
 
         #expect(await workspace.setUp(connecting: [.claudeCode], enablingCue: true).isEmpty)
         #expect(try await services.store.cueProfile()?.runtime == .known(.claudeCode))
@@ -90,19 +90,20 @@ struct SetupTests {
         let workspace = try await launch()
         var now = try await panel(workspace)
         #expect(now.cue == .needsAgent)
-        #expect(now.shown == [SetupRow(kind: .claudeCode, step: .logIn(nil)), SetupRow(kind: .pi, step: .logIn(nil))])
-        #expect(now.others.map(\.kind) == [.codex])
+        #expect(now.rows == [
+            SetupRow(kind: .claudeCode, step: .logIn(nil)), SetupRow(kind: .codex, step: .install(nil)), SetupRow(kind: .pi, step: .logIn(nil)),
+        ])
 
         await workspace.logIn(.claudeCode)
         now = try await panel(workspace)
         #expect(now.cue == .enable)
-        #expect(now.shown == [SetupRow(kind: .claudeCode, step: .connect), SetupRow(kind: .pi, step: .logIn(nil))])  // Pi 仍要登录才勾得上
+        #expect(now.rows == [SetupRow(kind: .claudeCode, step: .connect), SetupRow(kind: .pi, step: .logIn(nil))])  // Pi 仍要登录才勾得上
     }
 
     @Test func Pi缺够新的NodeJS_先给官网_装上了才给安装() async throws {
         let node = try #require(AgentKind.pi.installPrerequisite)
         let workspace = try await launch()
-        func pi() async throws -> SetupStep? { try await panel(workspace).others.first { $0.kind == .pi }?.step }
+        func pi() async throws -> SetupStep? { try await panel(workspace).rows.first { $0.kind == .pi }?.step }
         #expect(try await pi() == .needs(node))
 
         try app.installNode("v20.11.0")
@@ -117,7 +118,7 @@ struct SetupTests {
     @Test func 装不上或没登录上_就地写原因_可再点() async throws {
         let workspace = try await launch()
         await workspace.installAgent(.claudeCode)  // 安装脚本出错
-        guard case .install(let why?) = try await panel(workspace).shown.first?.step else {
+        guard case .install(let why?) = try await panel(workspace).rows.first?.step else {
             Issue.record("没装上时应仍是安装，带原因")
             return
         }
@@ -126,7 +127,7 @@ struct SetupTests {
         try app.offersClaudeInstaller(loginFails: true)
         await workspace.installAgent(.claudeCode)
         await workspace.logIn(.claudeCode)
-        #expect(try await panel(workspace).shown == [SetupRow(kind: .claudeCode, step: .logIn("没登录成功"))])
+        #expect(try await panel(workspace).rows.first == SetupRow(kind: .claudeCode, step: .logIn("没登录成功")))
     }
 
     @Test func 换新Mac_还没和iCloud对过_不提议在这台启用_对过发现Cue在别处就只管接入() async throws {
@@ -143,7 +144,7 @@ struct SetupTests {
         }
         try await app.syncs()
         try await eventually("Cue 那一行没了") { try await panel(workspace).cue == .none }
-        #expect(try await panel(workspace).shown == [SetupRow(kind: .pi, step: .connect)])  // 接入照常
+        #expect(try await panel(workspace).rows == [SetupRow(kind: .pi, step: .connect)])  // 接入照常
     }
 
     @Test func 老用户已接入Agent只差Cue_弹一次只剩Cue那一行_只这一次() async throws {
@@ -152,7 +153,7 @@ struct SetupTests {
         let first = try await launch()
         #expect(first.showsSetup)
         let now = try await panel(first)
-        #expect(now.shown.isEmpty)
+        #expect(now.rows.isEmpty)
         #expect(now.cue == .enable)
 
         app.relaunch()
