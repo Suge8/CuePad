@@ -50,9 +50,9 @@ extension CueTools {
       let (_, index) = try await store.noteCueLine(try args.required("text"), source: .cue, remindAt: at)
       return .ok("记下了 #\(index)，\(iso(at)) 叫醒你。")
     case "merge":
-      guard let lo = args.int("lo"), let hi = args.int("hi") else { throw Failure("merge 要给 lo 与 hi（区间 [lo, hi)）") }
-      try await store.setCueSummary(lo: lo, hi: hi, text: try args.required("text"))
-      return .ok("#\(lo)-\(hi - 1) 合成了一行。")
+      guard let lo = args.int("lo"), let hi = args.int("hi") else { throw Failure("merge 要给 lo 与 hi（同待合并里的 #lo-hi，hi 含在内）") }
+      try await store.setCueSummary(lo: lo, hi: hi + 1, text: try args.required("text"))
+      return .ok("#\(lo)-\(hi) 合成了一行。")
     case "zoom":
       guard let lo = args.int("lo") else { throw Failure("zoom 要给 lo（与 hi，同记忆视图里的 #lo-hi）") }
       guard let text = CueMemoryView(try await store.cueMemory()).zoom(lo: lo, hi: args.int("hi") ?? lo) else {

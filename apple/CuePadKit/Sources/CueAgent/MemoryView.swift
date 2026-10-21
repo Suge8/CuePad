@@ -121,9 +121,9 @@ public struct CueMemoryView: Equatable, Sendable {
     guard !merges.isEmpty else { return nil }
     let head = """
       记忆里有 \(merges.count) 块待合并。先逐块合成一行（至多 \(CueMemoryLine.maxBytes) 字节），留下有长期影响的，不编造，\
-      写回：memory merge {lo, hi, text}；合并不用告诉他，合完再照常处理下面的 <cue>。
+      #lo-hi 写回：memory merge {lo, hi, text}；合并不用告诉他，合完再照常处理下面的 <cue>。
       """
-    let blocks = merges.map { "#\($0.lo)-\($0.hi - 1)（lo: \($0.lo), hi: \($0.hi)）\n\($0.source)" }
+    let blocks = merges.map { "#\($0.lo)-\($0.hi - 1)\n\($0.source)" }
     return (["<merge>", head] + blocks + ["</merge>"]).joined(separator: "\n")
   }
 
