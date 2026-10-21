@@ -26,8 +26,8 @@ struct EvalBrain {
             effort: evalEnvironment["CUEPAD_CUE_EVAL_EFFORT"].flatMap(PiThinkingLevel.init(rawValue:)) ?? .medium)
     }()
 
-    /// .md 与 score.json 里写的大脑：大脑、模型与强度、上下文做法
-    var label: String { "\(runtime.name) · \(model) · \(effort.rawValue) · 精简混合（到换新线或缓存过期开新会话，用记忆视图与最近对话接上）" }
+    /// .md 与 score.json 里写的大脑：大脑、模型与强度
+    var label: String { "\(runtime.name) · \(model) · \(effort.rawValue)" }
 
     /// Pi 的登录：用户的 Pi 存的那一份，只读
     private static let piAuth = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".pi/agent/auth.json")
