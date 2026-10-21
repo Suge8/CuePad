@@ -1,12 +1,5 @@
 #if os(macOS)
-import AppKit
-import CuePi
-import CueStore
-import CueTestSupport
 import Foundation
-import SwiftUI
-import Testing
-@testable import CuePad
 
 /// 长程剧本里会话的长回复与他贴来的长文：撑大 Cue 的上下文（peek 给最新回答全文），也藏着后面要用的事实。
 enum LongScript {
