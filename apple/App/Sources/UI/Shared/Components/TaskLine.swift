@@ -8,6 +8,7 @@ import SwiftUI
 /// 看板上上级收成一行（`lead`）：状态看此刻干活的叶子。所在项目由所在的页或段头说，行里不重复。
 /// 步骤（`step`）比上级小一档：字小一号、圈小一号，缩进到圈对着上级标题的起点（`TaskOutline.indentWidth`），层级靠对齐读出来，不靠线。
 /// 旁注的位置：iPhone 在行尾（屏窄，行尾就在眼前）；iPad 宽栏与 Mac 紧跟标题（放在行尾时宽窗口里离标题太远，一眼看不到）。
+/// 标题优先：窄的看板列里行尾放不下时让位（`TaskLineLayout`），先丢时间、再丢没写状态词的标，要你管的状态词总留着。
 /// 点圈完成（`TaskCheck`），点行的其余地方打开任务气泡（`Workspace.openTask`；气泡里的步骤行是翻到这一步）。Mac 右键是 `CardActions`；
 /// 手机长按直接拖动（`TaskOutline`），不挂长按菜单：系统长按菜单弹出后，把预览往下拉是收起菜单、拖不起来，
 /// 往下面的组或项目段拖就做不到。菜单那几项各有入口：完成点圈、删除轻扫、归档在任务气泡的"⋯"。
@@ -61,23 +62,22 @@ struct TaskLine: View {
         let title = Text(task.title.textGlyphs).strikethrough(done, color: palette.ink3).foregroundStyle(done ? palette.ink3 : palette.ink)
             .font(step ? TaskMetrics.stepFont : TaskMetrics.lineFont)
             .lineLimit(titleLines)
-        // 旁注不让：标题先折行、再截断，状态词总是完整的
-        let side = HStack(alignment: .firstTextBaseline, spacing: 8) { notes(next: next, done: done) }.fixedSize()
         // 圈与旁注都对着标题第一行（`TaskRingView` 的基线），标题折成两行也不落到中间
         return HStack(alignment: .firstTextBaseline, spacing: TaskMetrics.columnGap) {
             ring(next: next)
             if stacked {
                 // 辅助字号时：旁注换到标题下面，不与标题抢一行
-                VStack(alignment: .leading, spacing: 2) { title; side }
-                    .padding(.vertical, Self.titlePadding)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            } else if inline {
-                title.padding(.vertical, Self.titlePadding)
-                side.padding(.leading, 8)
-                Spacer(minLength: 0)
+                VStack(alignment: .leading, spacing: 2) {
+                    title
+                    HStack(alignment: .firstTextBaseline, spacing: TaskLineLayout.gap) { notes(next: next, done: done) }.fixedSize()
+                }
+                .padding(.vertical, Self.titlePadding)
+                .frame(maxWidth: .infinity, alignment: .leading)
             } else {
-                title.padding(.vertical, Self.titlePadding).frame(maxWidth: .infinity, alignment: .leading)
-                side.padding(.leading, 8)
+                TaskLineLayout(trailing: !inline) {
+                    title.padding(.vertical, Self.titlePadding)
+                    notes(next: next, done: done)
+                }
             }
         }
         .frame(minHeight: TaskMetrics.rowHeight)
@@ -94,7 +94,7 @@ struct TaskLine: View {
         #endif
     }
 
-    /// 旁注：多久与"下一步"；做完的不写，要你管的状态词写出来时不写多久。
+    /// 旁注：多久与"下一步"；做完的不写，要你管的状态词写出来时不写多久。放不下时谁先让（`TaskLineLayout.yields`）：先是时间，再是没写状态词的标。
     @ViewBuilder private func notes(next: TaskNext?, done: Bool) -> some View {
         if !done, !(next?.speaks ?? false), let pace = TaskPace.of(task, steps: subtasks) {
             Group {
@@ -103,9 +103,10 @@ struct TaskLine: View {
                 case .ran(let since): LiveText(style: TaskPace.Ran(since: since))
                 }
             }
-            .font(TaskMetrics.caption).monospacedDigit().foregroundStyle(palette.ink3).fixedSize()
+            .font(TaskMetrics.caption).monospacedDigit().foregroundStyle(palette.ink3)
+            .yields(first: true)
         }
-        if !done, let next { TaskNextMark(next: next).transition(.opacity) }
+        if !done, let next { TaskNextMark(next: next).yields(first: false, ever: !next.speaks).transition(.opacity) }
     }
 
     private func open() { workspace.openTask(task) }
@@ -154,6 +155,107 @@ struct TaskLine: View {
             .padding(.vertical, 1)
     }
     #endif
+}
+
+/// 任务行的标题与行尾一次排（`TaskLine`；不用 `ViewThatFits`：它把每个候选都建一遍）：第一格是标题，其后是行尾各格。
+/// 标题至少留 `minTitle`（比它短的留它整行）；放不下时行尾按让位的先后收起（`yields`：先是时间，再是没写状态词的标），
+/// 写了状态词的（要你管的那件）不让。收起的那格量成零大小、裁掉不画。`trailing`：行尾贴右（手机一列）；否则紧跟标题（iPad 宽栏、Mac）。
+/// 行尾各格的首行基线对着标题首行；整块的首行基线就是标题的，外面的圈对着它。
+struct TaskLineLayout: Layout {
+    let trailing: Bool
+
+    static let gap: CGFloat = 8
+    #if os(macOS)
+    static let minTitle: CGFloat = 96
+    #else
+    static let minTitle: CGFloat = 110
+    #endif
+
+    /// 行尾一格让位的先后：数大的先让，0 不让。
+    struct Yield: LayoutValueKey { static let defaultValue = 0 }
+
+    private struct Plan {
+        var title: ProposedViewSize
+        var shown: [Bool]
+        var sizes: [CGSize]
+        var side: CGFloat
+        var titleWidth: CGFloat
+        /// 各格顶边相对整块顶边的位置（第一格是标题）。
+        var tops: [CGFloat]
+        var height: CGFloat
+    }
+
+    private func plan(_ width: CGFloat?, _ subviews: Subviews) -> Plan {
+        let notes = Array(subviews.dropFirst())
+        let sizes = notes.map { $0.sizeThatFits(.unspecified) }
+        var shown = notes.map { _ in true }
+        func side() -> CGFloat { zip(sizes, shown).reduce(0) { $0 + ($1.1 ? $1.0.width + Self.gap : 0) } }
+        let ideal = subviews[0].sizeThatFits(.unspecified).width
+        if let width {
+            for index in notes.indices.sorted(by: { notes[$0][Yield.self] > notes[$1][Yield.self] }) where notes[index][Yield.self] > 0 {
+                if width - side() >= min(ideal, Self.minTitle) { break }
+                shown[index] = false
+            }
+        }
+        let room = max((width ?? ideal + side()) - side(), 0)
+        let titleWidth = trailing && width != nil ? room : min(ideal, room)
+        let title = ProposedViewSize(width: titleWidth, height: nil)
+        let titleSize = subviews[0].sizeThatFits(title)
+        let baseline = subviews[0].dimensions(in: title)[.firstTextBaseline]
+        var tops = [0.0], bottoms = [titleSize.height]
+        for (index, note) in notes.enumerated() {
+            let top = shown[index] ? baseline - note.dimensions(in: ProposedViewSize(sizes[index]))[.firstTextBaseline] : 0
+            tops.append(top)
+            bottoms.append(top + (shown[index] ? sizes[index].height : 0))
+        }
+        let lift = -min(tops.min() ?? 0, 0)
+        return Plan(
+            title: title, shown: shown, sizes: sizes, side: side(), titleWidth: titleWidth,
+            tops: tops.map { $0 + lift }, height: (bottoms.max() ?? 0) + lift)
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard !subviews.isEmpty else { return .zero }
+        let plan = plan(proposal.width, subviews)
+        return CGSize(width: proposal.width ?? plan.titleWidth + plan.side, height: plan.height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard !subviews.isEmpty else { return }
+        let plan = plan(bounds.width, subviews)
+        subviews[0].place(at: CGPoint(x: bounds.minX, y: bounds.minY + plan.tops[0]), proposal: plan.title)
+        var x = trailing ? bounds.maxX - plan.side : bounds.minX + plan.titleWidth
+        for (index, note) in subviews.dropFirst().enumerated() {
+            guard plan.shown[index] else {
+                note.place(at: bounds.origin, proposal: .zero)
+                continue
+            }
+            x += Self.gap
+            note.place(at: CGPoint(x: x, y: bounds.minY + plan.tops[index + 1]), proposal: ProposedViewSize(plan.sizes[index]))
+            x += plan.sizes[index].width
+        }
+    }
+
+    func explicitAlignment(of guide: VerticalAlignment, in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGFloat? {
+        guard guide == .firstTextBaseline, !subviews.isEmpty else { return nil }
+        let plan = plan(bounds.width, subviews)
+        return bounds.minY + plan.tops[0] + subviews[0].dimensions(in: plan.title)[.firstTextBaseline]
+    }
+}
+
+extension View {
+    /// 任务行行尾的一格（`TaskLineLayout`）：放不下时让位，`first` 的先让；`ever` 为假的不让。
+    /// 量自己时是本来的大小，让掉时给零大小、裁掉不画；不让的不裁（等你确认的波纹画在标外面）。
+    @ViewBuilder func yields(first: Bool, ever: Bool = true) -> some View {
+        if ever {
+            fixedSize()
+                .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .topLeading)
+                .clipped()
+                .layoutValue(key: TaskLineLayout.Yield.self, value: first ? 2 : 1)
+        } else {
+            fixedSize()
+        }
+    }
 }
 
 /// 任务行上"下一步"那一格（`TaskNext`），Mac 与手机同一份，不垫底、不成胶囊——一屏可能有十几格，胶囊排成一列就成了一墙按钮：
