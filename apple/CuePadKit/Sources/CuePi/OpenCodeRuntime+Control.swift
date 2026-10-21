@@ -84,7 +84,7 @@ extension OpenCodeRuntime {
         case (.select, .option(let label)):
             guard let option = field.options?.first(where: { $0.label == label }) else { throw PiBridgeError.rejected("bad_answer") }
             value = .string(option.value)
-        case (.text, .text(let text)), (.select, .text(let text)) where question.acceptsText: value = .string(text)
+        case (_, .text(let text)) where question.acceptsText: value = .string(text)
         case (.confirm, .confirmed(let yes)): value = .bool(yes)
         default: throw PiBridgeError.rejected("bad_answer")
         }
