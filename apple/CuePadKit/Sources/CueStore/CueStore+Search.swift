@@ -5,7 +5,7 @@ extension CueStore {
   /// 每个活动项目（按项目顺序）的灵感数：散放在列表里、不是空白的灵感。一次查询，不必读全部卡片。
   public func projectSummaries() throws -> [ProjectSummary] {
     let counts = Dictionary(uniqueKeysWithValues: try db.query(
-      "SELECT projectID, COUNT(*) FROM cards WHERE (\(cardActive)) AND (\(looseIdea)) AND \(notBlank) GROUP BY projectID"
+      "SELECT projectID, COUNT(*) FROM cards WHERE (\(Self.cardActive)) AND (\(Self.looseIdea)) AND \(Self.notBlank) GROUP BY projectID"
     ) { ($0.uuid(0), Int($0.int(1))) })
     return try projects().map { ProjectSummary(projectID: $0.id, cardCount: counts[$0.id] ?? 0) }
   }
@@ -40,7 +40,7 @@ extension CueStore {
   }
 
   private func cardCondition(_ query: SearchQuery, terms: [String]) -> (String, [any SQLBindable]) {
-    var parts = [query.inTrash ? "NOT (\(cardVisible))" : "(\(cardVisible))"]
+    var parts = [query.inTrash ? "NOT (\(Self.cardVisible))" : "(\(Self.cardVisible))"]
     var arguments: [any SQLBindable] = []
 
     for term in terms {

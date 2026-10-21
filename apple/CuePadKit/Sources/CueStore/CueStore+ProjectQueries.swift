@@ -32,7 +32,7 @@ extension CueStore {
     Dictionary(uniqueKeysWithValues: try db.query(
       """
       SELECT projectID, COUNT(*) FROM cards
-      WHERE NOT (\(cardVisible)) AND projectID IN (SELECT id FROM projects WHERE deletedAt IS NOT NULL) GROUP BY projectID
+      WHERE NOT (\(Self.cardVisible)) AND projectID IN (SELECT id FROM projects WHERE deletedAt IS NOT NULL) GROUP BY projectID
       """
     ) { ($0.uuid(0), Int($0.int(1))) })
   }

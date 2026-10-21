@@ -1,31 +1,11 @@
 import CueText
 import Foundation
 
-/// 卡片可见：自身未删除，且所属项目在库里、未删除（项目还没同步到的先不显示）。
-let cardVisible = """
-  deletedAt IS NULL AND projectID IN (SELECT id FROM projects WHERE deletedAt IS NULL)
-  """
-
-/// 在列表里：可见且没归档（归档的只在"归档"里，搜索照样搜得到）。
-let cardActive = "(\(cardVisible)) AND archivedAt IS NULL"
-
-/// 散放的灵感：不是任务，也没挂在一个看得见的任务下（上级没到、在回收站的按散放看待）。
-let looseIdea = """
-  todoAt IS NULL AND (parentID IS NULL OR parentID NOT IN (SELECT id FROM cards WHERE deletedAt IS NULL AND todoAt IS NOT NULL))
-  """
-
-/// 列得出来的任务（`t` 是任务表，`p` 是它左连接的项目表）：要做、没删除、没归档，且所属项目没删除（还没同步到的项目照列，同 `taskProjectOrder`）。
-/// `tasks` 与 `taskCounts` 共用。
-private let visibleTask = "t.todoAt IS NOT NULL AND t.deletedAt IS NULL AND t.archivedAt IS NULL AND p.deletedAt IS NULL"
-
-/// 正文不是空白（与 `Card.isBlank` 同一条规则）。
-let notBlank = "TRIM(body, char(32, 9, 10, 13)) <> ''"
-
 extension CueStore {
   /// 某项目里可见的灵感（不含任务，也不含挂在任务下的），按手动顺序：卡片墙与 `card list` 列的就是它们。
   /// 任务见 `tasks(_:)`，挂在任务下的见 `children(of:)`。
   public func cards(in project: UUID) throws -> [Card] {
-    try select(Card.self, where: "(\(cardActive)) AND (\(looseIdea)) AND projectID = ?", [project], orderBy: "sortKey, id")
+    try select(Card.self, where: "(\(Self.cardActive)) AND (\(Self.looseIdea)) AND projectID = ?", [project], orderBy: "sortKey, id")
   }
 
   /// 回收站里单独删除的卡片，最近删除的在前；随项目删除的卡归在该项目名下，不在这里。
@@ -40,7 +20,7 @@ extension CueStore {
     try select(
       Card.self,
       where: """
-        (\(cardVisible)) AND archivedAt IS NOT NULL
+        (\(Self.cardVisible)) AND archivedAt IS NOT NULL
         AND (parentID IS NULL OR parentID NOT IN (SELECT id FROM cards WHERE archivedAt IS NOT NULL AND deletedAt IS NULL))
         """,
       orderBy: "archivedAt DESC, id")
@@ -90,7 +70,7 @@ extension CueStore {
     let tasks = try db.query(
       """
       SELECT \(Card.selection(as: "t")) FROM cards t LEFT JOIN projects p ON p.id = t.projectID
-      WHERE \(visibleTask) \(doneOnly ? " AND t.completedAt IS NOT NULL" : "") \(project == nil ? "" : " AND t.projectID = ?")
+      WHERE \(Self.visibleTask) \(doneOnly ? " AND t.completedAt IS NOT NULL" : "") \(project == nil ? "" : " AND t.projectID = ?")
       ORDER BY \(Self.taskProjectOrder), \(doneOnly ? "t.completedAt DESC, t.id" : "t.sortKey, t.id")
       """, project.map { [$0] } ?? []
     ) { Card(row: $0) }
@@ -146,7 +126,7 @@ extension CueStore {
       """
       SELECT t.projectID, SUM(t.completedAt IS NULL AND began), SUM(t.completedAt IS NULL AND NOT began), SUM(t.completedAt IS NOT NULL)
       FROM (SELECT t.projectID, t.completedAt, \(Card.startedSQL("t")) IS NOT NULL AS began \(Self.taskWithParent)
-      WHERE \(visibleTask) AND \(Self.topLevel) \(scope)) t
+      WHERE \(Self.visibleTask) AND \(Self.topLevel) \(scope)) t
       GROUP BY +t.projectID
       """, arguments
     ) { (project: $0.uuid(0), counts: TaskCounts(inProgress: Int($0.int(1)), todo: Int($0.int(2)), done: Int($0.int(3)))) }
@@ -158,7 +138,7 @@ extension CueStore {
     try db.query(
       """
       SELECT \(Card.selection(as: "t")) AS began \(Self.taskWithParent)
-      WHERE \(visibleTask) AND t.completedAt IS NULL AND began IS NOT NULL
+      WHERE \(Self.visibleTask) AND t.completedAt IS NULL AND began IS NOT NULL
       ORDER BY began DESC, \(Self.taskProjectOrder), t.sortKey, t.id
       """
     ) { Card(row: $0) }
@@ -180,7 +160,7 @@ extension CueStore {
     return try db.query(
       """
       SELECT \(Card.selection(as: "t")) \(Self.taskWithParent)
-      WHERE \(visibleTask) AND t.completedAt IS NOT NULL AND \(Self.topLevel)\(scope)
+      WHERE \(Self.visibleTask) AND t.completedAt IS NOT NULL AND \(Self.topLevel)\(scope)
       ORDER BY t.completedAt DESC, t.id\(limit.map { " LIMIT \($0)" } ?? "")
       """, arguments
     ) { Card(row: $0) }
@@ -215,7 +195,7 @@ extension CueStore {
       uniqueKeysWithValues: try db.query(
         """
         SELECT s.cardID, s.sentAt, s.targetKind, s.targetName, s.targetRef FROM sendRecords s
-        WHERE s.cardID IN (SELECT id FROM cards WHERE (\(cardVisible)) AND projectID = ?)
+        WHERE s.cardID IN (SELECT id FROM cards WHERE (\(Self.cardVisible)) AND projectID = ?)
           AND s.id = (SELECT t.id FROM sendRecords t WHERE t.cardID = s.cardID ORDER BY t.sentAt DESC, t.id DESC LIMIT 1)
         """, [project]
       ) {
