@@ -7,9 +7,6 @@ extension AnyTransition {
     /// 底部锚定下正在读的那段会先被推走再滑回来
     static let entry = AnyTransition.opacity.animation(Motion.quick)
 
-    /// 同一处先后换两句字（状态的一句、你的话到哪了的记号）：旧的先淡掉、新的随后淡入——长短不同的两句同时交叉淡，中间几帧叠成读不出的一团。
-    static let handOff = AnyTransition.asymmetric(
-        insertion: .opacity.animation(Motion.quick.delay(Motion.handOff)), removal: .opacity.animation(.easeOut(duration: Motion.handOff)))
 }
 
 /// 你的话那颗气泡长什么样，两处各一种，只在这里分：

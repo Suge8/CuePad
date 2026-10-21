@@ -29,7 +29,7 @@ nonisolated extension CueNow {
         if presence == .disabled, let waiting = local.waiting { return .away(waiting, failed: false) }
         return switch presence {
         case .disabled, .asleep, .unreachable:
-            .away(presence.line(host: digest.hostName ?? MacAgents.unnamed) ?? digest.name, failed: presence.isUnreachable)
+            .away(presence.line(host: digest.hostName ?? MacAgents.unnamed, ranBefore: digest.hostID != nil) ?? digest.name, failed: presence.isUnreachable)
         case .idle: .idle
         case .sending: .hearing
         case .working:

@@ -63,9 +63,10 @@ nonisolated enum CuePresence: Equatable, Sendable {
 
     /// 它不在时那一句（Cue 此刻的原因，`CueNow.Brain.away`；等同步时那句由 `CueNow.Local` 给），`host` 是它运行的那台 Mac 的名字。
     /// 这一句总写在名字下面（Cue 那一行、页头、小组件），不再带名字；睡着时只写哪台没开。在路上、在做事写状态词（`shown`），空闲不写。
-    func line(host: String) -> String? {
+    /// 没启用分两种：从没在哪台 Mac 上运行过是"还没启用"，运行过、后来停了（还记着停用前那台，`CueDigest.hostID`）是"已停用"。
+    func line(host: String, ranBefore: Bool) -> String? {
         switch self {
-        case .disabled: "还没启用"
+        case .disabled: ranBefore ? "已停用" : "还没启用"
         case .asleep: "「\(host)」没开"
         case .unreachable(let reason): reason
         case .idle, .sending, .working: nil

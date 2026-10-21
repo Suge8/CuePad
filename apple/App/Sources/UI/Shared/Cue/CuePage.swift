@@ -9,7 +9,7 @@ import SwiftUI
 /// 经过清单里"对你说"那一条点它回到对话里的原处。Cue 自己醒来的连着几轮收进一颗虚线气泡（`CueNoteBubble`：每轮写为什么醒，点了去叫醒它的会话），
 /// 末尾是它此刻在做什么（`CueEnding`）；
 /// 对话区与会话页是同一个（`ChatColumn`：排开、刻度滑条、跳转与描圈）；底部是"等你"（`CueWaitingDock`）与输入框（`CueComposer`）。
-/// 首次见面与启用只有一处（`CueWelcome`）：还没说过话时在正中，说过话后停用了在对话末尾。
+/// 首次见面与启用只有一处（`CueWelcome`）：还没说过话时在正中，说过话后停用了在输入框正上方。
 /// 对话第一帧就排好（`observing` 当场读），停在最新处；有新消息时从第一条读起，还没读的气泡旁一颗小点（`CueViewing`）。
 /// Cue 运行在别的设备上、本机正在和 iCloud 对时（`AppServices.isCatchingUp(on:)`）页头写"正在同步"，这期间到的话先不滑上来，
 /// 对完一次滑到最新（`ChatColumn` 的 `holding`）。
@@ -183,8 +183,6 @@ struct CuePage: View {
                 CueEnding(
                     newestSaid: thread.messages.last { $0.author == .known(.cue) }?.createdAt, joined: rows.last?.speaker == .leading,
                     roundInRows: live.map { live in rows.contains { $0.contains(round: live.round) } } ?? false)
-                // 说过话后停用了：启用排在对话末尾（`CueWelcome`），不另在输入框上方放一块
-                if !cue.canHear { CueWelcome(intro: false).padding(.vertical, 12).transition(.opacity) }
             }
             #if os(iOS)
             // 手机上对话里的字不开行内选择：长按出的是消息菜单，挑字走菜单里的"选择文本"（同会话页）
@@ -223,11 +221,13 @@ struct CuePage: View {
 
     // MARK: 底部
 
-    /// 浮在对话底上的一块："等你"卡与输入框。输入框按自己的高、不被挤（`fixedSize`），地方不够时（键盘弹出、小屏、横屏、输入框写了好几行）卡用剩下的。
+    /// 浮在对话底上的一块："等你"卡、停用时的启用与输入框。输入框按自己的高、不被挤（`fixedSize`），地方不够时（键盘弹出、小屏、横屏、输入框写了好几行）卡用剩下的。
     private var bottom: some View {
         VStack(spacing: 0) {
             if let thread {
                 CueWaitingDock(waiting: workspace.leadingAsk(thread.waiting), tasks: thread.tasks, shots: thread.shots, open: { opened = $0 }, moving: $docking)
+                // 说过话后停用了：启用就在输入框正上方（`CueWelcome`），是这时唯一的主动作
+                if !thread.rows.isEmpty, !cue.canHear { CueWelcome(intro: false).fixedSize(horizontal: false, vertical: true).padding(.bottom, 8).transition(.opacity) }
             }
             #if os(iOS)
             Group { if docked { dockRow } else { composer } }.fixedSize(horizontal: false, vertical: true)
@@ -235,5 +235,6 @@ struct CuePage: View {
             CueComposer(style: .page, takesFocusRequests: true) { follow.sent() }.fixedSize(horizontal: false, vertical: true)
             #endif
         }
+        .animation(Motion.quick, value: cue.canHear)
     }
 }

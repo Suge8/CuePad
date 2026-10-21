@@ -73,7 +73,7 @@ struct CueActivityTests {
         // Cue 自己开始想：手上没活也算有活，岛开着；过时之后只信慢的事实
         try await store.setCueState(.thinking)
         cue = try await now()
-        #expect(cue.isLive && cue.headline == "在想" && cue.focus.word == "在想" && cue.staleAfter == CueNow.fastStale)
+        #expect(cue.isLive && cue.headline == CueNow.thinking && cue.focus.word == "在想" && cue.staleAfter == CueNow.fastStale)
         #expect(cue.settled.headline == "刚做完「发布 v1.4」" && !cue.settled.isLive)
     }
 }

@@ -114,7 +114,7 @@ enum Motion {
     /// iPhone 换去处：两页水平推移与底部那一排两块玻璃换形同一个（`DockRoot`、`DockBar`），一起到位；比列表里挪位置走得长，看得清从哪到哪，仍在 300ms 内。
     static let dock = Animation.spring(duration: 0.3, bounce: 0)
     /// 颜色、透明度、悬停这类不移动位置的反馈。
-    static let quick = Animation.easeOut(duration: 0.16)
+    static let quick = HandOff.quick
     /// 按下：快、不回弹，手指一落就到位。
     static let pressDown = Animation.spring(duration: 0.14, bounce: 0)
     /// 松开：稍慢、带一点回弹，像纸被放开时弹回来。
@@ -124,8 +124,8 @@ enum Motion {
 
     /// 减弱动态效果时的整块交叉淡入淡出：只配换了身份的视图用（新旧两块各自淡入淡出），同一个视图上用它照样会插值位置与尺寸。
     static let crossfade = Animation.easeInOut(duration: 0.15)
-    /// 同一处先后换两样东西（一句状态换另一句、横幅让回页头）：旧的这么久淡完，新的晚这么久再出，不叠着交叉淡。
-    static let handOff: Double = 0.08
+    /// 同一处先后换两样东西（`HandOff`）：旧的这么久淡完，新的晚这么久再出。
+    static let handOff = HandOff.gap
 
     /// 位置、尺寸、旋转的动画；减弱动态效果时没有动画、直接到终态——一个动画事务里分不出只淡不挪，换曲线照样插值。
     static func spatial(_ animation: Animation, reduceMotion: Bool) -> Animation? {

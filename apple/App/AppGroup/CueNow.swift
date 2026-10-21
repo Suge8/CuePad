@@ -80,6 +80,8 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
     static let fastStale: TimeInterval = 3 * 60
     static let slowStale: TimeInterval = 15 * 60
     static let quiet = "手上没有事"
+    /// 在一轮里、没在用工具也不知道谁叫醒的那一句：同会话与对话末尾的状态词（`PiShown` 的 working）。
+    static let thinking = "思考中"
 
     var justDone: Bead? { beads.first { $0.kind == .done } }
 
@@ -118,12 +120,13 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
         beads.filter { $0.kind == .done }.map { $0.since.addingTimeInterval(Self.doneWindow) }.filter { $0 > date }.min()
     }
 
-    /// 那一句（Cue 那一行、岛与锁屏的头一行）：在一轮里只说谁叫醒的，此刻那一步另起一行（`doing`）。
+    /// 那一句（Cue 那一行、岛与锁屏的头一行）：在一轮里用工具时说此刻那一步（`doing`），不然说谁叫醒的、都没有时说"思考中"——
+    /// 与 Cue 页对话末尾那一行（`CuePresence.progress`）同一个说法，同屏页头与末尾不各说各的。
     var headline: String {
         switch cue {
         case .away(let reason, _): return reason
         case .hearing: return "你的话在路上"
-        case .working(let woke, _, _): return woke ?? "在想"
+        case .working(let woke, let doing, _): return doing ?? woke ?? Self.thinking
         case .idle:
             let asks = count(.asks), running = count(.running)
             let subagents = beads.filter { $0.kind == .delegating }.reduce(0) { $0 + $1.subagents }
@@ -153,8 +156,8 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
         }
     }
 
-    /// 在一轮里此刻那一步（"读取 Sources/Zoom.swift"）；没在用工具为 nil。
-    var doing: String? { if case .working(_, let doing, _) = cue { doing } else { nil } }
+    /// 那一句之外另起一行的（岛与锁屏）：用工具时那一句说的是此刻那一步，谁叫醒的写在这里；其余为 nil。
+    var aside: String? { if case .working(let woke?, _?, _) = cue { woke } else { nil } }
 
     /// 内容一样（不看推出的时刻）：一样的不重画、不重发。
     func same(as other: CueNow) -> Bool {
