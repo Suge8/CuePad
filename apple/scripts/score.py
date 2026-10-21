@@ -73,7 +73,7 @@ def total(scores: list) -> dict:
            "failed": dict.fromkeys(REASONS, 0), "interrupts": dict.fromkeys(["tell", "urgent", "leave", "other", "total"], 0),
            "usage": dict.fromkeys(["input", "cacheRead", "cacheWrite", "output", "cost"], 0), "merges": 0,
            "dream": {"count": 0, "seconds": 0, "usage": dict.fromkeys(["input", "cacheRead", "cacheWrite", "output", "cost"], 0)},
-           "summaries": {"background": 0, "rounds": 0}}
+           "summaries": {"background": 0, "rounds": 0}, "dreamed": False}
     for s in scores:
         m = s["metrics"]
         for key in ["wakes", "calls", "asks", "overlong", "renewals"]:
@@ -83,6 +83,7 @@ def total(scores: list) -> dict:
             for key, value in m[group].items():
                 out[group][key] = out[group].get(key, 0) + value
         if "dream" in m:
+            out["dreamed"] = True
             out["merges"] += m["merges"]
             out["dream"]["count"] += m["dream"]["count"]
             out["dream"]["seconds"] += m["dream"]["seconds"]
@@ -133,8 +134,8 @@ def suite_report(suite: str, groups: list, runs: dict) -> list:
 
     def row(values: dict, show, digits=2) -> str:
         cells = [show(n) for n in present]
-        means = [float(mean([values[n] for n in g])) for g in groups]
-        spreads = [float(spread([values[n] for n in g])) for g in groups]
+        means = [float(mean([values[n] for n in g if values[n] is not None])) for g in groups]
+        spreads = [float(spread([values[n] for n in g if values[n] is not None])) for g in groups]
         cells.append(fmt(means[0], digits))
         if two:
             delta = means[1] - means[0]
@@ -154,9 +155,10 @@ def suite_report(suite: str, groups: list, runs: dict) -> list:
     totals = {n: total(runs[n][suite]) for n in present}
     dreamed = any("dream" in s["metrics"] for n in present for s in runs[n][suite])
     for name, get in METRICS + (DREAM_METRICS if dreamed else []):
-        values = {n: get(totals[n]) for n in present}
+        # 没记后台合并的旧 score.json：这几行记"—"，不当 0 算进均值
+        values = {n: get(totals[n]) if (name, get) in METRICS or totals[n]["dreamed"] else None for n in present}
         digits = 4 if "费用" in name else 2
-        lines.append(f"| {name} | " + row(values, lambda n: fmt(values[n], digits), digits) + " |")
+        lines.append(f"| {name} | " + row(values, lambda n: "—" if values[n] is None else fmt(values[n], digits), digits) + " |")
 
     singled = sorted({r["label"] for n in present for sc in runs[n][suite] for r in sc.get("extra", {}).get("rounds", [])})
     for label in singled:
