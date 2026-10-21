@@ -62,12 +62,7 @@ struct ProjectScreen: View {
             // 行距为 0：同一组的"更早"行拼成一张纸（首尾圆角、行间分隔线），段与段之间的距离各自写在段上
             LazyVStack(alignment: .leading, spacing: 0) {
                 if data.cards.isEmpty {
-                    // 辅助字号下这一格铺满整行，"记一条灵感"才不缩成小字
-                    if typeSize.isAccessibilitySize {
-                        NewIdeaTile(action: newCard)
-                    } else {
-                        MasonryLayout(minColumnWidth: columnWidth, maxColumns: Self.maxColumns, spacing: Self.wallSpacing) { NewIdeaTile(action: newCard) }
-                    }
+                    wall { NewIdeaTile(action: newCard) }
                 }
                 if !arrangement.pinned.isEmpty {
                     // 资料：长期参考的灵感，一行一条压在任务区下面
@@ -82,7 +77,13 @@ struct ProjectScreen: View {
                 }
                 if !arrangement.wall.isEmpty {
                     SectionHeader(title: "最近", count: arrangement.wall.count).padding(.bottom, Self.headerGap)
-                    wall(arrangement.wall, page: page, lastTarget: lastTarget).padding(.bottom, Self.sectionGap)
+                    wall {
+                        ForEach(arrangement.wall.compactMap { page.entries[$0] }) { entry in
+                            CardTileView(entry: entry, lastTarget: lastTarget[entry.id], floated: board.floated.contains(entry.id))
+                                .transition(Motion.item)
+                        }
+                    }
+                    .padding(.bottom, Self.sectionGap)
                 }
                 if !arrangement.older.isEmpty {
                     let groups = data.olderGroups(arrangement)
@@ -110,20 +111,14 @@ struct ProjectScreen: View {
     /// 段与段之间、段标题与它的内容之间的距离（书架、Mac 项目页同一节奏）。
     private static let sectionGap: CGFloat = 24
     private static let headerGap: CGFloat = 8
-    private static let maxColumns = 4
     private static let wallSpacing: CGFloat = 12
-    private var columnWidth: CGFloat { sizeClass == .regular ? 220 : 150 }
 
     /// 名称、目录与计数取自项目目录，推入的第一帧就是最终值：导航栏标题在推入时定下，之后再换会让整页跳一下。
     private var project: Project? { workspace.catalog?.project(projectID) }
 
-    private func wall(_ ids: [UUID], page: ProjectPage, lastTarget: [UUID: String]) -> some View {
-        MasonryLayout(minColumnWidth: columnWidth, maxColumns: Self.maxColumns, spacing: Self.wallSpacing) {
-            ForEach(ids.compactMap { page.entries[$0] }) { entry in
-                CardTileView(entry: entry, lastTarget: lastTarget[entry.id], floated: board.floated.contains(entry.id))
-                    .transition(Motion.item)
-            }
-        }
+    /// 卡片墙：辅助字号下只排一列，卡上的字与"记一条灵感"才不被窄列挤成一字一行。
+    private func wall(@ViewBuilder _ tiles: () -> some View) -> some View {
+        MasonryLayout(minColumnWidth: sizeClass == .regular ? 220 : 150, maxColumns: typeSize.isAccessibilitySize ? 1 : 4, spacing: Self.wallSpacing) { tiles() }
     }
 
     /// 顶栏右边的"⋯"：新建卡片、看这个项目的会话（任务页与会话页共用的项目范围设成它，再切到会话页），其后是共用的项目操作。
