@@ -32,6 +32,8 @@ extension ChatScroll {
             /// 上一次交给 action 的读数。不用 action 给的旧值：那是上一次求值，中间几次变化（打开时排开更早的一段）可能求了值却没调 action，
             /// 拿它比内容变没变高会漏掉。
             var delivered: Reading?
+            /// 上一次读数时的最新一条新到的（`arrival`）；第一次读数前没记过。
+            var arrival: UUID??
         }
 
         private let values = Mutex(Values())
@@ -51,6 +53,15 @@ extension ChatScroll {
             values.withLock { values in
                 defer { values.delivered = reading }
                 return values.delivered
+            }
+        }
+
+        /// 换上这次读数时的 `arrival`，返回它是不是刚换成的一条（第一次读数只记下：打开时已在的不算新到）。
+        func arrived(_ arrival: UUID?) -> Bool {
+            values.withLock { values in
+                defer { values.arrival = arrival }
+                guard let last = values.arrival else { return false }
+                return arrival != nil && last != arrival
             }
         }
     }
@@ -108,6 +119,17 @@ extension ChatScroll {
         guard !follow.wrappedValue.atNewest || deferred else { return }
         deferred = false
         withAnimation(reduceMotion ? nil : Motion.quick) { toEnd(reader) }
+    }
+
+    /// 新到的那一条长高了 `height`：整段内容先往下挪这么多（上面的对话看着还在原处），下一帧起无回弹地归零（`ChatLift`）。
+    /// 只动变换：插进来那一次已排在终位，之后每帧不重排、不读几何。减弱动态效果时不挪，新的一条只淡入（`CueBubble.arrival`）。
+    func rise(by height: CGFloat) {
+        guard !reduceMotion else { return }
+        withTransaction(\.disablesAnimations, true) { lift = ChatLift(id: arrival, height: height, by: height) }
+        Task {
+            await NextFrame.wait()
+            withAnimation(Motion.move) { lift.by = 0 }
+        }
     }
 
     /// 内容末尾那个不占高的点（`toEnd`）。

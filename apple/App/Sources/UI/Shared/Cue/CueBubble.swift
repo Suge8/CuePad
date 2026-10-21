@@ -31,14 +31,8 @@ enum CueBubble {
         }
     }
 
-    /// 新说出的一颗从说话那一边的下角长出来（`Unfold`：占的高从零撑到整颗，气泡同比例放大、淡入）：贴着最新时滚动区底锚（`ChatScroll.pinned`），
-    /// 气泡的下沿第一帧就在终位、不在回复框的玻璃后面，上面的对话随它撑开一路滑上去，不一帧瞬移。撑开的每一帧都要重排对话，所以用定长的 `Motion.move`：
-    /// 弹簧最后那段一两像素的尾巴还要多排两百多毫秒。消失只淡出。减弱动态效果时只淡入淡出。
-    static func arrival(_ edge: HorizontalEdge, reduceMotion: Bool) -> AnyTransition {
-        guard !reduceMotion else { return .entry }
-        let grow = AnyTransition(Unfold.Arrival(anchor: edge == .trailing ? .bottomTrailing : .bottomLeading))
-        return .asymmetric(insertion: grow.animation(Motion.move), removal: .entry)
-    }
+    /// 新说出的一颗淡入。贴着最新时它还从下角放大、把上面的对话撑上去（`ChatLift`，滚动区给），插进来那一次就排在终位、之后只动变换。
+    static let arrival = AnyTransition.opacity.animation(Motion.move)
 }
 
 /// Cue 说的一句：靠左的一颗纸做的气泡（`cueBubble`），里面是 Markdown（同会话里 Agent 的回答），下面是它点名的图（`CueShots`：结束了回到问的位置的提问，
@@ -192,39 +186,5 @@ private struct CueBubbleSurface: ViewModifier {
 
     func body(content: Content) -> some View {
         content.padding(CueBubble.padding).background(onLane ? palette.laneBubble : palette.paper, in: shape).overlay { if let edge = palette.bubbleEdge { shape.strokeBorder(edge) } }
-    }
-}
-
-/// 占的高按 `shown`（0…1）撑开，里面按整高排、贴着下沿；`Arrival` 让它同比例从说话那一边的下角放大，正好填满撑开的那一截，不叠在上一格上。
-struct Unfold: Layout {
-    var shown: CGFloat
-
-    var animatableData: CGFloat {
-        get { shown }
-        set { shown = newValue }
-    }
-
-    /// 几个子视图（一格上面的时间与那颗气泡）从上往下紧挨着排，同父级的竖排。
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout Void) -> CGSize {
-        let sizes = subviews.map { $0.sizeThatFits(proposal) }
-        return CGSize(width: sizes.map(\.width).max() ?? 0, height: sizes.map(\.height).reduce(0, +) * shown)
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Void) {
-        var bottom = bounds.maxY
-        for subview in subviews.reversed() {
-            let height = subview.sizeThatFits(proposal).height
-            subview.place(at: CGPoint(x: bounds.minX, y: bottom), anchor: .bottomLeading, proposal: ProposedViewSize(width: bounds.width, height: height))
-            bottom -= height
-        }
-    }
-
-    struct Arrival: Transition {
-        let anchor: UnitPoint
-
-        func body(content: Content, phase: TransitionPhase) -> some View {
-            let shown: CGFloat = phase.isIdentity ? 1 : 0.01
-            Unfold(shown: shown) { content.scaleEffect(shown, anchor: anchor).opacity(shown) }
-        }
     }
 }

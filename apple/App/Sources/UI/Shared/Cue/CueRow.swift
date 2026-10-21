@@ -5,23 +5,22 @@ import SwiftUI
 struct CueSegment: View, Equatable {
     let rows: [CueRow]
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(AppServices.self) private var services
+    @Environment(\.chatLift) private var lift
 
     nonisolated static func == (a: Self, b: Self) -> Bool { a.rows.map(\.key) == b.rows.map(\.key) }
 
-    private var swapsInPlace: Bool {
-        #if os(macOS)
-        services.cue.keeper != nil
-        #else
-        false
-        #endif
-    }
-
-    /// 过渡挂在插进来的那一格上（`equatable()` 外面）：挂在格子里面不会播。
+    /// 淡入与新到那一条的撑开（`ChatLift`）挂在插进来的那一格上（`equatable()` 外面）：挂在格子里面的过渡不会播。
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            ForEach(rows, id: \.row.id) { row in row.equatable().transition(row.arrival(reduceMotion: reduceMotion, swapsInPlace: swapsInPlace)) }
+            ForEach(rows, id: \.row.id) { row in
+                let shown = lift.shown(row.row.id)
+                row.equatable()
+                    .scaleEffect(shown, anchor: .bottomLeading)
+                    .opacity(shown)
+                    .offset(y: lift.offset(row.row.id))
+                    .transition(CueRow.arrives(row.row, swapsInPlace: services.cueSwapsInPlace) ? CueBubble.arrival : .identity)
+            }
         }
     }
 }
@@ -75,12 +74,13 @@ struct CueRow: View, Equatable {
             }
     }
 
-    /// 新来时怎么出现（`CueSegment` 挂在这一格外面）：Cue 新说的一句与结果卡从左下角长出来（`CueBubble.arrival`）；
+    /// 新来时从左下角长出来、把上面的对话撑上去的那几种（`CueSegment`、`ChatLift`）：Cue 新说的一句与结果卡。
     /// `swapsInPlace`：Cue 在这台 Mac 值班，它的话原位换下正在说的那句（`CueEnding`），直接出现。你的话由回复框那头的发出动画接上，其余各格直接出现。
-    func arrival(reduceMotion: Bool, swapsInPlace: Bool) -> AnyTransition {
+    static func arrives(_ row: CueThread.Row, swapsInPlace: Bool) -> Bool {
         switch row {
-        case .cue where !swapsInPlace, .result: CueBubble.arrival(.leading, reduceMotion: reduceMotion)
-        default: .identity
+        case .cue: !swapsInPlace
+        case .result: true
+        default: false
         }
     }
 
@@ -142,9 +142,6 @@ struct CueEnding: View {
     let roundInRows: Bool
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
-    #if os(macOS)
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    #endif
 
     var body: some View {
         #if os(macOS)
@@ -156,7 +153,7 @@ struct CueEnding: View {
                 MarkdownText(source: draft.text).equatable().cueBubble(joined: joined)
             }
             .padding(.top, CuePage.gap(before: .leading, joined: joined))
-            .transition(.asymmetric(insertion: CueBubble.arrival(.leading, reduceMotion: reduceMotion), removal: .identity))
+            .transition(.asymmetric(insertion: CueBubble.arrival, removal: .identity))
         } else if !landed {
             live
         }
@@ -188,5 +185,16 @@ private struct CueDoing: View {
             Text(doing).font(Typography.secondary).foregroundStyle(palette.ink2).lineLimit(2).shimmering()
         }
         .accessibilityElement(children: .ignore).accessibilityLabel(doing)
+    }
+}
+
+extension AppServices {
+    /// Cue 的话原位换下正在说的那句（Cue 在这台 Mac 值班，`CueEnding`），新到时不另外长出来（`CueRow.arrives`）。
+    var cueSwapsInPlace: Bool {
+        #if os(macOS)
+        cue.keeper != nil
+        #else
+        false
+        #endif
     }
 }
