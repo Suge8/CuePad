@@ -32,9 +32,9 @@ enum DebugHooks {
         /// 整个窗口按最大的辅助字号画（`-CuePadLargestType`，`PaletteProvider`）：同上，不碰系统设置。
         var largestType = false
         #if os(macOS)
-        /// 正文以它开头的那张灵感卡、那条任务或那一行（回收站按名字）一出现就画成指针停着的样子（`-CuePadHover`）：后台截图里指针进不来，
-        /// 合成的鼠标移动事件也不触发不在前台的应用的悬停。
-        var hovered: String?
+        /// 窗口里这几点（左上为原点，同 `-CuePadClick`）上的按钮、行与卡一出现就画成指针停着的样子（`-CuePadHover x,y[;x,y…]`，`presetHover`）：
+        /// 后台截图里指针进不来，合成的鼠标移动事件也不触发不在前台的应用的悬停。一张图里看几处时给几个点。
+        var hovered: [CGPoint] = []
         #endif
         /// 任务页做完列的"更早做完的"一开始就展开（`-CuePadShowsDone`）。
         var showsDone = false
@@ -58,8 +58,6 @@ enum DebugHooks {
     }
 
     #if os(macOS)
-    /// 正文是这样开头的卡、任务、记忆或这一行（回收站按名字）是否按 `Preset.hovered` 一出现就画成悬停的样子。
-    static func hovers(_ text: String) -> Bool { preset.hovered.map(text.hasPrefix) ?? false }
     #endif
 
     static let preset: Preset = {

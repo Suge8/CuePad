@@ -58,7 +58,7 @@ struct ArchiveList: View {
             }
             .contentShape(.rect)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressStyle())
         .listRowBackground(palette.paper)
         #if os(iOS)
         .listSwipes(swipes(card))

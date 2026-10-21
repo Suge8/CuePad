@@ -183,7 +183,7 @@ struct SearchPalette: View {
                         }
                         if data.total > data.cards.count {
                             Button("显示更多（还有 \(data.total - data.cards.count) 条）") { query.pages += 1 }
-                                .buttonStyle(.plain).font(Typography.meta).foregroundStyle(palette.ink2)
+                                .buttonStyle(PressStyle(.inline)).font(Typography.meta).foregroundStyle(palette.ink2)
                                 .padding(.vertical, 10)
                         }
                     }

@@ -76,7 +76,7 @@ struct FocusBand: View {
             .fixedSize()
             .contentShape(.rect)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressStyle(.inline))
         .accessibilityValue(open ? "已展开" : "已折叠")
     }
 }

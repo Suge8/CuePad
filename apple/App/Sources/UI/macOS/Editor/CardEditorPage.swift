@@ -128,7 +128,7 @@ struct CardEditorPage: View {
             Menu("更多", icon: .more) {
                 CardActions(card: data.card, more: true)
             }
-            .labelStyle(.iconOnly).menuStyle(.button).menuIndicator(.hidden).buttonStyle(.borderless).fixedSize()
+            .labelStyle(.iconOnly).menuStyle(.button).menuIndicator(.hidden).buttonStyle(PressStyle(.inline)).fixedSize()
         }
         .font(Typography.meta)
         .foregroundStyle(palette.ink3)

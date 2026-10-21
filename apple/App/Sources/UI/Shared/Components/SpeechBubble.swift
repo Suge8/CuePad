@@ -51,7 +51,7 @@ struct SpeechBubble<Menu: View>: View {
             Dot()
             Button(MessageMenu.Item.resend.title, action: undelivered.resend)
                 .fontWeight(.semibold)
-                .buttonStyle(.plain)
+                .buttonStyle(PressStyle(.inline))
                 .contentShape(.rect.inset(by: -14))
                 .disabled(!undelivered.canResend)
         }

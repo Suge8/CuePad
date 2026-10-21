@@ -50,7 +50,7 @@ struct CueNoteBubble: View {
                     Button { expanded = true } label: {
                         NoteLine(icon: .earlier) { Text("更早还醒过 \(earlier) 次") }
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(PressStyle())
                 }
                 ForEach(shown) { unit in
                     switch unit {
@@ -64,7 +64,7 @@ struct CueNoteBubble: View {
                                 Text("都没动手")
                             }
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(PressStyle())
                     }
                 }
             }

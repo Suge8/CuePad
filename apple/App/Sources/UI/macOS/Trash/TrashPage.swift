@@ -65,7 +65,7 @@ struct TrashPage: View {
     }
 }
 
-/// 回收站的一行：指针停着时铺行的淡底（`RowStyle`），删除时间换成恢复与永久删除（右键菜单里也有）。
+/// 回收站的一行：指针停着时铺行的淡底（`RowStyle`），行尾浮出恢复与永久删除、盖住删除时间（`hoverReveal`；右键菜单里也有）。
 private struct TrashRow<Icon: View>: View {
     let item: TrashItem
     let restore: () -> Void
@@ -80,11 +80,19 @@ private struct TrashRow<Icon: View>: View {
             Text(item.title).font(Typography.body.weight(.medium)).foregroundStyle(palette.ink).lineLimit(1).layoutPriority(1)
             Text(item.detail).font(Typography.secondary).foregroundStyle(palette.ink3).lineLimit(1)
             Spacer(minLength: 12)
-            TrashRowEnd(deletedAt: item.deletedAt, restore: restore, confirm: { confirming = true })
+            if let deletedAt = item.deletedAt {
+                Text("删于 \(DateLabel.short(deletedAt))").font(Typography.meta).foregroundStyle(palette.ink3)
+            }
         }
         .padding(.horizontal, 12).frame(minHeight: 40)
-        .row(hovers: true)
-        .environment(\.rowHoverPreset, DebugHooks.hovers(item.title))
+        .hoverReveal {
+            HStack(spacing: 6) {
+                Button("恢复", action: restore).controlSize(.small)
+                Button("永久删除…") { confirming = true }.controlSize(.small).foregroundStyle(palette.failure)
+            }
+            .padding(.horizontal, 12)
+        }
+        .row()
         .contextMenu {
             Button("恢复", action: restore)
             Button("永久删除…", role: .destructive) { confirming = true }
@@ -95,27 +103,4 @@ private struct TrashRow<Icon: View>: View {
     }
 }
 
-/// 行尾：平时是删除时间，指针停在行上时换成两个操作。
-private struct TrashRowEnd: View {
-    let deletedAt: Date?
-    let restore: () -> Void
-    let confirm: () -> Void
-    @Environment(\.rowHovered) private var hovered
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        ZStack(alignment: .trailing) {
-            if let deletedAt {
-                Text("删于 \(DateLabel.short(deletedAt))").font(Typography.meta).foregroundStyle(palette.ink3)
-                    .opacity(hovered ? 0 : 1)
-            }
-            HStack(spacing: 6) {
-                Button("恢复", action: restore).controlSize(.small)
-                Button("永久删除…", action: confirm).controlSize(.small).foregroundStyle(palette.failure)
-            }
-            .opacity(hovered ? 1 : 0)
-            .allowsHitTesting(hovered)
-        }
-    }
-}
 #endif

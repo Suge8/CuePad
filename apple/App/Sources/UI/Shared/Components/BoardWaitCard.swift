@@ -103,7 +103,7 @@ private struct BoardSessionLink<Label: View>: View {
         Button(action: open) {
             label.frame(maxWidth: .infinity, alignment: .leading).contentShape(.rect)
         }
-        .buttonStyle(PressStyle(.card))
+        .buttonStyle(.row)
         .accessibilityHint("打开会话")
     }
 

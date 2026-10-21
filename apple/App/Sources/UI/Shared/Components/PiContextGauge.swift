@@ -50,7 +50,7 @@ struct PiContextGauge: View {
             .frame(minHeight: 44)
             .contentShape(.capsule)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressStyle())
         .help(meter.help.visible)
         .popover(isPresented: $showsDetail) { detail.presentationCompactAdaptation(.popover) }
         .accessibilityLabel("上下文")

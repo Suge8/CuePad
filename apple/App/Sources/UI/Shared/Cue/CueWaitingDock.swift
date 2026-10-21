@@ -181,7 +181,7 @@ struct CueWaitingDock: View {
             .frame(minHeight: Self.footerHeight)
             .contentShape(.rect)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressStyle())
         .accessibilityHint("收起键盘，展开这张卡")
     }
     #endif
@@ -240,7 +240,7 @@ struct CueWaitingDock: View {
             .font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink2)
             .frame(minHeight: Self.footerHeight).contentShape(.rect)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressStyle(.inline))
         .accessibilityLabel(open ? "收起原话" : "看 Cue 的原话")
     }
 

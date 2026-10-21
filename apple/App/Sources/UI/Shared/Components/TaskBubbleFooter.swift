@@ -111,7 +111,7 @@ private struct StartBar: View {
                 Menu { SessionBindItems(leaf: leaf) } label: {
                     Text("绑定会话").font(BubbleMetrics.meta).foregroundStyle(palette.ink3)
                 }
-                .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
+                .menuStyle(.button).buttonStyle(PressStyle(.inline)).menuIndicator(.hidden).fixedSize()
             }
             #endif
             if let caption { Text(caption).font(BubbleMetrics.meta).foregroundStyle(palette.ink2).lineLimit(1) }
