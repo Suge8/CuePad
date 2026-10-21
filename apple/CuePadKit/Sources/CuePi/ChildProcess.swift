@@ -225,7 +225,7 @@ public final class ChildProcess: Sendable {
     // MARK: 停与等
 
     /// 请它马上退出、不等：SIGTERM，宽限期过了还没走就 SIGKILL（自成进程组的整组结束）。之后等它退出的一定等得到。
-    func end(grace: Duration = .seconds(5)) {
+    func end(grace: Duration = AgentTimeouts.endGrace) {
         Darwin.kill(pid, SIGTERM)
         Task { [self] in
             if await !exited(within: grace) { kill() }
@@ -234,7 +234,7 @@ public final class ChildProcess: Sendable {
 
     /// 让它退出并等到退出：先关标准输入请它收尾，不走再 SIGTERM，还不走就 SIGKILL。之后 `exited()` 报 nil。
     /// 调用方取消不让它跳过收尾（SIGKILL 不给它清理的机会，如 Claude Code 的收件箱 socket 就会留在 /tmp/cc-socks 里）。
-    func stop(grace: Duration = .seconds(5)) async {
+    func stop(grace: Duration = AgentTimeouts.endGrace) async {
         shared.state.withLock { $0.stopping = true }
         closeInput()
         await Task { [self] in

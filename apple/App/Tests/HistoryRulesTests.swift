@@ -8,7 +8,7 @@ import Testing
 
 /// "什么算历史"的两条规则，端到端用真实 Pi：一句话没说过的会话关掉后不进历史；CuePad 后台托管的会话闲置退出不算结束，
 /// 仍在"现在"，Mac 本机与手机两条路发话都会唤醒它，只有用户结束它才进历史。
-/// 真实 Pi 与真实后台托管（闲置 2 秒退出），全部状态落在临时目录，假模型零网络；不碰真实资料库与 ~/.pi。
+/// 真实 Pi 与真实后台托管（测闲置退出的用例闲置 2 秒就退），全部状态落在临时目录，假模型零网络；不碰真实资料库与 ~/.pi。
 nonisolated private let fixtures = URL(filePath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
     .appending(path: "CuePadKit/Tests/CuePiTests/Fixtures")
 
@@ -21,7 +21,7 @@ struct HistoryRulesTests {
         let services: AppServices
         var store: CueStore { services.store }
 
-        init() async throws {
+        init(idleLimit: Duration = AgentTimeouts.hostedIdle) async throws {
             let directory = TestLibraries.makeDirectory()
             cwd = directory.appending(path: "work", directoryHint: .isDirectory)
             try FileManager.default.createDirectory(at: cwd, withIntermediateDirectories: true)
@@ -47,7 +47,7 @@ struct HistoryRulesTests {
             _ = Self.offline
 
             bridge = PiBridge(socketDirectory: paths.socketDirectory)
-            host = PiRuntime(bridge: bridge, paths: paths, pi: { realPi }, idleLimit: .seconds(2))
+            host = PiRuntime(bridge: bridge, paths: paths, pi: { realPi }, idleLimit: idleLimit)
             let mac = MacDependencies(
                 pi: bridge, hotkeys: InMemoryHotkeys(), paths: agentPaths, agents: AgentIntegrations(agents), terminal: PiTerminalJumper(),
                 hostID: TestApp.hostID, workspaces: Workspaces(root: directory.appending(path: "CuePad", directoryHint: .isDirectory)),
@@ -109,7 +109,7 @@ struct HistoryRulesTests {
     // MARK: 后台托管的会话闲置退出
 
     @Test func 托管会话闲置退出后仍在现在_发话唤醒回复_用户结束才进历史() async throws {
-        let rig = try await Rig()
+        let rig = try await Rig(idleLimit: .seconds(2))
         defer { rig.shutdown() }
         let id = try await rig.host.open(in: rig.cwd, launchToken: "hosted", name: nil, model: nil, thinking: nil)
         let session = try #require(rig.bridge.session(id: id))
