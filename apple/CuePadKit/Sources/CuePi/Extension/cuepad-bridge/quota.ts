@@ -1,5 +1,5 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { reason } from "./text.ts";
+import { reason } from "./info.ts";
 
 /** 查订阅额度的单个请求最多等这么久（接口实测约 150ms；VPN 断了就是查不到，CuePad 保留上次的值） */
 const QUOTA_TIMEOUT_MS = 3_000;
