@@ -7,7 +7,6 @@ public enum PasteboardImage {
     case file(URL)
     case png(Data)
 
-    /// 原图字节（文件的读出来）。
     public func data() throws -> Data {
         switch self {
         case .file(let url): try Data(contentsOf: url)
