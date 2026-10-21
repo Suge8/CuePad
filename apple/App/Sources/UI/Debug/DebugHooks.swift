@@ -307,7 +307,7 @@ extension View {
         #endif
     }
 
-    /// 点 Cue 页底部去处圆钮展开、收起三格的那条路交给演示（`dockTourIfAsked`）；`-CuePadPlacesOpen YES` 时第一次出现就展开（就绪前摆好，截得到）。
+    /// 点 Cue 页底部"⋯"展开、收起三格的那条路交给演示（`dockTourIfAsked`）；`-CuePadPlacesOpen YES` 时第一次出现就展开（就绪前摆好，截得到）。
     func debugExposesPlaces(_ toggle: @escaping () -> Void) -> some View {
         #if DEBUG
         onAppear {

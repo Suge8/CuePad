@@ -104,7 +104,7 @@ enum Motion {
     static let snappy = Animation.spring(duration: 0.25, bounce: 0)
     /// 卡片在墙上挪位（同列下移、新卡入场）：定长 0.24s，弹簧的尾巴会让实际时长超过 300ms。
     static let move = Animation.timingCurve(0.2, 0, 0, 1, duration: 0.24)
-    /// iPhone 换去处：两页水平推移与底部那一排两块玻璃换形同一个（`DockRoot`、`Dock`），一起到位；比列表里挪位置走得长，看得清从哪到哪，仍在 300ms 内。
+    /// iPhone 换去处：两页水平推移与底部那一排两块玻璃换形同一个（`DockRoot`、`DockBar`），一起到位；比列表里挪位置走得长，看得清从哪到哪，仍在 300ms 内。
     static let dock = Animation.spring(duration: 0.3, bounce: 0)
     /// 颜色、透明度、悬停这类不移动位置的反馈。
     static let quick = Animation.easeOut(duration: 0.16)

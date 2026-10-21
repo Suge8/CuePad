@@ -155,8 +155,9 @@ extension DebugScene {
         }
     }
 
-    /// `-CuePadDockTour YES`（iPhone，配 `-CuePadDemo YES`）：画面就绪后每一拍走一步，每步走点按调的那条路：Cue 页展开去处圆钮 → 去任务 →
-    /// 去会话 → 推入一个会话 → 返回 → 去项目 → 推入搜索 → 返回 → 推入一个会话再换去任务（推入的页清掉）→ 回 Cue → 聚焦输入框（去处圆钮让开）。
+    /// `-CuePadDockTour YES`（iPhone，配 `-CuePadDemo YES`）：画面就绪后每一拍走一步，每步走点按调的那条路：Cue 页展开"⋯" → 去任务 →
+    /// 去会话 → 推入一个会话 → 返回 → 去项目 → 推入搜索 → 返回 → 推入一个会话再换去任务（推入的页清掉）→ 回 Cue →
+    /// 不经"⋯"直接去会话（快捷键、通知的那条路）→ 回 Cue → 直接去项目 → 去会话（隔一格）→ 回 Cue → 聚焦输入框（"⋯"让开）。
     static func dockTourIfAsked(_ workspace: Workspace, _ navigation: Navigation) async {
         guard defaults.bool(forKey: "CuePadDockTour") else { return }
         let sessions = ((try? await workspace.services.store.piSessionPage(PiSessionQuery(limit: 2)))?.items ?? []).map(\.state)
@@ -186,6 +187,16 @@ extension DebugScene {
         open(1)
         await beat()
         navigation.select(.tasks)
+        await beat()
+        navigation.select(.cue)
+        await beat()
+        navigation.select(.agent)
+        await beat()
+        navigation.select(.cue)
+        await beat()
+        navigation.select(.shelf)
+        await beat()
+        navigation.select(.agent)
         await beat()
         navigation.select(.cue)
         await beat()

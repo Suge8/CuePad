@@ -162,13 +162,13 @@ nonisolated struct RelayEnd: Equatable, Sendable {
 
 /// Cue 那一头落在哪：同时在屏上几处时取排在前面的。三端的规则就是这个顺序——
 /// Mac 与 iPad 有侧栏时总落在侧栏的 Cue 一行（在不在 Cue 页都一样），侧栏收起时退到 Cue 页页头；
-/// iPhone 没有侧栏：在 Cue 页落在页头的头像（从底部往上飞一长段，最看得出），在三页上落在底部那颗 Cue 圆钮。
+/// iPhone 没有侧栏：在 Cue 页落在页头的头像（从底部往上飞一长段，最看得出），在三页上落在底部那一排的 Cue 钮。
 enum CueSpot: Int {
     /// 侧栏最上面的 Cue（Mac 是名片 `CueSidebarCard`、iPad 是那一行，头像都是 `CueEntryAvatar`；菜单栏面板、输入条在别的窗口，不参与）。
     case entry
     /// Cue 页的页头。
     case header
-    /// iPhone 三页底部那颗 Cue 圆钮。
+    /// iPhone 三页底部那一排的 Cue 钮。
     case dock
 }
 
