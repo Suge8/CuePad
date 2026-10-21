@@ -40,7 +40,6 @@ struct CueActivityViews {
 
     var expandedBottom: some View { Details(state: state, island: true).padding(.horizontal, 2).island() }
 
-    /// 灵动岛外圈的描边色：同头像的环。
     var keyline: Color { state.now.ring(Palette(dark: true)) }
 
     /// 过时时整张的不透明度。
@@ -48,7 +47,6 @@ struct CueActivityViews {
 }
 
 private extension View {
-    /// 灵动岛里：底是黑的，按深色取色板。
     func island() -> some View { withPalette().environment(\.colorScheme, .dark) }
 }
 
