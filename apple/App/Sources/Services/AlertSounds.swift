@@ -80,7 +80,7 @@ actor AlertSounds {
             }
             checked.insert(sound)
         } catch {
-            Logger(subsystem: AppServices.bundleID, category: "services")
+            Logger(subsystem: AppIdentity.id, category: "services")
                 .error("提示音没能装进 \(self.directory.path, privacy: .public)：\(String(describing: error), privacy: .public)")
         }
         return name

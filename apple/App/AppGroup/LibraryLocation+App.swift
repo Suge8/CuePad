@@ -14,7 +14,7 @@ extension LibraryLocation {
     var preferencesSuite: String? {
         if isIsolated { return directory.appending(path: "preferences").path }
         #if os(iOS)
-        return Self.appGroupIdentifier
+        return AppIdentity.appGroup
         #else
         return nil
         #endif

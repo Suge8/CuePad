@@ -24,7 +24,7 @@ extension DebugScene {
 ///   与手机同一条路（写请求、立即上传），等结果回到本机记 `send total= upload= toMac= back=`（全程、写出到传完、传完到 Mac 写回、写回到本机看到）；
 ///   对 Cue 说一句（`Workspace.sayToCue` 同一条路）；立即同步一次记 `syncNow took=`。
 enum SyncBench {
-    static let log = Logger(subsystem: AppServices.bundleID, category: "bench")
+    static let log = Logger(subsystem: AppIdentity.id, category: "bench")
     /// 一句话等结果最多这么久，超时记一次失败、接着下一轮
     private static let timeout = Duration.seconds(60)
 
