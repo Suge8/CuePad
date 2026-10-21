@@ -34,8 +34,8 @@
 
 | | |
 |:-:|:-:|
-| <img src="design/readme/cue.png" alt="Cue reports back with evidence; what it did folds into one line" /> | <img src="design/readme/board.png" alt="Task board with four lanes" /> |
-| Cue reports back with proof, and asks only what needs you | Every task and agent session on one board |
+| <img src="design/readme/cue.png" alt="Cue reports back with evidence; what it did folds into one line" /> | <img src="design/readme/board.png" alt="Task board: advancing, and waiting on you" /> |
+| Cue reports back with proof, and asks only what needs you | Every task on one board; answer Cue in one tap |
 | <img src="design/readme/session.png" alt="Annotate any part of an agent's reply" /> | <img src="design/readme/iphone-demo.png" alt="An agent's work, previewed on the iPhone" /> |
 | Agents send you pages and screenshots; annotate any part of a reply | Check an agent's work from your phone |
 
