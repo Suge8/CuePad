@@ -15,7 +15,7 @@ import OSLog
 /// - 让出的那个退出后，让接手的进程重新载入会话（`PiBridge.reload`）：它这期间没写过就接上那一轮、不分支，写过就由扩展提示一句。
 @MainActor
 public final class PiRuntime: AgentRuntime {
-    private static let log = Logger(subsystem: "com.sugeh.cuepad", category: "pi-host")
+    private static let log = Logger(subsystem: AppIdentity.id, category: "pi-host")
     private let bridge: PiBridge
     private let paths: PiPaths
     private let pi: @Sendable () async -> URL?

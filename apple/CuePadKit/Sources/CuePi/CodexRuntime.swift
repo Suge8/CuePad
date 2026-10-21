@@ -36,7 +36,7 @@ import OSLog
 ///     托管会话的经 `item/tool/requestUserInput` 发给 CuePad，只有一个问题时能从 CuePad 答。
 @MainActor
 public final class CodexRuntime: AgentRuntime, SessionLink {
-    static let log = Logger(subsystem: "com.sugeh.cuepad", category: "codex")
+    static let log = Logger(subsystem: AppIdentity.id, category: "codex")
     let bridge: PiBridge
     private let paths: AgentPaths
     private let hooks: AgentHookServer

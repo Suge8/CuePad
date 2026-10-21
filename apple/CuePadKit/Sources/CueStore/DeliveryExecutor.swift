@@ -110,7 +110,7 @@ public actor DeliveryExecutor {
   private let onIssue: @Sendable (any Error) -> Void
   private let onWritten: @Sendable (DeliveryRequest.ID) async -> Void
   private let handler: @Sendable (DeliveryRequest) async -> DeliveryOutcome
-  private static let log = Logger(subsystem: "com.sugeh.cuepad", category: "delivery")
+  private static let log = Logger(subsystem: AppIdentity.id, category: "delivery")
   private var watcher: Task<Void, Never>?
   private var cleanup: Task<Void, Never>?
   private var processing = false

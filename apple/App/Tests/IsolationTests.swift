@@ -5,7 +5,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 隔离模式（CUEPAD_LIBRARY_DIR）：资料库之外，偏好与窗口位置也不能落到真实的 com.sugeh.cuepad 域里。
+/// 隔离模式（CUEPAD_LIBRARY_DIR）：资料库之外，偏好与窗口位置也不能落到真实的偏好域（`AppIdentity.id`）里。
 /// 测试宿主用的就是真实域，所以这里只读真实域来确认它没被写。
 struct IsolationTests {
     private let realKeys = ["theme", "globalShortcut", "currentProject", "NSWindow Frame main", "NSWindow Frame settings"]

@@ -16,7 +16,7 @@ from collections import Counter
 from datetime import datetime
 
 sys.dont_write_bytecode = True
-from app import isolated_env  # noqa: E402
+from app import BUNDLE_ID, isolated_env  # noqa: E402
 from rusage import NS, usage  # noqa: E402
 
 APPLE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -104,7 +104,7 @@ def summarize(values):
 def stream(pids):
     """窗口内两个实例的 CloudKit 与 CuePad 日志。操作的字节数只在 debug 级的"marked as finished"里（CKOperationMetrics），
     不落盘，log show 事后取不到，所以边跑边收。"""
-    predicate = f"({' OR '.join(f'processID == {p}' for p in pids)}) AND (subsystem BEGINSWITH \"com.apple.cloudkit\" OR subsystem == \"com.sugeh.cuepad\")"
+    predicate = f"({' OR '.join(f'processID == {p}' for p in pids)}) AND (subsystem BEGINSWITH \"com.apple.cloudkit\" OR subsystem == \"{BUNDLE_ID}\")"
     return subprocess.Popen(["log", "stream", "--info", "--debug", "--style", "compact", "--predicate", predicate],
                             stdout=open(f"{BENCH}/window.log", "w"), stderr=subprocess.DEVNULL)
 
@@ -133,7 +133,7 @@ def report(pids, start, end, before, after):
         print(f"  每个操作用时 {summarize(took)}；其中排队 {summarize(queued)}")
         for key, n in ops.most_common():
             print(f"  {n / hours:7.0f} 次/时  上 {up[key] / hours / 1e3:7.0f} KB/时  下 {down[key] / hours / 1e3:7.0f} KB/时  {key[0]:<36} {key[1]}")
-    bench = [l.split("[com.sugeh.cuepad:bench] ", 1)[1] for l in log.splitlines() if "[com.sugeh.cuepad:bench] " in l]
+    bench = [l.split(f"[{BUNDLE_ID}:bench] ", 1)[1] for l in log.splitlines() if f"[{BUNDLE_ID}:bench] " in l]
     def values(event, key):
         return [float(m.group(1)) for l in bench if l.startswith(event + " ") for m in [re.search(rf"\b{key}=(-?[\d.]+)", l)] if m]
     print("\n时延（秒）")

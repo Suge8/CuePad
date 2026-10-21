@@ -17,8 +17,8 @@ final class NotificationService: UNNotificationServiceExtension, @unchecked Send
         var deliver: (UNNotificationContent) -> Void
     }
 
-    private static let container = "iCloud.com.sugeh.cuepad"
-    private static let log = Logger(subsystem: "com.sugeh.cuepad", category: "notify")
+    private static let container = AppIdentity.iCloudContainer
+    private static let log = Logger(subsystem: AppIdentity.id, category: "notify")
     private let pending = Mutex<Pending?>(nil)
 
     override func didReceive(_ request: UNNotificationRequest, withContentHandler handler: @escaping (UNNotificationContent) -> Void) {

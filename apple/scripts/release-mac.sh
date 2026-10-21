@@ -51,7 +51,7 @@ archive="$(release_archive mac "${versions[@]}")"
 xcodebuild archive -project "$APPLE_DIR/CuePad.xcodeproj" -scheme CuePad -destination 'generic/platform=macOS' \
   -archivePath "$archive" -derivedDataPath "$DERIVED" "${versions[@]}" "${team_signing[@]}"
 
-export_options "$OUT/export.plist" developer-id "Developer ID Application" com.sugeh.cuepad="CuePad macOS DeveloperID"
+export_options "$OUT/export.plist" developer-id "Developer ID Application" "$CUEPAD_APP_ID"="CuePad macOS DeveloperID"
 xcodebuild -exportArchive -archivePath "$archive" -exportOptionsPlist "$OUT/export.plist" \
   -exportPath "$OUT/export"
 
