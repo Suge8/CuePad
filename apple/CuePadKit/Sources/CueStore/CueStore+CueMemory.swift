@@ -99,11 +99,10 @@ extension CueStore {
     return CueMemory(lines: lines, summaries: valid.map(\.summary))
   }
 
-  /// 记忆的版本读数（`CueMemoryVersion`）：两条聚合，不读行的内容。
+  /// 记忆的版本读数（`CueMemoryVersion`）：一条聚合，不读行的内容。
   public func cueMemoryVersion() throws -> CueMemoryVersion {
-    let lines = try db.first("SELECT count(*), MAX(modifiedAt) FROM cueLines") { (Int($0.int(0)), $0.dateOrNil(1)) } ?? (0, nil)
-    let summaries = try db.first("SELECT count(*), MAX(createdAt) FROM cueSummaries") { (Int($0.int(0)), $0.dateOrNil(1)) } ?? (0, nil)
-    return CueMemoryVersion(lines: lines.0, linesModifiedAt: lines.1, summaries: summaries.0, summariesWrittenAt: summaries.1)
+    try db.first("SELECT count(*), MAX(modifiedAt) FROM cueLines") { CueMemoryVersion(lines: Int($0.int(0)), modifiedAt: $0.dateOrNil(1)) }
+      ?? CueMemoryVersion(lines: 0, modifiedAt: nil)
   }
 
   /// 写区间 [lo, hi) 的摘要（覆盖旧的）：对齐的 2 的幂区间（至少两行），行要都在；摘要同一条记忆的长度上限。
