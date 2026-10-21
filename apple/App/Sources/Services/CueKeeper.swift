@@ -650,7 +650,7 @@ final class CueKeeper {
                 try await shift.brain.configure(model: wanted.model, effort: wanted.effort)
                 brainSettings = wanted
                 Self.log.notice("Cue 就地换了模型或强度：\(Dotted(wanted.model ?? "默认", wanted.effort?.rawValue ?? "默认").visible, privacy: .public)")
-                if let profile = try? await setup.store.cueProfile() { await follow(BrainSettings(profile)) }
+                if let profile = try? await store.cueProfile() { await follow(BrainSettings(profile)) }
             } catch {
                 // 大脑不认：设置改回在用的（选择器上看到的就是在用的），告诉你一声。
                 // 等回应时你又改了设置就不动：你后来的选择照常生效，下一次对账再去对上
