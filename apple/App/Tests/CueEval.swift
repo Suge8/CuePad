@@ -66,7 +66,7 @@ final class CueEval {
     }
 
     /// 叫醒 Cue，等它把这次引起的都做完才返回：至少一轮做完、没有在跑的、歇着、话都交了，
-    /// 再稳住几秒没有新的一轮（空闲合并记忆这类紧跟着的醒来）。返回这次醒来的时段；没叫醒（等不到一轮开始）为 nil。
+    /// 再稳住几秒没有新的一轮（紧跟着的醒来）。返回这次醒来的时段；没叫醒（等不到一轮开始）为 nil。
     func settle(_ wake: () async throws -> Void) async throws -> ClosedRange<Date>? {
         let from = mark()
         try await wake()
