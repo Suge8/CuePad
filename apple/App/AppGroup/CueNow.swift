@@ -145,26 +145,37 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
         }
     }
 
-    /// 灵动岛紧凑态头像旁的一个短词：Cue 在一轮里最先（它正在动），其次是要你拍板的，再是活的样子。走秒（`clock`）计的就是它说的那件。
+    /// Cue 歇着时紧凑态说的那份活，先后同那一句：最早等你的、刚做完的、最早等子代理交回的、最早在跑的；都没有（只剩歇着的）为 nil。
+    /// 短词、走秒与颜色都跟着它，不会出现词说做完、秒在计另一件的。
+    var lead: Bead? {
+        if let done = justDone, asks == 0 { return done }
+        for kind in [Bead.Kind.asks, .delegating, .running] {
+            if let first = beads.filter({ $0.kind == kind }).min(by: { $0.since < $1.since }) { return first }
+        }
+        return nil
+    }
+
+    /// 灵动岛紧凑态头像旁的一个短词：Cue 在一轮里最先（它正在动），否则是 `lead` 的样子。
     var word: String {
         switch cue {
         case .away: return "不在"
         case .hearing: return "在听"
         case .working: return "在想"
-        case .idle: break
+        case .idle:
+            switch lead?.kind {
+            case .asks: return "等你"
+            case .done: return "做完"
+            case .delegating: return "等交回"
+            case .running: return "在跑"
+            case .resting, nil: return "歇着"
+            }
         }
-        if asks > 0 { return "等你" }
-        if justDone != nil { return "做完" }
-        if delegating > 0 { return "等交回" }
-        if running > 0 { return "在跑" }
-        return "歇着"
     }
 
-    /// 紧凑态与展开态走秒的起点，跟着短词说的那件事：Cue 这一轮从几点起；有等你是最早那件等了多久；再是最早在跑、等子代理的那份。
+    /// 紧凑态与展开态走秒的起点，跟着短词说的那件：Cue 这一轮从几点起，否则 `lead` 从几点起（做完是做完了多久）。
     var clock: Date? {
         if case .working(_, _, let since) = cue { return since }
-        let asked = beads.filter { $0.kind == .asks }.map(\.since).min()
-        return asked ?? beads.filter { $0.kind == .running || $0.kind == .delegating }.map(\.since).min()
+        return lead?.since
     }
 
     /// 在一轮里此刻那一步（"读取 Sources/Zoom.swift"）；没在用工具为 nil。

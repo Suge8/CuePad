@@ -140,9 +140,7 @@ extension CueNow {
         case .away: return palette.ink3
         case .idle: break
         }
-        if asks > 0 { return palette.waiting }
-        if justDone != nil { return palette.replied }
-        return running + delegating > 0 ? palette.signature : palette.ink3
+        return lead?.kind.tint(palette) ?? palette.ink3
     }
 
     /// 读屏：那一句，接每种活几件。
