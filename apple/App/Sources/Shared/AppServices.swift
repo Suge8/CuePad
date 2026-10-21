@@ -316,7 +316,7 @@ final class AppServices {
         updates = UpdateService(updater: mac.updater, bridge: mac.pi)
         historyStore = PiHistoryPersistence(storage: store, host: mac.hostID)
         cue = CueService(
-            store: store, sync: self.sync, hostID: mac.hostID, library: location.directory,
+            recorder: piStateRecorder, sync: self.sync, library: location.directory,
             piAgentDirectory: mac.paths.pi.agentDirectory, dependencies: mac.cue)
     }
     #else

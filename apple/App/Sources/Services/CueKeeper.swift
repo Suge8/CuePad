@@ -19,7 +19,7 @@ import os
 /// 交接与它之后的对话（`CueStore.cueResume`，上限见 `CueEnvelope.resumeMessages`），不为此多跑一轮。界面在交接处画"换了新上下文"的分隔，
 /// 说的是分隔以下都在 Cue 眼前：没写交接就起的班次也靠它让这句话成立。
 /// 生命周期只有一个 `Phase`：起大脑中 → 值班（可能在跑一轮）→ 出问题后等着重起 → 次数用完停在起不来；Cue 此刻在做什么（`work`）由它直接得出，
-/// 每次对完账写进库（`CueStore.setCueState`，同步给各端；值班结束时由 `CueService` 写回歇着）。
+/// 每次对完账写进库（`PiStateRecorder.updateCue`；值班结束时由 `CueService` 写回歇着）。
 ///
 /// 对账：库一变（订阅，不轮询）、大脑有事件、定时器到点，都重新对一次账，按先后只做一件事：
 /// 1. 你的消息（连同它收起的卡，`CueEnvelope.delivered`）与"等你"的回答（选的那一项）：大脑空闲就发信封醒来，正忙就插进当前这一轮；写 `deliveredAt`（回答也记在那条"等你"上）。
@@ -61,7 +61,7 @@ final class CueKeeper {
     nonisolated static let roundsKept = 50
 
     struct Setup {
-        var store: CueStore
+        var recorder: PiStateRecorder
         /// 找起大脑要的可执行文件等（不问登录）
         var launch: @Sendable (AgentKind) async throws -> CueLaunch?
         /// `cuepad` 命令行（MCP 服务）
@@ -76,6 +76,7 @@ final class CueKeeper {
         /// Cue 自己的目录（在资料库目录里）：`work` 是大脑的工作目录（空的），`keeper.json` 是跨班次的对账进度
         var directory: URL { library.appending(path: "Cue", directoryHint: .isDirectory) }
     }
+    private var store: CueStore { setup.recorder.store }
 
     /// 值班的生命周期。
     private enum Phase {
@@ -255,7 +256,7 @@ final class CueKeeper {
     private func publish() async {
         do {
             let work = work
-            try await setup.store.setCueState(work.state, detail: work.detail, round: work.row, context: shift?.context)
+            try await setup.recorder.updateCue(work.state, detail: work.detail, round: work.row, context: shift?.context)
         } catch {
             Self.log.error("Cue 此刻的样子没能写进资料库：\(error.localizedDescription, privacy: .public)")
         }
@@ -263,7 +264,7 @@ final class CueKeeper {
 
     /// 值班到 `stop()` 或任务取消，返回前停掉大脑。
     func run() async {
-        let (store, input) = (setup.store, input)
+        let (store, input) = (self.store, input)
         await withDiscardingTaskGroup { group in
             group.addTask {
                 do {
@@ -331,14 +332,14 @@ final class CueKeeper {
     private func startShift(failures: Int = 0, wake: CueWake? = nil, author: CueAuthor = .note) async {
         phase = .starting(failures: failures)
         do {
-            let profile = try await setup.store.cueProfile() ?? CueProfile()
+            let profile = try await store.cueProfile() ?? CueProfile()
             brainSettings = BrainSettings(profile)
             guard let runtime = profile.runtime.known, let launch = try await setup.launch(runtime) else {
                 return await broke("这台 Mac 上没有找到 \(profile.runtime.rawValue)")
             }
             let work = setup.directory.appending(path: "work", directoryHint: .isDirectory)
             try FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
-            let memory = CueMemoryView(try await setup.store.cueMemory())
+            let memory = CueMemoryView(try await store.cueMemory())
             let config = CueBrainConfig(
                 runtime: runtime, executable: launch.executable, model: profile.model, effort: profile.effort?.known,
                 systemPrompt: CuePrompt.system(name: profile.name, memory: memory, agents: launch.agents), workingDirectory: work,
@@ -371,7 +372,7 @@ final class CueKeeper {
             speech.offer(nil)
             if let delivered = shift.turn?.delivered, !delivered.isEmpty {
                 do {
-                    try await setup.store.unmarkCueMessagesDelivered(delivered)
+                    try await store.unmarkCueMessagesDelivered(delivered)
                 } catch {
                     Self.log.error("Cue 没读完的消息没能退回：\(error.localizedDescription, privacy: .public)")
                 }
@@ -416,7 +417,7 @@ final class CueKeeper {
             await recordRound()
         case .toolDone(let id, let result, let failed):
             guard let call = turn?.round.calls.last(where: { $0.id == id && $0.finishedAt == nil }) else { return }
-            let item = await CueActivity.item(tool: call.name, arguments: call.arguments, failed: failed, store: setup.store)
+            let item = await CueActivity.item(tool: call.name, arguments: call.arguments, failed: failed, store: store)
             updateShift { $0.turn?.round.finish(id, result: result, failed: failed, item: item) }
             await recordRound()
         case .failed(let raw):
@@ -461,7 +462,7 @@ final class CueKeeper {
     private func recordRound() async {
         guard let turn, !turn.round.calls.isEmpty else { return }
         do {
-            let row = try await setup.store.recordCueRound(
+            let row = try await store.recordCueRound(
                 turn.round.row, startedAt: turn.round.startedAt, answersYou: turn.answersYou, tools: turn.round.process, wake: turn.selfStarted?.wake)
             updateShift { $0.turn?.round.row = row }
         } catch {
@@ -472,7 +473,7 @@ final class CueKeeper {
     /// 一轮做完：经过那一行最后一次改（中途插了你的话，这一轮成了回答你的）、这一轮写给你的话与歇着一次写下（`CueStore.finishCueRound`），返回那一行。
     private func finish(_ turn: Turn, reply: String?) async -> UUID? {
         do {
-            return try await setup.store.finishCueRound(
+            return try await setup.recorder.finishCueRound(
                 turn.round.row, startedAt: turn.round.startedAt, answersYou: turn.answersYou, tools: turn.round.calls.isEmpty ? nil : turn.round.process,
                 reply: reply, as: turn.author, context: shift?.context)
         } catch {
@@ -486,7 +487,7 @@ final class CueKeeper {
     private func markTold(_ round: CueRound) async {
         let told = round.calls.filter(\.failed).flatMap { CueTools.undeliveredRequests(in: $0.result ?? "") }
         do {
-            try await setup.store.markCueTold(told)
+            try await store.markCueTold(told)
         } catch {
             Self.log.error("Cue 记下已知道的失败没写成，下一轮会再报一次：\(error.localizedDescription, privacy: .public)")
         }
@@ -494,14 +495,14 @@ final class CueKeeper {
 
     /// 该报给 Cue 的变化：基线之后的（到 `now` 为止到了的停住），与记着的归他的停下（`CueStore.cueChanges`）。
     private func changes(at now: Date = .now) async throws -> CueChanges {
-        try await setup.store.cueChanges(after: progress.marks ?? CueMarks(0), held: progress.held, at: now)
+        try await store.cueChanges(after: progress.marks ?? CueMarks(0), held: progress.held, at: now)
     }
 
     /// 一轮做完、没出错：会话的动静从醒来时读到的写入序号之后算（这一轮里才写进库的下次还在，哪怕事件时刻更早），
     /// 完成从此刻的写入序号之后算（这一轮里多是 Cue 自己做完的），等子代理停住从醒来的时刻（`seen`，信封里的变化读到那一刻为止）之后算。
     private func advanceBaseline(from mark: Int?, seen: Date) async {
         do {
-            let latest = try await setup.store.lastWrite()
+            let latest = try await store.lastWrite()
             progress.marks = CueMarks(sessions: mark ?? latest, tasks: latest, stalls: seen)
         } catch {
             Self.log.error("Cue 读变化失败：\(error.localizedDescription, privacy: .public)")
@@ -523,7 +524,7 @@ final class CueKeeper {
         timer?.cancel()
         timer = nil
         do {
-            let store = setup.store, now = Date.now
+            let store = self.store, now = Date.now
             let profile = try await store.cueProfile() ?? CueProfile()
             await follow(BrainSettings(profile))
             let pending = try await store.cueMessagesToDeliver()
@@ -656,7 +657,7 @@ final class CueKeeper {
                 var restored = wanted
                 (restored.model, restored.effort) = (current.model, current.effort)
                 do {
-                    let profile = try await setup.store.updateCueProfile { profile in
+                    let profile = try await store.updateCueProfile { profile in
                         guard BrainSettings(profile) == wanted else { return }
                         (profile.model, profile.effort) = (current.model, current.effort.map(Open.known))
                     }
@@ -689,7 +690,7 @@ final class CueKeeper {
     ) async throws -> Bool {
         guard let shift else { return false }
         let author = chosen ?? Self.author(of: wake)
-        let store = setup.store, now = Date.now
+        let store = self.store, now = Date.now
         let mark = try await store.lastWrite()
         let board = try await store.cueBoard()
         var resume: CueResume?
@@ -736,12 +737,12 @@ final class CueKeeper {
     /// 提醒到点的一轮要列给它的那几条记忆（带序号）；别的原因醒来没有。
     private func reminders(of wake: CueWake) async throws -> [CueIndexedLine] {
         guard case .reminder(let ids) = wake else { return [] }
-        return try await setup.store.cueLines(ids)
+        return try await store.cueLines(ids)
     }
 
     /// 记下送达并立即上传（不等上传完就接着对账）。
     private func markDelivered(_ ids: [UUID]) async throws {
-        try await setup.store.markCueMessagesDelivered(ids)
+        try await store.markCueMessagesDelivered(ids)
         guard !ids.isEmpty else { return }
         let upload = setup.upload
         Task { await upload(ids) }
@@ -757,7 +758,7 @@ final class CueKeeper {
             return []
         }
         do {
-            return try contents.flatMap { try $0.piImages(from: setup.store.files) }
+            return try contents.flatMap { try $0.piImages(from: store.files) }
         } catch {
             await say(.cue, "你发的图没能交给我：\(error.localizedDescription)")
             return []
@@ -767,7 +768,7 @@ final class CueKeeper {
     /// 这一轮写给你的话（回复、回答你的一轮出错）：提不提示你、一轮只响一次都在 `CueStore.replyCueRound`。
     private func reply(_ text: String, in turn: Turn) async {
         do {
-            try await setup.store.replyCueRound(startedAt: turn.round.startedAt, reply: text, as: turn.author, answersYou: turn.answersYou)
+            try await store.replyCueRound(startedAt: turn.round.startedAt, reply: text, as: turn.author, answersYou: turn.answersYou)
         } catch {
             Self.log.error("Cue 这一轮的话没能写进资料库：\(error.localizedDescription, privacy: .public)")
         }
@@ -777,7 +778,7 @@ final class CueKeeper {
     private func say(_ author: CueAuthor, _ text: String, urgent: Bool = false) async {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         do {
-            try await setup.store.addCueMessage(author, text: text, urgent: urgent)
+            try await store.addCueMessage(author, text: text, urgent: urgent)
         } catch {
             Self.log.error("Cue 的消息没能写进资料库：\(error.localizedDescription, privacy: .public)")
         }
