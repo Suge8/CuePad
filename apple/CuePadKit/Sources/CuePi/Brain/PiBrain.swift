@@ -51,7 +51,7 @@ final class PiBrain: CueBrain {
             ]
             if let model = config.model { arguments += ["--model", model] }
             if let effort = config.effort { arguments += ["--thinking", effort.rawValue] }
-            let process = try ChildProcess(
+            let process = try await ChildProcess(
                 config.executable, arguments, directory: config.workingDirectory, environment: BrainSession.environment(config),
                 placement: .group, input: .pipe, output: .lines)
             self.process = process

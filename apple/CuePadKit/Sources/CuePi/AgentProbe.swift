@@ -138,7 +138,7 @@ struct AgentProbe {
         let arguments = [
             "-p", "--no-session-persistence", "--settings", #"{"disableAllHooks":true}"#, "--strict-mcp-config", "--disable-slash-commands",
         ]
-        let stream = try ClaudeStream(
+        let stream = try await ClaudeStream(
             executable: executable, arguments: arguments, directory: FileManager.default.temporaryDirectory,
             environment: locator.environment(launching: executable, overrides: paths.environment))
         do {
