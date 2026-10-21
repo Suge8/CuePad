@@ -14,9 +14,15 @@ extension CueTools {
     if ask == nil, !shots.isEmpty { throw Failure("show 只跟着 ask：要他看的图放在提问上") }
     var done: [String] = []
     if let ref = args.string("withdraw") {
-      let question = try await question(ref, in: store.cueMessagesWaitingForYou(), missing: "等你里没有 \(ref)：他可能已经答了，看信封里的等你")
-      try await store.endCueQuestion(question.id, .withdrawn)
-      done.append("已撤回「\(CueEnvelope.clip(CueFormat.plainText(question.text), 40))」。")
+      // 他开口收起的卡已经不在等你里，算他直接说了：撤回是多余的一步，不当错（模型照他那句话撤回它很自然）；
+      // 随撤回带的 text 是撤回的理由，卡没撤也就不发，免得多一条打扰他
+      if ask == nil, args.string("restore") == nil, let aside = try? question(ref, in: await store.cueQuestionsSetAside(), missing: "") {
+        return .ok("「\(CueEnvelope.clip(CueFormat.plainText(aside.text), 40))」他开口时已收起，不在等你里，不用撤回" + (args.string("text") == nil ? "。" : "，text 也没发。"))
+      } else {
+        let question = try await question(ref, in: store.cueMessagesWaitingForYou(), missing: "等你里没有 \(ref)：他可能已经答了，看信封里的等你")
+        try await store.endCueQuestion(question.id, .withdrawn)
+        done.append("已撤回「\(CueEnvelope.clip(CueFormat.plainText(question.text), 40))」。")
+      }
     }
     if let ref = args.string("restore") {
       let question = try await question(ref, in: store.cueQuestionsSetAside(), missing: "他开口收起的里没有 \(ref)：照他那句话后面列的 id 写")
