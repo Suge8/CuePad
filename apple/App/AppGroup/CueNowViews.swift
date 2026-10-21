@@ -9,7 +9,7 @@ struct BeadDot: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        let tint = kind.tint(palette)
+        let tint = kind.tone.color(palette)
         Group {
             if kind == .delegating {
                 Circle().strokeBorder(tint, lineWidth: max(size * 0.24, 1.5))
@@ -111,24 +111,13 @@ extension CueMood {
     }
 }
 
-extension CueNow.Bead.Kind {
-    func tint(_ palette: Palette) -> Color {
+extension CueNow.Tone {
+    func color(_ palette: Palette) -> Color {
         switch self {
+        case .moving: palette.signature
         case .asks: palette.waiting
-        case .running, .delegating: palette.signature
-        case .resting: palette.ink3
         case .done: palette.replied
-        }
-    }
-
-    /// 这颗珠子的样子写成字（展开态与锁屏的每一行、读屏）。
-    var label: String {
-        switch self {
-        case .asks: "等你拍板"
-        case .running: "在跑"
-        case .delegating: "等子代理"
-        case .resting: "歇着"
-        case .done: "做完"
+        case .quiet: palette.ink3
         }
     }
 }
@@ -140,19 +129,9 @@ extension CueNow {
         return mood.ring(palette)
     }
 
-    /// 短词与走秒的颜色：是谁的事（同 `word` 的先后）。
-    func tint(_ palette: Palette) -> Color {
-        switch cue {
-        case .working, .hearing: return palette.signature
-        case .away: return palette.ink3
-        case .idle: break
-        }
-        return lead?.kind.tint(palette) ?? palette.ink3
-    }
-
     /// 读屏：那一句，接每种活几件。
     var spoken: String {
-        let counts = [Bead.Kind.asks, .running, .delegating, .resting, .done].compactMap { kind -> String? in
+        let counts = Bead.Kind.allCases.compactMap { kind -> String? in
             let count = beads.count { $0.kind == kind }
             return count > 0 ? "\(kind.label) \(count)" : nil
         }

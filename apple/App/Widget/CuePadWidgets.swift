@@ -16,23 +16,23 @@ struct CuePadWidgets: WidgetBundle {
 struct CueActivityWidget: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: CueActivityAttributes.self) { context in
-            CueActivityViews.lockScreen(context.state, stale: context.isStale)
+            CueActivityViews(context.state, stale: context.isStale).lockScreen
                 .widgetURL(DeepLink.cue.url)
         } dynamicIsland: { context in
-            let (state, stale) = (context.state, context.isStale)
+            let views = CueActivityViews(context.state, stale: context.isStale)
             return DynamicIsland {
-                DynamicIslandExpandedRegion(.leading) { CueActivityViews.expandedLeading(state, stale: stale) }
-                DynamicIslandExpandedRegion(.trailing) { CueActivityViews.expandedTrailing(state, stale: stale) }
-                DynamicIslandExpandedRegion(.center) { CueActivityViews.expandedCenter(state, stale: stale) }
-                DynamicIslandExpandedRegion(.bottom) { CueActivityViews.expandedBottom(state, stale: stale) }
+                DynamicIslandExpandedRegion(.leading) { views.expandedLeading }
+                DynamicIslandExpandedRegion(.trailing) { views.expandedTrailing }
+                DynamicIslandExpandedRegion(.center) { views.expandedCenter }
+                DynamicIslandExpandedRegion(.bottom) { views.expandedBottom }
             } compactLeading: {
-                CueActivityViews.compactLeading(state, stale: stale)
+                views.compactLeading()
             } compactTrailing: {
-                CueActivityViews.compactTrailing(state, stale: stale)
+                views.compactTrailing()
             } minimal: {
-                CueActivityViews.minimal(state, stale: stale)
+                views.minimal
             }
-            .keylineTint(CueActivityViews.keyline(state, stale: stale, palette: Palette(dark: true)))
+            .keylineTint(views.keyline)
             .widgetURL(DeepLink.cue.url)
         }
     }
