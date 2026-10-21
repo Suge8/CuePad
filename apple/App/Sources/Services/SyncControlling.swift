@@ -23,7 +23,7 @@ nonisolated extension SyncControlling {
     /// 马上只传这一条，不等提交触发的合并窗口，排在其余待推送前面（`CloudSync.send`）。`deleted`：本机删掉了它，传的是删除
     /// （传什么由库推导，这里只用于日志）。没传成的只记日志，之后照常重试。返回时这一条已经传完（或没传成）。
     func upload(_ record: UUID, deleted: Bool = false) async {
-        let log = Logger(subsystem: AppServices.bundleID, category: "services"), began = Date.now
+        let log = Logger(subsystem: AppIdentity.id, category: "services"), began = Date.now
         let what = deleted ? "删除" : "上传"
         if await send(recordName: record.uuidString.lowercased()) {
             log.info("立即\(what, privacy: .public) \(record.uuidString.prefix(8), privacy: .public) 用时 \(Date.now.timeIntervalSince(began), format: .fixed(precision: 1)) 秒")

@@ -104,7 +104,7 @@ extension AppServices {
         let signingOff = Task.detached { [presence] in await presence.signOff() }
         let leaving = Task.detached { [viewer] in await viewer?.signOff() }
         let stopExecutor = executor.beginStop(), stopCue = cue.stop(), sync = sync
-        let log = Logger(subsystem: Self.bundleID, category: "shutdown")
+        let log = Logger(subsystem: AppIdentity.id, category: "shutdown")
         return { @concurrent in
             let late = await ShutdownSteps.run([
                 ("远程投送执行器", stopExecutor),

@@ -178,7 +178,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
 
     private func showLibraryFailure(_ failure: LibraryFailure) {
-        Logger(subsystem: AppServices.bundleID, category: "launch").error("资料库没能打开：\(failure.reason, privacy: .public)")
+        Logger(subsystem: AppIdentity.id, category: "launch").error("资料库没能打开：\(failure.reason, privacy: .public)")
         let content = UnreadableLibraryView(failure: failure) { [weak self] in self?.launch() }
             .frame(width: 520, height: 420)
             .modifier(PaletteProvider())
@@ -196,7 +196,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
     /// 配置有误时不能带着错误的位置去读写数据：说明原因后退出。
     private func abortLaunch(_ error: any Error) {
-        Logger(subsystem: AppServices.bundleID, category: "launch").error("\(error.localizedDescription, privacy: .public)")
+        Logger(subsystem: AppIdentity.id, category: "launch").error("\(error.localizedDescription, privacy: .public)")
         FileHandle.standardError.write(Data("CuePad 无法启动：\(error.localizedDescription)\n".utf8))
         let alert = NSAlert(error: error)
         alert.messageText = "CuePad 无法启动"

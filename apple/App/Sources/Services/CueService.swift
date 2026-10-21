@@ -53,7 +53,7 @@ final class CueService {
     @ObservationIgnored private let notifier: any CueNotifying
     private var duty: (keeper: CueKeeper, task: Task<Void, Never>)?
     private var store: CueStore { setup.recorder.store }
-    private nonisolated static let log = Logger(subsystem: AppServices.bundleID, category: "cue")
+    private nonisolated static let log = Logger(subsystem: AppIdentity.id, category: "cue")
 
     /// Cue 此刻的样子经 `recorder` 写（与会话状态同一个节拍、同一条落盘链），资料库与本机 id 也取它的。
     init(recorder: PiStateRecorder, sync: (any SyncControlling)?, library: URL, piAgentDirectory: URL, dependencies: CueDependencies) {

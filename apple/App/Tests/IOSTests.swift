@@ -16,7 +16,7 @@ struct IOSTests {
         let location = try LibraryLocation.resolve(environment: [:])
 
         #expect(location.directory.path.hasPrefix(root.path))
-        #expect(location.preferencesSuite == LibraryLocation.appGroupIdentifier)
+        #expect(location.preferencesSuite == AppIdentity.appGroup)
     }
 
     @Test func iOS上复制_文字与图片按顺序各成一个条目_不记发送记录() async throws {
