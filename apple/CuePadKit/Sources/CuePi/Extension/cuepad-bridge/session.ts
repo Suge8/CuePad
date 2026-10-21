@@ -41,7 +41,6 @@ export class Session {
 	turnSince: number | null = null;
 	private lastKey: string;
 	phase: Phase;
-	/** 进入当前粗状态的时间 */
 	since: number;
 	/** 这段连续处理（离开空闲到彻底歇下，中间等你确认也算）开始的时间；空闲、出错时为 null */
 	busySince: number | null;
