@@ -123,7 +123,7 @@ enum DebugHooks {
         #endif
     }
 
-    /// 隔离库下也像正式版那样首次打开时请工作区决定弹不弹接入面板（`-CuePadOfferSetup YES`，同一个 `Workspace.offerSetup`）：验收老用户升级后自动弹的那一次。
+    /// 脚本起的实例也像正式版那样首次打开时请工作区决定弹不弹接入面板（`-CuePadOfferSetup YES`，同一个 `Workspace.offerSetup`）：验收第一次打开与老用户升级后自动弹的那一次。
     static var offersSetup: Bool {
         #if DEBUG
         DebugScene.defaults.bool(forKey: "CuePadOfferSetup")
