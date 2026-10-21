@@ -4,12 +4,12 @@ import CueStore
 import Darwin
 import QuartzCore
 import UIKit
-import UIKit.UIGestureRecognizerSubclass
 
 /// iOS 的 `-CuePadBench interact`（配 `-CuePadDemo YES`，iPhone：以去处为根的导航栈加底部一排）：单次交互那一下的主线程耗时，口径同 Mac 的 `InteractionBench`，
 /// 每项一行 `INTERACT {json}` 写进隔离库目录下的 `interact.jsonl`（模拟器里的标准输出不好取），量完退出。
 /// 动作是点击最终调用的同一条路（导航路径、`openSession`、点底部那一排与侧栏的 `select`、浮窗与面板的状态），不经触摸投递。
-/// 长按菜单在进程内没有入口：由 `perf-ios.sh` 在模拟器上真按（`AWAIT` 行），从手指按下起量。每项至少做两遍：第一遍是首次（要现建视图），之后是再次。
+/// 长按菜单与手势（滑动切页、右滑返回、左滑前进，以及会话行、看板上横滑的误触核对）由 `perf-ios.sh` 在模拟器上真按、真滑（`AWAIT` 行，`InteractionBench+iOSTouch`），
+/// 从手指按下起量；每行的 `landed` 是量完时的根与推入的页。每项至少做两遍：第一遍是首次（要现建视图），之后是再次。
 /// 演示库缺了要量的东西时写 `FAIL 原因` 并以 1 退出；全部量完写 `DONE`。`-CuePadInteractOnly 项,项` 只量列出的几项（同 Mac）。
 /// - 冷启动·Cue 页：App 一打开就在 Cue 页上；`launchMs` 是进程启动到对话排出来（`PerfProbe` 的 `cue`）的墙钟毫秒，
 ///   主线程与帧从画面摆起来（`beginCold`）量到对话出来后一秒，指令数从进程启动算起。量真实大小的对话配 `CUEPAD_PERF_SEED`（`perf-ios.sh`）。
@@ -71,12 +71,13 @@ enum IOSInteractionBench {
         guard sessions.count >= 2 else { fail("演示库里不到两个会话") }
         guard let task = tasks.first else { fail("演示库里没有任务") }
         guard let idea = try? await store.cards(in: Project.defaultID).first else { fail("演示库的默认项目里没有灵感") }
-        /// `press`：请测量脚本在这一点真按（长按或轻点由脚本按名字定），从手指按下起量；不给时从 `action` 发出起量。
-        func step(_ name: String, window: Duration = .milliseconds(800), press: CGPoint? = nil, _ action: () -> Void = {}) async {
+        /// `finger`：请测量脚本真按或真滑（`Finger`），从手指按下起量；不给时从 `action` 发出起量。
+        func step(_ name: String, window: Duration = .milliseconds(800), finger: Finger? = nil, _ action: () -> Void = {}) async {
             guard wants(name) else { return }
-            let pressed: (() async -> Void)? = press.map { point in { await Self.touch(write, name, at: point) } }
+            let pressed: (() async -> Void)? = finger.map { finger in { await Self.touch(write, name, finger) } }
             var measured = await measure(window: window, pressed: pressed, action)
             measured["name"] = name
+            measured["landed"] = Self.landed(workspace)
             row(measured)
         }
         workspace.select(.shelf)
@@ -122,6 +123,9 @@ enum IOSInteractionBench {
             await step("开任务气泡") { workspace.openTask(task) }
             await step("关任务气泡") { workspace.openTask = nil }
         }
+        await gestures(workspace, session: sessions[0], wants: wants, fail: fail) { name, window, finger, action in
+            await step(name, window: window, finger: finger, action)
+        }
         await typeLong(workspace, session: sessions[0], card: idea.id, wants: wants, fail: fail, step: { name, action in await step(name, action) })
         // 最后量长按书架上的项目卡（放在最后：万一菜单没收起，不影响前面各项）：系统的长按菜单在进程内没有入口，由 perf-ios.sh 在模拟器上真按（`AWAIT 名 x y` 是要它按的点，屏幕坐标）。
         // 从手指按下起量 1.5 秒（菜单在按住约半秒后才弹出）；松手后菜单留着，请脚本点一下空白处收起
@@ -129,9 +133,9 @@ enum IOSInteractionBench {
         try? await Task.sleep(for: .seconds(1))
         for _ in 0..<2 where wants("长按菜单") {
             guard let card = Self.longPressTarget(in: Self.window) else { fail("书架上找不到有长按菜单的项目卡") }
-            await step("长按菜单", window: .milliseconds(1500), press: card)
+            await step("长按菜单", window: .milliseconds(1500), finger: .press(card))
             // 收起菜单不量（模拟器里点空白处、按 Esc 都收不起长按出来的菜单）：在进程里让菜单交互收起
-            Self.dismissMenus(in: Self.window)
+            Self.dismissMenus()
             try? await Task.sleep(for: .seconds(2))
         }
         write("DONE")
@@ -205,41 +209,6 @@ enum IOSInteractionBench {
         return nil
     }
 
-    /// 请测量脚本在 `point` 真按一下（长按或轻点由脚本按名字定），等手指按下那一刻再返回：量从按下起算。
-    private static func touch(_ write: @escaping (String) -> Void, _ name: String, at point: CGPoint) async {
-        await withCheckedContinuation { continuation in
-            TouchProbe.arm { continuation.resume() }
-            write("AWAIT \(name) \(Int(point.x)) \(Int(point.y))")
-        }
-    }
-
-    private static func menuInteractions(in view: UIView?) -> [UIInteraction] {
-        guard let view else { return [] }
-        let here = view.interactions.filter { $0 is UIContextMenuInteraction || String(describing: type(of: $0)).contains("ClickPresentation") }
-        return here + view.subviews.flatMap { menuInteractions(in: $0) }
-    }
-
-    /// 收起开着的长按菜单：系统的菜单交互收起，SwiftUI 的点按呈现交互取消。
-    private static func dismissMenus(in view: UIView?) {
-        let windows = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows)
-        for interaction in windows.flatMap({ menuInteractions(in: $0) }) {
-            if let menu = interaction as? UIContextMenuInteraction { menu.dismissMenu() } else {
-                let cancel = NSSelectorFromString("cancelInteraction")
-                if interaction.responds(to: cancel) { interaction.perform(cancel) }
-            }
-        }
-    }
-
-    /// 书架上带长按菜单的项目卡（SwiftUI 的长按菜单在视图上挂着点按呈现交互）的中心点，屏幕坐标。
-    private static func longPressTarget(in view: UIView?) -> CGPoint? {
-        guard let view, !view.isHidden, view.alpha > 0, let window = view.window ?? (view as? UIWindow) else { return nil }
-        let menu = view.interactions.contains { String(describing: type(of: $0)).contains("ClickPresentation") }
-        let frame = view.convert(view.bounds, to: window)
-        if menu, frame.width > 100, frame.height > 40, window.bounds.contains(frame) { return CGPoint(x: frame.midX, y: frame.midY) }
-        for sub in view.subviews { if let found = longPressTarget(in: sub) { return found } }
-        return nil
-    }
-
     private static func stepScroll(_ name: String, _ scroll: UIScrollView, step: (String, () -> Void) async -> Void) async {
         // 滚动是持续的：量 40 帧里每帧的主线程回合与掉帧（动作只触发第一帧，之后由 display link 推）
         let driver = ScrollDriver(scroll)
@@ -248,7 +217,7 @@ enum IOSInteractionBench {
         scroll.setContentOffset(.zero, animated: false)
     }
 
-    private static var window: UIWindow? {
+    static var window: UIWindow? {
         UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows).first { $0.isKeyWindow }
     }
 
@@ -275,31 +244,6 @@ enum IOSInteractionBench {
         row["at"] = wall
         return row
     }
-}
-
-/// 窗口里手指按下的那一刻（测量脚本在模拟器上真按的长按、轻点）：每个窗口挂一个（长按菜单弹在自己的窗口里），只看不拦，按下就报给等着的一方。
-private final class TouchProbe: UIGestureRecognizer {
-    private static var waiting: (() -> Void)?
-
-    static func arm(_ pressed: @escaping () -> Void) {
-        let windows = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows)
-        for window in windows where !(window.gestureRecognizers ?? []).contains(where: { $0 is TouchProbe }) {
-            let probe = TouchProbe(target: nil, action: nil)
-            probe.cancelsTouchesInView = false
-            probe.delaysTouchesBegan = false
-            probe.delaysTouchesEnded = false
-            window.addGestureRecognizer(probe)
-        }
-        waiting = pressed
-    }
-
-    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
-        Self.waiting?()
-        Self.waiting = nil
-        state = .failed
-    }
-
-    override func canPrevent(_ preventedGestureRecognizer: UIGestureRecognizer) -> Bool { false }
 }
 
 /// 每帧往下滚 40pt，到底往回。
