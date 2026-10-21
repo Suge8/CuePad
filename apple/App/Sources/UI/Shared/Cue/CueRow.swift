@@ -5,11 +5,23 @@ import SwiftUI
 struct CueSegment: View, Equatable {
     let rows: [CueRow]
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(AppServices.self) private var services
+
     nonisolated static func == (a: Self, b: Self) -> Bool { a.rows.map(\.key) == b.rows.map(\.key) }
 
+    private var swapsInPlace: Bool {
+        #if os(macOS)
+        services.cue.keeper != nil
+        #else
+        false
+        #endif
+    }
+
+    /// 过渡挂在插进来的那一格上（`equatable()` 外面）：挂在格子里面不会播。
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            ForEach(rows, id: \.row.id) { $0.equatable() }
+            ForEach(rows, id: \.row.id) { row in row.equatable().transition(row.arrival(reduceMotion: reduceMotion, swapsInPlace: swapsInPlace)) }
         }
     }
 }
@@ -32,7 +44,6 @@ struct CueRow: View, Equatable {
     @Binding var opened: PreviewOpening?
     @Binding var seen: [UUID: Date]
     @Environment(Workspace.self) private var workspace
-    @Environment(AppServices.self) private var services
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var sizeClass
     #endif
@@ -64,6 +75,15 @@ struct CueRow: View, Equatable {
             }
     }
 
+    /// 新来时怎么出现（`CueSegment` 挂在这一格外面）：Cue 新说的一句与结果卡从左下角长出来（`CueBubble.arrival`）；
+    /// `swapsInPlace`：Cue 在这台 Mac 值班，它的话原位换下正在说的那句（`CueEnding`），直接出现。你的话由回复框那头的发出动画接上，其余各格直接出现。
+    func arrival(reduceMotion: Bool, swapsInPlace: Bool) -> AnyTransition {
+        switch row {
+        case .cue where !swapsInPlace, .result: CueBubble.arrival(.leading, reduceMotion: reduceMotion)
+        default: .identity
+        }
+    }
+
     @ViewBuilder private var content: some View {
         let cue = workspace.cue
         switch row {
@@ -76,7 +96,7 @@ struct CueRow: View, Equatable {
         case .waiting(let message):
             CueWaitingAsk(message: message, joined: joined)
         case .cue(let message, _):
-            CueSays(message: message, task: ref, shots: shots, open: { opened = $0 }, joined: joined, arrives: !swapsInPlace)
+            CueSays(message: message, task: ref, shots: shots, open: { opened = $0 }, joined: joined)
         case .result(let message, _):
             CueSays(message: message, task: ref, shots: shots, open: { opened = $0 }, card: true)
         case .notes(let rounds):
@@ -89,15 +109,6 @@ struct CueRow: View, Equatable {
     private var straddlesDot: Bool {
         #if os(iOS)
         sizeClass == .compact
-        #else
-        false
-        #endif
-    }
-
-    /// Cue 的话原位换下正在说的话（Cue 在这台 Mac 值班时），不淡入。
-    private var swapsInPlace: Bool {
-        #if os(macOS)
-        services.cue.keeper != nil
         #else
         false
         #endif

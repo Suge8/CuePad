@@ -23,24 +23,36 @@ struct CueWakeTitle: View {
         }
     }
 
-    /// 名字、后面的话与"没动手"排成一段字，按这个先后：窄处（iPhone）名字先读全，后面的话折到第二行，不截名字去留"子代理卡住了 · 没动手"；
-    /// 两行还放不下才截末尾。几点按自己的宽排在行末、对着第一行（`NoteLine`）。
+    /// 名字、后面的话与"没动手"排成一段字，按这个先后：窄处（iPhone）名字先读全，后面的话折到下一行，不截名字去留"子代理卡住了 · 没动手"。
+    /// "没动手"与前面隔一个点，一行放不下时它自起一行、不带点（点不落在行首）。几点按自己的宽排在行末、对着第一行（`NoteLine`）。
     private var words: some View {
+        Group {
+            if quiet, header.name != nil {
+                ViewThatFits(in: .horizontal) {
+                    phrase(quietAfter: Dotted.separator).lineLimit(1)
+                    phrase(quietAfter: "\n").lineLimit(3)
+                }
+            } else {
+                phrase(quietAfter: "").lineLimit(2)
+            }
+        }
+        .fixedSize(horizontal: false, vertical: true)
+        .menuLabel([header.reason, header.name, header.trail, quiet ? "没动手" : nil].compactMap(\.self).joined(separator: "，"))
+    }
+
+    private func phrase(quietAfter gap: String) -> Text {
         var line = AttributedString()
-        func add(_ text: String, _ color: Color, medium: Bool = false) {
-            var part = AttributedString(line.characters.isEmpty ? text : " " + text)
+        func add(_ text: String, _ color: Color, after: String = " ", medium: Bool = false) {
+            var part = AttributedString(line.characters.isEmpty ? text : after + text)
             part.foregroundColor = color
             if medium { part.font = Typography.caption.weight(.medium) }
             line += part
         }
         if let name = header.name { add(name, palette.ink, medium: true) }
         if let trail = header.trail { add(trail, palette.ink2) }
-        if quiet { add(header.name != nil ? "· 没动手" : "没动手", palette.ink3) }
+        if quiet { add("没动手", palette.ink3, after: gap) }
         let chevron = Text(Image(.forward)).font(.system(size: 8, weight: .semibold)).foregroundStyle(palette.ink3)
-        return Text("\(Text(line))\(header.targets.isEmpty ? Text("") : Text(" ") + chevron)")
-            .lineLimit(2)
-            .fixedSize(horizontal: false, vertical: true)
-            .menuLabel([header.reason, header.name, header.trail, quiet ? "没动手" : nil].compactMap(\.self).joined(separator: "，"))
+        return Text("\(Text(line))\(header.targets.isEmpty ? Text("") : Text(" \(chevron)"))")
     }
 
     @ViewBuilder private var reason: some View {
