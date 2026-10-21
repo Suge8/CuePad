@@ -27,7 +27,6 @@ enum InkSymbols {
         "cue.stop",
         "cue.done",
         "cue.done.pre",
-        "cue.climb",
         "cue.waiting",
         "cue.failure",
         "cue.undelivered",

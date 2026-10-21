@@ -1,5 +1,5 @@
 """CuePad 自家的图标（墨块）：从几何直接生成自定义 SF Symbol（模板 7.0，Ultralight / Regular / Black 三个母版插值），
-整个重写 App 资源目录的 Symbols 下（两端共用，资源名 cue.<名>），小组件与实时活动要的几个另拷一份进小组件自己的资源目录（`WIDGET_SYMBOLS`，扩展里没有 App 的资源），并生成 LoopLayer 取用的"话在路上"三块 V 的路径（`ClimbBlocks.swift`）
+整个重写 App 资源目录的 Symbols 下（两端共用，资源名 cue.<名>），小组件与实时活动要的几个另拷一份进小组件自己的资源目录（`WIDGET_SYMBOLS`，扩展里没有 App 的资源）
 与图标总览（`IconSheet`）列的全部符号名（`InkSymbols.swift`，只在 Debug 构建里）。
 用法：python3 design/tools/cue-symbols.py（只用标准库）。这里只有符号表与写出；几何在 `ink/geometry.py`，各族图标在 `ink/icons_*.py`。
 
@@ -24,7 +24,6 @@ from ink.icons_project import *
 
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "apple/App/Sources/Assets.xcassets/Symbols"
-CLIMB_SWIFT = ROOT / "apple/App/Sources/UI/Shared/Theme/ClimbBlocks.swift"
 NAMES_SWIFT = ROOT / "apple/App/Sources/UI/Debug/InkSymbols.swift"
 WIDGET_OUT = ROOT / "apple/App/Widget/Symbols.xcassets"
 WIDGET_SYMBOLS = ("waiting", "done")  # 小组件与实时活动用到的（`WidgetIcon`）
@@ -55,7 +54,6 @@ SYMBOLS = {
     "stop": stop,
     "done": done(),
     "done.pre": done("pre"),
-    "climb": climb,
     "waiting": badge(mark_question),
     "failure": badge(mark_exclaim),
     "undelivered": badge(mark_uturn),
@@ -280,17 +278,6 @@ def write_widget_symbols():
         shutil.copytree(OUT / f"{PREFIX}.{name}.symbolset", WIDGET_OUT / f"{PREFIX}.{name}.symbolset")
 
 
-def write_climb():
-    blocks = ",\n".join("        [" + ", ".join(f"CGPoint(x: {fmt(x)}, y: {fmt(y)})" for x, y in climb_block(tip)) + "]" for tip in CLIMB_TIPS)
-    CLIMB_SWIFT.write_text(
-        "// 由 design/tools/cue-symbols.py 生成，改形状改那里（符号 cue.climb 出自同一份）。\n"
-        "import CoreGraphics\n\n"
-        '/// "话在路上"三块实心 V 的顶点：22 × 22、y 朝下的格子，从下往上排（`LoopLayer.climb` 画它）。\n'
-        "enum ClimbBlocks {\n"
-        f"    static let blocks: [[CGPoint]] = [\n{blocks},\n    ]\n"
-        "}\n")
-
-
 def write_names():
     names = "\n".join(f'        "{PREFIX}.{name}",' for name in SYMBOLS)
     NAMES_SWIFT.write_text(
@@ -306,5 +293,4 @@ def write_names():
 if __name__ == "__main__":
     write_symbols()
     write_widget_symbols()
-    write_climb()
     write_names()

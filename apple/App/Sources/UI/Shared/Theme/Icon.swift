@@ -78,7 +78,7 @@ nonisolated enum Icon: Hashable, Sendable {
         case .stop: .ink("stop")
         case .done, .complete: .ink("done")
         case .donePending: .ink("done.pre")
-        case .onTheWay: .ink("climb")
+        case .onTheWay: .ink("plane")
         case .agent: .ink("agent")
         case .waiting: .ink("waiting")
         case .cueAsking: .ink("asking")
