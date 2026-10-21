@@ -18,6 +18,7 @@ struct GrowPanel<Head: View, Panel: View>: View {
     @ViewBuilder let head: Head
     @ViewBuilder let panel: Panel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.pageActive) private var active
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
@@ -41,6 +42,8 @@ struct GrowPanel<Head: View, Panel: View>: View {
         .frame(maxWidth: .infinity, maxHeight: open ? .infinity : nil, alignment: .top)
         .sensoryFeedback(.impact(weight: .light), trigger: open)
         .onDisappear { open = false }
+        // 窄屏滑走了这一页（它还留着）也收起
+        .onChange(of: active) { if !active { open = false } }
     }
 }
 

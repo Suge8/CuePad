@@ -134,7 +134,7 @@ private struct SwipeRow: ViewModifier {
             .background(alignment: offset > 0 ? .leading : .trailing) { if !side.isEmpty { buttons } }
         return Group { if clipped { moved.clipped() } else { moved } }
             .onGeometryChange(for: CGSize.self) { $0.size } action: { size = $0 }
-            .gesture(HorizontalPan(changed: drag, ended: end))
+            .gesture(HorizontalPan(allows: { rest != 0 || !($0 > 0 ? swipes.leading : swipes.trailing).isEmpty }, changed: drag, ended: end))
             .sensoryFeedback(.impact(weight: .medium), trigger: armed) { !$0 && $1 }
             .onChange(of: OpenSwipe.shared.row) { _, open in if open != row, offset != 0 { settle(0) } }
             .accessibilityActions { RowActionButtons(actions: swipes.leading + swipes.trailing) }
@@ -206,8 +206,10 @@ private struct SwipeRow: ViewModifier {
     }
 }
 
-/// 只接横向的拖：开始时横向速度明显大于纵向、且不在屏幕左缘（那里是返回手势）才开始，不抢列表滚动。
+/// 只接横向的拖：开始时横向速度明显大于纵向、不在屏幕左缘（那里是返回手势）、这一行在那个方向有动作（`allows`，按手指方向的正负）才开始，不抢列表滚动；
+/// 没有动作的方向让给页上的横拖（内容区右滑返回、根上切页），有动作时它们等这一行先判。
 private struct HorizontalPan: UIGestureRecognizerRepresentable {
+    let allows: (CGFloat) -> Bool
     let changed: (CGFloat) -> Void
     let ended: (_ commits: Bool, _ velocity: CGFloat) -> Void
 
@@ -218,6 +220,8 @@ private struct HorizontalPan: UIGestureRecognizerRepresentable {
         pan.delegate = context.coordinator
         return pan
     }
+
+    func updateUIGestureRecognizer(_ pan: UIPanGestureRecognizer, context: Context) { context.coordinator.allows = allows }
 
     func handleUIGestureRecognizerAction(_ pan: UIPanGestureRecognizer, context: Context) {
         switch pan.state {
@@ -233,11 +237,18 @@ private struct HorizontalPan: UIGestureRecognizerRepresentable {
 
     final class Coordinator: NSObject, UIGestureRecognizerDelegate {
         private static let edge: CGFloat = 28
+        var allows: (CGFloat) -> Bool = { _ in true }
 
         func gestureRecognizerShouldBegin(_ recognizer: UIGestureRecognizer) -> Bool {
             guard let pan = recognizer as? UIPanGestureRecognizer else { return false }
             let velocity = pan.velocity(in: pan.view)
-            return abs(velocity.x) > abs(velocity.y) * 1.5 && pan.location(in: nil).x > Self.edge
+            return abs(velocity.x) > abs(velocity.y) * 1.5 && pan.location(in: nil).x > Self.edge && allows(velocity.x)
+        }
+
+        /// 外层的横拖（导航栈的返回、根上切页）等这一行先判。
+        func gestureRecognizer(_ recognizer: UIGestureRecognizer, shouldBeRequiredToFailBy other: UIGestureRecognizer) -> Bool {
+            guard other is UIPanGestureRecognizer, let view = recognizer.view, let outer = other.view, outer !== view, view.isDescendant(of: outer) else { return false }
+            return (outer as? UIScrollView)?.panGestureRecognizer !== other
         }
     }
 }

@@ -9,7 +9,7 @@ import SwiftUI
 /// （同系统标签栏：栏高固定，字放大只会挤掉图标）。"项目"那一格在同步到不了 Mac 时带一个点（`AppServices.macAlert`）。
 /// 接力的"会话"那一头（`relaySpot(dock:)`）：三格展开时是"会话"那一格，收起时是"⋯"。减弱动态效果时不换形，直接到新样子。
 struct DockBar: View {
-    /// 推到了哪个去处（`DockRoot` 在推移的动画里改它，选中的滴与页同一个动画滑过去）。
+    /// 当前去处（`Workspace.root`）：换了它，选中的滴与页同一刻滑过去。
     let route: Route
     let look: DockLook
     /// 底边那一格交给了页里的输入框、它已画上屏：Cue 钮藏起。

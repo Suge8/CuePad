@@ -66,6 +66,7 @@ extension Workspace {
         guard let project else { return }
         let gone = Route.project(project)
         if let index = path.firstIndex(of: gone) { path.removeSubrange(index...) }
+        if forward == gone { forward = nil }
         if root == gone { select(.shelf) }
     }
 

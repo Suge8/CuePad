@@ -31,9 +31,18 @@ final class Workspace {
 
     let services: AppServices
     /// 当前去处（Mac 的内容区、iPad 右边那一栏、窄屏导航栈的根）：打开 App 先到 `openingRoute`。只经 `select` 换（`Workspace+Navigation`）。
-    var root: Route
+    var root: Route {
+        didSet { if root != oldValue { forward = nil } }
+    }
     /// 根页上推入的页（iOS 的卡片纸页、会话页……）；Mac 没有历史，总是空的。
-    var path: [Route] = []
+    var path: [Route] = [] {
+        didSet {
+            guard path != oldValue else { return }
+            forward = path.count < oldValue.count && oldValue.starts(with: path) ? oldValue[path.count] : nil
+        }
+    }
+    /// 刚返回离开的那一页（只记一层）：退回来时记下，推入别的页、换去处就忘。窄屏的 Cue 页上手指左滑把它推回来（`HomePager`、`goForward`）。
+    var forward: Route?
     /// 去处怎么摆：Mac 固定是 `.pages`，iOS 随尺寸类在 `.split` 与 `.dock` 之间换（`IOSRoot`）。变窄时把宽屏的去处推到它所属的那一页上。
     var layout = Layout.native {
         didSet {
