@@ -1,4 +1,4 @@
-"""项目图标与"话在路上"的三块 V。"""
+"""项目图标。"""
 from __future__ import annotations
 
 from .icons_settings import *
@@ -187,19 +187,3 @@ def menubar(m):
     e = 2.8
     paper_ = grown([(x0, y0), (x1 - e, y0), (x1, y0 + e), (x1, y1), (x0, y1)], [1.0, 0.2, 0.2, 1.0, 1.0], g)
     return [Layer("mark", [ring, paper_])]
-
-
-# "话在路上"三块实心 V：外沿 V 的尖在 tip、两端降 DROP（斜率同燕尾箭的箭镞），竖厚 THICK，两端竖切；从下往上排。
-# 22 格、y 朝下（LoopLayer 的画布），符号里减去中心 11。LoopLayer 的 climb 与符号 cue.climb 都只从这里来。
-CLIMB_TIPS, CLIMB_HALF, CLIMB_DROP, CLIMB_THICK = (12.1, 6.9, 1.7), 6.8, 5.1, 3.2
-
-
-def climb_block(tip):
-    return [(11, tip), (11 + CLIMB_HALF, tip + CLIMB_DROP), (11 + CLIMB_HALF, tip + CLIMB_DROP + CLIMB_THICK),
-            (11, tip + CLIMB_THICK), (11 - CLIMB_HALF, tip + CLIMB_DROP + CLIMB_THICK), (11 - CLIMB_HALF, tip + CLIMB_DROP)]
-
-
-def climb(m):
-    """话在路上（静止版，减弱动态效果与菜单里）：三块实心 V，与状态标里循环的 LoopLayer.climb 同形。字重只外扩四成 g，块间刀口不被吃掉。"""
-    g = GROW[m] * 0.4
-    return [Layer("climb", [grown([(x - 11, y - 11) for x, y in climb_block(tip)], [0] * 6, g) for tip in CLIMB_TIPS])]

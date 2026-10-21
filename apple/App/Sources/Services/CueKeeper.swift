@@ -112,7 +112,7 @@ final class CueKeeper {
         case .stuck(let reason): return (.error, reason, nil)
         case .running(let shift):
             guard let turn = shift.turn else { return (.settled, nil, nil) }
-            let detail = turn.round.running.map { CueActivity.detail(tool: $0.name, arguments: $0.arguments) }
+            let detail = turn.round.running?.detail
             return (detail == nil ? .thinking : .tool, detail, turn.round.row)
         }
     }

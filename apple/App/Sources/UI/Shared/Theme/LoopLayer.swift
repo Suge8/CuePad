@@ -1,7 +1,7 @@
 import QuartzCore
 import SwiftUI
 
-/// 常驻循环动效的唯一宿主：Agent 在跑的心电线（`heartbeat`）、话在路上的三块实心 V（`climb`）、等你确认的外扩波纹（`ripple`）、
+/// 常驻循环动效的唯一宿主：Agent 在跑的心电线（`heartbeat`）、话在路上的纸飞机（`flight`）、等你确认的外扩波纹（`ripple`）、
 /// 等待的转圈（`orbit`，经 `Spinner`）、Cue 在做事时头像外绕着的彗星（`comet`）、换模型与思考强度在路上时的呼吸（`pulse`）、进行中文字与最高思考强度上扫过的光（`sheen`）、
 /// Agent 在做时任务气泡里吉祥物的轻轻上下浮动（`float`）、看板推进中卡下沿那条线（`wave`，`BoardWave`）。
 /// 用 Core Animation 而不是 SwiftUI 的 repeatForever 或符号动效：后两者每帧都在 App 进程里重算，
@@ -17,9 +17,10 @@ struct LoopLayer {
         case comet(lineWidth: CGFloat)
         /// 心电线：淡色的一段心电波形上，一截实色沿波形从左走到右，1.4s 一趟；线宽是边长的 9%，淡波形是三成的颜色。
         case heartbeat
-        /// 三块实心的 V 从下往上依次亮起再暗下去（节奏见 `Climb`）；形状只在 `ClimbBlocks`（与符号 cue.climb 同出 design/tools/cue-symbols.py）。
-        /// 起播那一帧与不播时（截图、Mac 不在前台时只画的那一帧）都是最上面一块亮着、往下渐暗，看得出方向。
-        case climb
+        /// 话在路上：一架纸飞机（与发送钮、"已送达"同一架，`Icon.send`）从左下飞进来、在正中停一下、朝机头的右上飞出去，裁在自己的框里，
+        /// 一趟 `Flight.period` 秒。"发出"一族只有纸飞机：发送中、已送达都是它，燕尾箭只表示方向。
+        /// 不播时（截图、减弱动态效果由调用方换静止符号、Mac 不在前台时只画的那一帧）停在正中。
+        case flight
         /// 一圈细线从内切圆的大小往外扩到 1.6 倍、淡到看不见，2.4s 一次；线宽是边长的 7%。
         case ripple
         /// 一道横向的光带（宽是整体的一半）从左外扫到右外，1.8s 一趟。
@@ -97,17 +98,25 @@ struct LoopLayer {
                     shape.lineWidth = width
                     shape.strokeColor = index == 0 ? color?.copy(alpha: (color?.alpha ?? 1) * 0.22) : color
                 }
-            case .heartbeat, .climb, .ripple:
+            case .flight:
+                loop.frame = bounds
+                guard let plane = loop.sublayers?.first, let mask = plane.mask else { break }
+                let side = min(bounds.width, bounds.height)
+                plane.frame = CGRect(x: (bounds.width - side) / 2, y: (bounds.height - side) / 2, width: side, height: side)
+                plane.backgroundColor = color
+                mask.frame = plane.bounds
+                mask.contents = Self.plane(side: side, scale: displayScale)
+                if let fly = plane.animation(forKey: "loop")?.copy() as? CAAnimationGroup {
+                    fly.animations = Self.flightPath(side: side)
+                    plane.add(fly, forKey: "loop")
+                }
+            case .heartbeat, .ripple:
                 loop.frame = bounds
                 let side = min(bounds.width, bounds.height)
                 let paths = Self.strokes(kind, side: side)
                 for (index, shape) in (loop.sublayers ?? []).compactMap({ $0 as? CAShapeLayer }).enumerated() {
                     shape.frame = CGRect(x: (bounds.width - side) / 2, y: (bounds.height - side) / 2, width: side, height: side)
                     shape.path = paths[index]
-                    if kind == .climb {
-                        shape.fillColor = color
-                        continue
-                    }
                     shape.lineWidth = side * (kind == .ripple ? 0.07 : 0.09)
                     // 心电线的第一层是垫底的淡波形
                     shape.strokeColor = kind == .heartbeat && index == 0 ? color?.copy(alpha: (color?.alpha ?? 1) * 0.3) : color
@@ -212,22 +221,14 @@ struct LoopLayer {
                 for sublayer in [base, run] { layer.addSublayer(sublayer) }
                 _ = loop(walk, on: run)
                 return layer
-            case .climb:
+            case .flight:
                 let layer = CALayer()
-                let top = ClimbBlocks.blocks.count - 1
-                for index in ClimbBlocks.blocks.indices {
-                    let block = CAShapeLayer()
-                    let glow = CAKeyframeAnimation(keyPath: "opacity")
-                    glow.values = [Climb.dim, 1, Climb.dim, Climb.dim]
-                    glow.keyTimes = [0, NSNumber(value: Climb.peak), NSNumber(value: Climb.settled), 1]
-                    glow.duration = Climb.period
-                    // 从下往上每块比下面一块晚 `step` 亮（用相位而不是 beginTime：层进窗口前就开始算时间）；
-                    // 相位让顶块的亮峰落在第 0 帧，下面的块已经亮过、依次暗下去
-                    glow.timeOffset = Climb.peak * Climb.period + Double(top - index) * Climb.step
-                    // 没有动画时（模型值）也是最上面一块亮着
-                    block.opacity = index == top ? 1 : Float(Climb.dim)
-                    layer.addSublayer(loop(glow, on: block))
-                }
+                layer.masksToBounds = true
+                let plane = CALayer()
+                plane.mask = CALayer()
+                let fly = CAAnimationGroup()
+                fly.duration = Flight.period
+                layer.addSublayer(loop(fly, on: plane))
                 return layer
             case .ripple:
                 let layer = CALayer()
@@ -282,15 +283,6 @@ struct LoopLayer {
             }
         }
 
-        /// "话在路上"的节奏：一轮 `period` 秒，相邻两块差 `step` 秒；每块在一轮的 `peak` 处最亮，到 `settled` 暗回 `dim`，余下的时间歇着。
-        private enum Climb {
-            static let period = 1.2
-            static let step = 0.18
-            static let peak = 0.25
-            static let settled = 0.6
-            static let dim = 0.2
-        }
-
         /// 只描边、圆头圆角的一层（心电线、波纹）。
         private static func stroke() -> CAShapeLayer {
             let shape = CAShapeLayer()
@@ -300,11 +292,11 @@ struct LoopLayer {
             return shape
         }
 
-        /// 形状类动效每一层的路径（心电线、波纹是描边，三块 V 是闭合的实心块），画在边长 `side` 的正方形里（设计稿是 22 × 22、y 朝下的格子）。
+        /// 形状类动效每一层的路径（心电线、波纹，都是描边），画在边长 `side` 的正方形里（设计稿是 22 × 22、y 朝下的格子）。
         /// macOS 的层 y 朝上，统一翻过来，否则箭头朝下、心电线上下颠倒。
         private static func strokes(_ kind: Kind, side: CGFloat) -> [CGPath] {
             let unit = side / 22
-            func path(_ points: [CGPoint], closed: Bool = false) -> CGPath {
+            func path(_ points: [CGPoint]) -> CGPath {
                 let path = CGMutablePath()
                 path.addLines(between: points.map { point in
                     #if os(macOS)
@@ -313,7 +305,6 @@ struct LoopLayer {
                     CGPoint(x: point.x * unit, y: point.y * unit)
                     #endif
                 })
-                if closed { path.closeSubpath() }
                 return path
             }
             switch kind {
@@ -321,8 +312,6 @@ struct LoopLayer {
                 let wave = path([CGPoint(x: 1, y: 11), CGPoint(x: 5.5, y: 11), CGPoint(x: 7.5, y: 4.5), CGPoint(x: 11, y: 17.5),
                                  CGPoint(x: 13.5, y: 8), CGPoint(x: 15, y: 11), CGPoint(x: 21, y: 11)])
                 return [wave, wave]
-            case .climb:
-                return ClimbBlocks.blocks.map { path($0, closed: true) }
             case .ripple:
                 let inset = side * 0.07 / 2
                 return [CGPath(ellipseIn: CGRect(x: inset, y: inset, width: side - inset * 2, height: side - inset * 2), transform: nil)]
@@ -337,57 +326,6 @@ struct LoopLayer {
             animation.isRemovedOnCompletion = false
             layer.add(animation, forKey: "loop")
             return layer
-        }
-    }
-}
-
-/// 全 App 唯一的等待转圈（发送中、送达中、读下一页、正在开…）：与 Agent 状态标同一段弧（`orbit`），交给渲染服务转，App 进程不参与；
-/// 不用系统 `ProgressView`，全 App 的转圈是同一个样子、同一个颜色。减弱动态效果时是一段静止的弧。读屏读作"请稍候"，旁边的文字说在等什么。
-struct Spinner: View {
-    enum Size {
-        case mini, small, regular
-        var side: CGFloat {
-            switch self {
-            case .mini: 11
-            case .small: 15
-            case .regular: 20
-            }
-        }
-    }
-
-    var size = Size.small
-    @Environment(\.palette) private var palette
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    init(_ size: Size = .small) { self.size = size }
-
-    var body: some View {
-        Group {
-            if reduceMotion {
-                let width = size.side * 0.14
-                Circle().stroke(palette.track, lineWidth: width)
-                    .overlay { Circle().trim(from: 0, to: 0.3).stroke(palette.ink2, style: StrokeStyle(lineWidth: width, lineCap: .round)) }
-                    .padding(width / 2)
-            } else {
-                LoopLayer(kind: .orbit, color: palette.ink2)
-            }
-        }
-        .frame(width: size.side, height: size.side)
-        .accessibilityElement()
-        .accessibilityLabel("请稍候")
-    }
-}
-
-/// 省电模式开着（`ProcessInfo.isLowPowerModeEnabled`，随系统的变化通知更新）：读它的常驻动效换成静止的样子，同减弱动态效果。
-@Observable final class LowPowerMode {
-    static let shared = LowPowerMode()
-    private(set) var isOn = ProcessInfo.processInfo.isLowPowerModeEnabled
-
-    private init() {
-        Task {
-            for await _ in NotificationCenter.default.notifications(named: .NSProcessInfoPowerStateDidChange) {
-                isOn = ProcessInfo.processInfo.isLowPowerModeEnabled
-            }
         }
     }
 }

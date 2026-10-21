@@ -42,7 +42,7 @@ extension DebugScene {
         let pricing = try await store.createTask("重做定价区")
         try await store.linkCard(pricing.id, toSession: "pricing")
         _ = try await store.addPreviews([
-            (try file("pricing.html", Data(pricingPage.utf8)), "定价页：三档在窄屏横滑"), (try file("定价对比.pdf", reportPDF()), "三档价格对比表"),
+            (try file("pricing.html", Data(pricingPage.utf8)), "定价页：三档在窄屏横滑"), (try file("定价对比.pdf", pricingPDF()), "三档价格对比表"),
             (try file("宽屏.png", widePNG()), "宽屏：三档并排"), (try file("改动说明.md", Data(pricingNotes.utf8)), "改了什么、还差什么"),
         ], sessionID: "pricing")
         _ = try await store.addCueMessage(
@@ -50,8 +50,8 @@ extension DebugScene {
             task: pricing.id)
 
         // "等你"里推送的那件：部署会话发来预发上的截图与测试报告
-        _ = try await store.addPreviews([(try file("预发.png", phonePNG(covered: false)), "预发上的发言顺序")], sessionID: "deploy")
-        _ = try await store.addPreviews([(try file("测试报告.pdf", reportPDF()), "重连测试报告")], sessionID: "deploy")
+        _ = try await store.addPreviews([(try file("预发.png", stagingOrderPNG()), "预发上的发言顺序")], sessionID: "deploy")
+        _ = try await store.addPreviews([(try file("测试报告.pdf", reconnectReportPDF()), "重连测试报告")], sessionID: "deploy")
     }
 
     /// `-CuePadAllKinds YES|<n>`：空着的 scratch 会话里发六批，每批两份并排：3D 模型与一张还没到本机的（附件文件删掉，卡片写"下载中"；
@@ -72,9 +72,9 @@ extension DebugScene {
             [file("模型.usdz", filler), file("还在路上.png", away)],
             [file("录音.m4a", filler), file("录屏.mov", filler)],
             [file("需求.docx", filler), file("数据.xlsx", filler)],
-            [file("汇报.pptx", filler), file("报告.pdf", reportPDF())],
+            [file("汇报.pptx", filler), file("报告.pdf", reconnectReportPDF())],
             [file("日志.txt", Data("12:00 ok\n12:01 retry\n".utf8)), file("改动说明.md", Data(pricingNotes.utf8))],
-            [file("定价页.html", Data(pricingPage.utf8)), file("预发.png", phonePNG(covered: false))],
+            [file("定价页.html", Data(pricingPage.utf8)), file("预发.png", stagingOrderPNG())],
         ]
         for files in batches.prefix(count ?? batches.count) {
             let named = files.compactMap { $0 }.map { (url: $0, title: $0.deletingPathExtension().lastPathComponent) }
@@ -83,74 +83,6 @@ extension DebugScene {
                 if let stored = store.files.fileURL(for: entry.preview.hash) { try? FileManager.default.removeItem(at: stored) }
             }
         }
-    }
-
-    /// 手机登录页的截图：`covered` 时键盘挡住了登录钮。
-    static func phonePNG(covered: Bool) -> Data {
-        let view = ZStack(alignment: .bottom) {
-            VStack(alignment: .leading, spacing: 14) {
-                Text("登录").font(.system(size: 30, weight: .bold)).padding(.top, 70)
-                ForEach(["邮箱", "密码"], id: \.self) { field in
-                    RoundedRectangle(cornerRadius: 10).stroke(.gray.opacity(0.4)).frame(height: 46)
-                        .overlay(alignment: .leading) { Text(field).foregroundStyle(.gray).padding(.leading, 12) }
-                }
-                RoundedRectangle(cornerRadius: 12).fill(.indigo).frame(height: 48)
-                    .overlay { Text("登录").foregroundStyle(.white).bold() }
-                    .padding(.top, covered ? 150 : 8)
-                Spacer()
-            }
-            .padding(24)
-            RoundedRectangle(cornerRadius: 0).fill(Color(white: 0.82)).frame(height: 250)
-                .overlay { Text("键盘").foregroundStyle(.gray) }
-        }
-        .frame(width: 320, height: 640).background(.white)
-        return render(view)
-    }
-
-    private static func widePNG() -> Data {
-        let view = HStack(spacing: 16) {
-            ForEach(["基础", "专业", "团队"], id: \.self) { tier in
-                VStack(spacing: 10) {
-                    Text(tier).font(.title3.bold())
-                    Text(tier == "专业" ? "¥68" : tier == "基础" ? "¥0" : "¥198").font(.system(size: 34, weight: .heavy))
-                    RoundedRectangle(cornerRadius: 8).fill(tier == "专业" ? .indigo : .gray.opacity(0.3)).frame(height: 34)
-                }
-                .padding(18).frame(maxWidth: .infinity).background(.white, in: .rect(cornerRadius: 16))
-            }
-        }
-        .padding(28).frame(width: 640, height: 360).background(Color(red: 0.93, green: 0.94, blue: 0.99))
-        return render(view)
-    }
-
-    static func render(_ view: some View) -> Data {
-        let renderer = ImageRenderer(content: view)
-        renderer.scale = 2
-        return renderer.cgImage.map { DemoLibrary.encode($0) } ?? Data()
-    }
-
-    static func reportPDF() -> Data {
-        let page = VStack(alignment: .leading, spacing: 12) {
-            Text("定价对比").font(.system(size: 28, weight: .bold))
-            ForEach(["基础 · ¥0 · 3 个项目", "专业 · ¥68 · 不限项目", "团队 · ¥198 · 10 人协作"], id: \.self) { line in
-                Text(line).font(.system(size: 16))
-                Divider()
-            }
-            Spacer()
-        }
-        .padding(48).frame(width: 595, height: 842).background(.white)
-        let data = NSMutableData()
-        let renderer = ImageRenderer(content: page)
-        renderer.render { size, draw in
-            var box = CGRect(origin: .zero, size: size)
-            guard let consumer = CGDataConsumer(data: data), let context = CGContext(consumer: consumer, mediaBox: &box, nil) else { return }
-            for _ in 0..<2 {
-                context.beginPDFPage(nil)
-                draw(context)
-                context.endPDFPage()
-            }
-            context.closePDF()
-        }
-        return data as Data
     }
 
     private static let pricingPage = """

@@ -47,7 +47,7 @@ nonisolated struct CueThread: Equatable, Sendable {
         marks = ChatMark.enough(rows.compactMap { row in
             switch row {
             case .you(let message): ChatMark(id: message.id, kind: .said, preview: ChatMark.firstLine(message.text))
-            case .answer(let question): ChatMark(id: row.id, kind: .said, preview: ChatMark.firstLine(question.answer ?? ""))
+            case .answer(let question, _): ChatMark(id: row.id, kind: .said, preview: ChatMark.firstLine(question.answer ?? ""))
             case .cue, .result, .notes, .process: nil
             }
         })
@@ -88,8 +88,9 @@ nonisolated struct CueThread: Equatable, Sendable {
     enum Row: Identifiable, Equatable, Sendable {
         case you(CueMessage)
         /// 你对一条提问的回答（选的那一项，`CueMessage.answer`；更旧版本存下的另外一句照原文），排在答的那一刻（`answeredAt`）；数据就是那条提问本身，
-        /// 收起、撤回的没有这一格。问的那句总在对话里（`messages`），引用点了跳回去
-        case answer(CueMessage)
+        /// 收起、撤回的没有这一格。问的那句总在对话里（`messages`）：紧挨在上面时不带引用（`quoted` 为 false，问句同屏只留一份），
+        /// 隔开了才在字上面引一行它问的是什么，点了跳回去
+        case answer(CueMessage, quoted: Bool)
         case cue(CueMessage, task: UUID?)
         /// 点名了图的结果（结果卡）：图在 `CueThread.shots`
         case result(CueMessage, task: UUID)
@@ -100,7 +101,7 @@ nonisolated struct CueThread: Equatable, Sendable {
         var id: UUID {
             switch self {
             case .you(let message), .cue(let message, _), .result(let message, _), .process(let message): message.id
-            case .answer(let question): Self.answerID(of: question.id)
+            case .answer(let question, _): Self.answerID(of: question.id)
             case .notes(let rounds): rounds[0].id
             }
         }
@@ -108,7 +109,7 @@ nonisolated struct CueThread: Equatable, Sendable {
         var date: Date {
             switch self {
             case .you(let message), .cue(let message, _), .result(let message, _), .process(let message): message.createdAt
-            case .answer(let question): question.answeredAt ?? question.createdAt
+            case .answer(let question, _): question.answeredAt ?? question.createdAt
             case .notes(let rounds): rounds[0].date
             }
         }
@@ -177,7 +178,8 @@ nonisolated struct CueThread: Equatable, Sendable {
         var rows: [Row] = []
         func placeAnswers(before time: Date?) {
             while let next = answers.first, time.map({ next.answeredAt! < $0 }) ?? true {
-                rows.append(.answer(next))
+                let follows = if case .cue(let asked, _) = rows.last { asked.id == next.id } else { false }
+                rows.append(.answer(next, quoted: !follows))
                 answers.removeFirst()
             }
         }

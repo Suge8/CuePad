@@ -2,8 +2,9 @@ import CueStore
 import SwiftUI
 
 /// 你的话到哪了（气泡自己画出来）：进了对话、在路上（会话这边的说法，`PiDelivery.Transit`）、已送达（来回用时）、没能送达。
-/// 记号在气泡左下角外（`TripMark`）：路上只转圈（发送中、送达中你分不出也不用分，卡住了到点就是没能送达、写着原因），
-/// 唤醒已结束的会话比送达多一步（后台起 Agent，手机上还隔着同步往返），带上说法，免得看着像卡住；已送达一架小纸飞机（用时给读屏与 Mac 的悬停说明）；没能送达胭脂叹号，点它是原因全文与重发、移除。
+/// 记号在气泡左下角外（`TripMark`），"发出"一族只有纸飞机：路上是一架一趟趟飞过的小飞机（`LoopLayer.flight`，与发送钮、会话状态标里的话在路上同一个；
+/// 发送中、送达中你分不出也不用分，卡住了到点就是没能送达、写着原因），唤醒已结束的会话比送达多一步（后台起 Agent，手机上还隔着同步往返），带上说法，免得看着像卡住；
+/// 已送达是停下来带勾的那架（用时给读屏与 Mac 的悬停说明）；没能送达胭脂叹号，点它是原因全文与重发、移除。
 /// 只有没能送达在气泡下面多一行"未送达 · 重发"（`SpeechBubble`），原因不常驻：Mac 写回的原文长短不定，常驻就得折叠。
 enum BubbleTrip: Hashable {
     case arrived
@@ -48,7 +49,7 @@ private struct TripMark: View {
             case .arrived: EmptyView()
             case .sending(let transit):
                 HStack(spacing: 4) {
-                    Spinner(.mini)
+                    InFlight()
                     if transit == .waking { Text(PiDelivery.Transit.waking.label).fixedSize() }
                 }
                 .accessibilityElement(children: .ignore)
@@ -81,8 +82,22 @@ private struct TripMark: View {
             }
         }
         .font(Typography.caption).foregroundStyle(palette.ink3)
-        // 与气泡显出实色同一拍换记号（转圈 → 纸飞机），旧的先淡掉
+        // 与气泡显出实色同一拍换记号（飞着的 → 停下带勾的），旧的先淡掉
         .transition(.handOff)
         .id(trip)
+    }
+}
+
+/// 气泡旁路上那架小飞机：与"已送达"那架同样大；减弱动态效果时是静止的一架（`Icon.onTheWay`）。颜色跟着记号的前景。
+private struct InFlight: View {
+    @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        if reduceMotion {
+            Image(.onTheWay)
+        } else {
+            LoopLayer(kind: .flight, color: palette.ink3).frame(width: 13, height: 13)
+        }
     }
 }

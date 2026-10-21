@@ -69,9 +69,9 @@ extension PiShown {
 
 /// 会话状态标（全 App 只此一份：Agent 页卡片、书架、侧栏、Mac 侧栏的项目行与菜单栏、会话页顶栏、任务上的会话状态）：
 /// 颜色 + 不带外框的整体图形（图标与颜色只取 `PiShown.icon`、`tint`）——等你确认赭黄问号圆（外圈一圈波纹慢慢扩开）、出错胭脂圆叹号、没能送达胭脂折回箭头、
-/// 在跑靛青心电线（一截实色沿波形走）、话在路上靛青三块实心 V（从下往上依次亮起）、有新回复石绿铃铛（变成它时摇一下）、
+/// 在跑靛青心电线（一截实色沿波形走）、话在路上靛青纸飞机（从左下飞进、朝右上飞出）、有新回复石绿铃铛（变成它时摇一下）、
 /// 该你了灰色输入光标、新会话灰色星光、已结束更淡的带斜线圈；Cue 值班时，等 Cue 回答是墨色气泡问号、歇着是灰色省略号。`size` 是标的基准直径，外框是它的 1.8 倍，跟着旁边的字随辅助字号放大。
-/// 心电线、箭头、波纹是常驻循环动效，交给 Core Animation（`LoopLayer`），不在屏幕上时不画；换状态时旧图形缩小淡出、新图形放大淡入，
+/// 心电线、纸飞机、波纹是常驻循环动效，交给 Core Animation（`LoopLayer`），不在屏幕上时不画；换状态时旧图形缩小淡出、新图形放大淡入，
 /// 两个都是静止图标时由系统原地替换。减弱动态效果时循环动效换成同一状态的静止符号，没有波纹与摇铃。
 /// 旁边有状态文字时读屏跳过它；`announces` 时标自己带读屏标签。
 struct PiStateDot: View {
@@ -89,14 +89,14 @@ struct PiStateDot: View {
     private nonisolated static let midline = 0.36
 
     /// 画法：自绘的循环动效，或一个静止图标。换画法时整块换（缩放淡入淡出），同为图标时原地替换。
-    private enum Look: Hashable { case heartbeat, climb, icon }
+    private enum Look: Hashable { case heartbeat, flight, icon }
 
     private var look: Look {
         guard !reduceMotion else { return .icon }
         switch shown.status {
         case .working: return .heartbeat
         case .delivery(.failed): return .icon
-        case .delivery: return .climb
+        case .delivery: return .flight
         default: return .icon
         }
     }
@@ -106,7 +106,7 @@ struct PiStateDot: View {
         let mark = ZStack {
             switch look {
             case .heartbeat: LoopLayer(kind: .heartbeat, color: tint).transition(Self.swap)
-            case .climb: LoopLayer(kind: .climb, color: tint).transition(Self.swap)
+            case .flight: LoopLayer(kind: .flight, color: tint).transition(Self.swap)
             case .icon:
                 Image(shown.icon)
                     .font(.system(size: box * 0.86, weight: .semibold))

@@ -26,11 +26,16 @@ struct CueRow: View, Equatable {
     let delivered: Bool
     let live: CueLiveRound?
     /// 这一格是新消息：左边一颗小点（`CueUnreadDot`），末尾进出滚动区时报给页面（`CueViewing`）。
+    /// 页边距放得下时在气泡外隔一条缝；窄屏（iPhone、窄窗口的 iPad）页边距只有一条缝那么宽，点骑在气泡左缘上（`straddlesDot`），离屏缘约 12 点：
+    /// 挤在屏边与气泡之间时离屏缘只剩 3 点，像被切掉一半。
     let unread: Bool
     @Binding var opened: PreviewOpening?
     @Binding var seen: [UUID: Date]
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
+    #if os(iOS)
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    #endif
 
     /// 这一格排出来什么样只看这几样。
     nonisolated struct Key: Equatable {
@@ -47,7 +52,9 @@ struct CueRow: View, Equatable {
         if let stamp { ChatTimeMarker(date: stamp).padding(.top, CuePage.stampAbove) }
         content
             .overlay(alignment: .topLeading) {
-                CueUnreadDot(unread: unread).alignmentGuide(.leading) { $0[.trailing] + CueUnreadDot.gap }
+                CueUnreadDot(unread: unread).alignmentGuide(.leading) { [straddlesDot] in
+                    straddlesDot ? $0[HorizontalAlignment.center] : $0[.trailing] + CueUnreadDot.gap
+                }
             }
             .padding(.top, stamp != nil ? CuePage.stampBelow : CuePage.gap(before: row.speaker, joined: joined))
             .background(alignment: .bottom) {
@@ -64,8 +71,8 @@ struct CueRow: View, Equatable {
             SpeechBubble(said: .cue(message, host: cue.hostID), box: Bindable(cue).draft, showsDelivered: delivered, look: .cue(joined: joined)) { _ in
                 MessageActions(text: message.text, kind: .cue)
             }
-        case .answer(let question):
-            CueAnswer(question: question, joined: joined)
+        case .answer(let question, let quoted):
+            CueAnswer(question: question, quoted: quoted, joined: joined)
         case .cue(let message, _):
             CueSays(message: message, task: ref, shots: shots, open: { opened = $0 }, joined: joined, arrives: !swapsInPlace)
         case .result(let message, _):
@@ -75,6 +82,14 @@ struct CueRow: View, Equatable {
         case .process(let message):
             RoundProcess(tools: message.tools, ending: CueLiveRound.ending(of: message, in: live)).padding(.leading, CueBubble.noteInset)
         }
+    }
+
+    private var straddlesDot: Bool {
+        #if os(iOS)
+        sizeClass == .compact
+        #else
+        false
+        #endif
     }
 
     /// Cue 的话原位换下正在说的话（Cue 在这台 Mac 值班时），不淡入。
@@ -99,7 +114,7 @@ nonisolated struct CueLiveRound: Equatable {
     }
 }
 
-/// Cue 页对话的末尾：它在做事、这一轮在对话里还没有一格（你发起的一轮还没调过工具，或设置里关了工具步骤）时是一行此刻在做的（`RoundProcess` 的那一行，同会话页）。
+/// Cue 页对话的末尾：它在做事、这一轮在对话里还没有一格（你发起的一轮还没调过工具，或设置里关了工具步骤）时是一行此刻在做的（`CueDoing`）。
 /// Cue 在这台 Mac 值班时，在回答你的一轮出字就换成逐字长出的正在说的话
 /// （`CueKeeper.speech`，同会话页的 `SessionDraft`）：只有这个视图读它，出字时对话列表不重算；它与对话在同一次更新里拿到同一份对话，
 /// 落库了（`PiDraft.landed`）就不再显示，换下是同一帧里的一减一加。已落库而 Cue 的状态还没歇下时也不冒出进展那一行（话已经说完）；
@@ -140,10 +155,25 @@ struct CueEnding: View {
     @ViewBuilder private var live: some View {
         let presence = workspace.cue.presence
         if !roundInRows, let shown = presence.shown, let progress = presence.progress {
-            RoundProcess(tools: nil, ending: .live(shown, doing: progress, step: nil))
+            CueDoing(shown: shown, doing: progress)
                 .padding(.leading, CueBubble.noteInset)
                 .padding(.top, CuePage.gap(before: nil, joined: false))
                 .transition(.asymmetric(insertion: .entry, removal: .identity))
         }
+    }
+}
+
+/// Cue 此刻在做的那一行（对话末尾，`CueEnding`）：同会话页还没调工具时那一行（`RoundProcess`），状态标加一句它在做什么（"对「登录回调超时」说"，
+/// 对象由 `CueActivity.detail` 写清），仍是旁注、不铺底；字比旁注大一档（正文的次一级）：这是你刚说完在等的那件事，比经过与动态要紧。
+private struct CueDoing: View {
+    let shown: PiShown
+    let doing: String
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        NoteLine { PiStateDot(shown: shown, size: 7) } label: {
+            Text(doing).font(Typography.secondary).foregroundStyle(palette.ink2).lineLimit(2).shimmering()
+        }
+        .accessibilityElement(children: .ignore).accessibilityLabel(doing)
     }
 }
