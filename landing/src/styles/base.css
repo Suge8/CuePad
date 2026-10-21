@@ -59,7 +59,6 @@
 		0 34px 68px -32px oklch(20% 0.01 75 / 0.38), 0 6px 18px -8px oklch(20% 0.01 75 / 0.12);
 
 	--z-header: 50;
-	--z-chip: 70;
 	--z-grain: 80;
 	--z-skip: 90;
 }
@@ -235,18 +234,9 @@ section[id] {
 
 /* Screenshots float frameless on the paper */
 .shot {
-	--rot: 0deg;
-	--sc: 1;
 	width: 100%;
 	border-radius: 14px;
 	box-shadow: var(--shadow-shot);
-	transform: rotate(var(--rot)) scale(var(--sc));
-	transition:
-		transform 1s var(--ease-out),
-		translate 0.6s var(--ease-out);
-}
-html.js .feat:not(.in) .shot {
-	--sc: 0.94;
 }
 
 .ticks {
