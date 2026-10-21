@@ -124,27 +124,22 @@ struct CuePage: View {
     /// "⋯"展开时铺在对话上的一层：点一下或一划就收起。
     private var closePlaces: some View {
         Color.clear.contentShape(.rect)
-            .onTapGesture(perform: collapsePlaces)
-            .gesture(DragGesture(minimumDistance: 4).onChanged { _ in collapsePlaces() })
+            .onTapGesture { navigation.placesOpen = false }
+            .gesture(DragGesture(minimumDistance: 4).onChanged { _ in navigation.placesOpen = false })
             .accessibilityHidden(true)
-    }
-
-    private func collapsePlaces() {
-        navigation.placesOpen = false
     }
 
     /// 窄屏底部那一排：左边给"⋯"让出位置（输入框有焦点时不让），右边输入框。"⋯"展开着、换来这一页时 Cue 钮还在长成它，
     /// 输入框的位置是底部那一排的 Cue 钮，这里的输入框藏着；长到了才接手（`DockRoot.handed`），离开时当场藏起。
     private var dockRow: some View {
-        let shows = ownsComposer
-        return HStack(alignment: .bottom, spacing: 0) {
+        HStack(alignment: .bottom, spacing: 0) {
             if !navigation.cueComposing {
                 Color.clear.frame(width: Dock.slot + Dock.gap, height: Dock.slot)
             }
             composer
-                .opacity(shows ? 1 : 0)
-                .allowsHitTesting(shows)
-                .accessibilityHidden(!shows)
+                .opacity(ownsComposer ? 1 : 0)
+                .allowsHitTesting(ownsComposer)
+                .accessibilityHidden(!ownsComposer)
         }
     }
     #endif
