@@ -77,6 +77,7 @@ apple/scripts/xc.sh stop       # 验完就收；忘了 5 分钟后也会自己�
 - Instruments：Release 用 `CUEPAD_TRACE=<模板>` 跟着 perf 录；Debug 实例 `xc.sh run mac` 拿 PID 再 `xctrace record --attach <PID>`。按名字或 bundle id 认 CuePad 会认到正式版。
 - SwiftUI 模板 `--attach` 没有数据：`--launch` 一份换了 bundle id 并重签名的副本。`Animation Hitches` 模板单独录会写出几十 GB，不用；`--launch` 的进程结束后可能停在暂停状态，按 PID 结束。
 - Cue 值班的开销：库里要有 Cue 运行在这台的设置（`cueProfile` 的 `hostID` 是 `mac-<名>`、运行时 pi，配 `-CuePadHost <名>`），大脑换成 `-CuePadCueBrain apple/scripts/cue-brain-stub.py`，会话的动静同上由假扩展给。
+  真实库副本里 `hostID` 就是这台 Mac 的硬件标识：不给 `-CuePadHost` 也会值班，不换替身就用隔离目录里没登录的 Pi，每次醒来都发不进去、退避重起后再醒（正式版登录着不会这样）；副本没带 `Cue/keeper.json`，第一次值班还会当刚启用醒一次。不量 Cue 时给 `-CuePadHost` 一个别的名字。
 
 ### 交互预算
 

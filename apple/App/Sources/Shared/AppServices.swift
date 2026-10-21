@@ -67,6 +67,8 @@ final class AppServices {
     @ObservationIgnored let timing: Timing
     /// 此刻有事的 Pi 会话，整个 App 一份（打开资料库时当场读到第一份，`start()` 接着跟随）：界面与服务都从这里取，不各自订阅。
     let liveSessions: LiveSessions
+    /// Cue 的现状，整个 App 一份：Cue 那一行与 iPhone 的小组件快照都从这里取（`cueUpdates`）。
+    let cueFeed: CueFeed
     /// 订阅账号的额度，整个 App 一份（`start()` 开始跟随）。
     let accountQuotas = AccountQuotas()
     /// 待用户处理的正文冲突（同一张卡离线并发编辑产生的副本）。
@@ -206,6 +208,7 @@ final class AppServices {
         (self.sync, syncStatus) = (engine, status)
         speechClock = SpeechClock(localHost: mac.hostID, reachable: status.reachesMac, alwaysReachable: DebugHooks.preset.alwaysReachable, timing: mac.timing)
         liveSessions = try LiveSessions(store: store, endedOn: mac.hostID, at: speechClock.moment)
+        cueFeed = CueFeed(store: store, widget: false)
         timing = mac.timing
         hostID = mac.hostID
         workspaces = mac.workspaces
@@ -242,6 +245,7 @@ final class AppServices {
         (self.sync, syncStatus) = (engine, status)
         speechClock = SpeechClock(localHost: nil, reachable: status.reachesMac, alwaysReachable: DebugHooks.preset.alwaysReachable, timing: timing)
         liveSessions = try LiveSessions(store: store, endedOn: nil, at: speechClock.moment)
+        cueFeed = CueFeed(store: store, widget: true)
         self.timing = timing
         self.pasteboard = pasteboard
         cueActivity = !location.isIsolated || DebugHooks.opensLiveActivity ? CueLiveActivity() : nil

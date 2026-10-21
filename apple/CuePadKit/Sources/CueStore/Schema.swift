@@ -9,7 +9,7 @@
 /// - 列只用 TEXT / INTEGER，能直接映射 CKRecord 字段。
 ///
 /// 同步表里的本机列（不进 CKRecord，记录映射的列表里没有它们）：deliveryRequests.resultReceivedAt、cueToldAt（Cue 已知道没送到）；
-/// piSessionStates、cards、deliveryRequests、piMessages 的 writeSeq（本机写入序号，见 `writeSeq`）。
+/// piSessionStates、cards、deliveryRequests 的 writeSeq（本机写入序号，见 `writeSeq`）。
 ///
 /// 本机表（不同步）：`Table.synced` 之外的表，另有 piProcesses、syncRecords、syncState，以及 searchIndex（FTS5，由触发器随同步表维护，可随时重建）；
 /// cueSummaries 是 Cue 记忆的摘要缓存，可随时丢弃重建。
@@ -51,6 +51,8 @@ enum Schema {
     },
     // 68：启动与每次会话、Cue 对话变化都要读的几处走索引（各自的理由见下面的定义）
     "DROP INDEX piSessionStates_state; \(stateIndex) \(launchTokenIndex) \(hostedIndex) \(toDeliverIndex)",
+    // 69：会话消息不再盖写入序号（没有读者）：会话里每多一条消息，值班的 Cue 就不再多对一次账
+    "DROP TRIGGER piMessages_writeSeq_insert; ALTER TABLE piMessages DROP COLUMN writeSeq;",
   ]
 
   /// 升级腾出了大量空页（如 67 把系统字段压小）时整理一遍，把它们还给磁盘：库不开自动整理，空页只等以后的写入复用，文件不会变小。

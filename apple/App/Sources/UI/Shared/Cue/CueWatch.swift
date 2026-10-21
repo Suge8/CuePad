@@ -7,7 +7,7 @@ import Observation
 /// Observation 按存储属性追踪（值没变的写不通知），存整份摘要时任何一项变（在想→用工具、Cue 此刻……），书架与侧栏都要跟着重算。
 /// 在不在、话在不在路上随库与此刻重算：它那台 Mac 的在线期限由订阅到点重读（`CueStore.macOnline`），你最近一句的时限与同步通断由
 /// 此刻给，这里不另计时。
-/// 第一份在建工作区时当场读到（`Workspace.init`），之后从它接着订阅：没有"还没读到"时的默认现状。
+/// 第一份是整个 App 手里最新的那份（`CueFeed.latest`），之后跟着整个 App 那一份（`CueFeed`），不自己订阅：没有"还没读到"时的默认现状。
 @Observable
 final class CueWatch {
     private(set) var name = CueDigest.empty.name
@@ -38,8 +38,6 @@ final class CueWatch {
     private(set) var context: CueContext?
     /// 在跑的这一轮的经过那一行（`CueState.round`）。
     private(set) var round: UUID?
-    /// 当场读到的第一份（读不出来时为 nil，失败页盖住页面）：`follow` 从它接着订阅。
-    @ObservationIgnored private let start: Snapshot<CueDigest>?
     /// Cue 页的输入（离开再回来还在）。
     var draft = ComposerDraft()
     /// "Cue 记得什么"开着。
@@ -49,9 +47,9 @@ final class CueWatch {
     var showsRun = false
     #endif
 
-    init(_ start: Snapshot<CueDigest>?, at moment: Speech.Moment, local: CueNow.Local) {
-        self.start = start
-        if let digest = start?.value { apply(digest, at: moment, local: local) }
+    /// `digest` 读不出来时为 nil（失败页盖住页面，空摘要不会露面）。
+    init(_ digest: CueDigest?, at moment: Speech.Moment, local: CueNow.Local) {
+        if let digest { apply(digest, at: moment, local: local) }
     }
 
     /// 你正在写时：闲着没人等的 Cue 在听（"刚做完"让给它）；不在写就是此刻的表情。
@@ -59,10 +57,10 @@ final class CueWatch {
         composing ? CueMood.of(presence, waiting: waiting, composing: true) : expression
     }
 
-    /// 跟随资料库与此刻直到任务取消。
+    /// 跟随整个 App 那一份直到任务取消。
     func follow(_ services: AppServices) async throws {
-        for try await (digest, moment, local) in services.observeCue(from: start, { try CueDigest.read(from: $0) }) {
-            apply(digest, at: moment, local: local)
+        for try await seen in services.cueUpdates() {
+            apply(seen.read.digest, at: seen.moment, local: seen.local)
         }
     }
 

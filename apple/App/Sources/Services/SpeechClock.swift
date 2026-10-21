@@ -119,7 +119,7 @@ extension AppServices {
 
 extension AppServices {
     /// 同 `observeTimed`，再配上 Cue 此刻要的本机事实（`cueLocal`）：它变了（这台和 iCloud 对过了、断网了）也把手里那份再给一次，
-    /// 库没变也换得掉"正在从 iCloud 同步…"。Cue 此刻的两处推导（`CueWatch`、小组件快照）都经它。
+    /// 库没变也换得掉"正在从 iCloud 同步…"。Cue 的现状（`CueFeed`，Cue 那一行与小组件快照共用）经它。
     func observeCue<T: Sendable & Equatable>(
         from snapshot: Snapshot<T>? = nil, _ read: @escaping @Sendable (isolated CueStore) throws -> T
     ) -> AsyncThrowingStream<(T, Speech.Moment, CueNow.Local), any Error> {
