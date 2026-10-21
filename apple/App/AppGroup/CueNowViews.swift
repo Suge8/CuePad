@@ -50,7 +50,7 @@ extension CueBeads where Decorated == BeadDot {
     }
 }
 
-/// Cue 那一行的第二行：一排珠子接那一句（窄处那一句 `headline`）。不在时只写原因（起不来是胭脂色）。字号随外面。
+/// Cue 那一行的第二行：一排珠子接那一句（窄处那一句 `headline`；放不下时截那一句，珠子与计数不截）。不在时只写原因（起不来是胭脂色）。字号随外面。
 struct CueNowLine<Decorated: View>: View {
     let now: CueNow
     var limit = 4
@@ -60,7 +60,8 @@ struct CueNowLine<Decorated: View>: View {
     var body: some View {
         HStack(spacing: 7) {
             if !now.beads.isEmpty {
-                CueBeads(beads: now.beads, hidden: now.hidden, limit: limit, bead: bead)
+                // 珠子与"+N"按自己的宽排、不被挤：窄处让位的是后面那一句（截成省略号），计数截成"+…"就读不出几件了
+                CueBeads(beads: now.beads, hidden: now.hidden, limit: limit, bead: bead).fixedSize()
             }
             // 换一句原地换字：变的只是数时数字滚过去，换了说法逐字淡换（扩展里也画得出）。
             // 否决过整句换视图上推：新旧两句在一行的高里上下错开叠着，越出所在的页头与行

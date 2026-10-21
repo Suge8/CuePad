@@ -132,6 +132,9 @@ nonisolated struct CueSettings: Equatable, Sendable {
         let whyNone: String
 
         var usable: Bool { !brains.isEmpty }
+        /// 能不能选它启用：一家都不能当大脑的别的 Mac 选不了（各入口列着、写为什么，是停用项）；这台照样能选——它的记录可能还没写下，
+        /// 启用前会重新探测，Cue 页上点它还会打开接入面板给装法。
+        var selectable: Bool { usable || isHere }
         /// 菜单里名字下面那一行：能当大脑的几家，或为什么一家都不能用。
         var note: String { usable ? brains.map(\.name).joined(separator: "、") : whyNone }
     }

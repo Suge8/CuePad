@@ -5,8 +5,8 @@ import SwiftUI
 /// 空态与启用合成这一处，同一屏不说两遍；输入框上方不另放一块。
 /// - 还没说过话（`intro`）：自我介绍"我是 Cue"，在对话那一块正中。启用了只请你在下面直接说，没有按钮。
 /// - 说过话、后来停用了：排在对话末尾，不再自我介绍，只请你启用让它接着干活。
-/// 没启用时主动作是启用：选一台 Mac（能运行 Cue 的几台，`CueSettings.hosts`）——一台就是一颗"在那台上启用"的主按钮；几台是点开选哪台的菜单
-/// （`MenuButton`，每台下面写能当大脑的几家或为什么不能用），Mac 上点按是在这台运行、长按选别的。在这台 Mac 上启用打开接入面板
+/// 没启用时主动作是启用：选一台 Mac（能运行 Cue 的几台，`CueSettings.hosts`）——一台就是一颗"在那台上启用"的主按钮（选不了时停用、下面写为什么，`CueSettings.Host.selectable`）；几台是点开选哪台的菜单
+/// （`MenuButton`，每台下面写能当大脑的几家；选不了的是停用项，下面写为什么），Mac 上点按是在这台运行、长按选别的。在这台 Mac 上启用打开接入面板
 /// （`SetupPanel`：先检测、接入这台的 Agent，一家都没装时给装法，同一下启用），别的 Mac 直接启用，没写成的原因就地写在按钮下面（`CueSettingsModel`）。
 /// 能不能启用读 `CueGate`：这台还没和 iCloud 对过时只写在等什么、没有按钮（对得久了整张换成"正在从 iCloud 同步"，`EmptyState.waitsForSync`）。
 /// 手机上还没有哪台 Mac 写下过自己时，说先到 Mac 上打开 CuePad，主动作是把 Mac 版的下载链接（GitHub Releases，`CueSettings.macDownload`）发出去，隔空投送到 Mac 上最快。
@@ -87,11 +87,15 @@ private struct CueEnable: View {
     @ViewBuilder private func enableButton(_ hosts: [CueSettings.Host]) -> some View {
         let here = workspace.localHost
         if hosts.count == 1, let host = hosts.first {
-            Button(host.id == here ? "在这台 Mac 上启用" : "在「\(host.name)」上启用") { enable(on: host) }
+            // 选不了（`Host.selectable`）时按钮停用，下面写为什么
+            VStack(spacing: 6) {
+                Button(host.id == here ? "在这台 Mac 上启用" : "在「\(host.name)」上启用") { enable(on: host) }.disabled(!host.selectable)
+                if !host.selectable { Text(host.note).font(Typography.meta).foregroundStyle(palette.ink3) }
+            }
         } else {
             MenuButton(
                 sections: [ChoiceMenu.Section(choices: hosts.map { host in
-                    ChoiceMenu.Choice(title: host.name, subtitle: host.note.isEmpty ? nil : host.note, image: .icon(.mac)) {
+                    ChoiceMenu.Choice(title: host.name, subtitle: host.note.isEmpty ? nil : host.note, image: .icon(.mac), disabled: !host.selectable) {
                         enable(on: host)
                     }
                 })],
