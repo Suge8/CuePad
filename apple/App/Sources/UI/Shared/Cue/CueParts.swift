@@ -97,7 +97,7 @@ struct CueEnableCard: View {
     }
 }
 
-/// 一件活收成一行（对话里 Cue 的话下面、"等你"里关联的那件）：任务圈、标题、步骤数，点它打开任务；行尾是这件活交给的会话的状态标
+/// 一件活收成一行（对话里 Cue 的话下面、"等你"里关联的那件）：任务圈（有步骤时按步骤分段）、标题，点它打开任务；行尾是这件活交给的会话的状态标
 /// （`AgentDot`：正在开会话、在跑、等你……，点它看那个会话；没交出去不画）。Cue 交给会话时接力落在这一行（圈与状态标都挂着锚，`CueRelayStage`），
 /// 落下后状态标自己换成会话的真实状态。
 struct CueTaskLine: View {
@@ -115,17 +115,15 @@ struct CueTaskLine: View {
         HStack(spacing: 2) {
             CueTaskButton(task: ref.task.id) {
                 HStack(spacing: 6) {
-                    TaskRingView(status: ref.task.status, done: ref.done, size: 13).relaySpot(task: ref.task.id)
+                    TaskRingView(status: ref.task.status, done: ref.done, size: 13, steps: ref.progress).relaySpot(task: ref.task.id)
                     Text(ref.task.title).lineLimit(lines).fixedSize(horizontal: false, vertical: lines > 1)
-                    if let progress = ref.progress, !ref.done {
-                        Text("\(progress.done)/\(progress.total)").monospacedDigit().foregroundStyle(palette.ink3)
-                    }
                     Image(.forward).font(.system(size: 9, weight: .semibold))
                 }
                 .font(Typography.meta).foregroundStyle(palette.ink2)
                 .frame(minHeight: height).contentShape(.rect)
             }
             .accessibilityLabel("关于 \(ref.task.title)")
+            .accessibilityValue(ref.done ? "" : ref.progress.map(TaskCopy.progress) ?? "")
             .accessibilityHint("打开任务")
             if !ref.done { AgentDot(card: ref.task.id).padding(.vertical, -2) }
         }

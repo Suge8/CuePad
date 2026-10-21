@@ -5,7 +5,7 @@ import SwiftUI
 
 /// 任务气泡：点一条任务（项目页与任务页的行、Cue 对话里提到的任务、⌘K、归档、小组件链接），从点的那一下长出来的一张纸
 /// （\`BubbleFrame\`，Mac 与手机同一个视图，只差字号与行高）。不换页、不压暗；点外面或 Esc 关，点外面另一条就换成它的气泡。
-/// 上面是这件事：完成圈、标题（就地改）、"⋯"，一行所在项目与"步骤 n/m"，下面是它的正文（标题下面要交代给 Agent 的话，点了就地写）；
+/// 上面是这件事：完成圈（有步骤时按步骤分段，做到哪只画在圈上）、标题（就地改）、"⋯"，一行所在项目，下面是它的正文（标题下面要交代给 Agent 的话，点了就地写）；
 /// 有步骤时列出步骤（同全 App 的任务行 \`TaskLine\`），点一步气泡原地翻到这一步、左上出返回；顶层任务末尾一行添加步骤。
 /// 最下面一条是"下一步"：交给了会话是它此刻的样子（吉祥物、一句话），点了去会话；还没开始的叶子是"开始"（正文连同标题交给 Agent）；
 /// 有步骤的看最该你看的那一步（\`Workspace.lead\`）。
@@ -134,19 +134,16 @@ private struct BubblePage: View {
         .padding(.bottom, 4)
     }
 
-    /// 所在项目与做到第几步。
+    /// 所在项目；做到第几步看圈，读屏在这里念。
     private var meta: some View {
         HStack(spacing: 5) {
             ProjectGlyph(project: data.project, size: BubbleMetrics.glyph)
             Text(data.project?.name ?? "").lineLimit(1)
-            if let progress = data.progress {
-                Dot()
-                Text(TaskCopy.progress(progress)).monospacedDigit()
-            }
         }
         .font(BubbleMetrics.meta).foregroundStyle(palette.ink3)
         .padding(.leading, BubbleMetrics.indent).padding(.top, 3)
         .accessibilityElement(children: .combine)
+        .accessibilityValue(data.progress.map(TaskCopy.progress) ?? "")
     }
 
     private var more: some View {
