@@ -193,7 +193,7 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
 
   // 下面几条是界面与 Cue 共用的唯一一份：做不到的操作界面上不露出，Cue 要做时报错。
 
-  /// 能结束：做得到，在线，且读得到（旧版扩展的会话收不到结束命令，要在终端里退出 Pi）。
+  /// 能结束：做得到，且没结束。
   public var canEnd: Bool {
     capabilities.contains(.end) && state != .known(.ended)
   }
