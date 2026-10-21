@@ -15,9 +15,7 @@ nonisolated struct ProjectCatalog: Equatable, Sendable {
     /// 没绑文件夹的项目在手机上交给哪台 Mac（`CueStore.workMac`）与它的名字：手机项目页写"在 <Mac> 上"、新会话据此发去；一台 Mac 都没有为 nil。
     var workMac: MacAgents?
 
-    /// 未完成的顶层任务数。
     var openTasks: [UUID: Int] { taskCounts.mapValues(\.open) }
-    /// 全部项目的顶层任务数。
     var allTasks: TaskCounts { taskCounts.values.reduce(.zero, +) }
 
     /// 会话归的项目可以没有（`PiSessionState.projectID`），所以收可选的 id。
