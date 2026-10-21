@@ -50,7 +50,6 @@ final class PiProcess: @unchecked Sendable {
     ///   只认 `models.json` 里的模型，所以假模型也改为装进 agent 目录，并在 `models.json` 里登记。
     /// - Parameter modelInAgentDirectory: 假模型装进 agent 目录（不用 `-e` 加载）：CuePad 在后台托管的 Pi 只加载 agent 目录里的扩展。
     /// - Parameter alongside: 与它共用同一个临时 agent 目录、连接目录与工作目录（同一会话的第二个进程）；结束时不删共用的目录。
-    /// - Parameter sessionFile: 用 `--session` 打开这个会话文件。
     /// - Parameter discoverSkills: 让 Pi 去它的 skills 目录发现 skill（默认的安静参数里是 `--no-skills`）。
     /// - Parameter settings: 另外写进临时 agent 目录 Pi 设置（`settings.json`）的项，如压缩阈值（隔离的那几项见 `writeSettings`）。
     init(installBridge: Bool = true, socketDirectory: URL? = nil, extraExtensions: [String] = ["ui-confirm.ts"],

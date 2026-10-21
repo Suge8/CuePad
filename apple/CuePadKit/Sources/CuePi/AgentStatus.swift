@@ -44,7 +44,6 @@ extension AgentKind {
 public struct AgentStatus: Sendable, Equatable {
     public enum Presence: Sendable, Equatable {
         case notFound
-        /// 比 `AgentKind.minimumVersion` 旧
         case tooOld(AgentVersion)
         /// 有版本要求的报出版本，其余为 nil
         case found(AgentVersion?)
@@ -82,7 +81,6 @@ public struct AgentStatus: Sendable, Equatable {
 public enum AgentInstallError: Error, Equatable {
     case notFound(AgentKind)
     case tooOld(AgentKind, found: AgentVersion)
-    /// 同名文件不是 CuePad 写的（参数是它的位置）
     case foreign(String)
     /// 隔离运行（开发构建）而这家的配置目录是缺省的真实位置：不写，免得把正式版写的条目改成指向开发构建
     case isolated(AgentKind)

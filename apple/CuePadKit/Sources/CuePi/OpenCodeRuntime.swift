@@ -38,7 +38,6 @@ public final class OpenCodeRuntime: AgentRuntime, SessionLink {
     var connection: Connection?
     var waiters: [UUID: CheckedContinuation<Connection, any Error>] = [:]
 
-    /// 这个服务上的顶层会话
     var sessions: [String: Tracked] = [:]
     /// 子会话 → 父会话
     var parents: [String: String] = [:]
@@ -55,7 +54,6 @@ public final class OpenCodeRuntime: AgentRuntime, SessionLink {
     var ingesting: Task<Void, Never>?
     /// CuePad 拉起的服务（它的 `opencode` 与环境），停止接入时由 CuePad 停掉；本来就在跑的为 nil
     var startedService: (executable: URL, environment: [String: String])?
-    /// 顶层会话正在说的话（桥上那一格的来源）
     var drafts = OpenCodeDrafts()
 
     @MainActor final class Connection {
@@ -83,7 +81,6 @@ public final class OpenCodeRuntime: AgentRuntime, SessionLink {
         var online = false
         var hosted = false
         var launchToken: String?
-        /// 状态、要你回答的、子代理（子会话按会话 id）
         var facts = SessionFacts()
         /// 在跑的工具调用 → 名字（`tool.called` 不带名字，名字在它之前的 `tool.input.started` 里）
         var toolNames: [String: String] = [:]

@@ -86,7 +86,6 @@ struct RealSlashTests {
         }
     }
 
-    /// 扩展命令、模板、skill 由 Pi 展开执行，不是当普通文字发给模型。
     @Test func slashCommandsAreExpandedAndRunByPi() async throws {
         try await withRig { pi, bridge, s in
             try await bridge.command("/shout hi there", in: s.id)
@@ -114,7 +113,6 @@ struct RealSlashTests {
         }
     }
 
-    /// 内置命令走扩展接口：命名、换模型、思考强度即时生效并上报。
     @Test func builtinNameModelAndThinkingTakeEffect() async throws {
         try await withRig { _, bridge, s in
             try await bridge.command("/name 登录修复", in: s.id)

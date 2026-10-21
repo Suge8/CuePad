@@ -5,10 +5,8 @@ import Foundation
 import Observation
 
 extension PiBridge {
-    /// 一条已连接的 Pi socket 及其未完成的命令。
     final class Link: SessionLink {
         let connection: PiSocketConnection
-        /// 连上时的那个 socket 文件
         let file: PiSocketDirectory.FileIdentity
         weak var bridge: PiBridge?
         /// 收到 hello 之后的会话

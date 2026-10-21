@@ -45,7 +45,6 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
     private let locate: @Sendable () async -> ExecutableLocator
     let gate: PresenceGate
     var tracked: [PiSession.ID: Tracked] = [:]
-    /// CuePad 托管的进程（进程号 → 进程）
     var hosted: [Int32: CodexRPC] = [:]
     /// 托管进程环境里的标记（`HostMark`）→ 进程号
     var marks: [String: Int32] = [:]
@@ -80,10 +79,10 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
         gate = PresenceGate(presence: presence)
     }
 
-    /// 一个在线会话在这里的状态（快照在桥上，由 `facts` 推出）。
     /// 以一句话开新一轮的进展：正在停下这一轮，或这一轮已经结束（被停下或恰好自己做完）、等这句开出新的一轮。
     enum Restart { case stopping, stopped }
 
+    /// 一个在线会话在这里的状态（快照在桥上，由 `facts` 推出）。
     final class Tracked {
         let id: PiSession.ID
         let threadID: String

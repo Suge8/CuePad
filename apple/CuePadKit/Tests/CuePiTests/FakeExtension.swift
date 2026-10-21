@@ -59,7 +59,6 @@ nonisolated final class FakeExtension: @unchecked Sendable {
     }
     private let shared = Mutex(Shared())
     private var source: DispatchSourceRead?
-    /// start 时 listen 上的那个 socket 文件
     private var socketFile: PiSocketDirectory.FileIdentity?
     private let queue = DispatchQueue(label: "fake-extension")
     /// 对每条命令回一个 ack 体（不含 t/id）；nil 表示不回。

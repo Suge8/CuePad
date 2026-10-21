@@ -47,7 +47,6 @@ final class Stub: @unchecked Sendable {
     }
 }
 
-/// 回放时 CuePad 那一端的一条 socket 连接。
 final class Connection: @unchecked Sendable {
     let fd: Int32
     private let lock = Mutex(false)

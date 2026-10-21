@@ -64,7 +64,6 @@ struct RealBrainTests {
 
         func count(_ event: CueBrainEvent) -> Int { events.filter { $0 == event }.count }
 
-        /// 等到第 n 轮做完。
         func finished(_ n: Int = 1) async throws {
             try await eventually("第 \(n) 轮做完", timeout: .seconds(150)) { self.count(.turnFinished) >= n }
         }
@@ -170,7 +169,6 @@ struct RealBrainTests {
         }
     }
 
-    /// 让它写文件：写不出来（没有写工具，或被沙箱拒绝）。
     @Test(arguments: runtimes) func itCannotWriteFiles(_ runtime: AgentKind) async throws {
         AgentTape.use(runtime)
         try await withRig(runtime) { rig in
@@ -182,7 +180,6 @@ struct RealBrainTests {
         }
     }
 
-    /// 停下这一轮后还能接着说：停下的一轮没有回答，下一句照常回答。
     @Test(arguments: runtimes) func anAbortedTurnHasNoReplyAndTheNextMessageIsAnswered(_ runtime: AgentKind) async throws {
         AgentTape.use(runtime)
         try await withRig(runtime) { rig in

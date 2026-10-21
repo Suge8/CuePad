@@ -11,7 +11,6 @@ import Testing
 /// 终端会话跑在私有 tmux 服务器里（`tmux -L`），结束时按确切 pid 停掉 Claude Code 与那个 tmux 服务器。
 let claudeURL = ExecutableLocator.standard.candidates("claude").first
 let tmuxURL = ExecutableLocator.standard.candidates("tmux").first
-/// 测试用的模型与换模型时换到的另一个
 let claudeTestModel = "haiku", claudeOtherModel = "sonnet"
 
 /// 256×256 纯红 PNG（32×32 的常被模型认成别的颜色）
@@ -33,7 +32,6 @@ final class ClaudeTestbed {
     let presence: TestPresence
     let files: AttachmentFiles
     let store: CueStore
-    /// 桥上从测试台起来以后的全部变化
     let log: ChangeLog
     private var terminals: [ClaudeTerminal] = []
     /// 终端会话的会话文件跟读（同 App：历史索引读到的交给接入，`AgentRuntime.read`）；开第一个终端时起
@@ -129,7 +127,6 @@ final class ClaudeTestbed {
         return terminal
     }
 
-    /// 桥上这个进程里的会话
     func session(pid: Int32) -> PiSession? { bridge.sessions.first { $0.pid == pid && $0.agent == .claudeCode } }
 
     /// 像 App 的记录器那样记下桥上这个会话此刻的样子（状态与模型）。

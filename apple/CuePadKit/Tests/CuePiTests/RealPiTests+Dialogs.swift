@@ -48,7 +48,6 @@ extension RealPiTests {
         }
     }
 
-    /// 弹窗已经答过（或换了一个）时，拿旧标识作答被拒绝，不会答到别的弹窗上。
     @Test func answeringAStalePromptIsRejected() async throws {
         try await withRig { pi, bridge, s in
             try pi.prompt("/pick")

@@ -48,7 +48,6 @@ extension PiBridge {
         slots.first { $0.id == id }?.offer(draft)
     }
 
-    /// 一个会话下线（进程退出、会话结束）。
     public func detach(_ id: PiSession.ID, reason: PiSessionEndReason) {
         controls[id] = nil
         idleTimers.removeValue(forKey: id)?.cancel()

@@ -61,7 +61,6 @@ final class ClaudeTerminalSession: SessionLink {
         if waiting { facts.questions = [PiQuestion(promptID: nil, kind: .unknown("terminal"), text: "在终端里等你")] }
     }
 
-    /// 补上桥时按事实写好的会话。
     func publish(_ session: inout PiSession) { facts.publish(to: &session) }
 
     // MARK: 钩子

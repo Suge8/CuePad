@@ -9,7 +9,6 @@ struct AgentIntegrationTests {
     let root: URL
     let paths: PiPaths
     let bin: URL
-    /// App 里的命令行工具（技能里写它的绝对路径）
     var cuepad: URL { root.appending(path: "CuePad.app/Contents/Helpers/cuepad") }
     var environment: [String: String] {
         ["CLAUDE_CONFIG_DIR": root.appending(path: "claude").path, "CODEX_HOME": root.appending(path: "codex").path,
@@ -110,7 +109,6 @@ struct AgentIntegrationTests {
         #expect(await integration().status(of: kind).files == .missing)
     }
 
-    /// Agent 已经卸掉了，CuePad 留下的技能照样能删干净。
     @Test func uninstallWorksAfterTheAgentIsGone() async throws {
         try fakeAgent("claude")
         try await integration().install(.claudeCode)

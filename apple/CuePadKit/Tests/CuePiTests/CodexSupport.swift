@@ -118,7 +118,6 @@ struct CodexHome {
         try? FileManager.default.removeItem(at: root)
     }
 
-    /// 跑 `body`，不论成败都 `remove`。
     func using(_ body: () async throws -> Void) async throws {
         do {
             try await body()
@@ -312,7 +311,6 @@ final class CodexTerminal: @unchecked Sendable {
         }
     }
 
-    /// 终端从第 `offset` 个字节起输出过的里有没有这段文字。
     func printed(_ text: String, since offset: Int = 0) -> Bool {
         screen.withLock { $0.range(of: Data(text.utf8), in: min(offset, $0.count)..<$0.count) != nil }
     }

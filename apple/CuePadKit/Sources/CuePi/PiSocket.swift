@@ -29,7 +29,6 @@ enum PiSocketDirectory {
         return lstat(path, &st) == 0 && st.st_mode & S_IFMT == S_IFSOCK && st.st_uid == getuid() && st.st_mode & 0o077 == 0
     }
 
-    /// 文件名 `<sessionId>.<pid>.sock` 中的 pid
     static func pid(fromSocketName name: String) -> Int32? {
         let parts = name.split(separator: ".")
         guard parts.count >= 3, parts.last == "sock" else { return nil }

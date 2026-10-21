@@ -41,7 +41,6 @@ extension RealOpenCodeTests {
         }
     }
 
-    /// 开会话时模型配不上：开会话整体失败，这个会话不留在桥上，也不留在 OpenCode 的后台服务里。
     @Test func aSessionWhoseModelCannotBeSetIsNotLeftInTheService() async throws {
         try await withOpenCode { sandbox, store, bridge, runtime in
             await #expect(throws: PiBridgeError.unknownModel(.opencode)) {
