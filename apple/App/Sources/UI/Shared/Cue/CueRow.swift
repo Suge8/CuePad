@@ -73,6 +73,8 @@ struct CueRow: View, Equatable {
             }
         case .answer(let question, let quoted):
             CueAnswer(question: question, quoted: quoted, joined: joined)
+        case .waiting(let message):
+            CueWaitingAsk(message: message, joined: joined)
         case .cue(let message, _):
             CueSays(message: message, task: ref, shots: shots, open: { opened = $0 }, joined: joined, arrives: !swapsInPlace)
         case .result(let message, _):

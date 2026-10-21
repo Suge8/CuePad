@@ -53,10 +53,17 @@ struct CuePage: View {
     private var catchingUp: Bool { services.isCatchingUp(on: cue.hostID) }
     private var showsSteps: Bool { services.settings.showsCueSteps }
 
+    /// 读对话按什么重读：设置里关没关工具步骤、"等你"卡要露哪条（`CueThread.read`）。
+    private struct Reading: Equatable {
+        let showsSteps: Bool
+        let asking: UUID?
+    }
+
     var body: some View {
         page
-            .observing(services.store, id: showsSteps, into: $thread, onError: workspace.fail) { [showsSteps] in
-                try CueThread.read(from: $0, showsSteps: showsSteps)
+            .observing(services.store, id: Reading(showsSteps: showsSteps, asking: workspace.cueAsking), into: $thread, onError: workspace.fail) {
+                [showsSteps, asking = workspace.cueAsking] in
+                try CueThread.read(from: $0, showsSteps: showsSteps, asking: asking)
             }
             .previewPresenter($opened)
             .panel(isPresented: Bindable(cue).showsMemory) { CueMemoryPage() }
@@ -225,7 +232,7 @@ struct CuePage: View {
     private var bottom: some View {
         VStack(spacing: 0) {
             if let thread {
-                CueWaitingDock(waiting: workspace.leadingAsk(thread.waiting), tasks: thread.tasks, shots: thread.shots, open: { opened = $0 }, moving: $docking)
+                CueWaitingDock(waiting: thread.waiting, tasks: thread.tasks, shots: thread.shots, open: { opened = $0 }, moving: $docking)
                 // 说过话后停用了：启用就在输入框正上方（`CueWelcome`），是这时唯一的主动作
                 if !thread.rows.isEmpty, !cue.canHear { CueWelcome(intro: false).fixedSize(horizontal: false, vertical: true).padding(.bottom, 8).transition(.opacity) }
             }

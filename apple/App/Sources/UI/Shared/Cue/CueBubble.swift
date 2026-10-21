@@ -44,8 +44,9 @@ enum CueBubble {
 /// 你的回答在答的那一刻另成一格，见 `CueAnswer`、`CueThread.rows`）；它第一次提到一件活时底下一行这件活（`CueTaskLine`）。
 /// `card`：结果卡（点名了图的做完，哪句算只在 `CueThread.rows` 定）——不是气泡而是一张纸（`paper`），不与上下的气泡连成一串；
 /// 第一行是一句平常的话时（"「X」做完了"）单独加粗作标题，一眼先读到做完了什么，再看证据与图。
-/// 结束了的提问（答了、撤回）回到对话里时字与"等你"卡上同一句：代码写的问句（`CueAsking.question`，规矩那一类下面一行引的规矩），
-/// Cue 的原话收着、点"原话"展开（`CueOriginalToggle`）；答之前读的与答之后回看的不是两种说法，你回答气泡里引的也是这一句。
+/// 结束了的提问（答了、撤回、你没选直接说了）回到对话里时字与"等你"卡上同一句：代码写的问句（`CueAsking.question`，规矩那一类下面一行引的规矩），
+/// 淡一档（次一级的墨、不加粗：已经过去了，与还在等你的那一格 `CueWaitingAsk` 一眼分开），Cue 的原话收着、点"原话"展开（`CueOriginalToggle`）；
+/// 答之前读的与答之后回看的不是两种说法，你回答气泡里引的也是这一句。
 /// 长按（Mac 右键）是消息菜单（`MessageMenu.Kind.cue`），预览就是这颗气泡或这张纸。
 struct CueSays: View {
     let message: CueMessage
@@ -90,7 +91,7 @@ struct CueSays: View {
 
     private func asked(_ asking: CueAsking) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(CueQuestionLine.keepingTail(asking.question)).font(Typography.reading.weight(.semibold)).foregroundStyle(palette.ink)
+            Text(CueQuestionLine.keepingTail(asking.question)).font(Typography.reading).foregroundStyle(palette.ink2)
                 .lineSpacing(Typography.readingLineSpacing)
                 .fixedSize(horizontal: false, vertical: true)
             if let why = asking.why {

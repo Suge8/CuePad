@@ -47,7 +47,7 @@ struct CueQuestionLine: View {
 /// 窄屏（手机、窄窗口的 iPad）竖排："可以"铺满一行在上，次级按钮同宽在它下面、长了折行。摆法不随选项的字长变，主按钮总在同一处、最好按。
 /// 宽处（Mac、宽屏 iPad）横排在一行尾端：次级按钮在"可以"左边，"可以"不窄过 `onceWidth`、不随卡宽铺开；一行放不下或辅助功能字号时照样竖排、按字宽收着。
 /// `hint`：点名的图里"可以"选的是其中一张时（`CueShots.chosen`），一句告诉你选别的去哪说，竖排在按钮下面、横排在按钮左边。
-/// `paused`：Cue 停用着答不了时的原因（"启用 Cue 后再答"），写在 `hint` 的位置；选项全降成次级、停用，不和启用那颗主按钮抢（同屏只一个主动作），启用后恢复。
+/// `paused`：Cue 停用着答不了时的原因（"启用 Cue 后再答"），写在 `hint` 的位置；只留"可以"、降成次级并停用，不和启用那颗主按钮抢（同屏只一个主动作），启用后恢复。
 struct CueChoices: View {
     let options: [String]
     var disabled = false
@@ -73,7 +73,8 @@ struct CueChoices: View {
     private static let inset: CGFloat = 32
 
     var body: some View {
-        let once = options.first ?? CueAsk.once, others = Array(options.dropFirst()), hint = paused ?? hint
+        // 停用着只留停用的"可以"：别的选项此刻同样选不了，竖排时多一颗按钮就把手机上的卡挤进不带图的紧凑档
+        let once = options.first ?? CueAsk.once, others = paused == nil ? Array(options.dropFirst()) : [], hint = paused ?? hint
         let main: ControlButtonStyle.Kind = paused == nil ? .primary : .secondary
         let stacked = VStack(spacing: Self.stackGap) {
             button(once, kind: main, fill: true)
@@ -220,4 +221,35 @@ struct CueOriginalToggle: View {
     }
 
     private static let reach: CGFloat = 10
+}
+
+/// 对话里还在等你、没露在"等你"卡里的一问（`CueThread.Row.waiting`）：Cue 那一边的一颗气泡，等你记号（同卡上的问号）、加粗的问句与"去答"，
+/// 整颗可点：点了它换到卡里露（`Workspace.cueAsking`），卡原地交替。图、选项与原话都在卡里，这里不放：同一问同屏只摊开一处。
+struct CueWaitingAsk: View {
+    let message: CueMessage
+    var joined = false
+    @Environment(Workspace.self) private var workspace
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        let question = message.headline ?? ""
+        BubbleWidth(fraction: CueBubble.cueWidth, edge: .leading) {
+            Button { workspace.cueAsking = message.id } label: {
+                HStack(alignment: .firstTextBaseline, spacing: 9) {
+                    PiStateGlyph(status: .asking).font(Typography.reading)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(CueQuestionLine.keepingTail(question)).font(Typography.reading.weight(.semibold)).foregroundStyle(palette.ink)
+                            .lineSpacing(Typography.readingLineSpacing)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text("去答 ›").font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink2)
+                    }
+                }
+                .cueBubble(joined: joined)
+                .contentShape(CueBubble.shape(.leading, joined: joined))
+            }
+            .buttonStyle(PressStyle(.card))
+            .accessibilityLabel("等你：\(question)")
+            .accessibilityHint("放到下面的等你卡里答")
+        }
+    }
 }

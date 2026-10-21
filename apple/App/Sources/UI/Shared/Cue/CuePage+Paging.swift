@@ -42,7 +42,7 @@ extension CuePage {
         #if os(macOS)
         let composer = ComposerMetrics.textTop + ComposerMetrics.textBottomOpen + ComposerMetrics.slot
         // 卡与阅读栏同宽（`page` 里回复那一块两边让出同样的边距），至多占对话区的一半
-        // 露哪一条可能被换到最前（`Workspace.leadingAsk`）：取几条里最矮的，仍只数少
+        // 露哪一条可能被换到最前（`CueThread.leading`）：取几条里最矮的，仍只数少
         let floor = thread.waiting.map { CueWaitingDock.floor($0, shots: thread.shots, width: min(size.width, readingWidth) - 2 * inset) }.min() ?? 0
         let dock = min(floor, size.height / 2)
         return composer + replyPadding + dock
@@ -71,6 +71,8 @@ extension CuePage {
         // 字与图之间隔 8（`CueSays`）；结束了的提问只露代码写的问句，原话收着
         case .cue(let message, _): bubble + answer(message.asking?.question ?? message.text) + (shots == 0 ? 0 : 8 + CueShots.floor(count: shots, width: width(CueBubble.cueWidth)))
         // 字、图与那件活（至少 `CueTaskLine` 那么高）之间各隔 12
+        // 等你那一格：问句与"去答"一行
+        case .waiting(let message): bubble + answer(message.asking?.question ?? message.text)
         case .result(let message, _):
             bubble + answer(message.text) + 12 + CueShots.floor(count: shots, width: width(CueBubble.cueWidth)) + 12 + CueTaskLine.lineHeight
         // 虚线气泡至少一行小字
