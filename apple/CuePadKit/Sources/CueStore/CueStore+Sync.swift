@@ -83,6 +83,42 @@ extension CueStore {
     return pending
   }
 
+  /// 待推送与推导时的同步变更代数。`since` 是上次确定没有剩下待推送时的代数：其后的提交增量都还记着、范围都明确时，
+  /// 只复查它们碰过的记录；否则全量推导（真实库一次约 1 亿条指令，会话在跑时几乎每次上传前都要一遍）。
+  package func pendingSync(since generation: Int?) throws -> (pending: PendingSync, generation: Int) {
+    guard let generation, let touched = touched(after: generation) else { return (try pendingSync(), syncGeneration) }
+    var pending = PendingSync(saves: [], deletes: [])
+    let saves = Dictionary(grouping: touched.saves, by: \.table)
+    for table in Table.synced {
+      guard let keys = saves[table] else { continue }
+      let ids = Set(keys.map(\.id)).sorted()
+      pending.saves += try pendingSaves(table, where: "t.id IN (SELECT value FROM json_each(?))", [JSONColumn.encode(ids)])
+    }
+    for name in Set(touched.deletes).sorted() where try isPendingDelete(name) { pending.deletes.append(name) }
+    return (pending, syncGeneration)
+  }
+
+  /// `generation` 之后各次提交的增量合起来；有范围不明的、或早的已不在记着的里面时为 nil。
+  private func touched(after generation: Int) -> PendingSync? {
+    guard generation < syncGeneration else { return PendingSync(saves: [], deletes: []) }
+    let later = syncDeltas.drop { $0.generation <= generation }
+    guard later.first?.generation == generation + 1 else { return nil }
+    var union = PendingSync(saves: [], deletes: [])
+    for (_, delta) in later {
+      guard let delta else { return nil }
+      union.saves += delta.saves
+      union.deletes += delta.deletes
+    }
+    return union
+  }
+
+  private func isPendingDelete(_ name: String) throws -> Bool {
+    guard let type = try db.first("SELECT recordType FROM syncRecords WHERE recordName = ? AND pushedModifiedAt IS NOT NULL", [name], { $0.text(0) }),
+      let table = Table(rawValue: type)
+    else { return false }
+    return try db.first("SELECT 1 FROM \(table.rawValue) WHERE id = ?", [name]) { _ in true } == nil
+  }
+
   /// 一次提交里改动的行中变成待推送的；删除只查删过行的表。
   func pendingSync(in changes: Changes) throws -> PendingSync {
     var pending = PendingSync(saves: [], deletes: [])
@@ -121,8 +157,10 @@ extension CueStore {
     Dictionary(uniqueKeysWithValues: try db.query("SELECT id, modifiedAt FROM \(table.rawValue)") { ($0.text(0), $0.int(1)) })
   }
 
+  /// 上次服务器记录的系统字段归档（存法见 `SystemFields`）。
   package func systemFields(of recordName: String) throws -> Data? {
-    try db.first("SELECT systemFields FROM syncRecords WHERE recordName = ?", [recordName]) { $0.blobOrNil(0) } ?? nil
+    guard let packed = try db.first("SELECT systemFields FROM syncRecords WHERE recordName = ?", [recordName], { $0.blobOrNil(0) }) ?? nil else { return nil }
+    return SystemFields.unpack(packed)
   }
 
   /// 本机推送过的每条记录：记录名 → 表与推送时的修改时间。按版本对账时，推送过而服务器上已没有的就是在别处删掉了。
@@ -154,25 +192,31 @@ extension CueStore {
     }
   }
 
-  /// 服务器已接受这条记录（上传结果里的那一版）：记下它的系统字段与被推送版本的修改时间。之后再改才会重新变成待推送。
+  /// 服务器已接受这些记录（上传结果里的那一版，与系统字段归档）：记下系统字段与被推送版本的修改时间，一批一个事务。之后再改才会重新变成待推送。
   /// 上传一次只有一批在路上，结果按发出的先后回来。
-  package func markPushed(_ row: SyncRow, systemFields: Data) throws {
+  package func markPushed(_ pushed: [(row: SyncRow, systemFields: Data)]) throws {
+    guard !pushed.isEmpty else { return }
     let deletedMeanwhile = try write {
-      try setMetadata(row.table, row.id, systemFields, pushed: row.modifiedAt)
-      // 通知标志随这次上传送出，之后不能再被本机别的改动带上去（见 `PiStateRecorder`）；不动修改时间，不会让记录重新待推送
-      if Table.notifyFlagged.contains(row.table), let sent = row.fields["notify"], sent != .null {
-        try db.run("UPDATE \(row.table.rawValue) SET notify = NULL WHERE id = ? AND notify = ?", [row.id, sent])
+      try pushed.compactMap { row, systemFields -> String? in
+        try setMetadata(row.table, row.id, systemFields, pushed: row.modifiedAt)
+        // 通知标志随这次上传送出，之后不能再被本机别的改动带上去（见 `PiStateRecorder`）；不动修改时间，不会让记录重新待推送
+        if Table.notifyFlagged.contains(row.table), let sent = row.fields["notify"], sent != .null {
+          try db.run("UPDATE \(row.table.rawValue) SET notify = NULL WHERE id = ? AND notify = ?", [row.id, sent])
+        }
+        return try db.first("SELECT 1 FROM \(row.table.rawValue) WHERE id = ?", [row.id]) { _ in true } == nil ? row.id : nil
       }
-      return try db.first("SELECT 1 FROM \(row.table.rawValue) WHERE id = ?", [row.id]) { _ in true } == nil
     }
     // 上传途中本机删掉了它：删的那次提交时服务器还没收下、算不上待推送的删除，这次记下元数据才是，提交的却只是元数据表，增量里没有它
-    if deletedMeanwhile { syncChanged() }
+    if !deletedMeanwhile.isEmpty { syncChanged(PendingSync(saves: [], deletes: deletedMeanwhile)) }
   }
 
-  /// 服务器上已没有这条记录（删除已确认、或本来就不存在）：忘掉它的元数据。
-  /// 数据表里还有该记录时，它因此重新变成待上传。
-  package func dropSyncMetadata(_ recordName: String) throws {
-    try write { try db.run("DELETE FROM syncRecords WHERE recordName = ?", [recordName]) }
+  /// 服务器上已没有这些记录（删除已确认、或本来就不存在）：忘掉它们的元数据。
+  /// 数据表里还有的，因此重新变成待上传。
+  package func dropSyncMetadata(_ recordNames: [String]) throws {
+    guard !recordNames.isEmpty else { return }
+    try write {
+      for name in recordNames { try db.run("DELETE FROM syncRecords WHERE recordName = ?", [name]) }
+    }
   }
 
   /// 同步的本机状态（同步区令牌、上次的账号）；nil 是删掉。
@@ -275,7 +319,7 @@ extension CueStore {
       """
       INSERT INTO syncRecords (recordName, recordType, systemFields, pushedModifiedAt) VALUES (?, ?, ?, ?)
       ON CONFLICT(recordName) DO UPDATE SET systemFields = excluded.systemFields, pushedModifiedAt = excluded.pushedModifiedAt
-      """, [id, table.rawValue, systemFields, pushed])
+      """, [id, table.rawValue, SystemFields.pack(systemFields), pushed])
   }
 
   private func overwrite(_ row: SyncRow) throws {
