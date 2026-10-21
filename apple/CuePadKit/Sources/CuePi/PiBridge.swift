@@ -52,7 +52,6 @@ public final class PiBridge {
     /// 这个会话（`sessionID`）在线的那一格，规则同 `session(sessionID:)`；只随会话出现、消失通知。
     public func slot(sessionID: String) -> Slot? { slots.first { $0.sessionID == sessionID } }
 
-    /// 这个连接（`PiSession.id`）的会话。
     public func session(id: PiSession.ID) -> PiSession? { slots.first { $0.id == id }?.session }
 
     @ObservationIgnored let directory: URL

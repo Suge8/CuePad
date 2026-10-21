@@ -23,7 +23,6 @@ struct AgentProbe {
     let paths: AgentPaths
     let locator: ExecutableLocator
 
-    /// 一家问出的结果：能用，或不能用的原因。
     private enum Outcome: Sendable {
         case usable(MacAgent)
         case unusable(MacAgentProblem.Reason)

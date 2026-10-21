@@ -206,7 +206,6 @@ public enum PiHistory {
                 roundStartedAt: roundStartedAt, deliveryID: deliveryID.flatMap(UUID.init(uuidString:))))
         }
 
-        /// 拼你说的一句话：按块的原顺序加文字与图片。
         func said() -> Said { Said(files: files) }
     }
 

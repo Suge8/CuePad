@@ -46,7 +46,6 @@ struct DraftParts {
         self.since = since
     }
 
-    /// 最后一段的段号
     var lastPart: Int? { parts.keys.max() }
 
     mutating func append(_ delta: String, to part: Int) {
@@ -73,14 +72,13 @@ struct DraftParts {
 @MainActor @Observable
 public final class PiDraftFeed {
     public private(set) var draft: PiDraft?
-    /// `draft != nil`，只在有无变化时通知
     public private(set) var speaking = false
     /// 最近交来、还没显示的与等着显示它的那一拍
     @ObservationIgnored private var offered: PiDraft?
     @ObservationIgnored private var shownAt: ContinuousClock.Instant?
     @ObservationIgnored private var flush: Task<Void, Never>?
 
-    /// 逐字的增量（每秒几十个）合成每秒十次：读它的视图（Markdown 重排）不随每个增量重算
+    /// 逐字的增量合成 `interval` 一次：读它的视图（Markdown 重排）不随每个增量重算
     static let interval: Duration = .milliseconds(100)
 
     public init() {}

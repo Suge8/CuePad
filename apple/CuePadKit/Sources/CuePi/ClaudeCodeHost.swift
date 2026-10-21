@@ -61,7 +61,6 @@ final class ClaudeHostedSession: SessionLink {
         stream.onClose = { [weak self] in self?.ended() }
     }
 
-    /// 托管的进程（退出原因、进程号）
     var process: ChildProcess { stream.process }
 
     /// 握手（`initialize` 拿到可换的模型与命令）并上桥；接着已结束的会话时 `known` 是索引里记下的名字与首条消息，

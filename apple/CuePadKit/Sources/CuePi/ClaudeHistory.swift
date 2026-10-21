@@ -108,7 +108,6 @@ enum ClaudeHistory {
     /// Claude Code 自己补写的助手消息的模型（不是模型说的）：接着被停下的那一轮时补的"No response requested."等不算回答，
     /// 只留出错的（`isApiErrorMessage`，"API Error: …"、额度用完）
     private static let syntheticModel = "<synthetic>"
-    /// 你在终端里对权限确认答"否"时工具结果的开头（2.1.299，后面跟"停下"或你说的怎么做）
     /// 斜杠命令与 `!` 命令留下的回显：终端的对话里是命令本身与它的输出，不是你对模型说的话
     private static let commandEchoPrefixes = ["<command-name>", "<command-message>", "<local-command-", "<bash-input>", "<bash-stdout>", "<bash-stderr>"]
 
@@ -172,7 +171,6 @@ enum ClaudeHistory {
             var input: PiToolArguments?
             var toolUseID: String?
             var isError: Bool?
-            /// 工具结果的正文
             var content: Content?
 
             struct Source: Decodable { var data: String? }

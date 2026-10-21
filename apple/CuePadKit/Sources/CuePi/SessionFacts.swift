@@ -51,7 +51,6 @@ struct SessionFacts {
         self.failure = failure
     }
 
-    /// 在跑时换成在做 `activity`（思考、输出、调工具）。
     mutating func work(_ activity: PiWorkState, detail: String? = nil) {
         self.activity = activity
         activityDetail = detail
@@ -96,7 +95,6 @@ struct SessionFacts {
         return (.settled, nil)
     }
 
-    /// 此刻显示的那一问
     var question: PiQuestion? { questions.first ?? standingQuestion }
 
     mutating func publish(to session: inout PiSession, at now: Date = .now) {
@@ -192,7 +190,6 @@ enum ToolDetail {
 @MainActor
 final class PresenceGate {
     private let presence: any UserPresence
-    /// 挂住的：人回来时放行
     private var held: [UUID: @MainActor () -> Void] = [:]
     private var watch: Task<Void, Never>?
 
