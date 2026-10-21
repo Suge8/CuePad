@@ -14,7 +14,7 @@ public enum AgentTimeouts {
     /// 请会话结束后等它下桥
     public static let end: Duration = .seconds(10)
     /// 请托管的进程退出后等它自己收尾多久，过了就强杀（Pi 的收尾实测 80 次里 11 次停住超过这个数）
-    static let endGrace: Duration = .seconds(5)
+    public static let endGrace: Duration = .seconds(5)
     /// 托管的会话歇着满这么久就退出（不算结束，发话时再接着）
     public static let hostedIdle: Duration = .seconds(30 * 60)
 }

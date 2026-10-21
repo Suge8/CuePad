@@ -115,12 +115,13 @@ enum DebugHooks {
         #endif
     }
 
-    /// 隔离库下这台 Mac 上一家 Agent 都找不到（`-CuePadNoAgents YES`）：看一家都没装时的接入面板，不用真去卸。
-    static var findsNoAgents: Bool {
+    /// 隔离库下 Agent 当作装在这个家目录里（`-CuePadAgentHome <目录>`）：只在它的 `.local/bin` 里找，装、登录也按它当 HOME、PATH 只有系统目录，
+    /// 像一台什么都没装的 Mac。给一个空目录就是一家都没装；点"安装"真去跑官方脚本，装进这个目录，不碰真实的家目录。
+    static var agentHome: URL? {
         #if DEBUG
-        DebugScene.defaults.bool(forKey: "CuePadNoAgents")
+        DebugScene.defaults.string(forKey: "CuePadAgentHome").map { URL(filePath: $0, directoryHint: .isDirectory) }
         #else
-        false
+        nil
         #endif
     }
 
