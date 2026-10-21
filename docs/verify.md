@@ -115,6 +115,21 @@ TEST_RUNNER_CUEPAD_CUE_EVAL=1 TEST_RUNNER_CUEPAD_CUE_EVAL_OUT=/tmp/cue-eval/long
 - 多日记忆（`CueEvalDaysTests`，一次十分钟左右）单独跑：启用前预置两周历史（对话一千五百多条、做完的任务与会话回复、九十多行记忆），先等它空闲合并记忆（合并开销单列），再问起不同年纪埋下的事；缓存时长缩到 20 秒、场景里插几段静止，看冷醒来开没开新会话（从大脑的输出里数：新进程或 Pi 的 new_session）。`-only-testing:CuePadTests/CueEvalDaysTests`，`CUEPAD_TEST_TIME_LIMIT=1700`。
 - 模型每次答得不完全一样，结论看两遍以上。
 
+## LongMemEval
+
+改 Cue 的提示词或 recall 前后各跑一遍，用 LongMemEval（longmemeval_s cleaned）给长期记忆打分（一遍 100 题，同时 8 题约四五分钟）：
+
+```bash
+python3 apple/scripts/lme.py sample        # 下载数据到 /tmp/lme，按题型分层抽 100 题（种子 42）写成 /tmp/lme/sample.jsonl
+TEST_RUNNER_CUEPAD_LME_DATA=/tmp/lme/sample.jsonl TEST_RUNNER_CUEPAD_CUE_EVAL_RUNTIME=pi TEST_RUNNER_CUEPAD_CUE_EVAL_OUT=/tmp/cue-eval/lme-after \
+  CUEPAD_TEST_TIME_LIMIT=7200 apple/scripts/xc.sh test mac -only-testing:CuePadTests/CueEvalLMETests
+python3 apple/scripts/lme.py judge /tmp/cue-eval/lme-before /tmp/cue-eval/lme-after   # 判分，按先后比这几遍，写最后一遍的 report.md
+```
+
+- 每题一个隔离库：历史会话按原时刻写成 Cue 的对话（用户的话是他的，助手的话是 Cue 的回复），信封上的此刻定在提问时刻（`CueTiming.clock`），问题作为他的话交给 Cue。
+- 每题一个 `<输出>/<题号>.json`（回复、用时、开销、recall 的查询）与 CueEval 的 .md，已有的跳过，中断后重跑接着做；`TEST_RUNNER_CUEPAD_LME_ONLY=<题号,…>` 只跑几题，`_LANES` 同时跑几题（缺省 8）。
+- 判分用官方分题型提示，经 Pi 用 claude-sonnet-5-5（thinking off），登录只读 ~/.pi/agent/auth.json；判过的存在 .json 里，重判先删掉 `label`。同一份回答重判结果一致，大脑那边一遍之间差几题，结论看两遍以上。
+
 ## 崩溃诊断
 
 - 真机崩溃拿不到栈时，请用户从设置的"上次崩溃"里"导出诊断"发来：摘要未符号化，靠 dSYM 还原，每次发布的归档在 `~/Library/Developer/Xcode/Archives/<日期>/CuePad <ios|mac> <构建号>.xcarchive`。
