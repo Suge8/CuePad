@@ -530,9 +530,10 @@ struct CueHostTests {
     @Test func 一轮中途被杀_你的话重新交出() async throws {
         let rig = try await Rig()
         let first = try #require(rig.brainPIDs.first)
+        let asked = rig.model.requests.count
         try await rig.say("请慢慢想")
-        try await eventually("交给了大脑") { try await rig.store.cueMessagesToDeliver().isEmpty }
-        try await eventually("Cue 在想") { try await rig.store.cueState()?.state.isWorking == true }
+        // 等模型收到这一轮（挂着不回）再杀：杀早了，只挂一次的那次会落到新大脑头上
+        try await eventually("模型收到这一轮") { rig.model.requests.count > asked }
         kill(first, SIGKILL)
         try await rig.message(.cue, containing: "收到：请慢慢想")
         #expect(!rig.brainPIDs.contains(first))
