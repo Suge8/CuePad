@@ -99,6 +99,8 @@ struct DeliverableTile: View {
     /// 文件随同步到本机的那一刻就绪（附件表变化时重读）
     @State private var arrived: Bool?
     @State private var look: DeliverableLook?
+    /// 画面出了 `Pending.delay` 还没出来：这时才写它是什么（`kindIcon`）。
+    @State private var slow = false
     @State private var located = Located()
 
     /// 本机的那份文件（`AttachmentFiles.url(of:)` 要查几次文件系统，第一次还要拷一份）：同一次"到没到"只找一次，
@@ -134,8 +136,11 @@ struct DeliverableTile: View {
         .observingArrival(of: preview.hash, in: services.store, into: $arrived)
         .task(id: file) {
             guard let file else { return }
-            look = await DeliverableLooks.load(preview, file: file, box: box, scale: scale, caches: services.store.files.caches)
+            let waited = shown == nil
+            let loaded = await DeliverableLooks.load(preview, file: file, box: box, scale: scale, caches: services.store.files.caches)
+            withAnimation(waited ? Motion.quick : nil) { look = loaded }
         }
+        .pending(loading, shown: $slow)
     }
 
     /// 类型，视频与音频接时长、PDF 接页数："视频 0:12""PDF 3 页"。
@@ -153,10 +158,13 @@ struct DeliverableTile: View {
         return min(max(raw, 4 / 3), 16 / 9)
     }
 
+    /// 文件在本机、画面还没读到（内存里没有，在读磁盘上那份或现出）。
+    private var loading: Bool { file != nil && shown == nil }
+
     private var isShot: Bool { if case .shot = shape { true } else { false } }
     private var isChosen: Bool { if case .shot(_, true) = shape { true } else { false } }
 
-    /// 画面出来之前写它是什么：成页的（网页、文稿、表格、PDF…）一张纸，音频、视频、3D 各自的记号，其余是文件。
+    /// 画面出得慢（过了 `Pending.delay`）或出不来时写它是什么：成页的（网页、文稿、表格、PDF…）一张纸，音频、视频、3D 各自的记号，其余是文件。
     private var kindIcon: Icon {
         switch preview.kind {
         case .audio: .audio
@@ -193,13 +201,18 @@ struct DeliverableTile: View {
     private var picture: some View {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
         // 裁的时候留上沿：截图与页面要紧的多在上面；提问的方形缩略图出画面时已取好景（`LookBox.salient`），居中放
-        // 要你看清的图垫白（透明图）；画面出来之前同别处，写它是什么
-        return Rectangle().fill(isShot && shown?.image != nil ? Color.white : palette.fill)
+        // 要你看清的图垫白（透明图）。画面还在读时先空着（只有边），读到了淡入；读了 `Pending.delay` 还没出来才铺底写它是什么：
+        // 新到的一张（结果卡、提问卡插进对话）几十毫秒就出来，先闪一帧灰底加文件图标再换成截图，比空一下更扰人
+        let waiting = loading && !slow
+        return Rectangle().fill(shown?.image != nil ? (isShot ? Color.white : palette.fill) : waiting ? Color.clear : palette.fill)
             .overlay(alignment: isShot ? .center : .top) {
                 if let image = shown?.image {
                     Image(decorative: image, scale: 1).resizable().scaledToFill()
                         // 深色下页面与截图多是亮底，原样放在暗纸上刺眼：压暗一层（同 `Thumbnail`）；要你看清的图不压
                         .overlay { if preview.kind != .video, !isShot { palette.mediaDim } }
+                        .transition(.opacity)
+                } else if waiting {
+                    EmptyView()
                 } else if file == nil {
                     // 还没到本机：点名的图没有下面那行字，下载中写在画面上
                     VStack(spacing: 3) {
@@ -209,7 +222,7 @@ struct DeliverableTile: View {
                     .foregroundStyle(palette.ink3)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
-                    // 画面还在出（或这种文件没有画面）：写它是什么，不留一块空白
+                    // 画面出得慢（或这种文件没有画面）：写它是什么
                     VStack(spacing: 4) {
                         Image(kindIcon).font(radius < 12 ? .callout : .title2)
                         if preview.kind == .audio, let detail = shown?.detail { Text(detail).font(Typography.caption).monospacedDigit() }
