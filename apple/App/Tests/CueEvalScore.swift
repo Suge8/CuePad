@@ -101,12 +101,22 @@ extension CueEval {
         var failed = Dictionary(uniqueKeysWithValues: CallFailure.allCases.map { ($0.rawValue, 0) })
         for call in calls where call.failed { failed[CallFailure(call.result ?? "").rawValue, default: 0] += 1 }
         let usage = (rig.brainDirectory.map(BrainUsage.rounds(in:)) ?? []).reduce(BrainUsage(), +)
+        // 合并在哪做：摘要的写入时刻落在某个做梦进程的起止里就是后台；Cue 的轮里的 merge 调用另数（后台做梦时应为 0）
+        let dreams = rig.brainDirectory.map(BrainUsage.dreams(in:)) ?? []
+        let summaries = ((try? await rig.store.cueMemory().summaries) ?? []).filter { $0.createdAt >= (rounds.first?.startedAt ?? .distantFuture) }
+        let background = summaries.count { summary in dreams.contains { $0.contains(summary.createdAt) } }
         let urgent = spoken.count { $0.args["urgent"] as? Bool == true }
         return [
             "wakes": counted.count, "calls": calls.count, "failed": failed, "asks": asks.count,
             "interrupts": ["tell": spoken.count, "urgent": urgent, "leave": leaves.count, "other": otherPushes.count, "total": spoken.count + leaves.count + otherPushes.count],
             "overlong": overlong, "renewals": renewals.count,
             "usage": usage.json,
+            "dream": [
+                "count": dreams.count, "seconds": dreams.reduce(0) { $0 + $1.finished.timeIntervalSince($1.started) },
+                "usage": dreams.map(\.usage).reduce(BrainUsage(), +).json,
+            ],
+            "merges": Self.calls(in: counted, "memory", ["merge"]).count,
+            "summaries": ["background": background, "rounds": summaries.count - background],
             "roundSeconds": counted.compactMap { round in round.finishedAt.map { $0.timeIntervalSince(round.startedAt) } },
         ]
     }
