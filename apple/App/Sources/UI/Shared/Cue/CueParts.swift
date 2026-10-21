@@ -183,7 +183,9 @@ struct CueNoteBubble: View {
                         // 图标与几点是最近那次的
                         Button { expanded = true } label: {
                             NoteLine(icon: rounds[rounds.count - 1].header?.wake.icon ?? .wakeIdle, open: false, time: rounds[rounds.count - 1].date) {
-                                Text("看了 \(rounds.count) 次，都没动手")
+                                Text("看了 \(rounds.count) 次")
+                                Dot().foregroundStyle(palette.ink3)
+                                Text("都没动手")
                             }
                         }
                         .buttonStyle(.plain)
@@ -246,11 +248,11 @@ private struct CueNoteSection: View {
 }
 
 /// 一节的第一行（`NoteLine`，同并起来的那一行）：醒来原因的图标（叫醒它的会话出错是出错的那个）、原因（叫醒它的会话、任务、提醒是墨色的名字，点了去那里；
-/// 几处时点开列出来选），行末几点。只看了看的一轮在后面接"· 没动手"。
+/// 几处时点开列出来选），行末几点。几段之间一律隔一个点（"提醒到点 · 周会"、"atlas 停下了 · 没动手"），点得进去的末尾一个箭头。
 private struct CueWakeTitle: View {
     let header: CueWakeHeader
     let at: Date
-    var quiet = false
+    let quiet: Bool
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
@@ -273,11 +275,11 @@ private struct CueWakeTitle: View {
             if header.lead != nil, header.name != nil { Dot().foregroundStyle(palette.ink3) }
             if let name = header.name { Text(name).fontWeight(.medium).foregroundStyle(palette.ink) }
             if let trail = header.trail { Text(trail).foregroundStyle(palette.ink2).fixedSize() }
-            if !header.targets.isEmpty { Image(.forward).font(.system(size: 8, weight: .semibold)).foregroundStyle(palette.ink3) }
             if quiet {
                 Dot().foregroundStyle(palette.ink3)
                 Text("没动手").foregroundStyle(palette.ink3).fixedSize()
             }
+            if !header.targets.isEmpty { Image(.forward).font(.system(size: 8, weight: .semibold)).foregroundStyle(palette.ink3) }
         }
         .lineLimit(1)
     }

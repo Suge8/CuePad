@@ -84,13 +84,13 @@ nonisolated struct CueWakeHeader: Equatable, Sendable {
                 }
             }
             let latest = stirs.last
-            (lead, name) = (places.isEmpty ? "会话有动静" : nil, places.first?.title)
+            (lead, name) = (places.isEmpty ? Self.phrase(wake) : nil, places.first?.title)
             trail = places.isEmpty ? nil : places.count > 1 ? "等 \(places.count) 处有动静" : latest.map { Self.verb($0.kind) }
             failed = latest.map { [.failed, .undelivered].contains($0.kind) } ?? false
             targets = places.compactMap { place in place.target.map { Place(title: place.title, target: $0) } }
         case .reminder(let ids):
             let first = ids.lazy.compactMap { names.lines[$0] }.first
-            (lead, name, failed) = ("提醒到点", first.map { PiProgress.firstLine($0) ?? $0 }, false)
+            (lead, name, failed) = (Self.phrase(wake), first.map { PiProgress.firstLine($0) ?? $0 }, false)
             trail = ids.count > 1 ? "等 \(ids.count) 条" : nil
             targets = first.map { [Place(title: $0, target: .memory)] } ?? []
         case .enabled, .message, .idle, .renewed, .settingsChanged:

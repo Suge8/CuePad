@@ -222,10 +222,12 @@ struct CuePage: View {
         }
     }
 
-    /// 在跑的那一轮（Cue 此刻的状态记着是哪一行）此刻的结尾；不在跑为 nil。
+    /// 在跑的那一轮（Cue 此刻的状态记着是哪一行，"做完了没"只看它）此刻的结尾；不在跑为 nil。它那台 Mac 此刻不在（`CuePresence.shown` 为空）时
+    /// 这一轮照样没做完，只是不写在做什么。
     private var live: CueLiveRound? {
         let presence = cue.presence
-        guard let round = cue.round, let shown = presence.shown, let progress = presence.progress else { return nil }
+        guard let round = cue.round else { return nil }
+        guard let shown = presence.shown, let progress = presence.progress else { return CueLiveRound(round: round, ending: .took(nil)) }
         return CueLiveRound(round: round, ending: .live(shown, doing: progress, step: presence.isUsingTool ? RoundProcess.icon(.other) : nil))
     }
 
