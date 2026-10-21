@@ -13,7 +13,7 @@ struct BoardPaper<Row: Identifiable, Content: View>: View {
         if !rows.isEmpty {
             LazyVStack(alignment: .leading, spacing: 0) {
                 ForEach(BoardSection.of(rows, by: project)) { section in
-                    if workspace.boardScope == nil { BoardProjectHeading(id: section.id, first: section.first).padding(.leading, BoardInset.ring) }
+                    if workspace.scopedProject == nil { BoardProjectHeading(id: section.id, first: section.first).padding(.leading, BoardInset.ring) }
                     ForEach(section.rows) { content($0) }
                 }
             }
@@ -82,9 +82,6 @@ enum BoardInset {
 }
 
 extension Workspace {
-    /// 看板按哪个项目筛（`projectScope`）；选中的项目进了回收站就当作全部项目（同顶栏的 `ProjectScope`）。
-    var boardScope: UUID? { catalog?.project(projectScope)?.id }
-
     /// 推进中的先后：行上写出状态词的（要你管：等你、出错、被打断、有新回复…，`PiShown.speaksOnTask`）在前，其次在跑的，再次歇着的；同一档保持原来的先后。
     func byAttention(_ work: [TaskBoard.Work], agents: AgentLinks) -> [TaskBoard.Work] {
         func rank(_ work: TaskBoard.Work) -> Int {

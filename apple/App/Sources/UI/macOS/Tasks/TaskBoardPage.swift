@@ -12,7 +12,7 @@ struct TaskBoardPage: View {
     @State private var adding = false
 
     var body: some View {
-        let scope = workspace.boardScope
+        let scope = workspace.scopedProject
         VStack(alignment: .leading, spacing: 18) {
             topRow
             BoardColumns(board: (board ?? .empty).only(scope), adding: $adding, newTaskProject: scope ?? workspace.currentProject)
