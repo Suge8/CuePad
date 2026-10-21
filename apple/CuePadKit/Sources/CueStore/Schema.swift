@@ -40,7 +40,30 @@ enum Schema {
   /// （新库直接建成最新结构、不跑升级步骤：只改数据的一步在空库上无事可做）。
   /// 一步里任何会因数据冲突失败的语句（加唯一索引、NOT NULL、按假定的数据形状改写）都会让启动失败、库打不开：
   /// 要按别的设备已经同步来的、任意形状的数据写。
-  static let upgrades: [Upgrade] = []
+  static let upgrades: [Upgrade] = [
+    // 67：同步元数据的系统字段压缩存（`SystemFields`），真实库从 65MB 降到约 10MB。原地改写的行仍各占一页，所以整表重建：
+    // 一条 INSERT … SELECT 按行压缩，建好再补索引；腾出的页由升级后的整理还给磁盘（`reclaim`）
+    Upgrade { db in
+      try db.define("packSystemFields", SystemFields.pack)
+      try db.exec(
+        """
+        ALTER TABLE syncRecords RENAME TO syncRecordsOld; DROP INDEX syncRecords_recordType; DROP INDEX syncRecords_pushed;
+        \(syncRecordsTable)
+        INSERT INTO syncRecords SELECT recordName, recordType, packSystemFields(systemFields), pushedModifiedAt, sentModifiedAt FROM syncRecordsOld;
+        DROP TABLE syncRecordsOld;
+        \(syncRecordsIndexes)
+        """)
+    },
+  ]
+
+  /// 升级腾出了大量空页（如 67 把系统字段压小）时整理一遍，把它们还给磁盘：库不开自动整理，空页只等以后的写入复用，文件不会变小。
+  /// 别的进程（命令行、扩展）正开着库时整理不了（忙），空页留着照样复用，不挡打开。
+  static func reclaim(_ db: SQLite) throws {
+    let free = try db.first("PRAGMA freelist_count") { $0.int(0) } ?? 0
+    let total = try db.first("PRAGMA page_count") { $0.int(0) } ?? 0
+    guard free * 4 > total else { return }
+    try? db.exec("VACUUM")
+  }
 
   /// 默认项目（`Project.defaultID`）的那一条：新库建好就有。修改时间是 0：各台设备离线各自建出的是同一版，
   /// 合并时用户改过的（名字、颜色、图标）总比它新，不会被一台新装的设备盖回"默认"。
@@ -51,14 +74,26 @@ enum Schema {
     """
 
   /// 推导待推送（`CueStore.pendingSync`）只读每条记录的 id 与修改时间、同步元数据的记录名、类型与收下的修改时间：
-  /// 覆盖索引让它不碰表本身——同步元数据每行带约 4KB 的系统字段，会话消息、会话记录的行也大，真实库一次推导因此从 3.3 亿条指令降到 1 亿。
+  /// 覆盖索引让它不碰表本身——同步元数据每行带系统字段，会话消息、会话记录的行也大，真实库一次推导因此从 3.3 亿条指令降到 1 亿。
   private static func pendingIndexes(_ tables: [Table]) -> String {
     """
-    CREATE INDEX syncRecords_recordType ON syncRecords(recordType, pushedModifiedAt, recordName);
-    CREATE INDEX syncRecords_pushed ON syncRecords(recordName, pushedModifiedAt);
+    \(syncRecordsIndexes)
     \(tables.map(modifiedIndex).joined(separator: "\n"))
     """
   }
+
+  /// 同步元数据：每条记录服务器端的系统字段（压缩存，见 `SystemFields`）与服务器收下的修改时间（从没收下过为 NULL），以及本机交出去的那一版的修改时间
+  /// （sentModifiedAt，见 `CueStore.noteSent`）。服务器收下过而行已不在数据表里的，就是要向服务器删除的（不需要墓碑表）。
+  private static let syncRecordsTable = """
+    CREATE TABLE syncRecords (
+      recordName TEXT PRIMARY KEY NOT NULL, recordType TEXT NOT NULL, systemFields BLOB,
+      pushedModifiedAt INTEGER, sentModifiedAt INTEGER
+    ) STRICT;
+    """
+  private static let syncRecordsIndexes = """
+    CREATE INDEX syncRecords_recordType ON syncRecords(recordType, pushedModifiedAt, recordName);
+    CREATE INDEX syncRecords_pushed ON syncRecords(recordName, pushedModifiedAt);
+    """
 
   private static func modifiedIndex(_ table: Table) -> String {
     "CREATE INDEX \(table.rawValue)_modified ON \(table.rawValue)(id, modifiedAt);"
@@ -226,12 +261,7 @@ enum Schema {
       projectID TEXT PRIMARY KEY NOT NULL, directory TEXT NOT NULL
     ) STRICT;
 
-    -- 同步元数据：每条记录服务器端的系统字段与服务器收下的修改时间（从没收下过为 NULL），以及本机交出去的那一版的修改时间
-    -- （sentModifiedAt，见 CueStore.noteSent）。服务器收下过而行已不在数据表里的，就是要向服务器删除的（不需要墓碑表）。
-    CREATE TABLE syncRecords (
-      recordName TEXT PRIMARY KEY NOT NULL, recordType TEXT NOT NULL, systemFields BLOB,
-      pushedModifiedAt INTEGER, sentModifiedAt INTEGER
-    ) STRICT;
+    \(syncRecordsTable)
     -- 同步的本机状态：同步区令牌（zoneToken）与上次同步的 iCloud 账号（account）。
     CREATE TABLE syncState (key TEXT PRIMARY KEY NOT NULL, value BLOB NOT NULL) STRICT;
 

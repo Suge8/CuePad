@@ -29,9 +29,12 @@ public actor CueStore {
   private var readScopes: [Table: RowScope] = [:]
   private var readWhole: Set<Table> = []
   private var syncSubscribers: [UUID: AsyncStream<Void>.Continuation] = [:]
-  /// 可能让记录变成待推送的提交数（本连接让记录变成待推送的提交、别的进程的任何提交）：没变就说明上次推导出的待推送仍然成立，
-  /// 发送者不必为确认"没有要传的"再全量推导一遍（`SyncCoordinator.nextBatch`）。
-  package private(set) var syncGeneration = 0
+  /// 可能让记录变成待推送的提交数（本连接让记录变成待推送的提交、别的进程的任何提交），与最近这些提交各自的增量
+  /// （nil：范围不明，如别的进程的提交）：发送者确定没有剩下的待推送之后，只复查其后的提交碰过的记录（`pendingSync(since:)`）。
+  private(set) var syncGeneration = 0
+  private(set) var syncDeltas: [(generation: Int, delta: PendingSync?)] = []
+  /// 增量只记最近这么多次：没有发送者（命令行、隔离库）时不越攒越多；离线攒得更多的，恢复后全量推导一次。
+  private static let syncDeltaLimit = 256
   private let notificationName: String
   private let changeListener: ChangeListener?
   private var lastDataVersion: Int64
@@ -55,6 +58,7 @@ public actor CueStore {
         for upgrade in Schema.upgrades[(version - Schema.baseVersion)...] { try upgrade.run(connection) }
         try connection.exec("PRAGMA user_version = \(Schema.version)")
       }
+      try Schema.reclaim(connection)
     } else if version != Schema.version {
       throw CueStoreError.unsupportedSchemaVersion(version)
     }
@@ -109,7 +113,7 @@ public actor CueStore {
     lastDataVersion = version
     commits.add(1, ordering: .releasing)
     for subscriber in subscribers.values { subscriber.signal.yield() }
-    syncChanged()
+    syncChanged(nil)
   }
 
   // MARK: 观察
@@ -270,13 +274,15 @@ public actor CueStore {
     if !tables.isDisjoint(with: Table.synced) {
       // 只有让记录变成待推送的提交才算（记账、应用远端版本这类不会）；算不出增量时照算
       let delta = try? pendingSync(in: changes)
-      if delta.map({ !$0.saves.isEmpty || !$0.deletes.isEmpty }) ?? true { syncChanged() }
+      if delta.map({ !$0.saves.isEmpty || !$0.deletes.isEmpty }) ?? true { syncChanged(delta) }
     }
     return result
   }
 
-  func syncChanged() {
+  func syncChanged(_ delta: PendingSync?) {
     syncGeneration += 1
+    syncDeltas.append((syncGeneration, delta))
+    if syncDeltas.count > Self.syncDeltaLimit { syncDeltas.removeFirst() }
     for subscriber in syncSubscribers.values { subscriber.yield() }
   }
 

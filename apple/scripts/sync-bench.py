@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""同步测量（CloudKit 开发环境）：同一台 Mac 上开两个隔离实例经 iCloud 同步，跑固定时长，按 PID 统计 CloudKit 操作（次数与字节，取自 CKOperationMetrics）与时延。
+"""同步测量（CloudKit 开发环境）：同一台 Mac 上开两个隔离实例经 iCloud 同步，跑固定时长，按 PID 统计 CloudKit 操作（次数与字节，取自 CKOperationMetrics）、
+进程的指令、CPU、唤醒、能耗与内存（内核记账，同 rusage.py）与时延。
 A 是"有在线会话的 Mac"：这里起一个说桥协议的假扩展，几个会话不停切状态，收到的话一律受理；
 B 代替开着 Agent 页的手机（模拟器登不了 iCloud；拉取节奏按手机那档）：每轮对 A 的一个会话说一句、对 Cue 说一句、立即同步一次（打点见 DebugScene+SyncBench.swift）。
 
@@ -16,6 +17,7 @@ from datetime import datetime
 
 sys.dont_write_bytecode = True
 from app import isolated_env  # noqa: E402
+from rusage import NS, usage  # noqa: E402
 
 APPLE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SESSIONS = int(os.environ.get("SYNC_BENCH_SESSIONS", 3))
@@ -107,7 +109,7 @@ def stream(pids):
                             stdout=open(f"{BENCH}/window.log", "w"), stderr=subprocess.DEVNULL)
 
 
-def report(pids, start, end):
+def report(pids, start, end, before, after):
     hours = (end - start) / 3600
     log = open(f"{BENCH}/window.log").read()
     print(f"\n窗口 {stamp(start)} → {stamp(end)}（{(end - start) / 60:.1f} 分钟），会话 {SESSIONS} 个、平均 {FLIP:g} 秒切一次状态，B 每 {EVERY} 秒一轮")
@@ -124,6 +126,10 @@ def report(pids, start, end):
         total = sum(ops.values())
         print(f"\n{'A 有会话的 Mac' if role == 'a' else 'B 代替手机'}（PID {pid}）：CloudKit 操作 {total / hours:.0f} 次/小时；"
               f"上传 {sum(up.values()) / hours / 1e6:.2f} MB/小时、下载 {sum(down.values()) / hours / 1e6:.2f} MB/小时")
+        d = lambda k: after[role][k] - before[role][k]
+        print(f"  进程：指令 {d('instructions') / hours / 1e9:.2f} G/小时、CPU {(d('user') + d('system')) * NS / 1e9 / hours:.1f} 秒/小时、"
+              f"唤醒 {(d('idle_wkups') + d('interrupt_wkups')) / (end - start):.2f} 次/秒、能耗 {d('energy_nj') / 1e9 / hours:.1f} J/小时、"
+              f"内存 {after[role]['footprint'] / 2**20:.0f} MB")
         print(f"  每个操作用时 {summarize(took)}；其中排队 {summarize(queued)}")
         for key, n in ops.most_common():
             print(f"  {n / hours:7.0f} 次/时  上 {up[key] / hours / 1e3:7.0f} KB/时  下 {down[key] / hours / 1e3:7.0f} KB/时  {key[0]:<36} {key[1]}")
@@ -153,9 +159,9 @@ def main(minutes):
         time.sleep(WARMUP)
         for p in (a, b):
             if p.poll() is not None: raise SystemExit(f"实例 {p.pid} 已退出（日志 {BENCH}/*.log）")
-        log = stream(pids.values()); start = time.time()
+        log = stream(pids.values()); start = time.time(); before = {r: usage(p) for r, p in pids.items()}
         time.sleep(minutes * 60)
-        end = time.time(); log.terminate(); log.wait()
+        after = {r: usage(p) for r, p in pids.items()}; end = time.time(); log.terminate(); log.wait()
     finally:
         extension.terminate(); extension.wait()
         time.sleep(5)  # A 把会话结束同步出去
@@ -163,7 +169,7 @@ def main(minutes):
             p.terminate()
             try: p.wait(10)
             except subprocess.TimeoutExpired: p.kill()
-    report(pids, start, end)
+    report(pids, start, end, before, after)
 
 
 if __name__ == "__main__":

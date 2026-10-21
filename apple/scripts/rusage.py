@@ -77,4 +77,5 @@ def main():
     }), flush=True)
 
 
-main()
+if __name__ == "__main__":
+    main()

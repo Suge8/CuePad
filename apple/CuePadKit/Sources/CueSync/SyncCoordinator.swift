@@ -14,8 +14,8 @@ actor SyncCoordinator {
   private var subscribers: [UUID: AsyncStream<SyncState>.Continuation] = [:]
   /// 构造不出来的记录（附件文件不在本机）与当时的修改时间：同一版不再每批重试、重复报告，改过再试。
   private var unsendable: [String: Int64] = [:]
-  /// 库里没有可传的待推送，截至推导前的同步变更代数（`CueStore.syncGeneration`）：代数没变就不再全量推导（真实库一次约 1 亿条指令），
-  /// 按节奏的拉取每次顺带的那一轮因此不碰库。`sending` 是在路上的这一批带走了推导出的全部、这批的条数：整批收下才算没有了（`processSent`）。
+  /// 库里没有可传的待推送，截至推导时的同步变更代数（`CueStore.pendingSync(since:)`）：之后只复查其后的提交碰过的记录，不再全量推导，
+  /// 代数没变（按节奏的拉取每次顺带的那一轮）就什么都不查。`sending` 是在路上的这一批带走了推导出的全部、这批的条数：整批收下才算没有了（`processSent`）。
   private var drained: (generation: Int, sending: Int?)?
 
   /// 协调器自己记的事实。`status` 不含 `.syncing`；上传与拉积压的忙闲分开记。对外的快照只在发布处推出（`state`）。
@@ -96,15 +96,14 @@ actor SyncCoordinator {
   // MARK: 上传批次
 
   /// 下一批要上传的：`first` 里待推送的排在前面，至多 `limit` 条；没有可传的（或此刻不能同步）为 nil。
-  /// 上次确定没有可传的之后没有让记录变成待推送的提交（`drained`），直接为 nil，不再推导。
+  /// 上次确定没有可传的之后只看其后的提交碰过的记录（`drained`）。
   func nextBatch(first: Set<String>, limit: Int) async -> (saves: [CKRecord], deletes: [CKRecord.ID])? {
     if drained?.sending != nil { drained = nil }  // 上一批整个没传成（没有结果）
     guard canSync else { return nil }
-    let generation = await store.syncGeneration
-    if let drained, drained.generation == generation { return nil }
+    let since = drained?.generation
     drained = nil
-    let pending: PendingSync
-    do { pending = try await store.pendingSync() } catch {
+    let pending: PendingSync, generation: Int
+    do { (pending, generation) = try await store.pendingSync(since: since) } catch {
       report(error, recordName: nil)
       return nil
     }
@@ -311,11 +310,8 @@ actor SyncCoordinator {
       self.drained = sent.saved.count + sent.deleted.count == count ? (drained.generation, nil) : nil
     }
     var outcome = SendOutcome(progressed: !sent.saved.isEmpty || !sent.deleted.isEmpty, blocked: false, zoneMissing: false)
-    for record in sent.saved {
-      guard let row = RecordMapper.row(from: record) else { continue }
-      try await store.markPushed(row, systemFields: RecordMapper.encodeSystemFields(record))
-    }
-    for id in sent.deleted { try await store.dropSyncMetadata(id.recordName) }
+    try await store.markPushed(sent.saved.compactMap { record in RecordMapper.row(from: record).map { ($0, RecordMapper.encodeSystemFields(record)) } })
+    try await store.dropSyncMetadata(sent.deleted.map(\.recordName))
 
     // 没收下的仍是待推送（库里推导），下一批自然带上；这里只处理要先改本机状态才能成功的
     for (record, error) in sent.failedSaves {
@@ -333,7 +329,7 @@ actor SyncCoordinator {
       case .unknownItem, .zoneNotFound:
         // 服务器上没有这条记录（或整个同步区没了）：忘掉旧系统字段，作为新记录重新上传
         if error.code == .zoneNotFound { outcome.zoneMissing = true }
-        try await store.dropSyncMetadata(name)
+        try await store.dropSyncMetadata([name])
         outcome.progressed = true
       default:
         outcome.blocked = classify(error, recordType: record.recordType, recordName: name) || outcome.blocked
@@ -343,7 +339,7 @@ actor SyncCoordinator {
     for (id, error) in sent.failedDeletes {
       switch error.code {
       case .unknownItem, .zoneNotFound:
-        try await store.dropSyncMetadata(id.recordName)
+        try await store.dropSyncMetadata([id.recordName])
         outcome.progressed = true
       case .batchRequestFailed: outcome.progressed = true
       default:

@@ -91,7 +91,7 @@ apple/scripts/xc.sh stop       # 验完就收；忘了 5 分钟后也会自己�
 - 前提：这台 Mac 按 Provisioning UDID（`system_profiler SPHardwareDataType`，不是 Hardware UUID）登记过，装了「CuePad macOS Development」描述文件：`provision.py device <UDID> <名称> MAC_OS`，再 `provision.py profiles`。
 - 只碰开发环境：隔离库连 iCloud 要 Debug 构建、`-CuePadCloudKit YES`、Development 签名三样都在（`DebugScene.syncsIsolatedLibrary`）。
 - 模拟器登不了 iCloud，B 用 Mac 进程扮手机（拉取节奏换成手机那档）。隔离目录里 Cue 不值班：只量对 Cue 说的话到 A 的库，不量回复。
-- 口径：CloudKit 操作按进程统计，来源是 debug 日志里的 `CKOperationMetrics`，字节不含 TLS 与 HTTP 头。nettop 量不了：CloudKit 的流量都记在 cloudd 名下，和正式版的混在一起。
+- 口径：进程的指令、CPU、唤醒、能耗是窗口内的内核记账（同 `rusage.py`），实例是 Debug 构建、带界面，同步只占其中一小部分，前后对比看指令。CloudKit 操作按进程统计，来源是 debug 日志里的 `CKOperationMetrics`，字节不含 TLS 与 HTTP 头。nettop 量不了：CloudKit 的流量都记在 cloudd 名下，和正式版的混在一起。
 - 两个实例共用这台 Mac 的 cloudd、排同一个队：一个操作慢（偶尔几十秒），两边排在后面的一起等（报告里的"排队"），尾部时延比真机大；前后对比在同一网络、同一时段交替跑，看中位数。
 
 ## Cue 评测
