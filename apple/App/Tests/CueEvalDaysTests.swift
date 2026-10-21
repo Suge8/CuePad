@@ -37,7 +37,6 @@ private final class Days: EvalScript {
     static let quiet = Duration.seconds(5)
 
     private let history: DaysHistory
-    private var mergeRounds: [CueRound] = []
     /// 记忆的样子：预置后、开跑前与每一步做完时有几条摘要、记忆视图几行（看合并发生在哪、合并后视图多大）
     private var snapshots: [(label: String, at: Date, summaries: Int, lines: Int)] = []
 
@@ -79,23 +78,31 @@ private final class Days: EvalScript {
             try await site.deliver(pageShot("官网 2026 年 10 月周报", DaysScript.weeklyShot), title: "官网十月周报", rig: rig)
             try await site.settle(DaysScript.weekly, rig: rig)
         }
+        try await overBudget()
+        await quietPeriod(Self.away)
+        let parking = try await say("他：问车位（冷，有块要合）", "我车停在哪个车位来着？")
         await quietPeriod(Self.away)
         let wrap = try await say("他：问这几天的事（冷）", "这几天的事现在都怎么样了？")
-        return try await judge(Points(date: date, image: image, s3: s3, why: why, csv: csv, language: language, report: report, wrap: wrap, storage: storage))
+        return try await judge(Points(
+            date: date, image: image, s3: s3, why: why, csv: csv, language: language, report: report, parking: parking, wrap: wrap, storage: storage))
+    }
+
+    /// 他发消息触发冷换新、恰好有块要合：一口气补记 10 条记忆（Cue 记下的，第一条是后面要问的车位），记忆视图（开跑前 90 行，预算 96）超出预算、有块待合并。
+    /// 合并在空闲时醒来的方案会在他走开时就合掉；挪到换新那一轮的方案在他这句触发的冷换新里合。
+    private func overBudget() async throws {
+        for line in DaysScript.notedLater { _ = try await rig.store.noteCueLine(line, source: .cue) }
+        try await snapshot("补记 \(DaysScript.notedLater.count) 条后")
     }
 
     /// 开跑前等 Cue 静下来：没有在跑的轮，且之后静了 `quiet` 没有新的一轮。合并在空闲时醒来的方案（预置了 4 块待合并）在这段里合完；
     /// 合并挪到换新那一轮的方案没有这种醒来，刚启用那一轮做完、静 `quiet` 就开跑。
     private func settleDown() async throws {
-        let from = Date.now
         while true {
             try await eventually("Cue 没有在跑的轮", timeout: .seconds(300)) { self.eval.rounds.allSatisfy { $0.finishedAt != nil } }
             let count = eval.rounds.count
             await quietPeriod(Self.quiet)
             if eval.rounds.count == count, eval.rounds.allSatisfy({ $0.finishedAt != nil }) { break }
         }
-        mergeRounds = eval.rounds.filter { $0.startedAt >= from && Self.isMerge($0) }
-        notes.append("开跑前空闲合并醒来 \(mergeRounds.count) 次，还剩 \(try await pending()) 块待合并")
     }
 
     override func step(_ label: String, on session: ScriptedSession?, _ act: () async throws -> Void) async throws -> Step {
@@ -109,31 +116,26 @@ private final class Days: EvalScript {
         snapshots.append((label, .now, memory.summaries.count, CueMemoryView(memory).entries.count))
     }
 
-    /// 合并发生在哪几轮：摘要写下的时刻落在哪一轮（一轮可写几条），那一轮是不是换新的一轮、在哪一步，那一步做完时视图几行
+    /// 合并发生在哪几轮：摘要写下的时刻落在哪一轮（一轮可写几条），那一轮是不是新会话的第一轮（带了视图，`CueEval.opensSession`）、
+    /// 在哪一步，那一步做完时视图几行。合并在空闲时醒来还是挪进换新那一轮，都按写下的摘要认。
     private func merges() async -> [[String: Any]] {
-        let all = eval.rounds, renewed = Set(eval.renewals.map(\.id))
+        let all = eval.rounds
         let made = ((try? await rig.store.cueMemory().summaries) ?? []).filter { $0.createdAt >= (all.first?.startedAt ?? .distantFuture) }
         let byRound = Dictionary(grouping: made) { summary in all.lastIndex { $0.startedAt <= summary.createdAt } ?? 0 }
         return byRound.keys.sorted().map { index in
             let round = all[index], at = byRound[index]!.map(\.createdAt).max()!
             return [
-                "round": index, "wake": "\(round.wake)".prefix(40).description, "renewal": renewed.contains(round.id), "summaries": byRound[index]!.count,
+                "round": index, "wake": "\(round.wake)".prefix(40).description, "renewal": CueEval.opensSession(round), "summaries": byRound[index]!.count,
                 "step": steps.first { $0.window?.contains(round.startedAt) == true }?.label ?? "开跑前",
                 "viewLines": snapshots.first { $0.at >= at }?.lines ?? snapshots.last?.lines ?? 0,
             ]
         }
     }
 
-    /// 记忆树上待合并的块
-    private func pending() async throws -> Int { CueMemoryView(try await rig.store.cueMemory()).merges.count }
-
-    /// 合并的醒来：请合并的话里有这句
-    private static func isMerge(_ round: CueRound) -> Bool { round.sent.contains { $0.contains("写回：memory merge") } }
-
     // MARK: 判定
 
     struct Points {
-        let date, image, s3, why, csv, language, report, wrap: Step
+        let date, image, s3, why, csv, language, report, parking, wrap: Step
         let storage: ScriptedSession
     }
 
@@ -144,7 +146,7 @@ private final class Days: EvalScript {
         let csvTexts = CueEval.calls(in: rounds(key.csv), "task", ["add", "edit", "say", "start"]).map { Self.texts($0.args) }.joined(separator: "\n")
         let preference = csvTexts.contains(/中文/) ? "带了新的（中文）" : csvTexts.contains(/英文|English/) ? "带了旧的（英文）" : "没提"
         let told = try await messages(key.report) + calls(key.report, "tell").compactMap { $0.args["text"] as? String }
-        let cold = [key.image, key.csv, key.wrap]
+        let cold = [key.image, key.csv, key.parking, key.wrap]
         let renewed = cold.filter { step in eval.renewals.contains { step.window?.contains($0.startedAt) == true } }
         let after = steps.filter { ($0.window?.lowerBound ?? .distantFuture) >= (key.image.window?.lowerBound ?? .distantFuture) }
         let adds = after.flatMap { calls($0, "task", ["add"]) }.filter { !$0.call.failed }
@@ -167,6 +169,9 @@ private final class Days: EvalScript {
             Check(.memory, "5 天前否掉的理由：贵、团队没人熟 AWS（答出至少一条）", reasons.contains(/贵|成本|费用|AWS|不熟|没人熟/), note: reasons.isEmpty ? "（没回）" : ""),
             Check(.memory, "1 天前改的偏好：派活时带的是新的（中文提交信息）", preference.hasPrefix("带了新的"), note: "——\(preference)"),
             try await recalled("1 天前改的偏好：问起时答中文", key.language, fabricated: { $0.contains("英文") }) { $0.contains("中文") && !$0.contains(/现在.{0,6}英文|用英文写/) },
+            try await recalled("补记后有块要合、他触发冷换新：问车位答 B2 层 117", key.parking, fabricated: { $0.contains(/[A-Z]?\d+ ?层|\d{2,3} ?号/) }) {
+                $0.contains("B2") && $0.contains("117")
+            },
             Check(.carry, "2 天前答应的：周报数据出来告诉他访问量 48,210", told.contains { $0.contains(/48,?210|4\.8 ?万|48210/) }),
             Check(.carry, "冷醒来换新了", renewed.count == cold.count, note: "（\(renewed.count)/\(cold.count) 次：\(renewed.map(\.label).joined(separator: "、"))）"),
             Check(.carry, "冷醒来后不重做：除导出 CSV 外没另建任务", extra.isEmpty,
@@ -184,8 +189,9 @@ private final class Days: EvalScript {
         let median = durations.isEmpty ? "—" : seconds(durations[durations.count / 2])
         let usage = rig.brainDirectory.map(BrainUsage.rounds(in:)) ?? []
         let all = eval.rounds
+        let merged = await merges()
         // 开销按轮对齐（大脑报的与记下的轮按先后对应）
-        let mergeUsage = all.indices.filter { Self.isMerge(all[$0]) && $0 < usage.count }.map { usage[$0] }.reduce(BrainUsage(), +)
+        let cost = { (indices: [Int]) in indices.filter { $0 < usage.count }.map { usage[$0] }.reduce(BrainUsage(), +) }
         let total = usage.reduce(BrainUsage(), +)
         let renewals = eval.renewals
         let renewedAt = renewals.compactMap { round in steps.firstIndex { $0.window?.contains(round.startedAt) == true }.map { "第 \($0 + 1) 步「\(steps[$0].label)」" } }
@@ -194,18 +200,28 @@ private final class Days: EvalScript {
         var lines = [
             "", "## 多日", "",
             "- 预置历史：对话 \(history.logged) 条、记忆 \(history.memoryLines) 行（\(history.pinned) 行一直记着）、做完的任务 \(history.doneTasks) 件",
-            "- 醒来 \(rounds.count) 次（不含预热；其中开跑前空闲合并 \(mergeRounds.count) 次，剧本叫醒 \(steps.count) 次），换新 \(renewals.count) 次（大脑开了新的对话）"
+            "- 醒来 \(rounds.count) 次（不含预热；剧本叫醒 \(steps.count) 次），换新 \(renewals.count) 次（大脑开了新的对话）"
                 + (renewedAt.isEmpty ? "" : "，在" + renewedAt.joined(separator: "、")),
             "- 每轮用时中位 \(median)",
-            "- 合计（含预热与空闲合并）：\(BrainUsage.header.replacingOccurrences(of: " | ", with: "、")) = \(cells(total))",
-            "- 其中空闲合并醒来：\(cells(mergeUsage))",
+            "- 合计（含预热）：\(BrainUsage.header.replacingOccurrences(of: " | ", with: "、")) = \(cells(total))",
+            "- 其中合并的轮（写了摘要的轮，第 \(merged.map { "\($0["round"]!)" }.joined(separator: "、")) 轮）：\(cells(cost(merged.map { $0["round"] as! Int })))",
+            "- 合并 \(merged.count) 轮、写了 \(merged.reduce(0) { $0 + ($1["summaries"] as! Int) }) 条摘要："
+                + merged.map { "第 \($0["round"]!) 轮（\(($0["renewal"] as! Bool) ? "新会话的第一轮" : "接着原会话")，\($0["step"]!)，\($0["summaries"]!) 条），之后视图 \($0["viewLines"]!) 行" }
+                .joined(separator: "；"),
+            "- 记忆视图行数（摘要条数）：" + snapshots.map { "\($0.label) \($0.lines)（\($0.summaries)）" }.joined(separator: " → "),
         ]
-        let merged = await merges()
-        lines.append("- 记忆合并 \(merged.count) 次（写了 \(merged.reduce(0) { $0 + ($1["summaries"] as! Int) }) 条摘要）"
-            + merged.map { "；第 \($0["round"]!) 轮（\(($0["renewal"] as! Bool) ? "换新的一轮" : "没换新")，\($0["step"]!)），之后视图 \($0["viewLines"]!) 行" }.joined())
-        lines.append("- 记忆视图行数（摘要条数）：" + snapshots.map { "\($0.label) \($0.lines)（\($0.summaries)）" }.joined(separator: " → "))
         eval.extra["merges"] = merged
         eval.extra["viewLines"] = snapshots.map { ["after": $0.label, "lines": $0.lines, "summaries": $0.summaries] }
+        // 单列：他发消息触发冷换新、恰好有块要合的那一轮（问车位那一步的第一轮）
+        if let step = steps.first(where: { $0.label.contains("有块要合") }), let round = self.rounds(step).first, let index = all.firstIndex(where: { $0.id == round.id }) {
+            let used = cost([index]), took = round.finishedAt.map { $0.timeIntervalSince(round.startedAt) } ?? 0
+            let summaries = merged.first { $0["round"] as? Int == index }?["summaries"] as? Int ?? 0
+            lines.append("- 冷换新且有块要合的那一轮（第 \(index) 轮）：用时 \(seconds(took))，\(CueEval.opensSession(round) ? "新会话的第一轮" : "接着原会话")，写了 \(summaries) 条摘要；\(cells(used))")
+            eval.extra["rounds"] = [[
+                "label": "冷换新且有块要合", "seconds": took, "renewal": CueEval.opensSession(round), "summaries": summaries,
+                "input": used.input, "cacheRead": used.cacheRead, "cacheWrite": used.cacheWrite, "output": used.output, "cost": used.cost,
+            ]]
+        }
         lines += notes.map { "- \($0)" }
         lines += ["", "| 步 | 叫醒的事 | 轮数 | 工具调用 |", "| --- | --- | --- | --- |"]
         for (index, step) in steps.enumerated() {

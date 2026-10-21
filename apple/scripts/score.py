@@ -38,6 +38,10 @@ METRICS = [
     ("每轮用时中位 s", lambda m: statistics.median(m["roundSeconds"]) if m["roundSeconds"] else 0),
 ]
 
+# 场景单列的那一轮（score.json 的 extra.rounds）：(行名, 键)
+SINGLED = [("用时 s", "seconds"), ("费用 $", "cost"), ("输入 token", "input"), ("缓存读 token", "cacheRead"), ("缓存写 token", "cacheWrite"),
+           ("输出 token", "output"), ("写的摘要条数", "summaries"), ("新会话的第一轮（1 是）", "renewal")]
+
 
 def load(run: Path) -> dict:
     """一遍目录里各套的场景：{套: [score…]}"""
@@ -127,6 +131,15 @@ def suite_report(suite: str, groups: list, names: list, runs: dict) -> list:
         values = {n: get(totals[n]) for n in present}
         digits = 4 if name.startswith("费用") else 2
         lines.append(f"| {name} | " + row(values, lambda n: fmt(values[n], digits), digits) + " |")
+
+    singled = sorted({r["label"] for n in present for sc in runs[n][suite] for r in sc.get("extra", {}).get("rounds", [])})
+    for label in singled:
+        picked = {n: next((r for sc in runs[n][suite] for r in sc.get("extra", {}).get("rounds", []) if r["label"] == label), None) for n in present}
+        lines += ["", f"### 单列的轮：{label}", "", "| 指标 | " + " | ".join(head) + " |", "| --- |" + " --- |" * len(head)]
+        for name, key in SINGLED:
+            values = {n: float(picked[n][key]) if picked[n] else 0.0 for n in present}
+            digits = 4 if key == "cost" else 2
+            lines.append(f"| {name} | " + row(values, lambda n: fmt(values[n], digits) if picked[n] else "—", digits) + " |")
 
     keys = sorted({k for n in present for k in per[n]})
 

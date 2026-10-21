@@ -112,6 +112,9 @@ final class CueEval {
 
     var round: CueRound? { rig.rounds.first { $0.startedAt >= start } }
 
+    /// 这一轮是不是新会话的第一轮：发给大脑的带着视图（新会话从记忆视图与对话视图接上，刚启用那一轮也是）
+    static func opensSession(_ round: CueRound) -> Bool { round.sent.contains { $0.contains("<view>") || $0.contains("<memory>") } }
+
     /// 场景到此的每一轮（含预热），从早到晚
     var rounds: [CueRound] {
         for round in rig.rounds { archive[round.id] = round }
