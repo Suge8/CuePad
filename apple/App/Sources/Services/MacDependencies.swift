@@ -53,7 +53,8 @@ struct MacDependencies {
                 if let agentHome { return ExecutableLocator(searchDirectories: [agentHome.appending(path: ".local/bin")]) }
                 return await .system
             },
-            cuepad: commandLineTool.helper, isolated: location.isIsolated))
+            cuepad: commandLineTool.helper, isolated: location.isIsolated,
+            legacyPiExtensionInUse: { await !pi.allRun(extensionVersion: PiExtensionBundle.version) }))
         let hostID = (location.isIsolated ? DebugHooks.hostID : nil) ?? HostIdentity.current()
         return MacDependencies(
             pi: pi,

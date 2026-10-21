@@ -31,7 +31,7 @@ STATES = [{"kind": "thinking"}, {"kind": "tool", "tool": "bash", "tools": ["bash
 
 
 def extension_version():
-    source = open(f"{APPLE}/CuePadKit/Sources/CuePi/Extension/cuepad-bridge.ts").read()
+    source = open(f"{APPLE}/CuePadKit/Sources/CuePi/Extension/cuepad-bridge/index.ts").read()
     return int(re.search(r"const EXTENSION_VERSION = (\d+);", source).group(1)), int(re.search(r"const PROTOCOL_VERSION = (\d+);", source).group(1))
 
 

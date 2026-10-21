@@ -35,10 +35,10 @@ private struct PiTypes {
 struct ExtensionTypesTests {
     @Test func bridgeTypechecksAgainstInstalledPi() async throws {
         let pi = try #require(PiTypes())
-        let bridge = URL(filePath: #filePath).deletingLastPathComponent().appending(path: "../../Sources/CuePi/Extension/cuepad-bridge.ts").standardized
+        let bridge = URL(filePath: #filePath).deletingLastPathComponent().appending(path: "../../Sources/CuePi/Extension/cuepad-bridge/index.ts").standardized
         let config: [String: Any] = [
             "compilerOptions": [
-                "target": "ES2023", "module": "NodeNext", "strict": true, "noEmit": true, "skipLibCheck": true,
+                "target": "ES2023", "module": "NodeNext", "strict": true, "noEmit": true, "skipLibCheck": true, "allowImportingTsExtensions": true,
                 "types": ["node"], "typeRoots": [pi.nodeTypes.path],
                 "paths": ["@earendil-works/pi-coding-agent": [pi.packageRoot.appending(path: "dist/index.d.ts").path]],
             ],

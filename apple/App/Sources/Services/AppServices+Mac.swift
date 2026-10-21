@@ -15,6 +15,7 @@ extension AppServices {
         register(hotkey)
         if !location.isIsolated { diagnostics.start() }
         let piChanges = pi.changes() // 先订阅再启动桥与各家的接入：启动时发现的会话不能漏
+        let legacyPiChanges = pi.changes()
         // 关掉 OpenCode 的开关：CuePad 拉起的服务一并停掉（本来就在跑的不动）
         agents.uninstalled = { [weak self] kind in
             guard kind == .opencode, let openCode = self?.runtimes[.opencode] as? OpenCodeRuntime else { return }
@@ -40,6 +41,9 @@ extension AppServices {
         follow(reporting: { .syncUnavailable("远程投送执行器没能启动：\($0)") }) {
             await self.refreshAgentIntegrations()
             try await self.executor.start()
+        }
+        follow(reporting: { .piBridgeUnavailable("旧版 Pi 扩展文件没能删掉：\($0)") }) {
+            try await self.agents.retireLegacyPiExtension(following: legacyPiChanges)
         }
         follow(reporting: { .syncUnavailable("目录绑定没能同步给手机：\($0)") }) { try await self.startDirectoryBindings() }
         follow(reporting: { .syncUnavailable("这台 Mac 在线的记录没能写下：\($0)") }) { [presence, wakeNotifications] in

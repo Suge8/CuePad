@@ -10,7 +10,7 @@ here = os.path.dirname(os.path.abspath(__file__))
 kit = os.path.join(here, "..", "CuePadKit")
 pi = os.path.expanduser("~/.local/bin/pi")
 os.makedirs(os.path.join(agent, "extensions"), exist_ok=True)
-shutil.copy(os.path.join(kit, "Sources/CuePi/Extension/cuepad-bridge.ts"), os.path.join(agent, "extensions"))
+shutil.copytree(os.path.join(kit, "Sources/CuePi/Extension/cuepad-bridge"), os.path.join(agent, "extensions/cuepad-bridge"), dirs_exist_ok=True)
 os.makedirs(sock, mode=0o700, exist_ok=True); os.chmod(sock, 0o700)
 env = {k: v for k, v in os.environ.items() if not k.startswith(("HERDR", "TMUX"))}
 env.update(PI_CODING_AGENT_DIR=agent, CUEPAD_PI_SOCKET_DIR=sock)

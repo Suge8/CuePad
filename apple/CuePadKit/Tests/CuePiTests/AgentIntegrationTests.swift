@@ -15,7 +15,7 @@ struct AgentIntegrationTests {
         ["CLAUDE_CONFIG_DIR": root.appending(path: "claude").path, "CODEX_HOME": root.appending(path: "codex").path,
          "XDG_CONFIG_HOME": root.appending(path: "xdg").path]
     }
-    var extensionFile: URL { paths.extensionsDirectory.appending(path: "cuepad-bridge.ts") }
+    var extensionFile: URL { paths.extensionsDirectory.appending(path: "cuepad-bridge/index.ts") }
 
     /// 各家文档里个人技能的位置（Pi 的目录由 `PiPaths` 定）
     func skillFile(_ kind: AgentKind) -> URL {
