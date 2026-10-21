@@ -216,12 +216,17 @@ private final class Days: EvalScript, Playable {
             lines.append("- \(label)（第 \(index) 轮，\(step)）：用时 \(seconds(took))，\(CueEval.opensSession(round) ? "新会话的第一轮" : "接着原会话")，写了 \(summaries) 条摘要；\(cells(used))")
             singled.append(used.json.merging(["label": label, "seconds": took, "renewal": CueEval.opensSession(round), "summaries": summaries]) { $1 })
         }
-        // 后台做梦时：单列补记之后的第一次做梦，从补记到这次的摘要写完（没写就到进程收掉）用了多久、花了多少
-        if let noted = notedAt, let dream = dreams.first(where: { $0.started >= noted }) {
-            let written = ((try? await rig.store.cueMemory().summaries) ?? []).filter { dream.contains($0.createdAt) }
-            let took = (written.map(\.createdAt).max() ?? dream.finished).timeIntervalSince(noted)
-            lines.append("- 补记后那次后台做梦：补记后 \(seconds(dream.started.timeIntervalSince(noted))) 起，到摘要写完 \(seconds(took))，写了 \(written.count) 条摘要；\(cells(dream.usage))")
-            singled.append(dream.usage.json.merging(["label": "补记后那次后台做梦", "seconds": took, "summaries": written.count]) { $1 })
+        // 后台做梦时：单列补记引起的做梦（补记之后、他下一次开口之前起的；补记一条条写，一次没合完的排着接着合），
+        // 从补记到这些做梦的摘要写完（没写就到进程收掉）用了多久、一共花了多少
+        if let noted = notedAt {
+            let asked = steps.compactMap(\.window?.lowerBound).first { $0 >= noted } ?? .distantFuture
+            let after = dreams.filter { $0.started >= noted && $0.started < asked }
+            if let last = after.last {
+                let written = ((try? await rig.store.cueMemory().summaries) ?? []).filter { summary in after.contains { $0.contains(summary.createdAt) } }
+                let took = (written.map(\.createdAt).max() ?? last.finished).timeIntervalSince(noted), used = after.map(\.usage).reduce(BrainUsage(), +)
+                lines.append("- 补记后的后台做梦：\(after.count) 次，到摘要写完 \(seconds(took))，写了 \(written.count) 条摘要；\(cells(used))")
+                singled.append(used.json.merging(["label": "补记后的后台做梦", "seconds": took, "summaries": written.count, "dreams": after.count]) { $1 })
+            }
         }
         eval.extra["rounds"] = singled
         eval.report = lines + stepTable()

@@ -54,7 +54,8 @@ DREAM_METRICS = [
 
 # 场景单列的那一轮（score.json 的 extra.rounds）：(行名, 键)
 SINGLED = [("用时 s", "seconds"), ("费用 $", "cost"), ("输入 token", "input"), ("缓存读 token", "cacheRead"), ("缓存写 token", "cacheWrite"),
-           ("输出 token", "output"), ("写的摘要条数", "summaries"), ("新会话的第一轮（1 是）", "renewal")]
+           ("输出 token", "output"), ("写的摘要条数", "summaries"), ("新会话的第一轮（1 是）", "renewal"),
+           ("做梦次数", "dreams")]
 
 
 def load(run: Path) -> dict:
@@ -162,7 +163,9 @@ def suite_report(suite: str, groups: list, runs: dict) -> list:
         picked = {n: next((r for sc in runs[n][suite] for r in sc.get("extra", {}).get("rounds", []) if r["label"] == label), None) for n in present}
         lines += ["", f"### 单列的轮：{label}", "", "| 指标 | " + " | ".join(head) + " |", "| --- |" + " --- |" * len(head)]
         for name, key in SINGLED:
-            values = {n: float(picked[n][key]) if picked[n] else 0.0 for n in present}
+            if not any(r and key in r for r in picked.values()):
+                continue
+            values = {n: float(picked[n].get(key, 0)) if picked[n] else 0.0 for n in present}
             digits = 4 if key == "cost" else 2
             lines.append(f"| {name} | " + row(values, lambda n: fmt(values[n], digits) if picked[n] else "—", digits) + " |")
 

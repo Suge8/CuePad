@@ -129,7 +129,7 @@ TEST_RUNNER_CUEPAD_CUE_EVAL=1 TEST_RUNNER_CUEPAD_CUE_EVAL_OUT=/tmp/cue-eval/afte
 TEST_RUNNER_CUEPAD_CUE_EVAL=1 TEST_RUNNER_CUEPAD_CUE_EVAL_OUT=/tmp/cue-eval/long TEST_RUNNER_CUEPAD_CUE_EVAL_RUNS=2 CUEPAD_TEST_TIME_LIMIT=3600 \
   apple/scripts/xc.sh test mac -parallel-testing-enabled YES -only-testing:CuePadTests/CueEvalLongTests
 ```
-- 多日记忆（`CueEvalDaysTests`，十分钟左右）单独跑：预置两周历史（对话一千五百多条、九十多行记忆），等 Cue 静下来（没有在跑的轮、再静 5 秒）再问起不同年纪埋下的事；后段补记 10 条记忆让视图超预算，他再发消息触发冷换新（问刚补记的车位）。单列补记后第一次换新那一轮，和合并：在 Cue 的轮里时是那次换新起第一次写摘要的那一轮（同一轮只列一行），在后台时是补记后那次做梦（补记到摘要写完）。缓存时长缩到 20 秒、插几段静止，看冷醒来开没开新会话（新进程或 Pi 的 new_session）。`-only-testing:CuePadTests/CueEvalDaysTests`，`CUEPAD_TEST_TIME_LIMIT=1700`。
+- 多日记忆（`CueEvalDaysTests`，十分钟左右）单独跑：预置两周历史（对话一千五百多条、九十多行记忆），等 Cue 静下来（没有在跑的轮、再静 5 秒）再问起不同年纪埋下的事；后段补记 10 条记忆让视图超预算，他再发消息触发冷换新（问刚补记的车位）。单列补记后第一次换新那一轮，和合并：在 Cue 的轮里时是那次换新起第一次写摘要的那一轮（同一轮只列一行），在后台时是补记后他开口前的做梦。缓存时长缩到 20 秒、插几段静止，看冷醒来开没开新会话（新进程或 Pi 的 new_session）。`-only-testing:CuePadTests/CueEvalDaysTests`，`CUEPAD_TEST_TIME_LIMIT=1700`。
 
 ### 成绩单
 
