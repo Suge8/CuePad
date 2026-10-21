@@ -15,7 +15,8 @@ import Testing
 /// - Pi 用 `ANTHROPIC_OAUTH_TOKEN`，从 ~/.pi/agent/auth.json 的 anthropic.access 只读地取。不拷 auth.json、不替它刷新：
 ///   刷新会用掉一次性的刷新令牌，把用户挤下线；令牌过期就起不来，等他自己的 Pi 续上。`PI_CODING_AGENT_DIR` 在临时目录。
 /// 开销从评测这边取：外壳把大脑的 stdout 另存一份到 `usage` 目录（每个大脑进程一个文件，`BrainUsage` 读），
-/// 用 bash 的进程替换接 tee 再 exec，大脑仍是外壳这个进程，退出码与流都不变。
+/// 用 bash 的进程替换接 tee 再 exec，大脑仍是外壳这个进程，退出码与流都不变。后台整理记忆的一次性大脑（做梦）同走这个外壳，
+/// 认法是它的工具服务带 `--dream`（Pi 在环境变量 CUEPAD_CUE_MCP 里，Claude Code 在 --mcp-config 的参数里），输出另存到 `usage/dream`。
 struct EvalBrain {
     let runtime: AgentKind
     let model: String
@@ -103,7 +104,11 @@ struct EvalBrain {
             for name in $(env | sed -nE 's/^((ANTHROPIC|XDG)_[A-Za-z0-9_]*)=.*/\1/p'); do unset "$name"; done
             \#(login)
             export HOME='\#(home.path)'
-            exec > >(exec tee '\#(usage.path)'/"$(date +%s)-$$.jsonl")
+            out='\#(usage.path)'
+            [[ ${CUEPAD_CUE_MCP:-} == *--dream* ]] && out='\#(BrainUsage.dreamDirectory(in: root).path)'
+            previous=; for arg in "$@"; do [[ $previous == --mcp-config && $arg == *--dream* ]] && out='\#(BrainUsage.dreamDirectory(in: root).path)'; previous=$arg; done
+            mkdir -p "$out"
+            exec > >(exec tee "$out/$(date +%s)-$$.jsonl")
             exec '\#(executable.path)' "$@"\#(extra)
             """#.write(to: script, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)

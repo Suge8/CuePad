@@ -93,7 +93,9 @@ class EvalScript {
         for (id, fake) in extensions where id.hasPrefix("new-") && !sessions.contains(where: { $0.id == id }) {
             guard let leaf = try await rig.store.tasks(boundTo: id).first else { continue }
             let top = leaf.parent ?? leaf.task
-            guard "\(top.body)\n\(leaf.task.body)".contains(topic) else { continue }
+            // 新开在原来那件上的（那件已结束、照原任务另开新会话）新交代不在正文里，在 Cue 随后送进来的话里
+            let said = fake.commands.compactMap { $0.json["text"] as? String }
+            guard ([top.body, leaf.task.body] + said).joined(separator: "\n").contains(topic) else { continue }
             fake.setState(["kind": "thinking"])  // 开场白在接手前就到了：像真会话那样在干活
             return ScriptedSession(session: fake, task: top)
         }

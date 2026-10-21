@@ -54,10 +54,6 @@ extension CueTools {
       guard at > Date() else { throw Failure("提醒时刻已经过了：\(raw)") }
       let (_, index) = try await store.noteCueLine(try args.required("text"), source: .cue, remindAt: at)
       return .ok("记下了 #\(index)，\(iso(at)) 叫醒你。")
-    case "merge":
-      guard let lo = args.int("lo"), let hi = args.int("hi") else { throw Failure("merge 要给 lo 与 hi（同待合并里的 #lo-hi，hi 含在内）") }
-      try await store.setCueSummary(lo: lo, hi: hi + 1, text: try args.required("text"))
-      return .ok("#\(lo)-\(hi) 合成了一行。")
     case "zoom":
       guard let lo = args.int("lo") else { throw Failure("zoom 要给 lo（与 hi，同记忆视图里的 #lo-hi）") }
       guard let text = CueMemoryView(try await store.cueMemory()).zoom(lo: lo, hi: args.int("hi") ?? lo) else {
@@ -65,8 +61,20 @@ extension CueTools {
       }
       return .ok(text)
     case "allow": return try await allow(args)
-    case let other: throw Failure("memory 没有 \(other)：可用 note / recall / zoom / forget / pin / remind / merge / allow")
+    case let other: throw Failure("memory 没有 \(other)：可用 note / recall / zoom / forget / pin / remind / allow")
     }
+  }
+
+  /// 整理记忆的大脑写回一块的摘要：只认此刻待合并的块（`CueMemoryView.merges`），#lo-hi 照块头写（hi 含在内）。
+  func merge(_ args: Args) async throws -> Result {
+    guard let lo = args.int("lo"), let hi = args.int("hi") else { throw Failure("要给 lo 与 hi：照块头的 #lo-hi 写") }
+    let pending = CueMemoryView(try await store.cueMemory()).merges
+    guard pending.contains(where: { $0.lo == lo && $0.hi == hi + 1 }) else {
+      let blocks = pending.map { "#\($0.lo)-\($0.hi - 1)" }.joined(separator: "、")
+      throw Failure("#\(lo)-\(hi) 不是待合并的块：照块头写。" + (blocks.isEmpty ? "已经没有待合并的了。" : "待合并的有 \(blocks)。"))
+    }
+    try await store.setCueSummary(lo: lo, hi: hi + 1, text: try args.required("text"))
+    return .ok("#\(lo)-\(hi) 合成了一行。")
   }
 
   /// 改允许清单（`CueStore.setCueAllow`）：这类事在一个项目或所有项目里以后不用问，或去掉。

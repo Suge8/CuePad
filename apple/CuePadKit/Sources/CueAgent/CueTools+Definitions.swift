@@ -3,7 +3,24 @@ import CueText
 import Foundation
 
 extension CueTools {
-  static var definitions: [[String: Any]] {
+  /// 给这一组用的工具（`Toolset`）。
+  static func definitions(_ toolset: Toolset) -> [[String: Any]] {
+    switch toolset {
+    case .cue: definitions
+    case .dream: [merge]
+    }
+  }
+
+  private static var merge: [String: Any] {
+    [
+      "name": "merge",
+      "description": "把一块待合并的记忆写成一行摘要（≤\(CueMemoryLine.maxBytes) 字节）：lo、hi 照块头的 #lo-hi 写（hi 含在内）。",
+      "inputSchema": schema(["lo": ["type": "integer"], "hi": ["type": "integer"], "text": string], required: ["lo", "hi", "text"]),
+      "annotations": ["readOnlyHint": false, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false],
+    ]
+  }
+
+  private static var definitions: [[String: Any]] {
     [
       [
         "name": "task",
@@ -36,7 +53,7 @@ extension CueTools {
           对用户说一句（Cue 页里你的一行）。ask 是请他允许、等他回答（进"等你"），只能是这几类：\(CuePrompt.asks)。
           带 ask 必写 doing：一句说清要他定什么，动词开头写清对象，一行、≤\(CueAsking.phraseLimit) 字（如"推送 scheduler 的重连修复"；几个方案里挑时写你推荐的那个，如"按方案 1 决定单改提问卡"）；ask=rule 还必写 rule：依据他的哪条规矩，照他的原话（如"改数据库结构前先问我"）。
           卡片、摘要与通知只显示"可以<doing>吗？"、rule 那类的这条规矩、show 的图与选项，不显示 text。
-          show 是回答这个问题必须看的图，至多 \(CueShot.limit) 张，按要他看的先后：file 写 task peek 里"发到手机的"那一份的 id，look 写这张看什么（一行、≤\(CueShot.lookLimit) 字，如"方案 1：大按钮占满一行"）。几个方案就每个方案一张、同一台设备同一种样子，推荐的在前；不用看图就能答的不带。只有 show 里的图上卡片。
+          show 是回答这个问题必须看的图，至多 \(CueShot.limit) 张，按要他看的先后：file 写 task peek 里"发到手机的"那一份的 id，look 写这张看什么（一行、≤\(CueShot.lookLimit) 字，如"方案 1：大按钮占满一行"）。几个方案就只放方案、每个一张（不带原样作对比）、同一台设备同一种样子，推荐的在前；不用看图就能答的不带。只有 show 里的图上卡片。
           text 先一句要做的动作，再一句依据（rule 那类写哪条规矩）和不做会怎样；不写 push、rule 这类分类名。
           选项由 CuePad 给（如推送：\(CueAsk.push.choices(in: "项目名").joined(separator: " / "))；不带 task 时第二项是"\(CueAsk.push.always ?? "")"；rule 只有第一项），他选第二项就照字面记进允许清单。卡上只能选：他在 Cue 页一开口，开着的卡就当场收起，算他直接说了；他那句不是在答它，restore 放回。允许清单里有的（task 所在的项目或所有项目）会被拒：直接做。
           urgent 推送到手机；task 关联一个任务（按它的项目查允许清单）；withdraw 写"等你"里一条的 id，撤回它（你不用再问了，或他在会话里说了怎么办），可同时带 text 说明；restore 写他开口收起的那条的 id，放回"等你"。
@@ -55,12 +72,12 @@ extension CueTools {
           你的长期记忆，一行一条（≤\(CueMemoryLine.maxBytes) 字节），序号就是身份。note{text,pin?} 记一条，pin 一直记着（不 pin 的旧行会被并成摘要）；
           recall{query} 只读：全文找记忆、对话、任务，与你管过的会话里 Agent 的回复原话（带会话名与短 id，可接着 peek）；词之间空格隔开，命中任一个就算，命中的词越少见、越多越靠前（太常见的词不算），列不下的报条数；
           zoom{lo,hi?} 只读：展开记忆视图里的摘要 #lo-hi，给它的两半（摘要或原行）；只给 lo 是那一行；
-          forget{line}；pin{line,pinned}；remind{text,at} 到点叫醒你（ISO 8601 或 yyyy-MM-dd HH:mm）；merge{lo,hi,text} 把 <merge> 里待合并的块 #lo-hi 写成一行摘要；
+          forget{line}；pin{line,pinned}；remind{text,at} 到点叫醒你（ISO 8601 或 yyyy-MM-dd HH:mm）；
           allow{ask,project?,allowed?} 改允许清单：ask 只能是 \(Self.allowable)，不带 project 是所有项目，allowed:false 去掉。
           """,
         "inputSchema": schema(
           [
-            "action": ["type": "string", "enum": ["note", "recall", "zoom", "forget", "pin", "remind", "merge", "allow"]],
+            "action": ["type": "string", "enum": ["note", "recall", "zoom", "forget", "pin", "remind", "allow"]],
             "text": string, "pin": ["type": "boolean"], "query": string, "line": ["type": ["string", "integer"]],
             "pinned": ["type": "boolean"], "at": string, "lo": ["type": "integer"], "hi": ["type": "integer"],
             "ask": ["type": "string", "enum": CueAsk.allCases.filter { $0.always != nil }.map(\.rawValue)], "project": string,

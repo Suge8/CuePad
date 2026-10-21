@@ -96,6 +96,16 @@ public enum CuePrompt {
   /// 要先问的几类事（`CueAsk`，括号里照抄进 tell 的 ask）：系统提示与 tell 的说明共用这一种写法。
   static var asks: String { CueAsk.allCases.map { "\($0.definition)（\($0.rawValue)）" }.joined(separator: "、") }
 
+  /// 后台整理记忆的大脑的系统提示（`CueKeeper` 起的一次性大脑，工具只有 merge）：输入是待合并的块（`CueMemoryView.mergeText`）。
+  public static func dream(runtime: AgentKind) -> String {
+    """
+    你整理 CuePad 里 Cue 的长期记忆。输入是几块待合并的记忆，每块以 #lo-hi 开头，下面是它的原文（#序号 一行一条，或两半各自的摘要）。
+    把每一块合成一行摘要（至多 \(CueMemoryLine.maxBytes) 字节）：留下以后用得上的事实、偏好、约定与数字，丢掉寒暄与已经过时的；只写原文里有的，不编造；同一件事改过的以后说的为准。
+    每块调一次 \(CueMCPServer.toolName("merge", on: runtime))，lo、hi 照块头的 #lo-hi 写。大块里写着"上面先合的这一块写成的那一行"的，用你给那一块写的摘要。
+    全部写完就结束，不用说话。
+    """
+  }
+
   private static func tools(_ runtime: AgentKind) -> String {
     [("task", "任务与会话"), ("tell", "对他说话"), ("memory", "记忆")].map { "\(CueMCPServer.toolName($0.0, on: runtime))（\($0.1)）" }
       .joined(separator: "、")

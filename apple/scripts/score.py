@@ -5,7 +5,7 @@
   score.py RUN [RUN…] [--vs RUN [RUN…]]   一组是改前（或基线），--vs 后是改后；每个 RUN 是一遍的输出目录。
                                             写最后一个 RUN/score.md 并打印路径
 
-写法同 lme.py 的报告：每一遍一列；两组时多出两组均值与差（改后 − 改前）、组内差（同一设置几遍之间最大减最小，看波动）与翻转。
+写法同 bench.py 的报告：每一遍一列；两组时多出两组均值与差（改后 − 改前）、组内差（同一设置几遍之间最大减最小，看波动）与翻转。
 """
 import argparse
 import json
@@ -34,13 +34,28 @@ METRICS = [
     ("缓存读 token", lambda m: m["usage"]["cacheRead"]),
     ("缓存写 token", lambda m: m["usage"]["cacheWrite"]),
     ("输出 token", lambda m: m["usage"]["output"]),
-    ("费用 $", lambda m: m["usage"]["cost"]),
+    ("费用 $（含后台合并）", lambda m: m["usage"]["cost"] + m["dream"]["usage"]["cost"]),
     ("每轮用时中位 s", lambda m: statistics.median(m["roundSeconds"]) if m["roundSeconds"] else 0),
+]
+
+# 后台合并（做梦）的几行：只在有一遍记了它时列（旧的 score.json 没有这几项）
+DREAM_METRICS = [
+    ("后台合并次数", lambda m: m["dream"]["count"]),
+    ("　用时 s", lambda m: m["dream"]["seconds"]),
+    ("　输入 token", lambda m: m["dream"]["usage"]["input"]),
+    ("　缓存读 token", lambda m: m["dream"]["usage"]["cacheRead"]),
+    ("　缓存写 token", lambda m: m["dream"]["usage"]["cacheWrite"]),
+    ("　输出 token", lambda m: m["dream"]["usage"]["output"]),
+    ("　费用 $", lambda m: m["dream"]["usage"]["cost"]),
+    ("Cue 的轮里的 merge 调用", lambda m: m["merges"]),
+    ("摘要：后台写的", lambda m: m["summaries"]["background"]),
+    ("摘要：Cue 的轮里写的", lambda m: m["summaries"]["rounds"]),
 ]
 
 # 场景单列的那一轮（score.json 的 extra.rounds）：(行名, 键)
 SINGLED = [("用时 s", "seconds"), ("费用 $", "cost"), ("输入 token", "input"), ("缓存读 token", "cacheRead"), ("缓存写 token", "cacheWrite"),
-           ("输出 token", "output"), ("写的摘要条数", "summaries"), ("新会话的第一轮（1 是）", "renewal")]
+           ("输出 token", "output"), ("写的摘要条数", "summaries"), ("新会话的第一轮（1 是）", "renewal"),
+           ("做梦次数", "dreams")]
 
 
 def load(run: Path) -> dict:
@@ -56,7 +71,9 @@ def total(scores: list) -> dict:
     """一遍里一套的合计（短场景是各场景相加；每轮用时放在一起取中位）"""
     out = {"wakes": 0, "calls": 0, "asks": 0, "overlong": 0, "renewals": 0, "roundSeconds": [],
            "failed": dict.fromkeys(REASONS, 0), "interrupts": dict.fromkeys(["tell", "urgent", "leave", "other", "total"], 0),
-           "usage": dict.fromkeys(["input", "cacheRead", "cacheWrite", "output", "cost"], 0)}
+           "usage": dict.fromkeys(["input", "cacheRead", "cacheWrite", "output", "cost"], 0), "merges": 0,
+           "dream": {"count": 0, "seconds": 0, "usage": dict.fromkeys(["input", "cacheRead", "cacheWrite", "output", "cost"], 0)},
+           "summaries": {"background": 0, "rounds": 0}, "dreamed": False}
     for s in scores:
         m = s["metrics"]
         for key in ["wakes", "calls", "asks", "overlong", "renewals"]:
@@ -65,6 +82,15 @@ def total(scores: list) -> dict:
         for group in ["failed", "interrupts", "usage"]:
             for key, value in m[group].items():
                 out[group][key] = out[group].get(key, 0) + value
+        if "dream" in m:
+            out["dreamed"] = True
+            out["merges"] += m["merges"]
+            out["dream"]["count"] += m["dream"]["count"]
+            out["dream"]["seconds"] += m["dream"]["seconds"]
+            for key, value in m["dream"]["usage"].items():
+                out["dream"]["usage"][key] += value
+            for key, value in m["summaries"].items():
+                out["summaries"][key] += value
     return out
 
 
@@ -108,8 +134,8 @@ def suite_report(suite: str, groups: list, runs: dict) -> list:
 
     def row(values: dict, show, digits=2) -> str:
         cells = [show(n) for n in present]
-        means = [float(mean([values[n] for n in g])) for g in groups]
-        spreads = [float(spread([values[n] for n in g])) for g in groups]
+        means = [float(mean([values[n] for n in g if values[n] is not None])) for g in groups]
+        spreads = [float(spread([values[n] for n in g if values[n] is not None])) for g in groups]
         cells.append(fmt(means[0], digits))
         if two:
             delta = means[1] - means[0]
@@ -127,17 +153,21 @@ def suite_report(suite: str, groups: list, runs: dict) -> list:
 
     lines += ["", "### 指标（一遍的合计）", "", "| 指标 | " + " | ".join(head) + " |", "| --- |" + " --- |" * len(head)]
     totals = {n: total(runs[n][suite]) for n in present}
-    for name, get in METRICS:
-        values = {n: get(totals[n]) for n in present}
-        digits = 4 if name.startswith("费用") else 2
-        lines.append(f"| {name} | " + row(values, lambda n: fmt(values[n], digits), digits) + " |")
+    dreamed = any("dream" in s["metrics"] for n in present for s in runs[n][suite])
+    for name, get in METRICS + (DREAM_METRICS if dreamed else []):
+        # 没记后台合并的旧 score.json：这几行记"—"，不当 0 算进均值
+        values = {n: get(totals[n]) if (name, get) in METRICS or totals[n]["dreamed"] else None for n in present}
+        digits = 4 if "费用" in name else 2
+        lines.append(f"| {name} | " + row(values, lambda n: "—" if values[n] is None else fmt(values[n], digits), digits) + " |")
 
     singled = sorted({r["label"] for n in present for sc in runs[n][suite] for r in sc.get("extra", {}).get("rounds", [])})
     for label in singled:
         picked = {n: next((r for sc in runs[n][suite] for r in sc.get("extra", {}).get("rounds", []) if r["label"] == label), None) for n in present}
         lines += ["", f"### 单列的轮：{label}", "", "| 指标 | " + " | ".join(head) + " |", "| --- |" + " --- |" * len(head)]
         for name, key in SINGLED:
-            values = {n: float(picked[n][key]) if picked[n] else 0.0 for n in present}
+            if not any(r and key in r for r in picked.values()):
+                continue
+            values = {n: float(picked[n].get(key, 0)) if picked[n] else 0.0 for n in present}
             digits = 4 if key == "cost" else 2
             lines.append(f"| {name} | " + row(values, lambda n: fmt(values[n], digits) if picked[n] else "—", digits) + " |")
 

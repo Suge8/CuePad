@@ -42,7 +42,7 @@ enum EvalSuite: String {
     case short = "短场景"
     case long = "长程"
     case days = "多日"
-    case lme = "LongMemEval"
+    case bench = "记忆基准"
 }
 
 /// 出错的工具调用按原因分：参数校验退回、对象找不到（含对上了好几个）、没有这个工具、其他（会话没送到、读的文件不在等）。
@@ -101,12 +101,22 @@ extension CueEval {
         var failed = Dictionary(uniqueKeysWithValues: CallFailure.allCases.map { ($0.rawValue, 0) })
         for call in calls where call.failed { failed[CallFailure(call.result ?? "").rawValue, default: 0] += 1 }
         let usage = (rig.brainDirectory.map(BrainUsage.rounds(in:)) ?? []).reduce(BrainUsage(), +)
+        // 合并在哪做：摘要的写入时刻落在某个做梦进程的起止里就是后台；Cue 的轮里的 merge 调用另数（后台做梦时应为 0）
+        let dreams = rig.brainDirectory.map(BrainUsage.dreams(in:)) ?? []
+        let summaries = ((try? await rig.store.cueMemory().summaries) ?? []).filter { $0.createdAt >= (rounds.first?.startedAt ?? .distantFuture) }
+        let background = summaries.count { summary in dreams.contains { $0.contains(summary.createdAt) } }
         let urgent = spoken.count { $0.args["urgent"] as? Bool == true }
         return [
             "wakes": counted.count, "calls": calls.count, "failed": failed, "asks": asks.count,
             "interrupts": ["tell": spoken.count, "urgent": urgent, "leave": leaves.count, "other": otherPushes.count, "total": spoken.count + leaves.count + otherPushes.count],
             "overlong": overlong, "renewals": renewals.count,
             "usage": usage.json,
+            "dream": [
+                "count": dreams.count, "seconds": dreams.reduce(0) { $0 + $1.finished.timeIntervalSince($1.started) },
+                "usage": dreams.map(\.usage).reduce(BrainUsage(), +).json,
+            ],
+            "merges": Self.calls(in: counted, "memory", ["merge"]).count,
+            "summaries": ["background": background, "rounds": summaries.count - background],
             "roundSeconds": counted.compactMap { round in round.finishedAt.map { $0.timeIntervalSince(round.startedAt) } },
         ]
     }
@@ -120,7 +130,7 @@ extension CueEval {
     /// `prompt` 是这一遍的系统提示：记下估算的 token（非 ASCII 每字算 1、ASCII 每 4 字符算 1；工具说明另算）。
     /// Pi 当大脑时另记模型请求带没带 Claude 订阅的计费标识（`EvalBrain` 的只读扩展记下的）。
     func writeScore(_ name: String, suite: EvalSuite, checks: [Check], failure: (any Error)?, prompt: String, to output: URL) async throws {
-        guard suite != .lme else { return }  // LongMemEval 自己判分（lme.py），它的目录里 .json 都是题
+        guard suite != .bench else { return }  // 记忆基准自己判分（bench.py），它的目录里 .json 都是题
         let wide = prompt.unicodeScalars.count { !$0.isASCII }, ascii = prompt.unicodeScalars.count { $0.isASCII }
         var score: [String: Any] = [
             "name": name, "suite": suite.rawValue, "brain": EvalBrain.current.label, "error": failure.map { "\($0)" } ?? NSNull(),
