@@ -9,7 +9,7 @@ import SwiftUI
 /// （`MenuButton`，每台下面写能当大脑的几家或为什么不能用），Mac 上点按是在这台运行、长按选别的。在这台 Mac 上启用打开接入面板
 /// （`SetupPanel`：先检测、接入这台的 Agent，一家都没装时给装法，同一下启用），别的 Mac 直接启用，没写成的原因就地写在按钮下面（`CueSettingsModel`）。
 /// 能不能启用读 `CueGate`：这台还没和 iCloud 对过时只写在等什么、没有按钮（对得久了整张换成"正在从 iCloud 同步"，`EmptyState.waitsForSync`）。
-/// 手机上还没有哪台 Mac 写下过自己时，说先到 Mac 上打开 CuePad，主动作是把 Mac 版的下载链接发出去（隔空投送到 Mac 上最快）。
+/// 手机上还没有哪台 Mac 写下过自己时，说先到 Mac 上打开 CuePad，主动作是把 Mac 版的下载链接（GitHub Releases，`CueSettings.macDownload`）发出去，隔空投送到 Mac 上最快。
 /// 没启用时下面的输入框发出去是记下灵感。Cue 运行在别的 Mac 上不写在这里：Mac 上写在输入框工具排的末尾（`CueComposer`）。
 struct CueWelcome: View {
     let intro: Bool

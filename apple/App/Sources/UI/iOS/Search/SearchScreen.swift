@@ -70,7 +70,7 @@ struct SearchScreen: View {
     }
 }
 
-/// 搜索框：玻璃胶囊（搜索页顶上）。在输入或有字时右端一个叉：清空并收起键盘。
+/// 搜索框：玻璃胶囊（搜索页顶上，在系统顶栏里，所以是 `GlassInk.solidInBar`）。在输入或有字时右端一个叉：清空并收起键盘。
 struct SearchCapsule: View {
     static let height: CGFloat = ControlMetrics.height
     let prompt: String
@@ -91,7 +91,7 @@ struct SearchCapsule: View {
             }
         }
         .padding(.horizontal, 14).frame(maxWidth: .infinity, minHeight: Self.height)
-        .glass(in: .capsule)
+        .glass(in: .capsule, ink: .solidInBar)
     }
 }
 #endif

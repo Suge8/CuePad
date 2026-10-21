@@ -169,7 +169,7 @@ nonisolated struct CueSettings: Equatable, Sendable {
     static let hostTitle = "在哪台 Mac 上运行"
     /// 手机上还没有哪台 Mac 写下过自己（`hosts` 为空）时 Cue 设置里那句；Cue 页上给的动作是发出 Mac 版的下载链接（`macDownload`）。
     static let noHost = "先在 Mac 上打开 CuePad"
-    static let macDownload = URL(string: "https://cue-pad.com")!
+    static let macDownload = URL(string: "https://github.com/Suge8/CuePad/releases/latest")!
     static let allowsTitle = "不用先问的事"
     static func allowsNote(_ name: String) -> String {
         "推送、删除这类收不回的事，\(name) 做之前会先问你；打开的那类在所有项目里直接做。在它的提问上选\u{201C}以后……不用问\u{201D}也记在这里。"
