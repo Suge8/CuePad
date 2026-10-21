@@ -30,9 +30,9 @@ extension CueTools {
       leaf = try await workingLeaf(ref)
     } else {
       guard let ref = args.string("session") else { throw Failure("要给 task 或 session") }
-      switch try await sessionOrLeaf(ref) {
+      switch try await sessionRef(ref) {
       case .session(let session): return (session.sessionID, nil, "会话「\(session.title)」", session.shortID)
-      case .leaf(let found): leaf = found
+      case .task(let card): leaf = try await store.workingLeaf(of: card.id)
       }
     }
     return (try await store.leafSession(leaf.id), leaf.id, "「\(leaf.heading)」的会话", leaf.id.shortID)

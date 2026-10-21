@@ -12,9 +12,9 @@ extension CueTools {
     case "peek":
       if let ref = args.string("task") { return try await peek(try await task(ref)) }
       if let ref = args.string("session") {
-        switch try await sessionOrLeaf(ref) {
+        switch try await sessionRef(ref) {
         case .session(let session): return try await peek(session)
-        case .leaf: return try await peek(try await task(ref))
+        case .task(let card): return try await peek(card)
         }
       }
       return try await board()
@@ -39,7 +39,7 @@ extension CueTools {
     if args.string("task") == nil, let ref = args.string("session") {
       // 给 session 是收掉会话，给 task 是做完任务：模型把任务编号填进 session 来 done 时，记录里原意都是做完那件任务（多是一个步骤），
       // 照收掉会话办就做错了事，所以这里不像 say、peek 那样认任务的编号
-      guard case .session(let session) = try await sessionOrLeaf(ref) else {
+      guard case .session(let session) = try await sessionRef(ref) else {
         throw Failure("「\(ref)」是任务的编号：做完任务给 task；收掉会话给 session 写会话的 id（peek 里有）")
       }
       let ended = try await store.endIdleSession(session.sessionID) != nil

@@ -61,6 +61,12 @@ public struct CueTools: Sendable {
 
   /// 任务：id、至少 4 位的 id 前缀，或标题（不分大小写，只在没删除的任务里找）。
   func task(_ ref: String) async throws -> Card {
+    guard let card = try await findTask(ref) else { throw Failure("找不到任务「\(ref.trimmingCharacters(in: .whitespaces))」：用 task peek 看看板上的 id") }
+    return card
+  }
+
+  /// 同 `task`，对不上为 nil；对上好几个照样报错（要多写几位，不是找不到）。
+  private func findTask(_ ref: String) async throws -> Card? {
     let key = ref.trimmingCharacters(in: .whitespaces)
     if let uuid = UUID(uuidString: key), let card = try await store.card(uuid), card.isTask, card.deletedAt == nil { return card }
     if key.count >= 4, key.allSatisfy({ $0.isHexDigit || $0 == "-" }) {
@@ -69,37 +75,36 @@ public struct CueTools: Sendable {
       if hits.count > 1 { throw Failure("前缀 \(key) 对上了 \(hits.count) 个任务：多写几位") }
     }
     let named = try await store.tasks(.todo, .inProgress, .done).flatMap(\.tasks).filter { $0.heading.caseInsensitiveCompare(key) == .orderedSame }
-    if named.count == 1 { return named[0] }
     if named.count > 1 { throw Failure("有 \(named.count) 个任务叫「\(key)」：用 id（peek 里有）") }
-    throw Failure("找不到任务「\(key)」：用 task peek 看看板上的 id")
+    return named.first
   }
 
-  /// 会话：会话 id 至少 4 位的前缀或会话名（`CueStore.sessions(matching:)`）；同名的几个里只有一个没结束就是它。
+  /// 会话：会话 id 至少 4 位的前缀或会话名（`CueStore.sessions(matching:)`）；同名的几个里只有一个没结束就是它。写的是任务时是它在做的叶子绑着的会话。
   func session(_ ref: String) async throws -> PiSessionState {
-    switch try await sessionOrLeaf(ref) {
+    switch try await sessionRef(ref) {
     case .session(let session): return session
-    case .leaf(let leaf):
-      let id = try await store.leafSession(leaf.id)
-      guard let session = try await store.sessions(matching: id).first else { throw Failure("找不到「\(leaf.heading)」的会话：用 task peek 看看") }
+    case .task(let card):
+      let id = try await store.leafSession(try await store.workingLeaf(of: card.id).id)
+      guard let session = try await store.sessions(matching: id).first else { throw Failure("找不到「\(card.heading)」的会话：用 task peek 看看") }
       return session
     }
   }
 
-  /// session 写的引用：对不上会话时也认任务的 id 前缀或标题，指那件任务在做的叶子（它绑着的会话）。
+  /// session 写的引用：对不上会话时也认任务的 id 前缀或标题。
   /// 信封与看板按任务列会话、只写任务的编号，"对会话说"时模型自然把它填进 session：两套编号在这里收成一个参数都认。
-  func sessionOrLeaf(_ ref: String) async throws -> SessionOrLeaf {
+  func sessionRef(_ ref: String) async throws -> SessionRef {
     let hits = try await store.sessions(matching: ref)
     let live = hits.filter { $0.state != .known(.ended) }
     if hits.count == 1 { return .session(hits[0]) }
     if live.count == 1 { return .session(live[0]) }
     if hits.count > 1 { throw Failure("「\(ref)」对上了 \(hits.count) 个会话：用会话 id（peek 里有）") }
-    guard let card = try? await task(ref) else { throw Failure("找不到会话或任务「\(ref)」：用 task peek 看 id") }
-    return .leaf(try await store.workingLeaf(of: card.id))
+    guard let card = try await findTask(ref) else { throw Failure("找不到会话或任务「\(ref)」：用 task peek 看 id") }
+    return .task(card)
   }
 
-  enum SessionOrLeaf {
+  enum SessionRef {
     case session(PiSessionState)
-    case leaf(Card)
+    case task(Card)
   }
 
   /// 任务此刻在做的叶子（给顶层任务时是它在做的那个步骤）。
@@ -107,6 +112,5 @@ public struct CueTools: Sendable {
     try await store.workingLeaf(of: try await task(ref).id)
   }
 
-  func id(_ id: UUID) -> String { id.uuidString.lowercased() }
   func iso(_ date: Date) -> String { date.formatted(.iso8601) }
 }
