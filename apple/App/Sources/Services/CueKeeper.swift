@@ -639,8 +639,7 @@ final class CueKeeper {
         }
     }
 
-    /// 设置里的大脑设置与在用的不同：大脑没在跑就直接按新设置起；在跑、空闲且只换了模型或强度，就地换（下一轮起生效）。
-    /// 要换大脑的在对账第 3 步，等这一轮做完、你的话交完。
+    /// 设置与在用的不同：没在跑就按新设置起；在跑、空闲且只换模型或强度就地换（下一轮起生效），换时又改了的接着换。
     private func follow(_ wanted: BrainSettings) async {
         guard let current = brainSettings, wanted != current else { return }
         switch phase {
@@ -651,8 +650,9 @@ final class CueKeeper {
                 try await shift.brain.configure(model: wanted.model, effort: wanted.effort)
                 brainSettings = wanted
                 Self.log.notice("Cue 就地换了模型或强度：\(Dotted(wanted.model ?? "默认", wanted.effort?.rawValue ?? "默认").visible, privacy: .public)")
+                if let profile = try? await setup.store.cueProfile() { await follow(BrainSettings(profile)) }
             } catch {
-                // 大脑不认：设置改回它在用的（设置跟着事实走，选择器上看到的就是在用的），告诉你一声。
+                // 大脑不认：设置改回在用的（选择器上看到的就是在用的），告诉你一声。
                 // 等回应时你又改了设置就不动：你后来的选择照常生效，下一次对账再去对上
                 var restored = wanted
                 (restored.model, restored.effort) = (current.model, current.effort)
