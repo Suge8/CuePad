@@ -17,7 +17,9 @@ struct MainWindow: View {
                 .toolbar { ToolbarItem { SidebarToggle() } }
                 .navigationSplitViewColumnWidth(min: 210, ideal: 256, max: 320)
         } detail: {
-            detail
+            SidebarMotion { detail }
+                .background { palette.desk.ignoresSafeArea() }
+                .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { workspace.pages.detailMoved(to: $0) }
         }
         .background { WindowPanels(workspace: workspace) }
         .background { TaskBubbleSlot() }
@@ -30,7 +32,6 @@ struct MainWindow: View {
 
     private var detail: some View {
         ZStack {
-            palette.desk.ignoresSafeArea()
             page
             EditorLayer().zIndex(1)
         }
@@ -72,6 +73,41 @@ struct MainWindow: View {
         ToolbarItem(placement: .primaryAction) { PageMenuSlot() }
             .sharedBackgroundVisibility(.hidden)
     }
+}
+
+/// 开合侧栏时详情区里的页（`MacPages.detailHold`）：动之前按动画结束时的位置与宽度排好一次，动画里不再跟着变。
+/// 侧栏这一栏浮在详情区上面，它的宽是详情区左边的安全区：动画的每一帧安全区都在变，页里的滚动区伸进安全区、跟着每帧变宽重排。
+/// 动的时候这一块不让安全区的左边（页从窗口左缘按终点摆），侧栏的玻璃滑过页面——展开时滑进空出来的那一截，收起时滑开、露出已经排好的页。
+/// 否决的方案：页按终点排好、再跟着侧栏的边逐帧挪（偏移动画）——逐帧挪位置与逐帧重排一样贵（开合十次 27G 对 10G 指令），见 docs/ui.md「Mac 上开合」。
+/// 单独一个视图读它：主窗口的视图体不读。
+private struct SidebarMotion<Content: View>: View {
+    @Environment(Workspace.self) private var workspace
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        let hold = workspace.pages.detailHold
+        HoldPlace(hold: hold) { content }
+            .ignoresSafeArea(.container, edges: hold == nil ? [] : .leading)
+    }
+}
+
+private struct HoldPlace: Layout {
+    let hold: MacPages.DetailHold?
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        proposal.replacingUnspecifiedDimensions()
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let origin = CGPoint(x: bounds.minX + (hold?.leading ?? 0), y: bounds.minY)
+        for subview in subviews {
+            subview.place(at: origin, anchor: .topLeading, proposal: ProposedViewSize(width: hold?.width ?? bounds.width, height: bounds.height))
+        }
+    }
+
+    // 不回答对齐查询：默认实现会递归问遍整页子树
+    func explicitAlignment(of guide: HorizontalAlignment, in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGFloat? { nil }
+    func explicitAlignment(of guide: VerticalAlignment, in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGFloat? { nil }
 }
 
 /// 本窗口的浮层与确认框（都经 `panel`）。单独一个视图读它们的开合：主窗口的视图体读了，开合的那一帧就要重算整个窗口、重新提交整条工具栏。

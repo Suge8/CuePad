@@ -18,9 +18,38 @@ final class MacPages {
     @ObservationIgnored private var trimTask: Task<Void, Never>?
     static let keptPages = 4
 
-    /// 侧栏开合一步到位：只改可见性，不包动画（分栏动画约 0.3 秒里每帧整窗重排、重算鼠标跟踪区，掉帧十几次）。
+    /// 开合侧栏的动画里详情区里的页摆在哪（`SidebarMotion`）：动画结束时的左缘与宽度；不在动时 nil。
+    private(set) var detailHold: DetailHold?
+    @ObservationIgnored private var detailFrame = CGRect.zero
+    /// 侧栏开着、不在动时详情区的左缘：展开后详情区从哪起（侧栏这一栏的宽另有内边距，不能拿它算）。还没见过侧栏开着时为 nil。
+    @ObservationIgnored private var openedMinX: CGFloat?
+    @ObservationIgnored private var motions = 0
+
+    /// 开合侧栏：分栏照常动画，详情区里的页在动之前按终点排好、摆到终点，动画里只有侧栏在滑（`SidebarMotion`）。
+    /// 跟着每帧的宽度重排时每帧主线程约 16ms、800ms 里掉帧十几次；这样每帧约 6ms。动画中途再按，按新的终点重新排一次。
     func toggleSidebar() {
-        sidebar = sidebar == .detailOnly ? .all : .detailOnly
+        let opening = sidebar == .detailOnly
+        let leading = opening ? openedMinX : 0
+        detailHold = leading.map { DetailHold(leading: $0, width: detailFrame.maxX - $0) }
+        motions += 1
+        let motion = motions
+        withAnimation(Motion.snappy) {
+            sidebar = opening ? .all : .detailOnly
+        } completion: { [weak self] in
+            guard let self, motion == motions else { return }
+            detailHold = nil
+        }
+    }
+
+    struct DetailHold: Equatable {
+        var leading: CGFloat
+        var width: CGFloat
+    }
+
+    /// 详情区在窗口里的位置（几何读数，`MainWindow` 写；不触发重算）。
+    func detailMoved(to frame: CGRect) {
+        detailFrame = frame
+        if sidebar != .detailOnly, detailHold == nil { openedMinX = frame.minX }
     }
 
     func visit(from left: Route, to page: Route) {
