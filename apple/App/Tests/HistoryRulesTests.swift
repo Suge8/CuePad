@@ -41,11 +41,13 @@ struct HistoryRulesTests {
             let extensions = paths.agentDirectory.appending(path: "extensions")
             try FileManager.default.createDirectory(at: extensions, withIntermediateDirectories: true)
             try FileManager.default.copyItem(at: fixtures.appending(path: "fake-model.ts"), to: extensions.appending(path: "fake-model.ts"))
+            // 托管的 Pi 同真实用户一样读 agent 目录里的设置：默认假模型、不思考，不加载家目录里自动发现的 skill
+            try JSONSerialization.data(withJSONObject: ["defaultProvider": "fake", "defaultModel": "echo", "defaultThinkingLevel": "off", "skills": ["!**"]])
+                .write(to: paths.agentDirectory.appending(path: "settings.json"))
+            _ = Self.offline
 
             bridge = PiBridge(socketDirectory: paths.socketDirectory)
-            host = PiRuntime(
-                bridge: bridge, paths: paths, pi: { realPi }, idleLimit: .seconds(2),
-                extraArguments: ["--offline", "--no-context-files", "--no-skills", "--no-prompt-templates", "--no-themes", "--model", "fake/echo", "--thinking", "off"])
+            host = PiRuntime(bridge: bridge, paths: paths, pi: { realPi }, idleLimit: .seconds(2))
             let mac = MacDependencies(
                 pi: bridge, hotkeys: InMemoryHotkeys(), paths: agentPaths, agents: AgentIntegrations(agents), terminal: PiTerminalJumper(),
                 hostID: TestApp.hostID, workspaces: Workspaces(root: directory.appending(path: "CuePad", directoryHint: .isDirectory)),
@@ -60,6 +62,9 @@ struct HistoryRulesTests {
             services = try AppServices(location: location, defaults: TempDefaults().defaults, sync: .custom(FakeSync()), mac: mac)
             services.start()
         }
+
+        /// 不联网：Pi 只认 `PI_OFFLINE`（没有设置项），托管的 Pi 继承 CuePad 进程的环境，所以设在本测试进程上（只有 Pi 读它）。
+        static let offline: Void = { setenv("PI_OFFLINE", "1", 1) }()
 
         func shutdown() {
             services.cancelBackgroundWork()

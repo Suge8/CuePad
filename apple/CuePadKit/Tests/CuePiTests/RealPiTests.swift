@@ -89,7 +89,7 @@ struct RealPiTests {
 
     /// 配了模型范围（`--models`）时，手机可选的就是范围内的（与 Pi 的 /model 一致）；当前模型总在其中。
     @Test func choicesFollowPisModelScopeAndAlwaysIncludeTheCurrentModel() async throws {
-        let pi = try await PiProcess(extraArguments: ["--models", "fake/echo-think"])
+        let pi = try await PiProcess(extraArguments: ["--model", "fake/echo", "--models", "fake/echo-think"])
         let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
         defer { bridge.stop(); pi.stop() }
         try bridge.start()

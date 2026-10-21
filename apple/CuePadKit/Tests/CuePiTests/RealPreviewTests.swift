@@ -30,7 +30,7 @@ struct RealPreviewTests {
         try "<h1>登录页</h1>".write(to: pi.cwd.appending(path: "demo.html"), atomically: true, encoding: .utf8)
         try Data("m4a".utf8).write(to: pi.cwd.appending(path: "beep.m4a"))
 
-        try pi.prompt("[[tool:\(PiProcess.cuepad.path) show demo.html beep.m4a --title 登录页改好了 --json]] 给我看看")
+        try pi.prompt("[[tool:\(PiProcess.cuepad.path) show demo.html beep.m4a --title 登录页改好了 --title 提示音 --json]] 给我看看")
         _ = try await pi.waitForEvent("命令结束", { $0["type"] as? String == "tool_execution_end" && $0["toolName"] as? String == "bash" })
         _ = try await pi.waitForEvent("这一轮结束", { $0["type"] as? String == "agent_end" })
 
