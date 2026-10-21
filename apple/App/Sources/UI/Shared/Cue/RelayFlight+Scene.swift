@@ -7,6 +7,21 @@ extension RelayFlight {
     enum Head { case dot, ring }
 
     struct Scene {
+        /// 飞着的那颗点（叫醒）与那个小环（交给）的直径。
+        private static let head: CGFloat = 8
+        private static let ring: CGFloat = 11
+        /// 先加速、后长长地减速：落下时已经很慢。
+        private static let glide = CAMediaTimingFunction(controlPoints: 0.4, 0, 0.22, 1)
+        private static let flight = 0.78...1.08
+        private static let pointsPerSecond = 1800.0
+        private static let bend: CGFloat = 48
+        private static let mostBend: CGFloat = 160
+        private static let ripple = 0.14
+        private static let depart = 0.58
+        private static let reception = 0.82
+        private static let avatar = 0.78
+        private static let easeOut = CAMediaTimingFunction(controlPoints: 0.16, 1, 0.3, 1)
+
         let canvas: CALayer
         let color: CGColor
         let now: CFTimeInterval
@@ -14,16 +29,16 @@ extension RelayFlight {
 
         /// 起飞时只漾一圈；接住时珠心先亮、停住，再随外圈淡下去。只叠画光，不改珠子本身的视图与布局。
         func depart(at point: CGPoint, delay: Double, fills: Bool = false, started: (@MainActor () -> Void)? = nil) {
-            animate(circle(at: point, radius: 6, line: 1.5, glows: true), delay: delay, duration: RelayFlight.depart,
-                    timing: RelayFlight.easeOut, started: started, [
+            animate(circle(at: point, radius: 6, line: 1.5, glows: true), delay: delay, duration: Self.depart,
+                    timing: Self.easeOut, started: started, [
                         Self.keyframes("transform.scale", [0.8, 2.6]), Self.keyframes("opacity", [1, 0]),
                     ])
             if fills {
-                animate(circle(at: point, radius: 4, fill: 0.95, glows: true), delay: delay, duration: RelayFlight.reception, [
+                animate(circle(at: point, radius: 4, fill: 0.95, glows: true), delay: delay, duration: Self.reception, [
                     Self.keyframes("opacity", [0, 1, 1, 0], times: [0, 0.1, 0.42, 1]),
                     Self.keyframes("transform.scale", [0.9, 1.25, 1, 1], times: [0, 0.18, 0.42, 1]),
                 ])
-                animate(circle(at: point, radius: 11, fill: 0.18), delay: delay, duration: RelayFlight.reception, [Self.hold()])
+                animate(circle(at: point, radius: 11, fill: 0.18), delay: delay, duration: Self.reception, [Self.hold()])
             }
         }
 
@@ -34,12 +49,12 @@ extension RelayFlight {
             var normal = CGPoint(x: -(end.y - start.y) / max(length, 1), y: (end.x - start.x) / max(length, 1))
             let outward = abs(normal.x) < 0.2 ? normal.y * up < 0 : normal.x * (canvas.bounds.midX - mid.x) < 0
             if outward { normal = CGPoint(x: -normal.x, y: -normal.y) }
-            let bend = min(max(length * 0.32, RelayFlight.bend), RelayFlight.mostBend)
+            let bend = min(max(length * 0.32, Self.bend), Self.mostBend)
             let path = CGMutablePath()
             path.move(to: start)
             path.addQuadCurve(to: end, control: CGPoint(x: mid.x + normal.x * bend, y: mid.y + normal.y * bend))
-            let duration = min(RelayFlight.flight.lowerBound + Double(length) / RelayFlight.pointsPerSecond, RelayFlight.flight.upperBound)
-            streak(path, head: head, delay: delay, duration: duration, timing: RelayFlight.glide, launches: launches)
+            let duration = min(Self.flight.lowerBound + Double(length) / Self.pointsPerSecond, Self.flight.upperBound)
+            streak(path, head: head, delay: delay, duration: duration, timing: Self.glide, launches: launches)
             return duration
         }
 
@@ -48,7 +63,7 @@ extension RelayFlight {
             let path = CGMutablePath()
             path.move(to: start)
             path.addQuadCurve(to: CGPoint(x: start.x + 6, y: start.y + rise), control: CGPoint(x: start.x, y: start.y + rise * 0.6))
-            streak(path, head: head, delay: delay, duration: 0.55, timing: RelayFlight.easeOut, fades: true, launches: launches)
+            streak(path, head: head, delay: delay, duration: 0.55, timing: Self.easeOut, fades: true, launches: launches)
         }
 
         /// 一道光加它的尾巴：尾巴是同一条弧上的描边，终点跟着光走、起点晚一点出发、到终点时追上——尾巴越飞越短，落下时被收进去。
@@ -90,7 +105,7 @@ extension RelayFlight {
             let layer: CALayer
             switch head {
             case .dot:
-                let side = RelayFlight.head
+                let side = Self.head
                 layer = CALayer()
                 layer.bounds = CGRect(x: 0, y: 0, width: side, height: side)
                 layer.cornerRadius = side / 2
@@ -98,7 +113,7 @@ extension RelayFlight {
                 layer.shadowPath = CGPath(ellipseIn: layer.bounds, transform: nil)
                 layer.shadowRadius = side * 0.8
             case .ring:
-                let side = RelayFlight.ring, line: CGFloat = 2
+                let side = Self.ring, line: CGFloat = 2
                 let shape = CAShapeLayer()
                 shape.bounds = CGRect(x: 0, y: 0, width: side, height: side)
                 let path = CGPath(ellipseIn: shape.bounds.insetBy(dx: line / 2, dy: line / 2), transform: nil)
@@ -121,11 +136,11 @@ extension RelayFlight {
         /// 叫醒落下：头像的环亮起（带一圈光晕），停一下再外扩到 1.6 倍淡去；稍后一圈细的涟漪扩得更远。不盖住它的脸。
         func land(on target: CGRect, delay: Double) {
             let (radius, line) = Self.ring(of: target)
-            animate(circle(at: target.center, radius: radius, line: line, glows: true), delay: delay, duration: RelayFlight.avatar, [
-                Self.keyframes("opacity", [0, 1, 1, 0], times: [0, 0.12, 0.3, 1], timing: RelayFlight.easeOut),
-                Self.keyframes("transform.scale", [1, 1, 1, 1.6], times: [0, 0.12, 0.3, 1], timing: RelayFlight.easeOut),
+            animate(circle(at: target.center, radius: radius, line: line, glows: true), delay: delay, duration: Self.avatar, [
+                Self.keyframes("opacity", [0, 1, 1, 0], times: [0, 0.12, 0.3, 1], timing: Self.easeOut),
+                Self.keyframes("transform.scale", [1, 1, 1, 1.6], times: [0, 0.12, 0.3, 1], timing: Self.easeOut),
             ])
-            animate(circle(at: target.center, radius: radius, line: max(1, line / 2)), delay: delay + RelayFlight.ripple, duration: RelayFlight.avatar, timing: RelayFlight.easeOut, [
+            animate(circle(at: target.center, radius: radius, line: max(1, line / 2)), delay: delay + Self.ripple, duration: Self.avatar, timing: Self.easeOut, [
                 Self.keyframes("opacity", [0.7, 0]), Self.keyframes("transform.scale", [1, 2.1]),
             ])
         }
@@ -134,8 +149,8 @@ extension RelayFlight {
         func send(from source: CGRect) {
             let (radius, line) = Self.ring(of: source)
             animate(circle(at: source.center, radius: radius, line: line, glows: true), delay: 0, duration: 0.6, [
-                Self.keyframes("opacity", [0, 1, 1, 0], times: [0, 0.15, 0.35, 1], timing: RelayFlight.easeOut),
-                Self.keyframes("transform.scale", [1, 1, 1, 1.25], times: [0, 0.15, 0.35, 1], timing: RelayFlight.easeOut),
+                Self.keyframes("opacity", [0, 1, 1, 0], times: [0, 0.15, 0.35, 1], timing: Self.easeOut),
+                Self.keyframes("transform.scale", [1, 1, 1, 1.25], times: [0, 0.15, 0.35, 1], timing: Self.easeOut),
             ])
         }
 

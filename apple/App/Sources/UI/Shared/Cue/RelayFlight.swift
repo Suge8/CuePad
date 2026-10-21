@@ -16,23 +16,9 @@ struct RelayFlight {
     private static let liftoff = 0.08
     /// 头像的环亮起之后多久小环离开头像（交给）：先看清是 Cue 发出的。
     private static let release = 0.16
-    /// 飞着的那颗点（叫醒）与那个小环（交给）的直径。
-    static let head: CGFloat = 8
-    static let ring: CGFloat = 11
     /// 另一头不在屏上时光飘多远。
     private static let drift: CGFloat = 24
-    /// 先加速、后长长地减速：落下时已经很慢。
-    static let glide = CAMediaTimingFunction(controlPoints: 0.4, 0, 0.22, 1)
-    static let flight = 0.78...1.08
-    static let pointsPerSecond = 1800.0
-    static let bend: CGFloat = 48
-    static let mostBend: CGFloat = 160
     private static let arrival = 0.92
-    static let ripple = 0.14
-    static let depart = 0.58
-    static let reception = 0.82
-    static let avatar = 0.78
-    static let easeOut = CAMediaTimingFunction(controlPoints: 0.16, 1, 0.3, 1)
 
     static func distance(_ a: CGPoint, _ b: CGPoint?) -> CGFloat {
         guard let b else { return 0 }
