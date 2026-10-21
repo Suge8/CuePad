@@ -3,7 +3,7 @@ import CueStore
 import SwiftUI
 
 /// 设置窗口 Cue 那一页，每项一行 `SettingRow`（同其他各页），按要紧排：在哪台 Mac 上运行（这台排第一，"不启用"是停用；没能写成的原因写在这一行；
-/// 能不能选读 `CueGate`：还没和 iCloud 对过时写在等什么、选不了，正在别的 Mac 上运行时换过去先确认）；
+/// 能不能选读 `CueGate`：还没和 iCloud 对过时写在等什么、选不了，正在别的 Mac 上运行时改过来先确认）；
 /// 不用先问的事（允许清单 `CueProfile.allows`：每类一个开关，只管一个项目的那几项各一行、可撤销）；对话里显示不显示工具步骤（`CueStepsSetting`，存本机）与名字。
 /// 用哪个 Agent、模型与思考强度在 Cue 页输入框上（`CueConfigControls`），这里不重复。读写都经两端同一份 `CueSettingsModel`（手机上是 `CueSettingsScreen`）。
 struct CueSettingsPane: View {

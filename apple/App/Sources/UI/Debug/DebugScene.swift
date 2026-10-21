@@ -56,6 +56,8 @@ enum ScrollAnchor {
 ///   `-CuePadCatalogFailure once`：每个窗口（含菜单栏面板）只有第一次读取报错，按"重试"后恢复，核对重试路径。
 /// - `-CuePadSync <noAccount|decide|failed|syncing|restricted|conflicts>`：装上报这个状态的同步替身，设置里 iCloud 同步与 Mac 工具栏的同步提示按它显示（`DebugScene+Sync.swift`；`syncing` 还没和 iCloud 对过一遍）；
 ///   `-CuePadSync stalled`：装上同步永不返回的替身，核对下拉刷新的圈有时限；`-CuePadSync arrive`：启动后的第一次拉取分几页带回别的设备写下的 Cue 的话（`ArrivingSync`），核对"同步中"与对完一次滑上来；
+///   `-CuePadSync newmac`：换新 Mac 的第一遍同步，`-CuePadReconcileSeconds <秒>`（默认 8）后带回 Cue 在「Mac Studio」上运行（`NewMacSync`），核对各入口先等、对过后写它在哪台；
+/// - `-CuePadOfferSetup YES`（仅 Mac）：隔离库也像正式版那样首次打开时决定弹不弹接入面板（`Workspace.offerSetup`，只弹一次记在隔离库的偏好里），核对老用户升级后自动弹的那一次；
 /// - `-CuePadSampleCrash YES`：存一份样例崩溃诊断（配 `-CuePadCrashSheet YES` 直接打开摘要）；
 /// - `-CuePadNotifications YES`：隔离库下也要通知权限、发真实的系统通知（两端，规则见 docs/verify.md「通知」）；
 ///   `-CuePadQuotaRemindIn <秒>`（配 `-CuePadDemo YES -CuePadNotifications YES` 与空库）：演示额度里 Claude 的本周这么多秒后到提醒时刻（`DemoLibrary.seedQuotas`，核对周额度提醒）；
@@ -63,6 +65,10 @@ enum ScrollAnchor {
 /// 设置项可在参数域覆盖：`-theme dark`。
 enum DebugScene {
     static var defaults: UserDefaults { .standard }
+    /// 秒数参数（`-CuePadOfflineSeconds 20` 这类）：启动参数里是字符串，`object(forKey:) as? Double` 读不出，经 `double(forKey:)` 转；没给是 `fallback`。
+    static func seconds(_ key: String, default fallback: Double) -> Double {
+        defaults.object(forKey: key) == nil ? fallback : defaults.double(forKey: key)
+    }
     static var scene: String? { defaults.string(forKey: "CuePadScene") }
     /// 搜索框预填的字：只认启动参数（参数域），不读已存的偏好（`UserDefaults.standard` 是真实的偏好域）。
     static var searchText: String {

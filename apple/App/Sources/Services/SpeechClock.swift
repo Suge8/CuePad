@@ -117,6 +117,39 @@ extension AppServices {
     }
 }
 
+extension AppServices {
+    /// 同 `observeTimed`，再配上 Cue 此刻要的本机事实（`cueLocal`）：它变了（这台和 iCloud 对过了、断网了）也把手里那份再给一次，
+    /// 库没变也换得掉"正在从 iCloud 同步…"。Cue 此刻的两处推导（`CueWatch`、小组件快照）都经它。
+    func observeCue<T: Sendable & Equatable>(
+        from snapshot: Snapshot<T>? = nil, _ read: @escaping @Sendable (isolated CueStore) throws -> T
+    ) -> AsyncThrowingStream<(T, Speech.Moment, CueNow.Local), any Error> {
+        let timed = observeTimed(from: snapshot, read)
+        return AsyncThrowingStream { continuation in
+            let latest = Latest<(T, Speech.Moment)>(value: nil)
+            let reading = Task {
+                do {
+                    for try await (value, moment) in timed {
+                        latest.value = (value, moment)
+                        continuation.yield((value, moment, self.cueLocal))
+                    }
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+            let watching = Task {
+                for await local in Observations({ self.cueLocal }) {
+                    if let (value, moment) = latest.value { continuation.yield((value, moment, local)) }
+                }
+            }
+            continuation.onTermination = { _ in
+                reading.cancel()
+                watching.cancel()
+            }
+        }
+    }
+}
+
 /// `observeTimed` 手里最近读到的那份：此刻变了时配上它再给一次。
 private final class Latest<T> {
     var value: T?

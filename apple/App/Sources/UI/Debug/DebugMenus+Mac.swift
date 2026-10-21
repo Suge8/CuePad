@@ -15,7 +15,7 @@ extension DebugScene {
               let window = NSApp.windows.first(where: { $0.isVisible && $0.level == .normal && $0.styleMask.contains(.resizable) })
         else { return }
         let steps = defaults.string(forKey: key)!.split(separator: ";").map { $0.trimmingCharacters(in: .whitespaces) }
-        let gap = defaults.object(forKey: "CuePadClickGap") == nil ? 1.5 : defaults.double(forKey: "CuePadClickGap")
+        let gap = seconds("CuePadClickGap", default: 1.5)
         DebugForeground.require(window, for: key)
         try? await Task.sleep(for: .milliseconds(500))
         for (index, step) in steps.enumerated() {

@@ -25,7 +25,8 @@ struct CueActivityTests {
         try await store.bindSession("zoom", to: canvas.id)
         try await recorder.update(sessionID: "zoom", state: .waitingForUser, question: PiQuestion(promptID: "p", kind: .confirm, text: "改锚点？\n会动到缩放"))
 
-        func now() async throws -> CueNow { CueNow(try await CueDigest.read(from: store), at: .always()) }
+        // 实时活动只在 iPhone 上：按手机推（和 iCloud 对过、不是哪台 Mac），Mac 上的本机事实在 CueGateTests
+        func now() async throws -> CueNow { CueNow(try await CueDigest.read(from: store), at: .always(), local: CueNow.Local(waiting: nil, here: nil)) }
         func kinds(_ now: CueNow) -> [CueNow.Bead.Kind] { now.beads.map(\.kind) }
 
         // Cue 还没启用：那一句写原因；两件都落在等你上：两颗等你，加刚做完的那颗；第一件是 Cue 的提问，能"允许一次"
