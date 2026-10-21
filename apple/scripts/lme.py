@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """LongMemEval 给 Cue 的长期记忆打分：抽题、判分、出报告。跑法见 docs/verify.md「LongMemEval」。
 
-  lme.py sample [--data DIR]          下载 longmemeval_s_cleaned.json（缺时），按题型分层抽 100 题写成评测读的 sample.jsonl
+  lme.py sample [--data DIR] [--holdout]  下载 longmemeval_s_cleaned.json（缺时），按题型分层抽 100 题写成评测读的 sample.jsonl；
+                                      --holdout 另抽一份与它不相交、各层题数相同的留出集 holdout.jsonl（改提示词时在 sample 上挑、在留出集上验）
   lme.py judge RUN [RUN…] [--data DIR] 给每个 RUN/<题号>.json 判分（官方分题型判分提示，经 Pi 用 claude-sonnet-5-5），
                                       按给的先后比这几遍，写最后一个 RUN/report.md
 
@@ -48,8 +49,8 @@ def stratum(entry: dict) -> str:
     return entry["question_type"] + ("/拒答" if entry["question_id"].endswith("_abs") else "")
 
 
-def sample(entries: list) -> list:
-    """按题型（拒答题单独一层）分层、按比例抽 TOTAL 题，余数按最大余数法分；层内与层的先后都用固定种子。"""
+def sample(entries: list, seed: int = SEED, exclude: frozenset = frozenset()) -> list:
+    """按题型（拒答题单独一层）分层、按比例抽 TOTAL 题，余数按最大余数法分；层内与层的先后都用固定种子。各层题数按全集算，`exclude` 里的题不抽。"""
     layers = collections.defaultdict(list)
     for entry in entries:
         layers[stratum(entry)].append(entry)
@@ -57,10 +58,10 @@ def sample(entries: list) -> list:
     counts = {name: int(q) for name, q in quota.items()}
     for name in sorted(quota, key=lambda n: (-(quota[n] - counts[n]), n))[: TOTAL - sum(counts.values())]:
         counts[name] += 1
-    rng = random.Random(SEED)
+    rng = random.Random(seed)
     picked = []
     for name in sorted(layers):
-        picked += rng.sample(sorted(layers[name], key=lambda e: e["question_id"]), counts[name])
+        picked += rng.sample(sorted((e for e in layers[name] if e["question_id"] not in exclude), key=lambda e: e["question_id"]), counts[name])
     return picked
 
 
@@ -84,7 +85,9 @@ def timeline(entry: dict) -> list:
 def cmd_sample(args):
     entries = load(args.data)
     picked = sample(entries)
-    out = args.data / "sample.jsonl"
+    if args.holdout:
+        picked = sample(entries, SEED + 1, frozenset(e["question_id"] for e in picked))
+    out = args.data / ("holdout.jsonl" if args.holdout else "sample.jsonl")
     with out.open("w") as f:
         for e in picked:
             f.write(json.dumps({
@@ -176,7 +179,7 @@ def report(runs: list, references: dict):
     mean = lambda xs: sum(xs) / len(xs)
     lines = [
         "# LongMemEval（longmemeval_s cleaned）· Cue", "",
-        f"- {len(ids)} 道题（按题型分层抽、拒答题单独一层，种子 {SEED}），每个目录是一遍：{'、'.join(names)}。",
+        f"- {len(ids)} 道题（按题型分层抽、拒答题单独一层），每个目录是一遍：{'、'.join(names)}。",
         "- 每题一个隔离库，历史会话按原时刻写成 Cue 的对话（用户的话是他的，助手的话是 Cue 的回复），信封上的此刻定在提问时刻；"
         "等刚启用那一轮做完，问题作为他的话交给 Cue，答案是这一轮 Cue 对他说的话。",
         f"- 判分：{JUDGE_MODEL}（经 Pi，thinking off），官方 evaluate_qa.py 的分题型提示，回答里有 yes 算对。",
@@ -236,6 +239,7 @@ def main():
     sub = parser.add_subparsers(required=True)
     s = sub.add_parser("sample")
     s.add_argument("--data", type=Path, default=Path("/tmp/lme"))
+    s.add_argument("--holdout", action="store_true")
     s.set_defaults(run=cmd_sample)
     j = sub.add_parser("judge")
     j.add_argument("runs", type=Path, nargs="+")
