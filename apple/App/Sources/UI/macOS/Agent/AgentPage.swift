@@ -2,7 +2,9 @@
 import CueStore
 import SwiftUI
 
-/// 会话页（侧栏的"会话"进来）：没有页标题，顶上那一排（`pageHeader`，列表滚到它后面）：项目范围（与任务页共用 `Workspace.projectScope`）、搜索、额度环（`QuotaRings`，同手机；点它从环下长出明细的气泡 `QuotaDetail`，点外面或 Esc 收回）、新会话（右上"⋯"里同一下，还有接入 Agent）。
+/// 会话页（侧栏的"会话"进来）：没有页标题。项目范围在窗口最顶那一排（工具栏的 `ScopeSlot`，与任务页共用 `Workspace.projectScope`）；
+/// 页里自己顶上一排（列表滚到它后面）是搜索、额度环（`QuotaRings`，同手机；点它从环下长出明细的气泡 `QuotaDetail`，点外面或 Esc 收回）与新会话
+/// （右上"⋯"里同一下，还有接入 Agent）：它们的状态归这一页，不进工具栏（工具栏只放 Workspace 里已有的状态，规矩在 `ScopeSlot`）。
 /// 列表与行同手机（`PiSessionList`、`PiSessionRow`），点行在内容区打开会话页；在线会话右键可结束（确认后发给它所在的 Mac，对话留着）。
 /// 这台 Mac 检测到 Agent 却一家都没接入时，最上面是接入小卡（`ConnectAgents`）：没接入时本机的会话在这里看不到。
 struct AgentPage: View {
@@ -24,7 +26,12 @@ struct AgentPage: View {
             ScrollView { column }
             .onChange(of: filter) { proxy.scrollTo(Self.top, anchor: .top) }
         }
-        .pageHeader { topRow.frame(maxWidth: Self.width - Spacing.page * 2) }
+        // 顶上那一排钉在工具栏下、浮在列表上，列表滚到它后面（`Bars`）：排在安全区里，滚动区上沿不加内边距
+        .safeAreaInset(edge: .top, spacing: Bars.contentGap) {
+            topRow.frame(maxWidth: Self.width - Spacing.page * 2)
+                .frame(minHeight: Spacing.toolbarControl)
+                .padding(.horizontal, Spacing.page).padding(.top, Bars.contentGap)
+        }
         .background(palette.desk)
         .agentList(model, filter: filter)
         .refreshesQuota()
@@ -48,10 +55,9 @@ struct AgentPage: View {
         .frame(maxWidth: .infinity)
     }
 
-    /// 顶上一排：左边项目范围，中间搜索，右边额度环与新会话。
+    /// 顶上一排：搜索，右边额度环与新会话。
     private var topRow: some View {
         HStack(spacing: 10) {
-            ProjectScopeMenu()
             HStack(spacing: 6) {
                 Image(.search).foregroundStyle(palette.ink3).accessibilityHidden(true)
                 TextField(searchPrompt, text: $model.query, palette: palette).textFieldStyle(.plain)

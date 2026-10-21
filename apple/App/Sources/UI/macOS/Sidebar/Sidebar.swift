@@ -305,12 +305,14 @@ private struct PageRow<Icon: View, Title: View, Trailing: View>: View {
 
 /// 项目行：图标、名字，行尾项目的状态标（`ProjectMark`，`PiStateDot`；接力落到这个会话时落在标上）。
 /// 只随自己的项目、状态标与选中重算：会话状态一变，各行的标重新算一遍，没变的行不跟着重算。
+/// 指针停在行上时记下这个项目（`Workspace.hoveredProject`）：任务看板上别的项目的卡淡下去。行只写不读它，指针划过不重算行。
 private struct ProjectRow: View, Equatable {
     let project: Project
     let mark: ProjectMark?
     let selected: Bool
     let select: (Route) -> Void
     let edit: () -> Void
+    @Environment(Workspace.self) private var workspace
 
     static func == (a: Self, b: Self) -> Bool { a.project == b.project && a.mark == b.mark && a.selected == b.selected }
 
@@ -323,6 +325,9 @@ private struct ProjectRow: View, Equatable {
             if let mark { PiStateDot(shown: mark.shown, size: 7, announces: true).relaySpot(session: mark.session, row: .project) }
         }
         .contextMenu { ProjectActions(project: project, edit: edit) }
+        .onHover { workspace.hoverProject(project.id, $0) }
+        // 预设悬停只认停着的那一处：别处的同一项目一出现就报"没停着"，会把它清掉
+        .presetHover(Binding { false } set: { if $0 { workspace.hoverProject(project.id, true) } })
     }
 }
 

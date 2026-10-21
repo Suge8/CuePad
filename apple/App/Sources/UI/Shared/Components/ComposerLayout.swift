@@ -9,6 +9,9 @@ enum ComposerMetrics {
     static let slot: CGFloat = 56
     static let textTop: CGFloat = 17
     static let textBottomOpen: CGFloat = 4
+    /// 输入框里的圆钮（`CircleGlyph`）：看得见的直径与点得到的边长。
+    static let glyph: CGFloat = 40
+    static let glyphTarget: CGFloat = 44
 
     /// 一行字与上下边距合起来的高，至少 `slot`：没露出工具排时圆钮占这么高、居中，与最后一行字同一条中线。
     static func lineSlot(line: CGFloat) -> CGFloat { max(slot, ceil(line + 2 * textTop)) }

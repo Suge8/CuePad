@@ -231,7 +231,7 @@ struct CuePage: View {
     private var bottom: some View {
         VStack(spacing: 0) {
             if let thread {
-                CueWaitingDock(waiting: thread.waiting, tasks: thread.tasks, shots: thread.shots, open: { opened = $0 }, moving: $docking)
+                CueWaitingDock(waiting: workspace.leadingAsk(thread.waiting), tasks: thread.tasks, shots: thread.shots, open: { opened = $0 }, moving: $docking)
             }
             if !cue.canHear || cue.now.elsewhere != nil {
                 CueEnableCard().padding(.bottom, 8).transition(.opacity)

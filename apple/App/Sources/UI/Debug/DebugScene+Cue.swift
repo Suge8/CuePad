@@ -36,7 +36,7 @@ extension DebugScene {
             if let importing { try await store.linkCard(importing.id, toSession: "billing") }
             // 截图是 notes 会话做的（歇着）：Cue 值班，侧栏与会话列表里它只说"歇着"
             if let panel { try await store.linkCard(panel.id, toSession: "notes") }
-            await seedEvidence(store, session: "notes", title: "README 截图（浅色）")
+            let evidence = await seedEvidence(store, session: "notes", title: "README 截图（浅色）")
             // Cue 发进 atlas 会话的一句（还在路上）：会话页的气泡上标着 Cue
             _ = try await store.requestDelivery(
                 "排序改完后把 scheduler 的测试全跑一遍，结果贴给我", to: SendTarget(kind: .piSession, name: "atlas", ref: "atlas"), on: "demo-mac", cue: true)
@@ -86,7 +86,11 @@ extension DebugScene {
             let shot = CueFormat.imageMarkup(id: try store.files.store(swatchPNG()))
             try await you("README 的截图也交给你，换成 Swift 版的样子，参考这张\n" + shot)
             // Cue 确认做完了：结果的正文与 Cue 的 done 同一个拼法（`CueReport.text`）
-            if let panel { _ = try await store.finishTask(panel.id, evidence: ["浅色深色各一张，都按你给的参考图", "README 里的旧截图都换掉了"]) }
+            if let panel {
+                _ = try await store.finishTask(
+                    panel.id, evidence: ["浅色深色各一张，都按你给的参考图", "README 里的旧截图都换掉了"],
+                    shots: evidence.map { [CueShot(preview: $0.id, look: "浅色：新的 README 截图")] } ?? [])
+            }
             let asked = try await store.addCueMessage(
                 .cue, text: """
                     预发上验过了，截图在这里。重连用例都过了：

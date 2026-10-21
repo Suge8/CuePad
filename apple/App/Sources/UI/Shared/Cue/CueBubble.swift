@@ -151,15 +151,18 @@ struct CueAnswer: View {
 extension View {
     /// Cue 的话的气泡：纸色实底（`Palette.paper`，比桌面亮一级），你的话是比桌面深一级的牛皮纸色（`Palette.bubble`）。正在说的话（Mac）与说完落库的那句同一颗。
     /// 只铺一层底：不用卡片那套渐变、一线高光与描边（`paper()`）——气泡小，看不出差别，长对话滚动时每颗多出的层逐帧都要更新；
-    /// 增强对比度时才描边（`Palette.bubbleEdge`）。
-    func cueBubble(joined: Bool) -> some View { modifier(CueBubbleSurface(shape: CueBubble.shape(.leading, joined: joined))) }
+    /// 增强对比度时才描边（`Palette.bubbleEdge`）。`onLane`：浮在看板淡色泳道上的那颗（等你那一列）是纯白（`Palette.laneBubble`），纸色在泳道上发灰。
+    func cueBubble(joined: Bool, onLane: Bool = false) -> some View {
+        modifier(CueBubbleSurface(shape: CueBubble.shape(.leading, joined: joined), onLane: onLane))
+    }
 }
 
 private struct CueBubbleSurface: ViewModifier {
     let shape: UnevenRoundedRectangle
+    let onLane: Bool
     @Environment(\.palette) private var palette
 
     func body(content: Content) -> some View {
-        content.padding(CueBubble.padding).background(palette.paper, in: shape).overlay { if let edge = palette.bubbleEdge { shape.strokeBorder(edge) } }
+        content.padding(CueBubble.padding).background(onLane ? palette.laneBubble : palette.paper, in: shape).overlay { if let edge = palette.bubbleEdge { shape.strokeBorder(edge) } }
     }
 }

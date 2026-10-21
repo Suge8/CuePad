@@ -87,6 +87,8 @@ final class Workspace {
     var addsTask = false
     /// 清空回收站的确认开着（回收站页上与"⋯"里的"清空回收站…"同一下）。
     var confirmsEmptyTrash = false
+    /// 指针此刻停在哪个项目上（侧栏的项目行、看板卡上的项目小图形）：看板上别的项目的卡淡下去（`boardDim`）。侧栏与看板读写这一份。
+    var hoveredProject: UUID?
     #else
     /// 这个窗口有系统菜单开着（`MenuButton`）：这段里贴着键盘的那一层不跟键盘走（`KeyboardHold`）。
     var menuOpen = false
@@ -106,6 +108,8 @@ final class Workspace {
     #endif
     /// 项目范围：任务页与会话页共用这一份（顶栏中间那颗显示它、点 ✕ 清掉；项目页"⋯"里的"看这个项目的会话"设成这个项目再切到会话页），nil 是全部项目。
     var projectScope: UUID?
+    /// Cue 页的"等你"卡先露哪条提问（`CueWaitingDock` 露在等的第一条）：从任务看板点一张 Cue 问的等你卡的抬头时设成它；它结束了就不再起作用。
+    var cueAsking: UUID?
     var notice: Notice?
     /// 正在给哪个项目选文件夹（iOS：根视图据此弹候选；Mac 直接弹系统的选文件夹面板，不经这里）。
     var folderPicker: Project?
