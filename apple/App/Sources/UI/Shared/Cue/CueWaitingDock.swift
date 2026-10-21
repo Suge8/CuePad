@@ -6,7 +6,7 @@ import SwiftUI
 /// （`CueShots`，没点名的没有图；点开全屏时底栏就是这几个选项，看完当场定；"可以"选的是其中一张时那张描靛青圈、选项旁一句"要选别的，在下面跟 Cue 说"）、
 /// 选项（`CueChoices`），末行是关联的任务与原话的开关
 /// （Mac 上连同选项；辅助功能字号下各占一行），Mac 与手机同一结构；还有几条在等由页头与侧栏的"等你 M"说。卡上只能选：别的话在 Cue 页底下的输入框说，
-/// 一开口卡就收起（Cue 判断不是在答它会放回，见 `CueQuestionEnd`）。没有关掉。
+/// 一开口卡就收起（Cue 判断不是在答它会放回，见 `CueQuestionEnd`）。没有关掉。Cue 停用着时卡照样露、选项停用并写"启用后再答"（`CueChoices.paused`）。
 /// 列表与数量只来自 `cueMessagesWaitingForYou()`：回答后等库里那条结束才换下一条，写的时候按钮停用；没写成就报错、按钮恢复，可以再点。
 struct CueWaitingDock: View {
     let waiting: [CueMessage]
@@ -130,8 +130,10 @@ struct CueWaitingDock: View {
     /// 下面任务与原话一行（辅助功能字号下各占一行）；Mac 上合成一行，右下角是"可以"。
     private func card(_ message: CueMessage) -> some View {
         let ref = message.taskID.flatMap { tasks[$0] }
+        let cue = workspace.cue
         let choices = CueChoices(
-            options: message.choices ?? [], disabled: ending == message.id, hint: chosen(message).map { _ in "要选别的，在下面跟 \(workspace.cue.name) 说" }
+            options: message.choices ?? [], disabled: ending == message.id, hint: chosen(message).map { _ in "要选别的，在下面跟 \(cue.name) 说" },
+            paused: cue.canHear ? nil : "启用 \(cue.name) 后再答"
         ) { answer(message, $0) }
         let side = Self.padding.leading
         #if os(macOS)
@@ -250,17 +252,7 @@ struct CueWaitingDock: View {
     }
 
     private func originalToggle(_ message: CueMessage) -> some View {
-        let open = reading == message.id
-        return Button { reading = open ? nil : message.id } label: {
-            HStack(spacing: 4) {
-                Text("原话")
-                Image(.expand).font(.system(size: 9, weight: .semibold)).rotationEffect(.degrees(open ? 180 : 0))
-            }
-            .font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink2)
-            .frame(minHeight: Self.footerHeight).contentShape(.rect)
-        }
-        .buttonStyle(PressStyle(.inline))
-        .accessibilityLabel(open ? "收起原话" : "看 Cue 的原话")
+        CueOriginalToggle(open: Binding { reading == message.id } set: { reading = $0 ? message.id : nil }, height: Self.footerHeight)
     }
 
     private func answer(_ message: CueMessage, _ choice: String) {

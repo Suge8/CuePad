@@ -44,6 +44,8 @@ enum CueBubble {
 /// 你的回答在答的那一刻另成一格，见 `CueAnswer`、`CueThread.rows`）；它第一次提到一件活时底下一行这件活（`CueTaskLine`）。
 /// `card`：结果卡（点名了图的做完，哪句算只在 `CueThread.rows` 定）——不是气泡而是一张纸（`paper`），不与上下的气泡连成一串；
 /// 第一行是一句平常的话时（"「X」做完了"）单独加粗作标题，一眼先读到做完了什么，再看证据与图。
+/// 结束了的提问（答了、撤回）回到对话里时字与"等你"卡上同一句：代码写的问句（`CueAsking.question`，规矩那一类下面一行引的规矩），
+/// Cue 的原话收着、点"原话"展开（`CueOriginalToggle`）；答之前读的与答之后回看的不是两种说法，你回答气泡里引的也是这一句。
 /// 长按（Mac 右键）是消息菜单（`MessageMenu.Kind.cue`），预览就是这颗气泡或这张纸。
 struct CueSays: View {
     let message: CueMessage
@@ -59,6 +61,8 @@ struct CueSays: View {
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var selecting = false
+    /// 提问的原话展开着。
+    @State private var reading = false
 
     var body: some View {
         BubbleWidth(fraction: CueBubble.cueWidth, edge: .leading) {
@@ -77,6 +81,31 @@ struct CueSays: View {
     }
 
     @ViewBuilder private var words: some View {
+        if let asking = message.asking, !card {
+            asked(asking)
+        } else {
+            said
+        }
+    }
+
+    private func asked(_ asking: CueAsking) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(CueQuestionLine.keepingTail(asking.question)).font(Typography.reading.weight(.semibold)).foregroundStyle(palette.ink)
+                .lineSpacing(Typography.readingLineSpacing)
+                .fixedSize(horizontal: false, vertical: true)
+            if let why = asking.why {
+                Text(CueQuestionLine.keepingTail(why)).font(Typography.secondary).foregroundStyle(palette.ink2).fixedSize(horizontal: false, vertical: true)
+            }
+            if reading {
+                MarkdownText(source: message.text).equatable().font(Typography.secondary).foregroundStyle(palette.ink2).padding(.top, 6)
+                    .transition(.opacity)
+            }
+            CueOriginalToggle(open: $reading)
+        }
+        .animation(Motion.quick, value: reading)
+    }
+
+    @ViewBuilder private var said: some View {
         let parts: (title: String?, body: String) = card ? Self.headline(message.text) : (nil, message.text)
         if let title = parts.title {
             VStack(alignment: .leading, spacing: 6) {
