@@ -42,12 +42,12 @@ public enum PiExtensionBundle {
 
     /// 过渡（扩展 v38 起装成目录）：v37 及更早是单个文件 `cuepad-bridge.ts`，在跑的旧扩展只盯这个路径上的版本号，读不到就当没升级。
     /// 所以装目录时把它换成同名的空扩展：版本号变了，旧扩展歇下时照常自己重新载入；载入时 Pi 一并载入这个空扩展，它什么都不做，桥只有目录里那一份。
-    /// 存根的版本早于随包版本（扩展再升版）时删掉它：那时旧扩展都已换上目录。
-    /// 这是一次性的过渡代码：扩展 v39 起的 CuePad 普遍装上（存根随之删掉）后，这几项连同 `PiExtensionFiles` 里用它们的地方一起删；
+    /// 旧会话都换过来后由新扩展删掉它（`Extension/cuepad-bridge/legacy.ts`：只有它看得到哪些会话还开着旧扩展）。
+    /// 这是一次性的过渡代码：扩展 v39 起的 CuePad 普遍装上后，这几项连同用到它们的地方与 legacy.ts 一起删；
     /// 之后才从 v37 及更早直接升上来的，旧单文件与目录会被 Pi 一起载入（两份桥），得手动删掉旧文件。
     static let legacyFileName = "cuepad-bridge.ts"
     /// 存根的第二行，各版存根都一样：据此认出存根
-    static let legacyStubNote = "// 已改装成同目录下的 cuepad-bridge/。这个空扩展只为让还开着旧单文件扩展的 Pi 会话看到版本变了、歇下时换上新扩展；CuePad 下次升级扩展时删掉它。"
+    static let legacyStubNote = "// 已改装成同目录下的 cuepad-bridge/。这个空扩展只为让还开着旧单文件扩展的 Pi 会话看到版本变了、歇下时换上新扩展；它们都换过来后由新扩展删掉。"
     static let legacyStub = """
         \(ownershipMarker)
         \(legacyStubNote)
@@ -72,12 +72,11 @@ struct PiExtensionFiles {
 
     var state: AgentStatus.Files {
         if let foreign { return .foreign(foreign) }
-        let legacy = Self.isOurs(legacyFile) ? Self.read(legacyFile) : nil
-        if !FileManager.default.fileExists(atPath: directory.path) { return legacy == nil ? .missing : .outdated }
+        if !FileManager.default.fileExists(atPath: directory.path) { return Self.isOurs(legacyFile) ? .outdated : .missing }
         let names = (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []
         let same = Set(names) == Set(PiExtensionBundle.files.keys)
             && PiExtensionBundle.files.allSatisfy { Self.read(directory.appending(path: $0.key)) == $0.value }
-        return same && (legacy == nil || legacy == PiExtensionBundle.legacyStub) ? .current : .outdated
+        return same && !legacyIsBridge ? .current : .outdated
     }
 
     func install() throws {
@@ -95,14 +94,15 @@ struct PiExtensionFiles {
         try retireLegacyFile()
     }
 
-    /// 先装好目录再换存根：存根一出现旧扩展就可能重新载入，那时目录得已经在
+    /// 旧路径上还是 CuePad 的单文件桥（不是存根）
+    private var legacyIsBridge: Bool {
+        Self.isOurs(legacyFile) && Self.read(legacyFile)?.hasPrefix("\(PiExtensionBundle.ownershipMarker)\n\(PiExtensionBundle.legacyStubNote)\n") == false
+    }
+
+    /// 先装好目录再换存根：存根一出现旧扩展就可能重新载入，那时目录得已经在。存根由新扩展删（见 `PiExtensionBundle.legacyFileName`）
     private func retireLegacyFile() throws {
-        guard Self.isOurs(legacyFile), let legacy = Self.read(legacyFile), legacy != PiExtensionBundle.legacyStub else { return }
-        if legacy.hasPrefix("\(PiExtensionBundle.ownershipMarker)\n\(PiExtensionBundle.legacyStubNote)\n") {
-            try FileManager.default.removeItem(at: legacyFile)
-        } else {
-            try Data(PiExtensionBundle.legacyStub.utf8).write(to: legacyFile, options: .atomic)
-        }
+        guard legacyIsBridge else { return }
+        try Data(PiExtensionBundle.legacyStub.utf8).write(to: legacyFile, options: .atomic)
     }
 
     func uninstall() throws {

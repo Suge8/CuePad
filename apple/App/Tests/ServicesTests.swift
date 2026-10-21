@@ -108,7 +108,8 @@ struct AgentLineTests {
 
 struct AgentUpgradeTests {
     /// 装过的不再询问：App 更新后启动检查就把旧版的扩展静默升级到随包版本，缺的技能一起补上。
-    /// 旧版是单文件扩展（v37 及更早）：装上目录，旧文件换成空扩展（在跑的旧扩展看到版本变了自己换上目录里的，桥只有一份）。
+    /// 旧版是单文件扩展（v37 及更早）：装上目录，旧文件换成空扩展（在跑的旧扩展看到版本变了自己换上目录里的，桥只有一份；
+    /// 都换过来后新扩展删掉空扩展，这里没有 Pi 在跑，它留着）。
     @Test func 已装旧版扩展时启动检查静默升级到随包版本() async throws {
         let rig = TestApp()
         let bin = rig.directory.appending(path: "bin")

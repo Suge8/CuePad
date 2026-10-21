@@ -15,6 +15,7 @@ import { captureDialogs } from "./dialogs.ts";
 import { follow } from "./events.ts";
 import { INTERNAL_COMMAND, modelInfo, subagentsOf } from "./info.ts";
 import { Session, type Firecode } from "./session.ts";
+import { retireLegacyFile } from "./legacy.ts";
 import { listen } from "./socket.ts";
 import { reason } from "./text.ts";
 
@@ -110,6 +111,7 @@ export default function (pi: ExtensionAPI) {
 		let stop: ((reason: string) => void) | undefined;
 		try {
 			stop = listen(session, socketDirectory);
+			retireLegacyFile(socketDirectory, EXTENSION_VERSION).catch((error) => ctx.ui.notify(`CuePad 旧扩展文件清理失败：${reason(error)}`, "warning"));
 		} catch (error) {
 			ctx.ui.notify(`CuePad bridge disabled: ${reason(error)}`, "warning");
 		}
