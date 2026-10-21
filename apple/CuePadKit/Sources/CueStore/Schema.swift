@@ -36,8 +36,11 @@ enum Schema {
   /// 一步里任何会因数据冲突失败的语句（加唯一索引、NOT NULL、按假定的数据形状改写）都会让启动失败、库打不开：
   /// 要按别的设备已经同步来的、任意形状的数据写。
   static let upgrades: [Upgrade] = [
-    // 67：同步元数据的系统字段压缩存（`SystemFields`），真实库从 65MB 降到约 10MB。原地改写的行仍各占一页，所以整表重建：
-    // 一条 INSERT … SELECT 按行压缩，建好再补索引；腾出的页由升级后的整理还给磁盘（`reclaim`）
+    // 67：
+    // - 同步元数据的系统字段压缩存（`SystemFields`），真实库从 65MB 降到约 10MB。原地改写的行仍各占一页，所以整表重建：
+    //   一条 INSERT … SELECT 按行压缩，建好再补索引；腾出的页由升级后的整理还给磁盘（`reclaim`）
+    // - 启动与每次会话、Cue 对话变化都要读的几处走索引（各自的理由见它们的定义）
+    // - 会话消息不再盖写入序号（没有读者）：会话里每多一条消息，值班的 Cue 就不再多对一次账
     Upgrade { db in
       try db.define("packSystemFields", SystemFields.pack)
       try db.exec(
@@ -47,12 +50,10 @@ enum Schema {
         INSERT INTO syncRecords SELECT recordName, recordType, packSystemFields(systemFields), pushedModifiedAt, sentModifiedAt FROM syncRecordsOld;
         DROP TABLE syncRecordsOld;
         \(syncRecordsIndexes)
+        DROP INDEX piSessionStates_state; \(stateIndex) \(launchTokenIndex) \(hostedIndex) \(toDeliverIndex)
+        DROP TRIGGER piMessages_writeSeq_insert; ALTER TABLE piMessages DROP COLUMN writeSeq;
         """)
     },
-    // 68：启动与每次会话、Cue 对话变化都要读的几处走索引（各自的理由见下面的定义）
-    "DROP INDEX piSessionStates_state; \(stateIndex) \(launchTokenIndex) \(hostedIndex) \(toDeliverIndex)",
-    // 69：会话消息不再盖写入序号（没有读者）：会话里每多一条消息，值班的 Cue 就不再多对一次账
-    "DROP TRIGGER piMessages_writeSeq_insert; ALTER TABLE piMessages DROP COLUMN writeSeq;",
   ]
 
   /// 升级腾出了大量空页（如 67 把系统字段压小）时整理一遍，把它们还给磁盘：库不开自动整理，空页只等以后的写入复用，文件不会变小。
