@@ -134,7 +134,6 @@ extension DebugScene {
         }
     }
 
-    /// 对一个在线会话说一句（Cue 发起）。
     private static func relaySay(_ workspace: Workspace) async throws -> DeliveryRequest? {
         let rows = workspace.liveWork.rows.filter { $0.state != .known(.ended) }
         guard let session = rows.first(where: { $0.sessionID == defaults.string(forKey: "CuePadSession") }) ?? rows.first else { return nil }

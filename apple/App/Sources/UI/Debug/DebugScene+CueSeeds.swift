@@ -104,7 +104,6 @@ extension DebugScene {
         _ = try? await store.addPreviews([(file, title)], sessionID: session)
     }
 
-    /// 一张像截图的演示图：浅底上一列名单。
     static func swatchPNG() -> Data {
         let view = VStack(alignment: .leading, spacing: 10) {
             Text("发言顺序").font(.system(size: 22, weight: .bold))

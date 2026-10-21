@@ -60,7 +60,6 @@ extension DebugScene {
         }
     }
 
-    /// 一块纯色的 PNG（演示图片）。
     private static func swatch(red: CGFloat, green: CGFloat, blue: CGFloat) -> Data {
         let size = CGSize(width: 240, height: 180)
         let context = CGContext(
