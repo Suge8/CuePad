@@ -11,8 +11,7 @@ struct AgentScreen: View {
     @Environment(Workspace.self) private var workspace
     @State private var model = AgentListModel()
 
-    /// 项目范围里的项目进了回收站时是全部。
-    private var filter: UUID? { workspace.catalog?.project(workspace.projectScope)?.id }
+    private var filter: UUID? { workspace.scopedProject }
 
     var body: some View {
         SessionList(model: model, filter: filter)

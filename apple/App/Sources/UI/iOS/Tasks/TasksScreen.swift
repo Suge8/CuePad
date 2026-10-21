@@ -44,7 +44,7 @@ struct TasksScreen: View {
 
     private var newTaskProject: UUID? { scope ?? navigation.currentProject }
 
-    private var scope: UUID? { workspace.boardScope }
+    private var scope: UUID? { workspace.scopedProject }
 
     /// 一屏一列，左右滑换列：列的宽就是可见宽（`containerRelativeFrame`），按页停。
     private func pages(_ board: TaskBoard) -> some View {
