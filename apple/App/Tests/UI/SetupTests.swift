@@ -1,7 +1,5 @@
 #if os(macOS)
-import CuePi
 import CueStore
-import CueSync
 import CueTestSupport
 import Foundation
 import SwiftUI

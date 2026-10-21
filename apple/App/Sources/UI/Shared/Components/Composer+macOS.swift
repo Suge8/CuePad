@@ -1,6 +1,5 @@
 #if os(macOS)
 import AppKit
-import CueText
 import SwiftUI
 
 extension ComposerSource {

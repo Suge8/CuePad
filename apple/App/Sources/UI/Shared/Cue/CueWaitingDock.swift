@@ -1,5 +1,4 @@
 import CueStore
-import CueText
 import SwiftUI
 
 /// "等你"：固定在输入框上方，最早的那一条，收得紧。第一句是要你定什么，由代码按 Cue 写的动作短语写出
