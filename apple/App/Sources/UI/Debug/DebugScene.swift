@@ -37,8 +37,8 @@ enum ScrollAnchor {
 /// - `-CuePadClick x,y[;x,y|esc|return…]`、`-CuePadRightClick x,y`（仅 Mac，要 `-CuePadForeground YES`）：就绪后在主窗口里按顺序左键点几下（`esc`、`return` 是按那个键）、或右键点一下，打开那里的系统菜单、任务气泡再截图、录屏（`openMenuIfAsked`，见 `DebugMenus+Mac.swift`）；
 /// - `-CuePadCueBrain <可执行文件>`（仅 Mac）：Cue 的大脑换成这个替身（如 `scripts/cue-brain-stub.py`），量值班开销用（docs/verify.md「性能测量」）；
 /// - `-CuePadClosed <秒>`（仅 Mac）：画面就绪后这么久关上主窗口，`-CuePadReopen <秒>` 关上这么久再打开（`closeIfAsked`，见 `DebugScene+Cue.swift`）；
-/// - `-CuePadDockTour YES`（iPhone）：画面就绪后按固定节奏走一遍底部那一排：Cue 页展开"⋯"、去三页、三页互换、推入与返回、搜索、换去处清掉推入的页、从 Cue 直接去各页，
-///   录换去处的过渡（`dockTourIfAsked`，见 `DebugScene+iOS.swift`）；`-CuePadNotice <文字>`：就绪前弹一条提示（`noticeIfAsked`）；`-CuePadPlacesOpen YES`（配 cue 画面）：Cue 页底部的"⋯"一出现就展开（`debugExposesPlaces`）；
+/// - `-CuePadDockTour YES`（iPhone）：就绪后按固定节奏走一遍底部那一排，录换去处的过渡（`dockTourIfAsked`）；
+///   `-CuePadNotice <文字>`：就绪前弹一条提示（`noticeIfAsked`）；`-CuePadQuiet YES`（iOS）：不弹演示会话的前台横幅；`-CuePadPlacesOpen YES`（配 cue 画面）：Cue 页底部的"⋯"一出现就展开（`debugExposesPlaces`）；
 ///   `-CuePadCueDraft <文字>`（配 cue 画面）：Cue 的输入框里先有这句草稿；
 /// - `-CuePadReduceMotion YES`：整个窗口按"减弱动态效果"画（`PaletteProvider` 改窗口的环境；不碰系统设置，Mac 上那是用户这台机器的全局设置）；`-CuePadLargestType YES` 同理按最大的辅助字号画；
 /// - `-CuePadCueFocus YES`（配 cue 画面）：Cue 页的输入框一出现就聚焦；`-CuePadSoftKeyboard YES`（iOS）：模拟器里聚焦也弹出系统键盘；`-CuePadLandscape YES`（iPhone）：转成横屏；`-CuePadCompact <宽>`（iPad）：按这么宽的窄窗口画（分屏、台前调度；紧凑尺寸类，底部那一排 `DockRoot`，`debugCompact`）；
@@ -209,6 +209,7 @@ enum DebugScene {
         preset.cuePanelEnd = panel == "end"
         preset.cuePanelOpen = preset.cuePanelEnd || defaults.bool(forKey: "CuePadCuePanel")
         preset.quotaOpen = defaults.bool(forKey: "CuePadQuotaOpen")
+        preset.quietAlerts = defaults.bool(forKey: "CuePadQuiet")
         #endif
         return preset
     }
