@@ -34,9 +34,9 @@
 
 | | |
 |:-:|:-:|
-| <img src="design/readme/cue.png" alt="Cue reports back with evidence; what it did folds into one line" width="400" /> | <img src="design/readme/board.png" alt="Task board: advancing, and waiting on you" /> |
+| <img src="design/readme/cue.png" alt="Cue reports back with evidence; what it did folds into one line" width="400" /> | <img src="design/readme/board.png" alt="Task board: advancing, and waiting on you" width="400" /> |
 | Cue reports back with proof, and asks only what needs you | Every task on one board; answer Cue in one tap |
-| <img src="design/readme/session.png" alt="Annotate any part of an agent's reply" width="400" /> | <img src="design/readme/iphone-demo.png" alt="An agent's work, previewed on the iPhone" /> |
+| <img src="design/readme/session.png" alt="Annotate any part of an agent's reply" width="400" /> | <img src="design/readme/iphone-demo.png" alt="An agent's work, previewed on the iPhone" width="400" /> |
 | Agents send you pages and screenshots; annotate any part of a reply | Check an agent's work from your phone |
 
 > The interface is in Simplified Chinese for now.
