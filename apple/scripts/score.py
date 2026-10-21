@@ -91,7 +91,7 @@ def mark(result) -> str:
     return "—" if result is None else "✓" if result else "✗"
 
 
-def suite_report(suite: str, groups: list, names: list, runs: dict) -> list:
+def suite_report(suite: str, groups: list, runs: dict) -> list:
     present = [n for g in groups for n in g if suite in runs[n]]
     if not present:
         return []
@@ -203,9 +203,8 @@ def main():
         lines.append("- 计费标识（Pi，带 Claude 订阅计费标识的模型请求 / 全部）：" + "、".join(f"{n} {b[0]}/{b[1]}" for n, b in billed.items() if b))
     lines += ["- ✓ 过、✗ 没过、— 这一遍没测到（不计）。组内差是同一设置几遍之间最大减最小：差值小于它的不算改动的效果。", ""]
     for suite in SUITES:
-        lines += suite_report(suite, groups, names, runs)
-    out = groups[-1][-1]
-    path = [r for g in ([args.runs] + ([args.vs] if args.vs else [])) for r in g if r.name == out][0] / "score.md"
+        lines += suite_report(suite, groups, runs)
+    path = (args.vs or args.runs)[-1] / "score.md"
     path.write_text("\n".join(lines))
     print(path)
 
