@@ -10,8 +10,8 @@ extension View {
             switch style {
             case .fullScreen:
                 self.fullScreenCover(item: item) { content($0).environment(\.closePanel, close) }
-            case .bubble(let anchor):
-                self.overlay { BubbleLayer(item: item.wrappedValue, anchor: anchor, close: close, content: content) }
+            case .bubble(let source):
+                self.overlay { BubbleLayer(item: item.wrappedValue, source: source, close: close, content: content) }
             case .sheet:
                 self.sheet(item: item) { content($0).environment(\.closePanel, close) }
             }
@@ -28,7 +28,7 @@ extension View {
 /// 点另一条任务就是换成它的气泡）。键盘升起时（在气泡里写正文）气泡收起尾巴、贴在键盘上沿，不被键盘盖住。
 private struct BubbleLayer<Item: Identifiable, Panel: View>: View {
     let item: Item?
-    let anchor: CGPoint?
+    let source: BubbleSource
     let close: ClosePanel
     @ViewBuilder let content: (Item) -> Panel
     @State private var keyboardUp = false
@@ -36,10 +36,9 @@ private struct BubbleLayer<Item: Identifiable, Panel: View>: View {
 
     var body: some View {
         GeometryReader { proxy in
-            let origin = proxy.frame(in: .global).origin
             let placement = keyboardUp
                 ? BubblePlacement(dockedIn: proxy.size, insets: Self.insets)
-                : BubblePlacement(anchor: anchor.map { CGPoint(x: $0.x - origin.x, y: $0.y - origin.y) }, container: proxy.size, insets: Self.insets)
+                : BubblePlacement(source: source, container: proxy.frame(in: .global), insets: Self.insets)
             BubbleStage {
                 if let item {
                     BubbleFrame(placement: placement) {

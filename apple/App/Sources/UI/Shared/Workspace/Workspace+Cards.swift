@@ -82,11 +82,8 @@ extension Workspace {
             return
         }
         if let closed = closedTask, closed.task == task, PressPoint.reopens(closedAt: closed.at) { return closedTask = nil }
-        openTask = TaskBubble.Request(task: task, step: step, anchor: pressAnchor)
+        openTask = TaskBubble.Request(task: task, step: step, source: press.source)
     }
-
-    /// 刚按下的那一下（`PressPoint.anchor`）：从它长出的气泡落在这里。
-    var pressAnchor: CGPoint? { press.anchor }
 
     /// 归档（连同下级）：不占列表、仍可搜；提示里可撤销。
     func archive(_ id: UUID) async throws {

@@ -2,7 +2,7 @@
 import CueStore
 import SwiftUI
 
-/// 会话页（侧栏的"会话"进来）：没有页标题，顶上那一排（`pageHeader`，列表滚到它后面）：项目范围（与任务页共用 `Workspace.projectScope`）、搜索、额度环（`QuotaRings`，同手机；点它从那一下长出明细的气泡 `QuotaDetail`，点外面或 Esc 收回）、新会话（右上"⋯"里同一下，还有接入 Agent）。
+/// 会话页（侧栏的"会话"进来）：没有页标题，顶上那一排（`pageHeader`，列表滚到它后面）：项目范围（与任务页共用 `Workspace.projectScope`）、搜索、额度环（`QuotaRings`，同手机；点它从环下长出明细的气泡 `QuotaDetail`，点外面或 Esc 收回）、新会话（右上"⋯"里同一下，还有接入 Agent）。
 /// 列表与行同手机（`PiSessionList`、`PiSessionRow`），点行在内容区打开会话页；在线会话右键可结束（确认后发给它所在的 Mac，对话留着）。
 /// 这台 Mac 检测到 Agent 却一家都没接入时，最上面是接入小卡（`ConnectAgents`）：没接入时本机的会话在这里看不到。
 struct AgentPage: View {
@@ -10,8 +10,8 @@ struct AgentPage: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @State private var model = AgentListModel()
-    /// 额度明细的气泡开着时从哪一下长出来；收起的时刻（按在环上收起的，松开时不再打开，`PressPoint.reopens`）。
-    @State private var quota = DebugHooks.preset.quotaOpen ? QuotaBubble(anchor: nil) : nil
+    /// 额度明细的气泡开着；收起的时刻（按在环上收起的，松开时不再打开，`PressPoint.reopens`）。
+    @State private var quotaOpen = DebugHooks.preset.quotaOpen
     @State private var quotaClosed: ContinuousClock.Instant?
 
     private var filter: UUID? { workspace.scopedProject }
@@ -28,13 +28,11 @@ struct AgentPage: View {
         .background(palette.desk)
         .agentList(model, filter: filter)
         .refreshesQuota()
-        .panel(item: $quota, style: .bubble(anchor: quota?.anchor)) { _ in QuotaDetail().padding(16) }
-        .onChange(of: quota == nil) { _, closed in if closed { quotaClosed = .now } }
+        .onChange(of: quotaOpen) { _, open in if !open { quotaClosed = .now } }
     }
 
     private func toggleQuota() {
-        if quota != nil || PressPoint.reopens(closedAt: quotaClosed) { return quota = nil }
-        quota = QuotaBubble(anchor: workspace.pressAnchor)
+        quotaOpen = !quotaOpen && !PressPoint.reopens(closedAt: quotaClosed)
     }
 
     private static let top = "top"
@@ -68,8 +66,9 @@ struct AgentPage: View {
             .font(Typography.body)
             .padding(.horizontal, 14).frame(height: 36)
             .glass(in: .capsule)
-            QuotaRings(open: quota != nil, height: Spacing.toolbarControl, action: toggleQuota)
+            QuotaRings(open: quotaOpen, height: Spacing.toolbarControl, action: toggleQuota)
                 .glass(in: .capsule, interactive: true)
+                .bubble(isPresented: $quotaOpen) { QuotaDetail().padding(16) }
             NewSessionButton(showing: Bindable(workspace).showsNewSession)
         }
     }
@@ -131,12 +130,6 @@ struct AgentPage: View {
                        message: "在终端里开一个 Agent，或点右上角开新会话（⌥⌘N）", waitsForSync: true) { EmptyView() }
         }
     }
-}
-
-/// 额度明细的气泡：从点环的那一下长出来（`Workspace.pressAnchor`）。
-private struct QuotaBubble: Identifiable {
-    let id = 0
-    let anchor: CGPoint?
 }
 
 /// 接入 Agent 的小卡：这台 Mac 检测到 Agent、一家都没接入、桥上也没有会话时才有（没接入时本机的会话在这一页看不到，列表空着时它就是如实的空态，不再叠吉祥物）。
