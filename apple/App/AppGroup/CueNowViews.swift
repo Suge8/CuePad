@@ -80,13 +80,18 @@ struct CueNowLine<Decorated: View>: View {
                 CueBeads(beads: now.beads, hidden: now.hidden, limit: limit, bead: bead).fixedSize()
             }
             // 换一句原地换：只变了数时数字滚过去（"2 件"到"1 件"）；换了说法整句先淡掉再淡入（`HandOff`），叠在同一处。
+            // 占位的是看不见的新句：换句的那一刻宽度就是新句的，淡出中的旧句不撑着排版——居中排的页头里整组随这一下的动画滑到新位置
+            // （`CueHeader`），不在旧句淡完时再跳一下。
             // 否决过：整句上推（新旧两句上下错开叠着、越出页头）；整句按数字滚（不同的字逐字纵滚加模糊，中间帧混成"在 路上"）
-            ZStack(alignment: .leading) {
-                Text(now.headline).foregroundStyle(tint).lineLimit(1)
-                    .contentTransition(.numericText())
-                    .id(now.headline.filter { !$0.isNumber })
-                    .transition(.handOff)
-            }
+            Text(now.headline).lineLimit(1).hidden()
+                .overlay(alignment: .leading) {
+                    ZStack(alignment: .leading) {
+                        Text(now.headline).foregroundStyle(tint).lineLimit(1)
+                            .contentTransition(.numericText())
+                            .id(now.headline.filter { !$0.isNumber })
+                            .transition(.handOff)
+                    }
+                }
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(now.spoken)
