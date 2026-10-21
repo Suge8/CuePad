@@ -4,9 +4,10 @@ extension CueStore {
   /// 会话列表的一页（Mac 与手机共用的唯一查询）。顺序见 `PiSessionPage`。
   public func piSessionPage(_ query: PiSessionQuery) throws -> PiSessionPage {
     let (condition, arguments) = Self.condition(query)
+    // 只有一种状态的范围里"已结束的排后面"是常量，留着它 SQLite 就不走按状态的索引、把整个范围排一遍（真实库已结束的一页 17 万步对 3 千步）
+    let endedLast = query.scope == .all || query.scope == .current ? "state = '\(PiWorkState.ended.rawValue)', " : ""
     let states = try select(
-      PiSessionState.self, where: condition, arguments, orderBy: "state = '\(PiWorkState.ended.rawValue)', stateSince DESC, id",
-      limit: query.limit, offset: query.offset)
+      PiSessionState.self, where: condition, arguments, orderBy: "\(endedLast)stateSince DESC, id", limit: query.limit, offset: query.offset)
     let total = try db.first("SELECT count(*) FROM piSessionStates WHERE \(condition)", arguments) { Int($0.int(0)) } ?? 0
     return PiSessionPage(items: try listItems(states), total: total)
   }
