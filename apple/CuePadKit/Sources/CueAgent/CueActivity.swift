@@ -35,7 +35,7 @@ public enum CueActivity {
       case "forget": return line("忘掉一条")
       case "remind": return line("定提醒")
       case "allow": return line("改允许清单")
-      default: return line("整理记忆")
+      default: return line("用记忆")
       }
     case "bash": return line(tool, args.line("command"))
     case "grep", "find", "glob": return line(tool == "glob" ? "find" : tool, args.line("pattern"))
@@ -89,7 +89,9 @@ public enum CueActivity {
       case "allow":
         let ask = args.line("ask").map { CueAsk(rawValue: $0)?.name ?? $0 } ?? ""
         return item(.other, "允许清单：\(ask)" + ((args.raw["allowed"] as? Bool) == false ? "又要先问" : "以后不用问"))
-      default: return item(.other, "整理记忆")
+      case "forget": return item(.other, "忘掉一条记忆")
+      case "pin": return item(.other, (args.raw["pinned"] as? Bool) == false ? "一条记忆不再一直记着" : "一条记忆一直记着")
+      default: return item(.other, "memory")
       }
     case "bash": return item(.command, args.line("command") ?? tool)
     case "grep", "find", "glob": return item(.search, args.line("pattern") ?? tool)
