@@ -90,7 +90,6 @@ enum InkSymbols {
         "cue.ring.plus",
         "cue.badge.down",
         "cue.compact",
-        "cue.enlarge",
         "cue.hand",
         "cue.mac",
         "cue.photo",

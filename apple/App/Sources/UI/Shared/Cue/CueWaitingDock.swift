@@ -3,7 +3,8 @@ import SwiftUI
 
 /// "等你"：固定在输入框上方，最早的那一条（从任务看板点进来的那条先露，`Workspace.leadingAsk`），收得紧。第一句是要你定什么，由代码按 Cue 写的动作短语写出
 /// （`CueAsking.question`），不靠 Cue 的措辞；Cue 的原话默认收起，点"原话"再看（长了在里面滚）。下面是 Cue 点名要你看的图与各看什么
-/// （`CueShots`，没点名的没有图；点开全屏时底栏就是这几个选项，看完当场定）、选项（`CueChoices`），末行是关联的任务与原话的开关
+/// （`CueShots`，没点名的没有图；点开全屏时底栏就是这几个选项，看完当场定；"可以"选的是其中一张时那张描靛青圈、选项旁一句"要选别的，在下面跟 Cue 说"）、
+/// 选项（`CueChoices`），末行是关联的任务与原话的开关
 /// （Mac 上连同选项；辅助功能字号下各占一行），Mac 与手机同一结构；还有几条在等由页头与侧栏的"等你 M"说。卡上只能选：别的话在 Cue 页底下的输入框说，
 /// 一开口卡就收起（Cue 判断不是在答它会放回，见 `CueQuestionEnd`）。没有关掉。
 /// 列表与数量只来自 `cueMessagesWaitingForYou()`：回答后等库里那条结束才换下一条，写的时候按钮停用；没写成就报错、按钮恢复，可以再点。
@@ -13,7 +14,7 @@ struct CueWaitingDock: View {
     /// 提问点名的图（`CueThread.shots`）
     let shots: [UUID: [CueShown]]
     let open: (PreviewOpening) -> Void
-    /// 卡正在升起、沉下或淡入淡出：这期间对话不另外往上滑（`ChatColumn` 的 `holding`），只跟着它让出的高挪，停了再滑一次。
+    /// 卡正在升起或淡入：这期间对话不另外往上滑（`ChatColumn` 的 `holding`），只跟着它让出的高挪，停了再滑一次。离开时不压（`follow`）。
     @Binding var moving: Bool
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
@@ -24,10 +25,12 @@ struct CueWaitingDock: View {
     @State private var ending: UUID?
     /// 展开了原话的那条：换下一条时自动收起。
     @State private var reading: UUID?
-    /// 露出的那条：在等的第一条；答完沉下去的这一段里还是它（那时它已不在 `waiting` 里）。
+    /// 露出的那条：在等的第一条；答完淡掉的这一段里还是它（那时它已不在 `waiting` 里）。
     @State private var shown: CueMessage?
-    /// 露出了多少，0…1：升起的比例（`RiseBehind`，0 是全藏在输入框后面）；减弱动态效果时是不透明度。
+    /// 露出了多少，0…1：升起的比例（`RiseBehind`，0 是全藏在输入框后面）；减弱动态效果时与离开时是不透明度。
     @State private var level: CGFloat
+    /// 答完（或撤回）正在离开：让出的高一下到位，卡浮在原处淡掉（同减弱动态效果）。
+    @State private var leaving = false
 
     /// 页打开时已经在等的那张随页一起排出来、不升起（同 `follow` 的头一次）：等 `onChange` 再放的话卡晚一次更新才排，
     /// 对话按它让出的高又要重排一遍。
@@ -41,22 +44,25 @@ struct CueWaitingDock: View {
         _level = State(initialValue: waiting.isEmpty ? 0 : 1)
     }
 
-    /// 来了从输入框后面升起、答完沉回去（`RiseBehind`，露出的比例是状态、随曲线变：做成移除的过渡的话，沉回去那一下不动画，卡一帧就没了）；
-    /// 一条换下一条时新卡在原地与旧卡交叉淡（底边对齐叠放，竖排的话两张同时占位、底栏一下高一倍）。减弱动态效果时只淡入淡出：
+    /// 来了从输入框后面升起（`RiseBehind`，露出的比例是状态、随曲线变）；答完让出的高一下到位、卡浮在原处淡掉：对话里接着长出这一问与你的回答，
+    /// 对话一次滑到终位，回答就出现在卡刚才的地方。沉回去的话两段动作打架：回答比卡高时对话先跟着卡往下挪、卡沉完再往上滑，
+    /// 回答从输入框后面冒出来；比卡矮时上滑与跟着沉一上一下。
+    /// 一条换下一条时新卡在原地与旧卡交叉淡（底边对齐叠放，竖排的话两张同时占位、底栏一下高一倍）。减弱动态效果时来也只淡入：
     /// 占的高跟着有没有在等的一下到位、卡浮着淡，对话只定位一次。占的高由对话让出（卡在浮着的回复框里，`FloatingReply`）。
     /// 卡与下面输入框的间距在卡里（`below`）：没有在等的时候这一层不占位，也不留出间距。
     var body: some View {
         ZStack(alignment: .bottom) {
             if let message = shown {
-                // 只有换下一条时带动画（交叉淡）；头一张出现与沉完拿掉都不带，过渡不播
+                // 只有换下一条时带动画（交叉淡）；头一张出现与淡完拿掉都不带，过渡不播
                 card(waiting.first { $0.id == message.id } ?? message)
                     .id(message.id)
                     .transition(.opacity)
             }
         }
-        .opacity(reduceMotion ? level : 1)
-        .modifier(RiseBehind(shown: reduceMotion ? (waiting.isEmpty ? 0 : 1) : level, floats: reduceMotion, limit: chatHeight / 2))
+        .opacity(floats ? level : 1)
+        .modifier(RiseBehind(shown: floats ? (waiting.isEmpty ? 0 : 1) : level, floats: floats, limit: chatHeight / 2))
         .onChange(of: waiting.first?.id, initial: true) { old, new in follow(animated: old != new) }
+        .debugSettling(moving || leaving)
     }
 
     private static let below: CGFloat = 8
@@ -72,18 +78,22 @@ struct CueWaitingDock: View {
     }
     #endif
 
-    /// 跟上在等的第一条：来了升起，没了沉下去、沉完再拿掉，换了一条原地交替；减弱动态效果时来去都只淡。
+    /// 卡浮着、露出的比例当不透明度用：减弱动态效果时与离开时。
+    private var floats: Bool { reduceMotion || leaving }
+
+    /// 跟上在等的第一条：来了升起，没了淡掉、淡完再拿掉，换了一条原地交替；减弱动态效果时来也只淡。
     /// 升起用无回弹弹簧、从卡排进去的下一帧起播：卡插进来那一帧排版重，从这一帧起算的话前几十毫秒被吃掉，看着是冒一点、停一下、窜一大截。
-    /// 沉下用定长曲线（`Motion.move`）：弹簧最后那段一两点的尾巴要再画上百毫秒，沉到底前卡剩一道细线停在输入框上（升起的尾巴停在整高处，看不见）。
-    /// 减弱动态效果时淡入稍慢、淡出要快：淡出时对话已在终位，卡叠在字上的那几帧越短越好。
+    /// 淡入稍慢、淡出要快：淡出时对话正滑向终位，卡叠在字上的那几帧越短越好。离开时不压住对话（`moving`）：它要和卡让出的高同一下滑到终位。
     private func follow(animated: Bool) {
         guard let next = waiting.first else {
             guard shown != nil else { return }
             guard animated else { return leave() }
-            move(to: 0, reduceMotion ? .easeOut(duration: Motion.handOff) : Motion.move) { if waiting.isEmpty { leave() } }
+            leaving = true
+            move(to: 0, .easeOut(duration: Motion.handOff), holds: false) { if waiting.isEmpty { leave() } }
             return
         }
         let swapping = shown != nil
+        leaving = false
         withAnimation(swapping && animated ? Motion.quick : nil) { shown = next }
         guard animated, level < 1 else { return level = 1 }
         moving = true
@@ -94,9 +104,9 @@ struct CueWaitingDock: View {
         }
     }
 
-    /// 播一段卡的来去，播着的时候 `moving`；动画走完再收尾。沉到一半又来了一条时前一段被接走，它的收尾不算数（目标已经变了）。
-    private func move(to target: CGFloat, _ animation: Animation, then done: @escaping () -> Void = {}) {
-        moving = true
+    /// 播一段卡的来去，`holds` 时播着的时候 `moving`；动画走完再收尾。淡到一半又来了一条时前一段被接走，它的收尾不算数（目标已经变了）。
+    private func move(to target: CGFloat, _ animation: Animation, holds: Bool = true, then done: @escaping () -> Void = {}) {
+        moving = holds
         withAnimation(animation, completionCriteria: .removed) { level = target } completion: {
             guard level == target else { return }
             moving = false
@@ -104,10 +114,11 @@ struct CueWaitingDock: View {
         }
     }
 
-    /// 拿掉：沉到底或淡没了，这时已看不见，不再播过渡。
+    /// 拿掉：淡没了，这时已看不见，不再播过渡。
     private func leave() {
         shown = nil
         level = 0
+        leaving = false
     }
 
     /// 从上到下：问句（规矩那一类下面是规矩原话）、一排图、操作。卡至多占对话区可见高的一半，地方不够时只用剩下的（`RiseLayout`）。
@@ -115,10 +126,13 @@ struct CueWaitingDock: View {
     /// 整张 → 紧凑（去掉那排图；问句与选项钉住，展开的原话在中间滚，末行放得下才露）→ 只剩问句一行（`folded`）。
     /// 紧凑那档的理想高只算问句与选项（原话与末行都是 `Yielding`），所以"问句加选项都放不下"才收成一行；哪一档都不会截出半截字或半张图。
     /// 放得下时不进滚动区：滚动区里的按钮按下要晚一下才有反馈。Mac 上不挑（挑的话几份都要建，第一次打开 Cue 页时卡多建一遍）。
-    /// 手机上选项竖排（`CueChoices`）、下面任务与原话一行（辅助功能字号下各占一行）；Mac 上合成一行，右下角是"可以"。
+    /// 手机上选项自成一行（`CueChoices`：窄屏竖排铺满，宽屏 iPad 靠右横排——与任务、原话合成一行的话，带"以后……不用问"时放不下、竖着挤在右边）、
+    /// 下面任务与原话一行（辅助功能字号下各占一行）；Mac 上合成一行，右下角是"可以"。
     private func card(_ message: CueMessage) -> some View {
         let ref = message.taskID.flatMap { tasks[$0] }
-        let choices = CueChoices(options: message.choices ?? [], disabled: ending == message.id) { answer(message, $0) }
+        let choices = CueChoices(
+            options: message.choices ?? [], disabled: ending == message.id, hint: chosen(message).map { _ in "要选别的，在下面跟 \(workspace.cue.name) 说" }
+        ) { answer(message, $0) }
         let side = Self.padding.leading
         #if os(macOS)
         let body = VStack(spacing: 0) {
@@ -127,7 +141,7 @@ struct CueWaitingDock: View {
                 .padding(.horizontal, side).padding(.bottom, Self.padding.bottom).layoutPriority(1)
         }
         #else
-        let choicesRow = choices.padding(.top, 16).padding(.horizontal, side)
+        let choicesRow = choices.frame(maxWidth: .infinity, alignment: .trailing).padding(.top, 16).padding(.horizontal, side)
         let footerRow = Group {
             if typeSize.isAccessibilitySize {
                 // 任务至多两行、不截断
@@ -191,11 +205,17 @@ struct CueWaitingDock: View {
             CueQuestionLine(message: message)
             if reading == message.id { original(message.text).padding(.top, 12).transition(.opacity) }
             if showsShots, let shots = shots[message.id] {
-                CueShots(shots: shots, group: "waiting", reply: .answer(message), open: open).padding(.top, 16)
+                CueShots(shots: shots, group: "waiting", reply: .answer(message), chosen: chosen(message), open: open)
+                    .padding(.top, 16)
             }
         }
         .padding(.top, Self.padding.top).padding(.horizontal, Self.padding.leading)
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// 点名的几张图里"可以"选的那张（`CueShots.chosen`）：它描靛青圈，选项旁说选别的去哪说。
+    private func chosen(_ message: CueMessage) -> UUID? {
+        shots[message.id].flatMap { CueShots.chosen(for: message.asking, in: $0) }
     }
 
     /// 末行（任务、原话；Mac 上连同选项）可点的高。

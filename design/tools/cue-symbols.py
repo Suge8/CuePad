@@ -118,7 +118,6 @@ SYMBOLS = {
     "ring.plus": ring_mark(mark_plus),
     "badge.down": badge_dart,
     "compact": compact,
-    "enlarge": enlarge,
     "hand": hand,
     "mac": mac,
     "photo": photo,

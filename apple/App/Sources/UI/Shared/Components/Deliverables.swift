@@ -79,9 +79,9 @@ struct DeliverableTile: View {
         case column(maxHeight: CGFloat)
         /// 横向滑的一排里：同高，宽按比例
         case strip(height: CGFloat)
-        /// 提问点名的图（`CueShots`）：方形、宽随给的（至多 `side`）、按显著区域裁切填满（`LookBox.salient`），白底、实色边（`Palette.mediaEdge`）、深色下不压暗，
-        /// 右上角一颗放大的记号（太窄的不放，Mac 上悬停才出现）。
-        case shot(side: CGFloat)
+        /// 提问点名的图（`CueShots`）：方形、宽随给的（至多 `side`）、取细节最多的那一段填满（`LookBox.salient`），白底、实色边（`Palette.mediaEdge`）、深色下不压暗，
+        /// 图上不压放大记号（整张都可点，记号挡的正是要认的内容）。`chosen`："可以"选的就是这张，边换成两点宽的主按钮靛青。
+        case shot(side: CGFloat, chosen: Bool)
     }
 
     static let captionGap: CGFloat = 5
@@ -154,9 +154,7 @@ struct DeliverableTile: View {
     }
 
     private var isShot: Bool { if case .shot = shape { true } else { false } }
-
-    /// 放大的记号：图宽到这么多才放（再窄就挡住了图）。
-    static let enlargeMinWidth: CGFloat = 80
+    private var isChosen: Bool { if case .shot(_, true) = shape { true } else { false } }
 
     /// 画面出来之前写它是什么：成页的（网页、文稿、表格、PDF…）一张纸，音频、视频、3D 各自的记号，其余是文件。
     private var kindIcon: Icon {
@@ -188,16 +186,13 @@ struct DeliverableTile: View {
             picture.frame(width: (height * aspect).rounded(), height: height)
         case .shot:
             picture.aspectRatio(1, contentMode: .fit)
-                .overlay(alignment: .topTrailing) {
-                    GeometryReader { frame in if frame.size.width >= Self.enlargeMinWidth { EnlargeMark().frame(maxWidth: .infinity, alignment: .trailing) } }
-                }
         }
     }
 
     /// 画面铺满给的框（比例夹过的多出来的裁掉）；没有画面的写类型。
     private var picture: some View {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
-        // 裁的时候留上沿：截图与页面要紧的多在上面；提问的方形缩略图出画面时已按显著区域裁好（`LookBox.salient`），居中放
+        // 裁的时候留上沿：截图与页面要紧的多在上面；提问的方形缩略图出画面时已取好景（`LookBox.salient`），居中放
         // 要你看清的图垫白（透明图）；画面出来之前同别处，写它是什么
         return Rectangle().fill(isShot && shown?.image != nil ? Color.white : palette.fill)
             .overlay(alignment: isShot ? .center : .top) {
@@ -230,7 +225,7 @@ struct DeliverableTile: View {
                 }
             }
             .clipShape(shape)
-            .overlay(shape.strokeBorder(isShot ? palette.mediaEdge : palette.hair))
+            .overlay(shape.strokeBorder(isChosen ? palette.signatureFill : isShot ? palette.mediaEdge : palette.hair, lineWidth: isChosen ? 2 : 1))
             .zoomSource(zoom, in: namespace)
     }
 
@@ -255,7 +250,7 @@ struct DeliverableTile: View {
         case .hero(let maxHeight): LookBox(width: pixels(maxHeight * 16 / 9), height: pixels(maxHeight), fills: true)
         case .column(let maxHeight): LookBox(width: pixels(380), height: pixels(maxHeight), fills: false)
         case .strip(let height): LookBox(width: 0, height: pixels(height), fills: true)
-        case .shot(let side): LookBox(width: pixels(side), height: pixels(side), fills: true, salient: true)
+        case .shot(let side, _): LookBox(width: pixels(side), height: pixels(side), fills: true, salient: true)
         }
     }
 }
@@ -267,23 +262,5 @@ private extension View {
         #else
         self
         #endif
-    }
-}
-
-/// 截图右上角的放大记号：只是提示，整张图都可点。Mac 上指针停在这份交付物上（`buttonHovered`）才露出，手机一直在。
-private struct EnlargeMark: View {
-    @Environment(\.palette) private var palette
-    #if os(macOS)
-    @Environment(\.buttonHovered) private var lit
-    #endif
-
-    var body: some View {
-        Image(.enlarge).font(.system(size: 12, weight: .semibold)).foregroundStyle(palette.onMedia)
-            .frame(width: 20, height: 20).background(palette.mediaScrim, in: .circle)
-            .padding(6)
-            #if os(macOS)
-            .opacity(lit ? 1 : 0)
-            #endif
-            .accessibilityHidden(true)
     }
 }
