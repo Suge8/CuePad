@@ -86,9 +86,7 @@ extension Duty {
     /// 写进 .md 的长程统计
     func summarize() async {
         let rounds = eval.rounds.filter { $0.wake != .enabled }
-        let durations = rounds.compactMap { round in round.finishedAt.map { $0.timeIntervalSince(round.startedAt) } }.sorted()
-        let median = durations.isEmpty ? "—" : seconds(durations.count.isMultiple(of: 2)
-            ? (durations[durations.count / 2 - 1] + durations[durations.count / 2]) / 2 : durations[durations.count / 2])
+        let median = medianRoundTime()
         let renewals = eval.renewals
         let renewedAt = renewalModes.compactMap { round, mode in
             steps.firstIndex { $0.window?.contains(round.startedAt) == true }.map { "第 \($0 + 1) 步「\(steps[$0].label)」（\(mode)）" }

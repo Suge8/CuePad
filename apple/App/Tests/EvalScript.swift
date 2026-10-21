@@ -167,6 +167,15 @@ class EvalScript {
         }
     }
 
+    /// 每轮用时的中位（不含刚启用那一轮；偶数轮取中间两轮的平均）
+    func medianRoundTime() -> String {
+        let durations = eval.rounds.filter { $0.wake != .enabled }
+            .compactMap { round in round.finishedAt.map { $0.timeIntervalSince(round.startedAt) } }.sorted()
+        guard !durations.isEmpty else { return "—" }
+        let middle = durations.count / 2
+        return seconds(durations.count.isMultiple(of: 2) ? (durations[middle - 1] + durations[middle]) / 2 : durations[middle])
+    }
+
     /// .md 里统计段的尾巴：剧本没按预想走的地方，与每一步叫醒了几轮、调了哪些工具
     func stepTable() -> [String] {
         notes.map { "- \($0)" } + ["", "| 步 | 叫醒的事 | 轮数 | 工具调用 |", "| --- | --- | --- | --- |"]

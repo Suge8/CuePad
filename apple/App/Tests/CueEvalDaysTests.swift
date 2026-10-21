@@ -176,8 +176,7 @@ private final class Days: EvalScript, Playable {
 
     func summarize() async {
         let rounds = eval.rounds.filter { $0.wake != .enabled }
-        let durations = rounds.compactMap { round in round.finishedAt.map { $0.timeIntervalSince(round.startedAt) } }.sorted()
-        let median = durations.isEmpty ? "—" : seconds(durations[durations.count / 2])
+        let median = medianRoundTime()
         let usage = rig.brainDirectory.map(BrainUsage.rounds(in:)) ?? []
         let all = eval.rounds
         let merged = await merges()
