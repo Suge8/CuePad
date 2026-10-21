@@ -43,6 +43,7 @@ enum PiWire {
 
     struct Hello: Decodable {
         var protocolVersion: Int
+        var extensionVersion: Int?
         var sessionId: String
         var sessionFile: String?
         var pid: Int32
@@ -59,12 +60,13 @@ enum PiWire {
 
         enum CodingKeys: String, CodingKey {
             case protocolVersion = "protocol"
-            case sessionId, sessionFile, pid, cwd, tty, term, state, launchToken, hosted
+            case extensionVersion, sessionId, sessionFile, pid, cwd, tty, term, state, launchToken, hosted
         }
 
         init(from decoder: any Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
             protocolVersion = try c.decode(Int.self, forKey: .protocolVersion)
+            extensionVersion = try c.decodeIfPresent(Int.self, forKey: .extensionVersion)
             sessionId = try c.decode(String.self, forKey: .sessionId)
             sessionFile = try c.decodeIfPresent(String.self, forKey: .sessionFile)
             pid = try c.decode(Int32.self, forKey: .pid)

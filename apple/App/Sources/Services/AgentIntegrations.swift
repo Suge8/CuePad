@@ -141,12 +141,21 @@ final class AgentIntegrations {
         where isWritable(kind) && statuses[kind]?.files == .outdated && statuses[kind]?.isAvailable == true {
             do { try await install(kind) } catch { failure = failure ?? error }
         }
+        do { try await integration.retireLegacyPiExtension() } catch { failure = failure ?? error }
         if let failure { throw failure }
     }
 
     /// 新装或升级；已在运行的 Pi 会话空闲时自己重新载入扩展。
     func install(_ kind: AgentKind) async throws {
         try await change(kind) { try await $0.install(kind) }
+    }
+
+    /// 过渡：Pi 会话上线、下线（含换上新扩展时的重连）时复查旧单文件扩展的存根还要不要留（`AgentIntegration.retireLegacyPiExtension`）。
+    func retireLegacyPiExtension(following changes: AsyncStream<PiSessionChange>) async throws {
+        for await change in changes {
+            if case .appeared = change { try await integration.retireLegacyPiExtension() }
+            if case .ended = change { try await integration.retireLegacyPiExtension() }
+        }
     }
 
     /// 删掉 CuePad 写给它的全部文件。

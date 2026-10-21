@@ -294,7 +294,7 @@ struct RealHostTests {
         let host = host(pi, bridge)
         host.start()
         defer { stopHostedProcesses(bridge) }
-        try installed.install()  // 新 App 装好了新扩展
+        try installed.install(legacyInUse: false)  // 新 App 装好了新扩展
 
         try await eventually("同一个进程换上新扩展、重新连上") {
             bridge.sessions.contains { $0.pid == left.pid && !$0.upgrading && $0.state == .settled }

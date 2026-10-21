@@ -72,6 +72,7 @@ extension PiBridge {
             session.turnStartedAt = hello.state.turnSinceDate
             hello.info.apply(to: &session)
             session.launchToken = hello.launchToken
+            link.extensionVersion = hello.extensionVersion
             session.hosted = hello.hosted ?? false
             appear(session, on: link)
         case .otherProtocol(let hello):

@@ -17,16 +17,20 @@ public struct AgentIntegration: Sendable {
     private let isolated: Bool
     /// 装一家用的命令（`runInstaller`）：官方的那条，测试换成放替身的
     let installCommand: @Sendable (AgentKind, AgentStatus.Presence) -> String
+    /// 还有 Pi 会话开着旧单文件扩展（`PiExtensionBundle.legacyFileName`）：App 里是桥上连着的会话没都报随包版本（`PiBridge.allRun`），缺省没有 Pi 在跑
+    let legacyPiExtensionInUse: @Sendable () async -> Bool
 
     public init(
         paths: AgentPaths = AgentPaths(), locate: @escaping @Sendable () async -> ExecutableLocator = { await .system }, cuepad: URL,
-        isolated: Bool = false, installCommand: @escaping @Sendable (AgentKind, AgentStatus.Presence) -> String = { $0.installCommand($1) }
+        isolated: Bool = false, installCommand: @escaping @Sendable (AgentKind, AgentStatus.Presence) -> String = { $0.installCommand($1) },
+        legacyPiExtensionInUse: @escaping @Sendable () async -> Bool = { false }
     ) {
         self.paths = paths
         self.locate = locate
         self.cuepad = cuepad
         self.isolated = isolated
         self.installCommand = installCommand
+        self.legacyPiExtensionInUse = legacyPiExtensionInUse
     }
 
     public func home(of kind: AgentKind) -> URL { paths.home(of: kind) }
@@ -78,7 +82,7 @@ public struct AgentIntegration: Sendable {
         case .found: break
         }
         if case .foreign(let path) = files(of: kind) { throw AgentInstallError.foreign(path) }
-        if kind == .pi { try piExtension.install() }
+        if kind == .pi { try piExtension.install(legacyInUse: await legacyPiExtensionInUse()) }
         try FileManager.default.createDirectory(at: skillDirectory(of: kind), withIntermediateDirectories: true)
         try Data(AgentSkill.text(for: kind, cuepad: cuepad).utf8).write(to: skillFile(kind), options: .atomic)
         try await hooks(kind, codex: found.executable)?.install(command: hookCommand(kind))
@@ -87,6 +91,12 @@ public struct AgentIntegration: Sendable {
     /// 删掉 CuePad 写给这个 Agent 的全部文件，以及因此空出来的目录（`skills/cuepad`，空了的 `skills`、`extensions`）。
     /// Agent 已经卸掉了也能删；隔离运行写不了、有别人的同名文件时什么都不删。`executable` 是检测时挑中的那个（`AgentStatus.executable`）：
     /// Codex 删信任要起它，其余不用。
+    /// 过渡：旧单文件扩展的存根没有会话再用时删掉（见 `PiExtensionBundle.legacyFileName`）。App 在 Pi 会话上线、下线与启动检查时调。
+    @concurrent public func retireLegacyPiExtension() async throws {
+        guard isWritable(.pi) else { return }
+        try piExtension.retireLegacyFile(inUse: await legacyPiExtensionInUse())
+    }
+
     @concurrent public func uninstall(_ kind: AgentKind, executable: URL? = nil) async throws {
         guard isWritable(kind) else { throw AgentInstallError.isolated(kind) }
         if case .foreign(let path) = files(of: kind) { throw AgentInstallError.foreign(path) }
