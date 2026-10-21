@@ -47,11 +47,12 @@ struct DebugWidgetStage: View {
 /// `-CuePadScene activity`：实时活动按真实尺寸与位置画（`CueActivityViews`，主 App 也编进了它），叠在 Cue 页上：顶上紧凑态盖在灵动岛的位置，
 /// 下面露出真的 Cue 页头（同一份 Cue 此刻），再往下是展开态、锁屏、最小态与横屏的窄紧凑态。画的是 Cue 那一行此刻那一份（`CueWatch.now`），
 /// 配 `-CuePadCueNow <样例>`（`CueNowSamples`）钉成某一态，`-CuePadCueCycle YES` 就绪后轮流走过各态（页头与岛一起变，录切换）。
-/// 系统的 `ActivityViewContext` 造不出来：过没过时、横屏窄不窄由这里给，展开态按系统的四块（左、右、摄像头下、下面）摆；岛的黑底与圆角按 iPhone 17 的量。
+/// 系统的 `ActivityViewContext` 造不出来：过没过时（`-CuePadCueStale YES` 画过时之后的样子）、横屏窄不窄由这里给，展开态按系统的四块（左、右、摄像头下、下面）摆；岛的黑底与圆角按 iPhone 17 的量。
 /// 真开起来的那一个在 cue 画面配 `-CuePadDemo YES -CuePadLiveActivity YES`，回到桌面看灵动岛（`simctl io screenshot` 拍不到它，录一小段取帧）。
 struct DebugActivityStage: View {
     let workspace: Workspace
     @Environment(\.palette) private var palette
+    private let stale = UserDefaults.standard.bool(forKey: "CuePadCueStale")
 
     private static let island = Color(white: 0)
     /// 摄像头那一截宽、紧凑态高、展开态宽、锁屏卡宽（iPhone 17 竖屏，pt）。
@@ -79,13 +80,13 @@ struct DebugActivityStage: View {
                     label("长按灵动岛")
                     expanded(state)
                     label("锁屏")
-                    CueActivityViews.lockScreen(state, stale: false)
+                    CueActivityViews.lockScreen(state, stale: stale)
                         .frame(width: Self.lockWidth)
                         .background(palette.paper, in: .rect(cornerRadius: 22, style: .continuous))
                     HStack(alignment: .top, spacing: 28) {
                         VStack(alignment: .leading, spacing: 0) {
                             label("最小（和别的实时活动同在）")
-                            CueActivityViews.minimal(state, stale: false).frame(width: Self.height, height: Self.height).background(Self.island, in: .circle)
+                            CueActivityViews.minimal(state, stale: stale).frame(width: Self.height, height: Self.height).background(Self.island, in: .circle)
                         }
                         VStack(alignment: .leading, spacing: 0) {
                             label("横屏（窄紧凑态）")
@@ -120,10 +121,10 @@ struct DebugActivityStage: View {
     /// 紧凑态：系统按摄像头左右对称地撑开，两边一样宽（取宽的那边，同系统）。
     private func compact(_ state: CueActivityState, limited: Bool) -> some View {
         HStack(spacing: 0) {
-            CueActivityViews.compactLeading(state, stale: false, limited: limited).fixedSize()
+            CueActivityViews.compactLeading(state, stale: stale, limited: limited).fixedSize()
                 .frame(minWidth: limited ? nil : 66, alignment: .leading)
             Color.clear.frame(width: limited ? 14 : Self.camera)
-            CueActivityViews.compactTrailing(state, stale: false, limited: limited).fixedSize()
+            CueActivityViews.compactTrailing(state, stale: stale, limited: limited).fixedSize()
                 .frame(minWidth: limited ? nil : 66, alignment: .trailing)
         }
         .padding(.horizontal, 9)
@@ -135,14 +136,14 @@ struct DebugActivityStage: View {
     private func expanded(_ state: CueActivityState) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .top, spacing: 8) {
-                CueActivityViews.expandedLeading(state, stale: false)
+                CueActivityViews.expandedLeading(state, stale: stale)
                 VStack(spacing: 0) {
                     Color.clear.frame(height: 26)
-                    CueActivityViews.expandedCenter(state, stale: false)
+                    CueActivityViews.expandedCenter(state, stale: stale)
                 }
-                CueActivityViews.expandedTrailing(state, stale: false)
+                CueActivityViews.expandedTrailing(state, stale: stale)
             }
-            CueActivityViews.expandedBottom(state, stale: false)
+            CueActivityViews.expandedBottom(state, stale: stale)
         }
         .padding(.horizontal, 18).padding(.top, 12).padding(.bottom, 16)
         .frame(width: Self.expandedWidth)
