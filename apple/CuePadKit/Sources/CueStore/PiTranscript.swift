@@ -378,15 +378,22 @@ extension CueStore {
     let cutoff = now.addingTimeInterval(-window)
     try reportingFileFailures {
       try write {
-        let quiet = """
-          SELECT m.sessionID FROM piMessages m LEFT JOIN piSessions s ON s.id = m.sessionID GROUP BY m.sessionID
-          HAVING COALESCE(MAX(s.lastActivityAt), MAX(m.at)) < ? AND MAX(m.createdAt) < ?
+        // 先按会话聚合再连会话索引：聚合只读 `piMessages_sessionID_at`，不逐条回表读带长文的行
+        let quiet = try db.query(
           """
-        let said = try db.query(
-          "SELECT text FROM piMessages WHERE \(Self.userImages) AND sessionID IN (\(quiet))",
-          [CueFormat.imagePrefix, cutoff, cutoff]) { $0.text(0) }
-        var hashes = Set(said.flatMap(CueFormat.imageHashes(in:)))
-        try db.run("DELETE FROM piMessages WHERE sessionID IN (\(quiet))", [cutoff, cutoff])
+          SELECT m.sessionID FROM (SELECT sessionID, MAX(at) AS at, MAX(createdAt) AS createdAt FROM piMessages GROUP BY sessionID) m
+            LEFT JOIN piSessions s ON s.id = m.sessionID
+          WHERE COALESCE(s.lastActivityAt, m.at) < ?1 AND m.createdAt < ?1
+          """, [cutoff]) { $0.text(0) }
+        var hashes = Set<String>()
+        if !quiet.isEmpty {
+          let sessions = JSONColumn.encode(quiet)
+          let said = try db.query(
+            "SELECT text FROM piMessages WHERE \(Self.userImages) AND sessionID IN (SELECT value FROM json_each(?2))",
+            [CueFormat.imagePrefix, sessions]) { $0.text(0) }
+          hashes.formUnion(said.flatMap(CueFormat.imageHashes(in:)))
+          try db.run("DELETE FROM piMessages WHERE sessionID IN (SELECT value FROM json_each(?))", [sessions])
+        }
         let expired = "createdAt < ? AND sessionID NOT IN (SELECT sessionID FROM piMessages)"
         hashes.formUnion(try db.query("SELECT hash FROM previews WHERE \(expired)", [cutoff]) { $0.text(0) })
         try db.run("DELETE FROM previews WHERE \(expired)", [cutoff])
