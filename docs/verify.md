@@ -126,6 +126,7 @@ TEST_RUNNER_CUEPAD_LME_DATA=/tmp/lme/sample.jsonl TEST_RUNNER_CUEPAD_CUE_EVAL_RU
 python3 apple/scripts/lme.py judge /tmp/cue-eval/lme-before /tmp/cue-eval/lme-after   # 判分，按先后比这几遍，写最后一遍的 report.md
 ```
 
+- 改提示词时在 sample 上挑改法，在留出集上验：`lme.py sample --holdout` 另抽一份与它不相交、各层题数相同的 100 题（/tmp/lme/holdout.jsonl），`CUEPAD_LME_DATA` 指向它跑。
 - 每题一个隔离库：历史会话按原时刻写成 Cue 的对话（用户的话是他的，助手的话是 Cue 的回复），信封上的此刻定在提问时刻（`CueTiming.clock`），问题作为他的话交给 Cue。
 - 每题一个 `<输出>/<题号>.json`（回复、用时、开销、recall 的查询）与 CueEval 的 .md，已有的跳过，中断后重跑接着做；`TEST_RUNNER_CUEPAD_LME_ONLY=<题号,…>` 只跑几题，`_LANES` 同时跑几题（缺省 8）。
 - 判分用官方分题型提示，经 Pi 用 claude-sonnet-5-5（thinking off），登录只读 ~/.pi/agent/auth.json；判过的存在 .json 里，重判先删掉 `label`。同一份回答重判结果一致，大脑那边一遍之间差几题，结论看两遍以上。
