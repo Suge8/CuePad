@@ -79,6 +79,7 @@ private final class Days: EvalScript {
             try await site.settle(DaysScript.weekly, rig: rig)
         }
         try await overBudget()
+        try await settleDown()
         await quietPeriod(Self.away)
         let parking = try await say("他：问车位（冷，有块要合）", "我车停在哪个车位来着？")
         await quietPeriod(Self.away)
@@ -88,7 +89,7 @@ private final class Days: EvalScript {
     }
 
     /// 他发消息触发冷换新、恰好有块要合：一口气补记 10 条记忆（Cue 记下的，第一条是后面要问的车位），记忆视图（开跑前 90 行，预算 96）超出预算、有块待合并。
-    /// 合并在空闲时醒来的方案会在他走开时就合掉；挪到换新那一轮的方案在他这句触发的冷换新里合。
+    /// 合并在空闲时醒来的方案在随后等它静下来时合掉，他这句仍是冷换新；挪到换新那一轮的方案在他这句触发的冷换新里合。
     private func overBudget() async throws {
         for line in DaysScript.notedLater { _ = try await rig.store.noteCueLine(line, source: .cue) }
         try await snapshot("补记 \(DaysScript.notedLater.count) 条后")
@@ -126,7 +127,8 @@ private final class Days: EvalScript {
             let round = all[index], at = byRound[index]!.map(\.createdAt).max()!
             return [
                 "round": index, "wake": "\(round.wake)".prefix(40).description, "renewal": CueEval.opensSession(round), "summaries": byRound[index]!.count,
-                "step": steps.first { $0.window?.contains(round.startedAt) == true }?.label ?? "开跑前",
+                "step": steps.first { $0.window?.contains(round.startedAt) == true }?.label
+                    ?? steps.last { ($0.window?.upperBound ?? .distantFuture) < round.startedAt }.map { "「\($0.label)」之后" } ?? "开跑前",
                 "viewLines": snapshots.first { $0.at >= at }?.lines ?? snapshots.last?.lines ?? 0,
             ]
         }
@@ -212,8 +214,8 @@ private final class Days: EvalScript {
         ]
         eval.extra["merges"] = merged
         eval.extra["viewLines"] = snapshots.map { ["after": $0.label, "lines": $0.lines, "summaries": $0.summaries] }
-        // 单列：他发消息触发冷换新、恰好有块要合的那一轮（问车位那一步的第一轮）
-        if let step = steps.first(where: { $0.label.contains("有块要合") }), let round = self.rounds(step).first, let index = all.firstIndex(where: { $0.id == round.id }) {
+        // 单列：他发消息触发冷换新、恰好有块要合的那一轮（问车位那一步里他的消息叫醒的那一轮）
+        if let step = steps.first(where: { $0.label.contains("有块要合") }), let round = self.rounds(step).first(where: { $0.wake == .message }), let index = all.firstIndex(where: { $0.id == round.id }) {
             let used = cost([index]), took = round.finishedAt.map { $0.timeIntervalSince(round.startedAt) } ?? 0
             let summaries = merged.first { $0["round"] as? Int == index }?["summaries"] as? Int ?? 0
             lines.append("- 冷换新且有块要合的那一轮（第 \(index) 轮）：用时 \(seconds(took))，\(CueEval.opensSession(round) ? "新会话的第一轮" : "接着原会话")，写了 \(summaries) 条摘要；\(cells(used))")
