@@ -123,12 +123,24 @@ enum DebugHooks {
         #endif
     }
 
-    /// 隔离库下也像正式版那样首次打开时请工作区决定弹不弹接入面板（`-CuePadOfferSetup YES`，同一个 `Workspace.offerSetup`）：验收老用户升级后自动弹的那一次。
+    /// 脚本起的实例也像正式版那样首次打开时请工作区决定弹不弹接入面板（`-CuePadOfferSetup YES`，同一个 `Workspace.offerSetup`）：验收第一次打开与老用户升级后自动弹的那一次。
     static var offersSetup: Bool {
         #if DEBUG
         DebugScene.defaults.bool(forKey: "CuePadOfferSetup")
         #else
         false
+        #endif
+    }
+
+    /// 指定的隔离库当作本机构建的开发库来定碰不碰真实世界（`-CuePadActsAs development|stranger`，`LibraryLocation.touchesRealWorld`）：
+    /// development 照真的去找这台装没装正式版（维护者的 Mac），stranger 当作没装（克隆仓库自己编的人：接入真实的 Agent、发通知）。
+    /// 各家配置目录、命令行链接、连接目录与工作区照样由 xc.sh 给的环境变量（app.py 的 `isolated_env`）换进隔离库，换不走的（通知权限、主机标识）是真的。
+    enum ActsAs: String { case development, stranger }
+    static var actsAs: ActsAs? {
+        #if DEBUG
+        DebugScene.defaults.string(forKey: "CuePadActsAs").flatMap(ActsAs.init)
+        #else
+        nil
         #endif
     }
 

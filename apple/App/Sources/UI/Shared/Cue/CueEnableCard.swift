@@ -1,21 +1,39 @@
 import SwiftUI
 
-/// 还没启用时 Cue 页输入框上方的那一块，两端同一个：只放启用这一步，启用后怎么用由 Cue 页空态那一句说（同一屏不说两遍）。选一台 Mac 启用（能运行 Cue 的几台，`CueSettings.hosts`）——
+/// 还没启用时 Cue 页上启用的那一步，两端同一个：对话还空着时放在空态那张纸里、接在"启用后怎么用"那一句下面（`framed` 为 false，居中、不另起一块），
+/// 说过话之后是输入框上方的一块玻璃；启用后怎么用只由空态那一句说（同一屏不说两遍）。选一台 Mac 启用（能运行 Cue 的几台，`CueSettings.hosts`）——
 /// 一台就是一颗"在那台上启用"的主按钮；几台是点开选哪台的菜单（`MenuButton`，每台下面写能当大脑的几家或为什么不能用），
 /// Mac 上点按是在这台运行、长按选别的。在这台 Mac 上启用打开接入面板（`SetupPanel`：先检测、接入这台的 Agent，一家都没装时给装法，
 /// 同一下启用），别的 Mac 直接启用，没写成的原因就地写在下面（`CueSettingsModel`）。能不能启用读 `CueGate`：这台还没和 iCloud 对过时
 /// 只写在等什么、没有按钮；对过发现 Cue 已在别的 Mac 上运行（Mac 上，`CueNow.elsewhere`）时卡还在，改写它在哪台。
 /// 手机上还没有哪台 Mac 写下过自己时，说先到 Mac 上打开 CuePad。没启用时输入框发出去是记下灵感。
 struct CueEnableCard: View {
+    /// 输入框上方的一块玻璃；false 是空态里的一段，居中
+    var framed = true
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @State private var model = CueSettingsModel()
 
     var body: some View {
+        Group {
+            if framed {
+                content
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(16)
+                    .glass(in: .rect(cornerRadius: ComposerMetrics.radius, style: .continuous))
+            } else {
+                content
+            }
+        }
+        .cueSettings(model)
+        .animation(Motion.quick, value: model.failure)
+    }
+
+    private var content: some View {
         let settings = model.settings ?? .empty
         let hosts = settings.hosts(here: workspace.localHost)
-        VStack(alignment: .leading, spacing: 10) {
+        return VStack(alignment: framed ? .leading : .center, spacing: 10) {
             if let elsewhere = workspace.cue.now.elsewhere {
                 Label("\(workspace.cue.name) \(elsewhere)", icon: .mac)
                     .font(Typography.secondary).foregroundStyle(palette.ink2)
@@ -39,11 +57,6 @@ struct CueEnableCard: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .glass(in: .rect(cornerRadius: ComposerMetrics.radius, style: .continuous))
-        .cueSettings(model)
-        .animation(Motion.quick, value: model.failure)
     }
 
     private func enable(on host: CueSettings.Host) {

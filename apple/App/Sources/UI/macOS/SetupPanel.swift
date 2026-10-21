@@ -69,13 +69,20 @@ struct SetupPanel: View {
         }
     }
 
+    /// 标题说这一步做成什么；要启用 Cue 时下面一句说它是什么（第一次打开的人只认得 Agent）。
     private var header: some View {
         HStack(alignment: .center, spacing: 16) {
             Image(Mascot.hello.rawValue).resizable().scaledToFit().frame(width: 64, height: 64)
                 .scaleEffect(shown || reduceMotion ? 1 : 0.9)
                 .opacity(shown ? 1 : 0)
                 .accessibilityHidden(true)
-            Text(setupCue == .none ? "接入 Agent" : "接入 Agent，启用 \(cueName)").font(Typography.heading).foregroundStyle(palette.ink)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(setupCue == .none ? "接入 Agent" : "启用 \(cueName)").font(Typography.heading).foregroundStyle(palette.ink)
+                if setupCue != .none {
+                    Text("你说一件事，\(cueName) 交给这台 Mac 上的 Agent 去做").font(Typography.secondary).foregroundStyle(palette.ink2)
+                }
+            }
+            .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -84,15 +91,12 @@ struct SetupPanel: View {
             note { Spinner(.small); Text("正在检测 Agent…") }
         } else {
             if setupCue == .needsAgent {
-                Text("先\(logsInFirst ? "登录" : "装")一个能当 \(cueName) 的 Agent").font(Typography.secondary).foregroundStyle(palette.ink2)
+                Text("先\(logsInFirst ? "登录" : "装")好其中一家").font(Typography.secondary).foregroundStyle(palette.ink2)
                     .padding(.horizontal, 4)
             }
-            if !rows.isEmpty || cueRowShown {
-                group {
-                    ForEach(rows) { row($0) }
-                    if cueRowShown { cueRow }
-                }
-            }
+            // Agent 那几行与 Cue 那一行分两组：先定接哪几家，再是启用这一步
+            if !rows.isEmpty { group { ForEach(rows) { row($0) } } }
+            if cueRowShown { group { cueRow } }
             if done { note { Text("都已接入") } }
         }
     }
@@ -114,8 +118,8 @@ struct SetupPanel: View {
                 check(kind.name, isOn: Binding(
                     get: { !skipped.contains(kind) },
                     set: { if $0 { skipped.remove(kind) } else { skipped.insert(kind) } }))
-            case .install:
-                action("安装", kind) { await workspace.installAgent(kind) }
+            case .install(let failure):
+                action(failure == nil ? "安装" : "重试", kind) { await workspace.installAgent(kind) }
             case .needs(let prerequisite):
                 Link("去官网", destination: prerequisite.site)
                     .buttonStyle(ControlButtonStyle(kind: .secondary))
@@ -137,10 +141,12 @@ struct SetupPanel: View {
         switch row.step {
         case .connect:
             let (tone, line) = failures.agents[kind].map { (StatusTone.failure, Dotted($0)) }
+                ?? unusable(kind).map { (StatusTone.notice, Dotted($0)) }
                 ?? AgentLine.of(kind, agents.status(kind), writable: agents.isWritable(kind))
             return (tone, line, working && chosen.contains(kind))
         case .checking: return (.calm, "检查中…", true)
-        case .install(let failure?), .logIn(let failure?): return (.failure, Dotted(failure), false)
+        case .install(let failure?): return (.failure, Dotted("没装上", failure), false)  // 原因是安装脚本的最后一句原话
+        case .logIn(let failure?): return (.failure, Dotted(failure), false)
         case .install: return (.calm, Dotted(kind == .claudeCode ? "推荐" : nil, "运行官方安装脚本"), false)
         case .needs(let prerequisite):
             return (.notice, Dotted("需要 \(prerequisite.name) \(prerequisite.minimum.major).\(prerequisite.minimum.minor) 以上"), false)
@@ -151,13 +157,21 @@ struct SetupPanel: View {
         }
     }
 
+    /// 勾得上、却问不出能不能用的原因（只差接入不算）：接入照样写文件，但不写出来就像接上就能用。
+    private func unusable(_ kind: AgentKind) -> String? {
+        switch mac.problem(kind) {
+        case nil, .notConnected?: nil
+        case let reason?: reason.description
+        }
+    }
+
     private func action(_ title: String, _ kind: AgentKind, _ run: @escaping () async -> Void) -> some View {
         Button(title) { Task { await run() } }
             .buttonStyle(ControlButtonStyle(kind: .secondary))
             .accessibilityLabel("\(title) \(kind.name)")
     }
 
-    /// 启用 Cue 那一行：默认项目还没有文件夹时写它第一次开工时建在哪（`Workspaces`）。没启用成的写原因。
+    /// 启用 Cue 那一行：默认项目还没有文件夹时写任务在哪做（工作区，第一次开工时建好，`Workspaces`）。没启用成的写原因。
     /// 在等 iCloud 时写在等什么、转圈，勾不上。
     private var cueRow: some View {
         let waiting = self.waiting
@@ -175,8 +189,7 @@ struct SetupPanel: View {
 
     private var folder: String? {
         guard let home = workspace.catalog?.project(Project.defaultID), workspace.catalog?.directories[home.id] == nil else { return nil }
-        let workspaces = services.workspaces
-        return "开工时建好 \(workspaces.shown(workspaces.directory(for: home.name).path(percentEncoded: false)))"
+        return "任务在 \(Workspaces.shown(services.workspaces.directory(for: home.name).path(percentEncoded: false))) 里做"
     }
 
     private func check(_ name: String, isOn: Binding<Bool>) -> some View {

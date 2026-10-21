@@ -3,7 +3,8 @@ import SwiftUI
 /// "对 Cue 说"的输入框（全 App 只此一个）：草稿是 Cue 的那一份（`CueWatch.draft`），可带图片。要做事就在这里说，随手记也在这里：
 /// 发送是对 Cue 说（它定项目、建任务、开工），长按发送是"只记下"——记成默认项目里的一条灵感，不交给它；Cue 没启用时发送就是记下
 /// （`Workspace.sayToCue`、`note`）。按下就清空输入框，不等上传；这里只管输入与发完之后做什么（`sent`）。
-/// Mac 的 Cue 页上工具排里是 Cue 用哪个 Agent、模型与思考强度（`CueConfigControls`，与新会话同一排；⌘⇧M、⌘⇧E 弹出模型与思考强度的菜单）；浮起的输入条不放。
+/// Mac 的 Cue 页上工具排里是 Cue 用哪个 Agent、模型与思考强度（`CueConfigControls`，与新会话同一排；⌘⇧M、⌘⇧E 弹出模型与思考强度的菜单）；浮起的输入条不放，
+/// 没启用时也不放：发出去只是记下，还没有在哪台 Mac 运行，那几颗只能写一份选不了的缺省。
 /// 手机上它们在 Cue 面板的第一行（`CueHeader`），输入框里不再放一份：聚焦才露出的胶囊找不到。
 struct CueComposer: View {
     enum Style: Equatable {
@@ -81,7 +82,7 @@ struct CueComposer: View {
     /// Agent、模型与思考强度只在 Mac 的 Cue 页上（`tools`）。
     private var tooled: Bool {
         #if os(macOS)
-        style == .page
+        style == .page && workspace.cue.canHear
         #else
         false
         #endif
@@ -89,7 +90,7 @@ struct CueComposer: View {
 
     @ViewBuilder private var tools: some View {
         #if os(macOS)
-        if style == .page { CueConfigControls(opening: $opening, fail: workspace.fail) }
+        if tooled { CueConfigControls(opening: $opening, fail: workspace.fail) }
         #endif
     }
 
@@ -107,7 +108,7 @@ struct CueComposer: View {
     private var shortcuts: [ReplyShortcut: () -> Void] {
         var map: [ReplyShortcut: () -> Void] = [.send: send]
         #if os(macOS)
-        if style == .page {
+        if tooled {
             map[.model] = { opening = .model }
             map[.thinking] = { opening = .thinking }
         }

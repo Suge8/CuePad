@@ -13,7 +13,7 @@ public struct AgentIntegration: Sendable {
     let locate: @Sendable () async -> ExecutableLocator
     /// App 里的命令行工具（`Contents/Helpers/cuepad`），技能里写它的绝对路径
     private let cuepad: URL
-    /// 隔离运行（开发构建）：配置目录是缺省真实位置的那几家只检测、不写
+    /// 不碰真实世界（App 层的 `touchesRealWorld` 为 false）：配置目录是缺省真实位置的那几家只检测、不写
     private let isolated: Bool
     /// 装一家用的命令（`runInstaller`）：官方的那条，测试换成放替身的
     let installCommand: @Sendable (AgentKind, AgentStatus.Presence) -> String

@@ -30,9 +30,9 @@ final class AlertCenter: NSObject, UNUserNotificationCenterDelegate {
 
     var isAuthorized: Bool { authorization == .authorized || authorization == .provisional }
 
-    /// 隔离库（开发、测试与验收）默认不要通知权限、不发系统通知、不设角标：这些按 bundle id 记，与正式版同一个；
+    /// 不碰真实世界的（`LibraryLocation.touchesRealWorld`：测试、验收与装着正式版的 Mac 上的本机构建）默认不要通知权限、不发系统通知、不设角标：这些按 bundle id 记，与正式版同一个；
     /// 没人去点的权限弹窗还会一直留在系统里、盖住之后起的每个实例。Debug 构建给 `-CuePadNotifications YES` 时照常（docs/verify.md「通知」）。
-    var delivers: Bool { services.map { !$0.location.isIsolated || DebugHooks.deliversNotifications } ?? false }
+    var delivers: Bool { services.map { $0.location.touchesRealWorld || DebugHooks.deliversNotifications } ?? false }
 
     /// 用户可能在系统设置里改过：回到前台时重新读。
     func refresh() async {
@@ -80,7 +80,7 @@ final class AlertCenter: NSObject, UNUserNotificationCenterDelegate {
         guard await reaches(alert.route) else { return }
         #endif
         guard delivers else {
-            return AppServices.log.notice("通知（隔离库不发）：\(alert.title, privacy: .public)：\(alert.body, privacy: .private)")
+            return AppServices.log.notice("通知（不碰真实世界，不发）：\(alert.title, privacy: .public)：\(alert.body, privacy: .private)")
         }
         if authorization == .notDetermined { await requestAuthorization() }
         guard isAuthorized else { return }
@@ -151,7 +151,7 @@ final class AlertCenter: NSObject, UNUserNotificationCenterDelegate {
     private(set) var registration: Registration = .pending
     @ObservationIgnored private var enabled = false
 
-    /// 幂等。只在有同步时调用：没有同步就不会有这类通知。尚未决定时请求一次权限（只会弹一次系统提示，隔离库不要，`delivers`）。
+    /// 幂等。只在有同步时调用：没有同步就不会有这类通知。尚未决定时请求一次权限（只会弹一次系统提示，不碰真实世界时不要，`delivers`）。
     func enable() async {
         guard !enabled else { return }
         enabled = true

@@ -116,7 +116,7 @@ final class AppServices {
 
     #if os(iOS)
     @ObservationIgnored let pasteboard: UIPasteboard
-    /// 锁屏与灵动岛上的那一个实时活动（`startSnapshots` 跟着库开、改、结束它）。隔离库（测试、脚本起的调试实例）里没有：
+    /// 锁屏与灵动岛上的那一个实时活动（`startSnapshots` 跟着库开、改、结束它）。不碰真实世界时（`LibraryLocation.touchesRealWorld`：测试、脚本起的调试实例）没有：
     /// 实例被结束时开着的活动留在系统里，下次装 App 时系统为它把 App 叫到后台，正好撞上测试宿主的启动（测试进程连不上）；
     /// 验收实时活动时用 `-CuePadLiveActivity YES` 打开（`DebugHooks.opensLiveActivity`）。
     @ObservationIgnored let cueActivity: CueLiveActivity?
@@ -248,7 +248,7 @@ final class AppServices {
         cueFeed = CueFeed(store: store, widget: true)
         self.timing = timing
         self.pasteboard = pasteboard
-        cueActivity = !location.isIsolated || DebugHooks.opensLiveActivity ? CueLiveActivity() : nil
+        cueActivity = location.touchesRealWorld || DebugHooks.opensLiveActivity ? CueLiveActivity() : nil
         viewer = UIDevice.current.identifierForVendor.map { [sync = self.sync] in
             ViewerKeeper(store: store, sync: sync, device: $0.uuidString)
         }
