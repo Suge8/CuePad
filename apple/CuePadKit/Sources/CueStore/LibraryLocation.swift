@@ -28,7 +28,6 @@ public struct LibraryLocation: Equatable, Sendable {
   public static let environmentKey = "CUEPAD_LIBRARY_DIR"
   public static let appGroupIdentifier = "group.com.sugeh.cuepad"
 
-  /// 位置所依附的平台存储。
   public enum Base: Sendable {
     /// macOS：应用支持目录。
     case applicationSupport(URL)

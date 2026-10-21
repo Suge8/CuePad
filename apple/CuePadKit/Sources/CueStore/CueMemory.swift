@@ -1,7 +1,6 @@
 import CueText
 import Foundation
 
-/// 一条记忆是谁记的。
 public enum CueLineSource: String, Sendable, CaseIterable {
   case you, cue
 }
@@ -18,7 +17,6 @@ public struct CueMemoryLine: Identifiable, Equatable, Sendable {
   public var remindAt: Date?
   public var createdAt: Date
   public var modifiedAt: Date
-  /// 忘掉的时刻。
   public var deletedAt: Date?
 
   /// 一条最多这么多字节（UTF-8），超了拒绝。

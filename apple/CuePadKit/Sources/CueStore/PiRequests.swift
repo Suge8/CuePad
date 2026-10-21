@@ -2,7 +2,6 @@ import Foundation
 
 // 手机发给 Mac 的请求正文（投送请求 `content` 里的 JSON）。
 
-/// 对弹窗的回答。
 public enum PiAnswerValue: Sendable, Equatable {
   /// 选择框选中的选项原文
   case option(String)

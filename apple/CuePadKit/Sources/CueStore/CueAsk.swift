@@ -72,7 +72,7 @@ public struct CueAsking: Equatable, Sendable {
     self.rule = ask == .rule ? try Self.phrase(rule, "带 ask 要写 rule", "依据的规矩，照他的原话，如“改数据库结构前先问我”", limit: Self.phraseLimit) : nil
   }
 
-  /// 照存下的读回（`CueMessage.asking`、通知服务扩展读的同步记录）：认不出类别（更新的版本写的）、没有动作短语（结构 56 之前写的，
+  /// 照存下的读回（`CueMessage.asking`、通知服务扩展读的同步记录）：认不出类别（更新的版本写的）、没有动作短语（旧版本写的，
   /// 或规矩那一类没写规矩）的不算，卡片、摘要与通知照普通的话写它的第一行，回答的引用也是这一行。
   package init?(stored ask: CueAsk?, action: String?, rule: String?) {
     guard let ask, let action, ask != .rule || rule != nil else { return nil }

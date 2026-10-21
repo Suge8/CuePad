@@ -2,7 +2,7 @@ import Foundation
 import OSLog
 import SQLite3
 
-/// 绑定到语句的值。只有 CueStore 用到的三种存储类。
+/// 绑定到语句的值，即 SQLite 的四种存储类。
 package enum SQLValue: Codable, Sendable, Equatable {
   case null
   case int(Int64)
@@ -137,7 +137,6 @@ final class SQLite {
     sqlite3_close_v2(handle)
   }
 
-  /// 执行不带参数的一条或多条语句。
   func exec(_ sql: String) throws {
     guard sqlite3_exec(handle, sql, nil, nil, nil) == SQLITE_OK else { throw error(sql) }
   }
@@ -259,7 +258,7 @@ final class SQLite {
   }
 }
 
-/// 语句编译时授权回调记下的读表。
+/// 注册成 SQL 函数的闭包：经 C 回调的 user data 带进去。
 private final class BlobFunction {
   let transform: (UnsafeRawBufferPointer) -> [UInt8]
   init(_ transform: @escaping (UnsafeRawBufferPointer) -> [UInt8]) { self.transform = transform }

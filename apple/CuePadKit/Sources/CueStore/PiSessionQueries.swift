@@ -61,7 +61,6 @@ extension CueStore {
     return Dictionary(try listItems(states).map { ($0.state.sessionID, $0) }, uniquingKeysWith: { first, _ in first })
   }
 
-  /// 全部会话记录数（在线的与历史）。
   public func piSessionCount() throws -> Int {
     try db.first("SELECT count(*) FROM piSessionStates") { Int($0.int(0)) } ?? 0
   }
@@ -152,7 +151,7 @@ extension CueStore {
   /// 手机据此建议给项目绑哪个文件夹（见 `PiBind`）；几千条历史聚合成几十行，不整表读。
   public func sessionFolders() throws -> [SessionFolder] { try folders(where: Self.hasFolder, []) }
 
-  /// 记着文件夹的会话：也是文件夹索引（`Schema` 第 55 步）的部分条件，不一样就用不上。
+  /// 记着文件夹的会话：也是文件夹索引（`piSessionStates_folder`，`Schema+Indexes`）的部分条件，不一样就用不上。
   static let hasFolder = "folder IS NOT NULL AND folder != ''"
 
   private func folders(where condition: String, _ arguments: [any SQLBindable]) throws -> [SessionFolder] {

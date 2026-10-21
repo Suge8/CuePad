@@ -62,7 +62,6 @@ extension CueStore {
     }
   }
 
-  /// 一直记着，或取消。
   public func pinCueLine(_ id: UUID, _ pinned: Bool) throws {
     try write {
       try db.run("UPDATE cueLines SET pinned = ?, modifiedAt = ? WHERE id = ? AND pinned != ?", [pinned, Date.stamp, id, pinned])
@@ -137,7 +136,6 @@ public struct CueRecall: Equatable, Sendable {
   public var cards: [Card]
 }
 
-/// 一条记忆与它的序号。
 public struct CueIndexedLine: Equatable, Sendable {
   public var index: Int
   public var line: CueMemoryLine

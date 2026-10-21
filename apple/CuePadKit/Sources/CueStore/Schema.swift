@@ -3,9 +3,7 @@ import Foundation
 
 /// 表分两类。
 ///
-/// 同步表（由 CueSync 映射为 CKRecord，record type = 表名，recordName = id）：
-/// projects、cards、sendRecords、attachments、piSessionStates、agentCatalogs、deliveryRequests、directoryBindings、piMessages、previews、accountQuotas、
-/// cueMessages、cueLines、cueProfile、cueState、cueRead、macPresence、macAgents、sessionViewers。约束：
+/// 同步表（`Table.synced`，由 CueSync 映射为 CKRecord，record type = 表名，recordName = id）。约束：
 /// - 主键是 TEXT UUID（小写），由 Swift 侧生成；
 /// - 每条记录有 `modifiedAt`（毫秒），供字段级合并与冲突判断；
 /// - 软删除只有 `deletedAt`；
@@ -16,8 +14,8 @@ import Foundation
 /// 同步表里的本机列（不进 CKRecord，记录映射的列表里没有它们）：deliveryRequests.resultReceivedAt、cueToldAt（Cue 已知道没送到）；
 /// piSessionStates、cards、deliveryRequests、piMessages 的 writeSeq（本机写入序号，见 `writeSeq`）。
 ///
-/// 本机表（不同步）：piSessions、piProcesses、writeCounter、projectDirectories、syncRecords、syncState、searchIndex（FTS5，由触发器随同步表维护，可随时重建）、
-/// cueSummaries（Cue 记忆的摘要缓存，可随时丢弃重建）。
+/// 本机表（不同步）：`Table.synced` 之外的表，另有 piProcesses、syncRecords、syncState，以及 searchIndex（FTS5，由触发器随同步表维护，可随时重建）；
+/// cueSummaries 是 Cue 记忆的摘要缓存，可随时丢弃重建。
 ///
 /// 同步表只加表或可空列，不改已有列：其他版本的设备仍按旧字段读写同一批记录。下线的字段与表删掉本地列、不再读写，
 /// CloudKit 里照原样声明为已下线（`CloudKitSchema.retiredFields` / `retiredTypes`，生产环境删不掉）。

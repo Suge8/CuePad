@@ -37,7 +37,6 @@ public struct CueContext: StoredJSON, Equatable, Sendable {
   public var window: Int?
   public var since: Date
 
-  /// 换新线（token）。
   public static let renewAt = 60_000
 
   /// token 数的写法（各端的上下文用量与 Mac 的运行情况同一种）：不到一千写原数，往上写 5.3k、128k。
@@ -119,7 +118,6 @@ public struct CueDuty: Equatable, Sendable {
     self.left = left
   }
 
-  /// Cue 把会话此刻的这次停下留给了你。
   public func leftToYou(_ session: PiSessionState) -> Bool { left.contains { $0.holds(for: session) } }
 }
 

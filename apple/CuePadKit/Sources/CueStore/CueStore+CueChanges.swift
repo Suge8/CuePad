@@ -2,7 +2,7 @@ import CueText
 import Foundation
 
 extension CueStore {
-  /// 本机最近一次写入的序号：构成 Cue 的变化的那几列被写时（本机写入与同步落库一样），那一行盖上新序号（见 `Schema` 38）。
+  /// 本机最近一次写入的序号：构成 Cue 的变化的那几列被写时（本机写入与同步落库一样），那一行盖上新序号（触发器见 `Schema+Indexes`）。
   /// Cue 按它分新旧，不按事件时刻：事件可能晚到（机器忙、从别的设备同步来），时刻早于上次醒来。
   public func lastWrite() throws -> Int { try db.first("SELECT seq FROM writeCounter") { Int($0.int(0)) } ?? 0 }
 

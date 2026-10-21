@@ -59,7 +59,6 @@ public struct CueBoardItem: Identifiable, Equatable, Sendable {
   public var isActive: Bool { leaves.contains(where: \.isActive) }
 }
 
-/// 看板上一件事里在做的一个叶子。
 public struct CueBoardLeaf: Equatable, Sendable {
   public var leaf: Card
   /// 叶子的会话记录；还没开会话（或记录还没到）为 nil。
