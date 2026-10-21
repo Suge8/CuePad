@@ -5,7 +5,9 @@ import SwiftUI
 /// 底子是纸与墨（logo、吉祥物的两种颜色）：侧栏 < 桌面 < 纸同一色温由深到浅，文字、图标、系统控件的 tint 都是墨，墨分三档。
 /// 深色是"夜里的纸"：暖黑的桌面、略亮的纸、更深的侧栏，三层靠明度分开；彩色在深色下提亮一档，实底压到中等明度配浅字。
 /// **签名色是靛青**，只给焦点与正在发生的事：选中、主按钮、焦点环、Agent 在跑、图标点睛点亮；一屏通常一两处，不做装饰、不做链接。
-/// 状态色三种各管一件事：等你确认赭黄、出错胭脂、有新回复石绿，只上状态图形与紧挨着的那个词。项目色只上图形，不写成字。
+/// 状态色三种各管一件事：等你确认赭黄、出错胭脂、石绿，只上状态图形与紧挨着的那个词。石绿有两种用途——会话有新回复，与任务做完（完成对勾、
+/// 看板已完成那一列）：两者说的是同一件事"这一轮做完了，结果在那儿"，一个落在会话上、一个落在任务上，同一屏里不会把一个读成另一个。
+/// 项目色只上图形，不写成字。
 /// 增强对比度时加深次要墨色、描边与靛青。各令牌的 WCAG 对比度写在它的注释里（在侧栏、桌面、纸、气泡四层上最差的那个）。
 struct Palette {
     let dark: Bool
@@ -128,7 +130,7 @@ struct Palette {
     /// 删除钮、轻扫删除的胭脂底。字 6.3，深色 5.6。
     var failureFill: Color { dark ? Color(hex: 0xB8325F) : Color(hex: 0xAD2B5C) }
     var failureTrack: Color { failure.opacity(0.2) }
-    /// 有新回复（这轮答完了、你还没看）：石绿。对比度 4.7，深色 5.0，增强对比度 ≥ 7。
+    /// 有新回复（这轮答完了、你还没看）与任务做完：石绿（两种用途见头注释）。对比度 4.7，深色 5.0，增强对比度 ≥ 7。
     var replied: Color {
         switch (dark, highContrast) {
         case (false, false): Color(hex: 0x17704A)
@@ -137,6 +139,20 @@ struct Palette {
         case (true, true): Color(hex: 0x8FDCB2)
         }
     }
+    /// 石绿的实底（看板已完成列头那颗圆）：浅色就是石绿，深色压到中等明度，上面的白字形 4.6。
+    var repliedFill: Color { dark ? Color(hex: 0x2B7A55) : replied }
+
+    // MARK: 任务看板的泳道（`BoardLane`）
+
+    // 整列铺这一列状态色的浅调实色：不拿状态色叠透明度（压得深的状态色叠出来发灰）。待办没有状态色，用比桌面暗一点的暖灰才与桌面分得开。
+    // 深色同色相、明度落在桌面与纸之间：四列彼此认得出，纸色的卡仍浮在上面。上沿一线高光是 `sheen`。
+
+    var laneTodo: Color { dark ? Color(hex: 0x23211D) : Color(hex: 0xECE9E3) }
+    var laneAdvancing: Color { dark ? Color(hex: 0x1D2029) : Color(hex: 0xECEFF7) }
+    var laneWaiting: Color { dark ? Color(hex: 0x28231A) : Color(hex: 0xF5EFE1) }
+    var laneDone: Color { dark ? Color(hex: 0x1B241E) : Color(hex: 0xEAF3ED) }
+    /// 泳道上 Cue 的气泡（等你那一列）：浅色是纯白，比纸亮一级才从淡色的泳道上浮出来；深色是纸的上沿色。
+    var laneBubble: Color { dark ? paperLit : Color(hex: 0xFFFFFF) }
 
     // MARK: 要你看的会话卡片的底（`PiShown.wash`，代替纸色）
 
@@ -151,7 +167,7 @@ struct Palette {
     // MARK: 轻扫露出的其余动作（删除是 `failureFill`、主动作是 `signatureFill`）
 
     var neutralFill: Color { dark ? Color(hex: 0x6E685F) : Color(hex: 0x3A3733) }
-    /// 安静的一档，比 `neutralFill` 浅。
+    /// 安静的一档，比 `neutralFill` 浅；也是看板待办列头那颗暖灰圆（待办没有状态色）。
     var quietFill: Color { dark ? Color(hex: 0x57524B) : Color(hex: 0x6E685F) }
 
     // MARK: 项目色
