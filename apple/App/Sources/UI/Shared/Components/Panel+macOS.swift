@@ -137,7 +137,6 @@ private struct Weak<Object: AnyObject> {
 }
 
 extension Weak<NSView> {
-    /// 这一下鼠标落在它占的地方。
     func contains(_ event: NSEvent) -> Bool {
         guard let value else { return false }
         return value.bounds.contains(value.convert(event.locationInWindow, from: nil))

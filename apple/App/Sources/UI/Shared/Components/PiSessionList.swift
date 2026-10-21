@@ -29,7 +29,6 @@ nonisolated struct PiSessionList: Sendable, Equatable {
     var ends: [UUID: Speech.Trip] = [:]
 
     var loaded: Int { ended.count }
-    /// 还有没读的历史。
     var hasMore: Bool { ended.count < endedTotal }
     /// 一共几个会话（在线的加结束的）。
     var count: Int { now.count + endedTotal }

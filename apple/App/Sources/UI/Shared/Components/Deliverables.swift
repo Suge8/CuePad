@@ -52,7 +52,6 @@ struct PreviewBatch: View {
     private static let inset: CGFloat = 12
 
     #if os(macOS)
-    /// 三份起那一排的高
     private static let stripHeight: CGFloat = 176
     private static let heroMaxHeight: CGFloat = 320
     #else
@@ -61,7 +60,6 @@ struct PreviewBatch: View {
     #endif
 }
 
-/// 放大与缩回认的那张缩略图。
 struct PreviewZoomKey: Hashable {
     let group: String
     let preview: UUID
@@ -86,7 +84,6 @@ struct DeliverableTile: View {
         case shot(side: CGFloat)
     }
 
-    /// 画面与下面那行字之间。
     static let captionGap: CGFloat = 5
 
     let preview: PiPreview

@@ -48,7 +48,6 @@ nonisolated struct PiThinkingMeter: Equatable {
     var isOff: Bool { current == .off }
     /// 档名；Agent 没报此刻的强度时（如终端里的 Codex 用模型的缺省）是"默认"，照样能点能换。
     var label: String { current?.label ?? "默认" }
-    /// 填到最高一档。
     var isMax: Bool { !bars.isEmpty && filled == bars.count }
 
     func level(at fraction: Double) -> PiThinkingLevel {
