@@ -5,11 +5,70 @@ import Synchronization
 
 /// 起进程的底层：经中转挂到 launchd 下、登记退出事件、读描述符。
 extension ChildProcess {
+    /// 经中转起进程，返回它的 PID：`registered` 在它 exec 之前调（登记退出事件：已被 launchd 回收的进程登记不上，退出码就丢了）。
+    /// `actions` 里放好了标准输入输出与 3 号，中转用的 `goFD`、`reportFD` 在这里放；`newSession` 时连同它在新会话里。
+    static func spawn(
+        _ executable: URL, _ arguments: [String], environment: [String: String], actions: inout posix_spawn_file_actions_t?,
+        newSession: Bool, registered: (pid_t) -> Void
+    ) async throws -> pid_t {
+        // 起不来的（不存在、不可执行）当场抛错，不等中转里的 exec 失败
+        guard access(executable.path, X_OK) == 0 else { throw POSIXError(.init(rawValue: errno) ?? .ENOENT) }
+        let reported = try pipe(), go = try pipe()
+        posix_spawn_file_actions_adddup2(&actions, reported.write, reportFD)
+        posix_spawn_file_actions_adddup2(&actions, go.read, goFD)
+        var attributes: posix_spawnattr_t? = nil
+        posix_spawnattr_init(&attributes)
+        defer { posix_spawnattr_destroy(&attributes) }
+        // 信号处置与屏蔽恢复默认：忽略的信号会跨 exec 继承（测试进程、App 都可能忽略着 SIGTERM），子进程就收不到结束信号
+        var signals = sigset_t()
+        sigfillset(&signals)
+        posix_spawnattr_setsigdefault(&attributes, &signals)
+        sigemptyset(&signals)
+        posix_spawnattr_setsigmask(&attributes, &signals)
+        let session: Int32 = newSession ? POSIX_SPAWN_SETSID : 0
+        posix_spawnattr_setflags(&attributes, Int16(POSIX_SPAWN_CLOEXEC_DEFAULT | POSIX_SPAWN_SETSIGDEF | POSIX_SPAWN_SETSIGMASK | session))
+        let argv = ([shell, "-c", relay(environment), "sh", executable.path] + arguments).map { strdup($0) } + [nil]
+        let envp = environment.map { strdup("\($0.key)=\($0.value)") } + [nil]
+        defer { (argv + envp).forEach { free($0) } }
+        var relayPID: pid_t = 0
+        let code = posix_spawn(&relayPID, shell, &actions, &attributes, argv, envp)
+        close(reported.write)
+        close(go.read)
+        defer { close(go.write) }  // 放它 exec
+        guard code == 0 else {
+            close(reported.read)
+            throw POSIXError(.init(rawValue: code) ?? .EIO)
+        }
+        // 中转报完 PID 就退出（报告管道读到 EOF）；它是本进程的子进程，这里回收
+        let report = await readToEnd(reported.read)
+        var status: Int32 = 0
+        waitpid(relayPID, &status, 0)
+        guard let pid = pid_t(String(decoding: report, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)) else {
+            throw POSIXError(.ECHILD)
+        }
+        registered(pid)
+        return pid
+    }
+
+    private static let shell = "/bin/sh"
+    private static let goFD: Int32 = 8
+    private static let reportFD: Int32 = 9
+
     /// 中转脚本：后台的子 shell 自成进程组（`set -m`：作业控制下也不把标准输入换成空设备、不忽略 SIGINT 与 SIGQUIT），
-    /// 等 `goFD` 读到 EOF（App 已登记它的退出事件）再 exec 成要起的命令；`reportFD` 报出它的 PID，中转随即退出，它就挂到 launchd 下。
-    static let relay = #"set -m; { read -r _ <&8; exec "$@" 8<&-; } 9>&- & echo $! >&9"#
-    static let goFD: Int32 = 8
-    static let reportFD: Int32 = 9
+    /// 等 `goFD` 读到 EOF 再 exec 成要起的命令；`reportFD` 报出它的 PID，中转随即退出，它就挂到 launchd 下。
+    /// shell 会给要起的命令补上 PWD 与 SHLVL（exec 时 SHLVL 去不掉）：要求的环境里没有的，经 env 去掉，环境与要求的一致。
+    private static func relay(_ environment: [String: String]) -> String {
+        let added = ["PWD", "SHLVL"].filter { environment[$0] == nil }
+        let command = added.isEmpty ? #""$@""# : "/usr/bin/env " + added.map { "-u \($0) " }.joined() + #""$@""#
+        return "set -m; { read -r _ <&\(goFD); exec \(command) \(goFD)<&-; } \(reportFD)>&- & echo $! >&\(reportFD)"
+    }
+
+    /// 一根管道，两端都挪到 `lifted` 的号上。
+    static func pipe() throws -> (read: Int32, write: Int32) {
+        var fds: [Int32] = [0, 0]
+        guard Darwin.pipe(&fds) == 0 else { throw POSIXError(.init(rawValue: errno) ?? .EIO) }
+        return (try lifted(fds[0]), try lifted(fds[1]))
+    }
 
     /// 进程退出事件（带退出码）到了就记下、唤醒等着的，自成进程组的再结束组里剩下的。
     /// 事件源在进程退出前一直握着自己，与这个对象的生死无关（脱离 App 的 Pi 也由它记下退出）。
@@ -44,7 +103,7 @@ extension ChildProcess {
     }
 
     /// 读到 EOF，返回读到的全部。
-    static func readToEnd(_ fd: Int32) async -> Data {
+    private static func readToEnd(_ fd: Int32) async -> Data {
         final class Collected: Sendable { let data = Mutex(Data()) }
         let collected = Collected()
         await withCheckedContinuation { continuation in
@@ -79,7 +138,7 @@ extension ChildProcess {
     /// 要交给子进程的描述符在本进程这端挪到 `reportFD` 之上、设 FD_CLOEXEC：
     /// 不撞子进程里要放的 0–9 号（dup2 按顺序做，来源若正是先放的目标号就被盖掉；来源与目标同号时 dup2 不清 FD_CLOEXEC，会被关掉），
     /// 也不漏进同时起的别的子进程（继承了写端，这边就永远等不到 EOF）。
-    static func lifted(_ fd: Int32) throws -> Int32 {
+    private static func lifted(_ fd: Int32) throws -> Int32 {
         defer { close(fd) }
         let moved = fcntl(fd, F_DUPFD_CLOEXEC, reportFD + 1)
         guard moved >= 0 else { throw POSIXError(.init(rawValue: errno) ?? .EMFILE) }

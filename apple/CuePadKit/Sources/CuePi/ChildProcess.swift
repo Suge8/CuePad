@@ -67,15 +67,8 @@ public final class ChildProcess: Sendable {
         _ executable: URL, _ arguments: [String], directory: URL? = nil, environment: [String: String]? = nil,
         placement: Placement, input inputMode: Input = .null, output outputMode: Output = .null, keepErrors: Bool = true
     ) async throws {
-        // 起不来的（不存在、不可执行）当场抛错，不等中转里的 exec 失败
-        guard access(executable.path, X_OK) == 0 else { throw POSIXError(.init(rawValue: errno) ?? .ENOENT) }
-        var opened: [Int32] = []  // 子进程那端：起完就关
-        defer { for fd in opened { close(fd) } }
-        func pipe() throws -> (read: Int32, write: Int32) {
-            var fds: [Int32] = [0, 0]
-            guard Darwin.pipe(&fds) == 0 else { throw POSIXError(.init(rawValue: errno) ?? .EIO) }
-            return (try Self.lifted(fds[0]), try Self.lifted(fds[1]))
-        }
+        var opened: [Int32] = []
+        defer { for fd in opened { close(fd) } }  // 本进程这端以外的都在启动后关掉
 
         var actions: posix_spawn_file_actions_t? = nil
         posix_spawn_file_actions_init(&actions)
@@ -85,12 +78,12 @@ public final class ChildProcess: Sendable {
         case .null:
             posix_spawn_file_actions_addopen(&actions, STDIN_FILENO, "/dev/null", O_RDONLY, 0)
         case .pipe:
-            let stdin = try pipe()
+            let stdin = try Self.pipe()
             opened.append(stdin.read)
             input = stdin.write
             posix_spawn_file_actions_adddup2(&actions, stdin.read, STDIN_FILENO)
         case .lifeline:
-            let lifeline = try pipe()
+            let lifeline = try Self.pipe()
             opened += [lifeline.read, lifeline.write]
             posix_spawn_file_actions_adddup2(&actions, lifeline.read, STDIN_FILENO)
             posix_spawn_file_actions_adddup2(&actions, lifeline.write, 3)
@@ -99,7 +92,7 @@ public final class ChildProcess: Sendable {
         if outputMode == .null {
             posix_spawn_file_actions_addopen(&actions, STDOUT_FILENO, "/dev/null", O_WRONLY, 0)
         } else {
-            let out = try pipe()
+            let out = try Self.pipe()
             opened.append(out.write)
             stdout = out.read
             posix_spawn_file_actions_adddup2(&actions, out.write, STDOUT_FILENO)
@@ -114,51 +107,22 @@ public final class ChildProcess: Sendable {
             errorFile = file
             posix_spawn_file_actions_adddup2(&actions, file, STDERR_FILENO)
         } else {
-            let err = try pipe()
+            let err = try Self.pipe()
             opened.append(err.write)
             stderr = err.read
             posix_spawn_file_actions_adddup2(&actions, err.write, STDERR_FILENO)
         }
         if let directory { posix_spawn_file_actions_addchdir(&actions, directory.path) }
-        let reported = try pipe(), go = try pipe()
-        opened += [reported.write, go.read]
-        posix_spawn_file_actions_adddup2(&actions, reported.write, Self.reportFD)
-        posix_spawn_file_actions_adddup2(&actions, go.read, Self.goFD)
-
-        var attributes: posix_spawnattr_t? = nil
-        posix_spawnattr_init(&attributes)
-        defer { posix_spawnattr_destroy(&attributes) }
-        // 信号处置与屏蔽恢复默认：忽略的信号会跨 exec 继承（测试进程、App 都可能忽略着 SIGTERM），子进程就收不到结束信号
-        var signals = sigset_t()
-        sigfillset(&signals)
-        posix_spawnattr_setsigdefault(&attributes, &signals)
-        sigemptyset(&signals)
-        posix_spawnattr_setsigmask(&attributes, &signals)
-        let session: Int32 = placement == .detached ? POSIX_SPAWN_SETSID : 0
-        posix_spawnattr_setflags(&attributes, Int16(POSIX_SPAWN_CLOEXEC_DEFAULT | POSIX_SPAWN_SETSIGDEF | POSIX_SPAWN_SETSIGMASK | session))
-        let argv = (["/bin/sh", "-c", Self.relay, "sh", executable.path] + arguments).map { strdup($0) } + [nil]
-        let envp = (environment ?? ProcessInfo.processInfo.environment).map { strdup("\($0.key)=\($0.value)") } + [nil]
-        defer { (argv + envp).forEach { free($0) } }
-        var relay: pid_t = 0
-        let code = posix_spawn(&relay, "/bin/sh", &actions, &attributes, argv, envp)
-        for fd in opened { close(fd) }
-        opened = []
-        let ours = [input, stdout, stderr, errorFile].compactMap { $0 }
-        guard code == 0 else {
-            (ours + [reported.read, go.write]).forEach { close($0) }
-            throw POSIXError(.init(rawValue: code) ?? .EIO)
+        let pid: pid_t
+        do {
+            pid = try await Self.spawn(
+                executable, arguments, environment: environment ?? ProcessInfo.processInfo.environment, actions: &actions,
+                newSession: placement == .detached
+            ) { [shared] in Self.watchExit($0, group: placement == .group, shared: shared) }
+        } catch {
+            opened += [input, stdout, stderr, errorFile].compactMap { $0 }
+            throw error
         }
-        // 中转报完 PID 就退出（报告管道读到 EOF）；它是 App 的子进程，这里回收
-        let report = await Self.readToEnd(reported.read)
-        var relayStatus: Int32 = 0
-        waitpid(relay, &relayStatus, 0)
-        guard let pid = pid_t(String(decoding: report, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)) else {
-            (ours + [go.write]).forEach { close($0) }
-            throw POSIXError(.ECHILD)
-        }
-        // 先登记退出事件再放它 exec：已经被 launchd 回收的进程登记不上，退出码就丢了
-        Self.watchExit(pid, group: placement == .group, shared: shared)
-        close(go.write)
         self.pid = pid
         self.placement = placement
         self.input = input
@@ -212,11 +176,6 @@ public final class ChildProcess: Sendable {
             }
             return (process.status ?? -1, String(decoding: await output, as: UTF8.self))
         }.value
-    }
-
-    /// 起一个要等人的命令（打开浏览器登录）：标准输入、输出、错误都是空设备，自成进程组。`waitForExit()` 等它结束，`end()` 提前结束它。
-    public static func launch(_ executable: URL, _ arguments: [String], environment: [String: String]) async throws -> ChildProcess {
-        try await ChildProcess(executable, arguments, environment: environment, placement: .group, keepErrors: false)
     }
 
     /// 等它退出，返回退出码（被信号结束为 nil）；不随调用方取消提前返回。
