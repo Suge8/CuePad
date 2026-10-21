@@ -130,17 +130,18 @@ private struct CueSaysSurface: ViewModifier {
     }
 }
 
-/// 你对 Cue 一条提问的回答（`CueThread.Row.answer`）：你那一边的一颗气泡（`AnswerBubble`，同会话里的作答），字上面一行答的是哪张卡（`CueMessage.headline`，
-/// 点它跳回问的那句），下面是选的那一项（更旧版本存下的另外一句照原文）。从刻度滑条跳过来时描一圈。
+/// 你对 Cue 一条提问的回答（`CueThread.Row.answer`）：你那一边的一颗气泡（`AnswerBubble`，同会话里的作答），是选的那一项（更旧版本存下的另外一句照原文）；
+/// 问的那句隔开了（`quoted`）才在字上面引一行答的是哪张卡（`CueMessage.headline`，点它跳回问的那句）。从刻度滑条跳过来时描一圈。
 struct CueAnswer: View {
     let question: CueMessage
+    let quoted: Bool
     var joined = false
     @Environment(\.chatHighlight) private var highlight
 
     var body: some View {
         let id = CueThread.Row.answerID(of: question.id), answer = question.answer ?? ""
         AnswerBubble(
-            answer: answer, quote: question.headline.map { BubbleQuote(text: $0, target: question.id) }, look: .cue(joined: joined),
+            answer: answer, quote: quoted ? question.headline.map { BubbleQuote(text: $0, target: question.id) } : nil, look: .cue(joined: joined),
             highlighted: highlight == id
         ) {
             MessageActions(text: answer, kind: .cue)

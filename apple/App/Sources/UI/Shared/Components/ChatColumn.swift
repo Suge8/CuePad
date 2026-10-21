@@ -64,6 +64,13 @@ struct ChatColumn<Content: View, Key: Equatable>: View {
             ChatScroll(followKey: followKey, readingWidth: readingWidth, inset: inset, follow: $follow, holding: holding) {
                 content(ChatWindow(count: window, earlier: first > 0 ? paging.step(size, first) : 0) { showEarlier(size) })
             }
+            .overlay(alignment: .trailing) {
+                if !marks.isEmpty {
+                    let margin = ChatLayout.margin(size.width, readingWidth: readingWidth, inset: inset)
+                    ChatScrubber(marks: marks, scrolling: follow.scrolling, crowded: margin < Self.scrollerWidth + ChatScrubber.room) { follow.seek($0) }
+                        .padding(.trailing, Self.scrollerWidth)
+                }
+            }
             // 改记成接上的那条，之后不用每次再找
             .onChange(of: ids, initial: true) {
                 let index = start ?? ids.count - self.window(size)
@@ -82,12 +89,6 @@ struct ChatColumn<Content: View, Key: Equatable>: View {
         .environment(\.chatHighlight, highlight.id)
         .environment(\.chatTarget, follow.target?.id)
         .environment(\.chatJump, ChatJump(column: column) { follow.seek($0) })
-        .overlay(alignment: .trailing) {
-            if !marks.isEmpty {
-                ChatScrubber(marks: marks, scrolling: follow.scrolling) { follow.seek($0) }
-                    .padding(.trailing, Self.scrollerWidth)
-            }
-        }
         .onChange(of: pendingJump) {
             guard let target = pendingJump else { return }
             pendingJump = nil

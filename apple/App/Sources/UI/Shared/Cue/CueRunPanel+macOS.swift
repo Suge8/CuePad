@@ -159,7 +159,7 @@ private struct CueCallRow: View {
     }
 
     private var target: Text {
-        let detail = CueActivity.detail(tool: call.name, arguments: call.arguments)
+        let detail = call.detail
         let action = detail.hasPrefix(call.name) ? String(detail.dropFirst(call.name.count)).trimmingPrefix(PiSessionState.detailSeparator) : Substring(detail)
         return Text("\(Text(call.name).fontWeight(.semibold).foregroundStyle(palette.ink2))  \(String(action))")
     }

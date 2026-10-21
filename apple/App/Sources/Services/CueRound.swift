@@ -53,6 +53,8 @@ struct CueToolCall: Identifiable {
     let id: String
     let name: String
     let arguments: String
+    /// 正在用时那一句（`CueActivity.detail`，开始时就查好名字：此刻的状态同步读它，不再等库）
+    let detail: String
     let startedAt: Date
     var finishedAt: Date?
     var result: String?
