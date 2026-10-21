@@ -293,6 +293,13 @@ DEFINE SCHEMA
         GRANT CREATE TO "_icloud"
     );
 
+    RECORD TYPE syncFloor (
+        "___recordID" REFERENCE QUERYABLE,
+        version       INT64,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud"
+    );
+
     RECORD TYPE tags (
         "___recordID" REFERENCE QUERYABLE,
         color         STRING,

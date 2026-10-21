@@ -73,7 +73,7 @@ public enum CueAlertText {
   }
 }
 
-/// 一个账号私有数据库里的订阅（真实实现是 CKDatabase）。
+/// 一个账号私有数据库里的订阅（真实实现是 `CloudDatabase`）。
 protocol SubscriptionStore: Sendable {
   func subscriptions() async throws -> [CKSubscription.ID: CKSubscription]
   func save(_ subscription: CKSubscription) async throws
@@ -167,15 +167,4 @@ struct AlertSubscriptions {
       && existing.notificationInfo?.shouldSendContentAvailable == wanted.notificationInfo?.shouldSendContentAvailable
       && existing.notificationInfo?.shouldSendMutableContent == wanted.notificationInfo?.shouldSendMutableContent
   }
-}
-
-struct DatabaseSubscriptions: SubscriptionStore {
-  let database: CKDatabase
-
-  func subscriptions() async throws -> [CKSubscription.ID: CKSubscription] {
-    Dictionary(uniqueKeysWithValues: try await database.allSubscriptions().map { ($0.subscriptionID, $0) })
-  }
-
-  func save(_ subscription: CKSubscription) async throws { _ = try await database.save(subscription) }
-  func delete(_ id: CKSubscription.ID) async throws { _ = try await database.deleteSubscription(withID: id) }
 }

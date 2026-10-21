@@ -26,6 +26,7 @@ nonisolated struct SyncSummary: Equatable {
             (title, detail, icon, tone) = ("iCloud 空间不足", "本机改动都已保留，空间释放后自动上传", .syncTrouble, .notice)
         case .needsDecision(let decision):
             (title, detail, icon, tone) = ("同步已暂停，需要你决定", Self.describe(decision), .syncPaused, .notice)
+        case .outdated: (title, detail, icon, tone) = ("这台的 CuePad 要更新", Self.updateToSync, .syncPaused, .notice)
         // 底层原因（错误码、服务端说明）在设置的「没能同步」明细里按记录列出，状态这里只说人话
         case .failed: (title, detail, icon, tone) = ("同步出错", Self.failedDetail, .failure, .failure)
         }
@@ -35,6 +36,13 @@ nonisolated struct SyncSummary: Equatable {
     static let failedDetail = "有记录没能上传，本机的内容都在，会自动重试"
     #else
     static let failedDetail = "有记录没能上传，本机的内容都在。回到前台会自动重试，也可以点立即同步"
+    #endif
+
+    /// 别的设备用着这台跟不上的新版时，去哪更新。
+    #if os(macOS)
+    static let updateToSync = "别的设备已用新版；更新这台（菜单「CuePad › 检查更新…」）后接着同步，本机改动都在"
+    #else
+    static let updateToSync = "别的设备已用新版；在 TestFlight 里更新这台后接着同步，本机改动都在"
     #endif
 
     /// 没登录 iCloud 或关掉了本 App 的 iCloud 时，去哪开。

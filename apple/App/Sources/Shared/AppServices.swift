@@ -43,6 +43,8 @@ final class AppServices {
     enum SyncSource {
         case iCloud
         case custom(any SyncControlling)
+        /// 用本机的库建的同步：真实的同步代码连替身 iCloud（`CloudSync` 的替身连接），给测试与调试画面。
+        case built((CueStore) -> any SyncControlling)
     }
 
     /// iCloud 同步；没有时 `syncStatus` 是写明原因的 `.unavailable`。状态、问题与冲突见下，动作见 `AppServices+Sync`。
