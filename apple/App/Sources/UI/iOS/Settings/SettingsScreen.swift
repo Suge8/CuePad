@@ -2,9 +2,7 @@
 import CueSync
 import SwiftUI
 
-/// 设置（项目页末尾、宽屏侧栏底部推入），按要紧排，分组与说法同 Mac 的设置窗口：Cue 一行（推入它的设置页，右边写它在哪台运行）；
-/// iCloud 同步（状态、需要你决定时的两个选择或立即同步、两个版本的灵感或任务、没能同步的记录）；通知；外观；
-/// 启动时没完成的事与上次崩溃有才出现；版本写在最底下。
+/// 设置（项目页末尾、宽屏侧栏底部推入），按要紧排，分组与说法同 Mac 的设置窗口；启动时没完成的事与上次崩溃有才出现。
 struct SettingsScreen: View {
     @Environment(AppServices.self) private var services
     @Environment(Workspace.self) private var workspace

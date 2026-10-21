@@ -3,10 +3,8 @@ import CueStore
 import SwiftUI
 
 /// 项目页（iPhone 底部一排的"项目"；宽屏侧栏项目区末尾的"全部项目"，侧栏只列置顶与最近的几个），右上"新建项目"。
-/// 只排项目（任务的事在任务页）：置顶项目是纸卡，按行平分整行（`pinnedGrid`）；其余按项目目录的顺序排成一张纸上的行，长相同侧栏的项目行
-/// （名字、灵感数，下面一行"此刻"）。卡与行的"此刻"同侧栏一条规则（`ProjectNow.byProject`：会话的事、进行中的任务、介绍）。
-/// 窄屏（iPhone）没有侧栏，末尾一组归档、回收站、设置（同步到不了 Mac 时设置那一行带点，`AppServices.macAlert`），推在这一页上；
-/// 宽屏这一组在侧栏里，这里不放。
+/// 只排项目（任务的事在任务页）：置顶项目是纸卡（`pinnedGrid`），其余排成一张纸上的行，长相同侧栏的项目行。卡与行的"此刻"同侧栏一条规则（`ProjectNow.byProject`：会话的事、进行中的任务、介绍）。
+/// 窄屏（iPhone）没有侧栏，末尾一组归档、回收站、设置（同步到不了 Mac 时设置那一行带点，`AppServices.macAlert`）推在这一页上；宽屏这一组在侧栏里，这里不放。
 struct ShelfScreen: View {
     @Environment(Workspace.self) private var workspace
     @Environment(Navigation.self) private var navigation

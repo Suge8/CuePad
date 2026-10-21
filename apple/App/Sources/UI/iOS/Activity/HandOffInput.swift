@@ -2,12 +2,10 @@
 import CueStore
 import SwiftUI
 
-/// 发给 Agent：浮在键盘上方的输入框（与随手记、新会话同一种），任务的正文已经带在里面，可以补一句；
-/// 头部一颗胶囊选交给哪个会话（菜单最上面是"新会话"，其下本项目的在前、最近要你注意的在前）。默认交到哪与 Mac 的发给 Agent、
-/// Cue 的开工同一份规则（`CueStore.handOffPlan`）：叶子绑着会话就是那个会话（已结束的也列上，Mac 收到后唤醒它），没绑而上一步的会话
+/// 发给 Agent：浮在键盘上方的输入框（与随手记、新会话同一种），任务的正文已经带在里面，可以补一句；头部一颗胶囊选交给哪个会话。
+/// 默认交到哪与 Mac 的发给 Agent、Cue 的开工同一份规则（`CueStore.handOffPlan`）：叶子绑着会话就是那个会话（已结束的也列上，Mac 收到后唤醒它），没绑而上一步的会话
 /// 还开着就接着用它，否则是新会话；选"新会话…"就不接着用（同 Cue 的 fresh）。
-/// 发出即收起，任务那一行随即出现那个会话的状态（发送中 → 工作中 → 有新回复；开新会话时先是"正在开会话"，开好后同样关联）。工具排里是选中会话的模型与思考强度（与会话页回复框同一组件 `SessionConfigControls`）。
-/// 选中会话做不到的（图片、斜杠命令、换模型，`AgentCapabilities`）不露出。
+/// 发出即收起，任务那一行随即出现那个会话的状态；开新会话时先是"正在开会话"，开好后同样关联。
 struct HandOffInput: View {
     let outbox: Outbox
     @Environment(Workspace.self) private var workspace
