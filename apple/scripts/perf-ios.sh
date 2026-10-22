@@ -7,6 +7,9 @@
 #   长按菜单与手势在进程内没有入口：App 写 `AWAIT 名 x y`（按）或 `AWAIT 名 x y x2 y2 swipe|drag 秒`（快滑或慢拖），这里用 axe（https://github.com/cameroncooke/AXe）
 #   在模拟器上真按（长按菜单按住 0.8 秒；收起在 App 里做）、真滑（axe swipe）、真拖（axe drag，每秒 60 个移动点）。
 #   某一次没写完（App 写了 FAIL、中途退出或超时）整次失败、以 1 退出，不出部分结果的表。
+#   CUEPAD_TRACE=<xctrace 模板>（如 'Time Profiler'）：每次量的同时录整段 trace（启动前开录，含冷启动），存 /tmp/cuepad-perf/interact-ios-<第几次>.trace。
+#   录的是整机（模拟器里的进程 xctrace 按 PID、按名字都认不出），按打印的 PID 筛；INTERACT 行的 at（墙钟）减 trace 的开始时刻就是各项在 trace 里的位置。
+#   xctrace 连设备卡住（不出"Starting recording"、收到 Ctrl-C 也不退）时这里 60 秒后放弃并以 1 退出，不带着卡住的录制往下量。
 # xc.sh 构建好 Release（带 DEBUG 条件，只为留下测量代码；产物在 apple/.derived-perf）、领到一台模拟器后调这里（不独占机器：只比指令数与主线程 CPU），第一个参数是 CuePad.app；
 # 设备是领到的那台（机型 CUEPAD_IOS_DEVICE，默认 iPhone 17；见 _sim.sh）。
 set -euo pipefail
@@ -37,7 +40,18 @@ for run in $(seq "$runs"); do
   library_args=(-CuePadDemo YES)
   if [ -n "${CUEPAD_PERF_SEED:-}" ]; then cp -cR "$CUEPAD_PERF_SEED" "$library"; library_args=(); fi
   out="$library/interact.jsonl"
-  SIMCTL_CHILD_CUEPAD_LIBRARY_DIR="$library" xcrun simctl launch "$udid" "$BUNDLE_ID" ${library_args[@]+"${library_args[@]}"} -CuePadBench interact "${@:3}" >/dev/null
+  tracer=""
+  if [ -n "${CUEPAD_TRACE:-}" ]; then
+    trace="/tmp/cuepad-perf/interact-ios-$run.trace"
+    mkdir -p /tmp/cuepad-perf && rm -rf "$trace"
+    xcrun xctrace record --template "$CUEPAD_TRACE" --device "$udid" --all-processes --output "$trace" >"$trace.log" 2>&1 &
+    tracer=$!
+    # 开录了再启动，冷启动才录得到
+    for _ in $(seq 600); do grep -q 'Starting recording' "$trace.log" && break; sleep 0.1; done
+    grep -q 'Starting recording' "$trace.log" || { kill -9 "$tracer"; echo "xctrace 60 秒没开录（多半卡在连设备上，见 $trace.log）" >&2; exit 1; }
+  fi
+  pid="$(SIMCTL_CHILD_CUEPAD_LIBRARY_DIR="$library" xcrun simctl launch "$udid" "$BUNDLE_ID" ${library_args[@]+"${library_args[@]}"} -CuePadBench interact "${@:3}" | sed 's/.*: //')"
+  if [ -n "$tracer" ]; then echo "trace：${trace}（CuePad PID ${pid}）" >&2; fi
   sleep 2
   # 量完自己退出；最多等 5 分钟。其间按 App 要的点真按
   pressed=0 finished=0 deadline=$(( $(date +%s) + 300 )) tick=0
@@ -61,6 +75,11 @@ for run in $(seq "$runs"); do
     fi
     sleep 0.1
   done
+  if [ -n "$tracer" ]; then
+    kill -INT "$tracer"
+    for _ in $(seq 600); do kill -0 "$tracer" 2>/dev/null || break; sleep 0.1; done
+    if kill -0 "$tracer" 2>/dev/null; then kill -9 "$tracer"; echo "xctrace 收到 Ctrl-C 60 秒没写完，$trace 不完整" >&2; exit 1; fi
+  fi
   if [ "$finished" = 0 ]; then xcrun simctl terminate "$udid" "$BUNDLE_ID" || true; echo "第 $run 次：5 分钟内没量完" >&2; exit 1; fi
   if grep -q '^FAIL ' "$out" || ! grep -q '^DONE' "$out"; then
     echo "第 $run 次没量完：$(grep '^FAIL ' "$out" || echo 'App 中途退出')" >&2; exit 1
