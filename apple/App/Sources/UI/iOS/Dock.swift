@@ -3,7 +3,7 @@ import SwiftUI
 
 /// 窄屏（iPhone 与窄窗口 iPad）的容器：一个导航栈，根是底部那一排的四个去处横排成的一条（项目、任务、会话、Cue，`HomePager`：左右滑跟手切页），
 /// 推入的页照常由系统返回（返回钮、内容区右滑），返回后在 Cue 页左滑前进回刚才那页。其余去处推在所属的那一页上（`Navigation.select`）；打开 App 落在 Cue。
-/// 导航栈托管在 UIKit 里，几个栈交替时 SwiftUI 不逐帧挪它（旧页停着、最后一下才跳走）：所以只有一个栈，切页挪的是栈根里 SwiftUI 自己画的页。
+/// 导航栈托管在 UIKit 里，几个栈交替时 SwiftUI 不逐帧挪它（旧页停着、最后一下才跳走）：所以只有一个栈，切页挪的是栈根里的四页（各在自己的托管控制器里，`PagerController`）。
 /// 底部那一排整个窗口只有一份（`DockBar`），挂在栈的根上、不在哪一页里：切页时它不重建、不跟着滑，与页同一刻原地换形（`morph`）。
 /// 每页各建一排时，新页那一排要从旧的样子摆出第一帧再长回来，"⋯"展开着换去处就是收成圆再长开的一下来回。
 /// Cue 页的输入框在页里（随键盘升起），底边那一格同一时刻只有一个主人（`handed`）：换形一开始离开输入框的样子就交给 Cue 钮，
@@ -48,7 +48,10 @@ struct DockRoot: View {
             .environment(\.dockComposing, $composing)
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
             .toolbarVisibility(.hidden, for: .navigationBar)
-            .navigationDestination(for: Route.self) { RouteView(route: $0).leaveShot($0, into: shot) }
+            // 只有推在 Cue 页上的页能前进回来：只有它们离开前拍快照
+            .navigationDestination(for: Route.self) { route in
+                if root == .cue { RouteView(route: route).leaveShot(route, into: shot) } else { RouteView(route: route) }
+            }
         }
         .onChange(of: target, initial: true) { morph(to: target) }
         .debugExposesPlaces { placesOpen = true }

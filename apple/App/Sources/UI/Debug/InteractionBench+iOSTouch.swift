@@ -3,12 +3,15 @@ import UIKit
 import UIKit.UIGestureRecognizerSubclass
 
 /// `IOSInteractionBench` 里要真手指的项：进程内没有入口（系统长按菜单）或要量的就是手势本身（滑动切页、右滑返回、左滑前进）。
-/// App 写 `AWAIT 名 x y`（按）或 `AWAIT 名 x y x2 y2`（从前一点滑到后一点），屏幕坐标、名字里不带空格；`perf-ios.sh` 用 axe 在模拟器上真按、真滑，
+/// App 写 `AWAIT 名 x y`（按）或 `AWAIT 名 x y x2 y2 swipe|drag 秒`（从前一点快滑或慢拖到后一点），屏幕坐标、名字里不带空格；`perf-ios.sh` 用 axe 在模拟器上真按、真滑，
 /// 量从手指按下（`TouchProbe`）起算。每行的 `landed` 是量完时停在哪（`landed(_:)`），核对手势做了该做的事、没误触。
 extension IOSInteractionBench {
     enum Finger {
         case press(CGPoint)
-        case swipe(from: CGPoint, to: CGPoint)
+        /// 快滑（axe swipe）：切页、返回、快甩。
+        case swipe(from: CGPoint, to: CGPoint, seconds: Double = 0.25)
+        /// 慢拖（axe drag，逐点移动）：行的轻扫只认开始那一刻横向慢于 600pt/s 的拖。
+        case drag(from: CGPoint, to: CGPoint, seconds: Double)
     }
 
     typealias Step = (_ name: String, _ window: Duration, _ finger: Finger?, _ action: () -> Void) async -> Void
@@ -48,15 +51,24 @@ extension IOSInteractionBench {
             await step("右滑返回", swipeWindow, .swipe(from: CGPoint(x: 60, y: mid), to: CGPoint(x: right, y: mid))) {}
             await step("左滑前进", swipeWindow, .swipe(from: CGPoint(x: right, y: mid), to: CGPoint(x: left, y: mid))) {}
         }
+        // 会话行：慢慢左拖 150pt（约 0.9 秒）露出行的动作；同一行上快甩是切页（会话页左边是 Cue）
         for _ in 0..<2 where wants("误触·会话行左滑") {
             await land(.cue)
             await land(.agent)
-            let row = sessionRow(in: window, fail: fail).midY
-            await step("误触·会话行左滑", swipeWindow, .swipe(from: CGPoint(x: right, y: row), to: CGPoint(x: left, y: row))) {}
-            // 四页常驻、页不重建：滑出的行动作点一下行收起，不留给下一遍（没滑出时这一下会打开会话，也算没收起）
-            await press("收起行动作", .press(CGPoint(x: left, y: row)))
+            let row = sessionRow(in: window, fail: fail)
+            rowBefore = pixels(row)
+            await step("误触·会话行左滑", .milliseconds(1500), .drag(from: CGPoint(x: right, y: row.midY), to: CGPoint(x: right - 150, y: row.midY), seconds: 0.9)) {}
+            // 页常驻、不重建：滑出的行动作点一下行收起，不留给下一遍（没滑出时这一下会打开会话，也算没收起）
+            await press("收起行动作", .press(CGPoint(x: left, y: row.midY)))
             try? await Task.sleep(for: .seconds(1))
-            if revealsRowActions(in: window) || !workspace.path.isEmpty { fail("点一下没收起行动作：\(landed(workspace))") }
+            if landed(workspace) != "agent" { fail("点一下没收起行动作：\(landed(workspace))") }
+            rowBefore = nil
+        }
+        for _ in 0..<2 where wants("会话行快甩") {
+            await land(.cue)
+            await land(.agent)
+            let row = sessionRow(in: window, fail: fail).midY
+            await step("会话行快甩", swipeWindow, .swipe(from: CGPoint(x: right, y: row), to: CGPoint(x: left, y: row), seconds: 0.12)) {}
         }
         for _ in 0..<2 where wants("误触·看板左滑") || wants("误触·看板右滑") {
             await land(.tasks)
@@ -77,20 +89,22 @@ extension IOSInteractionBench {
             }
         }
         var text = ([workspace.root] + workspace.path).map(brief).joined(separator: ">")
-        if revealsRowActions(in: window) { text += "+行动作" }
+        if workspace.root == .agent, workspace.path.isEmpty, let before = rowBefore, moved(before) { text += "+行动作" }
         if workspace.root == .tasks, let column = boardColumn(in: window) { text += " 列=\(column)" }
         return text
     }
 
     /// 请测量脚本按或滑，等手指按下那一刻再返回：量从按下起算。
     static func touch(_ write: @escaping (String) -> Void, _ name: String, _ finger: Finger) async {
-        let points = switch finger {
-        case let .press(point): [point]
-        case let .swipe(from, to): [from, to]
+        func xy(_ point: CGPoint) -> String { "\(Int(point.x)) \(Int(point.y))" }
+        let args = switch finger {
+        case let .press(point): xy(point)
+        case let .swipe(from, to, seconds): "\(xy(from)) \(xy(to)) swipe \(seconds)"
+        case let .drag(from, to, seconds): "\(xy(from)) \(xy(to)) drag \(seconds)"
         }
         await withCheckedContinuation { continuation in
             TouchProbe.arm { continuation.resume() }
-            write((["AWAIT", name] + points.flatMap { ["\(Int($0.x))", "\(Int($0.y))"] }).joined(separator: " "))
+            write("AWAIT \(name) \(args)")
         }
     }
 
@@ -133,10 +147,34 @@ extension IOSInteractionBench {
         return TaskBoard.Column.allCases.indices.contains(index) ? TaskBoard.Column.allCases[index] : nil
     }
 
-    /// 行左滑露出的系统轻扫按钮在屏上。
-    private static func revealsRowActions(in window: UIWindow?) -> Bool {
-        guard let window else { return false }
-        return all(in: window).contains { String(describing: type(of: $0)).contains("SwipeAction") && $0.bounds.width > 10 && onScreen($0, window) != nil }
+    /// 慢拖之前那一行的样子（`pixels`）：自绘的轻扫按钮是 SwiftUI 画的、不是 UIKit 视图，也不进读屏，只能比画面认。
+    nonisolated(unsafe) private static var rowBefore: (rect: CGRect, pixels: [UInt8])?
+
+    /// 窗口里 `rect` 那一块的像素（1 倍，RGBA）。
+    private static func pixels(_ rect: CGRect) -> (rect: CGRect, pixels: [UInt8]) {
+        let width = Int(rect.width), height = Int(rect.height)
+        var buffer = [UInt8](repeating: 0, count: width * height * 4)
+        buffer.withUnsafeMutableBytes { bytes in
+            guard let context = CGContext(data: bytes.baseAddress, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
+                                          space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return }
+            context.translateBy(x: -rect.minX, y: rect.maxY)
+            context.scaleBy(x: 1, y: -1)
+            UIGraphicsPushContext(context)
+            window?.drawHierarchy(in: window?.bounds ?? .zero, afterScreenUpdates: false)
+            UIGraphicsPopContext()
+        }
+        return (rect, buffer)
+    }
+
+    /// 那一行露出了动作：行整体左移一个托盘宽，和慢拖之前比超过 8% 的像素明显变了（卡片底色大块是白的，露出动作时约 17%，收着时是 0）。
+    private static func moved(_ before: (rect: CGRect, pixels: [UInt8])) -> Bool {
+        let now = pixels(before.rect).pixels
+        var changed = 0
+        for i in stride(from: 0, to: now.count, by: 4) {
+            let diff = (0..<3).reduce(0) { $0 + abs(Int(now[i + $1]) - Int(before.pixels[i + $1])) }
+            if diff > 60 { changed += 1 }
+        }
+        return Double(changed) / Double(now.count / 4) > 0.08
     }
 
     private static func menuInteractions(in view: UIView?) -> [UIInteraction] {
