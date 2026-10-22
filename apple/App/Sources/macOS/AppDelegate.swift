@@ -179,6 +179,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
     private func showLibraryFailure(_ failure: LibraryFailure) {
         Logger(subsystem: AppIdentity.id, category: "launch").error("资料库没能打开：\(failure.reason, privacy: .public)")
+        DebugHooks.libraryFailed(failure.reason)
         let content = UnreadableLibraryView(failure: failure) { [weak self] in self?.launch() }
             .frame(width: 520, height: 420)
             .modifier(PaletteProvider())
