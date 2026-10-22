@@ -21,7 +21,7 @@ struct LiveSessionList<Row: View>: View {
             ForEach(shown) { row($0) }
             if hidden > 0 { LiveMoreFold(hidden: hidden, expanded: $showsAll, style: style) }
         }
-        .animation(Motion.quick, value: showsAll)
+        .animation(HandOff.quick, value: showsAll)
     }
 }
 
@@ -79,8 +79,8 @@ struct LiveWorkCount: View {
         Text(text)
             .font(font.monospacedDigit()).foregroundStyle(palette.ink3).lineLimit(1)
             .contentTransition(.numericText())
-            .animation(Motion.quick, value: work.running)
-            .animation(Motion.quick, value: work.subagents)
+            .animation(HandOff.quick, value: work.running)
+            .animation(HandOff.quick, value: work.subagents)
     }
 
     private var text: Dotted {

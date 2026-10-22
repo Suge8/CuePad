@@ -95,7 +95,7 @@ struct CueRelayStage: ViewModifier {
             anchors.compactMap { anchor -> (rank: Int, landing: RelayFlight.Landing)? in
                 guard case .end(let spot) = anchor.role, let rank = spot.rank(for: end),
                       let frame = anchor.frame(in: root, seesThrough: end.opens && rank == EndSpot.Row.own.rawValue) else { return nil }
-                return (rank, RelayFlight.Landing(point: frame.center, host: anchor.hostLayer))
+                return (rank, RelayFlight.Landing(point: frame.center, host: anchor.layer))
             }
             .min { ($0.rank, RelayFlight.distance($0.landing.point, cue)) < ($1.rank, RelayFlight.distance($1.landing.point, cue)) }?.landing
         }
@@ -186,9 +186,6 @@ final class RelayAnchorView: RelayAnchorBase {
     #endif
 
     static func all(in window: AnyObject) -> [RelayAnchorView] { anchors.allObjects.filter { $0.window === window } }
-
-    /// 锚自己的层：接住的光圈画在上面，随锚移动（`RelayFlight.Landing`）。
-    var hostLayer: CALayer? { layer }
 
     /// Cue 那头在屏上的那块：几处都在时取 `CueSpot` 排在前面的。
     static func cue(among anchors: [RelayAnchorView], in root: CALayer) -> CGRect? {

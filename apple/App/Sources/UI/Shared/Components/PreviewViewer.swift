@@ -151,7 +151,7 @@ private struct PreviewPager: View {
     }
 
     private func step(_ offset: Int) {
-        withAnimation(Motion.quick) { current = batch[index + offset].id }
+        withAnimation(HandOff.quick) { current = batch[index + offset].id }
     }
     #endif
 

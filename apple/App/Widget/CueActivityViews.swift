@@ -137,7 +137,7 @@ private struct Sentence: View {
         Text(now.headline).font(island ? .headline : .subheadline.weight(.semibold)).foregroundStyle(palette.ink)
             .lineLimit(1).minimumScaleFactor(0.85)
             .id(now.headline)
-            .transition(.push(from: .bottom))
+            .transition(.handOff)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
@@ -157,7 +157,7 @@ private struct Details: View {
         VStack(alignment: .leading, spacing: 7) {
             if let aside = now.aside {
                 Text(aside).font(.footnote).foregroundStyle(palette.ink2).lineLimit(1)
-                    .id(aside).transition(.push(from: .bottom))
+                    .id(aside).transition(.handOff)
             }
             if let first = now.first { FirstWait(wait: first, island: island) }
             if works > 0 { Works(beads: now.beads.filter { $0.kind != .asks }, limit: works) }

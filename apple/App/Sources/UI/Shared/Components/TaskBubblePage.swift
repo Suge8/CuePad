@@ -32,7 +32,7 @@ struct BubblePage: View {
                 }
                 .padding(.leading, BubbleMetrics.indent - BubbleMetrics.rowLead)
                 .padding(.top, BubbleMetrics.section - 4)
-                .animation(Motion.quick, value: data.steps.map(\.id))
+                .animation(HandOff.quick, value: data.steps.map(\.id))
             }
             BubbleFooter(data: data, focus: focus, editing: editing)
                 .padding(.top, BubbleMetrics.section + 2)

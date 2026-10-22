@@ -48,7 +48,7 @@ struct ProjectScope: View {
         .foregroundStyle(current == nil ? palette.ink2 : palette.signature)
         .background { if current != nil { Capsule().fill(palette.selection).padding(3) } }
         .fixedSize()
-        .animation(Motion.quick, value: current?.id)
+        .animation(HandOff.quick, value: current?.id)
         .sensoryFeedback(.selection, trigger: current?.id)
     }
 }

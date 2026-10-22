@@ -15,7 +15,7 @@ extension View {
         task(id: active) {
             if active { try? await Task.sleep(for: Pending.delay) }
             guard !Task.isCancelled, shown.wrappedValue != active else { return }
-            withAnimation(Motion.quick) { shown.wrappedValue = active }
+            withAnimation(HandOff.quick) { shown.wrappedValue = active }
         }
     }
 }

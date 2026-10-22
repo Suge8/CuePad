@@ -204,7 +204,7 @@ struct CueMove: Identifiable, Equatable {
     var confirm: String { to.isHere ? "改在这台运行" : "改在「\(to.name)」运行" }
 }
 
-/// 能不能在一台 Mac 上启用 Cue、改它运行的 Mac：所有入口（Cue 页的启用卡与它的多台菜单、接入面板 Cue 那一行、两端设置里的选择器）只读这一处，
+/// 能不能在一台 Mac 上启用 Cue、改它运行的 Mac：所有入口（Cue 页的启用钮与它的多台菜单（`CueWelcome`）、接入面板 Cue 那一行、两端设置里的选择器）只读这一处，
 /// 规则本身落在启用的入口（`AppServices.enableCue`），这里只给界面说清楚此刻是哪种。
 enum CueGate: Equatable {
     /// 这台的库还没和 iCloud 对过一遍（`AppServices.knowsSyncedFacts`）：入口写这句原因，不能启用

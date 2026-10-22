@@ -199,7 +199,7 @@ struct CuePage: View {
             // 滚动目标（段与其余各行）：内容变了滚动位置跟着它走（`ChatScroll`）；跳到某一条按条的 id 找，不靠它
             .scrollTargetLayout()
             .onGeometryChange(for: CGFloat.self) { $0.size.width.rounded() } action: { width = $0 }
-            .animation(Motion.quick, value: cue.presence.progress)
+            .animation(HandOff.quick, value: cue.presence.progress)
         }
     }
 
@@ -243,6 +243,6 @@ struct CuePage: View {
             CueComposer(style: .page, takesFocusRequests: true) { follow.sent() }.fixedSize(horizontal: false, vertical: true)
             #endif
         }
-        .animation(Motion.quick, value: cue.canHear)
+        .animation(HandOff.quick, value: cue.canHear)
     }
 }

@@ -71,7 +71,7 @@ struct CueHeader: View {
         }
         .frame(height: Self.height)
         .contentShape(.rect)
-        .animation(Motion.quick, value: cue.presence)
+        .animation(HandOff.quick, value: cue.presence)
         // 第二行换了长短不同的一句、多了少了珠子时整组重新居中：随这一下滑过去（新句淡入时已到位），珠子不跳
         .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: cue.now)
         .accessibilityElement(children: .combine)

@@ -90,18 +90,18 @@ struct CueWaitingDock: View {
             guard animated else { return leave() }
             leaving = true
             // 收尾看此刻的状态（`leaving`）：闭包里的 `waiting` 是排这一段时那一份，淡的这 80ms 里又来了一条时它还是空的，会把新来的那张拿掉
-            move(to: 0, .easeOut(duration: Motion.handOff), holds: false) { if leaving { leave() } }
+            move(to: 0, .easeOut(duration: HandOff.gap), holds: false) { if leaving { leave() } }
             return
         }
         let swapping = shown != nil
         leaving = false
-        withAnimation(swapping && animated ? Motion.quick : nil) { shown = next }
+        withAnimation(swapping && animated ? HandOff.quick : nil) { shown = next }
         guard animated, level < 1 else { return level = 1 }
         moving = true
         Task {
             await NextFrame.wait()
             guard shown?.id == next.id else { return moving = false }
-            move(to: 1, reduceMotion ? Motion.quick : Motion.snappy)
+            move(to: 1, reduceMotion ? HandOff.quick : Motion.snappy)
         }
     }
 
@@ -178,7 +178,7 @@ struct CueWaitingDock: View {
         #endif
         return body
             .paper(radius: ComposerMetrics.radius, lifted: true)
-            .animation(Motion.quick, value: reading)
+            .animation(HandOff.quick, value: reading)
             .padding(.bottom, Self.below)
     }
 

@@ -164,7 +164,7 @@ private struct FocusCard: View {
     /// 没做完的任务（含步骤）有这么多时，折起时列出的那几行之后的行按需建：全展开时普通栈要在点开的那一圈把每行都建出、量一遍（150 条约 150ms，模拟器 Release）。
     /// 按总数定、不按开合定：换栈会让一直在的那几行也跟着重建、淡出再淡入。
     private static let lazyFrom = 20
-    /// 收起后纸上留下的那几行淡入多久（同 `Motion.quick`）。
+    /// 收起后纸上留下的那几行淡入多久（同 `HandOff.quick`）。
     private static let revealDuration = 0.16
 
     var body: some View {

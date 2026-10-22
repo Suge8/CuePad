@@ -34,7 +34,7 @@ struct BlankChat: View {
         }
             .padding(.bottom, bottomInset)
             .opacity(shown ? 1 : 0)
-            .animation(Motion.quick, value: shown)
+            .animation(HandOff.quick, value: shown)
             .allowsHitTesting(false)
             .accessibilityHidden(!shown)
     }

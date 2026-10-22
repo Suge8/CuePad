@@ -52,7 +52,7 @@ struct CueGateTests {
 
         #expect(try await gate() == .waiting("正在从 iCloud 同步…"))
         #expect(workspace.cue.now.headline == "正在从 iCloud 同步…")  // Cue 此刻（侧栏名片、菜单栏面板、小组件）：不说"还没启用"
-        for moving in [false, true] {  // 启用卡、接入面板、设置的选择器与改 Mac 的确认都调它
+        for moving in [false, true] {  // Cue 页的启用（`CueWelcome`）、接入面板、设置的选择器与改 Mac 的确认都调它
             await #expect(throws: CueEnableError.unsynced) { try await services.enableCue(on: TestApp.hostID, moving: moving) }
         }
         #expect(try await store.cueProfile()?.enabledAt == nil)

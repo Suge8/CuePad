@@ -104,7 +104,7 @@ struct PageTitleSlot: View {
         .frame(maxWidth: .infinity)
         .frame(minWidth: Self.minWidth, idealWidth: Self.width, maxWidth: Self.width)
         .opacity(state.showsHeader ? 1 : 0)
-        .animation(Motion.quick, value: state.showsHeader)
+        .animation(HandOff.quick, value: state.showsHeader)
         .allowsHitTesting(state.showsHeader)
         .accessibilityHidden(!state.showsHeader)
         // 让开时这一块仍接指针：移上去或点一下唤出

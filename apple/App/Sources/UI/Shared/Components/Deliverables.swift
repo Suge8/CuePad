@@ -138,7 +138,7 @@ struct DeliverableTile: View {
             guard let file else { return }
             let waited = shown == nil
             let loaded = await DeliverableLooks.load(preview, file: file, box: box, scale: scale, caches: services.store.files.caches)
-            withAnimation(waited ? Motion.quick : nil) { look = loaded }
+            withAnimation(waited ? HandOff.quick : nil) { look = loaded }
         }
         .pending(loading, shown: $slow)
     }

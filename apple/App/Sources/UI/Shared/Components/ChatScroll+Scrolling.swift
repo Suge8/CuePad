@@ -118,7 +118,7 @@ extension ChatScroll {
         // 对的期间报着"在最新处"，下面其实还压着没滑上来的
         guard !follow.wrappedValue.atNewest || deferred else { return }
         deferred = false
-        withAnimation(reduceMotion ? nil : Motion.quick) { toEnd(reader) }
+        withAnimation(reduceMotion ? nil : HandOff.quick) { toEnd(reader) }
     }
 
     /// 新到的那一条长高了 `height`：整段内容在渲染端先往下挪这么多（上面的对话看着还在原处），无回弹地归零（`ContentLift`），它让开了再淡入（`CueBubble.arrival`）。

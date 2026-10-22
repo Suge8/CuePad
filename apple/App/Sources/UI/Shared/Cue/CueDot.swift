@@ -17,7 +17,7 @@ struct CueDot: View {
             CueArrival(color: palette.replied)
         }
         .frame(width: Self.size, height: Self.size)
-        .animation(Motion.quick, value: color)
+        .animation(HandOff.quick, value: color)
         .accessibilityHidden(true)
     }
 }

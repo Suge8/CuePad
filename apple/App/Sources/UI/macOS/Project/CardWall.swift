@@ -84,7 +84,7 @@ struct CardTile: View {
         .cardPresence(card.id, in: workspace)
         .onHover { hovering = $0 }
         .presetHover($hovering)
-        .animation(Motion.quick, value: hovering)
+        .animation(HandOff.quick, value: hovering)
         .contextMenu { CardActions(card: card, selectable: true) }
         .accessibilityElement(children: .combine)
         .accessibilityAction(named: "设为任务", makeTask)

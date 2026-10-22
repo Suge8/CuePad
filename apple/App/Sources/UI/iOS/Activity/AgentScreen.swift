@@ -99,9 +99,9 @@ struct SessionList: View {
             }
             .transaction(value: list.filter) { $0.animation = nil }
             .animation(Motion.snappy, value: list.now.map(\.id))
-            .animation(Motion.quick, value: list.now.map(\.state.state))
-            .animation(Motion.quick, value: (list.now + list.ended).map(\.delivery?.status))
-            .animation(Motion.quick, value: list.ends)
+            .animation(HandOff.quick, value: list.now.map(\.state.state))
+            .animation(HandOff.quick, value: (list.now + list.ended).map(\.delivery?.status))
+            .animation(HandOff.quick, value: list.ends)
         }
     }
 

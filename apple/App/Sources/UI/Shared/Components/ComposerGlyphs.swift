@@ -48,10 +48,10 @@ struct SendGlyph: View {
                 default: glyph.transition(.opacity)
                 }
             }
-            .animation(Motion.quick, value: phase)
+            .animation(HandOff.quick, value: phase)
         }
         // 钮底：发出那一刻当帧换掉，其余换状态时渐变
-        .animation(phase == .sending ? nil : Motion.quick, value: disc)
+        .animation(phase == .sending ? nil : HandOff.quick, value: disc)
         .onChange(of: phase) { _, new in if new == .ready, !reduceMotion { hops += 1 } }
     }
 

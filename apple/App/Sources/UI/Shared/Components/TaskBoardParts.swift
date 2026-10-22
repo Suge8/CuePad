@@ -257,7 +257,7 @@ private struct InsertBefore: ViewModifier {
                 }
             }
             .dropDestination(for: String.self) { ids, _ in perform(ids) } isTargeted: { targeted = $0 }
-            .animation(Motion.quick, value: targeted)
+            .animation(HandOff.quick, value: targeted)
             .sensoryFeedback(.selection, trigger: targeted) { _, now in now }
     }
 }

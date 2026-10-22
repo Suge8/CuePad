@@ -63,7 +63,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     private var shrunkDraft: String? { shrunk ? draft.preview : nil }
     private static var compactWidth: CGFloat { 220 }
     private static var headerTransition: AnyTransition {
-        .asymmetric(insertion: .opacity.animation(Motion.quick.delay(0.12)), removal: .identity)
+        .asymmetric(insertion: .opacity.animation(HandOff.quick.delay(0.12)), removal: .identity)
     }
     /// 玻璃上方允许浮出的高度（见 `field` 的裁切）。
     private static var overhang: CGFloat { 120 }
@@ -112,10 +112,10 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
             // 一直展开时焦点不改形状，不起动画：Mac 会话页打开即聚焦，白跑的一段动画每帧都要 AppKit 重算整窗的跟踪区
             if form == .open { focused = now } else { withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { focused = now } }
         }
-        .animation(Motion.quick, value: paletteCommands.isEmpty)
+        .animation(HandOff.quick, value: paletteCommands.isEmpty)
         .onChange(of: draft.text) { highlighted = 0 }
-        .animation(Motion.quick, value: draft.attachments.map(\.id))
-        .animation(Motion.quick, value: draft.images.map(\.id))
+        .animation(HandOff.quick, value: draft.attachments.map(\.id))
+        .animation(HandOff.quick, value: draft.images.map(\.id))
         .modifier(ImageSources(source: $source, images: $draft.images))
         .modifier(CardPanels(on: accepts.contains(.cards), picking: $source.isOn(.cards), previewing: $previewing) {
             CardPicker(project: cardsFrom) { draft.attach($0) }
@@ -223,6 +223,6 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
         }
         .frame(width: ComposerMetrics.slot, height: buttonHeight)
         // 只管钮自己进出：打第一个字时钮出现与一行变两层是同一次更新，挂在整块上的话"＋"的挪位也跟着它动画（减弱动态效果时也滑）
-        .animation(Motion.quick, value: sendVisible)
+        .animation(HandOff.quick, value: sendVisible)
     }
 }

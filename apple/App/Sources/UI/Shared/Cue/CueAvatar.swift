@@ -42,7 +42,7 @@ struct CueAvatar: View {
     private var dimmed: Bool { presence.isAway }
     private var working: Bool { if case .working = presence { true } else { false } }
 
-    /// 彗星与静止的环换手：只淡入淡出（彗星淡出时照转），比颜色反馈（`Motion.quick`）长一点，看得出是收住、不是消失。
+    /// 彗星与静止的环换手：只淡入淡出（彗星淡出时照转），比颜色反馈（`HandOff.quick`）长一点，看得出是收住、不是消失。
     private static let handoff = Animation.easeInOut(duration: 0.3)
 
     var body: some View {
@@ -53,8 +53,8 @@ struct CueAvatar: View {
         }
         .frame(width: size.box, height: size.box)
         .opacity(dimmed ? 0.5 : 1)
-        .animation(Motion.quick, value: mood)
-        .animation(Motion.quick, value: presence)
+        .animation(HandOff.quick, value: mood)
+        .animation(HandOff.quick, value: presence)
         .accessibilityHidden(true)
         .onAppear { visible = true }
         .onDisappear { visible = false }
