@@ -2,7 +2,7 @@
 import SwiftUI
 import UIKit
 
-/// 四页的容器：页都铺满容器（安全区、键盘照常由 UIKit 给），在条上的位置只是图层的平移（`apply`），各页的托管控制器建过就留着（回访不重建、滚动位置还在），挂不挂在窗口上另说：
+/// 四页的容器：页都铺满容器（安全区、键盘照常由 UIKit 给），在条上的位置只是外面套的那层视图的平移（`apply`；直接挪托管视图，它每帧都要重算自己在窗口里的位置），各页的托管控制器建过就留着（回访不重建、滚动位置还在），挂不挂在窗口上另说：
 /// - 当前页一直挂着；滑动中露出来的页（`moving`）挂着、画着、订阅着；
 /// - 两边的邻页停稳后挂上但藏着（下一次拖时现成），不订阅（`pageActive` 为假，没读过的先读一份 `pagePrefetch`）；
 /// - 推入的页盖住根（转场做完）时只留当前页挂着：返回时导航栈把根重新挂回窗口，挂着几页就要重排几页。回到根上安静一阵再把邻页挂回去。
@@ -19,7 +19,7 @@ final class PagerController: UIViewController {
     private let workspace: Workspace
     private let motion: PagerMotion
     private var input: Input?
-    private var pages: [Route: UIHostingController<AnyView>] = [:]
+    private var pages: [Route: Page] = [:]
     /// 正在滑的页：画、订阅。
     private var moving: Set<Route> = []
     /// 条停在哪一页（`Workspace.root` 换了，条滑过去之后才是它）。
@@ -83,19 +83,19 @@ final class PagerController: UIViewController {
 
     /// 一页的内容：环境整份转过来，再标上它此刻在不在屏上。
     private func refresh(_ route: Route) {
-        guard let input, let host = pages[route] else { return }
+        guard let input, let page = pages[route] else { return }
         let live = live(route)
-        host.rootView = AnyView(
+        page.host.rootView = AnyView(
             HomePage(route: route).background(input.environment.palette.desk)
                 .environment(\.pageActive, live).environment(\.pagePrefetch, !live)
                 .environment(\.self, input.environment))
-        host.view.isHidden = !live
+        page.slot.isHidden = !live
     }
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         if motion.width != width { motion.width = width }
-        for host in pages.values { host.view.frame = view.bounds }
+        for page in pages.values { page.slot.frame = view.bounds }
         if pan.state != .changed, turn == 0 || !motion.busy { offset = -CGFloat(Dock.order(resting)) * width }
         apply(offset)
     }
@@ -104,26 +104,25 @@ final class PagerController: UIViewController {
 
     private func build(_ route: Route) {
         guard pages[route] == nil else { return attach(route) }
-        let host = UIHostingController(rootView: AnyView(EmptyView()))
-        host.view.backgroundColor = .clear
-        pages[route] = host
-        addChild(host)
+        let page = Page()
+        pages[route] = page
+        addChild(page.host)
         attach(route)
-        host.didMove(toParent: self)
+        page.host.didMove(toParent: self)
         refresh(route)
         // 先排后动：建好就排一次，第一次露出来时不在跟手的那一帧里排
-        host.view.layoutIfNeeded()
+        page.slot.layoutIfNeeded()
     }
 
     private func attach(_ route: Route) {
-        guard let host = pages[route], host.view.superview !== view else { return }
-        host.view.frame = view.bounds
-        view.addSubview(host.view)
+        guard let page = pages[route], page.slot.superview !== view else { return }
+        page.slot.frame = view.bounds
+        view.addSubview(page.slot)
         apply(offset)
     }
 
     private func detach(_ route: Route) {
-        pages[route]?.view.removeFromSuperview()
+        pages[route]?.slot.removeFromSuperview()
     }
 
     private func neighbors(of route: Route) -> [Route] {
@@ -147,7 +146,7 @@ final class PagerController: UIViewController {
     /// 安静下来以后一步一步补齐：先把建过的邻页挂回去，再由近及远建还没建的页；每一步之间再等一阵，又动了就重新等。
     private func settleDown() {
         idle?.cancel()
-        let detached = neighbors(of: resting).filter { pages[$0] != nil && pages[$0]?.view.superview !== view }
+        let detached = neighbors(of: resting).filter { pages[$0] != nil && pages[$0]?.slot.superview !== view }
         let index = Dock.order(resting)
         let unbuilt = Dock.pages.filter { pages[$0] == nil }.min { abs(Dock.order($0) - index) < abs(Dock.order($1) - index) }
         guard !covered, let next = detached.first ?? unbuilt else { return }
@@ -167,10 +166,10 @@ final class PagerController: UIViewController {
         let forward = motion.shot != nil
         let pushed = forward ? min(max((stop - offset) / w, 0), 1) : 0
         let strip = forward ? max(offset, stop) : offset
-        for (route, host) in pages {
+        for (route, page) in pages {
             let order = Dock.order(route)
             let back = order == Self.last ? -pushed * Self.parallax * w : 0
-            host.view.transform = CGAffineTransform(translationX: CGFloat(order) * w + strip + back, y: 0)
+            page.slot.transform = CGAffineTransform(translationX: CGFloat(order) * w + strip + back, y: 0)
         }
         if motion.pushed != pushed { motion.pushed = pushed }
     }
@@ -178,12 +177,12 @@ final class PagerController: UIViewController {
     /// 条此刻的平移（弹簧在半路时从 Cue 页的图层读：它在条上的位置，拉出前进页时是它退开了多少）。
     private func presentedOffset() -> CGFloat {
         let stop = -CGFloat(Self.last) * width
-        guard let x = pages[Dock.pages[Self.last]]?.view.layer.presentation()?.affineTransform().tx else { return offset }
+        guard let x = pages[Dock.pages[Self.last]]?.slot.layer.presentation()?.affineTransform().tx else { return offset }
         return stop + (motion.shot != nil && x < 0 ? x / Self.parallax : x)
     }
 
     private func stopAnimations() {
-        for host in pages.values { host.view.layer.removeAllAnimations() }
+        for page in pages.values { page.slot.layer.removeAllAnimations() }
     }
 
     private func setMoving(_ routes: Set<Route>) {
@@ -244,13 +243,15 @@ final class PagerController: UIViewController {
         var target = index
         if commits, projected > w / 2, velocity > -200, allows(.previous) { target = index - 1 }
         if commits, projected < -w / 2, velocity < 200, allows(.next) { target = index + 1 }
-        if target != index, target <= Self.last {
-            resting = Dock.pages[target]
-            workspace.select(resting)
-        }
+        let turned = target != index && target <= Self.last
+        if turned { resting = Dock.pages[target] }
         animate(to: -CGFloat(target) * w, velocity: velocity) { [weak self] in
             if target > Self.last { self?.commitForward() } else { self?.rest() }
         }
+        guard turned else { return }
+        // 换去处是一次 SwiftUI 更新（底部那一排换形、页里订阅），主线程要忙一两帧：先把弹簧交给渲染服务，页在这几帧里照样滑
+        CATransaction.flush()
+        workspace.select(resting)
     }
 
     /// 页的图层与 SwiftUI 那两小块（前进页、底部那一排）用同一条弹簧。
@@ -328,6 +329,19 @@ final class PagerController: UIViewController {
         guard index != Dock.order(resting), Dock.pages.indices.contains(index) else { return false }
         workspace.select(Dock.pages[index])
         return true
+    }
+}
+
+/// 一页：托管控制器套在一层只管平移的视图里。
+private final class Page {
+    let host = UIHostingController(rootView: AnyView(EmptyView()))
+    let slot = UIView()
+
+    init() {
+        host.view.backgroundColor = .clear
+        host.view.frame = slot.bounds
+        host.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        slot.addSubview(host.view)
     }
 }
 
