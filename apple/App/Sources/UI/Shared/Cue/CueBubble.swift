@@ -74,21 +74,15 @@ struct CueSays: View {
     }
 
     @ViewBuilder private var words: some View {
-        if let asking = message.asking, !card {
-            asked(asking)
+        if message.asking != nil, !card {
+            asked
         } else {
             said
         }
     }
 
-    private func asked(_ asking: CueAsking) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(CueQuestionLine.keepingTail(asking.question)).font(Typography.reading).foregroundStyle(palette.ink2)
-                .lineSpacing(Typography.readingLineSpacing)
-                .fixedSize(horizontal: false, vertical: true)
-            if let why = asking.why {
-                Text(CueQuestionLine.keepingTail(why)).font(Typography.secondary).foregroundStyle(palette.ink2).fixedSize(horizontal: false, vertical: true)
-            }
+    private var asked: some View {
+        CueQuestionLine(message: message, tone: .ended) {
             if reading {
                 MarkdownText(source: message.text).equatable().font(Typography.secondary).foregroundStyle(palette.ink2).padding(.top, 6)
                     .transition(.opacity)
