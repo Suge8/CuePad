@@ -127,7 +127,7 @@ private struct ExpandedTrailing: View {
     }
 }
 
-/// 那一句（窄处那一句 `headline`：摄像头下与锁屏头一行都窄；此刻那一步另起一行，`Details`）。
+/// 那一句（窄处那一句 `headline`：摄像头下与锁屏头一行都窄；用工具时谁叫醒的另起一行，`CueNow.aside`、`Details`）。
 private struct Sentence: View {
     let now: CueNow
     let island: Bool
@@ -153,11 +153,11 @@ private struct Details: View {
 
     var body: some View {
         let now = state.now
-        let works = Self.rows - (now.doing == nil ? 0 : 1) - (now.first == nil ? 0 : 2)
+        let works = Self.rows - (now.aside == nil ? 0 : 1) - (now.first == nil ? 0 : 2)
         VStack(alignment: .leading, spacing: 7) {
-            if let doing = now.doing {
-                Text(doing).font(.footnote).foregroundStyle(palette.ink2).lineLimit(1)
-                    .id(doing).transition(.push(from: .bottom))
+            if let aside = now.aside {
+                Text(aside).font(.footnote).foregroundStyle(palette.ink2).lineLimit(1)
+                    .id(aside).transition(.push(from: .bottom))
             }
             if let first = now.first { FirstWait(wait: first, island: island) }
             if works > 0 { Works(beads: now.beads.filter { $0.kind != .asks }, limit: works) }

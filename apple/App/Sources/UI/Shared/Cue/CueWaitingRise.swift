@@ -1,13 +1,13 @@
 import SwiftUI
 
-/// "等你"卡从输入框后面升起、沉回去：占的高随曲线从 0 长到整高（沉回去反过来），卡不透明、顶边跟着上来，没露出的下半截裁在输入框后面。
+/// "等你"卡从输入框那一排后面升起：占的高随曲线从 0 长到整高，卡不透明、顶边跟着上来，没露出的下半截齐那一排的上沿裁掉。
 /// 占的高本身在变，底栏、对话让出的地方（手机是安全区，Mac 是浮着的回复框）与卡每一帧都是同一个高：
-/// 只动卡（淡入、平移）的话底栏当帧就是整高，对话先一下被顶开、空着等卡补进来，沉下时对话又从半透明的卡底下穿过。
-/// 代价是这 0.25 秒里底栏每帧排一次，对话只跟着挪偏移。
+/// 只动卡（淡入、平移）的话底栏当帧就是整高，对话先一下被顶开、空着等卡补进来。代价是这 0.25 秒里底栏每帧排一次，对话只跟着挪偏移。
+/// 离开不走这条（`CueWaitingDock.follow`）：浮着淡掉。
 struct RiseBehind: ViewModifier, Animatable {
     /// 露出的比例，0 是全藏在输入框后面。
     var shown: CGFloat
-    /// 浮着（减弱动态效果）：不裁，占的高为 0 时卡往上浮在对话上（淡入淡出时用）。
+    /// 浮着（减弱动态效果、答完离开）：不裁，占的高为 0 时卡往上浮在对话上（淡入淡出时用）。
     let floats: Bool
     /// 卡至多这么高（对话区可见高的一半），再高在卡里滚。
     let limit: CGFloat
@@ -17,20 +17,16 @@ struct RiseBehind: ViewModifier, Animatable {
         set { shown = newValue }
     }
 
+    /// 一条路径排两种样子（换分支的话卡在离开那一下换了身份、重建一遍）：浮着时卡底对齐、往上浮出去，不裁；
+    /// 不浮时两边与上面让出卡的影子（随露出的比例收，藏到底时一点不留），下沿齐输入框那一排的上沿裁——往下伸的话，
+    /// 卡藏在下面的上沿与问号从输入框圆角外、"⋯"与输入框之间的缝里露出来，画在玻璃控件上面。
     func body(content: Content) -> some View {
-        if floats {
-            RiseLayout(shown: shown, floats: true, limit: limit) { content }
-        } else {
-            RiseLayout(shown: shown, floats: false, limit: limit) { content }
-                // 两边与上面让出卡的影子（随露出的比例收，藏到底时一点不留）；下沿一直往输入框里伸进一个圆角那么深：输入框（实底玻璃，
-                // 排在卡上面）圆角外那一小块里看得到卡沉到它后面，不被一条直线齐齐切断，停稳时影子也连着。卡与输入框同一个圆角、
-                // 只窄一点，藏到底时卡的上沿整个在输入框的轮廓里
-                .mask {
-                    Rectangle()
-                        .padding([.horizontal, .top], -RiseBehind.shadowRoom * shown)
-                        .padding(.bottom, -ComposerMetrics.radius)
-                }
-        }
+        RiseLayout(shown: shown, floats: floats, limit: limit) { content }
+            .mask {
+                Rectangle()
+                    .padding(.horizontal, -RiseBehind.shadowRoom * (floats ? 1 : shown))
+                    .padding(.top, floats ? -(limit + RiseBehind.shadowRoom) : -RiseBehind.shadowRoom * shown)
+            }
     }
 
     private static let shadowRoom: CGFloat = 24

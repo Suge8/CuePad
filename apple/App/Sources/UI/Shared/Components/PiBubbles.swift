@@ -7,14 +7,11 @@ extension AnyTransition {
     /// 底部锚定下正在读的那段会先被推走再滑回来
     static let entry = AnyTransition.opacity.animation(Motion.quick)
 
-    /// 同一处先后换两句字（状态的一句、你的话到哪了的记号）：旧的先淡掉、新的随后淡入——长短不同的两句同时交叉淡，中间几帧叠成读不出的一团。
-    static let handOff = AnyTransition.asymmetric(
-        insertion: .opacity.animation(Motion.quick.delay(Motion.handOff)), removal: .opacity.animation(.easeOut(duration: Motion.handOff)))
 }
 
 /// 你的话那颗气泡长什么样，两处各一种，只在这里分：
 /// - 会话页（`session`）：四角同圆的一颗，新到的淡入。会话页是 Agent 干活的记录，回答全宽、不成泡，你的话只标出哪句是你说的，不画两边对说的样子。
-/// - Cue 页（`cue`）：两边对说的对话气泡，说话那一边下角收成小角、连着说的收成一串、从右下角长出来（`CueBubble`）。
+/// - Cue 页（`cue`）：两边对说的对话气泡，说话那一边下角收成小角、连着说的收成一串（`CueBubble`），由回复框那头的发出动画接上。
 enum BubbleLook: Equatable {
     case session
     /// `joined`：上面紧挨着你的另一句。
@@ -42,12 +39,7 @@ enum BubbleLook: Equatable {
     var statusSpacing: CGFloat { self == .session ? 6 : 2 }
     var statusInset: CGFloat { self == .session ? 0 : CueBubble.noteInset }
 
-    func arrival(reduceMotion: Bool) -> AnyTransition {
-        switch self {
-        case .session: .entry
-        case .cue: CueBubble.arrival(.trailing, reduceMotion: reduceMotion)
-        }
-    }
+    var arrival: AnyTransition { self == .session ? .entry : CueBubble.arrival }
 }
 
 /// 你的一句话：右侧气泡（样子见 `BubbleLook`），最宽到所在一栏的 `widthFraction`；到哪了画在气泡左下角外（`BubbleTrip`）。长按（Mac 右键）是 `menu`，预览就是这颗气泡。

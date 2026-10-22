@@ -206,14 +206,16 @@ private struct SidebarSearchField: View {
     }
 }
 
-/// 侧栏最上面的 Cue：头像、名字与 Cue 此刻那一行（`CueStatusRow`），点开 Cue 页。
+/// 侧栏最上面的 Cue：头像、名字与 Cue 此刻那一行（`CueStatusRow`），点开 Cue 页。Cue 页开着（右边那页或右侧面板）时不写此刻那一行：
+/// 页头（`CueHeader`）就写着同一句，同屏不说两遍；行高不变（`minHeight`），名字在原高里居中，侧栏不挪。
 private struct CueSidebarItem: View {
-
     @Environment(Workspace.self) private var workspace
+
     var body: some View {
         let selected = workspace.root == .cue
         Button { workspace.select(.cue) } label: {
-            CueStatusRow(font: .body.weight(selected ? .semibold : .medium)).frame(minHeight: 60).contentShape(.rect)
+            CueStatusRow(font: .body.weight(selected ? .semibold : .medium), status: !selected && !workspace.agentPanel)
+                .frame(minHeight: 60).contentShape(.rect)
         }
         .buttonStyle(RowStyle(selected: selected))
         .accessibilityAddTraits(selected ? .isSelected : [])

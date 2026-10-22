@@ -28,7 +28,7 @@ nonisolated enum Icon: Hashable, Sendable {
     case complete, reopen, restore, start, add, indent, outdent, link, unlink
     case projects, folder, newProject, unbindFolder, resource, isResource, pin, unpin
     case copy, share, saveAsIdea, write, rename, close, remove, clear, more
-    case forward, back, expand, collapse, choose, conflict, enlarge
+    case forward, back, expand, collapse, choose, conflict
     // 输入、发送与会话
     case send, save, checked, stop, endSession, handOff, delivered, retry, toLatest, fetching, compact, renew
     case declined, mac, yourAnswer, above, floated, earlier
@@ -72,13 +72,12 @@ nonisolated enum Icon: Hashable, Sendable {
         case .forward: .ink("chevron.right")
         case .back: .ink("chevron.left")
         case .expand: .ink("chevron.down")
-        case .enlarge: .ink("enlarge")
         case .collapse: .ink("chevron.up")
         case .send: .ink("plane")
         case .stop: .ink("stop")
         case .done, .complete: .ink("done")
         case .donePending: .ink("done.pre")
-        case .onTheWay: .ink("climb")
+        case .onTheWay: .ink("plane")
         case .agent: .ink("agent")
         case .waiting: .ink("waiting")
         case .cueAsking: .ink("asking")

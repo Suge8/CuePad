@@ -99,7 +99,7 @@ private struct FloatingHeader<Label: View, Center: View, Trailing: View>: ViewMo
                         }
                     }
                 }
-                // 玻璃自己画（实底，`GlassInk.solid`），不再套一层系统的玻璃底（玻璃不叠玻璃）
+                // 玻璃自己画（实底，`GlassInk.solidInBar`），不再套一层系统的玻璃底（玻璃不叠玻璃）
                 .sharedBackgroundVisibility(.hidden)
                 if Trailing.self != EmptyView.self {
                     ToolbarItem(placement: .primaryAction) {
@@ -151,7 +151,7 @@ private struct HeaderTitle<Label: View>: View {
     var body: some View {
         label
             .frame(height: FloatingHeaderLayout.height)
-            .glass(in: .capsule)
+            .glass(in: .capsule, ink: .solidInBar)
             .contentShape(.capsule)
             .opacity(workspace.notice == nil ? 1 : 0)
             .animation(NoticeBanner.giveWay(workspace.notice), value: workspace.notice == nil)

@@ -17,8 +17,8 @@ struct CircleGlyph<Content: View>: View {
 /// 输入框右下角的主按钮，全 App 的输入框只此一颗（"对 Cue 说"、会话回复框、随手记、新会话、发给 Agent）。墨块的样子：钮是一块实心圆，
 /// 字形是钮上反色的一块——发送是纸飞机（与"交给"同一架，`Icon.send`），记下是勾，停止是一块圆角方墨。
 /// - 不可发送：淡底、淡墨飞机；可发送（主动作）：靛青实心、纸色飞机，变成可发送的那一下上翼、下翼依次往上一跳。
-/// - 发送中（话在路上，与会话状态标同一个）：淡底上三块靛青的 V 从下往上依次亮（`LoopLayer.climb`）；发出那一刻钮底当帧换掉、
-///   飞机往右上飞走淡出，同一刻机头处起飞一点光（`RelayLaunch`，"对 Cue 说"才有）——钮底不渐变，靛青的光才不会压在靛青的钮上看不见。
+/// - 发送中（话在路上，与会话状态标同一个）：发出那一刻钮底当帧换掉、飞机往右上飞走淡出，同一刻机头处起飞一点光（`RelayLaunch`，"对 Cue 说"才有）——
+///   钮底不渐变，靛青的光才不会压在靛青的钮上看不见；接着淡底上一架靛青的飞机一趟趟从左下飞进、朝右上飞出（`LoopLayer.flight`），直到送达。
 /// - 停止（Agent 跑一轮时代替发送）：墨色实心方块；停止请求发出、这一轮还没歇下时换成转圈，不能再点。
 /// 按下照 `PressFeedback`（由外面的按钮给）。减弱动态效果：换状态只淡入淡出，不跳、不走，发送中是静止的"话在路上"。
 struct SendGlyph: View {
@@ -80,17 +80,17 @@ struct SendGlyph: View {
             .symbolEffect(.bounce.up.byLayer, options: .nonRepeating, value: hops)
     }
 
-    /// 飞机与发送中的三块 V 一样大：发出时飞机飞走、原地换成往上爬的 V。
+    /// 飞机与发送中那架一样大：发出时飞机飞走，接着同一架一趟趟飞过。
     private static let sendSide: CGFloat = 22
     /// 发出时飞机飞多远（往右上，顺着机头）：飞出钮的圆底再淡完。
     private static let flight = CGSize(width: 14, height: -14)
 
-    /// 发送中 = 话在路上，与会话状态标同一个：循环交给 `LoopLayer.climb`；减弱动态效果时是状态标同一个静止符号。
+    /// 发送中 = 话在路上，与会话状态标同一个：循环交给 `LoopLayer.flight`；减弱动态效果时是状态标同一个静止符号。
     @ViewBuilder private var onTheWay: some View {
         if reduceMotion {
             Image(.onTheWay).font(.system(size: 15, weight: .semibold)).foregroundStyle(palette.signature)
         } else {
-            LoopLayer(kind: .climb, color: palette.signature).frame(width: Self.sendSide, height: Self.sendSide)
+            LoopLayer(kind: .flight, color: palette.signature).frame(width: Self.sendSide, height: Self.sendSide)
         }
     }
 }

@@ -20,7 +20,6 @@ struct SpeechBubble<Menu: View>: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// 刚从刻度滑条跳到的那一句（Cue 页里你的话）描一圈。
     @Environment(\.chatHighlight) private var highlight
 
@@ -31,7 +30,7 @@ struct SpeechBubble<Menu: View>: View {
             if case .failed(let undelivered) = shown { failedLine(undelivered).padding(.trailing, look.statusInset) }
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
-        .transition(look.arrival(reduceMotion: reduceMotion))
+        .transition(look.arrival)
     }
 
     private func bubble(_ trip: Speech.Trip) -> BubbleTrip {

@@ -3,7 +3,8 @@ import SwiftUI
 
 /// 对话右缘的刻度滑条（会话页与 Cue 页同一个，`ChatColumn` 放）：你说的话是短线，上下文换了的地方（会话压缩、Cue 换新）是一个签名色的点，
 /// 按先后排在右缘拇指够得着的那一段（可见区三成高处到"回到最新"圆钮上方），只看序号、不看行有多高（更早的那些还没排开）。
-/// 平时淡淡地在那里（一眼看得出能跳），滚动时、手指按到刻度区时、Mac 上指针移到右缘时清楚起来，停手后淡回去。
+/// 平时淡淡地在那里（一眼看得出能跳），滚动时、手指按到刻度区时、Mac 上指针移到右缘时清楚起来，停手后淡回去；
+/// 阅读栏贴着边、右边距放不下刻度再隔一条缝（`crowded`，iPhone 与窄窗口）时平时不露也不接手指，滚动、指着时出来：常驻的话像一把尺子贴在气泡边上。
 /// 平时最多画 30 个刻度，更多时每个代表按序号均分的一段；拖动时以手指为中心鱼眼放大成逐条刻度、附近的刻度像程序坞那样变长，
 /// 逐条轻触一下，旁边浮出那一条的第一行，松手（或点一下）跳过去。手势只在这一段窄条里，不碰代码块、表格的横向滚动、顶栏与返回手势。
 /// 读屏上是一个可调节的元素：上下轻扫跳到上一处、下一处。不到两处时没有滑条。
@@ -11,6 +12,8 @@ import SwiftUI
 struct ChatScrubber: View {
     let marks: [ChatMark]
     let scrolling: Bool
+    /// 右边距放不下刻度（`room`）：平时不露
+    let crowded: Bool
     let jump: (UUID) -> Void
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -60,6 +63,10 @@ struct ChatScrubber: View {
     private static let bandTop: CGFloat = 0.3
     /// 平时（没在滚、没按着、指针不在上面）的不透明度：看得见、不抢字。
     private static let restOpacity = 0.35
+    /// 平时的刻度连同离右缘的距离，再加与气泡之间的一条缝：右边距不到这么宽就算挤（`crowded`）。
+    static let room: CGFloat = edge + restLength + 8
+    /// 平时一道刻度的长。
+    private static let restLength: CGFloat = 7
     private static let linger: Duration = .milliseconds(900)
 
     private var active: Bool { finger != nil || scrolling || lingering || hovering }
@@ -79,7 +86,7 @@ struct ChatScrubber: View {
                 Marks(ticks: ticks.filter { $0.dot && !$0.pointed }).fill(palette.ink2)
                 Marks(ticks: ticks.filter(\.pointed)).fill(palette.signature)
             }
-            .opacity(active ? 1 : Self.restOpacity)
+            .opacity(active ? 1 : crowded ? 0 : Self.restOpacity)
             .overlay(alignment: .topTrailing) {
                 if let pointed, let finger {
                     preview(marks[pointed])
@@ -98,6 +105,8 @@ struct ChatScrubber: View {
                         go(to: band.index(at: value.location.y))
                     })
             .sensoryFeedback(.selection, trigger: pointed) { _, new in new != nil }
+            // 平时不露时也不接手指：贴右缘滚对话的拇指不会抓到看不见的刻度；滚起来它露出来，停手后还留一会儿可以抓
+            .allowsHitTesting(active || !crowded)
         }
         .frame(width: Self.width)
         .padding(.bottom, bottomInset)
@@ -197,7 +206,7 @@ struct ChatScrubber: View {
                 let side = 5 + 4 * swell
                 return Tick(rect: CGRect(x: width - Self.edge - 3.5 - side / 2, y: y - side / 2, width: side, height: side), dot: true, pointed: index == pointed, swell: swell)
             }
-            let length = 7 + 11 * swell, thickness = 1.5 + 1.5 * swell
+            let length = Self.restLength + 11 * swell, thickness = 1.5 + 1.5 * swell
             return Tick(rect: CGRect(x: width - length - Self.edge, y: y - thickness / 2, width: length, height: thickness), dot: false, pointed: index == pointed, swell: swell)
         }
     }

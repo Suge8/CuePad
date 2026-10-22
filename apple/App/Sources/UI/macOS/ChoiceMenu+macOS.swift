@@ -23,7 +23,8 @@ extension ChoiceMenu {
 
     private static func item(_ choice: Choice) -> NSMenuItem {
         let handler = Handler(choice.choose)
-        let item = NSMenuItem(title: choice.title, action: #selector(Handler.fire), keyEquivalent: "")
+        // 停用项没有动作：菜单按没有动作的项画成灰、点不了
+        let item = NSMenuItem(title: choice.title, action: choice.disabled ? nil : #selector(Handler.fire), keyEquivalent: "")
         item.target = handler
         // 菜单项只弱引用目标：由它自己留住
         item.representedObject = handler

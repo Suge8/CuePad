@@ -31,13 +31,13 @@ struct AnswerLineTests {
 
         let thread = try await thread()
         let rows = thread.rows.suffix(3)
-        guard case .cue(let later, _) = rows.first, case .answer(let first) = rows.dropFirst().first, case .answer(let second) = rows.last
+        guard case .cue(let later, _) = rows.first, case .answer(let first, quoted: true) = rows.dropFirst().first, case .answer(let second, quoted: true) = rows.last
         else { Issue.record("最后是 Cue 后来那句与你的两条回答：\(thread.rows.map(\.id))"); return }
         #expect(later.text == "重连用例我也补上了。")
         #expect(first.id == push.id && first.answer == CueAsk.once && thread.rows.prefix(2).map(\.id) == [push.id, delete.id])
         #expect(first.asking?.question == "可以把发言顺序的修复推送到 origin/main 吗？")
         #expect(second.id == delete.id && second.answer == always)
-        #expect(!thread.rows.contains { if case .answer(let question) = $0 { question.id == gone.id } else { false } })
+        #expect(!thread.rows.contains { if case .answer(let question, _) = $0 { question.id == gone.id } else { false } })
         #expect(thread.rows.last?.speaker == .trailing)
         #expect(thread.marks.map(\.preview).suffix(2) == [CueAsk.once, always].map { ChatMark.firstLine($0) })
         // "等你"里不再有它们，计数与摘要照旧只看还开着的提问
