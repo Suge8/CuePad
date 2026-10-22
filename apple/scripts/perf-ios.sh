@@ -4,8 +4,8 @@
 #   如真实库的只读副本：冷启动进 Cue 页要量真实大小的对话），每次全新进程，逐项量点击回合、合计、最重一圈
 #   （主线程 CPU 毫秒）、进程指令数（百万条）与掉帧，按"第几次"分开取各次的中位数列成表；"落点"是量完时的根与推入的页（各次不同时都列出）。
 #   模拟器的合成与 GPU 和真机不同：只看主线程 CPU 与指令数，掉帧只作参考；第一次的数里有模拟器才有的 Swift 一致性查找，真机要另量。
-#   长按菜单与手势在进程内没有入口：App 写 `AWAIT 名 x y`（按）或 `AWAIT 名 x y x2 y2`（滑），这里用 axe（https://github.com/cameroncooke/AXe）在模拟器上真按
-#   （长按菜单按住 0.8 秒；收起在 App 里做）、真滑（0.25 秒滑完）。
+#   长按菜单与手势在进程内没有入口：App 写 `AWAIT 名 x y`（按）或 `AWAIT 名 x y x2 y2 swipe|drag 秒`（快滑或慢拖），这里用 axe（https://github.com/cameroncooke/AXe）
+#   在模拟器上真按（长按菜单按住 0.8 秒；收起在 App 里做）、真滑（axe swipe）、真拖（axe drag，每秒 60 个移动点）。
 #   某一次没写完（App 写了 FAIL、中途退出或超时）整次失败、以 1 退出，不出部分结果的表。
 # xc.sh 构建好 Release（带 DEBUG 条件，只为留下测量代码；产物在 apple/.derived-perf）、领到一台模拟器后调这里（不独占机器：只比指令数与主线程 CPU），第一个参数是 CuePad.app；
 # 设备是领到的那台（机型 CUEPAD_IOS_DEVICE，默认 iPhone 17；见 _sim.sh）。
@@ -48,9 +48,11 @@ for run in $(seq "$runs"); do
     awaits="$(grep -c '^AWAIT ' "$out" 2>/dev/null || true)"
     if [ "${awaits:-0}" -gt "$pressed" ]; then
       pressed=$((pressed + 1))
-      read -r _ name x y x2 y2 < <(grep '^AWAIT ' "$out" | sed -n "${pressed}p")
-      if [ -n "$x2" ]; then
-        axe swipe --start-x "$x" --start-y "$y" --end-x "$x2" --end-y "$y2" --duration 0.25 --delta 10 --udid "$udid" >/dev/null
+      read -r _ name x y x2 y2 how seconds < <(grep '^AWAIT ' "$out" | sed -n "${pressed}p")
+      if [ "$how" = drag ]; then
+        axe drag --start-x "$x" --start-y "$y" --end-x "$x2" --end-y "$y2" --duration "$seconds" --steps "$(printf '%.0f' "$(echo "$seconds * 60" | bc)")" --udid "$udid" >/dev/null
+      elif [ "$how" = swipe ]; then
+        axe swipe --start-x "$x" --start-y "$y" --end-x "$x2" --end-y "$y2" --duration "$seconds" --delta 10 --udid "$udid" >/dev/null
       elif [ "$name" = 长按菜单 ]; then
         axe touch -x "$x" -y "$y" --down --udid "$udid" >/dev/null; sleep 0.8; axe touch -x "$x" -y "$y" --up --udid "$udid" >/dev/null
       else
