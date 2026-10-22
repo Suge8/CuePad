@@ -31,10 +31,15 @@ extension LoopLayer.Host {
     }
 
     /// 纸飞机的剪影（只用来做遮罩，颜色由层底色给），按边长与屏幕倍数缓存。用平台的符号图直接画，不起一份 SwiftUI 渲染（发出那一刻就要它）。
-    private static var planes: [CGFloat: CGImage] = [:]
+    private static var planes: [PlaneKey: CGImage] = [:]
+
+    private struct PlaneKey: Hashable {
+        let side: CGFloat
+        let scale: CGFloat
+    }
 
     static func plane(side: CGFloat, scale: CGFloat) -> CGImage? {
-        let key = side * 100 + scale
+        let key = PlaneKey(side: side, scale: scale)
         if let cached = planes[key] { return cached }
         let pixels = Int((side * scale).rounded())
         guard let symbol = Icon.send.platformImage, pixels > 0,

@@ -23,7 +23,7 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
     /// 贴底与否、请求跳到哪：由放它的页面持有（页面据它收起顶栏、输入框）。
     let follow: Binding<ChatFollow>
     let holding: Bool
-    /// 最新一条是新到时要撑上去的那种就是它（`ChatLift`）。
+    /// 最新一条是新到时要撑上去的那种就是它（`rise`）。
     let arrival: UUID?
     private let content: Content
     @Environment(\.accessibilityReduceMotion) var reduceMotion
@@ -39,8 +39,8 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
     @State var unheld = false
     /// 排到下一帧的那一次上滑（`slide`）：还没滑时页面开始 hold（排它的那次读数早于页面开始 hold 的那次更新）就撤掉、记成欠着的一次。
     @State var sliding: Task<Void, Never>?
-    /// 新到的那一条正把上面的对话撑上去（`rise`）。
-    @State var lift = ChatLift()
+    /// 内容在渲染端的平移（`rise`）。
+    @State var lift = ContentLift()
 
     init(
         followKey: Key, readingWidth: CGFloat, inset: CGFloat, follow: Binding<ChatFollow>, holding: Bool = false, arrival: UUID? = nil,
@@ -62,7 +62,7 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
             ScrollViewReader { reader in
                 let padding = bottomPadding
                 ScrollView {
-                    content.padding(.bottom, padding).offset(y: lift.by).environment(\.chatLift, lift)
+                    content.padding(.bottom, padding).background { ContentLift.Anchor(lift: lift) }
                     // 最新处（`toEnd`）
                     Color.clear.frame(height: 0).id(Self.end)
                 }
@@ -134,7 +134,7 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                         // 新内容、正在说的话在下面长出来：底锚已在同一次排版里停到新的最新处（`pinned`），不再滑。回复框长高、栏的高度第一次加进内容边距
                         // （这一下系统把偏移放回顶上），最新处变远了：直接补滚过去。在读数里补（布局定下来之后）。滚动区变矮时读数已报在底、
                         // 画面与点按却还停在原处（Mac 打开会话时回复框比占位高，最后一行压在回复框下、选不中），所以看最新处远没远，不看在不在底；
-                        // 内容或浮着的那块变矮（"等你"卡沉下去、一格收起）、偏移已越过最新处时也补回去：iOS 的滚动区不一定自己退回来，
+                        // 内容或浮着的那块变矮（"等你"卡答掉后让出的高一下收起、一格收起）、偏移已越过最新处时也补回去：iOS 的滚动区不一定自己退回来，
                         // 底下空着一截，矮得多时整屏空白。只认变矮：发出一句的那一拍里有一次读数的可见区还没算上两行的输入框，
                         // 按"越过了"补回的话对话先掉下去再滑上来
                         let shrank = grown < 0 || reading.floating < last.floating

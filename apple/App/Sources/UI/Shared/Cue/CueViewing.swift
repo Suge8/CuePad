@@ -103,6 +103,8 @@ struct CueUnreadDot: View {
     nonisolated static let size: CGFloat = 7
     /// 点与气泡左缘之间。
     nonisolated static let gap: CGFloat = 6
+    /// 页边距至少这么宽才把点放在气泡外（点、缝，离屏缘再留一条缝），不然骑在气泡左缘上（`CueRow`）。
+    nonisolated static let room: CGFloat = size + gap + 8
     static let fade = Animation.easeOut(duration: 0.5)
 
     var body: some View {

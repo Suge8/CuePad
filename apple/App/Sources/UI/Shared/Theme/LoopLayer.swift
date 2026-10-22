@@ -104,7 +104,10 @@ struct LoopLayer {
                 let side = min(bounds.width, bounds.height)
                 plane.frame = CGRect(x: (bounds.width - side) / 2, y: (bounds.height - side) / 2, width: side, height: side)
                 plane.backgroundColor = color
+                // 剪影与飞的距离只随边长（剪影还随屏幕倍数）变：每次更新都重挂的话飞到一半的那一趟从头再飞
+                guard mask.frame.size != plane.bounds.size || mask.contentsScale != displayScale else { break }
                 mask.frame = plane.bounds
+                mask.contentsScale = displayScale
                 mask.contents = Self.plane(side: side, scale: displayScale)
                 if let fly = plane.animation(forKey: "loop")?.copy() as? CAAnimationGroup {
                     fly.animations = Self.flightPath(side: side)
@@ -343,3 +346,17 @@ extension LoopLayer: NSViewRepresentable {
     func updateNSView(_ host: Host, context: Context) { host.show(kind, color: color.resolve(in: context.environment).cgColor) }
 }
 #endif
+
+/// 省电模式开着（`ProcessInfo.isLowPowerModeEnabled`，随系统的变化通知更新）：读它的常驻动效换成静止的样子，同减弱动态效果。
+@Observable final class LowPowerMode {
+    static let shared = LowPowerMode()
+    private(set) var isOn = ProcessInfo.processInfo.isLowPowerModeEnabled
+
+    private init() {
+        Task {
+            for await _ in NotificationCenter.default.notifications(named: .NSProcessInfoPowerStateDidChange) {
+                isOn = ProcessInfo.processInfo.isLowPowerModeEnabled
+            }
+        }
+    }
+}

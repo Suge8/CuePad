@@ -30,7 +30,8 @@ struct SpeechBubble<Menu: View>: View {
             if case .failed(let undelivered) = shown { failedLine(undelivered).padding(.trailing, look.statusInset) }
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
-        .transition(look.arrival)
+        // 会话页新到的淡入（Cue 页这一句挂在格子里面，过渡不播，由回复框那头的发出动画接上）
+        .transition(.entry)
     }
 
     private func bubble(_ trip: Speech.Trip) -> BubbleTrip {

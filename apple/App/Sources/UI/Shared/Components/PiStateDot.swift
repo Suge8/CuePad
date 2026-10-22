@@ -92,12 +92,12 @@ struct PiStateDot: View {
     private enum Look: Hashable { case heartbeat, flight, icon }
 
     private var look: Look {
-        guard !reduceMotion else { return .icon }
         switch shown.status {
-        case .working: return .heartbeat
-        case .delivery(.failed): return .icon
-        case .delivery: return .flight
-        default: return .icon
+        case .working: reduceMotion ? .icon : .heartbeat
+        case .delivery(.failed): .icon
+        // 减弱动态效果时静止的那一架由它自己换（`OnTheWay`）
+        case .delivery: .flight
+        default: .icon
         }
     }
 
@@ -106,7 +106,7 @@ struct PiStateDot: View {
         let mark = ZStack {
             switch look {
             case .heartbeat: LoopLayer(kind: .heartbeat, color: tint).transition(Self.swap)
-            case .flight: LoopLayer(kind: .flight, color: tint).transition(Self.swap)
+            case .flight: OnTheWay(size: box, color: tint).transition(Self.swap)
             case .icon:
                 Image(shown.icon)
                     .font(.system(size: box * 0.86, weight: .semibold))

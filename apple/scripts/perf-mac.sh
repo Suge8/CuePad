@@ -75,7 +75,10 @@ collect() {
     wait "$pid" || status=$?
     wait "$reader"
     if [ -n "$tracer" ]; then wait "$tracer" || true; fi
-    if [ "$status" != 0 ]; then return "$status"; fi
+    if [ "$status" != 0 ]; then
+      sed -n 's/^BENCH-ERR /CuePad 没量完（'"$label"'）：/p' "$out" >&2
+      return "$status"
+    fi
     sed -n 's/^INTERACT //p' "$out" | sed "s/^{/{\"库\":\"$label\",/"
   done
   rm -rf "$library" "$out" "$pipe"

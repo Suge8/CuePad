@@ -244,6 +244,16 @@ enum DebugHooks {
     typealias MainWindowClass = MainShellWindow
     #endif
 
+    /// 资料库没能打开。量的时候（`-CuePadBench`）没人去点失败页，量的脚本会一直等：报出原因（`BENCH-ERR` 一行）后以 1 退出。
+    static func libraryFailed(_ reason: String) {
+        #if DEBUG
+        guard DebugScene.defaults.string(forKey: "CuePadBench") != nil else { return }
+        print("BENCH-ERR 资料库没能打开：\(reason)")
+        fflush(stdout)
+        exit(1)
+        #endif
+    }
+
     /// 退出前把借走的前台与指针还回去（`DebugForeground`）。
     static func willTerminate() {
         #if DEBUG

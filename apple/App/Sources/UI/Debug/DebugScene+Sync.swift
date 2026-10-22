@@ -8,7 +8,7 @@ import Synchronization
 extension DebugScene {
     /// `-CuePadSync stalled`：装上拉取永不返回的同步替身（隔离库本来没有同步），核对下拉刷新的圈有时限、界面不跟着卡。
     /// `-CuePadSync arrive`：像隔了一阵没打开的手机，启动后的第一次拉取带回别的设备写下的 Cue 的话，分几页陆续到（`ArrivingSync`）；
-    ///   `-CuePadArriveGap <秒>` 改两页之间的间隔（默认 0.45），拉长对的那一段（配 `-CuePadCueFlow` 看对的期间自己发出一句）。
+    ///   要拉长对的那一段（配 `-CuePadCueFlow` 看对的期间自己发出一句），临时把 `ArrivingSync.pageGap` 调大再录。
     /// `-CuePadSync offline`：一开始连不上 iCloud，`-CuePadOfflineSeconds`（默认 6）秒后恢复；配 `-CuePadDemoMac YES` 与
     /// `-CuePadSpeech send` 录"断网时说 → 同步不通 → 恢复 → 送达"（演示 Mac 断网时不接手）。
     /// `-CuePadSync outdated`：真实的同步代码连内存里的 iCloud 替身，替身里的最低对端版本高于这台（`CloudSync.simulated`）：
@@ -65,7 +65,7 @@ extension DebugScene {
     nonisolated final class ArrivingSync: SyncControlling {
         static let pages = 3
         static let perPage = 6
-        static let pageGap = Duration.seconds(UserDefaults.standard.object(forKey: "CuePadArriveGap") == nil ? 0.45 : UserDefaults.standard.double(forKey: "CuePadArriveGap"))
+        static let pageGap = Duration.milliseconds(450)
         private let first = Mutex<Task<Void, Never>?>(nil)
 
         var stateUpdates: AsyncStream<SyncState> { AsyncStream { $0.yield(SyncState(status: .idle, issues: [], reconciled: true)) } }

@@ -114,12 +114,13 @@ extension CueKeeper {
                 $0.lastRequest = .now
             }
         case .tool(let id, let name, let arguments):
-            let detail = await CueActivity.detail(tool: name, arguments: arguments, store: store)
-            updateShift { $0.turn?.round.calls.append(CueToolCall(id: id, name: name, arguments: arguments, detail: detail, startedAt: .now)) }
+            let named = await CueActivity.named(tool: name, arguments: arguments, store: store)
+            updateShift { $0.turn?.round.calls.append(CueToolCall(
+                id: id, name: name, arguments: arguments, named: named, detail: CueActivity.detail(tool: name, arguments: arguments, named: named), startedAt: .now)) }
             await recordRound()
         case .toolDone(let id, let result, let failed):
             guard let call = turn?.round.calls.last(where: { $0.id == id && $0.finishedAt == nil }) else { return }
-            let item = await CueActivity.item(tool: call.name, arguments: call.arguments, failed: failed, store: store)
+            let item = await CueActivity.item(tool: call.name, arguments: call.arguments, named: call.named, failed: failed, store: store)
             updateShift { $0.turn?.round.finish(id, result: result, failed: failed, item: item) }
             await recordRound()
         case .failed(let raw):

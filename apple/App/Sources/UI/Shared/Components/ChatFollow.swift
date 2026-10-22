@@ -154,22 +154,8 @@ extension EnvironmentValues {
     @Entry var chatBottomInset: CGFloat = 0
     /// 对话区可见的高（`FloatingReply` 给浮在底上的那一块）："等你"卡至多占它一半。
     @Entry var chatHeight: CGFloat = .infinity
-    /// 新到的那一条把上面的对话撑上去（`ChatScroll` 给，`ChatLift`）。
-    @Entry var chatLift = ChatLift()
-}
-
-/// 新到的那一条（`id`）插进来那一次就排在终位，滚动区把整段内容往下挪 `by`（起初是它长的高 `height`）、再无回弹地归零（只动变换），
-/// 上面的对话看着是被它撑上去的。它自己反向挪同样多、从下角按撑开的比例放大（放它的那一层挂，`CueSegment`）：两边同一个动画，
-/// 它一直贴着终位的下沿、不在回复框的玻璃后面，也不叠在上面那条上。
-struct ChatLift: Equatable {
-    var id: UUID?
-    var height: CGFloat = 0
-    var by: CGFloat = 0
-
-    /// 它此刻撑开了几成（0…1）。
-    func shown(_ row: UUID) -> CGFloat { row == id && height > 0 ? 1 - by / height : 1 }
-    /// 它反向挪多少。
-    func offset(_ row: UUID) -> CGFloat { row == id ? -by : 0 }
+    /// 阅读栏两边的页边距（`ChatLayout.margin`，`ChatColumn` 按可见区的宽算一次）：边上放的小东西（刻度、新消息的点）据它看放不放得下。
+    @Entry var chatMargin: CGFloat = 0
 }
 
 /// "回到最新"：回复框右上方一颗圆形玻璃钮，向下的箭头；离开后来过新内容时右上角带一个墨色的点。
