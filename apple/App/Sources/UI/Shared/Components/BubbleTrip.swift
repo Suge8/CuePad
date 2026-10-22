@@ -49,7 +49,7 @@ private struct TripMark: View {
             case .arrived: EmptyView()
             case .sending(let transit):
                 HStack(spacing: 4) {
-                    InFlight()
+                    OnTheWay(size: 13, color: palette.ink3)
                     if transit == .waking { Text(PiDelivery.Transit.waking.label).fixedSize() }
                 }
                 .accessibilityElement(children: .ignore)
@@ -88,16 +88,3 @@ private struct TripMark: View {
     }
 }
 
-/// 气泡旁路上那架小飞机：与"已送达"那架同样大；减弱动态效果时是静止的一架（`Icon.onTheWay`）。颜色跟着记号的前景。
-private struct InFlight: View {
-    @Environment(\.palette) private var palette
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    var body: some View {
-        if reduceMotion {
-            Image(.onTheWay)
-        } else {
-            LoopLayer(kind: .flight, color: palette.ink3).frame(width: 13, height: 13)
-        }
-    }
-}

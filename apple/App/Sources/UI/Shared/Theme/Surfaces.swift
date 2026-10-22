@@ -110,7 +110,10 @@ enum Motion {
     /// 短动效：列表里挪位置、面板、浮层、切换。
     static let snappy = Animation.spring(duration: 0.25, bounce: 0)
     /// 卡片在墙上挪位（同列下移、新卡入场）：定长 0.24s，弹簧的尾巴会让实际时长超过 300ms。
-    static let move = Animation.timingCurve(0.2, 0, 0, 1, duration: 0.24)
+    static let move = Animation.timingCurve(moveCurve.0, moveCurve.1, moveCurve.2, moveCurve.3, duration: moveDuration)
+    /// `move` 的时长与曲线控制点，渲染端照它走的动画（`ContentLift`）共用。
+    nonisolated static let moveDuration = 0.24
+    nonisolated static let moveCurve: (Double, Double, Double, Double) = (0.2, 0, 0, 1)
     /// iPhone 点按换去处：根上那一条页滑过去与底部那一排两块玻璃换形同一个（`HomePager`、`DockBar`），一起到位；比列表里挪位置走得长，看得清从哪到哪，仍在 300ms 内。
     static let dock = Animation.spring(duration: 0.3, bounce: 0)
     /// 颜色、透明度、悬停这类不移动位置的反馈。

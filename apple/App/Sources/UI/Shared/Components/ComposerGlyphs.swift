@@ -85,12 +85,6 @@ struct SendGlyph: View {
     /// 发出时飞机飞多远（往右上，顺着机头）：飞出钮的圆底再淡完。
     private static let flight = CGSize(width: 14, height: -14)
 
-    /// 发送中 = 话在路上，与会话状态标同一个：循环交给 `LoopLayer.flight`；减弱动态效果时是状态标同一个静止符号。
-    @ViewBuilder private var onTheWay: some View {
-        if reduceMotion {
-            Image(.onTheWay).font(.system(size: 15, weight: .semibold)).foregroundStyle(palette.signature)
-        } else {
-            LoopLayer(kind: .flight, color: palette.signature).frame(width: Self.sendSide, height: Self.sendSide)
-        }
-    }
+    /// 发送中 = 话在路上，与会话状态标同一个（`OnTheWay`）。
+    private var onTheWay: some View { OnTheWay(size: Self.sendSide, color: palette.signature) }
 }
