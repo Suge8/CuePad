@@ -121,6 +121,8 @@ enum DebugScene {
         preset.alertStatus = alertStatus
         if defaults.string(forKey: "CuePadSearchScope") == "sessions" { preset.searchScope = .sessions }
         preset.boardColumn = TaskBoard.Column.allCases.first { $0.title == defaults.string(forKey: "CuePadColumn") }
+        preset.protoBoard = defaults.string(forKey: "CuePadProtoBoard") ?? "A"
+        preset.protoBubble = defaults.string(forKey: "CuePadProtoBubble") ?? "P"
         let panel = defaults.string(forKey: "CuePadCuePanel")
         preset.cuePanelEnd = panel == "end"
         preset.cuePanelOpen = preset.cuePanelEnd || defaults.bool(forKey: "CuePadCuePanel")
