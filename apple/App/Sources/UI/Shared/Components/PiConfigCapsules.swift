@@ -59,7 +59,7 @@ struct PiModelCapsule: View {
         .background(palette.fill, in: .capsule)
         .frame(minHeight: 44)
         .contentShape(.capsule)
-        .animation(Motion.quick, value: current?.key)
+        .animation(HandOff.quick, value: current?.key)
     }
 
     private func spoken(at now: Date) -> String {
@@ -112,7 +112,7 @@ struct PiAgentCapsule: View {
         .background(palette.fill, in: .capsule)
         .frame(minHeight: 44)
         .contentShape(.capsule)
-        .animation(Motion.quick, value: kind)
+        .animation(HandOff.quick, value: kind)
     }
 }
 
@@ -211,7 +211,7 @@ struct PiThinkingDial: View {
         }
         .sensoryFeedback(.selection, trigger: touched) { _, new in new != nil }
         .animation(reduceMotion ? nil : Motion.snappy, value: drawn)
-        .animation(Motion.quick, value: bubble)
+        .animation(HandOff.quick, value: bubble)
         .accessibilityElement()
         .accessibilityLabel("思考强度")
         .accessibilityValue(meter.label)
@@ -242,13 +242,13 @@ struct PiThinkingDial: View {
 
     private func meterBars(_ drawn: PiThinkingMeter) -> some View {
         // 不知道此刻的档（"默认"）：空格画深一点，不像停用
-        bars(drawn) { index in
+        bars { index in
             index < drawn.filled ? palette.ink : drawn.current == nil ? palette.ink3 : palette.track
         }
             .overlay {
                 if drawn.isMax, !reduceMotion {
                     // 最高档：一道亮光从左往右扫过填满的格
-                    LoopLayer(kind: .sheen, color: palette.onFill).mask { bars(drawn) { _ in .black } }.allowsHitTesting(false)
+                    LoopLayer(kind: .sheen, color: palette.onFill).mask { bars { _ in .black } }.allowsHitTesting(false)
                 }
             }
             .overlay {
@@ -262,10 +262,11 @@ struct PiThinkingDial: View {
             .modifier(Breathing(active: pending && touched == nil))
     }
 
-    private func bars(_ drawn: PiThinkingMeter, color: @escaping (Int) -> Color) -> some View {
+    private func bars(color: @escaping (Int) -> Color) -> some View {
         HStack(alignment: .bottom, spacing: Self.gap) {
-            ForEach(Array(drawn.bars.enumerated()), id: \.offset) { index, _ in
-                Capsule().fill(color(index)).frame(width: Self.barWidth, height: height(index, of: drawn.bars.count))
+            let count = PiThinkingMeter.scale.count
+            ForEach(0..<count, id: \.self) { index in
+                Capsule().fill(color(index)).frame(width: Self.barWidth, height: height(index, of: count))
             }
         }
         .frame(height: Self.tallest, alignment: .bottom)

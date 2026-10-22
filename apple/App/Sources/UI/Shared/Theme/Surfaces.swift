@@ -26,9 +26,11 @@ enum GlassInk {
     /// 背后什么都有可能（亮的截图、深的代码块）：只着色不垫底的话，深色下一张亮图就把玻璃衬成浅灰、米白的字只剩 1.7:1，
     /// 垫了底才在任何背景上都够 4.5:1（docs/ui.md）。
     case solid
+    #if os(iOS)
     /// 同 `solid`，但放在系统顶栏里（推入页顶栏中间那块 `FloatingHeader`、搜索页的搜索框 `SearchCapsule`）：iOS 把它连同里面的东西提到栏那一层上画、再提亮一档，
     /// 垫在里面的反而发灰，所以只垫在玻璃下面。
     case solidInBar
+    #endif
 }
 
 private struct PaperSurface: ViewModifier {
@@ -73,16 +75,14 @@ private struct GlassSurface<S: Shape>: ViewModifier {
             content
                 .background(palette.paper, in: shape)
                 .overlay(shape.stroke(palette.hair))
-        } else if ink == .solidInBar {
-            #if os(macOS)
-            solid(content)
-            #else
-            content.glassEffect(glass, in: shape).background(palette.solidGlass, in: shape)
-            #endif
-        } else if ink == .solid {
-            solid(content)
         } else {
-            content.glassEffect(glass, in: shape)
+            switch ink {
+            case .clear: content.glassEffect(glass, in: shape)
+            case .solid: solid(content)
+            #if os(iOS)
+            case .solidInBar: content.glassEffect(glass, in: shape).background(palette.solidGlass, in: shape)
+            #endif
+            }
         }
     }
 
@@ -110,11 +110,12 @@ enum Motion {
     /// 短动效：列表里挪位置、面板、浮层、切换。
     static let snappy = Animation.spring(duration: 0.25, bounce: 0)
     /// 卡片在墙上挪位（同列下移、新卡入场）：定长 0.24s，弹簧的尾巴会让实际时长超过 300ms。
-    static let move = Animation.timingCurve(0.2, 0, 0, 1, duration: 0.24)
+    static let move = Animation.timingCurve(moveCurve.0, moveCurve.1, moveCurve.2, moveCurve.3, duration: moveDuration)
+    /// `move` 的时长与曲线控制点，渲染端照它走的动画（`ContentLift`）共用。
+    nonisolated static let moveDuration = 0.24
+    nonisolated static let moveCurve: (Double, Double, Double, Double) = (0.2, 0, 0, 1)
     /// iPhone 点按换去处：根上那一条页滑过去与底部那一排两块玻璃换形同一个（`HomePager`、`DockBar`），一起到位；比列表里挪位置走得长，看得清从哪到哪，仍在 300ms 内。
     static let dock = Animation.spring(duration: 0.3, bounce: 0)
-    /// 颜色、透明度、悬停这类不移动位置的反馈。
-    static let quick = HandOff.quick
     /// 按下：快、不回弹，手指一落就到位。
     static let pressDown = Animation.spring(duration: 0.14, bounce: 0)
     /// 松开：稍慢、带一点回弹，像纸被放开时弹回来。
@@ -124,8 +125,6 @@ enum Motion {
 
     /// 减弱动态效果时的整块交叉淡入淡出：只配换了身份的视图用（新旧两块各自淡入淡出），同一个视图上用它照样会插值位置与尺寸。
     static let crossfade = Animation.easeInOut(duration: 0.15)
-    /// 同一处先后换两样东西（`HandOff`）：旧的这么久淡完，新的晚这么久再出。
-    static let handOff = HandOff.gap
 
     /// 位置、尺寸、旋转的动画；减弱动态效果时没有动画、直接到终态——一个动画事务里分不出只淡不挪，换曲线照样插值。
     static func spatial(_ animation: Animation, reduceMotion: Bool) -> Animation? {
@@ -138,7 +137,7 @@ enum Motion {
 /// 手机：按下快、松开带一点回弹，按种类缩到不同比例，按下有一下轻触感；行只亮底不缩放（一屏几十行，缩放会让列表显得软）；减弱动态效果时只降透明度。
 /// Mac 照原生控件（访达、邮件、备忘录的按钮、列表与卡片都这样）：按下的那一刻变淡（卡片压暗一层），松开即复原，
 /// 不缩放、不回弹、不震动——缩放与回弹是触屏的习惯，在指针下显得软、慢；触控板的震动在 macOS 只给对齐这类反馈，点按钮不震。
-/// Mac 悬停：指针一进来就有回应（同 macOS 26 工具栏玻璃钮的悬停，与 Linear、Raycast、Arc），淡入淡出 `Motion.quick`、不挪位置不缩放：
+/// Mac 悬停：指针一进来就有回应（同 macOS 26 工具栏玻璃钮的悬停，与 Linear、Raycast、Arc），淡入淡出 `HandOff.quick`、不挪位置不缩放：
 /// 按钮在自己的框上浮一层淡底（`fill`，形状随框：方的、矮的是圆与胶囊，高的是圆角矩形），卡片整张亮一档（按下压暗的一半）。
 /// 指针照 HIG 与访达、邮件：按钮、行、卡片都是箭头，手形只给打开网页的链接（`pointerStyle(.link)`）——手形在 Mac 上读作"这是网页链接"。
 /// iPad 的指针用系统给按钮的悬停效果（自定义样式的按钮照样有），行另见 `RowStyle`。
@@ -200,7 +199,7 @@ struct PressFeedback: ViewModifier {
         .environment(\.buttonHovered, lit)
         .onHover { hovering = $0 }
         .presetHover($hovering)
-        .animation(Motion.quick, value: lit)
+        .animation(HandOff.quick, value: lit)
         .animation(nil, value: active)
     }
     #else

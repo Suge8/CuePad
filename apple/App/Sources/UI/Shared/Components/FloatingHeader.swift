@@ -90,7 +90,7 @@ private struct FloatingHeader<Label: View, Center: View, Trailing: View>: ViewMo
                 ToolbarItem(placement: .principal) {
                     HeaderTitle { label }
                     .opacity(title.isEmpty || hidden ? 0 : 1)
-                    .animation(Motion.quick, value: title.isEmpty || hidden)
+                    .animation(HandOff.quick, value: title.isEmpty || hidden)
                     .allowsHitTesting(!hidden)
                     .accessibilityHidden(hidden)
                     .background {
@@ -105,7 +105,7 @@ private struct FloatingHeader<Label: View, Center: View, Trailing: View>: ViewMo
                     ToolbarItem(placement: .primaryAction) {
                         trailing
                             .opacity(hidden ? 0 : 1)
-                            .animation(Motion.quick, value: hidden)
+                            .animation(HandOff.quick, value: hidden)
                             .allowsHitTesting(!hidden)
                             .accessibilityHidden(hidden)
                     }
@@ -182,7 +182,7 @@ private struct HeaderDetail: View {
         if let text {
             (text.isEmpty ? Text(" ") : Text(text)).font(.caption.monospacedDigit()).foregroundStyle(palette.ink3).lineLimit(1)
                 .contentTransition(.numericText())
-                .animation(Motion.quick, value: text)
+                .animation(HandOff.quick, value: text)
         }
     }
 }

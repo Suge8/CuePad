@@ -79,7 +79,7 @@ struct DeliverableTile: View {
         case column(maxHeight: CGFloat)
         /// 横向滑的一排里：同高，宽按比例
         case strip(height: CGFloat)
-        /// 提问点名的图（`CueShots`）：方形、宽随给的（至多 `side`）、取细节最多的那一段填满（`LookBox.salient`），白底、实色边（`Palette.mediaEdge`）、深色下不压暗，
+        /// 提问点名的图（`CueShots`）：方形、宽随给的（至多 `side`）、取细节最多的那一段填满（`LookBox.framed`），白底、实色边（`Palette.mediaEdge`）、深色下不压暗，
         /// 图上不压放大记号（整张都可点，记号挡的正是要认的内容）。`chosen`："可以"选的就是这张，边换成两点宽的主按钮靛青。
         case shot(side: CGFloat, chosen: Bool)
     }
@@ -138,7 +138,7 @@ struct DeliverableTile: View {
             guard let file else { return }
             let waited = shown == nil
             let loaded = await DeliverableLooks.load(preview, file: file, box: box, scale: scale, caches: services.store.files.caches)
-            withAnimation(waited ? Motion.quick : nil) { look = loaded }
+            withAnimation(waited ? HandOff.quick : nil) { look = loaded }
         }
         .pending(loading, shown: $slow)
     }
@@ -200,11 +200,16 @@ struct DeliverableTile: View {
     /// 画面铺满给的框（比例夹过的多出来的裁掉）；没有画面的写类型。
     private var picture: some View {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
-        // 裁的时候留上沿：截图与页面要紧的多在上面；提问的方形缩略图出画面时已取好景（`LookBox.salient`），居中放
+        // 裁的时候留上沿：截图与页面要紧的多在上面；提问的方形缩略图出画面时已取好景（`LookBox.framed`），居中放
         // 要你看清的图垫白（透明图）。画面还在读时先空着（只有边），读到了淡入；读了 `Pending.delay` 还没出来才铺底写它是什么：
         // 新到的一张（结果卡、提问卡插进对话）几十毫秒就出来，先闪一帧灰底加文件图标再换成截图，比空一下更扰人
         let waiting = loading && !slow
-        return Rectangle().fill(shown?.image != nil ? (isShot ? Color.white : palette.fill) : waiting ? Color.clear : palette.fill)
+        let ground: Color = switch (shown?.image != nil, isShot, waiting) {
+        case (true, true, _): palette.mediaGround
+        case (false, _, true): .clear
+        default: palette.fill
+        }
+        return Rectangle().fill(ground)
             .overlay(alignment: isShot ? .center : .top) {
                 if let image = shown?.image {
                     Image(decorative: image, scale: 1).resizable().scaledToFill()
@@ -263,7 +268,7 @@ struct DeliverableTile: View {
         case .hero(let maxHeight): LookBox(width: pixels(maxHeight * 16 / 9), height: pixels(maxHeight), fills: true)
         case .column(let maxHeight): LookBox(width: pixels(380), height: pixels(maxHeight), fills: false)
         case .strip(let height): LookBox(width: 0, height: pixels(height), fills: true)
-        case .shot(let side, _): LookBox(width: pixels(side), height: pixels(side), fills: true, salient: true)
+        case .shot(let side, _): LookBox(width: pixels(side), height: pixels(side), fills: true, framed: true)
         }
     }
 }

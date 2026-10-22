@@ -141,8 +141,8 @@ struct PiSessionRow: View {
             }
         }
         .contentTransition(.opacity)
-        .animation(Motion.quick, value: shown)
-        .animation(Motion.quick, value: facts)
+        .animation(HandOff.quick, value: shown)
+        .animation(HandOff.quick, value: facts)
         .sessionCard(wash: ended ? nil : shown.wash(palette))
         .accessibilityElement(children: .combine)
     }
@@ -172,8 +172,8 @@ struct PiSessionRow: View {
                 .font(style.line)
             }
             .contentTransition(.opacity)
-            .animation(Motion.quick, value: shown)
-            .animation(Motion.quick, value: facts)
+            .animation(HandOff.quick, value: shown)
+            .animation(HandOff.quick, value: facts)
         }
         .accessibilityElement(children: .combine)
     }
@@ -238,7 +238,7 @@ struct SessionCard: ViewModifier {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background {
                 shape.fill(wash ?? palette.paper)
-                    .animation(Motion.quick, value: wash)
+                    .animation(HandOff.quick, value: wash)
             }
     }
 }

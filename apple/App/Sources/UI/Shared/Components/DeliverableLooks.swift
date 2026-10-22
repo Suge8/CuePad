@@ -22,9 +22,9 @@ nonisolated struct LookBox: Hashable, Sendable {
     var width: Int
     var height: Int
     var fills: Bool
-    /// 出画面时就裁成框的比例、取细节最多的那一段（`DeliverableLooks.salientCrop`）：提问的方形缩略图只为认出是哪张，
+    /// 出画面时就裁成框的比例、取细节最多的那一段（`DeliverableLooks.detailCrop`）：提问的方形缩略图只为认出是哪张，
     /// 截图的中间常是空白，居中裁认不出。裁好的随缩略图存，画的时候居中铺满即可。
-    var salient = false
+    var framed = false
 
     /// 限宽的框里，横图、全景图最多按框的 4 倍解：再宽的那一截反正被裁掉或缩得看不清。不限宽的一排里格子按真实比例给宽，不封顶，否则全景图会被放大。
     private static let longestFactor = 4
@@ -78,7 +78,7 @@ enum DeliverableLooks {
         } else {
             await NextFrame.drawn()
             if var made = await image(preview, file: file, box: box, scale: scale, caches: caches) {
-                if box.salient { made = await salientCrop(made, aspect: CGFloat(box.width) / CGFloat(box.height)) }
+                if box.framed { made = await detailCrop(made, aspect: CGFloat(box.width) / CGFloat(box.height)) }
                 look.image = made
                 await LookFiles.store(made, as: key, in: caches)
             }
@@ -110,14 +110,14 @@ enum DeliverableLooks {
     }
 
     private static func key(_ preview: PiPreview, _ box: LookBox) -> String {
-        "\(preview.hash)@\(box.width)x\(box.height)\(box.fills ? "fill" : "fit")\(box.salient ? "-framed" : "")"
+        "\(preview.hash)@\(box.width)x\(box.height)\(box.fills ? "fill" : "fit")\(box.framed ? "-framed" : "")"
     }
 
     /// 按宽高比 `aspect` 裁出一块：占满短的那一边，沿长的那一边挪到细节最多的地方（`detail`），细节一样多的几处取中间那处，
     /// 内容整段放得下时就居中在框里；整张没有细节时居中。截图与页面上有字、有控件的地方细节多，空白的底没有：
     /// 页面的标题与表单、几张方案图各自不同的那一块都落在框里。
     /// 不用 Vision 的注意力显著热图：白底页面上它热成一大片，按重心居中常落在两块内容之间的空白上；模拟器上请求出错，截图、录屏里全落到兜底。
-    @concurrent private static func salientCrop(_ image: CGImage, aspect: CGFloat) async -> CGImage {
+    @concurrent private static func detailCrop(_ image: CGImage, aspect: CGFloat) async -> CGImage {
         let width = image.width, height = image.height
         let tall = CGFloat(width) / CGFloat(height) < aspect
         let cropWidth = tall ? width : Int(CGFloat(height) * aspect)

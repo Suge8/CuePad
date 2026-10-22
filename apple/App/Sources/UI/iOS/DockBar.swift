@@ -44,7 +44,7 @@ struct DockBar: View {
     }
 }
 
-/// 左边那块玻璃的内容：三格与"⋯"一直都在、只换不透明度，靠左叠着（玻璃往右长，三格不跟着挪）：先后换、不叠着交叉淡（`Motion.handOff`）——
+/// 左边那块玻璃的内容：三格与"⋯"一直都在、只换不透明度，靠左叠着（玻璃往右长，三格不跟着挪）：先后换、不叠着交叉淡（`HandOff.gap`）——
 /// 换出去的那样先淡完，换进来的晚这么久再出；插入、移除的过渡里被移除的那个随弹簧慢慢淡，"⋯"会叠在"项目"上停一阵。
 private struct DockPlaces: View {
     let route: Route
@@ -55,7 +55,7 @@ private struct DockPlaces: View {
 
     /// 换进来（`entering`）的晚 `handOff` 再淡入，换出去的在 `handOff` 内淡完。
     private static func handOff(in entering: Bool) -> Animation {
-        entering ? Motion.quick.delay(Motion.handOff) : .easeOut(duration: Motion.handOff)
+        entering ? HandOff.quick.delay(HandOff.gap) : .easeOut(duration: HandOff.gap)
     }
 
     var body: some View {
@@ -175,7 +175,7 @@ private struct DockCue: View {
                     .overlay(alignment: .topTrailing) { corner(drafted: drafted) }
             }
             // 长成输入框时里面先淡掉，只剩玻璃在长，长到了交给页里的输入框
-            .animation(.easeOut(duration: Motion.handOff)) {
+            .animation(.easeOut(duration: HandOff.gap)) {
                 $0.opacity(places ? 1 : 0)
             }
             .frame(maxHeight: .infinity)
@@ -208,7 +208,7 @@ private struct DockCue: View {
                     .transition(.opacity)
             }
         }
-        .animation(Motion.quick, value: drafted)
+        .animation(HandOff.quick, value: drafted)
     }
 }
 
@@ -238,8 +238,8 @@ private struct DockTally: View {
         .font(.system(size: 12, weight: .medium))
         .lineLimit(1)
         .fixedSize()
-        .animation(Motion.quick, value: cue.now.advancing)
-        .animation(Motion.quick, value: cue.waiting)
+        .animation(HandOff.quick, value: cue.now.advancing)
+        .animation(HandOff.quick, value: cue.waiting)
     }
 }
 #endif

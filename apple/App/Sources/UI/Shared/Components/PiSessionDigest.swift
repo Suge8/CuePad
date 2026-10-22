@@ -229,7 +229,7 @@ struct QuestionCard: View {
         guard services.reachesPiHost else { return }
         writeError = nil
         requestID = nil
-        withAnimation(Motion.quick) { tapped = value }
+        withAnimation(HandOff.quick) { tapped = value }
         Task {
             do {
                 requestID = try await workspace.services.answer(value, to: session).id

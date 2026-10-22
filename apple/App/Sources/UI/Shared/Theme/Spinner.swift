@@ -37,16 +37,21 @@ struct Spinner: View {
     }
 }
 
-/// 省电模式开着（`ProcessInfo.isLowPowerModeEnabled`，随系统的变化通知更新）：读它的常驻动效换成静止的样子，同减弱动态效果。
-@Observable final class LowPowerMode {
-    static let shared = LowPowerMode()
-    private(set) var isOn = ProcessInfo.processInfo.isLowPowerModeEnabled
+/// 全 App 唯一的"话在路上"（发送钮、气泡旁的记号、会话状态标）：一架纸飞机一趟趟飞过（`LoopLayer.flight`），减弱动态效果时停在正中、
+/// 同一架的静止符号（`Icon.onTheWay`，与飞机同大）。`size` 是框的边长，飞机占它的 86%。
+struct OnTheWay: View {
+    let size: CGFloat
+    let color: Color
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private init() {
-        Task {
-            for await _ in NotificationCenter.default.notifications(named: .NSProcessInfoPowerStateDidChange) {
-                isOn = ProcessInfo.processInfo.isLowPowerModeEnabled
+    var body: some View {
+        Group {
+            if reduceMotion {
+                Image(.onTheWay).font(.system(size: size * 0.86, weight: .semibold)).foregroundStyle(color)
+            } else {
+                LoopLayer(kind: .flight, color: color)
             }
         }
+        .frame(width: size, height: size)
     }
 }

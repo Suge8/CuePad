@@ -40,7 +40,7 @@ struct TaskRingView: View {
             Circle().stroke(tint, lineWidth: line)
             if status == .inProgress { Circle().trim(from: 0.25, to: 0.75).fill(tint).padding(line * 1.1).transition(.opacity) }
         }
-        .animation(Motion.quick, value: status)
+        .animation(HandOff.quick, value: status)
         .frame(width: size * 0.88, height: size * 0.88)
         .frame(width: size * 1.02, height: size * 1.02)
     }
@@ -62,7 +62,7 @@ struct TaskRingView: View {
             }
         }
         .rotationEffect(.degrees(-90))
-        .animation(Motion.quick, value: steps.done)
+        .animation(HandOff.quick, value: steps.done)
         .frame(width: size * 0.88, height: size * 0.88)
         .frame(width: size * 1.02, height: size * 1.02)
     }

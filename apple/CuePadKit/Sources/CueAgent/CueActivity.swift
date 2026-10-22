@@ -6,9 +6,30 @@ import Foundation
 /// 做完后经过清单里的一条（`item`，与会话回答注脚的清单同一种）。自己的三个工具写成人话、说清对象（对哪件活、哪个会话，建任务带标题、回想带查的词），
 /// 读文件类照会话里的写法（`read · 文件名`，动词由界面翻）。
 public enum CueActivity {
-  /// 正在用时那一句：Cue 自己的工具写成"动作「对象」"（与经过清单里那一条同一个说法、同一个认法，`named`），读文件类照会话里的写法"工具 · 目标"。
+  /// 任务那个工具各动作的说法，正在用时那一句（`detail`）与做完后清单里那一条（`item`）同一张表：`named` 是认出的对象（`Named.quoted`），
+  /// `board`：看的是看板（没指哪件活）。认不出的动作为 nil。
+  static func phrase(_ action: String?, _ named: String, board: Bool) -> (kind: PiChatMessage.Tools.Kind, text: String)? {
+    switch action {
+    case "add": (.add, "建任务\(named)")
+    case "edit": (.other, "改\(named)")
+    case "start": (.start, "开工\(named)")
+    case "say": (.talk, "对\(named)说")
+    case "peek": (.read, board ? "看板" : "看\(named)的近况")
+    case "stop": (.stop, "停下\(named)")
+    case "leave": (.other, "\(named)留给你回")
+    case "done": (.done, "做完\(named)")
+    default: nil
+    }
+  }
+
+  /// 调用开始时认一次对象（`Named`），存在这次调用上，正在用时那一句与做完后那一条都用它，不再查第二次库。
+  public static func named(tool: String, arguments: String, store: CueStore) async -> Named {
+    await Named(Parsed(arguments), tool: tool, store: store)
+  }
+
+  /// 正在用时那一句：Cue 自己的工具写成"动作「对象」"（与经过清单里那一条同一个说法，`phrase`），读文件类照会话里的写法"工具 · 目标"。
   /// `tool`、`arguments` 是大脑报的（`CueBrainEvent.tool`：去掉前缀的小写名字与 JSON 原文）。
-  public static func detail(tool: String, arguments: String, store: CueStore) async -> String {
+  public static func detail(tool: String, arguments: String, named: Named) -> String {
     let args = Parsed(arguments)
     func line(_ action: String, _ target: String? = nil) -> String {
       guard let target else { return action }
@@ -16,18 +37,7 @@ public enum CueActivity {
     }
     switch tool {
     case "task":
-      let named = await Named(args, tool: tool, store: store).quoted
-      switch args.line("action") {
-      case "add": return "建任务\(named)"
-      case "edit": return "改\(named)"
-      case "start": return "开工\(named)"
-      case "say": return "对\(named)说"
-      case "peek": return args.line("task") == nil && args.line("session") == nil ? "看板" : "看\(named)的近况"
-      case "stop": return "停下\(named)"
-      case "leave": return "\(named)留给你回"
-      case "done": return "做完\(named)"
-      default: return "看任务"
-      }
+      return phrase(args.line("action"), named.quoted, board: args.board)?.text ?? "看任务"
     case "tell": return args.raw["ask"] == nil ? "给你写话" : "问你"
     case "memory":
       switch args.line("action") {
@@ -45,29 +55,19 @@ public enum CueActivity {
     }
   }
 
-  /// 做完的一次调用在经过清单里的一条：动到的任务与会话按 Cue 写的引用认（`named`），清单里点它打开那件任务；
+  /// 做完的一次调用在经过清单里的一条：动到的任务与会话是开始时认出的（`named`），清单里点它打开那件任务；
   /// 认不出（写错了、调用失败）就照它写的引用列出，不带任务。给的是会话就写会话名，不带任务。
   /// 对你说的话（tell）已在对话里：清单里只留首行，带着那条消息，点它跳回原处。记忆的序号是 Cue 内部的身份，不写给人看。
-  public static func item(tool: String, arguments: String, failed: Bool, store: CueStore) async -> PiChatMessage.Tools.Item {
+  public static func item(tool: String, arguments: String, named: Named, failed: Bool, store: CueStore) async -> PiChatMessage.Tools.Item {
     let args = Parsed(arguments)
-    let target = await Named(args, tool: tool, store: store)
-    let named = target.quoted, task = target.task?.id
     func item(_ kind: PiChatMessage.Tools.Kind, _ target: String, message: UUID? = nil) -> PiChatMessage.Tools.Item {
-      .init(kind: kind, target: target.clipped(PiChatMessage.Tools.targetLimit), failed: failed, task: task, message: message)
+      .init(kind: kind, target: target.clipped(PiChatMessage.Tools.targetLimit), failed: failed, task: named.task, message: message)
     }
     switch tool {
     case "task":
-      switch args.line("action") {
-      case "add": return item(.add, "建任务\(named)")
-      case "edit": return item(.other, "改\(named)")
-      case "start": return item(.start, "开工\(named)")
-      case "say": return item(.talk, "对\(named)说：\(args.line("text") ?? "")")
-      case "peek": return task == nil && args.line("session") == nil ? item(.read, "看板") : item(.read, "看\(named)的近况")
-      case "stop": return item(.stop, "停下\(named)")
-      case "leave": return item(.other, "\(named)留给你回")
-      case "done": return item(.done, "做完\(named)")
-      default: return item(.other, "task")
-      }
+      let action = args.line("action")
+      guard let said = phrase(action, named.quoted, board: args.board) else { return item(.other, "task") }
+      return item(said.kind, action == "say" ? "\(said.text)：\(args.line("text") ?? "")" : said.text)
     case "tell":
       guard let line = args.line("text"), let text = args.raw["text"] as? String else { return item(.other, "撤回一条提问") }
       let message = try? await store.latestCueMessage(saying: text)
@@ -93,9 +93,9 @@ public enum CueActivity {
   }
 
   /// Cue 写的那件活或那个会话，与工具同一个认法（session 写成任务的编号也认作那件任务）；`quoted` 是给人看的"「名字」"，认不出照它写的。
-  private struct Named {
-    let task: Card?
-    let quoted: String
+  public struct Named: Sendable {
+    public let task: UUID?
+    public let quoted: String
 
     init(_ args: Parsed, tool: String, store: CueStore) async {
       let tools = CueTools(store: store)
@@ -109,16 +109,15 @@ public enum CueActivity {
         case nil: sessionName = session
         }
       }
-      self.task = task
+      self.task = task?.id
       quoted = "「\(task?.heading ?? args.line("task") ?? args.line("title") ?? sessionName ?? "")」"
     }
   }
 
   static let targetLimit = 80
 
-
   /// 大脑报的参数：JSON 对象，取各项的第一个非空行。
-  private struct Parsed {
+  struct Parsed {
     let raw: [String: Any]
 
     init(_ arguments: String) { raw = (try? JSONSerialization.jsonObject(with: Data(arguments.utf8))) as? [String: Any] ?? [:] }
@@ -128,5 +127,7 @@ public enum CueActivity {
     }
 
     var path: String? { line("path") ?? line("file_path") }
+    /// 看的是看板：没指哪件活、哪个会话。
+    var board: Bool { line("task") == nil && line("session") == nil }
   }
 }

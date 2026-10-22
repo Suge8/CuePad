@@ -100,12 +100,12 @@ struct CardEditorPage: View {
             await NextFrame.wait()
             guard isOpen else { return }
             workspace.presses.opened(cardID)
-            withAnimation(Motion.quick) { shown = true } completion: { settled = true }
+            withAnimation(HandOff.quick) { shown = true } completion: { settled = true }
         }
     }
 
     private func collapse() {
-        withAnimation(Motion.quick) {
+        withAnimation(HandOff.quick) {
             shown = false
         } completion: {
             gone = true

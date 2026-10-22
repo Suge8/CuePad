@@ -108,7 +108,7 @@ private struct CueRoundRow: View {
     private var detail: some View {
         VStack(alignment: .leading, spacing: 8) {
             if !round.sent.isEmpty {
-                Button { withAnimation(Motion.quick) { showsSent.toggle() } } label: {
+                Button { withAnimation(HandOff.quick) { showsSent.toggle() } } label: {
                     HStack(spacing: 6) {
                         Image(.mail).frame(width: 13).accessibilityHidden(true)
                         Text("交给 Cue 的话")
@@ -139,7 +139,7 @@ private struct CueCallRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Button { withAnimation(Motion.quick) { expanded.toggle() } } label: {
+            Button { withAnimation(HandOff.quick) { expanded.toggle() } } label: {
                 ToolRow(icon: CueRunFormat.icon(tool: call.name), target: target, truncation: .tail) { status }
                     .frame(minHeight: 22).contentShape(.rect)
             }

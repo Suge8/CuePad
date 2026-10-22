@@ -92,12 +92,12 @@ struct PiStateDot: View {
     private enum Look: Hashable { case heartbeat, flight, icon }
 
     private var look: Look {
-        guard !reduceMotion else { return .icon }
         switch shown.status {
-        case .working: return .heartbeat
-        case .delivery(.failed): return .icon
-        case .delivery: return .flight
-        default: return .icon
+        case .working: reduceMotion ? .icon : .heartbeat
+        case .delivery(.failed): .icon
+        // 减弱动态效果时静止的那一架由它自己换（`OnTheWay`）
+        case .delivery: .flight
+        default: .icon
         }
     }
 
@@ -106,7 +106,7 @@ struct PiStateDot: View {
         let mark = ZStack {
             switch look {
             case .heartbeat: LoopLayer(kind: .heartbeat, color: tint).transition(Self.swap)
-            case .flight: LoopLayer(kind: .flight, color: tint).transition(Self.swap)
+            case .flight: OnTheWay(size: box, color: tint).transition(Self.swap)
             case .icon:
                 Image(shown.icon)
                     .font(.system(size: box * 0.86, weight: .semibold))
@@ -120,7 +120,7 @@ struct PiStateDot: View {
             }
         }
         .frame(width: box, height: box)
-        .animation(Motion.quick, value: shown)
+        .animation(HandOff.quick, value: shown)
         .onChange(of: shown.isUnread) { _, unread in if unread, !reduceMotion { rings += 1 } }
         // 旁边是字时按第一行对齐（`.firstTextBaseline`）：每种标都把自己的中心放在那一行字的中线上。不能用各自的基线——
         // 符号有基线、自绘的动效没有（落到底边），同一列里就高高低低；标的大小跟着旁边的字走，中线离基线约是字高的四成

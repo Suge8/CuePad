@@ -6,7 +6,7 @@ import SwiftUI
 /// （`CueShots`，没点名的没有图；点开全屏时底栏就是这几个选项，看完当场定；"可以"选的是其中一张时那张描靛青圈、选项旁一句"要选别的，在下面跟 Cue 说"）、
 /// 选项（`CueChoices`），末行是关联的任务与原话的开关
 /// （Mac 上连同选项；辅助功能字号下各占一行），Mac 与手机同一结构；还有几条在等由页头与侧栏的"等你 M"说。卡上只能选：别的话在 Cue 页底下的输入框说，
-/// 一开口卡就收起（Cue 判断不是在答它会放回，见 `CueQuestionEnd`）。没有关掉。Cue 停用着时卡照样露、选项停用并写"启用后再答"（`CueChoices.paused`）。
+/// 一开口卡就收起（Cue 判断不是在答它会放回，见 `CueQuestionEnd`）。没有关掉。Cue 停用着时卡照样露、选项停用并写"启用后再答"（`CueChoices`）。
 /// 列表与数量只来自 `cueMessagesWaitingForYou()`：回答后等库里那条结束才换下一条，写的时候按钮停用；没写成就报错、按钮恢复，可以再点。
 struct CueWaitingDock: View {
     let waiting: [CueMessage]
@@ -90,18 +90,18 @@ struct CueWaitingDock: View {
             guard animated else { return leave() }
             leaving = true
             // 收尾看此刻的状态（`leaving`）：闭包里的 `waiting` 是排这一段时那一份，淡的这 80ms 里又来了一条时它还是空的，会把新来的那张拿掉
-            move(to: 0, .easeOut(duration: Motion.handOff), holds: false) { if leaving { leave() } }
+            move(to: 0, .easeOut(duration: HandOff.gap), holds: false) { if leaving { leave() } }
             return
         }
         let swapping = shown != nil
         leaving = false
-        withAnimation(swapping && animated ? Motion.quick : nil) { shown = next }
+        withAnimation(swapping && animated ? HandOff.quick : nil) { shown = next }
         guard animated, level < 1 else { return level = 1 }
         moving = true
         Task {
             await NextFrame.wait()
             guard shown?.id == next.id else { return moving = false }
-            move(to: 1, reduceMotion ? Motion.quick : Motion.snappy)
+            move(to: 1, reduceMotion ? HandOff.quick : Motion.snappy)
         }
     }
 
@@ -133,8 +133,7 @@ struct CueWaitingDock: View {
         let ref = message.taskID.flatMap { tasks[$0] }
         let cue = workspace.cue
         let choices = CueChoices(
-            options: message.choices ?? [], disabled: ending == message.id, hint: chosen(message).map { _ in "要选别的，在下面跟 \(cue.name) 说" },
-            paused: cue.canHear ? nil : "启用 \(cue.name) 后再答"
+            options: message.choices ?? [], disabled: ending == message.id, hint: chosen(message).map { _ in "要选别的，在下面跟 \(cue.name) 说" }
         ) { answer(message, $0) }
         let side = Self.padding.leading
         #if os(macOS)
@@ -178,7 +177,7 @@ struct CueWaitingDock: View {
         #endif
         return body
             .paper(radius: ComposerMetrics.radius, lifted: true)
-            .animation(Motion.quick, value: reading)
+            .animation(HandOff.quick, value: reading)
             .padding(.bottom, Self.below)
     }
 

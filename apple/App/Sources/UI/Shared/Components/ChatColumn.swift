@@ -17,7 +17,7 @@ struct ChatColumn<Content: View, Key: Equatable>: View {
     let ids: [UUID]
     let paging: ChatPaging
     let holding: Bool
-    /// 最新一条是新到时要撑上去的那种（`ChatLift`）就是它；会话页没有。
+    /// 最新一条是新到时要撑上去的那种（`ChatScroll.rise`）就是它；会话页没有。
     let arrival: UUID?
     @ViewBuilder let content: (ChatWindow) -> Content
     /// 排开到的最早那一条起、记下时对话里的各条；还没排（没有内容）为 nil。连后面的一起记：那一条自己掉出了读的范围（排开到了最早那头，
@@ -64,12 +64,13 @@ struct ChatColumn<Content: View, Key: Equatable>: View {
     var body: some View {
         GeometryReader { proxy in
             let size = proxy.size, window = self.window(size), first = ids.count - window
+            let margin = ChatLayout.margin(size.width, readingWidth: readingWidth, inset: inset)
             ChatScroll(followKey: followKey, readingWidth: readingWidth, inset: inset, follow: $follow, holding: holding, arrival: arrival) {
                 content(ChatWindow(count: window, earlier: first > 0 ? paging.step(size, first) : 0) { showEarlier(size) })
+                    .environment(\.chatMargin, margin)
             }
             .overlay(alignment: .trailing) {
                 if !marks.isEmpty {
-                    let margin = ChatLayout.margin(size.width, readingWidth: readingWidth, inset: inset)
                     ChatScrubber(marks: marks, scrolling: follow.scrolling, crowded: margin < Self.scrollerWidth + ChatScrubber.room) { follow.seek($0) }
                         .padding(.trailing, Self.scrollerWidth)
                 }

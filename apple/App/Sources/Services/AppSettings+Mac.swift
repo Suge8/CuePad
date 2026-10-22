@@ -8,7 +8,7 @@ extension AppSettings.Key {
 }
 
 extension AppSettings {
-    /// 首次打开的接入面板自己弹过没有（`Workspace.offerSetup`）：看过不接的不再弹，之后从 Cue 页的启用卡或设置里来。
+    /// 首次打开的接入面板自己弹过没有（`Workspace.offerSetup`）：看过不接的不再弹，之后从 Cue 页的启用钮（`CueWelcome`）或设置里来。
     var setupOffered: Bool {
         get { defaults.bool(forKey: Key.setupOffered) }
         set { defaults.set(newValue, forKey: Key.setupOffered) }

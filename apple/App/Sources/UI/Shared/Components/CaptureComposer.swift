@@ -53,7 +53,7 @@ struct CaptureComposer: View {
                     .transition(.opacity)
             }
         }
-        .animation(Motion.quick, value: workspace.notice)
+        .animation(HandOff.quick, value: workspace.notice)
         .padding(.horizontal, 12).padding(.top, 10)
     }
 

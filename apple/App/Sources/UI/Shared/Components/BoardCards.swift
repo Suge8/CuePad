@@ -35,7 +35,7 @@ private struct BoardDim: ViewModifier {
         let hovered = workspace.hoveredProject
         content
             .opacity(hovered.map { $0 == project } ?? true ? 1 : Self.dimmed)
-            .animation(Motion.quick, value: hovered)
+            .animation(HandOff.quick, value: hovered)
     }
 }
 #endif

@@ -45,8 +45,8 @@ struct SettingRow<Control: View, Fix: View>: View {
                 .frame(width: Self.iconWidth)
             }
         }
-        .animation(Motion.quick, value: tone)
-        .animation(Motion.quick, value: busy)
+        .animation(HandOff.quick, value: tone)
+        .animation(HandOff.quick, value: busy)
         .help(help ?? "")
         // 读屏把这一行当一组、组名是这一行的名称：状态后的"修复""查看"与右边的控件都读得出属于哪一行
         .accessibilityElement(children: .contain)

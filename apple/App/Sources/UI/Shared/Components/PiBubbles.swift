@@ -5,8 +5,7 @@ import SwiftUI
 extension AnyTransition {
     /// 对话里一条出现或消失：只淡入淡出，动画随过渡自带。不给整段对话挂动画：其余各行的位移若也跟着动画，
     /// 底部锚定下正在读的那段会先被推走再滑回来
-    static let entry = AnyTransition.opacity.animation(Motion.quick)
-
+    static let entry = AnyTransition.opacity.animation(HandOff.quick)
 }
 
 /// 你的话那颗气泡长什么样，两处各一种，只在这里分：
@@ -38,8 +37,6 @@ enum BubbleLook: Equatable {
     /// 没能送达时气泡下那一行（"未送达 · 重发"）离气泡多远、离右缘多远：Cue 页的旁注对着气泡里的字（`CueBubble.noteInset`）。
     var statusSpacing: CGFloat { self == .session ? 6 : 2 }
     var statusInset: CGFloat { self == .session ? 0 : CueBubble.noteInset }
-
-    var arrival: AnyTransition { self == .session ? .entry : CueBubble.arrival }
 }
 
 /// 你的一句话：右侧气泡（样子见 `BubbleLook`），最宽到所在一栏的 `widthFraction`；到哪了画在气泡左下角外（`BubbleTrip`）。长按（Mac 右键）是 `menu`，预览就是这颗气泡。
@@ -134,8 +131,8 @@ struct BubbleText: View {
             .background(palette.bubble, in: shape)
             .overlay { edge(shape) }
             .opacity(trip.opacity)
-            .animation(Motion.quick, value: highlighted)
-            .animation(Motion.quick, value: trip)
+            .animation(HandOff.quick, value: highlighted)
+            .animation(HandOff.quick, value: trip)
     }
 
     /// 折起着、而且长到可能被截：每个气泡多挂一份量全文高的视图（每个几何读数都是一次布局回调），所以短的话（绝大多数）不挂。

@@ -44,9 +44,9 @@ struct CueStatusRow<Trailing: View>: View {
             UnreadCount(count: cue.unread).font(Typography.meta)
             trailing
         }
-        .animation(Motion.quick, value: cue.unread)
-        .animation(Motion.quick, value: cue.presence)
-        .animation(Motion.quick, value: status)
+        .animation(HandOff.quick, value: cue.unread)
+        .animation(HandOff.quick, value: cue.presence)
+        .animation(HandOff.quick, value: status)
     }
 }
 
@@ -112,7 +112,7 @@ struct CueStatusLine: View {
         }
         .font(font)
         .transition(.opacity)
-        .animation(Motion.quick, value: cue.now)
+        .animation(HandOff.quick, value: cue.now)
         .pending(services.isCatchingUp(on: cue.hostID), shown: $syncing)
     }
 
@@ -157,7 +157,7 @@ struct CueTitle: View {
             }
             .padding(.trailing, 14)
         }
-        .animation(Motion.quick, value: cue.presence)
+        .animation(HandOff.quick, value: cue.presence)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isHeader)
     }
