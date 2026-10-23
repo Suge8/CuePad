@@ -69,7 +69,7 @@ struct CueHeader: View {
 /// 第一行左边是它的大脑（Agent、模型与思考强度，`CueConfigControls`；还没选在哪台运行时没有），右边是它在哪台运行与齿轮，点它推入设置
 /// （`CueSettingsScreen`：在哪台 Mac 上运行、不用先问的事、工具步骤与名字；放在第一行是因为下面的会话一多，面板就要滚，末尾的入口看不见）；
 /// 启用了接着是上下文用量（`CueContextCard`，与 Mac 同一个），然后是等你（卡片就在页面下方，点它收起面板）、在做（前几个，
-/// 同 Mac 菜单栏面板；区头写一共几个会话、几个子代理在跑，多出的在列末就地展开）、全部会话（推入 Agent 整页）与记忆。
+/// 同 Mac 菜单栏面板；区头写一共几个会话、几个子代理在跑，多出的在列末就地展开）、全部会话（换到会话页）与记忆。区头随面板一起滚，不钉住：钉住就要让滚过的行在它下面淡去，那是一层遮罩。
 /// 放不下时面板里面滚。
 private struct CueNowPanel: View {
     let close: () -> Void
@@ -79,8 +79,6 @@ private struct CueNowPanel: View {
 
     /// 面板只是一瞥：在做的会话最多列这么多，全部在 Agent 整页里。
     private static let limit = 5
-    /// "在做"区头的高度（钉住时滚过的行在它下沿淡去，`FadesUnderHeader`）。
-    @ScaledMetric(relativeTo: .footnote) private var headerHeight: CGFloat = 30
 
     var body: some View {
         HugHeight {
@@ -154,9 +152,7 @@ private struct CueNowPanel: View {
                 Spacer(minLength: 8)
                 if !work.rows.isEmpty { LiveWorkCount(work: work, font: .footnote) }
             }
-            .frame(height: headerHeight)
             .accessibilityElement(children: .combine)
-            .modifier(PinsToTop())
             sessionRows(work, live: live)
         }
     }
@@ -177,14 +173,12 @@ private struct CueNowPanel: View {
                         .contentShape(.rect)
                 }
                 .buttonStyle(.row)
-                .modifier(FadesUnderHeader(header: headerHeight))
             }
         }
         link("全部会话", count: live.total) {
             close()
             workspace.show(.agent)
         }
-        .modifier(FadesUnderHeader(header: headerHeight))
     }
 
     private func link(_ title: String, icon: Icon? = nil, count: Int? = nil, action: @escaping () -> Void) -> some View {
@@ -204,30 +198,4 @@ private struct CueNowPanel: View {
     }
 }
 
-/// "在做"区头钉在面板顶上：展开后一屏放不下，往下翻会话时还看得到有几个在跑。
-/// 不用懒加载栈的钉住区头：懒加载栈第一次量出的高是估的（实测估 882、实为 641），`HugHeight` 按它定的玻璃高下一帧才改成真的，
-/// 玻璃长大的动画里挨一下不带动画的改高，整块就有几帧不画（键盘关着点开页头那一闪）。这里在渲染时按滚过的距离下移，不进状态、不挂几何回调。
-private struct PinsToTop: ViewModifier {
-    func body(content: Content) -> some View {
-        content
-            .visualEffect { content, proxy in content.offset(y: max(0, -proxy.frame(in: .scrollView).minY)) }
-            // 盖在滚上来的行上面（行在它下沿淡去，`FadesUnderHeader`）
-            .zIndex(1)
-    }
-}
-
-/// 钉住的"在做"区头不铺底，滚到它下面的行就地淡去：铺什么颜色都与面板的玻璃对不上（玻璃的光随背后变，深色下是一条直角色带），
-/// 不铺底它就是玻璃本身。行顶离区头下沿还有 `fade` 的一半时开始淡，碰到区头的字之前淡完，字不会叠在一起。
-/// 读的是渲染时的几何（`visualEffect`），不进状态、不挂几何回调：滚动时每帧只改透明度。
-private struct FadesUnderHeader: ViewModifier {
-    let header: CGFloat
-    private static let fade: CGFloat = 12
-
-    func body(content: Content) -> some View {
-        content.visualEffect { [header, fade = Self.fade] content, proxy in
-            let top = proxy.frame(in: .scrollView).minY - (header - fade / 2)
-            return content.opacity(min(max(top / fade, 0), 1))
-        }
-    }
-}
 #endif
