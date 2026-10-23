@@ -33,7 +33,7 @@ struct IOSRoot: View {
             }
             .sheet(item: $workspace.projectForm) { ProjectFormSheet($0) }
             .sheet(item: Binding(get: { workspace.folderPicker }, set: { workspace.folderPicker = $0 })) { FolderPickerSheet(project: $0) }
-            .overlay { TaskBubbleSlot() }
+            .overlay { if sizeClass == .regular { TaskBubbleSlot() } else { PhoneTaskSlot() } }
         }
         .watchesTouches { [workspace] in workspace.pressed(at: $0) }
         // 这一层还没有导航栏：上安全区就是状态栏

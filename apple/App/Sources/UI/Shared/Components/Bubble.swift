@@ -9,6 +9,8 @@ nonisolated enum BubbleSource: Equatable {
     case press(CGPoint)
     /// 没有来源（键盘、⌘K 里按 ↩、小组件链接）：没有尾巴，在窗口上方居中。
     case unanchored
+    /// 贴在底部的一张纸（手机原型 Q）：横向铺满、留出同样的边，从底边升起，拖它的把手往下关（`BubbleDrag`）。
+    case bottom
 }
 
 /// 长出来的气泡（`PanelStyle.bubble`：任务气泡、Mac 会话页的额度明细）：纸色的底、一根指着来源的尾巴，不压暗、点外面或 Esc 关。
@@ -25,6 +27,9 @@ nonisolated struct BubblePlacement: Equatable {
     var tail: BubbleTail?
     /// 进出场从哪边来：朝着来源（尾巴尖）那一侧，-1 是上面、1 是下面。
     var side: CGFloat = -1
+    /// 贴在底部的纸（`BubbleSource.bottom`）：圆角与屏幕同心、整张从底边升起。
+    var sheet = false
+    var radius: CGFloat { sheet ? Self.sheetRadius : Self.radius }
 
     /// `container`：气泡那一层在窗口里的框（与来源同一套坐标）；`insets`：容器四周不放气泡的那一圈（安全区、工具栏与页边）。
     init(source: BubbleSource, container: CGRect, insets: EdgeInsets) {
@@ -39,6 +44,14 @@ nonisolated struct BubblePlacement: Equatable {
             x = bounds.midX - width / 2
             top = bounds.minY + Self.unanchoredTop
             maxHeight = bounds.height - Self.unanchoredTop
+            return
+        case .bottom:
+            x = bounds.minX
+            width = bounds.width
+            bottom = bounds.maxY
+            maxHeight = bounds.height - Self.unanchoredTop
+            side = 1
+            sheet = true
             return
         case .control(let frame):
             target = frame.offsetBy(dx: -container.minX, dy: -container.minY)
@@ -63,20 +76,20 @@ nonisolated struct BubblePlacement: Equatable {
         }
     }
 
-    /// 贴在容器下沿（键盘上沿）、横向居中，没有尾巴：手机上在气泡里写正文、键盘升起时。
-    init(dockedIn container: CGSize, insets: EdgeInsets) {
-        width = min(Self.width, container.width - insets.leading - insets.trailing)
-        x = (container.width - width) / 2
-        bottom = container.height - insets.bottom
-        maxHeight = container.height - insets.top - insets.bottom
-        side = 1
+    /// 键盘升起、整块挪到键盘之上时（手机）：尾巴不再对着来源，收起。
+    func lifted(_ lifted: Bool) -> BubblePlacement {
+        var placement = self
+        if lifted { placement.tail = nil }
+        return placement
     }
 
     /// 从来源那一侧浮出来：朝尾巴尖挪一小段加淡入；减弱动态效果时只淡入淡出。挂在气泡自己（只有气泡那么大）上。
     /// 不缩放（实测，Instruments）：缩放时每一帧字都按新的大小重画一遍（字形重新栅格化），开合各约 400ms 里主线程三成在重画字，掉帧；
     /// 平移不改字的大小，一次画好跟着走，开合的指令数降到原来的三成。缩放铺满整窗的一层更糟：AppKit 每帧重排整窗、重算鼠标跟踪区。
+    /// 贴在底部的纸整张从底边升起、落回底边（同系统的纸页）。
     func transition(reduceMotion: Bool) -> AnyTransition {
-        reduceMotion ? .opacity : .offset(y: side * Self.rise).combined(with: .opacity)
+        if reduceMotion { return .opacity }
+        return sheet ? .move(edge: .bottom) : .offset(y: side * Self.rise).combined(with: .opacity)
     }
 
     static let width: CGFloat = 400
@@ -86,6 +99,8 @@ nonisolated struct BubblePlacement: Equatable {
     #else
     static let radius: CGFloat = 26
     #endif
+    /// 贴在底部的纸：与屏幕圆角同心（屏幕圆角减去留的边）。
+    static let sheetRadius: CGFloat = 46
     /// 那一下离所在那一行上下沿的距离（半行高）：气泡让开整行，尾巴尖贴着行沿。
     static let reach: CGFloat = TaskMetrics.rowHeight / 2
     /// 尾巴离气泡角的最小距离：不画到圆角上。
@@ -158,8 +173,8 @@ struct BubbleFrame<Content: View, Area: View>: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        let shape = BubbleShape(tail: placement.tail, radius: BubblePlacement.radius)
-        let card = RoundedRectangle(cornerRadius: BubblePlacement.radius, style: .continuous)
+        let shape = BubbleShape(tail: placement.tail, radius: placement.radius)
+        let card = RoundedRectangle(cornerRadius: placement.radius, style: .continuous)
         ScrollView { content }
             .scrollBounceBehavior(.basedOnSize)
             .frame(width: placement.width)
@@ -180,8 +195,12 @@ struct BubbleFrame<Content: View, Area: View>: View {
 }
 
 /// 气泡那一层的排法：铺满容器，每个气泡（`BubbleSpot` 带着它的摆法）贴着内容的高、最高到摆法给的上限，
-/// 按上沿或下沿放到摆法给的位置。只排一次，不读回排版结果。
+/// 按上沿或下沿放到摆法给的位置。给了 `floor`（手机键盘的上沿）时整块挪到它之上、不改高；高过 `floor` 到 `ceiling` 才矮下去。
+/// 只排一次，不读回排版结果。
 struct BubbleStage: Layout {
+    var floor: CGFloat?
+    var ceiling: CGFloat = 0
+
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         proposal.replacingUnspecifiedDimensions()
     }
@@ -190,8 +209,12 @@ struct BubbleStage: Layout {
         for subview in subviews {
             guard let spot = subview[BubbleSpot.self] else { continue }
             let ideal = subview.sizeThatFits(ProposedViewSize(width: spot.width, height: nil))
-            let height = min(ideal.height, spot.maxHeight)
-            let y = spot.top ?? ((spot.bottom ?? 0) - height)
+            var height = min(ideal.height, spot.maxHeight)
+            var y = spot.top ?? ((spot.bottom ?? 0) - height)
+            if let floor, y + height > floor {
+                height = min(height, floor - ceiling)
+                y = floor - height
+            }
             subview.place(at: CGPoint(x: bounds.minX + spot.x, y: bounds.minY + y), proposal: ProposedViewSize(width: spot.width, height: height))
         }
     }

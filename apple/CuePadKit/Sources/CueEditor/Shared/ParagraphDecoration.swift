@@ -74,9 +74,19 @@ extension EditorCore {
         let hasNewline = range.length > 0 && text.character(at: NSMaxRange(range) - 1) == 0x0A
         let lineRange = NSRange(location: range.location, length: range.length - (hasNewline ? 1 : 0))
         let line = decorations.style(ofLine: text.substring(with: lineRange), at: range.location)
-        guard line.kind != .body || !line.inlineCode.isEmpty || !line.links.isEmpty else { return nil }
+        let title = range.location == 0 ? style.title : nil
+        guard title != nil || line.kind != .body || !line.inlineCode.isEmpty || !line.links.isEmpty else { return nil }
         let paragraph = NSMutableAttributedString(attributedString: storage.attributedSubstring(from: range))
-        decorate(paragraph, line: line)
+        if let title {
+            // 标题行不认 Markdown 记号：它就是一件事的名字
+            let spacing = NSMutableParagraphStyle()
+            spacing.lineSpacing = style.lineSpacing
+            spacing.paragraphSpacing = title.spacing
+            paragraph.addAttributes(
+                [.font: title.font, .foregroundColor: title.color, .paragraphStyle: spacing], range: NSRange(location: 0, length: paragraph.length))
+        } else {
+            decorate(paragraph, line: line)
+        }
         return NSTextParagraph(attributedString: paragraph)
     }
 
@@ -132,6 +142,13 @@ extension EditorCore {
         let length = storage.length
         guard edits.count == 1 else { return restyle(NSRange(location: 0, length: length)) }
         let edit = edits[0]
+        // 首段是标题：回车拆出、退格并进来的那一段不在编辑范围里，跟着换样子
+        if style.title != nil {
+            let first = storage.mutableString.paragraphRange(for: NSRange(location: 0, length: 0))
+            if edit.location <= NSMaxRange(first), NSMaxRange(first) < length {
+                restyle(NSUnionRange(first, storage.mutableString.paragraphRange(for: NSRange(location: NSMaxRange(first), length: 0))))
+            }
+        }
         if (decorations.fenceCount - old.fenceCount) % 2 != 0 {
             let start = min(NSMaxRange(edit), length)
             restyle(NSRange(location: start, length: length - start))

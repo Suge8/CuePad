@@ -8,6 +8,8 @@ struct NewTaskField: View {
     var choosesProject = false
     /// 出现时光标就在这一行（任务页：点"新任务"后直接写）。
     var autofocus = false
+    /// 失焦时还没写字就收起这一行（任务气泡"⋯"里的添加步骤浮出的那一行）。
+    var collapse: (() -> Void)?
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     @State private var text = ""
@@ -29,6 +31,7 @@ struct NewTaskField: View {
                     .accessibilityLabel(prompt)
                     .focused($focused)
                     .onSubmit(add)
+                    .onChange(of: focused) { if !focused, text.allSatisfy(\.isWhitespace) { collapse?() } }
                     .task {
                         // 换成输入框的那一帧还没进窗口的响应链：下一帧再接键盘
                         await NextFrame.wait()
