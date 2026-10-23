@@ -1,7 +1,7 @@
 import CueStore
 import SwiftUI
 
-/// 四列并排（Mac 任务页、宽屏 iPad）：每列（`BoardColumn`）列头钉在顶上（`BoardColumnHeader`），卡在下面各自滚动。
+/// 四列并排（Mac 任务页、宽屏 iPad）：每列（`BoardColumn`）的列头浮在顶上（`BoardColumnHeader`，写字玻璃），卡各自滚动、从列头后面过。
 /// 列按可见宽四等分，窄到一列放不下 `minColumn` 时整排横向滚动。
 struct BoardColumns: View {
     let board: TaskBoard
@@ -46,7 +46,7 @@ struct BoardColumn: View {
     @Binding var adding: Bool
     let newTaskProject: UUID?
     #if os(iOS)
-    /// 手机竖版看板的一行（`PhoneBoard`）：排成横着滑的一行（`BoardRowLane`）；否则是一列、列头钉在顶上（Mac、宽屏 iPad）。
+    /// 手机竖版看板的一行（`PhoneBoard`）：排成横着滑的一行（`BoardRowLane`）；否则是一列、列头浮在顶上（Mac、宽屏 iPad）。
     var row = false
     #endif
     @Environment(Workspace.self) private var workspace
@@ -86,12 +86,18 @@ struct BoardColumn: View {
         #endif
     }
 
+    /// 列头是一块写字玻璃浮在卡上，卡从它后面滚过，不在它下沿裁掉（docs/ui.md 沉浸式的栏）。
     private var columnLane: some View {
-        VStack(spacing: 0) {
-            header
-            ScrollView { cards }.scrollBounceBehavior(.basedOnSize)
-        }
-        .background { BoardLane(targeted: targeted) }
+        ScrollView { cards }
+            .scrollBounceBehavior(.basedOnSize)
+            .safeAreaPadding(.top, BoardColumnHeader.height + BoardCardMetrics.inset)
+            .overlay(alignment: .top) {
+                BoardColumnHeader(column: column, count: board.count(column))
+                    .padding(.horizontal, TaskMetrics.cardPadding)
+                    .glass(in: .rect(cornerRadius: BoardCardMetrics.radius, style: .continuous))
+                    .padding([.horizontal, .top], BoardCardMetrics.inset)
+            }
+            .background { BoardLane(targeted: targeted) }
     }
 
     private var isRow: Bool {
@@ -102,13 +108,9 @@ struct BoardColumn: View {
         #endif
     }
 
-    private var header: some View {
-        BoardColumnHeader(column: column, count: board.count(column)).padding(.horizontal, TaskMetrics.cardPadding + BoardCardMetrics.inset)
-    }
-
     private var cards: some View {
         LazyVStack(alignment: .leading, spacing: BoardCardMetrics.gap) { content }
-            .padding(.horizontal, BoardCardMetrics.inset).padding(.bottom, 24)
+            .padding(.horizontal, BoardCardMetrics.inset).padding(.vertical, BoardCardMetrics.inset).padding(.bottom, 24)
             .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: ids)
     }
 
