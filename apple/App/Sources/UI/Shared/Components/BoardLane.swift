@@ -49,7 +49,7 @@ struct BoardColumnHeader: View {
     #endif
 }
 
-/// 一列的记号（列头、手机的分段胶囊）：状态色实心圆 + 白色字形——待办暖灰三横线、推进中靛青波形、等你赭黄问号、已完成石绿对勾。
+/// 一列的记号（Mac 与 iPad 的列头、手机的行头、任务气泡顶上的列名）：状态色实心圆 + 白色字形——待办暖灰三横线、推进中靛青波形、等你赭黄问号、已完成石绿对勾。
 struct BoardLaneMark: View {
     let column: TaskBoard.Column
     var size: CGFloat = 16
