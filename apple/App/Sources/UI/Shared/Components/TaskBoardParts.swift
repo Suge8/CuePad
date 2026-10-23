@@ -1,7 +1,7 @@
 import CueStore
 import SwiftUI
 
-/// 四列并排（Mac 任务页、宽屏 iPad）：每列（`BoardColumn`）是一条泳道，列头浮在泳道顶上（`BoardColumnHeader`），卡各自滚动、从列头后面过。
+/// 四列并排（Mac 任务页、宽屏 iPad）：每列（`BoardColumn`）的列头浮在顶上（`BoardColumnHeader`，写字玻璃），卡各自滚动、从列头后面过。
 /// 列按可见宽四等分，窄到一列放不下 `minColumn` 时整排横向滚动。
 struct BoardColumns: View {
     let board: TaskBoard
@@ -14,13 +14,14 @@ struct BoardColumns: View {
     /// 一张卡要放下圈、项目小图形与一行够读的标题：iPad 竖屏放三列多一点，横滑看第四列。
     private static let minColumn: CGFloat = 260
     #endif
-    private static let gap: CGFloat = 12
+    /// 列与列之间：列没有底，靠这段留白分开。
+    private static let gap: CGFloat = 20
 
     var body: some View {
         ScrollView(.horizontal) {
             HStack(alignment: .top, spacing: Self.gap) {
                 ForEach(TaskBoard.Column.allCases) { column in
-                    BoardColumn(column: column, board: board, adding: $adding, newTaskProject: newTaskProject, titled: true)
+                    BoardColumn(column: column, board: board, adding: $adding, newTaskProject: newTaskProject)
                         .containerRelativeFrame(.horizontal) { width, _ in max(Self.minColumn, (width - Self.gap * 3) / 4) }
                 }
             }
@@ -29,7 +30,7 @@ struct BoardColumns: View {
     }
 }
 
-/// 看板的一列（`TaskBoard`；Mac 与宽屏 iPad 四列并排，手机一屏一列）：一条按列上色的泳道（`BoardLane`），一件一张卡——
+/// 看板的一列（`TaskBoard`；Mac 与宽屏 iPad 四列并排；手机转成一行，四行竖着排，`PhoneBoard`）：身后不铺底（`BoardLane`，拖进来时一层选中底），一件一张卡——
 /// 待办、推进中、已完成是任务卡（`BoardTaskCard`）、没绑任务的会话卡（`BoardSessionCard`），等你是 Cue 的气泡（`BoardWaitCard`），都在懒加载栈里（列可能很长，只建看得见的）。
 /// 推进中按档排（要你管 → 在跑 → 歇着，`Workspace.byAttention`），档与档之间多空一截；在跑的那一档只有前 `BoardWave.maxMoving` 张的线在动。
 /// 看全部项目时卡上标题前一个项目小图形。点击去处：待办、已完成的卡开任务气泡；推进中的任务卡进此刻干活的会话（没有会话的开气泡），会话卡进会话；
@@ -44,8 +45,10 @@ struct BoardColumn: View {
     /// 待办顶上浮出添加任务那一行（"+ 新任务"）；新任务落在 `newTaskProject`。
     @Binding var adding: Bool
     let newTaskProject: UUID?
-    /// 最上面带列头（四列并排时；手机一屏一列由顶上的分段写列名与数）。
-    var titled = false
+    #if os(iOS)
+    /// 手机竖版看板的一行（`PhoneBoard`）：排成横着滑的一行（`BoardRowLane`）；否则是一列、列头浮在顶上（Mac、宽屏 iPad）。
+    var row = false
+    #endif
     @Environment(Workspace.self) private var workspace
     @Environment(\.cardAgents) private var agents
     @Environment(\.palette) private var palette
@@ -59,28 +62,63 @@ struct BoardColumn: View {
     @State private var opened: PreviewOpening?
 
     var body: some View {
-        // 列头是一块写字玻璃浮在卡上，卡从它后面滚过，不在它下沿裁掉（docs/ui.md 沉浸式的栏）
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: BoardCardMetrics.gap) { content }
-                .padding(.horizontal, BoardCardMetrics.inset).padding(.vertical, BoardCardMetrics.inset).padding(.bottom, 24)
-                .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: ids)
+        lane
+            .dropDestination(for: String.self) { ids, _ in
+                drop(ids, before: nil)
+            } isTargeted: { targeted = $0 && column != .todo && column != .waiting }
+            .taskCheck(finishing?.task, subtasks: finishing?.steps, check: $check)
+            .modifier(ShotPresenter(column: column, opened: $opened))
+    }
+
+    @ViewBuilder private var lane: some View {
+        #if os(iOS)
+        if row {
+            BoardRowLane(column: column, count: board.count(column), targeted: targeted, rewind: adding && column == .todo ? board.todo.first?.id : nil) {
+                if adding && column == .todo { newTask.transition(Motion.item) }
+            } content: {
+                content
+            }
+        } else {
+            columnLane
         }
-        .scrollBounceBehavior(.basedOnSize)
-        .safeAreaPadding(.top, titled ? BoardColumnHeader.height + BoardCardMetrics.inset : 0)
-        .overlay(alignment: .top) {
-            if titled {
+        #else
+        columnLane
+        #endif
+    }
+
+    /// 列头浮在卡上，卡从它后面滚过，不在它下沿裁掉（docs/ui.md 沉浸式的栏）：Mac 上排进窗口最顶那一排（`boardTopRow`），iPad 是一块写字玻璃。
+    private var columnLane: some View {
+        #if os(macOS)
+        ScrollView { cards }
+            .scrollBounceBehavior(.basedOnSize)
+            .boardTopRow(column: column, count: board.count(column))
+            .background { BoardLane(targeted: targeted) }
+        #else
+        ScrollView { cards }
+            .scrollBounceBehavior(.basedOnSize)
+            .safeAreaPadding(.top, BoardColumnHeader.height + BoardCardMetrics.inset)
+            .overlay(alignment: .top) {
                 BoardColumnHeader(column: column, count: board.count(column))
                     .padding(.horizontal, TaskMetrics.cardPadding)
                     .glass(in: .rect(cornerRadius: BoardCardMetrics.radius, style: .continuous))
                     .padding([.horizontal, .top], BoardCardMetrics.inset)
             }
-        }
-        .background { BoardLane(column: column, targeted: targeted) }
-        .dropDestination(for: String.self) { ids, _ in
-            drop(ids, before: nil)
-        } isTargeted: { targeted = $0 && column != .todo && column != .waiting }
-        .taskCheck(finishing?.task, subtasks: finishing?.steps, check: $check)
-        .modifier(ShotPresenter(column: column, opened: $opened))
+            .background { BoardLane(targeted: targeted) }
+        #endif
+    }
+
+    private var isRow: Bool {
+        #if os(iOS)
+        row
+        #else
+        false
+        #endif
+    }
+
+    private var cards: some View {
+        LazyVStack(alignment: .leading, spacing: BoardCardMetrics.gap) { content }
+            .padding(.horizontal, BoardCardMetrics.inset).padding(.vertical, BoardCardMetrics.inset).padding(.bottom, 24)
+            .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: ids)
     }
 
     private var ids: [String] {
@@ -95,7 +133,8 @@ struct BoardColumn: View {
     @ViewBuilder private var content: some View {
         switch column {
         case .todo:
-            if adding {
+            // 手机竖版看板里添加那一行横贯在行上（`BoardRowLane.above`），不进格子
+            if adding, !isRow {
                 newTask.transition(Motion.item)
             }
             ForEach(board.todo) { item in
@@ -105,8 +144,8 @@ struct BoardColumn: View {
         case .advancing:
             let groups = workspace.byAttention(board.advancing, agents: agents)
             ForEach(groups, id: \.tier) { group in
-                // 档与档之间多空一截：栈里一格零高的空，前后各一个行距
-                if group.tier != groups.first?.tier { Color.clear.frame(height: 0) }
+                // 档与档之间多空一截：栈里一格零高的空，前后各一个行距（横着的一行里一格就是一张卡宽，不空）
+                if group.tier != groups.first?.tier, !isRow { Color.clear.frame(height: 0) }
                 ForEach(Array(group.work.enumerated()), id: \.element.id) { index, work in
                     let moves = group.tier == .running && index < BoardWave.maxMoving
                     if let item = work.item {
@@ -129,7 +168,8 @@ struct BoardColumn: View {
             if board.waiting.isEmpty { empty("没有要你拍板的事") }
         case .done:
             ForEach(board.done) { card($0) }
-            if board.done.isEmpty && board.earlier.isEmpty { empty("今天还没做完的") }
+            // 列头的数只数今天的：今天没有时先说没有，再接更早的，数与字对得上
+            if board.done.isEmpty { empty("今天还没做完的") }
             if !board.earlier.isEmpty { earlierToggle }
             if showsEarlier { ForEach(board.earlier) { card($0) } }
         }
@@ -145,7 +185,7 @@ struct BoardColumn: View {
 
     @ViewBuilder private var newTask: some View {
         #if os(macOS)
-        NewTaskField(project: newTaskProject, choosesProject: true, autofocus: true)
+        NewTaskField(project: newTaskProject, choosesProject: true, autofocus: true) { adding = false }
             .padding(.horizontal, TaskMetrics.cardPadding)
             .paper(radius: TaskMetrics.cardRadius)
         #else
@@ -157,7 +197,7 @@ struct BoardColumn: View {
 
     private func empty(_ text: String) -> some View {
         Text(text).font(Typography.secondary).foregroundStyle(palette.ink3)
-            .frame(maxWidth: .infinity, minHeight: 64)
+            .frame(maxWidth: .infinity, minHeight: isRow ? nil : 64, maxHeight: isRow ? .infinity : nil)
             .background(RoundedRectangle(cornerRadius: TaskMetrics.cardRadius, style: .continuous).strokeBorder(palette.hair, style: StrokeStyle(lineWidth: 1, dash: [4, 4])))
     }
 
@@ -187,6 +227,8 @@ struct BoardColumn: View {
         }
         .font(Typography.meta).foregroundStyle(palette.ink3)
         .padding(.horizontal, 4)
+        // 手机一行里它占一格：与旁边的空格一样高、字在中间
+        .frame(maxHeight: isRow ? .infinity : nil)
     }
 
     // MARK: 拖放

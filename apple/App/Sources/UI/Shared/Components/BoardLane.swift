@@ -1,24 +1,19 @@
 import SwiftUI
 
-/// 看板一列的泳道（`BoardColumn` 铺在身后）：从列头起整列铺到窗口底，按列上色（色值是 `Palette` 的 `lane…`），上沿一线白高光，
-/// 上两角圆角是卡片圆角加卡离泳道边的空（同心）。拖进来时再铺一层选中底。
+/// 看板一列（手机一行）身后那一块（`BoardColumn`、`BoardRowLane`）：平时什么都没有——列（行）靠留白与列头分开，不按列铺色，
+/// 颜色只在列的记号上（`BoardLaneMark`）；拖着卡停在上面时铺一层选中底，圆角是卡片圆角加卡离列边的空（同心）。
+/// 只铺实色：侧栏开合时整面墙每帧重画，大面积不铺渐变、不描边。
 struct BoardLane: View {
-    let column: TaskBoard.Column
     let targeted: Bool
     @Environment(\.palette) private var palette
 
     static let radius = BoardCardMetrics.radius + BoardCardMetrics.inset
 
     var body: some View {
-        let shape = UnevenRoundedRectangle(topLeadingRadius: Self.radius, topTrailingRadius: Self.radius, style: .continuous)
-        // 高光是垫在下面的一层亮色、泳道往下让出一线：圆角处跟着弯，不用渐变描边（整列面积铺渐变，列一变宽整面重画）
         ZStack {
-            shape.fill(palette.sheen)
-            shape.fill(column.lane(palette)).padding(.top, 1)
-            if targeted { shape.fill(palette.selection).transition(.opacity) }
+            if targeted { RoundedRectangle(cornerRadius: Self.radius, style: .continuous).fill(palette.selection).transition(.opacity) }
         }
         .animation(HandOff.quick, value: targeted)
-        .ignoresSafeArea(edges: .bottom)
     }
 }
 
@@ -54,7 +49,7 @@ struct BoardColumnHeader: View {
     #endif
 }
 
-/// 一列的记号（列头、手机的分段胶囊）：状态色实心圆 + 白色字形——待办暖灰三横线、推进中靛青波形、等你赭黄问号、已完成石绿对勾。
+/// 一列的记号（Mac 与 iPad 的列头、手机的行头、任务气泡顶上的列名）：状态色实心圆 + 白色字形——待办暖灰三横线、推进中靛青波形、等你赭黄问号、已完成石绿对勾。
 struct BoardLaneMark: View {
     let column: TaskBoard.Column
     var size: CGFloat = 16
@@ -102,16 +97,6 @@ nonisolated private struct LaneGlyph: Shape {
 }
 
 extension TaskBoard.Column {
-    /// 这一列泳道的底色。
-    func lane(_ palette: Palette) -> Color {
-        switch self {
-        case .todo: palette.laneTodo
-        case .advancing: palette.laneAdvancing
-        case .waiting: palette.laneWaiting
-        case .done: palette.laneDone
-        }
-    }
-
     /// 列头那颗实心圆的颜色：各列的状态色（待办没有状态色，是暖灰）。
     func mark(_ palette: Palette) -> Color {
         switch self {

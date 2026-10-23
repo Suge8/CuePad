@@ -26,7 +26,7 @@ struct PageMenuSlot: View {
             case .session: "完成或绑定任务、重命名、跳到终端、结束会话"
             case .project: "选择灵感、看这个项目的会话、项目操作"
             case .cue: "记得什么"
-            case .tasks: "新任务、归档做完的"
+            case .tasks: "新任务、项目范围、搜索、归档做完的"
             case .agent: "新会话、接入 Agent"
             case .trash: "清空回收站"
             case .none: "这一页没有更多操作"
@@ -61,6 +61,10 @@ struct PageMenuSlot: View {
                 Button("\(workspace.cue.name) 的设置…", icon: .settings) { SettingsPane.open(.cue) }
             case .tasks:
                 Button("新任务", icon: .add) { workspace.addsTask = true }
+                ProjectScopeItems()
+                Button("搜索（⌘K）", icon: .search) { workspace.searching = true }
+                    .disabled(!workspace.isLibraryReady)
+                Divider()
                 Button("全部归档做完的", icon: .archive) { workspace.attempt { try await workspace.archiveCompletedTasks() } }
             case .agent:
                 Button("新会话", icon: .add) { workspace.showsNewSession = true }
@@ -70,7 +74,12 @@ struct PageMenuSlot: View {
             case .session(nil), .none: EmptyView()
             }
         } label: {
-            Image(.more)
+            // 任务页选了项目范围：范围收在这里，钮角上带这个项目的小图形，一眼看得出只在看一个项目
+            Image(.more).overlay(alignment: .topTrailing) {
+                if content == .tasks, let project = workspace.catalog?.project(workspace.scopedProject) {
+                    ProjectGlyph(project: project, size: 10).offset(x: 12, y: -10)
+                }
+            }
         }
         .menuStyle(.button).menuIndicator(.hidden)
         .buttonStyle(ControlButtonStyle(kind: .circular))

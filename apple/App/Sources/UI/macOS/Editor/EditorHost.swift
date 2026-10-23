@@ -5,13 +5,13 @@ import SwiftUI
 
 /// 对编辑器的操作口：底部操作栏经它取当前正文与选中部分。
 final class EditorHandle {
-    fileprivate weak var view: CueEditorView?
+    fileprivate weak var textView: CueTextView?
 
-    var text: String? { view?.textView.storedText }
+    var text: String? { textView?.storedText }
     /// 选中部分的存储格式；没选中为 nil。
-    var selection: String? { view?.textView.selectedStoredText }
+    var selection: String? { textView?.selectedStoredText }
     func focus() {
-        if let view { view.window?.makeFirstResponder(view.textView) }
+        if let textView { textView.window?.makeFirstResponder(textView) }
     }
 }
 
@@ -33,7 +33,7 @@ struct EditorHost: NSViewRepresentable {
         let view = CueEditorView(imageStore: services.store.files, theme: theme)
         view.textView.storedText = initialText
         view.scrollerStyle = .overlay
-        handle.view = view
+        handle.textView = view.textView
         if let range = DebugHooks.preset.editorSelection {
             DebugHooks.later {
                 view.window?.makeFirstResponder(view.textView)
@@ -44,7 +44,10 @@ struct EditorHost: NSViewRepresentable {
     }
 
     func updateNSView(_ view: CueEditorView, context: Context) {
-        let textView = view.textView
+        update(view.textView)
+    }
+
+    fileprivate func update(_ textView: CueTextView) {
         textView.onChange = onChange
         textView.onSelectionChange = onSelectionChange
         textView.selectionActions = selectionActions
@@ -56,7 +59,30 @@ struct EditorHost: NSViewRepresentable {
     /// 主题每次渲染都新建，只在外观相关的值真的变了才替换（替换会重排全文）。
     private static func sameLook(_ a: CueEditorTheme, _ b: CueEditorTheme) -> Bool {
         a.textColor == b.textColor && a.backgroundColor == b.backgroundColor && a.font == b.font
-            && a.horizontalInset == b.horizontalInset && a.variableColor == b.variableColor
+            && a.horizontalInset == b.horizontalInset && a.variableColor == b.variableColor && a.title?.color == b.title?.color
+    }
+}
+
+/// 不带滚动视图、高贴着字的编辑器（任务气泡：整张纸一起滚，滚轮落在字上也是纸在滚）。其余同 `EditorHost`。
+struct FittedEditorHost: NSViewRepresentable {
+    let host: EditorHost
+    @Environment(AppServices.self) private var services
+
+    func makeNSView(context: Context) -> CueTextView {
+        let textView = CueTextView(imageStore: services.store.files, theme: host.theme)
+        // 字贴着框的左沿，与气泡里别的行对齐
+        textView.textContainer?.lineFragmentPadding = 0
+        textView.storedText = host.initialText
+        host.handle.textView = textView
+        return textView
+    }
+
+    func updateNSView(_ textView: CueTextView, context: Context) { host.update(textView) }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: CueTextView, context: Context) -> CGSize? {
+        guard let width = proposal.width else { return nil }
+        if nsView.frame.width != width { nsView.setFrameSize(NSSize(width: width, height: nsView.frame.height)) }
+        return CGSize(width: width, height: nsView.fittingHeight)
     }
 }
 

@@ -4,7 +4,7 @@ import SwiftUI
 
 /// 任务页：流水看板（`TaskBoard`），待办 → 推进中 → 等你 → 已完成（今天）。只看项目范围里的（`Workspace.scopedProject`，同会话页那一份；
 /// 选了项目以后卡上不画项目小图形、列头的数也只数这个项目），页里不另设筛选；项目范围在顶栏中间（`ProjectScope`）。
-/// 宽屏（iPad）同 Mac 四列并排（`BoardColumns`）；窄屏一屏一列：带数的分段（`BoardSegments`）、左右滑换列，打开时有等你就落在等你。
+/// 宽屏（iPad）同 Mac 四列并排（`BoardColumns`）；窄屏是四行竖排、每行横划的竖版看板（`PhoneBoard`），四行一打开都在眼前，不另设落点。
 /// 右上角"+"去待办、顶上浮出添加那一行（`NewTaskLine`，落在范围里的项目或当前项目，可换），失焦且没写字时收回。
 struct TasksScreen: View {
     @Environment(Workspace.self) private var workspace
@@ -13,8 +13,6 @@ struct TasksScreen: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var board: TaskBoard?
     @State private var adding = false
-    /// 窄屏此刻看的那一列（分页滚动的位置）。
-    @State private var column: TaskBoard.Column?
 
     var body: some View {
         let shown = (board ?? .empty).only(workspace.scopedProject)
@@ -22,10 +20,7 @@ struct TasksScreen: View {
             if sizeClass == .regular {
                 BoardColumns(board: shown, adding: $adding, newTaskProject: newTaskProject).padding(.horizontal, 12)
             } else {
-                // 分段浮在卡上，卡从它后面滚过，不在它下沿裁掉（docs/ui.md 沉浸式的栏）
-                pages(shown)
-                    .safeAreaPadding(.top, BoardSegments.height + Self.segmentGap)
-                    .overlay(alignment: .top) { BoardSegments(board: shown, selected: $column).padding(.horizontal, 16) }
+                PhoneBoard(board: shown, adding: $adding, newTaskProject: newTaskProject)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -35,82 +30,13 @@ struct TasksScreen: View {
         }
         .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: adding)
         .onChange(of: workspace.scopedProject) { adding = false }
-        .onAppear { if let board { land(board) } }
-        .onChange(of: board == nil) { if let board { land(board) } }
         .observingBoard(into: $board, store: services.store, onError: workspace.fail)
     }
 
     private var newTaskProject: UUID? { workspace.scopedProject ?? workspace.currentProject }
-    private static let segmentGap: CGFloat = 10
 
-    /// 一屏一列，左右滑换列：列的宽就是可见宽（`containerRelativeFrame`），按页停。
-    private func pages(_ board: TaskBoard) -> some View {
-        ScrollView(.horizontal) {
-            LazyHStack(alignment: .top, spacing: 0) {
-                ForEach(TaskBoard.Column.allCases) { column in
-                    BoardColumn(column: column, board: board, adding: $adding, newTaskProject: newTaskProject)
-                        .padding(.horizontal, 12)
-                        .containerRelativeFrame(.horizontal)
-                        .id(column)
-                }
-            }
-            .scrollTargetLayout()
-        }
-        .scrollTargetBehavior(.paging)
-        .scrollPosition(id: $column)
-        .scrollIndicators(.never)
-    }
-
-    /// 打开时落在哪一列：有等你就是等你（要你拍板的事在那里就能处理），否则推进中、再否则待办。
-    private func land(_ board: TaskBoard) {
-        if let column = DebugHooks.preset.boardColumn { return self.column = column }
-        column = !board.waiting.isEmpty ? .waiting : !board.advancing.isEmpty ? .advancing : .todo
-    }
-
-    /// 先滑到待办、停稳了再浮出添加那一行：滑动途中插进来的输入框接不住焦点（实测会空着不聚焦）。
-    private func add() {
-        guard column != .todo else { return adding = true }
-        withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { column = .todo } completion: { adding = true }
-    }
-}
-
-/// 窄屏任务页顶上浮着的分段：四列各一格，写列头那颗记号（`BoardLaneMark`，小一号）、列名与数；选中的那格是靛青浅底（`selection`）。点了滑到那一列。
-private struct BoardSegments: View {
-    let board: TaskBoard
-    @Binding var selected: TaskBoard.Column?
-    @Environment(\.palette) private var palette
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// 记号随分段的字一起缩放，约是字高。
-    @ScaledMetric(relativeTo: .subheadline) private var mark: CGFloat = 14
-    private static let segment: CGFloat = 40
-    private static let inset: CGFloat = 3
-    static let height = segment + inset * 2
-
-    var body: some View {
-        HStack(spacing: 2) {
-            ForEach(TaskBoard.Column.allCases) { column in
-                let on = selected == column
-                Button {
-                    withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { selected = column }
-                } label: {
-                    HStack(spacing: 4) {
-                        BoardLaneMark(column: column, size: mark)
-                        Text(column.title).fontWeight(on ? .semibold : .regular)
-                        Text("\(board.count(column))").monospacedDigit().foregroundStyle(palette.ink3)
-                    }
-                    .font(.subheadline).foregroundStyle(on ? palette.ink : palette.ink2)
-                    .lineLimit(1).minimumScaleFactor(0.8)
-                    .frame(maxWidth: .infinity, minHeight: Self.segment)
-                    .background(on ? palette.selection : .clear, in: .capsule)
-                    .contentShape(.capsule)
-                }
-                .buttonStyle(PressStyle())
-                .accessibilityAddTraits(on ? .isSelected : [])
-            }
-        }
-        .padding(Self.inset)
-        .glass(in: .capsule)
-    }
+    /// 待办顶上浮出添加那一行（手机看板先把待办那一行滑到行首，`BoardRowLane`）。
+    private func add() { adding = true }
 }
 
 /// 一行新建任务：↩ 添加并保持焦点，便于连续输入。给了 `projects` 时尾部可选挂到哪个项目。

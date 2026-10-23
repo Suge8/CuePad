@@ -151,6 +151,7 @@ private struct NoteEditor: View {
         .padding(.horizontal, 14).padding(.vertical, 11)
         .frame(width: Self.width, alignment: .leading)
         .glass(in: Self.shape)
+        .resignsFocusOnOutsideClick()
         .onExitCommand { settle(note.note.isEmpty ? nil : note.note) }
         .onAppear { focused = true }
         .onChange(of: focused) { if !focused { commit() } }
