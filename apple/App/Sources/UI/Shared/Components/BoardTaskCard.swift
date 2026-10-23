@@ -6,7 +6,7 @@ import SwiftUI
 /// - 推进中下沿是那条线、右上是要你管的状态词（`BoardPulse`，`BoardCardLayout`），歇着的标题淡一档；已完成标题淡一档、不加粗，卡尾是 Cue 点名的成果图；
 /// - 悬停提示：项目、多久（推进中是跑了多久或估还要多久，已完成是几点做完）与交给了哪家 Agent。
 /// 上级收成一张（`TaskBoard.Item.leaf`）：状态看此刻干活的叶子。点圈完成（`TaskCheck`）；点卡的其余地方打开任务气泡，推进中"下一步"是会话的进那个会话，
-/// Mac 右键第一项"打开任务"。Mac 上指针停在卡上卡亮一档（`PressFeedback` 的卡），还没交出去的叶子这时右端浮出"▶ 开始"（不占排版，盖住标题的尾巴）。
+/// 长按（Mac 右键）是这件任务的菜单（`CardActions`），点卡进的是会话时第一项"打开任务"。Mac 上指针停在卡上卡亮一档（`PressFeedback` 的卡），还没交出去的叶子这时右端浮出"▶ 开始"（不占排版，盖住标题的尾巴）。
 struct BoardTaskCard: View {
     let item: TaskBoard.Item
     let column: TaskBoard.Column
@@ -82,12 +82,30 @@ struct BoardTaskCard: View {
 
     /// 点卡的其余地方：推进中"下一步"是会话的进那个会话，其余打开任务气泡。
     private func tap(_ next: TaskNext?) {
-        if advancing, case .agent? = next { return follow(next) }
+        if opensSession(next) { return follow(next) }
         open()
     }
 
     private func follow(_ next: TaskNext?) {
         if let next { workspace.follow(next) }
+    }
+
+    /// 长按（Mac 右键）菜单：点卡进的是会话时（推进中、"下一步"是会话），第一项是"打开任务"，其余卡点一下就是打开任务、不重复这一项。
+    @ViewBuilder private func menu(next: TaskNext?) -> some View {
+        if opensSession(next) {
+            Button("打开任务", icon: .task, action: open)
+            Divider()
+        }
+        #if os(macOS)
+        CardActions(card: task, leaf: item.steps == nil)
+        #else
+        CardActions(card: task)
+        #endif
+    }
+
+    private func opensSession(_ next: TaskNext?) -> Bool {
+        if advancing, case .agent? = next { return true }
+        return false
     }
 
     #if os(macOS)
@@ -97,20 +115,17 @@ struct BoardTaskCard: View {
         card()
             .modifier(PressFeedback(pressed: false, kind: .card))
             .onTapGesture { tap(next) }
-            .contextMenu {
-                if advancing {
-                    Button("打开任务", icon: .task, action: open)
-                    Divider()
-                }
-                CardActions(card: task, leaf: item.steps == nil)
-            }
+            .contextMenu { menu(next: next) }
     }
     #else
     private static let ring: CGFloat = 22
 
+    /// 按住不动出长按菜单；菜单出来后往菜单外一挪就是拖（`BoardColumn` 挂的 `draggable`，系统把两者放在同一次长按里），往菜单里挪是在菜单里选。
     private func framed(next: TaskNext?, @ViewBuilder _ card: () -> some View) -> some View {
         card()
             .onTapGesture { tap(next) }
+            .contentShape(.contextMenuPreview, .rect(cornerRadius: TaskMetrics.cardRadius, style: .continuous))
+            .contextMenu { menu(next: next) }
             .contentShape(.dragPreview, .rect(cornerRadius: TaskMetrics.cardRadius, style: .continuous))
     }
     #endif
