@@ -112,6 +112,8 @@ enum DebugScene {
         preset.largestType = defaults.bool(forKey: "CuePadLargestType")
         if defaults.bool(forKey: "CuePadTasksOpen") { preset.taskFold = TaskFold(showsAll: true, showsDone: true) }
         preset.showsDone = defaults.bool(forKey: "CuePadShowsDone")
+        preset.lane = defaults.string(forKey: "CuePadLane") ?? ""
+        preset.dropTarget = TaskBoard.Column.allCases.first { "\($0)" == defaults.string(forKey: "CuePadDropTarget") }
         preset.cueNow = defaults.string(forKey: "CuePadCueNow").flatMap { CueNowSamples.all[$0] }
         #if os(macOS)
         preset.hovered = hoverPoints

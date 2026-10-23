@@ -43,7 +43,7 @@ enum TaskMetrics {
 
 /// 任务看板的卡（`boardCard`）：同一种卡一样高——待办、已完成是 `TaskMetrics.cardHeight`，推进中带线的卡是 `advancingHeight`；
 /// 左右内边距 `cardPadding`、圆角 `cardRadius`；开头的记号占 `cardLead` 见方，看全部项目时标题前一个 `cardGlyph` 的项目小图形；
-/// 卡离泳道边与卡与卡之间都是 `inset`（泳道圆角 = 卡圆角 + 它，同心）。
+/// 卡离列边与卡与卡之间都是 `inset`（列的托盘、拖入底的圆角 = 卡圆角 + 它，同心）。
 /// 推进中的卡从上往下：`titleTop`、标题一行 `titleRow`、`waveGap`、线（`WaveStrip.height`）、`waveBottom`。标题与线之间那一截两端同一个
 /// `waveGap`：贴得近了，线读起来像标题的下划线或删除线。卡的高度由这几段加出来，不另写一个数。
 enum BoardCardMetrics {

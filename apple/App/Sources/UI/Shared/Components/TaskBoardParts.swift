@@ -1,7 +1,7 @@
 import CueStore
 import SwiftUI
 
-/// 四列并排（Mac 任务页、宽屏 iPad）：每列（`BoardColumn`）是一条泳道，列头钉在泳道顶上（`BoardColumnHeader`），卡在下面各自滚动。
+/// 四列并排（Mac 任务页、宽屏 iPad）：每列（`BoardColumn`）列头钉在顶上（`BoardColumnHeader`），卡在下面各自滚动。
 /// 列按可见宽四等分，窄到一列放不下 `minColumn` 时整排横向滚动。
 struct BoardColumns: View {
     let board: TaskBoard
@@ -14,7 +14,8 @@ struct BoardColumns: View {
     /// 一张卡要放下圈、项目小图形与一行够读的标题：iPad 竖屏放三列多一点，横滑看第四列。
     private static let minColumn: CGFloat = 260
     #endif
-    private static let gap: CGFloat = 12
+    /// 列与列之间：托盘之间窄一点，没有底时靠留白分开要宽。
+    private static let gap: CGFloat = LaneLook.current == .tray ? 12 : 20
 
     var body: some View {
         ScrollView(.horizontal) {
@@ -29,7 +30,7 @@ struct BoardColumns: View {
     }
 }
 
-/// 看板的一列（`TaskBoard`；Mac 与宽屏 iPad 四列并排；手机转成一行，四行竖着排，`PhoneBoard`）：一条按列上色的泳道（`BoardLane`），一件一张卡——
+/// 看板的一列（`TaskBoard`；Mac 与宽屏 iPad 四列并排；手机转成一行，四行竖着排，`PhoneBoard`）：身后不按列铺色（`BoardLane`：托盘或没有底，拖进来时一层选中底），一件一张卡——
 /// 待办、推进中、已完成是任务卡（`BoardTaskCard`）、没绑任务的会话卡（`BoardSessionCard`），等你是 Cue 的气泡（`BoardWaitCard`），都在懒加载栈里（列可能很长，只建看得见的）。
 /// 推进中按档排（要你管 → 在跑 → 歇着，`Workspace.byAttention`），档与档之间多空一截；在跑的那一档只有前 `BoardWave.maxMoving` 张的线在动。
 /// 看全部项目时卡上标题前一个项目小图形。点击去处：待办、已完成的卡开任务气泡；推进中的任务卡进此刻干活的会话（没有会话的开气泡），会话卡进会话；
@@ -45,7 +46,7 @@ struct BoardColumn: View {
     @Binding var adding: Bool
     let newTaskProject: UUID?
     #if os(iOS)
-    /// 手机竖版看板的一行（`PhoneBoard`）：排成横着滑的一行（`BoardRowLane`）；否则是一列、列头钉在泳道顶上（Mac、宽屏 iPad）。
+    /// 手机竖版看板的一行（`PhoneBoard`）：排成横着滑的一行（`BoardRowLane`）；否则是一列、列头钉在顶上（Mac、宽屏 iPad）。
     var row = false
     #endif
     @Environment(Workspace.self) private var workspace
@@ -65,6 +66,7 @@ struct BoardColumn: View {
             .dropDestination(for: String.self) { ids, _ in
                 drop(ids, before: nil)
             } isTargeted: { targeted = $0 && column != .todo && column != .waiting }
+            .onAppear { if DebugHooks.preset.dropTarget == column { targeted = true } }
             .taskCheck(finishing?.task, subtasks: finishing?.steps, check: $check)
             .modifier(ShotPresenter(column: column, opened: $opened))
     }
@@ -87,10 +89,13 @@ struct BoardColumn: View {
 
     private var columnLane: some View {
         VStack(spacing: 0) {
-            header
+            header.overlay(alignment: .bottom) { BoardLaneRule(column: column, axis: .horizontal).padding(.horizontal, BoardCardMetrics.inset) }
             ScrollView { cards }.scrollBounceBehavior(.basedOnSize)
         }
         .background { BoardLane(column: column, targeted: targeted) }
+        // 托盘四角圆、底下离窗口边一截收住：卡滚到托盘下沿时跟着圆角裁
+        .clipShape(.rect(cornerRadius: LaneLook.current == .tray ? BoardLane.radius : 0, style: .continuous))
+        .padding(.bottom, LaneLook.current == .tray ? BoardCardMetrics.inset : 0)
     }
 
     private var isRow: Bool {
@@ -108,6 +113,8 @@ struct BoardColumn: View {
     private var cards: some View {
         LazyVStack(alignment: .leading, spacing: BoardCardMetrics.gap) { content }
             .padding(.horizontal, BoardCardMetrics.inset).padding(.bottom, 24)
+            // 细色轴（D2）压在列头下沿：卡离它一截
+            .padding(.top, LaneLook.current == .axis ? BoardCardMetrics.inset : 0)
             .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: ids)
     }
 
@@ -158,7 +165,8 @@ struct BoardColumn: View {
             if board.waiting.isEmpty { empty("没有要你拍板的事") }
         case .done:
             ForEach(board.done) { card($0) }
-            if board.done.isEmpty && board.earlier.isEmpty { empty("今天还没做完的") }
+            // 列头的数只数今天的：今天没有时先说没有，再接更早的，数与字对得上
+            if board.done.isEmpty { empty("今天还没做完的") }
             if !board.earlier.isEmpty { earlierToggle }
             if showsEarlier { ForEach(board.earlier) { card($0) } }
         }
@@ -216,6 +224,8 @@ struct BoardColumn: View {
         }
         .font(Typography.meta).foregroundStyle(palette.ink3)
         .padding(.horizontal, 4)
+        // 手机一行里它占一格：与旁边的空格一样高、字在中间
+        .frame(maxHeight: isRow ? .infinity : nil)
     }
 
     // MARK: 拖放

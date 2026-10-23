@@ -3,7 +3,7 @@ import SwiftUI
 
 extension View {
     /// 看板上一张卡的外形（四列同一种）：纸面（`paper`），同一种卡一样高（`BoardCardMetrics`：推进中带线的卡 `advancingHeight`，其余 `TaskMetrics.cardHeight`），
-    /// 左右内边距与圆角见 `TaskMetrics`。平放的纸不加模糊阴影（侧栏开合时整面墙每帧重画，`paper` 的注释）：靠泳道的淡色把纸托出来。
+    /// 左右内边距与圆角见 `TaskMetrics`。平放的纸不加模糊阴影（侧栏开合时整面墙每帧重画，`paper` 的注释）：靠纸与桌面（托盘）的明度差把纸托出来。
     func boardCard(advancing: Bool) -> some View { modifier(BoardCardFrame(advancing: advancing)) }
 
     /// 卡上的标题：一行；手机竖版看板（`boardRow`）里小一档、可折成两行。

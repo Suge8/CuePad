@@ -1,7 +1,7 @@
 #if os(macOS)
 import SwiftUI
 
-/// 任务页（侧栏"任务"、⌘⇧T）：流水看板（`TaskBoard`）四列并排——待办 → 推进中 → 等你 → 已完成（今天），每列是一条按列上色的泳道（`BoardColumn`、`BoardLane`），列头钉在泳道顶上、卡在下面各自滚动。
+/// 任务页（侧栏"任务"、⌘⇧T）：流水看板（`TaskBoard`）四列并排——待办 → 推进中 → 等你 → 已完成（今天），每列（`BoardColumn`、`BoardLane`）列头钉在顶上、卡在下面各自滚动，列不按状态铺色。
 /// 顶上不写页名（侧栏的选中格已经说了），也不另起一排：项目范围（`ProjectScopeMenu`，同会话页那一份；选了项目以后列头的数也只数这个项目）
 /// 与"新任务"（落在范围里的项目或当前项目）在窗口最顶那一排的工具栏里（`ScopeSlot`、`PageActionSlot`），列从工具栏下面起、滚到它后面。
 struct TaskBoardPage: View {

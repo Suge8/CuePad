@@ -5,7 +5,7 @@ import SwiftUI
 /// - 抬头一行：项目小图形（看全部项目时；选了项目范围不画；Mac 上悬停是项目联动，`BoardProjectGlyph`）、标题（会话在问的写会话名，Cue 问的写它落在的任务，Cue 的一般提问写 Cue 的名字；
 ///   做完了还在问的也照常写、不划线），右边是等了多久（`TaskBoard.Wait.since`）。点抬头去回答的地方（`BoardLink`）：会话在问的进会话，
 ///   Cue 问的去 Cue 页那条提问。
-/// - 谁在问贴在左下（Cue 的头像 `CueAvatar`，会话在问的是圆里这家 Agent 的品牌标，同推进中的会话卡），旁边一颗 Cue 页同款的气泡（`cueBubble`，泳道上是纯白）：问句（`CueMessage.headline`），
+/// - 谁在问贴在左下（Cue 的头像 `CueAvatar`，会话在问的是圆里这家 Agent 的品牌标，同推进中的会话卡），旁边一颗 Cue 页同款的气泡（`cueBubble`，看板上是纯白）：问句（`CueMessage.headline`），
 ///   下一行它依据的规矩与范围（"推送代码前先问你 · 圆桌"，`basis`）。
 /// - 气泡下方：Cue 的提问是选项，靠右——"可以"实心靛青在最右（全卡唯一的靛青），"以后「圆桌」里……不用问"写成"以后不用问"的描边胶囊在它左边
 ///   （范围气泡里已经写了），答的方法同 `AppServices.answerCueQuestion`；会话在问的是回答框（`BoardReply`），左边让出头像那一格。
