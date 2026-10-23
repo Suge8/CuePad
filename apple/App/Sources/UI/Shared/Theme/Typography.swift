@@ -56,8 +56,6 @@ enum Typography {
     static let sidebarHeader = Font.system(size: 12, weight: .semibold)
     /// 侧栏最上面的 Cue 名片的名字。
     static let cueCardName = Font.system(size: 18, weight: .semibold)
-    /// 侧栏磁贴（任务、会话）右上的数。
-    static let sidebarTileCount = Font.system(size: 22, weight: .medium).monospacedDigit()
     /// 多行正文的行距：苹方的默认行高偏紧，加上这些约是 1.5 倍行高。
     static let lineSpacing: CGFloat = 4
     #else

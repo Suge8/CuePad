@@ -77,7 +77,7 @@ private struct CueNowPanel: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
 
-    /// 面板只是一瞥：在做的会话最多列这么多，全部在 Agent 整页里。
+    /// 面板只是一瞥：在做的会话最多列这么多，全部在 进展页的会话段里。
     private static let limit = 5
 
     var body: some View {
@@ -177,7 +177,7 @@ private struct CueNowPanel: View {
         }
         link("全部会话", count: live.total) {
             close()
-            workspace.show(.agent)
+            workspace.showSessions()
         }
     }
 

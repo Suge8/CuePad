@@ -25,6 +25,8 @@ final class CueWatch {
     private(set) var now = CueNow.empty
     /// "等你 M"（`CueDigest.waiting`）：角标、入口的点与面板里等你那一行只读它，不随 Cue 此刻的别的变化重算。
     private(set) var waiting = 0
+    /// "推进中 N"（`CueDigest.advancing`）：侧栏进展那一行只读它与 `waiting`。
+    private(set) var advancing = 0
     /// 新消息有几条（`CueDigest.unread`）。
     private(set) var unread = 0
     /// 它最近一句（`CueDigest.lastSaid`）：只有 Mac 侧栏名片的气泡读。
@@ -79,6 +81,7 @@ final class CueWatch {
             if !next.same(as: now) { now = next }
         }
         waiting = digest.waiting
+        advancing = digest.advancing
         unread = digest.unread
         lastSaid = digest.lastSaid
         hostID = digest.hostID

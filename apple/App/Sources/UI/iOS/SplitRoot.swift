@@ -108,14 +108,13 @@ private struct AgentPanel: View {
     }
 }
 
-/// 侧栏列表，结构见 `SidebarOutline`：顶上是搜索框（点它把搜索页推在当前页上并聚焦），Cue（`CueSidebarItem`），任务与会话，置顶与最近的项目
-/// （末尾"全部项目"），底部归档、回收站与设置（同步到不了 Mac 时设置那一行带一个点）。选中的那一行垫选中底。
+/// 侧栏列表，结构见 `SidebarOutline`（同 Mac）：顶上是搜索框（点它把搜索页推在当前页上并聚焦），Cue（`CueSidebarItem`，要你拍板的事），
+/// 进展（行尾推进中与等你的数，`ProgressTally`），全部项目（置顶的在前，行只有图标与名字），底部归档、回收站与设置（同步到不了 Mac 时设置那一行带一个点）。
+/// 选中的那一行垫选中底。
 private struct SplitSidebar: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     @Environment(AppServices.self) private var services
-    /// 各项目的进行中任务，最近开始的在前（项目行的"此刻"，`ProjectNow`）。
-    @State private var leading: [UUID: [ProjectNow.InProgress]]?
 
     var body: some View {
         list
@@ -128,27 +127,15 @@ private struct SplitSidebar: View {
     }
 
     private var list: some View {
-        // 不用 List：行数有数（置顶的几个、最近至多几个、固定的几行），普通栈就够，格子的底、分隔线与间距也不用再一项项关掉
+        // 不用 List：几十行的量级，普通栈就够，格子的底、分隔线与间距也不用再一项项关掉
         ScrollView {
             VStack(alignment: .leading, spacing: Self.rowGap) {
                 SidebarSearchField().padding(.bottom, 10)
                 CueSidebarItem().padding(.bottom, 6)
-                ForEach(SidebarOutline.places, id: \.self) { SidebarRow(entry: $0, badge: $0.count(in: workspace)) }
+                ForEach(SidebarOutline.places, id: \.self) { SidebarRow(entry: $0, tally: true).relaySpot(dock: true) }
                 if let catalog = workspace.catalog {
-                    let outline = SidebarOutline(catalog)
-                    // 各项目的"此刻"在数据变化时算一次，行只拿结果
-                    let now = ProjectNow.byProject(
-                        outline.projects, sessions: services.liveSessions.items, tasks: leading ?? [:], shown: workspace.shown)
-                    if !outline.pinned.isEmpty {
-                        header("置顶")
-                        ForEach(outline.pinned) { row($0, catalog, now: now[$0.id]) }
-                    }
-                    if !outline.recent.isEmpty {
-                        header("最近")
-                        ForEach(outline.recent) { row($0, catalog, now: now[$0.id]) }
-                    }
-                    // 没有最近一组（项目全置顶）时也在：书架是新建项目与看全部的地方
-                    if SidebarOutline.showsAllProjects { SidebarRow(entry: .allProjects, badge: catalog.projects.count) }
+                    header("项目")
+                    ForEach(SidebarOutline(catalog).projects) { row($0) }
                 }
                 VStack(alignment: .leading, spacing: Self.rowGap) {
                     ForEach(SidebarOutline.footer, id: \.self) { SidebarRow(entry: $0, alert: $0 == .settings ? syncAlert : nil) }
@@ -157,7 +144,6 @@ private struct SplitSidebar: View {
             }
             .padding(.horizontal, 20).padding(.bottom, 20)
         }
-        .observing(services.store, into: $leading, onError: workspace.fail) { ProjectNow.leading(try $0.startedTasks()) }
     }
 
     private static let rowGap: CGFloat = 2
@@ -174,9 +160,9 @@ private struct SplitSidebar: View {
         services.macAlert.map { .init(color: palette.color($0.tone), text: $0.title) }
     }
 
-    private func row(_ project: Project, _ catalog: ProjectCatalog, now: ProjectNow?) -> some View {
-        SidebarRow(route: .project(project.id), title: project.name, project: project, badge: catalog.cardCounts[project.id] ?? 0, now: now)
-            .projectActions(project, radius: 10, pi: now?.shown)
+    private func row(_ project: Project) -> some View {
+        SidebarRow(route: .project(project.id), title: project.name, project: project)
+            .projectActions(project, radius: 10)
     }
 }
 
@@ -245,9 +231,8 @@ private struct SidebarRow: View {
     let title: String
     var icon: Icon?
     var project: Project?
-    var badge = 0
-    /// 项目行的"此刻"（项目行总留着这一行的高度）。
-    var now: ProjectNow?
+    /// 行尾写推进中与等你的数（进展那一行）。
+    var tally = false
     var alert: Alert?
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
@@ -259,19 +244,16 @@ private struct SidebarRow: View {
         let selected = workspace.root == route
         Button { workspace.select(route) } label: {
             Label {
-                VStack(alignment: .leading, spacing: 1) {
-                    // 辅助字号下名称独占一行、可换行，计数排到下一行：名称不被挤成"…"或从词中间断开
-                    let layout = typeSize.isAccessibilitySize
-                        ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2)) : AnyLayout(HStackLayout(spacing: 6))
-                    layout {
-                        Text(title).fontWeight(selected ? .semibold : .regular).lineLimit(typeSize.isAccessibilitySize ? 3 : 1)
-                        HStack(spacing: 6) {
-                            Spacer(minLength: 4)
-                            if let alert { Circle().fill(alert.color).frame(width: 7, height: 7).accessibilityHidden(true) }
-                            if badge > 0 { Text("\(badge)").font(.subheadline.monospacedDigit()).foregroundStyle(palette.ink3) }
-                        }
+                // 辅助字号下名称独占一行、可换行，计数排到下一行：名称不被挤成"…"或从词中间断开
+                let layout = typeSize.isAccessibilitySize
+                    ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2)) : AnyLayout(HStackLayout(spacing: 6))
+                layout {
+                    Text(title).fontWeight(selected ? .semibold : .regular).lineLimit(typeSize.isAccessibilitySize ? 3 : 1)
+                    HStack(spacing: 6) {
+                        Spacer(minLength: 4)
+                        if let alert { Circle().fill(alert.color).frame(width: 7, height: 7).accessibilityHidden(true) }
+                        if tally { ProgressTally().font(.subheadline) }
                     }
-                    if project != nil { ProjectNowLine(now: now, font: .footnote) }
                 }
             } icon: {
                 if let icon { IconImage(icon, accent: selected ? .lit : .none).font(.system(size: glyph)) } else { ProjectGlyph(project: project, size: glyph) }
@@ -287,8 +269,8 @@ private struct SidebarRow: View {
 }
 
 private extension SidebarRow {
-    init(entry: SidebarOutline.Entry, badge: Int = 0, alert: Alert? = nil) {
-        self.init(route: entry.route, title: entry.title, icon: entry.icon, badge: badge, alert: alert)
+    init(entry: SidebarOutline.Entry, tally: Bool = false, alert: Alert? = nil) {
+        self.init(route: entry.route, title: entry.title, icon: entry.icon, tally: tally, alert: alert)
     }
 }
 #endif

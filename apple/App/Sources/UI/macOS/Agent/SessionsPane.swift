@@ -2,19 +2,15 @@
 import CueStore
 import SwiftUI
 
-/// 会话页（侧栏的"会话"进来）：没有页标题。项目范围在窗口最顶那一排（工具栏的 `ScopeSlot`，与任务页共用 `Workspace.projectScope`）；
-/// 页里自己顶上一排（列表滚到它后面）是搜索、额度环（`QuotaRings`，同手机；点它从环下长出明细的气泡 `QuotaDetail`，点外面或 Esc 收回）与新会话
-/// （右上"⋯"里同一下，还有接入 Agent）：它们的状态归这一页，不进工具栏（工具栏只放 Workspace 里已有的状态，规矩在 `ScopeSlot`）。
+/// 进展页的会话段（`ProgressPage`）：全部会话，在线的在上（现在）、历史在下，只看项目范围里的（`Workspace.scopedProject`，与看板一段共用）。
+/// 页里不另起一排：范围、额度环与新会话在工具栏那一排（`ProgressPage` 的头注释）；搜索框是列表的第一行，随列表滚走。
 /// 列表与行同手机（`PiSessionList`、`PiSessionRow`），点行在内容区打开会话页；在线会话右键可结束（确认后发给它所在的 Mac，对话留着）。
 /// 这台 Mac 检测到 Agent 却一家都没接入时，最上面是接入小卡（`ConnectAgents`）：没接入时本机的会话在这里看不到。
-struct AgentPage: View {
+struct SessionsPane: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @State private var model = AgentListModel()
-    /// 额度明细的气泡开着；收起的时刻（按在环上收起的，松开时不再打开，`PressPoint.reopens`）。
-    @State private var quotaOpen = DebugHooks.preset.quotaOpen
-    @State private var quotaClosed: ContinuousClock.Instant?
 
     private var filter: UUID? { workspace.scopedProject }
 
@@ -26,27 +22,17 @@ struct AgentPage: View {
             ScrollView { column }
             .onChange(of: filter) { proxy.scrollTo(Self.top, anchor: .top) }
         }
-        // 顶上那一排钉在工具栏下、浮在列表上，列表滚到它后面（`Bars`）：排在安全区里，滚动区上沿不加内边距
-        .safeAreaInset(edge: .top, spacing: Bars.contentGap) {
-            topRow.frame(maxWidth: Self.width - Spacing.page * 2)
-                .frame(minHeight: Spacing.toolbarControl)
-                .padding(.horizontal, Spacing.page).padding(.top, Bars.contentGap)
-        }
+        // 让在安全区里（同看板一段）：列表照样滚到工具栏后面
+        .safeAreaPadding(.top, Bars.contentGap)
         .background(palette.desk)
         .agentList(model, filter: filter)
-        .refreshesQuota()
-        .onChange(of: quotaOpen) { _, open in if !open { quotaClosed = .now } }
-    }
-
-    private func toggleQuota() {
-        quotaOpen = !quotaOpen && !PressPoint.reopens(closedAt: quotaClosed)
     }
 
     private static let top = "top"
 
     private var column: some View {
         LazyVStack(alignment: .leading, spacing: 0, pinnedViews: []) {
-            Color.clear.frame(height: 0).id(Self.top)
+            searchField.id(Self.top).padding(.bottom, 12)
             ConnectAgents().padding(.bottom, 12)
             if let list = model.list { sessions(list) }
         }
@@ -55,28 +41,21 @@ struct AgentPage: View {
         .frame(maxWidth: .infinity)
     }
 
-    /// 顶上一排：搜索，右边额度环与新会话。
-    private var topRow: some View {
-        HStack(spacing: 10) {
-            HStack(spacing: 6) {
-                Image(.search).foregroundStyle(palette.ink3).accessibilityHidden(true)
-                TextField(searchPrompt, text: $model.query, palette: palette).textFieldStyle(.plain)
-                if !model.query.isEmpty {
-                    Button { model.query = "" } label: {
-                        Image(.clear).frame(width: 24, height: 24).contentShape(.circle)
-                    }
-                    .buttonStyle(PressStyle(.button)).foregroundStyle(palette.ink3)
-                    .accessibilityLabel("清除")
+    private var searchField: some View {
+        HStack(spacing: 6) {
+            Image(.search).foregroundStyle(palette.ink3).accessibilityHidden(true)
+            TextField(searchPrompt, text: $model.query, palette: palette).textFieldStyle(.plain)
+            if !model.query.isEmpty {
+                Button { model.query = "" } label: {
+                    Image(.clear).frame(width: 24, height: 24).contentShape(.circle)
                 }
+                .buttonStyle(PressStyle(.button)).foregroundStyle(palette.ink3)
+                .accessibilityLabel("清除")
             }
-            .font(Typography.body)
-            .padding(.horizontal, 14).frame(height: 36)
-            .glass(in: .capsule)
-            QuotaRings(open: quotaOpen, height: Spacing.toolbarControl, action: toggleQuota)
-                .glass(in: .capsule, interactive: true)
-                .bubble(isPresented: $quotaOpen) { QuotaDetail().padding(16) }
-            NewSessionButton(showing: Bindable(workspace).showsNewSession)
         }
+        .font(Typography.body)
+        .padding(.horizontal, 14).frame(height: 36)
+        .background(palette.fill, in: .capsule)
     }
 
     private var searchPrompt: String {
@@ -138,8 +117,9 @@ struct AgentPage: View {
     }
 }
 
-/// 接入 Agent 的小卡：这台 Mac 检测到 Agent、一家都没接入、桥上也没有会话时才有（没接入时本机的会话在这一页看不到，列表空着时它就是如实的空态，不再叠吉祥物）。
-/// 一个图标、一句话说接入了双向能做什么，右边"接入"打开接入面板（`SetupPanel`，检测到还没接入的几家，一键接入；Cue 没启用时同一下启用它）；别的 Mac 上的会话照样列在下面。
+/// 接入 Agent 的小卡：这台 Mac 检测到 Agent、一家都没接入、桥上也没有会话时才有（没接入时本机的会话在这里看不到，列表空着时它就是如实的空态，不再叠吉祥物）。
+/// 开头是检测到的那几家的标志（不套方块底），标题直说检测到了谁，下面一句说接入后能看到什么；"接入"打开接入面板
+/// （`SetupPanel`，检测到还没接入的几家一键接入；Cue 没启用时同一下启用它）。接入以后它自己消失，别的 Mac 上的会话照样列在下面。
 private struct ConnectAgents: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -154,25 +134,38 @@ private struct ConnectAgents: View {
 
     var body: some View {
         if Self.needed(services) {
-            HStack(alignment: .center, spacing: 12) {
-                Image(.extensionNote).font(.system(size: 15)).foregroundStyle(palette.ink2)
-                    .frame(width: 32, height: 32).background(palette.fill, in: .rect(cornerRadius: 9, style: .continuous))
-                    .accessibilityHidden(true)
+            let found = AgentKind.allCases.filter { services.agents.status($0) != nil }
+            HStack(alignment: .center, spacing: 14) {
+                HStack(spacing: -6) {
+                    ForEach(found, id: \.self) { kind in
+                        kind.mark.image.font(.system(size: 15)).foregroundStyle(palette.ink)
+                            .frame(width: 30, height: 30).background(palette.desk, in: .circle)
+                            .overlay(Circle().strokeBorder(palette.paper, lineWidth: 2))
+                    }
+                }
+                .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("接入 Agent").font(Typography.bodyStrong).foregroundStyle(palette.ink)
-                    Text("终端和桌面版里的会话与历史也看得到").font(Typography.secondary).foregroundStyle(palette.ink2)
+                    Text("这台 Mac 上有 \(Self.names(found))").font(Typography.bodyStrong).foregroundStyle(palette.ink).lineLimit(1)
+                    Text("接入后，在终端和桌面版里开的会话也列在这里，能看进展、回话").font(Typography.secondary).foregroundStyle(palette.ink2).lineLimit(1)
                 }
                 Spacer(minLength: 8)
                 Button { workspace.showsSetup = true } label: {
                     Text("接入").font(Typography.secondary.weight(.semibold)).foregroundStyle(palette.onFill)
-                        .padding(.horizontal, 14).frame(height: 28)
+                        .padding(.horizontal, 16).frame(height: 30)
                         .background(palette.signatureFill, in: .capsule).contentShape(.capsule)
                 }
                 .buttonStyle(PressStyle())
             }
             .sessionCard()
-            .help("接入 Pi、Claude Code、Codex 或 OpenCode：在终端和桌面版里开的会话与历史也出现在这里，在 Mac 和手机上看进展、发话、回答提问。CuePad 往它的配置目录写技能（Claude Code、Codex 另写钩子），在设置里关掉即删除。")
+            .help("接入以后 CuePad 往它的配置目录写技能（Claude Code、Codex 另写钩子），在设置里关掉即删除")
         }
+    }
+
+    /// "Pi、Claude Code 和 Codex"：中文列举，"和"两边与西文名之间留空格（系统的列表格式在这里不留）。
+    private static func names(_ found: [AgentKind]) -> String {
+        let all = found.map(\.name)
+        guard all.count > 1, let last = all.last else { return all.first ?? "" }
+        return all.dropLast().joined(separator: "、") + " 和 " + last
     }
 }
 #endif

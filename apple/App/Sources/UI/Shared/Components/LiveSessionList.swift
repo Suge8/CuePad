@@ -122,7 +122,7 @@ nonisolated extension PiSessionListItem {
 
 extension PiSessionState {
     /// "现在"的会话行：本机在线的（桥上实时，`live`）与同步记录里要列的（`recorded`：别的 Mac 上没结束的、正在唤醒的）一起按要你注意的先后；
-    /// 同一个会话只出现一次（本机实时优先）。其余已结束的不列，历史在 Agent 整页里。
+    /// 同一个会话只出现一次（本机实时优先）。其余已结束的不列，历史在 进展页的会话段里。
     static func liveRows(
         live: [PiSessionState], recorded: [PiSessionState], deliveries: [String: DeliveryRequest] = [:], cue: CueDuty? = nil,
         at moment: Speech.Moment

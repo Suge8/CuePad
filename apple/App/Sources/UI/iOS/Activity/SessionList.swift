@@ -2,42 +2,7 @@
 import CueStore
 import SwiftUI
 
-/// 会话页（iPhone 底部一排与宽屏侧栏的"会话"；Cue 面板的"全部会话"也换到这一页，项目页"⋯"里的"看这个项目的会话"设好项目范围再换到这里）：
-/// 只回答"每个会话在做什么、现在到哪了、结果或卡点是什么"。顶栏中间两块玻璃（`ScopeQuota`）：项目范围（与任务页共用 `Workspace.projectScope`），
-/// 与每个账号一颗的额度环——点环长出额度明细，两块并成一块面板（`GrowPanel`，同 Cue 的名牌）。搜会话在搜索页，这里不另放搜索框。
-struct AgentScreen: View {
-    @Environment(Workspace.self) private var workspace
-    @State private var model = AgentListModel()
-
-    private var filter: UUID? { workspace.scopedProject }
-
-    var body: some View {
-        SessionList(model: model, filter: filter)
-            .refreshesQuota()
-            .floatingHeader(SidebarOutline.Entry.sessions.title, center: { ScopeQuota() }) {
-                NewSessionButton(project: filter)
-            }
-    }
-}
-
-/// 会话页顶栏中间：项目范围与额度环各一块（还没有额度记录时只有项目范围）；点环长出额度明细。
-private struct ScopeQuota: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var open = DebugHooks.preset.quotaOpen
-
-    var body: some View {
-        GrowPanel(open: $open, radius: FloatingHeaderLayout.height / 2, fills: false, separate: true) {
-            HStack(spacing: 8) {
-                ProjectScope().headerPiece()
-                QuotaRings(open: open, height: FloatingHeaderLayout.height) { $open.grow(reduceMotion: reduceMotion) }.headerPiece()
-            }
-        } panel: {
-            QuotaDetail().padding(.horizontal, 16).padding(.top, 4).padding(.bottom, 18)
-        }
-    }
-}
-
-/// 会话列表（会话页、搜索页的会话一栏同一个，数据是两端共用的 `PiSessionList`）："现在"置顶（按要你注意的先后：等你确认 → 出错 → 工作中 → 空闲），
+/// 会话列表（进展页的会话段、搜索页的会话一栏同一个，数据是两端共用的 `PiSessionList`）："现在"置顶（按要你注意的先后：等你确认 → 出错 → 工作中 → 空闲），
 /// "历史"按结束时间分段、滑到底才读下一页。搜索词在 `model.query`，命中的字高亮。点开看近况、回复（历史会话看最后一轮，回复时 Mac 在后台恢复它）。
 /// 在线会话长按或慢慢左滑可结束（确认后发给它所在的 Mac，对话留着）。`top`：列表最上面一行（搜索页的范围胶囊），随列表滚走。
 struct SessionList<Top: View>: View {
@@ -153,7 +118,7 @@ extension SessionList where Top == EmptyView {
     init(model: AgentListModel, filter: UUID?) { self.init(model: model, filter: filter) { EmptyView() } }
 }
 
-private struct NewSessionButton: View {
+struct NewSessionButton: View {
     let project: UUID?
 
     @Environment(Workspace.self) private var workspace

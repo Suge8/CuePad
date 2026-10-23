@@ -1,8 +1,8 @@
 #if os(iOS)
 import SwiftUI
 
-/// 项目范围（`Workspace.projectScope`，任务页与会话页共用一份），窄屏在顶栏中间：看全部时是"全部项目 ⌄"，选了是项目图标与名字（靛青字、选中底）接一颗 ✕ 清掉。
-/// 点字换项目（项目目录里的全部项目，默认项目在内）。只画字与选中底，玻璃由所在的那一块给（任务页单独一颗，会话页与额度环合成一颗）。
+/// 项目范围（`Workspace.projectScope`，进展页两段共用一份），窄屏在顶栏中间：看全部时是"全部项目 ⌄"，选了是项目图标与名字（靛青字、选中底）接一颗 ✕ 清掉。
+/// 点字换项目（项目目录里的全部项目，默认项目在内）。只画字与选中底，玻璃由所在的那一块给（进展页与分段、额度环合成一颗）。
 /// 选中的项目进了回收站就当作全部项目（`Workspace.scopedProject`）。
 struct ProjectScope: View {
     @Environment(Workspace.self) private var workspace

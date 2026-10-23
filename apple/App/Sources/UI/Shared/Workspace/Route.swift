@@ -2,23 +2,21 @@ import CueStore
 import Foundation
 
 /// 去哪一页：两端同一个值，都经 `Workspace.show` 去；Mac 内容区挂哪一页与 iOS 导航栈里推入哪一页只差呈现（`Workspace.Layout`）
-/// （Mac 只用其中的 `project`、`archive`、`trash`、`tasks`、`cue`、`agent`、`session`）。
+/// （Mac 只用其中的 `project`、`archive`、`trash`、`progress`、`cue`、`session`）。
 nonisolated enum Route: Hashable {
-    /// 项目书架：全部项目（iPhone、iPad 侧栏的"全部项目"）。
+    /// 项目书架：全部项目（iPhone 底部那一排的"项目"）。
     case shelf
     case project(UUID)
     case archive
     case trash
     case settings
     case conflicts
-    /// 跨项目的任务看板（侧栏与 iPhone 底部的"任务"）。
-    case tasks
+    /// 进展：跨项目的看板与会话两段（`Workspace.progressPane`；侧栏与 iPhone 底部的"进展"）。
+    case progress
     /// Cue 页：和总控 Agent Cue 的对话（`CuePage`）。
     case cue
     /// Cue 的设置（手机从 Cue 面板推入，`CueSettingsScreen`；Mac 的在设置窗口里）。
     case cueSettings
-    /// Agent 页：全部 Pi 会话（iPhone 底部与 iPad 侧栏的"会话"）。
-    case agent
     case search
     case card(UUID)
     /// 一个 Pi 会话的整页（近况与回复）。
@@ -35,12 +33,11 @@ nonisolated enum Route: Hashable {
     /// 从 Pi 的会话 id 去会话页（Mac 的侧栏、搜索）。
     static func session(_ sessionID: String) -> Route { .session(PiSessionState.recordID(sessionID: sessionID), sessionID: sessionID) }
 
-    /// 窄屏（`Workspace.Layout.dock`）上它所属的去处（底部那一排的四个之一）：去处本身是它自己；卡片纸页、会话页、搜索不属于哪一页（推在当前页上），为 nil。
+    /// 窄屏（`Workspace.Layout.dock`）上它所属的去处（底部那一排的去处与 Cue 之一）：去处本身是它自己；卡片纸页、会话页、搜索不属于哪一页（推在当前页上），为 nil。
     var home: Route? {
         switch self {
         case .cue, .cueSettings: .cue
-        case .tasks: .tasks
-        case .agent: .agent
+        case .progress: .progress
         case .shelf, .project, .archive, .trash, .settings, .conflicts: .shelf
         case .search, .card, .session: nil
         }

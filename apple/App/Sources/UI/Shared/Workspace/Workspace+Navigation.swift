@@ -11,7 +11,7 @@ extension Workspace {
         case pages
         /// iPad 宽屏：侧栏选中的去处是根，会话页、卡片纸页推在它上面（返回回到原处）。
         case split
-        /// 窄屏（iPhone 与窄窗口 iPad）：根只有底部那一排的四个（`Route.home`），其余去处推在它所属的那一页上。
+        /// 窄屏（iPhone 与窄窗口 iPad）：根只有底部那一排的几个（`Dock.places` 与 Cue，`Route.home`），其余去处推在它所属的那一页上。
         case dock
 
         /// 会话页推在当前页上、能返回。
@@ -21,7 +21,7 @@ extension Workspace {
     /// 最上面那一页。
     var top: Route { path.last ?? root }
 
-    /// 当前项目：正在看的项目页（含其上推入的页，如卡片纸页），否则没有。"在哪个项目"只有这一份：⌘N、任务页新建任务的默认落点都读它。
+    /// 当前项目：正在看的项目页（含其上推入的页，如卡片纸页），否则没有。"在哪个项目"只有这一份：⌘N、进展页新建任务的默认落点都读它。
     var currentProject: UUID? {
         for route in ([root] + path).reversed() {
             if case .project(let id) = route { return id }
@@ -56,6 +56,12 @@ extension Workspace {
     }
 
     func push(_ route: Route) { path.append(route) }
+
+    /// 去进展页的会话段（原会话页的去向都是这里：Cue 面板的"全部会话"、"看这个项目的会话"、⌥⌘N、提示条）。
+    func showSessions() {
+        progressPane = .sessions
+        show(.progress)
+    }
 
     /// 推回刚返回离开的那一页（`forward`）。会话页按此刻重读首帧（同 `openSession`）：离开后对话可能又长了。
     func goForward() {
@@ -137,3 +143,9 @@ struct ProjectFormRequest: Identifiable {
     let id = UUID()
     var project: Project?
 }
+
+/// 进展页的两段（`Workspace.progressPane`）：看板与会话。
+enum ProgressPane: Hashable {
+    case board, sessions
+}
+

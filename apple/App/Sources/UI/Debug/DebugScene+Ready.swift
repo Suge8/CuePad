@@ -21,10 +21,10 @@ extension DebugScene {
         }
     }
 
-    /// `-CuePadNotice <文字>`：就绪前弹一条带去处的提示（点它去会话页），停一分钟：截图、录屏拍得到提示条。
+    /// `-CuePadNotice <文字>`：就绪前弹一条带去处的提示（点它去进展页），停一分钟：截图、录屏拍得到提示条。
     static func noticeIfAsked(_ workspace: Workspace) {
         guard let text = defaults.string(forKey: "CuePadNotice") else { return }
-        workspace.say(Dotted(text), status: .unread, link: .agent, duration: .seconds(60))
+        workspace.say(Dotted(text), status: .unread, link: .progress, duration: .seconds(60))
     }
 
     /// 就绪文件：脚本起的实例都带（`CUEPAD_SHOT_READY`，见 app.py），App 也据此认出是脚本起的（`DebugHooks.scripted`）。

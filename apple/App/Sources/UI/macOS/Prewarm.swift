@@ -68,7 +68,7 @@ struct Prewarm: View {
         .task(id: workspace.isLibraryReady) {
             guard workspace.isLibraryReady else { return }
             guard (try? await Task.sleep(for: Self.delay)) != nil else { return }
-            workspace.pages.premount(.agent)
+            workspace.pages.premount(.progress)
             let tasks = try? await workspace.services.store.tasks(.inProgress, .todo)
             if let task = tasks?.lazy.flatMap(\.tasks).first(where: { $0.parentID == nil }) {
                 warmTask = TaskBubble.Request(task: task.id, step: nil, source: .unanchored)

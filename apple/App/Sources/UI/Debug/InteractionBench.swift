@@ -36,11 +36,11 @@ enum InteractionBench {
         "收编辑页": (14, 2),
         "任务气泡开": (28, 2),
         "任务气泡关": (14, 2),
-        "进任务页": (28, 2),
-        "任务页→会话页": (28, 2),
-        "会话页→任务页": (14, 1),
-        "任务页→项目页": (14, 1),
-        "项目页→任务页": (14, 1),
+        "进进展页": (28, 2),
+        "看板→会话": (28, 2),
+        "会话→看板": (14, 1),
+        "看板→项目页": (14, 1),
+        "项目页→看板": (14, 1),
         "换项目范围": (28, 2),
         "清项目范围": (28, 2),
         "回 Cue 页": (14, 2),
@@ -113,9 +113,9 @@ enum InteractionBench {
                 await step("页面回访") { workspace.show(.project(b)) }
             }
         }
-        await step("Agent 页首访") { workspace.show(.agent) }
+        await step("Agent 页首访") { workspace.showSessions() }
         if let a { await step("页面回访") { workspace.show(.project(a)) } }
-        await step("页面回访") { workspace.show(.agent) }
+        await step("页面回访") { workspace.showSessions() }
         for id in sessions.prefix(2) { await step("会话页") { workspace.show(.session(id)) } }
         // 发送：回复框里写好几行再按 ⌘↩（主菜单"回复"的项经响应链交给文字区，这里直接交给它），量输入框收起、话贴到对话末尾、滚到最新那一下。
         // 大库在最长的那段对话里发，演示库在最近的会话里发；Cue 页先写好一段对话（库里没有时）
@@ -159,21 +159,22 @@ enum InteractionBench {
             }
         }
         for _ in 0..<2 {
-            await step("进任务页") { workspace.show(.tasks) }
+            await step("进进展页") { workspace.show(.progress) }
             await step("回 Cue 页") { workspace.show(.cue) }
             await step("⌘K 面板开") { workspace.searching = true }
             await step("⌘K 面板关") { workspace.searching = false }
         }
-        // 任务页与会话页（侧栏"会话"的列表页，同任务页用项目范围）、项目页之间来回，与任务页上换项目范围：
-        // 量顶栏（工具栏常驻项只换内容）跟着换页、换范围的开销
+        // 进展页看板与会话两段（共用项目范围）来回、与项目页来回，与进展页上换项目范围：
+        // 量顶栏（工具栏常驻项只换内容）跟着换段、换页、换范围的开销
         if let a {
-            workspace.show(.tasks)
+            workspace.progressPane = .board
+            workspace.show(.progress)
             try? await Task.sleep(for: .seconds(1))
             for _ in 0..<2 {
-                await step("任务页→会话页") { workspace.show(.agent) }
-                await step("会话页→任务页") { workspace.show(.tasks) }
-                await step("任务页→项目页") { workspace.show(.project(a)) }
-                await step("项目页→任务页") { workspace.show(.tasks) }
+                await step("看板→会话") { workspace.progressPane = .sessions }
+                await step("会话→看板") { workspace.progressPane = .board }
+                await step("看板→项目页") { workspace.show(.project(a)) }
+                await step("项目页→看板") { workspace.show(.progress) }
                 await step("换项目范围") { workspace.projectScope = a }
                 await step("清项目范围") { workspace.projectScope = nil }
             }

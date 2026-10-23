@@ -36,8 +36,7 @@ struct PageStack: View {
         case .archive: ArchivePage()
         case .trash: TrashPage()
         case .cue: CuePage()
-        case .agent: AgentPage()
-        case .tasks: TaskBoardPage()
+        case .progress: ProgressPage()
         case .session(let route): if let id = route.sessionID { SessionPage(sessionID: id).id(id) }
         default: EmptyView()  // 其余是 iOS 的页
         }

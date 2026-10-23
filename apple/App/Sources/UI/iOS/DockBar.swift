@@ -7,7 +7,7 @@ import SwiftUI
 /// - Cue 页输入框有焦点（`composing`）：都让开，输入框占满整排。
 /// 与屏幕圆角同心（同系统悬浮标签栏），只是玻璃：栏后面不垫渐变或模糊。字号固定、不随动态字体放大，辅助字号下长按弹出大内容查看器
 /// （同系统标签栏：栏高固定，字放大只会挤掉图标）。"项目"那一格在同步到不了 Mac 时带一个点（`AppServices.macAlert`）。
-/// 接力的"会话"那一头（`relaySpot(dock:)`）只在三格展开时的"会话"那一格；收起的"⋯"不接力：光落进"⋯"读不出是去了哪，深色下只剩一团发光的靛青点。
+/// 接力的会话那一头（`relaySpot(dock:)`）只在格子展开时的"进展"那一格；收起的"⋯"不接力：光落进"⋯"读不出是去了哪，深色下只剩一团发光的靛青点。
 /// 减弱动态效果时不换形，直接到新样子（条那边也不滑）。
 struct DockBar: View {
     /// 当前去处（`Workspace.root`）：读屏的选中、点 Cue 钮是去 Cue 页还是收起"⋯"。
@@ -187,7 +187,7 @@ private struct DockCell: View {
     let place: SidebarOutline.Entry
     /// 当前去处是它（读屏的选中）。
     let selected: Bool
-    /// 三格展开着："会话"那一格是接力的落点。
+    /// 格子展开着："进展"那一格是接力的落点。
     let relays: Bool
     let action: () -> Void
     @Environment(AppServices.self) private var services
@@ -197,12 +197,12 @@ private struct DockCell: View {
             DockCellLabel(place: place, lit: false).contentShape(.rect)
         }
         .buttonStyle(PressStyle(.button))
-        .relaySpot(dock: relays && place == .sessions)
+        .relaySpot(dock: relays && place == .progress)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(place.dockTitle)
-        .accessibilityValue(services.macAlert.flatMap { place == .allProjects ? $0.title : nil } ?? "")
+        .accessibilityLabel(place.title)
+        .accessibilityValue(services.macAlert.flatMap { place == .projects ? $0.title : nil } ?? "")
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
-        .accessibilityShowsLargeContentViewer { Label { Text(place.dockTitle) } icon: { Image(place.dockIcon) } }
+        .accessibilityShowsLargeContentViewer { Label { Text(place.title) } icon: { Image(place.icon) } }
     }
 }
 
@@ -217,11 +217,11 @@ private struct DockCellLabel: View {
 
     var body: some View {
         VStack(spacing: 3) {
-            IconImage(place.dockIcon, accent: lit ? .lit : .none)
+            IconImage(place.icon, accent: lit ? .lit : .none)
                 .font(.system(size: Self.icon, weight: lit ? .semibold : .medium))
                 .frame(height: Self.icon + 4)
-                .overlay(alignment: .topTrailing) { if place == .allProjects { syncDot } }
-            Text(place.dockTitle).font(.system(size: Self.label, weight: lit ? .semibold : .medium)).lineLimit(1)
+                .overlay(alignment: .topTrailing) { if place == .projects { syncDot } }
+            Text(place.title).font(.system(size: Self.label, weight: lit ? .semibold : .medium)).lineLimit(1)
         }
         .foregroundStyle(lit ? palette.signature : palette.ink)
         .frame(maxWidth: .infinity, maxHeight: .infinity)

@@ -23,7 +23,7 @@ extension View {
             trailing: trailing()))
     }
 
-    /// 根页：中间放 `center`（任务页、会话页是项目范围 `ProjectScope`，会话页再接额度环；Cue 页是它的名牌 `CueHeader`），不写标题。
+    /// 根页：中间放 `center`（进展页是分段、项目范围与额度环合成的一块；Cue 页是它的名牌 `CueHeader`），不写标题。
     func floatingHeader<Center: View, Trailing: View>(
         _ title: String, @ViewBuilder center: () -> Center, @ViewBuilder trailing: () -> Trailing
     ) -> some View {

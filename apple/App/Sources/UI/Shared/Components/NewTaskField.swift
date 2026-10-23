@@ -1,12 +1,12 @@
 import CueStore
 import SwiftUI
 
-/// 一行新建任务：↩ 添加，保持焦点以便连续输入。`parent` 给了时建成它的一个步骤（任务气泡里）；`choosesProject` 时右边可换落到哪个项目（Mac 任务页跨项目）。
+/// 一行新建任务：↩ 添加，保持焦点以便连续输入。`parent` 给了时建成它的一个步骤（任务气泡里）；`choosesProject` 时右边可换落到哪个项目（Mac 进展页跨项目）。
 struct NewTaskField: View {
     let project: UUID?
     var parent: UUID?
     var choosesProject = false
-    /// 出现时光标就在这一行（任务页：点"新任务"后直接写）。
+    /// 出现时光标就在这一行（进展页：点"新任务"后直接写）。
     var autofocus = false
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette

@@ -53,7 +53,7 @@ nonisolated struct PiSessionList: Sendable, Equatable {
     }
 }
 
-/// 一个 Agent 会话的行（iOS 的会话页与搜索页，Mac 的会话页、菜单栏面板、⌘K、项目页、Cue 页头面板同一种，状态都经 `PiShown`）。
+/// 一个 Agent 会话的行（进展页的会话段与 iOS 搜索页，Mac 的菜单栏面板、⌘K、项目页、Cue 页头面板同一种，状态都经 `PiShown`）。
 /// - 整页（`page`）是一张两行的圆角卡片：第一行状态标、名字、哪家 Agent 的标志，右边所在项目的图标（看全部项目时）与时长；
 ///   第二行状态词接一句现在到哪了（此刻的短词优先，如没能结束、有草稿，见 `PiRowFacts.note`；没有时是 `PiProgress.note`，与项目页、任务看板同一句），
 ///   快满的上下文靠右。模型与子代理名单不上卡（在会话页里）。要你看的三种状态卡片换成这种状态的淡底（`PiShown.wash`）。

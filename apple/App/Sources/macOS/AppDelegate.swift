@@ -101,12 +101,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     /// 主菜单里写"等 N 个 Agent 做完再装"的那一行（停用，只是说明）。
     static let updateNoteTag = 1
 
-    /// 主菜单"显示"里的搜索（⌘K）、任务（⌘⇧T）与侧栏（⌃⌘S）：搜索与侧栏是开关，开着时同一条命令把它关掉；任务是去任务页（收起开着的搜索）。
+    /// 主菜单"显示"里的搜索（⌘K）、进展（⌘⇧T）与侧栏（⌃⌘S）：搜索与侧栏是开关，开着时同一条命令把它关掉；进展是去进展页（收起开着的搜索）。
     /// 放在主菜单而不是窗口里的快捷键：模态浮层（⌘K 自己就是）开着时只把 ⌘ 组合键交给主菜单（`PanelHost`）。
     @objc func toggleSearch(_ sender: Any?) { workspace?.searching.toggle() }
-    @objc func showTasks(_ sender: Any?) {
+    @objc func showProgress(_ sender: Any?) {
         workspace?.searching = false
-        workspace?.show(.tasks)
+        workspace?.show(.progress)
     }
     @objc func newCard(_ sender: Any?) { workspace?.newCard() }
     @objc func newSession(_ sender: Any?) { workspace?.newSession() }
@@ -117,8 +117,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         switch item.action {
         case #selector(checkForUpdates(_:)): services?.updates.canCheckForUpdates ?? false
         case #selector(installUpdateNow(_:)): showsUpdateWait(item)
-        // 资料库读不出来时：搜索结果能打开卡片、任务页能增改任务，都是写入入口
-        case #selector(toggleSearch(_:)), #selector(showTasks(_:)), #selector(newCard(_:)), #selector(newSession(_:)):
+        // 资料库读不出来时：搜索结果能打开卡片、进展页能增改任务，都是写入入口
+        case #selector(toggleSearch(_:)), #selector(showProgress(_:)), #selector(newCard(_:)), #selector(newSession(_:)):
             workspace?.isLibraryReady == true && NSApp.mainWindow === services?.windowShell
         case #selector(toggleCueSidebar(_:)): NSApp.mainWindow === services?.windowShell
         default: true

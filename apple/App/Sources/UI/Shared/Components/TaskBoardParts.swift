@@ -1,7 +1,7 @@
 import CueStore
 import SwiftUI
 
-/// 四列并排（Mac 任务页、宽屏 iPad）：每列（`BoardColumn`）是一条泳道，列头浮在泳道顶上（`BoardColumnHeader`），卡各自滚动、从列头后面过。
+/// 四列并排（Mac 与宽屏 iPad 的进展页）：每列（`BoardColumn`）是一条泳道，列头浮在泳道顶上（`BoardColumnHeader`），卡各自滚动、从列头后面过。
 /// 列按可见宽四等分，窄到一列放不下 `minColumn` 时整排横向滚动。
 struct BoardColumns: View {
     let board: TaskBoard
@@ -268,7 +268,7 @@ private struct InsertBefore: ViewModifier {
 }
 
 extension View {
-    /// 读看板（Mac 任务页、手机任务页同一处）：库变了重读；过了零点也重读一次——"今天做完"按读的那一刻分，库没变时日子换了也要换（同项目页）。
+    /// 读看板（三端进展页同一处）：库变了重读；过了零点也重读一次——"今天做完"按读的那一刻分，库没变时日子换了也要换（同项目页）。
     func observingBoard(into board: Binding<TaskBoard?>, store: CueStore, onError: @escaping (any Error) -> Void) -> some View {
         modifier(BoardReading(board: board, store: store, onError: onError))
     }

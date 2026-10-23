@@ -23,12 +23,12 @@ extension DebugScene {
                 await seedCue(workspace.services)
                 await seedBusyBoard(workspace.services.store)
             }
-            workspace.show(.tasks)
+            workspace.show(.progress)
         case "agentsetup": workspace.showsSetup = true
         case "connected":
             await connectAgents(workspace.services)
             await bindFolderIfAsked(workspace.services.store)
-            workspace.show(.agent)
+            workspace.showSessions()
         case "wallgap":
             // 卡片墙删卡后的排布：在当前项目（配 -CuePadProject Flow）新记两条，再删掉最早那条（它独占一列），看留下的几张怎么排
             try? await Task.sleep(for: .seconds(1))
@@ -53,7 +53,7 @@ extension DebugScene {
                 await seedRemote(workspace.services)
                 await seedCue(workspace.services)
             }
-            workspace.show(.agent)
+            workspace.showSessions()
         case "cue", "cuememory", "cuerun":
             // Cue 页（演示数据见 `DebugScene+Cue.swift`）；cuememory 再打开"Cue 记得什么"，cuerun 打开"运行情况"（Cue 在这台值班时才有）
             if defaults.bool(forKey: "CuePadDemo") {
@@ -67,7 +67,7 @@ extension DebugScene {
         case "cuerows":
             await connectAgents(workspace.services)
             await seedCueRows(workspace.services)
-            workspace.show(.agent)
+            workspace.showSessions()
         case "menubar", "cuebar":
             if defaults.bool(forKey: "CuePadDemo") {
                 await seedRemote(workspace.services)

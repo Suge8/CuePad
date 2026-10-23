@@ -152,7 +152,7 @@ extension View {
                 async let relays: Void = DebugScene.relayIfAsked(workspace)
                 async let flow: Void = DebugScene.cueFlowIfAsked(workspace)
                 async let away: Void = DebugScene.awayIfAsked(
-                    workspace.services.store, leave: { workspace.show(.tasks) }, back: { workspace.show(.cue) })
+                    workspace.services.store, leave: { workspace.show(.progress) }, back: { workspace.show(.cue) })
                 async let tour: Void = DebugScene.dockTourIfAsked(workspace)
                 async let cueNow: Void = DebugScene.cueNowTourIfAsked(workspace.cue)
                 await DebugScene.cycleIfAsked(workspace.services)
