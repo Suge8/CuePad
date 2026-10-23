@@ -69,7 +69,7 @@ extension AppServices {
     ) async throws {
         let now = Self.cueNow(digest, at: moment, local: local)
         #if os(iOS)
-        await cueActivity?.show(CueActivityState(now: now, quotas: content.quotas, at: now.at), resend: resend, foreground: Self.inForeground)
+        await cueActivity?.show(CueActivityState(now: now, quotas: content.quotas), resend: resend, foreground: Self.inForeground)
         #endif
         try publish(WidgetSnapshots(content, now: now))
     }
@@ -115,8 +115,9 @@ nonisolated struct WidgetSnapshots: Equatable, Sendable {
 }
 
 extension CueActivityState {
-    /// 实时活动那一份：Cue 此刻，加各家额度此刻（`date`）的读数（`QuotaMeter`）与本周快重置的提醒段（`QuotaReminder.isNear`）。
-    nonisolated init(now: CueNow, quotas: [AccountQuota], at date: Date) {
+    /// 实时活动那一份：Cue 此刻，加各家额度在它推出那一刻（`CueNow.at`）的读数（`QuotaMeter`）与本周快重置的提醒段（`QuotaReminder.isNear`）。
+    nonisolated init(now: CueNow, quotas: [AccountQuota]) {
+        let date = now.at
         self.now = now
         self.quotas = quotas.compactMap { quota in
             let meter = QuotaMeter(quota, at: date)
