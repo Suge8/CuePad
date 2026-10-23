@@ -60,6 +60,11 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
         var subagents: Int
         /// 这份活的 Pi 会话 id：接力落在这颗珠子上（`relaySpot(bead:)`）。
         var sessions: [String]
+
+        /// 到这一刻收掉：刚做完的只留 `doneWindow`，别的不按时刻收。
+        var expiry: Date? { kind == .done ? since.addingTimeInterval(CueNow.doneWindow) : nil }
+
+        func isFresh(at date: Date) -> Bool { expiry.map { $0 > date } ?? true }
     }
 
     struct Wait: Codable, Hashable, Sendable {
@@ -114,13 +119,13 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
     /// 到 `date` 时的样子：刚做完的过了 `doneWindow` 就收掉。
     func aged(to date: Date) -> CueNow {
         var now = self
-        now.beads.removeAll { $0.kind == .done && $0.since.addingTimeInterval(Self.doneWindow) <= date }
+        now.beads.removeAll { !$0.isFresh(at: date) }
         return now
     }
 
     /// `date` 之后这一份下一次因时刻而变的那一刻（刚做完的那颗收掉）；没有为 nil。
     func nextChange(after date: Date) -> Date? {
-        beads.filter { $0.kind == .done }.map { $0.since.addingTimeInterval(Self.doneWindow) }.filter { $0 > date }.min()
+        beads.compactMap(\.expiry).filter { $0 > date }.min()
     }
 
     /// 推出后再没收到新一份时，到 `date` 该画成的样子：过了 `staleAt` 只信慢的事实，刚做完的到点收掉。

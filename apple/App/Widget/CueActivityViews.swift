@@ -44,7 +44,7 @@ struct CueActivityViews {
 
     /// 过时时整张的不透明度。
     static let staleOpacity = 0.55
-    /// 展开态与锁屏不高过 160 点：字号再大，下半的三行（`Details`）就放不下了。
+    /// 展开态与锁屏不高过 160 点：下半能少列的都少列了（`Details`），字号再大，头一行加 Cue 此刻那一步与第一件等你也放不下。
     static let maxType = DynamicTypeSize.xLarge
 }
 
@@ -151,28 +151,31 @@ private struct Sentence: View {
     }
 }
 
-/// 展开态与锁屏的下半：Cue 此刻那一步、第一件等你、各家额度、放得下的几份活。高度有上限（160 点，超出的系统直接裁掉）：
-/// 一共三行（等你占两行，额度那一行也算），先后照上面，活排在最后、剩几行列几份，没列出的在右上的珠子与总数里。
-/// 字号最大只到 `maxType`：再大三行也放不下。
+/// 展开态与锁屏的下半：Cue 此刻那一步、第一件等你、放得下的几份活、各家额度。高度有上限（160 点，超出的系统直接裁掉）：
+/// 系统给多高就排多少（`ViewThatFits`），放不下时先少列活、再省掉额度；没列出的活在右上的珠子与总数里。
 private struct Details: View {
     let state: CueActivityState
     let island: Bool
     @Environment(\.palette) private var palette
 
-    private static let rows = 3
-
     var body: some View {
-        let now = state.now
-        let above = (now.aside == nil ? 0 : 1) + (now.first == nil ? 0 : 2)
-        let quotas = !state.quotas.isEmpty && above < Self.rows
-        let works = Self.rows - above - (quotas ? 1 : 0)
+        let works = state.now.beads.filter { $0.kind != .asks }
+        ViewThatFits(in: .vertical) {
+            ForEach((0...works.count).reversed(), id: \.self) { shown in
+                column(Array(works.prefix(shown)), quotas: !state.quotas.isEmpty)
+            }
+            column([], quotas: false)
+        }
+    }
+
+    private func column(_ works: [CueNow.Bead], quotas: Bool) -> some View {
         VStack(alignment: .leading, spacing: 7) {
-            if let aside = now.aside {
+            if let aside = state.now.aside {
                 Text(aside).font(.footnote).foregroundStyle(palette.ink2).lineLimit(1)
                     .id(aside).transition(.handOff)
             }
-            if let first = now.first { FirstWait(wait: first, island: island) }
-            if works > 0 { Works(beads: now.beads.filter { $0.kind != .asks }, limit: works) }
+            if let first = state.now.first { FirstWait(wait: first, island: island) }
+            if !works.isEmpty { Works(beads: works) }
             if quotas { Quotas(quotas: state.quotas) }
         }
     }
@@ -181,12 +184,14 @@ private struct Details: View {
 /// 几份活，一份一行：珠子、名字、样子（等子代理写几个），右边走秒（刚做完写多久前）。
 private struct Works: View {
     let beads: [CueNow.Bead]
-    let limit: Int
     @Environment(\.palette) private var palette
+
+    /// 多久前（`Text(_:style: .relative)`）最宽写成的样子：一天内最多两段，"小时、分钟"比"分钟、秒"宽。
+    static let relative = "00小时00分钟"
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
-            ForEach(beads.prefix(limit)) { bead in
+            ForEach(beads) { bead in
                 HStack(spacing: 8) {
                     BeadDot(kind: bead.kind, size: 8)
                     Text(bead.name).font(.subheadline.weight(.medium)).foregroundStyle(palette.ink).lineLimit(1)
@@ -194,8 +199,8 @@ private struct Works: View {
                         .font(.footnote).foregroundStyle(bead.kind.tone.color(palette)).lineLimit(1).fixedSize()
                     Spacer(minLength: 6)
                     if bead.kind == .done || bead.kind == .resting {
-                        Text(bead.since, style: .relative).font(.footnote).monospacedDigit().foregroundStyle(palette.ink3)
-                            .multilineTextAlignment(.trailing).frame(width: 64, alignment: .trailing)
+                        Text(bead.since, style: .relative).monospacedDigit().foregroundStyle(palette.ink3)
+                            .multilineTextAlignment(.trailing).timerWidth(Self.relative).font(.footnote)
                     } else {
                         Clock(since: bead.since).font(.footnote).foregroundStyle(palette.ink3)
                     }
@@ -259,8 +264,8 @@ private struct LockScreen: View {
                 }
                 Spacer(minLength: 6)
                 if stale {
-                    Text(now.at, style: .relative).font(.footnote).monospacedDigit().foregroundStyle(palette.ink3)
-                        .multilineTextAlignment(.trailing).frame(width: 72, alignment: .trailing)
+                    Text(now.at, style: .relative).monospacedDigit().foregroundStyle(palette.ink3)
+                        .multilineTextAlignment(.trailing).timerWidth(Works.relative).font(.footnote)
                 } else {
                     VStack(alignment: .trailing, spacing: 5) {
                         if let since = now.focus.since { Clock(since: since).font(.subheadline.weight(.semibold)).foregroundStyle(now.focus.tone.color(palette)) }
