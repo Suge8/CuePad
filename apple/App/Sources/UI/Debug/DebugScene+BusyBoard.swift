@@ -40,5 +40,20 @@ extension DebugScene {
         if let first { try? await store.setStatus(first.id, .done) }
         if let second { try? await store.linkCard(second.id, toSession: "gateway") }
     }
+
+    /// `-CuePadCanvasSteps YES`（配 tasks 画面，两端；原型）：待办里"画布缩放锚点跟随指针"写上正文与三个步骤（第一步做完），
+    /// 从任务页的卡上点开一件有步骤的任务（演示库里有步骤的"发言轮次乱序"在等你那一列，点它的抬头去回答、不开浮窗）。
+    static func seedCanvasSteps(_ store: CueStore) async {
+        guard defaults.bool(forKey: "CuePadCanvasSteps") else { return }
+        guard let canvas = try? await store.tasks(.inProgress, .todo).flatMap(\.tasks).first(where: { $0.body.hasPrefix("画布缩放") }),
+              (try? await store.children(of: canvas.id))?.isEmpty != false else { return }
+        try? await store.updateCard(canvas.id) {
+            $0.rest = "缩放时以指针所在的点为锚点，指针下的那块内容不动、四周跟着放大缩小\n触控板捏合、⌘ 加滚轮、双击放大三种入口都要对，缩放到边界时不回弹"
+        }
+        let first = try? await store.createTask("复现缩放时画布跳动\n在 200% 以上连续捏合，记下画布偏移", under: canvas.id)
+        _ = try? await store.createTask("以指针为锚点换算平移", under: canvas.id)
+        _ = try? await store.createTask("捏合、滚轮、双击各补一个用例", under: canvas.id)
+        if let first { try? await store.setStatus(first.id, .done) }
+    }
 }
 #endif

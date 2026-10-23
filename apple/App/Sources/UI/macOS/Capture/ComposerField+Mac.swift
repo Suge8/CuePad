@@ -125,6 +125,13 @@ struct ComposerField: NSViewRepresentable {
         }
 
         func focusChanged(_ focused: Bool) {
+            guard !focused else { return report(true) }
+            // 交出焦点要等窗口换完第一响应者再报：换的中途报 false，SwiftUI 收这一格的焦点时把窗口的第一响应者清空，
+            // 刚接过焦点的别的文字区（任务气泡里点进的编辑器）又被夺走、打的字没处去（实测）
+            Task { @MainActor in self.report(false) }
+        }
+
+        private func report(_ focused: Bool) {
             if parent.focus.wrappedValue != focused { parent.focus.wrappedValue = focused }
         }
     }

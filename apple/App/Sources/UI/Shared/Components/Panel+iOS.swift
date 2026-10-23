@@ -100,6 +100,23 @@ extension EnvironmentValues {
     @Entry var bubbleDrag: BubbleDrag?
 }
 
+/// 贴在底部的纸顶上的把手：整条横着都接拖动（往下关，`BubbleDrag`），只画中间一小截。
+struct SheetGrabber: View {
+    @Environment(\.bubbleDrag) private var drag
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        Capsule().fill(palette.track).frame(width: 36, height: 5)
+            .frame(maxWidth: .infinity).frame(height: 18, alignment: .bottom)
+            .contentShape(.rect)
+            .gesture(
+                DragGesture(minimumDistance: 2, coordinateSpace: .global)
+                    .onChanged { drag?.changed($0.translation.height) }
+                    .onEnded { drag?.ended($0.translation.height, $0.predictedEndTranslation.height) })
+            .accessibilityHidden(true)
+    }
+}
+
 /// 窗口上挂一个只看不拦的手势：每次手指落下把窗口坐标与自己（量自己占的地方用）交给 `down`。随这个视图进出窗口装卸。
 private struct TouchWatch: UIViewRepresentable {
     let down: (CGPoint, UIView) -> Void
