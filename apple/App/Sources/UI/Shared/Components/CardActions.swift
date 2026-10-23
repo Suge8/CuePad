@@ -120,7 +120,12 @@ extension CardMenu.Item {
         case .outdent: return structure?.outdent
         case .more:
             #if os(iOS)
-            return { workspace.moreCard = CardMoreRequest(card: card, source: workspace.press.source) }
+            // 点这一行进的是会话时，气泡里另有"打开任务"：判断同长按菜单，按此刻交给的会话算
+            let leaf = structure?.leaf ?? true
+            return {
+                let opens = workspace.entersSession(card, leaf: leaf, in: workspace.agentLinks)
+                workspace.moreCard = CardMoreRequest(card: card, opens: opens, source: workspace.press.source)
+            }
             #else
             return nil
             #endif

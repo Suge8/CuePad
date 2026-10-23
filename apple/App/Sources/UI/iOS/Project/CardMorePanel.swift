@@ -5,6 +5,8 @@ import SwiftUI
 /// 任务行左滑"⋯ 更多"长出的气泡：从按下的那一下长出来（同任务气泡，`PanelStyle.bubble`）。
 nonisolated struct CardMoreRequest: Identifiable, Equatable {
     let card: Card
+    /// 点这一行进的是会话（`Workspace.entersSession`）：气泡里先是"打开任务"。
+    let opens: Bool
     let source: BubbleSource
     var id: UUID { card.id }
 }
@@ -16,7 +18,7 @@ struct CardMoreSlot: View {
     var body: some View {
         @Bindable var workspace = workspace
         Color.clear
-            .panel(item: $workspace.moreCard, style: .bubble(workspace.moreCard?.source ?? .unanchored)) { CardMorePanel(card: $0.card) }
+            .panel(item: $workspace.moreCard, style: .bubble(workspace.moreCard?.source ?? .unanchored)) { CardMorePanel(card: $0.card, opens: $0.opens) }
     }
 }
 
@@ -27,6 +29,7 @@ struct CardMoreSlot: View {
 /// 往里翻从右边进、返回从左边进（同推入与返回）。
 private struct CardMorePanel: View {
     let card: Card
+    let opens: Bool
     @State private var moving = false
     @Environment(Workspace.self) private var workspace
     @Environment(\.closePanel) private var close
@@ -57,7 +60,7 @@ private struct CardMorePanel: View {
         VStack(alignment: .leading, spacing: 0) {
             Text(card.title).font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(2)
                 .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 6)
-            ForEach(CardMenu.swipeMore(for: card), id: \.self) { item in
+            ForEach(CardMenu.swipeMore(for: card, opens: opens), id: \.self) { item in
                 if let run = item.run(on: card, in: workspace) {
                     row {
                         Image(item.icon).frame(width: 22)

@@ -62,6 +62,8 @@ nonisolated struct TaskTree: Equatable, Sendable {
     }
     func task(_ id: UUID) -> Card? { tasks[id] }
     func children(of id: UUID) -> [UUID] { links.children(of: id) }
+    /// 没有子任务（按库里的整棵树，含已完成、不显示的）：同任务行的 `subtasks == nil`。
+    func isLeaf(_ id: UUID) -> Bool { structure.children(of: id).isEmpty }
     func depth(of id: UUID) -> Int { links.depth(of: id) }
     func descendants(of id: UUID) -> [UUID] { links.descendants(of: id) }
 

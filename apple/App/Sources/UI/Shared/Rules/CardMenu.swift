@@ -35,9 +35,10 @@ nonisolated enum CardMenu {
         return Swipes(leading: indent ? [.indent] : [], trailing: [.trash, .more])
     }
 
-    /// 左滑"更多"长出的气泡里的那几项（`CardMorePanel`）：完成或重新打开、复制、归档；换项目另起一行翻页，子任务跟着上级走、没有这一行。
-    static func swipeMore(for card: Card) -> [Item] {
-        [card.status == .done ? .reopen : .complete, .copy, .archive]
+    /// 左滑"更多"长出的气泡里的那几项（`CardMorePanel`）：点它进的是会话时（`opens`，同 `sections`）先是"打开任务"，再是完成或重新打开、复制、归档；
+    /// 换项目另起一行翻页，子任务跟着上级走、没有这一行。
+    static func swipeMore(for card: Card, opens: Bool) -> [Item] {
+        (opens ? [.open] : []) + [card.status == .done ? .reopen : .complete, .copy, .archive]
     }
 
     /// 长按菜单，组间画分隔线。`selectable`：这张卡在能批量选择的地方（Mac 项目页的墙与列表），删除前多一项"选择"。
