@@ -163,7 +163,7 @@ final class TurnLog {
         return (log, changedAt, since)
     }
 
-    /// 画面的指纹：窗口图层树里看得见的层（不隐藏、不透明）的位置、大小、变换、透明度、底色、边框、圆角、阴影与内容。
+    /// 画面的指纹：窗口图层树里看得见的层（不隐藏、不透明）的位置、大小、滚动偏移（bounds 原点：滚动只改它）、变换、透明度、底色、边框、圆角、阴影与内容。
     /// 不含图层对象本身：换了个什么都不画的层不算变。动画只改显示层、不改模型层，所以不会因为转着的图标而变。
     private static func fingerprint(_ layer: CALayer) -> Int {
         var hasher = Hasher()
@@ -173,6 +173,8 @@ final class TurnLog {
             if layer.bounds.isEmpty, layer.contents == nil, layer.sublayers?.isEmpty != false { return }
             hasher.combine(layer.position.x)
             hasher.combine(layer.position.y)
+            hasher.combine(layer.bounds.origin.x)
+            hasher.combine(layer.bounds.origin.y)
             hasher.combine(layer.bounds.width)
             hasher.combine(layer.bounds.height)
             hasher.combine(layer.opacity)
