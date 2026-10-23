@@ -3,43 +3,38 @@ import CueStore
 import SwiftUI
 
 /// 项目页（iPhone 底部一排的"项目"；宽屏侧栏项目区末尾的"全部项目"，侧栏只列置顶与最近的几个），右上"新建项目"。
-/// 只排项目（任务的事在任务页）：置顶项目是纸卡（`pinnedGrid`），其余排成一张纸上的行，长相同侧栏的项目行。卡与行的"此刻"同侧栏一条规则（`ProjectNow.byProject`：会话的事、进行中的任务、介绍）。
+/// 只排项目（在发生什么在进展页）：置顶项目是纸卡（`pinnedGrid`：图标、名字、介绍），其余排成一张纸上的行，长相同侧栏的项目行（只有图标与名字）。
 /// 窄屏（iPhone）没有侧栏，末尾一组归档、回收站、设置（同步到不了 Mac 时设置那一行带点，`AppServices.macAlert`）推在这一页上；宽屏这一组在侧栏里，这里不放。
 struct ShelfScreen: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.dynamicTypeSize) private var typeSize
-    /// 各项目的进行中任务，最近开始的在前（"此刻"的一档，同侧栏）。
-    @State private var leading: [UUID: [ProjectNow.InProgress]]?
 
     private var narrow: Bool { sizeClass == .compact }
 
     var body: some View {
         ScrollView {
-            if let catalog = workspace.catalog, let leading { content(catalog, leading: leading) }
+            if let catalog = workspace.catalog { content(catalog) }
         }
         .refreshable { await services.syncNow() }
         .floatingHeader(SidebarOutline.Entry.projects.title, detail: workspace.catalog.map { "\($0.projects.count) 个项目" } ?? "") {
             Button("新建项目", icon: .newProject) { workspace.projectForm = .init() }
         }
-        .observing(services.store, into: $leading, onError: workspace.fail) { ProjectNow.leading(try $0.startedTasks()) }
     }
 
-    private func content(_ catalog: ProjectCatalog, leading: [UUID: [ProjectNow.InProgress]]) -> some View {
+    private func content(_ catalog: ProjectCatalog) -> some View {
         let pinned = catalog.projects.filter(\.isPinned)
         let rest = catalog.projects.filter { !$0.isPinned }
-        // "此刻"在数据变化时算一次，卡与行只拿结果
-        let now = ProjectNow.byProject(catalog.projects, sessions: services.liveSessions.items, tasks: leading, shown: workspace.shown)
         let wide = !narrow && !typeSize.isAccessibilitySize
         return LazyVStack(alignment: .leading, spacing: Self.sectionGap) {
             if !pinned.isEmpty {
                 // 置顶卡平分整行：iPhone 至多两列，宽屏至多四列，不留一排窄卡靠左
-                pinnedGrid(pinned, columns: typeSize.isAccessibilitySize ? 1 : min(pinned.count, wide ? 4 : 2), now: now)
+                pinnedGrid(pinned, columns: typeSize.isAccessibilitySize ? 1 : min(pinned.count, wide ? 4 : 2))
             }
             if !rest.isEmpty {
                 VStack(spacing: 0) {
-                    ForEach(rest) { ShelfRow(project: $0, count: catalog.cardCounts[$0.id] ?? 0, now: now[$0.id]) }
+                    ForEach(rest) { ShelfRow(project: $0) }
                 }
                 .padding(.vertical, Self.paperInset)
                 .rowPaper(radius: Self.radius)
@@ -49,7 +44,7 @@ struct ShelfScreen: View {
         .padding(.horizontal, 16)
         .padding(.bottom, 24)
         .animation(Motion.snappy, value: catalog.projects.map(\.id))
-        // 宽屏不把一行项目拉满整屏：名字与计数隔太远读不成一行
+        // 宽屏不把一行项目拉满整屏
         .frame(maxWidth: Self.readableWidth)
         .frame(maxWidth: .infinity)
     }
@@ -63,12 +58,12 @@ struct ShelfScreen: View {
     /// 置顶卡按行排：每行 `columns` 张平分整行，最后一行不满时那几张也平分整行，不留空格；最后一行只剩一张时它占满整行、
     /// 横着排成矮的一条（`wide`）——不让单出来的那张（常是最不活跃、甚至空的项目）成为首屏最大的一块。
     /// 一行里的卡同高。置顶的不多，不用懒加载。
-    private func pinnedGrid(_ pinned: [Project], columns: Int, now: [UUID: ProjectNow]) -> some View {
+    private func pinnedGrid(_ pinned: [Project], columns: Int) -> some View {
         VStack(spacing: 12) {
             ForEach(Array(stride(from: 0, to: pinned.count, by: columns)), id: \.self) { start in
                 let row = pinned[start..<min(start + columns, pinned.count)]
                 HStack(spacing: 12) {
-                    ForEach(row) { PinnedShelfCard(project: $0, now: now[$0.id], wide: row.count == 1 && columns > 1) }
+                    ForEach(row) { PinnedShelfCard(project: $0, wide: row.count == 1 && columns > 1) }
                 }
                 .fixedSize(horizontal: false, vertical: true)
             }
@@ -76,11 +71,9 @@ struct ShelfScreen: View {
     }
 }
 
-/// 置顶项目的纸卡：项目色从上沿淡下来的一层底、图标、名字、介绍，再一行"此刻"（会话的事或进行中的任务；
-/// "此刻"落到介绍那一档时不再写一遍）。`wide`：一行里单出来的那张占满整行，横着排成矮的一条，图标在左。
+/// 置顶项目的纸卡：项目色从上沿淡下来的一层底、图标、名字、介绍。`wide`：一行里单出来的那张占满整行，横着排成矮的一条，图标在左。
 private struct PinnedShelfCard: View {
     let project: Project
-    let now: ProjectNow?
     var wide = false
     @Environment(\.palette) private var palette
     @ScaledMetric(relativeTo: .title3) private var glyph: CGFloat = 22
@@ -114,7 +107,7 @@ private struct PinnedShelfCard: View {
             .paper(radius: Self.radius)
         }
         .buttonStyle(PressStyle(.card))
-        .projectActions(project, radius: Self.radius, pi: now?.shown)
+        .projectActions(project, radius: Self.radius, pi: nil)
         .accessibilityElement(children: .combine)
     }
 
@@ -123,45 +116,28 @@ private struct PinnedShelfCard: View {
         if let intro = project.intro?.nonEmpty {
             Text(intro).font(Typography.meta).foregroundStyle(palette.ink2).lineLimit(1)
         }
-        if let now, now.source != .intro { ProjectNowLine(now: now, font: Typography.meta) }
     }
 }
 
-/// 项目的一行，长相同侧栏的项目行：图标、名字、灵感数，下面一行"此刻"（`ProjectNowLine` 一直占着这一行的高度，状态出现、消失时列表不跳）。
-/// 辅助字号下名字独占一行、可换行，灵感数排到下一行。
+/// 项目的一行，长相同侧栏的项目行：图标与名字（条数、状态与"此刻"都不写：在发生什么在进展页）。辅助字号下名字可换行。
 private struct ShelfRow: View {
     let project: Project
-    let count: Int
-    let now: ProjectNow?
     @Environment(\.palette) private var palette
     @Environment(\.dynamicTypeSize) private var typeSize
     @ScaledMetric(relativeTo: .body) private var glyph: CGFloat = 17
 
     var body: some View {
-        let stacked = typeSize.isAccessibilitySize
         NavigationLink(value: Route.project(project.id)) {
             Label {
-                VStack(alignment: .leading, spacing: 1) {
-                    (stacked ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2)) : AnyLayout(HStackLayout(spacing: 6))) {
-                        Text(project.name).font(.body.weight(.medium)).foregroundStyle(palette.ink).lineLimit(stacked ? 3 : 1)
-                        if !stacked { Spacer(minLength: 4) }
-                        if count > 0 {
-                            Text("\(count)").font(.subheadline.monospacedDigit()).foregroundStyle(palette.ink3).counting(count)
-                                .accessibilityLabel("\(count) 条灵感")
-                        }
-                    }
-                    ProjectNowLine(now: now, font: .footnote)
-                }
+                Text(project.name).font(.body.weight(.medium)).foregroundStyle(palette.ink).lineLimit(typeSize.isAccessibilitySize ? 3 : 1)
             } icon: {
                 ProjectGlyph(project: project, size: glyph)
             }
-            .padding(.horizontal, 16).padding(.vertical, 8)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16).frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
             .contentShape(.rect)
         }
         .buttonStyle(.row)
-        .projectActions(project, radius: ShelfScreen.radius, pi: now?.shown)
-        .accessibilityElement(children: .combine)
+        .projectActions(project, radius: ShelfScreen.radius, pi: nil)
     }
 }
 

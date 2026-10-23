@@ -129,7 +129,7 @@ struct ChipRow<Content: View>: View {
     }
 }
 
-/// 一颗筛选胶囊（搜索的筛选、会话页的项目）：生效的是选中底（`selection`）与靛青字（选中一律用签名色），其余是纸底细边、墨色字。
+/// 一颗筛选胶囊（搜索的筛选）：生效的是选中底（`selection`）与靛青字（选中一律用签名色），其余是纸底细边、墨色字。
 struct FilterChip<Label: View>: View {
     let on: Bool
     @ViewBuilder let label: Label
