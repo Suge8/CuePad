@@ -3,11 +3,12 @@ import SwiftUI
 
 /// 一件等你怎么答，答法只在这里：任务页等你列的卡（`BoardWaitCard`）、Cue 页等你卡（`CueWaitDock`）与会话页的问题卡（`QuestionCard`）共用。按问题的种类给：
 /// - Cue 的提问：它的选项（`CueChoices`），"可以"是全件唯一的靛青；
-/// - 会话的选择题：每个选项一颗胶囊，靠右、放不下换行（`ChipFlow`）——选项不写进问句，也不给自由回答框；
+/// - 会话的选择题：每个选项一颗胶囊，靠右、放不下换行（`ChipFlow`），长选项折行写全——选项不写进问句，也不给自由回答框（会话页上允许自己写的，提示在底下回复框里写）；
 /// - 确认题："否 / 是"两颗普通胶囊：确认的常是部署、覆盖这类撤不回的事，不用主色推着人点"是"；
 /// - 文字题、Cue 留给你回的（没有提问）：回答框（`BoardReply`，草稿同会话页）；会话页上回复框就在底下（`replyElsewhere`），这里不另给；
 /// - 答不了的（编辑器这类只能在 Agent 里答的，`PiSessionState.answerableQuestion` 为空）：只有"打开会话"；会话页上不给（已经在里面了）。
 /// 会话的答案写成一条作答请求给它所在的 Mac：点下即停用、那颗写"送达中"，送到了写"已答，等 Mac 上的 Agent 继续"，没送到就地写原因、可以再答；
+/// 到哪了读库里答这道题（`promptID`）的那条请求，不记在视图里：切到别的卡再回来照样在，会话换了下一道题就是新的一题。
 /// 同步到不了 Mac 时不让答、写明去哪答。Mac 的会话页上选择题按 1–9 直接作答（键帽在胶囊里）。
 struct WaitAnswer: View {
     let wait: CueTally.Wait
@@ -48,20 +49,38 @@ private struct SessionAnswer: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
-    @State private var requestID: UUID?
-    /// 点了的那个回答：它的胶囊显示送达中。
-    @State private var tapped: PiAnswerValue?
-    @State private var writeError: String?
+    /// 点了、请求还没出现在库里读到的那一下（写成前，或写不成的原因）。
+    @State private var pending: Pending?
     #if os(macOS)
     @FocusState private var keyboard: Bool
     #endif
 
     private var question: PiQuestion? { session.answerableQuestion }
 
-    private var sent: Speech.Trip? {
-        let requests = deliveries ?? services.liveSessions.deliveries[session.sessionID].map { [$0] } ?? []
-        return requestID.flatMap { id in requests.first { $0.id == id } }.map { Speech.trip($0, at: services.speech) }
+    private struct Pending {
+        let promptID: String
+        let value: PiAnswerValue
+        var requestID: UUID?
+        var error: String?
     }
+
+    /// 答这道题最近的那条请求（先发的在前）。
+    private var request: DeliveryRequest? {
+        guard let promptID = question?.promptID else { return nil }
+        let requests = deliveries ?? services.liveSessions.deliveries[session.sessionID].map { [$0] } ?? []
+        return requests.last { $0.answer?.promptID == promptID }
+    }
+
+    /// 这道题刚点的、库里还读不到的那一下；读到了就以库里的为准。
+    private var unseen: Pending? {
+        guard let pending, pending.promptID == question?.promptID, pending.requestID == nil || pending.requestID != request?.id else { return nil }
+        return pending
+    }
+
+    /// 点了的那个回答：它的胶囊显示送达中。
+    private var tapped: PiAnswerValue? { unseen.map(\.value) ?? request?.answer?.value }
+    private var writeError: String? { unseen?.error }
+    private var sent: Speech.Trip? { unseen == nil ? request.map { Speech.trip($0, at: services.speech) } : nil }
 
     /// 点下即算在答（请求写成前也是），胶囊立刻停用，不重复作答。
     private var answering: Bool { tapped != nil && writeError == nil && sent?.failure == nil }
@@ -70,7 +89,9 @@ private struct SessionAnswer: View {
     var body: some View {
         switch question?.kind.known {
         case .confirm: answers([.confirmed(false), .confirmed(true)])
-        case .select: answers((question?.options ?? []).map(PiAnswerValue.option), numbered: replyElsewhere)
+        case .select:
+            answers((question?.options ?? []).map(PiAnswerValue.option), numbered: replyElsewhere,
+                    other: replyElsewhere && question?.allowsOther == true)
         case .text: reply
         case nil:
             if session.question == nil {
@@ -93,7 +114,7 @@ private struct SessionAnswer: View {
     }
 
     /// 几颗回答，下面一行此刻到哪了（送不到 Mac、已答、没送到）。
-    private func answers(_ values: [PiAnswerValue], numbered: Bool = false) -> some View {
+    private func answers(_ values: [PiAnswerValue], numbered: Bool = false, other: Bool = false) -> some View {
         VStack(alignment: .trailing, spacing: 6) {
             chips {
                 ForEach(Array(values.enumerated()), id: \.offset) { index, value in
@@ -102,6 +123,7 @@ private struct SessionAnswer: View {
             }
             // 送不到 Mac 时不让答：写进去的请求会一直停在送达中
             .disabled(answering || !services.reachesPiHost)
+            if other { Text("都不是？在下面的回复框里写你的回答").font(Typography.meta).foregroundStyle(palette.ink3) }
             if let note { Text(note.text).font(Typography.meta).foregroundStyle(note.failed ? palette.failure : palette.ink3).multilineTextAlignment(.trailing) }
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
@@ -135,7 +157,7 @@ private struct SessionAnswer: View {
                     #if os(macOS)
                     if let number { Keycap(text: "\(number)").accessibilityHidden(true) }
                     #endif
-                    Text(value.label).lineLimit(1)
+                    Text(value.label).multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
                 }
             }
             .frame(minWidth: Self.minWidth)
@@ -149,15 +171,14 @@ private struct SessionAnswer: View {
 
     /// 写一条作答请求给会话所在的 Mac；写不进去时就地说明。
     private func answer(_ value: PiAnswerValue) {
-        guard services.reachesPiHost else { return }
-        writeError = nil
-        requestID = nil
-        withAnimation(HandOff.quick) { tapped = value }
+        guard services.reachesPiHost, let promptID = question?.promptID else { return }
+        withAnimation(HandOff.quick) { pending = Pending(promptID: promptID, value: value) }
         Task {
             do {
-                requestID = try await workspace.services.answer(value, to: session).id
+                let id = try await workspace.services.answer(value, to: session).id
+                if pending?.promptID == promptID { pending?.requestID = id }
             } catch {
-                writeError = error.localizedDescription
+                if pending?.promptID == promptID { pending?.error = error.localizedDescription }
             }
         }
     }
