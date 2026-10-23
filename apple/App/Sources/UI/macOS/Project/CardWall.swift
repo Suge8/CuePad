@@ -21,7 +21,7 @@ struct CardOpenStyle: ButtonStyle {
     }
 }
 
-/// 卡面：首图、标题、摘要、元信息（时间、发送目标、浮回、任务与资料标记）。单独一个视图：悬停只改卡的外框，卡面不随之重算。
+/// 卡面：首图、标题、摘要、元信息（时间、发送目标、浮回、任务与置顶标记）。单独一个视图：悬停只改卡的外框，卡面不随之重算。
 private struct CardFace: View {
     let card: Card
     let lastTarget: String?
@@ -74,68 +74,22 @@ struct CardTile: View {
         .buttonStyle(CardOpenStyle())
         .overlay(alignment: .bottomTrailing) {
             if hovering, !workspace.presses.isSelecting {
-                HStack(spacing: 6) {
-                    DeleteCardButton(card: card.id)
-                    MakeTaskButton(card: card.id)
-                }
-                .padding(10).transition(.opacity)
+                DeleteCardButton(card: card.id).padding(10).transition(.opacity)
             }
         }
         .cardPresence(card.id, in: workspace)
+        // 灵感要做就拖到上面任务纸的一行上，接进那条任务（`TaskOutline`）
+        .onDrag { CardDragSession.shared.begin(.idea(card.id)) }
         .onHover { hovering = $0 }
         .presetHover($hovering)
         .animation(HandOff.quick, value: hovering)
         .contextMenu { CardActions(card: card, selectable: true) }
         .accessibilityElement(children: .combine)
-        .accessibilityAction(named: "设为任务", makeTask)
-    }
-
-    private func makeTask() {
-        let id = card.id
-        workspace.attempt { try await workspace.setTodo(id, true) }
     }
 
     private func open() {
         guard !workspace.presses.takesClick(on: card.id, command: NSEvent.modifierFlags.contains(.command)) else { return }
         workspace.open(card)
-    }
-}
-
-/// 悬停在墙上一张卡时右下角露出的"设为任务"：灵感变成任务的那一下（第一行做标题，其余是它的正文，`CueStore.setTodo`），
-/// 卡离开墙、出现在上面的任务里，行尾就是"开始"。圈是任务圈的样子，告诉你它会变成什么；批量选择时不出现（点按是选择）。
-private struct MakeTaskButton: View {
-    let card: UUID
-    @Environment(Workspace.self) private var workspace
-
-    var body: some View {
-        Button {
-            let id = card
-            workspace.attempt { try await workspace.setTodo(id, true) }
-        } label: {
-            MakeTaskChip()
-        }
-        .buttonStyle(PressStyle())
-        .help("设为任务：第一行做任务名，其余成为交给 Agent 的话")
-    }
-}
-
-/// "设为任务"的样子：指针停在钮上（`buttonHovered`）时铺成靛青实底——要变成任务了。
-private struct MakeTaskChip: View {
-    @Environment(\.buttonHovered) private var lit
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        HStack(spacing: 5) {
-            Circle().strokeBorder(lit ? palette.onFill : palette.ink2, lineWidth: 1.3).frame(width: 11, height: 11)
-            Text("设为任务").fontWeight(.medium)
-        }
-        .font(Typography.meta)
-        .foregroundStyle(lit ? palette.onFill : palette.ink)
-        .padding(.horizontal, 9).frame(height: 24)
-        .background(lit ? palette.signatureFill : palette.paperLit, in: .capsule)
-        .overlay(Capsule().strokeBorder(palette.hair).opacity(lit ? 0 : 1))
-        .shadow(color: palette.shadow, radius: 6, y: 2)
-        .contentShape(.capsule)
     }
 }
 

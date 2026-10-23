@@ -2,8 +2,8 @@ import Foundation
 
 /// 会话与开始时间只在叶子上（`CardLinks` 的类型注释）：这条规则被打破后怎么收敛，本机写入与远端变更共用这一处。
 extension CueStore {
-  /// 任务 `tasks` 的步骤刚变过：按 `CardLinks.repairs` 把它们记着的会话与开始时间放回该在的叶子上
-  /// （叶子加了第一个步骤时，它的会话与开始就是这样移到那个步骤上的，上级从此从步骤推出开始）。
+  /// 任务 `tasks` 的子任务刚变过：按 `CardLinks.repairs` 把它们记着的会话与开始时间放回该在的叶子上
+  /// （叶子加了第一个子任务时，它的会话与开始就是这样移到那个子任务上的，上级从此从子任务推出开始）。
   func settle(around tasks: [UUID]) throws {
     guard !tasks.isEmpty else { return }
     try apply(try CardLinks(db, around: tasks).repairs(touching: Set(tasks)))

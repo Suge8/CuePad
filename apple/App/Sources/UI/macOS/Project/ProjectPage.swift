@@ -2,7 +2,7 @@
 import CueStore
 import SwiftUI
 
-/// 项目页（与手机项目页同构）：最上面一行项目的一句介绍（没有就没有这一行）→ 任务那张纸（`FocusBand`）→ 资料 → 工作集卡片墙 → 更早；一条灵感都没有时墙上只有"记一条灵感"那一格（`NewIdeaTile`）。
+/// 项目页（与手机项目页同构）：最上面一行项目的一句介绍（没有就没有这一行）→ 任务那张纸（`FocusBand`）→ 置顶的灵感 → 工作集卡片墙 → 更早；一条灵感都没有时墙上只有"记一条灵感"那一格（`NewIdeaTile`）。
 /// 不写项目名作大标题：侧栏开着时名字就在选中的那一行，收起时工具栏的切换胶囊写它（`ProjectSwitcher`）。文件夹在哪写在"⋯"里文件夹那一组的组头（`ProjectActions`）。
 struct ProjectPage: View {
     let projectID: UUID
@@ -57,7 +57,7 @@ struct ProjectPage: View {
             }
             .debugScrollsToOlder(proxy, ready: board.arrangement != nil)
         }
-        // 批量选择的"全选"范围：看得见的这一页上散放的灵感（资料、墙、更早），按页上的顺序
+        // 批量选择的"全选"范围：看得见的这一页上散放的灵感（置顶、墙、更早），按页上的顺序
         .onChange(of: SelectableKey(active: active, ids: board.arrangement.map { $0.pinned + $0.wall + $0.older }), initial: true) { _, key in
             if key.active, let ids = key.ids { workspace.presses.selectable = ids }
         }
@@ -101,7 +101,7 @@ struct ProjectPage: View {
                     NewIdeaTile(action: workspace.focusCapture)
                 }
             } else {
-                if !arrangement.pinned.isEmpty { resources(arrangement.pinned.compactMap { byID[$0] }, lastTarget: lastTarget) }
+                if !arrangement.pinned.isEmpty { pinned(arrangement.pinned.compactMap { byID[$0] }, lastTarget: lastTarget) }
                 if !arrangement.wall.isEmpty {
                     wallSection(title: "最近", count: arrangement.wall.count, ids: arrangement.wall, byID: byID, lastTarget: lastTarget)
                 }
@@ -112,21 +112,15 @@ struct ProjectPage: View {
         }
     }
 
-    /// 资料：长期参考的灵感，一行一条压在任务区下面。
-    private func resources(_ cards: [Card], lastTarget: [UUID: String]) -> some View {
-        VStack(alignment: .leading, spacing: Spacing.sectionTitle) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text("资料").font(Typography.sectionTitle).foregroundStyle(palette.ink)
-                Text("\(cards.count)").font(Typography.sectionCount).foregroundStyle(palette.ink3)
+    /// 置顶的灵感：长期参考的，一行一条压在任务纸下面；不另起组名，行首的图钉认得出。
+    private func pinned(_ cards: [Card], lastTarget: [UUID: String]) -> some View {
+        VStack(spacing: 0) {
+            ForEach(Array(cards.enumerated()), id: \.element.id) { index, card in
+                if index > 0 { Rectangle().fill(palette.hair).frame(height: 1).padding(.leading, 40) }
+                OlderRow(card: card, lastTarget: lastTarget[card.id], pinned: true)
             }
-            VStack(spacing: 0) {
-                ForEach(Array(cards.enumerated()), id: \.element.id) { index, card in
-                    if index > 0 { Rectangle().fill(palette.hair).frame(height: 1).padding(.leading, 40) }
-                    OlderRow(card: card, lastTarget: lastTarget[card.id])
-                }
-            }
-            .rowPaper(radius: 12)
         }
+        .rowPaper(radius: 12)
     }
 
     private func wallSection(title: String, count: Int, ids: [UUID], byID: [UUID: Card], lastTarget: [UUID: String]) -> some View {

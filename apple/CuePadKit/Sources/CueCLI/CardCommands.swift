@@ -6,7 +6,7 @@ extension Command {
     Command(
       path: ["card", "list"], summary: "列出灵感（散放的，不含任务与挂在任务下的；默认所有项目，项目内按手动顺序）",
       options: [
-        .project("只列该项目"), .allProjects, Opt("pinned", "只列资料（长期参考的灵感）"),
+        .project("只列该项目"), .allProjects, Opt("pinned", "只列置顶的灵感（长期参考的）"),
         Opt("archived", "列归档的灵感与任务"), Opt("trash", "列回收站里单独删除的灵感与任务"),
       ],
       notes: Schema.defaultScope(otherwise: "列所有项目") + "\n" + Schema.output("[Card]", Schema.card)
@@ -66,16 +66,6 @@ extension Command {
       var previous: UUID?
       if let after = call.args.value("after") { previous = try await call.card(after).id }
       try await call.store.moveCard(card.id, to: .top(project: scope.target), after: previous)
-      return reply(try await call.freshView(card.id))
-    },
-    Command(
-      path: ["card", "todo"], summary: "设为任务（待办）；--off 改回灵感", arguments: "<灵感或任务>",
-      options: [Opt("off", "改回灵感：状态与会话关联清掉，它的下级提到它的位置")],
-      notes: "设为任务时第一行是标题，其余是它的正文。\n" + Schema.output("更新后的 Card", Schema.card)
-    ) { call in
-      try call.args.expect("灵感或任务")
-      let card = try await call.card(call.args.positionals[0])
-      try await call.store.setTodo(card.id, !call.args.has("off"))
       return reply(try await call.freshView(card.id))
     },
     Command(

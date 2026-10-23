@@ -1,7 +1,7 @@
 import CueStore
 import SwiftUI
 
-/// 一件等你（`TaskBoard.Wait`，出自 `CueStore.cueTally`）在哪都同一套写法：任务页等你列的卡（`BoardWaitCard`）、Cue 页等你卡（`CueWaitDock`）都从这里取
+/// 一件等你（`TaskBoard.Wait`，出自 `CueStore.cueTally`）在哪都同一套写法：进展页等你列的卡（`BoardWaitCard`）、Cue 页等你卡（`CueWaitDock`）都从这里取
 /// 写什么（`title`、`asked`、`waitBasis`）与谁在问（`WaitAsker`），怎么答是 `WaitAnswer`。
 nonisolated extension TaskBoard.Wait {
     /// 哪件事：会话在问的写会话名（点了进的就是它），Cue 问的写落在的任务，没落在任务上的写 Cue 的名字。

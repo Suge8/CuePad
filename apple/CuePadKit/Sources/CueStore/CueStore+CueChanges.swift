@@ -139,7 +139,7 @@ extension CueStore {
     return result
   }
 
-  /// 请求带着的叶子与它的顶层任务；卡不在了、不是任务（已删、改回灵感）为空。
+  /// 请求带着的叶子与它的顶层任务；卡不在了、不是任务（已删）为空。
   private func failedLeaf(_ card: UUID) throws -> [(task: Card?, leaf: Card?)] {
     guard let leaf = try find(Card.self, card), leaf.deletedAt == nil, leaf.isTask,
       let task = try find(Card.self, try topTask(of: leaf.id)), task.deletedAt == nil
@@ -173,10 +173,10 @@ extension CueStore {
     }
   }
 
-  /// 任务（自己或它的步骤）的会话里最近有动静的那个的摘要；没有会话为 nil。
+  /// 任务（自己或它的子任务）的会话里最近有动静的那个的摘要；没有会话为 nil。
   private func latestRecap(of task: UUID) throws -> PiRecap? { try latestSession(of: task)?.recap }
 
-  /// 任务（自己或它的步骤）绑着的会话里最近有动静的那个；没有为 nil。
+  /// 任务（自己或它的子任务）绑着的会话里最近有动静的那个；没有为 nil。
   func latestSession(of task: UUID) throws -> PiSessionState? {
     try select(
       PiSessionState.self,

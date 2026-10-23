@@ -1,19 +1,22 @@
 import CueStore
 
 /// 一条卡能做什么、菜单有哪几项、按什么顺序（iOS 与 Mac 同一份，`CardActions` 照着画）。
-/// 动线是任务优先：记下灵感 → 设为任务（标题下面写要交代的话）→ 开始（正文作为第一句交给 Agent，见 `TaskNext`）→ 完成并归档。
-/// 所以灵感的主动作是设为任务。长按（Mac 右键）最多四项加删除，主动作排第一，删除单独在最后；手机上的任务行不挂长按菜单（长按是拖动，见 `TaskLine`）；
-/// 打开是点按、完成是点圆圈、缩进是轻扫和拖放，这些不进菜单；低频的（换项目、复制、改回灵感、资料）在任务气泡与纸页的"⋯"里（`more`）。
+/// 动线是任务优先：建任务（标题下面写要交代的话）→ 开始（正文作为第一句交给 Agent，见 `TaskNext`）→ 完成并归档。
+/// 灵感与任务不互转：灵感要做，就拖到一条任务上接进它的正文（`Workspace.mergeIdea`）。
+/// 长按（Mac 右键）最多四项加删除，删除单独在最后；手机上的任务行不挂长按菜单（长按是拖动，见 `TaskLine`），其余操作在左滑的"更多"里（`more`）；
+/// 打开是点按、完成是点圆圈、缩进是轻扫和拖放，这些不进菜单；低频的（换项目、复制、置顶）在任务气泡与纸页的"⋯"里（`more(for:)`）。
 /// 一行轻扫露出的动作也在这里（`swipes`）。删除只有一处（`Workspace.trash`，进回收站、提示里可撤销）：菜单、轻扫之外，
 /// Mac 上悬停墙上的卡与"更早"的行时露出删除钮，⌘⌫ 删鼠标停着的那张（`DeleteCardButton`、`CardPresses.deletable`）。
 nonisolated enum CardMenu {
     enum Item: Hashable, Sendable {
-        case makeTask, makeIdea, complete, reopen, move, archive, resource, unresource, copy, trash
+        case complete, reopen, move, archive, pin, unpin, copy, trash
+        /// 手机任务行左滑的"⋯ 更多"：从这一下长出这条任务的其余操作（`CardMorePanel`、`swipeMore`）。
+        case more
         /// 开始批量选择（Mac 项目页上散放的灵感）。
         case select
         /// 给没做完的叶子任务绑定、改绑、解除 Agent 会话（Mac 的右键；会话列表在 Mac 上）。
         case bindSession
-        /// 只在轻扫里：任务在大纲里缩进、反缩进。
+        /// 任务在大纲里缩进、反缩进：缩进在右滑里，两样都在读屏动作里（`taskSpoken`；看得见的反缩进是拖放）。
         case indent, outdent
     }
 
@@ -23,27 +26,31 @@ nonisolated enum CardMenu {
         var trailing: [Item]
     }
 
-    /// 轻扫：任务右滑缩进、左滑删除与反缩进；灵感左滑删除与设为任务。做不了的不出现
-    /// （`indent`/`outdent`：大纲里这一行此刻能不能缩进、反缩进）。
-    static func swipes(for card: Card, indent: Bool, outdent: Bool) -> Swipes {
-        guard card.isTask else { return Swipes(leading: [], trailing: [.trash, .makeTask]) }
-        return Swipes(leading: indent ? [.indent] : [], trailing: [.trash] + (outdent ? [.outdent] : []))
+    /// 轻扫：任务右滑缩进（大纲里此刻能缩进时）、左滑删除与"更多"；灵感左滑删除。删除在最外侧，一滑到底就是它。
+    static func swipes(for card: Card, indent: Bool) -> Swipes {
+        guard card.isTask else { return Swipes(leading: [], trailing: [.trash]) }
+        return Swipes(leading: indent ? [.indent] : [], trailing: [.trash, .more])
+    }
+
+    /// 左滑"更多"长出的气泡里的那几项（`CardMorePanel`）：完成或重新打开、复制、归档；换项目另起一行翻页，子任务跟着上级走、没有这一行。
+    static func swipeMore(for card: Card) -> [Item] {
+        [card.status == .done ? .reopen : .complete, .copy, .archive]
     }
 
     /// 长按菜单，组间画分隔线。`selectable`：这张卡在能批量选择的地方（Mac 项目页的墙与列表），删除前多一项"选择"。
-    /// `bindsSession`：这是 Mac 上的叶子任务（没有步骤），没做完时多一项"绑定会话"。
+    /// `bindsSession`：这是 Mac 上的叶子任务（没有子任务），没做完时多一项"绑定会话"。
     /// 没做完的任务：完成与归档一组，绑定会话一组（Mac 的叶子），删除最后；没有绑定会话时不留空组。
     static func sections(for card: Card, selectable: Bool = false, bindsSession: Bool = false) -> [[Item]] {
         switch card.status {
-        case nil: [[.makeTask, .move, .archive], (selectable ? [.select] : []) + [.trash]]
+        case nil: [[.move, .archive], (selectable ? [.select] : []) + [.trash]]
         case .done: [[.reopen, .archive], [.trash]]
         case .todo, .inProgress: [[.complete, .archive], bindsSession ? [.bindSession] : [], [.trash]].filter { !$0.isEmpty }
         }
     }
 
-    /// 任务气泡与纸页的"⋯"。步骤跟着上级走，不单独换项目。
+    /// 任务气泡与纸页的"⋯"。子任务跟着上级走，不单独换项目。
     static func more(for card: Card) -> [[Item]] {
-        guard card.isTask else { return [[.makeTask, card.isPinned ? .unresource : .resource, .move, .copy], [.archive], [.trash]] }
-        return [(card.parentID == nil ? [.move] : []) + [.copy], [.makeIdea, .archive], [.trash]]
+        guard card.isTask else { return [[card.isPinned ? .unpin : .pin, .move, .copy], [.archive], [.trash]] }
+        return [(card.parentID == nil ? [.move] : []) + [.copy], [.archive], [.trash]]
     }
 }

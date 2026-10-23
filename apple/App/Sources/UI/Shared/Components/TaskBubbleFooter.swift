@@ -27,7 +27,7 @@ struct BubbleFooter: View {
 /// 交给了会话的叶子此刻怎样（\`TaskAgentLook\`，两端同一份说法）：吉祥物（在做时轻轻浮动）、状态标与一句标题、一句进展；整条点了去会话。
 private struct AgentStrip: View {
     let leaf: Card
-    /// 有步骤的任务看的是哪一步（写在进展前面）。
+    /// 有子任务的任务看的是哪一步（写在进展前面）。
     let caption: String?
     @Environment(Workspace.self) private var workspace
     @Environment(\.cardAgents) private var agents
@@ -77,7 +77,7 @@ private struct AgentStrip: View {
 /// 还没交出去的叶子："开始"——正文连同标题作为第一句交给 Agent（先写下正文里没保存的字）。Mac 左边另有"绑定会话"。
 private struct StartBar: View {
     let leaf: Card
-    /// 有步骤的任务开的是哪一步。
+    /// 有子任务的任务开的是哪一步。
     let caption: String?
     let editing: CardEditing?
     @Environment(Workspace.self) private var workspace

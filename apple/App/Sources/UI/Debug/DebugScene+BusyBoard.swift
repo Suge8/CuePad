@@ -3,7 +3,7 @@ import CueStore
 import Foundation
 
 /// `-CuePadBusyBoard YES`（配 tasks 画面与 `-CuePadDemo YES`）：推进中那一列里再放几件 Agent 正在多步推进的任务——
-/// 运行工具的、刚想的、派了子代理的、被打断的，与一件有三个步骤（登录回调）、做到第二步、第二步的会话在跑测试的（行尾估还要多久）；只写一次。
+/// 运行工具的、刚想的、派了子代理的、被打断的，与一件有三个子任务（登录回调）、做到第二步、第二步的会话在跑测试的（行尾估还要多久）；只写一次。
 extension DebugScene {
     static func seedBusyBoard(_ store: CueStore) async {
         guard defaults.bool(forKey: "CuePadBusyBoard") else { return }

@@ -20,7 +20,7 @@ nonisolated enum CaptureCopy {
     static func saved(to destination: String) -> String { "已记到 \(destination)" }
 }
 
-/// 随手记的草稿：一段文字加若干图片，存成一条灵感（文字在前，图片按顺序各占一行）。要做的事随后"设为任务"。
+/// 随手记的草稿：一段文字加若干图片，存成一条灵感（文字在前，图片按顺序各占一行）。要做的事随后拖进一条任务（`Workspace.mergeIdea`）。
 struct CaptureDraft {
     var text: String
     var images: [Data]

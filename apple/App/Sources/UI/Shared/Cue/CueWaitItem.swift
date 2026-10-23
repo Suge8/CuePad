@@ -2,7 +2,7 @@ import CueStore
 import SwiftUI
 
 /// 等你卡（`CueWaitDock`）里铺开的那一件，按部分排（卡按地方挑排哪几部分）：
-/// - 问句（`question`）：赭黄问号、标题字的问句（`TaskBoard.Wait.asked`），下一行 Cue 的提问是它依据的规矩与范围（最淡的墨、小一号，同任务页等你列），
+/// - 问句（`question`）：赭黄问号、标题字的问句（`TaskBoard.Wait.asked`），下一行 Cue 的提问是它依据的规矩与范围（最淡的墨、小一号，同进展页等你列），
 ///   会话的是问题的说明（选项不写进来）；右上角等了多久；Cue 的原话展开时接在下面（`reading`）。
 /// - 点名的图（`shots`，Cue 的提问才有，`CueShots`；点开全屏时底栏就是这几个选项，看完当场定）。
 /// - 怎么答（`answer`，`WaitAnswer`）；"可以"选的是其中一张图时，那张描靛青圈、选项旁一句"要选别的，在下面跟 Cue 说"。

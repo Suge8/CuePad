@@ -125,7 +125,7 @@ private struct CalloutSurface: ViewModifier {
     }
 }
 
-/// 等你确认、能从这里答的问题：问句与怎么答（`WaitAnswer`，同 Cue 页等你卡与任务页等你列：确认框"否 / 是"，选择框每个选项一颗胶囊，
+/// 等你确认、能从这里答的问题：问句与怎么答（`WaitAnswer`，同 Cue 页等你卡与进展页等你列：确认框"否 / 是"，选择框每个选项一颗胶囊，
 /// Mac 上按 1–9 直接作答；文字型的在下面的回复框里答）。答出去后停用，等 Mac 那边弹窗收起、问题清空（卡片随之消失）；没送达就地写原因，可以再答。
 struct QuestionCard: View {
     let session: PiSessionState

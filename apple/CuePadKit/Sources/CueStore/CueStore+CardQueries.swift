@@ -48,13 +48,13 @@ extension CueStore {
     return Dictionary(rows.map { ($0.card, $0.handoff) }, uniquingKeysWith: { first, _ in first })
   }
 
-  /// 一张任务的下级（步骤与挂在下面的灵感），按手动顺序；在回收站的不列。
+  /// 一张任务的下级（子任务与挂在下面的灵感），按手动顺序；在回收站的不列。
   public func children(of parent: UUID) throws -> [Card] {
     try select(Card.self, where: "parentID = ? AND deletedAt IS NULL AND archivedAt IS NULL", [parent], orderBy: "sortKey, id")
   }
 
   /// 这几种状态的任务，按项目分组：项目顺序同 `projects()`。组内是整棵任务树的先序（同级按手动顺序，
-  /// 步骤紧跟上级）再按状态筛：上级被筛掉的步骤就排在上级原来的位置。只要完成的时不按树，最近完成在前。
+  /// 子任务紧跟上级）再按状态筛：上级被筛掉的子任务就排在上级原来的位置。只要完成的时不按树，最近完成在前。
   /// 回收站里的任务与回收站项目的任务不列。
   public func tasks(_ statuses: TaskStatus...) throws -> [TaskGroup] {
     try taskGroups(Set(statuses))
@@ -102,7 +102,7 @@ extension CueStore {
     return ordered
   }
 
-  /// 可当上级的任务：列得出来的（没删除、没归档）要做卡片。上级不在这里的步骤当顶层，与 `tasks(_:)` 列出的一致。
+  /// 可当上级的任务：列得出来的（没删除、没归档）要做卡片。上级不在这里的子任务当顶层，与 `tasks(_:)` 列出的一致。
   private static let liveTask = "u.deletedAt IS NULL AND u.archivedAt IS NULL AND u.todoAt IS NOT NULL"
 
   /// 任务（`t`）连着它的项目（`p`）与列得出来的上级（`u`）；顶层的条件见 `topLevel`。`taskCounts`、`startedTasks` 与 `tasksDone` 共用。
@@ -111,7 +111,7 @@ extension CueStore {
   private static let topLevel = "(u.id IS NULL OR (t.completedAt IS NULL AND u.completedAt IS NOT NULL))"
 
   /// 各项目的顶层任务按状态的个数——给用户看的任务数与完成数只有这一处定义。顶层是显示在顶层的任务：
-  /// 没有上级、上级不在（没到、在回收站、归档了），或自己没完成而上级已完成（看板上它在顶层）；步骤的进度见 `subtaskProgress`。
+  /// 没有上级、上级不在（没到、在回收站、归档了），或自己没完成而上级已完成（看板上它在顶层）；子任务的进度见 `subtaskProgress`。
   /// 灵感不算；没有任务的项目不在结果里；回收站里的任务与回收站项目不算。
   public func taskCounts() throws -> [UUID: TaskCounts] { try taskCounts(scope: "", []) }
 
@@ -145,7 +145,7 @@ extension CueStore {
   }
 
   /// 做完的顶层任务，最近做完的在前——给用户看的"做完了哪些"只有这一处：任务看板的做完列与更早做完的、实时活动的"今天做完"、项目页的"已完成"。
-  /// 顶层与可见的口径同 `taskCounts`（做完的步骤跟着上级，归档、回收站里的与回收站项目的不算）。
+  /// 顶层与可见的口径同 `taskCounts`（做完的子任务跟着上级，归档、回收站里的与回收站项目的不算）。
   /// `since` 只要这一刻以来做完的，`project` 只要这个项目的，`limit` 至多几条。
   public func tasksDone(since: Date? = nil, in project: UUID? = nil, limit: Int? = nil) throws -> [Card] {
     var scope = "", arguments: [any SQLBindable] = []
@@ -166,7 +166,7 @@ extension CueStore {
     ) { Card(row: $0) }
   }
 
-  /// 每条任务的步骤完成了几个、一共几个：任务行的完成圈与"步骤 n/m"由它推出；没有步骤的不在结果里。
+  /// 每条任务的子任务完成了几个、一共几个：任务行的完成圈与"子任务 n/m"由它推出；没有子任务的不在结果里。
   /// 不带参数读全库；`of` 只读这几条任务的；`in` 只读一个项目里的（下级与上级同项目）。
   public func subtaskProgress() throws -> [UUID: TaskProgress] { try subtaskProgress(scope: "", []) }
 

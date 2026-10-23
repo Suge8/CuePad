@@ -4,24 +4,26 @@ import Synchronization
 import Testing
 @testable import CuePad
 
-/// 任务优先的主动线，按用户走的路写：灵感设为任务 → 开始把正文交给 Agent（话在路上、没送到可重发、送达后正文留着）→ 完成并归档；中途撤销。
+/// 任务优先的主动线，按用户走的路写：建任务 → 开始把正文交给 Agent（话在路上、没送到可重发、送达后正文留着）→ 完成并归档；中途撤销。
 /// 规则单测（行的状态怎么推）都从这些动作里走一遍，不单独测；各处写的任务数见 `TaskCountTests`，整理层级见 `TaskOutlineTests`。
 struct TaskFlowTests {
     let rig = TestApp()
     var store: CueStore { rig.services.store }
     private let atlas = SendTarget(kind: .piSession, name: "atlas", ref: "s1")
 
-    // MARK: 灵感走完全程
+    // MARK: 任务走完全程
 
-    @Test func 设为任务_开始把正文交给Agent_没送到在会话里看_送达后正文留着_完成并归档() async throws {
+    @Test func 灵感接进任务_开始把正文交给Agent_没送到在会话里看_送达后正文留着_完成并归档() async throws {
         let project = try await store.createProject(name: "圆桌", color: "#000000")
-        let idea = try await store.createCard(in: project.id, body: "修乱序\n日志在 logs/0918.txt")
+        let created = try await store.createTask("修乱序", in: project.id)
+        let idea = try await store.createCard(in: project.id, body: "日志在 logs/0918.txt")
         let workspace = Workspace(services: rig.services)
 
-        // 设为任务：第一行是标题，其余是它的正文，不拆出别的卡
-        try await workspace.setTodo(idea.id, true)
-        let task = try #require(try await store.card(idea.id))
+        // 灵感拖到任务上：接在正文后面，灵感进回收站，不拆出别的卡
+        try await workspace.mergeIdea(idea.id, into: created.id)
+        let task = try #require(try await store.card(created.id))
         #expect(task.title == "修乱序" && task.rest == "日志在 logs/0918.txt")
+        #expect(try await store.trashedCards().map(\.id) == [idea.id])
         #expect(try await store.children(of: task.id).isEmpty)
         #expect(try await next(task) == .start(leaf: task))
 
@@ -47,7 +49,7 @@ struct TaskFlowTests {
         _ = try await eventually(store, { try $0.card(task.id)?.piSessionID }) { $0 == "s1" }
         await executor.stop()
         let started = try #require(try await store.card(task.id))
-        #expect(started.status == .inProgress && started.body == "修乱序\n日志在 logs/0918.txt")
+        #expect(started.status == .inProgress && started.body == "修乱序\n\n日志在 logs/0918.txt")
 
         // 任务不自动完成；用户勾选，提示里给归档
         try await workspace.toggle(task.id)
@@ -153,15 +155,19 @@ struct TaskFlowTests {
 
     // MARK: 撤销与批量
 
-    @Test func 设为任务_删除_都能撤销_勾选以最新状态为准() async throws {
+    @Test func 灵感接进任务_删除_都能撤销_勾选以最新状态为准() async throws {
         let workspace = Workspace(services: rig.services)
-        let body = "上线前检查\n把 changelog 过一遍\n看下崩溃率"
-        let multi = try await store.createCard(body: body)
-        try await workspace.setTodo(multi.id, true)
-        #expect(workspace.notice?.text == "已设为任务")
+        let body = "上线前检查\n把 changelog 过一遍"
+        let check = try await store.createTask(body)
+        let crash = try await store.createCard(body: "看下 {{平台}} 崩溃率，{{阈值}}")
+        try await store.updateCard(crash.id) { $0.variableValues = ["平台": "iOS"] }
+        try await workspace.mergeIdea(crash.id, into: check.id)
+        #expect(workspace.notice?.text == "已接到「上线前检查」的正文后面")
+        // 灵感填好的变量随正文接过去，没填的留着占位符
+        #expect(try await store.card(check.id)?.body == body + "\n\n看下 iOS 崩溃率，{{阈值}}")
         try await #require(workspace.notice?.action).run()
-        #expect(try await store.cards(in: Project.defaultID).map(\.body) == [body])
-        #expect(try await store.card(multi.id)?.isTask == false)
+        #expect(try await store.card(check.id)?.body == body)
+        #expect(try await store.cards(in: Project.defaultID).map(\.id) == [crash.id])
 
         let idea = try await store.createCard(body: "续费域名")
         try await workspace.trash(idea.id)

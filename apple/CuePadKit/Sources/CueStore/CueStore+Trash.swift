@@ -14,12 +14,18 @@ extension CueStore {
       let now = Date.stamp
       return try ids.compactMap { id in
         guard let card = try find(Card.self, id), card.deletedAt == nil else { return nil }
-        let lifted = try liftChildren(of: card, at: now)
-        try db.run("UPDATE cards SET deletedAt = ?1, modifiedAt = ?1 WHERE id = ?2", [now, id])
-        if let parent = card.parentID { try settle(around: [parent]) }
-        return .trash(id: id, lifted: lifted)
+        return .trash(id: id, lifted: try trashRow(card, at: now))
       }
     }
+  }
+
+  /// 一条进回收站（在调用方的事务里），返回提到它位置的下级。
+  @discardableResult
+  func trashRow(_ card: Card, at now: Date) throws -> [UUID] {
+    let lifted = try liftChildren(of: card, at: now)
+    try db.run("UPDATE cards SET deletedAt = ?1, modifiedAt = ?1 WHERE id = ?2", [now, card.id])
+    if let parent = card.parentID { try settle(around: [parent]) }
+    return lifted
   }
 
   /// 恢复；如果所属项目仍在回收站，卡片回到默认项目，否则会不可见。
@@ -35,12 +41,12 @@ extension CueStore {
                          THEN ? ELSE projectID END
       WHERE id = ?
       """, [Date.stamp, Project.defaultID, id])
-    // 恢复回原来的上级下的步骤：上级的会话按叶子的规则放好
+    // 恢复回原来的上级下的子任务：上级的会话按叶子的规则放好
     if let parent = try find(Card.self, id)?.parentID { try settle(around: [parent]) }
   }
 
-  /// 拨回一次改动（`setTodo`、`trashCard`、`moveCard` 的回执），整个拨回是一个事务：
-  /// 改回灵感后下级回到它下面；删除恢复、提上去的下级回到它下面；挪动放回原来的位置。
+  /// 拨回一次改动（`trashCard`、`moveCard`、`mergeIdea` 的回执），整个拨回是一个事务：
+  /// 删除恢复、提上去的下级回到它下面；挪动放回原来的位置；接进任务的灵感恢复、任务正文改回。
   /// 其间已经不在了的下级跳过，原来的前一个同级不在了就排到最前。
   public func undo(_ change: CardChange) throws { try undo([change]) }
 
@@ -52,15 +58,15 @@ extension CueStore {
   /// 拨回一个回执（在调用方的事务里）。
   private func undoRow(_ change: CardChange) throws {
     switch change {
-    case .todo(let id, let on, let lifted):
-      try applyTodo(id, !on)
-      try adopt(lifted, by: id)
     case .trash(let id, let lifted):
       try restoreRow(id)
       try adopt(lifted, by: id)
     case .move(let id, let slot, let after):
       let survivor = try after.flatMap { try find(Card.self, $0)?.id }
       try relocate(id, to: slot, after: survivor)
+    case .merge(let idea, let task, let body):
+      try db.run("UPDATE cards SET body = ?, modifiedAt = ? WHERE id = ?", [body, Date.stamp, task])
+      try restoreRow(idea)
     }
   }
 

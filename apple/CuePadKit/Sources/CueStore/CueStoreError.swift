@@ -26,9 +26,9 @@ public enum CueStoreError: Error, Equatable {
   case invalidParent
   /// 挂上去后任务会超过 `Card.maxTaskDepth` 级。
   case taskTooDeep
-  /// 只能绑在叶子（没有步骤的任务）上；有步骤的任务绑到它的某个步骤上。
+  /// 只能绑在叶子（没有子任务的任务）上；有子任务的任务绑到它的某个子任务上。
   case notALeaf
-  /// 灵感没有状态：先"设为任务"。
+  /// 要的是任务、给的是灵感：灵感没有状态，不能改状态、开工、绑会话，也不能当别的灵感接进去的落点。
   case notATask
   /// 预览的文件不存在、读不了或不是文件（参数是它的路径）。
   case previewUnreadable(String)
@@ -49,7 +49,7 @@ public enum CueStoreError: Error, Equatable {
   case alreadyStarted(String)
   /// 叶子还没绑会话，它的话正送进上一步的会话（参数是叶子标题）。
   case sending(String)
-  /// 有步骤的任务还有这么多步骤没完成，不能整件完成。
+  /// 有子任务的任务还有这么多子任务没完成，不能整件完成。
   case stepsRemaining(Int)
   /// 正在为叶子开新会话，开好前不再开（参数是叶子标题）。
   case launching(String)
@@ -112,9 +112,9 @@ extension CueStoreError: LocalizedError {
     case .unsupportedSchemaVersion(let version): "资料库由更新版本的 CuePad 建立（结构版本 \(version)），这个版本打不开"
     case .schemaTooOld(let version): "资料库由更早版本的 CuePad 建立（结构版本 \(version)），这个版本不再升级它"
     case .invalidParent: "只能挂到任务下，不能挂到自己或自己的下级下"
-    case .taskTooDeep: "任务最多 \(Card.maxTaskDepth) 级（任务 → 步骤）"
-    case .notALeaf: "有步骤的任务不直接绑会话，绑到它的某个步骤上"
-    case .notATask: "这是灵感，先「设为任务」再改状态"
+    case .taskTooDeep: "任务最多 \(Card.maxTaskDepth) 级（任务 → 子任务）"
+    case .notALeaf: "有子任务的任务不直接绑会话，绑到它的某个子任务上"
+    case .notATask: "这是灵感，没有状态：要做的事另建任务，或把这条灵感接进一条任务"
     case .previewUnreadable(let path): "读不了这个文件（不存在、不是文件或没有权限）：\(path)"
     case .previewTooLarge(let path, let limit): "文件太大，单个不超过 \(limit / 1_000_000) MB：\(path)"
     case .previewUnsupported(let ext): "不支持预览\(ext.isEmpty ? "没有扩展名的文件" : " .\(ext) 文件")，可发：\(PiPreviewKind.supportedList)"
@@ -123,7 +123,7 @@ extension CueStoreError: LocalizedError {
     case .readOnlyLibrary: "资料库是只读的，写不进去"
     case .noSession(let title): "「\(title)」还没有会话：先 start 开工，它的正文会作为第一句"
     case .alreadyStarted(let title): "「\(title)」已有会话：用 say 对它说话"
-    case .stepsRemaining(let count): "还有 \(count) 个步骤没完成：先把它们做完并 done（不用做的，evidence 写明为什么不用做）"
+    case .stepsRemaining(let count): "还有 \(count) 个子任务没完成：先把它们做完并 done（不用做的，evidence 写明为什么不用做）"
     case .sending(let title): "「\(title)」的话正送进上一步的会话：送到后这一步就绑上它，再用 say 说话（peek 看状态）"
     case .launching(let title): "正在为「\(title)」开会话：等它开好（peek 看状态），再用 say 说话"
     case .noMac: "还没有 Mac 打开过 CuePad，开不了会话：先在 Mac 上打开它"

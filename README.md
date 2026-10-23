@@ -29,7 +29,7 @@
 - **Cue runs your agents for you.** Say what you want, typed on the Mac or from your phone. Cue turns it into tasks, starts and names agent sessions, answers their routine questions, checks their evidence and signs off finished work. It comes back only for what can't be undone (pushing, releasing, deleting): everything waiting on you is one number, *Waiting N*, one tap each.
 - **Every agent on one board.** Tasks move through four lanes — to do, advancing, waiting on you, done — with each session's live state next to them: thinking, running a tool, waiting, finished.
 - **Your phone is the remote.** Answer an agent's question or permission request from anywhere. Agents send you screenshots, pages, PDFs and recordings to check, each captioned with what to look at.
-- **Ideas first.** Plain Markdown with inline images and `{{variables}}`. When it's time to act, an idea becomes a task in one tap; every send is logged and can be resent.
+- **Ideas first.** Plain Markdown with inline images and `{{variables}}`. When it's time to act, drag an idea onto a task and it joins the task's notes; every send is logged and can be resent.
 - **Yours.** Everything lives in a SQLite library on your device and syncs through your own private iCloud database. No account, no server, no telemetry.
 
 | | |

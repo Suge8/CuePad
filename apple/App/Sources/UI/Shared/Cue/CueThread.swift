@@ -9,7 +9,7 @@ nonisolated struct CueThread: Equatable, Sendable {
     let messages: [CueMessage]
     /// 对话与"等你"提到的活（消息上收成一行的引用）。
     let tasks: [UUID: CueTaskRef]
-    /// 等你（Cue 的提问与会话在问的，同任务页等你列，`TaskBoard.waits`），最早的在前；点名要露的那件在最前（`leading`）。
+    /// 等你（Cue 的提问与会话在问的，同进展页等你列，`TaskBoard.waits`），最早的在前；点名要露的那件在最前（`leading`）。
     let waiting: [TaskBoard.Wait]
     /// Cue 点名要你看的图（`CueMessage.shots`：提问的与做完的结果），按消息的 id：只有点了名、那一份还在的
     let shots: [UUID: [CueShown]]

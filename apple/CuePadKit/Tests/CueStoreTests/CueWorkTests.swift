@@ -7,7 +7,7 @@ import Testing
   let fixture = try! Fixture()
   var store: CueStore { fixture.store }
 
-  /// Cue 收尾整件事：还有步骤没做完时不行（说还剩几个）；步骤都做完了，任务完成，各步骤上的会话请它结束——
+  /// Cue 收尾整件事：还有子任务没做完时不行（说还剩几个）；子任务都做完了，任务完成，各子任务上的会话请它结束——
   /// 只结束绑着的事都做完了的：一个会话还绑着别的没做完的事就留着，那件事完成（你点圆圈也一样）时才结束。
   @Test func aTaskWithStepsCompletesOnlyWhenEveryStepIsDone() async throws {
     let task = try await store.createTask("发布")

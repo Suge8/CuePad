@@ -1,9 +1,9 @@
 import CueStore
 import SwiftUI
 
-/// "等你"：固定在输入框上方的一张纸，要你拍板的事只在这里——来源与任务页等你列、Cue 那一行的"等你 M"同一份（`CueThread.waiting`，出自 `CueStore.cueTally`）：
+/// "等你"：固定在输入框上方的一张纸，要你拍板的事只在这里——来源与进展页等你列、Cue 那一行的"等你 M"同一份（`CueThread.waiting`，出自 `CueStore.cueTally`）：
 /// Cue 的提问与会话在问的同排。顶上一排是在等的每一件（`CueWaitStrip`），点哪件铺开哪件；默认露最早的那件（从任务看板点进来的那条先露，`CueThread.leading`）。
-/// 铺开的那件（`CueWaitItem`）：问句、点名的图、怎么答（`WaitAnswer`，与任务页等你列、会话页问题卡同一个）与末行。问句是代码按 Cue 写的动作短语写出的
+/// 铺开的那件（`CueWaitItem`）：问句、点名的图、怎么答（`WaitAnswer`，与进展页等你列、会话页问题卡同一个）与末行。问句是代码按 Cue 写的动作短语写出的
 /// （`CueAsking.question`），不靠 Cue 的措辞；Cue 的原话默认收起，点"原话"再看。对话里不另挂还在等你的提问：同一问同屏只一处。
 /// 卡上只能答：别的话在 Cue 页底下的输入框说，一开口 Cue 的提问就收起（Cue 判断不是在答它会放回，见 `CueQuestionEnd`）。没有关掉。
 /// Cue 停用着时卡照样露、Cue 的选项停用并写"启用后再答"（`CueChoices`）。答了等库里那件结束才换下一件。

@@ -10,7 +10,7 @@ nonisolated private struct EditorData: Sendable, Equatable {
 }
 
 /// 打开的灵感：一整张纸页（宽 iPad 上是居中的纸，两侧露出桌面），正文编辑（`CardTextField`）与自动保存（`CardEditing`）在这里；
-/// 顶栏是共用的悬浮顶栏——中间写所属项目与"时间 · 资料"，右边"⋯"里是分享与 `CardMenu.more`。任务不进这里，在任务气泡里看（`TaskBubble`）。
+/// 顶栏是共用的悬浮顶栏——中间写所属项目与"时间 · 置顶"，右边"⋯"里是分享与 `CardMenu.more`。任务不进这里，在任务气泡里看（`TaskBubble`）。
 /// 灵感离开时什么都没写就不留下（`Workspace.leaveEditing`）。
 struct CardEditorScreen: View {
     let cardID: UUID
@@ -56,9 +56,9 @@ struct CardEditorScreen: View {
         }
     }
 
-    /// 顶栏的一行："改于 03:36 · 资料"。
+    /// 顶栏的一行："改于 03:36 · 置顶"。
     private func detail(_ data: EditorData) -> Dotted {
-        Dotted("改于 \(DateLabel.short(data.card.modifiedAt))", data.card.isPinned ? "资料" : nil)
+        Dotted("改于 \(DateLabel.short(data.card.modifiedAt))", data.card.isPinned ? "置顶" : nil)
     }
 
     /// 顶栏右边的"⋯"：从第一帧就在（卡片还没读到时禁用），随放大过渡一起出现，不在过渡结束后才弹出来。

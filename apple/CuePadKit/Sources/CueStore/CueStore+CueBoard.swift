@@ -17,7 +17,7 @@ extension CueStore {
       sessions: try select(PiSessionState.self, where: Self.isLoose("piSessionStates"), orderBy: "stateSince DESC, id"))
   }
 
-  /// 最近完成、绑过会话的 `limit` 件顶层任务（没删除，归档了的也算），最近完成的在前，各带它（自己或步骤）的会话里最近有动静的那个此刻的样子：
+  /// 最近完成、绑过会话的 `limit` 件顶层任务（没删除，归档了的也算），最近完成的在前，各带它（自己或子任务）的会话里最近有动静的那个此刻的样子：
   /// Cue 据此找能接着用的旧会话（不带参数的 peek 末尾列出）。会话记录还没到的不列。
   public func cueRecentlyDone(limit: Int) throws -> [(task: Card, session: PiSessionState)] {
     try topTasks(where: "t.completedAt IS NOT NULL AND \(Self.hasSession)", orderBy: "t.completedAt DESC, t.id", limit: limit)
@@ -44,7 +44,7 @@ extension CueStore {
     let links = try CardLinks(db, around: tasks.map(\.id))
     let homes = try cards(Set(tasks.map { links.home(of: $0.id) }))
     let lastDone = try lastCompletedSteps(of: tasks.filter { task in homes[links.home(of: task.id)].map { $0.id != task.id && $0.completedAt != nil } ?? false })
-    // 每件事的候选：没做完的叶子（并行做的几步都在），加上没有在做的步骤时落回的那一个
+    // 每件事的候选：没做完的叶子（并行做的几步都在），加上没有在做的子任务时落回的那一个
     let steps = Dictionary(grouping: try select(
       Card.self, where: "parentID IN (SELECT value FROM json_each(?)) AND todoAt IS NOT NULL AND deletedAt IS NULL AND completedAt IS NULL",
       [Self.idList(tasks.map(\.id))], orderBy: "sortKey, id"
@@ -80,12 +80,12 @@ extension CueStore {
   /// 看板上的：没做完、没归档。
   private static let onBoard = "t.completedAt IS NULL AND t.archivedAt IS NULL"
 
-  /// 顶层任务 `t` 自己或它的步骤绑着会话。
+  /// 顶层任务 `t` 自己或它的子任务绑着会话。
   static let hasSession = """
     EXISTS (SELECT 1 FROM cards l WHERE (l.id = t.id OR l.parentID = t.id) AND l.todoAt IS NOT NULL AND l.deletedAt IS NULL AND l.piSessionID IS NOT NULL)
     """
 
-  /// 一件事的细节；给步骤也行，按它的顶层任务给。`rounds` 是每个叶子带几轮最近的问答。
+  /// 一件事的细节；给子任务也行，按它的顶层任务给。`rounds` 是每个叶子带几轮最近的问答。
   public func cueTaskDetail(_ task: UUID, rounds: Int = 3) throws -> CueTaskDetail {
     let top = try topTask(of: task)
     guard let card = try find(Card.self, top) else { throw CueStoreError.notFound }
@@ -125,7 +125,7 @@ extension CueStore {
   }
 
 
-  /// 一件顶层任务的交付物（唯一的规则）：它与它的步骤用过的会话（正在用的与换下来的，`Card.formerSessionIDs`）
+  /// 一件顶层任务的交付物（唯一的规则）：它与它的子任务用过的会话（正在用的与换下来的，`Card.formerSessionIDs`）
   /// 在任务开工（`Card.startedSQL`，没开始过按排进待办的时刻）之后发到手机的预览，从早到晚。开工前的不算：会话被另一件事接着用时，前一件的图不会算到这件上。
   /// 不另记"哪些是交付物"：会话发到手机本来就是给人看的。Cue 在 peek 里看这份清单，做完时从中点名要挂在结果上的几张（`finishTask` 的 shots）。
   public func deliverables(of task: UUID) throws -> [PiPreview] {

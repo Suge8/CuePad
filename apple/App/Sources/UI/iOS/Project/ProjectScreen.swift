@@ -13,7 +13,7 @@ nonisolated private struct ProjectPage: Sendable, Equatable {
     }
 }
 
-/// 项目页：任务纸 → 资料 → 最近（卡片墙）→ 更早，与 Mac 同构、同一套上墙规则；一条灵感都没有时墙上只有"记一条灵感"那一格（`NewIdeaTile`）。
+/// 项目页：任务纸 → 置顶的灵感 → 最近（卡片墙）→ 更早，与 Mac 同构、同一套上墙规则；一条灵感都没有时墙上只有"记一条灵感"那一格（`NewIdeaTile`）。
 /// 任务纸以下是一个懒加载列表：大项目只创建屏幕内的卡与行。
 struct ProjectScreen: View {
     let projectID: UUID
@@ -64,12 +64,11 @@ struct ProjectScreen: View {
                     wall { NewIdeaTile(action: workspace.newCard) }
                 }
                 if !arrangement.pinned.isEmpty {
-                    // 资料：长期参考的灵感，一行一条压在任务区下面
-                    SectionHeader(title: "资料", count: arrangement.pinned.count).padding(.bottom, Self.headerGap)
+                    // 置顶的灵感：长期参考的，一行一条压在任务纸下面；不另起组名，行首的图钉认得出
                     let ids = arrangement.pinned
                     VStack(spacing: 0) {
                         ForEach(ids.compactMap { page.entries[$0] }) { entry in
-                            OlderRow(entry: entry, lastTarget: lastTarget[entry.id], isFirst: entry.id == ids.first, isLast: entry.id == ids.last)
+                            OlderRow(entry: entry, lastTarget: lastTarget[entry.id], isFirst: entry.id == ids.first, isLast: entry.id == ids.last, pinned: true)
                         }
                     }
                     .padding(.bottom, Self.sectionGap)
@@ -146,7 +145,7 @@ struct ProjectScreen: View {
     }
 }
 
-/// 顶栏下总是一张纸（同 Mac 项目页）：本项目任务（前 3 条没做完的顶层任务连同步骤，可拖动、缩进，同进展页）；纸底一行左边"添加任务"，
+/// 顶栏下总是一张纸（同 Mac 项目页）：本项目任务（前 3 条没做完的顶层任务连同子任务，可拖动、缩进，同进展页）；纸底一行左边"添加任务"，
 /// 右边是没列出的与最近完成的个数，点了在纸里原地展开（无回弹弹簧）、各自开合，见 `TaskFold`、`TaskFoldAnchor`。
 /// 会话不在页上，"⋯"里"看这个项目的会话"去进展页的会话段。三种项目（多、少、只有任务）是同一个结构，切换项目时眼睛不用重新找。
 private struct FocusCard: View {
@@ -161,7 +160,7 @@ private struct FocusCard: View {
     @Environment(\.dynamicTypeSize) private var typeSize
 
     private static let visibleTasks = 3
-    /// 没做完的任务（含步骤）有这么多时，折起时列出的那几行之后的行按需建：全展开时普通栈要在点开的那一圈把每行都建出、量一遍（150 条约 150ms，模拟器 Release）。
+    /// 没做完的任务（含子任务）有这么多时，折起时列出的那几行之后的行按需建：全展开时普通栈要在点开的那一圈把每行都建出、量一遍（150 条约 150ms，模拟器 Release）。
     /// 按总数定、不按开合定：换栈会让一直在的那几行也跟着重建、淡出再淡入。
     private static let lazyFrom = 20
     /// 收起后纸上留下的那几行淡入多久（同 `HandOff.quick`）。

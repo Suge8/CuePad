@@ -23,7 +23,7 @@ extension Workspace {
         return speak(to: .cue, from: box) { try $0.stored(in: files) }
     }
 
-    /// 只记下（"对 Cue 说"长按发送）：这句不交给 Cue，记成一条灵感落在默认项目（不选项目，之后在灵感里挪到别的项目或设为任务），
+    /// 只记下（"对 Cue 说"长按发送）：这句不交给 Cue，记成一条灵感落在默认项目（不选项目，之后在灵感里挪到别的项目或拖进一条任务），
     /// 提示落点；按下输入框立刻空，写不进库时文字与图片放回输入框（期间新打的接在后面）。
     @discardableResult
     func note(from box: Binding<ComposerDraft>) -> Task<Void, Never>? {

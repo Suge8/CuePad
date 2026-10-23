@@ -3,7 +3,7 @@ import CueStore
 import CueText
 import SwiftUI
 
-/// 两端同一份的结果，加上只有右侧预览要写的：最近发去哪里、任务的上级标题与步骤进度。
+/// 两端同一份的结果，加上只有右侧预览要写的：最近发去哪里、任务的上级标题与子任务进度。
 nonisolated private struct PaletteData: Sendable, Equatable {
     var matches: CardMatches
     var lastSends: [UUID: LastSend]
@@ -270,7 +270,7 @@ struct SearchPalette: View {
         }
     }
 
-    /// 任务预览的一行："上级：修乱序 · 步骤 1/2"；什么都没有时不写。
+    /// 任务预览的一行："上级：修乱序 · 子任务 1/2"；什么都没有时不写。
     private static func taskFacts(parent: String?, subtasks: TaskProgress?) -> Dotted? {
         Dotted(parent.map { "上级：\($0)" }, subtasks.map(TaskCopy.progress)).nonEmpty
     }

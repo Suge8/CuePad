@@ -7,7 +7,7 @@ enum TaskMetrics {
     static let caption = Font.footnote
     static let chipTarget: CGFloat = 44
     static let titleRing: CGFloat = 24
-    // 任务行（`TaskLine`）：上级正文字号、步骤小一档，圈也小一档
+    // 任务行（`TaskLine`）：上级正文字号、子任务小一档，圈也小一档
     static let lineFont = Font.body
     static let stepFont = Font.subheadline
     static let ring: CGFloat = 24
@@ -25,7 +25,7 @@ enum TaskMetrics {
     static let caption = Typography.meta
     static let chipTarget: CGFloat = 24
     static let titleRing: CGFloat = 20
-    // 任务行（`TaskLine`）：上级正文字号加一点字重、步骤小一档，圈也小一档
+    // 任务行（`TaskLine`）：上级正文字号加一点字重、子任务小一档，圈也小一档
     static let lineFont = Typography.body.weight(.medium)
     static let stepFont = Typography.secondary
     static let ring: CGFloat = 17

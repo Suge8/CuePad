@@ -4,12 +4,12 @@ import CueText
 import Foundation
 import Testing
 
-/// 任务 → 步骤 → 会话：叶子（没有步骤的任务）才有会话；一个叶子最多一个会话，一个会话可以绑好几个叶子。
+/// 任务 → 子任务 → 会话：叶子（没有子任务的任务）才有会话；一个叶子最多一个会话，一个会话可以绑好几个叶子。
 @Suite struct LeafTests {
   let fixture = try! Fixture()
   var store: CueStore { fixture.store }
 
-  @Test func 加第一个步骤时_叶子的会话移到这个步骤上() async throws {
+  @Test func 加第一个子任务时_叶子的会话移到这个子任务上() async throws {
     let task = try await store.createTask("修乱序")
     try await store.linkCard(task.id, toSession: "s1")
 
@@ -18,7 +18,7 @@ import Testing
     let upper = try #require(try await store.card(task.id))
     #expect(upper.piSessionID == nil)
 
-    // 再加一个步骤不动：会话已经在第一个步骤上
+    // 再加一个子任务不动：会话已经在第一个子任务上
     let next = try await store.createTask("改排序", under: task.id)
     #expect(try await store.card(step.id)?.piSessionID == "s1")
     #expect(next.piSessionID == nil)
@@ -84,7 +84,7 @@ import Testing
     #expect(try await store.card(task.id)?.piSessionID == "s-old")
   }
 
-  @Test func 能绑的叶子_没完成_没绑会话_步骤带上级() async throws {
+  @Test func 能绑的叶子_没完成_没绑会话_子任务带上级() async throws {
     let project = try await store.createProject(name: "圆桌", color: "#111")
     let top = try await store.createTask("上线", in: project.id)
     let step = try await store.createTask("备份", under: top.id)

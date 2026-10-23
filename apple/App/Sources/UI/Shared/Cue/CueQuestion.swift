@@ -77,7 +77,7 @@ struct CueChoices: View {
     let options: [String]
     var disabled = false
     var hint: String?
-    /// 小一档（任务页等你列）：胶囊紧凑、靠右能换行，"以后……不用问"收成"以后不用问"（范围在依据那一行）；答的仍是原文
+    /// 小一档（进展页等你列）：胶囊紧凑、靠右能换行，"以后……不用问"收成"以后不用问"（范围在依据那一行）；答的仍是原文
     var compact = false
     let pick: (String) -> Void
     @Environment(Workspace.self) private var workspace

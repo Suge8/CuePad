@@ -56,7 +56,7 @@ extension CueTools {
     let detail = try await store.cueTaskDetail(card.id)
     let now = Date(), left = try await store.cueState()?.left ?? []
     var lines = [
-      "「\(detail.task.heading)」（\(detail.task.id.shortID)）" + (detail.progress.map { " · 步骤 \($0.done)/\($0.total)" } ?? "")
+      "「\(detail.task.heading)」（\(detail.task.id.shortID)）" + (detail.progress.map { " · 子任务 \($0.done)/\($0.total)" } ?? "")
         + " · " + status(detail.task)
     ]
     for leaf in detail.leaves {

@@ -13,7 +13,7 @@ struct OlderList: View {
     var body: some View {
         let total = groups.reduce(0) { $0 + $1.cards.count }
         VStack(alignment: .leading, spacing: 18) {
-            // 与"资料""最近"同一种分组标题
+            // 与"最近"同一种分组标题
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text("更早").font(Typography.sectionTitle).foregroundStyle(palette.ink)
                 Text("\(total)").font(Typography.sectionCount).foregroundStyle(palette.ink3)
@@ -71,16 +71,19 @@ struct OlderList: View {
     }
 }
 
-/// "更早"与"资料"里的一行：点开编辑页；指针停着时铺行的淡底、行尾浮出删除（`hoverReveal`，批量选择时不出），批量选择里选上的是选中底（`RowStyle`）。
+/// "更早"与置顶的灵感里的一行：点开编辑页；指针停着时铺行的淡底、行尾浮出删除（`hoverReveal`，批量选择时不出），批量选择里选上的是选中底（`RowStyle`）。
+/// 置顶的（`pinned`）行首是图钉，那一组不另起组名。同墙上的卡，拖到任务纸的一行上接进那条任务。
 struct OlderRow: View {
     let card: Card
     let lastTarget: String?
+    var pinned = false
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        Button(action: open) { OlderRowLine(card: card, lastTarget: lastTarget) }
+        Button(action: open) { OlderRowLine(card: card, lastTarget: lastTarget, pinned: pinned) }
             .buttonStyle(CardOpenStyle())
             .cardPresence(card.id, in: workspace)
+            .onDrag { CardDragSession.shared.begin(.idea(card.id)) }
             .contextMenu { CardActions(card: card, selectable: true) }
             .accessibilityElement(children: .combine)
     }
@@ -90,6 +93,7 @@ struct OlderRow: View {
 private struct OlderRowLine: View {
     let card: Card
     let lastTarget: String?
+    let pinned: Bool
     @Environment(\.cardSelected) private var selected
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
@@ -97,7 +101,7 @@ private struct OlderRowLine: View {
     var body: some View {
         let text = CardText(card.body)
         HStack(spacing: 10) {
-            RowGlyph(images: !text.images.isEmpty)
+            RowGlyph(images: !text.images.isEmpty, pinned: pinned)
             Text(text.label)
                 .font(Typography.body.weight(.medium)).foregroundStyle(palette.ink).lineLimit(1).layoutPriority(1)
             Text(text.preview).font(Typography.secondary).foregroundStyle(palette.ink3).lineLimit(1)
@@ -121,9 +125,10 @@ extension OlderRow {
     }
 }
 
-/// 行首的小图标；批量选择里选上时换成签名色的对勾。
+/// 行首的小图标（置顶的是图钉）；批量选择里选上时换成签名色的对勾。
 private struct RowGlyph: View {
     let images: Bool
+    let pinned: Bool
     @Environment(\.cardSelected) private var selected
     @Environment(\.palette) private var palette
 
@@ -132,11 +137,11 @@ private struct RowGlyph: View {
             if selected {
                 Image(.picked).foregroundStyle(palette.onFill, palette.signature)
             } else {
-                Image(images ? .photo : .document).foregroundStyle(palette.ink3)
+                Image(pinned ? .pin : images ? .photo : .document).foregroundStyle(pinned ? palette.ink2 : palette.ink3)
             }
         }
         .font(.system(size: 13)).frame(width: 18)
-        .accessibilityLabel(selected ? "已选" : images ? "含图片的灵感" : "灵感")
+        .accessibilityLabel(selected ? "已选" : pinned ? "置顶的灵感" : images ? "含图片的灵感" : "灵感")
     }
 }
 

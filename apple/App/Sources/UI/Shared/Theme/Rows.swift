@@ -73,7 +73,7 @@ extension View {
 }
 
 extension View {
-    /// 一组行拼成的一张纸（手机书架的几组、Mac 的更早、资料与回收站）：纸是行容器，行铺满纸，里面的东西裁在纸的圆角里。
+    /// 一组行拼成的一张纸（手机书架的几组、Mac 的更早、置顶与回收站）：纸是行容器，行铺满纸，里面的东西裁在纸的圆角里。
     func rowPaper(radius: CGFloat) -> some View {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
         return clipShape(shape).rowContainer(shape, flush: true).paper(radius: radius)

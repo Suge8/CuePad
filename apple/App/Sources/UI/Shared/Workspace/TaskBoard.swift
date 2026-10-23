@@ -8,7 +8,7 @@ import Foundation
 ///   等你每件一张、最早的在上（与 Cue 页等你卡同一份，`waits`），没落在任务上的（Cue 的一般提问、没绑任务的会话）也在。
 /// - 已完成：今天做完的顶层任务（`CueStore.tasksDone`），最近的在前；更早做完的收在列末（`earlier`），没进归档，所以就地展开，不跳去归档页。
 ///   每件带上 Cue 做完时点名的第一张成果图（`CueStore.cueResultShots`，读的时候一次取齐，不逐行查库）。
-/// 步骤不单列，卡片写进度；会话此刻在做什么看任务此刻干活的叶子（`Item.leaf`）。顶层的口径同 `CueStore.taskCounts`（`TaskTree` 的顶层）。
+/// 子任务不单列，卡片写进度；会话此刻在做什么看任务此刻干活的叶子（`Item.leaf`）。顶层的口径同 `CueStore.taskCounts`（`TaskTree` 的顶层）。
 nonisolated struct TaskBoard: Sendable, Equatable {
     enum Column: CaseIterable, Identifiable, Sendable {
         case todo, advancing, waiting, done
@@ -29,7 +29,7 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         var task: Card
         var project: Project?
         var steps: TaskProgress?
-        /// 此刻干活的叶子（`CueStore.workingLeaf`）：会话状态与"开始"看它。有步骤、不在进行中的为 nil（还没开始的由交给的规则定）。
+        /// 此刻干活的叶子（`CueStore.workingLeaf`）：会话状态与"开始"看它。有子任务、不在进行中的为 nil（还没开始的由交给的规则定）。
         var leaf: Card?
         /// 已完成的：Cue 做完时点名的第一张成果图（还在的）；别的列为 nil。
         var shot: CueShown?

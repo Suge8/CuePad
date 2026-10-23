@@ -70,7 +70,7 @@ extension Workspace {
         push(sessionRoute(route.id, sessionID: route.sessionID) ?? forward)
     }
 
-    /// 打开一条灵感或任务：任务在气泡里看（`openTask`）；灵感（挂在任务下的资料也一样）进编辑页（`showEditor`）。
+    /// 打开一条灵感或任务：任务在气泡里看（`openTask`）；灵感（挂在任务下的也一样）进编辑页（`showEditor`）。
     func open(_ card: Card) {
         if card.isTask { return openTask(card) }
         openTask = nil

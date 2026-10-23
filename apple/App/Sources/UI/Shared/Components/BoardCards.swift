@@ -97,7 +97,7 @@ struct BoardSessionCard: View {
 }
 
 /// 卡里的排法（任务卡、会话卡同一种）：一行开头记号、项目小图形与标题，右端是要你管的状态词或调用处给的尾巴；
-/// 推进中的卡标题贴上沿，下沿是那条线（`BoardWave`），有步骤的线下面再分段（`BoardSteps`）；别的列的卡标题竖直居中。
+/// 推进中的卡标题贴上沿，下沿是那条线（`BoardWave`），有子任务的线下面再分段（`BoardSteps`）；别的列的卡标题竖直居中。
 struct BoardCardLayout<Lead: View, Trailing: View>: View {
     let advancing: Bool
     var pulse = BoardPulse()
@@ -129,7 +129,7 @@ struct BoardCardLayout<Lead: View, Trailing: View>: View {
         .padding(.top, advancing ? BoardCardMetrics.titleTop : 0)
         .overlay(alignment: .topLeading) {
             if advancing {
-                // 线从离标题 `waveGap` 处起（带子代理细轨的线往下多占几点，不往上挤）；步骤的分段压在线那一格的底边，线最低处也在它上面
+                // 线从离标题 `waveGap` 处起（带子代理细轨的线往下多占几点，不往上挤）；子任务的分段压在线那一格的底边，线最低处也在它上面
                 ZStack(alignment: .bottomLeading) {
                     BoardWave(trace: pulse.trace, moves: moves)
                     if let steps, steps.total >= 2 { BoardSteps(steps: steps) }
@@ -153,7 +153,7 @@ struct BoardCardLayout<Lead: View, Trailing: View>: View {
     static var gap: CGFloat { 8 }
 }
 
-/// 推进中有步骤的卡下沿的分段：一步一段，做完的墨色、此刻那一步靛青、没到的轨道色。
+/// 推进中有子任务的卡下沿的分段：一步一段，做完的墨色、此刻那一步靛青、没到的轨道色。
 private struct BoardSteps: View {
     let steps: TaskProgress
     @Environment(\.palette) private var palette

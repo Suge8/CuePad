@@ -25,7 +25,7 @@ struct TaskCountTests {
         try await store.setStatus(closed.id, .done)
         try await store.setStatus(reopened.id, .todo)  // 上级跟着不再算做完
         let archived = try await store.createTask("旧的", in: project)
-        _ = try await store.createTask("旧的步骤", under: archived.id)
+        _ = try await store.createTask("旧的子任务", under: archived.id)
         try await store.archive(archived.id)
         let stranded = try await store.createTask("上级归档了", in: project)
         let orphan = try await store.createTask("孤儿", under: stranded.id)

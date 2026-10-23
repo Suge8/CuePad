@@ -1,17 +1,17 @@
 import CueText
 import Foundation
 
-/// 唯一的内容记录。界面上叫灵感或任务：同一种记录，差别只是 `todoAt`（"设为任务"时写上，"改回灵感"时清掉）。
-/// 灵感没有状态；任务有三态（由开始与完成两个时间推出）、可有下级——步骤（顶层任务下的任务，勾选清单里的一条）与当资料的灵感。
+/// 唯一的内容记录。界面上叫灵感或任务：同一种记录，差别只是 `todoAt`（建成任务时写上，之后不变：灵感与任务不互转，灵感要做就接进一条任务，`mergeIdea`）。
+/// 灵感没有状态；任务有三态（由开始与完成两个时间推出）、可有下级——子任务（顶层任务下的任务，勾选清单里的一条）与挂在下面的灵感。
 /// 任务的正文第一行是标题，其余是要交代给 Agent 的话（`CueLines.split`）：开工时整段作为第一句发出，发出后留在任务上。
-/// 结构（上级、要做、状态）对调用方只读，各有专门的方法：`setTodo`、`setStatus`、`moveCard`、`createTask`。
+/// 结构（上级、要做、状态）对调用方只读，各有专门的方法：`setStatus`、`moveCard`、`createTask`、`mergeIdea`。
 public struct Card: Identifiable, Equatable, Sendable {
   public let id: UUID
   /// 所在的项目；没指定的在默认项目（`Project.defaultID`）。
   public internal(set) var projectID: UUID
   /// 正文：一段 Markdown（`CueFormat`），图片为 `![](cuepad://img/<哈希>)`。
   public var body: String
-  /// 资料：项目里长期参考的灵感（项目页任务区下面一组）。字段名沿用同步记录里的 isPinned。
+  /// 置顶：项目里长期参考的灵感（项目页任务纸下面那几行，行首一枚图钉）。字段名沿用同步记录里的 isPinned。
   public var isPinned: Bool
   public var variableValues: [String: String]
   /// 冲突副本指向的原卡：同一张卡在两台设备上离线并发改了正文时，较旧的版本存成一张新卡，指回原卡，
@@ -24,11 +24,11 @@ public struct Card: Identifiable, Equatable, Sendable {
   public var modifiedAt: Date
   /// 上级任务；nil 是顶层。只有任务能当上级，任务最多 `maxTaskDepth` 级；上级不在库里或不可见时按顶层看待。
   public internal(set) var parentID: UUID?
-  /// "设为任务"的时间：有值是任务，nil 是灵感。
+  /// 建成任务的时间：有值是任务，nil 是灵感。
   public internal(set) var todoAt: Date?
   /// 自己记下的开始时间（手动置为进行中、或发给 Agent 时；列 `startedAt`）；回到待办时清空。
   var ownStartedAt: Date?
-  /// 开始的时间：自己记下的，没有时是步骤里最早开始（没开始就做完的算做完那一刻）的时刻——有步骤的任务从步骤推出，
+  /// 开始的时间：自己记下的，没有时是子任务里最早开始（没开始就做完的算做完那一刻）的时刻——有子任务的任务从子任务推出，
   /// 不另存（读出时由 `Card.startedSQL` 算，计数、正在推进与排序同一条 SQL）。
   public internal(set) var startedAt: Date?
   public internal(set) var completedAt: Date?
@@ -40,7 +40,7 @@ public struct Card: Identifiable, Equatable, Sendable {
   /// 它仍属于这个叶子（`CueStore.isLoose`）。正在用的只在 `piSessionID`，不在这里。
   public internal(set) var formerSessionIDs: [String] = []
 
-  /// 任务最多两级：任务 → 步骤。任务下的灵感不算一级。
+  /// 任务最多两级：任务 → 子任务。任务下的灵感不算一级。
   public static let maxTaskDepth = 2
 
   public var isTask: Bool { todoAt != nil }
@@ -54,8 +54,8 @@ public struct Card: Identifiable, Equatable, Sendable {
   }
 }
 
-/// 任务三态。由两个时间推出（唯一事实源）：有完成时间是完成，否则开始过（`Card.startedAt`：自己的，或任一步骤开始过、做完过）是进行中，
-/// 都没有是待办。有步骤的任务不用另记开始：步骤一开工它就是进行中。
+/// 任务三态。由两个时间推出（唯一事实源）：有完成时间是完成，否则开始过（`Card.startedAt`：自己的，或任一子任务开始过、做完过）是进行中，
+/// 都没有是待办。有子任务的任务不用另记开始：子任务一开工它就是进行中。
 public enum TaskStatus: String, Sendable, CaseIterable {
   case todo, inProgress, done
 }
@@ -66,10 +66,10 @@ public struct TaskGroup: Equatable, Sendable {
   public internal(set) var tasks: [Card]
 }
 
-/// 叶子任务，步骤带着它的上级（能绑会话的 `CueStore.bindableTasks`、绑着会话的 `CueStore.tasks(boundTo:)`）：界面写"上级 · 步骤"。
+/// 叶子任务，子任务带着它的上级（能绑会话的 `CueStore.bindableTasks`、绑着会话的 `CueStore.tasks(boundTo:)`）：界面写"上级 · 子任务"。
 public struct LeafTask: Identifiable, Equatable, Sendable {
   public let task: Card
-  /// 步骤的上级任务；顶层任务为 nil。
+  /// 子任务的上级任务；顶层任务为 nil。
   public let parent: Card?
   public var id: UUID { task.id }
 }
@@ -95,11 +95,11 @@ public struct TaskCounts: Equatable, Sendable {
   }
 }
 
-/// 步骤完成了几个、一共几个（任务的直接步骤，见 `CueStore.subtaskProgress`），与做完的步骤平均每步用了多久（任务行估还要多久，`TaskPace`）。
+/// 子任务完成了几个、一共几个（任务的直接子任务，见 `CueStore.subtaskProgress`），与做完的子任务平均每步用了多久（任务行估还要多久，`TaskPace`）。
 public struct TaskProgress: Equatable, Sendable {
   public let done: Int
   public let total: Int
-  /// 做完的步骤里记着自己开始时刻的，从开始到做完的平均秒数；一步都没有时为 nil（直接勾掉、没开过工的步骤量不出用时）。
+  /// 做完的子任务里记着自己开始时刻的，从开始到做完的平均秒数；一步都没有时为 nil（直接勾掉、没开过工的子任务量不出用时）。
   public let stepTime: TimeInterval?
 
   public init(done: Int, total: Int, stepTime: TimeInterval? = nil) {
@@ -123,12 +123,12 @@ public enum CardSlot: Hashable, Sendable {
 
 /// 一次卡片改动的回执：足够原样拨回去的快照，在改动的同一个事务里读到，所以不会和库里的实际写入对不上（`CueStore.undo`）。
 public enum CardChange: Sendable, Equatable {
-  /// 设为任务（`on`）或改回灵感：提上去的下级。
-  case todo(id: UUID, on: Bool, lifted: [UUID])
   /// 删除：提上去的下级。
   case trash(id: UUID, lifted: [UUID])
   /// 挪动：原来的位置与原来的前一个同级。
   case move(id: UUID, from: CardSlot, after: UUID?)
+  /// 灵感接进任务：任务原来的正文。
+  case merge(idea: UUID, task: UUID, body: String)
 }
 
 extension Card {
@@ -160,7 +160,7 @@ extension Card: Record {
     (columns.map { "\(alias).\($0)" } + [startedSQL(alias)]).joined(separator: ", ")
   }
 
-  /// 表 `alias` 里任务的开始时间（`Card.startedAt`）：自己记下的，没有时取步骤（没删除的下级任务）里最早的开始或做完时刻；灵感为 NULL。
+  /// 表 `alias` 里任务的开始时间（`Card.startedAt`）：自己记下的，没有时取子任务（没删除的下级任务）里最早的开始或做完时刻；灵感为 NULL。
   /// 开始过就是进行中只在这里定义：卡片读出、顶层计数、正在推进的筛选与排序都用它。
   static func startedSQL(_ alias: String) -> String {
     """

@@ -37,7 +37,7 @@ extension CueTools {
   private func done(_ args: Args) async throws -> Result {
     _ = try await host()  // 停用后不能再做完事
     if args.string("task") == nil, let ref = args.string("session") {
-      // 给 session 是收掉会话，给 task 是做完任务：模型把任务编号填进 session 来 done 时，记录里原意都是做完那件任务（多是一个步骤），
+      // 给 session 是收掉会话，给 task 是做完任务：模型把任务编号填进 session 来 done 时，记录里原意都是做完那件任务（多是一个子任务），
       // 照收掉会话办就做错了事，所以这里不像 say、peek 那样认任务的编号
       guard case .session(let session) = try await sessionRef(ref) else {
         throw Failure("「\(ref)」是任务的编号：做完任务给 task；收掉会话给 session 写会话的 id（peek 里有）")
@@ -49,7 +49,7 @@ extension CueTools {
     let reports = card.parentID == nil && card.status != .done
     let evidence = reports ? try Self.evidence(args) : []
     let shots = try CueShot.checked(try await shots(args.raw["show"]))
-    if !reports, !shots.isEmpty { throw Failure("show 只跟着做完顶层任务：步骤与已完成的不写结果，没写") }
+    if !reports, !shots.isEmpty { throw Failure("show 只跟着做完顶层任务：子任务与已完成的不写结果，没写") }
     let (report, ends) = try await store.finishTask(card.id, evidence: evidence, shots: shots)
     let ended = ends.isEmpty ? "" : "，已请 \(ends.count) 个会话结束"
     if card.status == .done {
@@ -70,7 +70,7 @@ extension CueTools {
     return items
   }
 
-  /// Cue 写的名字（标题、步骤名）：去掉首尾空白后不空、宽不过 `CueName.limit`。不合抛错，调用方在写任何东西之前查完。
+  /// Cue 写的名字（标题、子任务名）：去掉首尾空白后不空、宽不过 `CueName.limit`。不合抛错，调用方在写任何东西之前查完。
   private static func name(_ raw: String, _ what: String) throws -> String {
     let name = raw.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !name.isEmpty else { throw Failure("\(what)不能为空") }
@@ -83,11 +83,11 @@ extension CueTools {
 
   private func add(_ args: Args) async throws -> Result {
     let heading = try Self.name(try args.required("title"), "标题")
-    let names = try (args.strings("steps") ?? []).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }.map { try Self.name($0, "步骤") }
+    let names = try (args.strings("steps") ?? []).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }.map { try Self.name($0, "子任务") }
     let session = try await args.string("session").asyncMap(session)
     if session != nil, args.string("body") != nil { throw Failure("带 session 时不写 body：会话已经在做，话用 say 对它说") }
     if let session, let busy = try await store.tasks(boundTo: session.sessionID).first(where: { $0.task.piSessionID == session.sessionID && $0.task.status != .done }) {
-      throw Failure("会话「\(session.title)」正在做「\(busy.task.heading)」（\(busy.task.id.shortID)）：同一件事接着做用 say 或给它 edit 加步骤")
+      throw Failure("会话「\(session.title)」正在做「\(busy.task.heading)」（\(busy.task.id.shortID)）：同一件事接着做用 say 或给它 edit 加子任务")
     }
     // 没给 project：带会话的是会话所在的项目，其余进默认项目
     var project = try await args.string("project").asyncMap(project)
@@ -97,13 +97,13 @@ extension CueTools {
     if session == nil, let same = try await store.tasks(.todo, .inProgress).flatMap(\.tasks).first(where: {
       $0.parentID == nil && $0.projectID == projectID && $0.heading.caseInsensitiveCompare(heading) == .orderedSame
     }) {
-      let dropped = args.string("body") != nil || !names.isEmpty ? "，这次的正文与步骤也没写（要改用 edit）" : ""
+      let dropped = args.string("body") != nil || !names.isEmpty ? "，这次的正文与子任务也没写（要改用 edit）" : ""
       return .ok("已有没做完的「\(same.heading)」（\(same.id.shortID)），没再建\(dropped)：同一件事接着用它。")
     }
     let top = try await store.createTask(CueLines.joined(title: heading, rest: args.string("body")), in: projectID)
     var steps: [UUID] = []
     for step in names { steps.append(try await store.createTask(step, under: top.id).id) }
-    var text = "建好了「\(top.heading)」（\(top.id.shortID)）" + (steps.isEmpty ? "" : "，\(steps.count) 个步骤")
+    var text = "建好了「\(top.heading)」（\(top.id.shortID)）" + (steps.isEmpty ? "" : "，\(steps.count) 个子任务")
     if let session {
       let leaf = try await store.workingLeaf(of: top.id)
       try await store.bindSession(session.sessionID, to: leaf.id)
@@ -115,10 +115,10 @@ extension CueTools {
 
   private func edit(_ args: Args) async throws -> Result {
     let card = try await task(args.required("task"))
-    // 先查完再写，免得标题、步骤改了一半才报错
+    // 先查完再写，免得标题、子任务改了一半才报错
     let heading = try args.string("title").map { try Self.name($0, "标题") }
-    let steps = try args.strings("steps").map { try $0.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }.map { try Self.name($0, "步骤") } }
-    if steps != nil, card.parentID != nil { throw Failure("步骤只能加在顶层任务上：task 写它的顶层任务") }
+    let steps = try args.strings("steps").map { try $0.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }.map { try Self.name($0, "子任务") } }
+    if steps != nil, card.parentID != nil { throw Failure("子任务只能加在顶层任务上：task 写它的顶层任务") }
     let reopen = args.bool("reopen") == true
     if reopen, card.status != .done { throw Failure("「\(card.heading)」没完成，不用改回") }
     var done: [String] = []
@@ -141,13 +141,13 @@ extension CueTools {
         _ = try await store.createTask(step, under: card.id)
         added += 1
       }
-      done.append("追加了 \(added) 个步骤")
+      done.append("追加了 \(added) 个子任务")
     }
     if let ref = args.string("project") {
       let project = try await project(ref)
       let top = try await store.topTask(of: card.id)
       try await store.moveCard(top, to: .top(project: project.id), after: nil)
-      done.append("连同步骤挪到了项目「\(project.name)」")
+      done.append("连同子任务挪到了项目「\(project.name)」")
     }
     guard !done.isEmpty else { throw Failure("edit 至少给 title、body、steps、project、reopen 之一") }
     return .ok("「\(card.heading)」（\(card.id.shortID)）：\(done.joined(separator: "，"))。")

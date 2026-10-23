@@ -3,7 +3,7 @@ import CueTestSupport
 import Foundation
 import Testing
 
-/// 会留下"撤销"的卡片改动（设为任务、改回灵感、删除、挪动）：回执在改动的同一个事务里读到、改动之后原样拨回，
+/// 会留下"撤销"的卡片改动（删除、挪动）：回执在改动的同一个事务里读到、改动之后原样拨回，
 /// 中间没有别的写入能插进来；点任务的圆圈也是读、改在一个事务里。
 @Suite struct CardUndoTests {
   let fixture = try! Fixture()
@@ -31,9 +31,8 @@ import Testing
     #expect(try await topOrder(project.id) == order)
   }
 
-  /// 改回灵感与删除都把下级提到它的位置；拨回后下级（含归档的）按原顺序回到它下面。
-  @Test(arguments: [false, true])
-  func 改回灵感或删除拨回_下级含归档的按原顺序回到它下面(trash: Bool) async throws {
+  /// 删除把下级提到它的位置；拨回后下级（含归档的）按原顺序回到它下面。
+  @Test func 删除拨回_下级含归档的按原顺序回到它下面() async throws {
     let task = try await store.createTask("上线")
     let note = try await store.createCard(body: "回滚方案")
     let old = try await store.createCard(body: "旧的备忘")
@@ -42,7 +41,7 @@ import Testing
     let a = try await store.createTask("清单", under: task.id)
     let b = try await store.createTask("备份", under: task.id)
 
-    let change = try #require(trash ? try await store.trashCard(task.id) : try await store.setTodo(task.id, false))
+    let change = try #require(try await store.trashCard(task.id))
     #expect(try await card(a.id).parentID == nil)
     try await store.undo(change)
 

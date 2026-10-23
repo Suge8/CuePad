@@ -106,10 +106,10 @@ public enum CueEnvelope {
     return text
   }
 
-  /// 看板上的一件事（信封与 peek 共用）：在做的只有一个叶子时一行；同时在做几步时，头一行之后每步一行（缩进，带步骤的短 id）。
+  /// 看板上的一件事（信封与 peek 共用）：在做的只有一个叶子时一行；同时在做几步时，头一行之后每步一行（缩进，带子任务的短 id）。
   static func boardLine(_ item: CueBoardItem, now: Date, left: [CueLeft] = []) -> String {
     var parts = ["\(item.task.heading)（\(item.task.id.shortID)）"]
-    if let progress = item.progress { parts.append("步骤 \(progress.done)/\(progress.total)") }
+    if let progress = item.progress { parts.append("子任务 \(progress.done)/\(progress.total)") }
     guard item.leaves.count > 1 else {
       let leaf = item.leaves[0]
       return (parts + leafParts(leaf, named: leaf.leaf.id == item.task.id ? nil : leaf.leaf.heading, now: now, left: left)).joined(separator: " · ")
