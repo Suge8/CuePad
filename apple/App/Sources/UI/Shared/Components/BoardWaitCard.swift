@@ -188,6 +188,7 @@ struct BoardReply: View {
         .background(palette.fill, in: .rect(cornerRadius: 18, style: .continuous))
         #if os(iOS)
         .staysAboveKeyboard(while: writing, text: box.wrappedValue.text)
+        .preference(key: BoardReplying.self, value: writing)
         #endif
     }
 
@@ -201,3 +202,11 @@ struct BoardReply: View {
         }
     }
 }
+
+#if os(iOS)
+/// 看板里有回答框正在写（手机竖版看板据此让别的行退开，`PhoneBoard`）。
+struct BoardReplying: PreferenceKey {
+    static let defaultValue = false
+    static func reduce(value: inout Bool, nextValue: () -> Bool) { value = value || nextValue() }
+}
+#endif

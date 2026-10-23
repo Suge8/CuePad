@@ -51,6 +51,10 @@ enum BoardCardMetrics {
     static let gap: CGFloat = 8
     static var radius: CGFloat { TaskMetrics.cardRadius }
     static let waveGap: CGFloat = 8
+    /// 手机竖版看板（`boardRow`）：卡窄，内边距、记号与标题之间都收一点，标题小一档。
+    static let rowPadding: CGFloat = 12
+    static let rowGap: CGFloat = 6
+    static let rowTitle = Font.subheadline.weight(.medium)
     #if os(macOS)
     static let titleTop: CGFloat = 8
     static let titleRow: CGFloat = 20

@@ -45,8 +45,7 @@ enum DebugHooks {
         #if os(iOS)
         /// 设置页通知那一行显示的状态（`-CuePadAlertStatus`；演示模式没有同步，真实状态出不来）。
         var alertStatus: PiAlertStatus?
-        /// 原型（proto/board-combo，不进主干）：手机看板的排法（`-CuePadProtoBoard A|B|C`）与任务浮窗的样子（`-CuePadProtoBubble P|Q`）。
-        var protoBoard = "A"
+        /// 原型（proto/board-combo，不进主干）：任务浮窗的样子（`-CuePadProtoBubble P|Q`）。
         var protoBubble = "Q"
         /// 搜索页一打开在哪个范围（`-CuePadSearchScope sessions`）。
         var searchScope = SearchScreen.Scope.cards

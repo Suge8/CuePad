@@ -120,7 +120,6 @@ enum DebugScene {
         #if os(iOS)
         preset.alertStatus = alertStatus
         if defaults.string(forKey: "CuePadSearchScope") == "sessions" { preset.searchScope = .sessions }
-        preset.protoBoard = defaults.string(forKey: "CuePadProtoBoard") ?? "A"
         preset.protoBubble = defaults.string(forKey: "CuePadProtoBubble") ?? "Q"
         let panel = defaults.string(forKey: "CuePadCuePanel")
         preset.cuePanelEnd = panel == "end"

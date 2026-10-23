@@ -45,8 +45,8 @@ struct BoardColumn: View {
     @Binding var adding: Bool
     let newTaskProject: UUID?
     #if os(iOS)
-    /// 手机任务页的一行（四行横泳道，`PhoneBoard`）：给了就排成横着滑的一行（`BoardRowLane`），否则是一列、列头钉在泳道顶上（Mac、宽屏 iPad）。
-    var row: BoardRowShape?
+    /// 手机竖版看板的一行（`PhoneBoard`）：排成横着滑的一行（`BoardRowLane`）；否则是一列、列头钉在泳道顶上（Mac、宽屏 iPad）。
+    var row = false
     #endif
     @Environment(Workspace.self) private var workspace
     @Environment(\.cardAgents) private var agents
@@ -71,9 +71,12 @@ struct BoardColumn: View {
 
     @ViewBuilder private var lane: some View {
         #if os(iOS)
-        if let row {
-            BoardRowLane(column: column, count: board.count(column), shape: row, targeted: targeted,
-                         lead: adding && column == .todo ? Self.newTaskID : nil) { content }
+        if row {
+            BoardRowLane(column: column, count: board.count(column), targeted: targeted, rewind: adding && column == .todo ? board.todo.first?.id : nil) {
+                if adding && column == .todo { newTask.transition(Motion.item) }
+            } content: {
+                content
+            }
         } else {
             columnLane
         }
@@ -90,12 +93,9 @@ struct BoardColumn: View {
         .background { BoardLane(column: column, targeted: targeted) }
     }
 
-    /// 添加任务那一行（行里排在最前：添加时滑到它）。
-    private static let newTaskID = "new-task"
-
     private var isRow: Bool {
         #if os(iOS)
-        row != nil
+        row
         #else
         false
         #endif
@@ -123,8 +123,9 @@ struct BoardColumn: View {
     @ViewBuilder private var content: some View {
         switch column {
         case .todo:
-            if adding {
-                newTask.id(Self.newTaskID).transition(Motion.item)
+            // 手机竖版看板里添加那一行横贯在行上（`BoardRowLane.above`），不进格子
+            if adding, !isRow {
+                newTask.transition(Motion.item)
             }
             ForEach(board.todo) { item in
                 card(item).draggable(item.id.uuidString).modifier(InsertBefore(id: item.id) { drop($0, before: item.id) })
@@ -185,7 +186,7 @@ struct BoardColumn: View {
 
     private func empty(_ text: String) -> some View {
         Text(text).font(Typography.secondary).foregroundStyle(palette.ink3)
-            .frame(maxWidth: .infinity, minHeight: 64)
+            .frame(maxWidth: .infinity, minHeight: isRow ? nil : 64, maxHeight: isRow ? .infinity : nil)
             .background(RoundedRectangle(cornerRadius: TaskMetrics.cardRadius, style: .continuous).strokeBorder(palette.hair, style: StrokeStyle(lineWidth: 1, dash: [4, 4])))
     }
 

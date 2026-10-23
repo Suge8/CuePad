@@ -58,8 +58,8 @@ struct BoardTaskCard: View {
     private func title(resting: Bool) -> some View {
         let finished = task.status == .done
         let ink = check.phase != .idle ? palette.ink3 : finished || resting ? palette.ink2 : palette.ink
-        return Text(task.title.textGlyphs).font(TaskMetrics.lineFont).fontWeight(finished ? .regular : nil)
-            .strikethrough(check.phase != .idle, color: palette.ink3).foregroundStyle(ink).lineLimit(1)
+        return Text(task.title.textGlyphs).boardTitle(advancing: advancing).fontWeight(finished ? .regular : nil)
+            .strikethrough(check.phase != .idle, color: palette.ink3).foregroundStyle(ink)
     }
 
     /// 悬停提示：项目 · 多久 · 哪家 Agent。

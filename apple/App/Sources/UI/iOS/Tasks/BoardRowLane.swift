@@ -1,76 +1,100 @@
 #if os(iOS)
 import SwiftUI
 
-/// 一行横泳道排几排、卡占屏宽多少、行头在哪（`PhoneBoard` 的各排法）。
-struct BoardRowShape: Equatable {
-    /// 行里叠几排卡（等你只排一排：卡高）。
-    var tiers: Int
-    /// 一张卡占屏宽多少：下一张露出一截，看得出能横划。
-    var width: CGFloat
-    /// 行头竖排在行的左端（钉住，卡从它右边滑过）；否则是行顶一条。
-    var spine = false
-}
-
-/// 手机任务页的一行（`BoardColumn` 给了 `row` 时）：Mac 看板的一列转 90°——按列上色的泳道横贯全屏，行头（`BoardLaneMark`、名字、数）在行顶或左端，
-/// 卡在下面横着排，一排放不下就在这一行里横划、按卡停（`viewAligned`）。一行的高只看是哪一列（卡高 × 排数），与卡多卡少无关：
-/// 答完最后一件、做完一件，行不缩，整页不在手下跳；空行是行里的一格空态。
-/// 行里横划归这一行（整页 `claimsHorizontalDrags`），滑到头回弹；切页只认贴屏幕边起手。卡在懒加载的横排里，只建看得见的那几张。
-struct BoardRowLane<Content: View>: View {
+/// 手机竖版看板的一行（`BoardColumn` 的 `row`，`PhoneBoard` 四行竖着排）：Mac 看板的一列转 90°——按列上色的泳道横贯全屏，
+/// 行头（`BoardLaneMark`、竖排的名字、数）钉在左端，卡在它右边横着排，放不下就在这一行里横划、按卡停（`viewAligned`）；
+/// 卡滑过行头时在它右沿淡出，不硬切。
+/// 一格多高按列定、随动态字体放大（`BoardRowStyle`）：卡上标题小一档、可折两行，推进中下面是线与状态词，等你是抬头、三行问句、选项或回答框。
+/// 待办、推进中有两件以上叠两排（按列填，读的顺序不变），其余一排；空行与只有"更早做完的 N"的已完成行收成一排矮格，行高不低于行头（行头与格子谁高按谁）。
+/// 卡多卡少不改行高（除了空与不空、一件与两件），行在下面增减，上面的行不动。行里的卡在懒加载的横排里，只建看得见的几张。
+/// 添加任务那一行（`above`）横贯这一行、在卡的上面，不挤进格子里（格子窄，选项目的胶囊会被截）；添加时这一行先滑回行首。
+struct BoardRowLane<Above: View, Content: View>: View {
     let column: TaskBoard.Column
     let count: Int
-    let shape: BoardRowShape
     let targeted: Bool
-    /// 要滑到行首的那一格（添加任务那一行出现时）。
-    let lead: String?
+    /// 添加任务：这一行滑回行首（滑到这一格）。
+    let rewind: AnyHashable?
+    @ViewBuilder let above: Above
     @ViewBuilder let content: Content
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @ScaledMetric(relativeTo: .subheadline) private var taskHeight = BoardRowMetrics.taskHeight
+    @ScaledMetric(relativeTo: .subheadline) private var advancingHeight = BoardRowMetrics.advancingHeight
+    @ScaledMetric(relativeTo: .body) private var waitHeight = BoardRowMetrics.waitHeight
 
     var body: some View {
-        Group {
-            if shape.spine {
-                HStack(alignment: .top, spacing: 0) {
-                    BoardRowSpine(column: column, count: count).frame(width: BoardRowMetrics.spine)
-                    strip(leading: 0)
-                }
-                .padding(.vertical, BoardRowMetrics.inset)
-            } else {
-                VStack(alignment: .leading, spacing: 0) {
-                    BoardRowHeader(column: column, count: count)
-                    strip(leading: BoardRowMetrics.margin).padding(.bottom, BoardRowMetrics.inset)
-                }
+        HStack(alignment: .top, spacing: 0) {
+            BoardRowSpine(column: column, count: count).frame(width: BoardRowMetrics.spine)
+            VStack(alignment: .leading, spacing: BoardRowMetrics.gap) {
+                above.padding(.leading, BoardRowMetrics.fade).padding(.trailing, BoardRowMetrics.margin)
+                strip
             }
         }
+        .padding(.vertical, BoardRowMetrics.inset)
         .background { band }
     }
 
-    private func strip(leading: CGFloat) -> some View {
-        let height = BoardRowMetrics.cardHeight(column)
+    private var strip: some View {
+        let height = cellHeight
+        let tiers = self.tiers
+        // 回到行首用 ScrollViewReader，不绑 ScrollPosition：绑着的位置滑动时每帧写回状态，整行每帧重算
         return ScrollViewReader { proxy in
             ScrollView(.horizontal) {
-                LazyHGrid(rows: Array(repeating: GridItem(.fixed(height), spacing: BoardRowMetrics.gap), count: shape.tiers), spacing: BoardRowMetrics.gap) {
+                LazyHGrid(rows: Array(repeating: GridItem(.fixed(height), spacing: BoardRowMetrics.gap), count: tiers), spacing: BoardRowMetrics.gap) {
                     // Group 把格子的框分给里面的每一张卡
                     Group { content }
-                        .containerRelativeFrame(.horizontal) { width, _ in (width * shape.width).rounded() }
+                        .containerRelativeFrame(.horizontal) { width, _ in (width * cellWidth).rounded() }
                         .frame(height: height, alignment: .top)
                 }
                 .scrollTargetLayout()
             }
-            // 边用 safeAreaPadding（同看板原型的旧注释：键盘起落重排后 contentMargins 的边会丢）
-            .safeAreaPadding(.leading, leading)
+            // 边用 safeAreaPadding（键盘起落重排后 contentMargins 的边会丢）；左边让出淡出那一截
+            .safeAreaPadding(.leading, BoardRowMetrics.fade)
             .safeAreaPadding(.trailing, BoardRowMetrics.margin)
             .scrollTargetBehavior(.viewAligned)
             .scrollIndicators(.never)
             .scrollBounceBehavior(.always, axes: .horizontal)
             .scrollDismissesKeyboard(.immediately)
-            .frame(height: height * CGFloat(shape.tiers) + BoardRowMetrics.gap * CGFloat(shape.tiers - 1))
-            // 等你的问句最多三行：行高是定的
+            .frame(height: height * CGFloat(tiers) + BoardRowMetrics.gap * CGFloat(tiers - 1))
+            .mask { fadeMask }
+            // 等你的问句最多三行：格高是定的
             .lineLimit(BoardRowMetrics.questionLines)
-            .onChange(of: lead) {
-                guard let lead else { return }
-                withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { proxy.scrollTo(lead, anchor: .leading) }
+            .environment(\.boardRow, BoardRowStyle(cardHeight: taskHeight, advancingHeight: advancingHeight))
+            .onChange(of: rewind) {
+                if let rewind { withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { proxy.scrollTo(rewind, anchor: .leading) } }
             }
         }
+    }
+
+    /// 卡滑到行头右沿时淡出：左边一截从透明到实，其余全实。
+    private var fadeMask: some View {
+        HStack(spacing: 0) {
+            LinearGradient(colors: [.clear, .black], startPoint: .leading, endPoint: .trailing).frame(width: BoardRowMetrics.fade)
+            Color.black
+        }
+    }
+
+    /// 叠几排：待办、推进中两件以上叠两排。
+    private var tiers: Int {
+        switch column {
+        case .todo, .advancing: count >= 2 ? 2 : 1
+        case .waiting, .done: 1
+        }
+    }
+
+    /// 空行（只有一格空态）、只有"更早做完的"的已完成行是一排矮格。
+    private var cellHeight: CGFloat {
+        guard count > 0 else { return taskHeight }
+        return switch column {
+        case .advancing: advancingHeight
+        case .waiting: waitHeight
+        case .todo, .done: taskHeight
+        }
+    }
+
+    /// 一格占这一行可见宽的多少：等你的卡宽，其余露出下一张的一半。
+    private var cellWidth: CGFloat {
+        column == .waiting && count > 0 ? BoardRowMetrics.waitWidth : BoardRowMetrics.cardWidth
     }
 
     /// 横贯全屏的一条：上沿一线高光（同 `BoardLane`），拖进来时铺一层选中底。
@@ -84,62 +108,46 @@ struct BoardRowLane<Content: View>: View {
     }
 }
 
-/// 一行里的尺寸。
+/// 一行里的尺寸（高随动态字体放大，`BoardRowLane` 的 `@ScaledMetric`）。
 enum BoardRowMetrics {
-    /// 一格卡多高：推进中带线的卡、等你（抬头、三行问句的气泡、回答框或选项）、其余一行标题的卡。
-    static func cardHeight(_ column: TaskBoard.Column) -> CGFloat {
-        switch column {
-        case .advancing: BoardCardMetrics.advancingHeight
-        case .waiting: waitHeight
-        case .todo, .done: TaskMetrics.cardHeight
-        }
-    }
-
-    /// 等你一格的高：放得下抬头、三行问句加依据、回答框（实测最高的一件）。
-    static let waitHeight: CGFloat = 180
+    /// 待办、已完成一格：两行小一档的标题。
+    static let taskHeight: CGFloat = 60
+    /// 推进中一格：两行标题，下面是线与状态词。
+    static let advancingHeight: CGFloat = 76
+    /// 等你一格：抬头、三行问句加依据、回答框（实测最高的一件）。
+    static let waitHeight: CGFloat = 176
     static let questionLines = 3
+    /// 一格占可见宽：一张半，下一张露出一半。
+    static let cardWidth: CGFloat = 0.62
+    static let waitWidth: CGFloat = 0.88
+    /// 行头宽：记号、竖排的名字与数。
+    static let spine: CGFloat = 34
+    /// 卡滑到行头时淡出的那一截，也是卡离行头的空。
+    static let fade: CGFloat = 6
     static let margin: CGFloat = 12
     static let gap: CGFloat = 8
-    static let inset: CGFloat = 10
-    static let spine: CGFloat = 44
+    static let inset: CGFloat = 8
 }
 
-/// 行顶一条：记号、名字，右边是数（同 Mac 列头，矮一档）。
-private struct BoardRowHeader: View {
-    let column: TaskBoard.Column
-    let count: Int
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        HStack(spacing: 8) {
-            BoardLaneMark(column: column, size: 18)
-            Text(column.title).font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink2)
-            Spacer(minLength: 8)
-            Text("\(count)").font(.title3.weight(.semibold)).monospacedDigit().foregroundStyle(palette.ink).counting(count)
-        }
-        .lineLimit(1)
-        .padding(.horizontal, BoardRowMetrics.margin + TaskMetrics.cardPadding)
-        .frame(height: 40)
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isHeader)
-    }
-}
-
-/// 行的左端竖排：记号、竖着的名字、数，钉在左边，卡从它右边滑过。
+/// 行的左端：记号、竖着的名字、数，与第一排卡的上沿齐，卡从它右边滑过。
 private struct BoardRowSpine: View {
     let column: TaskBoard.Column
     let count: Int
     @Environment(\.palette) private var palette
+    @ScaledMetric(relativeTo: .footnote) private var mark: CGFloat = 18
 
     var body: some View {
-        VStack(spacing: 6) {
-            BoardLaneMark(column: column, size: 18)
-            VStack(spacing: 0) {
+        VStack(spacing: 4) {
+            BoardLaneMark(column: column, size: mark)
+            VStack(spacing: -1) {
                 ForEach(Array(column.title.enumerated()), id: \.offset) { Text(String($1)) }
             }
-            .font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink2)
-            Text("\(count)").font(.headline).monospacedDigit().foregroundStyle(palette.ink).counting(count)
+            .font(.footnote.weight(.semibold)).foregroundStyle(palette.ink2)
+            .padding(.top, 2)
+            Text("\(count)").font(.subheadline.weight(.semibold)).monospacedDigit().foregroundStyle(palette.ink).counting(count)
+                .minimumScaleFactor(0.7).lineLimit(1)
         }
+        .padding(.leading, BoardRowMetrics.fade)
         .frame(maxWidth: .infinity)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(column.title) \(count)")
