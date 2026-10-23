@@ -6,7 +6,7 @@ import SwiftUI
 /// Agent 在做时任务气泡里吉祥物的轻轻上下浮动（`float`）、看板推进中卡下沿那条线（`wave`，`BoardWave`）。
 /// 用 Core Animation 而不是 SwiftUI 的 repeatForever 或符号动效：后两者每帧都在 App 进程里重算，
 /// 列表里有几个在工作的会话时，静止不动也要占约 9% CPU；CA 的动画交给渲染服务，App 进程不参与，离屏不画。
-/// 减弱动态效果时由调用方不放它（或换成静止的样子）；省电模式看 `LowPowerMode`。
+/// 放不放只看 `LoopsPlay`，不放时调用方换静止的样子。
 struct LoopLayer {
     enum Kind: Equatable {
         /// 一圈淡轨道上一段弧匀速转，1.1s 一圈；线宽是直径的 14%。
@@ -19,7 +19,7 @@ struct LoopLayer {
         case heartbeat
         /// 话在路上：一架纸飞机（与发送钮、"已送达"同一架，`Icon.send`）从左下飞进来、在正中停一下、朝机头的右上飞出去，裁在自己的框里，
         /// 一趟 `Flight.period` 秒。"发出"一族只有纸飞机：发送中、已送达都是它，燕尾箭只表示方向。
-        /// 不播时（截图、减弱动态效果由调用方换静止符号、Mac 不在前台时只画的那一帧）停在正中。
+        /// 不播时（截图、Mac 不在前台时只画的那一帧）停在正中；不放循环动效时调用方换静止符号。
         case flight
         /// 一圈细线从内切圆的大小往外扩到 1.6 倍、淡到看不见，2.4s 一次；线宽是边长的 7%。
         case ripple
@@ -347,8 +347,18 @@ extension LoopLayer: NSViewRepresentable {
 }
 #endif
 
-/// 省电模式开着（`ProcessInfo.isLowPowerModeEnabled`，随系统的变化通知更新）：读它的常驻动效换成静止的样子，同减弱动态效果。
-@Observable final class LowPowerMode {
+/// 常驻循环动效（`LoopLayer`）此刻放不放，全 App 只这一条：减弱动态效果、省电模式、页不在前台（`pageActive`）时不放。
+/// 不看 `scenePhase`：Mac 的窗口由 AppKit 托管、没有 SwiftUI 场景，它一直不是 active，看它的动效在 Mac 上永远不动；
+/// 也不看窗口有没有焦点：人在别的 App 里瞟一眼，在做事的就该在动。出屏、iOS 进后台的层渲染服务本来不画。
+@propertyWrapper struct LoopsPlay: DynamicProperty {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.pageActive) private var pageActive
+
+    var wrappedValue: Bool { pageActive && !reduceMotion && !LowPowerMode.shared.isOn }
+}
+
+/// 省电模式开着（`ProcessInfo.isLowPowerModeEnabled`，随系统的变化通知更新）。
+@Observable private final class LowPowerMode {
     static let shared = LowPowerMode()
     private(set) var isOn = ProcessInfo.processInfo.isLowPowerModeEnabled
 
