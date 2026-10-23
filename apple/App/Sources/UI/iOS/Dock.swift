@@ -101,6 +101,7 @@ struct HomePage: View {
     var body: some View {
         RouteView(route: route)
             .environment(\.headerHost, .page(search: route != .cue))
+            .environment(\.pageNamedElsewhere, true)
             // 内容一直滚到 Dock 后面，最后一行停在 Dock 上面
             .safeAreaPadding(.bottom, route == .cue ? 0 : Dock.reserve(above: safeBottom))
             .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.bottom } action: { safeBottom = $0 }

@@ -60,6 +60,8 @@ extension EnvironmentValues {
     @Entry var headerGivesWay = false
     /// 在长开的 `GrowPanel` 里：中间那几块不另画玻璃。
     @Entry var headerGrown = false
+    /// 这一页的名字此刻在别处写着（窄屏底部那一排、iPad 侧栏的选中格）：页顶那一排不再写标题，同一屏不重复。
+    @Entry var pageNamedElsewhere = false
 }
 
 enum FloatingHeaderLayout {
@@ -71,11 +73,12 @@ private struct FloatingHeader<Center: View, Trailing: View>: ViewModifier {
     let title: String
     let hidden: Bool
     let reveal: (() -> Void)?
-    /// 中间是标题：页自己画那一排的页是窄屏的根，不写标题（书架），只留两边的圆钮。
+    /// 中间是标题：这一页的名字在别处写着时（`pageNamedElsewhere`）不写，只留两边的圆钮。
     let titled: Bool
     let center: Center
     let trailing: Trailing
     @Environment(\.headerHost) private var host
+    @Environment(\.pageNamedElsewhere) private var namedElsewhere
     @Environment(Workspace.self) private var workspace
 
     func body(content: Content) -> some View {
@@ -86,14 +89,15 @@ private struct FloatingHeader<Center: View, Trailing: View>: ViewModifier {
                 content
                     .safeAreaPadding(.top, FloatingHeaderLayout.height + Bars.contentGap)
                     .overlay(alignment: .top) {
-                        PageBar(search: host == .page(search: true), trailing: trailing) { if !titled { middle } }
+                        PageBar(search: host == .page(search: true), trailing: trailing) { if showsMiddle { middle } }
                     }
             case .navigationBar:
                 content
                     // 标题只在中间那块玻璃里：不在 `RouteView` 里的页（任务正文的编辑 sheet）也不能让系统在下面再排一个大标题
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
-                        ToolbarItem(placement: .principal) { middle }
+                        // 不写标题时也留着这一项（空的）：中间这一项不在时系统会把标题当普通文字摆回中间
+                        ToolbarItem(placement: .principal) { if showsMiddle { middle } else { Color.clear.frame(width: 1, height: 1) } }
                             // 玻璃自己画，不再套一层系统的玻璃底（玻璃不叠玻璃）
                             .sharedBackgroundVisibility(.hidden)
                         if Trailing.self != EmptyView.self {
@@ -108,6 +112,8 @@ private struct FloatingHeader<Center: View, Trailing: View>: ViewModifier {
         .environment(\.headerGivesWay, host != .panel && workspace.notice != nil)
         .animation(NoticeBanner.giveWay(workspace.notice), value: workspace.notice != nil)
     }
+
+    private var showsMiddle: Bool { !(titled && namedElsewhere) }
 
     private var middle: some View {
         HStack(spacing: 8) { center }
