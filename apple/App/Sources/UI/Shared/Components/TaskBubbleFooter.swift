@@ -32,7 +32,7 @@ private struct AgentStrip: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.cardAgents) private var agents
     @Environment(\.palette) private var palette
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @LoopsPlay private var loops
 
     var body: some View {
         if let item = agents.items[leaf.id] {
@@ -52,7 +52,7 @@ private struct AgentStrip: View {
 
     private func strip(_ look: TaskAgentLook, shown: PiShown, session: String) -> some View {
         HStack(spacing: BubbleMetrics.gap) {
-            MascotFace(mascot: look.mascot, floats: look.floats && !reduceMotion)
+            MascotFace(mascot: look.mascot, floats: look.floats && loops)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     PiStateDot(shown: shown, size: BubbleMetrics.dot).relaySpot(session: session, row: .task)

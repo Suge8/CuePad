@@ -176,22 +176,22 @@ struct LiveStatus: View {
 
 
 extension View {
-    /// 进行中的文字：底色是淡墨，一道墨色的光从左往右反复扫过（`LoopLayer`）；减弱动态效果时是静止的次要色。
+    /// 进行中的文字：底色是淡墨，一道墨色的光从左往右反复扫过（`LoopLayer`）；不放循环动效时（`LoopsPlay`）是静止的次要色。
     func shimmering() -> some View { modifier(Shimmer()) }
 }
 
 
 struct Shimmer: ViewModifier {
     @Environment(\.palette) private var palette
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @LoopsPlay private var sweeps
 
     func body(content: Content) -> some View {
-        if reduceMotion {
-            content.foregroundStyle(palette.ink2)
-        } else {
+        if sweeps {
             content
                 .foregroundStyle(palette.ink3)
                 .overlay { LoopLayer(kind: .sheen, color: palette.ink).mask { content } }
+        } else {
+            content.foregroundStyle(palette.ink2)
         }
     }
 }
