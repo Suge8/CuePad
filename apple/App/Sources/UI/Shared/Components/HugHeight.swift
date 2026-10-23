@@ -3,6 +3,8 @@ import SwiftUI
 /// 让滚动区贴着内容的高：放得下就是内容那么高（外面的玻璃不往下多长一截），放不下就是给的那么高、在里面滚。
 /// 手机 Cue 页头的面板与 Mac 菜单栏面板的"在做"用它。不用 `ViewThatFits` 排两份：两份内容各有各的状态
 /// （"还有 N 个"展开了，量出来放不下，就换成另一份收着的）。
+/// 里面不放懒加载栈：它第一次量出的高是估的（实测估 882、实为 641），下一帧才改成真的，外面的玻璃在长大的动画里挨一下不带动画的改高，
+/// 整块就有几帧不画（键盘关着点开 Cue 名牌时那一闪）。
 struct HugHeight: Layout {
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         guard let scroll = subviews.first else { return .zero }

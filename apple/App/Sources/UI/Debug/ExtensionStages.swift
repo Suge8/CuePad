@@ -47,6 +47,7 @@ struct DebugWidgetStage: View {
 /// 下面露出真的 Cue 页头（同一份 Cue 此刻），再往下是展开态、锁屏、最小态与横屏的窄紧凑态。画的是 Cue 那一行此刻那一份（`CueWatch.now`），
 /// 配 `-CuePadCueNow <样例>`（`CueNowSamples`）钉成某一态，`-CuePadCueCycle YES` 就绪后轮流走过各态（页头与岛一起变，录切换）。
 /// 系统的 `ActivityViewContext` 造不出来：过没过时（`-CuePadCueStale YES` 画过时之后的样子）、横屏窄不窄由这里给，展开态按系统的四块（左、右、摄像头下、下面）摆；岛的黑底与圆角按 iPhone 17 的量。
+/// 展开态与锁屏同系统一样最高给 160 点（下半按给的高排，`ViewThatFits`），放不下的裁掉、一眼看得出。
 /// 真开起来的那一个在 cue 画面配 `-CuePadDemo YES -CuePadLiveActivity YES`，回到桌面看灵动岛（`simctl io screenshot` 拍不到它，录一小段取帧）。
 struct DebugActivityStage: View {
     let workspace: Workspace
@@ -59,12 +60,14 @@ struct DebugActivityStage: View {
     private static let height: CGFloat = 37
     private static let expandedWidth: CGFloat = 371
     private static let lockWidth: CGFloat = 361
+    /// 展开态与锁屏最高多少（系统的上限，超出的裁掉）。
+    private static let maxHeight: CGFloat = 160
     /// 露出真的页头：从屏顶到页头下沿。
     private static let header: CGFloat = 132
 
     var body: some View {
         let state = CueActivityState(now: workspace.cue.now, quotas: CueNowSamples.quotas)
-        let views = CueActivityViews(state, stale: stale)
+        let views = CueActivityViews(state, at: stale ? state.now.staleAt : .now)
         ZStack(alignment: .top) {
             VStack(spacing: 0) {
                 Color.clear.frame(height: Self.header)
@@ -82,6 +85,7 @@ struct DebugActivityStage: View {
                     label("锁屏")
                     views.lockScreen
                         .frame(width: Self.lockWidth)
+                        .frame(maxHeight: Self.maxHeight, alignment: .top).clipped()
                         .background(palette.paper, in: .rect(cornerRadius: 22, style: .continuous))
                     HStack(alignment: .top, spacing: 28) {
                         VStack(alignment: .leading, spacing: 0) {
@@ -147,6 +151,7 @@ struct DebugActivityStage: View {
         }
         .padding(.horizontal, 18).padding(.top, 12).padding(.bottom, 16)
         .frame(width: Self.expandedWidth)
+        .frame(maxHeight: Self.maxHeight, alignment: .top).clipped()
         .background(Self.island, in: .rect(cornerRadius: 44, style: .continuous))
     }
 }

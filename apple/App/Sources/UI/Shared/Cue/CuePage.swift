@@ -96,8 +96,8 @@ struct CuePage: View {
         .background(palette.desk)
     }
     #else
-    /// 页头浮在对话上（`CueHeader`），对话让出固定的一段：页头展开成面板时对话不重排。窄屏上 Cue 页是导航栈的根、不需要返回，不用系统导航栏（`DockRoot`），
-    /// 页头就是最上面那一排；底部左边那颗"⋯"是底部那一排（`DockBar`，不在这一页里）收起的样子，这里给它让出位置，右边是输入框。
+    /// 页顶那一排只有 Cue 的名牌（`CueHeader`，经 `floatingHeader`），浮在对话上，对话让出固定的一段：名牌展开成面板时对话不重排。窄屏上 Cue 页是导航栈的根、不需要返回，不用系统导航栏（`DockRoot`），
+    /// 名牌就是最上面那一排；底部左边那颗"⋯"是底部那一排（`DockBar`，不在这一页里）收起的样子，这里给它让出位置，右边是输入框。
     /// "等你"卡与输入框浮在对话底上（`FloatingReply`，同会话页与 Mac，键盘也在那里让）；窄屏底部那一排没有键盘时离屏幕底边同 Dock。
     private var page: some View {
         FloatingReply(backed: false, floor: docked ? Dock.margin : nil) {
@@ -108,11 +108,7 @@ struct CuePage: View {
                 .frame(maxWidth: Self.readingWidth)
         }
             .scrollDismissesKeyboard(.interactively)
-            .safeAreaPadding(.top, CueHeader.reserve)
-            .overlay(alignment: .top) { CueHeader(underBanner: docked) }
-            .navigationTitle(cue.name)
-            // 标题只给读屏与系统：名字在页头里
-            .toolbar(removing: .title)
+            .floatingHeader(cue.name, center: { CueHeader() }) { EmptyView() }
     }
 
     /// 窄屏导航栈的根（不是 iPad 右侧面板）：底部是"⋯"加输入框。

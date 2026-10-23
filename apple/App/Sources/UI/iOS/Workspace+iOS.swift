@@ -83,9 +83,6 @@ extension Workspace {
 
 extension Route {
     var isCard: Bool { if case .card = self { true } else { false } }
-
-    /// 页顶上自带一排（搜索页的范围、Cue 页头）：内容让到那一排下面，离栏的距离由那一页自己给。
-    var ownsTopBar: Bool { self == .search || self == .cue }
 }
 
 /// 卡片 ↔ 编辑纸页的缩放过渡共用的命名空间。

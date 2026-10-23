@@ -53,11 +53,8 @@ nonisolated extension CueNow {
         }
         let works = digest.tally.advancing.map(bead)
         let done = digest.done.compactMap { task in
-            task.completedAt.flatMap { at in
-                at.addingTimeInterval(doneWindow) > now
-                    ? Bead(id: "done/\(task.id.uuidString)", kind: .done, name: task.title, since: at, subagents: 0, sessions: []) : nil
-            }
-        }
+            task.completedAt.map { Bead(id: "done/\(task.id.uuidString)", kind: .done, name: task.title, since: $0, subagents: 0, sessions: []) }
+        }.filter { $0.isFresh(at: now) }
         return Bead.Kind.allCases.flatMap { kind in (asks + works + done).filter { $0.kind == kind } }
     }
 

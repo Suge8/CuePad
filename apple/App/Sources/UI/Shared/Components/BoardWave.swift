@@ -6,7 +6,7 @@ import SwiftUI
 /// 歇着的是一条淡灰实线（`track`），同线宽、不带点。
 /// 动只靠整条横移一个周期，交给 Core Animation（`LoopLayer` 的 `wave`）：线不逐帧重画，App 进程不参与。
 /// SwiftUI 的 repeatForever 偏移虽也不重画线，却每帧在 App 进程里重算动画与显示列表（同 `LoopLayer` 头注释的实测），一列几条就常驻占 CPU。
-/// 只有看得见的在动：卡在懒加载栈里，出屏就不存在；页不在前台（`pageActive`）、窗口不是活跃窗口或场景到了后台、减弱动态效果、省电模式时静止；
+/// 只有看得见的在动：卡在懒加载栈里，出屏就不存在；不放循环动效时（`LoopsPlay`）静止；
 /// 一列里排在第 `maxMoving` 条以后的静止（`moves` 由列按先后给）——"同屏最多几条"要逐行读几何才判得出，每行一个几何读数的开销比省下的动画还大，
 /// 按列里的先后数是最轻的等价做法：列从上往下读，排在前面的就是一屏里先看到的。
 struct BoardWave: View {
@@ -14,15 +14,7 @@ struct BoardWave: View {
     /// 列里允许它动（排在前 `maxMoving` 条在跑的里）。
     var moves = true
     @Environment(\.palette) private var palette
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.pageActive) private var pageActive
-    #if os(macOS)
-    @Environment(\.appearsActive) private var appearsActive
-    private var visible: Bool { appearsActive && pageActive }
-    #else
-    @Environment(\.scenePhase) private var scenePhase
-    private var visible: Bool { scenePhase == .active && pageActive }
-    #endif
+    @LoopsPlay private var plays
 
     static let maxMoving = 8
     static let maxTracks = 3
@@ -39,7 +31,7 @@ struct BoardWave: View {
             let strip = WaveStrip(gait: gait, tracks: min(subagents, Self.maxTracks))
             HStack(spacing: 4) {
                 Group {
-                    if moves && visible && !reduceMotion && !LowPowerMode.shared.isOn {
+                    if moves && plays {
                         LoopLayer(kind: .wave(strip), color: palette.signature)
                     } else {
                         ZStack {

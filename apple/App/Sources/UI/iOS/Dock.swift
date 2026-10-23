@@ -61,7 +61,7 @@ struct DockRoot: View {
 }
 
 /// 栈的根上的一个去处：它的页。项目、任务、会话三页顶上那一排左边一颗搜索钮、右边这一页的那一个操作，不写标题
-/// （`homePage`：底部的选中格已经说了在哪一页），内容一直滚到底部那一排后面；Cue 页顶上是页头，输入框在它自己的页里（随键盘升起）。
+/// （底部的选中格已经说了在哪一页，`HeaderHost.page`），内容一直滚到底部那一排后面；Cue 页顶上只有 Cue 的名牌，输入框在它自己的页里（随键盘升起）。
 struct HomePage: View {
     let route: Route
     /// 安全区底边离屏幕底边多远（键盘弹出时是键盘高）。
@@ -69,7 +69,8 @@ struct HomePage: View {
 
     var body: some View {
         RouteView(route: route)
-            .environment(\.homePage, true)
+            .environment(\.headerHost, .page(search: route != .cue))
+            .environment(\.pageNamedElsewhere, true)
             // 内容一直滚到 Dock 后面，最后一行停在 Dock 上面
             .safeAreaPadding(.bottom, route == .cue ? 0 : Dock.reserve(above: safeBottom))
             .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.bottom } action: { safeBottom = $0 }

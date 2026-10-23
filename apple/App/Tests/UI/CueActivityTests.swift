@@ -4,7 +4,8 @@ import Testing
 @testable import CuePad
 
 /// Cue 此刻（`CueNow`）：Cue 那一行、小组件与 iPhone 的实时活动读同一份——一颗珠子一份活（等你、推进中、刚做完）、那一句、第一件等你；
-/// 在实时活动上"允许一次"走 Cue 页回答的同一个方法，那件回到推进中、下一件等你接上来（会话在问的只能打开）；没活了实时活动就该结束。
+/// 在实时活动上"允许一次"走 Cue 页回答的同一个方法，那件回到推进中、下一件等你接上来（会话在问的只能打开）；没活了实时活动就该结束；
+/// 刚做完的不压住在跑的，到点自己收掉。
 struct CueActivityTests {
     let rig = TestApp()
     var store: CueStore { rig.services.store }
@@ -74,5 +75,13 @@ struct CueActivityTests {
         cue = try await now()
         #expect(cue.isLive && cue.focus.word == "在想" && cue.staleAfter == CueNow.fastStale)
         #expect(cue.settled.headline == "刚做完「发布 v1.4」" && !cue.settled.isLive)
+
+        // 刚做完一件又派出一件在跑，Cue 歇下：岛说在跑的那件，不停在"做完"
+        let ship = try await store.createTask("推送并发新版", in: project.id)
+        try await recorder.update(sessionID: "ship", state: .thinking, title: "ship")
+        try await store.bindSession("ship", to: ship.id)
+        try await store.setCueState(.settled)
+        cue = try await now()
+        #expect(cue.headline == "1 件在跑" && cue.focus.word == "推进中")
     }
 }

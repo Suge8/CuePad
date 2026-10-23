@@ -40,7 +40,7 @@ extension PiShown {
 
     /// 状态的静止图形（`Icon`），与 `tint` 一起是全 App 状态图形的唯一出处：状态标（`PiStateDot`）、跟着字号的
     /// `PiStateGlyph`（问题卡、出错与没能结束的提示、Cue 的等你、前台横幅、通知设置）都从这里取。在跑、话在路上在状态标里是
-    /// 自绘的循环动效，这里是减弱动态效果与菜单里的样子。要你看的三种是实心圆、记号刻在里面，其余没有实心的圆底；同为圆的几种靠颜色与里面的记号分开。
+    /// 自绘的循环动效，这里是不放循环动效时与菜单里的样子。要你看的三种是实心圆、记号刻在里面，其余没有实心的圆底；同为圆的几种靠颜色与里面的记号分开。
     var icon: Icon {
         switch status {
         case .asking, .awaitsReply: .waiting
@@ -72,7 +72,7 @@ extension PiShown {
 /// 在跑靛青心电线（一截实色沿波形走）、话在路上靛青纸飞机（从左下飞进、朝右上飞出）、有新回复石绿铃铛（变成它时摇一下）、
 /// 该你了灰色输入光标、新会话灰色星光、已结束更淡的带斜线圈；Cue 值班时，等 Cue 回答是墨色气泡问号、歇着是灰色省略号。`size` 是标的基准直径，外框是它的 1.8 倍，跟着旁边的字随辅助字号放大。
 /// 心电线、纸飞机、波纹是常驻循环动效，交给 Core Animation（`LoopLayer`），不在屏幕上时不画；换状态时旧图形缩小淡出、新图形放大淡入，
-/// 两个都是静止图标时由系统原地替换。减弱动态效果时循环动效换成同一状态的静止符号，没有波纹与摇铃。
+/// 两个都是静止图标时由系统原地替换。不放循环动效时（`LoopsPlay`）换成同一状态的静止符号、没有波纹；减弱动态效果时不摇铃。
 /// 旁边有状态文字时读屏跳过它；`announces` 时标自己带读屏标签。
 struct PiStateDot: View {
     let shown: PiShown
@@ -80,6 +80,7 @@ struct PiStateDot: View {
     var announces = false
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @LoopsPlay private var loops
     @ScaledMetric private var scale: CGFloat = 1
     /// 每变成一次有新回复加一：铃铛摇一下。
     @State private var rings = 0
@@ -93,9 +94,9 @@ struct PiStateDot: View {
 
     private var look: Look {
         switch shown.status {
-        case .working: reduceMotion ? .icon : .heartbeat
+        case .working: loops ? .heartbeat : .icon
         case .delivery(.failed): .icon
-        // 减弱动态效果时静止的那一架由它自己换（`OnTheWay`）
+        // 不放循环动效时静止的那一架由它自己换（`OnTheWay`）
         case .delivery: .flight
         default: .icon
         }
@@ -114,7 +115,7 @@ struct PiStateDot: View {
                     .contentTransition(.symbolEffect(.replace))
                     .symbolEffect(.wiggle, options: .nonRepeating, value: rings)
                     .background {
-                        if shown.status == .asking, !reduceMotion { LoopLayer(kind: .ripple, color: tint).frame(width: box * 0.86, height: box * 0.86) }
+                        if shown.status == .asking, loops { LoopLayer(kind: .ripple, color: tint).frame(width: box * 0.86, height: box * 0.86) }
                     }
                     .transition(Self.swap)
             }

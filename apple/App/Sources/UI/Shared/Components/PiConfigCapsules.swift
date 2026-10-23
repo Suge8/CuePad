@@ -146,6 +146,7 @@ struct PiThinkingDial: View {
     let choose: (PiThinkingLevel) -> Void
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @LoopsPlay private var loops
     /// 手指（或鼠标）按着时指到的档：先在条上预览，松手才发出去。
     @State private var touched: PiThinkingLevel?
     /// 气泡里写的档：按下就有，松手后停 `linger` 再淡出。
@@ -246,7 +247,7 @@ struct PiThinkingDial: View {
             index < drawn.filled ? palette.ink : drawn.current == nil ? palette.ink3 : palette.track
         }
             .overlay {
-                if drawn.isMax, !reduceMotion {
+                if drawn.isMax, loops {
                     // 最高档：一道亮光从左往右扫过填满的格
                     LoopLayer(kind: .sheen, color: palette.onFill).mask { bars { _ in .black } }.allowsHitTesting(false)
                 }
@@ -280,15 +281,15 @@ struct PiThinkingDial: View {
 
 
 /// 发出后还没送达：轻轻呼吸（只在这一小会儿）。一层胶囊底色盖在内容上一明一暗（`LoopLayer` 的 `pulse`，交给渲染服务）：
-/// SwiftUI 的 repeatForever 每帧在 App 进程里重算，一直没送达时会话页静止也占约 9% CPU。减弱动态效果时不呼吸。
+/// SwiftUI 的 repeatForever 每帧在 App 进程里重算，一直没送达时会话页静止也占约 9% CPU。不放循环动效时（`LoopsPlay`）不呼吸。
 struct Breathing: ViewModifier {
     let active: Bool
     @Environment(\.palette) private var palette
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @LoopsPlay private var breathes
 
     func body(content: Content) -> some View {
         content.overlay {
-            if active, !reduceMotion { LoopLayer(kind: .pulse, color: palette.fill).mask { content }.allowsHitTesting(false) }
+            if active, breathes { LoopLayer(kind: .pulse, color: palette.fill).mask { content }.allowsHitTesting(false) }
         }
     }
 }
