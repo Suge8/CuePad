@@ -56,8 +56,10 @@ struct SplitRoot: View {
     private var stack: some View {
         @Bindable var workspace = workspace
         return NavigationStack(path: $workspace.path) {
+            // 根页的名字在侧栏的选中格里（侧栏收起时侧栏钮就在左上角），页顶那一排不再写；推入的页照写
             page(workspace.root)
-                .navigationDestination(for: Route.self) { page($0) }
+                .environment(\.pageNamedElsewhere, true)
+                .navigationDestination(for: Route.self) { page($0).environment(\.pageNamedElsewhere, false) }
         }
     }
 
@@ -93,14 +95,14 @@ private struct AgentPanelButton: View {
 }
 
 /// 右侧 Cue 面板。不套导航栈、不放工具栏：iPadOS 的详情栏只有一条工具栏，面板里的工具栏会并进去。
-/// 它不经 `RouteView`，沉浸式的那几件自己挂：离顶上那一排的距离让在安全区里（用外边距的话列表停在边距下沿、
-/// 滚上去被一刀切齐），内容一直滚到工具栏的玻璃与状态栏后面，什么也不遮（`Bars`）。
+/// 它不经 `RouteView`，沉浸式的那几件自己挂：页顶那一排（Cue 的名牌）由面板自己画（`HeaderHost.panel`），
+/// 内容一直滚到它与状态栏后面，什么也不遮（`Bars`）。
 private struct AgentPanel: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
         CuePage(inPanel: true).countsAsPiViewer()
-            .safeAreaPadding(.top, 8)
+            .environment(\.headerHost, .panel)
             .background(palette.desk.ignoresSafeArea())
             .modifier(KeyboardHold())
     }
@@ -179,20 +181,29 @@ private struct SplitSidebar: View {
 }
 
 /// 列表顶上的搜索框：点它把搜索页推在当前页上，那里的搜索框接着拿到键盘（同 ⌘K）。长相同搜索页的搜索框（`SearchCapsule`）。
+/// 搜索页开着时它是选中的那一格（签名色写"搜索"），不再写同一句提示：同一屏只有一个搜索框。
 private struct SidebarSearchField: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
     var body: some View {
+        let searching = workspace.top == .search
         Button { workspace.openSearch() } label: {
             HStack(spacing: 6) {
-                Image(.search).foregroundStyle(palette.ink3)
+                Image(.search).foregroundStyle(searching ? palette.signature : palette.ink3)
                 // 窄侧栏（iPad）放不下整句时只写"搜索"，不截成半句
-                ViewThatFits(in: .horizontal) {
-                    Text("搜索灵感、任务与会话")
-                    Text("搜索")
+                Group {
+                    if searching {
+                        Text("搜索").fontWeight(.semibold).foregroundStyle(palette.signature)
+                    } else {
+                        ViewThatFits(in: .horizontal) {
+                            Text("搜索灵感、任务与会话")
+                            Text("搜索")
+                        }
+                        .foregroundStyle(palette.ink3)
+                    }
                 }
-                .foregroundStyle(palette.ink3).lineLimit(1)
+                .lineLimit(1)
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 14).frame(maxWidth: .infinity, minHeight: SearchCapsule.height)

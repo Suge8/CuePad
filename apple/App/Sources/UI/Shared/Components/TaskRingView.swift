@@ -4,7 +4,7 @@ import SwiftUI
 /// 任务的完成圈，全 App 的任务只有这一种图形（行、步骤、任务页、Cue 页的任务行、Mac 面板）：完成是石绿的对勾；没完成的是一个实线圈，
 /// 进行中左半填满，待办空心。有两步以上步骤的（`steps`），圈按步骤分段：做完的段是墨色实线，没做完的是轨道色，
 /// 此刻那一步的会话在跑时（`running`）那一段是靛青浅底上走一道流光（`LoopLayer` 的 sheen，进行中文字上扫过的那道光）；进度只画在圈上，行尾不写"n/m"。
-/// 勾上的那一下：圈按下去成一颗点（`Icon.donePending`），压到最扁时点弹成勾（`Jelly` 的 pop）；减弱动态效果时只淡入淡出，流光换成静止的靛青。
+/// 勾上的那一下：圈按下去成一颗点（`Icon.donePending`），压到最扁时点弹成勾（`Jelly` 的 pop）；减弱动态效果时只淡入淡出；不放循环动效时（`LoopsPlay`）流光换成静止的靛青。
 struct TaskRingView: View {
     let status: TaskStatus?
     /// 界面上已经显示完成（勾了还没写入时也算）。
@@ -13,7 +13,7 @@ struct TaskRingView: View {
     var steps: TaskProgress?
     var running = false
     @Environment(\.palette) private var palette
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @LoopsPlay private var sweeps
 
     private var finished: Bool { done || status == .done }
 
@@ -54,8 +54,8 @@ struct TaskRingView: View {
                 let arc = Circle().trim(from: Double(index) / Double(count) + gap / 2, to: Double(index + 1) / Double(count) - gap / 2)
                     .stroke(style: StrokeStyle(lineWidth: line))
                 if index == steps.done, running {
-                    arc.foregroundStyle(reduceMotion ? palette.signature : palette.selection)
-                        .overlay { if !reduceMotion { LoopLayer(kind: .sheen, color: palette.signature).mask { arc } } }
+                    arc.foregroundStyle(sweeps ? palette.selection : palette.signature)
+                        .overlay { if sweeps { LoopLayer(kind: .sheen, color: palette.signature).mask { arc } } }
                 } else {
                     arc.foregroundStyle(index < steps.done ? palette.ink : palette.track)
                 }

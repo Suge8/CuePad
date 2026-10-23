@@ -25,7 +25,7 @@ struct TasksScreen: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         // 顶上不写页名（侧栏、底部那一排的选中格已经说了在哪一页），中间是项目范围
-        .floatingHeader("任务", center: { ProjectScope().glass(in: .capsule) }) {
+        .floatingHeader("任务", center: { ProjectScope().headerPiece() }) {
             Button("添加任务", icon: .add) { add() }
         }
         .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: adding)

@@ -2,9 +2,10 @@
 import SwiftUI
 import UIKit
 
-/// 卡片搜索的结果（搜索页"灵感与任务"一栏）：筛选胶囊（右边写命中"N 条"）+ 按项目分组的卡片（多个词都要命中，最近修改在前）。
-struct CardSearchResults: View {
+/// 卡片搜索的结果（搜索页"灵感与任务"一栏）：筛选胶囊（前面是调用方给的 `leading`，右边写命中"N 条"）+ 按项目分组的卡片（多个词都要命中，最近修改在前）。
+struct CardSearchResults<Leading: View>: View {
     @Binding var query: PaletteQuery
+    @ViewBuilder let leading: Leading
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
@@ -24,6 +25,7 @@ struct CardSearchResults: View {
             LazyVStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 8) {
                     ChipRow {
+                        leading
                         SearchFilters(query: $query, targets: data?.targets ?? []) { name, value, on in
                             Chip(name: name, value: value, on: on)
                         }

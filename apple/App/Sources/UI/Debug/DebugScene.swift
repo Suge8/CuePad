@@ -41,7 +41,7 @@ enum ScrollAnchor {
 /// - `-CuePadShowsDone YES`：已完成列的"更早做完的"一开始就展开；
 ///   `-CuePadBusyBoard YES`（配 tasks 画面与 `-CuePadDemo YES`）：推进中里再放几件 Agent 正在多步推进的任务（`seedBusyBoard`）；
 ///   `-CuePadCanvasSteps YES`（配 tasks 画面）：待办里一件写了正文、有三个步骤的任务，看任务气泡的正文与步骤（`seedCanvasSteps`）；
-/// - `-CuePadCueNow <woke|delegating|asks|done|quiet|away>`：Cue 此刻钉成这份样例（`CueNowSamples`），页头、侧栏、小组件与实时活动都按它画；
+/// - `-CuePadCueNow <woke|delegating|asks|done|afterDone|crowded|quiet|away>`：Cue 此刻钉成这份样例（`CueNowSamples`），页头、侧栏、小组件与实时活动都按它画；
 ///   `-CuePadCueCycle YES`：就绪后轮流走过各份样例（`cueNowTourIfAsked`），录切换；
 /// - `-CuePadCatalogFailure YES`：项目目录读取直接报错（重试也一样），核对读取失败画面；
 ///   `-CuePadCatalogFailure once`：每个窗口（含菜单栏面板）只有第一次读取报错，按"重试"后恢复，核对重试路径。

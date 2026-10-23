@@ -22,15 +22,10 @@ extension View {
 /// 玻璃上的字要多好读。
 enum GlassInk {
     case clear
-    /// 写着字的（默认；顶栏标题、输入框、搜索框、提示横幅、状态行）：玻璃里垫九成实的页面底色，边缘仍是玻璃的光。内容一直滚到这些玻璃后面，
+    /// 写着字的（默认；顶栏标题、输入框、搜索框、提示横幅、状态行）：玻璃里垫一层页面底色（`Palette.inkWell`），边缘仍是玻璃的光。内容一直滚到这些玻璃后面，
     /// 背后什么都有可能（亮的截图、深的代码块）：只着色不垫底的话，深色下一张亮图就把玻璃衬成浅灰、米白的字只剩 1.7:1，
     /// 垫了底才在任何背景上都够 4.5:1（docs/ui.md）。
     case solid
-    #if os(iOS)
-    /// 同 `solid`，但放在系统顶栏里（推入页顶栏中间那块 `FloatingHeader`、搜索页的搜索框 `SearchCapsule`）：iOS 把它连同里面的东西提到栏那一层上画、再提亮一档，
-    /// 垫在里面的反而发灰，所以只垫在玻璃下面。
-    case solidInBar
-    #endif
 }
 
 private struct PaperSurface: ViewModifier {
@@ -79,17 +74,18 @@ private struct GlassSurface<S: Shape>: ViewModifier {
             switch ink {
             case .clear: content.glassEffect(glass, in: shape)
             case .solid: solid(content)
-            #if os(iOS)
-            case .solidInBar: content.glassEffect(glass, in: shape).background(palette.solidGlass, in: shape)
-            #endif
             }
         }
     }
 
-    /// 玻璃里外各垫一层：只垫在下面时玻璃的折射与边缘的光仍从背后取样，背后一张亮图、一段字照样从玻璃里透出来（手机页头深色下最显）；
-    /// Mac 的玻璃还会在它下面那层上再压暗、提亮一档，只垫在下面整块发灰。下面那层让浮在桌面上的（Cue 条、菜单栏面板）不透出壁纸的颜色。
-    private func solid(_ content: Content) -> some View {
+    /// iOS 只在玻璃里垫一层 `inkWell`：背后的内容照样从玻璃里透出来（通透），字仍够 4.5:1。
+    /// Mac 里外各垫一层九成实的：Mac 的玻璃会在它下面那层上再压暗、提亮一档，只垫在里面整块发灰；下面那层让浮在桌面上的（Cue 条、菜单栏面板）不透出壁纸的颜色。
+    @ViewBuilder private func solid(_ content: Content) -> some View {
+        #if os(iOS)
+        content.background(palette.inkWell, in: shape).glassEffect(glass, in: shape)
+        #else
         content.background(palette.solidGlass, in: shape).glassEffect(glass, in: shape).background(palette.solidGlass, in: shape)
+        #endif
     }
 
     /// 全 App 自绘玻璃都是 `.regular`：内容一直滚到顶栏、回复框后面，玻璃是唯一的遮挡，栏后面不再垫模糊或渐变带。
@@ -114,8 +110,10 @@ enum Motion {
     /// `move` 的时长与曲线控制点，渲染端照它走的动画（`ContentLift`）共用。
     nonisolated static let moveDuration = 0.24
     nonisolated static let moveCurve: (Double, Double, Double, Double) = (0.2, 0, 0, 1)
-    /// iPhone 点按换去处：根上那一条页滑过去与底部那一排两块玻璃换形同一个（`HomePager`、`DockBar`），一起到位；比列表里挪位置走得长，看得清从哪到哪，仍在 300ms 内。
-    static let dock = Animation.spring(duration: 0.3, bounce: 0)
+    /// iPhone 切页：根上那一条页滑过去、底部那一排的滴与换形都是这一条（`PagerController.animate`，图层与 SwiftUI 同一条），"⋯"开合也用它；
+    /// 比列表里挪位置走得长，看得清从哪到哪，仍在 300ms 内。
+    static let dock = Animation.spring(duration: dockDuration, bounce: 0)
+    static let dockDuration: TimeInterval = 0.3
     /// 按下：快、不回弹，手指一落就到位。
     static let pressDown = Animation.spring(duration: 0.14, bounce: 0)
     /// 松开：稍慢、带一点回弹，像纸被放开时弹回来。

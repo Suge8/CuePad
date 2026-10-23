@@ -43,8 +43,11 @@ struct Palette {
 
     /// 写着字的玻璃（`GlassInk.solid`）的着色：深色压一层暗色调，浅色垫一层淡纸色，与垫的底色一起定玻璃的明暗。
     var glassTint: Color { dark ? Color.black.opacity(0.4) : paper.opacity(0.45) }
-    /// 浮在一整片字上的玻璃里垫的九成实的页面底色：背后的字透不过来。
+    /// Mac 写字玻璃里外各垫的九成实的页面底色：背后的字与桌面壁纸透不过来。
     var solidGlass: Color { desk.opacity(0.9) }
+    /// iOS 写字玻璃里垫的一层，按浅深取够 4.5:1 的最少一层：浅色墨深，玻璃的纸色着色压在最深的代码块上也够，只垫三成让背后的字糊成色块、不与玻璃上的字抢；
+    /// 深色墨浅，背后最亮（截图）要垫近八成（实测名字 14.8:1、次要字 8:1）。
+    var inkWell: Color { desk.opacity(dark ? 0.78 : 0.3) }
 
     // MARK: 墨
 
