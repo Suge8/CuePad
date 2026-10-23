@@ -3,7 +3,7 @@ import SwiftUI
 
 /// 底部那一排：左边一块玻璃，右边 Cue 钮，原地换形，不换身份。样子是连续的，跟着根上那一条（`PagerMotion`）走，拖到哪长到哪：
 /// - 三页上、Cue 页点开"⋯"时：左边三格胶囊，右边 Cue 钮占两格宽（`DockCue`）。选中的滴（`DockDrop`）跟着条在三格间滑，透过它的那一格着靛青。
-/// - Cue 页：左边收成一颗"⋯"，Cue 钮长成输入框那么宽、那么高，交给页里真的输入框（`DockSeat`）。从会话页滑向 Cue 页时跟着手指一点点长过去。
+/// - Cue 页：左边收成一颗"⋯"，Cue 钮长成输入框那么宽、那么高，在换形里与页里真的输入框交叉（`DockHandoff`）。从会话页滑向 Cue 页时跟着手指一点点长过去。
 /// - Cue 页输入框有焦点（`composing`）：都让开，输入框占满整排。
 /// 与屏幕圆角同心（同系统悬浮标签栏），只是玻璃：栏后面不垫渐变或模糊。字号固定、不随动态字体放大，辅助字号下长按弹出大内容查看器
 /// （同系统标签栏：栏高固定，字放大只会挤掉图标）。"项目"那一格在同步到不了 Mac 时带一个点（`AppServices.macAlert`）。
@@ -13,34 +13,23 @@ struct DockBar: View {
     /// 当前去处（`Workspace.root`）：读屏的选中、点 Cue 钮是去 Cue 页还是收起"⋯"。
     let route: Route
     let motion: PagerMotion
-    let seat: DockSeat
-    let placesOpen: Bool
-    /// "⋯"收起的弹簧还在走。
-    let folding: Bool
     let composing: Bool
     let width: CGFloat
     let openPlaces: (Bool) -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        // 三格的样子占几成：Cue 页上"⋯"展开着就是三格，否则看条有多少在 Cue 页上
-        DockForm(places: placesOpen ? 1 : 1 - motion.onCue, route: route, motion: motion, seat: seat, composing: composing, width: width,
-                 openPlaces: openPlaces)
+        DockForm(places: motion.places, route: route, motion: motion, composing: composing, width: width, openPlaces: openPlaces)
             .animation(Motion.dock, value: composing)
             .transaction { if reduceMotion { $0.animation = nil } }
-            // 条停在 Cue 页、"⋯"收好才把底边交给输入框；条一动、"⋯"一开就收回
-            .onChange(of: route == .cue && !placesOpen && !folding && !motion.busy, initial: true) { _, owner in seat.hand(owner) }
-            // 从 Cue 页点一格离开时"⋯"不收，停到别的页上才收：这时三格本来就展开着，收不收看不出来
-            .onChange(of: motion.busy) { if !motion.busy, route != .cue, placesOpen { openPlaces(false) } }
     }
 }
 
-/// 换形的每一帧都从 `places` 算（`Animatable`）：点按时弹簧逐帧插的是它，不是首尾两个样子之间直线过渡，先后淡的分段与拖动时一样。
+/// 换形的每一帧都从 `places` 算（`Animatable`）：点按时弹簧逐帧插的是它，不是首尾两个样子之间直线过渡，各段浓淡与拖动时一样（`DockHandoff`）。
 private struct DockForm: View, Animatable {
     var places: CGFloat
     let route: Route
     let motion: PagerMotion
-    let seat: DockSeat
     let composing: Bool
     let width: CGFloat
     let openPlaces: (Bool) -> Void
@@ -66,16 +55,13 @@ private struct DockForm: View, Animatable {
                 .clipShape(.capsule)
                 .glass(in: .capsule, interactive: true, ink: .clear)
                 .offset(x: left + Dock.gap)
-                .opacity(seat.released ? 0 : 1)
+                .opacity(DockHandoff.ramp(places, DockHandoff.swap))
                 .allowsHitTesting(shown)
                 .accessibilityHidden(!shown)
         }
         .frame(width: width, height: height, alignment: .bottomLeading)
     }
 }
-
-/// 换形里一样东西从哪一段起淡入：`places` 走过 `from…to` 时从 0 到 1。三格与"⋯"先后换、不叠着交叉淡：前一半"⋯"淡完，后一半三格才出来。
-private func ramp(_ places: CGFloat, from: CGFloat, to: CGFloat) -> Double { Double(min(max((places - from) / (to - from), 0), 1)) }
 
 /// 左边那块玻璃的内容：三格与"⋯"一直都在、只换不透明度，靠左叠着（玻璃往右长，三格不跟着挪）。
 private struct DockPlaces: View {
@@ -90,7 +76,7 @@ private struct DockPlaces: View {
         let open = places > 0.5
         ZStack(alignment: .leading) {
             DockCells(position: motion.position, onCue: motion.onCue, route: route, cell: cell, relays: open)
-                .opacity(ramp(places, from: 0.5, to: 1))
+                .opacity(DockHandoff.ramp(places, DockHandoff.cells))
                 .allowsHitTesting(open)
                 .accessibilityHidden(!open)
             Button(action: expand) {
@@ -101,7 +87,7 @@ private struct DockPlaces: View {
             .buttonStyle(PressStyle(.button))
             .accessibilityLabel("去处")
             .accessibilityHint("展开项目、任务、会话")
-            .opacity(1 - ramp(places, from: 0, to: 0.5))
+            .opacity(1 - DockHandoff.ramp(places, DockHandoff.more))
             .allowsHitTesting(!open)
             .accessibilityHidden(open)
         }
@@ -276,8 +262,8 @@ private struct DockCue: View {
                     .frame(width: Dock.height)
                     .overlay(alignment: .topTrailing) { corner(drafted: drafted) }
             }
-            // 长成输入框时里面先淡掉，只剩玻璃在长，长到了交给页里的输入框
-            .opacity(ramp(places, from: 0.5, to: 1))
+            // 长成输入框时里面先淡掉，只剩玻璃在长，与页里的输入框交叉
+            .opacity(DockHandoff.ramp(places, DockHandoff.cue))
             .frame(maxHeight: .infinity)
             .contentShape(.capsule)
         }

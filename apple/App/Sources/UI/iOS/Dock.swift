@@ -6,22 +6,15 @@ import SwiftUI
 /// 导航栈托管在 UIKit 里，几个栈交替时 SwiftUI 不逐帧挪它（旧页停着、最后一下才跳走）：所以只有一个栈，切页挪的是栈根里的四页（各在自己的托管控制器里，`PagerController`）。
 /// 底部那一排整个窗口只有一份（`DockBar`），挂在栈的根上、不在哪一页里：切页时它不重建、不跟着滑，选中的滴与换形跟着条（`PagerMotion`）走，拖到哪长到哪。
 /// 每页各建一排时，新页那一排要从旧的样子摆出第一帧再长回来，"⋯"展开着换去处就是收成圆再长开的一下来回。
-/// Cue 页的输入框在页里（随键盘升起），底边那一格同一时刻只有一个主人（`DockSeat`）：条动起来、"⋯"展开就交给 Cue 钮（它从输入框的样子换形），
-/// 条停在 Cue 页、"⋯"收起的弹簧做完（动画的完成回调）才交还给页里的输入框。不按延时交接：玻璃不跟延时的不透明度动画，当场就藏了。
+/// Cue 页的输入框在页里（随键盘升起），底边那一格在换形里与 Cue 钮交叉，浓淡都是条的位置与"⋯"开合的函数（`DockHandoff`）。
 /// 不用折叠的分栏：那个容器本身冷启动就多约 3000M 指令。
 struct DockRoot: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// 根上那一条此刻在哪（`PagerController` 写）。
     @State private var motion = PagerMotion()
-    /// 底边那一格此刻归谁。
-    @State private var seat = DockSeat()
     /// Cue 页的输入框有焦点：底部那一排让开，输入框占满整排。只活在窄屏的容器里，宽屏没有它，变宽再变窄也不留旧值。
     @State private var composing = false
-    /// Cue 页底部的"⋯"展开成了三格：点别处、滚动或点 Cue 钮收起；从 Cue 页点一格离开时不收（收起再长回三格就是一下来回），停到别的页上才收。
-    @State private var placesOpen = false
-    /// "⋯"收起的弹簧还在走：走完才把底边交还给输入框。
-    @State private var folding = false
     @State private var width: CGFloat = 0
     /// 推入的页离开前拍的快照（左滑前进时跟手用）。
     @State private var shot = LeaveShot()
@@ -33,20 +26,18 @@ struct DockRoot: View {
             HomePager(motion: motion, composing: composing, shot: shot) {
                 ZStack(alignment: .bottom) {
                     // "⋯"展开时铺在 Cue 页上的一层：点一下或一划就收起
-                    if placesOpen, root == .cue {
+                    if motion.placesOpen, root == .cue {
                         Color.clear.contentShape(.rect)
                             .onTapGesture { openPlaces(false) }
                             .gesture(DragGesture(minimumDistance: 4).onChanged { _ in openPlaces(false) })
                             .accessibilityHidden(true)
                     }
-                    DockBar(route: root, motion: motion, seat: seat, placesOpen: placesOpen, folding: folding, composing: composing,
-                            width: max(0, width - Dock.margin * 2), openPlaces: openPlaces)
+                    DockBar(route: root, motion: motion, composing: composing, width: max(0, width - Dock.margin * 2), openPlaces: openPlaces)
                         .padding(.bottom, Dock.margin).ignoresSafeArea(edges: .bottom)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                .overlay { DockGhostView(seat: seat, motion: motion, placesOpen: placesOpen) }
             }
-            .environment(\.dockSeat, seat)
+            .environment(\.dockMotion, motion)
             .environment(\.dockComposing, $composing)
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
             .toolbarVisibility(.hidden, for: .navigationBar)
@@ -62,15 +53,10 @@ struct DockRoot: View {
         .onChange(of: root) { composing = false }
     }
 
-    /// "⋯"展开、收起：底部那一排用 `Motion.dock` 换形；收起的弹簧做完才算收好（`folding`）。
+    /// "⋯"展开、收起（点别处、滚动、点 Cue 钮、输入框有焦点时收起）：底部那一排用 `Motion.dock` 换形。
     private func openPlaces(_ open: Bool) {
-        guard open != placesOpen else { return }
-        folding = !open && !reduceMotion
-        withAnimation(Motion.spatial(Motion.dock, reduceMotion: reduceMotion)) {
-            placesOpen = open
-        } completion: {
-            if !placesOpen { folding = false }
-        }
+        guard open != motion.placesOpen else { return }
+        withAnimation(Motion.spatial(Motion.dock, reduceMotion: reduceMotion)) { motion.placesOpen = open }
     }
 }
 

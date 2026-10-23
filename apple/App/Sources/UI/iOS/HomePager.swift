@@ -32,24 +32,32 @@ struct HomePager<Chrome: View>: View {
 }
 
 /// 条此刻的样子，容器（`PagerController.apply`）写、SwiftUI 读：在不在动（截图等它停）、停在哪、前进页拉出来多少。
-/// 读的只是几小块（底部那一排的滴读 `position`，换形读 `onCue`），各读各的：拖动时每帧只重算读到变了的那几块。
+/// 底部那一排的样子也只从这里推出来（`places`）：三格还是"⋯"加输入框、底边归 Cue 钮还是页里的输入框，没有另一份状态。
+/// 读的只是几小块（滴读 `position`，换形与输入框读 `places`），各读各的：拖动时每帧只重算读到变了的那几块。
 @Observable
 final class PagerMotion {
     var busy = false
     /// 条在第几页，连续的：拖到一半是 1.5。
     private(set) var position: CGFloat = 0
-    /// 条有多少在 Cue 页上（从它左边那页滑过来的进度，0…1）：底部那一排从三格长成"⋯"加输入框跟着它走。
+    /// 条有多少在 Cue 页上（从它左边那页滑过来的进度，0…1）。
     private(set) var onCue: CGFloat = 0
+    /// Cue 页底部的"⋯"展开成了三格（`DockRoot.openPlaces` 带着弹簧改）。条一离开 Cue 页就收起：那时三格本来就是展开的，收不收看不出来，
+    /// 回到 Cue 页就是收起的样子；与条怎么离开（滑、点、减弱动态效果时直接到位）无关。
+    var placesOpen = false
     /// 拉出前进页的进度，0…1。
     private(set) var pushed: CGFloat = 0
     var width: CGFloat = 0
     /// 拉出来的是哪张快照（推入真的页、它画上屏之前还留着）。
     var shot: UIView?
 
+    /// 底部那一排是三格的样子占几成：1 是三格，0 是"⋯"加输入框（`DockHandoff`）。
+    var places: CGFloat { placesOpen ? 1 : 1 - onCue }
+
     func move(to position: CGFloat, pushed: CGFloat) {
         if self.position != position { self.position = position }
         let onCue = Self.onCue(at: position)
         if self.onCue != onCue { self.onCue = onCue }
+        if onCue < 1, placesOpen { placesOpen = false }
         if self.pushed != pushed { self.pushed = pushed }
     }
 

@@ -84,12 +84,13 @@ final class PagerController: UIViewController {
 
     private var width: CGFloat { view.bounds.width }
 
-    private func live(_ route: Route) -> Bool { route == resting || moving.contains(route) }
+    /// 在屏上的页：停着的那页与正在滑的页。
+    private var live: Set<Route> { moving.union([resting]) }
 
     /// 一页的内容：环境整份转过来，再标上它此刻在不在屏上。
     private func refresh(_ route: Route) {
         guard let input, let page = pages[route] else { return }
-        let live = live(route)
+        let live = live.contains(route)
         page.host.rootView = AnyView(
             HomePage(route: route).background(input.environment.palette.desk)
                 .environment(\.pageActive, live).environment(\.pagePrefetch, !live)
@@ -201,11 +202,14 @@ final class PagerController: UIViewController {
         cuePage?.layer.removeAllAnimations()
     }
 
-    private func setMoving(_ routes: Set<Route>) {
-        let changed = routes.symmetricDifference(moving)
-        moving = routes
-        for route in changed { refresh(route) }
-        motion.busy = !routes.isEmpty || pan.state == .began || pan.state == .changed
+    /// 停在哪页、哪几页在滑只经这里改：在屏上的页（`live`）变了的那几页重新标上可见与订阅。
+    /// 停的页换了也算（减弱动态效果时直接到位，没有页在滑，只有停的页换了）。
+    private func show(resting: Route? = nil, moving: Set<Route>) {
+        let before = live
+        if let resting { self.resting = resting }
+        self.moving = moving
+        for route in before.symmetricDifference(live) { refresh(route) }
+        motion.busy = !moving.isEmpty || pan.state == .began || pan.state == .changed
     }
 
     // MARK: 跟手
@@ -240,7 +244,7 @@ final class PagerController: UIViewController {
         let index = Dock.order(resting) + (direction == .previous ? -1 : 1)
         if Dock.pages.indices.contains(index), !moving.contains(Dock.pages[index]) {
             build(Dock.pages[index])
-            setMoving(moving.union([resting, Dock.pages[index]]))
+            show(moving: moving.union([resting, Dock.pages[index]]))
         }
         let w = max(width, 1), base = -CGFloat(Dock.order(resting)) * w
         var target = dragStart + translation
@@ -260,7 +264,7 @@ final class PagerController: UIViewController {
         if commits, projected > w / 2, velocity > -200, allows(.previous) { target = index - 1 }
         if commits, projected < -w / 2, velocity < 200, allows(.next) { target = index + 1 }
         let turned = target != index && target <= Self.last
-        if turned { resting = Dock.pages[target] }
+        if turned { show(resting: Dock.pages[target], moving: moving) }
         animate(to: -CGFloat(target) * w, velocity: velocity) { [weak self] in
             if target > Self.last { self?.commitForward() } else { self?.rest() }
         }
@@ -289,7 +293,7 @@ final class PagerController: UIViewController {
 
     /// 停稳：滑过的页藏起来、不订阅；邻页还没挂上（刚打开就连着滑）时接着挂、接着建。
     private func rest() {
-        setMoving([])
+        show(moving: [])
         motion.busy = false
         for route in neighbors(of: resting) where pages[route] != nil { attach(route) }
         settleDown()
@@ -323,15 +327,15 @@ final class PagerController: UIViewController {
         let span = Set(Dock.pages[min(from, to)...max(from, to)])
         let missing = span.contains { pages[$0] == nil }
         for route in span { build(route) }
-        resting = root
         idle?.cancel()
         guard !(input?.reduceMotion ?? false), view.window != nil else {
             stopAnimations()
+            show(resting: root, moving: [])
             offset = -CGFloat(to) * width
             apply(offset)
             return rest()
         }
-        setMoving(moving.union(span))
+        show(resting: root, moving: moving.union(span))
         Task { [weak self] in
             if missing { await NextFrame.wait() }
             guard let self, self.resting == root else { return }
@@ -366,42 +370,5 @@ private final class PagerView: UIView {
     var scroll: (UIAccessibilityScrollDirection) -> Bool = { _ in false }
 
     override func accessibilityScroll(_ direction: UIAccessibilityScrollDirection) -> Bool { scroll(direction) }
-}
-
-/// 根上四页的横拖归谁（开始那一刻按状态给方向，同 Telegram 的文件夹切换）：
-/// - 横向比纵向快才开始；手指下面横着能滚的内容（看板的列、表格、附件条）还能往那边滚时让它先滚，滚到头再拖才翻页。
-///   那一侧没有页（最左的项目、没有可前进的 Cue）也接，只是越拖越沉（同系统滚动到头）：不接的话这一拖落到手指下面的行上，松手就点开了它。
-/// - 页里的滚动等它先判（横着翻页时列表不跟着竖着滚）；行上的轻扫先判（`rowSwipes` 只认慢拖、那个方向有动作），行不要的才归它。
-/// - 手指下面是正在输入的输入框时不开始。
-private final class PagerArbiter: NSObject, UIGestureRecognizerDelegate {
-    enum Direction { case previous, next }
-
-    func gestureRecognizerShouldBegin(_ recognizer: UIGestureRecognizer) -> Bool {
-        guard let pan = recognizer as? UIPanGestureRecognizer, let view = pan.view else { return false }
-        let velocity = pan.velocity(in: view)
-        let motion = velocity == .zero ? pan.translation(in: view) : velocity
-        guard abs(motion.x) > abs(motion.y) else { return false }
-        return !Self.yields(toward: motion.x < 0 ? .next : .previous, at: pan.location(in: view), in: view)
-    }
-
-    func gestureRecognizer(_ recognizer: UIGestureRecognizer, shouldBeRequiredToFailBy other: UIGestureRecognizer) -> Bool {
-        guard let view = recognizer.view, let scroll = other.view as? UIScrollView, other === scroll.panGestureRecognizer else { return false }
-        return scroll.isDescendant(of: view)
-    }
-
-    /// 手指下面有横着还能往这边滚的内容，或正在输入的输入框：让给它。
-    private static func yields(toward direction: Direction, at point: CGPoint, in root: UIView) -> Bool {
-        var view = root.hitTest(point, with: nil)
-        while let current = view, current !== root {
-            if current.isFirstResponder, current is UITextInput { return true }
-            if let scroll = current as? UIScrollView, scroll.isScrollEnabled, scroll.contentSize.width > scroll.bounds.width + 1 {
-                let inset = scroll.adjustedContentInset, x = scroll.contentOffset.x
-                let room = direction == .previous ? x > -inset.left + 1 : x < scroll.contentSize.width - scroll.bounds.width + inset.right - 1
-                if room { return true }
-            }
-            view = current.superview
-        }
-        return false
-    }
 }
 #endif
