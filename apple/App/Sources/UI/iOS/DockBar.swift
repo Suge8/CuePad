@@ -55,7 +55,7 @@ private struct DockForm: View, Animatable {
                 .clipShape(.capsule)
                 .glass(in: .capsule, interactive: true, ink: .clear)
                 .offset(x: left + Dock.gap)
-                .opacity(DockHandoff.ramp(places, DockHandoff.swap))
+                .opacity(DockHandoff.ramp(places, DockHandoff.cueGlass))
                 .allowsHitTesting(shown)
                 .accessibilityHidden(!shown)
         }
