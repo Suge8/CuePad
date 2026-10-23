@@ -26,7 +26,8 @@ extension IOSInteractionBench {
     ) async {
         guard let bounds = window?.bounds else { return }
         let left = bounds.width / 4, right = bounds.width * 3 / 4, mid = bounds.midY
-        func land(_ root: Route) async {
+        func land(_ root: Route, pane: ProgressPane = .board) async {
+            workspace.progressPane = pane
             workspace.select(root)
             try? await Task.sleep(for: .seconds(1))
         }
@@ -38,7 +39,7 @@ extension IOSInteractionBench {
             }
             // 会话页的中部满是会话行（行上左滑露出行的动作），切页滑在第一行上面的分组标题那一条
             if wants("滑动切页·会话→Cue") {
-                await land(.progress)
+                await land(.progress, pane: .sessions)
                 let row = sessionRow(in: window, fail: fail)
                 let y = row.minY - 20
                 await step("滑动切页·会话→Cue", swipeWindow, .swipe(from: CGPoint(x: right, y: y), to: CGPoint(x: left, y: y))) {}
@@ -54,25 +55,25 @@ extension IOSInteractionBench {
         // 会话行：慢慢左拖 150pt（约 0.9 秒）露出行的动作；同一行上快甩是切页（会话页左边是 Cue）
         for _ in 0..<2 where wants("误触·会话行左滑") {
             await land(.cue)
-            await land(.progress)
+            await land(.progress, pane: .sessions)
             let row = sessionRow(in: window, fail: fail)
             rowBefore = pixels(row)
             await step("误触·会话行左滑", .milliseconds(1500), .drag(from: CGPoint(x: right, y: row.midY), to: CGPoint(x: right - 150, y: row.midY), seconds: 0.9)) {}
             // 页常驻、不重建：滑出的行动作点一下行收起，不留给下一遍（没滑出时这一下会打开会话，也算没收起）
             await press("收起行动作", .press(CGPoint(x: left, y: row.midY)))
             try? await Task.sleep(for: .seconds(1))
-            if landed(workspace) != "agent" { fail("点一下没收起行动作：\(landed(workspace))") }
+            if landed(workspace) != "progress" { fail("点一下没收起行动作：\(landed(workspace))") }
             rowBefore = nil
         }
         for _ in 0..<2 where wants("会话行快甩") {
             await land(.cue)
-            await land(.progress)
+            await land(.progress, pane: .sessions)
             let row = sessionRow(in: window, fail: fail).midY
             await step("会话行快甩", swipeWindow, .swipe(from: CGPoint(x: right, y: row), to: CGPoint(x: left, y: row), seconds: 0.12)) {}
         }
         for _ in 0..<2 where wants("误触·看板左滑") || wants("误触·看板右滑") {
             await land(.progress)
-            guard let board = boardY(in: window) else { fail("任务页上找不到看板") }
+            guard let board = boardY(in: window) else { fail("进展页上找不到看板") }
             await step("误触·看板左滑", swipeWindow, .swipe(from: CGPoint(x: right, y: board), to: CGPoint(x: left, y: board))) {}
             await step("误触·看板右滑", swipeWindow, .swipe(from: CGPoint(x: left, y: board), to: CGPoint(x: right, y: board))) {}
         }

@@ -5,7 +5,7 @@ import Foundation
 /// 展开后这一格换成"收起"；只多一条时直接全列——"还有 1 条"那一行与一条任务一样高，折起来不省地方。
 /// "已完成 M"原地展开本项目最近完成的顶层任务（`ProjectPageData.done`，样子与点圆圈回到待办同任务看板），与上面各自开合。
 /// 收起其余任务一步到位，纸底那一行留在原来的屏幕位置（`TaskFoldAnchor`）。
-/// 页面本地的临时状态，不持久化；总表（任务页）只从侧栏、底部那一排与 ⌘⇧T 进，项目页不跳过去。
+/// 页面本地的临时状态，不持久化；总表（进展页）只从侧栏、底部那一排与 ⌘⇧T 进，项目页不跳过去。
 nonisolated struct TaskFold: Equatable, Sendable {
     var showsAll = false
     var showsDone = false

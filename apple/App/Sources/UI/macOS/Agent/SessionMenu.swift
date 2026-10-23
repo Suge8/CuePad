@@ -2,7 +2,7 @@
 import CueStore
 import SwiftUI
 
-/// Mac 会话行的右键菜单（Agent 整页）：标为未读、重命名、跳到所在终端（本机桥上开在终端里的）、
+/// Mac 会话行的右键菜单（进展页的会话段）：标为未读、重命名、跳到所在终端（本机桥上开在终端里的）、
 /// 结束会话（`end` 非空时；调用处先确认，确认后发给它所在的 Mac，对话留着）。桥上的那个会话只在这里读（`pi.session(sessionID:)`）：
 /// 列表读全部会话的话，任一会话一变整列重算。
 struct SessionMenu: View {

@@ -2,29 +2,22 @@
 import CueStore
 import SwiftUI
 
-/// 会话页顶上一排右端的 +：在本机后台开一个新会话（窗口内浮层，同其他弹层；系统 popover 从页面右侧的 + 弹出时会伸到窗口外）。
-/// 开好后关掉表单、在内容区打开新会话的整页。
-/// 这台 Mac 上一家 Agent 都不能用（`MacAgents`）时置灰，悬停说为什么（`whyNone`）；读到的这一份交给表单。
-struct NewSessionButton: View {
-    @Binding var showing: Bool
+/// 新会话的表单挂在进展页上（`ProgressPage`，⌥⌘N 与工具栏的"新会话"经 `Workspace.showsNewSession` 打开；窗口内浮层，同其他弹层）：
+/// 开好后关掉表单、在内容区打开新会话的整页。这台 Mac 上一家 Agent 都不能用（`MacAgents`）时表单里写为什么（`whyNone`）。
+struct NewSessionPanel: ViewModifier {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @State private var agents: MacAgents?
 
-    var body: some View {
-        let none = agents?.agents.isEmpty != false
-        Button { showing = true } label: { Image(.add) }
-        .buttonStyle(ControlButtonStyle(kind: .circular))
-        .accessibilityLabel("新会话")
-        .disabled(none)
-        .help(none ? agents.map { "开不了新会话：\($0.whyNone)" } ?? "" : "开一个新的 Agent 会话")
-        .observing(services.store, into: $agents, onError: workspace.fail) { [host = services.hostID] in try $0.macAgents(on: host) }
-        .panel(isPresented: $showing) {
-            NewSessionForm(agents: agents) { id in
-                showing = false
-                workspace.show(.session(id))
+    func body(content: Content) -> some View {
+        content
+            .observing(services.store, into: $agents, onError: workspace.fail) { [host = services.hostID] in try $0.macAgents(on: host) }
+            .panel(isPresented: Bindable(workspace).showsNewSession) {
+                NewSessionForm(agents: agents) { id in
+                    workspace.showsNewSession = false
+                    workspace.show(.session(id))
+                }
             }
-        }
     }
 }
 

@@ -55,13 +55,15 @@ struct MainWindow: View {
         // 工具栏给条目画的玻璃底不随内容显隐（隐去时会留一个空圆钮），所以关掉它、由按钮自己画
         ToolbarItem(placement: .navigation) { CloseButton() }
             .sharedBackgroundVisibility(.hidden)
-        // 这一页的范围与主操作（`ScopeSlot`、`PageActionSlot`）：常驻、固定宽度，玻璃由控件自己画
+        // 这一页的范围、额度与主操作（`ScopeSlot`、`QuotaSlot`、`PageActionSlot`）：常驻、固定宽度，玻璃由控件自己画
         ToolbarItem(placement: .navigation) { ScopeSlot() }
             .sharedBackgroundVisibility(.hidden)
-        // 会话页与 Cue 页（侧栏收起时）的标题（`SessionHeader`、`CueTitle`，居中）；右上的"⋯"（`PageMenuSlot`）是当前页的操作。.principal 在详情区里居中，与对话的阅读栏同一条中线
+        // 会话页的标题（`SessionHeader`）、进展页的看板｜会话、Cue 页（侧栏收起时）的标题（`CueTitle`），居中；右上的"⋯"（`PageMenuSlot`）是当前页的操作。.principal 在详情区里居中，与对话的阅读栏同一条中线
         ToolbarItem(placement: .principal) { PageTitleSlot() }
             .sharedBackgroundVisibility(.hidden)
         ToolbarSpacer(.flexible)
+        ToolbarItem(placement: .primaryAction) { QuotaSlot() }
+            .sharedBackgroundVisibility(.hidden)
         ToolbarItem(placement: .primaryAction) { PageActionSlot() }
             .sharedBackgroundVisibility(.hidden)
         ToolbarItemGroup(placement: .primaryAction) {
@@ -146,7 +148,7 @@ private struct EditorLayer: View {
 }
 
 /// 底部输入条：编辑页挂着（含淡出途中）时不显示，底栏只有一套，先退后进；⌘K 打开时只是藏起来（不卸下），关掉面板的同一帧就回来。
-/// 回收站、Agent 整页与会话页不放：那里不是记灵感的地方（Agent 整页有自己的"＋"新会话，会话页有回复框），它只会压住列表最后几行。
+/// 只在项目页与归档放：回收站、进展页与会话页不是记灵感的地方（进展页的主操作是新任务、新会话，会话页有回复框），它只会压住列表最后几行。
 private struct CaptureSlot: View {
     @Environment(Workspace.self) private var workspace
 
@@ -166,7 +168,7 @@ private struct CaptureSlot: View {
 }
 
 private extension Route {
-    /// 底部输入栏放不放：回收站、Agent 整页与会话页不是记灵感的地方。
+    /// 底部输入栏放不放（规则在 `CaptureSlot`）。
     var takesCapture: Bool {
         switch self {
         case .project, .archive: true
@@ -203,7 +205,7 @@ extension Workspace {
     }
 }
 
-/// 窗口级快捷键：⌘1–9 切项目。⌘N 记一条灵感、⌥⌘N 新会话、⌘K 搜索、⌘⇧T 任务页、⌃⌘S 侧栏与设置（⌘,）在主菜单，Esc 关浮层在 `PanelHost`。
+/// 窗口级快捷键：⌘1–9 切项目。⌘N 记一条灵感、⌥⌘N 新会话、⌘K 搜索、⌘⇧T 进展页、⌃⌘S 侧栏与设置（⌘,）在主菜单，Esc 关浮层在 `PanelHost`。
 /// ⌘1–9 的唯一处理者在这里：工具栏的项目切换菜单收起时不响应其菜单项的快捷键（实测），菜单里的 ⌘ 只是提示。
 private struct WorkspaceShortcuts: View {
     let workspace: Workspace

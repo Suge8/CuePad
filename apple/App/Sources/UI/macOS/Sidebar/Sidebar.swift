@@ -2,10 +2,10 @@
 import CueStore
 import SwiftUI
 
-/// 侧栏的结构与 iPhone、iPad 同一份（`SidebarOutline`），这里只管 Mac 的长相，一列到底：最上面 Cue 名片（`CueSidebarCard`）、
-/// 下面并排两块磁贴（`PlaceTiles`：任务打开看板页，会话打开会话页）、项目（置顶的在前；Mac 没有书架，全部列出），底栏是归档、回收站与设置。
-/// 点哪一处，内容区就是哪一页。在线会话不在侧栏另列：全部在会话页，项目行尾的状态标说这个项目里有没有要看的。
-/// 名片与磁贴一直在看得见的地方，只有项目区滚动（方向键与 ⌘1–9 换到的项目滚进可见区）；项目区是普通栈：几十行的量级，行高固定。
+/// 侧栏的结构与 iPhone、iPad 同一份（`SidebarOutline`），这里只管 Mac 的长相，一列到底：最上面 Cue 名片（`CueSidebarCard`，要你拍板的事）、
+/// 下面一行进展（`ProgressRow`：看板与会话）、项目（全部，置顶的在前；行只有图标与名字），底栏是归档、回收站与设置。
+/// 点哪一处，内容区就是哪一页。会话不在侧栏列：全部在进展页的会话段；项目行不挂状态标——要看的在 Cue，在动的在进展。
+/// 名片与进展一直在看得见的地方，只有项目区滚动（方向键与 ⌘1–9 换到的项目滚进可见区）；项目区是普通栈：几十行的量级，行高固定。
 struct Sidebar: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -20,7 +20,7 @@ struct Sidebar: View {
         let pages = catalog.map(SidebarPages.init)
         VStack(spacing: 0) {
             CueSidebarCard(select: select).padding(.top, 6)
-            PlaceTiles(select: select).padding(.horizontal, SidebarMetrics.edge).padding(.top, 10)
+            ProgressRow(select: select).padding(.horizontal, SidebarMetrics.column).padding(.top, 10)
             VStack(alignment: .leading, spacing: 0) {
                 SidebarHeader(title: "项目") {
                     Button("新建项目", icon: .add) { workspace.projectForm = .init() }.disabled(!workspace.isLibraryReady)
@@ -87,7 +87,7 @@ struct Sidebar: View {
     }
 }
 
-/// 侧栏一行的横向尺寸：侧栏边缘到行的图标列 `column`，行的底（`RowStyle`）向外让出 `RowMetrics.bleed`、离侧栏边缘 `edge`（名片与磁贴也离边缘 `edge`）；
+/// 侧栏一行的横向尺寸：侧栏边缘到行的图标列 `column`，行的底（`RowStyle`）向外让出 `RowMetrics.bleed`、离侧栏边缘 `edge`（名片也离边缘 `edge`）；
 /// 图标列宽 `Spacing.sidebarIcon`，名字离图标列 `titleGap`。
 enum SidebarMetrics {
     static let edge: CGFloat = 10
@@ -154,7 +154,7 @@ private struct SidebarHeaderAction: LabelStyle {
     }
 }
 
-/// 侧栏里能去的页，按显示顺序：任务 → 会话 → 项目（`SidebarOutline`）→ 归档 → 回收站。方向键共用这一份顺序。
+/// 侧栏里能去的页，按显示顺序：进展 → 项目（`SidebarOutline`）→ 归档 → 回收站。方向键共用这一份顺序。
 private struct SidebarPages {
     let outline: SidebarOutline
 
@@ -167,71 +167,28 @@ private struct SidebarPages {
     }
 }
 
-/// 名片下面并排的两块磁贴（`SidebarOutline.places`，数是 `Entry.count`，iPad 侧栏同一个）：任务（没做完的；打开看板页，同 ⌘⇧T）、
-/// 会话（在线的，有在跑的再写"N 在跑"、靛青，与菜单栏面板区头"在跑"同一档 `LiveWork.running`；点进会话页；
-/// 会话哪一行都不在屏上时接力落在这里，`relaySpot(dock:)`）。
-/// 单独读当前页与在线会话，换页、会话状态变时侧栏别处不跟着重算。
-private struct PlaceTiles: View {
+/// 名片下面一行"进展"（`SidebarOutline.places`，同 ⌘⇧T）：行尾写推进中几件、等你几件（`ProgressTally`，读 Cue 那一份计数）。
+/// 会话哪一行都不在屏上时接力落在这一行（`relaySpot(dock:)`）。单独读当前页，换页时侧栏别处不跟着重算。
+private struct ProgressRow: View {
     let select: (Route) -> Void
     @Environment(Workspace.self) private var workspace
-
-    var body: some View {
-        HStack(spacing: 8) {
-            ForEach(SidebarOutline.places, id: \.self) { entry in
-                PlaceTile(
-                    entry: entry, count: workspace.catalog?.allTasks.open ?? 0, running: workspace.liveWork.running, selected: workspace.root == entry.route
-                ) { select(entry.route) }
-                .relaySpot(dock: true)
-                .help("进展（⌘⇧T）")
-            }
-        }
-    }
-}
-
-/// 一块磁贴：纸色圆角，图标左上、数字右上、名字左下（会话的"N 在跑"在右下）；选中（当前页）换成选中底。
-private struct PlaceTile: View {
-    let entry: SidebarOutline.Entry
-    let count: Int
-    var running = 0
-    let selected: Bool
-    let action: () -> Void
     @Environment(\.palette) private var palette
 
-    private static let corner: CGFloat = 16
-    private static let height: CGFloat = 66
-
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: Self.corner, style: .continuous)
-        Button(action: action) {
-            VStack(spacing: 0) {
-                HStack(alignment: .top) {
-                    Image(entry.icon).font(.system(size: 13, weight: .medium)).foregroundStyle(palette.ink2).padding(.top, 4)
-                    Spacer(minLength: 4)
-                    Text(count, format: .number).font(Typography.sidebarTileCount).foregroundStyle(palette.ink).counting(count)
-                }
-                Spacer(minLength: 0)
-                HStack(alignment: .firstTextBaseline) {
-                    Text(entry.title).font(Typography.sidebarRow.weight(selected ? .semibold : .medium)).foregroundStyle(palette.ink)
-                    Spacer(minLength: 4)
-                    if running > 0 {
-                        Text("\(running) 在跑").font(Typography.meta.monospacedDigit()).foregroundStyle(palette.signature).lineLimit(1)
-                    }
-                }
-            }
-            .padding(.horizontal, 12).padding(.top, 8).padding(.bottom, 10)
-            .frame(maxWidth: .infinity, minHeight: Self.height, maxHeight: Self.height)
-            .background(selected ? palette.selection : palette.paper, in: shape)
-            .contentShape(shape)
+        let entry = SidebarOutline.Entry.progress
+        PageRow(selected: workspace.root == entry.route, action: { select(entry.route) }) {
+            Image(entry.icon).font(.system(size: 13, weight: .medium)).foregroundStyle(palette.ink2)
+        } title: {
+            Text(entry.title)
+        } trailing: {
+            ProgressTally().font(Typography.meta)
         }
-        .buttonStyle(PressStyle(.card))
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(running > 0 ? "\(entry.title)，\(count)，\(running) 个在跑" : "\(entry.title)，\(count)")
-        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+        .relaySpot(dock: true)
+        .help("进展：看板与会话（⌘⇧T）")
     }
 }
 
-/// 项目区的行。只有这里读当前页与在线会话，每行拿到"选没选中"与行尾的状态标：换页时只重算选中变了的两行
-/// （每行各读当前页时，换一次页项目再多也全部重算），会话状态变时只重算标变了的行。
+/// 项目区的行。只有这里读当前页，每行拿到"选没选中"：换页时只重算选中变了的两行（每行各读当前页时，换一次页项目再多也全部重算）。
 private struct ProjectRows: View {
     let pages: SidebarPages
     let catalog: ProjectCatalog
@@ -240,35 +197,19 @@ private struct ProjectRows: View {
 
     var body: some View {
         let current = workspace.root
-        let marks = marks()
         VStack(spacing: SidebarMetrics.rowGap) {
             ForEach(pages.outline.projects) { project in
                 ProjectRow(
-                    project: project, mark: marks[project.id], selected: current == .project(project.id),
+                    project: project, selected: current == .project(project.id),
                     select: select, edit: { workspace.projectForm = .init(project: project) })
                     .equatable()
                     .id(Route.project(project.id))
             }
         }
     }
-
-    /// 各项目行尾的状态标：项目的"此刻"（`ProjectNow`，iPad 侧栏与手机书架同一条挑法）挑中的会话，只在要你动手（等你、出错、没能送达，
-    /// `PiShown.needsYou`）或在跑（`isRunning`）时画；有新回复、要重载与停着的不画（行上只有一颗标，只给要看的与在动的）。
-    private func marks() -> [UUID: ProjectMark] {
-        let now = ProjectNow.byProject(pages.outline.projects, sessions: workspace.services.liveSessions.items, tasks: [:], shown: workspace.shown)
-        return now.compactMapValues { now in
-            guard case .agent(let shown, let session) = now.source, shown.needsYou || shown.isRunning else { return nil }
-            return ProjectMark(shown: shown, session: session)
-        }
-    }
 }
 
-private struct ProjectMark: Equatable {
-    let shown: PiShown
-    let session: String
-}
-
-/// 侧栏里的一行：图标列、名字、行尾一样东西（状态标或条数）；当前页是行的选中底（`RowStyle`）、文字加粗。
+/// 侧栏里的一行：图标列、名字、行尾一样东西（进展的计数）；当前页是行的选中底（`RowStyle`）、文字加粗。
 private struct PageRow<Icon: View, Title: View, Trailing: View>: View {
     let selected: Bool
     let action: () -> Void
@@ -297,18 +238,16 @@ private struct PageRow<Icon: View, Title: View, Trailing: View>: View {
     }
 }
 
-/// 项目行：图标、名字，行尾项目的状态标（`ProjectMark`，`PiStateDot`；接力落到这个会话时落在标上）。
-/// 只随自己的项目、状态标与选中重算：会话状态一变，各行的标重新算一遍，没变的行不跟着重算。
+/// 项目行：图标与名字，只随自己的项目与选中重算。
 /// 指针停在行上时记下这个项目（`Workspace.hoveredProject`）：任务看板上别的项目的卡淡下去。行只写不读它，指针划过不重算行。
 private struct ProjectRow: View, Equatable {
     let project: Project
-    let mark: ProjectMark?
     let selected: Bool
     let select: (Route) -> Void
     let edit: () -> Void
     @Environment(Workspace.self) private var workspace
 
-    static func == (a: Self, b: Self) -> Bool { a.project == b.project && a.mark == b.mark && a.selected == b.selected }
+    static func == (a: Self, b: Self) -> Bool { a.project == b.project && a.selected == b.selected }
 
     var body: some View {
         PageRow(selected: selected, action: { select(.project(project.id)) }) {
@@ -316,7 +255,7 @@ private struct ProjectRow: View, Equatable {
         } title: {
             Text(project.name)
         } trailing: {
-            if let mark { PiStateDot(shown: mark.shown, size: 7, announces: true).relaySpot(session: mark.session, row: .project) }
+            EmptyView()
         }
         .contextMenu { ProjectActions(project: project, edit: edit) }
         .onHover { workspace.hoverProject(project.id, $0) }

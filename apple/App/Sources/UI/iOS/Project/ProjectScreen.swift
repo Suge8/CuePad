@@ -120,7 +120,7 @@ struct ProjectScreen: View {
         MasonryLayout(minColumnWidth: sizeClass == .regular ? 220 : 150, maxColumns: typeSize.isAccessibilitySize ? 1 : 4, spacing: Self.wallSpacing) { tiles() }
     }
 
-    /// 顶栏右边的"⋯"：新建卡片、看这个项目的会话（任务页与会话页共用的项目范围设成它，再切到会话页），其后是共用的项目操作。
+    /// 顶栏右边的"⋯"：新建卡片、看这个项目的会话（进展页两段共用的项目范围设成它，再切到会话段），其后是共用的项目操作。
     private var actions: some View {
         Menu("更多", icon: .more) {
             Button("记一条灵感", icon: .write, action: workspace.newCard)
@@ -146,7 +146,7 @@ struct ProjectScreen: View {
     }
 }
 
-/// 顶栏下总是一张纸（同 Mac 项目页）：本项目任务（前 3 条没做完的顶层任务连同步骤，可拖动、缩进，同任务页）；纸底一行左边"添加任务"，
+/// 顶栏下总是一张纸（同 Mac 项目页）：本项目任务（前 3 条没做完的顶层任务连同步骤，可拖动、缩进，同进展页）；纸底一行左边"添加任务"，
 /// 右边是没列出的与最近完成的个数，点了在纸里原地展开（无回弹弹簧）、各自开合，见 `TaskFold`、`TaskFoldAnchor`。
 /// 会话不在页上，"⋯"里"看这个项目的会话"去会话页。三种项目（多、少、只有任务）是同一个结构，切换项目时眼睛不用重新找。
 private struct FocusCard: View {
@@ -168,7 +168,7 @@ private struct FocusCard: View {
     private static let revealDuration = 0.16
 
     var body: some View {
-        // 与任务页同一节奏：行自带 44pt 命中高度，行间不再加间距
+        // 与进展页同一节奏：行自带 44pt 命中高度，行间不再加间距
         VStack(alignment: .leading, spacing: 0) {
             let roots = data.tasks.roots
             let hidden = TaskFold.hidden(roots.count, limit: Self.visibleTasks)
@@ -186,7 +186,7 @@ private struct FocusCard: View {
                 }
             }
             if fold.showsDone {
-                // 同任务页里已完成的行：淡一档，点圆圈回到待办
+                // 同进展页里已完成的行：淡一档，点圆圈回到待办
                 ForEach(data.done) { TaskLine(task: $0) }
             }
             // 辅助字号下开合挪到"添加任务"下面一行：并排时输入框会被挤没

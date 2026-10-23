@@ -78,7 +78,7 @@ struct PageMenuSlot: View {
     }
 }
 
-/// 项目页"⋯"里的几项：进入批量选择（`CardPresses`，一条都还没选，点卡再选）、看这个项目的会话（任务页与会话页共用的项目范围设成它，再去会话页）、项目的操作。
+/// 项目页"⋯"里的几项：进入批量选择（`CardPresses`，一条都还没选，点卡再选）、看这个项目的会话（进展页两段共用的项目范围设成它，再去会话段）、项目的操作。
 /// 添加任务就在页上的任务区里。
 private struct ProjectMenuItems: View {
     let projectID: UUID

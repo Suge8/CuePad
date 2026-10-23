@@ -38,7 +38,7 @@ extension PiSessionList {
 }
 
 extension View {
-    /// 读会话页的列表（`filter` 是此刻的项目范围）：随会话、投送请求、项目与目录绑定的变化重读，换搜索词或筛选时重新订阅；
+    /// 读会话列表（`filter` 是此刻的项目范围）：随会话、投送请求、项目与目录绑定的变化重读，换搜索词或筛选时重新订阅；
     /// 一并挂上改名与结束会话的确认、行里的搜索高亮。
     func agentList(_ model: AgentListModel, filter: UUID?) -> some View { modifier(AgentListReader(model: model, filter: filter)) }
 }

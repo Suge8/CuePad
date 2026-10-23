@@ -92,7 +92,7 @@ final class Workspace {
     var showsSetup = false
     /// 新会话的表单开着（`NewSessionForm`，从会话页的 + 弹出；菜单"文件 › 新会话"先去会话页再置起，`newSession`）。
     var showsNewSession = false
-    /// 任务页待办顶上浮出添加那一行（页上的"新任务"与右上"⋯"里的同一下）。
+    /// 进展页待办顶上浮出添加那一行（页上的"新任务"与右上"⋯"里的同一下）。
     var addsTask = false
     /// 清空回收站的确认开着（回收站页上与"⋯"里的"清空回收站…"同一下）。
     var confirmsEmptyTrash = false

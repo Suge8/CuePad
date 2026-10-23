@@ -7,10 +7,9 @@ extension View {
     /// 列表与表单铺在桌面色上，与书架、项目页同一底色。
     func deskBackground() -> some View { modifier(DeskBackground()) }
 
-    /// 长按项目（书架、侧栏）：抬起这一项作预览，菜单是共用的项目操作，有 Pi 会话时菜单标题写明它的状态
-    /// （说清旁边那个点是什么意思）。项目还没同步到（nil）时没有菜单。
-    func projectActions(_ project: Project?, radius: CGFloat, pi: PiShown?) -> some View {
-        modifier(ProjectContextMenu(project: project, radius: radius, pi: pi))
+    /// 长按项目（书架、侧栏）：抬起这一项作预览，菜单是共用的项目操作。项目还没同步到（nil）时没有菜单。
+    func projectActions(_ project: Project?, radius: CGFloat) -> some View {
+        modifier(ProjectContextMenu(project: project, radius: radius))
     }
 }
 
@@ -48,16 +47,12 @@ private struct LiftedContextMenu<Menu: View, Preview: View>: ViewModifier {
 private struct ProjectContextMenu: ViewModifier {
     let project: Project?
     let radius: CGFloat
-    let pi: PiShown?
 
     func body(content: Content) -> some View {
         if let project {
             content
                 .contentShape(.contextMenuPreview, .rect(cornerRadius: radius, style: .continuous))
-                .contextMenu {
-                    let actions = ProjectActions(project: project) { workspace.projectForm = .init(project: project) }
-                    if let pi { Section(pi.presence) { actions } } else { actions }
-                }
+                .contextMenu { ProjectActions(project: project) { workspace.projectForm = .init(project: project) } }
         } else {
             content
         }

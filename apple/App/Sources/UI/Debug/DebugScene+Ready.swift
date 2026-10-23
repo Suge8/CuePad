@@ -21,7 +21,7 @@ extension DebugScene {
         }
     }
 
-    /// `-CuePadNotice <文字>`：就绪前弹一条带去处的提示（点它去会话页），停一分钟：截图、录屏拍得到提示条。
+    /// `-CuePadNotice <文字>`：就绪前弹一条带去处的提示（点它去进展页），停一分钟：截图、录屏拍得到提示条。
     static func noticeIfAsked(_ workspace: Workspace) {
         guard let text = defaults.string(forKey: "CuePadNotice") else { return }
         workspace.say(Dotted(text), status: .unread, link: .progress, duration: .seconds(60))

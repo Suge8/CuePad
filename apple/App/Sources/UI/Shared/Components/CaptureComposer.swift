@@ -90,7 +90,7 @@ struct CaptureComposer: View {
 
 #endif
 
-/// 头部的落点胶囊："[前缀] 图标 名字 ⌃⌄"，点开换去处。随手记与 iOS 任务页的快速添加写"→ 项目图标 项目名"（init(project:)），
+/// 头部的落点胶囊："[前缀] 图标 名字 ⌃⌄"，点开换去处。随手记与 iOS 进展页的快速添加写"→ 项目图标 项目名"（init(project:)），
 /// 新会话与发给 Agent 的输入框用同一个胶囊写"新会话 · 项目名""交给 会话名"。
 struct DestinationChip<Icon: View>: View {
     var lead: String?

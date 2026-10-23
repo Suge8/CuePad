@@ -21,7 +21,7 @@ extension Workspace {
     /// 最上面那一页。
     var top: Route { path.last ?? root }
 
-    /// 当前项目：正在看的项目页（含其上推入的页，如卡片纸页），否则没有。"在哪个项目"只有这一份：⌘N、任务页新建任务的默认落点都读它。
+    /// 当前项目：正在看的项目页（含其上推入的页，如卡片纸页），否则没有。"在哪个项目"只有这一份：⌘N、进展页新建任务的默认落点都读它。
     var currentProject: UUID? {
         for route in ([root] + path).reversed() {
             if case .project(let id) = route { return id }

@@ -27,17 +27,15 @@ enum EndSpot: Equatable {
     case session(String, Row)
     /// 任务圈与正在开会话的空心点：带着这件任务、或交给的会话就是它绑着的那个时算。
     case task(UUID, session: String?)
-    /// "会话"那一格：iPhone 展开的三格、Mac 侧栏的会话磁贴；Cue 页收起的去处钮不接力。
+    /// "进展"那一处：iPhone 底部那一排的那一格、Mac 与 iPad 侧栏的那一行；Cue 页收起的去处钮不接力。
     case dock
 
     /// 状态标所在的行，越具体越前。
     enum Row: Int {
         /// 会话自己那一行：会话列表、菜单栏面板、会话页的页头卡片。
         case own = 1
-        /// 它的任务行（任务行、任务卡、任务页上代表它的那一格）。
+        /// 它的任务行（任务行、任务卡、看板上代表它的那一格）。
         case task
-        /// 项目行上的状态：Mac 侧栏行尾的状态标、iPad 与手机的此刻一行（`ProjectNowLine`）。
-        case project
     }
 
     /// 对 `end` 来说有多具体；不是它的为 nil。
@@ -46,7 +44,7 @@ enum EndSpot: Equatable {
         case .bead(let sessions): sessions.contains(end.session) ? 0 : nil
         case .session(let session, let row): session == end.session ? row.rawValue : nil
         case .task(let task, let session): task == end.task || session == end.session ? Row.task.rawValue : nil
-        case .dock: Row.project.rawValue + 1
+        case .dock: Row.task.rawValue + 1
         }
     }
 }
@@ -65,7 +63,7 @@ extension View {
     /// Cue 的头像：接力的 Cue 那一头，环在这里亮起。
     func relaySpot(cue spot: CueSpot) -> some View { background { RelayAnchor(role: .cue(spot)) } }
 
-    /// "会话"那一格（`EndSpot.dock`，`dock` 为真的那处）：会话哪一行都不在屏上时接力落在这里。一直挂着。
+    /// "进展"那一处（`EndSpot.dock`，`dock` 为真的那处）：会话哪一行都不在屏上时接力落在这里。一直挂着。
     func relaySpot(dock: Bool) -> some View { background { if dock { RelayAnchor(role: .end(.dock)) } } }
 
     /// 会话自己那一行：这次交给刚开出这个会话时，行先占着位置、透明，光落下时淡出来（`Stage.arriving`）。

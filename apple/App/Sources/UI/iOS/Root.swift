@@ -101,7 +101,7 @@ struct RouteView: View {
         case .trash: TrashScreen()
         case .settings: SettingsScreen()
         case .conflicts: ConflictsScreen()
-        case .progress: TasksScreen()
+        case .progress: ProgressScreen()
         case .cue: CuePage().countsAsPiViewer()
         case .cueSettings: CueSettingsScreen()
         case .search: SearchScreen()
