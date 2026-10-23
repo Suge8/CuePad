@@ -25,8 +25,8 @@ struct CuePage: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var sizeClass
-    /// 这一页的输入框占着底边，底部那一排的 Cue 钮把位置交给它（`DockRoot`）。
-    @Environment(\.dockComposer) private var ownsComposer
+    /// 这一页的输入框占着底边时，底部那一排的 Cue 钮把位置交给它（`DockSeat`）。
+    @Environment(\.dockSeat) private var seat
     @Environment(\.dockComposing) private var composing
     #endif
     @State private var thread: CueThread?
@@ -118,16 +118,13 @@ struct CuePage: View {
     /// 窄屏导航栈的根（不是 iPad 右侧面板）：底部是"⋯"加输入框。
     private var docked: Bool { !inPanel && sizeClass == .compact }
 
-    /// 窄屏底部那一排：左边给"⋯"让出位置（输入框有焦点时不让），右边输入框；Cue 钮长成它之前藏着（`DockRoot.handed`）。
+    /// 窄屏底部那一排：左边给"⋯"让出位置（输入框有焦点时不让），右边输入框；Cue 钮长成它之前藏着（`DockSeat`）。
     private var dockRow: some View {
         HStack(alignment: .bottom, spacing: 0) {
             if composing?.wrappedValue != true {
                 Color.clear.frame(width: Dock.slot + Dock.gap, height: Dock.slot)
             }
-            composer
-                .opacity(ownsComposer ? 1 : 0)
-                .allowsHitTesting(ownsComposer)
-                .accessibilityHidden(!ownsComposer)
+            composer.modifier(DockSeatGate(seat: seat))
         }
     }
     #endif
