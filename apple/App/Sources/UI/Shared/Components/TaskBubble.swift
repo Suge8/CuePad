@@ -1,7 +1,7 @@
 import CueStore
 import SwiftUI
 
-/// 任务气泡：点一条任务（项目页与任务页的行、Cue 对话里提到的任务、⌘K、归档、小组件链接），从点的那一下长出来的一张纸
+/// 任务气泡（Mac 与宽屏 iPad；窄屏是 `PhoneTask`）：点一条任务（项目页与任务页的行、Cue 对话里提到的任务、⌘K、归档、小组件链接），从点的那一下长出来的一张纸
 /// （\`BubbleFrame\`，Mac 与手机同一个视图，只差字号与行高）。不换页、不压暗；点外面或 Esc 关，点外面另一条就换成它的气泡。
 /// 上面是这件事：完成圈（有步骤时按步骤分段，做到哪只画在圈上）、标题（就地改）、"⋯"，一行所在项目，下面是它的正文（标题下面要交代给 Agent 的话，点了就地写）；
 /// 有步骤时列出步骤（同全 App 的任务行 \`TaskLine\`），点一步气泡原地翻到这一步、左上出返回；顶层任务末尾一行添加步骤。
@@ -62,7 +62,7 @@ struct TaskBubble: View {
     }
 }
 
-/// 任务气泡挂在窗口上的那一格（Mac 主窗口、手机根视图各挂一次）：只有它读 `Workspace.openTask`，开合、翻页时只重算它，不连带根视图。
+/// 任务气泡挂在窗口上的那一格（Mac 主窗口、宽屏 iPad 的根视图各挂一次；窄屏挂 `PhoneTaskSlot`）：只有它读 `Workspace.openTask`，开合、翻页时只重算它，不连带根视图。
 struct TaskBubbleSlot: View {
     @Environment(Workspace.self) private var workspace
 
@@ -74,13 +74,15 @@ struct TaskBubbleSlot: View {
     }
 }
 
-/// 气泡一次读出的东西：顶层任务、所在项目、它的步骤。
+/// 气泡一次读出的东西：顶层任务、所在项目、它的步骤、它在看板的哪一列。
 nonisolated struct BubbleData: Sendable, Equatable {
     var goal: Card
     var project: Project?
     var steps: [Card]
     /// 步骤完成了几个（\`CueStore.subtaskProgress\`）；没有步骤为 nil。
     var progress: TaskProgress?
+    /// 在看板的哪一列（`TaskBoard.Column.of`，与看板同一条规则、同一份 `cueTally`）。
+    var column: TaskBoard.Column
     /// 已不是一条看得见的任务（删了、归档了、改回了灵感）。
     var gone: Bool { goal.deletedAt != nil || goal.archivedAt != nil || !goal.isTask }
 
@@ -91,7 +93,7 @@ nonisolated struct BubbleData: Sendable, Equatable {
         guard let goal = try store.card(id) else { throw CueStoreError.notFound }
         return BubbleData(
             goal: goal, project: try store.project(goal.projectID), steps: try store.children(of: id).filter(\.isTask),
-            progress: try store.subtaskProgress(of: [id])[id])
+            progress: try store.subtaskProgress(of: [id])[id], column: .of(goal, in: try store.cueTally()))
     }
 }
 

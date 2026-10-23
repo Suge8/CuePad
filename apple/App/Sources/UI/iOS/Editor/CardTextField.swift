@@ -11,6 +11,8 @@ struct CardTextField: View {
     let card: Card
     let editing: CardEditing
     let theme: CueEditorTheme
+    /// 高贴着字、自己不滚（`IOSEditorHost.fits`）。
+    var fits = false
     @Environment(Workspace.self) private var workspace
     @State private var pickingImage = false
     @State private var pickedImage: PhotosPickerItem?
@@ -25,7 +27,8 @@ struct CardTextField: View {
             onInsertImage: { pickingImage = true },
             onVariables: { editingVariables = true },
             selectionActions: [.convertToTasks(from: card, workspace: workspace)],
-            onError: workspace.fail)
+            onError: workspace.fail,
+            fits: fits)
         .photosPicker(isPresented: $pickingImage, selection: $pickedImage, matching: .images)
         .onChange(of: pickedImage) { insertPicked() }
         .sheet(isPresented: $editingVariables) {

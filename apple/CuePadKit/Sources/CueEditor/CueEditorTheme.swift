@@ -31,6 +31,21 @@ public struct CueEditorTheme: @unchecked Sendable {
     public var lineSpacing: CGFloat
     public var headingSpacing: CGFloat
     public var imageCornerRadius: CGFloat
+    /// 首段当标题排（任务气泡：标题与下面的话在同一个编辑器里，从第一帧就可编辑，点哪光标落在哪）；nil 时首段同正文。
+    public var title: Title?
+
+    /// 首段的样子：字体（按 `title3` 的档位随系统字号缩放）、颜色，与下一段隔多远。只改展示，存储格式里它就是第一行。
+    public struct Title: @unchecked Sendable {
+        public var font: CueFont
+        public var color: CueColor
+        public var spacing: CGFloat
+
+        public init(font: CueFont, color: CueColor, spacing: CGFloat) {
+            self.font = font
+            self.color = color
+            self.spacing = spacing
+        }
+    }
 
     public init(
         font: CueFont, headingFont: CueFont, codeFont: CueFont, markerColor: CueColor,

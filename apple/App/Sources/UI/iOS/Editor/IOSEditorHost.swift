@@ -24,6 +24,8 @@ struct IOSEditorHost: UIViewRepresentable {
     let onVariables: () -> Void
     var selectionActions: [CueSelectionAction] = []
     var onError: (any Error) -> Void = { _ in }
+    /// 高贴着字、自己不滚（任务气泡：整张纸一起滚）；否则铺满给的地方、在里面滚（纸页）。
+    var fits = false
     @Environment(AppServices.self) private var services
 
     func makeCoordinator() -> KeyboardBar.Actions { KeyboardBar.Actions() }
@@ -33,6 +35,12 @@ struct IOSEditorHost: UIViewRepresentable {
         view.storedText = initialText
         view.inputAccessoryView = KeyboardBar(textView: view, actions: context.coordinator)
         view.accessibilityLabel = "正文"
+        if fits {
+            view.isScrollEnabled = false
+            view.alwaysBounceVertical = false
+            // 字贴着框的左沿，与气泡里别的行对齐
+            view.textContainer.lineFragmentPadding = 0
+        }
         handle.view = view
         // 新建的空卡直接进入输入
         if initialText.isEmpty { DispatchQueue.main.async { view.becomeFirstResponder() } }
@@ -51,7 +59,14 @@ struct IOSEditorHost: UIViewRepresentable {
         view.onError = onError
         context.coordinator.insertImage = onInsertImage
         context.coordinator.variables = onVariables
-        if view.theme.textColor != theme.textColor || view.theme.horizontalInset != theme.horizontalInset { view.theme = theme }
+        if view.theme.textColor != theme.textColor || view.theme.horizontalInset != theme.horizontalInset || view.theme.title?.color != theme.title?.color {
+            view.theme = theme
+        }
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: CueTextView, context: Context) -> CGSize? {
+        guard fits, let width = proposal.width else { return nil }
+        return CGSize(width: width, height: uiView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude)).height)
     }
 }
 

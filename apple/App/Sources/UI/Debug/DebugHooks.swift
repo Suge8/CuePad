@@ -47,7 +47,7 @@ enum DebugHooks {
         var alertStatus: PiAlertStatus?
         /// 手机任务页打开时落在哪一列（`-CuePadColumn <列名>`）。
         var boardColumn: TaskBoard.Column?
-        /// 原型（proto/phone-board，不进主干）：手机看板的排法（`-CuePadProtoBoard A|B|C`）与任务浮窗的样子（`-CuePadProtoBubble P|Q|R`）。
+        /// 原型（proto/phone-board，不进主干）：手机看板的排法（`-CuePadProtoBoard A|B|C`）与任务浮窗的样子（`-CuePadProtoBubble P|Q`）。
         var protoBoard = "A"
         var protoBubble = "P"
         /// 搜索页一打开在哪个范围（`-CuePadSearchScope sessions`）。

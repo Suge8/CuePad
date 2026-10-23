@@ -6,15 +6,22 @@ import SwiftUI
 // 任务气泡（`TaskBubble`）的几块：任务是一件要做成的事——标题（`TaskHeading`）与下面要交代给 Agent 的话（正文，`Card.rest`）。
 
 
-/// 编辑器写的是正文的哪一段：整条（灵感），或任务标题下面的话（`Card.rest`；标题由 `TaskHeading` 另写，写入时各读库里此刻的另一段）。
+/// 编辑器写的是正文的哪一段：整条（灵感），或任务标题下面的话（`Card.rest`；标题由 `TaskHeading` 另写，写入时各读库里此刻的另一段），
+/// 或整条任务（手机的任务气泡 `PhoneTask`：标题是首段、同一个编辑器写）——下面还没写时多一个空段，提示写在那里，点那里光标落在第二行。
 nonisolated enum CardTextPart: Sendable {
-    case whole, rest
+    case whole, rest, task
 
-    func text(of card: Card) -> String { self == .whole ? card.body : card.rest ?? "" }
+    func text(of card: Card) -> String {
+        switch self {
+        case .whole: card.body
+        case .rest: card.rest ?? ""
+        case .task: card.rest == nil ? CueLines.split(card.body).title + "\n" : card.body
+        }
+    }
 
     func write(_ text: String, into card: inout Card) {
         switch self {
-        case .whole: card.body = text
+        case .whole, .task: card.body = text
         case .rest: card.rest = text
         }
     }
