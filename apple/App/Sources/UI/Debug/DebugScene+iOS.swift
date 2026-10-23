@@ -18,20 +18,6 @@ import UIKit
 /// `-CuePadLiveActivity YES`：隔离库下也开真的实时活动（配 `-CuePadDemo YES`，演示库里有推进中与等你），验收锁屏与灵动岛；`simctl io screenshot` 拍不到灵动岛，录一小段取帧。
 /// cuepanel：iPad 在项目页旁开着右侧 Cue 面板。演示库另写入 Mac 同步来的 Pi 会话状态（含历史）与几条发到 Mac 的请求。
 extension DebugScene {
-    /// `-CuePadCanvasSteps YES`（配 tasks 画面，原型 proto/task-bubble）：待办里"画布缩放锚点跟随指针"写上正文与三个步骤（第一步做完），
-    /// 从任务页的卡上点开一件有步骤的任务（演示库里有步骤的"发言轮次乱序"在等你那一列，点它的抬头去回答、不开浮窗）。
-    private static func seedCanvasSteps(_ store: CueStore) async {
-        guard let canvas = try? await store.tasks(.inProgress, .todo).flatMap(\.tasks).first(where: { $0.body.hasPrefix("画布缩放") }),
-              (try? await store.children(of: canvas.id))?.isEmpty != false else { return }
-        try? await store.updateCard(canvas.id) {
-            $0.rest = "缩放时以指针所在的点为锚点，指针下的那块内容不动、四周跟着放大缩小\n触控板捏合、⌘ 加滚轮、双击放大三种入口都要对，缩放到边界时不回弹"
-        }
-        let first = try? await store.createTask("复现缩放时画布跳动\n在 200% 以上连续捏合，记下画布偏移", under: canvas.id)
-        _ = try? await store.createTask("以指针为锚点换算平移", under: canvas.id)
-        _ = try? await store.createTask("捏合、滚轮、双击各补一个用例", under: canvas.id)
-        if let first { try? await store.setStatus(first.id, .done) }
-    }
-
     /// 模拟器当作接了电脑键盘、聚焦不弹软键盘：清掉输入法的硬件键盘布局后照常弹出（私有选择子，只在 Debug 里）。
     private static func showSoftwareKeyboard() {
         let selector = NSSelectorFromString("setHardwareLayout:")
@@ -116,7 +102,7 @@ extension DebugScene {
                 await seedCue(workspace.services)
                 await seedBusyBoard(workspace.services.store)
             }
-            if defaults.bool(forKey: "CuePadCanvasSteps") { await seedCanvasSteps(workspace.services.store) }
+            await seedCanvasSteps(workspace.services.store)
             workspace.projectScope = project
             workspace.show(.tasks)
         case "task":

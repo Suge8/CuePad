@@ -96,6 +96,8 @@ public final class CueTextView: NSTextView, CueEditorHost {
     public override func didChangeText() {
         super.didChangeText()
         core.flushHighlight()
+        // 高贴着字摆的宿主（任务气泡）按它重量高
+        invalidateIntrinsicContentSize()
         // 组合中的拼音只是标记文本，提交后才是内容，不上报
         if !isLoading, !hasMarkedText() { onChange?(storedText) }
     }
@@ -119,6 +121,13 @@ public final class CueTextView: NSTextView, CueEditorHost {
     private func horizontalInset(forWidth width: CGFloat) -> CGFloat {
         guard let maxTextWidth = theme.maxTextWidth else { return theme.horizontalInset }
         return max(theme.horizontalInset, ((width - maxTextWidth) / 2).rounded(.down))
+    }
+
+    /// 排完全文、贴着字的高（含上下留白）：不放进滚动视图、高随字长的宿主（任务气泡）按它摆。
+    public var fittingHeight: CGFloat {
+        let layout = core.layout
+        layout.ensureLayout(for: layout.documentRange)
+        return ceil(layout.usageBoundsForTextContainer.height + textContainerInset.height * 2)
     }
 
     // MARK: CueEditorHost

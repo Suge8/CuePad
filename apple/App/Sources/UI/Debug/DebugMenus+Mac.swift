@@ -2,7 +2,8 @@
 import AppKit
 
 /// 画面就绪后在本 App 自己的主窗口里按顺序点几下（截菜单、录任务气泡的开合与换条用；`xc.sh run mac` 起实例后从外面按窗口截、录）。
-/// - `-CuePadClick x,y[;x,y|esc|return…]`：左键点；几下之间用分号隔开，隔 `-CuePadClickGap` 秒（默认 1.5），`esc`、`return` 是按一下那个键。
+/// - `-CuePadClick x,y[;x,y|esc|return|type:文字…]`：左键点；几下之间用分号隔开，隔 `-CuePadClickGap` 秒（默认 1.5），`esc`、`return` 是按一下那个键，
+///   `type:文字` 是往窗口此刻的焦点里打进这几个字（按键事件只发给激活的窗口，后台窗口里看点进输入框落在哪靠它）。
 /// - `-CuePadRightClick x,y`：右键点，弹出那里的右键菜单。
 /// 事件进事件队列（同真点）：窗口的本地事件监听（浮层的关法、任务气泡的落点）照样看得到。
 /// 事件只在本进程里合成、不经窗口服务器，后台的窗口照样按点处理（不先"激活"），点开浮层、气泡、按钮看逻辑与摆位不占前台；截出来是未激活窗口的样子。
@@ -21,6 +22,10 @@ extension DebugScene {
         try? await Task.sleep(for: .milliseconds(500))
         for (index, step) in steps.enumerated() {
             if index > 0 { try? await Task.sleep(for: .seconds(gap)) }
+            if step.hasPrefix("type:") {
+                (window.firstResponder as? any NSTextInputClient)?.insertText(String(step.dropFirst(5)), replacementRange: NSRange(location: NSNotFound, length: 0))
+                continue
+            }
             if let key = keys[step] {
                 post(.keyDown, in: window, key: key)
                 post(.keyUp, in: window, key: key)
@@ -29,19 +34,30 @@ extension DebugScene {
             let parts = step.split(separator: ",").compactMap { Double($0) }
             guard parts.count == 2 else { return }
             let point = NSPoint(x: parts[0], y: window.frame.height - parts[1])
+            // 后台窗口的第一下只用来激活，文字区不接、也不拿焦点：照激活的窗口里真点的样子，先交焦点，再交给它自己的按下处理（它在里面等松开）
+            if !window.isKeyWindow, down == .leftMouseDown, let text = window.contentView?.superview?.hitTest(point) as? NSTextView {
+                guard let press = mouse(down, at: point, in: window), let release = mouse(up, at: point, in: window) else { return }
+                window.makeFirstResponder(text)
+                NSApp.postEvent(release, atStart: false)
+                text.mouseDown(with: press)
+                continue
+            }
             for type in [down, up] {
                 // 按下与松开同一刻进队列时，滚动视图里的点按手势认不出（按钮不受影响）；同真点隔一小会儿
                 if type == up { try? await Task.sleep(for: pressHold) }
-                guard let event = NSEvent.mouseEvent(
-                    with: type, location: point, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
-                    windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)
-                else { return }
+                guard let event = mouse(type, at: point, in: window) else { return }
                 NSApp.postEvent(event, atStart: false)
             }
         }
     }
 
     private static let pressHold: Duration = .milliseconds(90)
+
+    private static func mouse(_ type: NSEvent.EventType, at point: NSPoint, in window: NSWindow) -> NSEvent? {
+        NSEvent.mouseEvent(
+            with: type, location: point, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+            windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)
+    }
 
     private static let keys: [String: (code: UInt16, character: String)] = ["esc": (53, "\u{1b}"), "return": (36, "\r")]
 

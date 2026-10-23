@@ -1,8 +1,9 @@
 import CueStore
+import CueText
 import SwiftUI
 
 /// 一条灵感或任务正文此刻的编辑：编辑器的操作口、打字中的正文、自动保存与保存状态。整页编辑（Mac 编辑页、手机纸页）与
-/// 任务气泡里的正文（任务标题下面的话，`Card.rest`）共用这一份，各自只管怎么摆。编辑器是这段正文的唯一写者；
+/// 任务气泡（标题是首段、同一个编辑器写，`titled`）共用这一份，各自只管怎么摆。编辑器是这段正文的唯一写者；
 /// 离开时 `leave` 写下没保存的字，什么都没写的灵感不留下（新记的一条先建一条空的再编辑）。
 /// 手机进入后台时由壳层等它落盘（之后 App 可能被系统结束，离开页面的 onDisappear 不会再来）。
 @Observable
@@ -26,16 +27,17 @@ final class CardEditing {
     typealias Handle = IOSEditorHandle
     #endif
 
-    init(_ card: Card, part: CardTextPart = .whole, workspace: Workspace) {
+    /// `titled`：任务下面还没写话时多载入一个空段，提示写在那里，点那里光标落在第二行。
+    init(_ card: Card, titled: Bool = false, workspace: Workspace) {
         cardID = card.id
-        initialText = part.text(of: card)
+        initialText = titled && card.rest == nil ? CueLines.split(card.body).title + "\n" : card.body
         text = initialText
         self.workspace = workspace
         let store = workspace.services.store, id = card.id
         let autosave = Autosave(
             save: { [weak self] text in
                 self?.saveState = .saving
-                try await store.updateCard(id) { part.write(text, into: &$0) }
+                try await store.updateCard(id) { $0.body = text }
                 self?.saveState = .saved
             },
             onError: { [weak self] error in

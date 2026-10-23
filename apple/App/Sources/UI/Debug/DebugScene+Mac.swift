@@ -23,6 +23,7 @@ extension DebugScene {
                 await seedCue(workspace.services)
                 await seedBusyBoard(workspace.services.store)
             }
+            await seedCanvasSteps(workspace.services.store)
             workspace.show(.tasks)
         case "agentsetup": workspace.showsSetup = true
         case "connected":
