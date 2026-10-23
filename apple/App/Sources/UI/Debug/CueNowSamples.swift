@@ -48,6 +48,24 @@ enum CueNowSamples {
         bead("readme", .done, "README 截图换成 Swift 版", 0.5),
     ], advancing: 1, resting: .done)
 
+    /// 做完一件后又派出三件在跑，做完的那件已过了留它的时候（`doneWindow`）：岛该说在跑的，不再停在做完。
+    static let afterDone = now(.listening, .idle, [
+        bead("board", .running, "出手机任务看板方案", 0.95),
+        bead("header", .running, "出 iOS header 收口方案", 0.97),
+        bead("dock", .running, "底部 tab 切页丝滑收口", 0.97),
+        bead("release", .done, "推送并发新版", 25.1),
+    ], advancing: 3, resting: .done)
+
+    /// 一屏放不下的：Cue 被叫醒在用工具，一件等你允许，四件推进中，刚做完一件。
+    static let crowded = now(.thinking, .working(woke: "被 canvas-zoom 叫醒", doing: "读取 Sources/Zoom.swift", since: ago(0.7)), [
+        bead("ask", .asks, "推送 v1.4 到 TestFlight", 3),
+        bead("board", .running, "出手机任务看板方案", 0.95),
+        bead("header", .running, "出 iOS header 收口方案", 0.97),
+        bead("dock", .running, "底部 tab 切页丝滑收口", 0.97),
+        bead("notes", .delegating, "发言顺序修复", 12.05, subagents: 2),
+        bead("readme", .done, "README 截图换成 Swift 版", 2),
+    ], advancing: 4, first: push, resting: .waiting)
+
     /// 推进中的都歇着：实时活动结束，页头照写。
     static let quiet = now(.listening, .idle, [
         bead("canvas", .resting, "画布缩放", 18),
@@ -60,7 +78,8 @@ enum CueNowSamples {
     ], advancing: 1, resting: .sleeping)
 
     static let all: [String: CueNow] = [
-        "woke": woke, "delegating": delegating, "asks": asks, "done": done, "quiet": quiet, "away": away,
+        "woke": woke, "delegating": delegating, "asks": asks, "done": done, "afterDone": afterDone, "crowded": crowded,
+        "quiet": quiet, "away": away,
     ]
     static let tour = [woke, delegating, asks, done, quiet]
 

@@ -4,9 +4,11 @@ import Foundation
 /// iPhone 的灵动岛与锁屏读的唯一一份。App 由库推出（`CueNow.init(_:at:)`，从 Cue 的摘要 `CueDigest`），这里只有规则，各处只画（`CueNowViews`）。
 /// - Cue 自己（`cue`）：不在（没启用、睡着、起不来，带那一句原因）、歇着、你的话在路上、在一轮里（谁叫醒的、此刻那一步、从几点起）。
 /// - 手上的活（`beads`）：一颗珠子一份——等你的每一件，推进中的每一件（在跑、等子代理交回、歇着），刚做完的顶层任务；按这个先后排。
-/// - 那一句（`headline`）：先说 Cue 自己，再说要你拍板的，再说刚做完的、交出去的活，最后是静着；紧凑态说的那一件是 `focus`。
-/// - 快的事实（Cue 在想、话在路上）几分钟就变，后台的岛不一定等得到下一份：过了 `staleAfter` 只信慢的（`settled`）。
-/// 刚做完的珠子只留 `doneWindow`：到点由读的一方按时刻收掉（`aged(to:)`、`nextChange(after:)`），不另计时。
+/// - 那一句（`headline`）：先说 Cue 自己，再说要你拍板的，再说交出去还在动的活，再说刚做完的，最后是静着；紧凑态说的那一件是 `focus`。
+///   刚做完只是一瞬的事，不压住此刻在动的：有活在跑时它只是一颗绿珠子，手上没别的了才轮到它说。
+/// - 快的事实（Cue 在想、话在路上）几分钟就变，后台的岛不一定等得到下一份：过了 `staleAt` 只信慢的（`settled`）。
+/// 刚做完的珠子只留 `doneWindow`：到点由读的一方按时刻收掉（`aged(to:)`、`nextChange(after:)`），不另计时；
+/// 推出之后自己不会再收到新一份的（小组件、实时活动）按 `shown(at:)` 画、在 `nextShownChange(after:)` 那一刻让系统重画。
 nonisolated struct CueNow: Codable, Hashable, Sendable {
     var name: String
     /// 头像的表情；歇下来时的那一个（`restingMood`）给过时的那份用。
@@ -98,6 +100,7 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
 
     /// 这一份过多久不可信。
     var staleAfter: TimeInterval { isFast ? Self.fastStale : Self.slowStale }
+    var staleAt: Date { at.addingTimeInterval(staleAfter) }
 
     /// 过时之后只信慢的事实：Cue 按歇着算（表情也换回歇着的那个）。
     var settled: CueNow {
@@ -120,6 +123,14 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
         beads.filter { $0.kind == .done }.map { $0.since.addingTimeInterval(Self.doneWindow) }.filter { $0 > date }.min()
     }
 
+    /// 推出后再没收到新一份时，到 `date` 该画成的样子：过了 `staleAt` 只信慢的事实，刚做完的到点收掉。
+    func shown(at date: Date) -> CueNow { (date >= staleAt ? settled : self).aged(to: date) }
+
+    /// `date` 之后 `shown(at:)` 下一次变的那一刻（过时、刚做完的收掉）；没有为 nil。
+    func nextShownChange(after date: Date) -> Date? {
+        [nextChange(after: date), staleAt > date && self != settled ? staleAt : nil].compactMap { $0 }.min()
+    }
+
     /// 那一句（Cue 那一行、岛与锁屏的头一行）：在一轮里用工具时说此刻那一步（`doing`），不然说谁叫醒的、都没有时说"思考中"——
     /// 与 Cue 页对话末尾那一行（`CuePresence.progress`）同一个说法，同屏页头与末尾不各说各的。
     var headline: String {
@@ -131,9 +142,9 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
             let asks = count(.asks), running = count(.running)
             let subagents = beads.filter { $0.kind == .delegating }.reduce(0) { $0 + $1.subagents }
             if asks > 0 { return "\(asks) 件等你拍板" }
-            if let done = justDone { return "刚做完「\(done.name)」" }
             if subagents > 0 { return "等 \(subagents) 个子代理交回" }
             if running > 0 { return "\(running) 件在跑" }
+            if let done = justDone { return "刚做完「\(done.name)」" }
             if advancing > 0 { return "推进中 \(advancing) 件，都歇着" }
             return elsewhere ?? Self.quiet
         }
@@ -143,7 +154,7 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
 
     /// 灵动岛紧凑态头像旁说的那一件：短词、走秒的起点与颜色只在这里一起定，不会词说做完、秒在计另一件。
     /// Cue 在一轮里或话在路上最先（它正在动），不在写不在；歇着时是手上最该看的那份活，先后同那一句：
-    /// 最早等你的、刚做完的、推进中（在跑与等子代理交回，WORDS.md）最早的那份；只剩歇着的写歇着、不计时。
+    /// 最早等你的、推进中（在跑与等子代理交回，WORDS.md）最早的那份、刚做完的；只剩歇着的写歇着、不计时。
     var focus: (word: String, tone: Tone, since: Date?) {
         switch cue {
         case .away: return ("不在", .quiet, nil)
@@ -151,7 +162,7 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
         case .working(_, _, let since): return ("在想", .moving, since)
         case .idle:
             let earliest = { (tone: Tone) in self.beads.filter { $0.kind.tone == tone }.min { $0.since < $1.since } }
-            guard let lead = earliest(.asks) ?? justDone ?? earliest(.moving) else { return ("歇着", .quiet, nil) }
+            guard let lead = earliest(.asks) ?? earliest(.moving) ?? justDone else { return ("歇着", .quiet, nil) }
             return (lead.kind.word, lead.kind.tone, lead.since)
         }
     }

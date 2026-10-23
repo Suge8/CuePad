@@ -16,10 +16,10 @@ struct CuePadWidgets: WidgetBundle {
 struct CueActivityWidget: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: CueActivityAttributes.self) { context in
-            CueActivityViews(context.state, stale: context.isStale).lockScreen
+            CueActivityViews(context.state, at: .now).lockScreen
                 .widgetURL(DeepLink.cue.url)
         } dynamicIsland: { context in
-            let views = CueActivityViews(context.state, stale: context.isStale)
+            let views = CueActivityViews(context.state, at: .now)
             return DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) { views.expandedLeading }
                 DynamicIslandExpandedRegion(.trailing) { views.expandedTrailing }
@@ -44,40 +44,30 @@ struct SnapshotEntry<S: SnapshotFile>: TimelineEntry {
 }
 
 /// 数据来自主 App 写在共享容器里的快照；主 App 在快照内容变了时刷新时间线，所以这里不自己定时刷新。
-/// 快照里按时刻会变的（`later`：Cue 此刻过时、刚做完的那颗收掉）预先排成时间线上后面的几条，到点由系统换，不靠 App 醒来。
+/// 快照里按时刻会变的（`timeline`：Cue 此刻过时、刚做完的那颗收掉）从此刻起排成时间线，到点由系统换，不靠 App 醒来。
 struct SnapshotProvider<S: SnapshotFile>: TimelineProvider {
     /// 还没有快照（从没打开过主 App）时显示的。
     let empty: S
-    var later: (S, Date) -> [SnapshotEntry<S>] = { _, _ in [] }
+    var timeline: (S, Date) -> [SnapshotEntry<S>] = { [SnapshotEntry(date: $1, snapshot: $0)] }
 
     func placeholder(in context: Context) -> SnapshotEntry<S> { SnapshotEntry(date: .now, snapshot: empty) }
 
-    func getSnapshot(in context: Context, completion: @escaping (SnapshotEntry<S>) -> Void) { completion(current()) }
+    func getSnapshot(in context: Context, completion: @escaping (SnapshotEntry<S>) -> Void) { completion(entries()[0]) }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<SnapshotEntry<S>>) -> Void) {
-        let entry = current()
-        completion(Timeline(entries: [entry] + later(entry.snapshot, entry.date), policy: .never))
+        completion(Timeline(entries: entries(), policy: .never))
     }
 
-    private func current() -> SnapshotEntry<S> {
+    private func entries() -> [SnapshotEntry<S>] {
         let directory = (try? LibraryLocation.resolve())?.snapshotsDirectory
-        return SnapshotEntry(date: .now, snapshot: directory.flatMap { Snapshots.read(S.self, from: $0) } ?? empty)
+        return timeline(directory.flatMap { Snapshots.read(S.self, from: $0) } ?? empty, .now)
     }
 }
 
 extension CueNow {
-    /// 小组件时间线上后面的几条：过时的那一刻只信慢的事实（`settled`），刚做完的那几颗各在到点时收掉。
-    static func later(_ now: CueNow, after date: Date) -> [SnapshotEntry<CueNow>] {
-        var entries: [SnapshotEntry<CueNow>] = []
-        var shown = now, at = date
-        let stale = now.at.addingTimeInterval(now.staleAfter)
-        while true {
-            let next = [shown.nextChange(after: at), stale > at && shown != shown.settled ? stale : nil].compactMap { $0 }.min()
-            guard let next else { return entries }
-            shown = (next >= stale ? shown.settled : shown).aged(to: next)
-            at = next
-            entries.append(SnapshotEntry(date: next, snapshot: shown))
-        }
+    /// 小组件的时间线：此刻起一条，之后每到 `shown(at:)` 变的那一刻一条。
+    static func timeline(_ now: CueNow, from date: Date) -> [SnapshotEntry<CueNow>] {
+        sequence(first: date) { now.nextShownChange(after: $0) }.map { SnapshotEntry(date: $0, snapshot: now.shown(at: $0)) }
     }
 }
 
@@ -85,7 +75,7 @@ struct CueWidget: Widget {
     static let kind = "CuePadCue"
 
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: Self.kind, provider: SnapshotProvider(empty: CueNow.empty, later: CueNow.later)) { entry in
+        StaticConfiguration(kind: Self.kind, provider: SnapshotProvider(empty: CueNow.empty, timeline: CueNow.timeline)) { entry in
             WidgetViews.cue(entry.snapshot)
         }
         .configurationDisplayName("Cue")

@@ -18,11 +18,15 @@ extension AppServices {
             }
         }
         #if os(iOS)
-        // 开启只能在前台：回到前台时再看一次要不要开，并从此刻重算过时时刻
-        if let activity = cueActivity {
+        // 开启只能在前台：回到前台时按库里此刻推一份，再看一次要不要开，过时时刻从此刻算
+        if cueActivity != nil {
             follow {
                 for await _ in NotificationCenter.default.notifications(named: UIApplication.didBecomeActiveNotification) {
-                    await activity.resend(foreground: true)
+                    do {
+                        try await self.writeSnapshots(resend: true)
+                    } catch {
+                        self.reportIssue(.widgetDataUnavailable("\(error)"))
+                    }
                 }
             }
         }
@@ -30,12 +34,17 @@ extension AppServices {
     }
 
     #if os(iOS)
-    private static var isActive: Bool { UIApplication.shared.applicationState == .active }
+    /// 实时活动只能在前台开：启动到变成 active 之前（inactive）也算前台，库读完的第一份就能开，不等下一次变化。
+    private static var inForeground: Bool { UIApplication.shared.applicationState != .background }
     #endif
 
     /// Cue 此刻：小组件、实时活动与 Cue 那一行（`CueWatch`）都经这里推（调试时可钉成一份样例，`-CuePadCueNow`）。
+    /// 按推出的这一刻推：说的话的此刻（`SpeechClock`）只在时限到点、同步通断时走，库变了时它可能停在很久以前，
+    /// 拿它算会把早过了 `doneWindow` 的"刚做完"当成新的、过时时刻也从那时算。
     static func cueNow(_ digest: CueDigest, at moment: Speech.Moment, local: CueNow.Local) -> CueNow {
-        DebugHooks.preset.cueNow ?? CueNow(digest, at: moment, local: local)
+        var moment = moment
+        moment.now = .now
+        return DebugHooks.preset.cueNow ?? CueNow(digest, at: moment, local: local)
     }
 
     /// Cue 此刻要的本机事实：还没和 iCloud 对过时为什么等（与启用入口同一处判断 `CueGate`），这台 Mac 是哪台。
@@ -60,7 +69,7 @@ extension AppServices {
     ) async throws {
         let now = Self.cueNow(digest, at: moment, local: local)
         #if os(iOS)
-        await cueActivity?.show(CueActivityState(now: now, quotas: content.quotas, at: moment.now), resend: resend, foreground: Self.isActive)
+        await cueActivity?.show(CueActivityState(now: now, quotas: content.quotas, at: now.at), resend: resend, foreground: Self.inForeground)
         #endif
         try publish(WidgetSnapshots(content, now: now))
     }
