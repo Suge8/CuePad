@@ -97,7 +97,7 @@ enum IOSInteractionBench {
         }
         workspace.select(.cue)
         try? await Task.sleep(for: .seconds(1))
-        // 主导航：Cue 页点底部展开的"任务"去任务（配 `-CuePadManyTasks` 量任务多时）、任务页点 Cue 钮回来（点按调的就是 `select`，过渡由 `HomePager` 接着做）
+        // 主导航：Cue 页点底部的"进展"去进展页（配 `-CuePadManyTasks` 量任务多时）、进展页点 Cue 钮回来（点按调的就是 `select`，过渡由 `HomePager` 接着做）
         for _ in 0..<2 {
             await step("Cue 进任务") { workspace.select(.progress) }
             await step("任务回 Cue") { workspace.select(.cue) }

@@ -145,7 +145,7 @@ struct HandOffInput: View {
     }
 
     /// 默认目标是新会话时点发送，按交到哪的决定：换成新会话的输入框，项目、由哪台 Mac 开、会话名都取自决定。要在别的项目开，从菜单选"新会话…"。
-    /// 开新会话时任务带的是 `opening`（步骤带着顶层任务作背景）；交给已有会话的只是这一步自己的。
+    /// 开新会话时任务带的是 `opening`（子任务带着顶层任务作背景）；交给已有会话的只是这一步自己的。
     static func startDefault(
         _ draft: ComposerDraft, card: UUID?, plan: HandOffPlan?, opening: String?, workspace: Workspace
     ) {

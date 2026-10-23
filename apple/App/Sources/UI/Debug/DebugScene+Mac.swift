@@ -16,8 +16,8 @@ extension DebugScene {
         switch scene {
         case "collapsed": workspace.pages.sidebar = .detailOnly
         case "search": workspace.searching = true
-        case "tasks":
-            // 任务页：配 -CuePadDemo 时写入 Mac 同步来的演示会话与 Cue 的等你，推进中的任务带会话状态（同 iOS 的 tasks）
+        case "progress":
+            // 进展页看板段：配 -CuePadDemo 时写入 Mac 同步来的演示会话与 Cue 的等你，推进中的任务带会话状态（同 iOS 的 progress）
             if defaults.bool(forKey: "CuePadDemo") {
                 await seedRemote(workspace.services)
                 await seedCue(workspace.services)
@@ -49,7 +49,7 @@ extension DebugScene {
             let tasks = (try? await workspace.services.store.tasks(.inProgress, .todo).flatMap(\.tasks)) ?? []
             let named = defaults.string(forKey: "CuePadTask").flatMap { prefix in tasks.first { $0.title.hasPrefix(prefix) } }
             if let task = named ?? tasks.first(where: { $0.parentID == nil && $0.projectID == workspace.currentProject }) ?? tasks.first { workspace.openTask(task) }
-        case "agent":
+        case "sessions":
             if defaults.bool(forKey: "CuePadDemo") {
                 await seedRemote(workspace.services)
                 await seedCue(workspace.services)

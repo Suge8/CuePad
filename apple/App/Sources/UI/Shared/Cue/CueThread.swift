@@ -57,7 +57,7 @@ nonisolated struct CueThread: Equatable, Sendable {
     static func read(from store: isolated CueStore, showsSteps: Bool, asking: UUID? = nil) throws -> CueThread {
         let recent = try store.cueMessages(limit: limit)
         let messages = try store.cueQuestionsAnswered(outside: recent) + recent
-        // 提到的一次取完步骤进度，不逐件读细节
+        // 提到的一次取完子任务进度，不逐件读细节
         let progress = try store.subtaskProgress()
         let waits = leading(try TaskBoard.waits(try store.cueWaiting(), from: store) { task in
             TaskBoard.Item(task: task, steps: progress[task.id])
@@ -237,7 +237,7 @@ nonisolated struct CueThread: Equatable, Sendable {
     }
 }
 
-/// 对话或"等你"提到的一件活：任务与步骤进度。提到的卡不在了（删掉）就没有引用，那句话照常显示。
+/// 对话或"等你"提到的一件活：任务与子任务进度。提到的卡不在了（删掉）就没有引用，那句话照常显示。
 nonisolated struct CueTaskRef: Equatable, Sendable {
     var task: Card
     var progress: TaskProgress?

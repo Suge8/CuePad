@@ -14,7 +14,7 @@ struct CueTaskButton<Label: View>: View {
     private func open() { workspace.openTask(id: task) }
 }
 
-/// 一件活收成一行（对话里 Cue 的话下面、"等你"里关联的那件）：任务圈（有步骤时按步骤分段）、标题，点它打开任务；行尾是这件活交给的会话的状态标
+/// 一件活收成一行（对话里 Cue 的话下面、"等你"里关联的那件）：任务圈（有子任务时按子任务分段）、标题，点它打开任务；行尾是这件活交给的会话的状态标
 /// （`AgentDot`：正在开会话、在跑、等你……，点它看那个会话；没交出去不画）。Cue 交给会话时接力落在这一行（圈与状态标都挂着锚，`CueRelayStage`），
 /// 落下后状态标自己换成会话的真实状态。
 struct CueTaskLine: View {

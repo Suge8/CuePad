@@ -50,7 +50,7 @@ extension Workspace {
 }
 
 /// 工具栏居中的标题位（`.principal`，在详情区里居中，侧栏开合都与对话的阅读栏对齐）：一块玻璃，第一行会话名接状态（`PiSessionSubtitle`，只有着色的字、不画状态圆点：玻璃里唯一的圆是任务圈；只在在跑或要你注意时有；所在写在"⋯"菜单最上面）。
-/// 绑着任务时玻璃里是提醒事项那样的一条：左边是这件事的完成圈（点它完成；会话绑着的事都做完了才结束），会话名下面一行小字写"任务 · 步骤"
+/// 绑着任务时玻璃里是提醒事项那样的一条：左边是这件事的完成圈（点它完成；会话绑着的事都做完了才结束），会话名下面一行小字写"任务 · 子任务"
 /// （与会话名重复的一段不写，见 `SessionTaskLink.path`），点它回到这件事。一个会话绑着好几件时写还没做完的第一件，后面跟"等 N 件"，其余在"⋯"里。
 /// 两行与一行同高（工具栏控件的高度）；会话的事都归档了或在回收站里时只有一行。
 /// 玻璃画在标题自己身上、随它一起淡出：系统给工具栏项画的那块不随内容显隐，让开时会留下一块空玻璃。
@@ -131,7 +131,7 @@ struct PageTitleSlot: View {
         .accessibilityLabel(done ? "任务已完成" : "完成任务")
     }
 
-    /// 会话名下面的"任务 · 步骤"（绑着好几件时后面"等 N 件"）：点它回到这件事（项目页，任务气泡翻到这一步）。
+    /// 会话名下面的"任务 · 子任务"（绑着好几件时后面"等 N 件"）：点它回到这件事（项目页，任务气泡翻到这一步）。
     private func path(_ item: LeafTask, _ line: Dotted) -> some View {
         Button { workspace.showTask(item.task) } label: {
             Text(line)
@@ -198,7 +198,7 @@ nonisolated struct SessionTaskLink: Sendable, Equatable {
     /// 标题里写的那一件：还没做完的第一件，都做完了是第一件。
     var primary: LeafTask? { tasks.first { $0.task.status != .done } ?? tasks.first }
 
-    /// 会话名下面那一行"任务 · 步骤"（绑着好几件时后面"等 N 件"）：与会话名相同的一段不再写（从任务开的会话以叶子的标题命名），
+    /// 会话名下面那一行"任务 · 子任务"（绑着好几件时后面"等 N 件"）：与会话名相同的一段不再写（从任务开的会话以叶子的标题命名），
     /// 什么都不剩时没有这一行。
     func path(below title: String) -> Dotted? {
         guard let primary else { return nil }

@@ -70,7 +70,7 @@ const DICT: Record<Lang, Record<string, string>> = {
 		'f3.img': 'An agent’s work, previewed on the iPhone',
 		'f4.h': 'Ideas first',
 		'f4.p':
-			'Plain Markdown with inline images and <code>{{variables}}</code>. When it’s time to act, an idea becomes a task in one tap; every send is logged and can be resent.',
+			'Plain Markdown with inline images and <code>{{variables}}</code>. When it’s time to act, drag an idea onto a task; every send is logged and can be resent.',
 		'f4.img': 'A project page: tasks on top, ideas below',
 		'desk.line': 'A quiet desk for busy agents.',
 		'cinema.h': 'Every agent on one board',
@@ -144,7 +144,7 @@ const DICT: Record<Lang, Record<string, string>> = {
 		'f3.img': '在 iPhone 上看 Agent 发来的成果',
 		'f4.h': '灵感优先',
 		'f4.p':
-			'纯 Markdown，带内联图片与 <code>{{变量}}</code>。要动手时一点就变成任务，每次发送都留快照、可重发。',
+			'纯 Markdown，带内联图片与 <code>{{变量}}</code>。要动手时把灵感拖进任务，每次发送都留快照、可重发。',
 		'f4.img': '项目页：上面是任务，下面是灵感',
 		'desk.line': '安静的桌面，忙碌的 Agent。',
 		'cinema.h': '所有 Agent，一块看板',
