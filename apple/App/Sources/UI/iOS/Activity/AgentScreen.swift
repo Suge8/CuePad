@@ -2,9 +2,9 @@
 import CueStore
 import SwiftUI
 
-/// 会话页（iPhone 底部一排与宽屏侧栏的"会话"；也从 Cue 页头面板的"全部会话"推入，项目页"⋯"里的"看这个项目的会话"设好项目范围再换到这里）：
-/// 只回答"每个会话在做什么、现在到哪了、结果或卡点是什么"。顶栏中间一颗玻璃胶囊（`ScopeQuota`）：左半项目范围（与任务页共用 `Workspace.projectScope`），
-/// 右半每个账号一颗额度环，两半各点各的——点环从胶囊原地长出额度明细（`GrowPanel`，同 Cue 页头）。搜会话在搜索页，这里不另放搜索框。
+/// 会话页（iPhone 底部一排与宽屏侧栏的"会话"；Cue 面板的"全部会话"也换到这一页，项目页"⋯"里的"看这个项目的会话"设好项目范围再换到这里）：
+/// 只回答"每个会话在做什么、现在到哪了、结果或卡点是什么"。顶栏中间两块玻璃（`ScopeQuota`）：项目范围（与任务页共用 `Workspace.projectScope`），
+/// 与每个账号一颗的额度环——点环长出额度明细，两块并成一块面板（`GrowPanel`，同 Cue 的名牌）。搜会话在搜索页，这里不另放搜索框。
 struct AgentScreen: View {
     @Environment(Workspace.self) private var workspace
     @State private var model = AgentListModel()
@@ -20,16 +20,16 @@ struct AgentScreen: View {
     }
 }
 
-/// 会话页顶栏中间那颗胶囊：左半项目范围，右半额度环（还没有额度记录时没有右半，只剩项目范围）；点环长出额度明细。
+/// 会话页顶栏中间：项目范围与额度环各一块（还没有额度记录时只有项目范围）；点环长出额度明细。
 private struct ScopeQuota: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var open = DebugHooks.preset.quotaOpen
 
     var body: some View {
-        GrowPanel(open: $open, radius: FloatingHeaderLayout.height / 2, fills: false) {
-            HStack(spacing: 0) {
-                ProjectScope()
-                QuotaRings(open: open, height: FloatingHeaderLayout.height) { $open.grow(reduceMotion: reduceMotion) }
+        GrowPanel(open: $open, radius: FloatingHeaderLayout.height / 2, fills: false, separate: true) {
+            HStack(spacing: 8) {
+                ProjectScope().headerPiece()
+                QuotaRings(open: open, height: FloatingHeaderLayout.height) { $open.grow(reduceMotion: reduceMotion) }.headerPiece()
             }
         } panel: {
             QuotaDetail().padding(.horizontal, 16).padding(.top, 4).padding(.bottom, 18)
@@ -39,21 +39,23 @@ private struct ScopeQuota: View {
 
 /// 会话列表（会话页、搜索页的会话一栏同一个，数据是两端共用的 `PiSessionList`）："现在"置顶（按要你注意的先后：等你确认 → 出错 → 工作中 → 空闲），
 /// "历史"按结束时间分段、滑到底才读下一页。搜索词在 `model.query`，命中的字高亮。点开看近况、回复（历史会话看最后一轮，回复时 Mac 在后台恢复它）。
-/// 在线会话长按或慢慢左滑可结束（确认后发给它所在的 Mac，对话留着）。
-struct SessionList: View {
+/// 在线会话长按或慢慢左滑可结束（确认后发给它所在的 Mac，对话留着）。`top`：列表最上面一行（搜索页的范围胶囊），随列表滚走。
+struct SessionList<Top: View>: View {
     @Bindable var model: AgentListModel
     let filter: UUID?
+    @ViewBuilder var top: Top
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
 
     /// 最上面那一行的 id：换项目范围时滚回它。
-    private static let topID = "top"
+    private static var topID: String { "top" }
 
     var body: some View {
         ScrollViewReader { proxy in
             List {
                 Color.clear.frame(height: 0).listRowInsets(EdgeInsets()).listRowBackground(Color.clear).listRowSeparator(.hidden).id(Self.topID)
+                if Top.self != EmptyView.self { top.listRowInsets(EdgeInsets()).listRowBackground(Color.clear).listRowSeparator(.hidden) }
                 if let list = model.list { sessions(list) }
             }
             // 每个会话一张卡片（`sessionCard`）：平铺列表、行不画底，分组标题是普通的行（平铺列表的分组标题会吸顶）
@@ -120,13 +122,14 @@ struct SessionList: View {
         // 结束不是删除：墨色，确认框里再说清后果；会话记录没有删除（会话文件在 Mac 上，归 Pi 管）
         let trailing = (endable ? [RowAction("结束会话", icon: .endSession) { model.confirmingEnd = item.state }] : [])
             + (renamable ? [RowAction("重命名", icon: .rename, tone: .quiet, enabled: services.reachesPiHost) { model.renaming = item.state }] : [])
+        // 行的设置（底、分隔线、边距）挂在最外层：挂在自绘轻扫里面传不到列表上，列表退回系统默认的白底与分隔线
         return SessionRow(item: item, showsPlace: list.showsPlace, end: end)
-            .cardRow()
             .rowSwipes(RowSwipes(trailing: trailing), clipped: false)
             .contextMenu {
                 MarkUnreadButton(session: item.state)
                 RowActionButtons(actions: trailing.reversed())
             }
+            .cardRow()
     }
 
     @ViewBuilder private var empty: some View {
@@ -144,6 +147,10 @@ struct SessionList: View {
             .padding(.top, 40)
         }
     }
+}
+
+extension SessionList where Top == EmptyView {
+    init(model: AgentListModel, filter: UUID?) { self.init(model: model, filter: filter) { EmptyView() } }
 }
 
 private struct NewSessionButton: View {

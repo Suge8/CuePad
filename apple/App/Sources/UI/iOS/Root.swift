@@ -64,7 +64,7 @@ struct RouteView: View {
     @Environment(\.palette) private var palette
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.statusBarBottom) private var statusBar
-    @Environment(\.homePage) private var homePage
+    @Environment(\.headerHost) private var host
     /// 这一页的上沿（全局坐标）：状态栏那一条的渐变按它摆到屏幕顶上（`TopFade`）。页的上沿不一定在屏幕顶，
     /// 也不能靠 `ignoresSafeArea` 伸上去：根页让出的顶栏那一排也在安全区里，伸上去落在那一排下面。
     @State private var top: CGFloat = 0
@@ -74,14 +74,14 @@ struct RouteView: View {
     var body: some View {
         // 沉浸式：内容一直滚到顶栏、回复框的玻璃后面、透到屏幕最顶，玻璃本身就是遮挡，玻璃之间与下面的内容清楚可见——
         // 系统的滚动边缘效果（渐进模糊带，盖住整条栏）全关；只有状态栏那一条垫一层页底色的渐变（`Bars`）。
-        // 内容离顶栏的距离只在这里给（`Bars.contentGap`，让出在上安全区里），静止时第一行在顶栏下面。顶上那一排自己画的页（搜索页、Cue 页头、
-        // 窄屏的根）自己让到那一排下面（系统分组列表默认在顶上再留一段空，这里清掉，离栏多远只有这一个数）
-        page.contentMargins(.top, route.ownsTopBar ? nil : 0, for: .scrollContent)
-            .safeAreaPadding(.top, route.ownsTopBar || homePage ? 0 : Bars.contentGap)
+        // 内容离系统顶栏的距离只在这里给（`Bars.contentGap`，让出在上安全区里），静止时第一行在顶栏下面；页顶那一排自己画的页（窄屏的根）
+        // 由那一排让（`FloatingHeader`）。系统分组列表默认在顶上再留一段空，这里清掉，离栏多远只有这一个数
+        page.contentMargins(.top, 0, for: .scrollContent)
+            .safeAreaPadding(.top, host == .navigationBar ? Bars.contentGap : 0)
             .overlay(alignment: .top) { TopFade(color: background, solid: Self.stripSolid).frame(height: Bars.statusStrip(below: statusBar)).offset(y: -top) }
             .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: { top = $0 }
             .containerBackground(background, for: .navigation)
-            // 标题在顶栏玻璃里（推入页）或不写（窄屏的根，`homePage`），不用系统大标题
+            // 标题在页顶那一排中间的玻璃里或不写（根页），不用系统大标题
             .navigationBarTitleDisplayMode(.inline)
             .scrollEdgeEffectHidden()
             // 导航栈里的页自己跟着键盘让位（UIKit 给的安全区，不经外层），菜单开着时在这里锁住
