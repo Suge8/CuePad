@@ -5,8 +5,8 @@ import Foundation
 
 extension DebugScene {
     /// `-CuePadWake <秒>`（配 `-CuePadDemo YES`，画面就绪后开始、一直循环）：每隔这么久 Cue 被在线会话叫醒一次——此刻的状态写成在想、
-    /// 带上叫醒它的会话（这一轮的经过那一行上的 `CueMessage.wake`，同值班的 Mac 起一轮时写下的样子，对话里随之多一节动态），醒 1.5 秒后歇下；叫醒的会话从在线会话的前三个里轮着挑，
-    /// 一次一个、一次两个交替（看几道光错开），两个的那次歇下前动手说一句（录动态那颗虚线气泡里这一节从在跑到做完）；给了 `-CuePadSession`（session 画面）时它排第一个，每次都有它。
+    /// 带上叫醒它的会话（这一轮的经过那一行上的 `CueMessage.wake`，同值班的 Mac 起一轮时写下的样子，对话里随之多一行），醒 1.5 秒后歇下；叫醒的会话从在线会话的前三个里轮着挑，
+    /// 一次一个、一次两个交替（看几道光错开），两个的那次歇下前动手说一句（录 Cue 页那一行从在跑到做完）；给了 `-CuePadSession`（session 画面）时它排第一个，每次都有它。
     /// 录"叫醒"的动效用（`CueRelayStage`）；隔离库里 Cue 不值班，没有别人改它的状态。
     /// `-CuePadFlightLog <路径>`：每次叫醒（或交给，见 `relayIfAsked`）前歇着的 `probe` 秒与之后的 `probe` 秒各量一段，一段一行 JSON 追加到这个文件：
     /// 主线程 display link 的全部间隔、总帧数、超 16ms 的帧与掉帧（超过刷新间隔 1.5 倍）、每圈 run loop 的主线程 CPU、进程的指令数与能量（`TurnLog.metrics`、`energyMillijoules`）。

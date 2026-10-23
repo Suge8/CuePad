@@ -26,7 +26,7 @@
 - **拉取**（`ZonePuller`）：别的设备的请求到 Mac 的唯一通路；避免：兜底轮询、主动拉取
 - **Cue**（总控 Agent，界面上显示用户起的名字 `CueProfile.name`）；避免：管家、助手、总控
 - **做完**（任务完成，Cue 按证据自己定）；避免：收下、收尾、验收（界面、Cue 的系统提示与工具说明里）。看板列与项目页的列名写"已完成"，"做完"仍是 Cue 定完成的说法
-- **等你**：要用户拍板的事（`CueQuestionEnd`、`PiSessionState.asksYou`）；避免：待办、审批
+- **等你**：要用户拍板的事（`CueQuestionEnd`、`PiSessionState.asksYou`），Cue 的提问与会话在问的都算，只在 Cue 页的等你卡与看板的等你列里答，同一份 `CueStore.cueTally`；避免：待办、审批
 - **推进中** vs **等你** vs **进行中**：推进中是 Cue 此刻在做的里不在等你的（`CueBoard.active`），两个数只读 `CueStore.cueTally`，各端的现状读 Cue 此刻（`CueNow`：一颗珠子一份活，接一句）；进行中是任务自己的状态；避免：在管、在做、在跑（后两个是会话的）
 - **待回复**（会话行上，`CueLeft`）vs **该你了**：都是会话歇着、该你说下一句；待回复是值班的 Cue 特意留给你的，Cue 不值班时歇着的都是该你了；避免：待处理
 - **在场**（`SessionPresence`）：只在代码里，界面上不出现

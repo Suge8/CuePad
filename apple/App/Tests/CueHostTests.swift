@@ -94,7 +94,7 @@ struct CueHostTests {
         await rig.stop()
     }
 
-    /// 手上什么都没有时启用、巡视也到点了：Cue 都不醒来说"没有在做的事"，对话里只有你说的与它的回答，没有"没动手"那一行
+    /// 手上什么都没有时启用、巡视也到点了：Cue 都不醒来说"没有在做的事"，对话里只有你说的与它的回答，没有醒来记录那一行
     /// （Cue 页空着时是能说什么的空态）。
     @Test func 空库启用与巡视_不说空话() async throws {
         let rig = try await Rig(patrolAfter: .zero)

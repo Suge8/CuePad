@@ -125,149 +125,17 @@ private struct CalloutSurface: ViewModifier {
     }
 }
 
-/// 等你确认、能从这里答的问题：确认框是"是 / 否"，选择框每个选项一个按钮，输入框填了发送。
-/// Mac 上选项带编号键帽，按 1–9 直接作答（卡片出现时拿到键盘焦点，回复框此时收成"先在上面作答"、不占键盘）。
-/// 答出去后按钮停用，等 Mac 那边弹窗收起、问题清空（卡片随之消失）；作答请求没能送达时就地写原因，可以再答。
+/// 等你确认、能从这里答的问题：问句与怎么答（`WaitAnswer`，同 Cue 页等你卡与任务页等你列：确认框"否 / 是"，选择框每个选项一颗胶囊，
+/// Mac 上按 1–9 直接作答；文字型的在下面的回复框里答）。答出去后停用，等 Mac 那边弹窗收起、问题清空（卡片随之消失）；没送达就地写原因，可以再答。
 struct QuestionCard: View {
     let session: PiSessionState
     let question: PiQuestion
     let deliveries: [DeliveryRequest]
-    @Environment(Workspace.self) private var workspace
-    @Environment(\.palette) private var palette
-    @State private var requestID: UUID?
-    /// 点了的那个回答：它的按钮显示送达中。
-    @State private var tapped: PiAnswerValue?
-    @State private var writeError: String?
-    #if os(macOS)
-    @FocusState private var keyboard: Bool
-    #endif
-
-    @Environment(AppServices.self) private var services
-
-    /// 答的那条到哪了（`Speech`）；还没写成是 nil。
-    private var sent: Speech.Trip? {
-        requestID.flatMap { id in deliveries.first { $0.id == id } }.map { Speech.trip($0, at: services.speech) }
-    }
-    /// 点下即算在答（请求写成前也是），按钮立刻停用，不重复作答。
-    private var answering: Bool { tapped != nil && writeError == nil && sent?.failure == nil }
-    private var failure: String? { writeError ?? sent?.failure?.text(sync: services.syncStatus) }
 
     var body: some View {
         Callout(.asking, text: question.text, docked: true) {
-            // 送不到 Mac 时不让答：写进去的请求会一直停在送达中
-            controls.disabled(answering || !services.reachesPiHost)
-            if !services.reachesPiHost {
-                Text("\(SyncSummary(services.syncStatus).title)，现在答不了；同步恢复后再答，或在 Mac 上回答")
-                    .font(Typography.meta).foregroundStyle(palette.ink3)
-            } else if answering, sent == .delivered {
-                Text("已答，等 Mac 上的 Agent 继续").font(Typography.meta).foregroundStyle(palette.ink3)
-            } else if let failure {
-                Text(failure).font(Typography.meta).foregroundStyle(palette.failure)
-            }
+            WaitAnswer(wait: .session(session, task: nil), replyElsewhere: true, deliveries: deliveries)
         }
-        #if os(macOS)
-        .focusable(question.kind == .known(.select))
-        .focusEffectDisabled()
-        .focused($keyboard)
-        .onAppear { keyboard = question.kind == .known(.select) }
-        .onKeyPress(characters: .decimalDigits, phases: .down) { press in
-            guard let number = Int(press.characters), question.options.indices.contains(number - 1),
-                  !answering, services.reachesPiHost else { return .ignored }
-            answer(.option(question.options[number - 1]))
-            return .handled
-        }
-        #endif
-    }
-
-    @ViewBuilder private var controls: some View {
-        switch question.kind.known {
-        case .confirm:
-            HStack(spacing: 10) {
-                choice(.confirmed(false), prominent: false)
-                choice(.confirmed(true), prominent: true)
-            }
-        case .select:
-            VStack(spacing: 8) {
-                ForEach(Array(question.options.enumerated()), id: \.element) { index, option in
-                    choice(.option(option), prominent: false, leading: true, number: index < 9 ? index + 1 : nil)
-                }
-                if question.allowsOther {
-                    Text("都不是？在下面的回复框里写你的回答").font(Typography.meta).foregroundStyle(palette.ink3)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-            }
-        case .text, nil:
-            // 文字型问题在回复框里答（`MacDelivery.reply`），回复框的占位写着
-            EmptyView()
-        }
-    }
-
-    /// 一个回答按钮：点了的那个转为"送达中"，别的变淡。
-    /// `number`：Mac 上选项前的编号键帽（按这个数字键作答）。
-    private func choice(_ value: PiAnswerValue, prominent: Bool, leading: Bool = false, number: Int? = nil) -> some View {
-        let busy = answering && tapped == value
-        return Button { answer(value) } label: {
-            HStack(spacing: 8) {
-                if busy {
-                    Spinner(.small)
-                    Text("送达中")
-                } else {
-                    #if os(macOS)
-                    if let number { Keycap(text: "\(number)").accessibilityHidden(true) }
-                    #endif
-                    Text(value.label).multilineTextAlignment(leading ? .leading : .center)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: leading && !busy ? .leading : .center)
-        }
-        .buttonStyle(AnswerButtonStyle(prominent: prominent))
-        .accessibilityLabel(busy ? "\(value.label)，送达中" : value.label)
-    }
-
-    /// 写一条作答请求给会话所在的 Mac；写不进去时就地说明。
-    private func answer(_ value: PiAnswerValue) {
-        guard services.reachesPiHost else { return }
-        writeError = nil
-        requestID = nil
-        withAnimation(HandOff.quick) { tapped = value }
-        Task {
-            do {
-                requestID = try await workspace.services.answer(value, to: session).id
-            } catch {
-                writeError = error.localizedDescription
-            }
-        }
-    }
-}
-
-/// 问题卡上的回答按钮：淡底加细边，或墨色实底（确认的"是"），触摸目标 44pt；按下同 `PressStyle`（`PressFeedback`）。
-/// 不用签名色：确认的常是部署、覆盖这类收不回的事，品牌色不该推着人点"是"。
-/// 悬停同全 App 的按钮（`PressFeedback`）。
-private struct AnswerButtonStyle: ButtonStyle {
-    let prominent: Bool
-
-    func makeBody(configuration: Configuration) -> some View { AnswerButton(prominent: prominent, configuration: configuration) }
-}
-
-private struct AnswerButton: View {
-    let prominent: Bool
-    let configuration: ButtonStyleConfiguration
-    @Environment(\.palette) private var palette
-    @Environment(\.isEnabled) private var enabled
-
-    var body: some View {
-        let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
-        configuration.label
-            .font(Typography.body.weight(.medium))
-            .foregroundStyle(prominent ? palette.paper : palette.ink)
-            .padding(.horizontal, 14)
-            .frame(minHeight: 44)
-            .background(prominent ? palette.ink : palette.fill, in: shape)
-            .overlay { if !prominent { shape.strokeBorder(palette.hair, lineWidth: 1) } }
-            .contentShape(shape)
-            .modifier(PressFeedback(pressed: configuration.isPressed))
-            // 停用（送不到 Mac、已经答了）时变淡，看得出点不了
-            .opacity(enabled ? 1 : ControlMetrics.disabledOpacity)
     }
 }
 

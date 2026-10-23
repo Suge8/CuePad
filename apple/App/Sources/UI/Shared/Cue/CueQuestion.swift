@@ -2,12 +2,11 @@ import CueStore
 import SwiftUI
 
 /// 一问要你定什么：代码写出的问题（`CueMessage.headline`），规矩那一类下面再一行引的规矩（`CueAsking.why`），两行同一条左缘、都不限行；
-/// `below` 接在同一条左缘下面（"去答"、原话）。"等你"卡、全屏预览的底栏与对话里的问句共用，按 `Tone` 分三档：
-/// - `card`：卡上，左边赭黄问号（全卡唯一的状态色），问句是标题字；
-/// - `waiting`：对话里还在等你（`CueWaitingAsk`），问号、正文字加粗；
+/// `below` 接在同一条左缘下面（原话）。全屏预览的底栏与对话里答完的问句共用，按 `Tone` 分两档：
+/// - `card`：预览底栏上，左边赭黄问号（全卡唯一的状态色），问句是标题字；
 /// - `ended`：对话里已结束的（`CueSays`），不挂问号、正文字不加粗、次一级的墨，与还在等你的一眼分开。
 struct CueQuestionLine<Below: View>: View {
-    enum Tone { case card, waiting, ended }
+    enum Tone { case card, ended }
 
     let message: CueMessage
     var tone = Tone.card
@@ -17,7 +16,7 @@ struct CueQuestionLine<Below: View>: View {
     var body: some View {
         let headline = message.headline ?? "", why = message.asking?.why
         HStack(alignment: .firstTextBaseline, spacing: 9) {
-            if tone != .ended { PiStateGlyph(status: .asking).font(tone == .card ? Typography.title : Typography.reading).accessibilityHidden(true) }
+            if tone != .ended { PiStateGlyph(status: .asking).font(Typography.title).accessibilityHidden(true) }
             VStack(alignment: .leading, spacing: 4) {
                 VStack(alignment: .leading, spacing: 4) {
                     question(headline).fixedSize(horizontal: false, vertical: true)
@@ -38,7 +37,6 @@ struct CueQuestionLine<Below: View>: View {
         let line = Text(CueQuestionLine<EmptyView>.keepingTail(text))
         switch tone {
         case .card: line.font(Typography.title).foregroundStyle(palette.ink)
-        case .waiting: line.font(Typography.reading.weight(.semibold)).foregroundStyle(palette.ink).lineSpacing(Typography.readingLineSpacing)
         case .ended: line.font(Typography.reading).foregroundStyle(palette.ink2).lineSpacing(Typography.readingLineSpacing)
         }
     }
@@ -69,7 +67,8 @@ extension CueQuestionLine where Below == EmptyView {
     private static let tailLength = 4
 }
 
-/// "等你"的选项：第一项"可以"是实底主按钮（全卡唯一的靛青），其余（"以后……不用问"）是次级按钮（浅底细边的胶囊，一眼看得出能点）。"等你"卡与全屏预览的底栏共用。
+/// Cue 一问的选项：第一项"可以"是实底主按钮（全卡唯一的靛青），其余（"以后……不用问"）是次级按钮（浅底细边的胶囊，一眼看得出能点）。
+/// 等你的答法（`WaitAnswer`）与全屏预览的底栏共用。
 /// 窄屏（手机、窄窗口的 iPad）竖排："可以"铺满一行在上，次级按钮同宽在它下面、长了折行。摆法不随选项的字长变，主按钮总在同一处、最好按。
 /// 宽处（Mac、宽屏 iPad）横排在一行尾端：次级按钮在"可以"左边，"可以"不窄过 `onceWidth`、不随卡宽铺开；一行放不下或辅助功能字号时照样竖排、按字宽收着。
 /// `hint`：点名的图里"可以"选的是其中一张时（`CueShots.chosen`），一句告诉你选别的去哪说，竖排在按钮下面、横排在按钮左边。
@@ -78,6 +77,8 @@ struct CueChoices: View {
     let options: [String]
     var disabled = false
     var hint: String?
+    /// 小一档（任务页等你列）：胶囊紧凑、靠右能换行，"以后……不用问"收成"以后不用问"（范围在依据那一行）；答的仍是原文
+    var compact = false
     let pick: (String) -> Void
     @Environment(Workspace.self) private var workspace
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -103,6 +104,26 @@ struct CueChoices: View {
         let cue = workspace.cue, paused = !cue.canHear
         let once = options.first ?? CueAsk.once, others = paused ? [] : Array(options.dropFirst()), hint = paused ? "启用 \(cue.name) 后再答" : hint
         let main: ControlButtonStyle.Kind = paused ? .secondary : .primary
+        if compact {
+            VStack(alignment: .trailing, spacing: 4) {
+                ChipFlow {
+                    ForEach(others, id: \.self) { button($0, label: Self.short($0), kind: .secondary).lineLimit(1) }
+                    button(once, kind: main, paused: paused).lineLimit(1)
+                }
+                if let hint { note(hint) }
+            }
+            .frame(maxWidth: .infinity, alignment: .trailing)
+        } else {
+            full(once: once, others: others, hint: hint, main: main, paused: paused)
+        }
+    }
+
+    /// "以后……不用问"收成"以后不用问"。
+    private static func short(_ option: String) -> String {
+        option.hasPrefix("以后") && option.hasSuffix("不用问") ? "以后不用问" : option
+    }
+
+    @ViewBuilder private func full(once: String, others: [String], hint: String?, main: ControlButtonStyle.Kind, paused: Bool) -> some View {
         let stacked = VStack(spacing: Self.stackGap) {
             button(once, kind: main, fill: true, paused: paused)
             ForEach(others, id: \.self) { button($0, kind: .secondary, fill: true) }
@@ -132,12 +153,15 @@ struct CueChoices: View {
         Text(text).font(Typography.meta).foregroundStyle(palette.ink2)
     }
 
-    private func button(_ option: String, kind: ControlButtonStyle.Kind, fill: Bool = false, minWidth: CGFloat = 0, paused: Bool = false) -> some View {
+    private func button(
+        _ option: String, label: String? = nil, kind: ControlButtonStyle.Kind, fill: Bool = false, minWidth: CGFloat = 0, paused: Bool = false
+    ) -> some View {
         Button { pick(option) } label: {
-            Text(option).multilineTextAlignment(.center)
+            Text(label ?? option).multilineTextAlignment(.center)
                 .frame(minWidth: max(0, minWidth - Self.inset), maxWidth: fill ? .infinity : nil)
         }
-        .buttonStyle(ControlButtonStyle(kind: kind))
+        .buttonStyle(ControlButtonStyle(kind: kind, compact: compact))
+        .accessibilityLabel(option)
         .disabled(disabled || paused)
     }
 }
@@ -248,29 +272,4 @@ struct CueOriginalToggle: View {
     }
 
     private static let reach: CGFloat = 10
-}
-
-/// 对话里还在等你、没露在"等你"卡里的一问（`CueThread.Row.waiting`）：Cue 那一边的一颗气泡，等你记号（同卡上的问号）、加粗的问句与"去答"，
-/// 整颗可点：点了它换到卡里露（`Workspace.cueAsking`），卡原地交替。图、选项与原话都在卡里，这里不放：同一问同屏只摊开一处。
-struct CueWaitingAsk: View {
-    let message: CueMessage
-    var joined = false
-    @Environment(Workspace.self) private var workspace
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        let question = message.headline ?? ""
-        BubbleWidth(fraction: CueBubble.cueWidth, edge: .leading) {
-            Button { workspace.cueAsking = message.id } label: {
-                CueQuestionLine(message: message, tone: .waiting) {
-                    Text("去答 ›").font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink2)
-                }
-                .cueBubble(joined: joined)
-                .contentShape(CueBubble.shape(.leading, joined: joined))
-            }
-            .buttonStyle(PressStyle(.card))
-            .accessibilityLabel("等你：\(question)")
-            .accessibilityHint("放到下面的等你卡里答")
-        }
-    }
 }

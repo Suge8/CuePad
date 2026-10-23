@@ -70,7 +70,7 @@ extension CueStore {
 
   /// 一轮做完（值班的管理器调）：经过那一行的最终清单（`tools`；没调过工具为 nil，那一行不动）、这一轮写给你的话（`reply`，规则同 `replyCueRound`）
   /// 与歇着（`setCueState`）在同一个事务里写下，返回那一行。"这一轮做完了"只看此刻的状态（`CueState.round`），各端都照它判断：
-  /// 分开写的话同步可能先把歇着带到别的设备、话与清单还在路上，那里的 Cue 页就把这一轮先当成没动手，话到了再改回来。
+  /// 分开写的话同步可能先把歇着带到别的设备、话与清单还在路上，那里的 Cue 页就把这一轮先当成没说话，话到了再改回来。
   @discardableResult
   public func finishCueRound(
     _ id: UUID?, startedAt: Date, answersYou: Bool, tools: PiChatMessage.Tools?, reply: String?, as author: CueAuthor, context: CueContext?

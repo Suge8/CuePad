@@ -39,7 +39,7 @@ struct AskShotsTests {
         let plain = try await store.addCueMessage(.cue, text: "要推送吗？", ask: try CueAsking(.push, action: "推送提问卡的改动"), task: task.id)
 
         let before = try await thread()
-        #expect(before.waiting.map(\.id) == [question.id, plain.id])
+        #expect(before.waiting.compactMap(\.message?.id) == [question.id, plain.id])
         #expect(before.shots[question.id]?.map(\.preview.id) == [one[0].id, two[0].id])
         #expect(before.shots[question.id]?.map(\.look) == ["方案 1：大按钮占满一行", "方案 2：按钮贴在输入框上"])
         #expect(before.shots[plain.id] == nil)

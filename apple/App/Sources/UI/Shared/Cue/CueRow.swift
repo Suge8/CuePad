@@ -85,14 +85,12 @@ struct CueRow: View, Equatable {
             }
         case .answer(let question, let quoted):
             CueAnswer(question: question, quoted: quoted, joined: joined)
-        case .waiting(let message):
-            CueWaitingAsk(message: message, joined: joined)
         case .cue(let message, _):
             CueSays(message: message, task: ref, shots: shots, open: { opened = $0 }, joined: joined)
         case .result(let message, _):
             CueSays(message: message, task: ref, shots: shots, open: { opened = $0 }, card: true)
         case .notes(let rounds):
-            CueNoteBubble(rounds: rounds, live: live)
+            CueNoteLog(rounds: rounds, live: live)
         case .process(let message):
             RoundProcess(tools: message.tools, ending: CueLiveRound.ending(of: message, in: live)).padding(.leading, CueBubble.noteInset)
         }

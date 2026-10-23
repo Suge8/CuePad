@@ -10,7 +10,7 @@ public enum CueAuthor: String, Sendable, CaseIterable {
   case you
   /// Cue 对你说的；带选项的是"等你"
   case cue
-  /// Cue 自己醒来那一轮的动态（不推送，Cue 页收进一颗虚线气泡）：没有正文的是那一轮的经过，带着它为什么醒（`wake`）与做了什么（`tools`）
+  /// Cue 自己醒来那一轮的动态（不推送，Cue 页每轮一行旁注）：没有正文的是那一轮的经过，带着它为什么醒（`wake`）与做了什么（`tools`）
   case note
   /// 你发起的一轮的经过（`tools`，没有正文）：排在这一轮开始的位置，这一轮说的话与结果都在它之后（`CueStore.recordCueRound`）。
   /// Cue 自己醒来的一轮的经过是一条没有正文的动态（`note`），跟着动态收起
