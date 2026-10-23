@@ -29,7 +29,7 @@ struct BoardColumns: View {
     }
 }
 
-/// 看板的一列（`TaskBoard`；Mac 与宽屏 iPad 四列并排，手机横排成一条横滑，`PhoneBoard`）：一条按列上色的泳道（`BoardLane`），一件一张卡——
+/// 看板的一列（`TaskBoard`；Mac 与宽屏 iPad 四列并排；手机转成一行，四行竖着排，`PhoneBoard`）：一条按列上色的泳道（`BoardLane`），一件一张卡——
 /// 待办、推进中、已完成是任务卡（`BoardTaskCard`）、没绑任务的会话卡（`BoardSessionCard`），等你是 Cue 的气泡（`BoardWaitCard`），都在懒加载栈里（列可能很长，只建看得见的）。
 /// 推进中按档排（要你管 → 在跑 → 歇着，`Workspace.byAttention`），档与档之间多空一截；在跑的那一档只有前 `BoardWave.maxMoving` 张的线在动。
 /// 看全部项目时卡上标题前一个项目小图形。点击去处：待办、已完成的卡开任务气泡；推进中的任务卡进此刻干活的会话（没有会话的开气泡），会话卡进会话；
@@ -44,8 +44,10 @@ struct BoardColumn: View {
     /// 待办顶上浮出添加任务那一行（"+ 新任务"）；新任务落在 `newTaskProject`。
     @Binding var adding: Bool
     let newTaskProject: UUID?
-    /// 列头跟着卡一起竖着滚（手机）：整条泳道从页顶的玻璃与状态栏那一条下面滚过去（`PhoneBoard`）；否则列头钉在泳道顶上（Mac、宽屏 iPad）。
-    var headerScrolls = false
+    #if os(iOS)
+    /// 手机任务页的一行（四行横泳道，`PhoneBoard`）：给了就排成横着滑的一行（`BoardRowLane`），否则是一列、列头钉在泳道顶上（Mac、宽屏 iPad）。
+    var row: BoardRowShape?
+    #endif
     @Environment(Workspace.self) private var workspace
     @Environment(\.cardAgents) private var agents
     @Environment(\.palette) private var palette
@@ -68,26 +70,36 @@ struct BoardColumn: View {
     }
 
     @ViewBuilder private var lane: some View {
-        if headerScrolls {
-            // 泳道铺在滚动的内容后面、跟着列头走，往下伸出卡的末尾（一直铺到屏幕底，回弹时也不露底）
-            ScrollView {
-                VStack(spacing: 0) { header; cards }
-                    .background(alignment: .top) { BoardLane(column: column, targeted: targeted).padding(.bottom, -Self.runout) }
-            }
-            .scrollBounceBehavior(.basedOnSize)
-            // 列里一滚就收键盘（等你列的回答框）：手机看板没有别处收得起它
-            .scrollDismissesKeyboard(.immediately)
+        #if os(iOS)
+        if let row {
+            BoardRowLane(column: column, count: board.count(column), shape: row, targeted: targeted,
+                         lead: adding && column == .todo ? Self.newTaskID : nil) { content }
         } else {
-            VStack(spacing: 0) {
-                header
-                ScrollView { cards }.scrollBounceBehavior(.basedOnSize)
-            }
-            .background { BoardLane(column: column, targeted: targeted) }
+            columnLane
         }
+        #else
+        columnLane
+        #endif
     }
 
-    /// 泳道往卡的末尾以下伸出多长：比屏高，卡少时也铺满。
-    private static let runout: CGFloat = 2000
+    private var columnLane: some View {
+        VStack(spacing: 0) {
+            header
+            ScrollView { cards }.scrollBounceBehavior(.basedOnSize)
+        }
+        .background { BoardLane(column: column, targeted: targeted) }
+    }
+
+    /// 添加任务那一行（行里排在最前：添加时滑到它）。
+    private static let newTaskID = "new-task"
+
+    private var isRow: Bool {
+        #if os(iOS)
+        row != nil
+        #else
+        false
+        #endif
+    }
 
     private var header: some View {
         BoardColumnHeader(column: column, count: board.count(column)).padding(.horizontal, TaskMetrics.cardPadding + BoardCardMetrics.inset)
@@ -112,7 +124,7 @@ struct BoardColumn: View {
         switch column {
         case .todo:
             if adding {
-                newTask.transition(Motion.item)
+                newTask.id(Self.newTaskID).transition(Motion.item)
             }
             ForEach(board.todo) { item in
                 card(item).draggable(item.id.uuidString).modifier(InsertBefore(id: item.id) { drop($0, before: item.id) })
@@ -121,8 +133,8 @@ struct BoardColumn: View {
         case .advancing:
             let groups = workspace.byAttention(board.advancing, agents: agents)
             ForEach(groups, id: \.tier) { group in
-                // 档与档之间多空一截：栈里一格零高的空，前后各一个行距
-                if group.tier != groups.first?.tier { Color.clear.frame(height: 0) }
+                // 档与档之间多空一截：栈里一格零高的空，前后各一个行距（横着的一行里一格就是一张卡宽，不空）
+                if group.tier != groups.first?.tier, !isRow { Color.clear.frame(height: 0) }
                 ForEach(Array(group.work.enumerated()), id: \.element.id) { index, work in
                     let moves = group.tier == .running && index < BoardWave.maxMoving
                     if let item = work.item {

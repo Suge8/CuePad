@@ -4,7 +4,7 @@ import SwiftUI
 
 /// 任务页：流水看板（`TaskBoard`），待办 → 推进中 → 等你 → 已完成（今天）。只看项目范围里的（`Workspace.scopedProject`，同会话页那一份；
 /// 选了项目以后卡上不画项目小图形、列头的数也只数这个项目），页里不另设筛选；项目范围在顶栏中间（`ProjectScope`）。
-/// 宽屏（iPad）同 Mac 四列并排（`BoardColumns`）；窄屏四列横排成一条、横滑换列（`PhoneBoard`），打开时有等你就落在等你。
+/// 宽屏（iPad）同 Mac 四列并排（`BoardColumns`）；窄屏是四行竖排、每行横划的竖版看板（`PhoneBoard`），四行一打开都在眼前，不另设落点。
 /// 右上角"+"去待办、顶上浮出添加那一行（`NewTaskLine`，落在范围里的项目或当前项目，可换），失焦且没写字时收回。
 struct TasksScreen: View {
     @Environment(Workspace.self) private var workspace
@@ -13,8 +13,6 @@ struct TasksScreen: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var board: TaskBoard?
     @State private var adding = false
-    /// 窄屏此刻看的那一列（横滑停在哪一列）。
-    @State private var column: TaskBoard.Column?
 
     var body: some View {
         let shown = (board ?? .empty).only(workspace.scopedProject)
@@ -22,7 +20,7 @@ struct TasksScreen: View {
             if sizeClass == .regular {
                 BoardColumns(board: shown, adding: $adding, newTaskProject: newTaskProject).padding(.horizontal, 12)
             } else {
-                PhoneBoard(board: shown, adding: $adding, newTaskProject: newTaskProject, column: $column)
+                PhoneBoard(board: shown, adding: $adding, newTaskProject: newTaskProject)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -31,29 +29,14 @@ struct TasksScreen: View {
             Button("添加任务", icon: .add) { add() }
         }
         .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: adding)
-        .onChange(of: workspace.scopedProject) {
-            adding = false
-            land()
-        }
-        .onAppear { land() }
-        .onChange(of: board == nil) { land() }
+        .onChange(of: workspace.scopedProject) { adding = false }
         .observingBoard(into: $board, store: services.store, onError: workspace.fail)
     }
 
     private var newTaskProject: UUID? { workspace.scopedProject ?? workspace.currentProject }
 
-    /// 打开与换项目范围时落在哪一列（按范围里的看板）：有等你就是等你（要你拍板的事在那里就能处理），否则推进中、再否则待办。
-    private func land() {
-        guard let board = board?.only(workspace.scopedProject) else { return }
-        if let column = DebugHooks.preset.boardColumn { return self.column = column }
-        column = !board.waiting.isEmpty ? .waiting : !board.advancing.isEmpty ? .advancing : .todo
-    }
-
-    /// 先滑到待办、停稳了再浮出添加那一行：滑动途中插进来的输入框接不住焦点（实测会空着不聚焦）。
-    private func add() {
-        guard column != .todo else { return adding = true }
-        withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { column = .todo } completion: { adding = true }
-    }
+    /// 待办顶上浮出添加那一行（手机看板先把待办那一行滑到行首，`BoardRowLane`）。
+    private func add() { adding = true }
 }
 
 /// 一行新建任务：↩ 添加并保持焦点，便于连续输入。给了 `projects` 时尾部可选挂到哪个项目。

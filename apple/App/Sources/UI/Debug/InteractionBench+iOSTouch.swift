@@ -78,7 +78,7 @@ extension IOSInteractionBench {
         }
     }
 
-    /// 量完时停在哪：根与推入的页（`cue`、`cue>session`），露出了行的轻扫按钮记"+行动作"，任务页记看板此刻那一列。
+    /// 量完时停在哪：根与推入的页（`cue`、`cue>session`），露出了行的轻扫按钮记"+行动作"，任务页记看板第一行横着滚到了哪。
     static func landed(_ workspace: Workspace) -> String {
         func brief(_ route: Route) -> String {
             switch route {
@@ -90,7 +90,7 @@ extension IOSInteractionBench {
         }
         var text = ([workspace.root] + workspace.path).map(brief).joined(separator: ">")
         if workspace.root == .agent, workspace.path.isEmpty, let before = rowBefore, moved(before) { text += "+行动作" }
-        if workspace.root == .tasks, let column = boardColumn(in: window) { text += " 列=\(column)" }
+        if workspace.root == .tasks, let offset = boardOffset(in: window) { text += " 行横移=\(offset)" }
         return text
     }
 
@@ -129,11 +129,12 @@ extension IOSInteractionBench {
         return row
     }
 
-    /// 任务看板（四列横排成一条的滚动区）：屏上最里层那个，外面可能还套着翻页的容器。
+    /// 任务看板（竖排四行，每行一条横滚区）：屏上最靠上、横着放不下的那一行。
     private static func board(in window: UIWindow?) -> UIScrollView? {
         guard let window else { return nil }
         return all(in: window).compactMap { $0 as? UIScrollView }
-            .last { $0.contentSize.width > $0.bounds.width * 1.5 && $0.bounds.height > 300 && onScreen($0, window) != nil }
+            .filter { $0.contentSize.width > $0.bounds.width * 1.2 && $0.bounds.height >= 50 && onScreen($0, window) != nil }
+            .min { $0.convert($0.bounds, to: window).minY < $1.convert($1.bounds, to: window).minY }
     }
 
     private static func boardY(in window: UIWindow?) -> CGFloat? {
@@ -141,11 +142,9 @@ extension IOSInteractionBench {
         return board.convert(board.bounds, to: window).midY
     }
 
-    private static func boardColumn(in window: UIWindow?) -> TaskBoard.Column? {
-        // 列不一定一屏宽（原型的一列半、空列收窄）：按四列平分内容宽估
-        guard let board = board(in: window), board.contentSize.width > 0 else { return nil }
-        let index = Int((board.contentOffset.x / (board.contentSize.width / CGFloat(TaskBoard.Column.allCases.count))).rounded())
-        return TaskBoard.Column.allCases.indices.contains(index) ? TaskBoard.Column.allCases[index] : nil
+    /// 看板那一行横着滚到了哪（点）。
+    private static func boardOffset(in window: UIWindow?) -> Int? {
+        board(in: window).map { Int($0.contentOffset.x + $0.adjustedContentInset.left) }
     }
 
     /// 慢拖之前那一行的样子（`pixels`）：自绘的轻扫按钮是 SwiftUI 画的、不是 UIKit 视图，也不进读屏，只能比画面认。

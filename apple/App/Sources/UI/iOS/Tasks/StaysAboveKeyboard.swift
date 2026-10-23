@@ -50,7 +50,11 @@ private struct KeyboardReveal: UIViewRepresentable {
 
         func reveal() {
             // 键盘上沿以上才算看得见：滚动区自己未必按键盘缩了框
-            guard let window, let keyboardTop, let scroll = sequence(first: self as UIView, next: { $0.superview }).compactMap({ $0 as? UIScrollView }).first else { return }
+            // 外面最近的竖着能滚的那个（看板的行是横着滚的，跳过）：键盘让出的底边算进去
+            let vertical = sequence(first: self as UIView, next: { $0.superview }).compactMap { $0 as? UIScrollView }.first {
+                $0.contentSize.height + $0.adjustedContentInset.top + $0.adjustedContentInset.bottom > $0.bounds.height + 1
+            }
+            guard let window, let keyboardTop, let scroll = vertical else { return }
             let box = convert(bounds, to: window)
             let overlap = box.maxY + Self.margin - keyboardTop
             guard overlap > 0 else { return }

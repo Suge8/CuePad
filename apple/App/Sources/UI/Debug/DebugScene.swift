@@ -38,7 +38,7 @@ enum ScrollAnchor {
 /// - `-CuePadNoIdeas YES`：`-CuePadProject` 那个项目的灵感都移到回收站，看项目页没有灵感时的空态（改的是库本身，之后的画面也没有这些灵感：配一个新的 `CUEPAD_SHOT_LIBRARY`）；
 /// - `-CuePadTasksOpen YES`：项目页任务纸的"还有 N 条"与"已完成 M"一开始就展开；
 /// - `-CuePadHover x,y[;x,y…]`（仅 Mac）：窗口里这几点上的按钮、行与卡画成指针停着的样子（坐标同 `-CuePadClick`，`presetHover`）；
-/// - `-CuePadShowsDone YES`：已完成列的"更早做完的"一开始就展开；`-CuePadColumn <列名>`（iPhone）：任务页打开时落在这一列；
+/// - `-CuePadShowsDone YES`：已完成列的"更早做完的"一开始就展开；
 ///   `-CuePadBusyBoard YES`（配 tasks 画面与 `-CuePadDemo YES`）：推进中里再放几件 Agent 正在多步推进的任务（`seedBusyBoard`）；
 /// - `-CuePadCueNow <woke|delegating|asks|done|quiet|away>`：Cue 此刻钉成这份样例（`CueNowSamples`），页头、侧栏、小组件与实时活动都按它画；
 ///   `-CuePadCueCycle YES`：就绪后轮流走过各份样例（`cueNowTourIfAsked`），录切换；
@@ -120,9 +120,8 @@ enum DebugScene {
         #if os(iOS)
         preset.alertStatus = alertStatus
         if defaults.string(forKey: "CuePadSearchScope") == "sessions" { preset.searchScope = .sessions }
-        preset.boardColumn = TaskBoard.Column.allCases.first { $0.title == defaults.string(forKey: "CuePadColumn") }
         preset.protoBoard = defaults.string(forKey: "CuePadProtoBoard") ?? "A"
-        preset.protoBubble = defaults.string(forKey: "CuePadProtoBubble") ?? "P"
+        preset.protoBubble = defaults.string(forKey: "CuePadProtoBubble") ?? "Q"
         let panel = defaults.string(forKey: "CuePadCuePanel")
         preset.cuePanelEnd = panel == "end"
         preset.cuePanelOpen = preset.cuePanelEnd || defaults.bool(forKey: "CuePadCuePanel")
