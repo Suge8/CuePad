@@ -4,23 +4,17 @@ import SwiftUI
 /// 窄屏（iPhone 与窄窗口 iPad）的容器：一个导航栈，根是底部那一排的四个去处横排成的一条（项目、任务、会话、Cue，`HomePager`：左右滑跟手切页），
 /// 推入的页照常由系统返回（返回钮、内容区右滑），返回后在 Cue 页左滑前进回刚才那页。其余去处推在所属的那一页上（`Navigation.select`）；打开 App 落在 Cue。
 /// 导航栈托管在 UIKit 里，几个栈交替时 SwiftUI 不逐帧挪它（旧页停着、最后一下才跳走）：所以只有一个栈，切页挪的是栈根里的四页（各在自己的托管控制器里，`PagerController`）。
-/// 底部那一排整个窗口只有一份（`DockBar`），挂在栈的根上、不在哪一页里：切页时它不重建、不跟着滑，与页同一刻原地换形（`morph`）。
+/// 底部那一排整个窗口只有一份（`DockBar`），挂在栈的根上、不在哪一页里：切页时它不重建、不跟着滑，选中的滴与换形跟着条（`PagerMotion`）走，拖到哪长到哪。
 /// 每页各建一排时，新页那一排要从旧的样子摆出第一帧再长回来，"⋯"展开着换去处就是收成圆再长开的一下来回。
-/// Cue 页的输入框在页里（随键盘升起），底边那一格同一时刻只有一个主人（`handed`）：换形一开始离开输入框的样子就交给 Cue 钮，
-/// 长成输入框的那条弹簧做完（动画的完成回调）才交还给页里的输入框。不按延时交接：玻璃不跟延时的不透明度动画，当场就藏了。
+/// Cue 页的输入框在页里（随键盘升起），底边那一格在换形里与 Cue 钮交叉，浓淡都是条的位置与"⋯"开合的函数（`DockHandoff`）。
 /// 不用折叠的分栏：那个容器本身冷启动就多约 3000M 指令。
 struct DockRoot: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// 底部那一排此刻画成的样子：跟着该有的样子（`DockLook.init`）换形，出现前为 nil。
-    @State private var look: DockLook?
-    /// 底边那一格交给了 Cue 页里的输入框；Cue 钮等输入框画上屏才藏起（`released`）。
-    @State private var handed = false
-    @State private var released = false
+    /// 根上那一条此刻在哪（`PagerController` 写）。
+    @State private var motion = PagerMotion()
     /// Cue 页的输入框有焦点：底部那一排让开，输入框占满整排。只活在窄屏的容器里，宽屏没有它，变宽再变窄也不留旧值。
     @State private var composing = false
-    /// Cue 页底部的"⋯"展开成了三格：点别处、滚动或点 Cue 钮收起，回到 Cue 页总是收起的。同样只活在窄屏的容器里。
-    @State private var placesOpen = false
     @State private var width: CGFloat = 0
     /// 推入的页离开前拍的快照（左滑前进时跟手用）。
     @State private var shot = LeaveShot()
@@ -28,23 +22,22 @@ struct DockRoot: View {
     var body: some View {
         @Bindable var workspace = workspace
         let root = workspace.root
-        let target = DockLook(route: root, placesOpen: placesOpen, composing: composing)
         NavigationStack(path: $workspace.path) {
-            HomePager(composing: composing, shot: shot) {
+            HomePager(motion: motion, composing: composing, shot: shot) {
                 ZStack(alignment: .bottom) {
                     // "⋯"展开时铺在 Cue 页上的一层：点一下或一划就收起
-                    if placesOpen, root == .cue {
+                    if motion.placesOpen, root == .cue {
                         Color.clear.contentShape(.rect)
-                            .onTapGesture { placesOpen = false }
-                            .gesture(DragGesture(minimumDistance: 4).onChanged { _ in placesOpen = false })
+                            .onTapGesture { openPlaces(false) }
+                            .gesture(DragGesture(minimumDistance: 4).onChanged { _ in openPlaces(false) })
                             .accessibilityHidden(true)
                     }
-                    DockBar(route: root, look: look ?? target, released: released, placesOpen: $placesOpen, width: max(0, width - Dock.margin * 2))
+                    DockBar(route: root, motion: motion, composing: composing, width: max(0, width - Dock.margin * 2), openPlaces: openPlaces)
                         .padding(.bottom, Dock.margin).ignoresSafeArea(edges: .bottom)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
             }
-            .environment(\.dockComposer, handed)
+            .environment(\.dockMotion, motion)
             .environment(\.dockComposing, $composing)
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
             .toolbarVisibility(.hidden, for: .navigationBar)
@@ -53,41 +46,17 @@ struct DockRoot: View {
                 if root == .cue { RouteView(route: route).leaveShot(route, into: shot) } else { RouteView(route: route) }
             }
         }
-        .onChange(of: target, initial: true) { morph(to: target) }
-        .debugExposesPlaces { placesOpen = true }
+        .debugExposesPlaces { openPlaces(true) }
         // 有焦点时"⋯"收起
-        .onChange(of: composing) { if composing { placesOpen = false } }
-        .onChange(of: root) {
-            // 输入框离开页就没了焦点；回到 Cue 页是收起的样子，离开时不收：收起再长回三格就是换去处时那一下来回
-            composing = false
-            if root == .cue { placesOpen = false }
-        }
+        .onChange(of: composing) { if composing { openPlaces(false) } }
+        // 输入框离开页就没了焦点
+        .onChange(of: root) { composing = false }
     }
 
-    /// 换成 `target` 的样子：换去处时与页的推移同一刻起、同一条弹簧。离开输入框的样子当场收回底边那一格，长成输入框做完才交出去。
-    private func morph(to target: DockLook) {
-        let composer = target != .places
-        guard look != nil, !reduceMotion else {
-            look = target
-            handed = composer
-            released = composer
-            return
-        }
-        if !composer {
-            handed = false
-            released = false
-        }
-        withAnimation(Motion.dock) {
-            look = target
-        } completion: {
-            guard look == target, composer else { return }
-            handed = true
-            // 输入框的玻璃从藏着到画出来要几帧，这期间 Cue 钮还在，底边不空
-            Task {
-                await NextFrame.drawn()
-                if handed { released = true }
-            }
-        }
+    /// "⋯"展开、收起（点别处、滚动、点 Cue 钮、输入框有焦点时收起）：底部那一排用 `Motion.dock` 换形。
+    private func openPlaces(_ open: Bool) {
+        guard open != motion.placesOpen else { return }
+        withAnimation(Motion.spatial(Motion.dock, reduceMotion: reduceMotion)) { motion.placesOpen = open }
     }
 }
 
@@ -133,19 +102,6 @@ enum Dock {
     static func reserve(above safeBottom: CGFloat) -> CGFloat { max(0, height + margin + Bars.contentGap - safeBottom) }
 }
 
-/// 底部那一排该是什么样子：三页上与 Cue 页点开"⋯"时是三格，Cue 页上是"⋯"加输入框，输入框有焦点时都让开。
-enum DockLook {
-    case places, cue, composing
-
-    init(route: Route, placesOpen: Bool, composing: Bool) {
-        guard route == .cue, !placesOpen else {
-            self = .places
-            return
-        }
-        self = composing ? .composing : .cue
-    }
-}
-
 extension SidebarOutline.Entry {
     /// 底部那一排里的叫法：书架在窄屏就是"项目"那一页。
     var dockTitle: String { self == .allProjects ? "项目" : title }
@@ -153,8 +109,6 @@ extension SidebarOutline.Entry {
 }
 
 extension EnvironmentValues {
-    /// 底边那一格交给了 Cue 页里的输入框（`DockRoot.handed`）：没交过来时输入框藏着，那里是长成它的 Cue 钮。
-    @Entry var dockComposer = true
     /// Cue 页输入框的焦点交给底部那一排（`DockRoot.composing`）；宽屏没有底部那一排，为 nil。
     @Entry var dockComposing: Binding<Bool>?
 }

@@ -2,7 +2,11 @@
 import SwiftUI
 import UIKit
 
-/// 四页的容器：页都铺满容器（安全区、键盘照常由 UIKit 给），在条上的位置只是外面套的那层视图的平移（`apply`；直接挪托管视图，它每帧都要重算自己在窗口里的位置），各页的托管控制器建过就留着（回访不重建、滚动位置还在），挂不挂在窗口上另说：
+/// 四页的容器：四页按 `Dock.pages` 的顺序并排在一条上（`strip`），切页只平移这一条（Cue 页前进时另有自己的退开）；页都铺满容器（安全区、键盘照常由 UIKit 给）。
+/// 页与条只摆 `bounds` 与 `center`，不碰 `frame`：带平移的视图设 `frame` 会把那一刻的平移折进 `center`，之后平移一变页就带着一段残留位移
+/// （曾经每次排版都这样折一下：停在旧页再一下闪成新页、邻页叠在当前页上、Cue 页歪着露出旁边一角）。
+/// 条的位置只有一份（`offset`），每次挪都经 `apply` 同时交给 `PagerMotion`（底部那一排的滴与换形读它）。
+/// 各页的托管控制器建过就留着（回访不重建、滚动位置还在），挂不挂在窗口上另说：
 /// - 当前页一直挂着；滑动中露出来的页（`moving`）挂着、画着、订阅着；
 /// - 两边的邻页停稳后挂上但藏着（下一次拖时现成），不订阅（`pageActive` 为假，没读过的先读一份 `pagePrefetch`）；
 /// - 推入的页盖住根（转场做完）时只留当前页挂着：返回时导航栈把根重新挂回窗口，挂着几页就要重排几页。回到根上安静一阵再把邻页挂回去。
@@ -20,6 +24,7 @@ final class PagerController: UIViewController {
     private let motion: PagerMotion
     private var input: Input?
     private var pages: [Route: Page] = [:]
+    private let strip = UIView()
     /// 正在滑的页：画、订阅。
     private var moving: Set<Route> = []
     /// 条停在哪一页（`Workspace.root` 换了，条滑过去之后才是它）。
@@ -43,14 +48,13 @@ final class PagerController: UIViewController {
     private static let buildDelay: Duration = .seconds(2)
     /// 返回到根上后等这么久再把邻页挂回去：不压在返回转场刚停的那几帧上。
     private static let attachDelay: Duration = .milliseconds(500)
-    /// 拖动、点按滑过去的弹簧（同 `Motion.dock`）。
-    private static let spring: TimeInterval = 0.3
 
     init(workspace: Workspace, motion: PagerMotion) {
         self.workspace = workspace
         self.motion = motion
         resting = workspace.root
         super.init(nibName: nil, bundle: nil)
+        motion.move(to: CGFloat(Dock.order(resting)), pushed: 0)
     }
 
     @available(*, unavailable) required init?(coder: NSCoder) { fatalError() }
@@ -58,6 +62,7 @@ final class PagerController: UIViewController {
     override func loadView() {
         let container = PagerView()
         container.scroll = { [weak self] edge in self?.scroll(toward: edge) ?? false }
+        container.addSubview(strip)
         view = container
         pan.maximumNumberOfTouches = 1
         pan.delegate = arbiter
@@ -79,12 +84,13 @@ final class PagerController: UIViewController {
 
     private var width: CGFloat { view.bounds.width }
 
-    private func live(_ route: Route) -> Bool { route == resting || moving.contains(route) }
+    /// 在屏上的页：停着的那页与正在滑的页。
+    private var live: Set<Route> { moving.union([resting]) }
 
     /// 一页的内容：环境整份转过来，再标上它此刻在不在屏上。
     private func refresh(_ route: Route) {
         guard let input, let page = pages[route] else { return }
-        let live = live(route)
+        let live = live.contains(route)
         page.host.rootView = AnyView(
             HomePage(route: route).background(input.environment.palette.desk)
                 .environment(\.pageActive, live).environment(\.pagePrefetch, !live)
@@ -92,12 +98,24 @@ final class PagerController: UIViewController {
         page.slot.isHidden = !live
     }
 
+    /// 条横跨四页（点得到哪页，条的 `bounds` 就要盖到哪页），各页在条上的位置只随宽变；平移不在这里，排版多少次都不挪页。宽变了（转屏、分屏）停回当前页。
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        if motion.width != width { motion.width = width }
-        for page in pages.values { page.slot.frame = view.bounds }
-        if pan.state != .changed, turn == 0 || !motion.busy { offset = -CGFloat(Dock.order(resting)) * width }
+        let size = view.bounds.size
+        strip.bounds = CGRect(x: 0, y: 0, width: size.width * CGFloat(Dock.pages.count), height: size.height)
+        strip.center = CGPoint(x: strip.bounds.midX, y: size.height / 2)
+        for (route, page) in pages { place(page, at: route) }
+        guard motion.width != size.width else { return }
+        motion.width = size.width
+        stopAnimations()
+        offset = -CGFloat(Dock.order(resting)) * size.width
         apply(offset)
+    }
+
+    private func place(_ page: Page, at route: Route) {
+        let size = view.bounds.size
+        page.slot.bounds = CGRect(origin: .zero, size: size)
+        page.slot.center = CGPoint(x: (CGFloat(Dock.order(route)) + 0.5) * size.width, y: size.height / 2)
     }
 
     // MARK: 建页、挂页
@@ -115,10 +133,9 @@ final class PagerController: UIViewController {
     }
 
     private func attach(_ route: Route) {
-        guard let page = pages[route], page.slot.superview !== view else { return }
-        page.slot.frame = view.bounds
-        view.addSubview(page.slot)
-        apply(offset)
+        guard let page = pages[route], page.slot.superview !== strip else { return }
+        place(page, at: route)
+        strip.addSubview(page.slot)
     }
 
     private func detach(_ route: Route) {
@@ -146,7 +163,7 @@ final class PagerController: UIViewController {
     /// 安静下来以后一步一步补齐：先把建过的邻页挂回去，再由近及远建还没建的页；每一步之间再等一阵，又动了就重新等。
     private func settleDown() {
         idle?.cancel()
-        let detached = neighbors(of: resting).filter { pages[$0] != nil && pages[$0]?.slot.superview !== view }
+        let detached = neighbors(of: resting).filter { pages[$0] != nil && pages[$0]?.slot.superview !== strip }
         let index = Dock.order(resting)
         let unbuilt = Dock.pages.filter { pages[$0] == nil }.min { abs(Dock.order($0) - index) < abs(Dock.order($1) - index) }
         guard !covered, let next = detached.first ?? unbuilt else { return }
@@ -160,36 +177,39 @@ final class PagerController: UIViewController {
 
     // MARK: 摆位置
 
-    /// 按条的平移摆好：各页、前进时的 Cue 页、底部那一排与快照。
+    private var cuePage: UIView? { pages[Dock.pages[Self.last]]?.slot }
+
+    /// 按条的平移摆好：条、前进时退开的 Cue 页，并告诉 SwiftUI 那一层（底部那一排、快照）条在哪。
     private func apply(_ offset: CGFloat) {
         let w = max(width, 1), stop = -CGFloat(Self.last) * w
         let forward = motion.shot != nil
         let pushed = forward ? min(max((stop - offset) / w, 0), 1) : 0
-        let strip = forward ? max(offset, stop) : offset
-        for (route, page) in pages {
-            let order = Dock.order(route)
-            let back = order == Self.last ? -pushed * Self.parallax * w : 0
-            page.slot.transform = CGAffineTransform(translationX: CGFloat(order) * w + strip + back, y: 0)
-        }
-        if motion.pushed != pushed { motion.pushed = pushed }
+        let position = -(forward ? max(offset, stop) : offset) / w
+        strip.transform = CGAffineTransform(translationX: -position * w, y: 0)
+        cuePage?.transform = CGAffineTransform(translationX: -pushed * Self.parallax * w, y: 0)
+        motion.move(to: position, pushed: pushed)
     }
 
-    /// 条此刻的平移（弹簧在半路时从 Cue 页的图层读：它在条上的位置，拉出前进页时是它退开了多少）。
+    /// 条此刻的平移（弹簧在半路时从图层读：条在哪，拉出前进页时是 Cue 页退开了多少）。
     private func presentedOffset() -> CGFloat {
-        let stop = -CGFloat(Self.last) * width
-        guard let x = pages[Dock.pages[Self.last]]?.slot.layer.presentation()?.affineTransform().tx else { return offset }
-        return stop + (motion.shot != nil && x < 0 ? x / Self.parallax : x)
+        guard let x = strip.layer.presentation()?.affineTransform().tx else { return offset }
+        let back = cuePage?.layer.presentation()?.affineTransform().tx ?? 0
+        return back < 0 ? x + back / Self.parallax : x
     }
 
     private func stopAnimations() {
-        for page in pages.values { page.slot.layer.removeAllAnimations() }
+        strip.layer.removeAllAnimations()
+        cuePage?.layer.removeAllAnimations()
     }
 
-    private func setMoving(_ routes: Set<Route>) {
-        let changed = routes.symmetricDifference(moving)
-        moving = routes
-        for route in changed { refresh(route) }
-        motion.busy = !routes.isEmpty || pan.state == .began || pan.state == .changed
+    /// 停在哪页、哪几页在滑只经这里改：在屏上的页（`live`）变了的那几页重新标上可见与订阅。
+    /// 停的页换了也算（减弱动态效果时直接到位，没有页在滑，只有停的页换了）。
+    private func show(resting: Route? = nil, moving: Set<Route>) {
+        let before = live
+        if let resting { self.resting = resting }
+        self.moving = moving
+        for route in before.symmetricDifference(live) { refresh(route) }
+        motion.busy = !moving.isEmpty || pan.state == .began || pan.state == .changed
     }
 
     // MARK: 跟手
@@ -224,7 +244,7 @@ final class PagerController: UIViewController {
         let index = Dock.order(resting) + (direction == .previous ? -1 : 1)
         if Dock.pages.indices.contains(index), !moving.contains(Dock.pages[index]) {
             build(Dock.pages[index])
-            setMoving(moving.union([resting, Dock.pages[index]]))
+            show(moving: moving.union([resting, Dock.pages[index]]))
         }
         let w = max(width, 1), base = -CGFloat(Dock.order(resting)) * w
         var target = dragStart + translation
@@ -244,25 +264,25 @@ final class PagerController: UIViewController {
         if commits, projected > w / 2, velocity > -200, allows(.previous) { target = index - 1 }
         if commits, projected < -w / 2, velocity < 200, allows(.next) { target = index + 1 }
         let turned = target != index && target <= Self.last
-        if turned { resting = Dock.pages[target] }
+        if turned { show(resting: Dock.pages[target], moving: moving) }
         animate(to: -CGFloat(target) * w, velocity: velocity) { [weak self] in
             if target > Self.last { self?.commitForward() } else { self?.rest() }
         }
         guard turned else { return }
-        // 换去处是一次 SwiftUI 更新（底部那一排换形、页里订阅），主线程要忙一两帧：先把弹簧交给渲染服务，页在这几帧里照样滑
+        // 换去处是一次 SwiftUI 更新（页里订阅、底部那一排的选中），主线程要忙一两帧：先把弹簧交给渲染服务，页在这几帧里照样滑
         CATransaction.flush()
         workspace.select(resting)
     }
 
-    /// 页的图层与 SwiftUI 那两小块（前进页、底部那一排）用同一条弹簧。
+    /// 切页只有这一条弹簧：松手、点按、深链都经它；条的图层与 SwiftUI 那一层（底部那一排、前进页）同一条、同一个初速度。
     private func animate(to target: CGFloat, velocity: CGFloat = 0, done: @escaping () -> Void) {
         turn += 1
         let current = turn
         let distance = target - offset
         let initial = abs(distance) > 1 ? min(max(velocity / distance, -20), 20) : 0
         offset = target
-        withAnimation(.interpolatingSpring(duration: Self.spring, bounce: 0, initialVelocity: initial)) {
-            UIView.animate(springDuration: Self.spring, bounce: 0, initialSpringVelocity: initial, options: [.allowUserInteraction, .beginFromCurrentState]) {
+        withAnimation(.interpolatingSpring(duration: Motion.dockDuration, bounce: 0, initialVelocity: initial)) {
+            UIView.animate(springDuration: Motion.dockDuration, bounce: 0, initialSpringVelocity: initial, options: [.allowUserInteraction, .beginFromCurrentState]) {
                 self.apply(target)
             } completion: { [weak self] _ in
                 guard let self, current == self.turn else { return }
@@ -273,7 +293,7 @@ final class PagerController: UIViewController {
 
     /// 停稳：滑过的页藏起来、不订阅；邻页还没挂上（刚打开就连着滑）时接着挂、接着建。
     private func rest() {
-        setMoving([])
+        show(moving: [])
         motion.busy = false
         for route in neighbors(of: resting) where pages[route] != nil { attach(route) }
         settleDown()
@@ -301,21 +321,21 @@ final class PagerController: UIViewController {
 
     // MARK: 点按换去处
 
-    /// 去处换了（点底部那一排、深链、提示）而条还没挪过去：先建好一路要露出来的页，下一帧整条滑过去；减弱动态效果时直接换。
+    /// 去处换了（点底部那一排、深链、提示）而条还没挪过去：先建好一路要露出来的页，下一帧整条从此刻的位置滑过去（弹簧半路再点也是接着走）；减弱动态效果时直接换。
     private func slide(to root: Route) {
         let from = Dock.order(resting), to = Dock.order(root)
         let span = Set(Dock.pages[min(from, to)...max(from, to)])
         let missing = span.contains { pages[$0] == nil }
         for route in span { build(route) }
-        resting = root
         idle?.cancel()
         guard !(input?.reduceMotion ?? false), view.window != nil else {
             stopAnimations()
+            show(resting: root, moving: [])
             offset = -CGFloat(to) * width
             apply(offset)
             return rest()
         }
-        setMoving(span)
+        show(resting: root, moving: moving.union(span))
         Task { [weak self] in
             if missing { await NextFrame.wait() }
             guard let self, self.resting == root else { return }
@@ -332,7 +352,7 @@ final class PagerController: UIViewController {
     }
 }
 
-/// 一页：托管控制器套在一层只管平移的视图里。
+/// 一页：托管控制器套在一层视图里（Cue 页前进时平移的就是它）。
 private final class Page {
     let host = UIHostingController(rootView: AnyView(EmptyView()))
     let slot = UIView()
@@ -350,42 +370,5 @@ private final class PagerView: UIView {
     var scroll: (UIAccessibilityScrollDirection) -> Bool = { _ in false }
 
     override func accessibilityScroll(_ direction: UIAccessibilityScrollDirection) -> Bool { scroll(direction) }
-}
-
-/// 根上四页的横拖归谁（开始那一刻按状态给方向，同 Telegram 的文件夹切换）：
-/// - 横向比纵向快才开始；手指下面横着能滚的内容（看板的列、表格、附件条）还能往那边滚时让它先滚，滚到头再拖才翻页。
-///   那一侧没有页（最左的项目、没有可前进的 Cue）也接，只是越拖越沉（同系统滚动到头）：不接的话这一拖落到手指下面的行上，松手就点开了它。
-/// - 页里的滚动等它先判（横着翻页时列表不跟着竖着滚）；行上的轻扫先判（`rowSwipes` 只认慢拖、那个方向有动作），行不要的才归它。
-/// - 手指下面是正在输入的输入框时不开始。
-private final class PagerArbiter: NSObject, UIGestureRecognizerDelegate {
-    enum Direction { case previous, next }
-
-    func gestureRecognizerShouldBegin(_ recognizer: UIGestureRecognizer) -> Bool {
-        guard let pan = recognizer as? UIPanGestureRecognizer, let view = pan.view else { return false }
-        let velocity = pan.velocity(in: view)
-        let motion = velocity == .zero ? pan.translation(in: view) : velocity
-        guard abs(motion.x) > abs(motion.y) else { return false }
-        return !Self.yields(toward: motion.x < 0 ? .next : .previous, at: pan.location(in: view), in: view)
-    }
-
-    func gestureRecognizer(_ recognizer: UIGestureRecognizer, shouldBeRequiredToFailBy other: UIGestureRecognizer) -> Bool {
-        guard let view = recognizer.view, let scroll = other.view as? UIScrollView, other === scroll.panGestureRecognizer else { return false }
-        return scroll.isDescendant(of: view)
-    }
-
-    /// 手指下面有横着还能往这边滚的内容，或正在输入的输入框：让给它。
-    private static func yields(toward direction: Direction, at point: CGPoint, in root: UIView) -> Bool {
-        var view = root.hitTest(point, with: nil)
-        while let current = view, current !== root {
-            if current.isFirstResponder, current is UITextInput { return true }
-            if let scroll = current as? UIScrollView, scroll.isScrollEnabled, scroll.contentSize.width > scroll.bounds.width + 1 {
-                let inset = scroll.adjustedContentInset, x = scroll.contentOffset.x
-                let room = direction == .previous ? x > -inset.left + 1 : x < scroll.contentSize.width - scroll.bounds.width + inset.right - 1
-                if room { return true }
-            }
-            view = current.superview
-        }
-        return false
-    }
 }
 #endif
