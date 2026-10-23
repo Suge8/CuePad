@@ -10,10 +10,12 @@ struct CardActions: View {
     var selectable = false
     /// 这是 Mac 上的叶子任务（没有子任务）：没做完时多一项"绑定会话"（会话列表在 Mac 上，手机不传）。
     var leaf = false
+    /// 点它进的是会话（`Workspace.entersSession`）：长按菜单第一项"打开任务"。
+    var opens = false
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        let sections = more ? CardMenu.more(for: card) : CardMenu.sections(for: card, selectable: selectable, bindsSession: leaf)
+        let sections = more ? CardMenu.more(for: card) : CardMenu.sections(for: card, selectable: selectable, bindsSession: leaf, opens: opens)
         ForEach(sections.indices, id: \.self) { index in
             if index > 0 { Divider() }
             ForEach(sections[index], id: \.self, content: item)
@@ -62,6 +64,7 @@ extension CardMenu.Item {
         case .indent: "缩进"
         case .outdent: "反缩进"
         case .more: "更多"
+        case .open: "打开任务"
         }
     }
 
@@ -80,6 +83,7 @@ extension CardMenu.Item {
         case .indent: .indent
         case .outdent: .outdent
         case .more: .more
+        case .open: .task
         }
     }
 
@@ -104,6 +108,7 @@ extension CardMenu.Item {
             let pinned = self == .pin
             return { workspace.perform { try await $0.updateCard(id) { $0.isPinned = pinned } } }
         case .copy: return { workspace.copy(Outgoing.text(of: card)) }
+        case .open: return { workspace.openTask(card) }
         case .trash: return { workspace.attempt { try await workspace.trash(id) } }
         case .select:
             #if os(macOS)

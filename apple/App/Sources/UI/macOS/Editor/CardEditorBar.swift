@@ -28,6 +28,11 @@ extension CardEditing {
             onSubmit: { [weak self] in self?.submit() },
             onError: workspace.fail)
     }
+
+    /// 高贴着字、不自己滚的那一种（任务气泡）。
+    func fittedField(_ card: Card, theme: CueEditorTheme) -> FittedEditorHost {
+        FittedEditorHost(host: field(card, theme: theme))
+    }
 }
 
 /// 保存状态那几个字（编辑页的元信息行）：保存中、"已保存"亮一会儿、没能保存一直亮着。

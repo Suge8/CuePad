@@ -3,14 +3,11 @@ import SwiftUI
 
 extension View {
     /// 看板上一张卡的外形（四列同一种）：纸面（`paper`），同一种卡一样高（`BoardCardMetrics`：推进中带线的卡 `advancingHeight`，其余 `TaskMetrics.cardHeight`），
-    /// 左右内边距与圆角见 `TaskMetrics`。平放的纸不加模糊阴影（侧栏开合时整面墙每帧重画，`paper` 的注释）：靠泳道的淡色把纸托出来。
-    func boardCard(advancing: Bool) -> some View {
-        let height = advancing ? BoardCardMetrics.advancingHeight : TaskMetrics.cardHeight
-        return padding(.horizontal, TaskMetrics.cardPadding)
-            .frame(maxWidth: .infinity, minHeight: height, maxHeight: height, alignment: .leading)
-            .paper(radius: TaskMetrics.cardRadius)
-            .contentShape(.rect(cornerRadius: TaskMetrics.cardRadius, style: .continuous))
-    }
+    /// 左右内边距与圆角见 `TaskMetrics`。平放的纸不加模糊阴影（侧栏开合时整面墙每帧重画，`paper` 的注释）：靠纸与桌面（托盘）的明度差把纸托出来。
+    func boardCard(advancing: Bool) -> some View { modifier(BoardCardFrame(advancing: advancing)) }
+
+    /// 卡上的标题：一行；手机竖版看板（`boardRow`）里小一档、可折成两行。
+    func boardTitle(advancing: Bool) -> some View { modifier(BoardTitleStyle(advancing: advancing)) }
 
     /// 项目联动（Mac）：指针停在侧栏的项目行或卡上的项目小图形上时（`Workspace.hoveredProject`），别的项目的卡淡下去，这个项目的不动。
     /// 只这一个小修饰读它：指针换项目时重算的是各卡的透明度，不是整张卡。没有项目的（Cue 的一般提问）跟着淡。
@@ -20,6 +17,39 @@ extension View {
         #else
         self
         #endif
+    }
+}
+
+/// 手机竖版看板（`PhoneBoard`）里卡的样子：卡高随字号（`BoardRowLane` 按动态字体量好给下来）、标题小一档；
+/// 推进中的状态词挪到线那一行，标题一整行都给字。Mac 与宽屏 iPad 没有（nil）。
+struct BoardRowStyle: Equatable {
+    var cardHeight: CGFloat
+    var advancingHeight: CGFloat
+}
+
+extension EnvironmentValues {
+    @Entry var boardRow: BoardRowStyle?
+}
+
+private struct BoardCardFrame: ViewModifier {
+    let advancing: Bool
+    @Environment(\.boardRow) private var row
+
+    func body(content: Content) -> some View {
+        let height = advancing ? row?.advancingHeight ?? BoardCardMetrics.advancingHeight : row?.cardHeight ?? TaskMetrics.cardHeight
+        content.padding(.horizontal, row == nil ? TaskMetrics.cardPadding : BoardCardMetrics.rowPadding)
+            .frame(maxWidth: .infinity, minHeight: height, maxHeight: height, alignment: .leading)
+            .paper(radius: TaskMetrics.cardRadius)
+            .contentShape(.rect(cornerRadius: TaskMetrics.cardRadius, style: .continuous))
+    }
+}
+
+private struct BoardTitleStyle: ViewModifier {
+    let advancing: Bool
+    @Environment(\.boardRow) private var row
+
+    func body(content: Content) -> some View {
+        content.font(row == nil ? TaskMetrics.lineFont : BoardCardMetrics.rowTitle).lineLimit(row == nil ? 1 : 2)
     }
 }
 
@@ -87,7 +117,7 @@ struct BoardSessionCard: View {
                 .font(.system(size: TaskMetrics.cardLead * 0.85)).foregroundStyle(resting ? palette.ink3 : palette.ink2)
                 .frame(width: TaskMetrics.cardLead, height: TaskMetrics.cardLead)
                 if let project { BoardProjectGlyph(project: project) }
-                Text(session.title).font(TaskMetrics.lineFont).foregroundStyle(resting ? palette.ink2 : palette.ink).lineLimit(1)
+                Text(session.title).boardTitle(advancing: true).foregroundStyle(resting ? palette.ink2 : palette.ink)
             }
             .boardCard(advancing: true)
         }
@@ -106,6 +136,7 @@ struct BoardCardLayout<Lead: View, Trailing: View>: View {
     let lead: Lead
     let trailing: Trailing
     @Environment(\.palette) private var palette
+    @Environment(\.boardRow) private var row
 
     init(advancing: Bool, pulse: BoardPulse = BoardPulse(), moves: Bool = true, steps: TaskProgress? = nil,
          @ViewBuilder lead: () -> Lead, @ViewBuilder trailing: () -> Trailing = { EmptyView() }) {
@@ -118,27 +149,52 @@ struct BoardCardLayout<Lead: View, Trailing: View>: View {
     }
 
     var body: some View {
-        HStack(spacing: Self.gap) {
+        if row != nil, advancing { rowAdvancing } else { standard }
+    }
+
+    private var title: some View {
+        HStack(spacing: row == nil ? Self.gap : BoardCardMetrics.rowGap) {
             lead
             Spacer(minLength: 0)
-            if advancing, pulse.speaks { word }
+            if advancing, pulse.speaks, row == nil { word }
             trailing
         }
-        .frame(height: advancing ? BoardCardMetrics.titleRow : nil)
-        .frame(maxHeight: .infinity, alignment: advancing ? .top : .center)
-        .padding(.top, advancing ? BoardCardMetrics.titleTop : 0)
-        .overlay(alignment: .topLeading) {
-            if advancing {
-                // 线从离标题 `waveGap` 处起（带子代理细轨的线往下多占几点，不往上挤）；子任务的分段压在线那一格的底边，线最低处也在它上面
-                ZStack(alignment: .bottomLeading) {
-                    BoardWave(trace: pulse.trace, moves: moves)
-                    if let steps, steps.total >= 2 { BoardSteps(steps: steps) }
+    }
+
+    private var standard: some View {
+        title
+            .frame(height: advancing ? BoardCardMetrics.titleRow : nil)
+            .frame(maxHeight: .infinity, alignment: advancing ? .top : .center)
+            .padding(.top, advancing ? BoardCardMetrics.titleTop : 0)
+            .overlay(alignment: .topLeading) {
+                if advancing {
+                    // 线从离标题 `waveGap` 处起（带子代理细轨的线往下多占几点，不往上挤）；子任务的分段压在线那一格的底边，线最低处也在它上面
+                    wave.padding(.leading, TaskMetrics.cardLead + Self.gap).padding(.top, BoardCardMetrics.waveTop)
                 }
-                .frame(minHeight: WaveStrip.height, alignment: .bottomLeading)
-                .padding(.leading, TaskMetrics.cardLead + Self.gap)
-                .padding(.top, BoardCardMetrics.waveTop)
             }
+    }
+
+    /// 竖版看板里的推进中：卡窄，标题可折两行、在线上面那一截里竖直居中；状态词挪到线的右端。
+    private var rowAdvancing: some View {
+        title
+            .frame(maxHeight: .infinity)
+            .padding(.bottom, WaveStrip.height + BoardCardMetrics.waveBottom)
+            .overlay(alignment: .bottomLeading) {
+                HStack(alignment: .center, spacing: Self.gap) {
+                    wave
+                    if pulse.speaks { word }
+                }
+                .padding(.leading, TaskMetrics.cardLead + BoardCardMetrics.rowGap)
+                .padding(.bottom, BoardCardMetrics.waveBottom)
+            }
+    }
+
+    private var wave: some View {
+        ZStack(alignment: .bottomLeading) {
+            BoardWave(trace: pulse.trace, moves: moves)
+            if let steps, steps.total >= 2 { BoardSteps(steps: steps) }
         }
+        .frame(minHeight: WaveStrip.height, alignment: .bottomLeading)
     }
 
     /// 要你管的状态词：会话的状态词，或快满的上下文。

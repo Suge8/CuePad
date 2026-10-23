@@ -60,8 +60,74 @@ struct CloseButton: View {
     }
 }
 
-/// 工具栏左边、侧栏钮（与侧栏收起时的项目切换）之后：这一页的范围，进展页（看板与会话两段）是项目范围（`ProjectScopeMenu`，`Workspace.projectScope`）。
-/// 工具栏里的页面控件只有一条规矩（这一格、`PageActionSlot`、`PageMenuSlot` 都照它）：只放 Workspace 里已有的状态，主窗口里常驻、固定宽度、只换内容。
+/// 工具栏左边、侧栏钮（与侧栏收起时的项目切换）之后：进展页两段的图标分段（`ProgressPanes`，同 iPhone 顶上那块玻璃里那一组），两段同一个位置。
+/// 右沿报给看板段的列头（`MacPages.panesEdge`）：待办的列头从它右边起，不压在分段下面。
+struct PanesSlot: View {
+    @Environment(Workspace.self) private var workspace
+
+    var body: some View {
+        let shown = workspace.root == .progress
+        ProgressPanes(size: Spacing.toolbarControl - Self.inset * 2)
+            .padding(Self.inset)
+            .glass(in: .capsule)
+            .background { WindowEdge { workspace.pages.panesEdge = $0 } }
+            .opacity(shown ? 1 : 0).allowsHitTesting(shown).accessibilityHidden(!shown)
+    }
+
+    private static let inset: CGFloat = 3
+}
+
+/// 量这一块的右沿在窗口里的横坐标：工具栏项与页面不在同一棵视图里，SwiftUI 的全局坐标对不上，按窗口坐标量。
+/// 开合侧栏、拖侧栏的宽时挪的是外面的几层（工具栏项那一格），听这几层的框变了再量。
+private struct WindowEdge: NSViewRepresentable {
+    let report: (CGFloat) -> Void
+
+    func makeNSView(context: Context) -> Probe { Probe(report: report) }
+    func updateNSView(_ probe: Probe, context: Context) { probe.report = report }
+
+    final class Probe: NSView {
+        var report: (CGFloat) -> Void
+        private var observers: [any NSObjectProtocol] = []
+        private var last: CGFloat?
+
+        init(report: @escaping (CGFloat) -> Void) {
+            self.report = report
+            super.init(frame: .zero)
+        }
+
+        required init?(coder: NSCoder) { nil }
+
+        isolated deinit { observers.forEach(NotificationCenter.default.removeObserver) }
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            observers.forEach(NotificationCenter.default.removeObserver)
+            observers = sequence(first: self as NSView, next: \.superview).map { view in
+                NotificationCenter.default.addObserver(forName: NSView.frameDidChangeNotification, object: view, queue: nil) { [weak self] _ in
+                    MainActor.assumeIsolated { self?.measure() }
+                }
+            }
+            measure()
+        }
+
+        override func layout() {
+            super.layout()
+            measure()
+        }
+
+        private func measure() {
+            guard window != nil else { return }
+            let edge = convert(bounds, to: nil).maxX
+            guard edge != last else { return }
+            last = edge
+            // 不在布局的这一圈里改可观察的值
+            DispatchQueue.main.async { [report] in report(edge) }
+        }
+    }
+}
+
+/// 工具栏左边、两段分段之后：这一页的范围，进展页的会话段是项目范围（`ProjectScopeMenu`，`Workspace.projectScope`；看板段那一排是列头，范围在"⋯"里）。
+/// 工具栏里的页面控件只有一条规矩（这一格、`PanesSlot`、`QuotaSlot`、`PageActionSlot`、`SearchSlot`、`PageMenuSlot` 都照它）：只放 Workspace 里已有的状态，主窗口里常驻、固定宽度、只换内容。
 /// 工具栏项挂在主窗口上，读不到页面读的库，抄一份过来就是第二个事实源；工具栏项一增删整条重建（实测占进出会话页点击回合的一半，25fdb5fa、4fd371a4），
 /// 一变尺寸整条重排、重算整窗的鼠标跟踪区（100～150ms，b9707fc5）。所以每页都在，别的页看不见、不卸下（换页时不现建整份项目菜单），
 /// 项目名长了在这一格里截断，不撑宽它；状态归页面的（会话段的搜索、新会话表单读的这台 Mac 上有哪些 Agent）留在页里。
@@ -71,7 +137,7 @@ struct ScopeSlot: View {
     static let width: CGFloat = 200
 
     var body: some View {
-        let shown = workspace.root == .progress
+        let shown = workspace.showsSessionsBar
         // 一直挂着、别的页只是看不见（同 `SwitcherSlot`）：换页时不现建整份项目菜单
         ProjectScopeMenu()
             .frame(maxWidth: Self.width, alignment: .leading)
@@ -80,7 +146,7 @@ struct ScopeSlot: View {
     }
 }
 
-/// 工具栏右边、主操作之前：进展页的额度环（`QuotaRings`，点它从环下长出明细的气泡 `QuotaDetail`）。额度是整个 App 的（`AppServices.accountQuotas`），
+/// 工具栏右边、搜索之前：进展页会话段的额度环（额度是会话的，看板段不放）（`QuotaRings`，点它从环下长出明细的气泡 `QuotaDetail`）。额度是整个 App 的（`AppServices.accountQuotas`），
 /// 不是哪一页读的库，照 `ScopeSlot` 的规矩常驻、固定宽度，别的页看不见。
 struct QuotaSlot: View {
     @Environment(Workspace.self) private var workspace
@@ -92,7 +158,7 @@ struct QuotaSlot: View {
     static let width: CGFloat = 92
 
     var body: some View {
-        let shown = workspace.root == .progress
+        let shown = workspace.showsSessionsBar
         QuotaRings(open: open, height: Spacing.toolbarControl) { open = !open && !PressPoint.reopens(closedAt: closed) }
             .glass(in: .capsule, interactive: true)
             .bubble(isPresented: $open) { QuotaDetail().padding(16) }
@@ -102,24 +168,46 @@ struct QuotaSlot: View {
     }
 }
 
-/// 工具栏右边、搜索之前：这一页的主操作，进展页随段换：看板是"新任务"（待办顶上浮出添加那一行，`Workspace.addsTask`），
-/// 会话是"新会话"（弹出新会话的表单，`NewSessionPanel`）。规矩同 `ScopeSlot`：每页都在、固定宽度，别的页看不见。
+/// 工具栏右边、搜索之前：进展页会话段的"新会话"（弹出新会话的表单，`NewSessionPanel`，⌥⌘N 同）；看板段的新任务在"⋯"里。
+/// 规矩同 `ScopeSlot`：每页都在、固定宽度，别的页看不见。
 struct PageActionSlot: View {
     @Environment(Workspace.self) private var workspace
 
     static let width: CGFloat = 96
 
     var body: some View {
-        let shown = workspace.root == .progress, sessions = workspace.progressPane == .sessions
+        let shown = workspace.showsSessionsBar
         // 工具栏把"图标 + 字"的标签只画成图标：写明两样都要
-        Button(sessions ? "新会话" : "新任务", icon: .add) {
-            if sessions { workspace.showsNewSession = true } else { workspace.addsTask.toggle() }
-        }
-        .labelStyle(.titleAndIcon)
-        .buttonStyle(ControlButtonStyle(kind: .glass))
-        .help(sessions ? "开一个新的 Agent 会话（⌥⌘N）" : "在待办里添加任务")
-        .opacity(shown ? 1 : 0).allowsHitTesting(shown).accessibilityHidden(!shown)
-        .frame(width: Self.width, height: Spacing.toolbarControl, alignment: .trailing)
+        Button("新会话", icon: .add) { workspace.showsNewSession = true }
+            .labelStyle(.titleAndIcon)
+            .buttonStyle(ControlButtonStyle(kind: .glass))
+            .help("开一个新的 Agent 会话（⌥⌘N）")
+            .opacity(shown ? 1 : 0).allowsHitTesting(shown).accessibilityHidden(!shown)
+            .frame(width: Self.width, height: Spacing.toolbarControl, alignment: .trailing)
     }
+}
+
+/// 工具栏右边的搜索（⌘K 同）。进展页的看板上不在这里：那一排是列头，搜索收在"⋯"里（`PageMenuSlot`）；常驻、只是看不见（同 `ScopeSlot`）。
+struct SearchSlot: View {
+    @Environment(Workspace.self) private var workspace
+
+    var body: some View {
+        let shown = !workspace.boardOwnsTopRow
+        // 资料库读不出来时：搜索结果能打开卡片，是写入入口
+        Button { workspace.searching.toggle() } label: { Image(.search) }
+            .buttonStyle(ControlButtonStyle(kind: .circular))
+            .help("搜索（⌘K）")
+            .accessibilityLabel("搜索")
+            .disabled(!workspace.isLibraryReady)
+            .opacity(shown ? 1 : 0).allowsHitTesting(shown).accessibilityHidden(!shown)
+    }
+}
+
+extension Workspace {
+    /// 进展页的看板（没开编辑页时）：窗口最顶那一排写着四个列头（`boardTopRow`），那一排的页底渐变由各列自己垫，搜索收进"⋯"。
+    var boardOwnsTopRow: Bool { root == .progress && progressPane == .board && openCard == nil }
+
+    /// 进展页的会话段：那一排左边是项目范围，右边额度环与新会话。
+    var showsSessionsBar: Bool { root == .progress && progressPane == .sessions }
 }
 #endif

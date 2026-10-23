@@ -76,10 +76,15 @@ extension Workspace {
 
     func pressed(at point: CGPoint) { press.record(point) }
 
+    /// 点它进的是会话（`enter`）：这时长按菜单里另有"打开任务"（`CardMenu.sections` 的 `opens`）。
+    func entersSession(_ task: Card, leaf: Bool, in agents: AgentLinks) -> Bool {
+        leaf && agents.items[task.id]?.state != nil
+    }
+
     /// 点一条任务（项目页的任务行、看板的任务卡同一条规则）：开工了的叶子（交给过会话，做完了也算）直接进它的会话；
     /// 没开工的、有子任务的打开任务气泡（改标题与正文，子任务在气泡里）。
     func enter(_ task: Card, leaf: Bool, in agents: AgentLinks) {
-        guard leaf, let session = agents.items[task.id]?.state else { return openTask(task) }
+        guard entersSession(task, leaf: leaf, in: agents), let session = agents.items[task.id]?.state else { return openTask(task) }
         openTask = nil
         openSession(session.id, sessionID: session.sessionID)
     }

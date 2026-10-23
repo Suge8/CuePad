@@ -25,7 +25,7 @@ enum ScrollAnchor {
 /// - 录屏驱动（画面就绪后循环或走一遍，各自的注释写参数）：`-CuePadCycle`（`DebugScene+PiDemo.swift`）；`-CuePadWake`、`-CuePadRelay`、`-CuePadFlightLog`、`-CuePadNoAsks`、
 ///   `-CuePadCueSays`、`-CuePadVisitCue`、`-CuePadClosed`、`-CuePadReopen`（`DebugScene+CueDrivers.swift`）；`-CuePadCueFlow`、`-CuePadCueFlowLog`（`DebugScene+CueFlow.swift`）；
 /// - `-CuePadForeground YES`（仅 Mac）：允许占前台（本机构建默认在后台）；只有下面几项真占，规则见 `DebugForeground` 与 docs/verify.md「占前台」；
-/// - `-CuePadClick x,y[;x,y|esc|return…]`、`-CuePadRightClick x,y`（仅 Mac；右键与要截系统菜单的要 `-CuePadForeground YES`，其余在后台点）：就绪后在主窗口里按顺序左键点几下（`esc`、`return` 是按那个键）、或右键点一下，打开那里的系统菜单、任务气泡再截图、录屏（`openMenuIfAsked`，见 `DebugMenus+Mac.swift`）；
+/// - `-CuePadClick x,y[;x,y|esc|return|type:文字…]`、`-CuePadRightClick x,y`（仅 Mac；右键与要截系统菜单的要 `-CuePadForeground YES`，其余在后台点）：就绪后在主窗口里按顺序左键点几下（`esc`、`return` 是按那个键）、或右键点一下，打开那里的系统菜单、任务气泡再截图、录屏（`openMenuIfAsked`，见 `DebugMenus+Mac.swift`）；
 /// - `-CuePadCueBrain <可执行文件>`（仅 Mac）：Cue 的大脑换成这个替身（如 `scripts/cue-brain-stub.py`），量值班开销用（docs/verify.md「性能测量」）；
 /// - `-CuePadDockTour YES`（iPhone）：就绪后按固定节奏走一遍底部那一排，录换去处的过渡（`dockTourIfAsked`）；
 ///   `-CuePadNotice <文字>`：就绪前弹一条提示（`noticeIfAsked`）；`-CuePadQuiet YES`（iOS）：不弹演示会话的前台横幅；`-CuePadPlacesOpen YES`（cue 画面）：Cue 页底部的"⋯"展开着；
@@ -38,8 +38,9 @@ enum ScrollAnchor {
 /// - `-CuePadNoIdeas YES`：`-CuePadProject` 那个项目的灵感都移到回收站，看项目页没有灵感时的空态（改的是库本身，之后的画面也没有这些灵感：配一个新的 `CUEPAD_SHOT_LIBRARY`）；
 /// - `-CuePadTasksOpen YES`：项目页任务纸的"还有 N 条"与"已完成 M"一开始就展开；
 /// - `-CuePadHover x,y[;x,y…]`（仅 Mac）：窗口里这几点上的按钮、行与卡画成指针停着的样子（坐标同 `-CuePadClick`，`presetHover`）；
-/// - `-CuePadShowsDone YES`：已完成列的"更早做完的"一开始就展开；`-CuePadColumn <列名>`（iPhone）：任务页打开时落在这一列；
+/// - `-CuePadShowsDone YES`：已完成列的"更早做完的"一开始就展开；
 ///   `-CuePadBusyBoard YES`（配 tasks 画面与 `-CuePadDemo YES`）：推进中里再放几件 Agent 正在多步推进的任务（`seedBusyBoard`）；
+///   `-CuePadCanvasSteps YES`（配 tasks 画面）：待办里一件写了正文、有三个子任务的任务，看任务气泡的正文与子任务（`seedCanvasSteps`）；
 /// - `-CuePadCueNow <woke|delegating|asks|done|afterDone|crowded|quiet|away>`：Cue 此刻钉成这份样例（`CueNowSamples`），页头、侧栏、小组件与实时活动都按它画；
 ///   `-CuePadCueCycle YES`：就绪后轮流走过各份样例（`cueNowTourIfAsked`），录切换；
 /// - `-CuePadCatalogFailure YES`：项目目录读取直接报错（重试也一样），核对读取失败画面；
@@ -120,7 +121,6 @@ enum DebugScene {
         #if os(iOS)
         preset.alertStatus = alertStatus
         if defaults.string(forKey: "CuePadSearchScope") == "sessions" { preset.searchScope = .sessions }
-        preset.boardColumn = TaskBoard.Column.allCases.first { $0.title == defaults.string(forKey: "CuePadColumn") }
         let panel = defaults.string(forKey: "CuePadCuePanel")
         preset.cuePanelEnd = panel == "end"
         preset.cuePanelOpen = preset.cuePanelEnd || defaults.bool(forKey: "CuePadCuePanel")

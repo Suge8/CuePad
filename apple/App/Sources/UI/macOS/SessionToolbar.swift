@@ -69,8 +69,6 @@ struct PageTitleSlot: View {
     var body: some View {
         if let state = workspace.shownSessionHeader {
             title(state)
-        } else if workspace.root == .progress {
-            ProgressSegments()
         } else if workspace.root == .cue, workspace.pages.sidebar == .detailOnly {
             CueTitle()
                 .frame(height: Spacing.toolbarControl)

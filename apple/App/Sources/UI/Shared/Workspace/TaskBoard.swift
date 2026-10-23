@@ -15,6 +15,13 @@ nonisolated struct TaskBoard: Sendable, Equatable {
 
         var id: Self { self }
 
+        /// 一件顶层任务此刻在哪一列：分列的唯一规则，看板（`read`）与任务气泡的列头都按它。被等你占着的只在等你，Cue 在做的只在推进中，其余按状态。
+        static func of(_ task: Card, in tally: CueTally) -> Column {
+            if tally.held.contains(task.id) { return .waiting }
+            if tally.advancing.contains(where: { $0.task?.id == task.id }) { return .advancing }
+            return task.status == .done ? .done : .todo
+        }
+
         var title: String {
             switch self {
             case .todo: "待办"
@@ -133,8 +140,7 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         }
         let open = TaskTree(try store.tasks(.inProgress, .todo).flatMap(\.tasks))
         let tally = try store.cueTally()
-        let advanced = Set(tally.advancing.compactMap(\.task?.id))
-        let finished = tally.free(try store.tasksDone())
+        let finished = try store.tasksDone().filter { Column.of($0, in: tally) == .done }
         let today = Calendar.current.startOfDay(for: now)
         let split = finished.firstIndex { ($0.completedAt ?? .distantPast) < today } ?? finished.endIndex
         let results = try store.cueResultShots(of: finished)
@@ -145,7 +151,7 @@ nonisolated struct TaskBoard: Sendable, Equatable {
             return done
         }
         return TaskBoard(
-            todo: try tally.free(open.roots.compactMap(open.task).filter { !advanced.contains($0.id) }).map(item),
+            todo: try open.roots.compactMap(open.task).filter { Column.of($0, in: tally) == .todo }.map(item),
             advancing: try tally.advancing.map { work in Work(work: work, item: try work.task.map(item)) },
             waiting: try waits(tally.waiting, from: store, item: item),
             done: try finished[..<split].map(finishedItem),

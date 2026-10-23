@@ -36,7 +36,7 @@ enum DebugHooks {
         /// 后台截图里指针进不来，合成的鼠标移动事件也不触发不在前台的应用的悬停。一张图里看几处时给几个点。
         var hovered: [CGPoint] = []
         #endif
-        /// 任务页已完成列的"更早做完的"一开始就展开（`-CuePadShowsDone`）。
+        /// 进展页已完成列的"更早做完的"一开始就展开（`-CuePadShowsDone`）。
         var showsDone = false
         /// Cue 此刻钉成这一份样例（`-CuePadCueNow <样例>`，`CueNowSamples`）：页头、侧栏、小组件与实时活动都按它画，截各态用。
         var cueNow: CueNow?
@@ -45,8 +45,6 @@ enum DebugHooks {
         #if os(iOS)
         /// 设置页通知那一行显示的状态（`-CuePadAlertStatus`；演示模式没有同步，真实状态出不来）。
         var alertStatus: PiAlertStatus?
-        /// 手机任务页打开时落在哪一列（`-CuePadColumn <列名>`）。
-        var boardColumn: TaskBoard.Column?
         /// 搜索页一打开在哪个范围（`-CuePadSearchScope sessions`）。
         var searchScope = SearchScreen.Scope.cards
         /// Cue 页头一出现就展开成面板（`-CuePadCuePanel YES`；`end` 再滚到面板底，看记忆）。

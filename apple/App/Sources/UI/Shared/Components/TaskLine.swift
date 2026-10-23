@@ -142,14 +142,7 @@ struct TaskLine: View {
             .row()
             .benchSpot(task.id)
             .onTapGesture(perform: open)
-            .contextMenu {
-                // 点行进的是会话时，任务气泡从这里打开
-                if subtasks == nil, agents.items[task.id] != nil {
-                    Button("打开任务", icon: .task) { workspace.openTask(task) }
-                    Divider()
-                }
-                CardActions(card: task, leaf: subtasks == nil)
-            }
+            .contextMenu { CardActions(card: task, leaf: subtasks == nil, opens: workspace.entersSession(task, leaf: subtasks == nil, in: agents)) }
             .padding(.vertical, 1)
     }
     #endif

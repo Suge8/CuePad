@@ -4,7 +4,7 @@ import Foundation
 /// - 等你：Cue 带选项问你、还没结束的消息（`cueMessagesWaitingForYou`），加上会话里在等你回答的（`sessionsAskingYou`，规则在 `PiSessionState.asksYou`）。
 ///   一处在等就是一件：同一件任务上 Cue 在问、它的会话也在问，算两件。每件带上它落在哪件顶层任务上（消息的 `taskID`、会话归的那件 `sessionOwners`），没落在任务上的为 nil。
 /// - 被等你占着的（`held`）：有一件等你落在它上面的顶层任务。一件事只在一处：它只算等你，不论状态是待办、进行中还是做完——
-///   推进中、任务看板的待办与做完、实时活动的做完都先去掉它们（`free`）。
+///   推进中在这里去掉它们；任务看板与实时活动按列分时也先看它（App 里的 `TaskBoard.Column.of`）。
 /// - 推进中：Cue 此刻在做的（`CueBoard.active`，即它信封里的"在做"）里不在等你的：被等你占着的事与在问你的会话去掉；先后同看板。
 ///   进行中而会话都结束了、没人在做的事不算，它留在你的任务清单里（任务看板的待办）。
 public struct CueTally: Equatable, Sendable {
@@ -31,12 +31,6 @@ public struct CueTally: Equatable, Sendable {
   public var waiting: [Wait]
 
   public var held: Set<UUID> { Set(waiting.compactMap(\.task)) }
-
-  /// 去掉被等你占着的（`held`）：推进中，与看板、实时活动按状态分的那几份都经它。
-  public func free(_ tasks: [Card]) -> [Card] {
-    let held = self.held
-    return tasks.filter { !held.contains($0.id) }
-  }
 
   public init(advancing: [CueWork], waiting: [Wait]) {
     self.advancing = advancing

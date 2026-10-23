@@ -102,6 +102,7 @@ extension DebugScene {
                 await seedCue(workspace.services)
                 await seedBusyBoard(workspace.services.store)
             }
+            await seedCanvasSteps(workspace.services.store)
             workspace.projectScope = project
             workspace.show(.progress)
         case "task":

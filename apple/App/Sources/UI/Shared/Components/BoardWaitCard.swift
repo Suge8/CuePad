@@ -5,7 +5,7 @@ import SwiftUI
 /// - 抬头一行：项目小图形（看全部项目时；选了项目范围不画；Mac 上悬停是项目联动，`BoardProjectGlyph`）、哪件事（`TaskBoard.Wait.title`；
 ///   做完了还在问的也照常写、不划线），右边是等了多久（`TaskBoard.Wait.since`）。谁在问不写在这里，只靠头像。点抬头去回答的地方（`BoardLink`）：
 ///   会话在问的进会话，Cue 问的去 Cue 页那条提问。
-/// - 谁在问贴在左下（Cue 的头像，会话在问的是圆里这家 Agent 的品牌标，同推进中的会话卡，`WaitAsker`），旁边一颗 Cue 页同款的气泡（`cueBubble`，泳道上是纯白）：
+/// - 谁在问贴在左下（Cue 的头像，会话在问的是圆里这家 Agent 的品牌标，同推进中的会话卡，`WaitAsker`），旁边一颗 Cue 页同款的气泡（`cueBubble`，看板上是纯白）：
 ///   问句（`TaskBoard.Wait.asked`）；Cue 的提问下一行是它依据的规矩与范围（"推送代码前先问你 · 圆桌"，小一号、最淡的墨），会话的是问题的说明（选项不写进来）。
 /// - 气泡下方是怎么答（`WaitAnswer`，按问题种类给，靠右）；回答框左边让出头像那一格。
 struct BoardWaitCard: View {
@@ -98,6 +98,7 @@ struct BoardReply: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
+    @FocusState private var writing: Bool
 
     private var box: Binding<ComposerDraft> { services.settings.replyDraftBinding(for: session.id) }
     private var canSend: Bool { services.reachesPiHost && !box.wrappedValue.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
@@ -109,6 +110,7 @@ struct BoardReply: View {
                 .textFieldStyle(.plain).font(Typography.secondary).lineLimit(1...4)
                 .padding(.vertical, Self.textInset)
                 .frame(minHeight: ComposerMetrics.glyphTarget)
+                .focused($writing)
                 .onSubmit(send)
             Button(action: send) { SendGlyph(canSend ? .ready : .idle) }
                 .buttonStyle(PressStyle(.button))
@@ -117,6 +119,10 @@ struct BoardReply: View {
         }
         .padding(.leading, 12).padding(.trailing, 3).padding(.vertical, 3)
         .background(palette.fill, in: .rect(cornerRadius: 18, style: .continuous))
+        #if os(iOS)
+        .staysAboveKeyboard(while: writing, text: box.wrappedValue.text)
+        .preference(key: BoardReplying.self, value: writing)
+        #endif
     }
 
     /// 字上下各让出的空：一行字（约 16）加两边正好是钮的点按高，多行时最后一行仍落在钮的中线附近。
@@ -129,3 +135,11 @@ struct BoardReply: View {
         }
     }
 }
+
+#if os(iOS)
+/// 看板里有回答框正在写（手机竖版看板据此让别的行退开，`PhoneBoard`）。
+struct BoardReplying: PreferenceKey {
+    static let defaultValue = false
+    static func reduce(value: inout Bool, nextValue: () -> Bool) { value = value || nextValue() }
+}
+#endif
