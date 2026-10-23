@@ -75,6 +75,8 @@ struct BoardColumn: View {
                     .background(alignment: .top) { BoardLane(column: column, targeted: targeted).padding(.bottom, -Self.runout) }
             }
             .scrollBounceBehavior(.basedOnSize)
+            // 列里一滚就收键盘（等你列的回答框）：手机看板没有别处收得起它
+            .scrollDismissesKeyboard(.immediately)
         } else {
             VStack(spacing: 0) {
                 header

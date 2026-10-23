@@ -165,6 +165,7 @@ struct BoardReply: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
+    @FocusState private var writing: Bool
 
     private var box: Binding<ComposerDraft> { services.settings.replyDraftBinding(for: session.id) }
     private var canSend: Bool { services.reachesPiHost && !box.wrappedValue.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
@@ -176,6 +177,7 @@ struct BoardReply: View {
                 .textFieldStyle(.plain).font(Typography.secondary).lineLimit(1...4)
                 .padding(.vertical, Self.textInset)
                 .frame(minHeight: ComposerMetrics.glyphTarget)
+                .focused($writing)
                 .onSubmit(send)
             Button(action: send) { SendGlyph(canSend ? .ready : .idle) }
                 .buttonStyle(PressStyle(.button))
@@ -184,6 +186,9 @@ struct BoardReply: View {
         }
         .padding(.leading, 12).padding(.trailing, 3).padding(.vertical, 3)
         .background(palette.fill, in: .rect(cornerRadius: 18, style: .continuous))
+        #if os(iOS)
+        .staysAboveKeyboard(while: writing, text: box.wrappedValue.text)
+        #endif
     }
 
     /// 字上下各让出的空：一行字（约 16）加两边正好是钮的点按高，多行时最后一行仍落在钮的中线附近。
