@@ -2,6 +2,7 @@ import SwiftUI
 
 /// 看板一列的泳道（`BoardColumn` 铺在身后）：从列头起整列铺到窗口底，按列上色（色值是 `Palette` 的 `lane…`），上沿一线白高光，
 /// 上两角圆角是卡片圆角加卡离泳道边的空（同心）。拖进来时再铺一层选中底。
+/// 只有顶上那一截是圆角形状，往下是纯色：手机的泳道跟着卡滚、往下伸出一屏多（`BoardColumn.headerScrolls`），纯色的一块不按面积画。
 struct BoardLane: View {
     let column: TaskBoard.Column
     let targeted: Bool
@@ -10,15 +11,25 @@ struct BoardLane: View {
     static let radius = BoardCardMetrics.radius + BoardCardMetrics.inset
 
     var body: some View {
-        let shape = UnevenRoundedRectangle(topLeadingRadius: Self.radius, topTrailingRadius: Self.radius, style: .continuous)
-        // 高光是垫在下面的一层亮色、泳道往下让出一线：圆角处跟着弯，不用渐变描边（整列面积铺渐变，列一变宽整面重画）
         ZStack {
-            shape.fill(palette.sheen)
-            shape.fill(column.lane(palette)).padding(.top, 1)
-            if targeted { shape.fill(palette.selection).transition(.opacity) }
+            Self.capped(column.lane(palette), sheen: palette.sheen)
+            if targeted { Self.capped(palette.selection, sheen: nil).transition(.opacity) }
         }
         .animation(HandOff.quick, value: targeted)
         .ignoresSafeArea(edges: .bottom)
+    }
+
+    private static func capped(_ color: Color, sheen: Color?) -> some View {
+        let cap = UnevenRoundedRectangle(topLeadingRadius: radius, topTrailingRadius: radius, style: .continuous)
+        return VStack(spacing: 0) {
+            // 高光是垫在下面的一层亮色、泳道往下让出一线：圆角处跟着弯，不用渐变描边（整列面积铺渐变，列一变宽整面重画）
+            ZStack {
+                if let sheen { cap.fill(sheen) }
+                cap.fill(color).padding(.top, sheen == nil ? 0 : 1)
+            }
+            .frame(height: radius)
+            color
+        }
     }
 }
 

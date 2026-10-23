@@ -20,7 +20,7 @@ struct BoardColumns: View {
         ScrollView(.horizontal) {
             HStack(alignment: .top, spacing: Self.gap) {
                 ForEach(TaskBoard.Column.allCases) { column in
-                    BoardColumn(column: column, board: board, adding: $adding, newTaskProject: newTaskProject, titled: true)
+                    BoardColumn(column: column, board: board, adding: $adding, newTaskProject: newTaskProject)
                         .containerRelativeFrame(.horizontal) { width, _ in max(Self.minColumn, (width - Self.gap * 3) / 4) }
                 }
             }
@@ -44,8 +44,8 @@ struct BoardColumn: View {
     /// 待办顶上浮出添加任务那一行（"+ 新任务"）；新任务落在 `newTaskProject`。
     @Binding var adding: Bool
     let newTaskProject: UUID?
-    /// 最上面带列头（四列并排时；手机一屏一列由顶上的分段写列名与数）。
-    var titled = false
+    /// 列头跟着卡一起竖着滚（手机）：整条泳道从页顶的玻璃与状态栏那一条下面滚过去（`PhoneBoard`）；否则列头钉在泳道顶上（Mac、宽屏 iPad）。
+    var headerScrolls = false
     @Environment(Workspace.self) private var workspace
     @Environment(\.cardAgents) private var agents
     @Environment(\.palette) private var palette
@@ -59,23 +59,42 @@ struct BoardColumn: View {
     @State private var opened: PreviewOpening?
 
     var body: some View {
-        VStack(spacing: 0) {
-            if titled {
-                BoardColumnHeader(column: column, count: board.count(column)).padding(.horizontal, TaskMetrics.cardPadding + BoardCardMetrics.inset)
-            }
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: BoardCardMetrics.gap) { content }
-                    .padding(.horizontal, BoardCardMetrics.inset).padding(.top, titled ? 0 : BoardCardMetrics.inset).padding(.bottom, 24)
-                    .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: ids)
-            }
-            .scrollBounceBehavior(.basedOnSize)
-        }
-        .background { BoardLane(column: column, targeted: targeted) }
+        lane
         .dropDestination(for: String.self) { ids, _ in
             drop(ids, before: nil)
         } isTargeted: { targeted = $0 && column != .todo && column != .waiting }
         .taskCheck(finishing?.task, subtasks: finishing?.steps, check: $check)
         .modifier(ShotPresenter(column: column, opened: $opened))
+    }
+
+    @ViewBuilder private var lane: some View {
+        if headerScrolls {
+            // 泳道铺在滚动的内容后面、跟着列头走，往下伸出卡的末尾（一直铺到屏幕底，回弹时也不露底）
+            ScrollView {
+                VStack(spacing: 0) { header; cards }
+                    .background(alignment: .top) { BoardLane(column: column, targeted: targeted).padding(.bottom, -Self.runout) }
+            }
+            .scrollBounceBehavior(.basedOnSize)
+        } else {
+            VStack(spacing: 0) {
+                header
+                ScrollView { cards }.scrollBounceBehavior(.basedOnSize)
+            }
+            .background { BoardLane(column: column, targeted: targeted) }
+        }
+    }
+
+    /// 泳道往卡的末尾以下伸出多长：比屏高，卡少时也铺满。
+    private static let runout: CGFloat = 2000
+
+    private var header: some View {
+        BoardColumnHeader(column: column, count: board.count(column)).padding(.horizontal, TaskMetrics.cardPadding + BoardCardMetrics.inset)
+    }
+
+    private var cards: some View {
+        LazyVStack(alignment: .leading, spacing: BoardCardMetrics.gap) { content }
+            .padding(.horizontal, BoardCardMetrics.inset).padding(.bottom, 24)
+            .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: ids)
     }
 
     private var ids: [String] {

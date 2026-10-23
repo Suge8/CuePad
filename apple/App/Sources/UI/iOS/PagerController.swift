@@ -360,11 +360,17 @@ private final class PagerView: UIView {
 private final class PagerArbiter: NSObject, UIGestureRecognizerDelegate {
     enum Direction { case previous, next }
 
+    /// 离屏幕左右边多近起手算"贴边"（同系统左缘返回的宽）。
+    static let edge: CGFloat = 20
+
     func gestureRecognizerShouldBegin(_ recognizer: UIGestureRecognizer) -> Bool {
         guard let pan = recognizer as? UIPanGestureRecognizer, let view = pan.view else { return false }
         let velocity = pan.velocity(in: view)
         let motion = velocity == .zero ? pan.translation(in: view) : velocity
         guard abs(motion.x) > abs(motion.y) else { return false }
+        // 从屏幕边缘起手的一律是切页：页里横着能滚的内容（看板）不先滚
+        let start = pan.location(in: view).x - pan.translation(in: view).x
+        if start < Self.edge || start > view.bounds.width - Self.edge { return true }
         return !Self.yields(toward: motion.x < 0 ? .next : .previous, at: pan.location(in: view), in: view)
     }
 

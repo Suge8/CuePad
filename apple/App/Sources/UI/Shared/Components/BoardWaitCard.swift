@@ -14,19 +14,21 @@ struct BoardWaitCard: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.boardCompact) private var compact
     /// 正在答的那条（写成后它从等你里消失，写不成就清掉）。
     @State private var ending = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: Self.gap) {
             header.padding(.horizontal, Self.headerInset)
+            // 原型 B 的半屏列：谁在问让出那一格，气泡与回答框占满列宽
             HStack(alignment: .bottom, spacing: Self.whoGap) {
-                asker.frame(width: Self.who)
+                if !compact { asker.frame(width: Self.who) }
                 bubble
             }
             switch wait.wait {
             case .message(let message, _): choices(message)
-            case .session(let session, _): BoardReply(session: session).padding(.leading, Self.who + Self.whoGap)
+            case .session(let session, _): BoardReply(session: session).padding(.leading, compact ? 0 : Self.who + Self.whoGap)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -94,7 +96,7 @@ struct BoardWaitCard: View {
 
     /// 要你定什么那一句。不画问号：列名已经说了在等你。
     private func question(_ text: String) -> some View {
-        Text(CueQuestionLine.keepingTail(text)).font(Self.questionFont).foregroundStyle(palette.ink)
+        Text(CueQuestionLine.keepingTail(text)).font(compact ? .subheadline.weight(.medium) : Self.questionFont).foregroundStyle(palette.ink)
     }
 
     /// 依据的规矩与范围："推送代码前先问你 · 圆桌"；规矩那一类是他的原话。认不出类别的旧提问没有这一行。

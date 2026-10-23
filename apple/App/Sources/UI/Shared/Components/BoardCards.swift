@@ -4,13 +4,7 @@ import SwiftUI
 extension View {
     /// 看板上一张卡的外形（四列同一种）：纸面（`paper`），同一种卡一样高（`BoardCardMetrics`：推进中带线的卡 `advancingHeight`，其余 `TaskMetrics.cardHeight`），
     /// 左右内边距与圆角见 `TaskMetrics`。平放的纸不加模糊阴影（侧栏开合时整面墙每帧重画，`paper` 的注释）：靠泳道的淡色把纸托出来。
-    func boardCard(advancing: Bool) -> some View {
-        let height = advancing ? BoardCardMetrics.advancingHeight : TaskMetrics.cardHeight
-        return padding(.horizontal, TaskMetrics.cardPadding)
-            .frame(maxWidth: .infinity, minHeight: height, maxHeight: height, alignment: .leading)
-            .paper(radius: TaskMetrics.cardRadius)
-            .contentShape(.rect(cornerRadius: TaskMetrics.cardRadius, style: .continuous))
-    }
+    func boardCard(advancing: Bool) -> some View { modifier(BoardCardFrame(advancing: advancing)) }
 
     /// 项目联动（Mac）：指针停在侧栏的项目行或卡上的项目小图形上时（`Workspace.hoveredProject`），别的项目的卡淡下去，这个项目的不动。
     /// 只这一个小修饰读它：指针换项目时重算的是各卡的透明度，不是整张卡。没有项目的（Cue 的一般提问）跟着淡。
@@ -20,6 +14,33 @@ extension View {
         #else
         self
         #endif
+    }
+}
+
+extension EnvironmentValues {
+    /// 原型 B（proto/phone-board）：窄列里的卡收紧成两行标题。
+    @Entry var boardCompact = false
+}
+
+private struct BoardCardFrame: ViewModifier {
+    let advancing: Bool
+    @Environment(\.boardCompact) private var compact
+
+    func body(content: Content) -> some View {
+        let height = (advancing ? BoardCardMetrics.advancingHeight : TaskMetrics.cardHeight) + (compact ? BoardCardMetrics.compactExtra : 0)
+        content.padding(.horizontal, compact ? TaskMetrics.cardPadding - 4 : TaskMetrics.cardPadding)
+            .frame(maxWidth: .infinity, minHeight: height, maxHeight: height, alignment: .leading)
+            .paper(radius: TaskMetrics.cardRadius)
+            .contentShape(.rect(cornerRadius: TaskMetrics.cardRadius, style: .continuous))
+    }
+}
+
+/// 卡上的标题：一行；原型 B 的窄列里两行、小一档。
+struct BoardTitleStyle: ViewModifier {
+    @Environment(\.boardCompact) private var compact
+
+    func body(content: Content) -> some View {
+        content.font(compact ? .subheadline : TaskMetrics.lineFont).lineLimit(compact ? 2 : 1)
     }
 }
 
@@ -87,7 +108,7 @@ struct BoardSessionCard: View {
                 .font(.system(size: TaskMetrics.cardLead * 0.85)).foregroundStyle(resting ? palette.ink3 : palette.ink2)
                 .frame(width: TaskMetrics.cardLead, height: TaskMetrics.cardLead)
                 if let project { BoardProjectGlyph(project: project) }
-                Text(session.title).font(TaskMetrics.lineFont).foregroundStyle(resting ? palette.ink2 : palette.ink).lineLimit(1)
+                Text(session.title).modifier(BoardTitleStyle()).foregroundStyle(resting ? palette.ink2 : palette.ink)
             }
             .boardCard(advancing: true)
         }
@@ -106,6 +127,7 @@ struct BoardCardLayout<Lead: View, Trailing: View>: View {
     let lead: Lead
     let trailing: Trailing
     @Environment(\.palette) private var palette
+    @Environment(\.boardCompact) private var compact
 
     init(advancing: Bool, pulse: BoardPulse = BoardPulse(), moves: Bool = true, steps: TaskProgress? = nil,
          @ViewBuilder lead: () -> Lead, @ViewBuilder trailing: () -> Trailing = { EmptyView() }) {
@@ -124,7 +146,7 @@ struct BoardCardLayout<Lead: View, Trailing: View>: View {
             if advancing, pulse.speaks { word }
             trailing
         }
-        .frame(height: advancing ? BoardCardMetrics.titleRow : nil)
+        .frame(height: advancing ? BoardCardMetrics.titleRow + (compact ? BoardCardMetrics.compactExtra : 0) : nil)
         .frame(maxHeight: .infinity, alignment: advancing ? .top : .center)
         .padding(.top, advancing ? BoardCardMetrics.titleTop : 0)
         .overlay(alignment: .topLeading) {
@@ -136,7 +158,7 @@ struct BoardCardLayout<Lead: View, Trailing: View>: View {
                 }
                 .frame(minHeight: WaveStrip.height, alignment: .bottomLeading)
                 .padding(.leading, TaskMetrics.cardLead + Self.gap)
-                .padding(.top, BoardCardMetrics.waveTop)
+                .padding(.top, BoardCardMetrics.waveTop + (compact ? BoardCardMetrics.compactExtra : 0))
             }
         }
     }

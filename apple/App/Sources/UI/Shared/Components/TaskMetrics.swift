@@ -51,6 +51,8 @@ enum BoardCardMetrics {
     static let gap: CGFloat = 8
     static var radius: CGFloat { TaskMetrics.cardRadius }
     static let waveGap: CGFloat = 8
+    /// 原型 B：两行标题比一行多出的高。
+    static let compactExtra: CGFloat = 18
     #if os(macOS)
     static let titleTop: CGFloat = 8
     static let titleRow: CGFloat = 20
