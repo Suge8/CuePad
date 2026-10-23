@@ -113,14 +113,14 @@ enum BoardRowMetrics {
     static let spine: CGFloat = 32
     /// 行头玻璃的高（四行同一个，行至少这么高）：记号、三个字的竖排名与数，上下各留一点。
     static let spineHeight: CGFloat = 92
-    /// 卡静止时离屏幕左边：行头加卡与卡之间的空，停着的上一张卡正好整个收在玻璃下面。
+    /// 卡静止时离屏幕左边：行头加卡与卡之间的空，停着的上一张卡横向收在玻璃下面；比玻璃高的行里它在玻璃上下露出一截。
     static let lead: CGFloat = spine + gap
     static let margin: CGFloat = 12
     static let gap: CGFloat = 8
     static let inset: CGFloat = 8
 }
 
-/// 行的左端：记号、竖着的名字、数，与第一排卡的上沿齐，卡从它右边滑过。行再矮也写全：没有按列的底色，认行靠这几个字。
+/// 行头玻璃里的内容：记号、竖着的名字、数，在玻璃里居中（玻璃在行里竖直居中，卡从它下面滑过）。行再矮也写全：没有按列的底色，认行靠这几个字。
 private struct BoardRowSpine: View {
     let column: TaskBoard.Column
     let count: Int
