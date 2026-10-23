@@ -159,10 +159,12 @@ struct TaskFlowTests {
         let workspace = Workspace(services: rig.services)
         let body = "上线前检查\n把 changelog 过一遍"
         let check = try await store.createTask(body)
-        let crash = try await store.createCard(body: "看下崩溃率")
+        let crash = try await store.createCard(body: "看下 {{平台}} 崩溃率，{{阈值}}")
+        try await store.updateCard(crash.id) { $0.variableValues = ["平台": "iOS"] }
         try await workspace.mergeIdea(crash.id, into: check.id)
         #expect(workspace.notice?.text == "已接到「上线前检查」的正文后面")
-        #expect(try await store.card(check.id)?.body == body + "\n\n看下崩溃率")
+        // 灵感填好的变量随正文接过去，没填的留着占位符
+        #expect(try await store.card(check.id)?.body == body + "\n\n看下 iOS 崩溃率，{{阈值}}")
         try await #require(workspace.notice?.action).run()
         #expect(try await store.card(check.id)?.body == body)
         #expect(try await store.cards(in: Project.defaultID).map(\.id) == [crash.id])

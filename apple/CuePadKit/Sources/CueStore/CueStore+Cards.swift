@@ -50,7 +50,7 @@ extension CueStore {
     }
   }
 
-  /// 把灵感接到任务正文后面，灵感进回收站，一个事务（拖一条灵感到任务上）：灵感说的是这件事的一部分，接上后在任务里接着读、开工时一起交出去。
+  /// 把灵感接到任务正文后面（填好的变量换成值，没填的留占位符），灵感进回收站，一个事务（拖一条灵感到任务上）：灵感说的是这件事的一部分，接上后在任务里接着读、开工时一起交出去。
   /// 返回回执（`undo` 把正文改回、灵感恢复）。灵感不在了抛 `notFound`，落点不是任务抛 `notATask`。
   @discardableResult
   public func mergeIdea(_ idea: UUID, into task: UUID) throws -> CardChange {
@@ -58,7 +58,8 @@ extension CueStore {
       guard let card = try find(Card.self, idea), !card.isTask, card.deletedAt == nil else { throw CueStoreError.notFound }
       guard let target = try find(Card.self, task) else { throw CueStoreError.notFound }
       guard target.isTask else { throw CueStoreError.notATask }
-      let now = Date.stamp, added = card.body.trimmingCharacters(in: .whitespacesAndNewlines)
+      // 灵感填好的变量值随正文写进去：值记在灵感上，接过去后任务读不到，留着占位符就丢了它的意思
+      let now = Date.stamp, added = CueVariables.fill(card.body, values: card.variableValues).trimmingCharacters(in: .whitespacesAndNewlines)
       if !added.isEmpty {
         let kept = target.body.trimmingCharacters(in: .whitespacesAndNewlines)
         try db.run("UPDATE cards SET body = ?, modifiedAt = ? WHERE id = ?", [kept + "\n\n" + added, now, task])
