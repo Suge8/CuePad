@@ -86,8 +86,14 @@ struct BoardColumn: View {
         #endif
     }
 
-    /// 列头是一块写字玻璃浮在卡上，卡从它后面滚过，不在它下沿裁掉（docs/ui.md 沉浸式的栏）。
+    /// 列头浮在卡上，卡从它后面滚过，不在它下沿裁掉（docs/ui.md 沉浸式的栏）：Mac 上排进窗口最顶那一排（`boardTopRow`），iPad 是一块写字玻璃。
     private var columnLane: some View {
+        #if os(macOS)
+        ScrollView { cards }
+            .scrollBounceBehavior(.basedOnSize)
+            .boardTopRow(column: column, count: board.count(column))
+            .background { BoardLane(targeted: targeted) }
+        #else
         ScrollView { cards }
             .scrollBounceBehavior(.basedOnSize)
             .safeAreaPadding(.top, BoardColumnHeader.height + BoardCardMetrics.inset)
@@ -98,6 +104,7 @@ struct BoardColumn: View {
                     .padding([.horizontal, .top], BoardCardMetrics.inset)
             }
             .background { BoardLane(targeted: targeted) }
+        #endif
     }
 
     private var isRow: Bool {
@@ -178,7 +185,7 @@ struct BoardColumn: View {
 
     @ViewBuilder private var newTask: some View {
         #if os(macOS)
-        NewTaskField(project: newTaskProject, choosesProject: true, autofocus: true)
+        NewTaskField(project: newTaskProject, choosesProject: true, autofocus: true) { adding = false }
             .padding(.horizontal, TaskMetrics.cardPadding)
             .paper(radius: TaskMetrics.cardRadius)
         #else

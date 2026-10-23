@@ -2,11 +2,14 @@ import CueStore
 import SwiftUI
 
 /// 一行新建任务：↩ 添加，保持焦点以便连续输入。`choosesProject` 时右边可换落到哪个项目（Mac 任务页跨项目）。
+/// 失焦且没写字时收回：点出来的那一行（`writing`）变回入口，`autofocus` 浮出的那一行交给 `dismiss`；写了字的留着字。Mac 上点这一行外面就算失焦（`resignsFocusOnOutsideClick`）。
 struct NewTaskField: View {
     let project: UUID?
     var choosesProject = false
     /// 出现时光标就在这一行（任务页：点"新任务"后直接写）。
     var autofocus = false
+    /// `autofocus` 浮出的那一行失焦且没写字时收回（任务页：收起添加那一行）。
+    var dismiss: (() -> Void)?
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     @State private var text = ""
@@ -28,6 +31,7 @@ struct NewTaskField: View {
                     .accessibilityLabel(prompt)
                     .focused($focused)
                     .onSubmit(add)
+                    .onChange(of: focused) { if !focused, text.trimmingCharacters(in: .whitespaces).isEmpty { collapse() } }
                     .task {
                         // 换成输入框的那一帧还没进窗口的响应链：下一帧再接键盘
                         await NextFrame.wait()
@@ -68,6 +72,13 @@ struct NewTaskField: View {
             #endif
         }
         .frame(minHeight: TaskMetrics.rowHeight)
+        #if os(macOS)
+        .resignsFocusOnOutsideClick()
+        #endif
+    }
+
+    private func collapse() {
+        if let dismiss { dismiss() } else { writing = false }
     }
 
     // 入口不用系统占位灰：那样看起来像不能点
