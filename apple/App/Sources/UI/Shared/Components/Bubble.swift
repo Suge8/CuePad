@@ -9,7 +9,7 @@ nonisolated enum BubbleSource: Equatable {
     case press(CGPoint)
     /// 没有来源（键盘、⌘K 里按 ↩、小组件链接）：没有尾巴，在窗口上方居中。
     case unanchored
-    /// 贴在底部的一张纸（手机原型 Q）：横向铺满、留出同样的边，从底边升起，拖它的把手往下关（`BubbleDrag`）。
+    /// 贴在底部的一张纸（手机的任务气泡，`TaskBubbleSlot`）：横向铺满、留出同样的边，从底边升起，拖它的把手往下关（`BubbleDrag`）。
     case bottom
 }
 

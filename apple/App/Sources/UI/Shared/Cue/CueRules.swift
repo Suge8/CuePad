@@ -115,7 +115,7 @@ nonisolated struct CueDigest: Equatable, Sendable {
     var state: CueState?
     /// 在跑的这一轮为什么醒（`CueStore.cueWaking`）：醒的时刻与"被谁叫醒"那一截；歇着、这一轮没记为 nil。
     var woke: Woke?
-    /// 今天做完的顶层任务（被等你占着的不算，同任务看板的已完成列），最近的在前。
+    /// 今天做完的顶层任务（看板已完成那一列今天的，`TaskBoard.Column.of`），最近的在前。
     var done: [Card]
 
     static let empty = CueDigest(
@@ -151,7 +151,7 @@ nonisolated struct CueDigest: Equatable, Sendable {
             lastYou: try store.cueLastYou().map { LastYou(said: $0.said, delivered: $0.delivered) },
             state: try store.cueState(),
             woke: try store.cueWaking().map { Woke(at: $0.at, text: try Self.woke($0.wake, store: store)) },
-            done: tally.free(try store.tasksDone(since: Calendar.current.startOfDay(for: .now))))
+            done: try store.tasksDone(since: Calendar.current.startOfDay(for: .now)).filter { TaskBoard.Column.of($0, in: tally) == .done })
     }
 
     /// 这一轮为什么醒，写成那一句的开头（"被 canvas-zoom 叫醒"）。

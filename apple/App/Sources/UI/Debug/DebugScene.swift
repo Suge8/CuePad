@@ -40,6 +40,7 @@ enum ScrollAnchor {
 /// - `-CuePadHover x,y[;x,y…]`（仅 Mac）：窗口里这几点上的按钮、行与卡画成指针停着的样子（坐标同 `-CuePadClick`，`presetHover`）；
 /// - `-CuePadShowsDone YES`：已完成列的"更早做完的"一开始就展开；
 ///   `-CuePadBusyBoard YES`（配 tasks 画面与 `-CuePadDemo YES`）：推进中里再放几件 Agent 正在多步推进的任务（`seedBusyBoard`）；
+///   `-CuePadCanvasSteps YES`（配 tasks 画面）：待办里一件写了正文、有三个步骤的任务，看任务气泡的正文与步骤（`seedCanvasSteps`）；
 /// - `-CuePadCueNow <woke|delegating|asks|done|quiet|away>`：Cue 此刻钉成这份样例（`CueNowSamples`），页头、侧栏、小组件与实时活动都按它画；
 ///   `-CuePadCueCycle YES`：就绪后轮流走过各份样例（`cueNowTourIfAsked`），录切换；
 /// - `-CuePadCatalogFailure YES`：项目目录读取直接报错（重试也一样），核对读取失败画面；
@@ -112,8 +113,6 @@ enum DebugScene {
         preset.largestType = defaults.bool(forKey: "CuePadLargestType")
         if defaults.bool(forKey: "CuePadTasksOpen") { preset.taskFold = TaskFold(showsAll: true, showsDone: true) }
         preset.showsDone = defaults.bool(forKey: "CuePadShowsDone")
-        preset.lane = defaults.string(forKey: "CuePadLane") ?? ""
-        preset.dropTarget = TaskBoard.Column.allCases.first { "\($0)" == defaults.string(forKey: "CuePadDropTarget") }
         preset.cueNow = defaults.string(forKey: "CuePadCueNow").flatMap { CueNowSamples.all[$0] }
         #if os(macOS)
         preset.hovered = hoverPoints

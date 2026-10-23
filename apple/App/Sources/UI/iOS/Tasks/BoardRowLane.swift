@@ -3,7 +3,7 @@ import SwiftUI
 
 /// 手机竖版看板的一行（`BoardColumn` 的 `row`，`PhoneBoard` 四行竖着排）：Mac 看板的一列转 90°——一行横贯全屏，
 /// 行头（`BoardLaneMark`、竖排的名字、数）钉在左端，卡在它右边横着排，放不下就在这一行里横划、按卡停（`viewAligned`）；
-/// 卡滑过行头时在它右沿淡出，不硬切。行不按列铺色：分组靠留白、行头与 `LaneLook`（原型）。
+/// 卡滑过行头时在它右沿淡出，不硬切。行没有底（`BoardLane`）：分组靠留白与行头。
 /// 一格多高按列定、随动态字体放大（`BoardRowStyle`）：卡上标题小一档、可折两行，推进中下面是线与状态词，等你是抬头、三行问句、选项或回答框。
 /// 待办、推进中有两件以上叠两排（按列填，读的顺序不变），其余一排；空行与只有"更早做完的 N"的已完成行收成一排矮格；行高取格子与行头里高的那个（行头的名字总写全）。
 /// 卡多卡少不改行高（除了空与不空、一件与两件），行在下面增减，上面的行不动。行里的卡在懒加载的横排里，只建看得见的几张。
@@ -32,17 +32,9 @@ struct BoardRowLane<Above: View, Content: View>: View {
             }
         }
         .fixedSize(horizontal: false, vertical: true)
-        .overlay(alignment: .leading) {
-            BoardLaneRule(column: column, axis: .vertical).padding(.leading, BoardRowMetrics.spine - BoardLaneRule.width)
-        }
         .padding(.vertical, BoardRowMetrics.inset)
-        .background { BoardLane(column: column, targeted: targeted) }
-        // 托盘四角圆、不贴屏幕边：卡滑到托盘右沿跟着圆角裁
-        .clipShape(.rect(cornerRadius: tray ? BoardLane.radius : 0, style: .continuous))
-        .padding(.horizontal, tray ? BoardRowMetrics.trayMargin : 0)
+        .background { BoardLane(targeted: targeted) }
     }
-
-    private var tray: Bool { LaneLook.current == .tray }
 
     private var strip: some View {
         let height = cellHeight
@@ -127,8 +119,6 @@ enum BoardRowMetrics {
     static let margin: CGFloat = 12
     static let gap: CGFloat = 8
     static let inset: CGFloat = 8
-    /// 托盘（D3）离屏幕左右边。
-    static let trayMargin: CGFloat = 8
 }
 
 /// 行的左端：记号、竖着的名字、数，与第一排卡的上沿齐，卡从它右边滑过。行再矮也写全：没有按列的底色，认行靠这几个字。

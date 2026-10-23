@@ -36,10 +36,6 @@ enum DebugHooks {
         /// 后台截图里指针进不来，合成的鼠标移动事件也不触发不在前台的应用的悬停。一张图里看几处时给几个点。
         var hovered: [CGPoint] = []
         #endif
-        /// 原型：看板的分组画法（`-CuePadLane D1|D2|D3`，`LaneLook`），定稿后删。
-        var lane = ""
-        /// 看板这一列一出现就画成拖着卡停在上面的样子（`-CuePadDropTarget advancing|done`）：截图里没有真拖。
-        var dropTarget: TaskBoard.Column?
         /// 任务页已完成列的"更早做完的"一开始就展开（`-CuePadShowsDone`）。
         var showsDone = false
         /// Cue 此刻钉成这一份样例（`-CuePadCueNow <样例>`，`CueNowSamples`）：页头、侧栏、小组件与实时活动都按它画，截各态用。

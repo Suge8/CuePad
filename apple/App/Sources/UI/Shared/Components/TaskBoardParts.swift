@@ -14,8 +14,8 @@ struct BoardColumns: View {
     /// 一张卡要放下圈、项目小图形与一行够读的标题：iPad 竖屏放三列多一点，横滑看第四列。
     private static let minColumn: CGFloat = 260
     #endif
-    /// 列与列之间：托盘之间窄一点，没有底时靠留白分开要宽。
-    private static let gap: CGFloat = LaneLook.current == .tray ? 12 : 20
+    /// 列与列之间：列没有底，靠这段留白分开。
+    private static let gap: CGFloat = 20
 
     var body: some View {
         ScrollView(.horizontal) {
@@ -30,7 +30,7 @@ struct BoardColumns: View {
     }
 }
 
-/// 看板的一列（`TaskBoard`；Mac 与宽屏 iPad 四列并排；手机转成一行，四行竖着排，`PhoneBoard`）：身后不按列铺色（`BoardLane`：托盘或没有底，拖进来时一层选中底），一件一张卡——
+/// 看板的一列（`TaskBoard`；Mac 与宽屏 iPad 四列并排；手机转成一行，四行竖着排，`PhoneBoard`）：身后不铺底（`BoardLane`，拖进来时一层选中底），一件一张卡——
 /// 待办、推进中、已完成是任务卡（`BoardTaskCard`）、没绑任务的会话卡（`BoardSessionCard`），等你是 Cue 的气泡（`BoardWaitCard`），都在懒加载栈里（列可能很长，只建看得见的）。
 /// 推进中按档排（要你管 → 在跑 → 歇着，`Workspace.byAttention`），档与档之间多空一截；在跑的那一档只有前 `BoardWave.maxMoving` 张的线在动。
 /// 看全部项目时卡上标题前一个项目小图形。点击去处：待办、已完成的卡开任务气泡；推进中的任务卡进此刻干活的会话（没有会话的开气泡），会话卡进会话；
@@ -66,7 +66,6 @@ struct BoardColumn: View {
             .dropDestination(for: String.self) { ids, _ in
                 drop(ids, before: nil)
             } isTargeted: { targeted = $0 && column != .todo && column != .waiting }
-            .onAppear { if DebugHooks.preset.dropTarget == column { targeted = true } }
             .taskCheck(finishing?.task, subtasks: finishing?.steps, check: $check)
             .modifier(ShotPresenter(column: column, opened: $opened))
     }
@@ -89,13 +88,10 @@ struct BoardColumn: View {
 
     private var columnLane: some View {
         VStack(spacing: 0) {
-            header.overlay(alignment: .bottom) { BoardLaneRule(column: column, axis: .horizontal).padding(.horizontal, BoardCardMetrics.inset) }
+            header
             ScrollView { cards }.scrollBounceBehavior(.basedOnSize)
         }
-        .background { BoardLane(column: column, targeted: targeted) }
-        // 托盘四角圆、底下离窗口边一截收住：卡滚到托盘下沿时跟着圆角裁
-        .clipShape(.rect(cornerRadius: LaneLook.current == .tray ? BoardLane.radius : 0, style: .continuous))
-        .padding(.bottom, LaneLook.current == .tray ? BoardCardMetrics.inset : 0)
+        .background { BoardLane(targeted: targeted) }
     }
 
     private var isRow: Bool {
@@ -113,8 +109,6 @@ struct BoardColumn: View {
     private var cards: some View {
         LazyVStack(alignment: .leading, spacing: BoardCardMetrics.gap) { content }
             .padding(.horizontal, BoardCardMetrics.inset).padding(.bottom, 24)
-            // 细色轴（D2）压在列头下沿：卡离它一截
-            .padding(.top, LaneLook.current == .axis ? BoardCardMetrics.inset : 0)
             .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: ids)
     }
 

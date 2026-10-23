@@ -1,46 +1,19 @@
 import SwiftUI
 
-/// 原型：看板怎么分组（`-CuePadLane`），定稿后删。三种都不按列铺色，颜色只在列的记号（`BoardLaneMark`）上：
-/// D1 纸面留白——没有底，列（行）靠留白与列头分开；D2 细色轴——同 D1，列头下（手机在行头竖边）一条记号色的细线；
-/// D3 同色调托盘——每列一块与桌面同色温、只差一点明度的托盘（`Palette.laneTray`），四角圆、不贴边，底下自然收住。
-enum LaneLook: String {
-    case paper = "D1", axis = "D2", tray = "D3"
-    static let current = LaneLook(rawValue: DebugHooks.preset.lane) ?? .paper
-}
-
-/// 看板一列（手机一行）身后那一块（`BoardColumn`、`BoardRowLane`）：托盘（D3）或什么都没有；拖着卡停在上面时铺一层选中底，四角同托盘
-/// （卡片圆角加卡离边的空，同心）。不铺渐变、不描边：侧栏开合时整面墙每帧重画，大面积只铺实色。
+/// 看板一列（手机一行）身后那一块（`BoardColumn`、`BoardRowLane`）：平时什么都没有——列（行）靠留白与列头分开，不按列铺色，
+/// 颜色只在列的记号上（`BoardLaneMark`）；拖着卡停在上面时铺一层选中底，圆角是卡片圆角加卡离列边的空（同心）。
+/// 只铺实色：侧栏开合时整面墙每帧重画，大面积不铺渐变、不描边。
 struct BoardLane: View {
-    let column: TaskBoard.Column
     let targeted: Bool
     @Environment(\.palette) private var palette
 
     static let radius = BoardCardMetrics.radius + BoardCardMetrics.inset
 
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: Self.radius, style: .continuous)
         ZStack {
-            if LaneLook.current == .tray { shape.fill(palette.laneTray) }
-            if targeted { shape.fill(palette.selection).transition(.opacity) }
+            if targeted { RoundedRectangle(cornerRadius: Self.radius, style: .continuous).fill(palette.selection).transition(.opacity) }
         }
         .animation(HandOff.quick, value: targeted)
-    }
-}
-
-/// D2 的细色轴：记号色的一条细线，Mac 横在列头下、手机竖在行头边上。
-struct BoardLaneRule: View {
-    let column: TaskBoard.Column
-    let axis: Axis
-    @Environment(\.palette) private var palette
-
-    static let width: CGFloat = 2
-
-    var body: some View {
-        if LaneLook.current == .axis {
-            Capsule().fill(column.mark(palette))
-                .frame(width: axis == .vertical ? Self.width : nil, height: axis == .horizontal ? Self.width : nil)
-                .accessibilityHidden(true)
-        }
     }
 }
 

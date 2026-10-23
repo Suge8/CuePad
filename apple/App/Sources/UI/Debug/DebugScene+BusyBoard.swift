@@ -41,8 +41,8 @@ extension DebugScene {
         if let second { try? await store.linkCard(second.id, toSession: "gateway") }
     }
 
-    /// `-CuePadCanvasSteps YES`（配 tasks 画面，两端；原型）：待办里"画布缩放锚点跟随指针"写上正文与三个步骤（第一步做完），
-    /// 从任务页的卡上点开一件有步骤的任务（演示库里有步骤的"发言轮次乱序"在等你那一列，点它的抬头去回答、不开浮窗）。
+    /// `-CuePadCanvasSteps YES`（配 tasks 画面，两端）：待办里"画布缩放锚点跟随指针"写上正文与三个步骤（第一步做完），
+    /// 任务页上点它的卡看任务气泡的正文与步骤（演示库里另一件有步骤的"发言轮次乱序"在等你那一列，点它是去回答、不开气泡）。
     static func seedCanvasSteps(_ store: CueStore) async {
         guard defaults.bool(forKey: "CuePadCanvasSteps") else { return }
         guard let canvas = try? await store.tasks(.inProgress, .todo).flatMap(\.tasks).first(where: { $0.body.hasPrefix("画布缩放") }),

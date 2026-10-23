@@ -76,7 +76,6 @@ struct NewTaskField: View {
             .frame(width: TaskMetrics.ringColumn)
     }
 
-
     #if os(macOS)
     private static let glyph = Font.system(size: 12, weight: .semibold)
     #else
