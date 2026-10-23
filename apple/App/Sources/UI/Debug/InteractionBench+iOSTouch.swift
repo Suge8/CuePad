@@ -129,7 +129,7 @@ extension IOSInteractionBench {
         return row
     }
 
-    /// 任务看板（一屏一列横着翻的滚动区）：屏上最里层那个，外面可能还套着翻页的容器。
+    /// 任务看板（四列横排成一条的滚动区）：屏上最里层那个，外面可能还套着翻页的容器。
     private static func board(in window: UIWindow?) -> UIScrollView? {
         guard let window else { return nil }
         return all(in: window).compactMap { $0 as? UIScrollView }
@@ -142,8 +142,9 @@ extension IOSInteractionBench {
     }
 
     private static func boardColumn(in window: UIWindow?) -> TaskBoard.Column? {
-        guard let board = board(in: window), board.bounds.width > 0 else { return nil }
-        let index = Int((board.contentOffset.x / board.bounds.width).rounded())
+        // 列不一定一屏宽（原型的一列半、空列收窄）：按四列平分内容宽估
+        guard let board = board(in: window), board.contentSize.width > 0 else { return nil }
+        let index = Int((board.contentOffset.x / (board.contentSize.width / CGFloat(TaskBoard.Column.allCases.count))).rounded())
         return TaskBoard.Column.allCases.indices.contains(index) ? TaskBoard.Column.allCases[index] : nil
     }
 

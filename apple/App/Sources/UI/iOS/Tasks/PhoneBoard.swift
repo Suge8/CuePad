@@ -8,8 +8,9 @@ import SwiftUI
 /// 四列常驻（不用懒加载的横排）：一共四列，懒加载只省得下滑出屏的一两列，换来的是滑回来时重建、竖滚的位置丢掉；列里的卡照样懒加载。
 /// 排法按 `-CuePadProtoBoard`：
 /// - A「一列半」：一列约八成屏宽，右边露出下一列的列头与卡的开头；卡同 Mac，一行标题。
-/// - B「一屏两列」：两列各半屏，四列两屏看完；卡收紧成两行标题，等你的卡让出头像那一格（`boardCompact`）。
-/// - C「空列收窄」：同 A 的宽，此刻没有卡的列收成一条窄柱（记号、数、竖排列名），点它展开；待办点了"+"、已完成点开看更早的都照常展开。
+/// - B「一屏一列、两边露边」：一列占满一屏、居中，左右各露出邻列的一条边；卡最宽。
+///   （先试过一屏两列：半屏宽里推进中的标题被状态词挤断成"投…""rel ay"，等你的气泡一行只剩七八个字，放不下，换成这个。）
+/// - C「空列收窄」：同 A 的宽，此刻没有卡的列收成一条窄柱（记号、竖排列名、数），点它展开并滑过去（已完成今天还没有、更早做完的收在里面）；待办点了"+"时照常展开。
 struct PhoneBoard: View {
     let board: TaskBoard
     @Binding var adding: Bool
@@ -22,8 +23,11 @@ struct PhoneBoard: View {
     private let style = DebugHooks.preset.protoBoard
 
     static let margin: CGFloat = 12
-    static let gap: CGFloat = 10
+    /// 列间的空不小于列离屏边的空：停在一列上时前一列整个让出屏外，不在边上留一线。
+    static let gap: CGFloat = 12
     static let folded: CGFloat = 52
+    /// B：列离屏幕边多远（邻列露出这么宽减去列间的空）。
+    static let centered: CGFloat = 26
 
     var body: some View {
         ScrollView(.horizontal) {
@@ -34,18 +38,21 @@ struct PhoneBoard: View {
             }
             .scrollTargetLayout()
         }
-        .contentMargins(.horizontal, Self.margin, for: .scrollContent)
+        .contentMargins(.horizontal, style == "B" ? Self.centered : Self.margin, for: .scrollContent)
         .scrollTargetBehavior(.viewAligned)
         .scrollPosition(id: $column, anchor: .leading)
         .scrollIndicators(.never)
         .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
-        .environment(\.boardCompact, style == "B")
     }
 
     @ViewBuilder private func lane(_ column: TaskBoard.Column) -> some View {
         if folds(column) {
             Button {
-                withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { _ = opened.insert(column) }
+                // 展开的同时滑到它：点的是这一列，展开后它整个露出来
+                withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) {
+                    opened.insert(column)
+                    self.column = column
+                }
             } label: {
                 FoldedLane(column: column, count: board.count(column))
             }
@@ -64,10 +71,8 @@ struct PhoneBoard: View {
     }
 
     private func laneWidth(_ width: CGFloat) -> CGFloat {
-        switch style {
-        case "B": ((width - Self.gap) / 2).rounded(.down)
-        default: (width * 0.8).rounded()
-        }
+        // 容器宽已去掉左右的内容边距
+        style == "B" ? width : (width * 0.8).rounded()
     }
 }
 

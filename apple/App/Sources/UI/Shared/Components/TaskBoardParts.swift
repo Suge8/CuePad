@@ -29,7 +29,7 @@ struct BoardColumns: View {
     }
 }
 
-/// 看板的一列（`TaskBoard`；Mac 与宽屏 iPad 四列并排，手机一屏一列）：一条按列上色的泳道（`BoardLane`），一件一张卡——
+/// 看板的一列（`TaskBoard`；Mac 与宽屏 iPad 四列并排，手机横排成一条横滑，`PhoneBoard`）：一条按列上色的泳道（`BoardLane`），一件一张卡——
 /// 待办、推进中、已完成是任务卡（`BoardTaskCard`）、没绑任务的会话卡（`BoardSessionCard`），等你是 Cue 的气泡（`BoardWaitCard`），都在懒加载栈里（列可能很长，只建看得见的）。
 /// 推进中按档排（要你管 → 在跑 → 歇着，`Workspace.byAttention`），档与档之间多空一截；在跑的那一档只有前 `BoardWave.maxMoving` 张的线在动。
 /// 看全部项目时卡上标题前一个项目小图形。点击去处：待办、已完成的卡开任务气泡；推进中的任务卡进此刻干活的会话（没有会话的开气泡），会话卡进会话；
@@ -60,11 +60,11 @@ struct BoardColumn: View {
 
     var body: some View {
         lane
-        .dropDestination(for: String.self) { ids, _ in
-            drop(ids, before: nil)
-        } isTargeted: { targeted = $0 && column != .todo && column != .waiting }
-        .taskCheck(finishing?.task, subtasks: finishing?.steps, check: $check)
-        .modifier(ShotPresenter(column: column, opened: $opened))
+            .dropDestination(for: String.self) { ids, _ in
+                drop(ids, before: nil)
+            } isTargeted: { targeted = $0 && column != .todo && column != .waiting }
+            .taskCheck(finishing?.task, subtasks: finishing?.steps, check: $check)
+            .modifier(ShotPresenter(column: column, opened: $opened))
     }
 
     @ViewBuilder private var lane: some View {
