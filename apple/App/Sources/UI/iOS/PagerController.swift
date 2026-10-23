@@ -2,7 +2,7 @@
 import SwiftUI
 import UIKit
 
-/// 四页的容器：四页按 `Dock.pages` 的顺序并排在一条上（`strip`），切页只平移这一条（Cue 页前进时另有自己的退开）；页都铺满容器（安全区、键盘照常由 UIKit 给）。
+/// 根上三页的容器：三页按 `Dock.pages` 的顺序并排在一条上（`strip`），切页只平移这一条（Cue 页前进时另有自己的退开）；页都铺满容器（安全区、键盘照常由 UIKit 给）。
 /// 页与条只摆 `bounds` 与 `center`，不碰 `frame`：带平移的视图设 `frame` 会把那一刻的平移折进 `center`，之后平移一变页就带着一段残留位移
 /// （曾经每次排版都这样折一下：停在旧页再一下闪成新页、邻页叠在当前页上、Cue 页歪着露出旁边一角）。
 /// 条的位置只有一份（`offset`），每次挪都经 `apply` 同时交给 `PagerMotion`（底部那一排的滴与换形读它）。
@@ -98,7 +98,7 @@ final class PagerController: UIViewController {
         page.slot.isHidden = !live
     }
 
-    /// 条横跨四页（点得到哪页，条的 `bounds` 就要盖到哪页），各页在条上的位置只随宽变；平移不在这里，排版多少次都不挪页。宽变了（转屏、分屏）停回当前页。
+    /// 条横跨三页（点得到哪页，条的 `bounds` 就要盖到哪页），各页在条上的位置只随宽变；平移不在这里，排版多少次都不挪页。宽变了（转屏、分屏）停回当前页。
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         let size = view.bounds.size

@@ -80,7 +80,7 @@ struct SessionList<Top: View>: View {
             .listRowBackground(Color.clear).listRowSeparator(.hidden)
     }
 
-    /// 一张卡片：长按与慢慢左滑都有"结束会话"（在线的）与"重命名"（读得到的会话；Mac 够不着时置灰，会话页"⋯"里同一个说法）；快甩是切页（`rowSwipes`）。
+    /// 一张卡片：长按与慢慢左滑都有"结束会话"（在线的）与"重命名"（读得到的会话；Mac 够不着时置灰，会话近况页"⋯"里同一个说法）；快甩是切页（`rowSwipes`）。
     private func row(_ item: PiSessionListItem, in list: PiSessionList, end: Speech.Trip?) -> some View {
         let endable = item.state.canEnd && end != .sending
         let renamable = MacDelivery.canRename(item.state)
@@ -118,6 +118,7 @@ extension SessionList where Top == EmptyView {
     init(model: AgentListModel, filter: UUID?) { self.init(model: model, filter: filter) { EmptyView() } }
 }
 
+/// "新会话"：在 `project` 里开（顶栏右边的那一个操作）。
 struct NewSessionButton: View {
     let project: UUID?
 

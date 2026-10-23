@@ -2,14 +2,14 @@
 import SwiftUI
 import UIKit
 
-/// 窄屏根上的四页按底部那一排的顺序（`Dock.pages`）横着排成一条：左右滑跟手切页，松手按甩出的方向停到一页；点底部那一排换去处时整条滑过去。
+/// 窄屏根上的三页按底部那一排的顺序（`Dock.pages`）横着排成一条：左右滑跟手切页，松手按甩出的方向停到一页；点底部那一排换去处时整条滑过去。
 /// 当前页只有 `Workspace.root` 一份：松手、点按都经 `select`，条停在哪页跟着它走。条此刻在哪只有 `PagerMotion` 一份（容器写、SwiftUI 读），
 /// 拖、松手的弹簧、点按的弹簧都是同一条路（`PagerController.animate`），底部那一排的滴与换形读它，所以跟手、同一条弹簧、一起到位。
 /// Cue 在最右，它右边是刚返回离开的那一页（`Workspace.forward`）：手指左滑把它拉回来。跟手的是离开前拍的快照（`LeaveShot`，同 Safari 的前进），
 /// 同系统推入一样盖着 Cue 页滑进来、Cue 页与底部那一排慢慢退；松手推入真的页（不带动画），它画上屏后才收起快照。
 /// 跟手与弹簧都在 SwiftUI 之外（`PagerController`）：每页各有自己的托管控制器，拖动只改图层的平移，松手的弹簧交给 Core Animation，
 /// 页里只有 Cue 页的输入框逐帧换浓淡（`DockHandoff`），其余一帧不重算 SwiftUI。环境整份转给每一页（`environment(\.self)`），页里读到的与挂在导航栈根上时一样，
-/// 所以这一层的 body 每重算一次，四页的内容就整份重设一遍：这里不读 `PagerMotion` 里会变的东西，读的都放进自己的小块里（`PagerSettling`、`Retreat`、`ForwardPage`）。
+/// 所以这一层的 body 每重算一次，三页的内容就整份重设一遍：这里不读 `PagerMotion` 里会变的东西，读的都放进自己的小块里（`PagerSettling`、`Retreat`、`ForwardPage`）。
 /// 底部那一排与前进页的快照留在这一层 SwiftUI 里（托管视图点在空处也不往下交，盖在页上就挡住了页）：每帧只重算读 `PagerMotion` 的那几小块。
 struct HomePager<Chrome: View>: View {
     let motion: PagerMotion

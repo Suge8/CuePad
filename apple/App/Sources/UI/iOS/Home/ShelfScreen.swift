@@ -2,8 +2,8 @@
 import CueStore
 import SwiftUI
 
-/// 项目页（iPhone 底部一排的"项目"），右上"新建项目"。
-/// 只排项目（任务与会话的事在进展页）：置顶项目是纸卡（`pinnedGrid`），其余排成一张纸上的行，长相同侧栏的项目行。
+/// 项目页（窄屏底部那一排的"项目"），右上"新建项目"。宽屏侧栏已列出全部项目，没有进这一页的入口：只在正看着的项目进了回收站时退回这里（`Workspace.pop`）。
+/// 只排项目（在发生什么在进展页）：置顶项目是纸卡（`pinnedGrid`：图标、名字、介绍），其余排成一张纸上的行，长相同侧栏的项目行（只有图标与名字）。
 /// 窄屏（iPhone）没有侧栏，末尾一组归档、回收站、设置（同步到不了 Mac 时设置那一行带点，`AppServices.macAlert`）推在这一页上；宽屏这一组在侧栏里，这里不放。
 struct ShelfScreen: View {
     @Environment(Workspace.self) private var workspace
@@ -34,7 +34,7 @@ struct ShelfScreen: View {
             }
             if !rest.isEmpty {
                 VStack(spacing: 0) {
-                    ForEach(rest) { ShelfRow(project: $0, count: catalog.cardCounts[$0.id] ?? 0) }
+                    ForEach(rest) { ShelfRow(project: $0) }
                 }
                 .padding(.vertical, Self.paperInset)
                 .rowPaper(radius: Self.radius)
@@ -44,7 +44,7 @@ struct ShelfScreen: View {
         .padding(.horizontal, 16)
         .padding(.bottom, 24)
         .animation(Motion.snappy, value: catalog.projects.map(\.id))
-        // 宽屏不把一行项目拉满整屏：名字与计数隔太远读不成一行
+        // 宽屏不把一行项目拉满整屏
         .frame(maxWidth: Self.readableWidth)
         .frame(maxWidth: .infinity)
     }
@@ -119,32 +119,21 @@ private struct PinnedShelfCard: View {
     }
 }
 
-/// 项目的一行：图标、名字、灵感数。
-/// 辅助字号下名字独占一行、可换行，灵感数排到下一行。
+/// 项目的一行，长相同侧栏的项目行：图标与名字（条数、状态与"此刻"都不写：在发生什么在进展页）。辅助字号下名字可换行。
 private struct ShelfRow: View {
     let project: Project
-    let count: Int
     @Environment(\.palette) private var palette
     @Environment(\.dynamicTypeSize) private var typeSize
     @ScaledMetric(relativeTo: .body) private var glyph: CGFloat = 17
 
     var body: some View {
-        let stacked = typeSize.isAccessibilitySize
         NavigationLink(value: Route.project(project.id)) {
             Label {
-                (stacked ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2)) : AnyLayout(HStackLayout(spacing: 6))) {
-                    Text(project.name).font(.body.weight(.medium)).foregroundStyle(palette.ink).lineLimit(stacked ? 3 : 1)
-                    if !stacked { Spacer(minLength: 4) }
-                    if count > 0 {
-                        Text("\(count)").font(.subheadline.monospacedDigit()).foregroundStyle(palette.ink3).counting(count)
-                            .accessibilityLabel("\(count) 条灵感")
-                    }
-                }
+                Text(project.name).font(.body.weight(.medium)).foregroundStyle(palette.ink).lineLimit(typeSize.isAccessibilitySize ? 3 : 1)
             } icon: {
                 ProjectGlyph(project: project, size: glyph)
             }
-            .padding(.horizontal, 16).padding(.vertical, 8)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16).frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
             .contentShape(.rect)
         }
         .buttonStyle(.row)
