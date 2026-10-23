@@ -5,8 +5,8 @@ import SwiftUI
 /// - 开头是完成圈（`TaskCheckButton`，空心描边；做完是石绿的对勾），看全部项目时标题前一个项目小图形（`BoardProjectGlyph`，Mac 上悬停是项目联动）；
 /// - 推进中下沿是那条线、右上是要你管的状态词（`BoardPulse`，`BoardCardLayout`），歇着的标题淡一档；已完成标题淡一档、不加粗，卡尾是 Cue 点名的成果图；
 /// - 悬停提示：项目、多久（推进中是跑了多久或估还要多久，已完成是几点做完）与交给了哪家 Agent。
-/// 上级收成一张（`TaskBoard.Item.leaf`）：状态看此刻干活的叶子。点圈完成（`TaskCheck`）；点卡的其余地方打开任务气泡，推进中"下一步"是会话的进那个会话，
-/// Mac 右键第一项"打开任务"。Mac 上指针停在卡上卡亮一档（`PressFeedback` 的卡），还没交出去的叶子这时右端浮出"▶ 开始"（不占排版，盖住标题的尾巴）。
+/// 上级收成一张（`TaskBoard.Item.leaf`）：状态看此刻干活的叶子。点圈完成（`TaskCheck`）；点卡的其余地方同任务行（`Workspace.enter`）：
+/// 开工了的叶子进它的会话，其余打开任务气泡。Mac 右键第一项"打开任务"。Mac 上指针停在卡上卡亮一档（`PressFeedback` 的卡），还没交出去的叶子这时右端浮出"▶ 开始"（不占排版，盖住标题的尾巴）。
 struct BoardTaskCard: View {
     let item: TaskBoard.Item
     let column: TaskBoard.Column
@@ -48,7 +48,7 @@ struct BoardTaskCard: View {
     private func ring(next: TaskNext?) -> some View {
         let target = CGSize(width: TaskMetrics.cardLead, height: TaskMetrics.cardLead)
         #if os(macOS)
-        return TaskCheckButton(task: task, subtasks: item.steps, next: next, size: Self.ring, target: target, check: $check) { tap(next) }
+        return TaskCheckButton(task: task, subtasks: item.steps, next: next, size: Self.ring, target: target, check: $check) { tap() }
         #else
         return TaskCheckButton(task: task, subtasks: item.steps, next: next, size: Self.ring, target: target, check: $check)
         #endif
@@ -80,11 +80,7 @@ struct BoardTaskCard: View {
 
     private func open() { workspace.openTask(task) }
 
-    /// 点卡的其余地方：推进中"下一步"是会话的进那个会话，其余打开任务气泡。
-    private func tap(_ next: TaskNext?) {
-        if advancing, case .agent? = next { return follow(next) }
-        open()
-    }
+    private func tap() { workspace.enter(task, leaf: item.steps == nil, in: agents) }
 
     private func follow(_ next: TaskNext?) {
         if let next { workspace.follow(next) }
@@ -96,9 +92,10 @@ struct BoardTaskCard: View {
     private func framed(next: TaskNext?, @ViewBuilder _ card: () -> some View) -> some View {
         card()
             .modifier(PressFeedback(pressed: false, kind: .card))
-            .onTapGesture { tap(next) }
+            .onTapGesture { tap() }
             .contextMenu {
-                if advancing {
+                // 点卡进的是会话时，任务气泡从这里打开
+                if item.steps == nil, agents.items[task.id] != nil {
                     Button("打开任务", icon: .task, action: open)
                     Divider()
                 }
@@ -110,7 +107,7 @@ struct BoardTaskCard: View {
 
     private func framed(next: TaskNext?, @ViewBuilder _ card: () -> some View) -> some View {
         card()
-            .onTapGesture { tap(next) }
+            .onTapGesture { tap() }
             .contentShape(.dragPreview, .rect(cornerRadius: TaskMetrics.cardRadius, style: .continuous))
     }
     #endif

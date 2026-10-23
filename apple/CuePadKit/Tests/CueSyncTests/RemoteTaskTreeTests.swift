@@ -5,9 +5,9 @@ import Testing
 
 @testable import CueSync
 
-/// 远端变更下的任务层级不变量：两台设备离线并发地挪任务，合并后可能出现环、任务超过两级、步骤与父任务不在同一项目。
+/// 远端变更下的任务层级不变量：两台设备离线并发地挪任务，合并后可能出现环、任务超过两级、子任务与父任务不在同一项目。
 /// 应用远端变更后按确定的规则收敛（各设备算出同一结果），修正写回并推送：
-/// 环里 id 最小的那条回到顶层；第三级的任务提到第二级（挂到上级的上级下）；步骤下的提示词改挂到顶层任务；步骤跟随父任务的项目。
+/// 环里 id 最小的那条回到顶层；第三级的任务提到第二级（挂到上级的上级下）；子任务下的提示词改挂到顶层任务；子任务跟随父任务的项目。
 /// 父任务还没到（乱序）的不动。
 @Suite struct RemoteTaskTreeTests {
   let rig = try! Rig()
@@ -131,7 +131,7 @@ import Testing
     #expect(try await store.card(note.id)?.parentID == b1.id)
   }
 
-  @Test func 会话只在叶子上_远端让叶子有了步骤_会话落到第一个没完成的步骤() async throws {
+  @Test func 会话只在叶子上_远端让叶子有了子任务_会话落到第一个没完成的子任务() async throws {
     let top = try await store.createTask("上线")
     let first = try await store.createTask("备份")
     let second = try await store.createTask("发布")
@@ -146,7 +146,7 @@ import Testing
       fields["piSessionID"] = session.map { .text($0) } ?? .null
       return remoteRecord(.cards, id: card.id, fields)
     }
-    // 另一台设备给"上线"加了两个步骤（备份已完成）
+    // 另一台设备给"上线"加了两个子任务（备份已完成）
     let changes = [record(first, parent: top.id, sortKey: "a", done: true), record(second, parent: top.id, sortKey: "b")]
     try await rig.coordinator.pulled(changes, [])
 
@@ -155,7 +155,7 @@ import Testing
     #expect(try await store.card(second.id)?.piSessionID == "s1")
   }
 
-  @Test func 父任务在别处换了项目_步骤跟过去_父任务还没到的不动() async throws {
+  @Test func 父任务在别处换了项目_子任务跟过去_父任务还没到的不动() async throws {
     let site = try await store.createProject(name: "网站", color: "#111")
     let table = try await store.createProject(name: "圆桌", color: "#111")
     let parent = try await store.createTask("上线", in: site.id)

@@ -1,7 +1,7 @@
 import CueStore
 import SwiftUI
 
-/// 一行新建任务：↩ 添加，保持焦点以便连续输入。`parent` 给了时建成它的一个步骤（任务气泡里）；`choosesProject` 时右边可换落到哪个项目（Mac 任务页跨项目）。
+/// 一行新建任务：↩ 添加，保持焦点以便连续输入。`parent` 给了时建成它的一个子任务（任务气泡里）；`choosesProject` 时右边可换落到哪个项目（Mac 任务页跨项目）。
 struct NewTaskField: View {
     let project: UUID?
     var parent: UUID?
@@ -18,7 +18,7 @@ struct NewTaskField: View {
 
     /// 落到哪个项目：换过的，没换过是给的项目，都没有（不在项目页）是默认项目。
     private var target: UUID { chosen ?? project ?? Project.defaultID }
-    private var prompt: String { parent == nil ? "添加任务" : "添加步骤" }
+    private var prompt: String { parent == nil ? "添加任务" : "添加子任务" }
 
     var body: some View {
         HStack(spacing: TaskMetrics.columnGap) {

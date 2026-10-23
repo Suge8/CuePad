@@ -85,6 +85,10 @@ final class Workspace {
     /// 刚收起的气泡是哪件事、什么时候：按在它那一行上收起的（按下就关，松开时那一行又要打开它），这一下不再打开。
     @ObservationIgnored var closedTask: (task: UUID, at: ContinuousClock.Instant)?
     @ObservationIgnored var press = PressPoint()
+    #if os(iOS)
+    /// 任务行左滑"更多"长出的气泡（`CardMorePanel`）。
+    var moreCard: CardMoreRequest?
+    #endif
     #if os(macOS)
     /// ⌘K 搜索开着（`SearchPalette`）。
     var searching = false

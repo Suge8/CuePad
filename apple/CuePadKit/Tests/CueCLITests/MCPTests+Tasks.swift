@@ -5,7 +5,7 @@ import Foundation
 import Testing
 
 extension MCPTests {
-  /// 没给项目建的任务落在默认项目：Cue 用 edit 的 project 把它连同步骤与草稿挪进别的项目，开工就在那个项目的文件夹。
+  /// 没给项目建的任务落在默认项目：Cue 用 edit 的 project 把它连同子任务与草稿挪进别的项目，开工就在那个项目的文件夹。
   @Test(.timeLimit(.minutes(1))) func cueMovesATaskFromTheDefaultProjectIntoAnother() async throws {
     let sandbox = try Sandbox()
     let store = sandbox.store
@@ -29,7 +29,7 @@ extension MCPTests {
       _ = try await server.call("task", ["action": "start", "task": taskID])
       #expect(try await store.deliveryRequests().first?.launch?.project == project.id)
 
-      // 你亲手给步骤绑上会话：再开工被拒（叫它用 say），什么请求都不多写
+      // 你亲手给子任务绑上会话：再开工被拒（叫它用 say），什么请求都不多写
       try await store.bindSession("s9", to: step.id)
       #expect(try await server.refused("task", ["action": "start", "task": taskID]).contains("say"))
       #expect(try await store.deliveryRequests().count == 1)

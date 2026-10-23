@@ -76,7 +76,7 @@ struct CardEditorPage: View {
             if isOpen, !mounted { prepare() }
         }
         .onChange(of: data?.card.deletedAt) { if data?.card.deletedAt != nil { workspace.openCard = nil } }
-        // 编辑页只给散放的灵感：在"⋯"里设为任务、挂到了任务下，这页收起，接着在任务气泡里看
+        // 编辑页只给散放的灵感：挂到了任务下，这页收起，接着在任务气泡里看
         .onChange(of: data.map { $0.card.isTask || $0.card.parentID != nil }) { _, moved in
             guard moved == true, let card = data?.card else { return }
             workspace.openCard = nil
@@ -120,7 +120,7 @@ struct CardEditorPage: View {
             Dot()
             Text(DateLabel.short(data.card.modifiedAt))
             SaveStatus(editing: editing)
-            if data.card.isPinned { Label("资料", icon: .resource) }
+            if data.card.isPinned { Label("置顶", icon: .pin) }
             Spacer(minLength: 0)
             Menu("更多", icon: .more) {
                 CardActions(card: data.card, more: true)

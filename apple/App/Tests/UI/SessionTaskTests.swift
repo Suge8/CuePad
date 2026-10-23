@@ -48,8 +48,8 @@ struct SessionTaskTests {
     }
 
     /// 说话不改任务的状态：对已完成的事的会话说的话、作的答送到了，任务仍是完成。状态只由明确的动作改：
-    /// Cue 的 edit reopen 同你点掉圆圈（没完成的不让改回），加步骤回到进行中。
-    @Test func 对已完成任务的会话说话_任务仍是完成_改回或加步骤才变() async throws {
+    /// Cue 的 edit reopen 同你点掉圆圈（没完成的不让改回），加子任务回到进行中。
+    @Test func 对已完成任务的会话说话_任务仍是完成_改回或加子任务才变() async throws {
         try await enableCue()
         let task = try await store.createTask("修登录")
         let recorder = PiStateRecorder(store: store, hostID: services.hostID)

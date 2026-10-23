@@ -6,9 +6,9 @@ typealias Undo = @MainActor () async throws -> Void
 
 /// 会留下"撤销"的卡片改动：怎么拨回去是 Store 层的规则（`CueStore.undo`，回执在改动的同一个事务里读到），界面只负责把它挂到提示上。
 extension CueStore {
-    /// 设为任务 / 改回灵感（改回时下级提到它的位置）。
-    func settingTodo(_ id: UUID, _ on: Bool) async throws -> Undo {
-        undoing(try setTodo(id, on))
+    /// 灵感接到任务正文后面、灵感进回收站（`mergeIdea`）；撤销时正文改回、灵感恢复。
+    func merging(_ idea: UUID, into task: UUID) async throws -> Undo {
+        undoing(try mergeIdea(idea, into: task))
     }
 
     /// 删除一条灵感或任务（进回收站，下级提到它的位置，见 `trashCard`）；撤销时下级回到它下面。

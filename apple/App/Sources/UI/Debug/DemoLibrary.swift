@@ -164,7 +164,7 @@ enum DemoLibrary {
 
     typealias DemoTask = (project: String?, text: String, done: Bool)
 
-    /// 两级任务：圆桌的"乱序"四个步骤，每个步骤是叶子、带着正文（发给 Agent 的状态见 `DebugScene.seedTaskStates`）；
+    /// 两级任务：圆桌的"乱序"四个子任务，每个子任务是叶子、带着正文（发给 Agent 的状态见 `DebugScene.seedTaskStates`）；
     /// CuePad 的"投送超时"是叶子、带着正文（演示里发给 notes）。
     private static func seedSubtasks(_ store: CueStore) async throws {
         let tasks = try await store.tasks(.todo).flatMap(\.tasks)

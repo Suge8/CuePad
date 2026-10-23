@@ -6,7 +6,7 @@ import Foundation
 extension CueStore {
   /// 任务交到哪：给任务，按它干活的叶子（`homeLeaf`）定。界面的"开始"、手机的发给 Agent 与 Cue 的开工都按它：
   /// 1. 叶子绑着会话，就交给那个会话；
-  /// 2. 没绑，而同一件事的别的步骤绑着会话（`continuableSession`），就接着用它（上下文不丢；话送到时叶子绑上它；已结束的执行时先恢复）；
+  /// 2. 没绑，而同一件事的别的子任务绑着会话（`continuableSession`），就接着用它（上下文不丢；话送到时叶子绑上它；已结束的执行时先恢复）；
   /// 3. 否则在项目的文件夹开一个以叶子标题命名的新会话，由哪台 Mac 开见 `launchHost`。
   /// `fresh` 跳过 1、2，总是开新会话（界面"绑定会话"里的"开新会话"、Cue 开工带 fresh）；`agent` 给了就只接着用这一家的会话。
   /// `host` 是发起的这台 Mac，手机为 nil。不是任务抛 `notATask`；要开新会话而一台 Mac 都没有（只会在手机上）抛 `noMac`。
@@ -28,7 +28,7 @@ extension CueStore {
     return .launch(project: leaf.projectID, host: launchHost)
   }
 
-  /// 开工：把叶子（没有步骤的任务）的正文（标题连同下面的话）作为第一句交到 `handOffPlan` 定下的地方（界面的"开始"与 Cue 的 start
+  /// 开工：把叶子（没有子任务的任务）的正文（标题连同下面的话）作为第一句交到 `handOffPlan` 定下的地方（界面的"开始"与 Cue 的 start
   /// 同一条规则，含接着用上一步的会话与 `fresh`）：接着用上一步的会话时是它的下一句（规则同 `speak`），开新会话时它是第一句。正文发出后留在任务上。
   /// 接着用上一步的会话时，话送到才绑上（同开新会话"开成了才绑"），送到前算发送中（`sendingLeaves`）。
   /// 叶子已绑着会话（不带 `fresh`）抛 `alreadyStarted`：话在会话里说；正在开会话抛 `launching`，话还在送抛 `sending`。
@@ -69,7 +69,7 @@ extension CueStore {
     return agent
   }
 
-  /// 开工的第一句（界面的"开始"与 Cue 的 start 都按它）：开新会话的步骤先带上顶层任务的标题与正文作背景，空一行接这一步的；
+  /// 开工的第一句（界面的"开始"与 Cue 的 start 都按它）：开新会话的子任务先带上顶层任务的标题与正文作背景，空一行接这一步的；
   /// 接着用已有会话的只发这一步的（上下文已在会话里）。变量已填。
   public func opening(of leaf: UUID, _ newSession: Bool) throws -> String {
     guard let card = try find(Card.self, leaf) else { throw CueStoreError.notFound }
@@ -80,7 +80,7 @@ extension CueStore {
       .joined(separator: "\n\n")
   }
 
-  /// 同一件事别的步骤绑着、没在被请求结束的会话里最近有动静的那个（`agent` 给了就只要这一家的）：下一步接着用它，上下文不丢。
+  /// 同一件事别的子任务绑着、没在被请求结束的会话里最近有动静的那个（`agent` 给了就只要这一家的）：下一步接着用它，上下文不丢。
   /// 已结束的也算：执行的 Mac 连上目标会话时先恢复它（`MacExecutor`）。
   func continuableSession(for leaf: UUID, agent: AgentKind?) throws -> PiSessionState? {
     let top = try topTask(of: leaf)

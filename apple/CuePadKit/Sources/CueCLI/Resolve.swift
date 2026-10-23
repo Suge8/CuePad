@@ -32,7 +32,7 @@ extension Call {
   func task(_ ref: String) async throws -> Card {
     let all = try await store.tasks(.todo, .inProgress, .done).flatMap(\.tasks)
     if let id = UUID(uuidString: ref) {
-      guard let task = all.first(where: { $0.id == id }) else { throw CLIError.notFound("找不到任务 \(ref)（灵感先 cuepad card todo）") }
+      guard let task = all.first(where: { $0.id == id }) else { throw CLIError.notFound("找不到任务 \(ref)") }
       return task
     }
     return try await unique(ref, kind: "任务", describe: { $0.body }) { all.filter { matches(ref, $0.id) } }

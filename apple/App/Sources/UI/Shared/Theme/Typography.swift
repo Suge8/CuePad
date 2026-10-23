@@ -13,7 +13,7 @@ enum Typography {
     static let secondary = Font.system(size: 13)
     /// 元信息：时间、计数、路径、标记。
     static let meta = Font.system(size: 12)
-    /// 小节标签（任务与 Agent 栏的"任务""Agent"、资料、步骤）：小号加粗、次要墨色。
+    /// 小节标签（任务与 Agent 栏的"任务""Agent"、子任务）：小号加粗、次要墨色。
     static let label = Font.system(size: 12, weight: .semibold)
     /// 最小的字：折起的计数、对话里的旁注（`NoteLine`）这类附注（iOS 比元信息小一档，Mac 不再往下小）；caption2 是展开箭头这类更小的符号。
     static let caption = Font.system(size: 12)
@@ -33,7 +33,7 @@ enum Typography {
     /// 醒目的一句（等你确认的问题）。
     static let titleSize: CGFloat = 18
     static let title = Font.system(size: titleSize, weight: .semibold)
-    /// 页内分组标题（资料、最近、更早、现在、历史）与它旁边的计数。
+    /// 页内分组标题（最近、更早、现在、历史）与它旁边的计数。
     static let sectionTitle = Font.system(size: 15, weight: .semibold)
     static let sectionCount = Font.system(size: 13).monospacedDigit()
     /// 面板顶上的大标题（接入 Agent）。
@@ -45,7 +45,7 @@ enum Typography {
     static let keycap = Font.system(size: 11, weight: .medium, design: .rounded)
     /// 空态的标题。
     static let emptyTitle = Font.system(size: 17, weight: .semibold)
-    /// 工具栏：按钮上的字（收起、项目切换），会话页的标题与其后的状态；标题下面还有一行（任务 · 步骤）时标题收小，两行放进一个控件的高度。
+    /// 工具栏：按钮上的字（收起、项目切换），会话页的标题与其后的状态；标题下面还有一行（任务 · 子任务）时标题收小，两行放进一个控件的高度。
     static let toolbarLabel = Font.system(size: 13, weight: .medium)
     static let toolbarTitle = Font.system(size: 15, weight: .semibold)
     static let toolbarTitlePaired = Font.system(size: 13, weight: .semibold)

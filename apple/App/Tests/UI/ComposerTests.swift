@@ -36,9 +36,9 @@ struct ComposerTests {
         #expect(CueFormat.imageHashes(in: onlyPhoto.content).count == 1 && !onlyPhoto.content.contains("\n"))
     }
 
-    /// 发给 Agent 时用"＋ 选灵感"带上本项目的资料：卡片作为这次消息的附件跟着发出（任务的正文在前、资料在后），
-    /// 卡片本身不动——仍在原项目的资料组里。选卡片的面板里本项目资料排在最前。
-    @Test func 交给Agent时带上资料作附件_正文含它_资料原地不动_面板里资料在最前() async throws {
+    /// 发给 Agent 时用"＋ 选灵感"带上本项目置顶的灵感：卡片作为这次消息的附件跟着发出（任务的正文在前、灵感在后），
+    /// 卡片本身不动——仍置顶在原项目里。选卡片的面板里本项目置顶的排在最前。
+    @Test func 交给Agent时带上置顶的灵感作附件_正文含它_灵感原地不动_面板里置顶的在最前() async throws {
         let project = try await store.createProject(name: "圆桌", color: "#000000")
         let target = try await session(project: project.id)
         let task = try await store.createTask("修乱序\n先复现", in: project.id)
@@ -47,8 +47,8 @@ struct ComposerTests {
         _ = try await store.createCard(in: project.id, body: "随手一条")
 
         let page = try await CardPicker.Page.read(text: "", project: project.id, limit: 30, from: store)
-        #expect(page.resources.map(\.id) == [reference.id])
-        #expect(!page.pinned.contains { $0.id == reference.id })
+        #expect(page.pins.map(\.id) == [reference.id])
+        #expect(!page.own.contains { $0.id == reference.id })
 
         var draft = ComposerDraft(attachments: [Outbox(content: Outgoing.text(of: task), card: task.id, project: project.id)])
         draft.attach(try #require(try await store.card(reference.id)))
@@ -62,8 +62,8 @@ struct ComposerTests {
     }
 
     /// 发给 Agent 的输入框是为某件任务打开的：请求始终关联这件任务（打开时定下，不随附件增删），
-    /// 即使附件里只剩资料，状态点也在任务上、资料行不出现。
-    @Test func 交给Agent时附件里没有那件任务_请求仍关联它_状态点在任务不在资料() async throws {
+    /// 即使附件里只剩置顶的灵感，状态点也在任务上、灵感行不出现。
+    @Test func 交给Agent时附件里没有那件任务_请求仍关联它_状态点在任务不在灵感() async throws {
         let project = try await store.createProject(name: "圆桌", color: "#000000")
         let target = try await session(project: project.id)
         let task = try await store.createTask("修乱序\n先复现", in: project.id)

@@ -2,8 +2,8 @@ import CueStore
 import SwiftUI
 
 extension View {
-    /// 一条任务给读屏的样子（任务行 `TaskLine`、看板的任务卡 `BoardTaskCard` 同一份）：一行一个元素——"任务内容，步骤 1/4，下一步"，
-    /// 值是状态（文案见 `TaskSpeech`），默认动作勾选（与圈同一个动作）；另有打开、开始或看 Agent 的近况，Mac 上还有缩进与取消缩进。
+    /// 一条任务给读屏的样子（任务行 `TaskLine`、看板的任务卡 `BoardTaskCard` 同一份）：一行一个元素——"任务内容，子任务 1/4，下一步"，
+    /// 值是状态（文案见 `TaskSpeech`），默认动作勾选（与圈同一个动作）；另有打开、开始或看 Agent 的近况，缩进与反缩进（手机上缩进在右滑里）。
     /// `more`：调用处多给的动作（看板已完成卡的"看成果"）。
     func taskSpoken(
         _ task: Card, subtasks: TaskProgress?, next: TaskNext?, check: Binding<TaskCheck>, open: @escaping () -> Void, follow: @escaping () -> Void,
@@ -22,9 +22,8 @@ private struct TaskSpoken<More: View>: ViewModifier {
     let follow: () -> Void
     let more: More
     @Environment(Workspace.self) private var workspace
-    #if os(macOS)
     @Environment(\.taskStructure) private var structure
-    #endif
+
 
     func body(content: Content) -> some View {
         let done = check.done(task)
@@ -43,9 +42,7 @@ private struct TaskSpoken<More: View>: ViewModifier {
                 case .agent: Button("看 Agent 的近况", action: follow)
                 case nil: EmptyView()
                 }
-                #if os(macOS)
-                RowActionButtons(actions: [CardMenu.Item.indent, .outdent].compactMap { $0.rowAction(on: task, in: workspace, structure: structure) })
-                #endif
+                RowActionButtons(actions: TaskStructure.spoken.compactMap { $0.rowAction(on: task, in: workspace, structure: structure) })
             }
     }
 }

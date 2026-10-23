@@ -18,7 +18,7 @@ extension CueStore {
   }
 
   /// 任务页"最近完成"的一键归档：已完成的顶层任务（及其下级）全部归档，返回归档了几条任务。
-  /// 没做完的任务下已完成的步骤算在上级的进度里，不单独归档。
+  /// 没做完的任务下已完成的子任务算在上级的进度里，不单独归档。
   public func archiveCompletedTasks() throws -> Int {
     try write {
       let done = try db.query(
@@ -43,10 +43,10 @@ extension CueStore {
       """, [time, now, Self.idList(roots)])
   }
 
-  /// 改任务的状态：进行中在叶子上记开始时间（有步骤的记在此刻该做的那一步 `homeLeaf`，上级从步骤推出；已有的保留），完成记完成时间（保留开始时间）并连带没完成的下级任务，回到待办连同没完成的下级清掉开始时间
-  /// （做完过的步骤还在时它仍算开始过，见 `TaskStatus`）；
+  /// 改任务的状态：进行中在叶子上记开始时间（有子任务的记在此刻该做的那一步 `homeLeaf`，上级从子任务推出；已有的保留），完成记完成时间（保留开始时间）并连带没完成的下级任务，回到待办连同没完成的下级清掉开始时间
+  /// （做完过的子任务还在时它仍算开始过，见 `TaskStatus`）；
   /// 完成的改成别的先经 `reopen`（连同已完成的上级、取回归档）。
-  /// 只往下连带：步骤全做完，上级任务也不自动完成，完成一件事由用户说了算（进度只算步骤，见 `subtaskProgress`）。
+  /// 只往下连带：子任务全做完，上级任务也不自动完成，完成一件事由用户说了算（进度只算子任务，见 `subtaskProgress`）。
   /// 灵感没有状态，抛 `notATask`。
   public func setStatus(_ id: UUID, _ status: TaskStatus) throws {
     try write { _ = try applyStatus(id, status) }

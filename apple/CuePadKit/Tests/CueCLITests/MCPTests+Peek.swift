@@ -54,7 +54,7 @@ extension MCPTests {
     }
   }
 
-  /// 看板上一件事的近况取在做的那一步；步骤都做完、整件事还没收尾时取最后做完的那一步（它的会话是最新的进展），不落回第一步。
+  /// 看板上一件事的近况取在做的那一步；子任务都做完、整件事还没收尾时取最后做完的那一步（它的会话是最新的进展），不落回第一步。
   @Test(.timeLimit(.minutes(1))) func theBoardShowsTheStepLastWorkedOn() async throws {
     let sandbox = try Sandbox()
     let store = sandbox.store

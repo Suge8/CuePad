@@ -8,7 +8,7 @@ struct CardActions: View {
     var more = false
     /// 在能批量选择的地方（Mac 项目页的墙与列表）：菜单里多一项"选择"。
     var selectable = false
-    /// 这是 Mac 上的叶子任务（没有步骤）：没做完时多一项"绑定会话"（会话列表在 Mac 上，手机不传）。
+    /// 这是 Mac 上的叶子任务（没有子任务）：没做完时多一项"绑定会话"（会话列表在 Mac 上，手机不传）。
     var leaf = false
     @Environment(Workspace.self) private var workspace
 
@@ -49,45 +49,44 @@ struct CardActions: View {
 extension CardMenu.Item {
     var title: String {
         switch self {
-        case .makeTask: "设为任务"
-        case .makeIdea: "改回灵感"
         case .complete: "完成"
         case .reopen: "重新打开"
         case .move: "移到项目"
         case .archive: "归档"
-        case .resource: "设为资料"
-        case .unresource: "不再是资料"
+        case .pin: "置顶"
+        case .unpin: "取消置顶"
         case .copy: "复制"
         case .trash: "删除"
         case .select: "选择"
         case .bindSession: "绑定会话"
         case .indent: "缩进"
         case .outdent: "反缩进"
+        case .more: "更多"
         }
     }
 
     var icon: Icon {
         switch self {
-        case .makeTask: .task
-        case .makeIdea: .idea
         case .complete: .complete
         case .reopen: .reopen
         case .move: .folder
         case .archive: .archive
-        case .resource: .resource
-        case .unresource: .isResource
+        case .pin: .pin
+        case .unpin: .unpin
         case .copy: .copy
         case .trash: .trash
         case .select: .complete
         case .bindSession: .link
         case .indent: .indent
         case .outdent: .outdent
+        case .more: .more
         }
     }
 
     var tone: ActionTone {
         switch self {
         case .trash: .destructive
+        case .more: .quiet
         default: .neutral
         }
     }
@@ -95,17 +94,14 @@ extension CardMenu.Item {
 
 extension CardMenu.Item {
     /// 这一项对 `card` 做什么，菜单、"⋯"与轻扫都按它执行；子菜单（移到项目、绑定会话）与此处做不了的（手机上的选择、
-    /// 不在大纲里的缩进）为 nil。`structure` 是它在任务大纲里此刻能不能缩进、反缩进。
+    /// Mac 上的"更多"、不在大纲里的缩进）为 nil。`structure` 是它在任务大纲里此刻能不能缩进、反缩进。
     func run(on card: Card, in workspace: Workspace, structure: TaskStructure? = nil) -> (() -> Void)? {
         let id = card.id
         switch self {
-        case .makeTask, .makeIdea:
-            let todo = self == .makeTask
-            return { workspace.attempt { try await workspace.setTodo(id, todo) } }
         case .complete, .reopen: return { workspace.attempt { try await workspace.toggle(id) } }
         case .archive: return { workspace.attempt { try await workspace.archive(id) } }
-        case .resource, .unresource:
-            let pinned = self == .resource
+        case .pin, .unpin:
+            let pinned = self == .pin
             return { workspace.perform { try await $0.updateCard(id) { $0.isPinned = pinned } } }
         case .copy: return { workspace.copy(Outgoing.text(of: card)) }
         case .trash: return { workspace.attempt { try await workspace.trash(id) } }
@@ -117,6 +113,12 @@ extension CardMenu.Item {
             #endif
         case .indent: return structure?.indent
         case .outdent: return structure?.outdent
+        case .more:
+            #if os(iOS)
+            return { workspace.moreCard = CardMoreRequest(card: card, source: workspace.press.source) }
+            #else
+            return nil
+            #endif
         case .move, .bindSession: return nil
         }
     }
@@ -130,7 +132,7 @@ extension CardMenu.Item {
 extension RowSwipes {
     /// 一条灵感或任务的轻扫（`CardMenu.swipes`）；`structure` 是它在任务大纲里此刻能不能缩进、反缩进。
     static func card(_ card: Card, workspace: Workspace, structure: TaskStructure? = nil) -> RowSwipes {
-        let swipes = CardMenu.swipes(for: card, indent: structure?.indent != nil, outdent: structure?.outdent != nil)
+        let swipes = CardMenu.swipes(for: card, indent: structure?.indent != nil)
         let action = { (item: CardMenu.Item) in item.rowAction(on: card, in: workspace, structure: structure) }
         return RowSwipes(leading: swipes.leading.compactMap(action), trailing: swipes.trailing.compactMap(action))
     }

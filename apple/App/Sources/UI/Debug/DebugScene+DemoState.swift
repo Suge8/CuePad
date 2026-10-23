@@ -13,8 +13,8 @@ extension DebugScene {
         for id in others { if let directory = directories[id] { try? await store.setDirectory(directory, for: id) } }
     }
 
-    /// 任务三态：圆桌"乱序"的步骤"复现乱序""改成按首次加入时间排序""部署到预发环境"开了工，正文发给了会话 piwork、atlas、deploy
-    /// （步骤记着会话；复现乱序随后完成，它的会话 piwork 已结束：会话页看完成了的任务），"补 3 个重连用例"还没开始；
+    /// 任务三态：圆桌"乱序"的子任务"复现乱序""改成按首次加入时间排序""部署到预发环境"开了工，正文发给了会话 piwork、atlas、deploy
+    /// （子任务记着会话；复现乱序随后完成，它的会话 piwork 已结束：会话页看完成了的任务），"补 3 个重连用例"还没开始；
     /// CuePad"投送超时"的正文发给 notes；CuePad、Flow、圆桌各完成一条（先后完成）。
     static func seedTaskStates(_ store: CueStore, projects: [Project]) async {
         guard let tasks = try? await store.tasks(.todo).flatMap(\.tasks) else { return }

@@ -115,7 +115,7 @@ public struct CueTools: Sendable {
     case task(Card)
   }
 
-  /// 任务此刻在做的叶子（给顶层任务时是它在做的那个步骤）。
+  /// 任务此刻在做的叶子（给顶层任务时是它在做的那个子任务）。
   func workingLeaf(_ ref: String) async throws -> Card {
     try await store.workingLeaf(of: try await task(ref).id)
   }

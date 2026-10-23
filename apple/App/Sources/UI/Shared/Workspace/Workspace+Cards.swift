@@ -32,7 +32,7 @@ extension Workspace {
 
     /// 点任务的圆圈：待办与进行中都变完成，完成的不再算做完（开始过的回到进行中）。下一个状态由 Store 在一个事务里按当前值定（`toggleDone`）：
     /// 界面手里的副本可能已过时（列表还没刷新就又点了一次）。
-    /// 完成就是做完了：它（和它的步骤）绑着的会话里，绑着的事都做完了的一起结束——结束哪些只由 Store 定（`CueStore.toggleDone`，
+    /// 完成就是做完了：它（和它的子任务）绑着的会话里，绑着的事都做完了的一起结束——结束哪些只由 Store 定（`CueStore.toggleDone`，
     /// 与 Cue 的 done 同一条规则），结束请求写下就上传。
     func toggle(_ id: UUID) async throws {
         let (status, ended) = try await services.store.toggleDone(id)
@@ -42,9 +42,13 @@ extension Workspace {
         say("已完成", action: NoticeAction(title: "归档") { try await self.archive(id) })
     }
 
-    /// 设为任务 / 改回灵感；提示里带"撤销"。
-    func setTodo(_ id: UUID, _ on: Bool) async throws {
-        say(on ? "已设为任务" : "已改回灵感", action: .undo(try await services.store.settingTodo(id, on)))
+    /// 灵感拖到一条任务上：接到它的正文后面，灵感进回收站（一次写入）；提示里带"撤销"。灵感与任务不互转，这是灵感变成要做的事的唯一一步。
+    func mergeIdea(_ idea: UUID, into task: UUID) async throws {
+        let store = services.store
+        let undo = try await store.merging(idea, into: task)
+        closeIfOpen(idea)
+        let title = try await store.card(task)?.title ?? ""
+        say(Dotted("已接到「\(title.textGlyphs)」的正文后面"), action: .undo(undo))
     }
 
     /// 离开一条灵感或任务正文的编辑：先写下没保存的字，还是空白（`Card.isBlank`）的灵感就不留下——记一条是先建一条空的再编辑。
@@ -72,9 +76,17 @@ extension Workspace {
 
     func pressed(at point: CGPoint) { press.record(point) }
 
-    /// 打开一条任务的气泡（项目页与任务页的行、Cue 对话里的任务、⌘K、归档、小组件链接都经这里）：从刚按下的那一下长出来；
-    /// 不是刚点的（键盘、⌘K 里按 ↩、链接）就没有落点，气泡在窗口上方居中。步骤是它上级的气泡、翻到这一步；
-    /// 这件事的气泡已经开着时（气泡里点步骤、返回）原地翻页，不重新长一次。
+    /// 点一条任务（项目页的任务行、看板的任务卡同一条规则）：开工了的叶子（交给过会话，做完了也算）直接进它的会话；
+    /// 没开工的、有子任务的打开任务气泡（改标题与正文，子任务在气泡里）。
+    func enter(_ task: Card, leaf: Bool, in agents: AgentLinks) {
+        guard leaf, let session = agents.items[task.id]?.state else { return openTask(task) }
+        openTask = nil
+        openSession(session.id, sessionID: session.sessionID)
+    }
+
+    /// 打开一条任务的气泡（没开工的任务行、Cue 对话里的任务、⌘K、归档、小组件链接都经这里）：从刚按下的那一下长出来；
+    /// 不是刚点的（键盘、⌘K 里按 ↩、链接）就没有落点，气泡在窗口上方居中。子任务是它上级的气泡、翻到这一项；
+    /// 这件事的气泡已经开着时（气泡里点子任务、返回）原地翻页，不重新长一次。
     func openTask(_ card: Card) {
         let task = card.parentID ?? card.id, step = card.parentID == nil ? nil : card.id
         if openTask?.task == task {

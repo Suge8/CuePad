@@ -48,11 +48,11 @@ public enum CueWork: Identifiable, Equatable, Sendable {
 /// 看板上的一件事：一个没做完的顶层任务。在做的（`isActive`）归值班的 Cue 管，其余是你手上的清单。
 public struct CueBoardItem: Identifiable, Equatable, Sendable {
   public var task: Card
-  /// 步骤完成了几个；没有步骤为 nil。
+  /// 子任务完成了几个；没有子任务为 nil。
   public var progress: TaskProgress?
-  /// 在做的叶子，至少一个（按步骤顺序）：没做完、开着会话（会话没结束，或做到一半被打断）、正在开会话或话正送进会话的每一个——
-  /// 并行做的几步都在。一个都没有时是此刻该做的那一个：没有步骤是任务自己，否则第一个没完成的步骤；
-  /// 步骤都做完了是最后做完的那一步（近况取它的会话，不落回第一步）。
+  /// 在做的叶子，至少一个（按子任务顺序）：没做完、开着会话（会话没结束，或做到一半被打断）、正在开会话或话正送进会话的每一个——
+  /// 并行做的几步都在。一个都没有时是此刻该做的那一个：没有子任务是任务自己，否则第一个没完成的子任务；
+  /// 子任务都做完了是最后做完的那一步（近况取它的会话，不落回第一步）。
   public var leaves: [CueBoardLeaf]
   public var id: UUID { task.id }
   public var isActive: Bool { leaves.contains(where: \.isActive) }
@@ -66,7 +66,7 @@ public struct CueBoardLeaf: Equatable, Sendable {
   public var launching: Bool
   /// 叶子还没绑会话、它的话正送进上一步的会话（`CueStore.sendingLeaves`；送到时绑上）。
   public var sending: Bool
-  /// 停在当前状态的起点：会话进入当前状态的时刻，没有会话时是开始做或设为任务的时刻。
+  /// 停在当前状态的起点：会话进入当前状态的时刻，没有会话时是开始做或建成任务的时刻。
   public var since: Date
 
   /// 在做：会话没结束，或正在开会话、话正送进会话。

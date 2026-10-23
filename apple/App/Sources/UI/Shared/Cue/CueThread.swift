@@ -240,7 +240,7 @@ nonisolated struct CueThread: Equatable, Sendable {
     }
 }
 
-/// 对话或"等你"提到的一件活：任务与步骤进度。提到的卡不在了（删掉、改回灵感）就没有引用，那句话照常显示。
+/// 对话或"等你"提到的一件活：任务与步骤进度。提到的卡不在了（删掉）就没有引用，那句话照常显示。
 nonisolated struct CueTaskRef: Equatable, Sendable {
     var task: Card
     var progress: TaskProgress?

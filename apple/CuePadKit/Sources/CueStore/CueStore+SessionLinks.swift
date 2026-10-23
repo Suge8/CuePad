@@ -58,7 +58,7 @@ extension CueStore {
     """
   }
 
-  /// 把会话绑到叶子任务 `task` 上（会话页的"绑定到任务"、任务的右键）：叶子是没有步骤的任务，有步骤的抛 `notALeaf`，不是任务抛 `notATask`。
+  /// 把会话绑到叶子任务 `task` 上（会话页的"绑定到任务"、任务的右键）：叶子是没有子任务的任务，有子任务的抛 `notALeaf`，不是任务抛 `notATask`。
   /// 叶子原来绑着的会话换成这个；同一个会话可以绑好几个叶子（已完成的事绑着的会话照样能绑给新的事）。没开始的任务置为进行中，完成了的不变。
   /// 绑会话不发任务的正文：它在做的事已经在会话里，要说的话在会话里说。
   public func bindSession(_ sessionID: String, to task: UUID) throws {
@@ -86,7 +86,7 @@ extension CueStore {
     try db.run("UPDATE deliveryRequests SET cardID = NULL, modifiedAt = ? WHERE cardID = ? AND mode = 'start'", [Date.stamp, task])
   }
 
-  /// 这个会话属于的叶子任务：正在用它的与以前用过它的（`formerSessionIDs`；没删除、没归档，含完成了的），先开始的在前；步骤带着上级。
+  /// 这个会话属于的叶子任务：正在用它的与以前用过它的（`formerSessionIDs`；没删除、没归档，含完成了的），先开始的在前；子任务带着上级。
   /// 正在用它的是 `piSessionID` 等于它的那几个。
   public func tasks(boundTo sessionID: String) throws -> [LeafTask] {
     try select(
@@ -99,8 +99,8 @@ extension CueStore {
     ).map { LeafTask(task: $0, parent: try $0.parentID.flatMap { try find(Card.self, $0) }) }
   }
 
-  /// 能绑会话的叶子（没完成、没绑会话、没删除、没归档）：步骤带着上级一起给，界面写"上级 · 步骤"。顺序同 `tasks(in:_:)`
-  /// （项目页的任务顺序：同级手动顺序，步骤紧跟上级）。`project` 是会话所在的项目；会话没归项目（文件夹没绑给哪个项目）时列默认项目的。
+  /// 能绑会话的叶子（没完成、没绑会话、没删除、没归档）：子任务带着上级一起给，界面写"上级 · 子任务"。顺序同 `tasks(in:_:)`
+  /// （项目页的任务顺序：同级手动顺序，子任务紧跟上级）。`project` 是会话所在的项目；会话没归项目（文件夹没绑给哪个项目）时列默认项目的。
   public func bindableTasks(in project: UUID?) throws -> [LeafTask] {
     let open = try tasks(in: project ?? Project.defaultID, .todo, .inProgress)
     let byID = Dictionary(open.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
@@ -114,7 +114,7 @@ extension CueStore {
     return result
   }
 
-  /// 表 `alias` 里的任务是叶子：没有（没删除的）步骤。
+  /// 表 `alias` 里的任务是叶子：没有（没删除的）子任务。
   static func isLeaf(_ alias: String) -> String {
     "NOT EXISTS (SELECT 1 FROM cards s WHERE s.parentID = \(alias).id AND s.todoAt IS NOT NULL AND s.deletedAt IS NULL)"
   }

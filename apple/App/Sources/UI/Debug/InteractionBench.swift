@@ -142,7 +142,7 @@ enum InteractionBench {
                 await step("收编辑页") { workspace.openCard = nil }
             }
         }
-        // 任务气泡：第一条顶层任务（演示库里是"发言轮次乱序"那样有步骤的），在它的项目页上开：前台量时真实地点那一行，后台直接开
+        // 任务气泡：第一条顶层任务（演示库里是"发言轮次乱序"那样有子任务的），在它的项目页上开：前台量时真实地点那一行，后台直接开
         let tasks = ((try? await store.tasks(.inProgress, .todo))?.flatMap(\.tasks) ?? []).filter { $0.parentID == nil }
         if let task = tasks.first {
             if only?.contains("任务气泡开") ?? true, workspace.currentProject != task.projectID {

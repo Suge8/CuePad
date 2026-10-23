@@ -14,7 +14,7 @@ nonisolated struct ProjectPageData: Sendable, Equatable {
     var done: [Card]
     /// 本项目顶层任务的个数（`CueStore.taskCounts`）：纸底的"还有 N 条"与"已完成 M"。
     var taskCounts: TaskCounts
-    /// 任务的步骤完成了几个，完成圈与"步骤 n/m"由它推出。
+    /// 任务的子任务完成了几个，完成圈与"子任务 n/m"由它推出。
     var subtasks: [UUID: TaskProgress]
     /// 排墙用的卡片事实（`cards` 与 `lastSends` 推出，读取时算一次）：排墙、"更早"分组与"要不要重排"都读它。
     var stamps: [CardStamp]

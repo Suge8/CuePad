@@ -1,6 +1,6 @@
 import CueStore
 
-/// 任务是要做的卡片：这里只管任务特有的事（列出、新建、步骤、三态）；正文、移动、回收站用 card 命令。
+/// 任务是要做的卡片：这里只管任务特有的事（列出、新建、子任务、三态）；正文、移动、回收站用 card 命令。
 extension Command {
   static let task: [Command] = [
     Command(
@@ -22,13 +22,13 @@ extension Command {
       return listReply(views.map(\.line), json: views.map(\.json))
     },
     Command(
-      path: ["task", "add"], summary: "新建任务（顶层的放在项目最前，步骤放在上级的下级最后）", arguments: "<正文...>",
+      path: ["task", "add"], summary: "新建任务（顶层的放在项目最前，子任务放在上级的下级最后）", arguments: "<正文...>",
       options: [
         .project("挂到该项目"),
-        Opt("parent", "作为该任务的步骤（项目随它；任务 → 步骤，最多 \(Card.maxTaskDepth) 级）", value: "任务"),
+        Opt("parent", "作为该任务的子任务（项目随它；任务 → 子任务，最多 \(Card.maxTaskDepth) 级）", value: "任务"),
       ],
       notes: Schema.defaultScope(otherwise: Schema.defaultTarget) + "；给了 --parent 时不能再给 --project。\n"
-        + "正文取所有位置参数，以空格连接：第一行是标题，其余几行是它的正文（开始时连同标题发给 Agent）。已有的灵感用 cuepad card todo 变成任务。\n"
+        + "正文取所有位置参数，以空格连接：第一行是标题，其余几行是它的正文（开始时连同标题发给 Agent）。\n"
         + Schema.output("新建的 Card", Schema.card)
     ) { call in
       let args = call.args
@@ -44,7 +44,7 @@ extension Command {
       return reply(try await call.cardViews([task])[0])
     },
     setStatus("start", "标记进行中", .inProgress),
-    setStatus("done", "标记完成（没完成的步骤一起完成）", .done),
+    setStatus("done", "标记完成（没完成的子任务一起完成）", .done),
     setStatus("undo", "回到待办（撤销完成或进行中）", .todo),
   ]
 

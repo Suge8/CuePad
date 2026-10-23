@@ -19,9 +19,9 @@ extension CueStore {
     }
   }
 
-  /// 新步骤放在 `parent` 的下级最后，项目随它。上级不是任务抛 `invalidParent`，已在第 `Card.maxTaskDepth` 级抛 `taskTooDeep`。
-  /// 上级原本是叶子时，它的会话移到这个新步骤上（这一步就是已经在做的那件事，`CardLinks` 的规则）；上级的正文留在上级。
-  /// 上级已完成的不再算做完（`reopen`）：加步骤是明说还有活。
+  /// 新子任务放在 `parent` 的下级最后，项目随它。上级不是任务抛 `invalidParent`，已在第 `Card.maxTaskDepth` 级抛 `taskTooDeep`。
+  /// 上级原本是叶子时，它的会话移到这个新子任务上（这一步就是已经在做的那件事，`CardLinks` 的规则）；上级的正文留在上级。
+  /// 上级已完成的不再算做完（`reopen`）：加子任务是明说还有活。
   public func createTask(_ body: String, under parent: UUID) throws -> Card {
     try requireContent(body)
     return try write {
@@ -29,13 +29,13 @@ extension CueStore {
       guard try ancestors(of: parent).count + 1 < Card.maxTaskDepth else { throw CueStoreError.taskTooDeep }
       let last = try db.first("SELECT MAX(sortKey) FROM cards WHERE parentID = ?", [parent]) { $0.textOrNil(0) } ?? nil
       let step = try insertCard(body, project: link.project, parent: parent, todo: true, sortKey: SortKey.after(last))
-      try settle(around: [parent])  // 叶子加了第一个步骤：它的会话移到这个步骤上
+      try settle(around: [parent])  // 叶子加了第一个子任务：它的会话移到这个子任务上
       try reopen([parent])
       return try find(Card.self, step.id) ?? step
     }
   }
 
-  /// 任务此刻干活的叶子：任务自己是叶子就是它；有步骤的是第一个没完成的步骤，没有就第一个步骤（`CardLinks.home(of:)`）。
+  /// 任务此刻干活的叶子：任务自己是叶子就是它；有子任务的是第一个没完成的子任务，没有就第一个子任务（`CardLinks.home(of:)`）。
   /// 开工、绑会话、交话都落到它上面。`task` 必须是任务。
   func homeLeaf(_ task: UUID) throws -> UUID { try CardLinks(db, around: [task]).home(of: task) }
 
@@ -50,36 +50,27 @@ extension CueStore {
     }
   }
 
-  /// 设为任务 / 改回灵感。设为任务：成为待办的任务，正文原样（第一行是标题，其余是它的正文）。
-  /// 改回：回到灵感（状态与会话关联清掉），它的下级按原顺序提到它的位置。已经是这个样子时什么都不做、返回 nil；
-  /// 否则返回回执（`undo` 拨回）。
+  /// 把灵感接到任务正文后面，灵感进回收站，一个事务（拖一条灵感到任务上）：灵感说的是这件事的一部分，接上后在任务里接着读、开工时一起交出去。
+  /// 返回回执（`undo` 把正文改回、灵感恢复）。灵感不在了抛 `notFound`，落点不是任务抛 `notATask`。
   @discardableResult
-  public func setTodo(_ id: UUID, _ on: Bool) throws -> CardChange? {
-    try write { try applyTodo(id, on) }
-  }
-
-  @discardableResult
-  func applyTodo(_ id: UUID, _ on: Bool) throws -> CardChange? {
-    guard let card = try find(Card.self, id) else { throw CueStoreError.notFound }
-    guard card.isTask != on else { return nil }
-    let now = Date.stamp
-    var lifted: [UUID] = []
-    if on {
-      try db.run("UPDATE cards SET todoAt = ?1, startedAt = NULL, completedAt = NULL, modifiedAt = ?1 WHERE id = ?2", [now, id])
-    } else {
-      lifted = try liftChildren(of: card, at: now)
-      try db.run(
-        "UPDATE cards SET todoAt = NULL, startedAt = NULL, completedAt = NULL, piSessionID = NULL, formerSessionIDs = NULL, modifiedAt = ? WHERE id = ?",
-        [now, id])
+  public func mergeIdea(_ idea: UUID, into task: UUID) throws -> CardChange {
+    try write {
+      guard let card = try find(Card.self, idea), !card.isTask, card.deletedAt == nil else { throw CueStoreError.notFound }
+      guard let target = try find(Card.self, task) else { throw CueStoreError.notFound }
+      guard target.isTask else { throw CueStoreError.notATask }
+      let now = Date.stamp, added = card.body.trimmingCharacters(in: .whitespacesAndNewlines)
+      if !added.isEmpty {
+        let kept = target.body.trimmingCharacters(in: .whitespacesAndNewlines)
+        try db.run("UPDATE cards SET body = ?, modifiedAt = ? WHERE id = ?", [kept + "\n\n" + added, now, task])
+      }
+      try trashRow(card, at: now)
+      return .merge(idea: idea, task: task, body: target.body)
     }
-    // 步骤增减：上级的会话与提升上来的下级按叶子的规则放回去
-    if let parent = card.parentID { try settle(around: [parent]) }
-    return .todo(id: id, on: on, lifted: lifted)
   }
 
   /// 挪到 `slot` 里 `previous` 之后（nil = 最前），下级随它走、项目随新位置。卡片墙上的排序、换项目、缩进、
-  /// 挂成步骤、灵感挂到任务下当资料都是它。只能挂到任务下、不能挂到自己或自己的下级下（`invalidParent`），任务的子树超过 `Card.maxTaskDepth` 级任务抛 `taskTooDeep`。
-  /// 任务挂成步骤后，上级原来的会话按叶子的规则移到步骤上（`settle`）。
+  /// 挂成子任务、灵感挂到任务下都是它。只能挂到任务下、不能挂到自己或自己的下级下（`invalidParent`），任务的子树超过 `Card.maxTaskDepth` 级任务抛 `taskTooDeep`。
+  /// 任务挂成子任务后，上级原来的会话按叶子的规则移到子任务上（`settle`）。
   /// 返回回执（`undo` 把它放回原来的位置：原来的上级或项目、原来的前一个同级）。
   @discardableResult
   public func moveCard(_ id: UUID, to slot: CardSlot, after previous: UUID?) throws -> CardChange {

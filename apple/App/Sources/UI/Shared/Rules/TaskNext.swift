@@ -44,8 +44,8 @@ nonisolated enum TaskNext: Equatable, Sendable {
 }
 
 extension Workspace {
-    /// 一条任务"下一步"那一格（任务行、步骤行都走这里，两端不各自判断）：会话取窗口那一份交给的会话（`agents`，行从环境里取），
-    /// Mac 上本机在线的会话换上桥上的实时状态；完成了的不写。有步骤（`steps` 不为 nil）的不是叶子，不开工；正在开会话的不再给"开始"。
+    /// 一条任务"下一步"那一格（任务行、子任务行都走这里，两端不各自判断）：会话取窗口那一份交给的会话（`agents`，行从环境里取），
+    /// Mac 上本机在线的会话换上桥上的实时状态；完成了的不写。有子任务（`steps` 不为 nil）的不是叶子，不开工；正在开会话的不再给"开始"。
     /// `lead`：上级收成一行时（任务看板）此刻干活的叶子（`TaskBoard.Item.leaf`），先看它，它没有"下一步"再看这件自己。
     func next(for task: Card, lead: Card? = nil, in agents: AgentLinks, steps: TaskProgress?) -> TaskNext? {
         if let lead, let next = next(for: lead, in: agents, steps: nil) { return next }
@@ -66,7 +66,7 @@ extension Workspace {
         return (shown(agent), agent.state)
     }
 
-    /// 有步骤的任务此刻最该看的那一步的"下一步"：要你动手的会话优先，其次第一个有动静的会话，再次第一个能开始的步骤。
+    /// 有子任务的任务此刻最该看的那一步的"下一步"：要你动手的会话优先，其次第一个有动静的会话，再次第一个能开始的子任务。
     func lead(of steps: [Card], in agents: AgentLinks) -> TaskNext? {
         let nexts = steps.compactMap { next(for: $0, in: agents, steps: nil) }
         func needsYou(_ next: TaskNext) -> Bool { if case .agent(let shown, _) = next { shown.needsYou } else { false } }

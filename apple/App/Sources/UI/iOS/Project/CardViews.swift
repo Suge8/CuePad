@@ -1,7 +1,8 @@
 #if os(iOS)
 import SwiftUI
 
-/// 墙上的一张灵感。点开用系统缩放过渡放大成纸页；轻扫同所有灵感（`CardMenu.swipes`）；交给过 Agent 时右上角是那个会话的状态点；长按是菜单。
+/// 墙上的一张灵感。点开用系统缩放过渡放大成纸页；轻扫同所有灵感（`CardMenu.swipes`）；交给过 Agent 时右上角是那个会话的状态点；
+/// 长按是菜单，按住拖到上面任务纸的一行上接进那条任务（`TaskOutline`）。
 struct CardTileView: View {
     let entry: CardEntry
     let lastTarget: String?
@@ -44,6 +45,7 @@ struct CardTileView: View {
         .zoomSource(card.id, in: zoom)
         .rowSwipes(.card(card, workspace: workspace), clipped: false)
         .contextMenu { CardActions(card: card) }
+        .onDrag { CardDragSession.shared.begin(.idea(card.id)) }
     }
 }
 
@@ -82,13 +84,14 @@ struct OlderGroupHeader: View {
     }
 }
 
-/// "更早"里的一行。每行是懒加载列表里独立的一项：同组的行拼成一张纸（首尾圆角、行间分隔线），
-/// 大项目几百张旧卡也只创建屏幕内的行。
+/// "更早"与置顶的灵感里的一行。每行是懒加载列表里独立的一项：同组的行拼成一张纸（首尾圆角、行间分隔线），
+/// 大项目几百张旧卡也只创建屏幕内的行。置顶的（`pinned`）行首一枚图钉，那一组不另起组名。同墙上的卡，能拖进任务。
 struct OlderRow: View {
     let entry: CardEntry
     let lastTarget: String?
     let isFirst: Bool
     let isLast: Bool
+    var pinned = false
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     @Environment(\.zoomNamespace) private var zoom
@@ -105,6 +108,7 @@ struct OlderRow: View {
         let card = entry.card, text = entry.text
         NavigationLink(value: Route.card(card.id)) {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
+                if pinned { Image(.pin).font(.footnote).foregroundStyle(palette.ink2).accessibilityLabel("置顶") }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(text.label).font(.subheadline.weight(.medium)).foregroundStyle(palette.ink).lineLimit(1)
                     if !text.preview.isEmpty {
@@ -128,6 +132,7 @@ struct OlderRow: View {
         .zoomSource(card.id, in: zoom)
         .rowSwipes(.card(card, workspace: workspace))
         .contextMenu { CardActions(card: card) }
+        .onDrag { CardDragSession.shared.begin(.idea(card.id)) }
     }
 }
 

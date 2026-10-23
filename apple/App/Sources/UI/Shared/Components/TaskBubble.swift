@@ -3,17 +3,17 @@ import SwiftUI
 
 /// 任务气泡：点一条任务（项目页与任务页的行、Cue 对话里提到的任务、⌘K、归档、小组件链接），从点的那一下长出来的一张纸
 /// （\`BubbleFrame\`，Mac 与手机同一个视图，只差字号与行高）。不换页、不压暗；点外面或 Esc 关，点外面另一条就换成它的气泡。
-/// 上面是这件事：完成圈（有步骤时按步骤分段，做到哪只画在圈上）、标题（就地改）、"⋯"，一行所在项目，下面是它的正文（标题下面要交代给 Agent 的话，点了就地写）；
-/// 有步骤时列出步骤（同全 App 的任务行 \`TaskLine\`），点一步气泡原地翻到这一步、左上出返回；顶层任务末尾一行添加步骤。
+/// 上面是这件事：完成圈（有子任务时按子任务分段，做到哪只画在圈上）、标题（就地改）、"⋯"，一行所在项目，下面是它的正文（标题下面要交代给 Agent 的话，点了就地写）；
+/// 有子任务时列出子任务（同全 App 的任务行 \`TaskLine\`），点一步气泡原地翻到这一步、左上出返回；顶层任务末尾一行添加子任务。
 /// 最下面一条是"下一步"：交给了会话是它此刻的样子（吉祥物、一句话），点了去会话；还没开始的叶子是"开始"（正文连同标题交给 Agent）；
-/// 有步骤的看最该你看的那一步（\`Workspace.lead\`）。
+/// 有子任务的看最该你看的那一步（\`Workspace.lead\`）。
 struct TaskBubble: View {
-    /// 一次打开：\`id\` 每次打开都不同（同一件事再点一次也从新的那一下长出来）；\`step\` 是翻到的步骤，翻页不换 \`id\`。
+    /// 一次打开：\`id\` 每次打开都不同（同一件事再点一次也从新的那一下长出来）；\`step\` 是翻到的子任务，翻页不换 \`id\`。
     struct Request: Identifiable, Equatable {
         let id = UUID()
         /// 顶层任务。
         let task: UUID
-        /// 翻到的步骤；nil 是这件事本身（有步骤时是步骤一览）。
+        /// 翻到的子任务；nil 是这件事本身（有子任务时是子任务一览）。
         var step: UUID?
         /// 从哪长出来：点的那一下，或没有来源（\`Workspace.openTask\`）。
         let source: BubbleSource
@@ -41,11 +41,11 @@ struct TaskBubble: View {
         }
         .animation(HandOff.quick, value: step)
         #if os(macOS)
-        // Mac 的浮层挂在页面之外：步骤的状态点、"下一步"读的"交给了哪个会话"在这里补上
+        // Mac 的浮层挂在页面之外：子任务的状态点、"下一步"读的"交给了哪个会话"在这里补上
         .modifier(WindowCardAgents(workspace: workspace))
         #endif
         .observing(services.store, id: request.task, into: $data, onError: workspace.fail) { [task = request.task] in try BubbleData.read(task, from: $0) }
-        // 别处删掉、归档了它，或改回了灵感：气泡收起
+        // 别处删掉、归档了它：气泡收起
         .onChange(of: data?.gone) { if data?.gone == true { close() } }
         // 翻页、关气泡都先写下正文里没保存的字
         .onChange(of: step) { leaveEditing() }
@@ -74,15 +74,15 @@ struct TaskBubbleSlot: View {
     }
 }
 
-/// 气泡一次读出的东西：顶层任务、所在项目、它的步骤。
+/// 气泡一次读出的东西：顶层任务、所在项目、它的子任务。
 nonisolated struct BubbleData: Sendable, Equatable {
     var goal: Card
     var project: Project?
     var steps: [Card]
-    /// 步骤完成了几个（\`CueStore.subtaskProgress\`）；没有步骤为 nil。
+    /// 子任务完成了几个（\`CueStore.subtaskProgress\`）；没有子任务为 nil。
     var progress: TaskProgress?
-    /// 已不是一条看得见的任务（删了、归档了、改回了灵感）。
-    var gone: Bool { goal.deletedAt != nil || goal.archivedAt != nil || !goal.isTask }
+    /// 已不是一条看得见的任务（删了、归档了）。
+    var gone: Bool { goal.deletedAt != nil || goal.archivedAt != nil }
 
     /// 翻到的那一页：那一步（还在时），否则这件事本身。
     func focus(_ step: UUID?) -> Card { steps.first { $0.id == step } ?? goal }
@@ -106,9 +106,9 @@ enum BubbleMetrics {
     static let gap: CGFloat = 10
     static let ringNudge: CGFloat = 1
     static let ringBleed: CGFloat = (TaskMetrics.chipTarget - TaskMetrics.titleRing) / 2
-    /// 标题、项目行、正文与步骤的圈都对齐到标题的字起点。
+    /// 标题、项目行、正文与子任务的圈都对齐到标题的字起点。
     static let indent: CGFloat = TaskMetrics.chipTarget - ringBleed + gap
-    /// 步骤行的圈在它那一列（`TaskMetrics.ringColumn`）里居中：行往左挪半列空白，圈对着标题的字起点。
+    /// 子任务行的圈在它那一列（`TaskMetrics.ringColumn`）里居中：行往左挪半列空白，圈对着标题的字起点。
     static let rowLead: CGFloat = (TaskMetrics.ringColumn - TaskMetrics.stepRing) / 2
     static let section: CGFloat = 10
     static let lineSpacing: CGFloat = Typography.lineSpacing
