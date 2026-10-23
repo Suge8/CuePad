@@ -4,8 +4,8 @@ import SwiftUI
 /// 手机竖版看板的一行（`BoardColumn` 的 `row`，`PhoneBoard` 四行竖着排）：Mac 看板的一列转 90°——一行横贯全屏，
 /// 行头（`BoardLaneMark`、竖排的名字、数）是一块竖窄的写字玻璃，贴着屏幕左边钉在行里、竖直居中，卡在它右边横着排，放不下就在这一行里横划、
 /// 按卡停（`viewAligned`）；卡滑动时从玻璃下面过，不遮罩、不在它右沿裁掉（docs/ui.md 沉浸式的栏）。玻璃贴屏边、不留缝：留缝时停着的上一张卡的尾巴在缝里露出碎字。
-/// 四行的玻璃一样宽、高与这一行的卡一样（内容在玻璃里居中）：停着的上一张卡收在玻璃下面，上下都不露尾巴——四块一样高时，高的行在玻璃上下
-/// 露出上一张卡的碎字（实测，等你那一行最明显）。行至少放得下最长的名字（三个字）加记号与数（`spineHeight`）。行没有底（`BoardLane`）：分组靠留白与行头。
+/// 四行的玻璃一样大（`spineHeight`：放得下最长的名字三个字加记号与数），在行里竖直居中、内容在玻璃里居中，行至少这么高；
+/// 比玻璃高的行（推进中、等你）里，停着的上一张卡在玻璃上下露出一截尾巴。行没有底（`BoardLane`）：分组靠留白与行头。
 /// 一格多高按列定、随动态字体放大（`BoardRowStyle`）：卡上标题小一档、可折两行，推进中下面是线与状态词，等你是抬头、三行问句、选项或回答框。
 /// 待办、推进中有两件以上叠两排（按列填，读的顺序不变），其余一排；空行与只有"更早做完的 N"的已完成行收成一排矮格；行高不低于行头玻璃（名字总写全）。
 /// 卡多卡少不改行高（除了空与不空、一件与两件），行在下面增减，上面的行不动。行里的卡在懒加载的横排里，只建看得见的几张。
@@ -34,8 +34,7 @@ struct BoardRowLane<Above: View, Content: View>: View {
         .frame(minHeight: spineHeight)
         .overlay(alignment: .leading) {
             BoardRowSpine(column: column, count: count)
-                .frame(width: BoardRowMetrics.spine)
-                .frame(maxHeight: .infinity)
+                .frame(width: BoardRowMetrics.spine, height: spineHeight)
                 .glass(in: UnevenRoundedRectangle(bottomTrailingRadius: BoardRowMetrics.spine / 2, topTrailingRadius: BoardRowMetrics.spine / 2, style: .continuous))
         }
         .fixedSize(horizontal: false, vertical: true)
@@ -112,7 +111,7 @@ enum BoardRowMetrics {
     static let waitWidth: CGFloat = 0.88
     /// 行头宽：记号、竖排的名字与数。
     static let spine: CGFloat = 32
-    /// 行至少这么高：行头玻璃里放得下记号、三个字的竖排名与数，上下各留一点。
+    /// 行头玻璃的高（四行同一个，行至少这么高）：记号、三个字的竖排名与数，上下各留一点。
     static let spineHeight: CGFloat = 92
     /// 卡静止时离屏幕左边：行头加卡与卡之间的空，停着的上一张卡正好整个收在玻璃下面。
     static let lead: CGFloat = spine + gap
