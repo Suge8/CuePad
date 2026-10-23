@@ -25,13 +25,7 @@ struct DockRoot: View {
         NavigationStack(path: $workspace.path) {
             HomePager(motion: motion, composing: composing, shot: shot) {
                 ZStack(alignment: .bottom) {
-                    // "⋯"展开时铺在 Cue 页上的一层：点一下或一划就收起
-                    if motion.placesOpen, root == .cue {
-                        Color.clear.contentShape(.rect)
-                            .onTapGesture { openPlaces(false) }
-                            .gesture(DragGesture(minimumDistance: 4).onChanged { _ in openPlaces(false) })
-                            .accessibilityHidden(true)
-                    }
+                    PlacesCatcher(motion: motion, onCue: root == .cue) { openPlaces(false) }
                     DockBar(route: root, motion: motion, composing: composing, width: max(0, width - Dock.margin * 2), openPlaces: openPlaces)
                         .padding(.bottom, Dock.margin).ignoresSafeArea(edges: .bottom)
                 }
@@ -57,6 +51,22 @@ struct DockRoot: View {
     private func openPlaces(_ open: Bool) {
         guard open != motion.placesOpen else { return }
         withAnimation(Motion.spatial(Motion.dock, reduceMotion: reduceMotion)) { motion.placesOpen = open }
+    }
+}
+
+/// "⋯"展开时铺在 Cue 页上的一层：点一下或一划就收起。开合只重算这一小块：读在 `DockRoot` 里，每开合一次根上四页的内容都要整份重设（`HomePager`）。
+private struct PlacesCatcher: View {
+    let motion: PagerMotion
+    let onCue: Bool
+    let close: () -> Void
+
+    var body: some View {
+        if motion.placesOpen, onCue {
+            Color.clear.contentShape(.rect)
+                .onTapGesture(perform: close)
+                .gesture(DragGesture(minimumDistance: 4).onChanged { _ in close() })
+                .accessibilityHidden(true)
+        }
     }
 }
 

@@ -27,7 +27,7 @@ final class PagerController: UIViewController {
     private let strip = UIView()
     /// 正在滑的页：画、订阅。
     private var moving: Set<Route> = []
-    /// 条停在哪一页（`Workspace.root` 换了，条滑过去之后才是它）。
+    /// 条要停的那一页：跟着 `Workspace.root`，只在松手时先于它改（先把弹簧交出去再 `select`）；`update` 见到两者不同就是去处从别处换了，滑过去。
     private var resting = Route.first
     /// 条的平移（点）：停在第 i 页是 -i×宽；拉出前进页时越过最后一页。
     private var offset: CGFloat = 0
@@ -294,7 +294,6 @@ final class PagerController: UIViewController {
     /// 停稳：滑过的页藏起来、不订阅；邻页还没挂上（刚打开就连着滑）时接着挂、接着建。
     private func rest() {
         show(moving: [])
-        motion.busy = false
         for route in neighbors(of: resting) where pages[route] != nil { attach(route) }
         settleDown()
     }

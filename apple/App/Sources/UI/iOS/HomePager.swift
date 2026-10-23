@@ -8,7 +8,8 @@ import UIKit
 /// Cue 在最右，它右边是刚返回离开的那一页（`Workspace.forward`）：手指左滑把它拉回来。跟手的是离开前拍的快照（`LeaveShot`，同 Safari 的前进），
 /// 同系统推入一样盖着 Cue 页滑进来、Cue 页与底部那一排慢慢退；松手推入真的页（不带动画），它画上屏后才收起快照。
 /// 跟手与弹簧都在 SwiftUI 之外（`PagerController`）：每页各有自己的托管控制器，拖动只改图层的平移，松手的弹簧交给 Core Animation，
-/// 页里一帧不重算 SwiftUI。环境整份转给每一页（`environment(\.self)`），页里读到的与挂在导航栈根上时一样。
+/// 页里只有 Cue 页的输入框逐帧换浓淡（`DockHandoff`），其余一帧不重算 SwiftUI。环境整份转给每一页（`environment(\.self)`），页里读到的与挂在导航栈根上时一样，
+/// 所以这一层的 body 每重算一次，四页的内容就整份重设一遍：这里不读 `PagerMotion` 里会变的东西，读的都放进自己的小块里（`PagerSettling`、`Retreat`、`ForwardPage`）。
 /// 底部那一排与前进页的快照留在这一层 SwiftUI 里（托管视图点在空处也不往下交，盖在页上就挡住了页）：每帧只重算读 `PagerMotion` 的那几小块。
 struct HomePager<Chrome: View>: View {
     let motion: PagerMotion
@@ -26,9 +27,15 @@ struct HomePager<Chrome: View>: View {
             .ignoresSafeArea()
             .overlay { chrome.modifier(Retreat(motion: motion)) }
             .overlay { ForwardPage(motion: motion).allowsHitTesting(false).accessibilityHidden(true) }
-            // 跟手与弹簧在图层上，SwiftUI 看不出在动：截图要等停稳再拍
-            .debugSettling(motion.busy)
+            .background { PagerSettling(motion: motion) }
     }
+}
+
+/// 跟手与弹簧在图层上，SwiftUI 看不出在动：截图要等停稳再拍。
+private struct PagerSettling: View {
+    let motion: PagerMotion
+
+    var body: some View { Color.clear.debugSettling(motion.busy) }
 }
 
 /// 条此刻的样子，容器（`PagerController.apply`）写、SwiftUI 读：在不在动（截图等它停）、停在哪、前进页拉出来多少。
