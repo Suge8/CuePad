@@ -4,11 +4,11 @@ import SwiftUI
 /// Cue 页（Mac 内容区的一页、iPhone 与 iPad 侧栏最上面那一行点进的页、iPad 右侧面板；iPhone 打开 App 就在这一页），与会话页同一套消息版式：
 /// 页头一直在（头像、名字、此刻在做什么；Mac 在窗口工具栏，是 `CueTitle`；手机与 iPad 是浮在对话上的 `CueHeader`，点开是在做、等你与记忆的面板）；
 /// 中间是对话：你的话是右侧牛皮纸色的气泡，Cue 的话是左侧纸做的气泡（`CueBubble`、`CueSays`），它第一次提到一件活时气泡底下一行这件活（`CueTaskLine`），
-/// 同一边连着说的几颗收紧成一串，隔了一阵的地方居中写几点（`ChatTimeMarker`）；经过、动态与分隔不是气泡，是旁注与居中的标记（`NoteLine`、`ChatMarker`），
+/// 同一边连着说的几颗收紧成一串，隔了一阵的地方居中写几点（`ChatTimeMarker`）；经过、醒来记录与分隔不是气泡，是旁注与居中的标记（`NoteLine`、`ChatMarker`），
 /// 你发起的一轮在你的话之后先是这一轮的经过（`RoundProcess`，同会话页：在跑时实时展开，做完收成一行；设置里可关，`AppSettings.showsCueSteps`），这一轮说的话与结果按先后在它之后；
-/// 经过清单里"对你说"那一条点它回到对话里的原处。Cue 自己醒来的连着几轮收进一颗虚线气泡（`CueNoteBubble`：每轮写为什么醒，点了去叫醒它的会话），
+/// 经过清单里"对你说"那一条点它回到对话里的原处。Cue 自己醒来的那几轮每轮一行旁注（`CueNoteLog`：提到的那一处、当时出了什么事与它说的一句，点了去那里），
 /// 末尾是它此刻在做什么（`CueEnding`）；
-/// 对话区与会话页是同一个（`ChatColumn`：排开、刻度滑条、跳转与描圈）；底部是"等你"（`CueWaitingDock`）与输入框（`CueComposer`）。
+/// 对话区与会话页是同一个（`ChatColumn`：排开、刻度滑条、跳转与描圈）；底部是"等你"（`CueWaitDock`：Cue 的提问与会话在问的都在这里，对话里不另挂）与输入框（`CueComposer`）。
 /// 首次见面与启用只有一处（`CueWelcome`）：还没说过话时在正中，说过话后停用了在输入框正上方。
 /// 对话第一帧就排好（`observing` 当场读），停在最新处；有新消息时从第一条读起，还没读的气泡旁一颗小点（`CueViewing`）。
 /// Cue 运行在别的设备上、本机正在和 iCloud 对时（`AppServices.isCatchingUp(on:)`）页头写"正在同步"，这期间到的话先不滑上来，
@@ -34,7 +34,7 @@ struct CuePage: View {
     @State private var opened: PreviewOpening?
     /// 对话那一列的宽：离屏远的段换成的空白按它估高（`ChatSegments`）。
     @State private var width: CGFloat = 0
-    /// "等你"卡正在来去（`CueWaitingDock.moving`）：对话先不往上滑。
+    /// "等你"卡正在来去（`CueWaitDock.moving`）：对话先不往上滑。
     @State private var docking = false
     /// 末尾在屏上的新消息（`CueViewing`）。
     @State private var seen: [UUID: Date] = [:]
@@ -226,7 +226,7 @@ struct CuePage: View {
     private var bottom: some View {
         VStack(spacing: 0) {
             if let thread {
-                CueWaitingDock(waiting: thread.waiting, tasks: thread.tasks, shots: thread.shots, open: { opened = $0 }, moving: $docking)
+                CueWaitDock(waiting: thread.waiting, tasks: thread.tasks, shots: thread.shots, open: { opened = $0 }, moving: $docking)
                 // 说过话后停用了：启用就在输入框正上方（`CueWelcome`），是这时唯一的主动作
                 if !thread.rows.isEmpty, !cue.canHear { CueWelcome(intro: false).fixedSize(horizontal: false, vertical: true).padding(.bottom, 8).transition(.opacity) }
             }

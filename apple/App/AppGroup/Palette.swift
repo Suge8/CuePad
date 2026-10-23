@@ -59,8 +59,6 @@ struct Palette {
     var ink3: Color { ink.opacity(highContrast ? 0.75 : (dark ? 0.6 : 0.64)) }
     /// 分隔线、纸边、次按钮描边：装饰，不承载信息。
     var hair: Color { ink.opacity(highContrast ? 0.3 : (dark ? 0.09 : 0.07)) }
-    /// Cue 自己醒来的动态那颗气泡的虚线（`CueNoteBubble`）：说了但没推给你，只描边不铺底。比 `hair` 深，虚线断开后仍看得出边。
-    var noteEdge: Color { ink.opacity(highContrast ? 0.55 : (dark ? 0.26 : 0.28)) }
     /// 唯一的浅底：悬停、按下、次按钮、代码与变量。
     var fill: Color { ink.opacity(fillAmount) }
     /// `fill` 叠在 `surface` 上合成的实色：悬停的行上露出的操作垫它（`hoverReveal`），盖住压到的字、又和行的淡底接得上。

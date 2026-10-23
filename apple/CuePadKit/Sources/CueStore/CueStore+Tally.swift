@@ -48,14 +48,10 @@ public struct CueTally: Equatable, Sendable {
 
 extension CueStore {
   public func cueTally() throws -> CueTally {
-    let messages = try cueMessagesWaitingForYou()
-    let sessions = try sessionsAskingYou()
-    let owners = try sessionOwners(sessions.map(\.sessionID))
-    let waiting =
-      try messages.map { CueTally.Wait.message($0, task: try $0.taskID.flatMap(topLevelTask)) }
-      + sessions.map { CueTally.Wait.session($0, task: owners[$0.sessionID]?.task.id) }
+    let waiting = try cueWaiting()
     var tally = CueTally(advancing: [], waiting: waiting)
-    let held = tally.held, asking = Set(sessions.map(\.sessionID))
+    let held = tally.held
+    let asking = Set(waiting.compactMap { if case .session(let state, _) = $0 { state.sessionID } else { nil } })
     tally.advancing = try cueBoard().active.filter { work in
       switch work {
       case .task(let item): !held.contains(item.id)
@@ -63,6 +59,15 @@ extension CueStore {
       }
     }
     return tally
+  }
+
+  /// 只有等你那一份（`CueTally.waiting`，同一条规则）：Cue 页的等你卡只读它，不连带推进中的那些读取。
+  public func cueWaiting() throws -> [CueTally.Wait] {
+    let messages = try cueMessagesWaitingForYou()
+    let sessions = try sessionsAskingYou()
+    let owners = try sessionOwners(sessions.map(\.sessionID))
+    return try messages.map { CueTally.Wait.message($0, task: try $0.taskID.flatMap(topLevelTask)) }
+      + sessions.map { CueTally.Wait.session($0, task: owners[$0.sessionID]?.task.id) }
   }
 
   /// 这件任务所在的顶层任务（上级不在库里或不可见时按顶层看待，同 `Card.parentID`）；任务不在库里为 nil。

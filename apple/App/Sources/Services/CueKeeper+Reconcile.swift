@@ -148,7 +148,7 @@ extension CueKeeper {
     }
 
     /// 手上什么都没有：没做完的任务、不归它们的活会话（含出错、在等回答的）、等你的卡一样都没有。刚启用与空闲巡视这时都不醒：
-    /// 醒来只能说一句没有事，留下一行"没动手"。
+    /// 醒来只能说一句没有事，在 Cue 页留下一行什么都没做的记录。
     private func handsEmpty() async throws -> Bool {
         let board = try await store.cueBoard()
         guard board.tasks.isEmpty, board.sessions.isEmpty else { return false }

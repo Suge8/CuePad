@@ -5,7 +5,7 @@ import Foundation
 /// 一件任务只在一列：被等你占着的（`CueTally.held`）只在等你，Cue 在做的只在「推进中」，不论它的状态；其余按状态。
 /// - 待办：没做完、Cue 也没在做的顶层任务（没开始的，和开始过而会话都结束了的），项目顺序、同级手动顺序（拖动排序只在同一项目的顶层里挪，`move`）。
 /// - 推进中、等你：就是 `CueStore.cueTally`（Cue 那一行的同一份），"全部"下列头的数与它相等；没绑没做完的任务的活会话在「推进中」里各一张，
-///   等你每件一张，没落在任务上的（Cue 的一般提问、没绑任务的会话）也在。
+///   等你每件一张、最早的在上（与 Cue 页等你卡同一份，`waits`），没落在任务上的（Cue 的一般提问、没绑任务的会话）也在。
 /// - 已完成：今天做完的顶层任务（`CueStore.tasksDone`），最近的在前；更早做完的收在列末（`earlier`），没进归档，所以就地展开，不跳去归档页。
 ///   每件带上 Cue 做完时点名的第一张成果图（`CueStore.cueResultShots`，读的时候一次取齐，不逐行查库）。
 /// 步骤不单列，卡片写进度；会话此刻在做什么看任务此刻干活的叶子（`Item.leaf`）。顶层的口径同 `CueStore.taskCounts`（`TaskTree` 的顶层）。
@@ -117,6 +117,12 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         return TaskMove(slot: .top(project: dragged.projectID), after: after)
     }
 
+    /// 等你那几件（Cue 页的等你卡读同一份，`CueThread`）：最早的在前（等得最久的先答），落在任务上的带那件任务（`item` 按读的地方要的写）。
+    static func waits(_ waiting: [CueTally.Wait], from store: isolated CueStore, item: (Card) throws -> Item) throws -> [Wait] {
+        try waiting.map { wait in Wait(wait: wait, item: try wait.task.flatMap { try store.card($0) }.map(item)) }
+            .enumerated().sorted { ($0.element.since, $0.offset) < ($1.element.since, $1.offset) }.map(\.element)
+    }
+
     static func read(from store: isolated CueStore, now: Date = .now) throws -> TaskBoard {
         let projects = Dictionary(uniqueKeysWithValues: try store.projects().map { ($0.id, $0) })
         let steps = try store.subtaskProgress()
@@ -141,7 +147,7 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         return TaskBoard(
             todo: try tally.free(open.roots.compactMap(open.task).filter { !advanced.contains($0.id) }).map(item),
             advancing: try tally.advancing.map { work in Work(work: work, item: try work.task.map(item)) },
-            waiting: try tally.waiting.map { wait in Wait(wait: wait, item: try wait.task.flatMap { try store.card($0) }.map(item)) },
+            waiting: try waits(tally.waiting, from: store, item: item),
             done: try finished[..<split].map(finishedItem),
             earlier: try finished[split...].map(finishedItem))
     }
