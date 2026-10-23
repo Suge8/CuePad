@@ -93,14 +93,14 @@ private struct AgentPanelButton: View {
 }
 
 /// 右侧 Cue 面板。不套导航栈、不放工具栏：iPadOS 的详情栏只有一条工具栏，面板里的工具栏会并进去。
-/// 它不经 `RouteView`，沉浸式的那几件自己挂：离顶上那一排的距离让在安全区里（用外边距的话列表停在边距下沿、
-/// 滚上去被一刀切齐），内容一直滚到工具栏的玻璃与状态栏后面，什么也不遮（`Bars`）。
+/// 它不经 `RouteView`，沉浸式的那几件自己挂：页顶那一排（Cue 的名牌）由面板自己画（`HeaderHost.panel`），
+/// 内容一直滚到它与状态栏后面，什么也不遮（`Bars`）。
 private struct AgentPanel: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
         CuePage(inPanel: true).countsAsPiViewer()
-            .safeAreaPadding(.top, 8)
+            .environment(\.headerHost, .panel)
             .background(palette.desk.ignoresSafeArea())
             .modifier(KeyboardHold())
     }

@@ -22,15 +22,15 @@ struct TasksScreen: View {
             if sizeClass == .regular {
                 BoardColumns(board: shown, adding: $adding, newTaskProject: newTaskProject).padding(.horizontal, 12)
             } else {
-                VStack(alignment: .leading, spacing: 10) {
-                    BoardSegments(board: shown, selected: $column).padding(.horizontal, 16)
-                    pages(shown)
-                }
+                // 分段浮在卡上，卡从它后面滚过，不在它下沿裁掉（docs/ui.md 沉浸式的栏）
+                pages(shown)
+                    .safeAreaPadding(.top, BoardSegments.height + Self.segmentGap)
+                    .overlay(alignment: .top) { BoardSegments(board: shown, selected: $column).padding(.horizontal, 16) }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         // 顶上不写页名（侧栏、底部那一排的选中格已经说了在哪一页），中间是项目范围
-        .floatingHeader("任务", center: { ProjectScope().glass(in: .capsule) }) {
+        .floatingHeader("任务", center: { ProjectScope().headerPiece() }) {
             Button("添加任务", icon: .add) { add() }
         }
         .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: adding)
@@ -41,6 +41,7 @@ struct TasksScreen: View {
     }
 
     private var newTaskProject: UUID? { workspace.scopedProject ?? workspace.currentProject }
+    private static let segmentGap: CGFloat = 10
 
     /// 一屏一列，左右滑换列：列的宽就是可见宽（`containerRelativeFrame`），按页停。
     private func pages(_ board: TaskBoard) -> some View {
@@ -73,7 +74,7 @@ struct TasksScreen: View {
     }
 }
 
-/// 窄屏任务页顶上的分段：四列各一格，写列头那颗记号（`BoardLaneMark`，小一号）、列名与数；选中的那格是靛青浅底（`selection`）。点了滑到那一列。
+/// 窄屏任务页顶上浮着的分段：四列各一格，写列头那颗记号（`BoardLaneMark`，小一号）、列名与数；选中的那格是靛青浅底（`selection`）。点了滑到那一列。
 private struct BoardSegments: View {
     let board: TaskBoard
     @Binding var selected: TaskBoard.Column?
@@ -81,6 +82,9 @@ private struct BoardSegments: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// 记号随分段的字一起缩放，约是字高。
     @ScaledMetric(relativeTo: .subheadline) private var mark: CGFloat = 14
+    private static let segment: CGFloat = 40
+    private static let inset: CGFloat = 3
+    static let height = segment + inset * 2
 
     var body: some View {
         HStack(spacing: 2) {
@@ -96,7 +100,7 @@ private struct BoardSegments: View {
                     }
                     .font(.subheadline).foregroundStyle(on ? palette.ink : palette.ink2)
                     .lineLimit(1).minimumScaleFactor(0.8)
-                    .frame(maxWidth: .infinity, minHeight: 40)
+                    .frame(maxWidth: .infinity, minHeight: Self.segment)
                     .background(on ? palette.selection : .clear, in: .capsule)
                     .contentShape(.capsule)
                 }
@@ -104,7 +108,7 @@ private struct BoardSegments: View {
                 .accessibilityAddTraits(on ? .isSelected : [])
             }
         }
-        .padding(3)
+        .padding(Self.inset)
         .glass(in: .capsule)
     }
 }
