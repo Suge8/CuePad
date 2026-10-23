@@ -38,7 +38,9 @@ struct PhoneBoard: View {
             }
             .scrollTargetLayout()
         }
-        .contentMargins(.horizontal, style == "B" ? Self.centered : Self.margin, for: .scrollContent)
+        // 左右的边用 safeAreaPadding 不用 contentMargins：键盘（任务浮窗里写字）起落让页面重排一次后，contentMargins 的边会丢——
+        // 列宽变成算进边距的整页八成、停住的列贴到屏边，整条看板错开 12pt（实测）
+        .safeAreaPadding(.horizontal, style == "B" ? Self.centered : Self.margin)
         .scrollTargetBehavior(.viewAligned)
         .scrollPosition(id: $column, anchor: .leading)
         .scrollIndicators(.never)
