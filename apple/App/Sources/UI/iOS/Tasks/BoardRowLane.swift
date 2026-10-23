@@ -5,7 +5,7 @@ import SwiftUI
 /// 行头（`BoardLaneMark`、竖排的名字、数）钉在左端，卡在它右边横着排，放不下就在这一行里横划、按卡停（`viewAligned`）；
 /// 卡滑过行头时在它右沿淡出，不硬切。
 /// 一格多高按列定、随动态字体放大（`BoardRowStyle`）：卡上标题小一档、可折两行，推进中下面是线与状态词，等你是抬头、三行问句、选项或回答框。
-/// 待办、推进中有两件以上叠两排（按列填，读的顺序不变），其余一排；空行与只有"更早做完的 N"的已完成行收成一排矮格，行高不低于行头（行头与格子谁高按谁）。
+/// 待办、推进中有两件以上叠两排（按列填，读的顺序不变），其余一排；空行与只有"更早做完的 N"的已完成行收成一排矮格；行高只看格子，行头随行高收紧（`BoardRowSpine`）。
 /// 卡多卡少不改行高（除了空与不空、一件与两件），行在下面增减，上面的行不动。行里的卡在懒加载的横排里，只建看得见的几张。
 /// 添加任务那一行（`above`）横贯这一行、在卡的上面，不挤进格子里（格子窄，选项目的胶囊会被截）；添加时这一行先滑回行首。
 struct BoardRowLane<Above: View, Content: View>: View {
@@ -23,13 +23,13 @@ struct BoardRowLane<Above: View, Content: View>: View {
     @ScaledMetric(relativeTo: .body) private var waitHeight = BoardRowMetrics.waitHeight
 
     var body: some View {
-        HStack(alignment: .top, spacing: 0) {
-            BoardRowSpine(column: column, count: count).frame(width: BoardRowMetrics.spine)
-            VStack(alignment: .leading, spacing: BoardRowMetrics.gap) {
-                above.padding(.leading, BoardRowMetrics.fade).padding(.trailing, BoardRowMetrics.margin)
-                strip
-            }
+        // 行高只由格子定：行头叠在左边、拿到的就是这个高，放不下全名就收紧
+        VStack(alignment: .leading, spacing: BoardRowMetrics.gap) {
+            above.padding(.leading, BoardRowMetrics.fade).padding(.trailing, BoardRowMetrics.margin)
+            strip
         }
+        .padding(.leading, BoardRowMetrics.spine)
+        .overlay(alignment: .leading) { BoardRowSpine(column: column, count: count).frame(width: BoardRowMetrics.spine) }
         .padding(.vertical, BoardRowMetrics.inset)
         .background { band }
     }
@@ -130,6 +130,7 @@ enum BoardRowMetrics {
 }
 
 /// 行的左端：记号、竖着的名字、数，与第一排卡的上沿齐，卡从它右边滑过。
+/// 行矮（一排矮格：空行、只有"更早做完的 N"、一件待办）放不下竖排的名字时只留记号与数：行不为行头长高，名字由记号、行的颜色与格子里的字带出。
 private struct BoardRowSpine: View {
     let column: TaskBoard.Column
     let count: Int
@@ -137,21 +138,32 @@ private struct BoardRowSpine: View {
     @ScaledMetric(relativeTo: .footnote) private var mark: CGFloat = 18
 
     var body: some View {
-        VStack(spacing: 4) {
-            BoardLaneMark(column: column, size: mark)
-            VStack(spacing: -1) {
-                ForEach(Array(column.title.enumerated()), id: \.offset) { Text(String($1)) }
+        ViewThatFits(in: .vertical) {
+            VStack(spacing: 4) {
+                BoardLaneMark(column: column, size: mark)
+                VStack(spacing: -1) {
+                    ForEach(Array(column.title.enumerated()), id: \.offset) { Text(String($1)) }
+                }
+                .font(.footnote.weight(.semibold)).foregroundStyle(palette.ink2)
+                .padding(.top, 2)
+                number
             }
-            .font(.footnote.weight(.semibold)).foregroundStyle(palette.ink2)
-            .padding(.top, 2)
-            Text("\(count)").font(.subheadline.weight(.semibold)).monospacedDigit().foregroundStyle(palette.ink).counting(count)
-                .minimumScaleFactor(0.7).lineLimit(1)
+            VStack(spacing: 4) {
+                BoardLaneMark(column: column, size: mark)
+                number
+            }
         }
+        .frame(maxHeight: .infinity, alignment: .top)
         .padding(.leading, BoardRowMetrics.fade)
         .frame(maxWidth: .infinity)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(column.title) \(count)")
         .accessibilityAddTraits(.isHeader)
+    }
+
+    private var number: some View {
+        Text("\(count)").font(.subheadline.weight(.semibold)).monospacedDigit().foregroundStyle(palette.ink).counting(count)
+            .minimumScaleFactor(0.7).lineLimit(1)
     }
 }
 #endif
