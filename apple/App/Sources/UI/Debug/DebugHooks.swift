@@ -36,8 +36,6 @@ enum DebugHooks {
         /// 后台截图里指针进不来，合成的鼠标移动事件也不触发不在前台的应用的悬停。一张图里看几处时给几个点。
         var hovered: [CGPoint] = []
         #endif
-        /// 原型：Mac 任务页顶那一排的排法（`-CuePadTopBar M1|M2`，`TaskTopBar`），定稿后删。
-        var topBar = ""
         /// 任务页已完成列的"更早做完的"一开始就展开（`-CuePadShowsDone`）。
         var showsDone = false
         /// Cue 此刻钉成这一份样例（`-CuePadCueNow <样例>`，`CueNowSamples`）：页头、侧栏、小组件与实时活动都按它画，截各态用。
