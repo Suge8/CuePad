@@ -11,7 +11,7 @@ extension Workspace {
         case pages
         /// iPad 宽屏：侧栏选中的去处是根，会话页、卡片纸页推在它上面（返回回到原处）。
         case split
-        /// 窄屏（iPhone 与窄窗口 iPad）：根只有底部那一排的四个（`Route.home`），其余去处推在它所属的那一页上。
+        /// 窄屏（iPhone 与窄窗口 iPad）：根只有底部那一排的几个（`Dock.places` 与 Cue，`Route.home`），其余去处推在它所属的那一页上。
         case dock
 
         /// 会话页推在当前页上、能返回。

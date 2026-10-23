@@ -19,21 +19,19 @@ struct ProgressScreen: View {
     /// 窄屏此刻看的那一列（分页滚动的位置）。
     @State private var column: TaskBoard.Column?
     @State private var sessions = AgentListModel()
+    /// 去过的段：一直挂着，换段只换哪一段看得见（同 Mac 的 `ProgressPage`），不重建整块看板或会话列表。
+    @State private var mounted: Set<ProgressPane> = []
+    @Environment(\.pageActive) private var active
 
     var body: some View {
-        let shown = (board ?? .empty).only(workspace.scopedProject)
-        Group {
-            if workspace.progressPane == .sessions {
-                SessionList(model: sessions, filter: workspace.scopedProject)
-            } else if sizeClass == .regular {
-                BoardColumns(board: shown, adding: $adding, newTaskProject: newTaskProject).padding(.horizontal, 12)
-            } else {
-                // 分段浮在卡上，卡从它后面滚过，不在它下沿裁掉（docs/ui.md 沉浸式的栏）
-                pages(shown)
-                    .safeAreaPadding(.top, BoardSegments.height + Self.segmentGap)
-                    .overlay(alignment: .top) { BoardSegments(board: shown, selected: $column).padding(.horizontal, 16) }
+        let pane = workspace.progressPane
+        ZStack(alignment: .top) {
+            if mounted.contains(.board) || pane == .board { shown(.board, pane) { boardView } }
+            if mounted.contains(.sessions) || pane == .sessions {
+                shown(.sessions, pane) { SessionList(model: sessions, filter: workspace.scopedProject) }
             }
         }
+        .onChange(of: pane, initial: true) { mounted.insert(pane) }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         // 顶上不写页名（侧栏、底部那一排的选中格已经说了在哪一页）
         .floatingHeader("进展", center: { ProgressHeader() }) {
@@ -49,6 +47,29 @@ struct ProgressScreen: View {
         .onAppear { if let board { land(board) } }
         .onChange(of: board == nil) { if let board { land(board) } }
         .observingBoard(into: $board, store: services.store, onError: workspace.fail)
+    }
+
+    @ViewBuilder private var boardView: some View {
+        let shown = (board ?? .empty).only(workspace.scopedProject)
+        if sizeClass == .regular {
+            BoardColumns(board: shown, adding: $adding, newTaskProject: newTaskProject).padding(.horizontal, 12)
+        } else {
+            // 分段浮在卡上，卡从它后面滚过，不在它下沿裁掉（docs/ui.md 沉浸式的栏）
+            pages(shown)
+                .safeAreaPadding(.top, BoardSegments.height + Self.segmentGap)
+                .overlay(alignment: .top) { BoardSegments(board: shown, selected: $column).padding(.horizontal, 16) }
+        }
+    }
+
+    /// 看不见的那段：点不到、屏读跳过，暂停订阅（`pageActive`）。
+    private func shown(_ pane: ProgressPane, _ current: ProgressPane, @ViewBuilder content: () -> some View) -> some View {
+        let on = pane == current
+        return content()
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .opacity(on ? 1 : 0)
+            .allowsHitTesting(on)
+            .accessibilityHidden(!on)
+            .environment(\.pageActive, active && on)
     }
 
     private var newTaskProject: UUID? { workspace.scopedProject ?? workspace.currentProject }

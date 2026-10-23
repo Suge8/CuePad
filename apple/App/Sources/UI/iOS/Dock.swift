@@ -1,9 +1,9 @@
 #if os(iOS)
 import SwiftUI
 
-/// 窄屏（iPhone 与窄窗口 iPad）的容器：一个导航栈，根是底部那一排的四个去处横排成的一条（项目、任务、会话、Cue，`HomePager`：左右滑跟手切页），
+/// 窄屏（iPhone 与窄窗口 iPad）的容器：一个导航栈，根是底部那一排的去处横排成的一条（项目、进展、Cue，`HomePager`：左右滑跟手切页），
 /// 推入的页照常由系统返回（返回钮、内容区右滑），返回后在 Cue 页左滑前进回刚才那页。其余去处推在所属的那一页上（`Navigation.select`）；打开 App 落在 Cue。
-/// 导航栈托管在 UIKit 里，几个栈交替时 SwiftUI 不逐帧挪它（旧页停着、最后一下才跳走）：所以只有一个栈，切页挪的是栈根里的四页（各在自己的托管控制器里，`PagerController`）。
+/// 导航栈托管在 UIKit 里，几个栈交替时 SwiftUI 不逐帧挪它（旧页停着、最后一下才跳走）：所以只有一个栈，切页挪的是栈根里的几页（各在自己的托管控制器里，`PagerController`）。
 /// 底部那一排整个窗口只有一份（`DockBar`），挂在栈的根上、不在哪一页里：切页时它不重建、不跟着滑，选中的滴与换形跟着条（`PagerMotion`）走，拖到哪长到哪。
 /// 每页各建一排时，新页那一排要从旧的样子摆出第一帧再长回来，"⋯"展开着换去处就是收成圆再长开的一下来回。
 /// Cue 页的输入框在页里（随键盘升起），底边那一格在换形里与 Cue 钮交叉，浓淡都是条的位置与"⋯"开合的函数（`DockHandoff`）。
@@ -54,7 +54,7 @@ struct DockRoot: View {
     }
 }
 
-/// "⋯"展开时铺在 Cue 页上的一层：点一下或一划就收起。开合只重算这一小块：读在 `DockRoot` 里，每开合一次根上四页的内容都要整份重设（`HomePager`）。
+/// "⋯"展开时铺在 Cue 页上的一层：点一下或一划就收起。开合只重算这一小块：读在 `DockRoot` 里，每开合一次根上几页的内容都要整份重设（`HomePager`）。
 private struct PlacesCatcher: View {
     let motion: PagerMotion
     let onCue: Bool
@@ -70,7 +70,7 @@ private struct PlacesCatcher: View {
     }
 }
 
-/// 栈的根上的一个去处：它的页。项目、任务、会话三页顶上那一排左边一颗搜索钮、右边这一页的那一个操作，不写标题
+/// 栈的根上的一个去处：它的页。项目、进展两页顶上那一排左边一颗搜索钮、右边这一页的那一个操作，不写标题
 /// （底部的选中格已经说了在哪一页，`HeaderHost.page`），内容一直滚到底部那一排后面；Cue 页顶上只有 Cue 的名牌，输入框在它自己的页里（随键盘升起）。
 struct HomePage: View {
     let route: Route

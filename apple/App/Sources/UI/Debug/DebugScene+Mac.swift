@@ -29,6 +29,7 @@ extension DebugScene {
             await connectAgents(workspace.services)
             await bindFolderIfAsked(workspace.services.store)
             workspace.showSessions()
+            if defaults.bool(forKey: "CuePadNewSession") { workspace.newSession() }
         case "wallgap":
             // 卡片墙删卡后的排布：在当前项目（配 -CuePadProject Flow）新记两条，再删掉最早那条（它独占一列），看留下的几张怎么排
             try? await Task.sleep(for: .seconds(1))
