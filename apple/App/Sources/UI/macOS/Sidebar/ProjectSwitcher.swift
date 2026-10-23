@@ -28,8 +28,8 @@ struct ProjectSwitcher: View {
                 }
             }
             Divider()
-            let sessions = SidebarOutline.Entry.sessions
-            Button { workspace.show(sessions.route) } label: { Label(sessions.title, icon: sessions.icon).labelStyle(.titleAndIcon) }
+            let progress = SidebarOutline.Entry.progress
+            Button { workspace.show(progress.route) } label: { Label(progress.title, icon: progress.icon).labelStyle(.titleAndIcon) }
             Button { workspace.show(.archive) } label: { Label("归档", icon: .archive).labelStyle(.titleAndIcon) }
             Button { workspace.show(.trash) } label: { Label("回收站", icon: .trash).labelStyle(.titleAndIcon) }
         } label: {
@@ -93,10 +93,10 @@ private struct CurrentPage: View {
         case .trash:
             Image(.trash).accessibilityHidden(true)
             Text("回收站")
-        case .agent, .session:
-            let sessions = SidebarOutline.Entry.sessions
-            Image(sessions.icon).accessibilityHidden(true)
-            Text(sessions.title)
+        case .progress, .session:
+            let progress = SidebarOutline.Entry.progress
+            Image(progress.icon).accessibilityHidden(true)
+            Text(progress.title)
         default:
             EmptyView()
         }

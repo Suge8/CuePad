@@ -20,7 +20,7 @@ struct ShelfScreen: View {
             if let catalog = workspace.catalog, let leading { content(catalog, leading: leading) }
         }
         .refreshable { await services.syncNow() }
-        .floatingHeader(narrow ? "项目" : SidebarOutline.Entry.allProjects.title, detail: workspace.catalog.map { "\($0.projects.count) 个项目" } ?? "") {
+        .floatingHeader(SidebarOutline.Entry.projects.title, detail: workspace.catalog.map { "\($0.projects.count) 个项目" } ?? "") {
             Button("新建项目", icon: .newProject) { workspace.projectForm = .init() }
         }
         .observing(services.store, into: $leading, onError: workspace.fail) { ProjectNow.leading(try $0.startedTasks()) }

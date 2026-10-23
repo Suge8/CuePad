@@ -101,10 +101,9 @@ struct RouteView: View {
         case .trash: TrashScreen()
         case .settings: SettingsScreen()
         case .conflicts: ConflictsScreen()
-        case .tasks: TasksScreen()
+        case .progress: TasksScreen()
         case .cue: CuePage().countsAsPiViewer()
         case .cueSettings: CueSettingsScreen()
-        case .agent: AgentScreen().countsAsPiViewer()
         case .search: SearchScreen()
         case .session(let route): SessionScreen(id: route.id, seed: route.seed).countsAsPiViewer()
         case .card(let id):
@@ -137,7 +136,7 @@ struct RootShortcuts: View {
                 withAnimation(Motion.snappy) { workspace.sidebar = workspace.sidebar == .detailOnly ? .automatic : .detailOnly }
             }
             .keyboardShortcut("\\")
-            Button("任务") { workspace.show(.tasks) }.keyboardShortcut("t", modifiers: [.command, .shift])
+            Button("进展") { workspace.show(.progress) }.keyboardShortcut("t", modifiers: [.command, .shift])
             ForEach(Array(1...9).prefix(workspace.catalog?.projects.count ?? 0), id: \.self) { number in
                 Button("项目 \(number)") { workspace.showProject(number: number) }
                     .keyboardShortcut(KeyEquivalent(Character("\(number)")))

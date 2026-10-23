@@ -16,8 +16,7 @@ struct PageMenuSlot: View {
         case session(SessionHeader.State?)
         case project(UUID)
         case cue
-        case tasks
-        case agent
+        case progress
         case trash
         case none
 
@@ -26,8 +25,7 @@ struct PageMenuSlot: View {
             case .session: "完成或绑定任务、重命名、跳到终端、结束会话"
             case .project: "选择灵感、看这个项目的会话、项目操作"
             case .cue: "记得什么"
-            case .tasks: "新任务、归档做完的"
-            case .agent: "新会话、接入 Agent"
+            case .progress: "新任务、新会话、归档做完的、接入 Agent"
             case .trash: "清空回收站"
             case .none: "这一页没有更多操作"
             }
@@ -39,8 +37,7 @@ struct PageMenuSlot: View {
         case .session: .session(workspace.shownSessionHeader)
         case .project(let id): .project(id)
         case .cue: .cue
-        case .tasks: .tasks
-        case .agent: .agent
+        case .progress: .progress
         case .trash: .trash
         default: .none
         }
@@ -59,11 +56,11 @@ struct PageMenuSlot: View {
                     Toggle("运行情况", icon: .session, isOn: Bindable(workspace.cue).showsRun)
                 }
                 Button("\(workspace.cue.name) 的设置…", icon: .settings) { SettingsPane.open(.cue) }
-            case .tasks:
-                Button("新任务", icon: .add) { workspace.addsTask = true }
+            case .progress:
+                Button("新任务", icon: .add) { workspace.progressPane = .board; workspace.addsTask = true }
+                Button("新会话", icon: .add) { workspace.newSession() }
+                Divider()
                 Button("全部归档做完的", icon: .archive) { workspace.attempt { try await workspace.archiveCompletedTasks() } }
-            case .agent:
-                Button("新会话", icon: .add) { workspace.showsNewSession = true }
                 Button("接入 Agent…", icon: .extensionNote) { workspace.showsSetup = true }
             case .trash:
                 Button("清空回收站…", icon: .trash, role: .destructive) { workspace.confirmsEmptyTrash = true }
@@ -93,7 +90,7 @@ private struct ProjectMenuItems: View {
             .disabled(!ready || (workspace.catalog?.cardCounts[projectID] ?? 0) == 0)
         Button("看这个项目的会话", icon: .session) {
             workspace.projectScope = projectID
-            workspace.show(.agent)
+            workspace.showSessions()
         }
         if let project = workspace.catalog?.project(projectID) {
             Divider()

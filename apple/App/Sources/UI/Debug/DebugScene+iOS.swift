@@ -78,7 +78,7 @@ extension DebugScene {
         case "cue", "cuememory", "cuesettings":
             // 一夜里来的话要在不看 Cue 页时写（看着时写当场就读掉了）：先离开、写完再回来，才是"回来时有新消息"的样子
             if defaults.string(forKey: "CuePadCuePresence") == "away" {
-                workspace.show(.tasks)
+                workspace.show(.progress)
                 await NextFrame.wait()
             }
             if defaults.bool(forKey: "CuePadDemo") { await seedCue(workspace.services) }
@@ -95,7 +95,7 @@ extension DebugScene {
             workspace.agentPanel = true
         case "cuerows":
             await seedCueRows(workspace.services)
-            workspace.show(.agent)
+            workspace.showSessions()
         case "tasks":
             // 看板的等你列：配 -CuePadDemo 时写入 Cue 的等你（会话在问的随演示 Mac 的会话来）
             if defaults.bool(forKey: "CuePadDemo") {
@@ -103,7 +103,7 @@ extension DebugScene {
                 await seedBusyBoard(workspace.services.store)
             }
             workspace.projectScope = project
-            workspace.show(.tasks)
+            workspace.show(.progress)
         case "task":
             let store = workspace.services.store
             let tasks = (try? await store.tasks(.inProgress, .todo).flatMap(\.tasks)) ?? []
@@ -118,12 +118,12 @@ extension DebugScene {
             if defaults.bool(forKey: "CuePadNotify") {
                 workspace.open(DeepLink.session(session.id))  // 点锁屏通知进来：只带记录 id
             } else {
-                workspace.show(.agent)
+                workspace.showSessions()
                 workspace.openSession(session.id, sessionID: session.sessionID)
             }
             if defaults.bool(forKey: "CuePadStream") { Task { await stream(session.sessionID, store: workspace.services.store) } }
         case "newsession":
-            workspace.show(.agent)
+            workspace.showSessions()
             var sheet = NewSessionInput.Start(project: project)  // -CuePadProject 闲鱼：先选中还没绑文件夹的项目（交给 Cue 那台 Mac 建工作区）
             if defaults.bool(forKey: "CuePadLaunch"),
                let table = try? await workspace.services.store.projects().first(where: { $0.name == "圆桌" })?.id {
@@ -137,7 +137,7 @@ extension DebugScene {
             workspace.folderPicker = try? await workspace.services.store.projects().first { $0.name == name }
         case "agent":
             workspace.projectScope = project
-            workspace.show(.agent)
+            workspace.showSessions()
         case "search":
             workspace.openSearch()
         default: break
@@ -174,9 +174,9 @@ extension DebugScene {
         await beat()
         openPlaces()
         await beat()
-        workspace.select(.tasks)
+        workspace.select(.progress)
         await beat()
-        workspace.select(.agent)
+        workspace.showSessions()
         await beat()
         open(0)
         await beat()
@@ -190,17 +190,17 @@ extension DebugScene {
         await beat()
         open(1)
         await beat()
-        workspace.select(.tasks)
+        workspace.select(.progress)
         await beat()
         workspace.select(.cue)
         await beat()
-        workspace.select(.agent)
+        workspace.showSessions()
         await beat()
         workspace.select(.cue)
         await beat()
         workspace.select(.shelf)
         await beat()
-        workspace.select(.agent)
+        workspace.showSessions()
         await beat()
         workspace.select(.cue)
         await beat()

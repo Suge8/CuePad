@@ -97,25 +97,19 @@ enum Dock {
     static let slot = ComposerMetrics.slot
     /// 一格最宽：宽的窄窗口（iPad）里格子不再长，多出来的给 Cue 钮。
     static let maxCell: CGFloat = 76
-    /// 三个去处，从左到右：项目、任务、会话（会话挨着 Cue：接力的光从 Cue 落到它那一格最近）。
-    static let places: [SidebarOutline.Entry] = [.allProjects, .tasks, .sessions]
-    /// 根上的四页从左到右（三格去处，Cue 在最右）：左右滑切页与点按换去处时整条滑的顺序（`HomePager`）。
+    /// 去处，从左到右：项目、进展（进展挨着 Cue：接力的光从 Cue 落到它那一格最近）。
+    static let places: [SidebarOutline.Entry] = [.projects, .progress]
+    /// 根上的几页从左到右（去处，Cue 在最右）：左右滑切页与点按换去处时整条滑的顺序（`HomePager`）。
     static let pages: [Route] = places.map(\.route) + [.cue]
 
-    /// 一格多宽：整排按五格分（三格去处、两格 Cue），中间不空。
-    static func cell(in width: CGFloat) -> CGFloat { min(maxCell, (width - gap - inset * 2) / 5) }
+    /// 一格多宽：整排按去处的格数加两格 Cue 分，中间不空。
+    static func cell(in width: CGFloat) -> CGFloat { min(maxCell, (width - gap - inset * 2) / CGFloat(places.count + 2)) }
     static func capsule(in width: CGFloat) -> CGFloat { cell(in: width) * CGFloat(places.count) + inset * 2 }
 
     static func order(_ route: Route) -> Int { pages.firstIndex(of: route) ?? pages.count - 1 }
 
     /// 内容在安全区之上还要给 Dock 让出的高度（栏顶再隔 `Bars.contentGap` 到安全区底边）：滚到底时最后一行完整停在栏上面；键盘盖住 Dock 时为 0。
     static func reserve(above safeBottom: CGFloat) -> CGFloat { max(0, height + margin + Bars.contentGap - safeBottom) }
-}
-
-extension SidebarOutline.Entry {
-    /// 底部那一排里的叫法：书架在窄屏就是"项目"那一页。
-    var dockTitle: String { self == .allProjects ? "项目" : title }
-    var dockIcon: Icon { self == .allProjects ? .projects : icon }
 }
 
 extension EnvironmentValues {

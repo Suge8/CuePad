@@ -14,7 +14,7 @@ struct AgentScreen: View {
     var body: some View {
         SessionList(model: model, filter: filter)
             .refreshesQuota()
-            .floatingHeader(SidebarOutline.Entry.sessions.title, center: { ScopeQuota() }) {
+            .floatingHeader("会话", center: { ScopeQuota() }) {
                 NewSessionButton(project: filter)
             }
     }

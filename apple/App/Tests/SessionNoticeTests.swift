@@ -62,7 +62,7 @@ struct SessionNoticeTests {
         let session = UUID()
         let workspace = Workspace(services: app.services)
         #expect(workspace.showsAlert(about: session))  // Cue 页
-        workspace.select(.agent)
+        workspace.showSessions()
         #expect(workspace.showsAlert(about: session))
         workspace.push(.session(UUID()))  // 列表上推了别的会话
         #expect(workspace.showsAlert(about: session))

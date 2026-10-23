@@ -71,7 +71,7 @@ struct ScopeSlot: View {
     static let width: CGFloat = 200
 
     var body: some View {
-        let shown = workspace.root == .tasks || workspace.root == .agent
+        let shown = workspace.root == .progress
         // 一直挂着、别的页只是看不见（同 `SwitcherSlot`）：换页时不现建整份项目菜单
         ProjectScopeMenu()
             .frame(maxWidth: Self.width, alignment: .leading)
@@ -88,7 +88,7 @@ struct PageActionSlot: View {
     static let width: CGFloat = 96
 
     var body: some View {
-        let shown = workspace.root == .tasks
+        let shown = workspace.root == .progress
         // 工具栏把"图标 + 字"的标签只画成图标：写明两样都要
         Button("新任务", icon: .add) { workspace.addsTask.toggle() }
             .labelStyle(.titleAndIcon)

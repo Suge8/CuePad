@@ -99,7 +99,7 @@ enum IOSInteractionBench {
         try? await Task.sleep(for: .seconds(1))
         // 主导航：Cue 页点底部展开的"任务"去任务（配 `-CuePadManyTasks` 量任务多时）、任务页点 Cue 钮回来（点按调的就是 `select`，过渡由 `HomePager` 接着做）
         for _ in 0..<2 {
-            await step("Cue 进任务") { workspace.select(.tasks) }
+            await step("Cue 进任务") { workspace.select(.progress) }
             await step("任务回 Cue") { workspace.select(.cue) }
         }
         // Cue 页头开合面板（点页头的那条路）
@@ -108,7 +108,7 @@ enum IOSInteractionBench {
             await step("收起 Cue 面板") { DebugScene.toggleCuePanel() }
         }
         // 会话页（底部的"会话"）点会话（先读出这一页再推入）→ 返回
-        workspace.select(.agent)
+        workspace.showSessions()
         try? await Task.sleep(for: .seconds(1))
         for id in [sessions[0], sessions[0], sessions[1]] {
             await step("进会话页") { workspace.openSession(id) }

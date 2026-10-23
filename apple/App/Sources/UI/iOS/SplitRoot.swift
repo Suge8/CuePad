@@ -133,22 +133,14 @@ private struct SplitSidebar: View {
             VStack(alignment: .leading, spacing: Self.rowGap) {
                 SidebarSearchField().padding(.bottom, 10)
                 CueSidebarItem().padding(.bottom, 6)
-                ForEach(SidebarOutline.places, id: \.self) { SidebarRow(entry: $0, badge: $0.count(in: workspace)) }
+                ForEach(SidebarOutline.places, id: \.self) { SidebarRow(entry: $0) }
                 if let catalog = workspace.catalog {
                     let outline = SidebarOutline(catalog)
                     // 各项目的"此刻"在数据变化时算一次，行只拿结果
                     let now = ProjectNow.byProject(
                         outline.projects, sessions: services.liveSessions.items, tasks: leading ?? [:], shown: workspace.shown)
-                    if !outline.pinned.isEmpty {
-                        header("置顶")
-                        ForEach(outline.pinned) { row($0, catalog, now: now[$0.id]) }
-                    }
-                    if !outline.recent.isEmpty {
-                        header("最近")
-                        ForEach(outline.recent) { row($0, catalog, now: now[$0.id]) }
-                    }
-                    // 没有最近一组（项目全置顶）时也在：书架是新建项目与看全部的地方
-                    if SidebarOutline.showsAllProjects { SidebarRow(entry: .allProjects, badge: catalog.projects.count) }
+                    header("项目")
+                    ForEach(outline.projects) { row($0, catalog, now: now[$0.id]) }
                 }
                 VStack(alignment: .leading, spacing: Self.rowGap) {
                     ForEach(SidebarOutline.footer, id: \.self) { SidebarRow(entry: $0, alert: $0 == .settings ? syncAlert : nil) }

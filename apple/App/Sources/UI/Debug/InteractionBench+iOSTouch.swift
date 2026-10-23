@@ -38,7 +38,7 @@ extension IOSInteractionBench {
             }
             // 会话页的中部满是会话行（行上左滑露出行的动作），切页滑在第一行上面的分组标题那一条
             if wants("滑动切页·会话→Cue") {
-                await land(.agent)
+                await land(.progress)
                 let row = sessionRow(in: window, fail: fail)
                 let y = row.minY - 20
                 await step("滑动切页·会话→Cue", swipeWindow, .swipe(from: CGPoint(x: right, y: y), to: CGPoint(x: left, y: y))) {}
@@ -54,7 +54,7 @@ extension IOSInteractionBench {
         // 会话行：慢慢左拖 150pt（约 0.9 秒）露出行的动作；同一行上快甩是切页（会话页左边是 Cue）
         for _ in 0..<2 where wants("误触·会话行左滑") {
             await land(.cue)
-            await land(.agent)
+            await land(.progress)
             let row = sessionRow(in: window, fail: fail)
             rowBefore = pixels(row)
             await step("误触·会话行左滑", .milliseconds(1500), .drag(from: CGPoint(x: right, y: row.midY), to: CGPoint(x: right - 150, y: row.midY), seconds: 0.9)) {}
@@ -66,12 +66,12 @@ extension IOSInteractionBench {
         }
         for _ in 0..<2 where wants("会话行快甩") {
             await land(.cue)
-            await land(.agent)
+            await land(.progress)
             let row = sessionRow(in: window, fail: fail).midY
             await step("会话行快甩", swipeWindow, .swipe(from: CGPoint(x: right, y: row), to: CGPoint(x: left, y: row), seconds: 0.12)) {}
         }
         for _ in 0..<2 where wants("误触·看板左滑") || wants("误触·看板右滑") {
-            await land(.tasks)
+            await land(.progress)
             guard let board = boardY(in: window) else { fail("任务页上找不到看板") }
             await step("误触·看板左滑", swipeWindow, .swipe(from: CGPoint(x: right, y: board), to: CGPoint(x: left, y: board))) {}
             await step("误触·看板右滑", swipeWindow, .swipe(from: CGPoint(x: left, y: board), to: CGPoint(x: right, y: board))) {}
@@ -89,8 +89,8 @@ extension IOSInteractionBench {
             }
         }
         var text = ([workspace.root] + workspace.path).map(brief).joined(separator: ">")
-        if workspace.root == .agent, workspace.path.isEmpty, let before = rowBefore, moved(before) { text += "+行动作" }
-        if workspace.root == .tasks, let column = boardColumn(in: window) { text += " 列=\(column)" }
+        if workspace.root == .progress, workspace.progressPane == .sessions, workspace.path.isEmpty, let before = rowBefore, moved(before) { text += "+行动作" }
+        if workspace.root == .progress, let column = boardColumn(in: window) { text += " 列=\(column)" }
         return text
     }
 

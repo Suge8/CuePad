@@ -57,6 +57,12 @@ extension Workspace {
 
     func push(_ route: Route) { path.append(route) }
 
+    /// 去进展页的会话段（原会话页的去向都是这里：Cue 面板的"全部会话"、"看这个项目的会话"、⌥⌘N、提示条）。
+    func showSessions() {
+        progressPane = .sessions
+        show(.progress)
+    }
+
     /// 推回刚返回离开的那一页（`forward`）。会话页按此刻重读首帧（同 `openSession`）：离开后对话可能又长了。
     func goForward() {
         guard let forward else { return }
@@ -137,3 +143,9 @@ struct ProjectFormRequest: Identifiable {
     let id = UUID()
     var project: Project?
 }
+
+/// 进展页的两段（`Workspace.progressPane`）：看板与会话。
+enum ProgressPane: Hashable {
+    case board, sessions
+}
+

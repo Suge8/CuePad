@@ -40,12 +40,12 @@ extension DebugScene {
     #if os(iOS)
     static func cueFlowIfAsked(_ workspace: Workspace) async {
         await runCueFlow(workspace) { away in
-            workspace.select(away ? .tasks : .cue)
+            workspace.select(away ? .progress : .cue)
         }
     }
     #else
     static func cueFlowIfAsked(_ workspace: Workspace) async {
-        await runCueFlow(workspace) { away in workspace.show(away ? .tasks : .cue) }
+        await runCueFlow(workspace) { away in workspace.show(away ? .progress : .cue) }
     }
     #endif
 

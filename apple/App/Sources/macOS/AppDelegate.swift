@@ -106,7 +106,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     @objc func toggleSearch(_ sender: Any?) { workspace?.searching.toggle() }
     @objc func showTasks(_ sender: Any?) {
         workspace?.searching = false
-        workspace?.show(.tasks)
+        workspace?.show(.progress)
     }
     @objc func newCard(_ sender: Any?) { workspace?.newCard() }
     @objc func newSession(_ sender: Any?) { workspace?.newSession() }

@@ -177,7 +177,7 @@ private struct CueNowPanel: View {
         }
         link("全部会话", count: live.total) {
             close()
-            workspace.show(.agent)
+            workspace.showSessions()
         }
     }
 

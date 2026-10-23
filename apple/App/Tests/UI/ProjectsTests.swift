@@ -112,11 +112,11 @@ struct ProjectsNavigationTests {
         let workspace = Workspace(services: app.services)
 
         let phone = navigation()
-        phone.select(.shelf)  // 侧栏的"全部项目"
+        phone.select(.shelf)  // 底部那一排的"项目"
         phone.push(.project(project.id))  // 书架上的项目卡
-        phone.push(.tasks)  // 项目页的"已完成 N"
+        phone.push(.progress)  // 项目页的"已完成 N"
         #expect(try await workspace.createTask("补重连用例", in: try #require(phone.currentProject)).projectID == project.id)
-        phone.select(.tasks)  // 侧栏的"任务"：不在哪个项目里
+        phone.select(.progress)  // 侧栏的"进展"：不在哪个项目里
         #expect(phone.currentProject == nil)
         phone.open(DeepLink.project(project.id))
         #expect(phone.currentProject == project.id)
@@ -128,7 +128,7 @@ struct ProjectsNavigationTests {
         pad.push(.card(UUID()))
         pad.restore(project: project.id)  // 窗口宽窄变化、分栏重建
         #expect(pad.path.count == 1 && pad.currentProject == project.id)
-        pad.select(.tasks)
+        pad.select(.progress)
         #expect(pad.currentProject == nil)
         let gone = navigation()
         gone.restore(project: trashed.id)

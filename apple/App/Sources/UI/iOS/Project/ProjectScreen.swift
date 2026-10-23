@@ -126,7 +126,7 @@ struct ProjectScreen: View {
             Button("记一条灵感", icon: .write, action: workspace.newCard)
             Button("看这个项目的会话", icon: .session) {
                 workspace.projectScope = projectID
-                workspace.select(.agent)
+                workspace.showSessions()
             }
             if let project {
                 Divider()

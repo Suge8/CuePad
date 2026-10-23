@@ -115,8 +115,10 @@ final class Workspace {
     /// 每次 ⌘K（或点搜索钮、侧栏顶上的搜索框）加一：搜索页据此聚焦搜索框并全选已有文字，已在搜索页时同样生效。
     var searchFocusRequests = 0
     #endif
-    /// 项目范围：任务页与会话页共用这一份（顶栏中间那颗显示它、点 ✕ 清掉；项目页"⋯"里的"看这个项目的会话"设成这个项目再切到会话页），nil 是全部项目。
+    /// 项目范围：进展页的看板与会话两段共用这一份（顶栏那颗显示它、点 ✕ 清掉；项目页"⋯"里的"看这个项目的会话"设成这个项目再切到会话段），nil 是全部项目。
     var projectScope: UUID?
+    /// 进展页此刻在哪一段：看板或会话。三端同一份：工具栏的主操作（新任务 / 新会话）与页顶的分段都读它，去会话段经 `showSessions`。
+    var progressPane = ProgressPane.board
     /// Cue 页的"等你"卡先露哪条提问（`CueThread.leading`）：从任务看板点一张 Cue 问的等你卡的抬头、在 Cue 页对话里点一格等你时设成它；它结束了就不再起作用。
     var cueAsking: UUID?
     var notice: Notice?

@@ -163,7 +163,7 @@ private struct SidebarPages {
     }
 
     var order: [Route] {
-        [.tasks, .agent] + outline.projects.map { .project($0.id) } + [.archive, .trash]
+        [.progress] + outline.projects.map { .project($0.id) } + [.archive, .trash]
     }
 }
 
@@ -178,17 +178,11 @@ private struct PlaceTiles: View {
     var body: some View {
         HStack(spacing: 8) {
             ForEach(SidebarOutline.places, id: \.self) { entry in
-                switch entry {
-                case .tasks:
-                    PlaceTile(entry: entry, count: entry.count(in: workspace), selected: workspace.root == entry.route) { select(entry.route) }
-                        .help("任务（⌘⇧T）")
-                default:
-                    PlaceTile(entry: entry, count: entry.count(in: workspace), running: workspace.liveWork.running, selected: workspace.root == entry.route) {
-                        select(entry.route)
-                    }
-                    .relaySpot(dock: true)
-                        .help("按项目查看、搜索全部会话")
-                }
+                PlaceTile(
+                    entry: entry, count: workspace.catalog?.allTasks.open ?? 0, running: workspace.liveWork.running, selected: workspace.root == entry.route
+                ) { select(entry.route) }
+                .relaySpot(dock: true)
+                .help("进展（⌘⇧T）")
             }
         }
     }

@@ -197,12 +197,12 @@ private struct DockCell: View {
             DockCellLabel(place: place, lit: false).contentShape(.rect)
         }
         .buttonStyle(PressStyle(.button))
-        .relaySpot(dock: relays && place == .sessions)
+        .relaySpot(dock: relays && place == .progress)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(place.dockTitle)
-        .accessibilityValue(services.macAlert.flatMap { place == .allProjects ? $0.title : nil } ?? "")
+        .accessibilityLabel(place.title)
+        .accessibilityValue(services.macAlert.flatMap { place == .projects ? $0.title : nil } ?? "")
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
-        .accessibilityShowsLargeContentViewer { Label { Text(place.dockTitle) } icon: { Image(place.dockIcon) } }
+        .accessibilityShowsLargeContentViewer { Label { Text(place.title) } icon: { Image(place.icon) } }
     }
 }
 
@@ -217,11 +217,11 @@ private struct DockCellLabel: View {
 
     var body: some View {
         VStack(spacing: 3) {
-            IconImage(place.dockIcon, accent: lit ? .lit : .none)
+            IconImage(place.icon, accent: lit ? .lit : .none)
                 .font(.system(size: Self.icon, weight: lit ? .semibold : .medium))
                 .frame(height: Self.icon + 4)
-                .overlay(alignment: .topTrailing) { if place == .allProjects { syncDot } }
-            Text(place.dockTitle).font(.system(size: Self.label, weight: lit ? .semibold : .medium)).lineLimit(1)
+                .overlay(alignment: .topTrailing) { if place == .projects { syncDot } }
+            Text(place.title).font(.system(size: Self.label, weight: lit ? .semibold : .medium)).lineLimit(1)
         }
         .foregroundStyle(lit ? palette.signature : palette.ink)
         .frame(maxWidth: .infinity, maxHeight: .infinity)

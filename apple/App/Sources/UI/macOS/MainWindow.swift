@@ -196,9 +196,9 @@ private struct SyncAlert: View {
 }
 
 extension Workspace {
-    /// ⌥⌘N（"文件 › 新会话"）：去会话页、从那一页的 + 弹出新会话的表单（表单只有这一个出处）。
+    /// ⌥⌘N（"文件 › 新会话"）：去进展页的会话段、弹出新会话的表单（表单只有这一个出处）。
     func newSession() {
-        show(.agent)
+        showSessions()
         showsNewSession = true
     }
 }
