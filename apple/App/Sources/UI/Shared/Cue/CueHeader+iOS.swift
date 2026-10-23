@@ -197,19 +197,16 @@ private struct CueNowPanel: View {
 
     private var sessions: some View {
         let live = services.liveSessions, work = workspace.liveWork
-        // 区头钉在面板顶上：展开后一屏放不下，往下翻会话时还看得到有几个在跑
-        return LazyVStack(alignment: .leading, spacing: 10, pinnedViews: .sectionHeaders) {
-            Section {
-                sessionRows(work, live: live)
-            } header: {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text("在做").font(.footnote.weight(.semibold)).foregroundStyle(palette.ink3).accessibilityAddTraits(.isHeader)
-                    Spacer(minLength: 8)
-                    if !work.rows.isEmpty { LiveWorkCount(work: work, font: .footnote) }
-                }
-                .frame(height: headerHeight)
-                .accessibilityElement(children: .combine)
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("在做").font(.footnote.weight(.semibold)).foregroundStyle(palette.ink3).accessibilityAddTraits(.isHeader)
+                Spacer(minLength: 8)
+                if !work.rows.isEmpty { LiveWorkCount(work: work, font: .footnote) }
             }
+            .frame(height: headerHeight)
+            .accessibilityElement(children: .combine)
+            .modifier(PinsToTop())
+            sessionRows(work, live: live)
         }
     }
 
@@ -253,6 +250,18 @@ private struct CueNowPanel: View {
             .contentShape(.rect)
         }
         .buttonStyle(.row)
+    }
+}
+
+/// "在做"区头钉在面板顶上：展开后一屏放不下，往下翻会话时还看得到有几个在跑。
+/// 不用懒加载栈的钉住区头：懒加载栈第一次量出的高是估的（实测估 882、实为 641），`HugHeight` 按它定的玻璃高下一帧才改成真的，
+/// 玻璃长大的动画里挨一下不带动画的改高，整块就有几帧不画（键盘关着点开页头那一闪）。这里在渲染时按滚过的距离下移，不进状态、不挂几何回调。
+private struct PinsToTop: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .visualEffect { content, proxy in content.offset(y: max(0, -proxy.frame(in: .scrollView).minY)) }
+            // 盖在滚上来的行上面（行在它下沿淡去，`FadesUnderHeader`）
+            .zIndex(1)
     }
 }
 
