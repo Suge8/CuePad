@@ -13,9 +13,12 @@ import SwiftUI
 /// 打开时的底部锚点就是最新处。往上翻快到头时在上面再排开一段，多出来的高度加到偏移上，正在读的不动（`ChatFollow.prepending`）。
 /// 滚动区铺到顶栏、状态栏与回复框后面（iOS 的栏与键盘是安全区，滚动区把它当内容边距），内容在玻璃后面清楚可见。
 ///
-/// 对话排在阅读栏里：最宽 `readingWidth`（含左右 `inset`），在滚动区里居中，上下各留 `edge`。栏的边距只能是滚动区的
-/// 内容边距（`contentMargins`），不能是内容外面的 padding 或居中的框：滚动位置跟着一行（滚动目标）走，内容变了就把那一行
+/// 对话排在阅读栏里：最宽 `readingWidth`（含左右 `inset`），在滚动区里居中，上下各留 `edge`。栏的边距只能是滚动区自己的边
+/// （`safeAreaPadding`），不能是内容外面的 padding 或居中的框：滚动位置跟着一行（滚动目标）走，内容变了就把那一行
 /// 对回可见区的左上角——行若离内容原点有一段边距，整段对话就被横着推出那一段。
+/// 也不用 `contentMargins`：同一棵树里另一块滚动区（Cue 页等你卡上那一排件）和它在同一次更新里定边距时，SwiftUI 把那一块的内容边距
+/// 写到对话这里、之后不改回（实测：那一排的左边距改成 3，对话的左边距就成了 3；平常是 0，整段对话左移、上移 16）；安全区的边每次排版重算，
+/// 不受它串（同手机看板的行，`BoardRowLane`）。`.scrollView` 坐标空间两种边一样不含，对话里按它量的（`CueEndProbe`）不变。
 struct ChatScroll<Content: View, Key: Equatable>: View {
     let followKey: Key
     let readingWidth: CGFloat
@@ -73,9 +76,12 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                     .defaultScrollAnchor(pinned ? .bottom : nil, for: .sizeChanges)
                     // 栏贴着滚动区两边（手机、窄窗口）时，横向滚动的表格可以越过页边距滑到边上（`readingColumnBleeds`）
                     .environment(\.readingColumnBleeds, proxy.size.width <= readingWidth)
-                    .contentMargins(.horizontal, margin(proxy.size.width), for: .scrollContent)
-                    .contentMargins(.vertical, ChatLayout.edge, for: .scrollContent)
-                    .contentMargins(.bottom, bottomInset, for: .scrollIndicators)
+                    .safeAreaPadding(.horizontal, margin(proxy.size.width))
+                    .safeAreaPadding(.vertical, ChatLayout.edge)
+                    // 滚动条不随栏的边缩进：仍贴滚动区的左右边，上下只让开栏与回复框
+                    .contentMargins(.horizontal, -margin(proxy.size.width), for: .scrollIndicators)
+                    .contentMargins(.top, -ChatLayout.edge, for: .scrollIndicators)
+                    .contentMargins(.bottom, bottomInset - ChatLayout.edge, for: .scrollIndicators)
                     .scrollPosition($position)
                     .onScrollPhaseChange { _, phase in
                         let scrolling = phase == .interacting || phase == .decelerating
