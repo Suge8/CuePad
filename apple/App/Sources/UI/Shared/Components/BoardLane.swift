@@ -52,7 +52,8 @@ struct BoardColumnHeader: View {
     private static let font = Typography.secondary.weight(.semibold)
     private static let countFont = Typography.heading
     private static let mark: CGFloat = 16
-    static let height: CGFloat = 44
+    /// 排在窗口最顶那一排里，与工具栏的玻璃同高（`boardTopRow`）
+    static let height = Spacing.toolbarControl
     #else
     private static let font = Font.headline
     private static let countFont = Font.title2.weight(.semibold)
