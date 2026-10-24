@@ -5,7 +5,7 @@ public enum Table: String, Codable, Sendable, CaseIterable {
   case cueMessages, cueLines, cueProfile, cueState, cueRead, cueSummaries, macPresence, macAgents, sessionViewers
   /// 本机写入序号（`CueStore.lastWrite`，由触发器随 Cue 关心的那几列变化而加）：订阅读它，就只在这些变化时被叫醒。
   case writeCounter
-  /// 同步元数据（本机表，`Schema.syncRecordsTable`）：说的话读服务器收下过没有（`Speech.reachedServerSQL`），收下时叫醒它们。
+  /// 同步元数据（本机表，`Schema.syncRecordsTable`）：说的话读服务器收下过没有（`Speech.reachedServerSQL`）；订阅只按行依赖还没发出的那几句（`CueStore.noteUnsent`）。
   case syncRecords
 }
 

@@ -198,8 +198,11 @@ extension CueStore {
   private func selectWritten<R: Record>(
     _ type: R.Type, where condition: String, _ arguments: [any SQLBindable], orderBy: String
   ) throws -> [(R, Int)] {
-    try db.query(
-      "SELECT \(R.selection), writeSeq FROM \(R.table.rawValue) WHERE \(condition) ORDER BY \(orderBy)", arguments
-    ) { (R(row: $0), Int($0.int($0.index(of: "writeSeq")!))) }
+    // 读的是失败了的请求，到没到过服务器不会再改变它们：不依赖同步元数据
+    try db.untracked(.syncRecords) {
+      try db.query(
+        "SELECT \(R.selection), writeSeq FROM \(R.table.rawValue) WHERE \(condition) ORDER BY \(orderBy)", arguments
+      ) { (R(row: $0), Int($0.int($0.index(of: "writeSeq")!))) }
+    }
   }
 }

@@ -242,6 +242,9 @@ final class SQLite {
     return (value, tracked ?? [])
   }
 
+  /// 正在 `tracking` 里（订阅的一次读）。
+  var isTracking: Bool { tracked != nil }
+
   /// 执行 `body`，其间读到 `table` 不记进正在进行的 `tracking`：调用方自己按行登记依赖（`CueStore.narrow`）。
   /// 这之前或之后的读也碰了 `table` 的，照常记下。
   func untracked<T>(_ table: Table, _ body: () throws -> T) rethrows -> T {
