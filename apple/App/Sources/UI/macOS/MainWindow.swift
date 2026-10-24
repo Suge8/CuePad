@@ -36,8 +36,6 @@ struct MainWindow: View {
             page
             EditorLayer().zIndex(1)
         }
-        // 工具栏那一条垫页底色的渐变（`Bars`）：只这一处、只这一条高，页里浮着的东西（顶上那一排、提示）都在它下面
-        .overlay(alignment: .top) { ToolbarFade() }
         .overlay(alignment: .bottom) { CaptureSlot() }
         .overlay(alignment: .top) { NoticeView().padding(.top, 8) }
         .toolbar { toolbar }

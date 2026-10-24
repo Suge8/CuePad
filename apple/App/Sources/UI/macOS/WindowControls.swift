@@ -204,7 +204,7 @@ struct SearchSlot: View {
 }
 
 extension Workspace {
-    /// 进展页的看板（没开编辑页时）：窗口最顶那一排写着四个列头（`boardTopRow`），那一排的页底渐变由各列自己垫，搜索收进"⋯"。
+    /// 进展页的看板（没开编辑页时）：窗口最顶那一排写着四个列头（`boardTopRow`），搜索收进"⋯"。
     var boardOwnsTopRow: Bool { root == .progress && progressPane == .board && openCard == nil }
 
     /// 进展页的会话段：那一排左边是项目范围，右边额度环与新会话。
