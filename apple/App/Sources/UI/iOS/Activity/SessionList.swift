@@ -13,6 +13,8 @@ struct SessionList<Top: View>: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
 
+    private static var margin: CGFloat { 16 }
+
     /// 最上面那一行的 id：换项目范围时滚回它。
     private static var topID: String { "top" }
 
@@ -28,8 +30,11 @@ struct SessionList<Top: View>: View {
             // 顶上那一行只是滚回去的锚，不占系统给行的最小高度
             .environment(\.defaultMinListRowHeight, 0)
             .scrollContentBackground(.hidden)
-            .contentMargins(.horizontal, 16, for: .scrollContent)
-            .contentMargins(.top, Bars.contentGap, for: .scrollContent)
+            .safeAreaPadding(.horizontal, Self.margin)
+            .safeAreaPadding(.top, Bars.contentGap)
+            // 滚动条仍贴屏幕边与顶栏下沿，不随内容的边缩进
+            .contentMargins(.horizontal, -Self.margin, for: .scrollIndicators)
+            .contentMargins(.top, -Bars.contentGap, for: .scrollIndicators)
             .scrollDismissesKeyboard(.immediately)
             .refreshable { await services.syncNow() }
             // 换了项目范围：回到顶上，从这个项目的第一条看起

@@ -56,7 +56,7 @@ struct BoardRowLane<Above: View, Content: View>: View {
                 }
                 .scrollTargetLayout()
             }
-            // 边用 safeAreaPadding（键盘起落重排后 contentMargins 的边会丢）；左边让出行头，滑动时卡从它下面过
+            // 边用 safeAreaPadding（docs/ui.md 布局约束）；左边让出行头，滑动时卡从它下面过
             .safeAreaPadding(.leading, BoardRowMetrics.lead)
             .safeAreaPadding(.trailing, BoardRowMetrics.margin)
             .scrollTargetBehavior(.viewAligned)

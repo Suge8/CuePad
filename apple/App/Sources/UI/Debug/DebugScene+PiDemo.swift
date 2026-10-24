@@ -59,10 +59,11 @@ extension DebugScene {
             ("piwork", .settled, nil, nil, DemoRecap(
                 lastPrompt: "列出 piwork 目录下的文件", lastReply: "目录里有 3 个文件：\n- README.md\n- notes.txt\n- todo.md")),
         ]
-        // 历史里再加两个带近况的：一个正在请 Mac 继续，一个不在项目里
+        // 历史里再加几个带近况的：一个正在请 Mac 继续，一个不在项目里；pricing 是 Cue 核对过的那批四份的会话（`seedDeliveries`），会话页里那批横着滑
         let history: [(String, String?, PiRecap)] = [
             ("landing-copy", "旅行", PiRecap(lastPrompt: "把首页标题换成新文案", lastReply: "改好了，首页标题现在是「把想法写成卡片」。")),
             ("weekly", nil, PiRecap(lastPrompt: "汇总这周的提交", lastReply: "这周 23 个提交，主要是同步和 Agent 页。")),
+            ("pricing", "个人网站", PiRecap(lastPrompt: "重做定价区，三档在窄屏别挤成两行", lastReply: "改好了，网页、对比表、宽屏截图和改动说明都发给你了。")),
         ]
         // 文件夹名与还没绑文件夹的项目同名（Flow）：手机给项目换文件夹时的候选里有它
         for index in 1...3 {
