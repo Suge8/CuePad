@@ -300,6 +300,13 @@ DEFINE SCHEMA
         GRANT CREATE TO "_icloud"
     );
 
+    RECORD TYPE relaySecrets (
+        "___recordID" REFERENCE QUERYABLE,
+        secret        ENCRYPTED BYTES,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud"
+    );
+
     RECORD TYPE tags (
         "___recordID" REFERENCE QUERYABLE,
         color         STRING,

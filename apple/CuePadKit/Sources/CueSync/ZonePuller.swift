@@ -82,7 +82,7 @@ actor ZonePuller {
   }
 
   private func drainPages() async throws {
-    // 对账与积压了不止一页（离线久了、别处一下写了很多）算在同步中；一页就拉完的（按节奏每两三秒一次）不算，状态不跟着闪
+    // 对账与积压了不止一页（离线久了、别处一下写了很多）算在同步中；一页就拉完的（按节奏的、门铃叫来的）不算，状态不跟着闪
     var token = try await coordinator.token()
     if token == nil {
       await coordinator.setCatchingUp(true)

@@ -31,13 +31,13 @@ public actor CloudSync {
   /// 正在认的那一次：同时要认的都等它。
   private var connecting: Task<Bool, Never>?
   private var accountBackoff = Backoff()
-  /// 认不了时下次再认的时刻：之前来的立即同步（按节奏的拉取每两三秒一次）不另认，账号变化不等它。
+  /// 认不了时下次再认的时刻：之前来的立即同步（按节奏的拉取、门铃都可能很密）不另认，账号变化不等它。
   private var accountRetryAt: ContinuousClock.Instant?
   private var accountRetry: Task<Void, Never>?
   private var accountWatcher: Task<Void, Never>?
   /// `start()` 之前就要拉的（冷启动时先到的推送）：开始了再拉。
   private var startWaiters: [CheckedContinuation<Void, Never>] = []
-  /// 上一次建通知订阅的时刻：没建成时 `syncNow` 顺带重试，至多每 `alertRetryInterval` 一次（它也是按节奏的拉取，每两三秒一次）。
+  /// 上一次建通知订阅的时刻：没建成时 `syncNow` 顺带重试，至多每 `alertRetryInterval` 一次（按节奏的拉取、门铃也走它，可能很密）。
   private var alertsAttemptedAt: ContinuousClock.Instant?
   private static let alertRetryInterval = Duration.seconds(60)
   private static let log = Logger(subsystem: AppIdentity.id, category: "sync")

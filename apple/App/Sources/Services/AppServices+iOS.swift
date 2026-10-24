@@ -11,6 +11,7 @@ extension AppServices {
         startCaptureIngest()
         startSnapshots()
         startSync()
+        startRelay()
         startSpeechClock()
         startLiveSessions()
         startAccountQuotas()
