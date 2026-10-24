@@ -58,7 +58,7 @@ xcrun cktool export-schema $C --output-file /tmp/dev.ckdb   # 回读：服务端
 
 待部署到生产（已导入开发环境，发版前一次 Deploy Schema Changes，部署完删掉对应条目）：
 
-- 结构：`cueMessages.author`、`deliveryRequests.status` 两个可查询索引（`.ckdb` 已改，确认页的 Indexes 应只多这两项）。
+- 结构：`cueMessages.author`、`deliveryRequests.status` 两个可查询索引，与门铃密钥的记录类型 `relaySecrets`（`.ckdb` 已改；2026-10-25 重新生成、导入开发环境后回读，开发比生产只多这三项，确认页的 Indexes 应多那两个索引、Record Types 多 `relaySecrets`）。
 - 订阅定义（2026-10-25 已由开发签名的构建在开发容器的 `CuePad` 区保存，状态 active）：`cuepad.pi.waiting`、`cuepad.pi.settled`、`cuepad.cue` 带 content-available，新增 `cuepad.cue.said`、`cuepad.delivery.result`。旧的数据库订阅 `cuepad.changes` 不用部署，新版客户端自己删。
 - 顺序：先部署，再发 iOS 版。没部署时，新版在生产建不成两个新订阅，三个可见通知照常（`ensure` 各建各的），手机后台就收不到 Cue 的话与请求结果的推送；订阅建不成的原因显示在设置的通知那一行，部署后回前台自动补建。
-- 和 #33 的 `relaySecrets`：Deploy Schema Changes 部署的是开发环境的整份结构，开发环境里此刻有 #33 导入的 `relaySecrets`（不在本分支的 `.ckdb` 里），部署就会一起进生产、之后删不掉。所以等 #33 合进 main、`.ckdb` 里有了 `relaySecrets`，按「CloudKit 数据结构」重新生成、导入开发环境、回读确认只多这两个索引与 `relaySecrets`，再一次部署两者；#33 不合的话，先用本分支的 `.ckdb` 重新导入开发环境把它去掉再部署。
+- 门铃：生产没有 `relaySecrets` 时门铃取不到密钥、连不上中转，拉取照常按节奏走；`ck-production.sh` 会拦下发布。
