@@ -2,7 +2,7 @@ import CueStore
 import SwiftUI
 
 extension View {
-    /// 看板上一张卡的外形（四列同一种）：纸面（`paper`），同一种卡一样高（`BoardCardMetrics`：推进中带线的卡 `advancingHeight`，其余 `TaskMetrics.cardHeight`），
+    /// 看板上一张卡的外形（四列同一种）：纸面（`paper`），同一种卡一样高（`BoardCardMetrics`：推进中带线的卡 `advancingHeight`，其余 `TaskMetrics.cardHeight`；手机竖版看板里铺满行给的格），
     /// 左右内边距与圆角见 `TaskMetrics`。平放的纸不加模糊阴影（侧栏开合时整面墙每帧重画，`paper` 的注释）：靠纸与桌面（托盘）的明度差把纸托出来。
     func boardCard(advancing: Bool) -> some View { modifier(BoardCardFrame(advancing: advancing)) }
 
@@ -20,15 +20,10 @@ extension View {
     }
 }
 
-/// 手机竖版看板（`PhoneBoard`）里卡的样子：卡高随字号（`BoardRowLane` 按动态字体量好给下来）、标题小一档；
-/// 推进中的状态词挪到线那一行，标题一整行都给字。Mac 与宽屏 iPad 没有（nil）。
-struct BoardRowStyle: Equatable {
-    var cardHeight: CGFloat
-    var advancingHeight: CGFloat
-}
-
 extension EnvironmentValues {
-    @Entry var boardRow: BoardRowStyle?
+    /// 卡在手机竖版看板（`PhoneBoard`）的一行里：卡铺满行给的那一格（格多高只由行高定，`BoardRowLane`）、标题小一档；
+    /// 推进中的状态词挪到线那一行，标题一整行都给字。Mac 与宽屏 iPad 不是。
+    @Entry var boardRow = false
 }
 
 private struct BoardCardFrame: ViewModifier {
@@ -36,9 +31,9 @@ private struct BoardCardFrame: ViewModifier {
     @Environment(\.boardRow) private var row
 
     func body(content: Content) -> some View {
-        let height = advancing ? row?.advancingHeight ?? BoardCardMetrics.advancingHeight : row?.cardHeight ?? TaskMetrics.cardHeight
-        content.padding(.horizontal, row == nil ? TaskMetrics.cardPadding : BoardCardMetrics.rowPadding)
-            .frame(maxWidth: .infinity, minHeight: height, maxHeight: height, alignment: .leading)
+        let height: CGFloat? = row ? nil : advancing ? BoardCardMetrics.advancingHeight : TaskMetrics.cardHeight
+        content.padding(.horizontal, row ? BoardCardMetrics.rowPadding : TaskMetrics.cardPadding)
+            .frame(maxWidth: .infinity, minHeight: height, maxHeight: height ?? .infinity, alignment: .leading)
             .paper(radius: TaskMetrics.cardRadius)
             .contentShape(.rect(cornerRadius: TaskMetrics.cardRadius, style: .continuous))
     }
@@ -49,7 +44,7 @@ private struct BoardTitleStyle: ViewModifier {
     @Environment(\.boardRow) private var row
 
     func body(content: Content) -> some View {
-        content.font(row == nil ? TaskMetrics.lineFont : BoardCardMetrics.rowTitle).lineLimit(row == nil ? 1 : 2)
+        content.font(row ? BoardCardMetrics.rowTitle : TaskMetrics.lineFont).lineLimit(row ? 2 : 1)
     }
 }
 
@@ -149,14 +144,14 @@ struct BoardCardLayout<Lead: View, Trailing: View>: View {
     }
 
     var body: some View {
-        if row != nil, advancing { rowAdvancing } else { standard }
+        if row, advancing { rowAdvancing } else { standard }
     }
 
     private var title: some View {
-        HStack(spacing: row == nil ? Self.gap : BoardCardMetrics.rowGap) {
+        HStack(spacing: row ? BoardCardMetrics.rowGap : Self.gap) {
             lead
             Spacer(minLength: 0)
-            if advancing, pulse.speaks, row == nil { word }
+            if advancing, pulse.speaks, !row { word }
             trailing
         }
     }
