@@ -48,6 +48,9 @@ final class PagerMotion {
     /// Cue 页底部的"⋯"展开成了三格（`DockRoot.openPlaces` 带着弹簧改）。条一离开 Cue 页就收起：那时三格本来就是展开的，收不收看不出来，
     /// 回到 Cue 页就是收起的样子；与条怎么离开（滑、点、减弱动态效果时直接到位）无关。
     var placesOpen = false
+    /// Cue 页的输入框有焦点：底部那一排让开、输入框占满整排，根上不接横拖。Cue 页在焦点进出时带着弹簧改（`CuePage`），
+    /// 它与底部那一排各在一棵 SwiftUI 树里，读的是这同一份，所以输入框长宽与"⋯"淡出在同一次动画里。
+    var composing = false
     /// 拉出前进页的进度，0…1。
     private(set) var pushed: CGFloat = 0
     var width: CGFloat = 0

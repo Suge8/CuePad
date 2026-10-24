@@ -79,11 +79,20 @@ private struct CueNowPanel: View {
 
     /// 面板只是一瞥：在做的会话最多列这么多，全部在 进展页的会话段里。
     private static let limit = 5
+    /// 换一块新的滚动区（`body` 里的注释）。
+    @State private var scroll = 0
 
     var body: some View {
         HugHeight {
             ScrollView { content }.scrollBounceBehavior(.basedOnSize)
                 .defaultScrollAnchor(DebugHooks.preset.cuePanelEnd ? .bottom : nil)
+                .id(scroll)
+                // 这块滚动区不设内容边距，左、上有边距就是对话那块的：SwiftUI 在同一次更新里给对话的滚动区上内容边距时，
+                // 会把同一份写到这块的 UIScrollView 上（实测四边各 16，自己写的 `contentMargins` 也被盖掉），整块内容右下移 16、右边被裁，
+                // 之后不再改回。换一块新的，它按自己的环境排。底边不看：键盘盖住的那截是系统给的安全区。
+                .onScrollGeometryChange(for: Bool.self) { $0.contentInsets.leading != 0 || $0.contentInsets.top != 0 } action: { _, foreign in
+                    if foreign { scroll += 1 }
+                }
         }
     }
 
