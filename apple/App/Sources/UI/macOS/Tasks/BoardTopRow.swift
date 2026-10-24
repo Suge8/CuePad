@@ -7,8 +7,7 @@ extension EnvironmentValues {
 }
 
 extension View {
-    /// 一列的列头排进窗口最顶那一排、卡从它下面滚过（docs/ui.md 沉浸式的栏）：这一列自己在那一排垫页底色的渐变（`TopFade`，
-    /// 同主窗口的 `ToolbarFade`，进展页上那一条由各列自己垫，列头才压得在渐变上面），列头是写在渐变上的字，不另垫玻璃（同访达的列头：四块玻璃排一行读起来像四颗钮）。最右那一列的列头给右上的"⋯"让出一截，待办的列头给左上的两段分段让出一截。
+    /// 一列的列头排进窗口最顶那一排、卡从它下面滚过（docs/ui.md 沉浸式的栏，那一排什么都不垫），列头是字，不另垫玻璃（同访达的列头：四块玻璃排一行读起来像四颗钮）。最右那一列的列头给右上的"⋯"让出一截，待办的列头给左上的两段分段让出一截。
     func boardTopRow(column: TaskBoard.Column, count: Int) -> some View {
         modifier(BoardTopRow(column: column, count: count))
     }
@@ -19,7 +18,6 @@ private struct BoardTopRow: ViewModifier {
     let count: Int
     @Environment(\.boardBand) private var band
     @Environment(Workspace.self) private var workspace
-    @Environment(\.palette) private var palette
     /// 这一列的左沿在窗口里的横坐标（只有待办量：它让出左上的分段）。
     @State private var left: CGFloat?
 
@@ -27,13 +25,7 @@ private struct BoardTopRow: ViewModifier {
         content
             .onGeometryChange(for: CGFloat?.self) { column == .todo ? $0.frame(in: .global).minX : nil } action: { left = $0 }
             .safeAreaPadding(.top, band + Bars.contentGap)
-            .overlay(alignment: .top) {
-                ZStack {
-                    TopFade(color: palette.desk).frame(height: band + Bars.contentGap, alignment: .top)
-                    header.frame(height: band).frame(maxHeight: .infinity, alignment: .top)
-                }
-                .frame(height: band + Bars.contentGap)
-            }
+            .overlay(alignment: .top) { header.frame(height: band) }
     }
 
     private var header: some View {
