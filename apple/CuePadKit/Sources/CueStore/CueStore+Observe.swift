@@ -1,12 +1,11 @@
 import Foundation
-import Synchronization
 
 extension CueStore {
   /// 订阅：先产出一次当前值，之后每当 `read` 读到的表被提交的写事务改动就重读并产出。依赖的表由读取本身决定
   /// （每次读完按它实际读到的表更新，随数据走不同分支也对），调用处不另声明；这是订阅的唯一写法——
   /// 只要"变了就叫我"的也读一个会跟着变的值（计数、版本、列表），不单独订阅表。
   /// 结果随时间变的（读里登记了 `expire(at:)`，如 Cue 那台 Mac 算不算在线）到点也重读，不轮询。
-  /// 突发的多次写入会合并为一次重读。`read` 在 store 的隔离域内执行，可直接调用查询方法：
+  /// 突发的多次写入会合并为一次重读。`read` 在只读连接（`rereader`）的隔离域内、一个读事务里执行，可直接调用查询方法：
   /// `store.observe { try $0.cards(in: id) }`
   /// 订阅以表为粒度：别的行改动同一张表也会重读，但结果和上一次一样就不产出——比较只在读取的这一侧做一次，
   /// 不把没变的数据送到主线程、也不让界面白白重算。`initial` 是调用方手里已有的值，当作"上一次"：重新订阅后第一份没变也不产出。
@@ -28,22 +27,26 @@ extension CueStore {
   @MainActor
   public func snapshot<T: Sendable>(_ read: @Sendable (isolated CueStore) throws -> T) throws -> Snapshot<T> {
     // 先取提交数再读：其间有提交的，接着订阅时多重读一次，不会漏
-    let since = commits.load(ordering: .acquiring)
-    let (value, tables, scopes, expiry) = try (reader ?? self).assumeIsolated { try $0.tracked(read) }
+    let since = subscriptions.commits
+    let (value, tables, scopes, expiry) = try reader!.assumeIsolated { try $0.tracked(read) }
     return Snapshot(value: value, tables: tables, scopes: scopes, version: since, expiry: expiry)
   }
 
-  /// 订阅 `tables`（`since` 见 `subscribe`），每个信号重读一次；`last` 是第一次比较的"上一次"，`expiry` 是它到点重读的时刻。
+  /// 订阅 `tables`（`since` 见 `Subscriptions.add`），每个信号重读一次；`last` 是第一次比较的"上一次"，`expiry` 是它到点重读的时刻。
   private nonisolated func observe<T: Sendable & Equatable>(
     _ read: @escaping @Sendable (isolated CueStore) throws -> T, reading tables: Set<Table>, scopes: [Table: [RowScope]], since: Int?, last initial: T?,
     expiry firstExpiry: Date?
   ) -> AsyncThrowingStream<T, Error> {
     AsyncThrowingStream { continuation in
       let (signals, signal) = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
+      let (subscriptions, rereader) = (self.subscriptions, self.rereader!)
       let task = Task {
-        let token = await self.subscribe(signal, reading: tables, scopes: scopes, since: since)
+        let token = subscriptions.add(signal, reading: tables, scopes: scopes, since: since)
         var timer: Task<Void, Never>?
-        defer { timer?.cancel() }
+        defer {
+          timer?.cancel()
+          subscriptions.remove(token)
+        }
         let timing = self.timing
         func schedule(_ expiry: Date?) {
           timer?.cancel()
@@ -58,7 +61,9 @@ extension CueStore {
         do {
           var last = initial
           for await _ in signals {
-            let (next, expiry) = try await self.run(read, token: token)
+            let before = subscriptions.commits
+            let (next, reads, scopes, expiry) = try await rereader.tracked(read)
+            subscriptions.settle(token, reading: reads, scopes: scopes, since: before)
             schedule(expiry)
             if next == last { continue }
             last = next
@@ -68,7 +73,6 @@ extension CueStore {
         } catch {
           continuation.finish(throwing: error)
         }
-        await self.unsubscribe(token)
       }
       continuation.onTermination = { _ in
         signal.finish()
@@ -77,26 +81,11 @@ extension CueStore {
     }
   }
 
-  /// 登记订阅 `reading` 这些表；`since` 是读到那份时的提交数，其后有过提交（或没读过：nil）就先给一个信号重读。
-  /// 第一次读之前什么都可能改动它：没读过的先订阅全部表，读完再收窄。
-  private func subscribe(_ signal: AsyncStream<Void>.Continuation, reading tables: Set<Table>, scopes: [Table: [RowScope]], since: Int?) -> UUID {
-    let token = UUID()
-    subscribers[token] = (tables, scopes, signal)
-    if since != commits.load(ordering: .acquiring) { signal.yield() }
-    return token
-  }
-
-  /// 读一次，并把订阅收窄到这次实际读到的表。读与收窄在同一次 actor 执行里，其间没有写入能漏掉。
-  /// 也带回结果随时间变的时刻（读里调过 `expire(at:)`）。
-  private func run<T>(_ read: (isolated CueStore) throws -> T, token: UUID) throws -> (T, Date?) {
-    let (value, reads, scopes, expiry) = try tracked(read)
-    subscribers[token]?.tables = reads
-    subscribers[token]?.scopes = scopes
-    return (value, expiry)
-  }
-
-  /// 读一次，带回读到的表、其中按行收窄的（同一次读里又整表读过的不算收窄）与结果随时间变的时刻。
+  /// 在只读连接上读一次（一个读事务：读里的几条查询看到的是同一刻的库），带回读到的表、其中按行收窄的（同一次读里又整表读过的不算收窄）
+  /// 与结果随时间变的时刻。
   private func tracked<T>(_ read: (isolated CueStore) throws -> T) throws -> (T, Set<Table>, [Table: [RowScope]], Date?) {
+    try db.exec("BEGIN")
+    defer { try? db.exec("COMMIT") }
     readExpiry = nil
     readScopes = [:]
     defer { readScopes = nil }
@@ -143,7 +132,6 @@ extension CueStore {
   /// 正在读的结果到 `date` 会随时间变（不是因为库里写了什么）：`observe` 到点再读一次。不在订阅里读时无影响。
   func expire(at date: Date) { readExpiry = min(readExpiry ?? date, date) }
 
-  private func unsubscribe(_ token: UUID) { subscribers[token] = nil }
 }
 
 /// 主线程当场读到的一份（`CueStore.snapshot`）：值，加上从它接着订阅（`observe(from:)`）要的读到的表、当时的提交数与到点重读的时刻。

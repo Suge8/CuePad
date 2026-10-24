@@ -4,6 +4,9 @@ import SwiftUI
 
 /// 内容区：当前页与最近去过的几页都挂着（`Workspace.mountedPages`），切页只是换哪一页看得见，回访不重建、不重排、滚动位置还在。
 /// 不在前台的页：不可见、点不到、屏读跳过，暂停订阅与实时状态（`pageActive`），尺寸停在离开时的值（`PageStackLayout`）。
+/// 主窗口没露在屏上（被盖住、缩进程序坞、App 隐藏、锁屏与屏幕睡着，`AppServices.mainWindowExposed`）时当前页也一样：
+/// 看不见的窗口照样随每次写入重读、重排、重画，用户离开时这些活与按节奏的拉取抢同一条主线程。露出来时重新订阅，按那一刻的库排一次。
+/// 脚本起的实例窗口排在最后，当它露着（同 `CueViewing`）。
 /// 读页面的只有这里，主窗口的视图体不读它，切页时不重建整条工具栏。会话页不留，只在当前页时挂上。
 struct PageStack: View {
     @Environment(Workspace.self) private var workspace
@@ -12,6 +15,7 @@ struct PageStack: View {
         let current = workspace.root
         let pages = workspace.mountedPages
         let leaving = workspace.pages.leaving
+        let seen = workspace.services.mainWindowExposed || DebugHooks.scripted
         PageStackLayout(active: current) {
             ForEach(pages, id: \.self) { page in
                 let active = page == current
@@ -20,7 +24,7 @@ struct PageStack: View {
                     .opacity(active ? 1 : 0)
                     .allowsHitTesting(active)
                     .accessibilityHidden(!active)
-                    .environment(\.pageActive, active || page == leaving)
+                    .environment(\.pageActive, seen && (active || page == leaving))
                     .environment(\.pagePrefetch, !active && workspace.pages.isPremounted(page))
             }
         }
