@@ -9,6 +9,7 @@ import SwiftUI
 /// 面板定高、不滚：会话空着、少、满都是同样几格高，多出的在全部会话里，有没有等你、启没启用也一样高；放不下四格时少放几格（按给的高定，与有几个会话无关）。
 /// 区头不钉住、面板里没有滚动区：滚动区会读到对话那块的内容边距（SwiftUI 把对话的 `contentMargins` 写到同一棵树里别的 UIScrollView 上），整块右移被裁。
 struct CueNowPanel: View {
+    let brain: AgentModelChoice?
     let close: () -> Void
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -25,7 +26,7 @@ struct CueNowPanel: View {
             // 启用前后、选没选在哪台运行，这两行都占着同样的高：面板不随状态变矮
             VStack(spacing: 12) {
                 if cue.hostID != nil {
-                    CueConfigControls(fail: workspace.fail, alignment: .center)
+                    CueConfigControls(choice: brain, fail: workspace.fail, alignment: .center)
                 } else {
                     // 名片上的此刻已经写着"还没启用"，这里只空着这一行
                     Color.clear.frame(height: ConfigCapsule.hitHeight)
@@ -107,33 +108,41 @@ struct CueNowPanel: View {
 }
 
 /// 在做的那几格：一格一个会话（`PiSessionRow`，按 `LiveWork.rows` 的先后，要你注意的在前），格高就是一行的高（名字一行、状态一行），
-/// 有没有会话、有几个都占同样几格；没有时一句话居中在这几格里。最多 `most` 格，给的高放不下就少几格（`ViewThatFits` 从多到少试）：
-/// 只随屏高与字号变，不随会话变。
+/// 有没有会话、有几个都占同样几格；没有时一句话居中在这几格里。最多 `most` 格，给的高放不下就少几格：格数由 `SlotRoom` 按给的高与格高算出，
+/// 只随屏高与字号变，不随会话变。行只建放得下的那几行：量出这块排成几格高、一格多高，再按它列（量的是这块自己的框，行不参与它的大小，不成环）。
 private struct SessionSlots: View {
     let sessions: [PiSessionState]
     let open: (PiSessionState) -> Void
     @Environment(AppServices.self) private var services
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
+    @State private var room: CGFloat = 0
+    @State private var slot: CGFloat = 0
 
-    private static let most = 4
+    static let most = 4
+    private static let gap = CueHeader.rowGap
 
-    var body: some View {
-        ViewThatFits(in: .vertical) {
-            ForEach((1...Self.most).reversed(), id: \.self, content: column)
-        }
+    /// 这块排成了几格（还没量到时按最多算，同一帧里就会改成量到的）。
+    private var fit: Int {
+        guard slot > 0 else { return Self.most }
+        return min(max(Int(((room + Self.gap) / (slot + Self.gap)).rounded()), 1), Self.most)
     }
 
-    private func column(_ slots: Int) -> some View {
-        VStack(alignment: .leading, spacing: CueHeader.rowGap) {
-            ForEach(0..<slots, id: \.self) { index in
-                SlotHeight().overlay(alignment: .topLeading) {
-                    if index < sessions.count { row(sessions[index]) }
+    var body: some View {
+        SlotRoom(most: Self.most, gap: Self.gap) {
+            SlotHeight().onGeometryChange(for: CGFloat.self) { $0.size.height } action: { slot = $0 }
+        }
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { room = $0 }
+        .overlay(alignment: .top) {
+            if sessions.isEmpty {
+                Text("没有在跑的会话").font(.subheadline).foregroundStyle(palette.ink3).frame(maxHeight: .infinity)
+            } else {
+                VStack(alignment: .leading, spacing: Self.gap) {
+                    ForEach(sessions.prefix(fit)) { session in
+                        SlotHeight().overlay(alignment: .topLeading) { row(session) }
+                    }
                 }
             }
-        }
-        .overlay {
-            if sessions.isEmpty { Text("没有在跑的会话").font(.subheadline).foregroundStyle(palette.ink3) }
         }
     }
 
@@ -147,6 +156,24 @@ private struct SessionSlots: View {
                 .contentShape(.rect)
         }
         .buttonStyle(.row)
+    }
+}
+
+/// 几格会话的那块地方：一格高是唯一的子视图（`SlotHeight`）的高，给的高里放得下几格（至少一格、至多 `most` 格）就是几格那么高。
+private struct SlotRoom: Layout {
+    let most: Int
+    let gap: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let slot = subviews.first?.sizeThatFits(ProposedViewSize(width: proposal.width, height: nil)) ?? .zero
+        // 没给高或给的是无穷（外面量它最多要多高时）就是最多那几格
+        let fits = proposal.height.flatMap { $0.isFinite ? Int(($0 + gap) / (slot.height + gap)) : nil } ?? most
+        let count = CGFloat(min(max(fits, 1), most))
+        return CGSize(width: proposal.width ?? slot.width, height: count * slot.height + (count - 1) * gap)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews.first?.place(at: bounds.origin, proposal: ProposedViewSize(width: bounds.width, height: nil))
     }
 }
 

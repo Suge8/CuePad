@@ -34,6 +34,8 @@ struct CueComposer: View {
     #if os(macOS)
     /// ⌘⇧M、⌘⇧E 请模型或思考强度弹出菜单。
     @State private var opening: PiConfigPick?
+    /// 大脑那一排的可选与当前（Mac 的 Cue 页工具排）。
+    @State private var brain: AgentModelChoice?
     #endif
 
     var body: some View {
@@ -100,9 +102,10 @@ struct CueComposer: View {
         #if os(macOS)
         if tooled {
             HStack(spacing: 8) {
-                CueConfigControls(opening: $opening, fail: workspace.fail)
+                CueConfigControls(choice: brain, opening: $opening, fail: workspace.fail)
                 CueHostNote()
             }
+            .observingCueBrain(into: $brain, fail: workspace.fail)
         }
         #endif
     }
