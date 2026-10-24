@@ -4,7 +4,7 @@ import Foundation
 
 /// 桥协议的线上格式：一行一个 JSON。扩展端见 `Extension/cuepad-bridge/`。
 enum PiWire {
-    /// 客户端说的协议版本；hello 的版本不同就不往下解析（命令一条不发），会话等它换上新扩展（`OtherProtocolHello`、`PiSession.upgrading`）
+    /// 客户端说的协议版本；hello 的版本不同就不往下解析（命令除 `upgrade` 外一条不发），会话等它换上新扩展（`OtherProtocolHello`、`PiSession.upgrading`）
     static let protocolVersion = 16
 
     struct State: Decodable {
@@ -204,6 +204,10 @@ enum PiWire {
     }
 
     struct Bye: Decodable { var reason: String }
+
+    /// 请扩展核对磁盘上的扩展版本、不同就歇下时重新载入（`SelfReload.check`）。格式跨协议版本不变、没有 id、扩展不回 ack：
+    /// 要叫醒的正是协议号与 CuePad 不同的会话，它们只认得出这一行（见 CuePi README「协议」）。
+    static let upgrade = Data(#"{"t":"upgrade"}"#.utf8) + Data([0x0A])
 
     /// 协议版本不同的连接里只认告别（`OtherProtocolHello` 同理）：格式可能已变，读不出就当不是。
     static func otherProtocolBye(_ line: Data) -> Bye? {

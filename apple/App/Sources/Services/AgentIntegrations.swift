@@ -22,6 +22,8 @@ final class AgentIntegrations {
     @ObservationIgnored private let integration: AgentIntegration
     /// 移除成功之后（关掉开关）：收起 CuePad 为它起的东西（如 CuePad 拉起的 OpenCode 服务）
     @ObservationIgnored var uninstalled: (AgentKind) async -> Void = { _ in }
+    /// 新装或升级成功之后：Pi 的请在跑的会话换上新扩展（`PiBridge.offerExtensionUpgrade`）
+    @ObservationIgnored var installed: (AgentKind) -> Void = { _ in }
 
     init(_ integration: AgentIntegration) {
         self.integration = integration
@@ -144,9 +146,10 @@ final class AgentIntegrations {
         if let failure { throw failure }
     }
 
-    /// 新装或升级；已在运行的 Pi 会话空闲时自己重新载入扩展。
+    /// 新装或升级；已在运行的 Pi 会话经 `installed` 被请去核对，空闲时重新载入扩展。
     func install(_ kind: AgentKind) async throws {
         try await change(kind) { try await $0.install(kind) }
+        installed(kind)
     }
 
     /// v37 单文件扩展到 v38 目录扩展的过渡：Pi 会话上线、下线（含换上新扩展时的重连）时复查旧扩展的存根还要不要留（`AgentIntegration.retireLegacyPiExtension`）。

@@ -57,7 +57,7 @@ public enum PiExtensionBundle {
         """
 }
 
-/// Pi 扩展目录里 CuePad 的那份扩展：整个目录换新（`renamex_np` 交换，在跑的扩展盯着扩展目录，看到的总是完整的一份）。
+/// Pi 扩展目录里 CuePad 的那份扩展：整个目录换新（`renamex_np` 交换，在跑的扩展读到的总是完整的一份：v38 及更早盯着扩展目录，之后的在 CuePad 请它核对时读）。
 struct PiExtensionFiles {
     let extensionsDirectory: URL
     var directory: URL { extensionsDirectory.appending(path: PiExtensionBundle.directoryName, directoryHint: .isDirectory) }

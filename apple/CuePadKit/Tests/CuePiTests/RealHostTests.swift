@@ -267,7 +267,7 @@ struct RealHostTests {
         #expect(recap(of: next.sessions.first { $0.pid == opened.pid })?.lastReply?.contains("跑到一半") == true)
     }
 
-    /// App 更新后扩展协议号变了，上一版 App 托管的进程还在跑旧扩展：新 App 装上新扩展后它空闲时自己换上、以新协议重新连上，
+    /// App 更新后扩展协议号变了，上一版 App 托管的进程还在跑旧扩展：新 App 装上新扩展、请它核对后它空闲时换上、以新协议重新连上，
     /// 同一个进程接着收话，话送达、有回答。
     /// 只连真 Pi 跑：两个 Pi 进程交替上桥、中途热换扩展文件，回放排不稳先后（三次两次等不到旧扩展上桥）。
     @Test(RealAgents.live(.pi, "两个进程交替与热换扩展，回放排不稳先后"))
@@ -293,7 +293,8 @@ struct RealHostTests {
         let host = host(pi, bridge)
         host.start()
         defer { stopHostedProcesses(bridge) }
-        try installed.install(legacyInUse: false)  // 新 App 装好了新扩展
+        try installed.install(legacyInUse: false)  // 新 App 装好了新扩展，请连着的会话换上（App 里经 `AgentIntegrations.installed`）
+        bridge.offerExtensionUpgrade()
 
         try await eventually("同一个进程换上新扩展、重新连上") {
             bridge.sessions.contains { $0.pid == left.pid && !$0.upgrading && $0.state == .settled }

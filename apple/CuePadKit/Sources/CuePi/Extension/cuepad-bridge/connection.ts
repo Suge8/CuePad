@@ -114,6 +114,8 @@ function handleCommand(session: Session, socket: net.Socket, command: Command | 
 	const ack: Ack = (fields) => session.write(socket, { t: "ack", id: command?.id ?? null, ...fields });
 	const reject: Reject = (error) => ack({ ok: false, error });
 	try {
+		// 格式跨协议版本不变、不回 ack（CuePi README「协议」）：协议号不同的会话也要收得到
+		if (command?.t === "upgrade") return session.reload.check();
 		if (command?.t === "send") return handleSend(session, command, ack, reject);
 		if (command?.t === "command") return void handleSlash(session, command, ack, reject).catch((error) => reject(`failed: ${reason(error)}`));
 		if (command?.t === "answer") return handleAnswer(session, command, ack, reject);

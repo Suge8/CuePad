@@ -66,7 +66,9 @@ extension AgentTape {
     private static let iso = #"(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,9}))?(Z|[+-]\d{2}:\d{2})"#
     private static let milliseconds = #"(?<![0-9.])1[6-9][0-9]{11}(?![0-9])"#
     private static let seconds = #"(?<![0-9.])1[6-9][0-9]{8}(?![0-9])"#
-    private static let placeholder = #"\{(tmp|dtmp|pid|ms|s|iso|T|build|fixtures|pwd|home)(?::([^{}"\s]*))?\}"#
+    private static let placeholder = #"\{(tmp|dtmp|pid|ms|s|iso|T|build|fixtures|pwd|home|ext)(?::([^{}"\s]*))?\}"#
+    /// 扩展在 hello 里报的随包版本：CuePad 看它与随包版本是否相同决定发不发 `upgrade`，录成占位符，升扩展版本不用重录
+    private static let bundledVersion = #""extensionVersion":\#(PiExtensionBundle.version)"#
     private static let window = 2 * 86_400_000.0
 
     /// 录下前：密钥、路径、pid、时间换成占位符。
@@ -75,6 +77,7 @@ extension AgentTape {
         for secret in state.secrets where text.contains(secret) { text = text.replacing(secret, with: "{secret}") }
         text = replacing(jwt, in: text) { _ in "{secret}" }
         for (value, replacement) in identity where text.contains(value) { text = text.replacing(value, with: replacement) }
+        text = text.replacing(bundledVersion, with: #""extensionVersion":{ext}"#)
         let root = state.temporaryRoot, directories = state.temporaryDirectories
         for (form, name) in [(root + "/", "tmp"), (root.replacing("/", with: "-") + "-", "dtmp")] where text.contains(form) {
             text = replacing(NSRegularExpression.escapedPattern(for: form) + "([0-9]+)(?![0-9])", in: text) { groups in
@@ -143,6 +146,7 @@ extension AgentTape {
             case "fixtures": return fixturesDirectory.path
             case "pwd": return workingDirectory
             case "home": return home
+            case "ext": return String(PiExtensionBundle.version)
             case "pid": return pids[value].map { String($0) } ?? g[0]!
             case "ms", "s":
                 guard let delta = recordedDelta(g[1]!, value, t0: t0) else { return g[0]! }
