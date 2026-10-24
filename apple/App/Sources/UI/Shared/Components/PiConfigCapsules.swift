@@ -4,6 +4,8 @@ import SwiftUI
 /// 工具排里各枚胶囊（Agent、模型、思考强度、上下文用量 `PiContextGauge`）同样高。
 enum ConfigCapsule {
     static let height: CGFloat = 30
+    /// 点按区的高：胶囊画 `height` 高，点得到的上下各多一截，整排就是这么高。
+    static let hitHeight: CGFloat = 44
 }
 
 /// 模型胶囊：模型的标志（`BrandMark.model`）+ 模型短名（没有当前模型时写 `unnamed`）。iOS 点开是系统菜单（`MenuButton`）；Mac 点开与 ⌘⇧M 是同一个 AppKit 菜单（`ChoiceMenu`，
@@ -57,7 +59,7 @@ struct PiModelCapsule: View {
         // 按内容宽，给的窄了截断（最宽多少由工具排定）
         .frame(height: ConfigCapsule.height)
         .background(palette.fill, in: .capsule)
-        .frame(minHeight: 44)
+        .frame(minHeight: ConfigCapsule.hitHeight)
         .contentShape(.capsule)
         .animation(HandOff.quick, value: current?.key)
     }
@@ -110,7 +112,7 @@ struct PiAgentCapsule: View {
         .fixedSize()
         .frame(height: ConfigCapsule.height)
         .background(palette.fill, in: .capsule)
-        .frame(minHeight: 44)
+        .frame(minHeight: ConfigCapsule.hitHeight)
         .contentShape(.capsule)
         .animation(HandOff.quick, value: kind)
     }
@@ -195,7 +197,7 @@ struct PiThinkingDial: View {
                     .allowsHitTesting(false)
             }
         }
-        .frame(minHeight: 44)
+        .frame(minHeight: ConfigCapsule.hitHeight)
         .contentShape(.rect)
         .coordinateSpace(.named(Self.space))
         .gesture(

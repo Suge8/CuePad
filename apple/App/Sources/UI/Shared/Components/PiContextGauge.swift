@@ -47,7 +47,7 @@ struct PiContextGauge: View {
                 }
                 .clipShape(.capsule)
             }
-            .frame(minHeight: 44)
+            .frame(minHeight: ConfigCapsule.hitHeight)
             .contentShape(.capsule)
         }
         .buttonStyle(PressStyle())

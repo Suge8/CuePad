@@ -3,10 +3,10 @@ import CueStore
 import SwiftUI
 
 /// Cue 名牌长出的面板（`CueHeader`），手机上 Cue 的总面板（Mac 上这些分在 Cue 页输入框、"运行情况"、侧栏与设置里）。名牌长成的名片之下，沿中轴排：
-/// 它的大脑（Agent、模型与思考强度，`CueConfigControls`；还没选在哪台运行时没有）与上下文那一行（`CueContextLine`，启用了才有），居中；
+/// 它的大脑（Agent、模型与思考强度，`CueConfigControls`；还没选在哪台运行时空着这一行）与上下文那一行（`CueContextLine`，没启用时空着），居中；
 /// 在做：区头左"在做"，右边等你（赭黄，点它收起面板，等你的卡就在页面下方）与在跑、子代理的计数（`LiveWorkCount`）；下面固定几格会话（`SessionSlots`）；
 /// 底部三个等宽的去处：全部会话（换到进展页的会话段）、记忆、设置（`CueSettingsScreen`：在哪台 Mac 上运行、不用先问的事、工具步骤与名字）。
-/// 面板定高、不滚：会话空着、少、满都是同样几格高，多出的在全部会话里；放不下四格时少放几格（按给的高定，与有几个会话无关）。
+/// 面板定高、不滚：会话空着、少、满都是同样几格高，多出的在全部会话里，有没有等你、启没启用也一样高；放不下四格时少放几格（按给的高定，与有几个会话无关）。
 /// 区头不钉住、面板里没有滚动区：滚动区会读到对话那块的内容边距（SwiftUI 把对话的 `contentMargins` 写到同一棵树里别的 UIScrollView 上），整块右移被裁。
 struct CueNowPanel: View {
     let close: () -> Void
@@ -16,15 +16,22 @@ struct CueNowPanel: View {
 
     /// 面板的字号上限：再大名片、大脑、一格会话与去处就放不进最矮的 iPhone 了。
     private static let largestType = DynamicTypeSize.accessibility1
+    /// 区头的高：等你那颗按钮的点按区。
+    private static let tallyHeight: CGFloat = 32
 
     var body: some View {
         let cue = workspace.cue
         VStack(spacing: 16) {
-            if cue.hostID != nil || cue.canHear {
-                VStack(spacing: 12) {
-                    if cue.hostID != nil { CueConfigControls(fail: workspace.fail, alignment: .center) }
-                    if cue.canHear { CueContextLine(context: cue.context).frame(maxWidth: 240) }
+            // 启用前后、选没选在哪台运行，这两行都占着同样的高：面板不随状态变矮
+            VStack(spacing: 12) {
+                if cue.hostID != nil {
+                    CueConfigControls(fail: workspace.fail, alignment: .center)
+                } else {
+                    // 名片上的此刻已经写着"还没启用"，这里只空着这一行
+                    Color.clear.frame(height: ConfigCapsule.hitHeight)
                 }
+                CueContextLine(context: cue.context).frame(maxWidth: 240)
+                    .opacity(cue.canHear ? 1 : 0).accessibilityHidden(!cue.canHear)
             }
             VStack(alignment: .leading, spacing: 10) {
                 tally
@@ -43,7 +50,7 @@ struct CueNowPanel: View {
             Spacer(minLength: 8)
             if workspace.cue.waiting > 0 {
                 Button(action: close) {
-                    WaitingCount(count: workspace.cue.waiting).frame(minHeight: 32).contentShape(.rect)
+                    WaitingCount(count: workspace.cue.waiting).frame(minHeight: Self.tallyHeight).contentShape(.rect)
                 }
                 .buttonStyle(PressStyle())
                 .accessibilityHint("收起面板，看下面等你的事")
@@ -52,6 +59,8 @@ struct CueNowPanel: View {
             LiveWorkCount(work: workspace.liveWork, font: .footnote)
         }
         .font(.footnote)
+        // 有没有等你这一行都一样高（等你那颗按钮的点按区）
+        .frame(minHeight: Self.tallyHeight)
         // 大字号下一行放不下时整行缩一点，不截掉子代理的数
         .minimumScaleFactor(0.8)
     }
