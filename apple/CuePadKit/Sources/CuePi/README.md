@@ -8,7 +8,7 @@ Pi 的桥扩展（`Extension/cuepad-bridge/`，装成 Pi 扩展目录下的同�
 
 - 传输：Unix socket，一行一个 JSON（`\n` 结尾）。路径 `<socket 目录>/<sessionId>.<pid>.sock`，缺省目录 `/tmp/cuepad-<uid>`（`sun_path` 上限 104 字节，所以不用 `$TMPDIR`）。目录 0700、socket 0600；客户端还校验 socket 属主与对端 uid。扩展在 `.tmp` 名上 listen、收紧权限后才改名成 `.sock`。
 - 版本：`PROTOCOL_VERSION` 只认相等，不协商。每加一条命令或改了 CuePad 读的格式就升一号；协议号不同的会话只读出身份，等它换上新扩展（`PiSession.upgrading`）。只删 CuePad 不读的字段不升。
-- `EXTENSION_VERSION`（入口 `index.ts` 里）是扩展版本的唯一来源（`PiExtensionBundle.version` 从文件解析）。扩展的行为变了就升：在跑的扩展看到磁盘上的版本不同，歇下时自己重新载入。
+- `EXTENSION_VERSION`（入口 `index.ts` 里）是扩展版本的唯一来源（`PiExtensionBundle.version` 从文件解析）。扩展的行为变了就升：会话握手时报的版本与随包版本不同，或 CuePad 装完新版扩展后，CuePad 发 `upgrade`；扩展读磁盘上的版本，不同就歇下时重新载入。
 - 结束 = 连接断开。有 `bye` 是正常退出，没有就是进程被强杀。
 - 扩展只在 `tui`、`rpc` 模式启用；`print`/`json`（`pi -p`、FireCode 子代理的同进程子会话）不开 socket。
 
@@ -47,6 +47,9 @@ CuePad → 扩展（都带 `id`）：
 | `end` | — | — |
 | `reload` | — | — |
 | `quota` | — | — |
+
+`{"t":"upgrade"}`：请扩展核对磁盘上的扩展版本。不带 `id`，扩展不回 `ack`，不算进 `PROTOCOL_VERSION`，协议号不同的会话也发。
+**这一行的格式永远不能变**，扩展也要一直认它：要叫醒的正是协议号与 CuePad 不同的会话，它们只认得出这一行；格式一变，旧会话就再也换不上新扩展（与扩展装在 Pi 扩展目录下的路径必须稳定是同一类约束）。v38 及更早的扩展不认它（回 `bad_request`），它们自己盯着扩展目录。
 
 任何命令都可能以 `failed: <原因>` 拒绝。`ack` 只回给发命令的连接；多个客户端同连一个会话时各自收到全部状态，扩展不仲裁。
 

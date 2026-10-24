@@ -58,6 +58,12 @@ extension PiBridge {
             _ = try await request { try PiWire.configCommand(id: $0, model: model, thinking: thinking, name: name) }
         }
 
+        /// 报的扩展版本不是随包版本（协议号不同的没报，也算）：请它核对磁盘（`PiWire.upgrade`）。磁盘上还是旧的它就不动，所以可以多说。
+        func offerUpgrade() {
+            guard extensionVersion != PiExtensionBundle.version else { return }
+            connection.write(PiWire.upgrade)
+        }
+
         func refreshQuota() async throws { _ = try await request { try PiWire.bare("quota", id: $0) } }
 
         private func request(encode: (String) throws -> Data) async throws -> PiWire.Ack {
@@ -75,6 +81,9 @@ extension PiBridge {
     /// 连着的 Pi 会话都报了这个扩展版本（还没 hello 的、协议号不同的都不算）：过渡时判断旧单文件扩展还有没有会话在用
     /// （`AgentIntegration.retireLegacyPiExtension`）。连接在扫描 socket 目录时同步建立，所以已在跑的会话都算在内。
     public func allRun(extensionVersion version: Int) -> Bool { links.values.allSatisfy { $0.extensionVersion == version } }
+
+    /// 装完新版扩展后：请连着的旧版会话换上（握手时版本不同的已在握手时请过，那时磁盘上可能还是旧的）。
+    public func offerExtensionUpgrade() { for link in links.values where link.id != nil { link.offerUpgrade() } }
 
     func scan() {
         let names = (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []
@@ -146,6 +155,7 @@ extension PiBridge {
             link.extensionVersion = hello.extensionVersion
             session.hosted = hello.hosted ?? false
             appear(session, on: link)
+            link.offerUpgrade()
         case .otherProtocol(let hello):
             guard link.id == nil else { throw HandlingError.duplicateHello }
             guard "\(hello.sessionId).\(hello.pid)" == name else { throw HandlingError.nameMismatch }
@@ -156,6 +166,7 @@ extension PiBridge {
             session.firstMessage = hello.firstMessage
             session.hosted = hello.hosted
             appear(session, on: link)
+            link.offerUpgrade()
         case .state(let wire):
             guard let id = link.id else { throw HandlingError.messageBeforeHello }
             guard let work = wire.work else { throw HandlingError.unknownState(wire.kind) }

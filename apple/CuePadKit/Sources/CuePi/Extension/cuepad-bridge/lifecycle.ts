@@ -46,13 +46,14 @@ const OWN_DIRECTORY = path.dirname(__filename);
 const ENTRY = path.join(OWN_DIRECTORY, "index.ts");
 
 /**
- * 自己重新载入：磁盘上的本扩展换成了别的版本（CuePad 升级时整目录换掉，所以盯所在的扩展目录，不盯本目录；事件驱动，不轮询），
+ * 自己重新载入：CuePad 请本扩展核对磁盘（`upgrade`，见 CuePi README「协议」）、磁盘上的本扩展是别的版本时，
  * 就等到空闲（这一轮做完、没有等你回答的弹窗、子代理都歇下、不在压缩）经内部命令调 `ctx.reload()`：它清掉 Pi 的扩展缓存、
  * 从磁盘载入新版本，新实例以新协议重新连上 CuePad，用户不用自己 /reload；在跑的一轮不打断，歇下时（`commit` 里进入空闲）再重载。
+ * 否决自己盯着扩展目录（`fs.watch`）：Bun 在 macOS 上用 FSEvents，关监听与进程退出都同步等 fseventsd 注册完，它一忙，
+ * 会话关闭（闲置自退、/reload、换会话）就卡住几秒到十几秒；扩展文件只有 CuePad 写，由它来说。
  * 否决重新载入会话（`switchSession`）：同一工作目录下 Pi 复用缓存里的旧模块，载入的还是旧代码。
  */
 export class SelfReload {
-	private watcher: fs.FSWatcher | undefined;
 	private newerOnDisk = false;
 	private scheduled: ReturnType<typeof setImmediate> | undefined;
 
@@ -69,21 +70,18 @@ export class SelfReload {
 		this.runInternal = runInternal;
 	}
 
-	watch() {
-		this.watcher = fs.watch(path.dirname(OWN_DIRECTORY), (_event, name) => {
-			if (name !== null && name !== path.basename(OWN_DIRECTORY)) return;
-			let source: string;
-			try { source = fs.readFileSync(ENTRY, "utf8"); }
-			catch (error) {
-				this.newerOnDisk = false;
-				if ((error as NodeJS.ErrnoException).code !== "ENOENT") this.ctx.ui.notify(`CuePad 扩展升级检查失败：${reason(error)}`, "error");
-				return;
-			}
-			const version = Number(/const EXTENSION_VERSION = (\d+);/.exec(source)?.[1]);
-			this.newerOnDisk = Number.isInteger(version) && version !== this.version;
-			this.whenIdle();
-		});
-		this.watcher.on("error", (error) => this.ctx.ui.notify(`CuePad 扩展文件监听失败：${reason(error)}`, "error"));
+	/** CuePad 的 `upgrade`：读磁盘上的版本，与自己不同就排上重新载入（同版本什么都不做，所以 CuePad 多说几次也不会反复重载） */
+	check() {
+		let source: string;
+		try { source = fs.readFileSync(ENTRY, "utf8"); }
+		catch (error) {
+			this.newerOnDisk = false;
+			if ((error as NodeJS.ErrnoException).code !== "ENOENT") this.ctx.ui.notify(`CuePad 扩展升级检查失败：${reason(error)}`, "error");
+			return;
+		}
+		const version = Number(/const EXTENSION_VERSION = (\d+);/.exec(source)?.[1]);
+		this.newerOnDisk = Number.isInteger(version) && version !== this.version;
+		this.whenIdle();
 	}
 
 	/** 磁盘上是别的版本、此刻歇着：排上一次重新载入 */
@@ -107,7 +105,6 @@ export class SelfReload {
 	}
 
 	close() {
-		this.watcher?.close();
 		clearImmediate(this.scheduled);
 	}
 }

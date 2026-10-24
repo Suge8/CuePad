@@ -45,7 +45,7 @@ public struct PiSession: Identifiable, Sendable, Equatable {
     /// 启动时从会话列表补上的会话没有终端的环境变量，第一次钩子才带来
     public internal(set) var terminal: PiTerminal
     public internal(set) var state: PiWorkState
-    /// 扩展的协议号与 CuePad 不同：扩展换了新版本后会在歇下时自己重新载入、以新协议连回。这段时间读不到它在做什么（`state` 只是填的歇着）、
+    /// 扩展的协议号与 CuePad 不同：CuePad 请它核对磁盘（`PiWire.upgrade`），磁盘上换了新版本它就在歇下时重新载入、以新协议连回。这段时间读不到它在做什么（`state` 只是填的歇着）、
     /// 也发不进命令；同步记录不写、界面不换上桥上的状态，都照它最后一次读到的样子。
     public internal(set) var upgrading = false
     /// 一句话说明（同步记录的 `detail`）：工具名与调用目标、等你回答的弹窗标题、出错的摘要；其余状态为 nil

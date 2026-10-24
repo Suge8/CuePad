@@ -21,6 +21,7 @@ extension AppServices {
             guard kind == .opencode, let openCode = self?.runtimes[.opencode] as? OpenCodeRuntime else { return }
             await openCode.stopStartedService()()
         }
+        agents.installed = { [weak self] kind in if kind == .pi { self?.pi.offerExtensionUpgrade() } }
         do {
             try pi.start()
             try hooks.start()

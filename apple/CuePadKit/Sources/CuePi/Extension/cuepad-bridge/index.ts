@@ -16,7 +16,7 @@ import { captureDialogs, follow } from "./events.ts";
 import { INTERNAL_COMMAND, modelInfo, reason, subagentsOf } from "./info.ts";
 import { Session, type Firecode } from "./session.ts";
 
-const EXTENSION_VERSION = 38;
+const EXTENSION_VERSION = 39;
 const PROTOCOL_VERSION = 16;
 
 /** FireCode 发布"在飞子代理数"的频道（`{ inFlight }`）：在跑、在审，或已落定但结果事件还没交给指挥官的都算。
@@ -103,7 +103,6 @@ export default function (pi: ExtensionAPI) {
 		const session = new Session(pi, ctx, firecode, { protocol: PROTOCOL_VERSION, extensionVersion: EXTENSION_VERSION, launchToken });
 		const unsubscribe = follow(session);
 		session.idleExit.follow(session.phase);
-		session.reload.watch();
 		captureDialogs(ctx.ui, session);
 		let stop: ((reason: string) => void) | undefined;
 		try {
@@ -112,7 +111,7 @@ export default function (pi: ExtensionAPI) {
 			ctx.ui.notify(`CuePad bridge disabled: ${reason(error)}`, "warning");
 		}
 
-		/** 会话关闭：拆掉它挂的一切——事件处理、计时、文件监听、连接与 socket。 */
+		/** 会话关闭：拆掉它挂的一切——事件处理、计时、连接与 socket。 */
 		function close(why: string) {
 			for (const off of unsubscribe) off();
 			session.idleExit.cancel();
