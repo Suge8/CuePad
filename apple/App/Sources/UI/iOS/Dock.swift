@@ -22,7 +22,7 @@ struct DockRoot: View {
         @Bindable var workspace = workspace
         let root = workspace.root
         NavigationStack(path: $workspace.path) {
-            HomePager(motion: motion, composing: motion.composing, shot: shot)
+            HomePager(motion: motion, shot: shot)
                 .environment(\.dockMotion, motion)
                 .toolbarVisibility(.hidden, for: .navigationBar)
                 // 只有推在 Cue 页上的页能前进回来：只有它们离开前拍快照

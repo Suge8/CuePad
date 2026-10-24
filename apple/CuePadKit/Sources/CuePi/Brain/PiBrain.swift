@@ -29,7 +29,6 @@ final class PiBrain: CueBrain {
     private var process: ChildProcess?
     private let replies = PendingReplies<String, JSONValue>(timeout: AgentTimeouts.reply, timeoutError: CueBrainError.rejected("没有及时回应"))
     private var nextID = 0
-    private var window: Int?
     private(set) var seesImages = false
     static let subscription = Bundle.module.url(forResource: "claude-subscription", withExtension: "ts")!
     static let tools = Bundle.module.url(forResource: "cue-tools", withExtension: "ts")!
@@ -107,9 +106,8 @@ final class PiBrain: CueBrain {
         if let effort { _ = try await command(["type": "set_thinking_level", "level": .string(effort.rawValue)]) }
     }
 
-    /// 在用的模型（Pi 的 Model 对象）：上下文窗口与能不能看图。
+    /// 在用的模型（Pi 的 Model 对象）：能不能看图。
     private func adopt(_ model: JSONValue?) {
-        window = model?["contextWindow"]?.int
         seesImages = model?["input"]?.array?.contains("image") == true
     }
 
@@ -176,7 +174,7 @@ final class PiBrain: CueBrain {
     private func assistantMessage(_ message: JSONValue) {
         if let usage = message["usage"] {
             let used = ["input", "cacheRead", "cacheWrite"].reduce(0) { $0 + (usage[$1]?.int ?? 0) }
-            if used > 0 { session.emit(.context(used: used, window: window)) }
+            if used > 0 { session.emit(.context(used: used)) }
         }
         let stop = message["stopReason"]?.string
         // 被 abort 停下的是 "aborted"，不算出错；之后成功的请求（重试）清掉前面的错

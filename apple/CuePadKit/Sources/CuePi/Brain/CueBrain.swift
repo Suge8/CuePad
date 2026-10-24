@@ -45,8 +45,8 @@ public enum CueBrainEvent: Sendable, Equatable {
     /// 转成工具调用、这一轮被停下或出错（都在 `turnFinished` 之前）、下一轮开始时清掉；正常说完的留着——
     /// `turnFinished` 时还留着的就是这一轮的回答，没有就是这一轮没说话。三家都在协议层得出（逐字增量累积，每段说完时换成运行时给的定稿，不发增量也有），回答不另取一份
     case speaking(PiDraft?)
-    /// 最近一次模型请求的输入 token 合计（含缓存命中与写入）与上下文窗口
-    case context(used: Int, window: Int?)
+    /// 最近一次模型请求的输入 token 合计（含缓存命中与写入）
+    case context(used: Int)
     /// 开始调一个工具：`id` 是运行时给这次调用的编号（做完时对上）；名字去掉 CuePad 的 MCP 前缀并小写（`task`、`read`；
     /// Codex 跑的命令记作 `bash`，参数是 `{"command": …}`），参数是 JSON 原文
     case tool(id: String, name: String, arguments: String)

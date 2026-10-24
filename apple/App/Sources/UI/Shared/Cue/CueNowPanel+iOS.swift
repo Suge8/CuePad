@@ -123,10 +123,7 @@ private struct SessionSlots: View {
     private static let gap = CueHeader.rowGap
 
     /// 这块排成了几格（还没量到时按最多算，同一帧里就会改成量到的）。
-    private var fit: Int {
-        guard slot > 0 else { return Self.most }
-        return min(max(Int(((room + Self.gap) / (slot + Self.gap)).rounded()), 1), Self.most)
-    }
+    private var fit: Int { SlotRoom.count(in: room > 0 ? room : nil, slot: slot, gap: Self.gap, most: Self.most) }
 
     var body: some View {
         SlotRoom(most: Self.most, gap: Self.gap) {
@@ -166,10 +163,15 @@ private struct SlotRoom: Layout {
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let slot = subviews.first?.sizeThatFits(ProposedViewSize(width: proposal.width, height: nil)) ?? .zero
-        // 没给高或给的是无穷（外面量它最多要多高时）就是最多那几格
-        let fits = proposal.height.flatMap { $0.isFinite ? Int(($0 + gap) / (slot.height + gap)) : nil } ?? most
-        let count = CGFloat(min(max(fits, 1), most))
+        let count = CGFloat(Self.count(in: proposal.height, slot: slot.height, gap: gap, most: most))
         return CGSize(width: proposal.width ?? slot.width, height: count * slot.height + (count - 1) * gap)
+    }
+
+    /// 这么高放得下几格（至少一格、至多 `most` 格），排版与列行共用这一条。没给高、给的是无穷（外面量它最多要多高时）或还没量到格高就是最多那几格；
+    /// 量回来的高带浮点误差，多给半点余量。
+    static func count(in height: CGFloat?, slot: CGFloat, gap: CGFloat, most: Int) -> Int {
+        guard let height, height.isFinite, slot > 0 else { return most }
+        return min(max(Int((height + gap + 0.5) / (slot + gap)), 1), most)
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {

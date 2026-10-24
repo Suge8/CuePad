@@ -174,7 +174,7 @@ final class CodexBrain: CueBrain {
         case "thread/tokenUsage/updated":
             guard let usage = params["tokenUsage"], let input = usage["last"]?["inputTokens"]?.int else { return }
             // inputTokens 已含缓存命中（cachedInputTokens 是其中一部分）
-            session.emit(.context(used: input, window: usage["modelContextWindow"]?.int))
+            session.emit(.context(used: input))
         case "turn/completed":
             let completed = params["turn"]
             turn = nil

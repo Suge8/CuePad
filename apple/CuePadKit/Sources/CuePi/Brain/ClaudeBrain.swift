@@ -123,7 +123,7 @@ final class ClaudeBrain: CueBrain {
             let used = Int(["input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"].compactMap { usage[$0]?.number }.reduce(0, +))
             guard used > 0, used != turn?.used else { return }
             turn?.used = used
-            session.emit(.context(used: used, window: nil))
+            session.emit(.context(used: used))
         case "user":
             // 工具的结果回来了
             guard turn != nil, event["parent_tool_use_id"] == nil || event["parent_tool_use_id"] == .null else { return }
@@ -146,8 +146,6 @@ final class ClaudeBrain: CueBrain {
     private func finish(_ result: JSONValue) {
         let finished = turn ?? Turn()
         turn = nil
-        let windows = (result["modelUsage"]?.object ?? [:]).values.compactMap { $0["contextWindow"]?.number }
-        if let used = finished.used, let window = windows.max() { session.emit(.context(used: used, window: Int(window))) }
         if finished.aborted {
             session.emit(.speaking(nil))
         } else if result["is_error"]?.bool == true {

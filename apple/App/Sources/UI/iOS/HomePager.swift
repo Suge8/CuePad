@@ -13,15 +13,13 @@ import UIKit
 /// 前进页的快照留在这一层 SwiftUI 里：每帧只重算读 `PagerMotion` 的那几小块。
 struct HomePager: View {
     let motion: PagerMotion
-    /// Cue 页的输入框有焦点：这时不接横拖（选字、挪光标都是横着拖）。
-    let composing: Bool
     let shot: LeaveShot
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
         let root = workspace.root
         let forward = root == Dock.pages.last && workspace.forward != nil && shot.route == workspace.forward ? shot.view : nil
-        PagerHost(workspace: workspace, motion: motion, root: root, forward: forward, composing: composing)
+        PagerHost(workspace: workspace, motion: motion, root: root, forward: forward)
             .ignoresSafeArea()
             .overlay { ForwardPage(motion: motion).allowsHitTesting(false).accessibilityHidden(true) }
             .background { PagerSettling(motion: motion) }
@@ -113,13 +111,12 @@ private struct PagerHost: UIViewControllerRepresentable {
     let motion: PagerMotion
     let root: Route
     let forward: UIView?
-    let composing: Bool
 
     func makeUIViewController(context: Context) -> PagerController { PagerController(workspace: workspace, motion: motion) }
 
     func updateUIViewController(_ controller: PagerController, context: Context) {
         controller.update(.init(
-            environment: context.environment, root: root, forward: forward, composing: composing,
+            environment: context.environment, root: root, forward: forward,
             reduceMotion: context.environment.accessibilityReduceMotion))
     }
 }
