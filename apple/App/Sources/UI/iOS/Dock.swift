@@ -113,7 +113,7 @@ enum Dock {
 }
 
 extension EnvironmentValues {
-    /// Cue 页输入框的焦点交给底部那一排（`DockRoot.composing`）；宽屏没有底部那一排，为 nil。
+    /// Cue 页输入框的焦点报给底部那一排（`DockRoot.composing`）：页只写不读，自己的排版看自己记的那份（`CuePage.composing`）；宽屏没有底部那一排，为 nil。
     @Entry var dockComposing: Binding<Bool>?
 }
 #endif
