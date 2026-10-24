@@ -6,6 +6,8 @@ import Synchronization
 ///
 /// 重读在另一个连接上，读与"把订阅收窄到这次读到的表"之间可能有提交进来：重读前记下序号，读完收窄时
 /// 查其间的提交碰没碰这次读到的表，碰了再叫醒一次（`settle`）。为此留着最近的提交各碰了哪些表。
+/// 按行收窄的（`narrow`）：行集在重读那一刻的读事务里取；提交时按行判断（`CueStore.touches`）在写连接上、提交之后当场查，
+/// 看到的正是这次提交后的库。收窄登记晚于某次提交时，那次提交用的是旧的登记，由 `settle` 按表回看补叫醒（多读一次，不会漏）。
 final class Subscriptions: Sendable {
   struct Subscriber: Sendable {
     var tables: Set<Table>
