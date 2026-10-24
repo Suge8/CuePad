@@ -4,12 +4,13 @@ import SwiftUI
 /// 手机竖版看板的一行（`BoardColumn` 的 `row`，`PhoneBoard` 四行竖着排）：Mac 看板的一列转 90°——一行横贯全屏，
 /// 行头（`BoardLaneMark`、竖排的名字、数）是一块竖窄的写字玻璃，贴着屏幕左边钉在行里、竖直居中，卡在它右边横着排，放不下就在这一行里横划、
 /// 按卡停（`viewAligned`）；卡滑动时从玻璃下面过，不遮罩、不在它右沿裁掉（docs/ui.md 沉浸式的栏）。玻璃贴屏边、不留缝：留缝时停着的上一张卡的尾巴在缝里露出碎字。
-/// 四行的玻璃一样大（`spineHeight`：放得下最长的名字三个字加记号与数），在行里竖直居中、内容在玻璃里居中，行至少这么高；
-/// 比玻璃高的行（推进中、等你）里，停着的上一张卡在玻璃上下露出一截尾巴。行没有底（`BoardLane`）：分组靠留白与行头。
-/// 一格多高按列定、随动态字体放大（`BoardRowStyle`）：卡上标题小一档、可折两行，推进中下面是线与状态词，等你是抬头、三行问句、选项或回答框。
-/// 待办、推进中有两件以上叠两排（按列填，读的顺序不变），其余一排；空行与只有"更早做完的 N"的已完成行收成一排矮格；行高不低于行头玻璃（名字总写全）。
-/// 卡多卡少不改行高（除了空与不空、一件与两件），行在下面增减，上面的行不动。行里的卡在懒加载的横排里，只建看得见的几张。
-/// 添加任务那一行（`above`）横贯这一行、在卡的上面，不挤进格子里（格子窄，选项目的胶囊会被截）；添加时这一行先滑回行首。
+/// 四行的玻璃一样大（`spineHeight`：放得下最长的名字三个字加记号与数），在行里竖直居中、内容在玻璃里居中；比玻璃高的行里，停着的上一张卡在玻璃上下露出一截尾巴。
+/// 行没有底（`BoardLane`）：分组靠留白与行头。
+/// 行多高由 `PhoneBoard` 按屏高给，卡多卡少、有没有都不改；这里只答最小高：待办、推进中叠两排、等你与已完成一排的最小格（`BoardRowMetrics`，随动态字体放大），
+/// 不低于行头玻璃（名字总写全）。给得比最小高多时格跟着长高，长到再叠得下一排最小格就多叠一排（`adaptive`）；卡铺满格，按列填（读的顺序不变）。
+/// 空行是一格铺满整行高的虚线框。卡上标题小一档、可折两行，推进中下面是线与状态词，等你是抬头、三行问句、选项或回答框（不铺满格，靠上）。
+/// 行里的卡在懒加载的横排里，只建看得见的几张。
+/// 添加任务那一行（`above`）横贯这一行、在卡的上面，不挤进格子里（格子窄，选项目的胶囊会被截）；它占的高另加在最小高上，卡的格不变矮。添加时这一行先滑回行首。
 struct BoardRowLane<Above: View, Content: View>: View {
     let column: TaskBoard.Column
     let count: Int
@@ -26,33 +27,32 @@ struct BoardRowLane<Above: View, Content: View>: View {
     @ScaledMetric(relativeTo: .caption) private var spineHeight = BoardRowMetrics.spineHeight
 
     var body: some View {
-        // 矮行（一排矮格）长到玻璃那么高，空格、"更早做完的"那一格跟着长到行高
         VStack(alignment: .leading, spacing: BoardRowMetrics.gap) {
             above.padding(.leading, BoardRowMetrics.lead).padding(.trailing, BoardRowMetrics.margin)
             strip
         }
-        .frame(minHeight: spineHeight)
+        .frame(minHeight: spineHeight, maxHeight: .infinity)
         .overlay(alignment: .leading) {
             BoardRowSpine(column: column, count: count)
                 .frame(width: BoardRowMetrics.spine, height: spineHeight)
                 .glass(in: UnevenRoundedRectangle(bottomTrailingRadius: BoardRowMetrics.spine / 2, topTrailingRadius: BoardRowMetrics.spine / 2, style: .continuous))
         }
-        .fixedSize(horizontal: false, vertical: true)
         .padding(.vertical, BoardRowMetrics.inset)
         .background { BoardLane(targeted: targeted) }
     }
 
     private var strip: some View {
-        let height = cellHeight
-        let tiers = self.tiers
+        let cell = cellHeight
+        // 空行只有一格虚线框，铺满整行高；有卡时叠得下几排最小格就叠几排，格平分行高
+        let tier = count == 0 ? GridItem(.flexible(), spacing: BoardRowMetrics.gap) : GridItem(.adaptive(minimum: cell), spacing: BoardRowMetrics.gap)
         // 回到行首用 ScrollViewReader，不绑 ScrollPosition：绑着的位置滑动时每帧写回状态，整行每帧重算
         return ScrollViewReader { proxy in
             ScrollView(.horizontal) {
-                LazyHGrid(rows: Array(repeating: GridItem(.flexible(minimum: height), spacing: BoardRowMetrics.gap), count: tiers), spacing: BoardRowMetrics.gap) {
-                    // Group 把格子的框分给里面的每一张卡；卡自己定高（`BoardRowStyle`），空格与"更早做完的"长到行高
+                LazyHGrid(rows: [tier], spacing: BoardRowMetrics.gap) {
+                    // Group 把格子的框分给里面的每一张卡：卡、空格与"更早做完的"铺满格，等你靠上
                     Group { content }
                         .containerRelativeFrame(.horizontal) { width, _ in (width * cellWidth).rounded() }
-                        .frame(minHeight: height, maxHeight: .infinity, alignment: .top)
+                        .frame(maxHeight: .infinity, alignment: .top)
                 }
                 .scrollTargetLayout()
             }
@@ -63,28 +63,27 @@ struct BoardRowLane<Above: View, Content: View>: View {
             .scrollIndicators(.never)
             .scrollBounceBehavior(.always, axes: .horizontal)
             .scrollDismissesKeyboard(.immediately)
-            .frame(minHeight: height * CGFloat(tiers) + BoardRowMetrics.gap * CGFloat(tiers - 1), maxHeight: .infinity)
+            .frame(minHeight: cell * CGFloat(tiers) + BoardRowMetrics.gap * CGFloat(tiers - 1), maxHeight: .infinity)
             // 等你的问句最多三行：格高是定的
             .lineLimit(BoardRowMetrics.questionLines)
-            .environment(\.boardRow, BoardRowStyle(cardHeight: taskHeight, advancingHeight: advancingHeight))
+            .environment(\.boardRow, true)
             .onChange(of: rewind) {
                 if let rewind { withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { proxy.scrollTo(rewind, anchor: .leading) } }
             }
         }
     }
 
-    /// 叠几排：待办、推进中两件以上叠两排。
+    /// 最小高里叠几排：待办、推进中两排，其余一排。
     private var tiers: Int {
         switch column {
-        case .todo, .advancing: count >= 2 ? 2 : 1
+        case .todo, .advancing: 2
         case .waiting, .done: 1
         }
     }
 
-    /// 空行（只有一格空态）、只有"更早做完的"的已完成行是一排矮格。
+    /// 一格最矮多高。
     private var cellHeight: CGFloat {
-        guard count > 0 else { return taskHeight }
-        return switch column {
+        switch column {
         case .advancing: advancingHeight
         case .waiting: waitHeight
         case .todo, .done: taskHeight
@@ -99,11 +98,11 @@ struct BoardRowLane<Above: View, Content: View>: View {
 
 /// 一行里的尺寸（高随动态字体放大，`BoardRowLane` 的 `@ScaledMetric`）。
 enum BoardRowMetrics {
-    /// 待办、已完成一格：两行小一档的标题。
+    /// 待办、已完成一格最矮：两行小一档的标题。
     static let taskHeight: CGFloat = 60
-    /// 推进中一格：两行标题，下面是线与状态词。
+    /// 推进中一格最矮：两行标题，下面是线与状态词。
     static let advancingHeight: CGFloat = 76
-    /// 等你一格：抬头、三行问句加依据、回答框（实测最高的一件）。
+    /// 等你一格最矮：抬头、三行问句加依据、回答框（实测最高的一件）。
     static let waitHeight: CGFloat = 176
     static let questionLines = 3
     /// 一格占可见宽：一张半，下一张露出一半。
@@ -117,7 +116,7 @@ enum BoardRowMetrics {
     static let lead: CGFloat = spine + gap
     static let margin: CGFloat = 12
     static let gap: CGFloat = 8
-    static let inset: CGFloat = 8
+    static let inset: CGFloat = 4
 }
 
 /// 行头玻璃里的内容：记号、竖着的名字、数，在玻璃里居中（玻璃在行里竖直居中，卡从它下面滑过）。行再矮也写全：没有按列的底色，认行靠这几个字。
