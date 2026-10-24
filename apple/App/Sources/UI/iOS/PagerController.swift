@@ -42,7 +42,7 @@ final class PagerController: UIViewController {
     private let arbiter = PagerArbiter()
 
     private static var last: Int { Dock.pages.count - 1 }
-    /// 前进时 Cue 页与底部那一排退开的比例（同系统推入时下面那一页）。
+    /// 前进时 Cue 页退开的比例（同系统推入时下面那一页）。
     static let parallax: CGFloat = 0.3
     /// 打开 App 后先等这么久再建别的页：首屏、紧接着的滚动与输入不和它挤（同 Mac 启动后的预热）。
     private static let buildDelay: Duration = .seconds(2)
