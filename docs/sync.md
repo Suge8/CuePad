@@ -28,7 +28,7 @@
 
 ## 用户离开时的 Mac
 
-用户离开后 App Nap 把 App 放进后台节流档，别的程序占满 CPU 时整个进程拿不到 CPU，2 秒一拉能停几分钟（2026-10-24 正式版最长 406 秒）。所以有等待理由期间持有系统活动（`AppServices.holdActivityWhilePolling`）。
+用户离开后 App Nap 把 App 放进后台节流档，别的程序占满 CPU 时整个进程拿不到 CPU，按节奏的拉取能停几分钟（2026-10-24 正式版最长 406 秒）。所以有等待理由期间持有系统活动（`AppServices.holdActivityWhilePolling`）。
 
 2026-10-25 复测条件：真实库副本、替身云、6 个会话加命令行在写、30 个忙循环加压 60 秒。
 
@@ -56,16 +56,16 @@
 
 1. 按发送 → 本机库：先清空输入框，再写一条记录（毫秒级）。气泡是发送中。
 2. 本机 → 服务器：马上传（`CloudSync.send`），收下即已发出；满 `Speech.sendLimit` 还没传上去是没能送达（实测与取值理由在它的注释里）。
-3. 服务器 → 接收的 Mac：只靠 Mac 的 2 秒拉取，平均约 1 秒、最坏约 2 秒。
+3. 服务器 → 接收的 Mac：门铃或按节奏的拉取（节奏与实测见「拉取节奏与门铃」）。
 4. Mac 交给 Agent 或 Cue：0.2 秒内；领取、写回结果、交给 Cue 后都马上传。
-5. 服务器 → 发出方：手机有在等回执的话时每 2 秒拉，另有推送。回执到了是已送达；已发出满 `Speech.receiptLimit`（同步不通时不计）没回执是 Mac 迟迟没收下。
+5. 服务器 → 发出方：门铃或按节奏的拉取（手机有在等回执的话时在等，见「拉取节奏与门铃」），另有推送。回执到了是已送达；已发出满 `Speech.receiptLimit`（同步不通时不计）没回执是 Mac 迟迟没收下。
 6. 进对话：Mac 读到会话文件里带请求标识的那条，在同一个事务里收走请求，气泡由对话里那条接替（`PiChat.outgoing`）。
 
 Cue 说话的工具等结果至多 `Speech.cueWait`；没告诉它的失败作为"[发送失败]"写进它下一轮的变化并叫醒它（`CueTools`、`cueToldAt`）。
 
 ## Mac 在线
 
-每台设备自己写、别的设备只读的三张同步表，规则与写的时机在各自头注释：在不在线 `MacPresence`（`MacPresenceKeeper`）、开着哪一页 `Viewer`（`ViewerKeeper`）、有哪些 Agent 与模型 `MacAgents`（`MacAgentsRecorder`）。它们都不是等待理由：需要及时看到的那台 Mac 本来就因在线会话或 Cue 值班每 2 秒拉。
+每台设备自己写、别的设备只读的三张同步表，规则与写的时机在各自头注释：在不在线 `MacPresence`（`MacPresenceKeeper`）、开着哪一页 `Viewer`（`ViewerKeeper`）、有哪些 Agent 与模型 `MacAgents`（`MacAgentsRecorder`）。它们都不是等待理由：需要及时看到的那台 Mac 本来就听着门铃，在线会话或 Cue 值班时还按节奏拉（「拉取节奏与门铃」）。
 
 推送的取舍：在线记录的续期不给手机推送，手机只订阅要紧的变化（理由与实测在 `AlertSubscriptions` 头注释）。
 
