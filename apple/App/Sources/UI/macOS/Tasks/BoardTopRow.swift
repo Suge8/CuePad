@@ -7,7 +7,8 @@ extension EnvironmentValues {
 }
 
 extension View {
-    /// 一列的列头排进窗口最顶那一排、卡从它下面滚过（docs/ui.md 沉浸式的栏，那一排什么都不垫），列头是字，不另垫玻璃（同访达的列头：四块玻璃排一行读起来像四颗钮）。最右那一列的列头给右上的"⋯"让出一截，待办的列头给左上的两段分段让出一截。
+    /// 一列的列头排进窗口最顶那一排、卡从它下面滚过（docs/ui.md 沉浸式的栏，那一排什么都不垫）：列头是一块写字玻璃，与那一排的分段、"⋯"同高同一条中线（同 iPad 的列头）。
+    /// 否决过：只写字、不垫玻璃（同访达的列头），那一排不垫渐变后卡滚上来就压在字上。最右那一列的列头给右上的"⋯"让出一截，待办的列头给左上的两段分段让出一截。
     func boardTopRow(column: TaskBoard.Column, count: Int) -> some View {
         modifier(BoardTopRow(column: column, count: count))
     }
@@ -30,11 +31,14 @@ private struct BoardTopRow: ViewModifier {
 
     private var header: some View {
         BoardColumnHeader(column: column, count: count)
-            .padding(.leading, max(Self.lead, panesReserve))
-            .padding(.trailing, TaskMetrics.cardPadding + BoardCardMetrics.inset + (column == .done ? Self.moreReserve : 0))
+            .padding(.horizontal, Self.inner)
+            .glass(in: .capsule)
+            .padding(.leading, max(BoardCardMetrics.inset, panesReserve))
+            .padding(.trailing, BoardCardMetrics.inset + (column == .done ? Self.moreReserve : 0))
     }
 
-    private static let lead = TaskMetrics.cardPadding + BoardCardMetrics.inset
+    /// 玻璃里字离两头多远：卡里的字也这么远，列头的记号与卡上的对齐。
+    private static let inner = TaskMetrics.cardPadding
 
     /// 待办的列头从左上分段（`PanesSlot`）的右沿再空 `panesGap` 起；分段在不在这一列上方随侧栏开合、拖宽而变，按量到的算。
     private var panesReserve: CGFloat {
