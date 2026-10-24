@@ -2,7 +2,7 @@ import Foundation
 
 // 说的话到哪了（`Speech`）要从库里读的事实：记录本身，加上它的同步元数据里服务器收下过没有。
 // 都是读的时候推出来的，不另存：服务器收下一版就记在 syncRecords（`markPushed`）。订阅只依赖读到的还没发出的那几句在这张表里的行
-// （`noteUnsent`）：Mac 每小时推送几百次别的记录，不叫醒读说的话的订阅；那几句被收下时才叫醒。
+// （`dependOnUnsent`）：Mac 每小时推送几百次别的记录，不叫醒读说的话的订阅；那几句被收下时才叫醒。
 
 extension Speech {
   /// 表 `alias` 这一行服务器收下过（任一版）：SELECT 里推出 `reachedServer` 的那一列。别的设备写来的记录也收下过。
@@ -39,19 +39,15 @@ extension CueStore {
         """
       ) { (id: $0.text(0), said: $0.date(1), delivered: $0.dateOrNil(2), reachedServer: $0.bool(3)) }
     }
-    if let last, last.delivered == nil, !last.reachedServer { noteUnsent([last.id]) }
+    if let last, last.delivered == nil, !last.reachedServer { try dependOnUnsent([last.id]) }
     return last.map { ($0.said, $0.delivered, $0.reachedServer) }
   }
 
-  /// 订阅的这次读依赖这几句在同步元数据里的行：它们被服务器收下（那一行有了 pushedModifiedAt）时叫醒，别的记录的推送、交出不叫醒。
-  /// 一次读里登记几次都并成一份（`narrow` 一张表只收窄一次）；不在订阅里读时什么都不记。
-  func noteUnsent(_ names: [String]) {
-    guard db.isTracking, !names.isEmpty else { return }
-    if readScopes[.syncRecords] == nil { readUnsent = [] }
-    readUnsent.formUnion(names)
-    readScopes[.syncRecords] = RowScope(
-      column: "recordName",
-      candidates: "pushedModifiedAt IS NOT NULL AND recordName IN (SELECT value FROM json_each('\(JSONColumn.encode(readUnsent.sorted()))'))",
-      includes: { _ in true }, rows: [])
+  /// 订阅的这次读依赖这几句（还没发出的）在同步元数据里的行：它们被服务器收下（那一行有了 pushedModifiedAt）时叫醒，别的记录的推送、交出不叫醒。
+  func dependOnUnsent(_ names: [String]) throws {
+    guard !names.isEmpty else { return }
+    try narrow(
+      .syncRecords, column: "recordName", candidates: "pushedModifiedAt IS NOT NULL AND recordName IN (SELECT value FROM json_each(?))",
+      arguments: [JSONColumn.encode(names)], to: { _ in true }) { _ in }
   }
 }
