@@ -71,7 +71,7 @@ extension CueStore {
       """
       SELECT \(Card.selection(as: "t")) FROM cards t LEFT JOIN projects p ON p.id = t.projectID
       WHERE \(Self.visibleTask) \(doneOnly ? " AND t.completedAt IS NOT NULL" : "") \(project == nil ? "" : " AND t.projectID = ?")
-      ORDER BY \(Self.taskProjectOrder), \(doneOnly ? "t.completedAt DESC, t.id" : "t.sortKey, t.id")
+      ORDER BY \(Self.taskProjectOrder), \(doneOnly ? Self.recentlyDone : "t.sortKey, t.id")
       """, project.map { [$0] } ?? []
     ) { Card(row: $0) }
     var groups: [TaskGroup] = []
@@ -161,7 +161,7 @@ extension CueStore {
       """
       SELECT \(Card.selection(as: "t")) \(Self.taskWithParent)
       WHERE \(Self.visibleTask) AND t.completedAt IS NOT NULL AND \(Self.topLevel)\(scope)
-      ORDER BY t.completedAt DESC, t.id\(limit.map { " LIMIT \($0)" } ?? "")
+      ORDER BY \(Self.recentlyDone)\(limit.map { " LIMIT \($0)" } ?? "")
       """, arguments
     ) { Card(row: $0) }
   }
