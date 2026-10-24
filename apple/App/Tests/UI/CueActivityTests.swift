@@ -53,8 +53,6 @@ struct CueActivityTests {
 
         // 两件都做完、会话都结束：只剩刚做完的，没活了，实时活动该结束；刚做完的那颗过了一阵自己收掉
         try await workspace.toggle(canvas.id)
-        // 做完的时刻精确到毫秒，同一毫秒做完的两件谁算"刚做完"不定（按 id）：人点两下不会落在同一毫秒
-        try await Task.sleep(for: .milliseconds(2))
         try await workspace.toggle(release.id)
         try await recorder.update(sessionID: "zoom", state: .ended)
         try await recorder.update(sessionID: "testflight", state: .ended)
