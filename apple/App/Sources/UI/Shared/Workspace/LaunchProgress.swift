@@ -14,11 +14,11 @@ nonisolated struct LaunchProgress: Sendable, Equatable {
 
     enum Phase: Equatable {
         case idle
-        /// 请求在路上，或 Mac 还没执行完：Mac 接没接手（`PiDelivery.Transit`）。
+        /// 请求在路上，或 Mac 还没执行完：发出没有、Mac 接没接手（`PiDelivery.Transit`）。
         case sending(PiDelivery.Transit)
         /// Mac 已启动 Pi，等它连上来。
         case opening
-        /// 没能开成：Mac 报的原因，或超时、本机同步不通（说的话那条规则，`Speech`）。
+        /// 没能开成：Mac 报的原因，或一直没发出、超时（说的话那条规则，`Speech`）。
         case failed(Speech.Failure)
         case claimed
     }
@@ -26,8 +26,9 @@ nonisolated struct LaunchProgress: Sendable, Equatable {
     func phase(at moment: Speech.Moment) -> Phase {
         if claimed != nil { return .claimed }
         guard let request else { return .idle }
-        switch Speech.trip(request, at: moment) {
-        case .sending: return .sending(.of(request, session: nil))
+        let trip = Speech.trip(request, at: moment)
+        switch trip {
+        case .sending, .sent: return .sending(.of(request, session: nil, trip: trip))
         case .delivered: return .opening
         case .failed(let failure): return .failed(failure)
         }

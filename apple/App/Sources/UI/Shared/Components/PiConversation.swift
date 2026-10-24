@@ -60,12 +60,12 @@ struct PiConversation: View {
         .debugOpensPreview(in: items, session: session, $opened)
     }
 
-    /// 你发出、还没进对话的一句：说的话的气泡，还在路上时写会话这边的说法（发送中、送达中；已结束的会话先唤醒）。
+    /// 你发出、还没进对话的一句：说的话的气泡，还在路上时写会话这边的说法（发送中、已发出、送达中；已结束的会话先唤醒）。
     private func outgoing(_ request: DeliveryRequest) -> some View {
         let session = session, said = Said.request(request)
         return SpeechBubble(
             said: said, box: services.settings.replyDraftBinding(for: session.id),
-            transit: .of(request, session: session), fromCue: request.isFromCue, look: .session
+            session: session, fromCue: request.isFromCue, look: .session
         ) { trip in
             let failed = if case .failed = trip { true } else { false }
             MessageActions(

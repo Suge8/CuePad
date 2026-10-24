@@ -76,14 +76,6 @@ extension CueStore {
     }
   }
 
-  /// 你最近一句对 Cue 说的话：写下的时刻与交给它的时刻；你还没说过为 nil。到哪了由读的人按此刻推（`Speech.trip`，
-  /// App 的"此刻"只在 `SpeechClock` 一处到点刷新），这里只给记录。不说 Cue 那台 Mac 在不在（那是 `macOnline`）。
-  public func cueLastYou() throws -> (said: Date, delivered: Date?)? {
-    try db.first("SELECT createdAt, deliveredAt FROM cueMessages WHERE author = 'you' ORDER BY createdAt DESC, rowid DESC LIMIT 1") {
-      (said: $0.date(0), delivered: $0.dateOrNil(1))
-    }
-  }
-
   /// Cue 在跑的这一轮为什么醒、几点醒的（这一轮经过那一行上的 `CueMessage.wake`）；歇着、这一轮还没有那一行为 nil。各端画叫醒的那一下只读它。
   public func cueWaking() throws -> (at: Date, wake: CueWake)? {
     guard let round = try cueState()?.round, let row = try find(CueMessage.self, round), let wake = row.wake else { return nil }

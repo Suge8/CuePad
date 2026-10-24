@@ -30,7 +30,8 @@ nonisolated enum Said: Equatable, Sendable {
 
     func trip(at moment: Speech.Moment) -> Speech.Trip {
         switch self {
-        case .cue(let message, let host): Speech.trip(said: message.createdAt, delivered: message.deliveredAt, host: host, at: moment)
+        case .cue(let message, let host):
+            Speech.trip(said: message.createdAt, delivered: message.deliveredAt, reachedServer: message.reachedServer, host: host, at: moment)
         case .request(let request): Speech.trip(request, at: moment)
         }
     }

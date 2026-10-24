@@ -8,6 +8,8 @@ import SwiftUI
 /// send 先写好、画面就绪 2 秒后再发（录屏看到发出的那一下，配 `-CuePadDemoMac YES` 看到送达）；press 同 send，但在输入框出现 3 秒（`-CuePadPressAfter`）后按的是它的发送钮（看钮与飞光；Mac 上给录屏留出起录的时间）；
 /// 配 `-CuePadFlightLog <路径>` 从按下起量一段（同叫醒的量法，`measureFlight`）。
 /// 已送达与没能送达：Cue 页用 `-CuePadCuePresence thinking|asleep`（`DebugScene+Cue.swift`），会话页看 relay（一句已送达、一句没能送达）。
+/// trips（配 `-CuePadSession relay -CuePadSync simulated`，新的隔离库）：再写一句给一台不接手的 Mac（demo-studio），传上替身 iCloud 后是已发出——
+/// 一页里三种状态（已发出、已送达、没能送达）。
 extension DebugScene {
     static func presetSpeech(_ workspace: Workspace) async {
         guard let speech = defaults.string(forKey: "CuePadSpeech") else { return }
@@ -26,6 +28,18 @@ extension DebugScene {
         box.wrappedValue.text = "把重连用例也跑一遍，结果贴给我"
         switch speech {
         case "sent": _ = workspace.speak(to: listener, from: box) { try $0.stored(in: files) }
+        case "trips":
+            // 会话在哪台就发给哪台（`CueStore.speak`），所以直接写请求、指给那台不接手的，再像发出时那样马上传
+            guard case .session(let target, _, _, _) = listener, let ref = target.ref,
+                  let request = try? await services.store.requestDelivery(box.wrappedValue.text, to: target, on: Self.idleMac, mode: .send)
+            else { return }
+            box.wrappedValue.text = ""
+            await services.upload(request.id)
+            // 这一页的话都有了着落再报就绪：交给 demo-mini 的有了结果，发给不接手的那台的传上了替身
+            let settled = services.store.observe { store in
+                try store.deliveryRequests(toSession: ref).allSatisfy { !$0.isOpen || $0.hostID == Self.idleMac && $0.reachedServer }
+            }
+            do { for try await done in settled where done { break } } catch {}  // 读库失败：画面照样摆出来，不等
         case "send":
             Task {
                 try? await Task.sleep(for: .seconds(2))
@@ -34,6 +48,9 @@ extension DebugScene {
         default: break
         }
     }
+
+    /// `trips` 那一句发去的 Mac：演示库里没有它的执行器，话只到服务器（已发出）。
+    nonisolated private static let idleMac = "demo-studio"
 
     static func pressSendIfAsked(session: Bool, _ press: () -> Void) async {
         if !session, cueFlows { return await pressForCueFlow(press) }

@@ -54,7 +54,7 @@ nonisolated enum MacDelivery {
         guard let latest = deliveries.last, latest.mode == .known(.command) else { return nil }
         let command = String(latest.content.prefix { !$0.isWhitespace })
         switch Speech.trip(latest, at: moment) {
-        case .sending: return .running(command)
+        case .sending, .sent: return .running(command)
         case .delivered: return nil
         case .failed(let failure):
             let failedAt = latest.completedAt ?? latest.modifiedAt

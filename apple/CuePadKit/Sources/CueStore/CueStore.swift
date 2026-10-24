@@ -22,12 +22,11 @@ public actor CueStore {
   public nonisolated let files: AttachmentFiles
   /// 随时间变的读（`expire(at:)` 的到点重读、Mac 在不在线）用的时钟（你的话等没等过时限归 App 的 `SpeechClock`）；测试换成手动推进的。写下的时刻仍盖真实时间（`Date.stamp`）。
   public nonisolated let timing: Timing
-  var subscribers: [UUID: (tables: Set<Table>, scopes: [Table: RowScope], signal: AsyncStream<Void>.Continuation)] = [:]
+  var subscribers: [UUID: (tables: Set<Table>, scopes: [Table: [RowScope]], signal: AsyncStream<Void>.Continuation)] = [:]
   /// 这次读的结果到什么时候会随时间变（`expire(at:)`）：订阅到点重读。
   var readExpiry: Date?
-  /// 这次读只依赖其中一部分行的表（`narrow`）；同一张表收窄了不止一次的记进 `readWhole`，按整表依赖。
-  var readScopes: [Table: RowScope] = [:]
-  var readWhole: Set<Table> = []
+  /// 订阅的这次读只依赖其中一部分行的表（`narrow`，同一张表可收窄几次）；不在订阅的一次读里为 nil，什么都不记。
+  var readScopes: [Table: [RowScope]]?
   private var syncSubscribers: [UUID: AsyncStream<Void>.Continuation] = [:]
   /// 可能让记录变成待推送的提交数（本连接让记录变成待推送的提交、别的进程的任何提交），与最近这些提交各自的增量
   /// （nil：范围不明，如别的进程的提交）：发送者确定没有剩下的待推送之后，只复查其后的提交碰过的记录（`pendingSync(since:)`）。
@@ -160,13 +159,15 @@ public actor CueStore {
     _ type: R.Type, where condition: String = "1", _ arguments: [any SQLBindable] = [],
     orderBy: String = "rowid", limit: Int = -1, offset: Int = 0
   ) throws -> [R] {
-    try db.query(
-      """
+    let sql = """
       SELECT \(R.selection) FROM \(R.table.rawValue)
       WHERE \(condition) ORDER BY \(orderBy) LIMIT \(limit) OFFSET \(offset)
-      """,
-      arguments
-    ) { R(row: $0) }
+      """
+    guard R.self is any AwaitsServer.Type else { return try db.query(sql, arguments) { R(row: $0) } }
+    // 带服务器状态的记录：同步元数据不按整表依赖，只登记读到的还没发出的那几句
+    let rows = try db.untracked(.syncRecords) { try db.query(sql, arguments) { R(row: $0) } }
+    try dependOnUnsent(rows.compactMap { ($0 as? any AwaitsServer)?.unsentName })
+    return rows
   }
 
   func find<R: Record>(_ type: R.Type, _ id: any SQLBindable) throws -> R? {

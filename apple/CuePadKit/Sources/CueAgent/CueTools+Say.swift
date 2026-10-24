@@ -39,17 +39,19 @@ extension CueTools {
   }
 
   /// 说的话写下后等结果，至多到写下后 `wait`：结果按说的话那条规则（`Speech`）读——已送达、没送到（工具结果标成出错，带 Mac 报的原因），
-  /// 或还在路上（如实说还没送达；之后没送到会写进下一轮的变化，见 `CueChange.Kind.undelivered`）。`what` 是做了什么。
+  /// 或还在路上：还没传出这台、已发出（如实说还没送达；之后 Mac 报没送到会写进下一轮的变化，见 `CueChange.Kind.undelivered`）。
+  /// 没有 Mac 报的原因的没能送达（还没传出、迟迟没回执）不标出错：话可能稍后照常送达，标了 Cue 会再说一遍。`what` 是做了什么。
   func spoken(_ request: DeliveryRequest, _ what: String, tail short: String) async throws -> Result {
     let latest = try await settled(request)
     let tail = "（\(short)）"
     switch Speech.trip(latest, at: .always()) {
     case .delivered:
       return .ok("\(what)：已送达。\(tail)")
-    case .failed(let failure):
-      let reason = if case .reported(let reason) = failure { reason } else { DeliveryRequest.unexplainedFailure }
+    case .failed(.reported(let reason)):
       return Result(text: "\(what)：没送到——\(reason)\(tail) \(Self.undeliveredMark(request.id))", isError: true)
-    case .sending:
+    case .failed(.unsent), .sending:
+      return .ok("\(what)：还没发出（这台 Mac 还没把它传上 iCloud），还没送达，结果会写进变化。\(tail)")
+    case .failed(.timedOut), .sent:
       return .ok("\(what)：已发出，还没送达，结果会写进变化。\(tail)")
     }
   }

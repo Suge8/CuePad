@@ -87,7 +87,7 @@ struct SessionList<Top: View>: View {
 
     /// 一张卡片：长按与慢慢左滑都有"结束会话"（在线的）与"重命名"（读得到的会话；Mac 够不着时置灰，会话近况页"⋯"里同一个说法）；快甩是切页（`rowSwipes`）。
     private func row(_ item: PiSessionListItem, in list: PiSessionList, end: Speech.Trip?) -> some View {
-        let endable = item.state.canEnd && end != .sending
+        let endable = item.state.canEnd && end?.inTransit != true
         let renamable = MacDelivery.canRename(item.state)
         // 结束不是删除：墨色，确认框里再说清后果；会话记录没有删除（会话文件在 Mac 上，归 Pi 管）
         let trailing = (endable ? [RowAction("结束会话", icon: .endSession) { model.confirmingEnd = item.state }] : [])

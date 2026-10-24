@@ -60,6 +60,8 @@ public struct CueMessage: Identifiable, Equatable, Sendable {
   /// 手机推送的标志（明文、可查询，服务端订阅按它出通知）：写下时按 `alerts` 与他在不在 Mac 上开着 Cue 页置位（`CueStore.insertCueMessage`），
   /// 随那一次上传送出后清掉，远端带回来的不留（同 `PiSessionState.notify`，见 docs/sync.md「Agent 与 Cue 的通知」）。
   var notify: Bool = false
+  /// 服务器收下过这条（读的时候由同步元数据推出，不存，`Speech.reachedServerSQL`）：你的话"已发出"的依据。
+  public internal(set) var reachedServer = false
 
   /// 要提示你的 Cue 消息（手机推送与 Mac 通知同一条规则）：Cue 对你说的，带选项来问（"等你"）或 `urgent`。
   public var alerts: Bool { author == .known(.cue) && (choices != nil || urgent) }
@@ -86,7 +88,7 @@ extension CueMessage: Record {
       askAction: row.textOrNil(14), askRule: row.textOrNil(15), shots: JSONColumn.decodeList(CueShot.self, from: row.textOrNil(16)), urgent: row.bool(4), taskID: row.uuidOrNil(5),
       answer: row.textOrNil(6), answeredAt: row.dateOrNil(7), setAsideBy: row.uuidOrNil(17), deliveredAt: row.dateOrNil(8), createdAt: row.date(9),
       modifiedAt: row.date(10), tools: row.textOrNil(12).flatMap(PiChatMessage.Tools.init(stored:)), wake: row.textOrNil(18).flatMap(CueWake.init(stored:)),
-      notify: row.textOrNil(11) != nil)
+      notify: row.textOrNil(11) != nil, reachedServer: row.bool(19))
   }
 }
 

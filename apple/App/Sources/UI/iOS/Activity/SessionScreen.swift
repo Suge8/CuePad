@@ -47,7 +47,7 @@ struct SessionScreen: View {
         .scrollDismissesKeyboard(.interactively)
         // 看历史时标题与"⋯"让开（返回钮留着），点标题原来的位置唤出，回到最新自动出现（`ChatFollow.showsHeader`）
         .floatingHeader(digest?.title(at: services.speech) ?? session?.title ?? "", hidden: !follow.showsHeader, reveal: { follow.reveal() }) {
-            if shownEnd == .sending {
+            if shownEnd?.inTransit == true {
                 Text("正在结束…").font(.caption).foregroundStyle(palette.ink3)
             } else if let session {
                 PiSessionSubtitle(session: session, undelivered: PiChat.undeliveredNote(digest?.undelivered(at: services.speech) ?? 0))
@@ -62,7 +62,7 @@ struct SessionScreen: View {
                     }
                     if session.canEnd {
                         Button("结束会话", icon: .endSession, role: .destructive) { confirmingEnd = session }
-                            .disabled(shownEnd == .sending)
+                            .disabled(shownEnd?.inTransit == true)
                     }
                 } label: {
                     Image(.more)

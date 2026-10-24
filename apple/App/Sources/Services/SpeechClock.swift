@@ -3,7 +3,7 @@ import Foundation
 import Observation
 
 /// 说的话到哪了（`Speech`）的外部输入，全 App 一份：此刻与本机同步从什么时候起通着（`moment`）。
-/// 到点翻状态只靠这里：资料库里还在等回执的话（`track`，`AppServices.startSpeechClock` 跟着库给）最早到时限的那一刻把"此刻"刷一次
+/// 到点翻状态只靠这里：资料库里还在等的话（`track`，`AppServices.startSpeechClock` 跟着库给，服务器收下时也重给）最早到时限的那一刻把"此刻"刷一次
 /// （一个可取消的睡眠，不轮询），同步断开、恢复时也刷。气泡、会话行与"N 句没送到"、提示词、Cue 在不在与值班都读 `moment`，不各自计时。
 @Observable
 final class SpeechClock {
@@ -14,9 +14,10 @@ final class SpeechClock {
     @ObservationIgnored private let alwaysReachable: Bool
     @ObservationIgnored private let timing: Timing
 
-    /// 一句还没被接收方领取、交出的话：写下的时刻与接收它的那台 Mac。
+    /// 一句还没被接收方领取、交出的话：写下的时刻、服务器收下过没有与接收它的那台 Mac。
     nonisolated struct Awaiting: Equatable, Sendable {
         var said: Date
+        var reachedServer: Bool
         var host: String?
     }
 
@@ -27,7 +28,7 @@ final class SpeechClock {
         moment = Speech.Moment(now: now, reachableSince: reachable || alwaysReachable ? now : nil, localHost: localHost)
     }
 
-    /// 本机同步此刻通不通（`SyncStatus.reachesMac`）：恢复的那一刻起算时限，断开时还没回执的话就是本机同步不通。
+    /// 本机同步此刻通不通（`SyncStatus.reachesMac`）：恢复的那一刻起重新算时限；断开时已发出的话不计时，没发出的从写下算。
     func setReachable(_ reachable: Bool) {
         guard !alwaysReachable, reachable != (moment.reachableSince != nil) else { return }
         let now = timing.now()
@@ -45,7 +46,7 @@ final class SpeechClock {
     /// 已经过了的时限立即刷"此刻"，再睡到下一个。
     private func schedule() {
         alarm?.cancel()
-        let deadlines = waiting.compactMap { Speech.deadline(said: $0.said, delivered: nil, host: $0.host, at: moment) }
+        let deadlines = waiting.compactMap { Speech.deadline(said: $0.said, delivered: nil, reachedServer: $0.reachedServer, host: $0.host, at: moment) }
         let now = timing.now()
         if deadlines.contains(where: { $0 > moment.now && $0 <= now }) { moment.now = now }
         guard let next = deadlines.filter({ $0 > now }).min() else { return }
@@ -65,8 +66,8 @@ extension AppServices {
                 let requests = try store.deliveryRequests().filter(\.isOpen)
                 let cueHost = try store.cueProfile()?.hostID
                 let toCue = try store.cueMessagesToDeliver().filter { $0.author == .known(.you) }
-                let waiting = requests.filter(\.isWithdrawable).map { SpeechClock.Awaiting(said: $0.createdAt, host: $0.hostID) }
-                    + toCue.map { SpeechClock.Awaiting(said: $0.createdAt, host: cueHost) }
+                let waiting = requests.filter(\.isWithdrawable).map { SpeechClock.Awaiting(said: $0.createdAt, reachedServer: $0.reachedServer, host: $0.hostID) }
+                    + toCue.map { SpeechClock.Awaiting(said: $0.createdAt, reachedServer: $0.reachedServer, host: cueHost) }
                 return OpenSpeech(open: !requests.isEmpty || !toCue.isEmpty, waiting: waiting)
             }) {
                 self.hasOpenDeliveries = open.open

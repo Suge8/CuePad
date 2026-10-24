@@ -39,14 +39,16 @@ struct Spinner: View {
 
 /// 全 App 唯一的"话在路上"（发送钮、气泡旁的记号、会话状态标）：一架纸飞机一趟趟飞过（`LoopLayer.flight`），不放循环动效时（`LoopsPlay`）是
 /// 同一架的静止符号（`Icon.onTheWay`，与飞机同大）。`size` 是框的边长，飞机占它的 86%。
+/// `landed`：话已经出了这台设备（已发出、送达中，`PiDelivery.Transit`），飞机停着不飞。
 struct OnTheWay: View {
     let size: CGFloat
     let color: Color
+    var landed = false
     @LoopsPlay private var flies
 
     var body: some View {
         Group {
-            if flies {
+            if flies && !landed {
                 LoopLayer(kind: .flight, color: color)
             } else {
                 Image(.onTheWay).font(.system(size: size * 0.86, weight: .semibold)).foregroundStyle(color)

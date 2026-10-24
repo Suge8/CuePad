@@ -31,7 +31,7 @@ nonisolated struct PiRowFacts: Equatable {
     /// `end` 是此刻要显示的那次结束到哪了（`DeliveryRequest.shownEnd`），`renaming`、`renameFailed` 由最近一条改名推出（`PiRename`），
     /// `hasDraft` 是回复框里有没发的草稿。
     init(_ session: PiSessionState, shown: PiShown, end: Speech.Trip?, renaming: Bool, renameFailed: Bool, hasDraft: Bool) {
-        note = if end == .sending { .ending }
+        note = if end?.inTransit == true { .ending }
             else if end?.failure != nil { .endFailed }
             else if renameFailed { .renameFailed }
             else if let transit = shown.note { .transit(transit) }

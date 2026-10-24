@@ -18,7 +18,7 @@ nonisolated struct SessionDigest: Sendable, Equatable {
 
     /// 正在请 Mac 补写对话（很久以前的会话没有对话时）：请求还在路上（`Speech`，超时就不再说正在补写）。
     func fetchingTranscript(at moment: Speech.Moment) -> Bool {
-        deliveries.contains { $0.mode == .known(.transcript) && Speech.trip($0, at: moment) == .sending }
+        deliveries.contains { $0.mode == .known(.transcript) && Speech.trip($0, at: moment).inTransit }
     }
 
     /// 顶栏写的会话名：改名在路上时是新名（`PiRename`，与会话行读同一条：发给它的最近一条改名）。
@@ -37,7 +37,7 @@ nonisolated struct SessionDigest: Sendable, Equatable {
         guard let request = deliveries.last(where: { $0.config.map { $0.model != nil || $0.thinking != nil } == true }),
               let wanted = request.config else { return current }
         switch Speech.trip(request, at: moment) {
-        case .sending:
+        case .sending, .sent:
             let model = wanted.model.flatMap { key in catalog?.models.first { $0.key == key } } ?? current.model
             let thinking = (wanted.thinking ?? current.thinking).map { $0.clamped(to: model?.thinkingLevels ?? []) }
             return PiConfigShown(model: model, thinking: thinking, context: current.context, pending: true, failure: nil)
@@ -69,7 +69,7 @@ nonisolated struct PiConfigShown: Equatable {
     /// 上下文余量（会话记录上的，用量条显示；没有模型时为 nil）。
     var context: PiContextUsage?
     var pending: Bool
-    /// 最近一次没换成的原因（`Speech`：Mac 报的，或超时、本机同步不通）。
+    /// 最近一次没换成的原因（`Speech`：Mac 报的，或一直没发出、超时）。
     var failure: Speech.Failure?
 }
 
