@@ -48,8 +48,6 @@ struct DockRoot: View {
         .debugExposesPlaces { openPlaces(true) }
         // 有焦点时"⋯"收起
         .onChange(of: motion.composing) { if motion.composing { openPlaces(false) } }
-        // 输入框离开页就没了焦点
-        .onChange(of: workspace.top) { motion.composing = false }
         // 推入的页盖住根：底部那一排展开成两格加 Cue 钮（Cue 页的输入框留在 Cue 页里），返回 Cue 页再收回
         .onChange(of: workspace.path.isEmpty, initial: true) { _, root in
             withAnimation(Motion.spatial(Motion.dock, reduceMotion: reduceMotion)) {
