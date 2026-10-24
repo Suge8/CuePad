@@ -24,10 +24,11 @@ extension View {
     }
 
     /// 根页：中间放 `center`（进展页是分段、项目范围与额度环合成的一块；Cue 页是它的名牌 `CueHeader`），不写标题。
+    /// `height` 是中间那块收着时的高（Cue 的名牌比圆钮高）：内容按它让出，两侧圆钮对着它的中线。
     func floatingHeader<Center: View, Trailing: View>(
-        _ title: String, @ViewBuilder center: () -> Center, @ViewBuilder trailing: () -> Trailing
+        _ title: String, height: CGFloat = FloatingHeaderLayout.height, @ViewBuilder center: () -> Center, @ViewBuilder trailing: () -> Trailing
     ) -> some View {
-        modifier(FloatingHeader(title: title, hidden: false, reveal: nil, titled: false, center: center(), trailing: trailing()))
+        modifier(FloatingHeader(title: title, hidden: false, reveal: nil, titled: false, height: height, center: center(), trailing: trailing()))
     }
 
     /// 要紧信息是一行字、右边一个圆钮或"⋯"菜单。`detail` 为 nil 时只写标题；要等读库才有的信息先给空串，
@@ -75,6 +76,7 @@ private struct FloatingHeader<Center: View, Trailing: View>: ViewModifier {
     let reveal: (() -> Void)?
     /// 中间是标题：这一页的名字在别处写着时（`pageNamedElsewhere`）不写，只留两边的圆钮。
     let titled: Bool
+    var height = FloatingHeaderLayout.height
     let center: Center
     let trailing: Trailing
     @Environment(\.headerHost) private var host
@@ -87,9 +89,9 @@ private struct FloatingHeader<Center: View, Trailing: View>: ViewModifier {
             case .page, .panel:
                 // 内容让到这一排下面再隔 `Bars.contentGap`；这一排排在让出之前的安全区里，贴着状态栏下沿，同导航栏里的圆钮
                 content
-                    .safeAreaPadding(.top, FloatingHeaderLayout.height + Bars.contentGap)
+                    .safeAreaPadding(.top, height + Bars.contentGap)
                     .overlay(alignment: .top) {
-                        PageBar(search: host == .page(search: true), trailing: trailing) { if showsMiddle { middle } }
+                        PageBar(search: host == .page(search: true), height: height, trailing: trailing) { if showsMiddle { middle } }
                     }
             case .navigationBar:
                 content
@@ -143,6 +145,7 @@ private struct Yield: ViewModifier {
 /// 中间那几块盖在两颗圆钮之上一层：从中间长出的面板（`GrowPanel`）铺满这一排往下长。
 private struct PageBar<Middle: View, Trailing: View>: View {
     let search: Bool
+    let height: CGFloat
     let trailing: Trailing
     @ViewBuilder let middle: Middle
     @Environment(Workspace.self) private var workspace
@@ -156,7 +159,7 @@ private struct PageBar<Middle: View, Trailing: View>: View {
             }
             .labelStyle(.iconOnly)
             .buttonStyle(ControlButtonStyle(kind: .circular))
-            .frame(height: FloatingHeaderLayout.height)
+            .frame(height: height)
             middle
         }
         .padding(.horizontal, 16)

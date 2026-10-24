@@ -121,9 +121,7 @@ enum DebugScene {
         #if os(iOS)
         preset.alertStatus = alertStatus
         if defaults.string(forKey: "CuePadSearchScope") == "sessions" { preset.searchScope = .sessions }
-        let panel = defaults.string(forKey: "CuePadCuePanel")
-        preset.cuePanelEnd = panel == "end"
-        preset.cuePanelOpen = preset.cuePanelEnd || defaults.bool(forKey: "CuePadCuePanel")
+        preset.cuePanelOpen = defaults.bool(forKey: "CuePadCuePanel")
         preset.quietAlerts = defaults.bool(forKey: "CuePadQuiet")
         #endif
         return preset

@@ -62,6 +62,8 @@ struct PiConfigControls<Trailing: View>: View {
     /// 键盘请弹出的菜单（只有 Mac 有这个入口）：弹出后清掉。
     let opening: Binding<PiConfigPick?>
     let trailing: Trailing
+    /// 这一排在给的宽里靠哪边（Cue 面板里居中）。
+    var alignment = Alignment.leading
     @Environment(AppServices.self) var services
     #if os(macOS)
     /// 键盘弹出的菜单贴着哪枚胶囊。
@@ -83,6 +85,12 @@ struct PiConfigControls<Trailing: View>: View {
         self.trailing = trailing()
     }
 
+    func aligned(_ alignment: Alignment) -> Self {
+        var aligned = self
+        aligned.alignment = alignment
+        return aligned
+    }
+
     var body: some View {
         ConfigRow {
             if let agent { PiAgentCapsule(pick: agent) }
@@ -96,7 +104,7 @@ struct PiConfigControls<Trailing: View>: View {
             }
             trailing
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: alignment)
         #if os(macOS)
         .onChange(of: opening.wrappedValue) { _, pick in
             guard let pick else { return }

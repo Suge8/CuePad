@@ -79,7 +79,7 @@ private struct ProgressHeader: View {
     private static let pane: CGFloat = 38
 
     var body: some View {
-        GrowPanel(open: $open, radius: FloatingHeaderLayout.height / 2, fills: false) {
+        GrowPanel(open: $open, radius: FloatingHeaderLayout.height / 2) {
             HStack(spacing: 0) {
                 ProgressPanes(size: Self.pane).padding(.leading, 3)
                 ProjectScope()
