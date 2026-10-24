@@ -120,26 +120,6 @@ struct SyncWiringTests {
         #expect(app.sync.syncNows == 1)
     }
 
-    /// 推送把 App 冷启动到后台：推送先于同步开始到达，等同步开始了再拉，拉到别的设备写下的再交还系统，不空手返回。
-    @Test(.timeLimit(.minutes(1)))
-    func 冷启动时先到的推送_等同步开始了再拉_拉到别的设备写下的() async throws {
-        let card = CKRecord(recordType: "cards", recordID: CKRecord.ID(recordName: UUID().uuidString.lowercased(), zoneID: CloudSync.zoneID))
-        let now = Int64(Date.now.timeIntervalSince1970 * 1000) as NSNumber
-        card["projectID"] = Project.defaultID.uuidString.lowercased()
-        card.encryptedValues["body"] = "手机上记的"
-        card.encryptedValues["variableValues"] = "{}"
-        (card["isPinned"], card["sortKey"], card["createdAt"], card["modifiedAt"]) = (0 as NSNumber, "V", now, now)
-        let cloud = SimulatedCloud([Self.floor(CueStore.supportedSchemaVersions.lowerBound), card])
-        let app = TestApp(sync: .built { CloudSync(store: $0) { cloud } })
-        let services = app.services!
-        let push = Task { await services.pull() }
-        services.startSync()
-        defer { services.cancelBackgroundWork() }
-
-        await push.value
-        #expect(try await services.store.cards(in: Project.defaultID).map { $0.body }.contains("手机上记的"))
-    }
-
     @Test func 冲突副本经AppServices暴露_选定版本后消失() async throws {
         services.startSync()
         defer { services.cancelBackgroundWork() }

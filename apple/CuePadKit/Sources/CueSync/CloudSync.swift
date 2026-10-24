@@ -31,6 +31,8 @@ public actor CloudSync {
   /// 正在认的那一次：同时要认的都等它。
   private var connecting: Task<Bool, Never>?
   private var accountBackoff = Backoff()
+  /// 认不了时下次再认的时刻：之前来的立即同步（按节奏的拉取每两三秒一次）不另认，账号变化不等它。
+  private var accountRetryAt: ContinuousClock.Instant?
   private var accountRetry: Task<Void, Never>?
   private var accountWatcher: Task<Void, Never>?
   /// `start()` 之前就要拉的（冷启动时先到的推送）：开始了再拉。
@@ -101,6 +103,7 @@ public actor CloudSync {
   private func connectNow() async -> Bool {
     if connected { return true }
     if let connecting { return await connecting.value }
+    if let accountRetryAt, ContinuousClock.now < accountRetryAt { return false }
     guard let cloud else { return false }
     let task = Task { await self.checkAccount(cloud) }
     connecting = task
@@ -130,6 +133,7 @@ public actor CloudSync {
       return false
     }
     accountRetry?.cancel()
+    accountRetryAt = nil
     accountBackoff.reset()
     guard !connected else { return true }
     guard await coordinator.canSync, let sender else { return false }
@@ -141,10 +145,11 @@ public actor CloudSync {
   }
 
   private func retryAccount() {
-    let delay = accountBackoff.next()
+    let at = ContinuousClock.now + accountBackoff.next()
+    accountRetryAt = at
     accountRetry?.cancel()
     accountRetry = Task {
-      try? await Task.sleep(for: delay)
+      try? await Task.sleep(until: at, clock: .continuous)
       guard !Task.isCancelled else { return }
       do { try await self.syncNow() } catch { Self.log.notice("拉取失败：\(error.brief, privacy: .public)") }
     }
@@ -154,6 +159,7 @@ public actor CloudSync {
   private func accountChanged() async {
     guard let cloud else { return }
     let wasConnected = connected
+    accountRetryAt = nil  // 账号变了是新情况，不等上次失败的退避
     guard wasConnected ? await checkAccount(cloud) : await connectNow() else { return }
     if wasConnected { await ensureAlertSubscriptions(cloud) }  // 刚开始的已在建
     do { try await puller?.pull() } catch { Self.log.notice("拉取失败：\(error.brief, privacy: .public)") }

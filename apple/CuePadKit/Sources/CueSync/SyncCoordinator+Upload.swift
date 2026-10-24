@@ -95,7 +95,9 @@ extension SyncCoordinator {
   /// 一批上传的结果：记账，告诉发送者这批有没有进展、该等什么。有记录收下就是一次成功（`succeeded`），并告诉实时层（`acceptedUpdates`）。
   func sent(_ sent: SentRecords, for batch: OutgoingBatch) async -> SendOutcome {
     guard !stopped else { return SendOutcome(progressed: false, fault: .rejected) }
-    succeeded()
+    // 服务器答了才是连上了：有记录收下，或逐条的拒绝里有不是连不上的（版本冲突、限流）；全是连不上的不算
+    let failures = sent.failedSaves.map(\.error) + sent.failedDeletes.map(\.error)
+    if !sent.saved.isEmpty || !sent.deleted.isEmpty || failures.contains(where: { !SyncFault($0).isOffline }) { succeeded() }
     do {
       return try await processSent(sent, for: batch)
     } catch {

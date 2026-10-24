@@ -141,6 +141,7 @@ actor RecordSender {
     defer { waiting.forEach { $0.resume() } }
     guard admitted(bypassingOffline: bypass), await coordinator.canSync, await ready() else { return }
     for _ in 0..<Self.batchesPerRound {
+      guard admitted(bypassingOffline: bypass) else { return }  // 另一路这期间被要求等了
       guard var batch = await coordinator.nextBatch(.pending(excluding: inFlight), limit: limit) else { return }
       batch.drop(inFlight)  // 挑的时候马上传那一路占下的
       guard !batch.isEmpty else { return }
@@ -201,7 +202,7 @@ actor RecordSender {
         return false
       }
       backoff.reset()
-      clearHold()
+      settled()
       return true
     } catch let error as CKError where error.code == .limitExceeded && limit > 1 {
       limit /= 2  // 这一批太大：减半再试（马上传那一路的由后台那一路接着发）
@@ -253,16 +254,17 @@ actor RecordSender {
   private func schedule(_ fault: SyncFault) {
     let now = ContinuousClock.now
     let cap = urgent.isEmpty ? Backoff.cap : Backoff.waitingCap
-    let notBefore = now + (fault.retryAfter ?? .zero)
+    // 另一路先前得到的服务器等待照守：两路的结果先后回来，后到的不缩短它
+    let notBefore = max(now + (fault.retryAfter ?? .zero), hold?.notBefore ?? now)
     let until: ContinuousClock.Instant =
       switch fault {
-      case .offline: max(now + backoff.next(cap: cap), notBefore)
+      case .offline: now + backoff.next(cap: cap)
       case .wait(let given): given.map { now + $0 } ?? now + backoff.next(cap: cap)
       case .account: now + backoff.next()
       case .rejected: now + Self.rejectedPause
       }
-    hold = (until, fault, notBefore)
-    wake(at: until)
+    hold = (max(until, notBefore), fault, notBefore)
+    wake(at: max(until, notBefore))
   }
 
   private func wake(at until: ContinuousClock.Instant) {
@@ -272,6 +274,13 @@ actor RecordSender {
       guard !Task.isCancelled else { return }
       self.resume()
     }
+  }
+
+  /// 有一批收下了：退避的等待到此为止，服务器给的最早时刻照守（另一路被限流时它还在）。
+  private func settled() {
+    guard let hold, ContinuousClock.now < hold.notBefore else { return clearHold() }
+    self.hold = (hold.notBefore, hold.fault, hold.notBefore)
+    wake(at: hold.notBefore)
   }
 
   private func clearHold() {
