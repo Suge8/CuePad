@@ -1,9 +1,11 @@
 import CloudKit
+import CueStore
 import Foundation
 import os
 
 /// 同步逻辑：远端变更应用、上传批次与结果处理、账号与状态。不碰网络：拉取器（`ZonePuller.pulled`）、发送者（`sent`、`nextBatch`）
 /// 与账号检查（`CloudSync`）把服务器给的直接交进来。待推送只有库里推导的一份（`CueStore.pendingSync`）。
+/// 失败只经 `failed` 按 `SyncFault` 改状态；任何一次请求成功经 `succeeded` 收掉离线、同步出错与请求类的问题，并告诉发送者网络通了（`connectivity`）。
 actor SyncCoordinator {
   static let issueLimit = 50
   static let log = Logger(subsystem: AppIdentity.id, category: "delivery")
@@ -11,12 +13,17 @@ actor SyncCoordinator {
 
   let store: CueStore
   nonisolated let zoneID: CKRecordZone.ID
-  private var subscribers: [UUID: AsyncStream<SyncState>.Continuation] = [:]
+  private let states = Broadcast(latest: Facts().state)
+  /// 服务器收下了本机的一批改动（`acceptedUpdates`）。
+  private let acceptances = Broadcast<AcceptedChanges>()
+  /// 任何一次请求成功（连通的证据）：发送者因连不上在退避时据此当场再发（`RecordSender`）。
+  nonisolated let connectivity = Broadcast<Void>(bufferingPolicy: .bufferingNewest(1))
   /// 构造不出来的记录（附件文件不在本机）与当时的修改时间：同一版不再每批重试、重复报告，改过再试。
-  private var unsendable: [String: Int64] = [:]
+  var unsendable: [String: Int64] = [:]
   /// 库里没有可传的待推送，截至推导时的同步变更代数（`CueStore.pendingSync(since:)`）：之后只复查其后的提交碰过的记录，不再全量推导，
-  /// 代数没变（按节奏的拉取每次顺带的那一轮）就什么都不查。`sending` 是在路上的这一批带走了推导出的全部、这批的条数：整批收下才算没有了（`processSent`）。
-  var drained: (generation: Int, sending: Int?)?
+  /// 代数没变（按节奏的拉取每次顺带的那一轮）就什么都不查。只有后台那一路（`BatchScope.pending`）读写它，同一时刻至多一批：
+  /// 交出带走了全部的一批时记在批上（`OutgoingBatch.drains`），整批收下才记回这里（`processSent`）。
+  var drained: Int?
 
   /// 协调器自己记的事实。`status` 不含 `.syncing`；上传与拉积压的忙闲分开记。对外的快照只在发布处推出（`state`）。
   struct Facts {
@@ -39,7 +46,7 @@ actor SyncCoordinator {
   var facts = Facts() {
     didSet {
       let state = facts.state
-      if state != oldValue.state { for continuation in subscribers.values { continuation.yield(state) } }
+      if state != oldValue.state { states.yield(state) }
     }
   }
 
@@ -52,24 +59,15 @@ actor SyncCoordinator {
     self.zoneID = zoneID
   }
 
-  // MARK: 状态订阅
+  // MARK: 订阅
 
-  nonisolated var stateUpdates: AsyncStream<SyncState> {
-    AsyncStream { continuation in
-      let token = UUID()
-      Task {
-        await self.subscribe(token, continuation)
-        continuation.onTermination = { _ in Task { await self.unsubscribe(token) } }
-      }
-    }
-  }
+  /// 先给出当前快照，之后每次变化给出新快照。
+  nonisolated var stateUpdates: AsyncStream<SyncState> { states.stream() }
 
-  private func subscribe(_ token: UUID, _ continuation: AsyncStream<SyncState>.Continuation) {
-    subscribers[token] = continuation
-    continuation.yield(state)
-  }
+  /// 之后每次服务器收下本机的一批改动给出一个（不补之前的）。
+  nonisolated var acceptedUpdates: AsyncStream<AcceptedChanges> { acceptances.stream() }
 
-  private func unsubscribe(_ token: UUID) { subscribers[token] = nil }
+  func accepted(_ changes: AcceptedChanges) { acceptances.yield(changes) }
 
   /// 能不能和服务器同步：有可用的账号，也没有停下（`stopped`）。
   var canSync: Bool {
@@ -92,79 +90,13 @@ actor SyncCoordinator {
     unsendable = [:]
     drained = nil
     facts.reconciled = false  // 两种处理都清掉了令牌
-    facts.status = .idle
-  }
-
-  // MARK: 上传批次
-
-  /// 下一批要上传的：`first` 里待推送的排在前面，至多 `limit` 条；没有可传的（或此刻不能同步）为 nil。交出一批即算同步中，到这一轮结束（`finishedSending`）。
-  /// 上次确定没有可传的之后只看其后的提交碰过的记录（`drained`）。
-  func nextBatch(first: Set<String>, limit: Int) async -> (saves: [CKRecord], deletes: [CKRecord.ID])? {
-    if drained?.sending != nil { drained = nil }  // 上一批整个没传成（没有结果）
-    guard canSync else { return nil }
-    let since = drained?.generation
-    drained = nil
-    let pending: PendingSync, generation: Int
-    do { (pending, generation) = try await store.pendingSync(since: since) } catch {
-      report(error, recordName: nil)
-      return nil
-    }
-    let names = pending.saves.map(\.id).filter { unsendable[$0] == nil }
-    let ordered = names.filter(first.contains) + names.filter { !first.contains($0) }
-    let deletes = pending.deletes.filter(first.contains) + pending.deletes.filter { !first.contains($0) }
-    var saves: [CKRecord] = []
-    for name in ordered where saves.count < limit {
-      if let record = await record(for: recordID(name)) { saves.append(record) }
-    }
-    let batch = (saves: saves, deletes: Array(deletes.prefix(limit - saves.count)).map(recordID))
-    guard !batch.saves.isEmpty || !batch.deletes.isEmpty else {
-      drained = (generation, nil)
-      return nil
-    }
-    // 构造不出来的（附件文件不在本机）记进了 `unsendable`，同不可传的一样不算剩下
-    if ordered.count == saves.count + ordered.count(where: { unsendable[$0] != nil }), batch.deletes.count == deletes.count {
-      drained = (generation, saves.count + batch.deletes.count)
-    }
-    do {
-      try await store.noteSent(saves.compactMap { record in
-        guard let table = RecordMapper.table(named: record.recordType), let stamp = (record["modifiedAt"] as? NSNumber)?.int64Value else { return nil }
-        return (record.recordID.recordName, table, stamp)
-      })
-    } catch {
-      report(error, recordName: nil)
-      return nil
-    }
-    // 构造这批时可能停下了（拉到过高的门槛、要你决定）：停下后不再交出新的一批
-    guard canSync else { return nil }
-    facts.sending = true
-    return batch
-  }
-
-  /// 构造要上传的记录：以上次服务器记录的系统字段为底，写入当前行的字段；行已不在则返回 nil。
-  func record(for id: CKRecord.ID) async -> CKRecord? {
-    do {
-      guard let row = try await store.syncRow(recordName: id.recordName) else { return nil }
-      let base = try await store.systemFields(of: id.recordName).flatMap(RecordMapper.decodeSystemFields)
-      let record = RecordMapper.record(from: row, zoneID: zoneID, base: base)
-      if row.table == .attachments {
-        guard case .text(let hash)? = row.fields["hash"], let file = store.files.fileURL(for: hash) else {
-          unsendable[id.recordName] = row.modifiedAt
-          report("附件文件不在本机，未上传", recordType: row.table.rawValue, recordName: id.recordName)
-          return nil
-        }
-        record["file"] = CKAsset(fileURL: file)
-      }
-      return record
-    } catch {
-      report(error, recordName: id.recordName)
-      return nil
-    }
+    facts.status = .starting
   }
 
   // MARK: 拉取器、发送者与账号检查交进来的
 
-  /// 一轮上传结束（开始是 `nextBatch` 交出一批时）。
-  func finishedSending() { facts.sending = false }
+  /// 发送者有一批在路上，或因服务器要求等着重发：界面显示同步中。
+  func setSending(_ busy: Bool) { facts.sending = busy }
 
   /// 拉取器开始、结束拉积压（没有令牌时的对账，或一拉不止一页）。
   func setCatchingUp(_ busy: Bool) { facts.catchingUp = busy }
@@ -183,7 +115,7 @@ actor SyncCoordinator {
 
   /// 同步开始时读一次令牌：还没拉过（离线、没登录）也说得出这台对没对过。
   func loadToken() async {
-    do { _ = try await token() } catch { report(error, recordName: nil) }
+    do { _ = try await token() } catch { report(error, kind: .request) }
   }
 
   /// 拉取器拉到的一页：应用完才返回；整页没能应用（库写不进去、停下了）时抛出，拉取器不前移令牌。
@@ -195,11 +127,9 @@ actor SyncCoordinator {
     do {
       try await applyFetched(modifications, deletions)
     } catch {
-      report(error, recordName: nil)
+      report(error, kind: .request)
       throw error
     }
-    if case .failed = status { facts.status = .idle }
-    reached(nil)
   }
 
   /// 云端的最低对端版本（`PeerFloor`）高于这台能同步的结构版本：停下，抛出 `SyncPaused`。
@@ -209,27 +139,16 @@ actor SyncCoordinator {
     throw SyncPaused()
   }
 
-  /// 上传结果：记账，并告诉发送者这批有没有进展、要不要停下来等。
-  func sent(_ sent: SentRecords) async -> SendOutcome {
-    guard !stopped else { return SendOutcome(progressed: false, blocked: true, zoneMissing: false) }
-    reached(nil)
-    do {
-      return try await processSent(sent)
-    } catch {
-      report(error, recordName: nil)
-      return SendOutcome(progressed: false, blocked: true, zoneMissing: false)
-    }
-  }
-
   var needsDecision: SyncDecision? {
     if case .needsDecision(let decision) = status { decision } else { nil }
   }
 
+  /// 认到的账号状态。可用时仍是正在连接，第一次请求成功（`succeeded`）才算已同步：认了账号不等于连得上、对过门槛。
   func accountStatus(_ account: CKAccountStatus) {
     guard !stopped else { return }
     switch account {
     case .available:
-      if [.starting, .noAccount, .accountRestricted, .accountUnavailable].contains(status) { facts.status = .idle }
+      if [.noAccount, .accountRestricted, .accountUnavailable].contains(status) { facts.status = .starting }
     case .noAccount: facts.status = .noAccount
     case .restricted: facts.status = .accountRestricted
     case .temporarilyUnavailable, .couldNotDetermine: facts.status = .accountUnavailable
@@ -245,7 +164,7 @@ actor SyncCoordinator {
       guard let last = try await store.syncState(Self.accountKey) else { return try await store.setSyncState(Self.accountKey, current) }
       if last != current { facts.status = .needsDecision(.accountSwitched) }
     } catch {
-      report(error, recordName: nil)
+      report(error, kind: .request)
     }
   }
 
@@ -260,8 +179,57 @@ actor SyncCoordinator {
       try await setToken(nil)
       if synced { facts.status = .needsDecision(deletedByUser ? .cloudDataDeleted : .cloudDataReset) }
     } catch {
-      report(error, recordName: nil)
+      report(error, kind: .request)
     }
+  }
+
+  // MARK: 成功与失败
+
+  /// 一次请求成功（拉完、收下了上传、对过门槛）：连上了。正在连接、连不上、账号暂不可用回到空闲，请求类的问题消失，没有失败类的问题了就不再是同步出错；
+  /// 告诉发送者网络通了。停下时不改状态。
+  func succeeded() {
+    connectivity.yield(())
+    guard !stopped else { return }
+    var next = facts
+    next.issues.removeAll { $0.kind == .request }
+    switch next.status {
+    case .starting, .offline, .accountUnavailable: next.status = .idle
+    case .failed where !next.issues.contains(where: \.isFailure): next.status = .idle
+    default: break
+    }
+    facts = next
+  }
+
+  /// 一次请求失败，按归类改状态（只在这里）：连不上显示离线、账号与配额写明、要等的不改、其余报告并显示同步出错。返回归类。
+  /// 只在正常状态之间切换：要你决定、这台要更新这些更要紧的状态不被盖过。
+  @discardableResult
+  func failed(_ error: any Error, kind: SyncIssue.Kind = .request, recordType: String? = nil, recordName: String? = nil) -> SyncFault {
+    let fault = SyncFault(error)
+    guard !stopped else { return fault }
+    switch fault {
+    case .offline: if [.idle, .starting].contains(status) { facts.status = .offline }
+    case .account(let status): facts.status = status
+    case .wait: break
+    case .rejected: report(error, kind: kind, recordType: recordType, recordName: recordName)
+    }
+    return fault
+  }
+
+  // MARK: 报告
+
+  func report(_ error: any Error, kind: SyncIssue.Kind, recordType: String? = nil, recordName: String? = nil) {
+    report(error.diagnosis, kind: kind, recordType: recordType, recordName: recordName)
+  }
+
+  /// 记一条问题：同一类、同一条记录只留最新的一条（`SyncIssue.sameAs`）。失败类的让状态变成同步出错。
+  func report(_ message: String, kind: SyncIssue.Kind, recordType: String?, recordName: String?) {
+    var next = facts
+    let issue = SyncIssue(kind: kind, recordType: recordType, recordName: recordName, message: message)
+    next.issues.removeAll { $0.sameAs(issue) }
+    next.issues.append(issue)
+    if next.issues.count > Self.issueLimit { next.issues.removeFirst(next.issues.count - Self.issueLimit) }
+    if issue.isFailure, !stopped { next.status = .failed(message) }
+    facts = next  // 问题与状态一次送达
   }
 
   func recordID(_ name: String) -> CKRecord.ID { CKRecord.ID(recordName: name, zoneID: zoneID) }

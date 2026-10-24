@@ -120,18 +120,24 @@ struct SyncWiringTests {
         #expect(app.sync.syncNows == 1)
     }
 
-    /// 静默推送把 App 冷启动到后台：推送先于同步启动完到达，等启动完再拉，不空手交还系统；启动后的立即同步就是这一拉，不拉两遍。
-    @Test func 冷启动时先到的推送_等同步启动完再拉_只拉一次() async throws {
-        app.sync.holdsStart.withLock { $0 = true }
+    /// 推送把 App 冷启动到后台：推送先于同步开始到达，等同步开始了再拉，拉到别的设备写下的再交还系统，不空手返回。
+    @Test(.timeLimit(.minutes(1)))
+    func 冷启动时先到的推送_等同步开始了再拉_拉到别的设备写下的() async throws {
+        let card = CKRecord(recordType: "cards", recordID: CKRecord.ID(recordName: UUID().uuidString.lowercased(), zoneID: CloudSync.zoneID))
+        let now = Int64(Date.now.timeIntervalSince1970 * 1000) as NSNumber
+        card["projectID"] = Project.defaultID.uuidString.lowercased()
+        card.encryptedValues["body"] = "手机上记的"
+        card.encryptedValues["variableValues"] = "{}"
+        (card["isPinned"], card["sortKey"], card["createdAt"], card["modifiedAt"]) = (0 as NSNumber, "V", now, now)
+        let cloud = SimulatedCloud([Self.floor(CueStore.supportedSchemaVersions.lowerBound), card])
+        let app = TestApp(sync: .built { CloudSync(store: $0) { cloud } })
+        let services = app.services!
+        let push = Task { await services.pull() }
         services.startSync()
         defer { services.cancelBackgroundWork() }
-        try await eventually("开始启动") { app.sync.started == 1 }
-        let push = Task { await services.pull() }
-        app.sync.startGate.continuation.yield()
+
         await push.value
-        try await eventually("启动完才拉") { services.isSyncingNow == false && app.sync.events.count >= 2 }
-        let events = app.sync.events
-        #expect(events == ["started", "pull"])
+        #expect(try await services.store.cards(in: Project.defaultID).map { $0.body }.contains("手机上记的"))
     }
 
     @Test func 冲突副本经AppServices暴露_选定版本后消失() async throws {

@@ -1,6 +1,6 @@
 # 同步参考
 
-同步通路、拉取、发送与通知的规则和理由写在各自类型的头注释里：通路与为什么不用 CKSyncEngine 在 `CloudSync`，拉、推在 `ZonePuller`、`RecordSender`，等待理由与立即同步在 `AppServices+Sync.swift`，说的话到哪了在 `Speech`。这里只补代码里没有的：实测结论、跨设备的取舍、排查与真机验证。
+同步通路、拉取、发送与通知的规则和理由写在各自类型的头注释里：通路、冷启动与为什么不用 CKSyncEngine 在 `CloudSync`，拉、推在 `ZonePuller`、`RecordSender`，失败怎么归类、怎么重试在 `SyncFault`、`RecordSender`，等待理由与立即同步在 `AppServices+Sync.swift`，说的话到哪了在 `Speech`。这里只补代码里没有的：实测结论、跨设备的取舍、排查与真机验证。
 
 ## 拉取节奏
 
@@ -8,7 +8,7 @@
 
 - 实测（2026-10-12，手机发 18 条请求）：服务器到 Mac 0.44–2.67 秒、中位约 1.1 秒，全靠拉取到达。改节奏前先有新的实测，不凭"每天四万多次请求太多"去放慢。
 - Cue 值班是等待理由：2026-10-14 手机对 Cue 说的一句 21 秒才交给它，当时 Mac 没有等待理由、一次都没拉。没开 1 秒一档：Cue 回一句本身要十几到几十秒。
-- 不是等待理由的改动（灵感、任务等）靠切到前台、唤醒时的立即同步，手机另有推送。
+- 不是等待理由的改动（灵感、任务等）靠切到前台、唤醒时的立即同步；手机的推送只为要紧的变化（`AlertSubscriptions`），灵感、任务不推。
 
 ## 用户离开时的 Mac
 
@@ -51,7 +51,12 @@ Cue 说话的工具等结果至多 `Speech.cueWait`；没告诉它的失败作�
 
 每台设备自己写、别的设备只读的三张同步表，规则与写的时机在各自头注释：在不在线 `MacPresence`（`MacPresenceKeeper`）、开着哪一页 `Viewer`（`ViewerKeeper`）、有哪些 Agent 与模型 `MacAgents`（`MacAgentsRecorder`）。它们都不是等待理由：需要及时看到的那台 Mac 本来就因在线会话或 Cue 值班每 2 秒拉。
 
-推送的取舍：手机的同步区变化推送对每次写都推一次，续期就是醒着的每台 Mac 每小时约 12 次。Apple 建议后台推送每小时不超过两三次，超了系统会合并、节流；"等你"与 Agent 的提醒是查询订阅的可见推送，不受影响。接受这个代价，没把在线记录挪到手机不订阅的单独同步区（要多一个区、一份令牌和一条拉取）。实测到手机耗电或别的后台推送被节流时，先拉长 `MacPresence.renewal`，再考虑单独的区。
+推送的取舍：在线记录的续期不给手机推送，手机只订阅要紧的变化（理由与实测在 `AlertSubscriptions` 头注释）。
+
+## 失败与重试
+
+- 复测失败路径用 `research/sync-faults` 分支的故障探针（内存替身注入延迟与错误，Kit 与 App 两层，不合并）：叠到改动上跑 `xc.sh test kit -only-testing:CueSyncTests/SyncFaultProbeTests`、`xc.sh test mac|ios -only-testing:CuePadTests/SyncFaultProbeTests`。探针里挂得比 `RequestLimits.request` 久的数据库请求要按 CloudKit 的空闲超时到点失败，才和真机一致。
+- 没在真网络上确认的：断网时 CloudKit 整批抛的是 `partialFailure` 包着 -1009，还是 URL 错误原样；区忙带不带 `retryAfterSeconds`。归类（`SyncFault`）对这几种包法给同一个结论，所以不影响行为。
 
 ## 最低对端版本
 

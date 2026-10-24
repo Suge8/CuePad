@@ -48,12 +48,12 @@ import Testing
     let card = try await store.createCard(body: "base")
     try await rig.simulatePush()
     _ = try await edit(card, "第一版")
-    let lost = try #require(await rig.coordinator.nextBatch(first: [], limit: 400)?.saves.first)  // 交出去，结果没回来
+    let lost = try #require(await rig.coordinator.nextBatch(.pending(excluding: []), limit: 400)?.saves.first)  // 交出去，结果没回来
     let restarted = SyncCoordinator(store: store, zoneID: testZone)
     _ = try await edit(card, "第二版")
 
     if comesBackAsRejection {
-      let retry = try #require(await restarted.nextBatch(first: [], limit: 400)?.saves.first)
+      let retry = try #require(await restarted.nextBatch(.pending(excluding: []), limit: 400)?.saves.first)
       let rejection = CKError(.serverRecordChanged, userInfo: [CKRecordChangedErrorServerRecordKey: lost])
       _ = await restarted.sent(SentRecords(saved: [], failedSaves: [(retry, rejection)], deleted: [], failedDeletes: []))
     } else {

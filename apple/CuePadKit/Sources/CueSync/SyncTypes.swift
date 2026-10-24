@@ -1,4 +1,5 @@
 import CloudKit
+import CueStore
 
 /// 对外的同步状态，界面直接显示。本机数据在任何状态下都完好，可继续使用。
 public enum SyncStatus: Equatable, Sendable {
@@ -46,16 +47,34 @@ public enum SyncResolution: Sendable {
 }
 
 /// 同步过程中遇到的、被跳过或没能处理的事项（未知记录类型、损坏的附件、单条记录写入失败等）。不静默。
+/// 同一类、同一条记录只留一条（最新的原因）；上传与请求的问题在之后成功时自己消失（`Kind`）。
 public struct SyncIssue: Equatable, Sendable {
+  public enum Kind: Sendable {
+    /// 这条记录没能上传：它之后传上去了就消失。
+    case upload
+    /// 整个请求或本机读写出错：之后任何一次成功的往返就消失。
+    case request
+    /// 拉下来的记录被拒（未知类型、坏附件）：它不会自己变好，一直留着。
+    case incoming
+  }
+
+  public var kind: Kind
   public var recordType: String?
   public var recordName: String?
   public var message: String
 
-  public init(recordType: String? = nil, recordName: String? = nil, message: String) {
+  public init(kind: Kind = .incoming, recordType: String? = nil, recordName: String? = nil, message: String) {
+    self.kind = kind
     self.recordType = recordType
     self.recordName = recordName
     self.message = message
   }
+
+  /// 去重的标识：同一类、同一条记录（整个请求的问题没有记录，同一类只留一条）。
+  func sameAs(_ other: SyncIssue) -> Bool { kind == other.kind && recordName == other.recordName }
+
+  /// 失败类的问题：有它们时状态是同步出错（`SyncStatus.failed`），都消失了回到空闲。
+  var isFailure: Bool { kind != .incoming }
 }
 
 extension Error {
@@ -103,12 +122,19 @@ public struct SyncState: Equatable, Sendable {
   }
 }
 
+/// 服务器收下了本机的一批改动（`CloudSync.acceptedUpdates`，实时层据此按门铃）：收下的记录在哪些表、存下与删除各几条。
+public struct AcceptedChanges: Equatable, Sendable {
+  /// 存下的记录所在的表（删除只知道记录名，不在里面）。
+  public var tables: Set<Table>
+  public var saved: Int
+  public var deleted: Int
+}
+
+/// 一批上传的结果交给发送者：有没有进展、同步区要不要建、该等什么（各条的失败合成一个，`SyncFault`）。
 struct SendOutcome: Sendable {
   /// 有记录被收下，或被拒的已处理好（带上了服务器的版本标签等），接着发下一批不会原样再被拒
   var progressed: Bool
-  /// 配额、登录或未预期的失败：先停下，等下一次明确的触发
-  var blocked: Bool
-  var zoneMissing: Bool
-  /// 有记录因限流、服务忙等可重试的原因被拒：先等再发。里面是服务器给的等待（没给为 nil，退避）；没有这种记录时整个为 nil。
-  var throttled: Duration?? = nil
+  var zoneMissing = false
+  /// 有记录因可重试或要停下的原因被拒：这一轮到此为止，按它定下一次（nil：没有）。
+  var fault: SyncFault?
 }

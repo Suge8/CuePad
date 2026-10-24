@@ -98,7 +98,7 @@ struct Rig {
   /// 模拟服务器接受了此刻所有待推送的保存与删除，返回上传的记录。
   @discardableResult
   func simulatePush() async throws -> [CKRecord] {
-    guard let batch = await coordinator.nextBatch(first: [], limit: .max) else { return [] }
+    guard let batch = await coordinator.nextBatch(.pending(excluding: []), limit: .max) else { return [] }
     _ = await coordinator.sent(SentRecords(saved: batch.saves, deleted: batch.deletes))
     return batch.saves
   }
@@ -156,12 +156,19 @@ struct Loopback {
   }
 
   func deliver(from: Rig, to: Rig) async throws {
-    guard let batch = await from.coordinator.nextBatch(first: [], limit: .max) else { return }
+    guard let batch = await from.coordinator.nextBatch(.pending(excluding: []), limit: .max) else { return }
     let deletions: [(id: CKRecord.ID, recordType: String)] = try batch.deletes.compactMap { id in
       let type = try RawDB(from.fixture.url).rows("SELECT recordType FROM syncRecords WHERE recordName = '\(id.recordName)'").first?[0]
       return type.map { (id, $0) }
     }
     _ = await from.coordinator.sent(SentRecords(saved: batch.saves, deleted: batch.deletes))
     try await to.coordinator.pulled(batch.saves, deletions)
+  }
+}
+
+extension SyncCoordinator {
+  /// 一批上传的结果（批就是结果里提到的这些记录）。
+  func sent(_ sent: SentRecords) async -> SendOutcome {
+    await self.sent(sent, for: OutgoingBatch(saves: sent.saved + sent.failedSaves.map(\.record), deletes: sent.deleted + sent.failedDeletes.map(\.id)))
   }
 }

@@ -25,7 +25,7 @@ struct PeerFloor {
   func settle(_ cloud: some ZoneChangeSource & RecordUploader, coordinator: SyncCoordinator) async throws {
     var server: CKRecord?
     do {
-      server = try await cloud.records([id]).first
+      server = try await hedged(after: RequestLimits.hedge) { [id] in try await cloud.records([id]) }.first
     } catch let error as CKError where [.zoneNotFound, .userDeletedZone].contains(error.code) {
       await coordinator.zoneMissing(deletedByUser: error.code == .userDeletedZone)
       guard await coordinator.canSync else { throw SyncPaused() }

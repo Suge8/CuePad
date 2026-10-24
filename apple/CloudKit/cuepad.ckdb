@@ -124,7 +124,7 @@ DEFINE SCHEMA
         hostID        STRING,
         mode          STRING,
         cardID        STRING,
-        status        STRING,
+        status        STRING QUERYABLE,
         resultDetail  ENCRYPTED STRING,
         handledBy     STRING,
         createdAt     INT64,
@@ -193,7 +193,7 @@ DEFINE SCHEMA
 
     RECORD TYPE cueMessages (
         "___recordID" REFERENCE QUERYABLE,
-        author        STRING,
+        author        STRING QUERYABLE,
         text          ENCRYPTED STRING,
         choices       ENCRYPTED STRING,
         urgent        INT64,

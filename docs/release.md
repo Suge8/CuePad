@@ -59,3 +59,4 @@ xcrun cktool export-schema $C --output-file /tmp/dev.ckdb   # 回读：服务端
 待部署到生产（已导入开发环境，发版前按上面三步部署，部署完删掉对应条目）：
 
 - 订阅 `cuepad.pi.waiting`、`cuepad.cue` 加 content-available（`AlertSubscriptions`，等你类推送叫醒 App 更新实时活动）：订阅不在 `.ckdb` 里，按上一段部署
+- 只订阅要紧的变化（`AlertSubscriptions`）：`cueMessages.author`、`deliveryRequests.status` 建可查询索引（`.ckdb` 已改）；订阅 `cuepad.pi.settled` 加 content-available，新增 `cuepad.cue.said`、`cuepad.delivery.result`，去掉数据库订阅 `cuepad.changes`（客户端自己删）。先部署结构与订阅再发 iOS 版：没部署时新订阅在生产被拒，手机后台只剩三个可见通知的订阅

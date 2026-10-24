@@ -58,27 +58,42 @@ import Testing
 
   // MARK: 订阅的形状
 
+  /// 只订阅要紧的变化（订阅的定义要部署到生产，改了要重新部署）：三个可见通知按标志出、同时叫醒 App；Cue 对你说的话与请求的结果只静默叫醒；
+  /// 不订阅整个同步区的变化。
   @Test func subscriptionsMatchTheFlagAndCarryOnlyGenericLocalizedText() throws {
     let all = AlertSubscriptions(zoneID: zone).desired()
-    let subscriptions = all.compactMap { $0 as? CKQuerySubscription }
 
-    #expect(all.map(\.subscriptionID) == ["cuepad.pi.waiting", "cuepad.pi.settled", "cuepad.cue", "cuepad.changes"])
-    let changes = try #require(all.last as? CKDatabaseSubscription)  // 同步区有变化的静默推送：收到就拉
-    #expect(changes.notificationInfo?.shouldSendContentAvailable == true && changes.notificationInfo?.alertLocalizationKey == nil)
+    #expect(all.map(\.subscriptionID) == ["cuepad.pi.waiting", "cuepad.pi.settled", "cuepad.cue", "cuepad.cue.said", "cuepad.delivery.result"])
     #expect(
-      subscriptions.map { $0.predicate.predicateFormat }
-        == [#"notify == "waitingForUser""#, #"notify == "settled""#, #"notify == "cue""#])
-    #expect(subscriptions.map(\.recordType) == ["piSessionStates", "piSessionStates", "cueMessages"])
-    for subscription in subscriptions {
+      all.map { $0.predicate.predicateFormat }
+        == [#"notify == "waitingForUser""#, #"notify == "settled""#, #"notify == "cue""#, #"author == "cue""#, #"status IN {"succeeded", "failed"}"#])
+    #expect(all.map(\.recordType) == ["piSessionStates", "piSessionStates", "cueMessages", "cueMessages", "deliveryRequests"])
+    #expect(all.map(\.querySubscriptionOptions) == [
+      [.firesOnRecordCreation, .firesOnRecordUpdate], [.firesOnRecordCreation, .firesOnRecordUpdate], [.firesOnRecordCreation, .firesOnRecordUpdate],
+      [.firesOnRecordCreation], [.firesOnRecordCreation, .firesOnRecordUpdate],
+    ])  // 删除不通知
+    for subscription in all {
       #expect(subscription.zoneID == zone)
-      #expect(subscription.querySubscriptionOptions == [.firesOnRecordCreation, .firesOnRecordUpdate])  // 删除不通知
       let info: CKSubscription.NotificationInfo? = subscription.notificationInfo
-      #expect(info?.shouldSendMutableContent == true)  // 手机上的通知服务扩展先拿到，改写成会话名与问题
+      #expect(info?.shouldSendContentAvailable == true)  // 都把 App 叫到后台拉一次
       #expect(info?.alertBody == nil && info?.alertLocalizationArgs == nil && info?.desiredKeys == nil)
     }
-    #expect(subscriptions.map { $0.notificationInfo?.alertLocalizationKey } == ["pi_alert_waiting", "pi_alert_settled", "cue_alert"])
-    // 等你类的可见通知同时叫醒 App 拉一次（实时活动随之更新），做完的不叫
-    #expect(subscriptions.map { $0.notificationInfo?.shouldSendContentAvailable } == [true, false, true])
+    #expect(all.map { $0.notificationInfo?.alertLocalizationKey } == ["pi_alert_waiting", "pi_alert_settled", "cue_alert", nil, nil])
+    // 手机上的通知服务扩展先拿到可见通知，改写成会话名与问题
+    #expect(all.map { $0.notificationInfo?.shouldSendMutableContent } == [true, true, true, false, false])
+  }
+
+  /// 一个订阅被拒（生产环境还没部署它）不挡别的，状态写明哪个没建成。
+  @Test func aRejectedSubscriptionDoesNotKeepTheOthersFromBeingCreated() async throws {
+    let fake = FakeSubscriptions([], rejecting: "cuepad.cue.said")
+    let status = await AlertSubscriptions(zoneID: zone).ensure(in: fake)
+
+    guard case .failed(let why) = status else {
+      Issue.record("\(status)")
+      return
+    }
+    #expect(why.hasPrefix("cuepad.cue.said："))
+    #expect(await fake.saved.sorted() == ["cuepad.cue", "cuepad.delivery.result", "cuepad.pi.settled", "cuepad.pi.waiting"])
   }
 
   /// 通知服务扩展取回记录、在设备上解密后改写文案：等你确认是"会话名 在等你" + 问题首行，完成是会话名 + "完成了"。
@@ -205,7 +220,7 @@ import Testing
     let manager = AlertSubscriptions(zoneID: zone)
 
     #expect(await manager.ensure(in: fake) == .active)
-    #expect(await fake.saved.sorted() == ["cuepad.changes", "cuepad.cue", "cuepad.pi.settled", "cuepad.pi.waiting"])
+    #expect(await fake.saved.sorted() == ["cuepad.cue", "cuepad.cue.said", "cuepad.delivery.result", "cuepad.pi.settled", "cuepad.pi.waiting"])
 
     await fake.resetCounters()
     #expect(await manager.ensure(in: fake) == .active)
@@ -219,12 +234,13 @@ import Testing
     drifted = CKQuerySubscription(recordType: "piSessionStates", predicate: NSPredicate(format: "notify == %@", "other"), subscriptionID: drifted.subscriptionID, options: [.firesOnRecordCreation])
     let stale = CKQuerySubscription(recordType: "piSessionStates", predicate: NSPredicate(value: true), subscriptionID: "cuepad.pi.old", options: [.firesOnRecordCreation])
     let foreign = CKQuerySubscription(recordType: "other", predicate: NSPredicate(value: true), subscriptionID: "somebody.else", options: [.firesOnRecordCreation])
-    let fake = store(preloaded: [drifted, stale, foreign])
+    let retired = CKDatabaseSubscription(subscriptionID: "cuepad.changes")  // 原来的整区变化订阅
+    let fake = store(preloaded: [drifted, stale, foreign, retired])
 
     #expect(await manager.ensure(in: fake) == .active)
 
-    #expect(await fake.saved.sorted() == ["cuepad.changes", "cuepad.cue", "cuepad.pi.settled", "cuepad.pi.waiting"])
-    #expect(await fake.deleted.sorted() == ["cuepad.pi.old"])
+    #expect(await fake.saved.sorted() == ["cuepad.cue", "cuepad.cue.said", "cuepad.delivery.result", "cuepad.pi.settled", "cuepad.pi.waiting"])
+    #expect(await fake.deleted.sorted() == ["cuepad.changes", "cuepad.pi.old"])
     #expect(await fake.ids.contains("somebody.else"))
   }
 
@@ -244,7 +260,7 @@ import Testing
     #expect(tap("cuepad.cue") == .cue(message: id))
     #expect(tap("cuepad.pi.waiting") == .session(PiAlertTap(kind: .waitingForUser, sessionState: id)))
     #expect(tap("cuepad.pi.settled") == .session(PiAlertTap(kind: .settled, sessionState: id)))
-    #expect(tap("cuepad.changes") == nil)
+    #expect(tap("cuepad.delivery.result") == nil)  // 只叫醒 App 的静默推送不是点开的通知
   }
 
 }
@@ -252,17 +268,19 @@ import Testing
 /// 记录保存与删除了哪些订阅；模拟一个账号的私有数据库。
 actor FakeSubscriptions: SubscriptionStore {
   private var current: [CKSubscription.ID: CKSubscription]
-  private var saveFailure: (any Error)?
+  private let rejecting: String?
   private(set) var saved: [String] = []
   private(set) var deleted: [String] = []
   var ids: Set<String> { Set(current.keys) }
 
-  init(_ preloaded: [CKSubscription]) { current = Dictionary(uniqueKeysWithValues: preloaded.map { ($0.subscriptionID, $0) }) }
+  init(_ preloaded: [CKSubscription], rejecting: String? = nil) {
+    current = Dictionary(uniqueKeysWithValues: preloaded.map { ($0.subscriptionID, $0) })
+    self.rejecting = rejecting
+  }
 
   func subscriptions() -> [CKSubscription.ID: CKSubscription] { current }
-  func failSaves(with error: (any Error)?) { saveFailure = error }
   func save(_ subscription: CKSubscription) throws {
-    if let saveFailure { throw saveFailure }
+    if subscription.subscriptionID == rejecting { throw CKError(.invalidArguments) }
     current[subscription.subscriptionID] = subscription
     saved.append(subscription.subscriptionID)
   }

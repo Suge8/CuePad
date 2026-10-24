@@ -25,7 +25,8 @@ enum RecordMapper {
   /// 服务端要查询的字段（订阅谓词等），schema 里建可查询索引。加密字段服务端看不见，不能出现在这里。
   static let queryableColumns: [Table: Set<String>] = [
     .piSessionStates: [AlertSubscriptions.flagField],
-    .cueMessages: [AlertSubscriptions.flagField],
+    .cueMessages: [AlertSubscriptions.flagField, "author"],
+    .deliveryRequests: ["status"],
   ]
 
   static func table(named recordType: String) -> Table? {
