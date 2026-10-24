@@ -82,10 +82,11 @@ struct SearchPalette: View {
     }
 
     /// 会话范围的数据（会话列表查询，分页；第一页很轻，卡片范围里也读着，切过去不闪空），选中项跟着结果走。
+    /// 收着时不读会话的实时状态：面板常驻，读了的话每个会话每变一次，收着看不见的它也整个重算、重排。
     private var sessionObservation: SessionObservation {
         SessionObservation(
             key: SessionKey(text: query.text, pages: sessionPages, moment: services.speech), data: $sessions,
-            ids: sessionGroups.flatMap { $0.sessions.map(\.sessionID) }, selection: $sessionSelection)
+            ids: active ? sessionGroups.flatMap { $0.sessions.map(\.sessionID) } : [], selection: $sessionSelection)
     }
 
     private var panel: some View {

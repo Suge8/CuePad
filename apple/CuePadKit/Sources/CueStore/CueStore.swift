@@ -1,5 +1,4 @@
 import Foundation
-import Synchronization
 
 /// CuePad 的 SQLite 唯一事实源（系统 SQLite3）。App 与命令行各开一个连接写同一个库，提交后经跨进程通知互相唤醒。
 ///
@@ -7,22 +6,25 @@ import Synchronization
 /// 界面的第一帧要用的值在主线程当场读（`snapshot`），再从它接着订阅（`observe(from:)`）：页面不先排一帧空的、读到再换。
 /// 写：每个写方法是一个事务，提交后向订阅者发布一次变更。
 ///
-/// 跑在自己的串行队列上：不占并发线程池（SQLite 的读写是阻塞的）。主线程当场读走另一个只读连接（`reader`），它就在主线程上：
-/// WAL 下读不等写，也不排在队列里那些读写后面——发消息、同步写入时新出现的行当场读，不让主线程等。
+/// 跑在自己的串行队列上：不占并发线程池（SQLite 的读写是阻塞的）。另有两个只读连接，WAL 下读不等写：
+/// - 主线程当场读（`reader`），就在主线程上，不排在队列里那些读写后面——发消息、同步写入时新出现的行当场读，不让主线程等；
+/// - 订阅的重读（`rereader`），在自己的队列上：每次提交叫醒的整批重读不挡在写入与同步（拉取读令牌、应用、记账）前面。
+///   2026-10-24 复现：两者同在一条队列时，被节流的进程里这条队列 89% 的时间在重读，拉取读令牌排了 26–70 秒。
 public actor CueStore {
   let db: SQLite
   private nonisolated let queue: DispatchSerialQueue?
   private nonisolated let executor: UnownedSerialExecutor
   public nonisolated var unownedExecutor: UnownedSerialExecutor { executor }
-  /// 主线程当场读用的只读连接（`snapshot`）；它自己的是 nil（读它自己）。
+  /// 主线程当场读用的只读连接（`snapshot`）；只读连接自己的是 nil。
   nonisolated let reader: CueStore?
-  /// 提交过几次（本连接的写事务、别的进程的提交）：从快照接着订阅时据此知道其间有没有写入。快照在主线程上取它，所以是原子的。
-  nonisolated let commits = Atomic(0)
+  /// 订阅重读用的只读连接（`observe`），在自己的队列上；只读连接自己的是 nil。
+  nonisolated let rereader: CueStore?
+  /// 订阅者与提交序号：提交在本队列上登记，重读在 `rereader` 上收窄。
+  nonisolated let subscriptions = Subscriptions()
   /// 图片文件的读写（`AttachmentFiles`）；不经过 actor，界面可并发调用。
   public nonisolated let files: AttachmentFiles
   /// 随时间变的读（`expire(at:)` 的到点重读、Mac 在不在线）用的时钟（你的话等没等过时限归 App 的 `SpeechClock`）；测试换成手动推进的。写下的时刻仍盖真实时间（`Date.stamp`）。
   public nonisolated let timing: Timing
-  var subscribers: [UUID: (tables: Set<Table>, scopes: [Table: [RowScope]], signal: AsyncStream<Void>.Continuation)] = [:]
   /// 这次读的结果到什么时候会随时间变（`expire(at:)`）：订阅到点重读。
   var readExpiry: Date?
   /// 订阅的这次读只依赖其中一部分行的表（`narrow`，同一张表可收窄几次）；不在订阅的一次读里为 nil，什么都不记。
@@ -34,9 +36,10 @@ public actor CueStore {
   private(set) var syncDeltas: [(generation: Int, delta: PendingSync?)] = []
   /// 增量只记最近这么多次：没有发送者（命令行、隔离库）时不越攒越多；离线攒得更多的，恢复后全量推导一次。
   private static let syncDeltaLimit = 256
-  private let notificationName: String
+  private let notificationNames: [Table: String]
   private let changeListener: ChangeListener?
-  private var lastDataVersion: Int64
+  /// 每张表上次收到通知时本连接的 `PRAGMA data_version`（`externalChangeNotified`）。
+  private var seenVersions: [Table: Int64]
 
   public init(location: LibraryLocation, timing: Timing = .system) throws {
     let url = location.databaseURL
@@ -62,35 +65,38 @@ public actor CueStore {
       throw CueStoreError.unsupportedSchemaVersion(version)
     }
     let queue = DispatchSerialQueue(label: "CueStore", qos: .userInitiated)
-    let listener = ChangeListener(name: ChangeNotification.name(forDatabase: url))
+    let names = ChangeNotification.names(forDatabase: url)
+    let listener = ChangeListener(names: names)
     self.queue = queue
     executor = queue.asUnownedSerialExecutor()
-    reader = try CueStore(reading: location, timing: timing)
+    reader = try CueStore(reading: location, timing: timing, on: nil)
+    rereader = try CueStore(reading: location, timing: timing, on: DispatchSerialQueue(label: "CueStore.rereads", qos: .userInitiated))
     db = connection
     self.timing = timing
     files = Self.files(of: location)
-    notificationName = ChangeNotification.name(forDatabase: url)
+    notificationNames = names
     changeListener = listener
-    lastDataVersion = try connection.first("PRAGMA data_version") { $0.int(0) } ?? 0
+    let dataVersion = try connection.first("PRAGMA data_version") { $0.int(0) } ?? 0
+    seenVersions = Dictionary(uniqueKeysWithValues: Table.allCases.map { ($0, dataVersion) })
     Task { [weak self, events = listener.events] in
       for await _ in events { await self?.externalChangeNotified() }
     }
   }
 
-  /// 主线程当场读用的连接：只读、跑在主线程上，不收跨进程通知（订阅都在本体上）。
-  private init(reading location: LibraryLocation, timing: Timing) throws {
-    let url = location.databaseURL
-    let connection = try SQLite(path: url.path)
+  /// 只读连接：跑在 `queue` 上，nil 是主线程；不收跨进程通知（订阅都在本体上）。
+  private init(reading location: LibraryLocation, timing: Timing, on queue: DispatchSerialQueue?) throws {
+    let connection = try SQLite(path: location.databaseURL.path)
     try connection.exec("PRAGMA query_only = ON")
-    queue = nil
-    executor = MainActor.sharedUnownedExecutor
+    self.queue = queue
+    executor = queue?.asUnownedSerialExecutor() ?? MainActor.sharedUnownedExecutor
     reader = nil
+    rereader = nil
     db = connection
     self.timing = timing
     files = Self.files(of: location)
-    notificationName = ChangeNotification.name(forDatabase: url)
+    notificationNames = [:]
     changeListener = nil
-    lastDataVersion = 0
+    seenVersions = [:]
   }
 
   private static func files(of location: LibraryLocation) -> AttachmentFiles {
@@ -106,27 +112,38 @@ public actor CueStore {
     return (try? connection.first("PRAGMA user_version") { Int($0.int(0)) }) ?? nil
   }
 
-  /// 收到别的进程的通知：确有别的连接提交过才算外部变更，所有订阅者整体重读（不猜是哪张表）。
+  /// 收到按表的通知：只叫醒读这些表的订阅者。通知里也有本进程自己的（本连接的提交已当场叫醒过）：一张表上次收到通知以来
+  /// 本连接的 `data_version` 没变（别的连接都没提交过）就是自己的，略过。别的进程提交之后才 post，所以它的通知第一次被处理时，
+  /// 这张表记着的版本一定早于那次提交、和此刻的不同，不会漏；那期间别的进程只改了别的表时会多叫醒一次。
+  /// 碰了同步表的另告诉同步订阅者（范围不明，发送者全量推导一次）。
   private func externalChangeNotified() {
-    guard let version = try? db.first("PRAGMA data_version", [], { $0.int(0) }), version != lastDataVersion else { return }
-    lastDataVersion = version
-    commits.add(1, ordering: .releasing)
-    for subscriber in subscribers.values { subscriber.signal.yield() }
-    syncChanged(nil)
+    guard let posted = changeListener?.drain(), !posted.isEmpty else { return }
+    let version = try? db.first("PRAGMA data_version") { $0.int(0) }
+    let changed = posted.filter { version == nil || seenVersions[$0] != version }
+    for table in posted { seenVersions[table] = version }
+    guard !changed.isEmpty else { return }
+    for subscriber in subscriptions.committed(changed) { subscriber.signal.yield() }
+    if !changed.isDisjoint(with: Table.synced) { syncChanged(nil) }
   }
 
   // MARK: 内部：事务与通用行读写
+
+  /// 资料库队列此刻要排多久：投一件空活，到它开始执行（停摆打点，App 的 `holdActivityWhilePolling`）。
+  public nonisolated func queueDelay() async -> Duration {
+    await waited(since: .now)
+  }
+
+  private func waited(since posted: ContinuousClock.Instant) -> Duration { .now - posted }
 
   /// 一个写事务；提交后通知订阅者，并把改动的同步记录交给同步订阅者。
   func write<T>(_ body: () throws -> T) throws -> T {
     let (result, changes) = try db.transaction(body)
     let tables = Set(changes.tables.compactMap(Table.init(rawValue:)))
     if !tables.isEmpty {
-      commits.add(1, ordering: .releasing)
-      ChangeNotification.post(notificationName)
-    }
-    for (_, subscriber) in subscribers where touches(tables, changes, reading: subscriber.tables, scopes: subscriber.scopes) {
-      subscriber.signal.yield()
+      for subscriber in subscriptions.committed(tables) where touches(tables, changes, reading: subscriber.tables, scopes: subscriber.scopes) {
+        subscriber.signal.yield()
+      }
+      for table in tables { ChangeNotification.post(notificationNames[table]!) }
     }
     if !tables.isDisjoint(with: Table.synced) {
       // 只有让记录变成待推送的提交才算（记账、应用远端版本这类不会）；算不出增量时照算

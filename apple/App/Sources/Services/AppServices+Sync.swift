@@ -40,6 +40,7 @@ extension AppServices {
         }
         #if os(macOS)
         startWakeSync()
+        holdActivityWhilePolling()
         #endif
         startPolling()
     }
