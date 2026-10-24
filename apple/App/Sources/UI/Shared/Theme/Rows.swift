@@ -8,7 +8,6 @@ import SwiftUI
 /// 形状只有一条规则：同心圆角矩形（系统的 `ConcentricRectangle`），四角与最近的行容器（`rowContainer`）同心——
 /// 挨着容器圆角的角是容器的圆角减去两者的间距，离容器角远的角取下限。容器只分两种：
 /// - 浮着的行（默认：面板、侧栏、Mac 的列表）：底比行左右各宽出 `bleed`（行里的字仍与本栏的字对齐，底向两边让出一截），下限是 `radius`；
-///   行与行之间隔着空的容器（手机 Cue 页头的面板）给出这段空（`gap`），底上下各伸进去一半，不贴着字；
 /// - 铺满的行（`rowContainer(_:flush: true)`，手机的分组纸，同系统的分组列表）：底就是行的框，下限是直角——中间的行是直角，首尾两行的外角跟着纸。
 ///   行要贴到纸边：纸的首尾要多留白时放进首尾两行里，不给纸加内边距（不然底与纸边之间留一道缝，圆角也不同心）。
 /// 底多大，能点的就多大。
@@ -65,10 +64,9 @@ extension View {
         overlay(alignment: alignment) { HoverReveal(shows: shows, fills: alignment.vertical == .center, actions: actions()) }
     }
 
-    /// 一组行所在的容器：行底与它的形状同心。`flush`：行铺满容器的宽（手机的分组纸），否则行浮在容器里；
-    /// `gap`：浮着的行之间隔着的空，底上下各伸进一半。
-    func rowContainer(_ shape: some RoundedRectangularShape, flush: Bool = false, gap: CGFloat = 0) -> some View {
-        containerShape(shape).environment(\.rowFit, RowFit(flush: flush, gap: gap))
+    /// 一组行所在的容器：行底与它的形状同心。`flush`：行铺满容器的宽（手机的分组纸），否则行浮在容器里。
+    func rowContainer(_ shape: some RoundedRectangularShape, flush: Bool = false) -> some View {
+        containerShape(shape).environment(\.rowFit, RowFit(flush: flush))
     }
 }
 
@@ -113,13 +111,12 @@ private struct HoverReveal<Actions: View>: View {
 
 private struct RowFit {
     var flush = false
-    var gap: CGFloat = 0
 
     /// 底比行的框向外伸出多少（取负就是收回来）。
     func bleed(_ sign: CGFloat = 1) -> EdgeInsets {
         guard !flush else { return EdgeInsets() }
-        let side = RowMetrics.bleed * sign, edge = gap / 2 * sign
-        return EdgeInsets(top: edge, leading: side, bottom: edge, trailing: side)
+        let side = RowMetrics.bleed * sign
+        return EdgeInsets(top: 0, leading: side, bottom: 0, trailing: side)
     }
 }
 
