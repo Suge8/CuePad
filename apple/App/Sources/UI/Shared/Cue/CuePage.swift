@@ -25,9 +25,8 @@ struct CuePage: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var sizeClass
-    /// 底部那一排换形时，输入框与 Cue 钮交叉（`DockHandoff`）。
+    /// 底部那一排换形时，输入框与 Cue 钮交叉（`DockHandoff`）；输入框有焦点时不给"⋯"让位置，焦点进出写在它上面（`PagerMotion.composing`）。
     @Environment(\.dockMotion) private var dockMotion
-    @Environment(\.dockComposing) private var composing
     #endif
     @State private var thread: CueThread?
     @State private var follow = ChatFollow()
@@ -117,7 +116,7 @@ struct CuePage: View {
     /// 窄屏底部那一排：左边给"⋯"让出位置（输入框有焦点时不让），右边输入框；换形时与 Cue 钮交叉（`DockHandoff`）。
     private var dockRow: some View {
         HStack(alignment: .bottom, spacing: 0) {
-            if composing?.wrappedValue != true {
+            if dockMotion?.composing != true {
                 Color.clear.frame(width: Dock.slot + Dock.gap, height: Dock.slot)
             }
             composer.dockedComposer(dockMotion)
@@ -128,7 +127,8 @@ struct CuePage: View {
     #if os(iOS)
     private var composer: some View {
         CueComposer(style: .page, takesFocusRequests: !inPanel, sent: { follow.sent() }) { focused in
-            withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { composing?.wrappedValue = focused }
+            // 同底部那一排让开"⋯"的那条弹簧（`DockBar`）：输入框长宽与"⋯"淡出是同一下
+            withAnimation(Motion.spatial(Motion.dock, reduceMotion: reduceMotion)) { dockMotion?.composing = focused }
         }
     }
     #endif

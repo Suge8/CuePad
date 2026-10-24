@@ -4,7 +4,7 @@ import SwiftUI
 /// 底部那一排：左边一块玻璃，右边 Cue 钮，原地换形，不换身份。样子是连续的，跟着根上那一条（`PagerMotion`）走，拖到哪长到哪：
 /// - 项目、进展两页上、Cue 页点开"⋯"时：左边两格胶囊，右边 Cue 钮（`DockCue`）。选中的滴（`DockDrop`）跟着条在两格间滑，透过它的那一格着靛青。
 /// - Cue 页：左边收成一颗"⋯"，Cue 钮长成输入框那么宽、那么高，在换形里与页里真的输入框交叉（`DockHandoff`）。从进展页滑向 Cue 页时跟着手指一点点长过去。
-/// - Cue 页输入框有焦点（`composing`）：都让开，输入框占满整排。
+/// - Cue 页输入框有焦点（`PagerMotion.composing`）：都让开，输入框占满整排。
 /// - 推入的页上（`PagerMotion.covered`）总是两格加 Cue 钮，点哪一格（或 Cue 钮）都回到那一页的根上；会话页与卡片纸页上整排让开（`Dock.stays`）。
 /// 与屏幕圆角同心（同系统悬浮标签栏），只是玻璃：栏后面不垫渐变或模糊。字号固定、不随动态字体放大，辅助字号下长按弹出大内容查看器
 /// （同系统标签栏：栏高固定，字放大只会挤掉图标）。"项目"那一格在同步到不了 Mac 时带一个点（`AppServices.macAlert`）。
@@ -14,7 +14,6 @@ struct DockBar: View {
     /// 当前去处（`Workspace.root`）：读屏的选中、点 Cue 钮是去 Cue 页还是收起"⋯"。
     let route: Route
     let motion: PagerMotion
-    let composing: Bool
     let width: CGFloat
     /// 最上面那一页留着这一排（`Dock.stays`）。
     let stays: Bool
@@ -25,11 +24,11 @@ struct DockBar: View {
 
     var body: some View {
         let shown = stays ? (forwardStays ? 1 : 1 - motion.pushed) : 0
-        DockForm(places: motion.places, route: route, motion: motion, composing: composing, width: width, openPlaces: openPlaces)
+        DockForm(places: motion.places, route: route, motion: motion, composing: motion.composing, width: width, openPlaces: openPlaces)
             .opacity(shown)
             .allowsHitTesting(stays)
             .accessibilityHidden(!stays)
-            .animation(Motion.dock, value: composing)
+            .animation(Motion.dock, value: motion.composing)
             .animation(Motion.dock, value: stays)
             .transaction { if reduceMotion { $0.animation = nil } }
     }
