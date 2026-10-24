@@ -36,7 +36,7 @@ final class CueWatch {
     private(set) var hostName: String?
     /// 说它在哪台运行的那一格（Cue 面板的齿轮旁、手机设置里 Cue 那一行）：启用了是那台的名字，没启用写"没启用"。
     var home: String? { canHear ? hostName : "没启用" }
-    /// 它此刻的上下文（`CueState.context`，值班那台写、随状态同步）：上下文用量（`CueContextCard`）只读它。
+    /// 它此刻的上下文（`CueState.context`，值班那台写、随状态同步）：上下文那一行（`CueContextLine`）只读它。
     private(set) var context: CueContext?
     /// 在跑的这一轮的经过那一行（`CueState.round`）。
     private(set) var round: UUID?

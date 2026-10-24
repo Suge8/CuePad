@@ -47,9 +47,8 @@ enum DebugHooks {
         var alertStatus: PiAlertStatus?
         /// 搜索页一打开在哪个范围（`-CuePadSearchScope sessions`）。
         var searchScope = SearchScreen.Scope.cards
-        /// Cue 页头一出现就展开成面板（`-CuePadCuePanel YES`；`end` 再滚到面板底，看记忆）。
+        /// Cue 页头一出现就展开成面板（`-CuePadCuePanel YES`）。
         var cuePanelOpen = false
-        var cuePanelEnd = false
         /// 不弹演示会话的前台横幅（`-CuePadQuiet YES`）。
         var quietAlerts = false
         #endif

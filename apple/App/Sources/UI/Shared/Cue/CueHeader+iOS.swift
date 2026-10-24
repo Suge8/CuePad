@@ -1,29 +1,32 @@
 #if os(iOS)
 import SwiftUI
 
-/// Cue 页页顶那一排中间的名牌（手机、iPad 与 iPad 右侧的 Cue 面板同一个，`floatingHeader` 摆它）：一块实底玻璃，铺满两侧页边之间、定宽——
-/// 头像、名字与下面那一行（Cue 此刻：珠子接一句，`CueStatusLine`），右端展开的箭头。Cue 页这一排只有它：这一页的焦点就是 Cue，不放搜索钮；
-/// 不随字长短变宽：那一行几秒换一句，跟着变宽整颗名牌就一直在动。
-/// 点它从顶部长出面板（`GrowPanel`，同一块玻璃长高）：手机上 Cue 的总面板（`CueNowPanel`：大脑、上下文、等你、在做、
-/// 全部会话、记忆、设置），手机上 Cue 的这些只有这一个入口（额度在进展页顶栏的额度环里）。
+/// Cue 页页顶那一排中间的名牌（手机、iPad 与 iPad 右侧的 Cue 面板同一个，`floatingHeader` 摆它）：一块实底玻璃，定宽定高、居中——
+/// 上一行头像接名字，下一行 Cue 此刻（珠子接一句，`CueStatusLine`），两行各自居中。Cue 页这一排只有它：这一页的焦点就是 Cue，不放搜索钮；
+/// 不随字长短变宽：那一行几秒换一句，跟着变宽整颗名牌就一直在动。比圆钮高一截（两行字要的高），对话按它让出（`floatingHeader` 的 `height`）。
+/// 点它从顶部长出面板（`GrowPanel`，同一块玻璃长大）：名牌原地长成名片（头像放大到页头那一档、名字与此刻排在它下面），下面是 Cue 的总面板
+/// （`CueNowPanel`），手机上 Cue 的这些只有这一个入口（额度在进展页顶栏的额度环里）。头像只有一个、跟着长大（`PlateLayout`），接力的落点挂在它上面。
 /// 与 Mac 侧栏的 Cue 名片、菜单栏面板是同一套件、同一份数据（`CueWatch`、`Workspace.liveWork`）。
-/// 点名牌、点面板外、在名牌上往上划都收起；点面板里的一项先收起再去那里。开合的动效在 `GrowPanel`，箭头跟着转半圈。
+/// 点名牌、点面板外、在名牌上往上划都收起；点面板里的一项先收起再去那里。
+/// 开面板先收起键盘：面板定高，键盘弹着时放不下；打开它就是从打字转去看 Cue，草稿留在输入框里，收起面板不再弹回（同推入别的页时交出焦点）。
 /// 名牌浮在对话上，展开不改对话的布局，长大的只有这一块；展开与否只在这里（不进 `CueWatch`：侧栏也读它）。
+/// 放在 iPad 的系统导航栏里时（`HeaderHost.navigationBar`）名牌不长，面板从它弹出（`GrowPanel`），名片的那一头不出现。
 /// 打开时只读大脑那一行（设置与那台 Mac 的 Agent，`CueConfigControls.read`，当场读）；其余都是已经在订阅的。
 struct CueHeader: View {
-    @Environment(Workspace.self) private var workspace
-    @Environment(\.palette) private var palette
+    @Environment(\.headerHost) private var host
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var expanded = DebugHooks.preset.cuePanelOpen
 
     /// 面板里行与行之间的空（会话一列的行距），行的底上下各伸进一半。
     static let rowGap: CGFloat = 12
-    private static let height = FloatingHeaderLayout.height
+    /// 名牌的高：两行字（名字、此刻）上下各留一截。
+    static let height: CGFloat = 56
+    /// 名牌的宽：比两侧页边之间窄，名字与此刻居中读。
+    static let width: CGFloat = 212
 
     var body: some View {
         GrowPanel(open: $expanded, radius: Self.height / 2, rowGap: Self.rowGap) {
-            // 往上划收起只认名牌那一条：面板里放不下时要往上划着滚
-            Button(action: toggle) { plate }
+            Button(action: toggle) { CuePlate(card: expanded && host != .navigationBar) }
                 .buttonStyle(.plain)
                 .simultaneousGesture(DragGesture(minimumDistance: 16).onEnded { drag in
                     if expanded, drag.translation.height < -24 { toggle() }
@@ -36,175 +39,110 @@ struct CueHeader: View {
         .debugExposesCuePanel(toggle)
     }
 
-    private var plate: some View {
+    private func toggle() {
+        if !expanded { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }
+        $expanded.grow(reduceMotion: reduceMotion)
+    }
+}
+
+/// 名牌本身：收着是定宽定高的两行，`card` 时长成名片（铺满面板的宽、头像放大）。字号两态不变，长大的只有头像。
+private struct CuePlate: View {
+    let card: Bool
+    @Environment(Workspace.self) private var workspace
+    @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// 收着时头像缩到页头那一档的一半：与名字那一行同高。
+    private static let small: CGFloat = 0.5
+
+    var body: some View {
         let cue = workspace.cue
-        return HStack(spacing: 8) {
-            CueAvatar(mood: cue.mood(composing: !cue.draft.isEmpty(accepting: .images)), presence: cue.presence, size: .row)
+        let side = CueAvatar.Size.header.box * (card ? 1 : Self.small)
+        PlateLayout(card: card) {
+            CueAvatar(mood: cue.mood(composing: !cue.draft.isEmpty(accepting: .images)), presence: cue.presence, size: .header)
+                .scaleEffect(card ? 1 : Self.small)
+                .frame(width: side, height: side)
                 .relaySpot(cue: .header)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(cue.name).font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(1)
-                CueStatusLine(tally: true, font: .caption).lineLimit(1).truncationMode(.tail)
-            }
-            // 名牌是定高的一条：字号跟着动态字体放大到这一档为止，再大第二行就被裁掉
-            .dynamicTypeSize(...DynamicTypeSize.xxLarge)
-            Spacer(minLength: 8)
-            Image(.expand).font(.footnote.weight(.semibold)).foregroundStyle(palette.ink3)
-                .rotationEffect(.degrees(expanded ? 180 : 0))
-                .accessibilityHidden(true)
+            name(cue.name, shown: !card)
+            name(cue.name, shown: card)
+            CueStatusLine(tally: true, font: .caption).lineLimit(1).truncationMode(.tail)
         }
-        // 头像与名牌的左端同心
-        .padding(.leading, (Self.height - CueAvatar.Size.row.box) / 2)
-        .padding(.trailing, 16)
-        .frame(height: Self.height)
+        .padding(.horizontal, 16)
+        .padding(.top, card ? 18 : 0).padding(.bottom, card ? 2 : 0)
+        .frame(width: card ? nil : CueHeader.width, height: card ? nil : CueHeader.height)
+        .frame(maxWidth: card ? .infinity : nil)
+        // 收着是定高的两行：字号跟着动态字体放大到这一档为止，再大第二行就被裁掉
+        .dynamicTypeSize(...DynamicTypeSize.xxLarge)
         .contentShape(.rect)
         .animation(HandOff.quick, value: cue.presence)
         .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: cue.now)
         .accessibilityElement(children: .combine)
     }
 
-    private func toggle() { $expanded.grow(reduceMotion: reduceMotion) }
+    /// 名字两处各一份：头像右边（收着）与头像下面（名片）。两处之间要从长大的头像底下穿过去，所以不挪，一处淡出、一处淡入（同 `handOff`）。
+    private func name(_ name: String, shown: Bool) -> some View {
+        Text(name).font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(1)
+            // 只有透明度走这条曲线，位置跟着头像同一条弹簧
+            .animation(shown ? HandOff.quick.delay(HandOff.gap) : .easeOut(duration: HandOff.gap)) { $0.opacity(shown ? 1 : 0) }
+            .accessibilityHidden(!shown)
+    }
 }
 
-/// 页头展开后的面板，手机上 Cue 的总面板（Mac 上这些分在 Cue 页输入框、"运行情况"、侧栏与设置里）：
-/// 第一行左边是它的大脑（Agent、模型与思考强度，`CueConfigControls`；还没选在哪台运行时没有），右边是它在哪台运行与齿轮，点它推入设置
-/// （`CueSettingsScreen`：在哪台 Mac 上运行、不用先问的事、工具步骤与名字；放在第一行是因为下面的会话一多，面板就要滚，末尾的入口看不见）；
-/// 启用了接着是上下文用量（`CueContextCard`，与 Mac 同一个），然后是等你（卡片就在页面下方，点它收起面板）、在做（前几个，
-/// 同 Mac 菜单栏面板；区头写一共几个会话、几个子代理在跑，多出的在列末就地展开）、全部会话（换到进展页的会话段）与记忆。区头随面板一起滚，不钉住：钉住就要让滚过的行在它下面淡去，那是一层遮罩。
-/// 放不下时面板里面滚。
-private struct CueNowPanel: View {
-    let close: () -> Void
-    @Environment(Workspace.self) private var workspace
-    @Environment(AppServices.self) private var services
-    @Environment(\.palette) private var palette
+/// 名牌里头像、名字、此刻的摆法，两态是同一组视图：头像只有一个，开合时连续地长大挪位；名字两处各一份（头像右边、头像下面，`CuePlate.name`）。
+/// 收着时头像接名字一行、此刻一行；名片时头像在上，名字、此刻依次在下。每一行都居中，整组在给的高里竖直居中。
+/// 子视图依次是头像、头像右边的名字、头像下面的名字、此刻。
+private struct PlateLayout: Layout {
+    let card: Bool
 
-    /// 面板只是一瞥：在做的会话最多列这么多，全部在 进展页的会话段里。
-    private static let limit = 5
-    /// 换一块新的滚动区（`body` 里的注释）。
-    @State private var scroll = 0
+    private static let nameGap: CGFloat = 6
+    private static let lineGap: CGFloat = 2
+    private static let cardGap: CGFloat = 8
 
-    var body: some View {
-        HugHeight {
-            ScrollView { content }.scrollBounceBehavior(.basedOnSize)
-                .defaultScrollAnchor(DebugHooks.preset.cuePanelEnd ? .bottom : nil)
-                .id(scroll)
-                // 这块滚动区不设内容边距，左、上有边距就是对话那块的：SwiftUI 在同一次更新里给对话的滚动区上内容边距时，
-                // 会把同一份写到这块的 UIScrollView 上（实测四边各 16，自己写的 `contentMargins` 也被盖掉），整块内容右下移 16、右边被裁，
-                // 之后不再改回。换一块新的，它按自己的环境排。底边不看：键盘盖住的那截是系统给的安全区。
-                .onScrollGeometryChange(for: Bool.self) { $0.contentInsets.leading != 0 || $0.contentInsets.top != 0 } action: { _, foreign in
-                    if foreign { scroll += 1 }
-                }
-        }
+    private struct Sizes {
+        var avatar: CGSize, rowName: CGSize, cardName: CGSize, line: CGSize
+        var row: CGFloat { max(avatar.height, rowName.height) }
     }
 
-    private var content: some View {
-        let cue = workspace.cue
-        return VStack(alignment: .leading, spacing: 16) {
-            // 胶囊先排（Agent、模型、强度不被挤成省略号；窄处思考强度只写档名），右端拿剩下的宽：放得下写在哪台运行，放不下只留齿轮
-            HStack(spacing: 8) {
-                if cue.hostID != nil { CueConfigControls(fail: workspace.fail).layoutPriority(1) }
-                settings(cue).frame(maxWidth: .infinity, alignment: .trailing)
-            }
-            if cue.canHear { CueContextCard(context: cue.context) }
-            if cue.waiting > 0 { waiting(cue.waiting) }
-            sessions
-            link("记忆", icon: .memory) {
-                close()
-                cue.showsMemory = true
-            }
-        }
-        .padding(.horizontal, 16).padding(.top, 2).padding(.bottom, 16)
+    private func sizes(_ width: CGFloat?, _ subviews: Subviews) -> Sizes {
+        let avatar = subviews[0].sizeThatFits(.unspecified)
+        let wide = ProposedViewSize(width: width, height: nil)
+        return Sizes(
+            avatar: avatar,
+            rowName: subviews[1].sizeThatFits(ProposedViewSize(width: width.map { max($0 - avatar.width - Self.nameGap, 0) }, height: nil)),
+            cardName: subviews[2].sizeThatFits(wide),
+            line: subviews[3].sizeThatFits(wide))
     }
 
-    /// 大脑那一行的右端：它在哪台运行与齿轮，窄屏放不下名字时只留齿轮（名字在设置页的顶栏里看得到），点它推入设置。
-    private func settings(_ cue: CueWatch) -> some View {
-        let home = cue.home
-        return Button {
-            close()
-            workspace.push(.cueSettings)
-        } label: {
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 6) {
-                    if let home { Text(home).lineLimit(1) }
-                    Image(.settings)
-                }
-                Image(.settings)
-            }
-            .font(.subheadline.weight(.medium)).foregroundStyle(palette.ink2)
-            // 贴右对齐：与下面各行右端的字落在同一条竖线上
-            .frame(minWidth: 44, minHeight: 44, alignment: .trailing).contentShape(.rect)
-        }
-        .buttonStyle(PressStyle(.button))
-        .accessibilityLabel("\(cue.name) 的设置")
-        .accessibilityValue(home ?? "")
+    private func height(_ s: Sizes) -> CGFloat {
+        card ? s.avatar.height + Self.cardGap + s.cardName.height + Self.lineGap + s.line.height : s.row + Self.lineGap + s.line.height
     }
 
-    private func waiting(_ count: Int) -> some View {
-        Button(action: close) {
-            HStack(spacing: 8) {
-                Image(.waiting).foregroundStyle(palette.waiting).accessibilityHidden(true)
-                WaitingCount(count: count)
-                Spacer(minLength: 8)
-                Image(.expand).font(.footnote.weight(.semibold)).foregroundStyle(palette.ink3).accessibilityHidden(true)
-            }
-            .font(.subheadline)
-            .contentShape(.rect)
-        }
-        .buttonStyle(.row)
-        .accessibilityHint("收起面板，看下面等你的事")
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let s = sizes(proposal.width, subviews)
+        let natural = card ? max(s.avatar.width, s.cardName.width, s.line.width) : max(s.avatar.width + Self.nameGap + s.rowName.width, s.line.width)
+        return CGSize(width: proposal.width ?? natural, height: height(s))
     }
 
-    private var sessions: some View {
-        let live = services.liveSessions, work = workspace.liveWork
-        return VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text("在做").font(.footnote.weight(.semibold)).foregroundStyle(palette.ink3).accessibilityAddTraits(.isHeader)
-                Spacer(minLength: 8)
-                if !work.rows.isEmpty { LiveWorkCount(work: work, font: .footnote) }
-            }
-            .accessibilityElement(children: .combine)
-            sessionRows(work, live: live)
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let s = sizes(bounds.width, subviews)
+        let top = bounds.midY - height(s) / 2
+        func place(_ index: Int, _ x: CGFloat, _ y: CGFloat, _ anchor: UnitPoint, _ size: CGSize) {
+            subviews[index].place(at: CGPoint(x: x, y: y), anchor: anchor, proposal: ProposedViewSize(size))
         }
-    }
-
-    @ViewBuilder private func sessionRows(_ work: LiveWork, live: LiveSessions) -> some View {
-        if work.rows.isEmpty {
-            Text("没有在跑的会话").font(.subheadline).foregroundStyle(palette.ink3)
+        if card {
+            let below = top + s.avatar.height + Self.cardGap
+            place(0, bounds.midX, top, .top, s.avatar)
+            place(1, bounds.midX + s.avatar.width / 2 + Self.nameGap, top + s.avatar.height / 2, .leading, s.rowName)
+            place(2, bounds.midX, below, .top, s.cardName)
+            place(3, bounds.midX, below + s.cardName.height + Self.lineGap, .top, s.line)
         } else {
-            LiveSessionList(sessions: work.rows, limit: Self.limit, spacing: CueHeader.rowGap) { session in
-                Button {
-                    close()
-                    workspace.openSession(session.id, sessionID: session.sessionID)
-                } label: {
-                    PiSessionRow(
-                        session: session, project: workspace.catalog?.project(session.projectID), delivery: live.deliveries[session.sessionID],
-                        rename: live.renames[session.sessionID], undelivered: live.undelivered[session.sessionID] ?? 0
-                    ).equatable()
-                        .contentShape(.rect)
-                }
-                .buttonStyle(.row)
-            }
+            let x = bounds.midX - (s.avatar.width + Self.nameGap + s.rowName.width) / 2
+            place(0, x, top + s.row / 2, .leading, s.avatar)
+            place(1, x + s.avatar.width + Self.nameGap, top + s.row / 2, .leading, s.rowName)
+            // 头像下面那份名字贴着小头像的下沿，开合时跟着头像走
+            place(2, x + s.avatar.width / 2, top + (s.row + s.avatar.height) / 2, .top, s.cardName)
+            place(3, bounds.midX, top + s.row + Self.lineGap, .top, s.line)
         }
-        link("全部会话", count: live.total) {
-            close()
-            workspace.showSessions()
-        }
-    }
-
-    private func link(_ title: String, icon: Icon? = nil, count: Int? = nil, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 8) {
-                if let icon { Image(icon).foregroundStyle(palette.ink2).frame(width: 20).accessibilityHidden(true) }
-                Text(title).foregroundStyle(palette.ink)
-                if let count, count > 0 { Text("\(count)").monospacedDigit().foregroundStyle(palette.ink3) }
-                Spacer(minLength: 8)
-                Image(.forward).font(.footnote.weight(.semibold)).foregroundStyle(palette.ink3).accessibilityHidden(true)
-            }
-            .font(.subheadline.weight(.medium))
-            .frame(minHeight: 32)
-            .contentShape(.rect)
-        }
-        .buttonStyle(.row)
     }
 }
-
 #endif
