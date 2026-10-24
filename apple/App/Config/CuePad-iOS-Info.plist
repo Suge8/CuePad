@@ -4,6 +4,8 @@
 <dict>
 	<key>CuePadAppID</key>
 	<string>$(CUEPAD_APP_ID)</string>
+	<key>CuePadRelayHost</key>
+	<string>$(CUEPAD_RELAY_HOST)</string>
 	<key>UILaunchScreen</key>
 	<dict>
 		<key>UIColorName</key>

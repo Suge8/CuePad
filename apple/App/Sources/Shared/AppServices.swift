@@ -48,6 +48,8 @@ final class AppServices {
 
     /// iCloud 同步；没有时 `syncStatus` 是写明原因的 `.unavailable`。状态、问题与冲突见下，动作见 `AppServices+Sync`。
     @ObservationIgnored let sync: (any SyncControlling)?
+    /// 门铃（实时层，见 `AppServices+Relay`）；没有中转或不连 iCloud 时没有。
+    var relay: Relay?
     private(set) var syncStatus: SyncStatus
     private(set) var syncIssues: [SyncIssue] = []
     /// 同步在一页页地拉积压（`SyncState.catchingUp`）；界面只经 `isCatchingUp` 读。

@@ -12,6 +12,10 @@ CODE_SIGN_STYLE = Automatic
 CODE_SIGN_IDENTITY = -
 DEVELOPMENT_TEAM =
 
+// 门铃中转的主机（可带端口，连 wss://<它>/v1/…，见 relay/README.md）：经 Info.plist 的 CuePadRelayHost 给 App 读。
+// 空着就不连中转，同步照常按节奏拉；自己编译的可以填自己架的中转。
+CUEPAD_RELAY_HOST =
+
 // 推送环境（只有 iOS 要推送，Mac 不收推送）：Debug 用 development，Release（描述文件是 production）在工程里覆盖为 production。
 APS_ENVIRONMENT = development
 

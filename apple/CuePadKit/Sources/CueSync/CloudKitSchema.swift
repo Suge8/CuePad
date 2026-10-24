@@ -64,6 +64,7 @@ enum CloudKitSchema {
       types.append(recordType(table.rawValue, fields))
     }
     types.append(recordType(PeerFloor.recordType, [("\"___recordID\"", "REFERENCE QUERYABLE"), (PeerFloor.field, "INT64")]))
+    types.append(recordType(RelaySecretRecord.recordType, [("\"___recordID\"", "REFERENCE QUERYABLE"), (RelaySecretRecord.field, "ENCRYPTED BYTES")]))
     for retired in retiredTypes {
       types.append(recordType(retired.name, [("\"___recordID\"", "REFERENCE QUERYABLE")] + retired.fields))
     }
@@ -77,4 +78,12 @@ enum CloudKitSchema {
     lines.append(#"        GRANT CREATE TO "_icloud""#)
     return "    RECORD TYPE \(name) (\n" + lines.joined(separator: "\n") + "\n    );"
   }
+}
+
+/// 门铃的密钥（App 的 `RelayKey` 读写）：私有库里单独一个区的一条记录，字段加密。不放进同步区：已发出的版本拉到会当未知类型报给你。
+public enum RelaySecretRecord {
+  public static let zoneName = "Relay"
+  public static let recordType = "relaySecrets"
+  public static let recordName = "relaySecret"
+  public static let field = "secret"
 }

@@ -69,7 +69,7 @@ extension AppServices {
         await sync?.pull()
     }
 
-    /// 此刻该按什么节奏拉（nil：不拉）。"是否在等"只在这里定义，节奏见 `SyncPoller.Cadence.mac`、`.phone`：
+    /// 此刻该按什么节奏拉（nil：不拉）。"是否在等"只在这里定义，节奏见 `SyncPoller.Cadence.mac`、`.phone`，门铃通着（`doorbellLive`）时降为兜底：
     /// - Mac：桥上有连着的 Pi 会话（手机可能随时发来请求；以桥为准，资料库里的状态记录可能是没来得及标为结束的旧会话），
     ///   或有还没结果的投送请求（发给本机的，或本机发给别的 Mac 上会话的），或 Cue 在这台值班（你在手机上对它说的话、
     ///   "等你"的回答、别的 Mac 接管只经这一拉才到，会话都关着时它也在等）；Mac 不收推送（docs/sync.md「Agent 与 Cue 的通知」）；
@@ -78,10 +78,10 @@ extension AppServices {
     var pollingCadence: SyncPoller.Cadence? {
         #if os(macOS)
         DebugHooks.pollsLikePhone
-            ? .phone(hasOpenDeliveries: hasOpenDeliveries, isWatching: true)
-            : .mac(waiting: hasOpenDeliveries || !pi.slots.isEmpty || cue.onDuty)
+            ? .phone(hasOpenDeliveries: hasOpenDeliveries, isWatching: true, doorbell: doorbellLive)
+            : .mac(waiting: hasOpenDeliveries || !pi.slots.isEmpty || cue.onDuty, doorbell: doorbellLive)
         #else
-        .phone(hasOpenDeliveries: hasOpenDeliveries, isWatching: piViewers > 0 || cueViewers > 0)
+        .phone(hasOpenDeliveries: hasOpenDeliveries, isWatching: piViewers > 0 || cueViewers > 0, doorbell: doorbellLive)
         #endif
     }
 
