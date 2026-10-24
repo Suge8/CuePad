@@ -24,7 +24,7 @@ struct DockBar: View {
 
     var body: some View {
         let shown = stays ? (forwardStays ? 1 : 1 - motion.pushed) : 0
-        DockForm(places: motion.places, route: route, motion: motion, composing: motion.composing, width: width, openPlaces: openPlaces)
+        DockForm(places: motion.places, route: route, motion: motion, width: width, openPlaces: openPlaces)
             .opacity(shown)
             .allowsHitTesting(stays)
             .accessibilityHidden(!stays)
@@ -39,7 +39,6 @@ private struct DockForm: View, Animatable {
     var places: CGFloat
     let route: Route
     let motion: PagerMotion
-    let composing: Bool
     let width: CGFloat
     let openPlaces: (Bool) -> Void
 
@@ -49,7 +48,7 @@ private struct DockForm: View, Animatable {
     }
 
     var body: some View {
-        let shown = places > 0.5
+        let shown = places > 0.5, composing = motion.composing
         let left = Dock.slot + (Dock.capsule(in: width) - Dock.slot) * places
         let height = Dock.slot + (Dock.height - Dock.slot) * places
         ZStack(alignment: .bottomLeading) {

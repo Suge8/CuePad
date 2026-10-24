@@ -87,7 +87,7 @@ struct RealBrainTests {
             return replies
         }
         var failures: [String] { events.compactMap { if case .failed(let text) = $0 { text } else { nil } } }
-        var contexts: [(used: Int, window: Int?)] { events.compactMap { if case .context(let used, let window) = $0 { (used, window) } else { nil } } }
+        var contexts: [Int] { events.compactMap { if case .context(let used) = $0 { used } else { nil } } }
         var echoed: [String] { ((try? String(contentsOf: echoLog, encoding: .utf8)) ?? "").split(separator: "\n").map(String.init) }
     }
 
@@ -110,8 +110,7 @@ struct RealBrainTests {
         let turn = rig.events.filter { if case .speaking = $0 { false } else { true } }
         #expect(turn.first == .turnStarted && turn.last == .turnFinished, "\(rig.events)")
         #expect(rig.replies.count == 1 && rig.replies[0].contains(rig.codename))
-        let context = try #require(rig.contexts.last)
-        #expect(context.used > 0 && (context.window ?? 0) > context.used)
+        #expect(try #require(rig.contexts.last) > 0)
         }
     }
 
@@ -148,14 +147,13 @@ struct RealBrainTests {
         }
     }
 
-    /// 就地换模型与强度：同一个进程接着说，前面的话还记得，下一轮用的是新模型（Pi 的上下文窗口跟着变）；
+    /// 就地换模型与强度：同一个进程接着说，前面的话还记得，下一轮用的是新模型；
     /// 运行时不认的模型抛错，在用的不变。
     @Test(arguments: runtimes) func configureSwitchesModelInPlace(_ runtime: AgentKind) async throws {
         AgentTape.use(runtime)
         try await withRig(runtime) { rig in
         try await rig.brain.send("Remember the word PAPAYA. Reply with only OK.")
         try await rig.finished()
-        let before = try #require(rig.contexts.last?.window)
 
         let unknown = runtime == .pi ? "openai-codex/no-such-model" : "no-such-model"
         await #expect(throws: (any Error).self) { try await rig.brain.configure(model: unknown, effort: nil) }
@@ -165,7 +163,6 @@ struct RealBrainTests {
 
         #expect(rig.failures == [], "\(rig.events)")
         #expect(rig.replies.last?.uppercased().contains("PAPAYA") == true, "\(rig.replies)")
-        if runtime == .pi { #expect(rig.contexts.last?.window != before, "\(rig.contexts)") }
         }
     }
 

@@ -30,11 +30,11 @@ public struct CueState: Equatable, Sendable {
   static let recordID = DeterministicID.uuid("cue-state")
 }
 
-/// Cue 此刻的上下文（一个会话一份）：用了多少 token、模型的窗口（大脑没报为 nil）、这个会话几点起。用到 `renewAt` 后，
-/// 下一次醒来先开新会话（`CueKeeper`）。随 `CueState` 同步，各端的上下文用量只读它。
+/// Cue 此刻的上下文（一个会话一份）：用了多少 token。用到 `renewAt` 后，下一次醒来先开新会话（`CueKeeper`）。
+/// 随 `CueState` 同步，各端的上下文那一行只读它。旧版本存过的模型窗口（`window`）读时略过。
 public struct CueContext: StoredJSON, Equatable, Sendable {
   public var used: Int
-  public var window: Int?
+  /// 这个会话几点起：界面不读，照写，旧版本解码要它。
   public var since: Date
 
   /// 换新线：10 万 token。按真实时间线每次醒来约涨 8k，10 万与 6 万每天的花费只差约 1%，换新却从每天约 13 次降到约 8 次：
@@ -47,9 +47,8 @@ public struct CueContext: StoredJSON, Equatable, Sendable {
     count >= 1000 ? "\((Double(count) / 1000).formatted(.number.precision(.fractionLength(0...1))))k" : "\(count)"
   }
 
-  public init(used: Int, window: Int?, since: Date) {
+  public init(used: Int, since: Date) {
     self.used = used
-    self.window = window
     self.since = since
   }
 }

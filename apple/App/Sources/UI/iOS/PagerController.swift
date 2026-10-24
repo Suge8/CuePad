@@ -16,7 +16,6 @@ final class PagerController: UIViewController {
         let environment: EnvironmentValues
         let root: Route
         let forward: UIView?
-        let composing: Bool
         let reduceMotion: Bool
     }
 
@@ -35,7 +34,7 @@ final class PagerController: UIViewController {
     /// 第几次动：弹簧做完时已经开始了新的一次，就不收尾。
     private var turn = 0
     /// 前进松手后推入真的页，它画上屏之前快照还留着。
-    private var handing = false
+    private var handing = false { didSet { setNeedsUpdateProperties() } }
     private var covered = false
     private var idle: Task<Void, Never>?
     private let pan = UIPanGestureRecognizer()
@@ -72,10 +71,16 @@ final class PagerController: UIViewController {
 
     // MARK: 输入
 
+    /// Cue 页的输入框有焦点时不接横拖（选字、挪光标都是横着拖），前进松手到真的页画上屏之间也不接。直接读 `PagerMotion.composing`（UIKit 自动跟踪这里读到的 Observable），
+    /// 不经 SwiftUI 的输入转一道：那样焦点每进出一次，三页的内容都要整份重设（`refresh`）。
+    override func updateProperties() {
+        super.updateProperties()
+        pan.isEnabled = !motion.composing && !handing
+    }
+
     func update(_ input: Input) {
         let first = self.input == nil
         self.input = input
-        pan.isEnabled = !input.composing && !handing
         if first { build(resting) }
         for route in pages.keys { refresh(route) }
         if !handing, motion.shot !== input.forward { motion.shot = input.forward }
@@ -314,7 +319,6 @@ final class PagerController: UIViewController {
                 self.apply(self.offset)
             }
             self.motion.busy = false
-            self.pan.isEnabled = !(self.input?.composing ?? false)
         }
     }
 

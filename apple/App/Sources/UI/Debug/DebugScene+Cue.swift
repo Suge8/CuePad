@@ -139,7 +139,7 @@ extension DebugScene {
                 if !note.isEmpty { _ = try await store.addCueMessage(.note, text: note) }
             }
             // 这个班次两个半小时前起，用到换新线的七成（上下文用量那一块加深一档）
-            let context = CueContext(used: 70_000, window: 200_000, since: .now.addingTimeInterval(-9_000))
+            let context = CueContext(used: 70_000, since: .now.addingTimeInterval(-9_000))
             try await store.setCueState(.settled, context: context)
             // 等你里各种问题都有：Cue 把选择题、确认题、文字题留给你答（值班时它们本来归 Cue 答），都看过了（页停在最新处）
             if defaults.bool(forKey: "CuePadWaitKinds") {
