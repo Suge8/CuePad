@@ -4,7 +4,8 @@ import SwiftUI
 /// 窄屏（iPhone 与窄窗口 iPad）的容器：一个导航栈，根是底部那一排的三个去处横排成的一条（项目、进展、Cue，`HomePager`：左右滑跟手切页），
 /// 推入的页照常由系统返回（返回钮、内容区右滑），返回后在 Cue 页左滑前进回刚才那页。其余去处推在所属的那一页上（`Navigation.select`）；打开 App 落在 Cue。
 /// 导航栈托管在 UIKit 里，几个栈交替时 SwiftUI 不逐帧挪它（旧页停着、最后一下才跳走）：所以只有一个栈，切页挪的是栈根里的三页（各在自己的托管控制器里，`PagerController`）。
-/// 底部那一排整个窗口只有一份（`DockBar`），挂在栈的根上、不在哪一页里：切页时它不重建、不跟着滑，选中的滴与换形跟着条（`PagerMotion`）走，拖到哪长到哪。
+/// 底部那一排整个窗口只有一份（`DockBar`），盖在导航栈上、不在哪一页里：切页时它不重建、不跟着滑，选中的滴与换形跟着条（`PagerMotion`）走，拖到哪长到哪；
+/// 推入的页上也留着（同系统标签栏，`Dock.stays`），推入、返回时它不动。
 /// 每页各建一排时，新页那一排要从旧的样子摆出第一帧再长回来，"⋯"展开着换去处就是收成圆再长开的一下来回。
 /// Cue 页的输入框在页里（随键盘升起），底边那一格在换形里与 Cue 钮交叉，浓淡都是条的位置与"⋯"开合的函数（`DockHandoff`）。
 /// 不用折叠的分栏：那个容器本身冷启动就多约 3000M 指令。
@@ -23,28 +24,42 @@ struct DockRoot: View {
         @Bindable var workspace = workspace
         let root = workspace.root
         NavigationStack(path: $workspace.path) {
-            HomePager(motion: motion, composing: composing, shot: shot) {
-                ZStack(alignment: .bottom) {
-                    PlacesCatcher(motion: motion, onCue: root == .cue) { openPlaces(false) }
-                    DockBar(route: root, motion: motion, composing: composing, width: max(0, width - Dock.margin * 2), openPlaces: openPlaces)
-                        .padding(.bottom, Dock.margin).ignoresSafeArea(edges: .bottom)
+            HomePager(motion: motion, composing: composing, shot: shot)
+                .environment(\.dockMotion, motion)
+                .environment(\.dockComposing, $composing)
+                .toolbarVisibility(.hidden, for: .navigationBar)
+                // 只有推在 Cue 页上的页能前进回来：只有它们离开前拍快照
+                .navigationDestination(for: Route.self) { route in
+                    if root == .cue {
+                        RouteView(route: route).dockReserve(Dock.stays(on: route)).leaveShot(route, into: shot)
+                    } else {
+                        RouteView(route: route).dockReserve(Dock.stays(on: route))
+                    }
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-            }
-            .environment(\.dockMotion, motion)
-            .environment(\.dockComposing, $composing)
-            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
-            .toolbarVisibility(.hidden, for: .navigationBar)
-            // 只有推在 Cue 页上的页能前进回来：只有它们离开前拍快照
-            .navigationDestination(for: Route.self) { route in
-                if root == .cue { RouteView(route: route).leaveShot(route, into: shot) } else { RouteView(route: route) }
-            }
         }
+        .overlay {
+            ZStack(alignment: .bottom) {
+                PlacesCatcher(motion: motion, onCue: workspace.top == .cue) { openPlaces(false) }
+                DockBar(
+                    route: root, motion: motion, composing: composing, width: max(0, width - Dock.margin * 2),
+                    stays: Dock.stays(on: workspace.top), forwardStays: workspace.forward.map(Dock.stays) ?? true, openPlaces: openPlaces)
+                    .padding(.bottom, Dock.margin).ignoresSafeArea(edges: .bottom)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+        }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
         .debugExposesPlaces { openPlaces(true) }
         // 有焦点时"⋯"收起
         .onChange(of: composing) { if composing { openPlaces(false) } }
         // 输入框离开页就没了焦点
-        .onChange(of: root) { composing = false }
+        .onChange(of: workspace.top) { composing = false }
+        // 推入的页盖住根：底部那一排展开成两格加 Cue 钮（Cue 页的输入框留在 Cue 页里），返回 Cue 页再收回
+        .onChange(of: workspace.path.isEmpty, initial: true) { _, root in
+            withAnimation(Motion.spatial(Motion.dock, reduceMotion: reduceMotion)) {
+                motion.covered = !root
+                motion.placesOpen = false
+            }
+        }
     }
 
     /// "⋯"展开、收起（点别处、滚动、点 Cue 钮、输入框有焦点时收起）：底部那一排用 `Motion.dock` 换形。
@@ -74,15 +89,29 @@ private struct PlacesCatcher: View {
 /// （底部的选中格已经说了在哪一页，`HeaderHost.page`），内容一直滚到底部那一排后面；Cue 页顶上只有 Cue 的名牌，输入框在它自己的页里（随键盘升起）。
 struct HomePage: View {
     let route: Route
-    /// 安全区底边离屏幕底边多远（键盘弹出时是键盘高）。
-    @State private var safeBottom: CGFloat = 0
 
     var body: some View {
         RouteView(route: route)
             .environment(\.headerHost, .page(search: route != .cue))
             .environment(\.pageNamedElsewhere, true)
-            // 内容一直滚到 Dock 后面，最后一行停在 Dock 上面
-            .safeAreaPadding(.bottom, route == .cue ? 0 : Dock.reserve(above: safeBottom))
+            // Cue 页的底边是它自己的输入框
+            .dockReserve(route != .cue)
+    }
+}
+
+extension View {
+    /// 内容一直滚到底部那一排后面，最后一行停在它上面（`shown` 为假的页底边归自己）。
+    func dockReserve(_ shown: Bool) -> some View { modifier(DockReserve(shown: shown)) }
+}
+
+private struct DockReserve: ViewModifier {
+    let shown: Bool
+    /// 安全区底边离屏幕底边多远（键盘弹出时是键盘高）。
+    @State private var safeBottom: CGFloat = 0
+
+    func body(content: Content) -> some View {
+        content
+            .safeAreaPadding(.bottom, shown ? Dock.reserve(above: safeBottom) : 0)
             .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.bottom } action: { safeBottom = $0 }
     }
 }
@@ -107,6 +136,15 @@ enum Dock {
     static func capsule(in width: CGFloat) -> CGFloat { cell(in: width) * CGFloat(places.count) + inset * 2 }
 
     static func order(_ route: Route) -> Int { pages.firstIndex(of: route) ?? pages.count - 1 }
+
+    /// 这一页上留不留着底部那一排（同系统标签栏：往下钻的页都留着，回到哪一格、换去处随时点得到）。
+    /// 会话页与卡片纸页让开：底边是它们自己的（回复框、整页的纸与键盘），在那里专心说、专心写，同"信息"的对话与"备忘录"的一条。
+    static func stays(on route: Route) -> Bool {
+        switch route {
+        case .session, .card: false
+        default: true
+        }
+    }
 
     /// 内容在安全区之上还要给 Dock 让出的高度（栏顶再隔 `Bars.contentGap` 到安全区底边）：滚到底时最后一行完整停在栏上面；键盘盖住 Dock 时为 0。
     static func reserve(above safeBottom: CGFloat) -> CGFloat { max(0, height + margin + Bars.contentGap - safeBottom) }

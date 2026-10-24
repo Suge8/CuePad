@@ -40,7 +40,7 @@ extension View {
         floatingHeader(title, detail: detail) { EmptyView() }
     }
 
-    /// 页顶那一排中间的一块（标题、项目范围、额度环）：一块写字玻璃胶囊；提示横幅盖在这一排上时让开（它比这一块矮，露一截就是玻璃叠玻璃），
+    /// 页顶那一排中间的一块（标题、项目范围、额度环）：一块写字玻璃胶囊，与两侧圆钮同高（有没有第二行都是）；提示横幅盖在这一排上时让开（盖不全这一块，露一截就是玻璃叠玻璃），
     /// 在长开的面板里（`GrowPanel`）不另画玻璃，面板本身就是。
     func headerPiece() -> some View { modifier(HeaderPiece()) }
 }
@@ -168,10 +168,11 @@ private struct HeaderPiece: ViewModifier {
     @Environment(\.headerGrown) private var grown
 
     func body(content: Content) -> some View {
+        // 先定高再上玻璃：玻璃随内容高时，没有第二行的标题（项目没写介绍）只剩一条细缝
+        let piece = content.frame(height: FloatingHeaderLayout.height)
         Group {
-            if grown { content } else { content.glass(in: .capsule) }
+            if grown { piece } else { piece.glass(in: .capsule) }
         }
-        .frame(height: FloatingHeaderLayout.height)
         .contentShape(.capsule)
         .opacity(givesWay && !grown ? 0 : 1)
     }

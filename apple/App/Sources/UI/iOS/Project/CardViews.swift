@@ -111,9 +111,8 @@ struct OlderRow: View {
                 if pinned { Image(.pin).font(.footnote).foregroundStyle(palette.ink2).accessibilityLabel("置顶") }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(text.label).font(.subheadline.weight(.medium)).foregroundStyle(palette.ink).lineLimit(1)
-                    if !text.preview.isEmpty {
-                        Text(text.preview).font(.footnote).foregroundStyle(palette.ink3).lineLimit(1)
-                    }
+                    // 只有标题的也占着第二行：同一张纸上的行一样高
+                    Text(text.preview.isEmpty ? " " : text.preview).font(.footnote).foregroundStyle(palette.ink3).lineLimit(1)
                 }
                 Spacer(minLength: 8)
                 AgentDot(card: card.id).padding(.vertical, -8)

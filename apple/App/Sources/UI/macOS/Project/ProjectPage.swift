@@ -77,12 +77,13 @@ struct ProjectPage: View {
     }
 
     /// 最上面那行介绍取自项目目录，切换项目的第一帧就是新项目；卡片与任务读到后在其下出现。
+    /// 没写介绍也占着这一行：有没有介绍的项目之间切换，下面的任务纸与墙不上下跳。
     @ViewBuilder private var content: some View {
         VStack(alignment: .leading, spacing: Spacing.sectionTitle) {
-            if let intro = workspace.catalog?.project(projectID)?.intro {
-                Text(intro).font(Typography.secondary).foregroundStyle(palette.ink2)
-                    .lineLimit(1).truncationMode(.tail).help(intro).textSelection(.enabled)
-            }
+            let intro = workspace.catalog?.project(projectID)?.intro
+            Text(intro ?? " ").font(Typography.secondary).foregroundStyle(palette.ink2)
+                .lineLimit(1).truncationMode(.tail).help(intro ?? "").textSelection(.enabled)
+                .accessibilityHidden(intro == nil)
             VStack(alignment: .leading, spacing: Spacing.section) {
                 if let data, let arrangement = board.arrangement, let shape { page(data, arrangement, shape) }
             }
