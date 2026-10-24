@@ -80,11 +80,12 @@ private struct CuePlate: View {
         .accessibilityElement(children: .combine)
     }
 
-    /// 名字两处各一份：头像右边（收着）与头像下面（名片）。两处之间要从长大的头像底下穿过去，所以不挪，一处淡出、一处淡入（同 `handOff`）。
+    /// 名字两处各一份：头像右边（收着）与头像下面（名片）。两处之间要从长大的头像底下穿过去，所以不挪，原处淡出、新处淡入：
+    /// 两份走同一条曲线、同时起，任一帧浓淡相加是一，名字每一帧都读得到（先淡完再淡入的话中间有几帧名字整个没了）。
     private func name(_ name: String, shown: Bool) -> some View {
         Text(name).font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(1)
             // 只有透明度走这条曲线，位置跟着头像同一条弹簧
-            .animation(shown ? HandOff.quick.delay(HandOff.gap) : .easeOut(duration: HandOff.gap)) { $0.opacity(shown ? 1 : 0) }
+            .animation(HandOff.quick) { $0.opacity(shown ? 1 : 0) }
             .accessibilityHidden(!shown)
     }
 }
