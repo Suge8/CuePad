@@ -17,7 +17,7 @@ struct CueNowPanel: View {
 
     var body: some View {
         VStack(spacing: 20) {
-            BrainBlock(brain: brain, choose: { go(.cueSettings) })
+            BrainBlock(brain: brain, choose: { go { workspace.push(.cueSettings) } })
             HStack(spacing: 10) {
                 place("记忆", icon: .memory) { workspace.cue.showsMemory = true }
                 place("设置", icon: .settings) { workspace.push(.cueSettings) }
@@ -29,10 +29,7 @@ struct CueNowPanel: View {
 
     /// 两个去处同宽同高：次按钮的胶囊（同页里"以后不用问"那一类），图标接字。
     private func place(_ title: String, icon: Icon, action: @escaping () -> Void) -> some View {
-        Button {
-            close()
-            action()
-        } label: {
+        Button { go(action) } label: {
             Label { Text(title).lineLimit(1) } icon: { Image(icon) }
                 .labelStyle(.titleAndIcon)
                 .frame(maxWidth: .infinity)
@@ -40,9 +37,10 @@ struct CueNowPanel: View {
         .buttonStyle(ControlButtonStyle(kind: .secondary))
     }
 
-    private func go(_ route: Route) {
+    /// 点面板里的一项：先收起，再去那里。
+    private func go(_ action: () -> Void) {
         close()
-        workspace.push(route)
+        action()
     }
 }
 
