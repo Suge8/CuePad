@@ -20,7 +20,7 @@ extension CueStore {
   /// 最近完成、绑过会话的 `limit` 件顶层任务（没删除，归档了的也算），最近完成的在前，各带它（自己或子任务）的会话里最近有动静的那个此刻的样子：
   /// Cue 据此找能接着用的旧会话（不带参数的 peek 末尾列出）。会话记录还没到的不列。
   public func cueRecentlyDone(limit: Int) throws -> [(task: Card, session: PiSessionState)] {
-    try topTasks(where: "t.completedAt IS NOT NULL AND \(Self.hasSession)", orderBy: "t.completedAt DESC, t.id", limit: limit)
+    try topTasks(where: "t.completedAt IS NOT NULL AND \(Self.hasSession)", orderBy: Self.recentlyDone, limit: limit)
       .compactMap { task in try latestSession(of: task.id).map { (task, $0) } }
   }
 

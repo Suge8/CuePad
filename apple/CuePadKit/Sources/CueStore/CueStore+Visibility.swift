@@ -16,6 +16,10 @@ extension CueStore {
   /// `tasks` 与 `taskCounts` 共用。
   static let visibleTask = "t.todoAt IS NOT NULL AND t.deletedAt IS NULL AND t.archivedAt IS NULL AND p.deletedAt IS NULL"
 
+  /// 做完的任务（`t`）最近的在前：完成时刻相同（同一毫秒，或别的设备同步来时刻一样）的，本机后写下完成的在前（`writeSeq` 随 completedAt 变而盖），
+  /// 不落到按 id 这种与先后无关的次序上——"刚做完"那一件、已完成那一列与 Cue 看的最近做完都按它。
+  static let recentlyDone = "t.completedAt DESC, t.writeSeq DESC, t.id"
+
   /// 正文不是空白（与 `Card.isBlank` 同一条规则）。
   static let notBlank = "TRIM(body, char(32, 9, 10, 13)) <> ''"
 }
