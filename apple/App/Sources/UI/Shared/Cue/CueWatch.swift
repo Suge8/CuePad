@@ -71,7 +71,7 @@ final class CueWatch {
         let presence = CuePresence.derive(digest, at: moment)
         self.presence = presence
         canHear = presence != .disabled
-        sending = presence == .sending
+        sending = if case .sending = presence { true } else { false }
         lastYouSaid = digest.lastYou?.said
         busy = presence.shown != nil
         // 推出的时刻每次都不同：内容一样就不写，免得读它的每一行跟着重算

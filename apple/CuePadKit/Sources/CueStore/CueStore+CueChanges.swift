@@ -199,7 +199,7 @@ extension CueStore {
     _ type: R.Type, where condition: String, _ arguments: [any SQLBindable], orderBy: String
   ) throws -> [(R, Int)] {
     try db.query(
-      "SELECT \(R.columns.joined(separator: ", ")), writeSeq FROM \(R.table.rawValue) WHERE \(condition) ORDER BY \(orderBy)", arguments
-    ) { (R(row: $0), Int($0.int(Int32(R.columns.count)))) }
+      "SELECT \(R.selection), writeSeq FROM \(R.table.rawValue) WHERE \(condition) ORDER BY \(orderBy)", arguments
+    ) { (R(row: $0), Int($0.int($0.index(of: "writeSeq")!))) }
   }
 }

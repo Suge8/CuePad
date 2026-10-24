@@ -16,7 +16,7 @@ nonisolated enum PiRename {
     static func title(of session: PiSessionState, request: DeliveryRequest?, at moment: Speech.Moment) -> String {
         guard let request, let name = request.config?.name else { return session.title }
         switch Speech.trip(request, at: moment) {
-        case .sending: return name
+        case .sending, .sent: return name
         case .delivered: return session.modifiedAt > (request.completedAt ?? request.createdAt) ? session.title : name
         case .failed: return session.title
         }
@@ -25,7 +25,7 @@ nonisolated enum PiRename {
     /// 改名还在路上（行上写"正在改名"）。
     static func isPending(_ request: DeliveryRequest?, at moment: Speech.Moment) -> Bool {
         guard let request, request.isRename else { return false }
-        return Speech.trip(request, at: moment) == .sending
+        return Speech.trip(request, at: moment).inTransit
     }
 
     /// 没改成（行上写"没能改名"），留到本机看过这个会话（`seen`）为止（同没能送达的话，`PiDelivery.phase`）。

@@ -13,6 +13,7 @@ extension DebugScene {
     /// `-CuePadSpeech send` 录"断网时说 → 同步不通 → 恢复 → 送达"（演示 Mac 断网时不接手）。
     /// `-CuePadSync outdated`：真实的同步代码连内存里的 iCloud 替身，替身里的最低对端版本高于这台（`CloudSync.simulated`）：
     /// 同步停下、提示更新，本机照记、改动不上传（替身收下的条数记在日志的 sync 类别里）。
+    /// `-CuePadSync simulated`：同一个替身，门槛就是这台：照常同步，写下的记录传上替身（说的话到服务器是已发出，配 `-CuePadSpeech trips`）。
     /// `-CuePadSync <noAccount|decide|failed|restricted|conflicts>`：装上报这个状态的替身，设置里 iCloud 同步那一行、
     /// 要你决定的两个选择、立即同步与 Mac 工具栏的同步提示都按有同步时的样子出现；`failed` 带两条没能同步的记录，`conflicts` 在演示库里造一份冲突副本。
     /// 这些替身都当已和 iCloud 对过。
@@ -29,6 +30,7 @@ extension DebugScene {
         case "noAccount": .custom(StandInSync(.noAccount))
         case "decide": .custom(StandInSync(.needsDecision(.accountSwitched)))
         case "outdated": .built { CloudSync.simulated(store: $0, peerFloor: CueStore.supportedSchemaVersions.upperBound + 1) }
+        case "simulated": .built { CloudSync.simulated(store: $0, peerFloor: CueStore.supportedSchemaVersions.lowerBound) }
         case "failed": .custom(StandInSync(.failed("同步出错"), issues: issues))
         case "restricted": .custom(StandInSync(.accountRestricted))
         case "offline": .custom(OfflineSync(seconds: seconds("CuePadOfflineSeconds", default: 6)))

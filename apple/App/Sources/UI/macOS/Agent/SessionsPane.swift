@@ -99,7 +99,7 @@ struct SessionsPane: View {
     /// 看全部项目时卡上放所在项目的图标（`PiSessionList.showsPlace`）。
     private func row(_ item: PiSessionListItem, in list: PiSessionList, end: Speech.Trip?) -> some View {
         let session = item.state
-        let endable = session.canEnd && end != .sending
+        let endable = session.canEnd && end?.inTransit != true
         return PiSessionRow(session: session, project: list.showsPlace ? item.project : nil, delivery: item.delivery, end: end, rename: item.rename, undelivered: item.undelivered(at: services.speech), style: .page).equatable()
             .sessionLink(session.sessionID, press: .card)
             .contextMenu {

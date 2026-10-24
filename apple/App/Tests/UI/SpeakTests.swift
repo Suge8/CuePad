@@ -7,7 +7,7 @@ import Testing
 @testable import CuePad
 
 /// 发消息只有一条路（`Workspace.speak`），对 Cue 说与发给会话一样：按下发送输入框立刻空、只多一条记录（一个气泡），
-/// 之后到哪了只看记录与时间（`Speech`）：发送中 → 已送达；Mac 报失败或过了时限没回执是没能送达，可重发（撤回旧的、写同样的新的，文字不丢）；
+/// 之后到哪了只看记录与时间（`Speech`）：发送中 → 已送达；Mac 报失败或过了时限没发出是没能送达，可重发（撤回旧的、写同样的新的，文字不丢）；
 /// 写库失败时文字回到输入框。Cue 在不在睡觉只看它那台 Mac 的在线记录，不看你的话送没送到。
 @MainActor
 struct SpeakTests {
@@ -70,7 +70,7 @@ struct SpeakTests {
         var uploads = app.sync.uploads.stream.makeAsyncIterator()
         #expect(await uploads.next() == message.id.uuidString.lowercased())
         #expect(Said.cue(message, host: "mac-cue").trip(at: .always(at: .now)) == .sending)
-        #expect(try await presence() == .sending)  // Cue 页头与气泡同一个"在路上"
+        #expect(try await presence() == .sending(.sending))  // Cue 页头与气泡同一个"在路上"
 
         try await store.markCueMessagesDelivered([message.id])  // Cue 运行的那台 Mac 交给了它
         let delivered = try #require(try await youSaid().first)
@@ -97,25 +97,25 @@ struct SpeakTests {
         #expect(try await youSaid().isEmpty)
     }
 
-    /// 回执晚到但在时限内：一直是发送中，Cue 是话在路上；过了时限这句没能送达（同步通着是 Mac 迟迟没收下，不通写同步的原因），
+    /// 这里没有同步，话一直出不了这台：写下 `Speech.sendLimit` 之内是发送中，Cue 是话在路上；过了这句没能送达，
     /// 但那台 Mac 在线 Cue 就不算睡觉、仍在值班；那台 Mac 将睡眠标了离线 Cue 才在睡觉、不值班，本机同步不通时不说它在睡觉（照它写下的状态）；
-    /// 超时后回执来了照样是已送达，Cue 照它写下的在做事。
-    @Test func 对Cue说_话超时只说这句没送到_在睡觉只看那台Mac在不在线() async throws {
+    /// 没能送达后回执来了照样是已送达，Cue 照它写下的在做事。已发出后迟迟没回执见 `ReceiptTests`。
+    @Test func 对Cue说_没发出只说这句没送到_在睡觉只看那台Mac在不在线() async throws {
         try await enableCue()
         let workspace = Workspace(services: app.services)
         workspace.cue.draft = ComposerDraft(text: "顺便看看登录回调那个超时")
         await workspace.speak(to: .cue, from: Bindable(workspace.cue).draft) { try $0.stored(in: files) }?.value
         let message = try #require(try await youSaid().first)
         let said = Said.cue(message, host: "mac-cue")
-        let inTime = message.createdAt.addingTimeInterval(Speech.receiptLimit - 1)
-        let late = message.createdAt.addingTimeInterval(Speech.receiptLimit + 1)
+        let inTime = message.createdAt.addingTimeInterval(Speech.sendLimit - 1)
+        let late = message.createdAt.addingTimeInterval(Speech.sendLimit + 1)
 
         #expect(said.trip(at: .always(at: inTime)) == .sending)
-        try backdate(message, by: Speech.receiptLimit - 1)
-        #expect(try await presence() == .sending)
+        try backdate(message, by: Speech.sendLimit - 1)
+        #expect(try await presence() == .sending(.sending))
 
-        #expect(said.trip(at: .always(at: late)) == .failed(.timedOut))
-        try backdate(message, by: Speech.receiptLimit + 1)
+        #expect(said.trip(at: .always(at: late)) == .failed(.unsent))
+        try backdate(message, by: Speech.sendLimit + 1)
         #expect(try await presence() == .idle)
         #expect(try await store.cueDuty() != nil)
 
@@ -218,11 +218,11 @@ struct SpeakTests {
         #expect(retried[0].content == "改完再跑一遍" && retried[0].mode == .known(.send) && retried[0].isOpen)
         #expect(box.wrappedValue.text.isEmpty)
 
-        // 领取了在执行（如正在唤醒已结束的会话）：还是发送中
+        // 领取了在执行（如正在唤醒已结束的会话）：已发出，过了时限也不算没能送达
         let late = retried[0].createdAt.addingTimeInterval(Speech.receiptLimit + 1)
         var claimed = retried[0]
         claimed.status = .known(.executing)
-        #expect(Said.request(claimed).trip(at: .always(at: late)) == .sending)
+        #expect(Said.request(claimed).trip(at: .always(at: late)) == .sent)
 
         workspace.resend(.request(retried[0]), restoringInto: box)
         let again = try await eventually(store, { try $0.deliveryRequests() }) { $0.count == 1 && $0[0].id != retried[0].id }

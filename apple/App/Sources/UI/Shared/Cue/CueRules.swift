@@ -14,8 +14,8 @@ nonisolated enum CuePresence: Equatable, Sendable {
     /// 启用了，但它运行的那台 Mac 不在线。
     case asleep
     case idle
-    /// 你最近一句还在路上。
-    case sending
+    /// 你最近一句还在路上：发送中或已发出（`PiDelivery.Transit` 的那两种）。
+    case sending(PiDelivery.Transit)
     /// 在一轮里：想（`thinking`）或用工具（`tool`，`detail` 是"动作 · 目标"）。
     case working(PiWorkState, detail: String?)
     /// 管理器起不来：参数是给你看的原因。
@@ -25,8 +25,9 @@ nonisolated enum CuePresence: Equatable, Sendable {
     static func derive(_ digest: CueDigest, at moment: Speech.Moment) -> CuePresence {
         guard digest.enabled else { return .disabled }
         if !digest.hostOnline && moment.reachableSince(digest.hostID) != nil { return .asleep }
-        if let you = digest.lastYou, Speech.trip(said: you.said, delivered: you.delivered, host: digest.hostID, at: moment) == .sending {
-            return .sending
+        if let you = digest.lastYou {
+            let trip = Speech.trip(said: you.said, delivered: you.delivered, reachedServer: you.reachedServer, host: digest.hostID, at: moment)
+            if trip.inTransit { return .sending(trip == .sent ? .sent : .sending) }
         }
         guard let state = digest.state, let work = state.state.known else { return .idle }
         if work == .error { return .unreachable(state.detail ?? "\(digest.name) 起不来了") }
@@ -49,7 +50,7 @@ nonisolated enum CuePresence: Equatable, Sendable {
     /// 与 Agent 会话同一套的状态：话在路上、在做事；其余没有。
     var shown: PiShown? {
         switch self {
-        case .sending: PiShown(status: .delivery(.inTransit(.sending)))
+        case .sending(let transit): PiShown(status: .delivery(.inTransit(transit)))
         case .working(let state, _): PiShown(status: .working(state))
         case .disabled, .asleep, .idle, .unreachable: nil
         }
@@ -109,7 +110,7 @@ nonisolated struct CueDigest: Equatable, Sendable {
     var lastSaidDone: Bool
     /// 它运行的那台 Mac 此刻在线（`CueStore.macOnline`）；没启用为 false。
     var hostOnline: Bool
-    /// 你最近一句：写下与交给它的时刻（`CueStore.cueLastYou`）；你还没说过为 nil。到哪了按此刻推（`derive`）。
+    /// 你最近一句：写下与交给它的时刻、服务器收下过没有（`CueStore.cueLastYou`）；你还没说过为 nil。到哪了按此刻推（`derive`）。
     var lastYou: LastYou?
     /// 值班的 Mac 写下的此刻在做什么（`CueStore.cueState`）。
     var state: CueState?
@@ -130,6 +131,7 @@ nonisolated struct CueDigest: Equatable, Sendable {
     struct LastYou: Equatable, Sendable {
         var said: Date
         var delivered: Date?
+        var reachedServer: Bool
     }
 
     static func read(from store: isolated CueStore) throws -> CueDigest {
@@ -148,7 +150,7 @@ nonisolated struct CueDigest: Equatable, Sendable {
             lastSaid: said?.headline,
             lastSaidDone: saidTask?.status == .done,
             hostOnline: try profile?.activeHost.map { try store.macOnline($0) } ?? false,
-            lastYou: try store.cueLastYou().map { LastYou(said: $0.said, delivered: $0.delivered) },
+            lastYou: try store.cueLastYou().map { LastYou(said: $0.said, delivered: $0.delivered, reachedServer: $0.reachedServer) },
             state: try store.cueState(),
             woke: try store.cueWaking().map { Woke(at: $0.at, text: try Self.woke($0.wake, store: store)) },
             done: try store.tasksDone(since: Calendar.current.startOfDay(for: .now)).filter { TaskBoard.Column.of($0, in: tally) == .done })

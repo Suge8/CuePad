@@ -11,8 +11,8 @@ struct SpeechBubble<Menu: View>: View {
     let box: Binding<ComposerDraft>
     /// 已送达标不标：会话页每句都标（进了对话就不在这里），Cue 页只标你最后一句（旧的不标，免得满屏）。
     var showsDelivered = true
-    /// 还在路上时的说法（会话：发送中、送达中、正在唤醒，`PiDelivery.Transit`）；Cue 页的话只有发送中。
-    var transit = PiDelivery.Transit.sending
+    /// 收这句话的会话（会话页；在路上时说法分送达中、正在唤醒，`PiDelivery.Transit.of`）；Cue 页的话没有，只分发送中、已发出。
+    var session: PiSessionState?
     var fromCue = false
     let look: BubbleLook
     /// 长按菜单（消息菜单）；给的是此刻到哪了。
@@ -36,7 +36,8 @@ struct SpeechBubble<Menu: View>: View {
 
     private func bubble(_ trip: Speech.Trip) -> BubbleTrip {
         switch trip {
-        case .sending: .sending(transit)
+        case .sending, .sent:
+            if case .request(let request) = said { .sending(.of(request, session: session, trip: trip)) } else { .sending(trip == .sent ? .sent : .sending) }
         case .delivered: showsDelivered ? .delivered(said.roundTrip.map { PiClock.duration(Double($0.components.seconds)) }) : .arrived
         case .failed(let failure):
             .failed(Undelivered(reason: failure.text(sync: services.syncStatus), canResend: services.reachesPiHost, resend: resend, remove: remove))
@@ -62,17 +63,12 @@ struct SpeechBubble<Menu: View>: View {
 }
 
 nonisolated extension Speech.Failure {
-    /// 没能送达的原因：Mac 写回的原文；超时的只分本机同步不通与 Mac 一直没收下（只说这句话，不猜 Mac 在不在：那台 Mac 在不在线看它的在线记录）。
-    /// 同步不通写同步状态那套说法（`sync` 此刻的状态）。
+    /// 没能送达的原因：Mac 写回的原文；到点的只说这句话自己（不猜 Mac 在不在：那台 Mac 在不在线看它的在线记录）——
+    /// 一直没出这台设备时，本机同步此刻不通就写同步状态那套说法（`sync` 此刻的状态），通着就是这句一直没传上去。
     func text(sync: SyncStatus) -> String {
-        reason ?? "\(SyncSummary(sync).title)，发不到 Mac"
-    }
-
-    /// 这一句自己的原因（Mac 写回的、Mac 一直没收下）；本机同步不通是全局的事，不是哪一句的原因，没有（nil）。
-    var reason: String? {
         switch self {
         case .reported(let reason): reason
-        case .offline: nil
+        case .unsent: sync.reachesMac ? "这句一直没传到 iCloud，发不到 Mac" : "\(SyncSummary(sync).title)，发不到 Mac"
         case .timedOut: "Mac 迟迟没收下这句"
         }
     }

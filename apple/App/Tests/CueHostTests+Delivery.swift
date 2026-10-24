@@ -10,7 +10,7 @@ import Testing
 @testable import CuePad
 
 extension CueHostTests {
-    /// Cue 对开着的会话说话，过了说话工具等结果的时限（`CueTiming.sayWait`）Mac 才回报没送达（会话已关闭）：工具如实说还没送达；
+    /// Cue 对开着的会话说话，过了说话工具等结果的时限（`CueTiming.sayWait`）Mac 才回报没送达（会话已关闭）：工具如实说还没送达（没有同步，还没发出）；
     /// 失败一到就叫醒 Cue，信封里是"[发送失败] 任务 · 原因"；会话页那句话的气泡写着同一个原因。
     /// 会话开在另一台 Mac 上：说话请求由那台执行，本机的执行器不碰它；时限过后由替身当那台 Mac 写回失败。
     @Test func 说话过了时限才没送达_Cue马上醒来看到原因() async throws {
@@ -21,7 +21,7 @@ extension CueHostTests {
         try await PiStateRecorder(store: rig.store, hostID: "mac-b").update(sessionID: "remote-1", state: .settled, title: "修好登录页")
         try await rig.say("请对登录页说继续")
         try await eventually("这一轮做完", timeout: .seconds(90)) {
-            try await rig.store.cueState()?.state == .known(.settled) && rig.model.answered("已发出，还没送达")
+            try await rig.store.cueState()?.state == .known(.settled) && rig.model.answered("还没送达")
         }
         let sent = try #require(try await rig.store.deliveryRequests(toSession: "remote-1").last)
         #expect(sent.hostID == "mac-b" && sent.isOpen && sent.isFromCue)

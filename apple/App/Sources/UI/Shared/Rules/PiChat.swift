@@ -133,7 +133,7 @@ nonisolated enum PiChat {
 
     /// 回复框空着时的发送中：接在末尾的你的话里还有在路上的（与那个气泡同一个事实）。
     static func sending(_ deliveries: [DeliveryRequest], messages: [PiChatMessage], at moment: Speech.Moment) -> Bool {
-        outgoing(deliveries, messages: messages).contains { Speech.trip($0, at: moment) == .sending }
+        outgoing(deliveries, messages: messages).contains { Speech.trip($0, at: moment).inTransit }
     }
 
     /// 你在这个会话里说过的最近一句（对话里最后一条你的消息，存储格式，文字与图片；斜杠技能是你发的样子）：空回复框按 ↑ 调回它。

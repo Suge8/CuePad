@@ -69,6 +69,8 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
   public internal(set) var resultReceivedAt: Date?
   /// 谁写的（见 `DeliveryOrigin`）；nil 是你。
   public var origin: Open<DeliveryOrigin>?
+  /// 服务器收下过这条请求（读的时候由同步元数据推出，不存，`Speech.reachedServerSQL`）：说的话"已发出"的依据。
+  public internal(set) var reachedServer = false
 
   public var isFromCue: Bool { origin == .known(.cue) }
 
@@ -94,6 +96,7 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
     guard let end = requests.last(where: { $0.mode == .known(.end) }) else { return nil }
     switch Speech.trip(end, at: moment) {
     case .sending: return .sending
+    case .sent: return .sent
     case .delivered: return nil
     case .failed(let failure): return end.id == requests.last?.id ? .failed(failure) : nil
     }
@@ -150,7 +153,7 @@ extension DeliveryRequest: Record {
       hostID: row.text(5), mode: Open(rawValue: row.text(6)), cardID: row.uuidOrNil(7),
       status: Open(rawValue: row.text(8)), resultDetail: row.textOrNil(9), handledBy: row.textOrNil(10),
       createdAt: row.date(11), completedAt: row.dateOrNil(12), modifiedAt: row.date(13), resultReceivedAt: row.dateOrNil(14),
-      origin: row.textOrNil(15).map(Open.init(rawValue:)))
+      origin: row.textOrNil(15).map(Open.init(rawValue:)), reachedServer: row.bool(16))
   }
 }
 

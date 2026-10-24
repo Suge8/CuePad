@@ -153,7 +153,7 @@ import Testing
     await executor.stop()
   }
 
-  /// 断网时手机说的话（发给会话、对 Cue 说）：马上传失败，同步状态是连不上 iCloud、话是同步不通，Mac 那边还没有；
+  /// 断网时手机说的话（发给会话、对 Cue 说）：马上传失败，同步状态是连不上 iCloud，Mac 那边还没有；
   /// 记录不丢，恢复后的同步（发送者把待推送发出去、拉取）把它们传到 Mac；Mac 执行、交给 Cue 后的回执经同步回到手机，
   /// 两句都是已送达，同步状态回到空闲。
   @Test(.timeLimit(.minutes(1)))
@@ -172,7 +172,6 @@ import Testing
     await sender.stop()
 
     #expect(await phone.coordinator.status == .offline)
-    #expect(Speech.trip(request, at: Speech.Moment(now: .now, reachableSince: nil)) == .failed(.offline))
     #expect(try await mac.store.deliveryRequest(request.id) == nil)
 
     try await cloud.exchange()  // 恢复：手机的待推送传出去
@@ -183,7 +182,7 @@ import Testing
     let back = try #require(try await phone.store.deliveryRequest(request.id))
     let heard = try #require(try await phone.store.cueMessages().first { $0.id == message.id })
     #expect(Speech.trip(back, at: .always()) == .delivered)
-    #expect(Speech.trip(said: heard.createdAt, delivered: heard.deliveredAt, host: "mac", at: .always()) == .delivered)
+    #expect(Speech.trip(said: heard.createdAt, delivered: heard.deliveredAt, reachedServer: heard.reachedServer, host: "mac", at: .always()) == .delivered)
     #expect(await phone.coordinator.status == .idle)
     await executor.stop()
   }
