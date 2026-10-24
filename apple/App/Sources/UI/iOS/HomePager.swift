@@ -6,18 +6,16 @@ import UIKit
 /// 当前页只有 `Workspace.root` 一份：松手、点按都经 `select`，条停在哪页跟着它走。条此刻在哪只有 `PagerMotion` 一份（容器写、SwiftUI 读），
 /// 拖、松手的弹簧、点按的弹簧都是同一条路（`PagerController.animate`），底部那一排的滴与换形读它，所以跟手、同一条弹簧、一起到位。
 /// Cue 在最右，它右边是刚返回离开的那一页（`Workspace.forward`）：手指左滑把它拉回来。跟手的是离开前拍的快照（`LeaveShot`，同 Safari 的前进），
-/// 同系统推入一样盖着 Cue 页滑进来、Cue 页与底部那一排慢慢退；松手推入真的页（不带动画），它画上屏后才收起快照。
+/// 同系统推入一样盖着 Cue 页滑进来、Cue 页慢慢退（底部那一排在导航栈之上，留在原处，前进的页让开它时随拉出淡去，`DockBar`）；松手推入真的页（不带动画），它画上屏后才收起快照。
 /// 跟手与弹簧都在 SwiftUI 之外（`PagerController`）：每页各有自己的托管控制器，拖动只改图层的平移，松手的弹簧交给 Core Animation，
 /// 页里只有 Cue 页的输入框逐帧换浓淡（`DockHandoff`），其余一帧不重算 SwiftUI。环境整份转给每一页（`environment(\.self)`），页里读到的与挂在导航栈根上时一样，
-/// 所以这一层的 body 每重算一次，三页的内容就整份重设一遍：这里不读 `PagerMotion` 里会变的东西，读的都放进自己的小块里（`PagerSettling`、`Retreat`、`ForwardPage`）。
-/// 底部那一排与前进页的快照留在这一层 SwiftUI 里（托管视图点在空处也不往下交，盖在页上就挡住了页）：每帧只重算读 `PagerMotion` 的那几小块。
-struct HomePager<Chrome: View>: View {
+/// 所以这一层的 body 每重算一次，三页的内容就整份重设一遍：这里不读 `PagerMotion` 里会变的东西，读的都放进自己的小块里（`PagerSettling`、`ForwardPage`）。
+/// 前进页的快照留在这一层 SwiftUI 里：每帧只重算读 `PagerMotion` 的那几小块。
+struct HomePager: View {
     let motion: PagerMotion
     /// Cue 页的输入框有焦点：这时不接横拖（选字、挪光标都是横着拖）。
     let composing: Bool
     let shot: LeaveShot
-    /// 盖在页上、不随页滑的一层（底部那一排）：只在前进时随 Cue 页一起退。
-    @ViewBuilder let chrome: Chrome
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
@@ -25,7 +23,6 @@ struct HomePager<Chrome: View>: View {
         let forward = root == Dock.pages.last && workspace.forward != nil && shot.route == workspace.forward ? shot.view : nil
         PagerHost(workspace: workspace, motion: motion, root: root, forward: forward, composing: composing)
             .ignoresSafeArea()
-            .overlay { chrome.modifier(Retreat(motion: motion)) }
             .overlay { ForwardPage(motion: motion).allowsHitTesting(false).accessibilityHidden(true) }
             .background { PagerSettling(motion: motion) }
     }
@@ -57,8 +54,11 @@ final class PagerMotion {
     /// 拉出来的是哪张快照（推入真的页、它画上屏之前还留着）。
     var shot: UIView?
 
+    /// 推入的页盖着根（`DockRoot` 带着弹簧改）：输入框是 Cue 页的，推入的页上底部那一排总是三格。
+    var covered = false
+
     /// 底部那一排是三格的样子占几成：1 是三格，0 是"⋯"加输入框（`DockHandoff`）。
-    var places: CGFloat { placesOpen ? 1 : 1 - onCue }
+    var places: CGFloat { placesOpen || covered ? 1 : 1 - onCue }
 
     func move(to position: CGFloat, pushed: CGFloat) {
         if self.position != position { self.position = position }
@@ -71,14 +71,7 @@ final class PagerMotion {
     private static func onCue(at position: CGFloat) -> CGFloat { min(max(position - CGFloat(Dock.pages.count - 2), 0), 1) }
 }
 
-/// 前进时底部那一排随 Cue 页退开。
-private struct Retreat: ViewModifier {
-    let motion: PagerMotion
-
-    func body(content: Content) -> some View { content.offset(x: -motion.pushed * PagerController.parallax * motion.width) }
-}
-
-/// 拉出来的前进页：快照盖着 Cue 页与底部那一排从右边滑进来，边上一道阴影（同系统推入）；没拉出来时什么都不挂。
+/// 拉出来的前进页：快照盖着 Cue 页从右边滑进来，边上一道阴影（同系统推入）；没拉出来时什么都不挂。
 private struct ForwardPage: View {
     let motion: PagerMotion
     @Environment(\.palette) private var palette

@@ -5,6 +5,7 @@ import SwiftUI
 /// - 项目、进展两页上、Cue 页点开"⋯"时：左边两格胶囊，右边 Cue 钮（`DockCue`）。选中的滴（`DockDrop`）跟着条在两格间滑，透过它的那一格着靛青。
 /// - Cue 页：左边收成一颗"⋯"，Cue 钮长成输入框那么宽、那么高，在换形里与页里真的输入框交叉（`DockHandoff`）。从进展页滑向 Cue 页时跟着手指一点点长过去。
 /// - Cue 页输入框有焦点（`composing`）：都让开，输入框占满整排。
+/// - 推入的页上（`PagerMotion.covered`）总是两格加 Cue 钮，点哪一格（或 Cue 钮）都回到那一页的根上；会话页与卡片纸页上整排让开（`Dock.stays`）。
 /// 与屏幕圆角同心（同系统悬浮标签栏），只是玻璃：栏后面不垫渐变或模糊。字号固定、不随动态字体放大，辅助字号下长按弹出大内容查看器
 /// （同系统标签栏：栏高固定，字放大只会挤掉图标）。"项目"那一格在同步到不了 Mac 时带一个点（`AppServices.macAlert`）。
 /// 接力的"会话"那一头（`relaySpot(dock:)`）只在两格展开时的"进展"那一格（会话在进展里）；收起的"⋯"不接力：光落进"⋯"读不出是去了哪，深色下只剩一团发光的靛青点。
@@ -15,12 +16,21 @@ struct DockBar: View {
     let motion: PagerMotion
     let composing: Bool
     let width: CGFloat
+    /// 最上面那一页留着这一排（`Dock.stays`）。
+    let stays: Bool
+    /// 左滑拉出来的前进页留着这一排：不留时随拉出淡去。
+    let forwardStays: Bool
     let openPlaces: (Bool) -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
+        let shown = stays ? (forwardStays ? 1 : 1 - motion.pushed) : 0
         DockForm(places: motion.places, route: route, motion: motion, composing: composing, width: width, openPlaces: openPlaces)
+            .opacity(shown)
+            .allowsHitTesting(stays)
+            .accessibilityHidden(!stays)
             .animation(Motion.dock, value: composing)
+            .animation(Motion.dock, value: stays)
             .transaction { if reduceMotion { $0.animation = nil } }
     }
 }
@@ -235,7 +245,7 @@ private struct DockCellLabel: View {
 }
 
 /// 底部那一排右边的 Cue 钮：占两格宽，右端是它的头像（表情、在跑的环、等你的赭黄环，`CueAvatar`；又来一句时外漾一圈 `CueArrival`），
-/// 左边两行"推进中 N"、"等你 M"（`DockTally`）；点它去 Cue 页。iPhone 上 Cue 的新消息只提示在这里（推入的页没有这一排、不另提示）：
+/// 左边两行"推进中 N"、"等你 M"（`DockTally`）；点它去 Cue 页。iPhone 上 Cue 的新消息只提示在这里（会话页与纸页上没有这一排、不另提示）：
 /// 头像右上角石绿的点（`CueDot`）；有没说出去的草稿时那里是一颗牛皮纸色的小气泡（同你说的话，`Palette.bubble` 加 `Icon.said`）。
 /// 接力里它就是 Cue 那一头（`CueSpot.dock`）：项目、进展两页上没有页头，光落在这里。
 private struct DockCue: View {
@@ -273,9 +283,9 @@ private struct DockCue: View {
         .accessibilityValue(Dotted(cue.unread > 0 ? "\(cue.unread) 条新消息" : nil, DockTally.spoken(cue), drafted ? "有草稿" : nil).spoken)
     }
 
-    /// 在 Cue 页上（"⋯"展开着）点它是收起、回到输入框；在项目、进展页上是去 Cue 页。
+    /// 在 Cue 页上（"⋯"展开着）点它是收起、回到输入框；在别的页上（含推在 Cue 页上的页）是回 Cue 页。
     private func open() {
-        guard workspace.root != .cue else {
+        guard workspace.top != .cue else {
             collapse()
             return
         }

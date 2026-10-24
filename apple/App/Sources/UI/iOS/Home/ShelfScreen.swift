@@ -111,11 +111,11 @@ private struct PinnedShelfCard: View {
         .accessibilityElement(children: .combine)
     }
 
+    /// 没写介绍也占着介绍那一行：置顶卡一样高，单出来的一张、一整行都没介绍的不比别的行矮。
     @ViewBuilder private var lines: some View {
+        let intro = project.intro?.nonEmpty
         Text(project.name).font(.title3.weight(.bold)).foregroundStyle(palette.ink).lineLimit(1)
-        if let intro = project.intro?.nonEmpty {
-            Text(intro).font(Typography.meta).foregroundStyle(palette.ink2).lineLimit(1)
-        }
+        Text(intro ?? " ").font(Typography.meta).foregroundStyle(palette.ink2).lineLimit(1).accessibilityHidden(intro == nil)
     }
 }
 
