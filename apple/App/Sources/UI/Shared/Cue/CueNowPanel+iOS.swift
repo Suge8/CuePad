@@ -1,195 +1,82 @@
 #if os(iOS)
-import CueStore
 import SwiftUI
 
-/// Cue 名牌长出的面板（`CueHeader`），手机上 Cue 的总面板（Mac 上这些分在 Cue 页输入框、"运行情况"、侧栏与设置里）。名牌长成的名片之下，沿中轴排：
-/// 它的大脑（Agent、模型与思考强度，`CueConfigControls`；还没选在哪台运行时空着这一行）与上下文那一行（`CueContextLine`，没启用时空着），居中；
-/// 在做：区头左"在做"，右边等你（赭黄，点它收起面板，等你的卡就在页面下方）与在跑、子代理的计数（`LiveWorkCount`）；下面固定几格会话（`SessionSlots`）；
-/// 底部三个等宽的去处：全部会话（换到进展页的会话段）、记忆、设置（`CueSettingsScreen`：在哪台 Mac 上运行、不用先问的事、工具步骤与名字）。
-/// 面板定高、不滚：会话空着、少、满都是同样几格高，多出的在全部会话里，有没有等你、启没启用也一样高；放不下四格时少放几格（按给的高定，与有几个会话无关）。
-/// 区头不钉住、面板里没有滚动区：滚动区会读到对话那块的内容边距（SwiftUI 把对话的 `contentMargins` 写到同一棵树里别的 UIScrollView 上），整块右移被裁。
+/// Cue 名牌长出的面板（`CueHeader`）：只放 Cue 自己的（Mac 上这些分在 Cue 页输入框、"运行情况"与设置里）。名牌长成的名片之下沿中轴排：
+/// 它的大脑（Agent、模型与思考强度，`CueConfigControls`）与上下文那一行（`CueContextLine`），底下记忆、设置两个等宽的去处
+/// （设置是 `CueSettingsScreen`：在哪台 Mac 上运行、不用先问的事、工具步骤与名字）。
+/// 在做的会话不在这里：进行中的在进展页的会话段（左滑就到），点进会话只有那一条路，返回落点与行的长相都只有一种。
+/// 面板只有启用前后这一个变量，两态同一个尺寸：大脑那一块按启用了的样子占位（`BrainBlock`）。
+/// 面板里不放滚动区：滚动区会读到对话那块的内容边距（SwiftUI 把对话的 `contentMargins` 写到同一棵树里别的 UIScrollView 上），整块右移被裁。
 struct CueNowPanel: View {
     let brain: AgentModelChoice?
     let close: () -> Void
     @Environment(Workspace.self) private var workspace
-    @Environment(AppServices.self) private var services
-    @Environment(\.palette) private var palette
 
-    /// 面板的字号上限：再大名片、大脑、一格会话与去处就放不进最矮的 iPhone 了。
+    /// 面板的字号上限：再大胶囊那一排连模型名都要截掉（iPhone 17 上辅助字号第二档就成了"Opus…"）。
     private static let largestType = DynamicTypeSize.accessibility1
-    /// 区头的高：等你那颗按钮的点按区。
-    private static let tallyHeight: CGFloat = 32
 
     var body: some View {
-        let cue = workspace.cue
-        VStack(spacing: 16) {
-            // 启用前后、选没选在哪台运行，这两行都占着同样的高：面板不随状态变矮
-            VStack(spacing: 12) {
-                if cue.hostID != nil {
-                    CueConfigControls(choice: brain, fail: workspace.fail, alignment: .center)
-                } else {
-                    // 名片上的此刻已经写着"还没启用"，这里只空着这一行
-                    Color.clear.frame(height: ConfigCapsule.hitHeight)
-                }
-                CueContextLine(context: cue.context).frame(maxWidth: 240)
-                    .opacity(cue.canHear ? 1 : 0).accessibilityHidden(!cue.canHear)
+        VStack(spacing: 20) {
+            BrainBlock(brain: brain, choose: { go(.cueSettings) })
+            HStack(spacing: 10) {
+                place("记忆", icon: .memory) { workspace.cue.showsMemory = true }
+                place("设置", icon: .settings) { workspace.push(.cueSettings) }
             }
-            VStack(alignment: .leading, spacing: 10) {
-                tally
-                SessionSlots(sessions: workspace.liveWork.rows, open: open)
-            }
-            places
         }
-        .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 10)
+        .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 16)
         .dynamicTypeSize(...Self.largestType)
     }
 
-    /// 在做的区头：左"在做"，右边等你与在跑的计数；等你只在有的时候写。
-    private var tally: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text("在做").font(.footnote.weight(.semibold)).foregroundStyle(palette.ink3).accessibilityAddTraits(.isHeader)
-            Spacer(minLength: 8)
-            if workspace.cue.waiting > 0 {
-                Button(action: close) {
-                    WaitingCount(count: workspace.cue.waiting).frame(minHeight: Self.tallyHeight).contentShape(.rect)
-                }
-                .buttonStyle(PressStyle())
-                .accessibilityHint("收起面板，看下面等你的事")
-                Dot().foregroundStyle(palette.ink3)
-            }
-            LiveWorkCount(work: workspace.liveWork, font: .footnote)
+    /// 两个去处同宽同高：次按钮的胶囊（同页里"以后不用问"那一类），图标接字。
+    private func place(_ title: String, icon: Icon, action: @escaping () -> Void) -> some View {
+        Button {
+            close()
+            action()
+        } label: {
+            Label { Text(title).lineLimit(1) } icon: { Image(icon) }
+                .labelStyle(.titleAndIcon)
+                .frame(maxWidth: .infinity)
         }
-        .font(.footnote)
-        // 有没有等你这一行都一样高（等你那颗按钮的点按区）
-        .frame(minHeight: Self.tallyHeight)
-        // 大字号下一行放不下时整行缩一点，不截掉子代理的数
-        .minimumScaleFactor(0.8)
+        .buttonStyle(ControlButtonStyle(kind: .secondary))
     }
 
-    private var places: some View {
-        HStack(spacing: 0) {
-            place("全部会话", icon: .session, count: services.liveSessions.total) {
-                close()
-                workspace.showSessions()
-            }
-            place("记忆", icon: .memory) {
-                close()
-                workspace.cue.showsMemory = true
-            }
-            place("设置", icon: .settings) {
-                close()
-                workspace.push(.cueSettings)
-            }
-        }
-    }
-
-    private func place(_ title: String, icon: Icon, count: Int? = nil, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            VStack(spacing: 6) {
-                Image(icon).font(.title3).foregroundStyle(palette.ink2).accessibilityHidden(true)
-                HStack(spacing: 4) {
-                    Text(title).foregroundStyle(palette.ink)
-                    if let count, count > 0 { Text("\(count)").monospacedDigit().foregroundStyle(palette.ink3) }
-                }
-                .font(.footnote.weight(.medium))
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
-            }
-            .frame(maxWidth: .infinity, minHeight: 64)
-            .contentShape(.rect)
-        }
-        .buttonStyle(.row)
-    }
-
-    private func open(_ session: PiSessionState) {
+    private func go(_ route: Route) {
         close()
-        workspace.openSession(session.id, sessionID: session.sessionID)
+        workspace.push(route)
     }
 }
 
-/// 在做的那几格：一格一个会话（`PiSessionRow`，按 `LiveWork.rows` 的先后，要你注意的在前），格高就是一行的高（名字一行、状态一行），
-/// 有没有会话、有几个都占同样几格；没有时一句话居中在这几格里。最多 `most` 格，给的高放不下就少几格：格数由 `SlotRoom` 按给的高与格高算出，
-/// 只随屏高与字号变，不随会话变。行只建放得下的那几行：量出这块排成几格高、一格多高，再按它列（量的是这块自己的框，行不参与它的大小，不成环）。
-private struct SessionSlots: View {
-    let sessions: [PiSessionState]
-    let open: (PiSessionState) -> Void
-    @Environment(AppServices.self) private var services
+/// 大脑一排与上下文一行，启用前后同一块、同样高：
+/// - 启用了：胶囊（可换 Agent、模型、思考强度）与上下文用了几成；
+/// - 停用了（还记着那台 Mac）：同样两行，淡下去、不可点，看得到停用前用的是什么、上下文停在几成；
+/// - 还没选过在哪台运行：没有可写的大脑（只会是"默认模型"的空胶囊），这一块换成一颗"选在哪台 Mac 上运行"，点它去 Cue 的设置。
+/// 高度总由启用了的两行定（看不见时也排着），换态时面板不变高。
+private struct BrainBlock: View {
+    let brain: AgentModelChoice?
+    let choose: () -> Void
     @Environment(Workspace.self) private var workspace
-    @Environment(\.palette) private var palette
-    @State private var room: CGFloat = 0
-    @State private var slot: CGFloat = 0
-
-    static let most = 4
-    private static let gap = CueHeader.rowGap
-
-    /// 这块排成了几格（还没量到时按最多算，同一帧里就会改成量到的）。
-    private var fit: Int { SlotRoom.count(in: room > 0 ? room : nil, slot: slot, gap: Self.gap, most: Self.most) }
 
     var body: some View {
-        SlotRoom(most: Self.most, gap: Self.gap) {
-            SlotHeight().onGeometryChange(for: CGFloat.self) { $0.size.height } action: { slot = $0 }
+        let cue = workspace.cue
+        let chosen = cue.hostID != nil
+        VStack(spacing: 10) {
+            CueConfigControls(choice: brain, fail: workspace.fail, alignment: .center)
+            CueContextLine(context: cue.context).frame(maxWidth: 240)
         }
-        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { room = $0 }
-        .overlay(alignment: .top) {
-            if sessions.isEmpty {
-                Text("没有在跑的会话").font(.subheadline).foregroundStyle(palette.ink3).frame(maxHeight: .infinity)
-            } else {
-                VStack(alignment: .leading, spacing: Self.gap) {
-                    ForEach(sessions.prefix(fit)) { session in
-                        SlotHeight().overlay(alignment: .topLeading) { row(session) }
-                    }
-                }
+        .opacity(chosen ? (cue.canHear ? 1 : Self.dimmed) : 0)
+        .disabled(!cue.canHear)
+        .accessibilityHidden(!chosen)
+        .overlay {
+            if !chosen {
+                // 这时面板里唯一的下一步：用选中那一档的靛青，与下面两个去处分开
+                Button("选在哪台 Mac 上运行", icon: .mac, action: choose)
+                    .labelStyle(.titleAndIcon)
+                    .buttonStyle(ControlButtonStyle(kind: .highlight))
             }
         }
     }
 
-    private func row(_ session: PiSessionState) -> some View {
-        let live = services.liveSessions
-        return Button { open(session) } label: {
-            PiSessionRow(
-                session: session, project: workspace.catalog?.project(session.projectID), delivery: live.deliveries[session.sessionID],
-                rename: live.renames[session.sessionID], undelivered: live.undelivered[session.sessionID] ?? 0
-            ).equatable()
-                .contentShape(.rect)
-        }
-        .buttonStyle(.row)
-    }
-}
-
-/// 几格会话的那块地方：一格高是唯一的子视图（`SlotHeight`）的高，给的高里放得下几格（至少一格、至多 `most` 格）就是几格那么高。
-private struct SlotRoom: Layout {
-    let most: Int
-    let gap: CGFloat
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let slot = subviews.first?.sizeThatFits(ProposedViewSize(width: proposal.width, height: nil)) ?? .zero
-        let count = CGFloat(Self.count(in: proposal.height, slot: slot.height, gap: gap, most: most))
-        return CGSize(width: proposal.width ?? slot.width, height: count * slot.height + (count - 1) * gap)
-    }
-
-    /// 这么高放得下几格（至少一格、至多 `most` 格），排版与列行共用这一条。没给高、给的是无穷（外面量它最多要多高时）或还没量到格高就是最多那几格；
-    /// 量回来的高带浮点误差，多给半点余量。
-    static func count(in height: CGFloat?, slot: CGFloat, gap: CGFloat, most: Int) -> Int {
-        guard let height, height.isFinite, slot > 0 else { return most }
-        return min(max(Int((height + gap + 0.5) / (slot + gap)), 1), most)
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        subviews.first?.place(at: bounds.origin, proposal: ProposedViewSize(width: bounds.width, height: nil))
-    }
-}
-
-/// 一格的高：与 `PiSessionRow.Style.compact` 同样的两行字，看不见，铺满宽。
-private struct SlotHeight: View {
-    var body: some View {
-        let style = PiSessionRow.Style.compact
-        VStack(spacing: style.spacing) {
-            Text(verbatim: " ").font(style.name)
-            Text(verbatim: " ").font(style.line)
-        }
-        .frame(maxWidth: .infinity)
-        .hidden()
-        .accessibilityHidden(true)
-    }
+    /// 停用时那两行的浓淡：看得清是什么，又读得出点不了。
+    private static let dimmed = 0.4
 }
 #endif

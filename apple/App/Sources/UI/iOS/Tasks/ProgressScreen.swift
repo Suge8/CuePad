@@ -3,7 +3,7 @@ import CueStore
 import SwiftUI
 
 /// 进展页（iPhone 底部那一排与 iPad 侧栏的"进展"）：看板与会话两段，看哪一段只有 `Workspace.progressPane` 一份
-/// （Cue 面板的"全部会话"、项目页"⋯"的"看这个项目的会话"经 `showSessions` 换到会话段）。两段只看项目范围里的（`Workspace.scopedProject`）。
+/// （项目页"⋯"的"看这个项目的会话"经 `showSessions` 换到会话段）。两段只看项目范围里的（`Workspace.scopedProject`）。
 /// 顶栏中间一块玻璃（`ProgressHeader`）：两段的分段、项目范围、额度环；右上角随段是"添加任务"或"新会话"。
 /// 看板一段是流水看板（`TaskBoard`），待办 → 推进中 → 等你 → 已完成（今天）；选了项目以后卡上不画项目小图形、列头的数也只数这个项目。
 /// 宽屏（iPad）同 Mac 四列并排（`BoardColumns`）；窄屏是四行竖排、每行横划的竖版看板（`PhoneBoard`），四行一打开都在眼前，不另设落点。
