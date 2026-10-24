@@ -24,16 +24,15 @@ extension AppServices {
     }
 
     /// 启动同步，并让 `syncStatus`、`syncIssues`、`conflicts` 跟随，直到任务取消。没有同步（隔离模式）什么都不做。
-    /// 启动后的第一次拉走立即同步（`CloudSync.start` 自己不拉）：算在 `isCatchingUp` 里，打开的页面知道手里的可能不是最新。
+    /// 启动后的第一次拉走立即同步（`CloudSync.start` 自己不拉；拉取等得到同步开始）：算在 `isCatchingUp` 里，打开的页面知道手里的可能不是最新。
     func startSync() {
         guard let sync else { return }
         follow {
             for await state in sync.stateUpdates { self.setSyncState(state) }
         }
-        // 启动排在所有拉取前面（`pull`）：冷启动时先到的推送等它，不空拉
-        latestPull = (nil, Task {
+        follow {
             do { try await sync.start() } catch { self.syncFailedToStart(error) }
-        })
+        }
         follow { await self.syncNow() }
         follow(reporting: { .syncUnavailable("冲突列表读取失败：\($0)") }) {
             for try await conflicts in self.store.observe({ try $0.conflicts() }) { self.setConflicts(conflicts) }
@@ -51,38 +50,23 @@ extension AppServices {
         await syncNow()
     }
 
-    /// 手里有正在等的东西时按节奏拉（`SyncPoller`；节奏见 `pollingCadence`，每次拉经 `pull`）。
+    /// 手里有正在等的东西时按节奏拉（`SyncPoller`；节奏见 `pollingCadence`）。
     /// Mac 不收推送，别的设备写来的东西只靠它；手机有推送，它是推送之外让在等的东西更快、更稳地到。已经在拉就不重开。
+    /// 节奏与拉取不在主线程上：主线程忙（排版、重读）时拉取不跟着晚，只有等待理由变了才回主线程算一次节奏。
     func startPolling() {
-        guard sync != nil, polling == nil else { return }
+        guard let sync, polling == nil else { return }
         let waiting = pollingCondition()
         let poller = SyncPoller(timing: timing)
         polling = Task {
-            await poller.run(while: waiting) { await self.pull() }
+            await poller.run(while: waiting) { await sync.pull() }
         }
     }
 
-    /// 拉一次：立即同步、按节奏的拉取与收到推送（前台的通知、后台的静默推送）只经这里，同一时刻只有一拉。要的是此刻服务器上的：
-    /// 开拉不早于此刻的一拉（在拉的或刚拉完的）就带着它，不另拉；在拉的那一拉开拉更早（或同步还在启动），等它完了再拉。
-    /// 回到前台、同步恢复、冷启动时先到的推送与启动后的立即同步因此都是同一拉。不碰立即同步的忙碌状态（`syncNow`）。
-    /// 失败（多半是离线）只记日志：下一次触发会再拉，状态变化会经 `syncStatus` 反映。
+    /// 拉一次（返回时拉完）：立即同步与收到推送（前台的通知、后台的静默推送）经这里，按节奏的拉取直接调同步（`startPolling`）。
+    /// 同一时刻只有一拉，在跑时再来的合成下一拉，同步开始前来的（冷启动时先到的推送）等它开始了再拉：都在 `CloudSync.syncNow`。
+    /// 不碰立即同步的忙碌状态（`syncNow`）。拉取本身不在主线程上（`SyncControlling.pull`），主线程只等它返回。
     func pull() async {
-        guard let sync else { return }
-        let asked = ContinuousClock.now
-        while let latest = latestPull {
-            if let began = latest.began, began >= asked { return await latest.task.value }
-            await latest.task.value
-            if latestPull?.task == latest.task { break }  // 等的时候没有别人接着开拉：轮到这里
-        }
-        let task = Task {
-            do {
-                try await sync.syncNow()
-            } catch {
-                Self.log.notice("拉取失败：\(String(describing: error), privacy: .public)")
-            }
-        }
-        latestPull = (.now, task)
-        await task.value
+        await sync?.pull()
     }
 
     /// 此刻该按什么节奏拉（nil：不拉）。"是否在等"只在这里定义，节奏见 `SyncPoller.Cadence.mac`、`.phone`：

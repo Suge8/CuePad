@@ -47,7 +47,7 @@ final class IOSAppDelegate: NSObject, UIApplicationDelegate {
         alerts.registrationFailed(error)
     }
 
-    /// 同步区有变化的静默推送与带 content-available 的等你类推送（后台也会把 App 叫起来一会儿）：拉到推送说的变化再交还系统
+    /// 要紧的变化的推送（见 `AlertSubscriptions`：静默的与带 content-available 的可见通知，后台也会把 App 叫起来一会儿）：拉到推送说的变化再交还系统
     /// （冷启动时等同步启动完，见 `AppServices.pull`）；拉完当场改实时活动与小组件（`AppServices.writeSnapshots`）再交还：
     /// 回调一返回系统就可能挂起 App，快照那条观察是异步的，靠它改岛常常来不及。
     func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable: Any]) async -> UIBackgroundFetchResult {

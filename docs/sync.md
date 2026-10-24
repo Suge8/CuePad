@@ -1,6 +1,6 @@
 # 同步参考
 
-同步通路、拉取、发送与通知的规则和理由写在各自类型的头注释里：通路与为什么不用 CKSyncEngine 在 `CloudSync`，拉、推在 `ZonePuller`、`RecordSender`，等待理由与立即同步在 `AppServices+Sync.swift`，说的话到哪了在 `Speech`。这里只补代码里没有的：实测结论、跨设备的取舍、排查与真机验证。
+同步通路、拉取、发送与通知的规则和理由写在各自类型的头注释里：通路、冷启动与为什么不用 CKSyncEngine 在 `CloudSync`，拉、推在 `ZonePuller`、`RecordSender`，失败怎么归类、怎么重试在 `SyncFault`、`RecordSender`，等待理由与立即同步在 `AppServices+Sync.swift`，说的话到哪了在 `Speech`。这里只补代码里没有的：实测结论、跨设备的取舍、排查与真机验证。
 
 ## 拉取节奏
 
@@ -8,7 +8,7 @@
 
 - 实测（2026-10-12，手机发 18 条请求）：服务器到 Mac 0.44–2.67 秒、中位约 1.1 秒，全靠拉取到达。改节奏前先有新的实测，不凭"每天四万多次请求太多"去放慢。
 - Cue 值班是等待理由：2026-10-14 手机对 Cue 说的一句 21 秒才交给它，当时 Mac 没有等待理由、一次都没拉。没开 1 秒一档：Cue 回一句本身要十几到几十秒。
-- 不是等待理由的改动（灵感、任务等）靠切到前台、唤醒时的立即同步，手机另有推送。
+- 不是等待理由的改动（灵感、任务等）靠切到前台、唤醒时的立即同步；手机的推送只为要紧的变化（`AlertSubscriptions`），灵感、任务不推。
 
 ## 用户离开时的 Mac
 
@@ -27,7 +27,7 @@
 - 不持有活动，拆开重读也救不了：整个进程都在饿。
 - 持有活动后，剩下的排队来自同一条队列上的活。所以订阅重读走自己的只读连接（`CueStore` 头注释）。外部提交按表叫醒（`ChangeNotification`）。没人看得到主窗口时内容摘下（`MainShellWindow.parkWhileUnseen`，锁屏、6 个会话在写时主线程忙碌从 72% 降到 4%）。
 
-排查：类别 `stall` 的 notice 落盘，记着停摆时进程晚醒多久、主线程与资料库队列各排了多久。
+排查：类别 `stall`（`Logger.stall`）的 notice 落盘，记着停摆时进程晚醒多久、主线程与资料库队列各排了多久，以及一拉超过 1 秒、拉取节奏迟醒超过 1 秒（`SyncPoller`）。
 
 ## 发送
 
@@ -51,7 +51,12 @@ Cue 说话的工具等结果至多 `Speech.cueWait`；没告诉它的失败作�
 
 每台设备自己写、别的设备只读的三张同步表，规则与写的时机在各自头注释：在不在线 `MacPresence`（`MacPresenceKeeper`）、开着哪一页 `Viewer`（`ViewerKeeper`）、有哪些 Agent 与模型 `MacAgents`（`MacAgentsRecorder`）。它们都不是等待理由：需要及时看到的那台 Mac 本来就因在线会话或 Cue 值班每 2 秒拉。
 
-推送的取舍：手机的同步区变化推送对每次写都推一次，续期就是醒着的每台 Mac 每小时约 12 次。Apple 建议后台推送每小时不超过两三次，超了系统会合并、节流；"等你"与 Agent 的提醒是查询订阅的可见推送，不受影响。接受这个代价，没把在线记录挪到手机不订阅的单独同步区（要多一个区、一份令牌和一条拉取）。实测到手机耗电或别的后台推送被节流时，先拉长 `MacPresence.renewal`，再考虑单独的区。
+推送的取舍：在线记录的续期不给手机推送，手机只订阅要紧的变化（理由与实测在 `AlertSubscriptions` 头注释）。
+
+## 失败与重试
+
+- 复测失败路径用 `research/sync-faults` 分支的故障探针（内存替身注入延迟与错误，Kit 与 App 两层，不合并）：叠到改动上跑 `xc.sh test kit -only-testing:CueSyncTests/SyncFaultProbeTests`、`xc.sh test mac|ios -only-testing:CuePadTests/SyncFaultProbeTests`。探针里挂得比 `RequestLimits.request` 久的数据库请求要按 CloudKit 的空闲超时到点失败，才和真机一致。
+- 没在真网络上确认的：断网时 CloudKit 整批抛的是 `partialFailure` 包着 -1009，还是 URL 错误原样；区忙带不带 `retryAfterSeconds`。归类（`SyncFault`）对这几种包法给同一个结论，所以不影响行为。
 
 ## 最低对端版本
 
@@ -88,3 +93,13 @@ CloudKit 日志里的错误详情是 `<private>`。要复现：拿用户库的�
 同步是否真在跑以库为准（只读复制出来看）：`syncState` 有一行 `zoneToken`，`syncRecords` 的行数随推送增长到与同步表记录数相当。真机验证：装发布版 → 设置里的 iCloud 同步先显示"正在连接 iCloud…"再变"已同步" → 几分钟内复制库检查这两张表 → 另一台设备上看到同一批项目、灵感与任务。
 
 验证生产环境的订阅能否创建：用 Developer ID 描述文件签名、带 production 容器权限的最小 Mac 程序保存订阅，打印完整的 CKError（看 `description`，`localizedDescription` 会丢掉服务端的说明）。开发环境的 Mac 描述文件按 Provisioning UDID 登记设备，不是 Hardware UUID。
+
+### 推送拉起被划掉的 App
+
+推送先于同步启动到达：App 被划掉后由推送冷启动到后台，拉取要等同步开始了再拉（`CloudSync.syncNow`），拉完、改完小组件与实时活动才交还系统（`IOSAppDelegate` 的远程通知回调）。没有自动测试：推送不经 Workspace，模拟器登不了 iCloud，CloudKit 也不把推送发给做出改动的那台设备，只能真机加另一台设备验。
+
+1. 两端在同一个环境：生产订阅部署之后，手机装 TestFlight 版、Mac 用正式版；之前用 `xc.sh device` 装的开发构建，Mac 那头起连开发环境的实例（见 [verify.md](verify.md)「同步测量」）。手机打开一次、确认设置里通知那一行正常，主屏放 Cue 小组件。
+2. 在 App 切换器里划掉 CuePad，锁屏放一会儿。
+3. 在 Mac 上让 Cue 对你说一句不带选项的话（只走静默推送），再说一句带选项的（可见通知，同时叫醒 App）。
+4. 不解锁、不打开 App，看小组件与锁屏实时活动：应在几十秒内换成刚说的话。再打开 App：Cue 页里两句已在，不是打开后才转圈拉到。
+5. 反例：小组件停在旧内容、打开 App 才出现，就是推送拉起的那一拉空手返回或推送被节流。看手机日志（Mac 上 Console 选这台手机，subsystem 是 App 身份前缀）有没有"拉取失败"、类别 `sync` 的认账号失败。静默推送每小时只给两三条，连着试几次后它不来是系统节流，换可见通知那句验。

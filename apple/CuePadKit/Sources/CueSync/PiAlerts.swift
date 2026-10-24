@@ -80,14 +80,15 @@ protocol SubscriptionStore: Sendable {
   func delete(_ id: CKSubscription.ID) async throws
 }
 
-/// CloudKit 服务端订阅（只有手机建）：同步区有变化时的静默推送（收到就拉一次），以及下面的可见通知。
-/// Pi 会话状态记录（等你确认、完成两个）与 Cue 消息（一个）的 `notify` 标志置位时，服务端直接生成可见通知。
-/// 等你类的两个（会话等你确认、Cue 的消息）另带 content-available：可见通知同时把 App 叫到后台拉一次，实时活动的等你随之更新（docs/sync.md「Agent 与 Cue 的通知」）。
-/// 不依赖静默推送与 App 在后台运行。通知文案只用本地化 key 的通用句：标题与详情是加密字段，不可能出现在通知里；
-/// 也不设 `desiredKeys`。只订阅创建与更新（删除不通知）。谓词按标志而不是按状态，因为"同一状态下的重复更新"
-/// 与"从工作中进入完成"这类转换在谓词里表达不了；标志只在转换那一次写入上置位（见 `PiStateRecorder`）。
+/// CloudKit 服务端订阅（只有手机建）：只订阅要紧的变化——给你的话、请求结果、等你、做完，收到就在后台拉一次（App 的远程通知回调）。
+/// 不订阅整个同步区的变化：Mac 每小时写三百次上下（会话细节、在线续期、预览），每次一条静默推送，远超系统每小时两三条的预算，
+/// 被合并、节流后要紧的也跟着晚到（docs/sync.md「Agent 与 Cue 的通知」）。
+/// 可见通知：Pi 会话状态记录（等你确认、完成两个）与 Cue 消息（一个）的 `notify` 标志置位时，服务端直接生成；它们都另带 content-available，
+/// 把 App 叫到后台拉一次，实时活动随之更新。只靠静默推送的两个（Cue 对你说的话、发往 Mac 的请求有了结果）不出通知，只叫醒 App 拉。
+/// 通知文案只用本地化 key 的通用句：标题与详情是加密字段，不可能出现在通知里；也不设 `desiredKeys`。删除不通知。
+/// 谓词按标志而不是按状态，因为"同一状态下的重复更新"与"从工作中进入完成"这类转换在谓词里表达不了；标志只在转换那一次写入上置位（见 `PiStateRecorder`）。
 /// 标志在上传前会被同状态的更新沿用；状态已前进或会话已结束时未上传的标志作废（见 `PiStateRecorder`）。
-/// 两张表的 `notify` 可查询索引由生成的数据结构声明（`RecordMapper.queryableColumns`，见 docs/release.md「CloudKit 数据结构」）。
+/// 谓词用到的明文字段的可查询索引由生成的数据结构声明（`RecordMapper.queryableColumns`，见 docs/release.md「CloudKit 数据结构」）。
 /// 查询订阅是 schema 的一部分：改定义（谓词、选项、通知文案 key）要重新部署到生产，见 docs/release.md「CloudKit 数据结构」。
 struct AlertSubscriptions {
   /// 通知标志字段（明文、可查询）。
@@ -97,70 +98,85 @@ struct AlertSubscriptions {
   static let waitingID = prefix + "pi.waiting"
   static let settledID = prefix + "pi.settled"
   static let cueID = prefix + "cue"
-  /// 同步区有变化就给这台设备一个静默推送，收到就拉一次（App 的远程通知回调）。数据库订阅生产环境允许客户端直接建。
-  static let changesID = prefix + "changes"
+  /// Cue 对你说的话（不论要不要提示）：静默推送。
+  static let cueSaidID = prefix + "cue.said"
+  /// 发往 Mac 的请求有了结果（成功或失败）：静默推送，回执在后台也拉得回来。
+  static let resultID = prefix + "delivery.result"
   /// 通知的本地化文案 key（App 的 Localizable.strings 里的通用句）：改写不成时显示它们。
   private static let waitingKey = "pi_alert_waiting", settledKey = "pi_alert_settled", cueKey = "cue_alert"
 
   let zoneID: CKRecordZone.ID
 
-  func desired() -> [CKSubscription] {
+  func desired() -> [CKQuerySubscription] {
     [
-      make(.piSessionStates, id: Self.waitingID, flag: "waitingForUser", key: Self.waitingKey, wakes: true),
-      make(.piSessionStates, id: Self.settledID, flag: "settled", key: Self.settledKey),
-      make(.cueMessages, id: Self.cueID, flag: CueMessage.notifyFlag, key: Self.cueKey, wakes: true),
-      changes(),
+      alert(.piSessionStates, id: Self.waitingID, flag: "waitingForUser", key: Self.waitingKey),
+      alert(.piSessionStates, id: Self.settledID, flag: "settled", key: Self.settledKey),
+      alert(.cueMessages, id: Self.cueID, flag: CueMessage.notifyFlag, key: Self.cueKey),
+      silent(.cueMessages, id: Self.cueSaidID, NSPredicate(format: "author == %@", CueAuthor.cue.rawValue), on: .firesOnRecordCreation),
+      silent(
+        .deliveryRequests, id: Self.resultID, NSPredicate(format: "status IN %@", [DeliveryStatus.succeeded.rawValue, DeliveryStatus.failed.rawValue]),
+        on: [.firesOnRecordCreation, .firesOnRecordUpdate]),
     ]
   }
 
-  private func changes() -> CKDatabaseSubscription {
-    let subscription = CKDatabaseSubscription(subscriptionID: Self.changesID)
+  /// 幂等：缺的创建，与期望不一致的替换，本前缀下多余的删除，别人的订阅不碰。每个订阅各建各的，一个被拒（如生产环境还没部署的）不挡别的。
+  /// 账号切换后新账号的数据库里没有这些订阅，再调用一次即重建。失败不抛：结果就是状态，原因交给界面。
+  func ensure(in store: any SubscriptionStore) async -> PiAlertSubscriptionStatus {
+    let existing: [CKSubscription.ID: CKSubscription]
+    do { existing = try await store.subscriptions() } catch { return .failed(error.diagnosis) }
+    let wanted = desired()
+    let wantedIDs = Set(wanted.map(\.subscriptionID))
+    let failures: [String] = await withTaskGroup(of: String?.self) { group in
+      for id in existing.keys where !wantedIDs.contains(id) && id.hasPrefix(Self.prefix) {
+        group.addTask { await Self.attempt(id) { try await store.delete(id) } }
+      }
+      for subscription in wanted where !Self.matches(existing[subscription.subscriptionID], subscription) {
+        group.addTask { await Self.attempt(subscription.subscriptionID) { try await store.save(subscription) } }
+      }
+      return await group.reduce(into: [String]()) { failures, failure in if let failure { failures.append(failure) } }
+    }
+    return failures.isEmpty ? .active : .failed(failures.sorted().joined(separator: "\n"))
+  }
+
+  private static func attempt(_ id: String, _ change: () async throws -> Void) async -> String? {
+    do {
+      try await change()
+      return nil
+    } catch {
+      return "\(id)：\(error.diagnosis)"
+    }
+  }
+
+  /// 可见通知（`notify` 标志置位时），同时叫醒 App 在后台拉一次（content-available）。
+  private func alert(_ table: Table, id: String, flag: String, key: String) -> CKQuerySubscription {
+    let subscription = query(table, id: id, NSPredicate(format: "%K == %@", Self.flagField, flag), on: [.firesOnRecordCreation, .firesOnRecordUpdate])
+    let info = CKSubscription.NotificationInfo()
+    info.alertLocalizationKey = key
+    info.soundName = "default"
+    // 让手机上的通知服务扩展先拿到通知，按记录改写成会话名与问题、Cue 说的话（加密字段只能在设备上读）
+    info.shouldSendMutableContent = true
+    info.shouldSendContentAvailable = true
+    subscription.notificationInfo = info
+    return subscription
+  }
+
+  /// 只叫醒 App 在后台拉一次，不出通知。
+  private func silent(_ table: Table, id: String, _ predicate: NSPredicate, on options: CKQuerySubscription.Options) -> CKQuerySubscription {
+    let subscription = query(table, id: id, predicate, on: options)
     let info = CKSubscription.NotificationInfo()
     info.shouldSendContentAvailable = true
     subscription.notificationInfo = info
     return subscription
   }
 
-  /// 幂等：缺的创建，与期望不一致的替换，本前缀下多余的删除，别人的订阅不碰。
-  /// 账号切换后新账号的数据库里没有这些订阅，再调用一次即重建。失败不抛：结果就是状态，原因交给界面。
-  func ensure(in store: any SubscriptionStore) async -> PiAlertSubscriptionStatus {
-    do {
-      let existing = try await store.subscriptions()
-      let wanted = desired()
-      let wantedIDs = Set(wanted.map(\.subscriptionID))
-      for id in existing.keys where !wantedIDs.contains(id) && id.hasPrefix(Self.prefix) {
-        try await store.delete(id)
-      }
-      for subscription in wanted where !Self.matches(existing[subscription.subscriptionID], subscription) {
-        try await store.save(subscription)
-      }
-      return .active
-    } catch {
-      return .failed(error.diagnosis)
-    }
-  }
-
-  /// `wakes`：同时叫醒 App 在后台拉一次（content-available）。
-  private func make(_ table: Table, id: String, flag: String, key: String, wakes: Bool = false) -> CKQuerySubscription {
-    let subscription = CKQuerySubscription(
-      recordType: table.rawValue, predicate: NSPredicate(format: "%K == %@", Self.flagField, flag),
-      subscriptionID: id, options: [.firesOnRecordCreation, .firesOnRecordUpdate])
+  private func query(_ table: Table, id: String, _ predicate: NSPredicate, on options: CKQuerySubscription.Options) -> CKQuerySubscription {
+    let subscription = CKQuerySubscription(recordType: table.rawValue, predicate: predicate, subscriptionID: id, options: options)
     subscription.zoneID = zoneID
-    let info = CKSubscription.NotificationInfo()
-    info.alertLocalizationKey = key
-    info.soundName = "default"
-    // 让手机上的通知服务扩展先拿到通知，按记录改写成会话名与问题、Cue 说的话（加密字段只能在设备上读）
-    info.shouldSendMutableContent = true
-    info.shouldSendContentAvailable = wakes
-    subscription.notificationInfo = info
     return subscription
   }
 
-  private static func matches(_ existing: CKSubscription?, _ wanted: CKSubscription) -> Bool {
-    if wanted is CKDatabaseSubscription {
-      return existing is CKDatabaseSubscription && existing?.notificationInfo?.shouldSendContentAvailable == true
-    }
-    guard let existing = existing as? CKQuerySubscription, let wanted = wanted as? CKQuerySubscription else { return false }
+  private static func matches(_ existing: CKSubscription?, _ wanted: CKQuerySubscription) -> Bool {
+    guard let existing = existing as? CKQuerySubscription else { return false }
     return existing.recordType == wanted.recordType && existing.predicate.predicateFormat == wanted.predicate.predicateFormat
       && existing.zoneID == wanted.zoneID && existing.querySubscriptionOptions == wanted.querySubscriptionOptions
       && existing.notificationInfo?.alertLocalizationKey == wanted.notificationInfo?.alertLocalizationKey

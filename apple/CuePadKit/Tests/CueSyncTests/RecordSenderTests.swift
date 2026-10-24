@@ -34,7 +34,7 @@ import Testing
 
     #expect(await sender.send([rig.id(card.id)]))
     #expect(await server.zonesSaved == 1)
-    #expect(try await rig.reconcileDelta().saves.isEmpty)
+    #expect(try await !rig.reconcileDelta().saves.contains(rig.id(card.id)))  // 别的待推送（默认项目）在后台那一路，不随它返回
     await sender.stop()
   }
 

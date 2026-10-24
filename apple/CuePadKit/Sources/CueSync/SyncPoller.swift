@@ -1,5 +1,6 @@
 import CueStore
 import Foundation
+import os
 
 /// 有理由等就拉：Mac 不收推送，别的设备写来的东西只靠拉；手机的推送不保证送达与时效。手里有正在等的东西时，
 /// 按条件给出的节奏拉（等什么只在 `AppServices.pollingCadence` 定义）。
@@ -7,6 +8,7 @@ import Foundation
 /// 条件流给出此刻的节奏（nil：不在等）：每收到一个节奏就从头开始按它的档位隔着拉；节奏变了（多了或换了在等的东西）先立即拉一次，
 /// 最新状态不等第一个间隔。条件流的第一个值与重给的同一个节奏不立即拉：开始拉取（启动、回到前台）与同步恢复时 App 本来就立即同步，
 /// 那一拉就是这一拉。收到 nil 即停，条件流结束或任务取消时返回。
+/// 节奏与拉取都不在调用方的线程上跑（`run` 是 `@concurrent`）：App 从主线程开它，主线程忙时拉取不跟着晚，`fetch` 也别回到主线程。
 public struct SyncPoller: Sendable {
   /// 怎么拉：每 `interval` 拉一次，持续 `lasting`（nil 是一直），到期就不再拉。
   public struct Cadence: Equatable, Sendable {
@@ -31,13 +33,14 @@ public struct SyncPoller: Sendable {
     self.timing = timing
   }
 
+  @concurrent
   public func run<Condition: AsyncSequence & Sendable>(
     while waiting: Condition, fetch: @escaping @Sendable () async -> Void
   ) async where Condition.Element == Cadence?, Condition.Failure == Never {
     var cadences = waiting.makeAsyncIterator()
-    guard var current = await cadences.next(isolation: #isolation) else { return }
+    guard var current = await cadences.next(isolation: nil) else { return }
     var loop = start(current, now: false, fetch)
-    while let next = await cadences.next(isolation: #isolation) {
+    while let next = await cadences.next(isolation: nil) {
       loop?.cancel()
       loop = start(next, now: next != current, fetch)
       current = next
@@ -58,13 +61,24 @@ public struct SyncPoller: Sendable {
     while !Task.isCancelled, let interval = cadence.interval(after: .seconds(timing.now().timeIntervalSince(start))) {
       if let began {
         let spent = Duration.seconds(timing.now().timeIntervalSince(began))
-        if spent < interval { try? await timing.sleep(interval - spent) }
+        if spent < interval {
+          let due = timing.now().addingTimeInterval((interval - spent).seconds)
+          try? await timing.sleep(interval - spent)
+          let late = timing.now().timeIntervalSince(due)
+          if late > Self.stallThreshold { Logger.stall.notice("拉取节奏的睡眠迟醒 \(late, format: .fixed(precision: 2), privacy: .public) 秒") }
+        }
         guard !Task.isCancelled, cadence.interval(after: .seconds(timing.now().timeIntervalSince(start))) != nil else { return }
       }
-      began = timing.now()
+      let fetching = timing.now()
+      began = fetching
       await Task { await fetch() }.value  // 新节奏到来只打断睡眠，不打断拉了一半的请求（取消会让它报错）。取消屏蔽 withTaskCancellationShield 要 macOS 27，部署目标是 26
+      let took = timing.now().timeIntervalSince(fetching)
+      if took > Self.stallThreshold { Logger.stall.notice("一拉用了 \(took, format: .fixed(precision: 2), privacy: .public) 秒") }
     }
   }
+
+  /// 一拉超过它，或节奏的睡眠醒来迟了它这么多，记一条停摆日志（`Logger.stall`）。
+  private static let stallThreshold: TimeInterval = 1
 }
 
 extension SyncPoller.Cadence {

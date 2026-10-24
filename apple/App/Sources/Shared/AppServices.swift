@@ -96,10 +96,8 @@ final class AppServices {
     /// 这台 Mac 上的人看得到主窗口：开着的页算在看（会话页、Cue 页的在场、读过与提示都只认它）。
     var seesMainWindow: Bool { mainWindowExposed && !away }
     #endif
-    /// 最近一拉（`pull`）：开拉的时刻与它的任务，拉完也留着（等它立即返回）。同步启动时先是那次启动（不是一拉，没有开拉时刻）。
-    @ObservationIgnored var latestPull: (began: ContinuousClock.Instant?, task: Task<Void, Never>)?
     /// 还没返回的那一次立即同步（`syncNow`：启动、回到前台、下拉刷新、"立即同步"按钮）：期间再要立即同步的等它。
-    /// 拉取入口（`pull`）只合并开拉不早于要的那一刻的一拉，立即同步要的是"这一次还没返回的"，所以另记。
+    /// 拉取（`CloudSync.syncNow`）只合并还没开拉的那一拉，立即同步要的是"这一次还没返回的"，所以另记。
     var syncing: Task<Void, Never>?
     /// 立即同步还没返回：按钮的忙碌与禁用读 `canSyncNow`，"本机是不是最新"读 `isCatchingUp`。
     var isSyncingNow: Bool { syncing != nil }

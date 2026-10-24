@@ -54,8 +54,11 @@ xcrun cktool export-schema $C --output-file /tmp/dev.ckdb   # 回读：服务端
 
 发布带新字段或新记录类型的版本前先部署：生产里写未部署的字段或类型会让整条记录保存失败。`release mac` 打包前由 `ck-production.sh` 核对，缺的先部署再发。生产结构只能增不能删：已下线的类型与字段在 `CloudKitSchema.retiredTypes` / `retiredFields` 照原样声明。
 
-订阅也是 schema 的一部分，但不在 `.ckdb` 里，cktool 看不到：生产环境拒绝客户端创建没部署过的查询订阅（CKErrorDomain 12，底层 BadSyntax 2006，"attempting to create a subscription in a production container"），区域与数据库订阅不受限；订阅按通知形状匹配（换成 alertBody 的变体会被拒）。改订阅的定义（谓词、选项、通知文案 key）要先让开发环境签名的构建在开发容器里保存同样的订阅，再在控制台 Deploy Schema Changes——确认页各项都显示 0、也不列出订阅，但部署照样生效。
+订阅分两半：定义随 schema 部署，每台手机的订阅由 App 自己建（`AlertSubscriptions`，启动、账号变化、回前台时补建）。Apple 的 `CKSubscription` 文档："Create subscriptions in the development environment first and then promote them to production. Attempting to create a subscription directly in the production environment results in an error." 本项目 2026-10-07 在生产实测：没部署过的查询订阅被拒（CKErrorDomain 12，底层 BadSyntax 2006，"attempting to create a subscription in a production container"），数据库订阅不受限；按通知形状匹配（换成 alertBody 的变体会被拒）。订阅不在 `.ckdb` 里，cktool 看不到。改定义（谓词、选项、通知文案 key、content-available）的部署办法：开发环境签名的构建在开发容器里保存同样的订阅（同步区也用 `CuePad`），再在控制台 Deploy Schema Changes。确认页各项都显示 0、也不列出订阅，但部署照样生效。
 
-待部署到生产（已导入开发环境，发版前按上面三步部署，部署完删掉对应条目）：
+待部署到生产（已导入开发环境，发版前一次 Deploy Schema Changes，部署完删掉对应条目）：
 
-- 订阅 `cuepad.pi.waiting`、`cuepad.cue` 加 content-available（`AlertSubscriptions`，等你类推送叫醒 App 更新实时活动）：订阅不在 `.ckdb` 里，按上一段部署
+- 结构：`cueMessages.author`、`deliveryRequests.status` 两个可查询索引（`.ckdb` 已改，确认页的 Indexes 应只多这两项）。
+- 订阅定义（2026-10-25 已由开发签名的构建在开发容器的 `CuePad` 区保存，状态 active）：`cuepad.pi.waiting`、`cuepad.pi.settled`、`cuepad.cue` 带 content-available，新增 `cuepad.cue.said`、`cuepad.delivery.result`。旧的数据库订阅 `cuepad.changes` 不用部署，新版客户端自己删。
+- 顺序：先部署，再发 iOS 版。没部署时，新版在生产建不成两个新订阅，三个可见通知照常（`ensure` 各建各的），手机后台就收不到 Cue 的话与请求结果的推送；订阅建不成的原因显示在设置的通知那一行，部署后回前台自动补建。
+- 和 #33 的 `relaySecrets`：Deploy Schema Changes 部署的是开发环境的整份结构，开发环境里此刻有 #33 导入的 `relaySecrets`（不在本分支的 `.ckdb` 里），部署就会一起进生产、之后删不掉。所以等 #33 合进 main、`.ckdb` 里有了 `relaySecrets`，按「CloudKit 数据结构」重新生成、导入开发环境、回读确认只多这两个索引与 `relaySecrets`，再一次部署两者；#33 不合的话，先用本分支的 `.ckdb` 重新导入开发环境把它去掉再部署。

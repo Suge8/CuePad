@@ -12,6 +12,8 @@ import Foundation
 /// 之后每次只从令牌增量拉。
 ///
 /// 一次只跑一个拉取：在跑时再来的排在它后面（排着的只有一个，后来的都等它），不会用同一个令牌拉两遍、旧令牌也不会盖掉新的。
+/// 每个读请求 `RequestLimits.hedge` 没回音就同样的再发一次、先回来的算（`hedged`）：一拉挂住，排在后面的拉不跟着等。
+/// 拉完是一次成功（`SyncCoordinator.succeeded`），失败交给协调器归类（`failed`）。
 actor ZonePuller {
   static let tokenKey = "zoneToken"
   /// 对账那一遍带回的字段（门槛记录的版本在这一遍就看，`SyncCoordinator.meet`）。
@@ -48,27 +50,35 @@ actor ZonePuller {
       queued = nil
     }
     defer { if running?.id == id { running = nil } }
+    guard await coordinator.canSync else { return }
     do {
-      try await drain()
-    } catch let error as CKError where error.code == .changeTokenExpired {
-      try await coordinator.setToken(nil)
-      try await drain()
+      do {
+        try await drain()
+      } catch let error as CKError where error.code == .changeTokenExpired {
+        try await coordinator.setToken(nil)
+        try await drain()
+      }
     } catch let error as CKError where [.zoneNotFound, .userDeletedZone].contains(error.code) {
-      await coordinator.zoneMissing(deletedByUser: error.code == .userDeletedZone)
+      return await coordinator.zoneMissing(deletedByUser: error.code == .userDeletedZone)
+    } catch {
+      if !(error is SyncPaused) { await coordinator.failed(error) }
+      throw error
     }
+    await coordinator.succeeded()
   }
 
   private func drain() async throws {
-    guard await coordinator.canSync else { return }
     do {
       try await drainPages()
     } catch {
       await coordinator.setCatchingUp(false)
-      await coordinator.reached(error)  // 网络类失败：连不上 iCloud
       throw error
     }
     await coordinator.setCatchingUp(false)
-    await coordinator.reached(nil)
+  }
+
+  private func changes(since token: Data?, keys: [String]?) async throws -> ZoneChangeBatch {
+    try await hedged(after: RequestLimits.hedge) { [source] in try await source.changes(since: token, keys: keys) }
   }
 
   private func drainPages() async throws {
@@ -81,7 +91,7 @@ actor ZonePuller {
     }
     var batch: ZoneChangeBatch
     repeat {
-      batch = try await source.changes(since: token, keys: nil)
+      batch = try await changes(since: token, keys: nil)
       if batch.moreComing { await coordinator.setCatchingUp(true) }
       try await coordinator.pulled(batch.modifications, batch.deletions)
       if batch.token != token { try await coordinator.setToken(batch.token) }  // 库里的就是 `token`：没有变化的一拉不写库
@@ -96,7 +106,7 @@ actor ZonePuller {
     var batch: ZoneChangeBatch
     var token: Data?
     repeat {
-      batch = try await source.changes(since: token, keys: Self.versionKeys)
+      batch = try await changes(since: token, keys: Self.versionKeys)
       try await coordinator.meet(batch.modifications)
       for record in batch.modifications where RecordMapper.table(named: record.recordType) != nil {
         seen[record.recordID] = (record["modifiedAt"] as? NSNumber)?.int64Value ?? .max
@@ -108,7 +118,7 @@ actor ZonePuller {
     let wanted = try await newerOnServer(seen, synced: before)
     for start in stride(from: 0, to: wanted.count, by: CloudKitLimits.recordsPerRequest) {
       let ids = Array(wanted[start..<min(start + CloudKitLimits.recordsPerRequest, wanted.count)])
-      let records = try await source.records(ids)
+      let records = try await hedged(after: RequestLimits.hedge) { [source] in try await source.records(ids) }
       let found = Set(records.map(\.recordID))
       for id in ids where !found.contains(id) { seen[id] = nil }  // 补取时已不在
       try await coordinator.pulled(records, [])
