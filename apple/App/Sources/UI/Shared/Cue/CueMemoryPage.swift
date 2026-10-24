@@ -103,7 +103,8 @@ struct CueMemoryPage: View {
     #if os(macOS)
     private var content: some View {
         list
-            .contentMargins(.top, 14, for: .scrollContent)
+            .safeAreaPadding(.top, 14)
+            .contentMargins(.top, -14, for: .scrollIndicators)
             .overlay(alignment: .topTrailing) { PanelCloseButton().padding(12) }
             .frame(width: 480).frame(maxHeight: 600)
             .background(palette.desk)

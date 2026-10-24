@@ -16,9 +16,8 @@ import SwiftUI
 /// 对话排在阅读栏里：最宽 `readingWidth`（含左右 `inset`），在滚动区里居中，上下各留 `edge`。栏的边距只能是滚动区自己的边
 /// （`safeAreaPadding`），不能是内容外面的 padding 或居中的框：滚动位置跟着一行（滚动目标）走，内容变了就把那一行
 /// 对回可见区的左上角——行若离内容原点有一段边距，整段对话就被横着推出那一段。
-/// 也不用 `contentMargins`：同一棵树里另一块滚动区（Cue 页等你卡上那一排件）和它在同一次更新里定边距时，SwiftUI 把那一块的内容边距
-/// 写到对话这里、之后不改回（实测：那一排的左边距改成 3，对话的左边距就成了 3；平常是 0，整段对话左移、上移 16）；安全区的边每次排版重算，
-/// 不受它串（同手机看板的行，`BoardRowLane`）。`.scrollView` 坐标空间两种边一样不含，对话里按它量的（`CueEndProbe`）不变。
+/// 不用 `contentMargins` 的原因在 docs/ui.md 布局约束（这里犯过：Cue 页等你卡那一排件的边被写到对话上，整段左移、上移 16）。
+/// `.scrollView` 坐标空间两种边一样不含，对话里按它量的（`CueEndProbe`）不变。
 struct ChatScroll<Content: View, Key: Equatable>: View {
     let followKey: Key
     let readingWidth: CGFloat
