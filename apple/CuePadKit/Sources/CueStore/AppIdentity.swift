@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// App 的身份前缀：主 App 的 bundle id、偏好域、日志 subsystem 就是它，App Group 与 iCloud 容器由它派生。
 /// 唯一定义是 `App/Config/Signing.xcconfig` 的 `CUEPAD_APP_ID`，经构建设置展开进 App 与各扩展 Info.plist 的 `CuePadAppID`，运行期只读这个键。
@@ -23,4 +24,10 @@ public enum AppIdentity {
 
   public static var appGroup: String { "group.\(id)" }
   public static var iCloudContainer: String { "iCloud.\(id)" }
+}
+
+extension Logger {
+  /// 停摆的现场（notice 级别落盘，docs/sync.md「拉取节奏」）：Mac 等着拉时的晚醒与排队（`AppServices.holdActivityWhilePolling`）、
+  /// 一拉太久与拉取节奏迟醒（`SyncPoller`）都记在这一类里。
+  public static let stall = Logger(subsystem: AppIdentity.id, category: "stall")
 }

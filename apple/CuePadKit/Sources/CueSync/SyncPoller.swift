@@ -65,7 +65,7 @@ public struct SyncPoller: Sendable {
           let due = timing.now().addingTimeInterval((interval - spent).seconds)
           try? await timing.sleep(interval - spent)
           let late = timing.now().timeIntervalSince(due)
-          if late > Self.stallThreshold { Self.stallLog.notice("拉取节奏的睡眠迟醒 \(late, format: .fixed(precision: 2), privacy: .public) 秒") }
+          if late > Self.stallThreshold { Logger.stall.notice("拉取节奏的睡眠迟醒 \(late, format: .fixed(precision: 2), privacy: .public) 秒") }
         }
         guard !Task.isCancelled, cadence.interval(after: .seconds(timing.now().timeIntervalSince(start))) != nil else { return }
       }
@@ -73,13 +73,12 @@ public struct SyncPoller: Sendable {
       began = fetching
       await Task { await fetch() }.value  // 新节奏到来只打断睡眠，不打断拉了一半的请求（取消会让它报错）。取消屏蔽 withTaskCancellationShield 要 macOS 27，部署目标是 26
       let took = timing.now().timeIntervalSince(fetching)
-      if took > Self.stallThreshold { Self.stallLog.notice("一拉用了 \(took, format: .fixed(precision: 2), privacy: .public) 秒") }
+      if took > Self.stallThreshold { Logger.stall.notice("一拉用了 \(took, format: .fixed(precision: 2), privacy: .public) 秒") }
     }
   }
 
-  /// 拉取停摆的现场（与 Mac 停摆的日志同一类别 `stall`）：一拉超过它，或节奏的睡眠醒来迟了它这么多，记一条。
+  /// 一拉超过它，或节奏的睡眠醒来迟了它这么多，记一条停摆日志（`Logger.stall`）。
   private static let stallThreshold: TimeInterval = 1
-  private static let stallLog = Logger(subsystem: AppIdentity.id, category: "stall")
 }
 
 extension SyncPoller.Cadence {

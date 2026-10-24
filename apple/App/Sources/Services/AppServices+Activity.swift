@@ -33,7 +33,6 @@ extension AppServices {
     }
 
     nonisolated private static let stallLimit = Duration.seconds(1)
-    nonisolated private static let stallLog = Logger(subsystem: AppIdentity.id, category: "stall")
 
     @concurrent private static func watchStalls(_ store: CueStore) async {
         let clock = ContinuousClock()
@@ -45,7 +44,7 @@ extension AppServices {
             async let library = store.queueDelay()
             let (mainDelay, libraryDelay) = await (main, library)
             guard max(late, mainDelay, libraryDelay) > stallLimit else { continue }
-            stallLog.notice(
+            Logger.stall.notice(
                 "停摆：进程晚醒 \(late.milliseconds, privacy: .public)ms，主线程排队 \(mainDelay.milliseconds, privacy: .public)ms，资料库队列排队 \(libraryDelay.milliseconds, privacy: .public)ms")
         }
     }
