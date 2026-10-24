@@ -1,7 +1,7 @@
 import CueStore
 import SwiftUI
 
-/// "在做"的那一列会话：Mac 菜单栏面板的那一列（手机、iPad 的 Cue 面板是定高的几格，`CueNowPanel`）。行是同一种（`PiSessionRow`，样式与点它做什么由调用处给），
+/// "在做"的那一列会话：Mac 菜单栏面板的那一列（手机、iPad 上进行中的会话在进展页的会话段）。行是同一种（`PiSessionRow`，样式与点它做什么由调用处给），
 /// 顺序同一个（`LiveWork.rows`，要你注意的在前）。
 /// `limit` 给了就先列前几个（面板只是一瞥），多出的收成末尾一行"还有 N 个"，点开就地列全、末行换成"收起"——
 /// 看全在原地，不用跳到全部会话页；区头写有几个在跑（`LiveWorkCount`）。

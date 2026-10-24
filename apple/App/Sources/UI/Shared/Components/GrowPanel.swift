@@ -12,8 +12,6 @@ import SwiftUI
 struct GrowPanel<Head: View, Panel: View>: View {
     @Binding var open: Bool
     let radius: CGFloat
-    /// 面板里行与行之间的空（`rowContainer`）。
-    var rowGap: CGFloat = 0
     @ViewBuilder let head: Head
     @ViewBuilder let panel: Panel
     @Environment(\.headerGivesWay) private var givesWay
@@ -56,7 +54,6 @@ struct GrowPanel<Head: View, Panel: View>: View {
             }
             .frame(maxWidth: open ? .infinity : nil)
             .clipShape(shape)
-            .rowContainer(shape, gap: rowGap)
             .background { Color.clear.glass(in: shape) }
             .opacity(givesWay && !open ? 0 : 1)
         }

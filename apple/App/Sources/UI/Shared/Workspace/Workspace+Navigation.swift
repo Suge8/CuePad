@@ -57,7 +57,7 @@ extension Workspace {
 
     func push(_ route: Route) { path.append(route) }
 
-    /// 去进展页的会话段（原会话页的去向都是这里：Cue 面板的"全部会话"、"看这个项目的会话"、⌥⌘N、提示条）。
+    /// 去进展页的会话段（原会话页的去向都是这里："看这个项目的会话"、⌥⌘N、提示条）。
     func showSessions() {
         progressPane = .sessions
         show(.progress)
