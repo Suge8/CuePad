@@ -13,8 +13,6 @@ struct DockRoot: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// 根上那一条此刻在哪（`PagerController` 写）。
     @State private var motion = PagerMotion()
-    /// Cue 页的输入框有焦点：底部那一排让开，输入框占满整排。只活在窄屏的容器里，宽屏没有它，变宽再变窄也不留旧值。
-    @State private var composing = false
     @State private var width: CGFloat = 0
     /// 推入的页离开前拍的快照（左滑前进时跟手用）。
     @State private var shot = LeaveShot()
@@ -23,16 +21,15 @@ struct DockRoot: View {
         @Bindable var workspace = workspace
         let root = workspace.root
         NavigationStack(path: $workspace.path) {
-            HomePager(motion: motion, composing: composing, shot: shot) {
+            HomePager(motion: motion, composing: motion.composing, shot: shot) {
                 ZStack(alignment: .bottom) {
                     PlacesCatcher(motion: motion, onCue: root == .cue) { openPlaces(false) }
-                    DockBar(route: root, motion: motion, composing: composing, width: max(0, width - Dock.margin * 2), openPlaces: openPlaces)
+                    DockBar(route: root, motion: motion, width: max(0, width - Dock.margin * 2), openPlaces: openPlaces)
                         .padding(.bottom, Dock.margin).ignoresSafeArea(edges: .bottom)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
             }
             .environment(\.dockMotion, motion)
-            .environment(\.dockComposing, $composing)
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
             .toolbarVisibility(.hidden, for: .navigationBar)
             // 只有推在 Cue 页上的页能前进回来：只有它们离开前拍快照
@@ -42,9 +39,9 @@ struct DockRoot: View {
         }
         .debugExposesPlaces { openPlaces(true) }
         // 有焦点时"⋯"收起
-        .onChange(of: composing) { if composing { openPlaces(false) } }
+        .onChange(of: motion.composing) { if motion.composing { openPlaces(false) } }
         // 输入框离开页就没了焦点
-        .onChange(of: root) { composing = false }
+        .onChange(of: root) { motion.composing = false }
     }
 
     /// "⋯"展开、收起（点别处、滚动、点 Cue 钮、输入框有焦点时收起）：底部那一排用 `Motion.dock` 换形。
@@ -110,10 +107,5 @@ enum Dock {
 
     /// 内容在安全区之上还要给 Dock 让出的高度（栏顶再隔 `Bars.contentGap` 到安全区底边）：滚到底时最后一行完整停在栏上面；键盘盖住 Dock 时为 0。
     static func reserve(above safeBottom: CGFloat) -> CGFloat { max(0, height + margin + Bars.contentGap - safeBottom) }
-}
-
-extension EnvironmentValues {
-    /// Cue 页输入框的焦点报给底部那一排（`DockRoot.composing`）：页只写不读，自己的排版看自己记的那份（`CuePage.composing`）；宽屏没有底部那一排，为 nil。
-    @Entry var dockComposing: Binding<Bool>?
 }
 #endif
