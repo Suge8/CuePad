@@ -1,28 +1,31 @@
 #if os(iOS)
 import SwiftUI
 
-/// 底部那一排换形里每样东西多浓、点不点得到，全是 `PagerMotion.places` 的函数（1 是三格，0 是"⋯"加输入框）；拖动跟手、点按与松手的弹簧、
+/// 底部那一排换形里每样东西多浓、点不点得到，全是 `PagerMotion.places` 的函数（1 是两格，0 是"⋯"加输入框）；拖动跟手、点按与松手的弹簧、
 /// 减弱动态效果时直接到位，都只是 `places` 走得快慢不同，没有另外的交接时机。
-/// 底边那一格在换形里交叉：玻璃连续，字不相叠。输入框（在 Cue 页里，随页滑）在前两成半连玻璃带字淡完——这时它才滑出一百点上下，
-/// 伸出底部那一排右边的只有边上那一小截；Cue 钮的玻璃（不随页滑）在前三成淡入、从输入框的样子长成两格宽，
-/// 它的字与头像等输入框淡完才起。左边同理，"⋯"淡完三格才出来。
-/// 被否决的：按"停稳了没有"交接（交给输入框后等它画上屏一帧再藏 Cue 钮，收回时拍下输入框盖住）——几样状态互相触发，
-/// 到 Cue 页时空玻璃闪两三帧、两行草稿时玻璃只一行高，点"⋯"时字一帧没了，快照的加号浮在缩小的胶囊外。
+/// 分两段，同一时刻只有一样东西在动：先是两格（系统标签栏，不能变形）原地淡出，Cue 钮不动；淡完了 Cue 钮才长成输入框那么宽、那么高，
+/// "⋯"按原尺寸在左边淡入。底边那一格在后一段里交叉：玻璃连续，字不相叠。输入框（在 Cue 页里，随页滑）在前两成半连玻璃带字淡完，
+/// Cue 钮的玻璃（不随页滑）在前三成淡入，它的字与头像等输入框淡完才起。
+/// 被否决的：两格与 Cue 钮同时变（Cue 钮压在半透明的标签栏上，中途冒出半宽的空玻璃再缩成"⋯"）；按"停稳了没有"交接（交给输入框后等它画上屏一帧再藏 Cue 钮，
+/// 收回时拍下输入框盖住）——几样状态互相触发，到 Cue 页时空玻璃闪两三帧、两行草稿时玻璃只一行高。
 enum DockHandoff {
-    /// `places` 走过 `from…to` 时从 0 到 1。
-    static func ramp(_ places: CGFloat, from: CGFloat, to: CGFloat) -> Double { Double(min(max((places - from) / (to - from), 0), 1)) }
-
+    /// 两格（系统标签栏）在这一段淡入淡出。
+    static let tabs: ClosedRange<CGFloat> = 0.6...1
+    /// Cue 钮从输入框的样子长成两格旁的宽度、高度：两格淡完才动。
+    static let grow: ClosedRange<CGFloat> = 0...0.6
     /// 输入框（玻璃与字一起）在这一段淡出。
     static let composer: ClosedRange<CGFloat> = 0...0.25
     /// Cue 钮的玻璃在这一段淡入，与输入框的玻璃交叉。
     static let cueGlass: ClosedRange<CGFloat> = 0...0.3
     /// Cue 钮的字与头像：输入框淡完才起。
-    static let cue: ClosedRange<CGFloat> = 0.3...0.75
+    static let cue: ClosedRange<CGFloat> = 0.3...0.6
+    /// "⋯"在这一段淡出（Cue 钮长开之前它已不在）。
     static let more: ClosedRange<CGFloat> = 0...0.4
-    /// 三格："⋯"淡完才起。
-    static let cells: ClosedRange<CGFloat> = 0.4...0.85
 
-    static func ramp(_ places: CGFloat, _ range: ClosedRange<CGFloat>) -> Double { ramp(places, from: range.lowerBound, to: range.upperBound) }
+    /// `places` 走过 `range` 时从 0 到 1。
+    static func ramp(_ places: CGFloat, _ range: ClosedRange<CGFloat>) -> Double {
+        Double(min(max((places - range.lowerBound) / (range.upperBound - range.lowerBound), 0), 1))
+    }
 }
 
 extension View {

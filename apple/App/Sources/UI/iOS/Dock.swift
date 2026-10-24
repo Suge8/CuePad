@@ -4,7 +4,7 @@ import SwiftUI
 /// 窄屏（iPhone 与窄窗口 iPad）的容器：一个导航栈，根是底部那一排的三个去处横排成的一条（项目、进展、Cue，`HomePager`：左右滑跟手切页），
 /// 推入的页照常由系统返回（返回钮、内容区右滑），返回后在 Cue 页左滑前进回刚才那页。其余去处推在所属的那一页上（`Navigation.select`）；打开 App 落在 Cue。
 /// 导航栈托管在 UIKit 里，几个栈交替时 SwiftUI 不逐帧挪它（旧页停着、最后一下才跳走）：所以只有一个栈，切页挪的是栈根里的三页（各在自己的托管控制器里，`PagerController`）。
-/// 底部那一排整个窗口只有一份（`DockBar`），盖在导航栈上、不在哪一页里：切页时它不重建、不跟着滑，选中的滴与换形跟着条（`PagerMotion`）走，拖到哪长到哪；
+/// 底部那一排整个窗口只有一份（`DockBar`），盖在导航栈上、不在哪一页里：切页时它不重建、不跟着滑，选中与换形跟着条（`PagerMotion`）走；
 /// 推入的页上也留着（同系统标签栏，`Dock.stays`），推入、返回时它不动。
 /// 每页各建一排时，新页那一排要从旧的样子摆出第一帧再长回来，"⋯"展开着换去处就是收成圆再长开的一下来回。
 /// Cue 页的输入框在页里（随键盘升起），底边那一格在换形里与 Cue 钮交叉，浓淡都是条的位置与"⋯"开合的函数（`DockHandoff`）。
@@ -38,7 +38,7 @@ struct DockRoot: View {
             ZStack(alignment: .bottom) {
                 PlacesCatcher(motion: motion, onCue: workspace.top == .cue) { openPlaces(false) }
                 DockBar(
-                    route: root, motion: motion, width: max(0, width - Dock.margin * 2),
+                    motion: motion, width: max(0, width - Dock.margin * 2),
                     stays: Dock.stays(on: workspace.top), forwardStays: workspace.forward.map(Dock.stays) ?? true, openPlaces: openPlaces)
                     .padding(.bottom, Dock.margin).ignoresSafeArea(edges: .bottom)
             }
@@ -113,9 +113,11 @@ private struct DockReserve: ViewModifier {
 
 enum Dock {
     static let height: CGFloat = 62
+    /// 离屏幕左、右、下边的空：同系统悬浮标签栏自带的边距（`DockTabs` 靠它对齐）。
     static let margin: CGFloat = 21
     /// 两块玻璃之间、Cue 页"⋯"与输入框之间的空。
     static let gap: CGFloat = 8
+    /// 两格离底板两端的空（同系统标签栏的排法，`DockTabs`）。
     static let inset: CGFloat = 4
     /// Cue 页上收起时那颗"⋯"（与输入框同高）。
     static let slot = ComposerMetrics.slot

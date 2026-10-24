@@ -110,7 +110,7 @@ enum Motion {
     /// `move` 的时长与曲线控制点，渲染端照它走的动画（`ContentLift`）共用。
     nonisolated static let moveDuration = 0.24
     nonisolated static let moveCurve: (Double, Double, Double, Double) = (0.2, 0, 0, 1)
-    /// iPhone 切页：根上那一条页滑过去、底部那一排的滴与换形都是这一条（`PagerController.animate`，图层与 SwiftUI 同一条），"⋯"开合也用它；
+    /// iPhone 切页：根上那一条页滑过去、底部那一排的选中与换形都是这一条（`PagerController.animate`，图层与 SwiftUI 同一条），"⋯"开合也用它；
     /// 比列表里挪位置走得长，看得清从哪到哪，仍在 300ms 内。
     static let dock = Animation.spring(duration: dockDuration, bounce: 0)
     static let dockDuration: TimeInterval = 0.3
