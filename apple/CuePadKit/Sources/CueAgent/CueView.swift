@@ -101,9 +101,9 @@ public enum CueView {
     }
   }
 
-  /// 一轮的经过：清单里的每一步（对他说的话已是自己的一行，不重复），没成的标出。
+  /// 一轮的经过：清单里的每一步（对他说的话与提问已是自己的一行，不重复：Cue 的一轮里这两类只来自 tell），没成的标出。
   private static func round(_ tools: PiChatMessage.Tools?) -> String? {
-    let steps = (tools?.items ?? []).filter { $0.message == nil }.map { $0.target + ($0.failed ? "（没成）" : "") }
+    let steps = (tools?.items ?? []).filter { $0.kind != .said && $0.kind != .ask }.map { $0.target + ($0.failed ? "（没成）" : "") }
     guard !steps.isEmpty else { return nil }
     return ("你这一轮：" + steps.joined(separator: "；")).clipped(roundLimit)
   }

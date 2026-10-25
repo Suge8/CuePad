@@ -172,12 +172,10 @@ extension PiChatMessage {
       public var name: String?
       /// Cue 碰到的会话（`PiSessionState.id`）：点了进会话
       public var session: UUID?
-      /// Cue 对你说的那条（`CueMessage`）：清单里只留一行，点它跳回对话里的原处
-      public var message: UUID?
 
       public init(
         kind: Kind, target: String, failed: Bool = false, added: Int? = nil, removed: Int? = nil, task: UUID? = nil, name: String? = nil,
-        session: UUID? = nil, message: UUID? = nil
+        session: UUID? = nil
       ) {
         self.kind = kind
         self.target = target
@@ -187,7 +185,6 @@ extension PiChatMessage {
         self.task = task
         self.name = name
         self.session = session
-        self.message = message
       }
     }
 
