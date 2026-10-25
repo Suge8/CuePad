@@ -116,7 +116,7 @@ final class Workspace {
     var sidebar: NavigationSplitViewVisibility = .automatic
     /// 宽屏：右侧的 Cue 面板是否展开。
     var agentPanel = false
-    /// 每次 ⌘K（或点搜索钮、侧栏顶上的搜索框）加一：搜索页据此聚焦搜索框并全选已有文字，已在搜索页时同样生效。
+    /// 每次 ⌘K（或点搜索钮、项目页与侧栏顶上的搜索框）加一：搜索页据此聚焦搜索框，已在搜索页时同样生效。
     var searchFocusRequests = 0
     #endif
     /// 项目范围：进展页的看板与会话两段共用这一份（顶栏那颗显示它、点 ✕ 清掉；项目页"⋯"里的"看这个项目的会话"设成这个项目再切到会话段），nil 是全部项目。
