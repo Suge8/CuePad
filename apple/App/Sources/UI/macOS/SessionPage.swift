@@ -213,7 +213,7 @@ extension Workspace {
         Task {
             do {
                 let result = try await services.jumpToTerminal(id)
-                if let note = result.note { say(Dotted(note), isError: result.precision == .failed) }
+                if let note = result.note { say(Dotted(note), tone: result.precision == .failed ? .failure : .done) }
             } catch {
                 fail(error)
             }

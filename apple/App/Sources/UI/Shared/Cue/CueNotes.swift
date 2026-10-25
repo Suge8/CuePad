@@ -15,7 +15,7 @@ nonisolated struct CueNoteRound: Identifiable, Equatable, Sendable {
 
     /// `lines`：提醒的那几条记忆的正文（按 id；记忆的正文写下就不变，忘掉的照读）
     init(row: CueMessage, lines: [UUID: String]) {
-        header = row.wake.map { CueWakeHeader($0, lines: lines) }
+        header = row.wake.map { CueWakeHeader($0, in: row, lines: lines) }
         self.row = row
         touches = CueActivity.touches(row.tools)
         said = []
@@ -41,7 +41,8 @@ nonisolated struct CueNoteRound: Identifiable, Equatable, Sendable {
 }
 
 /// 一轮为什么醒（只画图标，`CueWake.icon`）与叫醒它的那几处：会话、任务的动静各是一处，带当时出了什么事（`kind`，"停下了"）；
-/// 提醒是到点的那条记忆。都按写下时的记录（`CueStir`）：名字是当时的，会话、任务之后改名、再动起来都不变；去哪由记录推出，不查库。
+/// 提醒是到点的那条记忆。都按写下时的记录（`CueStir` 与这一行的 `CueMessage.places`）：名字是当时的，会话、任务之后改名、再动起来都不变；
+/// 去哪由记录推出，不查库。
 nonisolated struct CueWakeHeader: Equatable, Sendable {
     /// 点了去哪（`Workspace.open`；Cue 页这一轮的经过里的一行也用它）。会话的 Pi 会话 id 知道就带上，进会话页少读一次
     enum Target: Equatable, Sendable {
@@ -61,18 +62,18 @@ nonisolated struct CueWakeHeader: Equatable, Sendable {
     /// 叫醒它的那几处，最新的在前，同一处只留最近那次
     let places: [Place]
 
-    init(_ wake: CueWake, lines: [UUID: String]) {
+    /// `row`：这一轮的经过那一行（叫醒它的那几处当时叫什么记在它上面）。
+    init(_ wake: CueWake, in row: CueMessage, lines: [UUID: String]) {
         self.wake = wake
         switch wake {
         case .sessionActivity(let stirs):
             var seen = Set<String>(), places: [Place] = []
             for stir in stirs.reversed() where seen.insert(stir.session ?? stir.task?.uuidString ?? "").inserted {
-                // 更旧版本写下的没有名字（`CueStir.name`）：只说是哪一类
                 if let id = stir.session {
                     places.append(Place(
-                        title: stir.name ?? "一个会话", kind: stir.kind, target: .session(PiSessionState.recordID(sessionID: id), sessionID: id)))
+                        title: row.name(session: id), kind: stir.kind, target: .session(PiSessionState.recordID(sessionID: id), sessionID: id)))
                 } else if let task = stir.task {
-                    places.append(Place(title: stir.name ?? "一件任务", kind: stir.kind, target: .task(task)))
+                    places.append(Place(title: row.name(task: task), kind: stir.kind, target: .task(task)))
                 }
             }
             self.places = places
@@ -86,6 +87,17 @@ nonisolated struct CueWakeHeader: Equatable, Sendable {
             places = []
         }
     }
+}
+
+nonisolated extension CueMessage {
+    /// 写下时提到的那一处叫什么（`places`）；没记下的（其他版本写来的、写下时已不在的）只说是哪一类。
+    func name(session: String) -> String { place(session: session)?.name ?? "一个会话" }
+    func name(task: UUID) -> String { place(task: task)?.name ?? "一件任务" }
+}
+
+nonisolated extension CuePlace {
+    /// 任务圈按它分段（`TaskRingView`）
+    var progress: TaskProgress? { steps.map { TaskProgress(done: $0.done, total: $0.total) } }
 }
 
 extension CueChange.Kind {

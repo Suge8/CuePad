@@ -167,7 +167,7 @@ struct CuePage: View {
                 ) { items in
                     CueSegment(rows: items.map { item in
                         CueRow(
-                            row: item, ref: item.taskID.flatMap { thread.tasks[$0] }, shots: thread.shots[item.id] ?? [],
+                            row: item, shots: thread.shots[item.id] ?? [],
                             joined: thread.joined.contains(item.id),
                             stamp: thread.stamps[item.id], delivered: item.id == lastYou, live: live.flatMap { item.contains(round: $0.round) ? $0 : nil },
                             unread: thread.unread.contains(item.id), opened: $opened, seen: $seen)

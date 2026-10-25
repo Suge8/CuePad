@@ -4,7 +4,7 @@ import Testing
 @testable import CuePad
 
 /// Cue 的话只带它点名的图，每张一句看什么（存在消息上，卡片、对话与全屏预览只读它）：提问卡带回答它必须看的，做完的结果卡带证明结论的最终成果；
-/// 关联任务发过的别的文件哪儿都不挂（在会话里）。没点名的提问、结果没有图。
+/// 关联任务发过的别的文件哪儿都不挂（在会话里）。没点名的提问、结果没有图。提到的任务按写下那一刻画，之后改名、重开都不变。
 @MainActor
 struct AskShotsTests {
     let app = TestApp()
@@ -64,5 +64,13 @@ struct AskShotsTests {
         }
         #expect(card.id == report?.id && id == task.id && done.shots[card.id]?.map(\.preview.id) == [final[1].id])
         #expect(done.shots[card.id]?.map(\.look) == ["深色：按钮对比度够"])
+
+        // 任务之后改名、重开：对话里提到它的那几句（气泡下的任务行、结果卡）仍是写下那一刻的名字与状态
+        func written(_ thread: CueThread) -> [CuePlace?] { thread.messages.filter { $0.taskID == task.id }.map { $0.place(task: task.id) } }
+        let frozen = written(done)
+        #expect(frozen.allSatisfy { $0?.name == "重做提问卡" } && frozen.last??.status == .known(.done), "\(frozen)")
+        try await store.updateCard(task.id) { $0.body = "改了名的任务" }
+        _ = try await store.toggleDone(task.id)
+        #expect(written(try await thread()) == frozen)
     }
 }

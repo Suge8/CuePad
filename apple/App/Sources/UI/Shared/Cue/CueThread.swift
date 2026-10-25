@@ -1,14 +1,12 @@
 import CueStore
 import SwiftUI
 
-/// Cue 页一次读到的：最近的对话、对话与"等你"里提到的每件活、在等你的那几条、待回复的会话；对话排成的格子与刻度滑条的刻度在读的时候一起推好
+/// Cue 页一次读到的：最近的对话、在等你的那几条、待回复的会话；对话排成的格子与刻度滑条的刻度在读的时候一起推好
 /// （不在主线程，滚动时页面重算也不再推一遍）。
 nonisolated struct CueThread: Equatable, Sendable {
     /// 最近的对话，从早到晚；前面另带上早于它问、在它这段时间里答了的提问（`CueStore.cueQuestionsAnswered`）：
     /// 你的回答在读到的范围里，它引用的那条提问也要在，点引用才回得去。
     let messages: [CueMessage]
-    /// 对话与"等你"提到的活（消息上收成一行的引用）。
-    let tasks: [UUID: CueTaskRef]
     /// 等你（Cue 的提问与会话在问的，同进展页等你列，`TaskBoard.waits`），等得最久的在前；点名要露的那件在最前（`leading`）。
     let waiting: [TaskBoard.Wait]
     /// 待回复的会话（`CueStore.sessionsAwaitingReply`），等得最久的在前：等你卡上方那条提示（`CueReplyTip`）。
@@ -31,16 +29,15 @@ nonisolated struct CueThread: Equatable, Sendable {
 
     /// `lines`：Cue 被提醒叫醒的那几轮，到点的记忆的正文（按 id）。
     init(
-        messages: [CueMessage], tasks: [UUID: CueTaskRef], waiting: [TaskBoard.Wait], replies: [PiSessionState], shots: [UUID: [CueShown]],
+        messages: [CueMessage], waiting: [TaskBoard.Wait], replies: [PiSessionState], shots: [UUID: [CueShown]],
         unread: Set<UUID>, lines: [UUID: String]
     ) {
         self.messages = messages
-        self.tasks = tasks
         self.waiting = waiting
         self.replies = replies
         self.shots = shots
         self.unread = unread
-        let rows = Self.rows(messages, tasks: tasks, waiting: Set(waiting.compactMap(\.message?.id)), shots: shots, lines: lines)
+        let rows = Self.rows(messages, waiting: Set(waiting.compactMap(\.message?.id)), shots: shots, lines: lines)
         self.rows = rows
         let stamps = Self.stamps(rows)
         self.stamps = stamps
@@ -66,12 +63,6 @@ nonisolated struct CueThread: Equatable, Sendable {
             TaskBoard.Item(task: task, steps: progress[task.id])
         }, asking: asking)
         let waiting = waits.compactMap(\.message)
-        let mentioned = Set((messages + waiting).compactMap(\.taskID))
-        var tasks: [UUID: CueTaskRef] = [:]
-        for id in mentioned {
-            guard let card = try store.card(id), card.isTask, card.deletedAt == nil else { continue }
-            tasks[id] = CueTaskRef(task: card, progress: progress[id])
-        }
         let pointed = (messages + waiting).filter { !$0.shots.isEmpty }
         let previews = try store.previews(Set(pointed.flatMap { $0.shots.map(\.preview) }))
         var shots: [UUID: [CueShown]] = [:]
@@ -83,7 +74,7 @@ nonisolated struct CueThread: Equatable, Sendable {
         }
         let reminded = messages.flatMap { message -> [UUID] in if case .reminder(let ids)? = message.wake { ids } else { [] } }
         return CueThread(
-            messages: messages, tasks: tasks, waiting: waits, replies: try store.sessionsAwaitingReply(), shots: shots, unread: Set(try store.cueUnread()),
+            messages: messages, waiting: waits, replies: try store.sessionsAwaitingReply(), shots: shots, unread: Set(try store.cueUnread()),
             lines: Dictionary(try store.cueLines(reminded).map { ($0.line.id, $0.line.text) }) { first, _ in first })
     }
 
@@ -183,7 +174,7 @@ nonisolated struct CueThread: Equatable, Sendable {
     /// 结果卡：关联一件活、不是提问、点名了图（`shots`，Cue 做完时挑的最终成果）的 Cue 的话；只挂点名的那几张，这件活发到手机的其余文件在它的会话里。
     /// 提问的图跟着提问那一格（`CueSays`）。
     private static func rows(
-        _ messages: [CueMessage], tasks: [UUID: CueTaskRef], waiting: Set<UUID>, shots: [UUID: [CueShown]], lines: [UUID: String]
+        _ messages: [CueMessage], waiting: Set<UUID>, shots: [UUID: [CueShown]], lines: [UUID: String]
     ) -> [Row] {
         // 同一毫秒答的按问的先后（`messages` 的顺序）
         var answers = messages.enumerated().filter { $0.element.answer != nil && $0.element.answeredAt != nil }
@@ -203,12 +194,12 @@ nonisolated struct CueThread: Equatable, Sendable {
             case .you: rows.append(.you(message))
             case .cue:
                 if waiting.contains(message.id) { continue }
-                if message.choices == nil, shots[message.id] != nil, let id = message.taskID, tasks[id] != nil {
+                if message.choices == nil, shots[message.id] != nil, let id = message.taskID {
                     shown.insert(id)
                     rows.append(.result(message, task: id))
                     continue
                 }
-                let task = message.taskID.flatMap { tasks[$0] != nil && shown.insert($0).inserted ? $0 : nil }
+                let task = message.taskID.flatMap { shown.insert($0).inserted ? $0 : nil }
                 rows.append(.cue(message, task: task))
             case .note:
                 // 没有正文的是一轮的经过（为什么醒、做了什么），开一节；有正文的是这一轮说的话，接在最近那一节后面
@@ -240,14 +231,6 @@ nonisolated struct CueThread: Equatable, Sendable {
             return shown.isEmpty ? nil : .notes(shown)
         }
     }
-}
-
-/// 对话或"等你"提到的一件活：任务与子任务进度。提到的卡不在了（删掉）就没有引用，那句话照常显示。
-nonisolated struct CueTaskRef: Equatable, Sendable {
-    var task: Card
-    var progress: TaskProgress?
-
-    var done: Bool { task.status == .done }
 }
 
 /// Cue 点名要你看的一张图：发到手机的那一份与看它的什么（`CueShot`）。

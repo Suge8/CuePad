@@ -166,6 +166,11 @@ extension CueStore {
   public func subtaskProgress(in project: UUID) throws -> [UUID: TaskProgress] { try subtaskProgress(scope: "AND projectID = ?", [project]) }
 
   private func subtaskProgress(scope: String, _ arguments: [any SQLBindable]) throws -> [UUID: TaskProgress] {
+    try Self.subtaskProgress(scope: scope, arguments, in: db)
+  }
+
+  /// 同上，直接读一个连接（库升级里也用，`CuePlace.capture`）。
+  static func subtaskProgress(scope: String, _ arguments: [any SQLBindable], in db: SQLite) throws -> [UUID: TaskProgress] {
     let rows = try db.query(
       """
       SELECT parentID, COUNT(*), COUNT(completedAt),

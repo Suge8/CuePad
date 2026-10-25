@@ -76,10 +76,11 @@ extension CueStore {
     }
   }
 
-  /// Cue 在跑的这一轮为什么醒、几点醒的（这一轮经过那一行上的 `CueMessage.wake`）；歇着、这一轮还没有那一行为 nil。各端画叫醒的那一下只读它。
-  public func cueWaking() throws -> (at: Date, wake: CueWake)? {
-    guard let round = try cueState()?.round, let row = try find(CueMessage.self, round), let wake = row.wake else { return nil }
-    return (row.createdAt, wake)
+  /// Cue 在跑的这一轮自己醒来的那一行（经过那一行，带着为什么醒 `CueMessage.wake`、几点醒的与叫醒它的那几处当时叫什么）；
+  /// 歇着、这一轮还没有那一行、不是自己醒来的为 nil。各端画叫醒的那一下只读它。
+  public func cueWaking() throws -> CueMessage? {
+    guard let round = try cueState()?.round, let row = try find(CueMessage.self, round), row.wake != nil else { return nil }
+    return row
   }
 
   /// 值班的 Mac 写下 Cue 此刻的样子（在做什么、这个班次的上下文），整行一次写；和库里一样就不写（不触发同步）。不在值班写歇着、没有上下文。

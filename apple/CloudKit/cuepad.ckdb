@@ -211,6 +211,7 @@ DEFINE SCHEMA
         askShots      ENCRYPTED STRING,
         setAsideBy    STRING,
         wake          STRING,
+        places        ENCRYPTED STRING,
         acceptance    INT64,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"

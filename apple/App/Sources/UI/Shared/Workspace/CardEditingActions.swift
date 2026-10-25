@@ -24,7 +24,7 @@ extension Workspace {
         let lines = CueLines.taskLines(stored), store = services.store
         attempt {
             for line in lines.reversed() { _ = try await store.createTask(line, in: project) }
-            self.say(lines.isEmpty ? "选中的部分没有文字" : "已转为 \(lines.count) 个任务", isError: lines.isEmpty)
+            self.say(lines.isEmpty ? "选中的部分没有文字" : "已转为 \(lines.count) 个任务", tone: lines.isEmpty ? .failure : .done)
         }
     }
 }

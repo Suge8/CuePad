@@ -58,4 +58,5 @@ xcrun cktool export-schema $C --output-file /tmp/dev.ckdb   # 回读：服务端
 
 待部署到生产（发版前一次 Deploy Schema Changes，部署完删掉对应条目）：
 
+- 字段 `cueMessages.places`（ENCRYPTED STRING，对话写下时提到的那几处的样子，`CuePlace`）：已导入开发环境。没部署时带它的 Cue 对话在生产里存不上。
 - 订阅定义（还没在开发容器里保存）：新增 `cuepad.pi.reply`（Cue 留给你回的会话，`notify == awaitsReply`，文案 key `pi_alert_reply`）。部署前先用开发签名的构建（`xc.sh device`）打开一次手机，让它在开发容器里建好，再部署、再发 iOS 版。没部署时生产里建不成它，待回复的锁屏推送不来，别的照常。

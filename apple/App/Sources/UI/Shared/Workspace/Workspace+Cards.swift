@@ -25,7 +25,7 @@ extension Workspace {
             await reconcileCurrentProject()
             #endif
             let result = try await write(Project.defaultID)
-            say("原项目已不存在或在回收站，已放到默认项目", isError: true)
+            say("原项目已不存在或在回收站，已放到默认项目", tone: .failure)
             return result
         }
     }
@@ -73,8 +73,8 @@ extension Workspace {
     func openTask(id: UUID) {
         let store = services.store
         attempt {
-            guard let card = try await store.card(id), card.deletedAt == nil else { return self.say("这件任务已删除") }
-            guard card.archivedAt == nil else { return self.say("这件任务已归档") }
+            guard let card = try await store.card(id), card.deletedAt == nil else { return self.say("这件任务已删除", tone: .gone) }
+            guard card.archivedAt == nil else { return self.say("这件任务已归档", tone: .gone) }
             self.openTask(card)
         }
     }

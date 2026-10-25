@@ -10,13 +10,34 @@ final class Workspace {
     struct Notice: Identifiable, Equatable {
         let id = UUID()
         var text: Dotted
-        var isError: Bool
-        /// 会话状态的提示（前台横幅）带的状态图形（`PiStateGlyph`）；nil 时按成功/错误用默认的。
+        var tone: Tone
+        /// 会话状态的提示（前台横幅）带的状态图形（`PiStateGlyph`）；nil 时按 `tone` 用默认的。
         var status: PiShown.Status?
         /// 点提示去哪（如随手记的落点）；nil 时提示只是告知。
         var link: Route?
         /// 提示右边的一个动作：多是"撤销"（把刚才那一下拨回去），完成任务后是"归档"。
         var action: NoticeAction?
+
+        /// 出错：字与图标用出错色，手机给出错的触感。
+        var isError: Bool { tone == .failure }
+
+        /// 一条提示说的是哪一类事：图标只在这里定（两端的提示同读 `icon`），出错另有颜色与触感。
+        enum Tone: Equatable {
+            /// 做成了、记下了
+            case done
+            /// 点了去的那一处已不在（删了、归档了）
+            case gone
+            case failure
+
+            var icon: Icon {
+                switch self {
+                case .done: .done
+                // 带斜线的圈：那里已经没有它了。不用对勾（对勾只表示完成与记下）
+                case .gone: .gone
+                case .failure: .failure
+                }
+            }
+        }
     }
 
     struct NoticeAction: Equatable {
@@ -182,10 +203,10 @@ final class Workspace {
     static let noticeDuration: Duration = .seconds(2.4)
 
     func say(
-        _ text: Dotted, isError: Bool = false, status: PiShown.Status? = nil, link: Route? = nil, duration: Duration = Workspace.noticeDuration,
+        _ text: Dotted, tone: Notice.Tone = .done, status: PiShown.Status? = nil, link: Route? = nil, duration: Duration = Workspace.noticeDuration,
         action: NoticeAction? = nil
     ) {
-        let notice = Notice(text: text, isError: isError, status: status, link: link, action: action)
+        let notice = Notice(text: text, tone: tone, status: status, link: link, action: action)
         self.notice = notice
         noticeTask?.cancel()
         noticeTask = Task { [weak self] in
@@ -195,7 +216,7 @@ final class Workspace {
     }
 
     func fail(_ error: any Error) {
-        say(Dotted(error.localizedDescription), isError: true)
+        say(Dotted(error.localizedDescription), tone: .failure)
     }
 
     // MARK: 项目目录、当前项目与新建位置
