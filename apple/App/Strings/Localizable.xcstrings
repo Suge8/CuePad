@@ -267,54 +267,6 @@
         }
       }
     },
-    "%@ 在干活" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ is working"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ 在干活"
-          }
-        }
-      }
-    },
-    "%@ 在干活：%@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@ is working: %2$@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ 在干活：%2$@"
-          }
-        }
-      }
-    },
-    "%@ 在等你" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ needs you"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ 在等你"
-          }
-        }
-      }
-    },
     "%@ 在等回答" : {
       "localizations" : {
         "en" : {
@@ -599,6 +551,22 @@
         }
       }
     },
+    "%@ 等你拍板" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ needs your call"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 等你拍板"
+          }
+        }
+      }
+    },
     "%@ 记得什么" : {
       "localizations" : {
         "en" : {
@@ -675,6 +643,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ 里的 hooks 格式不对，CuePad 没有改它"
+          }
+        }
+      }
+    },
+    "%@ 问版本没有回应，稍后再试" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ didn't respond to the version check. Try again later."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 问版本没有回应，稍后再试"
           }
         }
       }
@@ -1250,62 +1234,6 @@
         }
       }
     },
-    "%lld 个子代理在干活" : {
-      "localizations" : {
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld subagent working"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld subagents working"
-                }
-              }
-            }
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld 个子代理在干活"
-          }
-        }
-      }
-    },
-    "%lld 个子代理在跑" : {
-      "localizations" : {
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld subagent running"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld subagents running"
-                }
-              }
-            }
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld 个子代理在跑"
-          }
-        }
-      }
-    },
     "%lld 件" : {
       "localizations" : {
         "en" : {
@@ -1350,7 +1278,23 @@
         }
       }
     },
-    "%lld 件等你拍板" : {
+    "%lld 件待回复" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld to reply"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld 件待回复"
+          }
+        }
+      }
+    },
+    "%lld 件拍板" : {
       "localizations" : {
         "en" : {
           "variations" : {
@@ -1358,13 +1302,13 @@
               "one" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%lld for you"
+                  "value" : "%lld needs your call"
                 }
               },
               "other" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%lld for you"
+                  "value" : "%lld need your call"
                 }
               }
             }
@@ -1373,7 +1317,67 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%lld 件等你拍板"
+            "value" : "%lld 件拍板"
+          }
+        }
+      }
+    },
+    "%lld 件推进中" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld underway"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld 件推进中"
+          }
+        }
+      }
+    },
+    "%lld 件等子代理" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld waiting on subagents"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld 件等子代理"
+          }
+        }
+      }
+    },
+    "%lld 件要你管" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld needs you"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld need you"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld 件要你管"
           }
         }
       }
@@ -1406,6 +1410,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld 句没送到"
+          }
+        }
+      }
+    },
+    "%lld 在跑" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld running"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld 在跑"
           }
         }
       }
@@ -1550,6 +1570,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld 张图片"
+          }
+        }
+      }
+    },
+    "%lld 待回复" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld to reply"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld 待回复"
+          }
+        }
+      }
+    },
+    "%lld 拍板" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld for you"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld 拍板"
           }
         }
       }
@@ -1890,6 +1942,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld 等你"
+          }
+        }
+      }
+    },
+    "%lld 等子代理" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld on subagents"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld 等子代理"
           }
         }
       }
@@ -5443,6 +5511,22 @@
         }
       }
     },
+    "全部 %lld 条" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All %lld"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "全部 %lld 条"
+          }
+        }
+      }
+    },
     "全部完成" : {
       "localizations" : {
         "en" : {
@@ -6095,6 +6179,22 @@
         }
       }
     },
+    "刚记下" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recently Saved"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "刚记下"
+          }
+        }
+      }
+    },
     "创建" : {
       "localizations" : {
         "en" : {
@@ -6519,54 +6619,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "去会话"
-          }
-        }
-      }
-    },
-    "去会话里回它" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Reply in the session"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "去会话里回它"
-          }
-        }
-      }
-    },
-    "去会话里接着说" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Continue in the session"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "去会话里接着说"
-          }
-        }
-      }
-    },
-    "去会话里看看" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Take a look in the session"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "去会话里看看"
           }
         }
       }
@@ -10991,6 +11043,22 @@
         }
       }
     },
+    "找到了，但问版本没有回应，稍后再看" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Found, but it didn't respond to the version check. Check back later."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "找到了，但问版本没有回应，稍后再看"
+          }
+        }
+      }
+    },
     "技能" : {
       "localizations" : {
         "en" : {
@@ -11083,22 +11151,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "把这次随手记直接说给 %@"
-          }
-        }
-      }
-    },
-    "拍板" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Your call"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "拍板"
           }
         }
       }
@@ -11231,18 +11283,18 @@
         }
       }
     },
-    "换模型，看上下文、记忆与设置" : {
+    "换模型，看它刚记下的，去记忆与设置" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Change model, view context, memory, and settings"
+            "value" : "Change model, see what it just saved, open memory and settings"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "换模型，看上下文、记忆与设置"
+            "value" : "换模型，看它刚记下的，去记忆与设置"
           }
         }
       }
@@ -11499,22 +11551,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "推进中 %lld"
-          }
-        }
-      }
-    },
-    "推进中 %lld 件" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld underway"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "推进中 %lld 件"
           }
         }
       }
@@ -15875,34 +15911,6 @@
         }
       }
     },
-    "等 %lld 个子代理交回" : {
-      "localizations" : {
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "Awaiting %lld subagent"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "Awaiting %lld subagents"
-                }
-              }
-            }
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "等 %lld 个子代理交回"
-          }
-        }
-      }
-    },
     "等 %lld 件" : {
       "localizations" : {
         "en" : {
@@ -19635,22 +19643,6 @@
         }
       }
     },
-    "都停着" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "All idle"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "都停着"
-          }
-        }
-      }
-    },
     "都处理完了" : {
       "localizations" : {
         "en" : {
@@ -19903,6 +19895,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "问不出模型（%@）"
+          }
+        }
+      }
+    },
+    "问版本没有回应，稍后再试" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Didn't respond to the version check. Try again later."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "问版本没有回应，稍后再试"
           }
         }
       }
