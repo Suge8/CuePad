@@ -33,9 +33,9 @@ nonisolated struct SyncSummary: Equatable {
     }
 
     #if os(macOS)
-    static let failedDetail = "有改动没能同步，本机的内容都在，会自动重试"
+    static let failedDetail = "有改动没能同步，本机的内容都在；每一条为什么、会不会自动重试，点「查看」"
     #else
-    static let failedDetail = "有改动没能同步，本机的内容都在。回到前台会自动重试，也可以点立即同步"
+    static let failedDetail = "有改动没能同步，本机的内容都在；每一条为什么、会不会自动重试，见下面的明细"
     #endif
 
     /// 别的设备用着这台跟不上的新版时，去哪更新。
@@ -69,8 +69,10 @@ extension SyncIssue {
         case .refused: "\(subject)没被 iCloud 收下，会自动重试"
         case .local where kind == .incoming: "\(subject)没能存进这台设备，已跳过"
         case .local: "这台设备的资料库读写出错，会自动重试"
-        case .fileMissing: "\(subject)的文件不在这台设备上，传不上去"
-        case .unknownType: "收到一条更新版本的 CuePad 写的内容，已跳过；更新这台后就能同步"
+        // 构造不出来的只在这次运行里不再重试（`SyncCoordinator.unsendable`），改过或下次打开再试
+        case .fileMissing: "\(subject)的文件不在这台设备上，传不上去；下次打开 CuePad 会再试，还不行就重新添加它"
+        // 跳过的这条令牌已越过，更新后也不会补拉，只有之后的同类内容能同步
+        case .unknownType: "收到一条更新版本的 CuePad 写的内容，这版认不出，已跳过；更新这台后，之后的同类内容就能同步"
         case .damaged: "收到一张损坏的图片，已跳过"
         }
     }
