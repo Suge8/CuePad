@@ -60,11 +60,11 @@ extension MacSyncTests {
         defer { services.cancelBackgroundWork() }
 
         let noSession = try await bound(PiBind(project: project.id, folder: .besideSession("nope")))
-        #expect(noSession.status == .known(.failed) && noSession.resultDetail == SendError.piSessionNotOnThisMac.localizedDescription)
+        #expect(noSession.status == .known(.failed) && noSession.failureReason?.text == SendError.piSessionNotOnThisMac.localizedDescription)
         let missing = try await bound(PiBind(project: project.id, folder: .besideSession("gone-folder")))
-        #expect(missing.status == .known(.failed) && missing.resultDetail == "目录不存在：gone")
+        #expect(missing.status == .known(.failed) && missing.failureReason?.text == "目录不存在：gone")
         let unbound = try await bound(PiBind(project: project.id, folder: .project(bare.id)))
-        #expect(unbound.status == .known(.failed) && unbound.resultDetail == SendError.noCodeDirectory("无目录").localizedDescription)
+        #expect(unbound.status == .known(.failed) && unbound.failureReason?.text == SendError.noCodeDirectory("无目录").localizedDescription)
         #expect(try await services.store.directory(of: project.id) == existing.path)
     }
 
@@ -79,9 +79,9 @@ extension MacSyncTests {
         let send = try await services.store.requestDelivery(
             "接着做", to: SendTarget(kind: .piSession, name: "修好登录", ref: "s1"), on: TestApp.hostID)
         let resumed = try await awaitFinished(send.id)
-        #expect(resumed.status == .known(.failed) && resumed.resultDetail == "目录不存在：gone")
+        #expect(resumed.status == .known(.failed) && resumed.failureReason?.text == "目录不存在：gone")
         let start = try await launched(PiLaunch(project: project.id, prompt: nil, token: "tok-4"), title: "App")
-        #expect(start.status == .known(.failed) && start.resultDetail == "目录不存在：moved")
+        #expect(start.status == .known(.failed) && start.failureReason?.text == "目录不存在：moved")
         #expect(rig.host.calls.isEmpty)
     }
 

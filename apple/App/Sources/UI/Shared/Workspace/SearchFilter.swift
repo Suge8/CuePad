@@ -31,7 +31,7 @@ nonisolated struct PaletteQuery: Equatable {
 
     /// 项目筛选此刻的取值：选的项目名，没选是"全部"。
     func projectLabel(in projects: [Project]) -> String {
-        project.flatMap { id in projects.first { $0.id == id }?.name } ?? String(localized: "全部")
+        project.flatMap { id in projects.first { $0.id == id }?.shownName } ?? String(localized: "全部")
     }
 
     /// "发给过谁"筛选此刻的取值。

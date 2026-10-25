@@ -67,7 +67,7 @@ nonisolated enum PiChat {
             while let next = waiting.first, time.map({ next.at < $0 }) ?? true {
                 switch next {
                 case .answer(let message):
-                    entries.append(PiChatEntry(id: message.id, role: .answer, text: message.text, took: nil, question: message.question))
+                    entries.append(PiChatEntry(id: message.id, role: .answer, text: PiAnswerValue.shown(message.text), took: nil, question: message.question))
                     waiting.removeFirst()
                 case .preview(let first):
                     let batch = waiting.prefix { if case .preview(let preview) = $0 { preview.createdAt == first.createdAt } else { false } }

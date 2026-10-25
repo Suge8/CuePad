@@ -80,7 +80,7 @@ extension CueKeeper {
         }
         guard failures <= setup.timing.restarts.count else {
             phase = .stuck(reason)
-            await say(.cue, String(localized: "我起不来了：\(reason)\n你再发一条消息，我就再试一次。"), urgent: true)
+            await say(.cue, ShownText("我起不来了：\(reason)\n你再发一条消息，我就再试一次。"), urgent: true)
             return
         }
         phase = .restarting(failures)
@@ -133,7 +133,7 @@ extension CueKeeper {
             let line = summary.kind == .other ? raw : "\(summary.title)\n\(raw)"  // 认不出的错，摘要只是原文的首行
             guard line != lastFailure else { return }  // 同一个错一轮轮重复（如额度）只说一次
             lastFailure = line
-            let text = String(localized: "这一轮出错了：\(line)")
+            let text = ShownText("这一轮出错了：\(line)")
             if let turn, turn.answersYou { await reply(text, in: turn) } else { await say(.cue, text) }
         case .turnFinished:
             guard var finished = turn else { return }

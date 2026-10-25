@@ -27,7 +27,7 @@ struct CaptureComposer: View {
     @FocusState private var focused: Bool
 
     private var project: UUID { state.project ?? defaultProject ?? Project.defaultID }
-    private var destination: String { workspace.catalog?.project(project)?.name ?? "" }
+    private var destination: String { workspace.catalog?.project(project)?.shownName ?? "" }
     /// 收成一行（`Composer` 同一条规则）：没有头部的落点胶囊，占位要带上落点。
     private var collapsed: Bool { !pinnedOpen && !focused && state.draft.isEmpty(accepting: .images) }
 
@@ -60,7 +60,7 @@ struct CaptureComposer: View {
     private var destinationMenu: some View {
         MenuButton(sections: [
             ChoiceMenu.Section(choices: (workspace.catalog?.projects ?? []).map { item in
-                ChoiceMenu.Choice(title: .verbatim(item.name), checked: item.id == project) { state.project = item.id }
+                ChoiceMenu.Choice(title: .verbatim(item.shownName), checked: item.id == project) { state.project = item.id }
             }),
         ], accessibilityLabel: "记到 \(destination)") {
             DestinationChip(project: workspace.catalog?.project(project))
@@ -127,6 +127,6 @@ private enum ChipMetrics {
 
 extension DestinationChip where Icon == ProjectGlyph {
     init(project: Project?) {
-        self.init(lead: "→", title: Text(project?.name ?? "")) { ProjectGlyph(project: project, size: ChipMetrics.glyph) }
+        self.init(lead: "→", title: Text(project?.shownName ?? "")) { ProjectGlyph(project: project, size: ChipMetrics.glyph) }
     }
 }

@@ -1826,34 +1826,6 @@
         }
       }
     },
-    "%lld 秒没回答" : {
-      "localizations" : {
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "No answer in %lld second"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "No answer in %lld seconds"
-                }
-              }
-            }
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld 秒没回答"
-          }
-        }
-      }
-    },
     "%lld 等你" : {
       "localizations" : {
         "en" : {
@@ -2917,6 +2889,22 @@
         }
       }
     },
+    "Mac 上的 CuePad 在执行过程中退出，为避免重复发送没有重试" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CuePad on the Mac quit while running this and didn't retry, to avoid sending it twice"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mac 上的 CuePad 在执行过程中退出，为避免重复发送没有重试"
+          }
+        }
+      }
+    },
     "Mac 上这个会话的文件可能已经删掉了" : {
       "localizations" : {
         "en" : {
@@ -3491,18 +3479,18 @@
         }
       }
     },
-    "「%@」做完了" : {
+    "「%@」做完了\n\n%@" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "“%@” is done"
+            "value" : "“%@” is done\n\n%@"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "「%@」做完了"
+            "state" : "new",
+            "value" : "「%1$@」做完了\n\n%2$@"
           }
         }
       }
@@ -13939,22 +13927,6 @@
         }
       }
     },
-    "没报模型就退出了，退出码 %d" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "quit without reporting a model, exit code %d"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "没报模型就退出了，退出码 %d"
-          }
-        }
-      }
-    },
     "没换成 %@：%@\n我还用原来的。" : {
       "localizations" : {
         "en" : {
@@ -19783,6 +19755,50 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "问不出模型（%@）"
+          }
+        }
+      }
+    },
+    "问不出模型（%lld 秒没回答）" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "couldn't get its models (no answer in %lld second)"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "couldn't get its models (no answer in %lld seconds)"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "问不出模型（%lld 秒没回答）"
+          }
+        }
+      }
+    },
+    "问不出模型（没报模型就退出了，退出码 %d）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "couldn't get its models (quit without reporting one, exit code %d)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "问不出模型（没报模型就退出了，退出码 %d）"
           }
         }
       }

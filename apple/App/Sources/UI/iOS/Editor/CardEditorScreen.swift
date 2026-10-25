@@ -33,7 +33,7 @@ struct CardEditorScreen: View {
             }
             .padding(wide ? EdgeInsets(top: 8, leading: 24, bottom: 0, trailing: 24) : EdgeInsets())
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .floatingHeader(.verbatim(data?.project?.name ?? ""), detail: data.map(detail) ?? "") { actions }
+            .floatingHeader(.verbatim(data?.project?.shownName ?? ""), detail: data.map(detail) ?? "") { actions }
             .observing(services.store, id: cardID, into: $data, onError: workspace.fail) { [cardID] store in
                 guard let card = try store.card(cardID) else { throw CueStoreError.notFound }
                 return EditorData(card: card, project: try store.project(card.projectID))

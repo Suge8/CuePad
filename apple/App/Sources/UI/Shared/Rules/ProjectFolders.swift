@@ -69,7 +69,7 @@ nonisolated enum ProjectFolders {
         let own = Set(bindings.filter { $0.projectID == project }.map { "\($0.hostID)/\($0.folder)" })
         let owners = Dictionary(
             bindings.filter { $0.projectID != project }.compactMap { binding in
-                projects.first { $0.id == binding.projectID }.map { ("\(binding.hostID)/\(binding.folder)", $0.name) }
+                projects.first { $0.id == binding.projectID }.map { ("\(binding.hostID)/\(binding.folder)", $0.shownName) }
             }, uniquingKeysWith: { first, _ in first })
         var seen = own
         var result: [Candidate] = []
@@ -81,7 +81,7 @@ nonisolated enum ProjectFolders {
         for item in folders {
             add(
                 host: item.hostID, macName: item.macName, folder: item.folder, target: .besideSession(item.sessionID),
-                usedBy: item.projectID.flatMap { id in projects.first { $0.id == id }?.name }, sessions: item.count)
+                usedBy: item.projectID.flatMap { id in projects.first { $0.id == id }?.shownName }, sessions: item.count)
         }
         for binding in bindings where binding.projectID != project {
             add(host: binding.hostID, macName: binding.macName, folder: binding.folder, target: .project(binding.projectID), usedBy: nil, sessions: 0)

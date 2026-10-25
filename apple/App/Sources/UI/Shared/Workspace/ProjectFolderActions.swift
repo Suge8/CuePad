@@ -24,7 +24,7 @@ extension Workspace {
 
     /// 解除某台 Mac 上项目的绑定：就是本机的直接写，别的 Mac 上的请那台 Mac 做。
     func unbindFolder(_ binding: DirectoryBinding, of project: Project) {
-        let id = project.id, name = project.name
+        let id = project.id, name = project.shownName
         attempt {
             if binding.hostID == self.localHost {
                 try await self.services.store.setDirectory(nil, for: id)

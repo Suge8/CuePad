@@ -154,7 +154,7 @@ struct CueAnswer: View {
     @Environment(\.chatHighlight) private var highlight
 
     var body: some View {
-        let id = CueThread.Row.answerID(of: question.id), answer = question.answer ?? ""
+        let id = CueThread.Row.answerID(of: question.id), answer = question.answer.map(question.shownChoice) ?? ""
         AnswerBubble(
             answer: answer, quote: quoted ? question.headline.map { BubbleQuote(text: $0, target: question.id) } : nil, look: .cue(joined: joined),
             highlighted: highlight == id

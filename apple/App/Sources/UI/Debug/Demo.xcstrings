@@ -7425,22 +7425,6 @@
         }
       }
     },
-    "那台 Mac 上的 Pi 已经退出，没能送进去" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Pi on that Mac has exited; it couldn’t be delivered"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "那台 Mac 上的 Pi 已经退出，没能送进去"
-          }
-        }
-      }
-    },
     "邮箱" : {
       "localizations" : {
         "en" : {

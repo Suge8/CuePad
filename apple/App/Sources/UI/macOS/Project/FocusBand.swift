@@ -90,7 +90,7 @@ struct CompactFocus: View {
             HStack(spacing: 14) {
                 HStack(spacing: 6) {
                     ProjectGlyph(project: data.project, size: 13)
-                    Text(data.project?.name ?? "").font(Typography.toolbarTitle).lineLimit(1)
+                    Text(data.project?.shownName ?? "").font(Typography.toolbarTitle).lineLimit(1)
                 }
                 if data.taskCounts.open > 0 {
                     Label { Text(data.taskCounts.open, format: .number).monospacedDigit() } icon: { Image(.task) }

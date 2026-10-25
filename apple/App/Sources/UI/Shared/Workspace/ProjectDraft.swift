@@ -16,7 +16,7 @@ struct ProjectDraft {
     init(_ request: ProjectFormRequest) {
         let project = request.project
         self.project = project
-        name = project?.name ?? ""
+        name = project?.shownName ?? ""
         intro = project?.intro ?? ""
         icon = ProjectIcon(stored: project?.icon)
         color = project?.color ?? Palette.projectColors[0].stored
@@ -31,7 +31,9 @@ struct ProjectDraft {
     /// 写进库（出错交给 `attempt`），名称是空的不写、返回 false（表单不关）；新建的项目建好后调 `created`。
     func save(in workspace: Workspace, created: @escaping @MainActor (UUID) async throws -> Void) -> Bool {
         guard canSave else { return false }
-        let store = workspace.services.store, existing = project?.id, name = trimmedName, icon = icon.rawValue, color = color
+        // 名字没改就留存的那份：默认项目显示的是这台设备语言的名字，原样存回去就成了改名
+        let name = trimmedName == project?.shownName ? project?.name ?? trimmedName : trimmedName
+        let store = workspace.services.store, existing = project?.id, icon = icon.rawValue, color = color
         let intro = intro.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty
         workspace.attempt {
             let id = if let existing { existing } else { try await store.createProject(name: name, color: color, icon: icon).id }

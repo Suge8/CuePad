@@ -76,7 +76,7 @@ struct BoardTaskCard: View {
         case .done: task.completedAt?.formatted(date: .omitted, time: .shortened)
         case .todo, .waiting: nil
         }
-        return Dotted(item.project?.name, time, agent).visible
+        return Dotted(item.project?.shownName, time, agent).visible
     }
 
     private func open() { workspace.openTask(task) }

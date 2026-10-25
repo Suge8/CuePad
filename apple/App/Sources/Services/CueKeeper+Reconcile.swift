@@ -141,7 +141,7 @@ extension CueKeeper {
                     Self.log.error("Cue 的设置没能改回在用的：\(error.localizedDescription, privacy: .public)")
                 }
                 let why = error.localizedDescription
-                await say(.cue, wanted.model.map { String(localized: "没换成 \($0)：\(why)\n我还用原来的。") } ?? String(localized: "没换成：\(why)\n我还用原来的。"))
+                await say(.cue, wanted.model.map { ShownText("没换成 \($0)：\(why)\n我还用原来的。") } ?? ShownText("没换成：\(why)\n我还用原来的。"))
             }
         case .starting, .running:
             break

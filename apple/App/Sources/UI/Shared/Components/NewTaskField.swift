@@ -54,18 +54,18 @@ struct NewTaskField: View {
             #if os(macOS)
             if choosesProject, let projects = workspace.catalog?.projects {
                 Menu {
-                    ForEach(projects) { item in Button(item.name) { chosen = item.id } }
+                    ForEach(projects) { item in Button(item.shownName) { chosen = item.id } }
                 } label: {
                     let current = projects.first { $0.id == target }
                     HStack(spacing: 4) {
                         ProjectGlyph(project: current, size: 10)
-                        Text(current?.name ?? "").lineLimit(1)
+                        Text(current?.shownName ?? "").lineLimit(1)
                     }
                     .font(Typography.meta).foregroundStyle(palette.ink2)
                     .padding(.horizontal, 8).frame(height: 24)
                     .background(palette.fill, in: .capsule)
                     .contentShape(.capsule)
-                    .menuLabel("挂到 \(current?.name ?? "")")
+                    .menuLabel("挂到 \(current?.shownName ?? "")")
                 }
                 .menuStyle(.button).buttonStyle(PressStyle()).menuIndicator(.hidden).fixedSize()
             }

@@ -33,7 +33,7 @@ struct CueWaitEyebrow: View {
         if let project = workspace.catalog?.project(wait.project) {
             HStack(spacing: 2) {
                 ProjectGlyph(project: project, size: 11)
-                Text(project.name).lineLimit(1)
+                Text(project.shownName).lineLimit(1)
             }
             .fixedSize()
             .padding(.trailing, 10)
