@@ -122,20 +122,27 @@ private struct RecallLine: View {
     }
 }
 
-/// 面板最底下一行：它在哪台 Mac 上运行（不在时那一句同名牌，`CuePresence.line`：已停用、还没启用、某台没开），行尾"设置"；点了推入设置页
-/// （Cue 的名字与在哪台 Mac 上运行在它最上面一组）。
+/// 面板最底下一行，点了推入设置页（Cue 的名字与在哪台 Mac 上运行在它最上面一组），左边一句、行尾"设置"：
+/// 在线时写它在哪台 Mac 上运行；不在时写为什么（同名牌，`CuePresence.line`：已停用、还没启用、某台没开），
+/// 但名片上没有可数的时那一句已写在名字下面（`CueNow.quietLine`），同一屏不写两遍，这一行只剩去设置的路。
 private struct CueHostLine: View {
     let open: () -> Void
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
     var body: some View {
+        let place = place
         Button(action: open) {
             HStack(spacing: 8) {
-                Image(.mac).foregroundStyle(palette.ink3)
-                Text(place).foregroundStyle(palette.ink2).lineLimit(1)
-                Spacer(minLength: 8)
-                Text("设置").foregroundStyle(palette.ink3)
+                Image(place == nil ? .settings : .mac).foregroundStyle(palette.ink3)
+                if let place {
+                    Text(place).foregroundStyle(palette.ink2).lineLimit(1)
+                    Spacer(minLength: 8)
+                    Text("设置").foregroundStyle(palette.ink3)
+                } else {
+                    Text("设置").foregroundStyle(palette.ink2)
+                    Spacer(minLength: 8)
+                }
                 Image(.forward).font(.caption2.weight(.semibold)).foregroundStyle(palette.ink3)
             }
             .font(Typography.secondary)
@@ -148,10 +155,11 @@ private struct CueHostLine: View {
         .accessibilityAddTraits(.isButton)
     }
 
-    private var place: String {
+    private var place: String? {
         let cue = workspace.cue
         let host = cue.hostName ?? MacAgents.unnamed
-        return cue.presence.line(host: host, ranBefore: cue.hostID != nil) ?? String(localized: "在「\(host)」上运行")
+        guard let away = cue.presence.line(host: host, ranBefore: cue.hostID != nil) else { return String(localized: "在「\(host)」上运行") }
+        return cue.now.ledger.isEmpty ? nil : away
     }
 }
 
