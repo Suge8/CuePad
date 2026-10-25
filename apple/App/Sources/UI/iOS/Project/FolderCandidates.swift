@@ -58,6 +58,8 @@ struct FolderCandidateList: View {
         .listRowBackground(palette.paper)
         .deskBackground()
         .searchable(text: $query, prompt: "搜索文件夹")
+        // 搜索框是系统的玻璃，垫不了实底（`GlassInk`）：底边用系统的硬边缘效果把滚到它后面的行压下去，候选的名字不与占位字叠着
+        .scrollEdgeEffectStyle(.hard, for: .bottom)
         .observing(services.store, id: project, into: $candidates, onError: workspace.fail) {
             [project] store in
             ProjectFolders.candidates(
