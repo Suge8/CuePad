@@ -95,7 +95,7 @@ protocol SubscriptionStore: Sendable {
 /// 通知文案只用本地化 key 的通用句：标题与详情是加密字段，不可能出现在通知里；也不设 `desiredKeys`。删除不通知。
 /// 谓词按标志而不是按状态，因为"同一状态下的重复更新"与"从工作中进入完成"这类转换在谓词里表达不了；标志只在转换那一次写入上置位（见 `PiStateRecorder`）。
 /// 标志在上传前会被同状态的更新沿用；状态已前进或会话已结束时未上传的标志作废（见 `PiStateRecorder`）。
-/// 谓词用到的明文字段的可查询索引由生成的数据结构声明（`RecordMapper.queryableColumns`，见 docs/release.md「CloudKit 数据结构」）。
+/// 谓词用到的明文字段由谓词本身推出（`queriedColumns`），生成的数据结构据此建可查询索引（见 docs/release.md「CloudKit 数据结构」）；加密字段服务端看不见，不能出现在谓词里。
 /// 查询订阅是 schema 的一部分：改定义（谓词、选项、通知文案 key）要重新部署到生产，见 docs/release.md「CloudKit 数据结构」。
 struct AlertSubscriptions {
   /// 通知标志字段（明文、可查询）。
@@ -114,6 +114,13 @@ struct AlertSubscriptions {
   private static let waitingKey = "pi_alert_waiting", settledKey = "pi_alert_settled", replyKey = "pi_alert_reply", cueKey = "cue_alert"
 
   let zoneID: CKRecordZone.ID
+
+  /// 谓词用到的字段（按表）：字段名只写在谓词里这一处。
+  static let queriedColumns: [Table: Set<String>] = AlertSubscriptions(zoneID: CloudSync.zoneID).desired().reduce(into: [:]) { columns, subscription in
+    guard let table = subscription.recordType.flatMap(Table.init(rawValue:)), let field = (subscription.predicate as? NSComparisonPredicate)?.leftExpression.keyPath
+    else { preconditionFailure("订阅谓词只用一个字段的比较：\(subscription.predicate)") }
+    columns[table, default: []].insert(field)
+  }
 
   func desired() -> [CKQuerySubscription] {
     [

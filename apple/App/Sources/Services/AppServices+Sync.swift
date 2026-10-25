@@ -42,9 +42,10 @@ extension AppServices {
         startPolling()
     }
 
-    /// 应用回到前台：立即同步，iOS 恢复按节奏的拉取。
+    /// 回到前台的唯一入口（Mac 的 App 激活、iOS 任一窗口回到前台；已经在做的不重开）：iOS 恢复按节奏的拉取、重连门铃，立即同步。
     func handleActivation() async {
         startPolling()
+        relay?.resume()
         await syncNow()
     }
 
@@ -52,22 +53,27 @@ extension AppServices {
     /// Mac 不收推送，别的设备写来的东西只靠它；手机有推送，它是推送之外让在等的东西更快、更稳地到。已经在拉就不重开。
     /// 节奏与拉取不在主线程上：主线程忙（排版、重读）时拉取不跟着晚，只有等待理由变了才回主线程算一次节奏。
     func startPolling() {
-        guard let sync, polling == nil else { return }
+        guard sync != nil, polling == nil else { return }
         let waiting = pollingCondition()
         let poller = SyncPoller(timing: timing)
         polling = Task {
-            await poller.run(while: waiting) { await sync.pull() }
+            await poller.run(while: waiting) { await self.pull() }
         }
     }
 
-    /// 拉一次（返回时拉完）：立即同步与收到推送（前台的通知、后台的静默推送）经这里，按节奏的拉取直接调同步（`startPolling`）。
+    /// 拉一次（返回时拉完）：立即同步、按节奏的拉取、收到推送（前台的通知、后台的静默推送）与门铃都经这里。
     /// 同一时刻只有一拉，在跑时再来的合成下一拉，同步开始前来的（冷启动时先到的推送）等它开始了再拉：都在 `CloudSync.syncNow`。
-    /// 不碰立即同步的忙碌状态（`syncNow`）。拉取本身不在主线程上（`SyncControlling.pull`），主线程只等它返回。
-    func pull() async {
-        await sync?.pull()
+    /// 不碰立即同步的忙碌状态（`syncNow`）。不在调用方的线程上跑（`@concurrent`）：从主线程来的也当场离开，主线程忙时拉取不跟着晚。
+    /// 失败（多半是离线）只记日志：下一次触发会再拉，状态变化经同步状态反映。
+    @concurrent func pull() async {
+        do {
+            try await sync?.syncNow()
+        } catch {
+            Self.log.notice("拉取失败：\(error.brief, privacy: .public)")
+        }
     }
 
-    /// 此刻该按什么节奏拉（nil：不拉）。"是否在等"只在这里定义，节奏见 `SyncPoller.Cadence.mac`、`.phone`，门铃通着（`doorbellLive`）时降为兜底：
+    /// 此刻该按什么节奏拉（nil：不拉）。"是否在等"只在这里定义，节奏见 `SyncPoller.Cadence.mac`、`.phone`，门铃通着（`doorbellFallback`）时降为兜底：
     /// - Mac：桥上有连着的 Pi 会话（手机可能随时发来请求；以桥为准，资料库里的状态记录可能是没来得及标为结束的旧会话），
     ///   或有还没结果的投送请求（发给本机的，或本机发给别的 Mac 上会话的），或 Cue 在这台值班（你在手机上对它说的话、
     ///   "等你"的回答、别的 Mac 接管只经这一拉才到，会话都关着时它也在等）；Mac 不收推送（docs/sync.md「Agent 与 Cue 的通知」）；
@@ -76,10 +82,10 @@ extension AppServices {
     var pollingCadence: SyncPoller.Cadence? {
         #if os(macOS)
         DebugHooks.pollsLikePhone
-            ? .phone(hasOpenDeliveries: hasOpenDeliveries, isWatching: true, doorbell: doorbellLive)
-            : .mac(waiting: hasOpenDeliveries || !pi.slots.isEmpty || cue.onDuty, doorbell: doorbellLive)
+            ? .phone(hasOpenDeliveries: hasOpenDeliveries, isWatching: true, doorbell: doorbellFallback)
+            : .mac(waiting: hasOpenDeliveries || !pi.slots.isEmpty || cue.onDuty, doorbell: doorbellFallback)
         #else
-        .phone(hasOpenDeliveries: hasOpenDeliveries, isWatching: piViewers > 0 || cueViewers > 0, doorbell: doorbellLive)
+        .phone(hasOpenDeliveries: hasOpenDeliveries, isWatching: piViewers > 0 || cueViewers > 0, doorbell: doorbellFallback)
         #endif
     }
 

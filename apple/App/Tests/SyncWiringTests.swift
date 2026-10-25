@@ -76,6 +76,40 @@ struct SyncWiringTests {
         #expect(try await services.store.card(after.id)?.body == "停下之后写的")
     }
 
+    /// 换了 iCloud 账号：停下等你决定，决定之前记的不上传。选上传本机，本机的都传给新账号；选清掉本机，同步的数据清掉，
+    /// 本机的 Pi 会话索引（与账号无关）留着。
+    @Test(.timeLimit(.minutes(1)), arguments: [SyncResolution.uploadLocal, .eraseLocal])
+    func 换了iCloud账号_停下等你决定(_ resolution: SyncResolution) async throws {
+        let cloud = SimulatedCloud([Self.floor(CueStore.supportedSchemaVersions.lowerBound)])
+        let app = TestApp(sync: .built { CloudSync(store: $0) { cloud } })
+        let services = app.services!
+        let workspace = Workspace(services: services)
+        services.startSync()
+        defer { services.cancelBackgroundWork() }
+        let before = try await workspace.createCard(body: "换账号前记的", in: Project.defaultID)
+        try await eventually("传上去") { await cloud.saved.contains(before.id.uuidString.lowercased()) }
+        try await services.store.upsertPiSession(IndexedSession(id: "s1", path: "/p", cwd: "/c", lastActivityAt: .now), host: "mac-a")
+
+        await cloud.signIn("另一个账号")
+        NotificationCenter.default.post(name: .CKAccountChanged, object: nil)
+        try await eventually("要你决定") { services.syncStatus == .needsDecision(.accountSwitched) }
+        let waiting = try await workspace.createCard(body: "决定之前记的", in: Project.defaultID)
+        await services.upload(waiting.id)
+        #expect(await !cloud.saved.contains(waiting.id.uuidString.lowercased()))
+
+        try await services.resolveSync(resolution)
+        let ids = [before.id, waiting.id].map { CKRecord.ID(recordName: $0.uuidString.lowercased(), zoneID: CloudSync.zoneID) }
+        switch resolution {
+        case .uploadLocal:
+            try await eventually("本机的都传给新账号") { await cloud.records(ids).count == 2 }
+        case .eraseLocal:
+            #expect(try await services.store.card(before.id) == nil)
+            #expect(try await services.store.card(waiting.id) == nil)
+            #expect(try await services.store.piSessions().map(\.id) == ["s1"])
+            #expect(await cloud.records(ids).isEmpty)
+        }
+    }
+
     private static func floor(_ version: Int) -> CKRecord {
         let record = CKRecord(recordType: PeerFloor.recordType, recordID: PeerFloor(zoneID: CloudSync.zoneID).id)
         record[PeerFloor.field] = version as NSNumber

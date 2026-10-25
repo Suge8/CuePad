@@ -100,8 +100,8 @@ public struct SyncIssue: Equatable, Sendable {
 
 extension Error {
   /// 写进日志的原因：CloudKit 错误取错误码、服务器的说明（`localizedDescription` 常只剩"错误 14"，说明在 userInfo 的文字项里，
-  /// 如 `ServerErrorDescription`）与建议的重试间隔；整个 `description` 带记录内容，不进日志。
-  var brief: String {
+  /// 如 `ServerErrorDescription`）与建议的重试间隔；整个 `description` 带记录内容，不进日志。同步与门铃的失败都按它记。
+  public var brief: String {
     guard let error = self as? CKError else { return localizedDescription }
     let reasons = error.errorUserInfo.sorted { $0.key < $1.key }.compactMap { key, value in (value as? String).map { "\(key)=\($0)" } }
     let retry = error.retryAfterSeconds.map { "，\($0) 秒后重试" } ?? ""
@@ -143,14 +143,6 @@ public struct SyncState: Equatable, Sendable {
     self.catchingUp = catchingUp
     self.reconciled = reconciled
   }
-}
-
-/// 服务器收下了本机的一批改动（`CloudSync.acceptedUpdates`，实时层据此按门铃）：收下的记录在哪些表、存下与删除各几条。
-public struct AcceptedChanges: Equatable, Sendable {
-  /// 存下的记录所在的表（删除只知道记录名，不在里面）。
-  public var tables: Set<Table>
-  public var saved: Int
-  public var deleted: Int
 }
 
 /// 一批上传的结果交给发送者：有没有进展、同步区要不要建、该等什么（各条的失败合成一个，`SyncFault`）。

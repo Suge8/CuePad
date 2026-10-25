@@ -8,6 +8,7 @@ import os
 actor SimulatedCloud: SyncCloud {
   private var zone: [CKRecord.ID: (seq: Int, record: CKRecord)] = [:]
   private var seq = 0
+  private var account = "simulated"
   /// 收下的上传（记录名），按先后。
   private(set) var saved: [String] = []
   private static let log = Logger(subsystem: AppIdentity.id, category: "sync")
@@ -25,8 +26,15 @@ actor SimulatedCloud: SyncCloud {
     zone[record.recordID] = (seq, record)
   }
 
+  /// 换登了另一个 iCloud 账号：它的同步区是空的。
+  func signIn(_ account: String) {
+    self.account = account
+    zone = [:]
+  }
+
   func accountStatus() -> CKAccountStatus { .available }
-  func accountName() -> String { "simulated" }
+  func accountName() -> String { account }
+  func relaySecret() -> Data { Data(repeating: 7, count: RelaySecret.length) }
 
   func changes(since token: Data?, keys: [String]?) -> ZoneChangeBatch {
     let after = token.flatMap { Int(String(decoding: $0, as: UTF8.self)) } ?? 0
@@ -70,6 +78,7 @@ struct UnreachableCloud: SyncCloud {
 
   func accountStatus() -> CKAccountStatus { .available }
   func accountName() -> String { "simulated" }
+  func relaySecret() throws -> Data { throw Self.failure }
   func changes(since token: Data?, keys: [String]?) throws -> ZoneChangeBatch { throw Self.failure }
   func records(_ ids: [CKRecord.ID]) throws -> [CKRecord] { throw Self.failure }
   func upload(saving: [CKRecord], deleting: [CKRecord.ID]) throws -> SentRecords {

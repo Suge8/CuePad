@@ -160,7 +160,7 @@ import Testing
   func serverRecordChangedIsMergedLikeAnyRemoteChange(serverIsNewer: Bool) async throws {
     let card = try await pushedCard(body: "base")
     let local = try await editCard(card, pinned: true)
-    let client = try #require(await rig.coordinator.record(for: rig.recordID(card.id)))
+    let client = try #require(try await rig.coordinator.record(for: rig.recordID(card.id)))
     let server = remoteRecord(.cards, id: card.id, cardFields(body: "base", modifiedAt: local + (serverIsNewer ? 1_000 : -1_000)))
     let error = CKError(.serverRecordChanged, userInfo: [CKRecordChangedErrorServerRecordKey: server])
 
@@ -172,7 +172,7 @@ import Testing
 
   @Test func unknownItemOnSaveResurrectsTheRecord() async throws {
     let card = try await pushedCard()
-    let client = try #require(await rig.coordinator.record(for: rig.recordID(card.id)))
+    let client = try #require(try await rig.coordinator.record(for: rig.recordID(card.id)))
 
     _ = await rig.coordinator.sent(SentRecords(saved: [], failedSaves: [(client, CKError(.unknownItem))], deleted: [], failedDeletes: []))
 
@@ -195,7 +195,7 @@ import Testing
 
   @Test func writeFailuresOtherThanKnownOnesAreReportedNotSwallowed() async throws {
     let card = try await pushedCard()
-    let client = try #require(await rig.coordinator.record(for: rig.recordID(card.id)))
+    let client = try #require(try await rig.coordinator.record(for: rig.recordID(card.id)))
     _ = await rig.coordinator.sent(SentRecords(saved: [], failedSaves: [(client, CKError(.permissionFailure))], deleted: [], failedDeletes: []))
     _ = await rig.coordinator.sent(SentRecords(saved: [], failedSaves: [(client, CKError(.permissionFailure))], deleted: [], failedDeletes: []))  // 停下后重试又报同一个错
 

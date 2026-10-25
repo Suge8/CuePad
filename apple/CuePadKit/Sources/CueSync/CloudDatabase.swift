@@ -40,6 +40,8 @@ protocol SyncCloud: ZoneChangeSource, RecordUploader, SubscriptionStore {
   func accountStatus() async throws -> CKAccountStatus
   /// 此刻登录的账号（用户记录名）。
   func accountName() async throws -> String
+  /// 门铃的密钥（`RelaySecret`），没有就生成一把存进去。
+  func relaySecret() async throws -> Data
 }
 
 struct CloudDatabase: SyncCloud {
@@ -48,7 +50,7 @@ struct CloudDatabase: SyncCloud {
 
   /// 数据库的每个请求都带 CloudKit 自己的超时：`RequestLimits.request` 没有新数据（空闲，不是总用时：大附件照样传完）就失败，
   /// 归为连不上、退避重发。默认的 60 秒太长：挂住的一批挡着后面的话一起等。
-  private func database<R>(_ body: @escaping @Sendable (CKDatabase) async throws -> R) async throws -> R {
+  func database<R>(_ body: @escaping @Sendable (CKDatabase) async throws -> R) async throws -> R {
     let configuration = CKOperation.Configuration()
     configuration.timeoutIntervalForRequest = RequestLimits.request.seconds
     return try await container.privateCloudDatabase.configuredWith(configuration: configuration) { try await body($0) }

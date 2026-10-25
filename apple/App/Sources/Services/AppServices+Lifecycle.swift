@@ -24,8 +24,10 @@ extension AppServices {
         backgroundFlushes[token] = nil
     }
 
-    /// 进入后台前调用（在后台任务里，`BackgroundWork`）：等所有登记的落盘完成，写下这台设备已离开会话（界面在场景退到后台时报的）并传完，
+    /// App 整个进后台时调用（iOS 最后一个窗口退到后台，在后台任务里，`BackgroundWork`；只是一个窗口退下、别的还在前台的不调）：
+    /// 停掉按节奏的拉取，等所有登记的落盘完成，写下这台设备已离开会话（界面在场景退到后台时报的）并传完，
     /// 把待推送发完（挂起后发送者就不会再跑了），等这些改动的门铃按完再断开中转，并把小组件快照刷到最新（观察任务同理）。
+    /// 回前台的对应入口是 `handleActivation`。
     func prepareForBackground() async {
         stopPolling()
         relay?.pause()

@@ -13,12 +13,14 @@ import Testing
   actor ScriptedServer: RecordUploader {
     private var script: [@Sendable ([CKRecord]) throws -> SentRecords]
     private(set) var uploads: [[String]] = []
+    private(set) var deletions: [String] = []
     private(set) var zonesSaved = 0
 
     init(_ script: [@Sendable ([CKRecord]) throws -> SentRecords]) { self.script = script }
 
     func upload(saving: [CKRecord], deleting: [CKRecord.ID]) async throws -> SentRecords {
       uploads.append(saving.map(\.recordID.recordName))
+      deletions += deleting.map(\.recordName)
       if script.isEmpty { return SentRecords(saved: saving, deleted: deleting) }
       return try script.removeFirst()(saving)
     }
@@ -35,6 +37,48 @@ import Testing
     #expect(await sender.send([rig.id(card.id)]))
     #expect(await server.zonesSaved == 1)
     #expect(try await !rig.reconcileDelta().saves.contains(rig.id(card.id)))  // 别的待推送（默认项目）在后台那一路，不随它返回
+    await sender.stop()
+  }
+
+  /// 服务器拒收一条记录（这一版本身有问题）：之后说的话照样马上传上去，被拒的那一版不再一批批地重发。
+  @Test func aRecordTheServerRefusesDoesNotHoldBackLaterUploads() async throws {
+    let bad = try await rig.store.createCard(body: "服务器不收这一版")
+    let refused = rig.id(bad.id)
+    let server = ScriptedServer([
+      { records in
+        SentRecords(
+          saved: records.filter { $0.recordID.recordName != refused },
+          failedSaves: records.filter { $0.recordID.recordName == refused }.map { ($0, CKError(.invalidArguments)) })
+      }
+    ])
+    let sender = RecordSender(uploader: server, coordinator: rig.coordinator)
+    await sender.start()
+    await sender.flush()
+
+    let said = try await rig.store.createCard(body: "之后说的话")
+    #expect(await sender.send([rig.id(said.id)]))
+    await sender.flush()
+    #expect(await server.uploads.filter { $0.contains(refused) }.count == 1)
+    await sender.stop()
+  }
+
+  /// 改过的一版被服务器拒收之后，删掉这条照样传上去：跳过的只是被拒的那一版。
+  @Test func deletingARecordWhoseEditWasRefusedStillReachesTheServer() async throws {
+    let card = try await rig.store.createCard(body: "第一版")
+    let server = ScriptedServer([
+      { records in SentRecords(saved: records) },
+      { records in SentRecords(failedSaves: records.map { ($0, CKError(.invalidArguments)) }) },
+    ])
+    let sender = RecordSender(uploader: server, coordinator: rig.coordinator)
+    await sender.start()
+    await sender.flush()
+
+    try await Task.sleep(for: .milliseconds(3))  // 修改时间是毫秒
+    try await rig.store.updateCard(card.id) { $0.body = "服务器不收这一版" }
+    await sender.flush()
+    try await rig.store.purgeCard(card.id)
+    await sender.flush()
+    #expect(await server.deletions.contains(rig.id(card.id)))
     await sender.stop()
   }
 

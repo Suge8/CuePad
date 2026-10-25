@@ -1,30 +1,35 @@
 import Foundation
 import Synchronization
 
-/// 退避：指数加长、一半随机抖动；同步层的重试（发送者、认账号）都按它。
-struct Backoff: Sendable {
-  static let first = Duration.seconds(2)
-  static let cap = Duration.seconds(300)
-  /// 有话在等（马上传了还没收下）时的上限：断网久了恢复后，在等的话至多再晚这么久（连通的证据另会当场叫醒）。
+/// 退避：从 `first` 起每次失败翻倍到 `cap`，再一半固定、一半随机（同一阵子失败的设备不在同一刻一起重来）。
+/// 同步层的重试（发送者、认账号）用默认档，App 的门铃重连另给自己的档。
+public struct Backoff: Sendable {
+  /// 有话在等（马上传了还没收下）时发送者用的上限：断网久了恢复后，在等的话至多再晚这么久（连通的证据另会当场叫醒）。
   static let waitingCap = Duration.seconds(15)
+  private let first: Duration
+  private let cap: Duration
   private var failures = 0
 
-  /// 又失败了一次，下次隔多久。
-  mutating func next(cap: Duration = Self.cap) -> Duration {
+  public init(first: Duration = .seconds(2), cap: Duration = .seconds(300)) {
+    self.first = first
+    self.cap = cap
+  }
+
+  /// 又失败了一次，下次隔多久；`cap` 临时压低上限。
+  public mutating func next(cap: Duration? = nil) -> Duration {
     failures += 1
-    let base = min(Self.first * (1 << min(failures - 1, 16)), cap)
-    // 一半固定、一半随机：同一阵子失败的设备不在同一刻一起重来
+    let base = min(first * (1 << min(failures - 1, 16)), cap ?? self.cap)
     return base / 2 + base / 2 * Double.random(in: 0...1)
   }
 
-  mutating func reset() { failures = 0 }
+  public mutating func reset() { failures = 0 }
 }
 
 /// 同步自己给请求定的时限（CloudKit 自己的空闲超时见 `CloudDatabase.requestTimeout`）。
 enum RequestLimits {
   /// 不带数据的请求（认账号）至多等这么久，到点算连不上。
   static let request = Duration.seconds(15)
-  /// 一次读（拉变化、按 ID 取）这么久没回音就同样的再发一次，先回来的算（`hedged`）：一拉挂住，后面的拉不跟着等。
+  /// 一次拉变化（不带附件的文件，见 `ZonePuller`）这么久没回音就同样的再发一次，先回来的算（`hedged`）：一拉挂住，后面的拉不跟着等。
   static let hedge = Duration.seconds(3)
 }
 

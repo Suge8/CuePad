@@ -12,7 +12,7 @@ enum SyncFault: Equatable, Sendable {
   case wait(Duration?)
   /// 账号与配额：状态写明（没登录、受限、暂不可用、空间不足），长退避重试；账号变化时由同步重新认。
   case account(SyncStatus)
-  /// 其余：这次请求或这条记录本身的问题，进问题列表、显示同步出错，停一阵再试。
+  /// 其余：这次请求或这条记录本身的问题，进问题列表、显示同步出错。单条记录跳过这一版、改过再试（`SyncCoordinator.unsendable`），整个请求停一阵再试。
   case rejected
 
   init(_ error: any Error) {

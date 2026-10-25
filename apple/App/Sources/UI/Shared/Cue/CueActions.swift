@@ -66,7 +66,6 @@ extension AppServices {
     /// 选"以后……不用问"时 Store 同时把这句原话记成一条一直记着的记忆，一起上传。
     func answerCueQuestion(_ message: UUID, _ choice: String) async throws {
         let noted = try await store.endCueQuestion(message, .answered(choice))
-        await upload(message)
-        if let noted { await upload(noted) }
+        await sync?.upload([message] + [noted].compactMap { $0 })
     }
 }

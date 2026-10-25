@@ -1,8 +1,8 @@
 import Foundation
 
 /// CloudKit 数据结构（cktool 的 .ckdb 文本），由记录映射推出，不手写第二份：
-/// 每个同步表一个记录类型，另有最低对端版本（`PeerFloor`）；字段名与类型取自表的真实列（TEXT→STRING，INTEGER→INT64）；
-/// `RecordMapper.encryptedColumns` 里的字段声明为加密；`RecordMapper.queryableColumns` 里的字段与每个类型的
+/// 每个同步表一个记录类型，另有最低对端版本（`PeerFloor`）与门铃的密钥（`RelaySecret`，在自己的区里）；字段名与类型取自表的真实列（TEXT→STRING，INTEGER→INT64）；
+/// `RecordMapper.encryptedColumns` 里的字段声明为加密；订阅谓词用到的字段（`AlertSubscriptions.queriedColumns`）与每个类型的
 /// recordName 建可查询索引；附件记录另有资产字段 `file`。权限只给私有库所需的创建者与 iCloud 用户。
 /// 提交的文件是 `apple/CloudKit/cuepad.ckdb`，测试保证它与这里的输出一致。
 ///
@@ -57,7 +57,7 @@ enum CloudKitSchema {
       var fields: [(name: String, declaration: String)] = [("\"___recordID\"", "REFERENCE QUERYABLE")]
       for column in table.columns where column != "id" {
         let encrypted = RecordMapper.encryptedColumns[table]?.contains(column) == true
-        let queryable = RecordMapper.queryableColumns[table]?.contains(column) == true
+        let queryable = AlertSubscriptions.queriedColumns[table]?.contains(column) == true
         let type = sqlTypes[column] == "INTEGER" ? "INT64" : "STRING"
         fields.append((column, [encrypted ? "ENCRYPTED" : nil, type, queryable ? "QUERYABLE" : nil].compactMap { $0 }.joined(separator: " ")))
       }
@@ -66,7 +66,7 @@ enum CloudKitSchema {
       types.append(recordType(table.rawValue, fields))
     }
     types.append(recordType(PeerFloor.recordType, [("\"___recordID\"", "REFERENCE QUERYABLE"), (PeerFloor.field, "INT64")]))
-    types.append(recordType(RelaySecretRecord.recordType, [("\"___recordID\"", "REFERENCE QUERYABLE"), (RelaySecretRecord.field, "ENCRYPTED BYTES")]))
+    types.append(recordType(RelaySecret.recordType, [("\"___recordID\"", "REFERENCE QUERYABLE"), (RelaySecret.field, "ENCRYPTED BYTES")]))
     for retired in retiredTypes {
       types.append(recordType(retired.name, [("\"___recordID\"", "REFERENCE QUERYABLE")] + retired.fields))
     }
@@ -80,12 +80,4 @@ enum CloudKitSchema {
     lines.append(#"        GRANT CREATE TO "_icloud""#)
     return "    RECORD TYPE \(name) (\n" + lines.joined(separator: "\n") + "\n    );"
   }
-}
-
-/// 门铃的密钥（App 的 `RelayKey` 读写）：私有库里单独一个区的一条记录，字段加密。不放进同步区：已发出的版本拉到会当未知类型报给你。
-public enum RelaySecretRecord {
-  public static let zoneName = "Relay"
-  public static let recordType = "relaySecrets"
-  public static let recordName = "relaySecret"
-  public static let field = "secret"
 }
