@@ -179,7 +179,7 @@ private struct ShortcutRow: View {
 }
 
 /// 通知：系统权限没开时先一行（没决定过给"开启"，拒绝了给"打开系统设置"；开着就不占一行，横幅样式本来就在系统设置里），
-/// 再是两种提示（`AlertRoute.kind`）各一行：开关与提示音（选中即试听一次）。关掉一种 = 它的横幅与声音都没有。
+/// 再是三种提示（`AlertRoute.kind`）各一行：开关与提示音（选中即试听一次）。关掉一种 = 它的横幅与声音都没有。
 private struct NotificationSection: View {
     let alerts: AlertCenter
     @Environment(AppServices.self) private var services
@@ -188,6 +188,7 @@ private struct NotificationSection: View {
         Section {
             permission
             row("等你", kind: .waitingForUser, help: "Agent 在等你回答或确认，Cue 带选项来问你或有急事")
+            row("待回复", kind: .awaitsReply, help: "Cue 把会话留给你回")
             row("做完了", kind: .settled, help: "Agent 做完了一轮")
         }
         .task { await alerts.refresh() }

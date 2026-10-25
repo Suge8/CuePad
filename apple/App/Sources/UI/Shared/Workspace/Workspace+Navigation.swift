@@ -63,6 +63,12 @@ extension Workspace {
         show(.progress)
     }
 
+    /// 去看待回复的几个会话（Cue 页的待回复提示）：进展页的会话段，待回复排在最前（`PiShown.rank`）。提示数的是全部项目，项目范围放开，一个不漏。
+    func showReplies() {
+        projectScope = nil
+        showSessions()
+    }
+
     /// 推回刚返回离开的那一页（`forward`）。会话页按此刻重读首帧（同 `openSession`）：离开后对话可能又长了。
     func goForward() {
         guard let forward else { return }

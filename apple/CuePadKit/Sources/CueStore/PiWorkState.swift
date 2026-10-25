@@ -69,10 +69,11 @@ extension Open<PiWorkState> {
   public var isWorking: Bool { known?.isWorking == true }
 }
 
-/// 需要推送到手机锁屏的事件。只在"进入等你确认"和"从工作中进入完成"的那一次写入上置位，其余写入为 nil，
-/// 服务端订阅据此触发一次通知（同一状态下的重复写入不会再通知）。
+/// 需要推送到手机锁屏的事件。状态转换的两种只在"进入等你确认"和"从工作中进入完成"的那一次写入上置位，其余写入为 nil，
+/// 服务端订阅据此触发一次通知（同一状态下的重复写入不会再通知）；待回复（`awaitsReply`）不是转换，是 Cue 把歇着的会话留给你回的那一下
+/// （`CueStore.flagLeftToYou`）。
 public enum PiAlert: String, Sendable, CaseIterable {
-  case waitingForUser, settled
+  case waitingForUser, settled, awaitsReply
 
   /// 哪次转换是一件要提示的事的唯一规则（Mac 置位通知标志、两端读同步来的记录做提示都用它）：进入等你确认；从工作中进入完成。
   /// 首次看到的会话（没有上一个状态）不提示，重启或重新读取时不会把旧事件再提示一遍。

@@ -14,7 +14,7 @@ public enum CueEnvelope {
     /// 看板（`CueStore.cueBoard`）：只写在做的。
     public var board: CueBoard
     public var waiting: [CueMessage]
-    /// 它留给他回的会话（`CueState.left`）：看板上这几个写"留给他回"。
+    /// 它留给他回的会话（`CueState.left`）：看板上这几个写"待回复"。
     public var left: [CueLeft]
     public var wake: CueWake
     /// 提醒到点（`CueWake.reminder`）时到点的那几条记忆，带序号
@@ -128,7 +128,7 @@ public enum CueEnvelope {
     return parts.joined(separator: " · ")
   }
 
-  static let leftNote = "已留给他回"
+  static let leftNote = "待回复"
 
   /// 会话在 Cue 眼里的称呼：会话名与短 id（Cue 的工具给 session 时写它）。
   static func sessionName(_ session: PiSessionState) -> String { "会话「\(session.title)」（\(session.shortID)）" }

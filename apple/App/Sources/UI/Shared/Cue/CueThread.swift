@@ -1,7 +1,7 @@
 import CueStore
 import SwiftUI
 
-/// Cue 页一次读到的：最近的对话、对话与"等你"里提到的每件活、在等你的那几条；对话排成的格子与刻度滑条的刻度在读的时候一起推好
+/// Cue 页一次读到的：最近的对话、对话与"等你"里提到的每件活、在等你的那几条、待回复的会话；对话排成的格子与刻度滑条的刻度在读的时候一起推好
 /// （不在主线程，滚动时页面重算也不再推一遍）。
 nonisolated struct CueThread: Equatable, Sendable {
     /// 最近的对话，从早到晚；前面另带上早于它问、在它这段时间里答了的提问（`CueStore.cueQuestionsAnswered`）：
@@ -9,8 +9,10 @@ nonisolated struct CueThread: Equatable, Sendable {
     let messages: [CueMessage]
     /// 对话与"等你"提到的活（消息上收成一行的引用）。
     let tasks: [UUID: CueTaskRef]
-    /// 等你（Cue 的提问与会话在问的，同进展页等你列，`TaskBoard.waits`），最早的在前；点名要露的那件在最前（`leading`）。
+    /// 等你（Cue 的提问与会话在问的，同进展页等你列，`TaskBoard.waits`），等得最久的在前；点名要露的那件在最前（`leading`）。
     let waiting: [TaskBoard.Wait]
+    /// 待回复的会话（`CueStore.sessionsAwaitingReply`），等得最久的在前：等你卡上方那条提示（`CueReplyTip`）。
+    let replies: [PiSessionState]
     /// Cue 点名要你看的图（`CueMessage.shots`：提问的与做完的结果），按消息的 id：只有点了名、那一份还在的
     let shots: [UUID: [CueShown]]
     let rows: [Row]
@@ -27,17 +29,18 @@ nonisolated struct CueThread: Equatable, Sendable {
     /// 读最近这么多条对话（更早的不在 Cue 页里翻：要找旧事问 Cue）。
     static let limit = 200
 
-    /// `showsSteps`：对话里排不排每一轮的经过（`AppSettings.showsCueSteps`）；`names`：Cue 自己醒来的那几轮，叫醒它的会话、任务与提醒此刻叫什么。
+    /// `names`：Cue 自己醒来的那几轮，叫醒它的会话、任务与提醒此刻叫什么。
     init(
-        messages: [CueMessage], tasks: [UUID: CueTaskRef], waiting: [TaskBoard.Wait], shots: [UUID: [CueShown]], unread: Set<UUID>, showsSteps: Bool,
-        names: CueWakeNames
+        messages: [CueMessage], tasks: [UUID: CueTaskRef], waiting: [TaskBoard.Wait], replies: [PiSessionState], shots: [UUID: [CueShown]],
+        unread: Set<UUID>, names: CueWakeNames
     ) {
         self.messages = messages
         self.tasks = tasks
         self.waiting = waiting
+        self.replies = replies
         self.shots = shots
         self.unread = unread
-        let rows = Self.rows(messages, tasks: tasks, waiting: Set(waiting.compactMap(\.message?.id)), shots: shots, showsSteps: showsSteps, names: names)
+        let rows = Self.rows(messages, tasks: tasks, waiting: Set(waiting.compactMap(\.message?.id)), shots: shots, names: names)
         self.rows = rows
         let stamps = Self.stamps(rows)
         self.stamps = stamps
@@ -54,7 +57,7 @@ nonisolated struct CueThread: Equatable, Sendable {
     }
 
     /// `asking`：要露在"等你"卡里的那条 Cue 的提问（`Workspace.cueAsking`：从任务看板点进来），见 `leading`。
-    static func read(from store: isolated CueStore, showsSteps: Bool, asking: UUID? = nil) throws -> CueThread {
+    static func read(from store: isolated CueStore, asking: UUID? = nil) throws -> CueThread {
         let recent = try store.cueMessages(limit: limit)
         let messages = try store.cueQuestionsAnswered(outside: recent) + recent
         // 提到的一次取完子任务进度，不逐件读细节
@@ -79,11 +82,11 @@ nonisolated struct CueThread: Equatable, Sendable {
             if !shown.isEmpty { shots[message.id] = shown }
         }
         return CueThread(
-            messages: messages, tasks: tasks, waiting: waits, shots: shots, unread: Set(try store.cueUnread()), showsSteps: showsSteps,
+            messages: messages, tasks: tasks, waiting: waits, replies: try store.sessionsAwaitingReply(), shots: shots, unread: Set(try store.cueUnread()),
             names: try CueWakeNames.read(messages.compactMap(\.wake), from: store))
     }
 
-    /// "等你"卡露的先后：点名要露的那条（`asking`）还在等就排到最前，其余照旧从早到晚。卡先露最前的那件。
+    /// "等你"卡露的先后：点名要露的那条（`asking`）还在等就排到最前，其余照旧等得最久的在前。卡先露最前的那件。
     static func leading(_ waiting: [TaskBoard.Wait], asking: UUID?) -> [TaskBoard.Wait] {
         guard let asking, let index = waiting.firstIndex(where: { $0.message?.id == asking }), index > 0 else { return waiting }
         var ordered = waiting
@@ -91,12 +94,11 @@ nonisolated struct CueThread: Equatable, Sendable {
         return ordered
     }
 
-    /// 对话里的一格：你的话、你发起的一轮的经过（这一轮说的话与结果都在它之后）、Cue 的话（第一次提到一件活时下面一行这件活；
+    /// 对话里的一格：你的话、你发起的一轮的经过（碰到的各处，`CueActivity.touches`；一处都没碰的一轮没有这一格；这一轮说的话与结果都在它之后）、Cue 的话（第一次提到一件活时下面一行这件活；
     /// 做完的结果点了名的图是结果卡，见 `rows`），
     /// 连着的几轮 Cue 自己醒来（每轮是它的经过那一行与它说的话，`CueNoteRound`，每轮一行旁注 `CueNoteLog`）收成一格，隔了 `ChatTime.gap` 以上或跨了天另起一格。
     /// 还在等你的提问不在对话里，都在输入框上方的"等你"卡里（同一问同屏一处），结束了回到 Cue 的一句；你答了的，答的那一刻另有一格你的回答（`answer`）。
-    /// 设置里关了工具步骤时（`AppSettings.showsCueSteps`）不排经过：没有你发起的一轮的经过，动态里只留为什么醒与它说的话；
-    /// 它在做的事，自己醒来的一轮写在动态里那一节，你发起的一轮在末尾一行（`CueEnding`）。
+    /// 它在做的事，自己醒来的一轮写在动态里那一节下面，你发起的一轮写在它的经过里，还没有经过时在末尾一行（`CueEnding`）。
     enum Row: Identifiable, Equatable, Sendable {
         case you(CueMessage)
         /// 你对一条提问的回答（选的那一项，`CueMessage.answer`；更旧版本存下的另外一句照原文），排在答的那一刻（`answeredAt`）；数据就是那条提问本身，
@@ -107,12 +109,12 @@ nonisolated struct CueThread: Equatable, Sendable {
         /// 点名了图的结果（结果卡）：图在 `CueThread.shots`
         case result(CueMessage, task: UUID)
         case notes([CueNoteRound])
-        /// 你发起的一轮的经过（`CueAuthor.round`）
-        case process(CueMessage)
+        /// 你发起的一轮的经过（`CueAuthor.round`）：碰到的各处（`CueTrace`），读的时候推好
+        case process(CueMessage, touches: [CueActivity.Touch])
 
         var id: UUID {
             switch self {
-            case .you(let message), .cue(let message, _), .result(let message, _), .process(let message): message.id
+            case .you(let message), .cue(let message, _), .result(let message, _), .process(let message, _): message.id
             case .answer(let question, _): Self.answerID(of: question.id)
             case .notes(let rounds): rounds[0].id
             }
@@ -120,7 +122,7 @@ nonisolated struct CueThread: Equatable, Sendable {
 
         var date: Date {
             switch self {
-            case .you(let message), .cue(let message, _), .result(let message, _), .process(let message): message.createdAt
+            case .you(let message), .cue(let message, _), .result(let message, _), .process(let message, _): message.createdAt
             case .answer(let question, _): question.answeredAt ?? question.createdAt
             case .notes(let rounds): rounds[0].date
             }
@@ -145,7 +147,7 @@ nonisolated struct CueThread: Equatable, Sendable {
         /// 在跑的那一轮（`CueLiveRound.round`）在这一格里：你发起的一轮的经过，或动态里它那一节（醒来时就写下了）。
         func contains(round: UUID) -> Bool {
             switch self {
-            case .process(let message): message.id == round
+            case .process(let message, _): message.id == round
             case .notes(let rounds): rounds.contains { $0.row?.id == round }
             case .you, .answer, .cue, .result: false
             }
@@ -180,7 +182,7 @@ nonisolated struct CueThread: Equatable, Sendable {
     /// 结果卡：关联一件活、不是提问、点名了图（`shots`，Cue 做完时挑的最终成果）的 Cue 的话；只挂点名的那几张，这件活发到手机的其余文件在它的会话里。
     /// 提问的图跟着提问那一格（`CueSays`）。
     private static func rows(
-        _ messages: [CueMessage], tasks: [UUID: CueTaskRef], waiting: Set<UUID>, shots: [UUID: [CueShown]], showsSteps: Bool, names: CueWakeNames
+        _ messages: [CueMessage], tasks: [UUID: CueTaskRef], waiting: Set<UUID>, shots: [UUID: [CueShown]], names: CueWakeNames
     ) -> [Row] {
         // 同一毫秒答的按问的先后（`messages` 的顺序）
         var answers = messages.enumerated().filter { $0.element.answer != nil && $0.element.answeredAt != nil }
@@ -215,20 +217,22 @@ nonisolated struct CueThread: Equatable, Sendable {
                     rows.removeLast()
                 }
                 if message.text.isEmpty {
-                    group.append(CueNoteRound(row: message, showsSteps: showsSteps, names: names))
+                    group.append(CueNoteRound(row: message, names: names))
                 } else if group.isEmpty {
                     group = [CueNoteRound(said: message)]
                 } else {
                     group[group.count - 1].said.append(message)
                 }
                 rows.append(.notes(group))
-            case .round: if showsSteps { rows.append(.process(message)) }
+            case .round:
+                let touches = CueActivity.touches(message.tools)
+                if !touches.isEmpty { rows.append(.process(message, touches: touches)) }
             // 认不出的（旧版本写下的交接备忘、更新版本的新种类）不列
             case nil: break
             }
         }
         placeAnswers(before: nil)
-        // 关了工具步骤时，旧版本写下的经过（没有醒来原因）又没说话的那一节什么都不剩
+        // 旧版本写下的经过（没有醒来原因）又没说话的那一节什么都不剩
         return rows.compactMap { row in
             guard case .notes(let rounds) = row else { return row }
             let shown = rounds.filter { !$0.isEmpty }

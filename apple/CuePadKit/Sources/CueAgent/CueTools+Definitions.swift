@@ -33,7 +33,7 @@ extension CueTools {
           say 与接着用上一步会话的 start 等送达结果至多 \(Int(Speech.cueWait)) 秒：已送达、没送到（出错，带原因），或还没结果（之后没送到会作为 [发送失败] 叫醒你）；
           peek{task?|session?}：只读。都不带：所有没做完的事、不归没做完的事的活会话，和最近完成的几件（各带会话）。带 task：叶子、正文、近况、最近几轮问答（"他"是用户，"你"是你）与最新回答全文、发到手机的文件（带本机路径）。带 session：那个会话；
           stop{task|session}：停下会话这一轮；
-          leave{task|session}：会话停着（歇下或等回答）、这次该他接手时用，把它留给他回：会话列表显示"待回复"（等回答的回到等他确认）；不用另外 tell，他或你再对它说话就作废；
+          leave{task|session}：会话停着（歇下或等回答）、这次该他接手时用，把它留给他回：会话与 Cue 页显示"待回复"，不算等你（会话自己在等回答的提问照样进等你）；你已 tell 带 ask 问他的不再 leave；他或你再对它说话就作废；
           done{task|session,evidence?,show?}：做完。顶层任务要 evidence：1–\(evidenceCount) 条结论，每条宽不过 \(evidenceLimit)（约 20 个汉字，如"\(evidenceExample)"），CuePad 把标题与证据拼成结果告诉用户。show 是结果上挂的图，写法同 tell 的 show（如 look 写"最终版深色：分组标题"）；不带就不挂图，没点名的仍在会话里。下一步还用它的会话就留着，否则结束会话（结束的照样能 say）；已完成的再 done 只结束没人再用的会话，不要 evidence、show。给 session 是收掉那个会话：没做完的事在用、或有话正送进去的不收。
           """,
         "inputSchema": schema(
@@ -55,7 +55,7 @@ extension CueTools {
           卡片、摘要与通知只显示"可以<doing>吗？"、rule 那类的这条规矩、show 的图与选项，不显示 text。
           show 是回答这个问题必须看的图，至多 \(CueShot.limit) 张，按要他看的先后：file 写 task peek 里"发到手机的"那一份的 id，look 写这张看什么（一行、≤\(CueShot.lookLimit) 字，如"方案 1：大按钮占满一行"）。几个方案就只放方案、每个一张（不带原样作对比）、同一台设备同一种样子，推荐的在前；不用看图就能答的不带。只有 show 里的图上卡片。
           text 先一句要做的动作，再一句依据（rule 那类写哪条规矩）和不做会怎样；不写 push、rule 这类分类名。
-          选项由 CuePad 给（如推送：\(CueAsk.push.choices(in: "项目名").joined(separator: " / "))；不带 task 时第二项是"\(CueAsk.push.always ?? "")"；rule 只有第一项），他选第二项就照原话记成一条一直记着的记忆。卡上只能选：他在 Cue 页一开口，开着的卡就当场收起，算他直接说了；他那句不是在答它，restore 放回。
+          选项由 CuePad 给（如推送：\(CueAsk.push.choices(in: "项目名").joined(separator: " / "))；不带 task 时第二项是"\(CueAsk.push.always ?? "")"；taste、rule 只有第一项），他选第二项就照原话记成一条一直记着的记忆。卡上只能选：他在 Cue 页一开口，开着的卡就当场收起，算他直接说了；他那句不是在答它，restore 放回。
           urgent 推送到手机；task 关联一个任务（第二项的范围是它的项目）；withdraw 写"等你"里一条的 id，撤回它（你不用再问了，或他在会话里说了怎么办），可同时带 text 说明；restore 写他开口收起的那条的 id，放回"等你"。
           """,
         "inputSchema": schema(

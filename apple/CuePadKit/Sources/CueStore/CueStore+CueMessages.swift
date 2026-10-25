@@ -74,7 +74,7 @@ extension CueStore {
     try write {
       let row = try tools.map { try putCueRound(id, startedAt: startedAt, answersYou: answersYou, tools: $0) } ?? id
       if let reply { try putCueReply(startedAt: startedAt, reply: reply, as: author, answersYou: answersYou) }
-      try putCueState(.settled, detail: nil, round: nil, context: context)
+      try putCueState(.settled, detail: nil, step: nil, round: nil, context: context)
       return row
     }
   }

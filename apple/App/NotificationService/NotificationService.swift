@@ -5,7 +5,7 @@ import Synchronization
 import UserNotifications
 
 /// 通知服务扩展：Pi 与 Cue 的锁屏通知到达时，取回触发它的记录（同一 iCloud 容器，加密字段在设备上解密），
-/// 把通用句改写成"会话名 + 问题首句（或状态）"、"Cue 的名字 + 它说的话"（"等你"是要你定什么与选项，消息与 Cue 的设置一次取回）。
+/// 把通用句改写成"会话名 + 问题首句（或状态）"，同一会话的归成一组（`PiAlertTap.thread`）、"Cue 的名字 + 它说的话"（"等你"是要你定什么与选项，消息与 Cue 的设置一次取回）。
 /// 取不到（没网、超时、记录已删）就保持通用句。
 /// 系统在任意线程调用 `didReceive` 与 `serviceExtensionTimeWillExpire`，取回记录的回调又在另一条线程：
 /// 手里的内容与交付回调放在一把锁里，只交付一次。
@@ -39,6 +39,7 @@ final class NotificationService: UNNotificationServiceExtension, @unchecked Send
                 self.finish()
             }
         case .session(let tap):
+            content.threadIdentifier = tap.thread
             pending.withLock { $0 = Pending(content: content, deliver: handler) }
             let kind = tap.kind
             database.fetch(withRecordID: recordID) { record, _ in

@@ -1,34 +1,36 @@
 import CueStore
 import Foundation
 
-/// Cue 自己醒来的一轮在 Cue 页对话里的样子（`CueNoteLog` 里的一行）：这一轮的经过那一行（为什么醒、做了什么）与它这一轮说的话。
+/// Cue 自己醒来的一轮在 Cue 页对话里的样子（`CueNoteLog` 里的一行）：这一轮的经过那一行（为什么醒、碰到的各处）与它这一轮说的话。
 /// 旧版本写下的动态可能没有经过那一行（只有正文），也可能经过那一行上没有醒来原因（`header` 为 nil）。
 nonisolated struct CueNoteRound: Identifiable, Equatable, Sendable {
-    /// 经过那一行；设置里关了工具步骤时去掉清单（`tools`）
+    /// 经过那一行
     let row: CueMessage?
+    /// 这一轮碰到的各处（`CueActivity.touches`）：在跑时挂在这一行下面（`CueTrace`）
+    let touches: [CueActivity.Touch]
     /// 为什么醒、叫醒它的那几处（`CueMessage.wake`）
     let header: CueWakeHeader?
     /// 这一轮说的话（动态的正文），从早到晚
     var said: [CueMessage]
 
-    init(row: CueMessage, showsSteps: Bool, names: CueWakeNames) {
-        var row = row
+    init(row: CueMessage, names: CueWakeNames) {
         header = row.wake.map { CueWakeHeader($0, names: names) }
-        if !showsSteps { row.tools = nil }
         self.row = row
+        touches = CueActivity.touches(row.tools)
         said = []
     }
 
     init(said: CueMessage) {
         row = nil
+        touches = []
         header = nil
         self.said = [said]
     }
 
     var id: UUID { row?.id ?? said[0].id }
     var date: Date { row?.createdAt ?? said[0].createdAt }
-    /// 什么都不显示：没有醒来原因、没说话、清单也不显示
-    var isEmpty: Bool { header == nil && said.isEmpty && row?.tools == nil }
+    /// 什么都不显示：没有醒来原因、没说话（旧版本写下的经过）
+    var isEmpty: Bool { header == nil && said.isEmpty }
 
     /// 写在 `date` 的一条动态还接在 `last` 这一节所在的那一格里：没隔 `ChatTime.gap`、没跨天（同时间那一行另起一段的规则）。
     static func continues(_ last: CueNoteRound, at date: Date) -> Bool {
@@ -40,9 +42,9 @@ nonisolated struct CueNoteRound: Identifiable, Equatable, Sendable {
 /// 一轮为什么醒（只画图标，`CueWake.icon`）与叫醒它的那几处：会话、任务的动静各是一处，带当时出了什么事（`kind`，"停下了"）；
 /// 提醒是到点的那条记忆。名字读的时候查好（`CueWakeNames`）；当时出了什么事与这一处此刻怎样分开——此刻的状态由显示的地方读。
 nonisolated struct CueWakeHeader: Equatable, Sendable {
-    /// 点了去哪
+    /// 点了去哪（`Workspace.open`；Cue 页这一轮的经过里的一行也用它）。会话的 Pi 会话 id 知道就带上，进会话页少读一次
     enum Target: Equatable, Sendable {
-        case session(CueWakeNames.Session)
+        case session(UUID, sessionID: String?)
         case task(UUID)
         case memory
     }
@@ -57,7 +59,7 @@ nonisolated struct CueWakeHeader: Equatable, Sendable {
         var task: TaskStatus?
 
         var sessionID: String? {
-            if case .session(let session)? = target { session.sessionID } else { nil }
+            if case .session(_, let sessionID)? = target { sessionID } else { nil }
         }
     }
 
@@ -73,7 +75,8 @@ nonisolated struct CueWakeHeader: Equatable, Sendable {
             for stir in stirs.reversed() where seen.insert(stir.session ?? stir.task?.uuidString ?? "").inserted {
                 if let id = stir.session {
                     let session = names.sessions[id]
-                    places.append(Place(title: session?.title ?? "一个会话", kind: stir.kind, target: session.map(Target.session)))
+                    places.append(Place(
+                        title: session?.title ?? "一个会话", kind: stir.kind, target: session.map { .session($0.id, sessionID: $0.sessionID) }))
                 } else if let task = stir.task {
                     let title = names.tasks[task]
                     places.append(Place(title: title ?? "一件任务", kind: stir.kind, target: title == nil ? nil : .task(task), task: names.taskStatus[task]))

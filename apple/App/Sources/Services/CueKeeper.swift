@@ -107,14 +107,14 @@ final class CueKeeper {
     let speech = PiDraftFeed()
 
     /// Cue 此刻在做什么：一轮里在想或在用工具（连同这一轮的经过在对话里的那一行），起不来是出错（原因），其余（含起大脑、等着重起的那一下）歇着。
-    var work: (state: PiWorkState, detail: String?, row: UUID?) {
+    var work: (state: PiWorkState, detail: String?, step: CueActivity.Touch?, row: UUID?) {
         switch phase {
-        case .starting, .restarting: return (.settled, nil, nil)
-        case .stuck(let reason): return (.error, reason, nil)
+        case .starting, .restarting: return (.settled, nil, nil, nil)
+        case .stuck(let reason): return (.error, reason, nil, nil)
         case .running(let shift):
-            guard let turn = shift.turn else { return (.settled, nil, nil) }
-            let detail = turn.round.running?.detail
-            return (detail == nil ? .thinking : .tool, detail, turn.round.row)
+            guard let turn = shift.turn else { return (.settled, nil, nil, nil) }
+            guard let call = turn.round.running else { return (.thinking, nil, nil, turn.round.row) }
+            return (.tool, call.detail, call.step, turn.round.row)
         }
     }
 
@@ -134,7 +134,7 @@ final class CueKeeper {
     private func publish() async {
         do {
             let work = work
-            try await setup.recorder.updateCue(work.state, detail: work.detail, round: work.row, context: shift?.context)
+            try await setup.recorder.updateCue(work.state, detail: work.detail, step: work.step, round: work.row, context: shift?.context)
         } catch {
             Self.log.error("Cue 此刻的样子没能写进资料库：\(error.localizedDescription, privacy: .public)")
         }

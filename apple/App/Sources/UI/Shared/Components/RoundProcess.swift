@@ -1,23 +1,22 @@
 import CueStore
 import SwiftUI
 
-/// 一轮的经过（会话页与 Cue 页）：做完的回答上方、在跑的这一轮在对话末尾，同一个样子——一行旁注（`NoteLine`），不是一块：
+/// 一轮的经过（会话页；Cue 页的是 `CueTrace`）：做完的回答上方、在跑的这一轮在对话末尾，同一个样子——一行旁注（`NoteLine`），不是一块：
 /// - 标题行："跑了 12 步 · 改了 3 个文件"（`PiChat.processLine`），做完的接用时，在跑的接此刻的状态。
 ///   做完的收起时只有这一行；点它就地展开整份清单（挂在细线下，`NoteThread`；改动、出错都在原位，出错标胭脂），再点收起。
 /// - 没调过工具的一轮不画：做完的、正在说话的都没有这一行；只有在跑、还没说话时是一行此刻在做的（流光）。
 /// - 在跑时细线下是它最近说的那段话（收着时；展开的清单里本来就有）与正在跑的那一步（会话状态里的当前动作），实时展开：
-///   话至多三行，那一步至多两行、文字有流光。做完的几步与说过的话来自会话文件（`PiRecap.pendingTools`；Cue 的是对话里这一轮的那一行，`CueStore.recordCueRound`），
+///   话至多三行，那一步至多两行、文字有流光。做完的几步与说过的话来自会话文件（`PiRecap.pendingTools`），
 ///   正在跑的来自会话状态（`detail`），两者不重叠。
 ///   Mac 上正在说的话出字时（`PiShown.speaking`）这一块是草稿的标题，说的话就是下面的草稿，不再列一遍。
 /// 清单是注脚：小一档的字、次要墨色；调用每条一行，图标、等宽的文件路径或命令、状态——改文件写 +行数 −行数，失败的只把"失败"两个字标胭脂，
-/// 不显示工具输出；中途说的话按先后夹在调用之间，正常字形、至多三行。Cue 动到任务的那几条点它打开那件任务。
+/// 不显示工具输出；中途说的话按先后夹在调用之间，正常字形、至多三行。
 /// 在跑的与做完后的同一种排法、同样高（同样的步骤时）：Mac 上正在说的话落库时原位换下，这一块不跳（`SessionDraft`）。
 struct RoundProcess: View {
     let tools: PiChatMessage.Tools?
     let ending: Ending
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.chatJump) private var jump
     @State private var expanded = DebugHooks.preset.toolsOpen
 
     nonisolated enum Ending: Equatable {
@@ -47,8 +46,8 @@ struct RoundProcess: View {
                         if case .live(_, let doing, let step?) = ending { liveStep(doing, icon: step) }
                     }
                 } else if case .live(let shown, let doing, let step) = ending {
-                    // 它最近说的那段；已在对话里的（Cue 对你说的）不再列一遍
-                    let said = shown.speaking ? nil : tools.items.last { $0.kind == .said && $0.message == nil }
+                    // 它最近说的那段
+                    let said = shown.speaking ? nil : tools.items.last { $0.kind == .said }
                     if said != nil || step != nil {
                         NoteThread {
                             if let said { SaidRow(text: said.target, lines: 3) }
@@ -107,28 +106,11 @@ struct RoundProcess: View {
     }
 
     @ViewBuilder private func row(_ item: PiChatMessage.Tools.Item) -> some View {
-        if let message = item.message, let jump {
-            // 对你说的那条已在对话里：只留一行，点它回到原处
-            Button { jump(message) } label: {
-                if item.kind == .said { SaidRow(text: item.target, lines: 1) } else { toolRow(item) }
-            }
-            .buttonStyle(PressStyle()).accessibilityHint("回到对话里那一条")
-        } else if item.kind == .said {
+        if item.kind == .said {
             SaidRow(text: item.target, lines: 3)
-        } else if let task = item.task {
-            CueTaskButton(task: task) { toolRow(item) }.accessibilityHint("打开任务")
         } else {
-            toolRow(item)
+            ToolRow(icon: Self.icon(item.kind), target: Text(item.target), truncation: item.kind == .command ? .tail : .middle) { status(item) }
         }
-    }
-
-    private func toolRow(_ item: PiChatMessage.Tools.Item) -> some View {
-        // Cue 的动作写的是人话（哪件任务、说了什么），用正文字形；其余是路径、命令，用等宽
-        let prose = item.kind.acts && item.kind != .edit
-        return ToolRow(
-            icon: Self.icon(item.kind), target: prose ? Text(item.target).font(Typography.caption) : Text(item.target),
-            truncation: prose || item.kind == .command ? .tail : .middle
-        ) { status(item) }
     }
 
 
@@ -164,20 +146,15 @@ struct RoundProcess: View {
         }
     }
 
+    /// 会话里的几类；Cue 的动作只在 Cue 页的经过里（`CueTrace.icon`），会话里没有。
     static func icon(_ kind: PiChatMessage.Tools.Kind) -> Icon {
         switch kind {
         case .edit: .editFile
         case .command: .terminal
         case .read: .readFile
         case .search: .search
-        case .other: .tool
         case .said: .said
-        case .talk: .handOff
-        case .start: .started
-        case .add: .added
-        case .done: .complete
-        case .stop: .endSession
-        case .ask: .cueAsking
+        case .other, .talk, .start, .add, .done, .stop, .ask, .leave: .tool
         }
     }
 }
@@ -223,7 +200,7 @@ struct ToolRow<Status: View>: View {
     }
 }
 
-/// 旁注清单里说的一段话（一轮经过里中途说的、Cue 自己醒来时说了没推给你的）：与清单同一列的图标位，正常字形、次要墨色；
+/// 旁注清单里说的一段话（一轮经过里中途说的）：与清单同一列的图标位，正常字形、次要墨色；
 /// `lines` 是至多几行，nil 是全文（可选中）。
 struct SaidRow: View {
     let text: String

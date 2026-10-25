@@ -54,7 +54,9 @@ enum Schema {
         DROP TRIGGER piMessages_writeSeq_insert; ALTER TABLE piMessages DROP COLUMN writeSeq;
         """)
     },
-    // 68：不用先问的例外并进记忆：允许清单（cueProfile.allows，"类别"或"类别/项目 id"）每项转成一条他说的、一直记着的记忆，字同提问卡的第二项
+    // 68：Cue 此刻正在跑的那一步碰到的那一处（`CueState.step`）
+    "ALTER TABLE cueState ADD COLUMN step TEXT;",
+    // 69：不用先问的例外并进记忆：允许清单（cueProfile.allows，"类别"或"类别/项目 id"）每项转成一条他说的、一直记着的记忆，字同提问卡的第二项
     // （`CueAsk.always(in:)`；项目已不在的那项丢掉），清单那一列删掉。每台设备各自升级：行的 id 与时刻由清单项与设置的修改时间推出，写出的是同一行
     Upgrade { db in
       let profile = try db.first("SELECT allows, modifiedAt FROM cueProfile") { (allows: $0.textOrNil(0), at: $0.int(1)) }
