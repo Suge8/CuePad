@@ -53,7 +53,9 @@ struct CueMemoryPage: View {
                 EmptyState(mascot: .empty, title: "还没记住什么", message: "你说过的要紧事，它会自己记下").padding(20)
             }
         }
-        .safeAreaInset(edge: .bottom, spacing: 0) { field }
+        // 滚动区止于胶囊半高处，胶囊下半截伸出滚动区：内容只从胶囊背后滚过，不在它下面与圆角外露出被面板下沿切掉的半行
+        .safeAreaInset(edge: .bottom, spacing: 0) { field.padding(.bottom, -Metrics.field / 2) }
+        .padding(.bottom, Metrics.fieldBottom + Metrics.field / 2)
         .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: kept)
     }
 
@@ -74,7 +76,7 @@ struct CueMemoryPage: View {
         }
         .padding(.horizontal, 18)
         .glass(in: .rect(cornerRadius: Metrics.field / 2, style: .continuous))
-        .padding(.horizontal, 16).padding(.bottom, Metrics.fieldBottom)
+        .padding(.horizontal, 16)
     }
 
     private func groupTitle(_ title: String, icon: Icon? = nil) -> some View {
