@@ -16,7 +16,6 @@ nonisolated struct ProjectCatalog: Equatable, Sendable {
     var workMac: MacAgents?
 
     var openTasks: [UUID: Int] { taskCounts.mapValues(\.open) }
-    var allTasks: TaskCounts { taskCounts.values.reduce(.zero, +) }
 
     /// 会话归的项目可以没有（`PiSessionState.projectID`），所以收可选的 id。
     func project(_ id: UUID?) -> Project? {
