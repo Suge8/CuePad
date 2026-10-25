@@ -83,7 +83,7 @@ extension DebugScene {
             _ = try? await recorder.update(
                 sessionID: id, state: state, detail: detail, title: id, directory: id, projectID: name.flatMap(project), question: recap.question,
                 times: asked[id].map { PiTimes(stateSince: .now.addingTimeInterval(-$0 * 60), busySince: nil) },
-                modelState: demoModels(for: demoAgents[id]), context: demoContexts[id] ?? PiContextUsage(tokens: 12_000, window: 200_000), commands: demoCommands,
+                modelState: demoModels(for: demoAgents[id]), context: demoContexts[id] ?? PiContextUsage(tokens: 12_000, window: 200_000), commands: demoCommands(for: demoAgents[id]),
                 agent: demoAgents[id])
             try? await store.writePiTranscript(PiTranscript(
                 sessionID: id, messages: [],
