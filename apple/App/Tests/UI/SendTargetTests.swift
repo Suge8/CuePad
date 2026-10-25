@@ -138,7 +138,7 @@ struct SendTargetTests {
         #expect(rig.host.calls == [.resume(sessionFile: file, directory: folder.path)])
         #expect(rig.host.extensions["a"]?.messages == [PiMessage(text: Self.text, deliveryID: request.id.uuidString)])
         // 交出就提示，不等送达
-        #expect(workspace.notice?.text == Dotted("已交给 Agent 会话「alpha」", "唤醒后送达"))
+        #expect(workspace.notice?.text == Dotted("已交给 Agent 会话「alpha」，唤醒后送达"))
         _ = try await eventually(store, { try $0.card(task.id)?.piSessionID }) { $0 == "a" }
     }
 

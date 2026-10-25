@@ -51,7 +51,7 @@ final class SpeechClock {
         if deadlines.contains(where: { $0 > moment.now && $0 <= now }) { moment.now = now }
         guard let next = deadlines.filter({ $0 > now }).min() else { return }
         alarm = Task { [weak self, timing] in
-            guard (try? await timing.sleep(.seconds(next.timeIntervalSince(now)))) != nil else { return }
+            guard (try? await timing.sleepUntil(next)) != nil else { return }
             self?.schedule()
         }
     }
