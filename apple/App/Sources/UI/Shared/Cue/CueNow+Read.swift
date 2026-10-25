@@ -102,7 +102,7 @@ nonisolated extension CueNow {
             let asking = message.asking
             return Wait(
                 title: asking?.action ?? message.headline ?? "\(name) 在等你",
-                detail: asking.map { $0.why ?? "\(name) 请你允许\($0.ask.name)" },
+                detail: asking.map { $0.request(by: name) },
                 open: DeepLink.cue.url,
                 allow: message.choices?.first.map { Allow(message: message.id, choice: $0) })
         case .session(let state, _):

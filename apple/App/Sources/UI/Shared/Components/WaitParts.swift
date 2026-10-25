@@ -27,7 +27,7 @@ extension Workspace {
     func waitBasis(of message: CueMessage) -> String? {
         guard let asking = message.asking else { return nil }
         let scope = message.asked?.project.flatMap { catalog?.project($0)?.name }
-        return Dotted(asking.rule ?? "\(asking.ask.name)前先问你", scope).visible
+        return Dotted(asking.basis, scope).visible
     }
 }
 
