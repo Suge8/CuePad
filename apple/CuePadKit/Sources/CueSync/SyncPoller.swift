@@ -82,21 +82,17 @@ public struct SyncPoller: Sendable {
 }
 
 extension SyncPoller.Cadence {
-  /// 门铃通着（`doorbell`）时按节奏的拉取只是兜底：别的设备的改动一被收下，门铃就叫这台来拉（docs/sync.md「拉取节奏与门铃」）。
-  /// 兜底只补门铃自己察觉不到的丢失（对方按出去的那一下在路上没了、中转重启）：15 秒与心跳察觉静默断线的上限一样，
-  /// 门铃察觉得到的断（断线、重连）当场换回快档、立即拉一次，察觉不到的也不比它更晚。
-  public static let doorbellFallback = Duration.seconds(15)
-
-  /// Mac：在等（等什么见 `AppServices.pollingCadence`）时每 2 秒，别的设备写来的东西平均约 1 秒、最坏约 2 秒到；门铃通着时降为兜底。
+  /// Mac：在等（等什么见 `AppServices.pollingCadence`）时每 2 秒，别的设备写来的东西平均约 1 秒、最坏约 2 秒到。
   /// Mac 不收推送，门铃不通时这一拉是别的设备的改动到 Mac 的唯一通路，不放慢。
-  public static func mac(waiting: Bool, doorbell: Bool) -> Self? {
-    waiting ? Self(every: doorbell ? doorbellFallback : .seconds(2)) : nil
+  /// `doorbell`：门铃通着时降到的兜底间隔（只补门铃自己察觉不到的丢失，由门铃给出，`Relay.silenceLimit`）；nil 是门铃不通。
+  public static func mac(waiting: Bool, doorbell: Duration?) -> Self? {
+    waiting ? Self(every: doorbell ?? .seconds(2)) : nil
   }
 
   /// 手机：有发往 Mac 还没结果的请求时每 2 秒、每次在等最多 2 分钟（等回执的时限 `Speech.receiptLimit` 是 1 分钟：
   /// 报了没能送达之后还接着拉一分钟，晚到的回执照样拉回来；再晚的靠推送）；正在看 Agent 页、会话近况或 Cue 页时每 3 秒
-  /// （状态与对话是活的，不只靠推送），离开即停；两者都有时每 2 秒、不限时。门铃通着时间隔都降为兜底，时限不变。
-  public static func phone(hasOpenDeliveries: Bool, isWatching: Bool, doorbell: Bool) -> Self? {
+  /// （状态与对话是活的，不只靠推送），离开即停；两者都有时每 2 秒、不限时。门铃通着（`doorbell` 同 `mac`）时间隔都降为兜底，时限不变。
+  public static func phone(hasOpenDeliveries: Bool, isWatching: Bool, doorbell: Duration?) -> Self? {
     let cadence: Self? =
       switch (hasOpenDeliveries, isWatching) {
       case (true, true): Self(every: .seconds(2))
@@ -104,8 +100,8 @@ extension SyncPoller.Cadence {
       case (false, true): Self(every: .seconds(3))
       case (false, false): nil
       }
-    guard doorbell, var cadence else { return cadence }
-    cadence.interval = doorbellFallback
+    guard let doorbell, var cadence else { return cadence }
+    cadence.interval = doorbell
     return cadence
   }
 }

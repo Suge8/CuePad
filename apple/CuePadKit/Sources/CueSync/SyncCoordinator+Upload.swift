@@ -8,6 +8,8 @@ struct OutgoingBatch: Sendable {
   var deletes: [CKRecord.ID]
   /// 交出时库里可传的全在这批里，截至这个同步变更代数：整批收下就记作没有了（`SyncCoordinator.drained`）。
   var drains: Int?
+  /// 挑到了、但这一版传不上去的（`SyncCoordinator.unsendable`）：不在批里，马上传那一路据此答没传成。
+  var stuck: Set<String> = []
   var names: Set<String> { Set(saves.map(\.recordID.recordName) + deletes.map(\.recordName)) }
 }
 
@@ -20,18 +22,19 @@ enum BatchScope: Sendable {
 }
 
 extension SyncCoordinator {
-  /// 下一批要上传的：至多 `limit` 条；没有可传的（或此刻不能同步）为 nil。后台那一路在上次确定没有可传的之后只看其后的提交碰过的记录（`drained`）。
-  func nextBatch(_ scope: BatchScope, limit: Int) async -> OutgoingBatch? {
-    guard canSync else { return nil }
+  /// 下一批要上传的：至多 `limit` 条，没有可传的是空批。此刻不能同步（停下了、没有账号）或读库出错时抛出：
+  /// 调用方分得清"没有可传的"与"这次准备不了"。后台那一路在上次确定没有可传的之后只看其后的提交碰过的记录（`drained`）。
+  func nextBatch(_ scope: BatchScope, limit: Int) async throws -> OutgoingBatch {
+    guard canSync else { throw SyncPaused() }
     let since = drained
     if case .pending = scope { drained = nil }
     let pending: PendingSync, generation: Int
     do { (pending, generation) = try await store.pendingSync(since: since) } catch {
       failed(error)
-      return nil
+      throw error
     }
     let excluded: Set<String>
-    var names = pending.saves.map(\.id).filter { unsendable[$0] == nil }
+    var names = pending.saves.map(\.id)
     var deletes = pending.deletes
     switch scope {
     case .pending(let inFlight):
@@ -43,56 +46,57 @@ extension SyncCoordinator {
       names.removeAll { !wanted.contains($0) }
       deletes.removeAll { !wanted.contains($0) }
     }
-    var saves: [CKRecord] = []
-    for name in names where saves.count < limit {
-      if let record = await record(for: recordID(name)) { saves.append(record) }
+    var batch = OutgoingBatch(saves: [], deletes: [])
+    for name in names where batch.saves.count < limit {
+      let record: CKRecord?
+      do { record = try await self.record(for: recordID(name)) } catch {
+        failed(error, kind: .upload, recordName: name)
+        throw error
+      }
+      if let record { batch.saves.append(record) } else if unsendable[name] != nil { batch.stuck.insert(name) }
     }
+    batch.stuck.formUnion(deletes.filter { unsendable[$0] != nil })
+    deletes.removeAll { unsendable[$0] != nil }
+    batch.deletes = deletes.prefix(limit - batch.saves.count).map(recordID)
     let all = pending.saves.count + pending.deletes.count
-    var batch = OutgoingBatch(saves: saves, deletes: Array(deletes.prefix(limit - saves.count)).map(recordID))
-    guard !batch.saves.isEmpty || !batch.deletes.isEmpty else {
+    guard !batch.isEmpty else {
       if case .pending = scope, excluded.isDisjoint(with: pending.saves.map(\.id) + pending.deletes) { drained = generation }
-      return nil
+      return batch
     }
-    // 构造不出来的（附件文件不在本机）记进了 `unsendable`，同不可传的一样不算剩下
-    if case .pending = scope, saves.count + batch.deletes.count + pending.saves.count(where: { unsendable[$0.id] != nil }) == all {
-      batch.drains = generation
-    }
+    // 这一版传不上去的同不可传的一样不算剩下：改过才再出现在提交的增量里
+    if case .pending = scope, batch.saves.count + batch.deletes.count + batch.stuck.count == all { batch.drains = generation }
     do {
-      try await store.noteSent(saves.compactMap { record in
-        guard let table = RecordMapper.table(named: record.recordType), let stamp = (record["modifiedAt"] as? NSNumber)?.int64Value else { return nil }
+      try await store.noteSent(batch.saves.compactMap { record in
+        guard let table = RecordMapper.table(named: record.recordType), let stamp = record.modifiedAt else { return nil }
         return (record.recordID.recordName, table, stamp)
       })
     } catch {
       failed(error)
-      return nil
+      throw error
     }
     // 构造这批时可能停下了（拉到过高的门槛、要你决定）：停下后不再交出新的一批
-    guard canSync else { return nil }
+    guard canSync else { throw SyncPaused() }
     return batch
   }
 
-  /// 构造要上传的记录：以上次服务器记录的系统字段为底，写入当前行的字段；行已不在则返回 nil。
-  func record(for id: CKRecord.ID) async -> CKRecord? {
-    do {
-      guard let row = try await store.syncRow(recordName: id.recordName) else { return nil }
-      let base = try await store.systemFields(of: id.recordName).flatMap(RecordMapper.decodeSystemFields)
-      let record = RecordMapper.record(from: row, zoneID: zoneID, base: base)
-      if row.table == .attachments {
-        guard case .text(let hash)? = row.fields["hash"], let file = store.files.fileURL(for: hash) else {
-          unsendable[id.recordName] = row.modifiedAt
-          report(.fileMissing, kind: .upload, recordType: row.table.rawValue, recordName: id.recordName)
-          return nil
-        }
-        record["file"] = CKAsset(fileURL: file)
+  /// 构造要上传的记录：以上次服务器记录的系统字段为底，写入当前行的字段。行已不在、这一版传不上去（`unsendable`）时为 nil；
+  /// 附件的文件不在本机的这一版记进 `unsendable` 并报告。读库出错抛出。
+  func record(for id: CKRecord.ID) async throws -> CKRecord? {
+    guard let row = try await store.syncRow(recordName: id.recordName), unsendable[id.recordName] != row.modifiedAt else { return nil }
+    let base = try await store.systemFields(of: id.recordName).flatMap(RecordMapper.decodeSystemFields)
+    let record = RecordMapper.record(from: row, zoneID: zoneID, base: base)
+    if row.table == .attachments {
+      guard case .text(let hash)? = row.fields["hash"], let file = store.files.fileURL(for: hash) else {
+        unsendable[id.recordName] = row.modifiedAt
+        report(.fileMissing, kind: .upload, recordType: row.table.rawValue, recordName: id.recordName)
+        return nil
       }
-      return record
-    } catch {
-      failed(error, kind: .upload, recordName: id.recordName)
-      return nil
+      record["file"] = CKAsset(fileURL: file)
     }
+    return record
   }
 
-  /// 一批上传的结果：记账，告诉发送者这批有没有进展、该等什么。有记录收下就是一次成功（`succeeded`），并告诉实时层（`acceptedUpdates`）。
+  /// 一批上传的结果：记账，告诉发送者这批有没有进展、该等什么。有记录收下就是一次成功（`succeeded`），并告诉实时层（`acceptances`）。
   func sent(_ sent: SentRecords, for batch: OutgoingBatch) async -> SendOutcome {
     guard !stopped else { return SendOutcome(progressed: false, fault: .rejected) }
     // 服务器答了才是连上了：有记录收下，或逐条的拒绝里有不是连不上的（版本冲突、限流）；全是连不上的不算
@@ -113,7 +117,7 @@ extension SyncCoordinator {
     try await store.dropSyncMetadata(sent.deleted.map(\.recordName))
     if !received.isEmpty {
       facts.issues.removeAll { $0.kind == .upload && $0.recordName.map(received.contains) == true }
-      accepted(AcceptedChanges(tables: Set(sent.saved.compactMap { RecordMapper.table(named: $0.recordType) }), saved: sent.saved.count, deleted: sent.deleted.count))
+      acceptances.yield(())
     }
 
     // 没收下的仍是待推送（库里推导），下一批自然带上；这里只处理要先改本机状态才能成功的
@@ -135,7 +139,7 @@ extension SyncCoordinator {
         try await store.dropSyncMetadata([name])
         outcome.progressed = true
       default:
-        outcome.fault = SyncFault.merge(outcome.fault, failed(error, kind: .upload, recordType: record.recordType, recordName: name))
+        refused(failed(error, kind: .upload, recordType: record.recordType, recordName: name), name, version: record.modifiedAt ?? .min, &outcome)
       }
     }
     for (id, error) in sent.failedDeletes {
@@ -144,7 +148,7 @@ extension SyncCoordinator {
         try await store.dropSyncMetadata([id.recordName])
         outcome.progressed = true
       case .batchRequestFailed: outcome.progressed = true
-      default: outcome.fault = SyncFault.merge(outcome.fault, failed(error, kind: .upload, recordName: id.recordName))
+      default: refused(failed(error, kind: .upload, recordName: id.recordName), id.recordName, version: .min, &outcome)
       }
     }
     // 收下了：之前的失败与空间不足都过去了
@@ -153,4 +157,17 @@ extension SyncCoordinator {
     }
     return outcome
   }
+
+  /// 一条被拒：服务器拒收这一版（`SyncFault.rejected`）的记进 `unsendable`、跳过它接着发别的，改过再试；
+  /// 其余（连不上、要等、账号）是整个发送者的事，合进这批的结局。删除没有版本，记 `.min`。
+  private func refused(_ fault: SyncFault, _ name: String, version: Int64, _ outcome: inout SendOutcome) {
+    guard fault == .rejected else { return outcome.fault = SyncFault.merge(outcome.fault, fault) }
+    unsendable[name] = version
+    outcome.progressed = true
+  }
+}
+
+extension CKRecord {
+  /// 记录的版本（同步表的 `modifiedAt` 列）。
+  var modifiedAt: Int64? { (self["modifiedAt"] as? NSNumber)?.int64Value }
 }

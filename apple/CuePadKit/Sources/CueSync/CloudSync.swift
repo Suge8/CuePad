@@ -7,7 +7,7 @@ import os
 ///
 /// 用法：`let sync = CloudSync(store: store)`；`await sync.start()` 认账号（认不了由这里自己按退避再认）、开始上传，第一次拉由 App 发起
 /// （`syncNow`，它等得到拉完）；界面订阅 `stateUpdates`，状态为 `.needsDecision` 时让用户选择后调用 `resolve(_:)`。冲突副本由 `CueStore.conflicts()` 提供。
-/// 实时层订阅 `acceptedUpdates`（服务器收下了本机的一批改动），要立刻拉一次就调 `syncNow`。
+/// 实时层订阅 `acceptedUpdates`（服务器收下了本机的一批改动），要立刻拉一次就调 `syncNow`，门铃的密钥经 `relaySecret` 取。
 /// 需要 App 带 iCloud（CloudKit）entitlement 与容器；没有 entitlement 的进程（命令行测试）不能调用 `start()`。
 ///
 /// 冷启动：认过账号就能拉，第一拉不等别的；最低对端版本（`PeerFloor`）由发送者在第一次上传前对（上传等它，拉取不等：拉到的页里有门槛就当场看，
@@ -37,6 +37,8 @@ public actor CloudSync {
   private var accountWatcher: Task<Void, Never>?
   /// `start()` 之前就要拉的（冷启动时先到的推送）：开始了再拉。
   private var startWaiters: [CheckedContinuation<Void, Never>] = []
+  /// 等账号认好的（`relaySecret`）：每认完一次账号叫醒一遍，各自再看能不能同步。
+  private var accountWaiters: [UUID: CheckedContinuation<Void, any Error>] = [:]
   /// 上一次建通知订阅的时刻：没建成时 `syncNow` 顺带重试，至多每 `alertRetryInterval` 一次（按节奏的拉取、门铃也走它，可能很密）。
   private var alertsAttemptedAt: ContinuousClock.Instant?
   private static let alertRetryInterval = Duration.seconds(60)
@@ -62,8 +64,8 @@ public actor CloudSync {
   /// 先给出当前快照，之后状态或问题列表每次变化给出新快照。
   public nonisolated var stateUpdates: AsyncStream<SyncState> { coordinator.stateUpdates }
 
-  /// 之后每次服务器收下本机的一批改动给出一个（实时层据此按门铃）。
-  public nonisolated var acceptedUpdates: AsyncStream<AcceptedChanges> { coordinator.acceptedUpdates }
+  /// 之后每次服务器收下本机的一批改动给出一个（不补之前的；实时层据此按门铃）。
+  public nonisolated var acceptedUpdates: AsyncStream<Void> { coordinator.acceptances.stream() }
 
   /// 连上 iCloud 并认一次账号（返回时认完；认不了的这里自己按退避再认）。
   public func start() async {
@@ -135,6 +137,8 @@ public actor CloudSync {
     accountRetry?.cancel()
     accountRetryAt = nil
     accountBackoff.reset()
+    for waiter in accountWaiters.values { waiter.resume() }
+    accountWaiters = [:]
     guard !connected else { return true }
     guard await coordinator.canSync, let sender else { return false }
     connected = true
@@ -193,6 +197,33 @@ public actor CloudSync {
     await sender?.flush()
   }
 
+  /// 门铃的密钥（`RelaySecret`）：认过账号、能同步时才去 iCloud 取；没登录、要你决定时一直等到账号认好，不发请求。被取消就抛出。
+  public func relaySecret() async throws -> Data {
+    while true {
+      if connected, await coordinator.canSync { break }
+      try await accountChecked()
+    }
+    guard let cloud else { throw CancellationError() }
+    return try await cloud.relaySecret()
+  }
+
+  private func accountChecked() async throws {
+    let id = UUID()
+    try await withTaskCancellationHandler {
+      try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
+        if Task.isCancelled {
+          continuation.resume(throwing: CancellationError())
+        } else {
+          accountWaiters[id] = continuation
+        }
+      }
+    } onCancel: {
+      Task { await self.stopWaiting(id) }
+    }
+  }
+
+  private func stopWaiting(_ id: UUID) { accountWaiters.removeValue(forKey: id)?.resume(throwing: CancellationError()) }
+
   private func ensureAlertSubscriptions(_ cloud: any SyncCloud) async {
     guard Self.subscribesToAlerts else { return }
     alertsAttemptedAt = .now
@@ -204,6 +235,6 @@ public actor CloudSync {
   public func resolve(_ resolution: SyncResolution) async throws {
     try await coordinator.resolve(resolution)
     await stop()
-    try await start()
+    await start()
   }
 }

@@ -12,7 +12,9 @@ import Foundation
 /// 之后每次只从令牌增量拉。
 ///
 /// 一次只跑一个拉取：在跑时再来的排在它后面（排着的只有一个，后来的都等它），不会用同一个令牌拉两遍、旧令牌也不会盖掉新的。
-/// 每个读请求 `RequestLimits.hedge` 没回音就同样的再发一次、先回来的算（`hedged`）：一拉挂住，排在后面的拉不跟着等。
+/// 拉变化的请求 `RequestLimits.hedge` 没回音就同样的再发一次、先回来的算（`hedged`）：一拉挂住，排在后面的拉不跟着等。
+/// 代价是带附件、下载超过这么久的一页会下两遍：增量里的附件少而小，接受；对账时按 ID 补取的整条记录一次几百条、附件多，不赛跑，
+/// 挂住的由 CloudKit 自己的空闲超时断开（`CloudDatabase.database`）。
 /// 拉完是一次成功（`SyncCoordinator.succeeded`），失败交给协调器归类（`failed`）。
 actor ZonePuller {
   static let tokenKey = "zoneToken"
@@ -118,7 +120,7 @@ actor ZonePuller {
     let wanted = try await newerOnServer(seen, synced: before)
     for start in stride(from: 0, to: wanted.count, by: CloudKitLimits.recordsPerRequest) {
       let ids = Array(wanted[start..<min(start + CloudKitLimits.recordsPerRequest, wanted.count)])
-      let records = try await hedged(after: RequestLimits.hedge) { [source] in try await source.records(ids) }
+      let records = try await source.records(ids)
       let found = Set(records.map(\.recordID))
       for id in ids where !found.contains(id) { seen[id] = nil }  // 补取时已不在
       try await coordinator.pulled(records, [])

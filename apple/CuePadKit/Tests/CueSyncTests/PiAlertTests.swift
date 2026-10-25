@@ -36,7 +36,7 @@ import Testing
     try await recorder.update(sessionID: "s1", state: .thinking)  // 继续工作
 
     let id = try #require(try await rig.store.allPiSessionStates().first).id
-    let record = try #require(await rig.coordinator.record(for: rig.recordID(id)))
+    let record = try #require(try await rig.coordinator.record(for: rig.recordID(id)))
     #expect(record["notify"] == nil)
     #expect(record["state"] as? String == "thinking")
   }
@@ -52,7 +52,7 @@ import Testing
     try await recorder.update(sessionID: "s1", state: .waitingForUser, detail: "q2")
 
     let id = try #require(try await rig.store.allPiSessionStates().first).id
-    let record = try #require(await rig.coordinator.record(for: rig.recordID(id)))
+    let record = try #require(try await rig.coordinator.record(for: rig.recordID(id)))
     #expect(record["notify"] == nil && record.encryptedValues["detail"] as? String == "q2")
   }
 
@@ -84,22 +84,22 @@ import Testing
       .cue, text: "要合并到 main 吗？", ask: try CueAsking(.merge, action: "把登录页修复合并进 main"),
       shots: [CueShot(preview: shot.id, look: "改后的登录页")])
 
-    let record = try #require(await rig.coordinator.record(for: rig.recordID(message.id)))
+    let record = try #require(try await rig.coordinator.record(for: rig.recordID(message.id)))
     #expect(record["notify"] as? String == "cue" && record.encryptedValues["text"] as? String == "要合并到 main 吗？" && record["ask"] as? String == "merge")
-    let profile = try #require(await rig.coordinator.record(for: CKRecord.ID(recordName: CueProfile.syncRecordName, zoneID: zone)))
+    let profile = try #require(try await rig.coordinator.record(for: CKRecord.ID(recordName: CueProfile.syncRecordName, zoneID: zone)))
     let text = try #require(CueAlertText.content(message: record, profile: profile))
     #expect(text.title == "小管家" && text.body == "可以把登录页修复合并进 main 吗？\n看图：改后的登录页\n可以 / 以后合并进共享分支都不用问")
 
     try await rig.simulatePush()
     try await rig.store.endCueQuestion(message.id, .answered(CueAsk.once))
-    let answered = try #require(await rig.coordinator.record(for: rig.recordID(message.id)))
+    let answered = try #require(try await rig.coordinator.record(for: rig.recordID(message.id)))
     #expect(answered["notify"] == nil && answered.encryptedValues["answer"] as? String == CueAsk.once)
   }
 
   // MARK: 到不到你（用户定的规则：回答他那一轮的话推到手机、一轮只响一次；他在 Mac 上开着那一页不推；Cue 值班时会话做完只推归他的停下与留给他的）
 
   private func flag(_ rig: Rig, _ id: UUID) async throws -> String? {
-    try #require(await rig.coordinator.record(for: rig.recordID(id)))["notify"] as? String
+    try #require(try await rig.coordinator.record(for: rig.recordID(id)))["notify"] as? String
   }
 
   /// 他发完消息就离开了 App：Cue 回答这一轮的话推到手机，正文是 Cue 的原话；这一轮先发了提问卡就只响提问卡那一下。
@@ -114,7 +114,7 @@ import Testing
     try await rig.store.recordViewing(device: "phone", sessionID: nil, cue: true)
     let fixed = try await reply("登录页修好了，**测试全过**")
     #expect(try await flag(rig, fixed) == "cue")
-    let record = try #require(await rig.coordinator.record(for: rig.recordID(fixed)))
+    let record = try #require(try await rig.coordinator.record(for: rig.recordID(fixed)))
     #expect(CueAlertText.content(message: record, profile: nil)?.body == "登录页修好了，测试全过")
 
     let round = Date.now
@@ -166,7 +166,7 @@ import Testing
       return try await rig.store.cueDuty()?.left.first
     }())
     #expect(try await rig.store.flagLeftToYou(left, host: "mac") == session)
-    let record = try #require(await rig.coordinator.record(for: rig.recordID(session)))
+    let record = try #require(try await rig.coordinator.record(for: rig.recordID(session)))
     #expect(record["notify"] as? String == "awaitsReply")
     #expect(PiAlertText.content(for: record, kind: .awaitsReply).map { [$0.title, $0.body] } == ["登录页 待回复", "改好了"])
   }

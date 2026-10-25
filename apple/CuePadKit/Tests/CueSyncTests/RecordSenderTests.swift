@@ -38,6 +38,28 @@ import Testing
     await sender.stop()
   }
 
+  /// 服务器拒收一条记录（这一版本身有问题）：之后说的话照样马上传上去，被拒的那一版不再一批批地重发。
+  @Test func aRecordTheServerRefusesDoesNotHoldBackLaterUploads() async throws {
+    let bad = try await rig.store.createCard(body: "服务器不收这一版")
+    let refused = rig.id(bad.id)
+    let server = ScriptedServer([
+      { records in
+        SentRecords(
+          saved: records.filter { $0.recordID.recordName != refused },
+          failedSaves: records.filter { $0.recordID.recordName == refused }.map { ($0, CKError(.invalidArguments)) })
+      }
+    ])
+    let sender = RecordSender(uploader: server, coordinator: rig.coordinator)
+    await sender.start()
+    await sender.flush()
+
+    let said = try await rig.store.createCard(body: "之后说的话")
+    #expect(await sender.send([rig.id(said.id)]))
+    await sender.flush()
+    #expect(await server.uploads.filter { $0.contains(refused) }.count == 1)
+    await sender.stop()
+  }
+
   /// 一轮做完、回答落进对话：手机多久看到回答取决于它多快传上去。回答（对话与会话近况）随本机提交在合并窗口后就发，
   /// 不等会话状态细节的节流（这时还挂着一条工作中的细节；节流走手动时钟、永不到点，等它就会等到测试时限）。
   @Test func aNewReplyIsUploadedRightAfterItIsWritten() async throws {

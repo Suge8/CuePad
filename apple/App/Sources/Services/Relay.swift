@@ -1,6 +1,6 @@
 import CueStore
+import CueSync
 import Foundation
-import Network
 import Observation
 import os
 import Synchronization
@@ -9,10 +9,13 @@ import Synchronization
 /// 别的设备听到就去 iCloud 拉一次；门铃不带内容，数据只有 iCloud 一份。通着（`isLive`）时按节奏的拉取降为兜底，连不上或断了换回快档（`SyncPoller.Cadence`）。
 ///
 /// 何时连由 App 定（`AppServices.startRelay`）：`run` 期间想连就连着；`pause` 起不想连，`settle` 等按出去的门铃发完再断，
-/// 其间 `resume` 了就不断；换了 iCloud 账号 `reconnect` 换房间。
-/// 断了按退避加抖动重连，网络恢复时不等退避；每次入房先补按欠下的门铃（`ring`）、再拉一次：没连着的那段时间（包括启动到第一次连上）的门铃听不到。
-/// 心跳用 WebSocket 协议层的 ping，每 `pingInterval` 一次，`pongLimit` 内没回就断开重连：静默断线最迟约 15 秒发现。
-/// 用 URLSessionWebSocketTask：带系统代理设置、协议层 ping；连接是 wss（证书由系统校验）。
+/// 其间 `resume` 了就不断；换了 iCloud 账号 `reconnect` 换房间。不想连着时又有改动被收下（手机在后台点了实时活动上的"允许一次"），
+/// 短连一次（iOS 在后台任务里）：入房、按完就断，不等回前台，对方不必等兜底那一拉。
+/// 密钥要认过账号才取得到（`CloudSync.relaySecret`）：没登录 iCloud 时连接停在取密钥上，不重试。
+/// 断了按退避加抖动重连（`retry`），网络恢复时不等退避；每次入房先补按欠下的门铃（`ring`），同时开始心跳、收门铃并拉一次：
+/// 没连着的那段时间（包括启动到第一次连上）的门铃听不到。
+/// 心跳用 WebSocket 协议层的 ping，每 `pingInterval` 一次，`pongLimit` 内没回就断开重连：静默断线最迟 `silenceLimit` 发现。
+/// 用 URLSessionWebSocketTask：带系统代理设置、协议层 ping、自动回中转的 ping；连接是 wss（证书由系统校验）。
 @Observable
 final class Relay {
     /// 门铃此刻通着：入了房间，心跳有回应。
@@ -25,7 +28,7 @@ final class Relay {
     @ObservationIgnored private var rang: (@MainActor () async -> Void)?
     /// 保持连接的任务（断了自己重连）；断开着时为 nil。
     @ObservationIgnored private var connection: Task<Void, Never>?
-    /// 最后一个按出去的门铃（之前的都已发完或失败）：`suspend` 等它。
+    /// 最后一个按出去的门铃（之前的都已发完或失败）：`settle` 与短连等它。
     @ObservationIgnored private var sending: Task<Void, Never>?
     /// 有改动被收下时门铃没通（或没按出去），入房后先补按一次。
     @ObservationIgnored private var owesRing = false
@@ -34,10 +37,13 @@ final class Relay {
 
     nonisolated static let pingInterval = Duration.seconds(10)
     nonisolated static let pongLimit = Duration.seconds(5)
+    /// 心跳察觉静默断线的上限，也是门铃通着时按节奏拉取降到的兜底间隔（`AppServices.doorbellFallback`）：兜底只补门铃自己察觉不到的丢失
+    /// （对方按出去的那一下在路上没了、中转重启），察觉得到的断（断线、重连）当场换回快档、入房先拉一次，察觉不到的也不比它更晚。
+    nonisolated static let silenceLimit = pingInterval + pongLimit
     /// 连上、入房的时限。
     nonisolated static let handshakeLimit = Duration.seconds(15)
-    static let firstRetry = Duration.seconds(1)
-    static let maxRetry = Duration.seconds(60)
+    /// 重连的退避：1 秒起，至多 1 分钟。
+    static let retry = Backoff(first: .seconds(1), cap: .seconds(60))
     /// 连上后通了这么久才算稳定，退避从头算；更短就断的（中转刚起就挂、被网络掐掉）接着加长。
     static let steady = Duration.seconds(30)
     private nonisolated static let log = Logger(subsystem: AppIdentity.id, category: "relay")
@@ -50,10 +56,11 @@ final class Relay {
     }
 
     /// 本机的一批改动已被 iCloud 收下：通着就按一下门铃（排在前一个后面发）；不通（正在重连、手机在后台）或没按出去的记下欠一次，
-    /// 下次入房先补按：对方的拉取降为兜底后，丢一下就要等到兜底那一拉。
+    /// 下次入房先补按：对方的拉取降为兜底后，丢一下就要等到兜底那一拉。不想连着的这时短连一次去补按。
     func ring() {
         guard isLive, let socket else {
             owesRing = true
+            connect()
             return
         }
         let previous = sending
@@ -64,7 +71,7 @@ final class Relay {
                 Self.log.info("按了门铃")
             } catch {
                 owesRing = true
-                Self.log.notice("门铃没按出去，入房后补按：\(error.localizedDescription, privacy: .public)")
+                Self.log.notice("门铃没按出去，入房后补按：\(error.brief, privacy: .public)")
             }
         }
     }
@@ -101,12 +108,22 @@ final class Relay {
     func reconnect() async {
         guard connection != nil else { return }
         await disconnect()
-        if wanted { connect() }
+        connect()
     }
 
+    /// 想连着、或欠着门铃时连（后者是短连：iOS 在后台任务里，按完就断）。
     private func connect() {
-        guard connection == nil, let rang else { return }
-        connection = Task { await self.stayConnected(rang) }
+        guard connection == nil, let rang, wanted || owesRing else { return }
+        let done: @MainActor @Sendable () -> Void
+        #if os(iOS)
+        if wanted { done = {} } else { done = BackgroundWork.begin() }
+        #else
+        done = {}
+        #endif
+        connection = Task {
+            await stayConnected(rang)
+            done()
+        }
     }
 
     private func disconnect() async {
@@ -116,32 +133,38 @@ final class Relay {
         await connection.value
     }
 
+    /// 想连着就一直连着，只为补按门铃连上的按完就走；断了按退避重连。自己结束（不是被 `disconnect` 取消）时清掉 `connection`。
     private func stayConnected(_ rang: @escaping @MainActor () async -> Void) async {
-        let network = NetworkReturns()
-        defer { network.cancel() }
-        var failures = 0
-        while !Task.isCancelled {
+        var retry = Self.retry
+        while !Task.isCancelled, wanted || owesRing {
             let began = ContinuousClock.now
             do {
                 try await session(rang)
             } catch where !Task.isCancelled {
-                Self.log.notice("门铃断了：\(String(describing: error), privacy: .public)")
+                Self.log.notice("门铃断了：\(error.brief, privacy: .public)")
             } catch {}
-            let lasted = isLive && ContinuousClock.now - began >= Self.steady
+            if isLive, ContinuousClock.now - began >= Self.steady { retry.reset() }
             isLive = false
-            guard !Task.isCancelled else { return }
-            failures = lasted ? 1 : failures + 1
-            await network.wait(upTo: Self.retryDelay(after: failures))
+            guard !Task.isCancelled, wanted || owesRing else { break }
+            await Self.wait(upTo: retry.next())
+        }
+        if !Task.isCancelled { connection = nil }
+    }
+
+    /// 等 `delay`，其间网络恢复（`NetworkReturns`）或任务被取消就提前返回。
+    private nonisolated static func wait(upTo delay: Duration) async {
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask { try? await Task.sleep(for: delay) }
+            group.addTask {
+                var returns = NetworkReturns.stream().makeAsyncIterator()
+                _ = await returns.next()
+            }
+            await group.next()
+            group.cancelAll()
         }
     }
 
-    /// 第 n 次失败后等多久：1、2、4…秒到 `maxRetry`，再在后一半里随机取（一群设备不同时打回来）。
-    static func retryDelay(after failures: Int) -> Duration {
-        let ceiling = min(firstRetry * (1 << min(failures - 1, 6)), maxRetry)
-        return ceiling * Double.random(in: 0.5...1)
-    }
-
-    /// 一次连接：握手、入房、先拉一次，之后收门铃、发心跳，直到断开（抛出）或被取消。
+    /// 一次连接：握手、入房、补按欠下的门铃；不想连着的按完就返回，想连着的同时拉一次、收门铃、发心跳，直到断开（抛出）或被取消。
     private func session(_ rang: @escaping @MainActor () async -> Void) async throws {
         let credentials = try await credentials()
         let socket = session.webSocketTask(with: endpoint.appending(path: credentials.room))
@@ -159,7 +182,11 @@ final class Relay {
                 owesRing = false
                 ring()
             }
-            await rang()
+            guard wanted else {
+                await sending?.value
+                return
+            }
+            Task { await rang() }  // 补上没连着时听不到的；心跳与收门铃不等它
             try await withThrowingTaskGroup(of: Void.self) { group in
                 group.addTask { try await Self.heartbeat(socket) }
                 group.addTask {
@@ -224,45 +251,4 @@ private nonisolated final class Pong: Sendable {
     private let state = Mutex<ContinuousClock.Instant?>(nil)
     var last: ContinuousClock.Instant? { state.withLock { $0 } }
     func heard(at instant: ContinuousClock.Instant) { state.withLock { $0 = instant } }
-}
-
-/// 网络恢复（路径从不可用变为可用）时提前结束重连前的等待。
-private final class NetworkReturns {
-    private let monitor = NWPathMonitor()
-    private var satisfied: Bool?
-    private var waiter: CheckedContinuation<Void, Never>?
-
-    init() {
-        monitor.pathUpdateHandler = { [weak self] path in
-            let satisfied = path.status == .satisfied
-            Task { @MainActor in self?.update(satisfied) }
-        }
-        monitor.start(queue: DispatchQueue(label: "\(AppIdentity.id).relay.network"))
-    }
-
-    private func update(_ satisfied: Bool) {
-        if satisfied, self.satisfied == false { wake() }
-        self.satisfied = satisfied
-    }
-
-    /// 等 `delay`，其间网络恢复或任务被取消就提前返回。
-    func wait(upTo delay: Duration) async {
-        let timer = Task {
-            guard (try? await Task.sleep(for: delay)) != nil else { return }
-            wake()
-        }
-        await withTaskCancellationHandler {
-            await withCheckedContinuation { waiter = $0 }
-        } onCancel: {
-            Task { @MainActor in self.wake() }
-        }
-        timer.cancel()
-    }
-
-    private func wake() {
-        waiter?.resume()
-        waiter = nil
-    }
-
-    func cancel() { monitor.cancel() }
 }

@@ -14,11 +14,12 @@ actor SyncCoordinator {
   let store: CueStore
   nonisolated let zoneID: CKRecordZone.ID
   private let states = Broadcast(latest: Facts().state)
-  /// 服务器收下了本机的一批改动（`acceptedUpdates`）。
-  private let acceptances = Broadcast<AcceptedChanges>()
+  /// 服务器收下了本机的一批改动（`CloudSync.acceptedUpdates`）。
+  nonisolated let acceptances = Broadcast<Void>()
   /// 任何一次请求成功（连通的证据）：发送者因连不上在退避时据此当场再发（`RecordSender`）。
   nonisolated let connectivity = Broadcast<Void>(bufferingPolicy: .bufferingNewest(1))
-  /// 构造不出来的记录（附件文件不在本机）与当时的修改时间：同一版不再每批重试、重复报告，改过再试。
+  /// 这一版传不上去的记录与它的修改时间（删除记 `.min`）：附件文件不在本机、服务器拒收（`SyncFault.rejected`）。
+  /// 同一版不再每批重试、重复报告，也不挡别的记录；改过再试，重启 App 也再试一次。
   var unsendable: [String: Int64] = [:]
   /// 库里没有可传的待推送，截至推导时的同步变更代数（`CueStore.pendingSync(since:)`）：之后只复查其后的提交碰过的记录，不再全量推导，
   /// 代数没变（按节奏的拉取每次顺带的那一轮）就什么都不查。只有后台那一路（`BatchScope.pending`）读写它，同一时刻至多一批：
@@ -63,11 +64,6 @@ actor SyncCoordinator {
 
   /// 先给出当前快照，之后每次变化给出新快照。
   nonisolated var stateUpdates: AsyncStream<SyncState> { states.stream() }
-
-  /// 之后每次服务器收下本机的一批改动给出一个（不补之前的）。
-  nonisolated var acceptedUpdates: AsyncStream<AcceptedChanges> { acceptances.stream() }
-
-  func accepted(_ changes: AcceptedChanges) { acceptances.yield(changes) }
 
   /// 能不能和服务器同步：有可用的账号，也没有停下（`stopped`）。
   var canSync: Bool {

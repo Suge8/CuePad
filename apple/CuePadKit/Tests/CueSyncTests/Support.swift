@@ -98,7 +98,8 @@ struct Rig {
   /// 模拟服务器接受了此刻所有待推送的保存与删除，返回上传的记录。
   @discardableResult
   func simulatePush() async throws -> [CKRecord] {
-    guard let batch = await coordinator.nextBatch(.pending(excluding: []), limit: .max) else { return [] }
+    let batch = try await coordinator.nextBatch(.pending(excluding: []), limit: .max)
+    guard !batch.isEmpty else { return [] }
     _ = await coordinator.sent(SentRecords(saved: batch.saves, deleted: batch.deletes))
     return batch.saves
   }
@@ -156,7 +157,8 @@ struct Loopback {
   }
 
   func deliver(from: Rig, to: Rig) async throws {
-    guard let batch = await from.coordinator.nextBatch(.pending(excluding: []), limit: .max) else { return }
+    let batch = try await from.coordinator.nextBatch(.pending(excluding: []), limit: .max)
+    guard !batch.isEmpty else { return }
     let deletions: [(id: CKRecord.ID, recordType: String)] = try batch.deletes.compactMap { id in
       let type = try RawDB(from.fixture.url).rows("SELECT recordType FROM syncRecords WHERE recordName = '\(id.recordName)'").first?[0]
       return type.map { (id, $0) }

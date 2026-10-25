@@ -27,8 +27,8 @@ import Testing
     let same = try await store.createCard(body: "已同步")
     let stale = try await store.createCard(body: "本机旧版")
     try await rig.simulatePush()
-    let sameOnServer = try #require(await rig.coordinator.record(for: rig.recordID(same.id)))
-    let home = try #require(await rig.coordinator.record(for: rig.recordID(Project.defaultID)))
+    let sameOnServer = try #require(try await rig.coordinator.record(for: rig.recordID(same.id)))
+    let home = try #require(try await rig.coordinator.record(for: rig.recordID(Project.defaultID)))
     let newer = remoteRecord(.cards, id: stale.id, cardFields(body: "别处改过", modifiedAt: 9_000_000_000_000))
     let fresh = remoteRecord(.cards, cardFields(body: "别处新建", modifiedAt: 2_000))
     let zone = FakeZone(
@@ -51,8 +51,8 @@ import Testing
     let goneElsewhere = try await store.createCard(body: "别处删了")
     try await rig.simulatePush()
     let unpushed = try await store.createCard(body: "本机新写的")
-    let keptOnServer = try #require(await rig.coordinator.record(for: rig.recordID(kept.id)))
-    let home = try #require(await rig.coordinator.record(for: rig.recordID(Project.defaultID)))
+    let keptOnServer = try #require(try await rig.coordinator.record(for: rig.recordID(kept.id)))
+    let home = try #require(try await rig.coordinator.record(for: rig.recordID(Project.defaultID)))
     let zone = FakeZone([page("v1", [version(of: home), version(of: keptOnServer)]), page("t1")])
 
     try await ZonePuller(source: zone, coordinator: rig.coordinator).pull()
@@ -76,7 +76,7 @@ import Testing
   @Test func aRecordDeletedWhileTheZoneWasBeingScannedIsDeletedHere() async throws {
     let card = try await store.createCard(body: "翻的途中在别处删了")
     try await rig.simulatePush()
-    let onServer = try #require(await rig.coordinator.record(for: rig.recordID(card.id)))
+    let onServer = try #require(try await rig.coordinator.record(for: rig.recordID(card.id)))
     let deleted = ZoneChangeBatch(modifications: [], deletions: [(onServer.recordID, "cards")], token: Data("v2".utf8), moreComing: false)
     let zone = FakeZone([page("v1", [version(of: onServer)], more: true), .success(deleted), page("t1")])
 

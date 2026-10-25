@@ -41,7 +41,7 @@ import Testing
     let data = pngData(width: 6, height: 6)
     let attachment = try await referencedImage(data)
 
-    let record = try #require(await rig.coordinator.record(for: recordID(attachment.id)))
+    let record = try #require(try await rig.coordinator.record(for: recordID(attachment.id)))
 
     #expect(record["hash"] as? String == attachment.hash)
     let asset = try #require(record["file"] as? CKAsset)
@@ -51,7 +51,7 @@ import Testing
   @Test func attachmentWhoseFileIsMissingIsNotPushed() async throws {
     let attachment = try await referencedImage(pngData(width: 3, height: 3))
     try FileManager.default.removeItem(at: try #require(store.files.fileURL(for: attachment.hash)))
-    #expect(await rig.coordinator.record(for: recordID(attachment.id)) == nil)
+    #expect(try await rig.coordinator.record(for: recordID(attachment.id)) == nil)
   }
   @Test func downloadedAssetIsAdoptedIntoTheAttachmentDirectoryByHash() async throws {
     let data = pngData(width: 9, height: 9)

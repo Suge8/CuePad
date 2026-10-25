@@ -20,7 +20,7 @@ final class AppServices {
         let info = Bundle.main.infoDictionary
         return "\(info?["CFBundleShortVersionString"] as? String ?? "?")（\(info?["CFBundleVersion"] as? String ?? "?")）"
     }()
-    static let log = Logger(subsystem: AppIdentity.id, category: "services")
+    nonisolated static let log = Logger(subsystem: AppIdentity.id, category: "services")
 
     let store: CueStore
     #if os(macOS)
@@ -49,7 +49,7 @@ final class AppServices {
     /// iCloud 同步；没有时 `syncStatus` 是写明原因的 `.unavailable`。状态、问题与冲突见下，动作见 `AppServices+Sync`。
     @ObservationIgnored let sync: (any SyncControlling)?
     /// 门铃（实时层，见 `AppServices+Relay`）；没有中转或不连 iCloud 时没有。
-    var relay: Relay?
+    @ObservationIgnored let relay: Relay?
     private(set) var syncStatus: SyncStatus
     private(set) var syncIssues: [SyncIssue] = []
     /// 同步在一页页地拉积压（`SyncState.catchingUp`）；界面只经 `isCatchingUp` 读。
@@ -80,7 +80,7 @@ final class AppServices {
 
     /// 常驻的跟随者（`follow`），一起取消（`cancelBackgroundWork`）。
     @ObservationIgnored let tasks = Followers()
-    /// 有理由等就拉的任务（见 `startPolling`）；iOS 进入后台时取消、回前台再开。
+    /// 有理由等就拉的任务（见 `startPolling`）；iOS 整个进后台时取消、回前台再开。
     @ObservationIgnored var polling: Task<Void, Never>?
     /// 有在等回执的话：还没结果的投送请求（手机发出的，Mac 发给本机或别的 Mac 的），或对 Cue 说了还没交给它的话
     /// （`startSpeechClock` 跟着资料库更新），只给 `pollingCadence` 用。
@@ -164,7 +164,7 @@ final class AppServices {
         case globalShortcutUnavailable(String)
         /// 分享扩展留下的内容没能入库（保留在共享容器里，下次再试）。
         case captureImportFailed(String)
-        /// 跟着同步的本机功能没能启动（冲突列表、Mac 端的远程功能）。
+        /// 跟着库常驻、经同步与别的设备往来的本机功能没能启动或停了：是哪一项写在原因里（各处 `follow(reporting:)`）。
         case syncUnavailable(String)
         case widgetDataUnavailable(String)
         #if os(macOS)
@@ -205,6 +205,7 @@ final class AppServices {
         diagnostics = Diagnostics(directory: location.directory.appending(path: "Diagnostics", directoryHint: .isDirectory))
         let (engine, status) = Self.makeSync(sync, store: store, location: location)
         (self.sync, syncStatus) = (engine, status)
+        relay = Self.makeRelay(engine)
         speechClock = SpeechClock(localHost: mac.hostID, reachable: status.reachesMac, alwaysReachable: DebugHooks.preset.alwaysReachable, timing: mac.timing)
         liveSessions = try LiveSessions(store: store, endedOn: mac.hostID, at: speechClock.moment)
         cueFeed = CueFeed(store: store, widget: false)
@@ -242,6 +243,7 @@ final class AppServices {
         diagnostics = Diagnostics(directory: location.directory.appending(path: "Diagnostics", directoryHint: .isDirectory))
         let (engine, status) = Self.makeSync(sync, store: store, location: location)
         (self.sync, syncStatus) = (engine, status)
+        relay = Self.makeRelay(engine)
         speechClock = SpeechClock(localHost: nil, reachable: status.reachesMac, alwaysReachable: DebugHooks.preset.alwaysReachable, timing: timing)
         liveSessions = try LiveSessions(store: store, endedOn: nil, at: speechClock.moment)
         cueFeed = CueFeed(store: store, widget: true)
