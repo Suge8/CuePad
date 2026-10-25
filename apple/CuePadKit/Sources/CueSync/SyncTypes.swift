@@ -23,9 +23,9 @@ public enum SyncStatus: Equatable, Sendable {
   case needsDecision(SyncDecision)
   /// 云端的最低对端版本（`PeerFloor`）高于这台的结构版本：停下同步，更新 CuePad 后继续；本机改动留在库里。
   case outdated
-  /// 出现了未预期的失败（描述给用户看，详情在 `issues`）；下一次本机改动会重试。
-  case failed(String)
-  /// 这台设备没有在同步（原因给用户看）：没有同步（隔离模式、构建没有 iCloud 权限）或同步没能启动。由 App 层设置。
+  /// 出现了未预期的失败，是哪些、为什么在 `issues`；会自动重试。
+  case failed
+  /// 这台设备没有在同步（原因给用户看）：隔离模式、构建没有 iCloud 权限。由 App 层设置。
   case unavailable(String)
 }
 
@@ -48,6 +48,7 @@ public enum SyncResolution: Sendable {
 
 /// 同步过程中遇到的、被跳过或没能处理的事项（未知记录类型、损坏的附件、单条记录写入失败等）。不静默。
 /// 同一类、同一条记录只留一条（最新的原因）；上传与请求的问题在之后成功时自己消失（`Kind`）。
+/// 给人看的说法由 `problem` 推出（App 的 `SyncIssue.text`），`detail` 是原话（错误码、服务端说明），只进可展开的详情。
 public struct SyncIssue: Equatable, Sendable {
   public enum Kind: Sendable {
     /// 这条记录没能上传：它之后传上去了就消失。
@@ -58,16 +59,36 @@ public struct SyncIssue: Equatable, Sendable {
     case incoming
   }
 
+  /// 出了什么事。连不上、要等、账号与配额不是问题，是状态（`SyncFault`）。
+  public enum Problem: Equatable, Sendable {
+    /// iCloud 没收下这条记录或这次请求（CloudKit 报的其余错误）
+    case refused
+    /// 本机读写出错（资料库、附件目录）
+    case local
+    /// 附件的文件不在本机，传不上去
+    case fileMissing
+    /// 拉到这版不认识的记录类型（更新版本的 CuePad 写的），已跳过
+    case unknownType
+    /// 拉到的附件没有文件或内容与哈希不符，已跳过
+    case damaged
+
+    /// 请求或读写失败的那一类：CloudKit 的错误是 iCloud 没收下，其余是本机。
+    init(_ error: any Error) { self = error is CKError ? .refused : .local }
+  }
+
   public var kind: Kind
   public var recordType: String?
   public var recordName: String?
-  public var message: String
+  public var problem: Problem
+  /// 原话：排查用，不当标题。
+  public var detail: String?
 
-  public init(kind: Kind = .incoming, recordType: String? = nil, recordName: String? = nil, message: String) {
+  public init(kind: Kind = .incoming, recordType: String? = nil, recordName: String? = nil, problem: Problem, detail: String? = nil) {
     self.kind = kind
     self.recordType = recordType
     self.recordName = recordName
-    self.message = message
+    self.problem = problem
+    self.detail = detail
   }
 
   /// 去重的标识：同一类、同一条记录（整个请求的问题没有记录，同一类只留一条）。
@@ -96,6 +117,8 @@ public enum PiAlertSubscriptionStatus: Equatable, Sendable {
   /// 这台设备不建立订阅（Mac），或还没尝试。
   case off
   case active
+  /// 连不上 iCloud，还没建成（`SyncFault.offline`）；连上后的同步顺带重试。
+  case offline
   /// 没能建立（完整原因，见 `Error.diagnosis`）；每次回到前台、账号变化时重试。
   case failed(String)
 }

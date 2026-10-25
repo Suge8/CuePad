@@ -27,15 +27,15 @@ nonisolated struct SyncSummary: Equatable {
         case .needsDecision(let decision):
             (title, detail, icon, tone) = ("同步已暂停，需要你决定", Self.describe(decision), .syncPaused, .notice)
         case .outdated: (title, detail, icon, tone) = ("这台的 CuePad 要更新", Self.updateToSync, .syncPaused, .notice)
-        // 底层原因（错误码、服务端说明）在设置的「没能同步」明细里按记录列出，状态这里只说人话
+        // 是哪些、为什么在设置的「没能同步」明细里逐条说（`SyncIssue.text`），原话折在详情里
         case .failed: (title, detail, icon, tone) = ("同步出错", Self.failedDetail, .failure, .failure)
         }
     }
 
     #if os(macOS)
-    static let failedDetail = "有记录没能上传，本机的内容都在，会自动重试"
+    static let failedDetail = "有改动没能同步，本机的内容都在；每一条为什么、会不会自动重试，点「查看」"
     #else
-    static let failedDetail = "有记录没能上传，本机的内容都在。回到前台会自动重试，也可以点立即同步"
+    static let failedDetail = "有改动没能同步，本机的内容都在；每一条为什么、会不会自动重试，见下面的明细"
     #endif
 
     /// 别的设备用着这台跟不上的新版时，去哪更新。
@@ -62,17 +62,31 @@ nonisolated struct SyncSummary: Equatable {
 }
 
 extension SyncIssue {
-    /// "没能同步"明细里一条的人话：哪一类记录没能同步；底层原因（`message`）折在它下面。
-    var summary: String {
+    /// "没能同步"明细里一条的人话，只由归类（`problem`）推出：哪一样、出了什么事、会自己好还是要你做什么。原话（`detail`）折在它下面的详情里。
+    var text: String {
+        switch problem {
+        case .refused where kind == .request: "iCloud 没接受这次同步，会自动重试"
+        case .refused: "\(subject)没被 iCloud 收下，会自动重试"
+        case .local where kind == .incoming: "\(subject)没能存进这台设备，已跳过"
+        case .local: "这台设备的资料库读写出错，会自动重试"
+        // 构造不出来的只在这次运行里不再重试（`SyncCoordinator.unsendable`），改过或下次打开再试
+        case .fileMissing: "\(subject)的文件不在这台设备上，传不上去；下次打开 CuePad 会再试，还不行就重新添加它"
+        // 跳过的这条令牌已越过，更新后也不会补拉，只有之后的同类内容能同步
+        case .unknownType: "收到一条更新版本的 CuePad 写的内容，这版认不出，已跳过；更新这台后，之后的同类内容就能同步"
+        case .damaged: "收到一张损坏的图片，已跳过"
+        }
+    }
+
+    private var subject: String {
         switch recordType {
-        case "cards": "一张灵感或任务没能同步"
-        case "projects": "一个项目没能同步"
-        case "sendRecords": "一条发送记录没能同步"
-        case "attachments": "一张图片没能同步"
-        case "piSessionStates", "piMessages": "Agent 会话的内容没能同步"
-        case "deliveryRequests": "一条发给 Mac 的请求没能同步"
-        case "directoryBindings": "项目的文件夹没能同步"
-        default: "同步遇到一个问题"
+        case "cards": "一张灵感或任务"
+        case "projects": "一个项目"
+        case "sendRecords": "一条发送记录"
+        case "attachments": "一张图片"
+        case "piSessionStates", "piMessages": "Agent 会话的内容"
+        case "deliveryRequests": "一条发给 Mac 的请求"
+        case "directoryBindings": "项目的文件夹"
+        default: "一条记录"
         }
     }
 }

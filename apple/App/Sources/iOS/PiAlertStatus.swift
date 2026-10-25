@@ -25,6 +25,8 @@ struct PiAlertStatus: Equatable {
             self = Self(.problem, "没能向系统注册推送", Self.retrying, diagnostics: reason, action: .retry)
         case (_, _, .failed(let reason)):
             self = Self(.problem, "没能向 iCloud 登记通知", Self.retrying, diagnostics: reason, action: .retry)
+        case (_, _, .offline):
+            self = Self(.pending, "等连上 iCloud 再开启", "没有网络或 iCloud 暂时不通；连上后自动开启，这之前锁屏收不到提示。")
         case (_, .registered, .active):
             self = Self(.on, "已开启", "Agent 在等你确认或做完、Cue 回你话时，锁屏会提示你。")
         default:

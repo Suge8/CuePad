@@ -8,7 +8,7 @@ nonisolated protocol SyncControlling: Sendable {
     var stateUpdates: AsyncStream<SyncState> { get }
     /// 之后每次服务器收下本机的一批改动给出一个（实时层据此按门铃）
     var acceptedUpdates: AsyncStream<AcceptedChanges> { get }
-    func start() async throws
+    func start() async
     func stop() async
     /// 立即拉一次（返回时拉完；在拉的排上合成一拉，同步开始前来的等开始了再拉），顺带让待推送发一轮（不等）：
     /// 立即同步、回到前台、按节奏的拉取、收到推送、门铃都只调它（经 `pull`）

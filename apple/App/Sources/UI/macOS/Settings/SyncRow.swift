@@ -103,8 +103,14 @@ struct SyncRow: View {
                 VStack(alignment: .leading, spacing: 10) {
                     ForEach(Array(services.syncIssues.enumerated()), id: \.offset) { _, issue in
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(issue.summary).font(Typography.meta).foregroundStyle(palette.ink)
-                            Text(issue.message).font(Typography.meta.monospaced()).foregroundStyle(palette.ink3).textSelection(.enabled)
+                            Text(issue.text).font(Typography.meta).foregroundStyle(palette.ink).fixedSize(horizontal: false, vertical: true)
+                            if let detail = issue.detail {
+                                DisclosureGroup("详情") {
+                                    Text(detail).font(Typography.meta.monospaced()).textSelection(.enabled)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                                .font(Typography.meta).foregroundStyle(palette.ink3)
+                            }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                     }
@@ -112,7 +118,6 @@ struct SyncRow: View {
             }
             .frame(maxHeight: 360)
             .fixedSize(horizontal: false, vertical: true)
-            Text(SyncSummary.failedDetail).font(Typography.meta).foregroundStyle(palette.ink3)
         }
     }
 }

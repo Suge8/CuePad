@@ -119,6 +119,6 @@ import Testing
 
     #expect(try RawDB(rig.fixture.url).count("syncRecords") == 0)
     let issues = await rig.coordinator.issues
-    #expect(issues.contains { $0.message.contains("widgets") })
+    #expect(issues.contains { $0.problem == .unknownType && $0.recordType == "widgets" })
   }
 }
