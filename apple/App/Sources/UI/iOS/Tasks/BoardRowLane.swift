@@ -60,7 +60,6 @@ struct BoardRowLane<Above: View, Content: View>: View {
             .safeAreaPadding(.trailing, BoardRowMetrics.margin)
             .scrollTargetBehavior(.viewAligned)
             .scrollIndicators(.never)
-            .scrollBounceBehavior(.always, axes: .horizontal)
             .scrollDismissesKeyboard(.immediately)
             .frame(minHeight: cell * CGFloat(tiers) + BoardRowMetrics.gap * CGFloat(tiers - 1), maxHeight: .infinity)
             .environment(\.boardRow, true)

@@ -211,7 +211,7 @@ extension DebugScene {
             default: break
             }
         } catch {
-            fatalError("Cue 演示数据没写成：\(error)")
+            abandon("Cue 演示数据没写成", error)
         }
     }
 }

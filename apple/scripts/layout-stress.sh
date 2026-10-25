@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 布局反馈环压力场景：对一个 CuePad.app 跑三组隔离实例，任何一组出现布局循环或崩溃就以 1 退出。
+# 布局反馈环压力场景：对一个 CuePad.app 跑下面几组隔离实例，任何一组出现布局循环或崩溃就以 1 退出。
 #   1. 屏幕外最小窗口，Pi 会话快速结束/新建并在"思考中/出错"之间跳
 #   2. 1280×907 窗口，Pi 会话全状态快速轮换
 #   3. 常驻滚动条下边加卡边逐点拉宽窗口（-CuePadBench churn）
@@ -9,7 +9,8 @@
 # "has continued for 300 iterations"（AppKit 布局迭代超限，随后抛异常退出）。需要 DEBUG 条件编译的构建（调试场景参数）。
 # 用法：scripts/layout-stress.sh [--inject-loop] [CuePad.app]（缺省 apple/.derived/Build/Products/Debug/CuePad.app，先 xc.sh build mac）
 # 某组进程中途退出时报出退出码或终止信号，并保留它的隔离库目录（资料库、Pi 目录、这段进程的系统日志 process.log），打印路径不删。
-# --inject-loop：每组都挂上刻意的几何回写环（-CuePadGeometryLoop YES），检测器有效时脚本必须以 1 退出——用来证明它抓得到这类环。
+# --inject-loop：每组都挂上刻意的几何回写环（-CuePadGeometryLoop YES），证明检测器抓得到这类环：每组都抓到才以 0 退出；
+#   哪组没抓到，或因为没就绪、崩溃、没覆盖到这些别的原因失败，都以 1 退出（只看退出码 1 分不出是不是抓到了环）。
 set -u
 APPLE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 # 进本检出的入口锁：实例经 app.py 占本检出那一份，同检出的 shot、rec 不能同时在跑
@@ -73,7 +74,9 @@ run() { # 名称 Pi模式(none/all/error/real) 轮数 启动参数…
     if [ "$status" -gt 128 ]; then ending="进程中途退出（信号 SIG$(kill -l $((status - 128)))）"; else ending="进程中途退出（退出码 $status）"; fi
   fi
   echo "${name}：几何循环 $cycles  布局迭代超限 $iterations  $ending$coverage"
-  if [ "$cycles" -gt 0 ] || [ "$iterations" -gt 0 ] || [ "$crashed" = 1 ]; then failed=1; fi
+  if [ "$crashed" = 1 ]; then failed=1
+  elif [ ${#inject[@]} -gt 0 ]; then [ "$cycles" -gt 0 ] || { echo "  没抓到注入的环"; failed=1; }
+  elif [ "$cycles" -gt 0 ] || [ "$iterations" -gt 0 ]; then failed=1; fi
   [ -f "$lib/agents/pi/pi-stderr.log" ] && cp "$lib/agents/pi/pi-stderr.log" "/tmp/layout-stress-pi-$(date +%s).log"
   if [ "$crashed" = 1 ]; then
     # 留证：隔离库（资料库、Pi 目录）原样不删，这段进程的系统日志写进去

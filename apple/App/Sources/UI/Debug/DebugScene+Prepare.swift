@@ -8,14 +8,12 @@ extension DebugScene {
         // -CuePadSampleCrash YES：存一份样例崩溃诊断，设置里出现"上次崩溃"（配 -CuePadCrashSheet YES 直接打开摘要）
         if defaults.bool(forKey: "CuePadSampleCrash") { workspace.services.diagnostics.record([sampleCrash]) }
         #if os(macOS)
-        if defaults.string(forKey: "CuePadSeed") == "perf", (try? await store.projects().allSatisfy(\.isDefault)) == true {
-            do { try await PerfLibrary.seed(store) } catch { workspace.fail(error) }
-        }
+        if defaults.string(forKey: "CuePadSeed") == "perf" { await seedIfFresh(store, "大库", PerfLibrary.seed) }
         #endif
-        if defaults.bool(forKey: "CuePadDemo"), (try? await store.projects().allSatisfy(\.isDefault)) == true {
-            do { try await DemoLibrary.seed(store) } catch { workspace.fail(error) }
+        if defaults.bool(forKey: "CuePadDemo") {
+            await seedIfFresh(store, "演示库", DemoLibrary.seed)
+            await seedMacAgents(workspace.services)
         }
-        if defaults.bool(forKey: "CuePadDemo") { await seedMacAgents(workspace.services) }
         await presetSync(workspace.services)
         guard let name = defaults.string(forKey: "CuePadProject"),
               let project = try? await store.projects().first(where: { $0.name == name })
@@ -31,6 +29,15 @@ extension DebugScene {
         workspace.show(.project(project.id))
         #endif
         return project.id
+    }
+
+    /// 库里只有默认项目（新的隔离库）时写入；读写出错就以失败退出（`abandon`）。
+    private static func seedIfFresh(_ store: CueStore, _ what: String, _ seed: (CueStore) async throws -> Void) async {
+        do {
+            if try await store.projects().allSatisfy(\.isDefault) { try await seed(store) }
+        } catch {
+            abandon("\(what)没写完", error)
+        }
     }
 
     /// `-CuePadComposer <cards|attachments|lines|slash>`（配 session、newsession 画面，iOS 与 Mac）：输入框出现时 cards 打开选卡片面板，slash 写进 "/re" 弹出斜杠命令面板，

@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # iOS：testflight = 归档 → 导出并上传 App Store Connect；device = 开发构建并装到连接的真机。
 # 手动签名：证书与描述文件由 provision.py 经 API 创建（Xcode 自动签名的 API 密钥管不了 App Group / iCloud 容器）。
+# testflight 打包前先过两关，没部署完就不发：docs/release.md「待部署到生产」还有条目（订阅定义 cktool 看不到，只有手机会建，只拦 iOS）；
+# 生产环境的 CloudKit 结构缺字段（ck-production.sh，Mac 发版也跑）。
 # 前提：docs/release.md。
 set -euo pipefail
 APPLE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -15,6 +17,11 @@ provision="$APPLE_DIR/scripts/provision.py"
 
 case "$mode" in
   testflight)
+    docs="$APPLE_DIR/../docs/release.md"
+    grep -q '^### 待部署到生产$' "$docs" || { echo "docs/release.md 里没有「### 待部署到生产」这一节" >&2; exit 1; }
+    pending="$(awk '/^### 待部署到生产$/ { on = 1; next } /^#/ { on = 0 } on && /^- /' "$docs")"
+    [ -z "$pending" ] || { printf 'docs/release.md「待部署到生产」还有没部署的，部署完删掉条目再发 iOS 版：\n%s\n' "$pending" >&2; exit 1; }
+    "$APPLE_DIR/scripts/ck-production.sh"
     rm -rf "$OUT"; mkdir -p "$OUT"
     python3 "$provision" all
     # 版本由 release_versions 推出，命令行设置同时作用于 App 与扩展，两者一致

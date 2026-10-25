@@ -30,6 +30,12 @@ extension DebugScene {
     /// 就绪文件：脚本起的实例都带（`CUEPAD_SHOT_READY`，见 app.py），App 也据此认出是脚本起的（`DebugHooks.scripted`）。
     static let readyFile = ProcessInfo.processInfo.environment["CUEPAD_SHOT_READY"]
 
+    /// 摆画面要的数据没写成：报出原因、以 1 退出，不写就绪文件。等它的脚本（`xc.sh shot`、`perf-mac.sh`）照失败处理，不拿半截的库或画面当成果。
+    static func abandon(_ what: String, _ error: any Error) -> Never {
+        FileHandle.standardError.write(Data("\(what)：\(error)\n".utf8))
+        exit(1)
+    }
+
     /// 给了就绪文件时，画面摆好（`prepare` 做完）之后等到：读库的结果都回来了、摆画面的事都做完了、
     /// 没有视图报着正在过渡、屏上没有进行中的一次性动画（转圈这类一直循环的不算），连着三帧都这样，再写下这个文件。`xc.sh shot` 等它出现才截图，不靠固定的等待。
     static func signalReady(_ services: AppServices) async {

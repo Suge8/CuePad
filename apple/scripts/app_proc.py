@@ -15,7 +15,6 @@ def interrupted(sig, _):
     raise SystemExit(128 + sig)
 
 
-
 def descendants(pid):
     children = {}
     for line in subprocess.run(["ps", "-axo", "pid=,ppid="], capture_output=True, text=True).stdout.splitlines():
@@ -61,7 +60,7 @@ def wait_ready(path, pid, log="", timeout=READY_TIMEOUT):
         deadline = time.monotonic() + timeout
         while not os.path.exists(path):
             if exited:
-                die(f"App 在画面就绪前退出了：崩溃报告在 ~/Library/Logs/DiagnosticReports/CuePad-*.ips{log and '，输出在 ' + log}")
+                die(f"App 在画面就绪前退出了：{log and '原因看输出 ' + log + ' 的末尾，'}崩了的话崩溃报告在 ~/Library/Logs/DiagnosticReports/CuePad-*.ips")
             left = deadline - time.monotonic()
             if left <= 0:
                 die(f"{timeout:g} 秒内画面没有就绪（没有写下 {path}）{log and '，输出在 ' + log}")

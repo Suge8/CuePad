@@ -70,4 +70,3 @@ private struct BoardRows: Layout {
     }
 }
 #endif
-
