@@ -101,7 +101,7 @@ struct TaskBubbleSlot: View {
 nonisolated struct BubbleData: Sendable, Equatable {
     var goal: Card
     var steps: [Card]
-    /// 子任务完成了几个（\`CueStore.subtaskProgress\`）；没有子任务为 nil。
+    /// 子任务完成了几个（`CueStore.subtaskProgress`）；没有子任务为 nil。
     var progress: TaskProgress?
     /// 在看板的哪一列（`TaskBoard.Column.of`，与看板同一条规则、同一份 `cueTally`）。
     var column: TaskBoard.Column

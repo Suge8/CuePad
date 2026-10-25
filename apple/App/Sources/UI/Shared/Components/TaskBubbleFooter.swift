@@ -24,7 +24,7 @@ struct BubbleFooter: View {
     }
 }
 
-/// 交给了会话的叶子此刻怎样（\`TaskAgentLook\`，两端同一份说法）：吉祥物（在做时轻轻浮动）、状态标与一句标题、一句进展；整条点了去会话。
+/// 交给了会话的叶子此刻怎样（`TaskAgentLook`，两端同一份说法）：吉祥物（在做时轻轻浮动）、状态标与一句标题、一句进展；整条点了去会话。
 private struct AgentStrip: View {
     let leaf: Card
     /// 有子任务的任务看的是哪一步（写在进展前面）。
@@ -118,7 +118,7 @@ private struct StartBar: View {
     }
 }
 
-/// 吉祥物的小像：透明底的图；在做时轻轻上下浮动（Core Animation，\`LoopLayer.float\`）。
+/// 吉祥物的小像：透明底的图；在做时轻轻上下浮动（Core Animation，`LoopLayer.float`）。
 private struct MascotFace: View {
     let mascot: Mascot
     let floats: Bool
