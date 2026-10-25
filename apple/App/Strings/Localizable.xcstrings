@@ -1061,7 +1061,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Can't answer now (%@). Answer once sync is back, or on the Mac."
+            "value" : "%@, can't answer now. Answer once sync is back, or on the Mac."
           }
         },
         "zh-Hans" : {
@@ -1557,9 +1557,21 @@
     "%lld 推进中" : {
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld Underway"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld underway"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld underway"
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
@@ -1857,9 +1869,21 @@
     "%lld 等你" : {
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld Needs You"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld needs you"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld need you"
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
@@ -1964,7 +1988,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "3D Model"
+            "value" : "3D model"
           }
         },
         "zh-Hans" : {
@@ -2216,7 +2240,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "You’ll get Lock Screen alerts when an Agent needs you or finishes, or when Cue replies."
+            "value" : "You’ll get Lock Screen alerts when an agent needs you or finishes, or when Cue replies."
           }
         },
         "zh-Hans" : {
@@ -2232,7 +2256,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "You won’t get Lock Screen alerts when an Agent needs you or finishes, or when Cue replies."
+            "value" : "You won’t get Lock Screen alerts when an agent needs you or finishes, or when Cue replies."
           }
         },
         "zh-Hans" : {
@@ -2264,7 +2288,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "New Agent session"
+            "value" : "New agent session"
           }
         },
         "zh-Hans" : {
@@ -2954,7 +2978,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mac is starting the Agent session…"
+            "value" : "Mac is starting the agent session…"
           }
         },
         "zh-Hans" : {
@@ -3132,7 +3156,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "iCloud Temporarily Unavailable"
+            "value" : "iCloud temporarily unavailable"
           }
         },
         "zh-Hans" : {
@@ -3164,7 +3188,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "iCloud Is Off"
+            "value" : "iCloud is off"
           }
         },
         "zh-Hans" : {
@@ -3180,7 +3204,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "iCloud Storage Full"
+            "value" : "iCloud storage full"
           }
         },
         "zh-Hans" : {
@@ -3196,7 +3220,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "iCloud Account Restricted"
+            "value" : "iCloud account restricted"
           }
         },
         "zh-Hans" : {
@@ -4356,7 +4380,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Handed off to Agent session “%1$@”: %2$@. Click to see progress."
+            "value" : "Handed off to agent session “%1$@”: %2$@. Click to see progress."
           }
         },
         "zh-Hans" : {
@@ -4672,7 +4696,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Session Name"
+            "value" : "Session name"
           }
         },
         "zh-Hans" : {
@@ -5852,7 +5876,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Notes: what should the Agent do?"
+            "value" : "Notes: what should the agent do?"
           }
         },
         "zh-Hans" : {
@@ -5943,12 +5967,28 @@
         }
       }
     },
+    "切换模型" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "switch models"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "切换模型"
+          }
+        }
+      }
+    },
     "切换项目（⌘1–9）" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Switch Project (⌘1–9)"
+            "value" : "Switch project (⌘1–9)"
           }
         },
         "zh-Hans" : {
@@ -6108,7 +6148,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Delete Comment"
+            "value" : "Delete comment"
           }
         },
         "zh-Hans" : {
@@ -6376,7 +6416,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Compact Context"
+            "value" : "Compact context"
           }
         },
         "zh-Hans" : {
@@ -6744,7 +6784,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Message Agent"
+            "value" : "Message agent"
           }
         },
         "zh-Hans" : {
@@ -7232,7 +7272,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sync Paused — Decision Needed"
+            "value" : "Sync paused — decision needed"
           }
         },
         "zh-Hans" : {
@@ -7504,7 +7544,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Go to Source"
+            "value" : "Go to source"
           }
         },
         "zh-Hans" : {
@@ -7520,7 +7560,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Jump to Latest"
+            "value" : "Jump to latest"
           }
         },
         "zh-Hans" : {
@@ -7552,7 +7592,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Back to Task"
+            "value" : "Back to task"
           }
         },
         "zh-Hans" : {
@@ -7584,7 +7624,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Back to Top"
+            "value" : "Back to top"
           }
         },
         "zh-Hans" : {
@@ -7671,6 +7711,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "回答上面的问题"
+          }
+        }
+      }
+    },
+    "回答提问" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "answer questions"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "回答提问"
           }
         }
       }
@@ -7808,7 +7864,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Image Missing"
+            "value" : "Image missing"
           }
         },
         "zh-Hans" : {
@@ -7904,7 +7960,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Start an Agent in a terminal on your Mac, or start a new session here"
+            "value" : "Start an agent in a terminal on your Mac, or start a new session here"
           }
         },
         "zh-Hans" : {
@@ -8640,7 +8696,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Subagents done, waiting for the Agent to continue"
+            "value" : "Subagents done, waiting for the agent to continue"
           }
         },
         "zh-Hans" : {
@@ -9024,7 +9080,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "In Review"
+            "value" : "In review"
           }
         },
         "zh-Hans" : {
@@ -9168,7 +9224,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Conversation Scrubber"
+            "value" : "Conversation scrubber"
           }
         },
         "zh-Hans" : {
@@ -9264,7 +9320,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Shows Projects and Progress"
+            "value" : "Shows projects and progress"
           }
         },
         "zh-Hans" : {
@@ -9328,7 +9384,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Handed Back"
+            "value" : "Handed back"
           }
         },
         "zh-Hans" : {
@@ -9908,7 +9964,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Answered. Waiting for the Agent on the Mac."
+            "value" : "Answered. Waiting for the agent on the Mac."
           }
         },
         "zh-Hans" : {
@@ -10172,7 +10228,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Turn them on to get Lock Screen alerts when an Agent needs you or finishes, or when Cue replies."
+            "value" : "Turn them on to get Lock Screen alerts when an agent needs you or finishes, or when Cue replies."
           }
         },
         "zh-Hans" : {
@@ -10380,13 +10436,29 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "To Reply"
+            "value" : "To reply"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "待回复"
+          }
+        }
+      }
+    },
+    "待回复的会话" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sessions to Reply"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "待回复的会话"
           }
         }
       }
@@ -10460,7 +10532,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Almost full. The Agent compacts automatically before it runs out."
+            "value" : "Almost full. The agent compacts automatically before it runs out."
           }
         },
         "zh-Hans" : {
@@ -10476,7 +10548,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Almost full. The Agent compacts automatically before it runs out, or you can compact now."
+            "value" : "Almost full. The agent compacts automatically before it runs out, or you can compact now."
           }
         },
         "zh-Hans" : {
@@ -10684,7 +10756,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Here you can only pick folders where an Agent has run on a Mac. Link other folders on your Mac."
+            "value" : "Here you can only pick folders where an agent has run on a Mac. Link other folders on your Mac."
           }
         },
         "zh-Hans" : {
@@ -10812,7 +10884,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Open the Agent session for this"
+            "value" : "Open the agent session for this"
           }
         },
         "zh-Hans" : {
@@ -10956,7 +11028,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Hand the task's notes to an Agent and start"
+            "value" : "Hand the task's notes to an agent and start"
           }
         },
         "zh-Hans" : {
@@ -11020,7 +11092,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Your Call"
+            "value" : "Your call"
           }
         },
         "zh-Hans" : {
@@ -11148,7 +11220,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Change Model"
+            "value" : "Change model"
           }
         },
         "zh-Hans" : {
@@ -11420,7 +11492,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%lld Underway"
+            "value" : "%lld underway"
           }
         },
         "zh-Hans" : {
@@ -11436,7 +11508,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%lld Underway"
+            "value" : "%lld underway"
           }
         },
         "zh-Hans" : {
@@ -11580,7 +11652,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Search %@ Sessions"
+            "value" : "Search %@ sessions"
           }
         },
         "zh-Hans" : {
@@ -11644,7 +11716,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Search Folders"
+            "value" : "Search folders"
           }
         },
         "zh-Hans" : {
@@ -11724,7 +11796,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Undo Complete"
+            "value" : "Undo complete"
           }
         },
         "zh-Hans" : {
@@ -11788,7 +11860,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Hide Original"
+            "value" : "Hide original"
           }
         },
         "zh-Hans" : {
@@ -11887,6 +11959,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "改于 %@"
+          }
+        }
+      }
+    },
+    "改会话名" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "rename sessions"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "改会话名"
           }
         }
       }
@@ -12163,12 +12251,28 @@
         }
       }
     },
+    "新开的会话" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New session"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "新开的会话"
+          }
+        }
+      }
+    },
     "新消息" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "New Messages"
+            "value" : "New messages"
           }
         },
         "zh-Hans" : {
@@ -12440,7 +12544,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Show or Hide Sidebar (⌃⌘S)"
+            "value" : "Show or hide sidebar (⌃⌘S)"
           }
         },
         "zh-Hans" : {
@@ -12824,7 +12928,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "New Reply"
+            "value" : "New reply"
           }
         },
         "zh-Hans" : {
@@ -13112,7 +13216,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mark as Complete"
+            "value" : "Mark as complete"
           }
         },
         "zh-Hans" : {
@@ -13128,7 +13232,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mark as Incomplete"
+            "value" : "Mark as incomplete"
           }
         },
         "zh-Hans" : {
@@ -13480,7 +13584,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sending to Agent"
+            "value" : "Sending to the agent"
           }
         },
         "zh-Hans" : {
@@ -13544,7 +13648,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Waking Agent"
+            "value" : "Waking the agent"
           }
         },
         "zh-Hans" : {
@@ -13608,7 +13712,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Turning On…"
+            "value" : "Turning on…"
           }
         },
         "zh-Hans" : {
@@ -13848,7 +13952,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Permanently delete “%@”?"
+            "value" : "Permanently Delete “%@”?"
           }
         },
         "zh-Hans" : {
@@ -13864,7 +13968,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Permanently delete everything in the Trash?"
+            "value" : "Permanently Delete Everything in the Trash?"
           }
         },
         "zh-Hans" : {
@@ -14072,7 +14176,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Not Syncing"
+            "value" : "Not syncing"
           }
         },
         "zh-Hans" : {
@@ -14200,7 +14304,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No ideas or tasks found"
+            "value" : "No Ideas or Tasks Found"
           }
         },
         "zh-Hans" : {
@@ -14360,7 +14464,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Couldn’t Save"
+            "value" : "Couldn’t save"
           }
         },
         "zh-Hans" : {
@@ -14376,7 +14480,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Couldn’t Set Up iCloud Alerts"
+            "value" : "Couldn’t set up iCloud alerts"
           }
         },
         "zh-Hans" : {
@@ -14392,7 +14496,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Couldn’t Register for Push"
+            "value" : "Couldn’t register for push"
           }
         },
         "zh-Hans" : {
@@ -14488,7 +14592,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Couldn't reach Agent"
+            "value" : "Couldn't reach the agent"
           }
         },
         "zh-Hans" : {
@@ -14760,7 +14864,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Light Bulb"
+            "value" : "Light bulb"
           }
         },
         "zh-Hans" : {
@@ -14927,6 +15031,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "现在"
+          }
+        }
+      }
+    },
+    "现在压缩" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Compact Now"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "现在压缩"
           }
         }
       }
@@ -15240,7 +15360,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Opens the Agent session"
+            "value" : "Opens the agent session"
           }
         },
         "zh-Hans" : {
@@ -15272,7 +15392,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Show Cue's Original Message"
+            "value" : "Show Cue's original message"
           }
         },
         "zh-Hans" : {
@@ -15304,7 +15424,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Show All Projects"
+            "value" : "Show all projects"
           }
         },
         "zh-Hans" : {
@@ -15320,7 +15440,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "What you see may be out of date, and messages can't reach the Mac"
+            "value" : "what you see may be out of date, and messages can't reach the Mac"
           }
         },
         "zh-Hans" : {
@@ -15496,7 +15616,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Remove Image"
+            "value" : "Remove image"
           }
         },
         "zh-Hans" : {
@@ -15735,13 +15855,13 @@
               "one" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "Awaiting %lld Subagent"
+                  "value" : "Awaiting %lld subagent"
                 }
               },
               "other" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "Awaiting %lld Subagents"
+                  "value" : "Awaiting %lld subagents"
                 }
               }
             }
@@ -15867,13 +15987,13 @@
               "one" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%lld Needs You"
+                  "value" : "%lld needs you"
                 }
               },
               "other" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%lld Need You"
+                  "value" : "%lld need you"
                 }
               }
             }
@@ -15892,7 +16012,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Needs Your Answer"
+            "value" : "Needs your answer"
           }
         },
         "zh-Hans" : {
@@ -15908,7 +16028,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Needs Your Call"
+            "value" : "Needs your call"
           }
         },
         "zh-Hans" : {
@@ -15924,7 +16044,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Needs Your OK"
+            "value" : "Needs your OK"
           }
         },
         "zh-Hans" : {
@@ -15956,7 +16076,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Awaiting Subagents"
+            "value" : "Awaiting subagents"
           }
         },
         "zh-Hans" : {
@@ -16404,7 +16524,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Web Page"
+            "value" : "Web page"
           }
         },
         "zh-Hans" : {
@@ -16848,7 +16968,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Asks your Mac to start an Agent session"
+            "value" : "Asks your Mac to start an agent session"
           }
         },
         "zh-Hans" : {
@@ -16864,7 +16984,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Add a Memory"
+            "value" : "Add a memory"
           }
         },
         "zh-Hans" : {
@@ -16880,7 +17000,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Jot down an idea"
+            "value" : "Jot Down an Idea"
           }
         },
         "zh-Hans" : {
@@ -17088,7 +17208,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Your Turn"
+            "value" : "Your turn"
           }
         },
         "zh-Hans" : {
@@ -18016,7 +18136,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No folders have run an Agent on a Mac yet. Link one to a project on your Mac, or run pi in that folder once."
+            "value" : "No folders have run an agent on a Mac yet. Link one to a project on your Mac, or run pi in that folder once."
           }
         },
         "zh-Hans" : {
@@ -18064,7 +18184,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Notifications Not Turned On"
+            "value" : "Notifications not turned on"
           }
         },
         "zh-Hans" : {
@@ -18464,7 +18584,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Answer this question in the Agent's terminal"
+            "value" : "Answer this question in the agent's terminal"
           }
         },
         "zh-Hans" : {
@@ -18848,7 +18968,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Update CuePad on This Device"
+            "value" : "Update CuePad on this device"
           }
         },
         "zh-Hans" : {
@@ -18960,7 +19080,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Progress: Board and Sessions (⌘⇧T)"
+            "value" : "Progress: board and sessions (⌘⇧T)"
           }
         },
         "zh-Hans" : {
@@ -18976,7 +19096,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "In Progress"
+            "value" : "In progress"
           }
         },
         "zh-Hans" : {
@@ -19040,7 +19160,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Can’t Reach iCloud"
+            "value" : "Can’t reach iCloud"
           }
         },
         "zh-Hans" : {
@@ -19472,7 +19592,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Notifications Are Off"
+            "value" : "Notifications are off"
           }
         },
         "zh-Hans" : {
@@ -19536,7 +19656,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "All caught up"
+            "value" : "All Caught Up"
           }
         },
         "zh-Hans" : {
@@ -19856,7 +19976,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Quick Note"
+            "value" : "Quick note"
           }
         },
         "zh-Hans" : {

@@ -18,7 +18,7 @@ nonisolated extension PiShown {
         case .unread: String(localized: "有新回复")
         case .idle: String(localized: "该你了")
         case .resting: String(localized: "歇着")
-        case .fresh: String(localized: "新会话")
+        case .fresh: String(localized: "新开的会话")
         case .ended: String(localized: "已结束")
         case .interrupted: String(localized: "被打断")
         case .unknown: String(localized: "未知状态")
