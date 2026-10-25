@@ -6,6 +6,7 @@ import Foundation
 /// - 待办：没做完、Cue 也没在做的顶层任务（没开始的，和开始过而会话都结束了的），项目顺序、同级手动顺序（拖动排序只在同一项目的顶层里挪，`move`）。
 /// - 推进中、等你：就是 `CueStore.cueTally`（Cue 那一行的同一份），"全部"下列头的数与它相等；没绑没做完的任务的活会话在「推进中」里各一张。
 ///   等你两种都放：拍板在前（与 Cue 页拍板卡同一份，`waits`），待回复在后（`replies`），各自等得最久的在上；没落在任务上的（Cue 的一般提问、没绑任务的会话）也在。
+///   列里一件一张卡（`held`）：同一件任务上的几件等你收进一张，列头的数仍数条（"等你 N"，与各处相等）。
 /// - 已完成：今天做完的顶层任务（`CueStore.tasksDone`），最近的在前；更早做完的收在列末（`earlier`），没进归档，所以就地展开，不跳去归档页。
 ///   每件带上 Cue 做完时点名的第一张成果图（`CueStore.cueResultShots`，读的时候一次取齐，不逐行查库）。
 /// 子任务不单列，卡片写进度；会话此刻在做什么看任务此刻干活的叶子（`Item.leaf`）。顶层的口径同 `CueStore.taskCounts`（`TaskTree` 的顶层）。
@@ -92,6 +93,47 @@ nonisolated struct TaskBoard: Sendable, Equatable {
 
         /// 按项目筛时归哪个项目：绑着的任务的项目，否则会话的归处（`home`）。
         var project: UUID { item?.task.projectID ?? TaskBoard.home(reply.session) }
+    }
+
+    /// 等你列的一张卡：一件任务一张，落在它上面的拍板与待回复都收在这里（换列不换名字）；没落在任务上的各一张。
+    struct Held: Identifiable, Sendable, Equatable {
+        var item: Item?
+        /// 等得最久的在前。
+        var waits: [Wait]
+        var replies: [Reply]
+
+        var id: String { item.map { "task/\($0.id)" } ?? waits.first?.id ?? replies.first?.id ?? "" }
+        /// 有一件拍板就是拍板（赭黄问号），只剩待回复是待回复（墨点）。
+        var deciding: Bool { !waits.isEmpty }
+        /// 收了几件（卡上大于 1 才写）。
+        var count: Int { waits.count + replies.count }
+        /// 卡上写的名字：这件事本身——任务名，没绑任务的会话写会话名，不落在任务上的 Cue 提问写它要做的事（`CueAsking.action`）。
+        var title: String {
+            if let item { return item.task.title }
+            if let wait = waits.first {
+                switch wait.wait {
+                case .message(let message, _): return message.asking?.action ?? message.headline ?? ""
+                case .session(let session, _): return session.title
+                }
+            }
+            return replies.first?.session.title ?? ""
+        }
+        var project: UUID? { item?.task.projectID ?? waits.first?.project ?? replies.first?.project }
+    }
+
+    /// 等你列的卡：拍板的卡在前、只剩待回复的在后，各按里面等得最久的那件排（`waiting`、`replies` 本来就是这个顺序）。
+    var held: [Held] {
+        var cards: [Held] = [], index: [UUID: Int] = [:]
+        func add(_ item: Item?, _ fill: (inout Held) -> Void) {
+            if let id = item?.id, let at = index[id] { return fill(&cards[at]) }
+            var card = Held(item: item, waits: [], replies: [])
+            fill(&card)
+            if let id = item?.id { index[id] = cards.count }
+            cards.append(card)
+        }
+        for wait in waiting { add(wait.item) { $0.waits.append(wait) } }
+        for reply in replies { add(reply.item) { $0.replies.append(reply) } }
+        return cards
     }
 
     var todo: [Item]

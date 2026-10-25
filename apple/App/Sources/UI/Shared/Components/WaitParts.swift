@@ -1,21 +1,13 @@
 import CueStore
 import SwiftUI
 
-/// 一件拍板（`TaskBoard.Wait`，出自 `CueStore.cueTally`）写什么都从这里取：进展页等你列的卡（`BoardWaitCard`，`brief`）、Cue 页拍板卡（`CueWaitDock`：
-/// 眉题 `CueWaitEyebrow` 的 `title`，问句 `CueWaitQuestion` 的 `asked`），怎么答是 `WaitAnswer`。
+/// 一件拍板（`TaskBoard.Wait`，出自 `CueStore.cueTally`）在 Cue 页拍板卡（`CueWaitDock`）上写什么：眉题 `CueWaitEyebrow` 的 `title`，
+/// 问句 `CueWaitQuestion` 的 `asked`（进展页悬停的问句也是它）；怎么答是 `WaitAnswer`。进展页的卡写什么在 `TaskBoard.Held`。
 nonisolated extension TaskBoard.Wait {
     /// 哪件事：会话在问的写会话名（点了进的就是它），Cue 问的写落在的任务，没落在任务上的写 Cue 的名字。
     func title(cue: String) -> String {
         if case .session(let session, _) = wait { return session.title }
         return item?.task.title ?? cue
-    }
-
-    /// 看板卡上的短事由：Cue 的提问是它要做的那件事（`CueAsking.action`，不套"可以……吗？"；认不出类别的旧提问用问句），会话在问的是会话名。
-    var brief: String {
-        switch wait {
-        case .message(let message, _): message.asking?.action ?? message.headline ?? ""
-        case .session(let session, _): session.title
-        }
     }
 
     /// 眉题写哪个项目：落在的任务或会话的项目，Cue 的一般提问是它问时的范围。

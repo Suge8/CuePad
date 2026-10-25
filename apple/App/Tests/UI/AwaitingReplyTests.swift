@@ -44,6 +44,7 @@ struct AwaitingReplyTests {
         let board = try await TaskBoard.read(from: store)
         #expect(board.waiting.map(\.id) == ["session/deploy"] && board.replies.map(\.id) == ["reply/glass", "reply/header"])
         #expect(board.replies.first?.item?.task.id == dock.id && !board.advancing.contains { $0.item?.id == dock.id })  // 被待回复占着：只在等你
+        #expect(board.held.map(\.title) == ["deploy", "底栏换玻璃", "打磨手机 Cue 顶栏"] && board.held.map(\.deciding) == [true, false, false])  // 写这件事本身的名字
         let digest = try await CueDigest.read(from: store)
         #expect(board.count(.waiting) == 3 && digest.waiting == 3)  // "等你 N"两种一起数
         var cue = try await now()
