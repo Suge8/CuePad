@@ -3,7 +3,8 @@ import CueStore
 import SwiftUI
 
 /// 工具栏右上的"⋯"：当前页的操作，只放页上已有的动作；没有可放的页（归档）钮停用、同系统停用的控件那样变淡（与可用时一个样子，点了没反应像是坏了）。
-/// 其余页（归档）没有可放的，钮停用、同系统停用的控件那样变淡（与可用时一个样子，点了没反应像是坏了）。
+/// 编辑页开着（`Workspace.openCard`，盖在项目页上）时是这张卡的操作，编辑页里不另放"⋯"：卡由这里按 `openCard` 自己从库里读（`observing`），
+/// 没读到时钮停用。
 /// 菜单项不按页面数据置灰：菜单拿不到页面读的库，抄一份过来就是第二个事实源；没有可归档、可清空的时候点了什么也不发生。
 /// 它是单独的工具栏项、不共用系统的玻璃底（`sharedBackgroundVisibility(.hidden)`），圆钮的玻璃自己画，与"收起"同一种做法。
 /// 左沿报给看板段的列头（`MacPages.moreEdge`）：它下面的列头到它前面止。
@@ -11,10 +12,15 @@ import SwiftUI
 /// 会话页的钮跟着页面就在，菜单里的会话项等页面交来的值、并晚于标题两帧（`showsMenu`）。
 struct PageMenuSlot: View {
     @Environment(Workspace.self) private var workspace
+    @Environment(AppServices.self) private var services
+    /// 编辑页开着的那张卡（外层 nil 是还没读到；不是编辑页时读出的是 nil）。
+    @State private var opened: Card??
 
     private enum Content: Equatable {
         /// 会话页；页面还没交来值时是 nil。
         case session(SessionHeader.State?)
+        /// 编辑页开着：这张卡的操作；还没读到时是 nil。
+        case card(Card?)
         case project(UUID)
         case cue
         case progress
@@ -24,6 +30,7 @@ struct PageMenuSlot: View {
         var help: LocalizedStringResource {
             switch self {
             case .session: "完成或绑定任务、重命名、跳到终端、结束会话"
+            case .card: "置顶、移到项目、复制、归档、删除"
             case .project: "选择灵感、看这个项目的会话、项目操作"
             case .cue: "记得什么"
             case .progress: "新任务、新会话、项目范围、搜索、归档做完的、接入 Agent"
@@ -34,7 +41,8 @@ struct PageMenuSlot: View {
     }
 
     private var content: Content {
-        switch workspace.root {
+        if let id = workspace.openCard { return .card((opened ?? nil).flatMap { $0.id == id ? $0 : nil }) }
+        return switch workspace.root {
         case .session: .session(workspace.shownSessionHeader)
         case .project(let id): .project(id)
         case .cue: .cue
@@ -49,6 +57,7 @@ struct PageMenuSlot: View {
         Menu {
             switch content {
             case .session(let state?): if state.showsMenu { SessionMenuItems(state: state) }
+            case .card(let card?): CardActions(card: card, more: true)
             case .project(let id): ProjectMenuItems(projectID: id)
             case .cue:
                 Button("\(workspace.cue.name) 记得什么", icon: .memory) { workspace.cue.showsMemory = true }
@@ -68,7 +77,7 @@ struct PageMenuSlot: View {
                 Button("接入 Agent…", icon: .extensionNote) { workspace.showsSetup = true }
             case .trash:
                 Button("清空回收站…", icon: .trash, role: .destructive) { workspace.confirmsEmptyTrash = true }
-            case .session(nil), .none: EmptyView()
+            case .session(nil), .card(nil), .none: EmptyView()
             }
         } label: {
             // 看板段选了项目范围（范围收在这里）：钮角上带这个项目的小图形，一眼看得出只在看一个项目
@@ -83,9 +92,12 @@ struct PageMenuSlot: View {
         .fixedSize()
         .background { WindowEdge(\.minX) { workspace.pages.moreEdge = $0 } }
         .padding(.leading, Spacing.toolbarGap)
-        .disabled(content == .none)
+        .disabled(content == .none || content == .card(nil))
         .help(content.help)
         .accessibilityLabel("更多")
+        .observing(services.store, id: workspace.openCard, into: $opened, onError: workspace.fail) { [id = workspace.openCard] store in
+            try id.flatMap { try store.card($0) }
+        }
     }
 }
 

@@ -3,12 +3,12 @@ import Foundation
 
 /// 随手记的文案（Mac 底部输入栏与菜单栏面板；手机上随手记在"对 Cue 说"里长按发送"只记下"）：记下的都是灵感；落点写在头部的胶囊上，
 /// 占位只写"记下灵感"，只有 Mac 底部输入栏收成一行（没有胶囊）时占位带上落点；记下后的提示写明落点，点它去那里。
-/// Mac 上 ↩ 是换行、⌘↩ 才记下，占位里写明。
+/// Mac 上 ↩ 是换行、⌘↩ 才记下，占位里括号写快捷键（不再说一遍"记下"）。
 nonisolated enum CaptureCopy {
     #if os(macOS)
-    static var prompt: String { String(localized: "记下灵感（⌘↩ 记下）") }
+    static var prompt: String { String(localized: "记下灵感（⌘↩）") }
 
-    static func placeholder(to destination: String) -> String { String(localized: "记下灵感 → \(destination)（⌘↩ 记下）") }
+    static func placeholder(to destination: String) -> String { String(localized: "记下灵感 → \(destination)（⌘↩）") }
     #else
     static var prompt: String { String(localized: "记下灵感") }
 
