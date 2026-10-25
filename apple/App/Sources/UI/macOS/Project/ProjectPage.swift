@@ -2,7 +2,7 @@
 import CueStore
 import SwiftUI
 
-/// 项目页（与手机项目页同构）：最上面一行项目的一句介绍（没有就没有这一行）→ 任务那张纸（`FocusBand`）→ 置顶的灵感 → 工作集卡片墙 → 更早；一条灵感都没有时墙上只有"记一条灵感"那一格（`NewIdeaTile`）。
+/// 项目页（与手机项目页同构）：最上面一行项目的一句介绍（没有就没有这一行）→ 任务那张纸（`FocusBand`）→ 置顶的灵感 → 工作集卡片墙 → 更早；一条灵感都没有时墙上只有说现状的那一格（`EmptyWallTile`，记灵感在底部随手记）。
 /// 不写项目名作大标题：侧栏开着时名字就在选中的那一行，收起时工具栏的切换胶囊写它（`ProjectSwitcher`）。文件夹在哪写在"⋯"里文件夹那一组的组头（`ProjectActions`）。
 struct ProjectPage: View {
     let projectID: UUID
@@ -99,7 +99,7 @@ struct ProjectPage: View {
         if stage >= .wall {
             if data.cards.isEmpty {
                 MasonryLayout(minColumnWidth: Self.minColumnWidth, maxColumns: Self.maxColumns, spacing: Self.wallSpacing) {
-                    NewIdeaTile(action: workspace.focusCapture)
+                    EmptyWallTile()
                 }
             } else {
                 if !arrangement.pinned.isEmpty { pinned(arrangement.pinned.compactMap { byID[$0] }, lastTarget: lastTarget) }

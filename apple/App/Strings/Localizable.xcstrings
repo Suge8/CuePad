@@ -17203,34 +17203,34 @@
         }
       }
     },
-    "记下灵感 → %@（⌘↩ 记下）" : {
+    "记下灵感 → %@（⌘↩）" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Jot down an idea → %@ (⌘↩ to save)"
+            "value" : "Jot down an idea → %@ (⌘↩)"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "记下灵感 → %@（⌘↩ 记下）"
+            "value" : "记下灵感 → %@（⌘↩）"
           }
         }
       }
     },
-    "记下灵感（⌘↩ 记下）" : {
+    "记下灵感（⌘↩）" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Jot down an idea (⌘↩ to save)"
+            "value" : "Jot down an idea (⌘↩)"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "记下灵感（⌘↩ 记下）"
+            "value" : "记下灵感（⌘↩）"
           }
         }
       }
@@ -19199,6 +19199,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "这条提问已经结束了"
+          }
+        }
+      }
+    },
+    "这里还没有灵感" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No ideas here yet"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这里还没有灵感"
           }
         }
       }
