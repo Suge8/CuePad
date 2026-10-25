@@ -8,10 +8,10 @@ import Testing
 @testable import CuePad
 
 extension CueHostTests {
-    /// Cue 请你允许推送；你选"以后推送代码都不用问"后 Cue 被唤醒，回答写成 Cue 说的，允许清单记上推送（不进记忆）；
-    /// 它再问推送就被拒、叫它直接做。回答你的一轮只响一次：问你的那一轮响的是"等你"（正文是要你定什么），那一轮的回复不再响；
+    /// Cue 请你允许推送；你选"以后推送代码都不用问"后 Cue 被唤醒，回答写成 Cue 说的，记忆里多一条你说的、一直记着的原话
+    /// （不用先问的例外只在记忆里）。回答你的一轮只响一次：问你的那一轮响的是"等你"（正文是要你定什么），那一轮的回复不再响；
     /// 你选完它回的那一轮照常响它的原话（你说完多半已离开 App）。
-    @Test func 等你被回答_Cue被唤醒_以后都不用问记进允许清单() async throws {
+    @Test func 等你被回答_Cue被唤醒_以后都不用问记成一直记着的记忆() async throws {
         let rig = try await Rig()
         try await rig.say("请问我一个问题")
         let question = try await rig.message(.cue, containing: "要推送吗？")
@@ -22,9 +22,8 @@ extension CueHostTests {
         try await eventually("每一轮响一次") {
             rig.notifier.posted.map(\.body) == ["可以推送登录页的修复吗？\n可以 / 以后推送代码都不用问", "知道了：以后推送代码都不用问"]
         }
-        #expect(try await rig.store.cueProfile()?.allows == [CueAllow(.push, project: nil)])
-        #expect(try await rig.store.cueMemory().lines.isEmpty)
-        await #expect(throws: CueStoreError.alreadyAllowed(nil)) { try await rig.store.addCueMessage(.cue, text: "又要推送吗？", ask: try CueAsking(.push, action: "推送修复")) }
+        let lines = try await rig.store.cueMemory().lines
+        #expect(lines.map(\.text) == ["以后推送代码都不用问"] && lines.allSatisfy { $0.pinned && $0.source == .known(.you) })
         await rig.stop()
     }
 

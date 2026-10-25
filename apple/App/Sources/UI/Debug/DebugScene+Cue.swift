@@ -10,7 +10,7 @@ import Foundation
 /// `-CuePadWaitKinds YES`：等你里各种问题都有（Cue 把 homepage 的选择题、deploy 的确认题、rename 的文字题留给你答），对话都看过了、页停在最新处。
 /// `-CuePadReplies <N>`：Cue 把歇着的会话留给你回（待回复，等你卡上方那条提示，`CueReplyTip`）：1 是 notes，2 起另加十几分钟前歇下的 glass。
 /// 配 fresh 时 notes-edit 也结束，没有拍板：名牌说几个会话待回复。
-/// `-CuePadCuePresence <fresh|answered|thinking|tool|woke|sending|asleep|disabled>`：fresh 是刚启用、还没说过话（空态里那几句能直接说的话，`CueStarters`）；answered 是"等你"那一条你选了"可以"（回到对话里、带着你的回答），
+/// `-CuePadCuePresence <unchosen|fresh|answered|thinking|tool|woke|sending|asleep|disabled>`：unchosen 是还没选过在哪台 Mac 上运行（演示的几台 Mac 都在，手机 Cue 面板就地选）；fresh 是刚启用、还没说过话（空态里那几句能直接说的话，`CueStarters`）；answered 是"等你"那一条你选了"可以"（回到对话里、带着你的回答），
 /// 之后你又说了一句、Cue 跑了一轮（碰到 5 处，经过折起）、连着回了两句（看问询回到对话里的样子、一串气泡）；你的最后一句已交给 Cue（气泡旁的纸飞机）、它在想（thinking）或在用工具（tool：经过碰到 3 处、还在往下长，末行是此刻在做的）、Cue 自己醒来的一轮还在跑（woke：醒来那一行下面挂这一轮的经过，碰到 4 处，折成 2 处、"还有 2 处"与在跑那一行；改过又看过的那件写"修改"）、
 /// 刚说的还没交出去（sending：话在路上，时限内气泡转圈）、
 /// 演示 Mac 不在线、两分钟前说的一直没交出去（asleep：它在睡觉，气泡过了等回执的时限 `Speech.receiptLimit`、没能送达可重发；
@@ -21,6 +21,7 @@ extension DebugScene {
         let store = services.store
         guard (try? await store.cueMessages(limit: 1).isEmpty) == true else { return }
         let presence = defaults.string(forKey: "CuePadCuePresence")
+        if presence == "unchosen" { return }
         // "运行情况"只在 Cue 值班的这台 Mac 上有：cuerun 让它运行在这台（大脑在隔离目录里起不来，几轮是空的或出错）
         #if os(macOS)
         let host = scene == "cuerun" ? services.hostID : "demo-mac"

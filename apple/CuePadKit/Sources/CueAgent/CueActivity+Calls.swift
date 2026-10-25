@@ -67,7 +67,6 @@ extension CueActivity {
       case "note", "pin": return "记下"
       case "forget": return "忘掉一条"
       case "remind": return "定提醒"
-      case "allow": return "改允许清单"
       default: return "用记忆"
       }
     case "bash": return line(tool, args.line("command"))
@@ -102,9 +101,6 @@ extension CueActivity {
       case "note": return item(.other, "记下：\(args.line("text") ?? "")")
       case "remind": return item(.other, "提醒：\(args.line("text") ?? "")")
       case "zoom": return item(.read, "翻记忆")
-      case "allow":
-        let ask = args.line("ask").map { CueAsk(rawValue: $0)?.name ?? $0 } ?? ""
-        return item(.other, "允许清单：\(ask)" + ((args.raw["allowed"] as? Bool) == false ? "又要先问" : "以后不用问"))
       case "forget": return item(.other, "忘掉一条记忆")
       case "pin": return item(.other, (args.raw["pinned"] as? Bool) == false ? "一条记忆不再一直记着" : "一条记忆一直记着")
       default: return item(.other, "memory")
