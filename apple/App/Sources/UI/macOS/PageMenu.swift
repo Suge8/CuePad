@@ -6,6 +6,7 @@ import SwiftUI
 /// 其余页（归档）没有可放的，钮停用、同系统停用的控件那样变淡（与可用时一个样子，点了没反应像是坏了）。
 /// 菜单项不按页面数据置灰：菜单拿不到页面读的库，抄一份过来就是第二个事实源；没有可归档、可清空的时候点了什么也不发生。
 /// 它是单独的工具栏项、不共用系统的玻璃底（`sharedBackgroundVisibility(.hidden)`），圆钮的玻璃自己画，与"收起"同一种做法。
+/// 左沿报给看板段的列头（`MacPages.moreEdge`）：它下面的列头到它前面止。
 /// 钮在每一页都在、只随页面置灰：工具栏项的尺寸一变整条工具栏重排（一次进出会话页约占动作后主线程 CPU 的三分之一到一半）。
 /// 会话页的钮跟着页面就在，菜单里的会话项等页面交来的值、并晚于标题两帧（`showsMenu`）。
 struct PageMenuSlot: View {
@@ -80,6 +81,8 @@ struct PageMenuSlot: View {
         .menuStyle(.button).menuIndicator(.hidden)
         .buttonStyle(ControlButtonStyle(kind: .circular))
         .fixedSize()
+        .background { WindowEdge(\.minX) { workspace.pages.moreEdge = $0 } }
+        .padding(.leading, Spacing.toolbarGap)
         .disabled(content == .none)
         .help(content.help)
         .accessibilityLabel("更多")

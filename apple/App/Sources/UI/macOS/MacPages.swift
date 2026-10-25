@@ -18,8 +18,10 @@ final class MacPages {
     @ObservationIgnored private var trimTask: Task<Void, Never>?
     static let keptPages = 4
 
-    /// 窗口最顶那一排左上的两段分段（`PanesSlot`）右沿在窗口里的横坐标：看板段待办的列头从它右边起（`boardTopRow`）。
+    /// 窗口最顶那一排左上的两段分段（`PanesSlot`）右沿在窗口里的横坐标：它下面的列头从它右边起（`boardTopRow`）。
     var panesEdge: CGFloat = 0
+    /// 右上"⋯"（`PageMenuSlot`）左沿在窗口里的横坐标：它下面的列头到它前面止（`boardTopRow`）。
+    var moreEdge: CGFloat = 0
 
     /// 开合侧栏时随侧栏滑的那些图层（`SidebarSlide`）。
     let slide = SidebarSlide()

@@ -90,6 +90,8 @@ enum Spacing {
     static let sectionTitle: CGFloat = 12
     /// 工具栏里自绘控件的高度：与系统工具栏的圆钮同高。
     static let toolbarControl: CGFloat = 36
+    /// 工具栏里相邻两块自绘的玻璃之间：不共用系统玻璃底的项，系统不给留空。
+    static let toolbarGap: CGFloat = 8
     /// 侧栏行高。
     static let sidebarRow: CGFloat = 32
     /// 侧栏行首的图标列（项目图标、会话状态标在里面居中）。
