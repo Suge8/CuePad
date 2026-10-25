@@ -38,6 +38,10 @@ final class SettingsWindowController {
         }
         tabs.selectedTabViewItemIndex = Self.index(pane)
         let window = WindowFactory.settings(tabs)
+        // 这一页的高度要等窗口装上工具栏、排过一遍才算准（顶上让出工具栏）；不先按它定好，窗口从默认大小动画长到这一页的高度，
+        // 途中内容高过窗口、滚动条闪出来
+        window.contentView?.layoutSubtreeIfNeeded()
+        window.setContentSize(tabs.tabViewItems[Self.index(pane)].viewController!.preferredContentSize)
         window.center()
         built = (window, tabs)
         return (window, tabs)

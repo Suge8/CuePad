@@ -35,6 +35,15 @@ struct SettingsView: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
+        WholePointHeight {
+            form
+        }
+        .frame(width: 520)
+        // 与主窗口同一种桌面色，不用系统的白底
+        .background(palette.desk)
+    }
+
+    private var form: some View {
         Form {
             switch pane {
             case .general: GeneralSections()
@@ -48,10 +57,19 @@ struct SettingsView: View {
         .formStyle(.grouped)
         .font(Typography.body)
         .scrollContentBackground(.hidden)
-        .fixedSize(horizontal: false, vertical: true)
-        .frame(width: 520)
-        // 与主窗口同一种桌面色，不用系统的白底
-        .background(palette.desk)
+    }
+}
+
+/// 这一页按内容的理想高度排、高度进到整点：窗口只能是整点高，半点高的内容（行高常是 x.5）让窗口进位后，
+/// 表单的滚动区按进位后的窗口让出半点上下边距、内容又按整点排，多出半点可滚，窗口一出现滚动条就闪出来。
+private struct WholePointHeight: Layout {
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let ideal = subviews[0].sizeThatFits(ProposedViewSize(width: proposal.width, height: nil))
+        return CGSize(width: ideal.width, height: ideal.height.rounded(.up))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews[0].place(at: bounds.origin, proposal: ProposedViewSize(bounds.size))
     }
 }
 
