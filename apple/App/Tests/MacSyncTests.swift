@@ -102,7 +102,8 @@ struct MacSyncTests {
         services.startSync()
         defer { services.cancelBackgroundWork() }
         // 启动后的第一次拉也走立即同步
-        try await eventually("启动后拉一次") { rig.sync.started == 1 && rig.sync.syncNows == 1 }
+        // 等那一次立即同步返回：还没返回时再要立即同步的等它，不另拉
+        try await eventually("启动后拉一次") { rig.sync.started == 1 && rig.sync.syncNows == 1 && !services.isSyncingNow }
 
         rig.wakeCenter.post(name: NSWorkspace.didWakeNotification, object: nil)
 
