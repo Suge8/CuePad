@@ -6,7 +6,7 @@ import AppKit
 /// - `pinch:x,y,倍数` 触控板捏合（大于 1 是放大，约半秒）；`smart:x,y` 智能缩放（双指轻点两下）；
 /// - `swipe:x,y,dx,dy` 触控板双指滑动（dx、dy 是手指走的点数，往右、往下为正；约 0.3 秒，没有惯性）：翻页照真的走；
 ///   滚动视图自己的滚动（放大后的图双指看图）合成不了——系统的滚动视图在别的线程按窗口服务器送来的滑动滚（responsive scrolling），不认合成的；
-///   放大后看图用 `drag`；
+///   放大后看图用 `drag`；`jump:x,y,dy` 让那一点的滚动视图当场往下挪 dy 点（不是手势，只为把内容摆到后面，如 PDF 翻到后页）；
 /// - `left`、`right`、`space` 按一下那个键；`wait:秒` 多等一会儿；
 /// - `measure:标签` 起量、`measure` 收：这一段主线程的掉帧（display link 的回调间隔，`FrameRecorder`）与进程执行的指令数，
 ///   写一行 `PREVIEW-MEASURE 标签 {json}` 进日志（前后两个检出跑同一串步骤对比）。
@@ -47,6 +47,12 @@ extension DebugScene {
                 send(magnify(n[0], n[1], in: window, phase: 2, by: per))
             }
             send(magnify(n[0], n[1], in: window, phase: 4, by: 0))
+        case ("jump", 3):
+            guard let scroll = window.contentView?.superview?.hitTest(NSPoint(x: n[0], y: window.frame.height - n[1]))?.enclosingScrollView else { break }
+            var origin = scroll.contentView.bounds.origin
+            origin.y += scroll.contentView.isFlipped ? n[2] : -n[2]
+            scroll.contentView.scroll(to: origin)
+            scroll.reflectScrolledClipView(scroll.contentView)
         case ("smart", 2):
             send(cgEvent(n[0], n[1], in: window) { $0.type = Self.gestureType; $0.setIntegerValueField(Self.gestureSubtype, value: 22) })
         case ("swipe", 4):

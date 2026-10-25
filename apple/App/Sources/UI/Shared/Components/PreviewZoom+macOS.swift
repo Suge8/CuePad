@@ -109,9 +109,8 @@ final class PreviewZoom: NSScrollView, PreviewShowing {
 
     /// 关上那一刻屏上的样子：画面在窗口里露出的那一块（放大了只是它在滚动视图里看得见的那截），与它是整张图的哪一截。
     func shown(in window: NSWindow) -> PreviewShown {
-        guard let contents = canvas.layer?.contents else { return .opened }
         let picture = canvas.convert(canvas.bounds, to: nil), visible = picture.intersection(convert(bounds, to: nil))
-        guard !visible.isEmpty else { return .elsewhere }
+        guard let contents = canvas.layer?.contents, !visible.isEmpty else { return .opened }
         // 单位坐标的 y 与窗口一样朝上
         let shown = CGRect(
             x: (visible.minX - picture.minX) / picture.width, y: (visible.minY - picture.minY) / picture.height,

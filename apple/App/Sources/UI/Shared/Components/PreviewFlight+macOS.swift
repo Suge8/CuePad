@@ -52,24 +52,23 @@ import SwiftUI
         }
     }
 
-    /// 要关上（`previewPresenter` 的关法都经这里）：内容当场藏起，翻到的那一份从屏上此刻的样子缩回它的缩略图（`PreviewShown`）。
+    /// 要关上（`previewPresenter` 的关法都经这里）：翻到的那一份从屏上此刻的样子（`PreviewShown`）缩回它的缩略图；
+    /// 飞的那层铺上时才藏内容，没得飞（缩略图不在屏上、减弱动态效果）就留着内容随浮层淡出。
     func land() {
-        guard let stage, let window = stage.window else { return }
-        // 先量：内容一藏，屏上的样子就量不到了
+        guard let stage, let window = stage.window, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
+              let (source, to) = source(stage.key, in: window) else { return }
         let shown = shows[stage.key.preview]?.value?.shown(in: window) ?? .opened
         let place = stage.place
-        stage.landed(false)
-        guard !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion, let (source, to) = source(stage.key, in: window) else { return }
         Task {
             let start: (Any, Frame)
             switch shown {
-            case .elsewhere: return
             case .picture(let contents, let frame): start = (contents, frame)
             case .opened:
                 guard let image = await source.image() else { return }
                 start = (image, Frame(rect: place.rect(aspect: source.aspect ?? Flight.aspect(of: image))))
             }
             guard let flight = Flight(start.0, from: start.1, to: Frame(rect: to, radius: source.radius), in: window) else { return }
+            stage.landed(false)
             try? await Task.sleep(for: .seconds(Motion.moveDuration))
             flight.dissolve()
         }
@@ -157,14 +156,12 @@ struct PreviewFrame {
 
 private typealias Frame = PreviewFrame
 
-/// 全屏页里此刻显示着的那一份能说清自己在屏上的样子时（图片放大、拖过；PDF 翻到了后面），关上时从它飞回，而不是从刚打开的样子。
+/// 全屏页里此刻显示着的那一份在屏上的样子，关上时从它飞回，而不是从刚打开的样子。
 enum PreviewShown {
-    /// 还是打开时的样子（适合屏幕、在最前面）：飞回的起点照落地那一处（`Place`），画面用缩略图
+    /// 说不清（内容还没出来、不是图片或 PDF）：飞回的起点照落地那一处（`Place`），画面用缩略图
     case opened
-    /// 屏上的就是这张画面的这一截
+    /// 屏上的就是这张画面（的这一截）
     case picture(Any, PreviewFrame)
-    /// 屏上的已不是缩略图上那一截（PDF 翻到了后面、放大了）：不飞，随浮层淡出
-    case elsewhere
 }
 
 extension PreviewFlight {

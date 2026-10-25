@@ -47,7 +47,7 @@ private struct PreviewImage: NSViewRepresentable {
     }
 }
 
-/// PDF：系统的 PDF 视图，按宽铺满、竖着连续滚，捏合与智能缩放是它自己的。翻到后面或放大了再关，屏上已不是缩略图那一页，不飞回（`Shown`）。
+/// PDF：系统的 PDF 视图，按宽铺满、竖着连续滚，捏合与智能缩放是它自己的。关上时从屏上看得见的那几页飞回（`Shown`）。
 private struct PreviewPDF: NSViewRepresentable {
     let preview: UUID
     let file: URL
@@ -81,17 +81,40 @@ extension PreviewPDF {
     final class Shown: PreviewShowing {
         weak var view: PDFView?
 
-        /// 还在最前面：第一页的上沿就在顶栏下面（隔着页边）、没放大。
+        /// 屏上看得见的那几页（放大、翻到哪都照实）按屏上的位置重画一张，从那一块飞回。
+        /// 不用视图截图（`cacheDisplay`）：PDF 视图的页是分块图层，截出来是白的。
         func shown(in window: NSWindow) -> PreviewShown {
-            guard let view, let scroll = view.documentView?.enclosingScrollView, let first = view.document?.page(at: 0) else { return .opened }
-            let page = view.convert(view.convert(first.bounds(for: view.displayBox), from: first), to: nil)
-            let top = scroll.convert(scroll.bounds, to: nil).maxY - scroll.contentInsets.top
-            let atTop = abs(page.maxY - top) < Self.margin
-            return atTop && view.scaleFactor <= view.scaleFactorForSizeToFit * 1.01 ? .opened : .elsewhere
+            guard let view, let scroll = view.documentView?.enclosingScrollView else { return .opened }
+            let pages = view.visiblePages.map { ($0, view.convert(view.convert($0.bounds(for: view.displayBox), from: $0), to: nil)) }
+            let region = pages.reduce(CGRect.null) { $0.union($1.1) }.intersection(scroll.convert(scroll.bounds, to: nil))
+            guard !region.isEmpty, let image = Self.draw(pages, in: region, box: view.displayBox, desk: view.backgroundColor, scale: window.backingScaleFactor)
+            else { return .opened }
+            return .picture(image, PreviewFrame(rect: region))
         }
 
-        /// 第一页上沿离顶栏下沿至多这么远算在最前面（PDF 视图自己的页边）
-        private static let margin: CGFloat = 24
+        /// `pages` 的框与 `region` 都是窗口坐标（左下为原点，与位图同向）。
+        private static func draw(_ pages: [(PDFPage, CGRect)], in region: CGRect, box: PDFDisplayBox, desk: NSColor, scale: CGFloat) -> CGImage? {
+            guard let context = CGContext(
+                data: nil, width: Int(region.width * scale), height: Int(region.height * scale), bitsPerComponent: 8, bytesPerRow: 0,
+                space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue)
+            else { return nil }
+            context.scaleBy(x: scale, y: scale)
+            context.translateBy(x: -region.minX, y: -region.minY)
+            context.setFillColor(desk.cgColor)
+            context.fill(region)
+            for (page, rect) in pages {
+                let bounds = page.bounds(for: box)
+                context.saveGState()
+                // 纸是白的（同 PDF 视图，不随主题）
+                context.setFillColor(CGColor(gray: 1, alpha: 1))
+                context.fill(rect)
+                context.translateBy(x: rect.minX, y: rect.minY)
+                context.scaleBy(x: rect.width / bounds.width, y: rect.height / bounds.height)
+                page.draw(with: box, to: context)
+                context.restoreGState()
+            }
+            return context.makeImage()
+        }
     }
 }
 
