@@ -56,7 +56,7 @@ struct CommandLineToolRow: View {
         case .blocked(nil): return (.failure, Dotted(String(localized: "\(tool.linkDirectoryDisplay)/cuepad 已有一个文件，没有覆盖")))
         case .installed:
             return switch tool.pathIncludesLinkDirectory {
-            case true?: (.calm, "\(tool.linkDirectoryDisplay)/cuepad")
+            case true?: (.calm, Dotted("\(tool.linkDirectoryDisplay)/cuepad"))
             case false?: (.notice, Dotted(String(localized: "\(tool.linkDirectoryDisplay) 不在 PATH 里")))
             case nil: (.notice, Dotted(String(localized: "没能读取 shell 的 PATH，请确认 \(tool.linkDirectoryDisplay) 在其中")))
             }

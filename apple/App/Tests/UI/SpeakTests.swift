@@ -93,7 +93,7 @@ struct SpeakTests {
 
         let hashes = try photos.map { try files.store($0.data) }
         #expect(try await store.cards(in: Project.defaultID).map(\.body) == ["周末读完第三章\n\n![](cuepad://img/\(hashes[0]))\n![](cuepad://img/\(hashes[1]))"])
-        #expect(workspace.notice?.text == "已记到 默认")
+        #expect(workspace.notice?.text.visible == "已记到 默认")
         #expect(try await youSaid().isEmpty)
     }
 
@@ -146,7 +146,7 @@ struct SpeakTests {
         // 这一句其实已经交给了 Cue（回执还没回到本机时点了重发）：撤不回，不重发，说明原因
         try await store.markCueMessagesDelivered([renewed[0].id])
         workspace.resend(.cue(renewed[0], host: "mac-cue"), restoringInto: Bindable(workspace.cue).draft)
-        try await eventually("提示撤不回") { workspace.notice?.text == "Cue 已经收到这句了，撤不回" }
+        try await eventually("提示撤不回") { workspace.notice?.text.visible == "Cue 已经收到这句了，撤不回" }
         #expect(try await youSaid().map(\.id) == [renewed[0].id])
     }
 
@@ -164,10 +164,10 @@ struct SpeakTests {
 
         for (listener, box) in [(Listener.cue, Bindable(workspace.cue).draft), (.session(target, mode: .send), reply)] {
             box.wrappedValue = ComposerDraft(text: "参考这张", images: [photo])
-            let writing = workspace.speak(to: listener, from: box, saying: "已交给") { try $0.stored(in: files) }
+            let writing = workspace.speak(to: listener, from: box, saying: Dotted("已交给")) { try $0.stored(in: files) }
             #expect(writing == nil)
             #expect(box.wrappedValue.text == "参考这张" && box.wrappedValue.images.map(\.id) == [photo.id])
-            #expect(workspace.notice?.isError == true && workspace.notice?.text != "已交给")
+            #expect(workspace.notice?.isError == true && workspace.notice?.text.visible != "已交给")
         }
         #expect(try await youSaid().isEmpty)
         #expect(try await store.deliveryRequests().isEmpty)

@@ -89,14 +89,14 @@ struct ComposerTests {
 
         try await workspace.saveReply("## 结论\n\n先迁移再切流量", of: try await session(project: project.id))
         #expect(try await store.cards(in: project.id).map(\.body) == ["## 结论\n\n先迁移再切流量"])
-        #expect(workspace.notice?.text == "已记到 圆桌" && workspace.notice?.link == .project(project.id))
+        #expect(workspace.notice?.text.visible == "已记到 圆桌" && workspace.notice?.link == .project(project.id))
 
         try await workspace.saveReply("没归属的", of: try await {
             try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "loose", state: .settled, title: "loose")
             return try #require(try await store.allPiSessionStates().first { $0.sessionID == "loose" })
         }())
         #expect(try await store.cards(in: Project.defaultID).map(\.body) == ["没归属的"])
-        #expect(workspace.notice?.text == "已记到 默认" && workspace.notice?.link == .project(Project.defaultID))
+        #expect(workspace.notice?.text.visible == "已记到 默认" && workspace.notice?.link == .project(Project.defaultID))
     }
 }
 #endif

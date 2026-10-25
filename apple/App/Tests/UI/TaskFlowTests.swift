@@ -53,7 +53,7 @@ struct TaskFlowTests {
 
         // 任务不自动完成；用户勾选，提示里给归档
         try await workspace.toggle(task.id)
-        #expect(workspace.notice?.text == "已完成")
+        #expect(workspace.notice?.text.visible == "已完成")
         let archive = try #require(workspace.notice?.action)
         #expect(archive.title == "归档")
         try await archive.run()
@@ -162,7 +162,7 @@ struct TaskFlowTests {
         let crash = try await store.createCard(body: "看下 {{平台}} 崩溃率，{{阈值}}")
         try await store.updateCard(crash.id) { $0.variableValues = ["平台": "iOS"] }
         try await workspace.mergeIdea(crash.id, into: check.id)
-        #expect(workspace.notice?.text == "已接到「上线前检查」的正文后面")
+        #expect(workspace.notice?.text.visible == "已接到「上线前检查」的正文后面")
         // 灵感填好的变量随正文接过去，没填的留着占位符
         #expect(try await store.card(check.id)?.body == body + "\n\n看下 iOS 崩溃率，{{阈值}}")
         try await #require(workspace.notice?.action).run()
@@ -171,7 +171,7 @@ struct TaskFlowTests {
 
         let idea = try await store.createCard(body: "续费域名")
         try await workspace.trash(idea.id)
-        #expect(workspace.notice?.text == "已删除")
+        #expect(workspace.notice?.text.visible == "已删除")
         #expect(try await store.trashedCards().map(\.id) == [idea.id])
         try await #require(workspace.notice?.action).run()
         #expect(try await store.trashedCards().isEmpty)
@@ -183,7 +183,7 @@ struct TaskFlowTests {
         #expect(try await store.card(stale.id)?.status == .todo)
 
         workspace.convertToTasks("- 写发布说明\n\n- 更新截图", in: project.id)
-        try await eventually("转好任务") { workspace.notice?.text == "已转为 2 个任务" }
+        try await eventually("转好任务") { workspace.notice?.text.visible == "已转为 2 个任务" }
         #expect(try await store.tasks(.todo).flatMap(\.tasks).filter { $0.projectID == project.id }.map(\.body) == ["写发布说明", "更新截图"])
     }
 
