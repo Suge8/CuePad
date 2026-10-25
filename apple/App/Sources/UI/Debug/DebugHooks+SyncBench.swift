@@ -1,3 +1,5 @@
+import CueStore
+import CueSync
 import Foundation
 
 /// 同步测量（`SyncBench`，docs/perf.md「同步测量」）伸进产品代码的钩子；Release 里什么都不做。
@@ -16,5 +18,13 @@ extension DebugHooks {
         #else
         false
         #endif
+    }
+
+    /// 连 iCloud 的同步：测量的实例换成经断网开关的那份（`CloudOutage`，`sync-bench.py offline`），其余就是 `CloudSync(store:)`。
+    static func cloudSync(_ store: CueStore) -> CloudSync {
+        #if DEBUG && os(macOS)
+        if SyncBench.role != nil { return CloudOutage.cloudSync(store: store) }
+        #endif
+        return CloudSync(store: store)
     }
 }

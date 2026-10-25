@@ -11,18 +11,22 @@ Cue 的大脑是回"知道了。"的替身），B 代替手机（模拟器登不
   cold [条数=5] [次数=3]     M1 冷启动：一端退出期间另一端写 N 句，从进程启动到最后一句入库、上屏（手机、Mac 各一遍）
   fg [次数=5] [离开秒=15]    M2 回前台：手机进后台期间、Mac 隐藏期间对端写一句，从回前台到入库、上屏
   idle [分钟=10] [每轮秒=30] M6 常驻开销：每轮一次 send 加立即同步，记两端的 CloudKit 操作、字节、指令、CPU、唤醒、能耗
+  offline [秒=30] [次数=2] [path|nopath]  M5 断网恢复：只让手机的 iCloud 请求以 -1009 失败、门铃断开，断着时两边各写 3 句；恢复到第一次成功、积压发完、收完、回执
+  island [轮数=10]           M4 收消息到灵动岛（iPhone 模拟器，App 这一侧：入库→实时活动换内容）；不连 iCloud、不拿测量锁，xc.sh run ios 自己构建
 环境：SYNC_BENCH_RELAY=0 两端都不连门铃（门铃不通，只靠按节奏拉）；SYNC_BENCH_SKIP_BUILD=1 不构建；SYNC_BENCH_SESSIONS 会话数（默认 3）、
   SYNC_BENCH_FLIP 会话平均几秒切一次状态（默认 8）；SYNC_BENCH_WARM 预热上限秒（默认 300）；SYNC_BENCH_LOCK_WAIT 等锁上限秒（默认 3600）。
-每次跑之前拿全机测量锁 LOCK（flock，进程退出就放；持有者写在锁文件里），几个检出的测量不同时跑、不共用 cloudd 互相干扰；构建在锁外。
+每次跑之前查这台最近 2 分钟有没有被 CloudKit 限流（`throttled`：限流按设备与容器算，测量实例与正式版共用一份），被限着就不跑；
+运行期间被限流的次数记进结果并在报告里标出。每次跑之前拿全机测量锁 LOCK（flock，进程退出就放；持有者写在锁文件里），几个检出的测量不同时跑、不共用 cloudd 互相干扰；构建在锁外。
 结果在 OUT_ROOT/<时刻>-<场景>/：a.log、b.log（实例的全部输出）、result.json（每个指标的样本、负载、构建）；对比的汇总在 ab.json。
 口径与限制见 docs/perf.md「同步测量」。只结束自己起的进程。
 """
-import fcntl, json, os, subprocess, sys, time
+import fcntl, json, os, signal, subprocess, sys, time
 from datetime import datetime
 
 sys.dont_write_bytecode = True
 from _sync_run import Load, Run, exe_of, fake_extension  # noqa: E402
-from _sync_scenes import SCENES  # noqa: E402
+from _sync_scenes import SCENES, island  # noqa: E402
+from app_env import BUNDLE_ID  # noqa: E402
 
 CHECKOUT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 LOCK = "/tmp/cuepad-sync-measure.lock"
@@ -31,22 +35,45 @@ RELAY = os.environ.get("SYNC_BENCH_RELAY", "1") != "0"
 
 
 def hold_lock(what):
-    """拿全机测量锁（阻塞，最多 SYNC_BENCH_LOCK_WAIT 秒），返回打开的锁文件：进程活着就一直持有。"""
+    """拿全机测量锁（flock 阻塞等，排队先后由内核定；每分钟打印一次持有者，最多 SYNC_BENCH_LOCK_WAIT 秒），返回打开的锁文件：进程活着就一直持有。"""
     f = open(LOCK, "a+")
-    limit, began = float(os.environ.get("SYNC_BENCH_LOCK_WAIT", 3600)), time.time()
-    while True:
-        try:
-            fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            break
-        except BlockingIOError:
-            f.seek(0)
-            if time.time() - began > limit: raise SystemExit(f"等锁 {limit:.0f} 秒没轮到，持有者：{f.read().strip()}")
-            if int(time.time() - began) % 60 == 0: print(f"排队等测量锁，持有者：{f.read().strip()}", flush=True)
-            time.sleep(1)
+    limit = float(os.environ.get("SYNC_BENCH_LOCK_WAIT", 3600))
+    def holder(*_):
+        f.seek(0); return f.read().strip()
+    def tick(*_):
+        if time.time() - began > limit: raise SystemExit(f"等锁 {limit:.0f} 秒没轮到，持有者：{holder()}")
+        print(f"排队等测量锁，持有者：{holder()}", flush=True)
+    began = time.time()
+    try:
+        fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        tick()
+        signal.signal(signal.SIGALRM, tick); signal.setitimer(signal.ITIMER_REAL, 60, 60)
+        try: fcntl.flock(f, fcntl.LOCK_EX)
+        finally: signal.setitimer(signal.ITIMER_REAL, 0)
     f.seek(0); f.truncate()
     f.write(json.dumps({"pid": os.getpid(), "checkout": CHECKOUT, "what": what, "since": datetime.now().isoformat(timespec="seconds")}, ensure_ascii=False))
     f.flush()
     return f
+
+
+THROTTLE_LIMIT = 5  # 两分钟里这台的 CuePad 被 CloudKit 限流（429）超过这么多次就不跑
+
+
+def throttled(minutes=2, pids=None):
+    """最近几分钟这台 Mac 上 CuePad 收到的 CloudKit 限流（HTTP 429，`Device throttle`：按设备与容器算，正式版与测量实例共用一份）次数；
+    pids 给了只数这几个进程。"""
+    who = f" AND ({' OR '.join(f'processID == {p}' for p in pids)})" if pids else ""
+    out = subprocess.run(["log", "show", "--last", f"{minutes}m", "--predicate", f'subsystem == "{BUNDLE_ID}" AND eventMessage CONTAINS "429"{who}'],
+                         capture_output=True, text=True).stdout
+    return sum(1 for l in out.splitlines() if "429" in l and not l.startswith("Timestamp"))
+
+
+def refuse_if_throttled():
+    """限流按设备算：测量实例把这台推进限流，正式版的同步也跟着被拒。被限着时不跑，等它退下来。"""
+    n = throttled()
+    if n > THROTTLE_LIMIT:
+        raise SystemExit(f"这台 Mac 最近 2 分钟被 CloudKit 限流 {n} 次（正式版与测量共用一份设备限流），不跑；等它降下来再测（{THROTTLE_LIMIT} 次以内）")
 
 
 def build(checkout):
@@ -63,9 +90,17 @@ def commit(checkout):
 def run_once(checkout, scene, args, label=""):
     out = f"{OUT_ROOT}/{datetime.now():%m%d-%H%M%S}-{scene}{'-' + label if label else ''}"
     print(f"\n== {scene} {' '.join(args)}：{checkout}（{commit(checkout)}），门铃{'通' if RELAY else '不通'}；输出 {out}", flush=True)
+    if scene != "island": refuse_if_throttled()
     load = Load()
-    with Run(checkout, out, RELAY) as run:
-        metrics, extra = SCENES[scene](run, args)
+    if scene == "island":
+        metrics, extra = island(checkout, out, args)
+    else:
+        began = time.time()
+        with Run(checkout, out, RELAY) as run:
+            metrics, extra = SCENES[scene](run, args)
+        hit = throttled(minutes=int((time.time() - began) / 60) + 1)
+        extra["限流"] = {"窗口内 429 次数（含正式版）": hit}
+        if hit: print(f"  这次运行期间这台被 CloudKit 限流 {hit} 次：时延里含限流的等待，前后对比作废重测", flush=True)
     result = {"scene": scene, "args": args, "checkout": checkout, "commit": commit(checkout), "relay": RELAY,
               "load": load.summary(), "metrics": dict(metrics), "extra": extra}
     json.dump(result, open(f"{out}/result.json", "w"), ensure_ascii=False, indent=1)
@@ -104,14 +139,16 @@ def report(sides):
         for r in results:
             for role, e in r["extra"].items():
                 print(f"  {role}：" + "，".join(f"{k} {v}" for k, v in e.items() if k != "操作明细"))
+        hits = sum(r["extra"].get("限流", {}).get("窗口内 429 次数（含正式版）", 0) for r in results)
+        if hits: print(f"  ⚠ {name} 的运行期间共被限流 {hits} 次，这一边的数不可信")
 
 
 def main(argv):
     if argv[:1] == ["ab"]:
         x, y, rounds, scene, args = os.path.abspath(argv[1]), os.path.abspath(argv[2]), int(argv[3]), argv[4], argv[5:]
-        if scene not in SCENES: raise SystemExit(__doc__)
-        build(x); build(y)
-        lock = hold_lock(f"ab {scene} {x} {y}")  # noqa: F841 持有到进程结束
+        if scene not in SCENES and scene != "island": raise SystemExit(__doc__)
+        if scene != "island": build(x); build(y)
+        lock = hold_lock(f"ab {scene} {x} {y}") if scene != "island" else None  # noqa: F841 持有到进程结束
         sides, results = {"X": x, "Y": y}, {"X": [], "Y": []}
         for i in range(rounds):
             for label in ("X", "Y") if i % 2 == 0 else ("Y", "X"):
@@ -121,9 +158,9 @@ def main(argv):
         print(f"\nX = {x}（{commit(x)}）\nY = {y}（{commit(y)}）")
         report([(label, results[label]) for label in ("X", "Y")])
         return
-    if not argv or argv[0] not in SCENES: raise SystemExit(__doc__)
-    build(CHECKOUT)
-    lock = hold_lock(" ".join(argv))  # noqa: F841
+    if not argv or argv[0] not in [*SCENES, "island"]: raise SystemExit(__doc__)
+    if argv[0] != "island": build(CHECKOUT)
+    lock = hold_lock(" ".join(argv)) if argv[0] != "island" else None  # noqa: F841
     report([(os.path.basename(CHECKOUT), [run_once(CHECKOUT, argv[0], argv[1:])])])
 
 

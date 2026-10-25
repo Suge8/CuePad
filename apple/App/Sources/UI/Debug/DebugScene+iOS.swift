@@ -35,6 +35,7 @@ extension DebugScene {
         if defaults.bool(forKey: "CuePadDemo") { await seedRemote(workspace.services) }
         if defaults.bool(forKey: "CuePadDemoMac") { Task { await runDemoMac(workspace.services) } }
         if defaults.bool(forKey: "CuePadNoAsks") { await settleAsks(workspace.services.store) }
+        Task { await IslandBench.run(workspace.services) }
         if defaults.string(forKey: "CuePadBench") == "interact" {
             Task { await IOSInteractionBench.run(workspace) }
             return

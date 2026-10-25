@@ -74,7 +74,7 @@ extension CloudSync {
 /// 调试画面用它看断网时各处界面怎么说（`CloudSync.unreachable`）。
 struct UnreachableCloud: SyncCloud {
   private static let offline = NSError(domain: NSURLErrorDomain, code: NSURLErrorNotConnectedToInternet)
-  private static var failure: CKError { CKError(.networkUnavailable, userInfo: [NSUnderlyingErrorKey: offline]) }
+  static var failure: CKError { CKError(.networkUnavailable, userInfo: [NSUnderlyingErrorKey: offline]) }
 
   func accountStatus() -> CKAccountStatus { .available }
   func accountName() -> String { "simulated" }
