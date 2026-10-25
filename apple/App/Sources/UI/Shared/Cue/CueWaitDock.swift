@@ -19,20 +19,25 @@ struct CueWaitDock: View {
     let open: (PreviewOpening) -> Void
     /// 卡正在升起或淡入：这期间对话不另外往上滑（`ChatColumn` 的 `holding`），只跟着它让出的高挪，停了再滑一次。离开时不压（`follow`）。
     @Binding var moving: Bool
+    #if os(iOS)
     @Environment(Workspace.self) private var workspace
-    @Environment(\.palette) private var palette
+    #endif
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.chatHeight) private var chatHeight
+    @Environment(\.pageActive) private var active
     /// 手机上滑卡：卡跟着手指横移多少。
     @State private var drag: CGFloat = 0
     /// 滑走的那张往哪边飞出去（换一件时旧卡的去向）；不是滑走的（答完、点箭头）原地淡掉，为 0。
     @State private var exit: CGFloat = 0
     /// 露出的那件：选中的那件；答完淡掉的这一段里还是它（那时它已不在 `waiting` 里）。
-    @State private var shown: TaskBoard.Wait?
+    @State private var shown: CueWaitPick?
     /// 露出了多少，0…1：升起的比例（`RiseBehind`，0 是全藏在输入框后面）；减弱动态效果时与离开时是不透明度。
     @State private var level: CGFloat
     /// 都答完（或撤回）正在离开：让出的高一下到位，卡浮在原处淡掉（同减弱动态效果）。
     @State private var leaving = false
+    /// 这一页从什么时候起在前台：在这之前就在等的不算"来了"，不升起。Mac 上挂着不看的页不跟着库变（`pageActive`），
+    /// 回到前台时才读到的那几件当场就在、不再从输入框后面升起（升起的这一段对话跟着每帧重排）。
+    @State private var watching = Date.now
 
     /// 页打开时已经在等的那张随页一起排出来、不升起（同 `follow` 的头一次）：等 `onChange` 再放的话卡晚一次更新才排，
     /// 对话按它让出的高又要重排一遍。
@@ -42,25 +47,35 @@ struct CueWaitDock: View {
         self.shots = shots
         self.open = open
         _moving = moving
-        _shown = State(initialValue: Self.current(in: waiting, asking: asking))
+        _shown = State(initialValue: Self.pick(in: waiting, asking: asking))
         _level = State(initialValue: waiting.isEmpty ? 0 : 1)
     }
 
     /// 选中的那件：还在等就是它，不然是第一件。
-    private var current: TaskBoard.Wait? { Self.current(in: waiting, asking: asking) }
-
     static func current(in waiting: [TaskBoard.Wait], asking: String?) -> TaskBoard.Wait? {
-        waiting.first { $0.id == asking } ?? waiting.first
+        pick(in: waiting, asking: asking)?.wait
+    }
+
+    private static func pick(in waiting: [TaskBoard.Wait], asking: String?) -> CueWaitPick? {
+        guard !waiting.isEmpty else { return nil }
+        return CueWaitPick(waits: waiting, index: waiting.firstIndex { $0.id == asking } ?? 0)
+    }
+
+    private var current: CueWaitPick? { Self.pick(in: waiting, asking: asking) }
+
+    /// 露出的那件此刻的样子：还在等就取库里最新的那份（连同第几件），已经不在了（答完淡掉时）是它最后的样子、只此一件。
+    private func live(_ pick: CueWaitPick) -> CueWaitPick {
+        waiting.firstIndex { $0.id == pick.id }.map { CueWaitPick(waits: waiting, index: $0) } ?? CueWaitPick(waits: [pick.wait], index: 0)
     }
 
     /// 来了从输入框后面升起（`RiseBehind`）；都答完让出的高一下到位、卡浮在原处淡掉：对话里接着长出这一问与你的回答，对话一次滑到终位。
     /// 换一件时新的从叠边里微微放大淡入，旧的滑走的往那边飞出、其余原地淡掉（底边对齐叠放）。减弱动态效果时来也只淡入。卡与下面输入框的间距在卡里（`below`）。
     var body: some View {
         ZStack(alignment: .bottom) {
-            if let item = shown {
-                card(waiting.first { $0.id == item.id } ?? item)
+            if let shown {
+                card(live(shown))
                     .offset(x: drag)
-                    .id(item.id)
+                    .id(shown.id)
                     .transition(.asymmetric(
                         insertion: .scale(scale: 0.96, anchor: .bottom).combined(with: .opacity),
                         removal: .offset(x: exit).combined(with: .opacity)))
@@ -71,14 +86,11 @@ struct CueWaitDock: View {
         .opacity(floats ? level : 1)
         .modifier(RiseBehind(shown: floats ? (waiting.isEmpty ? 0 : 1) : level, floats: floats, limit: chatHeight / 2))
         .onChange(of: current?.id, initial: true) { old, new in follow(animated: old != new) }
+        .onChange(of: active) { if active { watching = .now } }
         .debugSettling(moving || leaving)
     }
 
-    static let side: CGFloat = 16
-    private static let below = ComposerMetrics.stackGap
-    /// 卡里上下的边与几部分之间：眉题离卡顶、怎么答离卡底、各部分之间。
-    private static let edge: CGFloat = 12
-    private static let gap: CGFloat = 12
+    static let below = ComposerMetrics.stackGap
     /// 叠边：每层比上一层往下多露这么多、两边各收这么多，至多两层；露得够一眼数出后面还有几件。
     private static let peek: CGFloat = 9
     private static let tuck: CGFloat = 12
@@ -86,15 +98,6 @@ struct CueWaitDock: View {
 
     /// 卡后面露出几层叠边：还有几件在等，至多 `layers`。
     private var behind: Int { min(max(waiting.count - 1, 0), Self.layers) }
-
-    #if os(macOS)
-    /// 卡至少多高（Cue 页打开时数要排几格，`CuePage.covered`）：眉题、问句（至少一行标题字）、带图时一排图（`CueShots.floor`）、
-    /// 怎么答（至少一颗按钮）与上下的边；叠边不算。只能数少。
-    static func floor(_ wait: TaskBoard.Wait, shots: [UUID: [CueShown]], width: CGFloat) -> CGFloat {
-        let pictures = wait.message.flatMap { shots[$0.id] }.map { gap + CueShots.floor(count: $0.count, width: width - 2 * side) } ?? 0
-        return edge + CueWaitEyebrow.height + 6 + Typography.titleSize + pictures + gap + ControlMetrics.compactHeight + edge + below
-    }
-    #endif
 
     /// 卡后面的叠边：与卡一样高，一层比一层窄、往下多露 `peek`，平时只露出卡下沿那一截。跟着在等的件数增减，不随滑卡挪。
     private var deck: some View {
@@ -112,23 +115,25 @@ struct CueWaitDock: View {
         .accessibilityHidden(true)
     }
 
-    /// 第几件、换到哪件（眉题行的小箭头、滑卡）。
-    private func index(of wait: TaskBoard.Wait) -> Int { waiting.firstIndex { $0.id == wait.id } ?? 0 }
-
-    private func neighbor(of wait: TaskBoard.Wait, by offset: Int) -> TaskBoard.Wait? {
-        let next = index(of: wait) + offset
-        return waiting.indices.contains(next) ? waiting[next] : nil
-    }
-
-    private func step(from wait: TaskBoard.Wait, by offset: Int) {
-        guard let next = neighbor(of: wait, by: offset) else { return }
-        withAnimation(HandOff.quick) { workspace.cueAsking = next.id }
+    /// 铺开的那件（`CueWaitCard`）垫上纸；手机上左右滑换一件。
+    /// 整张卡接这一拖（`contentShape`）：只挂在内容上的话卡里的空白处接不住，落到页上成了切页。卡里的按钮照样先接自己的点按。
+    private func card(_ pick: CueWaitPick) -> some View {
+        let card = CueWaitCard(pick: pick, shots: pick.wait.message.flatMap { shots[$0.id] }, open: open)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        #if os(iOS)
+            .contentShape(.rect(cornerRadius: ComposerMetrics.radius))
+            .gesture(HorizontalPan(allows: { swipes(pick, toward: $0) }, changed: { track($0, on: pick) }, ended: { release(pick, commits: $0, velocity: $1) }))
+        #endif
+        return card
+            .paper(radius: ComposerMetrics.radius, lifted: true)
+            .padding(.bottom, Self.below + Self.peek * CGFloat(behind))
     }
 
     /// 卡浮着、露出的比例当不透明度用：减弱动态效果时与离开时。
     private var floats: Bool { reduceMotion || leaving }
 
     /// 跟上选中的那件：来了升起，都没了淡掉、淡完再拿掉，换了一件原地交替；减弱动态效果时来也只淡。
+    /// 页到前台之前就在等的不升起，当场就在（`watching`）。
     /// 升起用无回弹弹簧、从卡排进去的下一帧起播：卡插进来那一帧排版重，从这一帧起算的话前几十毫秒被吃掉。
     /// 淡入稍慢、淡出要快：淡出时对话正滑向终位，卡叠在字上的那几帧越短越好。离开时不压住对话（`moving`）。
     private func follow(animated: Bool) {
@@ -143,7 +148,7 @@ struct CueWaitDock: View {
         let swapping = shown != nil
         leaving = false
         withAnimation(swapping && animated ? HandOff.quick : nil) { shown = next }
-        guard animated, level < 1 else { return level = 1 }
+        guard animated, level < 1, next.wait.since > watching else { return level = 1 }
         moving = true
         Task {
             await NextFrame.wait()
@@ -168,85 +173,23 @@ struct CueWaitDock: View {
         leaving = false
     }
 
-    /// Cue 点名的图（`CueShots`）："可以"选的是其中一张时那张描靛青圈；点开全屏时底栏就是这几个选项，看完当场定。
-    @ViewBuilder private func pictures(_ wait: TaskBoard.Wait) -> some View {
-        if let message = wait.message, let shown = shots[message.id] {
-            CueShots(shots: shown, group: "waiting", reply: .answer(message), chosen: CueShots.chosen(for: message.asking, in: shown), open: open)
-        }
-    }
-
-    private func eyebrow(_ wait: TaskBoard.Wait) -> some View {
-        CueWaitEyebrow(wait: wait, index: index(of: wait), count: max(waiting.count, 1)) { step(from: wait, by: $0) }
-            .padding(.top, Self.edge)
-    }
-
-    /// 从上到下：眉题、问句与点名的图、怎么答。卡至多占对话区可见高的一半，地方不够时只用剩下的（`RiseLayout`）。
-    /// Mac 上放不下时问句与图在卡里滚、怎么答钉在卡底。
-    /// 手机上按能放下的挑（`ViewThatFits`）：整张 → 紧凑（去掉图）→ 只剩问句一行（`folded`）。放得下时不进滚动区：滚动区里的按钮按下要晚一下才有反馈。
-    private func card(_ wait: TaskBoard.Wait) -> some View {
-        #if os(macOS)
-        let body = VStack(alignment: .leading, spacing: 0) {
-            eyebrow(wait)
-            Yielding {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: Self.gap) {
-                        CueQuestionLine(wait: wait)
-                        pictures(wait)
-                    }
-                    .padding(.top, 6)
-                }
-                .scrollBounceBehavior(.basedOnSize)
-            }
-            WaitAnswer(wait: wait.wait).padding(.top, Self.gap).layoutPriority(1)
-        }
-        .padding(.horizontal, Self.side).padding(.bottom, Self.edge)
-        #else
-        let body = ViewThatFits(in: .vertical) {
-            sheet(wait, shots: true)
-            sheet(wait, shots: false)
-            folded(wait)
-        }
-        .gesture(HorizontalPan(allows: { swipes(wait, toward: $0) }, changed: { track($0, on: wait) }, ended: { release(wait, commits: $0, velocity: $1) }))
-        .accessibilityAction(named: "上一件") { step(from: wait, by: -1) }
-        .accessibilityAction(named: "下一件") { step(from: wait, by: 1) }
-        #endif
-        return body
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .paper(radius: ComposerMetrics.radius, lifted: true)
-            .padding(.bottom, Self.below + Self.peek * CGFloat(behind))
-    }
-
     #if os(iOS)
-    /// 一件铺开：眉题、问句、（点名的图、）怎么答。
-    private func sheet(_ wait: TaskBoard.Wait, shots: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            eyebrow(wait)
-            VStack(alignment: .leading, spacing: Self.gap) {
-                CueQuestionLine(wait: wait)
-                if shots { pictures(wait) }
-                WaitAnswer(wait: wait.wait)
-            }
-            .padding(.top, 6)
-        }
-        .padding(.horizontal, Self.side).padding(.bottom, Self.edge)
-    }
-
     /// 这一拖归不归卡：那个方向还有一件（往左拖是下一件）；到头了让给页上的横拖（切页）。
-    private func swipes(_ wait: TaskBoard.Wait, toward velocity: CGFloat) -> Bool {
-        neighbor(of: wait, by: velocity < 0 ? 1 : -1) != nil
+    private func swipes(_ pick: CueWaitPick, toward velocity: CGFloat) -> Bool {
+        pick.neighbor(by: velocity < 0 ? 1 : -1) != nil
     }
 
     /// 跟手；拖过头（那边没有下一件）越拖越沉。
-    private func track(_ translation: CGFloat, on wait: TaskBoard.Wait) {
-        let open = neighbor(of: wait, by: translation < 0 ? 1 : -1) != nil
+    private func track(_ translation: CGFloat, on pick: CueWaitPick) {
+        let open = pick.neighbor(by: translation < 0 ? 1 : -1) != nil
         drag = open ? translation : translation * 0.2
         if !reduceMotion { exit = translation < 0 ? -Self.flyOut : Self.flyOut }
     }
 
     /// 松手：甩过或拖过 `commit` 且那边有下一件就换（旧卡顺着飞出、新卡从叠边里上来），否则弹回。
-    private func release(_ wait: TaskBoard.Wait, commits: Bool, velocity: CGFloat) {
+    private func release(_ pick: CueWaitPick, commits: Bool, velocity: CGFloat) {
         let projected = drag + velocity * 0.12
-        let next = commits && abs(projected) > Self.commit ? neighbor(of: wait, by: projected < 0 ? 1 : -1) : nil
+        let next = commits && abs(projected) > Self.commit ? pick.neighbor(by: projected < 0 ? 1 : -1) : nil
         guard let next else {
             exit = 0
             withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { drag = 0 }
@@ -262,23 +205,5 @@ struct CueWaitDock: View {
     /// 拖过这么远（连同甩的势头）就换一件；滑走的卡飞出这么远。
     private static let commit: CGFloat = 80
     private static let flyOut: CGFloat = 480
-
-    /// 连紧凑的样子都放不下（横屏弹着键盘）：整张卡收成问句一行。点它收起键盘，地方够了卡就按上面的挑法展开。
-    private func folded(_ wait: TaskBoard.Wait) -> some View {
-        Button {
-            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-        } label: {
-            HStack(spacing: 9) {
-                PiStateGlyph(status: .asking).font(Typography.title)
-                Text(wait.asked.line).font(Typography.title).foregroundStyle(palette.ink).lineLimit(1)
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, Self.side)
-            .frame(minHeight: ControlMetrics.height)
-            .contentShape(.rect)
-        }
-        .buttonStyle(PressStyle())
-        .accessibilityHint("收起键盘，展开这张卡")
-    }
     #endif
 }
