@@ -54,6 +54,8 @@ enum Schema {
         DROP TRIGGER piMessages_writeSeq_insert; ALTER TABLE piMessages DROP COLUMN writeSeq;
         """)
     },
+    // 68：Cue 此刻正在跑的那一步碰到的那一处（`CueState.step`）
+    "ALTER TABLE cueState ADD COLUMN step TEXT;",
   ]
 
   /// 升级腾出了大量空页（如 67 把系统字段压小）时整理一遍，把它们还给磁盘：库不开自动整理，空页只等以后的写入复用，文件不会变小。

@@ -2,12 +2,14 @@ import CueText
 import Foundation
 
 /// Cue 此刻在做什么（同步，只有一行，只由它值班的那台 Mac 写）：与 Agent 会话同一套工作状态（`PiWorkState`）。
-/// 一轮里是思考（`thinking`）或调用工具（`tool`，`detail` 是"动作 · 目标"，同会话的工具说明），一轮之间歇着（`settled`），
+/// 一轮里是思考（`thinking`）或调用工具（`tool`：碰到任务与会话的一步是 `step`，其余是 `detail`），一轮之间歇着（`settled`），
 /// 大脑起不来是出错（`error`，`detail` 是原因）。别的设备与这台 Mac 的界面都只读它（`CuePresence`）。
 public struct CueState: Equatable, Sendable {
   public var state: Open<PiWorkState>
-  /// 正在跑的那一步（"动作 · 目标"，`CueActivity.detail`）
+  /// 正在跑的那一步没碰任务与会话时的一句（"动作 · 目标"、看板、回想，`CueActivity.detail`）；出错时是原因
   public var detail: String?
+  /// 正在跑的那一步碰到的那一处（类别与对象，与每一步记下的同一对，`CueActivity.step`）：各端按按钮动词表写成一句（`CueActivity.line`）
+  public var step: CueActivity.Touch?
   /// 在跑的这一轮的经过那一行（`CueStore.recordCueRound`）；还没调过工具、歇着时没有
   public var round: UUID?
   /// 它这个班次的上下文（`CueContext`），值班的 Mac 随状态写；不在值班、这个班次还没请求过模型为 nil
@@ -17,11 +19,13 @@ public struct CueState: Equatable, Sendable {
   public var modifiedAt: Date
 
   public init(
-    state: Open<PiWorkState>, detail: String? = nil, round: UUID? = nil, context: CueContext? = nil, left: [CueLeft] = [], modifiedAt: Date = .now
+    state: Open<PiWorkState>, detail: String? = nil, step: CueActivity.Touch? = nil, round: UUID? = nil, context: CueContext? = nil, left: [CueLeft] = [],
+    modifiedAt: Date = .now
   ) {
     self.left = left
     self.state = state
     self.detail = detail
+    self.step = step
     self.round = round
     self.context = context
     self.modifiedAt = modifiedAt
@@ -121,13 +125,15 @@ public struct CueDuty: Equatable, Sendable {
 
 extension CueState: Record {
   static let table = Table.cueState
-  static let columns = ["id", "state", "detail", "modifiedAt", "round", "context", "leftToYou"]
+  static let columns = ["id", "state", "detail", "modifiedAt", "round", "context", "leftToYou", "step"]
   var bindings: [any SQLBindable] {
-    [Self.recordID, state.rawValue, detail, modifiedAt, round, context?.stored, left.isEmpty ? nil : JSONColumn.encode(left)]
+    [Self.recordID, state.rawValue, detail, modifiedAt, round, context?.stored, left.isEmpty ? nil : JSONColumn.encode(left), step.map(JSONColumn.encode)]
   }
+  /// 解不出的 `step`（更新版本加的类别）读成 nil：那一句退回状态词，此刻的其余照读。
   init(row: Row) {
     self.init(
-      state: Open(rawValue: row.text(1)), detail: row.textOrNil(2), round: row.uuidOrNil(4), context: row.textOrNil(5).flatMap(CueContext.init(stored:)),
+      state: Open(rawValue: row.text(1)), detail: row.textOrNil(2), step: JSONColumn.decode(CueActivity.Touch.self, from: row.textOrNil(7)),
+      round: row.uuidOrNil(4), context: row.textOrNil(5).flatMap(CueContext.init(stored:)),
       left: JSONColumn.decodeList(CueLeft.self, from: row.textOrNil(6)), modifiedAt: row.date(3))
   }
 }

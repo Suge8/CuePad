@@ -53,10 +53,11 @@ struct CueToolCall: Identifiable {
     let id: String
     let name: String
     let arguments: String
-    /// 动到的任务或会话，开始时就认好（`CueActivity.named`）：正在用时那一句（`detail`）同步读它、不等库，做完后那一条也用它。
+    /// 动到的任务或会话，开始时就认好（`CueActivity.named`）：正在用时碰到的那一处（`step`）同步读它、不等库，做完后那一条也用它。
     let named: CueActivity.Named
-    /// 正在用时那一句（`CueActivity.detail`）
-    let detail: String
+    /// 正在用时碰到的那一处（`CueActivity.step`）；没碰哪一处时是那一句（`detail`）
+    let step: CueActivity.Touch?
+    let detail: String?
     let startedAt: Date
     var finishedAt: Date?
     var result: String?

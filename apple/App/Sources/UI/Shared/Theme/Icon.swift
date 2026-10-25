@@ -36,7 +36,7 @@ nonisolated enum Icon: Hashable, Sendable {
     case terminal, terminalWindow, readFile, editFile, pondering, tool, said, started, added, branch, markUnread, fireCode, thinking
     case researcher, engineer, batchWorker, designer, sentinel, subagent
     // Cue 与设置
-    case memory, wakeEnabled, wakeMessage, wakeActivity, wakeIdle, wakeReminder, mail
+    case memory, wakeEnabled, wakeMessage, wakeActivity, wakeIdle, wakeReminder, looked, mail
     case name, autoApprove, hotkey, talkToCue, appearance, updates
     // 文件与交付物：没有画面的音频、列表里的文字卡、还在下载、视频的播放标、认不出类型的文件、转动查看 3D 模型
     case audio, document, downloading, play, file, inspect3D
@@ -167,7 +167,7 @@ nonisolated enum Icon: Hashable, Sendable {
         case .wakeEnabled: .ink("power")
         case .wakeActivity: .ink("bolt")
         case .wakeMessage, .talkToCue: .ink("bubble")
-        case .wakeIdle: .ink("eye")
+        case .wakeIdle, .looked: .ink("eye")
         case .wakeReminder: .ink("alarm")
         case .mail: .ink("mail")
         case .name: .ink("tag")

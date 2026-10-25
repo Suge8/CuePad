@@ -69,8 +69,8 @@ extension CueStore {
         PiSessionState.self, where: "sessionID IN (SELECT value FROM json_each(?))", [JSONColumn.encode(others.map(\.sessionID))])
       let left = others.filter { entry in sessions.contains(where: entry.holds) } + [CueLeft(sessionID: sessionID, since: session.stateSince)]
       let next = CueState(
-        state: current?.state ?? .known(.settled), detail: current?.detail, round: current?.round, context: current?.context, left: left,
-        modifiedAt: Date.stamp)
+        state: current?.state ?? .known(.settled), detail: current?.detail, step: current?.step, round: current?.round, context: current?.context,
+        left: left, modifiedAt: Date.stamp)
       try upsert(next, updating: ["leftToYou", "modifiedAt"])
       return CueState.recordID
     }
@@ -84,15 +84,18 @@ extension CueStore {
 
   /// 值班的 Mac 写下 Cue 此刻的样子（在做什么、这个班次的上下文），整行一次写；和库里一样就不写（不触发同步）。不在值班写歇着、没有上下文。
   public func setCueState(
-    _ state: PiWorkState, detail: String? = nil, round: UUID? = nil, context: CueContext? = nil
+    _ state: PiWorkState, detail: String? = nil, step: CueActivity.Touch? = nil, round: UUID? = nil, context: CueContext? = nil
   ) throws {
-    try write { try putCueState(state, detail: detail, round: round, context: context) }
+    try write { try putCueState(state, detail: detail, step: step, round: round, context: context) }
   }
 
-  func putCueState(_ state: PiWorkState, detail: String?, round: UUID?, context: CueContext?) throws {
+  func putCueState(_ state: PiWorkState, detail: String?, step: CueActivity.Touch?, round: UUID?, context: CueContext?) throws {
     let current = try cueState()
-    let next = CueState(state: .known(state), detail: detail, round: round, context: context, left: current?.left ?? [], modifiedAt: Date.stamp)
-    if let current, (current.state, current.detail, current.round, current.context) == (next.state, next.detail, next.round, next.context) { return }
-    try upsert(next, updating: ["state", "detail", "modifiedAt", "round", "context"])
+    let next = CueState(
+      state: .known(state), detail: detail, step: step, round: round, context: context, left: current?.left ?? [], modifiedAt: Date.stamp)
+    if let current, (current.state, current.detail, current.step, current.round, current.context) == (next.state, next.detail, next.step, next.round, next.context) {
+      return
+    }
+    try upsert(next, updating: ["state", "detail", "step", "modifiedAt", "round", "context"])
   }
 }

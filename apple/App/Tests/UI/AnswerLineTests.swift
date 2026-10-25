@@ -10,7 +10,7 @@ struct AnswerLineTests {
     let app = TestApp()
     var store: CueStore { app.services.store }
 
-    private func thread() async throws -> CueThread { try await CueThread.read(from: store, showsSteps: true) }
+    private func thread() async throws -> CueThread { try await CueThread.read(from: store) }
 
     /// Cue 问了、之后又说了超过 Cue 页读的那么多句，你才答：回答在 Cue 后来那句之后（答的那一刻），引用的是那张卡的问句，
     /// 那条提问也读进来（排在最前），点了回得去；选第二项的也一样；Cue 撤回的没有这一格；刻度滑条上有你的回答。

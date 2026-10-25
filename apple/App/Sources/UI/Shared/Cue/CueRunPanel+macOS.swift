@@ -159,7 +159,8 @@ private struct CueCallRow: View {
     }
 
     private var target: Text {
-        let detail = call.detail
+        // 碰到任务与会话的一步按按钮动词表写（同页头那句），其余是"工具 · 目标"，去掉开头的工具名
+        let detail = call.step.map(CueActivity.line) ?? call.detail ?? ""
         let action = detail.hasPrefix(call.name) ? String(detail.dropFirst(call.name.count)).trimmingPrefix(PiSessionState.detailSeparator) : Substring(detail)
         return Text("\(Text(call.name).fontWeight(.semibold).foregroundStyle(palette.ink2))  \(String(action))")
     }

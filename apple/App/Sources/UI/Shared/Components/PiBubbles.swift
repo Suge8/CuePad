@@ -34,9 +34,9 @@ enum BubbleLook: Equatable {
         }
     }
 
-    /// 没能送达时气泡下那一行（"未送达 · 重发"）离气泡多远、离右缘多远：Cue 页的旁注对着气泡里的字（`CueBubble.noteInset`）。
+    /// 没能送达时气泡下那一行（"未送达 · 重发"）离气泡多远、离右缘多远：Cue 页的对着气泡里的字。
     var statusSpacing: CGFloat { self == .session ? 6 : 2 }
-    var statusInset: CGFloat { self == .session ? 0 : CueBubble.noteInset }
+    var statusInset: CGFloat { self == .session ? 0 : CueBubble.padding.trailing }
 }
 
 /// 你的一句话：右侧气泡（样子见 `BubbleLook`），最宽到所在一栏的 `widthFraction`；到哪了画在气泡左下角外（`BubbleTrip`）。长按（Mac 右键）是 `menu`，预览就是这颗气泡。

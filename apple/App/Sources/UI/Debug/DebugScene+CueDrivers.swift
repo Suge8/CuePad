@@ -33,7 +33,8 @@ extension DebugScene {
             return ("wake", {
                 if acts {
                     var tools = PiChatMessage.Tools()
-                    tools.record(.init(kind: .talk, target: "对 \(woke[0]) 说：测试跑完把结果贴过来"))
+                    tools.record(.init(
+                        kind: .talk, target: "对 \(woke[0]) 说：测试跑完把结果贴过来", name: woke[0], session: PiSessionState.recordID(sessionID: woke[0])))
                     _ = try? await store.recordCueRound(row, startedAt: .now, answersYou: false, tools: tools)
                     _ = try? await store.addCueMessage(.note, text: "催了 \(woke[0])：测试跑完把结果贴过来")
                 }

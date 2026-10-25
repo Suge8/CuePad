@@ -7,9 +7,10 @@ import SwiftUI
 /// 一行从左到右：图标、字、几点（等宽一列，对齐）。
 /// - 图标：提到一处时是那一处此刻的样子（会话的状态标 `PiStateDot`、任务圈），与当时出了什么事分开——当时"停下了"的会话此刻可能又在跑；
 ///   提到几处或没提到哪处时是醒来原因（`CueWake.icon`）。
-/// - 字：名字（次要墨，几处时用顿号连起）与当时出了什么事，后面隔一个点接它这一轮说的话，截成一行，其余淡墨；没提到哪处的写它说的话或为什么醒。
+/// - 字：名字（次要墨，几处时用顿号连起）与当时出了什么事，逗号后接它这一轮说的话，截成一行，其余淡墨；没提到哪处的写它说的话或为什么醒。
 /// 整行是一行（`RowStyle`），点了去提到的那一处（会话直接进；几处时列出来选；提醒去记忆）；没提到哪处的不能点。
-/// 在跑的那一轮下面挂此刻在做的（`RoundProcess`）。多于 `foldAfter` 轮时只露最近 `shownWhenFolded` 轮，上面一行"更早还醒过 N 次"，点它全部展开。
+/// 在跑的那一轮下面挂这一轮的经过（`CueTrace`：碰到的各处与此刻在做的），与这几行同一种行（`CueNoteRow`）。
+/// 多于 `foldAfter` 轮时只露最近 `shownWhenFolded` 轮，上面一行"更早还醒过 N 次"，点它全部展开。左缘对着 Cue 气泡的左缘（同 `CueTrace`）。
 struct CueNoteLog: View {
     let rounds: [CueNoteRound]
     /// 在跑的那一轮在这几轮里时有（`CueLiveRound`）
@@ -26,20 +27,19 @@ struct CueNoteLog: View {
             VStack(alignment: .leading, spacing: 0) {
                 if folded {
                     Button { expanded = true } label: {
-                        CueNoteRow(time: nil) { Image(.earlier) } text: { Text("更早还醒过 \(rounds.count - shown.count) 次") }
+                        CueNoteRow { Image(.earlier) } text: { Text("更早还醒过 \(rounds.count - shown.count) 次") }
                     }
                     .buttonStyle(.row)
                 }
                 ForEach(shown) { round in CueNoteLine(round: round, live: live) }
             }
-            .padding(.leading, CueBubble.noteInset)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .transition(.entry)
     }
 }
 
-/// 一轮一行，在跑的那一轮下面挂此刻在做的。
+/// 一轮一行，在跑的那一轮下面挂这一轮的经过。
 private struct CueNoteLine: View {
     let round: CueNoteRound
     let live: CueLiveRound?
@@ -50,8 +50,8 @@ private struct CueNoteLine: View {
         let places = round.header?.places ?? []
         VStack(alignment: .leading, spacing: 0) {
             link(places, row: CueNoteRow(time: round.date) { glyph(places) } text: { line(places) })
-            if let row = round.row, row.id == live?.round {
-                RoundProcess(tools: row.tools, ending: CueLiveRound.ending(of: row, in: live)).padding(.leading, CueNoteRows.textInset)
+            if let row = round.row, let live, row.id == live.round {
+                CueTrace(touches: round.touches, doing: live.doing)
             }
         }
     }
@@ -75,7 +75,7 @@ private struct CueNoteLine: View {
         } else if places.count == 1, places[0].kind != nil, places[0].sessionID == nil {
             TaskRingView(status: places[0].task, done: false, size: 11)
         } else {
-            Image(round.header?.wake.icon ?? RoundProcess.icon(.said))
+            Image(round.header?.wake.icon ?? .said)
         }
     }
 
@@ -88,7 +88,7 @@ private struct CueNoteLine: View {
         }
         let tail = said ?? (head == nil ? round.header?.wake.reason : nil)
         return switch (head, tail) {
-        case (let head?, let tail?): Text("\(head)\(Dotted.separator)\(tail)")
+        case (let head?, let tail?): Text("\(head)，\(tail)")
         case (let head?, nil): head
         case (nil, let tail?): Text(tail)
         case (nil, nil): Text("")
@@ -96,9 +96,9 @@ private struct CueNoteLine: View {
     }
 }
 
-/// 一行旁注：图标、截成一行的字、等宽的几点（一列对齐）。
-private struct CueNoteRow<Glyph: View, Words: View>: View {
-    let time: Date?
+/// Cue 页的一行旁注（醒来那几行、一轮的经过 `CueTrace` 共用）：图标、截成一行的字，醒来那几行行末是等宽的几点（一列对齐）。
+struct CueNoteRow<Glyph: View, Words: View>: View {
+    var time: Date?
     @ViewBuilder let glyph: Glyph
     @ViewBuilder let text: Words
     @Environment(\.palette) private var palette
@@ -107,8 +107,10 @@ private struct CueNoteRow<Glyph: View, Words: View>: View {
         HStack(alignment: .firstTextBaseline, spacing: Note.spacing) {
             glyph.foregroundStyle(palette.ink3).frame(width: Note.glyphWidth).accessibilityHidden(true)
             text.foregroundStyle(palette.ink3).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
-            Text(time.map(ChatTime.time) ?? "").monospacedDigit().foregroundStyle(palette.ink3)
-                .frame(minWidth: CueNoteRows.timeWidth, alignment: .trailing).fixedSize()
+            if let time {
+                Text(ChatTime.time(time)).monospacedDigit().foregroundStyle(palette.ink3)
+                    .frame(minWidth: CueNoteRows.timeWidth, alignment: .trailing).fixedSize()
+            }
         }
         .font(Typography.caption)
         .frame(minHeight: CueNoteRows.height)
@@ -118,8 +120,6 @@ private struct CueNoteRow<Glyph: View, Words: View>: View {
 }
 
 enum CueNoteRows {
-    /// 字的左缘：图标位与间距（在跑的那一轮挂的那一行对着它）。
-    static let textInset = Note.glyphWidth + Note.spacing
     /// 几点那一列至少多宽："中午 12:44" 放得下，一列对齐。
     static let timeWidth: CGFloat = 62
     /// 一行至少多高：比旁注（`Note.lineHeight`）高一点，整行可点。
@@ -127,10 +127,10 @@ enum CueNoteRows {
 }
 
 extension Workspace {
-    /// 去 Cue 自己醒来那一轮提到的那一处：会话、任务（从点的地方长出气泡）或记忆。
+    /// 去 Cue 页一行旁注提到的那一处（醒来那几行、一轮的经过）：会话、任务（从点的地方长出气泡）或记忆。
     func open(_ target: CueWakeHeader.Target) {
         switch target {
-        case .session(let session): openSession(session.id, sessionID: session.sessionID)
+        case .session(let id, let sessionID): openSession(id, sessionID: sessionID)
         case .task(let id): openTask(id: id)
         case .memory: cue.showsMemory = true
         }

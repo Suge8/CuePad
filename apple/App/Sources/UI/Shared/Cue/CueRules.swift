@@ -16,8 +16,8 @@ nonisolated enum CuePresence: Equatable, Sendable {
     case idle
     /// 你最近一句还在路上：发送中或已发出（`PiDelivery.Transit` 的那两种）。
     case sending(PiDelivery.Transit)
-    /// 在一轮里：想（`thinking`）或用工具（`tool`，`detail` 是"动作 · 目标"）。
-    case working(PiWorkState, detail: String?)
+    /// 在一轮里：想（`thinking`）或用工具（`tool`：碰到任务与会话的一步是 `step`，其余 `detail` 是"动作 · 目标"）。
+    case working(PiWorkState, detail: String?, step: CueActivity.Touch?)
     /// 管理器起不来：参数是给你看的原因。
     case unreachable(String)
 
@@ -31,7 +31,7 @@ nonisolated enum CuePresence: Equatable, Sendable {
         }
         guard let state = digest.state, let work = state.state.known else { return .idle }
         if work == .error { return .unreachable(state.detail ?? "\(digest.name) 起不来了") }
-        return work.isWorking ? .working(work, detail: state.detail) : .idle
+        return work.isWorking ? .working(work, detail: state.detail, step: state.step) : .idle
     }
 
     /// 头像变暗、闭眼：它此刻不会接话。
@@ -45,21 +45,24 @@ nonisolated enum CuePresence: Equatable, Sendable {
     var isUnreachable: Bool { if case .unreachable = self { true } else { false } }
 
     /// 在用工具（不是在想）：对话末尾单列正在跑的那一步。
-    var isUsingTool: Bool { if case .working(.tool, _) = self { true } else { false } }
+    var isUsingTool: Bool { if case .working(.tool, _, _) = self { true } else { false } }
+
+    /// 正在跑的那一步碰到的那一处（`CueState.step`）：对话里在跑那一行按它画成与经过同一种行（`CueTrace`）。
+    var step: CueActivity.Touch? { if case .working(_, _, let step) = self { step } else { nil } }
 
     /// 与 Agent 会话同一套的状态：话在路上、在做事；其余没有。
     var shown: PiShown? {
         switch self {
         case .sending(let transit): PiShown(status: .delivery(.inTransit(transit)))
-        case .working(let state, _): PiShown(status: .working(state))
+        case .working(let state, _, _): PiShown(status: .working(state))
         case .disabled, .asleep, .idle, .unreachable: nil
         }
     }
 
-    /// 在做事时对话末尾那一行（同会话：当前动作，没有动作时是状态词）。
+    /// 在做事时那一句（页头、对话末尾）：碰到任务与会话的一步按按钮动词表写（`CueActivity.line`），其余同会话的当前动作，没有动作时是状态词。
     var progress: String? {
-        guard case .working(_, let detail) = self else { return nil }
-        return detail.flatMap(PiProgress.action) ?? shown?.label
+        guard case .working(_, let detail, let step) = self else { return nil }
+        return step.map(CueActivity.line) ?? detail.flatMap(PiProgress.action) ?? shown?.label
     }
 
     /// 它不在时那一句（Cue 此刻的原因，`CueNow.Brain.away`；等同步时那句由 `CueNow.Local` 给），`host` 是它运行的那台 Mac 的名字。
