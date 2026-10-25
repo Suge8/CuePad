@@ -40,5 +40,5 @@ struct CueReplyTip: View {
 
     private static let dot: CGFloat = 7
     /// 与下面等你卡（或输入框）之间，同等你卡与输入框之间。
-    private static let below: CGFloat = 8
+    private static let below = ComposerMetrics.stackGap
 }

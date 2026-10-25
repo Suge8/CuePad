@@ -230,9 +230,9 @@ struct CuePage: View {
         VStack(spacing: 0) {
             if let thread {
                 if !thread.replies.isEmpty { CueReplyTip(replies: thread.replies).transition(.opacity) }
-                CueWaitDock(waiting: thread.waiting, tasks: thread.tasks, shots: thread.shots, open: { opened = $0 }, moving: $docking)
+                CueWaitDock(waiting: thread.waiting, shots: thread.shots, open: { opened = $0 }, moving: $docking)
                 // 说过话后停用了：启用就在输入框正上方（`CueWelcome`），是这时唯一的主动作
-                if !thread.rows.isEmpty, !cue.canHear { CueWelcome(intro: false).fixedSize(horizontal: false, vertical: true).padding(.bottom, 8).transition(.opacity) }
+                if !thread.rows.isEmpty, !cue.canHear { CueWelcome(intro: false).fixedSize(horizontal: false, vertical: true).padding(.bottom, ComposerMetrics.stackGap).transition(.opacity) }
             }
             #if os(iOS)
             Group { if docked { dockRow } else { composer } }.fixedSize(horizontal: false, vertical: true)

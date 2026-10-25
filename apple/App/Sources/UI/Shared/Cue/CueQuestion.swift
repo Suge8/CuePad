@@ -67,11 +67,10 @@ extension CueQuestionLine where Below == EmptyView {
     private static let tailLength = 4
 }
 
-/// Cue 一问的选项：第一项"可以"是实底主按钮（全卡唯一的靛青），其余（"以后……不用问"）是它下面一行小字链接：一问的主动作只有"可以"，
-/// 放宽规矩是顺手的事，不和它抢。等你的答法（`WaitAnswer`）与全屏预览的底栏共用。
-/// 窄屏（手机、窄窗口的 iPad）竖排："可以"铺满一行，链接居中在它下面、长了折行。摆法不随选项的字长变，主按钮总在同一处、最好按。
-/// 宽处（Mac、宽屏 iPad）"可以"在一行尾端，不窄过 `onceWidth`、不随卡宽铺开，链接靠右在它下面；辅助功能字号时照样竖排、按字宽收着。
-/// `hint`：点名的图里"可以"选的是其中一张时（`CueShots.chosen`），一句告诉你选别的去哪说，竖排在按钮下面、横排在按钮左边。
+/// Cue 一问的选项，一行排完：第一项"可以"是按字宽的实底主按钮（全卡唯一的靛青）靠右，其余（"以后……不用问"）是同一行左边的小字链接：
+/// 一问的主动作只有"可以"，放宽规矩是顺手的事，不和它抢。等你的答法（`WaitAnswer`）与全屏预览的底栏共用；会话的选项胶囊同样靠右（`WaitAnswer`）。
+/// 主按钮总在右下角同一处，不随卡宽铺开，不窄过 `onceWidth`；链接长了在左边折行。辅助功能字号时竖排：按钮在上、链接在下，都靠右。
+/// `hint`：点名的图里"可以"选的是其中一张时（`CueShots.chosen`），一句告诉你选别的去哪说，写在左边链接的位置上面。
 /// Cue 停用着答不了时（`CueSession.canHear`）写"启用 Cue 后再答"在 `hint` 的位置；只留"可以"、降成次级并停用，不和启用那颗主按钮抢（同屏只一个主动作），启用后恢复。
 /// 进展页等你列小一档（`compact`），地方窄，选项照旧是一排靠右的胶囊。
 struct CueChoices: View {
@@ -84,18 +83,11 @@ struct CueChoices: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.palette) private var palette
-    #if os(iOS)
-    @Environment(\.horizontalSizeClass) private var sizeClass
-    #endif
 
     #if os(macOS)
     static let onceWidth: CGFloat = 96
-    private static let stackGap: CGFloat = 4
-    private var stacks: Bool { false }
     #else
     static let onceWidth: CGFloat = 88
-    private static let stackGap: CGFloat = 8
-    private var stacks: Bool { sizeClass != .regular }
     #endif
     /// 按钮左右的内边距（`ControlSurface`）：最小宽要扣掉它才是字的宽
     private static let inset: CGFloat = 32
@@ -125,21 +117,23 @@ struct CueChoices: View {
     }
 
     @ViewBuilder private func full(once: String, others: [String], hint: String?, main: ControlButtonStyle.Kind, paused: Bool) -> some View {
-        if stacks || typeSize.isAccessibilitySize {
-            VStack(spacing: Self.stackGap) {
-                button(once, kind: main, fill: true, paused: paused)
-                ForEach(others, id: \.self) { link($0).multilineTextAlignment(.center) }
-                if let hint { note(hint).multilineTextAlignment(.center) }
+        let side = VStack(alignment: typeSize.isAccessibilitySize ? .trailing : .leading, spacing: 0) {
+            if let hint { note(hint) }
+            ForEach(others, id: \.self) { link($0) }
+        }
+        .multilineTextAlignment(typeSize.isAccessibilitySize ? .trailing : .leading)
+        let primary = button(once, kind: main, minWidth: Self.onceWidth, paused: paused).lineLimit(1).fixedSize()
+        if typeSize.isAccessibilitySize {
+            VStack(alignment: .trailing, spacing: 4) {
+                primary
+                side
             }
-            // 不铺满时竖排也按字宽收着
-            .fixedSize(horizontal: !stacks, vertical: false)
+            .frame(maxWidth: .infinity, alignment: .trailing)
         } else {
-            VStack(alignment: .trailing, spacing: 0) {
-                HStack(spacing: 8) {
-                    if let hint { note(hint).lineLimit(1).padding(.trailing, 4) }
-                    button(once, kind: main, minWidth: Self.onceWidth, paused: paused).lineLimit(1)
-                }
-                ForEach(others, id: \.self) { link($0).multilineTextAlignment(.trailing) }
+            HStack(spacing: 12) {
+                side
+                Spacer(minLength: 0)
+                primary
             }
         }
     }
@@ -162,11 +156,11 @@ struct CueChoices: View {
     }
 
     private func button(
-        _ option: String, label: String? = nil, kind: ControlButtonStyle.Kind, fill: Bool = false, minWidth: CGFloat = 0, paused: Bool = false
+        _ option: String, label: String? = nil, kind: ControlButtonStyle.Kind, minWidth: CGFloat = 0, paused: Bool = false
     ) -> some View {
         Button { pick(option) } label: {
             Text(label ?? option).multilineTextAlignment(.center)
-                .frame(minWidth: max(0, minWidth - Self.inset), maxWidth: fill ? .infinity : nil)
+                .frame(minWidth: max(0, minWidth - Self.inset))
         }
         .buttonStyle(ControlButtonStyle(kind: kind, compact: compact))
         .accessibilityLabel(option)
