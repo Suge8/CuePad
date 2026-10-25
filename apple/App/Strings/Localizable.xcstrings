@@ -1061,7 +1061,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@, can't answer now. Answer once sync is back, or on the Mac."
+            "value" : "Can't answer now (%@). Answer once sync is back, or on the Mac."
           }
         },
         "zh-Hans" : {
