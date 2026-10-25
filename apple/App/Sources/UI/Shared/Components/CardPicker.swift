@@ -71,7 +71,7 @@ struct CardPicker: View {
                     }
                     if !data.own.isEmpty {
                         let own = project.flatMap { workspace.catalog?.project($0) }
-                        header(own.map { .verbatim($0.name) } ?? "本项目", project: own)
+                        header(own.map { .verbatim($0.shownName) } ?? "本项目", project: own)
                         rows(data.own)
                         if !data.rest.isEmpty { header("其他", project: nil).padding(.top, 8) }
                     }
@@ -201,7 +201,7 @@ struct CardRow: View {
                 if let project {
                     HStack(spacing: 4) {
                         ProjectGlyph(project: project, size: 10)
-                        Text(project?.name ?? "")
+                        Text(project?.shownName ?? "")
                     }
                     .font(.caption).foregroundStyle(palette.ink3).padding(.top, 2)
                 }

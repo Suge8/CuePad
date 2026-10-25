@@ -18,7 +18,7 @@ struct ProjectSwitcher: View {
             Divider()
             ForEach(Array(projects.enumerated()), id: \.element.id) { index, project in
                 let item = Button { workspace.show(.project(project.id)) } label: {
-                    Label { Text(project.name) } icon: { Image(nsImage: Self.menuIcon(project)) }
+                    Label { Text(project.shownName) } icon: { Image(nsImage: Self.menuIcon(project)) }
                         .labelStyle(.titleAndIcon)
                 }
                 if index < Self.numbered {
@@ -86,7 +86,7 @@ private struct CurrentPage: View {
         case .project(let id):
             let project = projects.first { $0.id == id }
             ProjectGlyph(project: project, size: 12)
-            Text(project?.name ?? "")
+            Text(project?.shownName ?? "")
         case .archive:
             Image(.archive).accessibilityHidden(true)
             Text("归档")

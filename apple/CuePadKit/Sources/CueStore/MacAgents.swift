@@ -81,48 +81,26 @@ public struct MacAgentProblem: Codable, Equatable, Sendable {
   }
 
   /// 要你动手的几种（Mac 的接入面板按它给"安装""登录"、勾上接入）与别的（版本太旧、问不出模型……，只写出来）。
-  /// 同步记录里存的是给人看的那句短语（`description`，接在 Agent 名后面读）：各端直接显示它，旧版本写的按同一句读回这几种。
+  /// 同步记录里存的是种类（别的带句式与参数，`ShownText`），各端按自己的语言写出（`description`，接在 Agent 名后面读）。
   public enum Reason: Equatable, Sendable, Codable, CustomStringConvertible {
     case notInstalled
     case notLoggedIn
     /// 登录了、只差接入（只有 Pi：托管的 Pi 经桥扩展上报）
     case notConnected
-    case other(String)
+    case other(ShownText)
 
-    /// 同步记录里存的字（Mac 写、各端读，按它认回）：照旧是中文，显示的是 `description`。
-    private static let named: [(Reason, String)] = [
-      (.notInstalled, "没装"), (.notLoggedIn, "没登录"), (.notConnected, "还没接入 CuePad（在设置里打开）"),
-    ]
-
-    public init(_ text: String) {
-      self = Self.named.first { $0.1 == text }?.0 ?? .other(text)
-    }
-
-    private var stored: String {
-      if case .other(let text) = self { return text }
-      return Self.named.first { $0.0 == self }?.1 ?? ""
-    }
-
-    /// 给人看的；`other` 是那台 Mac 写下时的原话（按它的语言）。
     public var description: String {
       switch self {
       case .notInstalled: String(localized: "没装")
       case .notLoggedIn: String(localized: "没登录")
       case .notConnected: String(localized: "还没接入 CuePad（在设置里打开）")
-      case .other(let text): text
+      case .other(let text): text.text
       }
-    }
-
-    public init(from decoder: any Decoder) throws { self.init(try decoder.singleValueContainer().decode(String.self)) }
-
-    public func encode(to encoder: any Encoder) throws {
-      var container = encoder.singleValueContainer()
-      try container.encode(stored)
     }
   }
 }
 
-/// 读出时跳过不认识的那家（更新的版本加的 Agent），其余照读。
+/// 读出时跳过读不出的那条（更新的版本加的 Agent、更早的版本存成中文短语的原因），其余照读。
 private struct Lenient<T: Decodable>: Decodable {
   let value: T?
   init(from decoder: any Decoder) throws { value = try? T(from: decoder) }

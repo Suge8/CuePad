@@ -42,7 +42,7 @@ public enum CueEnvelope {
   public static func render(_ input: Input) -> String {
     var lines = ["<cue>", input.now.formatted(stamp)]
 
-    lines.append("项目：" + input.projects.map(\.storedName).joined(separator: "、"))
+    lines.append("项目：" + input.projects.map(\.name).joined(separator: "、"))
 
     lines.append("变化（上次醒来之后）：" + (input.changes.isEmpty ? "无" : ""))
     lines += input.changes.map { "- \(change($0))" }

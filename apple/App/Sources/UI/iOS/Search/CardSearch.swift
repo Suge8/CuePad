@@ -40,7 +40,7 @@ struct CardSearchResults<Leading: View>: View {
                         let project = workspace.catalog?.project(group.id)
                         HStack(spacing: 6) {
                             ProjectGlyph(project: project, size: 12)
-                            SectionHeader(title: .verbatim(project?.name ?? ""), count: nil).padding(.horizontal, -4)
+                            SectionHeader(title: .verbatim(project?.shownName ?? ""), count: nil).padding(.horizontal, -4)
                         }
                         .padding(.top, 8)
                         LazyVGrid(columns: columns, alignment: .leading, spacing: 12) {

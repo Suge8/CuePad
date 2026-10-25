@@ -46,7 +46,7 @@ private struct ProjectScopePicker: View {
         Picker("项目范围", selection: $workspace.projectScope) {
             Label("全部项目", icon: .all).tag(UUID?.none)
             ForEach(workspace.catalog?.projects ?? []) { project in
-                Label { Text(project.name) } icon: { ProjectGlyph(project: project) }.tag(Optional(project.id))
+                Label { Text(project.shownName) } icon: { ProjectGlyph(project: project) }.tag(Optional(project.id))
             }
         }
     }

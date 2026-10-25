@@ -22,24 +22,31 @@ extension CueStore {
     }
   }
 
+  /// CuePad 代 Cue 写下的话（起不来、换不成模型……，`CueMessage.shownText`）。
+  @discardableResult
+  public func addCueMessage(_ author: CueAuthor, shown: ShownText, urgent: Bool = false) throws -> CueMessage {
+    try write { try insertCueMessage(author, shown: shown, urgent: urgent) }
+  }
+
   /// 点名的图都在发到手机的里，不在的抛 `shotMissing`（在写事务内调用）。
   func checkShots(_ shots: [CueShot]) throws {
     for shot in shots where try find(PiPreview.self, shot.preview) == nil { throw CueStoreError.shotMissing(shot.preview.uuidString.lowercased()) }
   }
 
-  /// 写一条对话（在写事务内调用）。`asking` 是提问问的什么，`project` 是它的范围，`shots` 是点名要你看的图；`at`：排在对话里的时刻，缺省是此刻（一轮的经过排在这一轮开始的时刻）。
+  /// 写一条对话（在写事务内调用）：原话是 `text`，CuePad 代写的是 `shown`（各端按自己的语言显示）。`asking` 是提问问的什么，`project` 是它的范围，
+  /// `shots` 是点名要你看的图；`at`：排在对话里的时刻，缺省是此刻（一轮的经过排在这一轮开始的时刻）。
   /// 要提示你的（`CueMessage.alerts`）同时置手机推送标志，到不到你只看 `reaches`。它提到的那几处此刻的样子一并记下（`CuePlace`）。
   func insertCueMessage(
-    _ author: CueAuthor, text: String, asking: CueAsking? = nil, shots: [CueShot] = [], in project: Project? = nil, urgent: Bool = false,
-    task: UUID? = nil, tools: PiChatMessage.Tools? = nil, wake: CueWake? = nil, at time: Date? = nil
+    _ author: CueAuthor, text: String = "", shown: ShownText? = nil, asking: CueAsking? = nil, shots: [CueShot] = [], in project: Project? = nil,
+    urgent: Bool = false, task: UUID? = nil, tools: PiChatMessage.Tools? = nil, wake: CueWake? = nil, at time: Date? = nil
   ) throws -> CueMessage {
     let now = Date.stamp
     var message = CueMessage(
-      id: UUID(), author: .known(author), text: text, choices: asking?.ask.choices(in: project?.name),
+      id: UUID(), author: .known(author), text: shown?.text ?? text, shownText: shown, choices: asking?.ask.choices(in: project?.name),
       asked: asking.map { CueAsked($0.ask, project: project?.id) }, askAction: asking?.action, askRule: asking?.rule, shots: shots,
       urgent: urgent, taskID: task,
       answer: nil, answeredAt: nil, setAsideBy: nil, deliveredAt: nil, createdAt: time ?? now, modifiedAt: now, tools: tools, wake: wake,
-      places: try CuePlace.capture(task: task, wake: wake, in: db), notify: false)
+      places: try CuePlace.capture(task: task, wake: wake, project: asking == nil ? nil : project?.id, in: db), notify: false)
     message.notify = try message.alerts && reaches(.cue)
     try insert(message)
     try registerImages(in: text)
@@ -83,15 +90,15 @@ extension CueStore {
   /// 一轮写给你的话（值班的管理器调）：做完时的回复，或回答你的一轮出错。不是在回答你的一轮（`answersYou` 为假）里已经对你说过话
   /// （tell、done 的结果），最后那句只是复述，不写。回答你的一轮要提示你（`urgent`：你说完多半就离开了，在等它），一轮只响一次：
   /// 这一轮已经提示过你（提问卡、急事、出错）就不再提示。
-  public func replyCueRound(startedAt: Date, reply: String, as author: CueAuthor, answersYou: Bool) throws {
-    try write { try putCueReply(startedAt: startedAt, reply: reply, as: author, answersYou: answersYou) }
+  public func replyCueRound(startedAt: Date, reply: ShownText, as author: CueAuthor, answersYou: Bool) throws {
+    try write { try putCueReply(startedAt: startedAt, reply: "", shown: reply, as: author, answersYou: answersYou) }
   }
 
-  private func putCueReply(startedAt: Date, reply: String, as author: CueAuthor, answersYou: Bool) throws {
-    guard !reply.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+  private func putCueReply(startedAt: Date, reply: String, shown: ShownText? = nil, as author: CueAuthor, answersYou: Bool) throws {
+    guard !(shown?.text ?? reply).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
     let said = try select(CueMessage.self, where: "author = 'cue' AND createdAt >= ?", [startedAt])
     guard answersYou || said.isEmpty else { return }
-    _ = try insertCueMessage(author, text: reply, urgent: answersYou && !said.contains(where: \.alerts))
+    _ = try insertCueMessage(author, text: reply, shown: shown, urgent: answersYou && !said.contains(where: \.alerts))
   }
 
   /// 待交给 Cue 的大脑的（唯一定义，也是它的部分索引的条件），交出去都叫醒它：你说了还没交的话，与还没交、或交过之后又从别处同步来另一个回答的回答。

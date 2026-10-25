@@ -179,7 +179,7 @@ struct SearchPalette: View {
                             let project = workspace.catalog?.project(group.id)
                             HStack(spacing: 6) {
                                 ProjectGlyph(project: project, size: 11)
-                                Text(project?.name ?? "")
+                                Text(project?.shownName ?? "")
                                 Text("\(group.cards.count)").foregroundStyle(palette.ink3)
                             }
                             .font(Typography.label).foregroundStyle(palette.ink2)
@@ -239,7 +239,7 @@ struct SearchPalette: View {
             VStack(alignment: .leading, spacing: 10) {
                 Text(text.label).font(Typography.previewTitle).foregroundStyle(palette.ink)
                 HStack(spacing: 6) {
-                    Text(Dotted(project?.name, DateLabel.short(card.modifiedAt)))
+                    Text(Dotted(project?.shownName, DateLabel.short(card.modifiedAt)))
                     if let name = data.lastSends[card.id]?.target.shownName { SentMark(target: name) }
                 }
                 .font(Typography.meta).foregroundStyle(palette.ink3)

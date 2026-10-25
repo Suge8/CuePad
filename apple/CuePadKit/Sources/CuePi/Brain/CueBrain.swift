@@ -56,7 +56,7 @@ public enum CueBrainEvent: Sendable, Equatable {
     /// 这一轮出错（提供方报错、额度、认证……），原文
     case failed(String)
     /// 进程退出，之后不再有事件。`stop()` 让它退出的为 nil，否则是退出原因（退出码与标准错误的末尾）
-    case exited(String?)
+    case exited(ShownText?)
 }
 
 @MainActor

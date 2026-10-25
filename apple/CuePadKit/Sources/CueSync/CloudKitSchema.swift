@@ -14,7 +14,8 @@ enum CloudKitSchema {
     "cards": [("cueFollows", "INT64"), ("isFavorite", "INT64"), ("numbering", "STRING")],
     "projects": [("goalCardID", "STRING"), ("sortKey", "STRING")],
     "sendRecords": [("taskID", "STRING"), ("partIDs", "STRING")],
-    "deliveryRequests": [("taskID", "STRING"), ("partIDs", "STRING")],
+    // 没送到的原因改存句式与参数（failure），各端按自己的语言显示
+    "deliveryRequests": [("taskID", "STRING"), ("partIDs", "STRING"), ("resultDetail", "ENCRYPTED STRING")],
     "piMessages": [("toolCount", "INT64")],
     "cueMessages": [("acceptance", "INT64")],
     // 叫醒的那一下改读这一轮经过那一行上的 `cueMessages.wake`

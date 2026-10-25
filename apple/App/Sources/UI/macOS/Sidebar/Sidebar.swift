@@ -255,7 +255,7 @@ private struct ProjectRow: View, Equatable {
         PageRow(selected: selected, action: { select(.project(project.id)) }) {
             ProjectGlyph(project: project)
         } title: {
-            Text(project.name)
+            Text(project.shownName)
         } trailing: {
             EmptyView()
         }

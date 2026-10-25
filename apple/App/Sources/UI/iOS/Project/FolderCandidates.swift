@@ -89,7 +89,7 @@ struct FolderPickerSheet: View {
         NavigationStack {
             FolderCandidateList(project: project.id, choose: bind)
                 .disabled({ if case .binding = phase { true } else { false } }())
-                .navigationTitle("\(project.name) 的文件夹")
+                .navigationTitle("\(project.shownName) 的文件夹")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .cancellationAction) { Button("取消", role: .cancel) { dismiss() } } }
                 .safeAreaInset(edge: .bottom) { status }
@@ -114,7 +114,7 @@ struct FolderPickerSheet: View {
 
     private func bind(_ candidate: ProjectFolders.Candidate) {
         phase = .binding(candidate.folder)
-        let id = project.id, name = project.name
+        let id = project.id, name = project.shownName
         Task {
             do {
                 try await workspace.requestFolder(PiBind(project: id, folder: candidate.target), title: name, on: candidate.hostID)

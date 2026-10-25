@@ -1,4 +1,5 @@
 #if os(macOS)
+import CueStore
 import Foundation
 
 /// 三家大脑共用的部分：事件流、本次运行的临时目录（系统提示等）、给运行时的环境。进程与协议各家用接入里的那一份
@@ -27,7 +28,7 @@ final class BrainSession {
     }
 
     /// 进程退出（`reason` 为 nil 是 `stop()` 让它退的）：删掉临时目录，发 `exited` 并结束事件流。只算第一次。
-    func exited(_ reason: String?) {
+    func exited(_ reason: ShownText?) {
         guard !ended else { return }
         ended = true
         if let directory { try? FileManager.default.removeItem(at: directory) }

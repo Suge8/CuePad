@@ -19,17 +19,17 @@ struct ProjectScope: View {
                 Picker("项目范围", selection: $workspace.projectScope) {
                     Label("全部项目", icon: .all).tag(UUID?.none)
                     ForEach(workspace.catalog?.projects ?? []) { project in
-                        Label { Text(project.name) } icon: { ProjectGlyph(project: project) }.tag(Optional(project.id))
+                        Label { Text(project.shownName) } icon: { ProjectGlyph(project: project) }.tag(Optional(project.id))
                     }
                 }
             } label: {
                 HStack(spacing: 5) {
                     if let current { ProjectGlyph(project: current, size: 13) }
-                    (current.map { Text($0.name) } ?? Text("全部项目")).fontWeight(current == nil ? nil : .semibold)
+                    (current.map { Text($0.shownName) } ?? Text("全部项目")).fontWeight(current == nil ? nil : .semibold)
                         .lineLimit(1).frame(maxWidth: Self.nameWidth)
                     if current == nil { Image(.expand).font(.caption.weight(.semibold)).accessibilityHidden(true) }
                 }
-                .menuLabel(current.map { "项目范围：\($0.name)" } ?? "项目范围：全部项目")
+                .menuLabel(current.map { "项目范围：\($0.shownName)" } ?? "项目范围：全部项目")
                 .padding(.leading, 14).padding(.trailing, current == nil ? 14 : 4)
                 .frame(height: FloatingHeaderLayout.height)
                 .contentShape(.capsule)

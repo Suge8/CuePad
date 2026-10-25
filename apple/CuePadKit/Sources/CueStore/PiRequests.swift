@@ -10,14 +10,22 @@ public enum PiAnswerValue: Sendable, Equatable {
   /// 输入框填的文字
   case text(String)
 
-  /// 答了什么，一句话："覆盖"、"是"。
-  public var label: String {
+  /// 写进对话的正文（`PiChatRole.answer`）：选项与填的字照原文；确认框是作答那台的语言，各端照 `shown` 按自己的语言写。
+  public var said: String {
     switch self {
-    case .option(let option): option
-    case .confirmed(let confirmed): confirmed ? String(localized: "是") : String(localized: "否")
-    case .text(let text): text
+    case .option(let said), .text(let said): said
+    case .confirmed: label
     }
   }
+
+  /// 确认框的是或否（各端按自己的语言写）；选项与填的字只有原文，为 nil。
+  public var shown: ShownText? {
+    guard case .confirmed(let yes) = self else { return nil }
+    return yes ? ShownText("是") : ShownText("否")
+  }
+
+  /// 答了什么，这台设备的语言。
+  public var label: String { shown?.text ?? said }
 }
 
 /// 手机发给 Mac 的作答：哪次弹窗、答什么。存在投送请求（方式 `answer`）的正文里（JSON，答案按种类各占一个键）。

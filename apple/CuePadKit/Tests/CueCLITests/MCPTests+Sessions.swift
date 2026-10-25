@@ -40,7 +40,7 @@ extension MCPTests {
 
       // 那台 Mac 上没有 Codex：执行器把失败写回
       let executor = DeliveryExecutor(store: store, hostID: "mac-a", onIssue: { Issue.record("\($0)") }) {
-        $0.launch?.agent == .codex ? .failed("这台 Mac 上没有找到 Codex") : .succeeded
+        $0.launch?.agent == .codex ? .failed(.verbatim("这台 Mac 上没有找到 Codex")) : .succeeded
       }
       try await executor.start()
       defer { Task { await executor.stop() } }

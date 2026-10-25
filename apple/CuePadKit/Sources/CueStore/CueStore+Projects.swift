@@ -15,12 +15,13 @@ extension CueStore {
     }
   }
 
-  /// 改名称、介绍、颜色、图标、置顶。删除状态对调用方只读，有专门的方法（编译期保证）。
+  /// 改名称、介绍、颜色、图标、置顶。删除状态对调用方只读，有专门的方法（编译期保证）。改了名的不能改成空名（别处留下的空名不改名照样能改别的）。
   public func updateProject(_ id: UUID, _ edit: @Sendable (inout Project) -> Void) throws {
     try write {
       guard var project = try find(Project.self, id) else { throw CueStoreError.notFound }
+      let name = project.name
       edit(&project)
-      try Self.requireName(project.name)
+      if project.name != name { try Self.requireName(project.name) }
       project.modifiedAt = Date.stamp
       try update(project)
     }

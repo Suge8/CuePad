@@ -86,7 +86,7 @@ extension CueQuestionLine where Below == EmptyView {
 /// 主按钮总在右下角同一处，不随卡宽铺开，不窄过 `onceWidth`；链接长了在左边折行。辅助功能字号时竖排：按钮在上、链接在下，都靠右。
 /// Cue 停用着答不了时（`CueSession.canHear`）写"启用 Cue 后再答"在左边链接的位置；只留"可以"、降成次级并停用，不和启用那颗主按钮抢（同屏只一个主动作），启用后恢复。
 struct CueChoices: View {
-    let options: [String]
+    let message: CueMessage
     var disabled = false
     let pick: (String) -> Void
     @Environment(Workspace.self) private var workspace
@@ -103,7 +103,7 @@ struct CueChoices: View {
 
     var body: some View {
         // 停用着只留停用的"可以"：别的选项此刻同样选不了
-        let cue = workspace.cue, paused = !cue.canHear, accessible = typeSize.isAccessibilitySize
+        let cue = workspace.cue, paused = !cue.canHear, accessible = typeSize.isAccessibilitySize, options = message.choices ?? []
         let side = VStack(alignment: accessible ? .trailing : .leading, spacing: 0) {
             if paused { note(String(localized: "启用 \(cue.name) 后再答")) }
             if !paused { ForEach(options.dropFirst(), id: \.self) { link($0) } }
@@ -125,10 +125,10 @@ struct CueChoices: View {
         }
     }
 
-    /// 次要的选项：一行小字，点了照样答这一项（原文）。
+    /// 次要的选项：一行小字，点了照样答这一项（存下的原文；写的是这台设备语言的那句，`CueMessage.shownChoice`）。
     private func link(_ option: String) -> some View {
         Button { pick(option) } label: {
-            Text(option).font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink2)
+            Text(message.shownChoice(option)).font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink2)
                 .padding(.vertical, Self.linkInset).contentShape(.rect)
         }
         .buttonStyle(PressStyle(.inline))
@@ -145,10 +145,10 @@ struct CueChoices: View {
     /// 主按钮"可以"：按字宽，不窄过 `onceWidth`；停用着降成次级并停用。
     private func once(_ option: String, paused: Bool) -> some View {
         Button { pick(option) } label: {
-            Text(option).multilineTextAlignment(.center).frame(minWidth: Self.onceWidth - Self.inset)
+            Text(message.shownChoice(option)).multilineTextAlignment(.center).frame(minWidth: Self.onceWidth - Self.inset)
         }
         .buttonStyle(ControlButtonStyle(kind: paused ? .secondary : .primary))
-        .accessibilityLabel(option)
+        .accessibilityLabel(message.shownChoice(option))
         .disabled(disabled || paused)
     }
 }

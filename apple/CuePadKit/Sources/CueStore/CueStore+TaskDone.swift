@@ -18,7 +18,7 @@ extension CueStore {
       _ = try applyStatus(task, .done)
       let ended = try endUnusedSessions(of: task, cue: true)
       guard finished, card.parentID == nil else { return (nil, ended) }
-      return (try insertCueMessage(.cue, text: CueReport.text(task: card.heading, evidence: evidence), shots: shots, task: task), ended)
+      return (try insertCueMessage(.cue, shown: CueReport.text(task: card.heading, evidence: evidence), shots: shots, task: task), ended)
     }
   }
 

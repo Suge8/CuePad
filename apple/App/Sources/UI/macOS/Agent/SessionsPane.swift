@@ -59,7 +59,7 @@ struct SessionsPane: View {
     }
 
     private var searchPrompt: String {
-        workspace.catalog?.project(filter).map { String(localized: "搜 \($0.name) 的会话") } ?? String(localized: "搜会话、目录、说过的话")
+        workspace.catalog?.project(filter).map { String(localized: "搜 \($0.shownName) 的会话") } ?? String(localized: "搜会话、目录、说过的话")
     }
 
     @ViewBuilder private func sessions(_ list: PiSessionList) -> some View {

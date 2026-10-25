@@ -31,7 +31,7 @@ struct TaskFlowTests {
         try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "s1", state: .settled, title: "atlas")
         let delivers = Mutex(false)
         let executor = DeliveryExecutor(store: store, hostID: "mac-a", onIssue: { Issue.record("\($0)") }) { [store, atlas] request in
-            guard delivers.withLock({ $0 }) else { return .failed("会话在送达前关掉了") }
+            guard delivers.withLock({ $0 }) else { return .failed(.verbatim("会话在送达前关掉了")) }
             _ = try? await store.recordSend(request.content, to: atlas, card: request.cardID)
             return .succeeded
         }
@@ -145,7 +145,7 @@ struct TaskFlowTests {
         #expect(request.launch?.project == project.id)
         #expect(try await next(task) == nil)
 
-        let executor = DeliveryExecutor(store: store, hostID: request.hostID, onIssue: { Issue.record("\($0)") }) { _ in .failed("这台 Mac 上开不了会话") }
+        let executor = DeliveryExecutor(store: store, hostID: request.hostID, onIssue: { Issue.record("\($0)") }) { _ in .failed(.verbatim("这台 Mac 上开不了会话")) }
         try await executor.start()
         _ = try await eventually(store, { try $0.deliveryRequest(request.id)?.status }) { $0 == .known(.failed) }
         await executor.stop()

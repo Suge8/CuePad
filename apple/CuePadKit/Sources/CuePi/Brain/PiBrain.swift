@@ -131,7 +131,7 @@ final class PiBrain: CueBrain {
     }
 
     /// 进程退出：等着的命令以 `notRunning` 失败，报退出。
-    private func ended(_ reason: String?) {
+    private func ended(_ reason: ShownText?) {
         replies.closeAll(CueBrainError.notRunning)
         session.exited(reason)
     }

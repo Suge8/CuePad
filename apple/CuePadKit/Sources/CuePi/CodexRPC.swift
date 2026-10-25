@@ -1,4 +1,5 @@
 #if os(macOS)
+import CueStore
 import Darwin
 import Foundation
 
@@ -233,13 +234,13 @@ enum CodexRPCError: Error, Equatable {
     case timedOut
 }
 
-extension CodexRPCError: LocalizedError {
-    var errorDescription: String? {
+extension CodexRPCError: ShownError {
+    var shown: String.LocalizationValue {
         switch self {
-        case .server(_, let message): String(localized: "Codex 拒绝了：\(message)")
-        case .closed: String(localized: "Codex 的 app-server 没有回应就退出了")
-        case .unreachable: String(localized: "连不上 Codex 的常驻服务")
-        case .timedOut: String(localized: "Codex 的 app-server 没有及时回应")
+        case .server(_, let message): "Codex 拒绝了：\(message)"
+        case .closed: "Codex 的 app-server 没有回应就退出了"
+        case .unreachable: "连不上 Codex 的常驻服务"
+        case .timedOut: "Codex 的 app-server 没有及时回应"
         }
     }
 }

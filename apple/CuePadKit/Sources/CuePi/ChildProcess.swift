@@ -265,14 +265,15 @@ public final class ChildProcess: Sendable {
         if placement == .group { killpg(pid, SIGKILL) } else { Darwin.kill(pid, SIGKILL) }
     }
 
-    /// 等进程退出，返回退出原因（退出码或信号与标准错误的末尾）；是 `stop()` 让它退出的返回 nil。可以多处一起等，不随取消提前返回。
-    func exited() async -> String? {
+    /// 等进程退出，返回退出原因（退出码或信号与标准错误的末尾，各端按自己的语言显示）；是 `stop()` 让它退出的返回 nil。
+    /// 可以多处一起等，不随取消提前返回。
+    func exited() async -> ShownText? {
         _ = await Task { await exited(within: nil) }.value  // 不继承取消
         let (status, stopping) = shared.state.withLock { ($0.status ?? -1, $0.stopping) }
         if stopping { return nil }
-        let code = (status & 0x7F) == 0 ? String(localized: "退出码 \((status >> 8) & 0xFF)") : String(localized: "被信号 \(status & 0x7F) 结束")
+        let code = (status & 0x7F) == 0 ? ShownText("退出码 \((status >> 8) & 0xFF)") : ShownText("被信号 \(status & 0x7F) 结束")
         let tail = stderrTail
-        return tail.isEmpty ? code : "\(code)：\(tail)"
+        return tail.isEmpty ? code : ShownText("\(code.embedded)：\(tail)")
     }
 
     /// 退出码；还没退出或被信号结束为 nil。

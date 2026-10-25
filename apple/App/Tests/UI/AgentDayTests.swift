@@ -105,7 +105,7 @@ struct AgentDayTests {
         let beta = PiStateRecorder(store: store, hostID: "mac-b")
         try await beta.update(sessionID: "beta", state: .settled, title: "beta")
         let lost = try await say("备份一下线上库", to: "beta")
-        try await macAnswers(lost, host: "mac-b", .failed("Pi 已经退出"))
+        try await macAnswers(lost, host: "mac-b", .failed(.verbatim("Pi 已经退出")))
         try await Task.sleep(for: .milliseconds(5))
         try await beta.update(sessionID: "beta", state: .thinking, title: "beta")
         try await beta.update(sessionID: "beta", state: .settled, title: "beta")
@@ -136,7 +136,7 @@ struct AgentDayTests {
         #expect(try await title() == "排队调度")
         #expect(try await item("delta").delivery == nil)
 
-        try await macAnswers(request, host: "mac-d", .failed("Pi 已经退出"))
+        try await macAnswers(request, host: "mac-d", .failed(.verbatim("Pi 已经退出")))
         let failed = try await item("delta")
         #expect(PiRename.title(of: failed.state, request: failed.rename, at: .always()) == "delta")
         #expect(note(failed) == .renameFailed)
@@ -188,7 +188,7 @@ struct AgentDayTests {
         #expect(ends.count == 1)
         #expect(try await list().ends[session.id] == .sending)
 
-        try await macAnswers(ends[0], host: "mac-a", .failed("会话没有按时结束，可能还在等你在终端里处理"))
+        try await macAnswers(ends[0], host: "mac-a", .failed(.verbatim("会话没有按时结束，可能还在等你在终端里处理")))
         #expect(try await list().ends[session.id]?.failure == .reported("会话没有按时结束，可能还在等你在终端里处理"))
 
         await workspace.end(session)

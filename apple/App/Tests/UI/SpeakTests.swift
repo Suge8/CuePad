@@ -207,7 +207,7 @@ struct SpeakTests {
         await workspace.speak(to: .session(target, mode: .send), from: box) { try $0.stored(in: files) }?.value
         let lost = try #require(try await store.deliveryRequests().first)
 
-        let executor = DeliveryExecutor(store: store, hostID: "mac-b", onIssue: { _ in }) { _ in .failed("Pi 已经退出") }
+        let executor = DeliveryExecutor(store: store, hostID: "mac-b", onIssue: { _ in }) { _ in .failed(.verbatim("Pi 已经退出")) }
         try await executor.start()
         let failed = try #require(try await eventually(store, { try $0.deliveryRequest(lost.id) }) { $0?.isOpen == false })
         await executor.stop()

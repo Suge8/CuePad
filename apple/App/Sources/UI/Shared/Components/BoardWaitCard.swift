@@ -45,7 +45,7 @@ struct BoardWaitCard: View {
     #if os(macOS)
     /// 一件：项目、问句（待回复写"待回复"）、等了多久，一行；几件时项目一行，下面一件一行。
     private func tip(at now: Date) -> String {
-        let project = workspace.catalog?.project(held.project)?.name
+        let project = workspace.catalog?.project(held.project)?.shownName
         let lines = held.waits.map { Dotted($0.asked.line, PiClock.Waited(since: $0.since).format(now)).visible }
             + held.replies.map { Dotted(String(localized: "待回复"), PiClock.Waited(since: $0.session.stateSince).format(now)).visible }
         if lines.count == 1 { return Dotted(project, lines[0]).visible }

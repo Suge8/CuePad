@@ -3,7 +3,7 @@ import Foundation
 
 extension CueStore {
   /// 结束一条还开着的提问（`CueQuestionEnd`）；已经结束的抛 `questionEnded`，回答不是它的选项之一抛 `notAChoice`。回答交给 Cue（`toDeliver`），撤回的不交。
-  /// 你选的是第二项（"以后……不用问"，`CueAsk.always(in:)`）时，同一个事务里把这句原话记成一条你说的、一直记着的记忆：
+  /// 你选的是第二项（"以后……不用问"，`CueAsk.always(in:)`）时，同一个事务里把你看到的那句（这台设备的语言，`CueMessage.shownChoice`）记成一条你说的、一直记着的记忆：
   /// 不用先问的例外只在记忆里，Cue 读到就直接做。已有一字不差、没忘掉的那条就用它（没钉上的钉上），同一句不记第二遍。
   /// 返回记下的那一条的 id（调用方连同提问一起上传）。
   @discardableResult
@@ -14,7 +14,7 @@ extension CueStore {
       let answer: String? = if case .answered(let text) = end { text } else { nil }
       guard try endQuestions(answer: answer, where: "id = ?", [id]) > 0 else { throw CueStoreError.questionEnded }
       guard let answer, message.allowsFromNowOn(answer) else { return nil }
-      return try keepLine(answer)
+      return try keepLine(message.shownChoice(answer))
     }
   }
 

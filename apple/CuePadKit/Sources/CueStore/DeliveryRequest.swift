@@ -59,8 +59,8 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
   public var mode: Open<DeliveryMode>
   public var cardID: UUID?
   public var status: Open<DeliveryStatus>
-  /// 失败原因（存储列）；给人看的读 `failure`。
-  public var resultDetail: String?
+  /// 没送到的原因（各端按自己的语言显示，`ShownText`）；给人看的读 `failure`。
+  public var failureReason: ShownText?
   public var handledBy: String?
   public var createdAt: Date
   public var completedAt: Date?
@@ -80,15 +80,15 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
   /// 还没被 Mac 领取（仍是 pending）：撤得回。领取后它已交给 Agent。
   public var isWithdrawable: Bool { status == .known(.pending) }
 
-  /// 没能送达的原因；成功或还在路上是 nil。本机执行器写回的失败总带原因（`DeliveryOutcome.failed`），只有别的版本写来、
+  /// 没能送达的原因（这台设备的语言）；成功或还在路上是 nil。本机执行器写回的失败总带原因（`DeliveryOutcome.failed`），只有别的版本写来、
   /// 没带原因的记录（含本版本不认识的状态，它不是送达）落到 `unexplainedFailure`——失败说法只在这里兜底，界面与服务不再各写一句。
   public var failure: String? {
     guard !isOpen, status != .known(.succeeded) else { return nil }
-    guard let reason = resultDetail, !reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return Self.unexplainedFailure }
+    guard let reason = failureReason?.text, !reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return Self.unexplainedFailure }
     return reason
   }
 
-  public static let unexplainedFailure = String(localized: "Mac 没有说明原因")
+  public static var unexplainedFailure: String { String(localized: "Mac 没有说明原因") }
 
   /// 发给一个会话的请求（先发的在前）里此刻要显示的那次结束到哪了（`Speech`）：还在路上的，或没能结束、之后也没再发过别的；
   /// 结束成功或没请求过是 nil。
@@ -132,26 +132,26 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
 /// 再不成就按失败写回；终态只由执行器写这一处。
 public enum DeliveryOutcome: Sendable {
   case succeeded
-  case failed(String)
-  case transient(String)
+  case failed(ShownText)
+  case transient(ShownText)
 }
 
 extension DeliveryRequest: Record {
   static let table = Table.deliveryRequests
   static let columns = [
     "id", "content", "targetKind", "targetName", "targetRef", "hostID", "mode", "cardID", "status",
-    "resultDetail", "handledBy", "createdAt", "completedAt", "modifiedAt", "resultReceivedAt", "origin",
+    "failure", "handledBy", "createdAt", "completedAt", "modifiedAt", "resultReceivedAt", "origin",
   ]
   static let syncedColumns = columns.filter { $0 != "resultReceivedAt" }
   var bindings: [any SQLBindable] {
-    [id, content, target.kind.rawValue, target.name, target.ref, hostID, mode.rawValue, cardID, status.rawValue, resultDetail, handledBy, createdAt, completedAt, modifiedAt, resultReceivedAt, origin?.rawValue]
+    [id, content, target.kind.rawValue, target.name, target.ref, hostID, mode.rawValue, cardID, status.rawValue, failureReason?.stored, handledBy, createdAt, completedAt, modifiedAt, resultReceivedAt, origin?.rawValue]
   }
   init(row: Row) {
     self.init(
       id: row.uuid(0), content: row.text(1),
       target: SendTarget(kind: Open(rawValue: row.text(2)), name: row.text(3), ref: row.textOrNil(4)),
       hostID: row.text(5), mode: Open(rawValue: row.text(6)), cardID: row.uuidOrNil(7),
-      status: Open(rawValue: row.text(8)), resultDetail: row.textOrNil(9), handledBy: row.textOrNil(10),
+      status: Open(rawValue: row.text(8)), failureReason: row.textOrNil(9).flatMap(ShownText.init(stored:)), handledBy: row.textOrNil(10),
       createdAt: row.date(11), completedAt: row.dateOrNil(12), modifiedAt: row.date(13), resultReceivedAt: row.dateOrNil(14),
       origin: row.textOrNil(15).map(Open.init(rawValue:)), reachedServer: row.bool(16))
   }

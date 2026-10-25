@@ -110,7 +110,7 @@ final class CueKeeper {
     var work: (state: PiWorkState, detail: String?, step: CueActivity.Touch?, row: UUID?) {
         switch phase {
         case .starting, .restarting: return (.settled, nil, nil, nil)
-        case .stuck(let reason): return (.error, reason, nil, nil)
+        case .stuck(let reason): return (.error, reason.text, nil, nil)
         case .running(let shift):
             guard let turn = shift.turn else { return (.settled, nil, nil, nil) }
             guard let call = turn.round.running else { return (.thinking, nil, nil, turn.round.row) }
