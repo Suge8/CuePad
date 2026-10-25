@@ -45,7 +45,7 @@ extension RealPiTests {
             try pi.prompt("[[tool:sleep 30]] [[abort-as-error]] 跑个慢命令")
             try await eventually("在跑工具") { bridge.sessions.first?.state == .tool }
             try await bridge.abort(s.id)
-            try await eventually("这一轮结束", timeout: .seconds(30)) { [.settled, .error].contains(bridge.sessions.first?.state) }
+            try await eventually("这一轮结束") { [.settled, .error].contains(bridge.sessions.first?.state) }
             #expect(bridge.sessions.first?.state == .settled, "\(String(describing: bridge.sessions.first?.detail))")
             let messages = try PiHistory.index(file: #require(s.sessionFile), from: nil).messages
             #expect(messages.map(\.text) == ["[[tool:sleep 30]] [[abort-as-error]] 跑个慢命令", PiNotice.stopped.rawValue])
@@ -74,7 +74,7 @@ extension RealPiTests {
             try await bridge.send(PiMessage(text: "[[slow]] FIRST", deliveryID: first.uuidString), to: s.id)
             try await bridge.send(PiMessage(text: "SECOND", deliveryID: second.uuidString), to: s.id)
 
-            try await eventually("最后一句答完", timeout: .seconds(20)) {
+            try await eventually("最后一句答完") {
                 self.replies(of: s).last?.hasPrefix("ECHO SECOND") == true && bridge.sessions.first?.state == .settled && log.states.last == .settled
             }
             #expect(log.settles == 1, "被停下的两轮都不算歇下：\(log.states)")

@@ -22,6 +22,7 @@ import Foundation
 struct AgentProbe {
     let paths: AgentPaths
     let locator: ExecutableLocator
+    let timing: Timing
 
     private enum Outcome: Sendable {
         case usable(MacAgent)
@@ -49,7 +50,7 @@ struct AgentProbe {
         guard let executable = status.executable else { return .unusable(.other(String(localized: "没找到它的命令行程序"))) }
         if kind == .opencode { return .usable(MacAgent(kind: kind, model: nil, models: [])) }
         do {
-            let agent: MacAgent? = try await withDeadline(AgentTimeouts.probe, orThrow: ProbeError.timedOut) { [self] in
+            let agent: MacAgent? = try await withDeadline(AgentTimeouts.probe, timing: timing, orThrow: ProbeError.timedOut) { [self] in
                 switch kind {
                 case .pi: return try await askPi(executable)
                 case .codex: return try await askCodex(executable)
@@ -72,6 +73,7 @@ struct AgentProbe {
     private static func absent(_ kind: AgentKind, _ status: AgentStatus) -> MacAgentProblem.Reason? {
         switch status.presence {
         case .notFound: .notInstalled
+        case .unresponsive: .other(String(localized: "问版本没有回应，稍后再试"))
         case .tooOld(let version): .other(String(localized: "版本太旧（\(version.description)，要 \(kind.minimumVersion?.description ?? "") 或更新）"))
         case .found: nil
         }
@@ -95,7 +97,7 @@ struct AgentProbe {
             "--no-skills", "--no-prompt-templates", "--no-themes", "--no-context-files",
         ]
         let environment = locator.environment(launching: executable, overrides: paths.pi.launchEnvironment.merging(["CUEPAD_PROBE": "1"]) { $1 })
-        guard let result = await ChildProcess.run(executable, arguments, environment: environment, timeout: AgentTimeouts.probe) else {
+        guard let result = await ChildProcess.run(executable, arguments, environment: environment, timeout: AgentTimeouts.probe, timing: timing) else {
             throw ProbeError.timedOut
         }
         struct Line: Decodable {

@@ -1,4 +1,5 @@
 #if os(macOS)
+import CueStore
 import Darwin
 import Foundation
 import Synchronization
@@ -167,26 +168,45 @@ public final class ChildProcess: Sendable {
 
     // MARK: 一次性的命令
 
+    /// 一次性命令的结局：跑完（退出码与标准输出）、超时被结束、没能启动。
+    public enum Attempt: Sendable {
+        case finished(status: Int32, output: String)
+        case timedOut
+        case notStarted
+    }
+
     /// 跑一个命令（标准输入、标准错误是空设备），取它的退出码与标准输出（`collect` 为 false 时不接管，常驻的后代继承了管道就永远读不到结尾）。
-    /// 自成进程组：超过 `timeout` 时结束它连同它起的整组（不理 SIGTERM、握着输出管道的子进程也一样），返回 nil；无法启动也返回 nil。
-    /// 取消调用方不影响它：超时照样结束，退出码照实取。
-    @concurrent public static func run(
+    /// 自成进程组：超过 `timeout` 时结束它连同它起的整组（不理 SIGTERM、握着输出管道的子进程也一样）。
+    /// 取消调用方不影响它：超时照样结束，退出码照实取。`timing` 是量 `timeout` 的钟：起一个进程要多久取决于系统此刻多忙，
+    /// 测试给手动推进的钟，截止只在测试推进时到。
+    @concurrent public static func attempt(
         _ executable: URL, _ arguments: [String], directory: URL? = nil, environment: [String: String]? = nil, timeout: Duration? = nil,
-        collect: Bool = true
-    ) async -> (status: Int32, output: String)? {
+        timing: Timing = .system, collect: Bool = true
+    ) async -> Attempt {
         guard let process = try? await ChildProcess(
             executable, arguments, directory: directory, environment: environment, placement: .group, output: collect ? .raw : .null,
             keepErrors: false)
-        else { return nil }
+        else { return .notStarted }
         // 包一层不继承取消的任务（`withTaskCancellationShield` 要 macOS 27，部署目标是 26）
         return await Task {
             async let output = process.output.reduce(into: Data()) { $0 += $1 }
-            guard await process.exited(within: timeout) else {
+            guard await process.exited(within: timeout, timing: timing) else {
                 process.end()
-                return nil  // 不等输出读完：它起的后代可能还握着管道（离开时读取随之取消）
+                return .timedOut  // 不等输出读完：它起的后代可能还握着管道（离开时读取随之取消）
             }
-            return (process.status ?? -1, String(decoding: await output, as: UTF8.self))
+            return .finished(status: process.status ?? -1, output: String(decoding: await output, as: UTF8.self))
         }.value
+    }
+
+    /// `attempt` 的简写：超时与没能启动都是 nil（只在两者不必分开时用）。
+    @concurrent public static func run(
+        _ executable: URL, _ arguments: [String], directory: URL? = nil, environment: [String: String]? = nil, timeout: Duration? = nil,
+        timing: Timing = .system, collect: Bool = true
+    ) async -> (status: Int32, output: String)? {
+        guard case .finished(let status, let output) = await attempt(
+            executable, arguments, directory: directory, environment: environment, timeout: timeout, timing: timing, collect: collect)
+        else { return nil }
+        return (status, output)
     }
 
     /// 等它退出，返回退出码（被信号结束为 nil）；不随调用方取消提前返回。
@@ -274,8 +294,8 @@ public final class ChildProcess: Sendable {
         return String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    /// 等进程退出，至多 `limit`（nil 不限时）；退出了返回 true。到点或调用方取消时不管有没有退出都立刻返回 false，好接着升级信号。
-    func exited(within limit: Duration?) async -> Bool {
+    /// 等进程退出，至多 `limit`（nil 不限时，按 `timing` 量）；退出了返回 true。到点或调用方取消时不管有没有退出都立刻返回 false，好接着升级信号。
+    func exited(within limit: Duration?, timing: Timing = .system) async -> Bool {
         let id = UUID()
         let shared = shared
         let giveUp: @Sendable () -> Void = { shared.state.withLock { $0.waiters.removeValue(forKey: id) }?.resume(returning: false) }
@@ -289,7 +309,7 @@ public final class ChildProcess: Sendable {
                 if Task.isCancelled { return giveUp() }
                 guard let limit else { return }
                 Task {
-                    try? await Task.sleep(for: limit)
+                    try? await timing.sleep(limit)
                     giveUp()
                 }
             }

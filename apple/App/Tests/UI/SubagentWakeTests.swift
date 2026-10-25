@@ -10,7 +10,7 @@ import Testing
 /// 会话派了子代理、自己这一轮歇下：值班的 Cue 等子代理时不被叫醒，结果交回、会话为它跑完那一轮歇下才叫醒一次；
 /// 在跑的子代理太久没进展（`PiSessionState.stallAfter`）叫醒一次（真 Pi 当大脑，同 `CueHostTests`）。
 /// 叫醒看的是 Mac 运行情况里的那几轮（`CueKeeper.rounds`：为什么醒、交给大脑的信封）。
-@Suite(.enabled(if: FileManager.default.isExecutableFile(atPath: realPi.path), "需要 ~/.local/bin/pi"), .serialized, .timeLimit(.minutes(2)))
+@Suite(.enabled(if: FileManager.default.isExecutableFile(atPath: realPi.path), "需要 ~/.local/bin/pi"), .serialized)
 @MainActor
 struct SubagentWakeTests {
     /// 你请 Cue 开工；会话派出子代理、自己这一轮答完（等子代理）：Cue 不醒，你这时跟它说话，它看到的变化里也没有这个会话。
@@ -38,7 +38,7 @@ struct SubagentWakeTests {
         session.sendInfo(["subagents": [Self.ui("running", action: "Run $ swift test")]])
         session.setState(["kind": "delegating"])
         // 名册先到（立即写），随后的等子代理只是工作中细节的变化，按写入节流晚到
-        try await eventually("等子代理写进库、派活那一轮的回答读到", timeout: PiStateRecorder.detailInterval + .seconds(5)) {
+        try await eventually("等子代理写进库、派活那一轮的回答读到") {
             let record = try await store.sessions(matching: session.sessionID).first
             return record?.state == .known(.delegating) && record?.lastReply == "派了 ui 去跑测试"
         }

@@ -62,7 +62,7 @@ struct RealClaudeTerminalTests {
             let session = try await testbed.waitForSession(pid: terminal.pid)
             try await testbed.bridge.send(PiMessage(text: "say hi"), to: session.id)
             @MainActor func reply() throws -> String? { try testbed.transcript(session.sessionFile).messages.last { $0.role == .known(.pi) }?.text }
-            try await eventually("这一轮出错、那句原话进了对话", timeout: .seconds(90)) {
+            try await eventually("这一轮出错、那句原话进了对话") {
                 try testbed.bridge.session(id: session.id)?.state == .error && reply() != nil
             }
             let detail = try #require(testbed.bridge.session(id: session.id)?.detail)
@@ -107,18 +107,18 @@ struct RealClaudeTerminalTests {
             let session = try await testbed.waitForSession(pid: terminal.pid)
 
             try await testbed.bridge.send(PiMessage(text: "用 Bash 工具在前台执行 `ping -c 120 127.0.0.1`，然后只回复 ZEBRA"), to: session.id)
-            try await eventually("在跑命令", timeout: .seconds(120)) { testbed.bridge.session(id: session.id)?.detail?.contains("ping -c 120") == true }
+            try await eventually("在跑命令") { testbed.bridge.session(id: session.id)?.detail?.contains("ping -c 120") == true }
             await #expect(throws: PiBridgeError.rejected("failed: 终端里的 Claude Code 在跑，CuePad 打断不了它：在终端里按 Esc，或等它做完再说")) {
                 try await testbed.bridge.send(PiMessage(text: "只回复 MANGO"), to: session.id)
             }
             #expect(try !testbed.transcript(session.sessionFile).messages.contains { $0.text.contains("MANGO") })
 
             try await terminal.keys("Escape")
-            try await eventually("按 Esc 后歇下", timeout: .seconds(30)) { testbed.bridge.session(id: session.id)?.state == .settled }
+            try await eventually("按 Esc 后歇下") { testbed.bridge.session(id: session.id)?.state == .settled }
             #expect(try testbed.transcript(session.sessionFile).messages.last?.text == PiNotice.stopped.rawValue)
             let delivery = UUID()
             try await testbed.bridge.send(PiMessage(text: "只回复 MANGO", deliveryID: delivery.uuidString), to: session.id)
-            try await eventually("话送到了", timeout: .seconds(60)) {
+            try await eventually("话送到了") {
                 (try? testbed.transcript(session.sessionFile).messages.contains { $0.deliveryID == delivery }) == true
             }
         }
@@ -172,7 +172,7 @@ struct RealClaudeTerminalTests {
 
             let opened = try await testbed.waitForSession(pid: terminal.pid)
             #expect(opened.sessionID == sessionID && !opened.hosted)
-            try await eventually("托管的让出", timeout: .seconds(60)) { log.ended.map(\.0.id) == [id] }
+            try await eventually("托管的让出") { log.ended.map(\.0.id) == [id] }
         }
     }
 
@@ -180,7 +180,7 @@ struct RealClaudeTerminalTests {
     @Test func aSessionAlreadyRunningBeforeCuePadStartsIsDiscoveredAndCannotBeResumedElsewhere() async throws {
         try await ClaudeTestbed.run(installHooks: false) { testbed in
             let terminal = try await testbed.terminal()
-            try await eventually("Claude Code 登记了这个会话", timeout: .seconds(60)) {
+            try await eventually("Claude Code 登记了这个会话") {
                 FileManager.default.fileExists(atPath: testbed.config.appending(path: "sessions/\(terminal.pid).json").path)
             }
 
@@ -189,7 +189,7 @@ struct RealClaudeTerminalTests {
 
             let delivery = UUID().uuidString
             try await testbed.bridge.send(PiMessage(text: "只回复 HELLO", deliveryID: delivery), to: session.id)
-            try await eventually("话送到了", timeout: .seconds(120)) {
+            try await eventually("话送到了") {
                 (try? testbed.transcript(session.sessionFile).messages.contains { $0.deliveryID == UUID(uuidString: delivery) }) == true
             }
             let indexed = IndexedSession(

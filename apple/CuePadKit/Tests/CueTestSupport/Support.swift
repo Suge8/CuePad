@@ -104,6 +104,10 @@ public func pngData(width: Int = 4, height: Int = 4, shade: CGFloat = 0.5) -> Da
   return data as Data
 }
 
+/// 截止永远不到的钟：测的不是超时本身的用例，给产品里等别的进程的时限（问版本、起进程到上桥……）用。
+/// 这些等待取决于系统此刻多忙（机器很忙时一个进程起来要几十秒），用真钟就是和墙钟赛跑；真挂住由每个测试的统一时限报。
+public let noDeadline = ManualTiming().timing
+
 /// 手动推进的时钟：`now` 只在 `advance` 时前进，`sleep` 挂起到 `advance` 越过截止时间。
 public final class ManualTiming: Sendable {
   private struct State {
@@ -185,14 +189,15 @@ struct TimedOut: Error, CustomStringConvertible {
   let description: String
 }
 
-/// 条件等待的默认上限。条件本该几毫秒就成立（替身、手动时钟、回放），上限只是"确实不会来了"的兜底：写错的测试几秒内就红，
-/// 不空等到测试时限。录制真 Agent（CUEPAD_AGENT_TESTS，见 CuePiTests 的 RealAgents）时每一步等的是真进程与真模型，放宽到一分钟。
-public let conditionTimeout: Duration = ProcessInfo.processInfo.environment["CUEPAD_AGENT_TESTS", default: ""].isEmpty ? .seconds(5) : .seconds(60)
+/// 条件等待的上限，只认一个来源：每个测试的统一时限（xc.sh 的 `TEST_TIME_LIMIT`，经 `CUEPAD_TEST_TIME_LIMIT` 交给测试进程），取它的九成。
+/// 条件要等的常是别的进程起来、答话，机器很忙时那不是几秒的事，自带一个短的墙钟上限只会假失败；挂住了仍由统一时限兜底，
+/// 取九成是让「等不到：X」这句话赶在它之前说出来。
+public let conditionBudget: Duration = .seconds(Double(ProcessInfo.processInfo.environment["CUEPAD_TEST_TIME_LIMIT"].flatMap(Int.init) ?? 120) * 0.9)
 
 /// 有界条件等待，只给没有事件可订阅的异步用（文件系统通知、socket、子进程、系统弹窗与布局、后台落盘）：
 /// 条件一成立马上返回，到了上限抛 `TimedOut`。库里的变化用下面按读取订阅的那个。
-public func eventually(_ what: String, timeout: Duration = conditionTimeout, _ condition: () async throws -> Bool) async throws {
-  let deadline = ContinuousClock.now + timeout
+public func eventually(_ what: String, _ condition: () async throws -> Bool) async throws {
+  let deadline = ContinuousClock.now + conditionBudget
   while try await !condition() {
     guard ContinuousClock.now < deadline else { throw TimedOut(description: "等不到：\(what)") }
     try await Task.sleep(for: .milliseconds(10))
@@ -207,7 +212,7 @@ public func quietPeriod(_ duration: Duration) async {
 
 /// 订阅读取直到条件成立（事件驱动，不轮询），到了上限抛 `TimedOut`。
 public func eventually<T: Sendable & Equatable>(
-  _ store: CueStore, timeout: Duration = conditionTimeout, _ read: @escaping @Sendable (isolated CueStore) throws -> T,
+  _ store: CueStore, _ read: @escaping @Sendable (isolated CueStore) throws -> T,
   until predicate: @escaping @Sendable (T) -> Bool
 ) async throws -> T {
   try await withThrowingTaskGroup(of: T.self) { group in
@@ -216,8 +221,8 @@ public func eventually<T: Sendable & Equatable>(
       throw CancellationError()
     }
     group.addTask {
-      try await Task.sleep(for: timeout)
-      throw TimedOut(description: "等不到：库里的读取在 \(timeout) 内满足条件")
+      try await Task.sleep(for: conditionBudget)
+      throw TimedOut(description: "等不到：库里的读取满足条件")
     }
     defer { group.cancelAll() }
     return try await group.next()!

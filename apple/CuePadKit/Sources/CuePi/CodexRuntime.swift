@@ -64,13 +64,17 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
     /// `model/list` 的结果（账号可用的模型对所有会话一样），第一次要时取
     var models: [CodexModel]?
     var stopped = true
+    /// 量起进程、问版本这些等待的时限的钟
+    let timing: Timing
     /// 终端会话哪些接上桥（`follow`）；给之前一个都不接
     var scope = PiHistoryScope.sessions([])
 
     public init(
         bridge: PiBridge, paths: AgentPaths, hooks: AgentHookServer, codex: @escaping @Sendable () async -> URL?,
-        locate: @escaping @Sendable () async -> ExecutableLocator = { await .system }, presence: any UserPresence = SystemPresence()
+        locate: @escaping @Sendable () async -> ExecutableLocator = { await .system }, presence: any UserPresence = SystemPresence(),
+        timing: Timing = .system
     ) {
+        self.timing = timing
         self.codex = codex
         self.bridge = bridge
         self.paths = paths
@@ -198,7 +202,7 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
         let rpc = try await CodexRPC.launch(codex.url, environment: codex.environment.merging([HostMark.variable: mark]) { $1 })
         host(rpc, mark: mark)
         do {
-            return try await withDeadline(AgentTimeouts.launch, orThrow: AgentRuntimeError.launchTimedOut(.codex)) { try await body(rpc) }
+            return try await withDeadline(AgentTimeouts.launch, timing: timing, orThrow: AgentRuntimeError.launchTimedOut(.codex)) { try await body(rpc) }
         } catch {
             await rpc.shutdown()
             throw error as? CodexRPCError == .timedOut ? AgentRuntimeError.launchTimedOut(.codex) : error

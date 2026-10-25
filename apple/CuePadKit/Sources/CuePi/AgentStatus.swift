@@ -44,6 +44,8 @@ extension AgentKind {
 public struct AgentStatus: Sendable, Equatable {
     public enum Presence: Sendable, Equatable {
         case notFound
+        /// 找到了它的程序，问版本时没有回应（机器很忙、程序卡住）：不知道装没装好，不当成没装
+        case unresponsive
         case tooOld(AgentVersion)
         /// 有版本要求的报出版本，其余为 nil
         case found(AgentVersion?)
@@ -80,6 +82,7 @@ public struct AgentStatus: Sendable, Equatable {
 
 public enum AgentInstallError: Error, Equatable {
     case notFound(AgentKind)
+    case unresponsive(AgentKind)
     case tooOld(AgentKind, found: AgentVersion)
     case foreign(String)
     /// 不碰真实世界（装着正式版的 Mac 上的本机构建、测试与验收）而这家的配置目录是缺省的真实位置：不写，免得把正式版写的条目改成指向开发构建
@@ -90,6 +93,7 @@ extension AgentInstallError: LocalizedError {
     public var errorDescription: String? {
         switch self {
         case .notFound(let kind): String(localized: "没有找到 \(kind.name)")
+        case .unresponsive(let kind): String(localized: "\(kind.name) 问版本没有回应，稍后再试")
         case .tooOld(let kind, let found): String(localized: "\(kind.name) \(found.description) 太旧，需要 \(kind.minimumVersion?.description ?? "") 或更新")
         case .foreign(let path): String(localized: "\(path) 是别人的同名文件，没有改动")
         case .isolated(let kind): String(localized: "这台 Mac 装着正式版，本机构建不改它在用的配置：先用 \(kind.homeVariable) 指定 \(kind.name) 的目录再接入")

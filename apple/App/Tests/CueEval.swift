@@ -60,7 +60,7 @@ final class CueEval {
     func trigger(_ wake: () async throws -> Void) async throws {
         mark()
         try await wake()
-        try await eventually("Cue 做完被叫醒的那一轮", timeout: .seconds(420)) { self.round?.finishedAt != nil }
+        try await eventually("Cue 做完被叫醒的那一轮") { self.round?.finishedAt != nil }
     }
 
     /// 叫醒 Cue，等它把这次引起的都做完才返回：至少一轮做完、没有在跑的、歇着、话都交了，
@@ -69,12 +69,12 @@ final class CueEval {
         let from = mark()
         try await wake()
         do {
-            try await eventually("Cue 醒来", timeout: .seconds(120)) { self.rig.rounds.contains { $0.startedAt >= from } }
+            try await eventually("Cue 醒来") { self.rig.rounds.contains { $0.startedAt >= from } }
         } catch {
             return nil
         }
         while true {
-            try await eventually("Cue 做完这次醒来引起的", timeout: .seconds(900)) { try await self.idle(since: from) }
+            try await eventually("Cue 做完这次醒来引起的") { try await self.idle(since: from) }
             let count = rig.rounds.count
             await quietPeriod(.seconds(3))
             if rig.rounds.count == count, try await idle(since: from) { break }

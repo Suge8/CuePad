@@ -74,7 +74,7 @@ extension MacSyncTests {
     }
 
     /// Cue 开的新会话：开场白同所有送进会话的话一样记发送记录（带请求 id 与来源），请求清理之后会话页里它仍标着 Cue。
-    @Test(.timeLimit(.minutes(1)))
+    @Test
     func Cue开的新会话_请求清理之后开场白仍标着Cue() async throws {
         let directory = try folder("proj")
         let project = try await services.store.createProject(name: "App", color: "#000000")
@@ -98,7 +98,7 @@ extension MacSyncTests {
     /// App 更新后，开着的会话歇下后自己重新载入扩展、接回（新载入的扩展没见过这一轮：开始报空、起点是此刻）。
     /// 协议号变了的（`upgrading`）这期间读不到状态，记录停在更新前的样子；没变的照常读着。更新前在跑、重载前做完了这一轮的，
     /// 接回时照常算一次歇下，Cue 被叫醒（他不在场：那句话说在半小时前）；更新前就歇着的，接回不是新的歇下，不叫醒。
-    @Test(.timeLimit(.minutes(1)), arguments: [true, false], [true, false])
+    @Test(arguments: [true, false], [true, false])
     func 会话重载扩展接回_这期间做完一轮的才叫醒Cue(running: Bool, upgrading: Bool) async throws {
         let changes = rig.pi.changes()
         try rig.pi.start()

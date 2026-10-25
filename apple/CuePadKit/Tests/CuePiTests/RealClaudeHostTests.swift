@@ -20,7 +20,7 @@ struct RealClaudeHostTests {
             let sessionID = try #require(testbed.bridge.session(id: id)?.sessionID)
 
             try await testbed.bridge.send(PiMessage(text: "Reply with the single word WRAPPED."), to: id)
-            try await eventually("这一轮开始又结束", timeout: .seconds(120)) {
+            try await eventually("这一轮开始又结束") {
                 log.states.contains { $0.isWorking } && testbed.bridge.session(id: id)?.state.isWorking == false
             }
             #expect(log.changes.allSatisfy { if case .appeared(let s) = $0 { s.sessionID != sessionID || s.id == id } else { true } })
@@ -81,19 +81,19 @@ struct RealClaudeHostTests {
 
             try await testbed.bridge.send(PiMessage(text: "用 Bash 工具在前台执行 python3 -c 'import time; time.sleep(120)'（不要放到后台），然后只回复 SLEPT"), to: id)
             // 跑命令也要确认（模型不同，问不问不一定）：问了就允许。不用 sleep：Claude Code 会把它挪到后台
-            try await eventually("在跑命令", timeout: .seconds(60)) {
+            try await eventually("在跑命令") {
                 if let asked = testbed.bridge.session(id: id)?.question?.promptID { try? await testbed.bridge.answer(.confirmed(true), to: asked, in: id) }
                 return testbed.bridge.session(id: id)?.state == .tool
             }
             try await testbed.bridge.abort(id)
-            try await eventually("停下", timeout: .seconds(30)) { testbed.bridge.session(id: id)?.state == .settled }
+            try await eventually("停下") { testbed.bridge.session(id: id)?.state == .settled }
 
             // 模型还没回出一个字就停：这一轮的用量全是 0，上下文仍是上一次的
             let used = try #require(testbed.bridge.session(id: id)?.context?.tokens)
             try await testbed.bridge.send(PiMessage(text: "写一篇两千字的茶叶史"), to: id)
-            try await eventually("开始这一轮", timeout: .seconds(30)) { testbed.bridge.session(id: id)?.state.isWorking == true }
+            try await eventually("开始这一轮") { testbed.bridge.session(id: id)?.state.isWorking == true }
             try await testbed.bridge.abort(id)
-            try await eventually("又停下", timeout: .seconds(30)) { testbed.bridge.session(id: id)?.state == .settled }
+            try await eventually("又停下") { testbed.bridge.session(id: id)?.state == .settled }
             #expect(try #require(testbed.bridge.session(id: id)?.context?.tokens) >= used)
 
             let after = Date()
@@ -114,7 +114,7 @@ struct RealClaudeHostTests {
 
             if toolRunning {
                 try await testbed.bridge.send(PiMessage(text: "用 Bash 工具在前台执行 `ping -c 110 127.0.0.1 && touch \(never.path)`（不要放后台），然后只回复 ZEBRA"), to: id)
-                try await eventually("在跑命令", timeout: .seconds(60)) { testbed.bridge.session(id: id)?.detail?.contains("ping -c 110") == true }
+                try await eventually("在跑命令") { testbed.bridge.session(id: id)?.detail?.contains("ping -c 110") == true }
             } else {
                 try await testbed.bridge.send(PiMessage(text: "用 Bash 工具执行 touch \(never.path) ，然后只回复 ZEBRA"), to: id)
                 _ = try await testbed.waitForQuestion(id)
@@ -122,7 +122,7 @@ struct RealClaudeHostTests {
             let delivery = UUID().uuidString
             let asked = Date()
             try await testbed.bridge.send(PiMessage(text: "只回复 MANGO", deliveryID: delivery), to: id)
-            try await testbed.waitForTurn(id, since: asked, timeout: .seconds(60))
+            try await testbed.waitForTurn(id, since: asked)
             try await testbed.waitForDraftLanded(id)
 
             let session = try #require(testbed.bridge.session(id: id))
@@ -153,7 +153,7 @@ struct RealClaudeHostTests {
                 try await testbed.bridge.configure(model: PiModelKey(provider: ClaudeCode.provider, id: "no-such-model"), in: id)
             }
             try await testbed.bridge.command("/rename 命令改名", in: id)
-            try await eventually("斜杠命令改了名、歇下", timeout: .seconds(60)) {
+            try await eventually("斜杠命令改了名、歇下") {
                 testbed.bridge.session(id: id)?.displayName == "命令改名" && testbed.bridge.session(id: id)?.state == .settled
             }
             await #expect(throws: PiBridgeError.rejected("unknown_command")) { try await testbed.bridge.command("/no-such-command", in: id) }
@@ -191,9 +191,9 @@ struct RealClaudeHostTests {
             let other = PiModelKey(provider: ClaudeCode.provider, id: claudeOtherModel)
             try await testbed.bridge.configure(model: other, in: id)
             try await testbed.bridge.send(PiMessage(text: "写一篇两千字的茶叶史"), to: id)
-            try await eventually("开始这一轮", timeout: .seconds(30)) { testbed.bridge.session(id: id)?.state.isWorking == true }
+            try await eventually("开始这一轮") { testbed.bridge.session(id: id)?.state.isWorking == true }
             try await testbed.bridge.abort(id)
-            try await eventually("停下", timeout: .seconds(30)) { testbed.bridge.session(id: id)?.state == .settled }
+            try await eventually("停下") { testbed.bridge.session(id: id)?.state == .settled }
             try await testbed.record(id)
             let log = ChangeLog(testbed.bridge)
 
@@ -251,7 +251,7 @@ struct RealClaudeHostTests {
             let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t", name: nil, model: nil, thinking: nil)
             let start = Date()
             _ = try await testbed.bridge.send(PiMessage(text: ClaudeTestbed.longSubagent), to: id)
-            try await eventually("等子代理", timeout: .seconds(120)) { testbed.bridge.session(id: id)?.state == .delegating }
+            try await eventually("等子代理") { testbed.bridge.session(id: id)?.state == .delegating }
             _ = try await testbed.bridge.send(PiMessage(text: ClaudeTestbed.stopSubagent), to: id)
             try await testbed.expectSettledOnce(id, since: start, reply: "STOPPED", roster: .interrupted)
         }
@@ -265,7 +265,7 @@ struct RealClaudeHostTests {
             let log = ChangeLog(testbed.bridge)
             let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t", name: nil, model: nil, thinking: nil)
 
-            try await eventually("空闲退出", timeout: .seconds(60)) { log.ended.map(\.0.id) == [id] }
+            try await eventually("空闲退出") { log.ended.map(\.0.id) == [id] }
             #expect(log.ended.map(\.1) == [.closed(reason: "quit")])
         }
     }

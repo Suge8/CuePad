@@ -40,7 +40,7 @@ import Testing
 
   // MARK: 新增、更新、删除
 
-  @Test(.timeLimit(.minutes(1)))
+  @Test
   func remoteRecordsAreInsertedInOneTransactionAndWakeObservers() async throws {
     try await rig.simulatePush()  // 新库的默认项目先传上去
     var values = store.observe { try $0.cards(in: Project.defaultID).map(\.body) }.makeAsyncIterator()

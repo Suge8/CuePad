@@ -36,7 +36,8 @@ struct AgentIntegrationTests {
     }
 
     private func integration(cuepad: URL? = nil) -> AgentIntegration {
-        AgentIntegration(paths: AgentPaths(pi: paths, environment: environment), locate: { ExecutableLocator(searchDirectories: [bin]) }, cuepad: cuepad ?? self.cuepad)
+        AgentIntegration(paths: AgentPaths(pi: paths, environment: environment), locate: { ExecutableLocator(searchDirectories: [bin]) }, cuepad: cuepad ?? self.cuepad,
+            timing: noDeadline)
     }
 
     private func fakeAgent(_ command: String, printing output: String = "") throws {
@@ -66,6 +67,21 @@ struct AgentIntegrationTests {
         #expect(await integration().status(of: kind).presence == presence)
     }
 
+    /// 找到了程序、问版本却没回应（机器很忙、程序卡住）不是没装：说「没有回应」，不让人以为没装。时限用手动钟，命令真被问到之后才推进。
+    @Test func anAgentThatDoesNotAnswerTheVersionIsUnresponsiveNotMissing() async throws {
+        let asked = root.appending(path: "asked")
+        try TestScript.install("#!/bin/sh\n. \"$0.env\"\ntouch \"$ASKED\"\nexec sleep 300\n", at: bin.appending(path: "pi"), variables: ["ASKED": asked.path])
+        let clock = ManualTiming()
+        let integration = AgentIntegration(
+            paths: AgentPaths(pi: paths, environment: environment), locate: { [bin] in ExecutableLocator(searchDirectories: [bin]) }, cuepad: cuepad,
+            timing: clock.timing)
+        async let status = integration.status(of: .pi)
+        try await eventually("它被问到了") { !fileGone(asked) }
+        await clock.waitForSleeper()
+        clock.advance(AgentTimeouts.command)
+        #expect(await status.presence == .unresponsive)
+    }
+
     /// 装 Pi 前查 Node.js 只看安装脚本会用的那个（PATH 里第一个）：前面是旧的、后面有新的也不算有，免得点了安装才被脚本拒。
     @Test func installPrerequisiteCountsOnlyTheNodeTheInstallerWillUse() async throws {
         let later = root.appending(path: "later-bin")
@@ -73,7 +89,8 @@ struct AgentIntegrationTests {
         try fakeAgent("node", printing: "v20.11.0")
         try TestScript.install("#!/bin/sh\necho v22.19.0\n", at: later.appending(path: "node"))
         let integration = AgentIntegration(
-            paths: AgentPaths(pi: paths, environment: environment), locate: { [bin] in ExecutableLocator(searchDirectories: [bin, later]) }, cuepad: cuepad)
+            paths: AgentPaths(pi: paths, environment: environment), locate: { [bin] in ExecutableLocator(searchDirectories: [bin, later]) }, cuepad: cuepad,
+            timing: noDeadline)
         #expect(await integration.status(of: .pi).lacking == AgentKind.pi.installPrerequisite)
     }
 

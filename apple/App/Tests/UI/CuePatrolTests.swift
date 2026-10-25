@@ -8,7 +8,7 @@ import Testing
 
 /// 值班的 Cue 在没有在做的事之后照常巡视（真 Pi 当大脑，同 `CueHostTests`）；手上还有一件没开工的事（`Rig.handOverWork`），
 /// 什么都没有时不巡视。
-@Suite(.enabled(if: FileManager.default.isExecutableFile(atPath: realPi.path), "需要 ~/.local/bin/pi"), .timeLimit(.minutes(2)))
+@Suite(.enabled(if: FileManager.default.isExecutableFile(atPath: realPi.path), "需要 ~/.local/bin/pi"))
 @MainActor
 struct CuePatrolTests {
     /// 终端里开着的会话一句话没说就退出了（没有会话文件：记录删掉，不算会话的动静）。它原是唯一在做的事，在做的就没了：
@@ -27,7 +27,7 @@ struct CuePatrolTests {
         let exited = Date.now
         session.close(bye: "quit")
         try await eventually("会话的记录删掉") { try await store.sessions(matching: "quiet").isEmpty }
-        try await eventually("退出之后巡视", timeout: .seconds(15)) {
+        try await eventually("退出之后巡视") {
             try await store.cueMessages().contains { $0.author == .known(.cue) && $0.text.contains("巡视了一圈") && $0.createdAt > exited }
         }
         await rig.stop()
@@ -57,7 +57,7 @@ struct CuePatrolTests {
         let synced = Date.now
         #expect(try await store.applyRemote([.save(deleted, systemFields: Data())]).isEmpty)
         #expect(try await store.card(task.id)?.deletedAt != nil)
-        try await eventually("删掉之后巡视", timeout: .seconds(15)) {
+        try await eventually("删掉之后巡视") {
             try await store.cueMessages().contains { $0.author == .known(.cue) && $0.text.contains("巡视了一圈") && $0.createdAt > synced }
         }
         await rig.stop()

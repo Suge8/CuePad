@@ -9,7 +9,7 @@ extension CodexRuntime {
     private func daemonSocket() async -> String? {
         if let controlSocket { return controlSocket }
         guard let codex = try? await executable(),
-              let result = await ChildProcess.run(codex.url, ["app-server", "daemon", "version"], environment: codex.environment, timeout: .seconds(10)),
+              let result = await ChildProcess.run(codex.url, ["app-server", "daemon", "version"], environment: codex.environment, timeout: AgentTimeouts.command, timing: timing),
               let info = JSONValue.parse(Data(result.output.utf8)), info["status"]?.string == "running", let path = info["socketPath"]?.string
         else { return nil }
         controlSocket = path

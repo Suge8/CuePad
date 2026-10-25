@@ -39,7 +39,7 @@ let package = Package(
         .testTarget(name: "CueAgentTests", dependencies: ["CueAgent", "CueTestSupport"]),
         .testTarget(name: "CueTextTests", dependencies: ["CueText"]),
         .testTarget(name: "CueStoreTests", dependencies: ["CueStore", "CueText", "CueTestSupport"]),
-        .testTarget(name: "CueEditorTests", dependencies: ["CueEditor"]),
+        .testTarget(name: "CueEditorTests", dependencies: ["CueEditor", "CueTestSupport"]),
         .testTarget(name: "CuePiTests", dependencies: ["CuePi", "CueStore", "CueTestSupport"], exclude: ["Fixtures"]),
     ]
 )

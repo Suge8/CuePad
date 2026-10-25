@@ -19,12 +19,15 @@ public struct AgentIntegration: Sendable {
     let installCommand: @Sendable (AgentKind, AgentStatus.Presence) -> String
     /// 还有 Pi 会话开着旧单文件扩展（`PiExtensionBundle.legacyFileName`）：App 里是桥上连着的会话没都报随包版本（`PiBridge.allRun`），缺省没有 Pi 在跑
     let legacyPiExtensionInUse: @Sendable () async -> Bool
+    /// 量问版本、问模型这些等别的进程的时限的钟：起一个进程要多久取决于系统此刻多忙，测试给手动推进的钟
+    private let timing: Timing
 
     public init(
         paths: AgentPaths = AgentPaths(), locate: @escaping @Sendable () async -> ExecutableLocator = { await .system }, cuepad: URL,
         isolated: Bool = false, installCommand: @escaping @Sendable (AgentKind, AgentStatus.Presence) -> String = { $0.installCommand($1) },
-        legacyPiExtensionInUse: @escaping @Sendable () async -> Bool = { false }
+        legacyPiExtensionInUse: @escaping @Sendable () async -> Bool = { false }, timing: Timing = .system
     ) {
+        self.timing = timing
         self.paths = paths
         self.locate = locate
         self.cuepad = cuepad
@@ -78,6 +81,7 @@ public struct AgentIntegration: Sendable {
         let found = await detect(kind)
         switch found.presence {
         case .notFound: throw AgentInstallError.notFound(kind)
+        case .unresponsive: throw AgentInstallError.unresponsive(kind)
         case .tooOld(let version): throw AgentInstallError.tooOld(kind, found: version)
         case .found: break
         }
@@ -112,7 +116,7 @@ public struct AgentIntegration: Sendable {
 
     /// 由检测出的状态（`status(of:)`）得出这台 Mac 上各家能不能用：能开新会话的几家问模型，其余给出原因（`AgentProbe`）。
     @concurrent public func probe(_ statuses: [AgentKind: AgentStatus]) async -> (agents: [MacAgent], problems: [MacAgentProblem]) {
-        await AgentProbe(paths: paths, locator: await locate()).run(statuses)
+        await AgentProbe(paths: paths, locator: await locate(), timing: timing).run(statuses)
     }
 
     private func files(of kind: AgentKind) -> AgentStatus.Files {
@@ -146,18 +150,25 @@ public struct AgentIntegration: Sendable {
 
     /// 问每家的 `--version`（设置里写出版本）：有版本要求的（Pi、OpenCode）要报得出够新的版本，OpenCode 报的版本太旧是 v1；
     /// 报不出版本的照常算在，只是没有版本。没有可执行文件时，除了 Pi，有配置目录（用过它，含各家的桌面版）也算在。
-    /// 挑中的可执行文件只在算在时给出（太旧的不给）。
+    /// 挑中的可执行文件只在算在时给出（太旧的不给）。找到了程序却在 `AgentTimeouts.command` 内没回答（机器很忙时常有）：
+    /// 说 `unresponsive`，不当成没装。
     private func detect(_ kind: AgentKind) async -> (presence: AgentStatus.Presence, executable: URL?) {
         let locator = await locate()
         let used = FileManager.default.fileExists(atPath: home(of: kind).path)
         let candidates = locator.candidates(kind.command)
+        var silent = false
         for executable in candidates {
-            guard let output = await Self.capture(executable, ["--version"], locator: locator),
-                  let version = AgentVersion(parsing: output) else { continue }
-            let tooOld = kind.minimumVersion.map { version < $0 } ?? false
-            return tooOld ? (.tooOld(version), nil) : (.found(version), executable)
+            switch await capture(executable, ["--version"], locator: locator) {
+            case .finished(_, let output):
+                guard let version = AgentVersion(parsing: output) else { continue }
+                let tooOld = kind.minimumVersion.map { version < $0 } ?? false
+                return tooOld ? (.tooOld(version), nil) : (.found(version), executable)
+            case .timedOut: silent = true
+            case .notStarted: continue
+            }
         }
         if kind.minimumVersion == nil, let executable = candidates.first { return (.found(nil), executable) }
+        if silent { return (.unresponsive, nil) }
         return (kind != .pi && used ? .found(nil) : .notFound, nil)
     }
 
@@ -166,20 +177,22 @@ public struct AgentIntegration: Sendable {
     private func lacking(_ prerequisite: InstallPrerequisite?) async -> InstallPrerequisite? {
         guard let prerequisite else { return nil }
         let locator = await locate()
-        guard let executable = locator.candidates(prerequisite.command).first,
-              let output = await Self.capture(executable, ["--version"], locator: locator),
-              let version = AgentVersion(parsing: output), version >= prerequisite.minimum else { return prerequisite }
-        return nil
+        guard let executable = locator.candidates(prerequisite.command).first else { return prerequisite }
+        switch await capture(executable, ["--version"], locator: locator) {
+        case .finished(_, let output): return AgentVersion(parsing: output).map { $0 >= prerequisite.minimum } == true ? nil : prerequisite
+        case .timedOut: return nil  // 没问出来：不说它缺
+        case .notStarted: return prerequisite
+        }
     }
 
-    /// 运行并取标准输出；超时或无法启动返回 nil。数据目录给一个用完即删的临时目录：OpenCode 每次运行（`--version` 也是）都往
+    /// 运行并取标准输出。数据目录给一个用完即删的临时目录：OpenCode 每次运行（`--version` 也是）都往
     /// `$XDG_DATA_HOME/opencode/log` 写日志，不能写进用户的。不运行就读出版本的办法没有通用的：npm 包有 package.json，
     /// Homebrew 与官方脚本装的是裸可执行文件，v2 的里面嵌着版本、v1 的没有同样的标记。
-    private static func capture(_ executable: URL, _ arguments: [String], locator: ExecutableLocator, timeout: Duration = .seconds(10)) async -> String? {
+    private func capture(_ executable: URL, _ arguments: [String], locator: ExecutableLocator) async -> ChildProcess.Attempt {
         let scratch = FileManager.default.temporaryDirectory.appending(path: "cuepad-probe-\(UUID().uuidString)", directoryHint: .isDirectory)
         defer { try? FileManager.default.removeItem(at: scratch) }
         let environment = locator.environment(launching: executable, overrides: ["PI_OFFLINE": "1", "XDG_DATA_HOME": scratch.path])
-        return await ChildProcess.run(executable, arguments, environment: environment, timeout: timeout)?.output
+        return await ChildProcess.attempt(executable, arguments, environment: environment, timeout: AgentTimeouts.command, timing: timing)
     }
 }
 #endif

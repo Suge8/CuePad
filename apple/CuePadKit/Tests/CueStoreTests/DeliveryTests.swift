@@ -35,7 +35,7 @@ import Testing
 
   private func request(_ id: UUID) async throws -> DeliveryRequest? { try await store.deliveryRequest(id) }
 
-  @Test(.timeLimit(.minutes(1)))
+  @Test
   func requestsAreExecutedOneAtATimeInCreationOrder() async throws {
     let handler = Handler()
     let executor = executor(handler)
@@ -52,7 +52,7 @@ import Testing
   }
 
   /// 发出的话到期清理不带走：没能送达的等用户重发或移除，送到的等它进了对话再随之收走，气泡不会两头都不在（别的完成请求照常清理）。
-  @Test(.timeLimit(.minutes(1)))
+  @Test
   func sentMessagesStayUntilTheyReachTheConversationOrTheUserRemovesThem() async throws {
     let handler = Handler()
     await handler.setOutcome(.failed("Pi 已经退出"))
@@ -91,7 +91,7 @@ import Testing
     await executor.stop()
   }
 
-  @Test(.timeLimit(.minutes(1)))
+  @Test
   func requestsOlderThanTheMaximumAgeAreAbandonedInsteadOfSurprisingTheUser() async throws {
     let handler = Handler()
     let stale = try await store.requestDelivery("old prompt", to: pi, on: "mac-a")
@@ -108,7 +108,7 @@ import Testing
     await executor.stop()
   }
 
-  @Test(.timeLimit(.minutes(1)))
+  @Test
   func requestWaitsForItsImagesToArriveThenRunsAfterOtherRequests() async throws {
     let data = pngData(width: 6, height: 6)
     let elsewhere = try Fixture()  // 图片在另一台设备上，尚未同步到本机
@@ -149,7 +149,7 @@ import Testing
     func record(_ name: String, imagePresent: Bool) { entries.append(Entry(name: name, imagePresent: imagePresent)) }
   }
 
-  @Test(.timeLimit(.minutes(1)))
+  @Test
   func aModeFromANewerVersionIsKeptButNeverExecutedAndFailsWithAReason() async throws {
     let handler = Handler()
     let made = try await store.requestDelivery("x", to: pi, on: "mac-a")

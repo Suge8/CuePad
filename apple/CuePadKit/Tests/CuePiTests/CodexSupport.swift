@@ -210,10 +210,10 @@ final class CodexRig {
             try TestScript.install("#!/bin/sh\n. \"$0.env\"\n\"$REAL\" \"$@\"\n", at: bin.appending(path: "codex"), variables: ["REAL": AgentTape.executable("codex").path])
             locator = ExecutableLocator(searchDirectories: [bin])
         }
-        let runtime = CodexRuntime(bridge: bridge, paths: codex.paths, hooks: hooks, codex: { [locator] in locator.candidates("codex").first }, locate: { [locator] in locator }, presence: presence)
+        let runtime = CodexRuntime(bridge: bridge, paths: codex.paths, hooks: hooks, codex: { [locator] in locator.candidates("codex").first }, locate: { [locator] in locator }, presence: presence, timing: noDeadline)
         do {
             try codex.signIn(approvals: approvals)
-            try await AgentIntegration(paths: codex.paths, locate: { [codex] in codex.locator }, cuepad: Self.hookHelper).install(.codex)
+            try await AgentIntegration(paths: codex.paths, locate: { [codex] in codex.locator }, cuepad: Self.hookHelper, timing: noDeadline).install(.codex)
             try hooks.start()
             try bridge.start()
             try runtime.start()

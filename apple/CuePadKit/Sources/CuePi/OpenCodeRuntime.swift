@@ -32,6 +32,8 @@ public final class OpenCodeRuntime: AgentRuntime, SessionLink {
     let opencode: @Sendable () async -> URL?
     let locate: @Sendable () async -> ExecutableLocator
     let transcriptWindow: TimeInterval
+    /// 量起服务、停服务这些等待的时限的钟
+    let timing: Timing
 
     private var watcher: FileFollower?
     private var watching: Task<Void, Never>?
@@ -93,8 +95,9 @@ public final class OpenCodeRuntime: AgentRuntime, SessionLink {
     public init(
         bridge: PiBridge, paths: AgentPaths, store: CueStore, hostID: String, opencode: @escaping @Sendable () async -> URL?,
         locate: @escaping @Sendable () async -> ExecutableLocator = { await .system },
-        transcriptWindow: TimeInterval = .infinity
+        transcriptWindow: TimeInterval = .infinity, timing: Timing = .system
     ) {
+        self.timing = timing
         self.bridge = bridge
         self.paths = paths
         self.store = store
@@ -140,7 +143,8 @@ public final class OpenCodeRuntime: AgentRuntime, SessionLink {
     public func stopStartedService() -> @concurrent @Sendable () async -> Void {
         guard let service = startedService else { return {} }
         startedService = nil
-        return { _ = await ChildProcess.run(service.executable, ["service", "stop"], environment: service.environment, timeout: AgentTimeouts.end) }
+        let timing = timing
+        return { _ = await ChildProcess.run(service.executable, ["service", "stop"], environment: service.environment, timeout: AgentTimeouts.end, timing: timing) }
     }
 
     /// 登记文件变了：换了服务就断开旧的、连上新的，没了就断开。

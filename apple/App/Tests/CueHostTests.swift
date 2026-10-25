@@ -14,9 +14,10 @@ import Testing
 /// 本机的 Pi（真 Pi 的测试共用）
 nonisolated let realPi = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".local/bin/pi")
 
-@Suite(.enabled(if: FileManager.default.isExecutableFile(atPath: realPi.path), "需要 ~/.local/bin/pi"), .serialized, .timeLimit(.minutes(2)))
+@Suite(.enabled(if: FileManager.default.isExecutableFile(atPath: realPi.path), "需要 ~/.local/bin/pi"), .serialized)
 struct CueHostTests {
-    /// 你的话送进 Cue 不受库忙不忙影响：十个会话的状态一刻不停地写着，说的话照样马上交给 Cue。
+    /// 你的话送进 Cue 不受库忙不忙影响：十个会话的状态一刻不停地写着，说的话照样交给 Cue——
+    /// 不是等写入歇下才交。不量时长：写入到交出去为止一直在继续，交不出去由测试时限报。
     @Test func 库正忙时你的话马上送进Cue() async throws {
         let rig = try await Rig()
         let store = rig.store
@@ -34,7 +35,7 @@ struct CueHostTests {
         defer { busy.cancel() }
         try await eventually("写入已经跑起来") { try await store.allPiSessionStates().count == 10 }
         try await rig.say("库正忙时说的")
-        try await eventually("交给 Cue", timeout: .milliseconds(500)) {
+        try await eventually("交给 Cue") {
             try await store.cueMessages().contains { $0.text == "库正忙时说的" && $0.deliveredAt != nil }
         }
         busy.cancel()

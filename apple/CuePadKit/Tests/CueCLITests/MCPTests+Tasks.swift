@@ -5,7 +5,7 @@ import Testing
 
 extension MCPTests {
   /// 没给项目建的任务落在默认项目：Cue 用 edit 的 project 把它连同子任务与草稿挪进别的项目，开工就在那个项目的文件夹。
-  @Test(.timeLimit(.minutes(1))) func cueMovesATaskFromTheDefaultProjectIntoAnother() async throws {
+  @Test func cueMovesATaskFromTheDefaultProjectIntoAnother() async throws {
     let sandbox = try Fixture()
     let store = sandbox.store
     let project = try await sandbox.project("greet")
@@ -38,7 +38,7 @@ extension MCPTests {
   /// 会话交了结果、Cue 收尾（task done 带证据）：Cue 自己验收，顶层任务直接完成，不请用户收下；做完了的会话请它结束（算 Cue 发起），
   /// 给用户写一条结果（关联任务、不是"等你"，正文由代码拼成"「任务名」做完了"加证据要点）。再调一次只说已经完成，不重复写。
   /// 整件事收尾要带证据：没带、多于 3 条或一条太长都退回，什么都不写。
-  @Test(.timeLimit(.minutes(1))) func cueFinishesATopTaskAndReportsIt() async throws {
+  @Test func cueFinishesATopTaskAndReportsIt() async throws {
     let sandbox = try Fixture()
     let store = sandbox.store
     let project = try await sandbox.project("演示")

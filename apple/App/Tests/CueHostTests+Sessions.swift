@@ -92,7 +92,7 @@ extension CueHostTests {
         try await rig.settleTask(titled: "修好登录页 要作答")
         let session = try #require(rig.app.host.extensions.values.first)
         session.setState(["kind": "waiting_user", "title": "允许使用 Bash？"])
-        try await rig.message(.cue, containing: "去作答了", timeout: .seconds(5))
+        try await rig.message(.cue, containing: "去作答了")
         await rig.stop()
     }
 

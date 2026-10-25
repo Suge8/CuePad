@@ -52,9 +52,13 @@ class EvalScript {
     func adopt(_ topic: Regex<Substring>, after step: Step, title: String, in projectName: String) async throws -> ScriptedSession {
         let started = calls(step, "task", ["start"]).contains { !$0.call.failed }
         var found: ScriptedSession?
-        try? await eventually("Cue 开出的会话绑上任务", timeout: started ? .seconds(60) : .zero) {
-            found = try await self.opened(topic)
-            return found != nil
+        if started {
+            try? await eventually("Cue 开出的会话绑上任务") {
+                found = try await self.opened(topic)
+                return found != nil
+            }
+        } else {
+            found = try? await opened(topic)
         }
         if let found {
             sessions.append(found)
@@ -79,7 +83,7 @@ class EvalScript {
     func continuing(_ session: ScriptedSession, _ topic: Regex<Substring>, after step: Step) async throws -> ScriptedSession {
         guard calls(step, "task", ["start"]).contains(where: { !$0.call.failed }) else { return session }
         var found: ScriptedSession?
-        try? await eventually("Cue 开出的会话绑上任务", timeout: .seconds(60)) {
+        try? await eventually("Cue 开出的会话绑上任务") {
             found = try await self.opened(topic)
             return found != nil
         }

@@ -46,7 +46,7 @@ final class ClaudeTestbed {
     }
 
     var integration: AgentIntegration {
-        AgentIntegration(paths: paths, locate: { AgentTape.locator("claude") }, cuepad: PiProcess.cuepad)
+        AgentIntegration(paths: paths, locate: { AgentTape.locator("claude") }, cuepad: PiProcess.cuepad, timing: noDeadline)
     }
 
     /// - Parameter settings: 装钩子之前用户自己的 settings.json（nil 是没有这个文件）。
@@ -97,7 +97,7 @@ final class ClaudeTestbed {
         runtime = ClaudeCodeRuntime(
             bridge: bridge, paths: paths, hooks: hooks, store: store, claude: { [bin] in bin.appending(path: "claude") },
             locate: { [bin] in ExecutableLocator(searchDirectories: [bin]) },
-            presence: presence)
+            presence: presence, timing: noDeadline)
         if installHooks { try await integration.install(.claudeCode) }
     }
 

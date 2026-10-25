@@ -6,7 +6,7 @@ import Testing
 @testable import CueSync
 
 /// 发送者面对服务器的几种拒绝：新装时同步区还不在、记录被限流。
-@Suite(.timeLimit(.minutes(1))) struct RecordSenderTests {
+@Suite struct RecordSenderTests {
   let rig = try! Rig()
 
   /// 按顺序回放每批上传的结局（用完之后照单全收），记下每批传了什么、建过几次区。

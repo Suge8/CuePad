@@ -59,15 +59,15 @@ extension RealClaudeTerminalTests {
             await #expect(throws: PiBridgeError.rejected("no_prompt")) {
                 try await testbed.bridge.answer(.option("咖啡"), to: try #require(held.promptID), in: session.id)
             }
-            try await eventually("终端里问", timeout: .seconds(30)) { await terminal.screen.contains("2. 咖啡") }
+            try await eventually("终端里问") { await terminal.screen.contains("2. 咖啡") }
             let chose = Date()
             try await terminal.keys("Enter")
             try await testbed.waitForTurn(session.id, since: chose)
 
             try await terminal.type(prompt)
-            try await eventually("又在问", timeout: .seconds(180)) { testbed.bridge.session(id: session.id)?.question != nil }
+            try await eventually("又在问") { testbed.bridge.session(id: session.id)?.question != nil }
             #expect(testbed.bridge.session(id: session.id)?.question?.promptID == nil)
-            try await eventually("终端里问", timeout: .seconds(30)) { await terminal.screen.contains("2. 咖啡") }
+            try await eventually("终端里问") { await terminal.screen.contains("2. 咖啡") }
         }
     }
 
@@ -93,12 +93,12 @@ extension RealClaudeTerminalTests {
 
             testbed.presence.isPresent = true
             try await terminal.type(prompt)
-            try await eventually("又在问", timeout: .seconds(180)) { testbed.bridge.session(id: session.id)?.question != nil }
+            try await eventually("又在问") { testbed.bridge.session(id: session.id)?.question != nil }
             #expect(testbed.bridge.session(id: session.id)?.question?.promptID == nil)
-            try await eventually("终端里弹表单", timeout: .seconds(30)) { await terminal.screen.contains("饮料") }
+            try await eventually("终端里弹表单") { await terminal.screen.contains("饮料") }
             let cancelled = Date()
             try await terminal.keys("Escape")  // 在终端里取消这个表单
-            try await eventually("CuePad 上收起", timeout: .seconds(60)) { testbed.bridge.session(id: session.id)?.question == nil }
+            try await eventually("CuePad 上收起") { testbed.bridge.session(id: session.id)?.question == nil }
 
             testbed.presence.isPresent = false
             try await testbed.waitForTurn(session.id, since: cancelled)
@@ -121,7 +121,7 @@ extension RealClaudeTerminalTests {
             try await eventually("终端里弹出确认") { await terminal.screen.contains("Do you want to proceed?") }
             try await terminal.keys("Enter")
 
-            try await eventually("CuePad 上的这一问收起", timeout: .seconds(120)) { testbed.bridge.session(id: session.id)?.question == nil }
+            try await eventually("CuePad 上的这一问收起") { testbed.bridge.session(id: session.id)?.question == nil }
             #expect(FileManager.default.fileExists(atPath: touched.path))
             await #expect(throws: PiBridgeError.rejected("no_prompt")) {
                 try await testbed.bridge.answer(.confirmed(false), to: try #require(permission.promptID), in: session.id)

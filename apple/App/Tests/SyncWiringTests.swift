@@ -32,7 +32,7 @@ struct SyncWiringTests {
 
     /// 真实的同步代码连内存里的 iCloud 替身（`SimulatedCloud`），从 AppServices 启动：云端最低对端版本高于这台时，
     /// 设置里说要更新、立即同步按不了，本机照记，改动不上传。
-    @Test(.timeLimit(.minutes(1)))
+    @Test
     func 云端门槛高于这台时_提示更新_本机照记_改动不上传() async throws {
         let cloud = SimulatedCloud([Self.floor(CueStore.supportedSchemaVersions.upperBound + 1)])
         let app = TestApp(sync: .built { CloudSync(store: $0) { cloud } })
@@ -52,7 +52,7 @@ struct SyncWiringTests {
 
     /// 云端门槛低于这台要求的（能打开的最老库）：先把门槛抬上去，之后才传内容；别的设备换了更新的版本、把门槛抬过这台，
     /// 拉到就停下提示更新，之后的改动不再上传。
-    @Test(.timeLimit(.minutes(1)))
+    @Test
     func 门槛先抬再传内容_别的设备抬过这台后停下不再上传() async throws {
         let cloud = SimulatedCloud([Self.floor(CueStore.supportedSchemaVersions.lowerBound - 1)])
         let app = TestApp(sync: .built { CloudSync(store: $0) { cloud } })
@@ -117,7 +117,7 @@ struct SyncWiringTests {
     }
 
     /// 同步一直不返回（引擎队列被占着、网络没有回音）：下拉刷新的圈到时限就停，同步仍挂着；转着的时候主线程照常响应（测试本身在主线程上推钟）。
-    @Test(.timeLimit(.minutes(1)))
+    @Test
     func 同步一直不返回时_下拉刷新到时限就停() async {
         let clock = ManualTiming()
         let app = TestApp(timing: clock.timing)

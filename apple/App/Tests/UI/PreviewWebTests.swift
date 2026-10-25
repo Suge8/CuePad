@@ -48,7 +48,7 @@ struct PreviewWebTests {
 
     private func settledTitle(_ page: WebPage) async throws -> String {
         var title = ""
-        try await eventually("页面里的请求都落定、写下标题", timeout: .seconds(10)) {
+        try await eventually("页面里的请求都落定、写下标题") {
             title = try await page.callJavaScript("return document.title") as? String ?? ""
             return !title.isEmpty
         }
