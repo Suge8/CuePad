@@ -2,15 +2,15 @@ import CueStore
 import CueText
 import Foundation
 
-/// 认 Cue 的一次工具调用、写它的两句（两句给谁看见 `CueActivity` 头注释）：正在用时那一句（`detail`，按钮同名的动词）与
-/// 做完后经过清单里那一条（`item`：给 Cue 自己看的说法写在 `target`，碰到的那一处另记在 `name`、`task`、`session`）。
+/// 认 Cue 的一次工具调用（两种说法给谁看见 `CueActivity` 头注释）：正在用时碰到的那一处（`step`，界面按按钮动词表写）或没碰哪一处时那一句（`detail`），
+/// 与做完后经过清单里那一条（`item`：给 Cue 自己看的说法写在 `target`，碰到的那一处另记在 `name`、`task`、`session`，与 `step` 同一对）。
 /// 读文件类照会话里的写法（`read · 文件名`，动词由界面翻）。
 extension CueActivity {
   /// 任务那个工具的动作是哪一种；认不出的动作为 nil。
   static func kind(_ action: String?) -> PiChatMessage.Tools.Kind? {
     switch action {
     case "add": .add
-    case "edit": .other
+    case "edit": .edit
     case "start": .start
     case "say": .talk
     case "peek": .read
@@ -42,20 +42,23 @@ extension CueActivity {
     await Named(Parsed(arguments), tool: tool, store: store)
   }
 
-  /// 正在用时那一句：任务那个工具写成"动词「对象」"（按钮同名，`verb`；看板就写看板），读文件类照会话里的写法"工具 · 目标"。
+  /// 正在用时碰到的那一处：任务那个工具指了哪一处时有（与做完后那一条的 `name`、`task`、`session` 同一对）；看板（没指哪一处）、认不出的动作为 nil。
+  public static func step(tool: String, arguments: String, named: Named) -> Touch? {
+    let args = Parsed(arguments)
+    guard tool == "task", let kind = kind(args.line("action")), let name = named.name else { return nil }
+    return Touch(kind: kind, name: name, task: named.task, session: named.session)
+  }
+
+  /// 正在用时没碰哪一处（`step` 为 nil）的那一句：看板、记忆、对你说，读文件类照会话里的写法"工具 · 目标"。
   /// `tool`、`arguments` 是大脑报的（`CueBrainEvent.tool`：去掉前缀的小写名字与 JSON 原文）。
-  public static func detail(tool: String, arguments: String, named: Named) -> String {
+  public static func detail(tool: String, arguments: String) -> String {
     let args = Parsed(arguments)
     func line(_ action: String, _ target: String? = nil) -> String {
       guard let target else { return action }
       return action + PiSessionState.detailSeparator + target.clipped(targetLimit)
     }
     switch tool {
-    case "task":
-      let action = args.line("action")
-      if action == "peek", args.board { return "看板" }
-      if action == "edit" { return "修改" + named.quoted }
-      return kind(action).flatMap(verb).map { $0 + named.quoted } ?? "看任务"
+    case "task": return args.line("action") == "peek" && args.board ? "看板" : "看任务"
     case "tell": return args.raw["ask"] == nil ? "给你写话" : "问你"
     case "memory":
       switch args.line("action") {
@@ -88,7 +91,7 @@ extension CueActivity {
       let action = args.line("action")
       guard let kind = kind(action), let words = cueWords(action, named.quoted, board: args.board) else { return item(.other, "task") }
       let place = action == "add" && named.task == nil ? await Named(args, tool: tool, store: store) : named
-      return item(kind, action == "say" ? "\(words)：\(args.line("text") ?? "")" : words, at: args.board ? nil : place)
+      return item(kind, action == "say" ? "\(words)：\(args.line("text") ?? "")" : words, at: place)
     case "tell":
       guard let line = args.line("text"), let text = args.raw["text"] as? String else { return item(.other, "撤回一条提问") }
       let message = try? await store.latestCueMessage(saying: text)

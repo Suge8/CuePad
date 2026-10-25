@@ -108,9 +108,12 @@ nonisolated struct CueLiveRound: Equatable {
     /// 它那台 Mac 此刻不在（`CuePresence.shown` 为空）时为 nil：这一轮照样没做完，只是不写在做什么
     let doing: Doing?
 
+    /// 在跑那一行：碰到任务与会话的一步（`step`）画成与经过同一种行，其余是图标加那一句；在说话时（`speaking`）没有这一行。
     struct Doing: Equatable {
-        let shown: PiShown
+        let icon: Icon
+        let step: CueActivity.Touch?
         let text: String
+        let speaking: Bool
     }
 }
 

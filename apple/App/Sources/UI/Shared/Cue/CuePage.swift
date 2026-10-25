@@ -193,8 +193,11 @@ struct CuePage: View {
     private var live: CueLiveRound? {
         let presence = cue.presence
         guard let round = cue.round else { return nil }
-        let doing = presence.shown.flatMap { shown in presence.progress.map { CueLiveRound.Doing(shown: shown, text: $0) } }
-        return CueLiveRound(round: round, doing: doing)
+        guard let shown = presence.shown, let progress = presence.progress else { return CueLiveRound(round: round, doing: nil) }
+        let step = presence.step
+        // 没碰哪一处的一步（看板、记忆、读文件）是工具图标，还没调工具（在想）是省略号
+        let icon = step.map { CueTrace.icon($0.kind) } ?? (presence.isUsingTool ? Icon.tool : .pondering)
+        return CueLiveRound(round: round, doing: .init(icon: icon, step: step, text: progress, speaking: shown.speaking))
     }
 
     /// 有新内容：多了消息、有一条被答了、"等你"变了、末尾的进展出现或收起。
