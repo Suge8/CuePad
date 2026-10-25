@@ -25,11 +25,9 @@ extension AppServices {
 
     /// 启动同步，并让 `syncStatus`、`syncIssues`、`conflicts` 跟随，直到任务取消。没有同步（隔离模式）什么都不做。
     /// 启动后的第一次拉走立即同步（`CloudSync.start` 自己不拉；拉取等得到同步开始）：算在 `isCatchingUp` 里，打开的页面知道手里的可能不是最新。
-    /// 认账号与第一拉当场在主线程之外开始：跟随者要等主线程建完第一帧才跑，挂在它们上面的第一拉跟着晚（iOS 模拟器实测晚 0.8–1.1 秒）。
     func startSync() {
         guard let sync else { return }
-        Task { @concurrent in await sync.start() }
-        beginSyncNow()
+        connectSync()
         follow {
             for await state in sync.stateUpdates { self.setSyncState(state) }
         }
@@ -41,6 +39,15 @@ extension AppServices {
         holdActivityWhilePolling()
         #endif
         startPolling()
+    }
+
+    /// 认账号并开始第一拉（算在立即同步里），只做一次。当场在主线程之外开始：跟随者要等主线程建完第一帧才跑，挂在它们上面的第一拉跟着晚
+    /// （iOS 模拟器实测晚 0.8–1.1 秒）。Mac 在建窗口之前就调：建窗口占着主线程 0.3–0.4 秒，这期间第一拉已在路上；`startSync` 里再调不重复。
+    func connectSync() {
+        guard let sync, !syncConnected else { return }
+        syncConnected = true
+        Task { @concurrent in await sync.start() }
+        beginSyncNow()
     }
 
     /// 回到前台的唯一入口（Mac 的 App 激活、iOS 任一窗口回到前台；已经在做的不重开）：iOS 恢复按节奏的拉取、重连门铃，立即同步。
