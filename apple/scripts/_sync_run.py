@@ -1,7 +1,8 @@
 """sync-bench.py 的实例与一次运行：两个隔离实例（A 有会话的 Mac、B 代替手机）、假扩展、打点的收集、负载与开销的记账。
 打点是实例标准输出里的 `SYNCBENCH {json}` 行（DebugScene+SyncBench.swift），读线程按行收进 `Instance.events`，场景按事件等、不按时间猜。
 """
-import json, os, random, re, select, shutil, socket, subprocess, sys, threading, time
+from collections import defaultdict
+import hashlib, json, os, random, re, select, shutil, socket, subprocess, sys, threading, time
 
 sys.dont_write_bytecode = True
 from app_env import isolated_env  # noqa: E402
@@ -12,6 +13,7 @@ STATES = [{"kind": "thinking"}, {"kind": "tool", "tool": "bash", "tools": ["bash
           {"kind": "compacting"}, {"kind": "done", "aborted": False}, {"kind": "idle"}]
 
 
+REAL_LIBS = "/tmp/cuepad-sync-bench/real-libraries"
 PEER = "mac-bench-a"  # A 的主机标识（-CuePadHost bench-a）：B 对会话说话点名这台
 
 
@@ -19,12 +21,15 @@ def exe_of(checkout):
     return f"{checkout}/apple/.derived/Build/Products/Debug/CuePad.app/Contents/MacOS/CuePad"
 
 
-class Instance:
-    """一个隔离实例。role：a（host）或 b（remote）。库在 out/<role>/library，换构建（A/B 对比的另一边）时整个目录重来。"""
+class Aborted(Exception):
+    """实例没了（真 iCloud 的运行到了时限被收掉，或崩了）：场景就此结束，已量到的照记。"""
 
-    def __init__(self, role, checkout, out, relay):
-        self.role, self.checkout, self.out, self.relay = role, checkout, out, relay
-        self.home = f"{out}/{role}"
+
+class Instance:
+    """一个隔离实例。role：a（host）或 b（remote）。库在 home/library；cloud 是连哪朵云的启动参数（`Run`）。"""
+
+    def __init__(self, role, checkout, out, relay, home, cloud):
+        self.role, self.checkout, self.out, self.relay, self.home, self.cloud = role, checkout, out, relay, home, cloud
         self.sockets = f"/tmp/cpsb-{role}-{os.getpid()}"  # 每次运行一份：别的运行留下的假扩展连不进来
         os.makedirs(self.sockets, mode=0o700, exist_ok=True); os.chmod(self.sockets, 0o700)
         self.events, self.cond, self.proc, self.started = [], threading.Condition(), None, None
@@ -36,6 +41,7 @@ class Instance:
                 "-CuePadSyncBench", "host" if self.role == "a" else "remote", "-CuePadOffscreen", "YES", "-CuePadScene", "cue"]
         if self.role == "a": args += ["-CuePadCueBrain", f"{self.checkout}/apple/scripts/cue-brain-stub.py"]
         if not self.relay: args += ["-CuePadSyncBenchNoRelay", "YES"]
+        args += self.cloud
         self.started = time.time()
         self.proc = subprocess.Popen(args, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
         threading.Thread(target=self._read, args=(self.proc,), daemon=True).start()
@@ -61,7 +67,10 @@ class Instance:
     def send(self, line):
         """给实例一条命令（`SyncBench.command`），返回发出时刻。"""
         sent = time.time()
-        self.proc.stdin.write(line + "\n"); self.proc.stdin.flush()
+        try:
+            self.proc.stdin.write(line + "\n"); self.proc.stdin.flush()
+        except (BrokenPipeError, ValueError):
+            raise Aborted(f"{self.role} 已退出")
         return sent
 
     def wait(self, match, timeout, after=0.0):
@@ -84,6 +93,14 @@ class Instance:
         self.proc.terminate()
         try: self.proc.wait(15)
         except subprocess.TimeoutExpired: self.proc.kill(); self.proc.wait()
+
+
+class Metrics(defaultdict):
+    def __init__(self): super().__init__(list)
+
+    def span(self, name, start, end):
+        if start and end: self[name].append(round(end["t"] - start["t"], 3))
+        elif start: self[name + "（超时）"].append(1)
 
 
 def kind(name, author=None):
@@ -160,13 +177,21 @@ def fake_extension(directory, checkout):
 
 
 class Run:
-    """一次运行：起 A、假扩展、B，等两边连通（`warm`），场景跑完收尾。"""
+    """一次运行：起 A、假扩展、B，等两边连通（`warm`），场景跑完收尾。场景把样本记进 `metrics`（中途收掉也留着）。
+    cloud：`sim` 是这次运行自己的模拟云（out/cloud，`SharedCloud`，延迟模型 latency）；`real` 连 iCloud 开发环境：
+    库留在 REAL_LIBS 里接着用（不每次从头拉开发区的历史），每个实例至多 budget 个请求，整次运行到 limit 秒就收掉。"""
 
-    def __init__(self, checkout, out, relay):
-        self.checkout, self.out, self.relay = checkout, out, relay
+    def __init__(self, checkout, out, relay, cloud, latency=None, budget=None, limit=None):
+        self.checkout, self.out, self.relay, self.limit, self.cloud = checkout, out, relay, limit, cloud
         os.makedirs(out, exist_ok=True)
-        self.a, self.b = Instance("a", checkout, out, relay), Instance("b", checkout, out, relay)
-        self.extension = None
+        if cloud == "sim":
+            os.makedirs(f"{out}/cloud")
+            json.dump(latency, open(f"{out}/cloud/latency.json", "w"))
+            args, home = ["-CuePadSyncBenchCloud", f"{out}/cloud"], out
+        else:
+            args, home = ["-CuePadSyncBenchBudget", str(budget)], f"{REAL_LIBS}/{hashlib.sha1(checkout.encode()).hexdigest()[:8]}"
+        self.a, self.b = (Instance(r, checkout, out, relay, f"{home}/{r}", args) for r in ("a", "b"))
+        self.extension, self.metrics, self.timer = None, Metrics(), None
 
     def __enter__(self):
         try:
@@ -176,6 +201,8 @@ class Run:
             raise
 
     def _start(self):
+        if self.limit:
+            self.timer = threading.Timer(self.limit, self._expire); self.timer.daemon = True; self.timer.start()
         self.extension = subprocess.Popen([sys.executable, os.path.abspath(sys.argv[0]), "--fake-extension", self.a.sockets, self.checkout])
         self.a.start()
         if not self.a.wait(kind("ready"), 60):
@@ -200,7 +227,13 @@ class Run:
             time.sleep(5)
         raise SystemExit(f"{limit:.0f} 秒没连通（{self.out}）")
 
+    def _expire(self):
+        print(f"  到了 {self.limit:.0f} 秒的时限，收掉实例", flush=True)
+        self.metrics["到时限中止（次）"].append(1)
+        self.b.stop(); self.a.stop()
+
     def __exit__(self, *_):
+        if self.timer: self.timer.cancel()
         if self.extension: self.extension.terminate(); self.extension.wait()
         time.sleep(3)  # A 把会话结束同步出去
         self.b.stop(); self.a.stop()

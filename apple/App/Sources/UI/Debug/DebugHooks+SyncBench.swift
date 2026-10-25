@@ -20,10 +20,12 @@ extension DebugHooks {
         #endif
     }
 
-    /// 连 iCloud 的同步：测量的实例换成经断网开关的那份（`CloudOutage`，`sync-bench.py offline`），其余就是 `CloudSync(store:)`。
+    /// 连 iCloud 的同步：测量的实例换成 `CloudOutage` 的那份（默认共用的模拟云，见 `SyncBench.cloud`），其余就是 `CloudSync(store:)`。
     static func cloudSync(_ store: CueStore) -> CloudSync {
         #if DEBUG && os(macOS)
-        if SyncBench.role != nil { return CloudOutage.cloudSync(store: store) }
+        if SyncBench.role != nil {
+            return CloudOutage.cloudSync(store: store, shared: SyncBench.sharedCloud, budget: SyncBench.budget)
+        }
         #endif
         return CloudSync(store: store)
     }

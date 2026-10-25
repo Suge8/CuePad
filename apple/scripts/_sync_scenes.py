@@ -3,9 +3,9 @@
 时刻都是同一台机器的墙钟：写下取记录的 createdAt，其余取实例读到那一刻（库的订阅送到主线程），上屏取画进页面后的那次提交。
 """
 import json, os, re, subprocess, time
-from collections import Counter, defaultdict
+from collections import Counter
 
-from _sync_run import PEER, kind
+from _sync_run import PEER, Metrics, kind
 from rusage import NS, usage
 
 ROUND_LIMIT = 60  # 一轮里等一样东西最多这么久（与 Speech.receiptLimit 同）
@@ -17,14 +17,6 @@ def by_id(name, id):
 
 def arrived(id):
     return lambda e: e["e"] in ("msg-arrived", "msg-present") and e.get("id") == id
-
-
-class Metrics(defaultdict):
-    def __init__(self): super().__init__(list)
-
-    def span(self, name, start, end):
-        if start and end: self[name].append(round(end["t"] - start["t"], 3))
-        elif start: self[name + "（超时）"].append(1)
 
 
 def round_trip(run, tag, m):
@@ -67,7 +59,7 @@ def round_trip(run, tag, m):
 def scene_send(run, args):
     """M3 发消息：send [轮数=10] [间隔秒=10]。"""
     rounds, gap = int(args[0]) if args else 10, float(args[1]) if len(args) > 1 else 10
-    m = Metrics()
+    m = run.metrics
     for i in range(rounds):
         began = time.time()
         round_trip(run, i, m)
@@ -107,7 +99,7 @@ def cold_once(m, label, restarted, writer, writes):
 def scene_cold(run, args):
     """M1 冷启动到内容最新：cold [条数=5] [次数=3]。手机（B）退出期间 Mac 的 Cue 说 N 句；Mac（A）退出期间手机对 Cue 说 N 句。"""
     count, times = int(args[0]) if args else 5, int(args[1]) if len(args) > 1 else 3
-    m = Metrics()
+    m = run.metrics
     for _ in range(times):
         run.b.stop()
         cold_once(m, "手机冷启动", run.b, run.a, writes(run.a, [f"cue {count}"], count, "cue"))
@@ -122,7 +114,7 @@ def scene_fg(run, args):
     """M2 回前台到内容最新：fg [次数=5] [离开秒=15]。手机进后台（停拉、断门铃）期间 Mac 的 Cue 说一句；Mac 隐藏期间手机对 Cue 说一句。"""
     times, away = int(args[0]) if args else 5, float(args[1]) if len(args) > 1 else 15
     a, b = run.a, run.b
-    m = Metrics()
+    m = run.metrics
     for _ in range(times):
         t = b.send("bg"); b.wait(kind("bg-done"), 30, after=t)
         w = writes(a, ["cue 1"], 1, "cue")
@@ -154,15 +146,18 @@ def scene_fg(run, args):
 
 
 def scene_idle(run, args):
-    """M6 常驻开销：idle [分钟=10] [每轮秒=30]。窗口里 B 每轮做一次 send 场景的一轮再立即同步一次；记两端的 CloudKit 操作与进程开销。"""
+    """M6 常驻开销：idle [分钟=10] [每轮秒=30]。窗口里 B 每轮做一次 send 场景的一轮再立即同步一次；记两端发给云的请求数与进程开销，
+    连真 iCloud 时另记 CloudKit 的字节与各类操作。"""
     minutes, every = float(args[0]) if args else 10, float(args[1]) if len(args) > 1 else 30
-    pids = {"A": run.a.pid, "B": run.b.pid}
-    window = f"{run.out}/window.log"
-    predicate = f"({' OR '.join(f'processID == {p}' for p in pids.values())}) AND subsystem BEGINSWITH \"com.apple.cloudkit\""
-    stream = subprocess.Popen(["log", "stream", "--info", "--debug", "--style", "compact", "--predicate", predicate],
-                              stdout=open(window, "w"), stderr=subprocess.DEVNULL)
-    m = Metrics()
+    pids, insts = {"A": run.a.pid, "B": run.b.pid}, {"A": run.a, "B": run.b}
+    window, stream = f"{run.out}/window.log", None
+    if run.cloud == "real":  # 字节只在 CloudKit 的 debug 日志里；模拟云只数请求
+        predicate = f"({' OR '.join(f'processID == {p}' for p in pids.values())}) AND subsystem BEGINSWITH \"com.apple.cloudkit\""
+        stream = subprocess.Popen(["log", "stream", "--info", "--debug", "--style", "compact", "--predicate", predicate],
+                                  stdout=open(window, "w"), stderr=subprocess.DEVNULL)
+    m = run.metrics
     start, before = time.time(), {r: usage(p) for r, p in pids.items()}
+    asked = {r: requests(i) for r, i in insts.items()}
     i = 0
     while time.time() < start + minutes * 60:
         began = time.time()
@@ -173,19 +168,28 @@ def scene_idle(run, args):
         i += 1
         time.sleep(max(0, began + every - time.time()))
     after, end = {r: usage(p) for r, p in pids.items()}, time.time()
-    stream.terminate(); stream.wait()
+    asked = {r: requests(i) - asked[r] for r, i in insts.items()}
+    if stream: stream.terminate(); stream.wait()
     hours = (end - start) / 3600
     extra = {}
     for role, pid in pids.items():
         d = lambda k: after[role][k] - before[role][k]
-        ops, up, down = cloudkit_ops(window, pid)
-        extra[role] = {"CloudKit 操作/时": round(sum(ops.values()) / hours), "上传 KB/时": round(sum(up.values()) / hours / 1e3),
-                       "下载 KB/时": round(sum(down.values()) / hours / 1e3), "指令 G/时": round(d("instructions") / hours / 1e9, 2),
+        extra[role] = {"请求/分钟": round(asked[role] / (end - start) * 60, 1), "指令 G/时": round(d("instructions") / hours / 1e9, 2),
                        "CPU 秒/时": round((d("user") + d("system")) * NS / 1e9 / hours, 1),
                        "唤醒/秒": round((d("idle_wkups") + d("interrupt_wkups")) / (end - start), 2),
-                       "能耗 J/时": round(d("energy_nj") / 1e9 / hours, 1), "内存 MB": round(after[role]["footprint"] / 2**20),
-                       "操作明细": {f"{k[0]} {k[1]}": round(n / hours) for k, n in ops.most_common()}}
+                       "能耗 J/时": round(d("energy_nj") / 1e9 / hours, 1), "内存 MB": round(after[role]["footprint"] / 2**20)}
+        if stream:
+            ops, up, down = cloudkit_ops(window, pid)
+            extra[role] |= {"上传 KB/时": round(sum(up.values()) / hours / 1e3), "下载 KB/时": round(sum(down.values()) / hours / 1e3),
+                            "操作明细": {f"{k[0]} {k[1]}": round(n / hours) for k, n in ops.most_common()}}
     return m, extra
+
+
+def requests(inst):
+    """inst 这个进程到此刻发给云的请求数（`CloudOutage.requests`）。"""
+    t = inst.send("stats")
+    e = inst.wait(kind("stats"), 10, after=t)
+    return e["requests"] if e else 0
 
 
 def cloudkit_ops(window, pid):
@@ -208,7 +212,7 @@ def scene_offline(run, args):
     path = (args[2] if len(args) > 2 else "path") == "path"
     a, b = run.a, run.b
     label = f"断网 {down:g} 秒{'' if path else '（路径不变）'}"
-    m = Metrics()
+    m = run.metrics
     for i in range(times):
         t = b.send("offline"); b.wait(kind("offline"), 30, after=t)
         began = time.time()
