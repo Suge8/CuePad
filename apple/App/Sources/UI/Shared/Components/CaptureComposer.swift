@@ -12,7 +12,7 @@ struct CaptureState {
 /// 随手记（Mac 底部输入栏与菜单栏面板共用；手机上随手记在"对 Cue 说"里，见 `CueComposer`）：共用的 `Composer`，头部左上是落点菜单（先看去哪、再写），
 /// 提交钮是"记下"（⌘↩，↩ 换行）。记下的是灵感，所以这里没有发送；记下后提示落点、点提示去那里。
 /// 文案与存法见 `CaptureCopy`、`CaptureDraft`。两处只差：Mac 底部输入栏平时收成一行、占位带上落点（`pinnedOpen` 为 false），
-/// 菜单栏面板的提示写在头部右边。
+/// 菜单栏面板的提示写在头部右边，最右是"交给 Cue"（这一条不记成灵感，直接说给 Cue；它管的是这份草稿，所以挨着草稿，不占 Cue 那一行的宽）。
 struct CaptureComposer: View {
     @Binding var state: CaptureState
     /// 没手动换过落点时落在哪（主窗口是正在看的项目，菜单栏面板是上次打开的项目）；不在项目里时是默认项目。
@@ -22,6 +22,7 @@ struct CaptureComposer: View {
     /// 记下之后（iOS 收起输入框）；草稿在这之前已清空。
     var saved: () -> Void = {}
     @Environment(Workspace.self) private var workspace
+    @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @State private var saving = false
     @FocusState private var focused: Bool
@@ -52,6 +53,7 @@ struct CaptureComposer: View {
                     .allowsHitTesting(false)
                     .transition(.opacity)
             }
+            if pinnedOpen { handOffButton }
         }
         .animation(HandOff.quick, value: workspace.notice)
         .padding(.horizontal, 12).padding(.top, 10)
@@ -65,6 +67,23 @@ struct CaptureComposer: View {
         ], accessibilityLabel: "记到 \(destination)") {
             DestinationChip(project: workspace.catalog?.project(project))
         }
+    }
+
+    private var handOffButton: some View {
+        let cue = workspace.cue
+        let empty = state.draft.isEmpty(accepting: .images) || !cue.canHear
+        return Button("交给 \(cue.name)", icon: .handOff, action: handToCue)
+            .font(Typography.meta.weight(.semibold))
+            .buttonStyle(ControlButtonStyle(kind: empty ? .secondary : .primary, compact: true))
+            .fixedSize()
+            .disabled(empty)
+            .help("把这次随手记直接说给 \(cue.name)")
+    }
+
+    /// 这次随手记不记成灵感，直接作为一句话说给 Cue。
+    private func handToCue() {
+        let files = services.store.files
+        _ = workspace.speak(to: .cue, from: $state.draft, saying: Dotted(String(localized: "已交给 \(workspace.cue.name)"))) { try $0.stored(in: files) }
     }
 
     private var saveButton: some View {
