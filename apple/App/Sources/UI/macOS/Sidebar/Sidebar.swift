@@ -224,6 +224,8 @@ private struct PageRow<Icon: View, Title: View, Trailing: View>: View {
                 icon.frame(width: Spacing.sidebarIcon)
                 title.font(Typography.sidebarRow).fontWeight(selected ? .semibold : .regular).lineLimit(1)
                     .padding(.leading, SidebarMetrics.titleGap)
+                    // 去处名不截断，行尾的东西（进展的计数）放不下时自己让步
+                    .layoutPriority(1)
                 Spacer(minLength: 4)
                 trailing
             }

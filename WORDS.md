@@ -44,7 +44,7 @@
 - 灵感 Idea · 任务 Task · 子任务 Subtask · 正文 Notes · 项目 Project · 默认项目 Default Project · 置顶 Pin / Unpin / Pinned · 归档 Archive · 回收站 Trash · 批注 Comment（不叫 Note，免得和 Notes 混）
 - 进展 Progress · 看板 Board · 会话 Session · Agent 会话 Agent Session · 全部项目 All Projects · 工作区 Workspace · 绑定的文件夹 Linked Folder
 - Cue 的四个：Cue · 推进中 Underway · 等你 Needs You · 记忆 Memory；一直记着 Always Remember
-- 拍板 Your Call（"N 件等你拍板" N Need Your Call，"等你拍板" Needs Your Call）
+- 拍板 Your Call（"等你拍板" Needs Your Call）；名牌第二行、小组件、灵动岛这类一行放不下整句的地方用短形 "N for you"（"N 件等你拍板"）
 - 进行中 In Progress（任务自己的状态，不与 Underway 混）· 已完成 Done（列名）· 完成 Complete（按钮）· 待回复 To Reply · 该你了 Your Turn · 新消息 New Messages · 有新回复 New Reply · 输出中 Writing…
 - 经过的动作词：查看 View · 发给 Message · 新建 New · 修改 Edit · 开始 Start · 停止 Stop · 完成 Complete · 留给你 Left for You
 - 只记下 Just Save · 对 Cue 说 Tell Cue · 运行情况 Status · 额度 Usage · 技能 Skill · 斜杠命令 Slash Command · 思考强度 Thinking · 灵动岛与锁屏 Live Activity

@@ -82,7 +82,8 @@ private struct CueNoteLine: View {
         }
         let tail = said ?? (head == nil ? round.header?.wake.reason : nil)
         return switch (head, tail) {
-        case (let head?, let tail?): Text("\(head)，\(tail)")
+        // 接在一处后面的那句（Cue 说的或醒来原因）自成一键：英文用冒号接整句，不与别处并列两段的"%@，%@"共用
+        case (let head?, let tail?): Text("\(head)\(Text("，\(tail)", comment: "Cue 页醒来那一行：一处之后接 Cue 说的话"))")
         case (let head?, nil): head
         case (nil, let tail?): Text(tail)
         case (nil, nil): Text("")

@@ -62,9 +62,11 @@ extension CueQuestionLine where Below == EmptyView {
 
     /// 只给显示：句尾最后 4 个字（汉字一个算一个，英文单词、数字一整段算一个，不算标点）连同其间与其后的标点粘成一块，
     /// 换行时不会只剩"我选」。"这样的尾巴挂在下一行。块与块之间插字连接符（U+2060，不占宽、不显示）；不插进单词里面：
-    /// 插在字母之间时排版反倒在那里断开（"ma / in"）。存储、通知、读屏、复制都用原文。
+    /// 插在字母之间时排版反倒在那里断开（"ma / in"）。没有汉字的（英文界面里 Cue 写的）照常按词折行、不粘：
+    /// 窄格一行只排得下两三个词，几个词粘成一块就比格还宽，排版只能在词中间断（"scr / eenshot"）。存储、通知、读屏、复制都用原文。
     static func keepingTail(_ text: String) -> String {
         func latin(_ character: Character) -> Bool { character.isASCII && (character.isLetter || character.isNumber) }
+        guard text.contains(where: { !$0.isASCII && $0.isLetter }) else { return text }
         var rest = Substring(text), pieces: [Substring] = [], counted = 0
         while counted < tailLength, let last = rest.last {
             let length = latin(last) ? rest.reversed().prefix(while: latin).count : 1
@@ -207,7 +209,9 @@ struct CueShots: View {
 
     /// 看什么：读屏读图的标签（`DeliverableTile` 的 label），这里只给眼睛看。
     private func caption(_ look: String) -> some View {
-        let parts = look.split(separator: "：", maxSplits: 1).map(String.init)
+        // 名字与说明之间是"："（英文是": "）
+        let split = look.range(of: "：") ?? look.range(of: ": ")
+        let parts = split.map { [String(look[..<$0.lowerBound]), String(look[$0.upperBound...])] } ?? [look]
         return VStack(alignment: .leading, spacing: 1) {
             Text(CueQuestionLine.keepingTail(parts.first ?? look)).fontWeight(.semibold).foregroundStyle(palette.ink)
             if parts.count > 1 { Text(CueQuestionLine.keepingTail(parts[1])).foregroundStyle(palette.ink2) }

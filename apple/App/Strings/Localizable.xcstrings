@@ -1112,13 +1112,13 @@
               "one" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%lld needs your call"
+                  "value" : "%lld for you"
                 }
               },
               "other" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%lld need your call"
+                  "value" : "%lld for you"
                 }
               }
             }
@@ -5019,7 +5019,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "OK to %@?"
+            "value" : "%@?"
           }
         }
       }
@@ -13595,6 +13595,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : ", "
+          }
+        }
+      }
+    },
+    "，%@" : {
+      "comment" : "Cue 页醒来那一行：一处之后接 Cue 说的话",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : ": %@"
           }
         }
       }
