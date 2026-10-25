@@ -22,7 +22,7 @@ extension View {
 
 extension EnvironmentValues {
     /// 卡在手机竖版看板（`PhoneBoard`）的一行里：卡铺满行给的那一格（格多高只由行高定，`BoardRowLane`）、标题小一档；
-    /// 推进中的状态词挪到线那一行，标题一整行都给字。Mac 与宽屏 iPad 不是。
+    /// Mac 与宽屏 iPad 不是。
     @Entry var boardRow = false
 }
 
@@ -92,7 +92,7 @@ extension Workspace {
 #endif
 
 /// 推进中一个没绑没做完的任务的活会话（终端里开的、"新会话"、只有已完成的事绑着的）：同任务卡（`BoardTaskCard`）的语法——
-/// 开头是这家 Agent 的品牌标（`AgentKind.mark`，任务是完成圈），标题是会话名，右上与下沿按 `BoardPulse` 写（要你管的写状态词、线停住，在跑的线在动），
+/// 开头是这家 Agent 的品牌标（`AgentKind.mark`，任务是完成圈），标题是会话名，下沿的线与线右端的状态词按 `BoardPulse` 写（要你管的写状态词、线停住，在跑的线在动），
 /// 看全部项目时标题前是它归处的项目小图形；悬停提示写项目、此刻状态多久与哪家 Agent。点了打开会话。
 struct BoardSessionCard: View {
     let session: PiSessionState
@@ -121,8 +121,9 @@ struct BoardSessionCard: View {
     }
 }
 
-/// 卡里的排法（任务卡、会话卡同一种）：一行开头记号、项目小图形与标题，右端是要你管的状态词或调用处给的尾巴；
-/// 推进中的卡标题贴上沿，下沿是那条线（`BoardWave`），有子任务的线下面再分段（`BoardSteps`）；别的列的卡标题竖直居中。
+/// 卡里的排法（任务卡、会话卡同一种）：一行开头记号、项目小图形与标题，右端是调用处给的尾巴；
+/// 推进中的卡标题贴上沿，下沿是那条线（`BoardWave`），有子任务的线下面再分段（`BoardSteps`），要你管的状态词在线的右端：
+/// 标题一整行都给字（状态词放在标题右端时，窄列里标题只剩四五个字）；别的列的卡标题竖直居中。
 struct BoardCardLayout<Lead: View, Trailing: View>: View {
     let advancing: Bool
     var pulse = BoardPulse()
@@ -151,7 +152,6 @@ struct BoardCardLayout<Lead: View, Trailing: View>: View {
         HStack(spacing: row ? BoardCardMetrics.rowGap : Self.gap) {
             lead
             Spacer(minLength: 0)
-            if advancing, pulse.speaks, !row { word }
             trailing
         }
     }
@@ -164,24 +164,29 @@ struct BoardCardLayout<Lead: View, Trailing: View>: View {
             .overlay(alignment: .topLeading) {
                 if advancing {
                     // 线从离标题 `waveGap` 处起（带子代理细轨的线往下多占几点，不往上挤）；子任务的分段压在线那一格的底边，线最低处也在它上面
-                    wave.padding(.leading, TaskMetrics.cardLead + Self.gap).padding(.top, BoardCardMetrics.waveTop)
+                    waveLine.padding(.leading, TaskMetrics.cardLead + Self.gap).padding(.top, BoardCardMetrics.waveTop)
                 }
             }
     }
 
-    /// 竖版看板里的推进中：卡窄，标题可折两行、在线上面那一截里竖直居中；状态词挪到线的右端。
+    /// 竖版看板里的推进中：卡窄，标题可折两行、在线上面那一截里竖直居中。
     private var rowAdvancing: some View {
         title
             .frame(maxHeight: .infinity)
             .padding(.bottom, WaveStrip.height + BoardCardMetrics.waveBottom)
             .overlay(alignment: .bottomLeading) {
-                HStack(alignment: .center, spacing: Self.gap) {
-                    wave
-                    if pulse.speaks { word }
-                }
-                .padding(.leading, TaskMetrics.cardLead + BoardCardMetrics.rowGap)
-                .padding(.bottom, BoardCardMetrics.waveBottom)
+                waveLine
+                    .padding(.leading, TaskMetrics.cardLead + BoardCardMetrics.rowGap)
+                    .padding(.bottom, BoardCardMetrics.waveBottom)
             }
+    }
+
+    /// 下沿那一行：线，右端是要你管的状态词。
+    private var waveLine: some View {
+        HStack(alignment: .center, spacing: Self.gap) {
+            wave
+            if pulse.speaks { word }
+        }
     }
 
     private var wave: some View {

@@ -51,7 +51,8 @@ enum Typeface {
 extension CueEditorTheme {
     /// 编辑页的主题。颜色是固定值而非动态色：外观切换时整体替换主题。
     /// 左右留白随平台：Mac 编辑页铺满、字限在 `maxTextWidth` 一列里居中，iPhone 贴近屏幕边。iOS 上字号是 Dynamic Type 的设计基准。
-    static func editor(_ palette: Palette, horizontalInset: CGFloat, maxTextWidth: CGFloat? = nil) -> CueEditorTheme {
+    /// `verticalInset` 是首行上面与末行下面的留白：宽屏 iPad 的纸四边同宽，其余贴着顶栏，留一点就够。
+    static func editor(_ palette: Palette, horizontalInset: CGFloat, verticalInset: CGFloat = 8, maxTextWidth: CGFloat? = nil) -> CueEditorTheme {
         let size: CGFloat = 15.5
         return CueEditorTheme(
             font: Typeface.pingFang(size),
@@ -67,7 +68,7 @@ extension CueEditorTheme {
             imagePlaceholderColor: CueColor(palette.fill),
             horizontalInset: horizontalInset,
             maxTextWidth: maxTextWidth,
-            verticalInset: 8,
+            verticalInset: verticalInset,
             lineSpacing: 7,
             headingSpacing: 10,
             imageCornerRadius: 10)

@@ -160,6 +160,7 @@ private struct ShelfFooter: View {
 }
 
 /// 末尾那一组的一行：图标、名字，行尾是同步到不了 Mac 的点（只有设置）、条数与箭头，点进一页。
+/// 图标与名字同项目行一样排（`Label`，图标槽同 `ProjectGlyph` 宽）：两组的图标列与字的起点在同一条竖线上。
 private struct ShelfLine: View {
     let route: Route
     let icon: Icon
@@ -171,8 +172,11 @@ private struct ShelfLine: View {
     var body: some View {
         NavigationLink(value: route) {
             HStack(spacing: 12) {
-                IconImage(icon).font(.system(size: glyph)).foregroundStyle(palette.ink).frame(minWidth: 22).accessibilityHidden(true)
-                Text(title).foregroundStyle(palette.ink)
+                Label {
+                    Text(title).foregroundStyle(palette.ink)
+                } icon: {
+                    IconImage(icon).font(.system(size: glyph)).foregroundStyle(palette.ink).frame(width: glyph + 6).accessibilityHidden(true)
+                }
                 Spacer(minLength: 8)
                 if let alert { Circle().fill(palette.color(alert.tone)).frame(width: 7, height: 7).accessibilityHidden(true) }
                 Image(.forward).font(.footnote.weight(.semibold)).foregroundStyle(palette.ink3).accessibilityHidden(true)
