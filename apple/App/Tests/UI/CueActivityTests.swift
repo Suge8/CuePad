@@ -34,7 +34,7 @@ struct CueActivityTests {
         var cue = try await now()
         #expect(kinds(cue) == [.asks, .asks, .done] && cue.advancing == 0 && cue.isLive)
         let first = try #require(cue.first)
-        #expect(first.title == "推送 v1.4 到 TestFlight" && first.detail == "Cue 请你允许推送代码" && first.open == DeepLink.cue.url)
+        #expect(first.title == "可以推送 v1.4 到 TestFlight 吗？" && first.detail == nil && first.open == DeepLink.cue.url)
         let allow = try #require(first.allow)
         #expect(allow.message == push.id && allow.choice == CueAsk.once)
 

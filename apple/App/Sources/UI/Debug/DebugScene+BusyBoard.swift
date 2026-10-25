@@ -42,7 +42,7 @@ extension DebugScene {
     }
 
     /// `-CuePadCanvasSteps YES`（配 tasks 画面，两端）：待办里"画布缩放锚点跟随指针"写上正文与三个子任务（第一个做完），
-    /// 进展页的看板上点它的卡看任务气泡的正文与子任务（演示库里另一件有子任务的"发言轮次乱序"在等你那一列，点它是去回答、不开气泡）。
+    /// 进展页的看板上点它的卡看任务气泡的正文与子任务（演示库里另一件有子任务的"发言轮次乱序"在等你那一列，点它是去 Cue 页那一问、不开气泡）。
     static func seedCanvasSteps(_ store: CueStore) async {
         guard defaults.bool(forKey: "CuePadCanvasSteps") else { return }
         guard let canvas = try? await store.tasks(.inProgress, .todo).flatMap(\.tasks).first(where: { $0.body.hasPrefix("画布缩放") }),

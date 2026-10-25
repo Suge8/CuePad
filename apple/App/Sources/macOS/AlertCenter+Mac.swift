@@ -41,7 +41,7 @@ extension AlertCenter: CueNotifying {
         if !shown.isEmpty { center.removeDeliveredNotifications(withIdentifiers: shown) }
     }
 
-    /// Dock 角标 = "等你"的总数；没有通知权限时不设（经通知中心设，受系统"标记"开关控制）。
+    /// Dock 角标 = "等你"的总数（拍板加待回复）；没有通知权限时不设（经通知中心设，受系统"标记"开关控制）。
     func showBadge(_ count: Int) async {
         badge = count
         await showBadge()

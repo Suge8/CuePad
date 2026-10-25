@@ -40,8 +40,7 @@ nonisolated extension CueNow {
         }
     }
 
-    /// 等你的每一件、待回复的每个会话、推进中的每一件、刚做完的每一件，按这个先后（同一种里照摘要的先后）。
-    /// 会话都待回复的事不另算一颗歇着的：它的会话已经各是一颗待回复。
+    /// 拍板的每一件、待回复的每个会话、推进中的每一件、刚做完的每一件，按这个先后（同一种里照摘要的先后）。
     private static func beads(_ digest: CueDigest, at now: Date) -> [Bead] {
         let asks = digest.tally.waiting.map { wait in
             switch wait {
@@ -52,9 +51,10 @@ nonisolated extension CueNow {
                 Bead(id: wait.id, kind: .asks, name: title(state), since: state.stateSince, subagents: 0, sessions: [state.sessionID])
             }
         }
-        let replies = digest.tally.replies.map { Bead(id: "reply/\($0.sessionID)", kind: .reply, name: title($0), since: $0.stateSince, subagents: 0, sessions: [$0.sessionID]) }
-        let replied = Set(digest.tally.replies.map(\.sessionID))
-        let works = digest.tally.advancing.map(bead).filter { $0.kind != .resting || $0.sessions.isEmpty || !Set($0.sessions).isSubset(of: replied) }
+        let replies = digest.tally.replies.map { reply in
+            Bead(id: reply.id, kind: .reply, name: title(reply.session), since: reply.session.stateSince, subagents: 0, sessions: [reply.session.sessionID])
+        }
+        let works = digest.tally.advancing.map(bead)
         let done = digest.done.compactMap { task in
             task.completedAt.map { Bead(id: "done/\(task.id.uuidString)", kind: .done, name: task.title, since: $0, subagents: 0, sessions: []) }
         }.filter { $0.isFresh(at: now) }
@@ -94,15 +94,14 @@ nonisolated extension CueNow {
 
     private static func title(_ state: PiSessionState) -> String { state.title.isEmpty ? "会话" : state.title }
 
-    /// Cue 的提问：要做的动作（`CueAsking.action`）与它请你允许哪一类事，打开是 Cue 页，带选项的能"允许一次"（选第一项）；
+    /// Cue 的提问：问句与下面那一句（同卡片与通知，`CueMessage.headline`、`CueAsking.why`），打开是 Cue 页，带选项的能"允许一次"（选第一项）；
     /// 会话在问：会话名与问题的第一行，打开是那个会话。
     private static func wait(_ wait: CueTally.Wait, name: String) -> Wait {
         switch wait {
         case .message(let message, _):
-            let asking = message.asking
             return Wait(
-                title: asking?.action ?? message.headline ?? "\(name) 在等你",
-                detail: asking.map { $0.request(by: name) },
+                title: message.headline ?? "\(name) 在等你",
+                detail: message.asking?.why,
                 open: DeepLink.cue.url,
                 allow: message.choices?.first.map { Allow(message: message.id, choice: $0) })
         case .session(let state, _):

@@ -31,10 +31,10 @@ struct BoardColumns: View {
 }
 
 /// 看板的一列（`TaskBoard`；Mac 与宽屏 iPad 四列并排；手机转成一行，四行竖着排，`PhoneBoard`）：身后不铺底（`BoardLane`，拖进来时一层选中底），一件一张卡——
-/// 待办、推进中、已完成是任务卡（`BoardTaskCard`）、没绑任务的会话卡（`BoardSessionCard`），等你是 Cue 的气泡（`BoardWaitCard`），都在懒加载栈里（列可能很长，只建看得见的）。
+/// 待办、推进中、已完成是任务卡（`BoardTaskCard`）、没绑任务的会话卡（`BoardSessionCard`），等你是一件一张的等你卡（`BoardWaitCard`，拍板在前、待回复在后），都在懒加载栈里（列可能很长，只建看得见的）。
 /// 推进中按档排（要你管 → 在跑 → 歇着，`Workspace.byAttention`），档与档之间多空一截；在跑的那一档只有前 `BoardWave.maxMoving` 张的线在动。
 /// 看全部项目时卡上标题前一个项目小图形。点击去处：待办、已完成的卡开任务气泡；推进中的任务卡进此刻干活的会话（没有会话的开气泡），会话卡进会话；
-/// 等你卡点抬头去回答的地方。已完成卡尾的成果图点开全屏看（这一列挂一个 `previewPresenter`）。
+/// 等你的卡只看不答：拍板点了去 Cue 页那一问（会话在问的进会话），待回复进会话。已完成卡尾的成果图点开全屏看（这一列挂一个 `previewPresenter`）。
 /// 拖放：行拖到推进中是开始（同"开始"：Mac 交给 Agent，手机浮起发给 Agent 的输入框）、拖到已完成是做完（同点完成圈，还有没完成的子任务、
 /// Agent 还在做时先问一句，`TaskCheck`）；待办里拖到一行前面是排序（`TaskBoard.move`），拖进来不改状态。别的拖法不接。
 /// 已完成列末尾是"更早做完的 N"：原地展开（它们没进归档，跳去归档页看到的是别的），展开后旁边是"全部归档"。
@@ -158,14 +158,11 @@ struct BoardColumn: View {
             }
             if board.advancing.isEmpty { empty("拖一件待办到这里开始") }
         case .waiting:
-            ForEach(board.waiting) { wait in
-                if let item = wait.item {
-                    BoardWaitCard(wait: wait).draggable(item.id.uuidString)
-                } else {
-                    BoardWaitCard(wait: wait)
-                }
+            ForEach(board.held) { held in
+                let card = BoardWaitCard(held: held, project: glyph(workspace.catalog?.project(held.project)))
+                if let item = held.item { card.draggable(item.id.uuidString) } else { card }
             }
-            if board.waiting.isEmpty { empty("没有要你拍板的事") }
+            if board.count(.waiting) == 0 { empty("没有等你的事") }
         case .done:
             ForEach(board.done) { card($0) }
             // 列头的数只数今天的：今天没有时先说没有，再接更早的，数与字对得上

@@ -13,7 +13,7 @@ struct CueReplyTip: View {
     var body: some View {
         Button(action: open) {
             HStack(spacing: 10) {
-                Circle().fill(palette.ink).frame(width: Self.dot, height: Self.dot)
+                ReplyDot()
                 if let only {
                     Text(Self.name(only)).foregroundStyle(palette.ink).lineLimit(1)
                     Text("待回复").foregroundStyle(palette.ink2).fixedSize()
@@ -38,7 +38,6 @@ struct CueReplyTip: View {
         if let only { workspace.openSession(only.id, sessionID: only.sessionID) } else { workspace.showReplies() }
     }
 
-    private static let dot: CGFloat = 7
     /// 与下面等你卡（或输入框）之间，同等你卡与输入框之间。
-    private static let below: CGFloat = 8
+    private static let below = ComposerMetrics.stackGap
 }

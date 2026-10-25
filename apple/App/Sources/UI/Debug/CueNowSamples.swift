@@ -12,7 +12,7 @@ enum CueNowSamples {
     }
 
     private static let push = CueNow.Wait(
-        title: "推送 v1.4 到 TestFlight", detail: "Cue 请你允许推送代码", open: DeepLink.cue.url,
+        title: "可以推送 v1.4 到 TestFlight 吗？", detail: nil, open: DeepLink.cue.url,
         allow: CueNow.Allow(message: UUID(), choice: CueAsk.once))
 
     private static func now(

@@ -1,8 +1,8 @@
 import CueStore
 import SwiftUI
 
-/// 一件等你（`TaskBoard.Wait`，出自 `CueStore.cueTally`）在哪都同一套写法：进展页等你列的卡（`BoardWaitCard`）、Cue 页等你卡（`CueWaitDock`）都从这里取
-/// 写什么（`title`、`asked`、`waitBasis`）与谁在问（`WaitAsker`），怎么答是 `WaitAnswer`。
+/// 一件拍板（`TaskBoard.Wait`，出自 `CueStore.cueTally`）在 Cue 页拍板卡（`CueWaitDock`）上写什么：眉题 `CueWaitEyebrow` 的 `title` 与 `project`，
+/// 问句 `CueQuestionLine` 的 `asked`（进展页悬停的问句也是它）；怎么答是 `WaitAnswer`。进展页的卡写什么在 `TaskBoard.Held`。
 nonisolated extension TaskBoard.Wait {
     /// 哪件事：会话在问的写会话名（点了进的就是它），Cue 问的写落在的任务，没落在任务上的写 Cue 的名字。
     func title(cue: String) -> String {
@@ -10,11 +10,11 @@ nonisolated extension TaskBoard.Wait {
         return item?.task.title ?? cue
     }
 
-    /// 要你定什么：Cue 的是代码写的问句（`CueMessage.headline`）；会话的是问题的第一行，`detail` 是第二行起的说明——
-    /// 选项不写进来（它们是下面的胶囊）。会话在等却没报出问题时是它此刻那一句（`PiProgress.line`）。
+    /// 要你定什么与下面那一句：Cue 的是代码写的问句（`CueMessage.headline`）与 `CueAsking.why`（只有规矩那一类有）；
+    /// 会话的是问题的第一行，`detail` 是第二行起的说明——选项不写进来（它们是下面的胶囊）。会话在等却没报出问题时是它此刻那一句（`PiProgress.line`）。
     var asked: (line: String, detail: String?) {
         switch wait {
-        case .message(let message, _): return (message.headline ?? "", nil)
+        case .message(let message, _): return (message.headline ?? "", message.asking?.why)
         case .session(let session, _):
             let lines = (session.question?.text ?? PiProgress.line(of: session) ?? "").split(separator: "\n", maxSplits: 1).map(String.init)
             return (lines.first ?? "", lines.count > 1 ? lines[1] : nil)
@@ -23,37 +23,10 @@ nonisolated extension TaskBoard.Wait {
 }
 
 extension Workspace {
-    /// Cue 一问依据的规矩与范围："推送代码前先问你 · 圆桌"；规矩那一类是他的原话。认不出类别的旧提问没有这一行。
-    func waitBasis(of message: CueMessage) -> String? {
-        guard let asking = message.asking else { return nil }
-        let scope = message.asked?.project.flatMap { catalog?.project($0)?.name }
-        return Dotted(asking.basis, scope).visible
-    }
-}
-
-/// 谁在问：Cue 的头像（此刻的表情），会话在问的是这家 Agent 的品牌标（认不出的是终端）。
-/// `ringed`：标放在纸色圆里（泳道上，同推进中的会话卡）。只给眼睛看，谁在问由旁边的字说。
-struct WaitAsker: View {
-    let wait: CueTally.Wait
-    let size: CGFloat
-    var ringed = false
-    @Environment(Workspace.self) private var workspace
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        switch wait {
-        case .message: CueAvatar(mood: workspace.cue.expression, size: .inline)
-        case .session(let session, _):
-            let mark = Group { if let kind = session.agent.known { kind.mark.image } else { Image(.terminal) } }
-                .font(.system(size: size * (ringed ? 0.5 : 0.7))).foregroundStyle(palette.ink2)
-                .frame(width: size, height: size)
-                .accessibilityHidden(true)
-            if ringed {
-                mark.background(palette.paper, in: .circle).overlay(Circle().strokeBorder(palette.hair))
-            } else {
-                mark
-            }
-        }
+    /// 去 Cue 页答这一问：它排到拍板卡最前（`cueAsking`，`CueThread.leading`）。看板上点拍板卡走这里。
+    func askOnCuePage(_ id: UUID) {
+        cueAsking = id
+        show(.cue)
     }
 }
 

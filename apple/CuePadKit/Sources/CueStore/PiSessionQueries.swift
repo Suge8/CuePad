@@ -90,7 +90,7 @@ extension CueStore {
     }
   }
 
-  /// 待回复的会话（规则在 `PiSessionState.awaitsReply`），等得最久的在前：Cue 页的待回复提示与名牌（`CueTally.replies`）只读它。
+  /// 待回复的会话（规则在 `PiSessionState.awaitsReply`），等得最久的在前：Cue 页的待回复提示与等你里的待回复（`CueTally.replies`）只读它。
   /// 只读 Cue 留给你回、此刻歇着的那几条，订阅同 `sessionsAskingYou`。
   public func sessionsAwaitingReply() throws -> [PiSessionState] {
     guard let cue = try cueDuty(), !cue.left.isEmpty else { return [] }

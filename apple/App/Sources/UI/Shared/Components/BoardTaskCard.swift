@@ -1,7 +1,7 @@
 import CueStore
 import SwiftUI
 
-/// 看板上的一件任务：待办、推进中、已完成三列同一种卡（等你是 `BoardWaitCard`），一样高（`boardCard`），卡上只有标题与一个状态记号，其余收进悬停提示。
+/// 看板上的一件任务：待办、推进中、已完成三列同一种卡（等你列是同样的卡，`BoardWaitCard`），一样高（`boardCard`），卡上只有标题与一个状态记号，其余收进悬停提示。
 /// - 开头是完成圈（`TaskCheckButton`，空心描边；做完是石绿的对勾），看全部项目时标题前一个项目小图形（`BoardProjectGlyph`，Mac 上悬停是项目联动）；
 /// - 推进中下沿是那条线、右上是要你管的状态词（`BoardPulse`，`BoardCardLayout`），歇着的标题淡一档；已完成标题淡一档、不加粗，卡尾是 Cue 点名的成果图；
 /// - 悬停提示：项目、多久（推进中是跑了多久或估还要多久，已完成是几点做完）与交给了哪家 Agent。
@@ -59,7 +59,7 @@ struct BoardTaskCard: View {
     private func title(resting: Bool) -> some View {
         let finished = task.status == .done
         let ink = check.phase != .idle ? palette.ink3 : finished || resting ? palette.ink2 : palette.ink
-        return Text(task.title.textGlyphs).boardTitle(advancing: advancing).fontWeight(finished ? .regular : nil)
+        return Text(task.title.textGlyphs).boardTitle().fontWeight(finished ? .regular : nil)
             .strikethrough(check.phase != .idle, color: palette.ink3).foregroundStyle(ink)
     }
 

@@ -145,11 +145,6 @@ struct Palette {
     /// 石绿的实底（看板已完成列头那颗圆）：浅色就是石绿，深色压到中等明度，上面的白字形 4.6。
     var repliedFill: Color { dark ? Color(hex: 0x2B7A55) : replied }
 
-    // MARK: 任务看板（`BoardLane`）
-
-    /// 看板上 Cue 的气泡（等你那一列）：浅色是纯白，比纸亮一级、与纸色的卡分得开；深色是纸的上沿色。
-    var laneBubble: Color { dark ? paperLit : Color(hex: 0xFFFFFF) }
-
     // MARK: 要你看的会话卡片的底（`PiShown.wash`，代替纸色）
 
     // 是这种状态色相的浅调，不是字色叠透明：状态色为了写成字压得很深（赭黄近棕），薄薄叠一层出来的是灰米、灰粉、灰绿，认不出是哪种。
