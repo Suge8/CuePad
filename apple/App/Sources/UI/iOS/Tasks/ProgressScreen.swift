@@ -45,13 +45,18 @@ struct ProgressScreen: View {
         .observingBoard(into: $board, store: services.store, onError: workspace.fail)
     }
 
-    @ViewBuilder private var boardView: some View {
-        let shown = (board ?? .empty).only(workspace.scopedProject)
-        if sizeClass == .regular {
-            BoardColumns(board: shown, adding: $adding, newTaskProject: newTaskProject).padding(.horizontal, 12)
-        } else {
-            PhoneBoard(board: shown, adding: $adding, newTaskProject: newTaskProject)
+    private var boardView: some View {
+        let scope = workspace.scopedProject
+        let shown = (board ?? .empty).only(scope)
+        return Group {
+            if sizeClass == .regular {
+                BoardColumns(board: shown, adding: $adding, newTaskProject: newTaskProject).padding(.horizontal, 12)
+            } else {
+                PhoneBoard(board: shown, adding: $adding, newTaskProject: newTaskProject)
+            }
         }
+        // 换范围不带里层的挪位与数字动画，理由同 Mac 的 `TaskBoardPage`
+        .transaction(value: scope) { $0.disablesAnimations = true }
     }
 
     /// 看不见的那段：点不到、屏读跳过，暂停订阅（`pageActive`）。
