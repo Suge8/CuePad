@@ -1,29 +1,6 @@
 import CueStore
 import SwiftUI
 
-/// 拍板卡（Cue 页的 `CueWaitDock`）里铺开的那一件，按部分排（卡按地方挑排哪几部分）：问句（`CueWaitQuestion`）、点名的图（`shots`，Cue 的提问才有，`CueShots`；
-/// "可以"选的是其中一张时那张描靛青圈；点开全屏时底栏就是这几个选项，看完当场定）、怎么答（`WaitAnswer`：主动作靠右下角，次要的在同一行左边）。
-/// 这件事是哪件、在哪个项目、等了多久、第几件在卡顶的眉题行（`CueWaitEyebrow`）；要看细节点眉题进任务或会话。
-struct CueWaitItem: View {
-    enum Part { case question, shots, answer }
-
-    let wait: TaskBoard.Wait
-    let part: Part
-    let shots: [UUID: [CueShown]]
-    let open: (PreviewOpening) -> Void
-
-    var body: some View {
-        switch part {
-        case .question: CueWaitQuestion(wait: wait)
-        case .shots:
-            if let message = wait.message, let shown = shots[message.id] {
-                CueShots(shots: shown, group: "waiting", reply: .answer(message), chosen: CueShots.chosen(for: message.asking, in: shown), open: open)
-            }
-        case .answer: WaitAnswer(wait: wait.wait)
-        }
-    }
-}
-
 /// 一件拍板要你定什么：赭黄问号、问句（`TaskBoard.Wait.asked`）；会话的问题有说明时（选项不写进来）接在下一行。
 /// 规矩那一类（`CueAsk.rule`）下一行引他自己的原话（`CueAsking.why`："你说过「方案让我挑」。"）：这一问为什么来问他只有这句说得出，问句本身看不出；
 /// 别的类不写依据（"推送代码前先问你"）：问句已经说了是什么事。
@@ -80,7 +57,7 @@ struct CueWaitEyebrow: View {
     }
 
     @ViewBuilder private var project: some View {
-        if let project = workspace.catalog?.project(wait.shownProject) {
+        if let project = workspace.catalog?.project(wait.project) {
             HStack(spacing: 2) {
                 ProjectGlyph(project: project, size: 11)
                 Text(project.name).lineLimit(1)

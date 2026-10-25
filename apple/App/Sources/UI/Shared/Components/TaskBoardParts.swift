@@ -162,7 +162,7 @@ struct BoardColumn: View {
                 let card = BoardWaitCard(held: held, project: glyph(workspace.catalog?.project(held.project)))
                 if let item = held.item { card.draggable(item.id.uuidString) } else { card }
             }
-            if board.waiting.isEmpty && board.replies.isEmpty { empty("没有等你的事") }
+            if board.count(.waiting) == 0 { empty("没有等你的事") }
         case .done:
             ForEach(board.done) { card($0) }
             // 列头的数只数今天的：今天没有时先说没有，再接更早的，数与字对得上

@@ -88,21 +88,15 @@ struct CueChoices: View {
     private static let inset: CGFloat = 32
 
     var body: some View {
-        // 停用着只留停用的"可以"：别的选项此刻同样选不了，竖排时多一颗按钮就把手机上的卡挤进不带图的紧凑档
-        let cue = workspace.cue, paused = !cue.canHear
-        let once = options.first ?? CueAsk.once, others = paused ? [] : Array(options.dropFirst()), hint = paused ? "启用 \(cue.name) 后再答" : nil
-        let main: ControlButtonStyle.Kind = paused ? .secondary : .primary
-        full(once: once, others: others, hint: hint, main: main, paused: paused)
-    }
-
-    @ViewBuilder private func full(once: String, others: [String], hint: String?, main: ControlButtonStyle.Kind, paused: Bool) -> some View {
-        let side = VStack(alignment: typeSize.isAccessibilitySize ? .trailing : .leading, spacing: 0) {
-            if let hint { note(hint) }
-            ForEach(others, id: \.self) { link($0) }
+        // 停用着只留停用的"可以"：别的选项此刻同样选不了
+        let cue = workspace.cue, paused = !cue.canHear, accessible = typeSize.isAccessibilitySize
+        let side = VStack(alignment: accessible ? .trailing : .leading, spacing: 0) {
+            if paused { note("启用 \(cue.name) 后再答") }
+            if !paused { ForEach(options.dropFirst(), id: \.self) { link($0) } }
         }
-        .multilineTextAlignment(typeSize.isAccessibilitySize ? .trailing : .leading)
-        let primary = button(once, kind: main, minWidth: Self.onceWidth, paused: paused).lineLimit(1).fixedSize()
-        if typeSize.isAccessibilitySize {
+        .multilineTextAlignment(accessible ? .trailing : .leading)
+        let primary = once(options.first ?? CueAsk.once, paused: paused).lineLimit(1).fixedSize()
+        if accessible {
             VStack(alignment: .trailing, spacing: 4) {
                 primary
                 side
@@ -134,14 +128,12 @@ struct CueChoices: View {
         Text(text).font(Typography.meta).foregroundStyle(palette.ink2)
     }
 
-    private func button(
-        _ option: String, kind: ControlButtonStyle.Kind, minWidth: CGFloat = 0, paused: Bool = false
-    ) -> some View {
+    /// 主按钮"可以"：按字宽，不窄过 `onceWidth`；停用着降成次级并停用。
+    private func once(_ option: String, paused: Bool) -> some View {
         Button { pick(option) } label: {
-            Text(option).multilineTextAlignment(.center)
-                .frame(minWidth: max(0, minWidth - Self.inset))
+            Text(option).multilineTextAlignment(.center).frame(minWidth: Self.onceWidth - Self.inset)
         }
-        .buttonStyle(ControlButtonStyle(kind: kind))
+        .buttonStyle(ControlButtonStyle(kind: paused ? .secondary : .primary))
         .accessibilityLabel(option)
         .disabled(disabled || paused)
     }

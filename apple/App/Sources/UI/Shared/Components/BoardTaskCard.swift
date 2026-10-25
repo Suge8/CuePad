@@ -59,7 +59,7 @@ struct BoardTaskCard: View {
     private func title(resting: Bool) -> some View {
         let finished = task.status == .done
         let ink = check.phase != .idle ? palette.ink3 : finished || resting ? palette.ink2 : palette.ink
-        return Text(task.title.textGlyphs).boardTitle(advancing: advancing).fontWeight(finished ? .regular : nil)
+        return Text(task.title.textGlyphs).boardTitle().fontWeight(finished ? .regular : nil)
             .strikethrough(check.phase != .idle, color: palette.ink3).foregroundStyle(ink)
     }
 

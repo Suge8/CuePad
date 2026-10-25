@@ -176,12 +176,11 @@ private struct SessionAnswer: View {
 /// 会话在问的文字题怎么答（`WaitAnswer`）：一行回答框，草稿就是会话页回复框那一份（`AppSettings.replyDraft`，两处写的是同一句），发出同会话页的作答
 /// （`Workspace.speak`：会话在等 CuePad 答得了的提问时这句就是答案，选项写原文或序号）；只发文字，草稿里的卡片与图片留给会话页。
 /// 同步到不了 Mac 时不能发（同回复框）。
-struct WaitReply: View {
+private struct WaitReply: View {
     let session: PiSessionState
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
-    @FocusState private var writing: Bool
 
     private var box: Binding<ComposerDraft> { services.settings.replyDraftBinding(for: session.id) }
     private var canSend: Bool { services.reachesPiHost && !box.wrappedValue.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
@@ -193,7 +192,6 @@ struct WaitReply: View {
                 .textFieldStyle(.plain).font(Typography.secondary).lineLimit(1...4)
                 .padding(.vertical, Self.textInset)
                 .frame(minHeight: ComposerMetrics.glyphTarget)
-                .focused($writing)
                 .onSubmit(send)
             Button(action: send) { SendGlyph(canSend ? .ready : .idle) }
                 .buttonStyle(PressStyle(.button))

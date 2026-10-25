@@ -1,7 +1,7 @@
 import CueStore
 import SwiftUI
 
-/// 一件拍板（`TaskBoard.Wait`，出自 `CueStore.cueTally`）在 Cue 页拍板卡（`CueWaitDock`）上写什么：眉题 `CueWaitEyebrow` 的 `title`，
+/// 一件拍板（`TaskBoard.Wait`，出自 `CueStore.cueTally`）在 Cue 页拍板卡（`CueWaitDock`）上写什么：眉题 `CueWaitEyebrow` 的 `title` 与 `project`，
 /// 问句 `CueWaitQuestion` 的 `asked`（进展页悬停的问句也是它）；怎么答是 `WaitAnswer`。进展页的卡写什么在 `TaskBoard.Held`。
 nonisolated extension TaskBoard.Wait {
     /// 哪件事：会话在问的写会话名（点了进的就是它），Cue 问的写落在的任务，没落在任务上的写 Cue 的名字。
@@ -9,9 +9,6 @@ nonisolated extension TaskBoard.Wait {
         if case .session(let session, _) = wait { return session.title }
         return item?.task.title ?? cue
     }
-
-    /// 眉题写哪个项目：落在的任务或会话的项目，Cue 的一般提问是它问时的范围。
-    var shownProject: UUID? { project ?? message?.asked?.project }
 
     /// 要你定什么：Cue 的是代码写的问句（`CueMessage.headline`）；会话的是问题的第一行，`detail` 是第二行起的说明——
     /// 选项不写进来（它们是下面的胶囊）。会话在等却没报出问题时是它此刻那一句（`PiProgress.line`）。

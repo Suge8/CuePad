@@ -17,7 +17,7 @@ struct BoardWaitCard: View {
             BoardCardLayout(advancing: false) {
                 mark.frame(width: TaskMetrics.cardLead, height: TaskMetrics.cardLead)
                 if let project { BoardProjectGlyph(project: project) }
-                Text(held.title).boardTitle(advancing: false, wraps: true).foregroundStyle(palette.ink)
+                Text(held.title).boardTitle(wraps: true).foregroundStyle(palette.ink)
             } trailing: {
                 if held.count > 1 {
                     Text("\(held.count) 件").font(TaskMetrics.caption).monospacedDigit().foregroundStyle(palette.ink2).fixedSize()
@@ -36,7 +36,7 @@ struct BoardWaitCard: View {
         if held.deciding {
             PiStateGlyph(status: .asking).font(.system(size: TaskMetrics.ring))
         } else {
-            Circle().fill(palette.ink).frame(width: Self.dot, height: Self.dot)
+            ReplyDot()
         }
     }
 
@@ -58,6 +58,4 @@ struct BoardWaitCard: View {
         if lines.count == 1 { return Dotted(project, lines[0]).visible }
         return ([project].compactMap(\.self) + lines).joined(separator: "\n")
     }
-
-    private static let dot: CGFloat = 7
 }

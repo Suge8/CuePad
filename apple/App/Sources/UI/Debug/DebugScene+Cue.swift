@@ -8,7 +8,6 @@ import Foundation
 /// 对话里有你的话（一句带图）、Cue 的话、每一轮的经过（碰到 1 处、3 处）、折起的动态、一条结果与一条"等你"（正文带一段测试输出）；atlas 会话里有一句 Cue 发的话；
 /// 记忆有钉住的与其他，还有一条忘掉的；上下文用到换新线的七成（`CueContext`）。cuerun（仅 Mac）让 Cue 运行在这台 Mac，"运行情况"才有。
 /// `-CuePadWaitKinds YES`：等你里各种问题都有（Cue 把 homepage 的选择题、deploy 的确认题、rename 的文字题留给你答），对话都看过了、页停在最新处。
-/// `-CuePadWaitSolo YES`：notes-edit 结束，等你里只剩 Cue 的提问（配 `-CuePadCueAsk push` 只有一件）。
 /// `-CuePadReplies <N>`：Cue 把歇着的会话留给你回（待回复：Cue 页拍板卡上方那条提示 `CueReplyTip`，看板的等你列，`seedReplies`）。
 /// 配 fresh 时 notes-edit 也结束，没有拍板：名牌说几个会话待回复。
 /// `-CuePadCuePresence <unchosen|fresh|answered|thinking|tool|woke|sending|asleep|disabled>`：unchosen 是还没选过在哪台 Mac 上运行（演示的几台 Mac 都在，手机 Cue 面板就地选）；fresh 是刚启用、还没说过话（空态里那几句能直接说的话，`CueStarters`）；answered 是"等你"那一条你选了"可以"（回到对话里、带着你的回答），
@@ -136,7 +135,6 @@ extension DebugScene {
                     ask: try CueAsking(.delete, action: "删掉 scripts/billing-legacy 目录"), task: billing.id)
             }
             if let variant = defaults.string(forKey: "CuePadCueAsk") { try await seedAsk(variant, store: store, task: order?.id) }
-            if defaults.bool(forKey: "CuePadWaitSolo") { try await PiStateRecorder(store: store, hostID: "demo-mac").end(sessionID: "notes-edit") }
             let forgotten = try await store.noteCueLine("旧的计费脚本还在用", source: .cue)
             try await store.forgetCueLine(forgotten.line.id)
             // 对话末尾 Cue 自己又醒了五轮（隔几分钟一轮，Cue 页每轮一行）：空闲巡视（只看了看）、billing 出错（说了一句）、atlas 停下了（催了一句，此刻又在跑）、

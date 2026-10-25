@@ -5,7 +5,7 @@ import SwiftUI
 /// Cue 的提问与会话在问的同排，一次铺开一件，默认露等得最久的那件（从任务看板点进来的那条先露，`CueThread.leading`）。
 /// 不止一件时像叠在一起的通知：卡后面露出一两层叠边（`deck`），眉题行写第几件（`CueWaitEyebrow`）；手机上左右滑卡换一件（跟手，甩过或拖过一段就换，
 /// 到头了让给切页），Mac 上点眉题行的小箭头。答完一件，下一件从叠边里顶上来。
-/// 铺开的那件（`CueWaitItem`）：眉题、问句、点名的图、怎么答（`WaitAnswer`，与会话页问题卡同一个；主动作在右下角）。问句是代码按 Cue 写的动作短语写出的
+/// 铺开的那件：眉题（`CueWaitEyebrow`）、问句（`CueWaitQuestion`）、点名的图、怎么答（`WaitAnswer`，与会话页问题卡同一个；主动作在右下角）。问句是代码按 Cue 写的动作短语写出的
 /// （`CueAsking.question`），不靠 Cue 的措辞；要看细节（Cue 的原话、会话里的来龙去脉）点眉题进任务或会话。对话里不另挂还在等你的提问：同一问同屏只一处。
 /// 圆角、与输入框和待回复提示之间的空同一套（`ComposerMetrics.radius`、`stackGap`）。
 /// 卡上只能答：别的话在 Cue 页底下的输入框说，一开口 Cue 的提问就收起（Cue 判断不是在答它会放回，见 `CueQuestionEnd`）。没有关掉。
@@ -24,11 +24,7 @@ struct CueWaitDock: View {
     /// 换到了哪件（滑卡、小箭头）；不在等了就回到第一件。
     @State private var picked: String?
     /// 手机上滑卡：卡跟着手指横移多少。
-    #if os(iOS)
-    @State private var drag = DebugHooks.preset.waitDrag
-    #else
     @State private var drag: CGFloat = 0
-    #endif
     /// 滑走的那张往哪边飞出去（换一件时旧卡的去向）；不是滑走的（答完、点箭头）原地淡掉，为 0。
     @State private var exit: CGFloat = 0
     /// 露出的那件：选中的那件；答完淡掉的这一段里还是它（那时它已不在 `waiting` 里）。
@@ -169,8 +165,11 @@ struct CueWaitDock: View {
         leaving = false
     }
 
-    private func part(_ wait: TaskBoard.Wait, _ part: CueWaitItem.Part) -> CueWaitItem {
-        CueWaitItem(wait: wait, part: part, shots: shots, open: open)
+    /// Cue 点名的图（`CueShots`）："可以"选的是其中一张时那张描靛青圈；点开全屏时底栏就是这几个选项，看完当场定。
+    @ViewBuilder private func pictures(_ wait: TaskBoard.Wait) -> some View {
+        if let message = wait.message, let shown = shots[message.id] {
+            CueShots(shots: shown, group: "waiting", reply: .answer(message), chosen: CueShots.chosen(for: message.asking, in: shown), open: open)
+        }
     }
 
     private func eyebrow(_ wait: TaskBoard.Wait) -> some View {
@@ -188,14 +187,14 @@ struct CueWaitDock: View {
             Yielding {
                 ScrollView {
                     VStack(alignment: .leading, spacing: Self.gap) {
-                        part(wait, .question)
-                        part(wait, .shots)
+                        CueWaitQuestion(wait: wait)
+                        pictures(wait)
                     }
                     .padding(.top, 6)
                 }
                 .scrollBounceBehavior(.basedOnSize)
             }
-            part(wait, .answer).padding(.top, Self.gap).layoutPriority(1)
+            WaitAnswer(wait: wait.wait).padding(.top, Self.gap).layoutPriority(1)
         }
         .padding(.horizontal, Self.side).padding(.bottom, Self.edge)
         #else
@@ -220,9 +219,9 @@ struct CueWaitDock: View {
         VStack(alignment: .leading, spacing: 0) {
             eyebrow(wait)
             VStack(alignment: .leading, spacing: Self.gap) {
-                part(wait, .question)
-                if shots { part(wait, .shots) }
-                part(wait, .answer)
+                CueWaitQuestion(wait: wait)
+                if shots { pictures(wait) }
+                WaitAnswer(wait: wait.wait)
             }
             .padding(.top, 6)
         }

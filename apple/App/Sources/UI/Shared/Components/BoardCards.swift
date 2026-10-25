@@ -7,7 +7,7 @@ extension View {
     func boardCard(advancing: Bool) -> some View { modifier(BoardCardFrame(advancing: advancing)) }
 
     /// 卡上的标题：一行；手机竖版看板（`boardRow`）里小一档、可折成两行。`wraps`：等你列的卡（名字要先读得出，右端没有占地方的状态词）处处可折两行。
-    func boardTitle(advancing: Bool, wraps: Bool = false) -> some View { modifier(BoardTitleStyle(advancing: advancing, wraps: wraps)) }
+    func boardTitle(wraps: Bool = false) -> some View { modifier(BoardTitleStyle(wraps: wraps)) }
 
     /// 项目联动（Mac）：指针停在侧栏的项目行或卡上的项目小图形上时（`Workspace.hoveredProject`），别的项目的卡淡下去，这个项目的不动。
     /// 只这一个小修饰读它：指针换项目时重算的是各卡的透明度，不是整张卡。没有项目的（Cue 的一般提问）跟着淡。
@@ -40,7 +40,6 @@ private struct BoardCardFrame: ViewModifier {
 }
 
 private struct BoardTitleStyle: ViewModifier {
-    let advancing: Bool
     let wraps: Bool
     @Environment(\.boardRow) private var row
 
@@ -113,7 +112,7 @@ struct BoardSessionCard: View {
                 .font(.system(size: TaskMetrics.cardLead * 0.85)).foregroundStyle(resting ? palette.ink3 : palette.ink2)
                 .frame(width: TaskMetrics.cardLead, height: TaskMetrics.cardLead)
                 if let project { BoardProjectGlyph(project: project) }
-                Text(session.title).boardTitle(advancing: true).foregroundStyle(resting ? palette.ink2 : palette.ink)
+                Text(session.title).boardTitle().foregroundStyle(resting ? palette.ink2 : palette.ink)
             }
             .boardCard(advancing: true)
         }

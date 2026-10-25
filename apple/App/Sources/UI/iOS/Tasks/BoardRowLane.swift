@@ -50,7 +50,7 @@ struct BoardRowLane<Above: View, Content: View>: View {
                 LazyHGrid(rows: [tier], spacing: BoardRowMetrics.gap) {
                     // Group 把格子的框分给里面的每一张卡：卡、空格与"更早做完的"铺满格
                     Group { content }
-                        .containerRelativeFrame(.horizontal) { width, _ in (width * cellWidth).rounded() }
+                        .containerRelativeFrame(.horizontal) { width, _ in (width * BoardRowMetrics.cardWidth).rounded() }
                         .frame(maxHeight: .infinity, alignment: .top)
                 }
                 .scrollTargetLayout()
@@ -80,9 +80,6 @@ struct BoardRowLane<Above: View, Content: View>: View {
         case .todo, .waiting, .done: taskHeight
         }
     }
-
-    /// 一格占这一行可见宽的多少：露出下一张的一半。
-    private var cellWidth: CGFloat { BoardRowMetrics.cardWidth }
 }
 
 /// 一行里的尺寸（高随动态字体放大，`BoardRowLane` 的 `@ScaledMetric`）。

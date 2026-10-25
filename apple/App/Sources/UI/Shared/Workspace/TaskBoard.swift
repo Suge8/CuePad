@@ -73,11 +73,14 @@ nonisolated struct TaskBoard: Sendable, Equatable {
             }
         }
 
-        /// 按项目筛时归哪个项目：落在的任务的项目，没落在任务上的会话看它的归处（`home`）；Cue 的一般提问不属于哪个项目。
+        /// 归哪个项目（按项目筛、卡与眉题上写的都是它）：落在的任务的项目，没落在任务上的会话看它的归处（`home`），
+        /// Cue 的一般提问是它问时的范围（`CueMessage.asked`），没给范围的不属于哪个项目。
         var project: UUID? {
             if let item { return item.task.projectID }
-            if case .session(let session, _) = wait { return TaskBoard.home(session) }
-            return nil
+            switch wait {
+            case .session(let session, _): return TaskBoard.home(session)
+            case .message(let message, _): return message.asked?.project
+            }
         }
     }
 
