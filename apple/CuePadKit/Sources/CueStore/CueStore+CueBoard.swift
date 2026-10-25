@@ -152,8 +152,8 @@ extension CueStore {
       SELECT \(Card.selection(as: "t")) FROM cards t LEFT JOIN projects p ON p.id = t.projectID
       WHERE t.parentID IS NULL AND t.todoAt IS NOT NULL AND t.deletedAt IS NULL AND (p.id IS NULL OR p.deletedAt IS NULL)
         AND \(condition)
-      ORDER BY \(orderBy ?? "\(Self.taskProjectOrder), t.sortKey, t.id")\(limit.map { " LIMIT \($0)" } ?? "")
-      """, arguments
+      ORDER BY \(orderBy ?? "\(Self.taskProjectOrder), t.sortKey, t.id") LIMIT ?
+      """, arguments + [limit ?? -1]
     ) { Card(row: $0) }
   }
 

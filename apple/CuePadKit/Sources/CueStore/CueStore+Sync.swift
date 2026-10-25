@@ -120,7 +120,7 @@ extension CueStore {
     var pending = PendingSync(saves: [], deletes: [])
     for table in Table.synced {
       if let rows = changes.rows[table.rawValue] {
-        pending.saves += try pendingSaves(table, where: "t.rowid IN (\(rows.sorted().map(String.init).joined(separator: ",")))")
+        pending.saves += try pendingSaves(table, where: "t.rowid IN (SELECT value FROM json_each(?))", [JSONColumn.encode(rows.sorted())])
       }
       if changes.deletedFrom.contains(table.rawValue) { pending.deletes += try pendingDeletes(table) }
     }

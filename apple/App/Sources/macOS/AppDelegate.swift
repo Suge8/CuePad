@@ -60,12 +60,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         self.services = services
         self.workspace = workspace
 
+        // 面板与主窗口共用 App 常驻的那个工作区（项目目录、会话归属与摘要只订阅一份，见 `Workspace.follow`）；点里面的一行在主窗口里打开那一页
         let panel = MenuBarPanel()
-        panel.setContent(RootViews.menuBarPad(services, workspace: workspace) { [weak panel] route in
+        panel.setContent(MenuBarPad { [weak panel] route in
             panel?.hide()
             window.show()
             workspace.show(route)
-        })
+        }.environment(workspace).modifier(PaletteProvider()).environment(services))
         menuBarPanel = panel
         statusItem = StatusItemController(
             togglePanel: {
@@ -88,7 +89,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         let cueBar = CueBar(services: services, workspace: workspace)
         self.cueBar = cueBar
         settingsWindow = SettingsWindowController {
-            RootViews.settings($0, services, cueBar: cueBar)
+            SettingsView(pane: $0).environment(cueBar).panelHost().modifier(PaletteProvider()).environment(services)
         }
         DebugHooks.present(window)
         // 首次打开：接入检测到的 Agent 并启用 Cue（主窗口里的浮层）。从 Xcode 编出来直接打开的也弹（克隆仓库自己编的人，开发库就是他的库）；
@@ -212,7 +213,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
 
     private func makeMainWindow(_ services: AppServices, workspace: Workspace) -> MainShellWindow {
-        let window = WindowFactory.main(content: RootViews.mainWindow(services, workspace: workspace))
+        let window = WindowFactory.main(content: MainRoot(workspace: workspace).environment(services))
         // 屏幕外测量不记窗口位置：记下的屏幕外位置会让之后正常打开时窗口不见
         if DebugHooks.placesOffscreen(window) { return window }
         mainFrameKeeper = WindowFrameKeeper(window: window, name: "main", settings: services.settings)

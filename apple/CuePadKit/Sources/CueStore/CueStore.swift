@@ -178,8 +178,9 @@ public actor CueStore {
   ) throws -> [R] {
     let sql = """
       SELECT \(R.selection) FROM \(R.table.rawValue)
-      WHERE \(condition) ORDER BY \(orderBy) LIMIT \(limit) OFFSET \(offset)
+      WHERE \(condition) ORDER BY \(orderBy) LIMIT ? OFFSET ?
       """
+    let arguments = arguments + [limit, offset]
     guard R.self is any AwaitsServer.Type else { return try db.query(sql, arguments) { R(row: $0) } }
     // 带服务器状态的记录：同步元数据不按整表依赖，只登记读到的还没发出的那几句
     let rows = try db.untracked(.syncRecords) { try db.query(sql, arguments) { R(row: $0) } }
