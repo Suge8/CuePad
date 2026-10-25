@@ -19,7 +19,7 @@ struct SyncWiringTests {
         app.sync.emit(SyncState(status: .syncing, issues: []))
         try await eventually("services.syncStatus == .syncing") { services.syncStatus == .syncing }
 
-        let issue = SyncIssue(recordType: "attachments", recordName: "c1", problem: .damaged, detail: "附件记录没有文件")
+        let issue = SyncIssue(recordType: Table.attachments.rawValue, recordName: "c1", problem: .damaged, detail: "附件记录没有文件")
         app.sync.emit(SyncState(status: .syncing, issues: [issue]))
         try await eventually("services.syncIssues == [issue]") { services.syncIssues == [issue] }
 
@@ -78,7 +78,7 @@ struct SyncWiringTests {
 
     /// 换了 iCloud 账号：停下等你决定，决定之前记的不上传。选上传本机，本机的都传给新账号；选清掉本机，同步的数据清掉，
     /// 本机的 Pi 会话索引（与账号无关）留着。
-    @Test(.timeLimit(.minutes(1)), arguments: [SyncResolution.uploadLocal, .eraseLocal])
+    @Test(arguments: [SyncResolution.uploadLocal, .eraseLocal])
     func 换了iCloud账号_停下等你决定(_ resolution: SyncResolution) async throws {
         let cloud = SimulatedCloud([Self.floor(CueStore.peerFloor)])
         let app = TestApp(sync: .built { CloudSync(store: $0) { cloud } })

@@ -38,7 +38,6 @@ struct SearchPalette: View {
     @State private var data: PaletteData?
     @State private var selection: UUID?
     @State private var sessions: SessionSearchData?
-    @State private var sessionPages = 1
     @State private var sessionSelection: String?
     @FocusState private var focused: Bool
 
@@ -47,7 +46,6 @@ struct SearchPalette: View {
     private static let listWidth: CGFloat = 380
     /// 列表 380 + 预览至少 300。
     private static let sideBySide: CGFloat = 680
-    private static let top = "top"
 
     var body: some View {
         panel
@@ -59,18 +57,16 @@ struct SearchPalette: View {
                     if query.text.isEmpty { query.text = DebugHooks.preset.searchText }
                     return
                 }
-                if query != PaletteQuery() || sessionPages != 1 {
+                if query != PaletteQuery() {
                     query = PaletteQuery()
-                    sessionPages = 1
                     data = nil
                     sessions = nil
                 }
                 selection = cardIDs.first
                 sessionSelection = sessionGroups.first?.sessions.first?.sessionID
             }
-            .onChange(of: query.text) { sessionPages = 1 }
             .background { if scope == .cards { shortcuts } }
-            .observing(services.store, id: query, into: $data, onError: workspace.fail) { [query] store in
+            .observing(services.store, id: query.cards, into: $data, onError: workspace.fail) { [query] store in
                 try PaletteData.read(query, from: store)
             }
             .onChange(of: cardIDs) {
@@ -83,7 +79,7 @@ struct SearchPalette: View {
     /// 收着时不读会话的实时状态：面板常驻，读了的话每个会话每变一次，收着看不见的它也整个重算、重排。
     private var sessionObservation: SessionObservation {
         SessionObservation(
-            key: SessionKey(text: query.text, pages: sessionPages, moment: services.speech), data: $sessions,
+            key: SessionKey(text: query.text, pages: query.sessionPages, moment: services.speech), data: $sessions,
             ids: active ? sessionGroups.flatMap { $0.sessions.map(\.sessionID) } : [], selection: $sessionSelection)
     }
 
@@ -146,7 +142,7 @@ struct SearchPalette: View {
         SessionResultList(
             groups: sessionGroups, deliveries: sessions?.deliveries ?? [:], undelivered: sessions?.undelivered ?? [:],
             more: (sessions?.endedTotal ?? 0) - (sessions?.ended.count ?? 0), isFiltered: !query.text.isEmpty,
-            selection: $sessionSelection, open: openSession) { sessionPages += 1 }
+            selection: $sessionSelection, open: openSession) { query.sessionPages += 1 }
             .environment(\.searchHighlight, query.text)
     }
 
@@ -167,7 +163,7 @@ struct SearchPalette: View {
 
     private var results: some View {
         ScrollViewReader { proxy in
-            ScrollView {
+            ResultsScroll(query: query) {
                 LazyVStack(alignment: .leading, spacing: 2) {
                     if let data = data?.matches {
                         if data.groups.isEmpty {
@@ -195,11 +191,8 @@ struct SearchPalette: View {
                 }
                 // 行的底向两边让出一截，留在滚动区里
                 .padding(.vertical, 8).padding(.horizontal, 18)
-                .id(Self.top)
             }
             .onChange(of: selection) { if let selection { proxy.scrollTo(selection) } }
-            // 换了条件（页数回到 1）就回到顶上，"显示更多"不动：结果变短时滚动位置留在原处、落到内容外面，懒加载的列表画成空白
-            .onChange(of: query) { if query.pages == 1 { proxy.scrollTo(Self.top, anchor: .top) } }
         }
     }
 

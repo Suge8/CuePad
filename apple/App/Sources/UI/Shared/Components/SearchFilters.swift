@@ -41,3 +41,19 @@ struct SearchFilters<Chip: View>: View {
         Menu { items() } label: { chip(name, value, on).menuLabel("\(name)：\(value)") }
     }
 }
+
+/// 搜索结果的滚动区（Mac ⌘K 与手机搜索页）：换了条件（卡片页数回到 1）就回到顶上，"显示更多"不动。
+/// 结果变短时滚动位置留在原处、落到内容外面，懒加载的列表画成空白，两端都会。
+struct ResultsScroll<Content: View>: View {
+    let query: PaletteQuery
+    @ViewBuilder let content: Content
+
+    private static var top: String { "top" }
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView { content.id(Self.top) }
+                .onChange(of: query.cards) { if query.pages == 1 { proxy.scrollTo(Self.top, anchor: .top) } }
+        }
+    }
+}

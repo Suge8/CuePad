@@ -72,6 +72,17 @@ extension DebugScene {
         PiSlashCommand(name: "skill:frontend-design", summary: String(localized: "做界面时先定视觉方向与密度", table: "Demo"), source: .known(.skill)),
     ]
 
+    /// 演示会话报的斜杠命令，按哪家 Agent（从 `demoCommands` 里挑，同真会话报的那几类）：Codex 是能从 CuePad 执行的几个内置命令加 skill（`CodexRuntime.builtinCommands`），
+    /// OpenCode 是压缩加提示词模板，Pi 与其余是整份。几家各报各的，手机发给 Agent 时换选会话才看得出命令跟着换。
+    static func demoCommands(for agent: AgentKind?) -> [PiSlashCommand] {
+        let names: Set<String>? = switch agent {
+        case .codex: ["compact", "name", "model", "skill:deploy", "skill:frontend-design"]
+        case .opencode: ["compact", "review", "changelog"]
+        case .pi, .claudeCode, nil: nil
+        }
+        return names.map { names in demoCommands.filter { names.contains($0.name) } } ?? demoCommands
+    }
+
     /// 演示会话的上下文用量（窗口 20 万 token）：多数宽裕，atlas 用到八成多（百分比加粗转墨色、说明里建议压缩），
     /// rename 用到九成多（胭脂那一档），billing 刚压缩过。
     static let demoContexts: [String: PiContextUsage] = [
@@ -106,7 +117,7 @@ extension DebugScene {
     }
 
     /// 不是 Pi 的演示会话（其余是 Pi）：都开在终端里，能做的按各家（`AgentCapabilities`）——cuepad 是 Claude Code（回复框只有文字、没有停止与模型），
-    /// homepage 是 Codex（能作答、换模型，没有斜杠命令），billing 是 OpenCode，历史里的 weekly 是 Claude Code。
+    /// homepage 是 Codex（能作答、换模型，斜杠命令只有几个内置与 skill），billing 是 OpenCode，历史里的 weekly 是 Claude Code。
     static let demoAgents: [String: AgentKind] = ["cuepad": .claudeCode, "homepage": .codex, "billing": .opencode, "weekly": .claudeCode]
 }
 #endif
