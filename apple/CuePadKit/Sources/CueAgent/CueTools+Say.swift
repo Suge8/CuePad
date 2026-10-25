@@ -45,7 +45,7 @@ extension CueTools {
   func spoken(_ request: DeliveryRequest, _ what: String, tail short: String, from host: String) async throws -> Result {
     let latest = try await settled(request)
     let tail = "（\(short)）"
-    let moment = Speech.Moment(now: .now, reachableSince: .distantPast, localHost: host)
+    let moment = Speech.Moment.always(localHost: host)
     switch Speech.trip(latest, at: moment) {
     case .delivered:
       return .ok("\(what)：已送达。\(tail)")
