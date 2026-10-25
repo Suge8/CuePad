@@ -10,6 +10,8 @@ struct OutgoingBatch: Sendable {
   var drains: Int?
   /// 挑到了、但这一版传不上去的（`SyncCoordinator.unsendable`）：不在批里，马上传那一路据此答没传成。
   var stuck: Set<String> = []
+  /// 挑到了、仍待推送但这批装不下的（超过 `limit`）：马上传那一路接着发，不当成已收下。
+  var left: Set<String> = []
   var names: Set<String> { Set(saves.map(\.recordID.recordName) + deletes.map(\.recordName)) }
 }
 
@@ -47,7 +49,11 @@ extension SyncCoordinator {
       deletes.removeAll { !wanted.contains($0) }
     }
     var batch = OutgoingBatch(saves: [], deletes: [])
-    for name in names where batch.saves.count < limit {
+    for name in names {
+      guard batch.saves.count < limit else {
+        batch.left.insert(name)
+        continue
+      }
       let record: CKRecord?
       do { record = try await self.record(for: recordID(name)) } catch {
         failed(error, kind: .upload, recordName: name)
@@ -55,9 +61,12 @@ extension SyncCoordinator {
       }
       if let record { batch.saves.append(record) } else if unsendable[name] != nil { batch.stuck.insert(name) }
     }
-    batch.stuck.formUnion(deletes.filter { unsendable[$0] != nil })
-    deletes.removeAll { unsendable[$0] != nil }
-    batch.deletes = deletes.prefix(limit - batch.saves.count).map(recordID)
+    // 删除只认删除被拒记下的 `.min`：先前哪一版保存被拒，不挡之后删掉它
+    batch.stuck.formUnion(deletes.filter { unsendable[$0] == .min })
+    deletes.removeAll { unsendable[$0] == .min }
+    let fits = max(limit - batch.saves.count, 0)
+    batch.deletes = deletes.prefix(fits).map(recordID)
+    batch.left.formUnion(deletes.dropFirst(fits))
     let all = pending.saves.count + pending.deletes.count
     guard !batch.isEmpty else {
       if case .pending = scope, excluded.isDisjoint(with: pending.saves.map(\.id) + pending.deletes) { drained = generation }

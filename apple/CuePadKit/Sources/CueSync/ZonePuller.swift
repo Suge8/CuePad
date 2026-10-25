@@ -13,13 +13,15 @@ import Foundation
 ///
 /// 一次只跑一个拉取：在跑时再来的排在它后面（排着的只有一个，后来的都等它），不会用同一个令牌拉两遍、旧令牌也不会盖掉新的。
 /// 拉变化的请求 `RequestLimits.hedge` 没回音就同样的再发一次、先回来的算（`hedged`）：一拉挂住，排在后面的拉不跟着等。
-/// 代价是带附件、下载超过这么久的一页会下两遍：增量里的附件少而小，接受；对账时按 ID 补取的整条记录一次几百条、附件多，不赛跑，
-/// 挂住的由 CloudKit 自己的空闲超时断开（`CloudDatabase.database`）。
+/// 赛跑的请求不带附件的文件（`fieldsWithoutFiles`），一页里的附件记录再按 ID 整条取一次、不赛跑：下载慢的不会下两遍，
+/// 挂住的由 CloudKit 自己的空闲超时断开（`CloudDatabase.database`）。对账时按 ID 补取的整条记录同样不赛跑。
 /// 拉完是一次成功（`SyncCoordinator.succeeded`），失败交给协调器归类（`failed`）。
 actor ZonePuller {
   static let tokenKey = "zoneToken"
   /// 对账那一遍带回的字段（门槛记录的版本在这一遍就看，`SyncCoordinator.meet`）。
   static let versionKeys = ["modifiedAt", PeerFloor.field]
+  /// 增量拉取带回的字段：同步表的全部列与门槛，不含附件的文件（资产字段 `file` 不是列）。
+  static let fieldsWithoutFiles = Array(Set(Table.synced.flatMap(\.columns)).subtracting(["id"]).union([PeerFloor.field])).sorted()
 
   private let source: any ZoneChangeSource
   private let coordinator: SyncCoordinator
@@ -79,8 +81,17 @@ actor ZonePuller {
     await coordinator.setCatchingUp(false)
   }
 
+  /// 一页变化；`keys` 为 nil 是整条记录：附件的文件不在赛跑的请求里，附件记录另按 ID 取整条（期间被删的略过，删除在后面的页里）。
   private func changes(since token: Data?, keys: [String]?) async throws -> ZoneChangeBatch {
-    try await hedged(after: RequestLimits.hedge) { [source] in try await source.changes(since: token, keys: keys) }
+    var batch = try await hedged(after: RequestLimits.hedge) { [source] in
+      try await source.changes(since: token, keys: keys ?? Self.fieldsWithoutFiles)
+    }
+    guard keys == nil else { return batch }
+    let attachments = batch.modifications.filter { $0.recordType == Table.attachments.rawValue }.map(\.recordID)
+    guard !attachments.isEmpty else { return batch }
+    let full = Dictionary(try await source.records(attachments).map { ($0.recordID, $0) }, uniquingKeysWith: { $1 })
+    batch.modifications = batch.modifications.compactMap { $0.recordType == Table.attachments.rawValue ? full[$0.recordID] : $0 }
+    return batch
   }
 
   private func drainPages() async throws {

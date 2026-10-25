@@ -29,7 +29,7 @@ public struct Backoff: Sendable {
 enum RequestLimits {
   /// 不带数据的请求（认账号）至多等这么久，到点算连不上。
   static let request = Duration.seconds(15)
-  /// 一次拉变化这么久没回音就同样的再发一次，先回来的算（`hedged`，取舍见 `ZonePuller`）：一拉挂住，后面的拉不跟着等。
+  /// 一次拉变化（不带附件的文件，见 `ZonePuller`）这么久没回音就同样的再发一次，先回来的算（`hedged`）：一拉挂住，后面的拉不跟着等。
   static let hedge = Duration.seconds(3)
 }
 

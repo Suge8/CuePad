@@ -38,7 +38,7 @@ import Testing
 
     try await ZonePuller(source: zone, coordinator: rig.coordinator).pull()
 
-    #expect(await zone.calls.map(\.keys) == [ZonePuller.versionKeys, ZonePuller.versionKeys, nil])
+    #expect(await zone.calls.map(\.keys) == [ZonePuller.versionKeys, ZonePuller.versionKeys, ZonePuller.fieldsWithoutFiles])
     #expect(await zone.calls.last?.token == Data("v2".utf8))
     #expect(Set(await zone.fetches.flatMap { $0 }) == [newer.recordID, fresh.recordID])  // 已同步的那条不取
     #expect(Set(try await store.cards(in: Project.defaultID).map(\.body)) == ["已同步", "别处改过", "别处新建"])
@@ -117,7 +117,7 @@ import Testing
     let record = try attachment(data)
     let blocker = rig.fixture.directory.appending(path: "Attachments")
     try Data().write(to: blocker)
-    let zone = FakeZone([page("t1", [record]), page("t1", [record])])
+    let zone = FakeZone([page("t1", [record]), page("t1", [record])], server: [record])
     let puller = ZonePuller(source: zone, coordinator: rig.coordinator)
 
     await #expect(throws: (any Error).self) { try await puller.pull() }
@@ -134,7 +134,7 @@ import Testing
   @Test func anAttachmentWhoseContentDoesNotMatchItsHashIsSkippedAndTheTokenMoves() async throws {
     try await store.setSyncState(ZonePuller.tokenKey, Data("t0".utf8))
     let record = try attachment(pngData(width: 5, height: 5), declaredHash: String(repeating: "a", count: 64))
-    let zone = FakeZone([page("t1", [record])])
+    let zone = FakeZone([page("t1", [record])], server: [record])
 
     try await ZonePuller(source: zone, coordinator: rig.coordinator).pull()
 

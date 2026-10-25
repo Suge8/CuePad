@@ -39,6 +39,8 @@ public actor CloudSync {
   private var startWaiters: [CheckedContinuation<Void, Never>] = []
   /// 等账号认好的（`relaySecret`）：每认完一次账号叫醒一遍，各自再看能不能同步。
   private var accountWaiters: [UUID: CheckedContinuation<Void, any Error>] = [:]
+  /// 认完账号的次数：等的一方看条件前记下，条件没满足再等时次数已变就不等（看条件时跨了 actor，期间可能刚认完）。
+  private var accountChecks = 0
   /// 上一次建通知订阅的时刻：没建成时 `syncNow` 顺带重试，至多每 `alertRetryInterval` 一次（按节奏的拉取、门铃也走它，可能很密）。
   private var alertsAttemptedAt: ContinuousClock.Instant?
   private static let alertRetryInterval = Duration.seconds(60)
@@ -137,11 +139,16 @@ public actor CloudSync {
     accountRetry?.cancel()
     accountRetryAt = nil
     accountBackoff.reset()
-    for waiter in accountWaiters.values { waiter.resume() }
-    accountWaiters = [:]
-    guard !connected else { return true }
-    guard await coordinator.canSync, let sender else { return false }
+    guard !connected else {
+      accountChecked()
+      return true
+    }
+    guard await coordinator.canSync, let sender else {
+      accountChecked()
+      return false
+    }
     connected = true
+    accountChecked()
     await sender.start()
     alertsAttemptedAt = .now  // 立即同步不另起一遍
     Task { await ensureAlertSubscriptions(cloud) }  // 第一拉不等订阅
@@ -200,19 +207,30 @@ public actor CloudSync {
   /// 门铃的密钥（`RelaySecret`）：认过账号、能同步时才去 iCloud 取；没登录、要你决定时一直等到账号认好，不发请求。被取消就抛出。
   public func relaySecret() async throws -> Data {
     while true {
+      let checks = accountChecks
       if connected, await coordinator.canSync { break }
-      try await accountChecked()
+      try await nextAccountCheck(after: checks)
     }
     guard let cloud else { throw CancellationError() }
     return try await cloud.relaySecret()
   }
 
-  private func accountChecked() async throws {
+  /// 认完了一次账号：叫醒等着的（`relaySecret`）。
+  private func accountChecked() {
+    accountChecks += 1
+    for waiter in accountWaiters.values { waiter.resume() }
+    accountWaiters = [:]
+  }
+
+  /// 等下一次认完账号；`checks` 之后已认过就当场返回。
+  private func nextAccountCheck(after checks: Int) async throws {
     let id = UUID()
     try await withTaskCancellationHandler {
       try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
         if Task.isCancelled {
           continuation.resume(throwing: CancellationError())
+        } else if accountChecks != checks {
+          continuation.resume()
         } else {
           accountWaiters[id] = continuation
         }

@@ -143,7 +143,8 @@ actor RecordSender {
     kick()  // 一轮的批数用完，还有没发完的
   }
 
-  /// 马上传那一路：只发在等的这几条里不在路上的；在路上的等那一批的结果。已不是待推送的答收下了，这一版传不上去的答没传成、不再追。
+  /// 马上传那一路：只发在等的这几条里不在路上的；在路上的等那一批的结果。已不是待推送的答收下了，这一版传不上去的答没传成、不再追；
+  /// 一批装不下的这一批收下后接着发，这一批没成就一起答没传成（仍在 `urgent` 里，重试时先发）。
   private func sendUrgent() async {
     let wanted = urgent.subtracting(inFlight)
     guard !wanted.isEmpty else { return }
@@ -153,14 +154,15 @@ actor RecordSender {
     let prepared = try? await coordinator.nextBatch(.only(reserved), limit: limit)
     inFlight.subtract(reserved)
     guard let batch = prepared else { return answer(reserved, received: []) }  // 准备不了：之后照常重试
-    let settled = reserved.subtracting(batch.names).subtracting(batch.stuck)  // 已不是待推送（别的批已收下、删掉了）
+    let settled = reserved.subtracting(batch.names).subtracting(batch.stuck).subtracting(batch.left)  // 已不是待推送（别的批已收下、删掉了）
     answer(settled, received: settled)
     answer(batch.stuck, received: [])
     urgent.subtract(settled.union(batch.stuck))
-    if !batch.isEmpty {
-      _ = await upload(batch)
-      trigger.yield()  // 在路上时又改过的，后台那一路接着发
-    }
+    guard !batch.isEmpty else { return }
+    let sent = await upload(batch)
+    trigger.yield()  // 在路上时又改过的，后台那一路接着发
+    guard !batch.left.isEmpty else { return }
+    if sent { runUrgent() } else { answer(batch.left, received: []) }
   }
 
   /// 发一批；返回能不能接着发下一批。
