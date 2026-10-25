@@ -20,7 +20,7 @@ nonisolated enum Icon: Hashable, Sendable {
     case idea, task, session, search, settings, archive, trash, sidebar
     case agent, allProjects, all, filter, extensionNote
     // 状态
-    case waiting, cueAsking, failure, undelivered, onTheWay, replied, yourTurn, fresh, ended, interrupted, unknown
+    case waiting, cueAsking, failure, undelivered, onTheWay, replied, yourTurn, fresh, ended, interrupted, unknown, gone
     case done, donePending, picked
     case syncStarting, synced, syncing, syncOff, syncRestricted, syncTrouble, syncPaused, uploadLocal, replaceWithCloud, syncNow
     case alertsPending, alertsOn, alertsOff
@@ -86,7 +86,8 @@ nonisolated enum Icon: Hashable, Sendable {
         case .replied, .alertsPending: .ink("bell")
         case .yourTurn: .ink("cursor")
         case .fresh: .ink("sparkle")
-        case .ended: .ink("ended")
+        // 已结束的会话、点了去的那一处已不在：都是那里已经没有了
+        case .ended, .gone: .ink("ended")
         case .interrupted: .ink("interrupted")
         case .unknown: .ink("unknown")
         case .picked: .filled("picked")

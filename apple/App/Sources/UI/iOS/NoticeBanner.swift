@@ -87,7 +87,7 @@ private struct NoticeCapsule: View {
                 HStack(spacing: 6) {
                     Label { Text(notice.text) } icon: {
                         if let status = notice.status { PiStateGlyph(status: status) }
-                        else { Image(notice.isError ? .failure : .done) }
+                        else { Image(notice.tone.icon) }
                     }
                     if notice.link != nil {
                         Image(.forward).font(.caption.weight(.semibold)).foregroundStyle(palette.ink3)

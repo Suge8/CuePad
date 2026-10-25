@@ -44,7 +44,8 @@ enum CueBubble {
 /// 长按（Mac 右键）是消息菜单（`MessageMenu.Kind.cue`），预览就是这颗气泡或这张纸。
 struct CueSays: View {
     let message: CueMessage
-    var task: CueTaskRef?
+    /// 它第一次提到的那件活（`CueThread.Row`）
+    var task: UUID?
     /// Cue 点名的图（`CueThread.shots`）与点开一张：全屏左右翻的就是这几张，底栏是关于它对 Cue 说
     var shots: [CueShown] = []
     var open: (PreviewOpening) -> Void = { _ in }
@@ -61,7 +62,7 @@ struct CueSays: View {
             VStack(alignment: .leading, spacing: card ? 12 : 8) {
                 words
                 if !shots.isEmpty { CueShots(shots: shots, group: message.id.uuidString, reply: .cue, open: open) }
-                if let task { CueTaskLine(ref: task) }
+                if let task { CueTaskLine(task: task, message: message) }
             }
             .modifier(CueSaysSurface(card: card, joined: joined))
             .contextMenu { MessageActions(text: message.text, kind: .cue, selectText: { selecting = true }) }

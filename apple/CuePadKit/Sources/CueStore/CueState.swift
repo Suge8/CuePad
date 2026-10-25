@@ -73,27 +73,22 @@ public enum CueWake: StoredJSON, Equatable, Sendable {
   case reminder([UUID])
 }
 
-/// 叫醒 Cue 的一处动静：`CueChange` 里界面要的那点——出了什么事、在哪个会话、哪件任务，与它当时叫什么。
-/// 写下就不再变：Cue 页那一行只按它画，会话、任务之后改名、再动起来都不跟着变。
+/// 叫醒 Cue 的一处动静：`CueChange` 里界面要的那点——出了什么事、在哪个会话、哪件任务。那一处当时叫什么在这一行的 `CueMessage.places` 里（加密同步）。
 public struct CueStir: Codable, Equatable, Sendable {
   public var kind: CueChange.Kind
   /// Pi 的会话 id；任务完成这类不在会话上的为 nil
   public var session: String?
   /// 变化所在的那件（叶子，任务本身的变化是任务）
   public var task: UUID?
-  /// 写下时那一处叫什么：在会话上的是会话名，其余是任务标题；空的不存。更旧版本写下的没有（结构 70 把那时库里的补上了，见 `Schema`）
-  public var name: String?
 
-  public init(kind: CueChange.Kind, session: String? = nil, task: UUID? = nil, name: String? = nil) {
+  public init(kind: CueChange.Kind, session: String? = nil, task: UUID? = nil) {
     self.kind = kind
     self.session = session
     self.task = task
-    self.name = name.flatMap { $0.isEmpty ? nil : $0 }
   }
 
   public init(_ change: CueChange) {
-    let task = change.leaf ?? change.task
-    self.init(kind: change.kind, session: change.session?.sessionID, task: task?.id, name: change.session?.title ?? task?.heading)
+    self.init(kind: change.kind, session: change.session?.sessionID, task: (change.leaf ?? change.task)?.id)
   }
 }
 

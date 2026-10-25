@@ -62,6 +62,8 @@ public struct CueMessage: Identifiable, Equatable, Sendable {
   public var tools: PiChatMessage.Tools?
   /// Cue 自己醒来的那一轮为什么醒（只在它的经过那一行上，起这一轮时写下、不再变）：Cue 页那一节的第一行与叫醒的接力都只读它。
   public var wake: CueWake? = nil
+  /// 写下那一刻它提到的那几处的样子（关联的任务、叫醒它的那几处，`CuePlace`）：Cue 页按它画，写下就不再变。
+  public var places: [String: CuePlace] = [:]
   /// 手机推送的标志（明文、可查询，服务端订阅按它出通知）：写下时按 `alerts` 与他在不在 Mac 上开着 Cue 页置位（`CueStore.insertCueMessage`），
   /// 随那一次上传送出后清掉，远端带回来的不留（同 `PiSessionState.notify`，见 docs/sync.md「Agent 与 Cue 的通知」）。
   var notify: Bool = false
@@ -76,7 +78,7 @@ extension CueMessage: Record {
   static let table = Table.cueMessages
   static let columns = [
     "id", "author", "text", "choices", "urgent", "taskID", "answer", "answeredAt", "deliveredAt", "createdAt", "modifiedAt", "notify", "tools",
-    "ask", "askAction", "askRule", "askShots", "setAsideBy", "wake",
+    "ask", "askAction", "askRule", "askShots", "setAsideBy", "wake", "places",
   ]
   /// `notify` 的值（订阅的谓词按它）。
   package static let notifyFlag = "cue"
@@ -84,6 +86,7 @@ extension CueMessage: Record {
     [
       id, author.rawValue, text, choices.map { JSONColumn.encode($0) }, urgent, taskID, answer, answeredAt, deliveredAt, createdAt, modifiedAt,
       notify ? Self.notifyFlag : nil, tools?.stored, asked?.stored, askAction, askRule, JSONColumn.encodeList(shots), setAsideBy, wake?.stored,
+      places.isEmpty ? nil : JSONColumn.encode(places),
     ]
   }
   init(row: Row) {
@@ -93,7 +96,7 @@ extension CueMessage: Record {
       askAction: row.textOrNil(14), askRule: row.textOrNil(15), shots: JSONColumn.decodeList(CueShot.self, from: row.textOrNil(16)), urgent: row.bool(4), taskID: row.uuidOrNil(5),
       answer: row.textOrNil(6), answeredAt: row.dateOrNil(7), setAsideBy: row.uuidOrNil(17), deliveredAt: row.dateOrNil(8), createdAt: row.date(9),
       modifiedAt: row.date(10), tools: row.textOrNil(12).flatMap(PiChatMessage.Tools.init(stored:)), wake: row.textOrNil(18).flatMap(CueWake.init(stored:)),
-      notify: row.textOrNil(11) != nil, reachedServer: row.bool(19))
+      places: JSONColumn.decode([String: CuePlace].self, from: row.textOrNil(19)) ?? [:], notify: row.textOrNil(11) != nil, reachedServer: row.bool(20))
   }
 }
 

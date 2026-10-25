@@ -80,8 +80,7 @@ extension DebugScene {
                 .cue, text: "好。拆成四步：复现、改成按首次加入时间排序、补 3 个重连用例、部署到预发。第一步已经复现了，现在在改排序。", task: order?.id)
             // Cue 自己醒来的几轮（同值班的管理器醒来时写下的经过那一行，带着为什么醒）：会话停下、出错、提醒到点，两次只看了看；
             // 连着六轮，Cue 页里折起前面的、两次只看了看的并成一行
-            // 演示会话的名字与 sessionID 相同
-            func stirred(_ kind: CueChange.Kind, _ session: String) -> CueWake { .sessionActivity([CueStir(kind: kind, session: session, name: session)]) }
+            func stirred(_ kind: CueChange.Kind, _ session: String) -> CueWake { .sessionActivity([CueStir(kind: kind, session: session)]) }
             let meeting = try await store.cueMemory().lines.first { $0.text.hasPrefix("周会") }
             for (wake, note, tools) in [
                 (stirred(.settled, "atlas"), "看了圆桌：复现乱序完成，原因是重连的人拿到了新的加入时间", process(step(.read, "看「发言轮次乱序」的近况", order))),
@@ -146,8 +145,7 @@ extension DebugScene {
                 (6, stirred(.settled, "atlas"), "scheduler 测试全过了，让它接着补 3 个重连用例", process(
                     step(.read, "看「发言轮次乱序」的近况", order), step(.talk, "对「发言轮次乱序」说：测试过了，接着补 3 个重连用例", order))),
                 (11, .sessionActivity([
-                    CueStir(kind: .waitingForUser, session: "deploy", name: "deploy"), CueStir(kind: .stalled, task: importing?.id, name: importing?.heading),
-                    CueStir(kind: .settled, session: "notes", name: "notes"),
+                    CueStir(kind: .waitingForUser, session: "deploy"), CueStir(kind: .stalled, task: importing?.id), CueStir(kind: .settled, session: "notes"),
                 ]), "", process(step(.read, "看板"))),
                 (5, stirred(.waitingForUser, "notes-edit"), "要你在编辑器里改好提交说明再保存，这一步我替不了", process(step(.read, "看 notes-edit 的近况"))),
             ] {

@@ -20,10 +20,9 @@ struct CueSegment: View, Equatable {
 }
 
 /// 对话里的一格，连同上面的时间与间距。只按自己的输入比较（`equatable()`）：对话里来了一句、Cue 的状态变了，别的格子不重算——
-/// 发出一句的那一刻对话要重排，每格都重算的话那一帧就掉了。要的那件活、在跑的那一轮、"已送达"都只交给用得着的那一格。
+/// 发出一句的那一刻对话要重排，每格都重算的话那一帧就掉了。在跑的那一轮、"已送达"都只交给用得着的那一格。
 struct CueRow: View, Equatable {
     let row: CueThread.Row
-    let ref: CueTaskRef?
     let shots: [CueShown]
     let joined: Bool
     let stamp: Date?
@@ -41,11 +40,11 @@ struct CueRow: View, Equatable {
 
     /// 这一格排出来什么样只看这几样。
     nonisolated struct Key: Equatable {
-        let row: CueThread.Row, ref: CueTaskRef?, shots: [CueShown], joined: Bool, stamp: Date?, delivered: Bool, live: CueLiveRound?, unread: Bool
+        let row: CueThread.Row, shots: [CueShown], joined: Bool, stamp: Date?, delivered: Bool, live: CueLiveRound?, unread: Bool
     }
 
     nonisolated var key: Key {
-        Key(row: row, ref: ref, shots: shots, joined: joined, stamp: stamp, delivered: delivered, live: live, unread: unread)
+        Key(row: row, shots: shots, joined: joined, stamp: stamp, delivered: delivered, live: live, unread: unread)
     }
 
     nonisolated static func == (a: Self, b: Self) -> Bool { a.key == b.key }
@@ -85,10 +84,10 @@ struct CueRow: View, Equatable {
             }
         case .answer(let question, let quoted):
             CueAnswer(question: question, quoted: quoted, joined: joined)
-        case .cue(let message, _):
-            CueSays(message: message, task: ref, shots: shots, open: { opened = $0 }, joined: joined)
-        case .result(let message, _):
-            CueSays(message: message, task: ref, shots: shots, open: { opened = $0 }, card: true)
+        case .cue(let message, let task):
+            CueSays(message: message, task: task, shots: shots, open: { opened = $0 }, joined: joined)
+        case .result(let message, let task):
+            CueSays(message: message, task: task, shots: shots, open: { opened = $0 }, card: true)
         case .notes(let rounds):
             CueNoteLog(rounds: rounds, live: live)
         case .process(let message, let touches):
