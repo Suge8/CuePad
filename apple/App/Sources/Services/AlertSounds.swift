@@ -34,24 +34,18 @@ nonisolated struct AlertPreference: Equatable, Sendable {
 
 /// 三种提示（`AlertRoute.kind`：等你、待回复、做完了）各自的偏好，本机、不同步（`AppSettings.alerts`）。
 nonisolated struct AlertPreferences: Equatable, Sendable {
-    var waiting = AlertPreference(isOn: true, sound: .chime)
-    var reply = AlertPreference(isOn: true, sound: .tap)
-    var settled = AlertPreference(isOn: true, sound: .drop)
+    private var kinds: [PiAlert: AlertPreference]
 
     subscript(kind: PiAlert) -> AlertPreference {
-        get {
-            switch kind {
-            case .waitingForUser: waiting
-            case .awaitsReply: reply
-            case .settled: settled
-            }
-        }
-        set {
-            switch kind {
-            case .waitingForUser: waiting = newValue
-            case .awaitsReply: reply = newValue
-            case .settled: settled = newValue
-            }
+        get { kinds[kind] ?? Self.fallback(kind) }
+        set { kinds[kind] = newValue }
+    }
+
+    private static func fallback(_ kind: PiAlert) -> AlertPreference {
+        switch kind {
+        case .waitingForUser: AlertPreference(isOn: true, sound: .chime)
+        case .awaitsReply: AlertPreference(isOn: true, sound: .tap)
+        case .settled: AlertPreference(isOn: true, sound: .drop)
         }
     }
 
@@ -59,12 +53,12 @@ nonisolated struct AlertPreferences: Equatable, Sendable {
 
     /// 存成 `[种类: [on, sound]]`；没存过的种类用缺省，`sound` 为空串是"无"。
     init(stored: [String: Any]? = nil) {
-        for kind in PiAlert.allCases {
-            guard let entry = stored?[kind.rawValue] as? [String: Any] else { continue }
-            self[kind] = AlertPreference(
-                isOn: entry[Self.on] as? Bool ?? self[kind].isOn,
-                sound: (entry[Self.sound] as? String).map(AlertSound.init(rawValue:)) ?? self[kind].sound)
-        }
+        kinds = Dictionary(uniqueKeysWithValues: PiAlert.allCases.map { kind in
+            let entry = stored?[kind.rawValue] as? [String: Any], fallback = Self.fallback(kind)
+            return (kind, AlertPreference(
+                isOn: entry?[Self.on] as? Bool ?? fallback.isOn,
+                sound: (entry?[Self.sound] as? String).map(AlertSound.init(rawValue:)) ?? fallback.sound))
+        })
     }
 
     var stored: [String: Any] {

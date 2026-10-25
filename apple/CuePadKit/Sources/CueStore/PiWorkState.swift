@@ -96,6 +96,9 @@ extension PiSessionState {
     let before = missedRound ? .thinking : previous.state.known
     return PiAlert.entering(state, since: stateSince, from: before.map { ($0, previous.stateSince) })
   }
+
+  /// Cue 把这次停下留给你（`CueLeft`）时提示的那种：歇着的是待回复，在等回答的是等你确认（它本来就在问你，留给你只是 Cue 不替你答）。
+  public var leftAlert: PiAlert { state == .known(.settled) ? .awaitsReply : .waitingForUser }
 }
 
 /// 会话的计时基准（扩展给出，原样写入）。

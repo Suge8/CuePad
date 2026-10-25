@@ -46,10 +46,11 @@ public enum CueAsk: String, CaseIterable, Sendable {
   public var allowable: Bool { self != .rule && self != .taste }
 
   /// 提问的第二项：这类事以后在 `project`（关联任务所在项目的名字）里不用问，nil 是所有项目里都不用问。
-  /// 选了它 `CueStore.endCueQuestion` 把这句原话记成一条他说的、一直记着的记忆，范围就在字面上。不能放行的（`allowable`）没有这一项。
+  /// 选了它 `CueStore.endCueQuestion` 把这句原话记成一条他说的、一直记着的记忆，范围就在字面上；项目名长到一条记忆放不下的截短（`CueMemoryLine.fitting`）。
+  /// 不能放行的（`allowable`）没有这一项。
   public func always(in project: String?) -> String? {
     guard allowable else { return nil }
-    return project.map { "以后「\($0)」里\(name)不用问" } ?? "以后\(name)都不用问"
+    return project.map { CueMemoryLine.fitting($0) { "以后「\($0)」里\(name)不用问" } } ?? "以后\(name)都不用问"
   }
 
   /// 所有项目里都不用问那一项；不能放行的没有。
@@ -133,7 +134,7 @@ public struct CueShot: Codable, Hashable, Sendable {
 }
 
 /// 一条提问问的哪一类、在哪（`CueMessage.asked`）：类别，与关联任务当时所在的项目（`project`，没关联任务为 nil）。选项第二项的范围照它写，
-/// 等你列的依据那一行写这个项目。存成"类别"或"类别/项目 id"；更新的版本写的类别原样留着（`Open`）。
+/// 看板按它把提问归到项目（`TaskBoard`）。存成"类别"或"类别/项目 id"；更新的版本写的类别原样留着（`Open`）。
 public struct CueAsked: Hashable, Sendable {
   public var ask: Open<CueAsk>
   public var project: UUID?

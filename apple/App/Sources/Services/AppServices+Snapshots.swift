@@ -7,9 +7,10 @@ import WidgetKit
 
 /// 给小组件与分享扩展的快照：跟随资料库变化写进共享容器。扩展不打开资料库。
 /// 只写内容真正变了的那份；小组件显示默认项目与 Cue，只有这两份变了才刷新它们（刷新次数有系统预算）。
+/// 每次运行的第一份全写、岛照发：留在共享容器与系统里的那份可能是旧版本写的，结构变了这版就解不出来（小组件读成空的），不能拿它比。
 /// iPhone 的实时活动（`CueLiveActivity`）与小组件读同一份 Cue 此刻，每次都先改岛：后台被推送叫醒时剩的时间不多。
 extension AppServices {
-    /// 项目或卡片变化、此刻变了（Cue 的表情随它，`observeTimed`）时按 Cue 的现状（`CueFeed`，同一次读带着小组件另要的）改快照，直到任务取消。
+    /// 库变了、此刻或本机事实变了（`CueFeed`，同一次读带着小组件另要的）时按 Cue 的现状改快照，直到任务取消。
     func startSnapshots() {
         follow(reporting: { .widgetDataUnavailable("\($0)") }) {
             for try await seen in self.cueUpdates() {
@@ -69,7 +70,8 @@ extension AppServices {
     ) async throws {
         let now = Self.cueNow(digest, at: moment, local: local)
         #if os(iOS)
-        await cueActivity?.show(CueActivityState(now: now, quotas: content.quotas), resend: resend, foreground: Self.inForeground)
+        let first = publishedSnapshots == nil
+        await cueActivity?.show(CueActivityState(now: now, quotas: content.quotas), resend: resend || first, foreground: Self.inForeground)
         #endif
         try publish(WidgetSnapshots(content, now: now))
     }

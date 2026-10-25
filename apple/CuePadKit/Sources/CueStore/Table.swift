@@ -20,7 +20,7 @@ extension Table {
   /// 带手机通知标志（明文列 `notify`）的表：标志上传即清、远端带回来的不留（`CueStore.markPushed`、`applyVersion`）。
   package static let notifyFlagged: Set<Table> = [.piSessionStates, .cueMessages]
 
-  /// 同步的列（CKRecord 的字段）；不含本机列。
+  /// 每张表的列：同步表（`synced`）是同步的那些（CKRecord 的字段），不含它们的本机列（`Schema` 头注释）；本机表是它自己的列。
   package var columns: [String] {
     switch self {
     case .projects: Project.columns

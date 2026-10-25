@@ -32,6 +32,21 @@ extension MCPTests {
       #expect(try await store.endCueQuestion(global.id, .answered(CueAsk.once)) == nil)
       #expect(try await store.cueMemory().lines.map(\.text) == ["以后「演示」里推送代码不用问"])
 
+      // 同一句再选一次用记着的那条，不记第二遍；项目名长到一条记忆放不下的，第二项截短项目名，选了照样记得下
+      let again = try await store.createTask("修好注册页", in: demo.id)
+      _ = try await server.call("tell", ["text": "要推送吗？", "ask": "push", "doing": "推送注册页的修复", "task": again.id.uuidString])
+      let repeated = try #require(try await store.cueMessagesWaitingForYou().last)
+      #expect(try await store.endCueQuestion(repeated.id, .answered("以后「演示」里推送代码不用问")) == noted)
+      let roomy = try await sandbox.project(String(repeating: "一个名字很长的项目", count: 12))
+      let far = try await store.createTask("修好长项目", in: roomy.id)
+      _ = try await server.call("tell", ["text": "要推送吗？", "ask": "push", "doing": "推送长项目的修复", "task": far.id.uuidString])
+      let clipped = try #require(try await store.cueMessagesWaitingForYou().last)
+      let scoped = try #require(clipped.choices?.last)
+      #expect(scoped.hasSuffix("…」里推送代码不用问") && CueMemoryLine.fits(scoped), "\(scoped)")
+      let kept = try #require(try await store.endCueQuestion(clipped.id, .answered(scoped)))
+      #expect(try await store.cueLine(kept)?.text == scoped)
+      #expect(try await store.cueMemory().lines.count == 2)
+
       // 提问写出要做的动作，规矩那一类还要写出是哪条规矩；卡片与通知只露这两样
       #expect(try await server.refused("tell", ["text": "要推送吗？", "ask": "merge", "task": task.id.uuidString]).contains("doing"))
       let long = String(repeating: "长", count: CueAsking.phraseLimit + 1)
