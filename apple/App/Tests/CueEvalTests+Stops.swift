@@ -97,11 +97,16 @@ extension CueEvalTests {
                 "比较两种推送方案",
                 "比较演示项目发推送用 APNs 直连还是 Firebase Cloud Messaging：成本、维护量、安卓支持，给出推荐与理由。他看完再定用哪个。做完的标准：一份对比与推荐。")
             try await eval.trigger { try await rig.settle(work, reply: Self.pushResearch) }
+            let calls = eval.round?.calls ?? []
             let told = eval.calls("tell").filter { !$0.call.failed && $0.args["ask"] == nil && $0.args["text"] != nil }
+            let text = told.first?.args["text"] as? String ?? ""
+            let tellAt = calls.firstIndex { $0.name == "tell" && !$0.failed }
+            let leaveAt = calls.lastIndex { $0.name == "task" && !$0.failed && $0.arguments.contains(#""leave""#) }
             return [
                 Check(.interrupt, "一句 tell 说完", told.count == 1),
                 Check(.tool, "tell 关联这件任务", told.contains { CueEval.refers($0.args, to: work.id, title: work.task.heading, cards: [work.task]) }),
-                Check(.result, "留给了他（leave 成了）", eval.calls("task", "leave").contains { !$0.call.failed }),
+                Check(.result, "tell 说了结论（推荐 APNs）与要他定的（安卓）", text.contains("APNs") && text.contains(/安卓|Android/)),
+                Check(.result, "先 tell 再留给他（leave 成了）", tellAt != nil && leaveAt.map { $0 > tellAt! } == true),
                 Check(.result, "先不 done", eval.calls("task", "done").isEmpty),
                 Check(.ask, "没发等你", try await eval.said().allSatisfy { $0.choices == nil }),
             ]
