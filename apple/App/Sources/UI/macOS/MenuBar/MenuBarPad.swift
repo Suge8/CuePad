@@ -2,9 +2,10 @@
 import CueStore
 import SwiftUI
 
-/// 菜单栏面板：最上面一行 Cue（点它在主窗口里打开 Cue 页；右边"交给 Cue"把这次随手记直接说给 Cue）与额度环（`QuotaRings`，点它就地展开明细 `QuotaDetail`，再点收回；面板弹出时数据陈旧就查一次，见 `AppDelegate`），
+/// 菜单栏面板：最上面一行 Cue（点它在主窗口里打开 Cue 页）与额度环（`QuotaRings`，点它就地展开明细 `QuotaDetail`，再点收回；面板弹出时数据陈旧就查一次，见 `AppDelegate`），
 /// 那一行的第二行是数字账（`CueLedger`：几件拍板、待回复、在跑、等子代理，按件数，同名牌）；
-/// 其下在做的会话（`MenuBarLive`，没有在做的不出这一块），最后是随手记（与主窗口底部同一个 `CaptureComposer`，一直展开）。
+/// 其下在做的会话（`MenuBarLive`，没有在做的不出这一块），最后是随手记（与主窗口底部同一个 `CaptureComposer`，一直展开；"交给 Cue"在它头部右边）。
+/// Cue 那一行右边只放额度环：数字账要写全拍板、待回复、在跑、等子代理四样，再放一颗"交给 Cue"就只剩六十来点宽。
 /// 面板最高到屏幕可用的高（`MenuBarPanel`），放不下时"在做"那一块在里面滚，其余几块始终整块可见。
 /// 各块各是一片玻璃、中间留空，面板自己没有底（输入框自带玻璃，外面再包一层就是玻璃套玻璃）。资料库读到之前没有输入框；读不出来时说明原因并给"重试"。
 struct MenuBarPad: View {
@@ -45,27 +46,13 @@ struct MenuBarPad: View {
     }
 
     private var cueRow: some View {
-        let empty = capture.draft.isEmpty(accepting: .images) || !workspace.cue.canHear
-        return CueStatusRow {
+        CueStatusRow {
             QuotaRings(open: quotaOpen, height: 28) { quotaOpen.toggle() }
-            Button("交给 \(workspace.cue.name)", icon: .handOff, action: handToCue)
-                .font(Typography.meta.weight(.semibold))
-                .buttonStyle(ControlButtonStyle(kind: empty ? .secondary : .primary, compact: true))
-                // 按钮不折行，放不下时让左边的状态行截短
-                .fixedSize()
-                .disabled(empty)
-                .help("把这次随手记直接说给 \(workspace.cue.name)")
         }
         .contentShape(.rect)
         .onTapGesture { open(.cue) }
         .accessibilityAction(named: "打开 \(workspace.cue.name)") { open(.cue) }
         .modifier(Block())
-    }
-
-    /// 这次随手记不记成灵感，直接作为一句话说给 Cue。
-    private func handToCue() {
-        let files = services.store.files
-        _ = workspace.speak(to: .cue, from: $capture.draft, saying: Dotted(String(localized: "已交给 \(workspace.cue.name)"))) { try $0.stored(in: files) }
     }
 
     private struct Block: ViewModifier {
