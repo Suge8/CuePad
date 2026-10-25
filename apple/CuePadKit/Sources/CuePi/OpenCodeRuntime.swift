@@ -116,6 +116,9 @@ public final class OpenCodeRuntime: AgentRuntime, SessionLink {
         refresh()
     }
 
+    /// 会话在服务里：本来就在跑的服务 App 退出时不动，CuePad 拉起的那个由 `stop()` 停掉，会话随之下线。
+    public var hostedSessionsOutliveApp: Bool { startedService == nil }
+
     /// 停下后可再 `start()`（接入开关关了又开）：会话下桥，读到哪的缓存一并丢掉——索引随断开接入删了，再接入从头读。
     public func stop() -> @concurrent @Sendable () async -> Void {
         watching?.cancel()

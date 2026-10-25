@@ -61,6 +61,8 @@ public protocol AgentRuntime: AnyObject {
     func start() throws
     /// 关掉托管的会话与连接；返回的等待在它们都结束后结束，不需要主线程（App 退出时限时等）。
     func stop() -> @concurrent @Sendable () async -> Void
+    /// 托管的会话撑得过 App 重启（退出、更新）：`stop()` 不收掉它们，新起的 App 经桥认回。更新只等撑不过的做完（`UpdateService`）。
+    var hostedSessionsOutliveApp: Bool { get }
     /// 在后台于 `directory` 开一个新会话，带上发起方的认领标识（`PiSession.launchToken`）；等它上了桥，返回桥上的 id。
     /// 会话名、模型、思考强度在开场的话之前一起生效（第一句话不会先当了会话名）：Pi 作为启动参数，其余上桥后一次配好
     /// （`configure(opened:…)`）；模型不对等配不上时会话结束、整体失败，不留会话。

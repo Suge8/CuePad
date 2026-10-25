@@ -50,6 +50,8 @@ final class RecordingHost: AgentRuntime {
 
     func start() {}
     func stop() -> @concurrent @Sendable () async -> Void { {} }
+    /// 与 Pi 一样：托管的进程撑得过 App 重启
+    var hostedSessionsOutliveApp: Bool { true }
 
     func resume(_ session: IndexedSession) async throws -> String {
         calls.append(.resume(sessionFile: session.path, directory: session.cwd))
@@ -88,6 +90,49 @@ final class RecordingHost: AgentRuntime {
         try await eventually("桥连上 \(sessionID)") { bridge.session(id: ext.id) != nil }
         return ext
     }
+}
+
+/// 撑不过 App 重启的那几家（Claude Code、Codex 这类靠管道连着 App 的）托管会话的替身：经桥的 `attach` 上桥（各家接入就是这样上桥的），
+/// 状态由测试改，命令都受理不做事。
+final class PipedHostedAgent: AgentRuntime, SessionLink {
+    private let bridge: PiBridge
+    private let agent: AgentKind
+
+    init(bridge: PiBridge, agent: AgentKind) {
+        self.bridge = bridge
+        self.agent = agent
+    }
+
+    var hostedSessionsOutliveApp: Bool { false }
+    func start() {}
+    func stop() -> @concurrent @Sendable () async -> Void { {} }
+    func open(in directory: URL, launchToken: String, name: String?, model: PiModelKey?, thinking: PiThinkingLevel?) async throws -> String {
+        throw AgentRuntimeError.notInstalled(agent)
+    }
+    func resume(_ session: IndexedSession) async throws -> String { throw AgentRuntimeError.notInstalled(agent) }
+    func transcript(of session: IndexedSession, files: AttachmentFiles) async throws -> PiTranscript { throw AgentRuntimeError.notInstalled(agent) }
+    func read(_ update: PiHistoryUpdate) {}
+    func follow(_ scope: PiHistoryScope) {}
+
+    /// 一个托管的会话上桥，返回桥上的 id。
+    @discardableResult
+    func host(_ sessionID: String, state: PiWorkState) -> PiSession.ID {
+        var session = PiSession(
+            id: "\(sessionID).1", sessionID: sessionID, agent: agent, sessionFile: nil, pid: 1, cwd: URL(filePath: "/work/\(sessionID)"),
+            terminal: PiTerminal(), state: state, stateSince: Date())
+        session.hosted = true
+        bridge.attach(session, via: self)
+        return session.id
+    }
+
+    func set(_ id: PiSession.ID, _ state: PiWorkState) { bridge.update(id) { $0.state = state } }
+
+    func send(_ message: PiMessage, in id: PiSession.ID) async throws {}
+    func command(_ line: String, in id: PiSession.ID) async throws {}
+    func end(_ id: PiSession.ID) async throws {}
+    func abort(_ id: PiSession.ID) async throws {}
+    func answer(_ answer: PiAnswerValue, to promptID: String, in id: PiSession.ID) async throws {}
+    func configure(model: PiModelKey?, thinking: PiThinkingLevel?, name: String?, in id: PiSession.ID) async throws {}
 }
 
 extension FakeExtension {
