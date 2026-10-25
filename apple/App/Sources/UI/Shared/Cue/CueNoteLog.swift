@@ -51,7 +51,7 @@ private struct CueNoteLine: View {
         VStack(alignment: .leading, spacing: 0) {
             link(places, row: CueNoteRow(time: round.date) { glyph(places) } text: { line(places) })
             if let row = round.row, let live, row.id == live.round {
-                CueTrace(touches: round.touches, doing: live.doing).padding(.leading, CueNoteRows.textInset)
+                CueTrace(touches: round.touches, doing: live.doing)
             }
         }
     }
@@ -120,8 +120,6 @@ struct CueNoteRow<Glyph: View, Words: View>: View {
 }
 
 enum CueNoteRows {
-    /// 字的左缘：图标位与间距（在跑的那一轮挂的经过对着它）。
-    static let textInset = Note.glyphWidth + Note.spacing
     /// 几点那一列至少多宽："中午 12:44" 放得下，一列对齐。
     static let timeWidth: CGFloat = 62
     /// 一行至少多高：比旁注（`Note.lineHeight`）高一点，整行可点。
