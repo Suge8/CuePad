@@ -12,6 +12,8 @@ final class LiveSessions {
     /// 第一份在 App 打开资料库时当场读到（`init`），之后从它接着订阅：没有"还没读到"这一态。
     private(set) var items: [PiSessionListItem] = []
     private(set) var total = 0
+    /// 未结束的那些（`items` 去掉已结束、还有话发给它的）。
+    private(set) var live: [PiSessionListItem] = []
     /// "在做"列的会话（`PiSessionListItem.isCurrent`）：在线的与正在唤醒的。
     private(set) var current: [PiSessionListItem] = []
     /// 在线会话的摘要、此刻没能送达的话有几句，"在做"列的会话收到的最近一条投送请求与改名，按 Pi 的会话 id。
@@ -42,8 +44,6 @@ final class LiveSessions {
         seen = start.value.relays.latest
         apply(start.value, at: moment)
     }
-
-    var live: [PiSessionListItem] { items.filter { $0.state.state != .known(.ended) } }
 
     /// `session` 在最近一次接力里：它的状态标挂锚（`relaySpot`）。
     func relays(session: String) -> Bool { flight?.ends.contains { $0.session == session } == true }
@@ -79,7 +79,7 @@ final class LiveSessions {
         if page.items != items { items = page.items }
         if page.total != total { total = page.total }
         set(\.recentlyEnded, page.ended)
-        let live = self.live
+        set(\.live, page.items.filter { $0.state.state != .known(.ended) })
         set(\.current, page.items.filter { $0.isCurrent(at: moment) })
         set(\.recaps, Dictionary(live.map { ($0.state.sessionID, $0.state.recap) }) { first, _ in first })
         set(\.deliveries, Dictionary(current.compactMap { item in item.delivery.map { (item.state.sessionID, $0) } }) { first, _ in first })
