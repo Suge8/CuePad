@@ -28,7 +28,7 @@ struct CueHostMenu<Label: View>: View {
             let choose = { (host: CueSettings.Host?) in if host?.id != running { change(host) } }
             return [
                 machines(checked: { $0.id == running }, pick: choose),
-                ChoiceMenu.Section(choices: [ChoiceMenu.Choice(title: CueSettings.off, checked: running == nil) { choose(nil) }]),
+                ChoiceMenu.Section(choices: [ChoiceMenu.Choice(title: .verbatim(CueSettings.off), checked: running == nil) { choose(nil) }]),
             ]
         }
     }

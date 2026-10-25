@@ -12851,22 +12851,6 @@
         }
       }
     },
-    "未命名会话" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Untitled Session"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "未命名会话"
-          }
-        }
-      }
-    },
     "未命名的 Mac" : {
       "localizations" : {
         "en" : {
