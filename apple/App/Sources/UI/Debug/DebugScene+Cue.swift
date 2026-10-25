@@ -8,7 +8,7 @@ import Foundation
 /// 对话里有你的话（一句带图）、Cue 的话、每一轮的经过（碰到 1 处、3 处）、折起的动态、一条结果与一条"等你"（正文带一段测试输出）；atlas 会话里有一句 Cue 发的话；
 /// 记忆有钉住的与其他，还有一条忘掉的；上下文用到换新线的七成（`CueContext`）。cuerun（仅 Mac）让 Cue 运行在这台 Mac，"运行情况"才有。
 /// `-CuePadWaitKinds YES`：等你里各种问题都有（Cue 把 homepage 的选择题、deploy 的确认题、rename 的文字题留给你答），对话都看过了、页停在最新处。
-/// `-CuePadReplies <N>`：Cue 把歇着的会话留给你回（待回复：Cue 页拍板卡上方那条提示 `CueReplyTip`，看板的等你列，`seedReplies`）。
+/// `-CuePadReplies <N>`、`-CuePadAtlas`、`-CuePadAtlasTitle` 见 `DebugScene+CueSessions.swift`。
 /// 配 fresh 时 notes-edit 也结束，没有拍板：名牌说几个会话待回复。
 /// `-CuePadCuePresence <unchosen|fresh|answered|thinking|tool|woke|sending|asleep|disabled>`：unchosen 是还没选过在哪台 Mac 上运行（演示的几台 Mac 都在，手机 Cue 面板就地选）；fresh 是刚启用、还没说过话（空态里那几句能直接说的话，`CueStarters`）；answered 是"等你"那一条你选了"可以"（回到对话里、带着你的回答），
 /// 之后你又说了一句、Cue 跑了一轮（碰到 5 处，经过折起）、连着回了两句（看问询回到对话里的样子、一串气泡）；你的最后一句已交给 Cue（气泡旁的纸飞机）、它在想（thinking）或在用工具（tool：经过碰到 3 处、还在往下长，末行是此刻在做的）、Cue 自己醒来的一轮还在跑（woke：醒来那一行下面挂这一轮的经过，碰到 4 处，折成 2 处、"还有 2 处"与在跑那一行；改过又看过的那件写"修改"）、
@@ -162,6 +162,7 @@ extension DebugScene {
                 try await store.markCueRead(through: .now)
             }
             try await seedReplies(defaults.integer(forKey: "CuePadReplies"), store: store)
+            try await atlasIfAsked(store)
             // 流程演示里"等你"只有它自己出的那一条：演示的这条先答掉，看得到那张卡出现与消失（`DebugScene+CueFlow.swift`）
             if cueFlows { _ = try await store.endCueQuestion(asked.id, .answered(CueAsk.once)) }
             switch presence {
@@ -211,27 +212,6 @@ extension DebugScene {
         } catch {
             fatalError("Cue 演示数据没写成：\(error)")
         }
-    }
-
-    /// 待回复的演示会话（各自新开，不借别的演示已绑着任务的会话）：header 绑着一件新任务"打磨手机 Cue 顶栏"（看板上它挪进等你、卡上写任务名），
-    /// 2 起另加没绑任务、十几分钟前歇下的 glass（写会话名）。
-    private static func seedReplies(_ count: Int, store: CueStore) async throws {
-        guard count > 0 else { return }
-        let recorder = PiStateRecorder(store: store, hostID: "demo-mac")
-        func settle(_ id: String, _ title: String, _ agent: AgentKind, minutes: Double, said: String, reply: String) async throws {
-            try await recorder.update(
-                sessionID: id, state: .settled, title: title, directory: "CuePad",
-                times: PiTimes(stateSince: .now.addingTimeInterval(-minutes * 60), busySince: nil), agent: agent)
-            try await store.writePiTranscript(PiTranscript(sessionID: id, messages: [], recap: PiRecap(lastPrompt: said, lastReply: reply)))
-        }
-        try await settle("header", "header", .codex, minutes: 5, said: "名牌两行居中", reply: "名牌两行已居中，展开改成了 0.25 秒，手感你再试试？")
-        let project = try await store.projects().first { $0.name == "CuePad" }?.id ?? Project.defaultID
-        let task = try await store.createTask("打磨手机 Cue 顶栏", in: project)
-        try await store.bindSession("header", to: task.id)
-        _ = try await store.leaveToYou("header")
-        guard count > 1 else { return }
-        try await settle("glass", "底栏换系统液态玻璃", .claudeCode, minutes: 12, said: "底栏换成系统的液态玻璃", reply: "改好了，深色下玻璃边缘偏亮，我调低了 8%。要再看一版截图吗？")
-        _ = try await store.leaveToYou("glass")
     }
 }
 #endif
