@@ -98,6 +98,12 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         var project: UUID { item?.task.projectID ?? TaskBoard.home(reply.session) }
     }
 
+    /// 看板上点了去哪：进会话，或去 Cue 页答那一问（`Workspace.askOnCuePage`）。
+    enum Destination: Sendable, Equatable {
+        case session(PiSessionState)
+        case question(UUID)
+    }
+
     /// 等你列的一张卡：一件任务一张，落在它上面的拍板与待回复都收在这里（换列不换名字）；没落在任务上的各一张。
     struct Held: Identifiable, Sendable, Equatable {
         var item: Item?
@@ -122,6 +128,16 @@ nonisolated struct TaskBoard: Sendable, Equatable {
             return replies.first?.session.title ?? ""
         }
         var project: UUID? { item?.task.projectID ?? waits.first?.project ?? replies.first?.project }
+        /// 点卡去最早的那件，拍板先于待回复：Cue 的提问去 Cue 页那一问，会话在问的与待回复进会话。
+        var destination: Destination {
+            if let wait = waits.first {
+                switch wait.wait {
+                case .message(let message, _): return .question(message.id)
+                case .session(let session, _): return .session(session)
+                }
+            }
+            return .session(replies[0].session)
+        }
     }
 
     /// 等你列的卡：拍板的卡在前、只剩待回复的在后，各按里面等得最久的那件排（`waiting`、`replies` 本来就是这个顺序）。

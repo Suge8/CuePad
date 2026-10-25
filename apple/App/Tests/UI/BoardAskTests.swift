@@ -4,7 +4,8 @@ import Testing
 @testable import CuePad
 
 /// 进展页只看不答：等你列一件一张卡，写这件事本身的名字（任务名；不落在任务上的 Cue 提问写它要做的事），同一件任务上的几件收成一张、写件数，
-/// 列头仍数条；点了去 Cue 页答，点的那一问排到拍板卡最前（不是原本最前的那件也一样）。
+/// 列头仍数条；点了去 Cue 页答，点的那一问排到拍板卡最前（不是原本最前的那件也一样）。拍板与待回复落在同一件任务上也是一张：
+/// 有拍板时是拍板（赭黄问号）、点了先去答它，答完只剩待回复（墨点）、点了进那个会话。
 @MainActor
 struct BoardAskTests {
     let app = TestApp()
@@ -26,5 +27,37 @@ struct BoardAskTests {
         #expect(workspace.top == .cue)
         let thread = try await CueThread.read(from: store, asking: workspace.cueAsking)
         #expect(thread.waiting.first?.message?.id == loose.id && thread.waiting.count == 3)
+    }
+
+    @Test func 同一任务上有拍板也有待回复_合成一张_先去拍板_答完变待回复进会话() async throws {
+        let workspace = Workspace(services: app.services)
+        _ = try await store.updateCueProfile {
+            $0.hostID = "mac-cue"
+            $0.enabledAt = .now
+        }
+        try await store.recordMacPresence(host: "mac-cue") { true }
+        let task = try await store.createTask("底栏换玻璃")
+        try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "glass", state: .settled, title: "底栏换系统液态玻璃")
+        try await store.bindSession("glass", to: task.id)
+        _ = try await store.leaveToYou("glass")
+        let push = try await store.addCueMessage(.cue, text: "要推送吗？", ask: try CueAsking(.push, action: "把底栏改动推送到 origin/main"), task: task.id)
+
+        func onlyCard() async throws -> TaskBoard.Held {
+            let held = try await TaskBoard.read(from: store).held
+            #expect(held.count == 1)  // 同一件任务只有一张
+            return try #require(held.first)
+        }
+
+        var card = try await onlyCard()
+        #expect(card.title == "底栏换玻璃" && card.deciding && card.count == 2)
+        workspace.open(card.destination)
+        #expect(workspace.top == .cue)
+        #expect(try await CueThread.read(from: store, asking: workspace.cueAsking).waiting.first?.message?.id == push.id)
+
+        try await app.services.answerCueQuestion(push.id, CueAsk.once)
+        card = try await onlyCard()
+        #expect(card.title == "底栏换玻璃" && !card.deciding && card.count == 1)
+        workspace.open(card.destination)
+        #expect(workspace.shownSession?.sessionID == "glass")
     }
 }

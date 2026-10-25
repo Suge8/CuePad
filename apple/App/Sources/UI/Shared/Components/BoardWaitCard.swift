@@ -13,7 +13,7 @@ struct BoardWaitCard: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        BoardLink(to: destination) {
+        BoardLink(to: held.destination) {
             BoardCardLayout(advancing: false) {
                 mark.frame(width: TaskMetrics.cardLead, height: TaskMetrics.cardLead)
                 if let project { BoardProjectGlyph(project: project) }
@@ -38,16 +38,6 @@ struct BoardWaitCard: View {
         } else {
             ReplyDot()
         }
-    }
-
-    private var destination: BoardDestination {
-        if let wait = held.waits.first {
-            switch wait.wait {
-            case .message(let message, _): return .question(message.id)
-            case .session(let session, _): return .session(session)
-            }
-        }
-        return .session(held.replies[0].session)
     }
 
     /// 一件：项目、问句（待回复写"待回复"）、等了多久，一行；几件时项目一行，下面一件一行。
