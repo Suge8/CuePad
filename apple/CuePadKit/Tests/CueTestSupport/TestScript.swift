@@ -33,8 +33,12 @@ public enum TestScript {
     let pending = cache.appending(path: "\(hash).\(UUID().uuidString)")
     try Data(text.utf8).write(to: pending)
     chmod(pending.path, 0o755)
-    // 同时有别的用例写好了同一份：留它的
-    if renamex_np(pending.path, file.path, UInt32(RENAME_EXCL)) != 0 { try? FileManager.default.removeItem(at: pending) }
+    if renamex_np(pending.path, file.path, UInt32(RENAME_EXCL)) != 0 {
+      let code = errno
+      try? FileManager.default.removeItem(at: pending)
+      // 同时有别的用例写好了同一份：留它的；别的错误当场报，不拖到运行脚本时成了超时
+      guard code == EEXIST else { throw POSIXError(POSIXErrorCode(rawValue: code) ?? .EIO) }
+    }
     return file
   }
 }
