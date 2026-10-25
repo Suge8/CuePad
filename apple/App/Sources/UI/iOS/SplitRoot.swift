@@ -130,7 +130,7 @@ private struct SplitSidebar: View {
         // 不用 List：几十行的量级，普通栈就够，格子的底、分隔线与间距也不用再一项项关掉
         ScrollView {
             VStack(alignment: .leading, spacing: Self.rowGap) {
-                SearchEntry().padding(.bottom, 10)
+                SearchEntry(selected: workspace.top == .search).padding(.bottom, 10)
                 CueSidebarItem().padding(.bottom, 6)
                 ForEach(SidebarOutline.places, id: \.self) { SidebarRow(entry: $0, tally: true).relaySpot(dock: true) }
                 if let catalog = workspace.catalog {

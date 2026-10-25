@@ -3,18 +3,19 @@ import SwiftUI
 import UIKit
 
 /// 搜索入口（窄屏项目页页顶那一排中间、iPad 侧栏顶上）：长相同搜索框（`SearchCapsule`），点它把搜索页推在当前页上，那里的搜索框接着拿到键盘（同 ⌘K）。
-/// 搜索页开着时它是选中的那一格（签名色写"搜索"），不再写同一句提示：同一屏只有一个搜索框。窄到放不下整句时只写"搜索"，不截成半句。
+/// `selected`：搜索页就开在旁边（iPad 侧栏），它是选中的那一格（签名色写"搜索"），不再写同一句提示：同一屏只有一个搜索框。
+/// 页顶那一排里的不选中：搜索页推上来就盖住了它，推入的那一下它也不该跟着重画。窄到放不下整句时只写"搜索"，不截成半句。
 struct SearchEntry: View {
+    var selected = false
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
     var body: some View {
-        let searching = workspace.top == .search
         Button(action: workspace.openSearch) {
             HStack(spacing: 6) {
-                Image(.search).imageScale(.medium).foregroundStyle(searching ? palette.signature : palette.ink3)
+                Image(.search).imageScale(.medium).foregroundStyle(selected ? palette.signature : palette.ink3)
                 Group {
-                    if searching {
+                    if selected {
                         Text("搜索").fontWeight(.semibold).foregroundStyle(palette.signature)
                     } else {
                         ViewThatFits(in: .horizontal) {
