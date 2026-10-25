@@ -165,28 +165,6 @@ extension LocalizedStringResource {
     static func verbatim(_ text: String) -> Self { "\(text)" }
 }
 
-// 带图标的标签、按钮、菜单收 `LocalizedStringResource`（`Icon.swift` 那几个收字面量与 String）；不优先，字面量仍走 LocalizedStringKey 那个。
-extension Label where Title == Text, Icon == Image {
-    @_disfavoredOverload
-    init(_ title: LocalizedStringResource, icon: AppIcon) {
-        self.init { Text(title) } icon: { Image(icon) }
-    }
-}
-
-extension Button where Label == SwiftUI.Label<Text, Image> {
-    @_disfavoredOverload
-    init(_ title: LocalizedStringResource, icon: AppIcon, role: ButtonRole? = nil, action: @escaping () -> Void) {
-        self.init(role: role, action: action) { SwiftUI.Label(title, icon: icon) }
-    }
-}
-
-extension Menu where Label == SwiftUI.Label<Text, Image> {
-    @_disfavoredOverload
-    init(_ title: LocalizedStringResource, icon: AppIcon, @ViewBuilder content: () -> Content) {
-        self.init(content: content) { SwiftUI.Label(title, icon: icon) }
-    }
-}
-
 extension View {
     /// 菜单（`Menu`）的标签：里面的几样（图标、字、箭头）合成一个无障碍元素，读作 `spoken`。分开时 Mac 的菜单按钮按子视图拆成几颗，
     /// 菜单项只挂在第一颗下，读屏落在别的那颗上打开的是空壳。标签只有一个图标时不用它，给菜单本身 `accessibilityLabel` 就够。
