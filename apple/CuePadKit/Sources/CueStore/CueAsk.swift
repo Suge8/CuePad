@@ -5,7 +5,7 @@ import Foundation
 /// （`CueStore.addCueMessage` 的 `ask`）；调研方案、技术取舍、实现路线、子任务与整件事算不算做完，Cue 按你的规矩与最佳实践自己定，做完告诉你。
 /// 选项也由这里给（`choices`），Cue 不能自拟"照这个做 / 我再看看"这类确认；别的想法（不同意、选别的方案、补一句条件）他在 Cue 页底下直接说，
 /// 卡随之收起（`CueQuestionEnd`）。
-/// 给人看的句子都由这里拼（`name`、`basis` 与 `CueAsking` 的 `why`、`basis`、`request`），各处不按类别另写；`definition` 只给 Cue 看。
+/// 给人看的句子都由这里拼（`name` 与 `CueAsking` 的 `question`、`why`），各处不按类别另写；`definition` 只给 Cue 看。
 public enum CueAsk: String, CaseIterable, Sendable {
   case push, merge, release, delete, outside, budget, taste, rule
 
@@ -21,15 +21,6 @@ public enum CueAsk: String, CaseIterable, Sendable {
     case .budget: "超出预算"
     case .taste: "审美取舍"
     case .rule: "你的规矩要先问的事"
-    }
-  }
-
-  /// 等你卡的依据行（"推送代码前先问你 · 圆桌"）：这类事为什么问你。规矩那一类卡上写他的原话（`CueAsking.basis`）。
-  public var basis: String {
-    switch self {
-    case .taste: "按你的口味定"
-    case .rule: "按你的规矩先问你"
-    default: "\(name)前先问你"
     }
   }
 
@@ -112,18 +103,9 @@ public struct CueAsking: Equatable, Sendable {
     return "可以\(gap(action.first))\(action)\(gap(action.last))吗？"
   }
 
-  /// 为什么问你（卡片与通知的第二句）：规矩那一类引他的规矩原话；审美那一类说明这事按他的口味定（能改回的事，不说就像在讨确认）。
-  /// 别的类没有：推送、删除这些收不回的地方他自己知道，卡上只留问句。
-  public var why: String? {
-    if let rule { return "你说过「\(rule)」。" }
-    return ask == .taste ? ask.basis + "。" : nil
-  }
-
-  /// 等你卡的依据行：规矩那一类是他的原话，别的是这一类的依据（`CueAsk.basis`）。
-  public var basis: String { rule ?? ask.basis }
-
-  /// 实时活动、小组件里这一问的说明，`cue` 是 Cue 的名字：有 `why` 用它，否则"Cue 请你允许推送代码"。
-  public func request(by cue: String) -> String { why ?? "\(cue) 请你允许\(ask.name)" }
+  /// 问句下面那一句（拍板卡、全屏预览底栏、对话里答完的那句、通知、实时活动都只读它）：只有规矩那一类引他自己的原话——
+  /// 这一问为什么来问他只有这句说得出。别的类不写：问句已经说了是什么事，"按你的口味定""请你允许推送代码"这类泛泛的依据只是复述。
+  public var why: String? { rule.map { "你说过「\($0)」。" } }
 }
 
 /// Cue 点名要你看的一张图（`CueMessage.shots`）：发到手机的哪一份（`PiPreview.id`）与看它的什么（Cue 写的一句）。写下就不再变；那一份不在了（会话的预览过期删掉）就不显示。

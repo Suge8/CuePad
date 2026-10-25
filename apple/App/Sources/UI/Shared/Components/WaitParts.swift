@@ -2,7 +2,7 @@ import CueStore
 import SwiftUI
 
 /// 一件拍板（`TaskBoard.Wait`，出自 `CueStore.cueTally`）在 Cue 页拍板卡（`CueWaitDock`）上写什么：眉题 `CueWaitEyebrow` 的 `title` 与 `project`，
-/// 问句 `CueWaitQuestion` 的 `asked`（进展页悬停的问句也是它）；怎么答是 `WaitAnswer`。进展页的卡写什么在 `TaskBoard.Held`。
+/// 问句 `CueQuestionLine` 的 `asked`（进展页悬停的问句也是它）；怎么答是 `WaitAnswer`。进展页的卡写什么在 `TaskBoard.Held`。
 nonisolated extension TaskBoard.Wait {
     /// 哪件事：会话在问的写会话名（点了进的就是它），Cue 问的写落在的任务，没落在任务上的写 Cue 的名字。
     func title(cue: String) -> String {
@@ -10,11 +10,11 @@ nonisolated extension TaskBoard.Wait {
         return item?.task.title ?? cue
     }
 
-    /// 要你定什么：Cue 的是代码写的问句（`CueMessage.headline`）；会话的是问题的第一行，`detail` 是第二行起的说明——
-    /// 选项不写进来（它们是下面的胶囊）。会话在等却没报出问题时是它此刻那一句（`PiProgress.line`）。
+    /// 要你定什么与下面那一句：Cue 的是代码写的问句（`CueMessage.headline`）与 `CueAsking.why`（只有规矩那一类有）；
+    /// 会话的是问题的第一行，`detail` 是第二行起的说明——选项不写进来（它们是下面的胶囊）。会话在等却没报出问题时是它此刻那一句（`PiProgress.line`）。
     var asked: (line: String, detail: String?) {
         switch wait {
-        case .message(let message, _): return (message.headline ?? "", nil)
+        case .message(let message, _): return (message.headline ?? "", message.asking?.why)
         case .session(let session, _):
             let lines = (session.question?.text ?? PiProgress.line(of: session) ?? "").split(separator: "\n", maxSplits: 1).map(String.init)
             return (lines.first ?? "", lines.count > 1 ? lines[1] : nil)

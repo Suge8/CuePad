@@ -1,44 +1,51 @@
 import CueStore
 import SwiftUI
 
-/// 一问要你定什么：代码写出的问题（`CueMessage.headline`），规矩那一类下面再一行引的规矩（`CueAsking.why`），两行同一条左缘、都不限行；
-/// `below` 接在同一条左缘下面（原话）。全屏预览的底栏与对话里答完的问句共用，按 `Tone` 分两档：
-/// - `card`：预览底栏上，左边赭黄问号（全卡唯一的状态色），问句是标题字；
+/// 一问要你定什么，问句只这一套画法：问句（Cue 的是代码写的 `CueMessage.headline`，会话的是问题第一行）与下面那一句
+/// （`note`：Cue 的只有规矩那一类引他的原话 `CueAsking.why`，会话的是问题的说明），两行同一条左缘、都不限行；`below` 接在同一条左缘下面（原话）。
+/// Cue 页拍板卡、全屏预览的底栏与对话里答完的问句共用，按 `Tone` 分两档：
+/// - `card`：拍板卡与预览底栏上，左边赭黄问号（全卡唯一的状态色），问句是标题字；
 /// - `ended`：对话里已结束的（`CueSays`），不挂问号、正文字不加粗、次一级的墨，与还在等你的一眼分开。
 struct CueQuestionLine<Below: View>: View {
     enum Tone { case card, ended }
 
-    let message: CueMessage
+    let question: String
+    let note: String?
     var tone = Tone.card
     @ViewBuilder var below: Below
     @Environment(\.palette) private var palette
 
     var body: some View {
-        let headline = message.headline ?? "", why = message.asking?.why
         HStack(alignment: .firstTextBaseline, spacing: 9) {
             if tone != .ended { PiStateGlyph(status: .asking).font(Typography.title).accessibilityHidden(true) }
             VStack(alignment: .leading, spacing: 4) {
                 VStack(alignment: .leading, spacing: 4) {
-                    question(headline).fixedSize(horizontal: false, vertical: true)
-                    if let why {
-                        Text(CueQuestionLine<EmptyView>.keepingTail(why)).font(Typography.secondary).foregroundStyle(palette.ink2).fixedSize(horizontal: false, vertical: true)
+                    line.fixedSize(horizontal: false, vertical: true)
+                    if let note {
+                        Text(CueQuestionLine<EmptyView>.keepingTail(note)).font(Typography.secondary).foregroundStyle(palette.ink2).fixedSize(horizontal: false, vertical: true)
                     }
                 }
-                // 读屏读成一句（问句，规矩）
+                // 读屏读成一句（问句，下面那一句）
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel([headline, why].compactMap(\.self).joined(separator: "，"))
+                .accessibilityLabel([question, note].compactMap(\.self).joined(separator: "，"))
                 below
             }
             if tone == .card { Spacer(minLength: 0) }
         }
     }
 
-    @ViewBuilder private func question(_ text: String) -> some View {
-        let line = Text(CueQuestionLine<EmptyView>.keepingTail(text))
+    @ViewBuilder private var line: some View {
+        let line = Text(CueQuestionLine<EmptyView>.keepingTail(question))
         switch tone {
         case .card: line.font(Typography.title).foregroundStyle(palette.ink)
         case .ended: line.font(Typography.reading).foregroundStyle(palette.ink2).lineSpacing(Typography.readingLineSpacing)
         }
+    }
+}
+
+extension CueQuestionLine {
+    init(message: CueMessage, tone: Tone = .card, @ViewBuilder below: () -> Below) {
+        self.init(question: message.headline ?? "", note: message.asking?.why, tone: tone, below: below)
     }
 }
 
@@ -47,6 +54,11 @@ extension CueQuestionLine where Below == EmptyView {
         self.init(message: message, tone: tone) { EmptyView() }
     }
 
+    /// 拍板卡上的一件（Cue 的提问或会话在问的，`TaskBoard.Wait.asked`）。
+    init(wait: TaskBoard.Wait) {
+        let asked = wait.asked
+        self.init(question: asked.line, note: asked.detail) { EmptyView() }
+    }
 
     /// 只给显示：句尾最后 4 个字（汉字一个算一个，英文单词、数字一整段算一个，不算标点）连同其间与其后的标点粘成一块，
     /// 换行时不会只剩"我选」。"这样的尾巴挂在下一行。块与块之间插字连接符（U+2060，不占宽、不显示）；不插进单词里面：

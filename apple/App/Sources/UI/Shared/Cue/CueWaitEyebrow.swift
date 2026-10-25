@@ -1,33 +1,6 @@
 import CueStore
 import SwiftUI
 
-/// 一件拍板要你定什么：赭黄问号、问句（`TaskBoard.Wait.asked`）；会话的问题有说明时（选项不写进来）接在下一行。
-/// 规矩那一类（`CueAsk.rule`）下一行引他自己的原话（`CueAsking.why`："你说过「方案让我挑」。"）：这一问为什么来问他只有这句说得出，问句本身看不出；
-/// 别的类不写依据（"推送代码前先问你"）：问句已经说了是什么事。
-struct CueWaitQuestion: View {
-    let wait: TaskBoard.Wait
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        let asked = wait.asked
-        let below: String? = switch wait.wait {
-        case .message(let message, _): message.asking?.rule != nil ? message.asking?.why : nil
-        case .session: asked.detail
-        }
-        return HStack(alignment: .firstTextBaseline, spacing: 9) {
-            PiStateGlyph(status: .asking).font(Typography.title)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(CueQuestionLine<EmptyView>.keepingTail(asked.line)).font(Typography.title).foregroundStyle(palette.ink)
-                if let below { Text(below).font(Typography.secondary).foregroundStyle(palette.ink2) }
-            }
-            .fixedSize(horizontal: false, vertical: true)
-            .accessibilityElement(children: .combine)
-            Spacer(minLength: 0)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
 /// 拍板卡顶上的眉题行（小号、淡墨，几样靠间距与深浅分开，不用"·"拼）：
 /// - 左边：所在项目（项目自己的图标与颜色，`ProjectGlyph`，同看板与侧栏）与项目名，再是这件事的名字（`TaskBoard.Wait.title`：任务名或会话名，深一档）。
 ///   名字点得到：Cue 的提问打开它落在的任务（`CueTaskButton`，接力也落在这里），会话在问的进会话（谁在问就是这个会话，打开会话的入口也是它）；
