@@ -16,12 +16,13 @@ nonisolated struct PaletteQuery: Equatable {
         }
     }
 
-    var text = ""
+    // 换了任一条件就是另一组结果，从第一页看起（同 `AgentListModel.query`）；只有"显示更多"改 `pages`
+    var text = "" { didSet { pages = 1 } }
     /// nil 不限。
-    var project: UUID?
-    var withImages = false
-    var sent: SendCondition = .any
-    var period: Period = .any
+    var project: UUID? { didSet { pages = 1 } }
+    var withImages = false { didSet { pages = 1 } }
+    var sent: SendCondition = .any { didSet { pages = 1 } }
+    var period: Period = .any { didSet { pages = 1 } }
     var pages = 1
 
     static let pageSize = 30
