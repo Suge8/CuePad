@@ -3,7 +3,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// Cue 此刻（`CueNow`）：Cue 那一行、小组件与 iPhone 的实时活动读同一份——一颗珠子一份活（等你、推进中、刚做完）、那一句、第一件等你；
+/// Cue 此刻（`CueNow`）：名牌、小组件与 iPhone 的实时活动读同一份——数字账、一件一行（等你、推进中、刚做完）、第一件等你；
 /// 在实时活动上"允许一次"走 Cue 页回答的同一个方法，那件回到推进中、下一件等你接上来（会话在问的只能打开）；没活了实时活动就该结束；
 /// 刚做完的不压住在跑的，到点自己收掉。
 struct CueActivityTests {
@@ -28,9 +28,9 @@ struct CueActivityTests {
 
         // 实时活动只在 iPhone 上：按手机推（和 iCloud 对过、不是哪台 Mac），Mac 上的本机事实在 CueGateTests
         func now() async throws -> CueNow { CueNow(try await CueDigest.read(from: store), at: .always(), local: CueNow.Local(waiting: nil, here: nil)) }
-        func kinds(_ now: CueNow) -> [CueNow.Bead.Kind] { now.beads.map(\.kind) }
+        func kinds(_ now: CueNow) -> [CueNow.Item.Kind] { now.items.map(\.kind) }
 
-        // Cue 还没启用：两件都落在等你上：两颗等你，加刚做完的那颗；第一件是 Cue 的提问，能"允许一次"
+        // Cue 还没启用：两件都落在等你上：两件等你，加刚做完的那件；第一件是 Cue 的提问，能"允许一次"
         var cue = try await now()
         #expect(kinds(cue) == [.asks, .asks, .done] && cue.advancing == 0 && cue.isLive)
         let first = try #require(cue.first)
@@ -42,7 +42,7 @@ struct CueActivityTests {
         try await rig.services.answerCueQuestion(allow.message, allow.choice)
         cue = try await now()
         #expect(kinds(cue) == [.asks, .running, .done] && cue.advancing == 1)
-        #expect(cue.beads[1].name == "发布 v1.4" && cue.beads[1].sessions == ["testflight"])
+        #expect(cue.items[1].name == "发布 v1.4")
         #expect(cue.first == CueNow.Wait(
             title: "canvas-zoom", detail: "改锚点？", open: DeepLink.session(PiSessionState.recordID(sessionID: "zoom")).url, allow: nil))
 
@@ -51,14 +51,14 @@ struct CueActivityTests {
         cue = try await now()
         #expect(kinds(cue) == [.running, .running, .done])
 
-        // 两件都做完、会话都结束：只剩刚做完的，没活了，实时活动该结束；刚做完的那颗过了一阵自己收掉
+        // 两件都做完、会话都结束：只剩刚做完的，没活了，实时活动该结束；刚做完的那件过了一阵自己收掉
         try await workspace.toggle(canvas.id)
         try await workspace.toggle(release.id)
         try await recorder.update(sessionID: "zoom", state: .ended)
         try await recorder.update(sessionID: "testflight", state: .ended)
         cue = try await now()
         #expect(kinds(cue) == [.done, .done, .done] && !cue.isLive && cue.first == nil)
-        #expect(cue.aged(to: cue.at.addingTimeInterval(CueNow.doneWindow + 1)).beads.isEmpty)
+        #expect(cue.aged(to: cue.at.addingTimeInterval(CueNow.doneWindow + 1)).items.isEmpty)
 
         // 启用 Cue（运行在 mac-cue，那台醒着）：歇着时那一句说刚做完的那件，到点收掉后是静着
         _ = try await store.updateCueProfile { profile in
@@ -67,21 +67,21 @@ struct CueActivityTests {
         }
         try await store.recordMacPresence(host: "mac-cue") { true }
         cue = try await now()
-        #expect(cue.headline == "刚做完「发布 v1.4」" && cue.focus.word == "做完")
-        #expect(cue.aged(to: cue.at.addingTimeInterval(CueNow.doneWindow + 1)).headline == CueNow.quiet)
+        #expect(cue.ledger.isEmpty && cue.quietLine == "刚做完「发布 v1.4」" && cue.quietWord == "做完")
+        #expect(cue.aged(to: cue.at.addingTimeInterval(CueNow.doneWindow + 1)).quietLine == CueNow.quiet)
 
         // Cue 自己开始想：手上没活也算有活，岛开着；过时之后只信慢的事实
         try await store.setCueState(.thinking)
         cue = try await now()
-        #expect(cue.isLive && cue.focus.word == "在想" && cue.staleAfter == CueNow.fastStale)
-        #expect(cue.settled.headline == "刚做完「发布 v1.4」" && !cue.settled.isLive)
+        #expect(cue.isLive && cue.isBusy && cue.quietWord == "在想" && cue.staleAfter == CueNow.fastStale)
+        #expect(cue.settled.quietLine == "刚做完「发布 v1.4」" && !cue.settled.isLive)
 
-        // 刚做完一件又派出一件在跑，Cue 歇下：岛说在跑的那件，不停在"做完"
+        // 刚做完一件又派出一件在跑，Cue 歇下：数字账写在跑的那件，不停在"做完"
         let ship = try await store.createTask("推送并发新版", in: project.id)
         try await recorder.update(sessionID: "ship", state: .thinking, title: "ship")
         try await store.bindSession("ship", to: ship.id)
         try await store.setCueState(.settled)
         cue = try await now()
-        #expect(cue.headline == "1 件在跑" && cue.focus.word == "推进中")
+        #expect(cue.spoken == "1 件在跑" && cue.needsYou == 0)
     }
 }

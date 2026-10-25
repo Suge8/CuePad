@@ -78,8 +78,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         services.start()
         services.follow { await services.viewer?.follow(workspace) }
         services.follow { await window.parkWhileUnseen(services) }
-        // Dock 角标是"等你"的件数：读 Cue 那一行的同一份（`CueWatch.waiting`），不另订阅库
-        services.follow { [alerts] in for await count in Observations({ workspace.cue.waiting }) { await alerts.showBadge(count) } }
+        // Dock 与菜单栏图标的角标是要你管的几件（拍板加待回复）：读名牌的同一份（`CueNow.needsYou`），不另订阅库
+        services.follow { [alerts, statusItem] in
+            for await count in Observations({ workspace.cue.now.needsYou }) {
+                statusItem?.show(badge: count)
+                await alerts.showBadge(count)
+            }
+        }
         let cueBar = CueBar(services: services, workspace: workspace)
         self.cueBar = cueBar
         settingsWindow = SettingsWindowController {

@@ -13,144 +13,159 @@ extension AnyTransition {
         insertion: .opacity.animation(HandOff.quick.delay(HandOff.gap)), removal: .opacity.animation(.easeOut(duration: HandOff.gap)))
 }
 
-/// "Cue 此刻"（`CueNow`）的现成样子，App、小组件、灵动岛与锁屏同一份：珠子（`BeadDot`、`CueBeads`）、珠子加那一句（`CueNowLine`），
-/// 扩展里的头像（`CueNowFace`：静止的脸加一圈状态色的环；App 里的头像是会动的 `CueAvatar`，环的颜色同一套）。
-/// 颜色只按意思取：在跑与等子代理靛青（实心是在跑，空心是交出去了、等交回）、等你赭黄、待回复墨色、刚做完石绿、歇着灰。
-struct BeadDot: View {
-    /// 一排里珠子的直径（Cue 那一行、页头）；扩展里另给。
-    static let standard: CGFloat = 7
-    /// 一排里相邻两颗之间：直径的这么多倍，挨得近、看得出是一串。
-    static func gap(_ size: CGFloat) -> CGFloat { size * 0.55 }
-
-    let kind: CueNow.Bead.Kind
-    var size = standard
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        let tint = kind.tone.color(palette)
-        Group {
-            if kind == .delegating {
-                Circle().strokeBorder(tint, lineWidth: max(size * 0.24, 1.5))
-            } else {
-                Circle().fill(tint)
-            }
-        }
-        .frame(width: size, height: size)
-    }
-}
-
-/// 接力落在一颗珠子上时那一圈淡光（`RelayFlight` 画在珠子的锚上、字底下）：多大、珠子后面的字离珠心至少多远——字不落进光圈里。
-enum BeadHalo {
-    static let radius: CGFloat = 11
-    /// 珠子边到后面第一个字的最小距离：光圈不压到"+N"与那一句的头一个字。
-    static func clearance(bead size: CGFloat) -> CGFloat { radius - size / 2 + 0.5 }
-}
-
-/// 一排珠子：前 `limit` 颗，多出的写"+N"（连同 `hidden`；排满时它的位置一直留着）。`bead` 给每颗加东西（App 里挂接力的落点）。
-/// 珠子之间挨得近，"+N"与最后一颗之间让出接力光圈的半径（`BeadHalo`）。
-struct CueBeads<Decorated: View>: View {
-    let beads: [CueNow.Bead]
-    var hidden = 0
-    var size = BeadDot.standard
-    var limit = 4
-    @ViewBuilder var bead: (CueNow.Bead, BeadDot) -> Decorated
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        let more = max(beads.count - limit, 0) + hidden
-        let gap = BeadDot.gap(size)
-        HStack(spacing: gap) {
-            ForEach(beads.prefix(limit)) { item in
-                bead(item, BeadDot(kind: item.kind, size: size)).transition(.scale.combined(with: .opacity))
-            }
-            // 排满 `limit` 颗时"+N"的位置一直留着、按两位数的宽：N 变了位数或收没了，前面的珠子与后面那一句都不横移
-            if beads.count >= limit || more > 0 {
-                Text(verbatim: "+99").hidden().overlay(alignment: .leading) {
-                    if more > 0 { Text("+\(more)").contentTransition(.numericText(value: Double(more))).transition(.opacity) }
-                }
-                .font(.system(size: size * 1.45, weight: .semibold)).monospacedDigit().foregroundStyle(palette.ink2)
-                .padding(.leading, max(0, BeadHalo.clearance(bead: size) - gap))
-            }
-        }
-        .accessibilityHidden(true)
-    }
-}
-
-extension CueBeads where Decorated == BeadDot {
-    init(beads: [CueNow.Bead], hidden: Int = 0, size: CGFloat = BeadDot.standard, limit: Int = 4) {
-        self.init(beads: beads, hidden: hidden, size: size, limit: limit) { _, dot in dot }
-    }
-}
-
-/// Cue 那一行的第二行：一排珠子接那一句（窄处那一句 `headline`；放不下时截那一句，珠子与计数不截）。不在时只写原因（起不来是胭脂色）。字号随外面。
-struct CueNowLine<Decorated: View>: View {
+/// "Cue 此刻"（`CueNow`）的现成样子，App、小组件、灵动岛与锁屏同一份：数字账（`CueLedger`）与头像的那一层（`cueFace`，扩展里的头像 `CueNowFace`；
+/// App 里会动的头像 `CueAvatar` 套同一层）。颜色只按意思取：拍板赭黄、待回复墨色、在跑与等子代理靛青、刚做完石绿、歇着灰。
+/// 数字账：数字按意思上色、加粗，词是次要墨色；要你管的与推进中的两组之间比组里宽一截。排得下哪排画哪排（`CueNow.ledger` 由细到粗），
+/// 最粗那排还放不下先收紧间距，再不够才截断。没有可数的写那一句（`CueNow.quietLine`，起不来是胭脂色，不在是次要灰）。数字变了原地滚过去，换了说法先淡掉再淡入（`handOff`）。
+/// 否决过：一件一颗珠子接一句——实心空心要背，一句只挑一种说，几件在推进反而看不出。
+struct CueLedger: View {
     let now: CueNow
-    var limit = 4
-    @ViewBuilder var bead: (CueNow.Bead, BeadDot) -> Decorated
+    /// 组里两项之间；两组之间是它的 `groupGap` 倍。
+    var gap: CGFloat = 8
     @Environment(\.palette) private var palette
 
+    private static let groupGap: CGFloat = 1.75
+
     var body: some View {
-        // 珠子与那一句之间至少让出接力光圈（`BeadHalo`），光落在最后一颗上时不压到头一个字
-        HStack(spacing: BeadHalo.clearance(bead: BeadDot.standard)) {
-            if !now.beads.isEmpty {
-                // 珠子与"+N"按自己的宽排、不被挤：窄处让位的是后面那一句（截成省略号），计数截成"+…"就读不出几件了
-                CueBeads(beads: now.beads, hidden: now.hidden, limit: limit, bead: bead).fixedSize()
-            }
-            // 换一句原地换：只变了数时数字滚过去（"2 件"到"1 件"）；换了说法整句先淡掉再淡入（`HandOff`），叠在同一处。
-            // 占位的是看不见的新句：换句的那一刻宽度就是新句的，淡出中的旧句不撑着排版——居中排的页头里整组随这一下的动画滑到新位置
-            // （`CueHeader`），不在旧句淡完时再跳一下。
-            // 否决过：整句上推（新旧两句上下错开叠着、越出页头）；整句按数字滚（不同的字逐字纵滚加模糊，中间帧混成"在 路上"）
-            Text(now.headline).lineLimit(1).hidden()
-                .overlay(alignment: .leading) {
-                    ZStack(alignment: .leading) {
-                        Text(now.headline).foregroundStyle(tint).lineLimit(1)
-                            .contentTransition(.numericText())
-                            .id(now.headline.filter { !$0.isNumber })
-                            .transition(.handOff)
+        ZStack(alignment: .leading) {
+            if now.ledger.isEmpty {
+                Text(now.quietLine).foregroundStyle(quietTint).lineLimit(1).id(now.quietLine).transition(.handOff)
+            } else {
+                ViewThatFits(in: .horizontal) {
+                    ForEach(Array(now.ledger.enumerated()), id: \.offset) { _, entries in row(entries, gap: gap) }
+                    if let last = now.ledger.last {
+                        row(last, gap: gap / 2)
+                        truncated(last)
                     }
                 }
+                .transition(.handOff)
+            }
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(now.spoken)
     }
 
-    private var tint: Color {
+    private func row(_ entries: [CueNow.Entry], gap: CGFloat) -> some View {
+        let yours = entries.filter { $0.tone == .asks || $0.tone == .reply }
+        let moving = entries.filter { $0.tone == .moving }
+        return HStack(spacing: gap * Self.groupGap) {
+            if !yours.isEmpty { group(yours, gap: gap) }
+            if !moving.isEmpty { group(moving, gap: gap) }
+        }
+        .fixedSize()
+    }
+
+    private func group(_ entries: [CueNow.Entry], gap: CGFloat) -> some View {
+        HStack(spacing: gap) {
+            ForEach(entries) { entry in
+                entry.text(number: entry.tone.color(palette)).monospacedDigit().foregroundStyle(palette.ink2)
+                    .contentTransition(.numericText(value: Double(entry.count)))
+            }
+        }
+    }
+
+    /// 最粗那排也放不下（字号很大、地方很窄）：同样的字连成一行，截的是要你管的那组，推进中的总数留全（几件在推进一直看得到）。
+    private func truncated(_ entries: [CueNow.Entry]) -> some View {
+        let yours = entries.filter { $0.tone != .moving }, moving = entries.filter { $0.tone == .moving }
+        return HStack(spacing: gap / 2) {
+            if !yours.isEmpty { joined(yours).lineLimit(1).truncationMode(.tail) }
+            if !moving.isEmpty { joined(moving).lineLimit(1).fixedSize() }
+        }
+    }
+
+    private func joined(_ entries: [CueNow.Entry]) -> Text {
+        let lines = entries.map { $0.line(number: $0.tone.color(palette)) }
+        return Text(lines.dropFirst().reduce(into: lines[0]) { $0 += " " + $1 }).foregroundStyle(palette.ink2)
+    }
+
+    private var quietTint: Color {
         if case .away(_, let failed) = now.cue { return failed ? palette.failure : palette.ink3 }
         return palette.ink2
     }
 }
 
-extension CueNowLine where Decorated == BeadDot {
-    init(now: CueNow, limit: Int = 4) { self.init(now: now, limit: limit) { _, dot in dot } }
-}
+extension CueNow.Entry {
+    /// 数接词（"3 在跑"）：每种一个整句的键，英文的语序在目录里（"3 running"、"1 for you"）；数加粗、着 `number` 色，词随外面。
+    /// 数以整数进键（"%lld 待回复"），不以 `Text` 插进去：后者的键是"%@ 待回复"，与"会话名 待回复"撞成一条、只能有一种英文。
+    func text(number: Color) -> Text { Text(line(number: number)) }
 
-/// 扩展里的头像：静止的脸加一圈环，环的颜色说 Cue 此刻（`ring`，同 App 里 `CueAvatar` 的环）。
-struct CueNowFace: View {
-    let now: CueNow
-    let size: CGFloat
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        let line = max(size * 0.075, 1.5)
-        ZStack {
-            Circle().stroke(now.ring(palette), lineWidth: line).padding(line / 2)
-            Image(now.mood.asset).resizable().scaledToFit().padding(line + size * 0.08)
+    func line(number: Color) -> AttributedString {
+        var line = switch kind {
+        case .asks: AttributedString(localized: "\(count) 拍板")
+        case .reply: AttributedString(localized: "\(count) 待回复")
+        case .running: AttributedString(localized: "\(count) 在跑")
+        case .delegating: AttributedString(localized: "\(count) 等子代理")
+        case .advancing: AttributedString(localized: "\(count) 推进中")
         }
-        .frame(width: size, height: size)
-        .opacity(now.isAway ? 0.55 : 1)
-        .accessibilityHidden(true)
+        if let digits = line.range(of: String(count)) {
+            line[digits].foregroundColor = number
+            line[digits].inlinePresentationIntent = .stronglyEmphasized
+        }
+        return line
     }
 }
 
-extension CueMood {
-    /// 头像那圈环的颜色，App 的头像（`CueAvatar`，在做事时换成彗星）与扩展里的同一条：在想靛青，等你赭黄，刚报了做完石绿，其余淡灰。
-    func ring(_ palette: Palette) -> Color {
-        switch self {
-        case .thinking: palette.signature
-        case .waiting: palette.waiting
-        case .done: palette.replied
-        case .sleeping, .listening: palette.track
-        }
+/// 头像那一层（App 的 `CueAvatar` 与扩展的 `CueNowFace` 同一个样子）：淡底的圆托着吉祥物，没有环；Cue 在一轮里或话在路上时右下一颗靛青的点
+/// （同"在线"点的位置），不在时整个变淡；给了 `badge` 时右上角是要你管的几件（拍板加待回复，赭黄，同 App 图标的角标）。
+/// `rim` 是点与角标外那一圈的颜色，与头像后面的底同色，把它们从脸上剪开（灵动岛里是黑）。
+/// 否决过：头像外一圈状态环、在想时一颗彗星绕着转——看着就是一条加载进度，平时那圈淡墨也把脸压小了一圈。
+struct CueFaceLayer: ViewModifier {
+    let size: CGFloat
+    var busy = false
+    var away = false
+    var badge: Int? = nil
+    var rim: Color?
+    @Environment(\.palette) private var palette
+
+    /// 不在时的不透明度。
+    static let awayOpacity = 0.5
+
+    func body(content: Content) -> some View {
+        let rim = rim ?? palette.paper
+        let line = max(size * 0.05, 1.5)
+        content
+            .frame(width: size, height: size)
+            .background(palette.hair, in: .circle)
+            .opacity(away ? Self.awayOpacity : 1)
+            .overlay(alignment: .bottomTrailing) {
+                if busy {
+                    Circle().fill(palette.signature).padding(line).background(rim, in: .circle)
+                        .frame(width: max(size * 0.26, 7), height: max(size * 0.26, 7))
+                        .offset(x: line, y: line)
+                        .transition(.scale.combined(with: .opacity))
+                }
+            }
+            .overlay(alignment: .topTrailing) {
+                if let badge, badge > 0 {
+                    Text(badge, format: .number).font(.system(size: max(size * 0.3, 8), weight: .bold)).monospacedDigit()
+                        .foregroundStyle(palette.onFill)
+                        .padding(.horizontal, size * 0.08).frame(minWidth: size * 0.42, minHeight: size * 0.42)
+                        .background(palette.waitingFill, in: .capsule)
+                        .padding(line).background(rim, in: .capsule)
+                        .offset(x: size * 0.16, y: -size * 0.12)
+                        .transition(.scale.combined(with: .opacity))
+                }
+            }
+    }
+}
+
+extension View {
+    func cueFace(size: CGFloat, busy: Bool = false, away: Bool = false, badge: Int? = nil, rim: Color? = nil) -> some View {
+        modifier(CueFaceLayer(size: size, busy: busy, away: away, badge: badge, rim: rim))
+    }
+}
+
+/// 扩展里的头像：静止的脸（`CueFaceLayer`）；`badge` 时右上角写要你管的几件（灵动岛最小态）。
+struct CueNowFace: View {
+    let now: CueNow
+    let size: CGFloat
+    var badge = false
+    var rim: Color?
+
+    var body: some View {
+        Image(now.mood.asset).resizable().scaledToFit().padding(size * 0.06)
+            .cueFace(size: size, busy: now.isBusy, away: now.isAway, badge: badge ? now.needsYou : nil, rim: rim)
+            .accessibilityHidden(true)
     }
 }
 
@@ -166,19 +181,3 @@ extension CueNow.Tone {
     }
 }
 
-extension CueNow {
-    /// 头像那圈环：话在路上靛青，其余跟着表情（`CueMood.ring`，App 里的头像同一条）。
-    func ring(_ palette: Palette) -> Color {
-        if case .hearing = cue { return palette.signature }
-        return mood.ring(palette)
-    }
-
-    /// 读屏：那一句，接每种活几件。
-    var spoken: String {
-        let counts = Bead.Kind.allCases.compactMap { kind -> String? in
-            let count = beads.count { $0.kind == kind }
-            return count > 0 ? "\(kind.label) \(count)" : nil
-        }
-        return Dotted([headline] + counts).spoken
-    }
-}

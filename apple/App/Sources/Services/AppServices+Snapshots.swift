@@ -72,6 +72,7 @@ extension AppServices {
         #if os(iOS)
         let first = publishedSnapshots == nil
         await cueActivity?.show(CueActivityState(now: now, quotas: content.quotas), resend: resend || first, foreground: Self.inForeground)
+        await alerts?.showBadge(now.needsYou)
         #endif
         try publish(WidgetSnapshots(content, now: now))
     }

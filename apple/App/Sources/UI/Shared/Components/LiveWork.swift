@@ -1,26 +1,10 @@
 import CueStore
 import Foundation
 
-/// 此刻在做的（各端"在做"读的唯一一份，`Workspace.liveWork`）：列出来的会话（在线的与正在唤醒的，按要你注意的先后），与同时在跑的 Agent——
-/// 显示的状态在跑的会话（工作中、话在路上，`PiShown.isRunning`，与行上那颗状态标的靛青同一档；
-/// 等你、出错、没能送达、歇着、新会话都不算），加上各会话里在跑的子代理（`PiSubagentState.isRunning`）。
-/// 子代理只数会话自己报上来的（同步记录的 `PiSessionState.subagents`，四家同一个来源；报不出的那家就是 0，不估算）。
-nonisolated struct LiveWork: Equatable {
-    let rows: [PiSessionState]
-    let running: Int
-    let subagents: Int
-
-    init(rows: [PiSessionState], running: (PiSessionState) -> Bool) {
-        self.rows = rows
-        self.running = rows.count(where: running)
-        subagents = rows.reduce(0) { $0 + $1.subagents.count(where: \.isRunning) }
-    }
-}
-
 extension Workspace {
-    /// "在做"（菜单栏面板 `MenuBarLive` 列的与区头数的都是它）：同步记录里没结束的（别的 Mac 上的，`LiveSessions`）与正在唤醒的，Mac 上再加本机桥上实时的
+    /// "在做"（各端"在做"读的唯一一份，菜单栏面板 `MenuBarLive` 列的就是它；几件在推进按件数写在数字账里，这里不另按会话数）：同步记录里没结束的（别的 Mac 上的，`LiveSessions`）与正在唤醒的，Mac 上再加本机桥上实时的
     /// （同一个会话只出现一次，本机实时优先），按要你注意的先后。只读已有的这几份，不另订阅。
-    var liveWork: LiveWork {
+    var liveWork: [PiSessionState] {
         let sessions = services.liveSessions
         #if os(macOS)
         let live = services.pi.sessions.compactMap {
@@ -29,9 +13,8 @@ extension Workspace {
         #else
         let live: [PiSessionState] = []
         #endif
-        let rows = PiSessionState.liveRows(
+        return PiSessionState.liveRows(
             live: live, recorded: sessions.current.map(\.listed), deliveries: sessions.deliveries, cue: sessions.cue, at: services.speech)
-        return LiveWork(rows: rows) { shown($0, delivery: sessions.deliveries[$0.sessionID]).isRunning }
     }
 }
 

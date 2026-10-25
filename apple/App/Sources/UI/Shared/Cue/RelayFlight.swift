@@ -13,7 +13,7 @@ struct RelayFlight {
     private static let stagger = 0.09
     /// 起飞那圈环外扩之后多久光离开状态标（叫醒）。
     private static let liftoff = 0.08
-    /// 头像的环亮起之后多久小环离开头像（交给）：先看清是 Cue 发出的。
+    /// 头像外那圈光亮起之后多久小环离开头像（交给）：先看清是 Cue 发出的。
     private static let release = 0.16
     /// 另一头不在屏上时光飘多远。
     private static let drift: CGFloat = 24
@@ -50,7 +50,7 @@ struct RelayFlight {
 
     /// 发出（输入框的发送钮 → Cue 的头像）：钮上纸飞机的机头就是那点光，从机头处（`head`，根层坐标）当场起飞——满大、不透明，
     /// 不在钮上外扩起飞环、也不从半大淡入：钮在这一刻换成发送中，起飞环与淡入的光叠在正飞走的飞机上，录屏里是一团糊。
-    /// 落进头像同叫醒；头像不在屏上时往上飘一小段淡去。减弱动态效果：只有头像的环淡亮一下（起点的钮自己已换成发送中，不再压一层光）。
+    /// 落进头像同叫醒；头像不在屏上时往上飘一小段淡去。减弱动态效果：只有头像外那圈光淡亮一下（起点的钮自己已换成发送中，不再压一层光）。
     func launch(from head: CGPoint, to cue: CGRect?, in root: CALayer) {
         stage(in: root) { scene in
             if reduceMotion {

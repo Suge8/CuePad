@@ -51,7 +51,7 @@ struct CueGateTests {
         defer { following.cancel() }
 
         #expect(try await gate() == .waiting("正在从 iCloud 同步…"))
-        #expect(workspace.cue.now.headline == "正在从 iCloud 同步…")  // Cue 此刻（侧栏名片、菜单栏面板、小组件）：不说"还没启用"
+        #expect(workspace.cue.now.quietLine == "正在从 iCloud 同步…")  // Cue 此刻（侧栏名片、菜单栏面板、小组件）：不说"还没启用"
         for moving in [false, true] {  // Cue 页的启用（`CueWelcome`）、接入面板、设置的选择器与改 Mac 的确认都调它
             await #expect(throws: CueEnableError.unsynced) { try await services.enableCue(on: TestApp.hostID, moving: moving) }
         }
@@ -59,7 +59,7 @@ struct CueGateTests {
 
         try await runsOnStudio()
         try await app.syncs()
-        try await eventually("Cue 此刻写它在哪台") { workspace.cue.now.headline == "在「Mac Studio」上运行" }
+        try await eventually("Cue 此刻写它在哪台") { workspace.cue.now.quietLine == "在「Mac Studio」上运行" }
     }
 
     @Test func Cue在别的Mac上_确认框说清改在这台_确认了才改过来() async throws {

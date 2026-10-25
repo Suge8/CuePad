@@ -56,7 +56,7 @@ import Testing
     #expect(record["notify"] == nil && record.encryptedValues["detail"] as? String == "q2")
   }
 
-  /// 通知服务扩展取回记录、在设备上解密后改写文案：等你确认是"会话名 在等你" + 问题首行，完成是会话名 + "完成了"。
+  /// 通知服务扩展取回记录、在设备上解密后改写文案：等你确认是"会话名 等你拍板" + 问题首行，完成是会话名 + "完成了"。
   @Test func theNotificationExtensionRewritesTheAlertFromTheDecryptedRecord() async throws {
     let rig = try Rig()
     let recorder = PiStateRecorder(store: rig.store, hostID: "mac", timing: ManualTiming().timing)
@@ -67,7 +67,7 @@ import Testing
     let record = RecordMapper.record(from: try #require(try await rig.store.syncRow(recordName: state.id.uuidString.lowercased())), zoneID: zone)
 
     let waiting = try #require(PiAlertText.content(for: record, kind: .waitingForUser))
-    #expect(waiting.title == "homepage 在等你" && waiting.body == "要覆盖 public/feed.xml 吗？")
+    #expect(waiting.title == "homepage 等你拍板" && waiting.body == "要覆盖 public/feed.xml 吗？")
     let settled = try #require(PiAlertText.content(for: record, kind: .settled))
     #expect(settled.title == "homepage" && settled.body == "完成了")
   }

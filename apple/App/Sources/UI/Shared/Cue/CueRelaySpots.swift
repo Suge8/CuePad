@@ -19,10 +19,8 @@ enum CueSpot: Int {
     case dock
 }
 
-/// 会话那一头落在哪：屏上有它的几处时取最具体的（`rank` 小的）。只有此刻在接力的珠子、会话与任务挂锚。
+/// 会话那一头落在哪：屏上有它的几处时取最具体的（`rank` 小的）。只有此刻在接力的会话与任务挂锚。
 enum EndSpot: Equatable {
-    /// Cue 那一行里代表这份活的珠子，一个珠子可对应几个会话。
-    case bead([String])
     /// 会话的状态标，按它所在的那一行分级（`Row`）。
     case session(String, Row)
     /// 任务圈与正在开会话的空心点：带着这件任务、或交给的会话就是它绑着的那个时算。
@@ -41,7 +39,6 @@ enum EndSpot: Equatable {
     /// 对 `end` 来说有多具体；不是它的为 nil。
     func rank(for end: RelayEnd) -> Int? {
         switch self {
-        case .bead(let sessions): sessions.contains(end.session) ? 0 : nil
         case .session(let session, let row): session == end.session ? row.rawValue : nil
         case .task(let task, let session): task == end.task || session == end.session ? Row.task.rawValue : nil
         case .dock: Row.task.rawValue + 1
@@ -50,9 +47,6 @@ enum EndSpot: Equatable {
 }
 
 extension View {
-    /// Cue 那一行里这份活的珠子：它对应的会话正在接力时才挂锚，优先于所有会话、任务与去处落点。
-    func relaySpot(bead sessions: [String]) -> some View { modifier(BeadSpot(sessions: sessions)) }
-
     /// 会话的状态标：接力的会话那一头，`row` 是它在哪种行里。只有此刻在接力的会话挂锚，平时什么都不加。
     /// 这次交给刚开出这个会话时，状态标先透明着，光落下时才亮出来（同 `relayArrival`）。
     func relaySpot(session: String?, row: EndSpot.Row = .own) -> some View { modifier(SessionSpot(session: session, row: row)) }
@@ -60,7 +54,7 @@ extension View {
     /// 任务行（任务圈、正在开会话的那个空心点）：任务交给的会话在接力、或这件任务就是接力带着的那件时，接力落在这里。
     func relaySpot(task: UUID) -> some View { modifier(TaskSpot(task: task)) }
 
-    /// Cue 的头像：接力的 Cue 那一头，环在这里亮起。
+    /// Cue 的头像：接力的 Cue 那一头，头像外亮起一圈光。
     func relaySpot(cue spot: CueSpot) -> some View { background { RelayAnchor(role: .cue(spot)) } }
 
     /// "进展"那一处（`EndSpot.dock`，`dock` 为真的那处）：会话哪一行都不在屏上时接力落在这里。一直挂着。
@@ -75,19 +69,7 @@ extension EnvironmentValues {
     @Entry var relayStage: CueRelayStage.Stage?
 }
 
-/// 珠子与会话状态标只读 `LiveSessions.flight`，不在窗口根上改环境值，避免每次接力让整棵视图树重算。
-private struct BeadSpot: ViewModifier {
-    let sessions: [String]
-    @Environment(Workspace.self) private var workspace
-
-    func body(content: Content) -> some View {
-        let flying = sessions.filter { workspace.services.liveSessions.relays(session: $0) }
-        content.background {
-            if !flying.isEmpty { RelayAnchor(role: .end(.bead(flying))).transition(.identity) }
-        }
-    }
-}
-
+/// 会话状态标只读 `LiveSessions.flight`，不在窗口根上改环境值，避免每次接力让整棵视图树重算。
 private struct SessionSpot: ViewModifier {
     let session: String?
     let row: EndSpot.Row

@@ -118,7 +118,7 @@ struct AgentDayTests {
         #expect(try await label("gone") == "正在唤醒")
         // 唤醒中就列在"现在"（侧栏的在做、Agent 页），不在历史
         app.services.liveSessions.apply(try await LiveSessions.Page.read(from: store), at: .always())
-        #expect(workspace.liveWork.rows.contains { $0.sessionID == "gone" } && workspace.liveWork.running == 1)  // 区头数它在跑
+        #expect(workspace.liveWork.contains { $0.sessionID == "gone" })
         let list = try await PiSessionList.read(text: "", project: Project.defaultID, historyLimit: PiSessionList.pageSize, at: .always(), from: store)
         #expect(list.now.contains { $0.state.sessionID == "gone" } && !list.historyRuns.flatMap(\.items).contains { $0.state.sessionID == "gone" })
     }

@@ -24,9 +24,10 @@ final class AlertCenter: NSObject, UNUserNotificationCenterDelegate {
     /// 主窗口：前台怎么呈现、你在不在看（`Workspace.presentation`）。
     @ObservationIgnored weak var workspace: Workspace?
     @ObservationIgnored let sounds = AlertSounds()
-    /// Dock 角标该显示的数（`CueWatch.waiting`，`AppDelegate` 接的）；没有权限时记着，开了之后补上。
-    @ObservationIgnored var badge = 0
     #endif
+    /// App 图标角标该显示的数（`CueNow.needsYou`：拍板加待回复；Mac 由 `AppDelegate` 接主窗口那一份，iPhone 由推出 Cue 此刻的那一处 `AppServices.present` 给）；
+    /// 没有权限时记着，开了之后补上。
+    @ObservationIgnored private var badge = 0
 
     var isAuthorized: Bool { authorization == .authorized || authorization == .provisional }
 
@@ -37,9 +38,22 @@ final class AlertCenter: NSObject, UNUserNotificationCenterDelegate {
     /// 用户可能在系统设置里改过：回到前台时重新读。
     func refresh() async {
         authorization = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
-        #if os(macOS)
         await showBadge()
-        #endif
+    }
+
+    /// App 图标的角标（iPhone 的主屏、Mac 的 Dock）：经通知中心设，受系统"标记"开关控制，没有通知权限时不设。
+    func showBadge(_ count: Int) async {
+        badge = count
+        await showBadge()
+    }
+
+    private func showBadge() async {
+        guard delivers, isAuthorized else { return }
+        do {
+            try await UNUserNotificationCenter.current().setBadgeCount(badge)
+        } catch {
+            AppServices.log.error("App 图标角标没能更新：\(String(describing: error), privacy: .public)")
+        }
     }
 
     /// 尚未决定时弹一次系统提示；已决定过的直接返回。
