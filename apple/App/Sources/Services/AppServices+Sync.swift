@@ -25,13 +25,14 @@ extension AppServices {
 
     /// 启动同步，并让 `syncStatus`、`syncIssues`、`conflicts` 跟随，直到任务取消。没有同步（隔离模式）什么都不做。
     /// 启动后的第一次拉走立即同步（`CloudSync.start` 自己不拉；拉取等得到同步开始）：算在 `isCatchingUp` 里，打开的页面知道手里的可能不是最新。
+    /// 认账号与第一拉当场在主线程之外开始：跟随者要等主线程建完第一帧才跑，挂在它们上面的第一拉跟着晚（iOS 模拟器实测晚 0.8–1.1 秒）。
     func startSync() {
         guard let sync else { return }
+        Task { @concurrent in await sync.start() }
+        beginSyncNow()
         follow {
             for await state in sync.stateUpdates { self.setSyncState(state) }
         }
-        follow { await sync.start() }
-        follow { await self.syncNow() }
         follow(reporting: { .syncUnavailable(String(localized: "冲突列表读取失败：\(String(describing: $0))")) }) {
             for try await conflicts in self.store.observe({ try $0.conflicts() }) { self.setConflicts(conflicts) }
         }
@@ -124,25 +125,28 @@ extension AppServices {
     /// （启动时与回到前台的那一次常常叠在一起）等这一次，不另拉一遍。
     func syncNow() async {
         guard sync != nil else { return }
-        if let syncing { return await syncing.value }
-        let waiting = Task { await pullAtMost() }
-        syncing = waiting
-        await waiting.value
-        syncing = nil
+        await (syncing ?? beginSyncNow()).value
     }
 
-    private func pullAtMost() async {
+    /// 开始一次立即同步：拉取当场在主线程之外开始（不排在主线程的队列后面），返回的任务至多等 `syncWaitLimit`，结束时清掉 `syncing`。
+    @discardableResult
+    private func beginSyncNow() -> Task<Void, Never> {
         let (settled, settle) = AsyncStream<Void>.makeStream()
-        Task {
-            await pull()
+        Task { @concurrent in
+            await self.pull()
             settle.finish()
         }
         let deadline = Task { [timing] in
             try? await timing.sleep(Self.syncWaitLimit)
             settle.finish()
         }
-        for await _ in settled {}
-        deadline.cancel()
+        let waiting = Task {
+            for await _ in settled {}
+            deadline.cancel()
+            syncing = nil
+        }
+        syncing = waiting
+        return waiting
     }
 
     static let syncWaitLimit = Duration.seconds(5)
