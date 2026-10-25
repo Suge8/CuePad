@@ -20,11 +20,16 @@ struct SessionList<Top: View>: View {
     var body: some View {
         ScrollViewReader { proxy in
             List {
-                Color.clear.frame(height: 0).listRowInsets(EdgeInsets()).listRowBackground(Color.clear).listRowSeparator(.hidden).id(Self.topID)
-                if Top.self != EmptyView.self { top.listRowInsets(EdgeInsets()).listRowBackground(Color.clear).listRowSeparator(.hidden) }
-                if let list = model.list { sessions(list) }
+                // 每一行（卡片、分组标题、空态、读下一页的转圈）都不画底、不画分隔线：一处给全，漏了的那一行会在空态下面拖出一条孤线
+                Group {
+                    Color.clear.frame(height: 0).listRowInsets(EdgeInsets()).id(Self.topID)
+                    if Top.self != EmptyView.self { top.listRowInsets(EdgeInsets()) }
+                    if let list = model.list { sessions(list) }
+                }
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
             }
-            // 每个会话一张卡片（`sessionCard`）：平铺列表、行不画底，分组标题是普通的行（平铺列表的分组标题会吸顶）
+            // 每个会话一张卡片（`sessionCard`）：平铺列表，分组标题是普通的行（平铺列表的分组标题会吸顶）
             .listStyle(.plain)
             // 顶上那一行只是滚回去的锚，不占系统给行的最小高度
             .environment(\.defaultMinListRowHeight, 0)
@@ -45,7 +50,7 @@ struct SessionList<Top: View>: View {
     /// 会话列表。换搜索词或项目时整段换掉、不做动画（逐行挪动会让新旧两批字叠在一起）；同一筛选下会话进出、换状态才有动画。
     @ViewBuilder private func sessions(_ list: PiSessionList) -> some View {
         if list.isEmpty {
-            empty.listRowBackground(Color.clear)
+            empty
         } else {
             Group {
                 if !list.now.isEmpty {
@@ -64,7 +69,7 @@ struct SessionList<Top: View>: View {
                 }
                 if model.hasMore {
                     // 滑到这里才读下一页。按已读条数重跑：读完一页它仍在屏幕上（一页没填满屏幕）时接着读
-                    Spinner(.regular).frame(maxWidth: .infinity).listRowBackground(Color.clear)
+                    Spinner(.regular).frame(maxWidth: .infinity)
                         .task(id: list.loaded) { model.loadMore() }
                 }
             }
@@ -81,7 +86,6 @@ struct SessionList<Top: View>: View {
         title()
             .frame(maxWidth: .infinity, alignment: .leading)
             .listRowInsets(EdgeInsets(top: 14, leading: 0, bottom: 4, trailing: 0))
-            .listRowBackground(Color.clear).listRowSeparator(.hidden)
     }
 
     /// 一张卡片：长按与慢慢左滑都有"结束会话"（在线的）与"重命名"（读得到的会话；Mac 够不着时置灰，会话近况页"⋯"里同一个说法）；快甩是切页（`rowSwipes`）。
@@ -91,7 +95,7 @@ struct SessionList<Top: View>: View {
         // 结束不是删除：墨色，确认框里再说清后果；会话记录没有删除（会话文件在 Mac 上，归 Pi 管）
         let trailing = (endable ? [RowAction("结束会话", icon: .endSession) { model.confirmingEnd = item.state }] : [])
             + (renamable ? [RowAction("重命名", icon: .rename, tone: .quiet, enabled: services.reachesPiHost) { model.renaming = item.state }] : [])
-        // 行的设置（底、分隔线、边距）挂在最外层：挂在自绘轻扫里面传不到列表上，列表退回系统默认的白底与分隔线
+        // 行的边距挂在最外层：挂在自绘轻扫里面传不到列表上
         return SessionRow(item: item, showsPlace: list.showsPlace, end: end)
             .rowSwipes(RowSwipes(trailing: trailing), clipped: false)
             .contextMenu {
@@ -154,11 +158,9 @@ private struct SessionRow: View {
 }
 
 private extension View {
-    /// 会话卡片在列表里的一行：行不画底、不画分隔线，卡片之间留 8 点。
+    /// 会话卡片在列表里的一行：卡片之间留 8 点。
     func cardRow() -> some View {
         listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
-            .listRowBackground(Color.clear)
-            .listRowSeparator(.hidden)
     }
 }
 #endif

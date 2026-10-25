@@ -282,23 +282,26 @@ struct ControlButtonStyle: ButtonStyle {
     enum Kind { case primary, highlight, secondary, quiet, circular, glass }
     var kind = Kind.secondary
     var compact = false
-    @Environment(\.isEnabled) private var isEnabled
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label.modifier(ControlSurface(kind: kind, compact: compact, destructive: configuration.role == .destructive))
             .modifier(PressFeedback(pressed: configuration.isPressed, kind: kind == .circular ? .button : .control))
-            .opacity(isEnabled ? 1 : ControlMetrics.disabledOpacity)
     }
 }
 
-/// 控件的外形（`ControlButtonStyle` 的样子，不含按压）。
+/// 控件的外形（`ControlButtonStyle` 的样子，不含按压）；停用时整体变淡，挂在菜单按钮上的同样。
 struct ControlSurface: ViewModifier {
     var kind = ControlButtonStyle.Kind.secondary
     var compact = false
     var destructive = false
     @Environment(\.palette) private var palette
+    @Environment(\.isEnabled) private var isEnabled
 
     func body(content: Content) -> some View {
+        shape(content).opacity(isEnabled ? 1 : ControlMetrics.disabledOpacity)
+    }
+
+    @ViewBuilder private func shape(_ content: Content) -> some View {
         switch kind {
         case .circular:
             content
