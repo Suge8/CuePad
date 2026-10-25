@@ -10,7 +10,8 @@
 //   设备 → {"t":"ring"}，中转转给同房间其它连接 {"t":"ring"}
 // 心跳用 WebSocket 协议层的 ping：设备每 10 秒一次；IDLE_TIMEOUT_S 内什么都没收到的连接（设备睡了、断网、被挂起）由中转断开，不留死连接。
 //
-// 环境变量：PORT（默认 8080）；CERT、KEY 是 PEM 证书与私钥路径，给了就直接提供 TLS，不给就是明文（放在 Caddy 等反向代理后面）。
+// 环境变量：PORT（默认 8080）；HOST 是监听地址（默认所有地址，放在反向代理后面时给 127.0.0.1）；
+// CERT、KEY 是 PEM 证书与私钥路径，给了就直接提供 TLS，不给就是明文（放在 Caddy 等反向代理后面）。
 const PROTOCOL = "cuepad-relay-v1";
 const AUTH_TIMEOUT_MS = 10_000;
 const IDLE_TIMEOUT_S = 20;
@@ -33,6 +34,7 @@ async function verified(room: string, nonce: string, signature: unknown): Promis
 
 const server = Bun.serve<Peer, never>({
   port: Number(process.env.PORT ?? 8080),
+  hostname: process.env.HOST,
   tls: process.env.CERT ? { cert: Bun.file(process.env.CERT), key: Bun.file(process.env.KEY!) } : undefined,
   fetch(req, server) {
     const path = new URL(req.url).pathname;
