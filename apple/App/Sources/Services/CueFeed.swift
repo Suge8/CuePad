@@ -2,7 +2,8 @@ import CueStore
 import Foundation
 import Observation
 
-/// Cue 的现状：库里那页摘要（`CueDigest`）配上此刻与本机事实（`AppServices.observeCue`），整个 App 一份、一个订阅读一次（同 `LiveSessions`）。
+/// Cue 的现状：库里那页摘要（`CueDigest`）配上此刻（`AppServices.speech`）与本机事实（`AppServices.cueLocal`），整个 App 一份、一个订阅读一次（同 `LiveSessions`）。
+/// 读的东西不随此刻与本机事实变：库变了重读，此刻或本机事实变了把手里那份配上新的再给一次（`updates`）。
 /// Cue 那一行（`CueWatch`，每个窗口一份）与 iPhone 的小组件快照、实时活动（`startSnapshots`）都从这里取，不各自订阅、库一变各读一遍摘要；
 /// iPhone 上同一次读顺带读小组件另要的项目、默认项目与额度（`WidgetContent`，`widget`）。
 /// 第一个来读的起订阅（`AppServices.cueUpdates`），之后的共用；读失败时订阅结束、记下错误，读它的各自报出。
@@ -25,7 +26,7 @@ final class CueFeed {
     }
 
     /// 订阅读到的最近一份；还没读到为 nil。
-    private(set) var seen: Seen?
+    private(set) var read: Read?
     fileprivate(set) var failure: (any Error)?
     @ObservationIgnored fileprivate var following = false
     /// 订阅还没读到时当场读的那份：订阅从它接着读，不重读
@@ -40,30 +41,29 @@ final class CueFeed {
 
     /// 手里最新的一份（新建的窗口第一帧就是它）：订阅读到的；还没读到就当场读，读不出来为 nil（失败页盖住页面）。
     func latest() -> Read? {
-        if let seen { return seen.read }
+        if let read { return read }
         start = try? store.snapshot { [widget] in try Read.read(from: $0, widget: widget) }
         return start?.value
     }
 
-    /// 跟随资料库、此刻与本机事实，直到任务取消或读失败。
-    fileprivate func follow(_ services: AppServices) async {
+    /// 跟随资料库，直到任务取消或读失败。
+    fileprivate func follow() async {
         defer { following = false }
+        let read: @Sendable (isolated CueStore) throws -> Read = { [widget] in try Read.read(from: $0, widget: widget) }
         do {
-            for try await (read, moment, local) in services.observeCue(from: start, { [widget] in try Read.read(from: $0, widget: widget) }) {
-                seen = Seen(read: read, moment: moment, local: local)
-            }
+            for try await next in start.map({ store.observe(from: $0, read) }) ?? store.observe(read) { self.read = next }
         } catch {
             failure = error
         }
     }
 
-    /// 手里这份与之后的每一份；订阅读失败时以那个错误结束。
-    fileprivate func updates() -> AsyncThrowingStream<Seen, any Error> {
+    /// 手里这份与之后的每一份，配上此刻与本机事实；订阅读失败时以那个错误结束。
+    fileprivate func updates(_ services: AppServices) -> AsyncThrowingStream<Seen, any Error> {
         AsyncThrowingStream { continuation in
             let task = Task {
-                for await (seen, failure) in Observations({ (self.seen, self.failure) }) {
+                for await (read, moment, local, failure) in Observations({ (self.read, services.speech, services.cueLocal, self.failure) }) {
                     if let failure { return continuation.finish(throwing: failure) }
-                    if let seen { continuation.yield(seen) }
+                    if let read { continuation.yield(Seen(read: read, moment: moment, local: local)) }
                 }
                 continuation.finish()
             }
@@ -78,8 +78,8 @@ extension AppServices {
         if !cueFeed.following {
             cueFeed.following = true
             cueFeed.failure = nil
-            follow { await self.cueFeed.follow(self) }
+            follow { await self.cueFeed.follow() }
         }
-        return cueFeed.updates()
+        return cueFeed.updates(self)
     }
 }
