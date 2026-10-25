@@ -1,7 +1,7 @@
 import Foundation
 
 /// 推进中与等你：Cue 那一行、任务看板中间两列、小组件、实时活动与 Dock 角标读的同一份，只在这里算。
-/// 等你是总称：卡在你这里的都算，分两种——拍板（`waiting`，在卡上点完）与待回复（`replies`，进会话说）。"等你 N"数两种（`waitingCount`），只说拍板的地方只数 `waiting`。
+/// 等你是总称：卡在你这里的都算，分两种——拍板（`waiting`，在卡上点完）与待回复（`replies`，进会话说）。"等你 N"数两种（App 里的 `CueNow.needsYou`），只说拍板的地方只数 `waiting`。
 /// - 拍板：Cue 带选项问你、还没结束的消息（`cueMessagesWaitingForYou`），加上会话里在等你回答的（`sessionsAskingYou`，规则在 `PiSessionState.asksYou`）。
 ///   一处在等就是一件：同一件任务上 Cue 在问、它的会话也在问，算两件。每件带上它落在哪件顶层任务上（消息的 `taskID`、会话归的那件 `sessionOwners`），没落在任务上的为 nil。
 /// - 待回复：Cue 留给你回、此刻歇着的会话（`sessionsAwaitingReply`，规则在 `PiSessionState.awaitsReply`），等得最久的在前，同样带上它归的顶层任务。
@@ -46,9 +46,6 @@ public struct CueTally: Equatable, Sendable {
   /// 拍板。
   public var waiting: [Wait]
   public var replies: [Reply]
-
-  /// "等你 N"：拍板加待回复。
-  public var waitingCount: Int { waiting.count + replies.count }
 
   public var held: Set<UUID> { Set(waiting.compactMap(\.task) + replies.compactMap(\.task)) }
 

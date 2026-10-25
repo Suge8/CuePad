@@ -11,7 +11,7 @@ enum WidgetViews {
             .modifier(WidgetPaper())
     }
 
-    /// Cue：头像、名字与 Cue 此刻那一行（`CueNowLine`，同 App 里 Cue 那一行）；整块点开 Cue 页（`DeepLink.cue`）。
+    /// Cue：头像（右上角是要你管的几件）、名字与数字账（`CueLedger`，同 App 里的名牌）；整块点开 Cue 页（`DeepLink.cue`）。
     static func cue(_ now: CueNow) -> some View {
         FamilyReader { cue(now, family: $0) }
     }
@@ -48,13 +48,14 @@ private struct WidgetPaper: ViewModifier {
 private struct CueView: View {
     let now: CueNow
     let family: WidgetFamily
+    @Environment(\.palette) private var palette
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            CueNowFace(now: now, size: family == .systemSmall ? 48 : 52)
+            CueNowFace(now: now, size: family == .systemSmall ? 48 : 52, badge: true, rim: palette.desk)
             Spacer(minLength: 0)
             Text(now.name).font(.headline).lineLimit(1)
-            CueNowLine(now: now, limit: family == .systemSmall ? 3 : 6).font(.footnote)
+            CueLedger(now: now, gap: 6).font(.footnote)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

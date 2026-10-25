@@ -29,8 +29,8 @@
 - **Cue**（总控 Agent，界面上显示用户起的名字 `CueProfile.name`）；避免：管家、助手、总控
 - **做完**（任务完成，Cue 按证据自己定）；避免：收下、收尾、验收（界面、Cue 的系统提示与工具说明里）。看板列与项目页的列名写"已完成"，"做完"仍是 Cue 定完成的说法；经过与按钮写"完成"，"做完"只在 Cue 说的话里
 - **经过**（Cue 页一轮碰到的任务与会话，一处一行，`CueTrace`）的动作词与按钮同名：查看、发给、新建、修改、开始、停止、完成、留给你（`CueActivity.verb`；Cue 正在做的那一句同一套；留给你回的会话就是待回复，行首同待回复的图形）；Cue 自己的说法（开工、做完、对「X」说）只进它的上下文（`CueActivity` 头注释）；避免：看了、对…说、停下（经过里）
-- **等你** vs **拍板** vs **待回复**：等你是总称，卡在用户这里的都算（`CueStore.cueTally`），分两种——拍板（`CueTally.waiting`：Cue 的提问，与会话在问、等的不是 Cue 的，`PiSessionState.asksYou`、`CueQuestionEnd`），在 Cue 页的拍板卡（会话在问的也可在会话页）上点完，进展页只看不答、点了过去；待回复（`CueTally.replies`）进会话说。"等你 N"（看板列头、侧栏、底部那一排、角标、小组件、灵动岛）两种一起数，只说拍板的地方写明"拍板"（名牌"N 件等你拍板"、Cue 页的拍板卡）；看板等你列一件一张卡、写这件事本身的名字（同一件任务上的几件收成一张），拍板在前、待回复在后。赭黄给等你与拍板，待回复的记号是墨色；避免：待办、审批
-- **推进中** vs **等你** vs **进行中**：推进中是 Cue 此刻在做的里不在等你的（`CueBoard.active`），两个数只读 `CueStore.cueTally`，各端的现状读 Cue 此刻（`CueNow`：一颗珠子一份活，接一句）；进行中是任务自己的状态；避免：在管、在做、在跑（后两个是会话的）
+- **等你** vs **拍板** vs **待回复**：等你是总称，卡在用户这里的都算（`CueStore.cueTally`），分两种——拍板（`CueTally.waiting`：Cue 的提问，与会话在问、等的不是 Cue 的，`PiSessionState.asksYou`、`CueQuestionEnd`），在 Cue 页的拍板卡（会话在问的也可在会话页）上点完，进展页只看不答、点了过去；待回复（`CueTally.replies`）进会话说。"等你 N"（看板列头、侧栏、底部那一排、App 图标与菜单栏图标的角标、灵动岛最小态）两种一起数（`CueNow.needsYou`），只说拍板的地方写明"拍板"（数字账里的"N 拍板"、Cue 页的拍板卡）；看板等你列一件一张卡、写这件事本身的名字（同一件任务上的几件收成一张），拍板在前、待回复在后。赭黄给等你与拍板，待回复的记号是墨色；避免：待办、审批
+- **推进中** vs **等你** vs **进行中**：推进中是 Cue 此刻在做的里不在等你的（`CueBoard.active`），两个数只读 `CueStore.cueTally`，各端的现状读 Cue 此刻（`CueNow`：数字账，几件拍板、待回复、在跑、等子代理，按件数）；数字账里的「在跑」「等子代理」是推进中那件此刻的样子；进行中是任务自己的状态；避免：在管、在做（会话的）
 - **待回复**（`PiSessionState.awaitsReply`）vs **该你了**：待回复是值班的 Cue 留给你回、此刻歇着（没在问）的会话，属于等你；会话行、Cue 页拍板卡上方那条提示、看板等你列、名牌、推送都叫它，记号墨色。该你了是 Cue 不值班时歇着的会话，不算等你；避免：待处理、等你回话
 - **在场**（`SessionPresence`）：只在代码里，界面上不出现
 - **新消息**（Cue 页，`CueStore.cueUnread`）vs **有新回复**（会话的，`PiUnread`）：前者各端同步，后者只记在本机；避免：未读消息（界面上）
@@ -44,7 +44,7 @@
 - 灵感 Idea · 任务 Task · 子任务 Subtask · 正文 Notes · 项目 Project · 默认项目 Default Project · 置顶 Pin / Unpin / Pinned · 归档 Archive · 回收站 Trash · 批注 Comment（不叫 Note，免得和 Notes 混）
 - 进展 Progress · 看板 Board · 会话 Session · Agent 会话 Agent Session · 全部项目 All Projects · 工作区 Workspace · 绑定的文件夹 Linked Folder
 - Cue 的四个：Cue · 推进中 Underway · 等你 Needs You · 记忆 Memory；一直记着 Always Remember
-- 拍板 Your Call（"等你拍板" Needs Your Call）；名牌第二行、小组件、灵动岛这类一行放不下整句的地方用短形 "N for you"（"N 件等你拍板"）
+- 拍板 Your Call（"等你拍板" Needs Your Call）；数字账（名牌、小组件、灵动岛与锁屏、菜单栏面板）与侧栏进展的计数里数接小写短形：N for you（拍板）· N to reply · N running · N on subagents · N underway · N need(s) you
 - 进行中 In Progress（任务自己的状态，不与 Underway 混）· 已完成 Done（列名）· 完成 Complete（按钮）· 待回复 To Reply · 该你了 Your Turn · 新消息 New Messages · 有新回复 New Reply · 输出中 Writing…
 - 经过的动作词：查看 View · 发给 Message · 新建 New · 修改 Edit · 开始 Start · 停止 Stop · 完成 Complete · 留给你 Left for You
 - 只记下 Just Save · 对 Cue 说 Tell Cue · 运行情况 Status · 额度 Usage · 技能 Skill · 斜杠命令 Slash Command · 思考强度 Thinking · 灵动岛与锁屏 Live Activity

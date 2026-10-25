@@ -299,22 +299,6 @@
         }
       }
     },
-    "%@ 在等你" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ needs you"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ 在等你"
-          }
-        }
-      }
-    },
     "%@ 在等回答" : {
       "localizations" : {
         "en" : {
@@ -595,6 +579,22 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$@ 等 %2$lld 条"
+          }
+        }
+      }
+    },
+    "%@ 等你拍板" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ Needs Your Call"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 等你拍板"
           }
         }
       }
@@ -1278,34 +1278,6 @@
         }
       }
     },
-    "%lld 个子代理在跑" : {
-      "localizations" : {
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld subagent running"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld subagents running"
-                }
-              }
-            }
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld 个子代理在跑"
-          }
-        }
-      }
-    },
     "%lld 件" : {
       "localizations" : {
         "en" : {
@@ -1350,7 +1322,23 @@
         }
       }
     },
-    "%lld 件等你拍板" : {
+    "%lld 件待回复" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld to reply"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld 件待回复"
+          }
+        }
+      }
+    },
+    "%lld 件拍板" : {
       "localizations" : {
         "en" : {
           "variations" : {
@@ -1358,13 +1346,13 @@
               "one" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%lld for you"
+                  "value" : "%lld needs your call"
                 }
               },
               "other" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%lld for you"
+                  "value" : "%lld need your call"
                 }
               }
             }
@@ -1373,7 +1361,67 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%lld 件等你拍板"
+            "value" : "%lld 件拍板"
+          }
+        }
+      }
+    },
+    "%lld 件推进中" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld underway"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld 件推进中"
+          }
+        }
+      }
+    },
+    "%lld 件等子代理" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld on subagents"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld 件等子代理"
+          }
+        }
+      }
+    },
+    "%lld 件要你管" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld item needs you"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld items need you"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld 件要你管"
           }
         }
       }
@@ -1406,6 +1454,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld 句没送到"
+          }
+        }
+      }
+    },
+    "%lld 在跑" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld running"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld 在跑"
           }
         }
       }
@@ -1554,12 +1618,44 @@
         }
       }
     },
+    "%lld 待回复" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld to reply"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld 待回复"
+          }
+        }
+      }
+    },
+    "%lld 拍板" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld for you"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld 拍板"
+          }
+        }
+      }
+    },
     "%lld 推进中" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%lld Underway"
+            "value" : "%lld underway"
           }
         },
         "zh-Hans" : {
@@ -1857,15 +1953,43 @@
     "%lld 等你" : {
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld Needs You"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld needs you"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld need you"
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld 等你"
+          }
+        }
+      }
+    },
+    "%lld 等子代理" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld on subagents"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld 等子代理"
           }
         }
       }
@@ -8364,6 +8488,7 @@
       }
     },
     "在跑" : {
+      "comment" : "数字账里跟在数后面的短词",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -10376,6 +10501,7 @@
       }
     },
     "待回复" : {
+      "comment" : "数字账里跟在数后面的短词",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -11015,22 +11141,6 @@
         }
       }
     },
-    "拍板" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Your Call"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "拍板"
-          }
-        }
-      }
-    },
     "拍照" : {
       "localizations" : {
         "en" : {
@@ -11400,6 +11510,7 @@
       }
     },
     "推进中" : {
+      "comment" : "数字账里跟在数后面的短词",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -11427,22 +11538,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "推进中 %lld"
-          }
-        }
-      }
-    },
-    "推进中 %lld 件" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld Underway"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "推进中 %lld 件"
           }
         }
       }
@@ -15755,34 +15850,6 @@
         }
       }
     },
-    "等 %lld 个子代理交回" : {
-      "localizations" : {
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "Awaiting %lld subagent"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "Awaiting %lld subagents"
-                }
-              }
-            }
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "等 %lld 个子代理交回"
-          }
-        }
-      }
-    },
     "等 %lld 件" : {
       "localizations" : {
         "en" : {
@@ -15952,6 +16019,7 @@
       }
     },
     "等子代理" : {
+      "comment" : "数字账里跟在数后面的短词",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -19511,22 +19579,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "都不是？在下面的回复框里写你的回答"
-          }
-        }
-      }
-    },
-    "都停着" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "All idle"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "都停着"
           }
         }
       }

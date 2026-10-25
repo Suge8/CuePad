@@ -4,7 +4,8 @@ import Testing
 @testable import CuePad
 
 /// 等你分拍板与待回复（WORDS.md）：Cue 留给你回、此刻歇着的会话是待回复——Cue 页不进拍板卡、在上方的待回复提示里，等得最久的在前；
-/// 进展页的等你列两种都放（拍板在前），绑着的任务从推进中挪进等你，"等你 N"两种一起数；名牌有拍板只说拍板，没有了才说几个会话待回复（数全部，不只排得下的珠子）。
+/// 进展页的等你列两种都放（拍板在前），绑着的任务从推进中挪进等你，"等你 N"两种一起数；名牌的数字账拍板与待回复各数各的（数全部，不只列得下的那几行），
+/// "等你 N"与 App 图标角标是两者之和（`CueNow.needsYou`）。
 /// 点提示：几个时去进展页的会话段，待回复紧随等你确认、等得最久的在前；对其中一个说了话它就不再待回复，只剩一个时点了直接进那个会话。
 @MainActor
 struct AwaitingReplyTests {
@@ -45,15 +46,14 @@ struct AwaitingReplyTests {
         #expect(board.waiting.map(\.id) == ["session/deploy"] && board.replies.map(\.id) == ["reply/glass", "reply/header"])
         #expect(board.replies.first?.item?.task.id == dock.id && !board.advancing.contains { $0.item?.id == dock.id })  // 被待回复占着：只在等你
         #expect(board.held.map(\.title) == ["deploy", "底栏换玻璃", "打磨手机 Cue 顶栏"] && board.held.map(\.deciding) == [true, false, false])  // 写这件事本身的名字
-        let digest = try await CueDigest.read(from: store)
-        #expect(board.count(.waiting) == 3 && digest.waiting == 3)  // "等你 N"两种一起数
         var cue = try await now()
-        #expect(cue.headline == "1 件等你拍板" && cue.beads.prefix(3).map(\.kind) == [.asks, .reply, .reply])
+        #expect(board.count(.waiting) == 3 && cue.needsYou == 3)  // "等你 N"两种一起数，看板等你列同数
+        #expect(cue.spoken == "1 件拍板，2 件待回复" && cue.items.prefix(3).map(\.kind) == [.asks, .reply, .reply])
 
-        // 答了拍板：名牌改说待回复
+        // 答了拍板：名牌只剩待回复
         try await recorder.update(sessionID: "deploy", state: .thinking)
         cue = try await now()
-        #expect(cue.headline == "2 个会话待回复")
+        #expect(cue.yours == [CueNow.Entry(kind: .reply, count: 2)])
 
         // 几个待回复：点提示去进展页的会话段，待回复紧随等你确认（此刻没有在问的，排在最前）
         workspace.projectScope = try await store.createProject(name: "圆桌", color: "#000000").id
@@ -68,14 +68,14 @@ struct AwaitingReplyTests {
         #expect(page.replies.map(\.sessionID) == ["glass"])
         workspace.openReplies(page.replies)
         #expect(workspace.shownSession?.sessionID == "glass")
-        #expect(try await now().headline == "1 个会话待回复")
+        #expect(try await now().yours == [CueNow.Entry(kind: .reply, count: 1)])
 
-        // 多过排得下的珠子：名牌数的是全部
+        // 多过列得下的行：数字账与角标数的是全部
         for index in 1...8 {
             try await settle("more-\(index)", "会话 \(index)", minutesAgo: Double(index))
             _ = try await store.leaveToYou("more-\(index)")
         }
         cue = try await now()
-        #expect(cue.beads.count == CueNow.beadLimit && cue.headline == "9 个会话待回复")
+        #expect(cue.items.count == CueNow.itemLimit && cue.yours == [CueNow.Entry(kind: .reply, count: 9)] && cue.needsYou == 9)
     }
 }

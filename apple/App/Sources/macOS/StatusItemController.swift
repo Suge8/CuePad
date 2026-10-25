@@ -1,7 +1,8 @@
 #if os(macOS)
 import AppKit
 
-/// 菜单栏图标（`Icon.menuBar`，同 logo 的墨块符号）。图标是模板图，随菜单栏明暗自动着色；没有状态，一直是这一个形。
+/// 菜单栏图标（`Icon.menuBar`，同 logo 的墨块符号）。图标是模板图，随菜单栏明暗自动着色，形一直不变；
+/// 有要你管的（拍板加待回复，`CueNow.needsYou`，同 Dock 角标与名牌）时图标右边写几件，没有不写（`show(badge:)`，`AppDelegate` 接的）。
 /// 左键弹出面板；右键（或 Control 点击）弹出菜单。
 final class StatusItemController: NSObject {
     private let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -24,6 +25,16 @@ final class StatusItemController: NSObject {
         button.target = self
         button.action = #selector(clicked)
         button.sendAction(on: [.leftMouseUp, .rightMouseUp])
+    }
+
+    /// 菜单栏的字随菜单栏明暗着色，不另上色：数字跟在图标右边、与图标同一条中线。
+    func show(badge count: Int) {
+        guard let button = item.button else { return }
+        button.imagePosition = count > 0 ? .imageLeading : .imageOnly
+        button.attributedTitle = count > 0
+            ? NSAttributedString(string: "\(count)", attributes: [.font: NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .semibold)])
+            : NSAttributedString()
+        button.setAccessibilityValue(count > 0 ? String(localized: "\(count) 件要你管") : nil)
     }
 
     func remove() {

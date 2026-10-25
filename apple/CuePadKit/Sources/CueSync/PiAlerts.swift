@@ -48,14 +48,14 @@ public enum PiAlertText {
     return content(title: title, question: question, reply: fields["lastReply"] as? String, kind: kind)
   }
 
-  /// 等你：标题"会话名 在等你"，正文是问题首行；没有问题时是它最后那句回答的首行；都没有写String(localized: "去看看它在问什么")。
-  /// 待回复（Cue 把歇着的它留给你回）：标题"会话名 待回复"，正文是它最后那句回答的首行，没有写String(localized: "去看看它说了什么")。
-  /// 完成：标题会话名，正文String(localized: "完成了")。
+  /// 等你：标题"会话名 等你拍板"（同名牌数字账的叫法），正文是问题首行；没有问题时是它最后那句回答的首行；都没有写"去看看它在问什么"。
+  /// 待回复（Cue 把歇着的它留给你回）：标题"会话名 待回复"，正文是它最后那句回答的首行，没有写"去看看它说了什么"。
+  /// 完成：标题会话名，正文"完成了"。
   public static func content(title: String, question: String?, reply: String?, kind: PiAlert) -> (title: String, body: String) {
     switch kind {
     case .waitingForUser:
       let first = [question, reply].lazy.compactMap { $0.flatMap(\.firstLine) }.first
-      return (String(localized: "\(title) 在等你"), first ?? String(localized: "去看看它在问什么"))
+      return (String(localized: "\(title) 等你拍板"), first ?? String(localized: "去看看它在问什么"))
     case .awaitsReply:
       return (String(localized: "\(title) 待回复"), reply.flatMap(\.firstLine) ?? String(localized: "去看看它说了什么"))
     case .settled:

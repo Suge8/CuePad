@@ -18,6 +18,8 @@ extension RelayFlight {
         private static let ripple = 0.14
         private static let depart = 0.58
         private static let reception = 0.82
+        /// 接住时落点外那圈淡光的半径。
+        private static let halo: CGFloat = 11
         private static let avatar = 0.78
         private static let easeOut = CAMediaTimingFunction(controlPoints: 0.16, 1, 0.3, 1)
 
@@ -41,7 +43,7 @@ extension RelayFlight {
             depart(at: CGPoint(x: host.bounds.midX, y: host.bounds.midY), in: pad, delay: delay, fills: true, started: started)
         }
 
-        /// 起飞时只漾一圈；接住时珠心先亮、停住，再随外圈淡下去。只叠画光，不改珠子本身的视图与布局。
+        /// 起飞时只漾一圈；接住时心先亮、停住，再随外圈淡下去。只叠画光，不改落点本身的视图与布局。
         func depart(at point: CGPoint, in parent: CALayer? = nil, delay: Double, fills: Bool = false, started: (@MainActor () -> Void)? = nil) {
             animate(circle(at: point, radius: 6, line: 1.5, glows: true, in: parent), delay: delay, duration: Self.depart,
                     timing: Self.easeOut, started: started, [
@@ -52,7 +54,7 @@ extension RelayFlight {
                     Self.keyframes("opacity", [0, 1, 1, 0], times: [0, 0.1, 0.42, 1]),
                     Self.keyframes("transform.scale", [0.9, 1.25, 1, 1], times: [0, 0.18, 0.42, 1]),
                 ])
-                animate(circle(at: point, radius: BeadHalo.radius, fill: 0.18, in: parent), delay: delay, duration: Self.reception, [Self.hold()])
+                animate(circle(at: point, radius: Self.halo, fill: 0.18, in: parent), delay: delay, duration: Self.reception, [Self.hold()])
             }
         }
 
@@ -147,7 +149,7 @@ extension RelayFlight {
             return layer
         }
 
-        /// 叫醒落下：头像的环亮起（带一圈光晕），停一下再外扩到 1.6 倍淡去；稍后一圈细的涟漪扩得更远。不盖住它的脸。
+        /// 叫醒落下：头像外一圈光亮起（带光晕），停一下再外扩到 1.6 倍淡去；稍后一圈细的涟漪扩得更远。不盖住它的脸。
         func land(on target: CGRect, delay: Double) {
             let (radius, line) = Self.ring(of: target)
             animate(circle(at: target.center, radius: radius, line: line, glows: true), delay: delay, duration: Self.avatar, [
@@ -159,7 +161,7 @@ extension RelayFlight {
             ])
         }
 
-        /// 交给发出：头像的环亮一下（带光晕），外扩到 1.25 倍淡去；比叫醒落下的那一下短、扩得近——发出是一拍，接住才漾开。
+        /// 交给发出：头像外那圈光亮一下（带光晕），外扩到 1.25 倍淡去；比叫醒落下的那一下短、扩得近——发出是一拍，接住才漾开。
         func send(from source: CGRect) {
             let (radius, line) = Self.ring(of: source)
             animate(circle(at: source.center, radius: radius, line: line, glows: true), delay: 0, duration: 0.6, [
@@ -168,7 +170,7 @@ extension RelayFlight {
             ])
         }
 
-        /// 减弱动态效果：头像的环原地淡入高亮再淡出。
+        /// 减弱动态效果：头像外那圈光原地淡入高亮再淡出。
         func glow(ring target: CGRect) {
             let (radius, line) = Self.ring(of: target)
             animate(circle(at: target.center, radius: radius, line: line, glows: true), delay: 0, duration: 1, [Self.hold()])
@@ -183,7 +185,7 @@ extension RelayFlight {
             keyframes("opacity", [0, 1, 1, 0], times: [0, 0.2, 0.55, 1], timing: CAMediaTimingFunction(name: .easeInEaseOut))
         }
 
-        /// 头像外那圈环的半径与线宽（`CueAvatar`：环宽约是外框的 7%）。
+        /// 头像外那圈光的半径与线宽（贴着头像的圆边，线宽约是边长的 7%）。
         private static func ring(of target: CGRect) -> (radius: CGFloat, line: CGFloat) {
             let side = min(target.width, target.height)
             let line = max(1.5, side * 0.07)

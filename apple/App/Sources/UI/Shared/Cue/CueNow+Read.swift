@@ -13,13 +13,18 @@ nonisolated extension CueNow {
 
     init(_ digest: CueDigest, at moment: Speech.Moment, local: Local) {
         let presence = CuePresence.derive(digest, at: moment)
-        let beads = Self.beads(digest, at: moment.now)
+        let items = Self.items(digest, at: moment.now)
         let host = digest.hostName ?? MacAgents.unnamed
+        let tally = Tally(
+            asks: items.count { $0.kind == .asks }, reply: items.count { $0.kind == .reply },
+            running: items.count { $0.kind == .running }, delegating: items.count { $0.kind == .delegating })
         self.init(
-            name: digest.name, mood: digest.mood(at: moment),
-            restingMood: CueMood.of(.idle, waiting: digest.waiting, justDone: digest.lastSaidDone),
+            // 头像此刻的表情（不算你正在写）与歇下来时的那一个：有没有等你只看 `needsYou` 那一个数
+            name: digest.name, mood: CueMood.of(presence, waiting: tally.needsYou, justDone: digest.lastSaidDone),
+            restingMood: CueMood.of(.idle, waiting: tally.needsYou, justDone: digest.lastSaidDone),
             cue: Self.brain(presence, digest: digest, local: local, at: moment.now),
-            beads: Array(beads.prefix(Self.beadLimit)), hidden: max(beads.count - Self.beadLimit, 0), counts: Counts(beads), advancing: digest.advancing,
+            tally: tally,
+            advancing: digest.advancing, items: Array(items.prefix(Self.itemLimit)),
             first: digest.tally.waiting.first.map { Self.wait($0, name: digest.name) }, at: moment.now,
             elsewhere: digest.enabled && local.here != nil && digest.hostID != local.here ? String(localized: "在「\(host)」上运行") : nil)
     }
@@ -41,29 +46,28 @@ nonisolated extension CueNow {
     }
 
     /// 拍板的每一件、待回复的每个会话、推进中的每一件、刚做完的每一件，按这个先后（同一种里照摘要的先后）。
-    private static func beads(_ digest: CueDigest, at now: Date) -> [Bead] {
+    private static func items(_ digest: CueDigest, at now: Date) -> [Item] {
         let asks = digest.tally.waiting.map { wait in
             switch wait {
             case .message(let message, _):
-                Bead(id: wait.id, kind: .asks, name: message.asking?.action ?? message.headline ?? String(localized: "\(digest.name) 在等你"), since: message.createdAt,
-                     subagents: 0, sessions: [])
+                Item(id: wait.id, kind: .asks, name: message.asking?.action ?? message.headline ?? String(localized: "\(digest.name) 等你拍板"), since: message.createdAt, subagents: 0)
             case .session(let state, _):
-                Bead(id: wait.id, kind: .asks, name: title(state), since: state.stateSince, subagents: 0, sessions: [state.sessionID])
+                Item(id: wait.id, kind: .asks, name: title(state), since: state.stateSince, subagents: 0)
             }
         }
         let replies = digest.tally.replies.map { reply in
-            Bead(id: reply.id, kind: .reply, name: title(reply.session), since: reply.session.stateSince, subagents: 0, sessions: [reply.session.sessionID])
+            Item(id: reply.id, kind: .reply, name: title(reply.session), since: reply.session.stateSince, subagents: 0)
         }
-        let works = digest.tally.advancing.map(bead)
+        let works = digest.tally.advancing.map(item)
         let done = digest.done.compactMap { task in
-            task.completedAt.map { Bead(id: "done/\(task.id.uuidString)", kind: .done, name: task.title, since: $0, subagents: 0, sessions: []) }
+            task.completedAt.map { Item(id: "done/\(task.id.uuidString)", kind: .done, name: task.title, since: $0, subagents: 0) }
         }.filter { $0.isFresh(at: now) }
-        return Bead.Kind.allCases.flatMap { kind in (asks + replies + works + done).filter { $0.kind == kind } }
+        return Item.Kind.allCases.flatMap { kind in (asks + replies + works + done).filter { $0.kind == kind } }
     }
 
     /// 推进中的一件：有会话在跑（在想、用工具、压缩，或正在开、话正送进去）是在跑，从最早在跑的那一轮起算；
     /// 否则有会话在等子代理是等交回，数它们在跑的子代理；再否则歇着。
-    private static func bead(_ work: CueWork) -> Bead {
+    private static func item(_ work: CueWork) -> Item {
         let sessions: [PiSessionState], name: String, pending: Bool, settledSince: Date
         switch work {
         case .task(let item):
@@ -77,19 +81,18 @@ nonisolated extension CueNow {
             pending = false
             settledSince = state.stateSince
         }
-        let ids = sessions.map(\.sessionID)
         let running = sessions.filter { $0.state.isWorking && $0.state != .known(.delegating) }
         if pending || !running.isEmpty {
             let since = running.map { $0.busySince ?? $0.stateSince }.min() ?? settledSince
-            return Bead(id: work.id, kind: .running, name: name, since: since, subagents: 0, sessions: ids)
+            return Item(id: work.id, kind: .running, name: name, since: since, subagents: 0)
         }
         let delegating = sessions.filter { $0.state == .known(.delegating) }
         if !delegating.isEmpty {
-            return Bead(
+            return Item(
                 id: work.id, kind: .delegating, name: name, since: delegating.map(\.stateSince).min() ?? settledSince,
-                subagents: delegating.reduce(0) { $0 + $1.subagents.count(where: \.isRunning) }, sessions: ids)
+                subagents: delegating.reduce(0) { $0 + $1.subagents.count(where: \.isRunning) })
         }
-        return Bead(id: work.id, kind: .resting, name: name, since: sessions.map(\.stateSince).max() ?? settledSince, subagents: 0, sessions: ids)
+        return Item(id: work.id, kind: .resting, name: name, since: sessions.map(\.stateSince).max() ?? settledSince, subagents: 0)
     }
 
     private static func title(_ state: PiSessionState) -> String { state.title.isEmpty ? String(localized: "会话") : state.title }
@@ -100,7 +103,7 @@ nonisolated extension CueNow {
         switch wait {
         case .message(let message, _):
             return Wait(
-                title: message.headline ?? String(localized: "\(name) 在等你"),
+                title: message.headline ?? String(localized: "\(name) 等你拍板"),
                 detail: message.asking?.why,
                 open: DeepLink.cue.url,
                 allow: message.choices?.first.map { Allow(message: message.id, choice: $0) })

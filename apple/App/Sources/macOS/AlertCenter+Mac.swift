@@ -40,20 +40,5 @@ extension AlertCenter: CueNotifying {
             .map(\.request.identifier)
         if !shown.isEmpty { center.removeDeliveredNotifications(withIdentifiers: shown) }
     }
-
-    /// Dock 角标 = "等你"的总数（拍板加待回复）；没有通知权限时不设（经通知中心设，受系统"标记"开关控制）。
-    func showBadge(_ count: Int) async {
-        badge = count
-        await showBadge()
-    }
-
-    func showBadge() async {
-        guard delivers, isAuthorized else { return }
-        do {
-            try await UNUserNotificationCenter.current().setBadgeCount(badge)
-        } catch {
-            AppServices.log.error("Dock 角标没能更新：\(String(describing: error), privacy: .public)")
-        }
-    }
 }
 #endif

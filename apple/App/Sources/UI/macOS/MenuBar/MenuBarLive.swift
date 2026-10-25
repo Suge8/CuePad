@@ -2,12 +2,12 @@
 import CueStore
 import SwiftUI
 
-/// 菜单栏面板（`MenuBarPad`）里"在做"那一块：区头写"在做"与在跑的计数（`LiveWorkCount`），下面是此刻在做的会话（`Workspace.liveWork`，要你注意的在前，
+/// 菜单栏面板（`MenuBarPad`）里"在做"那一块：区头只写"在做"（几件在推进按件数写在面板顶上的数字账 `CueLedger`，不另按会话数一遍），下面是此刻在做的会话（`Workspace.liveWork`，要你注意的在前，
 /// 行同会话列表 `PiSessionRow` 的紧凑样子）。先列 `limit` 个（面板只是一瞥），多出的收成末尾一行"还有 N 个"，点开就地列全、末行换成"收起"——
 /// 看全在原地，不用跳去主窗口；点会话在主窗口里打开它的整页（读与回复在主窗口）。放不下时在里面滚（`HugHeight`）。
 /// 手机、iPad 上进行中的会话在进展页的会话段。
 struct MenuBarLive: View {
-    let work: LiveWork
+    let rows: [PiSessionState]
     let open: (Route) -> Void
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -20,12 +20,7 @@ struct MenuBarLive: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Self.spacing) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text("在做").font(Typography.label).foregroundStyle(palette.ink3).accessibilityAddTraits(.isHeader)
-                Spacer(minLength: 8)
-                LiveWorkCount(work: work)
-            }
-            .accessibilityElement(children: .combine)
+            Text("在做").font(Typography.label).foregroundStyle(palette.ink3).accessibilityAddTraits(.isHeader)
             HugHeight {
                 ScrollView { sessions }.scrollBounceBehavior(.basedOnSize)
             }
@@ -33,8 +28,8 @@ struct MenuBarLive: View {
     }
 
     private var sessions: some View {
-        let hidden = max(work.rows.count - Self.limit, 0)
-        let shown = hidden > 0 && !showsAll ? Array(work.rows.prefix(Self.limit)) : work.rows
+        let hidden = max(rows.count - Self.limit, 0)
+        let shown = hidden > 0 && !showsAll ? Array(rows.prefix(Self.limit)) : rows
         // 在线的按会话 id 区分：状态变化时那一行不被重建
         return VStack(alignment: .leading, spacing: Self.spacing) {
             ForEach(shown) { row($0) }
@@ -80,30 +75,6 @@ private struct LiveMoreFold: View {
         .buttonStyle(PressStyle())
         .accessibilityLabel(expanded ? "收起" : "还有 \(hidden) 个会话")
         .accessibilityExpanded(expanded)
-    }
-}
-
-/// 区头右边的计数，只写在跑的："2 个在跑 · 2 个子代理"；只有子代理在跑时写"2 个子代理在跑"，都停着写"都停着"。
-/// 数字本身就是全部：报不出子代理的那几家不在里面，不另作说明；列了几行不在这里重复（多出的那一行写"还有 N 个"）。
-private struct LiveWorkCount: View {
-    let work: LiveWork
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        Text(text)
-            .font(Typography.meta.monospacedDigit()).foregroundStyle(palette.ink3).lineLimit(1)
-            .contentTransition(.numericText())
-            .animation(HandOff.quick, value: work.running)
-            .animation(HandOff.quick, value: work.subagents)
-    }
-
-    private var text: Dotted {
-        switch (work.running, work.subagents) {
-        case (0, 0): Dotted(String(localized: "都停着"))
-        case (0, let agents): Dotted(String(localized: "\(agents) 个子代理在跑"))
-        case (let sessions, 0): Dotted(String(localized: "\(sessions) 个在跑"))
-        case (let sessions, let agents): Dotted(String(localized: "\(sessions) 个在跑"), String(localized: "\(agents) 个子代理"))
-        }
     }
 }
 
