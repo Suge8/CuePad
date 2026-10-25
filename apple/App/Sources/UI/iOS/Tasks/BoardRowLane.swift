@@ -8,7 +8,7 @@ import SwiftUI
 /// 行没有底（`BoardLane`）：分组靠留白与行头。
 /// 行多高由 `PhoneBoard` 按屏高给，卡多卡少、有没有都不改；这里只答最小高：待办、推进中叠两排、等你与已完成一排的最小格（`BoardRowMetrics`，随动态字体放大），
 /// 不低于行头玻璃（名字总写全）。给得比最小高多时格跟着长高，长到再叠得下一排最小格就多叠一排（`adaptive`）；卡铺满格，按列填（读的顺序不变）。
-/// 空行是一格铺满整行高的虚线框。卡上标题小一档、可折两行，推进中下面是线与状态词，等你是抬头、三行问句、选项或回答框（不铺满格，靠上）。
+/// 空行是一格铺满整行高的虚线框。卡上标题小一档、可折两行，推进中下面是线与状态词，等你的拍板卡是眉题、三行问句、怎么答（压在卡底），待回复两张叠一格。
 /// 行里的卡在懒加载的横排里，只建看得见的几张。
 /// 添加任务那一行（`above`）横贯这一行、在卡的上面，不挤进格子里（格子窄，选项目的胶囊会被截）；它占的高另加在最小高上，卡的格不变矮。添加时这一行先滑回行首。
 struct BoardRowLane<Above: View, Content: View>: View {
@@ -49,7 +49,7 @@ struct BoardRowLane<Above: View, Content: View>: View {
         return ScrollViewReader { proxy in
             ScrollView(.horizontal) {
                 LazyHGrid(rows: [tier], spacing: BoardRowMetrics.gap) {
-                    // Group 把格子的框分给里面的每一张卡：卡、空格与"更早做完的"铺满格，等你靠上
+                    // Group 把格子的框分给里面的每一张卡：卡、空格与"更早做完的"铺满格，待回复叠的那一格靠上
                     Group { content }
                         .containerRelativeFrame(.horizontal) { width, _ in (width * cellWidth).rounded() }
                         .frame(maxHeight: .infinity, alignment: .top)
@@ -102,7 +102,7 @@ enum BoardRowMetrics {
     static let taskHeight: CGFloat = 60
     /// 推进中一格最矮：两行标题，下面是线与状态词。
     static let advancingHeight: CGFloat = 76
-    /// 等你一格最矮：抬头、三行问句加依据、回答框（实测最高的一件）。
+    /// 等你一格最矮：眉题、三行问句加说明、回答框（实测最高的一件）。
     static let waitHeight: CGFloat = 176
     static let questionLines = 3
     /// 一格占可见宽：一张半，下一张露出一半。

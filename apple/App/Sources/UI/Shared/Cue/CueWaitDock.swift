@@ -174,7 +174,7 @@ struct CueWaitDock: View {
     }
 
     private func eyebrow(_ wait: TaskBoard.Wait) -> some View {
-        CueWaitEyebrow(wait: wait, index: index(of: wait), count: max(waiting.count, 1)) { step(from: wait, by: $0) }
+        CueWaitEyebrow(wait: wait, place: .dock(index: index(of: wait), count: max(waiting.count, 1)) { step(from: wait, by: $0) })
             .padding(.top, Self.edge)
     }
 

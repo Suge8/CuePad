@@ -1,7 +1,7 @@
 import CueStore
 import SwiftUI
 
-/// 一件等你怎么答，答法只在这里：进展页等你列的卡（`BoardWaitCard`）、Cue 页等你卡（`CueWaitDock`）与会话页的问题卡（`QuestionCard`）共用。按问题的种类给：
+/// 一件拍板怎么答，答法只在这里：进展页等你列的卡（`BoardWaitCard`）、Cue 页拍板卡（`CueWaitDock`）与会话页的问题卡（`QuestionCard`）共用，各处一样大。按问题的种类给：
 /// - Cue 的提问：它的选项（`CueChoices`），"可以"是全件唯一的靛青；
 /// - 会话的选择题：每个选项一颗胶囊，靠右、放不下换行（`ChipFlow`），长选项折行写全——选项不写进问句，也不给自由回答框（会话页上允许自己写的，提示在底下回复框里写）；
 /// - 确认题："否 / 是"两颗普通胶囊：确认的常是部署、覆盖这类撤不回的事，不用主色推着人点"是"；
@@ -12,8 +12,6 @@ import SwiftUI
 /// 同步到不了 Mac 时不让答、写明去哪答。Mac 的会话页上选择题按 1–9 直接作答（键帽在胶囊里）。
 struct WaitAnswer: View {
     let wait: CueTally.Wait
-    /// 小一档（等你列）：胶囊紧凑，"以后……不用问"收成"以后不用问"
-    var compact = false
     /// 回复框在页上别处（会话页）
     var replyElsewhere = false
     /// 发给这个会话的投送请求（会话页给全的）；不给时读在线会话收到的最近一条（`LiveSessions.deliveries`）
@@ -25,7 +23,7 @@ struct WaitAnswer: View {
     var body: some View {
         switch wait {
         case .message(let message, _):
-            CueChoices(options: message.choices ?? [], disabled: ending, compact: compact) { choice in
+            CueChoices(options: message.choices ?? [], disabled: ending) { choice in
                 ending = true
                 workspace.attempt {
                     defer { ending = false }
@@ -33,7 +31,7 @@ struct WaitAnswer: View {
                 }
             }
         case .session(let session, _):
-            SessionAnswer(session: session, compact: compact, replyElsewhere: replyElsewhere, deliveries: deliveries)
+            SessionAnswer(session: session, replyElsewhere: replyElsewhere, deliveries: deliveries)
         }
     }
 }
@@ -41,7 +39,6 @@ struct WaitAnswer: View {
 /// 会话在问的怎么答（`WaitAnswer`）：作答请求到哪了只在这里跟。
 private struct SessionAnswer: View {
     let session: PiSessionState
-    let compact: Bool
     let replyElsewhere: Bool
     let deliveries: [DeliveryRequest]?
     @Environment(Workspace.self) private var workspace
@@ -95,7 +92,7 @@ private struct SessionAnswer: View {
             if !replyElsewhere {
                 chips {
                     Button("打开会话") { workspace.openSession(session.id, sessionID: session.sessionID) }
-                        .buttonStyle(ControlButtonStyle(kind: .secondary, compact: compact))
+                        .buttonStyle(ControlButtonStyle(kind: .secondary))
                 }
             }
         }
@@ -154,7 +151,7 @@ private struct SessionAnswer: View {
             }
             .frame(minWidth: Self.minWidth)
         }
-        .buttonStyle(ControlButtonStyle(kind: .secondary, compact: compact))
+        .buttonStyle(ControlButtonStyle(kind: .secondary))
         .accessibilityLabel(busy ? "\(value.label)，送达中" : value.label)
     }
 

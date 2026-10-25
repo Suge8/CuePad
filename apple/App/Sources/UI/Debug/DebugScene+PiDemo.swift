@@ -77,9 +77,12 @@ extension DebugScene {
             try? await store.writePiTranscript(PiTranscript(sessionID: id, messages: [], recap: recap))
             try? await recorder.end(sessionID: id)
         }
+        // 在问的从几分钟前问起（等了多久从进入这一态算，不给就是写入这一刻："1 秒"）
+        let asked: [String: TimeInterval] = ["deploy": 21, "rename": 14, "homepage": 9, "notes-edit": 4]
         for (id, state, detail, name, recap) in sessions {
             _ = try? await recorder.update(
                 sessionID: id, state: state, detail: detail, title: id, directory: id, projectID: name.flatMap(project), question: recap.question,
+                times: asked[id].map { PiTimes(stateSince: .now.addingTimeInterval(-$0 * 60), busySince: nil) },
                 modelState: demoModels(for: demoAgents[id]), context: demoContexts[id] ?? PiContextUsage(tokens: 12_000, window: 200_000), commands: demoCommands,
                 agent: demoAgents[id])
             try? await store.writePiTranscript(PiTranscript(

@@ -1,93 +1,34 @@
 import CueStore
 import SwiftUI
 
-/// 等你列里拍板的一件（待回复是 `BoardReplyCard`），排版只在这一个视图里（不包卡片，像 Cue 页里对你说的一句）。从上到下：
-/// - 抬头一行：项目小图形（看全部项目时；选了项目范围不画；Mac 上悬停是项目联动，`BoardProjectGlyph`）、哪件事（`TaskBoard.Wait.title`；
-///   做完了还在问的也照常写、不划线），右边是等了多久（`TaskBoard.Wait.since`）。谁在问不写在这里，只靠头像。点抬头去回答的地方（`BoardLink`）：
-///   会话在问的进会话，Cue 问的去 Cue 页那条提问。
-/// - 谁在问贴在左下（Cue 的头像，会话在问的是圆里这家 Agent 的品牌标，同推进中的会话卡，`WaitAsker`），旁边一颗 Cue 页同款的气泡（`cueBubble`，看板上是纯白）：
-///   问句（`TaskBoard.Wait.asked`）；Cue 的提问下一行是它依据的规矩与范围（"推送代码前先问你 · 圆桌"，小一号、最淡的墨），会话的是问题的说明（选项不写进来）。
-/// - 气泡下方是怎么答（`WaitAnswer`，按问题种类给，靠右）；回答框左边让出头像那一格。
+/// 等你列里拍板的一件（待回复是 `BoardReplyCard`）：和 Cue 页的拍板卡同一套写法，一件一张纸（`paper`，同看板别的卡）。从上到下：
+/// 眉题（`CueWaitEyebrow` 的 `board`：项目、哪件事，点了去任务或会话，等了多久）、问句（`CueWaitQuestion`，正文字号；规矩那一类引他的原话）、
+/// 怎么答（`WaitAnswer`，主动作靠右下角）。不带图：Cue 点名的图在 Cue 页那一问里看（点眉题过去，或 Cue 页本来就开着它）。
+/// Mac 上照看板卡的语法，项目名与等了多久在悬停提示里。手机竖版看板里卡铺满格，怎么答压在卡底。
 struct BoardWaitCard: View {
     let wait: TaskBoard.Wait
     @Environment(Workspace.self) private var workspace
-    @Environment(\.palette) private var palette
+    @Environment(\.boardRow) private var row
 
     var body: some View {
         VStack(alignment: .leading, spacing: Self.gap) {
-            header.padding(.horizontal, Self.headerInset)
-            HStack(alignment: .bottom, spacing: Self.whoGap) {
-                WaitAsker(wait: wait.wait, size: Self.who, ringed: true).frame(width: Self.who)
-                bubble
-            }
-            WaitAnswer(wait: wait.wait, compact: true).padding(.leading, replies ? Self.who + Self.whoGap : 0)
+            CueWaitEyebrow(wait: wait, place: .board)
+            CueWaitQuestion(wait: wait, dense: true)
+            if row { Spacer(minLength: 0) }
+            WaitAnswer(wait: wait.wait).padding(.top, Self.gap)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        // 不包卡片，件与件之间靠多留的这一截空分开
-        .padding(.bottom, Self.apart)
+        .padding(.horizontal, TaskMetrics.cardPadding).padding(.vertical, Self.vertical)
+        .frame(maxWidth: .infinity, maxHeight: row ? .infinity : nil, alignment: .topLeading)
+        .paper(radius: TaskMetrics.cardRadius)
+        #if os(macOS)
+        .help(Dotted(workspace.catalog?.project(wait.shownProject)?.name, PiClock.Waited(since: wait.since).format(.now)).visible)
+        #endif
         .boardDim(project: wait.project)
     }
 
-    /// 答法是回答框（文字题）：它左边让出头像那一格，选项靠右不让。
-    private var replies: Bool {
-        guard case .session(let session, _) = wait.wait else { return false }
-        return session.answerableQuestion?.kind.known == .text
-    }
-
-    private var bubble: some View {
-        let asked = wait.asked
-        return VStack(alignment: .leading, spacing: 3) {
-            Text(CueQuestionLine.keepingTail(asked.line)).font(Self.questionFont).foregroundStyle(palette.ink)
-            switch wait.wait {
-            case .message(let message, _):
-                if let basis = workspace.waitBasis(of: message) { Text(basis).font(Self.basisFont).foregroundStyle(palette.ink3) }
-            case .session:
-                if let detail = asked.detail { Text(detail).font(TaskMetrics.caption).foregroundStyle(palette.ink2) }
-            }
-        }
-        .fixedSize(horizontal: false, vertical: true)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .cueBubble(joined: false, onLane: true)
-    }
-
-    private var header: some View {
-        BoardLink(to: destination) {
-            HStack(spacing: 6) {
-                if workspace.scopedProject == nil, let project = workspace.catalog?.project(wait.project) {
-                    BoardProjectGlyph(project: project)
-                }
-                Text(wait.title(cue: workspace.cue.name)).foregroundStyle(palette.ink2).lineLimit(1)
-                Spacer(minLength: 8)
-                LiveText(style: PiClock.Elapsed(since: wait.since)).monospacedDigit().foregroundStyle(palette.ink3)
-            }
-            .font(TaskMetrics.caption)
-        }
-    }
-
-    private var destination: BoardDestination {
-        switch wait.wait {
-        case .message(let message, _): .question(message.id)
-        case .session(let session, _): .session(session)
-        }
-    }
-
-    /// 抬头、气泡、操作之间。
-    private static let gap: CGFloat = 8
-    /// 抬头的字对着气泡圆角里的字，往里让一点。
-    private static let headerInset: CGFloat = 4
-    /// 件与件之间比列里的行距多留的空。
-    private static let apart: CGFloat = 6
-    /// 谁在问那一格多宽、离气泡多远。
-    private static let whoGap: CGFloat = 8
-    #if os(macOS)
-    private static let who: CGFloat = 22
-    private static let questionFont = Typography.body.weight(.medium)
-    private static let basisFont = Typography.caption2
-    #else
-    private static let who: CGFloat = 28
-    private static let questionFont = Font.body.weight(.medium)
-    private static let basisFont = Font.caption
-    #endif
+    /// 眉题、问句、怎么答之间。
+    private static let gap: CGFloat = 6
+    private static let vertical: CGFloat = 8
 }
 
 /// 等你卡上回答会话的一行：草稿就是会话页回复框那一份（`AppSettings.replyDraft`，两处写的是同一句），发出同会话页的作答

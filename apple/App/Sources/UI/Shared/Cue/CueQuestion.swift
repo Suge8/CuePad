@@ -68,15 +68,12 @@ extension CueQuestionLine where Below == EmptyView {
 }
 
 /// Cue 一问的选项，一行排完：第一项"可以"是按字宽的实底主按钮（全卡唯一的靛青）靠右，其余（"以后……不用问"）是同一行左边的小字链接：
-/// 一问的主动作只有"可以"，放宽规矩是顺手的事，不和它抢。等你的答法（`WaitAnswer`）与全屏预览的底栏共用；会话的选项胶囊同样靠右（`WaitAnswer`）。
+/// 一问的主动作只有"可以"，放宽规矩是顺手的事，不和它抢。拍板的答法（`WaitAnswer`：Cue 页与进展页的拍板卡）与全屏预览的底栏共用；会话的选项胶囊同样靠右（`WaitAnswer`）。
 /// 主按钮总在右下角同一处，不随卡宽铺开，不窄过 `onceWidth`；链接长了在左边折行。辅助功能字号时竖排：按钮在上、链接在下，都靠右。
 /// Cue 停用着答不了时（`CueSession.canHear`）写"启用 Cue 后再答"在左边链接的位置；只留"可以"、降成次级并停用，不和启用那颗主按钮抢（同屏只一个主动作），启用后恢复。
-/// 进展页等你列小一档（`compact`），地方窄，选项照旧是一排靠右的胶囊。
 struct CueChoices: View {
     let options: [String]
     var disabled = false
-    /// 小一档（进展页等你列）：胶囊紧凑、靠右能换行，"以后……不用问"收成"以后不用问"（范围在依据那一行）；答的仍是原文
-    var compact = false
     let pick: (String) -> Void
     @Environment(Workspace.self) private var workspace
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -95,23 +92,7 @@ struct CueChoices: View {
         let cue = workspace.cue, paused = !cue.canHear
         let once = options.first ?? CueAsk.once, others = paused ? [] : Array(options.dropFirst()), hint = paused ? "启用 \(cue.name) 后再答" : nil
         let main: ControlButtonStyle.Kind = paused ? .secondary : .primary
-        if compact {
-            VStack(alignment: .trailing, spacing: 4) {
-                ChipFlow {
-                    ForEach(others, id: \.self) { button($0, label: Self.short($0), kind: .secondary).lineLimit(1) }
-                    button(once, kind: main, paused: paused).lineLimit(1)
-                }
-                if let hint { note(hint) }
-            }
-            .frame(maxWidth: .infinity, alignment: .trailing)
-        } else {
-            full(once: once, others: others, hint: hint, main: main, paused: paused)
-        }
-    }
-
-    /// "以后……不用问"收成"以后不用问"。
-    private static func short(_ option: String) -> String {
-        option.hasPrefix("以后") && option.hasSuffix("不用问") ? "以后不用问" : option
+        full(once: once, others: others, hint: hint, main: main, paused: paused)
     }
 
     @ViewBuilder private func full(once: String, others: [String], hint: String?, main: ControlButtonStyle.Kind, paused: Bool) -> some View {
@@ -154,13 +135,13 @@ struct CueChoices: View {
     }
 
     private func button(
-        _ option: String, label: String? = nil, kind: ControlButtonStyle.Kind, minWidth: CGFloat = 0, paused: Bool = false
+        _ option: String, kind: ControlButtonStyle.Kind, minWidth: CGFloat = 0, paused: Bool = false
     ) -> some View {
         Button { pick(option) } label: {
-            Text(label ?? option).multilineTextAlignment(.center)
+            Text(option).multilineTextAlignment(.center)
                 .frame(minWidth: max(0, minWidth - Self.inset))
         }
-        .buttonStyle(ControlButtonStyle(kind: kind, compact: compact))
+        .buttonStyle(ControlButtonStyle(kind: kind))
         .accessibilityLabel(option)
         .disabled(disabled || paused)
     }

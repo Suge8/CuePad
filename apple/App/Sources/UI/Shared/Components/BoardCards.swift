@@ -104,7 +104,7 @@ struct BoardSessionCard: View {
     var body: some View {
         let pulse = workspace.pulse(of: session)
         let resting = pulse.tier == .resting
-        BoardLink(to: .session(session), card: true) {
+        BoardLink(session: session) {
             BoardCardLayout(advancing: true, pulse: pulse, moves: moves) {
                 Group {
                     if let kind = session.agent.known { kind.mark.image } else { Image(.terminal) }

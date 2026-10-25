@@ -12,7 +12,7 @@ struct BoardReplyCard: View {
 
     var body: some View {
         let title = reply.item?.task.title ?? reply.session.title
-        BoardLink(to: .session(reply.session), card: true) {
+        BoardLink(session: reply.session) {
             BoardCardLayout(advancing: false) {
                 Circle().fill(palette.ink).frame(width: Self.dot, height: Self.dot)
                     .frame(width: TaskMetrics.cardLead, height: TaskMetrics.cardLead)
