@@ -31,13 +31,13 @@ extension CueStore {
   }
 
   /// Cue 刚把这次停下留给你（`leaveToYou`，会话状态没变，状态转换的标志轮不到它）：会话在这台 Mac 上（会话记录只有它写）、
-  /// 这次停下还在、到得了你，就给会话记录置手机推送标志——歇着的是待回复，在等回答的是等你确认（它本来就在问你，留给你只是 Cue 不替你答）。
+  /// 这次停下还在、到得了你，就给会话记录置手机推送标志（哪种见 `PiSessionState.leftAlert`）。
   /// 返回记录 id（立即上传用），没置为 nil。
   @discardableResult
   public func flagLeftToYou(_ left: CueLeft, host: String) throws -> UUID? {
     try write {
       guard let state = try sessionState(left.sessionID), state.hostID == host, left.holds(for: state) else { return nil }
-      let alert: PiAlert = state.state == .known(.settled) ? .awaitsReply : .waitingForUser
+      let alert = state.leftAlert
       guard try reaches(alert, state) else { return nil }
       try db.run(
         "UPDATE piSessionStates SET notify = ?1, modifiedAt = ?2 WHERE id = ?3 AND notify IS NULL",

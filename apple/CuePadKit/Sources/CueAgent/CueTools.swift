@@ -73,6 +73,13 @@ public struct CueTools: Sendable {
     return card
   }
 
+  /// 没做完、叫这个名字（不分大小写）的顶层任务，后建的在前：add 认同一件事、经过清单认 add 建的那件都按它，做完的同名旧任务不算。
+  func openTopTasks(titled heading: String) async throws -> [Card] {
+    try await store.tasks(.todo, .inProgress).flatMap(\.tasks)
+      .filter { $0.parentID == nil && $0.heading.caseInsensitiveCompare(heading) == .orderedSame }
+      .sorted { $0.createdAt > $1.createdAt }
+  }
+
   /// 同 `task`，对不上为 nil；对上好几个照样报错（要多写几位，不是找不到）。
   private func findTask(_ ref: String) async throws -> Card? {
     let key = ref.trimmingCharacters(in: .whitespaces)

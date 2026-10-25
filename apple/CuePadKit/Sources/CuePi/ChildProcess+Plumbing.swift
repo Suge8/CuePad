@@ -64,14 +64,15 @@ extension ChildProcess {
     /// 中转脚本：后台的子 shell 自成进程组（`set -m`：作业控制下也不把标准输入换成空设备、不忽略 SIGINT 与 SIGQUIT），
     /// 等 `goFD` 读到 EOF 再 exec 成要起的命令；`reportFD` 报出它的 PID，中转随即退出，它就挂到 launchd 下。
     /// shell 会给要起的命令补上 PWD 与 SHLVL（exec 时 SHLVL 去不掉）：要求的环境里没有的，经 env 去掉，环境与要求的一致。
-    /// `held` 时再留一个看守（`Placement.detached`）：`holdFD` 上读到认领的一行就退出，读到 EOF 就结束它（SIGTERM，宽限后 SIGKILL）。
+    /// `held` 时再留一个看守（`Placement.detached`）：`holdFD` 上读到认领的一行就退出，读到 EOF 就结束它（SIGTERM，宽限后 SIGKILL）；
+    /// 它已经不在（自己退了、`end()` 结束过）时 SIGTERM 失败，不再等宽限、补 SIGKILL。
     private static func relay(_ environment: [String: String], held: Bool) -> String {
         let added = ["PWD", "SHLVL"].filter { environment[$0] == nil }
         let command = added.isEmpty ? #""$@""# : "/usr/bin/env " + added.map { "-u \($0) " }.joined() + #""$@""#
         let start = "set -m; { read -r _ <&\(goFD); exec \(command) \(goFD)<&-; } \(reportFD)>&- \(holdFD)<&- & p=$!; "
         let grace = AgentTimeouts.endGrace.components.seconds
         let guardian = held
-            ? "{ read -r _ <&\(holdFD) || { kill -TERM $p; sleep \(grace); kill -KILL $p; }; } \(goFD)<&- \(reportFD)>&- 2>/dev/null & "
+            ? "{ read -r _ <&\(holdFD) || { kill -TERM $p && { sleep \(grace); kill -KILL $p; }; }; } \(goFD)<&- \(reportFD)>&- 2>/dev/null & "
             : ""
         return start + guardian + "echo $p >&\(reportFD)"
     }

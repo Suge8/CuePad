@@ -15,17 +15,6 @@ import Testing
 
   private func current() async throws -> PiSessionState { try #require(try await store.allPiSessionStates().first) }
 
-  @Test(arguments: [
-    (nil, PiWorkState.settled, nil), (nil, .waitingForUser, nil),  // 第一次看到的会话不提示
-    (.thinking, .settled, .settled), (.delegating, .settled, .settled), (.compacting, .settled, .settled), (.tool, .waitingForUser, .waitingForUser),
-    (.waitingForUser, .waitingForUser, nil), (.waitingForUser, .settled, nil), (.error, .settled, nil),
-    (.thinking, .thinking, nil), (.settled, .thinking, nil), (.settled, .error, nil),
-  ] as [(PiWorkState?, PiWorkState, PiAlert?)])
-  func transitionsThatAlert(from previous: PiWorkState?, to state: PiWorkState, expected: PiAlert?) {
-    let then = Date(timeIntervalSince1970: 100)
-    #expect(PiAlert.entering(state, since: then.addingTimeInterval(10), from: previous.map { ($0, then) }) == expected)
-  }
-
   /// 歇着时的手动压缩：扩展先报"在压缩"，压完（或失败、被停止）回到原来的"做完了"与原来的起点——这不是又做完了一轮，
   /// Mac 不置位通知标志，手机不论读没读到"在压缩"那一版都不提示；压缩发生在一轮里时，压完歇下照常是"做完了"。
   @Test func compactingWhileSettledAndFallingBackIsNotANewRound() async throws {

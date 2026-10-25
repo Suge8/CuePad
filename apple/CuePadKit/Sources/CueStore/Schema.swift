@@ -56,15 +56,21 @@ enum Schema {
     },
     // 68：Cue 此刻正在跑的那一步碰到的那一处（`CueState.step`）
     "ALTER TABLE cueState ADD COLUMN step TEXT;",
-    // 69：不用先问的例外并进记忆：允许清单（cueProfile.allows，"类别"或"类别/项目 id"）每项转成一条他说的、一直记着的记忆，字同提问卡的第二项
-    // （`CueAsk.always(in:)`；项目已不在的那项丢掉），清单那一列删掉。每台设备各自升级：行的 id 与时刻由清单项与设置的修改时间推出，写出的是同一行
+    // 69：不用先问的例外并进记忆：允许清单（cueProfile.allows，"类别"或"类别/项目 id"）每项转成一条他说的、一直记着的记忆，字是这一步写下时提问卡的第二项
+    // （照抄在这里，之后改 `CueAsk` 的字不改这一步写出的；项目名照样截短，`CueMemoryLine.fitting`；项目已不在的、当时就不能放行的那项丢掉），清单那一列删掉。
+    // 每台设备各自升级：行的 id 与时刻由清单项与设置的修改时间推出，写出的是同一行
     Upgrade { db in
+      let names = [
+        "push": "推送代码", "merge": "合并进共享分支", "release": "发布或部署", "delete": "删除文件、分支或数据", "outside": "动项目外的东西",
+        "budget": "超出预算",
+      ]
       let profile = try db.first("SELECT allows, modifiedAt FROM cueProfile") { (allows: $0.textOrNil(0), at: $0.int(1)) }
       let projects = Dictionary(try db.query("SELECT id, name FROM projects") { ($0.text(0), $0.text(1)) }, uniquingKeysWith: { first, _ in first })
       for item in JSONColumn.decodeList(String.self, from: profile?.allows) {
         let parts = item.split(separator: "/", maxSplits: 1).map(String.init)
         let project = parts.count > 1 ? projects[parts[1]] : nil
-        guard let profile, let ask = CueAsk(rawValue: parts[0]), parts.count == 1 || project != nil, let text = ask.always(in: project) else { continue }
+        guard let profile, let name = names[parts[0]], parts.count == 1 || project != nil else { continue }
+        let text = project.map { CueMemoryLine.fitting($0) { "以后「\($0)」里\(name)不用问" } } ?? "以后\(name)都不用问"
         try db.run(
           "INSERT OR IGNORE INTO cueLines (id, text, pinned, source, createdAt, modifiedAt) VALUES (?1, ?2, 1, 'you', ?3, ?3)",
           [DeterministicID.uuid("cue-allow/\(item)"), text, profile.at])

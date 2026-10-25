@@ -100,9 +100,7 @@ extension CueTools {
     if project == nil, let home = session?.projectID { project = try await store.projects().first { $0.id == home } }
     let projectID = project?.id ?? Project.defaultID
     // 同一件事建第二份（重试、同一轮里并发发出的两次 add）只会开出第二个会话：返回已有的那件
-    if session == nil, let same = try await store.tasks(.todo, .inProgress).flatMap(\.tasks).first(where: {
-      $0.parentID == nil && $0.projectID == projectID && $0.heading.caseInsensitiveCompare(heading) == .orderedSame
-    }) {
+    if session == nil, let same = try await openTopTasks(titled: heading).first(where: { $0.projectID == projectID }) {
       let dropped = args.string("body") != nil || !names.isEmpty ? "，这次的正文与子任务也没写（要改用 edit）" : ""
       return .ok("已有没做完的「\(same.heading)」（\(same.id.shortID)），没再建\(dropped)：同一件事接着用它。")
     }
@@ -165,10 +163,11 @@ extension CueTools {
       return agent
     }
     let leaf = try await workingLeaf(try args.required("task"))
+    let host = try await host()
     let request = try await store.startLeaf(
-      leaf.id, agent: agent, fresh: args.bool("fresh") == true, model: args.string("model"), thinking: try Self.effort(args), host: try await host(), cue: true)
+      leaf.id, agent: agent, fresh: args.bool("fresh") == true, model: args.string("model"), thinking: try Self.effort(args), host: host, cue: true)
     if request.mode == .known(.start) { return .ok("已请 Mac 为「\(leaf.heading)」开新会话，正文作为第一句。（\(leaf.id.shortID)）") }
-    return try await spoken(request, "「\(leaf.heading)」接着用上一步的会话，正文作为下一句（送到后这一步绑上它）", tail: leaf.id.shortID)
+    return try await spoken(request, "「\(leaf.heading)」接着用上一步的会话，正文作为下一句（送到后这一步绑上它）", tail: leaf.id.shortID, from: host)
   }
 
   static func effort(_ args: Args) throws -> PiThinkingLevel? {

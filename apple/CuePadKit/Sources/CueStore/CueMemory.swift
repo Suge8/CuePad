@@ -26,6 +26,20 @@ public struct CueMemoryLine: Identifiable, Equatable, Sendable {
     let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
     return !trimmed.isEmpty && trimmed.utf8.count <= maxBytes
   }
+
+  /// `frame` 套上 `part` 写成的一条（提问卡第二项套项目名）；超过 `maxBytes` 时从尾部截短 `part`、补"…"，截到放得下为止。
+  static func fitting(_ part: String, in frame: (String) -> String) -> String {
+    let whole = frame(part)
+    guard whole.utf8.count > maxBytes else { return whole }
+    let ellipsis = "…"
+    let room = maxBytes - frame(ellipsis).utf8.count
+    var kept = ""
+    for character in part {
+      guard kept.utf8.count + character.utf8.count <= room else { break }
+      kept.append(character)
+    }
+    return frame(kept + ellipsis)
+  }
 }
 
 /// 记忆的版本读数：行数与最后改动（记、忘、钉、提醒），任一变了它就变。管理器订阅它，不必每次读整份记忆；摘要不在内：管理器不看摘要。

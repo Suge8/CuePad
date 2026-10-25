@@ -75,7 +75,7 @@ extension CueActivity {
     }
   }
 
-  /// 做完的一次调用在经过清单里的一条：动到的任务与会话是开始时认出的（`named`，新建的那件开始时还没有，做完再认一次），记在这一条上；
+  /// 做完的一次调用在经过清单里的一条：动到的任务与会话是开始时认出的（`named`，新建的那件开始时还没有，做成了再认，`Named.added`），记在这一条上；
   /// 认不出（写错了、调用失败）就照它写的引用，不带任务与会话。
   /// 对你说的话（tell）已在对话里：清单里只留首行。记忆的序号是 Cue 内部的身份，不写给人看。
   public static func item(tool: String, arguments: String, named: Named, failed: Bool, store: CueStore) async -> PiChatMessage.Tools.Item {
@@ -89,7 +89,7 @@ extension CueActivity {
     case "task":
       let action = args.line("action")
       guard let kind = kind(action), let words = cueWords(action, named.quoted, board: args.board) else { return item(.other, "task") }
-      let place = action == "add" && named.task == nil ? await Named(args, tool: tool, store: store) : named
+      let place = action == "add" && !failed ? await named.added(args, store: store) : named
       return item(kind, action == "say" ? "\(words)：\(args.line("text") ?? "")" : words, at: place)
     case "tell":
       guard let line = args.line("text") else { return item(.other, "撤回一条提问") }
@@ -120,10 +120,17 @@ extension CueActivity {
     /// "「名字」"
     var quoted: String { "「\(name ?? "")」" }
 
+    private init(task: UUID?, session: UUID?, name: String?) {
+      self.task = task
+      self.session = session
+      self.name = name
+    }
+
+    /// 开始时认：add 要建的那件还没有，只照标题叫它（按标题去找会认成同名的旧任务，比如早做完的那件）。
     init(_ args: Parsed, tool: String, store: CueStore) async {
       let tools = CueTools(store: store)
       var task: Card?, found: PiSessionState?, sessionRef: String?
-      if let ref = args.line("task") ?? (tool == "task" && args.line("action") == "add" ? args.line("title") : nil) {
+      if let ref = args.line("task") {
         task = try? await tools.task(ref)
       } else if let session = args.line("session") {
         switch try? await tools.sessionRef(session) {
@@ -135,6 +142,12 @@ extension CueActivity {
       self.task = task?.id
       session = found?.id
       name = task?.heading ?? args.line("task") ?? args.line("title") ?? found?.title ?? sessionRef
+    }
+
+    /// add 做成后它建的那件，或认作同一件、没再建的那件（`CueTools.openTopTasks`）：没做完的同名顶层任务里后建的；会话照开始时认的。
+    func added(_ args: Parsed, store: CueStore) async -> Named {
+      guard let title = args.line("title"), let card = try? await CueTools(store: store).openTopTasks(titled: title).first else { return self }
+      return Named(task: card.id, session: session, name: card.heading)
     }
   }
 

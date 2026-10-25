@@ -4,7 +4,8 @@ import Foundation
 extension CueStore {
   /// 结束一条还开着的提问（`CueQuestionEnd`）；已经结束的抛 `questionEnded`，回答不是它的选项之一抛 `notAChoice`。回答交给 Cue（`toDeliver`），撤回的不交。
   /// 你选的是第二项（"以后……不用问"，`CueAsk.always(in:)`）时，同一个事务里把这句原话记成一条你说的、一直记着的记忆：
-  /// 不用先问的例外只在记忆里，Cue 读到就直接做。返回记下的那一条的 id（调用方连同提问一起上传）。
+  /// 不用先问的例外只在记忆里，Cue 读到就直接做。已有一字不差、没忘掉的那条就用它（没钉上的钉上），同一句不记第二遍。
+  /// 返回记下的那一条的 id（调用方连同提问一起上传）。
   @discardableResult
   public func endCueQuestion(_ id: UUID, _ end: CueQuestionEnd) throws -> UUID? {
     try write {
@@ -13,8 +14,15 @@ extension CueStore {
       let answer: String? = if case .answered(let text) = end { text } else { nil }
       guard try endQuestions(answer: answer, where: "id = ?", [id]) > 0 else { throw CueStoreError.questionEnded }
       guard let answer, message.allowsFromNowOn(answer) else { return nil }
-      return try insertLine(answer, source: .you, pinned: true).id
+      return try keepLine(answer)
     }
+  }
+
+  private func keepLine(_ text: String) throws -> UUID {
+    guard let id = try db.first("SELECT id FROM cueLines WHERE text = ? AND deletedAt IS NULL ORDER BY createdAt, id LIMIT 1", [text], { $0.uuid(0) })
+    else { return try insertLine(text, source: .you, pinned: true).id }
+    try db.run("UPDATE cueLines SET pinned = 1, modifiedAt = ? WHERE id = ? AND pinned = 0", [Date.stamp, id])
+    return id
   }
 
   /// 任务所在的项目；没有任务为 nil。
