@@ -15,7 +15,7 @@ struct TaskNextMark: View {
     var body: some View {
         Button(action: follow) { label }
             .buttonStyle(PressStyle())
-            .help(next.starts ? help : Dotted(next.speech, help).visible)
+            .help(next.starts ? help : "\(next.speech)，\(help)")
             .accessibilityLabel(next.speech)
             .accessibilityHint(help)
     }
