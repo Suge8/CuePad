@@ -47,6 +47,7 @@ struct SearchPalette: View {
     private static let listWidth: CGFloat = 380
     /// 列表 380 + 预览至少 300。
     private static let sideBySide: CGFloat = 680
+    private static let top = "top"
 
     var body: some View {
         panel
@@ -67,10 +68,7 @@ struct SearchPalette: View {
                 selection = cardIDs.first
                 sessionSelection = sessionGroups.first?.sessions.first?.sessionID
             }
-            .onChange(of: query.text) {
-                query.pages = 1
-                sessionPages = 1
-            }
+            .onChange(of: query.text) { sessionPages = 1 }
             .background { if scope == .cards { shortcuts } }
             .observing(services.store, id: query, into: $data, onError: workspace.fail) { [query] store in
                 try PaletteData.read(query, from: store)
@@ -197,8 +195,11 @@ struct SearchPalette: View {
                 }
                 // 行的底向两边让出一截，留在滚动区里
                 .padding(.vertical, 8).padding(.horizontal, 18)
+                .id(Self.top)
             }
             .onChange(of: selection) { if let selection { proxy.scrollTo(selection) } }
+            // 换了条件（页数回到 1）就回到顶上，"显示更多"不动：结果变短时滚动位置留在原处、落到内容外面，懒加载的列表画成空白
+            .onChange(of: query) { if query.pages == 1 { proxy.scrollTo(Self.top, anchor: .top) } }
         }
     }
 

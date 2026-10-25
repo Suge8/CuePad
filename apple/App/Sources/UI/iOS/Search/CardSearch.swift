@@ -56,7 +56,6 @@ struct CardSearchResults<Leading: View>: View {
             .padding(.horizontal, 16).padding(.bottom, 24)
         }
         .scrollDismissesKeyboard(.immediately)
-        .onChange(of: query.text) { query.pages = 1 }
         // 搜索框只报上屏的字（`SearchCapsule`）：拼音组字时不搜
         .observing(services.store, id: query, into: $data, onError: workspace.fail) { [query] store in
             try CardMatches.read(query, from: store)
