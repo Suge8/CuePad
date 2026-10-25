@@ -10,7 +10,7 @@ import SwiftUI
 ///
 /// 对话不用懒加载栈、只排最近几条（`PiConversation` 的窗口）：懒加载栈的总高与偏移都是按估计高度推出来的，回答高矮悬殊时
 /// 底部锚定会落在内容外、整页空白（WWDC26「Dive into lazy stacks」也说绝对偏移不可靠）；整段排开位置是确定的，
-/// 打开时的底部锚点就是最新处。往上翻快到头时在上面再排开一段，多出来的高度加到偏移上，正在读的不动（`ChatFollow.prepending`）。
+/// 打开时的底部锚点就是最新处。往上翻快到头时在上面再排开一段，多出来的高度当场加到偏移上，正在读的不动（`ChatFollow.prepending`、`ContentLift.scroll`）。
 /// 滚动区铺到顶栏、状态栏与回复框后面（iOS 的栏与键盘是安全区，滚动区把它当内容边距），内容在玻璃后面清楚可见。
 ///
 /// 对话排在阅读栏里：最宽 `readingWidth`（含左右 `inset`），在滚动区里居中，上下各留 `edge`。栏的边距只能是滚动区自己的边
@@ -112,7 +112,7 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                             } else if let target = follow.wrappedValue.target {
                                 // 跳去了某一条、你还没滚过：打开时排开更早的一段常与跳挤在相邻两帧，按偏移补的话晚一拍生效的偏移会盖掉跳，重新对准那一条
                                 reader.scrollTo(target.id, anchor: target.anchor)
-                            } else { position.scrollTo(y: offset.read + grown) }
+                            } else { lift.scroll(by: grown) }
                             return
                         }
                         // 跳去了某一条、你还没滚过：内容这时才变高矮（它上面的图读到了真实的比例、更早的一段排开）的话偏移不动、那一条被推走，重新对准它。
