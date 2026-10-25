@@ -20,8 +20,8 @@ struct RoundProcess: View {
     @State private var expanded = DebugHooks.preset.toolsOpen
 
     nonisolated enum Ending: Equatable {
-        /// 做完了：用时（`PiChat.took`；Cue 的一轮不记，为 nil）
-        case took(String?)
+        /// 做完了：用时（`PiChat.took`）
+        case took(String)
         /// 在跑：状态标按 `shown`；`doing` 是此刻在做的。有 `step`（那一步的图标）时它是正在跑的那一步、单列一行；
         /// 没有时（正在说话、等子代理）只写在标题行末
         case live(PiShown, doing: String, step: Icon?)
@@ -82,11 +82,9 @@ struct RoundProcess: View {
         } label: {
             Text(line).lineLimit(1).layoutPriority(-1)
             switch ending {
-            case .took(let took?):
+            case .took(let took):
                 Dot()
                 Text(took).fixedSize()
-            case .took:
-                EmptyView()
             case .live(_, let doing, nil):
                 Dot()
                 Text(doing).lineLimit(1).shimmering()

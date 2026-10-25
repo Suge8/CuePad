@@ -93,11 +93,6 @@ extension CueStore {
     _ = try insertCueMessage(author, text: reply, urgent: answersYou && !said.contains(where: \.alerts))
   }
 
-  /// Cue 说的、正文就是 `text` 的最近一条（经过清单里"对你说"那一条点它跳回原处）。
-  public func latestCueMessage(saying text: String) throws -> CueMessage? {
-    try select(CueMessage.self, where: "author = 'cue' AND text = ?", [text], orderBy: "createdAt DESC, rowid DESC", limit: 1).first
-  }
-
   /// 待交给 Cue 的大脑的（唯一定义，也是它的部分索引的条件），交出去都叫醒它：你说了还没交的话，与还没交、或交过之后又从别处同步来另一个回答的回答。
   static let toDeliver = """
     ((author = 'you' AND deliveredAt IS NULL)

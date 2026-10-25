@@ -58,5 +58,4 @@ xcrun cktool export-schema $C --output-file /tmp/dev.ckdb   # 回读：服务端
 
 待部署到生产（发版前一次 Deploy Schema Changes，部署完删掉对应条目）：
 
-- 字段：`cueState.step`（加密字符串，Cue 正在跑的那一步碰到的那一处；`.ckdb` 已改，还没导入开发环境，先导入再部署）。生产没有它时值班的 Mac 写不成 Cue 此刻，`ck-production.sh` 会拦下发布。
 - 订阅定义（还没在开发容器里保存）：新增 `cuepad.pi.reply`（Cue 留给你回的会话，`notify == awaitsReply`，文案 key `pi_alert_reply`）。部署前先用开发签名的构建（`xc.sh device`）打开一次手机，让它在开发容器里建好，再部署、再发 iOS 版。没部署时生产里建不成它，待回复的锁屏推送不来，别的照常。

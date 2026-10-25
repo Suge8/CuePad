@@ -77,13 +77,13 @@ extension CueActivity {
 
   /// 做完的一次调用在经过清单里的一条：动到的任务与会话是开始时认出的（`named`，新建的那件开始时还没有，做完再认一次），记在这一条上；
   /// 认不出（写错了、调用失败）就照它写的引用，不带任务与会话。
-  /// 对你说的话（tell）已在对话里：清单里只留首行，带着那条消息，点它跳回原处。记忆的序号是 Cue 内部的身份，不写给人看。
+  /// 对你说的话（tell）已在对话里：清单里只留首行。记忆的序号是 Cue 内部的身份，不写给人看。
   public static func item(tool: String, arguments: String, named: Named, failed: Bool, store: CueStore) async -> PiChatMessage.Tools.Item {
     let args = Parsed(arguments)
-    func item(_ kind: PiChatMessage.Tools.Kind, _ target: String, message: UUID? = nil, at place: Named? = nil) -> PiChatMessage.Tools.Item {
+    func item(_ kind: PiChatMessage.Tools.Kind, _ target: String, at place: Named? = nil) -> PiChatMessage.Tools.Item {
       .init(
         kind: kind, target: target.clipped(PiChatMessage.Tools.targetLimit), failed: failed, task: place?.task, name: place?.name,
-        session: place?.session, message: message)
+        session: place?.session)
     }
     switch tool {
     case "task":
@@ -92,9 +92,8 @@ extension CueActivity {
       let place = action == "add" && named.task == nil ? await Named(args, tool: tool, store: store) : named
       return item(kind, action == "say" ? "\(words)：\(args.line("text") ?? "")" : words, at: place)
     case "tell":
-      guard let line = args.line("text"), let text = args.raw["text"] as? String else { return item(.other, "撤回一条提问") }
-      let message = try? await store.latestCueMessage(saying: text)
-      return item(args.raw["ask"] == nil ? .said : .ask, line, message: message?.id)
+      guard let line = args.line("text") else { return item(.other, "撤回一条提问") }
+      return item(args.raw["ask"] == nil ? .said : .ask, line)
     case "memory":
       switch args.line("action") {
       case "recall": return item(.search, args.line("query") ?? "记忆")
