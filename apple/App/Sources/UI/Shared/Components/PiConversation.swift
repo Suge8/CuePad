@@ -272,14 +272,7 @@ struct PiSessionSubtitle: View {
                         AgentMark(session: session, font: Self.font)
                         if speaks || undelivered != nil { Dot().foregroundStyle(palette.ink3) }
                     }
-                    // 换一种说法是换一个视图，先淡掉再淡入（`handOff`，同 Cue 页头的 `CueStatusLine`），叠在同一处
-                    ZStack(alignment: .leading) {
-                        if syncing {
-                            SyncingLabel().transition(.handOff)
-                        } else if speaks {
-                            PiShownLabel(shown: shown).id(shown.label).transition(.handOff)
-                        }
-                    }
+                    if syncing { SyncingLabel() } else if speaks { PiShownLabel(shown: shown) }
                     if let undelivered {
                         if speaks { Dot().foregroundStyle(palette.failure) }
                         Text(undelivered).foregroundStyle(palette.failure)
@@ -303,7 +296,6 @@ struct PiSessionSubtitle: View {
 }
 
 /// 顶栏里的状态（会话页与 Cue 页同一个样子）：着色的状态词，手机上前面加状态标（Mac 的标题玻璃里不画圆）。
-/// 换一个词时调用处按 `label` 换身份、`handOff` 先淡掉再淡入：同一个视图里交叉淡，长短不同的两个词会叠成一团。
 struct PiShownLabel: View {
     let shown: PiShown
     @Environment(\.palette) private var palette
@@ -314,6 +306,8 @@ struct PiShownLabel: View {
             PiStateDot(shown: shown, size: 6)
             #endif
             Text(shown.label).fontWeight(shown.needsYou ? .medium : nil).foregroundStyle(shown.labelTint(palette))
+                .contentTransition(.opacity)
+                .animation(HandOff.quick, value: shown)
         }
     }
 }
