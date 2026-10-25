@@ -5559,6 +5559,22 @@
         }
       }
     },
+    "全部 %lld 条" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All %lld"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "全部 %lld 条"
+          }
+        }
+      }
+    },
     "全部完成" : {
       "localizations" : {
         "en" : {
@@ -6191,6 +6207,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "刚开始"
+          }
+        }
+      }
+    },
+    "刚记下" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Just Remembered"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "刚记下"
           }
         }
       }
@@ -11301,18 +11333,18 @@
         }
       }
     },
-    "换模型，看上下文、记忆与设置" : {
+    "换模型，看它刚记下的，去记忆与设置" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Change model, view context, memory, and settings"
+            "value" : "Change the model, see what it just remembered, open Memory and Settings"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "换模型，看上下文、记忆与设置"
+            "value" : "换模型，看它刚记下的，去记忆与设置"
           }
         }
       }

@@ -34,7 +34,7 @@ struct CueHeader: View {
                     if expanded, drag.translation.height < -24 { toggle() }
                 })
                 .accessibilityAddTraits(.isHeader)
-                .accessibilityHint(expanded ? "收起" : "换模型，看上下文、记忆与设置")
+                .accessibilityHint(expanded ? "收起" : "换模型，看它刚记下的，去记忆与设置")
         } panel: {
             CueNowPanel(brain: brain, close: toggle)
         }

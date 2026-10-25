@@ -99,6 +99,13 @@ extension CueStore {
     return CueMemory(lines: lines, summaries: valid.map(\.summary))
   }
 
+  /// 没忘掉的最新 `limit` 条与没忘掉的总数（`CueMemoryRecent`）：几行加一条计数。
+  public func recentCueMemory(limit: Int) throws -> CueMemoryRecent {
+    let lines = try select(CueMemoryLine.self, where: "deletedAt IS NULL", orderBy: "createdAt DESC, id DESC", limit: limit)
+    let count = try db.first("SELECT count(*) FROM cueLines WHERE deletedAt IS NULL") { Int($0.int(0)) } ?? 0
+    return CueMemoryRecent(lines: lines, count: count)
+  }
+
   /// 记忆的版本读数（`CueMemoryVersion`）：一条聚合，不读行的内容。
   public func cueMemoryVersion() throws -> CueMemoryVersion {
     try db.first("SELECT count(*), MAX(modifiedAt) FROM cueLines") { CueMemoryVersion(lines: Int($0.int(0)), modifiedAt: $0.dateOrNil(1)) }
