@@ -31,8 +31,9 @@ enum CLI {
         let dream = arguments == ["mcp", "--dream"]
         guard arguments.count == 1 || wait != nil || dream else { throw CLIError.usage("用法：cuepad mcp [--wait <秒> | --dream]") }
         let server = CueMCPServer(store: try openStore(environment: environment), wait: wait ?? Speech.cueWait, toolset: dream ? .dream : .cue)
+        // 大脑可能在工具还没答完时就退了（班次结束、换新）：写不进去就结束这次服务（同 main 的 emit）
         try await server.serve(FileHandle.standardInput.bytes.lines) { line in
-          FileHandle.standardOutput.write(Data((line + "\n").utf8))
+          try FileHandle.standardOutput.write(contentsOf: Data((line + "\n").utf8))
         }
         return CLIResult(code: 0, out: "", err: "")
       }

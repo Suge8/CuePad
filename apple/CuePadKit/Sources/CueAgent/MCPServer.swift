@@ -21,10 +21,10 @@ public struct CueMCPServer: Sendable {
 
   public init(store: CueStore, wait: TimeInterval, toolset: CueTools.Toolset = .cue) { tools = CueTools(store: store, wait: wait, toolset: toolset) }
 
-  /// 读到 `input` 结束为止，每条回应交给 `output`（一行，不含换行）。
-  public func serve(_ input: some AsyncSequence<String, any Error>, output: (String) -> Void) async throws {
+  /// 读到 `input` 结束为止，每条回应交给 `output`（一行，不含换行）；`output` 抛错（对端已关）就结束。
+  public func serve(_ input: some AsyncSequence<String, any Error>, output: (String) throws -> Void) async throws {
     for try await line in input where !line.trimmingCharacters(in: .whitespaces).isEmpty {
-      if let reply = await handle(line) { output(reply) }
+      if let reply = await handle(line) { try output(reply) }
     }
   }
 
