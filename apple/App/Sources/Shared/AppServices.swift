@@ -48,7 +48,7 @@ final class AppServices {
 
     /// iCloud 同步；没有时 `syncStatus` 是写明原因的 `.unavailable`。状态、问题与冲突见下，动作见 `AppServices+Sync`。
     @ObservationIgnored let sync: (any SyncControlling)?
-    /// 门铃（实时层，见 `AppServices+Relay`）；没有中转或不连 iCloud 时没有。
+    /// 门铃（实时层，见 `AppServices+Relay`）；不连真的 iCloud（替身、没有 iCloud 权限、隔离库）时没有。
     @ObservationIgnored let relay: Relay?
     private(set) var syncStatus: SyncStatus
     private(set) var syncIssues: [SyncIssue] = []
@@ -205,7 +205,7 @@ final class AppServices {
         diagnostics = Diagnostics(directory: location.directory.appending(path: "Diagnostics", directoryHint: .isDirectory))
         let (engine, status) = Self.makeSync(sync, store: store, location: location)
         (self.sync, syncStatus) = (engine, status)
-        relay = Self.makeRelay(engine)
+        relay = Self.makeRelay(sync, engine)
         speechClock = SpeechClock(localHost: mac.hostID, reachable: status.reachesMac, alwaysReachable: DebugHooks.preset.alwaysReachable, timing: mac.timing)
         liveSessions = try LiveSessions(store: store, endedOn: mac.hostID, at: speechClock.moment)
         cueFeed = CueFeed(store: store, widget: false)
@@ -243,7 +243,7 @@ final class AppServices {
         diagnostics = Diagnostics(directory: location.directory.appending(path: "Diagnostics", directoryHint: .isDirectory))
         let (engine, status) = Self.makeSync(sync, store: store, location: location)
         (self.sync, syncStatus) = (engine, status)
-        relay = Self.makeRelay(engine)
+        relay = Self.makeRelay(sync, engine)
         speechClock = SpeechClock(localHost: nil, reachable: status.reachesMac, alwaysReachable: DebugHooks.preset.alwaysReachable, timing: timing)
         liveSessions = try LiveSessions(store: store, endedOn: nil, at: speechClock.moment)
         cueFeed = CueFeed(store: store, widget: true)

@@ -5,6 +5,8 @@
 # 工程默认是本机 ad-hoc（Signing.xcconfig）；team_signing 换上团队与带 iCloud 的 macOS 权限文件，证书与描述文件名在工程的各 target 里。
 # App 身份前缀（bundle id 与由它派生的 App Group、iCloud 容器）：唯一定义在 Signing.xcconfig 的 CUEPAD_APP_ID
 CUEPAD_APP_ID="$(sed -n 's/^CUEPAD_APP_ID *= *//p' "$APPLE_DIR/App/Config/Signing.xcconfig")"
+# 门铃中转的主机：唯一定义在 Signing.xcconfig 的 CUEPAD_RELAY_HOST
+CUEPAD_RELAY_HOST="$(sed -n 's/^CUEPAD_RELAY_HOST *= *//p' "$APPLE_DIR/App/Config/Signing.xcconfig")"
 ASC_ENV="${CUEPAD_ASC_ENV:-$HOME/.appstoreconnect/cuepad.env}"
 team_signing=()
 if [ -f "$ASC_ENV" ]; then
@@ -47,6 +49,15 @@ release_versions() {
 # 用法：release_archive <ios|mac> <release_versions 的输出…>
 release_archive() {
   echo "$HOME/Library/Developer/Xcode/Archives/$(date +%F)/CuePad $1 ${3#CURRENT_PROJECT_VERSION=}.xcarchive"
+}
+
+# 发布前核对门铃中转：check_relay [打出来的 Info.plist]。中转的 /health 要回 ok（App 没有它只能按节奏拉）；
+# 给了 Info.plist 就再核对包里的 CuePadRelayHost 就是 CUEPAD_RELAY_HOST（App 读不到会当场停下）。
+check_relay() {
+  [ "$(curl -fsS --max-time 10 "https://$CUEPAD_RELAY_HOST/health" 2>/dev/null)" = ok ] \
+    || { echo "门铃中转 https://$CUEPAD_RELAY_HOST/health 没回 ok（部署见 relay/README.md）" >&2; exit 1; }
+  [ -z "${1:-}" ] || [ "$(/usr/libexec/PlistBuddy -c 'Print :CuePadRelayHost' "$1" 2>/dev/null)" = "$CUEPAD_RELAY_HOST" ] \
+    || { echo "$1 里的 CuePadRelayHost 不是 $CUEPAD_RELAY_HOST" >&2; exit 1; }
 }
 
 require_asc() {

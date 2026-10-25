@@ -14,6 +14,7 @@
 团队写在凭据文件的 `CUEPAD_TEAM_ID`（字段见 `_signing.sh` 头注释）。本机 ad-hoc 构建到此就能编能跑。
 要真机、同步或发布，再在开发者后台做上面的一次性前置：`xc.sh provision ids` 用 API 建四个 App ID 并开能力；App Group、iCloud 容器在网页创建并挂上；`xc.sh provision` 建证书与描述文件；CloudKit 结构按下文导入自己的容器。
 Mac 的自动更新源与公钥（`CuePad-macOS-Info.plist` 的 `SUFeedURL`、`SUPublicEDKey`）指向本仓库的发布，自己发版时换成自己的（`sparkle.sh`）。
+门铃中转（同一文件的 `CUEPAD_RELAY_HOST`）默认是作者的 `relay.cue-pad.com`，fork 照用也和别人互不相干（房间由各自 iCloud 里的密钥派生）；换成自己架的见 `relay/README.md`。发布脚本打包前核对它的 `/health`。
 
 ## 自动更新（macOS）
 

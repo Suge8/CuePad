@@ -9,11 +9,11 @@
 
 中转只看得到两样东西：房间号和签名。房间号是一把公钥，由你 iCloud 里的密钥派生；进房间要用这把密钥签名。没有密钥的人进不了你的房间，也按不了你的门铃。协议写在 `server.ts` 的头注释里。
 
-不架中转也能用 CuePad：设备照常按节奏去 iCloud 拉，只是别的设备的改动要晚一两秒才到。
+中转连不上时 CuePad 照常按节奏去 iCloud 拉，只是别的设备的改动要晚一两秒才到。
 
 ## 自己架一个
 
-适用于自己编译 CuePad 的情况。正式版暂未接中转，只按节奏去 iCloud 拉。下面是作者的中转实际的部署方式（Ubuntu 24.04）：Bun 用无特权用户跑在本机端口，由 systemd 常驻并加固；Caddy 在 443 终止 TLS、自动申请证书，把连接转给 Bun。
+正式版连作者的中转 `relay.cue-pad.com`。自己编译的默认也连它：房间由你自己 iCloud 里的密钥派生，和别人互不相干；想用自己的就照下面架一台，再改 `CUEPAD_RELAY_HOST`（第 7 步）。下面是作者的中转实际的部署方式（Ubuntu 24.04）：Bun 用无特权用户跑在本机端口，由 systemd 常驻并加固；Caddy 在 443 终止 TLS、自动申请证书，把连接转给 Bun。
 
 1. 准备一台大陆直连线路好的服务器（香港 CN2/CMI 一类即可，1 核 1 GB 够用），开放 80（签证书）与 443，给它配一个域名。没有域名时可以先用 `<IP 用横杠连起来>.sslip.io`（如 `154-12-24-171.sslip.io`），它直接解析到这个 IP。
 2. 装 Bun（1.2 或更新）到系统目录，`/usr/local/bin/bun`：
@@ -85,7 +85,7 @@
 
    Caddy 会自己签证书、续期，WebSocket 原样转发。域名还没解析到这台时签不到，Caddy 会退避重试；解析生效后 `systemctl reload caddy` 立即重试。
 6. 检查：`curl https://relay.example.com/health` 返回 `ok`。
-7. 把域名填进 `apple/App/Config/Signing.xcconfig` 的 `CUEPAD_RELAY_HOST`，再重新编译 App。
+7. 把 `apple/App/Config/Signing.xcconfig` 的 `CUEPAD_RELAY_HOST` 换成你的域名，再重新编译 App。
 8. 你自己的 iCloud 容器里要有记录类型 `relaySecrets`，按 [docs/release.md](../docs/release.md)「CloudKit 数据结构」导入 `apple/CloudKit/cuepad.ckdb`。
 
 不想装 Caddy 的，也可以让 Bun 自己提供 TLS（`CERT`、`KEY` 环境变量，见 `server.ts` 头注释），证书续期后要重启服务。
