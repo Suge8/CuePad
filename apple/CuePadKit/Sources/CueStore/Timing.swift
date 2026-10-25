@@ -4,10 +4,17 @@ import Foundation
 public struct Timing: Sendable {
   public var now: @Sendable () -> Date
   public var sleep: @Sendable (Duration) async throws -> Void
+  /// 睡到这一刻：等的是某个时刻（时限、到期）时用它。否决先算好时长再 `sleep`：任务晚一点才真正睡下，晚的那段又睡一遍，过点才醒。
+  public var sleepUntil: @Sendable (Date) async throws -> Void
 
-  public init(now: @escaping @Sendable () -> Date, sleep: @escaping @Sendable (Duration) async throws -> Void) {
+  /// `sleepUntil` 缺省按睡下那一刻的 `now` 算剩下的时长。
+  public init(
+    now: @escaping @Sendable () -> Date, sleep: @escaping @Sendable (Duration) async throws -> Void,
+    sleepUntil: (@Sendable (Date) async throws -> Void)? = nil
+  ) {
     self.now = now
     self.sleep = sleep
+    self.sleepUntil = sleepUntil ?? { try await sleep(.seconds(max(0, $0.timeIntervalSince(now())))) }
   }
 
   public static let system = Timing(now: { Date() }, sleep: { try await Task.sleep(for: $0) })

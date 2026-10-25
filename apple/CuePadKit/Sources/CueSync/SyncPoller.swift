@@ -63,7 +63,7 @@ public struct SyncPoller: Sendable {
         let spent = Duration.seconds(timing.now().timeIntervalSince(began))
         if spent < interval {
           let due = timing.now().addingTimeInterval((interval - spent).seconds)
-          try? await timing.sleep(interval - spent)
+          try? await timing.sleepUntil(due)
           let late = timing.now().timeIntervalSince(due)
           if late > Self.stallThreshold { Logger.stall.notice("拉取节奏的睡眠迟醒 \(late, format: .fixed(precision: 2), privacy: .public) 秒") }
         }
