@@ -112,24 +112,34 @@ private struct SyncSection: View {
     @Environment(\.palette) private var palette
     @State private var choices = SyncChoices()
     @State private var confirmErase = false
+    /// 这一轮同步中已久过 `Pending.delay`（`AppServices.shownSync`）。
+    @State private var syncLasts = false
 
     var body: some View {
         Section {
-            let summary = SyncSummary(services.syncStatus)
+            let shown = services.shownSync(lasting: syncLasts), summary = shown.summary
+            // 换一种说法、图标与转圈互换：旧的先淡完、新的再淡入（`handOff`，同 Mac 的 `SettingRow`），叠在同一处、不另占一行
             Label {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(summary.title)
-                    if let detail = summary.detail {
-                        Text(detail).font(.footnote).foregroundStyle(palette.ink3)
+                ZStack(alignment: .leading) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(summary.title)
+                        if let detail = summary.detail {
+                            Text(detail).font(.footnote).foregroundStyle(palette.ink3)
+                        }
                     }
+                    .id([summary.title, summary.detail])
+                    .transition(.handOff)
                 }
             } icon: {
-                if services.isSyncBusy {
-                    Spinner(.small)
-                } else {
-                    Image(summary.icon).foregroundStyle(palette.color(summary.tone))
+                ZStack {
+                    if shown.busy {
+                        Spinner(.small).transition(.handOff)
+                    } else {
+                        Image(summary.icon).foregroundStyle(palette.color(summary.tone)).transition(.handOff)
+                    }
                 }
             }
+            .pending(services.syncStatus == .syncing, shown: $syncLasts)
             // 要你决定、冲突与没能同步的记录都只在有同步时出现，按状态排；立即同步要有同步才点得动
             if case .needsDecision = services.syncStatus {
                 Group {

@@ -181,15 +181,6 @@ extension AppServices {
         #endif
     }
 
-    /// 同步那一行转不转圈（Mac 设置与手机设置共用）：正在连接、正在上传或对账，或立即同步还没返回。
-    var isSyncBusy: Bool {
-        if isSyncingNow { return true }
-        switch syncStatus {
-        case .starting, .syncing: return true
-        default: return false
-        }
-    }
-
     /// "立即同步"按钮（Mac 设置与手机设置共用）能不能按：有同步、没停下（等你决定、这台要更新）、上一次立即同步已经返回。
     var canSyncNow: Bool {
         guard sync != nil, !isSyncingNow else { return false }

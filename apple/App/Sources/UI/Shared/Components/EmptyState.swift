@@ -21,10 +21,15 @@ struct EmptyState<Action: View>: View {
     private var catchingUp: Bool { waitsForSync && services?.isCatchingUp == true }
 
     var body: some View {
-        VStack(spacing: 16) {
-            illustration
-            copy
-            if !syncing { action }
+        // 等同步那一句换成这里的空态：整块换身份，先淡掉再淡入（`handOff`），两块叠在同一张纸上、不同时交叉淡
+        ZStack {
+            VStack(spacing: 16) {
+                illustration
+                copy
+                if !syncing { action }
+            }
+            .id(syncing)
+            .transition(.handOff)
         }
         .multilineTextAlignment(.center)
         .frame(maxWidth: 420)
