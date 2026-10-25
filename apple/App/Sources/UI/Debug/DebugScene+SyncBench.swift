@@ -17,7 +17,7 @@ extension DebugScene {
 }
 
 /// `-CuePadSyncBench <host|remote>`（配 `-CuePadCloudKit YES` 与各自的 `-CuePadHost`）：同一台 Mac 上两个隔离实例经 CloudKit 开发环境同步，
-/// 打点给 `apple/scripts/sync-bench.py` 统计（跑法与口径见 docs/verify.md「同步测量」）。每个点是类别 `bench` 的一行 `<事件> 键=值…`。
+/// 打点给 `apple/scripts/sync-bench.py` 统计（跑法与口径见 docs/perf.md「同步测量」）。每个点是类别 `bench` 的一行 `<事件> 键=值…`。
 /// - host：有在线会话的 Mac（会话由脚本的假扩展给）。别的设备对 Cue 说的话一到库里就记 `cue-arrived lag=`（创建到本机库，同一台机器的时钟）。
 ///   Cue 不值班（隔离目录里没有登录的运行时），所以只量到达、不量 Cue 的回复。
 /// - remote：代替开着 Agent 页的手机，拉取节奏也换成手机那档（`DebugHooks.pollsLikePhone`）。等 host 的会话同步过来后，每 `-CuePadSyncBenchEvery` 秒（默认 30）一轮：对 host 的一个在线会话说一句，

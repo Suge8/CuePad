@@ -222,7 +222,7 @@ final class CueEval {
             let prompt = CuePrompt.system(name: CueProfile.defaultName, memory: CueMemoryView(try await rig.store.cueMemory()), agents: [], runtime: EvalBrain.current.runtime)
             try prompt.write(to: output.appending(path: "system-prompt.md"), atomically: true, encoding: .utf8)
             try await writeScore(name, suite: suite, checks: checks, failure: failure, prompt: prompt, to: output)
-            // 资料库留一份，看这一场在 Cue 页上的样子（docs/verify.md「Cue 评测」）
+            // 资料库留一份，看这一场在 Cue 页上的样子（docs/cue-eval.md）
             let library = output.appending(path: "\(name).library", directoryHint: .isDirectory)
             try? FileManager.default.removeItem(at: library)
             try FileManager.default.copyItem(at: rig.app.databaseURL.deletingLastPathComponent(), to: library)
