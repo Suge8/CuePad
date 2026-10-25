@@ -11,7 +11,8 @@ import Synchronization
 /// 何时连由 App 定（`AppServices.startRelay`）：`run` 期间想连就连着；`pause` 起不想连，`settle` 等按出去的门铃发完再断，
 /// 其间 `resume` 了就不断；换了 iCloud 账号 `reconnect` 换房间。不想连着时又有改动被收下（手机在后台点了实时活动上的"允许一次"），
 /// 短连一次（iOS 在后台任务里）：入房、按完就断，不等回前台，对方不必等兜底那一拉。
-/// 密钥要认过账号才取得到（`CloudSync.relaySecret`）：没登录 iCloud 时连接停在取密钥上，不重试。
+/// 密钥要认过账号才取得到（`CloudSync.relaySecret`）：没登录 iCloud 时连接停在取密钥上，不重试。取到就记着（`known`），之后的连接不再先去 iCloud 取一趟；
+/// 用记着的那份入了房再去取一次核对，变了（这个账号的 iCloud 数据被清掉、密钥重新生成过）就按新的重连。
 /// 断了按退避加抖动重连（`retry`），网络恢复时不等退避；每次入房先补按欠下的门铃（`ring`），同时开始心跳、收门铃并拉一次：
 /// 没连着的那段时间（包括启动到第一次连上）的门铃听不到。
 /// 心跳用 WebSocket 协议层的 ping，每 `pingInterval` 一次，`pongLimit` 内没回就断开重连：静默断线最迟 `silenceLimit` 发现。
@@ -26,6 +27,8 @@ final class Relay {
     @ObservationIgnored private var socket: URLSessionWebSocketTask?
     @ObservationIgnored private let session: URLSession
     @ObservationIgnored private var rang: (@MainActor () async -> Void)?
+    /// 这个账号的房间与签名（密钥派生的）：取到一次就记着，换账号（`reconnect`）时清掉。
+    @ObservationIgnored private var known: RelayCredentials?
     /// 保持连接的任务（断了自己重连）；断开着时为 nil。
     @ObservationIgnored private var connection: Task<Void, Never>?
     /// 最后一个按出去的门铃（之前的都已发完或失败）：`settle` 与短连等它。
@@ -106,6 +109,7 @@ final class Relay {
 
     /// 换了 iCloud 账号：连着的那条在旧账号的房间里，断开后按新账号的密钥重连。
     func reconnect() async {
+        known = nil
         guard connection != nil else { return }
         await disconnect()
         connect()
@@ -166,7 +170,10 @@ final class Relay {
 
     /// 一次连接：握手、入房、补按欠下的门铃；不想连着的按完就返回，想连着的同时拉一次、收门铃、发心跳，直到断开（抛出）或被取消。
     private func session(_ rang: @escaping @MainActor () async -> Void) async throws {
-        let credentials = try await credentials()
+        let remembered = known
+        let credentials: RelayCredentials
+        if let remembered { credentials = remembered } else { credentials = try await self.credentials() }
+        known = credentials
         let socket = session.webSocketTask(with: endpoint.appending(path: credentials.room))
         self.socket = socket
         defer {
@@ -187,6 +194,7 @@ final class Relay {
                 return
             }
             Task { await rang() }  // 补上没连着时听不到的；心跳与收门铃不等它
+            if let remembered { Task { await recheck(remembered) } }
             try await withThrowingTaskGroup(of: Void.self) { group in
                 group.addTask { try await Self.heartbeat(socket) }
                 group.addTask {
@@ -202,6 +210,13 @@ final class Relay {
         } onCancel: {
             socket.cancel(with: .goingAway, reason: nil)
         }
+    }
+
+    /// 用记着的那份入了房：再取一次密钥核对，换过了就忘掉旧的、重取重连（只在其间没换账号时）。
+    private func recheck(_ remembered: RelayCredentials) async {
+        guard let fresh = try? await credentials(), fresh.room != remembered.room, known?.room == remembered.room else { return }
+        Self.log.notice("门铃的密钥换过了，换房间重连")
+        await reconnect()
     }
 
     /// 收中转的随机数、签名回去、等它说入了房间；`handshakeLimit` 内没走完就断开。
