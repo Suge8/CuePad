@@ -75,6 +75,7 @@ private struct PlacesCatcher: View {
             Color.clear.contentShape(.rect)
                 .onTapGesture(perform: close)
                 .gesture(DragGesture(minimumDistance: 4).onChanged { _ in close() })
+                .transition(.identity)
                 .accessibilityHidden(true)
         }
     }

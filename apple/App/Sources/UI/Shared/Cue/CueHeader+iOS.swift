@@ -28,7 +28,7 @@ struct CueHeader: View {
         GrowPanel(open: $expanded, radius: Self.height / 2) {
             Button(action: toggle) { CuePlate(card: expanded && host != .navigationBar) }
                 .buttonStyle(.plain)
-                .simultaneousGesture(DragGesture(minimumDistance: 16).onEnded { drag in
+                .highPriorityGesture(DragGesture(minimumDistance: 16).onEnded { drag in
                     if expanded, drag.translation.height < -24 { toggle() }
                 })
                 .accessibilityAddTraits(.isHeader)

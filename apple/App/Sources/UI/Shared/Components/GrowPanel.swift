@@ -3,7 +3,7 @@ import SwiftUI
 
 /// 从页顶那一排长出面板的一块实底玻璃（Cue 的名牌、进展页的分段与额度环）：收着时只占 `head` 的宽、居中，同一块玻璃长高、长宽到铺满。
 /// `head` 里的几块不另画玻璃（`headerGrown`）；`head` 可以跟着开合换排法（Cue 的名牌长成名片），在同一块玻璃里一起长。
-/// 面板的几行按长大后的位置排好、淡入并下移 6 点，玻璃还在长的那几帧里不画到玻璃外面。点面板外收起（背后的页面不压色），离开页面时收起，
+/// 面板的几行按长大后的位置排好、淡入并下移 6 点，玻璃还在长的那几帧里不画到玻璃外面。点面板外只收起、不开（背后的页面不压色），离开页面时收起，
 /// 开合轻触感一下；提示横幅盖在这一排上时收着的整块让开，开着的只让开 `head`。开没开由调用方持有，`head` 里的按钮经 `grow` 开合
 /// （无回弹弹簧 `Motion.snappy`，减弱动态效果时直接到终态）。
 /// 里面的高度只在开合时变：长大的动画里挨一下不带动画的改高，整块玻璃就有几帧不画。面板能长到的高不让键盘：键盘起落时里面不跟着重排
@@ -43,7 +43,8 @@ struct GrowPanel<Head: View, Panel: View>: View {
         return ZStack(alignment: .top) {
             if open {
                 Color.clear.contentShape(.rect).ignoresSafeArea()
-                    .onTapGesture { $open.grow(reduceMotion: reduceMotion) }
+                    .onTapGesture { $open.grow(to: false, reduceMotion: reduceMotion) }
+                    .transition(.identity)
                     .accessibilityHidden(true)
             }
             VStack(spacing: 0) {
@@ -67,8 +68,11 @@ struct GrowPanel<Head: View, Panel: View>: View {
 }
 
 extension Binding<Bool> {
-    func grow(reduceMotion: Bool) {
-        withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { wrappedValue.toggle() }
+    /// 开合面板：给了 `to` 就到那一态（已经是就不动），不给就换一态。
+    func grow(to value: Bool? = nil, reduceMotion: Bool) {
+        let next = value ?? !wrappedValue
+        guard next != wrappedValue else { return }
+        withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { wrappedValue = next }
     }
 }
 #endif
