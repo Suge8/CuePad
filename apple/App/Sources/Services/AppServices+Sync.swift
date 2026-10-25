@@ -30,9 +30,7 @@ extension AppServices {
         follow {
             for await state in sync.stateUpdates { self.setSyncState(state) }
         }
-        follow {
-            do { try await sync.start() } catch { self.syncFailedToStart(error) }
-        }
+        follow { await sync.start() }
         follow { await self.syncNow() }
         follow(reporting: { .syncUnavailable("冲突列表读取失败：\($0)") }) {
             for try await conflicts in self.store.observe({ try $0.conflicts() }) { self.setConflicts(conflicts) }

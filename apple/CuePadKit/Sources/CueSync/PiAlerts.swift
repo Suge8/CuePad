@@ -129,30 +129,35 @@ struct AlertSubscriptions {
   }
 
   /// 幂等：缺的创建，与期望不一致的替换，本前缀下多余的删除，别人的订阅不碰。每个订阅各建各的，一个被拒（如生产环境还没部署的）不挡别的。
-  /// 账号切换后新账号的数据库里没有这些订阅，再调用一次即重建。失败不抛：结果就是状态，原因交给界面。
+  /// 账号切换后新账号的数据库里没有这些订阅，再调用一次即重建。失败不抛：结果就是状态，原因交给界面；全是连不上的（`SyncFault`）是连不上，不算没建成。
   func ensure(in store: any SubscriptionStore) async -> PiAlertSubscriptionStatus {
     let existing: [CKSubscription.ID: CKSubscription]
-    do { existing = try await store.subscriptions() } catch { return .failed(error.diagnosis) }
+    do { existing = try await store.subscriptions() } catch { return Self.status([(nil, error)]) }
     let wanted = desired()
     let wantedIDs = Set(wanted.map(\.subscriptionID))
-    let failures: [String] = await withTaskGroup(of: String?.self) { group in
+    let failures: [(id: String?, error: any Error)] = await withTaskGroup(of: (String?, any Error)?.self) { group in
       for id in existing.keys where !wantedIDs.contains(id) && id.hasPrefix(Self.prefix) {
         group.addTask { await Self.attempt(id) { try await store.delete(id) } }
       }
       for subscription in wanted where !Self.matches(existing[subscription.subscriptionID], subscription) {
         group.addTask { await Self.attempt(subscription.subscriptionID) { try await store.save(subscription) } }
       }
-      return await group.reduce(into: [String]()) { failures, failure in if let failure { failures.append(failure) } }
+      return await group.reduce(into: []) { failures, failure in if let failure { failures.append(failure) } }
     }
-    return failures.isEmpty ? .active : .failed(failures.sorted().joined(separator: "\n"))
+    return failures.isEmpty ? .active : Self.status(failures)
   }
 
-  private static func attempt(_ id: String, _ change: () async throws -> Void) async -> String? {
+  private static func status(_ failures: [(id: String?, error: any Error)]) -> PiAlertSubscriptionStatus {
+    guard !failures.allSatisfy({ SyncFault($0.error).isOffline }) else { return .offline }
+    return .failed(failures.map { [$0.id, $0.error.diagnosis].compactMap { $0 }.joined(separator: "：") }.sorted().joined(separator: "\n"))
+  }
+
+  private static func attempt(_ id: String, _ change: () async throws -> Void) async -> (String?, any Error)? {
     do {
       try await change()
       return nil
     } catch {
-      return "\(id)：\(error.diagnosis)"
+      return (id, error)
     }
   }
 

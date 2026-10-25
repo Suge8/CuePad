@@ -19,6 +19,7 @@ struct AlertCenterTests {
         (.authorized, .pending, .off, .pending, nil, nil),
         (.authorized, .failed("没有 aps-environment"), .off, .problem, .retry, "没有 aps-environment"),
         (.authorized, .registered, .failed("CKErrorDomain 错误 4"), .problem, .retry, "CKErrorDomain 错误 4"),
+        (.authorized, .registered, .offline, .pending, nil, nil),
     ] as [Case])
     func 通知状态一行_写明卡在哪一步(_ c: Case) {
         let status = PiAlertStatus(authorization: c.0, registration: c.1, subscription: c.2)

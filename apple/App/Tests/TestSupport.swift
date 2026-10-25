@@ -40,7 +40,6 @@ nonisolated final class FakeSync: SyncControlling, Sendable {
     private let state = Mutex(State())
     private let updates: AsyncStream<SyncState>
     private let continuation: AsyncStream<SyncState>.Continuation
-    let startError = Mutex<(any Error)?>(nil)
 
     init() { (updates, continuation) = AsyncStream.makeStream() }
 
@@ -52,9 +51,8 @@ nonisolated final class FakeSync: SyncControlling, Sendable {
 
     func emit(_ state: SyncState) { continuation.yield(state) }
 
-    func start() async throws {
+    func start() async {
         state.withLock { $0.started += 1 }
-        if let error = startError.withLock({ $0 }) { throw error }
     }
 
     /// 为 true 时 `stop()` 永不返回（模拟卡住的同步）。

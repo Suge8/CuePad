@@ -61,3 +61,28 @@ extension CloudSync {
     return CloudSync(store: store) { cloud }
   }
 }
+
+/// 断了网的 iCloud 替身：认得出账号，其余请求都像断网那样失败——拉取与订阅是 CloudKit 包着的 -1009，上传是包在 `partialFailure` 里的逐条 -1009。
+/// 调试画面用它看断网时各处界面怎么说（`CloudSync.unreachable`）。
+struct UnreachableCloud: SyncCloud {
+  private static let offline = NSError(domain: NSURLErrorDomain, code: NSURLErrorNotConnectedToInternet)
+  private static var failure: CKError { CKError(.networkUnavailable, userInfo: [NSUnderlyingErrorKey: offline]) }
+
+  func accountStatus() -> CKAccountStatus { .available }
+  func accountName() -> String { "simulated" }
+  func changes(since token: Data?, keys: [String]?) throws -> ZoneChangeBatch { throw Self.failure }
+  func records(_ ids: [CKRecord.ID]) throws -> [CKRecord] { throw Self.failure }
+  func upload(saving: [CKRecord], deleting: [CKRecord.ID]) throws -> SentRecords {
+    let ids = saving.map(\.recordID) + deleting
+    throw CKError(.partialFailure, userInfo: [CKPartialErrorsByItemIDKey: Dictionary(uniqueKeysWithValues: ids.map { ($0, Self.offline) })])
+  }
+  func saveZone() throws { throw Self.failure }
+  func subscriptions() throws -> [CKSubscription.ID: CKSubscription] { throw Self.failure }
+  func save(_ subscription: CKSubscription) throws { throw Self.failure }
+  func delete(_ id: CKSubscription.ID) throws { throw Self.failure }
+}
+
+extension CloudSync {
+  /// 连断了网的 iCloud 替身（`UnreachableCloud`，调试画面）。
+  public static func unreachable(store: CueStore) -> CloudSync { CloudSync(store: store) { UnreachableCloud() } }
+}

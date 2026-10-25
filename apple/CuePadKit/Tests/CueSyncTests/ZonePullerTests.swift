@@ -140,7 +140,7 @@ import Testing
 
     #expect(try await store.syncState(ZonePuller.tokenKey) == Data("t1".utf8))
     #expect(try RawDB(rig.fixture.url).count("attachments") == 0)
-    #expect(await rig.coordinator.issues.contains { $0.message.contains("已拒绝") })
+    #expect(await rig.coordinator.issues.contains { $0.problem == .damaged })
   }
 
   /// 同时来的几次拉取一个接一个跑：不会两个同时拉、用同一个令牌拉两遍。
