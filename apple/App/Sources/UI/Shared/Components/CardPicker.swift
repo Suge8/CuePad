@@ -66,7 +66,7 @@ struct CardPicker: View {
                 if let data {
                     if data.shown == 0, !settled.isEmpty { EmptyState.noMatch(settled) }
                     if !data.pins.isEmpty {
-                        header("置顶的灵感", project: nil)
+                        header("已置顶", project: nil)
                         rows(data.pins)
                     }
                     if !data.own.isEmpty {
