@@ -10,6 +10,7 @@ struct PiSubagentList: View {
     let agents: [PiSubagentState]
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var typeSize
     @State private var expanded = DebugHooks.preset.toolsOpen
 
     var body: some View {
@@ -50,15 +51,19 @@ struct PiSubagentList: View {
         .accessibilityExpanded(expanded)
     }
 
+    private var stacked: Bool { typeSize.isAccessibilitySize }
+
     private func row(_ agent: PiSubagentState) -> some View {
         VStack(alignment: .leading, spacing: 2) {
+            // 名字、角色与模型是一段字：放不下就折行，不截成"…"（模型名截了就认不出）；用时不折，辅助字号下挪到下一行
             HStack(spacing: Note.spacing) {
                 PiStateDot(shown: agent.shown, size: 6).frame(width: Note.glyphWidth)
-                Text(agent.name).foregroundStyle(palette.ink2).lineLimit(1)
-                Text("\(agent.role)\(agent.model.map { model in Text("\(Dotted.separator)\(BrandMark.label(.model(reference: model), PiModelName.short(model)))") } ?? Text(verbatim: ""))")
-                    .foregroundStyle(palette.ink3).lineLimit(1)
-                Spacer(minLength: 8)
-                if let clock = PiSubagentClock(agent) { Elapsed(clock: clock) }
+                (stacked ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2)) : AnyLayout(HStackLayout(spacing: Note.spacing))) {
+                    Text("\(Text(agent.name).foregroundStyle(palette.ink2)) \(agent.role)\(agent.model.map { model in Text("\(Dotted.separator)\(BrandMark.label(.model(reference: model), PiModelName.short(model)))") } ?? Text(verbatim: ""))")
+                        .foregroundStyle(palette.ink3)
+                    if !stacked { Spacer(minLength: 8) }
+                    if let clock = PiSubagentClock(agent) { Elapsed(clock: clock).fixedSize() }
+                }
             }
             .font(Typography.caption)
             Text("\(Text(agent.label).foregroundStyle(agent.shown.labelTint(palette)))\(Text(agent.action.isEmpty ? "" : "\(Dotted.separator)\(agent.action)").foregroundStyle(palette.ink3))")

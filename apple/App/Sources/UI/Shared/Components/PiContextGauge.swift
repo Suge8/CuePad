@@ -39,7 +39,7 @@ struct PiContextGauge: View {
             }
             .font(Typography.meta)
             .padding(.horizontal, 10)
-            .frame(height: ConfigCapsule.height)
+            .configCapsuleHeight()
             .background(palette.fill, in: .capsule)
             .background(alignment: .leading) {
                 GeometryReader { proxy in
