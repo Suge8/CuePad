@@ -60,5 +60,6 @@ xcrun cktool export-schema $C --output-file /tmp/dev.ckdb   # 回读：服务端
 
 - 结构：`cueMessages.author`、`deliveryRequests.status` 两个可查询索引，与门铃密钥的记录类型 `relaySecrets`（`.ckdb` 已改；2026-10-25 重新生成、导入开发环境后回读，开发比生产只多这三项，确认页的 Indexes 应多那两个索引、Record Types 多 `relaySecrets`）。
 - 订阅定义（2026-10-25 已由开发签名的构建在开发容器的 `CuePad` 区保存，状态 active）：`cuepad.pi.waiting`、`cuepad.pi.settled`、`cuepad.cue` 带 content-available，新增 `cuepad.cue.said`、`cuepad.delivery.result`。旧的数据库订阅 `cuepad.changes` 不用部署，新版客户端自己删。
+- 订阅定义（还没在开发容器里保存）：新增 `cuepad.pi.reply`（Cue 留给你回的会话，`notify == awaitsReply`，文案 key `pi_alert_reply`）。部署前先用开发签名的构建（`xc.sh device`）打开一次手机，让它在开发容器里建好。没部署时生产里建不成它，待回复的锁屏推送不来，别的照常。
 - 顺序：先部署，再发 iOS 版。没部署时，新版在生产建不成两个新订阅，三个可见通知照常（`ensure` 各建各的），手机后台就收不到 Cue 的话与请求结果的推送；订阅建不成的原因显示在设置的通知那一行，部署后回前台自动补建。
 - 门铃：生产没有 `relaySecrets` 时门铃取不到密钥、连不上中转，拉取照常按节奏走；`ck-production.sh` 会拦下发布。

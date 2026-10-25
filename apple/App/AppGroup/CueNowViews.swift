@@ -15,7 +15,7 @@ extension AnyTransition {
 
 /// "Cue 此刻"（`CueNow`）的现成样子，App、小组件、灵动岛与锁屏同一份：珠子（`BeadDot`、`CueBeads`）、珠子加那一句（`CueNowLine`），
 /// 扩展里的头像（`CueNowFace`：静止的脸加一圈状态色的环；App 里的头像是会动的 `CueAvatar`，环的颜色同一套）。
-/// 颜色只按意思取：在跑与等子代理靛青（实心是在跑，空心是交出去了、等交回）、等你赭黄、刚做完石绿、歇着灰。
+/// 颜色只按意思取：在跑与等子代理靛青（实心是在跑，空心是交出去了、等交回）、等你赭黄、待回复墨色、刚做完石绿、歇着灰。
 struct BeadDot: View {
     /// 一排里珠子的直径（Cue 那一行、页头）；扩展里另给。
     static let standard: CGFloat = 7
@@ -159,6 +159,7 @@ extension CueNow.Tone {
         switch self {
         case .moving: palette.signature
         case .asks: palette.waiting
+        case .reply: palette.ink
         case .done: palette.replied
         case .quiet: palette.ink3
         }
