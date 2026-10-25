@@ -168,7 +168,7 @@ final class AgentTape: @unchecked Sendable {
         case .record:
             let pids = state.withLock { $0.realGroups }
             for pid in pids { killpg(pid, SIGTERM) }
-            for pid in pids { try? await eventually("真 Agent 进程组 \(pid) 退出", timeout: .seconds(5)) { killpg(pid, 0) != 0 } }
+            for pid in pids { try? await eventually("真 Agent 进程组 \(pid) 退出") { killpg(pid, 0) != 0 } }
             for pid in pids { killpg(pid, SIGKILL) }
             guard keep else { return }
             let events = state.withLock { state in

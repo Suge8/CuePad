@@ -57,6 +57,7 @@ struct AgentRow: View {
         switch status.presence {
         case .found: false
         case .tooOld: true
+        case .unresponsive: false
         case .notFound: status.files == .missing
         }
     }
@@ -113,6 +114,7 @@ enum AgentLine {
         case (_, .foreign(let path)): return (.failure, Dotted(String(localized: "\(path) 是别人的同名文件，没有改动")))
         case (.tooOld(let version), _) where kind == .opencode: return (.notice, Dotted(String(localized: "需要 OpenCode 2，现在是 \(version.description)")))
         case (.tooOld(let version), _): return (.notice, Dotted(String(localized: "\(version.description) 太旧，需要 \(kind.minimumVersion.map(\.description) ?? "") 或更新")))
+        case (.unresponsive, _): return (.notice, Dotted(String(localized: "找到了，但问版本没有回应，稍后再看")))
         case (.notFound, .missing): return (.calm, Dotted(String(localized: "没有检测到")))
         case (.notFound, _): return (.calm, Dotted(String(localized: "已卸载，CuePad 的技能还留着")))
         case (.found, .missing): return (.calm, Dotted(kind.writes))

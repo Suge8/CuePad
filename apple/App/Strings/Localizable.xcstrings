@@ -679,6 +679,22 @@
         }
       }
     },
+    "%@ 问版本没有回应，稍后再试" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ didn't answer the version check; try again later"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 问版本没有回应，稍后再试"
+          }
+        }
+      }
+    },
     "%@%@" : {
       "localizations" : {
         "zh-Hans" : {
@@ -11045,6 +11061,22 @@
         }
       }
     },
+    "找到了，但问版本没有回应，稍后再看" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Found it, but it didn't answer the version check — look again later"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "找到了，但问版本没有回应，稍后再看"
+          }
+        }
+      }
+    },
     "技能" : {
       "localizations" : {
         "en" : {
@@ -19835,6 +19867,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "问不出模型（%@）"
+          }
+        }
+      }
+    },
+    "问版本没有回应，稍后再试" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Didn't answer the version check; try again later"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "问版本没有回应，稍后再试"
           }
         }
       }

@@ -4,6 +4,7 @@ import AppKit
 import UIKit
 #endif
 import CueEditor
+import CueTestSupport
 
 extension EditorHarness {
     func load(_ stored: String) {
@@ -23,9 +24,9 @@ extension EditorHarness {
         return paragraphs
     }
 
-    /// 条件等待：让出主线程直到条件成立，条件一成立马上返回。上限只是"确实不会来了"的兜底（同 CueTestSupport 的 conditionTimeout）。
-    func wait(timeout: TimeInterval = 5, until condition: () -> Bool) async -> Bool {
-        let deadline = Date().addingTimeInterval(timeout)
+    /// 条件等待：让出主线程直到条件成立，条件一成立马上返回。上限只是"确实不会来了"的兜底（同 CueTestSupport 的 conditionBudget）。
+    func wait(until condition: () -> Bool) async -> Bool {
+        let deadline = Date().addingTimeInterval(TimeInterval(conditionBudget.components.seconds))
         while !condition() {
             if Date() > deadline { return false }
             await pump(0.02)

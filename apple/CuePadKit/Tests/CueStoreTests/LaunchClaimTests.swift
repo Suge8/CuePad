@@ -31,7 +31,7 @@ import Testing
 
   /// Mac 上的会话记录晚到（Pi 120 秒后才连上、记下）：开新会话的请求早已完成、过了保留期，
   /// 但它在被认领前不清理，记录到了照样关联；同一轮里别的已完成请求照常清理；认领后下一轮清理带走它。
-  @Test(.timeLimit(.minutes(1)))
+  @Test
   func 会话记录120秒后才到_开新会话的请求留着_仍能关联() async throws {
     let clock = ManualTiming()
     let project = try await store.createProject(name: "圆桌", color: "#111")

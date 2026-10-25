@@ -119,7 +119,7 @@ struct ReceiptTests {
     /// 话传上服务器就是已发出（会话行、Cue 页头同一个说法），不等 Mac 回执。弱网：一次拉取失败、同步状态成了连不上 iCloud，
     /// 已发出的话不变红；断着时写下的话是发送中，满 `Speech.sendLimit` 才没能送达（只这一句，写同步的原因）。恢复后它传上去回到已发出；
     /// Mac 回执的那句已送达，另一句已发出后满 `Speech.receiptLimit` 没回执是 Mac 迟迟没收下。
-    @Test(.timeLimit(.minutes(1)))
+    @Test
     func 说的话到服务器是已发出_回执是已送达_一次失败不让别的话变红_没发出与没回执各自到点() async throws {
         let cloud = WeakCloud()
         let app = TestApp(sync: .built { CloudSync(store: $0) { cloud } }, timing: clock.timing)
@@ -186,7 +186,7 @@ struct ReceiptTests {
     /// 断网时说的话（对 Cue、对会话）先是发送中，满时限还没出这台才没能送达，不说 Mac 迟迟没收下、不说 Cue 在睡觉。断网超过手机主动拉取的
     /// 两分钟窗口后恢复：立即同步一次（交回引擎的记录当场传出、回执当场拉回），主动拉取重开一个窗口；没发出的话回到发送中，时限从恢复那一刻重新算。
     /// 传出与回执经同步走完一圈见 CueSync 的 DeviceFlowTests（断网写下的请求恢复后到 Mac、结果回到手机）。
-    @Test(.timeLimit(.minutes(1)))
+    @Test
     func 断网时说的话_满时限才没能送达不报没回应_恢复后立即同步并重开拉取_时限重算() async throws {
         let app = TestApp(timing: clock.timing)
         let services = app.services!

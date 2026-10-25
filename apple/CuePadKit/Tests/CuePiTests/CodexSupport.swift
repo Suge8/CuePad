@@ -114,7 +114,7 @@ struct CodexHome {
 
     /// 停掉在里面跑的进程（终端界面拉起的常驻服务与它的升级进程、它们起的 git，见 `TestProcesses`），再删掉临时目录（含复制的凭据）。
     @concurrent func remove() async {
-        TestProcesses.stop(under: [root])
+        await TestProcesses.stop(under: [root])
         try? FileManager.default.removeItem(at: root)
     }
 
@@ -207,16 +207,13 @@ final class CodexRig {
         var locator = codex.locator
         if wrapped {
             let bin = codex.root.appending(path: "wrapper", directoryHint: .isDirectory)
-            try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
-            let script = bin.appending(path: "codex")
-            try "#!/bin/sh\n'\(AgentTape.executable("codex").path)' \"$@\"\n".write(to: script, atomically: true, encoding: .utf8)
-            try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
+            try TestScript.install("#!/bin/sh\n. \"$0.env\"\n\"$REAL\" \"$@\"\n", at: bin.appending(path: "codex"), variables: ["REAL": AgentTape.executable("codex").path])
             locator = ExecutableLocator(searchDirectories: [bin])
         }
-        let runtime = CodexRuntime(bridge: bridge, paths: codex.paths, hooks: hooks, codex: { [locator] in locator.candidates("codex").first }, locate: { [locator] in locator }, presence: presence)
+        let runtime = CodexRuntime(bridge: bridge, paths: codex.paths, hooks: hooks, codex: { [locator] in locator.candidates("codex").first }, locate: { [locator] in locator }, presence: presence, timing: noDeadline)
         do {
             try codex.signIn(approvals: approvals)
-            try await AgentIntegration(paths: codex.paths, locate: { [codex] in codex.locator }, cuepad: Self.hookHelper).install(.codex)
+            try await AgentIntegration(paths: codex.paths, locate: { [codex] in codex.locator }, cuepad: Self.hookHelper, timing: noDeadline).install(.codex)
             try hooks.start()
             try bridge.start()
             try runtime.start()

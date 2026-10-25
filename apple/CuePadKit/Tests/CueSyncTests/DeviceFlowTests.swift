@@ -105,7 +105,7 @@ import Testing
   }
 
   /// 发出的话：手机写、Mac 执行，结果回到手机；Mac 把这句写进对话时收走请求，收走也同步到手机，气泡由对话里那条接替。
-  @Test(.timeLimit(.minutes(1)))
+  @Test
   func deliveryRequestTravelsFromPhoneToMacAndTheResultComesBackThenIsCleanedUp() async throws {
     let executor = DeliveryExecutor(store: mac.store, hostID: "mac", timing: clock.timing, onIssue: { Issue.record("\($0)") }) { _ in .succeeded }
     try await executor.start()
@@ -131,7 +131,7 @@ import Testing
 
   /// 手机上答了会话的提问：Mac 作答成功时把你答了什么写进那个会话的对话（带着当时的问题），经同步回到手机；
   /// 作答请求清理掉以后这一句还在（排在哪、Cue 替你答的不写见 App 的 `AnswerLineTests`）。
-  @Test(.timeLimit(.minutes(1)))
+  @Test
   func anAnswerLineOutlivesItsRequestOnThePhone() async throws {
     let executor = DeliveryExecutor(
       store: mac.store, hostID: "mac", timing: clock.timing, onIssue: { Issue.record("\($0)") }
@@ -156,7 +156,7 @@ import Testing
   /// 断网时手机说的话（发给会话、对 Cue 说）：马上传失败，同步状态是连不上 iCloud，Mac 那边还没有；
   /// 记录不丢，恢复后的同步（发送者把待推送发出去、拉取）把它们传到 Mac；Mac 执行、交给 Cue 后的回执经同步回到手机，
   /// 两句都是已送达，同步状态回到空闲。
-  @Test(.timeLimit(.minutes(1)))
+  @Test
   func wordsSaidOfflineReachTheMacAfterRecoveryAndTheReceiptsComeBack() async throws {
     let executor = DeliveryExecutor(store: mac.store, hostID: "mac", timing: clock.timing, onIssue: { Issue.record("\($0)") }) { _ in .succeeded }
     try await executor.start()

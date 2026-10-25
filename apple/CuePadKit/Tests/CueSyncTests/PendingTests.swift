@@ -10,7 +10,7 @@ import Testing
   var store: CueStore { rig.store }
 
   /// 本机与另一个进程（命令行）的写入、删除，开始同步后都自己传上去。
-  @Test(.timeLimit(.minutes(1)))
+  @Test
   func localAndOtherProcessWritesAreUploadedAutomaticallyOnceStarted() async throws {
     let server = FakeUploader()
     let sender = RecordSender(uploader: server, coordinator: rig.coordinator)
@@ -25,7 +25,7 @@ import Testing
   }
 
   /// 上一版还在上传时记录又改了：上一版的结果回来后，新的这一版接着传上去，不丢。
-  @Test(.timeLimit(.minutes(1)))
+  @Test
   func anEditMadeWhileThePreviousVersionWasUploadingIsUploadedAfterIt() async throws {
     let server = FakeUploader(holding: true)
     let sender = RecordSender(uploader: server, coordinator: rig.coordinator)

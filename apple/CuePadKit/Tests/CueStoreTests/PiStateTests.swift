@@ -17,7 +17,7 @@ import Testing
 
   /// 合并定时器到点的同时来了一次立即写入（完成）：挂起的旧细节不能在更新的状态之后落盘，
   /// 否则手机上的会话会一直显示"工作中"。
-  @Test(.timeLimit(.minutes(1)))
+  @Test
   func pendingDetailFiringAlongsideANewerStateNeverOverwritesIt() async throws {
     let recorder = recorder()
     for round in 0..<40 {

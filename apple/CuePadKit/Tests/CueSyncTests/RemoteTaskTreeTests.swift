@@ -52,7 +52,7 @@ import Testing
 
   /// 随机造一片合规的层级，再像远端批量应用那样改几张卡（改上级——含挂到自己、后代、灵感下——、项目、是不是任务，或删掉），
   /// 应用后用户读到的层级必须满足规则：上级是任务、与下级同项目、不成环、任务最多两级。
-  @Test(.timeLimit(.minutes(1)))
+  @Test
   func 随机的远端批量改动之后_层级总是合规() async throws {
     var random = Random(state: 20_261_011)
     for round in 0..<60 {

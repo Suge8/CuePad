@@ -59,7 +59,7 @@ extension CueHostTests {
                 try await app.services.enableCue(on: TestApp.hostID, moving: false)
             }
             // 值班起来、对过刚启用这一步：手上有事的（`prepare` 摆了）这时醒来看一眼，用例自己等它说的话
-            try await eventually("刚启用对过账", timeout: .seconds(300)) { self.services.cue.keeper?.progress.greeted != nil }
+            try await eventually("刚启用对过账") { self.services.cue.keeper?.progress.greeted != nil }
         }
 
         /// 启用前手上已有一件没开工的事：刚启用时 Cue 醒来看一眼。
@@ -103,11 +103,11 @@ extension CueHostTests {
 
         func image() throws -> String { CueFormat.imageMarkup(id: try store.files.store(pngData(shade: 0.5))) }
 
-        /// 等到出现一条 `author` 写的、含 `text` 的消息。默认上限比条件等待宽：中间隔着真 Pi 大脑起进程、读剧本。
+        /// 等到出现一条 `author` 写的、含 `text` 的消息（中间隔着真 Pi 大脑起进程、读剧本）。
         @discardableResult
-        func message(_ author: CueAuthor, containing text: String, timeout: Duration = .seconds(15)) async throws -> CueMessage {
+        func message(_ author: CueAuthor, containing text: String) async throws -> CueMessage {
             var found: CueMessage?
-            try await eventually("\(author) 说「\(text)」", timeout: timeout) {
+            try await eventually("\(author) 说「\(text)」") {
                 found = try await self.store.cueMessages().last { $0.author == .known(author) && $0.text.contains(text) }
                 return found != nil
             }

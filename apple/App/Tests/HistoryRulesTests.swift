@@ -89,20 +89,17 @@ struct HistoryRulesTests {
         }
     }
 
-    /// 跨进程的一步（真 Pi 起进程、闲置退出、文件落盘、索引跟上）要几秒，比默认的条件等待宽
-    private static let piStep: Duration = .seconds(15)
-
     // MARK: 一句话没说过的会话
 
     @Test func 一句话没说过的会话关掉后不进历史() async throws {
         let rig = try await Rig()
         defer { rig.shutdown() }
         let id = try await rig.host.open(in: rig.cwd, launchToken: "silent", name: nil, model: nil, thinking: nil)
-        try await eventually("会话记录写出", timeout: Self.piStep) { try await rig.records(.all).count == 1 }
+        try await eventually("会话记录写出") { try await rig.records(.all).count == 1 }
 
         try await rig.bridge.end(id)
 
-        try await eventually("没说过话的会话记录被删（同步删除）", timeout: Self.piStep) { try await rig.records(.all).isEmpty }
+        try await eventually("没说过话的会话记录被删（同步删除）") { try await rig.records(.all).isEmpty }
     }
 
     // MARK: 后台托管的会话闲置退出
@@ -114,30 +111,30 @@ struct HistoryRulesTests {
         let session = try #require(rig.bridge.session(id: id))
         let sessionID = session.sessionID
         _ = try await rig.bridge.send(PiMessage(text: "开场"), to: id)
-        try await eventually("回答落盘、索引跟上", timeout: Self.piStep) { try await rig.replies(of: sessionID).last == "ECHO 开场 IMAGES[]" }
+        try await eventually("回答落盘、索引跟上") { try await rig.replies(of: sessionID).last == "ECHO 开场 IMAGES[]" }
 
         // 闲置退出：进程不在了，会话仍在"现在"，歇着，不进历史
-        try await eventually("闲置退出", timeout: Self.piStep) { rig.bridge.session(sessionID: sessionID) == nil }
+        try await eventually("闲置退出") { rig.bridge.session(sessionID: sessionID) == nil }
         try await expectResting(rig, sessionID)
 
         // Mac 本机发话（"已结束"那条路：执行器用会话索引在后台唤醒）
         Workspace(services: rig.services).send("本机来的话", to: AgentTarget(session: sessionID))
-        try await eventually("本机发话得到回复", timeout: Self.piStep) { try await rig.replies(of: sessionID).last == "ECHO 本机来的话 IMAGES[]" }
-        try await eventually("再次闲置退出", timeout: Self.piStep) { rig.bridge.session(sessionID: sessionID) == nil }
+        try await eventually("本机发话得到回复") { try await rig.replies(of: sessionID).last == "ECHO 本机来的话 IMAGES[]" }
+        try await eventually("再次闲置退出") { rig.bridge.session(sessionID: sessionID) == nil }
         let resting = try await expectResting(rig, sessionID)
 
         // 手机发话（投送请求写给这台 Mac）
         let request = try await rig.store.requestDelivery("手机来的话", to: resting.target, on: resting.hostID, mode: .send)
         let result = try await rig.services.store.outcome(of: request)
         #expect(result.failure == nil)
-        try await eventually("手机发话得到回复", timeout: Self.piStep) { try await rig.replies(of: sessionID).last == "ECHO 手机来的话 IMAGES[]" }
-        try await eventually("又一次闲置退出", timeout: Self.piStep) { rig.bridge.session(sessionID: sessionID) == nil }
+        try await eventually("手机发话得到回复") { try await rig.replies(of: sessionID).last == "ECHO 手机来的话 IMAGES[]" }
+        try await eventually("又一次闲置退出") { rig.bridge.session(sessionID: sessionID) == nil }
         let again = try await expectResting(rig, sessionID)
 
         // 用户在 CuePad 里结束它：这时才进历史
         let end = try await rig.services.end(again)
         #expect(try await rig.services.store.outcome(of: end).failure == nil)
-        try await eventually("结束后进历史", timeout: Self.piStep) { try await rig.records(.ended).map(\.sessionID) == [sessionID] }
+        try await eventually("结束后进历史") { try await rig.records(.ended).map(\.sessionID) == [sessionID] }
         #expect(try await rig.records(.live).isEmpty)
     }
 
@@ -153,7 +150,7 @@ struct HistoryRulesTests {
 }
 
 /// 托管开新会话：参数不对时 Pi 起来就退出，带着 Pi 的原话报错，桥上不留会话。
-@Suite(.enabled(if: FileManager.default.isExecutableFile(atPath: realPi.path), "需要 ~/.local/bin/pi"), .timeLimit(.minutes(1)))
+@Suite(.enabled(if: FileManager.default.isExecutableFile(atPath: realPi.path), "需要 ~/.local/bin/pi"))
 struct HostedLaunchTests {
     @Test func 开新会话模型无效时整体失败() async throws {
         let directory = TestLibraries.makeDirectory()

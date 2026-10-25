@@ -19,6 +19,8 @@ let redPNG = Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAQAAAAEACAIAAADTED8xAA
 @MainActor
 final class ClaudeTestbed {
     let root: URL
+    /// 外壳（`wrapper`）所在的目录
+    let wrapperDirectory: URL
     let config: URL
     /// 工作目录（真实路径：Claude Code 记的就是它）
     let work: URL
@@ -44,14 +46,16 @@ final class ClaudeTestbed {
     }
 
     var integration: AgentIntegration {
-        AgentIntegration(paths: paths, locate: { AgentTape.locator("claude") }, cuepad: PiProcess.cuepad)
+        AgentIntegration(paths: paths, locate: { AgentTape.locator("claude") }, cuepad: PiProcess.cuepad, timing: noDeadline)
     }
 
     /// - Parameter settings: 装钩子之前用户自己的 settings.json（nil 是没有这个文件）。
     /// - Parameter wrapper: CuePad 起的 `claude` 换成这段 shell 脚本的外壳，真 claude 在 `$REAL`（`passThrough`：托管进程是它的子进程，
-    ///   钩子的父进程不是 CuePad 起的那个）。终端里开的仍是真 claude。
+    ///   钩子的父进程不是 CuePad 起的那个）。终端里开的仍是真 claude。脚本经 `TestScript` 放，内容里不写本次运行的路径：
+    ///   它要用的文件放在 `wrapperDirectory`，脚本里写 `${0%/*}`。
     init(installHooks: Bool = true, settings: String? = nil, idleLimit: Duration = .seconds(1800), wrapper: String? = nil) async throws {
         root = try makeTempDirectory()
+        wrapperDirectory = root.appending(path: "wrapper", directoryHint: .isDirectory)
         config = root.appending(path: "config")
         sockets = root.appending(path: "s")
         let workDirectory = root.appending(path: "work")
@@ -87,16 +91,13 @@ final class ClaudeTestbed {
         var bin = AgentTape.executable("claude").deletingLastPathComponent()
         if let wrapper {
             let real = bin.appending(path: "claude")
-            bin = root.appending(path: "wrapper", directoryHint: .isDirectory)
-            try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
-            let script = bin.appending(path: "claude")
-            try "#!/bin/sh\nREAL='\(real.path)'\n\(wrapper)\n".write(to: script, atomically: true, encoding: .utf8)
-            try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
+            bin = wrapperDirectory
+            try TestScript.install("#!/bin/sh\n. \"$0.env\"\n\(wrapper)\n", at: bin.appending(path: "claude"), variables: ["REAL": real.path])
         }
         runtime = ClaudeCodeRuntime(
             bridge: bridge, paths: paths, hooks: hooks, store: store, claude: { [bin] in bin.appending(path: "claude") },
             locate: { [bin] in ExecutableLocator(searchDirectories: [bin]) },
-            presence: presence)
+            presence: presence, timing: noDeadline)
         if installHooks { try await integration.install(.claudeCode) }
     }
 

@@ -98,11 +98,7 @@ struct AgentUpgradeTests {
     /// 旧版是单文件扩展（v37 及更早）：装上目录，没有 Pi 会话开着旧扩展就删掉旧文件，扩展目录里只剩一份。
     @Test func 已装旧版扩展时启动检查静默升级到随包版本() async throws {
         let rig = TestApp()
-        let bin = rig.directory.appending(path: "bin")
-        try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
-        let script = bin.appending(path: "pi")
-        try "#!/bin/sh\necho 0.90.0\n".write(to: script, atomically: true, encoding: .utf8)
-        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
+        try TestScript.install("#!/bin/sh\necho 0.90.0\n", at: rig.directory.appending(path: "bin/pi"))
         let legacy = rig.piPaths.extensionsDirectory.appending(path: "cuepad-bridge.ts")
         try FileManager.default.createDirectory(at: rig.piPaths.extensionsDirectory, withIntermediateDirectories: true)
         try "\(PiExtensionBundle.ownershipMarker)\nconst EXTENSION_VERSION = 37;\n".write(to: legacy, atomically: true, encoding: .utf8)

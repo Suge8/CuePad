@@ -47,7 +47,7 @@ struct SendTests {
     /// 发给 Pi 的东西不论从哪台设备发都只有一种记录：Mac 上发（会话详情、卡片的发送按钮、菜单栏）写一条指定本机的投送请求，写出就返回、
     /// 不等送达，由本机执行器照远端请求的流程执行；会话收到去掉图片标记的文字与按序的原图，资料库里只多这条请求与它的发送记录
     /// （内容快照、关联的卡片、会话 id 与目录名）。
-    @Test(.timeLimit(.minutes(1)))
+    @Test
     func Mac发给Pi会话_写本机投送请求由执行器送达_只多一条请求与一条发送记录() async throws {
         let ext = try await connectedSession()
         let body = try await bodyWithImage()

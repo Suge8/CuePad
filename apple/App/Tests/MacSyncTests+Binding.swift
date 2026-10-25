@@ -86,7 +86,7 @@ extension MacSyncTests {
     }
 
     /// 项目在哪台 Mac 上绑定了目录（只带目录末段名）同步给手机：Mac 绑定、解绑后随之写、删。
-    @Test(.timeLimit(.minutes(1)))
+    @Test
     func 目录绑定随绑定与解绑同步() async throws {
         let project = try await services.store.createProject(name: "App", color: "#000000")
         try await services.startDirectoryBindings()

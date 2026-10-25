@@ -8,13 +8,12 @@ import Testing
 /// 大脑的生死，经公开入口 `startBrain()`，运行时是假脚本（不花钱、默认跑）。脚本把自己的 pid 写进 `$PID_FILE`，
 /// 用来确认进程真的没了。
 @MainActor
-@Suite(.timeLimit(.minutes(1)))
+@Suite
 struct BrainLifecycleTests {
     private func fakeRuntime(_ runtime: AgentKind, _ body: String) throws -> (CueBrainConfig, pid: URL) {
         let directory = try makeTempDirectory()
         let script = directory.appending(path: "fake-\(runtime.rawValue)")
-        try "#!/bin/sh\necho $$ > \"$PID_FILE\"\n\(body)\n".write(to: script, atomically: true, encoding: .utf8)
-        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
+        try TestScript.install("#!/bin/sh\necho $$ > \"$PID_FILE\"\n\(body)\n", at: script)
         let pid = directory.appending(path: "pid")
         let config = CueBrainConfig(
             runtime: runtime, executable: script, systemPrompt: "x", workingDirectory: directory, mcp: ["/usr/bin/true"],
@@ -46,7 +45,7 @@ struct BrainLifecycleTests {
         let brain = try await config.startBrain()
         do {
             // 脚本跑起来写下 pid 之前停它，测不到"忽略 SIGTERM"
-            try await eventually("假运行时写下 pid", timeout: .seconds(5)) { (try? pid(in: file)) != nil }
+            try await eventually("假运行时写下 pid") { (try? pid(in: file)) != nil }
         } catch {
             await brain.stop()()
             throw error

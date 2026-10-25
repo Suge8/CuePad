@@ -89,7 +89,7 @@ private final class Days: EvalScript, Playable {
     /// 等 Cue 静下来：没有在跑的轮，且之后静了 `quiet` 没有新的一轮。预置的待合并块在刚启用那一轮（新会话的第一轮）里合。
     private func settleDown() async throws {
         while true {
-            try await eventually("Cue 没有在跑的轮", timeout: .seconds(300)) { self.eval.rounds.allSatisfy { $0.finishedAt != nil } }
+            try await eventually("Cue 没有在跑的轮") { self.eval.rounds.allSatisfy { $0.finishedAt != nil } }
             let count = eval.rounds.count
             await quietPeriod(Self.quiet)
             if eval.rounds.count == count, eval.rounds.allSatisfy({ $0.finishedAt != nil }) { break }
