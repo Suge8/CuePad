@@ -3,7 +3,8 @@ import SwiftUI
 
 /// 等你列里拍板的一件（待回复是 `BoardReplyCard`）：和 Cue 页的拍板卡同一套写法，一件一张纸（`paper`，同看板别的卡）。从上到下：
 /// 眉题（`CueWaitEyebrow` 的 `board`：项目、哪件事，点了去任务或会话，等了多久）、问句（`CueWaitQuestion`，正文字号；规矩那一类引他的原话）、
-/// 怎么答（`WaitAnswer`，主动作靠右下角）。不带图：Cue 点名的图在 Cue 页那一问里看（点眉题过去，或 Cue 页本来就开着它）。
+/// 怎么答（`WaitAnswer`，主动作靠右下角）。不带图：带点名图的提问（审美、带证据图的）要看了图才定得了，不让在这里盲点"可以"，
+/// 回答处换成次级的"看图再定 ›"，去 Cue 页、这一问排到拍板卡最前（`askOnCuePage`）；与按钮同高，卡高不变。
 /// Mac 上照看板卡的语法，项目名与等了多久在悬停提示里。手机竖版看板里卡铺满格，怎么答压在卡底。
 struct BoardWaitCard: View {
     let wait: TaskBoard.Wait
@@ -15,7 +16,7 @@ struct BoardWaitCard: View {
             CueWaitEyebrow(wait: wait, place: .board)
             CueWaitQuestion(wait: wait, dense: true)
             if row { Spacer(minLength: 0) }
-            WaitAnswer(wait: wait.wait).padding(.top, Self.gap)
+            answer.padding(.top, Self.gap)
         }
         .padding(.horizontal, TaskMetrics.cardPadding).padding(.vertical, Self.vertical)
         .frame(maxWidth: .infinity, maxHeight: row ? .infinity : nil, alignment: .topLeading)
@@ -24,6 +25,22 @@ struct BoardWaitCard: View {
         .help(Dotted(workspace.catalog?.project(wait.shownProject)?.name, PiClock.Waited(since: wait.since).format(.now)).visible)
         #endif
         .boardDim(project: wait.project)
+    }
+
+    @ViewBuilder private var answer: some View {
+        if let message = wait.message, !message.shots.isEmpty {
+            Button { workspace.askOnCuePage(message.id) } label: {
+                HStack(spacing: 4) {
+                    Text("看图再定")
+                    Image(.forward).font(.system(size: 9, weight: .bold))
+                }
+            }
+            .buttonStyle(ControlButtonStyle(kind: .secondary))
+            .accessibilityHint("去 Cue 页看图回答")
+            .frame(maxWidth: .infinity, alignment: .trailing)
+        } else {
+            WaitAnswer(wait: wait.wait)
+        }
     }
 
     /// 眉题、问句、怎么答之间。

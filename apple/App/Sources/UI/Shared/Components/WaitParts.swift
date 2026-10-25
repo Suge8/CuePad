@@ -25,6 +25,14 @@ nonisolated extension TaskBoard.Wait {
     }
 }
 
+extension Workspace {
+    /// 去 Cue 页答这一问：它排到拍板卡最前（`cueAsking`，`CueThread.leading`）。看板上没落在任务上的提问、带点名图的提问走这里。
+    func askOnCuePage(_ id: UUID) {
+        cueAsking = id
+        show(.cue)
+    }
+}
+
 /// 一排胶囊靠右，放不下换行（等你的选项）：每行按自己的宽靠右排；一颗比整行还长时独占一行、字折行。
 struct ChipFlow: Layout {
     var spacing: CGFloat = 6

@@ -125,10 +125,7 @@ struct CueWaitEyebrow: View {
                 CueTaskButton(task: task) { label(title, linked: true).relaySpot(task: task) }
                     .accessibilityHint("打开任务")
             } else if case .board = place {
-                Button {
-                    workspace.cueAsking = message.id
-                    workspace.show(.cue)
-                } label: { label(title, linked: true) }
+                Button { workspace.askOnCuePage(message.id) } label: { label(title, linked: true) }
                     .buttonStyle(PressStyle())
                     .accessibilityHint("去 Cue 页回答")
             } else {
