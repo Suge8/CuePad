@@ -1,7 +1,7 @@
 import CueStore
 
 /// 推进中一张卡此刻的样子（任务卡与没绑任务的会话卡同一条规则），只按这一份分：排在哪一档（`Workspace.byAttention`）、
-/// 卡下沿那条线（`trace`，`BoardWave` 画）、右上写不写状态词、标题淡不淡。会话的状态只经 `PiShown` 判定。
+/// 卡下沿那条线（`trace`，`BoardWave` 画）、线右端写不写状态词、标题淡不淡。会话的状态只经 `PiShown` 判定。
 /// - 要你管：写出状态词的（`PiShown.speaksOnTask`：出错、被打断、没能送达、待回复、有新回复），与上下文用到九成起的
 ///   （`UsageLevel.critical`，状态词就是"上下文 94%"）；线停住；
 /// - 在跑：`PiShown.isRunning`，线在动；
@@ -41,7 +41,7 @@ struct BoardPulse: Equatable {
         session?.context.flatMap(PiContextMeter.init).flatMap { $0.level == .critical ? $0 : nil }
     }
 
-    /// 右上写状态词（状态词或"上下文 94%"）。
+    /// 线右端写状态词（状态词或"上下文 94%"）。
     var speaks: Bool { tier == .needsYou }
 
     var tier: Tier {
