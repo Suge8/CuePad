@@ -165,6 +165,7 @@ extension DebugScene {
             }
             try await seedReplies(defaults.integer(forKey: "CuePadReplies"), store: store)
             try await atlasIfAsked(store)
+            try await taskLinesIfAsked(store)
             // 流程演示里"等你"只有它自己出的那一条：演示的这条先答掉，看得到那张卡出现与消失（`DebugScene+CueFlow.swift`）
             if cueFlows { _ = try await store.endCueQuestion(asked.id, .answered(CueAsk.once)) }
             switch presence {
