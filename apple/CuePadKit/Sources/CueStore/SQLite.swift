@@ -170,10 +170,10 @@ final class SQLite {
       case .null: sqlite3_bind_null(statement, position)
       case .int(let value): sqlite3_bind_int64(statement, position, value)
       case .text(let value):
-        sqlite3_bind_text(statement, position, value, -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
+        sqlite3_bind_text(statement, position, value, -1, SQLITE_TRANSIENT)
       case .blob(let value):
         value.withUnsafeBytes {
-          _ = sqlite3_bind_blob(statement, position, $0.baseAddress, Int32($0.count), unsafeBitCast(-1, to: sqlite3_destructor_type.self))
+          _ = sqlite3_bind_blob(statement, position, $0.baseAddress, Int32($0.count), SQLITE_TRANSIENT)
         }
       }
     }
