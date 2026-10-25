@@ -53,7 +53,7 @@ public struct CueMessage: Identifiable, Equatable, Sendable {
   public var deliveredAt: Date?
   public var createdAt: Date
   public var modifiedAt: Date
-  /// 一轮的经过那一行的清单（Cue 那一轮调过的工具，`CueActivity`），与回答注脚同一个样子；别的行没有。
+  /// 一轮的经过那一行的清单（Cue 那一轮调过的工具，`CueActivity`）：Cue 页读其中碰到的各处（`CueActivity.touches`），每一步的原文只进 Cue 的上下文；别的行没有。
   public var tools: PiChatMessage.Tools?
   /// Cue 自己醒来的那一轮为什么醒（只在它的经过那一行上，起这一轮时写下、不再变）：Cue 页那一节的第一行与叫醒的接力都只读它。
   public var wake: CueWake? = nil

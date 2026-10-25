@@ -35,7 +35,7 @@ extension CueHostTests {
         let session = try #require(rig.app.host.extensions.values.first)
         let title = try #require(try await rig.store.sessions(matching: session.sessionID).first?.title)
         func notes() async throws -> [CueNoteRound] {
-            let rows = try await CueThread.read(from: rig.store, showsSteps: true).rows
+            let rows = try await CueThread.read(from: rig.store).rows
             guard case .notes(let rounds)? = rows.last else { return [] }
             return rounds
         }

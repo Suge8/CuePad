@@ -2,22 +2,37 @@ import CueStore
 import CueText
 import Foundation
 
-/// Cue 的一次工具调用给人看的样子，两处用：正在用时那一句（`CueState.detail`，界面经 `PiProgress.action` 读），
-/// 做完后经过清单里的一条（`item`，与会话回答注脚的清单同一种）。自己的三个工具写成人话、说清对象（对哪件活、哪个会话，建任务带标题、回想带查的词），
+/// 认 Cue 的一次工具调用、写它的两句（两句给谁看见 `CueActivity` 头注释）：正在用时那一句（`detail`，按钮同名的动词）与
+/// 做完后经过清单里那一条（`item`：给 Cue 自己看的说法写在 `target`，碰到的那一处另记在 `name`、`task`、`session`）。
 /// 读文件类照会话里的写法（`read · 文件名`，动词由界面翻）。
-public enum CueActivity {
-  /// 任务那个工具各动作的说法，正在用时那一句（`detail`）与做完后清单里那一条（`item`）同一张表：`named` 是认出的对象（`Named.quoted`），
-  /// `board`：看的是看板（没指哪件活）。认不出的动作为 nil。
-  static func phrase(_ action: String?, _ named: String, board: Bool) -> (kind: PiChatMessage.Tools.Kind, text: String)? {
+extension CueActivity {
+  /// 任务那个工具的动作是哪一种；认不出的动作为 nil。
+  static func kind(_ action: String?) -> PiChatMessage.Tools.Kind? {
     switch action {
-    case "add": (.add, "建任务\(named)")
-    case "edit": (.other, "改\(named)")
-    case "start": (.start, "开工\(named)")
-    case "say": (.talk, "对\(named)说")
-    case "peek": (.read, board ? "看板" : "看\(named)的近况")
-    case "stop": (.stop, "停下\(named)")
-    case "leave": (.other, "\(named)留给你回")
-    case "done": (.done, "做完\(named)")
+    case "add": .add
+    case "edit": .other
+    case "start": .start
+    case "say": .talk
+    case "peek": .read
+    case "stop": .stop
+    case "leave": .leave
+    case "done": .done
+    default: nil
+    }
+  }
+
+  /// Cue 自己的说法（`Tools.Item.target`，只进它的上下文 `CueView`）：跟它的工具名走，不跟按钮。`named` 是认出的对象（`Named.quoted`），
+  /// `board`：看的是看板（没指哪件活）。
+  static func cueWords(_ action: String?, _ named: String, board: Bool) -> String? {
+    switch action {
+    case "add": "建任务\(named)"
+    case "edit": "改\(named)"
+    case "start": "开工\(named)"
+    case "say": "对\(named)说"
+    case "peek": board ? "看板" : "看\(named)的近况"
+    case "stop": "停下\(named)"
+    case "leave": "\(named)留给你回"
+    case "done": "做完\(named)"
     default: nil
     }
   }
@@ -27,7 +42,7 @@ public enum CueActivity {
     await Named(Parsed(arguments), tool: tool, store: store)
   }
 
-  /// 正在用时那一句：Cue 自己的工具写成"动作「对象」"（与经过清单里那一条同一个说法，`phrase`），读文件类照会话里的写法"工具 · 目标"。
+  /// 正在用时那一句：任务那个工具写成"动词「对象」"（按钮同名，`verb`；看板就写看板），读文件类照会话里的写法"工具 · 目标"。
   /// `tool`、`arguments` 是大脑报的（`CueBrainEvent.tool`：去掉前缀的小写名字与 JSON 原文）。
   public static func detail(tool: String, arguments: String, named: Named) -> String {
     let args = Parsed(arguments)
@@ -37,7 +52,10 @@ public enum CueActivity {
     }
     switch tool {
     case "task":
-      return phrase(args.line("action"), named.quoted, board: args.board)?.text ?? "看任务"
+      let action = args.line("action")
+      if action == "peek", args.board { return "看板" }
+      if action == "edit" { return "修改" + named.quoted }
+      return kind(action).flatMap(verb).map { $0 + named.quoted } ?? "看任务"
     case "tell": return args.raw["ask"] == nil ? "给你写话" : "问你"
     case "memory":
       switch args.line("action") {
@@ -55,19 +73,22 @@ public enum CueActivity {
     }
   }
 
-  /// 做完的一次调用在经过清单里的一条：动到的任务与会话是开始时认出的（`named`），清单里点它打开那件任务；
-  /// 认不出（写错了、调用失败）就照它写的引用列出，不带任务。给的是会话就写会话名，不带任务。
+  /// 做完的一次调用在经过清单里的一条：动到的任务与会话是开始时认出的（`named`，新建的那件开始时还没有，做完再认一次），记在这一条上；
+  /// 认不出（写错了、调用失败）就照它写的引用，不带任务与会话。
   /// 对你说的话（tell）已在对话里：清单里只留首行，带着那条消息，点它跳回原处。记忆的序号是 Cue 内部的身份，不写给人看。
   public static func item(tool: String, arguments: String, named: Named, failed: Bool, store: CueStore) async -> PiChatMessage.Tools.Item {
     let args = Parsed(arguments)
-    func item(_ kind: PiChatMessage.Tools.Kind, _ target: String, message: UUID? = nil) -> PiChatMessage.Tools.Item {
-      .init(kind: kind, target: target.clipped(PiChatMessage.Tools.targetLimit), failed: failed, task: named.task, message: message)
+    func item(_ kind: PiChatMessage.Tools.Kind, _ target: String, message: UUID? = nil, at place: Named? = nil) -> PiChatMessage.Tools.Item {
+      .init(
+        kind: kind, target: target.clipped(PiChatMessage.Tools.targetLimit), failed: failed, task: place?.task, name: place?.name,
+        session: place?.session, message: message)
     }
     switch tool {
     case "task":
       let action = args.line("action")
-      guard let said = phrase(action, named.quoted, board: args.board) else { return item(.other, "task") }
-      return item(said.kind, action == "say" ? "\(said.text)：\(args.line("text") ?? "")" : said.text)
+      guard let kind = kind(action), let words = cueWords(action, named.quoted, board: args.board) else { return item(.other, "task") }
+      let place = action == "add" && named.task == nil ? await Named(args, tool: tool, store: store) : named
+      return item(kind, action == "say" ? "\(words)：\(args.line("text") ?? "")" : words, at: args.board ? nil : place)
     case "tell":
       guard let line = args.line("text"), let text = args.raw["text"] as? String else { return item(.other, "撤回一条提问") }
       let message = try? await store.latestCueMessage(saying: text)
@@ -92,25 +113,30 @@ public enum CueActivity {
     }
   }
 
-  /// Cue 写的那件活或那个会话，与工具同一个认法（session 写成任务的编号也认作那件任务）；`quoted` 是给人看的"「名字」"，认不出照它写的。
+  /// Cue 写的那件活或那个会话，与工具同一个认法（session 写成任务的编号也认作那件任务）：`name` 是它叫什么，认不出照它写的；没指哪一处为 nil。
   public struct Named: Sendable {
     public let task: UUID?
-    public let quoted: String
+    /// 是会话时（`PiSessionState.id`）
+    public let session: UUID?
+    public let name: String?
+    /// "「名字」"
+    var quoted: String { "「\(name ?? "")」" }
 
     init(_ args: Parsed, tool: String, store: CueStore) async {
       let tools = CueTools(store: store)
-      var task: Card?, sessionName: String?
+      var task: Card?, found: PiSessionState?, sessionRef: String?
       if let ref = args.line("task") ?? (tool == "task" && args.line("action") == "add" ? args.line("title") : nil) {
         task = try? await tools.task(ref)
       } else if let session = args.line("session") {
         switch try? await tools.sessionRef(session) {
-        case .session(let found): sessionName = found.title
+        case .session(let state): found = state
         case .task(let card): task = card
-        case nil: sessionName = session
+        case nil: sessionRef = session
         }
       }
       self.task = task?.id
-      quoted = "「\(task?.heading ?? args.line("task") ?? args.line("title") ?? sessionName ?? "")」"
+      session = found?.id
+      name = task?.heading ?? args.line("task") ?? args.line("title") ?? found?.title ?? sessionRef
     }
   }
 

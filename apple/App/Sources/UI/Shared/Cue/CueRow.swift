@@ -91,27 +91,30 @@ struct CueRow: View, Equatable {
             CueSays(message: message, task: ref, shots: shots, open: { opened = $0 }, card: true)
         case .notes(let rounds):
             CueNoteLog(rounds: rounds, live: live)
-        case .process(let message):
-            RoundProcess(tools: message.tools, ending: CueLiveRound.ending(of: message, in: live)).padding(.leading, CueBubble.noteInset)
+        case .process(let message, let touches):
+            BubbleWidth(fraction: CueBubble.cueWidth, edge: .leading) {
+                CueTrace(touches: touches, doing: live?.round == message.id ? live?.doing : nil).frame(maxWidth: .infinity, alignment: .leading)
+            }
         }
     }
 
     private var straddlesDot: Bool { margin < CueUnreadDot.room }
 }
 
-/// Cue 在跑的那一轮：经过那一行（`round`）此刻的结尾，其余经过不记用时。
+/// Cue 在跑的那一轮：经过那一行（`round`）与此刻在做的（这一轮的经过的末行，`CueTrace`）。
 /// 交给对话里各格的是这个值而不是闭包：闭包每次都不相等，Cue 的状态一变（被叫醒、在想→用工具）对话里每一格都要重算。
 nonisolated struct CueLiveRound: Equatable {
     let round: UUID
-    let ending: RoundProcess.Ending
+    /// 它那台 Mac 此刻不在（`CuePresence.shown` 为空）时为 nil：这一轮照样没做完，只是不写在做什么
+    let doing: Doing?
 
-    static func ending(of message: CueMessage, in live: CueLiveRound?) -> RoundProcess.Ending {
-        guard let live, live.round == message.id else { return .took(nil) }
-        return live.ending
+    struct Doing: Equatable {
+        let shown: PiShown
+        let text: String
     }
 }
 
-/// Cue 页对话的末尾：它在做事、这一轮在对话里还没有一格（你发起的一轮还没调过工具，或设置里关了工具步骤）时是一行此刻在做的（`CueDoing`）。
+/// Cue 页对话的末尾：它在做事、这一轮在对话里还没有一格（你发起的一轮还没碰到任务与会话）时是一行此刻在做的（`CueDoing`）。
 /// Cue 在这台 Mac 值班时，在回答你的一轮出字就换成逐字长出的正在说的话
 /// （`CueKeeper.speech`，同会话页的 `SessionDraft`）：只有这个视图读它，出字时对话列表不重算；它与对话在同一次更新里拿到同一份对话，
 /// 落库了（`PiDraft.landed`）就不再显示，换下是同一帧里的一减一加。已落库而 Cue 的状态还没歇下时也不冒出进展那一行（话已经说完）；
@@ -122,7 +125,7 @@ struct CueEnding: View {
     /// 对话最后一格是 Cue 的话：正在说的这句落库后与它连成一串，说着的时候就排成那个样子。
     let joined: Bool
     /// 在跑的那一轮在对话里有一格（它的经过，或收着它的动态）：此刻在做的写在那一格里，这里不再写一遍。
-    /// 没有那一格时（你发起的一轮还没调过工具；设置里关了工具步骤，`CueThread.rows` 不排经过）写在这里。
+    /// 没有那一格时（你发起的一轮还没碰到任务与会话，`CueThread.rows` 不排经过）写在这里。
     let roundInRows: Bool
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -150,15 +153,14 @@ struct CueEnding: View {
         let presence = workspace.cue.presence
         if !roundInRows, let shown = presence.shown, let progress = presence.progress {
             CueDoing(shown: shown, doing: progress)
-                .padding(.leading, CueBubble.noteInset)
                 .padding(.top, CuePage.gap(before: nil, joined: false))
                 .transition(.asymmetric(insertion: .entry, removal: .identity))
         }
     }
 }
 
-/// Cue 此刻在做的那一行（对话末尾，`CueEnding`）：同会话页还没调工具时那一行（`RoundProcess`），状态标加一句它在做什么（"对「登录回调超时」说"，
-/// 对象由 `CueActivity.detail` 写清），仍是旁注、不铺底；字比旁注大一档（正文的次一级）：这是你刚说完在等的那件事，比经过与动态要紧。
+/// Cue 此刻在做的那一行（对话末尾，`CueEnding`）：状态标加一句它在做什么（"发给「登录回调超时」"，与这一轮的经过同一套动词，`CueActivity.detail`），
+/// 仍是旁注、不铺底，左缘对着 Cue 气泡的左缘；字比旁注大一档（正文的次一级）：这是你刚说完在等的那件事，比经过与动态要紧。
 private struct CueDoing: View {
     let shown: PiShown
     let doing: String
