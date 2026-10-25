@@ -74,12 +74,15 @@ def hold_lock(what):
 
 
 def throttled(minutes=2, pids=None):
-    """最近几分钟这台 Mac 上 CuePad 收到的 CloudKit 限流（HTTP 429，`Device throttle`：按设备与容器算，正式版与测量实例共用一份）次数；
-    pids 给了只数这几个进程。"""
+    """最近几分钟这台 Mac 上 CuePad 收到的 CloudKit 限流次数（`Request Rate Limited`、`Device throttle`：按设备与容器算，正式版与测量实例共用一份）；
+    pids 给了只数这几个进程。只认 CloudKit 的限流错误：日志里别的数字（"用时 0.00042925 秒"）含 429 也不是限流。"""
     who = f" AND ({' OR '.join(f'processID == {p}' for p in pids)})" if pids else ""
-    out = subprocess.run(["log", "show", "--last", f"{minutes}m", "--predicate", f'subsystem == "{BUNDLE_ID}" AND eventMessage CONTAINS "429"{who}'],
-                         capture_output=True, text=True).stdout
-    return sum(1 for l in out.splitlines() if "429" in l and not l.startswith("Timestamp"))
+    predicate = f'subsystem == "{BUNDLE_ID}" AND (eventMessage CONTAINS "{THROTTLE_MARKS[0]}" OR eventMessage CONTAINS "{THROTTLE_MARKS[1]}"){who}'
+    out = subprocess.run(["log", "show", "--last", f"{minutes}m", "--predicate", predicate], capture_output=True, text=True).stdout
+    return sum(1 for l in out.splitlines() if any(mark in l for mark in THROTTLE_MARKS))
+
+
+THROTTLE_MARKS = ("Request Rate Limited", "Device throttle")
 
 
 def real_allowed(wait):
