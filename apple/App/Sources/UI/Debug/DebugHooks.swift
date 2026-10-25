@@ -140,7 +140,7 @@ enum DebugHooks {
 
     /// 指定的隔离库当作本机构建的开发库来定碰不碰真实世界（`-CuePadActsAs development|stranger`，`LibraryLocation.touchesRealWorld`）：
     /// development 照真的去找这台装没装正式版（维护者的 Mac），stranger 当作没装（克隆仓库自己编的人：接入真实的 Agent、发通知）。
-    /// 各家配置目录、命令行链接、连接目录与工作区照样由 xc.sh 给的环境变量（app.py 的 `isolated_env`）换进隔离库，换不走的（通知权限、主机标识）是真的。
+    /// 各家配置目录、命令行链接、连接目录与工作区照样由 xc.sh 给的环境变量（app_env.py 的 `isolated_env`）换进隔离库，换不走的（通知权限、主机标识）是真的。
     enum ActsAs: String { case development, stranger }
     static var actsAs: ActsAs? {
         #if DEBUG

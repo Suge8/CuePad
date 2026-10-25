@@ -2,7 +2,7 @@
 """进程的空闲与常驻开销，从外面读内核的记账（proc_pid_rusage），App 里不加测量代码；模拟器里的 App 也是本机进程，一样读。
 
 用法：rusage.py <pid> <就绪标记> <静置秒> <量的秒数> [--on-ready <命令>] [--during <命令>]
-等就绪标记出现（app.wait_ready：kqueue，最多 60 秒，App 先退出就失败），记下启动到就绪的毫秒；跑 --on-ready（如切到别的 App）；
+等就绪标记出现（app_proc.wait_ready：kqueue，最多 60 秒，App 先退出就失败），记下启动到就绪的毫秒；跑 --on-ready（如切到别的 App）；
 再静置几秒让启动后的收尾做完，然后量一个窗口，窗口开始时起 --during（如 xctrace，量完等它写完），打印一行 JSON：
   readyMs        启动到就绪标记出现（标记的含义见 DebugScene.signalReady：画面摆好、读库回来、动画停下）。
                  Mac 从 app.py exec 成 CuePad 那一刻算（锁记录里的 execAt），iOS 从进程启动算
@@ -17,7 +17,8 @@
 import ctypes, json, subprocess, sys, time
 
 sys.dont_write_bytecode = True
-from app import SLOT, wait_ready  # noqa: E402
+from app_env import SLOT  # noqa: E402
+from app_proc import wait_ready  # noqa: E402
 
 libc = ctypes.CDLL(None)
 

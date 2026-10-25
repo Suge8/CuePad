@@ -33,6 +33,9 @@ struct MacDependencies {
 
     /// 碰不碰真实世界（各家的配置、命令行链接、连接目录、工作区、主机标识）只看 `LibraryLocation.touchesRealWorld`；
     /// 自动更新只看是不是正式版签名：本机构建装不了 Sparkle 发来的正式版，也不去读真实的更新源与偏好。
+    /// 隔离实例这台 Mac 的标识（没给 `-CuePadHost` 时）：不是任何真实的 Mac，库里记给真实 Mac 的东西在它看来都是别台的。
+    static let isolatedHostID = "mac-isolated"
+
     static func live(location: LibraryLocation, alerts: AlertCenter) -> MacDependencies {
         let environment = ProcessInfo.processInfo.environment
         let isolated = !location.touchesRealWorld
@@ -58,7 +61,10 @@ struct MacDependencies {
             },
             cuepad: commandLineTool.helper, isolated: isolated,
             legacyPiExtensionInUse: { await !pi.allRun(extensionVersion: PiExtensionBundle.version) }))
-        let hostID = (isolated ? DebugHooks.hostID : nil) ?? HostIdentity.current()
+        let hostID = isolated ? DebugHooks.hostID ?? Self.isolatedHostID : HostIdentity.current()
+        // 隔离实例用真实库的副本时，副本里记给这台的请求、会话索引（真实 ~/.pi 下的会话文件）、项目文件夹与 Cue 值班都按本机 id 认，
+        // 冒充了这台就会在真实目录里恢复、开会话（#34）
+        if isolated { precondition(hostID != HostIdentity.current(), "隔离实例不能用这台 Mac 的标识（-CuePadHost 换个名字）") }
         return MacDependencies(
             pi: pi,
             hotkeys: CarbonHotkeyBackend(),

@@ -11,7 +11,7 @@ sys.dont_write_bytecode = True
 sys.path.insert(0, os.path.dirname(__file__))
 import asc
 
-from app import BUNDLE_ID as APP_BUNDLE_ID  # noqa: E402
+from app_env import BUNDLE_ID as APP_BUNDLE_ID  # noqa: E402
 GROUP_NAME = "内部"
 
 
