@@ -100,7 +100,7 @@ private struct QuotaAccount: View {
                 PiProvider(id: meter.provider).mark?.image
                     .foregroundStyle(palette.ink2)
                     .frame(width: Self.iconColumn)
-                title.lineLimit(1)
+                title
             }
             .font(Typography.secondary.weight(.medium))
             VStack(alignment: .leading, spacing: 10) {
@@ -131,6 +131,9 @@ private struct QuotaWindowRow: View {
     let window: QuotaMeter.Window
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    private var stacked: Bool { typeSize.isAccessibilitySize }
 
     /// 还剩多少的数字（Mac 没有动态字体，给固定字号）。
     #if os(macOS)
@@ -142,13 +145,14 @@ private struct QuotaWindowRow: View {
     var body: some View {
         let critical = window.level == .critical
         VStack(alignment: .leading, spacing: 5) {
-            HStack(alignment: .firstTextBaseline, spacing: 0) {
-                Text(window.name).font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink)
-                reset.font(Typography.meta).foregroundStyle(palette.ink3).lineLimit(1)
-                Spacer(minLength: 8)
-                Text("剩 ").font(Typography.meta).foregroundStyle(palette.ink3)
-                Text(window.percent).font(Self.number).foregroundStyle(critical ? palette.failure : palette.ink)
+            // 窗口名（按模型的写着模型名）与多久后重置是一段字，放不下就折行、不截；还剩多少不折，辅助字号下挪到下一行
+            (stacked ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2)) : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 0))) {
+                heading.font(Typography.meta).foregroundStyle(palette.ink3)
+                if !stacked { Spacer(minLength: 8) }
+                Text("剩 \(Text(window.percent).font(Self.number).foregroundStyle(critical ? palette.failure : palette.ink))")
+                    .font(Typography.meta).foregroundStyle(palette.ink3)
                     .contentTransition(.numericText(value: window.left))
+                    .fixedSize()
             }
             // 剩余条：剩的少于匀速线就是用快了
             MarkedBar(fill: window.left, mark: window.even, level: window.level)
@@ -160,11 +164,12 @@ private struct QuotaWindowRow: View {
         .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: window)
     }
 
-    @ViewBuilder private var reset: some View {
+    @ViewBuilder private var heading: some View {
+        let name = Text(window.name).fontWeight(.medium).foregroundStyle(palette.ink)
         if window.hasReset {
-            Text("\(Dotted.inline)已重置")
+            Text("\(name)\(Dotted.inline)已重置")
         } else {
-            LiveText(style: QuotaMeter.Countdown(end: window.resetsAt)) { Text("\(Dotted.inline)\(Text($0).monospacedDigit())后重置") }
+            LiveText(style: QuotaMeter.Countdown(end: window.resetsAt)) { Text("\(name)\(Dotted.inline)\(Text($0).monospacedDigit())后重置") }
         }
     }
 }

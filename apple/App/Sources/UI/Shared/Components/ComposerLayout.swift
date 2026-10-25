@@ -2,7 +2,7 @@ import SwiftUI
 
 /// 输入框的尺寸：单行时高 `slot`（字行 + 上下各 `textTop`；字号大了是 `lineSlot`），圆角取一半成胶囊；圆钮一格 `slot`（`CircleGlyph` 的圆 + 四周的边距）、
 /// 离边 `inset`，与外框同心。一直展开时文字区下面只留 `textBottomOpen`，再下面是一格高的那一排；会展开收起的工具排在文字下面，
-/// 高是圆钮的圆（`slot - 2 * inset`），离底 `inset`，与两颗圆钮同一条中线。
+/// 至少圆钮的圆高（`slot - 2 * inset`，字号大了工具排折行时随它长高），离底 `inset`，与两颗圆钮同一条中线。
 enum ComposerMetrics {
     static let radius: CGFloat = 28
     static let inset: CGFloat = 8

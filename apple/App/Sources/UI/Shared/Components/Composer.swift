@@ -188,7 +188,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
                 // 工具排与两颗圆钮同一条中线；没有工具时这里是空的，不占位
                 if tooled, expanded, showsTools {
                     tools()
-                        .frame(height: ComposerMetrics.slot - 2 * ComposerMetrics.inset)
+                        .frame(minHeight: ComposerMetrics.slot - 2 * ComposerMetrics.inset)
                         .padding(.bottom, ComposerMetrics.inset)
                         .transition(.scale(scale: 0.6, anchor: .leading).combined(with: .opacity))
                 }
