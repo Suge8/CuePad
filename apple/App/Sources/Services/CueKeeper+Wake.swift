@@ -20,14 +20,14 @@ extension CueKeeper {
         let envelope = CueEnvelope.render(CueEnvelope.Input(
             now: setup.timing.clock(), projects: try await store.projects(),
             changes: changes.due, board: board, waiting: try await store.cueMessagesWaitingForYou(), left: try await store.cueState()?.left ?? [],
-            wake: wake, reminders: try await reminders(of: wake)))
+            wake: wake, reminders: try await reminders(of: wake), language: CueInterface.current.writing(after: said)))
         var parts = [envelope]
         if !shift.primed || renewDue(shift, now: now) {
             if shift.primed {
                 do {
                     try await shift.brain.newSession()
                 } catch {
-                    await broke("开不了新会话：\(error.localizedDescription)")
+                    await broke(String(localized: "开不了新会话：\(error.localizedDescription)"))
                     return false
                 }
                 Self.log.notice("Cue 换新：开了新会话")
@@ -47,7 +47,7 @@ extension CueKeeper {
         do {
             try await shift.brain.send(sent, images: images)
         } catch {
-            await broke("发不进去：\(error.localizedDescription)")  // 这一轮还没开，交出去的话也还没记送达
+            await broke(String(localized: "发不进去：\(error.localizedDescription)"))  // 这一轮还没开，交出去的话也还没记送达
             return false
         }
         var turn = Turn(
@@ -97,13 +97,13 @@ extension CueKeeper {
         let contents = pending.filter { $0.author == .known(.you) }.map { SendContent(stored: $0.text) }.filter(\.hasImages)
         guard !contents.isEmpty else { return [] }
         guard brain.seesImages else {
-            await say(.cue, "我现在用的模型看不了图，你发的图我看不到；要我看图，换个能看图的模型。图我还能原样转给会话。")
+            await say(.cue, String(localized: "我现在用的模型看不了图，你发的图我看不到；要我看图，换个能看图的模型。图我还能原样转给会话。"))
             return []
         }
         do {
             return try contents.flatMap { try $0.piImages(from: store.files) }
         } catch {
-            await say(.cue, "你发的图没能交给我：\(error.localizedDescription)")
+            await say(.cue, String(localized: "你发的图没能交给我：\(error.localizedDescription)"))
             return []
         }
     }

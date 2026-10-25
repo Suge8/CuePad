@@ -14,30 +14,30 @@ extension View {
     /// `hidden` 时中间与右边让开（淡到透明、不可点、读屏跳过），左边一直在；占的高度不变，内容的边距不跟着变（会话页看历史时用，
     /// 见 `ChatFollow.showsHeader`）；给了 `reveal` 时让开的那一块仍接点按，点它唤出。标题同时是读屏、返回菜单与多任务切换器里的名字。
     func floatingHeader<Detail: View, Trailing: View>(
-        _ title: String, hidden: Bool = false, reveal: (() -> Void)? = nil,
+        _ title: LocalizedStringResource, hidden: Bool = false, reveal: (() -> Void)? = nil,
         @ViewBuilder detail: () -> Detail, @ViewBuilder trailing: () -> Trailing
     ) -> some View {
         modifier(FloatingHeader(
             title: title, hidden: hidden, reveal: reveal, titled: true,
-            center: TitleStack(title: title, detail: detail()).padding(.horizontal, 16).headerPiece().opacity(title.isEmpty ? 0 : 1),
+            center: TitleStack(title: title, detail: detail()).padding(.horizontal, 16).headerPiece().opacity(String(localized: title).isEmpty ? 0 : 1),
             trailing: trailing()))
     }
 
     /// 根页：中间放 `center`（进展页是分段、项目范围与额度环合成的一块；Cue 页是它的名牌 `CueHeader`），不写标题。
     /// `height` 是中间那块收着时的高（Cue 的名牌比圆钮高）：内容按它让出，两侧圆钮对着它的中线。
     func floatingHeader<Center: View, Trailing: View>(
-        _ title: String, height: CGFloat = FloatingHeaderLayout.height, @ViewBuilder center: () -> Center, @ViewBuilder trailing: () -> Trailing
+        _ title: LocalizedStringResource, height: CGFloat = FloatingHeaderLayout.height, @ViewBuilder center: () -> Center, @ViewBuilder trailing: () -> Trailing
     ) -> some View {
         modifier(FloatingHeader(title: title, hidden: false, reveal: nil, titled: false, height: height, center: center(), trailing: trailing()))
     }
 
     /// 要紧信息是一行字、右边一个圆钮或"⋯"菜单。`detail` 为 nil 时只写标题；要等读库才有的信息先给空串，
     /// 那一行先留着位置，读到后标题不再上移。
-    func floatingHeader<Trailing: View>(_ title: String, detail: Dotted? = nil, @ViewBuilder trailing: () -> Trailing) -> some View {
+    func floatingHeader<Trailing: View>(_ title: LocalizedStringResource, detail: Dotted? = nil, @ViewBuilder trailing: () -> Trailing) -> some View {
         floatingHeader(title, detail: { HeaderDetail(text: detail) }, trailing: trailing)
     }
 
-    func floatingHeader(_ title: String, detail: Dotted? = nil) -> some View {
+    func floatingHeader(_ title: LocalizedStringResource, detail: Dotted? = nil) -> some View {
         floatingHeader(title, detail: detail) { EmptyView() }
     }
 
@@ -88,7 +88,7 @@ enum FloatingHeaderLayout {
 }
 
 private struct FloatingHeader<Center: View, Trailing: View>: ViewModifier {
-    let title: String
+    let title: LocalizedStringResource
     let hidden: Bool
     let reveal: (() -> Void)?
     /// 中间是标题：这一页的名字在别处写着时（`pageNamedElsewhere`）不写，只留两边的圆钮。
@@ -127,7 +127,7 @@ private struct FloatingHeader<Center: View, Trailing: View>: ViewModifier {
                     }
             }
         }
-        .navigationTitle(title)
+        .navigationTitle(Text(title))
         .environment(\.headerGivesWay, host != .panel && workspace.notice != nil)
         .animation(NoticeBanner.giveWay(workspace.notice), value: workspace.notice != nil)
     }
@@ -203,7 +203,7 @@ private struct HeaderPiece: ViewModifier {
 }
 
 private struct TitleStack<Detail: View>: View {
-    let title: String
+    let title: LocalizedStringResource
     let detail: Detail
     @Environment(\.palette) private var palette
 

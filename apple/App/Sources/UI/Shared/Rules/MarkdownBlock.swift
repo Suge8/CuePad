@@ -27,7 +27,7 @@ nonisolated enum MarkdownBlock: Equatable, Sendable {
             }
             return line == nil
         }
-        return line ?? (table ? "（一张表格）" : code ? "（一段代码）" : nil)
+        return line ?? (table ? String(localized: "（一张表格）") : code ? String(localized: "（一段代码）") : nil)
     }
 
     /// 一行里的行内记号（强调、代码、链接、转义、实体）只留显示的字；没有这些记号的行原样（系统的行内解析每行要建一份带属性的文字）。

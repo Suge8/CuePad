@@ -42,44 +42,44 @@ extension DebugScene {
             var tools = PiChatMessage.Tools()
             for step in 0..<15 {
                 try? await Task.sleep(for: .milliseconds(200))
-                tools.record(.init(kind: step % 4 == 0 ? .said : .command, target: step % 4 == 0 ? "看一下第 \(step) 步的输出" : "pnpm test -- --run case\(step)"))
+                tools.record(.init(kind: step % 4 == 0 ? .said : .command, target: step % 4 == 0 ? String(localized: "看一下第 \(step) 步的输出", table: "Demo") : "pnpm test -- --run case\(step)"))
                 await write([], PiRecap(pendingPrompt: you.text, pendingTools: tools))
-                let helper = PiSubagentState(name: "helper-\(round)", role: "工程师", phase: .known(.running), action: "第 \(step) 步", startedAt: you.at)
+                let helper = PiSubagentState(name: "helper-\(round)", role: String(localized: "工程师", table: "Demo"), phase: .known(.running), action: String(localized: "第 \(step) 步", table: "Demo"), startedAt: you.at)
                 await set(step % 2 == 0 ? .tool : .thinking, detail: step % 2 == 0 ? "bash · pnpm test case\(step)" : nil, agents: [helper])
             }
             let answer = PiChatMessage(
                 sessionID: sessionID, entryID: "stream-p\(round)", seq: seq + 1, role: .pi, text: longChatReply(round + 1), at: .now, tools: tools, roundStartedAt: you.at)
             await write([answer], PiRecap(lastPrompt: you.text, lastReply: answer.text))
-            let helper = PiSubagentState(name: "helper-\(round)", role: "工程师", phase: .known(.running), action: "收尾", startedAt: you.at)
+            let helper = PiSubagentState(name: "helper-\(round)", role: String(localized: "工程师", table: "Demo"), phase: .known(.running), action: String(localized: "收尾", table: "Demo"), startedAt: you.at)
             await set(.delegating, agents: [helper])
             try? await Task.sleep(for: .seconds(1))
             let returned = PiChatMessage(
                 sessionID: sessionID, entryID: "stream-m\(round)", seq: seq + 2, role: .machine,
                 text: "<firecode_master_event>\nhelper-\(round) 交回：\(longChatReply(round))\n</firecode_master_event>", at: .now)
             await write([returned], PiRecap(lastPrompt: you.text, lastReply: answer.text))
-            await set(.settled, agents: [PiSubagentState(name: "helper-\(round)", role: "工程师", phase: .known(.done), startedAt: you.at, settledAt: .now)])
+            await set(.settled, agents: [PiSubagentState(name: "helper-\(round)", role: String(localized: "工程师", table: "Demo"), phase: .known(.done), startedAt: you.at, settledAt: .now)])
             try? await Task.sleep(for: .seconds(1))
         }
     }
 
     static func longChatPrompt(_ round: Int) -> String {
         guard round % 25 != 0 else {
-            return "第 \(round) 轮，我把日志贴过来：\n" + (1...30).map { "[\($0)] worker-\($0 % 7) retry=\($0 % 3) 连接被对端重置，正在重连第 \($0) 次" }.joined(separator: "\n")
+            return String(localized: "第 \(round) 轮，我把日志贴过来：", table: "Demo") + "\n" + (1...30).map { String(localized: "[\($0)] worker-\($0 % 7) retry=\($0 % 3) 连接被对端重置，正在重连第 \($0) 次", table: "Demo") }.joined(separator: "\n")
         }
-        return ["继续", "第 \(round) 轮：把上一步的结果整理成表格", "这里为什么会慢？给我看一下热点代码", "好，下一个", "列一下还剩哪些没做"][round % 5]
+        return [String(localized: "继续", table: "Demo"), String(localized: "第 \(round) 轮：把上一步的结果整理成表格", table: "Demo"), String(localized: "这里为什么会慢？给我看一下热点代码", table: "Demo"), String(localized: "好，下一个", table: "Demo"), String(localized: "列一下还剩哪些没做", table: "Demo")][round % 5]
     }
 
     static func longChatReply(_ round: Int) -> String {
-        let paragraph = "第 \(round) 轮的回答。调度器在重连时会拿到新的时间戳，所以按加入时间排序会把重连的人排到最前；改成按首次加入时间排序之后，"
-            + "重连不再改变顺序，压测里 p95 从 12ms 降到 9ms，内存基本不变。另外两条超时路径还没有用例覆盖，补上之后覆盖率能到 85% 左右。"
+        let paragraph = String(localized: "第 \(round) 轮的回答。调度器在重连时会拿到新的时间戳，所以按加入时间排序会把重连的人排到最前；改成按首次加入时间排序之后，", table: "Demo")
+            + String(localized: "重连不再改变顺序，压测里 p95 从 12ms 降到 9ms，内存基本不变。另外两条超时路径还没有用例覆盖，补上之后覆盖率能到 85% 左右。", table: "Demo")
         switch round % 6 {
-        case 0: return "好的，第 \(round) 轮做完了。"
+        case 0: return String(localized: "好的，第 \(round) 轮做完了。", table: "Demo")
         case 1: return Array(repeating: paragraph, count: 5).joined(separator: "\n\n")
         case 2: return paragraph + "\n\n```swift\n" + (1...40).map { "let value\($0) = try await compute(\($0), retry: \($0 % 5))" }.joined(separator: "\n") + "\n```"
         case 3:
-            return "| 用例 | 结果 | 耗时 | 说明 |\n|:--|:--:|--:|:--|\n"
-                + (1...8).map { "| 用例 \($0) | \($0 % 3 == 0 ? "失败" : "通过") | \($0 * 13) ms | 第 \(round) 轮的第 \($0) 个检查 |" }.joined(separator: "\n")
-        case 4: return (1...12).map { "- 第 \($0) 项：" + ($0 % 2 == 0 ? "已完成" : "还差一点，等上游合并") }.joined(separator: "\n")
+            return String(localized: "| 用例 | 结果 | 耗时 | 说明 |", table: "Demo") + "\n|:--|:--:|--:|:--|\n"
+                + (1...8).map { String(localized: "| 用例 \($0) | \($0 % 3 == 0 ? String(localized: "失败", table: "Demo") : String(localized: "通过", table: "Demo")) | \($0 * 13) ms | 第 \(round) 轮的第 \($0) 个检查 |", table: "Demo") }.joined(separator: "\n")
+        case 4: return (1...12).map { String(localized: "- 第 \($0) 项：", table: "Demo") + ($0 % 2 == 0 ? String(localized: "已完成", table: "Demo") : String(localized: "还差一点，等上游合并", table: "Demo")) }.joined(separator: "\n")
         default: return paragraph
         }
     }

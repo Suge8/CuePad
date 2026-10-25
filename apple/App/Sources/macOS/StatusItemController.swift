@@ -43,10 +43,10 @@ final class StatusItemController: NSObject {
     /// 菜单只在右键时临时挂上，否则左键也会弹菜单而不是面板。
     private func showMenu() {
         let menu = NSMenu()
-        let toggle = menu.addItem(withTitle: "显示 / 隐藏", action: #selector(toggleMainWindow), keyEquivalent: "")
+        let toggle = menu.addItem(withTitle: String(localized: "显示 / 隐藏"), action: #selector(toggleMainWindow), keyEquivalent: "")
         toggle.target = self
         menu.addItem(.separator())
-        menu.addItem(withTitle: "退出 CuePad", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "")
+        menu.addItem(withTitle: String(localized: "退出 CuePad"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "")
         item.menu = menu
         item.button?.performClick(nil)
         item.menu = nil

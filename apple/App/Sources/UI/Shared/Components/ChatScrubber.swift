@@ -36,7 +36,7 @@ struct ChatScrubber: View {
         ChatMark.enough(entries.compactMap { entry in
             switch entry.role {
             case .user, .answer: ChatMark(id: entry.id, kind: .said, preview: ChatMark.firstLine(entry.text))
-            case .notice(let notice) where notice.changesContext: ChatMark(id: entry.id, kind: .boundary, preview: entry.text)
+            case .notice(let notice) where notice.changesContext: ChatMark(id: entry.id, kind: .boundary, preview: notice.label)
             case .notice, .pi, .machine, .preview: nil
             }
         })
@@ -119,7 +119,7 @@ struct ChatScrubber: View {
         }
         .accessibilityElement()
         .accessibilityLabel("对话刻度")
-        .accessibilityValue(currentIndex.map { "第 \($0 + 1) 处，共 \(marks.count) 处：\(marks[$0].preview)" } ?? "共 \(marks.count) 处")
+        .accessibilityValue(currentIndex.map { String(localized: "第 \($0 + 1) 处，共 \(marks.count) 处：\(marks[$0].preview)") } ?? String(localized: "共 \(marks.count) 处"))
         .accessibilityAdjustableAction { direction in
             let from = currentIndex ?? marks.count
             switch direction {
@@ -270,6 +270,6 @@ nonisolated struct ChatMark: Equatable, Sendable {
     static func firstLine(_ stored: String) -> String {
         if let line = CueFormat.plainText(stored).split(whereSeparator: \.isNewline).first { return line.trimmingCharacters(in: .whitespaces) }
         let images = CueFormat.imageHashes(in: stored).count
-        return images > 0 ? "\(images) 张图片" : ""
+        return images > 0 ? String(localized: "\(images) 张图片") : ""
     }
 }

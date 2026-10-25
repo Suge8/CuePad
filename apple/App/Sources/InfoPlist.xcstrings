@@ -1,0 +1,42 @@
+{
+  "sourceLanguage" : "zh-Hans",
+  "strings" : {
+    "NSAppleEventsUsageDescription" : {
+      "comment" : "Mac：跳到会话所在终端时的自动化授权说明",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CuePad controls your terminal app to take you to the tab where an agent session is running."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CuePad 需要控制终端应用，才能把你带到运行 Agent 会话的那个终端标签页。"
+          }
+        }
+      }
+    },
+    "NSCameraUsageDescription" : {
+      "comment" : "iOS：相机授权说明",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CuePad uses the camera to add photos to your ideas and tasks."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CuePad 用相机拍照，把照片记进灵感或任务。"
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

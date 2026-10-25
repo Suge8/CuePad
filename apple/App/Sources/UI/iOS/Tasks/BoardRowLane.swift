@@ -4,7 +4,7 @@ import SwiftUI
 /// 手机竖版看板的一行（`BoardColumn` 的 `row`，`PhoneBoard` 四行竖着排）：Mac 看板的一列转 90°——一行横贯全屏，
 /// 行头（`BoardLaneMark`、竖排的名字、数）是一块竖窄的写字玻璃，贴着屏幕左边钉在行里、竖直居中，卡在它右边横着排，放不下就在这一行里横划、
 /// 按卡停（`viewAligned`）；卡滑动时从玻璃下面过，不遮罩、不在它右沿裁掉（docs/ui.md 沉浸式的栏）。玻璃贴屏边、不留缝：留缝时停着的上一张卡的尾巴在缝里露出碎字。
-/// 四行的玻璃一样大（`spineHeight`：放得下最长的名字三个字加记号与数），在行里竖直居中、内容在玻璃里居中；比玻璃高的行里，停着的上一张卡在玻璃上下露出一截尾巴。
+/// 四行的玻璃一样大（至少 `spineHeight`，名字那一格按四个名字里最长的占位），在行里竖直居中、内容在玻璃里居中；比玻璃高的行里，停着的上一张卡在玻璃上下露出一截尾巴。
 /// 行没有底（`BoardLane`）：分组靠留白与行头。
 /// 行多高由 `PhoneBoard` 按屏高给，卡多卡少、有没有都不改；这里只答最小高：待办、推进中、等你叠两排、已完成一排的最小格（`BoardRowMetrics`，随动态字体放大），
 /// 不低于行头玻璃（名字总写全）。给得比最小高多时格跟着长高，长到再叠得下一排最小格就多叠一排（`adaptive`）；卡铺满格，按列填（读的顺序不变）。
@@ -33,7 +33,9 @@ struct BoardRowLane<Above: View, Content: View>: View {
         .frame(minHeight: spineHeight, maxHeight: .infinity)
         .overlay(alignment: .leading) {
             BoardRowSpine(column: column, count: count)
-                .frame(width: BoardRowMetrics.spine, height: spineHeight)
+                .frame(width: BoardRowMetrics.spine)
+                .frame(minHeight: spineHeight)
+                .fixedSize(horizontal: false, vertical: true)
                 .glass(in: UnevenRoundedRectangle(bottomTrailingRadius: BoardRowMetrics.spine / 2, topTrailingRadius: BoardRowMetrics.spine / 2, style: .continuous))
         }
         .padding(.vertical, BoardRowMetrics.inset)
@@ -110,8 +112,10 @@ private struct BoardRowSpine: View {
     var body: some View {
         VStack(spacing: 3) {
             BoardLaneMark(column: column, size: mark)
-            VStack(spacing: -2) {
-                ForEach(Array(column.title.enumerated()), id: \.offset) { Text(String($1)) }
+            // 四行的玻璃一样高：名字那一格按最长的名字占位
+            ZStack {
+                ForEach(TaskBoard.Column.allCases) { Self.name($0.title).hidden() }
+                Self.name(column.title)
             }
             .font(.caption.weight(.semibold)).foregroundStyle(palette.ink2)
             Text("\(count)").font(.footnote.weight(.semibold)).monospacedDigit().foregroundStyle(palette.ink).counting(count)
@@ -121,6 +125,29 @@ private struct BoardRowSpine: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(column.title) \(count)")
         .accessibilityAddTraits(.isHeader)
+    }
+
+    /// 汉字一字一行竖排；拉丁字母竖排读不成词，整词侧转 90°。
+    @ViewBuilder private static func name(_ title: String) -> some View {
+        if title.unicodeScalars.allSatisfy(\.properties.isIdeographic) {
+            VStack(spacing: -2) {
+                ForEach(Array(title.enumerated()), id: \.offset) { Text(String($1)) }
+            }
+        } else {
+            Sideways { Text(title).lineLimit(1).fixedSize().rotationEffect(.degrees(-90)) }
+        }
+    }
+}
+
+/// 侧转 90° 的一个子视图占转过之后的框（`rotationEffect` 只转画面，不换排版的宽高）。
+private struct Sideways: Layout {
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let size = subviews.first?.sizeThatFits(.unspecified) ?? .zero
+        return CGSize(width: size.height, height: size.width)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews.first?.place(at: CGPoint(x: bounds.midX, y: bounds.midY), anchor: .center, proposal: .unspecified)
     }
 }
 #endif

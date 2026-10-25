@@ -25,7 +25,7 @@ struct TrashScreen: View {
         }
         .scrollContentBackground(.hidden)
         // 空的时不写那一行：下面的空态已经说了
-        .floatingHeader("回收站", detail: data.map { $0.isEmpty ? nil : Dotted("\($0.count) 项") } ?? "") {
+        .floatingHeader("回收站", detail: data.map { $0.isEmpty ? nil : Dotted(String(localized: "\($0.count) 项")) } ?? Dotted()) {
             // 圆钮一直在、没东西时置灰：顶栏的控件不随数据出现消失
             Button("清空", icon: .trash, role: .destructive) { confirmEmpty = true }
                 .disabled(data?.isEmpty ?? true)

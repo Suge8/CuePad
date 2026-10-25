@@ -25,7 +25,7 @@ final class AgentListModel {
 
     /// 列表空着、没在搜时的标题（两端同一句；下面的说明与按钮各端自己给）；`filter` 是此刻的项目范围。
     static func noneTitle(filter: UUID?) -> String {
-        filter == nil ? "还没有 Agent 会话" : "这个项目还没有 Agent 会话"
+        filter == nil ? String(localized: "还没有 Agent 会话") : String(localized: "这个项目还没有 Agent 会话")
     }
 }
 

@@ -55,7 +55,7 @@ enum MainMenu {
 
     /// 会话回复框的快捷键：动作经响应链交给回复框的文字区（`GrowingTextView.performReplyShortcut`），回复框没聚焦时停用。
     private static func replyMenu() -> NSMenuItem {
-        let menu = NSMenu(title: "回复")
+        let menu = NSMenu(title: String(localized: "回复"))
         for key in ReplyShortcut.menu {
             let item = menu.addItem(withTitle: key.title, action: #selector(GrowingTextView.performReplyShortcut(_:)), keyEquivalent: key.input)
             item.keyEquivalentModifierMask = key.shift ? [.command, .shift] : .command
@@ -68,23 +68,23 @@ enum MainMenu {
     }
 
     private enum Entry {
-        case item(String, Selector, String, NSEvent.ModifierFlags = .command, tag: Int = 0)
+        case item(LocalizedStringResource, Selector, String, NSEvent.ModifierFlags = .command, tag: Int = 0)
         case separator
     }
 
-    private static func submenu(title: String, items: [Entry]) -> NSMenuItem {
-        let menu = NSMenu(title: title)
+    private static func submenu(title: LocalizedStringResource, items: [Entry]) -> NSMenuItem {
+        let menu = NSMenu(title: String(localized: title))
         for entry in items {
             switch entry {
             case let .item(title, action, key, modifiers, tag):
-                let item = menu.addItem(withTitle: title, action: action, keyEquivalent: key)
+                let item = menu.addItem(withTitle: String(localized: title), action: action, keyEquivalent: key)
                 item.keyEquivalentModifierMask = modifiers
                 item.tag = tag
             case .separator: menu.addItem(.separator())
             }
         }
         let holder = NSMenuItem()
-        holder.title = title
+        holder.title = menu.title
         holder.submenu = menu
         return holder
     }

@@ -78,14 +78,14 @@ final class SendState {
     /// 提示只说写出了（到哪了看任务那一行）。
     func destination(of stored: String, to target: AgentTarget, card: UUID?) -> (content: String, listener: Listener, handed: Dotted) {
         let name = sessionName(target.session)
-        let (listener, capabilities, note): (Listener, AgentCapabilities, String?) = switch route(of: target.session, host: target.host) {
-        case .local(let live): (.session(live.sendTarget, host: services.hostID, mode: .send, card: card), live.capabilities, nil)
-        case .remote(let session): (.session(session, mode: .send, card: card), session.capabilities, nil)
+        let (listener, capabilities, wakes): (Listener, AgentCapabilities, Bool) = switch route(of: target.session, host: target.host) {
+        case .local(let live): (.session(live.sendTarget, host: services.hostID, mode: .send, card: card), live.capabilities, false)
+        case .remote(let session): (.session(session, mode: .send, card: card), session.capabilities, false)
         case .ended(let host):
-            (.session(SendTarget(kind: .piSession, name: name, ref: target.session), host: host ?? services.hostID, mode: .send, card: card), .all, "唤醒后送达")
+            (.session(SendTarget(kind: .piSession, name: name, ref: target.session), host: host ?? services.hostID, mode: .send, card: card), .all, true)
         }
         let content = capabilities.contains(.images) ? stored : CueFormat.plainText(stored)
-        return (content, listener, Dotted("已交给 Agent 会话「\(name)」" + (note.map { "，\($0)" } ?? "")))
+        return (content, listener, Dotted(wakes ? String(localized: "已交给 Agent 会话「\(name)」，唤醒后送达") : String(localized: "已交给 Agent 会话「\(name)」")))
     }
 }
 #endif

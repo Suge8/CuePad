@@ -166,7 +166,7 @@ extension CueStore {
     var failures: [RemoteFailure] = []
     for hash in Set(hashes).sorted() where try !isImageReferenced(hash) {
       do { try files.remove(hash: hash) } catch {
-        failures.append(RemoteFailure(recordName: hash, message: "附件文件没能删除：\(error)"))
+        failures.append(RemoteFailure(recordName: hash, message: String(localized: "附件文件没能删除：\(String(describing: error))")))
       }
     }
     return failures

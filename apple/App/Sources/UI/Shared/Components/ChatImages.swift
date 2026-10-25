@@ -61,6 +61,6 @@ private struct ChatImage: View {
         guard let original = services.store.files.fileURL(for: hash) else { return }
         let type = CGImageSourceCreateWithURL(original as CFURL, nil).flatMap(CGImageSourceGetType)
         let ext = type.flatMap { UTType($0 as String)?.preferredFilenameExtension } ?? "png"
-        if let url = services.store.files.named(hash, as: "图片.\(ext)") { open(url) }
+        if let url = services.store.files.named(hash, as: String(localized: "图片.\(ext)")) { open(url) }
     }
 }

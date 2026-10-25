@@ -9,7 +9,7 @@ nonisolated enum PiProgress {
     static func note(of session: PiSessionState, failure: String?) -> String? {
         if let failure { return failure }
         if let progress = line(of: session) { return progress }
-        if session.state == .known(.settled), !session.hasStarted { return "等你说第一句" }
+        if session.state == .known(.settled), !session.hasStarted { return String(localized: "等你说第一句") }
         return nil
     }
 
@@ -17,7 +17,7 @@ nonisolated enum PiProgress {
         switch session.state.known {
         case .waitingForUser: firstLine(session.question?.text ?? session.detail)
         // 还没有具体动作时写正在处理的那句提问
-        case .thinking, .tool: session.detail.flatMap(action) ?? firstLine(session.pendingPrompt).map { "正在处理：\($0)" }
+        case .thinking, .tool: session.detail.flatMap(action) ?? firstLine(session.pendingPrompt).map { String(localized: "正在处理：\($0)") }
         case .delegating: PiSubagentLine.of(session.subagents) ?? firstLine(session.detail)
         // 状态词"正在压缩上下文"就是这一句（整页的行没有别的话时写状态词）
         case .compacting: nil
@@ -36,7 +36,8 @@ nonisolated enum PiProgress {
     }
 
     private static let verbs = [
-        "bash": "运行", "read": "读取", "edit": "修改", "write": "写入", "grep": "查找", "find": "查找", "ls": "查看",
+        "bash": String(localized: "运行"), "read": String(localized: "读取"), "edit": String(localized: "修改"), "write": String(localized: "写入"),
+        "grep": String(localized: "查找"), "find": String(localized: "查找"), "ls": String(localized: "查看"),
     ]
 
     static func firstLine(_ text: String?) -> String? {

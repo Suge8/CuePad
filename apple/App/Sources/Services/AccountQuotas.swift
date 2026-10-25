@@ -50,7 +50,7 @@ final class AccountQuotas {
 extension AppServices {
     /// 开始跟随额度记录（`start()` 调用）；读失败时报告并停止。
     func startAccountQuotas() {
-        follow(reporting: { .syncUnavailable("读取订阅额度失败，额度不再更新：\($0)") }) {
+        follow(reporting: { .syncUnavailable(String(localized: "读取订阅额度失败，额度不再更新：\(String(describing: $0))")) }) {
             try await self.accountQuotas.follow(self.store) { await self.alerts?.remind($0) }
         }
     }

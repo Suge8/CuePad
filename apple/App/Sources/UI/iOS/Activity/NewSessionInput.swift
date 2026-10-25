@@ -136,10 +136,10 @@ struct NewSessionInput: View {
         HStack(spacing: 8) {
             MenuButton(sections: [ChoiceMenu.Section(choices: places.map { place in
                 ChoiceMenu.Choice(
-                    title: Dotted(place.project.name, place.detail).visible,
+                    title: .verbatim(Dotted(place.project.name, place.detail).visible),
                     checked: place.id == chosen?.id) { choice = place.id }
-            })], accessibilityLabel: "在哪开：\(chosen?.project.name ?? "没选")") {
-                DestinationChip(title: Text(Dotted("新会话", chosen?.project.name ?? "选在哪开"))) {
+            })], accessibilityLabel: chosen.map { "在哪开：\($0.project.name)" } ?? "在哪开：没选") {
+                DestinationChip(title: Text(Dotted(String(localized: "新会话"), chosen?.project.name ?? String(localized: "选在哪开")))) {
                     if let project = chosen?.project { ProjectGlyph(project: project, size: 13) }
                 }
             }

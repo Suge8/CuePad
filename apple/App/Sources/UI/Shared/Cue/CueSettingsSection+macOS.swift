@@ -29,7 +29,7 @@ struct CueSettingsSection: View {
         let hosts = settings.hosts(here: services.hostID)
         let waiting = settings.gate(services).waitingReason
         return SettingRow(
-            title: CueSettings.hostTitle, icon: Image(.mac), tone: model.failure == nil ? .calm : .failure,
+            title: .verbatim(CueSettings.hostTitle), icon: Image(.mac), tone: model.failure == nil ? .calm : .failure,
             busy: model.enabling != nil || waiting != nil, status: (model.failure ?? waiting).map { Dotted($0) }
         ) {
             CueHostSetting(settings: settings, hosts: hosts, model: model).disabled(waiting != nil)

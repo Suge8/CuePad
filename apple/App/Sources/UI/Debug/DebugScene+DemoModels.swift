@@ -58,18 +58,18 @@ extension DebugScene {
 
     /// 演示会话的斜杠命令清单：内置、扩展、提示词模板、技能各有几条（回复框输入 "/" 弹出的面板）。
     static let demoCommands = [
-        PiSlashCommand(name: "compact", summary: "压缩当前上下文，可附上说明", source: .known(.builtin), hint: "[说明]"),
-        PiSlashCommand(name: "name", summary: "设置会话名", source: .known(.builtin), hint: "<名字>"),
-        PiSlashCommand(name: "model", summary: "换模型", source: .known(.builtin), hint: "<提供方/模型>"),
-        PiSlashCommand(name: "thinking", summary: "设置思考强度", source: .known(.builtin), hint: "<强度>"),
-        PiSlashCommand(name: "new", summary: "开一个新会话", source: .known(.builtin)),
-        PiSlashCommand(name: "clone", summary: "在当前位置复制出一个新会话", source: .known(.builtin)),
-        PiSlashCommand(name: "reload", summary: "重新载入扩展、skill、提示词模板与上下文文件", source: .known(.builtin)),
-        PiSlashCommand(name: "plan", summary: "先列计划，确认后再动手", source: .known(.extension)),
-        PiSlashCommand(name: "review", summary: "审查当前分支的改动", source: .known(.prompt)),
-        PiSlashCommand(name: "changelog", summary: "按提交记录写更新说明", source: .known(.prompt)),
-        PiSlashCommand(name: "skill:deploy", summary: "按清单检查并部署到生产", source: .known(.skill)),
-        PiSlashCommand(name: "skill:frontend-design", summary: "做界面时先定视觉方向与密度", source: .known(.skill)),
+        PiSlashCommand(name: "compact", summary: String(localized: "压缩当前上下文，可附上说明", table: "Demo"), source: .known(.builtin), hint: String(localized: "[说明]", table: "Demo")),
+        PiSlashCommand(name: "name", summary: String(localized: "设置会话名", table: "Demo"), source: .known(.builtin), hint: String(localized: "<名字>", table: "Demo")),
+        PiSlashCommand(name: "model", summary: String(localized: "换模型", table: "Demo"), source: .known(.builtin), hint: String(localized: "<提供方/模型>", table: "Demo")),
+        PiSlashCommand(name: "thinking", summary: String(localized: "设置思考强度", table: "Demo"), source: .known(.builtin), hint: String(localized: "<强度>", table: "Demo")),
+        PiSlashCommand(name: "new", summary: String(localized: "开一个新会话", table: "Demo"), source: .known(.builtin)),
+        PiSlashCommand(name: "clone", summary: String(localized: "在当前位置复制出一个新会话", table: "Demo"), source: .known(.builtin)),
+        PiSlashCommand(name: "reload", summary: String(localized: "重新载入扩展、skill、提示词模板与上下文文件", table: "Demo"), source: .known(.builtin)),
+        PiSlashCommand(name: "plan", summary: String(localized: "先列计划，确认后再动手", table: "Demo"), source: .known(.extension)),
+        PiSlashCommand(name: "review", summary: String(localized: "审查当前分支的改动", table: "Demo"), source: .known(.prompt)),
+        PiSlashCommand(name: "changelog", summary: String(localized: "按提交记录写更新说明", table: "Demo"), source: .known(.prompt)),
+        PiSlashCommand(name: "skill:deploy", summary: String(localized: "按清单检查并部署到生产", table: "Demo"), source: .known(.skill)),
+        PiSlashCommand(name: "skill:frontend-design", summary: String(localized: "做界面时先定视觉方向与密度", table: "Demo"), source: .known(.skill)),
     ]
 
     /// 演示会话的上下文用量（窗口 20 万 token）：多数宽裕，atlas 用到八成多（百分比加粗转墨色、说明里建议压缩），
@@ -101,7 +101,7 @@ extension DebugScene {
         #if os(macOS)
         let local = services.hostID
         _ = try? await store.recordMacAgents(
-            host: local, name: "这台 Mac", local == "mac-bare" ? [] : full, problems: local == "mac-bare" ? bare : [])
+            host: local, name: String(localized: "这台 Mac", table: "Demo"), local == "mac-bare" ? [] : full, problems: local == "mac-bare" ? bare : [])
         #endif
     }
 

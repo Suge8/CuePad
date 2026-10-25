@@ -15,7 +15,7 @@ struct UnreadableLibraryView: View {
     #endif
 
     var body: some View {
-        EmptyState(mascot: .error, title: "读不出资料库", message: failure.summary) {
+        EmptyState(mascot: .error, title: "读不出资料库", message: .verbatim(failure.summary)) {
             VStack(spacing: 16) {
                 DisclosureGroup("详情") {
                     Text(failure.reason).font(.caption.monospaced()).textSelection(.enabled)

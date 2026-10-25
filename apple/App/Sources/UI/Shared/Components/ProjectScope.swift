@@ -25,7 +25,7 @@ struct ProjectScope: View {
             } label: {
                 HStack(spacing: 5) {
                     if let current { ProjectGlyph(project: current, size: 13) }
-                    Text(current?.name ?? "全部项目").fontWeight(current == nil ? nil : .semibold)
+                    (current.map { Text($0.name) } ?? Text("全部项目")).fontWeight(current == nil ? nil : .semibold)
                         .lineLimit(1).frame(maxWidth: Self.nameWidth)
                     if current == nil { Image(.expand).font(.caption.weight(.semibold)).accessibilityHidden(true) }
                 }

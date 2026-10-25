@@ -38,7 +38,7 @@ nonisolated enum TaskNext: Equatable, Sendable {
     var speech: String {
         switch self {
         case .agent(let shown, _): shown.label
-        case .start: "可以开始"
+        case .start: String(localized: "可以开始")
         }
     }
 }

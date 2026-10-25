@@ -17,7 +17,7 @@ struct PreviewWeb: View {
             if let rules {
                 OfflineWebView(file: file, rules: rules).ignoresSafeArea(.container, edges: .bottom)
             } else if let failure {
-                EmptyState(mascot: .error, title: "没法安全地打开这个页面", message: failure).padding(24).frame(maxHeight: .infinity)
+                EmptyState(mascot: .error, title: "没法安全地打开这个页面", message: .verbatim(failure)).padding(24).frame(maxHeight: .infinity)
             } else {
                 Spinner(.regular)
             }

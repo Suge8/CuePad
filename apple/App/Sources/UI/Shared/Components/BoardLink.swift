@@ -12,10 +12,10 @@ struct BoardLink<Label: View>: View {
             label.frame(maxWidth: .infinity, alignment: .leading).contentShape(.rect)
         }
         .buttonStyle(PressStyle(.card))
-        .accessibilityHint(hint)
+        .accessibilityHint(Text(hint))
     }
 
-    private var hint: String {
+    private var hint: LocalizedStringResource {
         switch to {
         case .session: "打开会话"
         case .question: "去 Cue 页回答"

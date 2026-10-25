@@ -41,7 +41,7 @@ extension SyncCoordinator {
   private func adoptAsset(of record: CKRecord, _ row: SyncRow) throws -> Bool {
     let name = record.recordID.recordName
     guard case .text(let hash)? = row.fields["hash"], let file = (record["file"] as? CKAsset)?.fileURL else {
-      report(.damaged, detail: "附件记录没有文件", kind: .incoming, recordType: record.recordType, recordName: name)
+      report(.damaged, detail: String(localized: "附件记录没有文件"), kind: .incoming, recordType: record.recordType, recordName: name)
       return false
     }
     do {

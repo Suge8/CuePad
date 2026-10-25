@@ -76,8 +76,8 @@ nonisolated struct PiContextMeter: Equatable {
     var percent: String { "\(used)%" }
 
     /// 悬停与读屏：先说这是上下文，快满了时说可以压缩。
-    var help: Dotted { Dotted("上下文") + summary + Dotted(suggestsCompact ? "快满了，可以压缩" : nil) }
+    var help: Dotted { Dotted(String(localized: "上下文")) + summary + Dotted(suggestsCompact ? String(localized: "快满了，可以压缩") : nil) }
 
     /// "已用 21% · 剩 79%"（只写比例，用户看不到 token 数）。
-    var summary: Dotted { Dotted("已用 \(used)%", "剩 \(100 - used)%") }
+    var summary: Dotted { Dotted(String(localized: "已用 \(used)%"), String(localized: "剩 \(100 - used)%")) }
 }

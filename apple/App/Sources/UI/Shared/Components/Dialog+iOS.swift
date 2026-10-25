@@ -3,19 +3,19 @@ import SwiftUI
 
 extension View {
     func dialog(
-        _ title: String, isPresented: Binding<Bool>, message: String? = nil, field: DialogField? = nil, buttons: [DialogButton]
+        _ title: LocalizedStringResource, isPresented: Binding<Bool>, message: LocalizedStringResource? = nil, field: DialogField? = nil, buttons: [DialogButton]
     ) -> some View {
         Group {
             if let field {
-                self.alert(title, isPresented: isPresented) {
-                    TextField(field.prompt, text: field.text)
-                    ForEach(buttons) { Button($0.title, role: $0.role, action: $0.action).disabled($0.disabled) }
+                self.alert(Text(title), isPresented: isPresented) {
+                    TextField(String(localized: field.prompt), text: field.text)
+                    ForEach(buttons) { button in Button(role: button.role, action: button.action) { Text(button.title) }.disabled(button.disabled) }
                 } message: {
                     if let message { Text(message) }
                 }
             } else {
-                self.confirmationDialog(title, isPresented: isPresented, titleVisibility: .visible) {
-                    ForEach(buttons) { Button($0.title, role: $0.role, action: $0.action).disabled($0.disabled) }
+                self.confirmationDialog(Text(title), isPresented: isPresented, titleVisibility: .visible) {
+                    ForEach(buttons) { button in Button(role: button.role, action: button.action) { Text(button.title) }.disabled(button.disabled) }
                 } message: {
                     if let message { Text(message) }
                 }
@@ -24,13 +24,13 @@ extension View {
     }
 
     func dialog<Item: Identifiable>(
-        _ title: String, item: Binding<Item?>, message: String? = nil, buttons: @escaping (Item) -> [DialogButton]
+        _ title: LocalizedStringResource, item: Binding<Item?>, message: LocalizedStringResource? = nil, buttons: @escaping (Item) -> [DialogButton]
     ) -> some View {
         confirmationDialog(
-            title, isPresented: Binding { item.wrappedValue != nil } set: { if !$0 { item.wrappedValue = nil } },
+            Text(title), isPresented: Binding { item.wrappedValue != nil } set: { if !$0 { item.wrappedValue = nil } },
             titleVisibility: .visible, presenting: item.wrappedValue
         ) { shown in
-            ForEach(buttons(shown)) { Button($0.title, role: $0.role, action: $0.action).disabled($0.disabled) }
+            ForEach(buttons(shown)) { button in Button(role: button.role, action: button.action) { Text(button.title) }.disabled(button.disabled) }
         } message: { _ in
             if let message { Text(message) }
         }

@@ -120,10 +120,10 @@ public enum AgentRuntimeError: Error, Equatable {
 extension AgentRuntimeError: LocalizedError {
     public var errorDescription: String? {
         switch self {
-        case .notInstalled(let kind): "这台 Mac 上没有找到 \(kind.name)"
-        case .launchTimedOut(let kind): "\(kind.name) 没有及时启动"
-        case .launchFailed(let kind, let reason): "\(kind.name) 没能启动：\(reason)"
-        case .openElsewhere: "这个会话正开在别处（如终端里），先在那里退出再从 CuePad 接着说"
+        case .notInstalled(let kind): String(localized: "这台 Mac 上没有找到 \(kind.name)")
+        case .launchTimedOut(let kind): String(localized: "\(kind.name) 没有及时启动")
+        case .launchFailed(let kind, let reason): String(localized: "\(kind.name) 没能启动：\(reason)")
+        case .openElsewhere: String(localized: "这个会话正开在别处（如终端里），先在那里退出再从 CuePad 接着说")
         }
     }
 }

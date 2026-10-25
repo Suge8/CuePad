@@ -11,7 +11,7 @@ struct CueStarters: View {
     var body: some View {
         VStack(spacing: 8) {
             ForEach(Self.lines(agents?.agents.map(\.kind) ?? []), id: \.self) { line in
-                EmptyStateButton(title: line, icon: nil, kind: .small) {
+                EmptyStateButton(title: .verbatim(line), icon: nil, kind: .small) {
                     workspace.cue.draft.text = line
                     workspace.cueFocusPending = true
                 }
@@ -23,8 +23,11 @@ struct CueStarters: View {
     }
 
     static func lines(_ agents: [AgentKind]) -> [String] {
-        let first = agents.first.map { "用 \($0.name) " } ?? ""
-        let second = agents.dropFirst().first.map { "让 \($0.name) " } ?? ""
-        return ["\(first)做一个番茄钟网页，做好截图给我看", "\(second)调研三款笔记 App 的优缺点，写一页总结", "以后推送代码前先问我"]
+        let first = agents.first?.name, second = agents.dropFirst().first?.name
+        return [
+            first.map { String(localized: "用 \($0) 做一个番茄钟网页，做好截图给我看") } ?? String(localized: "做一个番茄钟网页，做好截图给我看"),
+            second.map { String(localized: "让 \($0) 调研三款笔记 App 的优缺点，写一页总结") } ?? String(localized: "调研三款笔记 App 的优缺点，写一页总结"),
+            String(localized: "以后推送代码前先问我"),
+        ]
     }
 }

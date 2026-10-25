@@ -89,7 +89,7 @@ struct DefaultProjectWidget: Widget {
     static let kind = "CuePadInbox"
 
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: Self.kind, provider: SnapshotProvider(empty: DefaultProjectSnapshot(name: "默认", cards: [], total: 0))) { entry in
+        StaticConfiguration(kind: Self.kind, provider: SnapshotProvider(empty: DefaultProjectSnapshot(name: String(localized: "默认"), cards: [], total: 0))) { entry in
             WidgetViews.defaultProject(entry.snapshot)
         }
         .configurationDisplayName("默认")

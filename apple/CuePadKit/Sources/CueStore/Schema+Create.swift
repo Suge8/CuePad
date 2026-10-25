@@ -6,7 +6,7 @@ extension Schema {
   /// 合并时用户改过的（名字、颜色、图标）总比它新，不会被一台新装的设备盖回"默认"。
   private static let defaultProject = """
     INSERT INTO projects (id, name, icon, color, isPinned, deletedAt, createdAt, modifiedAt, intro)
-    VALUES ('\(Project.defaultID.uuidString.lowercased())', '默认', 'house', '#8A8A84', 0, NULL, 0, 0, NULL)
+    VALUES ('\(Project.defaultID.uuidString.lowercased())', '\(Project.defaultName)', 'house', '#8A8A84', 0, NULL, 0, 0, NULL)
     ON CONFLICT(id) DO NOTHING;
     """
 

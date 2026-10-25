@@ -171,15 +171,15 @@ extension CodexRuntime {
 
     /// 能从 CuePad 执行的内置命令：Codex 的斜杠命令是终端界面自己实现的，只有这几个有对应的接口。
     private static let builtinCommands = [
-        PiSlashCommand(name: "compact", summary: "压缩上下文", source: .known(.builtin)),
-        PiSlashCommand(name: "name", summary: "给会话改名", source: .known(.builtin), hint: "<名字>"),
-        PiSlashCommand(name: "model", summary: "换模型", source: .known(.builtin), hint: "<模型>"),
+        PiSlashCommand(name: "compact", summary: String(localized: "压缩上下文"), source: .known(.builtin)),
+        PiSlashCommand(name: "name", summary: String(localized: "给会话改名"), source: .known(.builtin), hint: String(localized: "<名字>")),
+        PiSlashCommand(name: "model", summary: String(localized: "换模型"), source: .known(.builtin), hint: String(localized: "<模型>")),
     ]
 
     /// 托管会话切协作模式（终端会话的模式归终端界面管）
     private static let modeCommands = [
-        PiSlashCommand(name: "plan", summary: "进 Plan 模式：先问清楚、出计划，不动手", source: .known(.builtin), hint: "[话]"),
-        PiSlashCommand(name: "default", summary: "回默认模式", source: .known(.builtin)),
+        PiSlashCommand(name: "plan", summary: String(localized: "进 Plan 模式：先问清楚、出计划，不动手"), source: .known(.builtin), hint: String(localized: "[话]")),
+        PiSlashCommand(name: "default", summary: String(localized: "回默认模式"), source: .known(.builtin)),
     ]
 
     /// 会话的控制通道：托管的是它的进程，终端里的是常驻服务（钩子的父进程就是它才算；`codex exec` 之类没有控制接口）。

@@ -31,7 +31,7 @@ struct CueRunPanel: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     CueContextLine(context: workspace.cue.context)
-                    Text(Dotted("最近几轮", rounds.isEmpty ? nil : "\(rounds.count)"))
+                    Text(Dotted(String(localized: "最近几轮"), rounds.isEmpty ? nil : "\(rounds.count)"))
                         .font(Typography.label).foregroundStyle(palette.ink3)
                     if rounds.isEmpty {
                         Text("还没醒过").font(Typography.meta).foregroundStyle(palette.ink3)
@@ -100,9 +100,9 @@ private struct CueRoundRow: View {
 
     private var summary: Dotted {
         Dotted(
-            round.finishedAt.map { CueRunFormat.took($0.timeIntervalSince(round.startedAt)) } ?? "进行中",
-            round.calls.isEmpty ? "没调工具" : "\(round.calls.count) 次工具",
-            round.context.map { "上下文 \(CueContext.tokens($0))" })
+            round.finishedAt.map { CueRunFormat.took($0.timeIntervalSince(round.startedAt)) } ?? String(localized: "进行中"),
+            round.calls.isEmpty ? String(localized: "没调工具") : String(localized: "\(round.calls.count) 次工具"),
+            round.context.map { String(localized: "上下文 \(CueContext.tokens($0))") })
     }
 
     private var detail: some View {
@@ -120,7 +120,7 @@ private struct CueRoundRow: View {
                     .frame(minHeight: 22).contentShape(.rect)
                 }
                 .buttonStyle(PressStyle())
-                if showsSent { TraceText(text: round.sent.joined(separator: "\n\n— 插话 —\n\n")).transition(.opacity) }
+                if showsSent { TraceText(text: round.sent.joined(separator: String(localized: "\n\n— 插话 —\n\n"))).transition(.opacity) }
             }
             ForEach(round.calls) { CueCallRow(call: $0) }
             if let failure = round.failure {
@@ -149,7 +149,7 @@ private struct CueCallRow: View {
                 VStack(alignment: .leading, spacing: 6) {
                     TraceText(label: "参数", text: CueRunFormat.pretty(call.arguments))
                     if let result = call.result {
-                        TraceText(label: "结果", text: result.isEmpty ? "（空）" : CueRunFormat.pretty(result), tint: call.failed ? palette.failure : nil)
+                        TraceText(label: "结果", text: result.isEmpty ? String(localized: "（空）") : CueRunFormat.pretty(result), tint: call.failed ? palette.failure : nil)
                     }
                 }
                 .padding(.leading, 19)
@@ -180,7 +180,7 @@ private struct CueCallRow: View {
 
 /// 全文：等宽小字垫代码块同一种底（`ChatBlock`），可选；太长在里面滚。
 private struct TraceText: View {
-    var label: String?
+    var label: LocalizedStringResource?
     let text: String
     var tint: Color?
     @Environment(\.palette) private var palette
@@ -214,8 +214,8 @@ private enum CueRunFormat {
     /// 用时：一秒内写毫秒，十秒内到十分之一秒，往上同会话里的写法。
     static func took(_ seconds: TimeInterval) -> String {
         switch seconds {
-        case ..<1: "\(Int((seconds * 1000).rounded())) 毫秒"
-        case ..<10: String(format: "%.1f 秒", seconds)
+        case ..<1: String(localized: "\(Int((seconds * 1000).rounded())) 毫秒")
+        case ..<10: String(localized: "\(seconds.formatted(.number.precision(.fractionLength(1)))) 秒")
         default: PiClock.duration(seconds)
         }
     }
@@ -223,8 +223,8 @@ private enum CueRunFormat {
     /// 醒来原因（同 Cue 页，`CueWake.reason`）带上几处、几条。
     static func reason(_ wake: CueWake) -> String {
         switch wake {
-        case .sessionActivity(let stirs): "\(wake.reason)（\(stirs.count) 处）"
-        case .reminder(let lines): "\(wake.reason)（\(lines.count) 条）"
+        case .sessionActivity(let stirs): String(localized: "\(wake.reason)（\(stirs.count) 处）")
+        case .reminder(let lines): String(localized: "\(wake.reason)（\(lines.count) 条）")
         case .enabled, .message, .idle: wake.reason
         }
     }

@@ -15,8 +15,8 @@ extension AppServices {
         switch source {
         case .custom(let sync): return (sync, .starting)
         case .built(let make): return (make(store), .starting)
-        case .iCloud where location.isIsolated && !DebugHooks.syncsIsolatedLibrary: reason = "开发用的隔离资料库，不连 iCloud"
-        case .iCloud where !Entitlements.hasCloudKit: reason = "这个构建没有 iCloud 权限（本机开发构建），不会同步"
+        case .iCloud where location.isIsolated && !DebugHooks.syncsIsolatedLibrary: reason = String(localized: "开发用的隔离资料库，不连 iCloud")
+        case .iCloud where !Entitlements.hasCloudKit: reason = String(localized: "这个构建没有 iCloud 权限（本机开发构建），不会同步")
         case .iCloud: return (CloudSync(store: store), .starting)
         }
         log.notice("同步未启用：\(reason, privacy: .public)")
@@ -32,7 +32,7 @@ extension AppServices {
         }
         follow { await sync.start() }
         follow { await self.syncNow() }
-        follow(reporting: { .syncUnavailable("冲突列表读取失败：\($0)") }) {
+        follow(reporting: { .syncUnavailable(String(localized: "冲突列表读取失败：\(String(describing: $0))")) }) {
             for try await conflicts in self.store.observe({ try $0.conflicts() }) { self.setConflicts(conflicts) }
         }
         #if os(macOS)

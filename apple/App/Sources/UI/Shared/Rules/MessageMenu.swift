@@ -38,14 +38,14 @@ nonisolated enum MessageMenu {
 extension MessageMenu.Item {
     var title: String {
         switch self {
-        case .copy: "复制"
-        case .selectText: "选择文本"
-        case .annotate: "批注"
-        case .share: "分享"
-        case .saveAsIdea: "存为灵感"
-        case .editAgain: "编辑后重发"
-        case .resend: "重发"
-        case .remove: "移除"
+        case .copy: String(localized: "复制")
+        case .selectText: String(localized: "选择文本")
+        case .annotate: String(localized: "批注")
+        case .share: String(localized: "分享")
+        case .saveAsIdea: String(localized: "存为灵感")
+        case .editAgain: String(localized: "编辑后重发")
+        case .resend: String(localized: "重发")
+        case .remove: String(localized: "移除")
         }
     }
 

@@ -61,7 +61,7 @@ struct NewSessionForm: View {
                 VStack(spacing: 2) { ForEach(places) { row($0, selected: $0.id == place?.id) } }.padding(.horizontal, RowMetrics.bleed)
             }
             .frame(maxHeight: Self.listHeight).fixedSize(horizontal: false, vertical: true)
-            TextField("开场的话（可不填）", text: $prompt, palette: palette, axis: .vertical)
+            TextField(String(localized: "开场的话（可不填）"), text: $prompt, palette: palette, axis: .vertical)
                 .textFieldStyle(.plain).lineLimit(2...5)
                 .onSubmit { if let place, let agents, let agent, stage != .opening { start(place, choice(agents, agent)) } }
                 .padding(.horizontal, 10).padding(.vertical, 8)

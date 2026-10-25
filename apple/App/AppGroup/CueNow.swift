@@ -91,9 +91,9 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
     /// 一份写下后多久算过时：在一轮里、话在路上这类快的事实几分钟就变，其余慢。
     static let fastStale: TimeInterval = 3 * 60
     static let slowStale: TimeInterval = 15 * 60
-    static let quiet = "手上没有事"
+    static let quiet = String(localized: "手上没有事")
     /// 在一轮里、没在用工具也不知道谁叫醒的那一句：同会话与对话末尾的状态词（`PiShown` 的 working）。
-    static let thinking = "思考中"
+    static let thinking = String(localized: "思考中")
 
     var justDone: Bead? { beads.first { $0.kind == .done } }
 
@@ -146,15 +146,15 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
     var headline: String {
         switch cue {
         case .away(let reason, _): return reason
-        case .hearing: return "你的话在路上"
+        case .hearing: return String(localized: "你的话在路上")
         case .working(let woke, let doing, _): return doing ?? woke ?? Self.thinking
         case .idle:
-            if counts[.asks] > 0 { return "\(counts[.asks]) 件等你拍板" }
-            if counts[.reply] > 0 { return "\(counts[.reply]) 个会话待回复" }
-            if counts.subagents > 0 { return "等 \(counts.subagents) 个子代理交回" }
-            if counts[.running] > 0 { return "\(counts[.running]) 件在跑" }
-            if let done = justDone { return "刚做完「\(done.name)」" }
-            if advancing > 0 { return "推进中 \(advancing) 件，都歇着" }
+            if counts[.asks] > 0 { return String(localized: "\(counts[.asks]) 件等你拍板") }
+            if counts[.reply] > 0 { return String(localized: "\(counts[.reply]) 个会话待回复") }
+            if counts.subagents > 0 { return String(localized: "等 \(counts.subagents) 个子代理交回") }
+            if counts[.running] > 0 { return String(localized: "\(counts[.running]) 件在跑") }
+            if let done = justDone { return String(localized: "刚做完「\(done.name)」") }
+            if advancing > 0 { return String(localized: "推进中 \(advancing) 件，都歇着") }
             return elsewhere ?? Self.quiet
         }
     }
@@ -177,12 +177,12 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
     /// 最早等你的、最早待回复的、推进中（在跑与等子代理交回，WORDS.md）最早的那份、刚做完的；只剩歇着的写歇着、不计时。
     var focus: (word: String, tone: Tone, since: Date?) {
         switch cue {
-        case .away: return ("不在", .quiet, nil)
-        case .hearing: return ("在听", .moving, nil)
-        case .working(_, _, let since): return ("在想", .moving, since)
+        case .away: return (String(localized: "不在"), .quiet, nil)
+        case .hearing: return (String(localized: "在听"), .moving, nil)
+        case .working(_, _, let since): return (String(localized: "在想"), .moving, since)
         case .idle:
             let earliest = { (tone: Tone) in self.beads.filter { $0.kind.tone == tone }.min { $0.since < $1.since } }
-            guard let lead = earliest(.asks) ?? earliest(.reply) ?? earliest(.moving) ?? justDone else { return ("歇着", .quiet, nil) }
+            guard let lead = earliest(.asks) ?? earliest(.reply) ?? earliest(.moving) ?? justDone else { return (String(localized: "歇着"), .quiet, nil) }
             return (lead.kind.word, lead.kind.tone, lead.since)
         }
     }
@@ -222,23 +222,23 @@ nonisolated extension CueNow.Bead.Kind {
     /// 紧凑态的短词：在跑与等子代理交回都是推进中，两者靠珠子的实心、空心与那一句分。
     var word: String {
         switch self {
-        case .asks: "拍板"
-        case .reply: "待回复"
-        case .running, .delegating: "推进中"
-        case .done: "做完"
-        case .resting: "歇着"
+        case .asks: String(localized: "拍板")
+        case .reply: String(localized: "待回复")
+        case .running, .delegating: String(localized: "推进中")
+        case .done: String(localized: "做完")
+        case .resting: String(localized: "歇着")
         }
     }
 
     /// 这颗珠子的样子写成字（展开态与锁屏的每一行、读屏）。
     var label: String {
         switch self {
-        case .asks: "等你拍板"
-        case .reply: "待回复"
-        case .running: "在跑"
-        case .delegating: "等子代理"
-        case .resting: "歇着"
-        case .done: "做完"
+        case .asks: String(localized: "等你拍板")
+        case .reply: String(localized: "待回复")
+        case .running: String(localized: "在跑")
+        case .delegating: String(localized: "等子代理")
+        case .resting: String(localized: "歇着")
+        case .done: String(localized: "做完")
         }
     }
 }

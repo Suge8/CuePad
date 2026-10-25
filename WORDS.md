@@ -36,3 +36,15 @@
 - **新消息**（Cue 页，`CueStore.cueUnread`）vs **有新回复**（会话的，`PiUnread`）：前者各端同步，后者只记在本机；避免：未读消息（界面上）
 - **记忆**（`cueLines`）vs **置顶**（项目里的灵感）；长期生效的叫"一直记着"。不用先问的例外也是记忆：一条他说的、一直记着的原话（提问卡上选"以后……不用问"记下的，或他亲口说的，`CueStore.endCueQuestion`），范围写在字面上；避免：笔记、规矩（界面上）、允许清单（已退役）
 - **班次**（`CueKeeper` 起的一个大脑进程）vs **换新**（同一个班次里开新会话，用记忆视图与对话视图接上）：班次与 token 数只在代码、文档与 Mac 的"运行情况"里；换新这个词不上界面，上下文那一行（`CueContextLine`：Mac 的"运行情况"、手机的 Cue 面板）只写用到换新线的几成；避免：交接备忘（已退役）
+
+## 英文界面
+
+英文界面只用这些叫法（Apple 风格：按钮、菜单项、标题、列名用 Title Case，说明句、提示、占位符用句首大写）。没列的名词照 Apple 自家应用的说法。
+
+- 灵感 Idea · 任务 Task · 子任务 Subtask · 正文 Notes · 项目 Project · 默认项目 Default Project · 置顶 Pin / Unpin / Pinned · 归档 Archive · 回收站 Trash · 批注 Comment（不叫 Note，免得和 Notes 混）
+- 进展 Progress · 看板 Board · 会话 Session · Agent 会话 Agent Session · 全部项目 All Projects · 工作区 Workspace · 绑定的文件夹 Linked Folder
+- Cue 的四个：Cue · 推进中 Underway · 等你 Needs You · 记忆 Memory；一直记着 Always Remember
+- 拍板 Your Call（"N 件等你拍板" N Need Your Call，"等你拍板" Needs Your Call）
+- 进行中 In Progress（任务自己的状态，不与 Underway 混）· 已完成 Done（列名）· 完成 Complete（按钮）· 待回复 To Reply · 该你了 Your Turn · 新消息 New Messages · 有新回复 New Reply · 输出中 Writing…
+- 经过的动作词：查看 View · 发给 Message · 新建 New · 修改 Edit · 开始 Start · 停止 Stop · 完成 Complete · 留给你 Left for You
+- 只记下 Just Save · 对 Cue 说 Tell Cue · 运行情况 Status · 额度 Usage · 技能 Skill · 斜杠命令 Slash Command · 思考强度 Thinking · 灵动岛与锁屏 Live Activity

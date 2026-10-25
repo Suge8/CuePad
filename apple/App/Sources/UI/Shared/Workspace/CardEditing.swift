@@ -81,9 +81,9 @@ enum SaveState: Equatable {
     var text: String? {
         switch self {
         case .idle: nil
-        case .saving: "保存中…"
-        case .saved: "已保存"
-        case .failed: "没能保存"
+        case .saving: String(localized: "保存中…")
+        case .saved: String(localized: "已保存")
+        case .failed: String(localized: "没能保存")
         }
     }
 }

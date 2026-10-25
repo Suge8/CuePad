@@ -34,9 +34,9 @@ extension DebugScene {
                 if acts {
                     var tools = PiChatMessage.Tools()
                     tools.record(.init(
-                        kind: .talk, target: "对 \(woke[0]) 说：测试跑完把结果贴过来", name: woke[0], session: PiSessionState.recordID(sessionID: woke[0])))
+                        kind: .talk, target: String(localized: "对 \(woke[0]) 说：测试跑完把结果贴过来", table: "Demo"), name: woke[0], session: PiSessionState.recordID(sessionID: woke[0])))
                     _ = try? await store.recordCueRound(row, startedAt: .now, answersYou: false, tools: tools)
-                    _ = try? await store.addCueMessage(.note, text: "催了 \(woke[0])：测试跑完把结果贴过来")
+                    _ = try? await store.addCueMessage(.note, text: String(localized: "催了 \(woke[0])：测试跑完把结果贴过来", table: "Demo"))
                 }
                 try? await store.setCueState(.settled)
             })
@@ -60,7 +60,7 @@ extension DebugScene {
         guard delay > 0 else { return }
         try? await services.store.markCueRead(through: .now)
         try? await Task.sleep(for: .seconds(delay))
-        _ = try? await services.store.addCueMessage(.cue, text: "圆桌的预发部署好了，5 人以上的房间发言顺序都对了。")
+        _ = try? await services.store.addCueMessage(.cue, text: String(localized: "圆桌的预发部署好了，5 人以上的房间发言顺序都对了。", table: "Demo"))
         let visitAfter = defaults.double(forKey: "CuePadVisitCue")
         guard visitAfter > 0 else { return }
         try? await Task.sleep(for: .seconds(visitAfter))
@@ -74,10 +74,10 @@ extension DebugScene {
     static func seedAway(_ store: CueStore, aged: Bool = true) async throws {
         let hour: TimeInterval = 3600
         for (hours, author, text) in [
-            (2.5, CueAuthor.cue, "推上去了，CI 在跑正式环境的部署。"),
-            (1.5, .note, "看了圆桌：正式环境部署完成，冒烟测试全过"),
-            (2, .cue, "正式环境部署好了。5 人以上的房间我开了两个试过，发言顺序都对，重连后也保持首次加入的顺序。"),
-            (1, .cue, """
+            (2.5, CueAuthor.cue, String(localized: "推上去了，CI 在跑正式环境的部署。", table: "Demo")),
+            (1.5, .note, String(localized: "看了圆桌：正式环境部署完成，冒烟测试全过", table: "Demo")),
+            (2, .cue, String(localized: "正式环境部署好了。5 人以上的房间我开了两个试过，发言顺序都对，重连后也保持首次加入的顺序。", table: "Demo")),
+            (1, .cue, String(localized: """
                 导入旧数据那个会话又出错了：模型拒绝了请求（prompt 太长）。我打算拆成按年份导：
 
                 - 2019–2021 一批
@@ -85,16 +85,16 @@ extension DebugScene {
                 - 2024 至今一批
 
                 每批单独开会话，等你点头再开工。
-                """),
-            (0.5, .cue, "README 的深色截图也补上了，和浅色那张一起在任务里。"),
-            (0.25, .cue, "今天的看板：圆桌做完了，导入旧数据等你定怎么拆，别的都在跑。"),
+                """, table: "Demo")),
+            (0.5, .cue, String(localized: "README 的深色截图也补上了，和浅色那张一起在任务里。", table: "Demo")),
+            (0.25, .cue, String(localized: "今天的看板：圆桌做完了，导入旧数据等你定怎么拆，别的都在跑。", table: "Demo")),
         ] {
             if aged { try await store.seedAgeCueMessages(by: hours * hour) }
             _ = try await store.addCueMessage(author, text: text)
         }
     }
 
-    static let goingAway = "推吧。我去睡了，后面的你盯着，明早看"
+    static let goingAway = String(localized: "推吧。我去睡了，后面的你盯着，明早看", table: "Demo")
 
     /// `-CuePadAwayAfter <秒>`：就绪后这么久离开 Cue 页（`leave`），你说一句去睡了、Cue 接着说一夜的那几句，再回来（`back`）。
     /// 手机录"离开很久后回来"的定位；Mac 在两台设备同步读到哪时当写下新消息的那台（停在设置画面，不回来）。
@@ -138,7 +138,7 @@ extension DebugScene {
         let rows = workspace.liveWork.rows.filter { $0.state != .known(.ended) }
         guard let session = rows.first(where: { $0.sessionID == defaults.string(forKey: "CuePadSession") }) ?? rows.first else { return nil }
         return try await workspace.services.store.requestDelivery(
-            "看一下测试跑完没有，跑完把结果贴给我", to: SendTarget(kind: .piSession, name: session.title, ref: session.sessionID), on: session.hostID, cue: true)
+            String(localized: "看一下测试跑完没有，跑完把结果贴给我", table: "Demo"), to: SendTarget(kind: .piSession, name: session.title, ref: session.sessionID), on: session.hostID, cue: true)
     }
 
     /// 给一件还没交出去、归在项目里的待办叶子开新会话（Cue 发起，带着那张卡），演示 Mac 过一会儿开出它；返回请求与开出的会话 id。
@@ -185,7 +185,7 @@ extension DebugScene {
         let reopen = defaults.double(forKey: "CuePadReopen")
         guard reopen > 0 else { return }
         try? await Task.sleep(for: .seconds(reopen / 2))
-        try? await workspace.services.store.setCueState(.tool, detail: "读看板 · 关窗时写下")
+        try? await workspace.services.store.setCueState(.tool, detail: String(localized: "读看板 · 关窗时写下", table: "Demo"))
         try? await Task.sleep(for: .seconds(reopen / 2))
         shell.show()
     }

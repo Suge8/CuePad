@@ -85,9 +85,9 @@ final class AgentIntegrations {
         let result = await integration.runInstaller(kind, statuses[kind]?.presence ?? .notFound)
         await detect(kind)
         jobs[kind] = switch result {
-        case nil: .failed("安装超时")
-        case let (status, output)? where status != 0: .failed(Self.lastLine(output) ?? "安装没成功")
-        case _ where statuses[kind]?.isAvailable != true: .failed("装好了，但找不到 \(kind.command)")
+        case nil: .failed(String(localized: "安装超时"))
+        case let (status, output)? where status != 0: .failed(Self.lastLine(output) ?? String(localized: "安装没成功"))
+        case _ where statuses[kind]?.isAvailable != true: .failed(String(localized: "装好了，但找不到 \(kind.command)"))
         default: nil
         }
     }
@@ -107,7 +107,7 @@ final class AgentIntegrations {
             let status = await process.waitForExit()
             guard logins[kind] === process else { return }  // 被重来的那次换掉了
             logins[kind] = nil
-            jobs[kind] = status == 0 ? nil : .failed("没登录成功")
+            jobs[kind] = status == 0 ? nil : .failed(String(localized: "没登录成功"))
         } catch {
             jobs[kind] = .failed(error.localizedDescription)
         }

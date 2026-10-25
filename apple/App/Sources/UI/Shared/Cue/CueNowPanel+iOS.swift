@@ -28,7 +28,7 @@ struct CueNowPanel: View {
     }
 
     /// 两个去处同宽同高：次按钮的胶囊，图标接字。
-    private func place(_ title: String, icon: Icon, action: @escaping () -> Void) -> some View {
+    private func place(_ title: LocalizedStringResource, icon: Icon, action: @escaping () -> Void) -> some View {
         Button { go(action) } label: {
             Label { Text(title).lineLimit(1) } icon: { Image(icon) }
                 .labelStyle(.titleAndIcon)
@@ -79,7 +79,7 @@ private struct CueHostPick: View {
     @Environment(\.palette) private var palette
     @State private var model = CueSettingsModel()
 
-    private static let title = "选在哪台 Mac 上运行"
+    private static var title: String { String(localized: "选在哪台 Mac 上运行") }
 
     var body: some View {
         let settings = model.settings ?? .empty

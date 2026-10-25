@@ -89,10 +89,10 @@ public enum AgentInstallError: Error, Equatable {
 extension AgentInstallError: LocalizedError {
     public var errorDescription: String? {
         switch self {
-        case .notFound(let kind): "没有找到 \(kind.name)"
-        case .tooOld(let kind, let found): "\(kind.name) \(found) 太旧，需要 \(kind.minimumVersion.map(\.description) ?? "") 或更新"
-        case .foreign(let path): "\(path) 是别人的同名文件，没有改动"
-        case .isolated(let kind): "这台 Mac 装着正式版，本机构建不改它在用的配置：先用 \(kind.homeVariable) 指定 \(kind.name) 的目录再接入"
+        case .notFound(let kind): String(localized: "没有找到 \(kind.name)")
+        case .tooOld(let kind, let found): String(localized: "\(kind.name) \(found.description) 太旧，需要 \(kind.minimumVersion?.description ?? "") 或更新")
+        case .foreign(let path): String(localized: "\(path) 是别人的同名文件，没有改动")
+        case .isolated(let kind): String(localized: "这台 Mac 装着正式版，本机构建不改它在用的配置：先用 \(kind.homeVariable) 指定 \(kind.name) 的目录再接入")
         }
     }
 }

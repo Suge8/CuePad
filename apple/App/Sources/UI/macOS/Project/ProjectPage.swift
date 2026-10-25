@@ -124,7 +124,7 @@ struct ProjectPage: View {
         .rowPaper(radius: 12)
     }
 
-    private func wallSection(title: String, count: Int, ids: [UUID], byID: [UUID: Card], lastTarget: [UUID: String]) -> some View {
+    private func wallSection(title: LocalizedStringResource, count: Int, ids: [UUID], byID: [UUID: Card], lastTarget: [UUID: String]) -> some View {
         VStack(alignment: .leading, spacing: Spacing.sectionTitle) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(title).font(Typography.sectionTitle).foregroundStyle(palette.ink)

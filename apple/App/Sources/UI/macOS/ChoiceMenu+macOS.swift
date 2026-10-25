@@ -11,7 +11,7 @@ extension ChoiceMenu {
         for (index, section) in sections.enumerated() {
             if index > 0 { menu.addItem(.separator()) }
             if let title = section.title, sections.count > 1 {
-                let header = NSMenuItem.sectionHeader(title: title)
+                let header = NSMenuItem.sectionHeader(title: String(localized: title))
                 show(section.image?.nsImage, on: header)
                 menu.addItem(header)
             }
@@ -24,11 +24,11 @@ extension ChoiceMenu {
     private static func item(_ choice: Choice) -> NSMenuItem {
         let handler = Handler(choice.choose)
         // 停用项没有动作：菜单按没有动作的项画成灰、点不了
-        let item = NSMenuItem(title: choice.title, action: choice.disabled ? nil : #selector(Handler.fire), keyEquivalent: "")
+        let item = NSMenuItem(title: String(localized: choice.title), action: choice.disabled ? nil : #selector(Handler.fire), keyEquivalent: "")
         item.target = handler
         // 菜单项只弱引用目标：由它自己留住
         item.representedObject = handler
-        item.subtitle = choice.subtitle
+        item.subtitle = choice.subtitle.map { String(localized: $0) }
         show(choice.image?.nsImage, on: item)
         item.state = choice.checked == true ? .on : .off
         return item

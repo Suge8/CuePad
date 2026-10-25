@@ -30,7 +30,7 @@ extension AppServices {
         }
         follow { await self.historyStore.keepPruned() }
         // 先对账再起各家的接入：重新接上的会话沿用对账前的起点（`PiBridge.carryOver`）。对账失败照样起，只是从此刻算
-        follow(reporting: { .syncUnavailable("Agent 状态没能写入同步记录：\($0)") }) {
+        follow(reporting: { .syncUnavailable(String(localized: "Agent 状态没能写入同步记录：\(String(describing: $0))")) }) {
             var failure: (any Error)?
             do { try await self.resetPiState() } catch { failure = error }
             self.startRuntimes()
@@ -39,21 +39,21 @@ extension AppServices {
         }
         // 执行器在接入刷新之后才启动：托管的 Pi 加载磁盘上的扩展，App 更新后要先换成随包版本，旧扩展读不懂托管约定。
         // 刷新失败也照样启动——托管启动时核对连上的扩展，对不上就让它退出并报错（`PiHostError.extensionMismatch`）。
-        follow(reporting: { .syncUnavailable("远程投送执行器没能启动：\($0)") }) {
+        follow(reporting: { .syncUnavailable(String(localized: "远程投送执行器没能启动：\(String(describing: $0))")) }) {
             await self.refreshAgentIntegrations()
             try await self.executor.start()
         }
-        follow(reporting: { .piBridgeUnavailable("旧版 Pi 扩展文件没能删掉：\($0)") }) {
+        follow(reporting: { .piBridgeUnavailable(String(localized: "旧版 Pi 扩展文件没能删掉：\(String(describing: $0))")) }) {
             try await self.agents.retireLegacyPiExtension(following: legacyPiChanges)
         }
-        follow(reporting: { .syncUnavailable("目录绑定没能同步给手机：\($0)") }) { try await self.startDirectoryBindings() }
-        follow(reporting: { .syncUnavailable("这台 Mac 在线的记录没能写下：\($0)") }) { [presence, wakeNotifications] in
+        follow(reporting: { .syncUnavailable(String(localized: "目录绑定没能同步给手机：\(String(describing: $0))")) }) { try await self.startDirectoryBindings() }
+        follow(reporting: { .syncUnavailable(String(localized: "这台 Mac 在线的记录没能写下：\(String(describing: $0))")) }) { [presence, wakeNotifications] in
             try await presence.keep(notifications: wakeNotifications)
         }
-        follow(reporting: { .syncUnavailable("这台 Mac 开着的页没能写下：\($0)") }) { [viewer, wakeNotifications] in
+        follow(reporting: { .syncUnavailable(String(localized: "这台 Mac 开着的页没能写下：\(String(describing: $0))")) }) { [viewer, wakeNotifications] in
             try await viewer?.keep(notifications: wakeNotifications)
         }
-        follow(reporting: { .syncUnavailable("这台 Mac 上能用的 Agent 没能写下：\($0)") }) { [macAgents, wakeNotifications] in
+        follow(reporting: { .syncUnavailable(String(localized: "这台 Mac 上能用的 Agent 没能写下：\(String(describing: $0))")) }) { [macAgents, wakeNotifications] in
             try await macAgents.keep(notifications: wakeNotifications)
         }
         startCue()
@@ -80,7 +80,7 @@ extension AppServices {
         do {
             try await agents.refresh()
         } catch where !Task.isCancelled {
-            reportIssue(.piBridgeUnavailable("CuePad 写给 Agent 的技能或扩展没能升级：\(error.localizedDescription)"))
+            reportIssue(.piBridgeUnavailable(String(localized: "CuePad 写给 Agent 的技能或扩展没能升级：\(error.localizedDescription)")))
         } catch {}
     }
 
@@ -123,8 +123,8 @@ extension AppServices {
 
     /// Cue：本机能用的运行时、按设置值班、通知（点开去哪见 `AlertCenter`）。
     private func startCue() {
-        follow(reporting: { .piBridgeUnavailable("Cue 没能值班：\($0)") }) { try await self.cue.follow() }
-        follow(reporting: { .piBridgeUnavailable("Cue 的通知没能开始：\($0)") }) { try await self.cue.followNotifications() }
+        follow(reporting: { .piBridgeUnavailable(String(localized: "Cue 没能值班：\(String(describing: $0))")) }) { try await self.cue.follow() }
+        follow(reporting: { .piBridgeUnavailable(String(localized: "Cue 的通知没能开始：\(String(describing: $0))")) }) { try await self.cue.followNotifications() }
     }
 
     // MARK: 全局快捷键
@@ -134,7 +134,7 @@ extension AppServices {
         do {
             try hotkey.registerSaved()
         } catch {
-            reportIssue(.globalShortcutUnavailable("\(hotkey.label)（\(ShortcutText.display(hotkey.accelerator))）：\(error)"))
+            reportIssue(.globalShortcutUnavailable(String(localized: "\(hotkey.label)（\(ShortcutText.display(hotkey.accelerator))）：\(String(describing: error))")))
         }
     }
 
@@ -146,7 +146,7 @@ extension AppServices {
         do {
             return try await historyStore.start(for: file)
         } catch {
-            await reportIssue(.piHistoryUnavailable("读取 \(file.path) 的检查点失败：\(error)"))
+            await reportIssue(.piHistoryUnavailable(String(localized: "读取 \(file.path) 的检查点失败：\(String(describing: error))")))
             return nil
         }
     }
@@ -169,7 +169,7 @@ extension AppServices {
                     do {
                         try await historyStore.forget(agent)
                     } catch {
-                        reportIssue(.piHistoryUnavailable("删掉 \(agent.name) 的会话索引失败：\(error)"))
+                        reportIssue(.piHistoryUnavailable(String(localized: "删掉 \(agent.name) 的会话索引失败：\(String(describing: error))")))
                     }
                 }
                 indexing[agent] = (isConnected, Task { await self.index(agent, connected: isConnected) })
@@ -202,7 +202,7 @@ extension AppServices {
         do {
             try runtime.start()
         } catch {
-            return reportIssue(.piBridgeUnavailable("\(agent.name) 没能接上：\(error)"))
+            return reportIssue(.piBridgeUnavailable(String(localized: "\(agent.name) 没能接上：\(String(describing: error))")))
         }
         let (untilCancelled, held) = AsyncStream<Never>.makeStream()
         for await _ in untilCancelled {}
@@ -215,7 +215,7 @@ extension AppServices {
         do {
             return try await historyStore.hostedScope(of: agent)
         } catch {
-            reportIssue(.piHistoryUnavailable("读取 \(agent.name) 托管过的会话失败：\(error)"))
+            reportIssue(.piHistoryUnavailable(String(localized: "读取 \(agent.name) 托管过的会话失败：\(String(describing: error))")))
             return .sessions([])
         }
     }
@@ -231,7 +231,7 @@ extension AppServices {
         func flush() async {
             guard !pending.isEmpty else { return }
             for failure in await historyStore.persist(pending) {
-                reportIssue(.piHistoryUnavailable("写入 \(failure.file.path) 失败：\(failure.error)"))
+                reportIssue(.piHistoryUnavailable(String(localized: "写入 \(failure.file.path) 失败：\(String(describing: failure.error))")))
             }
             pending.removeAll()
         }
@@ -249,7 +249,7 @@ extension AppServices {
                     guard try await historyStore.backfillFinished(files, of: agent) else { continue }
                     try await piStateRecorder.dropUnindexedHosted(of: agent)
                 } catch {
-                    reportIssue(.piHistoryUnavailable("清理已不存在的会话失败：\(error)"))
+                    reportIssue(.piHistoryUnavailable(String(localized: "清理已不存在的会话失败：\(String(describing: error))")))
                 }
             }
         }

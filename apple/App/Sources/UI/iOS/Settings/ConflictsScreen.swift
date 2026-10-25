@@ -22,7 +22,7 @@ struct ConflictsScreen: View {
             .padding(16)
             .animation(HandOff.quick, value: services.conflicts.map(\.copy.id))
         }
-        .floatingHeader("两个版本", detail: services.conflicts.isEmpty ? nil : "\(services.conflicts.count) 处")
+        .floatingHeader("两个版本", detail: services.conflicts.isEmpty ? nil : Dotted(String(localized: "\(services.conflicts.count) 处")))
     }
 }
 

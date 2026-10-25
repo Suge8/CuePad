@@ -187,7 +187,7 @@ private struct SyncAlert: View {
             } label: {
                 Image(summary.icon).foregroundStyle(palette.color(summary.tone))
             }
-            .help([summary.title, summary.detail, "点按在设置里处理"].compactMap { $0 }.joined(separator: "\n"))
+            .help([summary.title, summary.detail, String(localized: "点按在设置里处理")].compactMap { $0 }.joined(separator: "\n"))
             .accessibilityLabel(summary.title)
         }
     }

@@ -59,6 +59,7 @@ nonisolated struct CrashReport: Identifiable, Equatable, Sendable {
             self = kind
         }
 
+        /// 导出的诊断（给开发者）里的叫法
         var name: String {
             switch self {
             case .crash: "崩溃"
@@ -68,7 +69,15 @@ nonisolated struct CrashReport: Identifiable, Equatable, Sendable {
             }
         }
 
-        var label: String { "上次" + name }
+        /// 设置里那一行的名字
+        var label: LocalizedStringResource {
+            switch self {
+            case .crash: "上次崩溃"
+            case .hang: "上次卡死"
+            case .cpu: "上次 CPU 异常"
+            case .disk: "上次磁盘写入异常"
+            }
+        }
     }
 
     let id: String

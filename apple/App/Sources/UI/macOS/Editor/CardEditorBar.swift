@@ -83,7 +83,7 @@ private struct VariablesChip: View {
         Button { editing.toggle() } label: {
             HStack(spacing: 6) {
                 Text("{{\(names[0])}}").foregroundStyle(palette.ink)
-                Text(card.variableValues[names[0]].flatMap { $0.isEmpty ? nil : $0 } ?? "未填")
+                Text(card.variableValues[names[0]].flatMap { $0.isEmpty ? nil : $0 } ?? String(localized: "未填"))
                     .foregroundStyle(card.variableValues[names[0]]?.isEmpty == false ? palette.ink : palette.ink2)
                     .lineLimit(1)
                 if names.count > 1 { Text("+\(names.count - 1)").foregroundStyle(palette.ink2) }

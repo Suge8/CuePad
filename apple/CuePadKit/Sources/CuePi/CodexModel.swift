@@ -26,7 +26,7 @@ struct CodexModel {
     /// 失败的一轮（`turn/completed` 的 `status` 为 failed）的原因：`turn.error` 的说明，带上补充细节。
     static func failure(of turn: JSONValue?) -> String {
         let message = [turn?["error"]?["message"]?.string, turn?["error"]?["additionalDetails"]?.string].compactMap { $0 }.filter { !$0.isEmpty }
-        return message.isEmpty ? "Codex 这一轮失败了" : message.joined(separator: "\n")
+        return message.isEmpty ? String(localized: "Codex 这一轮失败了") : message.joined(separator: "\n")
     }
 
     /// `hidden`：连隐藏的模型也要（大脑可能配的就是它）。

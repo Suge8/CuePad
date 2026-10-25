@@ -15,8 +15,8 @@ struct SelectableTextSheet: View {
 
 /// 可选文本页的外框：标题、可选的一行提示（标题下面），右上角"完成"。
 struct TextSheet<Content: View>: View {
-    let title: String
-    var hint: String?
+    let title: LocalizedStringResource
+    var hint: LocalizedStringResource?
     @ViewBuilder let content: Content
     @Environment(\.dismiss) private var dismiss
     @Environment(\.palette) private var palette
@@ -25,8 +25,8 @@ struct TextSheet<Content: View>: View {
         NavigationStack {
             content
                 .background(palette.paper)
-                .navigationTitle(title)
-                .navigationSubtitle(hint ?? "")
+                .navigationTitle(Text(title))
+                .navigationSubtitle(hint.map { Text($0) } ?? Text(verbatim: ""))
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .confirmationAction) { Button("完成", role: .close) { dismiss() } }
@@ -131,7 +131,7 @@ struct SelectableText: UIViewRepresentable {
 
         func textView(_ textView: UITextView, editMenuForTextIn range: NSRange, suggestedActions: [UIMenuElement]) -> UIMenu? {
             guard let notes, let place = notes.place(range) else { return nil }
-            let annotate = UIAction(title: "批注", image: Icon.said.platformImage) { _ in notes.annotate(place) }
+            let annotate = UIAction(title: String(localized: "批注"), image: Icon.said.platformImage) { _ in notes.annotate(place) }
             return UIMenu(children: [annotate] + suggestedActions)
         }
 

@@ -15,7 +15,7 @@ extension Composer {
 
     /// 带上的卡片或任务：标题、图片数，可移除；点一下看全文，长按（Mac 右键）出"展开编辑""不带了"（`AttachmentButton`）。
     func chip(_ outbox: Outbox) -> some View {
-        let card = CardText(outbox.content)
+        let card = CardText(outbox.content), name = card.title.nonEmpty ?? String(localized: "图片")
         let removable = outbox.card != keeps
         let shape = RoundedRectangle(cornerRadius: ComposerMetrics.radius - ComposerMetrics.inset, style: .continuous)
         let menu = removable ? [ChoiceMenu.Section(choices: [
@@ -23,12 +23,12 @@ extension Composer {
             ChoiceMenu.Choice(title: "不带了", image: .icon(.remove), destructive: true) { drop(outbox) },
         ])] : []
         return HStack(spacing: 0) {
-            AttachmentButton(label: "带上：\(card.title.nonEmpty ?? "图片")", menu: menu, open: { previewing = outbox }) {
+            AttachmentButton(label: "带上：\(name)", menu: menu, open: { previewing = outbox }) {
                 HStack(spacing: 10) {
                     Image(.pickCards).foregroundStyle(palette.ink3)
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(card.title.nonEmpty ?? "图片").font(Typography.secondary.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(1)
+                        Text(name).font(Typography.secondary.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(1)
                         // 去处收不了图片时卡片里的图片不发（`ComposerDraft.accepting`），不写张数
                         if accepts.contains(.images), !card.images.isEmpty {
                             Text("\(card.images.count) 张图片").font(Typography.caption).foregroundStyle(palette.ink3)

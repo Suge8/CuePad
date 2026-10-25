@@ -19,7 +19,7 @@ struct ShelfScreen: View {
             if let catalog = workspace.catalog { content(catalog) }
         }
         .refreshable { await services.syncNow() }
-        .floatingHeader(SidebarOutline.Entry.projects.title) {
+        .floatingHeader(.verbatim(SidebarOutline.Entry.projects.title)) {
             Button("新建项目", icon: .newProject) { workspace.projectForm = .init() }
         }
     }

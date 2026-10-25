@@ -36,10 +36,10 @@ final class MacExecutor {
 
     func start() async throws {
         let executor = DeliveryExecutor(store: store, hostID: hostID, onIssue: { [reportIssue] error in
-            let message = "处理投送请求时读写资料库失败：\(error.localizedDescription)"
+            let message = String(localized: "处理投送请求时读写资料库失败：\(error.localizedDescription)")
             Task { @MainActor in reportIssue(message) }
         }, onWritten: upload) { [weak self] request in
-            guard let self else { return .failed("这台 Mac 上的 CuePad 正在退出") }
+            guard let self else { return .failed(String(localized: "这台 Mac 上的 CuePad 正在退出")) }
             return await self.run(request)
         }
         try await executor.start()
@@ -113,7 +113,7 @@ final class MacExecutor {
         do {
             try await store.recordSend(content, to: target, card: request.cardID, delivery: request.id, origin: request.origin)
         } catch {
-            reportIssue("处理投送请求时读写资料库失败：发送已完成，但没能记下这次发送：\(error.localizedDescription)")
+            reportIssue(String(localized: "处理投送请求时读写资料库失败：发送已完成，但没能记下这次发送：\(error.localizedDescription)"))
         }
     }
 

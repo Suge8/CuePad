@@ -141,7 +141,7 @@ private struct NoteEditor: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Image(.said).font(Typography.secondary).foregroundStyle(palette.ink2).accessibilityHidden(true)
-            TextField("写批注，↩ 挂到下一句", text: $text, palette: palette, axis: .vertical)
+            TextField(String(localized: "写批注，↩ 挂到下一句"), text: $text, palette: palette, axis: .vertical)
                 .textFieldStyle(.plain)
                 .font(Typography.secondary).foregroundStyle(palette.ink)
                 .lineLimit(1...5)

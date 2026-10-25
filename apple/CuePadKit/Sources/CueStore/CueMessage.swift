@@ -121,7 +121,7 @@ enum CueRead {
 /// Cue 做完一件顶层任务后告诉你的结果（`CueStore.finishTask`）：一行"「任务名」做完了"，下面每条证据一个要点。
 public enum CueReport {
   public static func text(task: String, evidence: [String]) -> String {
-    (["「\(task)」做完了", ""] + evidence.map { "- \($0)" }).joined(separator: "\n")
+    ([String(localized: "「\(task)」做完了"), ""] + evidence.map { "- \($0)" }).joined(separator: "\n")
   }
 }
 
@@ -134,7 +134,7 @@ public enum CueAlert {
   public static func content(name: String?, text: String, asking: CueAsking?, choices: [String]?, looks: [String]) -> (title: String, body: String) {
     let body: String
     if let asking, let choices {
-      let shots = looks.isEmpty ? [] : ["看图：" + looks.joined(separator: "；")]
+      let shots = looks.isEmpty ? [] : [String(localized: "看图：\(looks.joined(separator: String(localized: "；")))")]
       body = ([asking.question] + [asking.why].compactMap(\.self) + shots + [choices.joined(separator: " / ")]).joined(separator: "\n")
     } else {
       let plain = CueFormat.plainText(text)

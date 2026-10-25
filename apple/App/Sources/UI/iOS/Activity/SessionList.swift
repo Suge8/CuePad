@@ -105,12 +105,12 @@ struct SessionList<Top: View>: View {
         if model.searching {
             EmptyState.noMatch(model.query).padding(.top, 40)
         } else if let filter {
-            EmptyState(mascot: .empty, title: AgentListModel.noneTitle(filter: filter), waitsForSync: true) {
+            EmptyState(mascot: .empty, title: .verbatim(AgentListModel.noneTitle(filter: filter)), waitsForSync: true) {
                 EmptyStateButton(title: "新会话", icon: .add, action: { workspace.newSession = .init(project: filter) })
             }
             .padding(.top, 40)
         } else {
-            EmptyState(mascot: .empty, title: AgentListModel.noneTitle(filter: nil), message: "在 Mac 的终端里开一个 Agent，或在这里开新会话", waitsForSync: true) {
+            EmptyState(mascot: .empty, title: .verbatim(AgentListModel.noneTitle(filter: nil)), message: "在 Mac 的终端里开一个 Agent，或在这里开新会话", waitsForSync: true) {
                 EmptyStateButton(title: "新会话", icon: .add, action: { workspace.newSession = .init() })
             }
             .padding(.top, 40)

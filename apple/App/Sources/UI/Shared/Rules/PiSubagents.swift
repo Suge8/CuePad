@@ -28,12 +28,12 @@ nonisolated extension PiSubagentState {
 
     var label: String {
         switch phase.known {
-        case .running: "工作中"
-        case .review: "审查中"
-        case .done: "已交回"
-        case .failed: "失败"
-        case .interrupted: "被中断"
-        case .idle: "空闲"
+        case .running: String(localized: "工作中")
+        case .review: String(localized: "审查中")
+        case .done: String(localized: "已交回")
+        case .failed: String(localized: "失败")
+        case .interrupted: String(localized: "被中断")
+        case .idle: String(localized: "空闲")
         case nil: shown.label
         }
     }
@@ -47,13 +47,13 @@ nonisolated struct PiSubagentSummary: Equatable {
     let lineup: [PiSubagentState]
 
     /// 主句：有在跑的写"2 个在跑"；都停了只写总数"8 个子代理"。
-    var lead: String { running > 0 ? "\(running) 个在跑" : "\(total) 个子代理" }
+    var lead: String { running > 0 ? String(localized: "\(running) 个在跑") : String(localized: "\(total) 个子代理") }
 
     /// 次句：除了在跑的还有别的，补上总数"共 8 个"；全在跑或都停了没有。
-    var tail: String? { running > 0 && total > running ? "共 \(total) 个" : nil }
+    var tail: String? { running > 0 && total > running ? String(localized: "共 \(total) 个") : nil }
 
     /// 失败的个数写在末尾；没有失败时为 nil。
-    var failure: String? { failed > 0 ? "\(failed) 失败" : nil }
+    var failure: String? { failed > 0 ? String(localized: "\(failed) 失败") : nil }
 
     init?(_ agents: [PiSubagentState]) {
         guard !agents.isEmpty else { return nil }
@@ -83,7 +83,7 @@ nonisolated enum PiSubagentClock: Equatable {
     func text(now: Date) -> String {
         switch self {
         case .running(let clock): clock.text(now: now)
-        case .took(let seconds): "用时 \(PiClock.duration(seconds))"
+        case .took(let seconds): String(localized: "用时 \(PiClock.duration(seconds))")
         }
     }
 
@@ -96,11 +96,11 @@ nonisolated enum PiSubagentLine {
         guard !agents.isEmpty else { return nil }
         let running = agents.filter(\.isRunning)
         switch running.count {
-        case 0: return "子代理已交回，等 Agent 接着做"
+        case 0: return String(localized: "子代理已交回，等 Agent 接着做")
         case 1:
             let agent = running[0]
-            return agent.action.isEmpty ? "\(agent.name) 在干活" : "\(agent.name) 在干活：\(agent.action)"
-        default: return "\(running.count) 个子代理在干活"
+            return agent.action.isEmpty ? String(localized: "\(agent.name) 在干活") : String(localized: "\(agent.name) 在干活：\(agent.action)")
+        default: return String(localized: "\(running.count) 个子代理在干活")
         }
     }
 }

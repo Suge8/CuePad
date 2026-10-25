@@ -9,8 +9,8 @@ public enum LibraryLocationError: Error, Equatable, LocalizedError {
 
   public var errorDescription: String? {
     switch self {
-    case .relativePath(let value): "CUEPAD_LIBRARY_DIR 必须是绝对路径，收到「\(value)」"
-    case .appGroupUnavailable(let id): "无法访问共享容器 \(id)：App 没有该 App Group 的权限（真机需要开发者签名）"
+    case .relativePath(let value): String(localized: "CUEPAD_LIBRARY_DIR 必须是绝对路径，收到「\(value)」")
+    case .appGroupUnavailable(let id): String(localized: "无法访问共享容器 \(id)：App 没有该 App Group 的权限（真机需要开发者签名）")
     }
   }
 }

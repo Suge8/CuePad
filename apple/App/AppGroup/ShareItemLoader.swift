@@ -7,7 +7,7 @@ import os
 nonisolated enum ShareError: Error, LocalizedError {
     case nothingToShare
 
-    var errorDescription: String? { "没有可保存的文字、网址或图片" }
+    var errorDescription: String? { String(localized: "没有可保存的文字、网址或图片") }
 }
 
 /// 把系统分享面板给的 `NSItemProvider` 读成 `ShareContent`：图片优先，其次网址，最后文字。

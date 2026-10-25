@@ -46,7 +46,7 @@ struct CrashReportView: View {
     var body: some View {
         SettingPopover(title: report.kind.label, width: 420) {
             Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 12, verticalSpacing: 6) {
-                ForEach(facts(date: .abbreviated), id: \.0) { title, value in
+                ForEach(facts(date: .abbreviated), id: \.0.key) { title, value in
                     GridRow {
                         Text(title).foregroundStyle(palette.ink3)
                         Text(value.visible).foregroundStyle(palette.ink).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
@@ -66,22 +66,22 @@ struct CrashReportView: View {
     }
     #endif
 
-    private func facts(date: Date.FormatStyle.DateStyle) -> [(String, Dotted)] {
-        var facts: [(String, Dotted)] = [("时间", Dotted(report.date.formatted(date: date, time: .standard)))]
+    private func facts(date: Date.FormatStyle.DateStyle) -> [(LocalizedStringResource, Dotted)] {
+        var facts: [(LocalizedStringResource, Dotted)] = [("时间", Dotted(report.date.formatted(date: date, time: .standard)))]
         if let exception = report.exception { facts.append(("异常", Dotted(exception + (report.signal.map { "（\($0)）" } ?? "")))) }
         if let reason = report.reason { facts.append(("原因", Dotted(reason))) }
         if let app = report.app { facts.append(("版本", app)) }
         return facts
     }
 
-    private static let note = "只存在这台设备上，不会自动上传；点导出把摘要和原始诊断复制出来，发给开发者。"
+    private static let note: LocalizedStringResource = "只存在这台设备上，不会自动上传；点导出把摘要和原始诊断复制出来，发给开发者。"
 
     #if os(iOS)
     private var list: some View {
         List {
             Section {
-                ForEach(facts(date: .complete), id: \.0) { title, value in
-                    LabeledContent(title) { Text(value).foregroundStyle(palette.ink3).multilineTextAlignment(.trailing).textSelection(.enabled) }
+                ForEach(facts(date: .complete), id: \.0.key) { title, value in
+                    LabeledContent { Text(value).foregroundStyle(palette.ink3).multilineTextAlignment(.trailing).textSelection(.enabled) } label: { Text(title) }
                 }
             }
             if !report.frames.isEmpty {

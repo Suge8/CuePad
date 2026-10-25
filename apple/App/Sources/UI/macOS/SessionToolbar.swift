@@ -203,7 +203,7 @@ nonisolated struct SessionTaskLink: Sendable, Equatable {
     func path(below title: String) -> Dotted? {
         guard let primary else { return nil }
         let named = [primary.parent?.title, primary.task.title].filter { $0 != title }
-        return Dotted(named + [tasks.count > 1 ? "等 \(tasks.count) 件" : nil]).nonEmpty
+        return Dotted(named + [tasks.count > 1 ? String(localized: "等 \(tasks.count) 件") : nil]).nonEmpty
     }
 
     static func read(sessionID: String, project: UUID?, from store: isolated CueStore) throws -> SessionTaskLink {

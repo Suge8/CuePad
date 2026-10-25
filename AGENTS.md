@@ -23,6 +23,7 @@ Swift 原生应用（macOS / iOS / iPadOS），产品见 [README.md](README.md)�
 ## 碰到这些先读
 
 - 界面配色、动效、布局、渲染性能 → [docs/ui.md](docs/ui.md)
+- 加、改界面上的字，英文版 → [docs/i18n.md](docs/i18n.md)
 - 同步、投送请求、CloudKit 订阅、通知、同步排查 → [docs/sync.md](docs/sync.md)
 - 截图验收、交互验收、通知验收、崩溃诊断、要占前台（截系统菜单、在前台量帧） → [docs/verify.md](docs/verify.md)
 - 性能测量、交互预算、同步测量 → [docs/perf.md](docs/perf.md)

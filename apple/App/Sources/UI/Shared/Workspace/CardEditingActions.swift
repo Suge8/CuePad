@@ -6,7 +6,7 @@ import Foundation
 extension CueSelectionAction {
     /// 编辑器选区的"转为任务"（Mac 的右键菜单、手机的编辑菜单同一项）：选中的字转成这张卡所在项目的任务。
     static func convertToTasks(from card: Card, workspace: Workspace) -> CueSelectionAction {
-        CueSelectionAction(title: "转为任务", icon: .task) { stored in workspace.convertToTasks(stored, in: card.projectID) }
+        CueSelectionAction(title: String(localized: "转为任务"), icon: .task) { stored in workspace.convertToTasks(stored, in: card.projectID) }
     }
 }
 

@@ -130,8 +130,8 @@ private struct SessionAnswer: View {
     }
 
     private var note: (text: String, failed: Bool)? {
-        if !services.reachesPiHost { return ("\(SyncSummary(services.syncStatus).title)，现在答不了；同步恢复后再答，或在 Mac 上回答", false) }
-        if answering, sent == .delivered { return ("已答，等 Mac 上的 Agent 继续", false) }
+        if !services.reachesPiHost { return (String(localized: "\(SyncSummary(services.syncStatus).title)，现在答不了；同步恢复后再答，或在 Mac 上回答"), false) }
+        if answering, sent == .delivered { return (String(localized: "已答，等 Mac 上的 Agent 继续"), false) }
         return failure.map { ($0, true) }
     }
 
@@ -152,7 +152,7 @@ private struct SessionAnswer: View {
             .frame(minWidth: Self.minWidth)
         }
         .buttonStyle(ControlButtonStyle(kind: .secondary))
-        .accessibilityLabel(busy ? "\(value.label)，送达中" : value.label)
+        .accessibilityLabel(busy ? String(localized: "\(value.label)，送达中") : value.label)
     }
 
     /// 胶囊至少这么宽："否""是"这类一个字的不缩成一颗圆点。
@@ -188,7 +188,7 @@ private struct WaitReply: View {
     var body: some View {
         // 一行时字与发送钮同一条中线（字的格至少与钮同高、竖直居中）；写成几行长高时钮贴在最后一行旁（底对齐，上下边距让最后一行对着钮的中线）
         HStack(alignment: .bottom, spacing: 6) {
-            TextField("回答", text: box.text, palette: palette, axis: .vertical)
+            TextField(String(localized: "回答"), text: box.text, palette: palette, axis: .vertical)
                 .textFieldStyle(.plain).font(Typography.secondary).lineLimit(1...4)
                 .padding(.vertical, Self.textInset)
                 .frame(minHeight: ComposerMetrics.glyphTarget)

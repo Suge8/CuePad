@@ -90,9 +90,9 @@ public enum CueBrainError: Error, Equatable {
 extension CueBrainError: LocalizedError {
     public var errorDescription: String? {
         switch self {
-        case .notRunning: "Cue 没在运行"
-        case .rejected(let message): "Cue 的运行时拒绝了请求：\(message)"
-        case .unsupported(let kind): "\(kind.name) 不能当 Cue 的大脑"
+        case .notRunning: String(localized: "Cue 没在运行")
+        case .rejected(let message): String(localized: "Cue 的运行时拒绝了请求：\(message)")
+        case .unsupported(let kind): String(localized: "\(kind.name) 不能当 Cue 的大脑")
         }
     }
 }

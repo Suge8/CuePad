@@ -17,7 +17,9 @@ struct TrashPage: View {
             .padding(.horizontal, Spacing.page).padding(.bottom, 40)
         }
         .safeAreaPadding(.top, Bars.contentGap)
-        .dialog("永久删除回收站里的全部内容？", isPresented: Bindable(workspace).confirmsEmptyTrash, message: "此操作无法撤销。发送记录会保留当时的内容快照。", buttons: [
+        .dialog(
+            "永久删除回收站里的全部内容？", isPresented: Bindable(workspace).confirmsEmptyTrash,
+            message: "此操作无法撤销。发送记录会保留当时的内容快照。", buttons: [
             DialogButton(title: "清空", role: .destructive) { workspace.perform { try await $0.emptyTrash() } }
         ])
         .observing(services.store, into: $data, onError: workspace.fail) { store in
@@ -50,7 +52,7 @@ struct TrashPage: View {
         }
     }
 
-    private func group(_ title: String, @ViewBuilder rows: () -> some View) -> some View {
+    private func group(_ title: LocalizedStringResource, @ViewBuilder rows: () -> some View) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title).font(Typography.sectionTitle).foregroundStyle(palette.ink)
             VStack(spacing: 0) { rows() }.rowPaper(radius: 12)

@@ -242,6 +242,6 @@ struct QuotaRings: View {
         .foregroundStyle(palette.ink2)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("额度")
-        .accessibilityValue(Dotted(rings.map { "\(PiProvider(id: $0.provider).account) \($0.window.name)剩 \($0.window.percent)" }).spoken)
+        .accessibilityValue(Dotted(rings.map { String(localized: "\(PiProvider(id: $0.provider).account) \($0.window.name)剩 \($0.window.percent)") }).spoken)
     }
 }

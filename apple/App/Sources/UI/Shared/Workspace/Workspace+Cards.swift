@@ -39,7 +39,7 @@ extension Workspace {
         for request in ended { _ = services.uploaded(request) }
         // 做完了就给一个归档（不自动归档）
         guard status == .done else { return }
-        say("已完成", action: NoticeAction(title: "归档") { try await self.archive(id) })
+        say("已完成", action: NoticeAction(title: String(localized: "归档")) { try await self.archive(id) })
     }
 
     /// 灵感拖到一条任务上：接到它的正文后面，灵感进回收站（一次写入）；提示里带"撤销"。灵感与任务不互转，这是灵感变成要做的事的唯一一步。
@@ -48,7 +48,7 @@ extension Workspace {
         let undo = try await store.merging(idea, into: task)
         closeIfOpen(idea)
         let title = try await store.card(task)?.title ?? ""
-        say(Dotted("已接到「\(title.textGlyphs)」的正文后面"), action: .undo(undo))
+        say("已接到「\(title.textGlyphs)」的正文后面", action: .undo(undo))
     }
 
     /// 离开一条灵感或任务正文的编辑：先写下没保存的字，还是空白（`Card.isBlank`）的灵感就不留下——记一条是先建一条空的再编辑。

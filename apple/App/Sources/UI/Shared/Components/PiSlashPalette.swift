@@ -64,11 +64,11 @@ struct PiSlashPalette: View {
 nonisolated extension Open<PiCommandSource> {
     var label: String {
         switch self {
-        case .known(.builtin): "内置"
-        case .known(.extension): "扩展"
-        case .known(.prompt): "模板"
-        case .known(.skill): "技能"
-        case .unknown: "其他"
+        case .known(.builtin): String(localized: "内置")
+        case .known(.extension): String(localized: "扩展")
+        case .known(.prompt): String(localized: "模板")
+        case .known(.skill): String(localized: "技能")
+        case .unknown: String(localized: "其他")
         }
     }
 }

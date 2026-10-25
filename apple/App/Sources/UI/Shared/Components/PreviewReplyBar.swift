@@ -16,8 +16,8 @@ struct PreviewReplyBar: View {
     var body: some View {
         Group {
             switch reply {
-            case .cue: field("关于「\(about)」对 \(workspace.cue.name) 说…", to: .cue)
-            case .session(let session): field("关于「\(about)」对会话说…", to: .session(session, mode: .send))
+            case .cue: field(String(localized: "关于「\(about)」对 \(workspace.cue.name) 说…"), to: .cue)
+            case .session(let session): field(String(localized: "关于「\(about)」对会话说…"), to: .session(session, mode: .send))
             case .answer(let message): choices(message)
             }
         }
@@ -44,7 +44,7 @@ struct PreviewReplyBar: View {
 
     private func send(to listener: Listener) {
         guard !text.isEmpty else { return }
-        let line = "关于「\(about)」：\(text)"
+        let line = String(localized: "关于「\(about)」：\(text)")
         guard workspace.speak(to: listener, from: $draft, content: { _ in line }) != nil else { return }
         done()
     }

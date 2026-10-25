@@ -61,7 +61,7 @@ extension AppServices {
     /// 跟着资料库给出还在等回执的话（`SpeechClock.track`）与有没有还没结果的请求（`hasOpenDeliveries`，主动拉取的条件）：
     /// 还没被领取的投送请求，与你对 Cue 说了、还没交给它的话。一个订阅读一次。读失败时报告并停止（到点不再翻、不再主动拉）。
     func startSpeechClock() {
-        follow(reporting: { .syncUnavailable("读取在等回执的话失败，到点不再翻状态、不再主动拉取：\($0)") }) {
+        follow(reporting: { .syncUnavailable(String(localized: "读取在等回执的话失败，到点不再翻状态、不再主动拉取：\(String(describing: $0))")) }) {
             for try await open in self.store.observe({ store in
                 let requests = try store.deliveryRequests().filter(\.isOpen)
                 let cueHost = try store.cueProfile()?.hostID

@@ -8,8 +8,8 @@ import SwiftUI
 /// 久过 `Pending.delay` 换成"正在从 iCloud 同步"——新装的设备上东西一页页地到，说"还没有"是错的。
 struct EmptyState<Action: View>: View {
     let mascot: Mascot
-    let title: String
-    var message: String?
+    let title: LocalizedStringResource
+    var message: LocalizedStringResource?
     var waitsForSync = false
     @ViewBuilder var action: Action
     @Environment(AppServices.self) private var services: AppServices?
@@ -60,7 +60,7 @@ struct EmptyState<Action: View>: View {
             .font(Typography.emptyTitle)
             .foregroundStyle(palette.ink)
             if let message = syncing ? "别的设备上的内容到了就会出现在这里" : message {
-                PhraseLines(text: message).font(Typography.secondary)
+                PhraseLines(text: String(localized: message)).font(Typography.secondary)
                     .foregroundStyle(palette.ink2)
             }
         }
@@ -178,7 +178,7 @@ private struct PhraseLines: View {
 }
 
 extension EmptyState where Action == EmptyView {
-    init(mascot: Mascot, title: String, message: String? = nil, waitsForSync: Bool = false) {
+    init(mascot: Mascot, title: LocalizedStringResource, message: LocalizedStringResource? = nil, waitsForSync: Bool = false) {
         self.init(mascot: mascot, title: title, message: message, waitsForSync: waitsForSync) { EmptyView() }
     }
 
@@ -192,7 +192,7 @@ extension EmptyState where Action == EmptyView {
 struct EmptyStateButton: View {
     enum Kind { case small, primary }
 
-    let title: String
+    let title: LocalizedStringResource
     let icon: Icon?
     var kind = Kind.primary
     let action: () -> Void

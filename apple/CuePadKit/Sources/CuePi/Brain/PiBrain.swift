@@ -27,7 +27,7 @@ final class PiBrain: CueBrain {
     private let session = BrainSession()
     var events: AsyncStream<CueBrainEvent> { session.events }
     private var process: ChildProcess?
-    private let replies = PendingReplies<String, JSONValue>(timeout: AgentTimeouts.reply, timeoutError: CueBrainError.rejected("没有及时回应"))
+    private let replies = PendingReplies<String, JSONValue>(timeout: AgentTimeouts.reply, timeoutError: CueBrainError.rejected(String(localized: "没有及时回应")))
     private var nextID = 0
     private(set) var seesImages = false
     static let subscription = Bundle.module.url(forResource: "claude-subscription", withExtension: "ts")!
@@ -100,7 +100,7 @@ final class PiBrain: CueBrain {
     private func apply(model: String?, effort: PiThinkingLevel?) async throws {
         if let model {
             let parts = model.split(separator: "/", maxSplits: 1).map(String.init)
-            guard parts.count == 2 else { throw CueBrainError.rejected("Pi 的模型要写成 提供方/模型：\(model)") }
+            guard parts.count == 2 else { throw CueBrainError.rejected(String(localized: "Pi 的模型要写成 提供方/模型：\(model)")) }
             adopt(try await command(["type": "set_model", "provider": .string(parts[0]), "modelId": .string(parts[1])])["data"])
         }
         if let effort { _ = try await command(["type": "set_thinking_level", "level": .string(effort.rawValue)]) }
@@ -126,7 +126,7 @@ final class PiBrain: CueBrain {
         nextID += 1
         let id = "cue-\(nextID)"
         let reply = try await replies.request(id) { process.write(JSONValue.object(command.merging(["id": .string(id)]) { $1 }).data) }
-        guard reply["success"]?.bool == true else { throw CueBrainError.rejected(reply["error"]?.string ?? "未知错误") }
+        guard reply["success"]?.bool == true else { throw CueBrainError.rejected(reply["error"]?.string ?? String(localized: "未知错误")) }
         return reply
     }
 
@@ -178,7 +178,7 @@ final class PiBrain: CueBrain {
         }
         let stop = message["stopReason"]?.string
         // 被 abort 停下的是 "aborted"，不算出错；之后成功的请求（重试）清掉前面的错
-        turn?.error = stop == "error" ? (message["errorMessage"]?.string ?? "未知错误") : nil
+        turn?.error = stop == "error" ? (message["errorMessage"]?.string ?? String(localized: "未知错误")) : nil
         if stop == "error" || stop == "aborted" { speech = nil }
         for (index, block) in (message["content"]?.array ?? []).enumerated() where block["type"]?.string == "text" {
             speech?.finish(index, with: block["text"]?.string ?? "")

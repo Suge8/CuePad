@@ -23,23 +23,23 @@ extension DebugScene {
             guard let task = tasks.first(where: { $0.body.hasPrefix(prefix) }) else { return }
             _ = try? await store.recordSend(task.body, to: SendTarget(kind: .piSession, name: session, ref: session), card: task.id)
         }
-        await send("复现乱序", to: "piwork")
-        await send("投送队列", to: "notes")
-        await send("改成按首次", to: "atlas")
-        await send("部署到预发", to: "deploy")
-        if let reproduce = tasks.first(where: { $0.body.hasPrefix("复现乱序") }) { try? await store.setStatus(reproduce.id, .done) }
+        await send(String(localized: "复现乱序", table: "Demo"), to: "piwork")
+        await send(String(localized: "投送队列超时报错不发键", table: "Demo"), to: "notes")
+        await send(String(localized: "改成按首次加入时间排序", table: "Demo"), to: "atlas")
+        await send(String(localized: "部署到预发环境", table: "Demo"), to: "deploy")
+        if let reproduce = tasks.first(where: { $0.body.hasPrefix(String(localized: "复现乱序", table: "Demo")) }) { try? await store.setStatus(reproduce.id, .done) }
         // notes 这一轮做完，会话歇下
         try? await Task.sleep(for: .milliseconds(5))
         _ = try? await PiStateRecorder(store: store, hostID: "demo-mac").update(
             sessionID: "notes", state: .settled, title: "notes", directory: "notes", projectID: projects.first { $0.name == "Career" }?.id,
             times: PiTimes(stateSince: .now, busySince: nil), modelState: demoModels, commands: demoCommands)
-        let cuepad = tasks.filter { $0.projectID == projects.first { $0.name == "CuePad" }?.id && !$0.body.hasPrefix("投送队列") }
+        let cuepad = tasks.filter { $0.projectID == projects.first { $0.name == "CuePad" }?.id && !$0.body.hasPrefix(String(localized: "投送队列超时报错不发键", table: "Demo")) }
         if let started = cuepad.first { try? await store.setStatus(started.id, .inProgress) }
         // Flow 只有一条在推进的任务、没有 Agent：项目的"此刻"是这条任务
-        if let canvas = tasks.first(where: { $0.body.hasPrefix("画布缩放") }) { try? await store.setStatus(canvas.id, .inProgress) }
+        if let canvas = tasks.first(where: { $0.body.hasPrefix(String(localized: "画布缩放锚点跟随指针", table: "Demo")) }) { try? await store.setStatus(canvas.id, .inProgress) }
         if cuepad.count > 1 { try? await store.setStatus(cuepad[1].id, .done) }
         // 再完成两个别的项目的，最近完成那组跨项目、按完成时间排
-        for name in ["Flow", "圆桌"] {
+        for name in ["Flow", String(localized: "圆桌", table: "Demo")] {
             guard let task = tasks.last(where: { $0.projectID == projects.first { $0.name == name }?.id }) else { continue }
             try? await Task.sleep(for: .milliseconds(5))
             try? await store.setStatus(task.id, .done)
@@ -58,17 +58,17 @@ extension DebugScene {
         try? Self.review.write(to: report, atomically: true, encoding: .utf8)
         try? Self.screenshotPNG()?.write(to: shot)
         var created: [Date] = []
-        for batch in [[(page, "登录页 v2：可点的完整页面")], [(shot, "手机截图：登录钮在键盘上方"), (report, "评审结论：还有三处要改")]] {
+        for batch in [[(page, String(localized: "登录页 v2：可点的完整页面", table: "Demo"))], [(shot, String(localized: "手机截图：登录钮在键盘上方", table: "Demo")), (report, String(localized: "评审结论：还有三处要改", table: "Demo"))]] {
             if let added = try? await store.addPreviews(batch.map { (url: $0.0, title: $0.1) }, sessionID: "notes") { created.append(added[0].preview.createdAt) }
         }
         // 对话围着预览的创建时间排：你的话在先，回答在后
         guard let first = created.first, let last = created.last else { return }
         let messages = [
             PiChatMessage(
-                sessionID: "notes", entryID: "u9", seq: 8, role: .user, text: "把登录页的新样子、手机上的截图和评审结论发给我看看，样子参考这张" + (screenshotMarkup(store).map { "\n" + $0 } ?? ""),
+                sessionID: "notes", entryID: "u9", seq: 8, role: .user, text: String(localized: "把登录页的新样子、手机上的截图和评审结论发给我看看，样子参考这张", table: "Demo") + (screenshotMarkup(store).map { "\n" + $0 } ?? ""),
                 at: first.addingTimeInterval(-50)),
             PiChatMessage(
-                sessionID: "notes", entryID: "p9", seq: 9, role: .pi, text: "发给你了：完整页面可以直接点按钮试交互，截图是 iPhone 宽度下的样子，评审结论里有两处要你定。",
+                sessionID: "notes", entryID: "p9", seq: 9, role: .pi, text: String(localized: "发给你了：完整页面可以直接点按钮试交互，截图是 iPhone 宽度下的样子，评审结论里有两处要你定。", table: "Demo"),
                 at: last.addingTimeInterval(2), tools: .init(steps: 1, items: [.init(kind: .command, target: "npx playwright screenshot --device 'iPhone 15' login-v2.html login-mobile.png")]), roundStartedAt: first.addingTimeInterval(-50)),
         ]
         try? await store.writePiTranscript(PiTranscript(

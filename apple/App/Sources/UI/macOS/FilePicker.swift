@@ -8,13 +8,13 @@ enum FilePicker {
     private static var open: NSOpenPanel?
 
     /// 选一个文件夹；取消为 nil。
-    static func folder(message: String) async -> URL? {
+    static func folder(message: LocalizedStringResource) async -> URL? {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.canCreateDirectories = true
-        panel.prompt = "选择"
-        panel.message = message
+        panel.prompt = String(localized: "选择")
+        panel.message = String(localized: message)
         return await show(panel).first
     }
 

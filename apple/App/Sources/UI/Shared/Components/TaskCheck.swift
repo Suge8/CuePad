@@ -57,7 +57,7 @@ struct TaskCheckButton: View {
 
     var body: some View {
         trigger
-        .accessibilityLabel(check.phase == .pending ? "撤销完成" : TaskSpeech.toggle(done: check.done(task)))
+        .accessibilityLabel(check.phase == .pending ? String(localized: "撤销完成") : TaskSpeech.toggle(done: check.done(task)))
         .sensoryFeedback(.success, trigger: check.phase) { $0 == .idle && $1 == .pending }
         .taskCheck(task, subtasks: subtasks, check: $check)
     }
@@ -94,7 +94,7 @@ private struct TaskCheckFlow: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-        .dialog(TaskCopy.openSubtasks(subtasks), isPresented: asking(.steps), buttons: [DialogButton(title: "全部完成") { check.phase = .pending }])
+        .dialog(.verbatim(TaskCopy.openSubtasks(subtasks)), isPresented: asking(.steps), buttons: [DialogButton(title: "全部完成") { check.phase = .pending }])
         .dialog(
             "Agent 还在做这件事", isPresented: asking(.agent), message: "完成会把它的会话一起结束。",
             buttons: [DialogButton(title: "完成并结束会话") { check.phase = .pending }])

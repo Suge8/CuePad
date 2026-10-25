@@ -34,7 +34,7 @@ struct BoardWaitCard: View {
             }
             .boardCard(advancing: false)
         }
-        .accessibilityLabel(Dotted(held.title, held.deciding ? "等你拍板" : "待回复", held.count > 1 ? "\(held.count) 件" : nil).spoken)
+        .accessibilityLabel(Dotted(held.title, held.deciding ? String(localized: "等你拍板") : String(localized: "待回复"), held.count > 1 ? String(localized: "\(held.count) 件") : nil).spoken)
         .boardDim(project: held.project)
     }
 
@@ -47,7 +47,7 @@ struct BoardWaitCard: View {
     private func tip(at now: Date) -> String {
         let project = workspace.catalog?.project(held.project)?.name
         let lines = held.waits.map { Dotted($0.asked.line, PiClock.Waited(since: $0.since).format(now)).visible }
-            + held.replies.map { Dotted("待回复", PiClock.Waited(since: $0.session.stateSince).format(now)).visible }
+            + held.replies.map { Dotted(String(localized: "待回复"), PiClock.Waited(since: $0.session.stateSince).format(now)).visible }
         if lines.count == 1 { return Dotted(project, lines[0]).visible }
         return ([project].compactMap(\.self) + lines).joined(separator: "\n")
     }

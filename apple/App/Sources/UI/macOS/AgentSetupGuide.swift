@@ -12,9 +12,10 @@ struct AgentSetupGuide: View {
     var body: some View {
         SettingPopover(title: title) {
             if case .tooOld(let version) = presence {
+                let minimum = kind.minimumVersion.map(\.description) ?? ""
                 Text(kind == .opencode
-                    ? "现在是 \(version)。CuePad 只支持 OpenCode 2（v1 的服务接口不同）；装好 v2 后它替换 v1。"
-                    : "现在是 \(version)，需要 \(kind.minimumVersion.map(\.description) ?? "") 或更新。")
+                    ? "现在是 \(version.description)。CuePad 只支持 OpenCode 2（v1 的服务接口不同）；装好 v2 后它替换 v1。"
+                    : "现在是 \(version.description)，需要 \(minimum) 或更新。")
                     .foregroundStyle(palette.ink2).fixedSize(horizontal: false, vertical: true)
             }
             Text("在终端运行：").foregroundStyle(palette.ink2)
@@ -24,7 +25,7 @@ struct AgentSetupGuide: View {
         }
     }
 
-    private var title: String {
+    private var title: LocalizedStringResource {
         if kind.upgrades(presence) { return "升级 \(kind.name)" }
         return kind == .opencode ? "安装 OpenCode 2" : "安装 \(kind.name)"
     }

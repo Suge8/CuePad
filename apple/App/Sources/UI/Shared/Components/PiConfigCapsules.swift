@@ -24,7 +24,7 @@ extension View {
 struct PiModelCapsule: View {
     let models: PiModelMenu
     let current: PiModelOption?
-    let unnamed: String
+    let unnamed: LocalizedStringResource
     let pending: Bool
     let quotas: [AccountQuota]
     #if os(macOS)
@@ -60,7 +60,7 @@ struct PiModelCapsule: View {
                     .modifier(Breathing(active: pending))
                     .accessibilityHidden(true)
             }
-            Text(current.map(PiModelName.short) ?? unnamed).lineLimit(1).truncationMode(.tail)
+            (current.map { Text(PiModelName.short($0)) } ?? Text(unnamed)).lineLimit(1).truncationMode(.tail)
                 .contentTransition(.opacity)
         }
         .font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink2)
@@ -74,7 +74,7 @@ struct PiModelCapsule: View {
     }
 
     private func spoken(at now: Date) -> String {
-        Dotted(current?.displayName ?? unnamed, binding(at: now).map { "\($0.name)额度剩 \($0.percent)" }).spoken
+        Dotted(current?.displayName ?? String(localized: unnamed), binding(at: now).map { String(localized: "\($0.name)额度剩 \($0.percent)") }).spoken
     }
 
     /// 当前模型的提供方卡着的那个窗口（按模型的周额度只算这个模型的）。
@@ -234,7 +234,8 @@ struct PiThinkingDial: View {
     }
 
     private func reading(_ drawn: PiThinkingMeter, wordy: Bool) -> some View {
-        Text("\(wordy ? "思考 " : "")\(Text(drawn.label).fontWeight(.medium).foregroundStyle(palette.ink2))")
+        let level = Text(drawn.label).fontWeight(.medium).foregroundStyle(palette.ink2)
+        return (wordy ? Text("思考 \(level)") : level)
             .font(Typography.meta).foregroundStyle(palette.ink3)
             .contentTransition(.opacity)
             .fixedSize()

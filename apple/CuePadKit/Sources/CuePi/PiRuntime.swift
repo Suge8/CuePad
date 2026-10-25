@@ -147,9 +147,9 @@ public enum PiHostError: Error, Equatable {
 extension PiHostError: LocalizedError {
     public var errorDescription: String? {
         switch self {
-        case .exited(let reason): "在后台启动的 Pi 没连上就退出了" + (reason.map { "：\($0)" } ?? "")
-        case .notConnected: "在后台启动的 Pi 一直没连上"
-        case .extensionMismatch: "Pi 里的 CuePad 扩展不是这个版本的，没能在后台启动；在 CuePad 设置里修复 Pi 接入后再发"
+        case .exited(let reason): reason.map { String(localized: "在后台启动的 Pi 没连上就退出了：\($0)") } ?? String(localized: "在后台启动的 Pi 没连上就退出了")
+        case .notConnected: String(localized: "在后台启动的 Pi 一直没连上")
+        case .extensionMismatch: String(localized: "Pi 里的 CuePad 扩展不是这个版本的，没能在后台启动；在 CuePad 设置里修复 Pi 接入后再发")
         }
     }
 }

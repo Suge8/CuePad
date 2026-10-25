@@ -1,5 +1,6 @@
 #if os(iOS)
 import CueSync
+import Foundation
 import UserNotifications
 
 /// 设置页里通知的那一行：从系统权限、远程通知注册、服务端订阅三步里找出卡在哪，并给出能解决它的动作。
@@ -34,12 +35,12 @@ struct PiAlertStatus: Equatable {
         }
     }
 
-    private static let retrying = "锁屏通知暂时收不到。回到前台时会自动重试，也可以现在重试。"
+    private static let retrying: LocalizedStringResource = "锁屏通知暂时收不到。回到前台时会自动重试，也可以现在重试。"
 
-    private init(_ state: State, _ title: String, _ detail: String?, diagnostics: String? = nil, action: Action? = nil) {
+    private init(_ state: State, _ title: LocalizedStringResource, _ detail: LocalizedStringResource?, diagnostics: String? = nil, action: Action? = nil) {
         self.state = state
-        self.title = title
-        self.detail = detail
+        self.title = String(localized: title)
+        self.detail = detail.map { String(localized: $0) }
         self.diagnostics = diagnostics
         self.action = action
     }

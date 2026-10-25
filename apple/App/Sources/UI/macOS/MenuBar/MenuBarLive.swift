@@ -99,10 +99,10 @@ private struct LiveWorkCount: View {
 
     private var text: Dotted {
         switch (work.running, work.subagents) {
-        case (0, 0): "都停着"
-        case (0, let agents): Dotted("\(agents) 个子代理在跑")
-        case (let sessions, 0): Dotted("\(sessions) 个在跑")
-        case (let sessions, let agents): Dotted("\(sessions) 个在跑", "\(agents) 个子代理")
+        case (0, 0): Dotted(String(localized: "都停着"))
+        case (0, let agents): Dotted(String(localized: "\(agents) 个子代理在跑"))
+        case (let sessions, 0): Dotted(String(localized: "\(sessions) 个在跑"))
+        case (let sessions, let agents): Dotted(String(localized: "\(sessions) 个在跑"), String(localized: "\(agents) 个子代理"))
         }
     }
 }

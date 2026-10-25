@@ -17,7 +17,7 @@ struct CueHostMenu<Label: View>: View {
     }
 
     var body: some View {
-        MenuButton(sections: sections, accessibilityLabel: accessibilityLabel, value: value, label: label)
+        MenuButton(sections: sections, accessibilityLabel: .verbatim(accessibilityLabel), value: value, label: label)
     }
 
     private var sections: [ChoiceMenu.Section] {
@@ -37,7 +37,7 @@ struct CueHostMenu<Label: View>: View {
     private func machines(checked: (CueSettings.Host) -> Bool?, pick: @escaping (CueSettings.Host) -> Void) -> ChoiceMenu.Section {
         ChoiceMenu.Section(choices: hosts.map { host in
             ChoiceMenu.Choice(
-                title: host.name, subtitle: host.note.isEmpty ? nil : host.note, image: .icon(.mac), checked: checked(host), disabled: !host.selectable
+                title: .verbatim(host.name), subtitle: host.note.isEmpty ? nil : .verbatim(host.note), image: .icon(.mac), checked: checked(host), disabled: !host.selectable
             ) { pick(host) }
         })
     }

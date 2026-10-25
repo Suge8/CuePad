@@ -56,7 +56,7 @@ private struct TripMark: View {
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(transit.label)
             case .delivered(let roundTrip):
-                let said = Dotted("已送达", roundTrip)
+                let said = Dotted(String(localized: "已送达"), roundTrip)
                 Image(.delivered).accessibilityLabel(Text(said))
                     #if os(macOS)
                     .help(said.visible)

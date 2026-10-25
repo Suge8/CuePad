@@ -16,11 +16,11 @@ nonisolated struct PiRowFacts: Equatable {
 
         var text: String {
             switch self {
-            case .ending: "正在结束…"
-            case .endFailed: "没能结束"
-            case .renameFailed: "没能改名"
-            case .renaming: "正在改名"
-            case .draft: "有草稿"
+            case .ending: String(localized: "正在结束…")
+            case .endFailed: String(localized: "没能结束")
+            case .renameFailed: String(localized: "没能改名")
+            case .renaming: String(localized: "正在改名")
+            case .draft: String(localized: "有草稿")
             case .transit(let text): text
             }
         }

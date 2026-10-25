@@ -69,7 +69,7 @@ extension IOSAppDelegate: CueQuestionAnswering {
     }
 
     private struct LibraryClosed: LocalizedError {
-        var errorDescription: String? { "CuePad 的资料库没打开，到 App 里看看" }
+        var errorDescription: String? { String(localized: "CuePad 的资料库没打开，到 App 里看看") }
     }
 }
 #endif

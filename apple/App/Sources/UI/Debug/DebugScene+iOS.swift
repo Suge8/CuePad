@@ -125,14 +125,14 @@ extension DebugScene {
             workspace.showSessions()
             var sheet = NewSessionInput.Start(project: project)  // -CuePadProject 闲鱼：先选中还没绑文件夹的项目（交给 Cue 那台 Mac 建工作区）
             if defaults.bool(forKey: "CuePadLaunch"),
-               let table = try? await workspace.services.store.projects().first(where: { $0.name == "圆桌" })?.id {
+               let table = try? await workspace.services.store.projects().first(where: { $0.name == String(localized: "圆桌", table: "Demo") })?.id {
                 sheet.launched = try? await workspace.services.launchSession(
-                    in: table, prompt: "看看 scheduler 的重连问题", title: "圆桌", on: "demo-mac", card: nil, agent: .pi)
+                    in: table, prompt: String(localized: "看看 scheduler 的重连问题", table: "Demo"), title: String(localized: "圆桌", table: "Demo"), on: "demo-mac", card: nil, agent: .pi)
             }
             workspace.newSession = sheet
         case "folderpicker":
             // 给 -CuePadProject（默认闲鱼，演示里没绑文件夹）选文件夹的候选页
-            let name = defaults.string(forKey: "CuePadProject") ?? "闲鱼"
+            let name = defaults.string(forKey: "CuePadProject") ?? String(localized: "闲鱼", table: "Demo")
             workspace.folderPicker = try? await workspace.services.store.projects().first { $0.name == name }
         case "sessions":
             workspace.projectScope = project
@@ -157,8 +157,8 @@ extension DebugScene {
         case "pending": PiAlertStatus(authorization: .authorized, registration: .pending, subscription: .off)
         case "denied": PiAlertStatus(authorization: .denied, registration: .pending, subscription: .off)
         case "undetermined": PiAlertStatus(authorization: .notDetermined, registration: .pending, subscription: .off)
-        case "registerFailed": PiAlertStatus(authorization: .authorized, registration: .failed("没有连接到 Apple 推送服务"), subscription: .off)
-        case "subscribeFailed": PiAlertStatus(authorization: .authorized, registration: .registered, subscription: .failed("iCloud 账号不可用"))
+        case "registerFailed": PiAlertStatus(authorization: .authorized, registration: .failed(String(localized: "没有连接到 Apple 推送服务", table: "Demo")), subscription: .off)
+        case "subscribeFailed": PiAlertStatus(authorization: .authorized, registration: .registered, subscription: .failed(String(localized: "iCloud 账号不可用", table: "Demo")))
         default: nil
         }
     }

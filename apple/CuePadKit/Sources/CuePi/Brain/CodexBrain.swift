@@ -100,7 +100,7 @@ final class CodexBrain: CueBrain {
     func configure(model id: String?, effort: PiThinkingLevel?) async throws {
         guard thread != nil else { throw CueBrainError.notRunning }
         if let id {
-            guard let found = models.first(where: { $0.id == id }) else { throw CueBrainError.rejected("Codex 没有模型 \(id)") }
+            guard let found = models.first(where: { $0.id == id }) else { throw CueBrainError.rejected(String(localized: "Codex 没有模型 \(id)")) }
             model = found
         }
         if let effort { level = effort }

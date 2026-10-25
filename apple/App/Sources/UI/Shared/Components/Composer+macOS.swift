@@ -3,7 +3,7 @@ import AppKit
 import SwiftUI
 
 extension ComposerSource {
-    static var imageChoices: [(title: String, icon: Icon, source: ComposerSource)] { [("图片文件…", .photo, .files)] }
+    static var imageChoices: [(title: LocalizedStringResource, icon: Icon, source: ComposerSource)] { [("图片文件…", .photo, .files)] }
 }
 
 extension ComposerMetrics {
@@ -35,7 +35,7 @@ struct ImageSources: ViewModifier {
 
 /// 带上的卡片：点一下看全文（`open`），右键出它的菜单。
 struct AttachmentButton<Label: View>: View {
-    let label: String
+    let label: LocalizedStringResource
     let menu: [ChoiceMenu.Section]
     let open: () -> Void
     @ViewBuilder let content: () -> Label
@@ -43,7 +43,7 @@ struct AttachmentButton<Label: View>: View {
     var body: some View {
         Button(action: open, label: content)
             .buttonStyle(PressStyle(.button))
-            .accessibilityLabel(label)
+            .accessibilityLabel(Text(label))
             .accessibilityHint("看全文")
             .contextMenu { ChoiceMenuItems(sections: menu) }
     }

@@ -68,9 +68,9 @@ public enum CueEnableError: LocalizedError, Equatable {
 
   public var errorDescription: String? {
     switch self {
-    case .noRuntime(let why): "没有能当 Cue 的 Agent：\(why)"
-    case .runsElsewhere(let name): "正在「\(name)」上运行，改过来要先确认"
-    case .unsynced: "还没和 iCloud 同步完"
+    case .noRuntime(let why): String(localized: "没有能当 Cue 的 Agent：\(why)")
+    case .runsElsewhere(let name): String(localized: "正在「\(name)」上运行，改过来要先确认")
+    case .unsynced: String(localized: "还没和 iCloud 同步完")
     }
   }
 }

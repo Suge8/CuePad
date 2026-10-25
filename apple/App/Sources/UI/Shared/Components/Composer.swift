@@ -10,8 +10,8 @@ import SwiftUI
 /// 调用方给草稿、占位、接受的种类和提交钮，草稿怎么处理由它们决定；回复框另给键盘快捷键（`ReplyShortcut`）与空着时按 ↑ 调回的那一句（`recall`）。
 struct Composer<Header: View, Tools: View, Send: View>: View {
     @Binding var draft: ComposerDraft
-    let prompt: String
-    let label: String
+    let prompt: LocalizedStringResource
+    let label: LocalizedStringResource
     let focus: FocusState<Bool>.Binding
     var accepts: ComposerKinds = [.images, .cards]
     /// 选卡片时排在前面的项目（回复框是会话所属的项目）。
@@ -199,7 +199,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
 
     private var text: some View {
         ComposerField(
-            text: $draft.text, prompt: prompt, label: label, maxLines: expanded ? 6 : 1, ink: palette.ink, focus: focus, keys: handle,
+            text: $draft.text, prompt: String(localized: prompt), label: String(localized: label), maxLines: expanded ? 6 : 1, ink: palette.ink, focus: focus, keys: handle,
             shortcut: shortcut, images: accepts.contains(.images) ? { draft.images += $0.map(PickedImage.init(data:)) } : nil)
             .focused(focus)
             // 收起时原文与"草稿：…"在同一个位置一换即成，不两层叠着交叉淡：同一行字在变形中只有一层

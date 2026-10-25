@@ -11,7 +11,7 @@ extension PiConfigControls {
             ChoiceMenu.popUp(models.sections(quotas: services.accountQuotas.items, at: .now), below: anchor)
         case .thinking:
             ChoiceMenu.popUp([ChoiceMenu.Section(title: "思考强度", choices: levels.map { level in
-                ChoiceMenu.Choice(title: level.label, checked: shown.thinking == level) { chooseThinking(level) }
+                ChoiceMenu.Choice(title: .verbatim(level.label), checked: shown.thinking == level) { chooseThinking(level) }
             })], below: anchor)
         }
     }

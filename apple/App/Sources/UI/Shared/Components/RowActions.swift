@@ -20,14 +20,14 @@ enum ActionTone: Sendable {
 
 /// 一行轻扫露出的一个动作（也画成长按菜单里的同一项与读屏动作）：标题、图标、颜色语义与要做的事。
 struct RowAction {
-    let title: String
+    let title: LocalizedStringResource
     let icon: Icon
     let tone: ActionTone
     /// 此刻做不了（如 Mac 够不着时改名）：照样列出，置灰；不直接消失，用户才知道有这件事。
     let enabled: Bool
     let run: () -> Void
 
-    init(_ title: String, icon: Icon, tone: ActionTone = .neutral, enabled: Bool = true, run: @escaping () -> Void) {
+    init(_ title: LocalizedStringResource, icon: Icon, tone: ActionTone = .neutral, enabled: Bool = true, run: @escaping () -> Void) {
         self.title = title
         self.icon = icon
         self.tone = tone
@@ -62,7 +62,7 @@ struct RowActionButtons: View {
 extension [RowAction] {
     /// 每个动作配上"位置·标题"的标识（`ForEach` 用）。
     var keyed: [(key: String, action: RowAction)] {
-        enumerated().map { ("\($0.offset)·\($0.element.title)", $0.element) }
+        enumerated().map { ("\($0.offset)·\($0.element.title.key)", $0.element) }
     }
 }
 

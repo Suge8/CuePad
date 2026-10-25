@@ -126,7 +126,7 @@ private struct DockCue: View {
         .buttonStyle(PressStyle(.button))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(cue.name)
-        .accessibilityValue(Dotted(cue.unread > 0 ? "\(cue.unread) 条新消息" : nil, DockTally.spoken(cue), drafted ? "有草稿" : nil).spoken)
+        .accessibilityValue(Dotted(cue.unread > 0 ? String(localized: "\(cue.unread) 条新消息") : nil, DockTally.spoken(cue), drafted ? String(localized: "有草稿") : nil).spoken)
     }
 
     /// 在 Cue 页上（"⋯"展开着）点它是收起、回到输入框；在别的页上（含推在 Cue 页上的页）是回 Cue 页。
@@ -162,7 +162,7 @@ private struct DockTally: View {
 
     static func spoken(_ cue: CueWatch) -> String {
         guard cue.now.advancing > 0 || cue.waiting > 0 else { return CueNow.quiet }
-        return Dotted(cue.now.advancing > 0 ? "推进中 \(cue.now.advancing)" : nil, cue.waiting > 0 ? "等你 \(cue.waiting)" : nil).spoken
+        return Dotted(cue.now.advancing > 0 ? String(localized: "推进中 \(cue.now.advancing)") : nil, cue.waiting > 0 ? String(localized: "等你 \(cue.waiting)") : nil).spoken
     }
 
     var body: some View {

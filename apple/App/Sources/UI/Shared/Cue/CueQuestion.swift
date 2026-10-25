@@ -103,7 +103,7 @@ struct CueChoices: View {
         // 停用着只留停用的"可以"：别的选项此刻同样选不了
         let cue = workspace.cue, paused = !cue.canHear, accessible = typeSize.isAccessibilitySize
         let side = VStack(alignment: accessible ? .trailing : .leading, spacing: 0) {
-            if paused { note("启用 \(cue.name) 后再答") }
+            if paused { note(String(localized: "启用 \(cue.name) 后再答")) }
             if !paused { ForEach(options.dropFirst(), id: \.self) { link($0) } }
         }
         .multilineTextAlignment(accessible ? .trailing : .leading)

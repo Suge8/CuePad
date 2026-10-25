@@ -81,7 +81,7 @@ nonisolated struct CueWakeHeader: Equatable, Sendable {
             let first = ids.lazy.compactMap { lines[$0] }.first
             places = first.map { line in
                 let title = PiProgress.firstLine(line) ?? line
-                return [Place(title: ids.count > 1 ? "\(title) 等 \(ids.count) 条" : title, target: .memory)]
+                return [Place(title: ids.count > 1 ? String(localized: "\(title) 等 \(ids.count) 条") : title, target: .memory)]
             } ?? []
         case .enabled, .message, .idle:
             places = []
@@ -91,8 +91,8 @@ nonisolated struct CueWakeHeader: Equatable, Sendable {
 
 nonisolated extension CueMessage {
     /// 写下时提到的那一处叫什么（`places`）；没记下的（其他版本写来的、写下时已不在的）只说是哪一类。
-    func name(session: String) -> String { place(session: session)?.name ?? "一个会话" }
-    func name(task: UUID) -> String { place(task: task)?.name ?? "一件任务" }
+    func name(session: String) -> String { place(session: session)?.name ?? String(localized: "一个会话") }
+    func name(task: UUID) -> String { place(task: task)?.name ?? String(localized: "一件任务") }
 }
 
 nonisolated extension CuePlace {
@@ -101,18 +101,6 @@ nonisolated extension CuePlace {
 }
 
 extension CueChange.Kind {
-    /// 当时出了什么事的一句。
-    var verb: String {
-        switch self {
-        case .settled: "停下了"
-        case .waitingForUser: "在等回答"
-        case .failed: "出错了"
-        case .undelivered: "话没送到"
-        case .done: "做完了"
-        case .stalled: "子代理卡住了"
-        }
-    }
-
     /// 当时出了什么事的图标（Cue 页只提到一处的那一行）：静止的，会话与任务同一种事同一个样子；形状借那时那一处的状态图形（`PiShown.icon`），
     /// 不画那一处此刻的状态——此刻在跑的会话在这里也不动。
     var icon: Icon {
@@ -132,11 +120,11 @@ extension CueWake {
     /// 为什么醒的一句话（Cue 页没提到哪处的那一行照写；Mac 的运行情况照写）。
     var reason: String {
         switch self {
-        case .enabled: "刚启用"
-        case .message: "你发来消息"
-        case .idle: "空闲时看了一眼"
-        case .sessionActivity: "会话有动静"
-        case .reminder: "提醒到点"
+        case .enabled: String(localized: "刚启用")
+        case .message: String(localized: "你发来消息")
+        case .idle: String(localized: "空闲时看了一眼")
+        case .sessionActivity: String(localized: "会话有动静")
+        case .reminder: String(localized: "提醒到点")
         }
     }
 

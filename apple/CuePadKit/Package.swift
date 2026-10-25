@@ -3,6 +3,8 @@ import PackageDescription
 
 let package = Package(
     name: "CuePadKit",
+    // 界面字由 Xcode 抽进 App 的 String Catalog（docs/i18n.md）：包声明了开发语言，Xcode 才对包里的目标抽字
+    defaultLocalization: "zh-Hans",
     platforms: [.macOS(.v26), .iOS(.v27)],
     products: [
         .library(name: "CueText", targets: ["CueText"]),

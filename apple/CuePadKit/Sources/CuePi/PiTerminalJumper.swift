@@ -39,12 +39,12 @@ public struct PiTerminalJumper: Sendable {
             if await run("tmux", ["-S", socket, "switch-client", "-t", pane]).status == 0 {
                 tty = await hostingClientTTY(socket: socket, pane: pane) ?? tty
             } else {
-                notes.append("tmux 没能切到 \(pane)（会话可能没有附着的客户端）")
+                notes.append(String(localized: "tmux 没能切到 \(pane)（会话可能没有附着的客户端）"))
             }
         }
 
         guard let bundleID = terminal.bundleID else {
-            return PiJumpResult(precision: .failed, note: "不知道会话运行在哪个终端应用里")
+            return PiJumpResult(precision: .failed, note: String(localized: "不知道会话运行在哪个终端应用里"))
         }
 
         let script: String? = switch bundleID {
@@ -58,14 +58,14 @@ public struct PiTerminalJumper: Sendable {
                 if result == "ok" { return PiJumpResult(precision: .tab, note: notes.first) }
                 notes.append(Self.explain(scriptResult: result))
             } catch {
-                notes.append("无法控制该终端应用（可能没有授予自动化权限）：\(error.localizedDescription)")
+                notes.append(String(localized: "无法控制该终端应用（可能没有授予自动化权限）：\(error.localizedDescription)"))
             }
         } else if bundleID == Self.appleTerminal {
-            notes.append("没有 tty 信息，无法定位标签页")
+            notes.append(String(localized: "没有 tty 信息，无法定位标签页"))
         }
 
         guard await activate(bundleID: bundleID) else {
-            return PiJumpResult(precision: .failed, note: "终端应用 \(bundleID) 没有在运行")
+            return PiJumpResult(precision: .failed, note: String(localized: "终端应用 \(bundleID) 没有在运行"))
         }
         return PiJumpResult(precision: .application, note: notes.first)
     }
@@ -84,8 +84,10 @@ public struct PiTerminalJumper: Sendable {
     }
 
     private static func explain(scriptResult: String) -> String {
-        if scriptResult.hasPrefix("ambiguous:") { return "有 \(scriptResult.dropFirst("ambiguous:".count)) 个终端匹配，无法确定是哪一个" }
-        return "没有工作目录或 tty 匹配的终端/标签页"
+        if scriptResult.hasPrefix("ambiguous:"), let count = Int(scriptResult.dropFirst("ambiguous:".count)) {
+            return String(localized: "有 \(count) 个终端匹配，无法确定是哪一个")
+        }
+        return String(localized: "没有工作目录或 tty 匹配的终端/标签页")
     }
 
     // MARK: AppleScript

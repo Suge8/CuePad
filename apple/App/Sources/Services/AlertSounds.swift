@@ -10,10 +10,10 @@ nonisolated enum AlertSound: String, CaseIterable, Sendable {
 
     var title: String {
         switch self {
-        case .chime: "叮咚"
-        case .tap: "轻响"
-        case .bell: "风铃"
-        case .drop: "水滴"
+        case .chime: String(localized: "叮咚")
+        case .tap: String(localized: "轻响")
+        case .bell: String(localized: "风铃")
+        case .drop: String(localized: "水滴")
         }
     }
 

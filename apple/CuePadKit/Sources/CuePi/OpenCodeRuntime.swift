@@ -22,7 +22,7 @@ public final class OpenCodeRuntime: AgentRuntime, SessionLink {
     static let log = Logger(subsystem: AppIdentity.id, category: "opencode")
     static let sessionPage = 200
     /// 权限请求的三个选项（作答时按原文认）
-    static let allowOnce = "允许", allowAlways = "总是允许", reject = "拒绝"
+    static let allowOnce = String(localized: "允许"), allowAlways = String(localized: "总是允许"), reject = String(localized: "拒绝")
 
     let bridge: PiBridge
     let paths: AgentPaths

@@ -149,7 +149,7 @@ private struct SplitSidebar: View {
     private static let rowGap: CGFloat = 2
     private static let groupGap: CGFloat = 16
 
-    private func header(_ title: String) -> some View {
+    private func header(_ title: LocalizedStringResource) -> some View {
         Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink3)
             .padding(.top, Self.groupGap).padding(.bottom, 4)
             .accessibilityAddTraits(.isHeader)

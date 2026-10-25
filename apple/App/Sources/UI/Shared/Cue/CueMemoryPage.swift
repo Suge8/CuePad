@@ -18,7 +18,7 @@ struct CueMemoryPage: View {
     @State private var forgetting: CueMemoryLine?
     @FocusState private var adding: Bool
 
-    private var title: String { "\(workspace.cue.name) 记得什么" }
+    private var title: String { String(localized: "\(workspace.cue.name) 记得什么") }
     private var kept: [CueMemoryLine] { (memory?.lines ?? []).filter { $0.deletedAt == nil }.reversed() }
     /// 有字但记不成一条（`CueMemoryLine.fits`：写入时同一个判断）。
     private var tooLong: Bool { !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !CueMemoryLine.fits(text) }
@@ -36,7 +36,7 @@ struct CueMemoryPage: View {
         return ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
                 if !pinned.isEmpty {
-                    groupTitle("一直记着", icon: .pin)
+                    groupTitle(String(localized: "一直记着"), icon: .pin)
                     ForEach(pinned) { row($0).transition(Motion.item) }
                 }
                 ForEach(TimeSection.split(others, date: \.createdAt, now: .now), id: \.section) { run in
@@ -61,7 +61,7 @@ struct CueMemoryPage: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 10) {
                 Image(.add).font(.system(size: 14, weight: .semibold)).foregroundStyle(palette.ink2).accessibilityHidden(true)
-                TextField("记一条", text: $text, palette: palette).textFieldStyle(.plain).font(Typography.body)
+                TextField(String(localized: "记一条"), text: $text, palette: palette).textFieldStyle(.plain).font(Typography.body)
                     .focused($adding)
                     .onSubmit(add)
                     .accessibilityLabel("记一条")
@@ -85,7 +85,7 @@ struct CueMemoryPage: View {
         let id = line.id, pinned = line.pinned, text = line.text
         return MemoryRow(
             line: line,
-            copy: RowAction(MessageMenu.Item.copy.title, icon: MessageMenu.Item.copy.icon) { workspace.copy(text) },
+            copy: RowAction(.verbatim(MessageMenu.Item.copy.title), icon: MessageMenu.Item.copy.icon) { workspace.copy(text) },
             pin: RowAction(pinned ? "不再一直记着" : "一直记着", icon: pinned ? .unpin : .pin) { workspace.pinCueLine(id, !pinned) },
             forget: RowAction("忘掉", icon: .remove, tone: .destructive) { forgetting = line })
     }
@@ -138,7 +138,7 @@ private struct MemoryRow: View {
     let forget: RowAction
     @Environment(\.palette) private var palette
 
-    private var meta: Dotted { Dotted(DateLabel.short(line.createdAt), line.source == .known(.you) ? "你记的" : nil) }
+    private var meta: Dotted { Dotted(DateLabel.short(line.createdAt), line.source == .known(.you) ? String(localized: "你记的") : nil) }
     private var menu: some View {
         Section(meta.visible) { RowActionButtons(actions: [copy, pin, forget]) }
     }

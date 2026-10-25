@@ -32,7 +32,7 @@ enum WindowFactory {
         tabs.canPropagateSelectedChildViewControllerTitle = false
         let window = dress(NSWindow(
             contentRect: .zero, styleMask: [.titled, .closable, .fullSizeContentView], backing: .buffered, defer: false), controller: tabs)
-        window.title = "设置"
+        window.title = String(localized: "设置")
         window.toolbarStyle = .preference
         window.titleVisibility = .hidden
         return window

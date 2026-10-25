@@ -188,7 +188,7 @@ extension OpenCodeRuntime {
     }
 
     static func question(_ permission: OpenCodePermission) -> PiQuestion {
-        let text = PermissionWording.question(.opencode, "使用 \(permission.action)", permission.resources)
+        let text = PermissionWording.question(.opencode, String(localized: "使用 \(permission.action)"), permission.resources)
         return PiQuestion(
             promptID: prompt(.permission, permission.sessionID, permission.id), kind: .select, text: text,
             options: [allowOnce, allowAlways, reject])

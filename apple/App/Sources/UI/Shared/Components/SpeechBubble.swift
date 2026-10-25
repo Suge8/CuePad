@@ -67,8 +67,8 @@ nonisolated extension Speech.Failure {
     func text(sync: SyncStatus) -> String {
         switch self {
         case .reported(let reason): reason
-        case .unsent: sync.reachesMac ? "这句一直没传到 iCloud，发不到 Mac" : "\(SyncSummary(sync).title)，发不到 Mac"
-        case .timedOut: "Mac 迟迟没收下这句"
+        case .unsent: sync.reachesMac ? String(localized: "这句一直没传到 iCloud，发不到 Mac") : String(localized: "\(SyncSummary(sync).title)，发不到 Mac")
+        case .timedOut: String(localized: "Mac 迟迟没收下这句")
         }
     }
 }

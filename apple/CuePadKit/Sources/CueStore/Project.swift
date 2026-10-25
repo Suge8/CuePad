@@ -14,12 +14,17 @@ public struct Project: Identifiable, Equatable, Sendable {
   public var createdAt: Date
   public var modifiedAt: Date
 
-  public static let untitled = "未命名项目"
+  public static let untitled = String(localized: "未命名项目")
 
   /// 默认项目：每个库都有、不能删（`trashProject` 拒绝），没指定项目记下的灵感与任务都进它。id 在所有设备上同一个，
   /// 离线时两台各自建出来也合成一条；建出来的那版修改时间是 0（`Schema.defaultProject`），用户改过名、颜色的总比它新。
   public static let defaultID = DeterministicID.uuid("project/default")
   public var isDefault: Bool { id == Self.defaultID }
+
+  /// 建库时默认项目的名字（`Schema.defaultProject`）：库里存、同步的都是这一份，各台设备离线建出的才是同一版。
+  /// 没改过名时读出来按当前语言显示（`shownDefaultName`），写回时换回它：中英文两台设备同步不会互相改名。
+  static let defaultName = "默认"
+  static var shownDefaultName: String { String(localized: "默认") }
 }
 
 /// 项目的灵感数（散放在列表里的，不含任务、挂在任务下的与空白灵感）。
@@ -31,10 +36,15 @@ public struct ProjectSummary: Equatable, Sendable {
 extension Project: Record {
   static let table = Table.projects
   static let columns = ["id", "name", "icon", "color", "isPinned", "deletedAt", "createdAt", "modifiedAt", "intro"]
-  var bindings: [any SQLBindable] { [id, name, icon, color, isPinned, deletedAt, createdAt, modifiedAt, intro] }
+  var bindings: [any SQLBindable] {
+    [id, isDefault && name == Self.shownDefaultName ? Self.defaultName : name, icon, color, isPinned, deletedAt, createdAt, modifiedAt, intro]
+  }
   init(row: Row) {
+    let id = row.uuid(0), name = row.text(1)
     self.init(
-      id: row.uuid(0), name: row.text(1).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? Project.untitled : row.text(1),
+      id: id,
+      name: name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        ? Project.untitled : id == Self.defaultID && name == Self.defaultName ? Self.shownDefaultName : name,
       icon: row.textOrNil(2), color: row.text(3),
       isPinned: row.bool(4), intro: row.textOrNil(8),
       deletedAt: row.dateOrNil(5), createdAt: row.date(6), modifiedAt: row.date(7))

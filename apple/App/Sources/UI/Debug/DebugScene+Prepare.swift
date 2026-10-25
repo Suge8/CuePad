@@ -20,7 +20,7 @@ extension DebugScene {
         else { return nil }
         let many = defaults.integer(forKey: "CuePadManyTasks")
         if many > 0, ((try? await store.taskCounts(in: project.id).open) ?? 0) < many {
-            for index in 1...many { _ = try? await store.createTask("压力任务 \(index)：画布与节点的一段说明", in: project.id) }
+            for index in 1...many { _ = try? await store.createTask(String(localized: "压力任务 \(index)：画布与节点的一段说明", table: "Demo"), in: project.id) }
         }
         if defaults.bool(forKey: "CuePadNoIdeas") {
             for card in (try? await store.cards(in: project.id)) ?? [] { _ = try? await store.trashCard(card.id) }
@@ -58,7 +58,7 @@ extension DebugScene {
             }
             draft.wrappedValue.images = [(0.85, 0.47, 0.29), (0.25, 0.56, 0.72)].map { PickedImage(data: swatch(red: $0.0, green: $0.1, blue: $0.2)) }
         case "lines":
-            draft.wrappedValue.text = (1...9).map { "第 \($0) 行" }.joined(separator: "\n")
+            draft.wrappedValue.text = (1...9).map { String(localized: "第 \($0) 行", table: "Demo") }.joined(separator: "\n")
         case "slash":
             draft.wrappedValue.text = "/re"
         default:

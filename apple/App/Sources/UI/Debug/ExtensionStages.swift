@@ -17,8 +17,8 @@ struct DebugWidgetStage: View {
 
     private static let cue = CueNowSamples.asks
     private static let home = DefaultProjectSnapshot(
-        name: "默认",
-        cards: ["周末带孩子去科技馆", "重连用例补三个", "首页标题换成新文案"].map { DefaultProjectSnapshot.Card(id: UUID(), title: $0, modifiedAt: .now) },
+        name: String(localized: "默认", table: "Demo"),
+        cards: [String(localized: "周末带孩子去科技馆", table: "Demo"), String(localized: "重连用例补三个", table: "Demo"), String(localized: "首页标题换成新文案", table: "Demo")].map { DefaultProjectSnapshot.Card(id: UUID(), title: $0, modifiedAt: .now) },
         total: 7)
 
     var body: some View {
@@ -80,26 +80,26 @@ struct DebugActivityStage: View {
                 .frame(maxWidth: .infinity).padding(.top, 11)
                 Color.clear.frame(height: Self.header - 11 - Self.height)
                 if state.now.isLive {
-                    label("长按灵动岛")
+                    label(String(localized: "长按灵动岛", table: "Demo"))
                     expanded(views)
-                    label("锁屏")
+                    label(String(localized: "锁屏", table: "Demo"))
                     views.lockScreen
                         .frame(width: Self.lockWidth)
                         .frame(maxHeight: Self.maxHeight, alignment: .top).clipped()
                         .background(palette.paper, in: .rect(cornerRadius: 22, style: .continuous))
                     HStack(alignment: .top, spacing: 28) {
                         VStack(alignment: .leading, spacing: 0) {
-                            label("最小（和别的实时活动同在）")
+                            label(String(localized: "最小（和别的实时活动同在）", table: "Demo"))
                             views.minimal.frame(width: Self.height, height: Self.height).background(Self.island, in: .circle)
                         }
                         VStack(alignment: .leading, spacing: 0) {
-                            label("横屏（窄紧凑态）")
+                            label(String(localized: "横屏（窄紧凑态）", table: "Demo"))
                             compact(views, limited: true)
                         }
                     }
                 } else {
-                    label("实时活动")
-                    Text("没有在跑的活：实时活动已结束，灵动岛空出来")
+                    label(String(localized: "实时活动", table: "Demo"))
+                    Text("没有在跑的活：实时活动已结束，灵动岛空出来", tableName: "Demo")
                         .font(.footnote).foregroundStyle(palette.ink3).frame(width: Self.lockWidth, height: 56)
                         .background(palette.fill, in: .rect(cornerRadius: 22, style: .continuous))
                 }
@@ -170,7 +170,7 @@ struct DebugShareStage: View {
                 if let model { ShareViews.root(model, dismiss: {}, cancel: {}) }
             }
             .task {
-                let text = NSItemProvider(object: "周末带孩子去科技馆，记得提前约票" as NSString)
+                let text = NSItemProvider(object: String(localized: "周末带孩子去科技馆，记得提前约票", table: "Demo") as NSString)
                 let link = NSItemProvider(object: URL(string: "https://example.com/museum")! as NSURL)
                 let model = ShareModel(providers: [text, link], location: location)
                 await model.load()

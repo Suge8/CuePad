@@ -7,14 +7,14 @@ struct TaskAgentLook: Equatable {
     init(_ shown: PiShown, line: String?) {
         switch shown.status {
         case .delivery(.failed): (mascot, title, note) = (.error, shown.label, line)
-        case .working, .delivery, .cueAsking: (mascot, floats, title, note) = (.search, true, shown.status == .cueAsking ? shown.presence : "Agent 正在做", "做完会在这里告诉你")
-        case .asking: (mascot, title, note) = (.error, "Agent 在等你\(shown.waitWord)", line)
-        case .awaitsReply: (mascot, title, note) = (.error, shown.presence, "去会话里回它")
+        case .working, .delivery, .cueAsking: (mascot, floats, title, note) = (.search, true, shown.status == .cueAsking ? shown.presence : String(localized: "Agent 正在做"), String(localized: "做完会在这里告诉你"))
+        case .asking: (mascot, title, note) = (.error, shown.asksForWords ? String(localized: "Agent 在等你回答") : String(localized: "Agent 在等你确认"), line)
+        case .awaitsReply: (mascot, title, note) = (.error, shown.presence, String(localized: "去会话里回它"))
         case .failed: (mascot, title, note) = (.error, shown.label, line)
-        case .unread: (mascot, title, note) = (.welcome, "Agent 回复了", "去会话里看看")
-        case .ended: (mascot, title, note) = (.clean, "会话结束了", "在会话里说一句会把它叫回来")
-        case .interrupted: (mascot, title, note) = (.error, "Agent 被打断了", "在会话里说一句，它接着做")
-        case .idle, .resting, .fresh, .unknown: (mascot, title, note) = (.welcome, "Agent 歇着", "去会话里接着说")
+        case .unread: (mascot, title, note) = (.welcome, String(localized: "Agent 回复了"), String(localized: "去会话里看看"))
+        case .ended: (mascot, title, note) = (.clean, String(localized: "会话结束了"), String(localized: "在会话里说一句会把它叫回来"))
+        case .interrupted: (mascot, title, note) = (.error, String(localized: "Agent 被打断了"), String(localized: "在会话里说一句，它接着做"))
+        case .idle, .resting, .fresh, .unknown: (mascot, title, note) = (.welcome, String(localized: "Agent 歇着"), String(localized: "去会话里接着说"))
         }
     }
 }

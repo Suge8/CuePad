@@ -50,22 +50,22 @@ extension DebugScene {
             .init(kind: .command, target: "pnpm vitest run scheduler"), .init(kind: .command, target: "pnpm vitest run scheduler --reporter=verbose", failed: true),
         ])
 
-    static let loginPage = """
-        <!doctype html><html lang="zh"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-        <title>登录</title><style>
+    static var loginPage: String { """
+        <!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+        <title>\(String(localized: "登录", table: "Demo"))</title><style>
         body{margin:0;min-height:100vh;display:grid;place-items:center;font:16px -apple-system,system-ui,sans-serif;background:linear-gradient(160deg,#eef2ff,#fdf2f8);color:#1c1b19}
         main{width:min(86vw,360px);padding:28px;border-radius:20px;background:#fff;box-shadow:0 10px 40px #4f46e522}
         h1{margin:0 0 4px;font-size:24px} p{margin:0 0 20px;color:#6b7280}
         input{width:100%;box-sizing:border-box;margin-bottom:12px;padding:12px 14px;border:1px solid #e5e7eb;border-radius:12px;font-size:16px}
         button{width:100%;padding:13px;border:0;border-radius:12px;background:#4f46e5;color:#fff;font-size:16px;font-weight:600}
         #ok{margin-top:14px;color:#059669;min-height:1.2em}</style></head><body><main>
-        <h1>欢迎回来</h1><p>用邮箱登录 Atlas</p>
-        <input placeholder="邮箱" value="me@example.com"><input placeholder="密码" type="password" value="secret">
-        <button onclick="document.getElementById('ok').textContent='登录成功（演示）'">登录</button><div id="ok"></div>
+        <h1>\(String(localized: "欢迎回来", table: "Demo"))</h1><p>\(String(localized: "用邮箱登录 Atlas", table: "Demo"))</p>
+        <input placeholder="\(String(localized: "邮箱", table: "Demo"))" value="me@example.com"><input placeholder="\(String(localized: "密码", table: "Demo"))" type="password" value="secret">
+        <button onclick="document.getElementById('ok').textContent='\(String(localized: "登录成功（演示）", table: "Demo"))'">\(String(localized: "登录", table: "Demo"))</button><div id="ok"></div>
         </main></body></html>
-        """
+        """ }
 
-    static let review = """
+    static var review: String { String(localized: """
         # 登录页评审结论
 
         改动都在 `login/` 下，**没有动接口**。
@@ -82,7 +82,7 @@ extension DebugScene {
         |:---|---:|---:|
         | 首屏可点元素 | 9 | 5 |
         | 登录成功率（内测） | 91% | 94% |
-        """
+        """, table: "Demo") }
 
     /// 演示用的一张图（手机上的登录页）存进附件目录，返回正文里引用它的写法；你的话带图片的演示（对话里的、还在路上的）用它。
     static func screenshotMarkup(_ store: CueStore) -> String? {
@@ -94,11 +94,11 @@ extension DebugScene {
         let view = ZStack {
             LinearGradient(colors: [Color(red: 0.93, green: 0.95, blue: 1), Color(red: 0.99, green: 0.95, blue: 0.97)], startPoint: .topLeading, endPoint: .bottomTrailing)
             VStack(alignment: .leading, spacing: 12) {
-                Text("欢迎回来").font(.system(size: 26, weight: .bold))
-                Text("用邮箱登录 Atlas").foregroundStyle(.gray)
+                Text("欢迎回来", tableName: "Demo").font(.system(size: 26, weight: .bold))
+                Text("用邮箱登录 Atlas", tableName: "Demo").foregroundStyle(.gray)
                 RoundedRectangle(cornerRadius: 12).stroke(.gray.opacity(0.3)).frame(height: 44).overlay(alignment: .leading) { Text("me@example.com").padding(.leading, 14) }
                 RoundedRectangle(cornerRadius: 12).stroke(.gray.opacity(0.3)).frame(height: 44).overlay(alignment: .leading) { Text("••••••").padding(.leading, 14) }
-                RoundedRectangle(cornerRadius: 12).fill(Color(red: 0.31, green: 0.27, blue: 0.9)).frame(height: 46).overlay { Text("登录").foregroundStyle(.white).bold() }
+                RoundedRectangle(cornerRadius: 12).fill(Color(red: 0.31, green: 0.27, blue: 0.9)).frame(height: 46).overlay { Text("登录", tableName: "Demo").foregroundStyle(.white).bold() }
             }
             .padding(28).frame(width: 320).background(.white, in: RoundedRectangle(cornerRadius: 20))
         }
@@ -124,11 +124,11 @@ extension DebugScene {
             try? await writeChat(sessionID, rounds, store: store)
         }
         await chat("notes", [
-            ("整理一下这周的会议记录", "整理好了，放在 `notes/2026-W40.md`。三件待办：\n\n- **续费域名**（周五前）\n- 评审计费额度\n- 补 scheduler 测试", Self.notesWeek, 1.5),
-            ("续费域名那条加上负责人和链接", "加好了：负责人写的是你，链接指向注册商的续费页。", .init(steps: 1, items: [.init(kind: .edit, target: "notes/2026-W40.md", added: 2, removed: 1)]), 0.4),
-            ("再把评审计费额度拆成两步", "拆成了两步：\n\n1. 先对一遍额度表和账单的口径\n2. 再看超额时的提示文案\n\n都放在待办的同一节下面。", .init(steps: 2, items: [.init(kind: .read, target: "notes/2026-W40.md"), .init(kind: .edit, target: "notes/2026-W40.md", added: 5, removed: 1)]), 0.8),
+            (String(localized: "整理一下这周的会议记录", table: "Demo"), String(localized: "整理好了，放在 `notes/2026-W40.md`。三件待办：\n\n- **续费域名**（周五前）\n- 评审计费额度\n- 补 scheduler 测试", table: "Demo"), Self.notesWeek, 1.5),
+            (String(localized: "续费域名那条加上负责人和链接", table: "Demo"), String(localized: "加好了：负责人写的是你，链接指向注册商的续费页。", table: "Demo"), .init(steps: 1, items: [.init(kind: .edit, target: "notes/2026-W40.md", added: 2, removed: 1)]), 0.4),
+            (String(localized: "再把评审计费额度拆成两步", table: "Demo"), String(localized: "拆成了两步：\n\n1. 先对一遍额度表和账单的口径\n2. 再看超额时的提示文案\n\n都放在待办的同一节下面。", table: "Demo"), .init(steps: 2, items: [.init(kind: .read, target: "notes/2026-W40.md"), .init(kind: .edit, target: "notes/2026-W40.md", added: 5, removed: 1)]), 0.8),
             // 最坏的 Markdown：宽表（对齐语法、代码单元格、中英混排长单元格）、引用、嵌套列表、标题、链接、长代码行
-            ("把三个排序方案的对比做成表格", """
+            (String(localized: "把三个排序方案的对比做成表格", table: "Demo"), String(localized: """
             ## 对比结果
 
             | 方案 | 延迟 (p95) | 内存 | 说明 |
@@ -150,13 +150,13 @@ extension DebugScene {
             ```ts
             export function sortQueue(queue: Participant[]): Participant[] { return [...queue].sort((a, b) => a.firstJoinedAt - b.firstJoinedAt) }
             ```
-            """, .init(steps: 3, items: [.init(kind: .read, target: "bench/sorting.md"), .init(kind: .read, target: "bench/results.csv"), .init(kind: .edit, target: "notes/sorting-compare.md", added: 24)]), 1.0),
+            """, table: "Demo"), .init(steps: 3, items: [.init(kind: .read, target: "bench/sorting.md"), .init(kind: .read, target: "bench/results.csv"), .init(kind: .edit, target: "notes/sorting-compare.md", added: 24)]), 1.0),
         ], startedMinutesAgo: 20)
         await seedPreviews(store, now: now)
         if let kinds = defaults.string(forKey: "CuePadAllKinds") { await seedAllKinds(store, upTo: Int(kinds)) }
         await chat("atlas", [
-            ("跑一下 scheduler 的测试，失败的话先别改代码，告诉我原因", "12 个用例里有 **2 个失败**：\n\n1. 发言轮次在 5 人以上时，第 6 位被排到了最前——队列按加入时间排序，但重连的人会拿到新的时间戳。\n2. 登录回调走了旧网关，超时后没有重试。\n\n第一个建议改成按首次加入时间排序，改动在 `scheduler/queue.ts`：\n\n```ts\nqueue.sort((a, b) => a.firstJoinedAt - b.firstJoinedAt)\n```\n\n要我先改第一个吗？", Self.testRun, 2),
-            ("按你说的改成首次加入时间排序，把断言也改了，再跑一遍", nil, .init(
+            (String(localized: "跑一下 scheduler 的测试，失败的话先别改代码，告诉我原因", table: "Demo"), String(localized: "12 个用例里有 **2 个失败**：\n\n1. 发言轮次在 5 人以上时，第 6 位被排到了最前——队列按加入时间排序，但重连的人会拿到新的时间戳。\n2. 登录回调走了旧网关，超时后没有重试。\n\n第一个建议改成按首次加入时间排序，改动在 `scheduler/queue.ts`：\n\n```ts\nqueue.sort((a, b) => a.firstJoinedAt - b.firstJoinedAt)\n```\n\n要我先改第一个吗？", table: "Demo"), Self.testRun, 2),
+            (String(localized: "按你说的改成首次加入时间排序，把断言也改了，再跑一遍", table: "Demo"), nil, .init(
                 steps: 4,
                 items: [
                     .init(kind: .read, target: "scheduler/queue.ts"), .init(kind: .edit, target: "scheduler/queue.ts", added: 3, removed: 1),
@@ -164,16 +164,16 @@ extension DebugScene {
                 ]), 0),
         ], startedMinutesAgo: 6)
         await chat("homepage", [
-            ("把 RSS 输出改成全文", nil, nil, 0),
+            (String(localized: "把 RSS 输出改成全文", table: "Demo"), nil, nil, 0),
         ], startedMinutesAgo: 3)
         await chat("relay", [
-            ("看一下线上库的迁移有没有卡住", "迁移跑到第 14 步停住了：`add_index_on_cards` 在等锁。现在没有别的写入，可以安全重跑。", .init(steps: 3, items: [.init(kind: .command, target: "psql -c 'select * from schema_migrations order by id desc limit 3'"), .init(kind: .command, target: "psql -c 'select pid, state, query from pg_stat_activity'"), .init(kind: .command, target: "psql -c 'select * from pg_locks where not granted'")]), 1.2),
-            (Self.skillSaid, "就像排队上厕所：建索引要把整张表锁一下，可前面有人一直占着没出来，它只能在门口等。占着的人走了，它马上就能进去。", nil, 0.3),
+            (String(localized: "看一下线上库的迁移有没有卡住", table: "Demo"), String(localized: "迁移跑到第 14 步停住了：`add_index_on_cards` 在等锁。现在没有别的写入，可以安全重跑。", table: "Demo"), .init(steps: 3, items: [.init(kind: .command, target: "psql -c 'select * from schema_migrations order by id desc limit 3'"), .init(kind: .command, target: "psql -c 'select pid, state, query from pg_stat_activity'"), .init(kind: .command, target: "psql -c 'select * from pg_locks where not granted'")]), 1.2),
+            (Self.skillSaid, String(localized: "就像排队上厕所：建索引要把整张表锁一下，可前面有人一直占着没出来，它只能在门口等。占着的人走了，它马上就能进去。", table: "Demo"), nil, 0.3),
         ], startedMinutesAgo: 10)
     }
 
     /// "/skill:eli5 为什么在等锁" 经 Pi 展开后进会话文件的样子（`PiSkillCall`）。
-    private static let skillSaid = """
+    private static var skillSaid: String { """
         <skill name="eli5" location="/Users/demo/.agents/skills/eli5/SKILL.md">
         References are relative to /Users/demo/.agents/skills/eli5.
 
@@ -184,8 +184,8 @@ extension DebugScene {
         - 三句话以内讲完
         </skill>
 
-        为什么在等锁
-        """
+        \(String(localized: "为什么在等锁", table: "Demo"))
+        """ }
 
     /// `-CuePadDemoMac YES`：演示库里一台会回话的"demo-mac"。发给它的会话的话，像真的经同步那样慢慢走完：
     /// 等一会儿才被接手（发送中）→ 送达用一会儿（送达中）→ 会话状态再晚一点才同步过来（思考中）→ 这一轮做完（该你了），

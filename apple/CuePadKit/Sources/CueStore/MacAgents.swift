@@ -24,7 +24,7 @@ public struct MacAgents: Equatable, Sendable {
 
   /// 给人看的名字（各处写某台 Mac 都用它）：没报过名字的（更旧的版本写的记录、还没有这台的记录）写 `unnamed`。
   public var shownName: String { Self.shownName(name) }
-  public static let unnamed = "未命名的 Mac"
+  public static let unnamed = String(localized: "未命名的 Mac")
   static func shownName(_ name: String?) -> String { name ?? unnamed }
   /// 读别的记录时顺带取它 `host` 列那台 Mac 报的名字（没有为 NULL，读出后经 `shownName(_:)`）：目录绑定、会话跑过的文件夹都这样带上名字，不另存。
   static func nameSQL(host column: String) -> String { "(SELECT name FROM macAgents WHERE macAgents.hostID = \(column))" }
@@ -44,7 +44,7 @@ public struct MacAgents: Equatable, Sendable {
 
   /// 一家都不能用时为什么（"Pi 没登录 · Codex 没装"）；还没有这台 Mac 写的记录时说还没查过。
   public var whyNone: String {
-    problems.isEmpty ? "还没查过有哪些 Agent 能用" : problems.map { "\($0.kind.name) \($0.reason)" }.joined(separator: " · ")
+    problems.isEmpty ? String(localized: "还没查过有哪些 Agent 能用") : problems.map { "\($0.kind.name) \($0.reason)" }.joined(separator: " · ")
   }
 
   public static func recordID(host: String) -> UUID { DeterministicID.uuid("mac-agents/\(host)") }
@@ -89,6 +89,7 @@ public struct MacAgentProblem: Codable, Equatable, Sendable {
     case notConnected
     case other(String)
 
+    /// 同步记录里存的字（Mac 写、各端读，按它认回）：照旧是中文，显示的是 `description`。
     private static let named: [(Reason, String)] = [
       (.notInstalled, "没装"), (.notLoggedIn, "没登录"), (.notConnected, "还没接入 CuePad（在设置里打开）"),
     ]
@@ -97,16 +98,26 @@ public struct MacAgentProblem: Codable, Equatable, Sendable {
       self = Self.named.first { $0.1 == text }?.0 ?? .other(text)
     }
 
-    public var description: String {
+    private var stored: String {
       if case .other(let text) = self { return text }
       return Self.named.first { $0.0 == self }?.1 ?? ""
+    }
+
+    /// 给人看的；`other` 是那台 Mac 写下时的原话（按它的语言）。
+    public var description: String {
+      switch self {
+      case .notInstalled: String(localized: "没装")
+      case .notLoggedIn: String(localized: "没登录")
+      case .notConnected: String(localized: "还没接入 CuePad（在设置里打开）")
+      case .other(let text): text
+      }
     }
 
     public init(from decoder: any Decoder) throws { self.init(try decoder.singleValueContainer().decode(String.self)) }
 
     public func encode(to encoder: any Encoder) throws {
       var container = encoder.singleValueContainer()
-      try container.encode(description)
+      try container.encode(stored)
     }
   }
 }

@@ -10,7 +10,7 @@ enum SettingsPane: String, CaseIterable {
 
     var title: String {
         switch self {
-        case .general: "通用"
+        case .general: String(localized: "通用")
         case .agents: "Agent"
         }
     }
@@ -118,7 +118,7 @@ private struct ShortcutKey: View {
 }
 
 private struct ShortcutRow: View {
-    let title: String
+    let title: LocalizedStringResource
     let icon: Icon
     let accelerator: String
     /// 注册新的组合键；失败时抛出，原来的照用。
@@ -130,7 +130,7 @@ private struct ShortcutRow: View {
     var body: some View {
         SettingRow(title: title, icon: Image(icon), tone: error == nil ? .calm : .failure, status: error.map { Dotted($0) }) {
             Button { recording ? stop() : start() } label: {
-                ShortcutKey(text: recording ? "请按下组合键…" : ShortcutText.display(accelerator), recording: recording)
+                ShortcutKey(text: recording ? String(localized: "请按下组合键…") : ShortcutText.display(accelerator), recording: recording)
             }
             .buttonStyle(PressStyle(.inline))
             .help("点一下，按下新的组合键（Esc 取消）")
@@ -165,15 +165,15 @@ private struct ShortcutRow: View {
         if flags.contains(.control) { modifiers.insert(.control) }
         if flags.contains(.shift) { modifiers.insert(.shift) }
         guard !modifiers.isEmpty, let accelerator = Shortcut(keyCode: UInt32(event.keyCode), modifiers: modifiers).accelerator else {
-            error = "需要至少一个修饰键加字母、数字、空格或功能键"
+            error = String(localized: "需要至少一个修饰键加字母、数字、空格或功能键")
             return
         }
         do {
             try apply(accelerator)
         } catch HotkeyError.occupied {
-            error = "这个组合已被其他应用占用"
+            error = String(localized: "这个组合已被其他应用占用")
         } catch {
-            self.error = "无法注册：\(error)"
+            self.error = String(localized: "无法注册：\(String(describing: error))")
         }
     }
 }
@@ -197,11 +197,11 @@ private struct NotificationSection: View {
     @ViewBuilder private var permission: some View {
         switch alerts.authorization {
         case .notDetermined:
-            SettingRow(title: "系统通知", icon: Image(.alertsPending), tone: .notice, status: "还没开启") { EmptyView() } fix: {
+            SettingRow(title: "系统通知", icon: Image(.alertsPending), tone: .notice, status: Dotted(String(localized: "还没开启"))) { EmptyView() } fix: {
                 Button("开启") { Task { await alerts.requestAuthorization() } }.settingFix()
             }
         case .denied:
-            SettingRow(title: "系统通知", icon: Image(.alertsOff), tone: .notice, status: "已关闭，收不到提示") { EmptyView() } fix: {
+            SettingRow(title: "系统通知", icon: Image(.alertsOff), tone: .notice, status: Dotted(String(localized: "已关闭，收不到提示"))) { EmptyView() } fix: {
                 Button("打开系统设置", action: openSystemSettings).settingFix()
             }
         default:
@@ -209,7 +209,7 @@ private struct NotificationSection: View {
         }
     }
 
-    private func row(_ title: String, kind: PiAlert, help: String) -> some View {
+    private func row(_ title: LocalizedStringResource, kind: PiAlert, help: LocalizedStringResource) -> some View {
         @Bindable var settings = services.settings
         // 设置行的图标是墨色线条：形状与提示带的状态图形同一个
         return SettingRow(title: title, icon: Image(PiShown(status: SessionAlert.status(kind)).icon), help: help) {
@@ -225,7 +225,7 @@ private struct NotificationSection: View {
                 .labelsHidden()
                 .fixedSize()
                 .disabled(!settings.alerts[kind].isOn)
-                Toggle(title, isOn: $settings.alerts[kind].isOn).labelsHidden().toggleStyle(.switch)
+                Toggle(String(localized: title), isOn: $settings.alerts[kind].isOn).labelsHidden().toggleStyle(.switch)
             }
         }
     }
@@ -278,7 +278,7 @@ private struct ConflictsRow: View {
     var body: some View {
         SettingRow(
             title: "同步冲突", icon: Image(.conflict), tone: .notice,
-            status: "\(services.conflicts.count) 条灵感或任务有两个版本"
+            status: Dotted(String(localized: "\(services.conflicts.count) 条灵感或任务有两个版本"))
         ) {
             EmptyView()
         } fix: {

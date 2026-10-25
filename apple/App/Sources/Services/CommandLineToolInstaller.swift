@@ -10,8 +10,8 @@ nonisolated enum CommandLineToolError: Error, Equatable, LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .unavailable: "这个 App 里没有命令行工具"
-        case .occupied(let path): "\(path) 已经被别的文件或链接占用，没有覆盖；确认不需要后请自行删除再安装"
+        case .unavailable: String(localized: "这个 App 里没有命令行工具")
+        case .occupied(let path): String(localized: "\(path) 已经被别的文件或链接占用，没有覆盖；确认不需要后请自行删除再安装")
         }
     }
 }
@@ -26,8 +26,8 @@ final class CommandLineToolInstaller {
         case installed
         /// 是本 App 的链接，但指向别处（App 被移动或换了副本）；安装即修复。
         case stale
-        /// 位置上是别的文件或别人的链接（说明是什么）。
-        case blocked(String)
+        /// 位置上是别的文件（nil）或别人的链接（指向哪）。
+        case blocked(link: String?)
     }
 
     private(set) var state = State.notInstalled
@@ -96,10 +96,10 @@ final class CommandLineToolInstaller {
         // attributesOfItem 不跟随符号链接：失效的链接也能看到
         guard let type = (try? files.attributesOfItem(atPath: link.path))?[.type] as? FileAttributeType else { return .notInstalled }
         guard type == .typeSymbolicLink, let target = try? files.destinationOfSymbolicLink(atPath: link.path) else {
-            return .blocked("已有一个文件")
+            return .blocked(link: nil)
         }
         if target == helper.path { return .installed }
-        return Self.isCuePadHelper(target) ? .stale : .blocked("已有一个指向 \(target) 的链接")
+        return Self.isCuePadHelper(target) ? .stale : .blocked(link: target)
     }
 
     private static func isCuePadHelper(_ path: String) -> Bool {

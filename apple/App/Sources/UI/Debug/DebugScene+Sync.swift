@@ -25,8 +25,8 @@ extension DebugScene {
         let issues = [
             SyncIssue(
                 kind: .upload, recordType: "cards", recordName: "A1B2", problem: .refused,
-                detail: "未能完成操作。（CKErrorDomain错误15。）（<CKError 0x6000: \"Server Rejected Request\" (15/2000); server message = \"Internal server error\">）"),
-            SyncIssue(kind: .request, problem: .local, detail: "资料库读写出错：database is locked（SQLite: database is locked [UPDATE syncState SET value = ?]）"),
+                detail: String(localized: "未能完成操作。（CKErrorDomain错误15。）（<CKError 0x6000: \"Server Rejected Request\" (15/2000); server message = \"Internal server error\">）", table: "Demo")),
+            SyncIssue(kind: .request, problem: .local, detail: String(localized: "资料库读写出错：database is locked（SQLite: database is locked [UPDATE syncState SET value = ?]）", table: "Demo")),
         ]
         return switch defaults.string(forKey: "CuePadSync") {
         case "stalled": .custom(StandInSync(stalls: true))
@@ -96,12 +96,12 @@ extension DebugScene {
         private static func arrive() async {
             guard let store = await standInLibrary() else { return }
             let lines = [
-                (CueAuthor.note, "看了圆桌：重连的人拿到了新的加入时间，乱序就是从这来的"),
-                (.note, "让 atlas 改成按首次加入时间排序，正在跑 scheduler 的测试"),
-                (.cue, "排序改好了，scheduler 的 42 个测试都过了。接下来补 3 个重连用例。"),
-                (.note, "补了「6 人同时重连顺序不变」，在跑"),
-                (.note, "CuePad 导入旧数据的会话又出错了：prompt 太长，等你回来再拆"),
-                (.cue, "重连用例都过了，预发也部署好了，截图放在任务上。要推送到 origin/main 吗？"),
+                (CueAuthor.note, String(localized: "看了圆桌：重连的人拿到了新的加入时间，乱序就是从这来的", table: "Demo")),
+                (.note, String(localized: "让 atlas 改成按首次加入时间排序，正在跑 scheduler 的测试", table: "Demo")),
+                (.cue, String(localized: "排序改好了，scheduler 的 42 个测试都过了。接下来补 3 个重连用例。", table: "Demo")),
+                (.note, String(localized: "补了「6 人同时重连顺序不变」，在跑", table: "Demo")),
+                (.note, String(localized: "CuePad 导入旧数据的会话又出错了：prompt 太长，等你回来再拆", table: "Demo")),
+                (.cue, String(localized: "重连用例都过了，预发也部署好了，截图放在任务上。要推送到 origin/main 吗？", table: "Demo")),
             ]
             for page in 0..<pages {
                 try? await Task.sleep(for: pageGap)
@@ -182,7 +182,7 @@ extension DebugScene {
         for project in (try? await store.projects()) ?? [] where original == nil {
             original = try? await store.cards(in: project.id).first
         }
-        guard let original, let copy = try? await store.createCard(in: original.projectID, body: original.body + "\n另一台设备上补了一句")
+        guard let original, let copy = try? await store.createCard(in: original.projectID, body: original.body + "\n" + String(localized: "另一台设备上补了一句", table: "Demo"))
         else { return }
         _ = markConflict(copy: copy.id, of: original.id, database: services.location.databaseURL)
     }

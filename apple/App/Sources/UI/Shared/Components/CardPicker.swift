@@ -57,8 +57,8 @@ struct CardPicker: View {
     }
     #endif
 
-    private static let title = "选一条灵感或任务"
-    private static let prompt = "搜索灵感与任务"
+    private static let title = String(localized: "选一条灵感或任务")
+    private static let prompt = String(localized: "搜索灵感与任务")
 
     private var list: some View {
         ScrollView {
@@ -66,12 +66,12 @@ struct CardPicker: View {
                 if let data {
                     if data.shown == 0, !settled.isEmpty { EmptyState.noMatch(settled) }
                     if !data.pins.isEmpty {
-                        header("置顶", project: nil)
+                        header("置顶的灵感", project: nil)
                         rows(data.pins)
                     }
                     if !data.own.isEmpty {
                         let own = project.flatMap { workspace.catalog?.project($0) }
-                        header(own?.name ?? "本项目", project: own)
+                        header(own.map { .verbatim($0.name) } ?? "本项目", project: own)
                         rows(data.own)
                         if !data.rest.isEmpty { header("其他", project: nil).padding(.top, 8) }
                     }
@@ -98,7 +98,7 @@ struct CardPicker: View {
         }
     }
 
-    private func header(_ title: String, project: Project?) -> some View {
+    private func header(_ title: LocalizedStringResource, project: Project?) -> some View {
         HStack(spacing: 6) {
             if let project { ProjectGlyph(project: project, size: 12) }
             SectionHeader(title: title, count: nil).padding(.horizontal, -4)

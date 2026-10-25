@@ -34,7 +34,7 @@ struct IOSEditorHost: UIViewRepresentable {
         let view = CueTextView(imageStore: services.store.files, theme: theme)
         view.storedText = initialText
         view.inputAccessoryView = KeyboardBar(textView: view, actions: context.coordinator)
-        view.accessibilityLabel = "正文"
+        view.accessibilityLabel = String(localized: "正文")
         if fits {
             view.isScrollEnabled = false
             view.alwaysBounceVertical = false
@@ -89,10 +89,10 @@ final class KeyboardBar: UIToolbar {
             return item
         }
         items = [
-            item("插入图片", .photo) { _ in actions.insertImage() },
-            item("变量取值", .variables) { _ in actions.variables() },
+            item(String(localized: "插入图片"), .photo) { _ in actions.insertImage() },
+            item(String(localized: "变量取值"), .variables) { _ in actions.variables() },
             .flexibleSpace(),
-            item("收起键盘", .dismissKeyboard) { $0.resignFirstResponder() },
+            item(String(localized: "收起键盘"), .dismissKeyboard) { $0.resignFirstResponder() },
         ]
         sizeToFit()
     }

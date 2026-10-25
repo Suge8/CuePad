@@ -91,7 +91,7 @@ struct HandOffInput: View {
             send: {
                 Button(action: send) { SendGlyph(canSend ? .ready : .idle) }
                     .buttonStyle(PressStyle(.button)).disabled(!canSend)
-                    .accessibilityLabel(chosen.map { "交给 \($0.state.title)" } ?? "开新会话交给它")
+                    .accessibilityLabel(chosen.map { String(localized: "交给 \($0.state.title)") } ?? String(localized: "开新会话交给它"))
             })
         .onAppear { focused = true }
         .observing(services.store, id: outbox.card, into: $planned, onError: workspace.fail) { [card = outbox.card] store in
@@ -117,7 +117,7 @@ struct HandOffInput: View {
             MenuButton(sections: [
                 ChoiceMenu.Section(choices: [ChoiceMenu.Choice(title: "新会话…", image: .icon(.add), choose: newSession)]),
                 ChoiceMenu.Section(choices: sessions.map { item in
-                    ChoiceMenu.Choice(title: title(item).visible, checked: item.state.id == chosen?.state.id) { choice = item.state.id }
+                    ChoiceMenu.Choice(title: .verbatim(title(item).visible), checked: item.state.id == chosen?.state.id) { choice = item.state.id }
                 }),
             ], accessibilityLabel: chosen.map { "交给 \($0.state.title)，点开换会话" } ?? "交给新会话") {
                 DestinationChip(title: Text(chosen.map { "交给 \($0.state.title)" } ?? "交给 新会话")) {
@@ -139,7 +139,7 @@ struct HandOffInput: View {
             return Self.startDefault(draft, card: outbox.card, plan: planned?.plan, opening: planned?.opening, workspace: workspace)
         }
         let kinds = session.composerKinds, files = services.store.files
-        let saying: Dotted = "已交给 \(session.title)"
+        let saying = Dotted(String(localized: "已交给 \(session.title)"))
         let written = if let line = PiSlash.line(of: draft.accepting(kinds), in: commands) {
             workspace.speak(to: .session(session, mode: .command, card: outbox.card), from: box, saying: saying) { _ in line }
         } else {

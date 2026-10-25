@@ -7,11 +7,11 @@ nonisolated enum TimeSection: Sendable {
 
     var title: String {
         switch self {
-        case .today: "今天"
-        case .yesterday: "昨天"
-        case .thisWeek: "本周"
-        case .thisMonth: "本月"
-        case .earlier: "更早"
+        case .today: String(localized: "今天")
+        case .yesterday: String(localized: "昨天")
+        case .thisWeek: String(localized: "本周")
+        case .thisMonth: String(localized: "本月")
+        case .earlier: String(localized: "更早")
         }
     }
 

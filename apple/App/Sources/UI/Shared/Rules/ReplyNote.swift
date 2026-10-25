@@ -47,9 +47,9 @@ nonisolated struct ReplyNote: Identifiable, Equatable, Codable, Sendable {
         guard !notes.isEmpty else { return "" }
         let lines = notes.enumerated().map { index, note in
             let said = note.note.split(whereSeparator: \.isNewline).joined(separator: " ").trimmingCharacters(in: .whitespaces)
-            return (notes.count > 1 ? "\(index + 1)." : "") + "「\(excerpt(note.quote))」" + said
+            return (notes.count > 1 ? "\(index + 1)." : "") + String(localized: "「\(excerpt(note.quote))」\(said)")
         }
-        return (["对你回答的批注（「」里是原话摘录）："] + lines).joined(separator: "\n")
+        return ([String(localized: "对你回答的批注（「」里是原话摘录）：")] + lines).joined(separator: "\n")
     }
 
     /// 摘录：去掉渲染时加的列表符、引用竖条与缩进，空白收成一个空格；超过 `excerptLimit` 个字只留头尾各 `excerptEnd` 个字。

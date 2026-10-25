@@ -91,7 +91,7 @@ struct SetupPanel: View {
             note { Spinner(.small); Text("正在检测 Agent…") }
         } else {
             if setupCue == .needsAgent {
-                Text("先\(logsInFirst ? "登录" : "装")好其中一家").font(Typography.secondary).foregroundStyle(palette.ink2)
+                Text(logsInFirst ? "先登录好其中一家" : "先装好其中一家").font(Typography.secondary).foregroundStyle(palette.ink2)
                     .padding(.horizontal, 4)
             }
             // Agent 那几行与 Cue 那一行分两组：先定接哪几家，再是启用这一步
@@ -112,7 +112,7 @@ struct SetupPanel: View {
     private func row(_ row: SetupRow) -> some View {
         let kind = row.kind
         let (tone, line, busy) = describe(row)
-        return SettingRow(title: kind.name, icon: kind.mark.image, tone: tone, busy: busy, status: line, help: nil) {
+        return SettingRow(title: .verbatim(kind.name), icon: kind.mark.image, tone: tone, busy: busy, status: line, help: nil) {
             switch row.step {
             case .connect:
                 check(kind.name, isOn: Binding(
@@ -144,15 +144,18 @@ struct SetupPanel: View {
                 ?? unusable(kind).map { (StatusTone.notice, Dotted($0)) }
                 ?? AgentLine.of(kind, agents.status(kind), writable: agents.isWritable(kind))
             return (tone, line, working && chosen.contains(kind))
-        case .checking: return (.calm, "检查中…", true)
-        case .install(let failure?): return (.failure, Dotted("没装上：\(failure)"), false)  // 原因是安装脚本的最后一句原话
+        case .checking: return (.calm, Dotted(String(localized: "检查中…")), true)
+        case .install(let failure?): return (.failure, Dotted(String(localized: "没装上：\(failure)")), false)  // 原因是安装脚本的最后一句原话
         case .logIn(let failure?): return (.failure, Dotted(failure), false)
-        case .install: return (.calm, Dotted(kind == .claudeCode ? "推荐" : nil, "运行官方安装脚本"), false)
+        case .install: return (.calm, Dotted(kind == .claudeCode ? String(localized: "推荐") : nil, String(localized: "运行官方安装脚本")), false)
         case .needs(let prerequisite):
-            return (.notice, Dotted("需要 \(prerequisite.name) \(prerequisite.minimum.major).\(prerequisite.minimum.minor) 以上"), false)
-        case .installing: return (.calm, "安装中，可能要几分钟", true)
-        case .logIn: return (.calm, kind.loginArguments == nil ? "在 \(kind.name) 里输入 /login" : "在浏览器里登录", false)
-        case .loggingIn: return (.calm, "在浏览器里登录完回到这里", true)
+            let version = "\(prerequisite.minimum.major).\(prerequisite.minimum.minor)"
+            return (.notice, Dotted(String(localized: "需要 \(prerequisite.name) \(version) 以上")), false)
+        case .installing: return (.calm, Dotted(String(localized: "安装中，可能要几分钟")), true)
+        case .logIn:
+            let how = kind.loginArguments == nil ? String(localized: "在 \(kind.name) 里输入 /login") : String(localized: "在浏览器里登录")
+            return (.calm, Dotted(how), false)
+        case .loggingIn: return (.calm, Dotted(String(localized: "在浏览器里登录完回到这里")), true)
         case .problem(let why): return (.notice, Dotted(why), false)
         }
     }
@@ -165,10 +168,10 @@ struct SetupPanel: View {
         }
     }
 
-    private func action(_ title: String, _ kind: AgentKind, _ run: @escaping () async -> Void) -> some View {
+    private func action(_ title: LocalizedStringResource, _ kind: AgentKind, _ run: @escaping () async -> Void) -> some View {
         Button(title) { Task { await run() } }
             .buttonStyle(ControlButtonStyle(kind: .secondary))
-            .accessibilityLabel("\(title) \(kind.name)")
+            .accessibilityLabel("\(String(localized: title)) \(kind.name)")
     }
 
     /// 启用 Cue 那一行：默认项目还没有文件夹时写任务在哪做（工作区，第一次开工时建好，`Workspaces`）。没启用成的写原因。
@@ -180,7 +183,7 @@ struct SetupPanel: View {
         return SettingRow(
             title: "在这台 Mac 上启用", icon: Image(.cue), tone: tone, busy: waiting != nil || working && enablingCue, status: line, help: nil
         ) {
-            check("在这台 Mac 上启用 \(cueName)", isOn: Binding(get: { waiting == nil && !skipsCue }, set: { skipsCue = !$0 }))
+            check(String(localized: "在这台 Mac 上启用 \(cueName)"), isOn: Binding(get: { waiting == nil && !skipsCue }, set: { skipsCue = !$0 }))
                 .disabled(waiting != nil)
         } fix: {
             EmptyView()
@@ -189,7 +192,8 @@ struct SetupPanel: View {
 
     private var folder: String? {
         guard let home = workspace.catalog?.project(Project.defaultID), workspace.catalog?.directories[home.id] == nil else { return nil }
-        return "任务在 \(Workspaces.shown(services.workspaces.directory(for: home.name).path(percentEncoded: false))) 里做"
+        let path = Workspaces.shown(services.workspaces.directory(for: home.name).path(percentEncoded: false))
+        return String(localized: "任务在 \(path) 里做")
     }
 
     private func check(_ name: String, isOn: Binding<Bool>) -> some View {
@@ -218,7 +222,7 @@ struct SetupPanel: View {
         }
     }
 
-    private var primaryTitle: String {
+    private var primaryTitle: LocalizedStringResource {
         if working { return enablingCue ? "启用中…" : "接入中…" }
         if chosen.isEmpty { return cueRowShown ? "启用" : "接入" }
         return enablingCue ? "接入并启用" : "接入"

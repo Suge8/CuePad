@@ -128,7 +128,7 @@ private struct SidebarScroll<Content: View>: View {
 
 /// 侧栏分组标题：名称在左、一颗动作在右（项目的"新建项目"）。
 private struct SidebarHeader<Action: View>: View {
-    let title: String
+    let title: LocalizedStringResource
     @ViewBuilder let action: Action
     @Environment(\.palette) private var palette
 
@@ -272,7 +272,7 @@ private struct FooterPage: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
-    private var title: String { count > 0 ? "\(entry.title)，\(count) 项" : entry.title }
+    private var title: String { count > 0 ? String(localized: "\(entry.title)，\(count) 项") : entry.title }
 
     var body: some View {
         let selected = workspace.root == entry.route

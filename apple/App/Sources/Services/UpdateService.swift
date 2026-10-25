@@ -49,7 +49,7 @@ final class UpdateService {
         }
     }
 
-    var waitingNote: String? { waitingFor.map { "等 \($0) 个 Agent 做完再装" } }
+    var waitingNote: String? { waitingFor.map { String(localized: "等 \($0) 个 Agent 做完再装") } }
 
     func checkForUpdates() {
         updater?.checkForUpdates()

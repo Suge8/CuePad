@@ -33,7 +33,7 @@ struct CaptureComposer: View {
 
     var body: some View {
         Composer(
-            draft: $state.draft, prompt: collapsed ? CaptureCopy.placeholder(to: destination) : CaptureCopy.prompt, label: "随手记",
+            draft: $state.draft, prompt: .verbatim(collapsed ? CaptureCopy.placeholder(to: destination) : CaptureCopy.prompt), label: "随手记",
             focus: $focused, accepts: .images, form: pinnedOpen ? .open : .line(opensOnFocus: true), shortcuts: [.send: save],
             header: { header }, tools: { EmptyView() }, send: { saveButton }
         )
@@ -60,7 +60,7 @@ struct CaptureComposer: View {
     private var destinationMenu: some View {
         MenuButton(sections: [
             ChoiceMenu.Section(choices: (workspace.catalog?.projects ?? []).map { item in
-                ChoiceMenu.Choice(title: item.name, checked: item.id == project) { state.project = item.id }
+                ChoiceMenu.Choice(title: .verbatim(item.name), checked: item.id == project) { state.project = item.id }
             }),
         ], accessibilityLabel: "记到 \(destination)") {
             DestinationChip(project: workspace.catalog?.project(project))

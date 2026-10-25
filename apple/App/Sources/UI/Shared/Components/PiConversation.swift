@@ -101,7 +101,7 @@ struct PiConversation: View {
         liveStatus
         #endif
         if session.state == .known(.error), !PiErrorSummary.echoes(messages.last { $0.role == .known(.pi) }?.text, line: session.detail) {
-            Callout(.failed, text: session.detail ?? "Mac 没有说明原因")
+            Callout(.failed, text: session.detail ?? String(localized: "Mac 没有说明原因"))
         }
     }
 
@@ -193,7 +193,7 @@ private struct ChatSegment: View, Equatable {
                 id: entry.id, text: entry.text, took: entry.took, tools: entry.tools, session: session, notes: notes.filter { $0.entry == entry.id }, fadesIn: !swapsInPlace)
         case .notice(let notice) where notice.changesContext:
             // 压缩：上下文从这里起换了，与 Cue 换新同一条分隔
-            ContextBoundary(title: entry.text, highlighted: entry.id == highlight)
+            ContextBoundary(title: notice.label, highlighted: entry.id == highlight)
         case .notice(let notice):
             RoundEndNote(notice: notice)
         case .machine:
@@ -212,7 +212,7 @@ private struct RoundEndNote: View {
     let notice: PiNotice
 
     var body: some View {
-        NoteLine(icon: notice == .declined ? .declined : .endSession) { Text(notice.rawValue) }
+        NoteLine(icon: notice == .declined ? .declined : .endSession) { Text(verbatim: notice.label) }
             .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityElement(children: .combine)
             .transition(.entry)

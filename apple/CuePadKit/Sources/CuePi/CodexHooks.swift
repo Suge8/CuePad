@@ -226,9 +226,9 @@ enum CodexHooksError: Error, Equatable {
 extension CodexHooksError: LocalizedError {
     var errorDescription: String? {
         switch self {
-        case .codexNotFound: "没有找到 codex 命令：Codex 的钩子要它来信任与撤销"
-        case .notTrusted: "Codex 没有信任 CuePad 的钩子（它的信任规则可能变了），钩子不会执行"
-        case .rejected(let reason): "Codex 读不了 hooks.json：\(reason)"
+        case .codexNotFound: String(localized: "没有找到 codex 命令：Codex 的钩子要它来信任与撤销")
+        case .notTrusted: String(localized: "Codex 没有信任 CuePad 的钩子（它的信任规则可能变了），钩子不会执行")
+        case .rejected(let reason): String(localized: "Codex 读不了 hooks.json：\(reason)")
         }
     }
 }

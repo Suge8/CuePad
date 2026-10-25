@@ -14,9 +14,9 @@ struct ProjectScopeMenu: View {
         } label: {
             HStack(spacing: 6) {
                 if let current { ProjectGlyph(project: current, size: 13) } else { Image(.filter) }
-                Text(current?.name ?? "全部项目").lineLimit(1)
+                Text(current?.name ?? String(localized: "全部项目")).lineLimit(1)
             }
-            .menuLabel(current.map { "项目范围：\($0.name)" } ?? "项目范围：全部项目")
+            .menuLabel("项目范围：\(current?.name ?? String(localized: "全部项目"))")
         }
         .menuStyle(.button).buttonStyle(ControlButtonStyle(kind: .glass)).menuIndicator(.hidden)
         // 横向不定死：给的地方窄于字宽时项目名截断（工具栏里固定宽度的那一格）
@@ -32,7 +32,7 @@ struct ProjectScopeItems: View {
         Menu {
             ProjectScopePicker().pickerStyle(.inline)
         } label: {
-            Label("项目范围：\(current?.name ?? "全部项目")", icon: .filter)
+            Label("项目范围：\(current?.name ?? String(localized: "全部项目"))", icon: .filter)
         }
     }
 }

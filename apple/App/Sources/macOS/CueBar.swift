@@ -17,7 +17,7 @@ final class CueBar {
     @ObservationIgnored private let services: AppServices
     /// ⌥Space 是"显示或隐藏 CuePad"的默认，这里错开一个 ⇧。
     @ObservationIgnored private(set) lazy var hotkey = GlobalHotkey(
-        label: "对 Cue 说", key: AppSettings.Key.cueShortcut, defaultAccelerator: "Alt+Shift+Space", defaults: services.settings.defaults,
+        label: String(localized: "对 Cue 说"), key: AppSettings.Key.cueShortcut, defaultAccelerator: "Alt+Shift+Space", defaults: services.settings.defaults,
         backend: services.hotkeyBackend
     ) { [weak self] in self?.toggle() }
 

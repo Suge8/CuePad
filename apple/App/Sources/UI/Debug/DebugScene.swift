@@ -92,7 +92,7 @@ enum DebugScene {
     }
 
     struct InjectedFailure: LocalizedError {
-        var errorDescription: String? { "调试注入的读取失败（-CuePadCatalogFailure）" }
+        var errorDescription: String? { String(localized: "调试注入的读取失败（-CuePadCatalogFailure）", table: "Demo") }
     }
 
     /// 需要时写入演示数据，并按参数选中项目；返回选中的项目。

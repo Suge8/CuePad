@@ -201,7 +201,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         Logger(subsystem: AppIdentity.id, category: "launch").error("\(error.localizedDescription, privacy: .public)")
         FileHandle.standardError.write(Data("CuePad 无法启动：\(error.localizedDescription)\n".utf8))
         let alert = NSAlert(error: error)
-        alert.messageText = "CuePad 无法启动"
+        alert.messageText = String(localized: "CuePad 无法启动")
         alert.runModal()
         NSApp.terminate(nil)
     }

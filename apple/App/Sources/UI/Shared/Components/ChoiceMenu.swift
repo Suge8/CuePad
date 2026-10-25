@@ -7,14 +7,14 @@ import UIKit
 /// 键盘也弹得出），`MenuButton` 是点开它的按钮。只有一组时不写组名。
 enum ChoiceMenu {
     struct Section {
-        var title: String? = nil
+        var title: LocalizedStringResource? = nil
         var image: Glyph? = nil
         let choices: [Choice]
     }
 
     struct Choice {
-        let title: String
-        var subtitle: String? = nil
+        let title: LocalizedStringResource
+        var subtitle: LocalizedStringResource? = nil
         var image: Glyph? = nil
         /// nil 是动作（不打勾），否则是选项、当前的打勾。
         var checked: Bool? = nil
@@ -47,9 +47,9 @@ struct MenuButton<Label: View>: View {
     let sections: [ChoiceMenu.Section]
     var primary: (() -> Void)? = nil
     var press = Press.control
-    let accessibilityLabel: String
+    let accessibilityLabel: LocalizedStringResource
     var value: String? = nil
-    var hint: String? = nil
+    var hint: LocalizedStringResource? = nil
     @ViewBuilder let label: () -> Label
 
     #if os(iOS)
@@ -78,7 +78,7 @@ struct MenuButton<Label: View>: View {
         }
         .menuStyle(.button).buttonStyle(PressStyle(press)).menuIndicator(.hidden).fixedSize()
         .accessibilityValue(value ?? "")
-        .accessibilityHint(hint ?? "")
+        .accessibilityHint(hint.map { Text($0) } ?? Text(verbatim: ""))
     }
     #endif
 }
@@ -125,9 +125,9 @@ private struct MenuTrigger: UIViewRepresentable {
     let sections: [ChoiceMenu.Section]
     let primary: (() -> Void)?
     let isEnabled: Bool
-    let label: String
+    let label: LocalizedStringResource
     let value: String?
-    let hint: String?
+    let hint: LocalizedStringResource?
     let pressed: (Bool) -> Void
     let presented: (Bool) -> Void
 
@@ -145,9 +145,9 @@ private struct MenuTrigger: UIViewRepresentable {
         button.primary = primary
         button.showsMenuAsPrimaryAction = primary == nil
         button.isEnabled = isEnabled
-        button.accessibilityLabel = label
+        button.accessibilityLabel = String(localized: label)
         button.accessibilityValue = value
-        button.accessibilityHint = hint
+        button.accessibilityHint = hint.map { String(localized: $0) }
         button.pressed = pressed
         button.presented = presented
     }
@@ -167,9 +167,9 @@ private final class TriggerButton: UIButton {
     var elements: [UIMenuElement] {
         sections.map { section in
             UIMenu(
-                title: sections.count > 1 ? section.title ?? "" : "", image: section.image?.uiImage, options: .displayInline,
+                title: sections.count > 1 ? section.title.map { String(localized: $0) } ?? "" : "", image: section.image?.uiImage, options: .displayInline,
                 children: section.choices.map { choice in
-                    let action = UIAction(title: choice.title, subtitle: choice.subtitle, image: choice.image?.uiImage) { _ in choice.choose() }
+                    let action = UIAction(title: String(localized: choice.title), subtitle: choice.subtitle.map { String(localized: $0) }, image: choice.image?.uiImage) { _ in choice.choose() }
                     if choice.destructive { action.attributes.insert(.destructive) }
                     if choice.disabled { action.attributes.insert(.disabled) }
                     action.state = choice.checked == true ? .on : .off

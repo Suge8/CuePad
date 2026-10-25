@@ -29,10 +29,10 @@ nonisolated enum PiClock: Hashable, Sendable, Codable {
     /// 不用系统的单位格式：中文的宽格式把秒写成"秒钟"、数字与单位之间不空。
     static func duration(_ seconds: TimeInterval) -> String {
         let whole = max(Int(seconds), 1)
-        if whole < 60 { return "\(whole) 秒" }
-        if whole < 3600 { return "\(whole / 60) 分钟" }
-        if whole < 86_400 { return "\(whole / 3600) 小时" }
-        return "\(whole / 86_400) 天"
+        if whole < 60 { return String(localized: "\(whole) 秒") }
+        if whole < 3600 { return String(localized: "\(whole / 60) 分钟") }
+        if whole < 86_400 { return String(localized: "\(whole / 3600) 小时") }
+        return String(localized: "\(whole / 86_400) 天")
     }
 
     /// 走字的计时（不是"多久前"）。
@@ -47,20 +47,20 @@ nonisolated enum PiClock: Hashable, Sendable, Codable {
     /// 此刻的文字（读屏、不走字的地方，以及 `live` 的每一次更新）：列表里（`.list`）不到一分钟写"刚开始"这类，不每秒换字。
     func text(now: Date, style: Style = .list, calendar: Calendar = .current) -> String {
         let elapsed = now.timeIntervalSince(since)
-        if style == .span { return elapsed < 60 ? "刚刚" : Self.duration(elapsed) }
+        if style == .span { return elapsed < 60 ? String(localized: "刚刚") : Self.duration(elapsed) }
         if case .ago = self { return DateLabel.short(since, now: now, calendar: calendar) }
         if style == .list, elapsed < 60 {
             switch self {
-            case .running: return "刚开始"
-            case .waiting: return "刚刚"
-            default: return "刚发出"
+            case .running: return String(localized: "刚开始")
+            case .waiting: return String(localized: "刚刚")
+            default: return String(localized: "刚发出")
             }
         }
         let duration = Self.duration(elapsed)
         return switch self {
-        case .running: "运行了 \(duration)"
-        case .waiting: "等了 \(duration)"
-        default: "\(duration)前发出"
+        case .running: String(localized: "运行了 \(duration)")
+        case .waiting: String(localized: "等了 \(duration)")
+        default: String(localized: "\(duration)前发出")
         }
     }
 
@@ -125,7 +125,7 @@ nonisolated extension PiClock {
         private var minute: Date { since.addingTimeInterval(60) }
         private var elapsed: Elapsed { Elapsed(since: since) }
 
-        func format(_ now: Date) -> String { now < minute ? "刚刚" : "已等 " + elapsed.format(now) }
+        func format(_ now: Date) -> String { now < minute ? String(localized: "刚刚") : String(localized: "已等 \(elapsed.format(now))") }
 
         func discreteInput(after now: Date) -> Date? { now < minute ? minute : elapsed.discreteInput(after: now) }
 

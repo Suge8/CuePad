@@ -15,7 +15,7 @@ struct TaskNextMark: View {
     var body: some View {
         Button(action: follow) { label }
             .buttonStyle(PressStyle())
-            .help(next.starts ? help : "\(next.speech)，\(help)")
+            .help(next.starts ? help : String(localized: "\(next.speech)，\(help)"))
             .accessibilityLabel(next.speech)
             .accessibilityHint(help)
     }
@@ -61,8 +61,8 @@ struct TaskNextMark: View {
 
     private var help: String {
         switch next {
-        case .agent: "打开这件事的 Agent 会话"
-        case .start: "把任务的正文交给 Agent，开始做"
+        case .agent: String(localized: "打开这件事的 Agent 会话")
+        case .start: String(localized: "把任务的正文交给 Agent，开始做")
         }
     }
 

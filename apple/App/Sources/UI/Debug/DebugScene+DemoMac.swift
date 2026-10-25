@@ -57,7 +57,7 @@ extension DebugScene {
         let context = try await store.cueState()?.context
         try await store.setCueState(.thinking, context: context)
         try await Task.sleep(for: .seconds(4))
-        _ = try await store.addCueMessage(.cue, text: "收到，我这就去看。")
+        _ = try await store.addCueMessage(.cue, text: String(localized: "收到，我这就去看。", table: "Demo"))
         try await store.setCueState(.settled, context: context)
     }
 
@@ -82,10 +82,10 @@ extension DebugScene {
         }
         // 说过话的会话做完一轮才是"有新回复"（刚开的还是新会话）
         try? await store.writePiTranscript(PiTranscript(
-            sessionID: "scratch", messages: [], recap: PiRecap(lastPrompt: "先跑一遍测试", lastReply: "全部通过。")))
+            sessionID: "scratch", messages: [], recap: PiRecap(lastPrompt: String(localized: "先跑一遍测试", table: "Demo"), lastReply: String(localized: "全部通过。", table: "Demo"))))
         while !Task.isCancelled {
             guard let session = try? await store.piSessionPage(query).items.first?.state,
-                  (try? await store.requestDelivery("再跑一遍测试", to: session.target, on: session.hostID, mode: .send)) != nil else { return }
+                  (try? await store.requestDelivery(String(localized: "再跑一遍测试", table: "Demo"), to: session.target, on: session.hostID, mode: .send)) != nil else { return }
             // 等演示 Mac 走完这一轮：干过活、又歇下
             var worked = false
             do {
@@ -95,9 +95,9 @@ extension DebugScene {
             } catch { return }
             // 每个状态停留的时长是演示节奏，不是在等别的事
             try? await Task.sleep(for: .seconds(2.5))
-            await set(.waitingForUser, "要提交吗？", question: PiQuestion(promptID: "cycle", kind: .confirm, text: "要提交吗？"))
+            await set(.waitingForUser, String(localized: "要提交吗？", table: "Demo"), question: PiQuestion(promptID: "cycle", kind: .confirm, text: String(localized: "要提交吗？", table: "Demo")))
             try? await Task.sleep(for: .seconds(3))
-            await set(.error, "模型拒绝了请求（400）")
+            await set(.error, String(localized: "模型拒绝了请求（400）", table: "Demo"))
             try? await Task.sleep(for: .seconds(3))
         }
     }
