@@ -28,8 +28,23 @@ public struct Project: Identifiable, Equatable, Sendable {
   public var shownName: String { Self.shownName(id: id, name: name) }
 
   public static func shownName(id: UUID, name: String) -> String {
-    if id == defaultID && name == defaultName { return String(localized: "默认") }
+    if id == defaultID && name == defaultName { return defaultShownName }
     return name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? untitled : name
+  }
+
+  private static var defaultShownName: String { String(localized: "默认") }
+
+  /// 按名字找项目（搜索）的唯一规则：存的名字或给人看的名字（`shownName`）里有 `text`。`stored` 是"存的名字里有"的 SQL 条件
+  /// （各处按自己的索引写），这里补上只有显示名才有的那几种（没改过名的默认项目、空名）；`id`、`name` 是列。
+  static func nameMatch(_ text: String, stored: String, id: String = "id", name: String = "name") -> (sql: String, arguments: [any SQLBindable]) {
+    var sql = stored
+    var arguments: [any SQLBindable] = []
+    if defaultShownName.localizedCaseInsensitiveContains(text) {
+      sql += " OR (\(id) = ? AND \(name) = ?)"
+      arguments += [defaultID, defaultName]
+    }
+    if untitled.localizedCaseInsensitiveContains(text) { sql += " OR trim(\(name)) = ''" }
+    return ("(\(sql))", arguments)
   }
 }
 

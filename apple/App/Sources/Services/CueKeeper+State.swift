@@ -12,7 +12,7 @@ extension CueKeeper {
         /// 第 n 次连续失败之后，等着重起
         case restarting(Int)
         /// 次数用完，停在起不来（原因）；你的下一条消息再试
-        case stuck(String)
+        case stuck(ShownText)
     }
 
     /// 大脑用的那几项设置：起大脑时取自设置，就地换了模型、强度跟着改；与库里的设置不同就去对上。

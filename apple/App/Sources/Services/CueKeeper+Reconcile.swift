@@ -33,7 +33,7 @@ extension CueKeeper {
                     do {
                         try await shift.brain.send(said, images: images)
                     } catch {
-                        return await broke(String(localized: "发不进去：\(error.localizedDescription)"))
+                        return await broke(ShownText("发不进去：\(ShownText(error).embedded)"))
                     }
                     updateShift {
                         $0.turn?.author = .cue
@@ -140,7 +140,7 @@ extension CueKeeper {
                 } catch {
                     Self.log.error("Cue 的设置没能改回在用的：\(error.localizedDescription, privacy: .public)")
                 }
-                let why = error.localizedDescription
+                let why = ShownText(error).embedded
                 await say(.cue, wanted.model.map { ShownText("没换成 \($0)：\(why)\n我还用原来的。") } ?? ShownText("没换成：\(why)\n我还用原来的。"))
             }
         case .starting, .running:

@@ -18143,6 +18143,22 @@
         }
       }
     },
+    "这一轮出错了：%@\n%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Something went wrong this turn: %1$@\n%2$@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "这一轮出错了：%1$@\n%2$@"
+          }
+        }
+      }
+    },
     "这一页没有更多操作" : {
       "localizations" : {
         "en" : {

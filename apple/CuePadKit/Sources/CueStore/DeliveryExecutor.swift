@@ -50,7 +50,7 @@ extension CueStore {
       _ = try insert(
         PiChatMessage(
           sessionID: session, entryID: "answer/\(id.uuidString.lowercased())", seq: seq, role: .answer, text: answer.value.said, at: request.createdAt,
-          deliveryID: id, question: answer.question),
+          deliveryID: id, question: answer.question, shownText: answer.value.shown),
         ignoringExisting: true)
     }
   }

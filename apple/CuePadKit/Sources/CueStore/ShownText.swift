@@ -21,8 +21,31 @@ public struct ShownText: Equatable, Sendable, StoredJSON {
     return ShownText(String.LocalizationValue(stringInterpolation: words))
   }
 
-  /// 这台设备当前语言的字。
-  public var text: String { String(localized: value) }
+  /// 这台设备当前语言的字：嵌着的话（`embedded`）先各按这台的语言取字，再填进句式。
+  public var text: String {
+    guard var words = try? JSONSerialization.jsonObject(with: JSONEncoder().encode(value)) as? [String: Any],
+      let arguments = words["arguments"] as? [[String: Any]],
+      arguments.contains(where: { Self.nested(in: $0) != nil })
+    else { return String(localized: value) }
+    words["arguments"] = arguments.map { argument in Self.nested(in: argument).map { ["string": ["_0": $0.text]] } ?? argument }
+    guard let data = try? JSONSerialization.data(withJSONObject: words),
+      let resolved = try? JSONDecoder().decode(String.LocalizationValue.self, from: data)
+    else { return String(localized: value) }
+    return String(localized: resolved)
+  }
+
+  /// 嵌进另一句里的写法（`ShownText("我起不来了：\(reason.embedded)")`）：句式的参数里只能放字，这一句整个编成一个带记号的字，
+  /// 读的时候（`text`）认出来，按读的设备的语言取字。只用作 `ShownText` 句式里的参数，不直接显示。
+  public var embedded: String { Self.embeddedMark + stored }
+
+  /// 嵌着的那句的记号：对象替换符开头，不会出现在原文的开头。
+  private static let embeddedMark = "\u{FFFC}shown:"
+
+  /// 句式的一个参数（`String.LocalizationValue` 的 JSON 形状：字是 `{"string": {"_0": …}}`）若是嵌着的一句，取出来。
+  private static func nested(in argument: [String: Any]) -> ShownText? {
+    guard let words = (argument["string"] as? [String: Any])?["_0"] as? String, words.hasPrefix(embeddedMark) else { return nil }
+    return ShownText(stored: String(words.dropFirst(embeddedMark.count)))
+  }
 
   public init(from decoder: any Decoder) throws { value = try decoder.singleValueContainer().decode(String.LocalizationValue.self) }
 
@@ -38,5 +61,5 @@ public protocol ShownError: LocalizedError {
 }
 
 extension ShownError {
-  public var errorDescription: String? { String(localized: shown) }
+  public var errorDescription: String? { ShownText(shown).text }
 }

@@ -25,7 +25,7 @@ extension CueKeeper {
             let profile = try await store.cueProfile() ?? CueProfile()
             brainSettings = BrainSettings(profile)
             guard let runtime = profile.runtime.known, let launch = try await setup.launch(runtime) else {
-                return await broke(String(localized: "这台 Mac 上没有找到 \(profile.runtime.rawValue)"))
+                return await broke(ShownText("这台 Mac 上没有找到 \(profile.runtime.rawValue)"))
             }
             let memory = CueMemoryView(try await store.cueMemory())
             let brain = try await startBrain(
@@ -38,7 +38,7 @@ extension CueKeeper {
             Task { for await event in brain.events { input.yield(.brain(id, event)) } }
             Self.log.notice("Cue 第 \(id) 个班次开始（\(runtime.rawValue, privacy: .public)）")
         } catch {
-            await broke(error.localizedDescription)
+            await broke(ShownText(error))
         }
     }
 
@@ -56,14 +56,14 @@ extension CueKeeper {
     }
 
     /// 大脑起不来、发不进去或意外退出：这一轮交出去的你的话清掉送达，退避重试，都失败就停在"起不来"。
-    func broke(_ reason: String) async {
-        Self.log.error("Cue 的大脑出了问题：\(reason, privacy: .public)")
+    func broke(_ reason: ShownText) async {
+        Self.log.error("Cue 的大脑出了问题：\(reason.text, privacy: .public)")
         let failures: Int
         switch phase {
         case .starting(let before): failures = before + 1
         case .running(let shift):
             if var round = shift.turn?.round {
-                round.failure = round.failure ?? reason
+                round.failure = round.failure ?? reason.text
                 archive(round)
             }
             await shift.brain.stop()()
@@ -80,7 +80,7 @@ extension CueKeeper {
         }
         guard failures <= setup.timing.restarts.count else {
             phase = .stuck(reason)
-            await say(.cue, ShownText("我起不来了：\(reason)\n你再发一条消息，我就再试一次。"), urgent: true)
+            await say(.cue, ShownText("我起不来了：\(reason.embedded)\n你再发一条消息，我就再试一次。"), urgent: true)
             return
         }
         phase = .restarting(failures)
@@ -130,10 +130,10 @@ extension CueKeeper {
             let summary = PiErrorSummary(raw)
             // Cue 自己醒来的一轮第一次出错（会重试的那种）先不说：多是网络偶发，重试也失败了再告诉你；你在等的一轮立刻说
             if turn?.selfStarted != nil, setback == nil, Self.retryable(summary) { return }
-            let line = summary.kind == .other ? raw : "\(summary.title)\n\(raw)"  // 认不出的错，摘要只是原文的首行
-            guard line != lastFailure else { return }  // 同一个错一轮轮重复（如额度）只说一次
-            lastFailure = line
-            let text = ShownText("这一轮出错了：\(line)")
+            guard raw != lastFailure else { return }  // 同一个错一轮轮重复（如额度）只说一次
+            lastFailure = raw
+            // 认不出的错，摘要只是原文的首行
+            let text = summary.kind == .other ? ShownText("这一轮出错了：\(raw)") : ShownText("这一轮出错了：\(summary.shownTitle.embedded)\n\(raw)")
             if let turn, turn.answersYou { await reply(text, in: turn) } else { await say(.cue, text) }
         case .turnFinished:
             guard var finished = turn else { return }
@@ -155,7 +155,7 @@ extension CueKeeper {
             }
         case .exited(let reason):
             // 自己停的大脑不会走到这里（停之前已离开这个班次）：退出都是意外
-            await broke(reason.map { String(localized: "大脑退出了（\($0)）") } ?? String(localized: "大脑退出了"))
+            await broke(reason.map { ShownText("大脑退出了（\($0.embedded)）") } ?? ShownText("大脑退出了"))
         }
     }
 

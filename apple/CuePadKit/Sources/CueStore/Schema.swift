@@ -26,10 +26,14 @@ enum Schema {
     init(_ run: @escaping @Sendable (SQLite) throws -> Void) { self.run = run }
   }
 
-  /// 能打开的最老结构版本（`upgrades` 的起点），也是这台要求的最低对端版本（CueSync 的 `PeerFloor`）：更早的库不升级、不打开
-  /// （`schemaTooOld`），更早的设备不再同步。发出的版本把用户的库都升过了某一版，就把那一版及以前的步骤折进 `create`、起点挪到那一版：
+  /// 能打开的最老结构版本（`upgrades` 的起点）：更早的库不升级、不打开（`schemaTooOld`）。发出的版本把用户的库都升过了某一版，就把那一版及以前的步骤折进 `create`、起点挪到那一版：
   /// `create` 建的就是最新结构，升级步骤只留还有库没跑过的，给更早设备留的兼容一并删掉。
   static let baseVersion = 66
+
+  /// 最低对端版本（CueSync 的 `PeerFloor`）：同步的记录格式换到旧版读不懂时抬到那一版，更早的设备停下同步、提示更新，
+  /// 不给它们留兼容的读写。与 `baseVersion` 分开：本机的库要等用户的库都升过才折进 `create`，记录格式却从这一版起就换了。
+  /// 72：没送到的原因、CuePad 代 Cue 写下的话、确认框的作答改存句式与参数（`ShownText`），旧版读不出。
+  static let peerFloor = 72
 
   /// `upgrades[i]` 把结构版本 `baseVersion + i` 升到 `baseVersion + i + 1`；改结构时在末尾追加一步，同时更新 `create`
   /// （新库直接建成最新结构、不跑升级步骤：只改数据的一步在空库上无事可做）。
@@ -98,6 +102,7 @@ enum Schema {
     // 72：Mac 写下、同步给各端的界面字改存句式与参数（`ShownText`），各端按自己的语言显示：
     // - 投送没送到的原因换成新列 failure（resultDetail 下线）；已有的原因是写下那台的原文，照原文存
     // - CuePad 代 Cue 写下的话存进新列 shownText，正文列留空；已有的做完的结果（`CueReport`）拆回任务名与证据
+    // - 你在 CuePad 里答确认框的是否存进新列 piMessages.shownText；已有的作答分不出是不是确认框，照原文
     // - 提问的选项各端照类别与范围写（`CueMessage.shownChoice`）：已有的提问补上范围那个项目此刻的名字（`CuePlace`）
     // 每台设备各自升级、不改 modifiedAt（不同步出去）：同一份数据改出同一份
     Upgrade(shownTexts),
@@ -105,7 +110,7 @@ enum Schema {
 
   /// 72 的那一步（见 `upgrades` 里的说明）。
   private static func shownTexts(_ db: SQLite) throws {
-    try db.exec("ALTER TABLE deliveryRequests RENAME COLUMN resultDetail TO failure; ALTER TABLE cueMessages ADD COLUMN shownText TEXT;")
+    try db.exec("ALTER TABLE deliveryRequests RENAME COLUMN resultDetail TO failure; ALTER TABLE cueMessages ADD COLUMN shownText TEXT; ALTER TABLE piMessages ADD COLUMN shownText TEXT;")
     let failures = try db.query("SELECT id, failure FROM deliveryRequests WHERE failure IS NOT NULL") { ($0.text(0), $0.text(1)) }
     for (id, reason) in failures {
       try db.run("UPDATE deliveryRequests SET failure = ? WHERE id = ?", [ShownText.verbatim(reason).stored, id])

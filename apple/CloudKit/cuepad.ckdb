@@ -163,6 +163,7 @@ DEFINE SCHEMA
         createdAt      INT64,
         modifiedAt     INT64,
         question       ENCRYPTED STRING,
+        shownText      ENCRYPTED STRING,
         toolCount      INT64,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"

@@ -27,7 +27,7 @@ extension CueKeeper {
                 do {
                     try await shift.brain.newSession()
                 } catch {
-                    await broke(String(localized: "开不了新会话：\(error.localizedDescription)"))
+                    await broke(ShownText("开不了新会话：\(ShownText(error).embedded)"))
                     return false
                 }
                 Self.log.notice("Cue 换新：开了新会话")
@@ -47,7 +47,7 @@ extension CueKeeper {
         do {
             try await shift.brain.send(sent, images: images)
         } catch {
-            await broke(String(localized: "发不进去：\(error.localizedDescription)"))  // 这一轮还没开，交出去的话也还没记送达
+            await broke(ShownText("发不进去：\(ShownText(error).embedded)"))  // 这一轮还没开，交出去的话也还没记送达
             return false
         }
         var turn = Turn(
@@ -103,7 +103,7 @@ extension CueKeeper {
         do {
             return try contents.flatMap { try $0.piImages(from: store.files) }
         } catch {
-            await say(.cue, ShownText("你发的图没能交给我：\(error.localizedDescription)"))
+            await say(.cue, ShownText("你发的图没能交给我：\(ShownText(error).embedded)"))
             return []
         }
     }

@@ -89,7 +89,7 @@ extension Schema {
     CREATE TABLE piMessages (
       id TEXT PRIMARY KEY NOT NULL, sessionID TEXT NOT NULL, seq INTEGER NOT NULL, role TEXT NOT NULL, text TEXT NOT NULL,
       at INTEGER NOT NULL, tools TEXT, roundStartedAt INTEGER, deliveryID TEXT,
-      createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL, question TEXT
+      createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL, question TEXT, shownText TEXT
     ) STRICT;
     CREATE INDEX piMessages_sessionID_seq ON piMessages(sessionID, seq);
     \(transcriptAgeIndex)

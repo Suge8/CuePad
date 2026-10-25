@@ -152,7 +152,7 @@ public final class ClaudeCodeRuntime: AgentRuntime {
                 cwd: cwd, sessionFile: ClaudeCode.sessionFile(home: home, cwd: cwd, sessionID: sessionID), model: model, launchToken: launchToken,
                 known: known).id
         } catch PiBridgeError.sessionEnded {
-            throw ClaudeCodeError.exited(await session.process.exited() ?? "")
+            throw ClaudeCodeError.exited(await session.process.exited())
         } catch PiBridgeError.ackTimeout {
             await session.process.stop()
             throw AgentRuntimeError.launchTimedOut(.claudeCode)
@@ -308,14 +308,14 @@ public final class ClaudeCodeRuntime: AgentRuntime {
 }
 
 public enum ClaudeCodeError: Error, Equatable, ShownError {
-    /// 后台启动的 Claude Code 没握上手就退出了（附它的退出原因）
-    case exited(String)
+    /// 后台启动的 Claude Code 没握上手就退出了（附它的退出原因；`stop()` 让它退的没有）
+    case exited(ShownText?)
     /// `claude agents --json` 没有正常给出在跑的会话
     case listingFailed
 
     public var shown: String.LocalizationValue {
         switch self {
-        case .exited(let reason): reason.isEmpty ? "在后台启动的 Claude Code 没连上就退出了" : "在后台启动的 Claude Code 退出了：\(reason)"
+        case .exited(let reason): reason.map { "在后台启动的 Claude Code 退出了：\($0.embedded)" } ?? "在后台启动的 Claude Code 没连上就退出了"
         case .listingFailed: "没能问到 Claude Code 此刻在跑哪些会话"
         }
     }
