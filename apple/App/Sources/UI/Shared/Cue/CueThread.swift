@@ -29,10 +29,10 @@ nonisolated struct CueThread: Equatable, Sendable {
     /// 读最近这么多条对话（更早的不在 Cue 页里翻：要找旧事问 Cue）。
     static let limit = 200
 
-    /// `names`：Cue 自己醒来的那几轮，叫醒它的会话、任务与提醒此刻叫什么。
+    /// `lines`：Cue 被提醒叫醒的那几轮，到点的记忆的正文（按 id）。
     init(
         messages: [CueMessage], tasks: [UUID: CueTaskRef], waiting: [TaskBoard.Wait], replies: [PiSessionState], shots: [UUID: [CueShown]],
-        unread: Set<UUID>, names: CueWakeNames
+        unread: Set<UUID>, lines: [UUID: String]
     ) {
         self.messages = messages
         self.tasks = tasks
@@ -40,7 +40,7 @@ nonisolated struct CueThread: Equatable, Sendable {
         self.replies = replies
         self.shots = shots
         self.unread = unread
-        let rows = Self.rows(messages, tasks: tasks, waiting: Set(waiting.compactMap(\.message?.id)), shots: shots, names: names)
+        let rows = Self.rows(messages, tasks: tasks, waiting: Set(waiting.compactMap(\.message?.id)), shots: shots, lines: lines)
         self.rows = rows
         let stamps = Self.stamps(rows)
         self.stamps = stamps
@@ -81,9 +81,10 @@ nonisolated struct CueThread: Equatable, Sendable {
             }
             if !shown.isEmpty { shots[message.id] = shown }
         }
+        let reminded = messages.flatMap { message -> [UUID] in if case .reminder(let ids)? = message.wake { ids } else { [] } }
         return CueThread(
             messages: messages, tasks: tasks, waiting: waits, replies: try store.sessionsAwaitingReply(), shots: shots, unread: Set(try store.cueUnread()),
-            names: try CueWakeNames.read(messages.compactMap(\.wake), from: store))
+            lines: Dictionary(try store.cueLines(reminded).map { ($0.line.id, $0.line.text) }) { first, _ in first })
     }
 
     /// "等你"卡露的先后：点名要露的那条（`asking`）还在等就排到最前，其余照旧等得最久的在前。卡先露最前的那件。
@@ -182,7 +183,7 @@ nonisolated struct CueThread: Equatable, Sendable {
     /// 结果卡：关联一件活、不是提问、点名了图（`shots`，Cue 做完时挑的最终成果）的 Cue 的话；只挂点名的那几张，这件活发到手机的其余文件在它的会话里。
     /// 提问的图跟着提问那一格（`CueSays`）。
     private static func rows(
-        _ messages: [CueMessage], tasks: [UUID: CueTaskRef], waiting: Set<UUID>, shots: [UUID: [CueShown]], names: CueWakeNames
+        _ messages: [CueMessage], tasks: [UUID: CueTaskRef], waiting: Set<UUID>, shots: [UUID: [CueShown]], lines: [UUID: String]
     ) -> [Row] {
         // 同一毫秒答的按问的先后（`messages` 的顺序）
         var answers = messages.enumerated().filter { $0.element.answer != nil && $0.element.answeredAt != nil }
@@ -217,7 +218,7 @@ nonisolated struct CueThread: Equatable, Sendable {
                     rows.removeLast()
                 }
                 if message.text.isEmpty {
-                    group.append(CueNoteRound(row: message, names: names))
+                    group.append(CueNoteRound(row: message, lines: lines))
                 } else if group.isEmpty {
                     group = [CueNoteRound(said: message)]
                 } else {

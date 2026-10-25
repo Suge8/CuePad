@@ -4,10 +4,10 @@ import SwiftUI
 
 /// 连着的几轮 Cue 自己醒来（`CueThread.Row.notes`）：每轮一行旁注，不画框、不铺底（对话里只有说的话是一块，`ChatMargin`）。
 /// 要你拍板的不在这里：在输入框上方的等你卡里（`CueWaitDock`），这里只留一句发生过什么。
-/// 一行从左到右：图标、字、几点（等宽一列，对齐）。
-/// - 图标：提到一处时是那一处此刻的样子（会话的状态标 `PiStateDot`、任务圈），与当时出了什么事分开——当时"停下了"的会话此刻可能又在跑；
-///   提到几处或没提到哪处时是醒来原因（`CueWake.icon`）。
-/// - 字：名字（次要墨，几处时用顿号连起）与当时出了什么事，逗号后接它这一轮说的话，截成一行，其余淡墨；没提到哪处的写它说的话或为什么醒。
+/// 一行从左到右：图标、字、几点（等宽一列，对齐）。一行是一条记录，定格在写下那一刻：图标与字只按记录画（`CueWakeHeader`），
+/// 那一处之后改名、再动起来都不变；只有在跑的那一轮挂着的经过末行在动，这一轮结束就定格。
+/// - 图标：提到一处时是当时出了什么事（`CueChange.Kind.icon`，静止的），提到几处或没提到哪处时是醒来原因（`CueWake.icon`）。
+/// - 字：当时的名字（次要墨，几处时用顿号连起）与当时出了什么事，逗号后接它这一轮说的话，截成一行，其余淡墨；没提到哪处的写它说的话或为什么醒。
 /// 整行是一行（`RowStyle`），点了去提到的那一处（会话直接进；几处时列出来选；提醒去记忆）；没提到哪处的不能点。
 /// 在跑的那一轮下面挂这一轮的经过（`CueTrace`：碰到的各处与此刻在做的），与这几行同一种行（`CueNoteRow`）。
 /// 多于 `foldAfter` 轮时只露最近 `shownWhenFolded` 轮，上面一行"更早还醒过 N 次"，点它全部展开。左缘对着 Cue 气泡的左缘（同 `CueTrace`）。
@@ -57,33 +57,27 @@ private struct CueNoteLine: View {
     }
 
     @ViewBuilder private func link(_ places: [CueWakeHeader.Place], row: some View) -> some View {
-        let targets = places.compactMap { place in place.target.map { (title: place.title, target: $0) } }
-        switch targets.count {
+        switch places.count {
         case 0: row
-        case 1: Button { workspace.open(targets[0].target) } label: { row }.buttonStyle(.row)
+        case 1: Button { workspace.open(places[0].target) } label: { row }.buttonStyle(.row)
         default:
             Menu {
-                ForEach(targets, id: \.title) { place in Button(place.title) { workspace.open(place.target) } }
+                ForEach(places, id: \.title) { place in Button(place.title) { workspace.open(place.target) } }
             } label: { row }
             .menuStyle(.button).buttonStyle(.row).menuIndicator(.hidden)
         }
     }
 
-    @ViewBuilder private func glyph(_ places: [CueWakeHeader.Place]) -> some View {
-        if places.count == 1, let id = places[0].sessionID {
-            PiStateDot(shown: workspace.liveShown(sessionID: id) ?? PiShown(status: .ended), size: 6)
-        } else if places.count == 1, places[0].kind != nil, places[0].sessionID == nil {
-            TaskRingView(status: places[0].task, done: false, size: 11)
-        } else {
-            Image(round.header?.wake.icon ?? .said)
-        }
+    private func glyph(_ places: [CueWakeHeader.Place]) -> Image {
+        if places.count == 1, let kind = places[0].kind { return Image(kind.icon) }
+        return Image(round.header?.wake.icon ?? .said)
     }
 
     private func line(_ places: [CueWakeHeader.Place]) -> Text {
         let said = round.said.isEmpty ? nil : round.said.map { CueFormat.plainText($0.text) }.joined(separator: " ")
         let head: Text? = switch places.count {
         case 0: nil
-        case 1: Text("\(Text(places[0].title).foregroundStyle(palette.ink2))\(places[0].kind.map { " " + CueWakeHeader.verb($0) } ?? "")")
+        case 1: Text("\(Text(places[0].title).foregroundStyle(palette.ink2))\(places[0].kind.map { " " + $0.verb } ?? "")")
         default: Text("\(Text(places.map(\.title).joined(separator: "、")).foregroundStyle(palette.ink2)) 有动静")
         }
         let tail = said ?? (head == nil ? round.header?.wake.reason : nil)
@@ -134,10 +128,5 @@ extension Workspace {
         case .task(let id): openTask(id: id)
         case .memory: cue.showsMemory = true
         }
-    }
-
-    /// 在线会话此刻的样子（`shown`）；已结束、不在了为 nil。
-    func liveShown(sessionID: String) -> PiShown? {
-        services.liveSessions.items.first { $0.state.sessionID == sessionID }.map(shown)
     }
 }
