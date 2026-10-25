@@ -24,7 +24,7 @@ failed=0
 # 真实 pi 要求目录存在，用仓库根
 DEMO_DIR="$HOME/$(sed -n 's/.*name: "CuePad".*directory: "\\(home)\([^"]*\)".*/\1/p' "$APPLE_DIR/App/Sources/UI/Debug/DemoLibrary.swift")"
 REAL_DIR="$(cd "$APPLE_DIR/.." && pwd)"
-READY_TIMEOUT="${CUEPAD_STRESS_READY_TIMEOUT:-60}" # 等资料库文件出现的秒数上限
+READY_TIMEOUT="${CUEPAD_STRESS_READY_TIMEOUT:-60}" # 等画面就绪的秒数上限
 SOCK="$(python3 "$APPLE_DIR/scripts/app.py" sockets)"
 
 run() { # 名称 Pi模式(none/all/error/real) 轮数 启动参数…
@@ -34,20 +34,14 @@ run() { # 名称 Pi模式(none/all/error/real) 轮数 启动参数…
   lib="$(mktemp -d /tmp/cuepad-stress.XXXXXX)"
   start="$(date "+%Y-%m-%d %H:%M:%S")"
   # 隔离与每个检出一份经 app.py exec：它占住那一份后 exec 成 CuePad，$! 就是 CuePad
-  python3 "$APPLE_DIR/scripts/app.py" exec "$app" "$lib" -- \
+  CUEPAD_SHOT_READY="$lib/ready" python3 "$APPLE_DIR/scripts/app.py" exec "$app" "$lib" -- \
     -CuePadDemo YES -CuePadProject CuePad ${inject[@]+"${inject[@]}"} "$@" >/dev/null 2>&1 &
   pid=$!
-  if [ "$mode" != none ]; then
-    # 资料库文件出现即 App 已起来
-    local waited=0
-    until [ -f "$lib/cuepad.db" ] || ! kill -0 "$pid" 2>/dev/null; do
-      if [ "$waited" -ge $((READY_TIMEOUT * 10)) ]; then
-        echo "${name}：$READY_TIMEOUT 秒内没有出现资料库文件，App 进程仍存活（未响应启动）" >&2
-        kill -9 "$pid" 2>/dev/null; wait "$pid" 2>/dev/null
-        echo "  证据留在 ${lib}" >&2; failed=1; return
-      fi
-      sleep 0.1; waited=$((waited + 1))
-    done
+  # 画面就绪（演示库写好、摆好）再开始搅；App 先退出时照常往下，崩溃在后面判
+  if [ "$mode" != none ] && ! python3 "$APPLE_DIR/scripts/app.py" wait "$lib/ready" "$pid" "$READY_TIMEOUT" 2>/dev/null && kill -0 "$pid" 2>/dev/null; then
+    echo "${name}：$READY_TIMEOUT 秒内画面没有就绪，App 进程仍存活（未响应启动）" >&2
+    kill -9 "$pid" 2>/dev/null; wait "$pid" 2>/dev/null
+    echo "  证据留在 ${lib}" >&2; failed=1; return
   fi
   if [ "$mode" = none ]; then
     wait "$pid"
