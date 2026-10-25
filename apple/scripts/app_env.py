@@ -12,7 +12,7 @@ RUNTIME = f"/tmp/cuepad-xc-{os.getuid()}"  # 与 _lock.sh 同一处；模拟器�
 SLOT, READY = f"{APPLE}/.derived/mac-app.lock", f"{APPLE}/.derived/mac-ready"
 # 实例借着前台却没到前台时写它（DebugForeground），看守替它拉到前台：别的应用在前台时 App 自己 activate 会被系统忽略
 FRONT = f"{APPLE}/.derived/mac-front"
-FRONT_POLL = 0.3
+FRONT_RETRY = 0.3  # 拉了还没到前台时隔多久再拉
 # 连接目录放 /tmp 下按检出分：socket 路径受 sun_path 104 字节限制，检出路径太长
 SOCKETS = f"/tmp/cuepad-app-{os.getuid()}-{hashlib.sha1(CHECKOUT.encode()).hexdigest()[:8]}"
 BUILD = re.compile(r".*/apple/\.derived[^/]*/Build/Products/[^/]+/CuePad\.app")
