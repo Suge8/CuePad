@@ -31,9 +31,11 @@ private struct ScenePhaseWork: ViewModifier {
             .onChange(of: phase) { _, phase in
                 switch phase {
                 case .active: Task {
+                    // 立即同步先开拉，不排在问通知设置与收分享后面
+                    async let activated: Void = services.handleActivation()
                     await alerts.refresh()
                     await services.drainCaptures()
-                    await services.handleActivation()
+                    await activated
                 }
                 case .background where UIApplication.shared.connectedScenes.allSatisfy({ $0.activationState == .background }):
                     Task { await BackgroundWork.run { await services.prepareForBackground() } }
