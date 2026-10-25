@@ -67,7 +67,7 @@ private struct CueRecall: View {
     @Environment(\.palette) private var palette
     @State private var recent: CueMemoryRecent?
 
-    private static let shown = 2
+    nonisolated private static let shown = 2
 
     var body: some View {
         let lines = recent?.lines ?? []
