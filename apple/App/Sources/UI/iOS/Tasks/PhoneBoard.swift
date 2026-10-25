@@ -26,7 +26,7 @@ struct PhoneBoard: View {
                         let away = replying && column != .waiting
                         BoardColumn(column: column, board: board, adding: $adding, newTaskProject: newTaskProject, row: true)
                             .opacity(away ? 0 : 1)
-                            .overlay { if away { Color.clear.contentShape(.rect).onTapGesture(perform: endEditing) } }
+                            .overlay { if away { Color.clear.contentShape(.rect).onTapGesture(perform: endEditing).transition(.identity) } }
                             .id(column)
                     }
                 }

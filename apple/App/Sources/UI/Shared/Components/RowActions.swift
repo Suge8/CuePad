@@ -132,7 +132,7 @@ private struct SwipeRow: ViewModifier {
     func body(content: Content) -> some View {
         let moved = content
             // 停开时点行本身只是收回，不打开它
-            .overlay { if rest != 0 { Color.clear.contentShape(.rect).onTapGesture { settle(0) } } }
+            .overlay { if rest != 0 { Color.clear.contentShape(.rect).onTapGesture { settle(0) }.transition(.identity) } }
             .offset(x: offset)
             .background(alignment: offset > 0 ? .leading : .trailing) { if !side.isEmpty { buttons } }
         return Group { if clipped { moved.clipped() } else { moved } }
