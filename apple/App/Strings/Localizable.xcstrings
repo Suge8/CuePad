@@ -1327,7 +1327,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%lld underway"
+            "value" : "%lld active"
           }
         },
         "zh-Hans" : {
@@ -1609,21 +1609,9 @@
     "%lld 推进中" : {
       "localizations" : {
         "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld underway"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld underway"
-                }
-              }
-            }
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld active"
           }
         },
         "zh-Hans" : {
@@ -8848,7 +8836,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "See what Cue is doing, what’s underway, and what needs your call. Tap to talk to it."
+            "value" : "See what Cue is doing, what’s active, and what needs your call. Tap to talk to it."
           }
         },
         "zh-Hans" : {
@@ -11516,7 +11504,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Underway"
+            "value" : "Active"
           }
         },
         "zh-Hans" : {
@@ -11532,7 +11520,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%lld underway"
+            "value" : "%lld active"
           }
         },
         "zh-Hans" : {
@@ -11548,7 +11536,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%lld underway, all idle"
+            "value" : "%lld active, none running now"
           }
         },
         "zh-Hans" : {

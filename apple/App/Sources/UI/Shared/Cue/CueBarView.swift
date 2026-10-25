@@ -23,7 +23,7 @@ struct CueBarView: View {
 import SwiftUI
 
 /// 一行 Cue 的现状（菜单栏面板、输入条、iPad 侧栏最上面；Mac 侧栏是名片 `CueSidebarCard`，用同一套零件）：头像（`CueEntryAvatar`）、名字，
-/// 下面 Cue 此刻那一行（`CueStatusLine` 的 tally），有新消息的在行尾写几条（石绿，`UnreadCount`；行里放不下时让给那一句）。有新消息时同会话行的"有新回复"：名字加粗。
+/// 下面 Cue 此刻那一行（`CueStatusLine` 的 tally），有新消息的在行尾写几条（石绿，`UnreadCount`；行里放不下时整个不写，让给名字与数字账）。有新消息时同会话行的"有新回复"：名字加粗。
 /// `status` 为假时不写此刻那一行（iPad 上 Cue 页开着时页头已写了这一句）。
 struct CueStatusRow<Trailing: View>: View {
     var font = Typography.body.weight(.semibold)
@@ -33,30 +33,30 @@ struct CueStatusRow<Trailing: View>: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
+        // 新消息数只在整行连它都排得下时写（名字已加粗说有新消息）；排不下就整行不带它，宽度先给名字与数字账
+        ViewThatFits(in: .horizontal) {
+            row(unread: workspace.cue.unread)
+            row(unread: 0)
+        }
+        .animation(HandOff.quick, value: workspace.cue.unread)
+        .animation(HandOff.quick, value: workspace.cue.presence)
+        .animation(HandOff.quick, value: status)
+    }
+
+    private func row(unread: Int) -> some View {
         let cue = workspace.cue
-        HStack(spacing: 10) {
+        return HStack(spacing: 10) {
             CueEntryAvatar()
             VStack(alignment: .leading, spacing: 1) {
                 Text(cue.name).font(font).fontWeight(cue.unread > 0 ? .bold : nil).foregroundStyle(palette.ink).lineLimit(1)
                 if status { CueStatusLine(tally: true).lineLimit(1).transition(.opacity) }
             }
-            // 宽度按要紧分：名字与数字账先拿（排不下才并、才截），再是新消息数，余下的才给 Spacer；行尾的东西（菜单栏面板的额度环与按钮）按自己的宽
-            .layoutPriority(2)
-            Spacer(minLength: 6)
-            if cue.unread > 0 {
-                // 放不下就不写数（名字已加粗说有新消息），不挤那一句
-                ViewThatFits(in: .horizontal) {
-                    UnreadCount(count: cue.unread)
-                    Color.clear.frame(width: 0, height: 0)
-                }
-                .font(Typography.meta)
-                .layoutPriority(1)
-            }
+            .layoutPriority(1)
+            // 两边已有行距，空白不再另占宽
+            Spacer(minLength: 0)
+            if unread > 0 { UnreadCount(count: unread).font(Typography.meta) }
             trailing
         }
-        .animation(HandOff.quick, value: cue.unread)
-        .animation(HandOff.quick, value: cue.presence)
-        .animation(HandOff.quick, value: status)
     }
 }
 
