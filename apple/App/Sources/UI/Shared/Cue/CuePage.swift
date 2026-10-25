@@ -54,7 +54,7 @@ struct CuePage: View {
     var body: some View {
         page
             .observing(services.store, into: $thread, onError: workspace.fail) { try CueThread.read(from: $0) }
-            .previewPresenter($opened)
+            .previewPresenter($opened, reply: .cue)
             .panel(isPresented: Bindable(cue).showsMemory) { CueMemoryPage() }
             .modifier(CueViewing(thread: thread, catchingUp: catchingUp, seen: $seen, follow: $follow))
             .onChange(of: thread != nil, initial: true) { _, loaded in

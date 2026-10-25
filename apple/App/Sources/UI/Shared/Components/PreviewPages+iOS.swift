@@ -9,10 +9,28 @@ import SwiftUI
 // 全屏预览里每类页都由 CuePad 自己画（手机）。不嵌快速查看：它把内容放在另一个进程里画，触摸进不来这边，嵌着它的页左右滑翻不了页、
 // 下拉收不起。文稿、表格、演示文稿交给 WebKit（`PreviewWeb`），3D 与认不出的类型是一张静态的图（`PreviewStill`）。
 
+/// 全屏页里除网页与 Markdown 外的每一类（`PreviewContent`）。
+struct PreviewPage: View {
+    let preview: PiPreview
+    let file: URL
+    let active: Bool
+
+    var body: some View {
+        switch preview.kind {
+        case .image: PreviewImage(file: file)
+        case .pdf: PreviewPDF(file: file)
+        case .video, .audio: PreviewPlayer(file: file, active: active)
+        case .text: PreviewText(file: file)
+        case .document, .spreadsheet, .presentation: PreviewWeb(file: file)
+        case .model, .web, .markdown, nil: PreviewStill(preview: preview, file: file)
+        }
+    }
+}
+
 /// 图片自己显示（不嵌快速查看，它把左右滑与下拉都吃掉）：没放大时左右滑翻页、下拉收起都给外面；双指或双击放大，放大了拖着看，双击回原样。
 struct PreviewImage: View {
     let file: URL
-    @Binding var zoomedIn: Bool
+    @Environment(\.previewZoomedIn) private var zoomedIn: Binding<Bool>
     @Environment(\.displayScale) private var scale
     @State private var image: CGImage?
     @State private var zoom: CGFloat = 1
@@ -53,61 +71,13 @@ struct PreviewImage: View {
         pinch = 1
         zoom = min(max(value, 1), 5)
         if zoom == 1 { offset = .zero }
-        zoomedIn = zoom > 1
+        zoomedIn.wrappedValue = zoom > 1
     }
 
     @concurrent private static func decode(_ file: URL, pixels: Int) async -> CGImage? {
         Thumbnails.image(at: file, maxPixel: pixels)
     }
 }
-/// 全屏页上的下拉收起（挂在整个翻页上，所有页都接得到）：UIKit 的拖动手势，开始那一刻看方向——往下、手指下面的滚动区都在顶上、
-/// 图片没放大时才接，跟着手指往下走，松手过一截就收起、缩回缩略图原处；横着的当场放弃交给分页翻页（页里横着能滚的先滚到头，再滑就翻）。
-/// 和页里自己的滚动同时认（SwiftUI 的拖动手势会把翻页与页里的滚动一起吃掉）。系统 zoom 转场自带的下滑收起在翻页的分页里接不到手势，所以自己接。
-struct PageSwipe: UIGestureRecognizerRepresentable {
-    let enabled: Bool
-    let pulled: (CGFloat) -> Void
-    let released: (CGFloat) -> Void
-
-    func makeUIGestureRecognizer(context: Context) -> UIPanGestureRecognizer {
-        let pan = UIPanGestureRecognizer()
-        pan.delegate = context.coordinator
-        return pan
-    }
-
-    func updateUIGestureRecognizer(_ pan: UIPanGestureRecognizer, context: Context) { pan.isEnabled = enabled }
-
-    func handleUIGestureRecognizerAction(_ pan: UIPanGestureRecognizer, context: Context) {
-        let down = max(pan.translation(in: pan.view).y, 0)
-        switch pan.state {
-        case .changed: pulled(down)
-        case .ended, .cancelled: released(down)
-        default: break
-        }
-    }
-
-    func makeCoordinator(converter: CoordinateSpaceConverter) -> Coordinator { Coordinator() }
-
-    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
-        func gestureRecognizerShouldBegin(_ recognizer: UIGestureRecognizer) -> Bool {
-            guard let pan = recognizer as? UIPanGestureRecognizer, let view = pan.view else { return false }
-            let velocity = pan.velocity(in: view)
-            return velocity.y > abs(velocity.x) && !Self.scrolledDown(under: pan.location(in: view), in: view)
-        }
-
-        func gestureRecognizer(_ recognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { true }
-
-        /// 手指下面有往下翻过的滚动区：这一拉是往回翻，不是收起。
-        private static func scrolledDown(under point: CGPoint, in root: UIView) -> Bool {
-            var view = root.hitTest(point, with: nil)
-            while let current = view, current !== root {
-                if let scroll = current as? UIScrollView, scroll.contentOffset.y > -scroll.adjustedContentInset.top + 1 { return true }
-                view = current.superview
-            }
-            return false
-        }
-    }
-}
-
 /// PDF：系统的 PDF 视图，按宽铺满、竖着连续滚，双指缩放。
 struct PreviewPDF: UIViewRepresentable {
     let file: URL

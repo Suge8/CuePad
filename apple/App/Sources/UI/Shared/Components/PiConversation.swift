@@ -56,7 +56,7 @@ struct PiConversation: View {
         // 挂在弹出预览之内：从这里打开的文件预览照常可选
         .environment(\.inlineTextSelection, false)
         #endif
-        .previewPresenter($opened)
+        .previewPresenter($opened, reply: .session(session))
         .debugOpensPreview(in: items, session: session, $opened)
     }
 
@@ -200,7 +200,7 @@ private struct ChatSegment: View, Equatable {
             MachineCards(text: entry.text)
         case .preview:
             PreviewBatch(previews: entry.previews, group: entry.id.uuidString) {
-                opened = PreviewOpening(preview: $0, batch: entry.previews, group: entry.id.uuidString, reply: .session(session))
+                opened = PreviewOpening(preview: $0, batch: entry.previews, group: entry.id.uuidString)
             }
         }
     }

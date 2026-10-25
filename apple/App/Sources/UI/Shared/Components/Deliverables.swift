@@ -275,7 +275,8 @@ struct DeliverableTile: View {
     }
 }
 
-private extension View {
+extension View {
+    /// 全屏页从这张缩略图放大出来、缩回这里（`previewPresenter`，手机才有）。
     @ViewBuilder func zoomSource(_ key: PreviewZoomKey, in namespace: Namespace.ID?) -> some View {
         #if os(iOS)
         if let namespace { matchedTransitionSource(id: key, in: namespace) } else { self }

@@ -51,7 +51,7 @@ extension View {
         #if DEBUG
         task(id: items.count) {
             guard let title = DebugScene.defaults.string(forKey: "CuePadOpenPreview") else { return }
-            opened.wrappedValue = items.lazy.flatMap { entry in entry.previews.map { PreviewOpening(preview: $0, batch: entry.previews, group: entry.id.uuidString, reply: .session(session)) } }
+            opened.wrappedValue = items.lazy.flatMap { entry in entry.previews.map { PreviewOpening(preview: $0, batch: entry.previews, group: entry.id.uuidString) } }
                 .first { $0.preview.title == title || $0.preview.name == title }
         }
         #else

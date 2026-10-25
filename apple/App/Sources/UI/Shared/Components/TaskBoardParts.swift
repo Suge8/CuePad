@@ -278,7 +278,7 @@ private struct ShotPresenter: ViewModifier {
     @Binding var opened: PreviewOpening?
 
     func body(content: Content) -> some View {
-        if column == .done { content.previewPresenter($opened) } else { content }
+        if column == .done { content.previewPresenter($opened, reply: .cue) } else { content }
     }
 }
 
