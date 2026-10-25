@@ -18,30 +18,28 @@ nonisolated struct ProjectPageData: Sendable, Equatable {
     var subtasks: [UUID: TaskProgress]
     /// 排墙用的卡片事实（`cards` 与 `lastSends` 推出，读取时算一次）：排墙、"更早"分组与"要不要重排"都读它。
     var stamps: [CardStamp]
+    /// 卡片最近一次发给的 Agent 会话名（同名会话写"已发过"，已下线的去处不写，`SendTarget.shownName`；`lastSends` 推出，读取时算一次）。
+    var lastTarget: [UUID: String]
 
-    /// 卡片最近一次发给的 Agent 会话名（同名会话写"已发过"，已下线的去处不写，`SendTarget.shownName`）。
-    var lastTarget: [UUID: String] {
-        Dictionary(uniqueKeysWithValues: lastSends.compactMap { id, send in
-            guard let name = send.target.shownName else { return nil }
-            return (id, name == project?.name ? SendCopy.sameProject : name)
-        })
-    }
 
     static let doneLimit = 30
 
     static func read(_ project: UUID, from store: isolated CueStore) throws -> ProjectPageData {
         // 层级限制按本项目全部任务（含已完成）算
         let all = try store.tasks(in: project, .inProgress, .todo, .done)
-        let cards = try store.cards(in: project), lastSends = try store.lastSends(in: project)
+        let cards = try store.cards(in: project), lastSends = try store.lastSends(in: project), info = try store.project(project)
         return ProjectPageData(
-            project: try store.project(project),
+            project: info,
             cards: cards,
             lastSends: lastSends,
             tasks: TaskTree(all.filter { $0.status != .done }, all: all),
             done: try store.tasksDone(in: project, limit: doneLimit),
             taskCounts: try store.taskCounts(in: project),
             subtasks: try store.subtaskProgress(in: project),
-            stamps: cards.map { CardStamp(id: $0.id, modifiedAt: $0.modifiedAt, lastSentAt: lastSends[$0.id]?.sentAt, isPinned: $0.isPinned) })
+            stamps: cards.map { CardStamp(id: $0.id, modifiedAt: $0.modifiedAt, lastSentAt: lastSends[$0.id]?.sentAt, isPinned: $0.isPinned) },
+            lastTarget: lastSends.compactMapValues { send in
+                send.target.shownName.map { $0 == info?.name ? SendCopy.sameProject : $0 }
+            })
     }
 }
 
