@@ -61,16 +61,3 @@ struct RiseLayout: Layout {
         return min(limit, (offered / shown).rounded(.up))
     }
 }
-
-/// 地方不够时先让的一段：给了高时按里面的理想高（滚动区是它内容的高）、至多到给的高（滚动区本身会占满给的高，留下一截空白）；
-/// 量理想高时（`ViewThatFits` 挑哪一档、外面不给高）不占高，所以它放不放得下不影响挑哪一档。
-struct Yielding: Layout {
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let ideal = subviews[0].sizeThatFits(ProposedViewSize(width: proposal.width, height: nil))
-        return CGSize(width: proposal.width ?? ideal.width, height: proposal.height.map { min(ideal.height, $0) } ?? 0)
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        subviews[0].place(at: bounds.origin, proposal: ProposedViewSize(bounds.size))
-    }
-}
