@@ -49,6 +49,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         }
         failureWindow?.close()
         failureWindow = nil
+        services.connectSync()  // 第一拉不等建窗口
         let workspace = Workspace(services: services)
         Task { await workspace.follow() }
         let window = makeMainWindow(services, workspace: workspace)
