@@ -131,10 +131,6 @@ private struct QuotaWindowRow: View {
     let window: QuotaMeter.Window
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.dynamicTypeSize) private var typeSize
-
-    private var stacked: Bool { typeSize.isAccessibilitySize }
-
     /// 还剩多少的数字（Mac 没有动态字体，给固定字号）。
     #if os(macOS)
     private static let number = Font.system(size: 15, weight: .semibold, design: .rounded).monospacedDigit()
@@ -146,13 +142,12 @@ private struct QuotaWindowRow: View {
         let critical = window.level == .critical
         VStack(alignment: .leading, spacing: 5) {
             // 窗口名（按模型的写着模型名）与多久后重置是一段字，放不下就折行、不截；还剩多少不折，辅助字号下挪到下一行
-            (stacked ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2)) : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 0))) {
+            MetaLine(gap: 8) {
                 heading.font(Typography.meta).foregroundStyle(palette.ink3)
-                if !stacked { Spacer(minLength: 8) }
+            } meta: {
                 Text("剩 \(Text(window.percent).font(Self.number).foregroundStyle(critical ? palette.failure : palette.ink))")
                     .font(Typography.meta).foregroundStyle(palette.ink3)
                     .contentTransition(.numericText(value: window.left))
-                    .fixedSize()
             }
             // 剩余条：剩的少于匀速线就是用快了
             MarkedBar(fill: window.left, mark: window.even, level: window.level)

@@ -117,12 +117,18 @@ struct CueNoteRow<Glyph: View, Words: View>: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
+        let words = text.foregroundStyle(palette.ink3).lineLimit(1)
         HStack(alignment: .firstTextBaseline, spacing: Note.spacing) {
             glyph.foregroundStyle(palette.ink3).frame(width: Note.glyphWidth).accessibilityHidden(true)
-            text.foregroundStyle(palette.ink3).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
             if let time {
-                Text(ChatTime.time(time)).monospacedDigit().foregroundStyle(palette.ink3)
-                    .frame(minWidth: CueNoteRows.timeWidth, alignment: .trailing).fixedSize()
+                MetaLine(gap: Note.spacing) {
+                    words
+                } meta: {
+                    Text(ChatTime.time(time)).monospacedDigit().foregroundStyle(palette.ink3)
+                        .frame(minWidth: CueNoteRows.timeWidth, alignment: .trailing)
+                }
+            } else {
+                words.frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .font(Typography.caption)
