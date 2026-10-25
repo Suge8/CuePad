@@ -32,12 +32,12 @@ struct CueWaitCard: View {
     @State private var folded = false
     #endif
 
-    static let side: CGFloat = 16
+    nonisolated static let side: CGFloat = 16
     /// 卡里上下的边与几部分之间：眉题离卡顶、怎么答离卡底、各部分之间。
-    static let edge: CGFloat = 12
-    static let gap: CGFloat = 12
+    nonisolated static let edge: CGFloat = 12
+    nonisolated static let gap: CGFloat = 12
     /// 眉题与问句之间。
-    static let lead: CGFloat = 6
+    nonisolated static let lead: CGFloat = 6
 
     #if os(macOS)
     /// 卡至少多高（Cue 页打开时数要排几格，`CuePage.covered`）：眉题、问句（至少一行标题字）、带图时一排图（`CueShots.floor`）、
