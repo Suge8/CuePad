@@ -1,5 +1,9 @@
 import SwiftUI
 
+/// "·"只用在同一件事并列的短信息之间：计数、版本、状态词、名字与属性（"10 推进中 · 1 等你"、"已接入 · Pi 0.9"）。
+/// 两段读起来像一句话的（出了什么事接说了什么、原因接下一步、动作接说明），写成一个字符串用中文标点，不进这里：
+/// "没装上：脚本退出了"、"正式版在用，先用 X 指定目录"，不是"没装上 · 脚本退出了"。
+///
 /// 一行里用"·"隔开几段的字（"25 条灵感 · 3 项任务"）：屏幕上写"·"，读屏读逗号停顿。全 App 拼这种分段只经这里——
 /// 别处直接写 " · " 的字面量会被 lint.sh 拦下；显示用 `Text(dotted)`（自带读屏文字），要字符串时取 `visible` / `spoken`。
 nonisolated struct Dotted: Hashable, Sendable, ExpressibleByStringLiteral, ExpressibleByStringInterpolation {

@@ -85,7 +85,7 @@ final class SendState {
             (.session(SendTarget(kind: .piSession, name: name, ref: target.session), host: host ?? services.hostID, mode: .send, card: card), .all, "唤醒后送达")
         }
         let content = capabilities.contains(.images) ? stored : CueFormat.plainText(stored)
-        return (content, listener, Dotted("已交给 Agent 会话「\(name)」", note))
+        return (content, listener, Dotted("已交给 Agent 会话「\(name)」" + (note.map { "，\($0)" } ?? "")))
     }
 }
 #endif

@@ -9,7 +9,7 @@ struct RecapPreview: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            Text(Dotted("最近一轮", "完整对话还在同步")).font(Typography.caption).foregroundStyle(palette.ink3)
+            Text("最近一轮，完整对话还在同步").font(Typography.caption).foregroundStyle(palette.ink3)
             UserBubble(stored: prompt, look: .session) {}
             if session.pendingPrompt == nil, let reply = session.lastReply { MarkdownText(source: reply) }
         }

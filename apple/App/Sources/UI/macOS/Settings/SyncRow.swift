@@ -65,9 +65,9 @@ struct SyncRow: View {
     private func status(_ summary: SyncSummary, fix: Fix?) -> Dotted {
         if let failure = choices.failure { return Dotted(failure) }
         return switch fix {
-        case .issues: Dotted(summary.title, "\(services.syncIssues.count) 条记录没能同步")
+        case .issues: Dotted("\(summary.title)，\(services.syncIssues.count) 条记录没能同步")
         case .decide, .openSettings: Dotted(summary.title)
-        case nil: Dotted(summary.title, summary.detail)
+        case nil: Dotted(summary.title + (summary.detail.map { "，\($0)" } ?? ""))
         }
     }
 
