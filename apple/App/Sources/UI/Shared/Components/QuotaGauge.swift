@@ -175,7 +175,7 @@ private struct QuotaWindowRow: View {
 }
 
 /// 回复框模型胶囊上标志外的一圈细环：卡着的那个窗口还剩多少，从 12 点顺时针铺（`ModelBadge`）。
-/// 还剩随动画插值，档位的颜色直接换。
+/// 还剩随动画插值，档位的颜色直接换。不带窗口的是只有轨道的空环（还没有额度记录时 `QuotaRings` 占位用）。
 struct QuotaRing: View, Animatable {
     private var left: Double
     private let level: UsageLevel
@@ -186,6 +186,11 @@ struct QuotaRing: View, Animatable {
     init(_ window: QuotaMeter.Window) {
         left = window.left
         level = window.level
+    }
+
+    init() {
+        left = 0
+        level = .roomy
     }
 
     var animatableData: Double {
@@ -209,7 +214,8 @@ struct QuotaRing: View, Animatable {
 
 /// 每个账号一颗小额度环（产品标志在环里，同回复框模型胶囊上那颗 `ModelBadge`）：环是卡着的那个窗口还剩多少，只用颜色说余量、不写数。
 /// 整排是一颗按钮，点它展开明细（`QuotaDetail`，展开在哪由所在的地方定）；`open` 只给读屏说展开没有。
-/// 手机会话页顶栏那颗胶囊的右半、Mac 会话页顶上那一排、菜单栏面板的 Cue 那一行。账号多时只放前 `limit` 颗；还没有额度记录时什么都不画。
+/// 手机会话页顶栏那颗胶囊的右半、Mac 会话页顶上那一排、菜单栏面板的 Cue 那一行。账号多时只放前 `limit` 颗；
+/// 还没有额度记录时也在：一颗空环、按钮置灰（控件随数据置灰而不出现消失，所在那一块不随有没有额度变宽变窄）。
 struct QuotaRings: View {
     let open: Bool
     let height: CGFloat
@@ -221,22 +227,22 @@ struct QuotaRings: View {
 
     var body: some View {
         let quotas = Array(services.accountQuotas.items.prefix(Self.limit))
-        if !quotas.isEmpty {
-            Button(action: action) {
-                Moments(next: quotas.nextReset(after:)) { now in rings(quotas, at: now) }
-                    .padding(.horizontal, 10)
-                    .frame(height: height)
-                    .contentShape(.rect)
-            }
-            .buttonStyle(PressStyle())
-            .accessibilityExpanded(open)
-            .accessibilityHint(open ? "收起" : "看每个窗口还剩多少、多久后重置")
+        Button(action: action) {
+            Moments(next: quotas.nextReset(after:)) { now in rings(quotas, at: now) }
+                .padding(.horizontal, 10)
+                .frame(height: height)
+                .contentShape(.rect)
         }
+        .buttonStyle(PressStyle())
+        .disabled(quotas.isEmpty)
+        .accessibilityExpanded(open)
+        .accessibilityHint(open ? "收起" : "看每个窗口还剩多少、多久后重置")
     }
 
     private func rings(_ quotas: [AccountQuota], at now: Date) -> some View {
         let rings = quotas.compactMap { quota in quota.binding(at: now).map { (provider: quota.provider, window: QuotaMeter.Window($0, at: now)) } }
         return HStack(spacing: 6) {
+            if rings.isEmpty { ModelBadge(mark: nil, binding: nil).overlay { QuotaRing() } }
             ForEach(rings, id: \.provider) { ModelBadge(mark: PiProvider(id: $0.provider).mark, binding: $0.window) }
         }
         .foregroundStyle(palette.ink2)
