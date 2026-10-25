@@ -11,8 +11,8 @@ struct HandOffInput: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
-    /// 在线会话各自的模型显示值与可换的模型、命令（按会话记录 id）。
-    @State private var digests: [UUID: SessionDigest]?
+    /// 选中的在线会话的模型显示值与可换的模型、命令。
+    @State private var digest: SessionDigest?
     @State private var choice: UUID?
     @State private var planned: Planned?
     @FocusState private var focused: Bool
@@ -48,9 +48,19 @@ struct HandOffInput: View {
             if workspace.outbox == nil, !draft.isEmpty(accepting: [.images, .cards]) { workspace.outbox = outbox }
         }
     }
+    /// 选中的会话在线时是它（模型与命令只给在线的换，已结束的绑定会话没有）。
+    private var chosenLive: PiSessionState? {
+        guard let chosen = chosen?.state else { return nil }
+        return services.liveSessions.live.contains { $0.state.id == chosen.id } ? chosen : nil
+    }
+    /// 读到的是选中的那个的（刚换选、新的一份还没读回来时没有）。
+    private var chosenDigest: SessionDigest? {
+        guard let digest, let id = chosenLive?.id, digest.session?.id == id else { return nil }
+        return digest
+    }
     /// 选中会话的模型与思考强度的显示值（`SessionDigest.config`）。
-    private var config: PiConfigShown? { chosen.flatMap { digests?[$0.state.id]?.config(at: services.speech) } }
-    private var catalog: AgentCatalog? { chosen.flatMap { digests?[$0.state.id]?.catalog } }
+    private var config: PiConfigShown? { chosenDigest?.config(at: services.speech) }
+    private var catalog: AgentCatalog? { chosenDigest?.catalog }
     private var commands: [PiSlashCommand] { chosen?.state.usableCommands(in: catalog) ?? [] }
 
     /// 选中的会话能换模型时，工具排上的那几样。
@@ -91,15 +101,12 @@ struct HandOffInput: View {
             return Planned(
                 plan: plan, bound: try store.piSessions(sessionIDs: [id])[id], fresh: try store.handOffPlan(card, host: nil, fresh: true), opening: opening)
         }
-        // 改模型、思考强度的请求与目录记录不在会话列表那一页里：按在线会话读各自的（会话变了就带着新的会话状态重读）
-        .observing(services.store, id: services.liveSessions.live, into: $digests, onError: workspace.fail) { [live = services.liveSessions.live] store in
-            var digests: [UUID: SessionDigest] = [:]
-            for item in live {
-                digests[item.state.id] = SessionDigest(
-                    session: item.state, project: nil, deliveries: try store.deliveryRequests(toSession: item.state.sessionID),
-                    catalog: try item.state.catalogID.flatMap { try store.agentCatalog($0) })
-            }
-            return digests
+        // 改模型、思考强度的请求与目录记录不在会话列表那一页里：只读选中的那个（会话变了就带着新的会话状态重读）
+        .observing(services.store, id: chosenLive, into: $digest, onError: workspace.fail) { [session = chosenLive] store in
+            guard let session else { return SessionDigest(session: nil, project: nil, deliveries: []) }
+            return SessionDigest(
+                session: session, project: nil, deliveries: try store.deliveryRequests(toSession: session.sessionID),
+                catalog: try session.catalogID.flatMap { try store.agentCatalog($0) })
         }
     }
 
