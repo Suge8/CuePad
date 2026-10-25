@@ -28,8 +28,10 @@ final class CueWatch {
     /// 它运行的那台 Mac 与它的名字（`CueDigest.hostID`、`hostName`）。
     private(set) var hostID: String?
     private(set) var hostName: String?
-    /// 它此刻的上下文（`CueState.context`，值班那台写、随状态同步）：上下文那一行（`CueContextLine`）只读它。
+    #if os(macOS)
+    /// 它此刻的上下文（`CueState.context`，值班那台写、随状态同步）：Mac"运行情况"里上下文那一行（`CueContextLine`）只读它。
     private(set) var context: CueContext?
+    #endif
     /// 在跑的这一轮的经过那一行（`CueState.round`）。
     private(set) var round: UUID?
     /// Cue 页的输入（离开再回来还在）。
@@ -73,7 +75,9 @@ final class CueWatch {
         hostID = digest.hostID
         hostName = digest.hostName
         round = digest.state?.round
+        #if os(macOS)
         context = digest.state?.context
+        #endif
     }
 
     /// 调试画面手动换的 Cue 此刻（`-CuePadCueCycle` 轮流走各态，`DebugScene.cueNowTourIfAsked`）：换过就不再随库变。
