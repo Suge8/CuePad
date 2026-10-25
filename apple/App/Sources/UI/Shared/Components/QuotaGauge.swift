@@ -90,8 +90,8 @@ private struct QuotaAccount: View {
     let meter: QuotaMeter
     @Environment(\.palette) private var palette
 
-    /// 图标列宽与它到字的距离，同面板里的列表行。
-    private static let iconColumn: CGFloat = 20
+    /// 图标列宽（随动态字体放大：图标跟着字放大，定宽的列在大字号下放不下，压到账号名上）与它到字的距离，同面板里的列表行。
+    @ScaledMetric(relativeTo: .subheadline) private var iconColumn: CGFloat = 20
     private static let iconGap: CGFloat = 8
 
     var body: some View {
@@ -99,14 +99,14 @@ private struct QuotaAccount: View {
             HStack(spacing: Self.iconGap) {
                 PiProvider(id: meter.provider).mark?.image
                     .foregroundStyle(palette.ink2)
-                    .frame(width: Self.iconColumn)
+                    .frame(width: iconColumn)
                 title
             }
             .font(Typography.secondary.weight(.medium))
             VStack(alignment: .leading, spacing: 10) {
                 ForEach(meter.windows) { QuotaWindowRow(window: $0) }
             }
-            .padding(.leading, Self.iconColumn + Self.iconGap)
+            .padding(.leading, iconColumn + Self.iconGap)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .ignore)
