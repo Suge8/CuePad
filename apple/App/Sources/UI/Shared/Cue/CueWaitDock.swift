@@ -116,13 +116,15 @@ struct CueWaitDock: View {
     }
 
     /// 铺开的那件（`CueWaitCard`）垫上纸；手机上左右滑换一件。
+    /// 整张卡接这一拖（`contentShape`）：只挂在内容上的话卡里的空白处接不住，落到页上成了切页。卡里的按钮照样先接自己的点按。
     private func card(_ pick: CueWaitPick) -> some View {
         let card = CueWaitCard(pick: pick, shots: pick.wait.message.flatMap { shots[$0.id] }, open: open)
+            .frame(maxWidth: .infinity, alignment: .leading)
         #if os(iOS)
+            .contentShape(.rect(cornerRadius: ComposerMetrics.radius))
             .gesture(HorizontalPan(allows: { swipes(pick, toward: $0) }, changed: { track($0, on: pick) }, ended: { release(pick, commits: $0, velocity: $1) }))
         #endif
         return card
-            .frame(maxWidth: .infinity, alignment: .leading)
             .paper(radius: ComposerMetrics.radius, lifted: true)
             .padding(.bottom, Self.below + Self.peek * CGFloat(behind))
     }
