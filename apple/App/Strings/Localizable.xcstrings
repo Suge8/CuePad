@@ -448,7 +448,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Activity in %@"
+            "value" : "Activity: %@"
           }
         },
         "zh-Hans" : {

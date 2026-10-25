@@ -50,6 +50,8 @@ struct MenuBarPad: View {
             Button("交给 \(workspace.cue.name)", icon: .handOff, action: handToCue)
                 .font(Typography.meta.weight(.semibold))
                 .buttonStyle(ControlButtonStyle(kind: empty ? .secondary : .primary, compact: true))
+                // 按钮不折行，放不下时让左边的状态行截短
+                .fixedSize()
                 .disabled(empty)
                 .help("把这次随手记直接说给 \(workspace.cue.name)")
         }

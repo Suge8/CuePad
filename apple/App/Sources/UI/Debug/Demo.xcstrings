@@ -2945,6 +2945,22 @@
         }
       }
     },
+    "导入旧数据那边我让它先拆成几段读，读完再接着导。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "For the legacy import, I had it read in chunks first and continue once done."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导入旧数据那边我让它先拆成几段读，读完再接着导。"
+          }
+        }
+      }
+    },
     "导出 PNG 时保留透明背景" : {
       "localizations" : {
         "en" : {
@@ -8061,6 +8077,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "默认"
+          }
+        }
+      }
+    },
+    "（改过）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : " (edited)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "（改过）"
           }
         }
       }

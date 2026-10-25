@@ -133,7 +133,12 @@ struct CueNowRow: View {
 
     var body: some View {
         Moments(next: now.nextChange(after:)) { date in
-            CueNowLine(now: now.aged(to: date)) { bead, dot in dot.relaySpot(bead: bead.sessions) }
+            let aged = now.aged(to: date)
+            // 窄处（菜单栏面板一行里还有额度环与按钮）先让出珠子：那一句是第一眼要读的，被截成"…"就什么也没说
+            ViewThatFits(in: .horizontal) {
+                CueNowLine(now: aged) { bead, dot in dot.relaySpot(bead: bead.sessions) }
+                CueNowLine(now: aged.withoutBeads)
+            }
         }
     }
 }
@@ -166,4 +171,14 @@ struct CueTitle: View {
 
 extension CueStatusRow where Trailing == EmptyView {
     init(font: Font = Typography.body.weight(.semibold), status: Bool = true) { self.init(font: font, status: status) { EmptyView() } }
+}
+
+private extension CueNow {
+    /// 只留那一句：窄处让位的那一份（`CueNowRow`）。
+    var withoutBeads: CueNow {
+        var now = self
+        now.beads = []
+        now.hidden = 0
+        return now
+    }
 }
