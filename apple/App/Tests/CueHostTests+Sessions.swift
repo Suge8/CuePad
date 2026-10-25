@@ -26,7 +26,7 @@ extension CueHostTests {
     }
 
     /// 会话的动静叫醒 Cue，它看了看、什么都没做（没有落了结果的一步）：这一轮最后的话不写进对话；Cue 页那一行写叫醒它的会话停下了、没说话，
-    /// 点它去的就是那个会话。紧接着又这样看了同一个会话：同一格里再一行。
+    /// 点它去的就是那个会话。紧接着又这样看了同一个会话：同一格里再一行。会话之后改了名，这两行仍写当时的名字。
     @Test func 会话歇下后Cue什么都没做_写明谁叫醒的() async throws {
         let rig = try await Rig()
         try await rig.settleTask(titled: "修好登录页 只看看")
@@ -41,7 +41,8 @@ extension CueHostTests {
         }
         func glanced(_ round: CueNoteRound) -> Bool {
             guard let place = round.header?.places.first, round.header?.places.count == 1 else { return false }
-            return round.said.isEmpty && place.title == title && place.kind == .settled && place.sessionID == session.sessionID
+            return round.said.isEmpty && place.title == title && place.kind == .settled
+                && place.target == .session(PiSessionState.recordID(sessionID: session.sessionID), sessionID: session.sessionID)
         }
         let first = try await notes()
         #expect(first.count == 1 && first.allSatisfy(glanced), "\(first)")
@@ -53,6 +54,11 @@ extension CueHostTests {
         try await eventually("又被叫醒的那一轮做完") { woke(2) }
         let both = try await notes()
         #expect(both.count == 2 && both.allSatisfy(glanced), "\(both)")
+
+        session.sendInfo(["name": "改过名的会话"])
+        try await eventually("改了名") { try await rig.store.sessions(matching: session.sessionID).first?.title == "改过名的会话" }
+        let renamed = try await notes()
+        #expect(renamed.count == 2 && renamed.allSatisfy(glanced), "\(renamed)")
         #expect(try await rig.store.cueMessages().allSatisfy { $0.author != .known(.note) || $0.text.isEmpty })
         await rig.stop()
     }

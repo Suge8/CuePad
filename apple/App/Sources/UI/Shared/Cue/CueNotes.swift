@@ -13,8 +13,9 @@ nonisolated struct CueNoteRound: Identifiable, Equatable, Sendable {
     /// 这一轮说的话（动态的正文），从早到晚
     var said: [CueMessage]
 
-    init(row: CueMessage, names: CueWakeNames) {
-        header = row.wake.map { CueWakeHeader($0, names: names) }
+    /// `lines`：提醒的那几条记忆的正文（按 id；记忆的正文写下就不变，忘掉的照读）
+    init(row: CueMessage, lines: [UUID: String]) {
+        header = row.wake.map { CueWakeHeader($0, lines: lines) }
         self.row = row
         touches = CueActivity.touches(row.tools)
         said = []
@@ -40,7 +41,7 @@ nonisolated struct CueNoteRound: Identifiable, Equatable, Sendable {
 }
 
 /// 一轮为什么醒（只画图标，`CueWake.icon`）与叫醒它的那几处：会话、任务的动静各是一处，带当时出了什么事（`kind`，"停下了"）；
-/// 提醒是到点的那条记忆。名字读的时候查好（`CueWakeNames`）；当时出了什么事与这一处此刻怎样分开——此刻的状态由显示的地方读。
+/// 提醒是到点的那条记忆。都按写下时的记录（`CueStir`）：名字是当时的，会话、任务之后改名、再动起来都不变；去哪由记录推出，不查库。
 nonisolated struct CueWakeHeader: Equatable, Sendable {
     /// 点了去哪（`Workspace.open`；Cue 页这一轮的经过里的一行也用它）。会话的 Pi 会话 id 知道就带上，进会话页少读一次
     enum Target: Equatable, Sendable {
@@ -53,38 +54,30 @@ nonisolated struct CueWakeHeader: Equatable, Sendable {
         let title: String
         /// 当时出了什么事；提醒没有
         var kind: CueChange.Kind?
-        /// 不在了的没有
-        var target: Target?
-        /// 任务此刻的状态（任务圈）；会话的是 nil
-        var task: TaskStatus?
-
-        var sessionID: String? {
-            if case .session(_, let sessionID)? = target { sessionID } else { nil }
-        }
+        let target: Target
     }
 
     let wake: CueWake
     /// 叫醒它的那几处，最新的在前，同一处只留最近那次
     let places: [Place]
 
-    init(_ wake: CueWake, names: CueWakeNames) {
+    init(_ wake: CueWake, lines: [UUID: String]) {
         self.wake = wake
         switch wake {
         case .sessionActivity(let stirs):
             var seen = Set<String>(), places: [Place] = []
             for stir in stirs.reversed() where seen.insert(stir.session ?? stir.task?.uuidString ?? "").inserted {
+                // 更旧版本写下的没有名字（`CueStir.name`）：只说是哪一类
                 if let id = stir.session {
-                    let session = names.sessions[id]
                     places.append(Place(
-                        title: session?.title ?? "一个会话", kind: stir.kind, target: session.map { .session($0.id, sessionID: $0.sessionID) }))
+                        title: stir.name ?? "一个会话", kind: stir.kind, target: .session(PiSessionState.recordID(sessionID: id), sessionID: id)))
                 } else if let task = stir.task {
-                    let title = names.tasks[task]
-                    places.append(Place(title: title ?? "一件任务", kind: stir.kind, target: title == nil ? nil : .task(task), task: names.taskStatus[task]))
+                    places.append(Place(title: stir.name ?? "一件任务", kind: stir.kind, target: .task(task)))
                 }
             }
             self.places = places
         case .reminder(let ids):
-            let first = ids.lazy.compactMap { names.lines[$0] }.first
+            let first = ids.lazy.compactMap { lines[$0] }.first
             places = first.map { line in
                 let title = PiProgress.firstLine(line) ?? line
                 return [Place(title: ids.count > 1 ? "\(title) 等 \(ids.count) 条" : title, target: .memory)]
@@ -93,16 +86,32 @@ nonisolated struct CueWakeHeader: Equatable, Sendable {
             places = []
         }
     }
+}
 
+extension CueChange.Kind {
     /// 当时出了什么事的一句。
-    static func verb(_ kind: CueChange.Kind) -> String {
-        switch kind {
+    var verb: String {
+        switch self {
         case .settled: "停下了"
         case .waitingForUser: "在等回答"
         case .failed: "出错了"
         case .undelivered: "话没送到"
         case .done: "做完了"
         case .stalled: "子代理卡住了"
+        }
+    }
+
+    /// 当时出了什么事的图标（Cue 页只提到一处的那一行）：静止的，会话与任务同一种事同一个样子；形状借那时那一处的状态图形（`PiShown.icon`），
+    /// 不画那一处此刻的状态——此刻在跑的会话在这里也不动。
+    var icon: Icon {
+        switch self {
+        // 停下时 Cue 在值班，会话是"歇着"
+        case .settled: PiShown(status: .resting).icon
+        case .waitingForUser: PiShown(status: .asking).icon
+        case .failed: PiShown(status: .failed).icon
+        case .undelivered: .undelivered
+        case .done: .complete
+        case .stalled: .subagent
         }
     }
 }
@@ -128,46 +137,5 @@ extension CueWake {
         case .idle: .wakeIdle
         case .reminder: .wakeReminder
         }
-    }
-}
-
-/// Cue 自己醒来的那几轮，叫醒它的会话、任务与提醒此刻叫什么（`CueThread.read` 一次读好，不在主线程）：改了名跟着变，名字不另存。
-nonisolated struct CueWakeNames: Equatable, Sendable {
-    struct Session: Equatable, Sendable {
-        let id: UUID
-        let sessionID: String
-        let title: String
-    }
-
-    /// 按 Pi 的会话 id
-    var sessions: [String: Session] = [:]
-    var tasks: [UUID: String] = [:]
-    var taskStatus: [UUID: TaskStatus] = [:]
-    /// 提醒的记忆：正文
-    var lines: [UUID: String] = [:]
-
-    static func read(_ wakes: [CueWake], from store: isolated CueStore) throws -> CueWakeNames {
-        var sessionIDs: [String] = [], taskIDs = Set<UUID>(), lineIDs: [UUID] = []
-        for wake in wakes {
-            switch wake {
-            case .sessionActivity(let stirs):
-                sessionIDs += stirs.compactMap(\.session)
-                taskIDs.formUnion(stirs.compactMap(\.task))
-            case .reminder(let ids): lineIDs += ids
-            case .enabled, .message, .idle: break
-            }
-        }
-        var names = CueWakeNames()
-        for (id, item) in try store.piSessions(sessionIDs: sessionIDs) {
-            names.sessions[id] = Session(id: item.state.id, sessionID: id, title: item.state.title)
-        }
-        for id in taskIDs {
-            if let card = try store.card(id), card.deletedAt == nil {
-                names.tasks[id] = card.title
-                names.taskStatus[id] = card.status
-            }
-        }
-        for line in try store.cueLines(lineIDs) { names.lines[line.line.id] = line.line.text }
-        return names
     }
 }

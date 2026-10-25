@@ -24,7 +24,7 @@ extension DebugScene {
             var woke = (0..<min(count, live.count)).map { live[(round + $0) % live.count] }
             if let opened { woke = [opened] + woke.prefix(count - 1) }
             round += 1
-            let wake = CueWake.sessionActivity(woke.map { CueStir(kind: .settled, session: $0) })
+            let wake = CueWake.sessionActivity(woke.map { CueStir(kind: .settled, session: $0, name: $0) })
             guard !woke.isEmpty, let row = try? await store.recordCueRound(nil, startedAt: .now, answersYou: false, tools: nil, wake: wake),
                 (try? await store.setCueState(.thinking, round: row)) != nil
             else { return nil }

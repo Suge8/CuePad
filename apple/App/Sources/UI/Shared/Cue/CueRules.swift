@@ -155,12 +155,12 @@ nonisolated struct CueDigest: Equatable, Sendable {
             hostOnline: try profile?.activeHost.map { try store.macOnline($0) } ?? false,
             lastYou: try store.cueLastYou().map { LastYou(said: $0.said, delivered: $0.delivered, reachedServer: $0.reachedServer) },
             state: try store.cueState(),
-            woke: try store.cueWaking().map { Woke(at: $0.at, text: try Self.woke($0.wake, store: store)) },
+            woke: try store.cueWaking().map { Woke(at: $0.at, text: Self.woke($0.wake)) },
             done: try store.tasksDone(since: Calendar.current.startOfDay(for: .now)).filter { TaskBoard.Column.of($0, in: tally) == .done })
     }
 
-    /// 这一轮为什么醒，写成那一句的开头（"被 canvas-zoom 叫醒"）。
-    private static func woke(_ wake: CueWake, store: isolated CueStore) throws -> String {
+    /// 这一轮为什么醒，写成那一句的开头（"被 canvas-zoom 叫醒"）：名字是叫醒时记下的（`CueStir.name`）。
+    private static func woke(_ wake: CueWake) -> String {
         switch wake {
         case .message: return "在回你的话"
         case .idle: return "例行查看"
@@ -168,11 +168,10 @@ nonisolated struct CueDigest: Equatable, Sendable {
         case .enabled: return "刚启用"
         case .sessionActivity(let stirs):
             var seen = Set<String>()
-            let ids = stirs.compactMap(\.session).filter { seen.insert($0).inserted }
-            guard let first = ids.first else { return "有一件做完了" }
-            let title = try store.piSessions(sessionIDs: [first])[first]?.state.title
-            let name = title.flatMap { $0.isEmpty ? nil : $0 } ?? "会话"
-            return ids.count > 1 ? "被 \(name) 等 \(ids.count) 处叫醒" : "被 \(name) 叫醒"
+            let sessions = stirs.filter { $0.session.map { seen.insert($0).inserted } ?? false }
+            guard let first = sessions.first else { return "有一件做完了" }
+            let name = first.name ?? "会话"
+            return sessions.count > 1 ? "被 \(name) 等 \(sessions.count) 处叫醒" : "被 \(name) 叫醒"
         }
     }
 

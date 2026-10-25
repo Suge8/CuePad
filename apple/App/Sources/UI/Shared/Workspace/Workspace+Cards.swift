@@ -68,10 +68,15 @@ extension Workspace {
         if openTask?.task == id { openTask = nil }
     }
 
-    /// 按 id 打开任务的气泡（Cue 页里提到的任务）：先从库里读到它，再同 `openTask(_:)`。
+    /// 按 id 打开任务的气泡（Cue 页里提到的任务）：先从库里读到它，再同 `openTask(_:)`。删掉、归档了的气泡开了也立刻收起（`TaskBubble` 的 `gone`），
+    /// 不开，说一句它去哪了。
     func openTask(id: UUID) {
         let store = services.store
-        attempt { if let card = try await store.card(id) { self.openTask(card) } }
+        attempt {
+            guard let card = try await store.card(id), card.deletedAt == nil else { return self.say("这件任务已删除") }
+            guard card.archivedAt == nil else { return self.say("这件任务已归档") }
+            self.openTask(card)
+        }
     }
 
     func pressed(at point: CGPoint) { press.record(point) }

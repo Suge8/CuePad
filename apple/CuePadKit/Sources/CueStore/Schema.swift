@@ -1,3 +1,5 @@
+import CueText
+
 /// 表分两类。
 ///
 /// 同步表（`Table.synced`，由 CueSync 映射为 CKRecord，record type = 表名，recordName = id）。约束：
@@ -70,6 +72,25 @@ enum Schema {
           [DeterministicID.uuid("cue-allow/\(item)"), text, profile.at])
       }
       try db.exec("ALTER TABLE cueProfile DROP COLUMN allows")
+    },
+    // 70：叫醒 Cue 的那几处（`CueStir.name`）存上写下时的名字，Cue 页那一行只按记录画。之前写下的补上升级时的名字（会话名、任务标题；记录已不在的不补）。
+    // 每台设备各自升级、不改 modifiedAt（不同步出去）：同一份数据补出同一个名字
+    Upgrade { db in
+      let rows = try db.query("SELECT id, wake FROM cueMessages WHERE wake LIKE '%sessionActivity%'") { ($0.text(0), $0.text(1)) }
+      for (id, stored) in rows {
+        guard case .sessionActivity(let stirs)? = CueWake(stored: stored) else { continue }
+        let named = try stirs.map { stir in
+          guard stir.name == nil else { return stir }
+          let name: String? =
+            if let session = stir.session {
+              try db.first("SELECT title FROM piSessionStates WHERE id = ?", [PiSessionState.recordID(sessionID: session)]) { $0.text(0) }
+            } else if let task = stir.task {
+              try db.first("SELECT body FROM cards WHERE id = ?", [task]) { CueSummary($0.text(0)).title }
+            } else { nil }
+          return CueStir(kind: stir.kind, session: stir.session, task: stir.task, name: name)
+        }
+        if named != stirs { try db.run("UPDATE cueMessages SET wake = ? WHERE id = ?", [CueWake.sessionActivity(named).stored, id]) }
+      }
     },
   ]
 
