@@ -24,11 +24,18 @@ nonisolated struct CardText: Equatable, Sendable {
     }
 
     /// 列表、卡片、看板里叫它什么：标题；没有文字时按有没有图写"N 张图"或"空白灵感"。全 App 只在这里定。
-    var label: String { title.nonEmpty ?? (images.isEmpty ? "空白灵感" : "\(images.count) 张图") }
+    var label: String { title.nonEmpty ?? Self.untitled(images: images.count) }
+
+    /// 只要名字时用它：只读到标题那一行（`CueSummary.title(of:)`），没有标题才数图片，不算摘要与链接。
+    static func label(of body: String) -> String {
+        CueSummary.title(of: body).nonEmpty ?? untitled(images: CueFormat.imageHashes(in: body).count)
+    }
+
+    private static func untitled(images: Int) -> String { images == 0 ? "空白灵感" : "\(images) 张图" }
 }
 
 nonisolated extension Card {
-    var title: String { CardText(body).label }
+    var title: String { CardText.label(of: body) }
 }
 
 nonisolated extension String {

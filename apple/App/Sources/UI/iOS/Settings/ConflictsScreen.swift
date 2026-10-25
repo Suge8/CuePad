@@ -34,7 +34,7 @@ private struct ConflictPair: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(CardText(conflict.original.body).label)
+            Text(conflict.original.title)
                 .font(.headline).foregroundStyle(palette.ink)
                 .accessibilityAddTraits(.isHeader)
             ViewThatFits(in: .horizontal) {
