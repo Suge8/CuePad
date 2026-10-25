@@ -35,6 +35,55 @@ import Testing
 
   private func request(_ id: UUID) async throws -> DeliveryRequest? { try await store.deliveryRequest(id) }
 
+  /// 交给上传的每一版：`onWritten` 被调那一刻库里这条请求的状态（马上传读的就是那一刻的行）。
+  actor Uploads {
+    private(set) var statuses: [DeliveryStatus?] = []
+    func add(_ status: DeliveryStatus?) { statuses.append(status) }
+  }
+
+  private func executor(_ uploads: Uploads, handler: @escaping @Sendable (DeliveryRequest) async -> DeliveryOutcome) -> DeliveryExecutor {
+    DeliveryExecutor(
+      store: store, hostID: "mac-a", timing: clock.timing, onIssue: { Issue.record("执行器意外上报：\($0)") },
+      onWritten: { [store] id in await uploads.add(try? await store.deliveryRequest(id)?.status.known) }, handler: handler)
+  }
+
+  /// 当场执行完的只交出结果那一版：领取那一版在路上时结果得等它回来才能传，手机的回执要多等一个来回。
+  @Test
+  func aRequestFinishedRightAwayHandsOnlyTheResultToUpload() async throws {
+    let uploads = Uploads()
+    let executor = executor(uploads) { _ in .succeeded }
+    try await executor.start()
+    _ = try await store.requestDelivery("hi", to: pi, on: "mac-a")
+    try await eventually("结果交给上传") { await !uploads.statuses.isEmpty }
+    clock.advance(DeliveryExecutor.claimGrace)
+    try await Task.sleep(for: .milliseconds(100))  // 领取那次要是没取消，到点后会在这段里交出
+
+    #expect(await uploads.statuses == [.succeeded])
+    await executor.stop()
+  }
+
+  /// 执行得久的（唤醒已结束的会话）到 `claimGrace` 先交出领取那一版：手机据它知道 Mac 接手了，不会报成没送到。
+  @Test
+  func aLongRunningRequestHandsOverTheClaimFirstThenTheResult() async throws {
+    let uploads = Uploads()
+    let (gate, open) = AsyncStream<Void>.makeStream()
+    let executor = executor(uploads) { _ in
+      for await _ in gate {}
+      return .succeeded
+    }
+    try await executor.start()
+    _ = try await store.requestDelivery("唤醒会话", to: pi, on: "mac-a")
+    await clock.waitForSleeper()
+    clock.advance(DeliveryExecutor.claimGrace)
+    try await eventually("领取交给上传") { await !uploads.statuses.isEmpty }
+    #expect(await uploads.statuses == [.executing])
+
+    open.finish()
+    try await eventually("结果交给上传") { await uploads.statuses.count == 2 }
+    #expect(await uploads.statuses == [.executing, .succeeded])
+    await executor.stop()
+  }
+
   @Test
   func requestsAreExecutedOneAtATimeInCreationOrder() async throws {
     let handler = Handler()
