@@ -18,8 +18,6 @@ struct WaitAnswer: View {
     var replyElsewhere = false
     /// 发给这个会话的投送请求（会话页给全的）；不给时读在线会话收到的最近一条（`LiveSessions.deliveries`）
     var deliveries: [DeliveryRequest]?
-    /// Cue 的提问：点名的图里"可以"选的是其中一张时的那句提示（`CueChoices.hint`）
-    var hint: String?
     @Environment(Workspace.self) private var workspace
     /// Cue 的提问正在答（写成后它从等你里消失，写不成就恢复）
     @State private var ending = false
@@ -27,7 +25,7 @@ struct WaitAnswer: View {
     var body: some View {
         switch wait {
         case .message(let message, _):
-            CueChoices(options: message.choices ?? [], disabled: ending, hint: hint, compact: compact) { choice in
+            CueChoices(options: message.choices ?? [], disabled: ending, compact: compact) { choice in
                 ending = true
                 workspace.attempt {
                     defer { ending = false }

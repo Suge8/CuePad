@@ -6,7 +6,7 @@ import SwiftUI
 /// 不止一件时像叠在一起的通知：卡后面露出一两层叠边（`deck`），眉题行写第几件（`CueWaitEyebrow`）；手机上左右滑卡换一件（跟手，甩过或拖过一段就换，
 /// 到头了让给切页），Mac 上点眉题行的小箭头。答完一件，下一件从叠边里顶上来。
 /// 铺开的那件（`CueWaitItem`）：眉题、问句、点名的图、怎么答（`WaitAnswer`，与进展页等你列、会话页问题卡同一个；主动作在右下角）。问句是代码按 Cue 写的动作短语写出的
-/// （`CueAsking.question`），不靠 Cue 的措辞；Cue 的原话默认收起，点"原话"再看。对话里不另挂还在等你的提问：同一问同屏只一处。
+/// （`CueAsking.question`），不靠 Cue 的措辞；要看细节（Cue 的原话、会话里的来龙去脉）点眉题进任务或会话。对话里不另挂还在等你的提问：同一问同屏只一处。
 /// 圆角、与输入框和待回复提示之间的空同一套（`ComposerMetrics.radius`、`stackGap`）。
 /// 卡上只能答：别的话在 Cue 页底下的输入框说，一开口 Cue 的提问就收起（Cue 判断不是在答它会放回，见 `CueQuestionEnd`）。没有关掉。
 /// Cue 停用着时卡照样露、Cue 的选项停用并写"启用后再答"（`CueChoices`）。答了等库里那件结束才换下一件。
@@ -24,11 +24,13 @@ struct CueWaitDock: View {
     /// 换到了哪件（滑卡、小箭头）；不在等了就回到第一件。
     @State private var picked: String?
     /// 手机上滑卡：卡跟着手指横移多少。
+    #if os(iOS)
+    @State private var drag = DebugHooks.preset.waitDrag
+    #else
     @State private var drag: CGFloat = 0
+    #endif
     /// 滑走的那张往哪边飞出去（换一件时旧卡的去向）；不是滑走的（答完、点箭头）原地淡掉，为 0。
     @State private var exit: CGFloat = 0
-    /// 展开了原话的那件：换一件时收起。
-    @State private var reading: String?
     /// 露出的那件：选中的那件；答完淡掉的这一段里还是它（那时它已不在 `waiting` 里）。
     @State private var shown: TaskBoard.Wait?
     /// 露出了多少，0…1：升起的比例（`RiseBehind`，0 是全藏在输入框后面）；减弱动态效果时与离开时是不透明度。
@@ -54,7 +56,6 @@ struct CueWaitDock: View {
     /// 换一件时新的从叠边里微微放大淡入，旧的滑走的往那边飞出、其余原地淡掉（底边对齐叠放）。减弱动态效果时来也只淡入。卡与下面输入框的间距在卡里（`below`）。
     var body: some View {
         ZStack(alignment: .bottom) {
-            deck
             if let item = shown {
                 card(waiting.first { $0.id == item.id } ?? item)
                     .offset(x: drag)
@@ -64,6 +65,8 @@ struct CueWaitDock: View {
                         removal: .offset(x: exit).combined(with: .opacity)))
             }
         }
+        // 叠边按卡的整高垫在后面：滑卡时露出的是后一件的纸，不跟着卡动、不随换卡进出
+        .background { if shown != nil { deck } }
         .opacity(floats ? level : 1)
         .modifier(RiseBehind(shown: floats ? (waiting.isEmpty ? 0 : 1) : level, floats: floats, limit: chatHeight / 2))
         .onChange(of: current?.id, initial: true) { old, new in follow(animated: old != new) }
@@ -77,9 +80,9 @@ struct CueWaitDock: View {
     /// 卡里上下的边与几部分之间：眉题离卡顶、怎么答离卡底、各部分之间。
     private static let edge: CGFloat = 12
     private static let gap: CGFloat = 12
-    /// 叠边：每层比上一层往下多露这么多、两边各收这么多，至多两层。
-    private static let peek: CGFloat = 6
-    private static let tuck: CGFloat = 10
+    /// 叠边：每层比上一层往下多露这么多、两边各收这么多，至多两层；露得够一眼数出后面还有几件。
+    private static let peek: CGFloat = 9
+    private static let tuck: CGFloat = 12
     private static let layers = 2
 
     /// 卡后面露出几层叠边：还有几件在等，至多 `layers`。
@@ -87,21 +90,22 @@ struct CueWaitDock: View {
 
     #if os(macOS)
     /// 卡至少多高（Cue 页打开时数要排几格，`CuePage.covered`）：眉题、问句（至少一行标题字）、带图时一排图（`CueShots.floor`）、
-    /// 怎么答（至少一颗按钮）与上下的边；原话收着、叠边不算。只能数少。
+    /// 怎么答（至少一颗按钮）与上下的边；叠边不算。只能数少。
     static func floor(_ wait: TaskBoard.Wait, shots: [UUID: [CueShown]], width: CGFloat) -> CGFloat {
         let pictures = wait.message.flatMap { shots[$0.id] }.map { gap + CueShots.floor(count: $0.count, width: width - 2 * side) } ?? 0
         return edge + CueWaitEyebrow.height + 6 + Typography.titleSize + pictures + gap + ControlMetrics.compactHeight + edge + below
     }
     #endif
 
-    /// 卡后面的叠边：一层比一层窄、往下多露 `peek`，底边对着卡底排，只露出卡下沿那一截。跟着在等的件数增减，不随滑卡挪。
+    /// 卡后面的叠边：与卡一样高，一层比一层窄、往下多露 `peek`，平时只露出卡下沿那一截。跟着在等的件数增减，不随滑卡挪。
     private var deck: some View {
-        ZStack(alignment: .bottom) {
+        ZStack {
             ForEach((1...Self.layers).reversed(), id: \.self) { layer in
-                Color.clear.frame(height: ComposerMetrics.radius * 2)
+                Color.clear
                     .paper(radius: ComposerMetrics.radius, lifted: true)
-                    .opacity(layer > behind ? 0 : layer == 1 ? 0.8 : 0.55)
+                    .opacity(layer > behind ? 0 : layer == 1 ? 0.85 : 0.6)
                     .padding(.horizontal, Self.tuck * CGFloat(layer))
+                    .padding(.top, Self.peek * CGFloat(layer))
                     .padding(.bottom, Self.below + Self.peek * CGFloat(max(behind - layer, 0)))
             }
         }
@@ -139,7 +143,6 @@ struct CueWaitDock: View {
         }
         let swapping = shown != nil
         leaving = false
-        if reading != next.id { reading = nil }
         withAnimation(swapping && animated ? HandOff.quick : nil) { shown = next }
         guard animated, level < 1 else { return level = 1 }
         moving = true
@@ -167,15 +170,11 @@ struct CueWaitDock: View {
     }
 
     private func part(_ wait: TaskBoard.Wait, _ part: CueWaitItem.Part) -> CueWaitItem {
-        CueWaitItem(
-            wait: wait, part: part, shots: shots, open: open,
-            reading: Binding { reading == wait.id } set: { reading = $0 ? wait.id : nil })
+        CueWaitItem(wait: wait, part: part, shots: shots, open: open)
     }
 
     private func eyebrow(_ wait: TaskBoard.Wait) -> some View {
-        CueWaitEyebrow(
-            wait: wait, index: index(of: wait), count: max(waiting.count, 1), reading: Binding { reading == wait.id } set: { reading = $0 ? wait.id : nil }
-        ) { step(from: wait, by: $0) }
+        CueWaitEyebrow(wait: wait, index: index(of: wait), count: max(waiting.count, 1)) { step(from: wait, by: $0) }
             .padding(.top, Self.edge)
     }
 
@@ -212,7 +211,6 @@ struct CueWaitDock: View {
         return body
             .frame(maxWidth: .infinity, alignment: .leading)
             .paper(radius: ComposerMetrics.radius, lifted: true)
-            .animation(HandOff.quick, value: reading)
             .padding(.bottom, Self.below + Self.peek * CGFloat(behind))
     }
 

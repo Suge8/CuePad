@@ -51,6 +51,8 @@ enum DebugHooks {
         var cuePanelOpen = false
         /// 不弹演示会话的前台横幅（`-CuePadQuiet YES`）。
         var quietAlerts = false
+        /// Cue 页等你卡停在往左滑到一半的样子，左移这么多点（`-CuePadWaitDrag 140`；启动参数的值不能以减号开头）。
+        var waitDrag: CGFloat = 0
         #endif
     }
 

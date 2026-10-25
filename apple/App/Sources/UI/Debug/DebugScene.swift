@@ -123,6 +123,7 @@ enum DebugScene {
         if defaults.string(forKey: "CuePadSearchScope") == "sessions" { preset.searchScope = .sessions }
         preset.cuePanelOpen = defaults.bool(forKey: "CuePadCuePanel")
         preset.quietAlerts = defaults.bool(forKey: "CuePadQuiet")
+        preset.waitDrag = -defaults.double(forKey: "CuePadWaitDrag")
         #endif
         return preset
     }

@@ -2,12 +2,12 @@ import CueStore
 import SwiftUI
 
 /// 等你卡（`CueWaitDock`）里铺开的那一件，按部分排（卡按地方挑排哪几部分）：
-/// - 问句（`question`）：赭黄问号、标题字的问句（`TaskBoard.Wait.asked`）；会话的问题有说明时（选项不写进来）接在下一行；
-///   再下一行是来源与等了多久（最淡的墨、小一号）："推送代码前先问你 · 圆桌 · 已等 38 分钟"，会话的是"Codex 在会话里问你 · 刚刚"；
-///   Cue 的原话展开时接在下面（`reading`，开关在眉题行）。
-/// - 点名的图（`shots`，Cue 的提问才有，`CueShots`；点开全屏时底栏就是这几个选项，看完当场定）。
-/// - 怎么答（`answer`，`WaitAnswer`）：主动作靠右下角，次要的在同一行左边；"可以"选的是其中一张图时，那张描靛青圈、左边一句"要选别的，在下面跟 Cue 说"。
-/// 这件事是哪件、第几件在卡顶的眉题行（`CueWaitEyebrow`）。
+/// - 问句（`question`）：赭黄问号、标题字的问句（`TaskBoard.Wait.asked`）；会话的问题有说明时（选项不写进来）接在下一行。
+///   规矩那一类（`CueAsk.rule`）下一行引他自己的原话（`CueAsking.why`："你说过「方案让我挑」。"）：这一问为什么来问他只有这句说得出，问句本身看不出；
+///   别的类只写这一类的泛泛依据（"推送代码前先问你"），问句已经说了是什么事，不写。
+/// - 点名的图（`shots`，Cue 的提问才有，`CueShots`；"可以"选的是其中一张时那张描靛青圈；点开全屏时底栏就是这几个选项，看完当场定）。
+/// - 怎么答（`answer`，`WaitAnswer`）：主动作靠右下角，次要的在同一行左边。
+/// 这件事是哪件、在哪个项目、等了多久、第几件在卡顶的眉题行（`CueWaitEyebrow`）；要看细节点眉题进任务或会话。
 struct CueWaitItem: View {
     enum Part { case question, shots, answer }
 
@@ -15,8 +15,6 @@ struct CueWaitItem: View {
     let part: Part
     let shots: [UUID: [CueShown]]
     let open: (PreviewOpening) -> Void
-    @Binding var reading: Bool
-    @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -24,59 +22,41 @@ struct CueWaitItem: View {
         case .question: question
         case .shots:
             if let message = wait.message, let shown = shots[message.id] {
-                CueShots(shots: shown, group: "waiting", reply: .answer(message), chosen: chosen(message), open: open)
+                CueShots(shots: shown, group: "waiting", reply: .answer(message), chosen: CueShots.chosen(for: message.asking, in: shown), open: open)
             }
-        case .answer:
-            WaitAnswer(wait: wait.wait, hint: wait.message.flatMap(chosen).map { _ in "要选别的，在下面跟 \(workspace.cue.name) 说" })
+        case .answer: WaitAnswer(wait: wait.wait)
         }
-    }
-
-    /// 点名的几张图里"可以"选的那张（`CueShots.chosen`）。
-    private func chosen(_ message: CueMessage) -> UUID? {
-        shots[message.id].flatMap { CueShots.chosen(for: message.asking, in: $0) }
     }
 
     private var question: some View {
         let asked = wait.asked
-        let detail: String? = if case .session = wait.wait { asked.detail } else { nil }
+        let below: String? = switch wait.wait {
+        case .message(let message, _): message.asking?.rule != nil ? message.asking?.why : nil
+        case .session: asked.detail
+        }
         return HStack(alignment: .firstTextBaseline, spacing: 9) {
             PiStateGlyph(status: .asking).font(Typography.title)
             VStack(alignment: .leading, spacing: 4) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(CueQuestionLine<EmptyView>.keepingTail(asked.line)).font(Typography.title).foregroundStyle(palette.ink)
-                    if let detail { Text(detail).font(Typography.secondary).foregroundStyle(palette.ink2) }
-                }
-                .accessibilityElement(children: .combine)
-                LiveText(style: PiClock.Waited(since: wait.since)) { Text(Dotted(source, $0)) }
-                    .font(Typography.caption).foregroundStyle(palette.ink3)
-                if reading, let message = wait.message {
-                    MarkdownText(source: message.text).equatable().font(Typography.secondary).foregroundStyle(palette.ink2)
-                        .padding(.top, 8).transition(.opacity)
-                }
+                Text(CueQuestionLine<EmptyView>.keepingTail(asked.line)).font(Typography.title).foregroundStyle(palette.ink)
+                if let below { Text(below).font(Typography.secondary).foregroundStyle(palette.ink2) }
             }
             .fixedSize(horizontal: false, vertical: true)
+            .accessibilityElement(children: .combine)
+            Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
-
-    /// 谁问的、凭什么问：Cue 的提问是它依据的规矩与范围（`waitBasis`，旧提问没有），会话的是哪家 Agent 在会话里问你。
-    private var source: String? {
-        switch wait.wait {
-        case .message(let message, _): workspace.waitBasis(of: message)
-        case .session(let session, _): "\(session.agent.known?.name ?? "Agent") 在会话里问你"
-        }
-    }
 }
 
-/// 等你卡顶上的眉题行：这件事的名字（`TaskBoard.Wait.title`：任务名或会话名，小号淡墨），点它去那件事——Cue 的提问打开它落在的任务
-/// （`CueTaskButton`，接力也落在这里），会话在问的进会话（打开会话的入口就是它）；没落在任务上的提问写 Cue 的名字、不可点。
-/// 右边是 Cue 原话的开关（`CueOriginalToggle`，Cue 的提问才有）与"1/3"第几件（只有一件不写）；Mac 上计数两边各一颗小箭头换一件（`step`），
-/// 手机上左右滑卡换（`CueWaitDock`）。
+/// 等你卡顶上的眉题行（小号、淡墨，几样靠间距与深浅分开，不用"·"拼）：
+/// - 左边：所在项目（项目自己的图标与颜色，`ProjectGlyph`，同看板与侧栏）与项目名，再是这件事的名字（`TaskBoard.Wait.title`：任务名或会话名，深一档）。
+///   名字点得到：Cue 的提问打开它落在的任务（`CueTaskButton`，接力也落在这里），会话在问的进会话（谁在问就是这个会话，打开会话的入口也是它）；
+///   没落在任务上的提问写 Cue 的名字、不可点。不属于哪个项目的不写项目。地方不够先截名字。
+/// - 右边：等了多久（"刚刚""已等 38 分钟"），不止一件时再是"1/3"第几件；Mac 上计数两边各一颗小箭头换一件（`step`），手机上左右滑卡换（`CueWaitDock`）。
 struct CueWaitEyebrow: View {
     let wait: TaskBoard.Wait
     let index: Int
     let count: Int
-    @Binding var reading: Bool
     let step: (Int) -> Void
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
@@ -84,11 +64,19 @@ struct CueWaitEyebrow: View {
     static let height: CGFloat = 20
 
     var body: some View {
-        HStack(spacing: 4) {
-            name
+        HStack(spacing: 0) {
+            if let project = workspace.catalog?.project(wait.project ?? wait.message?.asked?.project) {
+                HStack(spacing: 2) {
+                    ProjectGlyph(project: project, size: 11)
+                    Text(project.name).lineLimit(1)
+                }
+                .fixedSize()
+                .padding(.trailing, 10)
+            }
+            name.layoutPriority(-1)
             Spacer(minLength: 12)
-            if wait.message != nil { CueOriginalToggle(open: $reading).padding(.trailing, count > 1 ? 8 : 0) }
-            if count > 1 { position }
+            LiveText(style: PiClock.Waited(since: wait.since)).monospacedDigit().fixedSize()
+            if count > 1 { position.padding(.leading, 10) }
         }
         .font(Typography.caption)
         .foregroundStyle(palette.ink3)
@@ -117,19 +105,23 @@ struct CueWaitEyebrow: View {
             Text(title).lineLimit(1)
             if linked { Image(.forward).font(.system(size: 8, weight: .bold)) }
         }
+        .foregroundStyle(palette.ink2)
         // 小字本身矮：点得到的范围往上下扩，不撑高这一行
         .contentShape(.rect.inset(by: -Self.reach))
     }
 
     @ViewBuilder private var position: some View {
-        #if os(macOS)
-        arrow(.back, by: -1, enabled: index > 0, label: "上一件")
-        #endif
-        Text("\(index + 1)/\(count)").monospacedDigit()
-            .accessibilityLabel("第 \(index + 1) 件，共 \(count) 件")
-        #if os(macOS)
-        arrow(.forward, by: 1, enabled: index < count - 1, label: "下一件")
-        #endif
+        HStack(spacing: 0) {
+            #if os(macOS)
+            arrow(.back, by: -1, enabled: index > 0, label: "上一件")
+            #endif
+            Text("\(index + 1)/\(count)").monospacedDigit()
+                .accessibilityLabel("第 \(index + 1) 件，共 \(count) 件")
+            #if os(macOS)
+            arrow(.forward, by: 1, enabled: index < count - 1, label: "下一件")
+            #endif
+        }
+        .fixedSize()
     }
 
     #if os(macOS)

@@ -70,13 +70,11 @@ extension CueQuestionLine where Below == EmptyView {
 /// Cue 一问的选项，一行排完：第一项"可以"是按字宽的实底主按钮（全卡唯一的靛青）靠右，其余（"以后……不用问"）是同一行左边的小字链接：
 /// 一问的主动作只有"可以"，放宽规矩是顺手的事，不和它抢。等你的答法（`WaitAnswer`）与全屏预览的底栏共用；会话的选项胶囊同样靠右（`WaitAnswer`）。
 /// 主按钮总在右下角同一处，不随卡宽铺开，不窄过 `onceWidth`；链接长了在左边折行。辅助功能字号时竖排：按钮在上、链接在下，都靠右。
-/// `hint`：点名的图里"可以"选的是其中一张时（`CueShots.chosen`），一句告诉你选别的去哪说，写在左边链接的位置上面。
-/// Cue 停用着答不了时（`CueSession.canHear`）写"启用 Cue 后再答"在 `hint` 的位置；只留"可以"、降成次级并停用，不和启用那颗主按钮抢（同屏只一个主动作），启用后恢复。
+/// Cue 停用着答不了时（`CueSession.canHear`）写"启用 Cue 后再答"在左边链接的位置；只留"可以"、降成次级并停用，不和启用那颗主按钮抢（同屏只一个主动作），启用后恢复。
 /// 进展页等你列小一档（`compact`），地方窄，选项照旧是一排靠右的胶囊。
 struct CueChoices: View {
     let options: [String]
     var disabled = false
-    var hint: String?
     /// 小一档（进展页等你列）：胶囊紧凑、靠右能换行，"以后……不用问"收成"以后不用问"（范围在依据那一行）；答的仍是原文
     var compact = false
     let pick: (String) -> Void
@@ -95,7 +93,7 @@ struct CueChoices: View {
     var body: some View {
         // 停用着只留停用的"可以"：别的选项此刻同样选不了，竖排时多一颗按钮就把手机上的卡挤进不带图的紧凑档
         let cue = workspace.cue, paused = !cue.canHear
-        let once = options.first ?? CueAsk.once, others = paused ? [] : Array(options.dropFirst()), hint = paused ? "启用 \(cue.name) 后再答" : hint
+        let once = options.first ?? CueAsk.once, others = paused ? [] : Array(options.dropFirst()), hint = paused ? "启用 \(cue.name) 后再答" : nil
         let main: ControlButtonStyle.Kind = paused ? .secondary : .primary
         if compact {
             VStack(alignment: .trailing, spacing: 4) {
