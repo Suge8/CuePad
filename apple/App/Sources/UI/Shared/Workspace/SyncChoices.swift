@@ -1,11 +1,12 @@
 import CueStore
 import CueSync
 import Observation
+import os
 import SwiftUI
 
 /// 设置里同步要你选的两件事，两端同一份说法与出错处理：同步暂停时上传本机，还是用云端替换本机（替换前再确认一次，`confirmsErase`）；
-/// 同一张卡有两个版本时留哪一份。没做成的原因存在 `failure`，就地写在那一处，下一次动作先清掉（同 `CueSettingsModel`）；
-/// 做成了不另说，状态那一行与冲突列表自己会变。
+/// 同一张卡有两个版本时留哪一份。没做成时 `failure` 是给人看的一句，就地写在那一处，下一次动作先清掉（同 `CueSettingsModel`）；
+/// 这几件都只读写本机资料库，没做成就是本机读写出错，原话只进日志。做成了不另说，状态那一行与冲突列表自己会变。
 @Observable
 final class SyncChoices {
     private(set) var working = false
@@ -19,6 +20,7 @@ final class SyncChoices {
     static let upload = Choice(title: "上传本机数据", consequence: "本机数据作为新内容传到当前账号")
     static let erase = Choice(title: "用云端数据替换本机…", consequence: "丢弃本机的灵感、任务、项目与图片，从当前账号的云端重新下载")
     static let keep = "保留这一份"
+    static let failed = "没做成：这台设备的资料库读写出错，再试一次"
 
     func resolve(_ resolution: SyncResolution, _ services: AppServices) {
         run { try await services.resolveSync(resolution) }
@@ -34,7 +36,10 @@ final class SyncChoices {
         failure = nil
         Task {
             defer { working = false }
-            do { try await work() } catch { failure = error.localizedDescription }
+            do { try await work() } catch {
+                AppServices.log.error("同步的选择没做成：\(String(describing: error), privacy: .public)")
+                failure = Self.failed
+            }
         }
     }
 }

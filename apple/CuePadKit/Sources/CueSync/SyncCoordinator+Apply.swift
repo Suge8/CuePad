@@ -7,7 +7,7 @@ extension SyncCoordinator {
     var changes: [RemoteChange] = []
     for record in modifications where record.recordType != PeerFloor.recordType {  // 门槛不进库，`meet` 看过了
       guard let row = RecordMapper.row(from: record) else {
-        report("未知的记录类型「\(record.recordType)」，已跳过（可能来自更新版本的 CuePad）", kind: .incoming, recordType: record.recordType, recordName: record.recordID.recordName)
+        report(.unknownType, kind: .incoming, recordType: record.recordType, recordName: record.recordID.recordName)
         continue
       }
       if row.table == .deliveryRequests { traceArrival(of: record, row) }
@@ -16,13 +16,13 @@ extension SyncCoordinator {
     }
     for (id, recordType) in deletions {
       guard let table = RecordMapper.table(named: recordType) else {
-        report("未知的记录类型「\(recordType)」的删除，已跳过", kind: .incoming, recordType: recordType, recordName: id.recordName)
+        report(.unknownType, kind: .incoming, recordType: recordType, recordName: id.recordName)
         continue
       }
       changes.append(.delete(SyncKey(table: table, id: id.recordName)))
     }
     for failure in try await store.applyRemote(changes) {
-      report(failure.message, kind: .incoming, recordType: nil, recordName: failure.recordName)
+      report(.local, detail: failure.message, kind: .incoming, recordType: nil, recordName: failure.recordName)
     }
   }
 
@@ -41,14 +41,14 @@ extension SyncCoordinator {
   private func adoptAsset(of record: CKRecord, _ row: SyncRow) throws -> Bool {
     let name = record.recordID.recordName
     guard case .text(let hash)? = row.fields["hash"], let file = (record["file"] as? CKAsset)?.fileURL else {
-      report("附件记录没有文件，已拒绝", kind: .incoming, recordType: record.recordType, recordName: name)
+      report(.damaged, detail: "附件记录没有文件", kind: .incoming, recordType: record.recordType, recordName: name)
       return false
     }
     do {
       try store.files.adopt(fileAt: file, hash: hash)
       return true
     } catch let error as CueStoreError where [.invalidAttachmentHash, .attachmentHashMismatch].contains(error) {
-      report("附件文件校验失败，已拒绝：\(error)", kind: .incoming, recordType: record.recordType, recordName: name)
+      report(.damaged, detail: "\(error)", kind: .incoming, recordType: record.recordType, recordName: name)
       return false
     }
   }

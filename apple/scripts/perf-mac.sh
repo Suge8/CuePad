@@ -4,9 +4,9 @@
 #   逐项量点击回合（动作发出到画面第一次变的主线程 CPU 毫秒）与其中的指令数、每毫秒跑的周期（GHz：活一样多而回合翻倍时它减半，是机器那一刻慢），
 #   合计、最重一圈、指令数与掉帧，取各次的中位数，
 #   列成表。默认在后台量（不抢前台）：指令数照样前后对比，帧与掉帧偏乐观，不和预算比；
-#   要和交互预算（docs/verify.md「交互预算」）比就加 -CuePadForeground YES 在前台量（规则见 docs/verify.md「占前台」），有一项超了就以 1 退出。
+#   要和交互预算（docs/perf.md「交互预算」）比就加 -CuePadForeground YES 在前台量（规则见 docs/verify.md「占前台」），有一项超了就以 1 退出。
 #   CUEPAD_PERF_SEED=<库目录>（如真实库的只读副本）：只量这份库，每次从它克隆，换掉演示库与大库；配 -CuePadProject <库里的项目名>（单次交互从项目页起）。
-#   -CuePadInteractOnly 项,项 只量列出的几项（前后对比省下整套流程），用法见 docs/verify.md。
+#   -CuePadInteractOnly 项,项 只量列出的几项（前后对比省下整套流程），用法见 docs/perf.md「交互预算」。
 #   前台量时"任务气泡开"是真实点击：App 写 AWAIT click x y，这里用 hid.swift 经 HID 点那一行（会移动真实指针，量完放回）。
 #   每次量的原始行（每次启动每项一行 JSON，键同 InteractionBench 的 INTERACT 行，另加"库"）留在 apple/.derived-perf/Build/interact.jsonl，
 #   表里的中位数就从它算；下一次 perf mac 开跑时清空重写，要留着比就先拷走。

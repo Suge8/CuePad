@@ -19,7 +19,7 @@ struct SyncWiringTests {
         app.sync.emit(SyncState(status: .syncing, issues: []))
         try await eventually("services.syncStatus == .syncing") { services.syncStatus == .syncing }
 
-        let issue = SyncIssue(recordType: "cards", recordName: "c1", message: "附件记录没有文件，已拒绝")
+        let issue = SyncIssue(recordType: "attachments", recordName: "c1", problem: .damaged, detail: "附件记录没有文件")
         app.sync.emit(SyncState(status: .syncing, issues: [issue]))
         try await eventually("services.syncIssues == [issue]") { services.syncIssues == [issue] }
 
@@ -80,27 +80,6 @@ struct SyncWiringTests {
         let record = CKRecord(recordType: PeerFloor.recordType, recordID: PeerFloor(zoneID: CloudSync.zoneID).id)
         record[PeerFloor.field] = version as NSNumber
         return record
-    }
-
-    struct NoEntitlement: Error {}
-
-    @Test func 引擎启动失败时进入启动问题_状态写明原因() async throws {
-        app.sync.startError.withLock { $0 = NoEntitlement() }
-        services.startSync()
-        defer { services.cancelBackgroundWork() }
-
-        try await eventually("!services.startupIssues.isEmpty") { !services.startupIssues.isEmpty }
-
-        guard case .syncUnavailable(let message)? = services.startupIssues.first else {
-            Issue.record("启动失败没有进入 startupIssues：\(services.startupIssues)")
-            return
-        }
-        #expect(message.contains("NoEntitlement"))
-        guard case .unavailable(let reason) = services.syncStatus else {
-            Issue.record("\(services.syncStatus)")
-            return
-        }
-        #expect(reason.contains("没能启动"))
     }
 
     /// 同步一直不返回（引擎队列被占着、网络没有回音）：下拉刷新的圈到时限就停，同步仍挂着；转着的时候主线程照常响应（测试本身在主线程上推钟）。

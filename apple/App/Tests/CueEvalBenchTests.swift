@@ -5,7 +5,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 用记忆基准（LongMemEval、LoCoMo、ConvoMem）给 Cue 的长期记忆打分：改提示词、recall 前后各跑一遍比分数。跑法见 docs/verify.md「记忆基准」。
+/// 用记忆基准（LongMemEval、LoCoMo、ConvoMem）给 Cue 的长期记忆打分：改提示词、recall 前后各跑一遍比分数。跑法见 docs/cue-eval.md「记忆基准」。
 /// 每题一个隔离库：启用 Cue 之前把题里的历史按给的时刻写成 Cue 的对话（他的话已交给 Cue，其余是 Cue 的回复）；
 /// 信封上的此刻定在提问时刻（`CueTiming.clock`），别的时间规则照真实时钟。等值班起来，把问题作为他的话交给 Cue，收下这一轮 Cue 对他说的话。
 /// 题目由 `apple/scripts/bench.py sample` 抽好（`CUEPAD_BENCH_DATA`，三家同一种题目行），每题写一个 <输出>/<题号>.json（题目行除历史外的字段，

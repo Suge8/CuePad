@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Cue 评测的成绩单：读几遍的输出目录（每个场景一份 <场景>.score.json，CueEvalScore 写），按套（短场景、长程、多日）
-汇总判定的类别通过数与量化指标，比两组之间的差与每条判定的翻转。跑法、指标定义见 docs/verify.md「Cue 评测」。
+汇总判定的类别通过数与量化指标，比两组之间的差与每条判定的翻转。跑法、指标定义见 docs/cue-eval.md「成绩单」。
 
   score.py RUN [RUN…] [--vs RUN [RUN…]]   一组是改前（或基线），--vs 后是改后；每个 RUN 是一遍的输出目录。
                                             写最后一个 RUN/score.md 并打印路径

@@ -5,7 +5,7 @@ import os
 
 /// 同步逻辑：远端变更应用、上传批次与结果处理、账号与状态。不碰网络：拉取器（`ZonePuller.pulled`）、发送者（`sent`、`nextBatch`）
 /// 与账号检查（`CloudSync`）把服务器给的直接交进来。待推送只有库里推导的一份（`CueStore.pendingSync`）。
-/// 失败只经 `failed` 按 `SyncFault` 改状态；任何一次请求成功经 `succeeded` 收掉离线、同步出错与请求类的问题，并告诉发送者网络通了（`connectivity`）。
+/// 失败（服务器的与本机读写的）只经 `failed` 按 `SyncFault` 改状态、记问题；任何一次请求成功经 `succeeded` 收掉离线、同步出错与请求类的问题，并告诉发送者网络通了（`connectivity`）。
 actor SyncCoordinator {
   static let issueLimit = 50
   static let log = Logger(subsystem: AppIdentity.id, category: "delivery")
@@ -115,7 +115,7 @@ actor SyncCoordinator {
 
   /// 同步开始时读一次令牌：还没拉过（离线、没登录）也说得出这台对没对过。
   func loadToken() async {
-    do { _ = try await token() } catch { report(error, kind: .request) }
+    do { _ = try await token() } catch { failed(error) }
   }
 
   /// 拉取器拉到的一页：应用完才返回；整页没能应用（库写不进去、停下了）时抛出，拉取器不前移令牌。
@@ -124,12 +124,7 @@ actor SyncCoordinator {
     guard !stopped else { throw SyncPaused() }
     try meet(modifications)
     guard !modifications.isEmpty || !deletions.isEmpty else { return }
-    do {
-      try await applyFetched(modifications, deletions)
-    } catch {
-      report(error, kind: .request)
-      throw error
-    }
+    try await applyFetched(modifications, deletions)  // 没应用成的由拉取器报（`failed`）
   }
 
   /// 云端的最低对端版本（`PeerFloor`）高于这台能同步的结构版本：停下，抛出 `SyncPaused`。
@@ -164,7 +159,7 @@ actor SyncCoordinator {
       guard let last = try await store.syncState(Self.accountKey) else { return try await store.setSyncState(Self.accountKey, current) }
       if last != current { facts.status = .needsDecision(.accountSwitched) }
     } catch {
-      report(error, kind: .request)
+      failed(error)
     }
   }
 
@@ -179,7 +174,7 @@ actor SyncCoordinator {
       try await setToken(nil)
       if synced { facts.status = .needsDecision(deletedByUser ? .cloudDataDeleted : .cloudDataReset) }
     } catch {
-      report(error, kind: .request)
+      failed(error)
     }
   }
 
@@ -210,25 +205,23 @@ actor SyncCoordinator {
     case .offline: if [.idle, .starting].contains(status) { facts.status = .offline }
     case .account(let status): facts.status = status
     case .wait: break
-    case .rejected: report(error, kind: kind, recordType: recordType, recordName: recordName)
+    case .rejected:
+      report(SyncIssue.Problem(error), detail: error.diagnosis, kind: kind, recordType: recordType, recordName: recordName)
     }
     return fault
   }
 
   // MARK: 报告
 
-  func report(_ error: any Error, kind: SyncIssue.Kind, recordType: String? = nil, recordName: String? = nil) {
-    report(error.diagnosis, kind: kind, recordType: recordType, recordName: recordName)
-  }
-
   /// 记一条问题：同一类、同一条记录只留最新的一条（`SyncIssue.sameAs`）。失败类的让状态变成同步出错。
-  func report(_ message: String, kind: SyncIssue.Kind, recordType: String?, recordName: String?) {
+  /// 错误不直接报，经 `failed` 归类：连不上、要等、账号的不是问题。
+  func report(_ problem: SyncIssue.Problem, detail: String? = nil, kind: SyncIssue.Kind, recordType: String?, recordName: String?) {
     var next = facts
-    let issue = SyncIssue(kind: kind, recordType: recordType, recordName: recordName, message: message)
+    let issue = SyncIssue(kind: kind, recordType: recordType, recordName: recordName, problem: problem, detail: detail)
     next.issues.removeAll { $0.sameAs(issue) }
     next.issues.append(issue)
     if next.issues.count > Self.issueLimit { next.issues.removeFirst(next.issues.count - Self.issueLimit) }
-    if issue.isFailure, !stopped { next.status = .failed(message) }
+    if issue.isFailure, !stopped { next.status = .failed }
     facts = next  // 问题与状态一次送达
   }
 

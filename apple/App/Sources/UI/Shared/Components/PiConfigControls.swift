@@ -94,7 +94,7 @@ struct PiConfigControls<Trailing: View>: View {
     var body: some View {
         ConfigRow {
             if let agent { PiAgentCapsule(pick: agent) }
-            modelCapsule.layoutValue(key: ConfigGive.self, value: .name)
+            modelCapsule
             if let meter = PiThinkingMeter(levels: levels, current: shown.thinking) {
                 PiThinkingDial(meter: meter, pending: shown.pending, choose: chooseThinking)
                     #if os(macOS)
@@ -131,54 +131,75 @@ struct PiConfigControls<Trailing: View>: View {
 }
 
 /// 工具排：胶囊按内容宽从左排成一行，竖直居中，整排不超出给的宽（超出的话输入框跟着撑宽、伸出屏幕两边）。
-/// 放不下时按 `Give` 的次序一步步让，够了就停。模型胶囊另有上限：最宽是这一排的一半，至少 96（短名放得下）、至多 240（宽屏不至于拉得过长）。
+/// 一行放不下时按 `Give` 的次序一步步让，够了就停；让完还放不下（字号大、模型名长）就折到下一行，胶囊都按内容宽、不截字：
+/// 模型名是这一排要读的字，截成"…"就认不出用的是哪个模型。只有一枚自己就比整排宽时才截它。
 private struct ConfigRow: Layout {
-    /// 让的次序：先去掉思考强度前的"思考"二字（`PiThinkingDial`），再收紧间距，再把"上下文"收成圆环（`PiContextGauge`），最后才截模型名。
-    enum Give: CaseIterable { case wording, spacing, context, name }
+    /// 让的次序：先去掉思考强度前的"思考"二字（`PiThinkingDial`），再收紧间距，再把"上下文"收成圆环（`PiContextGauge`）。
+    enum Give: CaseIterable { case wording, spacing, context }
 
     private static let spacing: CGFloat = 6
     private static let tightSpacing: CGFloat = 2
-    private static let nameShare: CGFloat = 0.5
-    private static let nameMin: CGFloat = 96
-    private static let nameMax: CGFloat = 240
 
     private struct Arrangement {
         var widths: [CGFloat]
         var spacing: CGFloat
+        /// 每行从第几枚起；一行时只有 0。
+        var breaks = [0]
         var width: CGFloat { widths.reduce(0, +) + spacing * CGFloat(max(widths.count - 1, 0)) }
+
+        func lines(_ count: Int) -> [Range<Int>] {
+            zip(breaks, breaks.dropFirst() + [count]).map { $0..<$1 }
+        }
     }
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let row = arrange(in: proposal.width, subviews)
-        let height = zip(subviews, row.widths).map { $0.sizeThatFits(ProposedViewSize(width: $1, height: proposal.height)).height }.max() ?? 0
-        return CGSize(width: row.width, height: height)
+        let lines = row.lines(subviews.count).map { line(row, $0, subviews) }
+        return CGSize(width: lines.map(\.width).max() ?? 0, height: lines.map(\.height).reduce(0, +))
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         let row = arrange(in: proposal.width, subviews)
-        var x = bounds.minX
-        for (subview, width) in zip(subviews, row.widths) {
-            subview.place(at: CGPoint(x: x, y: bounds.midY), anchor: .leading, proposal: ProposedViewSize(width: width, height: bounds.height))
-            x += width + row.spacing
+        var y = bounds.minY
+        for range in row.lines(subviews.count) {
+            let height = line(row, range, subviews).height
+            var x = bounds.minX
+            for index in range {
+                subviews[index].place(at: CGPoint(x: x, y: y + height / 2), anchor: .leading, proposal: ProposedViewSize(width: row.widths[index], height: height))
+                x += row.widths[index] + row.spacing
+            }
+            y += height
         }
+    }
+
+    private func line(_ row: Arrangement, _ range: Range<Int>, _ subviews: Subviews) -> CGSize {
+        let width = range.map { row.widths[$0] }.reduce(0, +) + row.spacing * CGFloat(max(range.count - 1, 0))
+        let height = range.map { subviews[$0].sizeThatFits(ProposedViewSize(width: row.widths[$0], height: nil)).height }.max() ?? 0
+        return CGSize(width: width, height: height)
     }
 
     private func arrange(in available: CGFloat?, _ subviews: Subviews) -> Arrangement {
         var row = Arrangement(widths: subviews.map { $0.sizeThatFits(.unspecified).width }, spacing: Self.spacing)
         guard let available else { return row }
-        let name = subviews.firstIndex { $0[ConfigGive.self] == .name }
-        let cap = min(max(available * Self.nameShare, Self.nameMin), Self.nameMax)
-        if let name, row.widths[name] > cap { row.widths[name] = width(of: subviews[name], in: cap) }
         for give in Give.allCases where row.width > available {
             switch give {
             case .spacing:
                 row.spacing = Self.tightSpacing
-            case .name:
-                if let name { row.widths[name] = width(of: subviews[name], in: max(available - row.width + row.widths[name], 0)) }
             case .wording, .context:
                 for index in subviews.indices where subviews[index][ConfigGive.self] == give {
                     row.widths[index] = width(of: subviews[index], in: 0)
                 }
+            }
+        }
+        guard row.width > available else { return row }
+        var x: CGFloat = 0
+        for index in subviews.indices {
+            if row.widths[index] > available { row.widths[index] = width(of: subviews[index], in: available) }
+            if index > 0, x + row.spacing + row.widths[index] > available {
+                row.breaks.append(index)
+                x = row.widths[index]
+            } else {
+                x += (index > 0 ? row.spacing : 0) + row.widths[index]
             }
         }
         return row

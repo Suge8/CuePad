@@ -164,7 +164,7 @@ final class AppServices {
         case globalShortcutUnavailable(String)
         /// 分享扩展留下的内容没能入库（保留在共享容器里，下次再试）。
         case captureImportFailed(String)
-        /// iCloud 同步（或依赖它的 Mac 端远程功能）没能启动。
+        /// 跟着同步的本机功能没能启动（冲突列表、Mac 端的远程功能）。
         case syncUnavailable(String)
         case widgetDataUnavailable(String)
         #if os(macOS)
@@ -253,14 +253,6 @@ final class AppServices {
         }
     }
     #endif
-
-    /// 同步没能启动：状态写明原因（与启动问题一起），不停在"正在连接"。
-    func syncFailedToStart(_ error: any Error) {
-        let reason = "同步没能启动：\(error.localizedDescription)"
-        syncStatus = .unavailable(reason)
-        speechClock.setReachable(false)
-        reportIssue(.syncUnavailable(reason))
-    }
 
     #if os(iOS)
     func post(_ alert: SessionAlert) { sessionAlert = alert }

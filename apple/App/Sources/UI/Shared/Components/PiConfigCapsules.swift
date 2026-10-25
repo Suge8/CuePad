@@ -3,9 +3,18 @@ import SwiftUI
 
 /// 工具排里各枚胶囊（Agent、模型、思考强度、上下文用量 `PiContextGauge`）同样高。
 enum ConfigCapsule {
+    /// 标准字号下的高；字号大了跟着字长高，字上下留 `textInset`（写死高度时大字号的字会伸出胶囊）。
     static let height: CGFloat = 30
+    static let textInset: CGFloat = 4
     /// 点按区的高：胶囊画 `height` 高，点得到的上下各多一截，整排就是这么高。
     static let hitHeight: CGFloat = 44
+}
+
+extension View {
+    /// 胶囊的高（`ConfigCapsule`）：至少 `height`，字号大了随字长高。
+    func configCapsuleHeight() -> some View {
+        padding(.vertical, ConfigCapsule.textInset).frame(minHeight: ConfigCapsule.height)
+    }
 }
 
 /// 模型胶囊：模型的标志（`BrandMark.model`）+ 模型短名（没有当前模型时写 `unnamed`）。iOS 点开是系统菜单（`MenuButton`）；Mac 点开与 ⌘⇧M 是同一个 AppKit 菜单（`ChoiceMenu`，
@@ -56,8 +65,8 @@ struct PiModelCapsule: View {
         }
         .font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink2)
         .padding(.leading, badged ? 6 : 11).padding(.trailing, 11)
-        // 按内容宽，给的窄了截断（最宽多少由工具排定）
-        .frame(height: ConfigCapsule.height)
+        // 按内容宽；只有比整排还宽时截断（`ConfigRow`）
+        .configCapsuleHeight()
         .background(palette.fill, in: .capsule)
         .frame(minHeight: ConfigCapsule.hitHeight)
         .contentShape(.capsule)
@@ -110,7 +119,7 @@ struct PiAgentCapsule: View {
         .font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink2)
         .padding(.leading, 6).padding(.trailing, 11)
         .fixedSize()
-        .frame(height: ConfigCapsule.height)
+        .configCapsuleHeight()
         .background(palette.fill, in: .capsule)
         .frame(minHeight: ConfigCapsule.hitHeight)
         .contentShape(.capsule)
@@ -182,7 +191,7 @@ struct PiThinkingDial: View {
                 .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(Self.space)) } action: { track = $0 }
         }
         .padding(.horizontal, 10)
-        .frame(height: ConfigCapsule.height)
+        .configCapsuleHeight()
         .background(palette.fill, in: .capsule)
         .overlay(alignment: .top) {
             if let bubble {

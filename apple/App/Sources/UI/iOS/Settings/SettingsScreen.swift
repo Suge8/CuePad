@@ -153,9 +153,12 @@ private struct SyncSection: View {
             if !services.syncIssues.isEmpty {
                 DisclosureGroup("\(services.syncIssues.count) 条记录没能同步") {
                     ForEach(Array(services.syncIssues.enumerated()), id: \.offset) { _, issue in
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(issue.summary).font(.footnote)
-                            Text(issue.message).font(.caption2.monospaced()).foregroundStyle(palette.ink3).textSelection(.enabled)
+                        Text(issue.text).font(.footnote)
+                        if let detail = issue.detail {
+                            DisclosureGroup("详情") {
+                                Text(detail).font(.caption2.monospaced()).foregroundStyle(palette.ink3).textSelection(.enabled)
+                            }
+                            .font(.footnote).foregroundStyle(palette.ink3)
                         }
                     }
                 }

@@ -17,7 +17,8 @@ enum SyncFault: Equatable, Sendable {
 
   init(_ error: any Error) {
     guard let error = error as? CKError else {
-      self = Self.isURLError(error) ? .offline(nil) : .rejected
+      // 请求被取消（时限、赛跑输了的那路）同 CloudKit 的 operationCancelled：再试就是
+      self = Self.isURLError(error) ? .offline(nil) : error is CancellationError ? .wait(nil) : .rejected
       return
     }
     if error.code == .partialFailure, let items = error.partialErrorsByItemID?.values, !items.isEmpty {

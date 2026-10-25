@@ -27,7 +27,7 @@ extension SyncCoordinator {
     if case .pending = scope { drained = nil }
     let pending: PendingSync, generation: Int
     do { (pending, generation) = try await store.pendingSync(since: since) } catch {
-      report(error, kind: .request)
+      failed(error)
       return nil
     }
     let excluded: Set<String>
@@ -63,7 +63,7 @@ extension SyncCoordinator {
         return (record.recordID.recordName, table, stamp)
       })
     } catch {
-      report(error, kind: .request)
+      failed(error)
       return nil
     }
     // 构造这批时可能停下了（拉到过高的门槛、要你决定）：停下后不再交出新的一批
@@ -80,14 +80,14 @@ extension SyncCoordinator {
       if row.table == .attachments {
         guard case .text(let hash)? = row.fields["hash"], let file = store.files.fileURL(for: hash) else {
           unsendable[id.recordName] = row.modifiedAt
-          report("附件文件不在本机，未上传", kind: .upload, recordType: row.table.rawValue, recordName: id.recordName)
+          report(.fileMissing, kind: .upload, recordType: row.table.rawValue, recordName: id.recordName)
           return nil
         }
         record["file"] = CKAsset(fileURL: file)
       }
       return record
     } catch {
-      report(error, kind: .upload, recordName: id.recordName)
+      failed(error, kind: .upload, recordName: id.recordName)
       return nil
     }
   }
@@ -101,8 +101,7 @@ extension SyncCoordinator {
     do {
       return try await processSent(sent, for: batch)
     } catch {
-      report(error, kind: .request)
-      return SendOutcome(progressed: false, fault: .rejected)
+      return SendOutcome(progressed: false, fault: failed(error))
     }
   }
 
@@ -126,7 +125,7 @@ extension SyncCoordinator {
           try await applyFetched([server], [])  // 带上服务器的版本标签；本机版本胜出的话下一批重传
           outcome.progressed = true
         } else {
-          report("保存冲突但没有服务器版本：\(error)", kind: .upload, recordType: record.recordType, recordName: name)
+          report(.refused, detail: "保存冲突但没有服务器版本：\(error.diagnosis)", kind: .upload, recordType: record.recordType, recordName: name)
         }
       case .batchRequestFailed:
         outcome.progressed = true  // 同批里别的记录被拒，这条自己没问题
@@ -150,14 +149,8 @@ extension SyncCoordinator {
     }
     // 收下了：之前的失败与空间不足都过去了
     if !received.isEmpty, sent.failedSaves.isEmpty, sent.failedDeletes.isEmpty {
-      if status == .quotaExceeded || (status.isFailed && !facts.issues.contains(where: \.isFailure)) { facts.status = .idle }
+      if status == .quotaExceeded || (status == .failed && !facts.issues.contains(where: \.isFailure)) { facts.status = .idle }
     }
     return outcome
-  }
-}
-
-extension SyncStatus {
-  fileprivate var isFailed: Bool {
-    if case .failed = self { true } else { false }
   }
 }

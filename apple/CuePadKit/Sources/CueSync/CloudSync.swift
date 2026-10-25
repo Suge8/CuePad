@@ -5,7 +5,7 @@ import os
 /// iCloud 同步入口：私有数据库里一个自定义同步区，自己的同步循环——一个拉取器（`ZonePuller`）、一个发送者（`RecordSender`），
 /// 逻辑在协调器（`SyncCoordinator`）。
 ///
-/// 用法：`let sync = CloudSync(store: store)`；`try await sync.start()` 认账号（认不了由这里自己按退避再认）、开始上传，第一次拉由 App 发起
+/// 用法：`let sync = CloudSync(store: store)`；`await sync.start()` 认账号（认不了由这里自己按退避再认）、开始上传，第一次拉由 App 发起
 /// （`syncNow`，它等得到拉完）；界面订阅 `stateUpdates`，状态为 `.needsDecision` 时让用户选择后调用 `resolve(_:)`。冲突副本由 `CueStore.conflicts()` 提供。
 /// 实时层订阅 `acceptedUpdates`（服务器收下了本机的一批改动），要立刻拉一次就调 `syncNow`。
 /// 需要 App 带 iCloud（CloudKit）entitlement 与容器；没有 entitlement 的进程（命令行测试）不能调用 `start()`。
@@ -66,7 +66,7 @@ public actor CloudSync {
   public nonisolated var acceptedUpdates: AsyncStream<AcceptedChanges> { coordinator.acceptedUpdates }
 
   /// 连上 iCloud 并认一次账号（返回时认完；认不了的这里自己按退避再认）。
-  public func start() async throws {
+  public func start() async {
     guard cloud == nil else { return }
     let cloud = connect()
     self.cloud = cloud
