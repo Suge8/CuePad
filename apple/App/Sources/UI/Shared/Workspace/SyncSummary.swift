@@ -1,3 +1,4 @@
+import CueStore
 import CueSync
 import SwiftUI
 
@@ -78,14 +79,14 @@ extension SyncIssue {
     }
 
     private var subject: String {
-        switch recordType {
-        case "cards": String(localized: "一张灵感或任务")
-        case "projects": String(localized: "一个项目")
-        case "sendRecords": String(localized: "一条发送记录")
-        case "attachments": String(localized: "一张图片")
-        case "piSessionStates", "piMessages": String(localized: "Agent 会话的内容")
-        case "deliveryRequests": String(localized: "一条发给 Mac 的请求")
-        case "directoryBindings": String(localized: "项目的文件夹")
+        switch recordType.flatMap(Table.init(rawValue:)) {
+        case .cards: String(localized: "一张灵感或任务")
+        case .projects: String(localized: "一个项目")
+        case .sendRecords: String(localized: "一条发送记录")
+        case .attachments: String(localized: "一张图片")
+        case .piSessionStates, .piMessages: String(localized: "Agent 会话的内容")
+        case .deliveryRequests: String(localized: "一条发给 Mac 的请求")
+        case .directoryBindings: String(localized: "项目的文件夹")
         default: String(localized: "一条记录")
         }
     }
