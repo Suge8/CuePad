@@ -32,14 +32,27 @@ nonisolated struct AlertPreference: Equatable, Sendable {
     var sound: AlertSound?
 }
 
-/// 两种提示（`AlertRoute.kind`：等你、做完了）各自的偏好，本机、不同步（`AppSettings.alerts`）。
+/// 三种提示（`AlertRoute.kind`：等你、待回复、做完了）各自的偏好，本机、不同步（`AppSettings.alerts`）。
 nonisolated struct AlertPreferences: Equatable, Sendable {
     var waiting = AlertPreference(isOn: true, sound: .chime)
+    var reply = AlertPreference(isOn: true, sound: .tap)
     var settled = AlertPreference(isOn: true, sound: .drop)
 
     subscript(kind: PiAlert) -> AlertPreference {
-        get { kind == .waitingForUser ? waiting : settled }
-        set { if kind == .waitingForUser { waiting = newValue } else { settled = newValue } }
+        get {
+            switch kind {
+            case .waitingForUser: waiting
+            case .awaitsReply: reply
+            case .settled: settled
+            }
+        }
+        set {
+            switch kind {
+            case .waitingForUser: waiting = newValue
+            case .awaitsReply: reply = newValue
+            case .settled: settled = newValue
+            }
+        }
     }
 
     private static let on = "on", sound = "sound"

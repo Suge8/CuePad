@@ -117,6 +117,22 @@ nonisolated extension PiClock {
     }
 }
 
+nonisolated extension PiClock {
+    /// 等了多久（Cue 页等你卡的来源行）：不到一分钟写"刚刚"，之后"已等 12 分钟"；第一分钟不走秒，之后换字同 `Elapsed`。
+    struct Waited: DiscreteFormatStyle {
+        let since: Date
+
+        private var minute: Date { since.addingTimeInterval(60) }
+        private var elapsed: Elapsed { Elapsed(since: since) }
+
+        func format(_ now: Date) -> String { now < minute ? "刚刚" : "已等 " + elapsed.format(now) }
+
+        func discreteInput(after now: Date) -> Date? { now < minute ? minute : elapsed.discreteInput(after: now) }
+
+        func discreteInput(before now: Date) -> Date? { now <= minute ? nil : elapsed.discreteInput(before: now) }
+    }
+}
+
 nonisolated extension Date {
     /// 从这一刻起每隔 `step` 一格（往前往后都排），严格晚于 `now` 的第一格。按倍数算出来的那格因浮点误差不晚于 `now` 时取下一格：
     /// 按时刻重画的文字（`LiveText`）睡到这一刻，给出的时刻不晚于此刻就再也醒不过来。

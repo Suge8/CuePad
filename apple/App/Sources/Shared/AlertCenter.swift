@@ -185,8 +185,9 @@ struct AlertMessage {
     var body: String
 
     init(_ alert: SessionAlert) {
-        route = .session(PiAlertTap(kind: alert.kind, sessionState: alert.session))
-        thread = alert.session.uuidString
+        let tap = PiAlertTap(kind: alert.kind, sessionState: alert.session)
+        route = .session(tap)
+        thread = tap.thread
         (title, body) = alert.content
     }
 
@@ -203,7 +204,7 @@ struct AlertMessage {
     }
 }
 
-/// 一条通知说的是什么：Agent 会话的提示（"等你"或"做完了"），Cue 的消息（带选项来问、urgent 的，都算"等你"），或周额度提醒。
+/// 一条通知说的是什么：Agent 会话的提示（"等你"、"待回复"或"做完了"），Cue 的消息（带选项来问、urgent 的，都算"等你"），或周额度提醒。
 /// 手机的 CloudKit 推送与本地通知（`userInfo` 由这里写）都从 userInfo 认出。
 nonisolated enum AlertRoute: Equatable {
     case session(PiAlertTap)

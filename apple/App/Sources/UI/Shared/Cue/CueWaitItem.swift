@@ -2,8 +2,9 @@ import CueStore
 import SwiftUI
 
 /// 等你卡（`CueWaitDock`）里铺开的那一件，按部分排（卡按地方挑排哪几部分）：
-/// - 问句（`question`）：赭黄问号、标题字的问句（`TaskBoard.Wait.asked`），下一行 Cue 的提问是它依据的规矩与范围（最淡的墨、小一号，同进展页等你列），
-///   会话的是问题的说明（选项不写进来）；右上角等了多久；Cue 的原话展开时接在下面（`reading`）。
+/// - 问句（`question`）：赭黄问号、标题字的问句（`TaskBoard.Wait.asked`）；会话的问题有说明时（选项不写进来）接在下一行；
+///   再下一行是来源与等了多久（最淡的墨、小一号）："推送代码前先问你 · 圆桌 · 已等 38 分钟"，会话的是"Codex 在会话里问你 · 刚刚"。
+///   Cue 的原话展开时接在下面（`reading`）。
 /// - 点名的图（`shots`，Cue 的提问才有，`CueShots`；点开全屏时底栏就是这几个选项，看完当场定）。
 /// - 怎么答（`answer`，`WaitAnswer`）；"可以"选的是其中一张图时，那张描靛青圈、选项旁一句"要选别的，在下面跟 Cue 说"。
 /// - 末行（`footer`）：Cue 的提问落在的任务（`CueTaskLine`）与原话的开关（`CueOriginalToggle`）；会话在问的没有。
@@ -48,17 +49,14 @@ struct CueWaitItem: View {
 
     private var question: some View {
         let asked = wait.asked
-        let below: (text: String, basis: Bool)? = switch wait.wait {
-        case .message(let message, _): workspace.waitBasis(of: message).map { ($0, true) }
-        case .session: asked.detail.map { ($0, false) }
-        }
+        let detail: String? = if case .session = wait.wait { asked.detail } else { nil }
         return HStack(alignment: .firstTextBaseline, spacing: 9) {
             PiStateGlyph(status: .asking).font(Typography.title)
             VStack(alignment: .leading, spacing: 4) {
                 Text(CueQuestionLine<EmptyView>.keepingTail(asked.line)).font(Typography.title).foregroundStyle(palette.ink)
-                if let below {
-                    Text(below.text).font(below.basis ? Typography.caption : Typography.secondary).foregroundStyle(below.basis ? palette.ink3 : palette.ink2)
-                }
+                if let detail { Text(detail).font(Typography.secondary).foregroundStyle(palette.ink2) }
+                LiveText(style: PiClock.Waited(since: wait.since)) { Text(Dotted(source, $0)) }
+                    .font(Typography.caption).foregroundStyle(palette.ink3)
                 if reading, let message = wait.message {
                     MarkdownText(source: message.text).equatable().font(Typography.secondary).foregroundStyle(palette.ink2)
                         .padding(.top, 8).transition(.opacity)
@@ -66,14 +64,21 @@ struct CueWaitItem: View {
             }
             .fixedSize(horizontal: false, vertical: true)
             .accessibilityElement(children: .combine)
-            Spacer(minLength: 4)
-            LiveText(style: PiClock.Elapsed(since: wait.since)).font(Typography.caption.monospacedDigit()).foregroundStyle(palette.ink3).fixedSize()
+            Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
+
+    /// 谁问的、凭什么问：Cue 的提问是它依据的规矩与范围（`waitBasis`，旧提问没有），会话的是哪家 Agent 在会话里问你。
+    private var source: String? {
+        switch wait.wait {
+        case .message(let message, _): workspace.waitBasis(of: message)
+        case .session(let session, _): "\(session.agent.known?.name ?? "Agent") 在会话里问你"
+        }
+    }
 }
 
-/// 等你卡顶上那一排：在等的每一件（谁在问 + 哪件事），选中的铺一块底；放不下横着滚，打开时选中的那件滚进来。
+/// 等你卡顶上那一排：在等的每一件，只写名字（`TaskBoard.Wait.title`；谁在问在问句下面那行说），选中的铺一块底；放不下横着滚，打开时选中的那件滚进来。
 /// 会话在问、又不是只能去会话里答的，尾端一个"打开会话"（只能去会话里答的，答法本身就是它）。
 struct CueWaitStrip: View {
     let waiting: [TaskBoard.Wait]
@@ -105,7 +110,7 @@ struct CueWaitStrip: View {
             }
             .scrollIndicators(.hidden)
             .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
-            if case .session(let session, _) = current.wait, session.answerableQuestion != nil || session.question == nil {
+            if case .session(let session, _) = current.wait, session.answerableQuestion != nil {
                 Button { workspace.openSession(session.id, sessionID: session.sessionID) } label: {
                     HStack(spacing: 3) {
                         Text("打开会话")
@@ -126,10 +131,7 @@ struct CueWaitStrip: View {
     private func chip(_ wait: TaskBoard.Wait) -> some View {
         let selected = wait.id == current.id
         return Button { pick(wait.id) } label: {
-            HStack(spacing: 6) {
-                WaitAsker(wait: wait.wait, size: 16)
-                Text(wait.title(cue: workspace.cue.name)).lineLimit(1).frame(maxWidth: Self.titleWidth, alignment: .leading).fixedSize()
-            }
+            Text(wait.title(cue: workspace.cue.name)).lineLimit(1).frame(maxWidth: Self.titleWidth, alignment: .leading).fixedSize()
             .font(Typography.caption.weight(selected ? .semibold : .regular))
             .foregroundStyle(selected ? palette.ink : palette.ink2)
             .padding(.horizontal, Self.chipInset).frame(height: Self.height)

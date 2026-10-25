@@ -24,10 +24,11 @@ nonisolated extension PiSessionListItem {
 }
 
 nonisolated extension PiSessionState {
-    /// 会话列表的顺序（Agent 页、"在做"）：要你注意的在前（`PiShown.rank`），同一档保持原来的先后（最近进入当前状态的在前）。
+    /// 会话列表的顺序（Agent 页、"在做"）：要你注意的在前（`PiShown.rank`），同一档保持原来的先后（最近进入当前状态的在前）；
+    /// 待回复那一档是等得最久的在前，同 Cue 页的待回复提示（`CueStore.sessionsAwaitingReply`）。
     /// `deliveries` 是发给各会话（按 Pi 的会话 id）的最近一条投送请求：话在路上的与工作中同档，发出那一刻就挪到位。
     /// 不看有没有新回复：看一眼就让行换位置，列表会在手下跳。
-    /// `cue`：Cue 在值班时的那一份（`LiveSessions.cue`），等它回答的与在跑的同档（`PiShown.Status.cueAsking`），它留给你回的与等你确认同档。
+    /// `cue`：Cue 在值班时的那一份（`LiveSessions.cue`），等它回答的与在跑的同档（`PiShown.Status.cueAsking`），它留给你回的（待回复）排最前。
     /// `moment`：此刻（话超时就是没能送达）。
     /// `state`：一项的会话（会话本身是 `\.self`）。
     static func inListOrder<Item>(
@@ -38,9 +39,10 @@ nonisolated extension PiSessionState {
             .map { index, item in
                 let session = item[keyPath: state]
                 let shown = PiShown(session, delivery: deliveries[session.sessionID], cue: cue, at: moment)
-                return (rank: shown.rank, offset: index, item: item)
+                let waited = shown.status == .awaitsReply ? session.stateSince : .distantPast
+                return (rank: shown.rank, waited: waited, offset: index, item: item)
             }
-            .sorted { ($0.rank, $0.offset) < ($1.rank, $1.offset) }
+            .sorted { ($0.rank, $0.waited, $0.offset) < ($1.rank, $1.waited, $1.offset) }
             .map(\.item)
     }
 
@@ -133,7 +135,7 @@ nonisolated enum PiUnread {
 /// 判定的先后：没能送达（你没看过）在最前；会话自己在跑或在等你确认时就是它的状态，发给它的话还在路上只是一个小标记（`note`）；
 /// 会话停着时话在路上就说路上到哪了（`PiDelivery`）；其余按 Pi 报的状态，停在空闲时再分——
 /// 还没说过话是"新会话"，做完一轮你还没看是"有新回复"（`PiUnread`），看过是"该你了"（轮到你说下一句）；
-/// Cue 在值班（`CueProfile.onDuty`）时接手的是 Cue，只说"歇着"，它把这次停下留给你回的（`CueDuty.leftToYou`）是"待回复"；会话等的回答 CuePad 答得了时等的也是 Cue
+/// Cue 在值班（`CueProfile.onDuty`）时接手的是 Cue，只说"歇着"，它把这次停下留给你回的是"待回复"（`PiSessionState.awaitsReply`）；会话等的回答 CuePad 答得了时等的也是 Cue
 /// （"等 Cue 回答"，中性墨色，`PiSessionState.waitsForCue`），赭黄只留给在等你的（与"等你 N"同一条规则，`PiSessionState.asksYou`、`CueStore.cueTally`）。计时读哪一种（`clock`）也在这里定。
 nonisolated struct PiShown: Hashable, Sendable {
     enum Status: Hashable, Sendable {
@@ -141,7 +143,7 @@ nonisolated struct PiShown: Hashable, Sendable {
         /// 思考、运行工具、等子代理、压缩上下文。
         case working(PiWorkState)
         case asking
-        /// 歇着，Cue 值班时把这次停下留给了你回（`CueDuty.leftToYou`）。
+        /// 歇着，Cue 值班时把这次停下留给了你回（`PiSessionState.awaitsReply`）。
         case awaitsReply
         /// 在等回答，等的是 Cue（`PiSessionState.waitsForCue`），不是你。
         case cueAsking
@@ -199,7 +201,7 @@ nonisolated extension PiShown {
         case let phase?:
             self.init(status: .delivery(phase), clock: delivery.map { .sent(since: $0.createdAt) }, cue: cue)
         case nil where session.state == .known(.settled):
-            let rest: Status = duty.map { $0.leftToYou(session) ? .awaitsReply : .resting } ?? (unread ? .unread : .idle)
+            let rest: Status = session.awaitsReply(duty) ? .awaitsReply : duty != nil ? .resting : unread ? .unread : .idle
             self.init(status: session.hasStarted ? rest : .fresh, clock: own, cue: cue)
         case nil:
             self.init(status: asked, clock: own, cue: cue)
@@ -291,14 +293,15 @@ nonisolated extension PiShown {
         }
     }
 
-    /// 会话列表的档：等你确认与待回复 → 出错与没能送达 → 工作中与话在路上 → 停下的 → 已结束。
+    /// 会话列表的档：待回复（Cue 页的待回复提示点进来看的就是它们）→ 等你确认 → 出错与没能送达 → 工作中与话在路上 → 停下的 → 已结束。
     var rank: Int {
         switch status {
-        case .asking, .awaitsReply: 0
-        case .failed, .delivery(.failed): 1
-        case .working, .delivery, .cueAsking: 2
-        case .unread, .idle, .resting, .fresh, .interrupted, .unknown: 3
-        case .ended: 4
+        case .awaitsReply: 0
+        case .asking: 1
+        case .failed, .delivery(.failed): 2
+        case .working, .delivery, .cueAsking: 3
+        case .unread, .idle, .resting, .fresh, .interrupted, .unknown: 4
+        case .ended: 5
         }
     }
 

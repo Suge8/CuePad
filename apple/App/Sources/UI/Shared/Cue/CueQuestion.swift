@@ -67,12 +67,13 @@ extension CueQuestionLine where Below == EmptyView {
     private static let tailLength = 4
 }
 
-/// Cue 一问的选项：第一项"可以"是实底主按钮（全卡唯一的靛青），其余（"以后……不用问"）是次级按钮（浅底细边的胶囊，一眼看得出能点）。
-/// 等你的答法（`WaitAnswer`）与全屏预览的底栏共用。
-/// 窄屏（手机、窄窗口的 iPad）竖排："可以"铺满一行在上，次级按钮同宽在它下面、长了折行。摆法不随选项的字长变，主按钮总在同一处、最好按。
-/// 宽处（Mac、宽屏 iPad）横排在一行尾端：次级按钮在"可以"左边，"可以"不窄过 `onceWidth`、不随卡宽铺开；一行放不下或辅助功能字号时照样竖排、按字宽收着。
+/// Cue 一问的选项：第一项"可以"是实底主按钮（全卡唯一的靛青），其余（"以后……不用问"）是它下面一行小字链接：一问的主动作只有"可以"，
+/// 放宽规矩是顺手的事，不和它抢。等你的答法（`WaitAnswer`）与全屏预览的底栏共用。
+/// 窄屏（手机、窄窗口的 iPad）竖排："可以"铺满一行，链接居中在它下面、长了折行。摆法不随选项的字长变，主按钮总在同一处、最好按。
+/// 宽处（Mac、宽屏 iPad）"可以"在一行尾端，不窄过 `onceWidth`、不随卡宽铺开，链接靠右在它下面；辅助功能字号时照样竖排、按字宽收着。
 /// `hint`：点名的图里"可以"选的是其中一张时（`CueShots.chosen`），一句告诉你选别的去哪说，竖排在按钮下面、横排在按钮左边。
 /// Cue 停用着答不了时（`CueSession.canHear`）写"启用 Cue 后再答"在 `hint` 的位置；只留"可以"、降成次级并停用，不和启用那颗主按钮抢（同屏只一个主动作），启用后恢复。
+/// 进展页等你列小一档（`compact`），地方窄，选项照旧是一排靠右的胶囊。
 struct CueChoices: View {
     let options: [String]
     var disabled = false
@@ -124,30 +125,37 @@ struct CueChoices: View {
     }
 
     @ViewBuilder private func full(once: String, others: [String], hint: String?, main: ControlButtonStyle.Kind, paused: Bool) -> some View {
-        let stacked = VStack(spacing: Self.stackGap) {
-            button(once, kind: main, fill: true, paused: paused)
-            ForEach(others, id: \.self) { button($0, kind: .secondary, fill: true) }
-            if let hint { note(hint).multilineTextAlignment(.center) }
-        }
-        // 不铺满时竖排也按字宽收着（"可以"与次级按钮同宽）
-        .fixedSize(horizontal: !stacks, vertical: false)
-        let row = HStack(spacing: 8) {
-            if let hint { note(hint).lineLimit(1).padding(.trailing, 4) }
-            ForEach(others, id: \.self) { button($0, kind: .secondary).lineLimit(1).fixedSize() }
-            button(once, kind: main, minWidth: Self.onceWidth, paused: paused).lineLimit(1)
-        }
         if stacks || typeSize.isAccessibilitySize {
-            stacked
-        } else if others.isEmpty {
-            // 只有"可以"时一行总放得下，不挑（`ViewThatFits` 两份都要建）
-            row
+            VStack(spacing: Self.stackGap) {
+                button(once, kind: main, fill: true, paused: paused)
+                ForEach(others, id: \.self) { link($0).multilineTextAlignment(.center) }
+                if let hint { note(hint).multilineTextAlignment(.center) }
+            }
+            // 不铺满时竖排也按字宽收着
+            .fixedSize(horizontal: !stacks, vertical: false)
         } else {
-            ViewThatFits(in: .horizontal) {
-                row
-                stacked
+            VStack(alignment: .trailing, spacing: 0) {
+                HStack(spacing: 8) {
+                    if let hint { note(hint).lineLimit(1).padding(.trailing, 4) }
+                    button(once, kind: main, minWidth: Self.onceWidth, paused: paused).lineLimit(1)
+                }
+                ForEach(others, id: \.self) { link($0).multilineTextAlignment(.trailing) }
             }
         }
     }
+
+    /// 次要的选项：一行小字，点了照样答这一项（原文）。
+    private func link(_ option: String) -> some View {
+        Button { pick(option) } label: {
+            Text(option).font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink2)
+                .padding(.vertical, Self.linkInset).contentShape(.rect)
+        }
+        .buttonStyle(PressStyle(.inline))
+        .disabled(disabled)
+    }
+
+    /// 链接上下让出的点按余量：小字本身太矮，按不准。
+    private static let linkInset: CGFloat = 6
 
     private func note(_ text: String) -> some View {
         Text(text).font(Typography.meta).foregroundStyle(palette.ink2)

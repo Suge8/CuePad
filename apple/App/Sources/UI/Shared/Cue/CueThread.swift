@@ -1,7 +1,7 @@
 import CueStore
 import SwiftUI
 
-/// Cue 页一次读到的：最近的对话、对话与"等你"里提到的每件活、在等你的那几条；对话排成的格子与刻度滑条的刻度在读的时候一起推好
+/// Cue 页一次读到的：最近的对话、对话与"等你"里提到的每件活、在等你的那几条、待回复的会话；对话排成的格子与刻度滑条的刻度在读的时候一起推好
 /// （不在主线程，滚动时页面重算也不再推一遍）。
 nonisolated struct CueThread: Equatable, Sendable {
     /// 最近的对话，从早到晚；前面另带上早于它问、在它这段时间里答了的提问（`CueStore.cueQuestionsAnswered`）：
@@ -9,8 +9,10 @@ nonisolated struct CueThread: Equatable, Sendable {
     let messages: [CueMessage]
     /// 对话与"等你"提到的活（消息上收成一行的引用）。
     let tasks: [UUID: CueTaskRef]
-    /// 等你（Cue 的提问与会话在问的，同进展页等你列，`TaskBoard.waits`），最早的在前；点名要露的那件在最前（`leading`）。
+    /// 等你（Cue 的提问与会话在问的，同进展页等你列，`TaskBoard.waits`），等得最久的在前；点名要露的那件在最前（`leading`）。
     let waiting: [TaskBoard.Wait]
+    /// 待回复的会话（`CueStore.sessionsAwaitingReply`），等得最久的在前：等你卡上方那条提示（`CueReplyTip`）。
+    let replies: [PiSessionState]
     /// Cue 点名要你看的图（`CueMessage.shots`：提问的与做完的结果），按消息的 id：只有点了名、那一份还在的
     let shots: [UUID: [CueShown]]
     let rows: [Row]
@@ -29,12 +31,13 @@ nonisolated struct CueThread: Equatable, Sendable {
 
     /// `showsSteps`：对话里排不排每一轮的经过（`AppSettings.showsCueSteps`）；`names`：Cue 自己醒来的那几轮，叫醒它的会话、任务与提醒此刻叫什么。
     init(
-        messages: [CueMessage], tasks: [UUID: CueTaskRef], waiting: [TaskBoard.Wait], shots: [UUID: [CueShown]], unread: Set<UUID>, showsSteps: Bool,
-        names: CueWakeNames
+        messages: [CueMessage], tasks: [UUID: CueTaskRef], waiting: [TaskBoard.Wait], replies: [PiSessionState], shots: [UUID: [CueShown]],
+        unread: Set<UUID>, showsSteps: Bool, names: CueWakeNames
     ) {
         self.messages = messages
         self.tasks = tasks
         self.waiting = waiting
+        self.replies = replies
         self.shots = shots
         self.unread = unread
         let rows = Self.rows(messages, tasks: tasks, waiting: Set(waiting.compactMap(\.message?.id)), shots: shots, showsSteps: showsSteps, names: names)
@@ -79,11 +82,12 @@ nonisolated struct CueThread: Equatable, Sendable {
             if !shown.isEmpty { shots[message.id] = shown }
         }
         return CueThread(
-            messages: messages, tasks: tasks, waiting: waits, shots: shots, unread: Set(try store.cueUnread()), showsSteps: showsSteps,
+            messages: messages, tasks: tasks, waiting: waits, replies: try store.sessionsAwaitingReply(), shots: shots, unread: Set(try store.cueUnread()),
+            showsSteps: showsSteps,
             names: try CueWakeNames.read(messages.compactMap(\.wake), from: store))
     }
 
-    /// "等你"卡露的先后：点名要露的那条（`asking`）还在等就排到最前，其余照旧从早到晚。卡先露最前的那件。
+    /// "等你"卡露的先后：点名要露的那条（`asking`）还在等就排到最前，其余照旧等得最久的在前。卡先露最前的那件。
     static func leading(_ waiting: [TaskBoard.Wait], asking: UUID?) -> [TaskBoard.Wait] {
         guard let asking, let index = waiting.firstIndex(where: { $0.message?.id == asking }), index > 0 else { return waiting }
         var ordered = waiting
