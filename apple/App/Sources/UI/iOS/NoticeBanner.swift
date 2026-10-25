@@ -55,7 +55,7 @@ struct NoticeBanner: View {
 
 /// 一条提示本身：一块实底玻璃胶囊，带去处的点它过去，右边可有一个动作（撤销、归档）。高固定是导航栏那一排（`FloatingHeaderLayout.height`）：
 /// 一行放得下就一行；放不下时小一号折两行（"这是灵感，没有状态：要做的事另建任务…"截在一行里正好截掉要你做的那一步）；两行也放不下（辅助字号）
-/// 就一行截断——读屏照样读全文，点它照样去那里。字号至多到 xxLarge，再大一行也高过这一排。
+/// 就一行截断——读屏照样读全文，点它照样去那里。字号上限同这一排（`FloatingHeaderLayout.largestType`），再大一行也高过这一排。
 private struct NoticeCapsule: View {
     let notice: Workspace.Notice
     @Environment(Workspace.self) private var workspace
@@ -70,7 +70,7 @@ private struct NoticeCapsule: View {
             row(font: .footnote, lines: 2, inset: Self.twoLineInset)
             row(font: .subheadline, lines: 1, inset: 10)
         }
-        .dynamicTypeSize(...DynamicTypeSize.xxLarge)
+        .dynamicTypeSize(...FloatingHeaderLayout.largestType)
         .frame(maxWidth: .infinity)
         .frame(height: FloatingHeaderLayout.height)
         // 盖住的名牌、搜索框与正文不能透出来叠字。

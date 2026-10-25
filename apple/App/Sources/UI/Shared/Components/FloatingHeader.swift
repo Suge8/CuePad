@@ -85,6 +85,9 @@ enum FloatingHeaderLayout {
     static let margin: CGFloat = 16
     /// 一颗圆钮连同它与中间那块之间的空：铺满中间的那块（搜索框、提示横幅）按它让出圆钮。
     static let slot = height + 8
+    /// 这一排定高，字号跟着动态字体放大到这一档为止（同系统的导航栏与标签栏）：再大圆钮里的图标与中间那块的字就撑出这一排、把两颗圆钮挤出屏幕。
+    /// 管这一排上收着的东西（圆钮、`headerPiece`、`GrowPanel` 的 `head`、提示横幅），长出来的面板不归它管。
+    static let largestType = DynamicTypeSize.xxLarge
 }
 
 private struct FloatingHeader<Center: View, Trailing: View>: ViewModifier {
@@ -176,6 +179,7 @@ private struct PageBar<Middle: View, Trailing: View>: View {
             }
             .labelStyle(.iconOnly)
             .buttonStyle(ControlButtonStyle(kind: .circular))
+            .dynamicTypeSize(...FloatingHeaderLayout.largestType)
             .frame(height: height)
             if search == .field {
                 SearchEntry().padding(.trailing, Trailing.self == EmptyView.self ? 0 : FloatingHeaderLayout.slot)
@@ -193,7 +197,7 @@ private struct HeaderPiece: ViewModifier {
 
     func body(content: Content) -> some View {
         // 先定高再上玻璃：玻璃随内容高时，没有第二行的标题（项目没写介绍）只剩一条细缝
-        let piece = content.frame(height: FloatingHeaderLayout.height)
+        let piece = content.dynamicTypeSize(...FloatingHeaderLayout.largestType).frame(height: FloatingHeaderLayout.height)
         Group {
             if grown { piece } else { piece.glass(in: .capsule, interactive: interactive) }
         }
