@@ -25,7 +25,7 @@ extension ChatScroll {
     /// 它不是状态，写它不触发任何更新。
     final class ScrollOffset: Sendable {
         private struct Values {
-            /// 可见区顶边在内容里的位置。内容在下面或上面变高时滚动区不挪偏移，它就是变高之前的位置（往上排开一段时据它补高度差，`ChatFollow.prepending`）。
+            /// 可见区顶边在内容里的位置。
             var read: CGFloat = 0
             /// 最新处的偏移（`scrollTo(y:)` 的 y）。
             var end: CGFloat = 0

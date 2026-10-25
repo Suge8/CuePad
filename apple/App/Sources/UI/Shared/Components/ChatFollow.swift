@@ -15,7 +15,7 @@ nonisolated struct ChatFollow: Equatable {
     private(set) var hasUnseen = false
     /// 离最早那头不到一屏：对话该在上面再排开一段（`SessionChat`）。
     private(set) var nearOldest = false
-    /// 正在上面排开更早的一段：内容接下来在上面变高，滚动区把多出来的高度加到偏移上，正在读的不动。
+    /// 正在上面排开更早的一段：内容接下来在上面变高，滚动区把多出来的高度当场加到偏移上，正在读的不动（`ContentLift.scroll`）。
     /// 不能交给滚动区自己：滑到顶时（快甩的惯性常常先到顶）它记下的是"贴着顶边"，新内容会把正在读的推下去。
     private(set) var prepending = false
     /// 请滚动区回到最新（`jumpToNewest`、`sent`）：滚动区看到它变了就滚过去。
