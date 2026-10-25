@@ -18,20 +18,6 @@ extension AppServices {
                 try await self.present(widget, seen.read.digest, at: seen.moment, local: seen.local)
             }
         }
-        #if os(iOS)
-        // 开启只能在前台：回到前台时按库里此刻推一份，再看一次要不要开，过时时刻从此刻算
-        if cueActivity != nil {
-            follow {
-                for await _ in NotificationCenter.default.notifications(named: UIApplication.didBecomeActiveNotification) {
-                    do {
-                        try await self.writeSnapshots(resend: true)
-                    } catch {
-                        self.reportIssue(.widgetDataUnavailable("\(error)"))
-                    }
-                }
-            }
-        }
-        #endif
     }
 
     #if os(iOS)

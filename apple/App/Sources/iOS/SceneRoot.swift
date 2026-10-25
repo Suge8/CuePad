@@ -14,33 +14,22 @@ struct SceneRoot: View {
             .environment(alerts)
             .task { if services.sync != nil { await alerts.enable() } }
             .onOpenURL { services.handle(url: $0) }
-            .modifier(ScenePhaseWork(services: services, alerts: alerts))
+            .modifier(ScenePhaseWork(services: services))
             .background { SceneAppearance(settings: services.settings) }
     }
 }
 
-/// 回到前台：刷新通知、收分享、立即同步并接上拉取与门铃（`handleActivation`）；最后一个窗口退到后台：落盘、传完、断开（`prepareForBackground`）。
+/// 最后一个窗口退到后台：落盘、传完、断开（`prepareForBackground`）。回到前台整个 App 只做一次，不在这里（`AppServices.startForeground`）。
 /// iPad 多窗口时只退下一个、别的还在前台，App 照常拉取、连着门铃。
 private struct ScenePhaseWork: ViewModifier {
     let services: AppServices
-    let alerts: AlertCenter
     @Environment(\.scenePhase) private var phase
 
     func body(content: Content) -> some View {
         content
             .onChange(of: phase) { _, phase in
-                switch phase {
-                case .active: Task {
-                    // 立即同步先开拉，不排在问通知设置与收分享后面
-                    async let activated: Void = services.handleActivation()
-                    await alerts.refresh()
-                    await services.drainCaptures()
-                    await activated
-                }
-                case .background where UIApplication.shared.connectedScenes.allSatisfy({ $0.activationState == .background }):
-                    Task { await BackgroundWork.run { await services.prepareForBackground() } }
-                default: break
-                }
+                guard phase == .background, UIApplication.shared.connectedScenes.allSatisfy({ $0.activationState == .background }) else { return }
+                Task { await BackgroundWork.run { await services.prepareForBackground() } }
             }
     }
 }
