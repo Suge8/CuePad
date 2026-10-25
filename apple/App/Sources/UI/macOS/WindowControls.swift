@@ -11,7 +11,10 @@ struct SwitcherSlot: View {
         let collapsed = workspace.pages.sidebar == .detailOnly
         // 一直挂着（收起时才有宽度）：开合侧栏的那一刻不再现建全部项目的菜单。不用 disabled：环境一变整份菜单又要重算；
         // ⌘1–9 本来就由窗口快捷键（`WorkspaceShortcuts`）接，菜单里的只是提示
+        // 玻璃与墨色字自己画，同右边的项目范围（`ProjectScopeMenu`）：交给工具栏画时，没焦点的窗口里字是停用的淡灰
         ProjectSwitcher(collapsed: collapsed)
+            .menuStyle(.button).buttonStyle(ControlButtonStyle(kind: .glass))
+            .padding(.trailing, Spacing.toolbarGap)
             .frame(width: collapsed ? nil : 0, alignment: .leading)
             .clipped()
             .opacity(collapsed ? 1 : 0)
@@ -61,7 +64,7 @@ struct CloseButton: View {
 }
 
 /// 工具栏左边、侧栏钮（与侧栏收起时的项目切换）之后：进展页两段的图标分段（`ProgressPanes`，同 iPhone 顶上那块玻璃里那一组），两段同一个位置。
-/// 右沿报给看板段的列头（`MacPages.panesEdge`）：待办的列头从它右边起，不压在分段下面。
+/// 右沿报给看板段的列头（`MacPages.panesEdge`）：它下面的列头从它右边起，不压在分段下面。
 struct PanesSlot: View {
     @Environment(Workspace.self) private var workspace
 
@@ -70,27 +73,35 @@ struct PanesSlot: View {
         ProgressPanes(size: Spacing.toolbarControl - Self.inset * 2)
             .padding(Self.inset)
             .glass(in: .capsule)
-            .background { WindowEdge { workspace.pages.panesEdge = $0 } }
+            .background { WindowEdge(\.maxX) { workspace.pages.panesEdge = $0 } }
             .opacity(shown ? 1 : 0).allowsHitTesting(shown).accessibilityHidden(!shown)
     }
 
     private static let inset: CGFloat = 3
 }
 
-/// 量这一块的右沿在窗口里的横坐标：工具栏项与页面不在同一棵视图里，SwiftUI 的全局坐标对不上，按窗口坐标量。
+/// 量这一块的一条边（`CGRect.minX`、`maxX`）在窗口里的横坐标：工具栏项与页面不在同一棵视图里，SwiftUI 的全局坐标对不上，按窗口坐标量。
 /// 开合侧栏、拖侧栏的宽时挪的是外面的几层（工具栏项那一格），听这几层的框变了再量。
-private struct WindowEdge: NSViewRepresentable {
+struct WindowEdge: NSViewRepresentable {
+    let edge: KeyPath<CGRect, CGFloat>
     let report: (CGFloat) -> Void
 
-    func makeNSView(context: Context) -> Probe { Probe(report: report) }
+    init(_ edge: KeyPath<CGRect, CGFloat>, report: @escaping (CGFloat) -> Void) {
+        self.edge = edge
+        self.report = report
+    }
+
+    func makeNSView(context: Context) -> Probe { Probe(edge: edge, report: report) }
     func updateNSView(_ probe: Probe, context: Context) { probe.report = report }
 
     final class Probe: NSView {
+        let edge: KeyPath<CGRect, CGFloat>
         var report: (CGFloat) -> Void
         private var observers: [any NSObjectProtocol] = []
         private var last: CGFloat?
 
-        init(report: @escaping (CGFloat) -> Void) {
+        init(edge: KeyPath<CGRect, CGFloat>, report: @escaping (CGFloat) -> Void) {
+            self.edge = edge
             self.report = report
             super.init(frame: .zero)
         }
@@ -117,11 +128,11 @@ private struct WindowEdge: NSViewRepresentable {
 
         private func measure() {
             guard window != nil else { return }
-            let edge = convert(bounds, to: nil).maxX
-            guard edge != last else { return }
-            last = edge
+            let x = convert(bounds, to: nil)[keyPath: edge]
+            guard x != last else { return }
+            last = x
             // 不在布局的这一圈里改可观察的值
-            DispatchQueue.main.async { [report] in report(edge) }
+            DispatchQueue.main.async { [report] in report(x) }
         }
     }
 }
@@ -169,11 +180,9 @@ struct QuotaSlot: View {
 }
 
 /// 工具栏右边、搜索之前：进展页会话段的"新会话"（弹出新会话的表单，`NewSessionPanel`，⌥⌘N 同）；看板段的新任务在"⋯"里。
-/// 规矩同 `ScopeSlot`：每页都在、宽度不随页变，别的页看不见；宽度至少 `width`，字更宽的语言（英文）按字撑开，不截断。
+/// 规矩同 `ScopeSlot`：每页都在、宽度不随页变，别的页看不见；宽度就是字宽（字不随页变），离左右两块玻璃都是 `toolbarGap`。
 struct PageActionSlot: View {
     @Environment(Workspace.self) private var workspace
-
-    static let width: CGFloat = 96
 
     var body: some View {
         let shown = workspace.showsSessionsBar
@@ -184,7 +193,8 @@ struct PageActionSlot: View {
             .help("开一个新的 Agent 会话（⌥⌘N）")
             .opacity(shown ? 1 : 0).allowsHitTesting(shown).accessibilityHidden(!shown)
             .fixedSize()
-            .frame(minWidth: Self.width, minHeight: Spacing.toolbarControl, maxHeight: Spacing.toolbarControl, alignment: .trailing)
+            .frame(height: Spacing.toolbarControl)
+            .padding(.leading, Spacing.toolbarGap)
     }
 }
 
@@ -201,6 +211,7 @@ struct SearchSlot: View {
             .accessibilityLabel("搜索")
             .disabled(!workspace.isLibraryReady)
             .opacity(shown ? 1 : 0).allowsHitTesting(shown).accessibilityHidden(!shown)
+            .padding(.leading, Spacing.toolbarGap)
     }
 }
 
