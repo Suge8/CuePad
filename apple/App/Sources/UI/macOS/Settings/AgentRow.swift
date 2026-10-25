@@ -29,13 +29,11 @@ struct AgentRow: View {
         let (tone, line) = describe(status)
 
         SettingRow(title: .verbatim(kind.name), icon: kind.mark.image, tone: tone, busy: working, status: line, help: help) {
-            // 开不了也关不了的（没装、版本不对、开发构建没指定目录、别人的同名文件）不给开关，免得像是能点
-            if let status, canToggle(status) {
-                Toggle(kind.name, isOn: Binding(get: { status.isConnected }, set: apply))
-                    .labelsHidden()
-                    .toggleStyle(.switch)
-                    .disabled(working)
-            }
+            // 开关常驻：检测中与开不了也关不了的（没装、版本不对、开发构建没指定目录、别人的同名文件）置灰，检测完只换状态那一行字
+            Toggle(kind.name, isOn: Binding(get: { status?.isConnected ?? false }, set: apply))
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .disabled(working || !(status.map(canToggle) ?? false))
         } fix: {
             if let status, Self.needsSetup(status) {
                 Button(kind.upgrades(status.presence) ? "升级方法" : "安装方法") { showsGuide = true }
