@@ -40,18 +40,22 @@ public struct PiErrorSummary: Sendable, Equatable {
         kind = Self.kind(status: status, type: error.type, text: raw.lowercased())
     }
 
-    public var title: String {
-        func coded(_ text: String) -> String { status.map { String(localized: "\(text)（\($0)）") } ?? text }
+    /// 摘要，这台设备的语言。
+    public var title: String { shownTitle.text }
+
+    /// 摘要的句式（写进同步记录、各端按自己的语言显示的用它）。
+    public var shownTitle: ShownText {
+        func coded(_ text: ShownText) -> ShownText { status.map { ShownText("\(text.embedded)（\($0)）") } ?? text }
         return switch kind {
-        case .authentication: coded(String(localized: "认证失败，检查 API 密钥或重新登录"))
-        case .quota: String(localized: "额度用完")
-        case .rateLimited: String(localized: "请求太频繁，稍后再试")
-        case .rejected: coded(String(localized: "模型拒绝了请求"))
-        case .server: coded(String(localized: "模型服务繁忙或出错，稍后再试"))
-        case .network: String(localized: "网络连接中断")
-        case .modelUnavailable: String(localized: "模型不存在或没有权限")
-        case .outputTooLong: String(localized: "回答超出了输出长度上限")
-        case .other: status == nil ? Self.firstLine(of: raw) : coded(String(localized: "模型调用出错"))
+        case .authentication: coded(ShownText("认证失败，检查 API 密钥或重新登录"))
+        case .quota: ShownText("额度用完")
+        case .rateLimited: ShownText("请求太频繁，稍后再试")
+        case .rejected: coded(ShownText("模型拒绝了请求"))
+        case .server: coded(ShownText("模型服务繁忙或出错，稍后再试"))
+        case .network: ShownText("网络连接中断")
+        case .modelUnavailable: ShownText("模型不存在或没有权限")
+        case .outputTooLong: ShownText("回答超出了输出长度上限")
+        case .other: status == nil ? .verbatim(Self.firstLine(of: raw)) : coded(ShownText("模型调用出错"))
         }
     }
 

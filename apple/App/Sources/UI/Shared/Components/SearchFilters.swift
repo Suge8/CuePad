@@ -16,7 +16,7 @@ struct SearchFilters<Chip: View>: View {
         menu(String(localized: "项目"), query.projectLabel(in: projects), on: query.project != nil) {
             Button("全部") { query.project = nil }
             Divider()
-            ForEach(projects) { project in Button(project.name) { query.project = project.id } }
+            ForEach(projects) { project in Button(project.shownName) { query.project = project.id } }
         }
         Button { query.withImages.toggle() } label: { chip(String(localized: "含图片"), nil, query.withImages) }
             .accessibilityAddTraits(query.withImages ? .isSelected : [])

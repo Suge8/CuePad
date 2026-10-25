@@ -107,7 +107,7 @@ import Testing
   @Test func cueRepliesToHisRoundReachThePhoneOncePerRoundUnlessHeHasTheCuePageOpenOnAMac() async throws {
     let rig = try Rig()
     func reply(_ text: String, startedAt: Date = .now) async throws -> UUID {
-      try await rig.store.replyCueRound(startedAt: startedAt, reply: text, as: .cue, answersYou: true)
+      try await rig.store.replyCueRound(startedAt: startedAt, reply: .verbatim(text), as: .cue, answersYou: true)
       return try #require(try await rig.store.cueMessages().last { $0.text == text }).id
     }
 

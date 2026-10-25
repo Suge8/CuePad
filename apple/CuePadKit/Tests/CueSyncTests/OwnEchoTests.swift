@@ -73,7 +73,7 @@ actor EchoCloud: SyncCloud {
 
   init() {
     let floor = CKRecord(recordType: PeerFloor.recordType, recordID: PeerFloor(zoneID: CloudSync.zoneID).id)
-    floor[PeerFloor.field] = CueStore.supportedSchemaVersions.lowerBound as NSNumber
+    floor[PeerFloor.field] = CueStore.peerFloor as NSNumber
     inner = SimulatedCloud([floor])
   }
 

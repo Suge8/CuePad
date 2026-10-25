@@ -41,7 +41,7 @@ struct CueComposer: View {
     var body: some View {
         let cue = workspace.cue
         Composer(
-            draft: Bindable(cue).draft, prompt: cue.canHear ? "对 \(cue.name) 说" : "记一条灵感",
+            draft: Bindable(cue).draft, prompt: cue.canHear ? "对 \(cue.name) 说" : "记下灵感",
             label: "对 \(cue.name) 说",
             focus: $focused, accepts: .images,
             form: form, showsSendEmpty: sending, tooled: tooled, shortcuts: shortcuts,

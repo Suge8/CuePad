@@ -89,7 +89,7 @@ extension Schema {
     CREATE TABLE piMessages (
       id TEXT PRIMARY KEY NOT NULL, sessionID TEXT NOT NULL, seq INTEGER NOT NULL, role TEXT NOT NULL, text TEXT NOT NULL,
       at INTEGER NOT NULL, tools TEXT, roundStartedAt INTEGER, deliveryID TEXT,
-      createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL, question TEXT
+      createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL, question TEXT, shownText TEXT
     ) STRICT;
     CREATE INDEX piMessages_sessionID_seq ON piMessages(sessionID, seq);
     \(transcriptAgeIndex)
@@ -103,7 +103,7 @@ extension Schema {
     CREATE TABLE deliveryRequests (
       id TEXT PRIMARY KEY NOT NULL, content TEXT NOT NULL, targetKind TEXT NOT NULL, targetName TEXT NOT NULL,
       targetRef TEXT, hostID TEXT NOT NULL, mode TEXT NOT NULL, cardID TEXT, status TEXT NOT NULL,
-      resultDetail TEXT, handledBy TEXT, createdAt INTEGER NOT NULL, completedAt INTEGER, modifiedAt INTEGER NOT NULL,
+      failure TEXT, handledBy TEXT, createdAt INTEGER NOT NULL, completedAt INTEGER, modifiedAt INTEGER NOT NULL,
       resultReceivedAt INTEGER, origin TEXT, cueToldAt INTEGER, writeSeq INTEGER NOT NULL DEFAULT 0
     ) STRICT;
     CREATE INDEX deliveryRequests_status ON deliveryRequests(status, createdAt);
@@ -132,7 +132,7 @@ extension Schema {
     CREATE TABLE cueMessages (
       id TEXT PRIMARY KEY NOT NULL, author TEXT NOT NULL, text TEXT NOT NULL, choices TEXT, urgent INTEGER NOT NULL,
       taskID TEXT, answer TEXT, answeredAt INTEGER, deliveredAt INTEGER, createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL,
-      notify TEXT, tools TEXT, ask TEXT, askAction TEXT, askRule TEXT, askShots TEXT, setAsideBy TEXT, wake TEXT, places TEXT
+      notify TEXT, tools TEXT, ask TEXT, askAction TEXT, askRule TEXT, askShots TEXT, setAsideBy TEXT, wake TEXT, places TEXT, shownText TEXT
     ) STRICT;
     CREATE INDEX cueMessages_createdAt ON cueMessages(createdAt);
     \(openQuestionIndex)

@@ -23,8 +23,10 @@ public enum CueAuthor: String, Sendable, CaseIterable {
 public struct CueMessage: Identifiable, Equatable, Sendable {
   public let id: UUID
   public var author: Open<CueAuthor>
-  /// 正文（`CueFormat`）；你的消息可带图片引用。
+  /// 正文（`CueFormat`）；你的消息可带图片引用。CuePad 代写的（`shownText`）是这台设备语言的那一份。
   public var text: String
+  /// CuePad 代 Cue 写下的话（做完的结果、起不来、出错……）：存句式与参数，各端按自己的语言显示（`ShownText`）；Cue 与你的原话为 nil。
+  public var shownText: ShownText? = nil
   /// 给你的选项；有选项的 Cue 消息在等你（规则见 `CueStore.cueMessagesWaitingForYou`）。选项只由 `CueAsk.choices` 在写入时按 `asked` 写出、
   /// Cue 不能自拟；写下就不再变，卡片与通知照它显示。
   public var choices: [String]?
@@ -78,25 +80,26 @@ extension CueMessage: Record {
   static let table = Table.cueMessages
   static let columns = [
     "id", "author", "text", "choices", "urgent", "taskID", "answer", "answeredAt", "deliveredAt", "createdAt", "modifiedAt", "notify", "tools",
-    "ask", "askAction", "askRule", "askShots", "setAsideBy", "wake", "places",
+    "ask", "askAction", "askRule", "askShots", "setAsideBy", "wake", "places", "shownText",
   ]
   /// `notify` 的值（订阅的谓词按它）。
   package static let notifyFlag = "cue"
   var bindings: [any SQLBindable] {
     [
-      id, author.rawValue, text, choices.map { JSONColumn.encode($0) }, urgent, taskID, answer, answeredAt, deliveredAt, createdAt, modifiedAt,
+      id, author.rawValue, shownText == nil ? text : "", choices.map { JSONColumn.encode($0) }, urgent, taskID, answer, answeredAt, deliveredAt, createdAt, modifiedAt,
       notify ? Self.notifyFlag : nil, tools?.stored, asked?.stored, askAction, askRule, JSONColumn.encodeList(shots), setAsideBy, wake?.stored,
-      places.isEmpty ? nil : JSONColumn.encode(places),
+      places.isEmpty ? nil : JSONColumn.encode(places), shownText?.stored,
     ]
   }
   init(row: Row) {
+    let shown = row.textOrNil(20).flatMap(ShownText.init(stored:))
     self.init(
-      id: row.uuid(0), author: Open(rawValue: row.text(1)), text: row.text(2),
+      id: row.uuid(0), author: Open(rawValue: row.text(1)), text: shown?.text ?? row.text(2), shownText: shown,
       choices: JSONColumn.decode([String].self, from: row.textOrNil(3)), asked: row.textOrNil(13).flatMap(CueAsked.init(stored:)),
       askAction: row.textOrNil(14), askRule: row.textOrNil(15), shots: JSONColumn.decodeList(CueShot.self, from: row.textOrNil(16)), urgent: row.bool(4), taskID: row.uuidOrNil(5),
       answer: row.textOrNil(6), answeredAt: row.dateOrNil(7), setAsideBy: row.uuidOrNil(17), deliveredAt: row.dateOrNil(8), createdAt: row.date(9),
       modifiedAt: row.date(10), tools: row.textOrNil(12).flatMap(PiChatMessage.Tools.init(stored:)), wake: row.textOrNil(18).flatMap(CueWake.init(stored:)),
-      places: JSONColumn.decode([String: CuePlace].self, from: row.textOrNil(19)) ?? [:], notify: row.textOrNil(11) != nil, reachedServer: row.bool(20))
+      places: JSONColumn.decode([String: CuePlace].self, from: row.textOrNil(19)) ?? [:], notify: row.textOrNil(11) != nil, reachedServer: row.bool(21))
   }
 }
 
@@ -118,10 +121,10 @@ enum CueRead {
   static let columns = ["id", "modifiedAt"]
 }
 
-/// Cue 做完一件顶层任务后告诉你的结果（`CueStore.finishTask`）：一行"「任务名」做完了"，下面每条证据一个要点。
+/// Cue 做完一件顶层任务后告诉你的结果（`CueStore.finishTask`）：一行"「任务名」做完了"，下面每条证据一个要点；各端按自己的语言写那一行。
 public enum CueReport {
-  public static func text(task: String, evidence: [String]) -> String {
-    ([String(localized: "「\(task)」做完了"), ""] + evidence.map { "- \($0)" }).joined(separator: "\n")
+  public static func text(task: String, evidence: [String]) -> ShownText {
+    ShownText("「\(task)」做完了\n\n\(evidence.map { "- \($0)" }.joined(separator: "\n"))")
   }
 }
 

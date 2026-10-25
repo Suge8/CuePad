@@ -312,7 +312,8 @@ struct CueMark: View {
 }
 
 extension Label where Title == Text, Icon == Image {
-    init(_ title: LocalizedStringKey, icon: AppIcon) {
+    // 带图标的标签、按钮、菜单：界面字收 LocalizedStringResource（字面量与算好的本地化字都行），String 原样显示
+    init(_ title: LocalizedStringResource, icon: AppIcon) {
         self.init { Text(title) } icon: { Image(icon) }
     }
 
@@ -323,7 +324,7 @@ extension Label where Title == Text, Icon == Image {
 }
 
 extension Button where Label == SwiftUI.Label<Text, Image> {
-    init(_ title: LocalizedStringKey, icon: AppIcon, role: ButtonRole? = nil, action: @escaping () -> Void) {
+    init(_ title: LocalizedStringResource, icon: AppIcon, role: ButtonRole? = nil, action: @escaping () -> Void) {
         self.init(role: role, action: action) { SwiftUI.Label(title, icon: icon) }
     }
 
@@ -334,7 +335,7 @@ extension Button where Label == SwiftUI.Label<Text, Image> {
 }
 
 extension Menu where Label == SwiftUI.Label<Text, Image> {
-    init(_ title: LocalizedStringKey, icon: AppIcon, @ViewBuilder content: () -> Content) {
+    init(_ title: LocalizedStringResource, icon: AppIcon, @ViewBuilder content: () -> Content) {
         self.init(content: content) { SwiftUI.Label(title, icon: icon) }
     }
 
@@ -345,7 +346,7 @@ extension Menu where Label == SwiftUI.Label<Text, Image> {
 }
 
 extension Toggle where Label == SwiftUI.Label<Text, Image> {
-    init(_ title: LocalizedStringKey, icon: AppIcon, isOn: Binding<Bool>) {
+    init(_ title: LocalizedStringResource, icon: AppIcon, isOn: Binding<Bool>) {
         self.init(isOn: isOn) { SwiftUI.Label(title, icon: icon) }
     }
 }

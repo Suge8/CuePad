@@ -202,8 +202,7 @@ final class Workspace {
 
     static let noticeDuration: Duration = .seconds(2.4)
 
-    /// 字面量走下面那个（进目录、按当前语言取字）；这里收已经拼好的 `Dotted`。
-    @_disfavoredOverload
+    /// 收已经拼好的 `Dotted`；界面字面量走下面那个（进目录、按当前语言取字）。
     func say(
         _ text: Dotted, tone: Notice.Tone = .done, status: PiShown.Status? = nil, link: Route? = nil, duration: Duration = Workspace.noticeDuration,
         action: NoticeAction? = nil

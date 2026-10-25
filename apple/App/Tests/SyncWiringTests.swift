@@ -54,7 +54,7 @@ struct SyncWiringTests {
     /// 拉到就停下提示更新，之后的改动不再上传。
     @Test
     func 门槛先抬再传内容_别的设备抬过这台后停下不再上传() async throws {
-        let cloud = SimulatedCloud([Self.floor(CueStore.supportedSchemaVersions.lowerBound - 1)])
+        let cloud = SimulatedCloud([Self.floor(CueStore.peerFloor - 1)])
         let app = TestApp(sync: .built { CloudSync(store: $0) { cloud } })
         let services = app.services!
         let workspace = Workspace(services: services)
@@ -65,7 +65,7 @@ struct SyncWiringTests {
         try await eventually("传上去") { await cloud.saved.contains(before.id.uuidString.lowercased()) }
         let saved = await cloud.saved
         #expect(saved.first == PeerFloor.recordType)
-        #expect(PeerFloor.version(in: await cloud.records([PeerFloor(zoneID: CloudSync.zoneID).id])) == CueStore.supportedSchemaVersions.lowerBound)
+        #expect(PeerFloor.version(in: await cloud.records([PeerFloor(zoneID: CloudSync.zoneID).id])) == CueStore.peerFloor)
 
         await cloud.put(Self.floor(CueStore.supportedSchemaVersions.upperBound + 1))
         await services.syncNow()
@@ -80,7 +80,7 @@ struct SyncWiringTests {
     /// 本机的 Pi 会话索引（与账号无关）留着。
     @Test(arguments: [SyncResolution.uploadLocal, .eraseLocal])
     func 换了iCloud账号_停下等你决定(_ resolution: SyncResolution) async throws {
-        let cloud = SimulatedCloud([Self.floor(CueStore.supportedSchemaVersions.lowerBound)])
+        let cloud = SimulatedCloud([Self.floor(CueStore.peerFloor)])
         let app = TestApp(sync: .built { CloudSync(store: $0) { cloud } })
         let services = app.services!
         let workspace = Workspace(services: services)

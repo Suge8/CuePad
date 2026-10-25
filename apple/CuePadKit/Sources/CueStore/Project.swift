@@ -2,7 +2,7 @@ import Foundation
 
 public struct Project: Identifiable, Equatable, Sendable {
   public let id: UUID
-  /// 不会是空的：写入时空名抛 `blankProjectName`；别处（旧版本、同步）留下的空名读出来是 `untitled`。
+  /// 库里存的名字（Cue、命令行与同步看的都是它）；界面显示读 `shownName`。写入时空名抛 `blankProjectName`，别处（旧版本、同步）可能留下空名。
   public var name: String
   public var icon: String?
   public var color: String
@@ -14,7 +14,7 @@ public struct Project: Identifiable, Equatable, Sendable {
   public var createdAt: Date
   public var modifiedAt: Date
 
-  public static let untitled = String(localized: "未命名项目")
+  public static var untitled: String { String(localized: "未命名项目") }
 
   /// 默认项目：每个库都有、不能删（`trashProject` 拒绝），没指定项目记下的灵感与任务都进它。id 在所有设备上同一个，
   /// 离线时两台各自建出来也合成一条；建出来的那版修改时间是 0（`Schema.defaultProject`），用户改过名、颜色的总比它新。
@@ -22,11 +22,30 @@ public struct Project: Identifiable, Equatable, Sendable {
   public var isDefault: Bool { id == Self.defaultID }
 
   /// 建库时默认项目的名字（`Schema.defaultProject`）：库里存、同步的都是这一份，各台设备离线建出的才是同一版。
-  /// 没改过名时读出来按当前语言显示（`shownDefaultName`），写回时换回它：中英文两台设备同步不会互相改名。
   static let defaultName = "默认"
-  static var shownDefaultName: String { String(localized: "默认") }
-  /// 库里存的名字：给 Cue 看的也是它（Cue 的工具在 `cuepad mcp` 进程里按库里的名字认项目，那里查不到界面的译名）。
-  public var storedName: String { isDefault && name == Self.shownDefaultName ? Self.defaultName : name }
+
+  /// 给人看的名字（界面上写项目都读它）：没改过名的默认项目按这台设备的语言写，空名写 `untitled`，别的照存的。
+  public var shownName: String { Self.shownName(id: id, name: name) }
+
+  public static func shownName(id: UUID, name: String) -> String {
+    if id == defaultID && name == defaultName { return defaultShownName }
+    return name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? untitled : name
+  }
+
+  private static var defaultShownName: String { String(localized: "默认") }
+
+  /// 按名字找项目（搜索）的唯一规则：存的名字或给人看的名字（`shownName`）里有 `text`。`stored` 是"存的名字里有"的 SQL 条件
+  /// （各处按自己的索引写），这里补上只有显示名才有的那几种（没改过名的默认项目、空名）；`id`、`name` 是列。
+  static func nameMatch(_ text: String, stored: String, id: String = "id", name: String = "name") -> (sql: String, arguments: [any SQLBindable]) {
+    var sql = stored
+    var arguments: [any SQLBindable] = []
+    if defaultShownName.localizedCaseInsensitiveContains(text) {
+      sql += " OR (\(id) = ? AND \(name) = ?)"
+      arguments += [defaultID, defaultName]
+    }
+    if untitled.localizedCaseInsensitiveContains(text) { sql += " OR trim(\(name)) = ''" }
+    return ("(\(sql))", arguments)
+  }
 }
 
 /// 项目的灵感数（散放在列表里的，不含任务、挂在任务下的与空白灵感）。
@@ -38,16 +57,10 @@ public struct ProjectSummary: Equatable, Sendable {
 extension Project: Record {
   static let table = Table.projects
   static let columns = ["id", "name", "icon", "color", "isPinned", "deletedAt", "createdAt", "modifiedAt", "intro"]
-  var bindings: [any SQLBindable] {
-    [id, storedName, icon, color, isPinned, deletedAt, createdAt, modifiedAt, intro]
-  }
+  var bindings: [any SQLBindable] { [id, name, icon, color, isPinned, deletedAt, createdAt, modifiedAt, intro] }
   init(row: Row) {
-    let id = row.uuid(0), name = row.text(1)
     self.init(
-      id: id,
-      name: name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        ? Project.untitled : id == Self.defaultID && name == Self.defaultName ? Self.shownDefaultName : name,
-      icon: row.textOrNil(2), color: row.text(3),
+      id: row.uuid(0), name: row.text(1), icon: row.textOrNil(2), color: row.text(3),
       isPinned: row.bool(4), intro: row.textOrNil(8),
       deletedAt: row.dateOrNil(5), createdAt: row.date(6), modifiedAt: row.date(7))
   }

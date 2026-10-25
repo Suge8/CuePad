@@ -191,7 +191,7 @@ struct PiSessionRow: View {
                 PiStateGlyph.undelivered.font(style.meta.weight(.semibold))
                     .accessibilityHidden(false).accessibilityLabel(unsent)
             }
-            if style.card, let project { ProjectGlyph(project: project, size: Self.placeIcon).accessibilityLabel("在 \(project.name)") }
+            if style.card, let project { ProjectGlyph(project: project, size: Self.placeIcon).accessibilityLabel("在 \(project.shownName)") }
             // 时间只占它要的宽度，名字拿剩下的
             PiElapsed(shown: shown, font: style.meta, style: .span).fixedSize()
         }
@@ -204,7 +204,7 @@ struct PiSessionRow: View {
     private var searchHit: String? {
         let terms = highlight.split(whereSeparator: \.isWhitespace)
         let hits = { (text: String?) in text.map { text in terms.contains { text.localizedCaseInsensitiveContains($0) } } ?? false }
-        guard !terms.isEmpty, !hits(session.title), !hits(project?.name ?? session.folder),
+        guard !terms.isEmpty, !hits(session.title), !hits(project?.shownName ?? session.folder),
               let prompt = (session.pendingPrompt ?? session.lastPrompt)?.split(whereSeparator: \.isWhitespace).joined(separator: " "),
               let hit = terms.lazy.compactMap({ prompt.range(of: $0, options: .caseInsensitive) }).first else { return nil }
         let start = prompt.index(hit.lowerBound, offsetBy: -Self.leadIn, limitedBy: prompt.startIndex) ?? prompt.startIndex

@@ -77,7 +77,7 @@ private struct CardMorePanel: View {
                     Image(move.icon).frame(width: 22)
                     Text(move.title)
                     Spacer(minLength: 8)
-                    Text(workspace.catalog?.project(card.projectID)?.name ?? "").font(.subheadline).foregroundStyle(palette.ink3).lineLimit(1)
+                    Text(workspace.catalog?.project(card.projectID)?.shownName ?? "").font(.subheadline).foregroundStyle(palette.ink3).lineLimit(1)
                     Image(.forward).font(.footnote.weight(.semibold)).foregroundStyle(palette.ink3).accessibilityHidden(true)
                 } action: { flip(true) }
             }
@@ -100,7 +100,7 @@ private struct CardMorePanel: View {
                 let here = project.id == card.projectID
                 row {
                     ProjectGlyph(project: project, size: glyph).frame(width: 22)
-                    Text(project.name).lineLimit(1)
+                    Text(project.shownName).lineLimit(1)
                     Spacer(minLength: 8)
                     if here { Image(.complete).font(.footnote.weight(.semibold)).foregroundStyle(palette.ink3) }
                 } action: {

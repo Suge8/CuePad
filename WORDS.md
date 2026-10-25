@@ -39,7 +39,7 @@
 
 ## 英文界面
 
-英文界面只用这些叫法（Apple 风格：按钮、菜单项、标题、列名用 Title Case，说明句、提示、占位符用句首大写）。没列的名词照 Apple 自家应用的说法。
+英文界面只用这些叫法，没列的名词照 Apple 自家应用的说法。大小写只按字在界面上的位置定：导航与结构用 Title Case——页面与去处名、窗口与弹框标题（问句也是，"Forget This?"）、分段与标签页、列名、分组标题、按钮、菜单项、工具栏项、设置行的名字、空态标题；其余用句首大写——状态词与徽标（"Needs your OK"、"Not delivered"、"Not syncing"、"Running tool"）、说明、副标题、提示、帮助气泡、占位符、读屏标签与提示（同一个键也是按钮名时按按钮）、报错、横幅、通知正文、空态说明、复选框说明、斜杠命令的说明。下面的叫法作标题时 Title Case，嵌在句子与计数里小写（"3 need you"、"9 underway"、"the agent session"）；Agent 不是专名，句中写 agent。一句里嵌状态词时状态词在句首（"Not syncing, can't answer now."）。同一个中文键在两种位置要不同大小写时拆键：改一处中文措辞或整句化，不在代码里改大小写。
 
 - 灵感 Idea · 任务 Task · 子任务 Subtask · 正文 Notes · 项目 Project · 默认项目 Default Project · 置顶 Pin / Unpin / Pinned · 归档 Archive · 回收站 Trash · 批注 Comment（不叫 Note，免得和 Notes 混）
 - 进展 Progress · 看板 Board · 会话 Session · Agent 会话 Agent Session · 全部项目 All Projects · 工作区 Workspace · 绑定的文件夹 Linked Folder

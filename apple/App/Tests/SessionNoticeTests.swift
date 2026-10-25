@@ -77,8 +77,8 @@ struct SessionNoticeTests {
     @Test func 进了提示说的那个会话_横幅撤下_别的提示留着() {
         let session = UUID()
         let workspace = Workspace(services: app.services)
-        let banner = Workspace.Notice(text: "notes · 完成了", tone: .done, link: .session(session))
-        let other = Workspace.Notice(text: "已复制", tone: .done)
+        let banner = Workspace.Notice(text: Dotted("notes", "完成了"), tone: .done, link: .session(session))
+        let other = Workspace.Notice(text: Dotted("已复制"), tone: .done)
         #expect(workspace.keeps(banner) && workspace.keeps(other))
 
         workspace.show(.session(session))

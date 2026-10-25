@@ -27,7 +27,7 @@ extension CueKeeper {
                 do {
                     try await shift.brain.newSession()
                 } catch {
-                    await broke(String(localized: "开不了新会话：\(error.localizedDescription)"))
+                    await broke(ShownText("开不了新会话：\(ShownText(error).embedded)"))
                     return false
                 }
                 Self.log.notice("Cue 换新：开了新会话")
@@ -47,7 +47,7 @@ extension CueKeeper {
         do {
             try await shift.brain.send(sent, images: images)
         } catch {
-            await broke(String(localized: "发不进去：\(error.localizedDescription)"))  // 这一轮还没开，交出去的话也还没记送达
+            await broke(ShownText("发不进去：\(ShownText(error).embedded)"))  // 这一轮还没开，交出去的话也还没记送达
             return false
         }
         var turn = Turn(
@@ -97,19 +97,19 @@ extension CueKeeper {
         let contents = pending.filter { $0.author == .known(.you) }.map { SendContent(stored: $0.text) }.filter(\.hasImages)
         guard !contents.isEmpty else { return [] }
         guard brain.seesImages else {
-            await say(.cue, String(localized: "我现在用的模型看不了图，你发的图我看不到；要我看图，换个能看图的模型。图我还能原样转给会话。"))
+            await say(.cue, ShownText("我现在用的模型看不了图，你发的图我看不到；要我看图，换个能看图的模型。图我还能原样转给会话。"))
             return []
         }
         do {
             return try contents.flatMap { try $0.piImages(from: store.files) }
         } catch {
-            await say(.cue, String(localized: "你发的图没能交给我：\(error.localizedDescription)"))
+            await say(.cue, ShownText("你发的图没能交给我：\(ShownText(error).embedded)"))
             return []
         }
     }
 
     /// 这一轮写给你的话（回复、回答你的一轮出错）：提不提示你、一轮只响一次都在 `CueStore.replyCueRound`。
-    func reply(_ text: String, in turn: Turn) async {
+    func reply(_ text: ShownText, in turn: Turn) async {
         do {
             try await store.replyCueRound(startedAt: turn.round.startedAt, reply: text, as: turn.author, answersYou: turn.answersYou)
         } catch {
@@ -118,10 +118,9 @@ extension CueKeeper {
     }
 
     /// `urgent`：要提示你（`CueMessage.urgent`）。
-    func say(_ author: CueAuthor, _ text: String, urgent: Bool = false) async {
-        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+    func say(_ author: CueAuthor, _ text: ShownText, urgent: Bool = false) async {
         do {
-            try await store.addCueMessage(author, text: text, urgent: urgent)
+            try await store.addCueMessage(author, shown: text, urgent: urgent)
         } catch {
             Self.log.error("Cue 的消息没能写进资料库：\(error.localizedDescription, privacy: .public)")
         }

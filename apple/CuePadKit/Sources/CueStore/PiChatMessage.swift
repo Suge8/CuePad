@@ -41,6 +41,8 @@ public struct PiChatMessage: Identifiable, Equatable, Sendable {
   public var roundStartedAt: Date?
   /// 你的作答（`answer`）：当时问的是什么（问题原文）；别的为 nil
   public var question: String?
+  /// 你的作答是确认框的是或否时，各端按自己的语言写的那句（`PiAnswerValue.shown`）；选项与填的字照原文，为 nil。界面读 `shown`
+  public var shownText: ShownText?
   /// 你的消息：它是 CuePad 的哪条投送请求送进去的（扩展把请求 id 写进会话文件里那条消息）；在终端里直接打的为 nil。
   /// 界面据此把那条投送请求的气泡换成这条消息：对话里出现 `deliveryID == request.id` 的消息时不再显示请求气泡
   public var deliveryID: UUID?
@@ -53,7 +55,7 @@ public struct PiChatMessage: Identifiable, Equatable, Sendable {
 
   public init(
     sessionID: String, entryID: String, seq: Int64, role: PiChatRole, text: String, at: Date, tools: Tools? = nil,
-    roundStartedAt: Date? = nil, deliveryID: UUID? = nil, question: String? = nil
+    roundStartedAt: Date? = nil, deliveryID: UUID? = nil, question: String? = nil, shownText: ShownText? = nil
   ) {
     id = Self.recordID(sessionID: sessionID, entryID: entryID)
     self.sessionID = sessionID
@@ -65,6 +67,7 @@ public struct PiChatMessage: Identifiable, Equatable, Sendable {
     self.roundStartedAt = roundStartedAt
     self.deliveryID = deliveryID
     self.question = question
+    self.shownText = shownText
     createdAt = .stamp
     modifiedAt = createdAt
   }
@@ -105,10 +108,10 @@ public struct PiChatMessage: Identifiable, Equatable, Sendable {
 extension PiChatMessage: Record {
   static let table = Table.piMessages
   static let columns = [
-    "id", "sessionID", "seq", "role", "text", "at", "tools", "roundStartedAt", "deliveryID", "createdAt", "modifiedAt", "question",
+    "id", "sessionID", "seq", "role", "text", "at", "tools", "roundStartedAt", "deliveryID", "createdAt", "modifiedAt", "question", "shownText",
   ]
   var bindings: [any SQLBindable] {
-    [id, sessionID, seq, role.rawValue, text, at, tools?.stored, roundStartedAt, deliveryID, createdAt, modifiedAt, question]
+    [id, sessionID, seq, role.rawValue, text, at, tools?.stored, roundStartedAt, deliveryID, createdAt, modifiedAt, question, shownText?.stored]
   }
   init(row: Row) {
     id = row.uuid(0)
@@ -123,7 +126,11 @@ extension PiChatMessage: Record {
     createdAt = row.date(9)
     modifiedAt = row.date(10)
     question = row.textOrNil(11)
+    shownText = row.textOrNil(12).flatMap(ShownText.init(stored:))
   }
+
+  /// 给人看的正文，这台设备的语言。
+  public var shown: String { shownText?.text ?? text }
 }
 
 extension PiChatMessage {

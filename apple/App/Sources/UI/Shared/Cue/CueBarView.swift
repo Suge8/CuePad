@@ -23,7 +23,7 @@ struct CueBarView: View {
 import SwiftUI
 
 /// 一行 Cue 的现状（菜单栏面板、输入条、iPad 侧栏最上面；Mac 侧栏是名片 `CueSidebarCard`，用同一套零件）：头像（`CueEntryAvatar`）、名字，
-/// 下面 Cue 此刻那一行（`CueStatusLine` 的 tally），有新消息的在行尾写几条（石绿，`UnreadCount`）。有新消息时同会话行的"有新回复"：名字加粗。
+/// 下面 Cue 此刻那一行（`CueStatusLine` 的 tally），有新消息的在行尾写几条（石绿，`UnreadCount`；行里放不下时让给那一句）。有新消息时同会话行的"有新回复"：名字加粗。
 /// `status` 为假时不写此刻那一行（iPad 上 Cue 页开着时页头已写了这一句）。
 struct CueStatusRow<Trailing: View>: View {
     var font = Typography.body.weight(.semibold)
@@ -40,10 +40,18 @@ struct CueStatusRow<Trailing: View>: View {
                 Text(cue.name).font(font).fontWeight(cue.unread > 0 ? .bold : nil).foregroundStyle(palette.ink).lineLimit(1)
                 if status { CueStatusLine(tally: true).lineLimit(1).transition(.opacity) }
             }
-            // 数字账先拿宽：排不下才并、才截，不让给后面的空白
-            .layoutPriority(1)
+            // 宽度按要紧分：名字与数字账先拿（排不下才并、才截），再是新消息数，余下的才给 Spacer；行尾的东西（菜单栏面板的额度环与按钮）按自己的宽
+            .layoutPriority(2)
             Spacer(minLength: 6)
-            UnreadCount(count: cue.unread).font(Typography.meta)
+            if cue.unread > 0 {
+                // 放不下就不写数（名字已加粗说有新消息），不挤那一句
+                ViewThatFits(in: .horizontal) {
+                    UnreadCount(count: cue.unread)
+                    Color.clear.frame(width: 0, height: 0)
+                }
+                .font(Typography.meta)
+                .layoutPriority(1)
+            }
             trailing
         }
         .animation(HandOff.quick, value: cue.unread)

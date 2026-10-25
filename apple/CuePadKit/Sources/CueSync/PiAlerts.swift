@@ -67,15 +67,16 @@ public enum PiAlertText {
 /// 从通知取回的 Cue 消息与设置的记录里读出文案的材料，交给 `CueAlert`（文案规则只在那里）。
 public enum CueAlertText {
   public static func content(message: CKRecord, profile: CKRecord?) -> (title: String, body: String)? {
-    guard let text = message.encryptedValues["text"] as? String else { return nil }
     func decoded<T: Decodable>(_ key: String, as type: T.Type) -> T? {
       (message.encryptedValues[key] as? String).flatMap { try? JSONDecoder().decode(type, from: Data($0.utf8)) }
     }
-    let asking = CueAsking(
-      stored: (message["ask"] as? String).flatMap(CueAsked.init(stored:))?.ask.known, action: message.encryptedValues["askAction"] as? String,
-      rule: message.encryptedValues["askRule"] as? String)
+    guard let text = decoded("shownText", as: ShownText.self)?.text ?? message.encryptedValues["text"] as? String else { return nil }
+    let asked = (message["ask"] as? String).flatMap(CueAsked.init(stored:))
+    let asking = CueAsking(stored: asked?.ask.known, action: message.encryptedValues["askAction"] as? String, rule: message.encryptedValues["askRule"] as? String)
+    let choices = decoded("choices", as: [String].self), places = decoded("places", as: [String: CuePlace].self) ?? [:]
     return CueAlert.content(
-      name: profile?.encryptedValues["name"] as? String, text: text, asking: asking, choices: decoded("choices", as: [String].self),
+      name: profile?.encryptedValues["name"] as? String, text: text, asking: asking,
+      choices: choices.map { $0.map { CueAsked.shownChoice($0, choices: choices, asked: asked, places: places) } },
       looks: (decoded("askShots", as: [CueShot].self) ?? []).map(\.look))
   }
 }

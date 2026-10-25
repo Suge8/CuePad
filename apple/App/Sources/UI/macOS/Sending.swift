@@ -29,7 +29,7 @@ extension Workspace {
             send(text, to: AgentTarget(session: session, host: host), card: leaf)
         case .launch(let project, let host):
             // 会话名由任务定（`CueStore.requestLaunch`）；请求上显示的目标名同新会话的其他入口：任务没有标题时写项目名
-            let projectName = try await services.store.project(project)?.name ?? ""
+            let projectName = try await services.store.project(project)?.shownName ?? ""
             let title = plan.name ?? projectName
             let agents = try await services.store.macAgents(on: host)
             guard let agent = agents.preferred(services.settings.lastAgent) else {

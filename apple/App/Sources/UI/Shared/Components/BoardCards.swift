@@ -74,7 +74,7 @@ struct BoardProjectGlyph: View {
 
     var body: some View {
         ProjectGlyph(project: project, size: TaskMetrics.cardGlyph)
-            .help(project.name)
+            .help(project.shownName)
         #if os(macOS)
             .onHover { workspace.hoverProject(project.id, $0) }
             .presetHover(Binding { false } set: { if $0 { workspace.hoverProject(project.id, true) } })
@@ -116,7 +116,7 @@ struct BoardSessionCard: View {
             }
             .boardCard(advancing: true)
         }
-        .help(Dotted(project?.name, PiClock.duration(Date.now.timeIntervalSince(pulse.shown?.clock?.since ?? session.stateSince)), session.agentMark).visible)
+        .help(Dotted(project?.shownName, PiClock.duration(Date.now.timeIntervalSince(pulse.shown?.clock?.since ?? session.stateSince)), session.agentMark).visible)
         .accessibilityLabel(Dotted(session.title, pulse.fullContext.map { $0.help.spoken } ?? pulse.shown?.label).spoken)
     }
 }

@@ -125,7 +125,7 @@ DEFINE SCHEMA
         mode          STRING,
         cardID        STRING,
         status        STRING QUERYABLE,
-        resultDetail  ENCRYPTED STRING,
+        failure       ENCRYPTED STRING,
         handledBy     STRING,
         createdAt     INT64,
         completedAt   INT64,
@@ -133,6 +133,7 @@ DEFINE SCHEMA
         origin        STRING,
         taskID        STRING,
         partIDs       STRING,
+        resultDetail  ENCRYPTED STRING,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"
     );
@@ -162,6 +163,7 @@ DEFINE SCHEMA
         createdAt      INT64,
         modifiedAt     INT64,
         question       ENCRYPTED STRING,
+        shownText      ENCRYPTED STRING,
         toolCount      INT64,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"
@@ -212,6 +214,7 @@ DEFINE SCHEMA
         setAsideBy    STRING,
         wake          STRING,
         places        ENCRYPTED STRING,
+        shownText     ENCRYPTED STRING,
         acceptance    INT64,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"

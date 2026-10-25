@@ -116,7 +116,7 @@ struct CardEditorPage: View {
     private func meta(_ data: EditorData, _ editing: CardEditing) -> some View {
         HStack(spacing: 8) {
             ProjectGlyph(project: data.project, size: 12)
-            Text(data.project?.name ?? "").foregroundStyle(palette.ink)
+            Text(data.project?.shownName ?? "").foregroundStyle(palette.ink)
             Dot()
             Text(DateLabel.short(data.card.modifiedAt))
             SaveStatus(editing: editing)

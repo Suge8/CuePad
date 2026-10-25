@@ -28,7 +28,7 @@ struct ProjectsTests {
         workspace.cue.draft = ComposerDraft(text: "周末读完第三章")
         await workspace.note(from: Bindable(workspace.cue).draft)?.value
         #expect(try await store.cards(in: Project.defaultID).map(\.body) == ["周末读完第三章"])
-        #expect(workspace.notice?.text == "已记到 默认" && workspace.notice?.link == .project(Project.defaultID))
+        #expect(workspace.notice?.text.visible == "已记到 默认" && workspace.notice?.link == .project(Project.defaultID))
     }
 
     @Test func 启动回到上次的项目_失效时回到Cue页_数字键按当下顺序取() async throws {

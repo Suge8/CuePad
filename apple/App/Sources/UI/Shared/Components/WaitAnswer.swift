@@ -23,7 +23,7 @@ struct WaitAnswer: View {
     var body: some View {
         switch wait {
         case .message(let message, _):
-            CueChoices(options: message.choices ?? [], disabled: ending) { choice in
+            CueChoices(message: message, disabled: ending) { choice in
                 ending = true
                 workspace.attempt {
                     defer { ending = false }

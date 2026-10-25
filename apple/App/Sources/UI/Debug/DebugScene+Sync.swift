@@ -35,7 +35,7 @@ extension DebugScene {
         case "decide": .custom(StandInSync(.needsDecision(.accountSwitched)))
         case "outdated": .built { CloudSync.simulated(store: $0, peerFloor: CueStore.supportedSchemaVersions.upperBound + 1) }
         case "unreachable": .built { CloudSync.unreachable(store: $0) }
-        case "simulated": .built { CloudSync.simulated(store: $0, peerFloor: CueStore.supportedSchemaVersions.lowerBound) }
+        case "simulated": .built { CloudSync.simulated(store: $0, peerFloor: CueStore.peerFloor) }
         case "failed": .custom(StandInSync(.failed, issues: issues))
         case "restricted": .custom(StandInSync(.accountRestricted))
         case "offline": .custom(OfflineSync(seconds: seconds("CuePadOfflineSeconds", default: 6)))

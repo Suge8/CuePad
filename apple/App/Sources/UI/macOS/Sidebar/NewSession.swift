@@ -109,7 +109,7 @@ struct NewSessionForm: View {
         Button { chosen = place.id } label: {
             HStack(spacing: 8) {
                 ProjectGlyph(project: place.project, size: 13)
-                Text(place.project.name).foregroundStyle(palette.ink).lineLimit(1)
+                Text(place.project.shownName).foregroundStyle(palette.ink).lineLimit(1)
                 Spacer(minLength: 4)
                 // 对勾一直占着位置、只随选中显隐：换选中时名字不跟着让位
                 Image(.checked).foregroundStyle(palette.ink2).opacity(selected ? 1 : 0).accessibilityHidden(true)
@@ -132,7 +132,7 @@ struct NewSessionForm: View {
         Task {
             do {
                 let id = try await workspace.startSession(
-                    in: place.project.id, prompt: words.isEmpty ? nil : words, title: place.project.name, agent: agent,
+                    in: place.project.id, prompt: words.isEmpty ? nil : words, title: place.project.shownName, agent: agent,
                     model: choice.model, thinking: choice.shownThinking
                 ) { stage = .connecting }
                 stage = .idle

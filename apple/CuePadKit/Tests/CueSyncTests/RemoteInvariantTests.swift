@@ -76,7 +76,7 @@ import Testing
     let fields: [String: SQLValue] = [
       "content": .text("x"), "targetKind": .text("piSession"), "targetName": .text("n"), "targetRef": .null,
       "hostID": .null, "mode": .text("send"), "cardID": .null, "status": .text("pending"),
-      "resultDetail": .null, "handledBy": .null, "createdAt": .int(1_000), "completedAt": .null, "modifiedAt": .int(1_000),
+      "failure": .null, "handledBy": .null, "createdAt": .int(1_000), "completedAt": .null, "modifiedAt": .int(1_000),
     ]
     let broken = remoteRecord(.deliveryRequests, fields)
 

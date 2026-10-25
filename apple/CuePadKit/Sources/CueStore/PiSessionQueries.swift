@@ -34,8 +34,14 @@ extension CueStore {
     if let text = query.text?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty {
       let pattern = "%" + text.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "%", with: "\\%")
         .replacingOccurrences(of: "_", with: "\\_") + "%"
-      conditions.append("(title LIKE ? ESCAPE '\\' OR folder LIKE ? ESCAPE '\\' OR lastPrompt LIKE ? ESCAPE '\\')")
-      arguments += [pattern, pattern, pattern]
+      // 所在也算：行上写的是项目给人看的名字（`PiPlace`），按名字认项目同一条规则（英文界面搜 Default）
+      let named = Project.nameMatch(text, stored: "name LIKE ? ESCAPE '\\'")
+      conditions.append(
+        """
+        (title LIKE ? ESCAPE '\\' OR folder LIKE ? ESCAPE '\\' OR lastPrompt LIKE ? ESCAPE '\\'
+          OR \(home) IN (SELECT id FROM projects WHERE \(named.sql)))
+        """)
+      arguments += [pattern, pattern, pattern, pattern] + named.arguments
     }
     if let project = query.project {
       // 别的项目走 projectID 的索引；默认项目还收没有项目的

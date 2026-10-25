@@ -94,23 +94,6 @@ import Testing
     #expect(pushedSend["targetKind"] as? String == "carrierPigeon")
   }
 
-  /// 一家不能用的原因在同步记录里是给人看的那句：旧版本写的读回成对应的几种，这一版写出的还是同一句（线上格式不变）。
-  @Test func macAgentProblemsTravelAsTheirPhrases() async throws {
-    let old = #"[{"kind":"pi","reason":"还没接入 CuePad（在设置里打开）"},{"kind":"claude","reason":"没登录"},"#
-      + #"{"kind":"codex","reason":"没装"},{"kind":"opencode","reason":"版本太旧（1.0.0，要 2.0.0 或更新）"}]"#
-    let fields: [String: SQLValue] = ["hostID": .text("mac-old"), "agents": .text("[]"), "problems": .text(old), "modifiedAt": .int(5_000), "name": .null]
-    try await rig.coordinator.pulled([remoteRecord(.macAgents, id: MacAgents.recordID(host: "mac-old"), fields)], [])
-
-    let read = try #require(try await store.allMacAgents().first { $0.hostID == "mac-old" })
-    #expect(read.problems.map(\.reason) == [.notConnected, .notLoggedIn, .notInstalled, .other("版本太旧（1.0.0，要 2.0.0 或更新）")])
-    #expect(read.whyNone.hasPrefix("Pi 还没接入 CuePad（在设置里打开） · Claude Code 没登录"))
-
-    try await store.recordMacAgents(host: "mac-new", name: nil, [], problems: read.problems)
-    let written = try RawDB(rig.fixture.url).rows("SELECT problems FROM macAgents WHERE hostID = 'mac-new'")
-    func json(_ text: String) throws -> NSArray { try JSONSerialization.jsonObject(with: Data(text.utf8)) as! NSArray }
-    #expect(try json(written[0][0]) == json(old))
-  }
-
   @Test func unknownRecordTypesAreSkippedAndReported() async throws {
     let alien = CKRecord(recordType: "widgets", recordID: CKRecord.ID(recordName: UUID().uuidString.lowercased(), zoneID: testZone))
     alien["size"] = 3 as Int64

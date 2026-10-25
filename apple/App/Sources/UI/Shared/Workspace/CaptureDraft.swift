@@ -31,7 +31,7 @@ struct CaptureDraft {
         let files = store.files
         let body = StoredBody.make(text: text, imageHashes: try images.map { try files.store($0) })
         let card = try await workspace.createCard(body: body, in: project)
-        let destination = try await store.project(card.projectID)?.name ?? ""
+        let destination = try await store.project(card.projectID)?.shownName ?? ""
         workspace.say(Dotted(CaptureCopy.saved(to: destination)), link: .project(card.projectID))
     }
 }

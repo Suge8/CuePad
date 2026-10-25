@@ -188,7 +188,7 @@ private struct NotificationSection: View {
         Section {
             permission
             row("等你", kind: .waitingForUser, help: "Agent 在等你回答或确认，Cue 带选项来问你或有急事")
-            row("待回复", kind: .awaitsReply, help: "Cue 把会话留给你回")
+            row("待回复的会话", kind: .awaitsReply, help: "Cue 把会话留给你回")
             row("做完了", kind: .settled, help: "Agent 做完了一轮")
         }
         .task { await alerts.refresh() }

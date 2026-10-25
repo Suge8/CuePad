@@ -123,7 +123,7 @@ struct NewTaskLine: View {
                 .onChange(of: focused) { if !focused, text.trimmingCharacters(in: .whitespaces).isEmpty { dismiss?() } }
             if let projects {
                 Menu {
-                    ForEach(projects) { item in Button(item.name) { chosen = item.id } }
+                    ForEach(projects) { item in Button(item.shownName) { chosen = item.id } }
                 } label: {
                     DestinationChip(project: current).frame(minHeight: 44).contentShape(.rect).menuLabel("记到 \(current?.name ?? "")")
                 }

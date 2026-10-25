@@ -13,7 +13,7 @@ nonisolated struct TrashItem: Identifiable, Sendable, Equatable {
 
     init(_ project: Project, cards: Int) {
         id = project.id
-        title = project.name
+        title = project.shownName
         detail = CountCopy.items(cards) ?? ""
         deletedAt = project.deletedAt
         self.project = project
@@ -67,7 +67,7 @@ extension Workspace {
         attempt {
             try await item.restore(store)
             let project = try await item.landing(store)
-            self.say("已恢复到 \(project?.name ?? "")", link: project.map { .project($0.id) })
+            self.say("已恢复到 \(project?.shownName ?? "")", link: project.map { .project($0.id) })
         }
     }
     func purge(_ item: TrashItem) { perform { try await item.purge($0) } }

@@ -30,7 +30,7 @@ extension CueStore {
   /// 任务的状态与正文都不因说话而变：发出的正文留在任务上，"发过没有"看投送请求。
   /// 你的作答成功了，同一个事务里往那个会话的对话写下你答了什么（`PiChatRole.answer`；Cue 替你答的不写，记在它那一轮的经过里）。
   fileprivate func finishDelivery(_ id: UUID, _ outcome: DeliveryOutcome, at completed: Date) throws {
-    let (status, detail): (DeliveryStatus, String?) =
+    let (status, reason): (DeliveryStatus, ShownText?) =
       switch outcome {
       case .succeeded: (.succeeded, nil)
       case .failed(let reason), .transient(let reason): (.failed, reason)
@@ -38,9 +38,9 @@ extension CueStore {
     try write {
       try db.run(
         """
-        UPDATE deliveryRequests SET status = ?, resultDetail = ?, completedAt = ?, modifiedAt = ?
+        UPDATE deliveryRequests SET status = ?, failure = ?, completedAt = ?, modifiedAt = ?
         WHERE id = ? AND status IN (\(DeliveryStatus.openSQL))
-        """, [status.rawValue, detail, completed, Date.stamp, id])
+        """, [status.rawValue, reason?.stored, completed, Date.stamp, id])
       guard db.changes > 0, status == .succeeded, let request = try find(DeliveryRequest.self, id), !request.isFromCue,
         let answer = request.answer, let session = request.target.ref
       else { return }
@@ -49,8 +49,8 @@ extension CueStore {
       let seq = try db.first("SELECT MAX(seq) FROM piMessages WHERE sessionID = ?", [session]) { $0.isNull(0) ? 0 : $0.int(0) } ?? 0
       _ = try insert(
         PiChatMessage(
-          sessionID: session, entryID: "answer/\(id.uuidString.lowercased())", seq: seq, role: .answer, text: answer.value.label, at: request.createdAt,
-          deliveryID: id, question: answer.question),
+          sessionID: session, entryID: "answer/\(id.uuidString.lowercased())", seq: seq, role: .answer, text: answer.value.said, at: request.createdAt,
+          deliveryID: id, question: answer.question, shownText: answer.value.shown),
         ignoringExisting: true)
     }
   }
@@ -59,9 +59,9 @@ extension CueStore {
     try write {
       try db.run(
         """
-        UPDATE deliveryRequests SET status = 'failed', resultDetail = ?, completedAt = ?, modifiedAt = ?
+        UPDATE deliveryRequests SET status = 'failed', failure = ?, completedAt = ?, modifiedAt = ?
         WHERE status = 'executing' AND handledBy = ?
-        """, ["Mac 上的 CuePad 在执行过程中退出，为避免重复发送没有重试", now, Date.stamp, host])
+        """, [ShownText("Mac 上的 CuePad 在执行过程中退出，为避免重复发送没有重试").stored, now, Date.stamp, host])
     }
   }
 
@@ -167,11 +167,11 @@ public actor DeliveryExecutor {
     guard let candidates = await reporting({ try await store.pendingDeliveries(for: hostID) }) else { return nil }
     for request in candidates {
       if timing.now().timeIntervalSince(request.createdAt) > Self.maxAge.seconds {
-        await finish(request, .failed(String(localized: "请求创建后超过 \(Int(Self.maxAge.seconds)) 秒仍未执行，已放弃")))
+        await finish(request, .failed(ShownText("请求创建后超过 \(Int(Self.maxAge.seconds)) 秒仍未执行，已放弃")))
         continue
       }
       if case .unknown(let raw) = request.mode {
-        await finish(request, .failed(String(localized: "这个版本的 CuePad 不认识发送方式「\(raw)」，没有执行（可能来自更新版本，请升级 Mac 上的 CuePad）")))
+        await finish(request, .failed(ShownText("这个版本的 CuePad 不认识发送方式「\(raw)」，没有执行（可能来自更新版本，请升级 Mac 上的 CuePad）")))
         continue
       }
       if hasMissingImages(request) { continue }

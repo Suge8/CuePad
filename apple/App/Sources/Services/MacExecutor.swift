@@ -39,7 +39,7 @@ final class MacExecutor {
             let message = String(localized: "处理投送请求时读写资料库失败：\(error.localizedDescription)")
             Task { @MainActor in reportIssue(message) }
         }, onWritten: upload) { [weak self] request in
-            guard let self else { return .failed(String(localized: "这台 Mac 上的 CuePad 正在退出")) }
+            guard let self else { return .failed(ShownText("这台 Mac 上的 CuePad 正在退出")) }
             return await self.run(request)
         }
         try await executor.start()
@@ -54,15 +54,15 @@ final class MacExecutor {
     }
 
     /// 执行一次，把错误归类交给 `DeliveryExecutor`（重试与写回在那里）：暂时性错误（`isTransient`）是暂时没成，其余是失败；
-    /// 失败原因写回给手机用户看，取错误自身的说明（各模块的错误都实现了 `LocalizedError`）。
+    /// 失败原因写回给发起的设备看：错误的句式与参数（`ShownText`，各端按自己的语言显示），系统与第三方的错误是这台的原文。
     /// 开新会话的错不算暂时性：起得慢的那个之后还会连上，再开一个就是两个会话。
     private func run(_ request: DeliveryRequest) async -> DeliveryOutcome {
         do {
             return try await perform(request)
         } catch where request.mode != .known(.start) && Self.isTransient(error) {
-            return .transient(error.localizedDescription)
+            return .transient(ShownText(error))
         } catch {
-            return .failed(error.localizedDescription)
+            return .failed(ShownText(error))
         }
     }
 

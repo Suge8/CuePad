@@ -125,7 +125,7 @@ final class CueService {
             guard duty != nil, !fresh.isEmpty else { continue }
             let name = try await store.cueProfile()?.name
             for message in fresh {
-                let alert = CueAlert.content(name: name, text: message.text, asking: message.asking, choices: message.choices, looks: message.shots.map(\.look))
+                let alert = CueAlert.content(name: name, text: message.text, asking: message.asking, choices: message.shownChoices, looks: message.shots.map(\.look))
                 await notifier.post(title: alert.title, body: alert.body)
             }
         }
