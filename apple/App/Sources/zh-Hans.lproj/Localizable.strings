@@ -1,4 +1,5 @@
 /* 锁屏通知：CloudKit 订阅按 key 在设备上取文案（标题与详情是加密字段，不进通知）。 */
 "pi_alert_waiting" = "Agent 在等你确认";
 "pi_alert_settled" = "Agent 完成了";
+"pi_alert_reply" = "有会话待回复";
 "cue_alert" = "Cue 找你";

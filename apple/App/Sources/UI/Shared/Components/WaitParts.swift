@@ -11,7 +11,7 @@ nonisolated extension TaskBoard.Wait {
     }
 
     /// 要你定什么：Cue 的是代码写的问句（`CueMessage.headline`）；会话的是问题的第一行，`detail` 是第二行起的说明——
-    /// 选项不写进来（它们是下面的胶囊）。会话没有提问时（Cue 留给你回的）是它最后那句的首句。
+    /// 选项不写进来（它们是下面的胶囊）。会话在等却没报出问题时是它此刻那一句（`PiProgress.line`）。
     var asked: (line: String, detail: String?) {
         switch wait {
         case .message(let message, _): return (message.headline ?? "", nil)

@@ -89,7 +89,7 @@ public struct CueStir: Codable, Equatable, Sendable {
 }
 
 /// Cue 把会话的这一次停下留给你回（`CueStore.leaveToYou`）：会话停在 `since` 起的那次停下（歇着或等回答）时成立，
-/// 谁再对它说话、它动起来（`stateSince` 变了）就自然作废，不用谁去清。只有一份：会话列表的"待回复"、等你确认与"等你 N"都经 `CueDuty` 读它。
+/// 谁再对它说话、它动起来（`stateSince` 变了）就自然作废，不用谁去清。只有一份：待回复（`PiSessionState.awaitsReply`）与会话在问的归不归你（`waitsForCue`）都经 `CueDuty` 读它。
 public struct CueLeft: StoredJSON, Hashable, Sendable {
   public var sessionID: String
   public var since: Date
@@ -106,7 +106,7 @@ public struct CueLeft: StoredJSON, Hashable, Sendable {
 }
 
 /// Cue 在值班时各端看会话要用的那一份（`CueStore.cueDuty`；不在值班为 nil）：它的名字（"等 X 回答"）与它留给你回的会话。
-/// 会话等的是 Cue 还是你（`PiSessionState.waitsForCue`、`asksYou`）、会话行的"待回复"都只读它。
+/// 会话等的是 Cue 还是你（`PiSessionState.waitsForCue`、`asksYou`）、待回复（`awaitsReply`）都只读它。
 public struct CueDuty: Equatable, Sendable {
   public var name: String
   public var left: [CueLeft]

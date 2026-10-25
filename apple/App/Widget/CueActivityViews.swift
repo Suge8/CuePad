@@ -198,7 +198,7 @@ private struct Works: View {
                     Text(bead.kind == .delegating && bead.subagents > 0 ? "等 \(bead.subagents) 个子代理" : bead.kind.label)
                         .font(.footnote).foregroundStyle(bead.kind.tone.color(palette)).lineLimit(1).fixedSize()
                     Spacer(minLength: 6)
-                    if bead.kind == .done || bead.kind == .resting {
+                    if [.done, .resting, .reply].contains(bead.kind) {
                         Text(bead.since, style: .relative).monospacedDigit().foregroundStyle(palette.ink3)
                             .multilineTextAlignment(.trailing).timerWidth(Self.relative).font(.footnote)
                     } else {
