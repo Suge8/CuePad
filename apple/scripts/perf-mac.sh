@@ -10,7 +10,8 @@
 #   前台量时"任务气泡开"是真实点击：App 写 AWAIT click x y，这里用 hid.swift 经 HID 点那一行（会移动真实指针，量完放回）。
 #   每次量的原始行（每次启动每项一行 JSON，键同 InteractionBench 的 INTERACT 行，另加"库"）留在 apple/.derived-perf/Build/interact.jsonl，
 #   表里的中位数就从它算；下一次 perf mac 开跑时清空重写，要留着比就先拷走。
-#   CUEPAD_TRACE=<xctrace 模板>（如 'Animation Hitches'、'Time Profiler'）：每次量的同时按 PID 录整段 trace，存 /tmp/cuepad-perf/interact-<库>-<第几次>.trace。
+#   CUEPAD_TRACE=<xctrace 模板>（如 'Animation Hitches'、'Time Profiler'）：每次量的同时按 PID 录 trace，存本检出的 apple/.derived-perf/Build/traces/interact-<库>-<第几次>.trace（xctrace 的输出在同名 .log）。
+#   按 PID 开录要好几秒，短的几项等不到就量完退出了：App 带 -CuePadTraceWait YES 起，就绪后写 AWAIT trace <PID> 停着等，这里开录了发 SIGUSR1 放它走。
 # xc.sh 构建好 Release（带 DEBUG 条件，只为留下测量代码；预算按用户拿到的构建定，产物在 apple/.derived-perf，Instruments 也用这份）、
 # 带 -CuePadForeground YES 时独占机器（别的编译、测试同时跑，指令数之外的数都会被拖歪；后台量只比指令数，不独占）后调这里，第一个参数是 CuePad.app。iOS 的单次交互见 perf-ios.sh。
 set -euo pipefail
@@ -21,6 +22,7 @@ runs="${2:-3}"
 extra=("${@:3}")
 DERIVED="$(dirname "$(dirname "$(dirname "$APP")")")"
 LIBRARY="$DERIVED/library-perf"
+TRACES="$DERIVED/traces"
 
 # 实例经 app.py exec（隔离、占住本检出那一份后 exec 成 CuePad）：后台调用时 $! 就是 CuePad
 launch() {
@@ -42,40 +44,51 @@ if [ ! -f "$LIBRARY/cuepad.db" ]; then
   wait "$pid" || true
 fi
 
-# 真实点击的小工具（源文件比它新时重编）：App 每写一行 `AWAIT click x y` 就在那一点点一下，其余行原样转出
+# 真实点击的小工具（源文件比它新时重编）：App 每写一行 `AWAIT click x y` 就在那一点点一下；`AWAIT trace <PID>` 时按 PID 开录（`$trace`），其余行原样转出
 HID="$DERIVED/hid"
 if [ ! -x "$HID" ] || [ "$APPLE_DIR/scripts/hid.swift" -nt "$HID" ]; then xcrun swiftc -O "$APPLE_DIR/scripts/hid.swift" -o "$HID"; fi
 clicker() {
-  local line kind x y
+  local line kind what x y
   while IFS= read -r line; do
-    read -r kind _ x y <<<"$line"
-    if [ "$kind" = AWAIT ]; then "$HID" click "$x" "$y"; else printf '%s\n' "$line"; fi
+    read -r kind what x y <<<"$line"
+    if [ "$kind" = AWAIT ] && [ "$what" = trace ]; then record "$x" &
+    elif [ "$kind" = AWAIT ]; then "$HID" click "$x" "$y"
+    else printf '%s\n' "$line"; fi
   done
+  wait
+}
+
+# 按 PID 开录，开录了放 App 往下量；没开录成（输出里没有 Starting recording）就结束它，这一次算没量完
+record() {
+  local pid="$1"
+  xcrun xctrace record --template "$CUEPAD_TRACE" --attach "$pid" --output "$trace" 2>&1 | tee "$trace.log" | {
+    if grep -q 'Starting recording'; then kill -USR1 "$pid"; else echo "xctrace 没开录，见 $trace.log" >&2; kill -TERM "$pid"; fi
+    cat >/dev/null
+  }
 }
 
 # 每次都是全新进程（首访就是首访）与一份没量过的库：量的动作会写库（发送），同一份库连跑，后几次量的是越来越长的对话。
 # 演示库每次重建；大库每次从写好的那份 APFS 克隆（不占时间也不占空间）
 collect() {
   local label="$1" source="$2" library="$DERIVED/library-run" out="$DERIVED/interact-run.log" pipe="$DERIVED/interact-run.fifo"; shift 2
+  local tracing=()
+  [ -z "${CUEPAD_TRACE:-}" ] || tracing=(-CuePadTraceWait YES)
   for run in $(seq "$runs"); do
     rm -rf "$library" "$pipe"
+    local trace="$TRACES/interact-$label-$run.trace"
+    if [ -n "${CUEPAD_TRACE:-}" ]; then
+      mkdir -p "$TRACES" && rm -rf "$trace" "$trace.log"
+      echo "trace：$trace" >&2
+    fi
     if [ -n "$source" ]; then cp -cR "$source" "$library"; fi
     mkfifo "$pipe"
     clicker <"$pipe" >"$out" &
     local reader=$!
-    launch "$library" "$@" -CuePadBench interact -CuePadWindowSize 1440x900 ${extra[@]+"${extra[@]}"} >"$pipe" 2>/dev/null &
-    local pid=$! tracer=""
-    if [ -n "${CUEPAD_TRACE:-}" ]; then
-      local trace="/tmp/cuepad-perf/interact-$label-$run.trace"
-      mkdir -p /tmp/cuepad-perf && rm -rf "$trace"
-      xcrun xctrace record --template "$CUEPAD_TRACE" --attach "$pid" --output "$trace" >/dev/null 2>&1 &
-      tracer=$!
-      echo "trace：${trace}（CuePad PID ${pid}）" >&2
-    fi
+    launch "$library" "$@" -CuePadBench interact -CuePadWindowSize 1440x900 ${tracing[@]+"${tracing[@]}"} ${extra[@]+"${extra[@]}"} >"$pipe" 2>/dev/null &
+    local pid=$!
     local status=0
     wait "$pid" || status=$?
     wait "$reader"
-    if [ -n "$tracer" ]; then wait "$tracer" || true; fi
     if [ "$status" != 0 ]; then
       sed -n 's/^BENCH-ERR /CuePad 没量完（'"$label"'）：/p' "$out" >&2
       return "$status"

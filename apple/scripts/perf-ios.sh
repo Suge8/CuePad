@@ -7,7 +7,7 @@
 #   长按菜单与手势在进程内没有入口：App 写 `AWAIT 名 x y`（按）或 `AWAIT 名 x y x2 y2 swipe|drag 秒`（快滑或慢拖），这里用 axe（https://github.com/cameroncooke/AXe）
 #   在模拟器上真按（长按菜单按住 0.8 秒；收起在 App 里做）、真滑（axe swipe）、真拖（axe drag，每秒 60 个移动点）。
 #   某一次没写完（App 写了 FAIL、中途退出或超时）整次失败、以 1 退出，不出部分结果的表。
-#   CUEPAD_TRACE=<xctrace 模板>（如 'Time Profiler'）：每次量的同时录整段 trace（启动前开录，含冷启动），存 /tmp/cuepad-perf/interact-ios-<第几次>.trace。
+#   CUEPAD_TRACE=<xctrace 模板>（如 'Time Profiler'）：每次量的同时录整段 trace（启动前开录，含冷启动），存本检出的 apple/.derived-perf/Build/traces/interact-ios-<第几次>.trace。
 #   录的是整机（模拟器里的进程 xctrace 按 PID、按名字都认不出），按打印的 PID 筛；INTERACT 行的 at（墙钟）减 trace 的开始时刻就是各项在 trace 里的位置。
 #   xctrace 连设备卡住（不出"Starting recording"、收到 Ctrl-C 也不退）时这里 60 秒后放弃并以 1 退出，不带着卡住的录制往下量。
 # xc.sh 构建好 Release（带 DEBUG 条件，只为留下测量代码；产物在 apple/.derived-perf）、领到一台模拟器后调这里（不独占机器：只比指令数与主线程 CPU），第一个参数是 CuePad.app；
@@ -42,8 +42,8 @@ for run in $(seq "$runs"); do
   out="$library/interact.jsonl"
   tracer=""
   if [ -n "${CUEPAD_TRACE:-}" ]; then
-    trace="/tmp/cuepad-perf/interact-ios-$run.trace"
-    mkdir -p /tmp/cuepad-perf && rm -rf "$trace"
+    trace="$DERIVED/traces/interact-ios-$run.trace"
+    mkdir -p "$DERIVED/traces" && rm -rf "$trace"
     xcrun xctrace record --template "$CUEPAD_TRACE" --device "$udid" --all-processes --output "$trace" >"$trace.log" 2>&1 &
     tracer=$!
     # 开录了再启动，冷启动才录得到

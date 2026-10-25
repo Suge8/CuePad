@@ -5,7 +5,7 @@
 #   iOS 演示库首启会弹一条会话"做完了"的提示，5 秒后收起，正落在默认窗口开头（约 45M 指令、二十多次唤醒）；要看纯静置就加长静置（CUEPAD_IDLE_SETTLE=8）。
 #   Mac 实例同所有本机构建在后台（窗口排在最后，不抢前台）；iOS 在领到的模拟器上，每次先重开机（同 perf-ios.sh）。
 #   CUEPAD_IDLE_BACKGROUND=1（仅 ios）：就绪后切到设置 App，量 CuePad 进后台之后的开销。
-#   CUEPAD_TRACE=<xctrace 模板>（如 'Time Profiler'、Allocations）：量的窗口里同时录 trace，存 /tmp/cuepad-perf/idle-<平台>-<第几次>.trace；
+#   CUEPAD_TRACE=<xctrace 模板>（如 'Time Profiler'、Allocations）：量的窗口里同时录 trace，存本检出的 apple/.derived-perf/Build/traces/idle-<平台>-<第几次>.trace；
 #   iOS 录的是整机（模拟器里的进程 xctrace 按 PID、按名字都认不出），按打印的 PID 筛。
 # xc.sh 构建好 Release（同 perf-mac.sh，产物在 apple/.derived-perf）后调这里，第一个参数是 CuePad.app。不独占机器：量的都是进程自己的内核记账。
 set -euo pipefail
@@ -27,7 +27,7 @@ if [ "$platform" = ios ]; then
   sim_boot "$udid"
   xcrun simctl install "$udid" "$APP"
 fi
-mkdir -p /tmp/cuepad-perf
+mkdir -p "$derived/traces"
 rows="$derived/idle.jsonl"
 : >"$rows"
 for run in $(seq "$runs"); do
@@ -49,7 +49,7 @@ for run in $(seq "$runs"); do
     if [ -n "${CUEPAD_IDLE_BACKGROUND:-}" ]; then hooks+=(--on-ready "xcrun simctl launch $udid com.apple.Preferences"); fi
   fi
   if [ -n "${CUEPAD_TRACE:-}" ]; then
-    trace="/tmp/cuepad-perf/idle-$platform-$run.trace"
+    trace="$derived/traces/idle-$platform-$run.trace"
     rm -rf "$trace"
     target="--attach $pid"; [ "$platform" = mac ] || target="--device $udid --all-processes"
     hooks+=(--during "xcrun xctrace record --template $(printf %q "$CUEPAD_TRACE") $target --time-limit ${seconds}s --output $(printf %q "$trace")")
