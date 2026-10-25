@@ -18,7 +18,7 @@ enum CueNowSamples {
     private static func now(
         _ mood: CueMood, _ cue: CueNow.Brain, _ beads: [CueNow.Bead], advancing: Int, first: CueNow.Wait? = nil, resting: CueMood = .listening
     ) -> CueNow {
-        CueNow(name: "Cue", mood: mood, restingMood: resting, cue: cue, beads: beads, hidden: 0, advancing: advancing, first: first, at: .now)
+        CueNow(name: "Cue", mood: mood, restingMood: resting, cue: cue, beads: beads, hidden: 0, counts: CueNow.Counts(beads), advancing: advancing, first: first, at: .now)
     }
 
     /// 被会话叫醒、在看它交回的结果；一件在跑、一件等子代理。

@@ -60,7 +60,7 @@ struct CueTrace: View {
         }
     }
 
-    /// 动作的图标，与按钮同一个（查看是眼睛：Cue 看的是会话与任务，不是文件）。
+    /// 动作的图标，与按钮同一个（查看是眼睛：Cue 看的是会话与任务，不是文件）；留给你就是那个会话此刻的待回复，图形只取状态那一处（`PiShown.icon`）。
     static func icon(_ kind: PiChatMessage.Tools.Kind) -> Icon {
         switch kind {
         case .read: .looked
@@ -69,7 +69,7 @@ struct CueTrace: View {
         case .start: .started
         case .stop: .endSession
         case .done: .complete
-        case .leave: .yourTurn
+        case .leave: PiShown(status: .awaitsReply).icon
         case .edit: .write
         case .command, .search, .other, .said, .ask: .tool
         }

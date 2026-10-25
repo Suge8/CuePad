@@ -91,8 +91,8 @@ public enum CueStoreError: Error, Equatable {
   case shots(limit: Int)
   /// 点名的那一份不在发到手机的里（参数是 id）。
   case shotMissing(String)
-  /// 规矩那一类不能放进允许清单。
-  case cannotAllowRule
+  /// 不能放行的那几类（`CueAsk.allowable`）放不进允许清单。
+  case cannotAllow
 }
 
 extension CueStoreError: LocalizedError {
@@ -146,7 +146,7 @@ extension CueStoreError: LocalizedError {
     case .shots(let limit): "show 至多 \(limit) 张、不重复：只挑回答问题必须看的、证明结论的最终成果"
     case .shotMissing(let id): "发到手机的里没有 \(id)：照 task peek 里列的 id 写"
     case .alreadyAllowed(let project): "这类事在允许清单里（\(project.map { "项目「\($0)」" } ?? "所有项目")不用问）：直接做，做完告诉他"
-    case .cannotAllowRule: "规矩那一类不能放行：要他先问的就一直问"
+    case .cannotAllow: "规矩与审美这两类不能放行：要他定的就一直问他"
     }
   }
 }

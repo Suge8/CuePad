@@ -2,12 +2,12 @@ import SwiftUI
 
 extension PiShown {
     /// 状态色：等你确认赭黄、出错与没能送达胭脂、有新回复石绿三种各管一件事；在跑（工作中、话在路上）是正在发生，用签名色靛青；
-    /// 停着的（该你了、新会话、未知）与已结束灰。
+    /// 待回复是墨色（该你说下一句，同 Cue 页的待回复提示；赭黄只给要你拍板的）；停着的（该你了、新会话、未知）与已结束灰。
     func tint(_ palette: Palette) -> Color {
         switch status {
-        case .asking, .awaitsReply: palette.waiting
+        case .asking: palette.waiting
         // 等 Cue 回答：不是要你管的，中性的墨色（赭黄只给等你确认的）
-        case .cueAsking: palette.ink
+        case .cueAsking, .awaitsReply: palette.ink
         case .failed, .delivery(.failed): palette.failure
         case .working, .delivery: palette.signature
         case .unread: palette.replied
@@ -29,7 +29,7 @@ extension PiShown {
     }
 
     /// Agent 页卡片的底色：出错与没能送达、有新回复是这种状态的淡底令牌，其余是纸（nil）。
-    /// 等你确认与待回复不铺：大块的赭黄压眼，图标与状态字的赭黄已经够醒目；在跑的也不铺：会动的心电线与靛青字已经够醒目。
+    /// 等你确认与待回复不铺：大块的底色压眼，图标与状态字的赭黄已经够醒目；在跑的也不铺：会动的心电线与靛青字已经够醒目。
     func wash(_ palette: Palette) -> Color? {
         switch status {
         case .failed, .delivery(.failed): palette.failureWash
@@ -43,7 +43,9 @@ extension PiShown {
     /// 自绘的循环动效，这里是不放循环动效时与菜单里的样子。要你看的三种是实心圆、记号刻在里面，其余没有实心的圆底；同为圆的几种靠颜色与里面的记号分开。
     var icon: Icon {
         switch status {
-        case .asking, .awaitsReply: .waiting
+        case .asking: .waiting
+        // 待回复：同该你了的输入光标（都是轮到你说下一句），靠墨色与灰分开
+        case .awaitsReply: .yourTurn
         // 等 Cue 回答：气泡里的问号，线条墨色（实心赭黄的问号圆只给等你确认的）
         case .cueAsking: .cueAsking
         // 胭脂圆叹号（`Icon.failure`，与操作出错同一个）：与等你确认的赭黄问号圆靠颜色与里面的字分开

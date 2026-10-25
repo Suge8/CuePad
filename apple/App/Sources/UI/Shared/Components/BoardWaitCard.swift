@@ -28,10 +28,10 @@ struct BoardWaitCard: View {
         .boardDim(project: wait.project)
     }
 
-    /// 答法是回答框（文字题、Cue 留给你回的）：它左边让出头像那一格，选项靠右不让。
+    /// 答法是回答框（文字题）：它左边让出头像那一格，选项靠右不让。
     private var replies: Bool {
         guard case .session(let session, _) = wait.wait else { return false }
-        return session.answerableQuestion?.kind.known == .text || session.question == nil
+        return session.answerableQuestion?.kind.known == .text
     }
 
     private var bubble: some View {

@@ -4,7 +4,7 @@ import SwiftUI
 
 /// `-CuePadCueAsk <proposals|push|one|four|evidence>`（配 `-CuePadScene cue` 与演示库）：把"等你"换成提问卡的一种样子，对照设计稿截图。
 /// 演示库原有的两条先撤回，换上这一条：
-/// - proposals：真实那张卡的同款——按你的规矩在三个方案里挑，推荐 1，点名每个方案一张手机截图；
+/// - proposals：真实那张卡的同款——审美取舍，在三个方案里挑，推荐 1，点名每个方案一张手机截图；
 /// - push：推送，有第二项（"以后……不用问"），不带图；
 /// - one：部署到预发，只点名一张竖图；
 /// - four：四张竖图（一行平分，缩略图变小）；
@@ -29,7 +29,7 @@ extension DebugScene {
             ("in-thread-iphone.png", "提问卡方案 2：对话里问", "方案 2 对话里问：按钮贴输入框", proposalPNG(.thread)),
             ("slide-to-allow-iphone.png", "提问卡方案 3：郑重放行", "方案 3 郑重放行：滑过去才同意", proposalPNG(.slide)),
         ]
-        let proposalRule = try CueAsking(.rule, action: "按方案 1 决定单改提问卡", rule: "重做界面设计要先给几个方案让我选")
+        let proposalTaste = try CueAsking(.taste, action: "按方案 1 决定单改提问卡")
         let (text, asking, shown): (String, CueAsking, [CueShot]) = switch variant {
         case "push":
             ("发言顺序修好了，测试都过了。要推送到 origin/main 吗？", try CueAsking(.push, action: "把发言顺序的修复推送到 origin/main"), [])
@@ -38,7 +38,7 @@ extension DebugScene {
                 ("staging-1.4.2.png", "预发 1.4.2", "预发 1.4.2 要上的四处改动", stagingPNG()),
             ]))
         case "four":
-            ("提问卡我重画了四个方向，你挑一个。", proposalRule, try await shots(
+            ("提问卡我重画了四个方向，你挑一个。", proposalTaste, try await shots(
                 proposals + [("drawer-iphone.png", "提问卡方案 4：抽屉", "方案 4 抽屉：从底下拉出来", proposalPNG(.drawer))]))
         case "evidence":
             ("修复验过了，三处证据都在。要合并进 main 吗？", try CueAsking(.merge, action: "把发言顺序的修复合并进 main"), try await shots([
@@ -47,7 +47,7 @@ extension DebugScene {
                 ("pressure.png", "压测", "6 人同时重连的压测", evidencePNG("p95 9ms", tint: .orange)),
             ]))
         default:
-            ("提问卡我重画了三个方向，都放在下面这条里，你挑一个。我推荐 1：点一下就答完。", proposalRule, try await shots(proposals))
+            ("提问卡我重画了三个方向，都放在下面这条里，你挑一个。我推荐 1：点一下就答完。", proposalTaste, try await shots(proposals))
         }
         _ = try await store.addCueMessage(.cue, text: text, ask: asking, shots: shown, task: task)
     }

@@ -1,11 +1,13 @@
 import Foundation
 
-/// 推进中与等你：Cue 那一行、任务看板中间两列、小组件、实时活动与 Dock 角标读的同一份，只在这里算。
-/// - 等你：Cue 带选项问你、还没结束的消息（`cueMessagesWaitingForYou`），加上会话里在等你回答的（`sessionsAskingYou`，规则在 `PiSessionState.asksYou`）。
+/// 推进中、等你与待回复：Cue 那一行、任务看板中间两列、小组件、实时活动与 Dock 角标读的同一份，只在这里算。
+/// - 等你（要你拍板的）：Cue 带选项问你、还没结束的消息（`cueMessagesWaitingForYou`），加上会话里在等你回答的（`sessionsAskingYou`，规则在 `PiSessionState.asksYou`）。
 ///   一处在等就是一件：同一件任务上 Cue 在问、它的会话也在问，算两件。每件带上它落在哪件顶层任务上（消息的 `taskID`、会话归的那件 `sessionOwners`），没落在任务上的为 nil。
 /// - 被等你占着的（`held`）：有一件等你落在它上面的顶层任务。一件事只在一处：它只算等你，不论状态是待办、进行中还是做完——
 ///   推进中在这里去掉它们；任务看板与实时活动按列分时也先看它（App 里的 `TaskBoard.Column.of`）。
-/// - 推进中：Cue 此刻在做的（`CueBoard.active`，即它信封里的"在做"）里不在等你的：被等你占着的事与在问你的会话去掉；先后同看板。
+/// - 待回复（`replies`）：Cue 留给你回、此刻歇着的会话（`sessionsAwaitingReply`，规则在 `PiSessionState.awaitsReply`），等得最久的在前。
+///   不算等你、不占着任务：绑着任务的照旧随任务在推进中，会话上写"待回复"。
+/// - 推进中：Cue 此刻在做的（`CueBoard.active`，即它信封里的"在做"）里不在等你的：被等你占着的事与在问你、待回复的单独会话去掉；先后同看板。
 ///   进行中而会话都结束了、没人在做的事不算，它留在你的任务清单里（任务看板的待办）。
 public struct CueTally: Equatable, Sendable {
   public enum Wait: Identifiable, Equatable, Sendable {
@@ -29,27 +31,29 @@ public struct CueTally: Equatable, Sendable {
 
   public var advancing: [CueWork]
   public var waiting: [Wait]
+  public var replies: [PiSessionState]
 
   public var held: Set<UUID> { Set(waiting.compactMap(\.task)) }
 
-  public init(advancing: [CueWork], waiting: [Wait]) {
+  public init(advancing: [CueWork], waiting: [Wait], replies: [PiSessionState]) {
     self.advancing = advancing
     self.waiting = waiting
+    self.replies = replies
   }
 
-  public static let empty = CueTally(advancing: [], waiting: [])
+  public static let empty = CueTally(advancing: [], waiting: [], replies: [])
 }
 
 extension CueStore {
   public func cueTally() throws -> CueTally {
     let waiting = try cueWaiting()
-    var tally = CueTally(advancing: [], waiting: waiting)
+    var tally = CueTally(advancing: [], waiting: waiting, replies: try sessionsAwaitingReply())
     let held = tally.held
-    let asking = Set(waiting.compactMap { if case .session(let state, _) = $0 { state.sessionID } else { nil } })
+    let yours = Set(waiting.compactMap { if case .session(let state, _) = $0 { state.sessionID } else { nil } } + tally.replies.map(\.sessionID))
     tally.advancing = try cueBoard().active.filter { work in
       switch work {
       case .task(let item): !held.contains(item.id)
-      case .session(let state): !asking.contains(state.sessionID)
+      case .session(let state): !yours.contains(state.sessionID)
       }
     }
     return tally

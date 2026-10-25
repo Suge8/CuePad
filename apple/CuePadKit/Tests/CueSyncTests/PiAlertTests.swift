@@ -127,7 +127,7 @@ import Testing
     #expect(try await flag(rig, reply("合并好了")) == nil)
   }
 
-  /// 会话做完：Cue 不值班时推；值班时会话归它接手不推，只推归他的停下（他刚在里面说过话）与它留给他回的（正文是会话最后那句回答）；
+  /// 会话做完：Cue 不值班时推；值班时会话归它接手不推，只推归他的停下（他刚在里面说过话）与它留给他回的（待回复，正文是会话最后那句回答）；
   /// 他在 Mac 上开着那个会话时都不推。
   @Test func sessionAlertsReachThePhoneOnlyWhenTheStopIsHis() async throws {
     let rig = try Rig()
@@ -167,8 +167,8 @@ import Testing
     }())
     #expect(try await rig.store.flagLeftToYou(left, host: "mac") == session)
     let record = try #require(await rig.coordinator.record(for: rig.recordID(session)))
-    #expect(record["notify"] as? String == "waitingForUser")
-    #expect(PiAlertText.content(for: record, kind: .waitingForUser)?.body == "改好了")
+    #expect(record["notify"] as? String == "awaitsReply")
+    #expect(PiAlertText.content(for: record, kind: .awaitsReply).map { [$0.title, $0.body] } == ["登录页 待回复", "改好了"])
   }
 
   // MARK: 点通知的路由
@@ -187,6 +187,7 @@ import Testing
     #expect(tap("cuepad.cue") == .cue(message: id))
     #expect(tap("cuepad.pi.waiting") == .session(PiAlertTap(kind: .waitingForUser, sessionState: id)))
     #expect(tap("cuepad.pi.settled") == .session(PiAlertTap(kind: .settled, sessionState: id)))
+    #expect(tap("cuepad.pi.reply") == .session(PiAlertTap(kind: .awaitsReply, sessionState: id)))
     #expect(tap("cuepad.changes") == nil)
   }
 

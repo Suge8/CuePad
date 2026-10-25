@@ -12,6 +12,9 @@ public struct PiAlertTap: Equatable, Sendable {
     self.kind = kind
     self.sessionState = sessionState
   }
+
+  /// 通知中心里归哪一组：同一会话的提示（锁屏推送与本机通知）叠成一组，不刷屏。
+  public var thread: String { sessionState.uuidString.lowercased() }
 }
 
 /// 点开的 CloudKit 通知指向哪里（通知自带触发它的订阅与记录 id）：Pi 会话状态记录，或 Cue 的那条消息（点开进 Cue 页）。
@@ -27,6 +30,7 @@ public enum CloudAlert: Equatable, Sendable {
     switch notification.subscriptionID {
     case AlertSubscriptions.waitingID: self = .session(PiAlertTap(kind: .waitingForUser, sessionState: id))
     case AlertSubscriptions.settledID: self = .session(PiAlertTap(kind: .settled, sessionState: id))
+    case AlertSubscriptions.replyID: self = .session(PiAlertTap(kind: .awaitsReply, sessionState: id))
     case AlertSubscriptions.cueID: self = .cue(message: id)
     default: return nil
     }
@@ -44,13 +48,16 @@ public enum PiAlertText {
     return content(title: title, question: question, reply: fields["lastReply"] as? String, kind: kind)
   }
 
-  /// 等你：标题"会话名 在等你"，正文是问题首行；没有问题（Cue 把歇着的它留给你回）是它最后那句回答的首行；都没有写"去看看它在问什么"。
+  /// 等你：标题"会话名 在等你"，正文是问题首行；没有问题时是它最后那句回答的首行；都没有写"去看看它在问什么"。
+  /// 待回复（Cue 把歇着的它留给你回）：标题"会话名 待回复"，正文是它最后那句回答的首行，没有写"去看看它说了什么"。
   /// 完成：标题会话名，正文"完成了"。
   public static func content(title: String, question: String?, reply: String?, kind: PiAlert) -> (title: String, body: String) {
     switch kind {
     case .waitingForUser:
       let first = [question, reply].lazy.compactMap { $0.flatMap(\.firstLine) }.first
       return ("\(title) 在等你", first ?? "去看看它在问什么")
+    case .awaitsReply:
+      return ("\(title) 待回复", reply.flatMap(\.firstLine) ?? "去看看它说了什么")
     case .settled:
       return (title, "完成了")
     }
@@ -83,7 +90,7 @@ protocol SubscriptionStore: Sendable {
 /// CloudKit 服务端订阅（只有手机建）：只订阅要紧的变化——给你的话、请求结果、等你、做完，收到就在后台拉一次（App 的远程通知回调）。
 /// 不订阅整个同步区的变化：Mac 每小时写三百次上下（会话细节、在线续期、预览），每次一条静默推送，远超系统每小时两三条的预算，
 /// 被合并、节流后要紧的也跟着晚到（docs/sync.md「Agent 与 Cue 的通知」）。
-/// 可见通知：Pi 会话状态记录（等你确认、完成两个）与 Cue 消息（一个）的 `notify` 标志置位时，服务端直接生成；它们都另带 content-available，
+/// 可见通知：Pi 会话状态记录（等你确认、待回复、完成三个）与 Cue 消息（一个）的 `notify` 标志置位时，服务端直接生成；它们都另带 content-available，
 /// 把 App 叫到后台拉一次，实时活动随之更新。只靠静默推送的两个（Cue 对你说的话、发往 Mac 的请求有了结果）不出通知，只叫醒 App 拉。
 /// 通知文案只用本地化 key 的通用句：标题与详情是加密字段，不可能出现在通知里；也不设 `desiredKeys`。删除不通知。
 /// 谓词按标志而不是按状态，因为"同一状态下的重复更新"与"从工作中进入完成"这类转换在谓词里表达不了；标志只在转换那一次写入上置位（见 `PiStateRecorder`）。
@@ -97,20 +104,22 @@ struct AlertSubscriptions {
   static let prefix = "cuepad."
   static let waitingID = prefix + "pi.waiting"
   static let settledID = prefix + "pi.settled"
+  static let replyID = prefix + "pi.reply"
   static let cueID = prefix + "cue"
   /// Cue 对你说的话（不论要不要提示）：静默推送。
   static let cueSaidID = prefix + "cue.said"
   /// 发往 Mac 的请求有了结果（成功或失败）：静默推送，回执在后台也拉得回来。
   static let resultID = prefix + "delivery.result"
   /// 通知的本地化文案 key（App 的 Localizable.strings 里的通用句）：改写不成时显示它们。
-  private static let waitingKey = "pi_alert_waiting", settledKey = "pi_alert_settled", cueKey = "cue_alert"
+  private static let waitingKey = "pi_alert_waiting", settledKey = "pi_alert_settled", replyKey = "pi_alert_reply", cueKey = "cue_alert"
 
   let zoneID: CKRecordZone.ID
 
   func desired() -> [CKQuerySubscription] {
     [
-      alert(.piSessionStates, id: Self.waitingID, flag: "waitingForUser", key: Self.waitingKey),
-      alert(.piSessionStates, id: Self.settledID, flag: "settled", key: Self.settledKey),
+      alert(.piSessionStates, id: Self.waitingID, flag: PiAlert.waitingForUser.rawValue, key: Self.waitingKey),
+      alert(.piSessionStates, id: Self.settledID, flag: PiAlert.settled.rawValue, key: Self.settledKey),
+      alert(.piSessionStates, id: Self.replyID, flag: PiAlert.awaitsReply.rawValue, key: Self.replyKey),
       alert(.cueMessages, id: Self.cueID, flag: CueMessage.notifyFlag, key: Self.cueKey),
       silent(.cueMessages, id: Self.cueSaidID, NSPredicate(format: "author == %@", CueAuthor.cue.rawValue), on: .firesOnRecordCreation),
       silent(

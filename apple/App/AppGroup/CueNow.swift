@@ -1,10 +1,11 @@
 import Foundation
 
-/// Cue 此刻（WORDS.md「推进中」「等你」）：各端 Cue 那一行的第二行（三端侧栏、手机与 iPad 的 Cue 页头、菜单栏面板与输入条）、小组件、
+/// Cue 此刻（WORDS.md「推进中」「等你」「待回复」）：各端 Cue 那一行的第二行（三端侧栏、手机与 iPad 的 Cue 页头、菜单栏面板与输入条）、小组件、
 /// iPhone 的灵动岛与锁屏读的唯一一份。App 由库推出（`CueNow.init(_:at:)`，从 Cue 的摘要 `CueDigest`），这里只有规则，各处只画（`CueNowViews`）。
 /// - Cue 自己（`cue`）：不在（没启用、睡着、起不来，带那一句原因）、歇着、你的话在路上、在一轮里（谁叫醒的、此刻那一步、从几点起）。
-/// - 手上的活（`beads`）：一颗珠子一份——等你的每一件，推进中的每一件（在跑、等子代理交回、歇着），刚做完的顶层任务；按这个先后排。
-/// - 那一句（`headline`）：先说 Cue 自己，再说要你拍板的，再说交出去还在动的活，再说刚做完的，最后是静着；紧凑态说的那一件是 `focus`。
+/// - 手上的活（`beads`）：一颗珠子一份——等你的每一件，待回复的每个会话，推进中的每一件（在跑、等子代理交回、歇着），刚做完的顶层任务；按这个先后排。
+/// - 那一句（`headline`）：先说 Cue 自己，再说要你拍板的，再说待回复的会话，再说交出去还在动的活，再说刚做完的，最后是静着；紧凑态说的那一件是 `focus`。
+///   拍板与待回复不拼成一句：有拍板只说拍板，待回复的珠子在旁边。
 ///   刚做完只是一瞬的事，不压住此刻在动的：有活在跑时它只是一颗绿珠子，手上没别的了才轮到它说。
 /// - 快的事实（Cue 在想、话在路上）几分钟就变，后台的岛不一定等得到下一份：过了 `staleAt` 只信慢的（`settled`）。
 /// 刚做完的珠子只留 `doneWindow`：到点由读的一方按时刻收掉（`aged(to:)`、`nextChange(after:)`），不另计时；
@@ -18,6 +19,8 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
     /// 至多 `beadLimit` 颗，多出的只记个数（`hidden`）。
     var beads: [Bead]
     var hidden: Int
+    /// 截掉之前各种各几份：那一句数的是它，不是排得下的那几颗。
+    var counts: Counts
     /// 推进中几件（`CueTally.advancing`）。
     var advancing: Int
     /// 第一件等你：说什么、"打开"去哪，只有 Cue 带选项的提问能"允许一次"（会话在问的只给打开）。
@@ -41,6 +44,8 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
         enum Kind: String, Codable, Sendable, CaseIterable {
             /// 等你拍板
             case asks
+            /// 待回复：Cue 留给你回的会话（墨色，赭黄只给拍板）
+            case reply
             /// 有会话在跑（在想、用工具、正在开、话正送进去）
             case running
             /// 会话歇着、等它派出去的子代理交回
@@ -51,7 +56,7 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
             case done
         }
 
-        /// 那一份活的 id（`CueWork.id`、`CueTally.Wait.id`，刚做完的是 "done/任务 id"）。
+        /// 那一份活的 id（`CueWork.id`、`CueTally.Wait.id`，待回复的是 "reply/会话 id"，刚做完的是 "done/任务 id"）。
         var id: String
         var kind: Kind
         var name: String
@@ -144,22 +149,32 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
         case .hearing: return "你的话在路上"
         case .working(let woke, let doing, _): return doing ?? woke ?? Self.thinking
         case .idle:
-            let asks = count(.asks), running = count(.running)
-            let subagents = beads.filter { $0.kind == .delegating }.reduce(0) { $0 + $1.subagents }
-            if asks > 0 { return "\(asks) 件等你拍板" }
-            if subagents > 0 { return "等 \(subagents) 个子代理交回" }
-            if running > 0 { return "\(running) 件在跑" }
+            if counts[.asks] > 0 { return "\(counts[.asks]) 件等你拍板" }
+            if counts[.reply] > 0 { return "\(counts[.reply]) 个会话待回复" }
+            if counts.subagents > 0 { return "等 \(counts.subagents) 个子代理交回" }
+            if counts[.running] > 0 { return "\(counts[.running]) 件在跑" }
             if let done = justDone { return "刚做完「\(done.name)」" }
             if advancing > 0 { return "推进中 \(advancing) 件，都歇着" }
             return elsewhere ?? Self.quiet
         }
     }
 
-    private func count(_ kind: Bead.Kind) -> Int { beads.count { $0.kind == kind } }
+    /// 各种活一共几份（`counts`），连同等子代理的那几份里在跑的子代理数。
+    struct Counts: Codable, Hashable, Sendable {
+        private var kinds: [Bead.Kind: Int]
+        private(set) var subagents: Int
+
+        init(_ beads: [Bead]) {
+            kinds = Dictionary(grouping: beads, by: \.kind).mapValues(\.count)
+            subagents = beads.filter { $0.kind == .delegating }.reduce(0) { $0 + $1.subagents }
+        }
+
+        subscript(kind: Bead.Kind) -> Int { kinds[kind] ?? 0 }
+    }
 
     /// 灵动岛紧凑态头像旁说的那一件：短词、走秒的起点与颜色只在这里一起定，不会词说做完、秒在计另一件。
     /// Cue 在一轮里或话在路上最先（它正在动），不在写不在；歇着时是手上最该看的那份活，先后同那一句：
-    /// 最早等你的、推进中（在跑与等子代理交回，WORDS.md）最早的那份、刚做完的；只剩歇着的写歇着、不计时。
+    /// 最早等你的、最早待回复的、推进中（在跑与等子代理交回，WORDS.md）最早的那份、刚做完的；只剩歇着的写歇着、不计时。
     var focus: (word: String, tone: Tone, since: Date?) {
         switch cue {
         case .away: return ("不在", .quiet, nil)
@@ -167,7 +182,7 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
         case .working(_, _, let since): return ("在想", .moving, since)
         case .idle:
             let earliest = { (tone: Tone) in self.beads.filter { $0.kind.tone == tone }.min { $0.since < $1.since } }
-            guard let lead = earliest(.asks) ?? earliest(.moving) ?? justDone else { return ("歇着", .quiet, nil) }
+            guard let lead = earliest(.asks) ?? earliest(.reply) ?? earliest(.moving) ?? justDone else { return ("歇着", .quiet, nil) }
             return (lead.kind.word, lead.kind.tone, lead.since)
         }
     }
@@ -183,20 +198,21 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
     }
 
     static let empty = CueNow(
-        name: "Cue", mood: .sleeping, restingMood: .sleeping, cue: .idle, beads: [], hidden: 0, advancing: 0, first: nil, at: .distantPast)
+        name: "Cue", mood: .sleeping, restingMood: .sleeping, cue: .idle, beads: [], hidden: 0, counts: Counts([]), advancing: 0, first: nil, at: .distantPast)
 }
 
 nonisolated extension CueNow: SnapshotFile { static let fileName = "cue.json" }
 
 nonisolated extension CueNow {
-    /// 颜色的意思，各处只按它取色（`Tone.color`）：在动（在跑、等子代理交回、Cue 在想或话在路上）、等你、刚做完、其余。
-    enum Tone { case moving, asks, done, quiet }
+    /// 颜色的意思，各处只按它取色（`Tone.color`）：在动（在跑、等子代理交回、Cue 在想或话在路上）、等你、待回复、刚做完、其余。
+    enum Tone { case moving, asks, reply, done, quiet }
 }
 
 nonisolated extension CueNow.Bead.Kind {
     var tone: CueNow.Tone {
         switch self {
         case .asks: .asks
+        case .reply: .reply
         case .running, .delegating: .moving
         case .done: .done
         case .resting: .quiet
@@ -207,6 +223,7 @@ nonisolated extension CueNow.Bead.Kind {
     var word: String {
         switch self {
         case .asks: "等你"
+        case .reply: "待回复"
         case .running, .delegating: "推进中"
         case .done: "做完"
         case .resting: "歇着"
@@ -217,6 +234,7 @@ nonisolated extension CueNow.Bead.Kind {
     var label: String {
         switch self {
         case .asks: "等你拍板"
+        case .reply: "待回复"
         case .running: "在跑"
         case .delegating: "等子代理"
         case .resting: "歇着"
