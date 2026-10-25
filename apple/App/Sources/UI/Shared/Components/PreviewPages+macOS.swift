@@ -24,8 +24,8 @@ struct PreviewPage: View {
 
     var body: some View {
         switch preview.kind {
-        case .image: PreviewImage(file: file).ignoresSafeArea()
-        case .pdf: PreviewPDF(file: file).ignoresSafeArea()
+        case .image: PreviewImage(preview: preview.id, file: file).ignoresSafeArea()
+        case .pdf: PreviewPDF(preview: preview.id, file: file).ignoresSafeArea()
         case .video, .audio: PreviewPlayer(file: file, active: active)
         default: QuickLookPage(file: file)
         }
@@ -34,21 +34,28 @@ struct PreviewPage: View {
 
 /// 图片：`PreviewZoom`。
 private struct PreviewImage: NSViewRepresentable {
+    let preview: UUID
     let file: URL
     @Environment(\.previewChrome) private var chrome
+    @Environment(\.previewFlight) private var flight
 
     func makeNSView(context: Context) -> PreviewZoom { PreviewZoom(file: file) }
 
     func updateNSView(_ view: PreviewZoom, context: Context) {
         view.chrome = NSEdgeInsets(top: chrome.top, left: chrome.leading, bottom: chrome.bottom, right: chrome.trailing)
+        flight?.showing(preview, view)
     }
 }
 
-/// PDF：系统的 PDF 视图，按宽铺满、竖着连续滚，捏合与智能缩放是它自己的。
+/// PDF：系统的 PDF 视图，按宽铺满、竖着连续滚，捏合与智能缩放是它自己的。翻到后面或放大了再关，屏上已不是缩略图那一页，不飞回（`Shown`）。
 private struct PreviewPDF: NSViewRepresentable {
+    let preview: UUID
     let file: URL
     @Environment(\.palette) private var palette
     @Environment(\.previewChrome) private var chrome
+    @Environment(\.previewFlight) private var flight
+
+    func makeCoordinator() -> Shown { Shown() }
 
     func makeNSView(context: Context) -> PDFView {
         let view = PDFView()
@@ -56,15 +63,35 @@ private struct PreviewPDF: NSViewRepresentable {
         view.displayMode = .singlePageContinuous
         view.backgroundColor = NSColor(palette.desk)
         view.document = PDFDocument(url: file)
+        context.coordinator.view = view
         return view
     }
 
     func updateNSView(_ view: PDFView, context: Context) {
+        flight?.showing(preview, context.coordinator)
         guard let scroll = view.documentView?.enclosingScrollView else { return }
         let insets = NSEdgeInsets(top: chrome.top, left: 0, bottom: chrome.bottom, right: 0)
         guard scroll.contentInsets.top != insets.top || scroll.contentInsets.bottom != insets.bottom else { return }
         scroll.automaticallyAdjustsContentInsets = false
         scroll.contentInsets = insets
+    }
+}
+
+extension PreviewPDF {
+    final class Shown: PreviewShowing {
+        weak var view: PDFView?
+
+        /// 还在最前面：第一页的上沿就在顶栏下面（隔着页边）、没放大。
+        func shown(in window: NSWindow) -> PreviewShown {
+            guard let view, let scroll = view.documentView?.enclosingScrollView, let first = view.document?.page(at: 0) else { return .opened }
+            let page = view.convert(view.convert(first.bounds(for: view.displayBox), from: first), to: nil)
+            let top = scroll.convert(scroll.bounds, to: nil).maxY - scroll.contentInsets.top
+            let atTop = abs(page.maxY - top) < Self.margin
+            return atTop && view.scaleFactor <= view.scaleFactorForSizeToFit * 1.01 ? .opened : .elsewhere
+        }
+
+        /// 第一页上沿离顶栏下沿至多这么远算在最前面（PDF 视图自己的页边）
+        private static let margin: CGFloat = 24
     }
 }
 

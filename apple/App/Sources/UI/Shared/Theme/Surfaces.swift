@@ -104,25 +104,10 @@ private struct GlassSurface<S: Shape>: ViewModifier {
 /// 超过 300ms 的只有 Cue 与会话之间接力的那一下（`CueRelayStage`），时长与理由在它那里。
 enum Motion {
     /// 短动效：列表里挪位置、面板、浮层、切换。
-    static let snappy = Animation.spring(duration: snappyDuration, bounce: 0)
-    /// `snappy` 的时长：渲染端照它走的弹簧（Mac 侧栏开合 `SidebarSlide`、预览的飞出飞回 `PreviewFlight`）共用。
-    nonisolated static let snappyDuration: TimeInterval = 0.25
-
-    /// `snappy`（临界阻尼弹簧）走了 `time` 秒后离终点还剩的比例：(1 + ωt)·e^(−ωt)。
-    nonisolated static func snappyRemaining(_ time: TimeInterval) -> Double {
-        let omega = 2 * Double.pi / snappyDuration
-        return (1 + omega * time) * exp(-omega * time)
-    }
-
-    /// 走 `distance` 点的 `snappy` 离终点不到半点要多久：到这时就算走完（再往后已看不出在动，比弹簧按比例收敛早约 0.1 秒）。
-    nonisolated static func snappySettles(over distance: CGFloat) -> TimeInterval {
-        var time = 0.0
-        while Double(distance) * snappyRemaining(time) > 0.5 { time += 0.005 }
-        return time
-    }
+    static let snappy = Animation.spring(duration: 0.25, bounce: 0)
     /// 卡片在墙上挪位（同列下移、新卡入场）：定长 0.24s，弹簧的尾巴会让实际时长超过 300ms。
     static let move = Animation.timingCurve(moveCurve.0, moveCurve.1, moveCurve.2, moveCurve.3, duration: moveDuration)
-    /// `move` 的时长与曲线控制点，渲染端照它走的动画（`ContentLift`）共用。
+    /// `move` 的时长与曲线控制点，渲染端照它走的动画（`ContentLift`、Mac 预览的飞出飞回 `PreviewFlight`）共用。
     nonisolated static let moveDuration = 0.24
     nonisolated static let moveCurve: (Double, Double, Double, Double) = (0.2, 0, 0, 1)
     /// iPhone 切页：根上那一条页滑过去、底部那一排的选中与换形都是这一条（`PagerController.animate`，图层与 SwiftUI 同一条），"⋯"开合也用它；

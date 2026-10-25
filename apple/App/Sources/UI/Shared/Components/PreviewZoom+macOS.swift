@@ -12,7 +12,7 @@ import IOSurface
 /// - 放大后按住拖动看图（同"预览"的移动）。
 /// - 横扫翻不翻页由全屏页按这张往那边还滑不滑得动定（`PageInput`）：没放大、或放大了已滑到那一边才翻。
 /// 解码分两步，都在后台：先按全屏页的大小解一份（进缩略图缓存，再打开不再解），再解原图（最长边至多 `maxPixel`，不进缓存）换上，放大看得清。
-final class PreviewZoom: NSScrollView {
+final class PreviewZoom: NSScrollView, PreviewShowing {
     /// 两条栏占的边：适合屏幕时整张让在它们之间。
     var chrome = NSEdgeInsetsZero {
         didSet {
@@ -105,6 +105,18 @@ final class PreviewZoom: NSScrollView {
 
     override func smartMagnify(with event: NSEvent) {
         toggle(at: canvas.convert(event.locationInWindow, from: nil))
+    }
+
+    /// 关上那一刻屏上的样子：画面在窗口里露出的那一块（放大了只是它在滚动视图里看得见的那截），与它是整张图的哪一截。
+    func shown(in window: NSWindow) -> PreviewShown {
+        guard let contents = canvas.layer?.contents else { return .opened }
+        let picture = canvas.convert(canvas.bounds, to: nil), visible = picture.intersection(convert(bounds, to: nil))
+        guard !visible.isEmpty else { return .elsewhere }
+        // 单位坐标的 y 与窗口一样朝上
+        let shown = CGRect(
+            x: (visible.minX - picture.minX) / picture.width, y: (visible.minY - picture.minY) / picture.height,
+            width: visible.width / picture.width, height: visible.height / picture.height)
+        return .picture(contents, PreviewFrame(rect: visible, shown: shown))
     }
 
     /// 放大后按住拖动：可见区跟着指针反向挪，夹在能滑到的范围里。

@@ -66,6 +66,7 @@ private struct PreviewPager: View {
                 .transition(.opacity)
         }
         .environment(\.previewChrome, chrome)
+        .environment(\.previewFlight, flight)
         .opacity(landed ? 1 : 0)
         .background {
             PreviewFlight.Stage(
