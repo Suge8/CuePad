@@ -92,15 +92,6 @@ enum DebugHooks {
         #endif
     }
 
-    /// 中转换成 `-CuePadRelayHost <主机[:端口]>`（同步测量连开发用的中转）。nil：用构建配的（`AppServices.relayHost`）。
-    static var relayHost: String? {
-        #if DEBUG
-        DebugScene.defaults.string(forKey: "CuePadRelayHost")
-        #else
-        nil
-        #endif
-    }
-
     /// 隔离库下这台 Mac 的标识换成 `-CuePadHost <名>`：同一台机器上开两个隔离实例当两台 Mac（同步测量）。nil：用硬件标识。
     static var hostID: String? {
         #if DEBUG

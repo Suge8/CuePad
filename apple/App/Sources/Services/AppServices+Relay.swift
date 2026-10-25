@@ -9,11 +9,12 @@ import UIKit
 /// 何时连着：Mac 只要 App 在跑（Mac 不收推送，不在等时别的设备的改动原本要等下一次被叫醒才拉）；手机在前台时，
 /// App 整个进后台由 `prepareForBackground` 在本机改动传完、门铃按完后断开（`Relay.pause`、`settle`），回前台经 `handleActivation` 再连；
 /// 换了 iCloud 账号就换房间重连。门铃随时可能响：`pull` 合并同一时刻的拉取，同步还在启动时先等启动，所以与按节奏的拉取、立即同步、冷启动的第一拉不冲突。
-/// 只在真连着 iCloud（`makeSync` 建了 `CloudSync`）、构建配了中转（`relayHost`）时有；没配的（自己编译没架中转）照常按节奏拉。
+/// 只在真连着 iCloud（同步来源是 `.iCloud`、`makeSync` 建了 `CloudSync`）时有：测试与调试画面的替身云（`.built`、`.custom`）不连中转。
+/// 同步测量的隔离实例连的是 CloudKit 开发环境，密钥（`CloudSync.relaySecret`）从开发容器取，派生的房间与正式用户的不会重合。
 extension AppServices {
-    static func makeRelay(_ sync: (any SyncControlling)?) -> Relay? {
-        guard let sync = sync as? CloudSync, let host = relayHost else { return nil }
-        return Relay(host: host) { try RelayCredentials(secret: try await sync.relaySecret()) }
+    static func makeRelay(_ source: SyncSource, _ sync: (any SyncControlling)?) -> Relay? {
+        guard case .iCloud = source, let sync = sync as? CloudSync else { return nil }
+        return Relay(host: relayHost) { try RelayCredentials(secret: try await sync.relaySecret()) }
     }
 
     func startRelay() {
@@ -35,9 +36,11 @@ extension AppServices {
     /// 门铃通着时按节奏的拉取降到的兜底间隔（`pollingCadence`）；nil 是门铃不通。
     var doorbellFallback: Duration? { relay?.isLive == true ? Relay.silenceLimit : nil }
 
-    /// 中转的主机（可带端口）：构建设置 `CUEPAD_RELAY_HOST` 经 Info.plist 的 `CuePadRelayHost` 给出，空的就是没有中转。
-    static var relayHost: String? {
-        let host = DebugHooks.relayHost ?? Bundle.main.object(forInfoDictionaryKey: "CuePadRelayHost") as? String
-        return host?.isEmpty == false ? host : nil
+    /// 中转的主机：唯一定义是 `Signing.xcconfig` 的 `CUEPAD_RELAY_HOST`，经 Info.plist 的 `CuePadRelayHost` 给 App（发布脚本核对过它在包里）。
+    static var relayHost: String {
+        guard let host = Bundle.main.object(forInfoDictionaryKey: "CuePadRelayHost") as? String, !host.isEmpty else {
+            preconditionFailure("Info.plist 缺 CuePadRelayHost（Signing.xcconfig 的 CUEPAD_RELAY_HOST）")
+        }
+        return host
     }
 }
