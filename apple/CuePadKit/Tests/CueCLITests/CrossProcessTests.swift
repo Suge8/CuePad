@@ -1,17 +1,10 @@
 #if os(macOS)
 import CueStore
-import CueTestSupport
 import Foundation
 import Testing
 
 /// 真实两进程：`cuepad` 子进程写入，本进程 Store 的观察者被跨进程通知唤醒并读到新卡。
 @Suite struct CrossProcessTests {
-  /// SwiftPM 把 `cuepad` 与测试包构建到同一个产物目录。
-  private final class Anchor {}
-  private static var binary: URL {
-    Bundle(for: Anchor.self).bundleURL.deletingLastPathComponent().appending(path: "cuepad")
-  }
-
   private static func run(_ binary: URL, _ arguments: [String], library: URL) async throws -> Int32 {
     let process = Process()
     process.executableURL = binary
@@ -21,9 +14,8 @@ import Testing
   }
 
   @Test func observerSeesCardWrittenByCLIProcess() async throws {
-    let sandbox = try Sandbox()
-    let binary = Self.binary
-    try #require(FileManager.default.isExecutableFile(atPath: binary.path), "先构建 cuepad 产物：\(binary.path)")
+    let sandbox = try Fixture()
+    let binary = try cuepadBinary()
     let stream = sandbox.store.observe { try $0.cards(in: Project.defaultID).map(\.body) }
 
     let seen = try await withThrowingTaskGroup(of: [String].self) { group in

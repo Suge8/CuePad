@@ -8,7 +8,7 @@ import Testing
 /// `cuepad show`：把文件作为预览放进 Agent 会话的对话。会话从 Agent 给每条命令带的环境变量认出（如 Pi 的 `PI_SESSION_ID`），
 /// 认不出就报错、不猜。
 @Suite struct PreviewCommandTests {
-  private func page(_ sb: Sandbox, _ name: String = "demo.html", _ text: String = "<h1>登录页</h1>") throws -> String {
+  private func page(_ sb: Fixture, _ name: String = "demo.html", _ text: String = "<h1>登录页</h1>") throws -> String {
     let url = sb.directory.appending(path: name)
     try Data(text.utf8).write(to: url)
     return url.path
@@ -16,7 +16,7 @@ import Testing
 
   /// 一次给几个文件：按给的顺序存成同一次（对话里一张卡），每个文件一个 --title（按先后），每个文件一项报告。
   @Test func showStoresTheFilesTogetherForTheSessionFromTheEnvironmentAndReportsEach() async throws {
-    let sb = try Sandbox()
+    let sb = try Fixture()
     // .ts 是 TypeScript（系统认作视频流）：按文本发
     let files = [try page(sb, "demo.html", "<link rel=\"stylesheet\" href=\"a.css\">"), try page(sb, "beep.m4a", "m4a"), try page(sb, "notes.docx", "docx"), try page(sb, "app.ts", "let a = 1")]
     let titles = ["登录页：首屏", "提示音", "需求文稿", "入口"]
@@ -31,7 +31,7 @@ import Testing
   }
 
   @Test func withoutASessionInTheEnvironmentItRefusesAndSaysWhy() async throws {
-    let sb = try Sandbox()
+    let sb = try Fixture()
     let result = await sb.run("show", try page(sb))
     #expect(result.code != 0 && result.err.contains("PI_SESSION_ID"))
     let blank = await sb.run("show", try page(sb), environment: ["PI_SESSION_ID": ""])
@@ -40,7 +40,7 @@ import Testing
   }
 
   @Test func showRefusesWhatCannotBePreviewedWithAReasonAndExitCode() async throws {
-    let sb = try Sandbox()
+    let sb = try Fixture()
     let env = ["PI_SESSION_ID": "s1"]
     // 每个文件都要一句标题：少了不收
     let untitled = await sb.run("show", try page(sb), try page(sb, "b.html"), "--title", "登录页", environment: env)

@@ -7,7 +7,7 @@ import Testing
 
 @Suite struct ProjectAndCardTests {
   @Test func projectListReportsProjectsInOrderWithCounts() async throws {
-    let sb = try Sandbox()
+    let sb = try Fixture()
     let alpha = try await sb.project("Alpha")
     _ = try await sb.project("Beta")
     _ = try await sb.store.createCard(in: alpha.id, body: "x")
@@ -26,7 +26,7 @@ import Testing
   }
 
   @Test func cardBodyRoundTripsVerbatimThroughStdinAndArgument() async throws {
-    let sb = try Sandbox()
+    let sb = try Fixture()
     _ = try await sb.project("Alpha")
     let body = "第一段  \n---\n![](cuepad://img/\(String(repeating: "a", count: 64)))\n\n结尾\n"
 
@@ -45,7 +45,7 @@ import Testing
 
   /// 引用写 id 或至少 4 位的唯一前缀：不分大小写，回收站里的也找得到，同前缀多条时列出来让人写长一点。
   @Test func cardReferencesResolveByUniquePrefix() async throws {
-    let sb = try Sandbox()
+    let sb = try Fixture()
     let first = try await sb.store.createCard(body: "一号")
     let second = try await sb.store.createCard(body: "二号")
     let trashed = try await sb.store.createCard(body: "已删")
@@ -66,7 +66,7 @@ import Testing
   }
 
   @Test func cardMoveTrashRestore() async throws {
-    let sb = try Sandbox()
+    let sb = try Fixture()
     let alpha = try await sb.project("Alpha")
     let beta = try await sb.project("Beta")
     let card = try await sb.store.createCard(in: alpha.id, body: "a")
@@ -89,7 +89,7 @@ import Testing
   }
 
   @Test func projectReferenceErrorsAreActionable() async throws {
-    let sb = try Sandbox()
+    let sb = try Fixture()
     let first = try await sb.project("Dup")
     let second = try await sb.project("Dup")
     _ = try await sb.project("Solo")
@@ -120,7 +120,7 @@ import Testing
 
 @Suite struct TaskTests {
   @Test func taskLifecycle() async throws {
-    let sb = try Sandbox()
+    let sb = try Fixture()
     let alpha = try await sb.project("Alpha")
 
     let added = try await sb.object("task", "add", "写", "文档", "--project", "Alpha")
@@ -155,7 +155,7 @@ import Testing
   }
 
   @Test func addSubtaskUnderAParent() async throws {
-    let sb = try Sandbox()
+    let sb = try Fixture()
     let alpha = try await sb.project("Alpha")
     let parent = try await sb.store.createTask("上线", in: alpha.id)
 
@@ -171,7 +171,7 @@ import Testing
 
 @Suite struct SearchAndConflictTests {
   @Test func searchMatchesAllTermsAndAppliesFilters() async throws {
-    let sb = try Sandbox()
+    let sb = try Fixture()
     let alpha = try await sb.project("Alpha")
     let beta = try await sb.project("Beta")
     let hit = try await sb.store.createCard(in: alpha.id, body: "部署 脚本 说明")
@@ -205,7 +205,7 @@ import Testing
   }
 
   @Test func conflictsListAndResolve() async throws {
-    let sb = try Sandbox()
+    let sb = try Fixture()
     let original = try await sb.store.createCard(body: "新版本")
     let copy = try await sb.store.createCard(body: "旧版本")
     try sb.markConflict(copy: copy.id, of: original.id)
@@ -232,7 +232,7 @@ import Testing
 @Suite struct HelpTests {
   /// 帮助是唯一文档：手写的根帮助提到每个名词，名词的帮助列出它的动词，每个命令有自己的帮助。
   @Test func everyCommandIsReachableFromRootAndItsOwnHelp() async throws {
-    let sb = try Sandbox()
+    let sb = try Fixture()
     let root = await sb.run("--help").out
     for command in Command.all {
       let noun = command.path[0]
@@ -246,7 +246,7 @@ import Testing
   }
 
   @Test func documentedFieldsMatchActualJSON() async throws {
-    let sb = try Sandbox()
+    let sb = try Fixture()
     let project = try await sb.project("Alpha")
     let card = try await sb.store.createCard(in: project.id, body: "x")
     let task = try await sb.store.createTask("t", in: project.id)
@@ -270,7 +270,7 @@ import Testing
 
   @Test(arguments: [["nope"], ["card", "nope"], ["card", "show"], ["card", "list", "--bogus"], ["card", "add", "--body"]])
   func usageErrorsExitTwoWithPointerToHelp(arguments: [String]) async throws {
-    let result = await (try Sandbox()).call(arguments)
+    let result = await (try Fixture()).call(arguments)
     #expect(result.code == 2 && result.out.isEmpty && result.err.contains("--help"), "\(result)")
   }
 }
