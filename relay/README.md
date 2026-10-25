@@ -13,35 +13,84 @@
 
 ## 自己架一个
 
-适用于自己编译 CuePad 的情况。正式版暂未接中转，只按节奏去 iCloud 拉。
+适用于自己编译 CuePad 的情况。正式版暂未接中转，只按节奏去 iCloud 拉。下面是作者的中转实际的部署方式（Ubuntu 24.04）：Bun 用无特权用户跑在本机端口，由 systemd 常驻并加固；Caddy 在 443 终止 TLS、自动申请证书，把连接转给 Bun。
 
-1. 准备一台大陆直连线路好的服务器（香港 CN2/CMI 一类即可，1 核 1 GB 够用），再给它配一个域名并签好证书。
-2. 装 [Bun](https://bun.sh)（1.2 或更新），把 `server.ts` 拷到服务器上，例如 `/opt/cuepad-relay/`。
-3. 选一种方式提供 TLS：
-   - 直接用证书：`PORT=443 CERT=/path/fullchain.pem KEY=/path/privkey.pem bun server.ts`；
-   - 或放在 Caddy、nginx 后面：Bun 用明文监听本机端口（`PORT=8080 bun server.ts`），由反向代理终止 TLS 并转发 WebSocket（Caddy 写一行 `reverse_proxy 127.0.0.1:8080` 即可）。
-4. 交给 systemd 常驻（直接用证书的写法；路径按实际情况改）：
+1. 准备一台大陆直连线路好的服务器（香港 CN2/CMI 一类即可，1 核 1 GB 够用），开放 80（签证书）与 443，给它配一个域名。没有域名时可以先用 `<IP 用横杠连起来>.sslip.io`（如 `154-12-24-171.sslip.io`），它直接解析到这个 IP。
+2. 装 Bun（1.2 或更新）到系统目录，`/usr/local/bin/bun`：
+
+   ```bash
+   curl -fsSLO https://github.com/oven-sh/bun/releases/latest/download/bun-linux-x64.zip
+   python3 -m zipfile -e bun-linux-x64.zip /tmp/bun && install -m 755 /tmp/bun/bun-linux-x64/bun /usr/local/bin/bun
+   ```
+
+3. 建无特权用户，拷代码：
+
+   ```bash
+   useradd --system --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin cuepad-relay
+   mkdir -p /opt/cuepad-relay && cp server.ts /opt/cuepad-relay/   # root 所有，服务只读
+   ```
+
+4. 写 `/etc/systemd/system/cuepad-relay.service`，然后 `systemctl daemon-reload && systemctl enable --now cuepad-relay`：
 
    ```ini
-   # /etc/systemd/system/cuepad-relay.service
    [Unit]
-   Description=CuePad relay
+   Description=CuePad relay (doorbell)
    After=network-online.target
+   Wants=network-online.target
 
    [Service]
+   User=cuepad-relay
+   Group=cuepad-relay
    WorkingDirectory=/opt/cuepad-relay
-   Environment=PORT=443 CERT=/etc/letsencrypt/live/relay.example.com/fullchain.pem KEY=/etc/letsencrypt/live/relay.example.com/privkey.pem
+   Environment=HOST=127.0.0.1 PORT=8080
    ExecStart=/usr/local/bin/bun server.ts
    Restart=always
+   RestartSec=2
+   NoNewPrivileges=yes
+   ProtectSystem=strict
+   ProtectHome=yes
+   PrivateTmp=yes
+   PrivateDevices=yes
+   ProtectKernelTunables=yes
+   ProtectKernelModules=yes
+   ProtectKernelLogs=yes
+   ProtectControlGroups=yes
+   ProtectClock=yes
+   ProtectHostname=yes
+   ProtectProc=invisible
+   ProcSubset=pid
+   RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+   RestrictNamespaces=yes
+   RestrictRealtime=yes
+   RestrictSUIDSGID=yes
+   LockPersonality=yes
+   CapabilityBoundingSet=
+   AmbientCapabilities=
+   SystemCallArchitectures=native
+   SystemCallFilter=@system-service
+   UMask=0077
 
    [Install]
    WantedBy=multi-user.target
    ```
 
-   然后执行 `systemctl enable --now cuepad-relay`。证书续期以后要 `systemctl restart cuepad-relay`，Bun 才会读到新证书。
-5. 检查：`curl https://relay.example.com/health` 应该返回 `ok`。
-6. 把主机名填进 `apple/App/Config/Signing.xcconfig` 的 `CUEPAD_RELAY_HOST`（端口不是 443 时写成 `主机:端口`），再重新编译 App。
-7. 你自己的 iCloud 容器里要有记录类型 `relaySecrets`，按 [docs/release.md](../docs/release.md)「CloudKit 数据结构」导入 `apple/CloudKit/cuepad.ckdb`。
+   不要加 `MemoryDenyWriteExecute`：Bun 的 JIT 要可写可执行的内存。`systemd-analyze security cuepad-relay` 应在 1.5 左右（OK）。
+5. 按 [Caddy 官方文档](https://caddyserver.com/docs/install#debian-ubuntu-raspbian) 用 apt 装 Caddy，`/etc/caddy/Caddyfile` 写成（换成你的域名，可以写多个），再 `systemctl reload caddy`：
+
+   ```
+   relay.example.com {
+   	reverse_proxy 127.0.0.1:8080
+   }
+   ```
+
+   Caddy 会自己签证书、续期，WebSocket 原样转发。域名还没解析到这台时签不到，Caddy 会退避重试；解析生效后 `systemctl reload caddy` 立即重试。
+6. 检查：`curl https://relay.example.com/health` 返回 `ok`。
+7. 把域名填进 `apple/App/Config/Signing.xcconfig` 的 `CUEPAD_RELAY_HOST`，再重新编译 App。
+8. 你自己的 iCloud 容器里要有记录类型 `relaySecrets`，按 [docs/release.md](../docs/release.md)「CloudKit 数据结构」导入 `apple/CloudKit/cuepad.ckdb`。
+
+不想装 Caddy 的，也可以让 Bun 自己提供 TLS（`CERT`、`KEY` 环境变量，见 `server.ts` 头注释），证书续期后要重启服务。
+
+日常维护：日志 `journalctl -u cuepad-relay`、`journalctl -u caddy`；升级中转就把新的 `server.ts` 拷进 `/opt/cuepad-relay/` 再 `systemctl restart cuepad-relay`（设备几秒内自动重连）；升级 Bun 按第 2 步重装后同样重启。
 
 ## 用量
 
