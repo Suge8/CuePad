@@ -62,7 +62,7 @@ nonisolated struct PiSessionList: Sendable, Equatable {
 /// 名字后是哪家 Agent 只放标志（`AgentMark`）：名字优先，窄处先截名字，标志与时长一直留着。
 /// - 窄处（`compact`：Mac 菜单栏、⌘K、项目页、Cue 页头面板）两层：状态标、名字、时长；状态词接读数（`PiStatusLine`），上下文靠右。
 /// 状态标自成一列（固定宽、对着名字那一行的中线），第二层从名字起头；上下文只在快满时出现（`PiRowFacts.context`），
-/// 两种都在第二层落在时长正下方，与时长一样用等宽数字，状态词长短不同也不挪。
+/// 两种都在第二层落在时长正下方，与时长一样用等宽数字，状态词长短不同也不挪。辅助字号下两层的行尾（时长、上下文）各换到下一行（`MetaLine`）。
 /// 时长只有一种写法：在这个状态里待了多久（`PiClock.Style.span`）。搜索命中在说过的话里时，第二层换成命中的那一截。
 struct PiSessionRow: View {
     let session: PiSessionState
@@ -119,22 +119,24 @@ struct PiSessionRow: View {
             if !ended { PiStateDot(shown: shown, size: style.dot).relaySpot(session: session.sessionID) }
             VStack(alignment: .leading, spacing: style.spacing) {
                 headline(shown: shown)
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    if let searchHit {
-                        Text(Highlight.matches(searchHit, highlight)).foregroundStyle(palette.ink2)
-                    } else if ended {
-                        recap.foregroundStyle(palette.ink3)
-                    } else {
-                        // 状态词不截，后面那句先截
-                        StateWord(shown: shown).fixedSize()
-                        if let note = facts.note {
-                            NoteWord(note: note)
-                        } else if let progress = PiProgress.note(of: session, failure: nil) {
-                            Text(progress).foregroundStyle(palette.ink2)
+                MetaLine(spacing: 6, gap: 4) {
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        if let searchHit {
+                            Text(Highlight.matches(searchHit, highlight)).foregroundStyle(palette.ink2)
+                        } else if ended {
+                            recap.foregroundStyle(palette.ink3)
+                        } else {
+                            // 状态词不截，后面那句先截
+                            StateWord(shown: shown).fixedSize()
+                            if let note = facts.note {
+                                NoteWord(note: note)
+                            } else if let progress = PiProgress.note(of: session, failure: nil) {
+                                Text(progress).foregroundStyle(palette.ink2)
+                            }
                         }
                     }
-                    Spacer(minLength: 4)
-                    if let context = facts.context { ContextFact(meter: context).font(style.meta).fixedSize() }
+                } meta: {
+                    if let context = facts.context { ContextFact(meter: context).font(style.meta) }
                 }
                 .font(style.line)
                 .lineLimit(1)
@@ -160,14 +162,14 @@ struct PiSessionRow: View {
             PiStateDot(shown: shown, size: style.dot).relaySpot(session: session.sessionID)
             VStack(alignment: .leading, spacing: style.spacing) {
                 headline(shown: shown)
-                HStack(spacing: 6) {
+                MetaLine(alignment: .center, spacing: 6, gap: 4) {
                     if let searchHit {
                         Text(Highlight.matches(searchHit, highlight)).foregroundStyle(palette.ink2).lineLimit(1)
                     } else {
                         PiStatusLine(shown: shown, facts: facts)
                     }
-                    Spacer(minLength: 4)
-                    if let context = facts.context { ContextFact(meter: context).fixedSize() }
+                } meta: {
+                    if let context = facts.context { ContextFact(meter: context) }
                 }
                 .font(style.line)
             }
@@ -180,20 +182,24 @@ struct PiSessionRow: View {
 
     /// 第一层：名字（有新回复时加粗）、Agent 标志、没送到的折回箭头、整页卡片所在项目的图标、右上的时长。
     private func headline(shown: PiShown) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 6) {
-            Text(Highlight.matches(PiRename.title(of: session, request: rename, at: services.speech), highlight))
-                .font(style.name).fontWeight(shown.isUnread ? .bold : nil)
-                .foregroundStyle(style.card && ended ? palette.ink2 : palette.ink).lineLimit(1)
-            // 是哪家 Agent：只放标志，名字优先（`AgentMark`）；名字先截断，标志一直留着
-            if session.agentMark != nil { AgentMark(session: session, font: style.meta, named: false).fixedSize() }
-            Spacer(minLength: 4)
-            if shown.undelivered == nil, let unsent = PiChat.undeliveredNote(undelivered) {
-                PiStateGlyph.undelivered.font(style.meta.weight(.semibold))
-                    .accessibilityHidden(false).accessibilityLabel(unsent)
+        MetaLine(spacing: 6, gap: 4) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(Highlight.matches(PiRename.title(of: session, request: rename, at: services.speech), highlight))
+                    .font(style.name).fontWeight(shown.isUnread ? .bold : nil)
+                    .foregroundStyle(style.card && ended ? palette.ink2 : palette.ink).lineLimit(1)
+                // 是哪家 Agent：只放标志，名字优先（`AgentMark`）；名字先截断，标志一直留着
+                if session.agentMark != nil { AgentMark(session: session, font: style.meta, named: false).fixedSize() }
             }
-            if style.card, let project { ProjectGlyph(project: project, size: Self.placeIcon).accessibilityLabel("在 \(project.shownName)") }
+        } meta: {
             // 时间只占它要的宽度，名字拿剩下的
-            PiElapsed(shown: shown, font: style.meta, style: .span).fixedSize()
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                if shown.undelivered == nil, let unsent = PiChat.undeliveredNote(undelivered) {
+                    PiStateGlyph.undelivered.font(style.meta.weight(.semibold))
+                        .accessibilityHidden(false).accessibilityLabel(unsent)
+                }
+                if style.card, let project { ProjectGlyph(project: project, size: Self.placeIcon).accessibilityLabel("在 \(project.shownName)") }
+                PiElapsed(shown: shown, font: style.meta, style: .span)
+            }
         }
     }
 

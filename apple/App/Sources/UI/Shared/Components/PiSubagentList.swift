@@ -10,7 +10,6 @@ struct PiSubagentList: View {
     let agents: [PiSubagentState]
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.dynamicTypeSize) private var typeSize
     @State private var expanded = DebugHooks.preset.toolsOpen
 
     var body: some View {
@@ -51,18 +50,16 @@ struct PiSubagentList: View {
         .accessibilityExpanded(expanded)
     }
 
-    private var stacked: Bool { typeSize.isAccessibilitySize }
-
     private func row(_ agent: PiSubagentState) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             // 名字、角色与模型是一段字：放不下就折行，不截成"…"（模型名截了就认不出）；用时不折，辅助字号下挪到下一行
             HStack(spacing: Note.spacing) {
                 PiStateDot(shown: agent.shown, size: 6).frame(width: Note.glyphWidth)
-                (stacked ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2)) : AnyLayout(HStackLayout(spacing: Note.spacing))) {
+                MetaLine(alignment: .center, spacing: Note.spacing, gap: 8) {
                     Text("\(Text(agent.name).foregroundStyle(palette.ink2)) \(agent.role)\(agent.model.map { model in Text("\(Dotted.separator)\(BrandMark.label(.model(reference: model), PiModelName.short(model)))") } ?? Text(verbatim: ""))")
                         .foregroundStyle(palette.ink3)
-                    if !stacked { Spacer(minLength: 8) }
-                    if let clock = PiSubagentClock(agent) { Elapsed(clock: clock).fixedSize() }
+                } meta: {
+                    if let clock = PiSubagentClock(agent) { Elapsed(clock: clock) }
                 }
             }
             .font(Typography.caption)

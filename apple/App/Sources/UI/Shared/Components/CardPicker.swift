@@ -186,12 +186,14 @@ struct CardRow: View {
         return HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
                 // 标题在前、时间靠右，与其余列表同一种读法
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    // 任务用全 App 同一个任务圈打头，一眼分得出任务与灵感
-                    if card.isTask { TaskRingView(status: card.status, done: false, size: Self.ring) }
-                    Text(marked(text.label)).font(.headline).foregroundStyle(palette.ink).lineLimit(2)
-                    Spacer(minLength: 0)
-                    Text(DateLabel.short(card.modifiedAt)).font(.caption.monospacedDigit()).foregroundStyle(palette.ink3).fixedSize()
+                MetaLine(spacing: 8, gap: 0) {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        // 任务用全 App 同一个任务圈打头，一眼分得出任务与灵感
+                        if card.isTask { TaskRingView(status: card.status, done: false, size: Self.ring) }
+                        Text(marked(text.label)).font(.headline).foregroundStyle(palette.ink).lineLimit(2)
+                    }
+                } meta: {
+                    Text(DateLabel.short(card.modifiedAt)).font(.caption.monospacedDigit()).foregroundStyle(palette.ink3)
                 }
                 // 搜索时摘要从命中处截起（`CueSummary.snippet`），看得出为什么搜到它
                 let preview = highlight.isEmpty ? text.preview : CueSummary.snippet(card.body, matching: terms).textGlyphs
