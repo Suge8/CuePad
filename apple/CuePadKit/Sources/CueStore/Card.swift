@@ -89,10 +89,6 @@ public struct TaskCounts: Equatable, Sendable {
   public static let zero = TaskCounts(inProgress: 0, todo: 0, done: 0)
 
   public var open: Int { inProgress + todo }
-
-  public static func + (lhs: TaskCounts, rhs: TaskCounts) -> TaskCounts {
-    TaskCounts(inProgress: lhs.inProgress + rhs.inProgress, todo: lhs.todo + rhs.todo, done: lhs.done + rhs.done)
-  }
 }
 
 /// 子任务完成了几个、一共几个（任务的直接子任务，见 `CueStore.subtaskProgress`），与做完的子任务平均每步用了多久（任务行估还要多久，`TaskPace`）。
