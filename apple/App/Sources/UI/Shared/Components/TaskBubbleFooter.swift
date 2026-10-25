@@ -12,27 +12,26 @@ struct BubbleFooter: View {
         if focus.id == data.goal.id, !data.steps.isEmpty {
             switch workspace.lead(of: data.steps, in: agents) {
             case .agent(_, let session)?:
-                if let step = data.steps.first(where: { $0.piSessionID == session.sessionID }) { AgentStrip(leaf: step, caption: step.title) }
+                // 是哪一步、它此刻的状态词，上面的子任务行已经写了：这一条不再写它的名字
+                if let step = data.steps.first(where: { $0.piSessionID == session.sessionID }) { AgentStrip(leaf: step) }
             case .start(let leaf)?: StartBar(leaf: leaf, caption: leaf.title, editing: nil)
             case nil: EmptyView()
             }
         } else if agents.items[focus.id] != nil {
-            AgentStrip(leaf: focus, caption: nil)
+            AgentStrip(leaf: focus)
         } else if focus.status != .done, !agents.launching.contains(focus.id) {
             StartBar(leaf: focus, caption: nil, editing: editing)
         }
     }
 }
 
-/// 交给了会话的叶子此刻怎样（`TaskAgentLook`，两端同一份说法）：吉祥物（在做时轻轻浮动）、状态标与一句标题、一句进展；整条点了去会话。
+/// 交给了会话的叶子此刻怎样（`TaskAgentLook`，两端同一份说法）：会话的状态标（`PiStateDot`，在做时是心电线；不用吉祥物，它是 Cue 的样子）、
+/// 一句标题、一句进展或原因；整条点了去会话。
 private struct AgentStrip: View {
     let leaf: Card
-    /// 有子任务的任务看的是哪一步（写在进展前面）。
-    let caption: String?
     @Environment(Workspace.self) private var workspace
     @Environment(\.cardAgents) private var agents
     @Environment(\.palette) private var palette
-    @LoopsPlay private var loops
 
     var body: some View {
         if let item = agents.items[leaf.id] {
@@ -52,14 +51,12 @@ private struct AgentStrip: View {
 
     private func strip(_ look: TaskAgentLook, shown: PiShown, session: String) -> some View {
         HStack(spacing: BubbleMetrics.gap) {
-            MascotFace(mascot: look.mascot, floats: look.floats && loops)
+            PiStateDot(shown: shown, size: BubbleMetrics.mark).relaySpot(session: session, row: .task)
+                .frame(width: BubbleMetrics.markSlot)
             VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    PiStateDot(shown: shown, size: BubbleMetrics.dot).relaySpot(session: session, row: .task)
-                    Text(look.title).font(BubbleMetrics.strong).foregroundStyle(palette.ink).lineLimit(1)
-                }
-                if let line = Dotted(caption, look.note).nonEmpty {
-                    Text(line).font(BubbleMetrics.meta).foregroundStyle(palette.ink2).lineLimit(2)
+                Text(look.title).font(BubbleMetrics.strong).foregroundStyle(palette.ink).lineLimit(1)
+                if let note = look.note {
+                    Text(note).font(BubbleMetrics.meta).foregroundStyle(palette.ink2).lineLimit(2)
                 }
             }
             Spacer(minLength: 4)
@@ -115,23 +112,5 @@ private struct StartBar: View {
                 workspace.fail(error)
             }
         }
-    }
-}
-
-/// 吉祥物的小像：透明底的图；在做时轻轻上下浮动（Core Animation，`LoopLayer.float`）。
-private struct MascotFace: View {
-    let mascot: Mascot
-    let floats: Bool
-
-    var body: some View {
-        Group {
-            if floats, let image = mascot.bitmap(side: BubbleMetrics.mascot) {
-                LoopLayer(kind: .float(image, lift: BubbleMetrics.mascot * 0.06), color: .clear)
-            } else {
-                Image(mascot.rawValue).resizable().scaledToFit()
-            }
-        }
-        .frame(width: BubbleMetrics.mascot, height: BubbleMetrics.mascot)
-        .accessibilityHidden(true)
     }
 }
