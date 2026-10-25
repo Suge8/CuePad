@@ -2,10 +2,11 @@ import Foundation
 import Synchronization
 
 /// 退避：从 `first` 起每次失败翻倍到 `cap`，再一半固定、一半随机（同一阵子失败的设备不在同一刻一起重来）。
-/// 同步层的重试（发送者、认账号）用默认档，App 的门铃重连另给自己的档。
+/// 同步层的重试（发送者、认账号）用默认档；有人在等结果的重试上限压到 `waitingCap`。
 public struct Backoff: Sendable {
-  /// 有话在等（马上传了还没收下）时发送者用的上限：断网久了恢复后，在等的话至多再晚这么久（连通的证据另会当场叫醒）。
-  static let waitingCap = Duration.seconds(15)
+  /// 有人在等结果时的重试上限：有话在等（马上传了还没收下）时的发送者、门铃重连（`Relay.retry`）。
+  /// 断了久了恢复后至多再晚这么久（连通的证据另会当场叫醒），每台设备约 15 秒试一次，代价可以忽略。
+  public static let waitingCap = Duration.seconds(15)
   private let first: Duration
   private let cap: Duration
   private var failures = 0

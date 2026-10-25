@@ -42,8 +42,8 @@ final class Relay {
     nonisolated static let silenceLimit = pingInterval + pongLimit
     /// 连上、入房的时限。
     nonisolated static let handshakeLimit = Duration.seconds(15)
-    /// 重连的退避：1 秒起，至多 1 分钟。
-    static let retry = Backoff(first: .seconds(1), cap: .seconds(60))
+    /// 重连的退避：1 秒起，至多 `Backoff.waitingCap`（中转恢复后至多再等这么久就连回来，门铃不通时一直按 2 秒拉）。
+    static let retry = Backoff(first: .seconds(1), cap: Backoff.waitingCap)
     /// 连上后通了这么久才算稳定，退避从头算；更短就断的（中转刚起就挂、被网络掐掉）接着加长。
     static let steady = Duration.seconds(30)
     private nonisolated static let log = Logger(subsystem: AppIdentity.id, category: "relay")
