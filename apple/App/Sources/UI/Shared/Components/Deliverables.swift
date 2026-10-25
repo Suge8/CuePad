@@ -141,6 +141,8 @@ struct DeliverableTile: View {
             withAnimation(waited ? HandOff.quick : nil) { look = loaded }
         }
         .pending(loading, shown: $slow)
+        // 截图等画面读到再拍：读的头 `Pending.delay` 里格子只有边，拍下来就是一张空白占位
+        .debugSettling(loading)
     }
 
     /// 类型，视频与音频接时长、PDF 接页数："视频 0:12""PDF 3 页"。
