@@ -1,15 +1,16 @@
 #if os(iOS)
 import SwiftUI
 
-/// 每个窗口只显示一条短提示，沿用 `Workspace` 的消退计时。暂时盖在顶栏中间的名牌或搜索框的位置（名牌让开），
+/// 每个窗口只显示一条短提示，沿用 `Workspace` 的消退计时。暂时盖在顶栏中间的名牌或搜索框的位置（它们让开）：中间是铺满的搜索框时
+/// （`HeaderSearch.field`）完整盖住它，左右边缘对齐、同高，其余页在两侧圆钮之间居中；
 /// 两侧操作仍可用；不在 Cue 对话上另占一排，iPad 面板也共用窗口的提示。窄屏盖在整个窗口上，宽屏在右边那一栏里居中（不盖侧栏顶上的圆钮）。
 /// 提示与会话前台提示的变化只在这里读：根视图读了的话，每弹一条、消一条整个窗口（分栏的每一栏）都要重算一遍。
 struct NoticeBanner: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// 两侧让出的宽度：页边距、一颗圆钮与它和中间那块的间距，返回钮与右边的圆钮不被盖住。
-    private static let sideClearance: CGFloat = 16 + FloatingHeaderLayout.height + 8
+    /// 两侧让出的宽度：页边距加一颗圆钮的位，返回钮与右边的圆钮不被盖住。
+    private static let sideClearance = FloatingHeaderLayout.margin + FloatingHeaderLayout.slot
     /// iPad 上也保持胶囊，不铺满整个窗口。
     private static let maxWidth: CGFloat = 440
 
@@ -19,6 +20,7 @@ struct NoticeBanner: View {
     }
 
     var body: some View {
+        let field = workspace.layout == .dock && Dock.search(on: workspace.top) == .field
         ZStack {
             if let notice = workspace.notice {
                 NoticeCapsule(notice: notice)
@@ -26,9 +28,11 @@ struct NoticeBanner: View {
                     .id(notice.id)
             }
         }
-        .frame(maxWidth: Self.maxWidth)
+        .frame(maxWidth: field ? .infinity : Self.maxWidth)
         .frame(maxWidth: .infinity)
-        .padding(.horizontal, Self.sideClearance)
+        .padding(.leading, field ? FloatingHeaderLayout.margin : Self.sideClearance)
+        .padding(.trailing, Self.sideClearance)
+        .animation(HandOff.quick, value: field)
         // iPad 窄窗口：按窗口给的角落让开左上的窗口钮，不盖住它
         .containerCornerOffset(.horizontal, sizeToFit: true)
         .animation(HandOff.quick, value: workspace.notice)

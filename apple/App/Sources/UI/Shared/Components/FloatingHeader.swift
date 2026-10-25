@@ -10,7 +10,7 @@ extension View {
     /// - 系统导航栏（推入的页，与 iPad 右边那一栏的根）：左边是系统的圆形返回（左缘右滑返回、长按返回菜单都是系统的）或侧栏钮，
     ///   中间与右边是导航栏里的两项。两项推入时就建好、一直在，标题与信息只在项里面换，让开也只是透明：推入转场期间系统不重建工具栏项，
     ///   换项要等转场结束才显示；中间这一项不在时系统还会把标题当普通文字摆回中间。
-    /// - 页自己画（窄屏根上四页、iPad 右侧的 Cue 面板）：系统导航栏藏着，这一排随页切走（`HomePager`），进展页左边是搜索钮（项目页的搜索是中间那条 `SearchEntry`，Cue 页没有）。
+    /// - 页自己画（窄屏根上三页、iPad 右侧的 Cue 面板）：系统导航栏藏着，这一排随页切走（`HomePager`），搜索入口的样子按页给（`HeaderSearch`）。
     /// `hidden` 时中间与右边让开（淡到透明、不可点、读屏跳过），左边一直在；占的高度不变，内容的边距不跟着变（会话页看历史时用，
     /// 见 `ChatFollow.showsHeader`）；给了 `reveal` 时让开的那一块仍接点按，点它唤出。标题同时是读屏、返回菜单与多任务切换器里的名字。
     func floatingHeader<Detail: View, Trailing: View>(
@@ -43,16 +43,29 @@ extension View {
 
     /// 页顶那一排中间的一块（标题、项目范围、额度环）：一块写字玻璃胶囊，与两侧圆钮同高（有没有第二行都是）；提示横幅盖在这一排上时让开（盖不全这一块，露一截就是玻璃叠玻璃），
     /// 在长开的面板里（`GrowPanel`）不另画玻璃，面板本身就是。
-    func headerPiece() -> some View { modifier(HeaderPiece()) }
+    /// `interactive`：整块是一个按钮（搜索入口），玻璃随按压反应。
+    func headerPiece(interactive: Bool = false) -> some View { modifier(HeaderPiece(interactive: interactive)) }
 }
 
 /// 页顶那一排画在哪（`FloatingHeader`）：系统导航栏，或页自己画。
 enum HeaderHost: Equatable {
     case navigationBar
-    /// 页自己画，系统导航栏藏着；`search`：左边是搜索钮。
-    case page(search: Bool)
+    /// 页自己画，系统导航栏藏着；`search`：这一排的搜索入口（哪一页用哪种只在 `Dock.search`）。
+    case page(search: HeaderSearch?)
     /// iPad 右侧的 Cue 面板：自己画，提示横幅不在它上面（横幅在右边那一栏里），不用让开。
     case panel
+
+    var search: HeaderSearch? {
+        if case .page(let search) = self { search } else { nil }
+    }
+}
+
+/// 页自己画的那一排里的搜索入口，两种的放大镜落在同一处，左右切页时不跳。
+enum HeaderSearch {
+    /// 左边一颗圆钮：中间放着这一页看什么。
+    case button
+    /// 中间一条搜索框（`SearchEntry`），从左页边铺到右边圆钮前：中间没有别的；盖在上面的提示横幅同一范围（`NoticeBanner`）。
+    case field
 }
 
 extension EnvironmentValues {
@@ -66,9 +79,11 @@ extension EnvironmentValues {
 }
 
 enum FloatingHeaderLayout {
-    /// 与系统返回钮、工具栏圆钮同高；顶部的提示横幅与它同高、落在两侧圆钮之间（`NoticeBanner`）。
+    /// 与系统返回钮、工具栏圆钮同高；顶部的提示横幅与它同高、盖在中间那块的位置（`NoticeBanner`）。
     static let height: CGFloat = 44
-    /// 一颗圆钮连同它与中间那块之间的空：中间铺满的那块（搜索框）按它让出两侧的圆钮。
+    /// 这一排离屏幕左右边的空。
+    static let margin: CGFloat = 16
+    /// 一颗圆钮连同它与中间那块之间的空：铺满中间的那块（搜索框、提示横幅）按它让出圆钮。
     static let slot = height + 8
 }
 
@@ -93,7 +108,7 @@ private struct FloatingHeader<Center: View, Trailing: View>: ViewModifier {
                 content
                     .safeAreaPadding(.top, height + Bars.contentGap)
                     .overlay(alignment: .top) {
-                        PageBar(search: host == .page(search: true), height: height, trailing: trailing) { if showsMiddle { middle } }
+                        PageBar(search: host.search, height: height, trailing: trailing) { if showsMiddle { middle } }
                     }
             case .navigationBar:
                 content
@@ -143,10 +158,10 @@ private struct Yield: ViewModifier {
     }
 }
 
-/// 页自己画的那一排：左边搜索钮（`search`，只有进展页），右边这一页的那一个操作，两颗玻璃圆钮，位置同导航栏里的返回钮与圆钮；
-/// 中间那几块盖在两颗圆钮之上一层：从中间长出的面板（`GrowPanel`）铺满这一排往下长。
+/// 页自己画的那一排：搜索入口（`HeaderSearch`），右边这一页的那一个操作，圆钮的位置同导航栏里的返回钮与圆钮；
+/// 中间那几块盖在圆钮之上一层：从中间长出的面板（`GrowPanel`）铺满这一排往下长。
 private struct PageBar<Middle: View, Trailing: View>: View {
-    let search: Bool
+    let search: HeaderSearch?
     let height: CGFloat
     let trailing: Trailing
     @ViewBuilder let middle: Middle
@@ -155,20 +170,24 @@ private struct PageBar<Middle: View, Trailing: View>: View {
     var body: some View {
         ZStack(alignment: .top) {
             HStack {
-                if search { Button("搜索", icon: .search) { workspace.openSearch() } }
+                if search == .button { Button("搜索", icon: .search) { workspace.openSearch() } }
                 Spacer(minLength: 8)
                 trailing
             }
             .labelStyle(.iconOnly)
             .buttonStyle(ControlButtonStyle(kind: .circular))
             .frame(height: height)
+            if search == .field {
+                SearchEntry().padding(.trailing, Trailing.self == EmptyView.self ? 0 : FloatingHeaderLayout.slot)
+            }
             middle
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, FloatingHeaderLayout.margin)
     }
 }
 
 private struct HeaderPiece: ViewModifier {
+    let interactive: Bool
     @Environment(\.headerGivesWay) private var givesWay
     @Environment(\.headerGrown) private var grown
 
@@ -176,7 +195,7 @@ private struct HeaderPiece: ViewModifier {
         // 先定高再上玻璃：玻璃随内容高时，没有第二行的标题（项目没写介绍）只剩一条细缝
         let piece = content.frame(height: FloatingHeaderLayout.height)
         Group {
-            if grown { piece } else { piece.glass(in: .capsule) }
+            if grown { piece } else { piece.glass(in: .capsule, interactive: interactive) }
         }
         .contentShape(.capsule)
         .opacity(givesWay && !grown ? 0 : 1)

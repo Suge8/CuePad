@@ -130,7 +130,7 @@ private struct SplitSidebar: View {
         // 不用 List：几十行的量级，普通栈就够，格子的底、分隔线与间距也不用再一项项关掉
         ScrollView {
             VStack(alignment: .leading, spacing: Self.rowGap) {
-                SidebarSearchField().padding(.bottom, 10)
+                SearchEntry().padding(.bottom, 10)
                 CueSidebarItem().padding(.bottom, 6)
                 ForEach(SidebarOutline.places, id: \.self) { SidebarRow(entry: $0, tally: true).relaySpot(dock: true) }
                 if let catalog = workspace.catalog {
@@ -163,43 +163,6 @@ private struct SplitSidebar: View {
     private func row(_ project: Project) -> some View {
         SidebarRow(route: .project(project.id), title: project.name, project: project)
             .projectActions(project, radius: 10)
-    }
-}
-
-/// 列表顶上的搜索框：点它把搜索页推在当前页上，那里的搜索框接着拿到键盘（同 ⌘K）。长相同搜索页的搜索框（`SearchCapsule`）。
-/// 搜索页开着时它是选中的那一格（签名色写"搜索"），不再写同一句提示：同一屏只有一个搜索框。
-private struct SidebarSearchField: View {
-    @Environment(Workspace.self) private var workspace
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        let searching = workspace.top == .search
-        Button { workspace.openSearch() } label: {
-            HStack(spacing: 6) {
-                Image(.search).foregroundStyle(searching ? palette.signature : palette.ink3)
-                // 窄侧栏（iPad）放不下整句时只写"搜索"，不截成半句
-                Group {
-                    if searching {
-                        Text("搜索").fontWeight(.semibold).foregroundStyle(palette.signature)
-                    } else {
-                        ViewThatFits(in: .horizontal) {
-                            Text("搜索灵感、任务与会话")
-                            Text("搜索")
-                        }
-                        .foregroundStyle(palette.ink3)
-                    }
-                }
-                .lineLimit(1)
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 14).frame(maxWidth: .infinity, minHeight: SearchCapsule.height)
-            .glass(in: .capsule, interactive: true)
-            .contentShape(.capsule)
-        }
-        .buttonStyle(PressStyle(.wide))
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("搜索")
-        .accessibilityAddTraits([.isButton, .isSearchField])
     }
 }
 

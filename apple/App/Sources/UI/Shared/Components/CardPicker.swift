@@ -235,3 +235,25 @@ nonisolated extension String {
 
     private static let emojiDefaulted: Set<Character> = ["↩", "↪", "⤴", "⤵", "↔", "↕"]
 }
+
+#if os(iOS)
+/// 当前输入框是否在输入法组字中（有未上屏的拼音等）。SwiftUI 的搜索框不报告这一点，问第一响应者。
+enum TextComposition {
+    static var isComposing: Bool {
+        let probe = FirstResponderProbe()
+        UIApplication.shared.sendAction(#selector(UIResponder.cuepadReportFirstResponder(_:)), to: nil, from: probe, for: nil)
+        return (probe.responder as? UITextInput)?.markedTextRange != nil
+    }
+}
+
+private final class FirstResponderProbe: NSObject {
+    weak var responder: UIResponder?
+}
+
+extension UIResponder {
+    /// 发给 nil 目标的动作落在第一响应者上：借此拿到它。
+    @objc fileprivate func cuepadReportFirstResponder(_ sender: Any) {
+        (sender as? FirstResponderProbe)?.responder = self
+    }
+}
+#endif

@@ -80,14 +80,14 @@ private struct PlacesCatcher: View {
     }
 }
 
-/// 栈的根上的一个去处：它的页。进展页顶上那一排左边一颗搜索钮，项目页中间一条搜索框（放大镜在同一处）；右边是这一页的那一个操作，不写标题
+/// 栈的根上的一个去处：它的页。顶上那一排是搜索入口（`search`）与右边这一页的那一个操作，不写标题
 /// （底部的选中格已经说了在哪一页，`HeaderHost.page`），内容一直滚到底部那一排后面；Cue 页顶上只有 Cue 的名牌，输入框在它自己的页里（随键盘升起）。
 struct HomePage: View {
     let route: Route
 
     var body: some View {
         RouteView(route: route)
-            .environment(\.headerHost, .page(search: route == .progress))
+            .environment(\.headerHost, .page(search: Dock.search(on: route)))
             .environment(\.pageNamedElsewhere, true)
             // Cue 页的底边是它自己的输入框
             .dockReserve(route != .cue)
@@ -133,6 +133,16 @@ enum Dock {
     static func capsule(in width: CGFloat) -> CGFloat { cell(in: width) * CGFloat(places.count) + inset * 2 }
 
     static func order(_ route: Route) -> Int { pages.firstIndex(of: route) ?? pages.count - 1 }
+
+    /// 根上这一页页顶那一排的搜索入口：项目页中间没有别的，是铺满的一条搜索框；进展页中间放着这一页看什么，是左边一颗圆钮；
+    /// Cue 页的焦点就是 Cue，没有。提示横幅按它决定盖多宽（`NoticeBanner`）。
+    static func search(on route: Route) -> HeaderSearch? {
+        switch route {
+        case .shelf: .field
+        case .progress: .button
+        default: nil
+        }
+    }
 
     /// 这一页上留不留着底部那一排（同系统标签栏：往下钻的页都留着，回到哪一格、换去处随时点得到）。
     /// 会话页与卡片纸页让开：底边是它们自己的（回复框、整页的纸与键盘），在那里专心说、专心写，同"信息"的对话与"备忘录"的一条。

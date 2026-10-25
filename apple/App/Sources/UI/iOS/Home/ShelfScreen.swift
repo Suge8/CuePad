@@ -2,7 +2,7 @@
 import CueStore
 import SwiftUI
 
-/// 项目页（窄屏底部那一排的"项目"）：顶上中间一条搜索框（`SearchEntry`，放大镜正落在进展页左上搜索钮的位置，左右切页时不跳），右上"新建项目"。
+/// 项目页（窄屏底部那一排的"项目"）：顶上中间一条搜索框（`Dock.search`），右上"新建项目"。
 /// 宽屏侧栏已列出全部项目、顶上有搜索框，没有进这一页的入口：只在正看着的项目进了回收站时退回这里（`Workspace.pop`），顶上只有"新建项目"。
 /// 只排项目（在发生什么在进展页）：置顶项目是纸卡（`pinnedGrid`：图标、名字、介绍），其余排成一张纸上的行，长相同侧栏的项目行（只有图标与名字）。
 /// 窄屏（iPhone）没有侧栏，末尾一组归档、回收站、设置（同步到不了 Mac 时设置那一行带点，`AppServices.macAlert`）推在这一页上；宽屏这一组在侧栏里，这里不放。
@@ -11,26 +11,17 @@ struct ShelfScreen: View {
     @Environment(AppServices.self) private var services
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.dynamicTypeSize) private var typeSize
-    @Environment(\.headerHost) private var host
 
     private var narrow: Bool { sizeClass == .compact }
 
     var body: some View {
-        let title = SidebarOutline.Entry.projects.title
-        let page = ScrollView {
+        ScrollView {
             if let catalog = workspace.catalog { content(catalog) }
         }
         .refreshable { await services.syncNow() }
-        if host == .navigationBar {
-            page.floatingHeader(title) { newProject }
-        } else {
-            // 搜索框从左页边铺到"新建项目"那颗圆钮之前
-            page.floatingHeader(title, center: { SearchEntry().padding(.trailing, FloatingHeaderLayout.slot) }) { newProject }
+        .floatingHeader(SidebarOutline.Entry.projects.title) {
+            Button("新建项目", icon: .newProject) { workspace.projectForm = .init() }
         }
-    }
-
-    private var newProject: some View {
-        Button("新建项目", icon: .newProject) { workspace.projectForm = .init() }
     }
 
     private func content(_ catalog: ProjectCatalog) -> some View {
