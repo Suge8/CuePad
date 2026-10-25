@@ -92,7 +92,7 @@ protocol SubscriptionStore: Sendable {
 /// 不订阅整个同步区的变化：Mac 每小时写三百次上下（会话细节、在线续期、预览），每次一条静默推送，远超系统每小时两三条的预算，
 /// 被合并、节流后要紧的也跟着晚到（docs/sync.md「Agent 与 Cue 的通知」）。
 /// 可见通知：Pi 会话状态记录（等你确认、待回复、完成三个）与 Cue 消息（一个）的 `notify` 标志置位时，服务端直接生成；它们都另带 content-available，
-/// 把 App 叫到后台拉一次，实时活动随之更新。只靠静默推送的两个（Cue 对你说的话、发往 Mac 的请求有了结果）不出通知，只叫醒 App 拉。
+/// 把 App 叫到后台拉一次，实时活动随之更新。只靠静默推送的两个（Cue 对你说的、不出通知的话，发往 Mac 的请求有了结果）不出通知，只叫醒 App 拉。
 /// 通知文案只用本地化 key 的通用句：标题与详情是加密字段，不可能出现在通知里；也不设 `desiredKeys`。删除不通知。
 /// 谓词按标志而不是按状态，因为"同一状态下的重复更新"与"从工作中进入完成"这类转换在谓词里表达不了；标志只在转换那一次写入上置位（见 `PiStateRecorder`）。
 /// 标志在上传前会被同状态的更新沿用；状态已前进或会话已结束时未上传的标志作废（见 `PiStateRecorder`）。
@@ -107,7 +107,7 @@ struct AlertSubscriptions {
   static let settledID = prefix + "pi.settled"
   static let replyID = prefix + "pi.reply"
   static let cueID = prefix + "cue"
-  /// Cue 对你说的话（不论要不要提示）：静默推送。
+  /// Cue 对你说的、不出通知的话：静默推送（与 `cueID` 按 `CuePush` 分开，一条只命中一个）。
   static let cueSaidID = prefix + "cue.said"
   /// 发往 Mac 的请求有了结果（成功或失败）：静默推送，回执在后台也拉得回来。
   static let resultID = prefix + "delivery.result"
@@ -116,20 +116,24 @@ struct AlertSubscriptions {
 
   let zoneID: CKRecordZone.ID
 
-  /// 谓词用到的字段（按表）：字段名只写在谓词里这一处。
-  static let queriedColumns: [Table: Set<String>] = AlertSubscriptions(zoneID: CloudSync.zoneID).desired().reduce(into: [:]) { columns, subscription in
+  /// 谓词用到的字段（按表）：字段名只写在谓词里这一处。另留着旧版手机还在建的订阅要查的（`legacyQueried`）。
+  static let queriedColumns: [Table: Set<String>] = AlertSubscriptions(zoneID: CloudSync.zoneID).desired().reduce(into: legacyQueried) { columns, subscription in
     guard let table = subscription.recordType.flatMap(Table.init(rawValue:)), let field = (subscription.predicate as? NSComparisonPredicate)?.leftExpression.keyPath
     else { preconditionFailure("订阅谓词只用一个字段的比较：\(subscription.predicate)") }
     columns[table, default: []].insert(field)
   }
+
+  /// 2026-10 之前的版本按 `author == cue` 建 `cuepad.cue.said`（带提示的 Cue 消息因此同时命中它与 `cuepad.cue`，推两次）：
+  /// 这些手机还在时生产里的这个可查询索引要留着，不然它们建不成订阅。所有手机都升到按 `CuePush` 分的版本后删掉。
+  private static let legacyQueried: [Table: Set<String>] = [.cueMessages: ["author"]]
 
   func desired() -> [CKQuerySubscription] {
     [
       alert(.piSessionStates, id: Self.waitingID, flag: PiAlert.waitingForUser.rawValue, key: Self.waitingKey),
       alert(.piSessionStates, id: Self.settledID, flag: PiAlert.settled.rawValue, key: Self.settledKey),
       alert(.piSessionStates, id: Self.replyID, flag: PiAlert.awaitsReply.rawValue, key: Self.replyKey),
-      alert(.cueMessages, id: Self.cueID, flag: CueMessage.notifyFlag, key: Self.cueKey),
-      silent(.cueMessages, id: Self.cueSaidID, NSPredicate(format: "author == %@", CueAuthor.cue.rawValue), on: .firesOnRecordCreation),
+      alert(.cueMessages, id: Self.cueID, flag: CuePush.alert.rawValue, key: Self.cueKey),
+      silent(.cueMessages, id: Self.cueSaidID, Self.flagged(CuePush.wake.rawValue), on: .firesOnRecordCreation),
       silent(
         .deliveryRequests, id: Self.resultID, NSPredicate(format: "status IN %@", [DeliveryStatus.succeeded.rawValue, DeliveryStatus.failed.rawValue]),
         on: [.firesOnRecordCreation, .firesOnRecordUpdate]),
@@ -171,7 +175,7 @@ struct AlertSubscriptions {
 
   /// 可见通知（`notify` 标志置位时），同时叫醒 App 在后台拉一次（content-available）。
   private func alert(_ table: Table, id: String, flag: String, key: String) -> CKQuerySubscription {
-    let subscription = query(table, id: id, NSPredicate(format: "%K == %@", Self.flagField, flag), on: [.firesOnRecordCreation, .firesOnRecordUpdate])
+    let subscription = query(table, id: id, Self.flagged(flag), on: [.firesOnRecordCreation, .firesOnRecordUpdate])
     let info = CKSubscription.NotificationInfo()
     info.alertLocalizationKey = key
     info.soundName = "default"
@@ -181,6 +185,8 @@ struct AlertSubscriptions {
     subscription.notificationInfo = info
     return subscription
   }
+
+  private static func flagged(_ flag: String) -> NSPredicate { NSPredicate(format: "%K == %@", flagField, flag) }
 
   /// 只叫醒 App 在后台拉一次，不出通知。
   private func silent(_ table: Table, id: String, _ predicate: NSPredicate, on options: CKQuerySubscription.Options) -> CKQuerySubscription {
