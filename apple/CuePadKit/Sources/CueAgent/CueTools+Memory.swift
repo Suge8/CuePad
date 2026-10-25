@@ -60,8 +60,7 @@ extension CueTools {
         throw Failure("展开不了 #\(lo)-\(args.int("hi") ?? lo)：照记忆视图或摘要里出现过的 #a-b 写，单行只给 lo")
       }
       return .ok(text)
-    case "allow": return try await allow(args)
-    case let other: throw Failure("memory 没有 \(other)：可用 note / recall / zoom / forget / pin / remind / allow")
+    case let other: throw Failure("memory 没有 \(other)：可用 note / recall / zoom / forget / pin / remind")
     }
   }
 
@@ -75,18 +74,6 @@ extension CueTools {
     }
     try await store.setCueSummary(lo: lo, hi: hi + 1, text: try args.required("text"))
     return .ok("#\(lo)-\(hi) 合成了一行。")
-  }
-
-  /// 改允许清单（`CueStore.setCueAllow`）：这类事在一个项目或所有项目里以后不用问，或去掉。
-  private func allow(_ args: Args) async throws -> Result {
-    let raw = try args.required("ask")
-    guard let ask = CueAsk(rawValue: raw), ask.always != nil else { throw Failure("ask 只能是 \(Self.allowable)：规矩那一类不能放行") }
-    let project = try await args.string("project").asyncMap(project)
-    let allowed = args.bool("allowed") ?? true
-    let changed = try await store.setCueAllow(CueAllow(ask, project: project?.id), allowed: allowed)
-    let scope = project.map { "项目「\($0.name)」里" } ?? "所有项目里"
-    let what = "\(scope)\(ask.name)" + (allowed ? "以后不用问" : "又要先问")
-    return .ok((changed ? "记下了：" : "本来就是：") + what + "。")
   }
 
   /// `line`：序号（可带 #）或 id。

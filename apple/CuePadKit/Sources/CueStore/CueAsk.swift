@@ -5,11 +5,11 @@ import Foundation
 /// （`CueStore.addCueMessage` 的 `ask`）；调研方案、设计取舍、实现路线、子任务与整件事算不算做完，Cue 按你的规矩与最佳实践自己定，做完告诉你。
 /// 选项也由这里给（`choices`），Cue 不能自拟"照这个做 / 我再看看"这类确认；别的想法（不同意、选别的方案、补一句条件）他在 Cue 页底下直接说，
 /// 卡随之收起（`CueQuestionEnd`）。
-/// 给人看的只有 `name`（选项、设置里的"不用先问"）与 `why`；`definition` 只给 Cue 看。
+/// 给人看的只有 `name`（选项）与 `why`；`definition` 只给 Cue 看。
 public enum CueAsk: String, CaseIterable, Sendable {
   case push, merge, release, delete, outside, budget, rule
 
-  /// 这类事给人看的叫法（"以后推送代码都不用问"、设置里的"不用先问"）；规矩那一类不出现在这两处。
+  /// 这类事给人看的叫法（"以后推送代码都不用问"）；规矩那一类不出现在选项里。
   /// 范围要与 `definition` 一样大：选项照它写，选了放行的是整类。
   public var name: String {
     switch self {
@@ -39,14 +39,14 @@ public enum CueAsk: String, CaseIterable, Sendable {
   /// 第一项（主按钮）：允许这一次。
   public static let once = "可以"
 
-  /// 提问的第二项：选了它，这类事以后在 `project`（关联任务所在项目的名字）里不再问，nil 是所有项目里都不再问；
-  /// `CueStore.endCueQuestion` 按提问存的范围记进允许清单（`CueProfile.allows`）。规矩那一类没有这一项：一律放行等于没有规矩。
+  /// 提问的第二项：这类事以后在 `project`（关联任务所在项目的名字）里不用问，nil 是所有项目里都不用问。
+  /// 选了它 `CueStore.endCueQuestion` 把这句原话记成一条他说的、一直记着的记忆，范围就在字面上。规矩那一类没有这一项：一律放行等于没有规矩。
   public func always(in project: String?) -> String? {
     guard self != .rule else { return nil }
     return project.map { "以后「\($0)」里\(name)不用问" } ?? "以后\(name)都不用问"
   }
 
-  /// 所有项目里都不用问那一项；没有它的（规矩那一类）不能记进允许清单。
+  /// 所有项目里都不用问那一项。
   public var always: String? { always(in: nil) }
 
   /// 提问的选项（写入时定下、照存，之前写下的照旧显示当时的字）：可以，与"以后……不用问"（范围同上）。
@@ -125,9 +125,9 @@ public struct CueShot: Codable, Hashable, Sendable {
   }
 }
 
-/// 允许清单里的一项（`CueProfile.allows`）：一类要先问的事在一个项目里（`project`），或所有项目里（nil）以后不用问。
-/// 存成"类别"或"类别/项目 id"的数组；更新的版本写的类别原样留着（`Open`），改清单时不丢。
-public struct CueAllow: Hashable, Sendable {
+/// 一条提问问的哪一类、在哪（`CueMessage.asked`）：类别，与关联任务当时所在的项目（`project`，没关联任务为 nil）。选项第二项的范围照它写，
+/// 等你列的依据那一行写这个项目。存成"类别"或"类别/项目 id"；更新的版本写的类别原样留着（`Open`）。
+public struct CueAsked: Hashable, Sendable {
   public var ask: Open<CueAsk>
   public var project: UUID?
 
@@ -144,7 +144,4 @@ public struct CueAllow: Hashable, Sendable {
   }
 
   var stored: String { ask.rawValue + (project.map { "/" + $0.uuidString.lowercased() } ?? "") }
-
-  static func encode(_ allows: Set<CueAllow>) -> String? { JSONColumn.encodeList(allows.map(\.stored).sorted()) }
-  static func decode(_ text: String?) -> Set<CueAllow> { Set(JSONColumn.decodeList(String.self, from: text).compactMap(CueAllow.init(stored:))) }
 }

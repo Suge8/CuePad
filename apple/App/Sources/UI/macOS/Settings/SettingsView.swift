@@ -3,15 +3,13 @@ import AppKit
 import CueStore
 import SwiftUI
 
-/// 设置窗口的几页，工具栏上一排标签切换（同系统各应用的设置窗口），按要紧排：
-/// Cue（在哪台运行、不用先问的事）、通用（iCloud、通知、外观与快捷键、更新）、Agent（接入哪几家与 cuepad 命令，接好就很少再来）。
-/// Cue 那一页的标签写它的名字（同手机设置里 Cue 那一行）。
+/// 设置窗口的两页，工具栏上一排标签切换（同系统各应用的设置窗口），按要紧排：
+/// 通用（Cue 的名字与在哪台运行、iCloud、通知、外观与快捷键、更新）、Agent（接入哪几家与 cuepad 命令，接好就很少再来）。
 enum SettingsPane: String, CaseIterable {
-    case cue, general, agents
+    case general, agents
 
-    func title(cue name: String) -> String {
+    var title: String {
         switch self {
-        case .cue: name
         case .general: "通用"
         case .agents: "Agent"
         }
@@ -19,7 +17,6 @@ enum SettingsPane: String, CaseIterable {
 
     var icon: Icon {
         switch self {
-        case .cue: .cue
         case .general: .settings
         case .agents: .agent
         }
@@ -40,7 +37,6 @@ struct SettingsView: View {
     var body: some View {
         Form {
             switch pane {
-            case .cue: CueSettingsPane()
             case .general: GeneralSections()
             case .agents:
                 Section {
@@ -59,13 +55,14 @@ struct SettingsView: View {
     }
 }
 
-/// 通用那一页：iCloud 同步（与冲突）、通知、外观与两个全局快捷键、更新（与上次崩溃）。
+/// 通用那一页：Cue（`CueSettingsSection`）、iCloud 同步（与冲突）、通知、外观与两个全局快捷键、更新（与上次崩溃）。
 private struct GeneralSections: View {
     @Environment(AppServices.self) private var services
     /// "对 Cue 说"的快捷键（调试画面里没有）。
     @Environment(CueBar.self) private var cueBar: CueBar?
 
     var body: some View {
+        CueSettingsSection()
         Section {
             SyncRow()
             if !services.conflicts.isEmpty { ConflictsRow() }

@@ -2,23 +2,15 @@
 import CueSync
 import SwiftUI
 
-/// 设置（项目页末尾、宽屏侧栏底部推入），按要紧排，分组与说法同 Mac 的设置窗口；启动时没完成的事与上次崩溃有才出现。
+/// 设置（项目页末尾、宽屏侧栏底部与 Cue 面板推入），按要紧排，分组与说法同 Mac 设置窗口的通用页：Cue（名字与在哪台 Mac 上运行，`CueSettingsSection`）、
+/// iCloud 同步、通知、外观、启动问题、上次崩溃、版本；启动问题与上次崩溃有才出现。
 struct SettingsScreen: View {
     @Environment(AppServices.self) private var services
-    @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
     var body: some View {
         SettingsForm {
-            Section {
-                NavigationLink(value: Route.cueSettings) {
-                    LabeledContent {
-                        Text(workspace.cue.home ?? "")
-                    } label: {
-                        Label(workspace.cue.name, icon: .cue)
-                    }
-                }
-            }
+            CueSettingsSection()
             SyncSection()
             if services.sync != nil || Self.previewsAlerts { AlertSection() }
             Section {
@@ -29,7 +21,7 @@ struct SettingsScreen: View {
                 }
             }
             if !services.startupIssues.isEmpty {
-                Section("没能完成的事") {
+                Section("启动问题") {
                     ForEach(Array(services.startupIssues.enumerated()), id: \.offset) { _, issue in
                         Label { Text(issue.text) } icon: { FailureMark() }.font(.footnote)
                     }
@@ -41,6 +33,7 @@ struct SettingsScreen: View {
                     .frame(maxWidth: .infinity)
             }
         }
+        .scrollDismissesKeyboard(.interactively)
         .floatingHeader("设置")
     }
 
@@ -48,7 +41,7 @@ struct SettingsScreen: View {
     private static var previewsAlerts: Bool { DebugHooks.preset.alertStatus != nil }
 }
 
-/// 设置与 Cue 设置两页共用的表单：分组是纸色的行、底是页面色，宽屏上限宽居中（分段控件与说明不被拉成一长条）。
+/// 设置页的表单：分组是纸色的行、底是页面色，宽屏上限宽居中（分段控件与说明不被拉成一长条）。
 struct SettingsForm<Content: View>: View {
     @ViewBuilder var content: Content
     @Environment(\.palette) private var palette

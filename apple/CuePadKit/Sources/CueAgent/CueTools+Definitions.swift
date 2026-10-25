@@ -55,8 +55,8 @@ extension CueTools {
           卡片、摘要与通知只显示"可以<doing>吗？"、rule 那类的这条规矩、show 的图与选项，不显示 text。
           show 是回答这个问题必须看的图，至多 \(CueShot.limit) 张，按要他看的先后：file 写 task peek 里"发到手机的"那一份的 id，look 写这张看什么（一行、≤\(CueShot.lookLimit) 字，如"方案 1：大按钮占满一行"）。几个方案就只放方案、每个一张（不带原样作对比）、同一台设备同一种样子，推荐的在前；不用看图就能答的不带。只有 show 里的图上卡片。
           text 先一句要做的动作，再一句依据（rule 那类写哪条规矩）和不做会怎样；不写 push、rule 这类分类名。
-          选项由 CuePad 给（如推送：\(CueAsk.push.choices(in: "项目名").joined(separator: " / "))；不带 task 时第二项是"\(CueAsk.push.always ?? "")"；rule 只有第一项），他选第二项就照字面记进允许清单。卡上只能选：他在 Cue 页一开口，开着的卡就当场收起，算他直接说了；他那句不是在答它，restore 放回。允许清单里有的（task 所在的项目或所有项目）会被拒：直接做。
-          urgent 推送到手机；task 关联一个任务（按它的项目查允许清单）；withdraw 写"等你"里一条的 id，撤回它（你不用再问了，或他在会话里说了怎么办），可同时带 text 说明；restore 写他开口收起的那条的 id，放回"等你"。
+          选项由 CuePad 给（如推送：\(CueAsk.push.choices(in: "项目名").joined(separator: " / "))；不带 task 时第二项是"\(CueAsk.push.always ?? "")"；rule 只有第一项），他选第二项就照原话记成一条一直记着的记忆。卡上只能选：他在 Cue 页一开口，开着的卡就当场收起，算他直接说了；他那句不是在答它，restore 放回。
+          urgent 推送到手机；task 关联一个任务（第二项的范围是它的项目）；withdraw 写"等你"里一条的 id，撤回它（你不用再问了，或他在会话里说了怎么办），可同时带 text 说明；restore 写他开口收起的那条的 id，放回"等你"。
           """,
         "inputSchema": schema(
           [
@@ -72,16 +72,13 @@ extension CueTools {
           你的长期记忆，一行一条（≤\(CueMemoryLine.maxBytes) 字节），序号就是身份。note{text,pin?} 记一条，pin 一直记着（不 pin 的旧行会被并成摘要）；
           recall{query} 只读：全文找记忆、对话、任务，与你管过的会话里 Agent 的回复原话（带会话名与短 id，可接着 peek）；词之间空格隔开，命中任一个就算，命中的词越少见、越多越靠前（太常见的词不算），列不下的报条数；
           zoom{lo,hi?} 只读：展开记忆视图里的摘要 #lo-hi，给它的两半（摘要或原行）；只给 lo 是那一行；
-          forget{line}；pin{line,pinned}；remind{text,at} 到点叫醒你（ISO 8601 或 yyyy-MM-dd HH:mm）；
-          allow{ask,project?,allowed?} 改允许清单：ask 只能是 \(Self.allowable)，不带 project 是所有项目，allowed:false 去掉。
+          forget{line}；pin{line,pinned}；remind{text,at} 到点叫醒你（ISO 8601 或 yyyy-MM-dd HH:mm）。
           """,
         "inputSchema": schema(
           [
-            "action": ["type": "string", "enum": ["note", "recall", "zoom", "forget", "pin", "remind", "allow"]],
+            "action": ["type": "string", "enum": ["note", "recall", "zoom", "forget", "pin", "remind"]],
             "text": string, "pin": ["type": "boolean"], "query": string, "line": ["type": ["string", "integer"]],
             "pinned": ["type": "boolean"], "at": string, "lo": ["type": "integer"], "hi": ["type": "integer"],
-            "ask": ["type": "string", "enum": CueAsk.allCases.filter { $0.always != nil }.map(\.rawValue)], "project": string,
-            "allowed": ["type": "boolean"],
           ], required: ["action"]),
         "annotations": ["readOnlyHint": false, "destructiveHint": false, "idempotentHint": false, "openWorldHint": false],
       ],
@@ -93,8 +90,6 @@ extension CueTools {
   private static var show: [String: Any] {
     ["type": "array", "maxItems": CueShot.limit, "items": ["type": "object", "properties": ["file": string, "look": string], "required": ["file", "look"]]]
   }
-  /// 能放进允许清单的几类（规矩那一类不能）。
-  static var allowable: String { CueAsk.allCases.filter { $0.always != nil }.map(\.rawValue).joined(separator: " / ") }
   private static var name: [String: Any] { ["type": "string", "description": "宽不过 \(CueName.limit)（汉字算 2）"] }
 
   /// done 的证据：至多这么多条，每条宽不过 `evidenceLimit`（`CueName.width`）。结果消息由 Store 拼（`CueReport.text`）。

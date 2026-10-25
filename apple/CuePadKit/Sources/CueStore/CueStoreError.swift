@@ -83,16 +83,12 @@ public enum CueStoreError: Error, Equatable {
   case questionEnded
   /// 回答不是这条提问的选项（参数是那句话）：不选的话在对话里直接说。
   case notAChoice(String)
-  /// 允许清单里有这类事（参数是只管的那个项目的名字；不分项目的为 nil）。
-  case alreadyAllowed(String?)
   /// Cue 写的短语（提问的动作、规矩，图看什么）缺了、超长或不止一行（`CueAsking`、`CueShot.checked`）。
   case phrase(field: String, hint: String, limit: Int)
   /// 点名的图多于 `limit` 张或有重复（`CueShot.checked`）。
   case shots(limit: Int)
   /// 点名的那一份不在发到手机的里（参数是 id）。
   case shotMissing(String)
-  /// 规矩那一类不能放进允许清单。
-  case cannotAllowRule
 }
 
 extension CueStoreError: LocalizedError {
@@ -145,8 +141,6 @@ extension CueStoreError: LocalizedError {
     case .phrase(let field, let hint, let limit): "\(field)：\(hint)，一行、不超过 \(limit) 字"
     case .shots(let limit): "show 至多 \(limit) 张、不重复：只挑回答问题必须看的、证明结论的最终成果"
     case .shotMissing(let id): "发到手机的里没有 \(id)：照 task peek 里列的 id 写"
-    case .alreadyAllowed(let project): "这类事在允许清单里（\(project.map { "项目「\($0)」" } ?? "所有项目")不用问）：直接做，做完告诉他"
-    case .cannotAllowRule: "规矩那一类不能放行：要他先问的就一直问"
     }
   }
 }

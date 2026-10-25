@@ -28,9 +28,8 @@ public struct CueMessage: Identifiable, Equatable, Sendable {
   /// 给你的选项；有选项的 Cue 消息在等你（规则见 `CueStore.cueMessagesWaitingForYou`）。选项只由 `CueAsk.choices` 在写入时按 `asked` 写出、
   /// Cue 不能自拟；写下就不再变，卡片与通知照它显示。
   public var choices: [String]?
-  /// 提问的类别与范围（明文、同步，写入时定下）：哪一类事，与关联任务当时所在的项目（没关联任务为 nil，是所有项目）。
-  /// 选项里"以后……不用问"照它写，选了就把它原样记进允许清单（`CueStore.endCueQuestion`），所以字面范围与实际放行的一致。
-  public var asked: CueAllow?
+  /// 提问的类别与范围（明文、同步，写入时定下）。
+  public var asked: CueAsked?
   /// 提问要做的动作与依据的规矩（`CueAsking`；用户内容，加密同步）。
   public var askAction: String?
   public var askRule: String?
@@ -84,7 +83,7 @@ extension CueMessage: Record {
   init(row: Row) {
     self.init(
       id: row.uuid(0), author: Open(rawValue: row.text(1)), text: row.text(2),
-      choices: JSONColumn.decode([String].self, from: row.textOrNil(3)), asked: row.textOrNil(13).flatMap(CueAllow.init(stored:)),
+      choices: JSONColumn.decode([String].self, from: row.textOrNil(3)), asked: row.textOrNil(13).flatMap(CueAsked.init(stored:)),
       askAction: row.textOrNil(14), askRule: row.textOrNil(15), shots: JSONColumn.decodeList(CueShot.self, from: row.textOrNil(16)), urgent: row.bool(4), taskID: row.uuidOrNil(5),
       answer: row.textOrNil(6), answeredAt: row.dateOrNil(7), setAsideBy: row.uuidOrNil(17), deliveredAt: row.dateOrNil(8), createdAt: row.date(9),
       modifiedAt: row.date(10), tools: row.textOrNil(12).flatMap(PiChatMessage.Tools.init(stored:)), wake: row.textOrNil(18).flatMap(CueWake.init(stored:)),

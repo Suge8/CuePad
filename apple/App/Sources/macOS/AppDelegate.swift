@@ -82,7 +82,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         services.follow { [alerts] in for await count in Observations({ workspace.cue.waiting }) { await alerts.showBadge(count) } }
         let cueBar = CueBar(services: services, workspace: workspace)
         self.cueBar = cueBar
-        settingsWindow = SettingsWindowController(cueName: { workspace.cue.name }) {
+        settingsWindow = SettingsWindowController {
             RootViews.settings($0, services, cueBar: cueBar)
         }
         DebugHooks.present(window)

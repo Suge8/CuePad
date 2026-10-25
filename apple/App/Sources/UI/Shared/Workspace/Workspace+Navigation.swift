@@ -45,7 +45,7 @@ extension Workspace {
     }
 
     /// 换去处（侧栏与底部那一排点哪就是哪），清掉推入的页。窄屏上不在底部那一排的去处推在它所属的那一页上
-    /// （项目、设置……推在书架上，Cue 的设置推在 Cue 页上）；不属于哪一页的（卡片纸页、会话页）推在当前页上。
+    /// （项目、设置……推在书架上）；不属于哪一页的（卡片纸页、会话页）推在当前页上。
     func select(_ route: Route) {
         let home = layout == .dock ? route.home : route
         let next = home ?? root

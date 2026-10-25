@@ -20,7 +20,7 @@ extension CueStore {
   }
 
   /// 记一条（在写事务内调用，调用方先查过记得成）。
-  private func insertLine(_ text: String, source: CueLineSource, pinned: Bool, remindAt: Date? = nil) throws -> CueMemoryLine {
+  func insertLine(_ text: String, source: CueLineSource, pinned: Bool, remindAt: Date? = nil) throws -> CueMemoryLine {
     let now = Date.stamp
     let line = CueMemoryLine(
       id: UUID(), text: text, pinned: pinned, source: .known(source), remindAt: remindAt, createdAt: now, modifiedAt: now, deletedAt: nil)

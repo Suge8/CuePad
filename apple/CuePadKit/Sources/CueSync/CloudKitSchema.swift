@@ -23,6 +23,8 @@ enum CloudKitSchema {
     "directoryBindings": [("hostName", "ENCRYPTED STRING")],
     // 可换的模型与斜杠命令拆进了 agentCatalogs
     "piSessionStates": [("models", "ENCRYPTED STRING"), ("commands", "ENCRYPTED STRING")],
+    // 不用先问的例外并进了记忆（cueLines）
+    "cueProfile": [("allows", "ENCRYPTED STRING")],
   ]
   static let retiredTypes: [(name: String, fields: [(name: String, declaration: String)])] = [
     ("tags", [("color", "STRING"), ("createdAt", "INT64"), ("modifiedAt", "INT64"), ("name", "ENCRYPTED STRING")]),

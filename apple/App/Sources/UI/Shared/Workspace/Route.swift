@@ -15,8 +15,6 @@ nonisolated enum Route: Hashable {
     case progress
     /// Cue 页：和总控 Agent Cue 的对话（`CuePage`）。
     case cue
-    /// Cue 的设置（手机从 Cue 面板推入，`CueSettingsScreen`；Mac 的在设置窗口里）。
-    case cueSettings
     case search
     case card(UUID)
     /// 一个 Pi 会话的整页（近况与回复）。
@@ -36,7 +34,7 @@ nonisolated enum Route: Hashable {
     /// 窄屏（`Workspace.Layout.dock`）上它所属的去处（底部那一排的去处与 Cue 之一）：去处本身是它自己；卡片纸页、会话页、搜索不属于哪一页（推在当前页上），为 nil。
     var home: Route? {
         switch self {
-        case .cue, .cueSettings: .cue
+        case .cue: .cue
         case .progress: .progress
         case .shelf, .project, .archive, .trash, .settings, .conflicts: .shelf
         case .search, .card, .session: nil
