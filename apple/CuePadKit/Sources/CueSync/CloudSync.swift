@@ -35,6 +35,8 @@ public actor CloudSync {
   private var accountRetryAt: ContinuousClock.Instant?
   private var accountRetry: Task<Void, Never>?
   private var accountWatcher: Task<Void, Never>?
+  /// 重试的等待结束时补拉、网络路径恢复时提前结束连不上的等待（`SyncCoordinator+Hold`）。
+  private var retryWatchers: [Task<Void, Never>] = []
   /// `start()` 之前就要拉的（冷启动时先到的推送）：开始了再拉。
   private var startWaiters: [CheckedContinuation<Void, Never>] = []
   /// 每认完一次账号给一个：等账号认好的（`relaySecret`）据此再看能不能同步。
@@ -72,12 +74,18 @@ public actor CloudSync {
     guard cloud == nil else { return }
     let cloud = connect()
     self.cloud = cloud
-    puller = ZonePuller(source: cloud, coordinator: coordinator)
+    let puller = ZonePuller(source: cloud, coordinator: coordinator)
+    self.puller = puller
     sender = RecordSender(uploader: cloud, coordinator: coordinator) { [coordinator] in
       try await PeerFloor(zoneID: Self.zoneID).settle(cloud, coordinator: coordinator)
       await coordinator.succeeded()
     }
     await coordinator.loadToken()
+    let due = coordinator.retryDue.stream(), network = NetworkReturns.stream()
+    retryWatchers = [
+      Task { [coordinator] in for await _ in network { await coordinator.connected() } },
+      Task { for await _ in due { await puller.due() } },
+    ]
     accountWatcher = Task { [weak self] in
       for await _ in NotificationCenter.default.notifications(named: .CKAccountChanged) {
         await self?.accountChanged()
@@ -93,6 +101,8 @@ public actor CloudSync {
     accountWatcher = nil
     accountRetry?.cancel()
     accountRetry = nil
+    retryWatchers.forEach { $0.cancel() }
+    retryWatchers = []
     await sender?.stop()
     sender = nil
     puller = nil
