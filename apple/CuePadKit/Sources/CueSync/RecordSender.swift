@@ -39,6 +39,10 @@ actor RecordSender {
   private var inFlight: Set<String> = []
   /// 马上传了、还没收下的：有它们时退避上限小，到点先发它们。
   private var urgent: Set<String> = []
+  /// 要马上传时已在路上的（多半是刚领取的那一版，结果紧跟着写下）：在路上那批收下的是旧版，不算答复，回来就当场再发新版。
+  private var newer: Set<String> = []
+  /// 那批已回来、新版该接着马上传的（`upload` 在它们离开 `inFlight` 后发）。
+  private var resend: Set<String> = []
   private var waiters: [(remaining: Set<String>, received: Bool, continuation: CheckedContinuation<Bool, Never>)] = []
   private var urgentRuns: [Int: Task<Void, Never>] = [:]
   private var nextRun = 0
@@ -100,6 +104,7 @@ actor RecordSender {
   /// 马上传这几条：不进攒批窗口，不等后台那批，等到它们都有了结果（全收下为 true；离线等没传成的为 false，之后照常重试，且优先）。
   func send(_ names: Set<String>) async -> Bool {
     urgent.formUnion(names)
+    newer.formUnion(names.intersection(inFlight))
     return await withCheckedContinuation { continuation in
       waiters.append((names, true, continuation))
       runUrgent()
@@ -172,6 +177,10 @@ actor RecordSender {
     await updateBusy()
     let next = await outcome(of: batch)
     inFlight.subtract(names)
+    if !resend.isEmpty {
+      resend = []
+      runUrgent()
+    }
     await updateBusy()
     return next
   }
@@ -323,7 +332,11 @@ actor RecordSender {
 
   /// 一批有了结果：在等的话里这批带着的有了答复，都有答复的等待者返回（全收下才是 true）。
   private func answer(_ names: Set<String>, received: Set<String>) {
-    urgent.subtract(received)
+    let stale = newer.intersection(received)
+    newer.subtract(names)
+    resend.formUnion(stale)
+    let names = names.subtracting(stale)
+    urgent.subtract(names.intersection(received))
     var rest: [(remaining: Set<String>, received: Bool, continuation: CheckedContinuation<Bool, Never>)] = []
     for var waiter in waiters {
       let hit = waiter.remaining.intersection(names)
