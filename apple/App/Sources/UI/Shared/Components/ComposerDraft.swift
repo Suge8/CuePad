@@ -39,7 +39,7 @@ struct ComposerDraft {
         return parts.isEmpty ? nil : String(localized: "带了 \(parts.formatted(.list(type: .and)))")
     }
 
-    var hasImages: Bool { !images.isEmpty || attachments.contains { !CardText($0.content).images.isEmpty } }
+    var hasImages: Bool { !images.isEmpty || attachments.contains { CueFormat.hasImages($0.content) } }
 
     /// "＋ 选灵感"带上一张（作为这次消息的附件，卡片本身不动）；已带着的不重复。
     mutating func attach(_ card: Card) {

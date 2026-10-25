@@ -50,7 +50,7 @@ public enum CueFormat {
     }
 
     /// 正文里有没有图片引用。按字节找（memmem）：比 Foundation 的 `contains` 快约 20 倍，标准库的 `utf8.firstRange(of:)` 还要再慢 6 倍。
-    static func hasImages(_ stored: String) -> Bool {
+    public static func hasImages(_ stored: String) -> Bool {
         var stored = stored
         return stored.withUTF8 { contains($0, imagePrefixBytes) }
     }
