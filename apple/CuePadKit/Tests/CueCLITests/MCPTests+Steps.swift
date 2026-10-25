@@ -1,6 +1,5 @@
 #if os(macOS)
 import CueStore
-import CueTestSupport
 import Foundation
 import Testing
 
@@ -10,7 +9,7 @@ extension MCPTests {
   /// 最后一步做完，会话结束（界面点圆圈同一条规则，见 App 的 `TaskFlowTests`）。
   /// 开工的工具等送达结果时，另一个 `cuepad mcp`（Cue 的下一次调用）看到的是送到前的样子；Mac 送到后工具说已送达。
   @Test(.timeLimit(.minutes(1))) func stepsOfATaskContinueInTheSameSession() async throws {
-    let sandbox = try Sandbox()
+    let sandbox = try Fixture()
     let store = sandbox.store
     let project = try await sandbox.project("演示")
     try await store.setDirectory("/tmp/demo", for: project.id)
@@ -66,7 +65,7 @@ extension MCPTests {
   /// 换会话的那一刻与最后一步（"增加系统提示音和提示窗"做完了会话还挂着）：下一步开工用 fresh 开新会话时，上一步留着的会话结束；
   /// 下一步亲手绑到别的会话也一样；最后一步做完，它的会话结束。
   @Test(.timeLimit(.minutes(1))) func aLeftBehindSessionEnds() async throws {
-    let sandbox = try Sandbox()
+    let sandbox = try Fixture()
     let store = sandbox.store
     let project = try await sandbox.project("演示")
     try await store.setDirectory("/tmp/demo", for: project.id)

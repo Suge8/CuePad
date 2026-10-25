@@ -11,7 +11,6 @@ struct SessionList<Top: View>: View {
     @ViewBuilder var top: Top
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
-    @Environment(\.palette) private var palette
 
     private static var margin: CGFloat { 16 }
 

@@ -2,10 +2,10 @@ import CueStore
 import Observation
 import SwiftUI
 
-/// Cue 的设置，两端同一份：Mac 设置窗口的 Cue 那一页（`CueSettingsPane`）、手机的 Cue 设置页（`CueSettingsScreen`）与两端 Cue 页的启用
-/// （`CueWelcome`）都读写它。读的是同步的设置（`CueProfile`）、各台 Mac 自报的名字与能用的 Agent（`CueStore.allMacAgents`，Cue 能在
-/// 哪台上运行就是这几台）与项目名（允许清单里写）；动作是改名、在哪台运行并启用（`AppServices.enableCue`，规则在 `CueStore.enableCue`）、停用、
-/// 允许清单的一项（`CueStore.setCueAllow`），写完都立即上传。没写成的原因存在 `failure`，页面就地写出，下一次动作先清掉。
+/// Cue 的设置，各入口同一份：两端设置里 Cue 那一组（`CueSettingsSection`）、手机 Cue 面板的选 Mac（`CueNowPanel`）与两端 Cue 页的启用
+/// （`CueWelcome`）都读写它。读的是同步的设置（`CueProfile`）与各台 Mac 自报的名字与能用的 Agent（`CueStore.allMacAgents`，Cue 能在
+/// 哪台上运行就是这几台）；动作是改名、在哪台运行并启用（`AppServices.enableCue`，规则在 `CueStore.enableCue`）、停用，写完都立即上传。
+/// 没写成的原因存在 `failure`，页面就地写出，下一次动作先清掉。
 /// 能不能启用、改 Mac 要不要先确认只读 `CueGate`。
 @Observable
 final class CueSettingsModel {
@@ -49,10 +49,6 @@ final class CueSettingsModel {
         run { try await services.updateCue { $0.name = name } }
     }
 
-    func allow(_ item: CueAllow, _ allowed: Bool, _ services: AppServices) {
-        run { if try await services.store.setCueAllow(item, allowed: allowed) { await services.upload(CueProfile.recordID) } }
-    }
-
     /// 读不出来、写不成：原因就地写出。
     func fail(_ error: any Error) { failure = error.localizedDescription }
 
@@ -83,12 +79,6 @@ struct CueNameField: View {
     }
 }
 
-/// Cue 页对话里显示不显示工具步骤（`AppSettings.showsCueSteps`，存本机、不同步：只管这台设备上怎么看），两端设置里同一句话。
-enum CueStepsSetting {
-    static let title = "显示工具步骤"
-    static let note = "对话里每一轮“跑了几步、建了几件任务”那一行；关了只在它做事时于末尾写一行在做什么"
-}
-
 extension View {
     /// 读 Cue 的设置进 `model`（随设置、各台 Mac 的记录与项目变化重读），并挂上改 Mac 前的确认框（`CueSettingsModel.moving`）：
     /// 能启用的入口都经它，确认框只有这一个。
@@ -112,15 +102,11 @@ private struct CueSettingsReader: ViewModifier {
 nonisolated struct CueSettings: Equatable, Sendable {
     var profile: CueProfile
     var macs: [MacAgents]
-    /// 项目的名字（允许清单里只管一个项目的那几项写它的名字）。
-    var projects: [UUID: String]
 
-    static let empty = CueSettings(profile: CueProfile(), macs: [], projects: [:])
+    static let empty = CueSettings(profile: CueProfile(), macs: [])
 
     static func read(from store: isolated CueStore) throws -> CueSettings {
-        CueSettings(
-            profile: try store.cueProfile() ?? CueProfile(), macs: try store.allMacAgents(),
-            projects: Dictionary(try store.projects().map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first }))
+        CueSettings(profile: try store.cueProfile() ?? CueProfile(), macs: try store.allMacAgents())
     }
 
     /// 能运行 Cue 的一台：名字（那台自报的，`MacAgents.shownName`；是这台（`isHere`）时写"这台 Mac"）、能当大脑的几家与一家都不能用时为什么。
@@ -152,15 +138,8 @@ nonisolated struct CueSettings: Equatable, Sendable {
         return hosts
     }
 
-    /// 允许清单的一类：所有项目都不用问（`all`），与只管一个项目的几项（名字是「项目名」，删了的写"已删的项目"）。规矩那一类没有。
-    struct AllowGroup: Identifiable {
-        let ask: CueAsk
-        let all: Bool
-        let projects: [(allow: CueAllow, name: String)]
-
-        var id: CueAsk { ask }
-        var everywhere: CueAllow { CueAllow(ask, project: nil) }
-    }
+    /// 设置里那一行写的：此刻运行的那台（`running`，没启用为 nil）的名字，或"不启用"。
+    static func shown(_ running: String?, in hosts: [Host]) -> String { hosts.first { $0.id == running }?.name ?? off }
 
     /// 能不能在哪台启用（`CueGate`）：按库里它此刻运行在哪台、那台自报的名字。
     @MainActor func gate(_ services: AppServices) -> CueGate {
@@ -168,25 +147,12 @@ nonisolated struct CueSettings: Equatable, Sendable {
         return CueGate.of(services, running: running, name: running.map { id in macs.first { $0.hostID == id }?.shownName ?? MacAgents.unnamed })
     }
 
-    /// 两端同一套写法：选在哪台运行的那一项，与允许清单那一节（开关打开的那类在所有项目里都不用问）。
+    /// 各端同一套写法：选在哪台运行的那一行与"不启用"（停用）。
     static let hostTitle = "在哪台 Mac 上运行"
-    /// 手机上还没有哪台 Mac 写下过自己（`hosts` 为空）时 Cue 设置里那句；Cue 页上给的动作是发出 Mac 版的下载链接（`macDownload`）。
+    static let off = "不启用"
+    /// 手机上还没有哪台 Mac 写下过自己（`hosts` 为空）时设置与 Cue 面板里那句；Cue 页上给的动作是发出 Mac 版的下载链接（`macDownload`）。
     static let noHost = "先在 Mac 上打开 CuePad"
     static let macDownload = URL(string: "https://github.com/Suge8/CuePad/releases/latest")!
-    static let allowsTitle = "不用先问的事"
-    static func allowsNote(_ name: String) -> String {
-        "推送、删除这类收不回的事，\(name) 做之前会先问你；打开的那类在所有项目里直接做。在它的提问上选\u{201C}以后……不用问\u{201D}也记在这里。"
-    }
-
-    var allowGroups: [AllowGroup] {
-        let allows = profile.allows
-        return CueAsk.allCases.filter { $0.always != nil }.map { ask in
-            let projects = allows.filter { $0.ask == .known(ask) && $0.project != nil }
-                .map { (allow: $0, name: $0.project.flatMap { projects[$0] }.map { "「\($0)」" } ?? "已删的项目") }
-                .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
-            return AllowGroup(ask: ask, all: allows.contains(CueAllow(ask, project: nil)), projects: projects)
-        }
-    }
 
     private static let here = "这台 Mac"
 }
@@ -204,7 +170,8 @@ struct CueMove: Identifiable, Equatable {
     var confirm: String { to.isHere ? "改在这台运行" : "改在「\(to.name)」运行" }
 }
 
-/// 能不能在一台 Mac 上启用 Cue、改它运行的 Mac：所有入口（Cue 页的启用钮与它的多台菜单（`CueWelcome`）、接入面板 Cue 那一行、两端设置里的选择器）只读这一处，
+/// 能不能在一台 Mac 上启用 Cue、改它运行的 Mac：所有入口（Cue 页的启用钮与它的多台菜单（`CueWelcome`）、手机 Cue 面板的选 Mac、接入面板 Cue 那一行、
+/// 两端设置里那一行）只读这一处，
 /// 规则本身落在启用的入口（`AppServices.enableCue`），这里只给界面说清楚此刻是哪种。
 enum CueGate: Equatable {
     /// 这台的库还没和 iCloud 对过一遍（`AppServices.knowsSyncedFacts`）：入口写这句原因，不能启用

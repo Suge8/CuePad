@@ -46,9 +46,8 @@ struct SpeechBubble<Menu: View>: View {
 
     /// 一行，和旁注一样高：重发是行里的字，不画胶囊；点按区放大到 44 点而不撑高这一行。送不到 Mac 时也露出来（停用），看得出能重发。
     private func failedLine(_ undelivered: Undelivered) -> some View {
-        HStack(spacing: 4) {
-            Text("未送达")
-            Dot()
+        HStack(spacing: 0) {
+            Text("未送达，")
             Button(MessageMenu.Item.resend.title, action: undelivered.resend)
                 .fontWeight(.semibold)
                 .buttonStyle(PressStyle(.inline))

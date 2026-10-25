@@ -13,7 +13,8 @@ import Synchronization
 /// 开着的那一页由界面报来：会话页（`show`）Mac 是人看得到主窗口时内容区的会话页，手机是场景前台活跃时导航最上面的会话页
 /// （都是 `Workspace.shownSession`；iPad 开几个窗口各报各的，取最近开的那个）；Cue 页（`showCue`）两端都由 `CueViewing` 报（iPad 上它可以在面板里、
 /// 不在导航最上面）。Mac 上人不在跟前（系统将睡眠、屏幕睡了、锁屏、退出，或 `SessionPresence.window` 没动过键盘鼠标）时一概算没开着，
-/// 回来再按界面报的算；将睡眠与退出同步写完、传完才放行（做法同 `MacPresenceKeeper`），手机进后台时写完、传完。
+/// 回来再按界面报的算；退出时写完、传完才放行，手机进后台时写完、传完。将睡眠不拖住系统：Mac 的这条只在那台 Mac 在线时算数（`Viewer`），
+/// `MacPresenceKeeper` 在将睡眠时同步写下离线，它在各端就作废了。
 /// 写的那一刻在 Store 的隔离域里读开着哪一页：几路写入谁先谁后，库里留下的都是最后的那个状态。
 nonisolated final class ViewerKeeper: Sendable {
     /// 开着的会话页：会话记录 id；`sessionID` 是 Pi 的会话 id，只有记录 id 的入口（点通知进来）不带，写时从记录里取。
@@ -74,15 +75,12 @@ nonisolated final class ViewerKeeper: Sendable {
 
     /// 写下界面报来的变化，直到任务取消；Mac 另跟系统的睡眠、屏幕与锁屏。
     func keep(notifications center: NotificationCenter = .default) async throws {
-        #if os(macOS)
-        let sleeping = center.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: nil) { [self] _ in goingToSleep() }
-        defer { center.removeObserver(sleeping) }
-        #endif
         try await withThrowingDiscardingTaskGroup { group in
             group.addTask { for await _ in self.changes { try await self.publish() } }
             #if os(macOS)
             let distributed = DistributedNotificationCenter.default()
             let events: [(NotificationCenter, Notification.Name, Away, Bool)] = [
+                (center, NSWorkspace.willSleepNotification, .asleep, true),
                 (center, NSWorkspace.didWakeNotification, .asleep, false),
                 (center, NSWorkspace.screensDidSleepNotification, .screenOff, true),
                 (center, NSWorkspace.screensDidWakeNotification, .screenOff, false),
@@ -166,19 +164,6 @@ nonisolated extension ViewerKeeper {
     func signOff() async {
         state.withLock { _ = $0.away.insert(.quitting) }
         await settle()
-    }
-
-    /// 在系统发将睡眠通知的线程上同步等离开这一条写完、传完（理由同 `MacPresenceKeeper.goingToSleep`）。
-    private func goingToSleep() {
-        state.withLock { _ = $0.away.insert(.asleep) }
-        let done = DispatchSemaphore(value: 0)
-        Task.detached { [self] in
-            await settle()
-            done.signal()
-        }
-        if done.wait(timeout: .now() + MacPresenceKeeper.sleepUploadLimit) == .timedOut {
-            Self.log.notice("将睡眠：这台 Mac 离开那一页的记录 \(Int(MacPresenceKeeper.sleepUploadLimit)) 秒内没传完")
-        }
     }
 
     /// 跟着主窗口，直到任务取消：把这台 Mac 上的人看不看得到主窗口交给界面（`AppServices.seesMainWindow` 的两半：窗口露没露在屏上、

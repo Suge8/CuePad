@@ -6,7 +6,7 @@ B 代替开着 Agent 页的手机（模拟器登不了 iCloud；拉取节奏按�
 
 用法：sync-bench.py [分钟=10]
 构建是本检出 apple/.derived 里开发环境签名的那份（CUEPAD_SIGN=development xc.sh build mac）；库、日志在 /tmp/sync-bench。
-要同时开两个实例，不经 app.py 的每个检出一份；隔离目录同样取 app.isolated_env。
+要同时开两个实例，不经 app.py 的每个检出一份；隔离目录同样取 app_env.isolated_env。
 环境：SYNC_BENCH_SESSIONS 会话数（默认 3）；
       SYNC_BENCH_FLIP 每个会话平均几秒切一次状态（默认 8）；SYNC_BENCH_EVERY B 每轮间隔秒（默认 30）；SYNC_BENCH_WARMUP 预热秒（默认 90，不计入）。
 前提、口径与限制见 docs/verify.md「同步测量」。只结束自己起的进程。
@@ -16,7 +16,7 @@ from collections import Counter
 from datetime import datetime
 
 sys.dont_write_bytecode = True
-from app import BUNDLE_ID, isolated_env  # noqa: E402
+from app_env import BUNDLE_ID, isolated_env  # noqa: E402
 from rusage import NS, usage  # noqa: E402
 
 APPLE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

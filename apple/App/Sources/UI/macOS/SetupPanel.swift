@@ -145,7 +145,7 @@ struct SetupPanel: View {
                 ?? AgentLine.of(kind, agents.status(kind), writable: agents.isWritable(kind))
             return (tone, line, working && chosen.contains(kind))
         case .checking: return (.calm, "检查中…", true)
-        case .install(let failure?): return (.failure, Dotted("没装上", failure), false)  // 原因是安装脚本的最后一句原话
+        case .install(let failure?): return (.failure, Dotted("没装上：\(failure)"), false)  // 原因是安装脚本的最后一句原话
         case .logIn(let failure?): return (.failure, Dotted(failure), false)
         case .install: return (.calm, Dotted(kind == .claudeCode ? "推荐" : nil, "运行官方安装脚本"), false)
         case .needs(let prerequisite):

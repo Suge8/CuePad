@@ -6,16 +6,19 @@ import Synchronization
 /// 起进程的底层：经中转挂到 launchd 下、登记退出事件、读描述符。
 extension ChildProcess {
     /// 经中转起进程，返回它的 PID：`registered` 在它 exec 之前调（登记退出事件：已被 launchd 回收的进程登记不上，退出码就丢了）。
-    /// `actions` 里放好了标准输入输出与 3 号，中转用的 `goFD`、`reportFD` 在这里放；`newSession` 时连同它在新会话里。
+    /// `actions` 里放好了标准输入输出与 3 号，中转用的 `goFD`、`reportFD` 在这里放；`newSession` 时连同它在新会话里，
+    /// 并留一个看守（`Placement.detached`），返回看守那根管道的写端。
     static func spawn(
         _ executable: URL, _ arguments: [String], environment: [String: String], actions: inout posix_spawn_file_actions_t?,
         newSession: Bool, registered: (pid_t) -> Void
-    ) async throws -> pid_t {
+    ) async throws -> (pid: pid_t, hold: Int32?) {
         // 起不来的（不存在、不可执行）当场抛错，不等中转里的 exec 失败
         guard access(executable.path, X_OK) == 0 else { throw POSIXError(.init(rawValue: errno) ?? .ENOENT) }
         let reported = try pipe(), go = try pipe()
         posix_spawn_file_actions_adddup2(&actions, reported.write, reportFD)
         posix_spawn_file_actions_adddup2(&actions, go.read, goFD)
+        let hold = newSession ? try pipe() : nil
+        if let hold { posix_spawn_file_actions_adddup2(&actions, hold.read, holdFD) }
         var attributes: posix_spawnattr_t? = nil
         posix_spawnattr_init(&attributes)
         defer { posix_spawnattr_destroy(&attributes) }
@@ -27,16 +30,18 @@ extension ChildProcess {
         posix_spawnattr_setsigmask(&attributes, &signals)
         let session: Int32 = newSession ? POSIX_SPAWN_SETSID : 0
         posix_spawnattr_setflags(&attributes, Int16(POSIX_SPAWN_CLOEXEC_DEFAULT | POSIX_SPAWN_SETSIGDEF | POSIX_SPAWN_SETSIGMASK | session))
-        let argv = ([shell, "-c", relay(environment), "sh", executable.path] + arguments).map { strdup($0) } + [nil]
+        let argv = ([shell, "-c", relay(environment, held: hold != nil), "sh", executable.path] + arguments).map { strdup($0) } + [nil]
         let envp = environment.map { strdup("\($0.key)=\($0.value)") } + [nil]
         defer { (argv + envp).forEach { free($0) } }
         var relayPID: pid_t = 0
         let code = posix_spawn(&relayPID, shell, &actions, &attributes, argv, envp)
         close(reported.write)
         close(go.read)
+        if let hold { close(hold.read) }
         defer { close(go.write) }  // 放它 exec
         guard code == 0 else {
             close(reported.read)
+            if let hold { close(hold.write) }
             throw POSIXError(.init(rawValue: code) ?? .EIO)
         }
         // 中转报完 PID 就退出（报告管道读到 EOF）；它是本进程的子进程，这里回收
@@ -44,23 +49,31 @@ extension ChildProcess {
         var status: Int32 = 0
         waitpid(relayPID, &status, 0)
         guard let pid = pid_t(String(decoding: report, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)) else {
+            if let hold { close(hold.write) }
             throw POSIXError(.ECHILD)
         }
         registered(pid)
-        return pid
+        return (pid, hold?.write)
     }
 
     private static let shell = "/bin/sh"
+    private static let holdFD: Int32 = 7
     private static let goFD: Int32 = 8
     private static let reportFD: Int32 = 9
 
     /// 中转脚本：后台的子 shell 自成进程组（`set -m`：作业控制下也不把标准输入换成空设备、不忽略 SIGINT 与 SIGQUIT），
     /// 等 `goFD` 读到 EOF 再 exec 成要起的命令；`reportFD` 报出它的 PID，中转随即退出，它就挂到 launchd 下。
     /// shell 会给要起的命令补上 PWD 与 SHLVL（exec 时 SHLVL 去不掉）：要求的环境里没有的，经 env 去掉，环境与要求的一致。
-    private static func relay(_ environment: [String: String]) -> String {
+    /// `held` 时再留一个看守（`Placement.detached`）：`holdFD` 上读到认领的一行就退出，读到 EOF 就结束它（SIGTERM，宽限后 SIGKILL）。
+    private static func relay(_ environment: [String: String], held: Bool) -> String {
         let added = ["PWD", "SHLVL"].filter { environment[$0] == nil }
         let command = added.isEmpty ? #""$@""# : "/usr/bin/env " + added.map { "-u \($0) " }.joined() + #""$@""#
-        return "set -m; { read -r _ <&\(goFD); exec \(command) \(goFD)<&-; } \(reportFD)>&- & echo $! >&\(reportFD)"
+        let start = "set -m; { read -r _ <&\(goFD); exec \(command) \(goFD)<&-; } \(reportFD)>&- \(holdFD)<&- & p=$!; "
+        let grace = AgentTimeouts.endGrace.components.seconds
+        let guardian = held
+            ? "{ read -r _ <&\(holdFD) || { kill -TERM $p; sleep \(grace); kill -KILL $p; }; } \(goFD)<&- \(reportFD)>&- 2>/dev/null & "
+            : ""
+        return start + guardian + "echo $p >&\(reportFD)"
     }
 
     /// 一根管道，两端都挪到 `lifted` 的号上。

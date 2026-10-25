@@ -1,16 +1,10 @@
 #if os(macOS)
 import CueStore
-import CueTestSupport
 import Foundation
 import Testing
 
 /// Cue 的大脑经 `cuepad mcp`（stdio，一行一个 JSON-RPC）派活、说话、记东西：真实子进程，结果落在库里。
 @Suite struct MCPTests {
-  private final class Anchor {}
-  private static var binary: URL {
-    Bundle(for: Anchor.self).bundleURL.deletingLastPathComponent().appending(path: "cuepad")
-  }
-
   /// 一个 `cuepad mcp` 子进程：写一行请求，读一行回应。回应由它自己的线程读：两个子进程同时有调用在等（一个工具在等送达结果时
   /// 另一个照常回应）也互不挡着，`FileHandle.bytes` 的读取会把它们排成一队。
   final class Server: @unchecked Sendable {
@@ -21,7 +15,7 @@ import Testing
     private let exit: ProcessExit
 
     private init(library: URL) throws {
-      process.executableURL = MCPTests.binary
+      process.executableURL = try cuepadBinary()
       process.arguments = ["mcp"]
       process.environment = ["CUEPAD_LIBRARY_DIR": library.path]
       process.standardInput = input
@@ -45,7 +39,6 @@ import Testing
 
     /// 起一个 `cuepad mcp` 交给 `body`；之后（失败也一样）关它的输入、等它退出。
     static func run(library: URL, _ body: (Server) async throws -> Void) async throws {
-      try #require(FileManager.default.isExecutableFile(atPath: MCPTests.binary.path), "先构建 cuepad 产物：\(MCPTests.binary.path)")
       let server = try Server(library: library)
       let outcome: Result<Void, any Error>
       do { outcome = .success(try await body(server)) } catch { outcome = .failure(error) }
@@ -83,7 +76,7 @@ import Testing
   }
 
   @Test(.timeLimit(.minutes(1))) func cueDispatchesATaskTellsAndRemembersThroughMCP() async throws {
-    let sandbox = try Sandbox()
+    let sandbox = try Fixture()
     let store = sandbox.store
     let project = try await sandbox.project("演示")
     try await store.setDirectory("/tmp/demo", for: project.id)
@@ -130,7 +123,7 @@ import Testing
 
   /// 停用之后 Cue 的工具不能再派活（停用只清启用时刻，运行在哪台 Mac 还留着）。
   @Test(.timeLimit(.minutes(1))) func aDisabledCueCannotDispatchWork() async throws {
-    let sandbox = try Sandbox()
+    let sandbox = try Fixture()
     let store = sandbox.store
     let project = try await sandbox.project("演示")
     try await store.setDirectory("/tmp/demo", for: project.id)

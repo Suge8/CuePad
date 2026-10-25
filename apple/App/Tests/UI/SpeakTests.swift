@@ -128,7 +128,7 @@ struct SpeakTests {
         try await store.markCueMessagesDelivered([message.id])
         try await store.setCueState(.thinking)  // 值班的 Mac 交给它后写下它在想
         #expect(Said.cue(try #require(try await youSaid().first), host: "mac-cue").trip(at: .always(at: late)) == .delivered)
-        #expect(try await presence() == .working(.thinking, detail: nil))
+        #expect(try await presence() == .working(.thinking, detail: nil, step: nil))
     }
 
     @Test func 对Cue说_没能送达后重发_撤回旧的写一条同样的_交出去的撤不回也不重发() async throws {

@@ -251,6 +251,7 @@ DEFINE SCHEMA
         round         STRING,
         context       STRING,
         leftToYou     STRING,
+        step          ENCRYPTED STRING,
         woke          STRING,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"

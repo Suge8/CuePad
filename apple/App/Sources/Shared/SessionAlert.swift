@@ -22,7 +22,7 @@ struct SessionAlert: Equatable, Identifiable {
 
     var content: (title: String, body: String) { PiAlertText.content(title: title, question: question, reply: reply, kind: kind) }
 
-    var text: Dotted { Dotted(content.title, content.body) }
+    var text: Dotted { Dotted("\(content.title)：\(content.body)") }
 
     var status: PiShown.Status { Self.status(kind) }
 

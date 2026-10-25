@@ -119,12 +119,14 @@ public final class ManualTiming: Sendable {
   }
 
   public var now: Date { state.withLock { $0.current } }
-  public var timing: Timing { Timing(now: { self.now }, sleep: { try await self.sleep($0) }) }
+  public var timing: Timing {
+    Timing(now: { self.now }, sleep: { try await self.sleep(for: $0) }, sleepUntil: { date in try await self.sleep(until: { _ in date }) })
+  }
   public var sleeperCount: Int { state.withLock { $0.sleepers.count } }
 
   public func advance(_ duration: Duration) {
     let due: [CheckedContinuation<Void, Error>] = state.withLock { state in
-      state.current = state.current.addingTimeInterval(Self.seconds(duration))
+      state.current = state.current.addingTimeInterval(duration.seconds)
       let ready = state.sleepers.filter { $0.value.deadline <= state.current }
       for id in ready.keys { state.sleepers[id] = nil }
       return ready.values.map(\.continuation)
@@ -150,27 +152,31 @@ public final class ManualTiming: Sendable {
     }
   }
 
-  private func sleep(_ duration: Duration) async throws {
+  private func sleep(for duration: Duration) async throws {
+    try await sleep(until: { $0.addingTimeInterval(duration.seconds) })
+  }
+
+  /// 登记一个睡眠者，截止时刻由登记那一刻的 `current` 算出（按时长睡）或直接给定（睡到某一刻）。
+  private func sleep(until deadline: @escaping @Sendable (Date) -> Date) async throws {
     let id = UUID()
     try await withTaskCancellationHandler {
       try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-        // 取消可能发生在登记之前（此时 onCancel 找不到它），登记时要再看一次
-        let waiters: [CheckedContinuation<Void, Never>]? = state.withLock { state in
+        // 取消可能发生在登记之前（此时 onCancel 找不到它），登记时要再看一次；截止时刻已过（钟在它睡下前就拨过了）的当场醒
+        let waiters: [CheckedContinuation<Void, Never>]?? = state.withLock { state in
           if Task.isCancelled { return nil }
-          state.sleepers[id] = (state.current.addingTimeInterval(Self.seconds(duration)), continuation)
+          let due = deadline(state.current)
+          if due <= state.current { return .some(nil) }
+          state.sleepers[id] = (due, continuation)
           defer { state.sleeperWaiters = [:] }
           return Array(state.sleeperWaiters.values)
         }
-        guard let waiters else { return continuation.resume(throwing: CancellationError()) }
+        guard let registered = waiters else { return continuation.resume(throwing: CancellationError()) }
+        guard let waiters = registered else { return continuation.resume() }
         for waiter in waiters { waiter.resume() }
       }
     } onCancel: {
       state.withLock { $0.sleepers.removeValue(forKey: id)?.continuation }?.resume(throwing: CancellationError())
     }
-  }
-
-  private static func seconds(_ duration: Duration) -> TimeInterval {
-    Double(duration.components.seconds) + Double(duration.components.attoseconds) / 1e18
   }
 }
 

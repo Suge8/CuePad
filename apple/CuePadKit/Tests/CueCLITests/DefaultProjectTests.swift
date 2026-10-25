@@ -8,7 +8,7 @@ import Testing
 /// 不给 --project 时，默认范围是绑定了当前目录（或其祖先目录）的项目；不在这样的目录里新建的进默认项目。
 @Suite struct DefaultProjectTests {
   private struct World {
-    let sb: Sandbox
+    let sb: Fixture
     let alpha: Project
     let beta: Project
     let inAlpha: Card
@@ -18,7 +18,7 @@ import Testing
     static let inside = "/work/alpha/src/deep"
 
     init() async throws {
-      sb = try Sandbox()
+      sb = try Fixture()
       alpha = try await sb.project("Alpha")
       beta = try await sb.project("Beta")
       try await sb.store.setDirectory(Self.alphaDirectory, for: alpha.id)

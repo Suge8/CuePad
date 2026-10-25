@@ -11,7 +11,6 @@ struct FocusBand: View {
     let data: ProjectPageData
     @Binding var position: ScrollPosition
     let anchor: TaskFoldAnchor
-    @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     @Environment(\.pageActive) private var active
     @State private var fold = DebugHooks.preset.taskFold

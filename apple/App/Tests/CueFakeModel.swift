@@ -177,7 +177,7 @@ nonisolated final class FakeModel: Sendable {
             finishedAfter.withLock { $0.append(text) }
             return say("办好了")
         }
-        if let answer = text.firstMatch(of: /他回答了「.*」：(.+)/)?.1 { return say("知道了：\(answer)") }
+        if let answer = text.firstMatch(of: /他回答了「.*」：([^（\n]+)/)?.1 { return say("知道了：\(answer)") }
         if text.contains("请把这张图转给登录页"), let image = text.firstMatch(of: /!\[\]\(cuepad:\/\/img\/[0-9a-f]+\)/)?.0 {
             return call("task", ["action": "say", "task": "修好登录页 转图", "text": "看这张\n\(image)"])
         }

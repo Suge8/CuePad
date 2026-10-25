@@ -1,13 +1,12 @@
 #if os(macOS)
 import CueStore
-import CueTestSupport
 import Foundation
 import Testing
 
 extension MCPTests {
   /// peek 一件事：每个叶子最新的那条回答给全文（至多 4000 字，超了截尾并注明），更早的截短。
   @Test(.timeLimit(.minutes(1))) func peekGivesTheLatestReplyInFull() async throws {
-    let sandbox = try Sandbox()
+    let sandbox = try Fixture()
     let store = sandbox.store
     let task = try await store.createTask("跑测试")
     try await store.linkCard(task.id, toSession: "s1")
@@ -33,7 +32,7 @@ extension MCPTests {
 
   /// 不带 task 的 peek 是看板：所有没做完的事，按项目分组，做完的不列；太多时只列 60 行，说还有几件。
   @Test(.timeLimit(.minutes(1))) func cueSeesEveryOpenTaskGroupedByProject() async throws {
-    let sandbox = try Sandbox()
+    let sandbox = try Fixture()
     let store = sandbox.store
     let project = try await sandbox.project("演示")
     let mine = try await store.createTask("用户自己的事", in: project.id)
@@ -56,7 +55,7 @@ extension MCPTests {
 
   /// 看板上一件事的近况取在做的那一步；子任务都做完、整件事还没收尾时取最后做完的那一步（它的会话是最新的进展），不落回第一步。
   @Test(.timeLimit(.minutes(1))) func theBoardShowsTheStepLastWorkedOn() async throws {
-    let sandbox = try Sandbox()
+    let sandbox = try Fixture()
     let store = sandbox.store
     let task = try await store.createTask("加语言参数")
     let first = try await store.createTask("加 --lang", under: task.id), second = try await store.createTask("写 README", under: task.id)

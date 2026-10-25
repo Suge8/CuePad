@@ -5,8 +5,8 @@ import SwiftUI
 /// 页头一直在（头像、名字、此刻在做什么；Mac 在窗口工具栏，是 `CueTitle`；手机与 iPad 是浮在对话上的 `CueHeader`，点开是在做、等你与记忆的面板）；
 /// 中间是对话：你的话是右侧牛皮纸色的气泡，Cue 的话是左侧纸做的气泡（`CueBubble`、`CueSays`），它第一次提到一件活时气泡底下一行这件活（`CueTaskLine`），
 /// 同一边连着说的几颗收紧成一串，隔了一阵的地方居中写几点（`ChatTimeMarker`）；经过、醒来记录与分隔不是气泡，是旁注与居中的标记（`NoteLine`、`ChatMarker`），
-/// 你发起的一轮在你的话之后先是这一轮的经过（`RoundProcess`，同会话页：在跑时实时展开，做完收成一行；设置里可关，`AppSettings.showsCueSteps`），这一轮说的话与结果按先后在它之后；
-/// 经过清单里"对你说"那一条点它回到对话里的原处。Cue 自己醒来的那几轮每轮一行旁注（`CueNoteLog`：提到的那一处、当时出了什么事与它说的一句，点了去那里），
+/// 你发起的一轮在你的话之后先是这一轮的经过（`CueTrace`：碰到的任务与会话一处一行，在跑时原地往下长），这一轮说的话与结果按先后在它之后。
+/// Cue 自己醒来的那几轮每轮一行旁注（`CueNoteLog`：提到的那一处、当时出了什么事与它说的一句，点了去那里），
 /// 末尾是它此刻在做什么（`CueEnding`）；
 /// 对话区与会话页是同一个（`ChatColumn`：排开、刻度滑条、跳转与描圈）；底部是待回复提示（`CueReplyTip`）、"等你"（`CueWaitDock`：Cue 的提问与会话在问的都在这里，
 /// 对话里不另挂）与输入框（`CueComposer`）。
@@ -51,19 +51,11 @@ struct CuePage: View {
 
     private var cue: CueWatch { workspace.cue }
     private var catchingUp: Bool { services.isCatchingUp(on: cue.hostID) }
-    private var showsSteps: Bool { services.settings.showsCueSteps }
-
-    /// 读对话按什么重读：设置里关没关工具步骤、"等你"卡要露哪条（`CueThread.read`）。
-    private struct Reading: Equatable {
-        let showsSteps: Bool
-        let asking: UUID?
-    }
-
     var body: some View {
         page
-            .observing(services.store, id: Reading(showsSteps: showsSteps, asking: workspace.cueAsking), into: $thread, onError: workspace.fail) {
-                [showsSteps, asking = workspace.cueAsking] in
-                try CueThread.read(from: $0, showsSteps: showsSteps, asking: asking)
+            // "等你"卡要露哪条变了就重读（`CueThread.read`）
+            .observing(services.store, id: workspace.cueAsking, into: $thread, onError: workspace.fail) { [asking = workspace.cueAsking] in
+                try CueThread.read(from: $0, asking: asking)
             }
             .previewPresenter($opened)
             .panel(isPresented: Bindable(cue).showsMemory) { CueMemoryPage() }
@@ -202,8 +194,11 @@ struct CuePage: View {
     private var live: CueLiveRound? {
         let presence = cue.presence
         guard let round = cue.round else { return nil }
-        guard let shown = presence.shown, let progress = presence.progress else { return CueLiveRound(round: round, ending: .took(nil)) }
-        return CueLiveRound(round: round, ending: .live(shown, doing: progress, step: presence.isUsingTool ? RoundProcess.icon(.other) : nil))
+        guard let shown = presence.shown, let progress = presence.progress else { return CueLiveRound(round: round, doing: nil) }
+        let step = presence.step
+        // 没碰哪一处的一步（看板、记忆、读文件）是工具图标，还没调工具（在想）是省略号
+        let icon = step.map { CueTrace.icon($0.kind) } ?? (presence.isUsingTool ? Icon.tool : .pondering)
+        return CueLiveRound(round: round, doing: .init(icon: icon, step: step, text: progress, speaking: shown.speaking))
     }
 
     /// 有新内容：多了消息、有一条被答了、"等你"或待回复变了、末尾的进展出现或收起。

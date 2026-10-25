@@ -97,7 +97,6 @@ struct RouteView: View {
         case .conflicts: ConflictsScreen()
         case .progress: ProgressScreen()
         case .cue: CuePage().countsAsPiViewer()
-        case .cueSettings: CueSettingsScreen()
         case .search: SearchScreen()
         case .session(let route): SessionScreen(id: route.id, seed: route.seed).countsAsPiViewer()
         case .card(let id):

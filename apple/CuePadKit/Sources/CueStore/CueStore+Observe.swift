@@ -52,7 +52,7 @@ extension CueStore {
           timer?.cancel()
           timer = expiry.map { due in
             Task {
-              guard (try? await timing.sleep(.seconds(max(0, due.timeIntervalSince(timing.now()))))) != nil else { return }
+              guard (try? await timing.sleepUntil(due)) != nil else { return }
               signal.yield()
             }
           }

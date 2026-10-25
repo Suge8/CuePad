@@ -3,35 +3,18 @@ import Foundation
 
 extension CueStore {
   /// 结束一条还开着的提问（`CueQuestionEnd`）；已经结束的抛 `questionEnded`，回答不是它的选项之一抛 `notAChoice`。回答交给 Cue（`toDeliver`），撤回的不交。
-  /// 你选的是第二项（"以后……不用问"，`CueAsk.always(in:)`）时，同一个事务里把提问存的类别与范围（`CueMessage.asked`）记进允许清单；
-  /// 清单改了返回真，调用方上传设置。
+  /// 你选的是第二项（"以后……不用问"，`CueAsk.always(in:)`）时，同一个事务里把这句原话记成一条你说的、一直记着的记忆：
+  /// 不用先问的例外只在记忆里，Cue 读到就直接做。返回记下的那一条的 id（调用方连同提问一起上传）。
   @discardableResult
-  public func endCueQuestion(_ id: UUID, _ end: CueQuestionEnd) throws -> Bool {
+  public func endCueQuestion(_ id: UUID, _ end: CueQuestionEnd) throws -> UUID? {
     try write {
       guard let message = try find(CueMessage.self, id) else { throw CueStoreError.notFound }
       if case .answered(let answer) = end, message.choices?.contains(answer) != true { throw CueStoreError.notAChoice(answer) }
       let answer: String? = if case .answered(let text) = end { text } else { nil }
       guard try endQuestions(answer: answer, where: "id = ?", [id]) > 0 else { throw CueStoreError.questionEnded }
-      guard case .answered(let answer) = end, let asked = message.asked, let choices = message.choices, choices.count > 1, answer == choices[1]
-      else { return false }
-      return try changeAllows(asked, allowed: true)
+      guard let answer, message.allowsFromNowOn(answer) else { return nil }
+      return try insertLine(answer, source: .you, pinned: true).id
     }
-  }
-
-  /// 允许清单加上或去掉一项（卡片、设置的开关与 Cue 的 `memory allow` 都经这里）；不能放行的（`CueAsk.allowable`）抛 `cannotAllow`。
-  /// 返回清单改了没有（改了调用方上传设置）。没有设置就从默认值建一行（同 `updateCueProfile`）。
-  @discardableResult
-  public func setCueAllow(_ allow: CueAllow, allowed: Bool) throws -> Bool {
-    try write { try changeAllows(allow, allowed: allowed) }
-  }
-
-  private func changeAllows(_ allow: CueAllow, allowed: Bool) throws -> Bool {
-    guard allow.ask.known?.allowable != false else { throw CueStoreError.cannotAllow }
-    let before = try cueProfile()?.allows ?? []
-    let after = allowed ? before.union([allow]) : before.subtracting([allow])
-    guard after != before else { return false }
-    _ = try editProfile { $0.allows = after }
-    return true
   }
 
   /// 任务所在的项目；没有任务为 nil。

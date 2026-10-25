@@ -13,9 +13,6 @@ public struct CueProfile: Equatable, Sendable {
   public var effort: Open<PiThinkingLevel>?
   /// 启用的时刻；nil 是没启用。
   public var enabledAt: Date?
-  /// 允许清单：哪几类要先问的事以后不用问（唯一的事实源）。卡片上的"以后……不用问"、设置里的开关与 Cue 的 `memory allow` 都写这里，
-  /// Cue 的 `tell` 带 `ask` 时查它（`CueStore.addCueMessage`）。
-  public var allows: Set<CueAllow>
   public var modifiedAt: Date
 
   /// 在值班的那台 Mac：启用了才有（停用后 `hostID` 还留着，但谁都不该再替 Cue 派活）。
@@ -35,7 +32,7 @@ public struct CueProfile: Equatable, Sendable {
 
   public init(
     name: String = CueProfile.defaultName, hostID: String? = nil, runtime: Open<AgentKind> = .known(.pi), model: String? = nil,
-    effort: Open<PiThinkingLevel>? = .known(.low), enabledAt: Date? = nil, allows: Set<CueAllow> = [], modifiedAt: Date = .now
+    effort: Open<PiThinkingLevel>? = .known(.low), enabledAt: Date? = nil, modifiedAt: Date = .now
   ) {
     self.name = name
     self.hostID = hostID
@@ -43,28 +40,21 @@ public struct CueProfile: Equatable, Sendable {
     self.model = model
     self.effort = effort
     self.enabledAt = enabledAt
-    self.allows = allows
     self.modifiedAt = modifiedAt
-  }
-
-  /// 这类事在这个项目里（`project` 为 nil 是不关联任务的事）已允许：清单里有不分项目的那一项，或这个项目的那一项。返回对上的那一项。
-  func allowing(_ ask: CueAsk, in project: UUID?) -> CueAllow? {
-    [CueAllow(ask, project: nil), project.map { CueAllow(ask, project: $0) }].compactMap(\.self).first(where: allows.contains)
   }
 }
 
 extension CueProfile: Record {
   static let table = Table.cueProfile
-  static let columns = ["id", "name", "hostID", "runtime", "model", "effort", "enabledAt", "modifiedAt", "allows"]
+  static let columns = ["id", "name", "hostID", "runtime", "model", "effort", "enabledAt", "modifiedAt"]
   var bindings: [any SQLBindable] {
-    [Self.recordID, name, hostID, runtime.rawValue, model, effort?.rawValue, enabledAt, modifiedAt, CueAllow.encode(allows)]
+    [Self.recordID, name, hostID, runtime.rawValue, model, effort?.rawValue, enabledAt, modifiedAt]
   }
   init(row: Row) {
     let name = row.text(1).trimmingCharacters(in: .whitespacesAndNewlines)
     self.init(
       name: name.isEmpty ? Self.defaultName : name, hostID: row.textOrNil(2), runtime: Open(rawValue: row.text(3)),
-      model: row.textOrNil(4), effort: row.textOrNil(5).map(Open.init(rawValue:)), enabledAt: row.dateOrNil(6),
-      allows: CueAllow.decode(row.textOrNil(8)), modifiedAt: row.date(7))
+      model: row.textOrNil(4), effort: row.textOrNil(5).map(Open.init(rawValue:)), enabledAt: row.dateOrNil(6), modifiedAt: row.date(7))
   }
 }
 

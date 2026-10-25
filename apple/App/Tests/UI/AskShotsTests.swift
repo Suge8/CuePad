@@ -10,7 +10,7 @@ struct AskShotsTests {
     let app = TestApp()
     var store: CueStore { app.services.store }
 
-    private func thread() async throws -> CueThread { try await CueThread.read(from: store, showsSteps: true) }
+    private func thread() async throws -> CueThread { try await CueThread.read(from: store) }
 
     private func send(_ names: [String], title: String) async throws -> [PiPreview] {
         let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString, directoryHint: .isDirectory)

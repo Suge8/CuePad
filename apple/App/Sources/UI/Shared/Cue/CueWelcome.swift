@@ -7,7 +7,7 @@ import SwiftUI
 ///   没有主按钮。
 /// - 说过话、后来停用了：一小张纸排在输入框正上方（"等你"卡之下，离你下一步最近），不画吉祥物、不再自我介绍，只说启用后它接着干活。
 /// 没启用时启用是唯一的主动作：选一台 Mac（能运行 Cue 的几台，`CueSettings.hosts`；按钮的样子见 `enableButton`，选不了的写为什么，
-/// `CueSettings.Host.selectable`）；菜单里每台下面写能当大脑的几家。在这台 Mac 上启用打开接入面板
+/// `CueSettings.Host.selectable`）；菜单是各入口同一份 `CueHostMenu`。在这台 Mac 上启用打开接入面板
 /// （`SetupPanel`：先检测、接入这台的 Agent，一家都没装时给装法，同一下启用），别的 Mac 直接启用，没写成的原因就地写在按钮下面（`CueSettingsModel`）。
 /// 能不能启用读 `CueGate`：这台还没和 iCloud 对过时只写在等什么、没有按钮（对得久了整张换成"正在从 iCloud 同步"，`EmptyState.waitsForSync`）。
 /// 手机上还没有哪台 Mac 写下过自己时，说先到 Mac 上打开 CuePad，主动作是把 Mac 版的下载链接（GitHub Releases，`CueSettings.macDownload`）发出去，隔空投送到 Mac 上最快。
@@ -116,14 +116,7 @@ private struct CueEnable: View {
     }
 
     private func hostMenu(_ hosts: [CueSettings.Host], title: String, surface: ControlSurface) -> some View {
-        MenuButton(
-            sections: [ChoiceMenu.Section(choices: hosts.map { host in
-                ChoiceMenu.Choice(title: host.name, subtitle: host.note.isEmpty ? nil : host.note, image: .icon(.mac), disabled: !host.selectable) {
-                    enable(on: host)
-                }
-            })],
-            accessibilityLabel: title
-        ) {
+        CueHostMenu(hosts: hosts, accessibilityLabel: title, pick: { if let host = $0 { enable(on: host) } }) {
             HStack(spacing: 6) {
                 Text(title)
                 Image(.expand).font(.footnote.weight(.semibold))

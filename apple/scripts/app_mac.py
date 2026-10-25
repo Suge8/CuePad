@@ -1,0 +1,197 @@
+"""Mac 实例：每个检出一份（app.py 的规则 2），截图、录屏、run、exec、stop 与前台看守。"""
+import fcntl
+import json
+import os
+import re
+import signal
+import subprocess
+import sys
+import time
+
+from app_env import APPLE, BUILD, FRONT, FRONT_POLL, HOLD, READY, REC_SECONDS, RUN_TTL, SLOT, SOCKETS, WINDOW, die, isolated_env
+from app_proc import quit_mac, wait_ready
+
+
+def holder_alive(note):
+    pid = note.get("holder")
+    command = subprocess.run(["ps", "-o", "command=", "-p", str(pid)], capture_output=True, text=True).stdout if pid else ""
+    return "app.py" in command
+
+
+def read_note(slot):
+    slot.seek(0)
+    try:
+        return json.loads(slot.read() or "{}")
+    except ValueError:
+        return {}
+
+
+def take_slot():
+    """占住本检出那一份。占着的只会是 run 留下的看守（本检出的命令由 _lock.sh 排队），换掉它。"""
+    os.makedirs(os.path.dirname(SLOT), exist_ok=True)
+    slot = open(SLOT, "a+")
+    try:
+        fcntl.flock(slot, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return slot
+    except BlockingIOError:
+        pass
+    note = read_note(slot)  # 锁被占着，记录就是占着的那个写的
+    if holder_alive(note):
+        os.kill(note["holder"], signal.SIGTERM)
+    fcntl.flock(slot, fcntl.LOCK_EX)
+    return slot
+
+
+def write_note(slot, **note):
+    slot.truncate(0)
+    slot.write(json.dumps(note))
+    slot.flush()
+
+
+class Mac:
+    """持着本检出那一份的看守：start 起实例，quit 收掉（with 块结束时一定收）。"""
+
+    def __init__(self, app, library, what):
+        if not BUILD.fullmatch(app):
+            die(f"只起 apple/.derived* 里的构建，不起 {app}")
+        self.app, self.library, self.what, self.proc = app, os.path.abspath(library), what, None
+        self.ready, self.log = READY, re.sub(r"/Build/Products/.*", "/app-mac.log", app)
+
+    def __enter__(self):
+        self.slot = take_slot()
+        return self
+
+    def start(self, args):
+        if "-CuePadWindowSize" not in args:
+            args = [*args, "-CuePadWindowSize", WINDOW]
+        os.makedirs(SOCKETS, mode=0o700, exist_ok=True)
+        if os.path.exists(self.ready):
+            os.remove(self.ready)
+        self.proc = subprocess.Popen([f"{self.app}/Contents/MacOS/CuePad", *args], env=dict(isolated_env(self.library), CUEPAD_SHOT_READY=self.ready, CUEPAD_FRONT_REQUEST=FRONT),
+                                     stdin=subprocess.DEVNULL, stdout=open(self.log, "w"), stderr=subprocess.STDOUT)
+        front_keeper(self.proc.pid)
+        write_note(self.slot, holder=os.getpid(), app=self.proc.pid, what=self.what)
+        return wait_ready(self.ready, self.proc.pid, self.log)
+
+    def quit(self):
+        if self.proc:
+            quit_mac(self.proc)
+
+    def __exit__(self, *_):
+        self.quit()
+        self.slot.truncate(0)
+        self.slot.close()
+
+
+def wincap():
+    source, binary = f"{APPLE}/scripts/wincap.swift", f"{APPLE}/.derived/wincap"
+    if not os.path.exists(binary) or os.path.getmtime(source) > os.path.getmtime(binary):
+        os.makedirs(os.path.dirname(binary), exist_ok=True)
+        subprocess.run(["swiftc", "-O", source, "-o", binary], check=True)
+    return binary
+
+
+def mac(cmd, app, library, out, args):
+    if cmd == "run":
+        return run_mac(app, library, args)
+    with Mac(app, library, cmd) as m:
+        signal.alarm(HOLD + int(REC_SECONDS if cmd == "rec" else 0))  # 从拿到那一份算起，排队等别人的不算
+        size = m.start(args)
+        if len(size) != 2:
+            die("就绪文件里没有窗口尺寸：画面没有可拍的普通窗口")
+        capture = ["rec", str(m.proc.pid), str(REC_SECONDS)] if cmd == "rec" else ["shot", str(m.proc.pid)]
+        os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
+        subprocess.run([wincap(), *capture, *size, out], check=True)
+
+
+def run_mac(app, library, args):
+    """起着给 bcu 操作：看守进程脱离 xc.sh 在后台守到 App 退出、RUN_TTL 或 stop，这里等就绪后打印 PID 就返回。"""
+    report_r, report_w = os.pipe()
+    if os.fork():
+        os.close(report_w)
+        pid = os.read(report_r, 32).decode()
+        if not pid:
+            sys.exit(1)
+        print(pid)
+        return
+    os.close(report_r)
+    os.setsid()
+    with Mac(app, library, "run") as m:
+        signal.alarm(RUN_TTL)
+        m.start(args)
+        os.write(report_w, str(m.proc.pid).encode())
+        os.close(report_w)
+        # 不再占着调用方的输出：否则调用方要等这个后台进程结束才拿到结果
+        null = os.open(os.devnull, os.O_RDWR)
+        for fd in (0, 1, 2):
+            os.dup2(null, fd)
+        m.proc.wait()
+
+
+def exec_mac(app, library, args):
+    """量完自己退出的 bench（perf-mac.sh、perf-idle.sh）：占住本检出那一份后 exec 成 CuePad。锁的文件描述符传给 CuePad，
+    随它退出释放；PID 不变，调用方的 $! 就是 CuePad，由调用方按它结束，不留看守进程。"""
+    if not BUILD.fullmatch(app):
+        die(f"只起 apple/.derived* 里的构建，不起 {app}")
+    slot = take_slot()
+    # execAt：rusage.py 的"启动到就绪"从这里算，不算 python 启动与等本检出旧实例退出（进程的启动时刻是 fork 那一刻，exec 不重置）。
+    # time.monotonic_ns 在 macOS 上就是 mach_absolute_time 换成纳秒，与内核记账同一个钟
+    write_note(slot, holder=os.getpid(), app=os.getpid(), what="bench", execAt=time.monotonic_ns())
+    os.set_inheritable(slot.fileno(), True)
+    os.makedirs(SOCKETS, mode=0o700, exist_ok=True)
+    exe = f"{app}/Contents/MacOS/CuePad"
+    env = isolated_env(os.path.abspath(library))
+    env.setdefault("CUEPAD_SHOT_READY", READY)
+    env["CUEPAD_FRONT_REQUEST"] = FRONT
+    front_keeper(os.getpid())  # exec 不换 PID：看守的就是接下来的 CuePad
+    os.execve(exe, [exe, *args], env)
+
+
+def front_keeper(pid):
+    """后台看守 pid 那个实例：它写了 FRONT（借着前台却没到前台）就经系统事件把它拉到前台，它退出就走。
+    只看文件不问系统谁在前台：前台的切换由实例自己报（到了前台就删、被抢走再写），量的时候这里不多花一次查询。"""
+    if os.path.exists(FRONT):
+        os.remove(FRONT)
+    if os.fork():
+        return
+    os.setsid()
+    null = os.open(os.devnull, os.O_RDWR)
+    for fd in (0, 1, 2):
+        os.dup2(null, fd)
+    os.closerange(3, 1024)  # 不带着本检出那一份的锁与调用方的管道
+    pull = f'tell application "System Events" to set frontmost of (first process whose unix id is {pid}) to true'
+    while True:
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            break
+        if os.path.exists(FRONT):
+            subprocess.run(["osascript", "-e", pull], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        time.sleep(FRONT_POLL)
+    if os.path.exists(FRONT):
+        os.remove(FRONT)
+    os._exit(0)
+
+
+def stop():
+    os.makedirs(os.path.dirname(SLOT), exist_ok=True)
+    with open(SLOT, "a+") as slot:
+        try:
+            fcntl.flock(slot, fcntl.LOCK_EX | fcntl.LOCK_NB)  # 拿得到就是没有实例，留下的记录是旧的
+            print("本检出没有在跑的 Mac 实例")
+            return
+        except BlockingIOError:
+            pass
+        note = read_note(slot)
+        if not holder_alive(note):
+            print("本检出的 Mac 实例是 perf 在量，不是 run 起的，等它量完")
+            return
+        os.kill(note["holder"], signal.SIGTERM)
+        fcntl.flock(slot, fcntl.LOCK_EX)  # 看守收完实例才放锁
+    print(f"已结束 {note['app']}")
+
+
+def preflight():
+    stage = subprocess.run(["defaults", "read", "com.apple.WindowManager", "GloballyEnabled"], capture_output=True, text=True).stdout
+    if stage.strip() == "1":
+        die("台前调度开着：后台窗口被缩小显示，截图、录屏的尺寸不对。请用户在控制中心关掉台前调度再拍")

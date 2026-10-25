@@ -35,7 +35,7 @@ struct AwaitingReplyTests {
             sessionID: "deploy", state: .waitingForUser, title: "deploy", question: PiQuestion(promptID: "p", kind: .confirm, text: "部署到生产吗？"))
         _ = try await store.leaveToYou("deploy")  // 留给你的提问照样是拍板
 
-        func thread() async throws -> CueThread { try await CueThread.read(from: store, showsSteps: false) }
+        func thread() async throws -> CueThread { try await CueThread.read(from: store) }
         func now() async throws -> CueNow { CueNow(try await CueDigest.read(from: store), at: .always(), local: CueNow.Local(waiting: nil, here: nil)) }
 
         var page = try await thread()

@@ -20,11 +20,11 @@ struct BoardAskTests {
         let board = try await TaskBoard.read(from: store)
         #expect(board.held.map(\.title) == ["发言轮次乱序", "删掉 scripts/billing-legacy 目录"])
         #expect(board.held.map(\.count) == [2, 1] && board.count(.waiting) == 3)
-        #expect(try await CueThread.read(from: store, showsSteps: false, asking: workspace.cueAsking).waiting.first?.message?.id == push.id)
+        #expect(try await CueThread.read(from: store, asking: workspace.cueAsking).waiting.first?.message?.id == push.id)
 
         workspace.askOnCuePage(loose.id)
         #expect(workspace.top == .cue)
-        let thread = try await CueThread.read(from: store, showsSteps: false, asking: workspace.cueAsking)
+        let thread = try await CueThread.read(from: store, asking: workspace.cueAsking)
         #expect(thread.waiting.first?.message?.id == loose.id && thread.waiting.count == 3)
     }
 }

@@ -1,5 +1,6 @@
 #if os(macOS)
 import CuePi
+import CueStore
 import Foundation
 import Observation
 
@@ -14,22 +15,24 @@ protocol AppUpdater: AnyObject {
 
 /// 界面与菜单用的自动更新入口。没有更新器（不是正式版签名：本机构建与测试不去读真实的更新源与偏好）时全部无操作。
 ///
-/// 装更新要重启 CuePad，会结束它在后台托管的会话（各家的接入随 App 退出收掉托管的进程，新版也可能按扩展协议收掉旧的）。所以更新要重启时，
-/// 只要还有托管的会话在干活或等你确认（`PiWorkState.hasPendingWork`，含等子代理），就先不重启，等它们都空下来再自动装；
-/// 等着时可以现在就装。一条规则管所有家，看的是桥上的会话，不看是哪家、扩展协议是几。
+/// 装更新要重启 CuePad。托管的会话有的撑得过重启（`AgentRuntime.hostedSessionsOutliveApp`：托管的 Pi 脱离 App，新版经桥认回），
+/// 有的随 App 退出被收掉（靠管道连着 App 的 Claude Code、Codex，CuePad 拉起的 OpenCode 服务）。所以更新要重启时，只要还有撑不过的
+/// 托管会话在干活或等你确认（`PiWorkState.hasPendingWork`，含等子代理），就先不重启，等它们都空下来再自动装；等着时可以现在就装。
 @Observable
 final class UpdateService {
     @ObservationIgnored private let updater: (any AppUpdater)?
     @ObservationIgnored private let bridge: PiBridge
+    @ObservationIgnored private let runtimes: [AgentKind: any AgentRuntime]
     /// 推迟中的更新接着装下去的办法（更新器交来的）；没在等时为 nil。
     @ObservationIgnored private var install: (() -> Void)?
     @ObservationIgnored private var watcher: Task<Void, Never>?
     /// 推迟中的更新还在等几个后台会话做完；没在等时为 nil。
     private(set) var waitingFor: Int?
 
-    init(updater: (any AppUpdater)?, bridge: PiBridge) {
+    init(updater: (any AppUpdater)?, bridge: PiBridge, runtimes: [AgentKind: any AgentRuntime]) {
         self.updater = updater
         self.bridge = bridge
+        self.runtimes = runtimes
         updater?.postponeRelaunch = { [weak self] install in self?.postpone(install) ?? false }
     }
 
@@ -62,7 +65,10 @@ final class UpdateService {
         install()
     }
 
-    private var busy: Int { bridge.sessions.count { $0.hosted && $0.state.hasPendingWork } }
+    /// 重启会打断的：撑不过重启的托管会话里还有活的
+    private var busy: Int {
+        bridge.sessions.count { $0.hosted && $0.state.hasPendingWork && runtimes[$0.agent]?.hostedSessionsOutliveApp != true }
+    }
 
     private func postpone(_ install: @escaping () -> Void) -> Bool {
         let busy = busy

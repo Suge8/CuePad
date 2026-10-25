@@ -141,24 +141,26 @@ extension PiChatMessage {
       case edit, command, read, search, other
       /// 中途说的一段话（调工具前后说的"先看看…""测试挂了，查一下"；Cue 用 tell 对你说的）：`target` 是那段话
       case said
-      /// Cue 的动作：对会话说话、开工、建任务、收下、停下会话、问你（`target` 写哪件任务与说了什么，`task` 是那件任务）
-      case talk, start, add, done, stop, ask
+      /// Cue 的动作：对会话说话、开工、建任务、做完、停下会话、问你、把会话留给你回（`CueLeft`）；碰到的那一处在 `Item.name` 等几项上
+      case talk, start, add, done, stop, ask, leave
 
       /// 落了结果的一步（改文件与 Cue 的动作）：清单里总列上，标题行逐类写个数。
       public var acts: Bool {
         switch self {
-        case .edit, .talk, .start, .add, .done, .stop, .ask: true
+        case .edit, .talk, .start, .add, .done, .stop, .ask, .leave: true
         case .command, .read, .search, .other, .said: false
         }
       }
 
       /// 只是看了看的一步（读、搜、跑命令）；其余都算动过手（Cue 留给你回、记一笔也是）。
+      /// 更新的版本加的种类旧版本解不出：整份经过读成 nil（`StoredJSON`），那一轮只是不显示经过，消息照读。
       public var looks: Bool { self == .read || self == .search || self == .command }
     }
 
     public struct Item: Codable, Equatable, Sendable {
       public var kind: Kind
-      /// 文件路径（相对工作目录）、命令的第一个非空行、搜索的模式或工具名；说的话是那段话（至多 `saidLimit` 个字符）
+      /// 文件路径（相对工作目录）、命令的第一个非空行、搜索的模式或工具名；说的话是那段话（至多 `saidLimit` 个字符）。
+      /// Cue 的一步是它自己的说法，只进它的上下文（`CueActivity.item`），界面不读
       public var target: String
       public var failed: Bool
       /// 改文件：新增、删除的行数；算不出为 nil
@@ -166,11 +168,14 @@ extension PiChatMessage {
       public var removed: Int?
       /// Cue 动到的任务：清单里点这一条打开它
       public var task: UUID?
-      /// Cue 对你说的那条（`CueMessage`）：清单里只留一行，点它跳回对话里的原处
-      public var message: UUID?
+      /// Cue 碰到的那一处叫什么（任务的标题、会话名，认不出时照它写的引用）；没指哪一处（看板、记忆）为 nil。Cue 页这一轮的经过读它（`CueActivity.touches`）
+      public var name: String?
+      /// Cue 碰到的会话（`PiSessionState.id`）：点了进会话
+      public var session: UUID?
 
       public init(
-        kind: Kind, target: String, failed: Bool = false, added: Int? = nil, removed: Int? = nil, task: UUID? = nil, message: UUID? = nil
+        kind: Kind, target: String, failed: Bool = false, added: Int? = nil, removed: Int? = nil, task: UUID? = nil, name: String? = nil,
+        session: UUID? = nil
       ) {
         self.kind = kind
         self.target = target
@@ -178,7 +183,8 @@ extension PiChatMessage {
         self.added = added
         self.removed = removed
         self.task = task
-        self.message = message
+        self.name = name
+        self.session = session
       }
     }
 

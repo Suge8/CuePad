@@ -103,7 +103,7 @@ struct AgentRow: View {
 enum AgentLine {
     static func of(_ kind: AgentKind, _ status: AgentStatus?, writable: Bool) -> (StatusTone, Dotted?) {
         guard let status else { return (.calm, "检测中…") }
-        guard writable else { return (.calm, Dotted("正式版在用", "先用 \(kind.homeVariable) 指定目录")) }
+        guard writable else { return (.calm, Dotted("正式版在用，先用 \(kind.homeVariable) 指定目录")) }
         switch (status.presence, status.files) {
         case (_, .foreign(let path)): return (.failure, "\(path) 是别人的同名文件，没有改动")
         case (.tooOld(let version), _) where kind == .opencode: return (.notice, "需要 OpenCode 2，现在是 \(version)")

@@ -55,7 +55,7 @@ struct PageMenuSlot: View {
                 if workspace.services.cue.keeper != nil {
                     Toggle("运行情况", icon: .session, isOn: Bindable(workspace.cue).showsRun)
                 }
-                Button("\(workspace.cue.name) 的设置…", icon: .settings) { SettingsPane.open(.cue) }
+                Button("\(workspace.cue.name) 的设置…", icon: .settings) { SettingsPane.open(.general) }
             case .progress:
                 Button("新任务", icon: .add) { workspace.progressPane = .board; workspace.addsTask = true }
                 Button("新会话", icon: .add) { workspace.newSession() }

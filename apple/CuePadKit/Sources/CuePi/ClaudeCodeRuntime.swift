@@ -81,6 +81,9 @@ public final class ClaudeCodeRuntime: AgentRuntime {
     }
 
     /// 托管的进程关了输入还不走就 SIGTERM、再不走 SIGKILL（`ChildProcess.stop`）；终端会话挂着的钩子放掉。
+    /// 托管的进程靠管道连着 App，`stop()` 收掉它们。
+    public var hostedSessionsOutliveApp: Bool { false }
+
     public func stop() -> @concurrent @Sendable () async -> Void {
         for terminal in terminals.values { terminal.close() }
         for watcher in exitWatchers.values { watcher.cancel() }

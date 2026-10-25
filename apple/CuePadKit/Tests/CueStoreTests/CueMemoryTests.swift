@@ -3,7 +3,7 @@ import Foundation
 import Testing
 
 /// Cue 的记忆跨设备合并：摘要覆盖的行在别处被忘掉，摘要作废。
-@Suite struct CueKitReadsTests {
+@Suite struct CueMemoryTests {
   let fixture = try! Fixture()
   var store: CueStore { fixture.store }
 

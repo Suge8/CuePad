@@ -13,6 +13,16 @@ extension EditorHarness {
 
     var stored: String { textView.storedText }
 
+    /// 编辑器在屏幕上实际展示的各段落（TextKit 布局出来的文本元素，带展示属性）。
+    func displayed() -> [NSAttributedString] {
+        var paragraphs: [NSAttributedString] = []
+        textView.textLayoutManager!.enumerateTextLayoutFragments(from: nil, options: [.ensuresLayout]) { fragment in
+            if let paragraph = fragment.textElement as? NSTextParagraph { paragraphs.append(paragraph.attributedString) }
+            return true
+        }
+        return paragraphs
+    }
+
     /// 条件等待：让出主线程直到条件成立，条件一成立马上返回。上限只是"确实不会来了"的兜底（同 CueTestSupport 的 conditionTimeout）。
     func wait(timeout: TimeInterval = 5, until condition: () -> Bool) async -> Bool {
         let deadline = Date().addingTimeInterval(timeout)

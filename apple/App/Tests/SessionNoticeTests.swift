@@ -28,14 +28,14 @@ struct SessionNoticeTests {
         try await recorder.update(sessionID: "s1", state: .settled)
         let settled = try await live()
         let done = tracker.alerts(for: settled, cue: nil, since: .distantPast)
-        #expect(done.map(\.kind) == [.settled] && done.first?.text.visible == "homepage · 完成了")
+        #expect(done.map(\.kind) == [.settled] && done.first?.text.visible == "homepage：完成了")
         #expect(done.first?.session == settled.first?.id)
         #expect(tracker.alerts(for: settled, cue: nil, since: .distantPast).isEmpty)
 
         let question = PiQuestion(promptID: "p", kind: .select, text: "要覆盖 feed.xml 吗？\n会丢掉手写的条目", options: ["覆盖", "取消"])
         try await recorder.update(sessionID: "s1", state: .waitingForUser, question: question)
         let waiting = try #require(tracker.alerts(for: try await live(), cue: nil, since: .distantPast).first)
-        #expect(waiting.kind == .waitingForUser && waiting.text.visible == "homepage 在等你 · 要覆盖 feed.xml 吗？")
+        #expect(waiting.kind == .waitingForUser && waiting.text.visible == "homepage 在等你：要覆盖 feed.xml 吗？")
     }
 
     /// App 不在前台时发生的转换（冷启动、从后台回来后才同步到）不在前台补报：那一下系统推送已经提示过了。

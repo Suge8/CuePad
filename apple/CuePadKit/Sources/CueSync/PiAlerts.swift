@@ -72,7 +72,7 @@ public enum CueAlertText {
       (message.encryptedValues[key] as? String).flatMap { try? JSONDecoder().decode(type, from: Data($0.utf8)) }
     }
     let asking = CueAsking(
-      stored: (message["ask"] as? String).flatMap(CueAllow.init(stored:))?.ask.known, action: message.encryptedValues["askAction"] as? String,
+      stored: (message["ask"] as? String).flatMap(CueAsked.init(stored:))?.ask.known, action: message.encryptedValues["askAction"] as? String,
       rule: message.encryptedValues["askRule"] as? String)
     return CueAlert.content(
       name: profile?.encryptedValues["name"] as? String, text: text, asking: asking, choices: decoded("choices", as: [String].self),

@@ -13,8 +13,6 @@ enum CueBubble {
     static let padding = EdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16)
     #endif
     static let joinedGap: CGFloat = 4
-    /// 气泡旁的旁注（经过、醒来记录，`NoteLine`、`CueNoteLog`）离那一边的距离：图标对着气泡里的字。
-    static let noteInset: CGFloat = padding.leading
     /// Cue 的话最宽占所在一栏的比例：回答常带列表与代码，比你的话（`UserBubble.widthFraction`）宽（手机上窄，再宽一点）。
     #if os(macOS)
     static let cueWidth: CGFloat = 0.86

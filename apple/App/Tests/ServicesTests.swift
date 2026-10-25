@@ -38,9 +38,9 @@ struct PiHistoryPersistenceTests {
 
     private let header = #"{"type":"session","version":3,"id":"sess-1","timestamp":"2026-01-01T00:00:00.000Z","cwd":"/work/x"}"#
     private let firstPrompt = #"{"type":"message","id":"m1","parentId":null,"timestamp":"2026-01-01T00:00:01.000Z","message":{"role":"user","content":"fix the build","timestamp":1}}"#
-    private let reply = #"{"type":"message","id":"m2","parentId":"m1","timestamp":"2026-01-01T00:00:02.000Z","message":{"role":"assistant","stopReason":"stop","content":[{"type":"text","text":"done"}],"timestamp":2}}"#
 
-    @Test func 索引结果与检查点写入本机会话表_重启后可从中断处继续() async throws {
+    /// 续读从检查点接着读（读多少由 CuePiTests 的 HistoryTests 证明）：这里只管检查点落进本机会话表、重启后按文件路径取得回来。
+    @Test func 索引结果与检查点写入本机会话表_重启后按文件取得回检查点() async throws {
         let rig = TestApp()
         let file = try sessionFile(in: rig, lines: [header, firstPrompt])
         let events = AsyncStream<PiHistoryEvent> { continuation in
@@ -56,20 +56,7 @@ struct PiHistoryPersistenceTests {
         #expect(rows[0].cwd == "/work/x")
         #expect(rows[0].path == file.path)
         #expect(rows[0].title == "fix the build")
-
-        // 重启后从落盘的检查点继续：只读新增的字节
-        let handle = try FileHandle(forWritingTo: file)
-        try handle.seekToEnd()
-        try handle.write(contentsOf: Data((reply + "\n").utf8))
-        try handle.close()
-        let restarted = rig.relaunch()
-        // 索引器按文件路径取检查点：重启后仍能对应到会话
-        #expect(try await restarted.historyStore.start(for: file)?.checkpoint != nil)
-        let data = try #require(try await restarted.store.piCheckpoint(of: "sess-1"))
-        let checkpoint = try JSONDecoder().decode(PiHistoryCheckpoint.self, from: data)
-        let resumed = try PiHistory.index(file: file, agent: .pi, from: checkpoint, files: rig.services.store.files)
-        #expect(resumed.bytesRead == reply.utf8.count + 1)
-        #expect(resumed.history.displayName == "fix the build")
+        #expect(try await rig.relaunch().historyStore.start(for: file)?.checkpoint != nil)
     }
 
     /// 历史与 Pi 自己的会话列表一致：回填没看到的文件（已删除，或子代理会话这类不在会话列表里的）不再留在历史里。
