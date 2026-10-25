@@ -73,9 +73,9 @@ def problems(key, entry):
 
 
 def keep_source(key, entry):
-    """英文分了复数的键要有中文那一份：中文的表里缺这个键时，系统回落到英文的复数，中文界面就显示英文。"""
-    locs = entry.get("localizations", {})
-    if "variations" in locs.get("en", {}) and "zh-Hans" not in locs:
+    """每条都写上中文那一份：开发语言是英文，中文那边缺了整张表（演示内容、复数）时系统整张回落到英文，中文界面就显示英文。"""
+    locs = entry.setdefault("localizations", {})
+    if HAN.search(key) and "zh-Hans" not in locs:
         locs["zh-Hans"] = {"stringUnit": {"state": "translated", "value": key}}
 
 

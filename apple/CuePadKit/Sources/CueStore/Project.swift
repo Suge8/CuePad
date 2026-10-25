@@ -25,6 +25,8 @@ public struct Project: Identifiable, Equatable, Sendable {
   /// 没改过名时读出来按当前语言显示（`shownDefaultName`），写回时换回它：中英文两台设备同步不会互相改名。
   static let defaultName = "默认"
   static var shownDefaultName: String { String(localized: "默认") }
+  /// 库里存的名字：给 Cue 看的也是它（Cue 的工具在 `cuepad mcp` 进程里按库里的名字认项目，那里查不到界面的译名）。
+  public var storedName: String { isDefault && name == Self.shownDefaultName ? Self.defaultName : name }
 }
 
 /// 项目的灵感数（散放在列表里的，不含任务、挂在任务下的与空白灵感）。
@@ -37,7 +39,7 @@ extension Project: Record {
   static let table = Table.projects
   static let columns = ["id", "name", "icon", "color", "isPinned", "deletedAt", "createdAt", "modifiedAt", "intro"]
   var bindings: [any SQLBindable] {
-    [id, isDefault && name == Self.shownDefaultName ? Self.defaultName : name, icon, color, isPinned, deletedAt, createdAt, modifiedAt, intro]
+    [id, storedName, icon, color, isPinned, deletedAt, createdAt, modifiedAt, intro]
   }
   init(row: Row) {
     let id = row.uuid(0), name = row.text(1)

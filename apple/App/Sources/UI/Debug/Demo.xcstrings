@@ -8,6 +8,12 @@
             "state" : "translated",
             "value" : "# Pricing Section Changes\n\n## What changed\n- On narrow screens the three price cards now scroll sideways instead of squeezing into two rows\n- The annual discount badge moved to the card’s top right\n- The Pro tier got an outline to mark it as recommended\n\n## Not done yet\n- Dark mode colors"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "# 定价区改动说明\n\n## 改了什么\n- 三档价格卡在窄屏下改成横向滑动，不再挤成两行\n- 年付折扣标挪到卡片右上角\n- 专业档加了描边，作为推荐\n\n## 还没做\n- 深色模式的配色"
+          }
         }
       }
     },
@@ -17,6 +23,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "# Login Page Review\n\nAll changes are under `login/`; **the API is untouched**.\n\n## Done\n- Error message moved from an alert to a line under the field\n- Password field got a show/hide toggle\n\n## Needs your call\n1. Should “Remember me” be checked by default?\n2. Should third-party sign-in go at the bottom or the top?\n\n| Item | Before | Now |\n|:---|---:|---:|\n| Tappable elements above the fold | 9 | 5 |\n| Sign-in success rate (beta) | 91% | 94% |"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "# 登录页评审结论\n\n改动都在 `login/` 下，**没有动接口**。\n\n## 已处理\n- 错误提示从弹窗改成输入框下方的一行字\n- 密码框加了显示/隐藏\n\n## 要你定\n1. 记住我默认勾选吗？\n2. 第三方登录放在页面底部还是顶部？\n\n| 项 | 之前 | 现在 |\n|:---|---:|---:|\n| 首屏可点元素 | 9 | 5 |\n| 登录成功率（内测） | 91% | 94% |"
           }
         }
       }
@@ -28,6 +40,12 @@
             "state" : "translated",
             "value" : "## Comparison\n\n| Option | Latency (p95) | Memory | Notes |\n|:---|---:|:---:|---|\n| `queue.sort` by first join | 12 ms | 38 MB | Smallest change; reconnecting people don’t cut in line |\n| Sort by rejoinAt and dedupe | 9 ms | 41 MB | Needs a data migration; **not recommended** this week |\n| LinkedHashMap + lazy eviction of stale participants | 7 ms | 52 MB | Fastest but most complex; hard to debug |\n\n> Note: p95 was measured in an 8-person room; 16+ is untested.\n\n### Next steps\n1. Merge the first option\n   - Add 3 reconnect cases\n   - Run the stress test\n2. Then evaluate the third\n\nSee the [scheduler design notes](https://example.com/scheduler).\n\n```ts\nexport function sortQueue(queue: Participant[]): Participant[] { return [...queue].sort((a, b) => a.firstJoinedAt - b.firstJoinedAt) }\n```"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "## 对比结果\n\n| 方案 | 延迟 (p95) | 内存 | 说明 |\n|:---|---:|:---:|---|\n| `queue.sort` 按首次加入 | 12 ms | 38 MB | 改动最小，重连的人不会插队 |\n| 按 rejoinAt 排序并去重 | 9 ms | 41 MB | 需要迁移旧数据；**不建议**本周上 |\n| LinkedHashMap + lazy eviction of stale participants | 7 ms | 52 MB | 最快，但最复杂，出错时很难查 |\n\n> 注意：p95 是在 8 人房间里测的，16 人以上还没测。\n\n### 下一步\n1. 先合第一个方案\n   - 补 3 个重连用例\n   - 跑一遍压测\n2. 再评估第三个\n\n详见 [调度设计说明](https://example.com/scheduler)。\n\n```ts\nexport function sortQueue(queue: Participant[]): Participant[] { return [...queue].sort((a, b) => a.firstJoinedAt - b.firstJoinedAt) }\n```"
+          }
         }
       }
     },
@@ -37,6 +55,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Joined %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 加入"
           }
         }
       }
@@ -48,6 +72,12 @@
             "state" : "translated",
             "value" : "- Item %lld: "
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "- 第 %lld 项："
+          }
         }
       }
     },
@@ -57,6 +87,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "1.4.2 is built on the staging branch. Deploy to staging?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1.4.2 在预发分支上打好包了，要部署到预发吗？"
           }
         }
       }
@@ -68,6 +104,12 @@
             "state" : "translated",
             "value" : "**2 of 12 cases failed**:\n\n1. In rooms of 5+, the 6th person gets sorted to the front. The queue sorts by join time, but anyone who reconnects gets a new timestamp.\n2. The login callback goes through the old gateway and doesn’t retry after a timeout.\n\nI suggest fixing the first by sorting on first-join time, in `scheduler/queue.ts`:\n\n```ts\nqueue.sort((a, b) => a.firstJoinedAt - b.firstJoinedAt)\n```\n\nShall I start with the first one?"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "12 个用例里有 **2 个失败**：\n\n1. 发言轮次在 5 人以上时，第 6 位被排到了最前——队列按加入时间排序，但重连的人会拿到新的时间戳。\n2. 登录回调走了旧网关，超时后没有重试。\n\n第一个建议改成按首次加入时间排序，改动在 `scheduler/queue.ts`：\n\n```ts\nqueue.sort((a, b) => a.firstJoinedAt - b.firstJoinedAt)\n```\n\n要我先改第一个吗？"
+          }
         }
       }
     },
@@ -77,6 +119,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "4 / 4 passed"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "4 / 4 通过"
           }
         }
       }
@@ -88,6 +136,12 @@
             "state" : "translated",
             "value" : "5 hours"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "5 小时"
+          }
         }
       }
     },
@@ -97,6 +151,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "6 people · by first join"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "6 人 · 按首次加入时间排"
           }
         }
       }
@@ -108,6 +168,12 @@
             "state" : "translated",
             "value" : "Stress test of six people reconnecting at once"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "6 人同时重连的压测"
+          }
         }
       }
     },
@@ -117,6 +183,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Six people reconnecting at once keep their order"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "6 人同时重连顺序不变"
           }
         }
       }
@@ -128,6 +200,12 @@
             "state" : "translated",
             "value" : "<name>"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "<名字>"
+          }
         }
       }
     },
@@ -137,6 +215,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "<level>"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "<强度>"
           }
         }
       }
@@ -148,6 +232,12 @@
             "state" : "translated",
             "value" : "<provider/model>"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "<提供方/模型>"
+          }
         }
       }
     },
@@ -157,6 +247,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "The CuePad legacy-import session errored: the model rejected the request (prompt too long). Will pick it up when you’re back."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CuePad 导入旧数据的会话出错了：模型拒绝了请求（prompt 太长），等你回来再说"
           }
         }
       }
@@ -168,6 +264,12 @@
             "state" : "translated",
             "value" : "The CuePad legacy-import session errored again: prompt too long. Will split it when you’re back"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CuePad 导入旧数据的会话又出错了：prompt 太长，等你回来再拆"
+          }
         }
       }
     },
@@ -177,6 +279,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Only run CuePad releases from a clean checkout; ask before publishing"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CuePad 的发布只在干净检出里跑 release，对外发布要先问"
           }
         }
       }
@@ -188,6 +296,12 @@
             "state" : "translated",
             "value" : "Are the README screenshots done yet?"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "README 截图换完了吗？"
+          }
         }
       }
     },
@@ -197,6 +311,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Replace README screenshots with the Swift version"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "README 截图换成 Swift 版"
           }
         }
       }
@@ -208,6 +328,12 @@
             "state" : "translated",
             "value" : "README screenshot (light)"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "README 截图（浅色）"
+          }
         }
       }
     },
@@ -217,6 +343,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "README uses the new screenshots"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "README 换成新截图"
           }
         }
       }
@@ -228,6 +360,12 @@
             "state" : "translated",
             "value" : "The README screenshots are yours too. Redo them to match the Swift version; here’s a reference"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "README 的截图也交给你，换成 Swift 版的样子，参考这张"
+          }
         }
       }
     },
@@ -237,6 +375,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Replace the README screenshots with the Swift version"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "README 的截图换成 Swift 版"
           }
         }
       }
@@ -248,6 +392,12 @@
             "state" : "translated",
             "value" : "The dark README screenshot is added too; it’s on the task with the light one."
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "README 的深色截图也补上了，和浅色那张一起在任务里。"
+          }
         }
       }
     },
@@ -258,6 +408,12 @@
             "state" : "translated",
             "value" : "Old README screenshots all replaced"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "README 里的旧截图都换掉了"
+          }
         }
       }
     },
@@ -267,6 +423,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Todo\n\n- Swap screenshots for the Swift version\n- Renew the domain\n- Update the landing page"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Todo\n\n- 截图换成 Swift 版\n- 续费域名\n- 更新落地页"
           }
         }
       }
@@ -294,6 +456,12 @@
             "state" : "translated",
             "value" : "[message]"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "[说明]"
+          }
         }
       }
     },
@@ -303,6 +471,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "The atlas session uses Claude; everything else uses the default model"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "atlas 会话用 Claude，别的用默认模型"
           }
         }
       }
@@ -314,6 +488,12 @@
             "state" : "translated",
             "value" : "iCloud account unavailable"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iCloud 账号不可用"
+          }
         }
       }
     },
@@ -323,6 +503,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "scheduler · staging-2"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "scheduler · 预发 staging-2"
           }
         }
       }
@@ -334,6 +520,12 @@
             "state" : "translated",
             "value" : "All scheduler tests pass; had it move on to the 3 reconnect cases"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "scheduler 测试全过了，让它接着补 3 个重连用例"
+          }
         }
       }
     },
@@ -343,6 +535,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "staging.roundtable.app · Today 10:12"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "staging.roundtable.app · 今天 10:12"
           }
         }
       }
@@ -370,6 +568,12 @@
             "state" : "translated",
             "value" : "| Case | Result | Time | Notes |"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "| 用例 | 结果 | 耗时 | 说明 |"
+          }
         }
       }
     },
@@ -379,6 +583,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "• Keep the original turn order after reconnecting"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "• 重连后保留原来的轮次"
           }
         }
       }
@@ -390,6 +600,12 @@
             "state" : "translated",
             "value" : "The Design of Everyday Things, chapter 2\n\nThe difference between affordances and signifiers."
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "《设计心理学》第二章\n\n示能与意符的区别。"
+          }
         }
       }
     },
@@ -399,6 +615,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "“Mac Studio” is off"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "「Mac Studio」没开"
           }
         }
       }
@@ -410,6 +632,12 @@
             "state" : "translated",
             "value" : "“Replace README screenshots with the Swift version” is done"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "「README 截图换成 Swift 版」做完了"
+          }
         }
       }
     },
@@ -419,6 +647,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "“notes” left for you to reply"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "「notes」留给你回"
           }
         }
       }
@@ -430,6 +664,12 @@
             "state" : "translated",
             "value" : "Three-tier price comparison table"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "三档价格对比表"
+          }
         }
       }
     },
@@ -439,6 +679,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "In the last run, **2 of 12 cases failed**:\n\n1. In rooms of 5+, the 6th person was sorted to the front. The queue sorts by join time, but anyone who reconnects gets a new timestamp.\n2. The login callback goes through the old gateway and doesn’t retry after a timeout.\n\nI suggest fixing the first by sorting on first-join time, in `scheduler/queue.ts`:\n\n```ts\nqueue.sort((a, b) => a.firstJoinedAt - b.firstJoinedAt)\n```\n\nThe second needs the callback URL switched to the unified gateway.\n\nI also glanced at coverage: the scheduler directory is at 71%, mostly missing the reconnect and timeout paths. Once the two failures are fixed, I can add cases for those two, about 6 more tests.\n\nShall I start with the first one?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上一轮 12 个用例里有 **2 个失败**：\n\n1. 发言轮次在 5 人以上时，第 6 位的顺序被排到了最前——队列按加入时间排序，但重连的人会拿到新的时间戳。\n2. 登录回调走了旧网关，超时后没有重试。\n\n第一个建议改成按首次加入时间排序，改动在 `scheduler/queue.ts`：\n\n```ts\nqueue.sort((a, b) => a.firstJoinedAt - b.firstJoinedAt)\n```\n\n第二个需要把回调地址换成统一网关。\n\n另外顺手看了一眼覆盖率：scheduler 目录是 71%，主要缺重连和超时两条路径。两个失败修好后，我可以补上这两条的用例，大概再加 6 个测试。\n\n要我先改第一个吗？"
           }
         }
       }
@@ -450,6 +696,12 @@
             "state" : "translated",
             "value" : "Pro"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "专业"
+          }
         }
       }
     },
@@ -459,6 +711,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Pro · ¥68 · Unlimited projects"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "专业 · ¥68 · 不限项目"
           }
         }
       }
@@ -470,6 +728,12 @@
             "state" : "translated",
             "value" : "Personal Site"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "个人网站"
+          }
         }
       }
     },
@@ -479,6 +743,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Midway: only fixed scrolling"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "中途一版：只改了滚动"
           }
         }
       }
@@ -490,6 +760,12 @@
             "state" : "translated",
             "value" : "Add a --upper option to greet and verify the raw test output"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "为 greet 添加 --upper 参数并验证测试输出原文"
+          }
         }
       }
     },
@@ -499,6 +775,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "why is it waiting on a lock"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "为什么在等锁"
           }
         }
       }
@@ -510,6 +792,12 @@
             "state" : "translated",
             "value" : "Host"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "主持人"
+          }
         }
       }
     },
@@ -519,6 +807,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Host can mute everyone"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "主持人可以静音全部"
           }
         }
       }
@@ -530,6 +824,12 @@
             "state" : "translated",
             "value" : "Host prompt\n\n%@\nPrompt is written; deliver it in one tap."
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "主持人提示词\n\n%@\n提示词写好，一键投送。"
+          }
         }
       }
     },
@@ -539,6 +839,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Host stays first after reconnecting"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "主持人重连仍在第一位"
           }
         }
       }
@@ -550,6 +856,12 @@
             "state" : "translated",
             "value" : "Root cause of the shuffle is re-queuing on reconnect; the fix must keep the first-join time"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "乱序的根因在重连时重新入队，修复要保留首次加入的时间"
+          }
         }
       }
     },
@@ -559,6 +871,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Sell the used camera this week"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "二手相机这周挂出去"
           }
         }
       }
@@ -570,6 +888,12 @@
             "state" : "translated",
             "value" : "Handed to the notes session to reshoot from the reference."
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "交给 notes 会话按参考图重拍了。"
+          }
         }
       }
     },
@@ -579,6 +903,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Product decision"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "产品决策"
           }
         }
       }
@@ -590,6 +920,12 @@
             "state" : "translated",
             "value" : "Product decision\n\nList the current state and constraints first, then give the next step."
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "产品决策\n\n先列出现状和约束，再给出下一步。"
+          }
         }
       }
     },
@@ -599,6 +935,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Product decision\nanti-slop frontend cleanup"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "产品决策\nanti-slop 整理前端"
           }
         }
       }
@@ -610,6 +952,12 @@
             "state" : "translated",
             "value" : "Kyoto itinerary\n\nArashiyama on day two; avoid the weekend."
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "京都行程\n\n第二天去岚山，避开周末。"
+          }
         }
       }
     },
@@ -619,6 +967,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ship Roundtable today"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "今天先把圆桌发了"
           }
         }
       }
@@ -630,6 +984,12 @@
             "state" : "translated",
             "value" : "What should I look at first today?"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "今天先看哪件？"
+          }
         }
       }
     },
@@ -639,6 +999,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Today’s board: Roundtable is done, legacy import is waiting on how you want to split it, and everything else is running."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "今天的看板：圆桌做完了，导入旧数据等你定怎么拆，别的都在跑。"
           }
         }
       }
@@ -650,6 +1016,12 @@
             "state" : "translated",
             "value" : "Don’t ask again about pushing code in “Roundtable”"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "以后「圆桌」里推送代码不用问"
+          }
         }
       }
     },
@@ -659,6 +1031,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Don’t ask again"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "以后不用问"
           }
         }
       }
@@ -670,6 +1048,12 @@
             "state" : "translated",
             "value" : "Convert panning around the pointer anchor"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "以指针为锚点换算平移"
+          }
         }
       }
     },
@@ -679,6 +1063,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Speed up Trash\n\nTrash is visibly slow at {{count}} items. Measure first, then optimize."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "优化回收站性能\n\n回收站在 {{数据量}} 条时明显卡顿，先测量再优化。"
           }
         }
       }
@@ -690,6 +1080,12 @@
             "state" : "translated",
             "value" : "Sign in another way"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用其他方式登录"
+          }
         }
       }
     },
@@ -699,6 +1095,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Fix the TextKit editor\n\nThe TextKit editor fails intermittently. Reproduce it reliably and find the root cause before changing anything; don’t mask it with retries."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "修复 TextKit 编辑器\n\nTextKit 编辑器偶发失败。先稳定复现，定位根因后再改，不要加重试掩盖。"
           }
         }
       }
@@ -710,6 +1112,12 @@
             "state" : "translated",
             "value" : "Before: keyboard hides the login button"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "修复前：登录钮被键盘挡住"
+          }
         }
       }
     },
@@ -719,6 +1127,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Before: keyboard hides login"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "修复前：键盘挡住登录钮"
           }
         }
       }
@@ -730,6 +1144,12 @@
             "state" : "translated",
             "value" : "After: login above the keyboard"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "修复后：登录钮在键盘上方"
+          }
         }
       }
     },
@@ -739,6 +1159,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "After: login button shows above the keyboard"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "修复后：登录钮露在键盘上方"
           }
         }
       }
@@ -750,6 +1176,12 @@
             "state" : "translated",
             "value" : "Fix dropped images\n\nThe thumbnail is blank when dropping a HEIC."
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "修复拖入图片\n\n拖入 HEIC 时缩略图空白。"
+          }
         }
       }
     },
@@ -759,6 +1191,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Fix verified; all three pieces of evidence are in. Merge into main?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "修复验过了，三处证据都在。要合并进 main 吗？"
           }
         }
       }
@@ -770,6 +1208,12 @@
             "state" : "translated",
             "value" : "Fixed"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "修好"
+          }
         }
       }
     },
@@ -779,6 +1223,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Fix the keyboard covering the login page"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "修好登录页的键盘遮挡"
           }
         }
       }
@@ -790,6 +1240,12 @@
             "state" : "translated",
             "value" : "Complete “README screenshots”"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "做完「README 截图」"
+          }
         }
       }
     },
@@ -799,6 +1255,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Decide visual direction and density before building UI"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "做界面时先定视觉方向与密度"
           }
         }
       }
@@ -810,6 +1272,12 @@
             "state" : "translated",
             "value" : "Stop “billing”"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "停下「billing」"
+          }
         }
       }
     },
@@ -819,6 +1287,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Nudged %@: paste the results when the tests finish"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "催了 %@：测试跑完把结果贴过来"
           }
         }
       }
@@ -830,6 +1304,12 @@
             "state" : "translated",
             "value" : "Draft a plan first and wait for approval"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "先列计划，确认后再动手"
+          }
         }
       }
     },
@@ -839,6 +1319,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Run the migration script on the test database first; the error looks like this"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "先把迁移脚本在测试库上跑一遍，报错长这样"
           }
         }
       }
@@ -850,6 +1336,12 @@
             "state" : "translated",
             "value" : "Roundtable first: the shuffle affects every room of 5+."
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "先看圆桌：乱序会影响所有 5 人以上的房间。"
+          }
         }
       }
     },
@@ -859,6 +1351,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Read through the related code first"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "先读一遍相关代码"
           }
         }
       }
@@ -870,6 +1368,12 @@
             "state" : "translated",
             "value" : "Run the whole test suite first"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "先跑一遍全部测试"
+          }
         }
       }
     },
@@ -879,6 +1383,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Run the tests first"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "先跑一遍测试"
           }
         }
       }
@@ -890,6 +1400,12 @@
             "state" : "translated",
             "value" : "All passed."
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "全部通过。"
+          }
         }
       }
     },
@@ -899,6 +1415,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "All passed: 214 in total."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "全部通过，共 214 个。"
           }
         }
       }
@@ -910,6 +1432,12 @@
             "state" : "translated",
             "value" : "Split “review billing quota” into two steps"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "再把评审计费额度拆成两步"
+          }
         }
       }
     },
@@ -919,6 +1447,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Run the tests again"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "再跑一遍测试"
           }
         }
       }
@@ -930,6 +1464,12 @@
             "state" : "translated",
             "value" : "Write a commit message"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "写一段提交说明"
+          }
         }
       }
     },
@@ -939,6 +1479,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Draft the iOS header cleanup plan"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "出 iOS header 收口方案"
           }
         }
       }
@@ -950,6 +1496,12 @@
             "state" : "translated",
             "value" : "Draft the mobile task board plan"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "出手机任务看板方案"
+          }
         }
       }
     },
@@ -959,6 +1511,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Share extension takes several images at once"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "分享扩展一次收多张图片"
           }
         }
       }
@@ -970,6 +1528,12 @@
             "state" : "translated",
             "value" : "Share extension supports multiple images"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "分享扩展支持多张图片"
+          }
         }
       }
     },
@@ -979,6 +1543,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "List what’s left to do"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "列一下还剩哪些没做"
           }
         }
       }
@@ -990,6 +1560,12 @@
             "state" : "translated",
             "value" : "List the files in the piwork directory"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "列出 piwork 目录下的文件"
+          }
         }
       }
     },
@@ -999,6 +1575,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "List all callback URLs"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "列出所有回调地址"
           }
         }
       }
@@ -1010,6 +1592,12 @@
             "state" : "translated",
             "value" : "Delete scripts/billing-legacy"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "删掉 scripts/billing-legacy 目录"
+          }
         }
       }
     },
@@ -1019,6 +1607,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Added 2; the third waits until the sort fix is in."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "加了 2 个，第 3 个等排序改完再补。"
           }
         }
       }
@@ -1030,6 +1624,12 @@
             "state" : "translated",
             "value" : "Add it after “Install”?"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "加在「安装」后面吗？"
+          }
         }
       }
     },
@@ -1039,6 +1639,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Done: you’re listed as the owner, and the link points to the registrar’s renewal page."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "加好了：负责人写的是你，链接指向注册商的续费页。"
           }
         }
       }
@@ -1050,6 +1656,12 @@
             "state" : "translated",
             "value" : "Upgrade"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "升级"
+          }
         }
       }
     },
@@ -1059,6 +1671,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Stress task %lld: a note on canvas and nodes"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "压力任务 %lld：画布与节点的一段说明"
           }
         }
       }
@@ -1070,6 +1688,12 @@
             "state" : "translated",
             "value" : "Stress test"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "压测"
+          }
         }
       }
     },
@@ -1079,6 +1703,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Compact the current context, optionally with a note"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "压缩当前上下文，可附上说明"
           }
         }
       }
@@ -1090,6 +1720,12 @@
             "state" : "translated",
             "value" : "Prototype: three visual directions\n\nDesktop, board, stream."
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "原型：三个视觉方向\n\n桌面、看板、流。"
+          }
         }
       }
     },
@@ -1099,6 +1735,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Sent. The full page is tappable so you can try the interactions, the screenshot is at iPhone width, and the review has two items for you to decide."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "发给你了：完整页面可以直接点按钮试交互，截图是 iPhone 宽度下的样子，评审结论里有两处要你定。"
           }
         }
       }
@@ -1110,6 +1752,12 @@
             "state" : "translated",
             "value" : "A light buzz when speaking time is up"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "发言计时到点会轻震一下"
+          }
         }
       }
     },
@@ -1119,6 +1767,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Turn order shuffled"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "发言轮次乱序"
           }
         }
       }
@@ -1130,6 +1784,12 @@
             "state" : "translated",
             "value" : "Speaking Order Fix"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "发言顺序修复"
+          }
         }
       }
     },
@@ -1139,6 +1799,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Speaking order is fixed and tests pass. Push to origin/main?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "发言顺序修好了，测试都过了。要推送到 origin/main 吗？"
           }
         }
       }
@@ -1150,6 +1816,12 @@
             "state" : "translated",
             "value" : "Cancel"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "取消"
+          }
         }
       }
     },
@@ -1159,6 +1831,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Variable template docs\n\n%@\nUpdate the developer docs for variable templates and remove outdated notes."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "变量模板文档\n\n%@\n更新变量模板的开发文档，删掉过时的说明。"
           }
         }
       }
@@ -1170,6 +1848,12 @@
             "state" : "translated",
             "value" : "Variable template tests\n\nAdd acceptance tests for variable templates at the seam; watch them fail first, then implement."
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "变量模板补测试\n\n在接缝上给变量模板补验收测试，先看到它失败，再实现。"
+          }
         }
       }
     },
@@ -1179,6 +1863,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Added a line from another device"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "另一台设备上补了一句"
           }
         }
       }
@@ -1190,6 +1880,12 @@
             "state" : "translated",
             "value" : "Save as feed-full.xml"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "另存为 feed-full.xml"
+          }
         }
       }
     },
@@ -1199,6 +1895,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Push the scheduler reconnect fix?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "可以推送 scheduler 的重连修复吗？"
           }
         }
       }
@@ -1210,6 +1912,12 @@
             "state" : "translated",
             "value" : "OK to push v1.4 to TestFlight?"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "可以推送 v1.4 到 TestFlight 吗？"
+          }
         }
       }
     },
@@ -1219,6 +1927,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Same-time seats sorted by number"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同一时刻入座按座位号排"
           }
         }
       }
@@ -1230,6 +1944,12 @@
             "state" : "translated",
             "value" : "Sync conflicts"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同步冲突"
+          }
         }
       }
     },
@@ -1239,6 +1959,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Center the two-line name tag"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "名牌两行居中"
           }
         }
       }
@@ -1250,6 +1976,12 @@
             "state" : "translated",
             "value" : "The two-line name tag is centered and the expand is now 0.25 s. Want to try how it feels?"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "名牌两行已居中，展开改成了 0.25 秒，手感你再试试？"
+          }
         }
       }
     },
@@ -1259,6 +1991,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Weekly Meeting · Speaking Order"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "周会 · 发言顺序"
           }
         }
       }
@@ -1270,6 +2008,12 @@
             "state" : "translated",
             "value" : "Weekly meeting is Mondays at 10 a.m."
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "周会是每周一上午十点"
+          }
         }
       }
     },
@@ -1279,6 +2023,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Take the kids to the science museum this weekend"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "周末带孩子去科技馆"
           }
         }
       }
@@ -1290,6 +2040,12 @@
             "state" : "translated",
             "value" : "Take the kids to the science museum this weekend; remember to book tickets early"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "周末带孩子去科技馆，记得提前约票"
+          }
         }
       }
     },
@@ -1299,6 +2055,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Finish chapter 3 of The Design of Everyday Things this weekend"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "周末读完《设计心理学》第三章"
           }
         }
       }
@@ -1310,6 +2072,12 @@
             "state" : "translated",
             "value" : "Sentinel"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "哨兵"
+          }
         }
       }
     },
@@ -1319,6 +2087,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Prefers seeing prototype screenshots before settling on a plan"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "喜欢先看原型截图再定方案"
           }
         }
       }
@@ -1330,6 +2104,12 @@
             "state" : "translated",
             "value" : "Keep replies short; lead with the conclusion"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "回复要短，先说结论"
+          }
         }
       }
     },
@@ -1339,6 +2119,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Team"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "团队"
           }
         }
       }
@@ -1350,6 +2136,12 @@
             "state" : "translated",
             "value" : "Team · ¥198 · 10 collaborators"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "团队 · ¥198 · 10 人协作"
+          }
         }
       }
     },
@@ -1359,6 +2151,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Roundtable"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "圆桌"
           }
         }
       }
@@ -1370,6 +2168,12 @@
             "state" : "translated",
             "value" : "When will Roundtable staging be ready?"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "圆桌的预发什么时候能好？"
+          }
         }
       }
     },
@@ -1379,6 +2183,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Roundtable staging is staging-2; production deploys only after CI passes"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "圆桌的预发环境是 staging-2，正式环境要过 CI 才部署"
           }
         }
       }
@@ -1390,6 +2200,12 @@
             "state" : "translated",
             "value" : "Roundtable staging is deployed; speaking order is correct in rooms of 5+."
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "圆桌的预发部署好了，5 人以上的房间发言顺序都对了。"
+          }
         }
       }
     },
@@ -1399,6 +2215,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "The Roundtable bug where turn order shuffles in rooms of 5+ is yours. Once it’s fixed, deploy to staging."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "圆桌那个 5 人以上乱序的 bug 交给你，修好之后部署到预发"
           }
         }
       }
@@ -1410,6 +2232,12 @@
             "state" : "translated",
             "value" : "The Roundtable shuffle is yours"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "圆桌那个乱序交给你"
+          }
         }
       }
     },
@@ -1419,6 +2247,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Clone this session at the current point"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在当前位置复制出一个新会话"
           }
         }
       }
@@ -1430,6 +2264,12 @@
             "state" : "translated",
             "value" : "Basic"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "基础"
+          }
         }
       }
     },
@@ -1439,6 +2279,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Basic · ¥0 · 3 projects"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "基础 · ¥0 · 3 个项目"
           }
         }
       }
@@ -1450,6 +2296,12 @@
             "state" : "translated",
             "value" : "Reproduce the shuffle"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "复现乱序"
+          }
         }
       }
     },
@@ -1459,6 +2311,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Reproduced: the callback has no timeout while it waits for the token refresh, so on a slow network it hangs forever. Changed to a 10-second timeout, then back to the login page to re-authorize. Tests are running."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "复现了：回调里等 token 刷新时没设超时，网络慢时会一直挂着。改成 10 秒超时、超时后回登录页重新授权，测试在跑。"
           }
         }
       }
@@ -1470,6 +2328,12 @@
             "state" : "translated",
             "value" : "Reproduce the canvas jumping while zooming\nPinch continuously past 200%, then note the canvas offset"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "复现缩放时画布跳动\n在 200% 以上连续捏合，记下画布偏移"
+          }
         }
       }
     },
@@ -1479,6 +2343,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Multi-agent scheduling stress test"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "多 Agent 调度压测"
           }
         }
       }
@@ -1490,6 +2360,12 @@
             "state" : "translated",
             "value" : "Multi-agent scheduling can ship this month"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "多 Agent 调度本月可上线"
+          }
         }
       }
     },
@@ -1499,6 +2375,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Change color for a multi-selection"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "多选后统一改颜色"
           }
         }
       }
@@ -1510,6 +2392,12 @@
             "state" : "translated",
             "value" : "Failed"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "失败"
+          }
         }
       }
     },
@@ -1519,6 +2407,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Okay. Four steps: reproduce, sort by first-join time, add 3 reconnect cases, deploy to staging. The first is reproduced; I’m on the sort now."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "好。拆成四步：复现、改成按首次加入时间排序、补 3 个重连用例、部署到预发。第一步已经复现了，现在在改排序。"
           }
         }
       }
@@ -1530,6 +2424,12 @@
             "state" : "translated",
             "value" : "Okay. Four steps: reproduce, fix the sort, add cases, deploy to staging."
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "好。拆成四步：复现、改排序、补用例、部署到预发。"
+          }
         }
       }
     },
@@ -1539,6 +2439,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Done"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "好了"
           }
         }
       }
@@ -1550,6 +2456,12 @@
             "state" : "translated",
             "value" : "Okay, round %lld is done."
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "好的，第 %lld 轮做完了。"
+          }
         }
       }
     },
@@ -1559,6 +2471,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Okay, next"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "好，下一个"
           }
         }
       }
@@ -1570,6 +2488,12 @@
             "state" : "translated",
             "value" : "Okay, I’ll have the auth session reproduce it first."
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "好，我先让 auth 会话复现一下。"
+          }
         }
       }
     },
@@ -1579,6 +2503,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "The full page is tappable so you can try the interactions"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "完整页面可以直接点按钮试交互"
           }
         }
       }
@@ -1590,6 +2520,12 @@
             "state" : "translated",
             "value" : "The pricing session sent a batch and I checked it: on narrow screens the three tiers no longer squeeze into two rows, and the annual discount badge sits at the card’s top right. Dark mode is still missing; I’ll have it continue."
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "定价区的会话发来了一批，我核对过：三档价格在窄屏下不再挤成两行，年付的折扣标在卡片右上角。还差深色模式，让它接着做。"
+          }
         }
       }
     },
@@ -1599,6 +2535,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Pricing Comparison"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "定价对比"
           }
         }
       }
@@ -1610,6 +2552,12 @@
             "state" : "translated",
             "value" : "Pricing Comparison.pdf"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "定价对比.pdf"
+          }
         }
       }
     },
@@ -1619,6 +2567,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Pricing tests\n\nAdd acceptance tests for pricing at the seam."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "定价补测试\n\n在接缝上给定价补验收测试。"
           }
         }
       }
@@ -1630,6 +2584,12 @@
             "state" : "translated",
             "value" : "Pricing Page.html"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "定价页.html"
+          }
         }
       }
     },
@@ -1639,6 +2599,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Pricing: tiers swipe on narrow screens"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "定价页：三档在窄屏横滑"
           }
         }
       }
@@ -1650,6 +2616,12 @@
             "state" : "translated",
             "value" : "Live Activity"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "实时活动"
+          }
         }
       }
     },
@@ -1659,6 +2631,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Review changes on the current branch"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "审查当前分支的改动"
           }
         }
       }
@@ -1670,6 +2648,12 @@
             "state" : "translated",
             "value" : "Wide.png"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "宽屏.png"
+          }
         }
       }
     },
@@ -1679,6 +2663,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Wide: three tiers side by side"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "宽屏：三档并排"
           }
         }
       }
@@ -1690,6 +2680,12 @@
             "state" : "translated",
             "value" : "Password"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "密码"
+          }
         }
       }
     },
@@ -1699,6 +2695,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tell %@: paste the results when the tests finish"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "对 %@ 说：测试跑完把结果贴过来"
           }
         }
       }
@@ -1710,6 +2712,12 @@
             "state" : "translated",
             "value" : "Tell Cue"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "对 Cue 说"
+          }
         }
       }
     },
@@ -1719,6 +2727,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tell “README screenshots”: redo them to match the Swift version, following your reference"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "对「README 截图」说：换成 Swift 版的样子，按你给的参考图拍"
           }
         }
       }
@@ -1730,6 +2744,12 @@
             "state" : "translated",
             "value" : "Tell “README screenshots”: shoot the dark one from the reference too, then send it to me"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "对「README 截图」说：深色那张也按参考图拍，拍完发给我"
+          }
         }
       }
     },
@@ -1739,6 +2759,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tell “Turn order shuffled”: hold off for now; deploy once the login callback is fixed"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "对「发言轮次乱序」说：先停一下，等登录回调修好再部署"
           }
         }
       }
@@ -1750,6 +2776,12 @@
             "state" : "translated",
             "value" : "Tell “Turn order shuffled”: reproduce the shuffle in rooms of 5+ first, then sort by first-join time"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "对「发言轮次乱序」说：先复现 5 人以上的乱序，再改成按首次加入时间排序"
+          }
         }
       }
     },
@@ -1759,6 +2791,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tell “Turn order shuffled”: sort by first-join time, then run all the scheduler tests"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "对「发言轮次乱序」说：按首次加入时间排序，改完把 scheduler 的测试全跑一遍"
           }
         }
       }
@@ -1770,6 +2808,12 @@
             "state" : "translated",
             "value" : "Tell “Turn order shuffled”: tests pass, go ahead with the 3 reconnect cases"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "对「发言轮次乱序」说：测试过了，接着补 3 个重连用例"
+          }
         }
       }
     },
@@ -1779,6 +2823,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tell “Turn order shuffled”: when the reconnect cases are done, run all the tests"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "对「发言轮次乱序」说：重连用例补完把测试全跑一遍"
           }
         }
       }
@@ -1790,6 +2840,12 @@
             "state" : "translated",
             "value" : "Tell “Login callback timeout”"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "对「登录回调超时」说"
+          }
         }
       }
     },
@@ -1799,6 +2855,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tell “Login callback timeout”: first reproduce the callback hanging while it waits for the token refresh"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "对「登录回调超时」说：先复现回调等 token 刷新时一直挂着"
           }
         }
       }
@@ -1810,6 +2872,12 @@
             "state" : "translated",
             "value" : "Importing %lld"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导入中 %lld"
+          }
         }
       }
     },
@@ -1819,6 +2887,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "legacy import prompt too long"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导入旧数据 prompt 太长"
           }
         }
       }
@@ -1830,6 +2904,12 @@
             "state" : "translated",
             "value" : "The legacy import session got stuck on a schema migration last time; read its error before starting again"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导入旧数据会话上回卡在 schema 迁移，再开工前先看它的报错"
+          }
         }
       }
     },
@@ -1839,6 +2919,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Keep Trash when importing legacy data"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导入旧数据时保留回收站"
           }
         }
       }
@@ -1850,6 +2936,12 @@
             "state" : "translated",
             "value" : "The legacy import session errored again: the model rejected the request (prompt too long). I plan to split the import by year:\n\n- 2019–2021 in one batch\n- 2022–2023 in one batch\n- 2024 to now in one batch\n\nEach batch gets its own session. I’ll wait for your go-ahead."
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导入旧数据那个会话又出错了：模型拒绝了请求（prompt 太长）。我打算拆成按年份导：\n\n- 2019–2021 一批\n- 2022–2023 一批\n- 2024 至今一批\n\n每批单独开会话，等你点头再开工。"
+          }
         }
       }
     },
@@ -1859,6 +2951,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Keep transparent background when exporting PNG"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导出 PNG 时保留透明背景"
           }
         }
       }
@@ -1870,6 +2968,12 @@
             "state" : "translated",
             "value" : "Login button stays visible when the keyboard opens on a small screen"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "小屏上键盘弹出后登录钮仍可见"
+          }
         }
       }
     },
@@ -1879,6 +2983,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Lin"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "小林"
           }
         }
       }
@@ -1890,6 +3000,12 @@
             "state" : "translated",
             "value" : "Widget shows in-progress tasks"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "小组件显示进行中的任务"
+          }
         }
       }
     },
@@ -1899,6 +3015,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "List in-progress tasks in the widget"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "小组件里列出进行中的任务"
           }
         }
       }
@@ -1910,6 +3032,12 @@
             "state" : "translated",
             "value" : "It’s like a queue for the bathroom: building an index has to lock the whole table, but someone is still inside, so it waits at the door. Once they leave, it goes right in."
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "就像排队上厕所：建索引要把整张表锁一下，可前面有人一直占着没出来，它只能在门口等。占着的人走了，它马上就能进去。"
+          }
         }
       }
     },
@@ -1919,6 +3047,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Engineer"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "工程师"
           }
         }
       }
@@ -1930,6 +3064,12 @@
             "state" : "translated",
             "value" : "One light and one dark set done"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已出浅色、深色各一组"
+          }
         }
       }
     },
@@ -1939,6 +3079,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ran through on the test database"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已在测试库上跑通"
           }
         }
       }
@@ -1950,6 +3096,12 @@
             "state" : "translated",
             "value" : "Done"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已完成"
+          }
         }
       }
     },
@@ -1959,6 +3111,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Finished the sync section of the README"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已补完 README 的同步一节"
           }
         }
       }
@@ -1970,6 +3128,12 @@
             "state" : "translated",
             "value" : "Remember this for me: no releases on Fridays"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "帮我记一下：周五不发版"
+          }
         }
       }
     },
@@ -1979,6 +3143,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Go-to prompt: code review\n\nOnly report issues that cause incorrect behavior, sorted by severity."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "常用提示：代码评审\n\n只报告会导致错误行为的问题，按严重程度排序。"
           }
         }
       }
@@ -1990,6 +3160,12 @@
             "state" : "translated",
             "value" : "Save 20% with annual billing. Cancel anytime."
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "年付立省 20%，随时可以取消。"
+          }
         }
       }
     },
@@ -1999,6 +3175,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Switch the bottom bar to the system’s Liquid Glass"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "底栏换成系统的液态玻璃"
           }
         }
       }
@@ -2010,6 +3192,12 @@
             "state" : "translated",
             "value" : "Bottom bar: system Liquid Glass"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "底栏换系统液态玻璃"
+          }
         }
       }
     },
@@ -2019,6 +3207,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Smooth out bottom tab switching"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "底部 tab 切页丝滑收口"
           }
         }
       }
@@ -2030,6 +3224,12 @@
             "state" : "translated",
             "value" : "Create task “Turn order shuffled”"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "建任务「发言轮次乱序」"
+          }
         }
       }
     },
@@ -2039,6 +3239,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Create task “Login callback timeout”"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "建任务「登录回调超时」"
           }
         }
       }
@@ -2050,6 +3256,12 @@
             "state" : "translated",
             "value" : "Start a new session"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "开一个新会话"
+          }
         }
       }
     },
@@ -2059,6 +3271,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Get Started"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "开始使用"
           }
         }
       }
@@ -2070,6 +3288,12 @@
             "state" : "translated",
             "value" : "Start “Turn order shuffled”"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "开工「发言轮次乱序」"
+          }
         }
       }
     },
@@ -2079,6 +3303,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Start “Login callback timeout”"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "开工「登录回调超时」"
           }
         }
       }
@@ -2090,6 +3320,12 @@
             "state" : "translated",
             "value" : "Screen Recording.mov"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "录屏.mov"
+          }
         }
       }
     },
@@ -2099,6 +3335,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Voice Memo.m4a"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "录音.m4a"
           }
         }
       }
@@ -2110,6 +3352,12 @@
             "state" : "translated",
             "value" : "Performance"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "性能"
+          }
         }
       }
     },
@@ -2119,6 +3367,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Idea: TextKit editor\n\n%@\nMaybe attachments could load lazily by viewport, mounting only thumbnails."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "想法：TextKit 编辑器\n\n%@\n编辑器的附件也许可以按视口懒加载，只挂缩略图。"
           }
         }
       }
@@ -2130,6 +3384,12 @@
             "state" : "translated",
             "value" : "Idea: card wall\n\nRe-layout only when opening the project or crossing a day; the wall shouldn’t move on its own within one visit."
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "想法：卡片墙\n\n只在打开项目或跨天时重排，同一次打开里墙不自己挪动。"
+          }
         }
       }
     },
@@ -2139,6 +3399,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Idea: send history\n\nOne-tap resend should include the variable values from that time."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "想法：发送记录\n\n一键重发时带上当时的变量取值。"
           }
         }
       }
@@ -2150,6 +3416,12 @@
             "state" : "translated",
             "value" : "Screenshots"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "截图"
+          }
         }
       }
     },
@@ -2159,6 +3431,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Screenshot diff"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "截图对比"
           }
         }
       }
@@ -2170,6 +3448,12 @@
             "state" : "translated",
             "value" : "Show a message when a room link expires"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "房间链接过期后给出提示"
+          }
         }
       }
     },
@@ -2179,6 +3463,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Phone screenshot: login button above the keyboard"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "手机截图：登录钮在键盘上方"
           }
         }
       }
@@ -2190,6 +3480,12 @@
             "state" : "translated",
             "value" : "Polish the Cue header on iPhone"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打磨手机 Cue 顶栏"
+          }
         }
       }
     },
@@ -2199,6 +3495,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Batch worker"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "批量工"
           }
         }
       }
@@ -2210,6 +3512,12 @@
             "state" : "translated",
             "value" : "Deploy 1.4.2 to staging"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "把 1.4.2 部署到预发环境"
+          }
         }
       }
     },
@@ -2219,6 +3527,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Replace the README screenshots with the Swift version and add the dark mode one"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "把 README 的截图换成 Swift 版并补上深色模式的那一张"
           }
         }
       }
@@ -2230,6 +3544,12 @@
             "state" : "translated",
             "value" : "Make the RSS output full-text"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "把 RSS 输出改成全文"
+          }
         }
       }
     },
@@ -2239,6 +3559,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Put the comparison of the three sort options in a table"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "把三个排序方案的对比做成表格"
           }
         }
       }
@@ -2250,6 +3576,12 @@
             "state" : "translated",
             "value" : "Merge speaking order fix"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "把发言顺序的修复合并进 main"
+          }
         }
       }
     },
@@ -2259,6 +3591,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Push order fix to origin/main"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "把发言顺序的修复推送到 origin/main"
           }
         }
       }
@@ -2270,6 +3608,12 @@
             "state" : "translated",
             "value" : "Back up the quote to cloud storage"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "把报价单备份到网盘"
+          }
         }
       }
     },
@@ -2279,6 +3623,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Read through the whole billing directory and summarize the billing rules"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "把整个 billing 目录读一遍，总结计费规则"
           }
         }
       }
@@ -2290,6 +3640,12 @@
             "state" : "translated",
             "value" : "Push login timeout fix"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "把登录回调的超时修复推送到 origin/main"
+          }
         }
       }
     },
@@ -2299,6 +3655,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Push login page fix"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "把登录页的修复推送到 origin/main"
           }
         }
       }
@@ -2310,6 +3672,12 @@
             "state" : "translated",
             "value" : "Send me the new login page, the phone screenshot, and the review. Use this one as a look reference"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "把登录页的新样子、手机上的截图和评审结论发给我看看，样子参考这张"
+          }
         }
       }
     },
@@ -2319,6 +3687,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "What’s the billing session up to?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "把计费那个会话的进展说一下"
           }
         }
       }
@@ -2330,6 +3704,12 @@
             "state" : "translated",
             "value" : "Split the migration script into three steps"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "把迁移脚本拆成三步"
+          }
         }
       }
     },
@@ -2339,6 +3719,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Move these changes onto a new branch"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "把这批改动挪到新分支上"
           }
         }
       }
@@ -2350,6 +3736,12 @@
             "state" : "translated",
             "value" : "Merge continuous drags into one undo step"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "把连续拖拽合并成一条撤销记录"
+          }
         }
       }
     },
@@ -2359,6 +3751,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Run the reconnect cases too and paste me the results"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "把重连用例也跑一遍，结果贴给我"
           }
         }
       }
@@ -2370,6 +3768,12 @@
             "state" : "translated",
             "value" : "Change the homepage title to the new copy"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "把首页标题换成新文案"
+          }
         }
       }
     },
@@ -2379,6 +3783,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "On a delivery timeout, retry once; if it still fails, report the error and say why in the message"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "投送超时时先重试一次，还失败再报错，并在提示里写明原因"
           }
         }
       }
@@ -2390,6 +3800,12 @@
             "state" : "translated",
             "value" : "Delivery queue can ship this month"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "投送队列本月可上线"
+          }
         }
       }
     },
@@ -2399,6 +3815,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Delivery queue timeout error sends no keystroke"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "投送队列超时报错不发键"
           }
         }
       }
@@ -2410,6 +3832,12 @@
             "state" : "translated",
             "value" : "Report.pdf"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "报告.pdf"
+          }
         }
       }
     },
@@ -2419,6 +3847,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Expenses\nbs 84.36 usd claude github"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "报销\nbs 84.36 刀 claude github"
           }
         }
       }
@@ -2430,6 +3864,12 @@
             "state" : "translated",
             "value" : "Done. Each of the three steps can be rolled back."
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "拆好了，三步各自能回滚。"
+          }
         }
       }
     },
@@ -2439,6 +3879,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Split into two steps:\n\n1. Reconcile the quota table with the invoice figures\n2. Then check the over-quota message copy\n\nBoth are under the same section of the to-do list."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "拆成了两步：\n\n1. 先对一遍额度表和账单的口径\n2. 再看超额时的提示文案\n\n都放在待办的同一节下面。"
           }
         }
       }
@@ -2450,6 +3896,12 @@
             "state" : "translated",
             "value" : "Go with sorting by first-join time as you said, update the assertions too, and run again"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "按你说的改成首次加入时间排序，把断言也改了，再跑一遍"
+          }
         }
       }
     },
@@ -2459,6 +3911,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Write release notes from the commit history"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "按提交记录写更新说明"
           }
         }
       }
@@ -2470,6 +3928,12 @@
             "state" : "translated",
             "value" : "Rework ask card per option 1"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "按方案 1 决定单改提问卡"
+          }
         }
       }
     },
@@ -2479,6 +3943,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Check against the checklist and deploy to production"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "按清单检查并部署到生产"
           }
         }
       }
@@ -2490,6 +3960,12 @@
             "state" : "translated",
             "value" : "Sort by first-join time, update the assertions too, and run it again"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "按首次加入时间排序，把断言也改了，再跑一遍"
+          }
         }
       }
     },
@@ -2499,6 +3975,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Add one case each for pinch, scroll wheel, and double-click"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "捏合、滚轮、双击各补一个用例"
           }
         }
       }
@@ -2510,6 +3992,12 @@
             "state" : "translated",
             "value" : "Switch to the unified gateway and run tests"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "换成统一网关并跑测试"
+          }
         }
       }
     },
@@ -2519,6 +4007,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Switch model"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "换模型"
           }
         }
       }
@@ -2530,6 +4024,12 @@
             "state" : "translated",
             "value" : "Sort fix is in; all 42 scheduler tests pass. Next, the 3 reconnect cases."
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "排序改好了，scheduler 的 42 个测试都过了。接下来补 3 个重连用例。"
+          }
         }
       }
     },
@@ -2539,6 +4039,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "When the sort fix is in, run all the scheduler tests and paste me the results"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "排序改完后把 scheduler 的测试全跑一遍，结果贴给我"
           }
         }
       }
@@ -2550,6 +4056,12 @@
             "state" : "translated",
             "value" : "Investigate the Pi bridge\n\nThe Pi bridge logs error {{error code}}. Find out what triggers it before changing anything."
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "排查 Pi 桥\n\n日志里 Pi 桥报错 {{错误码}}，查清触发条件再动手。"
+          }
         }
       }
     },
@@ -2559,6 +4071,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Investigate leftover sockets\n\nThe socket isn’t deleted after a force quit; check the kqueue exit notification."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "排查 socket 残留\n\n强杀后 socket 没删，检查 kqueue 退出通知。"
           }
         }
       }
@@ -2570,6 +4088,12 @@
             "state" : "translated",
             "value" : "Investigate clipboard read-back\n\nRead-back after writing is occasionally empty. Check whether it’s a race first."
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "排查剪贴板回读\n\n写入后回读偶尔为空，先确认是不是竞态。"
+          }
         }
       }
     },
@@ -2579,6 +4103,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Pushed. CI is running the production deploy."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "推上去了，CI 在跑正式环境的部署。"
           }
         }
       }
@@ -2590,6 +4120,12 @@
             "state" : "translated",
             "value" : "Go ahead and push. I’m off to sleep; keep an eye on the rest and I’ll look in the morning"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "推吧。我去睡了，后面的你盯着，明早看"
+          }
         }
       }
     },
@@ -2599,6 +4135,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Push v1.4 to TestFlight"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "推送 v1.4 到 TestFlight"
           }
         }
       }
@@ -2610,6 +4152,12 @@
             "state" : "translated",
             "value" : "Push and Release"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "推送并发新版"
+          }
         }
       }
     },
@@ -2619,6 +4167,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Write commit messages in the imperative, one change per commit"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "提交信息用中文，一个提交只做一件事"
           }
         }
       }
@@ -2630,6 +4184,12 @@
             "state" : "translated",
             "value" : "I redrew the ask card in three directions, all in the message below. Pick one. I’d go with 1: one tap and you’re done."
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "提问卡我重画了三个方向，都放在下面这条里，你挑一个。我推荐 1：点一下就答完。"
+          }
         }
       }
     },
@@ -2639,6 +4199,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "I redrew the ask card in four directions. Pick one."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "提问卡我重画了四个方向，你挑一个。"
           }
         }
       }
@@ -2650,6 +4216,12 @@
             "state" : "translated",
             "value" : "Ask card option 1: Decision sheet"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "提问卡方案 1：决定单"
+          }
         }
       }
     },
@@ -2659,6 +4231,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ask card option 2: Ask in thread"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "提问卡方案 2：对话里问"
           }
         }
       }
@@ -2670,6 +4248,12 @@
             "state" : "translated",
             "value" : "Ask card option 3: Solemn approval"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "提问卡方案 3：郑重放行"
+          }
         }
       }
     },
@@ -2679,6 +4263,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ask card option 4: Drawer"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "提问卡方案 4：抽屉"
           }
         }
       }
@@ -2690,6 +4280,12 @@
             "state" : "translated",
             "value" : "Undo stack merges continuous drags"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "撤销栈合并连续拖拽"
+          }
         }
       }
     },
@@ -2699,6 +4295,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Undo stack merges continuous drags\n\nContinuous dragging records a single undo step."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "撤销栈合并连续拖拽\n\n连续拖拽只记一步撤销。"
           }
         }
       }
@@ -2710,6 +4312,12 @@
             "state" : "translated",
             "value" : "Got it, taking a look now."
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "收到，我这就去看。"
+          }
         }
       }
     },
@@ -2719,6 +4327,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Wrapping up"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "收尾"
           }
         }
       }
@@ -2730,6 +4344,12 @@
             "state" : "translated",
             "value" : "Edit CardLinks.repairs"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "改 CardLinks.repairs"
+          }
         }
       }
     },
@@ -2739,6 +4359,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Edit Exporter.render"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "改 Exporter.render"
           }
         }
       }
@@ -2750,6 +4376,12 @@
             "state" : "translated",
             "value" : "Edit “Turn order shuffled”"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "改「发言轮次乱序」"
+          }
         }
       }
     },
@@ -2759,6 +4391,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Edit “Import legacy data”"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "改「导入旧数据」"
           }
         }
       }
@@ -2770,6 +4408,12 @@
             "state" : "translated",
             "value" : "What changed and what’s left"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "改了什么、还差什么"
+          }
         }
       }
     },
@@ -2779,6 +4423,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Before / After"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "改前 / 改后"
           }
         }
       }
@@ -2790,6 +4440,12 @@
             "state" : "translated",
             "value" : "Before and After"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "改前改后"
+          }
         }
       }
     },
@@ -2799,6 +4455,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Speaking order before and after"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "改前改后的发言顺序"
           }
         }
       }
@@ -2810,6 +4472,12 @@
             "state" : "translated",
             "value" : "Change Notes.md"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "改动说明.md"
+          }
         }
       }
     },
@@ -2819,6 +4487,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Done. The glass edge looked a bit bright in dark mode, so I toned it down by 8%. Want another screenshot?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "改好了，深色下玻璃边缘偏亮，我调低了 8%。要再看一版截图吗？"
           }
         }
       }
@@ -2830,6 +4504,12 @@
             "state" : "translated",
             "value" : "Done. The page, comparison table, wide screenshot, and change notes are all sent to you."
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "改好了，网页、对比表、宽屏截图和改动说明都发给你了。"
+          }
         }
       }
     },
@@ -2839,6 +4519,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Done. The homepage title is now “Turn ideas into cards”."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "改好了，首页标题现在是「把想法写成卡片」。"
           }
         }
       }
@@ -2850,6 +4536,12 @@
             "state" : "translated",
             "value" : "When you’re done, look at that login callback timeout"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "改完再看看登录回调那个超时"
+          }
         }
       }
     },
@@ -2859,6 +4551,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "When done, add 3 reconnect cases covering disconnects, timeouts, and switching devices"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "改完补 3 个重连用例，覆盖断线、超时、换设备"
           }
         }
       }
@@ -2870,6 +4568,12 @@
             "state" : "translated",
             "value" : "Sort by first-join time"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "改成按首次加入时间排序"
+          }
         }
       }
     },
@@ -2879,6 +4583,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Before changing UI, take a before screenshot in light and dark; afterward shoot the after and compare them together. When showing me, send to my phone, not just a local path"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "改界面之前先拍改前截图，深浅色各一张；做完拍改后的放在一起比，交给我看的时候发到手机上，不要只贴本机路径"
           }
         }
       }
@@ -2890,6 +4600,12 @@
             "state" : "translated",
             "value" : "Improved"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "改进"
+          }
         }
       }
     },
@@ -2899,6 +4615,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Data.xlsx"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "数据.xlsx"
           }
         }
       }
@@ -2910,6 +4632,12 @@
             "state" : "translated",
             "value" : "Tidy up this week’s meeting notes"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "整理一下这周的会议记录"
+          }
         }
       }
     },
@@ -2919,6 +4647,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Prepare the release checklist\n\nSigning, notarization, Sparkle update feed."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "整理发布清单\n\n签名、公证、Sparkle 更新源。"
           }
         }
       }
@@ -2930,6 +4664,12 @@
             "state" : "translated",
             "value" : "Done. It’s in `notes/2026-W40.md`. Three to-dos:\n\n- **Renew the domain** (before Friday)\n- Review billing quota\n- Add scheduler tests"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "整理好了，放在 `notes/2026-W40.md`。三件待办：\n\n- **续费域名**（周五前）\n- 评审计费额度\n- 补 scheduler 测试"
+          }
         }
       }
     },
@@ -2939,6 +4679,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Done. It’s in `notes/2026-W40.md`. Three to-dos: **renew the domain**, review billing quota, add scheduler tests."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "整理好了，放在 `notes/2026-W40.md`。三件待办：**续费域名**、评审计费额度、补 scheduler 测试。"
           }
         }
       }
@@ -2950,6 +4696,12 @@
             "state" : "translated",
             "value" : "Docs"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "文档"
+          }
         }
       }
     },
@@ -2959,6 +4711,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Disconnects over 5 minutes sort as new joiners"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "断线超过 5 分钟按新人排"
           }
         }
       }
@@ -2970,6 +4728,12 @@
             "state" : "translated",
             "value" : "Turn order kept after reconnecting"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "断线重连后保留发言轮次"
+          }
         }
       }
     },
@@ -2979,6 +4743,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "What should the new branch be called?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "新分支叫什么？"
           }
         }
       }
@@ -2990,6 +4760,12 @@
             "state" : "translated",
             "value" : "Option 1, decision sheet: big buttons fill the row"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "方案 1 决定单：大按钮占满一行"
+          }
         }
       }
     },
@@ -2999,6 +4775,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Option 2, ask in thread: buttons sit by the input"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "方案 2 对话里问：按钮贴输入框"
           }
         }
       }
@@ -3010,6 +4792,12 @@
             "state" : "translated",
             "value" : "Option 3, solemn approval: slide to agree"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "方案 3 郑重放行：滑过去才同意"
+          }
         }
       }
     },
@@ -3019,6 +4807,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Option 4, drawer: pulls up from the bottom"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "方案 4 抽屉：从底下拉出来"
           }
         }
       }
@@ -3030,6 +4824,12 @@
             "state" : "translated",
             "value" : "Draft: three tiers above the fold"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "方案稿：首屏三档并排"
+          }
         }
       }
     },
@@ -3039,6 +4839,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Travel"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "旅行"
           }
         }
       }
@@ -3050,6 +4856,12 @@
             "state" : "translated",
             "value" : "Log.txt"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "日志.txt"
+          }
         }
       }
     },
@@ -3059,6 +4871,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Old plan: polling session state"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "旧方案：轮询会话状态"
           }
         }
       }
@@ -3070,6 +4888,12 @@
             "state" : "translated",
             "value" : "Old plan: polling session state\n\nCheck every two seconds; drains the battery."
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "旧方案：轮询会话状态\n\n每两秒查一次，耗电。"
+          }
         }
       }
     },
@@ -3079,6 +4903,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "The `scripts/billing-legacy` directory has no callers left, and CI no longer runs it. Delete it?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "旧的计费脚本目录 `scripts/billing-legacy` 已经没有调用方了，CI 里也不再跑。要删掉吗？"
           }
         }
       }
@@ -3090,6 +4920,12 @@
             "state" : "translated",
             "value" : "Old billing scripts are still in use"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "旧的计费脚本还在用"
+          }
         }
       }
     },
@@ -3099,6 +4935,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Old Landing Page"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "旧落地页"
           }
         }
       }
@@ -3110,6 +4952,12 @@
             "state" : "translated",
             "value" : "Old landing page copy\n\nHero title and three selling points."
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "旧落地页文案\n\n首屏标题与三段卖点。"
+          }
         }
       }
     },
@@ -3119,6 +4967,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Minimal (alongside other Live Activities)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最小（和别的实时活动同在）"
           }
         }
       }
@@ -3130,6 +4984,12 @@
             "state" : "translated",
             "value" : "Final, light: pricing page top"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最终版浅色：定价页首屏"
+          }
         }
       }
     },
@@ -3139,6 +4999,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Final, dark: pricing page top"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最终版深色：定价页首屏"
           }
         }
       }
@@ -3150,6 +5016,12 @@
             "state" : "translated",
             "value" : "The operation couldn't be completed. (CKErrorDomain error 15.) (<CKError 0x6000: \"Server Rejected Request\" (15/2000); server message = \"Internal server error\">)"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未能完成操作。（CKErrorDomain错误15。）（<CKError 0x6000: \"Server Rejected Request\" (15/2000); server message = \"Internal server error\">）"
+          }
         }
       }
     },
@@ -3159,6 +5031,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "This week"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "本周"
           }
         }
       }
@@ -3170,6 +5048,12 @@
             "state" : "translated",
             "value" : "Make the title a bit shorter"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "标题再短一点"
+          }
         }
       }
     },
@@ -3179,6 +5063,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Model.usdz"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "模型.usdz"
           }
         }
       }
@@ -3190,6 +5080,12 @@
             "state" : "translated",
             "value" : "The model rejected the request (400)"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "模型拒绝了请求（400）"
+          }
         }
       }
     },
@@ -3199,6 +5095,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "The model rejected the request (400): prompt is too long"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "模型拒绝了请求（400）：prompt is too long"
           }
         }
       }
@@ -3210,6 +5112,12 @@
             "state" : "translated",
             "value" : "Landscape (narrow compact)"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "横屏（窄紧凑态）"
+          }
         }
       }
     },
@@ -3219,6 +5127,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "No jumping when switching orientation"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "横竖屏切换不跳动"
           }
         }
       }
@@ -3230,6 +5144,12 @@
             "state" : "translated",
             "value" : "Welcome back"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "欢迎回来"
+          }
         }
       }
     },
@@ -3239,6 +5159,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Production is live. I tried two rooms of 5+: speaking order is right, and it keeps first-join order after reconnects too."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正式环境部署好了。5 人以上的房间我开了两个试过，发言顺序都对，重连后也保持首次加入的顺序。"
           }
         }
       }
@@ -3250,6 +5176,12 @@
             "state" : "translated",
             "value" : "Notes"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正文"
+          }
         }
       }
     },
@@ -3259,6 +5191,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Finish one chapter a week"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "每周读完一章"
           }
         }
       }
@@ -3270,6 +5208,12 @@
             "state" : "translated",
             "value" : "Compare quotes\n\nThree quotes; price plumbing and electrical separately."
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "比价\n\n三家报价，水电分开算。"
+          }
         }
       }
     },
@@ -3279,6 +5223,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Cover letter\n\nRewrite the first paragraph to match the job description."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "求职信\n\n按岗位描述改写第一段。"
           }
         }
       }
@@ -3290,6 +5240,12 @@
             "state" : "translated",
             "value" : "Summarize this week’s commits"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "汇总这周的提交"
+          }
         }
       }
     },
@@ -3299,6 +5255,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Briefing.pptx"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "汇报.pptx"
           }
         }
       }
@@ -3310,6 +5272,12 @@
             "state" : "translated",
             "value" : "Nothing running: the Live Activity has ended and the Dynamic Island is clear"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没有在跑的活：实时活动已结束，灵动岛空出来"
+          }
         }
       }
     },
@@ -3319,6 +5287,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "No new warnings"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没有新增警告"
           }
         }
       }
@@ -3330,6 +5304,12 @@
             "state" : "translated",
             "value" : "Couldn’t connect to Apple Push Notification service"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没有连接到 Apple 推送服务"
+          }
         }
       }
     },
@@ -3339,6 +5319,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "One light, one dark, both from your reference"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "浅色深色各一张，都按你给的参考图"
           }
         }
       }
@@ -3350,6 +5336,12 @@
             "state" : "translated",
             "value" : "One light and one dark version; button contrast passes 4.5:1"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "浅色深色各一版，按钮对比度都过了 4.5:1"
+          }
         }
       }
     },
@@ -3359,6 +5351,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "The light one is done; still shooting the dark one."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "浅色那张换好了，深色的还在拍。"
           }
         }
       }
@@ -3370,6 +5368,12 @@
             "state" : "translated",
             "value" : "Light: Pro outline marks it as recommended"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "浅色：专业档描边是推荐"
+          }
         }
       }
     },
@@ -3379,6 +5383,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Light: new README screenshot"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "浅色：新的 README 截图"
           }
         }
       }
@@ -3390,6 +5400,12 @@
             "state" : "translated",
             "value" : "Tests"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "测试"
+          }
         }
       }
     },
@@ -3399,6 +5415,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tests use stand-ins only; never send key or mouse events to other apps"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "测试只用替身，不向别的应用发键鼠事件"
           }
         }
       }
@@ -3410,6 +5432,12 @@
             "state" : "translated",
             "value" : "Tests are running; staging deploy in about twenty minutes."
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "测试在跑，大概二十分钟后能部署到预发。"
+          }
         }
       }
     },
@@ -3419,6 +5447,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Test Report.pdf"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "测试报告.pdf"
           }
         }
       }
@@ -3430,6 +5464,12 @@
             "state" : "translated",
             "value" : "Deploy if the tests all pass"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "测试都过了就部署"
+          }
         }
       }
     },
@@ -3439,6 +5479,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "If the tests all pass, deploy to staging"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "测试都过了就部署到预发环境"
           }
         }
       }
@@ -3450,6 +5496,12 @@
             "state" : "translated",
             "value" : "Paper looks gray in dark mode"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "深色模式下纸色偏灰"
+          }
         }
       }
     },
@@ -3459,6 +5511,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Dark: button contrast is enough"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "深色：按钮对比度够"
           }
         }
       }
@@ -3470,6 +5528,12 @@
             "state" : "translated",
             "value" : "Clean up old billing scripts"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "清理旧的计费脚本"
+          }
         }
       }
     },
@@ -3479,6 +5543,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Render"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "渲染"
           }
         }
       }
@@ -3490,6 +5560,12 @@
             "state" : "translated",
             "value" : "Slide to allow ›"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "滑过去，可以 ›"
+          }
         }
       }
     },
@@ -3499,6 +5575,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "The user is in San Francisco; don’t wake them after 11 p.m."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "用户住在上海，晚上十一点以后别叫醒"
           }
         }
       }
@@ -3510,6 +5592,12 @@
             "state" : "translated",
             "value" : "Sign in to Atlas with email"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "用邮箱登录 Atlas"
+          }
         }
       }
     },
@@ -3519,6 +5607,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Canvas Zoom"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "画布缩放"
           }
         }
       }
@@ -3530,6 +5624,12 @@
             "state" : "translated",
             "value" : "Canvas zoom\n\nTwo-finger zoom anchors to the pointer."
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "画布缩放\n\n双指缩放锚点跟随指针。"
+          }
         }
       }
     },
@@ -3539,6 +5639,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Canvas zoom anchors to the pointer"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "画布缩放锚点跟随指针"
           }
         }
       }
@@ -3550,6 +5656,12 @@
             "state" : "translated",
             "value" : "Sign In"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "登录"
+          }
         }
       }
     },
@@ -3559,6 +5671,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Login callback"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "登录回调"
           }
         }
       }
@@ -3570,6 +5688,12 @@
             "state" : "translated",
             "value" : "login callback timeout"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "登录回调 超时"
+          }
         }
       }
     },
@@ -3579,6 +5703,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Move login callback to the unified gateway"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "登录回调改走统一网关"
           }
         }
       }
@@ -3590,6 +5720,12 @@
             "state" : "translated",
             "value" : "The login callback fix is verified. Push to **origin/main**?"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "登录回调的修复验过了，要**推送到 origin/main** 吗？"
+          }
         }
       }
     },
@@ -3599,6 +5735,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Login callback timeout: no timeout while waiting for the token refresh, so a slow network hangs forever; changed to 10 seconds, then back to the login page to re-authorize"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "登录回调的超时问题：等 token 刷新时没设超时，网络慢会一直挂着；改成 10 秒超时、超时后回登录页重新授权"
           }
         }
       }
@@ -3610,6 +5752,12 @@
             "state" : "translated",
             "value" : "Login callback timeout"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "登录回调超时"
+          }
         }
       }
     },
@@ -3619,6 +5767,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Signed in (demo)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "登录成功（演示）"
           }
         }
       }
@@ -3630,6 +5784,12 @@
             "state" : "translated",
             "value" : "Sign-in timed out. Please sign in again."
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "登录超时，请重新登录"
+          }
         }
       }
     },
@@ -3639,6 +5799,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Login page v2: full tappable page"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "登录页 v2：可点的完整页面"
           }
         }
       }
@@ -3650,6 +5816,12 @@
             "state" : "translated",
             "value" : "The login page is fixed. Push to origin/main?"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "登录页修好了，要推送到 origin/main 吗？"
+          }
         }
       }
     },
@@ -3659,6 +5831,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Login page (after timeout)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "登录页（超时后）"
           }
         }
       }
@@ -3670,6 +5848,12 @@
             "state" : "translated",
             "value" : "There are 3 files in the directory:\n- README.md\n- notes.txt\n- todo.md"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "目录里有 3 个文件：\n- README.md\n- notes.txt\n- todo.md"
+          }
         }
       }
     },
@@ -3679,6 +5863,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Check on notes-edit"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "看 notes-edit 的近况"
           }
         }
       }
@@ -3690,6 +5880,12 @@
             "state" : "translated",
             "value" : "Check on “README screenshots”"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "看「README 截图」的近况"
+          }
         }
       }
     },
@@ -3699,6 +5895,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Check on “Turn order shuffled”"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "看「发言轮次乱序」的近况"
           }
         }
       }
@@ -3710,6 +5912,12 @@
             "state" : "translated",
             "value" : "Check on “Import legacy data”"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "看「导入旧数据」的近况"
+          }
         }
       }
     },
@@ -3719,6 +5927,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Check whether the tests have finished and paste me the results"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "看一下测试跑完没有，跑完把结果贴给我"
           }
         }
       }
@@ -3730,6 +5944,12 @@
             "state" : "translated",
             "value" : "Look at the output of step %lld"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "看一下第 %lld 步的输出"
+          }
         }
       }
     },
@@ -3739,6 +5959,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Check whether the production migration is stuck"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "看一下线上库的迁移有没有卡住"
           }
         }
       }
@@ -3750,6 +5976,12 @@
             "state" : "translated",
             "value" : "Checked Roundtable: shuffle reproduced. People who reconnect get a new join time."
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "看了圆桌：复现乱序完成，原因是重连的人拿到了新的加入时间"
+          }
         }
       }
     },
@@ -3759,6 +5991,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Checked Roundtable: production deploy complete, smoke tests all pass"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "看了圆桌：正式环境部署完成，冒烟测试全过"
           }
         }
       }
@@ -3770,6 +6008,12 @@
             "state" : "translated",
             "value" : "Checked Roundtable: people who reconnect got a new join time. That’s where the shuffle comes from"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "看了圆桌：重连的人拿到了新的加入时间，乱序就是从这来的"
+          }
         }
       }
     },
@@ -3779,6 +6023,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Board"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "看板"
           }
         }
       }
@@ -3790,6 +6040,12 @@
             "state" : "translated",
             "value" : "Look at the scheduler reconnect issue"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "看看 scheduler 的重连问题"
+          }
         }
       }
     },
@@ -3799,6 +6055,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Take a look at that bug where the delivery queue times out"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "看看投送队列超时的那个 bug"
           }
         }
       }
@@ -3810,6 +6072,12 @@
             "state" : "translated",
             "value" : "space"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "空格"
+          }
         }
       }
     },
@@ -3819,6 +6087,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Message %lld: "
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "第 %lld 句："
           }
         }
       }
@@ -3830,6 +6104,12 @@
             "state" : "translated",
             "value" : "Step %lld"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "第 %lld 步"
+          }
         }
       }
     },
@@ -3839,6 +6119,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Line %lld"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "第 %lld 行"
           }
         }
       }
@@ -3850,6 +6136,12 @@
             "state" : "translated",
             "value" : "Answer for round %lld. The scheduler gets a new timestamp when someone reconnects, so sorting by join time puts reconnecting people first; after switching to first-join time, "
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "第 %lld 轮的回答。调度器在重连时会拿到新的时间戳，所以按加入时间排序会把重连的人排到最前；改成按首次加入时间排序之后，"
+          }
         }
       }
     },
@@ -3859,6 +6151,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Round %lld, pasting the logs:"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "第 %lld 轮，我把日志贴过来："
           }
         }
       }
@@ -3870,6 +6168,12 @@
             "state" : "translated",
             "value" : "Round %lld: turn the previous result into a table"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "第 %lld 轮：把上一步的结果整理成表格"
+          }
         }
       }
     },
@@ -3879,6 +6183,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Waited more than 10 seconds for authorization and stopped"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "等待授权超过 10 秒，已停止等待"
           }
         }
       }
@@ -3890,6 +6200,12 @@
             "state" : "translated",
             "value" : "Waiting over 10 seconds for authorization returns to the login page and says why"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "等授权超过 10 秒就回到登录页，说明了原因"
+          }
         }
       }
     },
@@ -3899,6 +6215,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Type check"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "类型检查"
           }
         }
       }
@@ -3910,6 +6232,12 @@
             "state" : "translated",
             "value" : "Swap the hero image on the landing page"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "给落地页换一张首图"
+          }
         }
       }
     },
@@ -3919,6 +6247,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Continue"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "继续"
           }
         }
       }
@@ -3930,6 +6264,12 @@
             "state" : "translated",
             "value" : "Renew the domain"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "续费域名"
+          }
         }
       }
     },
@@ -3939,6 +6279,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Add a deadline to the domain renewal item"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "续费域名那条再加上截止日期"
           }
         }
       }
@@ -3950,6 +6296,12 @@
             "state" : "translated",
             "value" : "Add an owner and a link to the domain renewal item"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "续费域名那条加上负责人和链接"
+          }
         }
       }
     },
@@ -3959,6 +6311,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Edit the commit message"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "编辑提交说明"
           }
         }
       }
@@ -3970,6 +6328,12 @@
             "state" : "translated",
             "value" : "Edit the commit message\nSave after editing in the editor"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "编辑提交说明\n在编辑器里改好后保存"
+          }
         }
       }
     },
@@ -3979,6 +6343,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Zoom around the point under the pointer: the content beneath it stays put while everything else scales around it\nPinch on a trackpad, ⌘ + scroll, and double-click should all work; no bounce at the zoom limits"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "缩放时以指针所在的点为锚点，指针下的那块内容不动、四周跟着放大缩小\n触控板捏合、⌘ 加滚轮、双击放大三种入口都要对，缩放到边界时不回弹"
           }
         }
       }
@@ -3990,6 +6360,12 @@
             "state" : "translated",
             "value" : "Walt"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "老王"
+          }
         }
       }
     },
@@ -3999,6 +6375,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Contact Us"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "联系我们"
           }
         }
       }
@@ -4010,6 +6392,12 @@
             "state" : "translated",
             "value" : "Nodes snap to the grid"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "节点吸附到网格"
+          }
         }
       }
     },
@@ -4019,6 +6407,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Menu bar panel sends on ⌘↩"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "菜单栏面板 ⌘↩ 直接发出"
           }
         }
       }
@@ -4030,6 +6424,12 @@
             "state" : "translated",
             "value" : "Can the menu bar panel take dragged-in images?"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "菜单栏面板能不能直接拖图进来？"
+          }
         }
       }
     },
@@ -4039,6 +6439,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Landing page, light and dark"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "落地页深浅两版"
           }
         }
       }
@@ -4050,6 +6456,12 @@
             "state" : "translated",
             "value" : "Add 3 reconnect cases"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "补 3 个重连用例"
+          }
         }
       }
     },
@@ -4059,6 +6471,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Added “Six people reconnecting at once keep their order”; running it"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "补了「6 人同时重连顺序不变」，在跑"
           }
         }
       }
@@ -4070,6 +6488,12 @@
             "state" : "translated",
             "value" : "Add cases for timeout retry"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "补超时重试的用例"
+          }
         }
       }
     },
@@ -4079,6 +6503,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Woken by canvas-zoom"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "被 canvas-zoom 叫醒"
           }
         }
       }
@@ -4090,6 +6520,12 @@
             "state" : "translated",
             "value" : "The model rejected it (prompt too long). I need to split it into chunks; your call when you’re back"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "被模型拒了（prompt 太长），要拆成几段读，等你回来定"
+          }
         }
       }
     },
@@ -4099,6 +6535,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Renovation"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "装修"
           }
         }
       }
@@ -4110,6 +6552,12 @@
             "state" : "translated",
             "value" : "You need to edit the commit message in the editor and save. I can’t do that part for you"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "要你在编辑器里改好提交说明再保存，这一步我替不了"
+          }
         }
       }
     },
@@ -4119,6 +6567,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Commit now?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "要提交吗？"
           }
         }
       }
@@ -4130,6 +6584,12 @@
             "state" : "translated",
             "value" : "It should open offline"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "要能离线打开"
+          }
         }
       }
     },
@@ -4139,6 +6599,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Overwrite public/feed.xml?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "要覆盖 public/feed.xml 吗？"
           }
         }
       }
@@ -4150,6 +6616,12 @@
             "state" : "translated",
             "value" : "Overwrite tests/test_greet.py?"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "要覆盖 tests/test_greet.py 吗？"
+          }
         }
       }
     },
@@ -4159,6 +6631,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Overwrite"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "覆盖"
           }
         }
       }
@@ -4170,6 +6648,12 @@
             "state" : "translated",
             "value" : "Plan retry boundaries for the delivery queue"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "规划投送队列的重试边界"
+          }
         }
       }
     },
@@ -4179,6 +6663,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "The billing session is stuck on the signature for the quota endpoint; I had it print the raw request first."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "计费会话卡在额度接口的签名上，我让它先把请求原文打出来。"
           }
         }
       }
@@ -4190,6 +6680,12 @@
             "state" : "translated",
             "value" : "Billing quota"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "计费额度"
+          }
         }
       }
     },
@@ -4199,6 +6695,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Had atlas switch to sorting by first-join time; running the scheduler tests"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "让 atlas 改成按首次加入时间排序，正在跑 scheduler 的测试"
           }
         }
       }
@@ -4210,6 +6712,12 @@
             "state" : "translated",
             "value" : "Have subagents review these two branches in parallel"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "让子代理分头审查这两个分支"
+          }
         }
       }
     },
@@ -4219,6 +6727,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Noted: no releases on Fridays."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "记下了，周五不发版。"
           }
         }
       }
@@ -4230,6 +6744,12 @@
             "state" : "translated",
             "value" : "Noted: README screenshots need one light and one dark"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "记下：README 截图要浅色深色各一张"
+          }
         }
       }
     },
@@ -4239,6 +6759,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "The native app for capturing ideas, managing tasks, and directing agents"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "记灵感、管任务、指挥 Agent 的原生 App"
           }
         }
       }
@@ -4250,6 +6776,12 @@
             "state" : "translated",
             "value" : "Set the session name"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "设置会话名"
+          }
         }
       }
     },
@@ -4259,6 +6791,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Set the thinking level"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "设置思考强度"
           }
         }
       }
@@ -4270,6 +6808,12 @@
             "state" : "translated",
             "value" : "Settings: warn about shortcut conflicts"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "设置页加快捷键冲突提示"
+          }
         }
       }
     },
@@ -4279,6 +6823,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Design iCloud sync\n\nCome up with three approaches for iCloud sync, compare their costs, and recommend one with reasons.\n---\nConstraint: concurrent offline edits keep both versions; never overwrite silently."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "设计 iCloud 同步\n\n给 iCloud 同步出三个方案，比较代价，推荐一个并说明理由。\n---\n约束：离线并发编辑保留两个版本，不静默覆盖。"
           }
         }
       }
@@ -4290,6 +6840,12 @@
             "state" : "translated",
             "value" : "Designer"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "设计师"
+          }
         }
       }
     },
@@ -4299,6 +6855,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Design notifications\n\nNotify when Pi finishes or needs your confirmation; tapping jumps to the session."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "设计通知\n\nPi 完成与等你确认时推送，点通知跳到会话。"
           }
         }
       }
@@ -4310,6 +6872,12 @@
             "state" : "translated",
             "value" : "Assess whether the README needs an FAQ section and run the tests"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "评估 README 是否需要加一节 FAQ 并跑一遍测试"
+          }
         }
       }
     },
@@ -4319,6 +6887,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Review"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "评审"
           }
         }
       }
@@ -4330,6 +6904,12 @@
             "state" : "translated",
             "value" : "The review has two items for you to decide"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "评审结论里有两处要你定"
+          }
         }
       }
     },
@@ -4339,6 +6919,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Review: three things still to fix"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "评审结论：还有三处要改"
           }
         }
       }
@@ -4350,6 +6936,12 @@
             "state" : "translated",
             "value" : "Review: legacy import\n\nReview the legacy-import changes in {{branch}}; only report issues that cause incorrect behavior."
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "评审：导入旧数据\n\n审查 {{分支}} 中导入旧数据相关改动，只报告会导致错误行为的问题。"
+          }
         }
       }
     },
@@ -4359,6 +6951,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Review: shortcut recording\n\nOnly look for issues that cause incorrect behavior."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "评审：快捷键录制\n\n只看会导致错误行为的问题。"
           }
         }
       }
@@ -4370,6 +6968,12 @@
             "state" : "translated",
             "value" : "Review: search filters\n\nFilter before paginating so the total isn’t affected by paging."
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "评审：搜索筛选\n\n分页前先筛选，总数不受分页影响。"
+          }
         }
       }
     },
@@ -4379,6 +6983,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Review: billing quota\n\nReview the billing-quota changes in {{branch}}."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "评审：计费额度\n\n审查 {{分支}} 中计费额度相关改动。"
           }
         }
       }
@@ -4390,6 +7000,12 @@
             "state" : "translated",
             "value" : "Request timed out"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请求超时"
+          }
         }
       }
     },
@@ -4399,6 +7015,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Reading"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "读书"
           }
         }
       }
@@ -4410,6 +7032,12 @@
             "state" : "translated",
             "value" : "Reading Sources/Zoom.swift"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "读取 Sources/Zoom.swift"
+          }
         }
       }
     },
@@ -4419,6 +7047,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Done reading."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "读完了。"
           }
         }
       }
@@ -4430,6 +7064,12 @@
             "state" : "translated",
             "value" : "Reading the board · written when the window closed"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "读看板 · 关窗时写下"
+          }
         }
       }
     },
@@ -4439,6 +7079,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Research CKSyncEngine\n\nRecord-level sync, asset upload, and conflict handling."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "调研 CKSyncEngine\n\n记录级同步、资产上传与冲突处理。"
           }
         }
       }
@@ -4450,6 +7096,12 @@
             "state" : "translated",
             "value" : "Injected read failure (-CuePadCatalogFailure)"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "调试注入的读取失败（-CuePadCatalogFailure）"
+          }
         }
       }
     },
@@ -4459,6 +7111,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Library read/write error: database is locked (SQLite: database is locked [UPDATE syncState SET value = ?])"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "资料库读写出错：database is locked（SQLite: database is locked [UPDATE syncState SET value = ?]）"
           }
         }
       }
@@ -4470,6 +7128,12 @@
             "state" : "translated",
             "value" : "Back at the login page after the timeout"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "超时后回到登录页"
+          }
         }
       }
     },
@@ -4479,6 +7143,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "All 3 timeout cases pass"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "超时用例 3 个都过了"
           }
         }
       }
@@ -4490,6 +7160,12 @@
             "state" : "translated",
             "value" : "Run the scheduler tests. If any fail, don’t change code yet; tell me why"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "跑一下 scheduler 的测试，失败的话先别改代码，告诉我原因"
+          }
         }
       }
     },
@@ -4499,6 +7175,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Run the scheduler tests and find who gets sorted first in rooms of 5+\nDon’t change code yet; tell me the cause and the fix"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "跑一下 scheduler 的测试，找出 5 人以上时谁被排到了最前\n先别改代码，告诉我原因和改法"
           }
         }
       }
@@ -4510,6 +7192,12 @@
             "state" : "translated",
             "value" : "Lin is up"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "轮到小林发言"
+          }
         }
       }
     },
@@ -4519,6 +7207,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Migrate the delivery queue\n\nMove the delivery queue to the new storage layer; import old data in one go."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "迁移投送队列\n\n把投送队列迁到新的存储层，旧数据一次性导入。"
           }
         }
       }
@@ -4530,6 +7224,12 @@
             "state" : "translated",
             "value" : "Migration script"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "迁移脚本"
+          }
         }
       }
     },
@@ -4539,6 +7239,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "The migration stopped at step 14: `add_index_on_cards` is waiting on a lock. Nothing else is writing right now, so it’s safe to rerun."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "迁移跑到第 14 步停住了：`add_index_on_cards` 在等锁。现在没有别的写入，可以安全重跑。"
           }
         }
       }
@@ -4550,6 +7256,12 @@
             "state" : "translated",
             "value" : "Run pnpm test billing"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "运行 pnpm test billing"
+          }
         }
       }
     },
@@ -4559,6 +7271,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Run pnpm test export"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "运行 pnpm test export"
           }
         }
       }
@@ -4570,6 +7288,12 @@
             "state" : "translated",
             "value" : "On the Way.png"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "还在路上.png"
+          }
         }
       }
     },
@@ -4579,6 +7303,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Almost; waiting on upstream merge"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "还差一点，等上游合并"
           }
         }
       }
@@ -4590,6 +7320,12 @@
             "state" : "translated",
             "value" : "I’ll decide these two; list them out first"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这两处我来定，先列出来"
+          }
         }
       }
     },
@@ -4599,6 +7335,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "This Mac"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这台 Mac"
           }
         }
       }
@@ -4610,6 +7352,12 @@
             "state" : "translated",
             "value" : "23 commits this week, mostly sync and the Agent page."
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这周 23 个提交，主要是同步和 Agent 页。"
+          }
         }
       }
     },
@@ -4619,6 +7367,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Why is this slow? Show me the hot code"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这里为什么会慢？给我看一下热点代码"
           }
         }
       }
@@ -4630,6 +7384,12 @@
             "state" : "translated",
             "value" : "Pick the plan that fits you"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选一个适合你的方案"
+          }
         }
       }
     },
@@ -4639,6 +7399,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Passed"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通过"
           }
         }
       }
@@ -4650,6 +7416,12 @@
             "state" : "translated",
             "value" : "Pi on that Mac has exited; it couldn’t be delivered"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "那台 Mac 上的 Pi 已经退出，没能送进去"
+          }
         }
       }
     },
@@ -4659,6 +7431,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Email"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "邮箱"
           }
         }
       }
@@ -4670,6 +7448,12 @@
             "state" : "translated",
             "value" : "Deploy to production?"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "部署到生产吗？"
+          }
         }
       }
     },
@@ -4679,6 +7463,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Deploy to production?\nThis replaces 1.4.2, which is live now"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "部署到生产吗？\n会替换当前线上的 1.4.2"
           }
         }
       }
@@ -4690,6 +7480,12 @@
             "state" : "translated",
             "value" : "Deploy to staging"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "部署到预发环境"
+          }
         }
       }
     },
@@ -4699,6 +7495,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Before deploying, tell the test channel and wait for someone to reply before pushing; no releases after Friday afternoon unless it’s an urgent fix"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "部署前先在测试群说一声，等有人回了再推；周五下午之后不发版，紧急修复除外"
           }
         }
       }
@@ -4710,6 +7512,12 @@
             "state" : "translated",
             "value" : "Rebuild the pricing section"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重做定价区"
+          }
         }
       }
     },
@@ -4719,6 +7527,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Rebuild the pricing section; the three tiers shouldn’t squeeze into two rows on narrow screens"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重做定价区，三档在窄屏别挤成两行"
           }
         }
       }
@@ -4730,6 +7544,12 @@
             "state" : "translated",
             "value" : "Reload extensions, skills, prompt templates, and context files"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重新载入扩展、skill、提示词模板与上下文文件"
+          }
         }
       }
     },
@@ -4739,6 +7559,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Refactor the menu bar panel\n\nSplit the menu bar panel in {{module path}} into its own module, keeping the public interface unchanged.\n\n- Under 100ms from summon to ready for input\n- See the [NSPanel docs](https://developer.apple.com/documentation/appkit/nspanel)\n---\nWhen done, put a summary of the changes in the release notes."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重构菜单栏面板\n\n把 {{模块路径}} 里的菜单栏面板拆成独立模块，保持公开接口不变。\n\n- 唤起到可输入 < 100ms\n- 参考 [NSPanel 文档](https://developer.apple.com/documentation/appkit/nspanel)\n---\n完成后把改动摘要写进发布说明。"
           }
         }
       }
@@ -4750,6 +7576,12 @@
             "state" : "translated",
             "value" : "Refactor Settings\n\nDescribe each setting by what happens when you turn it on."
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重构设置页\n\n设置项的描述写打开后会发生什么。"
+          }
         }
       }
     },
@@ -4759,6 +7591,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "reconnects no longer change the order. In the stress test p95 dropped from 12ms to 9ms with memory about the same. Two more timeout paths have no cases yet; adding them should bring coverage to around 85%."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重连不再改变顺序，压测里 p95 从 12ms 降到 9ms，内存基本不变。另外两条超时路径还没有用例覆盖，补上之后覆盖率能到 85% 左右。"
           }
         }
       }
@@ -4770,6 +7608,12 @@
             "state" : "translated",
             "value" : "Reconnect keeps first-join time"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重连后保留首次加入时间"
+          }
         }
       }
     },
@@ -4779,6 +7623,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Reconnect Test Report"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重连测试报告"
           }
         }
       }
@@ -4790,6 +7640,12 @@
             "state" : "translated",
             "value" : "All 4 reconnect cases pass"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重连用例 4 个都过了"
+          }
         }
       }
     },
@@ -4799,6 +7655,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "All reconnect cases pass"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重连用例全部通过"
           }
         }
       }
@@ -4810,6 +7672,12 @@
             "state" : "translated",
             "value" : "How many reconnect cases did you add?"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重连用例加了几个？"
+          }
         }
       }
     },
@@ -4819,6 +7687,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Three more reconnect cases"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重连用例补三个"
           }
         }
       }
@@ -4830,6 +7704,12 @@
             "state" : "translated",
             "value" : "Reconnect cases all pass and staging is deployed; screenshots are on the task. Push to origin/main?"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重连用例都过了，预发也部署好了，截图放在任务上。要推送到 origin/main 吗？"
+          }
         }
       }
     },
@@ -4839,6 +7719,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Reconnected · same spot"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重连过 · 位置没变"
           }
         }
       }
@@ -4850,6 +7736,12 @@
             "state" : "translated",
             "value" : "Lock Screen"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "锁屏"
+          }
         }
       }
     },
@@ -4859,6 +7751,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Long-press Dynamic Island"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "长按灵动岛"
           }
         }
       }
@@ -4870,6 +7768,12 @@
             "state" : "translated",
             "value" : "Marketplace"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "闲鱼"
+          }
         }
       }
     },
@@ -4879,6 +7783,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Jay"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "阿杰"
           }
         }
       }
@@ -4890,6 +7800,12 @@
             "state" : "translated",
             "value" : "Requirements.docx"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "需求.docx"
+          }
         }
       }
     },
@@ -4899,6 +7815,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Also back up the production database"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "顺便备份一下线上数据库"
           }
         }
       }
@@ -4910,6 +7832,12 @@
             "state" : "translated",
             "value" : "Also take a look at that login callback timeout"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "顺便看看登录回调那个超时"
+          }
         }
       }
     },
@@ -4919,6 +7847,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Also look at that login callback timeout. Could it be the retry interval?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "顺便看看登录回调那个超时，是不是和重试间隔有关"
           }
         }
       }
@@ -4930,6 +7864,12 @@
             "state" : "translated",
             "value" : "Staging"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "预发"
+          }
         }
       }
     },
@@ -4939,6 +7879,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Staging 1.4.2"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "预发 1.4.2"
           }
         }
       }
@@ -4950,6 +7896,12 @@
             "state" : "translated",
             "value" : "The four changes going out in staging 1.4.2"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "预发 1.4.2 要上的四处改动"
+          }
         }
       }
     },
@@ -4959,6 +7911,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Staging.png"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "预发.png"
           }
         }
       }
@@ -4970,6 +7928,12 @@
             "state" : "translated",
             "value" : "Speaking order of 6 people on staging"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "预发上 6 人的发言顺序"
+          }
         }
       }
     },
@@ -4979,6 +7943,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Speaking order on staging"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "预发上的发言顺序"
           }
         }
       }
@@ -5006,6 +7976,12 @@
             "state" : "translated",
             "value" : "First launch walks you through linking a folder"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "首次启动引导绑定文件夹"
+          }
         }
       }
     },
@@ -5015,6 +7991,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Homepage Redesign"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "首页改版"
           }
         }
       }
@@ -5026,6 +8008,12 @@
             "state" : "translated",
             "value" : "Homepage redesign\n\nCome up with three homepage redesigns and compare their costs."
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "首页改版\n\n给首页改版出三个方案，比较代价。"
+          }
         }
       }
     },
@@ -5035,6 +8023,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Homepage redesign copy"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "首页改版文案"
           }
         }
       }
@@ -5046,6 +8040,12 @@
             "state" : "translated",
             "value" : "New copy for the homepage title"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "首页标题换成新文案"
+          }
         }
       }
     },
@@ -5055,6 +8055,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Default"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "默认"
           }
         }
       }
