@@ -72,10 +72,11 @@ enum Schema {
       try db.exec("ALTER TABLE cueProfile DROP COLUMN allows")
     },
     // 70：留空。它曾把醒来记录的名字补进明文的 wake，没发布就撤回了（名字是用户内容，改进加密的 places，见 71）；号留着，走过它的开发库照常往下升，
-    // 那里 wake 里多出的 name 读时忽略
+    // 那里 wake 里多出的 name 由 71 抹掉
     Upgrade { _ in },
     // 71：对话记下写下那一刻提到的那几处的样子（`CuePlace`：关联任务的名字、状态与子任务进度，叫醒 Cue 的会话、任务的名字），Cue 页只按记录画。
-    // 之前写下的补上升级时的样子（记录已不在的不补）；每台设备各自升级、不改 modifiedAt（不同步出去）：同一份数据补出同一份
+    // 之前写下的补上升级时的样子（记录已不在的不补），wake 按现在的 `CueWake` 重写一遍（抹掉 70 补进去的明文名字）；
+    // 每台设备各自升级、不改 modifiedAt（不同步出去）：同一份数据补出同一份
     Upgrade { db in
       try db.exec("ALTER TABLE cueMessages ADD COLUMN places TEXT")
       let rows = try db.query("SELECT id, taskID, wake FROM cueMessages WHERE taskID IS NOT NULL OR wake LIKE '%sessionActivity%'") {
@@ -83,7 +84,9 @@ enum Schema {
       }
       for row in rows {
         let places = try CuePlace.capture(task: row.task, wake: row.wake, in: db)
-        if !places.isEmpty { try db.run("UPDATE cueMessages SET places = ? WHERE id = ?", [JSONColumn.encode(places), row.id]) }
+        try db.run(
+          "UPDATE cueMessages SET places = ?, wake = coalesce(?, wake) WHERE id = ?",
+          [places.isEmpty ? nil : JSONColumn.encode(places), row.wake?.stored, row.id])
       }
     },
   ]
