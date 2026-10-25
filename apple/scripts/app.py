@@ -2,10 +2,10 @@
 """CuePad 的调试实例：起一份隔离实例，做一件事，一定退出。xc.sh 构建完调它，perf-mac.sh 用 exec。
 用法：app.py <shot|rec|run> <mac|ios|ipad> <CuePad.app> <库目录> [--device <UDID>] [--out <图|片>] [-- 启动参数…]
       app.py exec <CuePad.app> <库目录> [-- 启动参数…]   占住本检出那一份后 exec 成 CuePad（量完自己退出的 bench 用，$! 就是 CuePad）
+      app.py wait <就绪文件> <PID> [秒=60]              等 exec 起的实例写下就绪文件（kqueue）；它先退出或超时以 1 退出
       app.py stop                                       结束本检出 run 起的 Mac 实例
       app.py sockets                                    本检出实例的连接目录（终端里的会话 export CUEPAD_PI_SOCKET_DIR 为它才连得上）
       app.py preflight                                  Mac 截图、录屏前查台前调度
-另有 wait_ready（kqueue 等就绪文件）给 rusage.py 用。
 规则：
 1. 只起 apple/.derived* 里的构建；库、偏好、各家 Agent 的配置目录、命令行链接与连接目录都在库目录或本检出的 SOCKETS 下
    （isolated_env 是唯一一份，sync-bench.py 也用它），不碰真实资料库、~/.pi、~/.local/bin、~/CuePad（项目工作区）与 ~/Applications/CuePad.app。
@@ -30,9 +30,9 @@ import signal
 import sys
 
 sys.dont_write_bytecode = True
-from app_env import SOCKETS, die  # noqa: E402
+from app_env import READY_TIMEOUT, SOCKETS, die  # noqa: E402
 from app_mac import exec_mac, mac, preflight, stop  # noqa: E402
-from app_proc import interrupted  # noqa: E402
+from app_proc import interrupted, wait_ready  # noqa: E402
 from app_sim import sim  # noqa: E402
 
 
@@ -48,6 +48,8 @@ def main(argv):
         return preflight()
     if cmd == "sockets":
         return print(SOCKETS)
+    if cmd == "wait":
+        return wait_ready(argv[1], int(argv[2]), timeout=float(argv[3]) if len(argv) > 3 else READY_TIMEOUT)
     if cmd == "exec":
         return exec_mac(argv[1], argv[2], launch_args)
     if cmd not in ("shot", "rec", "run") or len(argv) < 4:

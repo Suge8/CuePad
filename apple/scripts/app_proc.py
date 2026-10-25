@@ -47,8 +47,8 @@ def quit_mac(proc):
             pass
 
 
-def wait_ready(path, pid, log=""):
-    """等就绪文件出现；App 先退出（多半是崩了）或超时就失败。"""
+def wait_ready(path, pid, log="", timeout=READY_TIMEOUT):
+    """等就绪文件出现；App 先退出（多半是崩了）或超过 timeout 秒就失败。"""
     queue, folder = select.kqueue(), os.open(os.path.dirname(path), os.O_RDONLY)
     try:
         watch = [select.kevent(folder, select.KQ_FILTER_VNODE, select.KQ_EV_ADD | select.KQ_EV_CLEAR, select.KQ_NOTE_WRITE),
@@ -58,13 +58,13 @@ def wait_ready(path, pid, log=""):
             exited = False
         except ProcessLookupError:
             exited = True
-        deadline = time.monotonic() + READY_TIMEOUT
+        deadline = time.monotonic() + timeout
         while not os.path.exists(path):
             if exited:
                 die(f"App 在画面就绪前退出了：崩溃报告在 ~/Library/Logs/DiagnosticReports/CuePad-*.ips{log and '，输出在 ' + log}")
             left = deadline - time.monotonic()
             if left <= 0:
-                die(f"{READY_TIMEOUT} 秒内画面没有就绪（没有写下 {path}）{log and '，输出在 ' + log}")
+                die(f"{timeout:g} 秒内画面没有就绪（没有写下 {path}）{log and '，输出在 ' + log}")
             exited = any(e.filter == select.KQ_FILTER_PROC for e in queue.control(None, 2, left))
     finally:
         os.close(folder)
