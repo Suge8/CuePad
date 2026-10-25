@@ -44,8 +44,9 @@ extension CueStore {
   }
 
   /// 订阅的这次读依赖这几句（还没发出的）在同步元数据里的行：它们被服务器收下（那一行有了 pushedModifiedAt）时叫醒，别的记录的推送、交出不叫醒。
+  /// 不在订阅里读时没有要登记的，也就不查。
   func dependOnUnsent(_ names: [String]) throws {
-    guard !names.isEmpty else { return }
+    guard readScopes != nil, !names.isEmpty else { return }
     try narrow(
       .syncRecords, column: "recordName", candidates: "pushedModifiedAt IS NOT NULL AND recordName IN (SELECT value FROM json_each(?))",
       arguments: [JSONColumn.encode(names)], to: { _ in true }) { _ in }

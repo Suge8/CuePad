@@ -26,7 +26,7 @@ private func minutes(_ date: Date) -> String {
 
 /// 卡片标题（`CueSummary`），过长截断。
 private func title(_ body: String) -> String {
-  let title = CueSummary(body).title
+  let title = CueSummary.title(of: body)
   guard !title.isEmpty else { return "（空）" }
   return title.count > 60 ? title.prefix(60) + "…" : title
 }

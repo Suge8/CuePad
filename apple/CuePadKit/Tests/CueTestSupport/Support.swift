@@ -126,7 +126,7 @@ public final class ManualTiming: Sendable {
 
   public func advance(_ duration: Duration) {
     let due: [CheckedContinuation<Void, Error>] = state.withLock { state in
-      state.current = state.current.addingTimeInterval(Self.seconds(duration))
+      state.current = state.current.addingTimeInterval(duration.seconds)
       let ready = state.sleepers.filter { $0.value.deadline <= state.current }
       for id in ready.keys { state.sleepers[id] = nil }
       return ready.values.map(\.continuation)
@@ -153,7 +153,7 @@ public final class ManualTiming: Sendable {
   }
 
   private func sleep(for duration: Duration) async throws {
-    try await sleep(until: { $0.addingTimeInterval(Self.seconds(duration)) })
+    try await sleep(until: { $0.addingTimeInterval(duration.seconds) })
   }
 
   /// 登记一个睡眠者，截止时刻由登记那一刻的 `current` 算出（按时长睡）或直接给定（睡到某一刻）。
@@ -177,10 +177,6 @@ public final class ManualTiming: Sendable {
     } onCancel: {
       state.withLock { $0.sleepers.removeValue(forKey: id)?.continuation }?.resume(throwing: CancellationError())
     }
-  }
-
-  private static func seconds(_ duration: Duration) -> TimeInterval {
-    Double(duration.components.seconds) + Double(duration.components.attoseconds) / 1e18
   }
 }
 

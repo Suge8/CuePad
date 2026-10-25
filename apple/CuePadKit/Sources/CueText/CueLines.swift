@@ -22,7 +22,7 @@ public enum CueLines {
         guard !CueFormat.isRule(line) else { return "" }
         // 绝大多数行没有图片引用：不必拆成记号再拼回去
         var text = line
-        if line.contains(CueFormat.imagePrefix) {
+        if CueFormat.hasImages(line) {
             text = CueFormat.parse(line).compactMap { token -> String? in
                 if case .text(let text) = token { text } else { nil }
             }.joined()
@@ -101,23 +101,45 @@ public struct CueSummary: Equatable, Sendable {
 
     public init(_ stored: String) {
         // 只读到标题之后第一段的末尾为止：长正文的后半段不用解析
-        var heading: String?
+        var lines = Lines(rest: Substring(stored))
+        title = Self.title(from: &lines)
         var paragraph: [String] = []
-        for raw in stored.split(separator: "\n", omittingEmptySubsequences: false) {
-            let line = CueLines.text(of: String(raw))
-            if heading == nil {
-                if !line.isEmpty { heading = Self.stripHeading(line) }
-            } else if !line.isEmpty {
+        while let line = lines.next() {
+            if !line.isEmpty {
                 paragraph.append(line)
             } else if !paragraph.isEmpty {
                 break
             }
         }
-        title = heading ?? ""
         preview = String(paragraph.joined(separator: " ").prefix(Self.previewLimit))
         linkHost = stored.range(of: "http").flatMap { stored[$0.lowerBound...].firstMatch(of: /https?:\/\/[^\s\/?#)\]]+/) }
             .flatMap { URL(string: String($0.output))?.host() }
             .map { $0.hasPrefix("www.") ? String($0.dropFirst(4)) : $0 }
+    }
+
+    /// 只要标题时用它（`Card.heading`、各处的卡片名字）：读到第一个有文字的行就停，不解析摘要与链接。
+    public static func title(of stored: String) -> String {
+        var lines = Lines(rest: Substring(stored))
+        return title(from: &lines)
+    }
+
+    private static func title(from lines: inout Lines) -> String {
+        while let line = lines.next() {
+            if !line.isEmpty { return stripHeading(line) }
+        }
+        return ""
+    }
+
+    /// 正文按 `\n` 逐行取有文字的部分（`CueLines.text(of:)`），用到哪行切到哪行：不先把整篇切成数组。
+    private struct Lines: IteratorProtocol {
+        var rest: Substring?
+
+        mutating func next() -> String? {
+            guard let current = rest else { return nil }
+            let end = current.firstIndex(of: "\n")
+            rest = end.map { current[current.index(after: $0)...] }
+            return CueLines.text(of: String(current[..<(end ?? current.endIndex)]))
+        }
     }
 
     /// 搜索结果里的摘要：标题之后的全部文字里第一处命中（不分大小写）离开头较远时，从命中处往前留 `snippetLead` 字截起、前面加"…"，

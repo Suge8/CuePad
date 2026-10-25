@@ -63,7 +63,7 @@ struct AttachmentSheet: View {
 
     var body: some View {
         VStack(spacing: 10) {
-            PanelHeader(title: CardText(outbox.content).label) {
+            PanelHeader(title: CardText.label(of: outbox.content)) {
                 Button("展开编辑", action: expand)
             }
             AttachmentBody(content: outbox.content, height: $contentHeight)

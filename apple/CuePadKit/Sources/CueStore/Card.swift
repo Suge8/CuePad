@@ -133,7 +133,7 @@ public enum CardChange: Sendable, Equatable {
 
 extension Card {
   /// 标题（`CueSummary` 的规则，唯一一处）：Cue 的工具、信封与界面都用它。空白的卡是空串（App 的 `title` 另给占位说法）。
-  public var heading: String { CueSummary(body).title }
+  public var heading: String { CueSummary.title(of: body) }
 
   /// 任务正文里标题下面的话（`CueLines.split`）：开工时连同标题一起发出。没有为 nil；写它只换这部分，标题那一行不动。
   public var rest: String? {

@@ -98,7 +98,7 @@ struct AttachmentSheet: View {
     var body: some View {
         NavigationStack {
             AttachmentBody(content: outbox.content, height: $contentHeight)
-                .navigationTitle(CardText(outbox.content).label)
+                .navigationTitle(CardText.label(of: outbox.content))
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) { Button("关闭", icon: .close, role: .cancel) { close() } }

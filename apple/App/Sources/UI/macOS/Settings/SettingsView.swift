@@ -295,7 +295,7 @@ private struct ConflictsRow: View {
                 VStack(alignment: .leading, spacing: 16) {
                     ForEach(services.conflicts, id: \.copy.id) { conflict in
                         VStack(alignment: .leading, spacing: 8) {
-                            Text(CardText(conflict.original.body).label).font(Typography.bodyStrong)
+                            Text(conflict.original.title).font(Typography.bodyStrong)
                             ForEach(conflict.versions) { version($0, of: conflict) }
                         }
                     }

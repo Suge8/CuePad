@@ -17,11 +17,10 @@ public enum ClaudeLogin {
     process.arguments = ["-c", tokenCommand]
     process.standardOutput = output
     process.standardError = FileHandle.nullDevice
-    guard (try? process.run()) != nil else { return nil }
+    guard let exit = try? ProcessExit(launching: process) else { return nil }
     let data = output.fileHandleForReading.readDataToEndOfFile()
-    process.waitUntilExit()
     let token = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
-    return process.terminationStatus == 0 && !token.isEmpty ? token : nil
+    return exit.blockingValue == 0 && !token.isEmpty ? token : nil
   }
 }
 #endif

@@ -1,6 +1,5 @@
 #if os(macOS)
 import CueStore
-import CueTestSupport
 import Foundation
 import Testing
 
@@ -9,7 +8,7 @@ extension MCPTests {
   /// 第二项照实际范围写：任务在项目里是"以后「项目」里推送不用问"，不关联任务时是"以后推送代码都不用问"；
   /// 选了第二项就把这句原话记成一条他说的、一直记着的记忆（不用先问的例外只在记忆里，问完任务挪了项目也照字面那句）。
   @Test(.timeLimit(.minutes(1))) func onlyIrreversibleThingsAreAskedAndAlwaysAllowIsRemembered() async throws {
-    let sandbox = try Sandbox()
+    let sandbox = try Fixture()
     let store = sandbox.store
     let demo = try await sandbox.project("演示"), other = try await sandbox.project("别的")
     let task = try await store.createTask("修好登录页", in: demo.id)
@@ -49,7 +48,7 @@ extension MCPTests {
 
   /// Cue 撤回自己问过、他还没答的一条：从"等你"里消失，不交回给 Cue；同一次可以换个问法再问。他再点那条，报已经结束；撤回过的不能再撤。
   @Test(.timeLimit(.minutes(1))) func cueWithdrawsItsQuestion() async throws {
-    let sandbox = try Sandbox()
+    let sandbox = try Fixture()
     let store = sandbox.store
     try await Server.run(library: sandbox.directory) { server in
       try await server.call("tell", ["text": "要删掉旧的 release 分支吗？", "ask": "delete", "doing": "删掉旧的 release 分支"])

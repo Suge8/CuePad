@@ -30,7 +30,7 @@ struct AttachmentBody: View {
     private static func blocks(_ content: String) -> [CueToken] {
         var blocks = CueFormat.parse(content)
         if case .text(let first)? = blocks.first {
-            let title = CardText(content).title
+            let title = CueSummary.title(of: content)
             var lines = first.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
             if let index = lines.firstIndex(where: { !$0.allSatisfy(\.isWhitespace) }),
                lines[index].trimmingCharacters(in: .whitespaces) == title {

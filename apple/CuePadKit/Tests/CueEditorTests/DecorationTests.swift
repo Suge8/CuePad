@@ -3,17 +3,6 @@ import AppKit
 import Testing
 @testable import CueEditor
 
-/// 编辑器在屏幕上实际展示的各段落（TextKit 布局出来的文本元素，带展示属性）。
-@MainActor
-private func displayed(_ h: EditorHarness) -> [NSAttributedString] {
-    var paragraphs: [NSAttributedString] = []
-    h.textView.textLayoutManager!.enumerateTextLayoutFragments(from: nil, options: [.ensuresLayout]) { fragment in
-        if let paragraph = fragment.textElement as? NSTextParagraph { paragraphs.append(paragraph.attributedString) }
-        return true
-    }
-    return paragraphs
-}
-
 private func font(_ p: NSAttributedString, at index: Int = 0) -> NSFont? {
     p.attribute(.font, at: index, effectiveRange: nil) as? NSFont
 }
@@ -28,12 +17,12 @@ struct DecorationTests {
     func firstLineIsBody() {
         let h = EditorHarness()
         h.load("先复现\n# 小节")
-        var p = displayed(h)
+        var p = h.displayed()
         #expect(font(p[0]) == theme.font && font(p[1]) == theme.headingFont)
 
         h.setCaret(0)
         h.textView.insertText("# ", replacementRange: nowhere)
-        p = displayed(h)
+        p = h.displayed()
         #expect(font(p[0]) == theme.headingFont && h.stored == "# 先复现\n# 小节")
     }
 
@@ -41,11 +30,11 @@ struct DecorationTests {
     func fenceToggleRestylesDownstream() {
         let h = EditorHarness()
         h.load("p\nq\n```\nr")
-        #expect(font(displayed(h)[3]) == theme.codeFont)
+        #expect(font(h.displayed()[3]) == theme.codeFont)
 
         h.setCaret(2)
         h.textView.insertText("```\n", replacementRange: nowhere)  // p ``` q ``` r：q 变代码，r 变正文
-        let p = displayed(h)
+        let p = h.displayed()
         #expect(font(p[2]) == theme.codeFont)
         #expect(font(p[4]) == theme.font)
     }
@@ -55,7 +44,7 @@ struct DecorationTests {
         let h = EditorHarness()
         let stored = "## 小节\n- 项\n```\nx\n```\n`c` {{v}}"
         h.load(stored)
-        _ = displayed(h)
+        _ = h.displayed()
         #expect(h.textView.textStorage!.attribute(.font, at: 0, effectiveRange: nil) as? NSFont == theme.font)
         #expect(h.textView.undoManager?.canUndo == false)
         #expect(h.stored == stored)

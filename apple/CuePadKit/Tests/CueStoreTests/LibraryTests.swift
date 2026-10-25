@@ -5,6 +5,8 @@ import Testing
   let fixture = try! Fixture()
   var store: CueStore { fixture.store }
 
+  private func bodies(_ cards: [Card]) -> [String] { cards.map(\.body) }
+
   // MARK: 排序
 
   @Test func newCardGoesOnTopAndMoveOnlyTouchesTheMovedCard() async throws {
@@ -79,7 +81,4 @@ import Testing
     #expect(try await store.projects().map(\.id) == [live.id, Project.defaultID])
     #expect(try await store.trashedProjects().isEmpty)
   }
-
-  // MARK: 结构版本
-
 }
