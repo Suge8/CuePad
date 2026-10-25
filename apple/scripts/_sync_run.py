@@ -1,7 +1,7 @@
 """sync-bench.py 的实例与一次运行：两个隔离实例（A 有会话的 Mac、B 代替手机）、假扩展、打点的收集、负载与开销的记账。
 打点是实例标准输出里的 `SYNCBENCH {json}` 行（DebugScene+SyncBench.swift），读线程按行收进 `Instance.events`，场景按事件等、不按时间猜。
 """
-import json, os, random, re, select, socket, subprocess, sys, threading, time
+import json, os, random, re, select, shutil, socket, subprocess, sys, threading, time
 
 sys.dont_write_bytecode = True
 from app_env import isolated_env  # noqa: E402
@@ -25,10 +25,10 @@ class Instance:
     def __init__(self, role, checkout, out, relay):
         self.role, self.checkout, self.out, self.relay = role, checkout, out, relay
         self.home = f"{out}/{role}"
-        self.sockets = f"/tmp/cpsb-{role}-{os.getuid()}"
+        self.sockets = f"/tmp/cpsb-{role}-{os.getpid()}"  # 每次运行一份：别的运行留下的假扩展连不进来
         os.makedirs(self.sockets, mode=0o700, exist_ok=True); os.chmod(self.sockets, 0o700)
         self.events, self.cond, self.proc, self.started = [], threading.Condition(), None, None
-        self.raw = open(f"{out}/{role}.log", "a")
+        self.raw = open(f"{out}/{role}.log", "a", buffering=1)
 
     def start(self):
         env = dict(isolated_env(f"{self.home}/library", self.sockets), CUEPAD_SHOT_READY=f"{self.home}/ready")
@@ -130,11 +130,11 @@ def fake_extension(directory, checkout):
     def hello(s):
         return {"t": "hello", "protocol": protocol, "extensionVersion": version, "sessionId": s["id"], "sessionFile": None, "pid": os.getpid(),
                 "cwd": "/tmp", "mode": "tui", "tty": None, "term": {}, "state": s["state"], "name": s["id"], "firstMessage": None}
-    running = True
+    running, parent = True, os.getppid()
     def stop(*_):
         nonlocal running; running = False
     import signal; signal.signal(signal.SIGTERM, stop)
-    while running:
+    while running and os.getppid() == parent:  # 起它的脚本没了（被杀、崩了）就跟着收尾
         readable = [s["server"] for s in sessions] + [c for s in sessions for c in s["clients"]]
         ready, _, _ = select.select(readable, [], [], 0.2)
         for s in sessions:
@@ -169,6 +169,13 @@ class Run:
         self.extension = None
 
     def __enter__(self):
+        try:
+            return self._start()
+        except BaseException:
+            self.__exit__()
+            raise
+
+    def _start(self):
         self.extension = subprocess.Popen([sys.executable, os.path.abspath(sys.argv[0]), "--fake-extension", self.a.sockets, self.checkout])
         self.a.start()
         if not self.a.wait(kind("ready"), 60):
@@ -197,4 +204,5 @@ class Run:
         if self.extension: self.extension.terminate(); self.extension.wait()
         time.sleep(3)  # A 把会话结束同步出去
         self.b.stop(); self.a.stop()
+        for directory in (self.a.sockets, self.b.sockets): shutil.rmtree(directory, ignore_errors=True)
 

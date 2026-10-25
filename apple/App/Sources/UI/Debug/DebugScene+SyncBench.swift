@@ -1,6 +1,7 @@
 #if DEBUG && os(macOS)
 import AppKit
 import CueStore
+import CueSync
 import Foundation
 import os
 
@@ -74,6 +75,8 @@ enum SyncBench {
     ///   （开发区里还有别的调试数据同步来的演示会话，所以点名是哪台）。
     /// - `cue <条数> [间隔秒]`：以 Cue 的身份对你说几句、每句马上传，传完记 `msg-sent ok=`（Cue 的话被收下不叫醒说的话的订阅，`Watch` 看不到已发出）。
     /// - `sync`：立即同步，记 `sync-now took=`（计到拉完：界面那层最多等 5 秒，量不出完成时长）。
+    /// - `offline`：这个实例连 iCloud 的请求都以没有网络失败（`CloudOutage`），门铃断开；`online [path]`：恢复，门铃重连，
+    ///   给了 path 再替路径监视器报一次网络回来（真断网的恢复；不给是路径一直可用、只是 iCloud 连不上）。
     /// - `bg`、`fg`：像手机那样进后台的收尾（`prepareForBackground`）、回前台（`handleActivation`）；`hide`、`activate`：Mac 隐藏、回到前台。
     private static func command(_ words: [String], _ workspace: Workspace) async {
         let services = workspace.services
@@ -113,6 +116,15 @@ enum SyncBench {
             if words.first == "activate" { NSApp.unhide(nil) }
             await services.handleActivation()
             mark("fg-done")
+        case "offline":
+            CloudOutage.set(true)
+            services.relay?.pause()
+            await services.relay?.settle()
+            mark("offline")
+        case "online":
+            CloudOutage.set(false, pathReturns: tag == "path")
+            services.relay?.resume()
+            mark("online")
         case "hide":
             NSApp.hide(nil)
         default:

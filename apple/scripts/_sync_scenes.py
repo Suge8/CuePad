@@ -2,7 +2,7 @@
 另可在 extra 里放不是时延的数（开销）。指标名就是报告里的行名，按"场景·段"写，A/B 两边同名的行对比。
 时刻都是同一台机器的墙钟：写下取记录的 createdAt，其余取实例读到那一刻（库的订阅送到主线程），上屏取画进页面后的那次提交。
 """
-import os, re, subprocess, time
+import json, os, re, subprocess, time
 from collections import Counter, defaultdict
 
 from _sync_run import PEER, kind
@@ -75,8 +75,8 @@ def scene_send(run, args):
     return m, {}
 
 
-def writes(inst, commands, count, author):
-    """给 inst 几条命令，等它写下 count 句（author 说的），再等都被服务器收下；返回写下的打点。"""
+def writes(inst, commands, count, author, sent=True):
+    """给 inst 几条命令，等它写下 count 句（author 说的）；sent 时再等都被服务器收下。返回写下的打点。"""
     t = time.time() - 0.5
     for c in commands: inst.send(c)
     got = []
@@ -84,8 +84,13 @@ def writes(inst, commands, count, author):
         seen = {w["id"] for w in got}
         w = inst.wait(lambda e: kind("msg-write", author)(e) and e["id"] not in seen, 10, after=t)
         if w: got.append(w)
-    for w in got: inst.wait(by_id("msg-sent" if author == "cue" else "msg-accepted", w["id"]), ROUND_LIMIT)
+    if sent:
+        for w in got: inst.wait(by_id("msg-sent" if author == "cue" else "msg-accepted", w["id"]), ROUND_LIMIT)
     return got
+
+
+def last(events):
+    return max(events, key=lambda e: e["t"]) if events and all(events) else None
 
 
 def cold_once(m, label, restarted, writer, writes):
@@ -195,4 +200,61 @@ def cloudkit_ops(window, pid):
     return ops, up, down
 
 
-SCENES = {"send": scene_send, "cold": scene_cold, "fg": scene_fg, "idle": scene_idle}
+def scene_offline(run, args):
+    """M5 断网恢复：offline [断网秒=30] [次数=2] [path|nopath]。只有手机（B）连 iCloud 的请求失败、门铃断开（CloudOutage）；
+    断着时手机对 Cue 说 3 句（积压待发）、Mac 的 Cue 说 3 句（积压待收）。恢复（path：同真断网，路径监视器报一次网络回来）后量
+    第一次成功（同步状态离开离线）、积压发完（3 句都已发出）、收完（3 句都入库、上屏）、说的 3 句都有回执。"""
+    down, times = float(args[0]) if args else 30, int(args[1]) if len(args) > 1 else 2
+    path = (args[2] if len(args) > 2 else "path") == "path"
+    a, b = run.a, run.b
+    label = f"断网 {down:g} 秒{'' if path else '（路径不变）'}"
+    m = Metrics()
+    for i in range(times):
+        t = b.send("offline"); b.wait(kind("offline"), 30, after=t)
+        began = time.time()
+        said = writes(b, [f"say off{i}-{k}" for k in range(3)], 3, "you", sent=False)
+        told = writes(a, ["cue 3"], 3, "cue")
+        time.sleep(max(0, began + down - time.time()))
+        on = {"t": b.send("online path" if path else "online")}
+        ok = b.wait(lambda e: e["e"] == "sync-status" and e["s"] != "offline", 120, after=on["t"])
+        sent = [b.wait(by_id("msg-accepted", w["id"]), 180) for w in said]
+        got = [b.wait(arrived(w["id"]), 180) for w in told]
+        shown = [b.wait(by_id("msg-shown", w["id"]), 30) for w in told]
+        receipts = [b.wait(by_id("msg-delivered", w["id"]), 180) for w in said]
+        m.span(f"{label}·恢复→第一次成功", on, ok)
+        m.span(f"{label}·恢复→积压发完", on, last(sent))
+        m.span(f"{label}·恢复→积压收完（入库）", on, last(got))
+        m.span(f"{label}·恢复→积压收完（上屏）", on, last(shown))
+        m.span(f"{label}·恢复→说的话都有回执", on, last(receipts))
+        time.sleep(10)
+    return m, {}
+
+
+def island(checkout, out, args):
+    """M4 收消息到灵动岛（iPhone 模拟器，App 这一侧）：island [轮数=10]。实现与量不到的段见 SyncBench+Island.swift。
+    不连 iCloud、不用 cloudd，所以不拿测量锁；模拟器经 xc.sh run ios 领（按它的模拟器锁排队）。"""
+    rounds = int(args[0]) if args else 10
+    library = f"{out}/ios-library"
+    os.makedirs(out, exist_ok=True)
+    env = dict(os.environ, CUEPAD_SHOT_LIBRARY=library, CUEPAD_RUN_SECONDS="600")
+    started = subprocess.run([f"{checkout}/apple/scripts/xc.sh", "run", "ios", "--", "-CuePadSyncBench", "island", "-CuePadLiveActivity", "YES",
+                              "-CuePadSyncBenchRounds", str(rounds)], env=env, capture_output=True, text=True)
+    open(f"{out}/ios-run.log", "w").write(started.stdout + started.stderr)
+    marks = f"{library}/bench-marks.jsonl"
+    end = time.time() + 30 + rounds * 5
+    while time.time() < end and not (os.path.exists(marks) and '"done"' in open(marks).read()):
+        time.sleep(1)  # 等的是另一台模拟器里的进程写完文件，没有能订阅的事件
+    events = [json.loads(l) for l in open(marks)] if os.path.exists(marks) else []
+    m = Metrics()
+    for r in range(1, rounds + 1):
+        write = next((e for e in events if e["e"] == "write" and e.get("round") == r), None)
+        done = next((e for e in events if e["e"] == "snapshots" and e.get("round") == r), None)
+        upto = next((e["t"] for e in events if e["e"] == "write" and e.get("round") == r + 1), float("inf"))
+        shown = next((e for e in events if write and e["e"] == "island" and write["t"] <= e["t"] < upto), None)
+        m.span("手机收消息·入库→岛的内容换掉", write, shown)
+        m.span("手机收消息·入库→快照写完（推送回调交还前）", write, done)
+    if not events: m["手机收消息·没有打点（超时）"].append(1)
+    return m, {}
+
+
+SCENES = {"offline": scene_offline, "send": scene_send, "cold": scene_cold, "fg": scene_fg, "idle": scene_idle}

@@ -9,6 +9,9 @@ public enum NetworkReturns {
 
   private static let monitor = Monitor()
 
+  /// 同步测量的断网恢复（`CloudOutage`）：路径监视器不知道那次断开，替它报一次网络回来。
+  static func simulateReturn() { monitor.returns.yield(()) }
+
   private final class Monitor: Sendable {
     let returns = Broadcast<Void>(bufferingPolicy: .bufferingNewest(1))
     private let path = NWPathMonitor()
