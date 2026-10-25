@@ -5,7 +5,7 @@ import SwiftUI
 /// - 项目、进展两页上、Cue 页点开"⋯"时：左边两格，右边 Cue 钮（`DockCue`）。选中哪格是条离哪页近，按住拖动的透镜是系统的。
 /// - Cue 页：左边一颗"⋯"，Cue 钮长成输入框那么宽、那么高，在换形里与页里真的输入框交叉（`DockHandoff`）。从进展页滑向 Cue 页时跟着手指走。
 /// - Cue 页输入框有焦点（`PagerMotion.composing`）：都让开，输入框占满整排。
-/// - 推入的页上（`PagerMotion.covered`）总是两格加 Cue 钮，点哪一格（或 Cue 钮）都回到那一页的根上；会话页与卡片纸页上整排让开（`Dock.stays`）。
+/// - 推入的页上（`PagerMotion.covered`）总是两格加 Cue 钮，点哪一格（或 Cue 钮）都回到那一页的根上；会话页与卡片纸页上、浮起的输入框开着时整排让开（`Dock.stays`）。
 /// 与屏幕圆角同心（同系统悬浮标签栏），只是玻璃：栏后面不垫渐变或模糊。
 /// 接力的"会话"那一头（`relaySpot(dock:)`）只在两格展开时的"进展"那一格（会话在进展里）；收起的"⋯"不接力：光落进"⋯"读不出是去了哪，深色下只剩一团发光的靛青点。
 /// 减弱动态效果时不换形，直接到新样子（条那边也不滑）。
@@ -63,7 +63,7 @@ private struct DockForm: View, Animatable {
             DockCue(places: places) { openPlaces(false) }
                 .frame(width: max(0, width - left - Dock.gap), height: height)
                 .clipShape(.capsule)
-                .glass(in: .capsule, interactive: true, ink: .clear)
+                .glass(in: .capsule, interactive: true)
                 .offset(x: left + Dock.gap)
                 .opacity(DockHandoff.ramp(places, DockHandoff.cueGlass))
                 .allowsHitTesting(shown)
