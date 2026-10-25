@@ -64,7 +64,7 @@ struct ProjectPage: View {
         .observing(services.store, id: projectID, into: dataBinding, onError: workspace.fail) { [projectID] store in
             try ProjectPageData.read(projectID, from: store)
         }
-        .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in rearrange() }
+        .onDayChange { rearrange() }
         .task(id: shape != nil) {
             guard shape != nil else { return }
             for next in Stage.allCases where next > stage {

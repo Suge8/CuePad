@@ -41,6 +41,13 @@ extension View {
     }
 }
 
+extension View {
+    /// 过了零点（"今天"按读的那一刻分的页面要重排、重读）。系统在它自己的线程上发这个通知：按主线程上的任务等，`action` 改的界面状态不跨线程。
+    func onDayChange(_ action: @escaping () -> Void) -> some View {
+        task { for await _ in NotificationCenter.default.notifications(named: .NSCalendarDayChanged) { action() } }
+    }
+}
+
 private struct Observing<T: Sendable & Equatable, ID: Equatable>: ViewModifier {
     let store: CueStore
     let id: ID
