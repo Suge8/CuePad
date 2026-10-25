@@ -47,7 +47,7 @@
 ## 加载与同步
 
 - 本机库里的东西第一帧就是读到的样子，没有"还没读到"这一态：不给页面加"读到没有"的标志、默认值与转圈（`observing`）。要等的只有别的设备。
-- "这一页在等同步"只有 `AppServices.isCatchingUp` 一个来源，样子只在 `Pending`。一闪而过的指示比稍等更扰人，所以过了 `Pending.delay` 才出。
+- "这一页在等同步"只有 `AppServices.isCatchingUp` 一个来源，样子只在 `Pending`。一闪而过的指示比稍等更扰人，所以过了 `Pending.delay` 才出；Mac 设置里同步那一行的"正在同步…"同理（`AppServices.shownSync`），一句话传上去的零点几秒不闪。
 - 对同步期间到的新内容先不动正在看的，对完一次滑上来（`ChatScroll` 的 `holding`）。
 
 ## 渲染性能约束
