@@ -205,23 +205,23 @@ extension PiBridgeError: LocalizedError {
 
     public var errorDescription: String? {
         switch self {
-        case .insecureSocketDirectory(let path): "Agent 连接目录 \(path) 不安全：必须属于当前用户且权限为 0700"
-        case .socketDirectoryTooLong: "Agent 连接目录的路径太长"
-        case .unknownSession: "这个 Agent 会话已经结束"
-        case .upgradingExtension: "这个会话正在换上新版扩展，歇下后自动接上，到时再发"
-        case .unsupported: "这个 Agent 会话不支持这样操作"
-        case .notEnded: "会话没有按时结束，可能还在等你在终端里处理"
-        case .sessionEnded: "发送途中 Agent 会话结束了"
-        case .ackTimeout: "Agent 没有及时确认：会话可能没在运行，或没接下这句（没登录、没有模型），到会话里看看"
-        case .rejected("no_prompt"), .rejected("stale_prompt"): "这个问题已经答过了，或 Agent 已经不在等这个问题"
-        case .rejected("bad_answer"): "答案和问题对不上（选项不在列表里，或类型不对）"
-        case .unknownModel(let agent): "这台 Mac 上的 \(agent.name) 里找不到这个模型"
-        case .rejected("no_auth"): "这个模型的提供方在这台 Mac 上还没有登录或配置密钥"
-        case .rejected("unknown_command"): "这个 Agent 会话里没有这个命令（可能已经被移除，或是只能在终端里用）"
-        case .rejected("missing_argument"): "这个命令需要带上参数"
+        case .insecureSocketDirectory(let path): String(localized: "Agent 连接目录 \(path) 不安全：必须属于当前用户且权限为 0700")
+        case .socketDirectoryTooLong: String(localized: "Agent 连接目录的路径太长")
+        case .unknownSession: String(localized: "这个 Agent 会话已经结束")
+        case .upgradingExtension: String(localized: "这个会话正在换上新版扩展，歇下后自动接上，到时再发")
+        case .unsupported: String(localized: "这个 Agent 会话不支持这样操作")
+        case .notEnded: String(localized: "会话没有按时结束，可能还在等你在终端里处理")
+        case .sessionEnded: String(localized: "发送途中 Agent 会话结束了")
+        case .ackTimeout: String(localized: "Agent 没有及时确认：会话可能没在运行，或没接下这句（没登录、没有模型），到会话里看看")
+        case .rejected("no_prompt"), .rejected("stale_prompt"): String(localized: "这个问题已经答过了，或 Agent 已经不在等这个问题")
+        case .rejected("bad_answer"): String(localized: "答案和问题对不上（选项不在列表里，或类型不对）")
+        case .unknownModel(let agent): String(localized: "这台 Mac 上的 \(agent.name) 里找不到这个模型")
+        case .rejected("no_auth"): String(localized: "这个模型的提供方在这台 Mac 上还没有登录或配置密钥")
+        case .rejected("unknown_command"): String(localized: "这个 Agent 会话里没有这个命令（可能已经被移除，或是只能在终端里用）")
+        case .rejected("missing_argument"): String(localized: "这个命令需要带上参数")
         // 扩展执行时出错（`failed: <原因>`）：原因就是要说的话
         case .rejected(let reason) where reason.hasPrefix(Self.failedPrefix): String(reason.dropFirst(Self.failedPrefix.count))
-        case .rejected(let reason): "Agent 没有接受：\(reason)"
+        case .rejected(let reason): String(localized: "Agent 没有接受：\(reason)")
         }
     }
 }

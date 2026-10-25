@@ -128,7 +128,7 @@ struct DeliverableTile: View {
         }
         .buttonStyle(PressStyle(.card))
         .disabled(file == nil)
-        .accessibilityLabel(Dotted("预览：\(label)", kind).spoken)
+        .accessibilityLabel(Dotted(String(localized: "预览：\(label)"), kind).spoken)
         .accessibilityHint(file == nil ? "正在从 iCloud 下载" : "全屏查看")
         #if os(macOS)
         .help(label)
@@ -145,7 +145,7 @@ struct DeliverableTile: View {
 
     /// 类型，视频与音频接时长、PDF 接页数："视频 0:12""PDF 3 页"。
     private var kind: String {
-        [preview.kind?.label ?? "文件", shown?.detail].compactMap { $0 }.joined(separator: " ")
+        [preview.kind?.label ?? String(localized: "文件"), shown?.detail].compactMap { $0 }.joined(separator: " ")
     }
 
     /// 读到之前先从内存里拿（同一份别处读过、滚回来的），第一帧就是该有的比例。

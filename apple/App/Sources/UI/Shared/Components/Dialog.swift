@@ -2,17 +2,17 @@ import SwiftUI
 
 /// 确认框与提示框里的一颗按钮；按下后框自己关。
 struct DialogButton: Identifiable {
-    let title: String
+    let title: LocalizedStringResource
     var role: ButtonRole?
     var disabled = false
     let action: @MainActor () -> Void
 
-    var id: String { title }
+    var id: String { title.key }
 }
 
 /// 提示框里要写一行字时（如新建任务的名字）。
 struct DialogField {
-    let prompt: String
+    let prompt: LocalizedStringResource
     let text: Binding<String>
 }
 

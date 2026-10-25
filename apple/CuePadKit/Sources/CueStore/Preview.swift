@@ -27,17 +27,17 @@ public enum PiPreviewKind: String, Sendable, CaseIterable {
 
   public var label: String {
     switch self {
-    case .web: "网页"
+    case .web: String(localized: "网页")
     case .markdown: "Markdown"
-    case .image: "图片"
-    case .video: "视频"
-    case .audio: "音频"
+    case .image: String(localized: "图片")
+    case .video: String(localized: "视频")
+    case .audio: String(localized: "音频")
     case .pdf: "PDF"
-    case .document: "文稿"
-    case .spreadsheet: "表格"
-    case .presentation: "演示文稿"
-    case .model: "3D 模型"
-    case .text: "文本"
+    case .document: String(localized: "文稿")
+    case .spreadsheet: String(localized: "表格")
+    case .presentation: String(localized: "演示文稿")
+    case .model: String(localized: "3D 模型")
+    case .text: String(localized: "文本")
     }
   }
 

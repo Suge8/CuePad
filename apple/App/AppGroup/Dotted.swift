@@ -21,7 +21,7 @@ nonisolated struct Dotted: Hashable, Sendable, ExpressibleByStringLiteral, Expre
 
     var isEmpty: Bool { parts.isEmpty }
     var visible: String { parts.joined(separator: Self.separator) }
-    var spoken: String { parts.joined(separator: "，") }
+    var spoken: String { parts.joined(separator: String(localized: "，", comment: "读屏在分段处停顿的标点")) }
 
     var nonEmpty: Dotted? { isEmpty ? nil : self }
 
@@ -29,7 +29,8 @@ nonisolated struct Dotted: Hashable, Sendable, ExpressibleByStringLiteral, Expre
 }
 
 extension Text {
-    /// 屏幕上是"a · b"，读屏读"a，b"。
+    /// 屏幕上是"a · b"，读屏读"a，b"。Dotted 能由字面量构成：不退让的话 `Text("…")` 会选中这里、原样显示不走本地化。
+    @_disfavoredOverload
     init(_ dotted: Dotted) { self = Text(verbatim: dotted.visible).accessibilityLabel(dotted.spoken) }
 }
 

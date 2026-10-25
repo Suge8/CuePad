@@ -21,7 +21,7 @@ extension CodexRuntime {
             case "idle" where session.facts.running:
                 endTurn(session)
             case "systemError":
-                endTurn(session, failure: session.lastError ?? "Codex 出错了")
+                endTurn(session, failure: session.lastError ?? String(localized: "Codex 出错了"))
                 if session.lastError == nil { readFailure(session) }
             default: return
             }

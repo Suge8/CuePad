@@ -21,7 +21,7 @@ nonisolated extension CueNow {
             cue: Self.brain(presence, digest: digest, local: local, at: moment.now),
             beads: Array(beads.prefix(Self.beadLimit)), hidden: max(beads.count - Self.beadLimit, 0), counts: Counts(beads), advancing: digest.advancing,
             first: digest.tally.waiting.first.map { Self.wait($0, name: digest.name) }, at: moment.now,
-            elsewhere: digest.enabled && local.here != nil && digest.hostID != local.here ? "在「\(host)」上运行" : nil)
+            elsewhere: digest.enabled && local.here != nil && digest.hostID != local.here ? String(localized: "在「\(host)」上运行") : nil)
     }
 
     private static func brain(_ presence: CuePresence, digest: CueDigest, local: Local, at now: Date) -> Brain {
@@ -45,7 +45,7 @@ nonisolated extension CueNow {
         let asks = digest.tally.waiting.map { wait in
             switch wait {
             case .message(let message, _):
-                Bead(id: wait.id, kind: .asks, name: message.asking?.action ?? message.headline ?? "\(digest.name) 在等你", since: message.createdAt,
+                Bead(id: wait.id, kind: .asks, name: message.asking?.action ?? message.headline ?? String(localized: "\(digest.name) 在等你"), since: message.createdAt,
                      subagents: 0, sessions: [])
             case .session(let state, _):
                 Bead(id: wait.id, kind: .asks, name: title(state), since: state.stateSince, subagents: 0, sessions: [state.sessionID])
@@ -92,7 +92,7 @@ nonisolated extension CueNow {
         return Bead(id: work.id, kind: .resting, name: name, since: sessions.map(\.stateSince).max() ?? settledSince, subagents: 0, sessions: ids)
     }
 
-    private static func title(_ state: PiSessionState) -> String { state.title.isEmpty ? "会话" : state.title }
+    private static func title(_ state: PiSessionState) -> String { state.title.isEmpty ? String(localized: "会话") : state.title }
 
     /// Cue 的提问：问句与下面那一句（同卡片与通知，`CueMessage.headline`、`CueAsking.why`），打开是 Cue 页，带选项的能"允许一次"（选第一项）；
     /// 会话在问：会话名与问题的第一行，打开是那个会话。
@@ -100,7 +100,7 @@ nonisolated extension CueNow {
         switch wait {
         case .message(let message, _):
             return Wait(
-                title: message.headline ?? "\(name) 在等你",
+                title: message.headline ?? String(localized: "\(name) 在等你"),
                 detail: message.asking?.why,
                 open: DeepLink.cue.url,
                 allow: message.choices?.first.map { Allow(message: message.id, choice: $0) })
@@ -108,7 +108,7 @@ nonisolated extension CueNow {
             let question = state.question?.text.split(whereSeparator: \.isNewline).first.map { $0.trimmingCharacters(in: .whitespaces) }
             return Wait(
                 title: title(state),
-                detail: question.flatMap { $0.isEmpty ? nil : $0 } ?? "在等你回答",
+                detail: question.flatMap { $0.isEmpty ? nil : $0 } ?? String(localized: "在等你回答"),
                 open: DeepLink.session(state.id).url,
                 allow: nil)
         }

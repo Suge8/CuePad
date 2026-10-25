@@ -62,7 +62,7 @@ extension CodexRuntime {
     /// 之后的轮次用的协作模式（实验接口）：模型与强度照会话此刻的，说明用这个模式内置的。
     private func collaborate(_ mode: String, in session: Tracked) async throws {
         let current = bridge.session(id: session.id)
-        guard let model = current?.model?.key.id else { throw PiBridgeError.rejected("failed: 不知道这个会话用的模型") }
+        guard let model = current?.model?.key.id else { throw PiBridgeError.rejected("failed: " + String(localized: "不知道这个会话用的模型")) }
         var settings: [String: JSONValue] = ["model": .string(model), "developer_instructions": .null]
         if case .known(let level)? = current?.thinking { settings["reasoning_effort"] = .string(CodexModel.effort(level)) }
         try await call(session, "thread/settings/update", [

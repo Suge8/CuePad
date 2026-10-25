@@ -225,7 +225,7 @@ enum PermissionWording {
     static let allowed = "用户在 CuePad 里允许了", denied = "用户在 CuePad 里拒绝了"
 
     static func question(_ agent: AgentKind, _ action: String, _ details: [String?]) -> String {
-        let lines = (["允许 \(agent.name) \(action)？"] + details.compactMap { $0 }).reduce(into: [String]()) { lines, line in
+        let lines = ([String(localized: "允许 \(agent.name) \(action)？")] + details.compactMap { $0 }).reduce(into: [String]()) { lines, line in
             if !line.isEmpty, !lines.contains(line) { lines.append(line) }
         }
         return lines.joined(separator: "\n").clipped(500)

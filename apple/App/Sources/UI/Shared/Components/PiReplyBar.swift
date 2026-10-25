@@ -143,9 +143,9 @@ struct PiReplyBar: View {
     }
 
     #if os(iOS)
-    private static let unanswerable = "这个问题要在 Mac 上回答"
+    private static let unanswerable: LocalizedStringResource = "这个问题要在 Mac 上回答"
     #else
-    private static let unanswerable = "这个问题要在终端里的 Agent 那边回答"
+    private static let unanswerable: LocalizedStringResource = "这个问题要在终端里的 Agent 那边回答"
     #endif
 
     /// 键盘快捷键（`ReplyShortcut`）此刻做什么：⌘↩ 同点按主按钮；⌘⇧M、⌘⇧E 在有工具排时打开模型、思考强度菜单（按键只在文字区聚焦时到这里）。
@@ -177,7 +177,7 @@ struct PiReplyBar: View {
     }
 
     /// 等你确认、不能发自由文本时收成的一行。
-    private func notice(_ text: String, icon: Icon) -> some View {
+    private func notice(_ text: LocalizedStringResource, icon: Icon) -> some View {
         Label(text, icon: icon)
             .font(Typography.secondary).foregroundStyle(palette.ink2)
             .padding(.horizontal, 18).frame(maxWidth: .infinity, minHeight: 2 * Self.radius, alignment: .leading)
@@ -190,7 +190,7 @@ struct PiReplyBar: View {
             Button(action: stop) { SendGlyph(stopping ? .stopping : .stop) }
                 .buttonStyle(PressStyle(.button))
                 .disabled(stopping || !reachable)
-                .accessibilityLabel(stopping ? "正在停止" : DeliveryMode.stop.label)
+                .accessibilityLabel(stopping ? Text("正在停止") : Text(DeliveryMode.stop.label))
         case .answer:
             Button(action: answer) { SendGlyph(glyph) }
                 .buttonStyle(PressStyle(.button))
@@ -210,12 +210,12 @@ struct PiReplyBar: View {
 
     /// 发出会打断 Agent 正在跑的这一轮（`MacDelivery`）：占位与发送钮的说明写明；打断不了的写说不了的原因。
     private var interrupts: Bool { session.state.known?.isTurnRunning == true }
-    private static let interruptNote = "会打断这一轮，以这句接着做"
-    private static let blockedPrompt = "在终端里跑着：按 Esc 或等它做完"
+    private static let interruptNote = String(localized: "会打断这一轮，以这句接着做")
+    private static let blockedPrompt: LocalizedStringResource = "在终端里跑着：按 Esc 或等它做完"
     private var sendNote: String { speakBlocked ?? (interrupts ? Self.interruptNote : "") }
 
     /// 占位只说这里写什么；Agent 在跑时写明发出会打断它，打断不了时写原因。
-    private var placeholder: String {
+    private var placeholder: LocalizedStringResource {
         if let answering { return answering.kind == .known(.select) ? "或写你自己的回答" : "回答上面的问题" }
         if speakBlocked != nil { return Self.blockedPrompt }
         if !draft.attachments.isEmpty || !draft.images.isEmpty { return "补一句（可不填）" }
@@ -224,7 +224,7 @@ struct PiReplyBar: View {
 
     /// 回给这个会话的那句占位：已结束的会话也能接着说——发出后它所在的 Mac 先在后台把它唤醒再送达，占位写明这一步，
     /// 不让人以为发给了一个没人接的会话。
-    private var replyPrompt: String {
+    private var replyPrompt: LocalizedStringResource {
         session.state == .known(.ended) ? "唤醒 \(session.title) 接着说" : "回复 \(session.title)"
     }
 
@@ -271,12 +271,12 @@ struct PiReplyBar: View {
 struct SyncHint: View {
     let status: SyncStatus
     /// 这对眼前的事意味着什么：浮起的输入框里只关心发不发得出去。
-    var consequence = "看到的可能不是最新，也发不到 Mac"
+    var consequence: LocalizedStringResource = "看到的可能不是最新，也发不到 Mac"
     @Environment(\.palette) private var palette
 
     var body: some View {
         let summary = SyncSummary(status)
-        Label { Text("\(summary.title)：\(consequence)") } icon: { Image(summary.icon) }
+        Label { Text("\(summary.title)：\(Text(consequence))") } icon: { Image(summary.icon) }
             .font(Typography.meta).foregroundStyle(palette.ink3)
             .lineLimit(2)
     }

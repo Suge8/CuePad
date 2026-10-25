@@ -138,7 +138,7 @@ extension SyncCoordinator {
           try await applyFetched([server], [])  // 带上服务器的版本标签；本机版本胜出的话下一批重传
           outcome.progressed = true
         } else {
-          report(.refused, detail: "保存冲突但没有服务器版本：\(error.diagnosis)", kind: .upload, recordType: record.recordType, recordName: name)
+          report(.refused, detail: String(localized: "保存冲突但没有服务器版本：\(error.diagnosis)"), kind: .upload, recordType: record.recordType, recordName: name)
         }
       case .batchRequestFailed:
         outcome.progressed = true  // 同批里别的记录被拒，这条自己没问题

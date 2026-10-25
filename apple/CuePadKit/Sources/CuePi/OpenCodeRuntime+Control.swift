@@ -201,7 +201,7 @@ extension OpenCodeRuntime {
         let environment = locator.environment(launching: executable, overrides: paths.environment)
         guard let result = await ChildProcess.run(executable, ["service", "start"], environment: environment, timeout: AgentTimeouts.launch, collect: false)
         else { throw AgentRuntimeError.launchTimedOut(.opencode) }
-        guard result.status == 0 else { throw AgentRuntimeError.launchFailed(.opencode, "opencode service start 退出码 \(result.status)") }
+        guard result.status == 0 else { throw AgentRuntimeError.launchFailed(.opencode, String(localized: "opencode service start 退出码 \(result.status)")) }
         startedService = (executable, environment)
     }
 }

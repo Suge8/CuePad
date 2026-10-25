@@ -16,6 +16,6 @@ nonisolated enum PiPlace {
 
     /// 会话页"⋯"菜单最上面的一行："在 CuePad"（会话页顶栏不写所在）；没有所在时是 nil。
     static func menuTitle(of state: PiSessionState, project: Project?) -> String? {
-        name(of: state, project: project).map { "在 \($0)" }
+        name(of: state, project: project).map { String(localized: "在 \($0)") }
     }
 }

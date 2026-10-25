@@ -8,10 +8,10 @@ nonisolated struct PaletteQuery: Equatable {
 
         var label: String {
             switch self {
-            case .any: "任意"
-            case .week: "近 7 天"
-            case .month: "近 30 天"
-            case .quarter: "近 90 天"
+            case .any: String(localized: "任意")
+            case .week: String(localized: "近 7 天")
+            case .month: String(localized: "近 30 天")
+            case .quarter: String(localized: "近 90 天")
             }
         }
     }
@@ -31,16 +31,16 @@ nonisolated struct PaletteQuery: Equatable {
 
     /// 项目筛选此刻的取值：选的项目名，没选是"全部"。
     func projectLabel(in projects: [Project]) -> String {
-        project.flatMap { id in projects.first { $0.id == id }?.name } ?? "全部"
+        project.flatMap { id in projects.first { $0.id == id }?.name } ?? String(localized: "全部")
     }
 
     /// "发给过谁"筛选此刻的取值。
     var sentLabel: String {
         switch sent {
-        case .any: "任意"
-        case .never: "没发过"
+        case .any: String(localized: "任意")
+        case .never: String(localized: "没发过")
         case .sent(_, .some(let name)): name
-        case .sent: "发过"
+        case .sent: String(localized: "发过")
         }
     }
 

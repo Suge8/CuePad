@@ -39,7 +39,7 @@ private struct CueEnable: View {
         let name = workspace.cue.name
         Group {
             if intro {
-                EmptyState(mascot: .hello, title: "我是 \(name)", message: message(hosts), waitsForSync: true) { steps(settings, hosts) }
+                EmptyState(mascot: .hello, title: "我是 \(name)", message: .verbatim(message(hosts)), waitsForSync: true) { steps(settings, hosts) }
             } else {
                 // 说过话后停用了：页头已写"已停用"，这里只说启用后怎样与那一步，不再自我介绍
                 VStack(spacing: 10) {
@@ -68,8 +68,8 @@ private struct CueEnable: View {
     }
 
     private func message(_ hosts: [CueSettings.Host]) -> String {
-        guard !hosts.isEmpty else { return "我在你的 Mac 上干活。在 Mac 上打开 CuePad 就能叫我，这之前想到的先在下面记下" }
-        return "启用后说一件想做的事，我来开工，要你拿主意时再找你"
+        guard !hosts.isEmpty else { return String(localized: "我在你的 Mac 上干活。在 Mac 上打开 CuePad 就能叫我，这之前想到的先在下面记下") }
+        return String(localized: "启用后说一件想做的事，我来开工，要你拿主意时再找你")
     }
 
     @ViewBuilder private func action(_ settings: CueSettings, _ hosts: [CueSettings.Host]) -> some View {
@@ -107,11 +107,11 @@ private struct CueEnable: View {
                 Button(host.isHere ? "在这台 Mac 上启用" : "在「\(host.name)」上启用") { enable(on: host) }.disabled(!host.selectable)
                 if !host.selectable { Text(host.note).font(Typography.meta).foregroundStyle(palette.ink3) }
                 if hosts.count > 1 {
-                    hostMenu(Array(hosts.dropFirst()), title: "选别的 Mac", surface: ControlSurface(kind: .quiet, compact: true))
+                    hostMenu(Array(hosts.dropFirst()), title: String(localized: "选别的 Mac"), surface: ControlSurface(kind: .quiet, compact: true))
                 }
             }
         } else {
-            hostMenu(hosts, title: "选一台 Mac 启用", surface: ControlSurface(kind: .primary))
+            hostMenu(hosts, title: String(localized: "选一台 Mac 启用"), surface: ControlSurface(kind: .primary))
         }
     }
 

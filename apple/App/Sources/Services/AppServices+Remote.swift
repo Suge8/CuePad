@@ -70,7 +70,7 @@ extension AppServices {
         let host = hostID
         try await store.publishDirectoryBindings(host: host)
         let changes = store.observe { try $0.projectDirectories() }
-        follow(reporting: { .syncUnavailable("目录绑定没能同步给手机：\($0)") }) { [store] in
+        follow(reporting: { .syncUnavailable(String(localized: "目录绑定没能同步给手机：\(String(describing: $0))")) }) { [store] in
             for try await _ in changes { try await store.publishDirectoryBindings(host: host) }
         }
     }

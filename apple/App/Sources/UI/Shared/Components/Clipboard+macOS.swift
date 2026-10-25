@@ -55,6 +55,6 @@ nonisolated struct ClipboardContent: Sendable, Equatable {
 
 enum ClipboardError: LocalizedError {
     case writeFailed
-    var errorDescription: String? { "写入剪贴板失败" }
+    var errorDescription: String? { String(localized: "写入剪贴板失败") }
 }
 #endif

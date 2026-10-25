@@ -25,10 +25,10 @@ nonisolated struct TaskBoard: Sendable, Equatable {
 
         var title: String {
             switch self {
-            case .todo: "待办"
-            case .advancing: "推进中"
-            case .waiting: "等你"
-            case .done: "已完成"
+            case .todo: String(localized: "待办")
+            case .advancing: String(localized: "推进中")
+            case .waiting: String(localized: "等你")
+            case .done: String(localized: "已完成")
             }
         }
     }

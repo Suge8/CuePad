@@ -150,7 +150,7 @@ final class ClaudeBrain: CueBrain {
             session.emit(.speaking(nil))
         } else if result["is_error"]?.bool == true {
             let text = result["result"]?.string?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            session.emit(.failed(text.isEmpty ? (result["subtype"]?.string ?? "未知错误") : text))
+            session.emit(.failed(text.isEmpty ? (result["subtype"]?.string ?? String(localized: "未知错误")) : text))
         }
         session.emit(.turnFinished)
     }

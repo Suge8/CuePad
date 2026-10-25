@@ -11,14 +11,14 @@ public enum CueActivity {
   /// 按钮同名的动作词；不碰任务与会话的种类（读文件、命令、记忆）没有。`.edit` 在 Cue 的一轮里是改任务（会话里的改文件不读这张表）。
   public static func verb(_ kind: PiChatMessage.Tools.Kind) -> String? {
     switch kind {
-    case .read: "查看"
-    case .talk: "发给"
-    case .add: "新建"
-    case .start: "开始"
-    case .stop: "停止"
-    case .done: "完成"
-    case .leave: "留给你"
-    case .edit: "修改"
+    case .read: String(localized: "查看")
+    case .talk: String(localized: "发给")
+    case .add: String(localized: "新建")
+    case .start: String(localized: "开始")
+    case .stop: String(localized: "停止")
+    case .done: String(localized: "完成")
+    case .leave: String(localized: "留给你")
+    case .edit: String(localized: "修改")
     case .command, .search, .other, .said, .ask: nil
     }
   }

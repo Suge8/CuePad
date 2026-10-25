@@ -28,21 +28,21 @@ enum DemoLibrary {
             if let intro = catalog.first(where: { $0.name == project.name })?.intro {
                 try await store.updateProject(project.id) { $0.intro = intro }
             }
-            for card in try await store.cards(in: project.id).filter({ $0.body.contains("发给 Pi") || $0.body.hasPrefix("评审") }).prefix(4) {
+            for card in try await store.cards(in: project.id).filter({ $0.body.hasPrefix(String(localized: "评审", table: "Demo")) }).prefix(4) {
                 try await store.recordSend(card.body, to: SendTarget(kind: .piSession, name: project.name.lowercased()), card: card.id)
             }
         }
-        let retired = try await store.createProject(name: "旧落地页", color: "#8A8A84", icon: ProjectIcon.globe.rawValue)
-        _ = try await store.createCard(in: retired.id, body: "旧落地页文案\n\n首屏标题与三段卖点。")
+        let retired = try await store.createProject(name: String(localized: "旧落地页", table: "Demo"), color: "#8A8A84", icon: ProjectIcon.globe.rawValue)
+        _ = try await store.createCard(in: retired.id, body: String(localized: "旧落地页文案\n\n首屏标题与三段卖点。", table: "Demo"))
         try await store.trashProject(retired.id)
         for project in try await store.projects() {
-            for card in try await store.cards(in: project.id) where card.body.hasPrefix("旧方案") || card.body.hasPrefix("产品决策") {
+            for card in try await store.cards(in: project.id) where card.body.hasPrefix(String(localized: "旧方案：轮询会话状态", table: "Demo")) || card.body.hasPrefix(String(localized: "产品决策", table: "Demo")) {
                 try await store.trashCard(card.id)
             }
         }
         try await seedQuotas(store)
         let home = demoHome
-        for (index, item) in [("cuepad", "规划投送队列的重试边界"), ("atlas", "多 Agent 调度压测"), ("homepage", "首页改版文案")].enumerated() {
+        for (index, item) in [("cuepad", String(localized: "规划投送队列的重试边界", table: "Demo")), ("atlas", String(localized: "多 Agent 调度压测", table: "Demo")), ("homepage", String(localized: "首页改版文案", table: "Demo"))].enumerated() {
             try await store.upsertPiSession(IndexedSession(
                 id: "demo-\(index)", path: "/tmp/demo-\(index).jsonl", cwd: "\(home)Project/\(item.0)",
                 title: item.1, lastActivityAt: .now.addingTimeInterval(-Double(index + 1) * 5400)), host: "demo-mac")
@@ -78,105 +78,19 @@ enum DemoLibrary {
         ], complete: true), host: "demo-mac")
     }
 
-    private static func projects(image: String) -> [DemoProject] {
-        let home = demoHome
-        let pic = CueFormat.imageMarkup(id: image)
-        return [
-            DemoProject(name: "CuePad", icon: .sparkles, color: "#A260C4", pinned: false, directory: "\(home)Project/cuepad", intro: "投送队列本月可上线", cards: [
-                (0.2, "修复 TextKit 编辑器\n\nTextKit 编辑器偶发失败。先稳定复现，定位根因后再改，不要加重试掩盖。", false),
-                (0.6, "设计 iCloud 同步\n\n给 iCloud 同步出三个方案，比较代价，推荐一个并说明理由。\n---\n约束：离线并发编辑保留两个版本，不静默覆盖。", false),
-                (1.2, "变量模板文档\n\n\(pic)\n更新变量模板的开发文档，删掉过时的说明。", false),
-                (1.5, "排查 Pi 桥\n\n日志里 Pi 桥报错 {{错误码}}，查清触发条件再动手。", false),
-                (2.0, "重构菜单栏面板\n\n把 {{模块路径}} 里的菜单栏面板拆成独立模块，保持公开接口不变。\n\n- 唤起到可输入 < 100ms\n- 参考 [NSPanel 文档](https://developer.apple.com/documentation/appkit/nspanel)\n---\n完成后把改动摘要写进发布说明。", false),
-                (3.0, "评审：导入旧数据\n\n审查 {{分支}} 中导入旧数据相关改动，只报告会导致错误行为的问题。", false),
-                (4.0, "优化回收站性能\n\n回收站在 {{数据量}} 条时明显卡顿，先测量再优化。", false),
-                (5.5, "迁移投送队列\n\n把投送队列迁到新的存储层，旧数据一次性导入。", false),
-                (6.0, "想法：TextKit 编辑器\n\n\(pic)\n编辑器的附件也许可以按视口懒加载，只挂缩略图。", false),
-                (9.0, "变量模板补测试\n\n在接缝上给变量模板补验收测试，先看到它失败，再实现。", false),
-                (12.0, "Todo\n\n- 截图换成 Swift 版\n- 续费域名\n- 更新落地页", false),
-                (18.0, "排查剪贴板回读\n\n写入后回读偶尔为空，先确认是不是竞态。", false),
-                (21.0, "评审：快捷键录制\n\n只看会导致错误行为的问题。", false),
-                (26.0, "想法：发送记录\n\n一键重发时带上当时的变量取值。", false),
-                (33.0, "重构设置页\n\n设置项的描述写打开后会发生什么。", false),
-                (38.0, "排查 socket 残留\n\n强杀后 socket 没删，检查 kqueue 退出通知。", false),
-                (45.0, "设计通知\n\nPi 完成与等你确认时推送，点通知跳到会话。", false),
-                (52.0, "整理发布清单\n\n签名、公证、Sparkle 更新源。", false),
-                (60.0, "修复拖入图片\n\n拖入 HEIC 时缩略图空白。", false),
-                (75.0, "想法：卡片墙\n\n只在打开项目或跨天时重排，同一次打开里墙不自己挪动。", false),
-                (84.0, "评审：搜索筛选\n\n分页前先筛选，总数不受分页影响。", false),
-                (110.0, "旧方案：轮询会话状态\n\n每两秒查一次，耗电。", false),
-                (130.0, "调研 CKSyncEngine\n\n记录级同步、资产上传与冲突处理。", false),
-                (170.0, "原型：三个视觉方向\n\n桌面、看板、流。", false),
-                (200.0, "常用提示：代码评审\n\n只报告会导致错误行为的问题，按严重程度排序。", true),
-            ]),
-            DemoProject(name: "圆桌", icon: .chat, color: "#D9774B", pinned: true, directory: "\(home)Project/atlas", intro: "多 Agent 调度本月可上线", cards: [
-                (1.0, "产品决策\n\n先列出现状和约束，再给出下一步。", false),
-                (2.5, "评审：计费额度\n\n审查 {{分支}} 中计费额度相关改动。", true),
-                (40.0, "主持人提示词\n\n\(pic)\n提示词写好，一键投送。", false),
-            ]),
-            DemoProject(name: "Flow", icon: .layers, color: "#3AA088", pinned: true, directory: nil, cards: [
-                (1.0, "撤销栈合并连续拖拽\n\n连续拖拽只记一步撤销。", false),
-                (15.0, "画布缩放\n\n双指缩放锚点跟随指针。", false),
-            ]),
-            DemoProject(name: "闲鱼", icon: .cart, color: "#3F8FB8", pinned: false, directory: nil, intro: "二手相机这周挂出去", cards: [
-                (3.0, "定价补测试\n\n在接缝上给定价补验收测试。", false),
-            ]),
-            DemoProject(name: "个人网站", icon: .globe, color: "#C9A227", pinned: false, directory: "\(home)Project/homepage", cards: [
-                (8.0, "首页改版\n\n给首页改版出三个方案，比较代价。", false),
-            ]),
-            DemoProject(name: "Career", icon: .briefcase, color: "#5E9E5A", pinned: false, directory: nil, cards: [
-                (20.0, "求职信\n\n按岗位描述改写第一段。", false),
-            ]),
-            DemoProject(name: "读书", icon: .book, color: "#D0607D", pinned: false, directory: nil, intro: "每周读完一章", cards: [
-                (30.0, "《设计心理学》第二章\n\n示能与意符的区别。", false),
-            ]),
-            DemoProject(name: "旅行", icon: .globe, color: "#3F8FB8", pinned: false, directory: nil, cards: [
-                (12.0, "京都行程\n\n第二天去岚山，避开周末。", false),
-            ]),
-            DemoProject(name: "装修", icon: .hammer, color: "#8A8A84", pinned: false, directory: nil, cards: [
-                (6.0, "比价\n\n三家报价，水电分开算。", false),
-            ]),
-        ]
-    }
-
-    private static let tasks: [DemoTask] = [
-        ("CuePad", "投送队列超时报错不发键", false),
-        ("CuePad", "导入旧数据时保留回收站", false),
-        ("CuePad", "菜单栏面板 ⌘↩ 直接发出", false),
-        ("CuePad", "小组件显示进行中的任务", false),
-        ("CuePad", "分享扩展支持多张图片", false),
-        ("CuePad", "设置页加快捷键冲突提示", false),
-        ("CuePad", "首次启动引导绑定文件夹", true),
-        ("CuePad", "深色模式下纸色偏灰", true),
-        ("圆桌", "发言轮次乱序", false),
-        ("圆桌", "登录回调改走统一网关", false),
-        ("圆桌", "房间链接过期后给出提示", false),
-        ("圆桌", "主持人可以静音全部", false),
-        ("圆桌", "清理旧的计费脚本", true),
-        ("Flow", "画布缩放锚点跟随指针", false),
-        ("Flow", "撤销栈合并连续拖拽", false),
-        ("Flow", "导出 PNG 时保留透明背景", false),
-        ("Flow", "节点吸附到网格", false),
-        ("Flow", "多选后统一改颜色", false),
-        (nil, "README 截图换成 Swift 版", false),
-        (nil, "续费域名", false),
-    ]
-
-    typealias DemoTask = (project: String?, text: String, done: Bool)
-
     /// 两级任务：圆桌的"乱序"四个子任务，每个子任务是叶子、带着正文（发给 Agent 的状态见 `DebugScene.seedTaskStates`）；
     /// CuePad 的"投送超时"是叶子、带着正文（演示里发给 notes）。
     private static func seedSubtasks(_ store: CueStore) async throws {
         let tasks = try await store.tasks(.todo).flatMap(\.tasks)
-        if let timeout = tasks.first(where: { $0.body.hasPrefix("投送队列") }) {
-            try await store.updateCard(timeout.id) { $0.rest = "投送超时时先重试一次，还失败再报错，并在提示里写明原因" }
+        if let timeout = tasks.first(where: { $0.body.hasPrefix(String(localized: "投送队列超时报错不发键", table: "Demo")) }) {
+            try await store.updateCard(timeout.id) { $0.rest = String(localized: "投送超时时先重试一次，还失败再报错，并在提示里写明原因", table: "Demo") }
         }
-        guard let order = tasks.first(where: { $0.body.hasPrefix("发言轮次") }) else { return }
+        guard let order = tasks.first(where: { $0.body.hasPrefix(String(localized: "发言轮次乱序", table: "Demo")) }) else { return }
         for (step, rest) in [
-            ("复现乱序", "跑一下 scheduler 的测试，找出 5 人以上时谁被排到了最前\n先别改代码，告诉我原因和改法"),
-            ("改成按首次加入时间排序", "按首次加入时间排序，把断言也改了，再跑一遍"),
-            ("补 3 个重连用例", "改完补 3 个重连用例，覆盖断线、超时、换设备"),
-            ("部署到预发环境", "测试都过了就部署到预发环境"),
+            (String(localized: "复现乱序", table: "Demo"), String(localized: "跑一下 scheduler 的测试，找出 5 人以上时谁被排到了最前\n先别改代码，告诉我原因和改法", table: "Demo")),
+            (String(localized: "改成按首次加入时间排序", table: "Demo"), String(localized: "按首次加入时间排序，把断言也改了，再跑一遍", table: "Demo")),
+            (String(localized: "补 3 个重连用例", table: "Demo"), String(localized: "改完补 3 个重连用例，覆盖断线、超时、换设备", table: "Demo")),
+            (String(localized: "部署到预发环境", table: "Demo"), String(localized: "测试都过了就部署到预发环境", table: "Demo")),
         ] {
             _ = try await store.createTask(step + "\n" + rest, under: order.id)
         }
@@ -198,7 +112,7 @@ enum DemoLibrary {
 
     /// 一张像界面截图的示意图：桌面底色上几块纸片。用 CoreGraphics 画，Mac 与 iOS 共用。
     /// 演示用的主目录：Mac 上是真实主目录（截图用的假 Pi 会话按它归到项目），iOS 只作显示。
-    private static var demoHome: String {
+    static var demoHome: String {
         #if os(macOS)
         FileManager.default.homeDirectoryForCurrentUser.path(percentEncoded: false)
         #else

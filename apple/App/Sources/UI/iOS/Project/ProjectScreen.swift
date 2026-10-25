@@ -42,7 +42,7 @@ struct ProjectScreen: View {
         .scrollPosition($position)
         .taskFoldScroll(anchor)
         // 顶栏第二行是项目的一句介绍；文件夹在哪写在"⋯"里文件夹那一组的组头（`ProjectActions`）
-        .floatingHeader(project?.name ?? "", detail: project?.intro.map { Dotted($0) }) { actions }
+        .floatingHeader(.verbatim(project?.name ?? ""), detail: project?.intro.map { Dotted($0) }) { actions }
         .observing(services.store, id: projectID, into: $page, onError: workspace.fail) {
             [projectID] store in ProjectPage(try ProjectPageData.read(projectID, from: store))
         }

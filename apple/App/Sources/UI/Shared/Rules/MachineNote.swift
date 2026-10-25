@@ -26,19 +26,19 @@ struct MachineNote: Equatable {
             let marker = errorAt ?? rest.firstIndex { Self.sections.contains($0.trimmingCharacters(in: .whitespaces)) }
             failed = errorAt != nil
             let content = marker.map { rest[($0 + 1)...].filter { line in !Self.elapsed.contains { line.hasPrefix($0) } }.joined(separator: "\n") }
-            who = marker == nil ? "子代理" : "子代理 \(heading.prefix { $0 != " " })"
+            who = marker == nil ? String(localized: "子代理") : String(localized: "子代理 \(String(heading.prefix { $0 != " " }))")
             line = PiProgress.firstSentence(content) ?? heading
             detail = afterHeading
         case "firecode_review":
-            who = "审查"
+            who = String(localized: "审查")
             line = heading
             detail = afterHeading
         case "firecode_watcher":
-            who = "观察员"
+            who = String(localized: "观察员")
             line = PiProgress.firstSentence(afterHeading) ?? heading
             detail = afterHeading
         default:
-            who = envelope.name.isEmpty ? "扩展" : envelope.name
+            who = envelope.name.isEmpty ? String(localized: "扩展") : envelope.name
             line = PiProgress.firstSentence(body) ?? ""
             detail = body
         }

@@ -49,7 +49,7 @@ struct CardActions: View {
 
 /// 每一项的字、图标与颜色语义：长按菜单、"⋯"与轻扫共用一份。
 extension CardMenu.Item {
-    var title: String {
+    var title: LocalizedStringResource {
         switch self {
         case .complete: "完成"
         case .reopen: "重新打开"

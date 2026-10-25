@@ -17,10 +17,10 @@ final class SyncChoices {
         let consequence: String
     }
 
-    static let upload = Choice(title: "上传本机数据", consequence: "本机数据作为新内容传到当前账号")
-    static let erase = Choice(title: "用云端数据替换本机…", consequence: "丢弃本机的灵感、任务、项目与图片，从当前账号的云端重新下载")
-    static let keep = "保留这一份"
-    static let failed = "没做成：这台设备的资料库读写出错，再试一次"
+    static let upload = Choice(title: String(localized: "上传本机数据"), consequence: String(localized: "本机数据作为新内容传到当前账号"))
+    static let erase = Choice(title: String(localized: "用云端数据替换本机…"), consequence: String(localized: "丢弃本机的灵感、任务、项目与图片，从当前账号的云端重新下载"))
+    static let keep = String(localized: "保留这一份")
+    static let failed = String(localized: "没做成：这台设备的资料库读写出错，再试一次")
 
     func resolve(_ resolution: SyncResolution, _ services: AppServices) {
         run { try await services.resolveSync(resolution) }
@@ -56,7 +56,7 @@ struct ConflictVersion: Identifiable {
 extension CardConflict {
     /// 原卡是现在在用的那份，副本是同步时被替下的（`Card.conflictOf`），与哪台设备写的无关。
     var versions: [ConflictVersion] {
-        [ConflictVersion(label: "现在的版本", card: original, keep: .original), ConflictVersion(label: "另一个版本", card: copy, keep: .copy)]
+        [ConflictVersion(label: String(localized: "现在的版本"), card: original, keep: .original), ConflictVersion(label: String(localized: "另一个版本"), card: copy, keep: .copy)]
     }
 }
 

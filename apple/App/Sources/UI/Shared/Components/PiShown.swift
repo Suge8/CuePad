@@ -72,10 +72,20 @@ nonisolated enum PiDelivery: Hashable, Sendable {
 
         var label: String {
             switch self {
-            case .sending: "发送中"
-            case .sent: "已发出"
-            case .delivering: "送达中"
-            case .waking: "正在唤醒"
+            case .sending: String(localized: "发送中")
+            case .sent: String(localized: "已发出")
+            case .delivering: String(localized: "送达中")
+            case .waking: String(localized: "正在唤醒")
+            }
+        }
+
+        /// 会话在跑时那句话的小注："你的话发送中"。
+        var note: String {
+            switch self {
+            case .sending: String(localized: "你的话发送中")
+            case .sent: String(localized: "你的话已发出")
+            case .delivering: String(localized: "你的话送达中")
+            case .waking: String(localized: "你的话正在唤醒")
             }
         }
 
@@ -196,7 +206,7 @@ nonisolated extension PiShown {
         case .failed(let failure):
             self.init(status: .delivery(.failed(failure)), clock: own, cue: cue)
         case let phase? where busy:
-            let note = if case .inTransit(let transit) = phase { "你的话\(transit.label)" } else { nil as String? }
+            let note = if case .inTransit(let transit) = phase { transit.note } else { nil as String? }
             self.init(status: asked, note: note, clock: own, cue: cue)
         case let phase?:
             self.init(status: .delivery(phase), clock: delivery.map { .sent(since: $0.createdAt) }, cue: cue)
@@ -226,105 +236,6 @@ nonisolated extension PiShown {
         case .ended: .ended
         case .interrupted: .interrupted
         case nil: .unknown
-        }
-    }
-}
-
-nonisolated extension PiShown {
-    var label: String {
-        switch status {
-        case .delivery(.inTransit(let transit)): transit.label
-        case .delivery(.delivered): "已送达"
-        case .delivery(.failed): "没能送达"
-        case .working(.tool): "运行工具"
-        case .working(.delegating): "子代理工作中"
-        case .working(.compacting): "正在压缩上下文"
-        case .working: speaking ? "输出中" : CueNow.thinking
-        case .asking: "等你\(waitWord)"
-        case .awaitsReply: "待回复"
-        case .cueAsking: "等 \(cue ?? "") 回答"
-        case .failed: "出错"
-        case .unread: "有新回复"
-        case .idle: "该你了"
-        case .resting: "歇着"
-        case .fresh: "新会话"
-        case .ended: "已结束"
-        case .interrupted: "被打断"
-        case .unknown: "未知状态"
-        }
-    }
-
-    /// 只有一个状态标时它说的是什么（读屏标签、悬停提示、项目长按菜单的标题、任务上的会话状态）。
-    var presence: String {
-        switch status {
-        case .delivery(.inTransit(.waking)): "正在唤醒 Agent"
-        case .delivery(.failed): "没能送达 Agent"
-        case .delivery: "正在发给 Agent"
-        case .working(.compacting): "Agent 正在压缩上下文"
-        case .working: "Agent 正在工作"
-        case .asking: "Agent 等你\(waitWord)"
-        case .awaitsReply: "Agent 在等你回复"
-        case .cueAsking: "Agent 在等 \(cue ?? "") 回答"
-        case .failed: "Agent 出错"
-        case .unread: "Agent 有新回复"
-        case .idle: "Agent 在等你说下一句"
-        case .resting: "Agent 歇着"
-        case .fresh: "Agent 新会话"
-        case .ended: "Agent 会话已结束"
-        case .interrupted: "Agent 被打断"
-        case .unknown: "Agent 状态未知"
-        }
-    }
-
-    /// 在等你做的事："回答"（填文字）或"确认"（是否、选择）。
-    var waitWord: String { asksForWords ? "回答" : "确认" }
-
-    /// 名字与状态词加粗：做完了你还没看。
-    var isUnread: Bool { status == .unread }
-
-    /// 此刻显示为没能送达时的原因（会话行、项目"此刻"、任务浮窗写它）。
-    var undelivered: Speech.Failure? { if case .delivery(.failed(let failure)) = status { failure } else { nil } }
-
-    /// 在跑：工作中，或话在路上、已送达而会话还没跟上（没能送达的不算）——状态色、动效、排序与区头"N 个在跑"同一档。
-    var isRunning: Bool {
-        switch status {
-        case .working, .delivery(.inTransit), .delivery(.delivered): true
-        default: false
-        }
-    }
-
-    /// 会话列表的档：等你确认 → 待回复 → 出错与没能送达 → 工作中与话在路上 → 停下的 → 已结束。拍板在前同看板的等你列（在问的会话卡着 Agent），
-    /// 待回复紧随（Cue 页的待回复提示点进来看的就是它们）。
-    var rank: Int {
-        switch status {
-        case .asking: 0
-        case .awaitsReply: 1
-        case .failed, .delivery(.failed): 2
-        case .working, .delivery, .cueAsking: 3
-        case .unread, .idle, .resting, .fresh, .interrupted, .unknown: 4
-        case .ended: 5
-        }
-    }
-
-    /// 选会话时排在前面的（发给 Agent 的会话选单）：等你确认与待回复 → 出错 → 有新回复 → 工作中 → 停下的 → 已结束。
-    var urgency: Int {
-        switch status {
-        case .asking, .awaitsReply: 6
-        case .failed, .delivery(.failed): 5
-        case .unread: 4
-        case .working, .delivery, .cueAsking: 2
-        case .idle, .resting, .fresh, .interrupted, .unknown: 1
-        case .ended: 0
-        }
-    }
-}
-
-nonisolated extension PiShown {
-    /// 要你动手：等你确认、待回复、出错、没能送达。只有它们带彩色。
-    var needsYou: Bool {
-        switch status {
-        case .asking, .awaitsReply, .failed, .delivery(.failed): true
-        default: false
         }
     }
 }

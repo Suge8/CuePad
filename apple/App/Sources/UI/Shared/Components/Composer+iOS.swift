@@ -3,7 +3,7 @@ import PhotosUI
 import SwiftUI
 
 extension ComposerSource {
-    static var imageChoices: [(title: String, icon: Icon, source: ComposerSource)] {
+    static var imageChoices: [(title: LocalizedStringResource, icon: Icon, source: ComposerSource)] {
         [("相册", .photoLibrary, .photos)] + (CameraPicker.isAvailable ? [("拍照", .camera, .camera)] : [])
     }
 }
@@ -72,7 +72,7 @@ struct CameraPicker: UIViewControllerRepresentable {
 
 /// 带上的卡片：点一下看全文（`open`），长按出它的菜单。走 `MenuButton`（菜单开着时输入框不随键盘跳），所以长按不浮起全文预览：点一下就是全文。
 struct AttachmentButton<Label: View>: View {
-    let label: String
+    let label: LocalizedStringResource
     let menu: [ChoiceMenu.Section]
     let open: () -> Void
     @ViewBuilder let content: () -> Label

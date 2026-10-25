@@ -27,15 +27,15 @@ nonisolated struct TaskFold: Equatable, Sendable {
 /// 子任务进度与完成上级时的确认，项目页任务纸底的开合（Mac 与 iOS 同一套）。还没交出去的叶子在行尾是"开始"（`TaskNext`）。
 enum TaskCopy {
     /// 纸底展开其余没做完的任务那一格（`TaskFold`）：折着写"还有 2 条"，展开后写"收起"。数都来自 `TaskCounts`，纸上不另摆分数。
-    static func more(hidden: Int, expanded: Bool) -> String { expanded ? "收起" : "还有 \(hidden) 条" }
+    static func more(hidden: Int, expanded: Bool) -> String { expanded ? String(localized: "收起") : String(localized: "还有 \(hidden) 条") }
     /// 纸底展开最近完成那一格。
-    static func done(_ count: Int) -> String { "已完成 \(count)" }
+    static func done(_ count: Int) -> String { String(localized: "已完成 \(count)") }
 
-    static func progress(_ subtasks: TaskProgress) -> String { "子任务 \(subtasks.done)/\(subtasks.total)" }
+    static func progress(_ subtasks: TaskProgress) -> String { String(localized: "子任务 \(subtasks.done)/\(subtasks.total)") }
 
     static func hasOpen(_ subtasks: TaskProgress?) -> Bool { subtasks.map { $0.done < $0.total } ?? false }
     static func openSubtasks(_ subtasks: TaskProgress?) -> String {
-        "还有 \(subtasks.map { $0.total - $0.done } ?? 0) 个子任务没完成，一起完成？"
+        String(localized: "还有 \(subtasks.map { $0.total - $0.done } ?? 0) 个子任务没完成，一起完成？")
     }
 }
 
@@ -43,12 +43,12 @@ enum TaskCopy {
 enum TaskSpeech {
     static func value(_ status: TaskStatus?) -> String {
         switch status {
-        case .todo: "待办"
-        case .inProgress: "进行中"
-        case .done: "已完成"
-        case nil: "灵感"
+        case .todo: String(localized: "待办")
+        case .inProgress: String(localized: "进行中")
+        case .done: String(localized: "已完成")
+        case nil: String(localized: "灵感")
         }
     }
 
-    static func toggle(done: Bool) -> String { done ? "标为未完成" : "标为完成" }
+    static func toggle(done: Bool) -> String { done ? String(localized: "标为未完成") : String(localized: "标为完成") }
 }

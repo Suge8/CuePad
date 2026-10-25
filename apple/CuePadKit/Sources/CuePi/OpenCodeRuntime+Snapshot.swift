@@ -103,14 +103,14 @@ extension OpenCodeRuntime {
         let commands = try await client.get(OpenCodeData<[OpenCodeCommand]>.self, "/api/command", directory: directory).data
         let catalog = Catalog(
             models: models,
-            commands: [PiSlashCommand(name: Self.compact, summary: "压缩上下文", source: .known(.builtin))]
+            commands: [PiSlashCommand(name: Self.compact, summary: String(localized: "压缩上下文"), source: .known(.builtin))]
                 + commands.map { PiSlashCommand(name: $0.name, summary: $0.description.map { String($0.prefix(120)) }, source: .known(.prompt)) })
         catalogs[directory] = catalog
         return catalog
     }
 
     static let compact = "compact"
-    static let unknownFailure = "出错了"
+    static let unknownFailure = String(localized: "出错了，原因不明")
 
     func bridgeID(_ sessionID: String, _ connection: Connection) -> PiSession.ID { "\(sessionID).\(connection.pid)" }
 

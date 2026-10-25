@@ -219,7 +219,7 @@ final class CueEval {
         do {
             try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
             try lines.joined(separator: "\n").appending("\n").write(to: output.appending(path: "\(name).md"), atomically: true, encoding: .utf8)
-            let prompt = CuePrompt.system(name: CueProfile.defaultName, memory: CueMemoryView(try await rig.store.cueMemory()), agents: [], runtime: EvalBrain.current.runtime)
+            let prompt = CuePrompt.system(name: CueProfile.defaultName, memory: CueMemoryView(try await rig.store.cueMemory()), agents: [], runtime: EvalBrain.current.runtime, interface: .current)
             try prompt.write(to: output.appending(path: "system-prompt.md"), atomically: true, encoding: .utf8)
             try await writeScore(name, suite: suite, checks: checks, failure: failure, prompt: prompt, to: output)
             // 资料库留一份，看这一场在 Cue 页上的样子（docs/cue-eval.md）

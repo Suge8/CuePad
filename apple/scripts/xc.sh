@@ -3,6 +3,7 @@
 # 或自己起停 CuePad，会被 .pi/extensions/xc-guard.ts 拦下）。
 #   xc.sh check                                     提交前的门：lint.sh、CuePadKit 的 swift build、iOS 编译（连测试目标）
 #   xc.sh build <mac|ios|ipad>
+#   xc.sh strings                                   编 mac 与 ios，把界面文字收进 String Catalog，列出缺英文的（strings.py 头注释）
 #   xc.sh test <mac|ios|ipad> [xcodebuild 参数…]     如 -only-testing:CuePadTests/SuiteName；ios、ipad 不带参数时连 CuePadKit 也在模拟器上跑
 #   xc.sh test kit [xcodebuild 参数…]               CuePadKit 在 macOS 上的测试，如 -only-testing:CueSyncTests/PendingTests
 #     test 只打印编译的警告与错误、失败的用例与汇总；完整输出（App 日志、每条用例）在 apple/.derived/test.log
@@ -35,7 +36,7 @@ IOS_DEVICE="${CUEPAD_IOS_DEVICE:-iPhone 17}"
 IPAD_DEVICE="${CUEPAD_IPAD_DEVICE:-iPad Pro 11-inch (M5)}"
 # 正常的测试几秒内跑完，最慢的也不到一分钟；挂住的测试曾让测试宿主停了 34 分钟没人发现
 TEST_TIME_LIMIT=${CUEPAD_TEST_TIME_LIMIT:-120}
-USAGE="用法：$0 <check|build|test|shot|rec|run|stop|perf|release|device|provision> [mac|ios|ipad|kit] …（见脚本头注释）"
+USAGE="用法：$0 <check|build|strings|test|shot|rec|run|stop|perf|release|device|provision> [mac|ios|ipad|kit] …（见脚本头注释）"
 
 cmd="${1:-}"; platform="${2:-}"
 case "$cmd" in
@@ -50,6 +51,7 @@ case "$cmd" in
       *) echo "用法：$0 release <mac|ios>" >&2; exit 2 ;;
     esac ;;
   device) exec "$APPLE_DIR/scripts/release-ios.sh" device ;;
+  strings) "$0" build mac; "$0" build ios; exec python3 "$APPLE_DIR/scripts/strings.py" sync ;;
   provision) exec python3 "$APPLE_DIR/scripts/provision.py" "${2:-all}" "${@:3}" ;;
   stop) exec python3 "$APPLE_DIR/scripts/app.py" stop ;;
   perf) ;;  # 先构建、再测量，两段各自进锁（见下）
@@ -134,13 +136,14 @@ case "$cmd" in
     # Kit 的 macOS 构建（CuePi、命令行工具只在这里编到）与 iOS 编译产物目录不同，并行跑
     (cd "$APPLE_DIR/CuePadKit" && swift build --quiet) & kit=$!
     status=0
-    xcd || status=$?
+    if xcd; then python3 "$APPLE_DIR/scripts/strings.py" check || status=$?; else status=$?; fi
     wait "$kit" || status=$?
     exit $status ;;
   build) xcd; sign_development ;;
   build-perf) xcb -quiet build ;;
   test)
-    limits=(-test-timeouts-enabled YES -maximum-test-execution-time-allowance "$TEST_TIME_LIMIT")
+    # 用例断言的是中文界面：不随跑测试那台机器的系统语言变
+    limits=(-test-timeouts-enabled YES -maximum-test-execution-time-allowance "$TEST_TIME_LIMIT" -testLanguage zh-Hans -testRegion CN)
     # 先开好领到的模拟器（停用 PosterBoard，见 _sim.sh），xcodebuild 就用开着的这台。
     # 再卸掉上一次装的 App：它开着的实时活动在重装时被系统结束，系统随即把 App 叫到后台（不带测试的环境），
     # 正撞上测试宿主的启动，测试进程就连不上（"The test runner hung before establishing connection"）。卸掉时活动一起没了，没有这一下

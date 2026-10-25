@@ -12,7 +12,7 @@ enum CueNowSamples {
     }
 
     private static let push = CueNow.Wait(
-        title: "可以推送 v1.4 到 TestFlight 吗？", detail: nil, open: DeepLink.cue.url,
+        title: String(localized: "可以推送 v1.4 到 TestFlight 吗？", table: "Demo"), detail: nil, open: DeepLink.cue.url,
         allow: CueNow.Allow(message: UUID(), choice: CueAsk.once))
 
     private static func now(
@@ -22,59 +22,59 @@ enum CueNowSamples {
     }
 
     /// 被会话叫醒、在看它交回的结果；一件在跑、一件等子代理。
-    static let woke = now(.thinking, .working(woke: "被 canvas-zoom 叫醒", doing: "读取 Sources/Zoom.swift", since: ago(0.7)), [
-        bead("homepage", .running, "首页改版", 0.97),
-        bead("notes", .delegating, "发言顺序修复", 12.05, subagents: 2),
-        bead("canvas", .resting, "画布缩放", 2),
+    static let woke = now(.thinking, .working(woke: String(localized: "被 canvas-zoom 叫醒", table: "Demo"), doing: String(localized: "读取 Sources/Zoom.swift", table: "Demo"), since: ago(0.7)), [
+        bead("homepage", .running, String(localized: "首页改版", table: "Demo"), 0.97),
+        bead("notes", .delegating, String(localized: "发言顺序修复", table: "Demo"), 12.05, subagents: 2),
+        bead("canvas", .resting, String(localized: "画布缩放", table: "Demo"), 2),
     ], advancing: 3)
 
     /// Cue 歇着，交出去的活在跑、等子代理交回。
     static let delegating = now(.listening, .idle, [
-        bead("canvas", .running, "画布缩放", 4.2),
-        bead("notes", .delegating, "发言顺序修复", 12.05, subagents: 2),
-        bead("homepage", .delegating, "首页改版", 6.5, subagents: 1),
+        bead("canvas", .running, String(localized: "画布缩放", table: "Demo"), 4.2),
+        bead("notes", .delegating, String(localized: "发言顺序修复", table: "Demo"), 12.05, subagents: 2),
+        bead("homepage", .delegating, String(localized: "首页改版", table: "Demo"), 6.5, subagents: 1),
     ], advancing: 3)
 
     /// 一件要你拍板（推送），其余在跑。
     static let asks = now(.waiting, .idle, [
-        bead("ask", .asks, "推送 v1.4 到 TestFlight", 3),
-        bead("canvas", .running, "画布缩放", 4.2),
-        bead("notes", .delegating, "发言顺序修复", 12.05, subagents: 2),
+        bead("ask", .asks, String(localized: "推送 v1.4 到 TestFlight", table: "Demo"), 3),
+        bead("canvas", .running, String(localized: "画布缩放", table: "Demo"), 4.2),
+        bead("notes", .delegating, String(localized: "发言顺序修复", table: "Demo"), 12.05, subagents: 2),
     ], advancing: 2, first: push, resting: .waiting)
 
     /// 刚做完一件，还有一件在跑。
     static let done = now(.done, .idle, [
-        bead("canvas", .running, "画布缩放", 4.2),
-        bead("readme", .done, "README 截图换成 Swift 版", 0.5),
+        bead("canvas", .running, String(localized: "画布缩放", table: "Demo"), 4.2),
+        bead("readme", .done, String(localized: "README 截图换成 Swift 版", table: "Demo"), 0.5),
     ], advancing: 1, resting: .done)
 
     /// 做完一件后又派出三件在跑，做完的那件已过了留它的时候（`doneWindow`）：岛该说在跑的，不再停在做完。
     static let afterDone = now(.listening, .idle, [
-        bead("board", .running, "出手机任务看板方案", 0.95),
-        bead("header", .running, "出 iOS header 收口方案", 0.97),
-        bead("dock", .running, "底部 tab 切页丝滑收口", 0.97),
-        bead("release", .done, "推送并发新版", 25.1),
+        bead("board", .running, String(localized: "出手机任务看板方案", table: "Demo"), 0.95),
+        bead("header", .running, String(localized: "出 iOS header 收口方案", table: "Demo"), 0.97),
+        bead("dock", .running, String(localized: "底部 tab 切页丝滑收口", table: "Demo"), 0.97),
+        bead("release", .done, String(localized: "推送并发新版", table: "Demo"), 25.1),
     ], advancing: 3, resting: .done)
 
     /// 一屏放不下的：Cue 被叫醒在用工具，一件等你允许，四件推进中，刚做完一件。
-    static let crowded = now(.thinking, .working(woke: "被 canvas-zoom 叫醒", doing: "读取 Sources/Zoom.swift", since: ago(0.7)), [
-        bead("ask", .asks, "推送 v1.4 到 TestFlight", 3),
-        bead("board", .running, "出手机任务看板方案", 0.95),
-        bead("header", .running, "出 iOS header 收口方案", 0.97),
-        bead("dock", .running, "底部 tab 切页丝滑收口", 0.97),
-        bead("notes", .delegating, "发言顺序修复", 12.05, subagents: 2),
-        bead("readme", .done, "README 截图换成 Swift 版", 2),
+    static let crowded = now(.thinking, .working(woke: String(localized: "被 canvas-zoom 叫醒", table: "Demo"), doing: String(localized: "读取 Sources/Zoom.swift", table: "Demo"), since: ago(0.7)), [
+        bead("ask", .asks, String(localized: "推送 v1.4 到 TestFlight", table: "Demo"), 3),
+        bead("board", .running, String(localized: "出手机任务看板方案", table: "Demo"), 0.95),
+        bead("header", .running, String(localized: "出 iOS header 收口方案", table: "Demo"), 0.97),
+        bead("dock", .running, String(localized: "底部 tab 切页丝滑收口", table: "Demo"), 0.97),
+        bead("notes", .delegating, String(localized: "发言顺序修复", table: "Demo"), 12.05, subagents: 2),
+        bead("readme", .done, String(localized: "README 截图换成 Swift 版", table: "Demo"), 2),
     ], advancing: 4, first: push, resting: .waiting)
 
     /// 推进中的都歇着：实时活动结束，页头照写。
     static let quiet = now(.listening, .idle, [
-        bead("canvas", .resting, "画布缩放", 18),
-        bead("notes", .resting, "发言顺序修复", 40),
+        bead("canvas", .resting, String(localized: "画布缩放", table: "Demo"), 18),
+        bead("notes", .resting, String(localized: "发言顺序修复", table: "Demo"), 40),
     ], advancing: 2)
 
     /// 它运行的那台 Mac 没开。
-    static let away = now(.sleeping, .away("「Mac Studio」没开", failed: false), [
-        bead("canvas", .resting, "画布缩放", 60),
+    static let away = now(.sleeping, .away(String(localized: "「Mac Studio」没开", table: "Demo"), failed: false), [
+        bead("canvas", .resting, String(localized: "画布缩放", table: "Demo"), 60),
     ], advancing: 1, resting: .sleeping)
 
     static let all: [String: CueNow] = [
@@ -86,11 +86,11 @@ enum CueNowSamples {
     /// 实时活动里的额度一瞥：Claude 本周快重置（倒数），Codex 宽松。
     static let quotas = [
         CueActivityState.Quota(account: "Claude", windows: [
-            .init(name: "5 小时", left: 0.68, level: .roomy, resetsAt: .now.addingTimeInterval(2.2 * 3600), near: false),
-            .init(name: "本周", left: 0.41, level: .roomy, resetsAt: .now.addingTimeInterval(2.4 * 3600), near: true),
+            .init(name: String(localized: "5 小时", table: "Demo"), left: 0.68, level: .roomy, resetsAt: .now.addingTimeInterval(2.2 * 3600), near: false),
+            .init(name: String(localized: "本周", table: "Demo"), left: 0.41, level: .roomy, resetsAt: .now.addingTimeInterval(2.4 * 3600), near: true),
         ]),
         CueActivityState.Quota(account: "Codex", windows: [
-            .init(name: "本周", left: 0.8, level: .roomy, resetsAt: .now.addingTimeInterval(4 * 86400), near: false),
+            .init(name: String(localized: "本周", table: "Demo"), left: 0.8, level: .roomy, resetsAt: .now.addingTimeInterval(4 * 86400), near: false),
         ]),
     ]
 }

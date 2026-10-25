@@ -81,7 +81,7 @@ public struct AgentCapabilities: OptionSet, Sendable, Hashable {
   /// 与 Mac 执行发话（桥的 `send`）都只认这里；不排队，歇下再说。
   public func speakBlocked(in state: PiWorkState?, agent: AgentKind?) -> String? {
     guard state?.isTurnRunning == true, !contains(.abort) else { return nil }
-    return "终端里的 \(agent?.name ?? "Agent") 在跑，CuePad 打断不了它：在终端里按 Esc，或等它做完再说"
+    return String(localized: "终端里的 \(agent?.name ?? "Agent") 在跑，CuePad 打断不了它：在终端里按 Esc，或等它做完再说")
   }
 
   /// `hosted`：会话在 CuePad 托管的进程里（没有终端界面），CuePad 掌握它的全部输入输出。

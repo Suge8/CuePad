@@ -7,18 +7,18 @@ extension DebugScene {
     /// 圆桌预发环境上一场 6 人房间的发言顺序（`deployShots`：推送那条"等你"）：按首次加入时间排，重连过的人还在原位。
     static func stagingOrderPNG() -> Data {
         let people: [(name: String, note: String?, joined: String, tint: Color)] = [
-            ("小林", "主持人", "20:01", .orange), ("阿杰", nil, "20:02", .teal), ("Mia", nil, "20:02", .pink),
-            ("老王", "重连过 · 位置没变", "20:03", .indigo), ("Sora", nil, "20:05", .green), ("Kai", nil, "20:06", .brown),
+            (String(localized: "小林", table: "Demo"), String(localized: "主持人", table: "Demo"), "20:01", .orange), (String(localized: "阿杰", table: "Demo"), nil, "20:02", .teal), ("Mia", nil, "20:02", .pink),
+            (String(localized: "老王", table: "Demo"), String(localized: "重连过 · 位置没变", table: "Demo"), "20:03", .indigo), ("Sora", nil, "20:05", .green), ("Kai", nil, "20:06", .brown),
         ]
         let view = VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 6) {
-                Text("预发").font(.system(size: 11, weight: .bold)).foregroundStyle(.white)
+                Text("预发", tableName: "Demo").font(.system(size: 11, weight: .bold)).foregroundStyle(.white)
                     .padding(.horizontal, 7).padding(.vertical, 3).background(.orange, in: .capsule)
                 Text("staging-2.roundtable.app").font(.system(size: 11)).foregroundStyle(.gray)
             }
             .padding(.top, 46)
-            Text("周会 · 发言顺序").font(.system(size: 24, weight: .bold)).padding(.top, 14)
-            Text("6 人 · 按首次加入时间排").font(.system(size: 12)).foregroundStyle(.gray).padding(.top, 4)
+            Text("周会 · 发言顺序", tableName: "Demo").font(.system(size: 24, weight: .bold)).padding(.top, 14)
+            Text("6 人 · 按首次加入时间排", tableName: "Demo").font(.system(size: 12)).foregroundStyle(.gray).padding(.top, 4)
             // 6 行落在正中那一块：缩略图裁成方的也是完整的 6 个人
             VStack(spacing: 6) {
                 ForEach(Array(people.enumerated()), id: \.offset) { index, person in
@@ -31,7 +31,7 @@ extension DebugScene {
                             if let note = person.note { Text(note).font(.system(size: 11)).foregroundStyle(index == 0 ? .orange : .indigo) }
                         }
                         Spacer()
-                        Text("\(person.joined) 加入").font(.system(size: 11).monospacedDigit()).foregroundStyle(.gray)
+                        Text("\(person.joined) 加入", tableName: "Demo").font(.system(size: 11).monospacedDigit()).foregroundStyle(.gray)
                     }
                     .padding(.horizontal, 12).frame(height: 44)
                     .background(.white, in: .rect(cornerRadius: 12))
@@ -39,7 +39,7 @@ extension DebugScene {
             }
             .padding(.top, 20)
             Spacer(minLength: 16)
-            Text("轮到小林发言").font(.system(size: 16, weight: .semibold)).foregroundStyle(.white)
+            Text("轮到小林发言", tableName: "Demo").font(.system(size: 16, weight: .semibold)).foregroundStyle(.white)
                 .frame(maxWidth: .infinity).frame(height: 48).background(Color.indigo, in: .capsule)
         }
         .padding(20).frame(width: 320, height: 640).background(Color(white: 0.95)).foregroundStyle(.black)
@@ -48,13 +48,13 @@ extension DebugScene {
 
     /// 重连用例的测试报告（PDF，一页）：与"等你"正文里那段输出同样四条，都过了。
     static func reconnectReportPDF() -> Data {
-        let cases = [("重连后保留首次加入时间", "0.21s"), ("6 人同时重连顺序不变", "0.48s"), ("断线超过 5 分钟按新人排", "0.12s"), ("主持人重连仍在第一位", "0.09s")]
+        let cases = [(String(localized: "重连后保留首次加入时间", table: "Demo"), "0.21s"), (String(localized: "6 人同时重连顺序不变", table: "Demo"), "0.48s"), (String(localized: "断线超过 5 分钟按新人排", table: "Demo"), "0.12s"), (String(localized: "主持人重连仍在第一位", table: "Demo"), "0.09s")]
         let page = VStack(alignment: .leading, spacing: 0) {
-            Text("重连测试报告").font(.system(size: 30, weight: .bold))
+            Text("重连测试报告", tableName: "Demo").font(.system(size: 30, weight: .bold))
             HStack(spacing: 10) {
-                Text("4 / 4 通过").font(.system(size: 15, weight: .bold)).foregroundStyle(.white)
+                Text("4 / 4 通过", tableName: "Demo").font(.system(size: 15, weight: .bold)).foregroundStyle(.white)
                     .padding(.horizontal, 12).padding(.vertical, 6).background(Color.green, in: .capsule)
-                Text("scheduler · 预发 staging-2").font(.system(size: 13)).foregroundStyle(.gray)
+                Text("scheduler · 预发 staging-2", tableName: "Demo").font(.system(size: 13)).foregroundStyle(.gray)
             }
             .padding(.top, 10)
             VStack(spacing: 0) {
@@ -80,8 +80,8 @@ extension DebugScene {
     /// 三档价格对比表（PDF，两页）：定价区那件的会话发来的一份。
     static func pricingPDF() -> Data {
         let page = VStack(alignment: .leading, spacing: 12) {
-            Text("定价对比").font(.system(size: 28, weight: .bold))
-            ForEach(["基础 · ¥0 · 3 个项目", "专业 · ¥68 · 不限项目", "团队 · ¥198 · 10 人协作"], id: \.self) { line in
+            Text("定价对比", tableName: "Demo").font(.system(size: 28, weight: .bold))
+            ForEach([String(localized: "基础 · ¥0 · 3 个项目", table: "Demo"), String(localized: "专业 · ¥68 · 不限项目", table: "Demo"), String(localized: "团队 · ¥198 · 10 人协作", table: "Demo")], id: \.self) { line in
                 Text(line).font(.system(size: 16))
                 Divider()
             }
@@ -98,7 +98,7 @@ extension DebugScene {
     static func readmePNG() -> Data {
         let view = VStack(spacing: 10) {
             Text("CuePad").font(.system(size: 30, weight: .bold))
-            Text("记灵感、管任务、指挥 Agent 的原生 App").font(.system(size: 15)).foregroundStyle(.gray)
+            Text("记灵感、管任务、指挥 Agent 的原生 App", tableName: "Demo").font(.system(size: 15)).foregroundStyle(.gray)
             HStack(spacing: 6) {
                 ForEach(["macOS · iOS · iPadOS", "Swift 6", "MIT"], id: \.self) { badge in
                     Text(badge).font(.system(size: 11, weight: .medium)).padding(.horizontal, 8).padding(.vertical, 3)
@@ -122,19 +122,19 @@ extension DebugScene {
                     Text("Cue").font(.system(size: 13, weight: .semibold))
                 }
                 .padding(.top, 6)
-                ForEach([("圆桌", Color.orange), ("Flow", .teal), ("CuePad", .purple), ("读书", .pink)], id: \.0) { name, tint in
+                ForEach([(String(localized: "圆桌", table: "Demo"), Color.orange), ("Flow", .teal), ("CuePad", .purple), (String(localized: "读书", table: "Demo"), .pink)], id: \.0) { name, tint in
                     HStack(spacing: 6) { RoundedRectangle(cornerRadius: 2).fill(tint).frame(width: 9, height: 9); Text(name).font(.system(size: 11)) }
                 }
                 Spacer()
             }
             .padding(12).frame(width: 130, alignment: .leading).background(Color(red: 0.89, green: 0.88, blue: 0.86))
             VStack(alignment: .leading, spacing: 8) {
-                Text("圆桌那个乱序交给你").font(.system(size: 11)).padding(8).background(Color(red: 0.88, green: 0.85, blue: 0.8), in: .rect(cornerRadius: 10))
+                Text("圆桌那个乱序交给你", tableName: "Demo").font(.system(size: 11)).padding(8).background(Color(red: 0.88, green: 0.85, blue: 0.8), in: .rect(cornerRadius: 10))
                     .frame(maxWidth: .infinity, alignment: .trailing)
-                Text("好。拆成四步：复现、改排序、补用例、部署到预发。").font(.system(size: 11)).padding(8).background(paper, in: .rect(cornerRadius: 10))
-                Text("「README 截图换成 Swift 版」做完了").font(.system(size: 11, weight: .semibold)).padding(8).background(paper, in: .rect(cornerRadius: 10))
+                Text("好。拆成四步：复现、改排序、补用例、部署到预发。", tableName: "Demo").font(.system(size: 11)).padding(8).background(paper, in: .rect(cornerRadius: 10))
+                Text("「README 截图换成 Swift 版」做完了", tableName: "Demo").font(.system(size: 11, weight: .semibold)).padding(8).background(paper, in: .rect(cornerRadius: 10))
                 Spacer()
-                Capsule().fill(paper).frame(height: 26).overlay(alignment: .leading) { Text("对 Cue 说").font(.system(size: 10)).foregroundStyle(.gray).padding(.leading, 10) }
+                Capsule().fill(paper).frame(height: 26).overlay(alignment: .leading) { Text("对 Cue 说", tableName: "Demo").font(.system(size: 10)).foregroundStyle(.gray).padding(.leading, 10) }
             }
             .padding(12).frame(maxWidth: .infinity).background(desk)
         }
@@ -145,18 +145,18 @@ extension DebugScene {
     /// 登录回调超时修好后的样子（流程演示里做完的那件）：等授权超过 10 秒，回到登录页并说明原因。
     static func loginTimeoutPNG() -> Data {
         let view = VStack(alignment: .leading, spacing: 14) {
-            Text("登录").font(.system(size: 30, weight: .bold)).padding(.top, 60)
+            Text("登录", tableName: "Demo").font(.system(size: 30, weight: .bold)).padding(.top, 60)
             HStack(alignment: .top, spacing: 8) {
                 Circle().fill(.orange).frame(width: 18, height: 18).overlay { Text("!").font(.system(size: 12, weight: .bold)).foregroundStyle(.white) }
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("登录超时，请重新登录").font(.system(size: 14, weight: .semibold))
-                    Text("等待授权超过 10 秒，已停止等待").font(.system(size: 12)).foregroundStyle(.gray)
+                    Text("登录超时，请重新登录", tableName: "Demo").font(.system(size: 14, weight: .semibold))
+                    Text("等待授权超过 10 秒，已停止等待", tableName: "Demo").font(.system(size: 12)).foregroundStyle(.gray)
                 }
             }
             .padding(12).frame(maxWidth: .infinity, alignment: .leading).background(Color.orange.opacity(0.12), in: .rect(cornerRadius: 10))
             loginFields()
             Spacer()
-            Text("使用其他方式登录").font(.system(size: 13)).foregroundStyle(.indigo).frame(maxWidth: .infinity)
+            Text("使用其他方式登录", tableName: "Demo").font(.system(size: 13)).foregroundStyle(.indigo).frame(maxWidth: .infinity)
         }
         .padding(24).frame(width: 320, height: 640).background(.white).foregroundStyle(.black)
         return render(view)
@@ -166,7 +166,7 @@ extension DebugScene {
     static func phonePNG(covered: Bool) -> Data {
         let view = ZStack(alignment: .bottom) {
             VStack(alignment: .leading, spacing: 14) {
-                Text("登录").font(.system(size: 30, weight: .bold)).padding(.top, 70)
+                Text("登录", tableName: "Demo").font(.system(size: 30, weight: .bold)).padding(.top, 70)
                 loginFields(buttonGap: covered ? 150 : 0)
                 Spacer()
             }
@@ -179,12 +179,12 @@ extension DebugScene {
 
     private static func loginFields(buttonGap: CGFloat = 0) -> some View {
         VStack(spacing: 14) {
-            ForEach(["邮箱", "密码"], id: \.self) { field in
+            ForEach([String(localized: "邮箱", table: "Demo"), String(localized: "密码", table: "Demo")], id: \.self) { field in
                 RoundedRectangle(cornerRadius: 10).stroke(.gray.opacity(0.4)).frame(height: 46)
                     .overlay(alignment: .leading) { Text(field).foregroundStyle(.gray).padding(.leading, 12) }
             }
             RoundedRectangle(cornerRadius: 12).fill(.indigo).frame(height: 48)
-                .overlay { Text("登录").foregroundStyle(.white).bold() }
+                .overlay { Text("登录", tableName: "Demo").foregroundStyle(.white).bold() }
                 .padding(.top, buttonGap)
         }
     }
@@ -201,8 +201,8 @@ extension DebugScene {
             }
             HStack(spacing: 5) {
                 RoundedRectangle(cornerRadius: 5).fill(Color(white: 0.7)).frame(width: 60, height: 38)
-                Text("空格").font(.system(size: 13)).frame(maxWidth: .infinity).frame(height: 38).background(.white, in: .rect(cornerRadius: 5))
-                Text("登录").font(.system(size: 13)).frame(width: 60, height: 38).background(Color(white: 0.7), in: .rect(cornerRadius: 5))
+                Text("空格", tableName: "Demo").font(.system(size: 13)).frame(maxWidth: .infinity).frame(height: 38).background(.white, in: .rect(cornerRadius: 5))
+                Text("登录", tableName: "Demo").font(.system(size: 13)).frame(width: 60, height: 38).background(Color(white: 0.7), in: .rect(cornerRadius: 5))
             }
             .padding(.horizontal, 6)
         }
@@ -211,11 +211,11 @@ extension DebugScene {
 
     static func widePNG() -> Data {
         let view = HStack(spacing: 16) {
-            ForEach(["基础", "专业", "团队"], id: \.self) { tier in
+            ForEach([String(localized: "基础", table: "Demo"), String(localized: "专业", table: "Demo"), String(localized: "团队", table: "Demo")], id: \.self) { tier in
                 VStack(spacing: 10) {
                     Text(tier).font(.title3.bold())
-                    Text(tier == "专业" ? "¥68" : tier == "基础" ? "¥0" : "¥198").font(.system(size: 34, weight: .heavy))
-                    RoundedRectangle(cornerRadius: 8).fill(tier == "专业" ? .indigo : .gray.opacity(0.3)).frame(height: 34)
+                    Text(tier == String(localized: "专业", table: "Demo") ? "¥68" : tier == String(localized: "基础", table: "Demo") ? "¥0" : "¥198").font(.system(size: 34, weight: .heavy))
+                    RoundedRectangle(cornerRadius: 8).fill(tier == String(localized: "专业", table: "Demo") ? .indigo : .gray.opacity(0.3)).frame(height: 34)
                 }
                 .padding(18).frame(maxWidth: .infinity).background(.white, in: .rect(cornerRadius: 16))
             }

@@ -19,6 +19,12 @@ nonisolated struct QuotaReminder {
     /// "明天04:00 重置，记得用掉"
     let body: String
 
+    private static func body(resetsAt: Date, fireAt: Date) -> String {
+        let time = resetsAt.formatted(date: .omitted, time: .shortened)
+        return Calendar.current.isDate(resetsAt, inSameDayAs: fireAt)
+            ? String(localized: "今天\(time) 重置，记得用掉") : String(localized: "明天\(time) 重置，记得用掉")
+    }
+
     /// 会提醒的那个窗口：整个账号的本周。
     static func window(of quota: AccountQuota) -> QuotaWindow? {
         quota.windows.first { $0.seconds == QuotaWindow.week && $0.model == nil }
@@ -36,11 +42,10 @@ nonisolated struct QuotaReminder {
             let fireAt = window.resetsAt.addingTimeInterval(-lead)
             guard fireAt > now else { return nil }
             let meter = QuotaMeter.Window(window, at: fireAt)
-            let day = Calendar.current.isDate(window.resetsAt, inSameDayAs: fireAt) ? "今天" : "明天"
             return QuotaReminder(
                 id: "\(prefix)\(quota.provider)/\(Int((window.resetsAt.timeIntervalSince1970 / 60).rounded()))", fireAt: fireAt,
-                title: "\(PiProvider(id: quota.provider).account) \(meter.name)还剩 \(meter.percent)",
-                body: "\(day)\(window.resetsAt.formatted(date: .omitted, time: .shortened)) 重置，记得用掉")
+                title: String(localized: "\(PiProvider(id: quota.provider).account) \(meter.name)还剩 \(meter.percent)"),
+                body: body(resetsAt: window.resetsAt, fireAt: fireAt))
         }
     }
 }

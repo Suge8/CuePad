@@ -12,12 +12,12 @@ extension DebugScene {
         guard let mode = defaults.string(forKey: "CuePadTaskLines") else { return }
         let tasks = try await store.tasks(.todo, .inProgress, .done).flatMap(\.tasks)
         func task(_ prefix: String) -> Card? { tasks.first { $0.parentID == nil && $0.body.hasPrefix(prefix) } }
-        guard let importing = task("导入旧数据"), let panel = task("README 截图") else { return }
-        _ = try await store.addCueMessage(.cue, text: "导入旧数据那边我让它先拆成几段读，读完再接着导。", task: importing.id)
+        guard let importing = task(String(localized: "导入旧数据时保留回收站", table: "Demo")), let panel = task(String(localized: "README 截图换成 Swift 版", table: "Demo")) else { return }
+        _ = try await store.addCueMessage(.cue, text: String(localized: "导入旧数据那边我让它先拆成几段读，读完再接着导。", table: "Demo"), task: importing.id)
         try await store.markCueRead(through: .now)
         guard mode == "changed" else { return }
         for task in [importing, panel] {
-            try await store.updateCard(task.id) { $0.body = $0.heading + "（改过）" }
+            try await store.updateCard(task.id) { $0.body = $0.heading + String(localized: "（改过）", table: "Demo") }
             _ = try await store.toggleDone(task.id)
         }
     }
@@ -40,13 +40,13 @@ extension DebugScene {
                 times: PiTimes(stateSince: .now.addingTimeInterval(-minutes * 60), busySince: nil), agent: agent)
             try await store.writePiTranscript(PiTranscript(sessionID: id, messages: [], recap: PiRecap(lastPrompt: said, lastReply: reply)))
         }
-        try await settle("header", "header", .codex, minutes: 5, said: "名牌两行居中", reply: "名牌两行已居中，展开改成了 0.25 秒，手感你再试试？")
+        try await settle("header", "header", .codex, minutes: 5, said: String(localized: "名牌两行居中", table: "Demo"), reply: String(localized: "名牌两行已居中，展开改成了 0.25 秒，手感你再试试？", table: "Demo"))
         let project = try await store.projects().first { $0.name == "CuePad" }?.id ?? Project.defaultID
-        let task = try await store.createTask("打磨手机 Cue 顶栏", in: project)
+        let task = try await store.createTask(String(localized: "打磨手机 Cue 顶栏", table: "Demo"), in: project)
         try await store.bindSession("header", to: task.id)
         _ = try await store.leaveToYou("header")
         guard count > 1 else { return }
-        try await settle("glass", "底栏换系统液态玻璃", .claudeCode, minutes: 12, said: "底栏换成系统的液态玻璃", reply: "改好了，深色下玻璃边缘偏亮，我调低了 8%。要再看一版截图吗？")
+        try await settle("glass", String(localized: "底栏换系统液态玻璃", table: "Demo"), .claudeCode, minutes: 12, said: String(localized: "底栏换成系统的液态玻璃", table: "Demo"), reply: String(localized: "改好了，深色下玻璃边缘偏亮，我调低了 8%。要再看一版截图吗？", table: "Demo"))
         _ = try await store.leaveToYou("glass")
     }
 }

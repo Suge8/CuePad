@@ -48,7 +48,7 @@ nonisolated struct PiThinkingMeter: Equatable {
     var filled: Int { current.flatMap { Self.scale.firstIndex(of: $0) }.map { $0 + 1 } ?? 0 }
     var isOff: Bool { current == .off }
     /// 档名；Agent 没报此刻的强度时（如终端里的 Codex 用模型的缺省）是"默认"，照样能点能换。
-    var label: String { current?.label ?? "默认" }
+    var label: String { current?.label ?? String(localized: "默认") }
     var isMax: Bool { current != .off && current == PiThinkingLevel.allCases.last(where: levels.contains) }
 
     func level(at fraction: Double) -> PiThinkingLevel {
@@ -68,13 +68,13 @@ nonisolated struct PiThinkingMeter: Equatable {
 extension PiThinkingLevel {
     nonisolated var label: String {
         switch self {
-        case .off: "关"
-        case .minimal: "最低"
-        case .low: "低"
-        case .medium: "中"
-        case .high: "高"
-        case .xhigh: "很高"
-        case .max: "最高"
+        case .off: String(localized: "关")
+        case .minimal: String(localized: "最低")
+        case .low: String(localized: "低")
+        case .medium: String(localized: "中")
+        case .high: String(localized: "高")
+        case .xhigh: String(localized: "很高")
+        case .max: String(localized: "最高")
         }
     }
 }

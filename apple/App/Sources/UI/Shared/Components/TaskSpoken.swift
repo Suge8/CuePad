@@ -32,7 +32,7 @@ private struct TaskSpoken<More: View>: ViewModifier {
             .accessibilityLabel([task.title, subtasks.map(TaskCopy.progress), next?.speech].compactMap { $0 }.joined(separator: "，"))
             .accessibilityValue(TaskSpeech.value(done ? .done : task.status))
             .accessibilityAddTraits(.isButton)
-            .accessibilityHint(check.phase == .pending ? "撤销完成" : TaskSpeech.toggle(done: done))
+            .accessibilityHint(check.phase == .pending ? String(localized: "撤销完成") : TaskSpeech.toggle(done: done))
             .accessibilityAction { workspace.tap($check, task: task, subtasks: subtasks, agentBusy: next?.agentBusy ?? false) }
             .accessibilityActions {
                 Button("打开", action: open)

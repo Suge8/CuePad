@@ -112,7 +112,7 @@ struct NewTaskLine: View {
         HStack(spacing: 2) {
             // 入口不用系统占位灰：那样看起来像不能点
             Image(.add).foregroundStyle(palette.ink2).frame(width: 44).accessibilityHidden(true)
-            TextField("添加任务", text: $text, palette: palette)
+            TextField(String(localized: "添加任务"), text: $text, palette: palette)
                 .accessibilityLabel("添加任务")
                 .frame(minHeight: 44)
                 .contentShape(.rect)

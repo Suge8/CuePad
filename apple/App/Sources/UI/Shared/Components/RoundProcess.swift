@@ -160,7 +160,7 @@ struct RoundProcess: View {
 extension View {
     /// 就地展开、收起的那一行给读屏的值；`nil` 是这一行展不开。
     func accessibilityExpanded(_ open: Bool?) -> some View {
-        accessibilityValue(open.map { $0 ? "已展开" : "已收起" } ?? "")
+        accessibilityValue(open.map { $0 ? Text("已展开") : Text("已收起") } ?? Text(verbatim: ""))
     }
 }
 

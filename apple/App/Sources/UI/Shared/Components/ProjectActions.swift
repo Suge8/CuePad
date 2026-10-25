@@ -46,7 +46,7 @@ struct ProjectActions<Extra: View>: View {
         #if os(macOS)
         if let directory = workspace.catalog?.directories[project.id] { return Workspaces.shown(directory) }
         let workspaces = workspace.services.workspaces
-        return "\(Workspaces.shown(workspaces.directory(for: project.name).path(percentEncoded: false)))（开工时建好）"
+        return String(localized: "\(Workspaces.shown(workspaces.directory(for: project.name).path(percentEncoded: false)))（开工时建好）")
         #else
         guard let catalog = workspace.catalog else { return "" }
         return ProjectFolders.places(of: project, bindings: catalog.bindings, workMac: catalog.workMac).joined(separator: "；")

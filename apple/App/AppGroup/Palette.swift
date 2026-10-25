@@ -173,18 +173,18 @@ struct Palette {
     }
 
     static let projectColors = [
-        ProjectColor(stored: "#D9774B", name: "橙色", light: 0xC0603A, dark: 0xE08A62),
-        ProjectColor(stored: "#C9A227", name: "芥黄", light: 0x858024, dark: 0xCFC45E),
-        ProjectColor(stored: "#5E9E5A", name: "绿色", light: 0x4F8A4C, dark: 0x7DB878),
-        ProjectColor(stored: "#3F8FB8", name: "蓝色", light: 0x357DA3, dark: 0x6AAAD0),
-        ProjectColor(stored: "#3AA088", name: "青绿", light: 0x2E8A75, dark: 0x5CBBA3),
-        ProjectColor(stored: "#A260C4", name: "紫色", light: 0x9358B3, dark: 0xB585D6),
-        ProjectColor(stored: "#D0607D", name: "粉色", light: 0xC2577A, dark: 0xE07E9A),
-        ProjectColor(stored: "#8A8A84", name: "灰色", light: 0x7D7A73, dark: 0xA39F96),
+        ProjectColor(stored: "#D9774B", name: String(localized: "橙色"), light: 0xC0603A, dark: 0xE08A62),
+        ProjectColor(stored: "#C9A227", name: String(localized: "芥黄"), light: 0x858024, dark: 0xCFC45E),
+        ProjectColor(stored: "#5E9E5A", name: String(localized: "绿色"), light: 0x4F8A4C, dark: 0x7DB878),
+        ProjectColor(stored: "#3F8FB8", name: String(localized: "蓝色"), light: 0x357DA3, dark: 0x6AAAD0),
+        ProjectColor(stored: "#3AA088", name: String(localized: "青绿"), light: 0x2E8A75, dark: 0x5CBBA3),
+        ProjectColor(stored: "#A260C4", name: String(localized: "紫色"), light: 0x9358B3, dark: 0xB585D6),
+        ProjectColor(stored: "#D0607D", name: String(localized: "粉色"), light: 0xC2577A, dark: 0xE07E9A),
+        ProjectColor(stored: "#8A8A84", name: String(localized: "灰色"), light: 0x7D7A73, dark: 0xA39F96),
     ]
 
     /// 不在表里的旧值退回的那一档。
-    private static let fallbackProjectColor = projectColors.first { $0.name == "灰色" }!
+    private static let fallbackProjectColor = projectColors.first { $0.stored == "#8A8A84" }!
 
     /// 项目的颜色：只上图形（项目图标、任务行末的项目小图标），不写成字、不做成圆点。不在表里的旧值退回灰色。
     func project(_ stored: String) -> Color {

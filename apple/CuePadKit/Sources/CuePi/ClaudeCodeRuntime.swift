@@ -315,8 +315,8 @@ public enum ClaudeCodeError: Error, Equatable, LocalizedError {
 
     public var errorDescription: String? {
         switch self {
-        case .exited(let reason): reason.isEmpty ? "在后台启动的 Claude Code 没连上就退出了" : "在后台启动的 Claude Code 退出了：\(reason)"
-        case .listingFailed: "没能问到 Claude Code 此刻在跑哪些会话"
+        case .exited(let reason): reason.isEmpty ? String(localized: "在后台启动的 Claude Code 没连上就退出了") : String(localized: "在后台启动的 Claude Code 退出了：\(reason)")
+        case .listingFailed: String(localized: "没能问到 Claude Code 此刻在跑哪些会话")
         }
     }
 }

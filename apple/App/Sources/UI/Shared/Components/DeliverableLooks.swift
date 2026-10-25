@@ -104,7 +104,7 @@ enum DeliverableLooks {
     private static func detail(_ preview: PiPreview, file: URL) async -> String? {
         switch preview.kind {
         case .audio, .video: await duration(file)
-        case .pdf: await pageCount(file).map { "\($0) 页" }
+        case .pdf: await pageCount(file).map { String(localized: "\($0) 页") }
         default: nil
         }
     }

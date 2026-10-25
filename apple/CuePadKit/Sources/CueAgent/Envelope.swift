@@ -19,11 +19,15 @@ public enum CueEnvelope {
     public var wake: CueWake
     /// 提醒到点（`CueWake.reminder`）时到点的那几条记忆，带序号
     public var reminders: [CueIndexedLine]
+    /// 这一轮要写的语言不是中文时它的名字（他这句话的语言，他没开口时是界面语言，App 定）：系统提示是中文，只在系统提示里说一次，
+    /// 照着中文句式回的还是中文（实测），所以每一轮在块尾再说一次；中文时为 nil，不写这一行。
+    public var language: String?
 
     public init(
       now: Date, projects: [Project], changes: [CueChange],
-      board: CueBoard, waiting: [CueMessage], left: [CueLeft] = [], wake: CueWake, reminders: [CueIndexedLine] = []
+      board: CueBoard, waiting: [CueMessage], left: [CueLeft] = [], wake: CueWake, reminders: [CueIndexedLine] = [], language: String? = nil
     ) {
+      self.language = language
       self.reminders = reminders
       self.left = left
       self.now = now
@@ -38,7 +42,7 @@ public enum CueEnvelope {
   public static func render(_ input: Input) -> String {
     var lines = ["<cue>", input.now.formatted(stamp)]
 
-    lines.append("项目：" + input.projects.map(\.name).joined(separator: "、"))
+    lines.append("项目：" + input.projects.map(\.storedName).joined(separator: "、"))
 
     lines.append("变化（上次醒来之后）：" + (input.changes.isEmpty ? "无" : ""))
     lines += input.changes.map { "- \(change($0))" }
@@ -57,6 +61,7 @@ public enum CueEnvelope {
 
     lines.append("醒来：" + wake(input.wake))
     if case .reminder = input.wake { lines += input.reminders.map { "- #\($0.index) \($0.line.text)" } }
+    if let language = input.language { lines.append("这一轮你写下的字都用\(language)（回复、tell、动态、任务、对会话说的话）") }
     lines.append("</cue>")
     return lines.joined(separator: "\n")
   }

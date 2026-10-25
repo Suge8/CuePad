@@ -77,15 +77,34 @@ private struct CueNoteLine: View {
         let said = round.said.isEmpty ? nil : round.said.map { CueFormat.plainText($0.text) }.joined(separator: " ")
         let head: Text? = switch places.count {
         case 0: nil
-        case 1: Text("\(Text(places[0].title).foregroundStyle(palette.ink2))\(places[0].kind.map { " " + $0.verb } ?? "")")
-        default: Text("\(Text(places.map(\.title).joined(separator: "、")).foregroundStyle(palette.ink2)) 有动静")
+        case 1: place(places[0])
+        default: Text("\(Text(places.map(\.title).formatted(.list(type: .and))).foregroundStyle(palette.ink2)) 有动静")
         }
         let tail = said ?? (head == nil ? round.header?.wake.reason : nil)
         return switch (head, tail) {
-        case (let head?, let tail?): Text("\(head)，\(tail)")
+        // 接在一处后面的那句（Cue 说的或醒来原因）自成一键：英文用冒号接整句，不与别处并列两段的"%@，%@"共用
+        case (let head?, let tail?): Text("\(head)\(Text("，\(tail)", comment: "Cue 页醒来那一行：一处之后接 Cue 说的话"))")
         case (let head?, nil): head
         case (nil, let tail?): Text(tail)
         case (nil, nil): Text("")
+        }
+    }
+
+    /// 一处：名字，当时出了事时接一句（"登录回调 停下了"）。
+    private func place(_ place: CueWakeHeader.Place) -> Text {
+        let title = Text(place.title).foregroundStyle(palette.ink2)
+        return place.kind.map { Self.line(title, $0) } ?? title
+    }
+
+    /// 一处当时出了什么事的整句（名字带着样式插进去）。
+    private static func line(_ title: Text, _ kind: CueChange.Kind) -> Text {
+        switch kind {
+        case .settled: Text("\(title) 停下了")
+        case .waitingForUser: Text("\(title) 在等回答")
+        case .failed: Text("\(title) 出错了")
+        case .undelivered: Text("\(title) 话没送到")
+        case .done: Text("\(title) 做完了")
+        case .stalled: Text("\(title) 子代理卡住了")
         }
     }
 }

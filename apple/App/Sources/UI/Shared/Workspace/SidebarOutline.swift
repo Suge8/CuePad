@@ -12,11 +12,11 @@ nonisolated struct SidebarOutline: Equatable {
 
         var title: String {
             switch self {
-            case .progress: "进展"
-            case .projects: "项目"
-            case .archive: "归档"
-            case .trash: "回收站"
-            case .settings: "设置"
+            case .progress: String(localized: "进展")
+            case .projects: String(localized: "项目")
+            case .archive: String(localized: "归档")
+            case .trash: String(localized: "回收站")
+            case .settings: String(localized: "设置")
             }
         }
 

@@ -25,12 +25,12 @@ extension CueKeeper {
             let profile = try await store.cueProfile() ?? CueProfile()
             brainSettings = BrainSettings(profile)
             guard let runtime = profile.runtime.known, let launch = try await setup.launch(runtime) else {
-                return await broke("这台 Mac 上没有找到 \(profile.runtime.rawValue)")
+                return await broke(String(localized: "这台 Mac 上没有找到 \(profile.runtime.rawValue)"))
             }
             let memory = CueMemoryView(try await store.cueMemory())
             let brain = try await startBrain(
                 runtime, launch, model: profile.model, effort: profile.effort?.known,
-                systemPrompt: CuePrompt.system(name: profile.name, memory: memory, agents: launch.agents, runtime: runtime),
+                systemPrompt: CuePrompt.system(name: profile.name, memory: memory, agents: launch.agents, runtime: runtime, interface: .current),
                 tools: ["--wait", "\(setup.timing.sayWait)"])
             shifts += 1
             let id = shifts, input = input
@@ -80,7 +80,7 @@ extension CueKeeper {
         }
         guard failures <= setup.timing.restarts.count else {
             phase = .stuck(reason)
-            await say(.cue, "我起不来了：\(reason)\n你再发一条消息，我就再试一次。", urgent: true)
+            await say(.cue, String(localized: "我起不来了：\(reason)\n你再发一条消息，我就再试一次。"), urgent: true)
             return
         }
         phase = .restarting(failures)
@@ -133,7 +133,7 @@ extension CueKeeper {
             let line = summary.kind == .other ? raw : "\(summary.title)\n\(raw)"  // 认不出的错，摘要只是原文的首行
             guard line != lastFailure else { return }  // 同一个错一轮轮重复（如额度）只说一次
             lastFailure = line
-            let text = "这一轮出错了：\(line)"
+            let text = String(localized: "这一轮出错了：\(line)")
             if let turn, turn.answersYou { await reply(text, in: turn) } else { await say(.cue, text) }
         case .turnFinished:
             guard var finished = turn else { return }
@@ -155,7 +155,7 @@ extension CueKeeper {
             }
         case .exited(let reason):
             // 自己停的大脑不会走到这里（停之前已离开这个班次）：退出都是意外
-            await broke(reason.map { "大脑退出了（\($0)）" } ?? "大脑退出了")
+            await broke(reason.map { String(localized: "大脑退出了（\($0)）") } ?? String(localized: "大脑退出了"))
         }
     }
 

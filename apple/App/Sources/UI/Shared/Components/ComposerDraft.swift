@@ -32,11 +32,11 @@ struct ComposerDraft {
             rest = end == rest.endIndex ? "" : rest[rest.index(after: end)...]
         }
         let parts = [
-            notes.isEmpty ? nil : "\(notes.count) 条批注",
-            attachments.isEmpty ? nil : "\(attachments.count) 条灵感",
-            images.isEmpty ? nil : "\(images.count) 张图片",
+            notes.isEmpty ? nil : String(localized: "\(notes.count) 条批注"),
+            attachments.isEmpty ? nil : String(localized: "\(attachments.count) 条灵感"),
+            images.isEmpty ? nil : String(localized: "\(images.count) 张图片"),
         ].compactMap { $0 }
-        return parts.isEmpty ? nil : "带了 " + parts.joined(separator: "、")
+        return parts.isEmpty ? nil : String(localized: "带了 \(parts.formatted(.list(type: .and)))")
     }
 
     var hasImages: Bool { !images.isEmpty || attachments.contains { !CardText($0.content).images.isEmpty } }

@@ -74,7 +74,7 @@ private struct BarTextField: UIViewRepresentable {
         field.adjustsFontForContentSizeCategory = true
         field.returnKeyType = .search
         field.clearButtonMode = .always
-        field.accessibilityLabel = "搜索"
+        field.accessibilityLabel = String(localized: "搜索")
         field.accessibilityTraits.insert(.searchField)
         field.setContentHuggingPriority(.defaultLow, for: .horizontal)
         field.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)

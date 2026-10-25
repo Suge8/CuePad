@@ -29,8 +29,8 @@ nonisolated enum ProjectFolders {
     /// 同步来的绑定只有末段（完整路径不出那台 Mac）。哪台都没绑时写 `workMac` 开工时会建的那个（`Workspaces.folderName`）；一台 Mac 都没有为空。
     static func places(of project: Project, bindings: [DirectoryBinding], workMac: MacAgents?) -> [String] {
         let own = bindings.filter { $0.projectID == project.id }
-        guard own.isEmpty else { return own.map { "在 \($0.macName) 上：\($0.folder)" } }
-        return workMac.map { ["在 \($0.shownName) 上：\(Workspaces.folderName(for: project.name))（开工时建好）"] } ?? []
+        guard own.isEmpty else { return own.map { String(localized: "在 \($0.macName) 上：\($0.folder)") } }
+        return workMac.map { [String(localized: "在 \($0.shownName) 上：\(Workspaces.folderName(for: project.name))（开工时建好）")] } ?? []
     }
 
     /// 项目操作菜单里的绑定项（`ProjectActions`）："换文件夹…"之外，绑着的每处一项解除（解除后下次开工回到工作区）；
@@ -46,7 +46,7 @@ nonisolated enum ProjectFolders {
 
     static func menu(for project: UUID, bindings: [DirectoryBinding], host: String?) -> Menu {
         let own = bindings.filter { $0.projectID == project && (host == nil || $0.hostID == host) }
-        return Menu(unbinds: own.map { Menu.Unbind(title: Dotted("解除绑定", own.count > 1 ? $0.macName : nil), binding: $0) })
+        return Menu(unbinds: own.map { Menu.Unbind(title: Dotted(String(localized: "解除绑定"), own.count > 1 ? $0.macName : nil), binding: $0) })
     }
 
     /// 手机上给项目选文件夹的一个候选：Mac 上已知的一个文件夹（只有名字）与"让那台 Mac 从哪里取"。

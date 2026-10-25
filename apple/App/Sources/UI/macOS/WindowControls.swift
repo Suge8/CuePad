@@ -169,7 +169,7 @@ struct QuotaSlot: View {
 }
 
 /// 工具栏右边、搜索之前：进展页会话段的"新会话"（弹出新会话的表单，`NewSessionPanel`，⌥⌘N 同）；看板段的新任务在"⋯"里。
-/// 规矩同 `ScopeSlot`：每页都在、固定宽度，别的页看不见。
+/// 规矩同 `ScopeSlot`：每页都在、宽度不随页变，别的页看不见；宽度至少 `width`，字更宽的语言（英文）按字撑开，不截断。
 struct PageActionSlot: View {
     @Environment(Workspace.self) private var workspace
 
@@ -183,7 +183,8 @@ struct PageActionSlot: View {
             .buttonStyle(ControlButtonStyle(kind: .glass))
             .help("开一个新的 Agent 会话（⌥⌘N）")
             .opacity(shown ? 1 : 0).allowsHitTesting(shown).accessibilityHidden(!shown)
-            .frame(width: Self.width, height: Spacing.toolbarControl, alignment: .trailing)
+            .fixedSize()
+            .frame(minWidth: Self.width, minHeight: Spacing.toolbarControl, maxHeight: Spacing.toolbarControl, alignment: .trailing)
     }
 }
 

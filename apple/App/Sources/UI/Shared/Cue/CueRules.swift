@@ -30,7 +30,7 @@ nonisolated enum CuePresence: Equatable, Sendable {
             if trip.inTransit { return .sending(trip == .sent ? .sent : .sending) }
         }
         guard let state = digest.state, let work = state.state.known else { return .idle }
-        if work == .error { return .unreachable(state.detail ?? "\(digest.name) 起不来了") }
+        if work == .error { return .unreachable(state.detail ?? String(localized: "\(digest.name) 起不来了")) }
         return work.isWorking ? .working(work, detail: state.detail, step: state.step) : .idle
     }
 
@@ -70,8 +70,8 @@ nonisolated enum CuePresence: Equatable, Sendable {
     /// 没启用分两种：从没在哪台 Mac 上运行过是"还没启用"，运行过、后来停了（还记着停用前那台，`CueDigest.hostID`）是"已停用"。
     func line(host: String, ranBefore: Bool) -> String? {
         switch self {
-        case .disabled: ranBefore ? "已停用" : "还没启用"
-        case .asleep: "「\(host)」没开"
+        case .disabled: ranBefore ? String(localized: "已停用") : String(localized: "还没启用")
+        case .asleep: String(localized: "「\(host)」没开")
         case .unreachable(let reason): reason
         case .idle, .sending, .working: nil
         }
@@ -162,16 +162,16 @@ nonisolated struct CueDigest: Equatable, Sendable {
     /// 这一轮为什么醒，写成那一句的开头（"被 canvas-zoom 叫醒"）：名字是叫醒时记下的（`CueMessage.places`）。
     private static func woke(_ row: CueMessage) -> String {
         switch row.wake! {
-        case .message: return "在回你的话"
-        case .idle: return "例行查看"
-        case .reminder: return "提醒到点"
-        case .enabled: return "刚启用"
+        case .message: return String(localized: "在回你的话")
+        case .idle: return String(localized: "例行查看")
+        case .reminder: return String(localized: "提醒到点")
+        case .enabled: return String(localized: "刚启用")
         case .sessionActivity(let stirs):
             var seen = Set<String>()
             let sessions = stirs.filter { $0.session.map { seen.insert($0).inserted } ?? false }
-            guard let first = sessions.first else { return "有一件做完了" }
+            guard let first = sessions.first else { return String(localized: "有一件做完了") }
             let name = row.name(session: first.session!)
-            return sessions.count > 1 ? "被 \(name) 等 \(sessions.count) 处叫醒" : "被 \(name) 叫醒"
+            return sessions.count > 1 ? String(localized: "被 \(name) 等 \(sessions.count) 处叫醒") : String(localized: "被 \(name) 叫醒")
         }
     }
 

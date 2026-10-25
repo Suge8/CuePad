@@ -155,7 +155,7 @@ final class AppServices {
         reportIssue: { [weak self] message in self?.reportIssue(.syncUnavailable(message)) })
 
     @ObservationIgnored lazy var hotkey = GlobalHotkey(
-        label: "显示或隐藏 CuePad", key: AppSettings.Key.globalShortcut, defaultAccelerator: "Alt+Space", defaults: settings.defaults,
+        label: String(localized: "显示或隐藏 CuePad"), key: AppSettings.Key.globalShortcut, defaultAccelerator: "Alt+Space", defaults: settings.defaults,
         backend: hotkeyBackend
     ) { [weak self] in self?.windowShell?.toggleFromHotkey() }
     #endif

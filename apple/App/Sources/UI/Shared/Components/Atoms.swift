@@ -128,8 +128,8 @@ nonisolated enum ProjectIcon: String, CaseIterable, Sendable {
         self = stored.flatMap(Self.init(rawValue:)) ?? .folder
     }
 
-    /// 读屏与提示用的中文含义。
-    var name: String {
+    /// 读屏与提示用的含义。
+    var name: LocalizedStringResource {
         switch self {
         case .folder: "文件夹"
         case .sparkles: "闪光"
@@ -160,15 +160,42 @@ nonisolated enum ProjectIcon: String, CaseIterable, Sendable {
 }
 
 // MARK: 小件
+extension LocalizedStringResource {
+    /// 收界面字的参数拿到的是已经算好或用户写的字（项目名、会话标题、Agent 说的）：原样显示，不查目录。
+    static func verbatim(_ text: String) -> Self { "\(text)" }
+}
+
+// 带图标的标签、按钮、菜单收 `LocalizedStringResource`（`Icon.swift` 那几个收字面量与 String）；不优先，字面量仍走 LocalizedStringKey 那个。
+extension Label where Title == Text, Icon == Image {
+    @_disfavoredOverload
+    init(_ title: LocalizedStringResource, icon: AppIcon) {
+        self.init { Text(title) } icon: { Image(icon) }
+    }
+}
+
+extension Button where Label == SwiftUI.Label<Text, Image> {
+    @_disfavoredOverload
+    init(_ title: LocalizedStringResource, icon: AppIcon, role: ButtonRole? = nil, action: @escaping () -> Void) {
+        self.init(role: role, action: action) { SwiftUI.Label(title, icon: icon) }
+    }
+}
+
+extension Menu where Label == SwiftUI.Label<Text, Image> {
+    @_disfavoredOverload
+    init(_ title: LocalizedStringResource, icon: AppIcon, @ViewBuilder content: () -> Content) {
+        self.init(content: content) { SwiftUI.Label(title, icon: icon) }
+    }
+}
+
 extension View {
     /// 菜单（`Menu`）的标签：里面的几样（图标、字、箭头）合成一个无障碍元素，读作 `spoken`。分开时 Mac 的菜单按钮按子视图拆成几颗，
     /// 菜单项只挂在第一颗下，读屏落在别的那颗上打开的是空壳。标签只有一个图标时不用它，给菜单本身 `accessibilityLabel` 就够。
-    func menuLabel(_ spoken: String) -> some View { accessibilityElement(children: .ignore).accessibilityLabel(spoken) }
+    func menuLabel(_ spoken: LocalizedStringResource) -> some View { accessibilityElement(children: .ignore).accessibilityLabel(spoken) }
 }
 
 /// 列表里的大段标题（会话页的"现在""历史"）：页面的骨架，不比行里的字弱。左右缩进由所在列表给，同那一列卡片的左缘。
 struct SectionTitle: View {
-    let text: String
+    let text: LocalizedStringResource
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -197,36 +224,45 @@ struct SectionLabel: View {
     }
 }
 
-/// 全 App 唯一的"什么时候"写法（灵感、任务、回收站、Agent 会话、对话里的时间标记都用它）：一分钟内"刚刚"，一小时内"N 分钟前"，一天内"N 小时前"；
-/// 再往前按日历（`day`）：昨天、一周内写星期、今年写月日、更早带年份。粗到小时为止，几小时前的事不写到分钟。
+/// 全 App 唯一的"什么时候"写法（灵感、任务、回收站、Agent 会话、对话里的时间标记都用它）：一分钟内"刚刚"，一天内"N 分钟前""N 小时前"；
+/// 再往前按日历（`day`）：昨天、一周内写星期、今年写月日、更早带年份。粗到小时为止，几小时前的事不写到分钟。都用系统格式，跟随界面语言。
 /// 会话的计时会随时间刷新（`PiElapsed`）；灵感卡、回收站这些不加定时器，写的是打开时的值。
 nonisolated enum DateLabel {
     static func short(_ date: Date, now: Date = .now, calendar: Calendar = .current) -> String {
-        let elapsed = now.timeIntervalSince(date)
-        if elapsed < 60 { return "刚刚" }
-        if elapsed < 3600 { return "\(Int(elapsed) / 60) 分钟前" }
-        if elapsed < 86_400 { return "\(Int(elapsed) / 3600) 小时前" }
+        let elapsed = Int(now.timeIntervalSince(date))
+        if elapsed < 60 { return String(localized: "刚刚") }
+        if elapsed < 3600 { return relative(DateComponents(minute: -elapsed / 60), style: .abbreviated) }
+        if elapsed < 86_400 { return relative(DateComponents(hour: -elapsed / 3600), style: .abbreviated) }
         return day(date, now: now, calendar: calendar)
     }
 
     /// 不是今天的那一天：昨天、一周内写星期、今年写月日、更早带年份。
     static func day(_ date: Date, now: Date = .now, calendar: Calendar = .current) -> String {
-        if let yesterday = calendar.date(byAdding: .day, value: -1, to: now), calendar.isDate(date, inSameDayAs: yesterday) { return "昨天" }
+        if let yesterday = calendar.date(byAdding: .day, value: -1, to: now), calendar.isDate(date, inSameDayAs: yesterday) {
+            return relative(DateComponents(day: -1), style: .full)
+        }
         let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: date), to: calendar.startOfDay(for: now)).day ?? 0
-        if days < 7 { return date.formatted(.dateTime.weekday(.abbreviated).locale(chinese)) }
+        if days < 7 { return date.formatted(.dateTime.weekday(.abbreviated)) }
         if calendar.isDate(date, equalTo: now, toGranularity: .year) { return date.formatted(monthDay) }
-        return date.formatted(.dateTime.year().month(.defaultDigits).day().locale(chinese))
+        return date.formatted(.dateTime.year().month(.defaultDigits).day())
     }
 
     /// "月/日"（今年里的日期、"更早"分组的周区间）。
-    static let monthDay = Date.FormatStyle.dateTime.month(.defaultDigits).day().locale(chinese)
+    static let monthDay = Date.FormatStyle.dateTime.month(.defaultDigits).day()
 
-    private static let chinese = Locale(identifier: "zh_CN")
+    /// 系统的相对时间（"5 分钟前""昨天"），独立成一项时首字母大写。
+    private static func relative(_ offset: DateComponents, style: RelativeDateTimeFormatter.UnitsStyle) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = style
+        formatter.dateTimeStyle = .named
+        formatter.formattingContext = .beginningOfSentence
+        return formatter.localizedString(from: offset)
+    }
 }
 
 /// 分段标题：名称 + 可选计数；读屏作为一个标题。
 struct SectionHeader: View {
-    let title: String
+    let title: LocalizedStringResource
     var count: Int?
     @Environment(\.palette) private var palette
 

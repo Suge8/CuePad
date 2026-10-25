@@ -187,7 +187,7 @@ private struct Works: View {
     @Environment(\.palette) private var palette
 
     /// 多久前（`Text(_:style: .relative)`）最宽写成的样子：一天内最多两段，"小时、分钟"比"分钟、秒"宽。
-    static let relative = "00小时00分钟"
+    static let relative = String(localized: "00小时00分钟")
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
@@ -195,7 +195,7 @@ private struct Works: View {
                 HStack(spacing: 8) {
                     BeadDot(kind: bead.kind, size: 8)
                     Text(bead.name).font(.subheadline.weight(.medium)).foregroundStyle(palette.ink).lineLimit(1)
-                    Text(bead.kind == .delegating && bead.subagents > 0 ? "等 \(bead.subagents) 个子代理" : bead.kind.label)
+                    (bead.kind == .delegating && bead.subagents > 0 ? Text("等 \(bead.subagents) 个子代理") : Text(bead.kind.label))
                         .font(.footnote).foregroundStyle(bead.kind.tone.color(palette)).lineLimit(1).fixedSize()
                     Spacer(minLength: 6)
                     if [.done, .resting, .reply].contains(bead.kind) {
@@ -260,7 +260,7 @@ private struct LockScreen: View {
                 CueNowFace(now: now, size: 34)
                 VStack(alignment: .leading, spacing: 1) {
                     Sentence(now: now, island: false)
-                    Text(now.advancing > 0 ? "推进中 \(now.advancing) 件" : now.name).font(.caption).foregroundStyle(palette.ink3)
+                    (now.advancing > 0 ? Text("推进中 \(now.advancing) 件") : Text(now.name)).font(.caption).foregroundStyle(palette.ink3)
                 }
                 Spacer(minLength: 6)
                 if stale {

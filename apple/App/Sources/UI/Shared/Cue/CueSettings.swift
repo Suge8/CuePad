@@ -92,8 +92,8 @@ private struct CueSettingsReader: ViewModifier {
     func body(content: Content) -> some View {
         content
             .observing(services.store, into: $model.settings, onError: model.fail) { try CueSettings.read(from: $0) }
-            .dialog(model.moving?.title ?? "", item: $model.moving, message: model.moving?.message) { move in
-                [DialogButton(title: move.confirm) { model.confirm(move, services) }]
+            .dialog(.verbatim(model.moving?.title ?? ""), item: $model.moving, message: model.moving.map { .verbatim($0.message) }) { move in
+                [DialogButton(title: .verbatim(move.confirm)) { model.confirm(move, services) }]
             }
     }
 }
@@ -122,7 +122,7 @@ nonisolated struct CueSettings: Equatable, Sendable {
         /// 启用前会重新探测，Cue 页上点它还会打开接入面板给装法。
         var selectable: Bool { usable || isHere }
         /// 菜单里名字下面那一行：能当大脑的几家，或为什么一家都不能用。
-        var note: String { usable ? brains.map(\.name).joined(separator: "、") : whyNone }
+        var note: String { usable ? brains.map(\.name).formatted(.list(type: .and)) : whyNone }
     }
 
     /// Cue 能在哪几台上运行，`here` 是这台 Mac（手机为 nil）时它排第一：这台刚启动、自己的记录还没写下时也在（启用前会先重新探测）。
@@ -148,13 +148,13 @@ nonisolated struct CueSettings: Equatable, Sendable {
     }
 
     /// 各端同一套写法：选在哪台运行的那一行与"不启用"（停用）。
-    static let hostTitle = "在哪台 Mac 上运行"
-    static let off = "不启用"
+    static var hostTitle: String { String(localized: "在哪台 Mac 上运行") }
+    static var off: String { String(localized: "不启用") }
     /// 手机上还没有哪台 Mac 写下过自己（`hosts` 为空）时设置与 Cue 面板里那句；Cue 页上给的动作是发出 Mac 版的下载链接（`macDownload`）。
-    static let noHost = "先在 Mac 上打开 CuePad"
+    static var noHost: String { String(localized: "先在 Mac 上打开 CuePad") }
     static let macDownload = URL(string: "https://github.com/Suge8/CuePad/releases/latest")!
 
-    private static let here = "这台 Mac"
+    private static var here: String { String(localized: "这台 Mac") }
 }
 
 /// 改 Cue 运行的 Mac 前那一问（`CueSettingsModel.moving`），两端同一份说法：改在哪台、原来那台（`from`，它自报的名字）不再运行。
@@ -165,9 +165,9 @@ struct CueMove: Identifiable, Equatable {
     let cue: String
 
     var id: String { to.id }
-    var title: String { to.isHere ? "让 \(cue) 改在这台 Mac 上运行？" : "让 \(cue) 改在「\(to.name)」上运行？" }
-    var message: String { "原来那台「\(from)」就不再运行 \(cue)。" }
-    var confirm: String { to.isHere ? "改在这台运行" : "改在「\(to.name)」运行" }
+    var title: String { to.isHere ? String(localized: "让 \(cue) 改在这台 Mac 上运行？") : String(localized: "让 \(cue) 改在「\(to.name)」上运行？") }
+    var message: String { String(localized: "原来那台「\(from)」就不再运行 \(cue)。") }
+    var confirm: String { to.isHere ? String(localized: "改在这台运行") : String(localized: "改在「\(to.name)」运行") }
 }
 
 /// 能不能在一台 Mac 上启用 Cue、改它运行的 Mac：所有入口（Cue 页的启用钮与它的多台菜单（`CueWelcome`）、手机 Cue 面板的选 Mac、接入面板 Cue 那一行、
@@ -184,7 +184,7 @@ enum CueGate: Equatable {
     /// `running`：它此刻运行的那台（没启用为 nil），`name` 是那台的名字。
     static func of(_ services: AppServices, running: String?, name: String?) -> CueGate {
         guard services.knowsSyncedFacts else {
-            return .waiting(services.syncStatus == .offline ? "连上 iCloud 后再启用" : "正在从 iCloud 同步…")
+            return .waiting(services.syncStatus == .offline ? String(localized: "连上 iCloud 后再启用") : String(localized: "正在从 iCloud 同步…"))
         }
         guard let running else { return .open }
         return .runs(id: running, name: name ?? MacAgents.unnamed)

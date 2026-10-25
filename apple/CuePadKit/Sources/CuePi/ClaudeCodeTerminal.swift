@@ -58,7 +58,7 @@ final class ClaudeTerminalSession: SessionLink {
         self.gate = gate
         self.inbox = inbox
         if let runningSince { facts.startTurn(at: runningSince) }
-        if waiting { facts.questions = [PiQuestion(promptID: nil, kind: .unknown("terminal"), text: "在终端里等你")] }
+        if waiting { facts.questions = [PiQuestion(promptID: nil, kind: .unknown("terminal"), text: String(localized: "在终端里等你"))] }
     }
 
     func publish(_ session: inout PiSession) { facts.publish(to: &session) }

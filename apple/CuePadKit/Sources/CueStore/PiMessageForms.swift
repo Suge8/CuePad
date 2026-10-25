@@ -64,7 +64,7 @@ public struct PiSkillCall: Equatable, Sendable {
   public static func shown(_ text: String) -> String { parse(text)?.line ?? text }
 }
 
-/// 对话里的系统行有哪几种，唯一的一处：同步记录里只有说话人与正文，种类由正文认出（正文就是它显示的那句）。
+/// 对话里的系统行有哪几种，唯一的一处：同步记录里只有说话人与正文，种类由正文认出（正文是中文原文，各端照当前语言显示 `label`）。
 /// 只有压缩换了上下文（对话里画分隔、刻度滑条上一个点）；停下与拒绝只是这一轮怎么结束的（行内一句）。
 public enum PiNotice: String, Sendable, CaseIterable {
   case compacted = "已压缩上下文"
@@ -72,4 +72,12 @@ public enum PiNotice: String, Sendable, CaseIterable {
   case declined = "已拒绝"
 
   public var changesContext: Bool { self == .compacted }
+
+  public var label: String {
+    switch self {
+    case .compacted: String(localized: "已压缩上下文")
+    case .stopped: String(localized: "已停止")
+    case .declined: String(localized: "已拒绝")
+    }
+  }
 }

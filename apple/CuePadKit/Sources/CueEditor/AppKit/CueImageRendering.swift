@@ -14,7 +14,7 @@ enum CueImageRendering {
             style.imagePlaceholderColor.setFill()
             NSBezierPath(roundedRect: rect, xRadius: style.imageCornerRadius, yRadius: style.imageCornerRadius).fill()
             if missing {
-                let label = "图片缺失" as NSString
+                let label = String(localized: "图片缺失") as NSString
                 let attributes: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 12), .foregroundColor: style.markerColor]
                 let textSize = label.size(withAttributes: attributes)
                 label.draw(at: NSPoint(x: rect.midX - textSize.width / 2, y: rect.midY - textSize.height / 2), withAttributes: attributes)

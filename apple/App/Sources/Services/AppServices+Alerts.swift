@@ -8,7 +8,7 @@ extension AppServices {
     ///   （本次运行第一次读到的只记基线），逐条交给 `AlertCenter.post`（到不到你在那里问）。Cue 的由 `CueService.followNotifications` 读库发。
     /// - Cue 留给你回的停下：状态没变，会话记录上的手机推送标志由会话所在的这台 Mac 补上（`CueStore.flagLeftToYou`）。
     func startAlerts() {
-        follow(reporting: { .syncUnavailable("Cue 留给你回的会话没能推到手机：\($0)") }) { [store, sync, hostID] in
+        follow(reporting: { .syncUnavailable(String(localized: "Cue 留给你回的会话没能推到手机：\(String(describing: $0))")) }) { [store, sync, hostID] in
             var known: Set<CueLeft>?
             for try await left in store.observe({ Set(try $0.cueDuty()?.left ?? []) }) {
                 defer { known = left }

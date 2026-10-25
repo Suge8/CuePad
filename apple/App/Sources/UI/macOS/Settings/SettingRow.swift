@@ -7,12 +7,12 @@ import SwiftUI
 /// - 右边只放这一行常驻的那一个控件（开关、分段、键帽、立即同步、连接）。
 /// 解释性的长句不上屏，放在悬停提示里（`help`）。
 struct SettingRow<Control: View, Fix: View>: View {
-    let title: String
+    let title: LocalizedStringResource
     let icon: Image
     var tone = StatusTone.calm
     var busy = false
     var status: Dotted?
-    var help: String?
+    var help: LocalizedStringResource?
     @ViewBuilder var control: Control
     @ViewBuilder var fix: Fix
     @Environment(\.palette) private var palette
@@ -47,7 +47,7 @@ struct SettingRow<Control: View, Fix: View>: View {
         }
         .animation(HandOff.quick, value: tone)
         .animation(HandOff.quick, value: busy)
-        .help(help ?? "")
+        .help(help.map { Text($0) } ?? Text(verbatim: ""))
         // 读屏把这一行当一组、组名是这一行的名称：状态后的"修复""查看"与右边的控件都读得出属于哪一行
         .accessibilityElement(children: .contain)
         .accessibilityLabel(title)
@@ -56,7 +56,8 @@ struct SettingRow<Control: View, Fix: View>: View {
 
 extension SettingRow where Fix == EmptyView {
     init(
-        title: String, icon: Image, tone: StatusTone = .calm, busy: Bool = false, status: Dotted? = nil, help: String? = nil,
+        title: LocalizedStringResource, icon: Image, tone: StatusTone = .calm, busy: Bool = false, status: Dotted? = nil,
+        help: LocalizedStringResource? = nil,
         @ViewBuilder control: () -> Control
     ) {
         self.init(title: title, icon: icon, tone: tone, busy: busy, status: status, help: help, control: control) { EmptyView() }
@@ -96,7 +97,7 @@ private struct SettingPopoverBackground: ViewModifier {
 
 /// 解决链接点开的说明或明细（同步要你决定、没能同步的记录、冲突、崩溃）：都是挂在链接上的弹出框，一种外观。
 struct SettingPopover<Content: View>: View {
-    let title: String
+    let title: LocalizedStringResource
     var width: CGFloat = 360
     @ViewBuilder var content: Content
     @Environment(\.palette) private var palette

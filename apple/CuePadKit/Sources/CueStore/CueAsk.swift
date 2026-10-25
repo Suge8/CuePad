@@ -13,14 +13,14 @@ public enum CueAsk: String, CaseIterable, Sendable {
   /// 范围要与 `definition` 一样大：选项照它写，选了放行的是整类。
   public var name: String {
     switch self {
-    case .push: "推送代码"
-    case .merge: "合并进共享分支"
-    case .release: "发布或部署"
-    case .delete: "删除文件、分支或数据"
-    case .outside: "动项目外的东西"
-    case .budget: "超出预算"
-    case .taste: "审美取舍"
-    case .rule: "你的规矩要先问的事"
+    case .push: String(localized: "推送代码")
+    case .merge: String(localized: "合并进共享分支")
+    case .release: String(localized: "发布或部署")
+    case .delete: String(localized: "删除文件、分支或数据")
+    case .outside: String(localized: "动项目外的东西")
+    case .budget: String(localized: "超出预算")
+    case .taste: String(localized: "审美取舍")
+    case .rule: String(localized: "你的规矩要先问的事")
     }
   }
 
@@ -39,7 +39,7 @@ public enum CueAsk: String, CaseIterable, Sendable {
   }
 
   /// 第一项（主按钮）：允许这一次。
-  public static let once = "可以"
+  public static let once = String(localized: "可以")
 
   /// 能不能放行（提问有第二项"以后……不用问"）。规矩那一类不能：一律放行等于没有规矩。审美那一类也不能：问的是选哪个方案而不是准不准做，
   /// "以后不用问"等于把他的口味交给 Cue 的口味，还会让卡上一次误点悄悄拿走以后每次长相的决定；他真要 Cue 定，会说出来、记成规矩。
@@ -50,7 +50,7 @@ public enum CueAsk: String, CaseIterable, Sendable {
   /// 不能放行的（`allowable`）没有这一项。
   public func always(in project: String?) -> String? {
     guard allowable else { return nil }
-    return project.map { CueMemoryLine.fitting($0) { "以后「\($0)」里\(name)不用问" } } ?? "以后\(name)都不用问"
+    return project.map { CueMemoryLine.fitting($0) { String(localized: "以后「\($0)」里\(name)不用问") } } ?? String(localized: "以后\(name)都不用问")
   }
 
   /// 所有项目里都不用问那一项；不能放行的没有。
@@ -99,14 +99,23 @@ public struct CueAsking: Equatable, Sendable {
 
   /// 要你定什么（卡片第一句、摘要、通知同一句）。
   public var question: String {
-    // 动作两头是字母或数字时与汉字之间空一格（"可以合并进 main 吗？"），同界面上中英文混排的写法
-    func gap(_ character: Character?) -> String { character.map { $0.isASCII && ($0.isLetter || $0.isNumber) } == true ? " " : "" }
-    return "可以\(gap(action.first))\(action)\(gap(action.last))吗？"
+    let text = String(localized: "可以\(action)吗？")
+    guard let range = text.range(of: action) else { return text }
+    // 动作两头的字母或数字与句子里的汉字之间空一格（"可以合并进 main 吗？"），同界面上中英文混排的写法；英文句子本有空格，不加
+    func gap(_ a: Character?, _ b: Character?) -> String {
+      guard let a, let b else { return "" }
+      func latin(_ c: Character) -> Bool { c.isASCII && (c.isLetter || c.isNumber) }
+      func han(_ c: Character) -> Bool { !c.isASCII && c.isLetter }
+      return latin(a) && han(b) || han(a) && latin(b) ? " " : ""
+    }
+    let before = range.lowerBound == text.startIndex ? nil : text[text.index(before: range.lowerBound)]
+    let after = range.upperBound == text.endIndex ? nil : text[range.upperBound]
+    return String(text[..<range.lowerBound]) + gap(before, action.first) + action + gap(action.last, after) + String(text[range.upperBound...])
   }
 
   /// 问句下面那一句（拍板卡、全屏预览底栏、对话里答完的那句、通知、实时活动都只读它）：只有规矩那一类引他自己的原话——
   /// 这一问为什么来问他只有这句说得出。别的类不写：问句已经说了是什么事，"按你的口味定""请你允许推送代码"这类泛泛的依据只是复述。
-  public var why: String? { rule.map { "你说过「\($0)」。" } }
+  public var why: String? { rule.map { String(localized: "你说过「\($0)」。") } }
 }
 
 /// Cue 点名要你看的一张图（`CueMessage.shots`）：发到手机的哪一份（`PiPreview.id`）与看它的什么（Cue 写的一句）。写下就不再变；那一份不在了（会话的预览过期删掉）就不显示。

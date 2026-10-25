@@ -3,3 +3,5 @@
 **/*.pbxproj
 # 录下的真 Agent 回放
 **/Fixtures/**
+# String Catalog：由 xcstringstool 与 strings.py 维护
+**/*.xcstrings

@@ -41,17 +41,17 @@ public struct PiErrorSummary: Sendable, Equatable {
     }
 
     public var title: String {
-        let code = status.map { "（\($0)）" } ?? ""
+        func coded(_ text: String) -> String { status.map { String(localized: "\(text)（\($0)）") } ?? text }
         return switch kind {
-        case .authentication: "认证失败，检查 API 密钥或重新登录\(code)"
-        case .quota: "额度用完"
-        case .rateLimited: "请求太频繁，稍后再试"
-        case .rejected: "模型拒绝了请求\(code)"
-        case .server: "模型服务繁忙或出错，稍后再试\(code)"
-        case .network: "网络连接中断"
-        case .modelUnavailable: "模型不存在或没有权限"
-        case .outputTooLong: "回答超出了输出长度上限"
-        case .other: status == nil ? Self.firstLine(of: raw) : "模型调用出错\(code)"
+        case .authentication: coded(String(localized: "认证失败，检查 API 密钥或重新登录"))
+        case .quota: String(localized: "额度用完")
+        case .rateLimited: String(localized: "请求太频繁，稍后再试")
+        case .rejected: coded(String(localized: "模型拒绝了请求"))
+        case .server: coded(String(localized: "模型服务繁忙或出错，稍后再试"))
+        case .network: String(localized: "网络连接中断")
+        case .modelUnavailable: String(localized: "模型不存在或没有权限")
+        case .outputTooLong: String(localized: "回答超出了输出长度上限")
+        case .other: status == nil ? Self.firstLine(of: raw) : coded(String(localized: "模型调用出错"))
         }
     }
 
@@ -120,7 +120,7 @@ public struct PiErrorSummary: Sendable, Equatable {
     private static func firstLine(of raw: String) -> String {
         let line = raw.split(whereSeparator: \.isNewline).first.map(String.init) ?? ""
         let text = (line.firstIndex(of: "{").map { String(line[..<$0]) } ?? line).trimmingCharacters(in: .whitespaces)
-        guard !text.isEmpty else { return "模型调用出错" }
+        guard !text.isEmpty else { return String(localized: "模型调用出错") }
         return text.clipped(firstLineLimit)
     }
 }

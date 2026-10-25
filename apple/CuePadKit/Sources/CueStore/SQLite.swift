@@ -49,7 +49,7 @@ struct SQLiteError: LocalizedError, CustomStringConvertible {
   let message: String
   let sql: String
   var description: String { "SQLite: \(message) [\(sql)]" }
-  var errorDescription: String? { "资料库读写出错：\(message)" }
+  var errorDescription: String? { String(localized: "资料库读写出错：\(message)") }
 }
 
 /// 一行结果，按列序号读取。只在 `query` 的回调里有效。

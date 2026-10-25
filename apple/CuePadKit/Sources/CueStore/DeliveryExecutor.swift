@@ -167,11 +167,11 @@ public actor DeliveryExecutor {
     guard let candidates = await reporting({ try await store.pendingDeliveries(for: hostID) }) else { return nil }
     for request in candidates {
       if timing.now().timeIntervalSince(request.createdAt) > Self.maxAge.seconds {
-        await finish(request, .failed("请求创建后超过 \(Int(Self.maxAge.seconds)) 秒仍未执行，已放弃"))
+        await finish(request, .failed(String(localized: "请求创建后超过 \(Int(Self.maxAge.seconds)) 秒仍未执行，已放弃")))
         continue
       }
       if case .unknown(let raw) = request.mode {
-        await finish(request, .failed("这个版本的 CuePad 不认识发送方式「\(raw)」，没有执行（可能来自更新版本，请升级 Mac 上的 CuePad）"))
+        await finish(request, .failed(String(localized: "这个版本的 CuePad 不认识发送方式「\(raw)」，没有执行（可能来自更新版本，请升级 Mac 上的 CuePad）")))
         continue
       }
       if hasMissingImages(request) { continue }

@@ -250,7 +250,7 @@ public final class ChildProcess: Sendable {
         _ = await Task { await exited(within: nil) }.value  // 不继承取消
         let (status, stopping) = shared.state.withLock { ($0.status ?? -1, $0.stopping) }
         if stopping { return nil }
-        let code = (status & 0x7F) == 0 ? "退出码 \((status >> 8) & 0xFF)" : "被信号 \(status & 0x7F) 结束"
+        let code = (status & 0x7F) == 0 ? String(localized: "退出码 \((status >> 8) & 0xFF)") : String(localized: "被信号 \(status & 0x7F) 结束")
         let tail = stderrTail
         return tail.isEmpty ? code : "\(code)：\(tail)"
     }

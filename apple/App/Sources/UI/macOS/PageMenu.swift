@@ -20,7 +20,7 @@ struct PageMenuSlot: View {
         case trash
         case none
 
-        var help: String {
+        var help: LocalizedStringResource {
             switch self {
             case .session: "完成或绑定任务、重命名、跳到终端、结束会话"
             case .project: "选择灵感、看这个项目的会话、项目操作"

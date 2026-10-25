@@ -33,7 +33,8 @@ extension Workspace {
             let title = plan.name ?? projectName
             let agents = try await services.store.macAgents(on: host)
             guard let agent = agents.preferred(services.settings.lastAgent) else {
-                say("\(host == services.hostID ? "这台" : "那台") Mac 上开不了会话：\(agents.whyNone)", tone: .failure)
+                let why = agents.whyNone
+                say(Dotted(host == services.hostID ? String(localized: "这台 Mac 上开不了会话：\(why)") : String(localized: "那台 Mac 上开不了会话：\(why)")), tone: .failure)
                 return
             }
             _ = try await startSession(in: project, prompt: text.nonEmpty, title: title, on: host, card: leaf, agent: agent) {}

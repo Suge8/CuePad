@@ -50,6 +50,8 @@ struct MenuBarPad: View {
             Button("交给 \(workspace.cue.name)", icon: .handOff, action: handToCue)
                 .font(Typography.meta.weight(.semibold))
                 .buttonStyle(ControlButtonStyle(kind: empty ? .secondary : .primary, compact: true))
+                // 按钮不折行，放不下时让左边的状态行截短
+                .fixedSize()
                 .disabled(empty)
                 .help("把这次随手记直接说给 \(workspace.cue.name)")
         }
@@ -62,7 +64,7 @@ struct MenuBarPad: View {
     /// 这次随手记不记成灵感，直接作为一句话说给 Cue。
     private func handToCue() {
         let files = services.store.files
-        _ = workspace.speak(to: .cue, from: $capture.draft, saying: "已交给 \(workspace.cue.name)") { try $0.stored(in: files) }
+        _ = workspace.speak(to: .cue, from: $capture.draft, saying: Dotted(String(localized: "已交给 \(workspace.cue.name)"))) { try $0.stored(in: files) }
     }
 
     private struct Block: ViewModifier {

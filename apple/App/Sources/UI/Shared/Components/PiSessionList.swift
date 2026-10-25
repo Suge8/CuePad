@@ -208,7 +208,7 @@ struct PiSessionRow: View {
               let prompt = (session.pendingPrompt ?? session.lastPrompt)?.split(whereSeparator: \.isWhitespace).joined(separator: " "),
               let hit = terms.lazy.compactMap({ prompt.range(of: $0, options: .caseInsensitive) }).first else { return nil }
         let start = prompt.index(hit.lowerBound, offsetBy: -Self.leadIn, limitedBy: prompt.startIndex) ?? prompt.startIndex
-        return "你说：\(start == prompt.startIndex ? "" : "…")\(prompt[start...])"
+        return String(localized: "你说：\(start == prompt.startIndex ? "" : "…")\(String(prompt[start...]))")
     }
 
     /// 截说过的话时命中处前面留几个字。

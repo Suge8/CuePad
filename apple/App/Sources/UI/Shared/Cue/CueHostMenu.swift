@@ -17,7 +17,7 @@ struct CueHostMenu<Label: View>: View {
     }
 
     var body: some View {
-        MenuButton(sections: sections, accessibilityLabel: accessibilityLabel, value: value, label: label)
+        MenuButton(sections: sections, accessibilityLabel: .verbatim(accessibilityLabel), value: value, label: label)
     }
 
     private var sections: [ChoiceMenu.Section] {
@@ -28,7 +28,7 @@ struct CueHostMenu<Label: View>: View {
             let choose = { (host: CueSettings.Host?) in if host?.id != running { change(host) } }
             return [
                 machines(checked: { $0.id == running }, pick: choose),
-                ChoiceMenu.Section(choices: [ChoiceMenu.Choice(title: CueSettings.off, checked: running == nil) { choose(nil) }]),
+                ChoiceMenu.Section(choices: [ChoiceMenu.Choice(title: .verbatim(CueSettings.off), checked: running == nil) { choose(nil) }]),
             ]
         }
     }
@@ -37,7 +37,7 @@ struct CueHostMenu<Label: View>: View {
     private func machines(checked: (CueSettings.Host) -> Bool?, pick: @escaping (CueSettings.Host) -> Void) -> ChoiceMenu.Section {
         ChoiceMenu.Section(choices: hosts.map { host in
             ChoiceMenu.Choice(
-                title: host.name, subtitle: host.note.isEmpty ? nil : host.note, image: .icon(.mac), checked: checked(host), disabled: !host.selectable
+                title: .verbatim(host.name), subtitle: host.note.isEmpty ? nil : .verbatim(host.note), image: .icon(.mac), checked: checked(host), disabled: !host.selectable
             ) { pick(host) }
         })
     }

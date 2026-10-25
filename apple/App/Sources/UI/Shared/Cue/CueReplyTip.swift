@@ -25,7 +25,7 @@ struct CueReplyTip: View {
             .frame(maxWidth: .infinity)
         }
         .buttonStyle(ControlButtonStyle(kind: .glass))
-        .accessibilityLabel(only.map { "\($0.title) 待回复" } ?? "\(replies.count) 个会话待回复")
+        .accessibilityLabel(only.map { String(localized: "\($0.title) 待回复") } ?? String(localized: "\(replies.count) 个会话待回复"))
         .padding(.bottom, Self.below)
     }
 

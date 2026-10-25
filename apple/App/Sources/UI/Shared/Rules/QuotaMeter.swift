@@ -34,12 +34,12 @@ nonisolated struct QuotaMeter: Equatable {
             left = 1 - used
             even = pace > 0 ? 1 - pace : nil
             resetsAt = window.resetsAt
-            runway = window.exhaustion(at: now).map { "约 " + PiClock.duration($0.timeIntervalSince(now)) }
+            runway = window.exhaustion(at: now).map { String(localized: "约 \(PiClock.duration($0.timeIntervalSince(now)))") }
             level = UsageLevel(used: used)
             hasReset = now >= window.resetsAt
             id = window.id
-            let reset = hasReset ? "已重置" : "\(Countdown(end: window.resetsAt).format(now))后重置"
-            spoken = Dotted("\(name)剩 \(Self.percent(left))", reset, runway.map { "照这速度\($0)后用完" }).spoken
+            let reset = hasReset ? String(localized: "已重置") : String(localized: "\(Countdown(end: window.resetsAt).format(now))后重置")
+            spoken = Dotted(String(localized: "\(name)剩 \(Self.percent(left))"), reset, runway.map { String(localized: "照这速度\($0)后用完") }).spoken
         }
     }
 
@@ -62,7 +62,7 @@ nonisolated struct QuotaMeter: Equatable {
     }
 
     /// 模型菜单的分组标题："Claude · 5 小时剩 86% · 本周剩 92%"。
-    var menuTitle: Dotted { Dotted([account] + windows.map { "\($0.name)剩 \($0.percent)" }) }
+    var menuTitle: Dotted { Dotted([account] + windows.map { String(localized: "\($0.name)剩 \($0.percent)") }) }
 
     /// 读屏：账号与每个窗口剩多少、多久重置。
     var spoken: String { Dotted([account] + windows.map(\.spoken)).spoken }
@@ -92,9 +92,9 @@ nonisolated struct QuotaMeter: Equatable {
     /// 窗口长度的叫法：5 小时、本周（7 天）、其余按天或小时。
     static func windowName(seconds: Int) -> String {
         switch seconds {
-        case QuotaWindow.week: "本周"
-        case let s where s % 86_400 == 0: "\(s / 86_400) 天"
-        default: "\(Int((Double(seconds) / 3_600).rounded())) 小时"
+        case QuotaWindow.week: String(localized: "本周")
+        case let s where s % 86_400 == 0: String(localized: "\(s / 86_400) 天")
+        default: String(localized: "\(Int((Double(seconds) / 3_600).rounded())) 小时")
         }
     }
 }

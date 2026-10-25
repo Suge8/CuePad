@@ -10,8 +10,8 @@ struct SearchScreen: View {
 
         var title: String {
             switch self {
-            case .cards: "灵感与任务"
-            case .sessions: "会话"
+            case .cards: String(localized: "灵感与任务")
+            case .sessions: String(localized: "会话")
             }
         }
     }
@@ -24,7 +24,7 @@ struct SearchScreen: View {
     /// 页宽：导航栏中间那一格不会自己铺满，搜索框按页宽给定宽度（让出左边的返回与两侧页边；宽屏还有侧栏钮与 Cue 面板钮）。
     @State private var width: CGFloat = 0
     private static let maxField: CGFloat = 560
-    static let prompt = "搜索灵感、任务与会话"
+    static let prompt = String(localized: "搜索灵感、任务与会话")
 
     var body: some View {
         Group {

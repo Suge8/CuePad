@@ -46,7 +46,7 @@ final class Workspace {
         /// 撤销刚才那一下（Mac 上 ⌘Z 也能点它）。
         var isUndo = false
         let run: Undo
-        static func undo(_ run: @escaping Undo) -> Self { Self(title: "撤销", isUndo: true, run: run) }
+        static func undo(_ run: @escaping Undo) -> Self { Self(title: String(localized: "撤销"), isUndo: true, run: run) }
         static func == (lhs: NoticeAction, rhs: NoticeAction) -> Bool { lhs.id == rhs.id }
     }
 
@@ -202,6 +202,8 @@ final class Workspace {
 
     static let noticeDuration: Duration = .seconds(2.4)
 
+    /// 字面量走下面那个（进目录、按当前语言取字）；这里收已经拼好的 `Dotted`。
+    @_disfavoredOverload
     func say(
         _ text: Dotted, tone: Notice.Tone = .done, status: PiShown.Status? = nil, link: Route? = nil, duration: Duration = Workspace.noticeDuration,
         action: NoticeAction? = nil
@@ -213,6 +215,13 @@ final class Workspace {
             try? await Task.sleep(for: duration)
             if self?.notice == notice { self?.notice = nil }
         }
+    }
+
+    func say(
+        _ text: LocalizedStringResource, tone: Notice.Tone = .done, status: PiShown.Status? = nil, link: Route? = nil,
+        duration: Duration = Workspace.noticeDuration, action: NoticeAction? = nil
+    ) {
+        say(Dotted(String(localized: text)), tone: tone, status: status, link: link, duration: duration, action: action)
     }
 
     func fail(_ error: any Error) {

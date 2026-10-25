@@ -14,7 +14,7 @@ public enum PiAnswerValue: Sendable, Equatable {
   public var label: String {
     switch self {
     case .option(let option): option
-    case .confirmed(let confirmed): confirmed ? "是" : "否"
+    case .confirmed(let confirmed): confirmed ? String(localized: "是") : String(localized: "否")
     case .text(let text): text
     }
   }

@@ -107,7 +107,7 @@ struct SearchPalette: View {
     private var header: some View {
         HStack(spacing: 10) {
             Image(.search).foregroundStyle(palette.ink2).accessibilityHidden(true)
-            TextField(scope == .cards ? "搜索灵感与任务" : "搜索会话", text: $query.text, palette: palette)
+            TextField(scope == .cards ? String(localized: "搜索灵感与任务") : String(localized: "搜索会话"), text: $query.text, palette: palette)
                 .textFieldStyle(.plain).font(Typography.searchField)
                 .focused($focused)
                 .onSubmit {
@@ -216,7 +216,7 @@ struct SearchPalette: View {
             }
             .frame(width: 16)
             .accessibilityElement()
-            .accessibilityLabel((card.isTask ? "任务" : "灵感") + (text.images.isEmpty ? "" : "，含图片"))
+            .accessibilityLabel(Self.kindLabel(task: card.isTask, images: !text.images.isEmpty))
             Text(Highlight.matches(text.label, query.text)).font(Typography.body).lineLimit(1)
             Spacer()
             Text(DateLabel.short(card.modifiedAt)).font(Typography.meta).foregroundStyle(palette.ink2)
@@ -272,9 +272,18 @@ struct SearchPalette: View {
         }
     }
 
+    private static func kindLabel(task: Bool, images: Bool) -> LocalizedStringResource {
+        switch (task, images) {
+        case (true, false): "任务"
+        case (true, true): "任务，含图片"
+        case (false, false): "灵感"
+        case (false, true): "灵感，含图片"
+        }
+    }
+
     /// 任务预览的一行："上级：修乱序 · 子任务 1/2"；什么都没有时不写。
     private static func taskFacts(parent: String?, subtasks: TaskProgress?) -> Dotted? {
-        Dotted(parent.map { "上级：\($0)" }, subtasks.map(TaskCopy.progress)).nonEmpty
+        Dotted(parent.map { String(localized: "上级：\($0)") }, subtasks.map(TaskCopy.progress)).nonEmpty
     }
 
     private var shortcuts: some View {

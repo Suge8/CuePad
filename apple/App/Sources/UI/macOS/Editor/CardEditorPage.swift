@@ -120,7 +120,7 @@ struct CardEditorPage: View {
             Dot()
             Text(DateLabel.short(data.card.modifiedAt))
             SaveStatus(editing: editing)
-            if data.card.isPinned { Label("置顶", icon: .pin) }
+            if data.card.isPinned { Label("已置顶", icon: .pin) }
             Spacer(minLength: 0)
             Menu("更多", icon: .more) {
                 CardActions(card: data.card, more: true)

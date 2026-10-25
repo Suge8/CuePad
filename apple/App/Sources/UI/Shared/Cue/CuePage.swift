@@ -97,7 +97,7 @@ struct CuePage: View {
                 .frame(maxWidth: Self.readingWidth)
         }
             .scrollDismissesKeyboard(.interactively)
-            .floatingHeader(cue.name, height: CueHeader.height, center: { CueHeader() }) { EmptyView() }
+            .floatingHeader(.verbatim(cue.name), height: CueHeader.height, center: { CueHeader() }) { EmptyView() }
     }
 
     /// 窄屏导航栈的根（不是 iPad 右侧面板）：底部是"⋯"加输入框。

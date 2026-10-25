@@ -9,33 +9,33 @@ extension DebugScene {
         let hour: TimeInterval = 3600, day = 24 * hour
         func ago(_ seconds: TimeInterval) -> Date { .now.addingTimeInterval(-seconds) }
         return [
-            SeedCueLine("回复要短，先说结论", source: .you, pinned: true, createdAt: ago(80 * day)),
-            SeedCueLine("部署前先在测试群说一声，等有人回了再推；周五下午之后不发版，紧急修复除外", source: .you, pinned: true, createdAt: ago(40 * day)),
-            SeedCueLine("提交信息用中文，一个提交只做一件事", source: .you, pinned: true, createdAt: ago(9 * day)),
+            SeedCueLine(String(localized: "回复要短，先说结论", table: "Demo"), source: .you, pinned: true, createdAt: ago(80 * day)),
+            SeedCueLine(String(localized: "部署前先在测试群说一声，等有人回了再推；周五下午之后不发版，紧急修复除外", table: "Demo"), source: .you, pinned: true, createdAt: ago(40 * day)),
+            SeedCueLine(String(localized: "提交信息用中文，一个提交只做一件事", table: "Demo"), source: .you, pinned: true, createdAt: ago(9 * day)),
             SeedCueLine(
-                "改界面之前先拍改前截图，深浅色各一张；做完拍改后的放在一起比，交给我看的时候发到手机上，不要只贴本机路径",
+                String(localized: "改界面之前先拍改前截图，深浅色各一张；做完拍改后的放在一起比，交给我看的时候发到手机上，不要只贴本机路径", table: "Demo"),
                 source: .cue, pinned: true, createdAt: ago(2 * day)),
-            SeedCueLine("圆桌的预发环境是 staging-2，正式环境要过 CI 才部署", source: .cue, createdAt: ago(60 * day)),
-            SeedCueLine("用户住在上海，晚上十一点以后别叫醒", source: .cue, createdAt: ago(33 * day)),
-            SeedCueLine("CuePad 的发布只在干净检出里跑 release，对外发布要先问", source: .cue, createdAt: ago(21 * day)),
-            SeedCueLine("喜欢先看原型截图再定方案", source: .cue, createdAt: ago(12 * day)),
+            SeedCueLine(String(localized: "圆桌的预发环境是 staging-2，正式环境要过 CI 才部署", table: "Demo"), source: .cue, createdAt: ago(60 * day)),
+            SeedCueLine(String(localized: "用户住在上海，晚上十一点以后别叫醒", table: "Demo"), source: .cue, createdAt: ago(33 * day)),
+            SeedCueLine(String(localized: "CuePad 的发布只在干净检出里跑 release，对外发布要先问", table: "Demo"), source: .cue, createdAt: ago(21 * day)),
+            SeedCueLine(String(localized: "喜欢先看原型截图再定方案", table: "Demo"), source: .cue, createdAt: ago(12 * day)),
             SeedCueLine(
-                "登录回调的超时问题：等 token 刷新时没设超时，网络慢会一直挂着；改成 10 秒超时、超时后回登录页重新授权",
+                String(localized: "登录回调的超时问题：等 token 刷新时没设超时，网络慢会一直挂着；改成 10 秒超时、超时后回登录页重新授权", table: "Demo"),
                 source: .cue, createdAt: ago(6 * day)),
-            SeedCueLine("atlas 会话用 Claude，别的用默认模型", source: .you, createdAt: ago(4 * day)),
-            SeedCueLine("周会是每周一上午十点", source: .cue, createdAt: ago(3 * day)),
-            SeedCueLine("乱序的根因在重连时重新入队，修复要保留首次加入的时间", source: .cue, createdAt: ago(day + 2 * hour)),
-            SeedCueLine("README 的截图换成 Swift 版", source: .you, createdAt: ago(20 * hour)),
-            SeedCueLine("导入旧数据会话上回卡在 schema 迁移，再开工前先看它的报错", source: .cue, createdAt: ago(5 * hour)),
-            SeedCueLine("测试只用替身，不向别的应用发键鼠事件", source: .cue, createdAt: ago(40 * 60)),
-            SeedCueLine("今天先把圆桌发了", source: .you, createdAt: ago(3 * 60)),
+            SeedCueLine(String(localized: "atlas 会话用 Claude，别的用默认模型", table: "Demo"), source: .you, createdAt: ago(4 * day)),
+            SeedCueLine(String(localized: "周会是每周一上午十点", table: "Demo"), source: .cue, createdAt: ago(3 * day)),
+            SeedCueLine(String(localized: "乱序的根因在重连时重新入队，修复要保留首次加入的时间", table: "Demo"), source: .cue, createdAt: ago(day + 2 * hour)),
+            SeedCueLine(String(localized: "README 的截图换成 Swift 版", table: "Demo"), source: .you, createdAt: ago(20 * hour)),
+            SeedCueLine(String(localized: "导入旧数据会话上回卡在 schema 迁移，再开工前先看它的报错", table: "Demo"), source: .cue, createdAt: ago(5 * hour)),
+            SeedCueLine(String(localized: "测试只用替身，不向别的应用发键鼠事件", table: "Demo"), source: .cue, createdAt: ago(40 * 60)),
+            SeedCueLine(String(localized: "今天先把圆桌发了", table: "Demo"), source: .you, createdAt: ago(3 * 60)),
         ]
     }
 
     /// 推送那条"等你"点名要看的两份：部署会话发来的预发截图与测试报告（`seedDeliveries`）。
     static func deployShots(_ store: CueStore) async throws -> [CueShot] {
         let sent = try await store.previews(of: "deploy")
-        return [("预发上的发言顺序", "预发上 6 人的发言顺序"), ("重连测试报告", "重连用例 4 个都过了")].compactMap { title, look in
+        return [(String(localized: "预发上的发言顺序", table: "Demo"), String(localized: "预发上 6 人的发言顺序", table: "Demo")), (String(localized: "重连测试报告", table: "Demo"), String(localized: "重连用例 4 个都过了", table: "Demo"))].compactMap { title, look in
             sent.first { $0.title == title }.map { CueShot(preview: $0.id, look: look) }
         }
     }
@@ -44,12 +44,12 @@ extension DebugScene {
     /// Cue 的回答高矮悬殊：一句话与会话页长对话同一套长段落、40 行代码块、宽表、长列表轮换（`longChatReply`）；你每 25 轮贴进来一段长文，每 15 轮带一张图。
     /// 量 Cue 页的长对话滚动（`-CuePadBench chatscroll`）就用这一段。
     static func seedLongCueChat(you: (String) async throws -> Void, store: CueStore) async throws {
-        let asks = ["今天先看哪件？", "把计费那个会话的进展说一下", "圆桌的预发什么时候能好？", "帮我记一下：周五不发版", "README 截图换完了吗？", "重连用例加了几个？"]
-        let replies = ["先看圆桌：乱序会影响所有 5 人以上的房间。", "计费会话卡在额度接口的签名上，我让它先把请求原文打出来。", "测试在跑，大概二十分钟后能部署到预发。",
-                       "记下了，周五不发版。", "浅色那张换好了，深色的还在拍。", "加了 2 个，第 3 个等排序改完再补。"]
+        let asks = [String(localized: "今天先看哪件？", table: "Demo"), String(localized: "把计费那个会话的进展说一下", table: "Demo"), String(localized: "圆桌的预发什么时候能好？", table: "Demo"), String(localized: "帮我记一下：周五不发版", table: "Demo"), String(localized: "README 截图换完了吗？", table: "Demo"), String(localized: "重连用例加了几个？", table: "Demo")]
+        let replies = [String(localized: "先看圆桌：乱序会影响所有 5 人以上的房间。", table: "Demo"), String(localized: "计费会话卡在额度接口的签名上，我让它先把请求原文打出来。", table: "Demo"), String(localized: "测试在跑，大概二十分钟后能部署到预发。", table: "Demo"),
+                       String(localized: "记下了，周五不发版。", table: "Demo"), String(localized: "浅色那张换好了，深色的还在拍。", table: "Demo"), String(localized: "加了 2 个，第 3 个等排序改完再补。", table: "Demo")]
         let shot = CueFormat.imageMarkup(id: try store.files.store(stagingOrderPNG()))
         for round in 0..<110 {
-            let ask = round % 25 == 0 ? longChatPrompt(round) : "第 \(round + 1) 句：" + asks[round % asks.count]
+            let ask = round % 25 == 0 ? longChatPrompt(round) : String(localized: "第 \(round + 1) 句：", table: "Demo") + asks[round % asks.count]
             try await you(round % 15 == 7 ? ask + "\n" + shot : ask)
             _ = try await store.addCueMessage(.cue, text: round % 3 == 0 ? replies[round % replies.count] : longChatReply(round))
         }
@@ -72,13 +72,13 @@ extension DebugScene {
         }
         try await store.recordMacPresence(host: "demo-mac") { true }
         let recorder = PiStateRecorder(store: store, hostID: "demo-mac")
-        let asked = "加在「安装」后面吗？"
+        let asked = String(localized: "加在「安装」后面吗？", table: "Demo")
         let rows: [(id: String, title: String, agent: AgentKind, state: PiWorkState, detail: String?, question: PiQuestion?, tokens: Int, model: Bool)] = [
-            ("cue-pi-long", "把 README 的截图换成 Swift 版并补上深色模式的那一张", .pi, .settled, nil, nil, 100_000, true),
-            ("cue-codex-short", "greet", .codex, .waitingForUser, "要覆盖 tests/test_greet.py 吗？", nil, 150_000, false),
-            ("cue-codex-long", "为 greet 添加 --upper 参数并验证测试输出原文", .codex, .tool, "bash · python3 -m unittest", nil, 188_000, true),
+            ("cue-pi-long", String(localized: "把 README 的截图换成 Swift 版并补上深色模式的那一张", table: "Demo"), .pi, .settled, nil, nil, 100_000, true),
+            ("cue-codex-short", "greet", .codex, .waitingForUser, String(localized: "要覆盖 tests/test_greet.py 吗？", table: "Demo"), nil, 150_000, false),
+            ("cue-codex-long", String(localized: "为 greet 添加 --upper 参数并验证测试输出原文", table: "Demo"), .codex, .tool, "bash · python3 -m unittest", nil, 188_000, true),
             ("cue-claude-short", "faq", .claudeCode, .settled, nil, nil, 150_000, false),
-            ("cue-claude-long", "评估 README 是否需要加一节 FAQ 并跑一遍测试", .claudeCode, .waitingForUser, asked,
+            ("cue-claude-long", String(localized: "评估 README 是否需要加一节 FAQ 并跑一遍测试", table: "Demo"), .claudeCode, .waitingForUser, asked,
              PiQuestion(promptID: "cuerows-confirm", kind: .confirm, text: asked), 100_000, false),
         ]
         for row in rows {
@@ -86,7 +86,7 @@ extension DebugScene {
                 sessionID: row.id, state: row.state, detail: row.detail, title: row.title, directory: "greet", question: row.question,
                 modelState: row.model ? demoModels(for: row.agent) : nil,
                 context: PiContextUsage(tokens: row.tokens, window: 200_000), agent: row.agent)
-            try await store.writePiTranscript(PiTranscript(sessionID: row.id, messages: [], recap: PiRecap(lastPrompt: row.title, lastReply: "好了")))
+            try await store.writePiTranscript(PiTranscript(sessionID: row.id, messages: [], recap: PiRecap(lastPrompt: row.title, lastReply: String(localized: "好了", table: "Demo"))))
             let task = try await store.createTask(row.title)
             try await store.linkCard(task.id, toSession: row.id)
         }

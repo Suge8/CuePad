@@ -16,7 +16,7 @@ struct PiAgentPick {
 
     var menu: [ChoiceMenu.Section] {
         [ChoiceMenu.Section(title: "Agent", choices: kinds.map { kind in
-            ChoiceMenu.Choice(title: kind.name, image: .brand(kind.mark), checked: kind == current) { choose(kind) }
+            ChoiceMenu.Choice(title: .verbatim(kind.name), image: .brand(kind.mark), checked: kind == current) { choose(kind) }
         })]
     }
 }
@@ -33,10 +33,10 @@ struct PiModelMenu {
     func sections(quotas: [AccountQuota], at now: Date) -> [ChoiceMenu.Section] {
         PiModelLabel.groups(models).map { group in
             ChoiceMenu.Section(
-                title: PiModelLabel.title(group.provider, quotas: quotas, at: now), image: group.provider.mark.map(ChoiceMenu.Glyph.brand),
+                title: .verbatim(PiModelLabel.title(group.provider, quotas: quotas, at: now)), image: group.provider.mark.map(ChoiceMenu.Glyph.brand),
                 choices: group.models.map { model in
                     ChoiceMenu.Choice(
-                        title: model.displayName, subtitle: model.key == defaultModel ? "默认" : nil, image: BrandMark.model(model).map(ChoiceMenu.Glyph.brand),
+                        title: .verbatim(model.displayName), subtitle: model.key == defaultModel ? "默认" : nil, image: BrandMark.model(model).map(ChoiceMenu.Glyph.brand),
                         checked: model.key == current) { choose(model) }
                 })
         }
@@ -55,7 +55,7 @@ struct PiConfigControls<Trailing: View>: View {
     let models: PiModelMenu
     let shown: PiConfigShown
     /// 胶囊上没有当前模型时写的。
-    let unnamed: String
+    let unnamed: LocalizedStringResource
     /// 思考强度可选的档；空时不放思考强度。
     let levels: [PiThinkingLevel]
     let chooseThinking: (PiThinkingLevel) -> Void
@@ -71,7 +71,7 @@ struct PiConfigControls<Trailing: View>: View {
     #endif
 
     init(
-        agent: PiAgentPick? = nil, models: PiModelMenu, shown: PiConfigShown, unnamed: String = "模型", levels: [PiThinkingLevel],
+        agent: PiAgentPick? = nil, models: PiModelMenu, shown: PiConfigShown, unnamed: LocalizedStringResource = "模型", levels: [PiThinkingLevel],
         opening: Binding<PiConfigPick?> = .constant(nil), chooseThinking: @escaping (PiThinkingLevel) -> Void,
         @ViewBuilder trailing: () -> Trailing = { EmptyView() }
     ) {

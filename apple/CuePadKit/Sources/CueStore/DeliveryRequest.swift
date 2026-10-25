@@ -88,7 +88,7 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
     return reason
   }
 
-  public static let unexplainedFailure = "Mac 没有说明原因"
+  public static let unexplainedFailure = String(localized: "Mac 没有说明原因")
 
   /// 发给一个会话的请求（先发的在前）里此刻要显示的那次结束到哪了（`Speech`）：还在路上的，或没能结束、之后也没再发过别的；
   /// 结束成功或没请求过是 nil。

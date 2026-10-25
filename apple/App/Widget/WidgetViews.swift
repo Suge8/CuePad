@@ -68,7 +68,7 @@ private struct DefaultProjectView: View {
         VStack(alignment: .leading, spacing: 4) {
             Text(Dotted(snapshot.name, "\(snapshot.total)")).font(.caption).foregroundStyle(palette.ink2)
             ForEach(snapshot.cards.prefix(3), id: \.id) { card in
-                Text(card.title.isEmpty ? "图片" : card.title).font(.footnote).lineLimit(1)
+                (card.title.isEmpty ? Text("图片") : Text(verbatim: card.title)).font(.footnote).lineLimit(1)
             }
             Spacer(minLength: 0)
         }

@@ -46,7 +46,7 @@ struct AgentProbe {
 
     private func outcome(_ kind: AgentKind, _ status: AgentStatus) async -> Outcome {
         if let reason = Self.absent(kind, status) { return .unusable(reason) }
-        guard let executable = status.executable else { return .unusable(.other("没找到它的命令行程序")) }
+        guard let executable = status.executable else { return .unusable(.other(String(localized: "没找到它的命令行程序"))) }
         if kind == .opencode { return .usable(MacAgent(kind: kind, model: nil, models: [])) }
         do {
             let agent: MacAgent? = try await withDeadline(AgentTimeouts.probe, orThrow: ProbeError.timedOut) { [self] in
@@ -61,7 +61,7 @@ struct AgentProbe {
             return Self.unconnected(kind, status).map(Outcome.unusable) ?? .usable(agent)
         } catch {
             let message = error.localizedDescription
-            return .unusable(.other("问不出模型（\(message.clipped(Self.messageLimit))）"))
+            return .unusable(.other(String(localized: "问不出模型（\(message.clipped(Self.messageLimit))）")))
         }
     }
 
@@ -72,7 +72,7 @@ struct AgentProbe {
     private static func absent(_ kind: AgentKind, _ status: AgentStatus) -> MacAgentProblem.Reason? {
         switch status.presence {
         case .notFound: .notInstalled
-        case .tooOld(let version): .other("版本太旧（\(version)，要 \(kind.minimumVersion.map(\.description) ?? "") 或更新）")
+        case .tooOld(let version): .other(String(localized: "版本太旧（\(version.description)，要 \(kind.minimumVersion?.description ?? "") 或更新）"))
         case .found: nil
         }
     }
@@ -83,7 +83,7 @@ struct AgentProbe {
         guard kind == .pi else { return nil }
         switch status.files {
         case .missing: return .notConnected
-        case .foreign(let path): return .other("接不上：\(path) 是别人的同名文件")
+        case .foreign(let path): return .other(String(localized: "接不上：\(path) 是别人的同名文件"))
         case .current, .outdated: return nil
         }
     }
@@ -167,8 +167,8 @@ struct AgentProbe {
         case noAnswer(status: Int32)
         var errorDescription: String? {
             switch self {
-            case .timedOut: "\(AgentTimeouts.probe.components.seconds) 秒没回答"
-            case .noAnswer(let status): "没报模型就退出了，退出码 \(status)"
+            case .timedOut: String(localized: "\(AgentTimeouts.probe.components.seconds) 秒没回答")
+            case .noAnswer(let status): String(localized: "没报模型就退出了，退出码 \(status)")
             }
         }
     }

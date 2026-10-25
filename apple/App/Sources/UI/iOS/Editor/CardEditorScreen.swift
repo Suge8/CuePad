@@ -33,7 +33,7 @@ struct CardEditorScreen: View {
             }
             .padding(wide ? EdgeInsets(top: 8, leading: 24, bottom: 0, trailing: 24) : EdgeInsets())
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .floatingHeader(data?.project?.name ?? "", detail: data.map(detail) ?? "") { actions }
+            .floatingHeader(.verbatim(data?.project?.name ?? ""), detail: data.map(detail) ?? "") { actions }
             .observing(services.store, id: cardID, into: $data, onError: workspace.fail) { [cardID] store in
                 guard let card = try store.card(cardID) else { throw CueStoreError.notFound }
                 return EditorData(card: card, project: try store.project(card.projectID))
@@ -58,7 +58,7 @@ struct CardEditorScreen: View {
 
     /// 顶栏的一行："改于 03:36 · 置顶"。
     private func detail(_ data: EditorData) -> Dotted {
-        Dotted("改于 \(DateLabel.short(data.card.modifiedAt))", data.card.isPinned ? "置顶" : nil)
+        Dotted(String(localized: "改于 \(DateLabel.short(data.card.modifiedAt))"), data.card.isPinned ? String(localized: "已置顶") : nil)
     }
 
     /// 顶栏右边的"⋯"：从第一帧就在（卡片还没读到时禁用），随放大过渡一起出现，不在过渡结束后才弹出来。

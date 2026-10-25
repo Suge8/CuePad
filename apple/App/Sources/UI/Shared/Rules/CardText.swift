@@ -31,7 +31,7 @@ nonisolated struct CardText: Equatable, Sendable {
         CueSummary.title(of: body).nonEmpty ?? untitled(images: CueFormat.imageHashes(in: body).count)
     }
 
-    private static func untitled(images: Int) -> String { images == 0 ? "空白灵感" : "\(images) 张图" }
+    private static func untitled(images: Int) -> String { images == 0 ? String(localized: "空白灵感") : String(localized: "\(images) 张图") }
 }
 
 nonisolated extension Card {
@@ -45,7 +45,7 @@ nonisolated extension String {
 
 /// 项目页的发送标记文案。项目名与会话名相同，写"已发过"而不是重复项目名。
 nonisolated enum SendCopy {
-    static let sameProject = "已发过"
+    static var sameProject: String { String(localized: "已发过") }
 }
 
 nonisolated extension SendTarget {

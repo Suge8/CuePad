@@ -5,19 +5,17 @@ import Foundation
 /// 占位只写"记下灵感"，只有 Mac 底部输入栏收成一行（没有胶囊）时占位带上落点；记下后的提示写明落点，点它去那里。
 /// Mac 上 ↩ 是换行、⌘↩ 才记下，占位里写明。
 nonisolated enum CaptureCopy {
-    static var prompt: String { "记下灵感" + keyHint }
+    #if os(macOS)
+    static var prompt: String { String(localized: "记下灵感（⌘↩ 记下）") }
 
-    static func placeholder(to destination: String) -> String { "记下灵感 → \(destination)" + keyHint }
+    static func placeholder(to destination: String) -> String { String(localized: "记下灵感 → \(destination)（⌘↩ 记下）") }
+    #else
+    static var prompt: String { String(localized: "记下灵感") }
 
-    private static var keyHint: String {
-        #if os(macOS)
-        "（⌘↩ 记下）"
-        #else
-        ""
-        #endif
-    }
+    static func placeholder(to destination: String) -> String { String(localized: "记下灵感 → \(destination)") }
+    #endif
 
-    static func saved(to destination: String) -> String { "已记到 \(destination)" }
+    static func saved(to destination: String) -> String { String(localized: "已记到 \(destination)") }
 }
 
 /// 随手记的草稿：一段文字加若干图片，存成一条灵感（文字在前，图片按顺序各占一行）。要做的事随后拖进一条任务（`Workspace.mergeIdea`）。

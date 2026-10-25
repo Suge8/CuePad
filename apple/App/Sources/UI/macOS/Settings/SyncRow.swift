@@ -24,7 +24,7 @@ struct SyncRow: View {
         let fix = fix
         SettingRow(
             title: "iCloud 同步", icon: Image(summary.icon), tone: tone(summary), busy: services.isSyncBusy, status: status(summary, fix: fix),
-            help: fix == nil ? nil : summary.detail
+            help: fix == nil ? nil : summary.detail.map { "\($0)" }
         ) {
             if services.sync != nil, fix != .decide, fix != .openSettings {
                 Button("立即同步") { Task { await services.syncNow() } }
@@ -65,9 +65,9 @@ struct SyncRow: View {
     private func status(_ summary: SyncSummary, fix: Fix?) -> Dotted {
         if let failure = choices.failure { return Dotted(failure) }
         return switch fix {
-        case .issues: Dotted("\(summary.title)，\(services.syncIssues.count) 条记录没能同步")
+        case .issues: Dotted(String(localized: "\(summary.title)，\(services.syncIssues.count) 条记录没能同步"))
         case .decide, .openSettings: Dotted(summary.title)
-        case nil: Dotted(summary.title + (summary.detail.map { "：\($0)" } ?? ""))
+        case nil: Dotted(summary.detail.map { String(localized: "\(summary.title)：\($0)") } ?? summary.title)
         }
     }
 

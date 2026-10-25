@@ -84,7 +84,7 @@ struct CardMeta: View {
             Spacer(minLength: 0)
             if card.isTask { Image(.task).help("任务").accessibilityLabel("任务") }
             if floated { Image(.floated).help("刚从更早的灵感里拿回来").accessibilityLabel("刚从更早的灵感里拿回来") }
-            if card.isPinned { Image(.pin).help("置顶").accessibilityLabel("置顶") }
+            if card.isPinned { Image(.pin).help("已置顶").accessibilityLabel("已置顶") }
         }
         .font(font)
         .foregroundStyle(palette.ink3)
@@ -99,7 +99,7 @@ struct SentMark: View {
         Label(target, icon: .handOff).labelStyle(.titleAndIcon).lineLimit(1)
             // 纸飞机是装饰：整体读作一句"已发给 …"；同项目时的"已发过"已经是完整文案。
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(target == SendCopy.sameProject ? target : "已发给 \(target)")
+            .accessibilityLabel(target == SendCopy.sameProject ? Text(target) : Text("已发给 \(target)"))
     }
 }
 
@@ -178,20 +178,20 @@ extension EnvironmentValues {
     @Entry var searchHighlight = ""
 }
 
-/// "更早"分组的标题：周是日期区间，月是"9 月"（跨年写"2025 年 12 月"）。
+/// "更早"分组的标题：周是日期区间，月是"9月"（跨年写"2025年12月"），按系统格式跟随界面语言。
 enum OlderGroupTitle {
     static func text(_ period: OlderGroup.Period, now: Date = .now, calendar: Calendar = .current) -> String {
         switch period {
         case .all:
-            return "更早"
+            return String(localized: "更早")
         case .week(let start):
             // 两端都写成"月/日"，与卡片行上的日期同一种写法
             let end = calendar.date(byAdding: .day, value: 6, to: start) ?? start
             return "\(start.formatted(DateLabel.monthDay)) – \(end.formatted(DateLabel.monthDay))"
         case .sparseMonth(let start), .month(let start):
-            // 同一年里只写月，跨年才带年份；数字两边各空一格，与"24 条灵感"同一种排法
-            let month = calendar.component(.month, from: start)
-            return calendar.isDate(start, equalTo: now, toGranularity: .year) ? "\(month) 月" : "\(calendar.component(.year, from: start)) 年 \(month) 月"
+            // 同一年里只写月，跨年才带年份
+            let sameYear = calendar.isDate(start, equalTo: now, toGranularity: .year)
+            return start.formatted(sameYear ? Date.FormatStyle.dateTime.month(.abbreviated) : Date.FormatStyle.dateTime.year().month(.abbreviated))
         }
     }
 }

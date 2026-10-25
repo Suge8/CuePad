@@ -156,6 +156,7 @@
 		A1000000000000000000E0A4 /* Exceptions for "ShareExtension" folder in "CuePad" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				InfoPlist.xcstrings,
 				ShareViewController.swift,
 			);
 			platformFiltersByRelativePath = {
@@ -173,6 +174,7 @@
 		C10000000000000000000003 /* Widget */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (A1000000000000000000E0A3 /* Exceptions for "Widget" folder in "CuePad" target */, ); path = App/Widget; sourceTree = "<group>"; };
 		E10000000000000000000002 /* CueCLI */ = {isa = PBXFileSystemSynchronizedRootGroup; path = CuePadKit/Sources/CueCLI; sourceTree = "<group>"; };
 		D20000000000000000000001 /* NotificationService */ = {isa = PBXFileSystemSynchronizedRootGroup; path = App/NotificationService; sourceTree = "<group>"; };
+		A10000000000000000000022 /* Strings */ = {isa = PBXFileSystemSynchronizedRootGroup; path = App/Strings; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -246,6 +248,7 @@
 			children = (
 				A10000000000000000000020 /* Sources */,
 				A10000000000000000000021 /* Tests */,
+				A10000000000000000000022 /* Strings */,
 				A10000000000000000000F02 /* FakeExtension.swift */,
 				E10000000000000000000002 /* CueCLI */,
 				C10000000000000000000001 /* AppGroup */,
@@ -306,6 +309,7 @@
 			);
 			fileSystemSynchronizedGroups = (
 				D20000000000000000000001 /* NotificationService */,
+				A10000000000000000000022 /* Strings */,
 			);
 			name = CuePadNotify;
 			packageProductDependencies = (
@@ -339,6 +343,7 @@
 				C10000000000000000000001 /* AppGroup */,
 				C10000000000000000000002 /* ShareExtension */,
 				C10000000000000000000003 /* Widget */,
+				A10000000000000000000022 /* Strings */,
 			);
 			name = CuePad;
 			packageProductDependencies = (
@@ -398,6 +403,7 @@
 			fileSystemSynchronizedGroups = (
 				C10000000000000000000002 /* ShareExtension */,
 				C10000000000000000000001 /* AppGroup */,
+				A10000000000000000000022 /* Strings */,
 			);
 			name = CuePadShare;
 			packageProductDependencies = (
@@ -422,6 +428,7 @@
 			fileSystemSynchronizedGroups = (
 				C10000000000000000000003 /* Widget */,
 				C10000000000000000000001 /* AppGroup */,
+				A10000000000000000000022 /* Strings */,
 			);
 			name = CuePadWidget;
 			packageProductDependencies = (
@@ -470,6 +477,7 @@
 			hasScannedForEncodings = 0;
 			knownRegions = (
 				"zh-Hans",
+				en,
 				Base,
 			);
 			mainGroup = A10000000000000000000006;
@@ -661,6 +669,9 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = A10000000000000000000004 /* Signing.xcconfig */;
 			buildSettings = {
+				DEVELOPMENT_LANGUAGE = en;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
@@ -683,6 +694,9 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = A10000000000000000000004 /* Signing.xcconfig */;
 			buildSettings = {
+				DEVELOPMENT_LANGUAGE = en;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
@@ -742,6 +756,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				APS_ENVIRONMENT = production;
+				EXCLUDED_SOURCE_FILE_NAMES = Demo.xcstrings;
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Developer ID Application";
 				"CODE_SIGN_STYLE[sdk=macosx*]" = Manual;
 				"PROVISIONING_PROFILE_SPECIFIER[sdk=macosx*]" = "CuePad macOS DeveloperID";

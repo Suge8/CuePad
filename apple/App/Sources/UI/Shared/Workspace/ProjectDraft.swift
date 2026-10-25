@@ -10,8 +10,8 @@ struct ProjectDraft {
     var icon: ProjectIcon
     var color: String
 
-    static let namePrompt = "名称"
-    static let introPrompt = "一句话介绍（可不填）"
+    static let namePrompt = String(localized: "名称")
+    static let introPrompt = String(localized: "一句话介绍（可不填）")
 
     init(_ request: ProjectFormRequest) {
         let project = request.project
@@ -22,8 +22,8 @@ struct ProjectDraft {
         color = project?.color ?? Palette.projectColors[0].stored
     }
 
-    var title: String { project == nil ? "新建项目" : "编辑项目" }
-    var confirm: String { project == nil ? "创建" : "保存" }
+    var title: String { project == nil ? String(localized: "新建项目") : String(localized: "编辑项目") }
+    var confirm: String { project == nil ? String(localized: "创建") : String(localized: "保存") }
     var canSave: Bool { !trimmedName.isEmpty }
 
     var trimmedName: String { name.trimmingCharacters(in: .whitespaces) }

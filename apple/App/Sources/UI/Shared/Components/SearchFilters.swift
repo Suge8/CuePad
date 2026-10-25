@@ -13,12 +13,12 @@ struct SearchFilters<Chip: View>: View {
 
     var body: some View {
         let projects = workspace.catalog?.projects ?? []
-        menu("项目", query.projectLabel(in: projects), on: query.project != nil) {
+        menu(String(localized: "项目"), query.projectLabel(in: projects), on: query.project != nil) {
             Button("全部") { query.project = nil }
             Divider()
             ForEach(projects) { project in Button(project.name) { query.project = project.id } }
         }
-        Button { query.withImages.toggle() } label: { chip("含图片", nil, query.withImages) }
+        Button { query.withImages.toggle() } label: { chip(String(localized: "含图片"), nil, query.withImages) }
             .accessibilityAddTraits(query.withImages ? .isSelected : [])
         menu("Agent", query.sentLabel, on: query.sent != .any) {
             Button("任意") { query.sent = .any }
@@ -32,7 +32,7 @@ struct SearchFilters<Chip: View>: View {
                 }
             }
         }
-        menu("时间", query.period.label, on: query.period != .any) {
+        menu(String(localized: "时间"), query.period.label, on: query.period != .any) {
             ForEach(PaletteQuery.Period.allCases, id: \.self) { period in Button(period.label) { query.period = period } }
         }
     }

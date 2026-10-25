@@ -20,7 +20,7 @@ struct NewTaskField: View {
 
     /// 落到哪个项目：换过的，没换过是给的项目，都没有（不在项目页）是默认项目。
     private var target: UUID { chosen ?? project ?? Project.defaultID }
-    private let prompt = "添加任务"
+    private let prompt = String(localized: "添加任务")
 
     var body: some View {
         HStack(spacing: TaskMetrics.columnGap) {

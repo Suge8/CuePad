@@ -43,8 +43,8 @@ nonisolated enum MacDelivery {
 
         func text(sync: SyncStatus) -> String {
             switch self {
-            case .running(let command): "正在执行 \(command)…"
-            case .failed(let command, let failure): "\(command) 没执行成功：\(failure.text(sync: sync))"
+            case .running(let command): String(localized: "正在执行 \(command)…")
+            case .failed(let command, let failure): String(localized: "\(command) 没执行成功：\(failure.text(sync: sync))")
             }
         }
     }
@@ -95,16 +95,16 @@ extension PiSessionState {
 nonisolated extension DeliveryMode {
     var label: String {
         switch self {
-        case .send: "说话"
-        case .command: "斜杠命令"
-        case .answer: "作答"
-        case .start: "新会话"
-        case .transcript: "补写对话"
-        case .config: "模型与思考强度"
-        case .end: "结束会话"
-        case .stop: "停止这一轮"
-        case .bind: "绑定文件夹"
-        case .quota: "刷新额度"
+        case .send: String(localized: "说话")
+        case .command: String(localized: "斜杠命令")
+        case .answer: String(localized: "作答")
+        case .start: String(localized: "新会话")
+        case .transcript: String(localized: "补写对话")
+        case .config: String(localized: "模型与思考强度")
+        case .end: String(localized: "结束会话")
+        case .stop: String(localized: "停止这一轮")
+        case .bind: String(localized: "绑定文件夹")
+        case .quota: String(localized: "刷新额度")
         }
     }
 }

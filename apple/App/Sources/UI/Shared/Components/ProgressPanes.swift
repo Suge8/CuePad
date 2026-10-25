@@ -16,7 +16,7 @@ struct ProgressPanes: View {
         }
     }
 
-    private func pane(_ pane: ProgressPane, _ title: String, icon: Icon) -> some View {
+    private func pane(_ pane: ProgressPane, _ title: LocalizedStringResource, icon: Icon) -> some View {
         let on = workspace.progressPane == pane
         return Button {
             withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { workspace.progressPane = pane }
@@ -28,8 +28,8 @@ struct ProgressPanes: View {
                 .contentShape(.capsule)
         }
         .buttonStyle(PressStyle())
-        .help(title)
-        .accessibilityLabel(title)
+        .help(Text(title))
+        .accessibilityLabel(Text(title))
         .accessibilityAddTraits(on ? .isSelected : [])
     }
 }

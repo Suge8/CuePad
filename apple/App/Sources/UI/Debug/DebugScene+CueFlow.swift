@@ -34,7 +34,7 @@ extension DebugScene {
         static let back = 1.5
     }
 
-    private static let flowSaid = "顺便看看登录回调那个超时，是不是和重试间隔有关"
+    private static let flowSaid = String(localized: "顺便看看登录回调那个超时，是不是和重试间隔有关", table: "Demo")
     private static let flowSession = "cueflow"
 
     #if os(iOS)
@@ -85,30 +85,30 @@ extension DebugScene {
         let context = try await store.cueState()?.context
         try await store.setCueState(.thinking, context: context)
         try await beat(FlowBeat.thinking)
-        let roundtable = try await store.projects().first { $0.name == "圆桌" }?.id
-        let task = try await store.createTask("登录回调超时", in: roundtable ?? Project.defaultID)
+        let roundtable = try await store.projects().first { $0.name == String(localized: "圆桌", table: "Demo") }?.id
+        let task = try await store.createTask(String(localized: "登录回调超时", table: "Demo"), in: roundtable ?? Project.defaultID)
         var tools = PiChatMessage.Tools()
-        tools.record(.init(kind: .read, target: "看板"))
-        tools.record(.init(kind: .add, target: "建任务「登录回调超时」", task: task.id))
+        tools.record(.init(kind: .read, target: String(localized: "看板", table: "Demo")))
+        tools.record(.init(kind: .add, target: String(localized: "建任务「登录回调超时」", table: "Demo"), task: task.id))
         let row = try await store.recordCueRound(nil, startedAt: startedAt, answersYou: true, tools: tools)
-        try await store.setCueState(.tool, detail: "开工「登录回调超时」", round: row, context: context)
+        try await store.setCueState(.tool, detail: String(localized: "开工「登录回调超时」", table: "Demo"), round: row, context: context)
         try await beat(FlowBeat.toolStep)
         try await store.linkCard(task.id, toSession: flowSession)
-        tools.record(.init(kind: .start, target: "开工「登录回调超时」", task: task.id))
+        tools.record(.init(kind: .start, target: String(localized: "开工「登录回调超时」", table: "Demo"), task: task.id))
         _ = try await store.recordCueRound(row, startedAt: startedAt, answersYou: true, tools: tools)
-        try await store.setCueState(.tool, detail: "对「登录回调超时」说", round: row, context: context)
+        try await store.setCueState(.tool, detail: String(localized: "对「登录回调超时」说", table: "Demo"), round: row, context: context)
         try await beat(FlowBeat.toolStep)
 
-        _ = try await store.addCueMessage(.cue, text: "复现了：回调里等 token 刷新时没设超时，网络慢时会一直挂着。改成 10 秒超时、超时后回登录页重新授权，测试在跑。", task: task.id)
+        _ = try await store.addCueMessage(.cue, text: String(localized: "复现了：回调里等 token 刷新时没设超时，网络慢时会一直挂着。改成 10 秒超时、超时后回登录页重新授权，测试在跑。", table: "Demo"), task: task.id)
         try await store.setCueState(.settled, context: context)
         try await beat(FlowBeat.reply)
 
-        let evidence = await seedEvidence(store, session: flowSession, title: "登录页（超时后）", png: loginTimeoutPNG())
+        let evidence = await seedEvidence(store, session: flowSession, title: String(localized: "登录页（超时后）", table: "Demo"), png: loginTimeoutPNG())
         _ = try await store.finishTask(
-            task.id, evidence: ["等授权超过 10 秒就回到登录页，说明了原因", "超时用例 3 个都过了"],
-            shots: evidence.map { [CueShot(preview: $0.id, look: "超时后回到登录页")] } ?? [])
+            task.id, evidence: [String(localized: "等授权超过 10 秒就回到登录页，说明了原因", table: "Demo"), String(localized: "超时用例 3 个都过了", table: "Demo")],
+            shots: evidence.map { [CueShot(preview: $0.id, look: String(localized: "超时后回到登录页", table: "Demo"))] } ?? [])
         try await beat(FlowBeat.result)
-        let asked = try await store.addCueMessage(.cue, text: "登录回调的修复验过了，要**推送到 origin/main** 吗？", ask: try CueAsking(.push, action: "把登录回调的超时修复推送到 origin/main"), task: task.id)
+        let asked = try await store.addCueMessage(.cue, text: String(localized: "登录回调的修复验过了，要**推送到 origin/main** 吗？", table: "Demo"), ask: try CueAsking(.push, action: String(localized: "把登录回调的超时修复推送到 origin/main", table: "Demo")), task: task.id)
         try await beat(FlowBeat.asking)
         try await workspace.services.answerCueQuestion(asked.id, CueAsk.once)
         try await beat(FlowBeat.answered)

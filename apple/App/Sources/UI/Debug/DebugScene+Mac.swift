@@ -31,7 +31,7 @@ extension DebugScene {
             // 卡片墙删卡后的排布：在当前项目（配 -CuePadProject Flow）新记两条，再删掉最早那条（它独占一列），看留下的几张怎么排
             try? await Task.sleep(for: .seconds(1))
             let project = workspace.currentProject ?? Project.defaultID
-            for body in ["报销\nbs 84.36 刀 claude github", "产品决策\nanti-slop 整理前端"] {
+            for body in [String(localized: "报销\nbs 84.36 刀 claude github", table: "Demo"), String(localized: "产品决策\nanti-slop 整理前端", table: "Demo")] {
                 _ = try? await workspace.createCard(body: body, in: project)
                 try? await Task.sleep(for: .milliseconds(300))
             }
@@ -126,7 +126,7 @@ extension DebugScene {
     /// `-CuePadSampleCue`：Cue 请你允许一件事（算进"等你"）。隔离库里 Cue 不值班，替 `CueService.followNotifications` 交给同一个出口。
     private static func askSample(after delay: Duration, services: AppServices) async {
         try? await Task.sleep(for: delay)
-        guard let message = try? await services.store.addCueMessage(.cue, text: "登录页修好了，要推送到 origin/main 吗？", ask: try? CueAsking(.push, action: "把登录页的修复推送到 origin/main")),
+        guard let message = try? await services.store.addCueMessage(.cue, text: String(localized: "登录页修好了，要推送到 origin/main 吗？", table: "Demo"), ask: try? CueAsking(.push, action: String(localized: "把登录页的修复推送到 origin/main", table: "Demo"))),
               let alerts = services.alerts else { return }
         let content = CueAlert.content(name: try? await services.store.cueProfile()?.name, text: message.text, asking: message.asking, choices: message.choices, looks: message.shots.map(\.look))
         await alerts.post(title: content.title, body: content.body)
@@ -179,7 +179,7 @@ extension DebugScene {
             frame.size.width = width
             window.setFrame(frame, display: true)
             if step.isMultiple(of: 4) {
-                workspace.attempt { _ = try await workspace.createCard(body: "导入中 \(step)\n" + String(repeating: "正文", count: step % 40), in: project) }
+                workspace.attempt { _ = try await workspace.createCard(body: String(localized: "导入中 \(step)", table: "Demo") + "\n" + String(repeating: String(localized: "正文", table: "Demo"), count: step % 40), in: project) }
             }
             try? await Task.sleep(for: .milliseconds(15))
         }

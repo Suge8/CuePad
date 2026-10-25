@@ -12,10 +12,10 @@ enum ReplyShortcut: Int, CaseIterable {
 
     var title: String {
         switch self {
-        case .send: "发送"
-        case .model: "选择模型…"
-        case .thinking: "选择思考强度…"
-        case .recall: "调回上一句"
+        case .send: String(localized: "发送")
+        case .model: String(localized: "选择模型…")
+        case .thinking: String(localized: "选择思考强度…")
+        case .recall: String(localized: "调回上一句")
         }
     }
 

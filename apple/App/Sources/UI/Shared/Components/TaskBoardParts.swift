@@ -192,7 +192,7 @@ struct BoardColumn: View {
         #endif
     }
 
-    private func empty(_ text: String) -> some View {
+    private func empty(_ text: LocalizedStringResource) -> some View {
         Text(text).font(Typography.secondary).foregroundStyle(palette.ink3)
             .frame(maxWidth: .infinity, minHeight: isRow ? nil : 64, maxHeight: isRow ? .infinity : nil)
             .background(RoundedRectangle(cornerRadius: TaskMetrics.cardRadius, style: .continuous).strokeBorder(palette.hair, style: StrokeStyle(lineWidth: 1, dash: [4, 4])))

@@ -68,7 +68,7 @@ private struct VariablesSheet: View {
                 }
                 ForEach(names, id: \.self) { name in
                     LabeledContent("{{\(name)}}") {
-                        TextField("取值", text: Binding(get: { values[name] ?? "" }, set: { values[name] = $0 }), palette: palette)
+                        TextField(String(localized: "取值"), text: Binding(get: { values[name] ?? "" }, set: { values[name] = $0 }), palette: palette)
                             .multilineTextAlignment(.trailing)
                     }
                 }
