@@ -61,6 +61,7 @@ enum InteractionBench {
     static var rows: [UUID: CGRect] = [:]
 
     static func run(_ workspace: Workspace) async {
+        if UserDefaults.standard.bool(forKey: "CuePadTraceWait") { await waitForTracer() }
         if PerfProbe.firstSeen["content"] == nil { await PerfProbe.wait(for: "content") }
         if UserDefaults.standard.bool(forKey: "CuePadDemo") { await DebugScene.seedRemote(workspace.services) }
         // `-CuePadInteractOnly 会话页,开编辑页`：只量这几项，前后对比时省下整套流程（列的项之间要自己够得着，如开编辑页配收编辑页）
@@ -198,6 +199,22 @@ enum InteractionBench {
             }
         }
         NSApp.terminate(nil)
+    }
+
+    /// `-CuePadTraceWait YES`（perf-mac.sh 带着 CUEPAD_TRACE 时）：写 `AWAIT trace <PID>` 停着，等它按 PID 开录了发来 SIGUSR1。
+    /// 按 PID 开录要好几秒，不等的话只量几项时进程量完退出了还没开录。信号源先装好再写这一行：信号不会在没人接的时候到。
+    private static func waitForTracer() async {
+        signal(SIGUSR1, SIG_IGN)
+        let source = DispatchSource.makeSignalSource(signal: SIGUSR1, queue: .main)
+        await withCheckedContinuation { (started: CheckedContinuation<Void, Never>) in
+            source.setEventHandler {
+                source.cancel()
+                started.resume()
+            }
+            source.resume()
+            print("AWAIT trace \(getpid())")
+            fflush(stdout)
+        }
     }
 
     /// 发送时回复框里的话：三行，发出后输入框收回一行。

@@ -21,6 +21,9 @@ struct TaskBoardPage: View {
                 .padding(.horizontal, Spacing.page - 8)
                 .environment(\.boardBand, band)
                 .ignoresSafeArea(edges: .top)
+                // 换范围是整块换内容：列里按卡挪位的动画与列头数字滚动都不跟着走（跟着走时四列每帧重排、数字每帧在 CPU 上重画，掉帧半秒）。
+                // `animation = nil` 挡不住里层的 `.animation(_:value:)`，只有 `disablesAnimations` 挡得住
+                .transaction(value: scope) { $0.disablesAnimations = true }
         }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .background(palette.desk)
