@@ -12,7 +12,7 @@ extension CueStore {
       if case .answered(let answer) = end, message.choices?.contains(answer) != true { throw CueStoreError.notAChoice(answer) }
       let answer: String? = if case .answered(let text) = end { text } else { nil }
       guard try endQuestions(answer: answer, where: "id = ?", [id]) > 0 else { throw CueStoreError.questionEnded }
-      guard let answer, message.ask != nil, let choices = message.choices, choices.count > 1, answer == choices[1] else { return nil }
+      guard let answer, message.allowsFromNowOn(answer) else { return nil }
       return try insertLine(answer, source: .you, pinned: true).id
     }
   }

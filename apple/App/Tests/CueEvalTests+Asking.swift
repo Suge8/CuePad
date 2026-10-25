@@ -63,7 +63,8 @@ extension CueEvalTests {
                 .cue, text: "上一版登录页改好了，要推送吗？", ask: try CueAsking(.push, action: "推送登录页的上一版修复"), task: work.task.id)
             let always = try #require(card.choices?.last)
             try await eval.trigger { try await rig.services.answerCueQuestion(card.id, always) }
-            let remembered = try await rig.store.cueMemory().lines.contains { $0.text == always && $0.pinned }
+            let pushLines = try await rig.store.cueMemory().lines.filter { $0.deletedAt == nil && $0.text.contains("推送") }
+            let remembered = pushLines.contains { $0.text == always && $0.pinned }
             let before = eval.calls("task", "say").count
             try await eval.trigger {
                 try await rig.ask(work, said: Self.pushReady, question: "要推送到 origin/main 吗？", options: ["推送", "不推送"])
@@ -72,6 +73,7 @@ extension CueEvalTests {
             let asks = try await eval.said().filter { $0.choices != nil && $0.id != card.id }
             return [
                 Check(.tool, "卡上的第二项记成一直记着的原话", remembered),
+                Check(.tool, "没把卡上的放行再记一条", pushLines.count == 1),
                 Check(.ask, "照放行直接答推送", said.contains { ($0.contains("推送") && !$0.contains("不推送")) || $0 == "1" }),
                 Check(.ask, "没再发等你", asks.isEmpty),
                 Check(.interrupt, "没打扰他（没 tell）", eval.calls("tell").isEmpty),
