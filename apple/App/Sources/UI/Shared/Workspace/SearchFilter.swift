@@ -16,14 +16,23 @@ nonisolated struct PaletteQuery: Equatable {
         }
     }
 
-    // 换了任一条件就是另一组结果，从第一页看起（同 `AgentListModel.query`）；只有"显示更多"改 `pages`
-    var text = "" { didSet { pages = 1 } }
+    // 换了条件就是另一组结果，从第一页看起（同 `AgentListModel.query`）：搜索词两种页数都回 1，筛选只管卡片；页数只由"显示更多"往上加
+    var text = "" { didSet { pages = 1; sessionPages = 1 } }
     /// nil 不限。
     var project: UUID? { didSet { pages = 1 } }
     var withImages = false { didSet { pages = 1 } }
     var sent: SendCondition = .any { didSet { pages = 1 } }
     var period: Period = .any { didSet { pages = 1 } }
     var pages = 1
+    /// Mac ⌘K 会话范围读到第几页（会话只按搜索词搜，筛选不管它）。
+    var sessionPages = 1
+
+    /// 卡片结果看的那部分：会话页数不算，会话范围点"显示更多"不重读卡片、卡片列表也不回顶。
+    var cards: PaletteQuery {
+        var cards = self
+        cards.sessionPages = 1
+        return cards
+    }
 
     static let pageSize = 30
 

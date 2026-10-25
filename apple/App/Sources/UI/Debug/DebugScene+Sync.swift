@@ -24,7 +24,7 @@ extension DebugScene {
     static var syncSource: AppServices.SyncSource {
         let issues = [
             SyncIssue(
-                kind: .upload, recordType: "cards", recordName: "A1B2", problem: .refused,
+                kind: .upload, recordType: Table.cards.rawValue, recordName: "A1B2", problem: .refused,
                 detail: String(localized: "未能完成操作。（CKErrorDomain错误15。）（<CKError 0x6000: \"Server Rejected Request\" (15/2000); server message = \"Internal server error\">）", table: "Demo")),
             SyncIssue(kind: .request, problem: .local, detail: String(localized: "资料库读写出错：database is locked（SQLite: database is locked [UPDATE syncState SET value = ?]）", table: "Demo")),
         ]

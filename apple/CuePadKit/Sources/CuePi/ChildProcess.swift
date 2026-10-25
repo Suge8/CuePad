@@ -295,7 +295,22 @@ public final class ChildProcess: Sendable {
     }
 
     /// 等进程退出，至多 `limit`（nil 不限时，按 `timing` 量）；退出了返回 true。到点或调用方取消时不管有没有退出都立刻返回 false，好接着升级信号。
+    /// 等退出与计时在同一个任务组里赛跑：谁先到取谁，另一个随即取消（进程先退出，计时的睡眠者当场撤掉）。
     func exited(within limit: Duration?, timing: Timing = .system) async -> Bool {
+        guard let limit else { return await waitForExitSignal() }
+        return await withTaskGroup(of: Bool?.self) { group in
+            group.addTask { await self.waitForExitSignal() }
+            group.addTask { (try? await timing.sleep(limit)) == nil ? nil : false }  // 被取消的计时不算结果
+            defer { group.cancelAll() }
+            while let result = await group.next() {
+                if let result { return result }
+            }
+            return false
+        }
+    }
+
+    /// 退出了返回 true；被取消（含赛跑输了被撤）返回 false。
+    private func waitForExitSignal() async -> Bool {
         let id = UUID()
         let shared = shared
         let giveUp: @Sendable () -> Void = { shared.state.withLock { $0.waiters.removeValue(forKey: id) }?.resume(returning: false) }
@@ -306,12 +321,7 @@ public final class ChildProcess: Sendable {
                     return s.status != nil
                 }
                 if exited { return continuation.resume(returning: true) }
-                if Task.isCancelled { return giveUp() }
-                guard let limit else { return }
-                Task {
-                    try? await timing.sleep(limit)
-                    giveUp()
-                }
+                if Task.isCancelled { giveUp() }
             }
         } onCancel: { giveUp() }
     }

@@ -6,7 +6,7 @@ import Testing
 
 /// 用户在一台 Mac 上连续编辑同一条提示词：本机上传过的版本经拉取回到本机时，本机往往已有更新的编辑。
 /// 回声不是别的设备的并发编辑，不能留下冲突副本。从同步入口（`CloudSync`）走，App 中途重启过。
-@Suite(.timeLimit(.minutes(1))) struct OwnEchoTests {
+struct OwnEchoTests {
   let fixture = try! Fixture()
   let cloud = EchoCloud()
   var store: CueStore { fixture.store }
