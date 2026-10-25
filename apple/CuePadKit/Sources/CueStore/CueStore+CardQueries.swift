@@ -105,7 +105,7 @@ extension CueStore {
   /// 可当上级的任务：列得出来的（没删除、没归档）要做卡片。上级不在这里的子任务当顶层，与 `tasks(_:)` 列出的一致。
   private static let liveTask = "u.deletedAt IS NULL AND u.archivedAt IS NULL AND u.todoAt IS NOT NULL"
 
-  /// 任务（`t`）连着它的项目（`p`）与列得出来的上级（`u`）；顶层的条件见 `topLevel`。`taskCounts`、`startedTasks` 与 `tasksDone` 共用。
+  /// 任务（`t`）连着它的项目（`p`）与列得出来的上级（`u`）；顶层的条件见 `topLevel`。`taskCounts` 与 `tasksDone` 共用。
   private static let taskWithParent =
     "FROM cards t LEFT JOIN projects p ON p.id = t.projectID LEFT JOIN cards u ON u.id = t.parentID AND \(liveTask)"
   private static let topLevel = "(u.id IS NULL OR (t.completedAt IS NULL AND u.completedAt IS NOT NULL))"
@@ -131,17 +131,6 @@ extension CueStore {
       """, arguments
     ) { (project: $0.uuid(0), counts: TaskCounts(inProgress: Int($0.int(1)), todo: Int($0.int(2)), done: Int($0.int(3)))) }
     return Dictionary(uniqueKeysWithValues: rows.map { ($0.project, $0.counts) })
-  }
-
-  /// 进行中的任务（开始过、没完成，`Card.startedAt`），最近开始的在前，同刻按项目顺序与手动顺序；回收站、归档的不列。
-  public func startedTasks() throws -> [Card] {
-    try db.query(
-      """
-      SELECT \(Card.selection(as: "t")) AS began \(Self.taskWithParent)
-      WHERE \(Self.visibleTask) AND t.completedAt IS NULL AND began IS NOT NULL
-      ORDER BY began DESC, \(Self.taskProjectOrder), t.sortKey, t.id
-      """
-    ) { Card(row: $0) }
   }
 
   /// 做完的顶层任务，最近做完的在前——给用户看的"做完了哪些"只有这一处：任务看板的做完列与更早做完的、实时活动的"今天做完"、项目页的"已完成"。
