@@ -23,9 +23,10 @@ extension AppServices {
         return request
     }
 
-    /// 马上传这一条（`SyncControlling.upload`）：手机写出投送请求、Mac 写回结果、Mac 写出带通知标志的会话状态后都调用。没有同步时什么也不做。
-    func upload(_ record: UUID, deleted: Bool = false) async {
-        await sync?.upload(record, deleted: deleted)
+    /// 马上传这几条（`SyncControlling.upload`，同一次写入写出的一起给）：手机写出投送请求、Mac 写回结果、Mac 写出带通知标志的会话状态后都调用。
+    /// 没有同步时什么也不做。
+    func upload(_ records: UUID..., deleted: Bool = false) async {
+        await sync?.upload(records, deleted: deleted)
     }
 
     /// 回答会话正在等的弹窗：写一条作答请求给会话所在的 Mac。

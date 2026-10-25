@@ -62,7 +62,7 @@ extension DebugScene {
         func start() async {}
         func stop() async {}
         func syncNow() async throws {}
-        func send(recordName: String) async -> Bool { true }
+        func send(recordNames: Set<String>) async -> Bool { true }
         func push() async {}
         func resolve(_ resolution: SyncResolution) async throws {}
     }
@@ -79,7 +79,7 @@ extension DebugScene {
         func start() async {}
         func stop() async {}
         func syncNow() async throws { await pull() }
-        func send(recordName: String) async -> Bool { true }
+        func send(recordNames: Set<String>) async -> Bool { true }
         func push() async {}
         func resolve(_ resolution: SyncResolution) async throws {}
 
@@ -145,7 +145,7 @@ extension DebugScene {
         func start() async {}
         func stop() async {}
         func syncNow() async throws {}
-        func send(recordName: String) async -> Bool { true }
+        func send(recordNames: Set<String>) async -> Bool { true }
         func push() async {}
         func resolve(_ resolution: SyncResolution) async throws {}
     }
@@ -161,7 +161,7 @@ extension DebugScene {
         func start() async {}
         func stop() async {}
         func syncNow() async throws { if stalls { try await Task.sleep(for: .seconds(86_400)) } }
-        func send(recordName: String) async -> Bool { true }
+        func send(recordNames: Set<String>) async -> Bool { true }
         func push() async {}
         func resolve(_ resolution: SyncResolution) async throws {}
     }

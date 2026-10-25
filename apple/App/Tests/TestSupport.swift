@@ -70,8 +70,8 @@ nonisolated final class FakeSync: SyncControlling, Sendable {
         if syncNowHangs.withLock({ $0 }) { try? await Task.sleep(for: .seconds(3600)) }
     }
     let uploads = AsyncStream<String>.makeStream()
-    func send(recordName: String) async -> Bool {
-        uploads.continuation.yield(recordName)
+    func send(recordNames: Set<String>) async -> Bool {
+        for name in recordNames.sorted() { uploads.continuation.yield(name) }
         return true
     }
     func push() async {}

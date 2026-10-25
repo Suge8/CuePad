@@ -183,12 +183,12 @@ public actor CloudSync {
     try await puller.pull()
   }
 
-  /// 马上传这一条：不进攒批窗口、不等后台那批；返回时它有了结果（服务器收下为 true，离线等没传成的为 false，之后优先重试）。
-  /// 要传什么（保存还是删除）由库推导：本机删掉的就是删除。
+  /// 马上传这几条（同一次写入写出的一起，一个请求）：不进攒批窗口、不等后台那批；返回时它们都有了结果
+  /// （全被服务器收下为 true，离线等没传成的为 false，之后优先重试）。要传什么（保存还是删除）由库推导：本机删掉的就是删除。
   @discardableResult
-  public func send(recordName: String) async -> Bool {
+  public func send(recordNames: Set<String>) async -> Bool {
     guard connected, let sender else { return false }
-    return await sender.send([recordName])
+    return await sender.send(recordNames)
   }
 
   /// 把待推送全部发出去，返回时这一轮结束（iOS 进入后台前）。

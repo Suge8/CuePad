@@ -15,7 +15,7 @@ import Testing
   @Test func anUploadedVersionPulledBackAfterALaterEditIsNotAConflict() async throws {
     let (sync, card) = try await syncedCard()
     try await edit(card, "第一版")
-    #expect(await sync.send(recordName: name(card)))
+    #expect(await sync.send(recordNames: [name(card)]))
 
     try await expectEchoIgnored(card, after: sync)
   }
@@ -25,7 +25,7 @@ import Testing
     let (sync, card) = try await syncedCard()
     await cloud.loseNextResult()
     try await edit(card, "第一版")
-    #expect(await !sync.send(recordName: name(card)))
+    #expect(await !sync.send(recordNames: [name(card)]))
 
     try await expectEchoIgnored(card, after: sync)
   }
@@ -36,7 +36,7 @@ import Testing
     await sync.start()
     try await sync.syncNow()
     let card = try await store.createCard(body: "base")
-    #expect(await sync.send(recordName: name(card)))
+    #expect(await sync.send(recordNames: [name(card)]))
     return (sync, card)
   }
 
