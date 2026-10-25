@@ -14,11 +14,13 @@ extension CueHostTests {
         let rig = try await Rig()
         try await rig.say("请建个任务并开工")
         try await rig.message(.cue, containing: "办好了")
-        try await eventually("执行器开出会话") { rig.app.host.calls.contains { if case .open(let directory, _, _, _, _) = $0 { directory == rig.folder.path } else { false } } }
+        try await eventually("执行器开出会话") { !rig.app.host.extensions.isEmpty }
         let session = try #require(rig.app.host.extensions.values.first)
         try await eventually("配置后送进草稿") { session.received.contains("send") }
         #expect(rig.app.host.calls.contains {
-            if case .open(_, _, let name, let model, let thinking) = $0 { name == "修好登录页" && model == "fake/fake-model" && thinking == "high" } else { false }
+            if case .open(let directory, _, let name, let model, let thinking) = $0 {
+                directory == rig.folder.path && name == "修好登录页" && model == "fake/fake-model" && thinking == "high"
+            } else { false }
         })
         #expect(session.messages.first?.text == "修好登录页\n把登录页修好")
         #expect(!session.received.contains("config"))

@@ -1,5 +1,6 @@
 #if os(macOS)
 import CueStore
+import CueTestSupport
 import Foundation
 import Testing
 @testable import CuePi
@@ -39,9 +40,7 @@ struct AgentIntegrationTests {
     }
 
     private func fakeAgent(_ command: String, printing output: String = "") throws {
-        let script = bin.appending(path: command)
-        try "#!/bin/sh\nprintf '%s\\n' '\(output)'\n".write(to: script, atomically: true, encoding: .utf8)
-        chmod(script.path, 0o755)
+        try TestScript.install("#!/bin/sh\nprintf '%s\\n' '\(output)'\n", at: bin.appending(path: command))
     }
 
     private func installAll() throws {
@@ -72,9 +71,7 @@ struct AgentIntegrationTests {
         let later = root.appending(path: "later-bin")
         try FileManager.default.createDirectory(at: later, withIntermediateDirectories: true)
         try fakeAgent("node", printing: "v20.11.0")
-        let newer = later.appending(path: "node")
-        try "#!/bin/sh\necho v22.19.0\n".write(to: newer, atomically: true, encoding: .utf8)
-        chmod(newer.path, 0o755)
+        try TestScript.install("#!/bin/sh\necho v22.19.0\n", at: later.appending(path: "node"))
         let integration = AgentIntegration(
             paths: AgentPaths(pi: paths, environment: environment), locate: { [bin] in ExecutableLocator(searchDirectories: [bin, later]) }, cuepad: cuepad)
         #expect(await integration.status(of: .pi).lacking == AgentKind.pi.installPrerequisite)
@@ -123,14 +120,13 @@ struct AgentIntegrationTests {
     /// 检测时它的数据目录是一个用完即删的临时目录。替身照 OpenCode 的样子写日志，并记下给它的数据目录（没给时只记不写，不碰真实目录）。
     @Test func askingTheVersionLeavesNothingInTheAgentsDataDirectory() async throws {
         let record = root.appending(path: "data-home.txt")
-        let script = bin.appending(path: "opencode")
-        try """
+        try TestScript.install("""
         #!/bin/sh
-        printf '%s' "${XDG_DATA_HOME-unset}" > '\(record.path)'
+        . "$0.env"
+        printf '%s' "${XDG_DATA_HOME-unset}" > "$RECORD"
         if [ -n "$XDG_DATA_HOME" ]; then mkdir -p "$XDG_DATA_HOME/opencode/log" && echo started >> "$XDG_DATA_HOME/opencode/log/opencode.log"; fi
         echo 'opencode v2.0.29'
-        """.write(to: script, atomically: true, encoding: .utf8)
-        chmod(script.path, 0o755)
+        """, at: bin.appending(path: "opencode"), variables: ["RECORD": record.path])
 
         #expect(await integration().status(of: .opencode).presence == .found(AgentVersion(2, 0, 29)))
         let dataHome = try String(contentsOf: record, encoding: .utf8)

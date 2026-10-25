@@ -13,8 +13,7 @@ struct BrainLifecycleTests {
     private func fakeRuntime(_ runtime: AgentKind, _ body: String) throws -> (CueBrainConfig, pid: URL) {
         let directory = try makeTempDirectory()
         let script = directory.appending(path: "fake-\(runtime.rawValue)")
-        try "#!/bin/sh\necho $$ > \"$PID_FILE\"\n\(body)\n".write(to: script, atomically: true, encoding: .utf8)
-        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
+        try TestScript.install("#!/bin/sh\necho $$ > \"$PID_FILE\"\n\(body)\n", at: script)
         let pid = directory.appending(path: "pid")
         let config = CueBrainConfig(
             runtime: runtime, executable: script, systemPrompt: "x", workingDirectory: directory, mcp: ["/usr/bin/true"],

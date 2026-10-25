@@ -31,7 +31,7 @@ final class RecordingHost: AgentRuntime {
     }
 
     private(set) var calls: [Call] = []
-    /// 开出的假扩展（起来就记下，不等连上桥），按 Pi 自己的会话 id。
+    /// 开出的、已连上桥的假扩展，按 Pi 自己的会话 id：等它非空就是会话在桥上了（起来就记下的话，测试会在连上桥之前往下走）。
     private(set) var extensions: [String: FakeExtension] = [:]
     /// 给了就让开新会话以这个原因失败（Pi 起来就退出时的样子）
     var openFailure: String?
@@ -86,8 +86,8 @@ final class RecordingHost: AgentRuntime {
         }
         try bridge.start()
         try ext.start()
-        extensions[sessionID] = ext
         try await eventually("桥连上 \(sessionID)") { bridge.session(id: ext.id) != nil }
+        extensions[sessionID] = ext
         return ext
     }
 }

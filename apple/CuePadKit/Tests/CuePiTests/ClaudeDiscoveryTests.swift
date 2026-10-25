@@ -14,11 +14,11 @@ struct ClaudeDiscoveryTests {
     /// 换轮：上一轮在请求途中答完、这一轮紧接着开始，回答还没写——上一轮的回答不算这一轮的（歇下先到时 Cue 不读它），这一轮的回答写下就算。
     /// 收尾：这一轮在请求途中答完——它的回答算（Cue 照样被叫醒）。
     @Test func aRoundThatChangesOrEndsWhileCuePadIsListingItIsReadFromTheSessionFile() async throws {
-        let gate = try makeTempDirectory()
-        let release = gate.appending(path: "release"), listing = gate.appending(path: "listing.json")
-        #expect(mkfifo(release.path, 0o600) == 0)
-        let wrapper = #"if [ "$1" = agents ]; then touch '\#(gate.path)/listed'; cat '\#(release.path)' >/dev/null; cat '\#(listing.path)'; else "$REAL" "$@"; fi"#
+        let wrapper = #"if [ "$1" = agents ]; then touch "${0%/*}/listed"; cat "${0%/*}/release" >/dev/null; cat "${0%/*}/listing.json"; else "$REAL" "$@"; fi"#
         try await ClaudeTestbed.run(installHooks: false, wrapper: wrapper) { testbed in
+            let gate = testbed.wrapperDirectory
+            let release = gate.appending(path: "release"), listing = gate.appending(path: "listing.json")
+            #expect(mkfifo(release.path, 0o600) == 0)
             try testbed.startConnected()
             let listed = gate.appending(path: "listed")
             try await eventually("列表请求发出") { FileManager.default.fileExists(atPath: listed.path) }
