@@ -1,15 +1,15 @@
 import CueText
 import Foundation
 
-/// Cue 要先问你的几类事（唯一定义，Cue 的提示词与工具说明照它写）：收不回或越出它职责的事。只有这几类能写带选项的"等你"
-/// （`CueStore.addCueMessage` 的 `ask`）；调研方案、设计取舍、实现路线、子任务与整件事算不算做完，Cue 按你的规矩与最佳实践自己定，做完告诉你。
+/// Cue 要先问你的几类事（唯一定义，Cue 的提示词与工具说明照它写）：收不回或越出它职责的事，与只能按你口味定的审美取舍。只有这几类能写带选项的"等你"
+/// （`CueStore.addCueMessage` 的 `ask`）；调研方案、技术取舍、实现路线、子任务与整件事算不算做完，Cue 按你的规矩与最佳实践自己定，做完告诉你。
 /// 选项也由这里给（`choices`），Cue 不能自拟"照这个做 / 我再看看"这类确认；别的想法（不同意、选别的方案、补一句条件）他在 Cue 页底下直接说，
 /// 卡随之收起（`CueQuestionEnd`）。
 /// 给人看的只有 `name`（选项、设置里的"不用先问"）与 `why`；`definition` 只给 Cue 看。
 public enum CueAsk: String, CaseIterable, Sendable {
-  case push, merge, release, delete, outside, budget, rule
+  case push, merge, release, delete, outside, budget, taste, rule
 
-  /// 这类事给人看的叫法（"以后推送代码都不用问"、设置里的"不用先问"）；规矩那一类不出现在这两处。
+  /// 这类事给人看的叫法（"以后推送代码都不用问"、设置里的"不用先问"）；不能放行的（`allowable`）不出现在这两处。
   /// 范围要与 `definition` 一样大：选项照它写，选了放行的是整类。
   public var name: String {
     switch self {
@@ -19,6 +19,7 @@ public enum CueAsk: String, CaseIterable, Sendable {
     case .delete: "删除文件、分支或数据"
     case .outside: "动项目外的东西"
     case .budget: "超出预算"
+    case .taste: "审美取舍"
     case .rule: "你的规矩要先问的事"
     }
   }
@@ -32,6 +33,7 @@ public enum CueAsk: String, CaseIterable, Sendable {
     case .delete: "删除文件、分支或数据"
     case .outside: "动项目以外的东西"
     case .budget: "超出预算"
+    case .taste: "只能按他口味定的审美取舍（界面长相、配色、文案语气）"
     case .rule: "他的规矩明确要先问的事，或要违反、改动他的规矩"
     }
   }
@@ -39,14 +41,18 @@ public enum CueAsk: String, CaseIterable, Sendable {
   /// 第一项（主按钮）：允许这一次。
   public static let once = "可以"
 
+  /// 能不能记进允许清单。规矩那一类不能：一律放行等于没有规矩。审美那一类也不能：问的是选哪个方案而不是准不准做，
+  /// "以后不用问"等于把他的口味交给 Cue 的口味，还会让卡上一次误点悄悄拿走以后每次长相的决定；他真要 Cue 定，会说出来、记成规矩。
+  public var allowable: Bool { self != .rule && self != .taste }
+
   /// 提问的第二项：选了它，这类事以后在 `project`（关联任务所在项目的名字）里不再问，nil 是所有项目里都不再问；
-  /// `CueStore.endCueQuestion` 按提问存的范围记进允许清单（`CueProfile.allows`）。规矩那一类没有这一项：一律放行等于没有规矩。
+  /// `CueStore.endCueQuestion` 按提问存的范围记进允许清单（`CueProfile.allows`）。不能放行的（`allowable`）没有这一项。
   public func always(in project: String?) -> String? {
-    guard self != .rule else { return nil }
+    guard allowable else { return nil }
     return project.map { "以后「\($0)」里\(name)不用问" } ?? "以后\(name)都不用问"
   }
 
-  /// 所有项目里都不用问那一项；没有它的（规矩那一类）不能记进允许清单。
+  /// 所有项目里都不用问那一项；不能放行的没有。
   public var always: String? { always(in: nil) }
 
   /// 提问的选项（写入时定下、照存，之前写下的照旧显示当时的字）：可以，与"以后……不用问"（范围同上）。
@@ -97,8 +103,12 @@ public struct CueAsking: Equatable, Sendable {
     return "可以\(gap(action.first))\(action)\(gap(action.last))吗？"
   }
 
-  /// 规矩那一类为什么问你：引他的规矩原话（卡片与通知的第二句）。别的类没有：推送、删除这些收不回的地方他自己知道，卡上只留问句。
-  public var why: String? { rule.map { "你说过「\($0)」。" } }
+  /// 为什么问你（卡片与通知的第二句）：规矩那一类引他的规矩原话；审美那一类说明这事按他的口味定（能改回的事，不说就像在讨确认）。
+  /// 别的类没有：推送、删除这些收不回的地方他自己知道，卡上只留问句。
+  public var why: String? {
+    if let rule { return "你说过「\(rule)」。" }
+    return ask == .taste ? "这要按你的口味定。" : nil
+  }
 }
 
 /// Cue 点名要你看的一张图（`CueMessage.shots`）：发到手机的哪一份（`PiPreview.id`）与看它的什么（Cue 写的一句）。写下就不再变；那一份不在了（会话的预览过期删掉）就不显示。

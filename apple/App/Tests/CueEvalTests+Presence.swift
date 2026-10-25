@@ -67,7 +67,7 @@ extension CueEvalTests {
     @Test func o答他自己问的() async throws {
         try await CueEval.run(
             "o-答他自己问的",
-            expect: "他 15 分钟前在会话里自己问了个问题（不在场），会话答完停下：Cue 不替他接（不 say），task leave 留给他，会话显示待回复"
+            expect: "他 15 分钟前在会话里自己问了个问题（不在场），会话答完停下等他一句话：Cue 不替他接（不 say），task leave 留给他，会话显示待回复，不 tell"
         ) { eval in
             let rig = eval.rig
             let work = try await rig.working(Self.title, Self.body)
@@ -83,7 +83,7 @@ extension CueEvalTests {
                 Check(.ask, "留给了他（leave 成了）", eval.calls("task", "leave").contains { !$0.call.failed }),
                 Check(.result, "会话行显示待回复", PiShown(session, cue: duty, at: .always()).label == "待回复"),
                 Check(.ask, "没发等你", try await eval.said().allSatisfy { $0.choices == nil }),
-                Check(.interrupt, "留给他了就不补「不打算行动」", try await eval.said().allSatisfy { !$0.text.contains("不打算行动") }),
+                Check(.interrupt, "没打扰他（没 tell）", eval.calls("tell").isEmpty),
             ]
         }
     }

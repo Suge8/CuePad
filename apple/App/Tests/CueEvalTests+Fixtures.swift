@@ -20,7 +20,7 @@ extension CueEvalTests {
         做完的标准：跑过项目已有的测试与 lint 并贴出输出；改前改后的登录页截图发到手机。推送前先停下来问。
         """
 
-    /// 卡上已经问着（同 Cue 按他的规矩把三个方案交上来的那张：推荐 1，点名每个方案一张图）；会话还在、等他定。
+    /// 卡上已经问着（同 Cue 把三个方案作为审美取舍交上来的那张：推荐 1，点名每个方案一张图）；会话还在、等他定。
     static func proposalsAsked(_ eval: CueEval) async throws -> (Working, CueMessage) {
         let rig = eval.rig
         let work = try await rig.working("重做提问卡", "提问卡出三个视觉方案：决定单、对话里问、郑重放行。做完的标准：每个方案的效果图发到手机，他选定后再实现。")
@@ -29,16 +29,15 @@ extension CueEvalTests {
             let preview = try #require(try await rig.shots([("\(slug)-iphone.png", title)], from: work).first).preview
             shots.append(CueShot(preview: preview.id, look: title.replacingOccurrences(of: "提问卡", with: "")))
         }
-        let asking = try CueAsking(.rule, action: "按方案 1 决定单改提问卡", rule: "重做界面设计要先给几个方案让我选")
+        let asking = try CueAsking(.taste, action: "按方案 1 决定单改提问卡")
         let question = try await rig.store.addCueMessage(
             .cue, text: "三个提问卡方案做好了，我推荐 1 决定单：点一下就答完。", ask: asking, shots: shots, task: work.task.id)
         return (work, question)
     }
 
-    /// 他交代过界面方案要在卡上选；会话交回三个提问卡方案与效果图（还夹着先前别的改动的截图），Cue 被会话歇下叫醒的那一轮跑完。
+    /// 会话交回三个提问卡方案与效果图（还夹着先前别的改动的截图），Cue 被会话歇下叫醒的那一轮跑完。
     static func proposalsDelivered(_ eval: CueEval) async throws -> Working {
         let rig = eval.rig
-        try await eval.trigger { try await rig.say("以后重做界面设计，先给我几个方案，交回时在卡上让我选") }
         let work = try await rig.working("重做提问卡", "提问卡出三个视觉方案：决定单、对话里问、郑重放行。做完的标准：每个方案的效果图（手机浅色、深色、原样与 Mac）发到手机。")
         try await rig.shots([
             ("1-01-改前-长按菜单.png", "上一轮的改动：改前长按菜单"), ("1-02-改后-长按菜单.png", "上一轮的改动：改后长按菜单"),

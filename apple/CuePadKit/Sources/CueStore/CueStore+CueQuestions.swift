@@ -18,7 +18,7 @@ extension CueStore {
     }
   }
 
-  /// 允许清单加上或去掉一项（卡片、设置的开关与 Cue 的 `memory allow` 都经这里）；规矩那一类不能放行，抛 `cannotAllowRule`。
+  /// 允许清单加上或去掉一项（卡片、设置的开关与 Cue 的 `memory allow` 都经这里）；不能放行的（`CueAsk.allowable`）抛 `cannotAllow`。
   /// 返回清单改了没有（改了调用方上传设置）。没有设置就从默认值建一行（同 `updateCueProfile`）。
   @discardableResult
   public func setCueAllow(_ allow: CueAllow, allowed: Bool) throws -> Bool {
@@ -26,7 +26,7 @@ extension CueStore {
   }
 
   private func changeAllows(_ allow: CueAllow, allowed: Bool) throws -> Bool {
-    guard allow.ask != .known(.rule) else { throw CueStoreError.cannotAllowRule }
+    guard allow.ask.known?.allowable != false else { throw CueStoreError.cannotAllow }
     let before = try cueProfile()?.allows ?? []
     let after = allowed ? before.union([allow]) : before.subtracting([allow])
     guard after != before else { return false }

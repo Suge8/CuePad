@@ -25,8 +25,14 @@ extension CueTools {
     case "leave":
       _ = try await host()  // 停用后不再替他判断谁接手
       let target = try await speaker(args)
+      // 他在等你里答 Cue 问的那张卡，会话等的是 Cue 转达：再留给他回，同一件事就既在等你、又是待回复
+      for question in try await store.cueMessagesWaitingForYou() {
+        guard let task = question.taskID, (try? await store.leafSession(store.workingLeaf(of: task).id)) == target.session else { continue }
+        let asked = question.asking?.question ?? CueEnvelope.clip(CueFormat.plainText(question.text), 40)
+        throw Failure("等你里问着他「\(asked)」（\(question.id.shortID)），他在卡上答了你再转给会话：不用留给他回")
+      }
       try await store.leaveToYou(target.session)
-      return .ok("已把\(target.label)留给他回：会话列表上写着待回复，他或你再对它说话就作废。（\(target.short)）")
+      return .ok("已把\(target.label)留给他回：会话与 Cue 页显示待回复（不算等你），他或你再对它说话就作废。（\(target.short)）")
     case "done": return try await done(args)
     case let other: throw Failure("task 没有 \(other)：可用 add / edit / start / say / peek / stop / leave / done")
     }

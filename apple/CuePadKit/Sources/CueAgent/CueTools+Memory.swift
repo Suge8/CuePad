@@ -80,7 +80,7 @@ extension CueTools {
   /// 改允许清单（`CueStore.setCueAllow`）：这类事在一个项目或所有项目里以后不用问，或去掉。
   private func allow(_ args: Args) async throws -> Result {
     let raw = try args.required("ask")
-    guard let ask = CueAsk(rawValue: raw), ask.always != nil else { throw Failure("ask 只能是 \(Self.allowable)：规矩那一类不能放行") }
+    guard let ask = CueAsk(rawValue: raw), ask.allowable else { throw Failure("ask 只能是 \(Self.allowable)：规矩与审美这两类不能放行") }
     let project = try await args.string("project").asyncMap(project)
     let allowed = args.bool("allowed") ?? true
     let changed = try await store.setCueAllow(CueAllow(ask, project: project?.id), allowed: allowed)
