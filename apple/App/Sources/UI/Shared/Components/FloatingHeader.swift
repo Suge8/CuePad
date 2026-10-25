@@ -10,7 +10,7 @@ extension View {
     /// - 系统导航栏（推入的页，与 iPad 右边那一栏的根）：左边是系统的圆形返回（左缘右滑返回、长按返回菜单都是系统的）或侧栏钮，
     ///   中间与右边是导航栏里的两项。两项推入时就建好、一直在，标题与信息只在项里面换，让开也只是透明：推入转场期间系统不重建工具栏项，
     ///   换项要等转场结束才显示；中间这一项不在时系统还会把标题当普通文字摆回中间。
-    /// - 页自己画（窄屏根上四页、iPad 右侧的 Cue 面板）：系统导航栏藏着，这一排随页切走（`HomePager`），左边是搜索钮（Cue 页没有）。
+    /// - 页自己画（窄屏根上四页、iPad 右侧的 Cue 面板）：系统导航栏藏着，这一排随页切走（`HomePager`），进展页左边是搜索钮（项目页的搜索是中间那条 `SearchEntry`，Cue 页没有）。
     /// `hidden` 时中间与右边让开（淡到透明、不可点、读屏跳过），左边一直在；占的高度不变，内容的边距不跟着变（会话页看历史时用，
     /// 见 `ChatFollow.showsHeader`）；给了 `reveal` 时让开的那一块仍接点按，点它唤出。标题同时是读屏、返回菜单与多任务切换器里的名字。
     func floatingHeader<Detail: View, Trailing: View>(
@@ -68,6 +68,8 @@ extension EnvironmentValues {
 enum FloatingHeaderLayout {
     /// 与系统返回钮、工具栏圆钮同高；顶部的提示横幅与它同高、落在两侧圆钮之间（`NoticeBanner`）。
     static let height: CGFloat = 44
+    /// 一颗圆钮连同它与中间那块之间的空：中间铺满的那块（搜索框）按它让出两侧的圆钮。
+    static let slot = height + 8
 }
 
 private struct FloatingHeader<Center: View, Trailing: View>: ViewModifier {
@@ -141,7 +143,7 @@ private struct Yield: ViewModifier {
     }
 }
 
-/// 页自己画的那一排：左边搜索钮（`search`），右边这一页的那一个操作，两颗玻璃圆钮，位置同导航栏里的返回钮与圆钮；
+/// 页自己画的那一排：左边搜索钮（`search`，只有进展页），右边这一页的那一个操作，两颗玻璃圆钮，位置同导航栏里的返回钮与圆钮；
 /// 中间那几块盖在两颗圆钮之上一层：从中间长出的面板（`GrowPanel`）铺满这一排往下长。
 private struct PageBar<Middle: View, Trailing: View>: View {
     let search: Bool

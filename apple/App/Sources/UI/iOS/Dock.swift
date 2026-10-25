@@ -80,14 +80,14 @@ private struct PlacesCatcher: View {
     }
 }
 
-/// 栈的根上的一个去处：它的页。项目、进展两页顶上那一排左边一颗搜索钮、右边这一页的那一个操作，不写标题
+/// 栈的根上的一个去处：它的页。进展页顶上那一排左边一颗搜索钮，项目页中间一条搜索框（放大镜在同一处）；右边是这一页的那一个操作，不写标题
 /// （底部的选中格已经说了在哪一页，`HeaderHost.page`），内容一直滚到底部那一排后面；Cue 页顶上只有 Cue 的名牌，输入框在它自己的页里（随键盘升起）。
 struct HomePage: View {
     let route: Route
 
     var body: some View {
         RouteView(route: route)
-            .environment(\.headerHost, .page(search: route != .cue))
+            .environment(\.headerHost, .page(search: route == .progress))
             .environment(\.pageNamedElsewhere, true)
             // Cue 页的底边是它自己的输入框
             .dockReserve(route != .cue)
