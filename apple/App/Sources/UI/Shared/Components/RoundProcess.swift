@@ -124,7 +124,7 @@ struct RoundProcess: View {
     private func liveStep(_ doing: String, icon: Icon) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
             Image(icon).font(Typography.caption2).foregroundStyle(palette.ink3)
-                .frame(width: Note.glyphWidth).accessibilityHidden(true)
+                .noteGlyph().accessibilityHidden(true)
             Text(doing).font(Typography.codeNote).lineLimit(2).truncationMode(.middle).shimmering()
         }
         .padding(.bottom, 2)
@@ -188,7 +188,7 @@ struct ToolRow<Status: View>: View {
         HStack(spacing: Note.spacing) {
             Image(icon)
                 .font(Typography.caption2).foregroundStyle(palette.ink3)
-                .frame(width: Note.glyphWidth).accessibilityHidden(true)
+                .noteGlyph().accessibilityHidden(true)
             target.font(Typography.codeNote).foregroundStyle(palette.ink3)
                 .lineLimit(1).truncationMode(truncation)
             Spacer(minLength: 4)
@@ -208,7 +208,7 @@ struct SaidRow: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: Note.spacing) {
             Image(RoundProcess.icon(.said)).font(Typography.caption2).foregroundStyle(palette.ink3)
-                .frame(width: Note.glyphWidth).accessibilityHidden(true)
+                .noteGlyph().accessibilityHidden(true)
             let said = Text(text).font(Typography.caption).foregroundStyle(palette.ink2).lineLimit(lines)
                 .frame(maxWidth: .infinity, alignment: .leading)
             // 全文的可以挑字；收成几行的在按钮里（点它回到对话里那一条），不开

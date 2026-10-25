@@ -54,7 +54,7 @@ struct PiSubagentList: View {
         VStack(alignment: .leading, spacing: 2) {
             // 名字、角色与模型是一段字：放不下就折行，不截成"…"（模型名截了就认不出）；用时不折，辅助字号下挪到下一行
             HStack(spacing: Note.spacing) {
-                PiStateDot(shown: agent.shown, size: 6).frame(width: Note.glyphWidth)
+                PiStateDot(shown: agent.shown, size: 6).noteGlyph()
                 MetaLine(alignment: .center, spacing: Note.spacing, gap: 8) {
                     Text("\(Text(agent.name).foregroundStyle(palette.ink2)) \(agent.role)\(agent.model.map { model in Text("\(Dotted.separator)\(BrandMark.label(.model(reference: model), PiModelName.short(model)))") } ?? Text(verbatim: ""))")
                         .foregroundStyle(palette.ink3)
@@ -67,7 +67,7 @@ struct PiSubagentList: View {
                 .font(Typography.caption)
                 .lineLimit(agent.isRunning ? 1 : nil).truncationMode(.tail)
                 .fixedSize(horizontal: false, vertical: true)
-                .padding(.leading, Note.glyphWidth + Note.spacing)
+                .noteGlyph(.indent)
                 .accessibilityLabel(Dotted(agent.label, agent.action).spoken)
         }
         .accessibilityElement(children: .combine)
