@@ -845,7 +845,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "The file for %@ isn't on this device, so it can't be uploaded. CuePad will try again next time it opens; if that fails, add it again."
+            "value" : "%@ can't be uploaded because its file isn't on this device. CuePad will try again next time it opens; if that fails, add it again."
           }
         },
         "zh-Hans" : {
@@ -2167,6 +2167,22 @@
         }
       }
     },
+    "Agent 发来的一份内容" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Something an agent sent"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agent 发来的一份内容"
+          }
+        }
+      }
+    },
     "Agent 回复了" : {
       "localizations" : {
         "en" : {
@@ -2813,6 +2829,22 @@
         }
       }
     },
+    "Cue 此刻的状态" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cue's current status"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cue 此刻的状态"
+          }
+        }
+      }
+    },
     "Cue 没在运行" : {
       "localizations" : {
         "en" : {
@@ -2861,6 +2893,22 @@
         }
       }
     },
+    "Cue 的设置" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cue's configuration"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cue 的设置"
+          }
+        }
+      }
+    },
     "Cue 的运行时拒绝了请求：%@" : {
       "localizations" : {
         "en" : {
@@ -2889,6 +2937,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Cue 的通知没能开始：%@"
+          }
+        }
+      }
+    },
+    "Cue 记忆里的一条" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "An item in Cue's memory"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cue 记忆里的一条"
+          }
+        }
+      }
+    },
+    "Cue 页读到的位置" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your read position in Cue"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cue 页读到的位置"
           }
         }
       }
@@ -3607,6 +3687,22 @@
         }
       }
     },
+    "一个 Agent 的模型与命令" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "An agent's model and command list"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "一个 Agent 的模型与命令"
+          }
+        }
+      }
+    },
     "一个会话" : {
       "localizations" : {
         "en" : {
@@ -3667,6 +3763,54 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "一句话介绍（可不填）"
+          }
+        }
+      }
+    },
+    "一台 Mac 上能用的 Agent 清单" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A Mac's agent list"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "一台 Mac 上能用的 Agent 清单"
+          }
+        }
+      }
+    },
+    "一台 Mac 在不在线" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A Mac's online status"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "一台 Mac 在不在线"
+          }
+        }
+      }
+    },
+    "一台设备开着哪一页" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A device's open page"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "一台设备开着哪一页"
           }
         }
       }
@@ -7531,6 +7675,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "和 %@ 说话"
+          }
+        }
+      }
+    },
+    "和 Cue 的一条对话" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A message with Cue"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "和 Cue 的一条对话"
           }
         }
       }
@@ -16863,6 +17023,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "解除绑定"
+          }
+        }
+      }
+    },
+    "订阅额度" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Subscription usage"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "订阅额度"
           }
         }
       }

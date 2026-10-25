@@ -87,7 +87,19 @@ extension SyncIssue {
         case .piSessionStates, .piMessages: String(localized: "Agent 会话的内容")
         case .deliveryRequests: String(localized: "一条发给 Mac 的请求")
         case .directoryBindings: String(localized: "项目的文件夹")
-        default: String(localized: "一条记录")
+        case .agentCatalogs: String(localized: "一个 Agent 的模型与命令")
+        case .previews: String(localized: "Agent 发来的一份内容")
+        case .accountQuotas: String(localized: "订阅额度")
+        case .cueMessages: String(localized: "和 Cue 的一条对话")
+        case .cueLines: String(localized: "Cue 记忆里的一条")
+        case .cueProfile: String(localized: "Cue 的设置")
+        case .cueState: String(localized: "Cue 此刻的状态")
+        case .cueRead: String(localized: "Cue 页读到的位置")
+        case .macPresence: String(localized: "一台 Mac 在不在线")
+        case .macAgents: String(localized: "一台 Mac 上能用的 Agent 清单")
+        case .sessionViewers: String(localized: "一台设备开着哪一页")
+        // 本机表不同步，认不出的是更新版本的表
+        case nil, .piSessions, .projectDirectories, .cueSummaries, .writeCounter, .syncRecords: String(localized: "一条记录")
         }
     }
 }
