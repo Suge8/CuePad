@@ -155,7 +155,7 @@ struct CueChoices: View {
 /// （边长 `ShotRow`：放得下就是 `side`，不然几张平分可用宽），取细节最多的那一段填满（`LookBox.framed`）。缩略图本来看不全、都要点开，它只管认出是哪张、邀请点开；
 /// 要看什么由每张正下方那一句说（与图同宽、向下换行；含"："的拆两行，前半加粗是名字、后半是说明），辅助功能字号下也一样。
 /// 格窄、一行只排得下七八个字，折行时句尾几个字粘成一块（`CueQuestionLine.keepingTail`），不剩一两个字挂在下一行。
-/// 点一张全屏看整张，左右翻的就是这几张，页顶写看什么；底栏按 `reply`（"等你"里是那几个选项）。
+/// 点一张全屏看整张，左右翻的就是这几张，页顶写看什么；底栏按 `reply`（拍板卡里是那几个选项）。
 /// `chosen`："可以"选的就是其中这一张（`chosen(for:in:)`），它描一圈主按钮的靛青。
 struct CueShots: View {
     let shots: [CueShown]
@@ -234,27 +234,4 @@ private struct ShotRow: Layout {
                 at: CGPoint(x: bounds.minX + CGFloat(index) * (cell + CueShots.gap), y: bounds.minY), proposal: ProposedViewSize(width: cell, height: nil))
         }
     }
-}
-
-/// "原话"开关：问句是代码写的（`CueAsking.question`），Cue 的原话收着、点它展开。"等你"卡与答完回到对话里的那一问共用。
-struct CueOriginalToggle: View {
-    @Binding var open: Bool
-    var height: CGFloat = 0
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        Button { open.toggle() } label: {
-            HStack(spacing: 4) {
-                Text("原话")
-                Image(.expand).font(.system(size: 9, weight: .semibold)).rotationEffect(.degrees(open ? 180 : 0))
-            }
-            .font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink2)
-            // 对话里那一问下面不另占一行高：按得到的范围往外扩一圈，不撑高气泡
-            .frame(minHeight: height).contentShape(.rect.inset(by: -Self.reach))
-        }
-        .buttonStyle(PressStyle(.inline))
-        .accessibilityLabel(open ? "收起原话" : "看 Cue 的原话")
-    }
-
-    private static let reach: CGFloat = 10
 }

@@ -2,9 +2,9 @@ import CueStore
 import SwiftUI
 
 /// 拍板卡顶上的眉题行（小号、淡墨，几样靠间距与深浅分开，不用"·"拼）：
-/// - 左边：所在项目（项目自己的图标与颜色，`ProjectGlyph`，同看板与侧栏）与项目名，再是这件事的名字（`TaskBoard.Wait.title`：任务名或会话名，深一档）。
+/// - 左边：所在项目（项目自己的图标与颜色，`ProjectGlyph`，同看板与侧栏）与项目名，再是这件事的名字（`TaskBoard.Wait.title`：任务名或会话名，同看板的卡，深一档）。
 ///   名字点得到：Cue 的提问打开它落在的任务（`CueTaskButton`，接力也落在这里），会话在问的进会话（谁在问就是这个会话，打开会话的入口也是它）；
-///   没落在任务上的提问写 Cue 的名字、不可点。不属于哪个项目的不写项目。地方不够先截名字。
+///   没落在任务上的提问没有这件事，写 Cue 的名字、不可点。不属于哪个项目的不写项目。地方不够先截名字。
 /// - 右边：等了多久（"刚刚""已等 38 分钟"），不止一件时再是"1/3"第几件；Mac 上计数两边各一颗小箭头换一件（`step`），手机上左右滑卡换（`CueWaitDock`）。
 struct CueWaitEyebrow: View {
     let wait: TaskBoard.Wait
@@ -41,7 +41,7 @@ struct CueWaitEyebrow: View {
     }
 
     @ViewBuilder private var name: some View {
-        let title = wait.title(cue: workspace.cue.name)
+        let title = wait.title ?? workspace.cue.name
         switch wait.wait {
         case .message(let message, _):
             if let task = wait.item?.task.id ?? message.taskID {

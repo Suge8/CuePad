@@ -5,7 +5,7 @@ import SwiftUI
 /// 至少圆钮的圆高（`slot - 2 * inset`，字号大了工具排折行时随它长高），离底 `inset`，与两颗圆钮同一条中线。
 enum ComposerMetrics {
     static let radius: CGFloat = 28
-    /// 输入框上面叠着的几层（Cue 页的待回复提示、等你卡）彼此之间与离输入框都隔这么多，纸与玻璃的圆角同 `radius`：底部一套数。
+    /// 输入框上面叠着的几层（Cue 页的待回复提示、拍板卡）彼此之间与离输入框都隔这么多，纸与玻璃的圆角同 `radius`：底部一套数。
     static let stackGap: CGFloat = 8
     static let inset: CGFloat = 8
     static let slot: CGFloat = 56

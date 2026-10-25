@@ -1,9 +1,9 @@
 import CueStore
 import SwiftUI
 
-/// 全屏预览底部的玻璃栏（`PreviewReply`）：对 Cue 或这个会话说一句关于这一份的话，或回答"等你"。
+/// 全屏预览底部的玻璃栏（`PreviewReply`）：对 Cue 或这个会话说一句关于这一份的话，或回答拍板。
 /// 说出去的就是一句普通的话"关于「标题」：……"，走说话的那一条路（`Workspace.speak`），Cue 与会话都看得懂，不另造格式；
-/// 回答走"等你"的那一条（`answerCueQuestion`）。说完、答完就收起全屏页，回到对话里看自己那句。
+/// 回答走拍板的那一条（`answerCueQuestion`）。说完、答完就收起全屏页，回到对话里看自己那句。
 struct PreviewReplyBar: View {
     let reply: PreviewReply
     /// 当前这一份的标题

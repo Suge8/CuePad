@@ -18,9 +18,9 @@ nonisolated enum Icon: Hashable, Sendable {
     // 导航与页面入口
     case cue, cueAsleep, cueLooking, cueHappy
     case idea, task, session, search, settings, archive, trash, sidebar
-    case agent, allProjects, all, filter, extensionNote
+    case agent, all, filter, extensionNote
     // 状态
-    case waiting, cueAsking, failure, undelivered, onTheWay, replied, yourTurn, fresh, ended, interrupted, unknown, gone
+    case waiting, cueAsking, awaitsReply, failure, undelivered, onTheWay, replied, yourTurn, fresh, ended, interrupted, unknown, gone
     case done, donePending, picked
     case syncStarting, synced, syncing, syncOff, syncRestricted, syncTrouble, syncPaused, uploadLocal, replaceWithCloud, syncNow
     case alertsPending, alertsOn, alertsOff
@@ -34,10 +34,10 @@ nonisolated enum Icon: Hashable, Sendable {
     case declined, mac, yourAnswer, above, floated, earlier
     case photo, photoLibrary, camera, pickCards, expandEdit, selectText, dismissKeyboard, variables
     case terminal, terminalWindow, readFile, editFile, pondering, tool, said, started, added, branch, markUnread, fireCode, thinking
-    case researcher, engineer, batchWorker, designer, sentinel, subagent
+    case subagent
     // Cue 与设置
     case memory, wakeEnabled, wakeMessage, wakeActivity, wakeIdle, wakeReminder, looked, mail
-    case name, autoApprove, hotkey, talkToCue, appearance, updates
+    case name, hotkey, talkToCue, appearance, updates
     // 文件与交付物：没有画面的音频、列表里的文字卡、还在下载、视频的播放标、认不出类型的文件、转动查看 3D 模型
     case audio, document, downloading, play, file, inspect3D
     /// Mac 菜单栏里的 CuePad（单色模板图）。
@@ -123,7 +123,6 @@ nonisolated enum Icon: Hashable, Sendable {
         case .rename, .editFile: .ink("pencil")
         case .choose: .ink("choose")
         case .all: .ink("deck")
-        case .allProjects: .ink("grid")
         case .filter: .ink("filter")
         case .extensionNote: .ink("puzzle")
 
@@ -155,14 +154,9 @@ nonisolated enum Icon: Hashable, Sendable {
         case .started: .ink("ring.play")
         case .added: .ink("ring.plus")
         case .branch: .ink("branch")
-        case .markUnread: .ink("dot")
+        case .markUnread, .awaitsReply: .ink("dot")
         case .fireCode: .ink("flame")
         case .thinking: .ink("bubble.dots")
-        case .researcher: .ink("search")
-        case .engineer: .ink("hammer")
-        case .batchWorker: .ink("layers")
-        case .designer: .ink("brush")
-        case .sentinel: .ink("eye")
         case .subagent: .ink("person")
         case .memory: .ink("bookmark")
         case .wakeEnabled: .ink("power")
@@ -172,7 +166,6 @@ nonisolated enum Icon: Hashable, Sendable {
         case .wakeReminder: .ink("alarm")
         case .mail: .ink("mail")
         case .name: .ink("tag")
-        case .autoApprove: .ink("shield.tick")
         case .hotkey: .ink("keyboard")
         case .appearance: .ink("sun")
         case .updates: .ink("badge.down")

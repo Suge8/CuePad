@@ -150,9 +150,9 @@ extension EnvironmentValues {
     @Entry var chatTarget: UUID?
     /// 跳到对话里的某一条去读（`ChatColumn` 给）：经过清单里"对你说"那一条点它回到原处。不在对话区里为 nil。
     @Entry var chatJump: ChatJump?
-    /// 浮在对话底上的那一块占的高（`FloatingReply`：Mac 的回复框，手机 Cue 页的"等你"卡与输入框）：对话在底下让出这么高，最新一行停在它上方。
+    /// 浮在对话底上的那一块占的高（`FloatingReply`：Mac 的回复框，手机 Cue 页的拍板卡与输入框）：对话在底下让出这么高，最新一行停在它上方。
     @Entry var chatBottomInset: CGFloat = 0
-    /// 对话区可见的高（`FloatingReply` 给浮在底上的那一块）："等你"卡至多占它一半。
+    /// 对话区可见的高（`FloatingReply` 给浮在底上的那一块）：拍板卡至多占它一半。
     @Entry var chatHeight: CGFloat = .infinity
     /// 阅读栏两边的页边距（`ChatLayout.margin`，`ChatColumn` 按可见区的宽算一次）：边上放的小东西（刻度、新消息的点）据它看放不放得下。
     @Entry var chatMargin: CGFloat = 0

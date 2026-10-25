@@ -22,13 +22,3 @@ struct BoardLink<Label: View>: View {
         }
     }
 }
-
-extension Workspace {
-    /// 看板上的卡点了去哪（`BoardLink` 与流程测试同走这里）。
-    func open(_ destination: TaskBoard.Destination) {
-        switch destination {
-        case .session(let session): openSession(session.id, sessionID: session.sessionID)
-        case .question(let id): askOnCuePage(id)
-        }
-    }
-}

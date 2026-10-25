@@ -5,7 +5,7 @@ import SwiftUI
 /// 空态与启用合成这一处，同一屏不说两遍；输入框上方不另放一块。
 /// - 还没说过话（`intro`）：自我介绍"我是 Cue"，在对话那一块正中。启用了请你直接说，下面接几句能直接说的话（`CueStarters`，点一句放进输入框），
 ///   没有主按钮。
-/// - 说过话、后来停用了：一小张纸排在输入框正上方（"等你"卡之下，离你下一步最近），不画吉祥物、不再自我介绍，只说启用后它接着干活。
+/// - 说过话、后来停用了：一小张纸排在输入框正上方（拍板卡之下，离你下一步最近），不画吉祥物、不再自我介绍，只说启用后它接着干活。
 /// 没启用时启用是唯一的主动作：选一台 Mac（能运行 Cue 的几台，`CueSettings.hosts`；按钮的样子见 `enableButton`，选不了的写为什么，
 /// `CueSettings.Host.selectable`）；菜单是各入口同一份 `CueHostMenu`。在这台 Mac 上启用打开接入面板
 /// （`SetupPanel`：先检测、接入这台的 Agent，一家都没装时给装法，同一下启用），别的 Mac 直接启用，没写成的原因就地写在按钮下面（`CueSettingsModel`）。
@@ -116,7 +116,7 @@ private struct CueEnable: View {
     }
 
     private func hostMenu(_ hosts: [CueSettings.Host], title: String, surface: ControlSurface) -> some View {
-        CueHostMenu(hosts: hosts, accessibilityLabel: title, pick: { if let host = $0 { enable(on: host) } }) {
+        CueHostMenu(hosts: hosts, use: .enable { enable(on: $0) }, accessibilityLabel: title) {
             HStack(spacing: 6) {
                 Text(title)
                 Image(.expand).font(.footnote.weight(.semibold))

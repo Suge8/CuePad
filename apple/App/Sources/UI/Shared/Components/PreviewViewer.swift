@@ -16,7 +16,7 @@ struct PreviewOpening: Identifiable, Equatable {
     var id: UUID { preview.id }
 }
 
-/// 全屏页底栏：从结果卡打开是对 Cue 说，从会话页打开是对这个会话说，从"等你"打开是那几个选项。
+/// 全屏页底栏：从结果卡打开是对 Cue 说，从会话页打开是对这个会话说，从拍板卡打开是那几个选项。
 enum PreviewReply: Equatable {
     case cue
     case session(PiSessionState)

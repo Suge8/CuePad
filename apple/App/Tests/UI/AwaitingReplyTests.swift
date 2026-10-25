@@ -5,7 +5,7 @@ import Testing
 
 /// 等你分拍板与待回复（WORDS.md）：Cue 留给你回、此刻歇着的会话是待回复——Cue 页不进拍板卡、在上方的待回复提示里，等得最久的在前；
 /// 进展页的等你列两种都放（拍板在前），绑着的任务从推进中挪进等你，"等你 N"两种一起数；名牌有拍板只说拍板，没有了才说几个会话待回复（数全部，不只排得下的珠子）。
-/// 点提示：几个时去进展页的会话段，待回复排最前、等得最久的在前；对其中一个说了话它就不再待回复，只剩一个时点了直接进那个会话。
+/// 点提示：几个时去进展页的会话段，待回复紧随等你确认、等得最久的在前；对其中一个说了话它就不再待回复，只剩一个时点了直接进那个会话。
 @MainActor
 struct AwaitingReplyTests {
     let rig = TestApp()
@@ -55,9 +55,9 @@ struct AwaitingReplyTests {
         cue = try await now()
         #expect(cue.headline == "2 个会话待回复")
 
-        // 几个待回复：点提示去进展页的会话段，待回复排在最前
+        // 几个待回复：点提示去进展页的会话段，待回复紧随等你确认（此刻没有在问的，排在最前）
         workspace.projectScope = try await store.createProject(name: "圆桌", color: "#000000").id
-        workspace.showReplies()
+        workspace.openReplies(try await thread().replies)
         #expect(workspace.root == .progress && workspace.progressPane == .sessions && workspace.projectScope == nil)
         let list = try await PiSessionList.read(text: "", historyLimit: PiSessionList.pageSize, at: .always(), from: store)
         #expect(list.now.prefix(2).map(\.state.sessionID) == ["glass", "header"])  // 同 Cue 页，等得最久的在前
@@ -65,9 +65,8 @@ struct AwaitingReplyTests {
         // 对其中一个说了话、它动起来：不再待回复；只剩一个，点提示直接进那个会话
         try await recorder.update(sessionID: "header", state: .thinking)
         page = try await thread()
-        let only = try #require(page.replies.first)
-        #expect(page.replies.count == 1 && only.sessionID == "glass")
-        workspace.openSession(only.id, sessionID: only.sessionID)
+        #expect(page.replies.map(\.sessionID) == ["glass"])
+        workspace.openReplies(page.replies)
         #expect(workspace.shownSession?.sessionID == "glass")
         #expect(try await now().headline == "1 个会话待回复")
 

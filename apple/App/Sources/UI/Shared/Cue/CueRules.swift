@@ -184,7 +184,7 @@ nonisolated struct CueDigest: Equatable, Sendable {
 }
 
 nonisolated extension CueMessage {
-    /// Cue 的一句在对话以外的那一行（Mac 侧栏名片的气泡、"等你"卡与全屏预览底栏的第一句、回答的引用、实时活动里第一件等你）：提问是要你定什么（`CueAsking.question`，不露原话），
+    /// Cue 的一句在对话以外的那一行（Mac 侧栏名片的气泡、拍板卡与全屏预览底栏的第一句、回答的引用、实时活动里第一件等你）：提问是要你定什么（`CueAsking.question`，不露原话），
     /// 其余是第一行纯文字（Markdown 的符号去掉，`MarkdownBlock.firstPlainLine`）。
     var headline: String? { asking?.question ?? MarkdownBlock.firstPlainLine(CueFormat.plainText(text)) }
 }

@@ -57,7 +57,7 @@ struct CueComposer: View {
             .onChange(of: focused) { focusChanged(focused) }
             #if os(iOS)
             // 推入别的页就交出焦点、收起键盘，返回时不还：只由系统收起的话 SwiftUI 记着它，返回时在推出转场里把键盘弹回来，
-            // 这一页的托管控制器不认转场里到的键盘，输入框与等你卡就压在键盘底下（实测）。焦点经上面那条报给底部那一排
+            // 这一页的托管控制器不认转场里到的键盘，输入框与拍板卡就压在键盘底下（实测）。焦点经上面那条报给底部那一排
             .onChange(of: workspace.top) { _, top in
                 if style == .page, takesFocusRequests, top != .cue { focused = false }
             }
@@ -102,10 +102,10 @@ struct CueComposer: View {
         #if os(macOS)
         if tooled {
             HStack(spacing: 8) {
-                CueConfigControls(choice: brain, opening: $opening, fail: workspace.fail)
+                CueConfigControls(choice: brain, opening: $opening)
                 CueHostNote()
             }
-            .observingCueBrain(into: $brain, fail: workspace.fail)
+            .observingCueBrain(into: $brain)
         }
         #endif
     }

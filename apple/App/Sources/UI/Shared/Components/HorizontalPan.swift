@@ -2,7 +2,7 @@
 import SwiftUI
 import UIKit
 
-/// 只接横向的拖（行上的轻扫 `rowSwipes`、Cue 页等你卡换一件 `CueWaitDock`）：开始时横向速度明显大于纵向、不贴屏幕两边起手（贴边是返回与切页）、
+/// 只接横向的拖（行上的轻扫 `rowSwipes`、Cue 页拍板卡换一件 `CueWaitDock`）：开始时横向速度明显大于纵向、不贴屏幕两边起手（贴边是返回与切页）、
 /// 挂它的那一块要它（`allows`，按开始那一刻的横向速度）才开始，不抢列表滚动；页上的横拖（内容区右滑返回、根上切页）等它先判：它不要的才归它们。
 struct HorizontalPan: UIGestureRecognizerRepresentable {
     let allows: (CGFloat) -> Bool
