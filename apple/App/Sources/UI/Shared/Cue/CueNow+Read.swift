@@ -19,7 +19,7 @@ nonisolated extension CueNow {
             name: digest.name, mood: digest.mood(at: moment),
             restingMood: CueMood.of(.idle, waiting: digest.waiting, justDone: digest.lastSaidDone),
             cue: Self.brain(presence, digest: digest, local: local, at: moment.now),
-            beads: Array(beads.prefix(Self.beadLimit)), hidden: max(beads.count - Self.beadLimit, 0), advancing: digest.advancing,
+            beads: Array(beads.prefix(Self.beadLimit)), hidden: max(beads.count - Self.beadLimit, 0), counts: Counts(beads), advancing: digest.advancing,
             first: digest.tally.waiting.first.map { Self.wait($0, name: digest.name) }, at: moment.now,
             elsewhere: digest.enabled && local.here != nil && digest.hostID != local.here ? "在「\(host)」上运行" : nil)
     }

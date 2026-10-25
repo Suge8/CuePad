@@ -19,6 +19,8 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
     /// 至多 `beadLimit` 颗，多出的只记个数（`hidden`）。
     var beads: [Bead]
     var hidden: Int
+    /// 截掉之前各种各几份：那一句数的是它，不是排得下的那几颗。
+    var counts: Counts
     /// 推进中几件（`CueTally.advancing`）。
     var advancing: Int
     /// 第一件等你：说什么、"打开"去哪，只有 Cue 带选项的提问能"允许一次"（会话在问的只给打开）。
@@ -147,19 +149,28 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
         case .hearing: return "你的话在路上"
         case .working(let woke, let doing, _): return doing ?? woke ?? Self.thinking
         case .idle:
-            let asks = count(.asks), running = count(.running)
-            let subagents = beads.filter { $0.kind == .delegating }.reduce(0) { $0 + $1.subagents }
-            if asks > 0 { return "\(asks) 件等你拍板" }
-            if count(.reply) > 0 { return "\(count(.reply)) 个会话待回复" }
-            if subagents > 0 { return "等 \(subagents) 个子代理交回" }
-            if running > 0 { return "\(running) 件在跑" }
+            if counts[.asks] > 0 { return "\(counts[.asks]) 件等你拍板" }
+            if counts[.reply] > 0 { return "\(counts[.reply]) 个会话待回复" }
+            if counts.subagents > 0 { return "等 \(counts.subagents) 个子代理交回" }
+            if counts[.running] > 0 { return "\(counts[.running]) 件在跑" }
             if let done = justDone { return "刚做完「\(done.name)」" }
             if advancing > 0 { return "推进中 \(advancing) 件，都歇着" }
             return elsewhere ?? Self.quiet
         }
     }
 
-    private func count(_ kind: Bead.Kind) -> Int { beads.count { $0.kind == kind } }
+    /// 各种活一共几份（`counts`），连同等子代理的那几份里在跑的子代理数。
+    struct Counts: Codable, Hashable, Sendable {
+        private var kinds: [Bead.Kind: Int]
+        private(set) var subagents: Int
+
+        init(_ beads: [Bead]) {
+            kinds = Dictionary(grouping: beads, by: \.kind).mapValues(\.count)
+            subagents = beads.filter { $0.kind == .delegating }.reduce(0) { $0 + $1.subagents }
+        }
+
+        subscript(kind: Bead.Kind) -> Int { kinds[kind] ?? 0 }
+    }
 
     /// 灵动岛紧凑态头像旁说的那一件：短词、走秒的起点与颜色只在这里一起定，不会词说做完、秒在计另一件。
     /// Cue 在一轮里或话在路上最先（它正在动），不在写不在；歇着时是手上最该看的那份活，先后同那一句：
@@ -187,7 +198,7 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
     }
 
     static let empty = CueNow(
-        name: "Cue", mood: .sleeping, restingMood: .sleeping, cue: .idle, beads: [], hidden: 0, advancing: 0, first: nil, at: .distantPast)
+        name: "Cue", mood: .sleeping, restingMood: .sleeping, cue: .idle, beads: [], hidden: 0, counts: Counts([]), advancing: 0, first: nil, at: .distantPast)
 }
 
 nonisolated extension CueNow: SnapshotFile { static let fileName = "cue.json" }
