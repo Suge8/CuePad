@@ -1,4 +1,5 @@
 #if DEBUG && os(macOS)
+import AppKit
 import CueStore
 import Foundation
 import os
@@ -17,123 +18,112 @@ extension DebugScene {
 }
 
 /// `-CuePadSyncBench <host|remote>`（配 `-CuePadCloudKit YES` 与各自的 `-CuePadHost`）：同一台 Mac 上两个隔离实例经 CloudKit 开发环境同步，
-/// 打点给 `apple/scripts/sync-bench.py` 统计（跑法与口径见 docs/perf.md「同步测量」）。每个点是类别 `bench` 的一行 `<事件> 键=值…`。
-/// - host：有在线会话的 Mac（会话由脚本的假扩展给）。别的设备对 Cue 说的话一到库里就记 `cue-arrived lag=`（创建到本机库，同一台机器的时钟）。
-///   Cue 不值班（隔离目录里没有登录的运行时），所以只量到达、不量 Cue 的回复。
-/// - remote：代替开着 Agent 页的手机，拉取节奏也换成手机那档（`DebugHooks.pollsLikePhone`）。等 host 的会话同步过来后，每 `-CuePadSyncBenchEvery` 秒（默认 30）一轮：对 host 的一个在线会话说一句，
-///   与手机同一条路（写请求、立即上传），等结果回到本机记 `send total= upload= toMac= back=`（全程、写出到传完、传完到 Mac 写回、写回到本机看到）；
-///   对 Cue 说一句（`Workspace.sayToCue` 同一条路）；立即同步一次记 `syncNow took=`。
+/// 由 `apple/scripts/sync-bench.py` 驱动与统计（场景与口径见 docs/perf.md「同步测量」）。
+/// - host：有在线会话的 Mac（会话由脚本的假扩展给），Cue 在这台值班（大脑是 `-CuePadCueBrain` 的替身，回"知道了。"）。
+/// - remote：代替手机，拉取节奏按手机开着 Agent 页那档（`DebugHooks.pollsLikePhone`）。
+/// 两端都只做脚本经标准输入给的命令（`command`），自己不按时做任何事：节奏只在脚本一处。
+/// 打点是标准输出里的一行 `SYNCBENCH {json}`（`e` 事件、`t` 墙钟秒，同一台机器跨进程可直接相减），事件见 `SyncBench.Watch` 与 `command`。
+/// `-CuePadSyncBenchNoRelay YES`：不连门铃，只靠按节奏的拉取（门铃不通的那条路）。
 enum SyncBench {
     static let log = Logger(subsystem: AppIdentity.id, category: "bench")
-    /// 一句话等结果最多这么久，超时记一次失败、接着下一轮
-    private static let timeout = Duration.seconds(60)
-
-    static func run(_ services: AppServices) async {
-        switch defaults.string(forKey: "CuePadSyncBench") {
-        case "host": await host(services)
-        case "remote":
-            let every = defaults.integer(forKey: "CuePadSyncBenchEvery")
-            await remote(services, every: .seconds(every > 0 ? every : 30))
-        default: break
-        }
-    }
-
+    static var role: String? { defaults.string(forKey: "CuePadSyncBench") }
+    static var relayOff: Bool { role != nil && defaults.bool(forKey: "CuePadSyncBenchNoRelay") }
     private static var defaults: UserDefaults { DebugScene.defaults }
 
-    private static func host(_ services: AppServices) async {
-        var seen: Set<UUID>?
+    static func run(_ workspace: Workspace) async {
+        guard let role else { return }
+        let services = workspace.services
+        mark("ready", ["role": role, "pid": Int(getpid()), "relay": services.relay != nil])
+        Watch.start(services)
+        if role == "host" { await enableCue(services) }
         do {
-            for try await messages in services.store.observe({ try $0.cueMessages(limit: 50) }) {
-                let yours = messages.filter { $0.author == .known(.you) }
-                if let known = seen {
-                    for message in yours where !known.contains(message.id) {
-                        log.notice("cue-arrived lag=\(Date.now.timeIntervalSince(message.createdAt), format: .fixed(precision: 3), privacy: .public)")
+            for try await line in FileHandle.standardInput.bytes.lines {
+                await command(line.split(separator: " ").map(String.init), workspace)
+            }
+        } catch {
+            log.error("bench-error 读命令：\(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// 一行打点，脚本按行读（标准输出是管道，每行当场冲出去）。
+    static func mark(_ event: String, _ fields: [String: any Sendable] = [:], at time: Date = .now) {
+        var row = fields
+        row["e"] = event
+        row["t"] = time.timeIntervalSince1970
+        guard let data = try? JSONSerialization.data(withJSONObject: row, options: [.sortedKeys]) else { return }
+        print("SYNCBENCH " + String(decoding: data, as: UTF8.self))
+        fflush(stdout)
+    }
+
+    /// Cue 在这台值班：设置写成运行在这台、运行时 Pi（大脑由 `-CuePadCueBrain` 换成替身）。
+    private static func enableCue(_ services: AppServices) async {
+        let host = services.hostID
+        do {
+            try await services.store.updateCueProfile {
+                $0.hostID = host
+                $0.enabledAt = .now
+                $0.runtime = .known(.pi)
+            }
+        } catch {
+            log.error("bench-error 启用 Cue：\(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// 脚本的命令，一行一条：
+    /// - `say <标记>`：对 Cue 说一句（`Workspace.speak`，与输入框同一条路）；`send <标记> <Mac>`：对那台 Mac 上的一个在线会话说一句
+    ///   （开发区里还有别的调试数据同步来的演示会话，所以点名是哪台）。
+    /// - `cue <条数> [间隔秒]`：以 Cue 的身份对你说几句、每句马上传，传完记 `msg-sent ok=`（Cue 的话被收下不叫醒说的话的订阅，`Watch` 看不到已发出）。
+    /// - `sync`：立即同步，记 `sync-now took=`（计到拉完：界面那层最多等 5 秒，量不出完成时长）。
+    /// - `bg`、`fg`：像手机那样进后台的收尾（`prepareForBackground`）、回前台（`handleActivation`）；`hide`、`activate`：Mac 隐藏、回到前台。
+    private static func command(_ words: [String], _ workspace: Workspace) async {
+        let services = workspace.services
+        let tag = words.dropFirst().first ?? ""
+        mark("command", ["line": words.joined(separator: " ")])
+        switch words.first {
+        case "say":
+            workspace.speak("同步测量 \(tag)", to: .cue)
+        case "send":
+            guard let session = await onlineSession(on: words.count > 2 ? words[2] : "", services) else {
+                return mark("bench-error", ["what": "没有那台 Mac 上的在线会话"])
+            }
+            workspace.speak("同步测量 \(tag)", to: .session(session, mode: .send))
+        case "cue":
+            let count = Int(tag) ?? 1
+            let gap = words.count > 2 ? Double(words[2]) ?? 0 : 0
+            for index in 0..<count {
+                do {
+                    let message = try await services.store.addCueMessage(.cue, text: "同步测量 Cue 第 \(index) 句")
+                    Task {
+                        let ok = await services.sync?.send(recordNames: [message.id.uuidString.lowercased()]) ?? false
+                        mark("msg-sent", ["id": message.id.uuidString.lowercased(), "ok": ok])
                     }
+                } catch {
+                    mark("bench-error", ["what": "写 Cue 的话：\(error.localizedDescription)"])
                 }
-                seen = (seen ?? []).union(yours.map(\.id))
+                if gap > 0, index < count - 1 { try? await Task.sleep(for: .seconds(gap)) }
             }
-        } catch {
-            log.error("bench-error 读 Cue 消息：\(error.localizedDescription, privacy: .public)")
-        }
-    }
-
-    private static func remote(_ services: AppServices, every interval: Duration) async {
-        log.notice("remote-start host=\(services.hostID, privacy: .public)")
-        var round = 0
-        while !Task.isCancelled {
+        case "sync":
             let began = ContinuousClock.now
-            round += 1
-            if let target = await onlineSession(services) {
-                await send(round, to: target, services)
-            } else {
-                log.notice("waiting 还没看到别的 Mac 上的在线会话")
-            }
-            await sayToCue(round, services)
-            // 计到同步真正做完：界面那层（`AppServices.syncNow`）最多等 5 秒，量不出完成时长
-            let syncing = ContinuousClock.now
-            do { try await services.sync?.syncNow() } catch { log.error("bench-error 立即同步：\(error.localizedDescription, privacy: .public)") }
-            log.notice("syncNow took=\((ContinuousClock.now - syncing).seconds, format: .fixed(precision: 3), privacy: .public)")
-            try? await Task.sleep(until: began + interval)
+            do { try await services.sync?.syncNow() } catch { mark("bench-error", ["what": "立即同步：\(error.localizedDescription)"]) }
+            mark("sync-now", ["took": (ContinuousClock.now - began).seconds])
+        case "bg":
+            await services.prepareForBackground()
+            mark("bg-done")
+        case "fg", "activate":
+            if words.first == "activate" { NSApp.unhide(nil) }
+            await services.handleActivation()
+            mark("fg-done")
+        case "hide":
+            NSApp.hide(nil)
+        default:
+            mark("bench-error", ["what": "不认识的命令"])
         }
     }
 
-    /// 别的 Mac 上的一个在线会话（与手机的发送目标同一批：同步来的会话状态）。
-    private static func onlineSession(_ services: AppServices) async -> PiSessionState? {
+    /// `host` 那台 Mac 上的一个在线会话（与手机的发送目标同一批：同步来的会话状态）。
+    private static func onlineSession(on host: String, _ services: AppServices) async -> PiSessionState? {
         let page = try? await services.store.piSessionPage(.current)
-        return page?.items.map(\.state).filter { $0.hostID != services.hostID && $0.state != .known(.ended) }.randomElement()
-    }
-
-    private static func send(_ round: Int, to session: PiSessionState, _ services: AppServices) async {
-        let started = ContinuousClock.now
-        do {
-            let request = try await services.store.requestDelivery(
-                "同步测量第 \(round) 句", to: session.target, on: session.hostID)
-            let written = ContinuousClock.now
-            async let done = result(of: request, in: services.store)
-            await services.upload(request.id)
-            let uploaded = (instant: ContinuousClock.now, date: Date.now)
-            guard let (result, seen) = try await done else {
-                return log.error("bench-error 发送：\(timeout.components.seconds) 秒没有结果")
-            }
-            let completed = result.completedAt ?? seen.date
-            log.notice("""
-                send total=\((seen.instant - started).seconds, format: .fixed(precision: 3), privacy: .public) \
-                upload=\((uploaded.instant - written).seconds, format: .fixed(precision: 3), privacy: .public) \
-                toMac=\(completed.timeIntervalSince(uploaded.date), format: .fixed(precision: 3), privacy: .public) \
-                back=\(seen.date.timeIntervalSince(completed), format: .fixed(precision: 3), privacy: .public) \
-                failed=\(result.failure != nil, privacy: .public)
-                """)
-        } catch {
-            log.error("bench-error 发送：\(error.localizedDescription, privacy: .public)")
-        }
-    }
-
-    /// 等请求有结果，最多 `timeout`；超时返回 nil。同时记下本机看到结果的时刻。
-    private static func result(
-        of request: DeliveryRequest, in store: CueStore
-    ) async throws -> (DeliveryRequest, seenAt: (instant: ContinuousClock.Instant, date: Date))? {
-        try await withThrowingTaskGroup(of: (DeliveryRequest, seenAt: (instant: ContinuousClock.Instant, date: Date))?.self) { group in
-            group.addTask {
-                let done = try await store.outcome(of: request)
-                return (done, (ContinuousClock.now, Date()))
-            }
-            group.addTask {
-                try await Task.sleep(for: timeout)
-                return nil
-            }
-            let first = try await group.next() ?? nil
-            group.cancelAll()
-            return first
-        }
-    }
-
-    private static func sayToCue(_ round: Int, _ services: AppServices) async {
-        do {
-            let message = try await services.store.addCueMessage(.you, text: "同步测量第 \(round) 句")
-            await services.upload(message.id)
-        } catch {
-            log.error("bench-error 对 Cue 说：\(error.localizedDescription, privacy: .public)")
-        }
+        return page?.items.map(\.state).filter { $0.hostID == host && $0.state != .known(.ended) }.randomElement()
     }
 }
 #endif

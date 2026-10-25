@@ -2,7 +2,7 @@ import CueStore
 import CueText
 import Foundation
 
-/// Cue 此刻在做什么（头像的表情与环、页头的一句、Cue 页对话末尾的进展、侧栏与菜单栏面板的一行）。各端（含它值班的这台 Mac）都由库推出（`derive`）：
+/// Cue 此刻在做什么（头像的表情与在动的点、Cue 页对话末尾的进展、侧栏与菜单栏面板的一行）。各端（含它值班的这台 Mac）都由库推出（`derive`）：
 /// 没启用；它运行的那台 Mac 不在线是在睡觉（那台的在线记录 `MacPresence`，与值班同一条，`CueStore.macOnline`；到期由订阅重读）——本机同步不通时
 /// 那条记录可能只是没同步来，说不准它在不在，不说它在睡觉、照它写下的状态（值班仍按不在线算：那时它答不了会话，宁可多叫你一次）；
 /// 你最近一句还在等回执是话在路上（`Speech`，与气泡同一个事实，此刻由 `SpeechClock` 给）；
@@ -101,8 +101,6 @@ nonisolated struct CueDigest: Equatable, Sendable {
     var hostName: String?
     /// 推进中与等你（`CueStore.cueTally`）。
     var tally: CueTally
-    /// "等你 M"：拍板加待回复（`CueTally.waitingCount`）。
-    var waiting: Int { tally.waitingCount }
     var advancing: Int { tally.advancing.count }
     /// 新消息有几条（`CueStore.cueUnread`）。
     var unread: Int
@@ -176,11 +174,6 @@ nonisolated struct CueDigest: Equatable, Sendable {
     }
 
     private static let recentWindow = 40
-
-    /// 头像此刻的表情（不算你正在写）：Cue 那一行、小组件与实时活动同一个。
-    func mood(at moment: Speech.Moment) -> CueMood {
-        CueMood.of(CuePresence.derive(self, at: moment), waiting: waiting, justDone: lastSaidDone)
-    }
 }
 
 nonisolated extension CueMessage {

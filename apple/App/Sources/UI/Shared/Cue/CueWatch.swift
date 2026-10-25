@@ -18,15 +18,9 @@ final class CueWatch {
     private(set) var sending = false
     /// 你最近一句写下的时刻（`CueDigest.lastYou`）：刚发出的那句读到了没有只看它。
     private(set) var lastYouSaid: Date?
-    /// 在路上或在做事（`CuePresence.shown` 有值）与此刻的表情（不算你正在写，`mood(composing:)`）：标签图标只看这两项。
-    private(set) var busy = false
-    private(set) var expression = CueMood.sleeping
-    /// Cue 此刻（`CueNow`）：Cue 那一行的第二行只读它；内容变了才换（推出的时刻不算）。
+    /// Cue 此刻（`CueNow`）：头像的表情与在不在动、数字账、拍板几件（底部那一排与侧栏进展那一行的"等你 M"、入口的点）、推进中几件、
+    /// 角标的数都只读它，不另存一份；内容变了才换（推出的时刻不算）。
     private(set) var now = CueNow.empty
-    /// "等你 M"（`CueDigest.waiting`，拍板加待回复）：角标、入口的点与面板里等你那一行只读它，不随 Cue 此刻的别的变化重算。
-    private(set) var waiting = 0
-    /// "推进中 N"（`CueDigest.advancing`）：侧栏进展那一行只读它与 `waiting`。
-    private(set) var advancing = 0
     /// 新消息有几条（`CueDigest.unread`）。
     private(set) var unread = 0
     /// 它最近一句（`CueDigest.lastSaid`）：只有 Mac 侧栏名片的气泡读。
@@ -34,8 +28,10 @@ final class CueWatch {
     /// 它运行的那台 Mac 与它的名字（`CueDigest.hostID`、`hostName`）。
     private(set) var hostID: String?
     private(set) var hostName: String?
-    /// 它此刻的上下文（`CueState.context`，值班那台写、随状态同步）：上下文那一行（`CueContextLine`）只读它。
+    #if os(macOS)
+    /// 它此刻的上下文（`CueState.context`，值班那台写、随状态同步）：Mac"运行情况"里上下文那一行（`CueContextLine`）只读它。
     private(set) var context: CueContext?
+    #endif
     /// 在跑的这一轮的经过那一行（`CueState.round`）。
     private(set) var round: UUID?
     /// Cue 页的输入（离开再回来还在）。
@@ -52,9 +48,9 @@ final class CueWatch {
         if let digest { apply(digest, at: moment, local: local) }
     }
 
-    /// 你正在写时：闲着没人等的 Cue 在听（"刚做完"让给它）；不在写就是此刻的表情。
+    /// 你正在写时：闲着没人等的 Cue 在听（"刚做完"让给它，同 `CueMood.of`）；不在写就是此刻的表情。
     func mood(composing: Bool) -> CueMood {
-        composing ? CueMood.of(presence, waiting: waiting, composing: true) : expression
+        composing && now.mood == .done ? .listening : now.mood
     }
 
     /// 跟随整个 App 那一份直到任务取消。
@@ -71,29 +67,24 @@ final class CueWatch {
         canHear = presence != .disabled
         sending = if case .sending = presence { true } else { false }
         lastYouSaid = digest.lastYou?.said
-        busy = presence.shown != nil
         // 推出的时刻每次都不同：内容一样就不写，免得读它的每一行跟着重算
         let next = AppServices.cueNow(digest, at: moment, local: local)
-        if !isPinned {
-            expression = CueMood.of(presence, waiting: digest.waiting, justDone: digest.lastSaidDone)
-            if !next.same(as: now) { now = next }
-        }
-        waiting = digest.waiting
-        advancing = digest.advancing
+        if !isPinned, !next.same(as: now) { now = next }
         unread = digest.unread
         lastSaid = digest.lastSaid
         hostID = digest.hostID
         hostName = digest.hostName
         round = digest.state?.round
+        #if os(macOS)
         context = digest.state?.context
+        #endif
     }
 
-    /// 调试画面手动换的 Cue 此刻（`-CuePadCueCycle` 轮流走各态，`DebugScene.cueNowTourIfAsked`）：换过就不再随库变，头像的表情跟着它。
+    /// 调试画面手动换的 Cue 此刻（`-CuePadCueCycle` 轮流走各态，`DebugScene.cueNowTourIfAsked`）：换过就不再随库变。
     @ObservationIgnored private var isPinned = false
 
     func pin(_ next: CueNow) {
         isPinned = true
         now = next
-        expression = next.mood
     }
 }

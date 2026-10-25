@@ -72,11 +72,11 @@ public struct ExecutableLocator: Sendable, Equatable {
             .joined(separator: ":")
     }
 
-    /// 用户登录 shell 此刻的 PATH（交互式启动才会读 .zshrc）；5 秒没结果就放弃。
-    public static func loginShellPath() async -> String? {
+    /// 用户登录 shell 此刻的 PATH（交互式启动才会读 .zshrc）；`AgentTimeouts.shell` 没结果就放弃。
+    public static func loginShellPath(timing: Timing = .system) async -> String? {
         let marker = "__CUEPAD_PATH__"
         let shell = URL(filePath: ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh")
-        guard let result = await ChildProcess.run(shell, ["-ilc", "printf '\\n\(marker)%s\\n' \"$PATH\""], timeout: .seconds(5)) else { return nil }
+        guard let result = await ChildProcess.run(shell, ["-ilc", "printf '\\n\(marker)%s\\n' \"$PATH\""], timeout: AgentTimeouts.shell, timing: timing) else { return nil }
         return result.output.split(separator: "\n").last { $0.hasPrefix(marker) }.map { String($0.dropFirst(marker.count)) }
     }
 }

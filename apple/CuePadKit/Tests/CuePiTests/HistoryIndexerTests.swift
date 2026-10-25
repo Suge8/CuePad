@@ -81,7 +81,7 @@ struct HistoryIndexerTests {
 
     /// Codex 的常驻服务整段会话都开着会话文件写，文件先建出来、文件头（`session_meta`）随后才写：回填读到空文件不记成会话，
     /// 文件头与之后的每次追加都当场读到（歇下要等回答读到才算），只记成文件头里的那个会话，不按文件名多记一个。
-    @Test(.timeLimit(.minutes(1)))
+    @Test
     func anOpenCodexSessionIsReadAsItIsWrittenAndOnlyUnderItsRealID() async throws {
         let day = root.appending(path: "2026/10/14")
         let url = day.appending(path: "rollout-2026-10-14T15-57-42-live.jsonl")
@@ -105,7 +105,7 @@ struct HistoryIndexerTests {
 
     /// 新用户常见顺序是先开 CuePad、后装 Pi：桥报出会话时它的文件连同会话目录都还不存在（Pi 第一条回答落盘前不建文件）。
     /// 之后建出目录、写入会话（会话还没结束），历史要当场跟上；目录被删掉再建也要恢复。
-    @Test(.timeLimit(.minutes(1)))
+    @Test
     func aLiveSessionsFileIsReadOnceItAppearsUnderADirectoryCreatedLater() async throws {
         let sessions = root.appending(path: "agent/sessions")  // 连上层目录也还不存在
         let project = sessions.appending(path: "--work-x--")

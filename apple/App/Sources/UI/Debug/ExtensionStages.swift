@@ -122,14 +122,11 @@ struct DebugActivityStage: View {
         Text(text).font(.caption.weight(.semibold)).foregroundStyle(palette.ink3).padding(.top, 14).padding(.bottom, 6)
     }
 
-    /// 紧凑态：系统按摄像头左右对称地撑开，两边一样宽（取宽的那边，同系统）。
+    /// 紧凑态：系统按摄像头左右对称地撑开，两边一样宽（取宽的那边，同系统），摄像头在正中。
     private func compact(_ views: CueActivityViews, limited: Bool) -> some View {
-        HStack(spacing: 0) {
+        SymmetricSides(gap: limited ? 14 : Self.camera, least: limited ? 0 : 66) {
             views.compactLeading(limited: limited).fixedSize()
-                .frame(minWidth: limited ? nil : 66, alignment: .leading)
-            Color.clear.frame(width: limited ? 14 : Self.camera)
             views.compactTrailing(limited: limited).fixedSize()
-                .frame(minWidth: limited ? nil : 66, alignment: .trailing)
         }
         .padding(.horizontal, 9)
         .frame(height: Self.height)
@@ -176,6 +173,25 @@ struct DebugShareStage: View {
                 await model.load()
                 self.model = model
             }
+    }
+}
+
+/// 紧凑态的两半：左右一样宽（取宽的那边、至少 `least`），中间隔着摄像头那一截；左边那半贴左、右边那半贴右。
+private struct SymmetricSides: Layout {
+    let gap: CGFloat
+    let least: CGFloat
+
+    private func side(_ subviews: Subviews) -> CGFloat {
+        subviews.map { $0.sizeThatFits(.unspecified).width }.reduce(least, max)
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        CGSize(width: side(subviews) * 2 + gap, height: subviews.map { $0.sizeThatFits(.unspecified).height }.reduce(0, max))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews[0].place(at: CGPoint(x: bounds.minX, y: bounds.midY), anchor: .leading, proposal: .unspecified)
+        subviews[1].place(at: CGPoint(x: bounds.maxX, y: bounds.midY), anchor: .trailing, proposal: .unspecified)
     }
 }
 #endif

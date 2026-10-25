@@ -20,7 +20,7 @@ extension CueHostTests {
         try await rig.store.linkCard(task.id, toSession: "remote-1")
         try await PiStateRecorder(store: rig.store, hostID: "mac-b").update(sessionID: "remote-1", state: .settled, title: "修好登录页")
         try await rig.say("请对登录页说继续")
-        try await eventually("这一轮做完", timeout: .seconds(90)) {
+        try await eventually("这一轮做完") {
             try await rig.store.cueState()?.state == .known(.settled) && rig.model.answered("还没送达")
         }
         let sent = try #require(try await rig.store.deliveryRequests(toSession: "remote-1").last)
@@ -137,7 +137,7 @@ extension CueHostTests {
             // 说话工具等结果至多 `CueTiming.sayWait`：等它交回"还没送达"再替那台 Mac 回报。只看歇着不够——这一轮刚开始时库里还是歇着，
             // 那时回报，说话工具当场拿到没送到，Cue 不会再被叫醒
             let told = rig.model.answers("还没送达")
-            try await eventually("这一轮做完", timeout: .seconds(60)) {
+            try await eventually("这一轮做完") {
                 guard rig.model.answers("还没送达") > told, try await rig.store.cueState()?.state == .known(.settled) else { return false }
                 return try await rig.store.deliveryRequests(toSession: "remote-1").contains { $0.isOpen }
             }

@@ -46,6 +46,9 @@ final class SidebarSlide {
         else { return }
         expecting = nil
         guard !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else { return }
+        // 分栏与详情区那一格按自己的框裁剪，裁剪框随平移一起走：收起时页右边一截（已按终点的宽排好）、展开时页右边多铺的底色被裁掉，
+        // 滑动途中窗口右缘露出窗口的白底。停下时它们与窗口一样大，不裁也不多画什么
+        [split, cell].forEach { $0.clipsToBounds = false }
         // 侧栏收起后它那一格的宽照旧：就是展开时侧栏的边
         let width = bar.frame.width
         let next = SlideCurve(from: opening ? 0 : width, to: opening ? width : 0, width: width)
@@ -85,8 +88,7 @@ final class SidebarSlide {
     }
 
     /// 工具栏的一项摆了位置（同步投递；同一次重排里可能摆好几回，以最后一回为准，同一个键替下）：在滑的时候叠一段偏移，
-    /// 从开合之前的位置随侧栏的边滑到这里。变了宽的是这次出现或消失的项（侧栏收起时才有的项目切换），原地出没、不滑：
-    /// 它的玻璃底由工具栏的玻璃容器按框画，平移只挪得动里面的字。
+    /// 从开合之前的位置随侧栏的边滑到这里。变了宽的是这次出现或消失的项（侧栏收起时才有的项目切换），没有开合之前的位置可滑，原地出没。
     private func riderMoved(_ rider: NSView) {
         let now = CACurrentMediaTime()
         guard let motion, now < motion.begin + motion.duration, let frame = riders[ObjectIdentifier(rider)], let layer = rider.layer else { return }

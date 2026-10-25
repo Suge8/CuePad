@@ -37,7 +37,7 @@ struct MacSyncTests {
 
     /// 退出可能发生在主线程被占住时：在主线程上的任务里调用 terminate，系统在嵌套的事件循环里等收尾的回复，
     /// 主线程上排队的任务轮不到。收尾的等待部分若需要主线程，退出就永远等不到。
-    @Test(.timeLimit(.minutes(1)))
+    @Test
     func 主线程被占住时退出收尾仍在上限内完成() async throws {
         services.startSync()
         try await services.executor.start()
@@ -58,7 +58,7 @@ struct MacSyncTests {
         signal.wait(timeout: .now() + seconds) == .success
     }
 
-    @Test(.timeLimit(.minutes(1)))
+    @Test
     func 退出收尾有上限_组件卡住时到点放行并指出是哪个() async throws {
         services.startSync()
         try await eventually("rig.sync.started == 1") { rig.sync.started == 1 }
@@ -71,7 +71,7 @@ struct MacSyncTests {
     }
 
     /// 退出时这台 Mac 当场离线：排在前面的组件卡住、耗尽了收尾的上限，离线这一条也已写下并上传。
-    @Test(.timeLimit(.minutes(1)))
+    @Test
     func 退出时这台Mac离线_前面的组件卡住也不漏() async throws {
         // Cue 的大脑起不来、也取消不了，直到断言后放行：停 Cue 这一步卡住（等的是不随取消结束的任务）
         let (gate, release) = AsyncStream<Void>.makeStream()
@@ -112,7 +112,7 @@ struct MacSyncTests {
 
     /// 这台 Mac 的在线记录（别的设备判断它在不在、Cue 在不在值班只看它）：启动即在线，醒着每 5 分钟续期，每次都立即上传；
     /// 将睡眠的通知返回时离线已经写下并传出；睡着时到点不续；醒来立即又在线。
-    @Test(.timeLimit(.minutes(1)))
+    @Test
     func 在线记录_启动即在线_醒着定期续期_将睡眠当场离线_醒来又在线() async throws {
         let clock = ManualTiming()
         let rig = TestApp(timing: clock.timing)

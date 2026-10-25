@@ -3,7 +3,7 @@ import CueAgent
 import CueStore
 import SwiftUI
 
-/// Cue 页右侧的"运行情况"（给开发者看，默认关着，从"⋯"里打开，`CueWatch.showsRun`）：上面是上下文那一行（`CueContextLine`，与手机 Cue 面板同一个，
+/// Cue 页右侧的"运行情况"（给开发者看，默认关着，从"⋯"里打开，`CueWatch.showsRun`）：上面是上下文那一行（`CueContextLine`，
 /// 读同步来的那份）；下面是最近几轮，新的在上：每轮一行为什么醒、几点、用时、调了几次工具，
 /// 点开是交给大脑的话与工具清单（清单的行与会话里回答注脚的清单同一个 `ToolRow`），清单的一条再点开是参数与结果的全文。
 /// 几轮只在值班的管理器的内存里（`CueKeeper.rounds`）；Cue 不在这台 Mac 值班时没有这一栏。

@@ -29,13 +29,13 @@ struct CardLinks {
 
   /// 只读这些任务、它们的下级与下级的下级。
   init(_ db: SQLite, around tasks: [UUID]) throws {
-    let marks = tasks.map { _ in "?" }.joined(separator: ", ")
+    let marks = "SELECT value FROM json_each(?1)"
     self.init(
       try db.query(
         """
         SELECT \(Self.columns) FROM cards WHERE deletedAt IS NULL AND (id IN (\(marks)) OR parentID IN (\(marks))
           OR parentID IN (SELECT id FROM cards WHERE parentID IN (\(marks)))) ORDER BY sortKey, id
-        """, tasks + tasks + tasks, Self.row))
+        """, [CueStore.idList(tasks)], Self.row))
   }
 
   private static func row(_ row: Row) -> (id: UUID, link: Link) {

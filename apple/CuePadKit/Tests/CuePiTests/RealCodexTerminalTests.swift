@@ -14,11 +14,11 @@ struct RealCodexTerminalTests {
         try await withCodexRig(approvals: "on-request") { rig in
             let terminal = try CodexTerminal(rig.codex)
             defer { terminal.stop() }
-            try await eventually("终端界面起来了", timeout: .seconds(60)) { terminal.printed("OpenAI Codex") }
+            try await eventually("终端界面起来了") { terminal.printed("OpenAI Codex") }
 
             // 在终端里说的话：会话出现在 CuePad 里（不是托管的），做完后歇下
             try terminal.type("Reply with the single word READY.")
-            try await eventually("终端会话的回答", timeout: .seconds(120)) {
+            try await eventually("终端会话的回答") {
                 rig.session.map { rig.replies($0).last?.uppercased().contains("READY") == true && $0.state == .settled } ?? false
             }
             let session = try #require(rig.session)
@@ -28,16 +28,16 @@ struct RealCodexTerminalTests {
             // 从 CuePad 说：空闲时马上开始，会话文件里认得出是这次投送
             let hello = UUID()
             try await rig.bridge.send(PiMessage(text: "Reply with the single word PONG.", deliveryID: hello.uuidString), to: id)
-            try await eventually("回答了 CuePad 的话", timeout: .seconds(120)) { rig.replies(session).last?.uppercased().contains("PONG") == true }
+            try await eventually("回答了 CuePad 的话") { rig.replies(session).last?.uppercased().contains("PONG") == true }
             #expect(try rig.transcript(session).messages.contains { $0.deliveryID == hello && $0.text == "Reply with the single word PONG." })
             try await eventually("终端里也显示了这句话") { terminal.printed("PONG") }
 
             // 在跑时说：停下这一轮（连同在跑的命令），以这句开新一轮。回答用生造的词：被停下那一轮说过的过程说明也算它的回答，可能提到要说的词
             try await rig.bridge.send(PiMessage(text: "Run the shell command `sleep 60`, then reply with the single word ZEBRA."), to: id)
-            try await eventually("在跑命令", timeout: .seconds(120)) { rig.bridge.session(id: id)?.detail?.contains("sleep 60") == true }
+            try await eventually("在跑命令") { rig.bridge.session(id: id)?.detail?.contains("sleep 60") == true }
             let now = UUID(), busy = ChangeLog(rig.bridge)
             try await rig.bridge.send(PiMessage(text: "Reply with the single word MANGO.", deliveryID: now.uuidString), to: id)
-            try await eventually("这句开的新一轮答完", timeout: .seconds(120)) {
+            try await eventually("这句开的新一轮答完") {
                 rig.bridge.session(id: id)?.state == .settled && rig.replies(session).last?.uppercased().contains("MANGO") == true
                     && busy.states.last == .settled
             }
@@ -48,9 +48,9 @@ struct RealCodexTerminalTests {
 
             // 停止这一轮
             try await rig.bridge.send(PiMessage(text: "Run the shell command `sleep 60`, then reply with the single word LATE."), to: id)
-            try await eventually("在跑命令", timeout: .seconds(120)) { rig.bridge.session(id: id)?.detail?.contains("sleep 60") == true }
+            try await eventually("在跑命令") { rig.bridge.session(id: id)?.detail?.contains("sleep 60") == true }
             try await rig.bridge.abort(id)
-            try await eventually("停下了", timeout: .seconds(20)) { rig.bridge.session(id: id)?.state == .settled }
+            try await eventually("停下了") { rig.bridge.session(id: id)?.state == .settled }
             // 停下时还没说出那句回答（这一轮说过的过程说明照对话规则算它的回答）
             #expect(rig.replies(session).last?.uppercased().contains("LATE") != true, "\(rig.replies(session))")
 
@@ -59,19 +59,19 @@ struct RealCodexTerminalTests {
             #expect(rig.bridge.session(id: id)?.displayName == "终端里的会话")
             #expect(rig.bridge.session(id: id)?.thinking == .known(.medium))
             try await rig.bridge.command("/compact", in: id)
-            try await eventually("压缩了上下文", timeout: .seconds(120)) {
+            try await eventually("压缩了上下文") {
                 (try? rig.transcript(session).messages.contains { $0.role == .known(.system) && $0.text == PiNotice.compacted.rawValue }) == true
             }
-            try await eventually("压完歇下", timeout: .seconds(60)) { rig.bridge.session(id: id)?.state == .settled }
+            try await eventually("压完歇下") { rig.bridge.session(id: id)?.state == .settled }
 
             // CuePad 晚于终端里的会话启动、而它正在跑一轮：从常驻服务里认出它与名字，能停下这一轮说新的一句
             try await rig.bridge.send(PiMessage(text: "Run the shell command `sleep 45`, then reply with the single word LATE."), to: id)
-            try await eventually("在跑命令", timeout: .seconds(120)) { rig.bridge.session(id: id)?.detail?.contains("sleep 45") == true }
+            try await eventually("在跑命令") { rig.bridge.session(id: id)?.detail?.contains("sleep 45") == true }
             let later = PiBridge(socketDirectory: rig.codex.root.appending(path: "s2"))
             try later.start()
             let runtime = CodexRuntime(
                 bridge: later, paths: rig.codex.paths, hooks: rig.hooks, codex: { [locator = rig.codex.locator] in locator.candidates("codex").first },
-                locate: { [locator = rig.codex.locator] in locator })
+                locate: { [locator = rig.codex.locator] in locator }, timing: noDeadline)
             try runtime.start()
             runtime.follow(.all)  // 测试台装了钩子：同 App 检测出接入了
             try await eventually("认出了终端里正在跑的会话") {
@@ -79,7 +79,7 @@ struct RealCodexTerminalTests {
             }
             let lateID = try #require(later.session(sessionID: session.sessionID)?.id)
             try await later.send(PiMessage(text: "Reply with the single word KIWI."), to: lateID)
-            try await eventually("停下那一轮、答了新的一句", timeout: .seconds(120)) {
+            try await eventually("停下那一轮、答了新的一句") {
                 later.session(id: lateID)?.state == .settled && rig.replies(session).last?.uppercased().contains("KIWI") == true
             }
             await runtime.stop()()
@@ -93,18 +93,19 @@ struct RealCodexTerminalTests {
         try await withCodexRig { rig in
             let terminal = try CodexTerminal(rig.codex)
             defer { terminal.stop() }
-            try await eventually("终端界面起来了", timeout: .seconds(60)) { terminal.printed("OpenAI Codex") }
+            try await eventually("终端界面起来了") { terminal.printed("OpenAI Codex") }
             let log = ChangeLog(rig.bridge)
 
             try terminal.type("Spawn exactly one subagent with task name fruit. Tell it: sleep 30 seconds with the sleep tool, then reply with exactly the word BANANA. Do not wait for it: end your turn right away, replying only DISPATCHED. When its result reaches you later, reply with exactly the word it sent you.")
-            try await eventually("这一轮结束、在等子代理", timeout: .seconds(120)) { rig.session?.state == .delegating }
+            try await eventually("这一轮结束、在等子代理") { rig.session?.state == .delegating }
             let session = try #require(rig.session)
 
             let later = PiBridge(socketDirectory: rig.codex.root.appending(path: "s2"))
             try later.start()
             let runtime = CodexRuntime(
                 bridge: later, paths: rig.codex.paths, hooks: AgentHookServer(path: rig.codex.root.appending(path: "s2/hooks.sock")),
-                codex: { [locator = rig.codex.locator] in locator.candidates("codex").first }, locate: { [locator = rig.codex.locator] in locator })
+                codex: { [locator = rig.codex.locator] in locator.candidates("codex").first }, locate: { [locator = rig.codex.locator] in locator },
+                timing: noDeadline)
             try runtime.start()
             runtime.follow(.all)
             try await eventually("晚启动也认出在等子代理") {
@@ -115,7 +116,7 @@ struct RealCodexTerminalTests {
             later.stop()
 
             try terminal.press("my half-typed draft")
-            try await eventually("读到结果后歇下", timeout: .seconds(120)) {
+            try await eventually("读到结果后歇下") {
                 rig.session.map { $0.state == .settled && rig.replies($0).last?.uppercased().contains("BANANA") == true } ?? false
                     && log.states.last == .settled
             }
@@ -124,7 +125,7 @@ struct RealCodexTerminalTests {
             try await eventually("终端里也答出了结果") { terminal.printed("BANANA") }
             // 打了一半的话还在输入框里：回车发出去
             try terminal.press("\r")
-            try await eventually("打了一半的话照常发出", timeout: .seconds(60)) {
+            try await eventually("打了一半的话照常发出") {
                 (try? rig.transcript(session).messages.contains { $0.role == .known(.user) && $0.text == "my half-typed draft" }) == true
             }
         }
@@ -138,9 +139,9 @@ struct RealCodexTerminalTests {
         try await withCodexRig { rig in
             let terminal = try CodexTerminal(rig.codex, arguments: ["-m", "no-such-model-xyz"])
             defer { terminal.stop() }
-            try await eventually("终端界面起来了", timeout: .seconds(60)) { terminal.printed("OpenAI Codex") }
+            try await eventually("终端界面起来了") { terminal.printed("OpenAI Codex") }
             try terminal.type("Reply OK.")
-            try await eventually("这一轮失败，带着原因", timeout: .seconds(120)) {
+            try await eventually("这一轮失败，带着原因") {
                 rig.session?.state == .error && rig.session?.errorMessage?.contains("no-such-model-xyz") == true
             }
         }
@@ -150,9 +151,9 @@ struct RealCodexTerminalTests {
         try await withCodexRig(approvals: "on-request") { rig in
             let terminal = try CodexTerminal(rig.codex)
             defer { terminal.stop() }
-            try await eventually("终端界面起来了", timeout: .seconds(60)) { terminal.printed("OpenAI Codex") }
+            try await eventually("终端界面起来了") { terminal.printed("OpenAI Codex") }
             try terminal.type("Reply with the single word READY.")
-            try await eventually("终端会话的回答", timeout: .seconds(120)) { rig.session?.state == .settled && rig.session.map { !rig.replies($0).isEmpty } == true }
+            try await eventually("终端会话的回答") { rig.session?.state == .settled && rig.session.map { !rig.replies($0).isEmpty } == true }
             let id = try #require(rig.session?.id)
             // 允许的那一项：联网时是 "Yes, just this once"
             let approval = "Yes, "
@@ -165,7 +166,7 @@ struct RealCodexTerminalTests {
             @MainActor func fetched(_ file: String, inTerminalSince since: Int? = nil) async throws {
                 var pressed: ContinuousClock.Instant?
                 var answered: Set<String> = []
-                try await eventually("都允许了、这一轮做完", timeout: .seconds(120)) {
+                try await eventually("都允许了、这一轮做完") {
                     let session = rig.bridge.session(id: id)
                     if let since, terminal.printed(approval, since: since), let question = session?.question, !question.isAnswerable,
                        pressed.map({ ContinuousClock.now - $0 > .seconds(1) }) ?? true {
@@ -185,11 +186,11 @@ struct RealCodexTerminalTests {
             let log = ChangeLog(rig.bridge)
             var mark = terminal.printedCount
             try await fetch("here.html")
-            try await eventually("等你确认", timeout: .seconds(120)) { rig.bridge.session(id: id)?.question != nil }
+            try await eventually("等你确认") { rig.bridge.session(id: id)?.question != nil }
             let shown = try #require(rig.bridge.session(id: id)?.question)
             #expect(!shown.isAnswerable && shown.kind == .known(.confirm) && shown.text.contains("here.html"))
             #expect(rig.bridge.session(id: id)?.state == .waitingForUser)
-            try await eventually("终端弹出确认框", timeout: .seconds(20)) { terminal.printed(approval, since: mark) }
+            try await eventually("终端弹出确认框") { terminal.printed(approval, since: mark) }
             try await fetched("here.html", inTerminalSince: mark)
             #expect(!log.changes.contains { if case .stateChanged(let s, _) = $0 { s.question?.isAnswerable == true } else { false } })
 
@@ -197,7 +198,7 @@ struct RealCodexTerminalTests {
             rig.presence.isPresent = false
             mark = terminal.printedCount
             try await fetch("away.html")
-            try await eventually("等你在 CuePad 里确认", timeout: .seconds(120)) { rig.bridge.session(id: id)?.question?.isAnswerable == true }
+            try await eventually("等你在 CuePad 里确认") { rig.bridge.session(id: id)?.question?.isAnswerable == true }
             let asked = try #require(rig.bridge.session(id: id)?.question)
             #expect(asked.text.contains("away.html") && !terminal.printed(approval, since: mark))
             try await fetched("away.html")
@@ -206,13 +207,13 @@ struct RealCodexTerminalTests {
             // 挂着时人回来了：终端补弹确认框，CuePad 里收起成只显示；在终端里允许
             mark = terminal.printedCount
             try await fetch("back.html")
-            try await eventually("等你在 CuePad 里确认", timeout: .seconds(120)) { rig.bridge.session(id: id)?.question?.isAnswerable == true }
+            try await eventually("等你在 CuePad 里确认") { rig.bridge.session(id: id)?.question?.isAnswerable == true }
             #expect(!terminal.printed(approval, since: mark))
             rig.presence.isPresent = true
             try await eventually("CuePad 里收起成只显示") {
                 rig.bridge.session(id: id).map { $0.state == .waitingForUser && $0.question?.isAnswerable == false } ?? false
             }
-            try await eventually("终端补弹确认框", timeout: .seconds(20)) { terminal.printed(approval, since: mark) }
+            try await eventually("终端补弹确认框") { terminal.printed(approval, since: mark) }
             try await fetched("back.html", inTerminalSince: mark)
         }
     }

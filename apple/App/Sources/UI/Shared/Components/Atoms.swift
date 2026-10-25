@@ -74,12 +74,14 @@ private struct Observing<T: Sendable & Equatable, ID: Equatable>: ViewModifier {
         guard immediately, active, value == nil, let snapshot = try? store.snapshot(read) else { return }
         start = snapshot
         value = snapshot.value
+        DebugHooks.observed(snapshot.value)
     }
 
     private func follow(_ updates: AsyncThrowingStream<T, any Error>) async {
         do {
             for try await next in updates {
                 value = next
+                DebugHooks.observed(next)
                 if !active { return }
             }
         } catch is CancellationError {

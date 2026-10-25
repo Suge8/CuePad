@@ -31,11 +31,15 @@ public final class ClaudeCodeRuntime: AgentRuntime {
     private var hosted: [String: ClaudeHostedSession] = [:]  // 会话 id → 托管进程
     /// 终端会话哪些接上桥（`follow`）；给之前一个都不接
     private var scope = PiHistoryScope.sessions([])
+    /// 量列表请求时限的钟
+    private let timing: Timing
 
     public init(
         bridge: PiBridge, paths: AgentPaths, hooks: AgentHookServer, store: CueStore, claude: @escaping @Sendable () async -> URL?,
-        locate: @escaping @Sendable () async -> ExecutableLocator = { await .system }, presence: any UserPresence = SystemPresence()
+        locate: @escaping @Sendable () async -> ExecutableLocator = { await .system }, presence: any UserPresence = SystemPresence(),
+        timing: Timing = .system
     ) {
+        self.timing = timing
         self.claude = claude
         self.bridge = bridge
         self.paths = paths
@@ -248,7 +252,7 @@ public final class ClaudeCodeRuntime: AgentRuntime {
 
     private func running() async throws -> [Running] {
         let claude = try await executable()
-        guard let result = await ChildProcess.run(claude.url, ["agents", "--json"], environment: claude.environment, timeout: .seconds(15)),
+        guard let result = await ChildProcess.run(claude.url, ["agents", "--json"], environment: claude.environment, timeout: AgentTimeouts.list, timing: timing),
               result.status == 0 else {
             throw ClaudeCodeError.listingFailed
         }

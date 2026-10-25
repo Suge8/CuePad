@@ -22,20 +22,23 @@ public final class PiRuntime: AgentRuntime {
     private let pi: @Sendable () async -> URL?
     private let locate: @Sendable () async -> ExecutableLocator
     private let idleLimit: Duration
+    private let timing: Timing
     private var watcher: Task<Void, Never>?
 
     /// - Parameter pi: 这台 Mac 上够新的 `pi`（检测时挑中的那个，`AgentStatus.executable`；没有为 nil）。
     /// - Parameter idleLimit: 托管进程空闲多久自己退出（交给扩展计时）。
+    /// - Parameter timing: 量起进程到上桥时限的钟。
     public init(
         bridge: PiBridge, paths: PiPaths, pi: @escaping @Sendable () async -> URL?,
         locate: @escaping @Sendable () async -> ExecutableLocator = { await .system },
-        idleLimit: Duration = AgentTimeouts.hostedIdle
+        idleLimit: Duration = AgentTimeouts.hostedIdle, timing: Timing = .system
     ) {
         self.bridge = bridge
         self.paths = paths
         self.pi = pi
         self.locate = locate
         self.idleLimit = idleLimit
+        self.timing = timing
     }
 
     /// 开始跟着桥上的会话：让出的托管会话退出后让接手的重新载入。
@@ -94,7 +97,7 @@ public final class PiRuntime: AgentRuntime {
         let pid = process.pid
         let session: PiSession
         do {
-            session = try await withDeadline(AgentTimeouts.launch, orThrow: PiHostError.notConnected) {
+            session = try await withDeadline(AgentTimeouts.launch, timing: timing, orThrow: PiHostError.notConnected) {
                 try await withThrowingTaskGroup(of: PiSession?.self) { group in
                     group.addTask {
                         for await change in changes {

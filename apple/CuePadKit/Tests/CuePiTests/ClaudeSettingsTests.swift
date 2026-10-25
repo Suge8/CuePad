@@ -18,7 +18,7 @@ struct ClaudeSettingsTests {
             let file = testbed.config.appending(path: "settings.json")
             let moved = AgentIntegration(
                 paths: testbed.paths, locate: { AgentTape.locator("claude") },
-                cuepad: testbed.root.appending(path: "Moved/CuePad.app/Contents/Helpers/cuepad"))
+                cuepad: testbed.root.appending(path: "Moved/CuePad.app/Contents/Helpers/cuepad"), timing: noDeadline)
 
             try await testbed.integration.install(.claudeCode)
             #expect(await testbed.integration.status(of: .claudeCode).files == .current)

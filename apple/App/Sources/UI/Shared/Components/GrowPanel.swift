@@ -30,6 +30,7 @@ struct GrowPanel<Head: View, Panel: View>: View {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
         return head
             .environment(\.headerGrown, true)
+            .dynamicTypeSize(...FloatingHeaderLayout.largestType)
             .background { Color.clear.glass(in: shape) }
             .opacity(givesWay ? 0 : 1)
             .popover(isPresented: $open) {
@@ -50,6 +51,7 @@ struct GrowPanel<Head: View, Panel: View>: View {
             VStack(spacing: 0) {
                 head
                     .environment(\.headerGrown, true)
+                    .dynamicTypeSize(...FloatingHeaderLayout.largestType)
                     .opacity(givesWay ? 0 : 1)
                 if open { panel.transition(.opacity.combined(with: .offset(y: -6))) }
             }

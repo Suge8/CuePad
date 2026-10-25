@@ -49,13 +49,15 @@ struct MainWindow: View {
 
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
         // 工具栏项常驻、只换里面的内容：增删工具栏项会让 AppKit 在开合侧栏的那一帧重建整条工具栏
+        // 玻璃由控件自己画：共用工具栏的玻璃底时，侧栏收起再展开后宽 0 的这一项仍留着玻璃的边距，把右边的分段挤开 42pt
         ToolbarItem(placement: .navigation) { SwitcherSlot() }
+            .sharedBackgroundVisibility(.hidden)
         // 工具栏给条目画的玻璃底不随内容显隐（隐去时会留一个空圆钮），所以关掉它、由按钮自己画
         ToolbarItem(placement: .navigation) { CloseButton() }
             .sharedBackgroundVisibility(.hidden)
         // 进展页的两段分段与会话段的范围、额度、新会话（`PanesSlot`、`ScopeSlot`、`QuotaSlot`、`PageActionSlot`）：常驻、固定宽度，玻璃由控件自己画
         // 一项里排两样：工具栏的构建器一次最多十项
-        ToolbarItem(placement: .navigation) { HStack(spacing: 8) { PanesSlot(); ScopeSlot() } }
+        ToolbarItem(placement: .navigation) { HStack(spacing: Spacing.toolbarGap) { PanesSlot(); ScopeSlot() } }
             .sharedBackgroundVisibility(.hidden)
         // 会话页的标题（`SessionHeader`）、Cue 页（侧栏收起时）的标题（`CueTitle`），居中；右上的"⋯"（`PageMenuSlot`）是当前页的操作。.principal 在详情区里居中，与对话的阅读栏同一条中线
         ToolbarItem(placement: .principal) { PageTitleSlot() }

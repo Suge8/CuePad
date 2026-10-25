@@ -11,7 +11,7 @@ struct CueDot: View {
     static let size: CGFloat = 7
 
     var body: some View {
-        let color = workspace.cue.unread > 0 ? palette.replied : workspace.cue.waiting > 0 ? palette.waiting : nil
+        let color = workspace.cue.unread > 0 ? palette.replied : workspace.cue.now.needsYou > 0 ? palette.waiting : nil
         ZStack {
             if let color { Circle().fill(color).transition(.scale.combined(with: .opacity)) }
             CueArrival(color: palette.replied)

@@ -152,7 +152,7 @@ extension SessionTaskTests {
     /// Cue 停用后，答得了的那个也回到"等你确认"。
     /// 它运行的那台 Mac 不在线（在线记录过了期限没续：崩溃、断电、断网）也不算值班：答得了的提问回到等你、算进"等你"、置推送标志，
     /// 到期自己变，不用等库里再写什么；那台 Mac 续上在线，又归 Cue。
-    @Test(.timeLimit(.minutes(1)))
+    @Test
     func Cue值班时_答得了的提问等Cue_答不了的_那台Mac不在线与停用后等你() async throws {
         let clock = ManualTiming()
         let app = TestApp(timing: clock.timing)

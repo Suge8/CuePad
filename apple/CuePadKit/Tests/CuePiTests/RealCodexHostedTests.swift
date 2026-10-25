@@ -23,7 +23,7 @@ struct RealCodexHostedTests {
             let message = PiMessage(text: "What color is this image? Answer with one lowercase word.", images: [image], deliveryID: delivery.uuidString)
             try await rig.bridge.send(message, to: id)
             // 上下文余量（`thread/tokenUsage/updated`）、歇下（Stop 钩子）与会话文件里的回答走三条通道，先后不定：一起等
-            try await eventually("这一轮做完、报了上下文余量、回答落盘", timeout: .seconds(120)) {
+            try await eventually("这一轮做完、报了上下文余量、回答落盘") {
                 log.states.contains(.thinking) && rig.bridge.session(id: id).map {
                     $0.state == .settled && $0.context?.window ?? 0 > 0 && rig.replies($0).last?.lowercased().contains("red") == true
                 } == true
@@ -56,7 +56,7 @@ struct RealCodexHostedTests {
             #expect(rig.bridge.session(id: resumed)?.hosted == true && rig.bridge.session(id: resumed)?.sessionID == session.sessionID)
             try await rig.bridge.send(PiMessage(text: "Reply with the single word AGAIN."), to: resumed)
             // 前一句要它答小写，模型可能沿用：大小写不论
-            try await eventually("接着回答了", timeout: .seconds(120)) { rig.replies(session).last?.uppercased().contains("AGAIN") == true }
+            try await eventually("接着回答了") { rig.replies(session).last?.uppercased().contains("AGAIN") == true }
         }
     }
 
@@ -69,7 +69,7 @@ struct RealCodexHostedTests {
             let threadID = try #require(rig.bridge.session(id: id)?.sessionID)
 
             try await rig.bridge.send(PiMessage(text: "Reply with the single word WRAPPED."), to: id)
-            try await eventually("这一轮做完、回答落盘", timeout: .seconds(120)) {
+            try await eventually("这一轮做完、回答落盘") {
                 log.states.contains(.thinking)
                     && rig.bridge.session(id: id).map { $0.state == .settled && rig.replies($0).last?.uppercased().contains("WRAPPED") == true } == true
             }
@@ -85,14 +85,14 @@ struct RealCodexHostedTests {
             let page = rig.codex.work.appending(path: "page.html")
 
             try await rig.bridge.send(PiMessage(text: "Run exactly this shell command, requesting escalated sandbox permissions up front because it needs network access: curl -s -o page.html https://example.com"), to: id)
-            try await eventually("等你确认", timeout: .seconds(120)) { rig.bridge.session(id: id)?.question != nil }
+            try await eventually("等你确认") { rig.bridge.session(id: id)?.question != nil }
             let question = try #require(rig.bridge.session(id: id)?.question)
             #expect(rig.bridge.session(id: id)?.state == .waitingForUser)
             #expect(question.kind == .known(.confirm) && question.text.hasPrefix("允许 Codex 运行命令？") && question.text.contains("curl"))
 
             try await rig.bridge.answer(.confirmed(true), to: try #require(question.promptID), in: id)
 
-            try await eventually("这一轮做完", timeout: .seconds(120)) { rig.bridge.session(id: id)?.state == .settled }
+            try await eventually("这一轮做完") { rig.bridge.session(id: id)?.state == .settled }
             #expect(FileManager.default.fileExists(atPath: page.path))
         }
     }
@@ -107,7 +107,7 @@ struct RealCodexHostedTests {
             let log = ChangeLog(rig.bridge)
 
             try await rig.bridge.command("/plan Ask me which drink I want, Tea or Coffee, with the request_user_input tool, and sleep while you wait for my answer instead of ending your turn. Then reply with only the option I chose.", in: id)
-            try await eventually("等你回答", timeout: .seconds(120)) { rig.bridge.session(id: id)?.question?.promptID != nil }
+            try await eventually("等你回答") { rig.bridge.session(id: id)?.question?.promptID != nil }
             let question = try #require(rig.bridge.session(id: id)?.question)
             #expect(rig.bridge.session(id: id)?.state == .waitingForUser)
             #expect(question.kind == .known(.select) && question.allowsOther)
@@ -115,7 +115,7 @@ struct RealCodexHostedTests {
 
             try await rig.bridge.answer(.option(coffee), to: try #require(question.promptID), in: id)
 
-            try await eventually("拿到答案接着说，说完落盘", timeout: .seconds(120)) {
+            try await eventually("拿到答案接着说，说完落盘") {
                 rig.bridge.session(id: id).map { $0.state == .settled && rig.replies($0).last?.lowercased().contains("coffee") == true } == true
             }
             #expect(rig.bridge.session(id: id)?.question == nil)
@@ -134,7 +134,7 @@ struct RealCodexHostedTests {
             try await rig.bridge.send(PiMessage(text: "Spawn exactly one subagent with task name pong and ask it to reply with the word PONG. Wait for it, then tell me what it said."), to: id)
 
             // 变化日志经异步流收下，比桥上的会话晚一拍：等它也收到这次变化
-            try await eventually("这一轮做完", timeout: .seconds(180)) { rig.bridge.session(id: id)?.state == .settled && log.states.contains(.thinking) && log.states.last == .settled }
+            try await eventually("这一轮做完") { rig.bridge.session(id: id)?.state == .settled && log.states.contains(.thinking) && log.states.last == .settled }
             #expect(log.settles == 1, "\(log.states)")
             let roster = try #require(rig.bridge.session(id: id)?.subagents)
             #expect(roster.map(\.name) == ["pong"])
@@ -165,11 +165,11 @@ struct RealCodexHostedTests {
             _ = try await rig.bridge.send(PiMessage(text: "Spawn exactly one subagent with task name fruit. Tell it: sleep 15 seconds with the sleep tool, then reply with exactly the word BANANA. Do not wait for it: end your turn right away, replying only DISPATCHED. When its result reaches you later, reply with exactly the word it sent you."), to: id)
 
             // 变化日志经异步流收下，比桥上的会话晚一拍：等它也收到这次变化
-            try await eventually("这一轮结束、在等子代理", timeout: .seconds(120)) { rig.bridge.session(id: id)?.state == .delegating && log.states.last == .delegating }
+            try await eventually("这一轮结束、在等子代理") { rig.bridge.session(id: id)?.state == .delegating && log.states.last == .delegating }
             #expect(log.settles == 0)
             let delegating = try #require(rig.bridge.session(id: id))
             let dispatched = try #require(try rig.transcript(delegating).recap.answeredAt)
-            try await eventually("读到结果后歇下", timeout: .seconds(180)) {
+            try await eventually("读到结果后歇下") {
                 rig.bridge.session(id: id).map { $0.state == .settled && rig.replies($0).last?.uppercased().contains("BANANA") == true } == true
                     && log.states.last == .settled
             }
@@ -196,7 +196,7 @@ struct RealCodexHostedTests {
             let id = try await rig.runtime.open(in: rig.codex.work, launchToken: "token-4", name: nil, model: nil, thinking: nil)
 
             try await rig.bridge.send(PiMessage(text: "Reply OK."), to: id)
-            try await eventually("这一轮失败，带着原因", timeout: .seconds(120)) {
+            try await eventually("这一轮失败，带着原因") {
                 rig.bridge.session(id: id)?.detail?.contains(RejectingProvider.reason) == true
             }
             let session = try #require(rig.bridge.session(id: id))

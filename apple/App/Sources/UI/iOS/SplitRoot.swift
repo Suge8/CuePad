@@ -85,7 +85,7 @@ private struct AgentPanelButton: View {
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        let waiting = workspace.cue.waiting, unread = workspace.cue.unread
+        let waiting = workspace.cue.now.needsYou, unread = workspace.cue.unread
         Button { withAnimation(Motion.snappy) { workspace.agentPanel.toggle() } } label: {
             Label { Text(workspace.cue.name) } icon: { CueMark(selected: workspace.agentPanel) }
                 .overlay(alignment: .topTrailing) { CueDot().offset(x: 3, y: -2) }

@@ -1,4 +1,5 @@
 #if os(macOS)
+import CueStore
 import Foundation
 
 /// 接入里各种等待的时限，唯一的一处。
@@ -12,20 +13,26 @@ public enum AgentTimeouts {
     /// 起进程到上桥、拉起后台服务
     public static let launch: Duration = .seconds(30)
     public static let end: Duration = .seconds(10)
+    /// 问版本、读列表这类一次性的小命令（连同起进程）
+    public static let command: Duration = .seconds(10)
+    /// 取用户登录 shell 的 PATH
+    public static let shell: Duration = .seconds(5)
+    /// 列出在跑的 Claude Code 会话
+    public static let list: Duration = .seconds(15)
     /// 请托管的进程退出后等它自己收尾多久，过了就强杀（Pi 的收尾实测 80 次里 11 次停住超过这个数）
     public static let endGrace: Duration = .seconds(5)
     /// 托管的会话歇着满这么久就退出（不算结束，发话时再接着）
     public static let hostedIdle: Duration = .seconds(30 * 60)
 }
 
-/// 至多等 `limit`：到点取消 `operation` 并抛 `timeout`。`operation` 要响应取消（到点后要等它返回）。
+/// 至多等 `limit`（按 `timing` 量）：到点取消 `operation` 并抛 `timeout`。`operation` 要响应取消（到点后要等它返回）。
 func withDeadline<T: Sendable>(
-    _ limit: Duration, orThrow timeout: any Error, _ operation: @escaping @Sendable () async throws -> T
+    _ limit: Duration, timing: Timing = .system, orThrow timeout: any Error, _ operation: @escaping @Sendable () async throws -> T
 ) async throws -> T {
     try await withThrowingTaskGroup(of: T.self) { group in
         group.addTask { try await operation() }
         group.addTask {
-            try await Task.sleep(for: limit)
+            try await timing.sleep(limit)
             throw timeout
         }
         defer { group.cancelAll() }

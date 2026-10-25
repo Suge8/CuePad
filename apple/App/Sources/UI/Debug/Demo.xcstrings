@@ -5585,6 +5585,22 @@
         }
       }
     },
+    "玻璃按钮重做" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Redo the glass buttons"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "玻璃按钮重做"
+          }
+        }
+      }
+    },
     "用户住在上海，晚上十一点以后别叫醒" : {
       "localizations" : {
         "en" : {
@@ -6525,6 +6541,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "被 canvas-zoom 叫醒"
+          }
+        }
+      }
+    },
+    "被 notes 叫醒" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Woken by notes"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "被 notes 叫醒"
           }
         }
       }

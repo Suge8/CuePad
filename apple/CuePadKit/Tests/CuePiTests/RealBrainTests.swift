@@ -65,11 +65,11 @@ struct RealBrainTests {
         func count(_ event: CueBrainEvent) -> Int { events.filter { $0 == event }.count }
 
         func finished(_ n: Int = 1) async throws {
-            try await eventually("第 \(n) 轮做完", timeout: .seconds(150)) { self.count(.turnFinished) >= n }
+            try await eventually("第 \(n) 轮做完") { self.count(.turnFinished) >= n }
         }
 
         func started(_ n: Int = 1) async throws {
-            try await eventually("第 \(n) 轮开始", timeout: .seconds(60)) { self.count(.turnStarted) >= n }
+            try await eventually("第 \(n) 轮开始") { self.count(.turnStarted) >= n }
         }
 
         /// 每轮的回答：做完时还留着的正在说的话
@@ -136,7 +136,7 @@ struct RealBrainTests {
             Call the echo tool with the text "x". Then call it again with the exact text it returned, and keep doing that, \
             one call at a time, until you have made 8 calls. Then reply with the last result.
             """)
-        try await eventually("第一次调到 MCP 替身", timeout: .seconds(90)) { !rig.echoed.isEmpty }
+        try await eventually("第一次调到 MCP 替身") { !rig.echoed.isEmpty }
         try await rig.brain.send("Stop now: make no more tool calls and reply with only the word STOPPED.")
         try await rig.finished()
 

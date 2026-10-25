@@ -17,10 +17,17 @@
 
 ## 同步测量
 
-两台设备间同步的开销与时延只用 `apple/scripts/sync-bench.py`（做法、用法与口径在头注释），只经 CloudKit **开发环境**。
+两台设备间同步的时延与开销只用 `apple/scripts/sync-bench.py`（场景、用法与环境变量在头注释，每段的定义在 `_sync_scenes.py`），只经 CloudKit **开发环境**。
+同一台 Mac 上两个隔离实例：A 是有在线会话、Cue 在值班的 Mac，B 代替手机（拉取按手机那档，进后台、回前台走手机的入口）。两端只听脚本的命令、打点，节奏只在脚本里。
 
 - 前提：这台 Mac 按 Provisioning UDID（`system_profiler SPHardwareDataType`，不是 Hardware UUID）登记过，装了「CuePad macOS Development」描述文件：`provision.py device <UDID> <名称> MAC_OS`，再 `provision.py profiles`。
 - 只碰开发环境：隔离库连 iCloud 要 Debug 构建、`-CuePadCloudKit YES`、Development 签名三样都在（`DebugScene.syncsIsolatedLibrary`）。
-- 隔离目录里 Cue 不值班：只量对 Cue 说的话到 A 的库，不量回复。
-- 实例是 Debug 构建、带界面，同步只占进程开销的一小部分，前后对比看指令。CloudKit 的字节不含 TLS 与 HTTP 头。nettop 量不了：CloudKit 的流量都记在 cloudd 名下，和正式版的混在一起。
-- 两个实例共用这台 Mac 的 cloudd、排同一个队：一个操作慢（偶尔几十秒），两边排在后面的一起等（报告里的"排队"），尾部时延比真机大；前后对比在同一网络、同一时段交替跑，看中位数。
+- 全机测量锁 `/tmp/cuepad-sync-measure.lock`：每次跑都先拿（构建在锁外），几个检出的测量不同时跑、不共用 cloudd 互相干扰。
+- 前后对比：`sync-bench.py ab <旧检出> <新检出> <轮数> <场景> [参数]`，交替跑、出 p50 / p95 与样本数的对比表，附每边运行期间的 1 分钟负载。两个检出都要含测量打点（`DebugScene+SyncBench.swift`）。
+  同一时段、同一网络交替跑才可比；看中位数，尾部受共用的 cloudd 排队影响（一个操作慢时两个实例排在后面的一起等），比真机大。
+- 口径：时刻都是同一台机器的墙钟。写下取记录的创建时刻；已发出、入库、回执取实例读到库里变化的那一刻（库的订阅送到主线程）；上屏取页面订阅拿到新值后那一次界面提交（`SyncBench.Watch.observed`，两端开着 Cue 页）。
+  冷启动从起进程算。Cue 自己说的话被服务器收下不叫醒说的话的订阅，Mac→手机这一段只量到手机入库。
+- 门铃不通：`SYNC_BENCH_RELAY=0` 两端都不连中转（`-CuePadSyncBenchNoRelay`），不停正式中转。
+- 量不了的：手机真的被挂起、App Nap 与系统节流（直接起的进程不被节流；隐藏的 Mac 实例窗口仍在画，`parkWhileUnseen` 不生效）；推送与实时活动（模拟器登不了 iCloud）；真机的网络。
+- 常驻开销（`idle`）：实例是 Debug 构建、带界面，同步只占进程开销的一小部分，前后对比看指令。CloudKit 的字节不含 TLS 与 HTTP 头。nettop 量不了：CloudKit 的流量都记在 cloudd 名下，和正式版的混在一起。
+- 开发区里留着别的调试数据（演示会话、老版本写的卡片），全新的库第一次要拉完它们，算在预热里；对会话说话只对 A 的会话（`mac-bench-a`）。

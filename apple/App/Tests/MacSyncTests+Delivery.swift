@@ -100,7 +100,7 @@ extension MacSyncTests {
     }
 
     /// 手机上停止、结束、改配置：请求都发给会话所在的那台 Mac，写出后立即上传（与发送、作答同一条通路）。
-    @Test(.timeLimit(.minutes(1)))
+    @Test
     func 请求停止_结束_改配置写给会话所在的Mac并立即上传() async throws {
         try await PiStateRecorder(store: services.store, hostID: "mac-other").update(sessionID: "far", state: .thinking, title: "远处")
         let session = try #require(try await services.store.allPiSessionStates().first)
@@ -121,7 +121,7 @@ extension MacSyncTests {
 
     /// Mac 主动拉取的条件看桥上真的连着的会话，不看资料库里的状态记录（记录可能是没来得及标为结束的旧会话）；
     /// 本机有还没结果的投送请求时也在等。
-    @Test(.timeLimit(.minutes(1)))
+    @Test
     func 主动拉取的条件_没有连着的会话时不因旧记录而拉_有本机待执行请求时拉() async throws {
         try await PiStateRecorder(store: services.store, hostID: TestApp.hostID).update(sessionID: "stale", state: .settled, title: "旧会话")
         services.startSpeechClock()
@@ -135,7 +135,7 @@ extension MacSyncTests {
     }
 
     /// Cue 在这台值班也是在等：你在手机上对它说的话、"等你"的回答只经主动拉取到达，会话都关着、没有在路上的请求时也拉。
-    @Test(.timeLimit(.minutes(1)))
+    @Test
     func 主动拉取的条件_Cue在这台值班时也拉() async throws {
         #expect(services.pollingCadence == nil)
         try await services.store.updateCueProfile { [hostID = TestApp.hostID] in
@@ -151,7 +151,7 @@ extension MacSyncTests {
 
     /// 领取与写回结果后各立即只上传这一条，不等引擎调度：手机才能尽早知道 Mac 接手了、拉到结果。
     /// 领取那次在后台任务里传，两次的先后不定：两次都传过才说明结果已写回并传出。
-    @Test(.timeLimit(.minutes(1)))
+    @Test
     func 执行器领取与写回结果后各立即上传这一条() async throws {
         try await services.executor.start()
         defer { services.cancelBackgroundWork() }

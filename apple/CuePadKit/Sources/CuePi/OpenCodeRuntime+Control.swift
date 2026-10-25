@@ -185,7 +185,7 @@ extension OpenCodeRuntime {
         if let connection, connection.ready { return connection }
         let id = UUID()
         let timeout = Task { [weak self] in
-            guard (try? await Task.sleep(for: AgentTimeouts.launch)) != nil else { return }
+            guard let timing = self?.timing, (try? await timing.sleep(AgentTimeouts.launch)) != nil else { return }
             self?.waiters.removeValue(forKey: id)?.resume(throwing: AgentRuntimeError.launchTimedOut(.opencode))
         }
         defer { timeout.cancel() }
@@ -199,7 +199,7 @@ extension OpenCodeRuntime {
         let locator = await locate()
         // 服务常驻，它起的工具也用这个 PATH
         let environment = locator.environment(launching: executable, overrides: paths.environment)
-        guard let result = await ChildProcess.run(executable, ["service", "start"], environment: environment, timeout: AgentTimeouts.launch, collect: false)
+        guard let result = await ChildProcess.run(executable, ["service", "start"], environment: environment, timeout: AgentTimeouts.launch, timing: timing, collect: false)
         else { throw AgentRuntimeError.launchTimedOut(.opencode) }
         guard result.status == 0 else { throw AgentRuntimeError.launchFailed(.opencode, String(localized: "opencode service start 退出码 \(result.status)")) }
         startedService = (executable, environment)

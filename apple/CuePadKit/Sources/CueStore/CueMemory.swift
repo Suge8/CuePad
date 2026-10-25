@@ -68,6 +68,12 @@ public struct CueMemorySummary: Equatable, Sendable {
   public var createdAt: Date
 }
 
+/// 最近记下的几条（没忘掉的，新的在前）与没忘掉的一共几条：手机 Cue 面板"刚记下"那一块只读它，不读整份记忆。
+public struct CueMemoryRecent: Equatable, Sendable {
+  public var lines: [CueMemoryLine]
+  public var count: Int
+}
+
 /// 记忆的全貌：全部行（序号即下标，含忘掉的）与仍然有效的摘要，一次读出。记忆视图（`CueAgent`）从它算。
 public struct CueMemory: Equatable, Sendable {
   public var lines: [CueMemoryLine]

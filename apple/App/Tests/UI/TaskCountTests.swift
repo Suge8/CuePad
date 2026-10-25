@@ -59,8 +59,8 @@ struct TaskCountTests {
         let other = try await store.createTask("补重连用例", in: project.id)
         func board() async throws -> TaskBoard { try await TaskBoard.read(from: store) }
         func expectCountsMatchCue(_ board: TaskBoard) async throws {
-            let digest = try await CueDigest.read(from: store)
-            #expect(board.count(.advancing) == digest.advancing && board.count(.waiting) == digest.waiting)
+            let cue = CueNow(try await CueDigest.read(from: store), at: .always(), local: CueNow.Local(waiting: nil, here: nil))
+            #expect(board.count(.advancing) == cue.advancing && board.count(.waiting) == cue.needsYou)
         }
         #expect(try await Set(board().todo.map(\.id)) == [task.id, other.id])
 

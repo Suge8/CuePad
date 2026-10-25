@@ -60,9 +60,10 @@ enum RealAgents {
         .enabled(if: recording.contains(agent) && installed(agent), "只连真 \(agent.rawValue) 跑（\(why)）：TEST_RUNNER_CUEPAD_AGENT_TESTS=\(agent.rawValue) 开启")
     }
 
-    /// 有录像带的套件的时限：回放一分钟（卡住的回放不空等到录制的时限），录制时给真 Agent 的 `recording`。
-    static func timeLimit(_ recording: TimeLimitTrait.Duration) -> TimeLimitTrait {
-        .timeLimit(Self.recording.isEmpty ? .minutes(1) : recording)
+    /// 有录像带的套件的时限：录制时给真 Agent 的 `recording`；回放不另设，用 xc.sh 给每个测试的统一时限
+    /// （各用例自己再设一个更短的墙钟时限，机器忙时会先于它到点，成了假失败）。
+    static func timeLimit(_ recording: TimeLimitTrait.Duration) -> any SuiteTrait {
+        Self.recording.isEmpty ? ConditionTrait.enabled(if: true) : .timeLimit(recording)
     }
 
     /// 回放时套件内并行（快），录制时一个一个来（真 Agent 抢同一份额度与常驻服务）。

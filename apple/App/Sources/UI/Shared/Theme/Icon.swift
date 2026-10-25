@@ -306,8 +306,8 @@ struct CueMark: View {
 
     var body: some View {
         let cue = workspace.cue
-        let accent: IconImage.Accent = cue.waiting > 0 ? .state(palette.waiting) : selected || cue.busy ? .lit : .none
-        Jelly(value: cue.expression, move: JellyMove.cue) { mood, _ in IconImage(.cue(mood), accent: accent) }
+        let accent: IconImage.Accent = cue.now.needsYou > 0 ? .state(palette.waiting) : selected || cue.now.isBusy ? .lit : .none
+        Jelly(value: cue.now.mood, move: JellyMove.cue) { mood, _ in IconImage(.cue(mood), accent: accent) }
     }
 }
 

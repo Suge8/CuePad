@@ -2,9 +2,10 @@
 import SwiftUI
 
 /// Cue 页页顶那一排中间的名牌（手机、iPad 与 iPad 右侧的 Cue 面板同一个，`floatingHeader` 摆它）：一块实底玻璃，定宽定高、居中——
-/// 上一行头像接名字，下一行 Cue 此刻（珠子接一句，`CueStatusLine`），两行各自居中。Cue 页这一排只有它：这一页的焦点就是 Cue，不放搜索钮；
-/// 不随字长短变宽：那一行几秒换一句，跟着变宽整颗名牌就一直在动。比圆钮高一截（两行字要的高），对话按它让出（`floatingHeader` 的 `height`）。
-/// 点它从顶部长出面板（`GrowPanel`，同一块玻璃长大）：名牌原地长成名片（头像放大到页头那一档、名字与此刻排在它下面），下面是 Cue 自己的那几样
+/// 左边头像占两行高（没有环，Cue 在动时右下一颗靛青的点，`CueAvatar`），右边上一行名字、下一行数字账（`CueStatusLine` 的 tally，`CueLedger`），左对齐。
+/// Cue 页这一排只有它：这一页的焦点就是 Cue，不放搜索钮；不随字长短变宽：数字账随时在变，跟着变宽整颗名牌就一直在动。
+/// 比圆钮高一截（两行字要的高），对话按它让出（`floatingHeader` 的 `height`）。
+/// 点它从顶部长出面板（`GrowPanel`，同一块玻璃长大）：名牌原地长成名片（头像从左边连续地长大、挪到正中，名字与数字账排在它下面、居中），下面是 Cue 自己的那几样
 /// （`CueNowPanel`：大脑、上下文、记忆、设置），手机上这些只有这一个入口（额度在进展页顶栏的额度环里，在做的会话在进展页的会话段）。
 /// 头像只有一个、跟着长大（`PlateLayout`），接力的落点挂在它上面。与 Mac 侧栏的 Cue 名片是同一套件、同一份数据（`CueWatch`）。
 /// 点名牌、点面板外、在名牌上往上划都收起；点面板里的一项先收起再去那里。
@@ -18,10 +19,12 @@ struct CueHeader: View {
     @State private var expanded = DebugHooks.preset.cuePanelOpen
     @State private var brain: AgentModelChoice?
 
-    /// 名牌的高：两行字（名字、此刻）上下各留一截。
-    static let height: CGFloat = 56
-    /// 名牌的宽：比两侧页边之间窄，名字与此刻居中读。
-    static let width: CGFloat = 212
+    /// 名牌的高：两行字（名字、数字账）上下各留一截。
+    nonisolated static let height: CGFloat = 56
+    /// 名牌的宽：比两侧页边之间窄，又放得下"1 拍板 1 待回复 4 推进中"。
+    nonisolated static let width: CGFloat = 244
+    /// 收着时头像的直径：两行字的高。
+    nonisolated static let face: CGFloat = 40
 
     var body: some View {
         GrowPanel(open: $expanded, radius: Self.height / 2) {
@@ -31,7 +34,7 @@ struct CueHeader: View {
                     if expanded, drag.translation.height < -24 { toggle() }
                 })
                 .accessibilityAddTraits(.isHeader)
-                .accessibilityHint(expanded ? "收起" : "换模型，看上下文、记忆与设置")
+                .accessibilityHint(expanded ? "收起" : "换模型，看它刚记下的，去记忆与设置")
         } panel: {
             CueNowPanel(brain: brain, close: toggle)
         }
@@ -45,105 +48,108 @@ struct CueHeader: View {
     }
 }
 
-/// 名牌本身：收着是定宽定高的两行，`card` 时长成名片（铺满面板的宽、头像放大）。字号两态不变，长大的只有头像。
+/// 名牌本身：收着是定宽定高的一块（头像在左、两行字在右），`card` 时长成名片（铺满面板的宽、头像放大到名片那一档、居中）。字号两态不变，长大的只有头像。
+/// 名字与数字账只一份，开合时跟着摆法（`PlateLayout`）连续挪位，不交叉淡化：两份半透明叠在一起时字多就发花。
 private struct CuePlate: View {
     let card: Bool
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// 收着时头像缩到页头那一档的一半：与名字那一行同高。
-    private static let small: CGFloat = 0.5
-
     var body: some View {
         let cue = workspace.cue
-        let side = CueAvatar.Size.header.box * (card ? 1 : Self.small)
-        PlateLayout(card: card) {
-            CueAvatar(mood: cue.mood(composing: !cue.draft.isEmpty(accepting: .images)), presence: cue.presence, size: .header)
-                .scaleEffect(card ? 1 : Self.small)
+        let full = CueAvatar.Size.card.side
+        let side = card ? full : CueHeader.face
+        PlateLayout(progress: card ? 1 : 0) {
+            // 头像只按名片那一档画一次，收着时整体缩小：开合时连续地长大，点与表情不换档
+            CueAvatar(cue.now, mood: cue.mood(composing: !cue.draft.isEmpty(accepting: .images)), size: .card)
+                .scaleEffect(side / full)
                 .frame(width: side, height: side)
                 .relaySpot(cue: .header)
-            name(cue.name, shown: !card)
-            name(cue.name, shown: card)
-            CueStatusLine(tally: true, font: .caption).lineLimit(1).truncationMode(.tail)
+            Text(cue.name).font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(1)
+            CueStatusLine(tally: true, font: .caption).lineLimit(1)
         }
-        .padding(.horizontal, 16)
-        .padding(.top, card ? 18 : 0).padding(.bottom, card ? 2 : 0)
-        .frame(width: card ? nil : CueHeader.width, height: card ? nil : CueHeader.height)
-        .frame(maxWidth: card ? .infinity : nil)
         // 收着是定高的两行：字号跟着动态字体放大到这一档为止，再大第二行就被裁掉
-        .dynamicTypeSize(...DynamicTypeSize.xxLarge)
+        .dynamicTypeSize(...FloatingHeaderLayout.largestType)
         .contentShape(.rect)
-        .animation(HandOff.quick, value: cue.presence)
         .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: cue.now)
         .accessibilityElement(children: .combine)
     }
-
-    /// 名字两处各一份：头像右边（收着）与头像下面（名片）。两处之间要从长大的头像底下穿过去，所以不挪，原处淡出、新处淡入：
-    /// 两份走同一条曲线、同时起，任一帧浓淡相加是一，名字每一帧都读得到（先淡完再淡入的话中间有几帧名字整个没了）。
-    private func name(_ name: String, shown: Bool) -> some View {
-        Text(name).font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(1)
-            // 只有透明度走这条曲线，位置跟着头像同一条弹簧
-            .animation(HandOff.quick) { $0.opacity(shown ? 1 : 0) }
-            .accessibilityHidden(!shown)
-    }
 }
 
-/// 名牌里头像、名字、此刻的摆法，两态是同一组视图：头像只有一个，开合时连续地长大挪位；名字两处各一份（头像右边、头像下面，`CuePlate.name`）。
-/// 收着时头像接名字一行、此刻一行；名片时头像在上，名字、此刻依次在下。每一行都居中，整组在给的高里竖直居中。
-/// 子视图依次是头像、头像右边的名字、头像下面的名字、此刻。
+/// 名牌里头像、名字、数字账的摆法，收着（`progress` 0）到名片（1）之间每一帧都按开合进度重排（`animatableData`），三样都只有一份：
+/// - 收着：定宽定高（`CueHeader.width`×`height`），头像贴左、竖直居中，名字与数字账在它右边上下两行、左对齐，这一组对着头像竖直居中。
+/// - 名片：铺满给的宽，头像在上、居中，名字、数字账依次在它下面、各自居中。
+/// - 开合中：头像从左连续长到正中；字绕开长大的头像走——前半程贴着头像右边往下挪到头像下沿之下，后半程在头像下面横移到居中。
+///   名牌的宽高跟着进度长，高总是让得下字（不比"字的下沿加底边"矮），任何一帧字都不出玻璃。
+/// 数字账两态都按收着时那一栏的宽排（`lineWidth`）：名片里放得下全列也不换排法，开合前后是同一排字。
+/// 子视图依次是头像、名字、数字账。
 private struct PlateLayout: Layout {
-    let card: Bool
+    var progress: CGFloat
 
-    private static let nameGap: CGFloat = 6
+    var animatableData: CGFloat {
+        get { progress }
+        set { progress = newValue }
+    }
+
+    /// 收着时头像离名牌左边：圆头像贴着胶囊的圆头，左右留白看着一样。
+    private static let inset: CGFloat = 8
+    private static let trailing: CGFloat = 16
+    private static let nameGap: CGFloat = 10
     private static let lineGap: CGFloat = 2
     private static let cardGap: CGFloat = 8
+    /// 名片时头像离顶、字离底。
+    private static let cardTop: CGFloat = 18
+    private static let cardBottom: CGFloat = 2
+    /// 收着时右边那一栏的宽：名牌宽减去两侧留白、头像与它到字的距离。
+    private static let lineWidth = CueHeader.width - inset - trailing - CueHeader.face - nameGap
+    /// 前半程往下、后半程横移的分界。
+    private static let turn: CGFloat = 0.5
 
-    private struct Sizes {
-        var avatar: CGSize, rowName: CGSize, cardName: CGSize, line: CGSize
-        var row: CGFloat { max(avatar.height, rowName.height) }
+    private struct Frame {
+        var size: CGSize
+        var avatar: CGPoint, radius: CGFloat
+        var name: CGPoint, line: CGPoint
     }
 
-    private func sizes(_ width: CGFloat?, _ subviews: Subviews) -> Sizes {
-        let avatar = subviews[0].sizeThatFits(.unspecified)
-        let wide = ProposedViewSize(width: width, height: nil)
-        return Sizes(
-            avatar: avatar,
-            rowName: subviews[1].sizeThatFits(ProposedViewSize(width: width.map { max($0 - avatar.width - Self.nameGap, 0) }, height: nil)),
-            cardName: subviews[2].sizeThatFits(wide),
-            line: subviews[3].sizeThatFits(wide))
-    }
+    private static func lerp(_ a: CGFloat, _ b: CGFloat, _ t: CGFloat) -> CGFloat { a + (b - a) * t }
+    private static func ease(_ t: CGFloat) -> CGFloat { let t = min(max(t, 0), 1); return t * t * (3 - 2 * t) }
 
-    private func height(_ s: Sizes) -> CGFloat {
-        card ? s.avatar.height + Self.cardGap + s.cardName.height + Self.lineGap + s.line.height : s.row + Self.lineGap + s.line.height
+    /// 这一刻三样各在哪（名字、数字账给左上角）、整块多大；`width` 是名片时铺满的宽。
+    private func frame(width: CGFloat?, _ subviews: Subviews) -> Frame {
+        let p = min(max(progress, 0), 1)
+        let column = ProposedViewSize(width: Self.lineWidth, height: nil)
+        let name = subviews[1].sizeThatFits(column), line = subviews[2].sizeThatFits(column)
+        let words = name.height + Self.lineGap + line.height
+        let small = CueHeader.face / 2, large = CueAvatar.Size.card.side / 2
+        let full = max(width ?? CueHeader.width, CueHeader.width)
+        let w = Self.lerp(CueHeader.width, full, p)
+        let radius = Self.lerp(small, large, p)
+        let center = CGPoint(
+            x: Self.lerp(Self.inset + small, w / 2, p),
+            y: Self.lerp(CueHeader.height / 2, Self.cardTop + large, p))
+        let down = Self.ease(p / Self.turn), across = Self.ease((p - Self.turn) / (1 - Self.turn))
+        let beside = center.x + radius + Self.nameGap
+        let top = Self.lerp(center.y - words / 2, center.y + radius + Self.cardGap, down)
+        let nameAt = CGPoint(x: Self.lerp(beside, center.x - name.width / 2, across), y: top)
+        let lineAt = CGPoint(x: Self.lerp(beside, center.x - line.width / 2, across), y: top + name.height + Self.lineGap)
+        let cardHeight = Self.cardTop + 2 * large + Self.cardGap + words + Self.cardBottom
+        let h = max(Self.lerp(CueHeader.height, cardHeight, p), lineAt.y + line.height + Self.cardBottom)
+        return Frame(size: CGSize(width: w, height: h), avatar: center, radius: radius, name: nameAt, line: lineAt)
     }
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let s = sizes(proposal.width, subviews)
-        let natural = card ? max(s.avatar.width, s.cardName.width, s.line.width) : max(s.avatar.width + Self.nameGap + s.rowName.width, s.line.width)
-        return CGSize(width: proposal.width ?? natural, height: height(s))
+        frame(width: proposal.width, subviews).size
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        let s = sizes(bounds.width, subviews)
-        let top = bounds.midY - height(s) / 2
-        func place(_ index: Int, _ x: CGFloat, _ y: CGFloat, _ anchor: UnitPoint, _ size: CGSize) {
-            subviews[index].place(at: CGPoint(x: x, y: y), anchor: anchor, proposal: ProposedViewSize(size))
-        }
-        if card {
-            let below = top + s.avatar.height + Self.cardGap
-            place(0, bounds.midX, top, .top, s.avatar)
-            place(1, bounds.midX + s.avatar.width / 2 + Self.nameGap, top + s.avatar.height / 2, .leading, s.rowName)
-            place(2, bounds.midX, below, .top, s.cardName)
-            place(3, bounds.midX, below + s.cardName.height + Self.lineGap, .top, s.line)
-        } else {
-            let x = bounds.midX - (s.avatar.width + Self.nameGap + s.rowName.width) / 2
-            place(0, x, top + s.row / 2, .leading, s.avatar)
-            place(1, x + s.avatar.width + Self.nameGap, top + s.row / 2, .leading, s.rowName)
-            // 头像下面那份名字贴着小头像的下沿，开合时跟着头像走
-            place(2, x + s.avatar.width / 2, top + (s.row + s.avatar.height) / 2, .top, s.cardName)
-            place(3, bounds.midX, top + s.row + Self.lineGap, .top, s.line)
-        }
+        // 与量尺寸时同一个给的宽：这一刻的宽是按进度从收着的宽长向它的（`bounds` 已是长到一半的宽，不能再拿它当铺满的宽）
+        let f = frame(width: proposal.width, subviews)
+        let origin = CGPoint(x: bounds.midX - f.size.width / 2, y: bounds.minY)
+        subviews[0].place(at: CGPoint(x: origin.x + f.avatar.x, y: origin.y + f.avatar.y), anchor: .center, proposal: .unspecified)
+        let column = ProposedViewSize(width: Self.lineWidth, height: nil)
+        subviews[1].place(at: CGPoint(x: origin.x + f.name.x, y: origin.y + f.name.y), anchor: .topLeading, proposal: column)
+        subviews[2].place(at: CGPoint(x: origin.x + f.line.x, y: origin.y + f.line.y), anchor: .topLeading, proposal: column)
     }
 }
 #endif

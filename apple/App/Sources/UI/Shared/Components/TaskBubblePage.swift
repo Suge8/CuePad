@@ -33,7 +33,7 @@ struct TaskBubblePage: View {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(data.steps) { TaskLine(task: $0, step: true) }
                 }
-                .padding(.leading, BubbleMetrics.stepLead)
+                .padding(.leading, BubbleMetrics.stepLead).padding(.trailing, BubbleMetrics.textTrailing)
                 .padding(.top, 4)
                 .animation(HandOff.quick, value: data.steps.map(\.id))
             }
@@ -97,7 +97,7 @@ private struct TaskEditor: View {
     }
 }
 
-/// 正文还没写时第二段（空段）上的提示。点它就是点进那一段：不拦点按。只看标题那一行之后有没有字，每敲一个字的开销不随正文变长。
+/// 正文还没写时第二段（空段）上的提示。点它就是点进那一段：不拦点按。只占那空段的一行，大字号下截断：折成两行就往上叠到标题上。只看标题那一行之后有没有字，每敲一个字的开销不随正文变长。
 private struct BodyHint: View {
     let editing: CardEditing
     let inset: CGFloat
@@ -109,6 +109,7 @@ private struct BodyHint: View {
             Text("写正文：要 Agent 做什么")
                 .font(.custom(CueEditorTheme.taskBodyFace, size: BubbleMetrics.bodySize, relativeTo: .body))
                 .foregroundStyle(palette.ink3)
+                .lineLimit(1)
                 .padding(.bottom, inset)
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)

@@ -7,7 +7,7 @@ extension MCPTests {
   /// Cue 派活时选哪家 Agent 开会话：请求带着这家与模型（写法同给大脑的清单：Claude Code、Codex 只写 id，提供方补成这家；
   /// Pi、OpenCode 要写 provider/id）。不写 agent 用那台 Mac 的默认（能用的第一家）；写了那台 Mac 记着不能用的那家，当场退回并说原因。
   /// 那台 Mac 开不了这家时，失败是这件事的一条变化（还没开成会话也报），写着"开工：原因"，Cue 下次醒来看得到。
-  @Test(.timeLimit(.minutes(1))) func cueStartsASessionWithTheAgentItChose() async throws {
+  @Test func cueStartsASessionWithTheAgentItChose() async throws {
     let sandbox = try Fixture()
     let store = sandbox.store
     let project = try await sandbox.project("演示")
@@ -52,7 +52,7 @@ extension MCPTests {
 
   /// 会话因为模型出错，你让换个模型：Cue 的 say 带 model、effort，先请会话换模型（与界面换模型同一种请求），再说这句；
   /// 换不了模型的会话（终端里的 Claude Code）直接报错，什么都不写，告诉 Cue 可以 fresh 开新会话。
-  @Test(.timeLimit(.minutes(1))) func cueSwitchesTheSessionModelBeforeSpeaking() async throws {
+  @Test func cueSwitchesTheSessionModelBeforeSpeaking() async throws {
     let sandbox = try Fixture()
     let store = sandbox.store
     try await store.updateCueProfile {

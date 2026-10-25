@@ -13,7 +13,7 @@ import UIKit
 /// 同步测量的隔离实例连的是 CloudKit 开发环境，密钥（`CloudSync.relaySecret`）从开发容器取，派生的房间与正式用户的不会重合。
 extension AppServices {
     static func makeRelay(_ source: SyncSource, _ sync: (any SyncControlling)?) -> Relay? {
-        guard case .iCloud = source, let sync = sync as? CloudSync else { return nil }
+        guard case .iCloud = source, !DebugHooks.relayOff, let sync = sync as? CloudSync else { return nil }
         return Relay(host: relayHost) { try RelayCredentials(secret: try await sync.relaySecret()) }
     }
 

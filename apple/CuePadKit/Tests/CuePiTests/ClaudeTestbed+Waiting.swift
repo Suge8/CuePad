@@ -8,13 +8,13 @@ import Testing
 
 extension ClaudeTestbed {
     func waitForSession(pid: Int32) async throws -> PiSession {
-        try await eventually("Claude Code 会话上桥", timeout: .seconds(60)) { session(pid: pid) != nil }
+        try await eventually("Claude Code 会话上桥") { session(pid: pid) != nil }
         return session(pid: pid)!
     }
 
     /// 等这个会话在 `start` 之后做完一轮（进过工作、又歇下）：发话之前取 `start`。看变化记录，不看此刻的状态——
     /// 回放时一轮可能在开始等之前就做完了；按歇下的时刻认，之前停下的那一轮不算。
-    func waitForTurn(_ id: PiSession.ID, since start: Date, timeout: Duration = .seconds(180)) async throws {
+    func waitForTurn(_ id: PiSession.ID, since start: Date) async throws {
         func done() -> Bool {
             var worked = false
             for case .stateChanged(let session, _) in log.changes where session.id == id {
@@ -24,7 +24,7 @@ extension ClaudeTestbed {
             return false
         }
         do {
-            try await eventually("这一轮做完", timeout: timeout) { done() }
+            try await eventually("这一轮做完") { done() }
         } catch {
             throw Stuck(description: "等不到这一轮做完；会话：\(String(describing: bridge.session(id: id)?.state)) \(String(describing: bridge.session(id: id)?.detail)) \(String(describing: bridge.session(id: id)?.question))")
         }
@@ -33,7 +33,7 @@ extension ClaudeTestbed {
     /// 等这个会话弹出能从 CuePad 作答的问题；等不到时带上终端此刻的样子。
     func waitForQuestion(_ id: PiSession.ID, on terminal: ClaudeTerminal? = nil) async throws -> PiQuestion {
         do {
-            try await eventually("会话在等你确认", timeout: .seconds(180)) { bridge.session(id: id)?.question?.promptID != nil }
+            try await eventually("会话在等你确认") { bridge.session(id: id)?.question?.promptID != nil }
         } catch {
             throw NoQuestion(description: "等不到会话在等你确认；会话：\(String(describing: bridge.session(id: id)))；终端：\n\(await terminal?.screen ?? "")")
         }
@@ -45,7 +45,7 @@ extension ClaudeTestbed {
         for attempt in 0..<2 {
             try await terminal.type(prompt)
             var worked = false
-            try await eventually("在等你确认或这一轮做完", timeout: .seconds(180)) {
+            try await eventually("在等你确认或这一轮做完") {
                 let session = bridge.session(id: id)
                 if session?.state.isWorking == true { worked = true }
                 return session?.question?.promptID != nil || (worked && session?.state == .settled)
@@ -81,7 +81,7 @@ extension ClaudeTestbed {
     func expectSettledOnce(_ id: PiSession.ID, since start: Date, reply: String, roster: PiSubagentPhase, waits: Int = 1) async throws {
         let session = { [bridge] in bridge.session(id: id) }
         // 变化日志经异步流收下，比桥上的会话晚一拍：等它也收到这次歇下
-        try await eventually("交回结果的那一轮做完", timeout: .seconds(240)) {
+        try await eventually("交回结果的那一轮做完") {
             session()?.state == .settled && (try? transcript(session()?.sessionFile))?.recap.lastReply?.contains(reply) == true
                 && log.states.last == .settled
         }
@@ -120,7 +120,7 @@ extension ClaudeTestbed {
     func waitForDraftLanded(_ id: PiSession.ID) async throws {
         let file = bridge.session(id: id)?.sessionFile
         var newest: Date?
-        try await eventually("回答落盘", timeout: .seconds(10)) {
+        try await eventually("回答落盘") {
             newest = (try? transcript(file))?.messages.last { $0.role == .known(.pi) }?.at
             return newest.map { $0 >= start(of: id) } ?? false
         }

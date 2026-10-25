@@ -201,10 +201,7 @@ final class TestApp {
     private var bin: URL { directory.appending(path: "bin") }
 
     private func executable(_ name: String, _ script: String, in directory: URL) throws {
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let file = directory.appending(path: name)
-        try script.write(to: file, atomically: true, encoding: .utf8)
-        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: file.path)
+        try TestScript.install(script, at: directory.appending(path: name))
     }
 
     private static let piProbeLine = #"{"cuepadProbe":{"model":{"provider":"fake","id":"m","name":"M","thinking":["off"]},"models":[{"provider":"fake","id":"m","name":"M","thinking":["off"]}]}}"#
@@ -247,7 +244,7 @@ final class TestApp {
         """
         #!/usr/bin/python3
         import json, os, sys
-        marker = os.path.join(os.path.dirname(os.path.realpath(__file__)), ".logged-in")
+        marker = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".logged-in")
         args = sys.argv[1:]
         if "--version" in args:
             print("2.1.0 (Claude Code)"); sys.exit(0)

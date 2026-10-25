@@ -21,7 +21,6 @@ nonisolated struct ProjectPageData: Sendable, Equatable {
     /// 卡片最近一次发给的 Agent 会话名（同名会话写"已发过"，已下线的去处不写，`SendTarget.shownName`；`lastSends` 推出，读取时算一次）。
     var lastTarget: [UUID: String]
 
-
     static let doneLimit = 30
 
     static func read(_ project: UUID, from store: isolated CueStore) throws -> ProjectPageData {

@@ -1,13 +1,13 @@
 import SwiftUI
 
-/// 侧栏进展那一行行尾（Mac、iPad）："N 推进中 · M 等你"，数读 Cue 那一份计数（`CueWatch.advancing`、`waiting`，同 Cue 那一行与看板列头）；
+/// 侧栏进展那一行行尾（Mac、iPad）："N 推进中 · M 等你"，数读 Cue 那一份计数（`CueNow.advancing`、`needsYou`，同名牌与看板列头）；
 /// 等你是赭黄、加粗一档，都是零时不写。行里放不下（英文比中文宽）时让给去处名：只写数"N · M"，颜色仍分得出哪个是等你，读屏照念全句。
 struct ProgressTally: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
     var body: some View {
-        let advancing = workspace.cue.advancing, waiting = workspace.cue.waiting
+        let advancing = workspace.cue.now.advancing, waiting = workspace.cue.now.needsYou
         ViewThatFits(in: .horizontal) {
             counts(advancing: Text("\(advancing) 推进中"), waiting: Text("\(waiting) 等你"))
             counts(advancing: Text(advancing, format: .number), waiting: Text(waiting, format: .number))
@@ -21,7 +21,7 @@ struct ProgressTally: View {
     }
 
     private func counts(advancing: Text, waiting: Text) -> some View {
-        let shows = (advancing: workspace.cue.advancing > 0, waiting: workspace.cue.waiting > 0)
+        let shows = (advancing: workspace.cue.now.advancing > 0, waiting: workspace.cue.now.needsYou > 0)
         return HStack(spacing: 4) {
             if shows.advancing { advancing.foregroundStyle(palette.ink2) }
             if shows.advancing, shows.waiting { Dot().foregroundStyle(palette.ink2) }

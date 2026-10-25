@@ -40,8 +40,7 @@ struct CueStatusRow<Trailing: View>: View {
                 Text(cue.name).font(font).fontWeight(cue.unread > 0 ? .bold : nil).foregroundStyle(palette.ink).lineLimit(1)
                 if status { CueStatusLine(tally: true).lineLimit(1).transition(.opacity) }
             }
-            // 宽度按要紧分：名字与此刻那句先拿（放不下先让出珠子，`CueNowRow`），再是新消息数，余下的才给 Spacer；
-            // 行尾的东西（菜单栏面板的额度环与按钮）按自己的宽。都是 0 优先级时那句与 Spacer、新消息数平分剩下的宽，旁边空着也被截成"…"
+            // 宽度按要紧分：名字与数字账先拿（排不下才并、才截），再是新消息数，余下的才给 Spacer；行尾的东西（菜单栏面板的额度环与按钮）按自己的宽
             .layoutPriority(2)
             Spacer(minLength: 6)
             if cue.unread > 0 {
@@ -68,7 +67,7 @@ struct CueEntryAvatar: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        CueAvatar(mood: workspace.cue.expression, presence: workspace.cue.presence, size: size).relaySpot(cue: .entry)
+        CueAvatar(workspace.cue.now, size: size).relaySpot(cue: .entry)
             .background { CueArrival(color: palette.replied, reach: 1.5) }
     }
 }
@@ -94,7 +93,7 @@ struct UnreadCount: View {
 }
 
 /// Cue 那一行的第二行（`tally`：Mac 侧栏名片、iPad 侧栏、菜单栏面板、输入条与手机、iPad 的页头）或 Mac Cue 页头里此刻在做什么的那一句。
-/// `tally` 时就是 Cue 此刻（`CueNowRow`：珠子接那一句，不在时写原因）；不写 tally 时不在写 Cue 此刻的那句原因（`CueNow.Brain.away`，起不来是失败色，其余次要灰），
+/// `tally` 时就是 Cue 此刻（`CueNowRow`：数字账，没有可数的写一句安静的现状、不在时写原因）；不写 tally 时不在写 Cue 此刻的那句原因（`CueNow.Brain.away`，起不来是失败色，其余次要灰），
 /// 话在路上、在做事与会话顶栏同一个样子（`PiShownLabel`），空闲不写。
 /// Cue 在这台 Mac 值班、正在说回答你的话（`CueKeeper.speech`）时状态词是"输出中"（`PiShown.speaking`）。
 /// 它运行在别的设备上、本机正在和 iCloud 对时（`AppServices.isCatchingUp(on:)`，久过 `Pending.delay` 才出）写"正在同步"：那时写下的状态与数可能已经过时。
@@ -137,20 +136,12 @@ struct CueStatusLine: View {
     }
 }
 
-/// App 里的 Cue 此刻那一行（`CueNowLine`）：刚做完的那颗到点自己收掉（`Moments` 睡到 `CueNow.nextChange`，不另计时）；
-/// 每颗珠子是它那几个会话接力飞光的落点（`relaySpot(bead:)`），露出来的才有，收进"+N"的落回会话与任务行。
+/// App 里的 Cue 此刻那一行（数字账，`CueLedger`）：刚做完的那件到点自己收掉、那一句跟着换（`Moments` 睡到 `CueNow.nextChange`，不另计时）。
 struct CueNowRow: View {
     let now: CueNow
 
     var body: some View {
-        Moments(next: now.nextChange(after:)) { date in
-            let aged = now.aged(to: date)
-            // 窄处（菜单栏面板一行里还有额度环与按钮）先让出珠子：那一句是第一眼要读的，被截成"…"就什么也没说
-            ViewThatFits(in: .horizontal) {
-                CueNowLine(now: aged) { bead, dot in dot.relaySpot(bead: bead.sessions) }
-                CueNowLine(now: aged.withoutBeads)
-            }
-        }
+        Moments(next: now.nextChange(after:)) { date in CueLedger(now: now.aged(to: date)) }
     }
 }
 
@@ -165,7 +156,7 @@ struct CueTitle: View {
     var body: some View {
         let cue = workspace.cue
         HStack(spacing: 8) {
-            CueAvatar(mood: cue.mood(composing: !cue.draft.isEmpty(accepting: .images)), presence: cue.presence, size: .row)
+            CueAvatar(cue.now, mood: cue.mood(composing: !cue.draft.isEmpty(accepting: .images)), size: .row)
                 .relaySpot(cue: .header)
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(cue.name).font(Typography.toolbarTitle).foregroundStyle(palette.ink).lineLimit(1)
@@ -182,14 +173,4 @@ struct CueTitle: View {
 
 extension CueStatusRow where Trailing == EmptyView {
     init(font: Font = Typography.body.weight(.semibold), status: Bool = true) { self.init(font: font, status: status) { EmptyView() } }
-}
-
-private extension CueNow {
-    /// 只留那一句：窄处让位的那一份（`CueNowRow`）。
-    var withoutBeads: CueNow {
-        var now = self
-        now.beads = []
-        now.hidden = 0
-        return now
-    }
 }

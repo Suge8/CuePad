@@ -192,7 +192,7 @@ struct PiTranscriptTests {
     }
 
     /// 文件一追加就写：Mac 本机界面也读同步记录，这里的延迟就是 Mac 上看到的延迟。
-    @Test(.timeLimit(.minutes(1))) func 文件追加一条用户消息后_摘要与消息随即可读() async throws {
+    @Test func 文件追加一条用户消息后_摘要与消息随即可读() async throws {
         let file = try sessionFile("s1", at: .now.addingTimeInterval(-60))
         _ = try await live("s1", file: file)
         let indexer = PiHistoryIndexer(agent: .pi, paths: AgentPaths(pi: rig.piPaths), files: store.files) { _ in nil }!

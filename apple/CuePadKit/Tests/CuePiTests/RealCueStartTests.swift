@@ -29,7 +29,7 @@ struct RealCueStartTests {
             for line in ["Reply with exactly the word READY.", "Reply with exactly the word AGAIN."] {
                 let log = ChangeLog(bridge)
                 try await bridge.send(PiMessage(text: line), to: id)
-                try await eventually("这一轮做完歇下", timeout: .seconds(180)) {
+                try await eventually("这一轮做完歇下") {
                     log.states.contains { $0.hasPendingWork } && bridge.session(id: id)?.state == .settled
                 }
             }
@@ -70,7 +70,7 @@ struct RealCueStartTests {
             let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
             defer { stopHostedProcesses(bridge); bridge.stop(); pi.stop() }
             try bridge.start()
-            let runtime = PiRuntime(bridge: bridge, paths: pi.paths, pi: { AgentTape.executable("pi") }, idleLimit: .seconds(120))
+            let runtime = PiRuntime(bridge: bridge, paths: pi.paths, pi: { AgentTape.executable("pi") }, idleLimit: .seconds(120), timing: noDeadline)
             runtime.start()
             try await body(runtime, bridge, pi.cwd, PiModelKey(provider: "fake", id: "echo"))
         case .codex:
