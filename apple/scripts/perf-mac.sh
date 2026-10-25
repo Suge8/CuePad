@@ -28,15 +28,16 @@ launch() {
   exec python3 "$APPLE_DIR/scripts/app.py" exec "$APP" "$library" -- "$@"
 }
 
-# 第一次：写入大库并把大项目设为当前项目，写完结束；之后的运行才是冷启动
+# 第一次：写入大库并把大项目设为当前项目，写完结束；之后的运行才是冷启动。
+# 等就绪文件而不是数某张表：就绪在 PerfLibrary.seed 整个写完之后（DebugScene.signalReady），数表会在后面的对话还没写完时就结束它。
+# 没写完的不留：下一次从头写
 if [ ! -f "$LIBRARY/cuepad.db" ]; then
   mkdir -p "$LIBRARY"
-  launch "$LIBRARY" -CuePadSeed perf -CuePadProject 大项目 >"$DERIVED/seed.log" 2>&1 &
+  ready="$DERIVED/seed-ready"
+  rm -f "$ready"
+  CUEPAD_SHOT_READY="$ready" launch "$LIBRARY" -CuePadSeed perf -CuePadProject 大项目 >"$DERIVED/seed.log" 2>&1 &
   pid=$!
-  until [ "$(sqlite3 "$LIBRARY/cuepad.db" 'SELECT count(*) FROM piSessions' 2>/dev/null || echo 0)" = 200 ]; do
-    kill -0 "$pid" 2>/dev/null || { echo "写入大库时 CuePad 退出了，见 $DERIVED/seed.log" >&2; exit 1; }
-    sleep 1
-  done
+  python3 "$APPLE_DIR/scripts/app.py" wait "$ready" "$pid" 900 >/dev/null || { kill -TERM "$pid" 2>/dev/null; wait "$pid" || true; rm -rf "$LIBRARY"; echo "大库没写完，见 $DERIVED/seed.log" >&2; exit 1; }
   kill -TERM "$pid"
   wait "$pid" || true
 fi

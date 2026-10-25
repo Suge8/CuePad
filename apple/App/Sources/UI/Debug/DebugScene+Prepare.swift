@@ -81,6 +81,11 @@ extension DebugScene {
         later(.milliseconds(300)) { proxy.scrollTo(ScrollAnchor.older, anchor: UnitPoint(x: 0.5, y: 0.35)) }
     }
 
-    /// 产品视图读的启动预设（`DebugHooks.preset`）。
+    /// task 画面：打开 `-CuePadTask <标题开头>` 那一条任务的气泡，没给是 `preferred` 挑中的，再没有是第一条（推进中、待办）。
+    static func openTask(_ workspace: Workspace, preferred: (Card) -> Bool) async {
+        let tasks = (try? await workspace.services.store.tasks(.inProgress, .todo).flatMap(\.tasks)) ?? []
+        let named = defaults.string(forKey: "CuePadTask").flatMap { prefix in tasks.first { $0.title.hasPrefix(prefix) } }
+        if let task = named ?? tasks.first(where: preferred) ?? tasks.first { workspace.openTask(task) }
+    }
 }
 #endif

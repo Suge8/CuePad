@@ -69,7 +69,7 @@ enum InteractionBench {
         let measuresCue = only.map { $0.contains("Cue 页首访") || $0.contains("发送·Cue 页") } ?? true
         if measuresCue { await DebugScene.seedCue(workspace.services) }
         try? await Task.sleep(for: .seconds(3))
-        guard let window = NSApp.windows.first(where: { $0.styleMask.contains(.fullSizeContentView) && $0.styleMask.contains(.resizable) }),
+        guard let window = DebugScene.mainWindow,
               let view = window.contentView
         else { return }
         let borrowed = DebugForeground.borrow(window)
