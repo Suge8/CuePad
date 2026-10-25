@@ -94,7 +94,7 @@ struct ProjectPage: View {
     @ViewBuilder
     private func page(_ data: ProjectPageData, _ arrangement: WallArrangement, _ shape: PageShape) -> some View {
         let byID = shape.byID
-        let lastTarget = shape.lastTarget
+        let lastTarget = data.lastTarget
         if stage >= .focus { FocusBand(data: data, position: $position, anchor: anchor) }
         if stage >= .wall {
             if data.cards.isEmpty {
@@ -167,12 +167,10 @@ private struct SelectableKey: Equatable {
 
 private struct PageShape: Equatable {
     let byID: [UUID: Card]
-    let lastTarget: [UUID: String]
     let older: [OlderGroup]
 
     init(_ data: ProjectPageData, _ arrangement: WallArrangement) {
         byID = Dictionary(uniqueKeysWithValues: data.cards.map { ($0.id, $0) })
-        lastTarget = data.lastTarget
         older = data.olderGroups(arrangement)
     }
 }

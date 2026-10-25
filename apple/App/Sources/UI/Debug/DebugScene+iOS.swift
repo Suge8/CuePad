@@ -67,8 +67,7 @@ extension DebugScene {
                let card = try? await workspace.services.store.card(id) {
                 let outbox = Outbox(content: Outgoing.text(of: card), card: id, project: project)
                 // 给了 -CuePadSession 就当已选好会话，直接进它的近况页（卡片预填在回复框里）
-                if let title = defaults.string(forKey: "CuePadSession"),
-                   let session = try? await workspace.services.store.piSessionPage(PiSessionQuery(text: title)).items.first(where: { $0.state.title == title })?.state {
+                if let title = defaults.string(forKey: "CuePadSession"), let session = await demoSession(titled: title, store: workspace.services.store) {
                     let settings = workspace.services.settings
                     var reply = settings.replyDraft(for: session.id)
                     reply.attachments = [outbox]
@@ -108,16 +107,13 @@ extension DebugScene {
             workspace.projectScope = project
             workspace.show(.progress)
         case "task":
-            let store = workspace.services.store
-            let tasks = (try? await store.tasks(.inProgress, .todo).flatMap(\.tasks)) ?? []
-            // 给了 -CuePadTask <标题开头> 打开那一条，否则进行中的第一条
-            let named = defaults.string(forKey: "CuePadTask").flatMap { prefix in tasks.first { $0.title.hasPrefix(prefix) } }
-            if let task = named ?? tasks.first(where: { $0.status == .inProgress }) ?? tasks.first { workspace.openTask(task) }
+            // 没给 -CuePadTask 时是进行中的第一条
+            await openTask(workspace) { $0.status == .inProgress }
         case "session":
             // 打开 -CuePadSession（会话名，默认 homepage）的近况页，推在 Agent 整页上
             let title = defaults.string(forKey: "CuePadSession") ?? "homepage"
             if defaults.bool(forKey: "CuePadDemo") { await seedCue(workspace.services) }
-            guard let session = try? await workspace.services.store.piSessionPage(PiSessionQuery(text: title)).items.first(where: { $0.state.title == title })?.state else { break }
+            guard let session = await demoSession(titled: title, store: workspace.services.store) else { break }
             if defaults.bool(forKey: "CuePadNotify") {
                 workspace.open(DeepLink.session(session.id))  // 点锁屏通知进来：只带记录 id
             } else {
@@ -146,6 +142,11 @@ extension DebugScene {
         default: break
         }
         await presetSpeech(workspace)
+    }
+
+    /// 演示会话按会话名找（演示会话的会话名各不相同）。
+    private static func demoSession(titled title: String, store: CueStore) async -> PiSessionState? {
+        try? await store.piSessionPage(PiSessionQuery(text: title)).items.first { $0.state.title == title }?.state
     }
 
     /// `-CuePadAlertStatus <on|pending|denied|undetermined|registerFailed|subscribeFailed>`：设置页通知那一行按这个状态显示

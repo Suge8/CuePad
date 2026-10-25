@@ -3,12 +3,13 @@ import fcntl
 import json
 import os
 import re
+import select
 import signal
 import subprocess
 import sys
 import time
 
-from app_env import APPLE, BUILD, FRONT, FRONT_POLL, HOLD, READY, REC_SECONDS, RUN_TTL, SLOT, SOCKETS, WINDOW, die, isolated_env
+from app_env import APPLE, BUILD, FRONT, FRONT_RETRY, HOLD, READY, REC_SECONDS, RUN_TTL, SLOT, SOCKETS, WINDOW, die, isolated_env
 from app_proc import quit_mac, wait_ready
 
 
@@ -67,9 +68,9 @@ class Mac:
         os.makedirs(SOCKETS, mode=0o700, exist_ok=True)
         if os.path.exists(self.ready):
             os.remove(self.ready)
-        self.proc = subprocess.Popen([f"{self.app}/Contents/MacOS/CuePad", *args], env=dict(isolated_env(self.library), CUEPAD_SHOT_READY=self.ready, CUEPAD_FRONT_REQUEST=FRONT),
+        self.proc = subprocess.Popen([f"{self.app}/Contents/MacOS/CuePad", *args], env=dict(isolated_env(self.library), CUEPAD_SHOT_READY=self.ready, **front_env(args)),
                                      stdin=subprocess.DEVNULL, stdout=open(self.log, "w"), stderr=subprocess.STDOUT)
-        front_keeper(self.proc.pid)
+        front_keeper(self.proc.pid, args)
         write_note(self.slot, holder=os.getpid(), app=self.proc.pid, what=self.what)
         return wait_ready(self.ready, self.proc.pid, self.log)
 
@@ -130,7 +131,7 @@ def run_mac(app, library, args):
 
 def exec_mac(app, library, args):
     """量完自己退出的 bench（perf-mac.sh、perf-idle.sh）：占住本检出那一份后 exec 成 CuePad。锁的文件描述符传给 CuePad，
-    随它退出释放；PID 不变，调用方的 $! 就是 CuePad，由调用方按它结束，不留看守进程。"""
+    随它退出释放；PID 不变，调用方的 $! 就是 CuePad，由调用方按它结束；不留看守进程（借前台的另有前台看守，随它退出）。"""
     if not BUILD.fullmatch(app):
         die(f"只起 apple/.derived* 里的构建，不起 {app}")
     slot = take_slot()
@@ -142,14 +143,26 @@ def exec_mac(app, library, args):
     exe = f"{app}/Contents/MacOS/CuePad"
     env = isolated_env(os.path.abspath(library))
     env.setdefault("CUEPAD_SHOT_READY", READY)
-    env["CUEPAD_FRONT_REQUEST"] = FRONT
-    front_keeper(os.getpid())  # exec 不换 PID：看守的就是接下来的 CuePad
+    env.update(front_env(args))
+    front_keeper(os.getpid(), args)  # exec 不换 PID：看守的就是接下来的 CuePad
     os.execve(exe, [exe, *args], env)
 
 
-def front_keeper(pid):
-    """后台看守 pid 那个实例：它写了 FRONT（借着前台却没到前台）就经系统事件把它拉到前台，它退出就走。
-    只看文件不问系统谁在前台：前台的切换由实例自己报（到了前台就删、被抢走再写），量的时候这里不多花一次查询。"""
+def wants_front(args):
+    """给了 -CuePadForeground YES：只有这样的实例会借前台（DebugForeground），才要看守。"""
+    return any(a == "-CuePadForeground" and v.lower() in ("yes", "true", "1") for a, v in zip(args, args[1:]))
+
+
+def front_env(args):
+    return {"CUEPAD_FRONT_REQUEST": FRONT} if wants_front(args) else {}
+
+
+def front_keeper(pid, args):
+    """要借前台的实例才有：后台看守 pid 那个实例，它写了 FRONT（借着前台却没到前台）就经系统事件把它拉到前台，它退出就走。
+    只看文件不问系统谁在前台：前台的切换由实例自己报（到了前台就删、被抢走再写）。用 kqueue 等目录变化与实例退出，
+    平时不醒；FRONT 在着（拉了还没到前台）时每 FRONT_RETRY 秒再拉一次。"""
+    if not wants_front(args):
+        return
     if os.path.exists(FRONT):
         os.remove(FRONT)
     if os.fork():
@@ -160,14 +173,18 @@ def front_keeper(pid):
         os.dup2(null, fd)
     os.closerange(3, 1024)  # 不带着本检出那一份的锁与调用方的管道
     pull = f'tell application "System Events" to set frontmost of (first process whose unix id is {pid}) to true'
-    while True:
-        try:
-            os.kill(pid, 0)
-        except ProcessLookupError:
-            break
-        if os.path.exists(FRONT):
-            subprocess.run(["osascript", "-e", pull], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        time.sleep(FRONT_POLL)
+    queue, folder = select.kqueue(), os.open(os.path.dirname(FRONT), os.O_RDONLY)
+    try:
+        queue.control([select.kevent(folder, select.KQ_FILTER_VNODE, select.KQ_EV_ADD | select.KQ_EV_CLEAR, select.KQ_NOTE_WRITE),
+                       select.kevent(pid, select.KQ_FILTER_PROC, select.KQ_EV_ADD, select.KQ_NOTE_EXIT)], 0)
+        while True:
+            if os.path.exists(FRONT):
+                subprocess.run(["osascript", "-e", pull], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            events = queue.control(None, 2, FRONT_RETRY if os.path.exists(FRONT) else None)
+            if any(e.filter == select.KQ_FILTER_PROC for e in events):
+                break
+    except ProcessLookupError:
+        pass  # 装上之前它就退了
     if os.path.exists(FRONT):
         os.remove(FRONT)
     os._exit(0)

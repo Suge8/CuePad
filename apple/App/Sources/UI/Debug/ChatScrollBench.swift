@@ -43,7 +43,7 @@ enum ChatScrollBench {
         var found: (NSWindow, NSScrollView)?
         for _ in 0..<90 {
             try? await Task.sleep(for: .seconds(1))
-            if let window = NSApp.windows.first(where: { $0.styleMask.contains(.resizable) && $0.styleMask.contains(.fullSizeContentView) }),
+            if let window = DebugScene.mainWindow,
                let content = window.contentView, let scroll = chatScroll(in: content) { found = (window, scroll); break }
         }
         guard let (window, scroll) = found else { print("CHATSCROLL-ERR 找不到对话的滚动视图"); fflush(stdout); exit(1) }

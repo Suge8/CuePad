@@ -1,8 +1,6 @@
 import CueStore
 import SwiftUI
 
-
-
 /// 会话页的模型菜单怎么写：按提供方（`PiProvider`）分组，组名有额度时带还剩多少；胶囊上的短名见 `PiModelName`。
 nonisolated enum PiModelLabel {
     /// 分组标题：这家有订阅额度时写"Claude · 5 小时剩 86% · 本周剩 92%"（`QuotaMeter.menuTitle`），否则是提供方名。
@@ -21,7 +19,6 @@ nonisolated enum PiModelLabel {
         return order.map { (PiProvider(id: $0), byProvider[$0] ?? []) }
     }
 }
-
 
 /// 思考强度条：格是一把固定的尺，除"关"以外的六档（最低到最高）各一格，当前档以下填满——同一档在哪个模型上都是同样几格（"低"总是两格），
 /// 换了模型不换样子；模型不支持的档照样有格，指到那里取最近的支持档（`PiThinkingLevel.clamped(to:)`）。关着时格全空。
@@ -67,7 +64,6 @@ nonisolated struct PiThinkingMeter: Equatable {
         return levels.indices.contains(next) ? levels[next] : nil
     }
 }
-
 
 extension PiThinkingLevel {
     nonisolated var label: String {

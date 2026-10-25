@@ -26,13 +26,6 @@ nonisolated extension PiSubagentState {
         }
     }
 
-    /// 角色的图标（会话卡片上一个子代理一个）：FireCode 角色表里的角色各一个，认不出的角色是一个人。
-    var roleIcon: Icon { Self.roleIcons[role] ?? .subagent }
-
-    private static let roleIcons: [String: Icon] = [
-        "调研员": .researcher, "工程师": .engineer, "批量工": .batchWorker, "设计师": .designer, "哨兵": .sentinel,
-    ]
-
     var label: String {
         switch phase.known {
         case .running: "工作中"
