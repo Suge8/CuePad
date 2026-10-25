@@ -40,7 +40,7 @@ def round_trip(run, tag, m):
         if reply:
             rid = reply["id"]
             shown = b.wait(by_id("msg-shown", rid), ROUND_LIMIT)
-            rgot = b.first("msg-arrived", rid)
+            rgot = b.wait(arrived(rid), 5)  # 页面与记录方各订阅一份，同一次提交先送到哪个不定
             m.span("Mac→手机 Cue 回话·写下→手机入库", reply, rgot)
             m.span("Mac→手机 Cue 回话·手机入库→上屏", rgot, shown)
             m.span("Mac→手机 Cue 回话·全程（写下→上屏）", reply, shown)
@@ -237,19 +237,19 @@ def scene_offline(run, args):
 def island(checkout, out, args):
     """M4 收消息到灵动岛（iPhone 模拟器，App 这一侧）：island [轮数=10]。实现与量不到的段见 SyncBench+Island.swift。
     不连 iCloud、不用 cloudd，所以不拿测量锁；模拟器经 xc.sh run ios 领（按它的模拟器锁排队）。"""
-    rounds = int(args[0]) if args else 10
+    rounds, m = int(args[0]) if args else 10, Metrics()
     library = f"{out}/ios-library"
     os.makedirs(out, exist_ok=True)
     env = dict(os.environ, CUEPAD_SHOT_LIBRARY=library, CUEPAD_RUN_SECONDS="600")
     started = subprocess.run([f"{checkout}/apple/scripts/xc.sh", "run", "ios", "--", "-CuePadSyncBench", "island", "-CuePadLiveActivity", "YES",
                               "-CuePadSyncBenchRounds", str(rounds)], env=env, capture_output=True, text=True)
     open(f"{out}/ios-run.log", "w").write(started.stdout + started.stderr)
+    # App 跑完各轮才报就绪，run 返回时打点已写完；最后一行是"PID UDID"，按 PID 收掉这个实例
+    last = started.stdout.strip().splitlines()[-1].split() if started.stdout.strip() else []
+    if started.returncode == 0 and last and last[0].isdigit(): os.kill(int(last[0]), 15)
     marks = f"{library}/bench-marks.jsonl"
-    end = time.time() + 30 + rounds * 5
-    while time.time() < end and not (os.path.exists(marks) and '"done"' in open(marks).read()):
-        time.sleep(1)  # 等的是另一台模拟器里的进程写完文件，没有能订阅的事件
     events = [json.loads(l) for l in open(marks)] if os.path.exists(marks) else []
-    m = Metrics()
+    if not any(e["e"] == "done" for e in events): m["手机收消息·没跑完（次）"].append(1)
     for r in range(1, rounds + 1):
         write = next((e for e in events if e["e"] == "write" and e.get("round") == r), None)
         done = next((e for e in events if e["e"] == "snapshots" and e.get("round") == r), None)
@@ -257,7 +257,6 @@ def island(checkout, out, args):
         shown = next((e for e in events if write and e["e"] == "island" and write["t"] <= e["t"] < upto), None)
         m.span("手机收消息·入库→岛的内容换掉", write, shown)
         m.span("手机收消息·入库→快照写完（推送回调交还前）", write, done)
-    if not events: m["手机收消息·没有打点（超时）"].append(1)
     return m, {}
 
 
