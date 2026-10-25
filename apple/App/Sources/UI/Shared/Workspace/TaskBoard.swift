@@ -4,8 +4,8 @@ import Foundation
 /// 任务看板（进展页的看板一段）的四列，按流水排：待办 → 推进中 → 等你 → 已完成（今天）。列只是任务状态与等你的投影，不另存状态：
 /// 一件任务只在一列：被等你占着的（`CueTally.held`）只在等你，Cue 在做的只在「推进中」，不论它的状态；其余按状态。
 /// - 待办：没做完、Cue 也没在做的顶层任务（没开始的，和开始过而会话都结束了的），项目顺序、同级手动顺序（拖动排序只在同一项目的顶层里挪，`move`）。
-/// - 推进中、等你：就是 `CueStore.cueTally`（Cue 那一行的同一份），"全部"下列头的数与它相等；没绑没做完的任务的活会话在「推进中」里各一张，
-///   等你每件一张、最早的在上（与 Cue 页等你卡同一份，`waits`），没落在任务上的（Cue 的一般提问、没绑任务的会话）也在。
+/// - 推进中、等你：就是 `CueStore.cueTally`（Cue 那一行的同一份），"全部"下列头的数与它相等；没绑没做完的任务的活会话在「推进中」里各一张。
+///   等你两种都放：拍板在前（与 Cue 页拍板卡同一份，`waits`），待回复在后（`replies`），各自等得最久的在上；没落在任务上的（Cue 的一般提问、没绑任务的会话）也在。
 /// - 已完成：今天做完的顶层任务（`CueStore.tasksDone`），最近的在前；更早做完的收在列末（`earlier`），没进归档，所以就地展开，不跳去归档页。
 ///   每件带上 Cue 做完时点名的第一张成果图（`CueStore.cueResultShots`，读的时候一次取齐，不逐行查库）。
 /// 子任务不单列，卡片写进度；会话此刻在做什么看任务此刻干活的叶子（`Item.leaf`）。顶层的口径同 `CueStore.taskCounts`（`TaskTree` 的顶层）。
@@ -83,20 +83,34 @@ nonisolated struct TaskBoard: Sendable, Equatable {
     /// 没绑任务的会话归哪个项目：它的项目，没有项目的归默认项目（同 `PiSessionListItem.home`）。
     static func home(_ session: PiSessionState) -> UUID { session.projectID ?? Project.defaultID }
 
+    /// 等你里待回复的一个会话（`CueTally.Reply`）：绑着任务的带那件任务。
+    struct Reply: Identifiable, Sendable, Equatable {
+        var reply: CueTally.Reply
+        var item: Item?
+        var id: String { reply.id }
+        var session: PiSessionState { reply.session }
+
+        /// 按项目筛时归哪个项目：绑着的任务的项目，否则会话的归处（`home`）。
+        var project: UUID { item?.task.projectID ?? TaskBoard.home(reply.session) }
+    }
+
     var todo: [Item]
     var advancing: [Work]
+    /// 等你里的拍板。
     var waiting: [Wait]
+    /// 等你里的待回复，排在拍板后面。
+    var replies: [Reply]
     var done: [Item]
     /// 更早做完的顶层任务，最近的在前。
     var earlier: [Item]
 
-    static let empty = TaskBoard(todo: [], advancing: [], waiting: [], done: [], earlier: [])
+    static let empty = TaskBoard(todo: [], advancing: [], waiting: [], replies: [], done: [], earlier: [])
 
     func count(_ column: Column) -> Int {
         switch column {
         case .todo: todo.count
         case .advancing: advancing.count
-        case .waiting: waiting.count
+        case .waiting: waiting.count + replies.count
         case .done: done.count
         }
     }
@@ -107,6 +121,7 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         let mine = { (item: Item) in item.task.projectID == project }
         return TaskBoard(
             todo: todo.filter(mine), advancing: advancing.filter { $0.project == project }, waiting: waiting.filter { $0.project == project },
+            replies: replies.filter { $0.project == project },
             done: done.filter(mine), earlier: earlier.filter(mine))
     }
 
@@ -154,6 +169,7 @@ nonisolated struct TaskBoard: Sendable, Equatable {
             todo: try open.roots.compactMap(open.task).filter { Column.of($0, in: tally) == .todo }.map(item),
             advancing: try tally.advancing.map { work in Work(work: work, item: try work.task.map(item)) },
             waiting: try waits(tally.waiting, from: store, item: item),
+            replies: try tally.replies.map { Reply(reply: $0, item: try $0.task.flatMap { try store.card($0) }.map(item)) },
             done: try finished[..<split].map(finishedItem),
             earlier: try finished[split...].map(finishedItem))
     }

@@ -105,8 +105,8 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
         }
     }
 
-    /// 有活才开着实时活动：Cue 在一轮里或话在路上、有等你的、有在跑或等子代理的；只剩歇着与刚做完的就结束。
-    var isLive: Bool { isFast || beads.contains { $0.kind.tone == .asks || $0.kind.tone == .moving } }
+    /// 有活才开着实时活动：Cue 在一轮里或话在路上、有等你的（拍板与待回复）、有在跑或等子代理的；只剩歇着与刚做完的就结束。
+    var isLive: Bool { isFast || beads.contains { [.asks, .reply, .moving].contains($0.kind.tone) } }
 
     /// 这一份过多久不可信。
     var staleAfter: TimeInterval { isFast ? Self.fastStale : Self.slowStale }
@@ -222,7 +222,7 @@ nonisolated extension CueNow.Bead.Kind {
     /// 紧凑态的短词：在跑与等子代理交回都是推进中，两者靠珠子的实心、空心与那一句分。
     var word: String {
         switch self {
-        case .asks: "等你"
+        case .asks: "拍板"
         case .reply: "待回复"
         case .running, .delegating: "推进中"
         case .done: "做完"

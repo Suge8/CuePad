@@ -98,8 +98,8 @@ nonisolated struct CueDigest: Equatable, Sendable {
     var hostName: String?
     /// 推进中与等你（`CueStore.cueTally`）。
     var tally: CueTally
-    /// "等你 M"。
-    var waiting: Int { tally.waiting.count }
+    /// "等你 M"：拍板加待回复（`CueTally.waitingCount`）。
+    var waiting: Int { tally.waitingCount }
     var advancing: Int { tally.advancing.count }
     /// 新消息有几条（`CueStore.cueUnread`）。
     var unread: Int

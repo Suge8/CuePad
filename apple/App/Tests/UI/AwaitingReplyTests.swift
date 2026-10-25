@@ -3,15 +3,15 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 等你只放拍板，待回复另算（WORDS.md）：Cue 留给你回、此刻歇着的会话不进等你（Cue 页等你卡、看板等你列、"等你 N"、名牌），
-/// 在 Cue 页的待回复提示里，等得最久的在前；名牌有拍板只说拍板，没有了才说几个会话待回复（数全部，不只排得下的珠子）。
+/// 等你分拍板与待回复（WORDS.md）：Cue 留给你回、此刻歇着的会话是待回复——Cue 页不进拍板卡、在上方的待回复提示里，等得最久的在前；
+/// 进展页的等你列两种都放（拍板在前），绑着的任务从推进中挪进等你，"等你 N"两种一起数；名牌有拍板只说拍板，没有了才说几个会话待回复（数全部，不只排得下的珠子）。
 /// 点提示：几个时去进展页的会话段，待回复排最前、等得最久的在前；对其中一个说了话它就不再待回复，只剩一个时点了直接进那个会话。
 @MainActor
 struct AwaitingReplyTests {
     let rig = TestApp()
     var store: CueStore { rig.services.store }
 
-    @Test func Cue留给你回的歇着会话不在等你里_在待回复里_点提示去会话段或那个会话() async throws {
+    @Test func Cue留给你回的歇着会话是待回复_Cue页不进拍板卡_看板等你列排在拍板后_点提示去会话段或那个会话() async throws {
         let workspace = Workspace(services: rig.services)
         _ = try await store.updateCueProfile {
             $0.hostID = "mac-cue"
@@ -27,6 +27,8 @@ struct AwaitingReplyTests {
         try await settle("header", "打磨手机 Cue 顶栏", minutesAgo: 5)
         try await settle("glass", "底栏换系统液态玻璃", minutesAgo: 12)
         try await settle("quiet", "清理旧脚本", minutesAgo: 20)
+        let dock = try await store.createTask("底栏换玻璃")
+        try await store.bindSession("glass", to: dock.id)
         _ = try await store.leaveToYou("header")
         _ = try await store.leaveToYou("glass")
         try await recorder.update(
@@ -39,9 +41,12 @@ struct AwaitingReplyTests {
         var page = try await thread()
         #expect(page.waiting.map(\.id) == ["session/deploy"])
         #expect(page.replies.map(\.sessionID) == ["glass", "header"])  // 等得最久的在前；Cue 没留给你的不算
-        #expect(try await TaskBoard.read(from: store).waiting.map(\.id) == ["session/deploy"])
+        let board = try await TaskBoard.read(from: store)
+        #expect(board.waiting.map(\.id) == ["session/deploy"] && board.replies.map(\.id) == ["reply/glass", "reply/header"])
+        #expect(board.replies.first?.item?.task.id == dock.id && !board.advancing.contains { $0.item?.id == dock.id })  // 被待回复占着：只在等你
+        let digest = try await CueDigest.read(from: store)
+        #expect(board.count(.waiting) == 3 && digest.waiting == 3)  // "等你 N"两种一起数
         var cue = try await now()
-        #expect(try await CueDigest.read(from: store).waiting == 1)
         #expect(cue.headline == "1 件等你拍板" && cue.beads.prefix(3).map(\.kind) == [.asks, .reply, .reply])
 
         // 答了拍板：名牌改说待回复

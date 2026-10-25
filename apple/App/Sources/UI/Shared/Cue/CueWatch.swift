@@ -23,7 +23,7 @@ final class CueWatch {
     private(set) var expression = CueMood.sleeping
     /// Cue 此刻（`CueNow`）：Cue 那一行的第二行只读它；内容变了才换（推出的时刻不算）。
     private(set) var now = CueNow.empty
-    /// "等你 M"（`CueDigest.waiting`）：角标、入口的点与面板里等你那一行只读它，不随 Cue 此刻的别的变化重算。
+    /// "等你 M"（`CueDigest.waiting`，拍板加待回复）：角标、入口的点与面板里等你那一行只读它，不随 Cue 此刻的别的变化重算。
     private(set) var waiting = 0
     /// "推进中 N"（`CueDigest.advancing`）：侧栏进展那一行只读它与 `waiting`。
     private(set) var advancing = 0

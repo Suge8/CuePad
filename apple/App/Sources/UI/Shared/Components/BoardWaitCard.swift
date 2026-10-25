@@ -1,7 +1,7 @@
 import CueStore
 import SwiftUI
 
-/// 等你列的一件，排版只在这一个视图里（不包卡片，像 Cue 页里对你说的一句）。从上到下：
+/// 等你列里拍板的一件（待回复是 `BoardReplyCard`），排版只在这一个视图里（不包卡片，像 Cue 页里对你说的一句）。从上到下：
 /// - 抬头一行：项目小图形（看全部项目时；选了项目范围不画；Mac 上悬停是项目联动，`BoardProjectGlyph`）、哪件事（`TaskBoard.Wait.title`；
 ///   做完了还在问的也照常写、不划线），右边是等了多久（`TaskBoard.Wait.since`）。谁在问不写在这里，只靠头像。点抬头去回答的地方（`BoardLink`）：
 ///   会话在问的进会话，Cue 问的去 Cue 页那条提问。

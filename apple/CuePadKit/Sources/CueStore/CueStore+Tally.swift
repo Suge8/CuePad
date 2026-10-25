@@ -1,12 +1,12 @@
 import Foundation
 
-/// 推进中、等你与待回复：Cue 那一行、任务看板中间两列、小组件、实时活动与 Dock 角标读的同一份，只在这里算。
-/// - 等你（要你拍板的）：Cue 带选项问你、还没结束的消息（`cueMessagesWaitingForYou`），加上会话里在等你回答的（`sessionsAskingYou`，规则在 `PiSessionState.asksYou`）。
+/// 推进中与等你：Cue 那一行、任务看板中间两列、小组件、实时活动与 Dock 角标读的同一份，只在这里算。
+/// 等你是总称：卡在你这里的都算，分两种——拍板（`waiting`，在卡上点完）与待回复（`replies`，进会话说）。"等你 N"数两种（`waitingCount`），只说拍板的地方只数 `waiting`。
+/// - 拍板：Cue 带选项问你、还没结束的消息（`cueMessagesWaitingForYou`），加上会话里在等你回答的（`sessionsAskingYou`，规则在 `PiSessionState.asksYou`）。
 ///   一处在等就是一件：同一件任务上 Cue 在问、它的会话也在问，算两件。每件带上它落在哪件顶层任务上（消息的 `taskID`、会话归的那件 `sessionOwners`），没落在任务上的为 nil。
-/// - 被等你占着的（`held`）：有一件等你落在它上面的顶层任务。一件事只在一处：它只算等你，不论状态是待办、进行中还是做完——
+/// - 待回复：Cue 留给你回、此刻歇着的会话（`sessionsAwaitingReply`，规则在 `PiSessionState.awaitsReply`），等得最久的在前，同样带上它归的顶层任务。
+/// - 被等你占着的（`held`）：有一件拍板或待回复落在它上面的顶层任务。一件事只在一处：它只算等你，不论状态是待办、进行中还是做完——
 ///   推进中在这里去掉它们；任务看板与实时活动按列分时也先看它（App 里的 `TaskBoard.Column.of`）。
-/// - 待回复（`replies`）：Cue 留给你回、此刻歇着的会话（`sessionsAwaitingReply`，规则在 `PiSessionState.awaitsReply`），等得最久的在前。
-///   不算等你、不占着任务：绑着任务的照旧随任务在推进中，会话上写"待回复"。
 /// - 推进中：Cue 此刻在做的（`CueBoard.active`，即它信封里的"在做"）里不在等你的：被等你占着的事与在问你、待回复的单独会话去掉；先后同看板。
 ///   进行中而会话都结束了、没人在做的事不算，它留在你的任务清单里（任务看板的待办）。
 public struct CueTally: Equatable, Sendable {
@@ -29,13 +29,30 @@ public struct CueTally: Equatable, Sendable {
     }
   }
 
+  /// 待回复的一个会话，带它归的顶层任务（没绑任务为 nil）。
+  public struct Reply: Identifiable, Equatable, Sendable {
+    public var session: PiSessionState
+    public var task: UUID?
+
+    public init(session: PiSessionState, task: UUID?) {
+      self.session = session
+      self.task = task
+    }
+
+    public var id: String { "reply/\(session.sessionID)" }
+  }
+
   public var advancing: [CueWork]
+  /// 拍板。
   public var waiting: [Wait]
-  public var replies: [PiSessionState]
+  public var replies: [Reply]
 
-  public var held: Set<UUID> { Set(waiting.compactMap(\.task)) }
+  /// "等你 N"：拍板加待回复。
+  public var waitingCount: Int { waiting.count + replies.count }
 
-  public init(advancing: [CueWork], waiting: [Wait], replies: [PiSessionState]) {
+  public var held: Set<UUID> { Set(waiting.compactMap(\.task) + replies.compactMap(\.task)) }
+
+  public init(advancing: [CueWork], waiting: [Wait], replies: [Reply]) {
     self.advancing = advancing
     self.waiting = waiting
     self.replies = replies
@@ -47,9 +64,12 @@ public struct CueTally: Equatable, Sendable {
 extension CueStore {
   public func cueTally() throws -> CueTally {
     let waiting = try cueWaiting()
-    var tally = CueTally(advancing: [], waiting: waiting, replies: try sessionsAwaitingReply())
+    let replying = try sessionsAwaitingReply()
+    let owners = try sessionOwners(replying.map(\.sessionID))
+    var tally = CueTally(
+      advancing: [], waiting: waiting, replies: replying.map { CueTally.Reply(session: $0, task: owners[$0.sessionID]?.task.id) })
     let held = tally.held
-    let yours = Set(waiting.compactMap { if case .session(let state, _) = $0 { state.sessionID } else { nil } } + tally.replies.map(\.sessionID))
+    let yours = Set(waiting.compactMap { if case .session(let state, _) = $0 { state.sessionID } else { nil } } + replying.map(\.sessionID))
     tally.advancing = try cueBoard().active.filter { work in
       switch work {
       case .task(let item): !held.contains(item.id)
@@ -59,7 +79,7 @@ extension CueStore {
     return tally
   }
 
-  /// 只有等你那一份（`CueTally.waiting`，同一条规则）：Cue 页的等你卡只读它，不连带推进中的那些读取。
+  /// 只有拍板那一份（`CueTally.waiting`，同一条规则）：Cue 页的拍板卡只读它，不连带推进中的那些读取。
   public func cueWaiting() throws -> [CueTally.Wait] {
     let messages = try cueMessagesWaitingForYou()
     let sessions = try sessionsAskingYou()

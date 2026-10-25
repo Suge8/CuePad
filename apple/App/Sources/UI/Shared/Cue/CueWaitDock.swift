@@ -1,7 +1,7 @@
 import CueStore
 import SwiftUI
 
-/// "等你"：固定在输入框上方的一张纸，要你拍板的事只在这里——来源与进展页等你列、Cue 那一行的"等你 M"同一份（`CueThread.waiting`，出自 `CueStore.cueTally`）：
+/// 拍板卡：固定在输入框上方的一张纸，要你拍板的事在 Cue 页只在这里——与进展页等你列里的拍板同一份（`CueThread.waiting`，出自 `CueStore.cueTally`；待回复不进来，在上方的提示里）：
 /// Cue 的提问与会话在问的同排，一次铺开一件，默认露等得最久的那件（从任务看板点进来的那条先露，`CueThread.leading`）。
 /// 不止一件时像叠在一起的通知：卡后面露出一两层叠边（`deck`），眉题行写第几件（`CueWaitEyebrow`）；手机上左右滑卡换一件（跟手，甩过或拖过一段就换，
 /// 到头了让给切页），Mac 上点眉题行的小箭头。答完一件，下一件从叠边里顶上来。
