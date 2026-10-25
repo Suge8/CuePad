@@ -240,8 +240,8 @@ struct RealHostTests {
         #expect(bridge.sessions.filter { $0.sessionID == sessionID }.map(\.pid) == [mine.pid])
     }
 
-    /// 托管的进程不随 CuePad 结束：发出一轮后 CuePad 这一侧整个没了（桥与托管服务都停掉，相当于 App 退出），这一轮照常跑完；
-    /// 新起的一套桥重新连上，看到同一个进程、标着托管、状态是做完了。
+    /// 托管的进程不随 CuePad 结束：发出一轮后 CuePad 这一侧整个没了（桥与托管服务都停掉，相当于 App 退出、更新），这一轮照常跑完；
+    /// 新起的一套桥重新连上，看到同一个进程、标着托管、状态是做完了，接着发话照常送达、有回答。
     @Test func aHostedSessionOutlivesCuePadAndIsSeenAgainByTheNextOne() async throws {
         let pi = try await PiProcess(modelInAgentDirectory: true)
         let first = PiBridge(socketDirectory: pi.paths.socketDirectory)
@@ -264,7 +264,11 @@ struct RealHostTests {
         try await eventually("新的桥看到它做完了这一轮") {
             next.sessions.first { $0.pid == opened.pid }.map { $0.hosted && $0.state == .settled } == true
         }
-        #expect(recap(of: next.sessions.first { $0.pid == opened.pid })?.lastReply?.contains("跑到一半") == true)
+        let again = try #require(next.sessions.first { $0.pid == opened.pid })
+        #expect(recap(of: again)?.lastReply?.contains("跑到一半") == true)
+        try await next.send(PiMessage(text: "新的 CuePad 认回之后"), to: again.id)
+        let file = try #require(again.sessionFile)
+        try await eventually("认回的进程接着收话、有回答") { replies(in: file).last == "ECHO 新的 CuePad 认回之后 IMAGES[]" }
     }
 
     /// App 更新后扩展协议号变了，上一版 App 托管的进程还在跑旧扩展：新 App 装上新扩展、请它核对后它空闲时换上、以新协议重新连上，

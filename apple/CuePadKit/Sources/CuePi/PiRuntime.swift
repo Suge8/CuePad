@@ -8,7 +8,8 @@ import OSLog
 /// 状态与消息都走桥。给已结束的会话发消息时恢复它（`resume`），开新会话（`open`）。
 ///
 /// 托管的进程与终端里开的会话是同一个模型：它自己管生死，CuePad 只是连上去看和发的客户端。
-/// - 启动即脱离 App（`ChildProcess.Placement.detached`）：App 退出、更新、崩溃都不影响它，新起的 App 经桥重新看到它；
+/// - 脱离 App（`ChildProcess.Placement.detached`）：连上桥、确认读得懂托管约定后认领它，之后 App 退出、更新、崩溃都不影响它，
+///   新起的 App 经桥重新看到它；认领之前 App 没了，它随之结束（这时它还什么都没收到）；
 /// - 经环境变量 `CUEPAD_HOSTED`（值是空闲多少秒后退出，格式见 README「协议」）告诉扩展：扩展在 hello 里带回（`PiSession.hosted`），
 ///   空闲（这一轮做完、没有等你确认、子代理也歇下）满时限就自己退出；
 /// - 有哪些托管会话只看桥（`hosted` 与 hello 里的 pid），这里不记进程；结束、让出由桥做（`PiBridge` 的托管会话一节）；
@@ -51,6 +52,9 @@ public final class PiRuntime: AgentRuntime {
     /// 托管的 Pi 会话不随 CuePad 退出（新会话组、空闲由扩展自退），没有要关的。
     public func stop() -> @concurrent @Sendable () async -> Void { {} }
 
+    /// 认领后的托管进程脱离 App；扩展协议号随更新变了也一样，它歇下时换上新扩展、以新协议连回。
+    public var hostedSessionsOutliveApp: Bool { true }
+
     /// 在后台于 `directory` 开一个新会话，带上发起方的认领标识；等它连上桥后返回。会话名、模型与思考强度是 Pi 的启动参数
     /// （`--name`、`--model`、`--thinking`），给了就一起生效；模型不存在或没登录时 Pi 起来就退出，抛 `exited` 并带上 Pi 的原话。
     public func open(
@@ -82,7 +86,7 @@ public final class PiRuntime: AgentRuntime {
         let environment = await locate().environment(
             launching: executable,
             overrides: paths.launchEnvironment.merging(environment) { $1 }.merging([Self.hostedVariable: String(idleLimit.components.seconds)]) { $1 })
-        // 脱离 App：新会话、标准输入是它自己握着两端的管道（RPC 模式读到 EOF 就收尾，这样永远读不到），App 不持有它的任何管道；
+        // 脱离 App：新会话、标准输入是它自己握着两端的管道（RPC 模式读到 EOF 就收尾，这样永远读不到）；认领前 App 只握着看守的那根；
         // 标准输出丢掉（RPC 的事件与回应走桥），标准错误留着，没连上就退出时取最后一行当原因
         let process = try await ChildProcess(
             executable, ["--mode", "rpc"] + arguments, directory: directory, environment: environment,
@@ -117,6 +121,7 @@ public final class PiRuntime: AgentRuntime {
             process.end()
             throw PiHostError.extensionMismatch
         }
+        process.release()
         return session
     }
 

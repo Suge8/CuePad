@@ -75,7 +75,8 @@ extension DebugScene {
                 await seedCue(workspace.services)
             }
         case "updatewait":
-            // 更新在等后台会话做完再装：托管的会话由 socket 目录里的假扩展连上来（隔离的 CUEPAD_PI_SOCKET_DIR），连上后检查一次
+            // 托管的 Pi 在干活时检查更新：它撑得过重启，更新不等它、直接装（演示更新器打一个点）。托管的会话由 socket 目录里的假扩展连上来
+            // （隔离的 CUEPAD_PI_SOCKET_DIR），连上后检查一次；随 App 退出的那几家在干活时推迟、"等 N 个 Agent 做完再装"由 UpdateTests 证明
             await connectAgents(workspace.services)
             let pi = workspace.services.pi
             let busy = { pi.sessions.contains { $0.hosted && $0.state.hasPendingWork } }

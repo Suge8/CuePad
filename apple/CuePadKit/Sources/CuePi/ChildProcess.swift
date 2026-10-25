@@ -17,7 +17,10 @@ public final class ChildProcess: Sendable {
     enum Placement: Sendable {
         /// 自成一个进程组：退出后把组里剩下的（它起的、没跟着走的子进程）一并结束，不留孤儿；停它时整组结束
         case group
-        /// 新会话：App 所在会话与进程组的信号碰不到它，App 退出、崩溃它照常在（后台托管的 Pi）
+        /// 新会话：App 所在会话与进程组的信号碰不到它，认领（`release()`）之后 App 退出、崩溃它照常在（后台托管的 Pi）。
+        /// 认领之前它的生死跟着起它的这一方：中转留一个看守读 `holdFD` 上只有本进程握着写端的管道，没等到认领就读到 EOF
+        /// （这个对象没了、App 退出或崩溃）时结束它，SIGTERM 后宽限 `AgentTimeouts.endGrace` 再 SIGKILL。否则起到一半 App 就没了、
+        /// 而它的扩展又没接手（没载入、目录已删）时，它既不会空闲自退也没人认，成了一直空转的孤儿
         case detached
     }
 
@@ -56,6 +59,8 @@ public final class ChildProcess: Sendable {
     private let shared = Shared()
     /// 脱离 App 的进程的标准错误：已删掉名字的临时文件（只剩描述符），进程退出后随最后一个描述符关闭而释放
     private let errorFile: Int32?
+    /// 脱离 App 的进程还没认领时看守那根管道的写端（`Placement.detached`）
+    private let hold: Mutex<Int32?>
     private static let stderrLimit = 4096
 
     /// `environment` 是完整的环境（nil 继承本进程的）；`directory` 为 nil 时用本进程的工作目录。
@@ -110,9 +115,9 @@ public final class ChildProcess: Sendable {
             posix_spawn_file_actions_adddup2(&actions, err.write, STDERR_FILENO)
         }
         if let directory { posix_spawn_file_actions_addchdir(&actions, directory.path) }
-        let pid: pid_t
+        let pid: pid_t, hold: Int32?
         do {
-            pid = try await Self.spawn(
+            (pid, hold) = try await Self.spawn(
                 executable, arguments, environment: environment ?? ProcessInfo.processInfo.environment, actions: &actions,
                 newSession: placement == .detached
             ) { [shared] in Self.watchExit($0, group: placement == .group, shared: shared) }
@@ -124,6 +129,7 @@ public final class ChildProcess: Sendable {
         self.placement = placement
         self.input = input
         self.errorFile = errorFile
+        self.hold = Mutex(hold)
         if let input { _ = fcntl(input, F_SETNOSIGPIPE, 1) }
 
         let shared = shared
@@ -149,6 +155,14 @@ public final class ChildProcess: Sendable {
 
     deinit {
         if let errorFile { close(errorFile) }
+        hold.withLock { $0 }.map { _ = close($0) }
+    }
+
+    /// 认领脱离 App 的进程：看守退出，之后它的生死只归它自己（`Placement.detached`）。
+    func release() {
+        guard let fd = hold.withLock({ fd in defer { fd = nil }; return fd }) else { return }
+        _ = Darwin.write(fd, "\n", 1)
+        close(fd)
     }
 
     // MARK: 一次性的命令

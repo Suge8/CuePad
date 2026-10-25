@@ -96,6 +96,8 @@ final class TestApp {
     let socketDirectory = URL(filePath: "/tmp/cat-\(UUID().uuidString.prefix(8))", directoryHint: .isDirectory)
     lazy var pi = PiBridge(socketDirectory: socketDirectory)
     lazy var host = RecordingHost(bridge: pi, socketDirectory: socketDirectory, sessions: piPaths.sessionsDirectory)
+    /// 托管的 Claude Code 会话（撑不过 App 重启的那一类）
+    lazy var claude = PipedHostedAgent(bridge: pi, agent: .claudeCode)
     #else
     let pasteboardName = UIPasteboard.Name("cuepad-tests-\(UUID().uuidString)")
     #endif
@@ -289,7 +291,7 @@ final class TestApp {
             commandLineTool: CommandLineToolInstaller(helper: helper, linkDirectory: piPaths.binDirectory, shellPath: { nil }),
             updater: updater,
             hooks: AgentHookServer(path: piPaths.hookSocket),
-            runtimes: { [host] _ in [.pi: host] },
+            runtimes: { [host, claude] _ in [.pi: host, .claudeCode: claude] },
             pasteboard: pasteboard,
             cue: cue ?? CueDependencies(launch: { _, _ in nil }, helper: helper, notifier: RecordingCueNotifier()))
         return try! AppServices(location: isolatedLocation, defaults: preferences.defaults, sync: syncSource ?? .custom(sync), mac: mac)
