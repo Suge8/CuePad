@@ -154,6 +154,7 @@ extension DebugScene {
         ], startedMinutesAgo: 20)
         await seedPreviews(store, now: now)
         if let kinds = defaults.string(forKey: "CuePadAllKinds") { await seedAllKinds(store, upTo: Int(kinds)) }
+        if let media = defaults.string(forKey: "CuePadPreviewMedia") { await seedPreviewMedia(store, from: media) }
         await chat("atlas", [
             (String(localized: "跑一下 scheduler 的测试，失败的话先别改代码，告诉我原因", table: "Demo"), String(localized: "12 个用例里有 **2 个失败**：\n\n1. 发言轮次在 5 人以上时，第 6 位被排到了最前——队列按加入时间排序，但重连的人会拿到新的时间戳。\n2. 登录回调走了旧网关，超时后没有重试。\n\n第一个建议改成按首次加入时间排序，改动在 `scheduler/queue.ts`：\n\n```ts\nqueue.sort((a, b) => a.firstJoinedAt - b.firstJoinedAt)\n```\n\n要我先改第一个吗？", table: "Demo"), Self.testRun, 2),
             (String(localized: "按你说的改成首次加入时间排序，把断言也改了，再跑一遍", table: "Demo"), nil, .init(

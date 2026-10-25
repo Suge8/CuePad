@@ -85,6 +85,15 @@ extension DebugScene {
         }
     }
 
+    /// `-CuePadPreviewMedia <目录>`：目录里的文件按文件名顺序作为一批发进 scratch 会话（标题同文件名）。录预览页的缩放、切图、播放与翻页用真内容：
+    /// 大图、真视频、多页 PDF（演示数据里的视频只是占位的字节）。
+    static func seedPreviewMedia(_ store: CueStore, from directory: String) async {
+        let files = (try? FileManager.default.contentsOfDirectory(at: URL(filePath: directory), includingPropertiesForKeys: nil)) ?? []
+        let named = files.filter { !$0.lastPathComponent.hasPrefix(".") }.sorted { $0.lastPathComponent < $1.lastPathComponent }
+            .map { (url: $0, title: $0.deletingPathExtension().lastPathComponent) }
+        _ = try? await store.addPreviews(named, sessionID: "scratch")
+    }
+
     private static var pricingPage: String { """
         <!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>
         body{margin:0;font:17px -apple-system,system-ui,sans-serif;background:linear-gradient(160deg,#eef2ff,#fdf2f8);color:#1c1b19;padding:48px}
