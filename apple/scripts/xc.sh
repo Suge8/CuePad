@@ -146,7 +146,7 @@ case "$cmd" in
   test)
     # 用例断言的是中文界面：不随跑测试那台机器的系统语言变
     limits=(-test-timeouts-enabled YES -maximum-test-execution-time-allowance "$TEST_TIME_LIMIT" -testLanguage zh-Hans -testRegion CN)
-    # 先开好领到的模拟器（停用 PosterBoard，见 _sim.sh），xcodebuild 就用开着的这台。
+    # 先开好领到的模拟器（并瘦身，见 _sim.sh），xcodebuild 就用开着的这台。
     # 再卸掉上一次装的 App：它开着的实时活动在重装时被系统结束，系统随即把 App 叫到后台（不带测试的环境），
     # 正撞上测试宿主的启动，测试进程就连不上（"The test runner hung before establishing connection"）。卸掉时活动一起没了，没有这一下
     if [ -n "${device:-}" ]; then sim_boot "$device"; xcrun simctl uninstall "$device" "$CUEPAD_APP_ID"; fi
