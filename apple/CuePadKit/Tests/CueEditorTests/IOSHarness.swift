@@ -55,20 +55,9 @@ final class EditorHarness {
     private func updateTraits() { root.updateTraitsIfNeeded() }
 
     func setCaret(_ location: Int) { textView.selectedRange = NSRange(location: location, length: 0) }
-    var caret: Int { textView.selectedRange.location }
 
     func privatePasteboard() -> UIPasteboard {
         UIPasteboard(name: UIPasteboard.Name("cue-editor-tests-\(UUID().uuidString)"), create: true)!
-    }
-
-    /// 编辑器在屏幕上实际展示的各段落（TextKit 布局出来的文本元素，带展示属性）。
-    func displayed() -> [NSAttributedString] {
-        var paragraphs: [NSAttributedString] = []
-        textView.textLayoutManager!.enumerateTextLayoutFragments(from: nil, options: [.ensuresLayout]) { fragment in
-            if let paragraph = fragment.textElement as? NSTextParagraph { paragraphs.append(paragraph.attributedString) }
-            return true
-        }
-        return paragraphs
     }
 }
 

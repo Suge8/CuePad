@@ -80,7 +80,6 @@ final class EditorHarness {
     }
 
     func setCaret(_ location: Int) { textView.setSelectedRange(NSRange(location: location, length: 0)) }
-    var caret: Int { textView.selectedRange().location }
 }
 
 final class FakeDrag: NSObject, NSDraggingInfo {
