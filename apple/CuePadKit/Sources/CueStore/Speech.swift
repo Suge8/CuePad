@@ -59,7 +59,7 @@ public enum Speech {
   // MARK: 规则
 
   /// 推出到哪了的外部输入：此刻，与本机同步从什么时候起通着（nil：此刻不通）。接收方就是本机（`localHost`）时不经同步；
-  /// Cue 的说话工具与 Cue 在同一台 Mac 上：按一直通着算、那台就是本机（`CueTools.spoken`）。
+  /// Cue 的说话工具与 Cue 在同一台 Mac 上：按一直通着算（`always`）、那台就是本机（`CueTools.spoken`）。
   public struct Moment: Equatable, Sendable {
     public var now: Date
     public var reachableSince: Date?
@@ -71,7 +71,9 @@ public enum Speech {
       self.localHost = localHost
     }
 
-    public static func always(at now: Date = .now) -> Moment { Moment(now: now, reachableSince: .distantPast) }
+    public static func always(at now: Date = .now, localHost: String? = nil) -> Moment {
+      Moment(now: now, reachableSince: .distantPast, localHost: localHost)
+    }
 
     /// 接收的就是这台 Mac：话不经服务器。
     public func isLocal(_ host: String?) -> Bool { host != nil && host == localHost }
