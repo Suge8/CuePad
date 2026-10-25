@@ -18,11 +18,8 @@ extension DebugScene {
         case "search": workspace.searching = true
         case "progress":
             // 进展页看板段：配 -CuePadDemo 时写入 Mac 同步来的演示会话与 Cue 的等你，推进中的任务带会话状态（同 iOS 的 progress）
-            if defaults.bool(forKey: "CuePadDemo") {
-                await seedRemote(workspace.services)
-                await seedCue(workspace.services)
-                await seedBusyBoard(workspace.services.store)
-            }
+            await seedDemo(workspace.services)
+            if defaults.bool(forKey: "CuePadDemo") { await seedBusyBoard(workspace.services.store) }
             await seedCanvasSteps(workspace.services.store)
             workspace.show(.progress)
         case "agentsetup": workspace.showsSetup = true
@@ -45,22 +42,14 @@ extension DebugScene {
             try? await Task.sleep(for: .seconds(1))
             for id in workspace.presses.selectable.prefix(3) { workspace.presses.toggle(id) }
         case "task":
-            // 给了 -CuePadTask <标题开头> 打开那一条，否则本项目第一条没完成的顶层任务，打开它的气泡
-            let tasks = (try? await workspace.services.store.tasks(.inProgress, .todo).flatMap(\.tasks)) ?? []
-            let named = defaults.string(forKey: "CuePadTask").flatMap { prefix in tasks.first { $0.title.hasPrefix(prefix) } }
-            if let task = named ?? tasks.first(where: { $0.parentID == nil && $0.projectID == workspace.currentProject }) ?? tasks.first { workspace.openTask(task) }
+            // 没给 -CuePadTask 时是本项目第一条没完成的顶层任务
+            await openTask(workspace) { $0.parentID == nil && $0.projectID == workspace.currentProject }
         case "sessions":
-            if defaults.bool(forKey: "CuePadDemo") {
-                await seedRemote(workspace.services)
-                await seedCue(workspace.services)
-            }
+            await seedDemo(workspace.services)
             workspace.showSessions()
         case "cue", "cuememory", "cuerun":
             // Cue 页（演示数据见 `DebugScene+Cue.swift`）；cuememory 再打开"Cue 记得什么"，cuerun 打开"运行情况"（Cue 在这台值班时才有）
-            if defaults.bool(forKey: "CuePadDemo") {
-                await seedRemote(workspace.services)
-                await seedCue(workspace.services)
-            }
+            await seedDemo(workspace.services)
             if defaults.bool(forKey: "CuePadNoAsks") { await settleAsks(workspace.services.store) }
             workspace.show(.cue)
             if scene == "cuememory" { workspace.cue.showsMemory = true }
@@ -70,10 +59,7 @@ extension DebugScene {
             await seedCueRows(workspace.services)
             workspace.showSessions()
         case "menubar", "cuebar":
-            if defaults.bool(forKey: "CuePadDemo") {
-                await seedRemote(workspace.services)
-                await seedCue(workspace.services)
-            }
+            await seedDemo(workspace.services)
         case "updatewait":
             // 托管的 Pi 在干活时检查更新：它撑得过重启，更新不等它、直接装（演示更新器打一个点）。托管的会话由 socket 目录里的假扩展连上来
             // （隔离的 CUEPAD_PI_SOCKET_DIR），连上后检查一次；随 App 退出的那几家在干活时推迟、"等 N 个 Agent 做完再装"由 UpdateTests 证明
@@ -87,10 +73,7 @@ extension DebugScene {
             mainWindow?.orderOut(nil)
         case "settings":
             // 拍真的设置窗口（连同标题栏）：主窗口不带淡出地收起，截图脚本取到的就是它
-            if defaults.bool(forKey: "CuePadDemo") {
-                await seedRemote(workspace.services)
-                await seedCue(workspace.services)
-            }
+            await seedDemo(workspace.services)
             SettingsPane.open(defaults.string(forKey: "CuePadSettingsPane").flatMap(SettingsPane.init(rawValue:)))
             mainWindow?.animationBehavior = .none
             mainWindow?.orderOut(nil)
@@ -101,10 +84,7 @@ extension DebugScene {
                let card = try? await workspace.services.store.card(id) { workspace.open(card) }
         case "session":
             // 整页打开 -CuePadSession（演示会话的 sessionID 与会话名相同）
-            if defaults.bool(forKey: "CuePadDemo") {
-                await seedRemote(workspace.services)
-                await seedCue(workspace.services)
-            }
+            await seedDemo(workspace.services)
             if let id = sessionToOpen {
                 workspace.show(.session(id))
                 if defaults.bool(forKey: "CuePadStream") { Task { await stream(id, store: workspace.services.store) } }
@@ -122,11 +102,18 @@ extension DebugScene {
         }
     }
 
+    /// `-CuePadDemo YES` 时补上演示 Mac 的在线会话与 Cue 的对话（各自已写过就不再写）。
+    private static func seedDemo(_ services: AppServices) async {
+        guard defaults.bool(forKey: "CuePadDemo") else { return }
+        await seedRemote(services)
+        await seedCue(services)
+    }
+
     /// `-CuePadSidebarCycle YES`（配录屏）：画面就绪后每 1.5 秒开合一次侧栏，走 ⌃⌘S 那条路（主菜单动作经响应链），看开合的动效。
     /// `-CuePadSidebarCycle fast`：动画中途反向——按下后 0.1 秒再按、0.06 秒连按三次，各停 1.5 秒，看打断时页是否仍贴着侧栏、停下时是否回到终点。
     private static func cycleSidebar() async {
         // 两次之间停多久是录屏的节奏，不是在等别的事
-        let gaps: [Double] = UserDefaults.standard.string(forKey: "CuePadSidebarCycle") == "fast" ? [0.1, 1.5, 0.06, 0.06, 1.5] : [1.5]
+        let gaps: [Double] = defaults.string(forKey: "CuePadSidebarCycle") == "fast" ? [0.1, 1.5, 0.06, 0.06, 1.5] : [1.5]
         try? await Task.sleep(for: .seconds(1.5))
         var step = 0
         while !Task.isCancelled {
@@ -145,8 +132,6 @@ extension DebugScene {
         await alerts.post(title: content.title, body: content.body)
     }
 
-    /// connected：把几家 Agent 接进截图用的隔离目录（`xc.sh shot` 把各家的配置目录指到产物目录下），看接入后的侧栏、设置与 + 的新会话（选 Agent）。
-    /// 配置目录建出来就算装着（没有命令时按目录认）。
     /// 演示用的更新器（`-CuePadScene updatewait`）：检查就当找到了更新、你点了安装，像 Sparkle 一样先问要不要推迟重启；装的那一刻只打一个点
     /// （`update-installed`），不真装。
     final class DemoUpdater: AppUpdater {
@@ -171,6 +156,8 @@ extension DebugScene {
         try? await store.setDirectory(path, for: project.id)
     }
 
+    /// connected：把几家 Agent 接进截图用的隔离目录（`xc.sh shot` 把各家的配置目录指到产物目录下），看接入后的侧栏、设置与 + 的新会话（选 Agent）。
+    /// 配置目录建出来就算装着（没有命令时按目录认）。
     private static func connectAgents(_ services: AppServices) async {
         for kind in AgentKind.allCases {
             try? FileManager.default.createDirectory(at: services.agents.home(kind), withIntermediateDirectories: true)
@@ -199,9 +186,8 @@ extension DebugScene {
         NSApp.terminate(nil)
     }
 
-    private static var mainWindow: NSWindow? {
-        NSApp.windows.first { $0.styleMask.contains(.resizable) && $0.styleMask.contains(.fullSizeContentView) }
-    }
+    /// 主窗口（Debug 里是 `DebugWindow`）。
+    static var mainWindow: NSWindow? { NSApp.windows.first { $0 is DebugWindow } }
 
     /// 只调整主窗口尺寸，外框样式由壳层创建窗口时决定，这里不碰。
     private static func resizeWindow() {
