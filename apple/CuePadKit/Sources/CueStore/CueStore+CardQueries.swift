@@ -150,8 +150,8 @@ extension CueStore {
       """
       SELECT \(Card.selection(as: "t")) \(Self.taskWithParent)
       WHERE \(Self.visibleTask) AND t.completedAt IS NOT NULL AND \(Self.topLevel)\(scope)
-      ORDER BY \(Self.recentlyDone)\(limit.map { " LIMIT \($0)" } ?? "")
-      """, arguments
+      ORDER BY \(Self.recentlyDone) LIMIT ?
+      """, arguments + [limit ?? -1]
     ) { Card(row: $0) }
   }
 

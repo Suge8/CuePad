@@ -95,9 +95,10 @@ extension CueStore {
   public func sessionsAwaitingReply() throws -> [PiSessionState] {
     guard let cue = try cueDuty(), !cue.left.isEmpty else { return [] }
     let settled = PiWorkState.settled.rawValue
-    let left = JSONColumn.encode(cue.left.map(\.sessionID)).replacingOccurrences(of: "'", with: "''")
-    let candidates = "state = '\(settled)' AND sessionID IN (SELECT value FROM json_each('\(left)'))"
-    return try narrow(.piSessionStates, column: "state", candidates: candidates, to: { $0 == settled }) { rows in
+    let candidates = "state = '\(settled)' AND sessionID IN (SELECT value FROM json_each(?))"
+    return try narrow(
+      .piSessionStates, column: "state", candidates: candidates, arguments: [JSONColumn.encode(cue.left.map(\.sessionID))], to: { $0 == settled }
+    ) { rows in
       try sessions(rows).filter { $0.awaitsReply(cue) }.sorted { ($0.stateSince, $0.sessionID) < ($1.stateSince, $1.sessionID) }
     }
   }
@@ -109,11 +110,10 @@ extension CueStore {
   /// 发给这些会话的最近一条改名，按 Pi 的会话 id（取法见 `DeliveryRequest.latestRename`）。
   func latestRenames(to sessionIDs: [String]) throws -> [String: DeliveryRequest] {
     guard !sessionIDs.isEmpty else { return [:] }
-    let refs = Array(repeating: "?", count: sessionIDs.count).joined(separator: ", ")
     let configs = try select(
       DeliveryRequest.self,
-      where: "targetKind = '\(SendTargetKind.piSession.rawValue)' AND mode = '\(DeliveryMode.config.rawValue)' AND targetRef IN (\(refs))",
-      sessionIDs, orderBy: "createdAt, rowid")
+      where: "targetKind = '\(SendTargetKind.piSession.rawValue)' AND mode = '\(DeliveryMode.config.rawValue)' AND targetRef IN (SELECT value FROM json_each(?))",
+      [JSONColumn.encode(sessionIDs)], orderBy: "createdAt, rowid")
     return Dictionary(grouping: configs) { $0.target.ref ?? "" }.compactMapValues(DeliveryRequest.latestRename(in:))
   }
 
@@ -122,13 +122,12 @@ extension CueStore {
   /// （新请求写成后删掉旧的）或移除；作答、命令、设置不是说的话，不算。
   func unsettledTalk(to sessionIDs: [String]) throws -> [String: [DeliveryRequest]] {
     guard !sessionIDs.isEmpty else { return [:] }
-    let refs = Array(repeating: "?", count: sessionIDs.count).joined(separator: ", ")
     let requests = try select(
       DeliveryRequest.self,
       where: """
         targetKind = '\(SendTargetKind.piSession.rawValue)' AND mode = '\(DeliveryMode.send.rawValue)'
-          AND status IN ('\(DeliveryStatus.pending.rawValue)', '\(DeliveryStatus.failed.rawValue)') AND targetRef IN (\(refs))
-        """, sessionIDs, orderBy: "createdAt, rowid")
+          AND status IN ('\(DeliveryStatus.pending.rawValue)', '\(DeliveryStatus.failed.rawValue)') AND targetRef IN (SELECT value FROM json_each(?))
+        """, [JSONColumn.encode(sessionIDs)], orderBy: "createdAt, rowid")
     return Dictionary(grouping: requests) { $0.target.ref ?? "" }
   }
 
@@ -136,11 +135,10 @@ extension CueStore {
   /// 一次查询按会话聚合；投送请求完成后不久就被执行它的 Mac 清理，表一直很小。
   func latestDeliveries(to sessionIDs: [String]) throws -> [String: DeliveryRequest] {
     guard !sessionIDs.isEmpty else { return [:] }
-    let refs = Array(repeating: "?", count: sessionIDs.count).joined(separator: ", ")
     let requests = try select(
       DeliveryRequest.self,
-      where: "targetKind = '\(SendTargetKind.piSession.rawValue)' AND mode IN (\(sqlList(DeliveryMode.toSession))) AND targetRef IN (\(refs))",
-      sessionIDs, orderBy: "createdAt DESC, rowid DESC")
+      where: "targetKind = '\(SendTargetKind.piSession.rawValue)' AND mode IN (\(sqlList(DeliveryMode.toSession))) AND targetRef IN (SELECT value FROM json_each(?))",
+      [JSONColumn.encode(sessionIDs)], orderBy: "createdAt DESC, rowid DESC")
     var latest: [String: DeliveryRequest] = [:]
     for request in requests {
       if let ref = request.target.ref, latest[ref] == nil { latest[ref] = request }
