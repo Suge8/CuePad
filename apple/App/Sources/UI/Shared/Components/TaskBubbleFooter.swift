@@ -25,8 +25,8 @@ struct BubbleFooter: View {
     }
 }
 
-/// 交给了会话的叶子此刻怎样（`TaskAgentLook`，两端同一份说法）：会话的状态标（`PiStateDot`，在做时是心电线；不用吉祥物，它是 Cue 的样子）、
-/// 一句标题、一句进展或原因；整条点了去会话。
+/// 交给了会话的叶子此刻怎样（`TaskAgentLook`，两端同一份说法）：开头是这家 Agent 的标志（不用吉祥物，它是 Cue 的样子），
+/// 状态标（`PiStateDot`，在做时是心电线）接一句标题，下面一句进展或原因；整条点了去会话。
 private struct AgentStrip: View {
     let leaf: Card
     @Environment(Workspace.self) private var workspace
@@ -42,19 +42,27 @@ private struct AgentStrip: View {
             #endif
             let shown = workspace.shown(state, delivery: item.delivery)
             let look = TaskAgentLook(shown, line: PiProgress.note(of: state, failure: shown.undelivered?.text(sync: workspace.services.syncStatus)))
-            Button { workspace.openSession(state.id, sessionID: state.sessionID) } label: { strip(look, shown: shown, session: state.sessionID) }
+            Button { workspace.openSession(state.id, sessionID: state.sessionID) } label: { strip(look, shown: shown, session: state) }
                 .buttonStyle(PressStyle(.wide))
                 .accessibilityElement(children: .combine)
                 .accessibilityHint("打开会话")
         }
     }
 
-    private func strip(_ look: TaskAgentLook, shown: PiShown, session: String) -> some View {
+    private func strip(_ look: TaskAgentLook, shown: PiShown, session: PiSessionState) -> some View {
         HStack(spacing: BubbleMetrics.gap) {
-            PiStateDot(shown: shown, size: BubbleMetrics.mark).relaySpot(session: session, row: .task)
-                .frame(width: BubbleMetrics.markSlot)
+            // 同看板的会话卡（`BoardSessionCard`）：认得出是哪家就是它的标志，认不出是终端
+            Group {
+                if let kind = session.agent.known { kind.mark.image } else { Image(.terminal) }
+            }
+            .font(.system(size: BubbleMetrics.brand)).foregroundStyle(palette.ink2)
+            .frame(width: BubbleMetrics.markSlot)
+            .accessibilityLabel(session.agentMark ?? "")
             VStack(alignment: .leading, spacing: 2) {
-                Text(look.title).font(BubbleMetrics.strong).foregroundStyle(palette.ink).lineLimit(1)
+                HStack(spacing: 6) {
+                    PiStateDot(shown: shown, size: BubbleMetrics.dot).relaySpot(session: session.sessionID, row: .task)
+                    Text(look.title).font(BubbleMetrics.strong).foregroundStyle(palette.ink).lineLimit(1)
+                }
                 if let note = look.note {
                     Text(note).font(BubbleMetrics.meta).foregroundStyle(palette.ink2).lineLimit(2)
                 }

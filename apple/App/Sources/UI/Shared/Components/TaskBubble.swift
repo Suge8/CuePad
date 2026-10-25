@@ -5,7 +5,7 @@ import SwiftUI
 /// 任务行与看板卡点开工了的叶子直接进会话，其余开它，`Workspace.enter`），
 /// 内容两端同一份（`TaskBubblePage` 加最下面的"下一步" `BubbleFooter`），只有摆法分端（`TaskBubbleSlot`）。不换页、不压暗；点外面或 Esc 关。
 /// 翻到一个子任务（点子任务行）原地换页、左上出返回；别处删掉、归档了它，气泡收起。
-/// "下一步"：交给了会话是它此刻的样子（状态标、一句话），点了去会话；还没开始的叶子是"开始"（正文连同标题交给 Agent）；
+/// "下一步"：交给了会话是它此刻的样子（这家 Agent 的标志、状态与一句话），点了去会话；还没开始的叶子是"开始"（正文连同标题交给 Agent）；
 /// 有子任务的看最该你看的那一步（`Workspace.lead`）。
 struct TaskBubble: View {
     /// 一次打开：`id` 每次打开都不同（同一件事再点一次也从新的那一下长出来）；`step` 是翻到的子任务，翻页不换 `id`。
@@ -144,9 +144,10 @@ enum BubbleMetrics {
     static let textTrailing: CGFloat = 12
     static let footerGap: CGFloat = 10
     static let gap: CGFloat = 10
-    /// "下一步"那一条开头的会话状态标（`PiStateDot` 的尺寸）与它占的那一列。
-    static let mark: CGFloat = 11
+    /// "下一步"那一条开头这家 Agent 的标志、它占的那一列，与标题前的状态标（`PiStateDot` 的尺寸）。
+    static let brand: CGFloat = 20
     static let markSlot: CGFloat = 26
+    static let dot: CGFloat = 8
     static let capsule: CGFloat = 28
     static let stripPadding = EdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 8)
     static let stripRadius: CGFloat = 12
@@ -163,8 +164,9 @@ enum BubbleMetrics {
     static let textTrailing: CGFloat = 12
     static let footerGap: CGFloat = 12
     static let gap: CGFloat = 8
-    static let mark: CGFloat = 14
+    static let brand: CGFloat = 24
     static let markSlot: CGFloat = 32
+    static let dot: CGFloat = 9
     static let capsule: CGFloat = 36
     static let stripPadding = EdgeInsets(top: 10, leading: 10, bottom: 10, trailing: 10)
     static let stripRadius: CGFloat = 18
