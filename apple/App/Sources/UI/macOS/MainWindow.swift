@@ -48,30 +48,16 @@ struct MainWindow: View {
     }
 
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
-        // 工具栏项常驻、只换里面的内容：增删工具栏项会让 AppKit 在开合侧栏的那一帧重建整条工具栏
-        // 玻璃由控件自己画：共用工具栏的玻璃底时，侧栏收起再展开后宽 0 的这一项仍留着玻璃的边距，把右边的分段挤开 42pt
-        ToolbarItem(placement: .navigation) { SwitcherSlot() }
+        // 工具栏项常驻、只换里面的内容（`ScopeSlot` 头注释）：左右各一项把控件排在一起（`LeadingSlots`、`TrailingSlots`），中间是这一页的标题。
+        // 玻璃都由控件自己画：工具栏给条目画的玻璃底不随内容显隐，宽 0 时仍留着玻璃的边距与一个空圆钮
+        ToolbarItem(placement: .navigation) { LeadingSlots() }
             .sharedBackgroundVisibility(.hidden)
-        // 工具栏给条目画的玻璃底不随内容显隐（隐去时会留一个空圆钮），所以关掉它、由按钮自己画
-        ToolbarItem(placement: .navigation) { CloseButton() }
-            .sharedBackgroundVisibility(.hidden)
-        // 进展页的两段分段与会话段的范围、额度、新会话（`PanesSlot`、`ScopeSlot`、`QuotaSlot`、`PageActionSlot`）：常驻、固定宽度，玻璃由控件自己画
-        // 一项里排两样：工具栏的构建器一次最多十项
-        ToolbarItem(placement: .navigation) { HStack(spacing: Spacing.toolbarGap) { PanesSlot(); ScopeSlot() } }
-            .sharedBackgroundVisibility(.hidden)
-        // 会话页的标题（`SessionHeader`）、Cue 页（侧栏收起时）的标题（`CueTitle`），居中；右上的"⋯"（`PageMenuSlot`）是当前页的操作。.principal 在详情区里居中，与对话的阅读栏同一条中线
+        // 会话页的标题（`SessionHeader`）、Cue 页（侧栏收起时）的标题（`CueTitle`），居中；.principal 在详情区里居中，与对话的阅读栏同一条中线
         ToolbarItem(placement: .principal) { PageTitleSlot() }
             .sharedBackgroundVisibility(.hidden)
         ToolbarSpacer(.flexible)
-        ToolbarItem(placement: .primaryAction) { QuotaSlot() }
-            .sharedBackgroundVisibility(.hidden)
-        ToolbarItem(placement: .primaryAction) { PageActionSlot() }
-            .sharedBackgroundVisibility(.hidden)
         ToolbarItem(placement: .primaryAction) { SyncAlert() }
-        // 玻璃由控件自己画：进展页的看板上它藏起来时不留一个空的玻璃圈
-        ToolbarItem(placement: .primaryAction) { SearchSlot() }
-            .sharedBackgroundVisibility(.hidden)
-        ToolbarItem(placement: .primaryAction) { PageMenuSlot() }
+        ToolbarItem(placement: .primaryAction) { TrailingSlots() }
             .sharedBackgroundVisibility(.hidden)
     }
 }
