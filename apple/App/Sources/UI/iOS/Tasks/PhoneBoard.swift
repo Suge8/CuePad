@@ -7,14 +7,12 @@ import SwiftUI
 /// 四行竖着铺满顶栏与底部那一排之间（`BoardRows`）：行高只由这段高定，卡多卡少、有没有都不改，下面不空出一块；
 /// 矮屏与大字号放不下时各行取最小高（`BoardRowLane` 的最小高），整页竖着滚。
 /// 横拖的归属照通用的那条（`PagerArbiter`）：手指下的行还能往那边滚就滚行，贴屏幕边起手、滚到头、行与行之间、空行、行头上的横拖是切页。
-/// 在等你那一行写回答时，别的行退开（淡出、不接点按，点一下收起键盘）：整页为键盘上推时，顶上浮着的搜索、项目与"+"下面只剩页底色，不压着别的卡。
 /// 点"+"添加任务时整页先回到待办那一行。
 struct PhoneBoard: View {
     let board: TaskBoard
     @Binding var adding: Bool
     let newTaskProject: UUID?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var replying = false
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -23,29 +21,17 @@ struct PhoneBoard: View {
                     // 量这一屏多高的尺：滚动区看得见的那段（让开顶栏与底部那一排）
                     Color.clear.containerRelativeFrame(.vertical)
                     ForEach(TaskBoard.Column.allCases) { column in
-                        let away = replying && column != .waiting
                         BoardColumn(column: column, board: board, adding: $adding, newTaskProject: newTaskProject, row: true)
-                            .opacity(away ? 0 : 1)
-                            .overlay { if away { Color.clear.contentShape(.rect).onTapGesture(perform: endEditing) } }
                             .id(column)
                     }
                 }
             }
             .scrollBounceBehavior(.basedOnSize)
             .scrollIndicators(.never)
-            // 一滚就收键盘（等你行的回答框）
-            .scrollDismissesKeyboard(.immediately)
-            .onPreferenceChange(BoardReplying.self) { writing in
-                withAnimation(HandOff.quick) { replying = writing }
-            }
             .onChange(of: adding) {
                 if adding { withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { proxy.scrollTo(TaskBoard.Column.todo, anchor: .top) } }
             }
         }
-    }
-
-    private func endEditing() {
-        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
 
     /// 行与行之间：行没有底，靠这段留白分开。

@@ -1,7 +1,7 @@
 import CueStore
 import SwiftUI
 
-/// 一件拍板怎么答，答法只在这里：进展页等你列的卡（`BoardWaitCard`）、Cue 页拍板卡（`CueWaitDock`）与会话页的问题卡（`QuestionCard`）共用，各处一样大。按问题的种类给：
+/// 一件拍板怎么答，答法只在这里：Cue 页拍板卡（`CueWaitDock`）与会话页的问题卡（`QuestionCard`）共用（进展页只看不答）。按问题的种类给：
 /// - Cue 的提问：它的选项（`CueChoices`），"可以"是全件唯一的靛青；
 /// - 会话的选择题：每个选项一颗胶囊，靠右、放不下换行（`ChipFlow`），长选项折行写全——选项不写进问句，也不给自由回答框（会话页上允许自己写的，提示在底下回复框里写）；
 /// - 确认题："否 / 是"两颗普通胶囊：确认的常是部署、覆盖这类撤不回的事，不用主色推着人点"是"；
@@ -87,7 +87,7 @@ private struct SessionAnswer: View {
         case .select:
             answers((question?.options ?? []).map(PiAnswerValue.option), numbered: replyElsewhere,
                     other: replyElsewhere && question?.allowsOther == true)
-        case .text: if !replyElsewhere { BoardReply(session: session) }
+        case .text: if !replyElsewhere { WaitReply(session: session) }
         case nil:
             if !replyElsewhere {
                 chips {
@@ -169,6 +169,48 @@ private struct SessionAnswer: View {
             } catch {
                 if pending?.promptID == promptID { pending?.error = error.localizedDescription }
             }
+        }
+    }
+}
+
+/// 会话在问的文字题怎么答（`WaitAnswer`）：一行回答框，草稿就是会话页回复框那一份（`AppSettings.replyDraft`，两处写的是同一句），发出同会话页的作答
+/// （`Workspace.speak`：会话在等 CuePad 答得了的提问时这句就是答案，选项写原文或序号）；只发文字，草稿里的卡片与图片留给会话页。
+/// 同步到不了 Mac 时不能发（同回复框）。
+struct WaitReply: View {
+    let session: PiSessionState
+    @Environment(Workspace.self) private var workspace
+    @Environment(AppServices.self) private var services
+    @Environment(\.palette) private var palette
+    @FocusState private var writing: Bool
+
+    private var box: Binding<ComposerDraft> { services.settings.replyDraftBinding(for: session.id) }
+    private var canSend: Bool { services.reachesPiHost && !box.wrappedValue.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+
+    var body: some View {
+        // 一行时字与发送钮同一条中线（字的格至少与钮同高、竖直居中）；写成几行长高时钮贴在最后一行旁（底对齐，上下边距让最后一行对着钮的中线）
+        HStack(alignment: .bottom, spacing: 6) {
+            TextField("回答", text: box.text, palette: palette, axis: .vertical)
+                .textFieldStyle(.plain).font(Typography.secondary).lineLimit(1...4)
+                .padding(.vertical, Self.textInset)
+                .frame(minHeight: ComposerMetrics.glyphTarget)
+                .focused($writing)
+                .onSubmit(send)
+            Button(action: send) { SendGlyph(canSend ? .ready : .idle) }
+                .buttonStyle(PressStyle(.button))
+                .disabled(!canSend)
+                .accessibilityLabel("回答")
+        }
+        .padding(.leading, 12).padding(.trailing, 3).padding(.vertical, 3)
+        .background(palette.fill, in: .rect(cornerRadius: 18, style: .continuous))
+    }
+
+    /// 字上下各让出的空：一行字（约 16）加两边正好是钮的点按高，多行时最后一行仍落在钮的中线附近。
+    private static let textInset: CGFloat = 12
+
+    private func send() {
+        guard canSend else { return }
+        _ = workspace.speak(to: .session(session, mode: .send), from: box, keeping: { var kept = $0; kept.text = ""; return kept }) { draft in
+            draft.text.trimmingCharacters(in: .whitespacesAndNewlines)
         }
     }
 }

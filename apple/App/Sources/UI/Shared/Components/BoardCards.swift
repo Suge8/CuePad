@@ -6,8 +6,8 @@ extension View {
     /// 左右内边距与圆角见 `TaskMetrics`。平放的纸不加模糊阴影（侧栏开合时整面墙每帧重画，`paper` 的注释）：靠纸与桌面（托盘）的明度差把纸托出来。
     func boardCard(advancing: Bool) -> some View { modifier(BoardCardFrame(advancing: advancing)) }
 
-    /// 卡上的标题：一行；手机竖版看板（`boardRow`）里小一档、可折成两行。
-    func boardTitle(advancing: Bool) -> some View { modifier(BoardTitleStyle(advancing: advancing)) }
+    /// 卡上的标题：一行；手机竖版看板（`boardRow`）里小一档、可折成两行。`wraps`：等你列的卡（名字要先读得出，右端没有占地方的状态词）处处可折两行。
+    func boardTitle(advancing: Bool, wraps: Bool = false) -> some View { modifier(BoardTitleStyle(advancing: advancing, wraps: wraps)) }
 
     /// 项目联动（Mac）：指针停在侧栏的项目行或卡上的项目小图形上时（`Workspace.hoveredProject`），别的项目的卡淡下去，这个项目的不动。
     /// 只这一个小修饰读它：指针换项目时重算的是各卡的透明度，不是整张卡。没有项目的（Cue 的一般提问）跟着淡。
@@ -41,10 +41,11 @@ private struct BoardCardFrame: ViewModifier {
 
 private struct BoardTitleStyle: ViewModifier {
     let advancing: Bool
+    let wraps: Bool
     @Environment(\.boardRow) private var row
 
     func body(content: Content) -> some View {
-        content.font(row ? BoardCardMetrics.rowTitle : TaskMetrics.lineFont).lineLimit(row ? 2 : 1)
+        content.font(row ? BoardCardMetrics.rowTitle : TaskMetrics.lineFont).lineLimit(row || wraps ? 2 : 1)
     }
 }
 
@@ -104,7 +105,7 @@ struct BoardSessionCard: View {
     var body: some View {
         let pulse = workspace.pulse(of: session)
         let resting = pulse.tier == .resting
-        BoardLink(session: session) {
+        BoardLink(to: .session(session)) {
             BoardCardLayout(advancing: true, pulse: pulse, moves: moves) {
                 Group {
                     if let kind = session.agent.known { kind.mark.image } else { Image(.terminal) }
