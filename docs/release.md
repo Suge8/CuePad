@@ -29,7 +29,7 @@ Sparkle 2：密钥、appcast 与只发完整包见 `sparkle.sh` 头注释，更�
 
 enclosure 带构建号，是因为 GitHub 不能一次替换多个资产：用固定名字时，换包与换 appcast 之间有一段旧签名配新包的窗口，落后的客户端验签失败。所以上传顺序是：带构建号的新包 → `appcast.xml` → 官网包 → 删上一版带构建号的包；中途失败重跑 `release mac` 即可补齐。
 
-装更新要重启 CuePad：托管的 Pi 撑得过重启（新版经桥认回），Claude Code、Codex 这类随 App 退出的托管会话还在干活或等你确认时，重启推迟到它们空下来（`UpdateService`）。`-CuePadScene updatewait` 验托管的 Pi 在干活时更新直接装。
+装更新要重启 CuePad：托管的 Pi 撑得过重启（新版经桥认回），Claude Code、Codex、OpenCode 这类随 App 退出的托管会话还在干活或等你确认时，重启推迟到它们空下来（`UpdateService`）。`-CuePadScene updatewait` 验托管的 Pi 在干活时更新直接装。
 
 换 logo 时重跑 `scripts/make-icon.py`，菜单栏图标 `cue.menubar` 在符号生成器里一起改。
 
@@ -52,11 +52,13 @@ xcrun cktool export-schema $C --output-file /tmp/dev.ckdb   # 回读：服务端
 2. 用 better-browser-use 的 `--mine` 车道（用户自己已登录 Apple 开发者账号的浏览器）打开控制台，开发环境点「Deploy Schema Changes…」，确认页列出的改动只有这次新增的，再点 Deploy。
 3. 再回读生产与 `cuepad.ckdb` 对比；交回时附确认页与部署完成的截图。
 
-发布带新字段或新记录类型的版本前先部署：生产里写未部署的字段或类型会让整条记录保存失败。`release mac` 打包前由 `ck-production.sh` 核对，缺的先部署再发。生产结构只能增不能删：已下线的类型与字段在 `CloudKitSchema.retiredTypes` / `retiredFields` 照原样声明。
+发布带新字段或新记录类型的版本前先部署：生产里写未部署的字段或类型会让整条记录保存失败。`release mac|ios` 打包前由 `ck-production.sh` 核对，缺字段或下面的待部署清单还有条目就不发。生产结构只能增不能删：已下线的类型与字段在 `CloudKitSchema.retiredTypes` / `retiredFields` 照原样声明。
 
 订阅分两半：定义随 schema 部署，每台手机的订阅由 App 自己建（`AlertSubscriptions`，启动、账号变化、回前台时补建）。Apple 的 `CKSubscription` 文档："Create subscriptions in the development environment first and then promote them to production. Attempting to create a subscription directly in the production environment results in an error." 本项目 2026-10-07 在生产实测：没部署过的查询订阅被拒（CKErrorDomain 12，底层 BadSyntax 2006，"attempting to create a subscription in a production container"），数据库订阅不受限；按通知形状匹配（换成 alertBody 的变体会被拒）。订阅不在 `.ckdb` 里，cktool 看不到。改定义（谓词、选项、通知文案 key、content-available）的部署办法：开发环境签名的构建在开发容器里保存同样的订阅（同步区也用 `CuePad`），再在控制台 Deploy Schema Changes。确认页各项都显示 0、也不列出订阅，但部署照样生效。
 
-待部署到生产（发版前一次 Deploy Schema Changes，部署完删掉对应条目）：
+### 待部署到生产
+
+发版前一次 Deploy Schema Changes，部署完删掉对应条目（`ck-production.sh` 按这一节的条目拦发版）：
 
 - 字段 `cueMessages.places`（ENCRYPTED STRING，对话写下时提到的那几处的样子，`CuePlace`）：已导入开发环境。没部署时带它的 Cue 对话在生产里存不上。
 - 订阅定义（还没在开发容器里保存）：新增 `cuepad.pi.reply`（Cue 留给你回的会话，`notify == awaitsReply`，文案 key `pi_alert_reply`）。部署前先用开发签名的构建（`xc.sh device`）打开一次手机，让它在开发容器里建好，再部署、再发 iOS 版。没部署时生产里建不成它，待回复的锁屏推送不来，别的照常。

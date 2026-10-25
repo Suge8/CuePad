@@ -30,16 +30,19 @@ extension DebugScene {
         case "sent": _ = workspace.speak(to: listener, from: box) { try $0.stored(in: files) }
         case "trips":
             // 会话在哪台就发给哪台（`CueStore.speak`），所以直接写请求、指给那台不接手的，再像发出时那样马上传
-            guard case .session(let target, _, _, _) = listener, let ref = target.ref,
-                  let request = try? await services.store.requestDelivery(box.wrappedValue.text, to: target, on: Self.idleMac, mode: .send)
-            else { return }
-            box.wrappedValue.text = ""
-            await services.upload(request.id)
-            // 这一页的话都有了着落再报就绪：交给 demo-mini 的有了结果，发给不接手的那台的传上了替身
-            let settled = services.store.observe { store in
-                try store.deliveryRequests(toSession: ref).allSatisfy { !$0.isOpen || $0.hostID == Self.idleMac && $0.reachedServer }
+            guard case .session(let target, _, _, _) = listener, let ref = target.ref else { return }
+            do {
+                let request = try await services.store.requestDelivery(box.wrappedValue.text, to: target, on: Self.idleMac, mode: .send)
+                box.wrappedValue.text = ""
+                await services.upload(request.id)
+                // 这一页的话都有了着落再报就绪：交给 demo-mini 的有了结果，发给不接手的那台的传上了替身
+                let settled = services.store.observe { store in
+                    try store.deliveryRequests(toSession: ref).allSatisfy { !$0.isOpen || $0.hostID == Self.idleMac && $0.reachedServer }
+                }
+                for try await done in settled where done { break }
+            } catch {
+                abandon("trips 那一句没摆好", error)
             }
-            do { for try await done in settled where done { break } } catch {}  // 读库失败：画面照样摆出来，不等
         case "send":
             Task {
                 try? await Task.sleep(for: .seconds(2))

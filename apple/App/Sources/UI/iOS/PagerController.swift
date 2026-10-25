@@ -9,7 +9,7 @@ import UIKit
 /// 各页的托管控制器建过就留着（回访不重建、滚动位置还在），挂不挂在窗口上另说：
 /// - 当前页一直挂着；滑动中露出来的页（`moving`）挂着、画着、订阅着；
 /// - 两边的邻页停稳后挂上但藏着（下一次拖时现成），不订阅（`pageActive` 为假，没读过的先读一份 `pagePrefetch`）；
-/// - 推入的页盖住根（转场做完）时只留当前页挂着：返回时导航栈把根重新挂回窗口，挂着几页就要重排几页。回到根上安静一阵再把邻页挂回去。
+/// - 推入的页盖住根（转场做完、根离开窗口）时只留当前页挂着：返回时导航栈把根重新挂回窗口，挂着几页就要重排几页。回到根上安静一阵再把邻页挂回去。
 /// 还没建的页在打开 App 后安静一阵（`buildDelay`）再一页一页地建，离当前页近的先建；拖的那一下邻页还没有才当场建。
 final class PagerController: UIViewController {
     struct Input {
@@ -35,14 +35,13 @@ final class PagerController: UIViewController {
     private var turn = 0
     /// 前进松手后推入真的页，它画上屏之前快照还留着。
     private var handing = false { didSet { setNeedsUpdateProperties() } }
-    private var covered = false
     private var idle: Task<Void, Never>?
     private let pan = UIPanGestureRecognizer()
     private let arbiter = PagerArbiter()
 
     private static var last: Int { Dock.pages.count - 1 }
     /// 前进时 Cue 页退开的比例（同系统推入时下面那一页）。
-    static let parallax: CGFloat = 0.3
+    private static let parallax: CGFloat = 0.3
     /// 打开 App 后先等这么久再建别的页：首屏、紧接着的滚动与输入不和它挤（同 Mac 启动后的预热）。
     private static let buildDelay: Duration = .seconds(2)
     /// 返回到根上后等这么久再把邻页挂回去：不压在返回转场刚停的那几帧上。
@@ -154,13 +153,11 @@ final class PagerController: UIViewController {
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        covered = false
         settleDown()
     }
 
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
-        covered = true
         idle?.cancel()
         for route in pages.keys where route != resting { detach(route) }
     }
@@ -171,10 +168,10 @@ final class PagerController: UIViewController {
         let detached = neighbors(of: resting).filter { pages[$0] != nil && pages[$0]?.slot.superview !== strip }
         let index = Dock.order(resting)
         let unbuilt = Dock.pages.filter { pages[$0] == nil }.min { abs(Dock.order($0) - index) < abs(Dock.order($1) - index) }
-        guard !covered, let next = detached.first ?? unbuilt else { return }
+        guard view.window != nil, let next = detached.first ?? unbuilt else { return }
         let delay = detached.isEmpty ? Self.buildDelay : Self.attachDelay
         idle = Task { [weak self] in
-            guard (try? await Task.sleep(for: delay)) != nil, let self, !self.covered, !self.motion.busy else { return }
+            guard (try? await Task.sleep(for: delay)) != nil, let self, self.view.window != nil, !self.motion.busy else { return }
             self.build(next)
             self.settleDown()
         }

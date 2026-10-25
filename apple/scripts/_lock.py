@@ -1,16 +1,18 @@
 """xc.sh 的入口锁（规则与用法见 _lock.sh 头注释）：按模式拿检出、模拟器、闸门与机器几把 flock，登记持有者，
 在锁里起命令并守着它的时限，结束时连同它起的全部进程（swift test 的测试宿主、xcodebuild 的编译器各自另起进程组，按组结束会漏下它们）。
-用法：_lock.py <时限秒> <等待上限秒> <报告间隔秒> <模拟器台数> <运行目录> <本检出的锁文件> <plain|sim|exclusive> <命令…>
+用法：_lock.py <时限秒> <等待上限秒> <报告间隔秒> <模拟器台数> <plain|sim|exclusive> <命令…>；锁与登记在 app_env.RUNTIME，本检出的锁在 apple/.derived/xc.lock
 """
 import fcntl, json, os, shlex, signal, subprocess, sys, threading, time
 
 sys.dont_write_bytecode = True
+from app_env import APPLE, CHECKOUT, RUNTIME  # noqa: E402
 from app_proc import descendants  # noqa: E402
 
-hold, wait_limit, report, pool, root, own, mode, *cmd = sys.argv[1:]
+hold, wait_limit, report, pool, mode, *cmd = sys.argv[1:]
 hold, wait_limit, report, pool = int(hold), int(wait_limit), int(report), int(pool)
-holders = f"{root}/holders"
+holders, own = f"{RUNTIME}/holders", f"{APPLE}/.derived/xc.lock"
 os.makedirs(holders, exist_ok=True)
+os.makedirs(os.path.dirname(own), exist_ok=True)
 begun = time.time()
 
 
@@ -22,7 +24,7 @@ def processes(pids):
     return {int(line.split(None, 2)[0]): tuple(part.strip() for part in line.split(None, 2)[1:]) for line in out.splitlines()}
 
 
-me = {"pid": os.getpid(), "start": processes([os.getpid()])[os.getpid()][1], "checkout": os.path.dirname(os.path.dirname(os.path.dirname(own))),
+me = {"pid": os.getpid(), "start": processes([os.getpid()])[os.getpid()][1], "checkout": CHECKOUT,
       "cmd": shlex.join(cmd), "held": [], "waiting": None}
 record = f"{holders}/{me['pid']}.json"
 
@@ -140,9 +142,9 @@ try:
     acquire([(checkout, f"检出 {me['checkout']}")], fcntl.LOCK_EX, "这个检出的上一个任务还在跑")
     sim = ""
     if mode == "sim":
-        sims = [open(f"{root}/sim{n}", "a+") for n in range(pool)]
+        sims = [open(f"{RUNTIME}/sim{n}", "a+") for n in range(pool)]
         sim = str(acquire([(f, f"模拟器 {n}") for n, f in enumerate(sims)], fcntl.LOCK_EX, f"{pool} 台模拟器都在用"))
-    gate, machine = open(f"{root}/gate", "a+"), open(f"{root}/machine", "a+")
+    gate, machine = open(f"{RUNTIME}/gate", "a+"), open(f"{RUNTIME}/machine", "a+")
     if mode == "exclusive":
         acquire([(gate, "闸门（独占）")], fcntl.LOCK_EX, "另一个性能测量在跑")
         acquire([(machine, "机器（独占）")], fcntl.LOCK_EX, "等在跑的编译、测试做完（性能测量独占机器）")

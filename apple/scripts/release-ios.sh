@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # iOS：testflight = 归档 → 导出并上传 App Store Connect；device = 开发构建并装到连接的真机。
 # 手动签名：证书与描述文件由 provision.py 经 API 创建（Xcode 自动签名的 API 密钥管不了 App Group / iCloud 容器）。
+# testflight 打包前先核对生产环境的 CloudKit 结构与待部署清单（ck-production.sh），没部署完就不发。
 # 前提：docs/release.md。
 set -euo pipefail
 APPLE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -15,6 +16,7 @@ provision="$APPLE_DIR/scripts/provision.py"
 
 case "$mode" in
   testflight)
+    "$APPLE_DIR/scripts/ck-production.sh"
     rm -rf "$OUT"; mkdir -p "$OUT"
     python3 "$provision" all
     # 版本由 release_versions 推出，命令行设置同时作用于 App 与扩展，两者一致
