@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""记忆基准（LongMemEval、LoCoMo、ConvoMem）给 Cue 的长期记忆打分：抽题、判分、出报告。跑法见 docs/verify.md「记忆基准」。
+"""记忆基准（LongMemEval、LoCoMo、ConvoMem）给 Cue 的长期记忆打分：抽题、判分、出报告。跑法见 docs/cue-eval.md「记忆基准」。
 
   bench.py sample BENCH [--data DIR] [--holdout]  下载 BENCH（lme / locomo / convomem）的官方数据到 DIR（缺省 /tmp/bench/BENCH，缺时才下），
                                       按层抽 100 题（种子 42）写成评测读的 DIR/sample.jsonl；--holdout 另抽一份与它不相交、各层题数相同的 holdout.jsonl

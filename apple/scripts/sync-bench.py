@@ -9,7 +9,7 @@ B 代替开着 Agent 页的手机（模拟器登不了 iCloud；拉取节奏按�
 要同时开两个实例，不经 app.py 的每个检出一份；隔离目录同样取 app_env.isolated_env。
 环境：SYNC_BENCH_SESSIONS 会话数（默认 3）；
       SYNC_BENCH_FLIP 每个会话平均几秒切一次状态（默认 8）；SYNC_BENCH_EVERY B 每轮间隔秒（默认 30）；SYNC_BENCH_WARMUP 预热秒（默认 90，不计入）。
-前提、口径与限制见 docs/verify.md「同步测量」。只结束自己起的进程。
+前提、口径与限制见 docs/perf.md「同步测量」。只结束自己起的进程。
 """
 import json, os, random, re, select, socket, statistics, subprocess, sys, time
 from collections import Counter

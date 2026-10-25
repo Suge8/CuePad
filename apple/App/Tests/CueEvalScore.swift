@@ -3,7 +3,7 @@ import CueStore
 import Foundation
 @testable import CuePad
 
-/// 判定的类别：成绩单（`apple/scripts/score.py`）按它汇总通过数。定义见 docs/verify.md「Cue 评测」。
+/// 判定的类别：成绩单（`apple/scripts/score.py`）按它汇总通过数，跑法见 docs/cue-eval.md。
 enum CheckKind: String, CaseIterable {
     /// 事做对没
     case result = "结果"

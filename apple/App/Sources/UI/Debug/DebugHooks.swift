@@ -74,7 +74,7 @@ enum DebugHooks {
         #endif
     }
 
-    /// 隔离库也连 iCloud：只给同步测量（docs/verify.md「同步测量」），只连 CloudKit 开发环境，见 `DebugScene.syncsIsolatedLibrary`。
+    /// 隔离库也连 iCloud：只给同步测量（docs/perf.md「同步测量」），只连 CloudKit 开发环境，见 `DebugScene.syncsIsolatedLibrary`。
     static var syncsIsolatedLibrary: Bool {
         #if DEBUG && os(macOS)
         DebugScene.syncsIsolatedLibrary

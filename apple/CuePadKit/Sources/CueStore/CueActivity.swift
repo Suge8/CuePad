@@ -5,7 +5,7 @@ import Foundation
 ///   Cue 页这一轮的经过（`touches`）与正在跑的那一步（`CueState.step`：页头那句、对话里在跑那一行、Mac 的"运行情况"）都按这张表写（`line`）。
 /// - 给 Cue 看的（`Tools.Item.target`，`CueActivity.item` 写）：跟它的工具名走（开工、做完、对「X」说：…），同 WORDS 里"做完"是 Cue 的说法，
 ///   只进它换新后的对话视图（`CueView`）。
-/// 界面的动词跟按钮走、会改；Cue 的说法跟工具与系统提示走，改了等于改提示词，要做前后评测（docs/verify.md）。所以两份各管各的。
+/// 界面的动词跟按钮走、会改；Cue 的说法跟工具与系统提示走，改了等于改提示词，要做前后评测（docs/cue-eval.md）。所以两份各管各的。
 /// 认调用、写这两句的在 CueAgent（`CueActivity+Calls`）：那边只在 Mac 上有，界面各端读这边。
 public enum CueActivity {
   /// 按钮同名的动作词；不碰任务与会话的种类（读文件、命令、记忆）没有。`.edit` 在 Cue 的一轮里是改任务（会话里的改文件不读这张表）。

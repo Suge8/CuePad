@@ -6,7 +6,7 @@
   ids                           创建 App ID（主 App、分享扩展、小组件）并开启能力（App Groups、iCloud、推送；推送只有 iOS 用）
   identity <distribution|development>  本机没有该证书的私钥时创建证书，放进专用钥匙串
   profiles                      创建并安装描述文件：iOS（App Store；有已登记设备时再建 Development）与 macOS（Developer ID；
-                                有已登记的 Mac 时再建 Development，CloudKit 开发环境只能用它，见 docs/verify.md「同步测量」）
+                                有已登记的 Mac 时再建 Development，CloudKit 开发环境只能用它，见 docs/perf.md「同步测量」）
   device <UDID> <名称> [MAC_OS] 登记一台真机（Mac 用 Provisioning UDID，不是 Hardware UUID）
   devid-csr                     为 Developer ID Application 证书生成私钥与 CSR（证书只有账号持有人能创建，见 docs/release.md）
   devid-import <.cer 路径>      把网页上下载的 Developer ID 证书连同私钥导入专用钥匙串
