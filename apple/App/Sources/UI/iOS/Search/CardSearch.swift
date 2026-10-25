@@ -16,7 +16,7 @@ struct CardSearchResults<Leading: View>: View {
     }
 
     var body: some View {
-        ScrollView {
+        ResultsScroll(query: query) {
             LazyVStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 8) {
                     ChipRow {
