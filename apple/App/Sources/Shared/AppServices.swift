@@ -225,7 +225,7 @@ final class AppServices {
         agents = mac.agents
         macAgents = MacAgentsRecorder(store: store, sync: self.sync, host: mac.hostID, agents: agents)
         commandLineTool = mac.commandLineTool
-        updates = UpdateService(updater: mac.updater, bridge: mac.pi)
+        updates = UpdateService(updater: mac.updater, bridge: mac.pi, runtimes: runtimes)
         historyStore = PiHistoryPersistence(storage: store, host: mac.hostID)
         cue = CueService(
             recorder: piStateRecorder, sync: self.sync, library: location.directory,

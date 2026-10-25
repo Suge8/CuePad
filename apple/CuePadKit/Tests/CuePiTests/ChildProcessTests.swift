@@ -42,5 +42,19 @@ struct ChildProcessTests {
         #expect(await child.exited(within: .seconds(5)))
         child.end()
     }
+
+    /// 后台托管的进程在认领之前，起它的一方没了（App 退出、更新、崩溃，这里是起它的对象释放了）就随之结束，连 SIGTERM 也不理的也不留下：
+    /// 不然起到一半 App 就没了、扩展又没接手的 Pi 会一直空转（10-21 测量实例留下的 25 个孤儿）。认领之后照常活着由
+    /// `RealHostTests.aHostedSessionOutlivesCuePadAndIsSeenAgainByTheNextOne` 证明。
+    @Test(.timeLimit(.minutes(1))) func aDetachedProcessNobodyClaimedEndsWithItsLauncher() async throws {
+        let started = try makeTempDirectory().appending(path: "started")
+        var child: ChildProcess? = try await ChildProcess(
+            URL(filePath: "/bin/sh"), ["-c", "trap '' TERM; touch '\(started.path)'; exec sleep 300"], placement: .detached, input: .lifeline)
+        let pid = try #require(child?.pid)
+        defer { kill(pid, SIGKILL) }  // 见红时别留下
+        try await eventually("它跑起来了、不理 SIGTERM") { !fileGone(started) }
+        child = nil
+        try await eventually("没认领的进程随起它的一方结束", timeout: .seconds(15)) { kill(pid, 0) != 0 }
+    }
 }
 #endif
