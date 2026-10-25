@@ -79,7 +79,7 @@ CUEPAD_FAKE_HOME=$PWD/apple/.derived/fakehome apple/scripts/xc.sh run mac -- -Cu
 ## 通知
 
 - 隔离库默认不发系统通知、不要权限、不装提示音、不设角标：这些按 bundle id 记，与正式版同一个，没人点的权限弹窗还会盖住之后的截图。验收给 `-CuePadNotifications YES`，Mac 的提示音这时装进真实的 ~/Library/Sounds。
-- 产物目录里的构建拿不到通知权限（日志 `Failed to find or validate client`）：复制成 `~/Applications/CuePad Notify.app`（别的名字，不覆盖 `CuePad.app`），改掉 `CFBundleIdentifier` 再 ad-hoc 重签名，用 `open -n -g --env …` 带上 `app.isolated_env` 那几个目录启动；验完删掉副本，系统设置的通知列表里会留下这个 bundle id。
+- 产物目录里的构建拿不到通知权限（日志 `Failed to find or validate client`）：复制成 `~/Applications/CuePad Notify.app`（别的名字，不覆盖 `CuePad.app`），改掉 `CFBundleIdentifier` 再 ad-hoc 重签名，用 `open -n -g --env …` 带上 `isolated_env` 那几个目录启动；验完删掉副本，系统设置的通知列表里会留下这个 bundle id。
 - 触发会话状态：在 `CUEPAD_PI_SOCKET_DIR` 里放一个说桥协议的假扩展（协议见 CuePi README）。
 - 系统要等自己的通知处理（含 Apple 智能摘要）走完才呈现，实测有时 20 秒；横幅 5 秒就收，边等边找（`bcu find-roots --app NotificationCenter` 里的 dialog）。
 - 实际播了哪个文件看 `systemsoundserverd` 日志的 `mAudioToken`（通知中心那行 `Playing notification sound` 找不到文件时也照打，实际播的是兜底音）；Dock 角标读 Dock 里这一项的 `AXStatusLabel`。
