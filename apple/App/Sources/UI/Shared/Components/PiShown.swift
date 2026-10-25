@@ -28,7 +28,7 @@ nonisolated extension PiSessionState {
     /// 待回复那一档是等得最久的在前，同 Cue 页的待回复提示（`CueStore.sessionsAwaitingReply`）。
     /// `deliveries` 是发给各会话（按 Pi 的会话 id）的最近一条投送请求：话在路上的与工作中同档，发出那一刻就挪到位。
     /// 不看有没有新回复：看一眼就让行换位置，列表会在手下跳。
-    /// `cue`：Cue 在值班时的那一份（`LiveSessions.cue`），等它回答的与在跑的同档（`PiShown.Status.cueAsking`），它留给你回的（待回复）排最前。
+    /// `cue`：Cue 在值班时的那一份（`LiveSessions.cue`），等它回答的与在跑的同档（`PiShown.Status.cueAsking`），它留给你回的（待回复）紧随等你确认。
     /// `moment`：此刻（话超时就是没能送达）。
     /// `state`：一项的会话（会话本身是 `\.self`）。
     static func inListOrder<Item>(
@@ -293,11 +293,12 @@ nonisolated extension PiShown {
         }
     }
 
-    /// 会话列表的档：待回复（Cue 页的待回复提示点进来看的就是它们）→ 等你确认 → 出错与没能送达 → 工作中与话在路上 → 停下的 → 已结束。
+    /// 会话列表的档：等你确认 → 待回复 → 出错与没能送达 → 工作中与话在路上 → 停下的 → 已结束。拍板在前同看板的等你列（在问的会话卡着 Agent），
+    /// 待回复紧随（Cue 页的待回复提示点进来看的就是它们）。
     var rank: Int {
         switch status {
-        case .awaitsReply: 0
-        case .asking: 1
+        case .asking: 0
+        case .awaitsReply: 1
         case .failed, .delivery(.failed): 2
         case .working, .delivery, .cueAsking: 3
         case .unread, .idle, .resting, .fresh, .interrupted, .unknown: 4

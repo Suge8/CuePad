@@ -102,7 +102,7 @@ nonisolated enum PiClock: Hashable, Sendable, Codable {
 }
 
 nonisolated extension PiClock {
-    /// 只写过了多久（"42 秒""12 分钟"，不写"刚刚"、不带前缀）：任务行的用时（`TaskPace`）、推进中会话行的时长、等你卡等了多久。
+    /// 只写过了多久（"42 秒""12 分钟"，不写"刚刚"、不带前缀）：任务行的用时（`TaskPace`）、推进中会话行的时长、拍板等了多久。
     /// 换字的时刻同走字的会话计时（`Style.header`：第一分钟每秒、一小时内每整分钟、再往后每整小时），字跟着时长写法走到哪一档。
     struct Elapsed: DiscreteFormatStyle {
         let since: Date
@@ -118,7 +118,7 @@ nonisolated extension PiClock {
 }
 
 nonisolated extension PiClock {
-    /// 等了多久（Cue 页等你卡的来源行）：不到一分钟写"刚刚"，之后"已等 12 分钟"；第一分钟不走秒，之后换字同 `Elapsed`。
+    /// 等了多久（Cue 页拍板卡的眉题、看板等你列卡的悬停提示）：不到一分钟写"刚刚"，之后"已等 12 分钟"；第一分钟不走秒，之后换字同 `Elapsed`。
     struct Waited: DiscreteFormatStyle {
         let since: Date
 

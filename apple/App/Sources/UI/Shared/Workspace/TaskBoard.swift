@@ -65,6 +65,13 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         var item: Item?
         var id: String { wait.id }
 
+        /// 这件事叫什么（拍板卡的眉题、看板的卡同一个）：落在的任务名，没绑任务的会话名；不落在任务上的 Cue 提问没有这件事，为 nil。
+        var title: String? {
+            if let item { return item.task.title }
+            if case .session(let session, _) = wait { return session.title }
+            return nil
+        }
+
         /// 等了多久从哪算：Cue 提问的时刻，会话进入等你的时刻。
         var since: Date {
             switch wait {
@@ -98,10 +105,10 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         var project: UUID { item?.task.projectID ?? TaskBoard.home(reply.session) }
     }
 
-    /// 看板上点了去哪：进会话，或去 Cue 页答那一问（`Workspace.askOnCuePage`）。
+    /// 看板上点了去哪（`Workspace.open(_:)`）：进会话，或去 Cue 页答拍板卡里的那一件（`Wait.id`）。
     enum Destination: Sendable, Equatable {
         case session(PiSessionState)
-        case question(UUID)
+        case question(String)
     }
 
     /// 等你列的一张卡：一件任务一张，落在它上面的拍板与待回复都收在这里（换列不换名字）；没落在任务上的各一张。
@@ -116,23 +123,17 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         var deciding: Bool { !waits.isEmpty }
         /// 收了几件（卡上大于 1 才写）。
         var count: Int { waits.count + replies.count }
-        /// 卡上写的名字：这件事本身——任务名，没绑任务的会话写会话名，不落在任务上的 Cue 提问写它要做的事（`CueAsking.action`）。
+        /// 卡上写的名字：这件事本身（`Wait.title`），不落在任务上的 Cue 提问写它要做的事（`CueAsking.action`）。
         var title: String {
-            if let item { return item.task.title }
-            if let wait = waits.first {
-                switch wait.wait {
-                case .message(let message, _): return message.asking?.action ?? message.headline ?? ""
-                case .session(let session, _): return session.title
-                }
-            }
-            return replies.first?.session.title ?? ""
+            if let wait = waits.first { return wait.title ?? wait.message?.asking?.action ?? wait.message?.headline ?? "" }
+            return item?.task.title ?? replies[0].session.title
         }
         var project: UUID? { item?.task.projectID ?? waits.first?.project ?? replies.first?.project }
         /// 点卡去最早的那件，拍板先于待回复：Cue 的提问去 Cue 页那一问，会话在问的与待回复进会话。
         var destination: Destination {
             if let wait = waits.first {
                 switch wait.wait {
-                case .message(let message, _): return .question(message.id)
+                case .message: return .question(wait.id)
                 case .session(let session, _): return .session(session)
                 }
             }
@@ -140,8 +141,32 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         }
     }
 
+    private(set) var todo: [Item]
+    private(set) var advancing: [Work]
+    /// 等你里的拍板。
+    private(set) var waiting: [Wait]
+    /// 等你里的待回复，排在拍板后面。
+    private(set) var replies: [Reply]
+    /// 等你列的卡（`group`），读的时候分好（不在主线程，页面重算不再分一遍）。
+    private(set) var held: [Held]
+    private(set) var done: [Item]
+    /// 更早做完的顶层任务，最近的在前。
+    private(set) var earlier: [Item]
+
+    init(todo: [Item], advancing: [Work], waiting: [Wait], replies: [Reply], done: [Item], earlier: [Item]) {
+        self.todo = todo
+        self.advancing = advancing
+        self.waiting = waiting
+        self.replies = replies
+        held = Self.group(waiting, replies)
+        self.done = done
+        self.earlier = earlier
+    }
+
+    static let empty = TaskBoard(todo: [], advancing: [], waiting: [], replies: [], done: [], earlier: [])
+
     /// 等你列的卡：拍板的卡在前、只剩待回复的在后，各按里面等得最久的那件排（`waiting`、`replies` 本来就是这个顺序）。
-    var held: [Held] {
+    private static func group(_ waiting: [Wait], _ replies: [Reply]) -> [Held] {
         var cards: [Held] = [], index: [UUID: Int] = [:]
         func add(_ item: Item?, _ fill: (inout Held) -> Void) {
             if let id = item?.id, let at = index[id] { return fill(&cards[at]) }
@@ -155,18 +180,6 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         return cards
     }
 
-    var todo: [Item]
-    var advancing: [Work]
-    /// 等你里的拍板。
-    var waiting: [Wait]
-    /// 等你里的待回复，排在拍板后面。
-    var replies: [Reply]
-    var done: [Item]
-    /// 更早做完的顶层任务，最近的在前。
-    var earlier: [Item]
-
-    static let empty = TaskBoard(todo: [], advancing: [], waiting: [], replies: [], done: [], earlier: [])
-
     func count(_ column: Column) -> Int {
         switch column {
         case .todo: todo.count
@@ -176,14 +189,19 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         }
     }
 
-    /// 只看一个项目的（nil 是全部）。
+    /// 只看一个项目的（nil 是全部）：等你列的卡按卡的项目筛（一张卡里的几件同属一个项目），不重分。
     func only(_ project: UUID?) -> TaskBoard {
         guard let project else { return self }
         let mine = { (item: Item) in item.task.projectID == project }
-        return TaskBoard(
-            todo: todo.filter(mine), advancing: advancing.filter { $0.project == project }, waiting: waiting.filter { $0.project == project },
-            replies: replies.filter { $0.project == project },
-            done: done.filter(mine), earlier: earlier.filter(mine))
+        var board = self
+        board.todo = todo.filter(mine)
+        board.advancing = advancing.filter { $0.project == project }
+        board.waiting = waiting.filter { $0.project == project }
+        board.replies = replies.filter { $0.project == project }
+        board.held = held.filter { $0.project == project }
+        board.done = done.filter(mine)
+        board.earlier = earlier.filter(mine)
+        return board
     }
 
     /// 在待办里把 `id` 拖到 `target` 前面（nil 是列末）：只在同一项目的顶层里挪，排在它前面最近的同项目任务之后——
@@ -200,7 +218,7 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         return TaskMove(slot: .top(project: dragged.projectID), after: after)
     }
 
-    /// 等你那几件（Cue 页的等你卡读同一份，`CueThread`）：最早的在前（等得最久的先答），落在任务上的带那件任务（`item` 按读的地方要的写）。
+    /// 等你那几件（Cue 页的拍板卡读同一份，`CueThread`）：最早的在前（等得最久的先答），落在任务上的带那件任务（`item` 按读的地方要的写）。
     static func waits(_ waiting: [CueTally.Wait], from store: isolated CueStore, item: (Card) throws -> Item) throws -> [Wait] {
         try waiting.map { wait in Wait(wait: wait, item: try wait.task.flatMap { try store.card($0) }.map(item)) }
             .enumerated().sorted { ($0.element.since, $0.offset) < ($1.element.since, $1.offset) }.map(\.element)

@@ -13,7 +13,6 @@ import SwiftUI
 /// 放在 iPad 的系统导航栏里时（`HeaderHost.navigationBar`）名牌不长，面板从它弹出（`GrowPanel`），名片的那一头不出现。
 /// 大脑那一行要的（设置与那台 Mac 的 Agent，`observingCueBrain`）随名牌一直订阅着：面板开时才建，长出的第一帧就是真的；其余都是整个窗口已经在订阅的。
 struct CueHeader: View {
-    @Environment(Workspace.self) private var workspace
     @Environment(\.headerHost) private var host
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var expanded = DebugHooks.preset.cuePanelOpen
@@ -36,7 +35,7 @@ struct CueHeader: View {
         } panel: {
             CueNowPanel(brain: brain, close: toggle)
         }
-        .observingCueBrain(into: $brain, fail: workspace.fail)
+        .observingCueBrain(into: $brain)
         .debugExposesCuePanel(toggle)
     }
 

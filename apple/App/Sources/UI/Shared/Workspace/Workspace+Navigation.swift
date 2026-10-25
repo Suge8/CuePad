@@ -2,7 +2,7 @@ import CueStore
 import Foundation
 import Observation
 
-/// 去哪：两端同一套规则，入口（侧栏与底部那一排、⌘1–9、提示、深链、通知、组件里的"去会话"）都经这里；
+/// 去哪：两端同一套规则，入口（侧栏与底部那一排、⌘1–9、提示、深链、通知、看板的卡、Cue 页的旁注与待回复提示、组件里的"去会话"）都经这里；
 /// 平台只给怎么摆（`Layout`）与呈现时顺带的事（`willSelect`、`showEditor`、`sessionRoute`，在各端的 `Workspace` 扩展里）。
 extension Workspace {
     /// 去处怎么摆。
@@ -63,10 +63,31 @@ extension Workspace {
         show(.progress)
     }
 
-    /// 去看待回复的几个会话（Cue 页的待回复提示）：进展页的会话段，待回复排在最前（`PiShown.rank`）。提示数的是全部项目，项目范围放开，一个不漏。
-    func showReplies() {
+    /// 去看待回复的会话（Cue 页的待回复提示）：只有一个直接进那个会话；几个去进展页的会话段（排在等你确认之后、其余之前，`PiShown.rank`），
+    /// 提示数的是全部项目，项目范围放开，一个不漏。
+    func openReplies(_ replies: [PiSessionState]) {
+        if replies.count == 1 { return openSession(replies[0].id, sessionID: replies[0].sessionID) }
         projectScope = nil
         showSessions()
+    }
+
+    /// 看板上的卡点了去哪（`BoardLink` 与流程测试同走这里）：进会话，或去 Cue 页答那一问——拍板卡露的就是它（`cueAsking`）。
+    func open(_ destination: TaskBoard.Destination) {
+        switch destination {
+        case .session(let session): openSession(session.id, sessionID: session.sessionID)
+        case .question(let wait):
+            cueAsking = wait
+            show(.cue)
+        }
+    }
+
+    /// 去 Cue 页一行旁注提到的那一处（醒来那几行、一轮的经过）：会话、任务（从点的地方长出气泡）或记忆。
+    func open(_ target: CueWakeHeader.Target) {
+        switch target {
+        case .session(let id, let sessionID): openSession(id, sessionID: sessionID)
+        case .task(let id): openTask(id: id)
+        case .memory: cue.showsMemory = true
+        }
     }
 
     /// 推回刚返回离开的那一页（`forward`）。会话页按此刻重读首帧（同 `openSession`）：离开后对话可能又长了。

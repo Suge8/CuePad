@@ -7,9 +7,9 @@ nonisolated struct CueThread: Equatable, Sendable {
     /// 最近的对话，从早到晚；前面另带上早于它问、在它这段时间里答了的提问（`CueStore.cueQuestionsAnswered`）：
     /// 你的回答在读到的范围里，它引用的那条提问也要在，点引用才回得去。
     let messages: [CueMessage]
-    /// 等你（Cue 的提问与会话在问的，同进展页等你列，`TaskBoard.waits`），等得最久的在前；点名要露的那件在最前（`leading`）。
+    /// 拍板（Cue 的提问与会话在问的，同进展页等你列，`TaskBoard.waits`），等得最久的在前。
     let waiting: [TaskBoard.Wait]
-    /// 待回复的会话（`CueStore.sessionsAwaitingReply`），等得最久的在前：等你卡上方那条提示（`CueReplyTip`）。
+    /// 待回复的会话（`CueStore.sessionsAwaitingReply`），等得最久的在前：拍板卡上方那条提示（`CueReplyTip`）。
     let replies: [PiSessionState]
     /// Cue 点名要你看的图（`CueMessage.shots`：提问的与做完的结果），按消息的 id：只有点了名、那一份还在的
     let shots: [UUID: [CueShown]]
@@ -53,15 +53,14 @@ nonisolated struct CueThread: Equatable, Sendable {
         })
     }
 
-    /// `asking`：要露在"等你"卡里的那条 Cue 的提问（`Workspace.cueAsking`：从任务看板点进来），见 `leading`。
-    static func read(from store: isolated CueStore, asking: UUID? = nil) throws -> CueThread {
+    static func read(from store: isolated CueStore) throws -> CueThread {
         let recent = try store.cueMessages(limit: limit)
         let messages = try store.cueQuestionsAnswered(outside: recent) + recent
         // 提到的一次取完子任务进度，不逐件读细节
         let progress = try store.subtaskProgress()
-        let waits = leading(try TaskBoard.waits(try store.cueWaiting(), from: store) { task in
+        let waits = try TaskBoard.waits(try store.cueWaiting(), from: store) { task in
             TaskBoard.Item(task: task, steps: progress[task.id])
-        }, asking: asking)
+        }
         let waiting = waits.compactMap(\.message)
         let pointed = (messages + waiting).filter { !$0.shots.isEmpty }
         let previews = try store.previews(Set(pointed.flatMap { $0.shots.map(\.preview) }))
@@ -78,18 +77,10 @@ nonisolated struct CueThread: Equatable, Sendable {
             lines: Dictionary(try store.cueLines(reminded).map { ($0.line.id, $0.line.text) }) { first, _ in first })
     }
 
-    /// "等你"卡露的先后：点名要露的那条（`asking`）还在等就排到最前，其余照旧等得最久的在前。卡先露最前的那件。
-    static func leading(_ waiting: [TaskBoard.Wait], asking: UUID?) -> [TaskBoard.Wait] {
-        guard let asking, let index = waiting.firstIndex(where: { $0.message?.id == asking }), index > 0 else { return waiting }
-        var ordered = waiting
-        ordered.insert(ordered.remove(at: index), at: 0)
-        return ordered
-    }
-
     /// 对话里的一格：你的话、你发起的一轮的经过（碰到的各处，`CueActivity.touches`；一处都没碰的一轮没有这一格；这一轮说的话与结果都在它之后）、Cue 的话（第一次提到一件活时下面一行这件活；
     /// 做完的结果点了名的图是结果卡，见 `rows`），
     /// 连着的几轮 Cue 自己醒来（每轮是它的经过那一行与它说的话，`CueNoteRound`，每轮一行旁注 `CueNoteLog`）收成一格，隔了 `ChatTime.gap` 以上或跨了天另起一格。
-    /// 还在等你的提问不在对话里，都在输入框上方的"等你"卡里（同一问同屏一处），结束了回到 Cue 的一句；你答了的，答的那一刻另有一格你的回答（`answer`）。
+    /// 还在等你的提问不在对话里，都在输入框上方的拍板卡里（同一问同屏一处），结束了回到 Cue 的一句；你答了的，答的那一刻另有一格你的回答（`answer`）。
     /// 它在做的事，自己醒来的一轮写在动态里那一节下面，你发起的一轮写在它的经过里，还没有经过时在末尾一行（`CueEnding`）。
     enum Row: Identifiable, Equatable, Sendable {
         case you(CueMessage)

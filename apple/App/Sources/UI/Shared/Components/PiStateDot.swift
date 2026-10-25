@@ -2,7 +2,7 @@ import SwiftUI
 
 extension PiShown {
     /// 状态色：等你确认赭黄、出错与没能送达胭脂、有新回复石绿三种各管一件事；在跑（工作中、话在路上）是正在发生，用签名色靛青；
-    /// 待回复是墨色（该你说下一句，同 Cue 页的待回复提示；赭黄只给要你拍板的）；停着的（该你了、新会话、未知）与已结束灰。
+    /// 待回复是墨色（赭黄只给要你拍板的）；停着的（该你了、新会话、未知）与已结束灰。
     func tint(_ palette: Palette) -> Color {
         switch status {
         case .asking: palette.waiting
@@ -44,8 +44,8 @@ extension PiShown {
     var icon: Icon {
         switch status {
         case .asking: .waiting
-        // 待回复：同该你了的输入光标（都是轮到你说下一句），靠墨色与灰分开
-        case .awaitsReply: .yourTurn
+        // 待回复：墨点，各处同一个（Cue 页的待回复提示、看板等你列、经过里的"留给你"）
+        case .awaitsReply: .awaitsReply
         // 等 Cue 回答：气泡里的问号，线条墨色（实心赭黄的问号圆只给等你确认的）
         case .cueAsking: .cueAsking
         // 胭脂圆叹号（`Icon.failure`，与操作出错同一个）：与等你确认的赭黄问号圆靠颜色与里面的字分开
@@ -72,7 +72,7 @@ extension PiShown {
 /// 会话状态标（全 App 只此一份：Agent 页卡片、书架、侧栏、Mac 侧栏的项目行与菜单栏、会话页顶栏、任务上的会话状态）：
 /// 颜色 + 不带外框的整体图形（图标与颜色只取 `PiShown.icon`、`tint`）——等你确认赭黄问号圆（外圈一圈波纹慢慢扩开）、出错胭脂圆叹号、没能送达胭脂折回箭头、
 /// 在跑靛青心电线（一截实色沿波形走）、话在路上靛青纸飞机（从左下飞进、朝右上飞出）、有新回复石绿铃铛（变成它时摇一下）、
-/// 该你了灰色输入光标、新会话灰色星光、已结束更淡的带斜线圈；Cue 值班时，等 Cue 回答是墨色气泡问号、歇着是灰色省略号。`size` 是标的基准直径，外框是它的 1.8 倍，跟着旁边的字随辅助字号放大。
+/// 待回复墨点、该你了灰色输入光标、新会话灰色星光、已结束更淡的带斜线圈；Cue 值班时，等 Cue 回答是墨色气泡问号、歇着是灰色省略号。`size` 是标的基准直径，外框是它的 1.8 倍，跟着旁边的字随辅助字号放大。
 /// 心电线、纸飞机、波纹是常驻循环动效，交给 Core Animation（`LoopLayer`），不在屏幕上时不画；换状态时旧图形缩小淡出、新图形放大淡入，
 /// 两个都是静止图标时由系统原地替换。不放循环动效时（`LoopsPlay`）换成同一状态的静止符号、没有波纹；减弱动态效果时不摇铃。
 /// 旁边有状态文字时读屏跳过它；`announces` 时标自己带读屏标签。
@@ -139,7 +139,7 @@ struct PiStateDot: View {
     private static let swap = AnyTransition.scale(scale: 0.6).combined(with: .opacity)
 }
 
-/// 状态的静止图形，大小跟着旁边的字（问题卡、出错与没能结束的提示、Cue 的等你、前台横幅、气泡上的没能送达）：
+/// 状态的静止图形，大小跟着旁边的字（问题卡、出错与没能结束的提示、Cue 的等你、待回复的提示与看板卡、前台横幅、气泡上的没能送达）：
 /// 与状态标同一份图标与颜色（`PiShown.icon`、`tint`），不带动效。读屏跳过，意思由旁边的字说。
 struct PiStateGlyph: View {
     let status: PiShown.Status

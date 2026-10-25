@@ -6,7 +6,7 @@ import SwiftUI
 /// （设置推入设置页，Cue 的名字与在哪台 Mac 上运行在它最上面一组）。
 /// 在做的会话不在这里：进行中的在进展页的会话段（左滑就到），点进会话只有那一条路，返回落点与行的长相都只有一种。
 /// 面板只有启用前后这一个变量，两态同一个尺寸：大脑那一块按启用了的样子占位（`BrainBlock`）。
-/// 面板里不放滚动区：滚动区会读到对话那块的内容边距（SwiftUI 把对话的 `contentMargins` 写到同一棵树里别的 UIScrollView 上），整块右移被裁。
+/// 面板里不放滚动区（docs/ui.md 布局约束）。
 struct CueNowPanel: View {
     let brain: AgentModelChoice?
     let close: () -> Void
@@ -27,7 +27,7 @@ struct CueNowPanel: View {
         .dynamicTypeSize(...Self.largestType)
     }
 
-    /// 两个去处同宽同高：次按钮的胶囊（同页里"以后不用问"那一类），图标接字。
+    /// 两个去处同宽同高：次按钮的胶囊，图标接字。
     private func place(_ title: String, icon: Icon, action: @escaping () -> Void) -> some View {
         Button { go(action) } label: {
             Label { Text(title).lineLimit(1) } icon: { Image(icon) }
@@ -57,7 +57,7 @@ private struct BrainBlock: View {
         let cue = workspace.cue
         let chosen = cue.hostID != nil
         VStack(spacing: 10) {
-            CueConfigControls(choice: brain, fail: workspace.fail, alignment: .center)
+            CueConfigControls(choice: brain, alignment: .center)
             CueContextLine(context: cue.context).frame(maxWidth: 240)
         }
         .opacity(chosen ? (cue.canHear ? 1 : Self.dimmed) : 0)
@@ -95,9 +95,7 @@ private struct CueHostPick: View {
                 Text(CueSettings.noHost).font(Typography.secondary).foregroundStyle(palette.ink3)
             } else {
                 HStack(spacing: 8) {
-                    CueHostMenu(hosts: hosts, accessibilityLabel: Self.title) { host in
-                        if let host { model.choose(host, services) }
-                    } label: {
+                    CueHostMenu(hosts: hosts, use: .enable { model.choose($0, services) }, accessibilityLabel: Self.title) {
                         Label(Self.title, icon: .mac)
                             .labelStyle(.titleAndIcon)
                             .modifier(ControlSurface(kind: .highlight))

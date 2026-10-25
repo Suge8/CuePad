@@ -8,7 +8,7 @@ import SwiftUI
 /// 你发起的一轮在你的话之后先是这一轮的经过（`CueTrace`：碰到的任务与会话一处一行，在跑时原地往下长），这一轮说的话与结果按先后在它之后。
 /// Cue 自己醒来的那几轮每轮一行旁注（`CueNoteLog`：提到的那一处、当时出了什么事与它说的一句，点了去那里），
 /// 末尾是它此刻在做什么（`CueEnding`）；
-/// 对话区与会话页是同一个（`ChatColumn`：排开、刻度滑条、跳转与描圈）；底部是待回复提示（`CueReplyTip`）、"等你"（`CueWaitDock`：Cue 的提问与会话在问的都在这里，
+/// 对话区与会话页是同一个（`ChatColumn`：排开、刻度滑条、跳转与描圈）；底部是待回复提示（`CueReplyTip`）、拍板卡（`CueWaitDock`：Cue 的提问与会话在问的都在这里，
 /// 对话里不另挂）与输入框（`CueComposer`）。
 /// 首次见面与启用只有一处（`CueWelcome`）：还没说过话时在正中，说过话后停用了在输入框正上方。
 /// 对话第一帧就排好（`observing` 当场读），停在最新处；有新消息时从第一条读起，还没读的气泡旁一颗小点（`CueViewing`）。
@@ -34,7 +34,7 @@ struct CuePage: View {
     @State private var opened: PreviewOpening?
     /// 对话那一列的宽：离屏远的段换成的空白按它估高（`ChatSegments`）。
     @State private var width: CGFloat = 0
-    /// "等你"卡正在来去（`CueWaitDock.moving`）：对话先不往上滑。
+    /// 拍板卡正在来去（`CueWaitDock.moving`）：对话先不往上滑。
     @State private var docking = false
     /// 末尾在屏上的新消息（`CueViewing`）。
     @State private var seen: [UUID: Date] = [:]
@@ -42,7 +42,7 @@ struct CuePage: View {
     #if os(macOS)
     static let readingWidth: CGFloat = 760
     static let inset: CGFloat = 24
-    /// "等你"卡与输入框离页底。
+    /// 拍板卡与输入框离页底。
     static let replyPadding: CGFloat = 16
     #else
     static let readingWidth: CGFloat = 640
@@ -53,10 +53,7 @@ struct CuePage: View {
     private var catchingUp: Bool { services.isCatchingUp(on: cue.hostID) }
     var body: some View {
         page
-            // "等你"卡要露哪条变了就重读（`CueThread.read`）
-            .observing(services.store, id: workspace.cueAsking, into: $thread, onError: workspace.fail) { [asking = workspace.cueAsking] in
-                try CueThread.read(from: $0, asking: asking)
-            }
+            .observing(services.store, into: $thread, onError: workspace.fail) { try CueThread.read(from: $0) }
             .previewPresenter($opened)
             .panel(isPresented: Bindable(cue).showsMemory) { CueMemoryPage() }
             .modifier(CueViewing(thread: thread, catchingUp: catchingUp, seen: $seen, follow: $follow))
@@ -90,7 +87,7 @@ struct CuePage: View {
     #else
     /// 页顶那一排只有 Cue 的名牌（`CueHeader`，经 `floatingHeader`），浮在对话上，对话让出固定的一段：名牌展开成面板时对话不重排。窄屏上 Cue 页是导航栈的根、不需要返回，不用系统导航栏（`DockRoot`），
     /// 名牌就是最上面那一排；底部左边那颗"⋯"是底部那一排（`DockBar`，不在这一页里）收起的样子，这里给它让出位置，右边是输入框。
-    /// "等你"卡与输入框浮在对话底上（`FloatingReply`，同会话页与 Mac，键盘也在那里让）；窄屏底部那一排没有键盘时离屏幕底边同 Dock。
+    /// 拍板卡与输入框浮在对话底上（`FloatingReply`，同会话页与 Mac，键盘也在那里让）；窄屏底部那一排没有键盘时离屏幕底边同 Dock。
     private var page: some View {
         FloatingReply(backed: false, floor: docked ? Dock.margin : nil) {
             chat
@@ -201,7 +198,7 @@ struct CuePage: View {
         return CueLiveRound(round: round, doing: .init(icon: icon, step: step, text: progress, speaking: shown.speaking))
     }
 
-    /// 有新内容：多了消息、有一条被答了、"等你"或待回复变了、末尾的进展出现或收起。
+    /// 有新内容：多了消息、有一条被答了、拍板或待回复变了、末尾的进展出现或收起。
     private struct FollowKey: Equatable {
         var count: Int
         var last: Date?
@@ -220,12 +217,12 @@ struct CuePage: View {
 
     // MARK: 底部
 
-    /// 浮在对话底上的一块：待回复提示、"等你"卡、停用时的启用与输入框。输入框按自己的高、不被挤（`fixedSize`），地方不够时（键盘弹出、小屏、横屏、输入框写了好几行）卡用剩下的。
+    /// 浮在对话底上的一块：待回复提示、拍板卡、停用时的启用与输入框。输入框按自己的高、不被挤（`fixedSize`），地方不够时（键盘弹出、小屏、横屏、输入框写了好几行）卡用剩下的。
     private var bottom: some View {
         VStack(spacing: 0) {
             if let thread {
                 if !thread.replies.isEmpty { CueReplyTip(replies: thread.replies).transition(.opacity) }
-                CueWaitDock(waiting: thread.waiting, shots: thread.shots, open: { opened = $0 }, moving: $docking)
+                CueWaitDock(waiting: thread.waiting, asking: workspace.cueAsking, shots: thread.shots, open: { opened = $0 }, moving: $docking)
                 // 说过话后停用了：启用就在输入框正上方（`CueWelcome`），是这时唯一的主动作
                 if !thread.rows.isEmpty, !cue.canHear { CueWelcome(intro: false).fixedSize(horizontal: false, vertical: true).padding(.bottom, ComposerMetrics.stackGap).transition(.opacity) }
             }

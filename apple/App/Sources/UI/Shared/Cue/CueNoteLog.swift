@@ -3,7 +3,7 @@ import CueText
 import SwiftUI
 
 /// 连着的几轮 Cue 自己醒来（`CueThread.Row.notes`）：每轮一行旁注，不画框、不铺底（对话里只有说的话是一块，`ChatMargin`）。
-/// 要你拍板的不在这里：在输入框上方的等你卡里（`CueWaitDock`），这里只留一句发生过什么。
+/// 要你拍板的不在这里：在输入框上方的拍板卡里（`CueWaitDock`），这里只留一句发生过什么。
 /// 一行从左到右：图标、字、几点（等宽一列，对齐）。一行是一条记录，定格在写下那一刻：图标与字只按记录画（`CueWakeHeader`），
 /// 那一处之后改名、再动起来都不变；只有在跑的那一轮挂着的经过末行在动，这一轮结束就定格。
 /// - 图标：提到一处时是当时出了什么事（`CueChange.Kind.icon`，静止的），提到几处或没提到哪处时是醒来原因（`CueWake.icon`）。
@@ -118,15 +118,4 @@ enum CueNoteRows {
     static let timeWidth: CGFloat = 62
     /// 一行至少多高：比旁注（`Note.lineHeight`）高一点，整行可点。
     static let height: CGFloat = Note.lineHeight + 4
-}
-
-extension Workspace {
-    /// 去 Cue 页一行旁注提到的那一处（醒来那几行、一轮的经过）：会话、任务（从点的地方长出气泡）或记忆。
-    func open(_ target: CueWakeHeader.Target) {
-        switch target {
-        case .session(let id, let sessionID): openSession(id, sessionID: sessionID)
-        case .task(let id): openTask(id: id)
-        case .memory: cue.showsMemory = true
-        }
-    }
 }

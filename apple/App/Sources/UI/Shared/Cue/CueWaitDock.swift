@@ -2,7 +2,7 @@ import CueStore
 import SwiftUI
 
 /// 拍板卡：固定在输入框上方的一张纸，Cue 的提问只在这里答（进展页等你列只看，点了来这里；会话在问的也可在会话页答）——与进展页等你列里的拍板同一份（`CueThread.waiting`，出自 `CueStore.cueTally`；待回复不进来，在上方的提示里）：
-/// Cue 的提问与会话在问的同排，一次铺开一件，默认露等得最久的那件（从任务看板点进来的那条先露，`CueThread.leading`）。
+/// Cue 的提问与会话在问的同排（等得最久的在前），一次铺开一件：露哪件只记在 `Workspace.cueAsking`（看板上点进来的、滑卡与小箭头换的都写它），不在等了露第一件。
 /// 不止一件时像叠在一起的通知：卡后面露出一两层叠边（`deck`），眉题行写第几件（`CueWaitEyebrow`）；手机上左右滑卡换一件（跟手，甩过或拖过一段就换，
 /// 到头了让给切页），Mac 上点眉题行的小箭头。答完一件，下一件从叠边里顶上来。
 /// 铺开的那件：眉题（`CueWaitEyebrow`）、问句（`CueQuestionLine`）、点名的图、怎么答（`WaitAnswer`，与会话页问题卡同一个；主动作在右下角）。问句是代码按 Cue 写的动作短语写出的
@@ -12,6 +12,8 @@ import SwiftUI
 /// Cue 停用着时卡照样露、Cue 的选项停用并写"启用后再答"（`CueChoices`）。答了等库里那件结束才换下一件。
 struct CueWaitDock: View {
     let waiting: [TaskBoard.Wait]
+    /// 要露的那件（`Workspace.cueAsking`）；换一件写回那里。
+    let asking: String?
     /// 提问点名的图（`CueThread.shots`）
     let shots: [UUID: [CueShown]]
     let open: (PreviewOpening) -> Void
@@ -21,8 +23,6 @@ struct CueWaitDock: View {
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.chatHeight) private var chatHeight
-    /// 换到了哪件（滑卡、小箭头）；不在等了就回到第一件。
-    @State private var picked: String?
     /// 手机上滑卡：卡跟着手指横移多少。
     @State private var drag: CGFloat = 0
     /// 滑走的那张往哪边飞出去（换一件时旧卡的去向）；不是滑走的（答完、点箭头）原地淡掉，为 0。
@@ -36,17 +36,22 @@ struct CueWaitDock: View {
 
     /// 页打开时已经在等的那张随页一起排出来、不升起（同 `follow` 的头一次）：等 `onChange` 再放的话卡晚一次更新才排，
     /// 对话按它让出的高又要重排一遍。
-    init(waiting: [TaskBoard.Wait], shots: [UUID: [CueShown]], open: @escaping (PreviewOpening) -> Void, moving: Binding<Bool>) {
+    init(waiting: [TaskBoard.Wait], asking: String?, shots: [UUID: [CueShown]], open: @escaping (PreviewOpening) -> Void, moving: Binding<Bool>) {
         self.waiting = waiting
+        self.asking = asking
         self.shots = shots
         self.open = open
         _moving = moving
-        _shown = State(initialValue: waiting.first)
+        _shown = State(initialValue: Self.current(in: waiting, asking: asking))
         _level = State(initialValue: waiting.isEmpty ? 0 : 1)
     }
 
-    /// 选中的那件：点过的还在等就是它，不然是第一件。
-    private var current: TaskBoard.Wait? { waiting.first { $0.id == picked } ?? waiting.first }
+    /// 选中的那件：还在等就是它，不然是第一件。
+    private var current: TaskBoard.Wait? { Self.current(in: waiting, asking: asking) }
+
+    static func current(in waiting: [TaskBoard.Wait], asking: String?) -> TaskBoard.Wait? {
+        waiting.first { $0.id == asking } ?? waiting.first
+    }
 
     /// 来了从输入框后面升起（`RiseBehind`）；都答完让出的高一下到位、卡浮在原处淡掉：对话里接着长出这一问与你的回答，对话一次滑到终位。
     /// 换一件时新的从叠边里微微放大淡入，旧的滑走的往那边飞出、其余原地淡掉（底边对齐叠放）。减弱动态效果时来也只淡入。卡与下面输入框的间距在卡里（`below`）。
@@ -66,8 +71,6 @@ struct CueWaitDock: View {
         .opacity(floats ? level : 1)
         .modifier(RiseBehind(shown: floats ? (waiting.isEmpty ? 0 : 1) : level, floats: floats, limit: chatHeight / 2))
         .onChange(of: current?.id, initial: true) { old, new in follow(animated: old != new) }
-        // 从任务看板点进来换了要露的那条：回到第一件（它已排到最前）
-        .onChange(of: workspace.cueAsking) { picked = nil }
         .debugSettling(moving || leaving)
     }
 
@@ -119,7 +122,7 @@ struct CueWaitDock: View {
 
     private func step(from wait: TaskBoard.Wait, by offset: Int) {
         guard let next = neighbor(of: wait, by: offset) else { return }
-        withAnimation(HandOff.quick) { picked = next.id }
+        withAnimation(HandOff.quick) { workspace.cueAsking = next.id }
     }
 
     /// 卡浮着、露出的比例当不透明度用：减弱动态效果时与离开时。
@@ -251,7 +254,7 @@ struct CueWaitDock: View {
         }
         withAnimation(reduceMotion ? HandOff.quick : Motion.snappy, completionCriteria: .removed) {
             drag = 0
-            picked = next.id
+            workspace.cueAsking = next.id
             shown = next
         } completion: { exit = 0 }
     }

@@ -36,13 +36,13 @@ extension CuePage {
     }
 
     /// 浮在对话底上的那一块（`bottom`）至少多高：对话底下让出它那么高的留白（`chatBottomInset`），最新处停在它上方。
-    /// Mac 上按输入框（`ComposerMetrics`）、底下的边距与"等你"卡（`CueWaitDock.floor`）的下限算，只能数少；
+    /// Mac 上按输入框（`ComposerMetrics`）、底下的边距与拍板卡（`CueWaitDock.floor`）的下限算，只能数少；
     /// 手机上没算这两样的下限，按整屏数（多排几格，不会铺不满）。
     private static func covered(_ thread: CueThread, size: CGSize) -> CGFloat {
         #if os(macOS)
         let composer = ComposerMetrics.textTop + ComposerMetrics.textBottomOpen + ComposerMetrics.slot
         // 卡与阅读栏同宽（`page` 里回复那一块两边让出同样的边距），至多占对话区的一半
-        // 露哪一条可能被换到最前（`CueThread.leading`）：取几条里最矮的，仍只数少
+        // 露哪一件随时会换（`Workspace.cueAsking`）：取几件里最矮的，仍只数少
         let floor = thread.waiting.map { CueWaitDock.floor($0, shots: thread.shots, width: min(size.width, readingWidth) - 2 * inset) }.min() ?? 0
         let dock = min(floor, size.height / 2)
         return composer + replyPadding + dock

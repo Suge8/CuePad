@@ -146,8 +146,8 @@ final class Workspace {
     var scopedProject: UUID? { catalog?.project(projectScope)?.id }
     /// 进展页此刻在哪一段：看板或会话。三端同一份：工具栏的主操作（新任务 / 新会话）与页顶的分段都读它，去会话段经 `showSessions`。
     var progressPane = ProgressPane.board
-    /// Cue 页的"等你"卡先露哪条提问（`CueThread.leading`）：从任务看板点一张 Cue 问的等你卡的抬头、在 Cue 页对话里点一格等你时设成它；它结束了就不再起作用。
-    var cueAsking: UUID?
+    /// Cue 页拍板卡露的是哪一件（`TaskBoard.Wait.id`）：看板上点了一张 Cue 问的卡、在拍板卡上换一件都写这里；不在等了露第一件。
+    var cueAsking: String?
     var notice: Notice?
     /// 正在给哪个项目选文件夹（iOS：根视图据此弹候选；Mac 直接弹系统的选文件夹面板，不经这里）。
     var folderPicker: Project?

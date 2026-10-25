@@ -38,8 +38,8 @@ enum CueBubble {
 /// 你的回答在答的那一刻另成一格，见 `CueAnswer`、`CueThread.rows`）；它第一次提到一件活时底下一行这件活（`CueTaskLine`）。
 /// `card`：结果卡（点名了图的做完，哪句算只在 `CueThread.rows` 定）——不是气泡而是一张纸（`paper`），不与上下的气泡连成一串；
 /// 第一行是一句平常的话时（"「X」做完了"）单独加粗作标题，一眼先读到做完了什么，再看证据与图。
-/// 结束了的提问（答了、撤回、你没选直接说了）回到对话里时字与"等你"卡上同一句：代码写的问句（`CueAsking.question`，规矩那一类下面一行引的规矩），
-/// 淡一档（次一级的墨、不加粗：已经过去了，还在等你的在输入框上方的等你卡里，`CueWaitDock`），Cue 的原话收着、点"原话"展开（`CueOriginalToggle`）；
+/// 结束了的提问（答了、撤回、你没选直接说了）回到对话里时字与拍板卡上同一句：代码写的问句（`CueAsking.question`，规矩那一类下面一行引的规矩），
+/// 淡一档（次一级的墨、不加粗：已经过去了，还在等你的在输入框上方的拍板卡里，`CueWaitDock`），Cue 的原话收着、点"原话"展开；
 /// 答之前读的与答之后回看的不是两种说法，你回答气泡里引的也是这一句。
 /// 长按（Mac 右键）是消息菜单（`MessageMenu.Kind.cue`），预览就是这颗气泡或这张纸。
 struct CueSays: View {
@@ -86,7 +86,7 @@ struct CueSays: View {
                 MarkdownText(source: message.text).equatable().font(Typography.secondary).foregroundStyle(palette.ink2).padding(.top, 6)
                     .transition(.opacity)
             }
-            CueOriginalToggle(open: $reading)
+            OriginalToggle(open: $reading)
         }
         .animation(HandOff.quick, value: reading)
     }
@@ -180,4 +180,26 @@ private struct CueBubbleSurface: ViewModifier {
     func body(content: Content) -> some View {
         content.padding(CueBubble.padding).background(palette.paper, in: shape).overlay { if let edge = palette.bubbleEdge { shape.strokeBorder(edge) } }
     }
+}
+
+/// "原话"开关：问句是代码写的（`CueAsking.question`），Cue 的原话收着、点它展开。
+private struct OriginalToggle: View {
+    @Binding var open: Bool
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        Button { open.toggle() } label: {
+            HStack(spacing: 4) {
+                Text("原话")
+                Image(.expand).font(.system(size: 9, weight: .semibold)).rotationEffect(.degrees(open ? 180 : 0))
+            }
+            .font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink2)
+            // 不另占一行高：按得到的范围往外扩一圈，不撑高气泡
+            .contentShape(.rect.inset(by: -Self.reach))
+        }
+        .buttonStyle(PressStyle(.inline))
+        .accessibilityLabel(open ? "收起原话" : "看 Cue 的原话")
+    }
+
+    private static let reach: CGFloat = 10
 }
