@@ -39,12 +39,12 @@
 
 ## 英文界面
 
-英文界面只用这些叫法，没列的名词照 Apple 自家应用的说法。大小写只按字在界面上的位置定：导航与结构用 Title Case——页面与去处名、窗口与弹框标题（问句也是，"Forget This?"）、分段与标签页、列名、分组标题、按钮、菜单项、工具栏项、设置行的名字、空态标题；其余用句首大写——状态词与徽标（"Needs your OK"、"Not delivered"、"Not syncing"、"Running tool"）、说明、副标题、提示、帮助气泡、占位符、读屏标签与提示（同一个键也是按钮名时按按钮）、报错、横幅、通知正文、空态说明、复选框说明、斜杠命令的说明。下面的叫法作标题时 Title Case，嵌在句子与计数里小写（"3 need you"、"9 underway"、"the agent session"）；Agent 不是专名，句中写 agent。一句里嵌状态词时状态词在句首（"Not syncing, can't answer now."）。同一个中文键在两种位置要不同大小写时拆键：改一处中文措辞或整句化，不在代码里改大小写。
+英文界面只用这些叫法，没列的名词照 Apple 自家应用的说法。大小写只按字在界面上的位置定：导航与结构用 Title Case——页面与去处名、窗口与弹框标题（问句也是，"Forget This?"）、分段与标签页、列名、分组标题、按钮、菜单项、工具栏项、设置行的名字、空态标题；其余用句首大写——状态词与徽标（"Needs your OK"、"Not delivered"、"Not syncing"、"Running tool"）、说明、副标题、提示、帮助气泡、占位符、读屏标签与提示（同一个键也是按钮名时按按钮）、报错、横幅、通知正文、空态说明、复选框说明、斜杠命令的说明。下面的叫法作标题时 Title Case，嵌在句子与计数里小写（"3 need you"、"9 active"、"the agent session"）；Agent 不是专名，句中写 agent。一句里嵌状态词时状态词在句首（"Not syncing, can't answer now."）。同一个中文键在两种位置要不同大小写时拆键：改一处中文措辞或整句化，不在代码里改大小写。
 
 - 灵感 Idea · 任务 Task · 子任务 Subtask · 正文 Notes · 项目 Project · 默认项目 Default Project · 置顶 Pin / Unpin / Pinned · 归档 Archive · 回收站 Trash · 批注 Comment（不叫 Note，免得和 Notes 混）
 - 进展 Progress · 看板 Board · 会话 Session · Agent 会话 Agent Session · 全部项目 All Projects · 工作区 Workspace · 绑定的文件夹 Linked Folder
-- Cue 的四个：Cue · 推进中 Underway · 等你 Needs You · 记忆 Memory；一直记着 Always Remember
-- 拍板 Your Call（"等你拍板" Needs Your Call）；数字账（名牌、小组件、灵动岛与锁屏、菜单栏面板）与侧栏进展的计数里数接小写短形：N for you（拍板）· N to reply · N running · N on subagents · N underway · N need(s) you
-- 进行中 In Progress（任务自己的状态，不与 Underway 混）· 已完成 Done（列名）· 完成 Complete（按钮）· 待回复 To Reply · 该你了 Your Turn · 新消息 New Messages · 有新回复 New Reply · 输出中 Writing…
+- Cue 的四个：Cue · 推进中 Active · 等你 Needs You · 记忆 Memory；一直记着 Always Remember
+- 拍板 Your Call（"等你拍板" Needs Your Call）；数字账（名牌、小组件、灵动岛与锁屏、菜单栏面板）与侧栏进展的计数里数接小写短形：N for you（拍板）· N to reply · N running · N on subagents · N active · N need(s) you
+- 进行中 In Progress（任务自己的状态，不与 Active 混）· 已完成 Done（列名）· 完成 Complete（按钮）· 待回复 To Reply · 该你了 Your Turn · 新消息 New Messages · 有新回复 New Reply · 输出中 Writing…
 - 经过的动作词：查看 View · 发给 Message · 新建 New · 修改 Edit · 开始 Start · 停止 Stop · 完成 Complete · 留给你 Left for You
 - 只记下 Just Save · 对 Cue 说 Tell Cue · 运行情况 Status · 额度 Usage · 技能 Skill · 斜杠命令 Slash Command · 思考强度 Thinking · 灵动岛与锁屏 Live Activity

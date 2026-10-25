@@ -16,7 +16,7 @@ extension AnyTransition {
 /// "Cue 此刻"（`CueNow`）的现成样子，App、小组件、灵动岛与锁屏同一份：数字账（`CueLedger`）与头像的那一层（`cueFace`，扩展里的头像 `CueNowFace`；
 /// App 里会动的头像 `CueAvatar` 套同一层）。颜色只按意思取：拍板赭黄、待回复墨色、在跑与等子代理靛青、刚做完石绿、歇着灰。
 /// 数字账：数字按意思上色、加粗，词是次要墨色；要你管的与推进中的两组之间比组里宽一截。排得下哪排画哪排（`CueNow.ledger` 由细到粗），
-/// 最粗那排还放不下先收紧间距，再不够才截断。没有可数的写那一句（`CueNow.quietLine`，起不来是胭脂色，不在是次要灰）。数字变了原地滚过去，换了说法先淡掉再淡入（`handOff`）。
+/// 最粗那排还放不下先收紧间距，再不够去掉推进中那组；要你管的那组（拍板、待回复）永远写全、不截。没有可数的写那一句（`CueNow.quietLine`，起不来是胭脂色，不在是次要灰）。数字变了原地滚过去，换了说法先淡掉再淡入（`handOff`）。
 /// 否决过：一件一颗珠子接一句——实心空心要背，一句只挑一种说，几件在推进反而看不出。
 struct CueLedger: View {
     let now: CueNow
@@ -35,7 +35,7 @@ struct CueLedger: View {
                     ForEach(Array(now.ledger.enumerated()), id: \.offset) { _, entries in row(entries, gap: gap) }
                     if let last = now.ledger.last {
                         row(last, gap: gap / 2)
-                        truncated(last)
+                        urgentFirst(last)
                     }
                 }
                 .transition(.handOff)
@@ -64,18 +64,19 @@ struct CueLedger: View {
         }
     }
 
-    /// 最粗那排也放不下（字号很大、地方很窄）：同样的字连成一行，截的是要你管的那组，推进中的总数留全（几件在推进一直看得到）。
-    private func truncated(_ entries: [CueNow.Entry]) -> some View {
-        let yours = entries.filter { $0.tone != .moving }, moving = entries.filter { $0.tone == .moving }
-        return HStack(spacing: gap / 2) {
-            if !yours.isEmpty { joined(yours).lineLimit(1).truncationMode(.tail) }
-            if !moving.isEmpty { joined(moving).lineLimit(1).fixedSize() }
+    /// 最粗那排也放不下（字号很大、地方很窄）：要你管的那组写全，推进中那组放得下才写，放不下整组不写。
+    private func urgentFirst(_ entries: [CueNow.Entry]) -> some View {
+        let yours = entries.filter { $0.tone == .asks || $0.tone == .reply }
+        let moving = entries.filter { $0.tone == .moving }
+        return HStack(spacing: gap / 2 * Self.groupGap) {
+            if !yours.isEmpty { group(yours, gap: gap / 2).fixedSize() }
+            if !moving.isEmpty {
+                ViewThatFits(in: .horizontal) {
+                    group(moving, gap: gap / 2).fixedSize()
+                    if !yours.isEmpty { Color.clear.frame(width: 0, height: 0) }
+                }
+            }
         }
-    }
-
-    private func joined(_ entries: [CueNow.Entry]) -> Text {
-        let lines = entries.map { $0.line(number: $0.tone.color(palette)) }
-        return Text(lines.dropFirst().reduce(into: lines[0]) { $0 += " " + $1 }).foregroundStyle(palette.ink2)
     }
 
     private var quietTint: Color {

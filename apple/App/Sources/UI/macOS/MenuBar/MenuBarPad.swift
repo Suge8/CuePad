@@ -54,7 +54,6 @@ struct MenuBarPad: View {
                 // 按钮不折行，放不下时让左边的状态行截短
                 .fixedSize()
                 .disabled(empty)
-                .fixedSize()
                 .help("把这次随手记直接说给 \(workspace.cue.name)")
         }
         .contentShape(.rect)
