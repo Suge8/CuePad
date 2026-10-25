@@ -3,7 +3,7 @@ import SwiftUI
 
 /// 常驻循环动效的唯一宿主：Agent 在跑的心电线（`heartbeat`）、话在路上的纸飞机（`flight`）、等你确认的外扩波纹（`ripple`）、
 /// 等待的转圈（`orbit`，经 `Spinner`）、换模型与思考强度在路上时的呼吸（`pulse`）、进行中文字与最高思考强度上扫过的光（`sheen`）、
-/// Agent 在做时任务气泡里吉祥物的轻轻上下浮动（`float`）、看板推进中卡下沿那条线（`wave`，`BoardWave`）。
+/// 看板推进中卡下沿那条线（`wave`，`BoardWave`）。
 /// 用 Core Animation 而不是 SwiftUI 的 repeatForever 或符号动效：后两者每帧都在 App 进程里重算，
 /// 列表里有几个在工作的会话时，静止不动也要占约 9% CPU；CA 的动画交给渲染服务，App 进程不参与，离屏不画。
 /// 放不放只看 `LoopsPlay`，不放时调用方换静止的样子。
@@ -23,8 +23,6 @@ struct LoopLayer {
         case sheen
         /// 铺满的一层颜色从无到有再回去，一明一暗 1.4s（盖在内容上，内容看起来在呼吸）。
         case pulse
-        /// 一张图（等比铺满）上下浮动 `lift`，一上一下 1.8s。
-        case float(CGImage, lift: CGFloat = 8)
         /// 一条预先画好的周期线（几层同一个周期）整条匀速横移一个周期，渲染服务只挪一层（`WaveStrip`）。
         case wave(WaveStrip)
     }
@@ -123,8 +121,6 @@ struct LoopLayer {
             case .pulse:
                 loop.frame = bounds
                 loop.backgroundColor = color
-            case .float:
-                loop.frame = bounds
             case .wave(let wave):
                 wave.layout(loop, in: bounds, color: color)
             case .sheen:
@@ -205,17 +201,6 @@ struct LoopLayer {
                 fade.autoreverses = true
                 fade.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
                 return loop(fade, on: layer)
-            case .float(let image, let lift):
-                let layer = CALayer()
-                layer.contents = image
-                layer.contentsGravity = .resizeAspect
-                let bob = CABasicAnimation(keyPath: "transform.translation.y")
-                bob.fromValue = 0
-                bob.toValue = lift
-                bob.duration = 0.9
-                bob.autoreverses = true
-                bob.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-                return loop(bob, on: layer)
             case .wave(let wave):
                 let layer = wave.make()
                 _ = loop(wave.drift(), on: layer.sublayers![0])

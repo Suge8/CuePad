@@ -33,7 +33,7 @@ struct TaskBubblePage: View {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(data.steps) { TaskLine(task: $0, step: true) }
                 }
-                .padding(.leading, BubbleMetrics.stepLead)
+                .padding(.leading, BubbleMetrics.stepLead).padding(.trailing, BubbleMetrics.textTrailing)
                 .padding(.top, 4)
                 .animation(HandOff.quick, value: data.steps.map(\.id))
             }

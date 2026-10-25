@@ -89,18 +89,16 @@ nonisolated enum PiSubagentClock: Equatable {
 
 }
 
-/// 会话在等子代理时（`PiProgress` 的那一句）说它们在干什么：只有一个在跑，写它的名字与动作；好几个在跑，说个数；
-/// 都不在跑了（交回了、在被审查，结果还没发给 Agent）说已交回。
+/// 会话在等子代理时（`PiProgress` 的那一句）说是谁在干什么：只有一个在跑，写它的名字与动作；好几个在跑，说几个在跑；
+/// 都不在跑了（交回了、在被审查，结果还没发给 Agent）说已交回。它接在状态词"子代理工作中"后面，不再说一遍"在干活"。
 nonisolated enum PiSubagentLine {
     static func of(_ agents: [PiSubagentState]) -> String? {
         guard !agents.isEmpty else { return nil }
         let running = agents.filter(\.isRunning)
         switch running.count {
         case 0: return String(localized: "子代理已交回，等 Agent 接着做")
-        case 1:
-            let agent = running[0]
-            return agent.action.isEmpty ? String(localized: "\(agent.name) 在干活") : String(localized: "\(agent.name) 在干活：\(agent.action)")
-        default: return String(localized: "\(running.count) 个子代理在干活")
+        case 1: return Dotted(running[0].name, running[0].action).visible
+        default: return String(localized: "\(running.count) 个在跑")
         }
     }
 }
