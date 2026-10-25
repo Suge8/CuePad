@@ -73,7 +73,9 @@ final class PanelHost {
                 responders[id] = Weak(value: window.firstResponder)
                 window.makeFirstResponder(nil)
             }
-            if let index = shown.firstIndex(where: { $0.id == id }) { shown[index] = entry } else { shown.append(entry) }
+            withAnimation(entry.style.fades ? HandOff.quick : nil) {
+                if let index = shown.firstIndex(where: { $0.id == id }) { shown[index] = entry } else { shown.append(entry) }
+            }
         } else {
             // 气泡：不动焦点（同系统 popover）：输入栏聚焦时交出焦点，它要收起再重排，开一次多约 800M 指令、点击回合多十几毫秒（实测）
             withAnimation(Motion.snappy) { shown.append(entry) }
@@ -88,7 +90,7 @@ final class PanelHost {
     func hide(_ id: UUID) {
         guard let index = shown.firstIndex(where: { $0.id == id }) else { return }
         if shown[index].modal {
-            shown.remove(at: index)
+            withAnimation(shown[index].style.fades ? HandOff.quick : nil) { _ = shown.remove(at: index) }
         } else {
             withAnimation(Motion.snappy) { _ = shown.remove(at: index) }
         }
@@ -135,6 +137,11 @@ final class PanelHost {
     }
 
     private static let escape: UInt16 = 53
+}
+
+private extension PanelStyle {
+    /// 开、关时整块淡入淡出：全屏预览（里面的画面从缩略图飞出、飞回，`PreviewFlight`）；其余模态浮层原地出现、消失。
+    var fades: Bool { self == .fullScreen }
 }
 
 private struct Weak<Object: AnyObject> {
@@ -283,6 +290,7 @@ private struct PanelLayer: View {
                 .environment(\.pageActive, shown.open)
                 .environment(\.pagePrefetch, !shown.open)
         }
+        .transition(.opacity)
     }
 
     /// 气泡：量窗口的那一层一直在，气泡在它里面进出（进出场要挂在被插入、移除的那一层上）；顶上让出工具栏那一条。

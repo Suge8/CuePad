@@ -125,29 +125,18 @@ private struct SlideCurve {
         self.from = from
         self.to = to
         self.width = width
-        duration = Self.settles(over: abs(to - from))
+        duration = Motion.snappySettles(over: abs(to - from))
     }
 
-    private static let omega = 2 * Double.pi / 0.25
     /// 关键帧每秒取样多少次：比 144Hz 密，帧之间按直线插值看不出折线。
     private static let samplesPerSecond = 240.0
-
-    /// 临界阻尼弹簧离终点的比例是 (1 + ωt)·e^(−ωt)。
-    private static func remaining(_ time: Double) -> Double { (1 + omega * time) * exp(-omega * time) }
-
-    /// 滑这么远时离终点不到半点要多久：到这时就算滑完。弹簧按比例收敛到 `settlingDuration` 要多等 0.1 秒左右，那时早已看不出在动。
-    private static func settles(over distance: CGFloat) -> TimeInterval {
-        var time = 0.0
-        while Double(distance) * remaining(time) > 0.5 { time += 0.005 }
-        return time
-    }
 
     /// 叠加在模型值上的一段平移偏移：边相对终点的偏移从 `from - to` 按曲线回到 0，`translation` 把它换算成这一层的偏移（到 0 时也得是 0）。
     func offset(_ translation: (CGFloat) -> CGFloat) -> CAKeyframeAnimation {
         let steps = max(1, Int((duration * Self.samplesPerSecond).rounded(.up)))
         let animation = CAKeyframeAnimation(keyPath: "transform.translation.x")
         animation.values = (0...steps).map { step in
-            translation(step == steps ? 0 : (from - to) * CGFloat(Self.remaining(duration * Double(step) / Double(steps))))
+            translation(step == steps ? 0 : (from - to) * CGFloat(Motion.snappyRemaining(duration * Double(step) / Double(steps))))
         }
         animation.isAdditive = true
         return timed(animation)

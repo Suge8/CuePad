@@ -95,7 +95,6 @@ struct DeliverableTile: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @Environment(\.displayScale) private var scale
-    @Environment(\.previewZoom) private var namespace
     /// 文件随同步到本机的那一刻就绪（附件表变化时重读）
     @State private var arrived: Bool?
     @State private var look: DeliverableLook?
@@ -246,7 +245,7 @@ struct DeliverableTile: View {
             }
             .clipShape(shape)
             .overlay(shape.strokeBorder(isChosen ? palette.signatureFill : isShot ? palette.mediaEdge : palette.hair, lineWidth: isChosen ? 2 : 1))
-            .zoomSource(zoom, in: namespace)
+            .previewSource(zoom, radius: radius, aspect: shown?.aspect) { [image = shown?.image] in image }
     }
 
     private var caption: some View {
@@ -276,12 +275,33 @@ struct DeliverableTile: View {
 }
 
 extension View {
-    /// 全屏页从这张缩略图放大出来、缩回这里（`previewPresenter`，手机才有）。
-    @ViewBuilder func zoomSource(_ key: PreviewZoomKey, in namespace: Namespace.ID?) -> some View {
+    /// 全屏页从这张缩略图放大出来、缩回这里（`previewPresenter`）：iOS 是系统 zoom 转场的来源，Mac 在 `PreviewFlight` 里登记，
+    /// `image` 是飞的那张画面（飞的那一下才取），`aspect` 是内容的真实比例（缩略图裁过时；不给按画面的）。
+    func previewSource(_ key: PreviewZoomKey, radius: CGFloat, aspect: CGFloat? = nil, image: @escaping () async -> CGImage?) -> some View {
+        modifier(PreviewSource(key: key, radius: radius, aspect: aspect, image: image))
+    }
+}
+
+private struct PreviewSource: ViewModifier {
+    let key: PreviewZoomKey
+    let radius: CGFloat
+    let aspect: CGFloat?
+    let image: () async -> CGImage?
+    #if os(iOS)
+    @Environment(\.previewZoom) private var namespace
+    #else
+    @Environment(\.previewFlight) private var flight
+    #endif
+
+    func body(content: Content) -> some View {
         #if os(iOS)
-        if let namespace { matchedTransitionSource(id: key, in: namespace) } else { self }
+        if let namespace { content.matchedTransitionSource(id: key, in: namespace) } else { content }
         #else
-        self
+        if let flight {
+            content.background { PreviewSourceMark(flight: flight, key: key, image: image, aspect: aspect, radius: radius) }
+        } else {
+            content
+        }
         #endif
     }
 }

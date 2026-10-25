@@ -1,3 +1,4 @@
+import CueEditor
 import CueStore
 import ImageIO
 import SwiftUI
@@ -72,15 +73,18 @@ private struct ChatImage: View {
     let zoom: PreviewZoomKey
     let open: () -> Void
     @Environment(AppServices.self) private var services
-    @Environment(\.previewZoom) private var namespace
+    @Environment(\.displayScale) private var scale
     /// 文件随同步到本机的那一刻就绪
     @State private var arrived: Bool?
 
     var body: some View {
         Button(action: open) {
             // 到达时换一个身份，缩略图重新读文件；一开始就在的不重读
-            Thumbnail(hash: hash, height: side, radius: 12, fitWidth: fitWidth).frame(width: fitWidth == nil ? side : nil).id(arrived ?? true)
-                .zoomSource(zoom, in: namespace)
+            Thumbnail(hash: hash, height: side, radius: Self.radius, fitWidth: fitWidth).frame(width: fitWidth == nil ? side : nil).id(arrived ?? true)
+                .previewSource(zoom, radius: Self.radius) { [files = services.store.files, hash, pixels = Self.pixels(side, scale)] in
+                    guard let url = files.fileURL(for: hash) else { return nil }
+                    return await Self.decode(url, pixels: pixels)
+                }
         }
         .buttonStyle(PressStyle())
         .disabled(arrived == false)
@@ -88,4 +92,11 @@ private struct ChatImage: View {
         .accessibilityHint("查看大图")
         .observingArrival(of: hash, in: services.store, into: $arrived)
     }
+
+    private static let radius: CGFloat = 12
+
+    /// 飞的那张取 `Thumbnail` 同样大小的那份，在缩略图缓存里（`Thumbnails`），不另解一遍。
+    private static func pixels(_ side: CGFloat, _ scale: CGFloat) -> Int { Int(side * 3 * scale) }
+
+    @concurrent private static func decode(_ url: URL, pixels: Int) async -> CGImage? { Thumbnails.image(at: url, maxPixel: pixels) }
 }

@@ -208,6 +208,15 @@ enum DebugHooks {
         #endif
     }
 
+    #if os(macOS)
+    /// 全屏预览的翻页开始接本窗口的滚动（`PageInput`）：`-CuePadClick` 合成的滑动先过它（`DebugScene.scrollGate`）。
+    static func previewScrolls(_ takes: @escaping (NSEvent) -> Bool) {
+        #if DEBUG
+        DebugScene.scrollGate = takes
+        #endif
+    }
+    #endif
+
     /// 第 `attempt` 次订阅项目目录之前：`-CuePadCatalogFailure` 在这里注入读取失败。
     /// 隔离库下也要通知权限、发真实的系统通知、装提示音、设角标（`-CuePadNotifications YES`，见 `AlertCenter.delivers`）。
     static var deliversNotifications: Bool {
