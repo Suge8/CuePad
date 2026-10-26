@@ -16091,6 +16091,22 @@
         }
       }
     },
+    "等 Mac 出现再请求通知权限没能启动：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't start waiting for a Mac to ask for notification permission: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "等 Mac 出现再请求通知权限没能启动：%@"
+          }
+        }
+      }
+    },
     "等了 %@" : {
       "localizations" : {
         "en" : {
@@ -17267,6 +17283,22 @@
         }
       }
     },
+    "记下的灵感、建的任务都能在这里搜到" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ideas and tasks you save can be searched here."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "记下的灵感、建的任务都能在这里搜到"
+          }
+        }
+      }
+    },
     "记下（⌘↩）" : {
       "localizations" : {
         "en" : {
@@ -18339,22 +18371,6 @@
         }
       }
     },
-    "还没有 Mac 打开过 CuePad：先在 Mac 上打开它" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "CuePad hasn’t been opened on a Mac yet. Open it on your Mac first."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "还没有 Mac 打开过 CuePad：先在 Mac 上打开它"
-          }
-        }
-      }
-    },
     "还没有开启通知" : {
       "localizations" : {
         "en" : {
@@ -18383,6 +18399,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "还没有归档的"
+          }
+        }
+      }
+    },
+    "还没有灵感与任务" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No Ideas or Tasks Yet"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "还没有灵感与任务"
           }
         }
       }
