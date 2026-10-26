@@ -211,9 +211,9 @@ final class TestApp {
         let integration = agentIntegration
         let hooks = try #require(integration.hooks(.codex) as? CodexHooks).hooks
         let command = integration.hookCommand(.codex)
-        let skill = integration.skillFile(.codex)
+        let skill = integration.skillFile
         try FileManager.default.createDirectory(at: skill.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try AgentSkill.text(for: .codex, cuepad: helper).write(to: skill, atomically: true, encoding: .utf8)
+        try AgentSkill.text(cuepad: helper, for: [.codex]).write(to: skill, atomically: true, encoding: .utf8)
         try hooks.install(command: command)
         let path = hooks.file.realPath.path
         let trust = try hooks.ourGroups(in: JSONSourceTree(Data(contentsOf: hooks.file))).map { group in
@@ -269,7 +269,8 @@ final class TestApp {
     /// 其余 Agent 的配置目录也在临时目录里，按它们自己认的环境变量给。
     var agentHomes: [String: String] {
         ["CLAUDE_CONFIG_DIR": directory.appending(path: "claude").path, "CODEX_HOME": directory.appending(path: "codex").path,
-         "OPENCODE_CONFIG_DIR": directory.appending(path: "opencode").path, "XDG_STATE_HOME": directory.appending(path: "state").path]
+         "OPENCODE_CONFIG_DIR": directory.appending(path: "opencode").path, "XDG_STATE_HOME": directory.appending(path: "state").path,
+         "CUEPAD_AGENTS_DIR": directory.appending(path: "agents").path]
     }
 
     private func makeServices() -> AppServices {

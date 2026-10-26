@@ -19751,6 +19751,22 @@
         }
       }
     },
+    "这台 Mac 的技能与说明没能写下：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't record this Mac's skills and instructions: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这台 Mac 的技能与说明没能写下：%@"
+          }
+        }
+      }
+    },
     "这台 Mac 装着正式版，本机构建不改它在用的配置：先用 %@ 指定 %@ 的目录再接入" : {
       "localizations" : {
         "en" : {

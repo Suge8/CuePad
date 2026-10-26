@@ -13,19 +13,21 @@ struct AgentIntegrationTests {
     var cuepad: URL { root.appending(path: "CuePad.app/Contents/Helpers/cuepad") }
     var environment: [String: String] {
         ["CLAUDE_CONFIG_DIR": root.appending(path: "claude").path, "CODEX_HOME": root.appending(path: "codex").path,
-         "XDG_CONFIG_HOME": root.appending(path: "xdg").path]
+         "XDG_CONFIG_HOME": root.appending(path: "xdg").path, "CUEPAD_AGENTS_DIR": root.appending(path: "agents").path]
     }
     var extensionFile: URL { paths.extensionsDirectory.appending(path: "cuepad-bridge/index.ts") }
 
-    /// 各家文档里个人技能的位置（Pi 的目录由 `PiPaths` 定）
-    func skillFile(_ kind: AgentKind) -> URL {
+    /// 几家共读的那一份（Pi、Codex、OpenCode 原生读 `~/.agents/skills`）
+    var skillFile: URL { root.appending(path: "agents/skills/cuepad/SKILL.md") }
+    /// Claude Code 读技能的位置（它不读 `.agents`）；也是旧版各家副本所在的位置
+    func agentSkill(_ kind: AgentKind) -> URL {
         let home = switch kind {
         case .pi: paths.agentDirectory
         case .claudeCode: root.appending(path: "claude")
         case .codex: root.appending(path: "codex")
         case .opencode: root.appending(path: "xdg/opencode")
         }
-        return home.appending(path: "skills/cuepad/SKILL.md")
+        return home.appending(path: "skills/cuepad")
     }
 
     init() throws {
@@ -96,24 +98,26 @@ struct AgentIntegrationTests {
 
     // MARK: 接入与删除
 
-    /// 每家的技能写进它自己文档里的个人技能目录，正文写着 App 里 cuepad 的绝对路径与手机预览（show），Codex 的提醒沙箱。
-    /// 关掉时 CuePad 写的文件与因此空出来的目录都删掉，配置目录里别的东西不动。
+    /// 技能正文写着 App 里 cuepad 的绝对路径与手机预览（show），沙箱的提醒各家通用。
+    /// 关掉时 CuePad 写的文件与因此空出来的目录都删掉，配置目录里别的东西不动。技能只有共读的一份，Claude Code 读的是链到它的链接。
     /// Codex 的钩子要真 codex 来信任，它的接入与删除见 `CodexHooksTests`。
     @Test(arguments: AgentKind.allCases.filter { $0 != .codex })
     func installWritesTheSkillWhereTheAgentReadsItAndUninstallLeavesNoTrace(kind: AgentKind) async throws {
         try installAll()
-        let home = skillFile(kind).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let home = agentSkill(kind).deletingLastPathComponent().deletingLastPathComponent()
         try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
         try #"{"theme": "用户自己的"}"#.write(to: home.appending(path: "settings.json"), atomically: true, encoding: .utf8)
         let before = contents(root)
 
         try await integration().install(kind)
 
-        let skill = try String(contentsOf: skillFile(kind), encoding: .utf8)
+        let skill = try String(contentsOf: skillFile, encoding: .utf8)
         #expect(skill.hasPrefix("---\nname: cuepad\ndescription: "))
         #expect(skill.contains("\(cuepad.path) --help"))
         #expect(skill.contains("\(cuepad.path) show <文件…>"))
-        #expect(skill.contains("沙箱") == (kind == .codex))
+        #expect(skill.contains("沙箱外"))
+        let read = try? String(contentsOf: agentSkill(.claudeCode).appending(path: "SKILL.md"), encoding: .utf8)
+        #expect((read == skill) == (kind == .claudeCode), "Claude Code 经链接读到同一份；别家不建链接")
         #expect(FileManager.default.fileExists(atPath: extensionFile.path) == (kind == .pi))
         #expect(await integration().status(of: kind).files == .current)
 
@@ -130,7 +134,39 @@ struct AgentIntegrationTests {
 
         #expect(await integration().status(of: .claudeCode) == AgentStatus(presence: .found(nil), files: .current))  // 配置目录还在：算用过
         try await integration().uninstall(.claudeCode)
-        #expect(!FileManager.default.fileExists(atPath: skillFile(.claudeCode).deletingLastPathComponent().path))
+        #expect(!FileManager.default.fileExists(atPath: skillFile.path))
+        #expect(!RelativeLink.isLink(agentSkill(.claudeCode)))
+    }
+
+    /// 几家各自接入，共用一份技能：关掉一家，别家照旧接着。
+    @Test func agentsShareOneSkillAndUninstallingOneKeepsTheOthers() async throws {
+        try installAll()
+        try await integration().install(.pi)
+        try await integration().install(.opencode)
+        try await integration().uninstall(.opencode)
+        #expect(await integration().status(of: .opencode).files == .missing)
+        #expect(await integration().status(of: .pi).files == .current)
+        #expect(FileManager.default.fileExists(atPath: skillFile.path))
+    }
+
+    /// 旧版写在各家自己目录里的副本：那几家算接入了、待升级；装任何一家都把副本收掉、记进共用的那一份，钩子的足迹搬过去。
+    @Test func legacyCopiesInEachAgentsDirectoryAreFoldedIntoTheSharedSkill() async throws {
+        try installAll()
+        let legacy = "---\nname: cuepad\n---\n旧的\n<!-- 由 CuePad 写入，升级时整文件覆盖 -->\n"
+        for kind in [AgentKind.claudeCode, .opencode] {
+            try FileManager.default.createDirectory(at: agentSkill(kind), withIntermediateDirectories: true)
+            try legacy.write(to: agentSkill(kind).appending(path: "SKILL.md"), atomically: true, encoding: .utf8)
+        }
+        try "{}".write(to: agentSkill(.claudeCode).appending(path: "claude-hooks.json"), atomically: true, encoding: .utf8)
+        #expect(await integration().status(of: .opencode).files == .outdated)
+
+        try await integration().install(.opencode)
+
+        #expect(await integration().status(of: .opencode).files == .current)
+        #expect(!FileManager.default.fileExists(atPath: agentSkill(.opencode).path))
+        #expect(RelativeLink.points(agentSkill(.claudeCode), to: skillFile.deletingLastPathComponent()))
+        #expect(FileManager.default.fileExists(atPath: skillFile.deletingLastPathComponent().appending(path: "claude-hooks.json").path))
+        #expect(AgentSkill.kinds(in: try String(contentsOf: skillFile, encoding: .utf8)) == [.claudeCode, .opencode])
     }
 
     /// 问版本不在 Agent 自己的数据目录里留东西：OpenCode 每次运行（`--version` 也是）都往 `$XDG_DATA_HOME/opencode/log` 写日志，
@@ -151,18 +187,19 @@ struct AgentIntegrationTests {
         #expect(!FileManager.default.fileExists(atPath: dataHome), "临时数据目录用完删掉")
     }
 
-    /// 用户自己的同名技能或扩展不覆盖、不删除；Pi 的两样一起拒绝。
-    @Test func foreignFilesWithTheSameNameAreNeverTouched() async throws {
+    /// 用户自己的同名技能或扩展不覆盖、不删除（共读的那一份、Claude Code 读的位置上）；Pi 的两样一起拒绝。
+    @Test(arguments: [(AgentKind.pi, false), (.claudeCode, true)])
+    func foreignFilesWithTheSameNameAreNeverTouched(kind: AgentKind, inAgentDirectory: Bool) async throws {
         try installAll()
         let mine = "---\nname: cuepad\n---\n我自己的\n"
-        for kind in [AgentKind.claudeCode, .pi] {
-            try FileManager.default.createDirectory(at: skillFile(kind).deletingLastPathComponent(), withIntermediateDirectories: true)
-            try mine.write(to: skillFile(kind), atomically: true, encoding: .utf8)
-            #expect(await integration().status(of: kind).files == .foreign((skillFile(kind).path as NSString).abbreviatingWithTildeInPath))
-            await #expect(throws: AgentInstallError.self) { try await integration().install(kind) }
-            await #expect(throws: AgentInstallError.self) { try await integration().uninstall(kind) }
-            #expect(try String(contentsOf: skillFile(kind), encoding: .utf8) == mine)
-        }
+        let file = inAgentDirectory ? agentSkill(kind).appending(path: "SKILL.md") : skillFile
+        try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try mine.write(to: file, atomically: true, encoding: .utf8)
+        let shown = ((inAgentDirectory ? agentSkill(kind) : skillFile).path as NSString).abbreviatingWithTildeInPath
+        #expect(await integration().status(of: kind).files == .foreign(shown))
+        await #expect(throws: AgentInstallError.self) { try await integration().install(kind) }
+        await #expect(throws: AgentInstallError.self) { try await integration().uninstall(kind) }
+        #expect(try String(contentsOf: file, encoding: .utf8) == mine)
         #expect(!FileManager.default.fileExists(atPath: extensionFile.path))
     }
 
@@ -176,7 +213,7 @@ struct AgentIntegrationTests {
 
         #expect(await integration(cuepad: moved).status(of: .pi).files == .outdated)
         try await integration(cuepad: moved).install(.pi)
-        #expect(try String(contentsOf: skillFile(.pi), encoding: .utf8).contains(moved.path))
+        #expect(try String(contentsOf: skillFile, encoding: .utf8).contains(moved.path))
         #expect(await integration(cuepad: moved).status(of: .pi).files == .current)
     }
 }

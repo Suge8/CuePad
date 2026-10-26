@@ -1,8 +1,9 @@
 import Foundation
 
-/// 要整理的一件（`AgentLibrary.tidies`）：只有问题时出现，每件一句事实（`title`）一个动作（`action`）。种类与判定规则在 CuePi 的
-/// `AgentLibraryFiles`；整理不弹确认，移走的进系统废纸篓，做完给一条可撤销的提示。`id` 由种类与涉及的路径推出，重扫后不变，
-/// 整理请求（`TidyOrder`）按它指认，执行时那件已不在就不做（`AgentLibraryError.tidyGone`）。
+/// 要整理的一件（`AgentLibrary.tidies`）：只有问题时出现，每件一句事实（`title`）一个动作（`action`）。判定规则在 CuePi 的
+/// `LibrarySkillScan`、`LibraryInstructionScan`；整理不弹确认，移走的进系统废纸篓，做完给一条可撤销的提示。
+/// `id` 由种类推出（同名的带名字、格式不对的带路径、项目的带项目），重扫后不变；整理请求（`TidyOrder`）按它指认，
+/// 照执行时的文件做（那时多出来的同类问题一并做），那件已不在就不做（一件都不在时 `AgentLibraryError.tidyGone`）。
 public struct LibraryTidy: Codable, Equatable, Sendable, Identifiable {
   public let id: String
   public let kind: Kind
@@ -77,7 +78,11 @@ public struct LibraryTidy: Codable, Equatable, Sendable, Identifiable {
   }
 
   /// 合成稿：几份说明按段取并集（`InstructionMerge`），整理时照它写进 AGENTS.md；不是说明的为 nil。
-  public var merged: String? { sources.isEmpty ? nil : InstructionMerge.union(sources.compactMap(\.text)) }
+  /// 替换基础提示的两份（`InstructionSource.Origin.replacesBasePrompt`）只有撤掉的（`retiring`，同 `TidyOrder.retire`）才并进来。
+  public func merged(retiring: Set<InstructionSource.Origin> = []) -> String? {
+    let used = sources.filter { !$0.origin.replacesBasePrompt || retiring.contains($0.origin) }
+    return used.isEmpty ? nil : InstructionMerge.union(used.compactMap(\.text))
+  }
 
   /// 一句事实（各端按自己的语言写，参数是名字与个数）。
   public var title: String {
@@ -91,7 +96,7 @@ public struct LibraryTidy: Codable, Equatable, Sendable, Identifiable {
       directories.count == 1 ? String(localized: "技能目录里有个空目录") : String(localized: "技能目录里有 \(directories.count) 个空目录")
     case .globalInstructions(let sources):
       differs
-        ? String(localized: "\(sources.filter { $0.origin != .shared }.count) 家的全局规则各写一份")
+        ? String(localized: "\(Set(sources.compactMap(\.origin.agent)).count) 家的全局规则各写一份")
         : String(localized: "全局说明换成一份、各家链到它")
     case .projectClaude: String(localized: "项目里另有一份不同的 CLAUDE.md")
     }
@@ -167,8 +172,23 @@ public struct InstructionSource: Codable, Equatable, Sendable {
     case shared
     /// 这家自己的那份：全局的 `~/.claude/CLAUDE.md`、`~/.codex/AGENTS.md`……，项目的 `CLAUDE.md`
     case agent(AgentKind)
-    /// Codex 配置里 `model_instructions_file` 指的那份（只作比对来源，合成时撤掉这个键）
+    /// Pi 的 `SYSTEM.md`（替换它的基础提示）：只作比对来源，合成时可选进废纸篓；留着时仍是说明里单独的一份（`LibraryInstruction.Kind.piSystem`）
+    case piSystem
+    /// Codex 配置里 `model_instructions_file` 指的那份（替换它的基础提示）：只作比对来源，合成时可选撤掉这个键
     case codexPrompt
+
+    /// 替换基础提示的两份：自己不算"各写一份"，合成时撤不撤由你选（`TidyOrder.retire`）。
+    public var replacesBasePrompt: Bool { self == .piSystem || self == .codexPrompt }
+
+    /// 是哪家的；共读的那份为 nil。
+    public var agent: AgentKind? {
+      switch self {
+      case .shared: nil
+      case .agent(let kind): kind
+      case .piSystem: .pi
+      case .codexPrompt: .codex
+      }
+    }
   }
 
   public let origin: Origin

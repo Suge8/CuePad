@@ -65,7 +65,7 @@ final class PiProcess: @unchecked Sendable {
             agentDirectory: root.appending(path: "agent"), socketDirectory: socketDirectory ?? root.appending(path: "s"), binDirectory: root.appending(path: "bin"))
         let tape = AgentTape.active
         if installBridge && other == nil {
-            let agents = AgentIntegration(paths: AgentPaths(pi: paths, environment: [:]), locate: { AgentTape.locator("pi") }, cuepad: Self.cuepad, timing: noDeadline)
+            let agents = AgentIntegration(paths: AgentPaths(pi: paths, environment: ["CUEPAD_AGENTS_DIR": root.appending(path: "agents").path]), locate: { AgentTape.locator("pi") }, cuepad: Self.cuepad, timing: noDeadline)
             try await agents.install(.pi)
         }
         if other == nil {
