@@ -4,7 +4,7 @@ import SwiftUI
 
 /// iCloud 同步那一行。状态字只说现状（`SyncSummary`），有解决办法时后面给一个链接：
 /// 没开 iCloud → 打开系统设置；暂停等你决定 → "处理…"弹出两个选择（替换本机前再确认一次）；有记录没能同步 → "查看"明细。
-/// 能自己好起来的（账号受限、暂时不可用、空间不足）把原因直接写在状态里；右边常驻"立即同步"。
+/// 能自己好起来的（账号受限、暂时不可用、空间不足）把原因直接写在状态里；按了有用时右边给"立即同步"（`AppServices.canSyncNow`）。
 struct SyncRow: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
@@ -16,9 +16,6 @@ struct SyncRow: View {
     /// 这一轮同步中已久过 `Pending.delay`（`AppServices.shownSync`）。
     @State private var syncLasts = false
 
-    /// 系统设置的 Apple 账户（iCloud 的开关在里面）。
-    private static let accountSettings = URL(string: "x-apple.systempreferences:com.apple.systempreferences.AppleIDSettings")!
-
     private enum Fix { case decide, openSettings, issues }
 
     var body: some View {
@@ -28,10 +25,10 @@ struct SyncRow: View {
             title: "iCloud 同步", icon: Image(summary.icon), tone: tone(summary), busy: shown.busy, status: status(summary, fix: fix),
             help: fix == nil ? nil : summary.detail.map { "\($0)" }
         ) {
-            if services.sync != nil, fix != .decide, fix != .openSettings {
+            if services.canSyncNow {
                 Button("立即同步") { Task { await services.syncNow() } }
                     .settingButton()
-                    .disabled(!services.canSyncNow)
+                    .disabled(services.isSyncingNow)
             }
         } fix: {
             switch fix {
@@ -40,7 +37,7 @@ struct SyncRow: View {
                     .settingFix()
                     .popover(isPresented: $showsDecision, arrowEdge: .bottom) { decision(summary) }
             case .openSettings:
-                Button("打开系统设置") { openURL(Self.accountSettings) }.settingFix()
+                Button(SyncSummary.settingsTitle) { openURL(SyncSummary.settings) }.settingFix()
             case .issues:
                 Button("查看") { showsIssues = true }
                     .settingFix()

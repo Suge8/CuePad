@@ -46,6 +46,15 @@ nonisolated struct SyncSummary: Equatable {
     static let updateToSync = String(localized: "别的设备已用新版；在 TestFlight 里更新这台后接着同步，本机改动都在")
     #endif
 
+    /// 没开 iCloud（`SyncStatus.noAccount`）时给的出路：打开系统设置。Mac 直达 Apple 账户那一页；iOS 只能打开设置里这个 App 的那一页，再照 `turnOnICloud` 走。
+    #if os(macOS)
+    static let settingsTitle = String(localized: "打开系统设置")
+    static let settings = URL(string: "x-apple.systempreferences:com.apple.systempreferences.AppleIDSettings")!
+    #else
+    static let settingsTitle = String(localized: "打开设置")
+    static let settings = URL(string: UIApplication.openSettingsURLString)!
+    #endif
+
     /// 没登录 iCloud 或关掉了本 App 的 iCloud 时，去哪开。
     #if os(macOS)
     static let turnOnICloud = String(localized: "在「系统设置 › Apple 账户 › iCloud」里登录，并在使用 iCloud 的 App 里打开 CuePad；打开后自动开始同步，本机数据不受影响")

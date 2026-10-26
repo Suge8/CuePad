@@ -10,7 +10,9 @@ import SwiftUI
 /// `CueSettings.Host.selectable`）；菜单是各入口同一份 `CueHostMenu`。在这台 Mac 上启用打开接入面板
 /// （`SetupPanel`：先检测、接入这台的 Agent，一家都没装时给装法，同一下启用），别的 Mac 直接启用，没写成的原因就地写在按钮下面（`CueSettingsModel`）。
 /// 能不能启用读 `CueGate`：这台还没和 iCloud 对过时只写在等什么、没有按钮（对得久了整张换成"正在从 iCloud 同步"，`EmptyState.waitsForSync`）。
-/// 手机上还没有哪台 Mac 写下过自己时，说先到 Mac 上打开 CuePad，主动作是把 Mac 版的下载链接（GitHub Releases，`CueSettings.macDownload`）发出去，隔空投送到 Mac 上最快。
+/// 手机只经 iCloud 和 Mac 连上：同步到不了 Mac 时（`AppServices.macAlert`），那句话换成设置里同步那一行的说法（`SyncSummary`），
+/// 没开 iCloud 时主动作是打开设置，别的到不了的情况（受限、暂停、出错、空间不足）没有主动作、等它好起来或去设置里处理。
+/// 同步通着、手机上还没有哪台 Mac 写下过自己时，说先到 Mac 上打开 CuePad，主动作是把 Mac 版的下载链接（GitHub Releases，`CueSettings.macDownload`）发出去，隔空投送到 Mac 上最快。
 /// 没启用时下面的输入框发出去是记下灵感。Cue 运行在别的 Mac 上不写在这里：Mac 上写在输入框工具排的末尾（`CueComposer`）。
 struct CueWelcome: View {
     let intro: Bool
@@ -31,6 +33,7 @@ private struct CueEnable: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
+    @Environment(\.openURL) private var openURL
     @State private var model = CueSettingsModel()
 
     var body: some View {
@@ -43,7 +46,7 @@ private struct CueEnable: View {
             } else {
                 // 说过话后停用了：页头已写"已停用"，这里只说启用后怎样与那一步，不再自我介绍
                 VStack(spacing: 10) {
-                    Text("启用后 \(name) 接着干活").font(Typography.secondary).foregroundStyle(palette.ink2)
+                    Text(offline.map(Self.line) ?? String(localized: "启用后 \(name) 接着干活")).font(Typography.secondary).foregroundStyle(palette.ink2)
                     steps(settings, hosts)
                 }
                 .multilineTextAlignment(.center)
@@ -67,7 +70,21 @@ private struct CueEnable: View {
         }
     }
 
+    /// 同步到不了 Mac 的那一份说法；Mac 上这台自己就能运行 Cue，不挡。
+    private var offline: SyncSummary? {
+        #if os(iOS)
+        services.macAlert
+        #else
+        nil
+        #endif
+    }
+
+    private static func line(_ summary: SyncSummary) -> String {
+        summary.detail.map { String(localized: "\(summary.title)：\($0)") } ?? summary.title
+    }
+
     private func message(_ hosts: [CueSettings.Host]) -> String {
+        if let offline { return Self.line(offline) }
         guard !hosts.isEmpty else { return String(localized: "我在你的 Mac 上干活。在 Mac 上打开 CuePad 就能叫我，这之前想到的先在下面记下") }
         return String(localized: "启用后说一件想做的事，我来开工，要你拿主意时再找你")
     }
@@ -77,6 +94,10 @@ private struct CueEnable: View {
             HStack(spacing: 8) {
                 Spinner(.small)
                 Text(why).font(Typography.secondary).foregroundStyle(palette.ink3)
+            }
+        } else if offline != nil {
+            if services.syncStatus == .noAccount {
+                Button(SyncSummary.settingsTitle) { openURL(SyncSummary.settings) }
             }
         } else if hosts.isEmpty {
             ShareLink(item: CueSettings.macDownload) { Label("发出 Mac 版的下载链接", icon: .share) }
