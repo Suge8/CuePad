@@ -138,13 +138,19 @@ public actor CloudSync {
       }
       await coordinator.account(try await withDeadline(RequestLimits.request) { try await cloud.accountName() })
     } catch {
-      Self.log.notice("认 iCloud 账号失败，稍后再认：\(error.brief, privacy: .public)")
       guard !connected else { return true }
-      if SyncFault(error).isOffline { await coordinator.failed(error) } else { await coordinator.accountStatus(.couldNotDetermine) }
+      // 连不上的经协调器按段记（`SyncCoordinator.noteWaiting`）；其余的在这里只记开始认不了的那一次
+      if SyncFault(error).isOffline {
+        await coordinator.failed(error)
+      } else {
+        if accountRetryAt == nil { Self.log.notice("认 iCloud 账号失败，按退避再认：\(error.brief, privacy: .public)") }
+        await coordinator.accountStatus(.couldNotDetermine)
+      }
       retryAccount()
       return false
     }
     accountRetry?.cancel()
+    if accountRetryAt != nil { Self.log.notice("认好 iCloud 账号") }
     accountRetryAt = nil
     accountBackoff.reset()
     defer { accountChecks.yield(()) }
@@ -164,7 +170,7 @@ public actor CloudSync {
     accountRetry = Task {
       try? await Task.sleep(until: at, clock: .continuous)
       guard !Task.isCancelled else { return }
-      do { try await self.syncNow() } catch { Self.log.notice("拉取失败：\(error.brief, privacy: .public)") }
+      try? await self.syncNow()  // 拉取失败由协调器归类、按段记（`SyncCoordinator.noteWaiting`）
     }
   }
 
@@ -175,7 +181,7 @@ public actor CloudSync {
     accountRetryAt = nil  // 账号变了是新情况，不等上次失败的退避
     guard wasConnected ? await checkAccount(cloud) : await connectNow() else { return }
     if wasConnected { await ensureAlertSubscriptions(cloud) }  // 刚开始的已在建
-    do { try await puller?.pull() } catch { Self.log.notice("拉取失败：\(error.brief, privacy: .public)") }
+    try? await puller?.pull()
   }
 
   /// 立即同步：拉一次（返回时拉完），顺带让发送者发一轮（不等，守着它的重试时刻）。下拉刷新、立即同步按钮、回到前台、按节奏的拉取（`SyncPoller`）、
@@ -216,6 +222,7 @@ public actor CloudSync {
     }
     try Task.checkCancellation()
     guard let cloud else { throw CancellationError() }
+    guard await coordinator.admits(.pull) else { throw RetryHeld() }  // 被限流时不另发请求：门铃按自己的退避再来
     return try await cloud.relaySecret()
   }
 

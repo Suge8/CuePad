@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// 贴着最新（规则同 use-stick-to-bottom）：只有用户自己滚走才解除贴底，回到最新处（自己滚回、点"回到最新"）重新贴上；
-/// 输入框长高、键盘弹出这类不是用户滚动带来的位移不解除。离最新处超过一屏出"回到最新"圆钮，离开后来了新内容圆钮带一个点。
+/// 输入框长高、键盘弹出这类不是用户滚动带来的位移不解除。离最新处超过一屏出"回到最新"圆钮（离开后来了新内容时带的点在 `ChatScroll`）。
 /// 顶栏让开（`showsHeader`，iPhone 与 Mac 同一条）：离开最新就让开，看历史期间怎么滑都不出现（往回滑也不出来，
 /// 免得读的时候顶栏一闪一闪）；点它原来的位置唤出（`reveal`），再滑又让开；回到最新（滑到底、点"回到最新"、发出消息）自动出现。
 /// 平台不同的只有"⋯"：iPhone 上跟标题一起让开（顶栏浮在对话上，少一颗圆钮就少一块遮挡，`floatingHeader` 的 `hidden`）；
@@ -11,8 +11,6 @@ nonisolated struct ChatFollow: Equatable {
     private(set) var atNewest = true
     /// 离最新处超过一屏：出"回到最新"圆钮。
     private(set) var showsJump = false
-    /// 离开最新处后来过新内容：圆钮上带一个点。
-    private(set) var hasUnseen = false
     /// 离最早那头不到一屏：对话该在上面再排开一段（`SessionChat`）。
     private(set) var nearOldest = false
     /// 正在上面排开更早的一段：内容接下来在上面变高，滚动区把多出来的高度当场加到偏移上，正在读的不动（`ContentLift.scroll`）。
@@ -77,7 +75,6 @@ nonisolated struct ChatFollow: Equatable {
         if !near { jumping = false }
         if near, !jumping {
             atNewest = true
-            hasUnseen = false
             revealed = false
         } else if byUser {
             atNewest = false
@@ -88,10 +85,6 @@ nonisolated struct ChatFollow: Equatable {
     /// 看历史时点屏幕顶部：顶栏出来，直到再滑或回到最新。
     mutating func reveal() {
         if !atNewest { revealed = true }
-    }
-
-    mutating func contentChanged() {
-        if !atNewest { hasUnseen = true }
     }
 
     mutating func jumpToNewest() {

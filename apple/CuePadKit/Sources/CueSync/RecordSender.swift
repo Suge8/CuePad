@@ -1,7 +1,6 @@
 import CloudKit
 import CueStore
 import Foundation
-import os
 
 /// 推：库里推导的待推送（`CueStore.pendingSync`）是唯一的队列，这里只决定什么时候发、一批发哪些。
 ///
@@ -17,7 +16,6 @@ actor RecordSender {
   static let gatherWindow = Duration.milliseconds(300)
   /// 一轮至多发这么多批，余下的接着下一轮（防止被拒又处理不好的记录让一轮停不下来）。
   static let batchesPerRound = 100
-  private static let log = Logger(subsystem: AppIdentity.id, category: "sync")
 
   private let uploader: any RecordUploader
   private let coordinator: SyncCoordinator
@@ -206,7 +204,6 @@ actor RecordSender {
       return true
     } catch {
       answer(names, received: [])
-      Self.log.notice("上传整批失败：\(error.brief, privacy: .public)")
       if let error = error as? CKError, error.code == .userDeletedZone {
         await coordinator.zoneMissing(deletedByUser: true)
         return false
@@ -227,7 +224,6 @@ actor RecordSender {
       } catch is SyncPaused {
         return false
       } catch {
-        Self.log.notice("对最低对端版本失败，暂不上传：\(error.brief, privacy: .public)")
         await schedule(await coordinator.failed(error))
         return false
       }

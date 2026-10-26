@@ -1,7 +1,4 @@
 import Foundation
-#if os(macOS)
-import Security
-#endif
 
 public enum LibraryLocationError: Error, Equatable, LocalizedError {
   case relativePath(String)
@@ -19,7 +16,7 @@ public enum LibraryLocationError: Error, Equatable, LocalizedError {
 /// - macOS：`~/Library/Application Support/CuePad/Library/`；
 /// - iOS：App Group（`AppIdentity.appGroup`）共享容器下的 `Library/`（分享扩展、小组件与主 App 共用）；
 /// - 环境变量 `CUEPAD_LIBRARY_DIR`（绝对路径）指向隔离目录，各平台通用。
-/// Mac 上只有正式版（Developer ID 签名的 App 与随它分发的命令行）打开真实资料库：本机构建的代码一打开就会就地升级库结构、改写数据，
+/// Mac 上只有正式版（发版脚本归档的 App 与随它分发的命令行，`AppIdentity.isRelease`）打开真实资料库：本机构建的代码一打开就会就地升级库结构、改写数据，
 /// 装着的正式版之后就打不开它了，还会把改动同步出去（日常构建、测量构建、自己编的命令行都误开过）。所以没给环境变量的本机构建
 /// （Xcode 里 ⌘R、双击产物、自己编的命令行）打开自己的开发库 `~/Library/Application Support/CuePad Dev/Library/`，按隔离库对待；
 /// 克隆下来的人不用先配环境变量就能跑。iOS 真机的开发构建本来就要用真机上的库，不受限。
@@ -45,7 +42,7 @@ public struct LibraryLocation: Equatable, Sendable {
 
   /// 库是怎么定下来的。
   public enum Origin: Sendable {
-    /// 正式版的真实库（Mac 上 Developer ID 签名的进程，iOS 上 App Group 里的）
+    /// 正式版的真实库（Mac 上正式版的进程，iOS 上 App Group 里的）
     case release
     /// Mac 本机构建的开发库（`CuePad Dev`）
     case development
@@ -82,40 +79,11 @@ public struct LibraryLocation: Equatable, Sendable {
       return LibraryLocation(directory: container.appending(path: "Library", directoryHint: .isDirectory), origin: .release)
     case .applicationSupport(let support):
       #if os(macOS)
-      if support == URL.applicationSupportDirectory, !isReleaseSigned {
+      if support == URL.applicationSupportDirectory, !AppIdentity.isRelease {
         return LibraryLocation(directory: support.appending(path: "CuePad Dev/Library", directoryHint: .isDirectory), origin: .development)
       }
       #endif
       return LibraryLocation(directory: support.appending(path: "CuePad/Library", directoryHint: .isDirectory), origin: .release)
     }
   }
-
-  #if os(macOS)
-  /// 本进程是不是 Developer ID 签名（公证发布的正式版）。ad-hoc、未签名与 Apple Development 签名的本机构建都不是。
-  public static let isReleaseSigned: Bool = {
-    var code: SecCode?
-    var staticCode: SecStaticCode?
-    guard SecCodeCopySelf([], &code) == errSecSuccess, let code, SecCodeCopyStaticCode(code, [], &staticCode) == errSecSuccess, let staticCode
-    else { return false }
-    return isDeveloperID(staticCode)
-  }()
-
-  /// 这个 App 包是不是 Developer ID 签名：同上，看别的副本（`touchesRealWorld` 找这台装没装正式版）。
-  public static func isReleaseSigned(at bundle: URL) -> Bool {
-    var staticCode: SecStaticCode?
-    guard SecStaticCodeCreateWithPath(bundle as CFURL, [], &staticCode) == errSecSuccess, let staticCode else { return false }
-    return isDeveloperID(staticCode)
-  }
-
-  /// 签名证书链第一张的名字以 "Developer ID Application" 开头。只读签名信息、不校验：这里分的是正式版与本机构建，不是防伪。
-  private static func isDeveloperID(_ code: SecStaticCode) -> Bool {
-    var info: CFDictionary?
-    guard SecCodeCopySigningInformation(code, SecCSFlags(rawValue: kSecCSSigningInformation), &info) == errSecSuccess,
-      let certificates = (info as? [String: Any])?[kSecCodeInfoCertificates as String] as? [SecCertificate],
-      let leaf = certificates.first,
-      let name = SecCertificateCopySubjectSummary(leaf) as String?
-    else { return false }
-    return name.hasPrefix("Developer ID Application")
-  }
-  #endif
 }

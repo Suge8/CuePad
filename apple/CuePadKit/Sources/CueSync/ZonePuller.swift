@@ -68,7 +68,7 @@ actor ZonePuller {
       }
     } catch let error as CKError where [.zoneNotFound, .userDeletedZone].contains(error.code) {
       return await coordinator.zoneMissing(deletedByUser: error.code == .userDeletedZone)
-    } catch is PullHeld {
+    } catch is RetryHeld {
       owed = true
       return
     } catch {
@@ -94,7 +94,7 @@ actor ZonePuller {
 
   /// 发请求前问重试调度：在等就抛出，这一拉记成欠着（`run`）。
   private func admitted() async throws {
-    guard await coordinator.admits(.pull) else { throw PullHeld() }
+    guard await coordinator.admits(.pull) else { throw RetryHeld() }
   }
 
   private func drain() async throws {
@@ -185,6 +185,3 @@ actor ZonePuller {
     }
   }
 }
-
-/// 拉取途中重试调度要求等（`ZonePuller.admitted`）：这一拉停下、记成欠着，不算失败。
-struct PullHeld: Error {}

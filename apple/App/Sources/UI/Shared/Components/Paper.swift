@@ -129,12 +129,17 @@ struct Thumbnail: View {
             .frame(maxWidth: fitWidth == nil ? .infinity : nil)
             .clipShape(.rect(cornerRadius: radius))
             .overlay(RoundedRectangle(cornerRadius: radius).strokeBorder(palette.hair))
-            .task(id: hash) {
-                guard let url = services.store.files.fileURL(for: hash) else { return }
-                let pixels = Int(height * 3 * scale)
-                image = await Task.detached(priority: .utility) { Thumbnails.image(at: url, maxPixel: pixels) }.value
-            }
+            .task(id: hash) { image = await Self.picture(hash, height: height, scale: scale, in: services.store.files) }
     }
+
+    /// 这张图按 `height` 高的格子解的整张（最长边至多高的三倍、不裁，`Thumbnails` 有缓存）：全屏页飞出与占位用的也是它
+    /// （你的话里带的图、点名图），同一份不另解。不在本机为 nil。
+    static func picture(_ hash: String, height: CGFloat, scale: CGFloat, in files: AttachmentFiles) async -> CGImage? {
+        guard let url = files.fileURL(for: hash) else { return nil }
+        return await decode(url, pixels: Int(height * 3 * scale))
+    }
+
+    @concurrent private static func decode(_ url: URL, pixels: Int) async -> CGImage? { Thumbnails.image(at: url, maxPixel: pixels) }
 
     private var width: CGFloat? {
         guard let fitWidth else { return nil }

@@ -19,17 +19,21 @@ struct FloatingReply<Chat: View, Reply: View>: View {
     @ViewBuilder let chat: Chat
     @ViewBuilder let reply: Reply
     @Environment(\.palette) private var palette
-    @State private var height: CGFloat = 0
-    @State private var area: CGFloat = .infinity
+    /// 这一块的高。量到之前不排对话（同一次更新里的下一遍排版就量到了，第一帧照样有对话）：对话第一次排就按它让出底边，
+    /// 不先按 0 排一遍再挪——那样滚动区的读数在打开的那一帧里多变一次，赶上推入页面时导航栏那一遍，系统丢掉第三次（`ChatScroll`）。
+    @State private var height: CGFloat?
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            chat.environment(\.chatBottomInset, height)
+            if let height { chat.environment(\.chatBottomInset, height) }
             GeometryReader { room in
-                let keyboard = room.size.height - (room.bounds(of: .named(floatingReplyPage))?.maxY ?? room.size.height)
+                let page = room.bounds(of: .named(floatingReplyPage))?.maxY ?? room.size.height
+                let keyboard = room.size.height - page
                 reply
                     .padding(.bottom, max((floor ?? 0) - keyboard, gap))
-                    .environment(\.chatHeight, area)
+                    // 对话区可见的高：透到上安全区里（页头、状态栏底下也是对话）的那段连同算；下边不算，键盘弹出时那是键盘，盖住的不可见。
+                    // 与键盘高同在这一遍排版里定，不写回状态
+                    .environment(\.chatHeight, page + room.safeAreaInsets.top)
                     .frame(maxWidth: .infinity)
                     .background(backed ? palette.desk : .clear)
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height = $0 }
@@ -41,8 +45,6 @@ struct FloatingReply<Chat: View, Reply: View>: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
         .coordinateSpace(.named(floatingReplyPage))
-        // 对话透到上安全区里（页头、状态栏底下也是对话），可见的高连同它算；下边不算：键盘弹出时那是键盘，盖住的不可见
-        .onGeometryChange(for: CGFloat.self) { $0.size.height + $0.safeAreaInsets.top } action: { area = $0 }
         .ignoresSafeArea(.container, edges: floor == nil ? [] : .bottom)
     }
 }

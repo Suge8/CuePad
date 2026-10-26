@@ -37,11 +37,11 @@ struct CueMemoryPage: View {
             LazyVStack(alignment: .leading, spacing: 0) {
                 if !pinned.isEmpty {
                     groupTitle(String(localized: "一直记着"), icon: .pin)
-                    ForEach(pinned) { row($0).transition(Motion.item) }
+                    ForEach(pinned) { row($0).transition(.opacity) }
                 }
                 ForEach(TimeSection.split(others, date: \.createdAt, now: .now), id: \.section) { run in
                     groupTitle(run.section.title)
-                    ForEach(run.items) { row($0).transition(Motion.item) }
+                    ForEach(run.items) { row($0).transition(.opacity) }
                 }
             }
             .padding(.horizontal, Metrics.margin)

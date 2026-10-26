@@ -68,7 +68,7 @@ struct ProjectPage: View {
         .observing(services.store, id: projectID, into: dataBinding, onError: workspace.fail) { [projectID] store in
             try ProjectPageData.read(projectID, from: store)
         }
-        .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in rearrange() }
+        .onDayChange { rearrange() }
         .task(id: shape != nil) {
             guard shape != nil else { return }
             for next in Stage.allCases where next > stage {
@@ -137,7 +137,7 @@ struct ProjectPage: View {
             MasonryLayout(minColumnWidth: Self.minColumnWidth, maxColumns: Self.maxColumns, spacing: Self.wallSpacing) {
                 ForEach(ids.compactMap { byID[$0] }) { card in
                     CardTile(card: card, lastTarget: lastTarget[card.id], floated: board.floated.contains(card.id))
-                        .transition(Motion.item)
+                        .transition(.opacity)
                 }
             }
         }

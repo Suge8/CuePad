@@ -1,5 +1,4 @@
 import Foundation
-import Synchronization
 import OSLog
 import SQLite3
 
@@ -25,18 +24,8 @@ extension Bool: SQLBindable { var sqlValue: SQLValue { .int(self ? 1 : 0) } }
 /// 库里 UUID 一律存小写文本（CKRecord 的 recordName 也用这个字符串）。
 extension UUID: SQLBindable { var sqlValue: SQLValue { .text(uuidString.lowercased()) } }
 extension Date {
-  /// 当前时间，精度截到毫秒：返回给调用方的值与落盘后读回的值相等。它是记录的版本（`modifiedAt`），进程内严格递增：
-  /// 同一毫秒里先后两次写同一行（领取与写回结果常在同一毫秒），版本相同的话服务器收下前一版就当后一版也收下了，后一版再也不传。
-  static var stamp: Date {
-    let now = Int64((Date().timeIntervalSince1970 * 1000).rounded())
-    let ms = lastStamp.withLock { last in
-      last = max(now, last + 1)
-      return last
-    }
-    return Date(timeIntervalSince1970: Double(ms) / 1000)
-  }
-
-  private static let lastStamp = Mutex<Int64>(0)
+  /// 当前时间，精度截到毫秒：返回给调用方的值与落盘后读回的值相等。用作版本时比旧版大由库保证（`CueStore.guards`）。
+  static var stamp: Date { Date(timeIntervalSince1970: (Date().timeIntervalSince1970 * 1000).rounded() / 1000) }
 }
 
 /// 时间存 Unix 毫秒整数。

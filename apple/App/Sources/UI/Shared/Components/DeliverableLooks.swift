@@ -292,8 +292,11 @@ enum LookFiles {
     }
 
     /// 存下的那张（已是要的大小，原样解出来）；没有为 nil。不经 `Thumbnails`：内存里那份由 `DeliverableLooks` 一处留着。
+    /// 先读成数据再解：没存过是常态，`CGImageSourceCreateWithURL` 对不存在的文件每次都往系统日志记一条 ImageIO 错误。
     @concurrent static func image(_ key: String, in caches: URL) async -> CGImage? {
-        guard let source = CGImageSourceCreateWithURL(url(key, in: caches) as CFURL, nil) else { return nil }
+        guard let data = try? Data(contentsOf: url(key, in: caches), options: .mappedIfSafe),
+            let source = CGImageSourceCreateWithData(data as CFData, nil)
+        else { return nil }
         return CGImageSourceCreateImageAtIndex(source, 0, [kCGImageSourceShouldCacheImmediately: true] as CFDictionary)
     }
 
