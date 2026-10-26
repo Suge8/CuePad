@@ -27,8 +27,6 @@ struct PreviewImage: UIViewRepresentable {
 final class PreviewZoomView: UIScrollView, UIScrollViewDelegate {
     /// 最多放大到适合屏幕的几倍
     private static let maxZoom: CGFloat = 5
-    /// 放大后那一张的最长边上限（像素）：同改版前一直解着的那张，内存不比原来多
-    nonisolated private static let detailPixels = 4800
 
     /// 不放大时图摆在这个框里：两条栏之间（安全区）
     var frameInsets: UIEdgeInsets = .zero { didSet { if frameInsets != oldValue { setNeedsLayout() } } }
@@ -133,7 +131,8 @@ final class PreviewZoomView: UIScrollView, UIScrollViewDelegate {
             show(pending)
         }
         guard zoomedIn, detailing == nil else { return }
-        detailing = load({ min(Int(max($0.width, $0.height)), Self.detailPixels) }) { [weak self] in self?.show($0) }
+        let fit = max(fitted.width, fitted.height) * scale
+        detailing = load({ PreviewScale.detailPixels(fit: fit, most: Self.maxZoom, original: $0) }) { [weak self] in self?.show($0) }
     }
 
     /// 还没有解出来的图时先铺缩略图的画面（`previewSource` 交的都是整张，点名图也是）；文件头读不到比例时先按它的排。

@@ -44,6 +44,15 @@ extension EnvironmentValues {
 enum PreviewScale {
     /// 双击（Mac 还有智能缩放）放大到适合屏幕的这么多倍
     static let tap: CGFloat = 2.5
+
+    /// 放大后换上的那张清楚的要解多大（最长边像素）：适合屏幕时铺的像素（`fit`）× 最多放大的倍数（`most`）——放到最大时一个图像素
+    /// 对一个屏幕像素，再多也看不出——夹在原图（`original`）以内、不过 `detailCap`。两端都只在第一次放大停下来才解它，只看不放大的图不解。
+    nonisolated static func detailPixels(fit: CGFloat, most: CGFloat, original: CGSize) -> Int {
+        Int(min(fit * most, max(original.width, original.height), CGFloat(detailCap)).rounded(.up))
+    }
+
+    /// 清楚的那张最长边至多这么多：一张至多 8192² × 4 字节（256MB）
+    nonisolated static let detailCap = 8192
 }
 
 /// 一个文件的内容：网页与 Markdown 两端一样，其余每类怎么显示在各端的 `PreviewPage`。
