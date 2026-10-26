@@ -8,7 +8,7 @@ import SwiftUI
 /// 行没有底（`BoardLane`）：分组靠留白与行头。
 /// 行多高由 `PhoneBoard` 按屏高给，卡多卡少、有没有都不改；这里只答最小高：待办、推进中、等你叠两排、已完成一排的最小格（`BoardRowMetrics`，随动态字体放大），
 /// 不低于行头玻璃（名字总写全）。给得比最小高多时格跟着长高，长到再叠得下一排最小格就多叠一排（`adaptive`）；卡铺满格，按列填（读的顺序不变）。
-/// 空行是一格铺满整行高的虚线框。卡上标题小一档（折几行同别处的卡，`BoardTitleBand`），推进中下面是线与状态词。
+/// 空行是一格铺满整行高的虚线框。卡上标题小一档、可折两行（`BoardCardMetrics.title`），推进中下面是线与状态词。
 /// 辅助字号下一行只叠一排、一张卡几乎占满可见宽（下一张露一条边）：窄卡里大字一行只放得下两个字。
 /// 行里的卡在懒加载的横排里，只建看得见的几张。
 /// 添加任务那一行（`above`）横贯这一行、在卡的上面，不挤进格子里（格子窄，选项目的胶囊会被截）；它占的高另加在最小高上，卡的格不变矮。添加时这一行先滑回行首。
@@ -67,6 +67,7 @@ struct BoardRowLane<Above: View, Content: View>: View {
             .scrollDismissesKeyboard(.immediately)
             .frame(minHeight: cell * CGFloat(tiers) + BoardRowMetrics.gap * CGFloat(tiers - 1), maxHeight: .infinity)
             .environment(\.boardRow, true)
+            .environment(\.boardTitle, BoardCardMetrics.title(cardWidth: nil, typeSize: typeSize))
             .onChange(of: rewind) {
                 if let rewind { withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { proxy.scrollTo(rewind, anchor: .leading) } }
             }

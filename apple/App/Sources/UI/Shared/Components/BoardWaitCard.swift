@@ -3,7 +3,7 @@ import SwiftUI
 
 /// 等你列的一张卡（`TaskBoard.Held`）：进展页只看不答，与看板别的卡同一种（`BoardCardLayout`，一样高，一个记号加名字）。
 /// - 记号说状态：拍板是赭黄问号（`PiStateGlyph(.asking)`），只剩待回复是墨点（`PiStateGlyph(.awaitsReply)`，各处待回复同一个，赭黄只给拍板）。
-/// - 名字同别的列：这件事本身（任务名，没绑任务的会话名，不落在任务上的 Cue 提问写它要做的事），换列不换名字，折几行同别的卡（`BoardTitleBand`）；看全部项目时前面是项目小图形。
+/// - 名字同别的列：这件事本身（任务名，没绑任务的会话名，不落在任务上的 Cue 提问写它要做的事），换列不换名字，折几行同别的卡（`BoardCardMetrics.title`）；看全部项目时前面是项目小图形。
 /// - 一件任务上收了几件时右端写件数。问什么在 Mac 的悬停提示里（项目、问句或"待回复"、等了多久，几件时一件一行）与点进去看。
 /// 点卡去最早的那件（`TaskBoard.Held.destination`）：Cue 的提问去 Cue 页、拍板卡露的就是这一问，会话在问的与待回复进会话。
 struct BoardWaitCard: View {

@@ -21,6 +21,8 @@ extension EnvironmentValues {
     /// 卡在手机竖版看板（`PhoneBoard`）的一行里：卡铺满行给的那一格（格多高只由行高定，`BoardRowLane`）、标题小一档；
     /// 列里的卡（Mac、宽屏 iPad、iPhone 横屏）不是。
     @Entry var boardRow = false
+    /// 卡标题留几行、多高：所在的列或行按卡宽与字号算一次（`BoardCardMetrics.title`），同一列、同一行的卡都一样。
+    @Entry var boardTitle = BoardTitle()
 }
 
 private struct BoardCardFrame: ViewModifier {
@@ -107,9 +109,10 @@ struct BoardSessionCard: View {
     }
 }
 
-/// 卡里的排法（看板上所有的卡同一种）：开头记号、项目小图形与标题一带（`BoardTitleBand`：折几行、多高），右端是调用处给的尾巴；
-/// 推进中的卡标题那一带贴上沿，下面是那条线（`BoardWave`），有子任务的线下面再分段（`BoardSteps`），要你管的状态词在线的右端：
-/// 标题一整带都给字（状态词放在标题右端时，窄列里标题只剩四五个字）。卡多高只由这里加出来：上下留白、标题那一带、线。
+/// 卡里的排法（看板上所有的卡同一种）：开头记号、项目小图形与标题一行带，右端是调用处给的尾巴；
+/// 推进中的卡标题贴上沿，下面是那条线（`BoardWave`），有子任务的线下面再分段（`BoardSteps`），要你管的状态词在线的右端：
+/// 标题一整带都给字（状态词放在标题右端时，窄列里标题只剩四五个字）。卡多高只由这里加出来：上下留白、标题（按所在的列或行给的行数留足，
+/// `boardTitle`：只有一行字的卡也一样高）、线。
 struct BoardCardLayout<Lead: View, Trailing: View>: View {
     let advancing: Bool
     var pulse = BoardPulse()
@@ -119,6 +122,7 @@ struct BoardCardLayout<Lead: View, Trailing: View>: View {
     let trailing: Trailing
     @Environment(\.palette) private var palette
     @Environment(\.boardRow) private var row
+    @Environment(\.boardTitle) private var titleBand
 
     init(advancing: Bool, pulse: BoardPulse = BoardPulse(), moves: Bool = true, steps: TaskProgress? = nil,
          @ViewBuilder lead: () -> Lead, @ViewBuilder trailing: () -> Trailing = { EmptyView() }) {
@@ -131,47 +135,34 @@ struct BoardCardLayout<Lead: View, Trailing: View>: View {
     }
 
     var body: some View {
-        switch (row, advancing) {
-        case (true, true): rowAdvancing
-        case (true, false): title.frame(maxHeight: .infinity)
-        case (false, true): columnAdvancing
-        case (false, false): title.padding(.vertical, BoardCardMetrics.titlePadding)
-        }
+        if advancing { withWave } else if row { title.frame(maxHeight: .infinity) } else { title.padding(.vertical, BoardCardMetrics.titlePadding) }
     }
 
     private var title: some View {
-        BoardTitleBand(least: BoardCardMetrics.titleRow) {
-            HStack(spacing: row ? BoardCardMetrics.rowGap : Self.gap) {
-                lead
-                Spacer(minLength: 0)
-                trailing
-            }
+        HStack(spacing: gap) {
+            lead.font(row ? BoardCardMetrics.rowTitle : TaskMetrics.lineFont).lineLimit(titleBand.lines)
+            Spacer(minLength: 0)
+            trailing
         }
+        .frame(minHeight: titleBand.height)
     }
 
-    /// 列里的推进中：标题那一带贴上沿，线离它 `waveGap`（带子代理细轨的线往下多占几点，不撑高卡）；子任务的分段压在线那一格的底边，线最低处也在它上面。
-    private var columnAdvancing: some View {
-        VStack(alignment: .leading, spacing: BoardCardMetrics.waveGap) {
-            title
-            waveLine.fixedSize(horizontal: false, vertical: true)
-                .frame(height: WaveStrip.height, alignment: .top)
-                .padding(.leading, TaskMetrics.cardLead + Self.gap)
-        }
-        .padding(.top, BoardCardMetrics.titleTop)
-        .padding(.bottom, BoardCardMetrics.waveBottom)
-    }
-
-    /// 竖版看板里的推进中：卡铺满格，标题那一带在线上面那一截里竖直居中。
-    private var rowAdvancing: some View {
+    /// 推进中：标题下面让出线那一截，线压在卡的下沿。列里标题贴上沿、线离它 `waveGap`，带子代理细轨的线往下多占几点、不撑高卡；
+    /// 手机的行里卡铺满格，标题在线上面那一截里竖直居中，细轨往上占。子任务的分段压在线那一格的底边，线最低处也在它上面。
+    private var withWave: some View {
         title
-            .frame(maxHeight: .infinity)
-            .padding(.bottom, WaveStrip.height + BoardCardMetrics.waveBottom)
+            .frame(maxHeight: row ? .infinity : nil)
+            .padding(.top, row ? 0 : BoardCardMetrics.titleTop)
+            .padding(.bottom, (row ? 0 : BoardCardMetrics.waveGap) + WaveStrip.height + BoardCardMetrics.waveBottom)
             .overlay(alignment: .bottomLeading) {
-                waveLine
-                    .padding(.leading, TaskMetrics.cardLead + BoardCardMetrics.rowGap)
+                waveLine.fixedSize(horizontal: false, vertical: true)
+                    .frame(height: WaveStrip.height, alignment: row ? .bottom : .top)
+                    .padding(.leading, TaskMetrics.cardLead + gap)
                     .padding(.bottom, BoardCardMetrics.waveBottom)
             }
     }
+
+    private var gap: CGFloat { row ? BoardCardMetrics.rowGap : Self.gap }
 
     /// 下沿那一行：线，右端是要你管的状态词。
     private var waveLine: some View {
