@@ -5,7 +5,8 @@ import Foundation
 /// - `base` 是编辑器以为文件此刻的样子（打开时读到的、自己写成的、跟上的那一版）；写入都带它的哈希（`InstructionEdit.base`），
 ///   文件已不是它，那台 Mac 就不写（`AgentLibraryError.changedOnMac`）。
 /// - Mac 自动存（停手一小会儿，同灵感的编辑页，`Autosave`），没有保存钮；手机攒着，点纸飞机"发往 Mac"（`send`）。
-/// - 快照里的这份变了（文件在别处被改了，`follow`）：你没改过就当场跟上；你改着没写成的，留着你的字、说出文件变了，由你选换成文件里的（`takeFile`）。
+/// - 快照里的这份变了（文件在别处被改了，`follow`）：你没改过就当场跟上；你改着没写成的，留着你的字、说出文件变了，
+///   由你选换成文件里的（`takeFile`）或留你的盖过它（`keepMine`）；选之前不再自动写。
 @Observable
 final class InstructionDraft {
     let kind: LibraryInstruction.Kind
@@ -31,6 +32,9 @@ final class InstructionDraft {
         case conflict(file: String?)
         case failed
     }
+
+    /// 文件在别处改过、等你选（这时不自动写，纸飞机也不亮）。
+    var conflicted: Bool { if case .conflict = state { true } else { false } }
 
     init(_ instruction: LibraryInstruction, workspace: Workspace) {
         kind = instruction.kind
@@ -88,6 +92,15 @@ final class InstructionDraft {
     func takeFile() {
         guard case .conflict(let file?) = state else { return }
         replace(with: file)
+    }
+
+    /// 文件在别处改过、你也改着：留你的，盖过文件此刻的样子（以它为基准再写一次）。
+    func keepMine() async {
+        guard case .conflict(let file?) = state else { return }
+        base = file
+        mark()
+        state = .idle
+        await write(text)
     }
 
     private func replace(with file: String) {

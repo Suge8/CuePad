@@ -62,7 +62,7 @@ extension DebugScene {
             if defaults.bool(forKey: "CuePadDemo") { await seedCue(workspace.services) }
             open(.library)
             if scene == "instruction" { workspace.openLibrary(.instruction(project.map(LibraryInstruction.Kind.project) ?? .global)) }
-            if scene == "compare" { workspace.openLibrary(.compare("global")) }
+            if scene == "compare" { workspace.openLibrary(.compare("global-instructions")) }
         case "settings":
             // 配演示库时 Cue 运行在演示的 Mac Studio 上（同 Mac 的设置画面）
             if defaults.bool(forKey: "CuePadDemo") { await seedCue(workspace.services) }

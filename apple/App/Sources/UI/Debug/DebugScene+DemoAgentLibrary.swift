@@ -3,11 +3,13 @@ import CueStore
 import Foundation
 
 extension DebugScene {
-    /// 演示的技能与说明（配 `-CuePadDemo YES`）：写在演示的 Mac Studio 名下（各家都接了，`seedMacAgents`）——隔离实例本机一家都没接入，
-    /// 技能右端没有列可看；Mac 上本机没写过时读到的就是它（`CueStore.agentLibrary(preferring:)`）。
+    /// 演示的技能与说明（配 `-CuePadDemo YES`）：手机上看的是演示的 Mac Studio 报来的快照（各家都接了，`seedMacAgents`），这里替它写一份；
+    /// Mac 上看的是本机照文件扫出的（`AgentLibraryKeeper`），这里把同一套内容写成隔离目录里的文件（`seedAgentFiles`）。
     /// 默认是有要整理的样子（散落的、Claude Code 看不见的、同名的、格式不对的、各写一份的全局规则）；`-CuePadAgentLibrary clean` 是整理好了的样子。
-    /// 真实的扫描与整理在 Mac 上（`AgentLibraryKeeper`），这里只写一份快照。
     static func seedAgentLibrary(_ services: AppServices) async {
+        #if os(macOS)
+        seedAgentFiles()
+        #endif
         let store = services.store
         let projects = (try? await store.projects()) ?? []
         func project(_ name: String) -> UUID? { projects.first { $0.name == name }?.id }
@@ -22,7 +24,7 @@ extension DebugScene {
     }
 }
 
-private struct DemoAgentLibrary {
+struct DemoAgentLibrary {
     let home: String
     let clean: Bool
     let cuepad: UUID?
@@ -40,7 +42,7 @@ private struct DemoAgentLibrary {
 
     // MARK: 技能
 
-    private static let global: [(group: String, name: String, description: String)] = [
+    static let global: [(group: String, name: String, description: String)] = [
         ("creative", "copywriting", String(localized: "写落地页、发布说明与商店文案", table: "Demo")),
         ("creative", "gpt-image", String(localized: "生成插图、海报与图标", table: "Demo")),
         ("creative", "video", String(localized: "剪产品演示短片", table: "Demo")),
@@ -97,7 +99,7 @@ private struct DemoAgentLibrary {
         默认中文，删去客套与重复。
         """, table: "Demo")
 
-    private static let claudeRules = String(localized: """
+    static let claudeRules = String(localized: """
         # 原则
 
         用当下最新最轻的做法，代码、文档、测试都是负债，每一行都要有理由。
@@ -111,7 +113,7 @@ private struct DemoAgentLibrary {
         默认中文，删去客套与重复。
         """, table: "Demo")
 
-    private static let piSystem = String(localized: """
+    static let piSystem = String(localized: """
         你是 Pi Agent。
 
         # 原则
@@ -171,16 +173,16 @@ private struct DemoAgentLibrary {
                           text: String(localized: "---\nname: release\ndescription: 签名、公证、发布新版本\n---\n\n只在干净检出运行 xc.sh release。\n\n公证完再推 appcast。", table: "Demo"), modifiedAt: ago(5)),
             ])))
         }
-        list.append(LibraryTidy(id: "malformed/uilane", kind: .malformed(
+        list.append(LibraryTidy(id: "malformed/" + root + "/operations/uilane", kind: .malformed(
             SkillEntry(name: "uilane", scope: .global, path: root + "/operations/uilane"), .unreadable)))
-        list.append(LibraryTidy(id: "global", kind: .globalInstructions([
+        list.append(LibraryTidy(id: "global-instructions", kind: .globalInstructions([
             InstructionSource(origin: .shared, path: home + "/.agents/AGENTS.md", text: Self.sharedRules, modifiedAt: ago(26)),
             InstructionSource(origin: .agent(.claudeCode), path: home + "/.claude/CLAUDE.md", text: Self.claudeRules, modifiedAt: ago(24 * 2)),
             InstructionSource(origin: .piSystem, path: home + "/.pi/agent/SYSTEM.md", text: Self.piSystem, modifiedAt: ago(24 * 9)),
         ])))
         if let homepage {
             let folder = home + "/Project/homepage"
-            list.append(LibraryTidy(id: "claude/homepage", kind: .projectClaude(project: homepage, sources: [
+            list.append(LibraryTidy(id: "project-claude/\(homepage.uuidString)", kind: .projectClaude(project: homepage, sources: [
                 InstructionSource(origin: .shared, path: folder + "/AGENTS.md", text: String(localized: "# 个人网站\n\nAstro 静态站，部署前先跑 pnpm build。", table: "Demo"), modifiedAt: ago(24 * 4)),
                 InstructionSource(origin: .agent(.claudeCode), path: folder + "/CLAUDE.md", text: String(localized: "# 个人网站\n\n图片放 public/img，用 webp。", table: "Demo"), modifiedAt: ago(24 * 20)),
             ])))

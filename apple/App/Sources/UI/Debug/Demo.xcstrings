@@ -1,6 +1,102 @@
 {
   "sourceLanguage" : "zh-Hans",
   "strings" : {
+    "# CuePad\n\nSwift 原生应用。构建、测试、截图只经 apple/scripts/xc.sh。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "# CuePad\n\nA native Swift app. Build, test, and take screenshots only through apple/scripts/xc.sh."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "# CuePad\n\nSwift 原生应用。构建、测试、截图只经 apple/scripts/xc.sh。"
+          }
+        }
+      }
+    },
+    "# uilane\n\n界面泳道图。\n" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "# uilane\n\nUI swimlane diagrams.\n"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "# uilane\n\n界面泳道图。\n"
+          }
+        }
+      }
+    },
+    "# 个人网站\n\nAstro 静态站，部署前先跑 pnpm build。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "# Website\n\nAn Astro static site. Run pnpm build before deploying."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "# 个人网站\n\nAstro 静态站，部署前先跑 pnpm build。"
+          }
+        }
+      }
+    },
+    "# 个人网站\n\n图片放 public/img，用 webp。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "# Website\n\nPut images in public/img, as webp."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "# 个人网站\n\n图片放 public/img，用 webp。"
+          }
+        }
+      }
+    },
+    "# 原则\n\n用当下最新最轻的做法，代码、文档、测试都是负债，每一行都要有理由。\n\n# Git\n\n不是自己创建的检出里不用 reset、stash、push --force。\n\n# 回复\n\n默认中文，删去客套与重复。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "# Principles\n\nUse the newest, lightest approach. Code, docs, and tests are liabilities; every line needs a reason.\n\n# Git\n\nNo reset, stash, or push --force in checkouts you didn't create.\n\n# Replies\n\nBe direct; drop pleasantries and repetition."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "# 原则\n\n用当下最新最轻的做法，代码、文档、测试都是负债，每一行都要有理由。\n\n# Git\n\n不是自己创建的检出里不用 reset、stash、push --force。\n\n# 回复\n\n默认中文，删去客套与重复。"
+          }
+        }
+      }
+    },
+    "# 原则\n\n用当下最新最轻的做法，代码、文档、测试都是负债，每一行都要有理由。\n\n# 协作\n\n先查代码与一手资料再下结论；用户的说法和自己的记忆都要验证。\n\n# 回复\n\n默认中文，删去客套与重复。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "# Principles\n\nUse the newest, lightest approach. Code, docs, and tests are liabilities; every line needs a reason.\n\n# Collaboration\n\nCheck the code and primary sources before concluding; verify both the user's claims and your own memory.\n\n# Replies\n\nBe direct; drop pleasantries and repetition."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "# 原则\n\n用当下最新最轻的做法，代码、文档、测试都是负债，每一行都要有理由。\n\n# 协作\n\n先查代码与一手资料再下结论；用户的说法和自己的记忆都要验证。\n\n# 回复\n\n默认中文，删去客套与重复。"
+          }
+        }
+      }
+    },
     "# 定价区改动说明\n\n## 改了什么\n- 三档价格卡在窄屏下改成横向滑动，不再挤成两行\n- 年付折扣标挪到卡片右上角\n- 专业档加了描边，作为推荐\n\n## 还没做\n- 深色模式的配色" : {
       "localizations" : {
         "en" : {
@@ -77,6 +173,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "- 第 %lld 项："
+          }
+        }
+      }
+    },
+    "---\nname: release\ndescription: 发布新版本\n---\n\n打 tag，推送，等 CI 绿。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "---\nname: release\ndescription: Ship a new version\n---\n\nTag, push, and wait for CI to pass."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "---\nname: release\ndescription: 发布新版本\n---\n\n打 tag，推送，等 CI 绿。"
+          }
+        }
+      }
+    },
+    "---\nname: release\ndescription: 签名、公证、发布新版本\n---\n\n只在干净检出运行 xc.sh release。\n\n公证完再推 appcast。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "---\nname: release\ndescription: Sign, notarize, and ship a new version\n---\n\nRun xc.sh release only in a clean checkout.\n\nPush the appcast after notarization."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "---\nname: release\ndescription: 签名、公证、发布新版本\n---\n\n只在干净检出运行 xc.sh release。\n\n公证完再推 appcast。"
           }
         }
       }
@@ -419,6 +547,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "README 里的旧截图都换掉了"
+          }
+        }
+      }
+    },
+    "Swift 6.2 的并发规则与新写法" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Swift 6.2 concurrency rules and modern idioms"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Swift 6.2 的并发规则与新写法"
           }
         }
       }
@@ -1079,6 +1223,22 @@
         }
       }
     },
+    "你是 Pi Agent。\n\n# 原则\n\n用当下最新最轻的做法，代码、文档、测试都是负债，每一行都要有理由。\n\n# 工具\n\n互不依赖的调用放在同一轮里并发完成。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You are Pi Agent.\n\n# Principles\n\nUse the newest, lightest approach. Code, docs, and tests are liabilities; every line needs a reason.\n\n# Tools\n\nRun independent calls concurrently in the same turn."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你是 Pi Agent。\n\n# 原则\n\n用当下最新最轻的做法，代码、文档、测试都是负债，每一行都要有理由。\n\n# 工具\n\n互不依赖的调用放在同一轮里并发完成。"
+          }
+        }
+      }
+    },
     "使用其他方式登录" : {
       "localizations" : {
         "en" : {
@@ -1235,6 +1395,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "修好登录页的键盘遮挡"
+          }
+        }
+      }
+    },
+    "做原型回答设计问题" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Build prototypes to answer design questions"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "做原型回答设计问题"
           }
         }
       }
@@ -1463,6 +1639,22 @@
         }
       }
     },
+    "写 PR 描述" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Write PR descriptions"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "写 PR 描述"
+          }
+        }
+      }
+    },
     "写一段提交说明" : {
       "localizations" : {
         "en" : {
@@ -1475,6 +1667,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "写一段提交说明"
+          }
+        }
+      }
+    },
+    "写给 Agent 读的文档" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Write docs for agents"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "写给 Agent 读的文档"
+          }
+        }
+      }
+    },
+    "写落地页、发布说明与商店文案" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Write landing pages, release notes, and store copy"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "写落地页、发布说明与商店文案"
           }
         }
       }
@@ -1603,6 +1827,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "删掉 scripts/billing-legacy 目录"
+          }
+        }
+      }
+    },
+    "剪产品演示短片" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit short product demos"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "剪产品演示短片"
           }
         }
       }
@@ -2631,6 +2871,22 @@
         }
       }
     },
+    "实现一张工单并逐条实测" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Implement a ticket and verify each point"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "实现一张工单并逐条实测"
+          }
+        }
+      }
+    },
     "审查当前分支的改动" : {
       "localizations" : {
         "en" : {
@@ -3527,6 +3783,22 @@
         }
       }
     },
+    "找一手资料调查问题" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Research with primary sources"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "找一手资料调查问题"
+          }
+        }
+      }
+    },
     "把 1.4.2 部署到预发环境" : {
       "localizations" : {
         "en" : {
@@ -3539,6 +3811,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "把 1.4.2 部署到预发环境"
+          }
+        }
+      }
+    },
+    "把 Notion 页面导出成 Markdown" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Export Notion pages to Markdown"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "把 Notion 页面导出成 Markdown"
           }
         }
       }
@@ -3923,6 +4211,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "按你说的改成首次加入时间排序，把断言也改了，再跑一遍"
+          }
+        }
+      }
+    },
+    "按场景挑可移植的界面组件" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pick portable UI components by use case"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "按场景挑可移植的界面组件"
           }
         }
       }
@@ -4323,6 +4627,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "撤销栈合并连续拖拽\n\n连续拖拽只记一步撤销。"
+          }
+        }
+      }
+    },
+    "操作与调试网页" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Drive and debug web pages"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "操作与调试网页"
           }
         }
       }
@@ -4771,6 +5091,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "新分支叫什么？"
+          }
+        }
+      }
+    },
+    "新建、打磨或审查界面" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Build, polish, or review UI"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "新建、打磨或审查界面"
           }
         }
       }
@@ -5607,6 +5943,22 @@
         }
       }
     },
+    "生成插图、海报与图标" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Generate illustrations, posters, and icons"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "生成插图、海报与图标"
+          }
+        }
+      }
+    },
     "用户住在上海，晚上十一点以后别叫醒" : {
       "localizations" : {
         "en" : {
@@ -6247,6 +6599,22 @@
         }
       }
     },
+    "签名、公证、发布新版本" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sign, notarize, and ship a new version"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "签名、公证、发布新版本"
+          }
+        }
+      }
+    },
     "类型检查" : {
       "localizations" : {
         "en" : {
@@ -6259,6 +6627,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "类型检查"
+          }
+        }
+      }
+    },
+    "经 xc.sh 构建、测试与截图" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Build, test, and screenshot via xc.sh"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "经 xc.sh 构建、测试与截图"
           }
         }
       }
@@ -6423,6 +6807,22 @@
         }
       }
     },
+    "联网搜索与取正文" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Search the web and fetch pages"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "联网搜索与取正文"
+          }
+        }
+      }
+    },
     "节点吸附到网格" : {
       "localizations" : {
         "en" : {
@@ -6531,6 +6931,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "补超时重试的用例"
+          }
+        }
+      }
+    },
+    "补齐界面的英文" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fill in English UI strings"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "补齐界面的英文"
           }
         }
       }
@@ -7079,6 +7495,22 @@
         }
       }
     },
+    "读写与合并 PDF" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Read, write, and merge PDFs"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "读写与合并 PDF"
+          }
+        }
+      }
+    },
     "读取 Sources/Zoom.swift" : {
       "localizations" : {
         "en" : {
@@ -7427,6 +7859,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "这里为什么会慢？给我看一下热点代码"
+          }
+        }
+      }
+    },
+    "连服务器执行命令、传文件" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Run commands and copy files on servers"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "连服务器执行命令、传文件"
           }
         }
       }
@@ -8083,6 +8531,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "首页标题换成新文案"
+          }
+        }
+      }
+    },
+    "验证改动，只留覆盖用户可见行为的测试" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verify changes; keep only tests of user-visible behavior"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "验证改动，只留覆盖用户可见行为的测试"
           }
         }
       }

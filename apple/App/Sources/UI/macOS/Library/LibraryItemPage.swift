@@ -38,7 +38,7 @@ private struct LibraryItemPage: View {
 }
 
 /// 一份说明的编辑页（Mac）：同灵感的编辑页，字在一列里居中，自动存、没有保存钮（`InstructionDraft`）。页顶一行写它是哪一份、文件在哪、存好没有；
-/// 文件在别处被改了（终端里、别的编辑器、手机发来的）当场跟上，你改着没存上的留着、写出文件变了，给"换成文件里的"。
+/// 文件在别处被改了（终端里、别的编辑器、手机发来的）当场跟上，你改着没存上的留着、写出文件变了，由你选换成文件里的或留你的。
 /// 快照里没有这一份了（项目解绑了文件夹）就收起。
 private struct InstructionEditorPage: View {
     let kind: LibraryInstruction.Kind
@@ -88,7 +88,7 @@ private struct InstructionEditorPage: View {
     }
 }
 
-/// 存好没有：存的时候"保存中…"，存好"已保存"亮一会儿；在别处改过且已跟上写"在别处改过，已跟上"；你改着而文件变了写出来、给"换成文件里的"。
+/// 存好没有：存的时候"保存中…"，存好"已保存"亮一会儿；在别处改过且已跟上写"在别处改过，已跟上"；你改着而文件变了写出来、给"换成文件里的"与"留我的"。
 struct DraftStatus: View {
     let draft: InstructionDraft
     @Environment(\.palette) private var palette
@@ -106,6 +106,7 @@ struct DraftStatus: View {
                     Text("文件在别处改过了").foregroundStyle(palette.ink)
                     if file != nil {
                         Button("换成文件里的") { draft.takeFile() }.buttonStyle(PressStyle(.inline)).foregroundStyle(palette.ink)
+                        Button("留我的") { Task { await draft.keepMine() } }.buttonStyle(PressStyle(.inline)).foregroundStyle(palette.ink)
                     }
                 }
             }

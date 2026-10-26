@@ -21,7 +21,7 @@ struct LibraryItemScreen: View {
 }
 
 /// 一份说明的纸页（手机）：改动攒在这里，顶栏右边的纸飞机"发往 Mac"（有改动才亮），那台写进文件、快照同步回来（`InstructionDraft`）。
-/// 顶栏第二行写文件在哪台 Mac、发着没有；Mac 上又改过而你没改的当场跟上，你改着的留着、写出 Mac 上改过了，给"换成 Mac 上的"。
+/// 顶栏第二行写文件名、发着没有；Mac 上又改过而你没改的当场跟上，你改着的留着、写出 Mac 上改过了，由你选换成 Mac 上的或留你的。
 /// 退出这一页时还有没发的就发出去（同 Mac 离开编辑页时存下没存的）：改了的字不丢。
 private struct InstructionScreen: View {
     let kind: LibraryInstruction.Kind
@@ -48,7 +48,7 @@ private struct InstructionScreen: View {
             if draft == nil { draft = InstructionDraft(instruction, workspace: workspace) }
         }
         .onChange(of: instruction?.text) { draft?.follow(instruction?.text) }
-        .onDisappear { if let draft, draft.dirty, draft.state != .saving { Task { await draft.send() } } }
+        .onDisappear { if let draft, draft.dirty, draft.state != .saving, !draft.conflicted { Task { await draft.send() } } }
     }
 
     /// 顶栏第二行：文件名、发着没有。
@@ -66,7 +66,7 @@ private struct InstructionScreen: View {
 
     private var send: some View {
         Button("发往 Mac", icon: .send) { if let draft { Task { await draft.send() } } }
-            .disabled(!(draft?.dirty ?? false) || draft?.state == .saving)
+            .disabled(!(draft?.dirty ?? false) || draft?.state == .saving || draft?.conflicted == true)
             .task(id: draft?.state) {
                 guard let draft, draft.state == .saved || draft.state == .followed else { return }
                 try? await Task.sleep(for: SaveState.savedDisplay * 2)
@@ -74,13 +74,14 @@ private struct InstructionScreen: View {
             }
     }
 
-    /// Mac 上改过、你也改着：一条纸上的横条写出来，给"换成 Mac 上的"（丢下你的）；不换就接着改，发的时候还会再拦一次。
+    /// Mac 上改过、你也改着：一条纸上的横条写出来，给"换成 Mac 上的"（丢下你的）与"留我的"（以 Mac 上此刻的为基准发过去盖过它）。
     private func conflict(_ draft: InstructionDraft, file: String?) -> some View {
         HStack(spacing: 10) {
             Text("Mac 上改过了，你改的还没发").font(.footnote).foregroundStyle(palette.ink)
             Spacer(minLength: 8)
             if file != nil {
                 Button("换成 Mac 上的") { draft.takeFile() }.font(.footnote.weight(.medium)).foregroundStyle(palette.ink)
+                Button("留我的") { Task { await draft.keepMine() } }.font(.footnote.weight(.medium)).foregroundStyle(palette.ink)
             }
         }
         .padding(.horizontal, 20).padding(.vertical, 10)

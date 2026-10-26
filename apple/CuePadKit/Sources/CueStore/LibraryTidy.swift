@@ -224,12 +224,14 @@ public enum InstructionMerge {
     return merged.joined(separator: "\n\n") + (merged.isEmpty ? "" : "\n")
   }
 
-  static func blocks(of text: String) -> [String] {
+  /// 按段拆开（空行隔开，去掉首尾空行与空段）：合成与比一比按同一种段落认"一样"。
+  public static func blocks(of text: String) -> [String] {
     text.replacingOccurrences(of: "\r\n", with: "\n").split(separator: /\n[ \t]*\n/)
       .map { $0.trimmingCharacters(in: .newlines) }.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
   }
 
-  private static func normalized(_ block: String) -> String {
+  /// 一段的比较键：空白不计，只看字。
+  public static func normalized(_ block: String) -> String {
     block.split(whereSeparator: \.isWhitespace).joined(separator: " ")
   }
 }

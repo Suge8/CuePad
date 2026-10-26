@@ -180,5 +180,91 @@ struct AgentLibraryTests {
         _ = try await library("合成后 Claude Code 读 AGENTS.md") { $0.tidies.isEmpty && $0.instruction(.project(project.id))?.readers == [.claudeCode] }
         services.cancelBackgroundWork()
     }
+
+    /// 说明的编辑页（`InstructionDraft`，Mac 的编辑页与手机的纸页同一份）：停手就存进文件；别处改了而你没在改，当场跟上；
+    /// 你改着时别处也改了，你的字留着、不再自动写，等你选——换成文件里的，或留你的盖过它。
+    @Test func 编辑页自动存_跟上别处的改动_两边都改时由你选() async throws {
+        let file = agents.appending(path: "AGENTS.md")
+        try write("# 原则\n", file)
+        let keeping = keep()
+        defer { keeping.cancel() }
+        let workspace = Workspace(services: services)
+        let following = Task { await workspace.follow() }
+        defer { following.cancel() }
+        func snapshot(_ text: String) async throws -> String? {
+            try await eventually("快照读到 \(text)") { workspace.library?.instruction(.global)?.text == text }
+            return workspace.library?.instruction(.global)?.text
+        }
+        _ = try await snapshot("# 原则\n")
+        let draft = InstructionDraft(try #require(workspace.library?.instruction(.global)), workspace: workspace)
+
+        draft.changed("# 原则\n\n先读\n")
+        await draft.leave()
+        #expect(read(file) == "# 原则\n\n先读\n" && draft.state == .saved && !draft.dirty)
+
+        try write("# 原则\n\n终端里改的\n", file)
+        draft.follow(try await snapshot("# 原则\n\n终端里改的\n"))
+        #expect(draft.text == "# 原则\n\n终端里改的\n" && draft.state == .followed && !draft.dirty)
+
+        try write("别处又改\n", file)
+        draft.changed("我改的\n")
+        await draft.leave()
+        draft.follow(try await snapshot("别处又改\n"))
+        #expect(draft.state == .conflict(file: "别处又改\n") && draft.text == "我改的\n" && read(file) == "别处又改\n")
+        draft.takeFile()
+        #expect(draft.text == "别处又改\n" && !draft.dirty)
+
+        try write("第三次\n", file)
+        draft.changed("还是我的\n")
+        await draft.leave()
+        draft.follow(try await snapshot("第三次\n"))
+        #expect(draft.conflicted)
+        await draft.keepMine()
+        #expect(read(file) == "还是我的\n" && draft.state == .saved && !draft.dirty)
+    }
+
+    /// 手机上的整理与"发往 Mac"走同一个入口（`Workspace.tidy`、`saveInstruction`）：快照是别台的就写投送请求、等那台做完——
+    /// 做完提示"整理好了"，那台上刚改过就认成同一种错（编辑页据此说"Mac 上改过了"），别的失败写出原因。
+    /// 那台 Mac 由一个领 mac-phone-target 请求的执行器扮演，照这台的文件做（同 `MacExecutor` 把错写回请求）。
+    @Test func 手机发往Mac_等那台做完_Mac上刚改过认得出() async throws {
+        try FileManager.default.createDirectory(at: claude, withIntermediateDirectories: true)
+        let folder = home("work/site")
+        let project = try await store.createProject(name: "Site", color: "#000000")
+        try await store.setDirectory(folder.path, for: project.id)
+        try write("# Site\n", folder.appending(path: "AGENTS.md"))
+        try skill("pr", in: agents.appending(path: "skills"))
+        let keeping = keep()
+        defer { keeping.cancel() }
+        var phone = try await library("扫出说明与没链上的技能") { $0.tidies.map(\.id) == ["unlinked"] && $0.instruction(.project(project.id))?.text != nil }
+        phone.hostID = "mac-phone-target"
+        let library = services.library
+        let mac = DeliveryExecutor(store: store, hostID: phone.hostID, onIssue: { Issue.record("\($0)") }) { request in
+            do {
+                if let orders = request.tidyOrders { _ = try await library.tidy(orders) }
+                if let edit = request.instructionEdit { try await library.write(edit) }
+                return .succeeded
+            } catch {
+                return .failed(ShownText(error))
+            }
+        }
+        try await mac.start()
+        defer { Task { await mac.stop() } }
+        let workspace = Workspace(services: services)
+
+        await workspace.tidy(phone.automaticOrders, in: phone)
+
+        #expect(workspace.notice?.text.visible == "整理好了 1 件" && workspace.notice?.action == nil)
+        #expect(RelativeLink.points(claude.appending(path: "skills/pr"), to: agents.appending(path: "skills/pr")))
+        let seen = try #require(phone.instruction(.project(project.id)))
+        try await workspace.saveInstruction(InstructionEdit(instruction: seen.kind, base: seen.base, text: "# Site\n\n手机改的\n"), in: phone)
+        #expect(read(folder.appending(path: "AGENTS.md")) == "# Site\n\n手机改的\n")
+        await #expect(throws: AgentLibraryError.changedOnMac) {
+            try await workspace.saveInstruction(InstructionEdit(instruction: seen.kind, base: seen.base, text: "覆盖"), in: phone)
+        }
+        #expect(read(folder.appending(path: "AGENTS.md")) == "# Site\n\n手机改的\n")
+
+        await workspace.tidy([TidyOrder(tidy: "unlinked")], in: phone)
+        #expect(workspace.notice?.text.visible.contains("这件已经不用整理了") == true, "那台没做成：写出原因")
+    }
 }
 #endif

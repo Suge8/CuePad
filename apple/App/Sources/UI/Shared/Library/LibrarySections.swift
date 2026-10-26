@@ -96,16 +96,22 @@ struct LibraryRow<Icon: View, Trailing: View>: View {
         HStack(spacing: LibraryRowMetrics.gap) {
             icon.frame(width: LibraryRowMetrics.icon)
             VStack(alignment: .leading, spacing: 2) {
-                Text(verbatim: title).font(Self.titleFont).foregroundStyle(palette.ink).lineLimit(1)
-                if let detail { Text(verbatim: detail).font(Self.detailFont).foregroundStyle(palette.ink2).lineLimit(1) }
+                Text(verbatim: title).font(Self.titleFont).foregroundStyle(palette.ink).lineLimit(Self.lines)
+                if let detail { Text(verbatim: detail).font(Self.detailFont).foregroundStyle(palette.ink2).lineLimit(Self.lines) }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             trailing
         }
         .padding(.horizontal, LibraryPaper<EmptyView>.inset)
+        .padding(.vertical, Self.vertical)
         .frame(minHeight: LibraryRowMetrics.height)
         .contentShape(.rect)
     }
+
+    private static var vertical: CGFloat { 8 }
+
+    /// 一件事的那句写不下一行就折成两行，不截掉（手机窄、英文长）
+    private static var lines: Int { 2 }
 
     #if os(macOS)
     private static var titleFont: Font { Typography.body.weight(.medium) }
@@ -265,7 +271,7 @@ struct SkillSection: View {
             if !library.selfManaged.isEmpty {
                 LibraryPaper {
                     ForEach(library.selfManaged, id: \.agent) { managed in
-                        LibraryRow(title: Self.managed(managed), detail: String(localized: "由 \(managed.agent.name) 自己管，CuePad 不碰")) {
+                        LibraryRow(title: managed.title, detail: String(localized: "由 \(managed.agent.name) 自己管，CuePad 不碰")) {
                             managed.agent.mark.image.foregroundStyle(palette.ink2)
                         } trailing: {
                             EmptyView()
@@ -296,12 +302,6 @@ struct SkillSection: View {
         .rowContainer(.rect(cornerRadius: LibraryPaper<EmptyView>.radius, style: .continuous))
     }
 
-    private static func managed(_ managed: SelfManagedSkills) -> String {
-        switch managed.agent {
-        case .claudeCode: String(localized: "Claude Code 从 claude.ai 同步的 \(managed.count) 个")
-        default: String(localized: "\(managed.agent.name) 自带的 \(managed.count) 个")
-        }
-    }
 }
 
 private enum SkillLine: Identifiable {

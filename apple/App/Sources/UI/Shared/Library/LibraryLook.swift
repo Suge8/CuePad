@@ -18,9 +18,9 @@ extension Workspace {
         case .duplicate(_, let copies):
             return String(localized: "\(copies.map { scopeName($0.skill.scope) }.formatted(.list(type: .and))) 各一份")
         case .malformed(_, let problem): return problem.description
-        case .empty(let directories): return Self.names(directories.map { library.shown($0) })
+        case .empty(let directories): return Self.names(directories.map { ($0 as NSString).lastPathComponent })
         case .globalInstructions(let sources):
-            let owners = sources.compactMap(\.origin.owner).map(\.name)
+            let owners = AgentKind.allCases.filter(Set(sources.compactMap(\.origin.agent)).contains).map(\.name)
             return tidy.differs ? String(localized: "\(owners.formatted(.list(type: .and))) 各一份，内容不同") : String(localized: "内容一样，换成链接就行")
         case .projectClaude(let project, _):
             return String(localized: "\(projectName(project))：Claude Code 读的是它，不读 AGENTS.md")
@@ -72,15 +72,19 @@ extension Workspace {
     }
 }
 
-extension InstructionSource.Origin {
-    /// 这一份是哪家的（共读的那份不属于哪家）。
-    var owner: AgentKind? {
-        switch self {
-        case .shared: nil
-        case .agent(let kind): kind
-        case .piSystem: .pi
-        case .codexPrompt: .codex
-        }
+extension AgentLibrary {
+    /// 技能右端的几列：那台报的能用的几家（`MacAgents`），加上快照里提到的几家（谁看不见哪个技能、谁读哪份说明）——
+    /// 装了还没登录的那家也会看不见技能，它的空圈得有一列放。顺序同 `AgentKind`。
+    func columns(reported: [AgentKind]) -> [AgentKind] {
+        let named = Set(reported + skills.flatMap(\.unseenBy) + instructions.flatMap(\.readers))
+        return AgentKind.allCases.filter(named.contains)
+    }
+}
+
+extension SelfManagedSkills {
+    /// "Claude Code 从 claude.ai 同步的 13 个"、"Codex 自带的 5 个"。
+    var title: String {
+        agent == .claudeCode ? String(localized: "Claude Code 从 claude.ai 同步的 \(count) 个") : String(localized: "\(agent.name) 自带的 \(count) 个")
     }
 }
 

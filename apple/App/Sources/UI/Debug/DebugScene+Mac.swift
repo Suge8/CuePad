@@ -83,7 +83,7 @@ extension DebugScene {
             // 技能与说明（配 -CuePadDemo YES 有演示的快照）；instruction 打开全局说明（给了 -CuePadProject 是那个项目的，盖在项目页上），compare 打开各写一份的全局规则
             if opened == nil || scene != "instruction" { workspace.show(.library) }
             if scene == "instruction" { workspace.openLibrary(.instruction(opened.map(LibraryInstruction.Kind.project) ?? .global)) }
-            if scene == "compare" { workspace.openLibrary(.compare("global")) }
+            if scene == "compare" { workspace.openLibrary(.compare("global-instructions")) }
         case "editor":
             if let id = await card(in: workspace.currentProject ?? Project.defaultID, store: workspace.services.store),
                let card = try? await workspace.services.store.card(id) { workspace.open(card) }

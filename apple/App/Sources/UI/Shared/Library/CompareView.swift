@@ -3,15 +3,15 @@ import SwiftUI
 
 /// 比一比（要整理里同名的技能、各写一份的全局规则、项目里另一份 CLAUDE.md）：几份原文并排，每份一张纸——头上写是谁的哪一份，
 /// 只有这一份有的段落垫一层牛皮纸色（差异不用状态色：不是出了错，只是"这里不一样"）。Mac 上几列并排、各自滚；手机上左右翻（露出下一张的边）。
-/// 说明合成成一份（`LibraryTidy.merged`，按段取并集），各家改成读它，原来的进废纸篓；Pi 的系统提示与 Codex 的自定提示词只作比对，
-/// 要不要一并撤掉由你勾（`TidyOrder.retire`，不勾就原样留着）。同名的技能每份底下一颗"留这份"，其余进废纸篓。
+/// 说明合成成一份（`LibraryTidy.merged(retiring:)`，按段取并集），各家改成读它，原来的进废纸篓；替换基础提示的两份（Pi 的系统提示、Codex 的自定提示词）
+/// 只作比对，勾了"合进去，撤掉这份"才并进来并撤掉（`TidyOrder.retire`），不勾就原样留着。同名的技能每份底下一颗"留这份"，其余进废纸篓。
 /// 做完回到技能与说明页，结果与撤销在提示里（`Workspace.tidy`）；那件已经不在了（在别处整理过）也回去。
 struct CompareView: View {
     let tidyID: String
     let close: () -> Void
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
-    @State private var retire: Set<String> = []
+    @State private var retire: Set<InstructionSource.Origin> = []
     @State private var working = false
 
     var body: some View {
@@ -42,15 +42,15 @@ struct CompareView: View {
         let place: String
         let modified: Date?
         let blocks: [(text: String, differs: Bool)]
-        /// 只作比对、合成时可选撤掉的（路径）
-        let optional: String?
+        /// 替换基础提示的那份（合成时可选一并撤掉）
+        let optional: InstructionSource.Origin?
         /// 同名技能的那份（"留这份"）
         let keep: String?
     }
 
     static func pages(of tidy: LibraryTidy, workspace: Workspace, library: AgentLibrary) -> [Page] {
         var texts: [String?] = []
-        var heads: [(String, BrandMark?, Icon?, String, String, Date?, String?, String?)] = []
+        var heads: [(String, BrandMark?, Icon?, String, String, Date?, InstructionSource.Origin?, String?)] = []
         switch tidy.kind {
         case .duplicate(_, let copies):
             for copy in copies {
@@ -61,9 +61,9 @@ struct CompareView: View {
             let project: UUID? = if case .projectClaude(let id, _) = tidy.kind { id } else { nil }
             for source in sources {
                 texts.append(source.text)
-                let mark = source.origin.owner?.mark
+                let mark = source.origin.agent?.mark
                 heads.append((source.path, mark, mark == nil ? .instruction : nil, workspace.sourceName(source.origin, project: project),
-                              library.shown(source.path), source.modifiedAt, source.origin.isOptional ? source.path : nil, nil))
+                              library.shown(source.path), source.modifiedAt, source.origin.replacesBasePrompt ? source.origin : nil, nil))
             }
         default: return []
         }
@@ -107,9 +107,9 @@ struct CompareView: View {
             }
             .foregroundStyle(palette.ink)
             Text(verbatim: page.place).font(Typography.meta).foregroundStyle(palette.ink3).lineLimit(1).truncationMode(.middle).padding(.top, 2)
-            if let path = page.optional {
-                Toggle(isOn: Binding(get: { retire.contains(path) }, set: { if $0 { retire.insert(path) } else { retire.remove(path) } })) {
-                    Text("合成后撤掉").font(Typography.meta).foregroundStyle(palette.ink2)
+            if let origin = page.optional {
+                Toggle(isOn: Binding(get: { retire.contains(origin) }, set: { if $0 { retire.insert(origin) } else { retire.remove(origin) } })) {
+                    Text("合进去，撤掉这份").font(Typography.meta).foregroundStyle(palette.ink2)
                 }
                 #if os(macOS)
                 .toggleStyle(.checkbox)
@@ -174,7 +174,7 @@ struct CompareView: View {
 
     private func run(_ tidy: LibraryTidy, _ library: AgentLibrary, keep: String?) {
         working = true
-        let order = TidyOrder(tidy: tidy.id, keep: keep, retire: keep == nil ? retire.sorted() : [])
+        let order = TidyOrder(tidy: tidy.id, keep: keep, retire: keep == nil ? retire : [])
         Task {
             await workspace.tidy([order], in: library)
             working = false
