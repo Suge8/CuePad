@@ -9,13 +9,25 @@ extension View {
         Group {
             switch style {
             case .fullScreen:
-                self.fullScreenCover(item: item) { content($0).environment(\.closePanel, close) }
+                self.fullScreenCover(item: item) { content($0).modalPage(close) }
             case .bubble(let source):
                 self.overlay { BubbleLayer(item: item.wrappedValue, source: source, close: close, content: content) }
             case .sheet:
-                self.sheet(item: item) { content($0).environment(\.closePanel, close) }
+                self.sheet(item: item) { content($0).modalPage(close) }
             }
         }
+    }
+
+    /// sheet 与全屏是盖在上面的一页新的，不吃挂它那一页的页内环境（呈现的内容照样继承呈现处的环境）：
+    /// 页顶那一排画在它自己的导航栏里（根页、iPad 的 Cue 面板给的 `HeaderHost` 会让它不画标题、改画成根页那一排），
+    /// 底下那页被提示横幅盖着时它不跟着让开、不算长开的面板里，它在前台（看板分段、翻走的根页给的 `pageActive` 不算数）。
+    fileprivate func modalPage(_ close: ClosePanel) -> some View {
+        environment(\.closePanel, close)
+            .environment(\.headerHost, .navigationBar)
+            .environment(\.headerGivesWay, false)
+            .environment(\.headerGrown, false)
+            .environment(\.pageActive, true)
+            .environment(\.pagePrefetch, false)
     }
 
     /// 窗口里每一次手指落下都报给 `pressed`（窗口坐标），不拦这一下（任务气泡从这里长出来，`Workspace.pressed`）。
