@@ -5,9 +5,9 @@ import SwiftUI
 /// 页头一直在（头像、名字、此刻在做什么；Mac 在窗口工具栏，是 `CueTitle`；手机与 iPad 是浮在对话上的 `CueHeader`，点开是在做、等你与记忆的面板）；
 /// 中间是对话：你的话是右侧牛皮纸色的气泡，Cue 的话是左侧纸做的气泡（`CueBubble`、`CueSays`），它第一次提到一件活时气泡底下一行这件活（`CueTaskLine`），
 /// 同一边连着说的几颗收紧成一串，隔了一阵的地方居中写几点（`ChatTimeMarker`）；经过、醒来记录与分隔不是气泡，是旁注与居中的标记（`NoteLine`、`ChatMarker`），
-/// 你发起的一轮在你的话之后先是这一轮的经过（`CueTrace`：碰到的任务与会话一处一行，在跑时原地往下长），这一轮说的话与结果按先后在它之后。
+/// 你发起的一轮在你的话之后先是这一轮的经过（`CueTrace`：碰到的任务与会话一处一行，做完一步才往下长、出现了就不再动），这一轮说的话与结果按先后在它之后。
 /// Cue 自己醒来的那几轮每轮一行旁注（`CueNoteLog`：提到的那一处、当时出了什么事与它说的一句，点了去那里），
-/// 末尾是它此刻在做什么（`CueEnding`）；
+/// 末尾是它此刻在做什么（`CueEnding`：常驻的一行，此刻在做的只写这里）；
 /// 对话区与会话页是同一个（`ChatColumn`：排开、刻度滑条、跳转与描圈）；底部是拍板卡（`CueWaitDock`：Cue 的提问与会话在问的都在这里，
 /// 对话里不另挂）与输入框（`CueComposer`），待回复提示（`CueReplyTip`）叠在它们上方。
 /// 首次见面与启用只有一处（`CueWelcome`）：还没说过话时在正中，说过话后停用了在输入框正上方。
@@ -154,20 +154,18 @@ struct CuePage: View {
         ) { window in
             let lastYou = thread.messages.last { $0.author == .known(.you) }?.id
             ChatStack(spacing: 0) {
-                let live = live
                 ChatSegments(items: rows, window: window, size: Self.segment, spare: Self.spare) { items in
                     CueSegment(rows: items.map { item in
                         CueRow(
                             row: item, shots: thread.shots[item.id] ?? [],
                             joined: thread.joined.contains(item.id),
-                            stamp: thread.stamps[item.id], delivered: item.id == lastYou, live: live.flatMap { item.contains(round: $0.round) ? $0 : nil },
+                            stamp: thread.stamps[item.id], delivered: item.id == lastYou,
                             unread: thread.unread.contains(item.id), opened: $opened, seen: $seen)
                     })
                     .equatable()
                 }
                 CueEnding(
-                    newestSaid: thread.messages.last { $0.author == .known(.cue) }?.createdAt, joined: rows.last?.speaker == .leading,
-                    roundInRows: live.map { live in rows.contains { $0.contains(round: live.round) } } ?? false)
+                    newestSaid: thread.messages.last { $0.author == .known(.cue) }?.createdAt, joined: rows.last?.speaker == .leading)
             }
             #if os(iOS)
             // 手机上对话里的字不开行内选择：长按出的是消息菜单，挑字走菜单里的"选择文本"（同会话页）
@@ -175,18 +173,6 @@ struct CuePage: View {
             #endif
             .animation(HandOff.quick, value: cue.presence.progress)
         }
-    }
-
-    /// 在跑的那一轮（Cue 此刻的状态记着是哪一行，"做完了没"只看它）此刻的结尾；不在跑为 nil。它那台 Mac 此刻不在（`CuePresence.shown` 为空）时
-    /// 这一轮照样没做完，只是不写在做什么。
-    private var live: CueLiveRound? {
-        let presence = cue.presence
-        guard let round = cue.round else { return nil }
-        guard let shown = presence.shown, let progress = presence.progress else { return CueLiveRound(round: round, doing: nil) }
-        let step = presence.step
-        // 没碰哪一处的一步（看板、记忆、读文件）是工具图标，还没调工具（在想）是省略号
-        let icon = step.map { CueTrace.icon($0.kind) } ?? (presence.isUsingTool ? Icon.tool : .pondering)
-        return CueLiveRound(round: round, doing: .init(icon: icon, step: step, text: progress, speaking: shown.speaking))
     }
 
     /// 有新内容：多了消息、有一条被答了、拍板或待回复变了、末尾的进展出现或收起。
