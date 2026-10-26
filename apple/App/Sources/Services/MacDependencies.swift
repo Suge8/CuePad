@@ -56,7 +56,7 @@ struct MacDependencies {
         let agents = AgentIntegrations(AgentIntegration(
             paths: paths,
             locate: { @Sendable in
-                if let agentHome { return ExecutableLocator(searchDirectories: [agentHome.appending(path: ".local/bin")]) }
+                if let agentHome { return ExecutableLocator(home: agentHome) }
                 return await .system
             },
             cuepad: commandLineTool.helper, isolated: isolated,

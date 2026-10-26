@@ -145,13 +145,11 @@ struct SetupPanel: View {
                 ?? AgentLine.of(kind, agents.status(kind), writable: agents.isWritable(kind))
             return (tone, line, working && chosen.contains(kind))
         case .checking: return (.calm, Dotted(String(localized: "检查中…")), true)
-        case .install(let failure?): return (.failure, Dotted(String(localized: "没装上：\(failure)")), false)  // 原因是安装脚本的最后一句原话
+        case .install(let failure?): return (.failure, Dotted(AgentLine.notInstalled(failure)), false)
         case .logIn(let failure?): return (.failure, Dotted(failure), false)
         case .install: return (.calm, Dotted(kind == .claudeCode ? String(localized: "推荐") : nil, String(localized: "运行官方安装脚本")), false)
-        case .needs(let prerequisite):
-            let version = "\(prerequisite.minimum.major).\(prerequisite.minimum.minor)"
-            return (.notice, Dotted(String(localized: "需要 \(prerequisite.name) \(version) 以上")), false)
-        case .installing: return (.calm, Dotted(String(localized: "安装中，可能要几分钟")), true)
+        case .needs(let prerequisite): return (.notice, Dotted(AgentLine.needs(prerequisite)), false)
+        case .installing: return (.calm, Dotted(AgentLine.installing), true)
         case .logIn:
             let how = kind.loginArguments == nil ? String(localized: "在 \(kind.name) 里输入 /login") : String(localized: "在浏览器里登录")
             return (.calm, Dotted(how), false)

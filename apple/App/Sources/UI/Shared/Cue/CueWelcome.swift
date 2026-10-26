@@ -100,7 +100,8 @@ private struct CueEnable: View {
     }
 
     /// 一台：一颗直接启用的主按钮（选不了时停用、下面写为什么）。几台：Mac 上主按钮直接在这台启用，别的几台收在旁边一颗"选别的 Mac"的菜单里；
-    /// Mac 上这颗菜单常驻，没有别的 Mac 时置灰：库里多一台 Mac 时卡片不长高一截（卡片竖直居中，长高就整块上下挪）。
+    /// Mac 上这颗菜单常驻、只有这台时藏起（占着位置）：库里多一台 Mac 时卡片不长高一截（卡片竖直居中，长高就整块上下挪）；
+    /// 不置灰露着：只有一台 Mac 的新用户看到一颗点不了的"选别的 Mac"，不知道该装第二台还是哪里坏了。
     /// 手机上没有"这台"，主按钮本身就是选哪台的菜单（带下拉箭头）。一颗按钮只做一件事：点了直接启用的不带箭头，带箭头的点开是菜单。
     @ViewBuilder private func enableButton(_ hosts: [CueSettings.Host]) -> some View {
         if let host = hosts.first, hosts.count == 1 || host.isHere {
@@ -108,8 +109,8 @@ private struct CueEnable: View {
                 Button(host.isHere ? "在这台 Mac 上启用" : "在「\(host.name)」上启用") { enable(on: host) }.disabled(!host.selectable)
                 if !host.selectable { Text(host.note).font(Typography.meta).foregroundStyle(palette.ink3) }
                 if host.isHere {
-                    hostMenu(Array(hosts.dropFirst()), title: String(localized: "选别的 Mac"), surface: ControlSurface(kind: .quiet, compact: true))
-                        .disabled(hosts.count == 1)
+                    let others = hostMenu(Array(hosts.dropFirst()), title: String(localized: "选别的 Mac"), surface: ControlSurface(kind: .quiet, compact: true))
+                    if hosts.count == 1 { others.hidden() } else { others }
                 }
             }
         } else {
