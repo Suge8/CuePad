@@ -171,12 +171,15 @@ public enum AgentLibraryError: Error, Equatable, ShownError {
   case tidyGone
   /// 说明所在的项目在这台 Mac 上没有绑定的文件夹
   case noFolder
+  /// 撤销整理时，整理过的文件之后又改过：整个不撤，不盖掉后来的改动
+  case changedSinceTidy
 
   public var shown: String.LocalizationValue {
     switch self {
     case .changedOnMac: "Mac 上刚改过"
     case .tidyGone: "这件已经不用整理了"
     case .noFolder: "这个项目在这台 Mac 上没有绑定文件夹"
+    case .changedSinceTidy: "整理之后这些文件又改过，没有撤销"
     }
   }
 }

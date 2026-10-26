@@ -54,7 +54,11 @@ struct LibrarySkillScan {
         let duplicated = Set(duplicates.flatMap { $0.map(\.entry.path) })
         for copies in duplicates {
             let name = copies[0].entry.name
-            tidies.append(LibraryTidy(id: "duplicate/\(name)", kind: .duplicate(
+            let id = switch copies[0].entry.scope {
+            case .global: "duplicate/\(name)"
+            case .project(let project): "duplicate/\(name)/\(project.uuidString)"
+            }
+            tidies.append(LibraryTidy(id: id, kind: .duplicate(
                 name: name, copies: copies.map { SkillCopy(skill: $0.entry, text: $0.text, modifiedAt: $0.modifiedAt) })))
         }
         let moves = strays.filter { $0.problem == nil && !duplicated.contains($0.entry.path) }.compactMap { found in
@@ -96,10 +100,12 @@ struct LibrarySkillScan {
                 if inOldDirectory, RelativeLink.isLink(item) { continue }
                 var isDirectory: ObjCBool = false
                 guard FileManager.default.fileExists(atPath: item.path, isDirectory: &isDirectory), isDirectory.boolValue else { continue }
+                watched.insert(item.path)  // 各家自管的目录也盯着：里面多了少了，计数跟着变
                 if inOldDirectory, group.isEmpty, Self.isManaged(name, in: root) { continue }
-                watched.insert(item.path)
                 let skillFile = item.appending(path: AgentSkill.fileName)
-                if let text = try? String(contentsOf: skillFile, encoding: .utf8) {
+                if FileManager.default.fileExists(atPath: skillFile.path) {
+                    // 读不出（不是 UTF-8、没权限）的也是技能，格式不对：进要整理
+                    let text = (try? String(contentsOf: skillFile, encoding: .utf8)) ?? ""
                     if inOldDirectory, name == AgentSkill.name, AgentSkill.kinds(in: text) != nil { continue }  // 旧版 CuePad 副本：接入收掉它
                     watched.insert(skillFile.path)
                     let frontmatter = SkillFrontmatter(text)
@@ -134,14 +140,23 @@ struct LibrarySkillScan {
         entries(directory).filter { FileManager.default.fileExists(atPath: directory.appending(path: "\($0)/\(AgentSkill.fileName)").path) }.count
     }
 
-    /// 同名的几组（每组先全局、后各项目，按路径）：有全局的，连同各项目里同名的一组；没有全局的，同一个项目里两个以上才算。
+    /// 同名的几组（每组先全局、后各项目，按路径）：有全局的，连同各项目里同名的一组（留下哪份只移走和它撞名的，`LibraryTidying`）；
+    /// 没有全局的，同一个项目里两个以上才算，每个项目一组——两个项目各有一个不撞名。
     private static func duplicates(_ skills: [Found]) -> [[Found]] {
-        Dictionary(grouping: skills, by: \.entry.name).sorted { $0.key < $1.key }.compactMap { _, copies in
-            let global = copies.filter { $0.entry.scope == .global }
-            let byProject = Dictionary(grouping: copies.filter { $0.entry.scope != .global }, by: \.entry.scope)
-            let clashing = global.isEmpty ? byProject.values.filter { $0.count > 1 }.flatMap(\.self) : copies
-            return clashing.count > 1 ? clashing.sorted { ($0.entry.scope == .global ? 0 : 1, $0.entry.path) < ($1.entry.scope == .global ? 0 : 1, $1.entry.path) } : nil
+        Dictionary(grouping: skills, by: \.entry.name).sorted { $0.key < $1.key }.flatMap { _, copies -> [[Found]] in
+            let sorted = copies.sorted { ($0.entry.scope == .global ? 0 : 1, $0.entry.path) < ($1.entry.scope == .global ? 0 : 1, $1.entry.path) }
+            if sorted.contains(where: { $0.entry.scope == .global }) { return sorted.count > 1 ? [sorted] : [] }
+            return byProject(sorted)
         }
+    }
+
+    private static func byProject(_ copies: [Found]) -> [[Found]] {
+        var groups: [LibraryScope: [Found]] = [:], order: [LibraryScope] = []
+        for copy in copies {
+            if groups[copy.entry.scope] == nil { order.append(copy.entry.scope) }
+            groups[copy.entry.scope, default: []].append(copy)
+        }
+        return order.compactMap { groups[$0].flatMap { $0.count > 1 ? $0 : nil } }
     }
 }
 

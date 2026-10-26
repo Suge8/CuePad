@@ -3,14 +3,15 @@ import CueStore
 import Foundation
 
 /// 一次整理改了什么（按先后），撤销时倒着放回：搬走的搬回、进了废纸篓的放回原处、建的链接与目录删掉、改写的文件写回原样。
+/// 整理之后又有人动过这些文件（改了合成的说明、换了链接、在放回的位置上又建了东西），撤销就整个不做（`changedSinceTidy`），不盖掉后来的改动。
 public struct LibraryUndo: Sendable {
     enum Step: Sendable {
         case moved(from: URL, to: URL)
         case trashed(URL, into: URL)
-        case linked(URL)
+        case linked(URL, to: URL)
         case createdDirectory(URL)
-        /// 改写之前的内容；之前没有这个文件为 nil
-        case wrote(URL, previous: Data?)
+        /// 改写之前的内容（之前没有这个文件为 nil）与写下的内容
+        case wrote(URL, previous: Data?, written: Data)
     }
 
     var steps: [Step] = []
@@ -35,8 +36,12 @@ struct LibraryTidying {
         case .unlinked(let skills):
             for skill in skills { try linkForClaude(skill.name, URL(filePath: skill.path), in: skill.scope) }
         case .duplicate(_, let copies):
-            guard let keep = order.keep, copies.contains(where: { $0.skill.path == keep }) else { throw AgentLibraryError.tidyGone }
-            for copy in copies where copy.skill.path != keep { try moveToTrash(URL(filePath: copy.skill.path)) }
+            guard let keep = order.keep else { throw AgentLibraryError.tidyGone }
+            guard let kept = copies.first(where: { $0.skill.path == keep })?.skill.scope else { throw AgentLibraryError.tidyGone }
+            // 只移走和留下的那份撞名的：同一层的、全局的（留的是项目里的），留的是全局的就是各项目里的全部
+            for copy in copies where copy.skill.path != keep && (copy.skill.scope == kept || copy.skill.scope == .global || kept == .global) {
+                try moveToTrash(URL(filePath: copy.skill.path))
+            }
         case .malformed:
             return false
         case .empty(let directories):
@@ -66,7 +71,7 @@ struct LibraryTidying {
               !FileManager.default.fileExists(atPath: link.path), !RelativeLink.isLink(link) else { return }
         try ensureDirectory(link.deletingLastPathComponent())
         try RelativeLink.make(at: link, to: skill)
-        undo.steps.append(.linked(link))
+        undo.steps.append(.linked(link, to: skill))
     }
 
     /// 合成一份全局说明，各家换成链到它的链接；OpenCode 自己那份移走（没有它时读 Claude Code 的）；撤掉选中的替换基础提示。
@@ -79,7 +84,7 @@ struct LibraryTidying {
             if RelativeLink.isLink(file) { continue }  // 指到别处的不碰
             if FileManager.default.fileExists(atPath: file.path) { try moveToTrash(file) }
             try RelativeLink.make(at: file, to: shared)
-            undo.steps.append(.linked(file))
+            undo.steps.append(.linked(file, to: shared))
         }
         let openCode = places.globalFile(.opencode)
         if places.uses(.opencode), !RelativeLink.isLink(openCode), FileManager.default.fileExists(atPath: openCode.path) { try moveToTrash(openCode) }
@@ -98,7 +103,7 @@ struct LibraryTidying {
         guard previous != Data(text.utf8) else { return }
         try ensureDirectory(target.deletingLastPathComponent())
         try Data(text.utf8).write(to: target, options: .atomic)
-        undo.steps.append(.wrote(target, previous: previous))
+        undo.steps.append(.wrote(target, previous: previous, written: Data(text.utf8)))
     }
 
     /// 建出还没有的目录，记下最上面新建的那一层。
@@ -110,8 +115,9 @@ struct LibraryTidying {
         undo.steps.append(.createdDirectory(top))
     }
 
-    /// 倒着放回。放回的位置已被占（撤销前又有了同名的）就停下报错，已放回的不再动。
+    /// 倒着放回：先按倒放的顺序核对每一步此刻还是整理完的样子，有一步不是就整个不做、抛 `changedSinceTidy`。
     static func revert(_ undo: LibraryUndo) throws {
+        guard isIntact(undo) else { throw AgentLibraryError.changedSinceTidy }
         let files = FileManager.default
         for step in undo.steps.reversed() {
             switch step {
@@ -121,14 +127,40 @@ struct LibraryTidying {
             case .trashed(let original, let trashed):
                 try files.createDirectory(at: original.deletingLastPathComponent(), withIntermediateDirectories: true)
                 try files.moveItem(at: trashed, to: original)
-            case .linked(let link):
-                if RelativeLink.isLink(link) { try files.removeItem(at: link) }
+            case .linked(let link, _):
+                try files.removeItem(at: link)
             case .createdDirectory(let directory):
                 if (try? files.contentsOfDirectory(atPath: directory.path))?.allSatisfy({ $0 == ".DS_Store" }) == true { try files.removeItem(at: directory) }
-            case .wrote(let file, let previous):
+            case .wrote(let file, let previous, _):
                 if let previous { try previous.write(to: file, options: .atomic) } else { try files.removeItem(at: file) }
             }
         }
+    }
+
+    /// 每一步此刻都还是整理完的样子：搬去、放进废纸篓的还在，原处空着（或是倒放时先删掉的链接、文件），建的链接还指着原处，写的文件没再改过。
+    private static func isIntact(_ undo: LibraryUndo) -> Bool {
+        let files = FileManager.default
+        func present(_ url: URL) -> Bool { files.fileExists(atPath: url.path) || RelativeLink.isLink(url) }
+        var freed: Set<String> = []
+        func vacant(_ url: URL) -> Bool { !present(url) || freed.contains(url.path) }
+        for step in undo.steps.reversed() {
+            switch step {
+            case .moved(let from, let to):
+                guard present(to), vacant(from) else { return false }
+                freed.insert(to.path)
+            case .trashed(let original, let trashed):
+                guard present(trashed), vacant(original) else { return false }
+            case .linked(let link, let target):
+                guard RelativeLink.points(link, to: target) else { return false }
+                freed.insert(link.path)
+            case .createdDirectory:
+                continue
+            case .wrote(let file, let previous, let written):
+                guard (try? Data(contentsOf: file)) == written else { return false }
+                if previous == nil { freed.insert(file.path) }
+            }
+        }
+        return true
     }
 }
 #endif

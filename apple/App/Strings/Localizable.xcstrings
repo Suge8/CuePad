@@ -3333,18 +3333,18 @@
         }
       }
     },
-    "SKILL.md 开头没有 --- 包着的名字与说明" : {
+    "SKILL.md 读不出名字与说明：要是文本，开头用 --- 包着 name 与 description" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "SKILL.md doesn't start with a name and description between --- lines"
+            "value" : "Can't read a name and description from SKILL.md: it must be text starting with name and description between --- lines"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "SKILL.md 开头没有 --- 包着的名字与说明"
+            "value" : "SKILL.md 读不出名字与说明：要是文本，开头用 --- 包着 name 与 description"
           }
         }
       }
@@ -12667,6 +12667,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "整张卡片"
+          }
+        }
+      }
+    },
+    "整理之后这些文件又改过，没有撤销" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "These files changed after tidying, so nothing was undone"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "整理之后这些文件又改过，没有撤销"
           }
         }
       }
