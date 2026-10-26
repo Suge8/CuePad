@@ -147,7 +147,6 @@ struct BoardCardLayout<Lead: View, Trailing: View>: View {
                 trailing
             }
         }
-        .font(row ? BoardCardMetrics.rowTitle : TaskMetrics.lineFont)
     }
 
     /// 列里的推进中：标题那一带贴上沿，线离它 `waveGap`（带子代理细轨的线往下多占几点，不撑高卡）；子任务的分段压在线那一格的底边，线最低处也在它上面。
