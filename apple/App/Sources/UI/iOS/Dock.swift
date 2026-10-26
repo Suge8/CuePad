@@ -14,7 +14,6 @@ struct DockRoot: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// 根上那一条此刻在哪（`PagerController` 写）。
     @State private var motion = PagerMotion()
-    @State private var width: CGFloat = 0
     /// 推入的页离开前拍的快照（左滑前进时跟手用）。
     @State private var shot = LeaveShot()
 
@@ -35,16 +34,18 @@ struct DockRoot: View {
                 }
         }
         .overlay {
-            ZStack(alignment: .bottom) {
-                PlacesCatcher(motion: motion, onCue: workspace.top == .cue) { openPlaces(false) }
-                DockBar(
-                    motion: motion, width: max(0, width - Dock.margin * 2),
-                    stays: stays, forwardStays: workspace.forward.map(Dock.stays) ?? true, openPlaces: openPlaces)
-                    .padding(.bottom, Dock.margin).ignoresSafeArea(edges: .bottom)
+            // 底部那一排按窗口的宽在同一遍排版里排，不写回状态：打开时先按 0 宽排一遍，玻璃就多变一次形
+            GeometryReader { proxy in
+                ZStack(alignment: .bottom) {
+                    PlacesCatcher(motion: motion, onCue: workspace.top == .cue) { openPlaces(false) }
+                    DockBar(
+                        motion: motion, width: max(0, proxy.size.width - Dock.margin * 2),
+                        stays: stays, forwardStays: workspace.forward.map(Dock.stays) ?? true, openPlaces: openPlaces)
+                        .padding(.bottom, Dock.margin).ignoresSafeArea(edges: .bottom)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
         }
-        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
         .debugExposesPlaces { openPlaces(true) }
         // 有焦点时"⋯"收起
         .onChange(of: motion.composing) { if motion.composing { openPlaces(false) } }
@@ -104,13 +105,14 @@ extension View {
 
 private struct DockReserve: ViewModifier {
     let shown: Bool
-    /// 安全区底边离屏幕底边多远（键盘弹出时是键盘高）。
-    @State private var safeBottom: CGFloat = 0
 
+    /// 让多少看安全区底边离屏幕底边多远（键盘弹出时是键盘高），在同一遍排版里读：写回状态的话，打开页面、键盘起落时都先按旧的排一遍再挪。
     func body(content: Content) -> some View {
-        content
-            .safeAreaPadding(.bottom, shown ? Dock.reserve(above: safeBottom) : 0)
-            .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.bottom } action: { safeBottom = $0 }
+        if shown {
+            GeometryReader { proxy in content.safeAreaPadding(.bottom, Dock.reserve(above: proxy.safeAreaInsets.bottom)) }
+        } else {
+            content
+        }
     }
 }
 

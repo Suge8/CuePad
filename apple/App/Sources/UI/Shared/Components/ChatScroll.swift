@@ -2,7 +2,8 @@ import SwiftUI
 
 /// 聊天式的滚动区（会话页与 Cue 页、Mac 与 iPhone 共用，经 `ChatColumn`）：打开停在最新，贴着最新时跟着新内容与底下输入框的长高、键盘的弹出，
 /// 用户滚走后这些都不再挪动正在读的内容；离最新处超过一屏时可见区右下角（回复框右上方）浮出圆形"回到最新"，
-/// 离开后来过新内容时带一个点，点它回到最新（`ChatFollow`）。`followKey` 变了就算有新内容。
+/// 离开后来过新内容时带一个点，点它回到最新（`ChatFollow`）。离开最新处之后 `followKey` 变了就算来过新内容（`unseen`）：
+/// 按离开那一刻的它推出来，不在它每变一次时写状态——内容一帧里连着到几条（同步带回积压、Cue 连说几句）时，每变一次都写的话一帧里更新好几遍。
 /// 贴着最新时新内容插进来的那一帧就排在终位（内容变高矮时底锚，`pinned`），从说话那一边的角长出来，不先排在回复框的玻璃后面再滑上来；
 /// 发出一句时回复框让出的地方先留着，那句到了一起收（`bottomPadding`），收起回复框与新的一条出现在同一帧。减弱动态效果下滚动不做动画。
 /// 本机正在和 iCloud 对（`holding`，回到前台、刚打开时拉到的积压一页页地到）时，贴着最新也先不跟：新的长在可见区下面、看着的不动，
@@ -43,6 +44,8 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
     @State var sliding: Task<Void, Never>?
     /// 内容在渲染端的平移（`rise`）。
     @State var lift = ContentLift()
+    /// 离开最新处那一刻的 `followKey`；在最新处为 nil。
+    @State var leftAt: Key?
 
     init(
         followKey: Key, readingWidth: CGFloat, inset: CGFloat, follow: Binding<ChatFollow>, holding: Bool = false, arrival: UUID? = nil,
@@ -91,14 +94,13 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                         let read = geometry.contentOffset.y + geometry.contentInsets.top
                         let distance = max(0, (geometry.contentSize.height - read - geometry.containerSize.height).rounded())
                         let screen = geometry.containerSize.height.rounded()
-                        let end = (geometry.contentSize.height - geometry.containerSize.height).rounded()
-                        offset.set(read: max(0, read.rounded()), end: end)
+                        offset.set(read: max(0, read.rounded()), end: (geometry.contentSize.height - geometry.containerSize.height).rounded(), container: screen)
                         return Reading(
                             nearNewest: distance <= ChatFollow.slack, beyondScreen: distance > screen, nearOldest: read < screen,
-                            height: (geometry.contentSize.height - padding).rounded(), floating: padding, end: end, inset: geometry.contentInsets.top.rounded(),
-                            container: screen)
+                            height: (geometry.contentSize.height - padding).rounded(), floating: padding)
                     } action: { previous, reading in
-                        let last = offset.deliver(reading) ?? previous
+                        let delivered = offset.deliver(reading)
+                        let last = delivered.reading ?? previous
                         let grown = reading.height - last.height
                         // 新到的那一条带来的长高（它插进来的那次排版）：在对、滚走了时它照常长在下面
                         let rising = offset.arrived(arrival) && grown > 0
@@ -132,30 +134,30 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                             byUser: next.scrolling)
                         if next != follow.wrappedValue { follow.wrappedValue = next }
                         guard following else { return }
-                        if holding, !unheld, grown > 0, reading.inset == last.inset {
+                        if holding, !unheld, grown > 0 {
                             deferred = true
                             return
                         }
-                        // 新内容、正在说的话在下面长出来：底锚已在同一次排版里停到新的最新处（`pinned`），不再滑。回复框长高、栏的高度第一次加进内容边距
-                        // （这一下系统把偏移放回顶上），最新处变远了：直接补滚过去。在读数里补（布局定下来之后）。滚动区变矮时读数已报在底、
-                        // 画面与点按却还停在原处（Mac 打开会话时回复框比占位高，最后一行压在回复框下、选不中），所以看最新处远没远，不看在不在底；
+                        // 新内容、正在说的话在下面长出来：底锚已在同一次排版里停到新的最新处（`pinned`），不再滑。
+                        // 贴着最新却离最新处远了（系统挪的：栏的高度第一次加进内容边距时它把偏移放回顶上）、回复框长高了：直接补滚过去。在读数里补（布局定下来之后）。
+                        // 回复框长高不等离远了才补：Mac 打开会话时回复框比占位高，读数已报在底、画面与点按却还停在原处，最后一行压在回复框下、选不中；
                         // 内容或浮着的那块变矮（拍板卡答掉后让出的高一下收起、一格收起）、偏移已越过最新处时也补回去：iOS 的滚动区不一定自己退回来，
                         // 底下空着一截，矮得多时整屏空白。只认变矮：发出一句的那一拍里有一次读数的可见区还没算上两行的输入框，
                         // 按"越过了"补回的话对话先掉下去再滑上来
                         let shrank = grown < 0 || reading.floating < last.floating
-                        if grown > 0, reading.inset == last.inset {
+                        if grown > 0, reading.nearNewest {
                             // 底锚当帧已排在新的最新处（`pinned`），不再滚；新到的那一条把上面的对话撑上去
                             if rising { rise(by: grown) }
-                        } else if Self.followsKeyboard, reading.container < last.container, grown == 0 {
+                        } else if Self.followsKeyboard, delivered.viewShrank, grown == 0 {
                             // 可见区从底下变矮、内容没变：键盘升起来了（系统先把它算进内容边距，键盘才开始升）。整段滑上去，
                             // 对话与键盘、回复框一起走；当下补滚的话整段对话先一下跳到终点，键盘与回复框还在半路
                             slide(reader)
-                        } else if reading.end > last.end || reading.inset != last.inset || (shrank && offset.read > reading.end) {
+                        } else if (!reading.nearNewest && !deferred) || reading.floating > last.floating || (shrank && offset.read > offset.end) {
                             toEnd(reader)
                             settle(reader)
                         }
                     }
-                    .onChange(of: followKey) { follow.wrappedValue.contentChanged() }
+                    .onChange(of: follow.wrappedValue.atNewest) { _, atNewest in leftAt = atNewest ? nil : followKey }
                     .onChange(of: holding) {
                         unheld = false
                         if holding, let sliding {
@@ -181,12 +183,12 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
         }
         .overlay(alignment: .bottomTrailing) {
             if follow.wrappedValue.showsJump {
-                JumpToNewest(unseen: follow.wrappedValue.hasUnseen) { follow.wrappedValue.jumpToNewest() }
+                JumpToNewest(unseen: unseen) { follow.wrappedValue.jumpToNewest() }
                     .padding(.trailing, JumpToNewest.inset).padding(.bottom, JumpToNewest.inset + bottomInset)
                     .transition(.scale(scale: 0.6).combined(with: .opacity))
             }
         }
         .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: follow.wrappedValue.showsJump)
-        .animation(HandOff.quick, value: follow.wrappedValue.hasUnseen)
+        .animation(HandOff.quick, value: unseen)
     }
 }
