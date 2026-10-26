@@ -26,6 +26,13 @@ final class Autosave {
         }
     }
 
+    /// 丢下还没写的（编辑器换成了别处的正文）：之后的 `flush` 不再写它。
+    func discard() {
+        pending = nil
+        timer?.cancel()
+        timer = nil
+    }
+
     func flush() async {
         guard let text = pending else { return }
         pending = nil

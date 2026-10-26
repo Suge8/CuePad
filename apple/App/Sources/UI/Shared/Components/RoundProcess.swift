@@ -152,7 +152,7 @@ struct RoundProcess: View {
         case .read: .readFile
         case .search: .search
         case .said: .said
-        case .other, .talk, .start, .add, .done, .stop, .ask, .leave: .tool
+        case .other, .talk, .start, .add, .done, .stop, .ask, .leave, .schedule: .tool
         }
     }
 }

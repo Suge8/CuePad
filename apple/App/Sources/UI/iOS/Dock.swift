@@ -153,7 +153,7 @@ enum Dock {
     /// 会话页与卡片纸页让开：底边是它们自己的（回复框、整页的纸与键盘），在那里专心说、专心写，同"信息"的对话与"备忘录"的一条。
     static func stays(on route: Route) -> Bool {
         switch route {
-        case .session, .card: false
+        case .session, .card, .libraryItem: false
         default: true
         }
     }

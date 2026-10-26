@@ -43,7 +43,7 @@ extension CueStore {
       """, [time, now, Self.idList(roots)])
   }
 
-  /// 改任务的状态：进行中在叶子上记开始时间（有子任务的记在此刻该做的那一步 `homeLeaf`，上级从子任务推出；已有的保留），完成记完成时间（保留开始时间）并连带没完成的下级任务，回到待办连同没完成的下级清掉开始时间
+  /// 改任务的状态：进行中在叶子上记开始时间（有子任务的记在此刻该做的那一步 `homeLeaf`，上级从子任务推出；已有的保留），完成记完成时间（保留开始时间）并连带没完成的下级任务、不再定时（`endCueSchedules`），回到待办连同没完成的下级清掉开始时间
   /// （做完过的子任务还在时它仍算开始过，见 `TaskStatus`）；
   /// 完成的改成别的先经 `reopen`（连同已完成的上级、取回归档）。
   /// 只往下连带：子任务全做完，上级任务也不自动完成，完成一件事由用户说了算（进度只算子任务，见 `subtaskProgress`）。
@@ -74,6 +74,7 @@ extension CueStore {
         UPDATE cards SET completedAt = ?1, modifiedAt = ?1
         WHERE completedAt IS NULL AND todoAt IS NOT NULL AND id IN (\(Self.subtree(from: "SELECT ?2")))
         """, [now, id])
+      try endCueSchedules(under: id, at: now)
     }
     return try find(Card.self, id)?.status ?? status
   }

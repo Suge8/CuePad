@@ -3,15 +3,17 @@ import CueStore
 import Foundation
 
 /// 写给 Agent 的技能：CuePad 是什么、怎么把文件发到手机、做 HTML 页给手机看的约定（只写在这里），其余让 Agent 看 `--help`（命令行唯一的文档）。
+/// 只写一份，在几家共读的 `~/.agents/skills/cuepad`（Claude Code 另有一个链到它的链接，`AgentIntegration`），正文各家通用。
 /// 正文写 App 里 `cuepad` 的绝对路径，不用先把命令装进 PATH；App 被移动后路径变了，它就成了旧版，启动时重写。
-/// Codex 默认在沙箱里跑命令，资料库在沙箱外，写入要申请。
+/// 末尾的标记行写着为哪几家接入的（`kinds(in:)`）：几家共读一份文件，各家接没接入只记在这里。
 enum AgentSkill {
     static let name = "cuepad"
     static let fileName = "SKILL.md"
-    /// 文件末尾的标记行；用它区分"CuePad 写的"与同名的用户文件
+    /// 标记行的开头；用它区分"CuePad 写的"与同名的用户文件（旧版写在各家目录里的副本也以它开头，只是不带接入的几家）
     static let ownershipMarker = "<!-- 由 CuePad 写入"
+    private static let kindsPrefix = "（接入："
 
-    static func text(for kind: AgentKind, cuepad: URL) -> String {
+    static func text(cuepad: URL, for kinds: Set<AgentKind>) -> String {
         let command = shellQuoted(cuepad.path)
         let lines = [
             "description: 交付能看的成果（截图、录屏、网页、PDF、文稿）给用户验收，或用户提到 CuePad、灵感、任务时用：把文件发到用户手机上的 CuePad，读写其中的灵感与任务。CuePad 是用户记灵感、管任务、指挥 Agent 的 App。",
@@ -27,8 +29,18 @@ enum AgentSkill {
             "- 单个文件、不联网：样式与脚本写进同一个 HTML，图片用 `data:` 地址内联。",
             "",
             "其余命令（灵感、任务、搜索）：`\(command) --help`。",
-        ] + (kind == .codex ? ["资料库在沙箱外：写入的命令（show、add、done、move 等）申请在沙箱外运行。"] : [])
-        return (["---", "name: \(name)"] + lines + ["\(ownershipMarker)，升级时整文件覆盖 -->", ""]).joined(separator: "\n")
+            "在沙箱里跑命令时，资料库在沙箱外：写入的命令（show、add、done、move 等）申请在沙箱外运行。",
+        ]
+        let listed = AgentKind.allCases.filter(kinds.contains).map(\.rawValue).joined(separator: ", ")
+        return (["---", "name: \(name)"] + lines + ["\(ownershipMarker)\(kindsPrefix)\(listed)），升级时整文件覆盖 -->", ""]).joined(separator: "\n")
+    }
+
+    /// 是 CuePad 写的就给出标记行里接入的几家（旧版的副本没有这一段，是空的）；不是为 nil。
+    static func kinds(in text: String) -> Set<AgentKind>? {
+        guard let marker = text.range(of: ownershipMarker) else { return nil }
+        let rest = text[marker.upperBound...]
+        guard rest.hasPrefix(kindsPrefix), let end = rest.firstIndex(of: "）") else { return [] }
+        return Set(rest[rest.index(rest.startIndex, offsetBy: kindsPrefix.count)..<end].split(separator: ", ").compactMap { AgentKind(rawValue: String($0)) })
     }
 
     /// 路径里有空格等字符时 Agent 的 shell 会拆开它。

@@ -9,10 +9,12 @@ extension DebugScene {
         if defaults.bool(forKey: "CuePadSampleCrash") { workspace.services.diagnostics.record([sampleCrash]) }
         #if os(macOS)
         if defaults.string(forKey: "CuePadSeed") == "perf" { await seedIfFresh(store, "大库", PerfLibrary.seed) }
+        await isolateBoundFolders(store)
         #endif
         if defaults.bool(forKey: "CuePadDemo") {
             await seedIfFresh(store, "演示库", DemoLibrary.seed)
             await seedMacAgents(workspace.services)
+            await seedAgentLibrary(workspace.services)
         }
         await seedOneMac(store)
         await presetSync(workspace.services)
@@ -47,6 +49,27 @@ extension DebugScene {
     }
 
     /// 库里只有默认项目（新的隔离库）时写入；读写出错就以失败退出（`abandon`）。
+    #if os(macOS)
+    /// 这台 Mac 上绑在真实主目录下的文件夹搬进演示主目录（`DemoLibrary.demoHome`，在隔离库里），保留主目录下的相对路径：
+    /// 演示与性能库是种子写的，旧版本的种子绑的是真实主目录（`~/Project/cuepad`），库在了就不重写；实例会真去读写绑定的文件夹（技能与说明的扫描、整理与改说明），
+    /// 每次启动都搬一遍，旧库也写不到真实仓库。`-CuePadFolder` 明说要绑的那个照旧（隔离实例里真跑 Cue 派活要它）。
+    private static func isolateBoundFolders(_ store: CueStore) async {
+        // 只在隔离库里搬：用真实库的 Debug 实例绑的就是用户自己的文件夹
+        guard let library = ProcessInfo.processInfo.environment[LibraryLocation.environmentKey],
+              let directories = try? await store.projectDirectories()
+        else { return }
+        let real = FileManager.default.homeDirectoryForCurrentUser.path(percentEncoded: false)
+        let home = DemoLibrary.demoHome, asked = defaults.string(forKey: "CuePadFolder")
+        for (project, path) in directories where path.hasPrefix(real) && !path.hasPrefix(library + "/") && path != asked {
+            do {
+                try await store.setDirectory(home + path.dropFirst(real.count), for: project)
+            } catch {
+                abandon("演示项目的文件夹没搬进隔离库", error)
+            }
+        }
+    }
+    #endif
+
     private static func seedIfFresh(_ store: CueStore, _ what: String, _ seed: (CueStore) async throws -> Void) async {
         do {
             if try await store.projects().allSatisfy(\.isDefault) { try await seed(store) }

@@ -12,6 +12,13 @@ final class IOSEditorHandle {
     var selection: String? { view?.selectedStoredText }
     func insertImage(_ data: Data) { view?.insertImage(data: data) }
     func focus() { view?.becomeFirstResponder() }
+    /// 换掉整篇正文（说明在 Mac 上被改了、你还没动过，编辑页跟上）：光标留在原来的位置附近。
+    func replace(_ text: String) {
+        guard let view else { return }
+        let location = view.selectedRange.location
+        view.storedText = text
+        view.selectedRange = NSRange(location: min(location, (view.text as NSString).length), length: 0)
+    }
 }
 
 /// iOS CueTextView 的 SwiftUI 宿主。正文只在创建时载入一次，之后编辑器是这张卡正文的唯一写者。
@@ -20,8 +27,9 @@ struct IOSEditorHost: UIViewRepresentable {
     let theme: CueEditorTheme
     let handle: IOSEditorHandle
     let onChange: (String) -> Void
-    let onInsertImage: () -> Void
-    let onVariables: () -> Void
+    /// 插图与变量取值；都为 nil 时键盘上方只有"收起键盘"（说明是纯文字，`LibraryItemScreen`）。
+    var onInsertImage: (() -> Void)?
+    var onVariables: (() -> Void)?
     var selectionActions: [CueSelectionAction] = []
     var onError: (any Error) -> Void = { _ in }
     /// 高贴着字、自己不滚（任务气泡：整张纸一起滚）；否则铺满给的地方、在里面滚（纸页）。
@@ -33,7 +41,7 @@ struct IOSEditorHost: UIViewRepresentable {
     func makeUIView(context: Context) -> CueTextView {
         let view = CueTextView(imageStore: services.store.files, theme: theme)
         view.storedText = initialText
-        view.inputAccessoryView = KeyboardBar(textView: view, actions: context.coordinator)
+        view.inputAccessoryView = KeyboardBar(textView: view, actions: context.coordinator, plain: onInsertImage == nil)
         view.accessibilityLabel = String(localized: "正文")
         if fits {
             view.isScrollEnabled = false
@@ -57,8 +65,8 @@ struct IOSEditorHost: UIViewRepresentable {
         view.onChange = onChange
         view.selectionActions = selectionActions
         view.onError = onError
-        context.coordinator.insertImage = onInsertImage
-        context.coordinator.variables = onVariables
+        context.coordinator.insertImage = onInsertImage ?? {}
+        context.coordinator.variables = onVariables ?? {}
         if view.theme.textColor != theme.textColor || view.theme.horizontalInset != theme.horizontalInset || view.theme.title?.color != theme.title?.color {
             view.theme = theme
         }
@@ -78,7 +86,7 @@ final class KeyboardBar: UIToolbar {
         var variables: () -> Void = {}
     }
 
-    init(textView: CueTextView, actions: Actions) {
+    init(textView: CueTextView, actions: Actions, plain: Bool) {
         super.init(frame: CGRect(x: 0, y: 0, width: 0, height: 44))
         func item(_ label: String, _ icon: Icon, _ action: @escaping (CueTextView) -> Void) -> UIBarButtonItem {
             let item = UIBarButtonItem(image: icon.platformImage, primaryAction: UIAction { [weak textView] _ in
@@ -88,9 +96,10 @@ final class KeyboardBar: UIToolbar {
             item.accessibilityLabel = label
             return item
         }
-        items = [
+        items = (plain ? [] : [
             item(String(localized: "插入图片"), .photo) { _ in actions.insertImage() },
             item(String(localized: "变量取值"), .variables) { _ in actions.variables() },
+        ]) + [
             .flexibleSpace(),
             item(String(localized: "收起键盘"), .dismissKeyboard) { $0.resignFirstResponder() },
         ]

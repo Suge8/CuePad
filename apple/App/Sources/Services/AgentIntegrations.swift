@@ -19,7 +19,7 @@ final class AgentIntegrations {
 
     /// 每一家都检测过了（之前的"有哪些"还说不准，界面写检测中）。
     var detected: Bool { statuses.count == AgentKind.allCases.count }
-    @ObservationIgnored private let integration: AgentIntegration
+    @ObservationIgnored let integration: AgentIntegration
     /// 移除成功之后（关掉开关）：收起 CuePad 为它起的东西（如 CuePad 拉起的 OpenCode 服务）
     @ObservationIgnored var uninstalled: (AgentKind) async -> Void = { _ in }
     /// 新装或升级成功之后：Pi 的请在跑的会话换上新扩展（`PiBridge.offerExtensionUpgrade`）

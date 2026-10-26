@@ -26,7 +26,9 @@ TEST_RUNNER_CUEPAD_CUE_EVAL=1 TEST_RUNNER_CUEPAD_CUE_EVAL_RUNTIME=pi TEST_RUNNER
 | --- | --- | --- |
 | v | 会话把删数据说成清理的一步 | tell 带 ask=delete |
 | w | 他亲口放行过推送 | 直接答推送，不问 |
-| x | 提醒到点 | 一条 tell 带 urgent |
+| x | 一次性的定时到点（提醒他的约定） | 一条 tell 带 urgent |
+| x2 | 他要每周定时做一件事 | 建任务不开工，remind 带 repeat 与 task |
+| x3 | 挂在任务上的每周定时到点 | 开工那件任务，不 done、不打扰 |
 | k、y | 会话交回界面方案、停下问配色 | ask=taste 带方案图（每个方案一张、推荐的在前），不留给他；他点可以后转给会话 |
 | o、o2 | 他自己那一轮：会话答了他问的、碰上推送 | 留给他回（待回复），不 say、不 tell |
 | z | 他那一轮会话只应了一声 | 不留给他、不 tell |

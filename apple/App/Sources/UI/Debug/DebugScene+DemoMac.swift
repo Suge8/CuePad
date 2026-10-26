@@ -33,6 +33,7 @@ extension DebugScene {
                 // 与真的 Mac 一样，说出去的话送达后记一条发送记录（任务因此进行中、关联到这个会话）
                 let executor = DeliveryExecutor(store: store, hostID: host, onIssue: { _ in }) { request in
                     try? await Task.sleep(for: .seconds(1))
+                    if let outcome = await DemoAgentLibrary.apply(request, store: store) { return outcome }
                     if let mode = request.mode.known, DeliveryMode.toSession.contains(mode), mode != .answer {
                         _ = try? await store.recordSend(request.content, to: request.target, card: request.cardID, delivery: request.id, origin: request.origin)
                     }

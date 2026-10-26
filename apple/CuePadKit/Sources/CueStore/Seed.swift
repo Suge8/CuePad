@@ -29,9 +29,14 @@ public struct SeedCard: Sendable {
 /// 演示记忆的一条：记下的时刻原样写入，记忆页才有"刚刚""昨天""几月几日"的分布。
 public struct SeedCueLine: Sendable {
   public var text: String, source: CueLineSource, pinned: Bool, createdAt: Date
+  /// 定时（`CueMemoryLine.remindAt` 等）
+  public var remindAt: Date?, repeats: CueRepeat?, task: UUID?
 
-  public init(_ text: String, source: CueLineSource, pinned: Bool = false, createdAt: Date) {
+  public init(
+    _ text: String, source: CueLineSource, pinned: Bool = false, createdAt: Date, remindAt: Date? = nil, repeats: CueRepeat? = nil, task: UUID? = nil
+  ) {
     (self.text, self.source, self.pinned, self.createdAt) = (text, source, pinned, createdAt)
+    (self.remindAt, self.repeats, self.task) = (remindAt, repeats, task)
   }
 }
 
@@ -42,7 +47,8 @@ extension CueStore {
       for line in cueLines {
         try insert(
           CueMemoryLine(
-            id: UUID(), text: line.text, pinned: line.pinned, source: .known(line.source), remindAt: nil, createdAt: line.createdAt,
+            id: UUID(), text: line.text, pinned: line.pinned, source: .known(line.source), remindAt: line.remindAt,
+            repeats: line.repeats, task: line.task, createdAt: line.createdAt,
             modifiedAt: line.createdAt, deletedAt: nil))
       }
     }

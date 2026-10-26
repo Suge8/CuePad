@@ -139,9 +139,10 @@ extension Schema {
     \(answeredIndex)
     \(setAsideIndex)
     \(toDeliverIndex)
+    -- 记忆；有 remindAt 的是定时（repeats 是重复规则，`CueRepeat.rule`；taskID 是挂在哪件任务上）
     CREATE TABLE cueLines (
       id TEXT PRIMARY KEY NOT NULL, text TEXT NOT NULL, pinned INTEGER NOT NULL, source TEXT NOT NULL, remindAt INTEGER,
-      createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL, deletedAt INTEGER
+      createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL, deletedAt INTEGER, repeats TEXT, taskID TEXT
     ) STRICT;
     CREATE INDEX cueLines_order ON cueLines(createdAt, id);
     CREATE INDEX cueLines_remindAt ON cueLines(remindAt) WHERE remindAt IS NOT NULL;
@@ -163,6 +164,7 @@ extension Schema {
     -- 每台 Mac 自己写、各端读：在线记录（Mac 在不在、Cue 在不在值班的唯一信号），能用的 Agent 与各家的模型。
     CREATE TABLE macPresence (id TEXT PRIMARY KEY NOT NULL, hostID TEXT NOT NULL, onlineUntil INTEGER NOT NULL, modifiedAt INTEGER NOT NULL) STRICT;
     CREATE TABLE macAgents (id TEXT PRIMARY KEY NOT NULL, hostID TEXT NOT NULL, agents TEXT, problems TEXT, modifiedAt INTEGER NOT NULL, name TEXT) STRICT;
+    \(agentLibrariesTable)
     -- 每台设备自己写：此刻开着哪个会话、开没开着 Cue 页、他最近一次来到这台的时刻（会话停下时他在不在场的一半；提示到不到他）。
     CREATE TABLE sessionViewers (
       id TEXT PRIMARY KEY NOT NULL, device TEXT NOT NULL, sessionID TEXT, modifiedAt INTEGER NOT NULL, cue INTEGER, arrivedAt INTEGER

@@ -100,12 +100,6 @@ public struct MacAgentProblem: Codable, Equatable, Sendable {
   }
 }
 
-/// 读出时跳过读不出的那条（更新的版本加的 Agent、更早的版本存成中文短语的原因），其余照读。
-private struct Lenient<T: Decodable>: Decodable {
-  let value: T?
-  init(from decoder: any Decoder) throws { value = try? T(from: decoder) }
-}
-
 extension MacAgents: Record {
   static let table = Table.macAgents
   static let columns = ["id", "hostID", "agents", "problems", "modifiedAt", "name"]

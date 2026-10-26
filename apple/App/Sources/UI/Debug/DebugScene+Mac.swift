@@ -8,7 +8,7 @@ extension DebugScene {
         // 窗口在首帧之后才定下尺寸（窗口位置记忆、内容尺寸），这之后再改
         try? await Task.sleep(for: .milliseconds(100))
         resizeWindow()
-        _ = await prepareLibrary(workspace)
+        let opened = await prepareLibrary(workspace)
         let sampleCue = defaults.double(forKey: "CuePadSampleCue")
         if sampleCue > 0 { Task { await askSample(after: .seconds(sampleCue), services: workspace.services) } }
         Task { await SyncBench.run(workspace) }
@@ -22,7 +22,17 @@ extension DebugScene {
             if defaults.bool(forKey: "CuePadDemo") { await seedBusyBoard(workspace.services.store) }
             await seedCanvasSteps(workspace.services.store)
             workspace.show(.progress)
-        case "agentsetup": workspace.showsSetup = true
+        case "agentsetup":
+            // -CuePadConnected YES：几家先都接进隔离目录（同 connected），看接入面板的第二步（技能与说明收到一处）
+            // Cue 在演示的 Mac Studio 上运行（这一台不用再启用），面板里没有要接、要启用的就是第二步；面板打开后自己再检测一遍，等它检测完再拍
+            let connected = defaults.bool(forKey: "CuePadConnected")
+            if connected {
+                await connectAgents(workspace.services)
+                await seedDemo(workspace.services)
+                await workspace.recheckAgents()
+            }
+            workspace.showsSetup = true
+            if connected { try? await Task.sleep(for: .seconds(3)) }
         case "connected":
             await connectAgents(workspace.services)
             await bindFolderIfAsked(workspace.services.store)
@@ -79,6 +89,11 @@ extension DebugScene {
             mainWindow?.orderOut(nil)
         case "trash": workspace.show(.trash)
         case "archive": workspace.show(.archive)
+        case "library", "instruction", "compare":
+            // 技能与说明（配 -CuePadDemo YES 有演示的快照）；instruction 打开全局说明（给了 -CuePadProject 是那个项目的，盖在项目页上），compare 打开各写一份的全局规则
+            if opened == nil || scene != "instruction" { workspace.show(.library) }
+            if scene == "instruction" { workspace.openLibrary(.instruction(opened.map(LibraryInstruction.Kind.project) ?? .global)) }
+            if scene == "compare" { workspace.openLibrary(.compare("global-instructions")) }
         case "editor":
             if let id = await card(in: workspace.currentProject ?? Project.defaultID, store: workspace.services.store),
                let card = try? await workspace.services.store.card(id) { workspace.open(card) }

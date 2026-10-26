@@ -126,6 +126,7 @@ SYMBOLS = {
     "window": window,
     "doc": paper(paper_lines),
     "doc.blank": paper(),
+    "skill": skill,
     "wrench": wrench,
     "bubble.text": bubble("text"),
     "bubble.dots": bubble("dots"),

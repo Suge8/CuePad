@@ -149,9 +149,11 @@ final class AppServices {
     @ObservationIgnored let presence: MacPresenceKeeper
     /// 这台 Mac 上的 Agent 能不能用（同步表 macAgents）的唯一写入口；`start()` 时开始跟着接入状态与唤醒问，Cue 启用前也经它问。
     @ObservationIgnored let macAgents: MacAgentsRecorder
+    /// 这台 Mac 的技能与说明（同步表 agentLibraries）的唯一写入口，整理与改说明也经它。
+    @ObservationIgnored let library: AgentLibraryKeeper
     /// 执行发给这台 Mac 的投送请求（手机发来的与本机界面写的）；`start()` 时启动。
     @ObservationIgnored lazy var executor = MacExecutor(
-        store: store, pi: pi, runtimes: runtimes, hostID: hostID, workspaces: workspaces, recorder: piStateRecorder,
+        store: store, pi: pi, runtimes: runtimes, hostID: hostID, workspaces: workspaces, recorder: piStateRecorder, library: library,
         upload: { [weak self] id in await self?.upload(id) },
         refreshQuota: { [weak self] in try await self?.refreshQuotaForRequest() },
         reportIssue: { [weak self] message in self?.reportIssue(.syncUnavailable(message)) })
@@ -227,6 +229,10 @@ final class AppServices {
         runtimes = mac.runtimes(store)
         agents = mac.agents
         macAgents = MacAgentsRecorder(store: store, sync: self.sync, host: mac.hostID, agents: agents)
+        // 隔离运行时移走的不进系统废纸篓，放在库里
+        let trash = location.touchesRealWorld ? nil : AgentLibraryFiles.trash(into: location.directory.appending(path: "Trash", directoryHint: .isDirectory))
+        library = AgentLibraryKeeper(
+            store: store, sync: self.sync, host: mac.hostID, files: AgentLibraryFiles(integration: agents.integration, trash: trash))
         commandLineTool = mac.commandLineTool
         updates = UpdateService(updater: mac.updater, bridge: mac.pi, runtimes: runtimes)
         historyStore = PiHistoryPersistence(storage: store, host: mac.hostID)

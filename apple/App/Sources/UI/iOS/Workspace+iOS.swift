@@ -18,6 +18,27 @@ extension Workspace {
     /// 灵感的纸页推在当前页上。
     func showEditor(_ card: UUID) { push(.card(card)) }
 
+    /// 技能与说明里的一样（说明的编辑页、比一比）推在技能与说明页上；比一比合成之后打开的说明换掉比一比（返回回到技能与说明页）。
+    func openLibrary(_ item: LibraryItem) {
+        if case .instruction = item, case .libraryItem(.compare)? = path.last {
+            path[path.count - 1] = .libraryItem(item)
+        } else {
+            push(.libraryItem(item))
+        }
+    }
+
+    /// 一份说明在手机上的编辑：改着没发的留在这里，离开说明页再回来接着改、接着发——不点纸飞机就不发，也不丢（App 退出才没了）。
+    /// 再打开时先对上快照里此刻的样子（没改过就跟上，改着的就说 Mac 上改过了）。
+    func instructionDraft(_ instruction: LibraryInstruction) -> InstructionDraft {
+        if let draft = instructionDrafts[instruction.kind] {
+            draft.follow(instruction.text)
+            return draft
+        }
+        let draft = InstructionDraft(instruction, workspace: self)
+        instructionDrafts[instruction.kind] = draft
+        return draft
+    }
+
     /// 先读出这一页：推入的第一帧就是标题与最新的对话（`SessionRoute.seed`），只有记录 id 的入口顺带补上 Pi 的会话 id。
     /// 读不出来时照常推入，由页面报错。
     func sessionRoute(_ id: UUID, sessionID: String?) -> Route? {

@@ -56,6 +56,9 @@ extension AppServices {
         follow(reporting: { .syncUnavailable(String(localized: "这台 Mac 上能用的 Agent 没能写下：\(String(describing: $0))")) }) { [macAgents, wakeNotifications] in
             try await macAgents.keep(notifications: wakeNotifications)
         }
+        follow(reporting: { .syncUnavailable(String(localized: "这台 Mac 的技能与说明没能写下：\(String(describing: $0))")) }) { [library] in
+            try await library.keep()
+        }
         startCue()
         startSync()
         startRelay()

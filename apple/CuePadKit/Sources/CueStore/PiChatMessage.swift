@@ -148,13 +148,13 @@ extension PiChatMessage {
       case edit, command, read, search, other
       /// 中途说的一段话（调工具前后说的"先看看…""测试挂了，查一下"；Cue 用 tell 对你说的）：`target` 是那段话
       case said
-      /// Cue 的动作：对会话说话、开工、建任务、做完、停下会话、问你、把会话留给你回（`CueLeft`）；碰到的那一处在 `Item.name` 等几项上
-      case talk, start, add, done, stop, ask, leave
+      /// Cue 的动作：对会话说话、开工、建任务、做完、停下会话、问你、把会话留给你回（`CueLeft`）、新建定时（`CueMemoryLine`）；碰到的那一处在 `Item.name` 等几项上
+      case talk, start, add, done, stop, ask, leave, schedule
 
       /// 落了结果的一步（改文件与 Cue 的动作）：清单里总列上，标题行逐类写个数。
       public var acts: Bool {
         switch self {
-        case .edit, .talk, .start, .add, .done, .stop, .ask, .leave: true
+        case .edit, .talk, .start, .add, .done, .stop, .ask, .leave, .schedule: true
         case .command, .read, .search, .other, .said: false
         }
       }

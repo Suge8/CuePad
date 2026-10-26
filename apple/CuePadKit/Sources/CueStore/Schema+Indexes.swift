@@ -10,7 +10,7 @@ extension Schema {
     """
   }
 
-  private static func modifiedIndex(_ table: Table) -> String {
+  static func modifiedIndex(_ table: Table) -> String {
     "CREATE INDEX \(table.rawValue)_modified ON \(table.rawValue)(id, modifiedAt);"
   }
   /// 各台 Mac 跑过 Agent 的文件夹（`CueStore.sessionFolders`）：每次会话记录变化都重读，按 (Mac, 文件夹) 聚合只读这几列，

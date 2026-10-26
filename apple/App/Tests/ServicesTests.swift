@@ -94,7 +94,7 @@ struct AgentLineTests {
 }
 
 struct AgentUpgradeTests {
-    /// 装过的不再询问：App 更新后启动检查就把旧版的扩展静默升级到随包版本，缺的技能一起补上。
+    /// 装过的不再询问：App 更新后启动检查就把旧版的扩展静默升级到随包版本，缺的技能一起补上（几家共读的那一份）。
     /// 旧版是单文件扩展（v37 及更早）：装上目录，没有 Pi 会话开着旧扩展就删掉旧文件，扩展目录里只剩一份。
     @Test func 已装旧版扩展时启动检查静默升级到随包版本() async throws {
         let rig = TestApp()
@@ -109,7 +109,8 @@ struct AgentUpgradeTests {
         let entry = rig.piPaths.extensionsDirectory.appending(path: "cuepad-bridge/index.ts")
         #expect(try String(contentsOf: entry, encoding: .utf8) == PiExtensionBundle.entry)
         #expect(!FileManager.default.fileExists(atPath: legacy.path))
-        #expect(FileManager.default.fileExists(atPath: rig.piPaths.agentDirectory.appending(path: "skills/cuepad/SKILL.md").path))
+        let skill = try String(contentsOf: rig.directory.appending(path: "agents/skills/cuepad/SKILL.md"), encoding: .utf8)
+        #expect(AgentSkill.kinds(in: skill) == [.pi])
     }
 
     /// 没装过的不碰：检测完什么都不写，等用户自己接入。

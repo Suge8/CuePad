@@ -98,6 +98,11 @@ final class Workspace {
     var openCard: UUID? {
         didSet { if let openCard { presses.present(openCard) } }
     }
+    /// 技能与说明里打开的一样（说明的编辑页、比一比），盖在当前页上（iOS 推入，见 `openLibrary`）；换页、"收起"、Esc 时清空。
+    var openLibraryItem: LibraryItem?
+    #else
+    /// 手机上改着的说明（`instructionDraft(_:)`）：离开说明页也留着。
+    @ObservationIgnored var instructionDrafts: [LibraryInstruction.Kind: InstructionDraft] = [:]
     #endif
     /// 气泡里看着的任务（`TaskBubble`）：从被点的那一下长出来，盖在当前页上，不换页。两端同一份，各个入口都经 `openTask(_:)`。
     var openTask: TaskBubble.Request? {
@@ -158,6 +163,10 @@ final class Workspace {
     /// 交给了会话的灵感与任务（`AgentLinks`，卡与行上的状态点读它）：整个窗口一份，页面直接读，
     /// 不各自订阅（挂着的页也不会在每次回到前台时重读一遍）。读到和已有的相同不送来（`observe(after:)` 在读取一侧比较），免得页面白算。
     private(set) var agentLinks = AgentLinks(items: [:], launching: [:])
+    /// 技能与说明（`AgentLibrary`：Mac 上是本机的，手机上是 Cue 运行的那台的）：入口的角标、技能与说明页、编辑页与比一比都读这一份；
+    /// 同项目目录当场读（`readLibrary`），第一帧就是库里的样子；没有一台写过为 nil。
+    private(set) var library: AgentLibrary?
+    @ObservationIgnored private var libraryStart: Snapshot<AgentLibrary?>?
 
     private func follow<T: Sendable & Equatable>(
         _ value: ReferenceWritableKeyPath<Workspace, T>, _ read: @escaping @Sendable (isolated CueStore) throws -> T
@@ -186,6 +195,7 @@ final class Workspace {
         sendState = SendState(services: services)
         #endif
         readCatalog()
+        readLibrary()
     }
 
     #if os(macOS)
@@ -238,10 +248,11 @@ final class Workspace {
         async let links: Void = followAgentLinks()
         async let cue: Void = followCue()
         async let opens: Void = openLinks()
+        async let library: Void = followLibrary()
         #if os(macOS)
         await followSessionPlacement()
         #endif
-        _ = await (catalog, links, cue, opens)
+        _ = await (catalog, links, cue, opens, library)
     }
 
     private func followCatalog() async {
@@ -249,6 +260,29 @@ final class Workspace {
     }
 
     private func followAgentLinks() async { await follow(\.agentLinks) { try AgentLinks.read(from: $0) } }
+
+    private func readLibrary() {
+        let host = localHost
+        do {
+            libraryStart = try services.store.snapshot { try $0.agentLibrary(preferring: host) }
+            library = libraryStart?.value ?? nil
+        } catch {
+            fail(error)
+        }
+    }
+
+    /// 从当场读到的那份接着订阅（当场没读出来就从头订阅）。
+    private func followLibrary() async {
+        let host = localHost
+        let read: @Sendable (isolated CueStore) throws -> AgentLibrary? = { try $0.agentLibrary(preferring: host) }
+        guard let start = libraryStart else { return await follow(\.library, read) }
+        do {
+            for try await next in services.store.observe(from: start, read) { library = next }
+        } catch is CancellationError {
+        } catch {
+            fail(error)
+        }
+    }
 
     private func readCatalog() {
         do {
@@ -288,6 +322,7 @@ final class Workspace {
     func retryCatalog() {
         catalogAttempt += 1
         readCatalog()
+        readLibrary()
     }
 
     #if os(macOS)

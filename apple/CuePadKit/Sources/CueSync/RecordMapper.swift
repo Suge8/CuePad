@@ -20,6 +20,7 @@ enum RecordMapper {
     .cueProfile: ["name", "model", "effort"],
     .cueState: ["detail", "step"],
     .macAgents: ["agents", "problems", "name"],
+    .agentLibraries: ["home", "skills", "instructions", "tidies", "selfManaged", "agents"],
   ]
 
   static func table(named recordType: String) -> Table? {

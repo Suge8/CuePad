@@ -75,6 +75,16 @@ extension AppServices {
         uploaded(try await store.requestBind(bind, title: title, on: host))
     }
 
+    /// 请 `host` 那台 Mac 整理技能与说明（`Workspace.tidy`）。
+    func requestTidy(_ orders: [TidyOrder], on host: String) async throws -> DeliveryRequest {
+        uploaded(try await store.requestTidy(orders, on: host))
+    }
+
+    /// 请 `host` 那台 Mac 改一份说明（`Workspace.saveInstruction`）。
+    func requestInstructionEdit(_ edit: InstructionEdit, title: String, on host: String) async throws -> DeliveryRequest {
+        uploaded(try await store.requestInstructionEdit(edit, title: title, on: host))
+    }
+
     /// 请会话所在的 Mac 把这个会话的对话补写进来（7 天前活跃过、还没有对话的会话打开时调用）。
     func requestTranscript(of session: PiSessionState) async throws -> DeliveryRequest {
         uploaded(try await store.requestTranscript(of: session))

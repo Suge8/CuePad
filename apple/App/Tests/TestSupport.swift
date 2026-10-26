@@ -111,7 +111,13 @@ final class TestApp {
     private let cue: CueDependencies?
     /// 自动更新器；默认没有（同隔离模式）。
     private let updater: (any AppUpdater)?
-    init(sync source: AppServices.SyncSource? = nil, cue: CueDependencies? = nil, updater: (any AppUpdater)? = nil, timing: Timing = .system) {
+    /// 这台的标识：两台设备连同一个云替身时，另一台给别的（演手机：它看的是那台 Mac 写下的，经投送请求让那台做）。
+    let hostID: String
+    init(
+        sync source: AppServices.SyncSource? = nil, cue: CueDependencies? = nil, updater: (any AppUpdater)? = nil, timing: Timing = .system,
+        host: String = TestApp.hostID
+    ) {
+        hostID = host
         syncSource = source
         self.timing = timing
         self.cue = cue
@@ -211,9 +217,9 @@ final class TestApp {
         let integration = agentIntegration
         let hooks = try #require(integration.hooks(.codex) as? CodexHooks).hooks
         let command = integration.hookCommand(.codex)
-        let skill = integration.skillFile(.codex)
+        let skill = integration.skillFile
         try FileManager.default.createDirectory(at: skill.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try AgentSkill.text(for: .codex, cuepad: helper).write(to: skill, atomically: true, encoding: .utf8)
+        try AgentSkill.text(cuepad: helper, for: [.codex]).write(to: skill, atomically: true, encoding: .utf8)
         try hooks.install(command: command)
         let path = hooks.file.realPath.path
         let trust = try hooks.ourGroups(in: JSONSourceTree(Data(contentsOf: hooks.file))).map { group in
@@ -269,7 +275,8 @@ final class TestApp {
     /// 其余 Agent 的配置目录也在临时目录里，按它们自己认的环境变量给。
     var agentHomes: [String: String] {
         ["CLAUDE_CONFIG_DIR": directory.appending(path: "claude").path, "CODEX_HOME": directory.appending(path: "codex").path,
-         "OPENCODE_CONFIG_DIR": directory.appending(path: "opencode").path, "XDG_STATE_HOME": directory.appending(path: "state").path]
+         "OPENCODE_CONFIG_DIR": directory.appending(path: "opencode").path, "XDG_STATE_HOME": directory.appending(path: "state").path,
+         "CUEPAD_AGENTS_DIR": directory.appending(path: "agents").path]
     }
 
     private func makeServices() -> AppServices {
@@ -279,7 +286,7 @@ final class TestApp {
             paths: AgentPaths(pi: piPaths, environment: agentHomes),
             agents: AgentIntegrations(agentIntegration),
             terminal: PiTerminalJumper(),
-            hostID: Self.hostID,
+            hostID: hostID,
             workspaces: workspaces,
             wakeNotifications: wakeCenter,
             timing: timing,

@@ -229,6 +229,8 @@ DEFINE SCHEMA
         createdAt     INT64,
         modifiedAt    INT64,
         deletedAt     INT64,
+        repeats       STRING,
+        taskID        STRING,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"
     );
@@ -295,6 +297,20 @@ DEFINE SCHEMA
         modifiedAt    INT64,
         cue           INT64,
         arrivedAt     INT64,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud"
+    );
+
+    RECORD TYPE agentLibraries (
+        "___recordID" REFERENCE QUERYABLE,
+        hostID        STRING,
+        home          ENCRYPTED STRING,
+        skills        ENCRYPTED STRING,
+        instructions  ENCRYPTED STRING,
+        tidies        ENCRYPTED STRING,
+        selfManaged   ENCRYPTED STRING,
+        agents        ENCRYPTED STRING,
+        modifiedAt    INT64,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"
     );

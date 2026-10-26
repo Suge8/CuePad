@@ -1,4 +1,5 @@
 #if os(macOS)
+import AppKit
 import CueStore
 import Foundation
 
@@ -17,6 +18,7 @@ extension Workspace {
     /// 去项目页记下它（下次打开回到它）。
     func willSelect(_ route: Route, root next: Route) {
         openCard = nil
+        openLibraryItem = nil
         presses.clearSelection()
         presses.dismiss()
         pages.visit(from: root, to: next)
@@ -28,6 +30,22 @@ extension Workspace {
     func showEditor(_ card: UUID) {
         presses.clearSelection()
         openCard = card
+    }
+
+    /// 技能与说明里的一样（说明的编辑页、比一比）盖在当前页上（`LibraryItemLayer`），同灵感的编辑页。
+    func openLibrary(_ item: LibraryItem) {
+        presses.clearSelection()
+        openLibraryItem = item
+    }
+
+    /// 格式不对的技能：用默认的编辑器打开它的 SKILL.md，自己改（改好了重扫就不在要整理里了）。
+    func openSkillFile(_ directory: String) {
+        NSWorkspace.shared.open(URL(filePath: directory).appending(path: "SKILL.md"))
+    }
+
+    /// 技能那一行：在访达里显示它的目录。
+    func revealSkill(_ directory: String) {
+        NSWorkspace.shared.activateFileViewerSelecting([URL(filePath: directory, directoryHint: .isDirectory)])
     }
 
     /// 会话页按 Pi 的会话 id 认（桥上的在线会话）：只有记录 id 的入口（通知）从记录里取；记录已经没了（会话删了）就不去。
