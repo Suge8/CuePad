@@ -289,6 +289,12 @@
         }
       }
     },
+    "MacBook Pro" : {
+      "localizations" : {
+
+      },
+      "shouldTranslate" : false
+    },
     "README 截图换完了吗？" : {
       "localizations" : {
         "en" : {

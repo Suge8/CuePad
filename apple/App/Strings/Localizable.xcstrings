@@ -4459,6 +4459,22 @@
         }
       }
     },
+    "两台登同一个 iCloud" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sign In to the Same iCloud on Both"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "两台登同一个 iCloud"
+          }
+        }
+      }
+    },
     "中" : {
       "localizations" : {
         "en" : {
@@ -6639,6 +6655,22 @@
         }
       }
     },
+    "卡在这一步" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stuck here"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "卡在这一步"
+          }
+        }
+      }
+    },
     "历史" : {
       "localizations" : {
         "en" : {
@@ -8115,6 +8147,54 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "在 %@ 里输入 /login"
+          }
+        }
+      }
+    },
+    "在 Mac 上接入 Agent" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connect Agents on Your Mac"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在 Mac 上接入 Agent"
+          }
+        }
+      }
+    },
+    "在 Mac 上装 CuePad" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Install CuePad on Your Mac"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在 Mac 上装 CuePad"
+          }
+        }
+      }
+    },
+    "在 Mac 的 CuePad 里接入 %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In CuePad on your Mac, connect %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在 Mac 的 CuePad 里接入 %@"
           }
         }
       }
@@ -10787,18 +10867,18 @@
         }
       }
     },
-    "我在你的 Mac 上干活。在 Mac 上打开 CuePad 就能叫我，这之前想到的先在下面记下" : {
+    "我在你的 Mac 上干活，接上 Mac 就能叫我" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "I work on your Mac. Open CuePad on a Mac to get me going. Until then, jot down ideas below."
+            "value" : "I work on your Mac. Connect a Mac and you can call me."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "我在你的 Mac 上干活。在 Mac 上打开 CuePad 就能叫我，这之前想到的先在下面记下"
+            "value" : "我在你的 Mac 上干活，接上 Mac 就能叫我"
           }
         }
       }
@@ -10895,6 +10975,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "手机上只能从 Mac 上跑过 Agent 的文件夹里选；别的文件夹请在 Mac 上绑定。"
+          }
+        }
+      }
+    },
+    "手机记事、拍板，Agent 在 Mac 上干活" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your phone captures and decides; agents work on your Mac"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "手机记事、拍板，Agent 在 Mac 上干活"
           }
         }
       }
@@ -14255,6 +14351,22 @@
         }
       }
     },
+    "没有 Mac 也能先用：记灵感、建任务，Mac 接上后接着做" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No Mac yet? Save ideas and tasks now; they pick up once a Mac connects."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没有 Mac 也能先用：记灵感、建任务，Mac 接上后接着做"
+          }
+        }
+      }
+    },
     "没有 tty 信息，无法定位标签页" : {
       "localizations" : {
         "en" : {
@@ -15371,6 +15483,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "留给你"
+          }
+        }
+      }
+    },
+    "登好后 Mac 会出现在这里" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Once both are signed in, your Mac shows up here"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "登好后 Mac 会出现在这里"
           }
         }
       }
