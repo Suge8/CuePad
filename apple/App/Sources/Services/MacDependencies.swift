@@ -75,7 +75,7 @@ struct MacDependencies {
             workspaces: Workspaces.resolve(isolatedLibrary: isolated ? location.directory : nil),
             wakeNotifications: NSWorkspace.shared.notificationCenter,
             commandLineTool: commandLineTool,
-            updater: LibraryLocation.isReleaseSigned ? SparkleUpdater() : DebugHooks.updater,
+            updater: AppIdentity.isRelease ? SparkleUpdater() : DebugHooks.updater,
             hooks: hooks,
             runtimes: { store in [
                 .pi: PiRuntime(bridge: pi, paths: paths.pi, pi: { await agents.executable(.pi) }),

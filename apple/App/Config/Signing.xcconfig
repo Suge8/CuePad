@@ -16,6 +16,10 @@ DEVELOPMENT_TEAM =
 // 发布脚本打包前核对它活着（_signing.sh 的 check_relay）。房间由各自 iCloud 里的密钥派生，fork 用这台也与别人互不相干；换成自己架的就改这一行。
 CUEPAD_RELAY_HOST = relay.cue-pad.com
 
+// 正式版标记（唯一定义）：release-mac.sh 归档时传 YES，经 macOS Info.plist 的 CuePadRelease 给运行期读（CuePadKit 的 AppIdentity.isRelease）；
+// 本机构建、perf 的 Release 构建与测试都是 NO。Mac 上只有带它的包开真实资料库、带自动更新。
+CUEPAD_RELEASE = NO
+
 // 推送环境（只有 iOS 要推送，Mac 不收推送）：Debug 用 development，Release（描述文件是 production）在工程里覆盖为 production。
 APS_ENVIRONMENT = development
 
