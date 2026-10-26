@@ -3,7 +3,7 @@ import SwiftUI
 
 /// 常驻循环动效的唯一宿主：Agent 在跑的心电线（`heartbeat`）、话在路上的纸飞机（`flight`）、等你确认的外扩波纹（`ripple`）、
 /// 等待的转圈（`orbit`，经 `Spinner`）、换模型与思考强度在路上时的呼吸（`pulse`）、进行中文字与最高思考强度上扫过的光（`sheen`）、
-/// 看板推进中卡下沿那条线在跑的那一截（`wave`，`BoardLine`）。
+/// 看板推进中卡下沿那条线在跑的那一截（`wave`，`BoardLine`）、等子代理交回的两颗点（`relay`）与 Cue 小人的帧序列（`sprite`，动作表在 `CueSprite`）。
 /// 用 Core Animation 而不是 SwiftUI 的 repeatForever 或符号动效：后两者每帧都在 App 进程里重算，
 /// 列表里有几个在工作的会话时，静止不动也要占约 9% CPU；CA 的动画交给渲染服务，App 进程不参与，离屏不画。
 /// 放不放只看 `LoopsPlay`，不放时调用方换静止的样子。
@@ -25,10 +25,16 @@ struct LoopLayer {
         case pulse
         /// 看板线在跑的那一截（`WaveStrip`）：一条预先画好的周期线整条匀速横移一个周期，或子代理轨上的短划往前跑；渲染服务只挪层、动虚线相位。
         case wave(WaveStrip)
+        /// 等子代理交回：一大一小两颗点，小的回来贴住大点，`RelayMark.period` 一趟（`LoopLayer+Cue`）。
+        case relay
+        /// 小人的帧序列与整只的动作（`CueSprite`，`LoopLayer+Cue`）。
+        case sprite(CueSprite, CueAtlas.Sheet)
     }
 
     let kind: Kind
     let color: Color
+    /// 帧序列的 `intro` 放不放：只在换成这一拍的那一下（`JellyPhase.entering`）放，层重建（切页回来、省电关了又开）不放。
+    var intro = false
 
     final class Host: LoopHostBase {
         private(set) var kind: Kind?
@@ -53,6 +59,9 @@ struct LoopLayer {
             wantsLayer = true
         }
 
+        /// 层的坐标与 iOS 一样 y 朝下：路径、位移、转角两端同一套，不再各处分平台翻（`contents` 的位图不随之颠倒）。
+        override var isFlipped: Bool { true }
+
         override func layout() {
             super.layout()
             layoutLoop()
@@ -66,11 +75,13 @@ struct LoopLayer {
 
         required init?(coder: NSCoder) { fatalError() }
 
-        func show(_ kind: Kind, color: CGColor?) {
+        func show(_ kind: Kind, color: CGColor?, intro: Bool) {
+            // 调用方每帧重算时（软糖放着，`JellyFrame`）值没变不碰图层
+            guard kind != self.kind || color != self.color else { return }
             if kind != self.kind {
                 self.kind = kind
                 root.sublayers?.forEach { $0.removeFromSuperlayer() }
-                root.addSublayer(Self.make(kind))
+                root.addSublayer(Self.make(kind, intro: intro))
             }
             self.color = color
             layoutLoop()
@@ -123,6 +134,10 @@ struct LoopLayer {
                 loop.backgroundColor = color
             case .wave(let wave):
                 wave.layout(loop, in: bounds, color: color)
+            case .relay:
+                Self.layoutRelay(loop, in: bounds, color: color)
+            case .sprite:
+                Self.layoutSprite(loop, in: bounds)
             case .sheen:
                 let band = bounds.width * 0.5
                 loop.bounds = CGRect(x: 0, y: 0, width: band, height: bounds.height)
@@ -136,7 +151,7 @@ struct LoopLayer {
             CATransaction.commit()
         }
 
-        private static func make(_ kind: Kind) -> CALayer {
+        private static func make(_ kind: Kind, intro: Bool) -> CALayer {
             switch kind {
             case .orbit:
                 let layer = CALayer()
@@ -201,6 +216,10 @@ struct LoopLayer {
                 fade.autoreverses = true
                 fade.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
                 return loop(fade, on: layer)
+            case .relay:
+                return makeRelay()
+            case .sprite(let sprite, let sheet):
+                return makeSprite(sprite, on: sheet, intro: intro)
             case .wave(let wave):
                 let layer = wave.make()
                 for (animation, target) in wave.loops(in: layer) { _ = loop(animation, on: target) }
@@ -229,18 +248,11 @@ struct LoopLayer {
         }
 
         /// 形状类动效每一层的路径（心电线、波纹，都是描边），画在边长 `side` 的正方形里（设计稿是 22 × 22、y 朝下的格子）。
-        /// macOS 的层 y 朝上，统一翻过来，否则箭头朝下、心电线上下颠倒。
         private static func strokes(_ kind: Kind, side: CGFloat) -> [CGPath] {
             let unit = side / 22
             func path(_ points: [CGPoint]) -> CGPath {
                 let path = CGMutablePath()
-                path.addLines(between: points.map { point in
-                    #if os(macOS)
-                    CGPoint(x: point.x * unit, y: (22 - point.y) * unit)
-                    #else
-                    CGPoint(x: point.x * unit, y: point.y * unit)
-                    #endif
-                })
+                path.addLines(between: points.map { CGPoint(x: $0.x * unit, y: $0.y * unit) })
                 return path
             }
             switch kind {
@@ -256,11 +268,16 @@ struct LoopLayer {
             }
         }
 
-        private static func loop(_ animation: CAAnimation, on layer: CALayer) -> CALayer {
+        /// 挂一条常驻循环：退到后台再回来时不被系统摘掉；最高 `Motion.Beat.frameRate` 帧；起点按全局时钟对齐到周期的整数倍，
+        /// 同屏同一种循环（两只头像的眨眼、一列心电线）同相——各从自己建出来那一刻起跳的话，两只头像各眨各的，读成两个角色。
+        static func loop(_ animation: CAAnimation, on layer: CALayer, key: String = "loop") -> CALayer {
             animation.repeatCount = .infinity
-            // 退到后台再回来时不被系统摘掉
             animation.isRemovedOnCompletion = false
-            layer.add(animation, forKey: "loop")
+            animation.preferredFrameRateRange = CAFrameRateRange(minimum: 10, maximum: Motion.Beat.frameRate, preferred: Motion.Beat.frameRate)
+            let now = CACurrentMediaTime()
+            let period = animation.duration * (animation.autoreverses ? 2 : 1)
+            animation.beginTime = layer.convertTime(now, from: nil) - now.truncatingRemainder(dividingBy: period)
+            layer.add(animation, forKey: key)
             return layer
         }
     }
@@ -270,13 +287,13 @@ struct LoopLayer {
 typealias LoopHostBase = UIView
 extension LoopLayer: UIViewRepresentable {
     func makeUIView(context: Context) -> Host { Host(frame: .zero) }
-    func updateUIView(_ host: Host, context: Context) { host.show(kind, color: color.resolve(in: context.environment).cgColor) }
+    func updateUIView(_ host: Host, context: Context) { host.show(kind, color: color.resolve(in: context.environment).cgColor, intro: intro) }
 }
 #else
 typealias LoopHostBase = NSView
 extension LoopLayer: NSViewRepresentable {
     func makeNSView(context: Context) -> Host { Host(frame: .zero) }
-    func updateNSView(_ host: Host, context: Context) { host.show(kind, color: color.resolve(in: context.environment).cgColor) }
+    func updateNSView(_ host: Host, context: Context) { host.show(kind, color: color.resolve(in: context.environment).cgColor, intro: intro) }
 }
 #endif
 

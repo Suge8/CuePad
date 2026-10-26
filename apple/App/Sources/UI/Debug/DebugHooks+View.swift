@@ -94,10 +94,13 @@ extension View {
     }
 
     #if os(macOS)
-    /// 主窗口根上：按启动参数摆好调试画面、挂上自检用的布局环，摆好后报"首帧就绪"（`xc.sh shot` 等它再截图）。
+    /// 主窗口根上：按启动参数摆好调试画面（状态图形总览盖在最上层）、挂上自检用的布局环，摆好后报"首帧就绪"（`xc.sh shot` 等它再截图）。
     func debugScene(_ workspace: Workspace) -> some View {
         #if DEBUG
-        task {
+        overlay {
+            if DebugScene.scene == "stateicons" { StateGlyphSheet().withPalette() }
+        }
+        .task {
             await DebugScene.prepare(workspace)
             await DebugScene.signalReady(workspace.services)
             // 接力与关窗不挂在窗口内容上：关窗时内容摘下（`MainShellWindow`），内容上的任务跟着停
@@ -132,6 +135,7 @@ extension View {
                 switch DebugScene.scene {
                 case "style": StyleBoard()
                 case "icons": IconSheet()
+                case "stateicons": StateGlyphSheet()
                 case "widgets": DebugWidgetStage()
                 case "activity": DebugActivityStage(workspace: workspace)
                 case "share": DebugShareStage(location: workspace.services.location)

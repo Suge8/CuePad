@@ -18,9 +18,9 @@ struct TaskRingView: View {
     private var finished: Bool { done || status == .done }
 
     var body: some View {
-        Jelly(value: finished, move: { old, new in !old && new ? .pop : nil }) { finished, leaving in
-            if finished || leaving {
-                Image(leaving ? .donePending : .done)
+        Jelly(value: finished, look: { $0 }, move: { old, new in !old && new ? .pop : nil }) { finished, phase in
+            if finished || phase == .leaving {
+                Image(phase == .leaving ? .donePending : .done)
                     .font(.system(size: size))
                     .foregroundStyle(TaskGlyph.tint(.done, palette))
             } else if let steps, steps.total >= 2 {

@@ -25,6 +25,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         terminationSources = TerminationSignal.install()
         MainMenu.install()
         FirstClick.install()
+        CueAtlas.shared.load()
         launch()
     }
 

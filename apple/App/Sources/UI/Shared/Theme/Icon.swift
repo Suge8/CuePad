@@ -16,7 +16,7 @@ import AppKit
 /// - 反白符号（`filled`）不按层着色，调用方给两种颜色时按层上色。
 nonisolated enum Icon: Hashable, Sendable {
     // 导航与页面入口
-    case cue, cueAsleep, cueLooking, cueHappy
+    case cue
     case idea, task, session, search, settings, archive, trash, sidebar
     case agent, all, filter, extensionNote
     /// 技能与说明（侧栏底下那颗、Cue 面板那一行）；说明（AGENTS.md）一份
@@ -36,7 +36,7 @@ nonisolated enum Icon: Hashable, Sendable {
     case declined, mac, yourAnswer, above, floated, earlier
     case photo, photoLibrary, camera, pickCards, expandEdit, selectText, dismissKeyboard, variables
     case terminal, terminalWindow, readFile, editFile, pondering, tool, said, started, added, branch, markUnread, fireCode, thinking
-    case subagent
+    case relay, relayStalled
     // Cue 与设置
     case memory, wakeEnabled, wakeMessage, wakeActivity, wakeIdle, schedule, looked, mail
     case name, hotkey, talkToCue, appearance, updates, launchAtLogin
@@ -56,12 +56,10 @@ nonisolated enum Icon: Hashable, Sendable {
     private var source: Source {
         switch self {
         case .cue: .ink("mascot")
-        case .cueAsleep: .ink("mascot.sleep")
-        case .cueLooking: .ink("mascot.look")
-        case .cueHappy: .ink("mascot.happy")
         case .idea: .ink("idea")
         case .task: .ink("task")
-        case .session: .ink("session")
+        // 思考中（Cue 页那一行）用在跑的心电线静止形：在跑与歇着（省略号）从此不共用图形
+        case .session, .pondering: .ink("session")
         case .search: .ink("search")
         case .settings: .ink("settings")
         case .archive: .ink("archive")
@@ -70,7 +68,7 @@ nonisolated enum Icon: Hashable, Sendable {
         case .add: .ink("plus")
         case .close, .remove: .ink("close")
         case .clear: .ink("clear")
-        case .more, .pondering: .ink("more")
+        case .more: .ink("more")
         case .forward: .ink("chevron.right")
         case .back: .ink("chevron.left")
         case .expand: .ink("chevron.down")
@@ -161,7 +159,8 @@ nonisolated enum Icon: Hashable, Sendable {
         case .markUnread, .awaitsReply: .ink("dot")
         case .fireCode: .ink("flame")
         case .thinking: .ink("bubble.dots")
-        case .subagent: .ink("person")
+        case .relay: .ink("relay")
+        case .relayStalled: .ink("relay.stalled")
         case .memory: .ink("bookmark")
         case .wakeEnabled, .launchAtLogin: .ink("power")
         case .wakeActivity: .ink("bolt")
@@ -185,16 +184,6 @@ nonisolated enum Icon: Hashable, Sendable {
 
     /// 有点睛层、按上面的着色规则画的墨块符号（反白符号不是）。
     var isInk: Bool { if case .ink = source { true } else { false } }
-
-    /// Cue 此刻的表情用哪个符号（标签图标；头像是位图，见 `CueAvatar`）：睡着闭眼、在做事看向一边、刚做完开心，其余醒着。
-    static func cue(_ mood: CueMood) -> Icon {
-        switch mood {
-        case .sleeping: .cueAsleep
-        case .thinking: .cueLooking
-        case .done: .cueHappy
-        case .waiting, .listening: .cue
-        }
-    }
 
     #if os(iOS)
     /// UIKit 的菜单与工具条用。
@@ -298,20 +287,6 @@ struct IconImage: View {
         case .lit: palette.signature
         case .state(let color): color
         }
-    }
-}
-
-/// Cue 的标签图标（iPad 工具栏的 Cue 面板钮）：表情跟着 `CueMood`（`Icon.cue(_:)`），被叫醒、做完时软糖地弹一下、在最低点换表情（`Jelly`）。
-/// 点睛（折角）：有等你时赭黄；选中、话在路上或在做事时靛青。
-struct CueMark: View {
-    var selected = false
-    @Environment(Workspace.self) private var workspace
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        let cue = workspace.cue
-        let accent: IconImage.Accent = cue.now.needsYou > 0 ? .state(palette.waiting) : selected || cue.now.isBusy ? .lit : .none
-        Jelly(value: cue.now.mood, move: JellyMove.cue) { mood, _ in IconImage(.cue(mood), accent: accent) }
     }
 }
 

@@ -229,12 +229,3 @@ def eye(m):
     o, p = (0, 0), 2.6 + 0.5 * g
     return [Layer("eye", [almond, disc(o, p + c + 1.6, hole=True)]), Layer("pupil", [disc(o, p)], "secondary")]
 
-
-def person(m):
-    """子代理：一个人——圆头，下面是圆肩的半身，之间一条刻缝。"""
-    g, c = GROW[m], CARVE[m]
-    o, r = (0, -5.4), 5.0
-    head = disc(o, r + g)
-    top = o[1] + r + g + c + g
-    body = grown([(-10.0, 11.0), (-10.0, top + 5.6), (-5.0, top), (5.0, top), (10.0, top + 5.6), (10.0, 11.0)], [1.4, 4.6, 3.0, 3.0, 4.6, 1.4], g)
-    return [Layer("person", [head, body])]

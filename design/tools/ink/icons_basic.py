@@ -4,35 +4,28 @@ from __future__ import annotations
 from .geometry import *
 
 # ---------- 图标：每个函数（母版名）→ [Layer]，第一层是墨，第二层（有的话）是点睛 ----------
-def mascot(eyes="open"):
-    """Cue：纸身体（右上让出折角的槽）、斜着的腰环（前半圈压在身体上，把身体切成上下两块）、折角是点睛。
-    四种眼睛用同一种笔画（三点、两段、同向微折）挖出来，结构一致：竖胶囊（醒）、往右挪的竖胶囊（看向一边）、横缝（睡）、^（开心）。"""
-    def build(m):
-        g, c = GROW[m], CARVE[m]
-        x0, x1, y0, y1, r, e = -8.0 - g, 8.0 + g, -11.2 - g, 10.6 + g, 4.4 + g, 4.1 + g * 0.5
-        body = rpoly([(x0, y0), (x1 - e - c, y0), (x1 - e - c, y0 + e + c), (x1, y0 + e + c), (x1, y1), (x0, y1)],
-                     [r, 0.5 + g * 0.5, 0, 0.5 + g * 0.5, r, r])
-        # 腰环是一个剪切过的椭圆：前半圈压在身体上，两头绕到身体两侧外面再往身后收，在离身体一条刻缝处收住
-        t = 3.0 + 1.0 * g
-        A, B, cy, sh = 11.4 + g, 3.4, 2.6, -0.2
-        def E(th): return mul((A * math.cos(th), cy + B * math.sin(th) + sh * A * math.cos(th)), G)
-        front = [E(math.pi - math.pi * k / 120) for k in range(121)]
-        upper = clip(body, Along(front, t * G / 2 + c * G, 1))
-        lower = clip(body, Along(front, -(t * G / 2 + c * G), -1))
-        edge = (8.0 + g + c + t / 2) / A
-        th0, th1 = math.pi + math.acos(edge), 2 * math.pi - math.acos(edge)
-        ring = thick([E(th0 - (th0 - (th1 - 2 * math.pi)) * k / 160) for k in range(161)], t * G, 10)
-        ex, ey = 3.0, -1.8
-        erx, ery = 1.5 - g * 0.15, 2.4 - g * 0.15
-        def eye(x, y, kind):
-            if kind == "pill": return bar([(x + 0.03, y - ery + erx), (x, y), (x + 0.03, y + ery - erx)], 2 * erx)
-            if kind == "shut": return bar([(x - 1.5, y + 1.0), (x, y + 1.05), (x + 1.5, y + 1.0)], 1.45 - g * 0.15)
-            return bar([(x + 1.6, y + 1.0), (x, y - 0.5), (x - 1.6, y + 1.0)], 1.5 - g * 0.15)
-        kind, dx = {"open": ("pill", 0), "look": ("pill", 1.4), "sleep": ("shut", 0), "happy": ("smile", 0)}[eyes]
-        face = holed([eye(-ex + dx, ey, kind), eye(ex + dx, ey, kind)])
-        ear = rpoly([(x1 - e, y0), (x1, y0 + e), (x1 - e, y0 + e)], [0.7 + g * 0.4, 0.7 + g * 0.4, 0])
-        return [Layer("body", [upper] + face + [lower]), Layer("ring", [ring]), Layer("ear", [ear], "secondary")]
-    return build
+def mascot(m):
+    """Cue：纸身体（右上让出折角的槽）、斜着的腰环（前半圈压在身体上，把身体切成上下两块）、竖胶囊的两只眼挖出来，折角是点睛。"""
+    g, c = GROW[m], CARVE[m]
+    x0, x1, y0, y1, r, e = -8.0 - g, 8.0 + g, -11.2 - g, 10.6 + g, 4.4 + g, 4.1 + g * 0.5
+    body = rpoly([(x0, y0), (x1 - e - c, y0), (x1 - e - c, y0 + e + c), (x1, y0 + e + c), (x1, y1), (x0, y1)],
+                 [r, 0.5 + g * 0.5, 0, 0.5 + g * 0.5, r, r])
+    # 腰环是一个剪切过的椭圆：前半圈压在身体上，两头绕到身体两侧外面再往身后收，在离身体一条刻缝处收住
+    t = 3.0 + 1.0 * g
+    A, B, cy, sh = 11.4 + g, 3.4, 2.6, -0.2
+    def E(th): return mul((A * math.cos(th), cy + B * math.sin(th) + sh * A * math.cos(th)), G)
+    front = [E(math.pi - math.pi * k / 120) for k in range(121)]
+    upper = clip(body, Along(front, t * G / 2 + c * G, 1))
+    lower = clip(body, Along(front, -(t * G / 2 + c * G), -1))
+    edge = (8.0 + g + c + t / 2) / A
+    th0, th1 = math.pi + math.acos(edge), 2 * math.pi - math.acos(edge)
+    ring = thick([E(th0 - (th0 - (th1 - 2 * math.pi)) * k / 160) for k in range(161)], t * G, 10)
+    ex, ey = 3.0, -1.8
+    erx, ery = 1.5 - g * 0.15, 2.4 - g * 0.15
+    def eye(x): return bar([(x + 0.03, ey - ery + erx), (x, ey), (x + 0.03, ey + ery - erx)], 2 * erx)
+    face = holed([eye(-ex), eye(ex)])
+    ear = rpoly([(x1 - e, y0), (x1, y0 + e), (x1 - e, y0 + e)], [0.7 + g * 0.4, 0.7 + g * 0.4, 0])
+    return [Layer("body", [upper] + face + [lower]), Layer("ring", [ring]), Layer("ear", [ear], "secondary")]
 
 
 def idea(m):

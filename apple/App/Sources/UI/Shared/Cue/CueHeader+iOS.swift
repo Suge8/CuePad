@@ -60,7 +60,7 @@ private struct CuePlate: View {
         let side = card ? full : CueHeader.face
         PlateLayout(progress: card ? 1 : 0) {
             // 头像只按名片那一档画一次，收着时整体缩小：开合时连续地长大，点与表情不换档
-            CueAvatar(cue.now, mood: cue.mood(composing: !cue.draft.isEmpty(accepting: .images)), size: .card)
+            CueAvatar(cue.beat, size: .card)
                 .scaleEffect(side / full)
                 .frame(width: side, height: side)
                 .relaySpot(cue: .header)

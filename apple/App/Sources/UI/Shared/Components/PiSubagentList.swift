@@ -26,23 +26,27 @@ struct PiSubagentList: View {
 
     private func header(_ summary: PiSubagentSummary) -> some View {
         Button { expanded.toggle() } label: {
-            NoteLine(open: expanded) {
+            NoteLine {
                 if summary.running > 0 {
                     PiStateDot(shown: PiShown(status: .working(.delegating)), size: 6)
                 } else {
                     Image(.branch).imageScale(.small)
                 }
             } label: {
-                Text(summary.lead).fontWeight(summary.running > 0 ? .medium : .regular)
-                    .foregroundStyle(summary.running > 0 ? palette.ink : palette.ink3).monospacedDigit()
-                if let tail = summary.tail {
-                    Dot()
-                    Text(tail).foregroundStyle(palette.ink3).monospacedDigit()
+                HStack(alignment: .firstTextBaseline, spacing: Note.spacing) {
+                    Text(summary.lead).fontWeight(summary.running > 0 ? .medium : .regular)
+                        .foregroundStyle(summary.running > 0 ? palette.ink : palette.ink3).monospacedDigit().rollingCount(summary.running > 0 ? summary.running : summary.total)
+                    if let tail = summary.tail {
+                        Dot()
+                        Text(tail).foregroundStyle(palette.ink3).monospacedDigit().rollingCount(summary.total)
+                    }
+                    if let failure = summary.failure {
+                        Dot().foregroundStyle(palette.failure)
+                        Text(failure).foregroundStyle(palette.failure).monospacedDigit().rollingCount(summary.failed)
+                    }
+                    DisclosureChevron(open: expanded)
                 }
-                if let failure = summary.failure {
-                    Dot().foregroundStyle(palette.failure)
-                    Text(failure).foregroundStyle(palette.failure).monospacedDigit()
-                }
+                .handOff(id: [summary.running > 0 ? "running" : "total", summary.tail == nil ? nil : "total", summary.failure == nil ? nil : "failed"].compactMap { $0 })
             }
         }
         .buttonStyle(PressStyle(.inline))

@@ -55,6 +55,14 @@ for run in $(seq "$runs"); do
     hooks+=(--during "xcrun xctrace record --template $(printf %q "$CUEPAD_TRACE") $target --time-limit ${seconds}s --output $(printf %q "$trace")")
     echo "trace：${trace}（CuePad PID ${pid}）" >&2
   fi
+  # 渲染服务（rusage.py 的 render*）：iOS 是这台模拟器的 launchd_sim（参数里带 UDID）下的 backboardd，Mac 是 WindowServer
+  if [ "$platform" = ios ]; then
+    launchd="$(pgrep -f "launchd_sim .*$udid" | head -1)"
+    CUEPAD_IDLE_RENDER_PID="$(pgrep -P "$launchd" backboardd | head -1)"
+  else
+    CUEPAD_IDLE_RENDER_PID="$(pgrep -x WindowServer)"
+  fi
+  export CUEPAD_IDLE_RENDER_PID
   python3 "$APPLE_DIR/scripts/rusage.py" "$pid" "$ready" "$settle" "$seconds" ${hooks[@]+"${hooks[@]}"} >>"$rows" || { stop; exit 1; }
   stop
 done

@@ -14,9 +14,13 @@
   instructionsM  窗口内执行的指令（百万）    cpuMs  窗口内的 CPU 毫秒（用户态加内核态）
   footprintMB    窗口结束时的物理占用（同活动监视器的"内存"）    peakMB  进程一生的物理占用峰值
   energyMJ       窗口内内核估算的能耗（毫焦）
+  render*        环境变量 CUEPAD_IDLE_RENDER_PID 给了渲染服务的 PID 时，同一窗口里它的开销：Core Animation 的动画在渲染服务里算，App 进程看不到。
+                 iOS 模拟器是它的 backboardd，读 CPU 毫秒、指令与唤醒（renderCpuMs、renderInstructionsM、renderWakeupsPerSec）；
+                 Mac 是 WindowServer，属系统用户，不提权读不到 proc_pid_rusage（EPERM），只从 ps 读累计 CPU（10ms 粒度，只有 renderCpuMs）。
+                 WindowServer 合成整个屏幕：别的 App 在动的开销也在里面，前后交替多跑几次再比
 指令与唤醒不随机器忙闲变，前后对比看它们；readyMs、cpuMs、能耗受调度（性能核还是能效核）影响，机器忙时只作参考。
 """
-import ctypes, json, subprocess, sys, time
+import ctypes, json, os, subprocess, sys, time
 
 sys.dont_write_bytecode = True
 from app_env import SLOT  # noqa: E402
@@ -49,6 +53,21 @@ def usage(pid):
         raise SystemExit(f"读不到进程 {pid}（已退出？）")
     raw = buf[2:]
     return {k: raw[i] for k, i in FIELDS.items()}
+
+
+def render_usage(pid):
+    """渲染服务此刻的累计开销：读得到 rusage 就读 CPU、指令与唤醒，读不到（Mac 的 WindowServer）只从 ps 读累计 CPU。"""
+    buf = (ctypes.c_uint64 * 64)()
+    if libc.proc_pid_rusage(pid, 6, ctypes.byref(buf)) == 0:
+        raw = buf[2:]
+        return {"cpu": (raw[FIELDS["user"]] + raw[FIELDS["system"]]) * NS, "instructions": raw[FIELDS["instructions"]],
+                "wakeups": raw[FIELDS["idle_wkups"]] + raw[FIELDS["interrupt_wkups"]]}
+    # ps 的累计 CPU 是 [[时:]分:]秒.百分秒
+    clock = subprocess.run(["ps", "-o", "time=", "-p", str(pid)], capture_output=True, text=True, check=True).stdout.strip()
+    seconds = 0.0
+    for part in clock.split(":"):
+        seconds = seconds * 60 + float(part)
+    return {"cpu": seconds * 1e9}
 
 
 def started_ns(pid):
@@ -88,13 +107,22 @@ def main():
         subprocess.run(hooks["--on-ready"], shell=True, check=True, stdout=subprocess.DEVNULL)
     time.sleep(settle)
     a = wait_quiet(pid)
+    render = int(os.environ.get("CUEPAD_IDLE_RENDER_PID", 0))
+    ra = render_usage(render) if render else None
     settled = time.monotonic_ns()
     during = subprocess.Popen(hooks["--during"], shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) if "--during" in hooks else None
     time.sleep(seconds)  # 量的就是这一段
     b = usage(pid)
+    rb = render_usage(render) if render else None
     if during:
         during.wait()
     d = lambda k: b[k] - a[k]
+    extra = {}
+    if render:
+        extra["renderCpuMs"] = round((rb["cpu"] - ra["cpu"]) / 1e6, 1)
+        if "instructions" in rb:
+            extra["renderInstructionsM"] = round((rb["instructions"] - ra["instructions"]) / 1e6, 1)
+            extra["renderWakeupsPerSec"] = round((rb["wakeups"] - ra["wakeups"]) / seconds, 2)
     print(json.dumps({
         "readyMs": round(ready_ms),
         "readyInstructionsM": round(ready_instructions / 1e6, 1),
@@ -106,6 +134,7 @@ def main():
         "footprintMB": round(b["footprint"] / 2**20, 1),
         "peakMB": round(b["peak"] / 2**20, 1),
         "energyMJ": round(d("energy_nj") / 1e6, 1),
+        **extra,
     }), flush=True)
 
 

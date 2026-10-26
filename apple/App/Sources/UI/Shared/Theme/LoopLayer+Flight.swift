@@ -9,14 +9,10 @@ extension LoopLayer.Host {
         static let keyTimes: [NSNumber] = [0, 0.32, 0.62, 1]
     }
 
-    /// 飞的那一趟的位移与透明度（位移是相对正中的变换：不播时就停在正中）。macOS 的层 y 朝上，右上是 +y。
+    /// 飞的那一趟的位移与透明度（位移是相对正中的变换：不播时就停在正中）。层 y 朝下（两端同，`LoopLayer.Host`），右上是 -y。
     static func flightPath(side: CGFloat) -> [CAAnimation] {
         let distance = side * 0.6
-        #if os(macOS)
-        let up = distance
-        #else
         let up = -distance
-        #endif
         let across = CAKeyframeAnimation(keyPath: "transform.translation.x")
         across.values = [-distance, 0, 0, distance]
         let rise = CAKeyframeAnimation(keyPath: "transform.translation.y")
