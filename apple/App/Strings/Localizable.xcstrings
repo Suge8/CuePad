@@ -8287,6 +8287,22 @@
         }
       }
     },
+    "在右侧并排看 %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show %@ Alongside"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在右侧并排看 %@"
+          }
+        }
+      }
+    },
     "在后台启动的 Claude Code 没连上就退出了" : {
       "localizations" : {
         "en" : {

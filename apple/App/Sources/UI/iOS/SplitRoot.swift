@@ -3,11 +3,19 @@ import CueStore
 import SwiftUI
 
 /// 宽屏（iPad）的分栏：左栏是侧栏列表（`SplitSidebar`），右边是选中的页与其上推入的页（打开的卡片纸页推在项目页上），
-/// Cue 可在右侧面板里与项目并排看。窄屏不用它（`DockRoot`）：折叠后的分栏这个容器本身比导航栈多约 3000M 指令（冷启动同口径交替量）。
+/// Cue 可在右侧面板里与项目并排看（开关在侧栏 Cue 那一行）。右边那一栏的根同窄屏的根自己画页顶那一排（`SplitHome`），
+/// 系统导航栏只给推入的页：左右各一颗圆钮，根页左边是侧栏钮（系统的撤掉，`SidebarToggle`），推入的页左边是系统的返回，右边只有这一页自己的操作。窄屏不用它（`DockRoot`）：折叠后的分栏这个容器本身比导航栈多约 3000M 指令（冷启动同口径交替量）。
 struct SplitRoot: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.statusBarBottom) private var statusBar
     @State private var width: CGFloat = 0
+    /// 侧栏此刻在屏幕上（排在旁边，或从左缘滑出盖在页上）：侧栏钮与 ⌘\ 开还是收、开面板时要不要先收侧栏都按它（根页写不写页名看的是排没排在旁边，`SplitHome`）。
+    /// 只能读排出来的位置：`Workspace.sidebar` 是要的样子，`.automatic` 竖屏收起、横屏排开由系统定，尺寸类横竖屏都是 regular。
+    /// 读侧栏自己：右边那一栏推入了页时，它的导航栈归分栏管，侧栏开合不再给这一栏的 SwiftUI 视图新的位置。
+    /// 只在越线时写一次（`Bool` 读数），写的东西不影响侧栏自己的位置；侧栏收起时整列被撤下，不再有读数，撤下就是收起。
+    @State private var sidebarShown = false
+    /// 分栏（侧栏加右边那一栏，不含右侧面板）的宽：根页比它窄就是侧栏排在旁边（`SplitHome`）。
+    @State private var splitWidth: CGFloat = 0
     /// 侧栏选中的项目（宽屏恢复窗口时选回它；选的不是项目时为空）。只存这一个：当前项目由路径推出（`Workspace.currentProject`）
     @SceneStorage("splitProject") private var storedProject = ""
 
@@ -20,27 +28,35 @@ struct SplitRoot: View {
 
     var body: some View {
         @Bindable var workspace = workspace
-        NavigationSplitView(columnVisibility: $workspace.sidebar) {
-            SplitSidebar()
-                .navigationSplitViewColumnWidth(
-                    min: 240, ideal: min(sidebarWidth, Self.maxSidebarWidth), max: max(340, min(sidebarWidth, Self.maxSidebarWidth)))
-        } detail: {
-            // 右侧面板与详情栏并排（不用 .inspector：它包在分栏或导航栈上时，推入的页面拿不到导航栏的安全区，
-            // 大标题与返回按钮压在内容上；挂进导航栈里又会把面板的工具栏并进详情栏）
-            HStack(spacing: 0) {
+        // 右侧面板排在分栏外面：放在详情栏里时，详情栏的导航栈被分栏接管成整栏，推入的页铺满整栏盖住面板、根页的栏项浮在面板上。
+        // 不用 .inspector：它包在分栏或导航栈上时，推入的页面拿不到导航栏的安全区
+        HStack(spacing: 0) {
+            NavigationSplitView(columnVisibility: $workspace.sidebar) {
+                SplitSidebar()
+                    .toolbar(removing: .sidebarToggle)
+                    .onGeometryChange(for: Bool.self) { $0.frame(in: .global).maxX > 1 } action: { sidebarShown = $0 }
+                    .onDisappear { sidebarShown = false }
+                    .navigationSplitViewColumnWidth(
+                        min: 240, ideal: min(sidebarWidth, Self.maxSidebarWidth), max: max(340, min(sidebarWidth, Self.maxSidebarWidth)))
+            } detail: {
                 // 提示横幅在右边这一栏里居中：按整个窗口居中时盖住侧栏顶上的圆钮。竖直按状态栏下沿排，与窄屏同一排：
                 // 这一栏的上安全区还含着分栏的工具栏那一排，按它排就掉到页头上了
                 stack.overlay(alignment: .top) { NoticeBanner().padding(.top, statusBar).ignoresSafeArea(edges: .top) }
-                if workspace.agentPanel {
-                    Divider().ignoresSafeArea()
-                    AgentPanel()
-                        .frame(width: min(panelWidth, Self.maxPanelWidth))
-                        .transition(.move(edge: .trailing))
-                }
+            }
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { splitWidth = $0 }
+            if workspace.agentPanel {
+                Divider().ignoresSafeArea()
+                AgentPanel()
+                    .frame(width: min(panelWidth, Self.maxPanelWidth))
+                    .transition(.move(edge: .trailing))
             }
         }
+        .background {
+            Button("侧栏") { SidebarToggle.flip(workspace, shown: sidebarShown) }
+                .keyboardShortcut("\\").opacity(0).frame(width: 0, height: 0).accessibilityHidden(true)
+        }
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
-        // 窄窗口（竖屏、分屏）放不下三栏：打开右侧面板或卡片纸页时收起侧栏，纸页盖住整个右侧
+        // 窄窗口（竖屏、分屏）放不下三栏：打开右侧面板或卡片纸页时收起侧栏
         .onChange(of: workspace.agentPanel) { _, shown in
             if shown { collapseSidebarIfNarrow() }
         }
@@ -56,41 +72,57 @@ struct SplitRoot: View {
     private var stack: some View {
         @Bindable var workspace = workspace
         return NavigationStack(path: $workspace.path) {
-            // 根页的名字在侧栏的选中格里（侧栏收起时侧栏钮就在左上角），页顶那一排不再写；推入的页照写
-            page(workspace.root)
-                .environment(\.pageNamedElsewhere, true)
-                .navigationDestination(for: Route.self) { page($0).environment(\.pageNamedElsewhere, false) }
-        }
-    }
-
-    /// 右边的页：Cue 面板的开关在每一页上（推入的页也有），卡片纸页与 Cue 页本身除外——纸页有自己的复制、发送与更多。
-    @ViewBuilder private func page(_ route: Route) -> some View {
-        if route.isCard || route == .cue {
-            RouteView(route: route)
-        } else {
-            RouteView(route: route).toolbar {
-                ToolbarItem(placement: .primaryAction) { AgentPanelButton() }
-            }
+            SplitHome(route: workspace.root, sidebarShown: sidebarShown, splitWidth: splitWidth)
+                .navigationDestination(for: Route.self) { RouteView(route: $0) }
         }
     }
 
     private func collapseSidebarIfNarrow() {
-        guard width < Self.threeColumnWidth, workspace.sidebar != .detailOnly else { return }
+        guard width < Self.threeColumnWidth, sidebarShown else { return }
         withAnimation(Motion.snappy) { workspace.sidebar = .detailOnly }
     }
 }
 
-/// 右侧 Cue 面板的开关（和项目并排看 Cue）；有等你或新消息时带点（`CueDot`）。
-private struct AgentPanelButton: View {
+/// 右边那一栏的根：页顶那一排页自己画（`HeaderHost.split`），系统导航栏藏着。环境挂在这一层里、目的地挂在外面：推入的页不继承。
+/// 侧栏排在旁边时根页比分栏窄（盖在页上的侧栏不挪页）：比宽不比左缘，推入、返回时根页整页平移，宽不变，页名不跟着闪。
+private struct SplitHome: View {
+    let route: Route
+    let sidebarShown: Bool
+    let splitWidth: CGFloat
+    /// 根页的宽，只在侧栏开合、窗口变宽窄时变。
+    @State private var width: CGFloat = 0
+
+    var body: some View {
+        RouteView(route: route)
+            .environment(\.headerHost, .split(sidebarShown: sidebarShown, sidebarBeside: width < splitWidth - 1))
+            .toolbarVisibility(.hidden, for: .navigationBar)
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+    }
+}
+
+/// 根页左上的侧栏钮（⌘\ 同）：侧栏在屏幕上时收起，否则排开（竖屏也排在旁边，不盖在页上）。收起时侧栏的 Cue 那一行看不见了：
+/// 不在 Cue 页、Cue 有等你或新消息时钮角上带点（`CueDot`，同 Mac 的侧栏钮）。
+struct SidebarToggle: View {
+    let shown: Bool
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        let waiting = workspace.cue.now.needsYou, unread = workspace.cue.unread
-        Button { withAnimation(Motion.snappy) { workspace.agentPanel.toggle() } } label: {
-            Label { Text(workspace.cue.name) } icon: { CueMark(selected: workspace.agentPanel) }
-                .overlay(alignment: .topTrailing) { CueDot().offset(x: 3, y: -2) }
+        let dotted = !shown && workspace.root != .cue
+        Button { Self.flip(workspace, shown: shown) } label: {
+            Label { Text("侧栏") } icon: {
+                Image(.sidebar).overlay(alignment: .topTrailing) { if dotted { CueDot().offset(x: 5, y: -4) } }
+            }
         }
-        .accessibilityValue(unread > 0 ? "\(unread) 条新消息" : waiting > 0 ? "等你 \(waiting)" : "")
+        .accessibilityValue(dotted ? Self.cueNews(workspace.cue) : "")
+    }
+
+    /// 按侧栏此刻在不在屏幕上开合：`.automatic` 在竖屏本来就是收起，按要的样子换的话第一下没反应。
+    static func flip(_ workspace: Workspace, shown: Bool) {
+        withAnimation(Motion.snappy) { workspace.sidebar = shown ? .detailOnly : .all }
+    }
+
+    private static func cueNews(_ cue: CueWatch) -> String {
+        if cue.unread > 0 { String(localized: "\(cue.unread) 条新消息") } else if cue.now.needsYou > 0 { String(localized: "等你 \(cue.now.needsYou)") } else { "" }
     }
 }
 
@@ -168,17 +200,34 @@ private struct SplitSidebar: View {
 
 /// 侧栏最上面的 Cue：头像、名字与 Cue 此刻那一行（`CueStatusRow`），点开 Cue 页。Cue 页开着（右边那页或右侧面板）时不写此刻那一行：
 /// 页头（`CueHeader`）就写着同一句，同屏不说两遍；行高不变（`minHeight`），名字在原高里居中，侧栏不挪。
+/// 行尾是右侧 Cue 面板（和项目并排看 Cue）的开关，浮在行上、行里给它让出位置；右边那页就是 Cue 页时置灰，不出现消失。
 private struct CueSidebarItem: View {
     @Environment(Workspace.self) private var workspace
+    @Environment(\.palette) private var palette
 
     var body: some View {
-        let selected = workspace.root == .cue
+        let selected = workspace.root == .cue, open = workspace.agentPanel
         Button { workspace.select(.cue) } label: {
-            CueStatusRow(font: .body.weight(selected ? .semibold : .medium), status: !selected && !workspace.agentPanel)
-                .frame(minHeight: 60).contentShape(.rect)
+            CueStatusRow(font: .body.weight(selected ? .semibold : .medium), status: !selected && !open) {
+                Color.clear.frame(width: ControlMetrics.height)
+            }
+            .frame(minHeight: 60).contentShape(.rect)
         }
         .buttonStyle(RowStyle(selected: selected))
         .accessibilityAddTraits(selected ? .isSelected : [])
+        .overlay(alignment: .trailing) {
+            Button { withAnimation(Motion.snappy) { workspace.agentPanel.toggle() } } label: {
+                // 侧栏钮的符号左右翻过来：在右边开一栏
+                Label { Text("在右侧并排看 \(workspace.cue.name)") } icon: { IconImage(.sidebar, accent: open ? .lit : .none).scaleEffect(x: -1) }
+                    .labelStyle(.iconOnly)
+                    .foregroundStyle(palette.ink)
+                    .frame(width: ControlMetrics.height, height: ControlMetrics.height)
+                    .contentShape(.rect)
+            }
+            .buttonStyle(PressStyle(.button))
+            .disabled(selected && !open)
+            .accessibilityAddTraits(open ? .isSelected : [])
+        }
     }
 }
 
