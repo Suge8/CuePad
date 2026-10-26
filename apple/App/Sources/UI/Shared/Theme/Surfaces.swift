@@ -107,9 +107,12 @@ enum Motion {
     static let snappy = Animation.spring(duration: 0.25, bounce: 0)
     /// 卡片在墙上挪位（同列下移、新卡入场）：定长 0.24s，弹簧的尾巴会让实际时长超过 300ms。
     static let move = Animation.timingCurve(moveCurve.0, moveCurve.1, moveCurve.2, moveCurve.3, duration: moveDuration)
-    /// `move` 的时长与曲线控制点，渲染端照它走的动画（`ContentLift`、Mac 预览的飞出飞回 `PreviewFlight`）共用。
+    /// `move` 的时长与曲线，渲染端照它走的动画（`ContentLift`、Mac 预览的飞出飞回 `PreviewFlight` 与缩放）共用。
     nonisolated static let moveDuration = 0.24
-    nonisolated static let moveCurve: (Double, Double, Double, Double) = (0.2, 0, 0, 1)
+    static var moveTiming: CAMediaTimingFunction {
+        CAMediaTimingFunction(controlPoints: Float(moveCurve.0), Float(moveCurve.1), Float(moveCurve.2), Float(moveCurve.3))
+    }
+    private static let moveCurve: (Double, Double, Double, Double) = (0.2, 0, 0, 1)
     /// iPhone 切页：根上那一条页滑过去、底部那一排的选中与换形都是这一条（`PagerController.animate`，图层与 SwiftUI 同一条），"⋯"开合也用它；
     /// 比列表里挪位置走得长，看得清从哪到哪，仍在 300ms 内。
     static let dock = Animation.spring(duration: dockDuration, bounce: 0)

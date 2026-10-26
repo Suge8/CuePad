@@ -142,8 +142,7 @@ extension EnvironmentValues {
         let animation = CABasicAnimation(keyPath: keyPath)
         animation.fromValue = value
         animation.duration = Motion.moveDuration
-        animation.timingFunction = CAMediaTimingFunction(
-            controlPoints: Float(Motion.moveCurve.0), Float(Motion.moveCurve.1), Float(Motion.moveCurve.2), Float(Motion.moveCurve.3))
+        animation.timingFunction = Motion.moveTiming
         return animation
     }
 }
