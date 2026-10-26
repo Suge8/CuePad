@@ -2,7 +2,7 @@ import SwiftUI
 
 /// 空态与出错页：吉祥物、一句现状、一句下一步、一个可选动作，自上而下一列居中，全 App 只有这一套布局：
 /// 任何宽度与辅助字号下字都按行折、不和图或按钮并排挤成竖排。那张纸与所在页面的内容同宽（左右边线与标题、其他纸对齐，中轴就是页面的中轴），纸里的字居中、最宽 420。
-/// 那句下一步按逗号、句号断成几截排（`PhraseLines`）：居中的中文按字折行，行尾常剩一两个孤字。
+/// 那句下一步按全角标点断成几截排（`PhraseLines`，标点黏在前一截末尾）：居中的中文按字折行，行尾常剩一两个孤字。
 /// 吉祥物出场时从下方轻轻弹上来，只这一次；减弱动态效果时只淡入、不挪。
 /// "这里还没有"类的空态（`waitsForSync`）在本机正在和 iCloud 对时（`AppServices.isCatchingUp`）不先说空：对得快就等对完再出，
 /// 久过 `Pending.delay` 换成"正在从 iCloud 同步"——新装的设备上东西一页页地到，说"还没有"是错的。
@@ -78,7 +78,7 @@ struct EmptyState<Action: View>: View {
 private struct PhraseLines: View {
     let text: String
 
-    fileprivate static let breaks: Set<Character> = ["，", "。", "；", "：", "！", "？"]
+    fileprivate static let breaks: Set<Character> = ["，", "。", "；", "：", "、", "！", "？"]
 
     var body: some View {
         Flow {
@@ -89,14 +89,18 @@ private struct PhraseLines: View {
     }
 
     /// 一截：末尾的全角标点单放在一个字宽的格子里。整截一个 `Text` 时，排版把行尾的全角标点挤成半角（每截都在行尾），逗号句号就贴着字。
+    /// 一行放不下、要在截内折行时整截一个 `Text`：格子挨着的是整块的右边，不是最后一行的末字，标点会悬在块外。
     private struct Phrase: View {
         let text: String
 
         var body: some View {
             if let last = text.last, PhraseLines.breaks.contains(last) {
-                HStack(spacing: 0) {
-                    Text(text.dropLast())
-                    Text(verbatim: "中").hidden().overlay(alignment: .leading) { Text(String(last)) }
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 0) {
+                        Text(text.dropLast())
+                        Text(verbatim: "中").hidden().overlay(alignment: .leading) { Text(String(last)) }
+                    }
+                    Text(text)
                 }
             } else {
                 Text(text)
