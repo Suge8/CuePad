@@ -51,8 +51,11 @@ extension DebugScene {
         }
     }
 
+    /// 只报状态的同步替身：拉取、上传、解决都什么都不做，要做点什么的自己再写那一项。
+    protocol StandInSyncing: SyncControlling {}
+
     /// 先报连不上 iCloud，过一会儿报已同步；拉取与上传什么都不做。
-    nonisolated final class OfflineSync: SyncControlling {
+    nonisolated final class OfflineSync: StandInSyncing {
         let seconds: Double
         init(seconds: Double) { self.seconds = seconds }
         var stateUpdates: AsyncStream<SyncState> {
@@ -65,18 +68,12 @@ extension DebugScene {
                 continuation.onTermination = { _ in task.cancel() }
             }
         }
-        func start() async {}
-        func stop() async {}
-        func syncNow() async throws {}
-        func send(recordNames: Set<String>) async -> Bool { true }
-        func push() async {}
-        func resolve(_ resolution: SyncResolution) async throws {}
     }
 
     /// 已同步，然后依次报一段段别的状态（`blips` 各段时长，段间隔 `gap` 的已同步），走完一遍再来。
     /// `upload`：上传那种（`.syncing`），短的像一句话 0.3 秒传上去、长的像传一批；`catchup`：对一遍那种（`catchingUp`，同回前台时那一拉），页头写"正在同步"；
     /// `offline`：连不上 iCloud（像网络一时断开又回来），同步到不了 Mac 的提醒点、拍板卡的"现在答不了"一出一收。
-    nonisolated final class BlipSync: SyncControlling {
+    nonisolated final class BlipSync: StandInSyncing {
         enum Kind { case upload, catchup, offline }
         let blips: [Duration]
         let gap: Duration
@@ -113,29 +110,18 @@ extension DebugScene {
                 continuation.onTermination = { _ in task.cancel() }
             }
         }
-        func start() async {}
-        func stop() async {}
-        func syncNow() async throws {}
-        func send(recordNames: Set<String>) async -> Bool { true }
-        func push() async {}
-        func resolve(_ resolution: SyncResolution) async throws {}
     }
 
     /// 第一次拉取（启动后同步一通就拉的那一次，`AppServices.setSyncState`）带回 `pages` 页别的设备写下的 Cue 的话，每页 `perPage` 条、
     /// 隔 `pageGap` 到一页（同 `ZonePuller` 一页页应用），拉完才返回；之后的拉什么都不做。话直接写进本机库：界面看到的与应用远端变更是同一种变化。
-    nonisolated final class ArrivingSync: SyncControlling {
+    nonisolated final class ArrivingSync: StandInSyncing {
         static let pages = 3
         static let perPage = 6
         static let pageGap = Duration.milliseconds(450)
         private let first = Mutex<Task<Void, Never>?>(nil)
 
         var stateUpdates: AsyncStream<SyncState> { AsyncStream { $0.yield(SyncState(status: .idle, issues: [], reconciled: true)) } }
-        func start() async {}
-        func stop() async {}
         func syncNow() async throws { await pull() }
-        func send(recordNames: Set<String>) async -> Bool { true }
-        func push() async {}
-        func resolve(_ resolution: SyncResolution) async throws {}
 
         private func pull() async {
             let task = first.withLock { task in
@@ -177,7 +163,7 @@ extension DebugScene {
 
     /// 换新 Mac：先报还没和 iCloud 对过，过 `seconds` 秒把第一遍拉回的写进库（Cue 在 Mac Studio 上运行、那台醒着、能用 Pi），再报对过，
     /// 同真实的第一遍同步先应用记录、再报对过。拉取与上传什么都不做。
-    nonisolated final class NewMacSync: SyncControlling {
+    nonisolated final class NewMacSync: StandInSyncing {
         let seconds: Double
         init(seconds: Double) { self.seconds = seconds }
         var stateUpdates: AsyncStream<SyncState> {
@@ -196,28 +182,17 @@ extension DebugScene {
                 continuation.onTermination = { _ in task.cancel() }
             }
         }
-        func start() async {}
-        func stop() async {}
-        func syncNow() async throws {}
-        func send(recordNames: Set<String>) async -> Bool { true }
-        func push() async {}
-        func resolve(_ resolution: SyncResolution) async throws {}
     }
 
     /// 报 `state`（默认已同步），其余什么都不做；`stalls` 时立即同步不返回（像网络一直没有回音）。
-    nonisolated final class StandInSync: SyncControlling {
+    nonisolated final class StandInSync: StandInSyncing {
         let state: SyncState
         let stalls: Bool
         init(_ status: SyncStatus = .idle, issues: [SyncIssue] = [], stalls: Bool = false) {
             (state, self.stalls) = (SyncState(status: status, issues: issues, reconciled: true), stalls)
         }
         var stateUpdates: AsyncStream<SyncState> { AsyncStream { [state] in $0.yield(state) } }
-        func start() async {}
-        func stop() async {}
         func syncNow() async throws { if stalls { try await Task.sleep(for: .seconds(86_400)) } }
-        func send(recordNames: Set<String>) async -> Bool { true }
-        func push() async {}
-        func resolve(_ resolution: SyncResolution) async throws {}
     }
 
     /// 摆画面时交给同步替身的：`arrive`、`newmac` 的资料库，`conflicts` 的冲突副本（冲突那一行由有同步时的订阅读出，`AppServices.startSync`）。
@@ -249,5 +224,14 @@ extension DebugScene {
         let sql = "UPDATE cards SET conflictOf = '\(original.uuidString.lowercased())' WHERE id = '\(copy.uuidString.lowercased())'"
         return sqlite3_exec(handle, sql, nil, nil, nil) == SQLITE_OK
     }
+}
+
+nonisolated extension DebugScene.StandInSyncing {
+    func start() async {}
+    func stop() async {}
+    func syncNow() async throws {}
+    func send(recordNames: Set<String>) async -> Bool { true }
+    func push() async {}
+    func resolve(_ resolution: SyncResolution) async throws {}
 }
 #endif

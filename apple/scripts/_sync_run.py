@@ -13,7 +13,8 @@ STATES = [{"kind": "thinking"}, {"kind": "tool", "tool": "bash", "tools": ["bash
           {"kind": "compacting"}, {"kind": "done", "aborted": False}, {"kind": "idle"}]
 
 
-REAL_LIBS = "/tmp/cuepad-sync-bench/real-libraries"
+OUT_ROOT = "/tmp/cuepad-sync-bench"
+REAL_LIBS = f"{OUT_ROOT}/real-libraries"
 PEER = "mac-bench-a"  # A 的主机标识（-CuePadHost bench-a）：B 对会话说话点名这台
 
 
