@@ -9,12 +9,7 @@ import SwiftUI
 // 全屏预览里每类页怎么显示（Mac）。图片、PDF、音视频用系统的视图自己显示：嵌快速查看时它的图片只有捏合缩放，没有双击放大、拖着看，
 // 也不把滑到头的横扫交给翻页；PDF 与音视频在 PDFKit、AVKit 里是同样的系统视图，能直接设内容让到两条栏之间的边。
 // 文本、文稿、表格、演示文稿、3D 与认不出的类型仍嵌快速查看：这些系统才认得全，也没有要和翻页抢的手势。
-// 图片与 PDF 一直铺到两条栏下面（放大、滚动时内容从栏后透出来），按 `previewChrome` 让出栏占的边；其余在两条栏之间。
-
-extension EnvironmentValues {
-    /// 全屏页顶栏与底栏占的边（`PreviewPager`）。
-    @Entry var previewChrome = EdgeInsets()
-}
+// 图片与 PDF 一直铺到两条栏下面（放大、滚动时内容从栏后透出来），按 `previewInsets` 让出栏占的边；其余在两条栏之间。
 
 /// 全屏页里除网页与 Markdown 外的每一类（`PreviewContent`）。
 struct PreviewPage: View {
@@ -36,7 +31,7 @@ struct PreviewPage: View {
 private struct PreviewImage: NSViewRepresentable {
     let preview: UUID
     let file: URL
-    @Environment(\.previewChrome) private var chrome
+    @Environment(\.previewInsets) private var chrome
     @Environment(\.previewFlight) private var flight
 
     func makeNSView(context: Context) -> PreviewZoom { PreviewZoom(file: file) }
@@ -52,7 +47,7 @@ private struct PreviewPDF: NSViewRepresentable {
     let preview: UUID
     let file: URL
     @Environment(\.palette) private var palette
-    @Environment(\.previewChrome) private var chrome
+    @Environment(\.previewInsets) private var chrome
     @Environment(\.previewFlight) private var flight
 
     func makeCoordinator() -> Shown { Shown() }

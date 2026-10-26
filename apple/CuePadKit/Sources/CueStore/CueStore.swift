@@ -64,6 +64,7 @@ public actor CueStore {
     } else if version != Schema.version {
       throw CueStoreError.unsupportedSchemaVersion(version)
     }
+    try connection.exec(Self.guards)
     let queue = DispatchSerialQueue(label: "CueStore", qos: .userInitiated)
     let names = ChangeNotification.names(forDatabase: url)
     let listener = ChangeListener(names: names)

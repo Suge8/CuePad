@@ -11,8 +11,8 @@ struct WidgetDataTests {
 
     @Test func 默认项目快照按最近修改排最多五张_带名字总数与首行标题() async throws {
         for index in 1...7 {
-            let card = try await services.store.createCard(body: "卡片 \(index)\n后面的行")
-            try await services.store.updateCard(card.id) { $0.modifiedAt = Date(timeIntervalSince1970: Double(index)) }
+            _ = try await services.store.createCard(body: "卡片 \(index)\n后面的行")
+            try await Task.sleep(for: .milliseconds(2))  // 修改时间是毫秒：一张比一张新
         }
         _ = try await services.store.createCard(body: "![](cuepad://img/\(String(repeating: "a", count: 64)))")
         let project = try await services.store.createProject(name: "P", color: "#000000")
