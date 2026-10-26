@@ -56,7 +56,6 @@ struct MainWindow: View {
         ToolbarItem(placement: .principal) { PageTitleSlot() }
             .sharedBackgroundVisibility(.hidden)
         ToolbarSpacer(.flexible)
-        ToolbarItem(placement: .primaryAction) { SyncAlert() }
         ToolbarItem(placement: .primaryAction) { TrailingSlots() }
             .sharedBackgroundVisibility(.hidden)
     }
@@ -157,26 +156,6 @@ private extension Route {
         switch self {
         case .project, .archive: true
         default: false
-        }
-    }
-}
-
-/// 同步需要关注时（没登录 iCloud、需要你决定、出错等）在工具栏露一个图标：悬停看原因，点开设置处理。
-/// 平时什么都不显示；随同步状态（数据）变化，不随布局变化。
-private struct SyncAlert: View {
-    @Environment(AppServices.self) private var services
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        let summary = SyncSummary(services.syncStatus)
-        if services.sync != nil, summary.tone != .calm {
-            Button {
-                SettingsPane.open(.general)
-            } label: {
-                Image(summary.icon).foregroundStyle(palette.color(summary.tone))
-            }
-            .help([summary.title, summary.detail, String(localized: "点按在设置里处理")].compactMap { $0 }.joined(separator: "\n"))
-            .accessibilityLabel(summary.title)
         }
     }
 }

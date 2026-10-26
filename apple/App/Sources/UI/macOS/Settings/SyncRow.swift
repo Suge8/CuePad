@@ -2,9 +2,9 @@
 import CueSync
 import SwiftUI
 
-/// iCloud 同步那一行。状态字只说现状（`SyncSummary`），有解决办法时后面给一个链接：
+/// iCloud 同步那一行。状态字只写现状的标题（`SyncSummary`），补充说明在悬停提示里；有解决办法时后面给一个链接：
 /// 没开 iCloud → 打开系统设置；暂停等你决定 → "处理…"弹出两个选择（替换本机前再确认一次）；有记录没能同步 → "查看"明细。
-/// 能自己好起来的（账号受限、暂时不可用、空间不足）把原因直接写在状态里；按了有用时右边给"立即同步"（`AppServices.canSyncNow`）。
+/// 按了有用时右边给"立即同步"（`AppServices.canSyncNow`）。
 struct SyncRow: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
@@ -22,8 +22,8 @@ struct SyncRow: View {
         let shown = services.shownSync(lasting: syncLasts), summary = shown.summary
         let fix = fix
         SettingRow(
-            title: "iCloud 同步", icon: Image(summary.icon), tone: tone(summary), busy: shown.busy, status: status(summary, fix: fix),
-            help: fix == nil ? nil : summary.detail.map { "\($0)" }
+            title: "iCloud 同步", icon: Image(summary.icon), tone: tone(summary), busy: shown.busy, status: status(summary),
+            help: summary.detail.map { "\($0)" }
         ) {
             if services.canSyncNow {
                 Button("立即同步") { Task { await services.syncNow() } }
@@ -62,13 +62,10 @@ struct SyncRow: View {
         choices.failure != nil || !services.syncIssues.isEmpty ? .failure : summary.tone
     }
 
-    private func status(_ summary: SyncSummary, fix: Fix?) -> Dotted {
+    private func status(_ summary: SyncSummary) -> Dotted {
         if let failure = choices.failure { return Dotted(failure) }
-        return switch fix {
-        case .issues: Dotted(String(localized: "\(summary.title)，\(services.syncIssues.count) 条记录没能同步"))
-        case .decide, .openSettings: Dotted(summary.title)
-        case nil: Dotted(summary.line)
-        }
+        if fix == .issues { return Dotted(String(localized: "\(summary.title)，\(services.syncIssues.count) 条记录没能同步")) }
+        return Dotted(summary.title)
     }
 
     private func decision(_ summary: SyncSummary) -> some View {

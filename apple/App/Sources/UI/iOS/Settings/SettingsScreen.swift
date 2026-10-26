@@ -59,6 +59,26 @@ struct SettingsForm<Content: View>: View {
     }
 }
 
+/// 设置里一行状态的标题与下面的说明。说明按 `reserve`（会自己来去的那一句：连不上 iCloud）留出高度，此刻没说明或说明更短时留白：
+/// 断开、连上不是用户做的，说明一出一收整页的行就跟着跳。比它长的（要你处理的几种，不会自己来去）照常撑高。
+private struct StatusText: View {
+    let title: String
+    let detail: String?
+    let reserve: String?
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+            ZStack(alignment: .topLeading) {
+                Text(reserve ?? "").hidden()
+                if let detail { Text(detail) }
+            }
+            .font(.footnote).foregroundStyle(palette.ink3)
+        }
+    }
+}
+
 /// 通知：一行状态（权限、推送注册、服务端订阅哪一步不通就写哪一步），能在这里解决的给按钮。
 private struct AlertSection: View {
     @Environment(AppServices.self) private var services
@@ -72,10 +92,7 @@ private struct AlertSection: View {
         let status = DebugHooks.preset.alertStatus ?? live
         Section {
             Label {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(status.title)
-                    if let detail = status.detail { Text(detail).font(.footnote).foregroundStyle(palette.ink3) }
-                }
+                StatusText(title: status.title, detail: status.detail, reserve: PiAlertStatus.offline.detail)
             } icon: {
                 Image(status.state == .on ? .alertsOn : status.state == .pending ? .alertsPending : .alertsOff)
                     .foregroundStyle(status.state == .problem ? palette.failure : palette.ink2)
@@ -118,12 +135,7 @@ private struct SyncSection: View {
         Section {
             let summary = SyncSummary(services.syncStatus)
             Label {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(summary.title)
-                    if let detail = summary.detail {
-                        Text(detail).font(.footnote).foregroundStyle(palette.ink3)
-                    }
-                }
+                StatusText(title: summary.title, detail: summary.detail, reserve: SyncSummary(.offline).detail)
             } icon: {
                 if services.isSyncBusy {
                     Spinner(.small)

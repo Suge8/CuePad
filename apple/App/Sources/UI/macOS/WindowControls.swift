@@ -20,11 +20,12 @@ struct LeadingSlots: View {
     private static let leadingGap: CGFloat = 4
 }
 
-/// 窗口最顶那一排右边的一项：会话段的额度环与新会话、搜索、"⋯"排在同一个工具栏项里（理由同 `LeadingSlots`）。
+/// 窗口最顶那一排右边的一项：同步提醒、会话段的额度环与新会话、搜索、"⋯"排在同一个工具栏项里（理由同 `LeadingSlots`）。
 struct TrailingSlots: View {
     var body: some View {
         // 间隔由各控件自己在前面留（`toolbarGap`）：宽 0 的那几格不多出空隙
         HStack(spacing: 0) {
+            SyncAlertSlot()
             QuotaSlot()
             PageActionSlot()
             SearchSlot()
@@ -211,6 +212,7 @@ struct QuotaSlot: View {
         }
         .onChange(of: open) { _, open in if !open { closed = .now } }
         .toolbarVisible(workspace.showsSessionsBar)
+        .padding(.leading, Spacing.toolbarGap)
         .toolbarPresence(workspace.root == .progress)
     }
 }
@@ -247,6 +249,25 @@ struct PageActionSlot: View {
         .frame(height: Spacing.toolbarControl)
         .padding(.leading, Spacing.toolbarGap)
         .toolbarPresence(workspace.root == .progress)
+    }
+}
+
+/// 工具栏右边最前面：同步需要关注时（没登录 iCloud、连不上、需要你决定、出错等）露一个图标，悬停看原因，点开设置处理。
+/// 有同步就常驻一格圆钮宽，平时只是看不见：提醒一出一收不挤动标题、额度环与搜索（工具栏项一变宽整条重排，窄窗口里居中的标题跟着挪）。
+struct SyncAlertSlot: View {
+    @Environment(AppServices.self) private var services
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        let summary = SyncSummary(services.syncStatus)
+        Button { SettingsPane.open(.general) } label: {
+            Image(summary.icon).foregroundStyle(palette.color(summary.tone))
+        }
+        .buttonStyle(ControlButtonStyle(kind: .circular))
+        .help([summary.title, summary.detail, String(localized: "点按在设置里处理")].compactMap { $0 }.joined(separator: "\n"))
+        .accessibilityLabel(summary.title)
+        .toolbarVisible(summary.tone != .calm)
+        .toolbarPresence(services.sync != nil)
     }
 }
 

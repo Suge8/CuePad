@@ -3,22 +3,41 @@ import SwiftUI
 
 /// 设置的一行，全窗口只有这一种排法（同系统设置的网络、iCloud 行）：
 /// - 左边定宽的图标与名称，名称下面一行状态；状态有现成的解决办法时，紧跟一个链接（`fix`：打开系统设置、处理…、查看、复制命令）。
+/// - 状态那一行是这一行有没有（带不带 `status` 参数）的事，不是此刻有没有话的事：此刻没话也留着空行，一句话长了截断、不折行，
+///   整句在悬停提示的第一行。行高一变，下面整窗的行跟着跳，设置窗口还按内容变高；逐帧动画行高又让 AppKit 每帧重排整窗，所以只能定高。
 /// - 图标与状态字按 `StatusTone` 一起着色（正常就是安静，没有绿色与对勾）；在等结果（`busy`）时图标位置是转圈。
-///   状态换一句、图标与转圈互换都是旧的先淡完、新的再淡入（`handOff`）：同时交叉淡时长短两句叠成一团，行高一变还把淡出中的那句裁掉半截。
+///   状态换一句、图标与转圈互换都是旧的先淡完、新的再淡入（`handOff`）：同时交叉淡时长短两句叠成一团。
 /// - 右边只放这一行常驻的那一个控件（开关、分段、键帽、立即同步、连接）。
 /// 解释性的长句不上屏，放在悬停提示里（`help`）。
 struct SettingRow<Control: View, Fix: View>: View {
     let title: LocalizedStringResource
     let icon: Image
-    var tone = StatusTone.calm
-    var busy = false
-    var status: Dotted?
-    var help: LocalizedStringResource?
-    @ViewBuilder var control: Control
-    @ViewBuilder var fix: Fix
+    let tone: StatusTone
+    let busy: Bool
+    /// 有状态那一行（此刻可能没话）。
+    let hasStatus: Bool
+    let status: Dotted?
+    let help: LocalizedStringResource?
+    let control: Control
+    let fix: Fix
     @Environment(\.palette) private var palette
 
     private static var iconWidth: CGFloat { 20 }
+
+    init(
+        title: LocalizedStringResource, icon: Image, tone: StatusTone = .calm, busy: Bool = false, status: Dotted?,
+        help: LocalizedStringResource? = nil, @ViewBuilder control: () -> Control, @ViewBuilder fix: () -> Fix
+    ) {
+        self.init(title: title, icon: icon, tone: tone, busy: busy, hasStatus: true, status: status, help: help, control: control(), fix: fix())
+    }
+
+    fileprivate init(
+        title: LocalizedStringResource, icon: Image, tone: StatusTone, busy: Bool, hasStatus: Bool, status: Dotted?,
+        help: LocalizedStringResource?, control: Control, fix: Fix
+    ) {
+        (self.title, self.icon, self.tone, self.busy, self.hasStatus, self.status, self.help) = (title, icon, tone, busy, hasStatus, status, help)
+        (self.control, self.fix) = (control, fix)
+    }
 
     var body: some View {
         LabeledContent {
@@ -26,18 +45,7 @@ struct SettingRow<Control: View, Fix: View>: View {
         } label: {
             Label {
                 Text(title)
-                if let status {
-                    // 新旧两句叠在同一处：淡出中的那句不另占一行
-                    ZStack(alignment: .leading) {
-                        HStack(spacing: 8) {
-                            Text(status).foregroundStyle(palette.color(tone, muted: true))
-                            fix
-                        }
-                        .id(status)
-                        .transition(.handOff)
-                    }
-                    .font(Typography.meta)
-                }
+                if hasStatus { statusLine }
             } icon: {
                 ZStack {
                     if busy {
@@ -54,20 +62,41 @@ struct SettingRow<Control: View, Fix: View>: View {
         }
         .animation(HandOff.quick, value: tone)
         .animation(HandOff.quick, value: busy)
-        .help(help.map { Text($0) } ?? Text(verbatim: ""))
+        .help(Text(verbatim: [status?.visible, help.map { String(localized: $0) }].compactMap { $0 }.joined(separator: "\n")))
         // 读屏把这一行当一组、组名是这一行的名称：状态后的"修复""查看"与右边的控件都读得出属于哪一行
         .accessibilityElement(children: .contain)
         .accessibilityLabel(title)
+    }
+
+    /// 一行高：没话时由占位的空格撑着；新旧两句叠在同一处，淡出中的那句不另占一行。
+    private var statusLine: some View {
+        ZStack(alignment: .leading) {
+            Text(verbatim: " ").accessibilityHidden(true)
+            if let status {
+                HStack(spacing: 8) {
+                    Text(status).foregroundStyle(palette.color(tone, muted: true)).lineLimit(1)
+                    fix.fixedSize()
+                }
+                .id(status)
+                .transition(.handOff)
+            }
+        }
+        .font(Typography.meta)
     }
 }
 
 extension SettingRow where Fix == EmptyView {
     init(
-        title: LocalizedStringResource, icon: Image, tone: StatusTone = .calm, busy: Bool = false, status: Dotted? = nil,
+        title: LocalizedStringResource, icon: Image, tone: StatusTone = .calm, busy: Bool = false, status: Dotted?,
         help: LocalizedStringResource? = nil,
         @ViewBuilder control: () -> Control
     ) {
         self.init(title: title, icon: icon, tone: tone, busy: busy, status: status, help: help, control: control) { EmptyView() }
+    }
+
+    /// 没有状态那一行的设置（名字、外观、提示音）。
+    init(title: LocalizedStringResource, icon: Image, help: LocalizedStringResource? = nil, @ViewBuilder control: () -> Control) {
+        self.init(title: title, icon: icon, tone: .calm, busy: false, hasStatus: false, status: nil, help: help, control: control(), fix: EmptyView())
     }
 }
 
