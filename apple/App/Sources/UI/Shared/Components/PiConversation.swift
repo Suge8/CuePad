@@ -19,6 +19,8 @@ struct PiConversation: View {
     var deliveries: [DeliveryRequest] = []
     /// 排开最近几条（不用懒加载栈，见 `ChatScroll`），更早的由它再排开一段。
     let window: ChatWindow
+    /// 正在请会话所在的 Mac 补写对话（`SessionDigest.fetchingTranscript`）：最上面一行说明。排在对话那一列里，它收起时正在读的不动（`ChatAnchor`）。
+    var fetching = false
     #if os(macOS)
     /// 这个会话在本机桥上的那一格（在线时）：正在说的话从这里读。
     var slot: PiBridge.Slot?
@@ -26,14 +28,18 @@ struct PiConversation: View {
     @Environment(\.chatHighlight) private var highlight
     @Environment(AppServices.self) private var services
     @Environment(Workspace.self) private var workspace
+    @Environment(\.palette) private var palette
     @State private var opened: PreviewOpening?
 
     var body: some View {
         let all = items
         let notes = services.settings.replyNotes(for: session.id)
-        VStack(alignment: .leading, spacing: Self.spacing) {
+        ChatStack(spacing: Self.spacing) {
+            if fetching {
+                Label("正在从 Mac 取对话…", icon: .fetching).font(Typography.meta).foregroundStyle(palette.ink3).frame(maxWidth: .infinity)
+            }
             if all.isEmpty, let prompt = session.pendingPrompt ?? session.lastPrompt { RecapPreview(session: session, prompt: prompt) }
-            ChatSegments(items: all, window: window, size: Self.segment, spacing: Self.spacing) { items in
+            ChatSegments(items: all, window: window, size: Self.segment) { items in
                 ChatSegment(items: Array(items), session: session, highlight: highlight, notes: notes, swapsInPlace: swapsInPlace, opened: $opened)
                     .equatable()
             }

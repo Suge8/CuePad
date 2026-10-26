@@ -153,9 +153,9 @@ struct CuePage: View {
             arrival: rows.last.flatMap { CueRow.arrives($0, swapsInPlace: services.cueSwapsInPlace) ? $0.id : nil }
         ) { window in
             let lastYou = thread.messages.last { $0.author == .known(.you) }?.id
-            VStack(alignment: .leading, spacing: 0) {
+            ChatStack(spacing: 0) {
                 let live = live
-                ChatSegments(items: rows, window: window, size: Self.segment, spacing: 0, spare: Self.spare) { items in
+                ChatSegments(items: rows, window: window, size: Self.segment, spare: Self.spare) { items in
                     CueSegment(rows: items.map { item in
                         CueRow(
                             row: item, shots: thread.shots[item.id] ?? [],

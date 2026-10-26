@@ -118,25 +118,18 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                         let shift = anchor.take()
                         if shift != 0 { lift.scroll(by: shift) }
                         if follow.wrappedValue.prepending, grown > 0 {
-                            // 上面排开的一批到了（没贴着最新的，正在读的上面已跟过去）。离最早那头还近不近按跟过去之后的位置（读数已按它算）当场定，
-                            // 再排哪一批不看之后的读数来得早晚
-                            let near: Bool
-                            // 贴着最新时正在读的就是最新处：停回新的最新处。打开时顶栏边距刚生效、系统把偏移放回了顶上，读数也不在最新处
+                            // 上面排开的一批到了。离最早那头还近不近当场定，再排哪一批不看之后的读数来得早晚：没贴着最新时按跟过正在读的那一条之后的位置
+                            // （读数已按它算）；贴着最新时正在读的就是最新处，停回新的最新处（打开时顶栏边距刚生效、系统把偏移放回了顶上，读数也不在最新处）
                             if follow.wrappedValue.atNewest, !follow.wrappedValue.scrolling {
                                 toEnd(reader)
                                 settle(reader, animated: false)
-                                near = offset.end < offset.container
-                            } else {
-                                // 跳去了某一条、你还没滚过：打开时排开更早的一段常与跳挤在相邻两帧，重新对准那一条。
-                                // 落在哪要等跳过去的读数：先按这次的算（多排的至多一批，下一批的读数里已经跳过去了）
-                                if let target = follow.wrappedValue.target { reader.scrollTo(target.id, anchor: target.anchor) }
-                                near = reading.nearOldest
+                                follow.wrappedValue.prepended(nearOldest: offset.end < offset.container)
+                                return
                             }
-                            follow.wrappedValue.prepended(nearOldest: near)
-                            return
+                            follow.wrappedValue.prepended(nearOldest: reading.nearOldest)
                         }
                         // 跳去了某一条、你还没滚过：内容这时才变高矮（它上面的图读到了真实的比例、更早的一段排开）的话偏移不动、那一条被推走，重新对准它。
-                        // 变高矮常晚于跳的那一下：图的比例读到之前按猜的排
+                        // 变高矮常晚于跳的那一下：图的比例读到之前按猜的排；打开时排开更早的一段也常与跳挤在相邻两帧
                         if grown != 0, !follow.wrappedValue.scrolling, let target = follow.wrappedValue.target {
                             reader.scrollTo(target.id, anchor: target.anchor)
                             return
