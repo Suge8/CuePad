@@ -16,6 +16,8 @@ struct ProjectPage: View {
     /// 墙与"更早"要用的、由数据和分区推出的东西：数据或分区变了才重算（任务行里 Agent 的状态一变页面就要重算，每次都从上千张卡里重新分组太贵）。
     @State private var shape: PageShape?
     @State private var collapsed = false
+    /// 窗口最顶那一排的高（`readsTopBand`）：下滚后的回到顶部排在那一排里。
+    @State private var band: CGFloat = 0
     /// 任务纸收起其余任务时连带的滚动（`TaskFoldAnchor`）。
     @State private var position = ScrollPosition()
     @State private var anchor = TaskFoldAnchor()
@@ -45,16 +47,18 @@ struct ProjectPage: View {
                 .onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y > Self.collapseOffset } action: { _, isCollapsed in
                     withAnimation(HandOff.quick) { collapsed = isCollapsed }
                 }
-                // 下滚后收成的一行：浮在工具栏下面，不放进工具栏——工具栏内容只随用户操作变，
-                // 不随滚动位置这种布局读数变（工具栏一变就重排整个窗口，跟着滚动位置变会形成布局循环）
+                // 下滚后的回到顶部：排进窗口最顶那一排、居中（项目页那一排中间是空的），不压在下一排的卡片上；
+                // 是页里的一块、不放进工具栏——工具栏内容只随用户操作变，不随滚动位置这种布局读数变（工具栏一变就重排整个窗口，跟着滚动位置变会形成布局循环）
                 if collapsed, let data, !data.tasks.isEmpty {
                     CompactFocus(data: data) {
                         withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { proxy.scrollTo("top", anchor: .top) }
                     }
-                    .padding(.top, Bars.contentGap)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
+                    .frame(height: band)
+                    .ignoresSafeArea(edges: .top)
+                    .transition(.opacity)
                 }
             }
+            .readsTopBand(into: $band)
             .debugScrollsToOlder(proxy, ready: board.arrangement != nil)
         }
         // 批量选择的"全选"范围：看得见的这一页上散放的灵感（置顶、墙、更早），按页上的顺序
