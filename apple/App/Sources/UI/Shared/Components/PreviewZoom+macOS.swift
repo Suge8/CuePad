@@ -130,8 +130,7 @@ final class PreviewZoom: NSScrollView, PreviewShowing {
         moving = true
         NSAnimationContext.runAnimationGroup { context in
             context.duration = Motion.moveDuration
-            context.timingFunction = CAMediaTimingFunction(
-                controlPoints: Float(Motion.moveCurve.0), Float(Motion.moveCurve.1), Float(Motion.moveCurve.2), Float(Motion.moveCurve.3))
+            context.timingFunction = Motion.moveTiming
             animator().setMagnification(target, centeredAt: point)
         } completionHandler: { [weak self] in
             self?.settle()

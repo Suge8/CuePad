@@ -17,7 +17,7 @@ import SwiftUI
         slide.toValue = 0
         slide.isAdditive = true
         slide.duration = Motion.moveDuration
-        slide.timingFunction = CAMediaTimingFunction(controlPoints: Float(Motion.moveCurve.0), Float(Motion.moveCurve.1), Float(Motion.moveCurve.2), Float(Motion.moveCurve.3))
+        slide.timingFunction = Motion.moveTiming
         slides += 1
         layer.add(slide, forKey: "lift.\(slides)")
     }
