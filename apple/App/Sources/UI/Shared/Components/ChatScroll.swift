@@ -11,12 +11,13 @@ import SwiftUI
 ///
 /// 对话不用懒加载栈、只排最近几条（`PiConversation` 的窗口）：懒加载栈的总高与偏移都是按估计高度推出来的，回答高矮悬殊时
 /// 底部锚定会落在内容外、整页空白（WWDC26「Dive into lazy stacks」也说绝对偏移不可靠）；整段排开位置是确定的，
-/// 打开时的底部锚点就是最新处。往上翻快到头时在上面再排开一段，多出来的高度当场加到偏移上，正在读的不动（`ChatFollow.prepending`、`ContentLift.scroll`）。
+/// 打开时的底部锚点就是最新处。没贴着最新时，正在读的那一条在内容里挪了（往上翻快到头时上面再排开一段、空白段换成真的、改宽重排）就当场把可见区跟过去，
+/// 正在读的不动（`ChatAnchor`、`ContentLift.scroll`）。
 /// 滚动区铺到顶栏、状态栏与回复框后面（iOS 的栏与键盘是安全区，滚动区把它当内容边距），内容在玻璃后面清楚可见。
 ///
 /// 对话排在阅读栏里：最宽 `readingWidth`（含左右 `inset`），在滚动区里居中，上下各留 `edge`。栏的边距只能是滚动区自己的边
-/// （`safeAreaPadding`），不能是内容外面的 padding 或居中的框：滚动位置跟着一行（滚动目标）走，内容变了就把那一行
-/// 对回可见区的左上角——行若离内容原点有一段边距，整段对话就被横着推出那一段。
+/// （`safeAreaPadding`），不能是内容外面的 padding 或居中的框：按条跳（`scrollTo`）时滚动区把那一条对回可见区，
+/// 行若离内容原点有一段边距，整段对话就被横着推出那一段。
 /// 不用 `contentMargins` 的原因在 docs/ui.md 布局约束（这里犯过：Cue 页拍板卡那一排件的边被写到对话上，整段左移、上移 16）。
 /// `.scrollView` 坐标空间两种边一样不含，对话里按它量的（`CueEndProbe`）不变。
 struct ChatScroll<Content: View, Key: Equatable>: View {
@@ -31,8 +32,9 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
     private let content: Content
     @Environment(\.accessibilityReduceMotion) var reduceMotion
     @Environment(\.chatBottomInset) var bottomInset
-    /// 不从"贴着底边"起：那样内容一变高滚动区自己就一下跳到新的底（打开时停在最新处由 `initialOffset` 的底锚管）。
-    @State var position = ScrollPosition()
+    /// 对话各条排在哪、正在读的那一条（`ChatAnchor`）与据它算出的在屏上的段。
+    @State var anchor = ChatAnchor()
+    @State var onScreen: Set<UUID> = []
     @State var offset = ScrollOffset()
     /// 发出那一刻浮着的回复框的高（`toNewest`、`bottomPadding`），发出的话到了（内容在下面长高）就放掉。
     @State var held: CGFloat?
@@ -66,8 +68,12 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
         GeometryReader { proxy in
             ScrollViewReader { reader in
                 let padding = bottomPadding
+                // 跟着正在读的那一条（`ChatAnchor`）：贴着最新时底锚管、跳去了某一条时对准那一条
+                let keeping = !pinned && follow.wrappedValue.target == nil
                 ScrollView {
                     content.padding(.bottom, padding).background { ContentLift.Anchor(lift: lift) }
+                        .environment(\.chatAnchor, anchor)
+                        .environment(\.chatOnScreen, onScreen)
                     // 最新处（`toEnd`）
                     Color.clear.frame(height: 0).id(Self.end)
                 }
@@ -84,7 +90,6 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                     .contentMargins(.horizontal, -margin(proxy.size.width), for: .scrollIndicators)
                     .contentMargins(.top, -ChatLayout.edge, for: .scrollIndicators)
                     .contentMargins(.bottom, bottomInset - ChatLayout.edge, for: .scrollIndicators)
-                    .scrollPosition($position)
                     .onScrollPhaseChange { _, phase in
                         let scrolling = phase == .interacting || phase == .decelerating
                         if follow.wrappedValue.scrolling != scrolling { follow.wrappedValue.scrolling = scrolling }
@@ -92,36 +97,40 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                     .onScrollGeometryChange(for: Reading.self) { geometry in
                         // 可见区底边 = 偏移 + 顶部 inset + 容器高（containerSize 已扣掉上下 inset）
                         let read = geometry.contentOffset.y + geometry.contentInsets.top
-                        let distance = max(0, (geometry.contentSize.height - read - geometry.containerSize.height).rounded())
                         let screen = geometry.containerSize.height.rounded()
                         offset.set(read: max(0, read.rounded()), end: (geometry.contentSize.height - geometry.containerSize.height).rounded(), container: screen)
+                        let tracked = anchor.track(read: read, height: geometry.containerSize.height, keeping: keeping)
+                        // 越线按跟过正在读的那一条之后的位置算：改宽、上面排开一批的那一下，没跟过去的可见区可能正落在最新处或最早那头附近，
+                        // 按它报的话贴底、排开更早的会被误触发
+                        let settled = read + tracked.shift
+                        let distance = max(0, (geometry.contentSize.height - settled - geometry.containerSize.height).rounded())
                         return Reading(
-                            nearNewest: distance <= ChatFollow.slack, beyondScreen: distance > screen, nearOldest: read < screen,
-                            height: (geometry.contentSize.height - padding).rounded(), floating: padding)
+                            nearNewest: distance <= ChatFollow.slack, beyondScreen: distance > screen, nearOldest: settled < screen,
+                            height: (geometry.contentSize.height - padding).rounded(), floating: padding, anchor: tracked)
                     } action: { previous, reading in
                         let delivered = offset.deliver(reading)
                         let last = delivered.reading ?? previous
                         let grown = reading.height - last.height
                         // 新到的那一条带来的长高（它插进来的那次排版）：在对、滚走了时它照常长在下面
                         let rising = offset.arrived(arrival) && grown > 0
+                        if reading.anchor.onScreen != onScreen { onScreen = reading.anchor.onScreen }
+                        // 正在读的那一条挪了：可见区跟过去（在上面排开一段时贴着最新的停回最新处、跳去了某一条的对准那一条，见下）
+                        let shift = anchor.take()
+                        if shift != 0 { lift.scroll(by: shift) }
                         if follow.wrappedValue.prepending, grown > 0 {
-                            // 这次读数是补之前的（上面长了、偏移没动，看着仍离最早那头近）。补之后的读数要晚一两帧才来，等的这一帧画完就接着排的话
-                            // 用的是补之前的"近"：按补到的位置当场算离最早那头还近不近，再排哪一批不看读数来得早晚
+                            // 上面排开的一批到了（没贴着最新的，正在读的上面已跟过去）。离最早那头还近不近按跟过去之后的位置（读数已按它算）当场定，
+                            // 再排哪一批不看之后的读数来得早晚
                             let near: Bool
-                            // 贴着最新时正在读的就是最新处：停回新的最新处。按偏移补的话，打开时顶栏边距刚生效、系统把偏移放回了顶上，
-                            // 补出来的是顶上那一截
+                            // 贴着最新时正在读的就是最新处：停回新的最新处。打开时顶栏边距刚生效、系统把偏移放回了顶上，读数也不在最新处
                             if follow.wrappedValue.atNewest, !follow.wrappedValue.scrolling {
                                 toEnd(reader)
                                 settle(reader, animated: false)
                                 near = offset.end < offset.container
-                            } else if let target = follow.wrappedValue.target {
-                                // 跳去了某一条、你还没滚过：打开时排开更早的一段常与跳挤在相邻两帧，按偏移补的话晚一拍生效的偏移会盖掉跳，重新对准那一条。
-                                // 落在哪要等跳过去的读数：先按这次的算（多排的至多一批，下一批的读数里已经跳过去了）
-                                reader.scrollTo(target.id, anchor: target.anchor)
-                                near = reading.nearOldest
                             } else {
-                                lift.scroll(by: grown)
-                                near = offset.read + grown < offset.container
+                                // 跳去了某一条、你还没滚过：打开时排开更早的一段常与跳挤在相邻两帧，重新对准那一条。
+                                // 落在哪要等跳过去的读数：先按这次的算（多排的至多一批，下一批的读数里已经跳过去了）
+                                if let target = follow.wrappedValue.target { reader.scrollTo(target.id, anchor: target.anchor) }
+                                near = reading.nearOldest
                             }
                             follow.wrappedValue.prepended(nearOldest: near)
                             return
@@ -179,8 +188,8 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                         slide(reader)
                     }
                     .onChange(of: follow.wrappedValue.toNewest) { _, request in if let request { toNewest(sent: request.sent, reader) } }
-                    // 跳到某一条：按条的 id 在整段内容里找（`ScrollViewReader`；滚动位置的按 id 跳只认滚动目标布局的直接子视图，
-                    // 对话分段排（`ChatSegments`），那里只有段）。等这一下顶栏让开、回复框收起排好了再滚：同一次更新里滚，滚动区不动
+                    // 跳到某一条：按条的 id 在整段内容里找（`ScrollViewReader`；滚动位置的按 id 跳只认滚动目标布局的直接子视图，条在段里）。
+                    // 等这一下顶栏让开、回复框收起排好了再滚：同一次更新里滚，滚动区不动
                     .onChange(of: follow.wrappedValue.target) { _, target in
                         guard let target else { return }
                         Task {

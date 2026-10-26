@@ -13,8 +13,8 @@ nonisolated struct ChatFollow: Equatable {
     private(set) var showsJump = false
     /// 可见区顶边离最早那头不到一屏。
     private(set) var nearOldest = false
-    /// 正在上面排开更早的一段：内容接下来在上面变高，滚动区把多出来的高度当场加到偏移上，正在读的不动（`ContentLift.scroll`）。
-    /// 不能交给滚动区自己：滑到顶时（快甩的惯性常常先到顶）它记下的是"贴着顶边"，新内容会把正在读的推下去。
+    /// 正在上面排开更早的一段：排上去之前不再要下一批（`wantsEarlier`）。排上去时正在读的不动由滚动区按那一条补（`ChatAnchor`），
+    /// 它按补后的位置报离最早那头还近不近（`prepended`）。
     private(set) var prepending = false
     /// 请滚动区回到最新（`jumpToNewest`、`sent`）：滚动区看到它变了就滚过去。
     private(set) var toNewest: ToNewest?
@@ -156,8 +156,6 @@ extension EnvironmentValues {
     @Entry var chatHeight: CGFloat = .infinity
     /// 阅读栏两边的页边距（`ChatLayout.margin`，`ChatColumn` 按可见区的宽算一次）：边上放的小东西（刻度、新消息的点）据它看放不放得下。
     @Entry var chatMargin: CGFloat = 0
-    /// 阅读栏的宽（可见区的宽去掉两边的 `chatMargin`，`ChatColumn` 给）：离屏远的段换成的空白按它估高（`ChatSegments`）。
-    @Entry var chatWidth: CGFloat = 0
 }
 
 /// "回到最新"：回复框右上方一颗圆形玻璃钮，向下的箭头；离开后来过新内容时右上角带一个墨色的点。

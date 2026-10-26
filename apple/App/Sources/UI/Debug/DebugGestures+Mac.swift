@@ -7,7 +7,7 @@ import AppKit
 /// - `swipe:x,y,dx,dy` 触控板双指滑动（dx、dy 是手指走的点数，往右、往下为正；约 0.3 秒，没有惯性）：翻页照真的走；
 ///   滚动视图自己的滚动（放大后的图双指看图）在进程内合成不了——系统的滚动视图在别的线程按窗口服务器送来的滑动滚（responsive scrolling），
 ///   不认合成的；后台看图用 `drag`，要真滚走下面占前台的 `hidscroll`；`jump:x,y,dy` 让那一点的滚动视图一下往下挪 dy 点（负数往上；只为把内容摆到要看的地方，如 PDF 翻到后页、对话翻回前面）；
-/// - `left`、`right`、`space` 按一下那个键；`wait:秒` 多等一会儿；
+/// - `left`、`right`、`space` 按一下那个键；`wait:秒` 多等一会儿；`width:宽,秒` 像拖窗口右边那样逐帧把窗口改到这么宽（左上角不动）；
 /// - 占前台的真实输入（要 `-CuePadForeground YES`，`DebugForeground`）：`front:x,y` 借前台、把指针放到那一点；`hidpinch:x,y,倍数`、
 ///   `hidscroll:x,y,dx,dy`（手指走 0.5 秒、松手后惯性约 0.6 秒）在 HID 层发给窗口服务器（同触控板，经它派给指针下的窗口、系统滚动视图自己的线程）；
 ///   `back` 还前台与指针；`probe:x,y` 把那一点的滚动视图放大倍数与可见区原点写进日志（`PREVIEW-PROBE`，看事件进没进去）；
@@ -26,6 +26,14 @@ extension DebugScene {
         let n = rest.split(separator: ",").compactMap { Double($0) }
         switch (name, n.count) {
         case ("wait", 1): try? await Task.sleep(for: .seconds(n[0]))
+        case ("width", 2):
+            let from = window.frame.width, steps = max(1, Int(n[1] / 0.016))
+            for step in 1...steps {
+                var frame = window.frame
+                frame.size.width = from + (n[0] - from) * Double(step) / Double(steps)
+                window.setFrame(frame, display: true)
+                try? await Task.sleep(for: Self.frame)
+            }
         case ("measure", _): measure(rest.isEmpty ? nil : String(rest), in: window)
         case ("left", 0), ("right", 0), ("space", 0): key(name, in: window)
         case ("dbl", 2):

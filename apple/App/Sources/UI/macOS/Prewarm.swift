@@ -44,7 +44,7 @@ struct Prewarm: View {
             case .conversation:
                 ChatScroll(followKey: 0, readingWidth: 760, inset: 24, follow: $follow) {
                     PiConversation(
-                        session: Self.session, items: PiChat.entries(Self.messages), messages: Self.messages, window: PiConversation.firstWindow)
+                        session: Self.session, items: PiChat.entries(Self.messages), messages: Self.messages, window: ChatWindow(count: PiConversation.firstWindow, earlier: 0) {})
                 }
             case .replyBar: PiReplyBar(session: Self.session, config: nil, catalog: nil, stopping: false) {}
             case .newSession: NewSessionForm(agents: nil) { _ in }

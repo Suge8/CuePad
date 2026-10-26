@@ -22,7 +22,7 @@ import SwiftUI
         layer.add(slide, forKey: "lift.\(slides)")
     }
 
-    /// 可见区沿内容往下挪 `height`：上面多排开了这么高时，正在读的留在原处（`ChatFollow.prepending`）。直接改平台滚动视图的偏移，
+    /// 可见区沿内容往下挪 `height`：正在读的那一条在内容里挪了这么多时（`ChatAnchor`），它留在原处。直接改平台滚动视图的偏移，
     /// 在内容变高的这次更新里生效、这一帧就画在原处，正滚着（触控板的惯性、滚轮、手指拖着）也接着从新的位置滚。
     /// 否决的方案：SwiftUI 的滚动位置（`ScrollPosition.scrollTo(y:)`）晚一次更新才用上，Mac 上正滚着时常被滚动盖掉：正在读的被推下去一整段，
     /// 离最早那头仍不到一屏、不再排开更早的，停在"更早的 N 条"上；按底边锚定（`defaultScrollAnchor(_:for: .sizeChanges)`）正滚着时系统不管。

@@ -91,6 +91,8 @@ extension ChatScroll {
         var height: CGFloat
         /// 让出浮着的那一块的那段（`bottomPadding`）。
         var floating: CGFloat
+        /// 正在读的那一条挪了多少、在屏上的段（`ChatAnchor`）：在屏上的段变了、排版挪动了正在读的那一条时 action 才因它跑。
+        var anchor: ChatAnchor.Tracked
     }
 
     /// 对完一次（`holding` 期间长在下面的）、键盘升起时，整段滑到最新处（减弱动态效果时直接到）；贴着最新时来的新内容不经这里，底锚当帧就排好（`pinned`）。用定长的 `Motion.move`，不用弹簧：弹簧最后那段一两像素的尾巴
