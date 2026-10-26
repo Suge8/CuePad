@@ -137,7 +137,7 @@ struct ProjectPage: View {
             MasonryLayout(minColumnWidth: Self.minColumnWidth, maxColumns: Self.maxColumns, spacing: Self.wallSpacing) {
                 ForEach(ids.compactMap { byID[$0] }) { card in
                     CardTile(card: card, lastTarget: lastTarget[card.id], floated: board.floated.contains(card.id))
-                        .transition(Motion.item)
+                        .transition(.opacity)
                 }
             }
         }

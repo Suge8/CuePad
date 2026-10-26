@@ -102,7 +102,7 @@ struct StyleBoard: View {
             VStack(spacing: 0) {
                 ForEach(rows, id: \.self) { row in
                     Text("第 \(row) 行").frame(maxWidth: .infinity, minHeight: 44, alignment: .leading).padding(.horizontal, 16)
-                        .transition(Motion.item)
+                        .transition(.opacity)
                 }
             }
             .paper(radius: 14)

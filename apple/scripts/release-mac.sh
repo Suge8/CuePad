@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# macOS 分发：归档 → Developer ID 导出 → 公证 → 装订 → zip → 生成并签名 appcast → 替换固定 GitHub Release 的资产 → 从公开地址回读校验。
+# macOS 分发：归档（带正式版标记）→ Developer ID 导出 → 核对标记与资料库位置 → 公证 → 装订 → zip → 生成并签名 appcast → 替换固定 GitHub Release 的资产 → 从公开地址回读校验。
 # 用法：release-mac.sh [--dry-run] [--resume <提交 id>]
 #   --dry-run  停在本地产物：<产物目录>/release/mac/ 下的 zip 与 appcast.xml（已用 EdDSA 签名校验），不上传
 #   --resume   公证有时要等很久（新账号首次提交可能数小时）：中断后接着等这次提交，再装订并继续后面的步骤
@@ -50,7 +50,7 @@ python3 "$APPLE_DIR/scripts/provision.py" profiles
 read -ra versions <<<"$(release_versions)"
 archive="$(release_archive mac "${versions[@]}")"
 xcodebuild archive -project "$APPLE_DIR/CuePad.xcodeproj" -scheme CuePad -destination 'generic/platform=macOS' \
-  -archivePath "$archive" -derivedDataPath "$DERIVED" "${versions[@]}" "${team_signing[@]}"
+  -archivePath "$archive" -derivedDataPath "$DERIVED" "${versions[@]}" "${team_signing[@]}" CUEPAD_RELEASE=YES
 
 export_options "$OUT/export.plist" developer-id "Developer ID Application" "$CUEPAD_APP_ID"="CuePad macOS DeveloperID"
 xcodebuild -exportArchive -archivePath "$archive" -exportOptionsPlist "$OUT/export.plist" \
@@ -59,8 +59,16 @@ xcodebuild -exportArchive -archivePath "$archive" -exportOptionsPlist "$OUT/expo
 fi
 
 app="$OUT/export/CuePad.app"
+plist() { /usr/libexec/PlistBuddy -c "Print $1" "$app/Contents/Info.plist"; }
 check_relay "$app/Contents/Info.plist"
 codesign --verify --deep --strict --verbose=2 "$app"
+# 正式版标记（Signing.xcconfig 的 CUEPAD_RELEASE）：包里是 YES，包里的命令行在空家目录下找的是正式资料库 CuePad/Library、不是开发库 CuePad Dev。
+# 少了它，装上的正式版会去开开发库，用户看到的是空库
+[ "$(plist CuePadRelease)" = YES ] || { echo "包里的 CuePadRelease 不是 YES" >&2; exit 1; }
+home="$(mktemp -d)"
+probe="$(HOME="$home" CFFIXED_USER_HOME="$home" "$app/Contents/Helpers/cuepad" project list 2>&1 || true)"
+rm -rf "$home"
+grep -qF "/Library/Application Support/CuePad/Library/cuepad.db" <<<"$probe" || { echo "包里的命令行没去找正式资料库：$probe" >&2; exit 1; }
 
 # 公证：提交 zip，等待结果，通过后把票据装订进 app
 if [ -n "$resume" ]; then
@@ -80,7 +88,6 @@ xcrun stapler staple "$app"
 xcrun stapler validate "$app"
 spctl --assess --type execute --verbose=2 "$app"
 
-plist() { /usr/libexec/PlistBuddy -c "Print $1" "$app/Contents/Info.plist"; }
 zip="$OUT/$ASSET"
 update="$OUT/${ASSET%.zip}-$(plist CFBundleVersion).zip"
 ditto -c -k --keepParent "$app" "$zip"
