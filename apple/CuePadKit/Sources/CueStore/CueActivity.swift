@@ -2,7 +2,7 @@ import Foundation
 
 /// Cue 的一次工具调用给人看的样子。一次调用有两种说法，各给一拨读者，不合成一份：
 /// - 给人看的（这里）：动作词与按钮同名（`verb`：查看、发给、新建、修改、开始、停止、完成、留给你），配碰到的那一处（`Tools.Item.name`）。
-///   Cue 页这一轮的经过（`touches`）与正在跑的那一步（`CueState.step`：页头那句、对话里经过在动的那一行、Mac 的"运行情况"）都按这张表写（`line`）。
+///   Cue 页这一轮的经过（`touches`）与正在跑的那一步（`CueState.step`：页头那句、对话末尾此刻在做的那一行、Mac 的"运行情况"）都按这张表写（`line`）。
 /// - 给 Cue 看的（`Tools.Item.target`，`CueActivity.item` 写）：跟它的工具名走（开工、做完、对「X」说：…），同 WORDS 里"做完"是 Cue 的说法，
 ///   只进它换新后的对话视图（`CueView`）。
 /// 界面的动词跟按钮走、会改；Cue 的说法跟工具与系统提示走，改了等于改提示词，要做前后评测（docs/cue-eval.md）。所以两份各管各的。
@@ -52,21 +52,14 @@ public enum CueActivity {
     var touches: [Touch] = []
     for item in tools?.items ?? [] where !item.failed {
       guard let name = item.name, item.kind == .leave || weight.contains(item.kind) else { continue }
-      merge(Touch(kind: item.kind, name: name, task: item.task, session: item.session), into: &touches)
+      let touch = Touch(kind: item.kind, name: name, task: item.task, session: item.session)
+      guard let index = touches.firstIndex(where: { $0.same(touch) }) else {
+        touches.append(touch)
+        continue
+      }
+      if rank(item.kind) < rank(touches[index].kind) { touches[index].kind = item.kind }
     }
     return touches
-  }
-
-  /// 把一处并进经过（`touches` 与在跑的那一步共用这一条规矩）：已有那一处就留两者里更要紧的动作，没有就接在末尾；返回它在第几行。
-  /// 在跑的那一步也这样并：做完后落进清单的那一条按同一条规矩并回同一行，所以在跑时与做完后、重开前后经过一样。
-  @discardableResult
-  public static func merge(_ touch: Touch, into touches: inout [Touch]) -> Int {
-    guard let index = touches.firstIndex(where: { $0.same(touch) }) else {
-      touches.append(touch)
-      return touches.count - 1
-    }
-    if rank(touch.kind) < rank(touches[index].kind) { touches[index].kind = touch.kind }
-    return index
   }
 
   private static func rank(_ kind: PiChatMessage.Tools.Kind) -> Int { weight.firstIndex(of: kind) ?? weight.count }
