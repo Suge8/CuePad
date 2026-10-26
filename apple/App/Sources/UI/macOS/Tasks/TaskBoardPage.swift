@@ -15,8 +15,7 @@ struct TaskBoardPage: View {
     var body: some View {
         let scope = workspace.scopedProject
         ZStack(alignment: .topLeading) {
-            BoardColumns(board: (board ?? .empty).only(scope), adding: Bindable(workspace).addsTask, newTaskProject: scope ?? workspace.currentProject)
-                .padding(.horizontal, Spacing.page - 8)
+            BoardColumns(board: (board ?? .empty).only(scope), adding: Bindable(workspace).addsTask, newTaskProject: scope ?? workspace.currentProject, margin: Spacing.page - 8)
                 .environment(\.boardBand, band)
                 .ignoresSafeArea(edges: .top)
                 // 换范围是整块换内容：列里按卡挪位的动画与列头数字滚动都不跟着走（跟着走时四列每帧重排、数字每帧在 CPU 上重画，掉帧半秒）。

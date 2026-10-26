@@ -2,14 +2,17 @@ import CueStore
 import SwiftUI
 
 /// 四列并排（Mac、宽屏 iPad 与 iPhone 横屏的进展页）：每列（`BoardColumn`）的列头浮在顶上（`BoardColumnHeader`，写字玻璃），卡各自滚动、从列头后面过。
-/// 列按可见宽四等分，四列总在眼前（藏在屏外的列没有露出一截，看不出能横划）；窄到一列放不下 `minColumn` 时整排横向滚动。
+/// 列按可见宽四等分，四列总在眼前；列最窄 `minColumn`，放不下四列时（如 Mac 窄窗开着侧栏）整排横向滚动、最右一列露出一截
+/// （看得出能横划）：两侧页边是滚动区内容的边（`margin`），列滚到窗口边才裁，滚到头右边照样留页边。
 struct BoardColumns: View {
     let board: TaskBoard
     @Binding var adding: Bool
     let newTaskProject: UUID?
+    /// 两侧页边。
+    let margin: CGFloat
 
     /// 一列最窄（三端同一个）：放得下圈、项目小图形与折两行后够读的标题（`BoardCardMetrics.title`）。
-    /// iPad 竖屏、iPhone 横屏、Mac 900 宽收起侧栏的窗口都排得下四列。
+    /// iPad 竖屏、iPhone 横屏、Mac 900 宽收起侧栏的窗口都排得下四列；900 宽开着侧栏排不下，横滑（压窄到排得下时一行只剩三个字）。
     private static let minColumn: CGFloat = 160
     /// 列与列之间：列没有底，靠这段留白分开。
     private static let gap: CGFloat = 20
@@ -19,7 +22,7 @@ struct BoardColumns: View {
     var body: some View {
         // 按可见宽算一次列宽与卡标题的行数，四列、每张卡都用这一份（几何读数只给子视图，不写回状态）
         GeometryReader { proxy in
-            let column = max(Self.minColumn, (proxy.size.width - Self.gap * 3) / 4)
+            let column = max(Self.minColumn, (proxy.size.width - margin * 2 - Self.gap * 3) / 4)
             ScrollView(.horizontal) {
                 HStack(alignment: .top, spacing: Self.gap) {
                     ForEach(TaskBoard.Column.allCases) { item in
@@ -27,6 +30,7 @@ struct BoardColumns: View {
                     }
                 }
             }
+            .safeAreaPadding(.horizontal, margin)
             .scrollBounceBehavior(.basedOnSize)
             .environment(\.boardTitle, BoardCardMetrics.title(cardWidth: column - 2 * BoardCardMetrics.inset, typeSize: typeSize))
         }

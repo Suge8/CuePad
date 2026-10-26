@@ -52,7 +52,7 @@ struct ProgressScreen: View {
         let shown = (board ?? .empty).only(scope)
         return Group {
             if sizeClass == .regular || verticalSizeClass == .compact {
-                BoardColumns(board: shown, adding: $adding, newTaskProject: newTaskProject).padding(.horizontal, 12)
+                BoardColumns(board: shown, adding: $adding, newTaskProject: newTaskProject, margin: 12)
             } else {
                 PhoneBoard(board: shown, adding: $adding, newTaskProject: newTaskProject)
             }
