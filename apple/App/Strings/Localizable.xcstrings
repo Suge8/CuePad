@@ -1234,6 +1234,34 @@
         }
       }
     },
+    "%lld 个子代理在跑" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld subagent running"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld subagents running"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld 个子代理在跑"
+          }
+        }
+      }
+    },
     "%lld 件" : {
       "localizations" : {
         "en" : {
@@ -1258,22 +1286,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld 件"
-          }
-        }
-      }
-    },
-    "%lld 件在跑" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld running"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld 件在跑"
           }
         }
       }
@@ -1338,22 +1350,6 @@
         }
       }
     },
-    "%lld 件等子代理" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld waiting on subagents"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld 件等子代理"
-          }
-        }
-      }
-    },
     "%lld 件要你管" : {
       "localizations" : {
         "en" : {
@@ -1410,22 +1406,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld 句没送到"
-          }
-        }
-      }
-    },
-    "%lld 在跑" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld running"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld 在跑"
           }
         }
       }
@@ -1498,6 +1478,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld 失败"
+          }
+        }
+      }
+    },
+    "%lld 子代理" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld subagent"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld subagents"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld 子代理"
           }
         }
       }
@@ -1902,22 +1910,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld 等你"
-          }
-        }
-      }
-    },
-    "%lld 等子代理" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld on subagents"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld 等子代理"
           }
         }
       }
@@ -3987,6 +3979,22 @@
         }
       }
     },
+    "上一个（←）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Previous (←)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上一个（←）"
+          }
+        }
+      }
+    },
     "上一件" : {
       "localizations" : {
         "en" : {
@@ -4175,6 +4183,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "下一个"
+          }
+        }
+      }
+    },
+    "下一个（→）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Next (→)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下一个（→）"
           }
         }
       }
@@ -7995,22 +8019,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "图片"
-          }
-        }
-      }
-    },
-    "图片.%@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Image.%@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "图片.%@"
           }
         }
       }

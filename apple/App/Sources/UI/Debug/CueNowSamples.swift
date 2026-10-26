@@ -16,11 +16,14 @@ enum CueNowSamples {
         allow: CueNow.Allow(message: UUID(), choice: CueAsk.once))
 
     private static func now(
-        _ mood: CueMood, _ cue: CueNow.Brain, _ items: [CueNow.Item], advancing: Int, first: CueNow.Wait? = nil, resting: CueMood = .listening
+        _ mood: CueMood, _ cue: CueNow.Brain, _ items: [CueNow.Item], advancing: Int, first: CueNow.Wait? = nil, resting: CueMood = .listening,
+        subagents: Int? = nil
     ) -> CueNow {
-        let count = { (kind: CueNow.Item.Kind) in items.count { $0.kind == kind } }
-        let tally = CueNow.Tally(asks: count(.asks), reply: count(.reply), running: count(.running), delegating: count(.delegating))
-        return CueNow(name: "Cue", mood: mood, restingMood: resting, cue: cue, tally: tally, advancing: advancing, items: items, first: first, at: .now)
+        let count = { (kinds: Set<CueNow.Item.Kind>) in items.count { kinds.contains($0.kind) } }
+        let tally = CueNow.Tally(asks: count([.asks]), reply: count([.reply]), moving: count([.running, .delegating]))
+        return CueNow(
+            name: "Cue", mood: mood, restingMood: resting, cue: cue, tally: tally, advancing: advancing,
+            subagents: subagents ?? items.reduce(0) { $0 + $1.subagents }, items: items, first: first, at: .now)
     }
 
     /// 被会话叫醒、在看它交回的结果；一件在跑、一件等子代理。
@@ -94,6 +97,17 @@ enum CueNowSamples {
         item("notes", .delegating, String(localized: "发言顺序修复", table: "Demo"), 12.05, subagents: 1),
     ], advancing: 4)
 
+    /// 真实规模：一件拍板、一个会话待回复；推进中 4 件——"看板方案"挂两个会话（一个在跑、一个等 5 个子代理交回），另两件在跑，
+    /// "发言顺序修复"等 7 个子代理交回：一共 12 个子代理在跑。
+    static let busy = now(.waiting, .idle, [
+        item("ask", .asks, String(localized: "推送 v1.4 到 TestFlight", table: "Demo"), 3),
+        item("reply/glass", .reply, String(localized: "玻璃按钮重做", table: "Demo"), 9),
+        item("board", .running, String(localized: "出手机任务看板方案", table: "Demo"), 3.2),
+        item("header", .running, String(localized: "出 iOS header 收口方案", table: "Demo"), 1.4),
+        item("dock", .running, String(localized: "底部 tab 切页丝滑收口", table: "Demo"), 0.9),
+        item("notes", .delegating, String(localized: "发言顺序修复", table: "Demo"), 12.05, subagents: 7),
+    ], advancing: 4, first: push, resting: .waiting, subagents: 12)
+
     /// 它运行的那台 Mac 没开，手上的活照旧：一件拍板、一个会话待回复、三件在跑。
     static let awayBusy = now(.sleeping, .away(String(localized: "「Mac Studio」没开", table: "Demo"), failed: false), [
         item("ask", .asks, String(localized: "推送 v1.4 到 TestFlight", table: "Demo"), 3),
@@ -116,7 +130,7 @@ enum CueNowSamples {
 
     static let all: [String: CueNow] = [
         "woke": woke, "delegating": delegating, "asks": asks, "done": done, "afterDone": afterDone, "crowded": crowded,
-        "quiet": quiet, "away": away, "four": four, "fourAsks": fourAsks, "fourWorking": fourWorking, "awayBusy": awayBusy,
+        "quiet": quiet, "away": away, "four": four, "fourAsks": fourAsks, "fourWorking": fourWorking, "awayBusy": awayBusy, "busy": busy,
     ]
     static let tour = [woke, delegating, asks, done, quiet]
 

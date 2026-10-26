@@ -3,9 +3,10 @@ import Foundation
 /// Cue 此刻（WORDS.md「推进中」「等你」「待回复」）：各端 Cue 那一行（三端侧栏、手机与 iPad 的名牌、菜单栏面板与输入条）、小组件、
 /// iPhone 的灵动岛与锁屏、App 图标与菜单栏图标的角标读的唯一一份。App 由库推出（`CueNow.init(_:at:local:)`，从 Cue 的摘要 `CueDigest`），这里只有规则，各处只画（`CueNowViews`）。
 /// - Cue 自己（`cue`）：不在（没启用、睡着、起不来，带那一句原因）、歇着、你的话在路上、在一轮里（谁叫醒的、此刻那一步、从几点起）。头像的表情（`mood`）也在这里，各处的头像只读它。
-/// - 数字账（`ledger`）：几种活各几件（Cue 不在时也照写），按件数（一件是看板上的一张卡，`CueTally`），不按会话数。要你管的（拍板、待回复）在前，推进中的（在跑、等子代理交回）在后；
-///   歇着的不写（看板上看得到），为 0 的不写；放不下时在跑与等子代理并成"N 推进中"（与底部那一排的"推进中 N"同一个数，`advancing`）。
-///   不再挑一句说：几件、各什么样子、几件要你管同时摆出来。都没有时一句安静的现状（`quietLine`）。
+/// - 数字账（`ledger`）：要你管的（拍板、待回复，按件数）在前，"N 推进中"在后（与看板列头、底部那一排、侧栏进展那一行同一个数，`advancing`），
+///   再接"M 子代理"（推进中各件的会话里在跑的子代理一共几个，`subagents`），放不下先去掉子代理；Cue 不在时也照写，为 0 的不写。
+///   推进中那项只在有件在跑或等子代理交回时写（`Tally.moving`），都歇着时写那一句（`quietLine`）；每件此刻的样子（在跑、等子代理）不进数字账，在下面每件一行里。
+///   否决过：按件分"3 在跑 1 等子代理"——看不出规模，加起来又不数歇着的、对不上推进中；按会话数加代理总数——会话数对不上看板上任何一个数，放不下时只剩它。
 /// - 角标（`needsYou`）：拍板加待回复，App 图标、菜单栏图标与灵动岛最小态同一个数。
 /// - 每件一行（`items`）：展开态与锁屏下面列的那几件，等你的每一件、待回复的每个会话、推进中的每一件（在跑、等子代理交回、歇着）、刚做完的顶层任务；按这个先后排。
 /// - 快的事实（Cue 在想、话在路上）几分钟就变，后台的岛不一定等得到下一份：过了 `staleAt` 只信慢的（`settled`）。
@@ -21,6 +22,8 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
     var tally: Tally
     /// 推进中几件（`CueTally.advancing`，含歇着的）。
     var advancing: Int
+    /// 推进中各件的会话里在跑的子代理一共几个。
+    var subagents: Int
     /// 至多 `itemLimit` 件。
     var items: [Item]
     /// 第一件等你：说什么、"打开"去哪，只有 Cue 带选项的提问能"允许一次"（会话在问的只给打开）。
@@ -39,12 +42,12 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
         case working(woke: String?, doing: String?, since: Date)
     }
 
-    /// 各种几件（推进中的只数在跑与等子代理的，歇着的不进数字账）。
+    /// 各种几件。
     struct Tally: Codable, Hashable, Sendable {
         var asks = 0
         var reply = 0
-        var running = 0
-        var delegating = 0
+        /// 推进中在跑或等子代理交回的（不数歇着的）：有它才写"N 推进中"、开着实时活动。
+        var moving = 0
 
         /// "等你 N"：拍板加待回复，这条规则只在这里（`CueNow.needsYou`）。
         var needsYou: Int { asks + reply }
@@ -122,7 +125,7 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
     var needsYou: Int { tally.needsYou }
 
     /// 有活才开着实时活动：Cue 在一轮里或话在路上、有等你的（拍板与待回复）、有在跑或等子代理的；只剩歇着与刚做完的就结束。
-    var isLive: Bool { isBusy || needsYou > 0 || tally.running + tally.delegating > 0 }
+    var isLive: Bool { isBusy || needsYou > 0 || tally.moving > 0 }
 
     /// 这一份过多久不可信。
     var staleAfter: TimeInterval { isBusy ? Self.fastStale : Self.slowStale }
@@ -165,7 +168,7 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
     }
 
     static let empty = CueNow(
-        name: "Cue", mood: .sleeping, restingMood: .sleeping, cue: .idle, tally: Tally(), advancing: 0, items: [], first: nil, at: .distantPast)
+        name: "Cue", mood: .sleeping, restingMood: .sleeping, cue: .idle, tally: Tally(), advancing: 0, subagents: 0, items: [], first: nil, at: .distantPast)
 }
 
 nonisolated extension CueNow: SnapshotFile { static let fileName = "cue.json" }
@@ -174,23 +177,20 @@ nonisolated extension CueNow {
     /// 数字账的一项：哪一种、几件。
     struct Entry: Hashable, Sendable, Identifiable {
         enum Kind: Hashable, Sendable {
-            case asks, reply, running, delegating
-            /// 在跑与等子代理并成的那一项（数是 `advancing`）。
-            case advancing
+            case asks, reply, advancing, subagents
         }
 
         let kind: Kind
         let count: Int
         var id: Kind { kind }
 
-        /// 读屏念的整句（"3 件在跑"）：每种一个键，英文的复数与语序在目录里。
+        /// 读屏念的整句（"4 件推进中"）：每种一个键，英文的复数与语序在目录里。
         var spoken: String {
             switch kind {
             case .asks: String(localized: "\(count) 件拍板")
             case .reply: String(localized: "\(count) 件待回复")
-            case .running: String(localized: "\(count) 件在跑")
-            case .delegating: String(localized: "\(count) 件等子代理")
             case .advancing: String(localized: "\(count) 件推进中")
+            case .subagents: String(localized: "\(count) 个子代理在跑")
             }
         }
 
@@ -198,7 +198,7 @@ nonisolated extension CueNow {
             switch kind {
             case .asks: .asks
             case .reply: .reply
-            case .running, .delegating, .advancing: .moving
+            case .advancing, .subagents: .moving
             }
         }
     }
@@ -208,17 +208,17 @@ nonisolated extension CueNow {
         [Entry(kind: .asks, count: tally.asks), Entry(kind: .reply, count: tally.reply)].filter { $0.count > 0 }
     }
 
-    /// 推进中的：在跑、等子代理（为 0 的不写，歇着的不写）。
+    /// 推进中的：几件推进中、几个子代理在跑（为 0 的不写）；没有在跑或等子代理的件时为空。
     var moving: [Entry] {
-        [Entry(kind: .running, count: tally.running), Entry(kind: .delegating, count: tally.delegating)].filter { $0.count > 0 }
+        guard tally.moving > 0 else { return [] }
+        return [Entry(kind: .advancing, count: advancing), Entry(kind: .subagents, count: subagents)].filter { $0.count > 0 }
     }
 
-    /// 数字账由细到粗的几排（排得下哪排画哪排）：全列；在跑与等子代理并成推进中。都没有时为空，写 `quietLine`。
+    /// 数字账由细到粗的几排（排得下哪排画哪排）：全列；去掉子代理。都没有时为空，写 `quietLine`。
     /// Cue 不在时照写：活还在、拍板还等着你，不在只由头像变淡说（原因在没有可数时、在设置与 Cue 页里）。
     var ledger: [[Entry]] {
         guard !(yours.isEmpty && moving.isEmpty) else { return [] }
-        let merged = moving.isEmpty ? [] : [yours + [Entry(kind: .advancing, count: advancing)]]
-        return [yours + moving] + merged
+        return [yours + moving] + (moving.count > 1 ? [yours + moving.prefix(1)] : [])
     }
 
     /// 没有可数的时那一句：不在的原因、你的话在路上、Cue 此刻那一步（用工具时那一步，不然谁叫醒的，都没有时"思考中"，
@@ -266,7 +266,7 @@ nonisolated extension CueNow {
         return isBusy || !moving.isEmpty ? .moving : .quiet
     }
 
-    /// 读屏：数字账（"1 件拍板，3 件在跑"），没有时那一句。
+    /// 读屏：数字账（"1 件拍板，4 件推进中，12 个子代理在跑"），没有时那一句。
     var spoken: String {
         guard let entries = ledger.first else { return quietLine }
         return Dotted(entries.map(\.spoken)).spoken

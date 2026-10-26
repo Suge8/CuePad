@@ -7,7 +7,7 @@ import WidgetKit
 /// 调试画面用同一份视图画出各态（`DebugActivityStage`）：系统的上下文（`ActivityViewContext`）造不出来，这里只吃内容与画的时刻。
 /// 数字账与头像就是 App 里名牌的同一份（`CueNowViews`）。画的是推出的那一份到此刻的样子（`CueNow.shown(at:)`：
 /// 过时了只信慢的事实，刚做完的到点收掉）；每一份的 `staleDate` 是它下一次变的那一刻（`CueLiveActivity`），系统到点重画，App 不用醒。
-/// - 紧凑态：数字账那一排拆在摄像头两侧——左边要你管的那一组（拍板、待回复），右边推进中的总数；没有要你管的，左右是推进中的前两项。没有可数的只写短词（`CueNow.quietWord`）。
+/// - 紧凑态：数字账那一排拆在摄像头两侧——左边要你管的那一组（拍板、待回复），右边"N 推进中"；没有要你管的，左边"N 推进中"、右边"M 子代理"。没有可数的只写短词（`CueNow.quietWord`）。
 ///   不计时：哪件的秒在走看不出，计时留在展开态每一行里。横屏窄紧凑态（`isDynamicIslandLimitedInWidth`）左边只留头像，右边是最前那一项的数。
 /// - 最小态（与别的实时活动同在）：头像加角标（要你管的几件，`CueNow.needsYou`）。
 /// - 展开态：头一行数字账，Cue 自己此刻那一步另起一行（`CueNow.step`），第一件等你带"允许一次"（`AllowOnceIntent`），其余几件一件一行，最后一行各家额度（快重置时倒数，`QuotaReminder.isNear`）。展开态与锁屏都不高过 160 点。
@@ -104,7 +104,7 @@ private struct CompactLeading: View {
     }
 }
 
-/// 紧凑态右边：有要你管的时是推进中的总数，没有时是推进中的第二项；横屏窄处是要你管的几件（没有时推进中的总数）。
+/// 紧凑态右边：有要你管的时是"N 推进中"，没有时是"M 子代理"；横屏窄处是要你管的几件（没有时推进中几件）。
 private struct CompactTrailing: View {
     let now: CueNow
     let forced: Bool?
@@ -117,7 +117,7 @@ private struct CompactTrailing: View {
             if limited {
                 if now.needsYou > 0 {
                     Text(now.needsYou, format: .number).font(.system(size: 14, weight: .bold)).monospacedDigit().foregroundStyle(palette.waiting)
-                } else if now.moving.count > 0 {
+                } else if !now.moving.isEmpty {
                     Text(now.advancing, format: .number).font(.system(size: 14, weight: .bold)).monospacedDigit().foregroundStyle(palette.signature)
                 }
             } else if let entry = Self.trailing(now) {
@@ -128,8 +128,7 @@ private struct CompactTrailing: View {
     }
 
     private static func trailing(_ now: CueNow) -> CueNow.Entry? {
-        if !now.yours.isEmpty { return now.moving.isEmpty ? nil : CueNow.Entry(kind: .advancing, count: now.advancing) }
-        return now.moving.dropFirst().first
+        now.yours.isEmpty ? now.moving.dropFirst().first : now.moving.first
     }
 }
 
