@@ -73,9 +73,9 @@ public struct PiErrorSummary: Sendable, Equatable {
 
     // MARK: 解析
 
-    /// 开头的 `400 …` / `400: …`（Claude Code 写成 `API Error: 400 …`），或 `(400)`。
+    /// 开头的 `400 …` / `400: …`，Claude Code 的 `API Error: 400 …`（前面可能还有一句，如 `Failed to authenticate. API Error: 401 …`），或 `(400)`。
     private static func status(in raw: String) -> Int? {
-        let match = raw.firstMatch(of: /^\s*(?:API Error:\s*)?(\d{3})\b/) ?? raw.firstMatch(of: /\((\d{3})\)/)
+        let match = raw.firstMatch(of: /^\s*(\d{3})\b/) ?? raw.firstMatch(of: /API Error:\s*(\d{3})\b/) ?? raw.firstMatch(of: /\((\d{3})\)/)
         return match.flatMap { Int($0.1) }.flatMap { (100...599).contains($0) ? $0 : nil }
     }
 

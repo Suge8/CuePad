@@ -5,22 +5,22 @@ import SwiftUI
 /// 会话来自 `CueStore.handedSessions`（执行过的记在卡上，手机发出还没执行的读投送请求）。
 nonisolated struct AgentLinks: Sendable, Equatable {
     var items: [UUID: PiSessionListItem]
-    /// 从这条开了新会话、还没开好（"正在开会话"）。
-    var launching: Set<UUID>
+    /// 从这条开了新会话、还没开好（"正在开会话"）：用哪家开。
+    var launching: [UUID: AgentKind]
 
     static func read(from store: isolated CueStore) throws -> AgentLinks {
         let handed = try store.handedSessions()
         let sessions = try store.piSessions(sessionIDs: handed.values.compactMap { if case .session(let id) = $0 { id } else { nil } })
         return AgentLinks(
             items: handed.compactMapValues { if case .session(let id) = $0 { sessions[id] } else { nil } },
-            launching: Set(handed.filter { $0.value == .launching }.keys))
+            launching: handed.compactMapValues { if case .launching(let kind) = $0 { kind } else { nil } })
     }
 }
 
 extension EnvironmentValues {
     /// 灵感与任务交给的会话（`AgentLinks.items`）：整个窗口一份（`Workspace.agentLinks`），由 `WindowCardAgents` 放进环境，
     /// 页面、卡与行各取自己的，不自己订阅。
-    @Entry var cardAgents = AgentLinks(items: [:], launching: [])
+    @Entry var cardAgents = AgentLinks(items: [:], launching: [:])
 }
 
 /// 把窗口那一份交给的会话放进环境。单独一层读它：会话状态变化时只重算这一层与读环境的卡和行，不重算外面的根视图。
@@ -41,7 +41,7 @@ struct AgentDot: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        if agents.launching.contains(card) {
+        if agents.launching[card] != nil {
             Circle().strokeBorder(palette.signature, lineWidth: 1.5).frame(width: 8, height: 8)
                 .relaySpot(task: card)
                 .frame(width: 28, height: 28)

@@ -147,10 +147,11 @@ private struct SidebarHeader<Action: View>: View {
     }
 }
 
-/// 区头的动作钮只露图标，框是 24 的圆：悬停的底（`PressFeedback`）就这么大。
+/// 区头的动作钮只露图标，框是 24 的圆：悬停的底（`PressFeedback`）就这么大。名字交给 `.iconOnly`：只画图标时读屏照样读得到它。
 private struct SidebarHeaderAction: LabelStyle {
     func makeBody(configuration: Configuration) -> some View {
-        configuration.icon.frame(width: 24, height: 24).contentShape(.circle)
+        Label { configuration.title } icon: { configuration.icon.frame(width: 24, height: 24).contentShape(.circle) }
+            .labelStyle(.iconOnly)
     }
 }
 

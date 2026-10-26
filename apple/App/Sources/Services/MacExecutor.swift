@@ -59,10 +59,10 @@ final class MacExecutor {
     private func run(_ request: DeliveryRequest) async -> DeliveryOutcome {
         do {
             return try await perform(request)
-        } catch where request.mode != .known(.start) && Self.isTransient(error) {
-            return .transient(ShownText(error))
         } catch {
-            return .failed(ShownText(error))
+            // 原因写回请求，请求完成后一分钟就清掉；日志里留一份，事后查得到是哪一步、什么错
+            AppServices.log.error("投送请求 \(request.id, privacy: .public) \(request.mode.rawValue, privacy: .public) 没成：\(String(describing: error), privacy: .public)")
+            return request.mode != .known(.start) && Self.isTransient(error) ? .transient(ShownText(error)) : .failed(ShownText(error))
         }
     }
 
@@ -186,8 +186,15 @@ final class MacExecutor {
         guard let launch = request.launch else { throw SendError.unsupportedMode(request.mode.rawValue) }  // 更新版本写的新内容
         let directory = try await workspace(of: launch.project)
         try requireDirectory(directory)
-        let id = try await runtime(launch.agent ?? .pi).open(
+        let clock = ContinuousClock(), began = clock.now
+        let id = try await runtime(launch.opening).open(
             in: directory, launchToken: launch.token, name: launch.name, model: launch.model, thinking: launch.thinking)
+        let opened = clock.now
+        // 开工到会话连上分两段记下：起进程上桥，与第一句落成会话里的消息（`AgentTimeouts`）；慢在哪一段、超时在哪一段从这里看
+        defer {
+            AppServices.log.notice(
+                "开新会话（\(launch.opening.rawValue, privacy: .public)）：起进程上桥 \(began.duration(to: opened), privacy: .public)，送开场 \(opened.duration(to: clock.now), privacy: .public)")
+        }
         if let opening = launch.prompt?.trimmingCharacters(in: .whitespacesAndNewlines), !opening.isEmpty {
             // 开场的话是存储格式（可带卡片里的图片）
             let content = SendContent(stored: opening)

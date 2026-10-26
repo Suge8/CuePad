@@ -39,9 +39,11 @@ extension CueEvalTests {
             let rig = eval.rig
             try await eval.trigger { try await rig.say("在工作区里建一个 hello.txt，写一句 hello") }
             let tasks = try await rig.store.cueBoard().tasks.map(\.task)
+            let reply = try await eval.reply()
             return [
                 Check(.result, "开工（开出了会话）", rig.app.host.calls.contains { if case .open = $0 { true } else { false } }),
                 Check(.result, "正文没指到 Cue 的工作目录", !tasks.isEmpty && tasks.allSatisfy { !$0.body.contains("Cue/work") }),
+                Check(.interrupt, "回复不报模型与强度", reply.map { !reportsConfig($0.text) } == true),
             ]
         }
     }

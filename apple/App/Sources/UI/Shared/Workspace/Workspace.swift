@@ -117,6 +117,9 @@ final class Workspace {
     var showsSetup = false
     /// 新会话的表单开着（`NewSessionForm`，从会话页的 + 弹出；菜单"文件 › 新会话"先去会话页再置起，`newSession`）。
     var showsNewSession = false
+    /// 这台 Mac 上点"开始"没开成会话的叶子与原因（`handOff`）：任务气泡那一行一直写着、给"重试"，再点开始时清掉。
+    /// 只记在这台：没开成的开新会话请求过一会儿就清掉（`DeliveryExecutor.retention`），提示条两秒多就收，原因就只剩这里。
+    var launchFailures: [UUID: String] = [:]
     /// 进展页待办顶上浮出添加那一行（页上的"新任务"与右上"⋯"里的同一下）。
     var addsTask = false
     /// 清空回收站的确认开着（回收站页上与"⋯"里的"清空回收站…"同一下）。
@@ -154,7 +157,7 @@ final class Workspace {
 
     /// 交给了会话的灵感与任务（`AgentLinks`，卡与行上的状态点读它）：整个窗口一份，页面直接读，
     /// 不各自订阅（挂着的页也不会在每次回到前台时重读一遍）。读到和已有的相同不送来（`observe(after:)` 在读取一侧比较），免得页面白算。
-    private(set) var agentLinks = AgentLinks(items: [:], launching: [])
+    private(set) var agentLinks = AgentLinks(items: [:], launching: [:])
 
     private func follow<T: Sendable & Equatable>(
         _ value: ReferenceWritableKeyPath<Workspace, T>, _ read: @escaping @Sendable (isolated CueStore) throws -> T

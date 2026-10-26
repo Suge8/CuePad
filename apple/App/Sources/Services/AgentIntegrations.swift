@@ -178,6 +178,14 @@ final class AgentIntegrations {
     }
 }
 
+extension AppServices {
+    /// 装一家（接入面板与设置里的"安装""升级"）：后台跑官方安装脚本，装完再问一遍这台各家能不能用、写进库（开会话、启用 Cue 读它）。
+    func installAgent(_ kind: AgentKind) async throws {
+        await agents.installAgent(kind)
+        try await macAgents.record(redetecting: true)
+    }
+}
+
 /// 在后台装、登录一家的进度（`AgentIntegrations.jobs`）。
 enum AgentJob: Equatable {
     case installing

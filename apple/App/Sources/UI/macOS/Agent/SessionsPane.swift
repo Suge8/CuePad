@@ -123,16 +123,21 @@ private struct ConnectAgents: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
 
-    /// 检测到 Agent、一家都没接入、桥上也没有会话。
+    /// 这台装着的几家：检测过、找到了它的程序（太旧、问版本没回应的也算装着；没找到的也有检测结果，不算）。
+    private static func found(_ agents: AgentIntegrations) -> [AgentKind] {
+        AgentKind.allCases.filter { agents.status($0).map { $0.presence != .notFound } ?? false }
+    }
+
+    /// 装着 Agent、一家都没接入、桥上也没有会话。
     static func needed(_ services: AppServices) -> Bool {
         let agents = services.agents
-        return AgentKind.allCases.contains { agents.status($0) != nil } && !AgentKind.allCases.contains { agents.status($0)?.isConnected == true }
+        return !found(agents).isEmpty && !AgentKind.allCases.contains { agents.status($0)?.isConnected == true }
             && services.pi.slots.isEmpty
     }
 
     var body: some View {
         if Self.needed(services) {
-            let found = AgentKind.allCases.filter { services.agents.status($0) != nil }
+            let found = Self.found(services.agents)
             HStack(alignment: .center, spacing: 14) {
                 HStack(spacing: -6) {
                     ForEach(found, id: \.self) { kind in

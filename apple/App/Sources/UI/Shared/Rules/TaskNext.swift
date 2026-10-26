@@ -51,7 +51,7 @@ extension Workspace {
         if let lead, let next = next(for: lead, in: agents, steps: nil) { return next }
         guard task.status != .done else { return nil }
         let agent = agent(of: task.id, in: agents)
-        let startable = steps == nil && !agents.launching.contains(task.id) ? task : nil
+        let startable = steps == nil && agents.launching[task.id] == nil ? task : nil
         return TaskNext(shown: agent?.shown, session: agent?.session, startable: startable)
     }
 

@@ -35,6 +35,7 @@ struct CueEvalTests {
                 Check(.result, "放进演示项目", tasks.first?.projectID == demo?.id),
                 Check(.result, "开工（开出了会话）", rig.app.host.calls.contains { if case .open = $0 { true } else { false } }),
                 Check(.interrupt, "回复一两句", reply.map { sentences($0.text) <= 2 } == true),
+                Check(.interrupt, "回复不报模型与强度", reply.map { !reportsConfig($0.text) } == true),
                 Check(.ask, "没发等你", try await eval.said().allSatisfy { $0.choices == nil }),
                 Check(.ask, "没问用户", reply.map { !$0.text.contains("？") && !$0.text.contains("?") } == true),
                 Check(.interrupt, "他发起的一轮不另 tell", eval.calls("tell").isEmpty),

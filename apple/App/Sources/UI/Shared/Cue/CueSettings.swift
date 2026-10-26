@@ -150,8 +150,14 @@ nonisolated struct CueSettings: Equatable, Sendable {
     /// 各端同一套写法：选在哪台运行的那一行与"不启用"（停用）。
     static var hostTitle: String { String(localized: "在哪台 Mac 上运行") }
     static var off: String { String(localized: "不启用") }
-    /// 手机上还没有哪台 Mac 写下过自己（`hosts` 为空）时设置与 Cue 面板里那句；Cue 页上给的动作是发出 Mac 版的下载链接（`macDownload`）。
-    static var noHost: String { String(localized: "先在 Mac 上打开 CuePad") }
+    #if os(iOS)
+    /// 手机上还没有哪台 Mac 写下过自己（`hosts` 为空）时设置与 Cue 面板里那句。同步到不了 Mac（`AppServices.macAlert`）时写同步那一行的标题：
+    /// 手机只经 iCloud 和 Mac 连上，那时去 Mac 上打开也连不上。只写标题：面板里这一块定高放不下说明，设置里说明与出路就在紧下面的同步那一组。
+    /// Cue 页上给的动作是发出 Mac 版的下载链接（`macDownload`）。
+    @MainActor static func noHost(_ services: AppServices) -> String {
+        services.macAlert?.title ?? String(localized: "先在 Mac 上打开 CuePad")
+    }
+    #endif
     static let macDownload = URL(string: "https://github.com/Suge8/CuePad/releases/latest")!
 
     private static var here: String { String(localized: "这台 Mac") }
