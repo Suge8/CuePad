@@ -118,8 +118,6 @@ enum Motion {
     static let pressDown = Animation.spring(duration: 0.14, bounce: 0)
     /// 松开：稍慢、带一点回弹，像纸被放开时弹回来。
     static let pressUp = Animation.spring(duration: 0.34, bounce: 0.32)
-    /// 列表里一行出现、消失：淡入淡出；位置由列表自己的动画挪。
-    static let item = AnyTransition.opacity
 
     /// 减弱动态效果时的整块交叉淡入淡出：只配换了身份的视图用（新旧两块各自淡入淡出），同一个视图上用它照样会插值位置与尺寸。
     static let crossfade = Animation.easeInOut(duration: crossfadeDuration)

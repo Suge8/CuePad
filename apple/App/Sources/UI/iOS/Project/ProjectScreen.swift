@@ -78,7 +78,7 @@ struct ProjectScreen: View {
                     wall {
                         ForEach(arrangement.wall.compactMap { page.entries[$0] }) { entry in
                             CardTileView(entry: entry, lastTarget: lastTarget[entry.id], floated: board.floated.contains(entry.id))
-                                .transition(Motion.item)
+                                .transition(.opacity)
                         }
                     }
                     .padding(.bottom, Self.sectionGap)

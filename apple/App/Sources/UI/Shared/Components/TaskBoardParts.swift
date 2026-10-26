@@ -74,7 +74,7 @@ struct BoardColumn: View {
         #if os(iOS)
         if row {
             BoardRowLane(column: column, count: board.count(column), targeted: targeted, rewind: adding && column == .todo ? board.todo.first?.id : nil) {
-                if adding && column == .todo { newTask.transition(Motion.item) }
+                if adding && column == .todo { newTask.transition(.opacity) }
             } content: {
                 content
             }
@@ -135,7 +135,7 @@ struct BoardColumn: View {
         case .todo:
             // 手机竖版看板里添加那一行横贯在行上（`BoardRowLane.above`），不进格子
             if adding, !isRow {
-                newTask.transition(Motion.item)
+                newTask.transition(.opacity)
             }
             ForEach(board.todo) { item in
                 card(item).draggable(item.id.uuidString).modifier(InsertBefore(id: item.id) { drop($0, before: item.id) })
