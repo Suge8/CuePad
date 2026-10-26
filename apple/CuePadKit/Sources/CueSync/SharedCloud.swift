@@ -9,7 +9,9 @@ import SQLite3
 /// 上传先睡六成再落盘、再睡剩下的（服务器收下在回包之前），拉取先睡六成再读。令牌是写入序号，一页至多 `page` 条（`moreComing`）。
 /// 不模拟：改记录冲突（serverRecordChanged）、cloudd 的排队。限流只在脚本要时注入（`admit`）。门铃的密钥是这次运行的（文件里一份），房间不与别的运行重合。
 /// 每个请求（认账号除外）记进 requests 表：时刻、进程、种类、结果、回给它的 Retry-After，脚本按它数各进程发了几次、守没守 Retry-After；
-/// 拉取与上传另记模型抽到的用时（drawn）与回到调用方的时刻（done），两者之差是落盘与调用方那头没及时接回来的部分。
+/// 拉取与上传另记模型抽到的用时（drawn）与回到调用方的时刻（done），两者之差是落盘与调用方那头没及时接回来的部分；
+/// 另记带了哪些记录（names：上传的是存与删的，拉取的是拉回的，每条 `类型:记录名`，逗号隔开）与落盘的时刻（landed：上传写进同步区、拉取读出的那一刻），
+/// 对得出某条记录在哪个上传里、被哪一拉带回。
 struct SharedCloud: SyncCloud {
   /// 每种请求的用时分布：对数正态，按中位与 p95 定。
   struct Latency: Decodable, Sendable {
@@ -80,8 +82,9 @@ struct SharedCloud: SyncCloud {
       }
       return batch
     }
+    let landed = Date.now.timeIntervalSince1970
     try? await Task.sleep(for: .seconds(total * 0.4))
-    finish(row)
+    finish(row, landed: landed, names: batch.modifications.map { "\($0.recordType):\($0.recordID.recordName)" } + batch.deletions.map { "\($0.recordType):\($0.id.recordName)" })
     return batch
   }
 
@@ -114,8 +117,9 @@ struct SharedCloud: SyncCloud {
         throw error
       }
     }
+    let landed = Date.now.timeIntervalSince1970
     try? await Task.sleep(for: .seconds(total * 0.4))
-    finish(row)
+    finish(row, landed: landed, names: saving.map { "\($0.recordType):\($0.recordID.recordName)" } + deleting.map { "-:\($0.recordName)" })
     return SentRecords(saved: saving, deleted: deleting)
   }
 
@@ -157,8 +161,10 @@ struct SharedCloud: SyncCloud {
     return row
   }
 
-  private func finish(_ row: Int64) {
-    try? database { try $0.run("UPDATE requests SET done = ? WHERE rowid = ?", Date.now.timeIntervalSince1970, row) }
+  private func finish(_ row: Int64, landed: Double, names: [String]) {
+    try? database {
+      try $0.run("UPDATE requests SET done = ?, landed = ?, names = ? WHERE rowid = ?", Date.now.timeIntervalSince1970, landed, names.joined(separator: ","), row)
+    }
   }
 
   private func wait(_ spec: [Double]) async { try? await Task.sleep(for: .seconds(Latency.draw(spec))) }
@@ -186,7 +192,7 @@ struct SharedCloud: SyncCloud {
         CREATE TABLE IF NOT EXISTS records (name TEXT PRIMARY KEY, type TEXT NOT NULL, data BLOB, seq INTEGER NOT NULL);
         CREATE INDEX IF NOT EXISTS records_seq ON records(seq);
         CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value BLOB);
-        CREATE TABLE IF NOT EXISTS requests (t REAL NOT NULL, pid INTEGER NOT NULL, kind TEXT NOT NULL, result TEXT NOT NULL, wait REAL, drawn REAL, done REAL);
+        CREATE TABLE IF NOT EXISTS requests (t REAL NOT NULL, pid INTEGER NOT NULL, kind TEXT NOT NULL, result TEXT NOT NULL, wait REAL, drawn REAL, done REAL, landed REAL, names TEXT);
         """)
     }
 

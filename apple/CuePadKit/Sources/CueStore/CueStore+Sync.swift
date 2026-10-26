@@ -78,6 +78,14 @@ extension CueStore {
     return pending
   }
 
+  /// Cue 对你说的话里待推送的，连同 Cue 此刻的样子（一轮的话与歇着同一个事务写下，要一起到）：发送者马上传它们，不攒批。
+  /// Cue 的话多半是命令行进程（Cue 的工具）写的，那边传不了；所以由同步层认，不靠写的人叫上传。
+  package func pendingSpeech() throws -> Set<String> {
+    let said = try pendingSaves(.cueMessages, where: "t.author = 'cue'").map(\.id)
+    guard !said.isEmpty else { return [] }
+    return Set(said + (try pendingSaves(.cueState, where: "1").map(\.id)))
+  }
+
   /// 全量对账：所有同步表里待推送的记录。
   package func pendingSync() throws -> PendingSync {
     var pending = PendingSync(saves: [], deletes: [])
@@ -212,7 +220,7 @@ extension CueStore {
       }
     }
     // 上传途中本机删掉了它：删的那次提交时服务器还没收下、算不上待推送的删除，这次记下元数据才是，提交的却只是元数据表，增量里没有它
-    if !deletedMeanwhile.isEmpty { syncChanged(PendingSync(saves: [], deletes: deletedMeanwhile)) }
+    if !deletedMeanwhile.isEmpty { syncChanged(PendingSync(saves: [], deletes: deletedMeanwhile), in: []) }
   }
 
   /// 服务器上已没有这些记录（删除已确认、或本来就不存在）：忘掉它们的元数据。
