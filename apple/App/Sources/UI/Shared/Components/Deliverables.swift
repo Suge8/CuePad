@@ -206,13 +206,14 @@ struct DeliverableTile: View {
         // 要你看清的图垫白（透明图）。画面还在读时先空着（只有边），读到了淡入；读了 `Pending.delay` 还没出来才铺底写它是什么：
         // 新到的一张（结果卡、提问卡插进对话）几十毫秒就出来，先闪一帧灰底加文件图标再换成截图，比空一下更扰人
         let waiting = loading && !slow
+        let crop: Alignment = isShot ? .center : .top
         let ground: Color = switch (shown?.image != nil, isShot, waiting) {
         case (true, true, _): palette.mediaGround
         case (false, _, true): .clear
         default: palette.fill
         }
         return Rectangle().fill(ground)
-            .overlay(alignment: isShot ? .center : .top) {
+            .overlay(alignment: crop) {
                 if let image = shown?.image {
                     Image(decorative: image, scale: 1).resizable().scaledToFill()
                         // 深色下页面与截图多是亮底，原样放在暗纸上刺眼：压暗一层（同 `Thumbnail`）；要你看清的图不压
@@ -246,7 +247,7 @@ struct DeliverableTile: View {
             }
             .clipShape(shape)
             .overlay(shape.strokeBorder(isChosen ? palette.signatureFill : isShot ? palette.mediaEdge : palette.hair, lineWidth: isChosen ? 2 : 1))
-            .previewSource(zoom, radius: radius, aspect: isShot ? nil : shown?.aspect) { [image = shown?.image, whole] in
+            .previewSource(zoom, radius: radius, aspect: isShot ? nil : shown?.aspect, crop: isShot ? .detail : .aligned(crop)) { [image = shown?.image, whole] in
                 await whole?() ?? image
             }
     }
@@ -291,16 +292,29 @@ struct DeliverableTile: View {
 
 extension View {
     /// 全屏页从这张缩略图放大出来、缩回这里（`previewPresenter`）：iOS 是系统 zoom 转场的来源，Mac 在 `PreviewFlight` 里登记，
-    /// `image` 是飞的那张画面（飞的那一下才取），`aspect` 是内容的真实比例（缩略图裁过时；不给按画面的）。
-    func previewSource(_ key: PreviewZoomKey, radius: CGFloat, aspect: CGFloat? = nil, image: @escaping () async -> CGImage?) -> some View {
-        modifier(PreviewSource(key: key, radius: radius, aspect: aspect, image: image))
+    /// `image` 是飞的那张画面（飞的那一下才取），`aspect` 是内容的真实比例（缩略图裁过时；不给按画面的），
+    /// `crop` 是缩略图露出 `image` 的哪一截（`PreviewCrop`）。
+    func previewSource(
+        _ key: PreviewZoomKey, radius: CGFloat, aspect: CGFloat? = nil, crop: PreviewCrop = .aligned(.center), image: @escaping () async -> CGImage?
+    ) -> some View {
+        modifier(PreviewSource(key: key, radius: radius, aspect: aspect, crop: crop, image: image))
     }
+}
+
+/// 缩略图铺满它的框时露出飞的那张画面（`previewSource` 的 `image`）的哪一截：Mac 飞的那层在缩略图那一端照它裁，起飞、落地与缩略图同一幅；
+/// iOS 由系统 zoom 转场管，不用。
+enum PreviewCrop {
+    /// 铺满、多出来的按这个对齐留（同缩略图自己的对齐）
+    case aligned(Alignment)
+    /// 点名图：缩略图是从整张里取细节最多的那一块（`DeliverableLooks.detailRegion`），飞的是整张
+    case detail
 }
 
 private struct PreviewSource: ViewModifier {
     let key: PreviewZoomKey
     let radius: CGFloat
     let aspect: CGFloat?
+    let crop: PreviewCrop
     let image: () async -> CGImage?
     #if os(iOS)
     @Environment(\.previewZoom) private var namespace
@@ -321,7 +335,7 @@ private struct PreviewSource: ViewModifier {
         }
         #else
         if let flight {
-            content.background { PreviewSourceMark(flight: flight, key: key, image: image, aspect: aspect, radius: radius) }
+            content.background { PreviewSourceMark(flight: flight, key: key, image: image, aspect: aspect, radius: radius, crop: crop) }
         } else {
             content
         }

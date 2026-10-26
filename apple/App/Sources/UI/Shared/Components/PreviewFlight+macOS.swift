@@ -16,6 +16,7 @@ import SwiftUI
         let image: () async -> CGImage?
         let aspect: CGFloat?
         let radius: CGFloat
+        let crop: PreviewCrop
     }
 
     private var sources: [PreviewZoomKey: Source] = [:]
@@ -41,8 +42,9 @@ import SwiftUI
         else { return stage.landed(true) }
         Task {
             guard let image = await source.image(), stage.window === window,
-                  let flight = Flight(
-                    image, from: Frame(rect: from, radius: source.radius), to: Frame(rect: stage.place.rect(aspect: source.aspect ?? Flight.aspect(of: image))),
+                  let flight = await Flight(
+                    image, from: source.frame(from, showing: image),
+                    to: Frame(filling: stage.place.rect(aspect: source.aspect ?? Frame.aspect(of: image)), with: image, crop: source.alignment),
                     in: window)
             else { return stage.landed(true) }
             try? await Task.sleep(for: .seconds(Motion.moveDuration))
@@ -65,9 +67,9 @@ import SwiftUI
             case .picture(let contents, let frame): start = (contents, frame)
             case .opened:
                 guard let image = await source.image() else { return }
-                start = (image, Frame(rect: place.rect(aspect: source.aspect ?? Flight.aspect(of: image))))
+                start = (image, Frame(filling: place.rect(aspect: source.aspect ?? Frame.aspect(of: image)), with: image, crop: source.alignment))
             }
-            guard let flight = Flight(start.0, from: start.1, to: Frame(rect: to, radius: source.radius), in: window) else { return }
+            guard let flight = await Flight(start.0, from: start.1, to: source.frame(to, showing: start.0), in: window) else { return }
             stage.landed(false)
             try? await Task.sleep(for: .seconds(Motion.moveDuration))
             flight.dissolve()
@@ -97,13 +99,12 @@ extension EnvironmentValues {
 @MainActor private final class Flight {
     private let layer = CALayer()
 
-    static func aspect(of image: CGImage) -> CGFloat { CGFloat(image.width) / CGFloat(max(image.height, 1)) }
-
-    /// `contents` 是 CGImage 或 IOSurface；`from` 带着起点那一刻画面露出的那一截（`contentsRect`，单位坐标），飞着展开成整张。
+    /// `contents` 是 CGImage 或 IOSurface；两端各带着那里画面露出的那一截（`contentsRect`），飞着从一截换成另一截。
     init?(_ contents: Any, from: Frame, to: Frame, in window: NSWindow) {
         guard let root = window.contentView?.superview, let host = root.layer else { return nil }
         layer.contents = contents
-        layer.contentsGravity = .resizeAspectFill
+        // 露出哪一截全由两端的 `shown` 定（缩略图怎么裁、对齐哪边由它登记时交出），图层不再自己居中裁
+        layer.contentsGravity = .resize
         layer.contentsScale = window.backingScaleFactor
         layer.masksToBounds = true
         layer.cornerCurve = .continuous
@@ -147,11 +148,62 @@ extension EnvironmentValues {
     }
 }
 
-/// 飞的一端：窗口坐标的框、圆角，与画面露出的那一截（单位坐标，整张是 0,0,1,1）。
+extension PreviewFlight.Source {
+    /// 内容那一端多出来的按什么留：点名图在那一端是整张、不裁，居中即可。
+    var alignment: Alignment {
+        if case .aligned(let alignment) = crop { alignment } else { .center }
+    }
+
+    /// 缩略图这一端：框 `rect`，画面 `contents` 露出缩略图上那一截（`crop`）。
+    /// 点名图露的是细节最多的那块，按缩略图同一个算法在整张上算；`contents` 是全屏页的大图（IOSurface）时到缩略图交的整张上算，单位坐标一样。
+    func frame(_ rect: CGRect, showing contents: Any) async -> PreviewFrame {
+        guard case .detail = crop else { return PreviewFrame(filling: rect, radius: radius, with: contents, crop: alignment) }
+        let whole: CGImage? = if contents is IOSurface { await image() } else { (contents as! CGImage) }
+        guard let whole, whole.width > 0, whole.height > 0 else { return PreviewFrame(filling: rect, radius: radius, with: contents, crop: .center) }
+        let region = await DeliverableLooks.detailRegion(whole, aspect: rect.width / max(rect.height, 1))
+        let width = CGFloat(whole.width), height = CGFloat(whole.height)
+        // 像素原点左上，单位坐标 y 朝上
+        return PreviewFrame(rect: rect, radius: radius, shown: CGRect(
+            x: region.minX / width, y: 1 - region.maxY / height, width: region.width / width, height: region.height / height))
+    }
+}
+
+/// 飞的一端：窗口坐标的框、圆角，与画面露出的那一截（单位坐标，整张是 0,0,1,1，y 朝上）。
 struct PreviewFrame {
     var rect: CGRect
     var radius: CGFloat = 0
     var shown = CGRect(x: 0, y: 0, width: 1, height: 1)
+
+    /// 画面铺满 `rect`、多出来的按 `crop` 那边留（同缩略图的裁法：截图留上沿）。
+    init(filling rect: CGRect, radius: CGFloat = 0, with contents: Any, crop: Alignment) {
+        self.rect = rect
+        self.radius = radius
+        let picture = Self.aspect(of: contents), box = rect.width / max(rect.height, 1)
+        guard picture > 0, box > 0 else { return }
+        if picture > box {
+            let width = box / picture
+            shown = CGRect(x: (1 - width) * Self.share(crop.horizontal == .leading, crop.horizontal == .trailing), y: 0, width: width, height: 1)
+        } else {
+            let height = picture / box
+            shown = CGRect(x: 0, y: (1 - height) * Self.share(crop.vertical == .bottom, crop.vertical == .top), width: 1, height: height)
+        }
+    }
+
+    init(rect: CGRect, radius: CGFloat = 0, shown: CGRect = CGRect(x: 0, y: 0, width: 1, height: 1)) {
+        self.rect = rect
+        self.radius = radius
+        self.shown = shown
+    }
+
+    /// 多出来的那段裁在低端（左、下）的份额：留低端 0、留高端 1、居中一半。
+    private static func share(_ low: Bool, _ high: Bool) -> CGFloat { low ? 0 : high ? 1 : 0.5 }
+
+    /// 图层上放的画面（IOSurface 或 CGImage）的宽高比。
+    static func aspect(of contents: Any) -> CGFloat {
+        let (width, height) = if let surface = contents as? IOSurface { (surface.width, surface.height) }
+            else { ((contents as! CGImage).width, (contents as! CGImage).height) }
+        return CGFloat(width) / CGFloat(max(height, 1))
+    }
 }
 
 private typealias Frame = PreviewFrame
@@ -249,6 +301,7 @@ struct PreviewSourceMark: NSViewRepresentable {
     let image: () async -> CGImage?
     let aspect: CGFloat?
     let radius: CGFloat
+    let crop: PreviewCrop
 
     func makeNSView(context: Context) -> Mark { Mark() }
 
@@ -256,7 +309,7 @@ struct PreviewSourceMark: NSViewRepresentable {
         if let old = view.key, old != key { flight.unregister(old, view: view) }
         view.key = key
         view.flight = flight
-        flight.register(key, .init(view: view, image: image, aspect: aspect, radius: radius))
+        flight.register(key, .init(view: view, image: image, aspect: aspect, radius: radius, crop: crop))
     }
 
     static func dismantleNSView(_ view: Mark, coordinator: ()) {
