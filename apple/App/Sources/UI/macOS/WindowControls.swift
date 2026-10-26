@@ -70,14 +70,16 @@ struct PanesSlot: View {
 
     var body: some View {
         let shown = workspace.root == .progress
-        ProgressPanes(size: Spacing.toolbarControl - Self.inset * 2)
-            .padding(Self.inset)
-            .glass(in: .capsule)
+        ProgressControl { ProgressPanes(size: Self.side).padding(Self.inset).glass(in: .capsule) }
+            // 两颗方钮连同边距：挂上之前空着的这一格同样大
+            .frame(width: 2 * Self.side + 2 * Self.inset, height: Spacing.toolbarControl)
             .background { WindowEdge(\.maxX) { workspace.pages.panesEdge = $0 } }
             .opacity(shown ? 1 : 0).allowsHitTesting(shown).accessibilityHidden(!shown)
     }
 
     private static let inset: CGFloat = 3
+    /// 一颗的边长：与工具栏的控件一样高。
+    private static let side = Spacing.toolbarControl - inset * 2
 }
 
 /// 量这一块的一条边（`CGRect.minX`、`maxX`）在窗口里的横坐标：工具栏项与页面不在同一棵视图里，SwiftUI 的全局坐标对不上，按窗口坐标量。
@@ -140,7 +142,7 @@ struct WindowEdge: NSViewRepresentable {
 /// 工具栏左边、两段分段之后：这一页的范围，进展页的会话段是项目范围（`ProjectScopeMenu`，`Workspace.projectScope`；看板段那一排是列头，范围在"⋯"里）。
 /// 工具栏里的页面控件只有一条规矩（这一格、`PanesSlot`、`QuotaSlot`、`PageActionSlot`、`SearchSlot`、`PageMenuSlot` 都照它）：只放 Workspace 里已有的状态，主窗口里常驻、固定宽度、只换内容。
 /// 工具栏项挂在主窗口上，读不到页面读的库，抄一份过来就是第二个事实源；工具栏项一增删整条重建（实测占进出会话页点击回合的一半，25fdb5fa、4fd371a4），
-/// 一变尺寸整条重排、重算整窗的鼠标跟踪区（100～150ms，b9707fc5）。所以每页都在，别的页看不见、不卸下（换页时不现建整份项目菜单），
+/// 一变尺寸整条重排、重算整窗的鼠标跟踪区（100～150ms，b9707fc5）。所以每页都在（只在进展页露的随它挂上，`ProgressControl`），别的页看不见、不卸下（换页时不现建整份项目菜单），
 /// 项目名长了在这一格里截断，不撑宽它；状态归页面的（会话段的搜索、新会话表单读的这台 Mac 上有哪些 Agent）留在页里。
 struct ScopeSlot: View {
     @Environment(Workspace.self) private var workspace
@@ -149,9 +151,8 @@ struct ScopeSlot: View {
 
     var body: some View {
         let shown = workspace.showsSessionsBar
-        // 一直挂着、别的页只是看不见（同 `SwitcherSlot`）：换页时不现建整份项目菜单
-        ProjectScopeMenu()
-            .frame(maxWidth: Self.width, alignment: .leading)
+        // 随进展页挂上后一直挂着、别的页只是看不见：换页时不现建整份项目菜单
+        ProgressControl { ProjectScopeMenu().frame(maxWidth: Self.width, alignment: .leading) }
             .opacity(shown ? 1 : 0).allowsHitTesting(shown).accessibilityHidden(!shown)
             .frame(width: Self.width, height: Spacing.toolbarControl, alignment: .leading)
     }
@@ -170,12 +171,28 @@ struct QuotaSlot: View {
 
     var body: some View {
         let shown = workspace.showsSessionsBar
-        QuotaRings(open: open, height: Spacing.toolbarControl) { open = !open && !PressPoint.reopens(closedAt: closed) }
-            .glass(in: .capsule, interactive: true)
-            .bubble(isPresented: $open) { QuotaDetail().padding(16) }
-            .onChange(of: open) { _, open in if !open { closed = .now } }
-            .opacity(shown ? 1 : 0).allowsHitTesting(shown).accessibilityHidden(!shown)
-            .frame(width: Self.width, height: Spacing.toolbarControl, alignment: .trailing)
+        ProgressControl {
+            QuotaRings(open: open, height: Spacing.toolbarControl) { open = !open && !PressPoint.reopens(closedAt: closed) }
+                .glass(in: .capsule, interactive: true)
+                .bubble(isPresented: $open) { QuotaDetail().padding(16) }
+        }
+        .onChange(of: open) { _, open in if !open { closed = .now } }
+        .opacity(shown ? 1 : 0).allowsHitTesting(shown).accessibilityHidden(!shown)
+        .frame(width: Self.width, height: Spacing.toolbarControl, alignment: .trailing)
+    }
+}
+
+/// 进展页才露的工具栏控件（`PanesSlot`、`ScopeSlot`、`QuotaSlot`）：别的页上看不见、只占着固定的那一格。随进展页一起挂上——启动后空闲时进展页先挂上（`Prewarm`），
+/// 或一打开就在进展页——之后一直挂着；挂上之前那一格空着，第一帧不建看不见的分段、项目菜单、玻璃与额度环。
+private struct ProgressControl<Content: View>: View {
+    @ViewBuilder let content: Content
+    @Environment(Workspace.self) private var workspace
+    @State private var mounted = false
+
+    var body: some View {
+        let due = workspace.mountedPages.contains(.progress)
+        ZStack { if mounted || due { content } }
+            .onChange(of: due, initial: true) { if $1 { mounted = true } }
     }
 }
 

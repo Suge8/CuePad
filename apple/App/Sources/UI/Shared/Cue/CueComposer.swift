@@ -34,8 +34,6 @@ struct CueComposer: View {
     #if os(macOS)
     /// ⌘⇧M、⌘⇧E 请模型或思考强度弹出菜单。
     @State private var opening: PiConfigPick?
-    /// 大脑那一排的可选与当前（Mac 的 Cue 页工具排）。
-    @State private var brain: AgentModelChoice?
     #endif
 
     var body: some View {
@@ -100,13 +98,7 @@ struct CueComposer: View {
 
     @ViewBuilder private var tools: some View {
         #if os(macOS)
-        if tooled {
-            HStack(spacing: 8) {
-                CueConfigControls(choice: brain, opening: $opening)
-                CueHostNote()
-            }
-            .observingCueBrain(into: $brain)
-        }
+        if tooled { CueBrainRow(opening: $opening) }
         #endif
     }
 
@@ -155,6 +147,20 @@ struct CueComposer: View {
 }
 
 #if os(macOS)
+/// 工具排：大脑那一排（`CueConfigControls`）与末尾的旁注。大脑的可选与当前由这一排自己订阅：读到、变了只重算这一排，不重算整个输入框。
+private struct CueBrainRow: View {
+    @Binding var opening: PiConfigPick?
+    @State private var brain: AgentModelChoice?
+
+    var body: some View {
+        HStack(spacing: 8) {
+            CueConfigControls(choice: brain, opening: $opening)
+            CueHostNote()
+        }
+        .observingCueBrain(into: $brain)
+    }
+}
+
 /// 工具排末尾的旁注：Cue 运行在别的 Mac 上时写在哪台。单拆一个视图读 Cue 此刻：输入框本身不随它重算。
 private struct CueHostNote: View {
     @Environment(Workspace.self) private var workspace

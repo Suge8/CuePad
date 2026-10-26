@@ -73,7 +73,11 @@ private struct Observing<T: Sendable & Equatable, ID: Equatable>: ViewModifier {
     private func readNow() {
         guard immediately, active, value == nil, let snapshot = try? store.snapshot(read) else { return }
         start = snapshot
-        value = snapshot.value
+        // 当场读到的是这一页本来的样子，不是变化：页面上挂在这些值上的动画（`animation(_:value:)`）不播，
+        // 不然从"还没读到"到读到的那一截连同同一次更新里的版面变化（冷启动时内容区从占位尺寸到真实尺寸）一帧帧排过去
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) { value = snapshot.value }
         DebugHooks.observed(snapshot.value)
     }
 
