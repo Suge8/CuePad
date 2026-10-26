@@ -7447,6 +7447,22 @@
         }
       }
     },
+    "同步恢复后再启用" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Available once sync is back"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同步恢复后再启用"
+          }
+        }
+      }
+    },
     "名字" : {
       "localizations" : {
         "en" : {
@@ -19387,22 +19403,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "远程投送执行器没能启动：%@"
-          }
-        }
-      }
-    },
-    "连上 iCloud 后再启用" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Connect to iCloud to turn on"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "连上 iCloud 后再启用"
           }
         }
       }
