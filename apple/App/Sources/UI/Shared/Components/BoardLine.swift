@@ -4,6 +4,8 @@ import SwiftUI
 extension EnvironmentValues {
     /// 推进中这一列各会话你这边最近说的几句的时刻（`CueStore.recentSaid`）：列读一次交给卡上的线（`BoardLine`），卡不各自读库。
     @Entry var boardSaid: [String: [Date]] = [:]
+    /// 线右端的时长按哪一刻写：整列一个，每过一个整分钟换一次（`BoardColumn`），一列的卡在同一次更新里换字，不各自定时。
+    @Entry var boardNow = Date.now
 }
 
 /// 看板推进中卡下沿那条线：整行一条线，状态与颜色只按 `BoardPulse`。
@@ -12,6 +14,7 @@ extension EnvironmentValues {
 /// - 右段固定占 `nowShare` 是现在（`BoardPulse.Trace`）：在跑是从最后一颗（靛青）点长出的波浪或子代理直轨（`WaveStrip`）；
 ///   停住是淡线接到右端、末端一颗与状态词同色的点，被打断是断线；歇着是淡线、不带点。每张卡的现在在同一位置、同一长度，一列读起来整齐；
 /// - 右端只写一个时长：会话在此刻这个状态里待了多久（同会话行那一格，`PiClock.Style.span`；数字加粗、单位小一号淡色），要你管的状态词紧跟。
+///   按列给的此刻写（`boardNow`，整分钟换），比会话行最多晚一分钟换字：一列的卡在同一次更新里换字，不各开一个定时任务。
 /// 动只经 `LoopLayer`，只有看得见的在动：卡在懒加载栈里，出屏就不存在；不放循环动效时（`LoopsPlay`）静止；
 /// 一列里排在第 `maxMoving` 条以后的静止（`moves` 由列按先后给）——"同屏最多几条"要逐行读几何才判得出，每行一个几何读数的开销比省下的动画还大，
 /// 按列里的先后数是最轻的等价做法：列从上往下读，排在前面的就是一屏里先看到的。读屏不念：卡的读屏标签已说了状态。
@@ -45,12 +48,10 @@ struct BoardLine: View {
     }
 
     private func past(_ marks: [CGFloat]) -> some View {
-        ZStack {
-            PastLine(marks: marks)
-                .fill(LinearGradient(stops: [.init(color: palette.track.opacity(0), location: 0), .init(color: palette.track, location: 0.3)], startPoint: .leading, endPoint: .trailing))
-            PastDots(marks: marks, pick: .earlier).fill(palette.ink3)
-            PastDots(marks: marks, pick: .last).fill(pulse.tier == .running ? palette.signature : palette.ink3)
-        }
+        PastLine(marks: marks)
+            .fill(LinearGradient(stops: [.init(color: palette.track.opacity(0), location: 0), .init(color: palette.track, location: 0.3)], startPoint: .leading, endPoint: .trailing))
+            .overlay { PastDots(marks: marks, pick: .earlier).fill(palette.ink3) }
+            .overlay { PastDots(marks: marks, pick: .last).fill(pulse.tier == .running ? palette.signature : palette.ink3) }
     }
 
     /// `joint`：两段交界处有最后一颗点，停住与歇着的线从它挖的空后面接上。
@@ -83,8 +84,8 @@ struct BoardLine: View {
     }
 
     private var reading: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 4) {
-            if let clock = pulse.shown?.clock { TimeSpent(live: clock.live(.span)) }
+        HStack(spacing: 4) {
+            if let clock = pulse.shown?.clock { TimeSpent(clock: clock) }
             switch pulse.word {
             case .state(let shown): Text(shown.label).font(TaskMetrics.caption.weight(.semibold)).foregroundStyle(pulse.tint(palette))
             case .context(let meter): ContextFact(meter: meter).font(TaskMetrics.caption)
@@ -94,21 +95,22 @@ struct BoardLine: View {
         .fixedSize()
     }
 
-    /// 时长：数字加粗、单位小一号淡色（"12 分钟""42 sec"；不到一分钟是"刚刚"，整段淡色），只在字会变的那一刻重画（`Moments`）。
+    /// 时长：数字加粗、单位小一号淡色（"12 分钟""42 sec"；不到一分钟是"刚刚"，整段淡色），一段字里分两种样子。单独一层读列给的此刻：换字时只重算它。
     private struct TimeSpent: View {
-        let live: PiClock.Live
+        let clock: PiClock
+        @Environment(\.boardNow) private var now
         @Environment(\.palette) private var palette
 
         var body: some View {
-            Moments(next: live.discreteInput(after:)) { now in
-                let text = live.format(now)
-                let digits = text.prefix { $0.isNumber }
-                HStack(alignment: .firstTextBaseline, spacing: 1) {
-                    if !digits.isEmpty { Text(digits).font(Typography.meta.weight(.semibold)).foregroundStyle(palette.ink2) }
-                    Text(text.dropFirst(digits.count)).font(Typography.caption2).foregroundStyle(palette.ink3)
-                }
-                .monospacedDigit()
-            }
+            let text = clock.text(now: now, style: .span)
+            let count = text.prefix { $0.isNumber }.count
+            var digits = AttributedString(text.prefix(count))
+            digits.font = Typography.meta.weight(.semibold).monospacedDigit()
+            digits.foregroundColor = palette.ink2
+            var unit = AttributedString(text.dropFirst(count))
+            unit.font = Typography.caption2
+            unit.foregroundColor = palette.ink3
+            return Text(digits + unit)
         }
     }
 }

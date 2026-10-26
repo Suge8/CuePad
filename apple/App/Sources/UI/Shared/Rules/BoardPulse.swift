@@ -90,8 +90,21 @@ extension Workspace {
     /// 任务卡此刻的样子：看此刻干活的叶子交给的会话，没有再看任务自己的（同"下一步"的先后）；会话歇着、"下一步"不写它时也照样看，
     /// 快满的上下文不因此漏掉。都没交给会话是歇着。
     func pulse(for task: Card, lead: Card?, in agents: AgentLinks) -> BoardPulse {
-        guard let agent = lead.flatMap({ agent(of: $0.id, in: agents) }) ?? agent(of: task.id, in: agents) else { return BoardPulse() }
+        guard let id = watched(task, lead: lead, in: agents), let agent = agent(of: id, in: agents) else { return BoardPulse() }
         return BoardPulse(shown: agent.shown, session: agent.session)
+    }
+
+    /// 任务卡看谁交给的会话：此刻干活的叶子，没有再看任务自己。
+    private func watched(_ task: Card, lead: Card?, in agents: AgentLinks) -> UUID? {
+        [lead?.id, task.id].compactMap(\.self).first { agents.items[$0] != nil }
+    }
+
+    /// 推进中一件看的是哪个会话（同 `pulse`），不推它此刻的样子：列只要知道是谁时用（读说过的话，`LineFeed`）。
+    func sessionID(_ work: TaskBoard.Work, agents: AgentLinks) -> String? {
+        switch work.work {
+        case .task: work.item.flatMap { item in watched(item.task, lead: item.leaf, in: agents).flatMap { agents.items[$0]?.state.sessionID } }
+        case .session(let session): session.sessionID
+        }
     }
 
     /// 推进中一件此刻的样子（`BoardPulse`）：任务同任务卡，会话看它自己（同会话卡）。
