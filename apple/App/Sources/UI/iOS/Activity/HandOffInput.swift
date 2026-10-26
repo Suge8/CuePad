@@ -86,15 +86,7 @@ struct HandOffInput: View {
                     .accessibilityLabel(chosen.map { String(localized: "交给 \($0.state.title)") } ?? String(localized: "开新会话交给它"))
             })
         .composerNotice(planned?.noMac == true || !services.reachesPiHost || config?.failure != nil) {
-            Group {
-                if planned?.noMac == true {
-                    Text(CueStoreError.noMac.localizedDescription).foregroundStyle(palette.ink3)
-                } else if !services.reachesPiHost {
-                    SyncHint(status: services.syncStatus, consequence: "发不到 Mac")
-                }
-                if let failure = config?.failure { Text("没换成：\(failure.text(sync: services.syncStatus))").foregroundStyle(palette.failure) }
-            }
-            .font(.caption)
+            MacInputNotice(noMac: planned?.noMac == true, failure: config?.failure)
         }
         .onAppear { focused = true }
         .observing(services.store, id: outbox.card, into: $planned, onError: workspace.fail) { [card = outbox.card] store in

@@ -60,7 +60,7 @@ struct NoteThread<Content: View>: View {
 /// 不占位的话，它一出一收，贴着最新的整段对话跟着当帧上下跳一行（内容变高矮时底锚，`ChatScroll`），回复紧接着到时还与新到的那一条的上滑叠成一抖。
 /// 代价：歇着时对话末尾多一行空白；放进来的那一行只写一行（长的截断）。在跑的经过往下长出几行是内容，照常长。
 struct ChatLiveSlot<Content: View>: View {
-    let gap: CGFloat
+    var gap: CGFloat = 0
     /// 那一行字的字号：占位按它量高。
     var font: Font = Typography.caption
     @ViewBuilder let content: Content

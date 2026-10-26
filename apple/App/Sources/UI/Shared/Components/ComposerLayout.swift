@@ -16,6 +16,14 @@ enum ComposerMetrics {
     static let glyphTarget: CGFloat = 44
     /// 输入框上方叠着的说明（`composerNotice`）的圆角：一两行小字，比输入框的胶囊收一档。
     static let noticeRadius: CGFloat = 16
+    static let noticeSpacing: CGFloat = 4
+    static let noticePadding: CGFloat = 8
+    /// 两行说明的文字预算（含行间距）；滚动区按动态字号缩放它，外边距不缩放。
+    static let noticeTextHeight: CGFloat = 2 * 20 + noticeSpacing
+
+    static func noticeClearance(textHeight: CGFloat) -> CGFloat {
+        textHeight + 2 * noticePadding + stackGap
+    }
 
     /// 一行字与上下边距合起来的高，至少 `slot`：没露出工具排时圆钮占这么高、居中，与最后一行字同一条中线。
     static func lineSlot(line: CGFloat) -> CGFloat { max(slot, ceil(line + 2 * textTop)) }
@@ -126,10 +134,10 @@ extension View {
     func composerNotice(_ shown: Bool, @ViewBuilder _ notice: () -> some View) -> some View {
         floatingAbove {
             if shown {
-                VStack(alignment: .leading, spacing: 4) { notice() }
+                VStack(alignment: .leading, spacing: ComposerMetrics.noticeSpacing) { notice() }
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, 14).padding(.vertical, 8)
+                    .padding(.horizontal, 14).padding(.vertical, ComposerMetrics.noticePadding)
                     .glass(in: .rect(cornerRadius: ComposerMetrics.noticeRadius, style: .continuous))
                     .allowsHitTesting(false)
             }

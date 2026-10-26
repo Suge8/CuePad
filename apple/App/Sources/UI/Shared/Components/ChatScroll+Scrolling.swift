@@ -22,7 +22,11 @@ extension ChatScroll {
     /// 看内容长高，不看 `followKey`：它还算着别的（之前那句的送达情况），可能比那句先变。
     /// 排在内容里而不是内容边距：Mac 的滚动区改边距要晚一次排版才生效，那时它自己把偏移一下挪到底，就滑不起来了。
     /// 键盘是安全区，不在这里：发出时键盘随即收起，对话跟着键盘的动画走，不留。
-    var bottomPadding: CGFloat { max(bottomInset, held ?? 0) }
+    /// 提示无论有无都让出两行的上限。只扣真正空着的页边距：ChatLiveSlot 在跑时有进展，不能当作留白扣掉。
+    /// 默认字号额外 52pt；字体变化时只随文字预算缩放，不读几何、不随同步或待回复状态变化。
+    var bottomPadding: CGFloat {
+        max(bottomInset, held ?? 0) + max(0, ComposerMetrics.noticeClearance(textHeight: noticeTextHeight) - ChatLayout.edge)
+    }
 
     /// 最近一次读数里的可见区（偏移、最新处、可见区的高）与上一次交给读数 action 的读数。读数闭包不一定在主线程，所以带锁；
     /// 它不是状态，写它不触发任何更新。
