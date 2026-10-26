@@ -51,8 +51,9 @@ struct LibraryInstructionScan {
                 readers.append(.opencode)
             }
         }
+        let replacements = replacements(places)
         if unlinked, !sources.isEmpty {
-            tidies.append(LibraryTidy(id: "global-instructions", kind: .globalInstructions(sources + replacements(places))))
+            tidies.append(LibraryTidy(id: "global-instructions", kind: .globalInstructions(sources + replacements)))
         }
         instructions.append(LibraryInstruction(
             kind: .global, path: shared.path, text: sharedText, modifiedAt: Self.modified(shared), readers: readers, links: links))
@@ -61,7 +62,7 @@ struct LibraryInstructionScan {
         }
     }
 
-    /// 替换基础提示的两份（有才列）。
+    /// 替换基础提示的两份（有才列）；不论要不要比都盯着：SYSTEM.md 留着时是单独一份说明，Codex 的配置里加上这个键就有一份要比。
     private mutating func replacements(_ places: AgentLibraryPlaces) -> [InstructionSource] {
         var found: [InstructionSource] = []
         if places.uses(.pi) {

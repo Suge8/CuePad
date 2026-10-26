@@ -93,12 +93,22 @@ struct AgentLibraryTests {
     /// 同名的要你挑留哪份、格式不对的要你自己改，"全部整理"不碰；替换基础提示的两份是比对来源，合成时选了才撤（Pi 的进废纸篓、Codex 的撤掉配置键）。
     @Test func 同名留一份_合成时撤掉选中的替换基础提示_都能撤销() async throws {
         for directory in [claude, codex, pi] { try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true) }
-        let folder = home("work/app")
+        let folder = home("work/app"), other = home("work/blog")
         let project = try await store.createProject(name: "App", color: "#000000")
+        let blog = try await store.createProject(name: "Blog", color: "#000000")
         try await store.setDirectory(folder.path, for: project.id)
+        try await store.setDirectory(other.path, for: blog.id)
         try skill("pr", in: agents.appending(path: "skills"))
         try skill("pr", in: folder.appending(path: ".agents/skills"))
+        try skill("pr", in: other.appending(path: ".agents/skills"))
+        // 两个项目各自撞名：各是一件，各自留一份，不动别的项目
+        for root in [folder, other] {
+            try skill("lint", in: root.appending(path: ".agents/skills"))
+            try skill("lint", in: root.appending(path: ".codex/skills"))
+        }
         try skill("broken", in: agents.appending(path: "skills"), named: "Broken")
+        try FileManager.default.createDirectory(at: agents.appending(path: "skills/binary"), withIntermediateDirectories: true)
+        try Data([0xFF, 0xFE, 0x00]).write(to: agents.appending(path: "skills/binary/SKILL.md"))
         try write("全局规则\n", claude.appending(path: "CLAUDE.md"))
         try write("你是 Pi\n", pi.appending(path: "SYSTEM.md"))
         try write("你是 Codex\n", codex.appending(path: "prompt.md"))
@@ -107,8 +117,12 @@ struct AgentLibraryTests {
         let keeping = keep()
         defer { keeping.cancel() }
 
-        let found = try await library("扫出同名、格式不对与全局规则") { $0.tidies.count == 3 }
-        #expect(found.tidies.map(\.title) == ["2 个技能都叫 pr", "「broken」的格式不对", "3 家的全局规则各写一份"])
+        let found = try await library("扫出同名、格式不对与全局规则") { $0.tidies.count == 6 }
+        let lintInApp = "duplicate/lint/\(project.id.uuidString)", lintInBlog = "duplicate/lint/\(blog.id.uuidString)"
+        #expect(found.tidies.map(\.id).prefix(3) == [lintInApp, lintInBlog, "duplicate/pr"])
+        #expect(found.tidies.map(\.title) == [
+            "2 个技能都叫 lint", "2 个技能都叫 lint", "3 个技能都叫 pr", "「binary」的格式不对", "「broken」的格式不对", "3 家的全局规则各写一份",
+        ])
         #expect(found.automaticOrders.map(\.tidy) == ["global-instructions"])
         let global = try #require(found.tidies.last)
         #expect(global.sources.map(\.origin) == [.agent(.claudeCode), .piSystem, .codexPrompt])
@@ -116,18 +130,22 @@ struct AgentLibraryTests {
 
         let workspace = Workspace(services: services)
         let projectCopy = folder.appending(path: ".agents/skills/pr").path
-        await workspace.tidy(
-            [TidyOrder(tidy: "duplicate/pr", keep: projectCopy), TidyOrder(tidy: global.id, retire: [.piSystem, .codexPrompt])], in: found)
+        await workspace.tidy([
+            TidyOrder(tidy: "duplicate/pr", keep: projectCopy), TidyOrder(tidy: lintInApp, keep: folder.appending(path: ".agents/skills/lint").path),
+            TidyOrder(tidy: global.id, retire: [.piSystem, .codexPrompt]),
+        ], in: found)
 
-        #expect(workspace.notice?.text.visible == "整理好了 2 件")
-        #expect(!exists(agents.appending(path: "skills/pr")) && exists(URL(filePath: projectCopy)))
+        #expect(workspace.notice?.text.visible == "整理好了 3 件")
+        #expect(!exists(folder.appending(path: ".codex/skills/lint")) && exists(other.appending(path: ".codex/skills/lint")))
+        // 留项目里的那份：移走的只是和它撞名的全局那份，另一个项目的不动
+        #expect(!exists(agents.appending(path: "skills/pr")) && exists(URL(filePath: projectCopy)) && exists(other.appending(path: ".agents/skills/pr")))
         #expect(read(agents.appending(path: "AGENTS.md")) == "全局规则\n\n你是 Pi\n\n你是 Codex\n")
         #expect(!exists(pi.appending(path: "SYSTEM.md")))
         #expect(read(codex.appending(path: "config.toml")) == "model = \"gpt\"\n\n[tools]\nweb = true\n")
         #expect(RelativeLink.points(pi.appending(path: "AGENTS.md"), to: agents.appending(path: "AGENTS.md")))
-        let broken = "malformed/\(agents.appending(path: "skills/broken").path)"
-        // 留下的是项目里那份：Claude Code 看不见它，接着要链上
-        let tidied = try await library("只剩链接与格式不对的") { $0.tidies.map(\.id) == ["unlinked", broken] }
+        let malformed = ["binary", "broken"].map { "malformed/\(agents.appending(path: "skills/\($0)").path)" }
+        // 留下的是项目里那几份：Claude Code 看不见它们，接着要链上；另一个项目的同名还在
+        let tidied = try await library("只剩链接、另一个项目的同名与格式不对的") { $0.tidies.map(\.id) == ["unlinked", lintInBlog] + malformed }
         #expect(tidied.instruction(.piSystem) == nil)
 
         try await #require(workspace.notice?.action).run()
@@ -223,48 +241,37 @@ struct AgentLibraryTests {
         #expect(read(file) == "还是我的\n" && draft.state == .saved && !draft.dirty)
     }
 
-    /// 手机上的整理与"发往 Mac"走同一个入口（`Workspace.tidy`、`saveInstruction`）：快照是别台的就写投送请求、等那台做完——
-    /// 做完提示"整理好了"，那台上刚改过就认成同一种错（编辑页据此说"Mac 上改过了"），别的失败写出原因。
-    /// 那台 Mac 由一个领 mac-phone-target 请求的执行器扮演，照这台的文件做（同 `MacExecutor` 把错写回请求）。
-    @Test func 手机发往Mac_等那台做完_Mac上刚改过认得出() async throws {
-        try FileManager.default.createDirectory(at: claude, withIntermediateDirectories: true)
-        let folder = home("work/site")
-        let project = try await store.createProject(name: "Site", color: "#000000")
-        try await store.setDirectory(folder.path, for: project.id)
-        try write("# Site\n", folder.appending(path: "AGENTS.md"))
-        try skill("pr", in: agents.appending(path: "skills"))
+    /// 整理之后又改过（编辑页改了合成的说明）：撤销整个不做、说明原因，后来的改动留着。留着的 Pi 系统提示、各家自管的技能照样跟着文件变。
+    @Test func 整理之后又改过_撤销整个不做_留着的系统提示照样跟着文件() async throws {
+        for directory in [claude, codex, pi] { try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true) }
+        try FileManager.default.createDirectory(at: codex.appending(path: "skills/.system"), withIntermediateDirectories: true)
+        try write("规则一\n", claude.appending(path: "CLAUDE.md"))
+        try write("规则二\n", codex.appending(path: "AGENTS.md"))
+        try write("你是 Pi\n", pi.appending(path: "SYSTEM.md"))
         let keeping = keep()
         defer { keeping.cancel() }
-        var phone = try await library("扫出说明与没链上的技能") { $0.tidies.map(\.id) == ["unlinked"] && $0.instruction(.project(project.id))?.text != nil }
-        phone.hostID = "mac-phone-target"
-        let library = services.library
-        let mac = DeliveryExecutor(store: store, hostID: phone.hostID, onIssue: { Issue.record("\($0)") }) { request in
-            do {
-                if let orders = request.tidyOrders { _ = try await library.tidy(orders) }
-                if let edit = request.instructionEdit { try await library.write(edit) }
-                return .succeeded
-            } catch {
-                return .failed(ShownText(error))
-            }
-        }
-        try await mac.start()
-        defer { Task { await mac.stop() } }
+        let found = try await library("扫出全局规则") { !$0.tidies.isEmpty }
         let workspace = Workspace(services: services)
+        await workspace.tidy(found.automaticOrders, in: found)
+        let undo = try #require(workspace.notice?.action)
+        let merged = try await library("合成好了") { $0.instruction(.global)?.text == "规则一\n\n规则二\n" }
+        let global = try #require(merged.instruction(.global))
+        try await workspace.saveInstruction(InstructionEdit(instruction: .global, base: global.base, text: "规则一\n\n规则二\n\n后来加的\n"), in: merged)
 
-        await workspace.tidy(phone.automaticOrders, in: phone)
+        await #expect(throws: AgentLibraryError.changedSinceTidy) { try await undo.run() }
 
-        #expect(workspace.notice?.text.visible == "整理好了 1 件" && workspace.notice?.action == nil)
-        #expect(RelativeLink.points(claude.appending(path: "skills/pr"), to: agents.appending(path: "skills/pr")))
-        let seen = try #require(phone.instruction(.project(project.id)))
-        try await workspace.saveInstruction(InstructionEdit(instruction: seen.kind, base: seen.base, text: "# Site\n\n手机改的\n"), in: phone)
-        #expect(read(folder.appending(path: "AGENTS.md")) == "# Site\n\n手机改的\n")
-        await #expect(throws: AgentLibraryError.changedOnMac) {
-            try await workspace.saveInstruction(InstructionEdit(instruction: seen.kind, base: seen.base, text: "覆盖"), in: phone)
-        }
-        #expect(read(folder.appending(path: "AGENTS.md")) == "# Site\n\n手机改的\n")
-
-        await workspace.tidy([TidyOrder(tidy: "unlinked")], in: phone)
-        #expect(workspace.notice?.text.visible.contains("这件已经不用整理了") == true, "那台没做成：写出原因")
+        #expect(read(agents.appending(path: "AGENTS.md")) == "规则一\n\n规则二\n\n后来加的\n")
+        #expect(RelativeLink.points(claude.appending(path: "CLAUDE.md"), to: agents.appending(path: "AGENTS.md")))
+        _ = try await library("读到后来加的") { $0.instruction(.global)?.text?.hasSuffix("后来加的\n") == true }
+        await quietPeriod(.milliseconds(300))  // 前面那些改动的跟随都过去了：下面这次只能由盯着 SYSTEM.md 读到
+        try Data("你是 Pi，改过\n".utf8).write(to: pi.appending(path: "SYSTEM.md"))  // 原地写，不换文件，所在目录不变
+        _ = try await library("系统提示跟上") { $0.instruction(.piSystem)?.text == "你是 Pi，改过\n" }
+        try skill("from-claude-ai", in: claude.appending(path: "skills/synced"))
+        _ = try await library("自管的计数跟上") { $0.selfManaged == [SelfManagedSkills(agent: .claudeCode, count: 1)] }
+        try skill("openai-docs", in: codex.appending(path: "skills/.system"))
+        _ = try await library("Codex 自带的多了一个") { $0.selfManaged.contains(SelfManagedSkills(agent: .codex, count: 1)) }
+        try FileManager.default.removeItem(at: codex.appending(path: "skills/.system/openai-docs"))
+        _ = try await library("Codex 自带的又没了") { $0.selfManaged == [SelfManagedSkills(agent: .claudeCode, count: 1)] }
     }
 }
 #endif

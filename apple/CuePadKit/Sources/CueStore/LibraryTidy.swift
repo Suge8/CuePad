@@ -143,7 +143,7 @@ public struct SkillCopy: Codable, Equatable, Sendable {
 
 /// 技能的格式哪里不对（四家最严的那条）。
 public enum SkillProblem: Codable, Equatable, Sendable, CustomStringConvertible {
-  /// SKILL.md 读不出、没有开头的 `---` 信息块
+  /// SKILL.md 读不出（不是 UTF-8 文本、没有权限）或开头没有 `---` 包着的名字与说明
   case unreadable
   /// `name` 与目录名不同
   case nameMismatch(String)
@@ -156,7 +156,7 @@ public enum SkillProblem: Codable, Equatable, Sendable, CustomStringConvertible 
 
   public var description: String {
     switch self {
-    case .unreadable: String(localized: "SKILL.md 开头没有 --- 包着的名字与说明")
+    case .unreadable: String(localized: "SKILL.md 读不出名字与说明：要是文本，开头用 --- 包着 name 与 description")
     case .nameMismatch(let name): String(localized: "name 写的是 \(name)，和目录名不一样")
     case .badName: String(localized: "名字只能用小写字母、数字和连字符，最多 64 个字")
     case .badDescription: String(localized: "description 要有，且不超过 1024 个字")

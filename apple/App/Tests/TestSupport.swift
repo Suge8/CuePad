@@ -111,7 +111,13 @@ final class TestApp {
     private let cue: CueDependencies?
     /// 自动更新器；默认没有（同隔离模式）。
     private let updater: (any AppUpdater)?
-    init(sync source: AppServices.SyncSource? = nil, cue: CueDependencies? = nil, updater: (any AppUpdater)? = nil, timing: Timing = .system) {
+    /// 这台的标识：两台设备连同一个云替身时，另一台给别的（演手机：它看的是那台 Mac 写下的，经投送请求让那台做）。
+    let hostID: String
+    init(
+        sync source: AppServices.SyncSource? = nil, cue: CueDependencies? = nil, updater: (any AppUpdater)? = nil, timing: Timing = .system,
+        host: String = TestApp.hostID
+    ) {
+        hostID = host
         syncSource = source
         self.timing = timing
         self.cue = cue
@@ -280,7 +286,7 @@ final class TestApp {
             paths: AgentPaths(pi: piPaths, environment: agentHomes),
             agents: AgentIntegrations(agentIntegration),
             terminal: PiTerminalJumper(),
-            hostID: Self.hostID,
+            hostID: hostID,
             workspaces: workspaces,
             wakeNotifications: wakeCenter,
             timing: timing,
