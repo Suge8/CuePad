@@ -298,6 +298,19 @@ DEFINE SCHEMA
         GRANT CREATE TO "_icloud"
     );
 
+    RECORD TYPE agentLibraries (
+        "___recordID" REFERENCE QUERYABLE,
+        hostID        STRING,
+        home          ENCRYPTED STRING,
+        skills        ENCRYPTED STRING,
+        instructions  ENCRYPTED STRING,
+        tidies        ENCRYPTED STRING,
+        selfManaged   ENCRYPTED STRING,
+        modifiedAt    INT64,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud"
+    );
+
     RECORD TYPE syncFloor (
         "___recordID" REFERENCE QUERYABLE,
         version       INT64,

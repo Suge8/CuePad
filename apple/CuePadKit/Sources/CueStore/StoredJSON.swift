@@ -33,3 +33,9 @@ enum JSONColumn {
 
   static func decodeList<T: Decodable>(_ type: T.Type, from text: String?) -> [T] { decode([T].self, from: text) ?? [] }
 }
+
+/// 列表里的一条：读不出（更新的版本加的种类、更早的版本存的旧形状）时为 nil，读的地方跳过它、其余照读。
+struct Lenient<T: Decodable>: Decodable {
+  let value: T?
+  init(from decoder: any Decoder) throws { value = try? T(from: decoder) }
+}

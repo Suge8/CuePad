@@ -163,6 +163,7 @@ extension Schema {
     -- 每台 Mac 自己写、各端读：在线记录（Mac 在不在、Cue 在不在值班的唯一信号），能用的 Agent 与各家的模型。
     CREATE TABLE macPresence (id TEXT PRIMARY KEY NOT NULL, hostID TEXT NOT NULL, onlineUntil INTEGER NOT NULL, modifiedAt INTEGER NOT NULL) STRICT;
     CREATE TABLE macAgents (id TEXT PRIMARY KEY NOT NULL, hostID TEXT NOT NULL, agents TEXT, problems TEXT, modifiedAt INTEGER NOT NULL, name TEXT) STRICT;
+    \(agentLibrariesTable)
     -- 每台设备自己写：此刻开着哪个会话、开没开着 Cue 页（会话停下时他在不在场的一半；提示到不到他）。
     CREATE TABLE sessionViewers (id TEXT PRIMARY KEY NOT NULL, device TEXT NOT NULL, sessionID TEXT, modifiedAt INTEGER NOT NULL, cue INTEGER) STRICT;
 

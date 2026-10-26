@@ -158,6 +158,8 @@ final class Workspace {
     /// 交给了会话的灵感与任务（`AgentLinks`，卡与行上的状态点读它）：整个窗口一份，页面直接读，
     /// 不各自订阅（挂着的页也不会在每次回到前台时重读一遍）。读到和已有的相同不送来（`observe(after:)` 在读取一侧比较），免得页面白算。
     private(set) var agentLinks = AgentLinks(items: [:], launching: [:])
+    /// 技能与说明（`AgentLibrary`：Mac 上是本机的，手机上是 Cue 运行的那台的）：入口的角标、技能与说明页、编辑页都读这一份；没有一台写过为 nil。
+    private(set) var library: AgentLibrary?
 
     private func follow<T: Sendable & Equatable>(
         _ value: ReferenceWritableKeyPath<Workspace, T>, _ read: @escaping @Sendable (isolated CueStore) throws -> T
@@ -238,10 +240,11 @@ final class Workspace {
         async let links: Void = followAgentLinks()
         async let cue: Void = followCue()
         async let opens: Void = openLinks()
+        async let library: Void = followLibrary()
         #if os(macOS)
         await followSessionPlacement()
         #endif
-        _ = await (catalog, links, cue, opens)
+        _ = await (catalog, links, cue, opens, library)
     }
 
     private func followCatalog() async {
@@ -249,6 +252,11 @@ final class Workspace {
     }
 
     private func followAgentLinks() async { await follow(\.agentLinks) { try AgentLinks.read(from: $0) } }
+
+    private func followLibrary() async {
+        let host = localHost
+        await follow(\.library) { try $0.agentLibrary(preferring: host) }
+    }
 
     private func readCatalog() {
         do {

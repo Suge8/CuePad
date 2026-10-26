@@ -38,6 +38,12 @@ public enum DeliveryMode: String, Sendable, CaseIterable {
   /// 请 Mac 刷新订阅额度（手机上的额度视图打开、数据陈旧时）：由 Mac 上在线会话里的扩展查一次（`AccountQuota`），新值随同步回来；
   /// 正文固定为 `quota`，不写发送记录；查不到时照常按失败写回，手机不提示，只显示上次的值与更新时间
   case quota
+  /// 整理技能与说明（手机上的"全部整理"、一件的动作）：正文是 `[TidyOrder]`（见 `DeliveryRequest.tidyOrders`），由 Mac 照执行时的文件做，
+  /// 那件已不在的不做；不写发送记录
+  case tidy
+  /// 改一份说明（手机上的"发往 Mac"）：正文是 `InstructionEdit`（见 `DeliveryRequest.instructionEdit`），Mac 上的文件已不是基准就退回
+  /// "Mac 上刚改过"；不写发送记录
+  case instruction
 
   /// 发给会话本身、会改变它状态的方式（说话与作答）；会话的显示状态只把这几种算进去。命令与设置（config、end、stop、bind）不在其中：
   /// 它们不是"你说的话"，对话只来自会话文件，进度只在回复框上方短暂显示。
@@ -107,6 +113,12 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
 
   /// 绑定文件夹请求的内容；其他方式、读不出的为 nil。
   public var bind: PiBind? { mode == .known(.bind) ? PiBind(stored: content) : nil }
+
+  /// 整理请求的那几件；其他方式、读不出的为 nil。
+  public var tidyOrders: [TidyOrder]? { mode == .known(.tidy) ? JSONColumn.decode([TidyOrder].self, from: content) : nil }
+
+  /// 改说明请求的内容；其他方式、读不出的为 nil。
+  public var instructionEdit: InstructionEdit? { mode == .known(.instruction) ? InstructionEdit(stored: content) : nil }
 
   /// 作答请求的答案；其他方式为 nil。
   public var answer: PiAnswer? { mode == .known(.answer) ? PiAnswer(stored: content) : nil }

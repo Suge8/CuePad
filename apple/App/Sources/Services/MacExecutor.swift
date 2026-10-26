@@ -12,6 +12,7 @@ final class MacExecutor {
     private let hostID: String
     private let workspaces: Workspaces
     private let recorder: PiStateRecorder
+    private let library: AgentLibraryKeeper
     private let upload: @Sendable (UUID) async -> Void
     private let refreshQuota: @MainActor () async throws -> Void
     private let reportIssue: @MainActor (String) -> Void
@@ -19,7 +20,7 @@ final class MacExecutor {
 
     init(
         store: CueStore, pi: PiBridge, runtimes: [AgentKind: any AgentRuntime], hostID: String, workspaces: Workspaces, recorder: PiStateRecorder,
-        upload: @escaping @Sendable (UUID) async -> Void,
+        library: AgentLibraryKeeper, upload: @escaping @Sendable (UUID) async -> Void,
         refreshQuota: @escaping @MainActor () async throws -> Void,
         reportIssue: @escaping @MainActor (String) -> Void
     ) {
@@ -29,6 +30,7 @@ final class MacExecutor {
         self.hostID = hostID
         self.workspaces = workspaces
         self.recorder = recorder
+        self.library = library
         self.upload = upload
         self.refreshQuota = refreshQuota
         self.reportIssue = reportIssue
@@ -91,6 +93,12 @@ final class MacExecutor {
         case .config: try await configure(request)
         case .command: try await runCommand(request)
         case .send: try await deliver(request)
+        case .tidy:
+            guard let orders = request.tidyOrders else { throw SendError.unsupportedMode(request.mode.rawValue) }
+            _ = try await library.tidy(orders)
+        case .instruction:
+            guard let edit = request.instructionEdit else { throw SendError.unsupportedMode(request.mode.rawValue) }
+            try await library.write(edit)
         }
         return .succeeded
     }

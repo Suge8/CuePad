@@ -106,7 +106,17 @@ enum Schema {
     // - 提问的选项各端照类别与范围写（`CueMessage.shownChoice`）：已有的提问补上范围那个项目此刻的名字（`CuePlace`）
     // 每台设备各自升级、不改 modifiedAt（不同步出去）：同一份数据改出同一份
     Upgrade(shownTexts),
+    // 73：各台 Mac 的技能与说明（`AgentLibrary`）
+    "\(agentLibrariesTable) \(modifiedIndex(.agentLibraries))",
   ]
+
+  /// 技能与说明的快照：每台 Mac 自己写一条、各端读（`AgentLibrary`）。
+  static let agentLibrariesTable = """
+    CREATE TABLE agentLibraries (
+      id TEXT PRIMARY KEY NOT NULL, hostID TEXT NOT NULL, home TEXT NOT NULL, skills TEXT, instructions TEXT, tidies TEXT, selfManaged TEXT,
+      modifiedAt INTEGER NOT NULL
+    ) STRICT;
+    """
 
   /// 72 的那一步（见 `upgrades` 里的说明）。
   private static func shownTexts(_ db: SQLite) throws {

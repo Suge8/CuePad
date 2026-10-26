@@ -1262,6 +1262,50 @@
         }
       }
     },
+    "%lld 个技能在旧目录里" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld skill in an old folder"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld skills in old folders"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld 个技能在旧目录里"
+          }
+        }
+      }
+    },
+    "%lld 个技能都叫 %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld skills are named %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld 个技能都叫 %2$@"
+          }
+        }
+      }
+    },
     "%lld 件" : {
       "localizations" : {
         "en" : {
@@ -1506,6 +1550,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld 子代理"
+          }
+        }
+      }
+    },
+    "%lld 家的全局规则各写一份" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld agent has its own global rules"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld agents each have their own global rules"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld 家的全局规则各写一份"
           }
         }
       }
@@ -2655,6 +2727,34 @@
         }
       }
     },
+    "Claude Code 看不见 %lld 个技能" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Claude Code can't see %lld skill"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Claude Code can't see %lld skills"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Claude Code 看不见 %lld 个技能"
+          }
+        }
+      }
+    },
     "Codex 出错了" : {
       "localizations" : {
         "en" : {
@@ -3057,6 +3157,22 @@
         }
       }
     },
+    "Mac 上刚改过" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Just changed on the Mac"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mac 上刚改过"
+          }
+        }
+      }
+    },
     "Mac 上的 CuePad 在执行过程中退出，为避免重复发送没有重试" : {
       "localizations" : {
         "en" : {
@@ -3185,6 +3301,22 @@
         }
       }
     },
+    "Pi 的系统提示" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pi System Prompt"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pi 的系统提示"
+          }
+        }
+      }
+    },
     "Pi 里的 CuePad 扩展不是这个版本的，没能在后台启动；在 CuePad 设置里修复 Pi 接入后再发" : {
       "localizations" : {
         "en" : {
@@ -3197,6 +3329,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Pi 里的 CuePad 扩展不是这个版本的，没能在后台启动；在 CuePad 设置里修复 Pi 接入后再发"
+          }
+        }
+      }
+    },
+    "SKILL.md 开头没有 --- 包着的名字与说明" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "SKILL.md doesn't start with a name and description between --- lines"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "SKILL.md 开头没有 --- 包着的名字与说明"
           }
         }
       }
@@ -3247,6 +3395,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "cuepad 命令"
+          }
+        }
+      }
+    },
+    "description 要有，且不超过 1024 个字" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Needs a description of at most 1024 characters"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "description 要有，且不超过 1024 个字"
           }
         }
       }
@@ -3416,6 +3580,22 @@
 
       },
       "shouldTranslate" : false
+    },
+    "name 写的是 %@，和目录名不一样" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "name says %@, which doesn't match the folder name"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "name 写的是 %@，和目录名不一样"
+          }
+        }
+      }
     },
     "opencode service start 退出码 %d" : {
       "localizations" : {
@@ -3663,6 +3843,22 @@
         }
       }
     },
+    "「%@」在旧目录里" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“%@” is in an old folder"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "「%@」在旧目录里"
+          }
+        }
+      }
+    },
     "「%@」在用" : {
       "localizations" : {
         "en" : {
@@ -3691,6 +3887,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "「%@」没开"
+          }
+        }
+      }
+    },
+    "「%@」的格式不对" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“%@” isn't formatted right"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "「%@」的格式不对"
           }
         }
       }
@@ -3771,6 +3983,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "一句话介绍（可不填）"
+          }
+        }
+      }
+    },
+    "一台 Mac 上的技能与说明" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "a Mac's skills and instructions"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "一台 Mac 上的技能与说明"
           }
         }
       }
@@ -5639,6 +5867,38 @@
         }
       }
     },
+    "全局说明" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Global Instructions"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "全局说明"
+          }
+        }
+      }
+    },
+    "全局说明换成一份、各家链到它" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keep one global instructions file and link every agent to it"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "全局说明换成一份、各家链到它"
+          }
+        }
+      }
+    },
     "全屏查看" : {
       "localizations" : {
         "en" : {
@@ -7447,6 +7707,22 @@
         }
       }
     },
+    "合成" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Merge"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "合成"
+          }
+        }
+      }
+    },
     "同步冲突" : {
       "localizations" : {
         "en" : {
@@ -7523,6 +7799,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "名字"
+          }
+        }
+      }
+    },
+    "名字只能用小写字母、数字和连字符，最多 64 个字" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Names can only use lowercase letters, digits, and hyphens, up to 64 characters"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "名字只能用小写字母、数字和连字符，最多 64 个字"
           }
         }
       }
@@ -11283,6 +11575,66 @@
         }
       }
     },
+    "技能与说明" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Skills & Instructions"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "技能与说明"
+          }
+        }
+      }
+    },
+    "技能目录里有 %lld 个空目录" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld empty folder among the skills"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld empty folders among the skills"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "技能目录里有 %lld 个空目录"
+          }
+        }
+      }
+    },
+    "技能目录里有个空目录" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "An empty folder among the skills"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "技能目录里有个空目录"
+          }
+        }
+      }
+    },
     "把任务的正文交给 Agent，开始做" : {
       "localizations" : {
         "en" : {
@@ -12003,6 +12355,22 @@
         }
       }
     },
+    "搬过去" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Move"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "搬过去"
+          }
+        }
+      }
+    },
     "撤销" : {
       "localizations" : {
         "en" : {
@@ -12255,6 +12623,38 @@
         }
       }
     },
+    "改说明" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit instructions"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "改说明"
+          }
+        }
+      }
+    },
+    "放得太深（超过 6 层），Codex 读不到" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nested more than 6 levels deep, so Codex can't read it"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "放得太深（超过 6 层），Codex 读不到"
+          }
+        }
+      }
+    },
     "整张卡片" : {
       "localizations" : {
         "en" : {
@@ -12267,6 +12667,50 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "整张卡片"
+          }
+        }
+      }
+    },
+    "整理好了 %lld 件" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Tidied %lld item"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Tidied %lld items"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "整理好了 %lld 件"
+          }
+        }
+      }
+    },
+    "整理技能与说明" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tidy skills and instructions"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "整理技能与说明"
           }
         }
       }
@@ -14143,6 +14587,22 @@
         }
       }
     },
+    "比一比" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Compare"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "比一比"
+          }
+        }
+      }
+    },
     "水滴" : {
       "localizations" : {
         "en" : {
@@ -15851,6 +16311,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "移到项目"
+          }
+        }
+      }
+    },
+    "移走" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remove"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "移走"
           }
         }
       }
@@ -18907,6 +19383,22 @@
         }
       }
     },
+    "这个项目在这台 Mac 上没有绑定文件夹" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This project has no linked folder on this Mac"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这个项目在这台 Mac 上没有绑定文件夹"
+          }
+        }
+      }
+    },
     "这个项目还没同步到这台 Mac，稍后再开" : {
       "localizations" : {
         "en" : {
@@ -18983,6 +19475,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "这件任务已归档"
+          }
+        }
+      }
+    },
+    "这件已经不用整理了" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This no longer needs tidying"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这件已经不用整理了"
           }
         }
       }
@@ -20123,6 +20631,22 @@
         }
       }
     },
+    "链上" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Link"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "链上"
+          }
+        }
+      }
+    },
     "锁屏通知暂时收不到。回到前台时会自动重试，也可以现在重试。" : {
       "localizations" : {
         "en" : {
@@ -20627,6 +21151,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "项目范围：全部项目"
+          }
+        }
+      }
+    },
+    "项目说明" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Project Instructions"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "项目说明"
+          }
+        }
+      }
+    },
+    "项目里另有一份不同的 CLAUDE.md" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The project has a different CLAUDE.md"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "项目里另有一份不同的 CLAUDE.md"
           }
         }
       }
