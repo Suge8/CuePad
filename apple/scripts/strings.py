@@ -73,10 +73,16 @@ def problems(key, entry):
 
 
 def keep_source(key, entry):
-    """每条都写上中文那一份：开发语言是英文，中文那边缺了整张表（演示内容、复数）时系统整张回落到英文，中文界面就显示英文。"""
+    """每条都写上中文那一份、且是已译：开发语言是英文，中文那边缺了整张表（演示内容、复数），或只有 xcstringstool 补的待译那份
+    （多个占位符的键它按位置补一份 state new），编出来都没有中文，中文界面显示英文。待译那份的值就是带位置的原文，照用。"""
     locs = entry.setdefault("localizations", {})
-    if HAN.search(key) and "zh-Hans" not in locs:
+    if not HAN.search(key):
+        return
+    unit = locs.get("zh-Hans", {}).get("stringUnit")
+    if unit is None:
         locs["zh-Hans"] = {"stringUnit": {"state": "translated", "value": key}}
+    elif unit["state"] != "translated":
+        unit["state"] = "translated"
 
 
 # 两端构建里各自要有抽取结果的目标（CuePi 只在 Mac 上编）

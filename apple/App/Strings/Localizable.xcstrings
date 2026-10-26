@@ -79,7 +79,7 @@
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "new",
+            "state" : "translated",
             "value" : "%1$@ %2$@ 太旧，需要 %3$@ 或更新"
           }
         }
@@ -106,7 +106,7 @@
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "new",
+            "state" : "translated",
             "value" : "%1$@ %2$@剩 %3$@"
           }
         }
@@ -122,7 +122,7 @@
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "new",
+            "state" : "translated",
             "value" : "%1$@ %2$@还剩 %3$@"
           }
         }
@@ -149,7 +149,7 @@
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "new",
+            "state" : "translated",
             "value" : "%1$@ 上的 %2$@"
           }
         }
@@ -277,7 +277,7 @@
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "new",
+            "state" : "translated",
             "value" : "%1$@ 和 %2$@"
           }
         }
@@ -309,7 +309,7 @@
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "new",
+            "state" : "translated",
             "value" : "%1$@ 太旧，需要 %2$@ 或更新"
           }
         }
@@ -437,7 +437,7 @@
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "new",
+            "state" : "translated",
             "value" : "%1$@ 没执行成功：%2$@"
           }
         }
@@ -469,7 +469,7 @@
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "new",
+            "state" : "translated",
             "value" : "%1$@ 没能启动：%2$@"
           }
         }
@@ -485,7 +485,7 @@
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "new",
+            "state" : "translated",
             "value" : "%1$@ 没能接上：%2$@"
           }
         }
@@ -561,7 +561,7 @@
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "new",
+            "state" : "translated",
             "value" : "%1$@ 等 %2$lld 条"
           }
         }
@@ -711,7 +711,7 @@
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "new",
+            "state" : "translated",
             "value" : "%1$@%2$@%3$@后重置"
           }
         }
@@ -727,7 +727,7 @@
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "new",
+            "state" : "translated",
             "value" : "%1$@%2$@已重置"
           }
         }
@@ -743,7 +743,7 @@
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "new",
+            "state" : "translated",
             "value" : "%1$@/cuepad 已有一个指向 %2$@ 的链接，没有覆盖"
           }
         }
@@ -802,7 +802,7 @@
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "new",
+            "state" : "translated",
             "value" : "%1$@剩 %2$@"
           }
         }
@@ -882,7 +882,7 @@
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "new",
+            "state" : "translated",
             "value" : "%1$@额度剩 %2$@"
           }
         }
@@ -898,7 +898,7 @@
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "new",
+            "state" : "translated",
             "value" : "%1$@（%2$@）：%3$@"
           }
         }
@@ -914,7 +914,7 @@
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "new",
+            "state" : "translated",
             "value" : "%1$@（%2$lld 处）"
           }
         }
@@ -930,7 +930,7 @@
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "new",
+            "state" : "translated",
             "value" : "%1$@（%2$lld 条）"
           }
         }
@@ -946,7 +946,7 @@
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "new",
+            "state" : "translated",
             "value" : "%1$@（%2$lld）"
           }
         }
@@ -962,7 +962,7 @@
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "new",
+            "state" : "translated",
             "value" : "%1$@，%2$@"
           }
         }
@@ -990,7 +990,7 @@
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "new",
+            "state" : "translated",
             "value" : "%1$@，%2$lld 条记录没能同步"
           }
         }
@@ -1018,7 +1018,7 @@
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "new",
+            "state" : "translated",
             "value" : "%1$@，%2$lld 项"
           }
         }
@@ -1082,7 +1082,7 @@
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "new",
+            "state" : "translated",
             "value" : "%1$@：%2$@"
           }
         }
@@ -3625,7 +3625,7 @@
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "new",
+            "state" : "translated",
             "value" : "「%1$@」%2$@"
           }
         }
@@ -3657,7 +3657,7 @@
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "new",
+            "state" : "translated",
             "value" : "「%1$@」做完了\n\n%2$@"
           }
         }
@@ -4101,7 +4101,7 @@
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "new",
+            "state" : "translated",
             "value" : "上传：%1$@。替换：%2$@。"
           }
         }
@@ -4613,7 +4613,7 @@
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "new",
+            "state" : "translated",
             "value" : "交给了 Agent 会话「%1$@」：%2$@，点开看近况"
           }
         }
@@ -4709,7 +4709,7 @@
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "new",
+            "state" : "translated",
             "value" : "以后「%1$@」里%2$@不用问"
           }
         }
@@ -5249,7 +5249,7 @@
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "new",
+            "state" : "translated",
             "value" : "你说：%1$@%2$@"
           }
         }
@@ -5537,7 +5537,7 @@
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "new",
+            "state" : "translated",
             "value" : "允许 %1$@ %2$@？"
           }
         }
@@ -5885,7 +5885,7 @@
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "new",
+            "state" : "translated",
             "value" : "关于「%1$@」对 %2$@ 说…"
           }
         }
@@ -5917,7 +5917,7 @@
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "new",
+            "state" : "translated",
             "value" : "关于「%1$@」：%2$@"
           }
         }
@@ -6029,7 +6029,7 @@
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "new",
+            "state" : "translated",
             "value" : "写入 %1$@ 失败：%2$@"
           }
         }
@@ -6413,7 +6413,7 @@
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "new",
+            "state" : "translated",
             "value" : "删掉 %1$@ 的会话索引失败：%2$@"
           }
         }
@@ -6729,7 +6729,7 @@
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "new",
+            "state" : "translated",
             "value" : "原来那台「%1$@」就不再运行 %2$@。"
           }
         }
@@ -8961,7 +8961,7 @@
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "new",
+            "state" : "translated",
             "value" : "子任务 %1$lld/%2$lld"
           }
         }
@@ -11197,7 +11197,7 @@
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "new",
+            "state" : "translated",
             "value" : "批注：%1$@，原文：%2$@"
           }
         }
@@ -14313,7 +14313,7 @@
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "new",
+            "state" : "translated",
             "value" : "没换成 %1$@：%2$@\n我还用原来的。"
           }
         }
@@ -15273,7 +15273,7 @@
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "new",
+            "state" : "translated",
             "value" : "版本太旧（%1$@，要 %2$@ 或更新）"
           }
         }
@@ -16009,7 +16009,7 @@
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "new",
+            "state" : "translated",
             "value" : "第 %1$lld 件，共 %2$lld 件"
           }
         }
@@ -16025,7 +16025,7 @@
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "new",
+            "state" : "translated",
             "value" : "第 %1$lld 处，共 %2$lld 处：%3$@"
           }
         }
@@ -17013,7 +17013,7 @@
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "new",
+            "state" : "translated",
             "value" : "被 %1$@ 等 %2$lld 处叫醒"
           }
         }
@@ -17189,7 +17189,7 @@
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "new",
+            "state" : "translated",
             "value" : "让 %1$@ 改在「%2$@」上运行？"
           }
         }
@@ -17665,7 +17665,7 @@
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "new",
+            "state" : "translated",
             "value" : "读取 %1$@ 托管过的会话失败：%2$@"
           }
         }
@@ -17681,7 +17681,7 @@
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "new",
+            "state" : "translated",
             "value" : "读取 %1$@ 的检查点失败：%2$@"
           }
         }
@@ -18597,7 +18597,7 @@
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "new",
+            "state" : "translated",
             "value" : "这一轮出错了：%1$@\n%2$@"
           }
         }
@@ -19253,7 +19253,7 @@
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "new",
+            "state" : "translated",
             "value" : "这台 Mac 装着正式版，本机构建不改它在用的配置：先用 %1$@ 指定 %2$@ 的目录再接入"
           }
         }
@@ -20385,7 +20385,7 @@
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "new",
+            "state" : "translated",
             "value" : "需要 %1$@ %2$@ 以上"
           }
         }
