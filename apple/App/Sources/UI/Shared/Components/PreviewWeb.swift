@@ -19,7 +19,12 @@ struct PreviewWeb: View {
             } else if let failure {
                 EmptyState(mascot: .error, title: "没法安全地打开这个页面", message: .verbatim(failure)).padding(24).frame(maxHeight: .infinity)
             } else {
+                #if os(iOS)
+                // 规则还在装时就铺缩略图的画面，与载入时盖在页面上的那张同一处（`OfflineWebView`）
+                PreviewCoverView().ignoresSafeArea(.container, edges: OfflineWebView.edges)
+                #else
                 Spinner(.regular)
+                #endif
             }
         }
         .task {
@@ -127,6 +132,20 @@ private struct OfflineWebView {
         func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction) async -> WKNavigationActionPolicy {
             PreviewWebGuard.allows(action.navigationType, to: action.request.url) ? .allow : .cancel
         }
+
+        #if os(iOS)
+        /// 载完（或载不了）之前盖在页面上的缩略图画面（`PreviewCover`）；拦截规则装好不算载完
+        var cover: UIView?
+
+        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { uncover() }
+        func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: any Error) { uncover() }
+        func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: any Error) { uncover() }
+
+        private func uncover() {
+            cover?.removeFromSuperview()
+            cover = nil
+        }
+        #endif
     }
 }
 
@@ -178,10 +197,19 @@ extension OfflineWebView: NSViewRepresentable {
     func updateNSView(_ view: WKWebView, context: Context) {}
 }
 #else
-/// 手机的全屏页里铺满整屏、滚到两条栏后面，内容边按 `previewInsets` 让出栏。
+/// 手机的全屏页里铺满整屏、滚到两条栏后面，内容边按 `previewInsets` 让出栏；载完之前盖着缩略图的画面（`previewLook`），
+/// 从缩略图飞出来的第一帧就有图（网页的是桌面宽的首屏、文稿的是纸面，与重排后的页不一样，只当占位）。
 extension OfflineWebView: UIViewRepresentable {
     static let edges = Edge.Set.all
-    func makeUIView(context: Context) -> WKWebView { make(context.coordinator) }
+    func makeUIView(context: Context) -> WKWebView {
+        let view = make(context.coordinator)
+        let cover = PreviewCover(look: context.environment.previewLook)
+        cover.frame = view.bounds
+        cover.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        view.addSubview(cover)
+        context.coordinator.cover = cover
+        return view
+    }
     func updateUIView(_ view: WKWebView, context: Context) { view.scrollView.previewInsets(context.environment.previewInsets) }
 }
 #endif

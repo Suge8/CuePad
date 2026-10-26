@@ -30,8 +30,7 @@ private struct PreviewPresenter: ViewModifier {
                 presented = opened
             }
             .panel(item: Binding { presented } set: { presented = $0; opened = $0 }, style: .fullScreen) {
-                PreviewPager(opening: $0, reply: $0.reply ?? reply, current: $0.preview.id, zoom: zoom)
-                    .environment(\.previewLooks, PreviewLooks(sources: sources, group: $0.group))
+                PreviewPager(opening: $0, reply: $0.reply ?? reply, current: $0.preview.id, zoom: zoom, sources: sources)
             }
     }
 }
@@ -45,6 +44,7 @@ private struct PreviewPager: View {
     let reply: PreviewReply
     @State var current: UUID
     let zoom: Namespace.ID
+    let sources: PreviewSources
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @Environment(\.closePanel) private var close
@@ -92,6 +92,7 @@ private struct PreviewPager: View {
             ForEach(batch) { page in
                 // 分页铺满整屏、页里拿不到安全区：栏占的边在这里给回去，会滚的页再自己铺到栏后面（`previewInsets`）
                 PreviewContent(preview: page, file: file(of: page), active: page.id == current).safeAreaPadding(insets).tag(page.id)
+                    .environment(\.previewLook, PreviewLook(sources: sources, key: PreviewZoomKey(group: opening.group, preview: page.id)))
             }
         }
         .tabViewStyle(.page(indexDisplayMode: .never))

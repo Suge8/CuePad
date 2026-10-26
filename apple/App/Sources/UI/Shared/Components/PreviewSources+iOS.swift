@@ -38,19 +38,19 @@ import SwiftUI
     }
 }
 
-/// 全屏页里某一份的缩略图画面（`PreviewSources` 加上这一页是哪一组）：页里先铺它，大图到了再换。
-struct PreviewLooks {
+/// 全屏页里一页的缩略图画面：已经取到的当场给（`now`），没取到的再去取（`load`）。页里先铺它，内容出来再撤。
+struct PreviewLook {
     let sources: PreviewSources
-    let group: String
+    let key: PreviewZoomKey
 
-    func taken(_ id: UUID) -> PreviewSources.Look? { sources.taken(PreviewZoomKey(group: group, preview: id)) }
-    func look(_ id: UUID) async -> PreviewSources.Look? { await sources.prepare(PreviewZoomKey(group: group, preview: id)) }
+    var now: PreviewSources.Look? { sources.taken(key) }
+    func load() async -> PreviewSources.Look? { await sources.prepare(key) }
 }
 
 extension EnvironmentValues {
     /// 缩略图登记画面的地方（`previewPresenter` 给，`previewSource` 写）
     @Entry var previewSources: PreviewSources?
-    /// 全屏页里取缩略图画面（`PreviewPage` 读）
-    @Entry var previewLooks: PreviewLooks?
+    /// 全屏页里这一页的缩略图画面（`PreviewPager` 每页给，图、视频、网页与文稿读）
+    @Entry var previewLook: PreviewLook?
 }
 #endif

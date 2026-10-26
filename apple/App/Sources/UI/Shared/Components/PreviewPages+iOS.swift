@@ -10,12 +10,12 @@ import SwiftUI
 // 每页铺满整屏：会滚的（图、PDF、文本、网页）铺到两条栏后面、按 `previewInsets` 让出内容边，其余排在两条栏之间（全屏页给的安全区）。
 
 /// 全屏页里除网页与 Markdown 外的每一类（`PreviewContent`）。
-/// 图与视频在内容出来前先铺缩略图的画面（`previewLooks`）：从缩略图飞出来的第一帧就有图，不是一张空的纸。
+/// 图、视频、网页与文稿在内容出来前先铺缩略图的画面（`previewLook`）：从缩略图飞出来的第一帧就有图，不是一张空的纸。
 struct PreviewPage: View {
     let preview: PiPreview
     let file: URL
     let active: Bool
-    @Environment(\.previewLooks) private var looks
+    @Environment(\.previewLook) private var look
 
     var body: some View {
         switch preview.kind {
@@ -27,17 +27,6 @@ struct PreviewPage: View {
         case .model, .web, .markdown, nil: PreviewStill(preview: preview, file: file)
         }
     }
-
-    private var look: PreviewLook { PreviewLook(id: preview.id, looks: looks) }
-}
-
-/// 一份的缩略图画面：已经取到的当场给（`now`），没取到的再去取（`load`）。
-struct PreviewLook {
-    let id: UUID
-    let looks: PreviewLooks?
-
-    var now: PreviewSources.Look? { looks?.taken(id) }
-    func load() async -> PreviewSources.Look? { await looks?.look(id) }
 }
 
 /// PDF：系统的 PDF 视图，按宽铺满、竖着连续滚，页与页之间留一道缝，双指缩放（以手指处为锚、放大了拖到边再拖是翻页，同图片）。
@@ -68,7 +57,7 @@ struct PreviewPDF: UIViewRepresentable {
 struct PreviewPlayer: UIViewControllerRepresentable {
     let file: URL
     let active: Bool
-    let look: PreviewLook
+    let look: PreviewLook?
 
     func makeUIViewController(context: Context) -> AVPlayerViewController {
         let controller = AVPlayerViewController()
@@ -99,18 +88,25 @@ struct PreviewPlayer: UIViewControllerRepresentable {
     }
 }
 
+/// SwiftUI 里铺的那张（`PreviewCover`），按这一页的 `previewLook`。
+struct PreviewCoverView: UIViewRepresentable {
+    @Environment(\.previewLook) private var look
+    func makeUIView(context: Context) -> PreviewCover { PreviewCover(look: look) }
+    func updateUIView(_ view: PreviewCover, context: Context) {}
+}
+
 /// 内容出来前铺的缩略图画面：按内容的真实比例在框里放到最大（缩略图裁过的那几边照比例铺满，同 zoom 转场飞的那张）。
 final class PreviewCover: UIView {
     private let imageView = UIImageView()
     private var aspect: CGFloat?
 
-    init(look: PreviewLook) {
+    init(look: PreviewLook?) {
         super.init(frame: .zero)
         isUserInteractionEnabled = false
         imageView.contentMode = .scaleAspectFill
         imageView.clipsToBounds = true
         addSubview(imageView)
-        if let now = look.now { show(now) } else {
+        if let now = look?.now { show(now) } else if let look {
             Task { [weak self] in if let look = await look.load() { self?.show(look) } }
         }
     }

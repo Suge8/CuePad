@@ -11,7 +11,7 @@ import UIKit
 /// 大图解码与上传纹理几十毫秒，放在手势中间会让那几帧卡住（模拟器上解码还会抢渲染的 CPU）；只看不放大的图不解大的。
 struct PreviewImage: UIViewRepresentable {
     let file: URL
-    let look: PreviewLook
+    let look: PreviewLook?
     @Environment(\.previewInsets) private var insets
     @Environment(\.displayScale) private var scale
 
@@ -53,7 +53,7 @@ final class PreviewZoomView: UIScrollView, UIScrollViewDelegate {
     private var fitted: CGSize = .zero
     private var fittedFor: (area: CGSize, aspect: CGFloat)?
 
-    init(file: URL, scale: CGFloat, look: PreviewLook) {
+    init(file: URL, scale: CGFloat, look: PreviewLook?) {
         self.file = file
         self.scale = scale
         super.init(frame: .zero)
@@ -73,7 +73,7 @@ final class PreviewZoomView: UIScrollView, UIScrollViewDelegate {
         imageView.clipsToBounds = true
         addSubview(imageView)
         aspect = Thumbnails.pointSize(at: file).flatMap { $0.height > 0 ? $0.width / $0.height : nil }
-        if let now = look.now { cover(now) } else {
+        if let now = look?.now { cover(now) } else if let look {
             Task { [weak self] in if let look = await look.load() { self?.cover(look) } }
         }
         let doubleTap = UITapGestureRecognizer(target: self, action: #selector(doubleTapped))
