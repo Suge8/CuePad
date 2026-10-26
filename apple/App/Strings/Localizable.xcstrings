@@ -4863,6 +4863,22 @@
         }
       }
     },
+    "会话一直没连上 CuePad" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The session never connected to CuePad"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "会话一直没连上 CuePad"
+          }
+        }
+      }
+    },
     "会话名" : {
       "localizations" : {
         "en" : {
@@ -13751,6 +13767,22 @@
         }
       }
     },
+    "正在开 %@ 会话…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opening %@ session…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在开 %@ 会话…"
+          }
+        }
+      }
+    },
     "正在开…" : {
       "localizations" : {
         "en" : {
@@ -14099,6 +14131,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "没发过"
+          }
+        }
+      }
+    },
+    "没开成会话：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't open the session: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没开成会话：%@"
           }
         }
       }

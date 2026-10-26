@@ -9,18 +9,29 @@ extension Workspace {
     /// 接着用上一步的会话就发给它（在跑就打断这一轮）；要开新会话就开以任务命名的、开好后任务绑上它（项目没绑文件夹时执行的那台 Mac
     /// 先建工作区，`MacExecutor`）。正文发出后留在任务上。
     func handOff(_ leaf: Card) {
-        let id = leaf.id
-        attempt { try await self.handOff(leaf: id) }
+        start(leaf.id, fresh: false)
     }
 
     /// 给叶子开一个新会话，不接着用绑着的或上一步的会话（"绑定会话"里的"开新会话"；与 Cue 开工带 fresh 同一条规则，
     /// `CueStore.handOffPlan(fresh:)`）。
     func startFresh(_ leaf: Card) {
-        let id = leaf.id
-        attempt { try await self.handOff(leaf: id, fresh: true) }
+        start(leaf.id, fresh: true)
     }
 
-    private func handOff(leaf: UUID, fresh: Bool = false) async throws {
+    /// 没开成的原因提示一下，并留在任务气泡上（`launchFailures`）：一闪而过的提示条看漏了，任务就像什么都没发生地回到"开始"。
+    private func start(_ leaf: UUID, fresh: Bool) {
+        launchFailures[leaf] = nil
+        attempt {
+            do {
+                try await self.handOff(leaf: leaf, fresh: fresh)
+            } catch {
+                self.launchFailures[leaf] = error.localizedDescription
+                throw error
+            }
+        }
+    }
+
+    private func handOff(leaf: UUID, fresh: Bool) async throws {
         let store = services.store
         let plan = try await store.handOffPlan(leaf, host: services.hostID, fresh: fresh)
         let text = try await store.opening(of: leaf, plan.opensSession)
@@ -32,11 +43,7 @@ extension Workspace {
             let projectName = try await services.store.project(project)?.shownName ?? ""
             let title = plan.name ?? projectName
             let agents = try await services.store.macAgents(on: host)
-            guard let agent = agents.preferred(services.settings.lastAgent) else {
-                let why = agents.whyNone
-                say(Dotted(host == services.hostID ? String(localized: "这台 Mac 上开不了会话：\(why)") : String(localized: "那台 Mac 上开不了会话：\(why)")), tone: .failure)
-                return
-            }
+            guard let agent = agents.preferred(services.settings.lastAgent) else { throw SendError.noAgent(here: host == services.hostID, agents.whyNone) }
             _ = try await startSession(in: project, prompt: text.nonEmpty, title: title, on: host, card: leaf, agent: agent) {}
         }
     }

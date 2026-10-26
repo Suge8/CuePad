@@ -19,9 +19,31 @@ struct BubbleFooter: View {
             }
         } else if agents.items[focus.id] != nil {
             AgentStrip(leaf: focus)
-        } else if focus.status != .done, !agents.launching.contains(focus.id) {
+        } else if let kind = agents.launching[focus.id] {
+            LaunchStrip(kind: kind)
+        } else if focus.status != .done {
             StartBar(leaf: focus, caption: nil, editing: editing)
         }
+    }
+}
+
+/// 正在开会话的叶子：与会话连上后的那一行（`AgentStrip`）同一种排法、同一个位置，写正在开哪家的会话；连上后原地换成它。
+/// 开得慢时（Claude Code 冷启动、第一句落进会话，实测 9–17 秒）这里一直有字，不是一片空白。
+private struct LaunchStrip: View {
+    let kind: AgentKind
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        BubbleStrip(mark: kind.mark.image) {
+            HStack(spacing: 6) {
+                Spinner(.small)
+                Text("正在开 \(kind.name) 会话…").font(BubbleMetrics.strong).foregroundStyle(palette.ink).lineLimit(1)
+            }
+        } trailing: {
+            // 与"去会话"同高：连上后换成它时这一行不跳
+            Color.clear.frame(width: 0, height: BubbleMetrics.capsule)
+        }
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -50,14 +72,8 @@ private struct AgentStrip: View {
     }
 
     private func strip(_ look: TaskAgentLook, shown: PiShown, session: PiSessionState) -> some View {
-        HStack(spacing: BubbleMetrics.gap) {
-            // 同看板的会话卡（`BoardSessionCard`）：认得出是哪家就是它的标志，认不出是终端
-            Group {
-                if let kind = session.agent.known { kind.mark.image } else { Image(.terminal) }
-            }
-            .font(.system(size: BubbleMetrics.brand)).foregroundStyle(palette.ink2)
-            .frame(width: BubbleMetrics.markSlot)
-            .accessibilityLabel(session.agentMark ?? "")
+        // 同看板的会话卡（`BoardSessionCard`）：认得出是哪家就是它的标志，认不出是终端
+        BubbleStrip(mark: session.agent.known?.mark.image ?? Image(.terminal), markLabel: session.agentMark) {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     PiStateDot(shown: shown, size: BubbleMetrics.dot).relaySpot(session: session.sessionID, row: .task)
@@ -67,11 +83,31 @@ private struct AgentStrip: View {
                     Text(note).font(BubbleMetrics.meta).foregroundStyle(palette.ink2).lineLimit(2)
                 }
             }
-            Spacer(minLength: 4)
+        } trailing: {
             Text("去会话").font(BubbleMetrics.meta.weight(.semibold))
                 .foregroundStyle(shown.needsYou ? palette.onFill : palette.ink)
                 .padding(.horizontal, 14).frame(height: BubbleMetrics.capsule)
                 .background(shown.needsYou ? palette.signatureFill : palette.fill, in: .capsule)
+        }
+    }
+}
+
+/// 气泡底下会话那一行的排法（`AgentStrip`、`LaunchStrip`）：左边这家 Agent 的标志，中间状态与说明，右边可选的动作。
+private struct BubbleStrip<Content: View, Trailing: View>: View {
+    let mark: Image
+    var markLabel: String?
+    @ViewBuilder let content: Content
+    @ViewBuilder let trailing: Trailing
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        HStack(spacing: BubbleMetrics.gap) {
+            mark.font(.system(size: BubbleMetrics.brand)).foregroundStyle(palette.ink2)
+                .frame(width: BubbleMetrics.markSlot)
+                .accessibilityLabel(markLabel ?? "")
+            content
+            Spacer(minLength: 4)
+            trailing
         }
         .padding(BubbleMetrics.stripPadding)
         .background(palette.fill, in: .rect(cornerRadius: BubbleMetrics.stripRadius, style: .continuous))
@@ -79,7 +115,8 @@ private struct AgentStrip: View {
     }
 }
 
-/// 还没交出去的叶子："开始"——正文连同标题作为第一句交给 Agent（先写下正文里没保存的字）。Mac 左边另有"绑定会话"。
+/// 还没交出去的叶子："开始"——正文连同标题作为第一句交给 Agent（先写下正文里没保存的字）。Mac 左边另有"绑定会话"；
+/// 这台 Mac 上上次没开成（`Workspace.launchFailures`）时左边换成原因、按钮写"重试"。
 private struct StartBar: View {
     let leaf: Card
     /// 有子任务的任务开的是哪一步。
@@ -91,7 +128,10 @@ private struct StartBar: View {
     var body: some View {
         HStack(spacing: BubbleMetrics.gap) {
             #if os(macOS)
-            if caption == nil {
+            if let failure {
+                Text(failure).font(BubbleMetrics.meta).foregroundStyle(palette.failure).lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else if caption == nil {
                 Menu { SessionBindItems(leaf: leaf) } label: {
                     Text("绑定会话").font(BubbleMetrics.meta).foregroundStyle(palette.ink3)
                 }
@@ -101,7 +141,7 @@ private struct StartBar: View {
             if let caption { Text(caption).font(BubbleMetrics.meta).foregroundStyle(palette.ink2).lineLimit(1) }
             Spacer(minLength: 0)
             Button(action: start) {
-                Label(caption == nil ? "开始" : "开始这一步", icon: .start)
+                Label(failure != nil ? "重试" : caption == nil ? "开始" : "开始这一步", icon: .start)
                     .font(BubbleMetrics.meta.weight(.semibold)).foregroundStyle(palette.onFill)
                     .padding(.horizontal, 16).frame(height: BubbleMetrics.capsule)
                     .background(palette.signatureFill, in: .capsule).contentShape(.capsule)
@@ -109,6 +149,14 @@ private struct StartBar: View {
             .buttonStyle(PressStyle())
             .accessibilityHint("把任务的正文交给 Agent，开始做")
         }
+    }
+
+    private var failure: String? {
+        #if os(macOS)
+        workspace.launchFailures[leaf.id]
+        #else
+        nil
+        #endif
     }
 
     private func start() {
