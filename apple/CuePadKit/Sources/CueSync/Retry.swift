@@ -26,9 +26,9 @@ public struct Backoff: Sendable {
   public mutating func reset() { failures = 0 }
 }
 
-/// 同步自己给请求定的时限（CloudKit 自己的空闲超时见 `CloudDatabase.requestTimeout`）。
+/// 同步自己给请求定的时限。
 enum RequestLimits {
-  /// 不带数据的请求（认账号）至多等这么久，到点算连不上。
+  /// 不带数据的请求（认账号）至多等这么久，到点算连不上；也是数据库每个请求的空闲超时（`CloudDatabase.database`）。
   static let request = Duration.seconds(15)
   /// 一次拉变化（不带附件的文件，见 `ZonePuller`）这么久没回音就同样的再发一次，先回来的算（`hedged`）：一拉挂住，后面的拉不跟着等。
   static let hedge = Duration.seconds(3)
