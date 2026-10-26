@@ -15,7 +15,9 @@ import Foundation
 /// 拉变化的请求 `RequestLimits.hedge` 没回音就同样的再发一次、先回来的算（`hedged`）：一拉挂住，排在后面的拉不跟着等。
 /// 赛跑的请求不带附件的文件（`fieldsWithoutFiles`），一页里的附件记录再按 ID 整条取一次、不赛跑：下载慢的不会下两遍，
 /// 挂住的由 CloudKit 自己的空闲超时断开（`CloudDatabase.database`）。对账时按 ID 补取的整条记录同样不赛跑。
-/// 拉完是一次成功（`SyncCoordinator.succeeded`），失败交给协调器归类（`failed`）。
+/// 拉完是一次成功（`SyncCoordinator.succeeded`），失败交给协调器归类（`failed`）；连不上与服务器要求等的，下次最早什么时候再拉由同步层唯一的重试调度定
+/// （`SyncCoordinator.hold`，与上传共用，拉取守哪些见 `SyncCoordinator.Request.pull`）：每个请求发出前都问它（一拉翻页、补取的途中上传那一路被要求等了也停），
+/// 等待期间来的拉取（门铃、立即同步、按节奏的拉取）与因此失败的那一拉都记成欠一拉，等待结束时（`due`）补上，不靠下一次触发。
 actor ZonePuller {
   static let tokenKey = "zoneToken"
   /// 对账那一遍带回的字段（门槛记录的版本在这一遍就看，`SyncCoordinator.meet`）。
@@ -27,6 +29,8 @@ actor ZonePuller {
   private let coordinator: SyncCoordinator
   private var running: (id: UUID, task: Task<Void, any Error>)?
   private var queued: (id: UUID, task: Task<Void, any Error>)?
+  /// 等待期间被挡下过：等待结束时补拉一次。
+  private var owed = false
 
   init(source: any ZoneChangeSource, coordinator: SyncCoordinator) {
     self.source = source
@@ -64,11 +68,33 @@ actor ZonePuller {
       }
     } catch let error as CKError where [.zoneNotFound, .userDeletedZone].contains(error.code) {
       return await coordinator.zoneMissing(deletedByUser: error.code == .userDeletedZone)
+    } catch is PullHeld {
+      owed = true
+      return
     } catch {
-      if !(error is SyncPaused) { await coordinator.failed(error) }
+      if !(error is SyncPaused) {
+        let fault = await coordinator.failed(error)
+        // 连不上又没给时刻的不记：拉取不守连不上的退避（`SyncCoordinator.Request.pull`），也不拿拉取的失败拖住上传
+        if fault.isWait || fault.retryAfter != nil {
+          await coordinator.hold(fault, waiting: true)
+          owed = true
+        }
+      }
       throw error
     }
     await coordinator.succeeded()
+  }
+
+  /// 重试的等待结束了（`SyncCoordinator.retryDue`）：期间被挡下过的拉取补一次。
+  func due() async {
+    guard owed else { return }
+    owed = false
+    try? await pull()  // 失败已由协调器归类、定了下次的时刻
+  }
+
+  /// 发请求前问重试调度：在等就抛出，这一拉记成欠着（`run`）。
+  private func admitted() async throws {
+    guard await coordinator.admits(.pull) else { throw PullHeld() }
   }
 
   private func drain() async throws {
@@ -84,11 +110,13 @@ actor ZonePuller {
   /// 一页变化；`keys` 为 nil 是整条记录：附件的文件不在赛跑的请求里，附件记录另按 ID 取整条（期间被删的略过，删除在后面的页里）。
   private func changes(since token: Data?, keys: [String]?) async throws -> ZoneChangeBatch {
     var batch = try await hedged(after: RequestLimits.hedge) { [source] in
-      try await source.changes(since: token, keys: keys ?? Self.fieldsWithoutFiles)
+      try await self.admitted()
+      return try await source.changes(since: token, keys: keys ?? Self.fieldsWithoutFiles)
     }
     guard keys == nil else { return batch }
     let attachments = batch.modifications.filter { $0.recordType == Table.attachments.rawValue }.map(\.recordID)
     guard !attachments.isEmpty else { return batch }
+    try await admitted()
     let full = Dictionary(try await source.records(attachments).map { ($0.recordID, $0) }, uniquingKeysWith: { $1 })
     batch.modifications = batch.modifications.compactMap { $0.recordType == Table.attachments.rawValue ? full[$0.recordID] : $0 }
     return batch
@@ -131,6 +159,7 @@ actor ZonePuller {
     let wanted = try await newerOnServer(seen, synced: before)
     for start in stride(from: 0, to: wanted.count, by: CloudKitLimits.recordsPerRequest) {
       let ids = Array(wanted[start..<min(start + CloudKitLimits.recordsPerRequest, wanted.count)])
+      try await admitted()
       let records = try await source.records(ids)
       let found = Set(records.map(\.recordID))
       for id in ids where !found.contains(id) { seen[id] = nil }  // 补取时已不在
@@ -156,3 +185,6 @@ actor ZonePuller {
     }
   }
 }
+
+/// 拉取途中重试调度要求等（`ZonePuller.admitted`）：这一拉停下、记成欠着，不算失败。
+struct PullHeld: Error {}
