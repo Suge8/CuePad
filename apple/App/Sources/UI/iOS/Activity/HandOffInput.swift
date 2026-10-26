@@ -19,7 +19,7 @@ struct HandOffInput: View {
 
     /// 交到哪的规则读出的：决定本身（不是从任务来的为 nil）、决定交给的会话的会话行（默认目标；没有为 nil，即新会话），
     /// 与选"新会话…"时的决定（`handOffPlan(fresh:)`，与 Cue 开工带 fresh 同一条规则），以及开新会话时任务的第一句（`CueStore.opening`）。
-    /// 还没有哪台 Mac 写下过自己时没有决定（`noMac`）：这是新用户的常态、不是出错，原因写在输入框头部，同新会话的输入框。
+    /// 还没有哪台 Mac 写下过自己时没有决定（`noMac`）：这是新用户的常态、不是出错，原因叠在输入框上方（`composerNotice`），同新会话的输入框。
     nonisolated private struct Planned: Equatable, Sendable {
         var plan: HandOffPlan?
         var bound: PiSessionListItem?
@@ -39,7 +39,7 @@ struct HandOffInput: View {
         if let choice { return all.first { $0.state.id == choice } }
         return planned?.bound.flatMap { bound in all.first { $0.state.sessionID == bound.state.sessionID } }
     }
-    private var canSend: Bool { services.reachesPiHost && planned.map { !$0.noMac } == true }
+    private var canSend: Bool { planned.map { !$0.noMac } == true }
     private var draft: ComposerDraft { workspace.handOffDraft }
 
     /// 草稿在 `Workspace.handOffDraft`：发出即收起，写库失败时放回草稿、重新浮起这个输入框。
@@ -76,20 +76,7 @@ struct HandOffInput: View {
             draft: box, prompt: "补一句（可不填）", label: "发给 Agent", focus: $focused,
             accepts: chosen?.state.composerKinds ?? [.images, .cards], cardsFrom: outbox.project, keeps: outbox.card, tooled: tools != nil,
             commands: commands,
-            header: {
-                header.padding(.horizontal, 12).padding(.top, 10)
-                if planned?.noMac == true {
-                    Text(CueStoreError.noMac.localizedDescription).font(.caption).foregroundStyle(palette.ink3).lineLimit(2)
-                        .padding(.horizontal, 18).padding(.top, 8)
-                } else if !services.reachesPiHost {
-                    SyncHint(status: services.syncStatus, consequence: "发不到 Mac").font(.caption).lineLimit(1)
-                        .padding(.horizontal, 18).padding(.top, 8)
-                }
-                if let failure = config?.failure {
-                    Text("没换成：\(failure.text(sync: services.syncStatus))").font(.caption).foregroundStyle(palette.failure).lineLimit(2)
-                        .padding(.horizontal, 18).padding(.top, 6)
-                }
-            },
+            header: { header.padding(.horizontal, 12).padding(.top, 10) },
             tools: {
                 if let tools { SessionConfigControls(session: tools.session, models: tools.models, shown: tools.config) }
             },
@@ -98,6 +85,9 @@ struct HandOffInput: View {
                     .buttonStyle(PressStyle(.button)).disabled(!canSend)
                     .accessibilityLabel(chosen.map { String(localized: "交给 \($0.state.title)") } ?? String(localized: "开新会话交给它"))
             })
+        .composerNotice(planned?.noMac == true || config?.failure != nil) {
+            MacInputNotice(noMac: planned?.noMac == true, failure: config?.failure)
+        }
         .onAppear { focused = true }
         .observing(services.store, id: outbox.card, into: $planned, onError: workspace.fail) { [card = outbox.card] store in
             guard let card else { return Planned() }
@@ -121,7 +111,7 @@ struct HandOffInput: View {
         }
     }
 
-    /// 头部：交给谁的胶囊（菜单里是在线会话与"新会话"）；送不到 Mac 时的原因在它下面单独一行。
+    /// 头部：交给谁的胶囊（菜单里是在线会话与"新会话"）；没选到 Mac、没换成的原因叠在输入框上方（`composerNotice`）。
     private var header: some View {
         HStack(spacing: 8) {
             // 新会话放最上面：会话多了也不用往下翻

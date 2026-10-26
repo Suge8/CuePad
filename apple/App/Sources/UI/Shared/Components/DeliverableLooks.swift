@@ -22,7 +22,7 @@ nonisolated struct LookBox: Hashable, Sendable {
     var width: Int
     var height: Int
     var fills: Bool
-    /// 出画面时就裁成框的比例、取细节最多的那一段（`DeliverableLooks.detailCrop`）：提问的方形缩略图只为认出是哪张，
+    /// 出画面时就裁成框的比例、取细节最多的那一段（`DeliverableLooks.detailRegion`）：提问的方形缩略图只为认出是哪张，
     /// 截图的中间常是空白，居中裁认不出。裁好的随缩略图存，画的时候居中铺满即可。
     var framed = false
 

@@ -3,7 +3,7 @@ import SwiftUI
 
 /// 待回复（WORDS.md）：Cue 页拍板卡上方的一条提示，说 Cue 留给你回、此刻歇着的会话（`CueThread.replies`，等得最久的在前）。
 /// 它们不是拍板，不进拍板卡：一颗与输入框同族的玻璃胶囊（`ControlButtonStyle.glass`，比输入框矮），左边是待回复的墨点（`PiStateGlyph`，赭黄只给拍板）。
-/// 一个写"<会话名> 待回复"，几个写"<N> 个会话待回复"；点了去哪见 `Workspace.openReplies`。没有待回复时不占位（`CuePage`）。
+/// 一个写"<会话名> 待回复"，几个写"<N> 个会话待回复"；点了去哪见 `Workspace.openReplies`。叠在底部那一块上方、不占排版（`CuePage`）。
 struct CueReplyTip: View {
     let replies: [PiSessionState]
     @Environment(Workspace.self) private var workspace
@@ -26,11 +26,10 @@ struct CueReplyTip: View {
         }
         .buttonStyle(ControlButtonStyle(kind: .glass))
         .accessibilityLabel(only.map { String(localized: "\($0.title) 待回复") } ?? String(localized: "\(replies.count) 个会话待回复"))
-        .padding(.bottom, Self.below)
     }
 
-    private var only: PiSessionState? { replies.count == 1 ? replies.first : nil }
+    /// 它连同离底部那一块的间隔占多高（`floatingAbove`）：对话末尾那一行给它让出这么多（`ChatLiveSlot`）。玻璃胶囊定高，不随字号变。
+    static var clearance: CGFloat { ControlMetrics.height + ComposerMetrics.stackGap }
 
-    /// 与下面拍板卡（或输入框）之间，同拍板卡与输入框之间。
-    private static let below = ComposerMetrics.stackGap
+    private var only: PiSessionState? { replies.count == 1 ? replies.first : nil }
 }

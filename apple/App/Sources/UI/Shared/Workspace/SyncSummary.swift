@@ -9,7 +9,7 @@ nonisolated struct SyncSummary: Equatable {
     let icon: Icon
     let tone: StatusTone
 
-    /// 一行写完：标题，有说明时接在冒号后（Mac 设置那一行、手机上到不了 Mac 时 Cue 的欢迎卡）。
+    /// 一行写完：标题，有说明时接在冒号后（手机上到不了 Mac 时 Cue 的欢迎卡）。
     var line: String { detail.map { String(localized: "\(title)：\($0)") } ?? title }
 
     init(_ status: SyncStatus) {
@@ -42,11 +42,14 @@ nonisolated struct SyncSummary: Equatable {
     static let failedDetail = String(localized: "有改动没能同步，本机的内容都在；每一条为什么、会不会自动重试，见下面的明细")
     #endif
 
-    /// 别的设备用着这台跟不上的新版时，去哪更新。
+    /// 别的设备用着这台跟不上的新版时（`SyncStatus.outdated`）：只在同步那一行说，后面给去更新的钮（`updateTitle`）；会话与 Cue 页不再各说一遍。
+    static let updateToSync = String(localized: "别的设备已用新版，这台更新后接着同步；这期间写下的都在，更新后自动发出")
     #if os(macOS)
-    static let updateToSync = String(localized: "别的设备已用新版；更新这台（菜单「CuePad › 检查更新…」）后接着同步，本机改动都在")
+    static let updateTitle = String(localized: "检查更新…")
     #else
-    static let updateToSync = String(localized: "别的设备已用新版；在 TestFlight 里更新这台后接着同步，本机改动都在")
+    static let updateTitle = String(localized: "在 TestFlight 里更新")
+    /// 打开 TestFlight（列表里 CuePad 那一行有更新钮）。只经 TestFlight 发布，没有 App Store 页。
+    static let update = URL(string: "itms-beta://")!
     #endif
 
     /// 没开 iCloud（`SyncStatus.noAccount`）时给的出路：打开系统设置。Mac 直达 Apple 账户那一页；iOS 只能打开设置里这个 App 的那一页，再照 `turnOnICloud` 走。
@@ -152,7 +155,8 @@ extension AppServices {
         syncStatus == .syncing && !lasting ? ShownSync(status: .idle, busy: isSyncingNow) : ShownSync(status: syncStatus, busy: isSyncBusy)
     }
 
-    /// 发给 Pi 会话的请求（回复、作答、重发）此刻送得到执行它的 Mac：手机靠同步；Mac 上就是本机执行，总送得到。
+    /// 要当场生效的请求（停止、改名、补对话）此刻送得到执行它的 Mac：手机靠同步；Mac 上就是本机执行，总送得到。
+    /// 说的话（回复、作答、开会话、交给 Agent、重发）不看它：写下就排着，恢复后自动发出，同对 Cue 说的话。
     var reachesPiHost: Bool {
         #if os(iOS)
         speech.reachableSince != nil  // 演示 Mac 在本机库里接手时一直算通（`SpeechClock`）

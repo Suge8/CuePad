@@ -13,7 +13,8 @@ STATES = [{"kind": "thinking"}, {"kind": "tool", "tool": "bash", "tools": ["bash
           {"kind": "compacting"}, {"kind": "done", "aborted": False}, {"kind": "idle"}]
 
 
-REAL_LIBS = "/tmp/cuepad-sync-bench/real-libraries"
+OUT_ROOT = "/tmp/cuepad-sync-bench"
+REAL_LIBS = f"{OUT_ROOT}/real-libraries"
 PEER = "mac-bench-a"  # A 的主机标识（-CuePadHost bench-a）：B 对会话说话点名这台
 
 
@@ -203,7 +204,7 @@ class Run:
         self.extension = subprocess.Popen([sys.executable, os.path.abspath(sys.argv[0]), "--fake-extension", self.a.sockets, self.checkout])
         self.a.start()
         if not self.a.wait(kind("ready"), 60):
-            raise SystemExit(f"A 60 秒没有测量打点（{self.out}/a.log）：构建要含 DebugScene+SyncBench.swift 的打点（变基到含 climb/metrics 的 main）")
+            raise SystemExit(f"A 60 秒没有测量打点（{self.out}/a.log）：构建要含 DebugScene+SyncBench.swift 的打点")
         self.b.start()
         if not self.b.wait(kind("ready"), 60): raise SystemExit(f"B 没就绪（{self.out}/b.log）")
         self.warm()

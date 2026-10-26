@@ -22,6 +22,7 @@ extension ChatScroll {
     /// 看内容长高，不看 `followKey`：它还算着别的（之前那句的送达情况），可能比那句先变。
     /// 排在内容里而不是内容边距：Mac 的滚动区改边距要晚一次排版才生效，那时它自己把偏移一下挪到底，就滑不起来了。
     /// 键盘是安全区，不在这里：发出时键盘随即收起，对话跟着键盘的动画走，不留。
+    /// 叠在那一块上方的提示不在这里让：它落在对话末尾常驻的那一行的位置上（`ChatLiveSlot`）。
     var bottomPadding: CGFloat { max(bottomInset, held ?? 0) }
 
     /// 最近一次读数里的可见区（偏移、最新处、可见区的高）与上一次交给读数 action 的读数。读数闭包不一定在主线程，所以带锁；
@@ -122,12 +123,11 @@ extension ChatScroll {
         }
     }
 
-    /// 回到最新（点圆钮、发出一句）。发出时记下回复框此刻的高（`bottomPadding`）。已经在最新处就不用滚。
+    /// 回到最新（点圆钮、发出一句）。发出时记下回复框此刻的高（`bottomPadding`）。贴底已由 `ChatFollow` 当场记上，这里只管滚过去：
+    /// 已经在最新处时滚不动，什么都不发生。
     func toNewest(sent: Bool, _ reader: ScrollViewProxy) {
         held = sent ? bottomInset : nil
         if holding { unheld = true }
-        // 对的期间报着"在最新处"，下面其实还压着没滑上来的
-        guard !follow.wrappedValue.atNewest || deferred else { return }
         deferred = false
         withAnimation(reduceMotion ? nil : HandOff.quick) { toEnd(reader) }
     }

@@ -26,7 +26,7 @@ struct PreviewImage: UIViewRepresentable {
 
 final class PreviewZoomView: UIScrollView, UIScrollViewDelegate {
     /// 最多放大到适合屏幕的几倍
-    private static let maxZoom: CGFloat = 5
+    nonisolated private static let maxZoom: CGFloat = 5
 
     /// 不放大时图摆在这个框里：两条栏之间（安全区）
     var frameInsets: UIEdgeInsets = .zero { didSet { if frameInsets != oldValue { setNeedsLayout() } } }

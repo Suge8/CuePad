@@ -86,7 +86,7 @@ private struct PreviewPager: View {
     }
 
     /// 左右翻的几份：系统的分页（UIKit 的分页滚动区，相邻的一份提前建好，翻过去时图已经解好）；翻到哪一份只有 `current` 一份。
-    /// 不用 `ScrollView` 的分页：它翻页松手后只按 60Hz 出帧，邻页要露头才建（模拟器逐帧录屏实测，改版前的 `TabView` 松手后 120Hz）。
+    /// 不用 `ScrollView` 的分页：它翻页松手后只按 60Hz 出帧，邻页要露头才建（模拟器逐帧录屏实测，`TabView` 的分页松手后 120Hz）。
     private var pages: some View {
         TabView(selection: $current) {
             ForEach(batch) { page in
@@ -107,9 +107,8 @@ private struct PreviewPager: View {
 
     /// 往前、往后翻一份（键盘），到头不动。
     private func turn(_ step: Int) {
-        let next = index + step
-        guard batch.indices.contains(next) else { return }
-        withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { current = batch[next].id }
+        guard let next = opening.neighbor(of: current, step: step) else { return }
+        withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { current = next }
     }
 
     private func file(of preview: PiPreview) -> URL? {

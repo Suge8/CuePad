@@ -143,6 +143,8 @@ extension DebugScene {
             let install: () -> Void = { print("update-installed"); DebugHooks.mark("update-installed") }
             if postponeRelaunch?(install) != true { install() }
         }
+
+        func checkForUpdatesInBackground() { checkForUpdates() }
     }
 
     /// `-CuePadFolder <路径>`：建一个以文件夹命名、绑着它的项目（已有同名的不再建）。隔离实例里真跑 Cue 派活要有绑了文件夹的项目，

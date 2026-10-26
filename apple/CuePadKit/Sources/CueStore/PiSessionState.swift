@@ -119,8 +119,8 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
   public var pendingTools: PiChatMessage.Tools?
   public var answeredAt: Date?
   public var question: PiQuestion?
-  /// 这次写入是否要通知手机；见 `PiAlert`。
-  public var notify: Open<PiAlert>?
+  /// 这次写入怎么推到手机（`PiPush`）；随那一次上传送出后清掉，远端带回来的不留。
+  public var notify: PiPush?
   /// 计时基准，见 `PiTimes`（同名字段）。界面：工作中"已运行"自 `busySince`，等你确认"已等"自 `stateSince`，其余"多久前"自 `stateSince`。
   public var stateSince: Date
   /// 旧版本写的记录没有。
@@ -151,7 +151,7 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
   /// 公开给 Mac 端：把桥上的实时会话也写成这种形状，交给同一个近况界面。
   public init(
     id: UUID, sessionID: String, hostID: String, title: String, projectID: UUID?, state: Open<PiWorkState>, detail: String?,
-    folder: String?, lastPrompt: String?, lastReply: String?, question: PiQuestion?, notify: Open<PiAlert>?, stateSince: Date,
+    folder: String?, lastPrompt: String?, lastReply: String?, question: PiQuestion?, notify: PiPush?, stateSince: Date,
     busySince: Date?, createdAt: Date, modifiedAt: Date, launchToken: String? = nil, hosted: Bool = false,
     subagents: [PiSubagentState] = [], pendingPrompt: String? = nil, pendingTools: PiChatMessage.Tools? = nil, model: PiModelOption? = nil,
     thinking: Open<PiThinkingLevel>? = nil, context: PiContextUsage? = nil, agent: Open<AgentKind> = .known(.pi), catalogID: UUID? = nil,
@@ -268,7 +268,7 @@ extension PiSessionState: Record {
       id: row.uuid(0), sessionID: row.text(1), hostID: row.text(2), title: row.text(3), projectID: row.uuidOrNil(4),
       state: Open(rawValue: row.text(5)), detail: row.textOrNil(6), folder: row.textOrNil(11),
       lastPrompt: row.textOrNil(12), lastReply: row.textOrNil(13), question: row.textOrNil(14).flatMap(PiQuestion.init(stored:)),
-      notify: row.textOrNil(10).map(Open.init(rawValue:)), stateSince: row.date(7), busySince: row.dateOrNil(15), createdAt: row.date(8),
+      notify: row.textOrNil(10).flatMap(PiPush.init(rawValue:)), stateSince: row.date(7), busySince: row.dateOrNil(15), createdAt: row.date(8),
       modifiedAt: row.date(9), launchToken: row.textOrNil(16), hosted: row.intOrNil(17) == 1,
       subagents: JSONColumn.decodeList(PiSubagentState.self, from: row.textOrNil(18)),
       // 列里是会话文件的投影原样（最后一句可能是上次中途退出、没等到回答的）；已结束的会话没有正在处理的提问，

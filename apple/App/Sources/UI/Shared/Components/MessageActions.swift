@@ -39,7 +39,7 @@ struct MessageActions: View {
             }
         case .editAgain: if let session { Button(item.title, icon: item.icon) { editAgain(session) } }
         case .resend:
-            if let resend { Button(item.title, icon: item.icon, action: resend).disabled(!workspace.services.reachesPiHost) }
+            if let resend { Button(item.title, icon: item.icon, action: resend) }
         case .remove: if let remove { Button(item.title, icon: item.icon, role: .destructive, action: remove) }
         }
     }

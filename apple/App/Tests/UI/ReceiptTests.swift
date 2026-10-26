@@ -159,7 +159,7 @@ struct ReceiptTests {
         #expect(try await trip(of: second, services) == .sending)
         await advance(to: second.createdAt.addingTimeInterval(Speech.sendLimit))
         try await eventually("满时限没发出") { try await trip(of: second, services) == .failed(.unsent) }
-        #expect(Speech.Failure.unsent.text(sync: services.syncStatus) == "连不上 iCloud，发不到 Mac")
+        #expect(Speech.Failure.unsent.text(sync: services.syncStatus) == "还没传出这台，同步恢复后自动发出")
         #expect(try await trip(of: first, services) == .sent)
         #expect(try await trip(of: toCue, services) == .sent)
         try await eventually("会话行是没能送达，只数这一句") { row(services)?.undelivered == .unsent && services.liveSessions.undelivered["atlas"] == 1 }

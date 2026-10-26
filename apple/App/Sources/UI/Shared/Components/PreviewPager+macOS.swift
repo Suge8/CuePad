@@ -124,9 +124,8 @@ private struct PreviewPager: View {
     }
 
     private func step(_ offset: Int) {
-        let next = index + offset
-        guard batch.indices.contains(next) else { return }
-        withAnimation(Motion.crossfade) { current = batch[next].id }
+        guard let next = opening.neighbor(of: current, step: offset) else { return }
+        withAnimation(Motion.crossfade) { current = next }
     }
 
     private func file(of preview: PiPreview) -> URL? {

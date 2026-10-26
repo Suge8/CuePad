@@ -20,7 +20,7 @@ struct CueSegment: View, Equatable {
 }
 
 /// 对话里的一格，连同上面的时间与间距。只按自己的输入比较（`equatable()`）：对话里来了一句、Cue 的状态变了，别的格子不重算——
-/// 发出一句的那一刻对话要重排，每格都重算的话那一帧就掉了。在跑的那一轮、"已送达"都只交给用得着的那一格。
+/// 发出一句的那一刻对话要重排，每格都重算的话那一帧就掉了。"已送达"只交给用得着的那一格。
 struct CueRow: View, Equatable {
     let row: CueThread.Row
     let shots: [CueShown]
@@ -28,7 +28,6 @@ struct CueRow: View, Equatable {
     let stamp: Date?
     /// 你最后一句：气泡旁标已送达（`BubbleTrip.delivered`）。
     let delivered: Bool
-    let live: CueLiveRound?
     /// 这一格是新消息：左边一颗小点（`CueUnreadDot`），末尾进出滚动区时报给页面（`CueViewing`）。
     /// 页边距（`chatMargin`）放得下时在气泡外隔一条缝；放不下（iPhone、窄窗口的 iPad）点骑在气泡左缘上（`straddlesDot`），离屏缘约 12 点：
     /// 挤在屏边与气泡之间时离屏缘只剩 3 点，像被切掉一半。
@@ -40,11 +39,11 @@ struct CueRow: View, Equatable {
 
     /// 这一格排出来什么样只看这几样。
     nonisolated struct Key: Equatable {
-        let row: CueThread.Row, shots: [CueShown], joined: Bool, stamp: Date?, delivered: Bool, live: CueLiveRound?, unread: Bool
+        let row: CueThread.Row, shots: [CueShown], joined: Bool, stamp: Date?, delivered: Bool, unread: Bool
     }
 
     nonisolated var key: Key {
-        Key(row: row, shots: shots, joined: joined, stamp: stamp, delivered: delivered, live: live, unread: unread)
+        Key(row: row, shots: shots, joined: joined, stamp: stamp, delivered: delivered, unread: unread)
     }
 
     nonisolated static func == (a: Self, b: Self) -> Bool { a.key == b.key }
@@ -89,10 +88,10 @@ struct CueRow: View, Equatable {
         case .result(let message, let task):
             CueSays(message: message, task: task, shots: shots, open: { opened = $0 }, card: true)
         case .notes(let rounds):
-            CueNoteLog(rounds: rounds, live: live)
-        case .process(let message, let touches):
+            CueNoteLog(rounds: rounds)
+        case .process(_, let touches):
             BubbleWidth(fraction: CueBubble.cueWidth, edge: .leading) {
-                CueTrace(touches: touches, doing: live?.round == message.id ? live?.doing : nil).frame(maxWidth: .infinity, alignment: .leading)
+                CueTrace(touches: touches).frame(maxWidth: .infinity, alignment: .leading)
             }
         }
     }
@@ -100,62 +99,44 @@ struct CueRow: View, Equatable {
     private var straddlesDot: Bool { margin < CueUnreadDot.room }
 }
 
-/// Cue 在跑的那一轮：经过那一行（`round`）与此刻在做的（这一轮的经过的末行，`CueTrace`）。
-/// 交给对话里各格的是这个值而不是闭包：闭包每次都不相等，Cue 的状态一变（被叫醒、在想→用工具）对话里每一格都要重算。
-nonisolated struct CueLiveRound: Equatable {
-    let round: UUID
-    /// 它那台 Mac 此刻不在（`CuePresence.shown` 为空）时为 nil：这一轮照样没做完，只是不写在做什么
-    let doing: Doing?
-
-    /// 在跑那一行：碰到任务与会话的一步（`step`）画成与经过同一种行，其余是图标加那一句；在说话时（`speaking`）没有这一行。
-    struct Doing: Equatable {
-        let icon: Icon
-        let step: CueActivity.Touch?
-        let text: String
-        let speaking: Bool
-    }
-}
-
-/// Cue 页对话的末尾：它在做事、这一轮在对话里还没有一格（你发起的一轮还没碰到任务与会话）时是一行此刻在做的（`CueDoing`）。
-/// Cue 在这台 Mac 值班时，在回答你的一轮出字就换成逐字长出的正在说的话
+/// Cue 页对话的末尾：此刻在做的那一行（`CueDoing`）的位置一直占着（`ChatLiveSlot`，没有时留白）：Cue 此刻在做什么只写在这里，
+/// 不进对话里的哪一格（经过、醒来那一行都是记录，`CueTrace`），出现、收起与换字都不挪对话。
+/// Cue 在这台 Mac 值班时，在回答你的一轮出字就在这一行上方逐字长出正在说的话
 /// （`CueKeeper.speech`，同会话页的 `SessionDraft`）：只有这个视图读它，出字时对话列表不重算；它与对话在同一次更新里拿到同一份对话，
-/// 落库了（`PiDraft.landed`）就不再显示，换下是同一帧里的一减一加。已落库而 Cue 的状态还没歇下时也不冒出进展那一行（话已经说完）；
-/// 中途转成工具调用时让位给进展那一行。进展那一行被换下时直接拿掉，不与正在说的话叠着淡出。别的 Mac 与手机只有进展那一行。
+/// 落库了（`PiDraft.landed`）就不再显示，换下是同一帧里的一减一加。有草稿时（说着、已落库而 Cue 的状态还没歇下）那一行留白（话已经在说、说完了）；
+/// 中途转成工具调用时桥清掉草稿，那一行写进展。进展那一行被换下时直接拿掉，不与正在说的话叠着淡出。别的 Mac 与手机只有进展那一行。
+/// 待回复提示（`CueReplyTip`）落在这一行的位置上：它在时盖住这一行。
 struct CueEnding: View {
     /// 对话里最近一条 Cue 的话的时刻
     let newestSaid: Date?
     /// 对话最后一格是 Cue 的话：正在说的这句落库后与它连成一串，说着的时候就排成那个样子。
     let joined: Bool
-    /// 在跑的那一轮在对话里有一格（它的经过，或收着它的动态）：此刻在做的写在那一格里，这里不再写一遍。
-    /// 没有那一格时（你发起的一轮还没碰到任务与会话，`CueThread.rows` 不排经过）写在这里。
-    let roundInRows: Bool
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
 
     var body: some View {
-        #if os(macOS)
-        let draft = services.cue.keeper?.speech.draft
-        let landed = draft?.landed(newestReply: newestSaid) ?? false
-        if let draft, !landed {
-            // 与落库后的那句（`CueSays`）同一颗气泡、同一个位置，换下时正文不动
-            BubbleWidth(fraction: CueBubble.cueWidth, edge: .leading) {
-                MarkdownText(source: draft.text).equatable().cueBubble(joined: joined)
+        VStack(alignment: .leading, spacing: 0) {
+            #if os(macOS)
+            let draft = services.cue.keeper?.speech.draft
+            if let draft, !draft.landed(newestReply: newestSaid) {
+                // 与落库后的那句（`CueSays`）同一颗气泡、同一个位置，换下时正文不动
+                BubbleWidth(fraction: CueBubble.cueWidth, edge: .leading) {
+                    MarkdownText(source: draft.text).equatable().cueBubble(joined: joined)
+                }
+                .padding(.top, CuePage.gap(before: .leading, joined: joined))
+                .transition(.asymmetric(insertion: CueBubble.arrival, removal: .identity))
             }
-            .padding(.top, CuePage.gap(before: .leading, joined: joined))
-            .transition(.asymmetric(insertion: CueBubble.arrival, removal: .identity))
-        } else if !landed {
-            live
+            ChatLiveSlot(gap: CuePage.gap(before: nil, joined: false), font: CueDoing.font, floating: CueReplyTip.clearance) { if draft == nil { live } }
+            #else
+            ChatLiveSlot(gap: CuePage.gap(before: nil, joined: false), font: CueDoing.font, floating: CueReplyTip.clearance) { live }
+            #endif
         }
-        #else
-        live
-        #endif
     }
 
     @ViewBuilder private var live: some View {
         let presence = workspace.cue.presence
-        if !roundInRows, let shown = presence.shown, let progress = presence.progress {
+        if let shown = presence.shown, let progress = presence.progress {
             CueDoing(shown: shown, doing: progress)
-                .padding(.top, CuePage.gap(before: nil, joined: false))
                 .transition(.asymmetric(insertion: .entry, removal: .identity))
         }
     }
@@ -168,9 +149,12 @@ private struct CueDoing: View {
     let doing: String
     @Environment(\.palette) private var palette
 
+    static let font = Typography.secondary
+
     var body: some View {
+        // 一行：它的位置只留一行（`ChatLiveSlot`）
         NoteLine { PiStateDot(shown: shown, size: 7) } label: {
-            Text(doing).font(Typography.secondary).foregroundStyle(palette.ink2).lineLimit(2).shimmering()
+            Text(doing).font(Self.font).foregroundStyle(palette.ink2).lineLimit(1).shimmering()
         }
         .accessibilityElement(children: .ignore).accessibilityLabel(doing)
     }

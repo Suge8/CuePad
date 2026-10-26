@@ -93,7 +93,7 @@ final class AppServices {
     #if os(macOS)
     /// 主窗口露在屏上（没缩进程序坞、没被别的窗口整个盖住、App 没隐藏），有没有焦点都算（`ViewerKeeper.follow` 写）。
     var mainWindowExposed = true
-    /// 人不在跟前：睡眠、屏幕睡了、锁屏、`SessionPresence.window` 没动键盘鼠标（`ViewerKeeper.Away` 有没有，它写）。
+    /// 人不在跟前：睡眠、屏幕睡了、锁屏、`SessionPresence.window` 没动键盘鼠标、他去了别的设备（`ViewerKeeper.Away` 有没有，它写）。
     var away = false
     /// 这台 Mac 上的人看得到主窗口：开着的页算在看（会话页、Cue 页的在场、读过与提示都只认它）。
     var seesMainWindow: Bool { mainWindowExposed && !away }
@@ -274,8 +274,12 @@ final class AppServices {
 
     /// 同步从不通变通时立即同步一次（`syncNow`）：断网时没传上去的记录（留在库里待推送）当场传出、在等的回执当场拉回，
     /// 不等发送者的退避；按节奏的拉取也随之重开一个窗口（`pollingCondition`）。
+    /// Mac 停下同步等更新时当场查一次更新（`UpdateService.checkInBackground`）。
     func setSyncState(_ state: SyncState) {
         let recovered = state.status.reachesMac && speech.reachableSince == nil
+        #if os(macOS)
+        if state.status == .outdated, syncStatus != .outdated { updates.checkInBackground() }
+        #endif
         syncStatus = state.status
         speechClock.setReachable(state.status.reachesMac)
         if recovered { Task { await syncNow() } }

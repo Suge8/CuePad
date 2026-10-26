@@ -115,6 +115,7 @@ struct SettingPopover<Content: View>: View {
             content
         }
         .font(Typography.secondary)
+        .lineLimit(nil)
         .padding(16)
         .frame(width: width, alignment: .leading)
         .settingPopoverBackground()

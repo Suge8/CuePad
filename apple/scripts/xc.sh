@@ -37,7 +37,7 @@ IOS_DEVICE="${CUEPAD_IOS_DEVICE:-iPhone 17}"
 IPAD_DEVICE="${CUEPAD_IPAD_DEVICE:-iPad Pro 11-inch (M5)}"
 # 正常的测试几秒内跑完，最慢的也不到一分钟；挂住的测试曾让测试宿主停了 34 分钟没人发现
 TEST_TIME_LIMIT=${CUEPAD_TEST_TIME_LIMIT:-120}
-# 测试里条件等待的上限从这个时限推出（CueTestSupport 的 conditionBudget）：测试自己不再另写一个短的墙钟上限
+# 测试里条件等待的上限从这个时限推出（CueTestSupport 的 conditionBudget）：测试不另写短的墙钟上限
 export TEST_RUNNER_CUEPAD_TEST_TIME_LIMIT=$TEST_TIME_LIMIT
 USAGE="用法：$0 <check|build|strings|test|shot|rec|run|stop|perf|release|device|provision> [mac|ios|ipad|kit] …（见脚本头注释）"
 

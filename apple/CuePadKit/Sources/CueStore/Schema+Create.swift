@@ -104,7 +104,7 @@ extension Schema {
       id TEXT PRIMARY KEY NOT NULL, content TEXT NOT NULL, targetKind TEXT NOT NULL, targetName TEXT NOT NULL,
       targetRef TEXT, hostID TEXT NOT NULL, mode TEXT NOT NULL, cardID TEXT, status TEXT NOT NULL,
       failure TEXT, handledBy TEXT, createdAt INTEGER NOT NULL, completedAt INTEGER, modifiedAt INTEGER NOT NULL,
-      resultReceivedAt INTEGER, origin TEXT, cueToldAt INTEGER, writeSeq INTEGER NOT NULL DEFAULT 0
+      resultReceivedAt INTEGER, origin TEXT, cueToldAt INTEGER, writeSeq INTEGER NOT NULL DEFAULT 0, serverAt INTEGER
     ) STRICT;
     CREATE INDEX deliveryRequests_status ON deliveryRequests(status, createdAt);
 
@@ -163,8 +163,10 @@ extension Schema {
     -- 每台 Mac 自己写、各端读：在线记录（Mac 在不在、Cue 在不在值班的唯一信号），能用的 Agent 与各家的模型。
     CREATE TABLE macPresence (id TEXT PRIMARY KEY NOT NULL, hostID TEXT NOT NULL, onlineUntil INTEGER NOT NULL, modifiedAt INTEGER NOT NULL) STRICT;
     CREATE TABLE macAgents (id TEXT PRIMARY KEY NOT NULL, hostID TEXT NOT NULL, agents TEXT, problems TEXT, modifiedAt INTEGER NOT NULL, name TEXT) STRICT;
-    -- 每台设备自己写：此刻开着哪个会话、开没开着 Cue 页（会话停下时他在不在场的一半；提示到不到他）。
-    CREATE TABLE sessionViewers (id TEXT PRIMARY KEY NOT NULL, device TEXT NOT NULL, sessionID TEXT, modifiedAt INTEGER NOT NULL, cue INTEGER) STRICT;
+    -- 每台设备自己写：此刻开着哪个会话、开没开着 Cue 页、他最近一次来到这台的时刻（会话停下时他在不在场的一半；提示到不到他）。
+    CREATE TABLE sessionViewers (
+      id TEXT PRIMARY KEY NOT NULL, device TEXT NOT NULL, sessionID TEXT, modifiedAt INTEGER NOT NULL, cue INTEGER, arrivedAt INTEGER
+    ) STRICT;
 
     -- trigram 分词：中文等无空格文本可子串匹配；LIKE 在其上对任意长度关键字都正确（3 字符以上走索引）。
     CREATE VIRTUAL TABLE searchIndex USING fts5(text, refID, kind UNINDEXED, tokenize = 'trigram');

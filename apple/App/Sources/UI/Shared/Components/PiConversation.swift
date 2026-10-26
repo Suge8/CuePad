@@ -19,6 +19,8 @@ struct PiConversation: View {
     var deliveries: [DeliveryRequest] = []
     /// 排开最近几条（不用懒加载栈，见 `ChatScroll`），更早的由它再排开一段。
     let window: ChatWindow
+    /// 正在请会话所在的 Mac 补写对话（`SessionDigest.fetchingTranscript`）：最上面一行说明。排在对话那一列里，它收起时正在读的不动（`ChatAnchor`）。
+    var fetching = false
     #if os(macOS)
     /// 这个会话在本机桥上的那一格（在线时）：正在说的话从这里读。
     var slot: PiBridge.Slot?
@@ -26,14 +28,19 @@ struct PiConversation: View {
     @Environment(\.chatHighlight) private var highlight
     @Environment(AppServices.self) private var services
     @Environment(Workspace.self) private var workspace
+    @Environment(\.palette) private var palette
+    @ScaledMetric(relativeTo: .footnote) private var noticeText = ComposerMetrics.noticeTextHeight
     @State private var opened: PreviewOpening?
 
     var body: some View {
         let all = items
         let notes = services.settings.replyNotes(for: session.id)
-        VStack(alignment: .leading, spacing: Self.spacing) {
+        ChatStack(spacing: Self.spacing) {
+            if fetching {
+                Label("正在从 Mac 取对话…", icon: .fetching).font(Typography.meta).foregroundStyle(palette.ink3).frame(maxWidth: .infinity)
+            }
             if all.isEmpty, let prompt = session.pendingPrompt ?? session.lastPrompt { RecapPreview(session: session, prompt: prompt) }
-            ChatSegments(items: all, window: window, size: Self.segment, spacing: Self.spacing) { items in
+            ChatSegments(items: all, window: window, size: Self.segment) { items in
                 ChatSegment(items: Array(items), session: session, highlight: highlight, notes: notes, swapsInPlace: swapsInPlace, opened: $opened)
                     .equatable()
             }
@@ -79,21 +86,26 @@ struct PiConversation: View {
         #endif
     }
 
-    /// 对话末尾：正在说的话或处理中的进展（带子代理）、出错的原因（Agent 已把这次错误写成最后一条回答时不再重复）。
+    /// 对话末尾：出错的原因（Agent 已把这次错误写成最后一条回答时不再重复）、正在说的话或处理中的进展（带子代理）。
+    /// 进展的第一行一直占着位置（`ChatLiveSlot`，没有时留白）：一轮开始、结束时对话不跟着跳；进展往下长出的几步是内容。
+    /// 它排在最后：回复框上方的说明（`composerNotice`）落在这段留白里，盖不到上面的内容。
     @ViewBuilder private var ending: some View {
-        #if os(macOS)
-        if let slot {
-            SessionDraft(slot: slot, session: session, newestReply: messages.last { $0.role == .known(.pi) }?.at)
-        } else {
-            liveStatus
-        }
-        #else
-        liveStatus
-        #endif
         if session.state == .known(.error), !PiErrorSummary.echoes(messages.last { $0.role == .known(.pi) }?.text, line: session.detail) {
             Callout(.failed, text: session.detail ?? String(localized: "Mac 没有说明原因"))
         }
+        #if os(macOS)
+        if let slot {
+            SessionDraft(slot: slot, session: session, newestReply: messages.last { $0.role == .known(.pi) }?.at, floating: floating)
+        } else {
+            ChatLiveSlot(spacing: Self.spacing, floating: floating) { liveStatus }
+        }
+        #else
+        ChatLiveSlot(spacing: Self.spacing, floating: floating) { liveStatus }
+        #endif
     }
+
+    /// 回复框上方的说明最高多高（两行，`composerNotice`）：末尾那一行给它让出这么多（`ChatLiveSlot`）。
+    private var floating: CGFloat { ComposerMetrics.noticeClearance(textHeight: noticeText) }
 
     @ViewBuilder private var liveStatus: some View {
         if session.state.isWorking || !session.subagents.isEmpty { LiveStatus(session: session).transition(.entry) }
@@ -103,31 +115,36 @@ struct PiConversation: View {
 
 #if os(macOS)
 /// 会话页对话的末尾（Mac，本机在线的会话）：正在说的话（`PiBridge.Slot.draft`）出字时逐字长出来（`DraftReply`，上方是这一轮的经过，标题行末写"输出中"），
-/// 没有时是进展那一行（`LiveStatus`）——中途的话转成工具调用时桥清掉草稿，这里就让位给工具那一行。出字时只读草稿的视图重算，对话列表不重算。
-/// 草稿落库了（`PiDraft.landed`）就不再显示：换下是同一帧里的一减一加。这一轮还在跑也不冒出进展那一行（正文已经说完）；
-/// 状态先到时草稿照常留着、等文件。下一条助手消息开始时扩展清掉旧草稿。进展行被草稿换下时直接拿掉，不叠着淡出。
+/// 下面是进展的位置（`ChatLiveSlot`）：没有草稿时写进展（`LiveStatus`）——中途的话转成工具调用时桥清掉草稿，这里就让位给工具那一行。出字时只读草稿的视图重算，对话列表不重算。
+/// 草稿落库了（`PiDraft.landed`）就不再显示：换下是同一帧里的一减一加。这一轮还在跑也不冒出进展（正文已经说完），只列子代理；
+/// 状态先到时草稿照常留着、等文件。下一条助手消息开始时扩展清掉旧草稿。进展被草稿换下时直接拿掉，不叠着淡出。
 struct SessionDraft: View {
     let slot: PiBridge.Slot
     let session: PiSessionState
     /// 对话里最近一条 Agent 回答的时刻
     let newestReply: Date?
+    /// 回复框上方的说明最高多高（`PiConversation.floating`）。
+    let floating: CGFloat
 
     var body: some View {
         let draft = slot.draft
         let landed = draft?.landed(newestReply: newestReply) ?? false
-        if let draft, !landed {
-            VStack(alignment: .leading, spacing: 8) {
+        let speaking = draft != nil && !landed
+        VStack(alignment: .leading, spacing: PiConversation.spacing) {
+            if let draft, speaking {
                 DraftReply(text: draft.text) {
                     if let ending = LiveStatus.ending(of: session, speaking: true) {
                         RoundProcess(tools: session.pendingTools, ending: ending)
                     }
                 }
-                PiSubagentList(agents: session.subagents)
             }
-        } else if landed, session.state.known?.isTurnRunning == true {
-            PiSubagentList(agents: session.subagents)
-        } else if session.state.isWorking || !session.subagents.isEmpty {
-            LiveStatus(session: session).transition(.asymmetric(insertion: .entry, removal: .identity))
+            ChatLiveSlot(spacing: PiConversation.spacing, floating: floating) {
+                if speaking || landed && session.state.known?.isTurnRunning == true {
+                    PiSubagentList(agents: session.subagents)
+                } else if session.state.isWorking || !session.subagents.isEmpty {
+                    LiveStatus(session: session).transition(.asymmetric(insertion: .entry, removal: .identity))
+                }
+            }
         }
     }
 }

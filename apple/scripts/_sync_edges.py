@@ -80,7 +80,7 @@ def ignored(requests):
 
 def scene_bgflush(run, args):
     """M8 写完马上进后台：bgflush [次数=8]。手机对 Cue 说一句、紧接着走进后台的收尾（`prepareForBackground`：传完、门铃按完才断开）；
-    量写下→已发出、进后台→收尾完、写下→Mac 入库，再回前台等下一次（climb-send 的临时探针 bgflush.py 收进来）。"""
+    量写下→已发出、进后台→收尾完、写下→Mac 入库，再回前台等下一次。"""
     times, (a, b) = int(args[0]) if args else 8, (run.a, run.b)
     m = run.metrics
     for i in range(times):
@@ -99,7 +99,7 @@ def scene_bgflush(run, args):
 def scene_versions(run, args):
     """撞版本探针（不进总表）：versions [命令行改几次=150]。A 用 App 的库紧循环改一张卡（`churn`），同时命令行（这个检出的 cuepad，同一个隔离库）逐条改同一张；
     库里加一个审计触发器记下每次提交的版本，数提交后版本不比上一版大的次数（其中前后两版来自不同进程的另记）。
-    库层版本触发器（climb/send 第二轮）之前应能看到，之后应是 0。"""
+    同一行的新版本一定比旧的大由库层的版本触发器守着（`CueStore.guards`），应是 0。"""
     count, a = int(args[0]) if args else 150, run.a
     t = a.send("card-new")
     card = a.wait(kind("card"), 10, after=t - 0.01)["id"]

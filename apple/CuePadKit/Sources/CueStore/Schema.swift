@@ -8,7 +8,7 @@
 ///   引用完整性由写入逻辑维护（同一事务内清理），同哈希附件的并发重复可容忍；
 /// - 列只用 TEXT / INTEGER，能直接映射 CKRecord 字段。
 ///
-/// 同步表里的本机列（不进 CKRecord，记录映射的列表里没有它们）：deliveryRequests.resultReceivedAt、cueToldAt（Cue 已知道没送到）；
+/// 同步表里的本机列（不进 CKRecord，记录映射的列表里没有它们）：deliveryRequests.resultReceivedAt、serverAt（服务器收下它的时刻）、cueToldAt（Cue 已知道没送到）；
 /// piSessionStates、cards、deliveryRequests 的 writeSeq（本机写入序号，见 `writeSeq`）。
 ///
 /// 本机表（不同步）：`Table.synced` 之外的表，另有 piProcesses、syncRecords、syncState，以及 searchIndex（FTS5，由触发器随同步表维护，可随时重建）；
@@ -30,10 +30,10 @@ enum Schema {
   /// `create` 建的就是最新结构，升级步骤只留还有库没跑过的，给更早设备留的兼容一并删掉。
   static let baseVersion = 66
 
-  /// 最低对端版本（CueSync 的 `PeerFloor`）：同步的记录格式换到旧版读不懂时抬到那一版，更早的设备停下同步、提示更新，
-  /// 不给它们留兼容的读写。与 `baseVersion` 分开：本机的库要等用户的库都升过才折进 `create`，记录格式却从这一版起就换了。
-  /// 72：没送到的原因、CuePad 代 Cue 写下的话、确认框的作答改存句式与参数（`ShownText`），旧版读不出。
-  static let peerFloor = 72
+  /// 最低对端版本（CueSync 的 `PeerFloor`）：更早的设备停下收发、提示更新。只在旧版照新写法读写会做错事时抬到那一版——把新写法误读成别的意思、
+  /// 写回时盖掉新字段、读不出就卡住同步；新加的表、字段与句式旧版只是不认（照旧字段显示、跳过读不出的），不抬：一抬，旧设备在更新前什么都发不出去。
+  /// 抬的那一版先发 iOS、TestFlight 处理完再发 Mac（docs/release.md「发版顺序」）。与 `baseVersion` 分开：本机的库要等用户的库都升过才折进 `create`。
+  static let peerFloor = 66
 
   /// `upgrades[i]` 把结构版本 `baseVersion + i` 升到 `baseVersion + i + 1`；改结构时在末尾追加一步，同时更新 `create`
   /// （新库直接建成最新结构、不跑升级步骤：只改数据的一步在空库上无事可做）。
@@ -101,11 +101,15 @@ enum Schema {
     },
     // 72：Mac 写下、同步给各端的界面字改存句式与参数（`ShownText`），各端按自己的语言显示：
     // - 投送没送到的原因换成新列 failure（resultDetail 下线）；已有的原因是写下那台的原文，照原文存
-    // - CuePad 代 Cue 写下的话存进新列 shownText，正文列留空；已有的做完的结果（`CueReport`）拆回任务名与证据
+    // - CuePad 代 Cue 写下的话存进新列 shownText，正文照旧（写下那台的语言，更早的版本照它读）；已有的做完的结果（`CueReport`）拆回任务名与证据
     // - 你在 CuePad 里答确认框的是否存进新列 piMessages.shownText；已有的作答分不出是不是确认框，照原文
     // - 提问的选项各端照类别与范围写（`CueMessage.shownChoice`）：已有的提问补上范围那个项目此刻的名字（`CuePlace`）
     // 每台设备各自升级、不改 modifiedAt（不同步出去）：同一份数据改出同一份
     Upgrade(shownTexts),
+    // 73：他最近一次来到这台设备的时刻（`Viewer.arrivedAt`）：他此刻在哪台设备前只按它判断
+    "ALTER TABLE sessionViewers ADD COLUMN arrivedAt INTEGER;",
+    // 74：投送请求记下服务器收下它的时刻（本机列，拉到时由服务器的记录给），执行的 Mac 按它算过期（`DeliveryExecutor.maxAge`）；已有的照写下的时刻算
+    "ALTER TABLE deliveryRequests ADD COLUMN serverAt INTEGER;",
   ]
 
   /// 72 的那一步（见 `upgrades` 里的说明）。
@@ -119,7 +123,7 @@ enum Schema {
     for (id, text) in reports {
       guard let end = text.range(of: "」做完了\n\n") else { continue }
       let task = String(text[text.index(after: text.startIndex)..<end.lowerBound]), evidence = String(text[end.upperBound...])
-      try db.run("UPDATE cueMessages SET text = '', shownText = ? WHERE id = ?", [ShownText("「\(task)」做完了\n\n\(evidence)").stored, id])
+      try db.run("UPDATE cueMessages SET shownText = ? WHERE id = ?", [ShownText("「\(task)」做完了\n\n\(evidence)").stored, id])
     }
     let asked = try db.query("SELECT id, ask, places FROM cueMessages WHERE ask LIKE '%/%'") { ($0.text(0), $0.text(1), $0.textOrNil(2)) }
     for (id, ask, stored) in asked {

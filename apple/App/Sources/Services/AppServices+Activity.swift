@@ -17,20 +17,21 @@ extension AppServices {
     func holdActivityWhilePolling() {
         follow { [store] in
             var held: (activity: NSObjectProtocol, watch: Task<Void, Never>)?
+            func release() {
+                guard let (activity, watch) = held else { return }
+                ProcessInfo.processInfo.endActivity(activity)
+                watch.cancel()
+                held = nil
+            }
             for await waiting in Observations({ self.pollingCadence != nil }) where waiting != (held != nil) {
-                if let (activity, watch) = held {
-                    ProcessInfo.processInfo.endActivity(activity)
-                    watch.cancel()
-                    held = nil
+                if held != nil {
+                    release()
                 } else {
                     let activity = ProcessInfo.processInfo.beginActivity(options: .userInitiatedAllowingIdleSystemSleep, reason: "按节奏从 iCloud 拉取")
                     held = (activity, Task { await Self.watchStalls(store) })
                 }
             }
-            if let (activity, watch) = held {
-                ProcessInfo.processInfo.endActivity(activity)
-                watch.cancel()
-            }
+            release()
         }
     }
 

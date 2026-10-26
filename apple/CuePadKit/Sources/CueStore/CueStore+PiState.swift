@@ -1,7 +1,7 @@
 import Foundation
 
 extension CueStore {
-  /// `notify` 只置给到得了你的提示（`CueStore.reaches`）。
+  /// `notify` 是这次写入进入的那种提示（`PiAlert.entering`），怎么推到手机只按 `CueStore.push`。
   /// `catalog`：会话报的模型与命令所在的目录记录；`writesCatalog` 为真（这个会话报的变了或还没写过）才写它，
   /// 不必每次状态变化都去比一遍几十 KB 的清单。
   func writePiState(
@@ -12,12 +12,12 @@ extension CueStore {
       var record = PiSessionState(
         id: PiSessionState.recordID(sessionID: sessionID), sessionID: sessionID, hostID: hostID, title: content.title,
         projectID: content.projectID, state: .known(content.state), detail: content.detail, folder: content.folder, lastPrompt: nil,
-        lastReply: nil, question: content.question, notify: notify.map(Open.known), stateSince: content.times.stateSince,
+        lastReply: nil, question: content.question, notify: nil, stateSince: content.times.stateSince,
         busySince: content.times.busySince, createdAt: now, modifiedAt: now, launchToken: content.launchToken, hosted: content.hosted,
         subagents: content.subagents, model: content.modelState.model, thinking: content.modelState.thinking,
         context: content.context, agent: .known(content.agent), catalogID: catalog?.id, turnStartedAt: content.turnStartedAt)
       if writesCatalog, let catalog { try writeCatalog(catalog) }
-      if let alert = notify, try !reaches(alert, record) { record.notify = nil }
+      if let notify { record.notify = try push(notify, record) }
       // 摘要不归这里写：它是对话的投影，只由 `writePiTranscript` 写（新记录插入时先空着）
       // 最后一轮的开始不知道（CuePad 在一轮中途重启，各家的事实从头记起）时留着库里的：这一轮的回答照样不早于它
       let assignments = PiSessionState.columns.dropFirst()

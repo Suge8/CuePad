@@ -17,6 +17,12 @@ struct PreviewOpening: Identifiable, Equatable {
 
     func title(of preview: PiPreview) -> String { looks[preview.id] ?? preview.title }
 
+    /// 从 `current` 往前、往后数 `step` 份的那一份，到头为 nil。
+    func neighbor(of current: UUID, step: Int) -> UUID? {
+        let next = index(of: current) + step
+        return batch.indices.contains(next) ? batch[next].id : nil
+    }
+
     /// "2 / 3 · 图片"，只有一份时只写类型
     func position(at index: Int) -> Dotted { Dotted(batch.count > 1 ? "\(index + 1) / \(batch.count)" : nil, batch[index].kind?.label) }
 }

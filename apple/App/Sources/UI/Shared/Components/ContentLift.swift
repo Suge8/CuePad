@@ -13,11 +13,11 @@ import SwiftUI
     func slide(by height: CGFloat) {
         guard let layer else { return }
         let slide = CABasicAnimation(keyPath: "transform.translation.y")
-        slide.fromValue = Self.downIsPositive ? height : -height
+        slide.fromValue = downIsPositive ? height : -height
         slide.toValue = 0
         slide.isAdditive = true
         slide.duration = Motion.moveDuration
-        slide.timingFunction = CAMediaTimingFunction(controlPoints: Float(Motion.moveCurve.0), Float(Motion.moveCurve.1), Float(Motion.moveCurve.2), Float(Motion.moveCurve.3))
+        slide.timingFunction = Motion.moveTiming
         slides += 1
         layer.add(slide, forKey: "lift.\(slides)")
     }
@@ -42,13 +42,14 @@ import SwiftUI
 
     /// 挪的是滚动区里装内容的那一层，滚动区自己的裁剪与滚动条不动；挂到窗口上时层还没建，到挪的时候再找。
     #if os(iOS)
-    private static let downIsPositive = true
+    private var downIsPositive: Bool { true }
     private var layer: CALayer? {
         sequence(first: probe, next: \.?.superview).first { $0?.superview is UIScrollView }??.layer
     }
     #else
-    /// Mac 的层 y 朝上。
-    private static let downIsPositive = false
+    /// 平移在内容那一层的上一层（滚动区的裁剪视图）里算：它跟着内容翻转（SwiftUI 的滚动区是），y 就朝下。
+    /// 当成 Mac 的层一律 y 朝上的话方向反了：新到的一条插进来时整段先多窜上去一截、再往下落回终位。
+    private var downIsPositive: Bool { probe?.enclosingScrollView?.contentView.isFlipped ?? true }
     private var layer: CALayer? { probe?.enclosingScrollView?.documentView?.layer }
     #endif
 

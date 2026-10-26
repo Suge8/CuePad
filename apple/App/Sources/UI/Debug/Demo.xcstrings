@@ -449,7 +449,7 @@
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "new",
+            "state" : "translated",
             "value" : "[%1$lld] worker-%2$lld retry=%3$lld 连接被对端重置，正在重连第 %4$lld 次"
           }
         }
@@ -561,7 +561,7 @@
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "new",
+            "state" : "translated",
             "value" : "| 用例 %1$lld | %2$@ | %3$lld ms | 第 %4$lld 轮的第 %5$lld 个检查 |"
           }
         }
@@ -8001,7 +8001,7 @@
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "new",
+            "state" : "translated",
             "value" : "预发上验过了，截图在这里。重连用例都过了：\n\n```\n$ swift test --filter Reconnect\n✔ %1$@ (0.21s)\n✔ %2$@ (0.48s)\n✔ %3$@ (0.12s)\n✔ %4$@ (0.09s)\nExecuted 4 tests, with 0 failures\n```\n\n要把改动**推送到 origin/main** 吗？推上去 CI 会自动部署到正式环境。"
           }
         }

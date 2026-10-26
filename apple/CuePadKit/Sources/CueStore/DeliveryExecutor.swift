@@ -92,7 +92,8 @@ extension CueStore {
 
 /// Mac 端的投送执行器：只领取发给本机（`hostID` 等于本机）的请求，一次一个、按创建顺序，经 `handler` 交给 App 层真正执行，
 /// 把结果写回请求；完成的请求保留 `retention` 后清理（发出的话等它进对话、等认领的开新会话请求等认领，见 `deleteCompletedDeliveries`）。
-/// - 创建后超过 `maxAge` 还没执行的请求直接判失败（Mac 离线太久后不再突然发出旧内容）；
+/// - 服务器收下后超过 `maxAge` 还没执行的请求直接判失败（Mac 离线太久后不再突然发出旧内容）。从服务器收下算、不从写下算：
+///   在发出的设备上等着的那段（断网、要更新）你看得到它在等、撤得回，传上来就照常执行，同对 Cue 说的话；本机写的从写下算；
 /// - 请求引用的图片还没同步到本机时先等着，图片到达（观察到附件变化）后再执行；
 /// - 暂时没成的（`DeliveryOutcome.transient`）重试一次，再不成按失败写回；
 /// - 启动时，上次执行到一半的请求判失败且不重试（可能已经发出）；
@@ -103,7 +104,7 @@ extension CueStore {
 public actor DeliveryExecutor {
   private let store: CueStore
   private let hostID: String
-  /// 创建后多久还没执行就放弃。
+  /// 服务器收下后多久还没执行就放弃。
   package static let maxAge: Duration = .seconds(600)
   /// 完成的请求保留多久。
   package static let retention: Duration = .seconds(60)
@@ -171,8 +172,8 @@ public actor DeliveryExecutor {
   private func nextActionable() async -> DeliveryRequest? {
     guard let candidates = await reporting({ try await store.pendingDeliveries(for: hostID) }) else { return nil }
     for request in candidates {
-      if timing.now().timeIntervalSince(request.createdAt) > Self.maxAge.seconds {
-        await finish(request, .failed(ShownText("请求创建后超过 \(Int(Self.maxAge.seconds)) 秒仍未执行，已放弃")))
+      if timing.now().timeIntervalSince(request.serverAt ?? request.createdAt) > Self.maxAge.seconds {
+        await finish(request, .failed(ShownText("请求到 iCloud 后超过 \(Int(Self.maxAge.seconds)) 秒仍未执行，已放弃")))
         continue
       }
       if case .unknown(let raw) = request.mode {
