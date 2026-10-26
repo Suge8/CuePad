@@ -9,10 +9,16 @@ from _sync_run import PEER, Metrics, kind
 from rusage import NS, usage
 
 ROUND_LIMIT = 60  # 一轮里等一样东西最多这么久（与 Speech.receiptLimit 同）
+# 按记录 id 等的打点不按时刻过滤（id 只出现一次）：同一毫秒打的两点、或回前台那一刻刚好到的，读到的先后与时刻不一定一致
 
 
 def by_id(name, id):
     return lambda e: e["e"] == name and e.get("id") == id
+
+
+def settled(inst, name, id):
+    """这条记录早该有的那一段（后面的段已经到了）：两个实例、两个订阅的打点到这里的先后不定，同一毫秒的会晚一点读到，等一下再认没有。"""
+    return inst.wait(by_id(name, id), 2)
 
 
 def arrived(id):
@@ -28,8 +34,8 @@ def round_trip(run, tag, m):
     if say:
         id = say["id"]
         receipt = b.wait(by_id("msg-delivered", id), ROUND_LIMIT)
-        accepted, got = b.first("msg-accepted", id), a.wait(arrived(id), 1)
-        handed = a.first("msg-delivered", id)
+        accepted, got = settled(b, "msg-accepted", id), a.wait(arrived(id), 1)
+        handed = settled(a, "msg-delivered", id)
         m.span("手机→Mac 对 Cue 说·写下→已发出", say, accepted)
         m.span("手机→Mac 对 Cue 说·已发出→Mac 入库", accepted, got)
         m.span("手机→Mac 对 Cue 说·Mac 入库→上屏", got, a.wait(by_id("msg-shown", id), 5))
@@ -47,7 +53,7 @@ def round_trip(run, tag, m):
     if req:
         id = req["id"]
         done = b.wait(by_id("req-done", id), ROUND_LIMIT)
-        accepted, got, ran = b.first("req-accepted", id), a.wait(by_id("req-arrived", id), 1), a.first("req-done", id)
+        accepted, got, ran = settled(b, "req-accepted", id), a.wait(by_id("req-arrived", id), 1), settled(a, "req-done", id)
         executed = {"t": ran["at"]} if ran else None
         m.span("手机→Mac 对会话说·写下→已发出", req, accepted)
         m.span("手机→Mac 对会话说·已发出→Mac 入库", accepted, got)
@@ -88,8 +94,8 @@ def last(events):
 def cold_once(m, label, restarted, writer, writes):
     t0 = restarted.start()
     ready = restarted.wait(kind("ready"), 60, after=t0)
-    got = [restarted.wait(arrived(w["id"]), ROUND_LIMIT, after=t0) for w in writes]
-    shown = [restarted.wait(by_id("msg-shown", w["id"]), 30, after=t0) for w in writes]
+    got = [restarted.wait(arrived(w["id"]), ROUND_LIMIT) for w in writes]
+    shown = [restarted.wait(by_id("msg-shown", w["id"]), 30) for w in writes]
     start = {"t": t0}
     m.span(f"{label}·启动→打点就绪", start, ready)
     m.span(f"{label}·启动→最后一条入库", start, max(got, key=lambda e: e["t"]) if all(got) else None)
@@ -121,10 +127,10 @@ def scene_fg(run, args):
         time.sleep(away)
         if w:
             id = w[0]["id"]
-            before = b.first("msg-arrived", id)
             t0 = {"t": b.send("fg")}
-            if before: m["手机回前台·离开期间已到（次）"].append(1)
-            m.span("手机回前台·回前台→入库", t0, before or b.wait(arrived(id), ROUND_LIMIT, after=t0["t"]))
+            got = b.wait(arrived(id), ROUND_LIMIT)
+            if got and got["t"] < t0["t"]: m["手机回前台·离开期间已到（次）"].append(1)
+            else: m.span("手机回前台·回前台→入库", t0, got)
             m.span("手机回前台·回前台→上屏", t0, b.wait(by_id("msg-shown", id), ROUND_LIMIT))
         else:
             b.send("fg")
@@ -134,11 +140,11 @@ def scene_fg(run, args):
         time.sleep(away)
         if w:
             id = w[0]["id"]
-            m.span("Mac 隐藏·已发出→Mac 入库", b.first("msg-accepted", id), a.wait(arrived(id), 1))
-            early = a.first("msg-shown", id)
+            m.span("Mac 隐藏·已发出→Mac 入库", settled(b, "msg-accepted", id), a.wait(arrived(id), 1))
             t0 = {"t": a.send("activate")}
-            if early: m["Mac 隐藏期间已上屏（次）"].append(1)
-            else: m.span("Mac 回前台·回前台→上屏", t0, a.wait(by_id("msg-shown", id), ROUND_LIMIT))
+            shown = a.wait(by_id("msg-shown", id), ROUND_LIMIT)
+            if shown and shown["t"] < t0["t"]: m["Mac 隐藏期间已上屏（次）"].append(1)
+            else: m.span("Mac 回前台·回前台→上屏", t0, shown)
         else:
             a.send("activate")
         time.sleep(5)

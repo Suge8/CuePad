@@ -84,9 +84,6 @@ class Instance:
                 if left <= 0 or not self.alive(): return None
                 self.cond.wait(left)
 
-    def first(self, event_name, id):
-        return next((e for e in self.events if e["e"] == event_name and e.get("id") == id), None)
-
     def stop(self):
         if not self.alive(): return
         self.proc.stdin.close()
