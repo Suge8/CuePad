@@ -33,7 +33,8 @@ enum Schema {
   /// 最低对端版本（CueSync 的 `PeerFloor`）：同步的记录格式换到旧版读不懂时抬到那一版，更早的设备停下同步、提示更新，
   /// 不给它们留兼容的读写。与 `baseVersion` 分开：本机的库要等用户的库都升过才折进 `create`，记录格式却从这一版起就换了。
   /// 72：没送到的原因、CuePad 代 Cue 写下的话、确认框的作答改存句式与参数（`ShownText`），旧版读不出。
-  static let peerFloor = 72
+  /// 73：定时的重复规则与挂着的任务（`CueMemoryLine.repeats`、`task`）：旧版值班会把到点的重复定时当一次性的清掉。
+  static let peerFloor = 73
 
   /// `upgrades[i]` 把结构版本 `baseVersion + i` 升到 `baseVersion + i + 1`；改结构时在末尾追加一步，同时更新 `create`
   /// （新库直接建成最新结构、不跑升级步骤：只改数据的一步在空库上无事可做）。

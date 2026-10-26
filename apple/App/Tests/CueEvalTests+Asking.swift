@@ -108,12 +108,10 @@ extension CueEvalTests {
             expect: "他要每周一早上 9 点清理一次过期分支和旧截图：建这件任务（不开工），memory remind 定成每周一 9:00 的定时、挂在它上面，回复一两句"
         ) { eval in
             try await eval.trigger { try await eval.rig.say("每周一早上 9 点清理一次演示项目的过期分支和旧截图") }
-            let reminds = eval.calls("memory", "remind").filter { !$0.call.failed }
-            let rule = reminds.compactMap { ($0.args["repeat"] as? String).flatMap { CueRepeat(rule: $0) } }.first
             let schedule = try await eval.rig.store.cueSchedules().first?.line
             let reply = try await eval.reply()
             return [
-                Check(.tool, "定成每周一 9:00", rule == CueRepeat(.weekly([2]), hour: 9, minute: 0)),
+                Check(.tool, "定成每周一 9:00", schedule?.repeats == CueRepeat(.weekly([2]), hour: 9, minute: 0)),
                 Check(.result, "挂在任务上", schedule?.task != nil),
                 Check(.ask, "没开工（没 start、没开会话）", eval.calls("task", "start").isEmpty
                     && !eval.rig.app.host.calls.contains { if case .open = $0 { true } else { false } }),
