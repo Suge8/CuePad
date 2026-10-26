@@ -229,6 +229,8 @@ DEFINE SCHEMA
         createdAt     INT64,
         modifiedAt    INT64,
         deletedAt     INT64,
+        repeats       STRING,
+        taskID        STRING,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"
     );

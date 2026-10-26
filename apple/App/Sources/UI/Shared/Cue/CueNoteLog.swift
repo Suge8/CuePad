@@ -8,7 +8,7 @@ import SwiftUI
 /// 那一处之后改名、再动起来都不变；这一轮在做什么只写在对话末尾那一行（`CueEnding`），这里不挂经过，一轮从开始到结束都是这一行。
 /// - 图标：提到一处时是当时出了什么事（`CueChange.Kind.icon`，静止的），提到几处或没提到哪处时是醒来原因（`CueWake.icon`）。
 /// - 字：当时的名字（次要墨，几处时用顿号连起）与当时出了什么事，逗号后接它这一轮说的话的要点（`PiProgress.gist`），其余淡墨；没提到哪处的写那句要点或为什么醒。
-/// 整行是一行（`RowStyle`），点了去提到的那一处（会话直接进；几处时列出来选；提醒去记忆）；没提到哪处的不能点。
+/// 整行是一行（`RowStyle`），点了去提到的那一处（会话直接进；几处时列出来选；定时去它挂着的任务，没挂的去记忆）；没提到哪处的不能点。
 /// 多于 `foldAfter` 轮时只露最近 `shownWhenFolded` 轮，上面一行"更早还醒过 N 次"，点它全部展开。左缘对着 Cue 气泡的左缘（同经过 `CueTrace`）。
 struct CueNoteLog: View {
     let rounds: [CueNoteRound]
@@ -81,9 +81,10 @@ private struct CueNoteLine: View {
         }
     }
 
-    /// 一处：名字，当时出了事时接一句（"登录回调 停下了"）。
+    /// 一处：名字，当时出了事时接一句（"登录回调 停下了"）；错过后补上的定时接那句事实。
     private func place(_ place: CueWakeHeader.Place) -> Text {
         let title = Text(place.title).foregroundStyle(palette.ink2)
+        if let missed = place.missed { return Text("\(title)，\(ScheduleText.missed(missed))") }
         return place.kind.map { Self.line(title, $0) } ?? title
     }
 

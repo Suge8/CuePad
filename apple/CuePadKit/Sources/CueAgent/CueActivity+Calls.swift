@@ -66,7 +66,7 @@ extension CueActivity {
       case "zoom": return "翻记忆"
       case "note", "pin": return "记下"
       case "forget": return "忘掉一条"
-      case "remind": return "定提醒"
+      case "remind": return "定时"
       default: return "用记忆"
       }
     case "bash": return line(tool, args.line("command"))
@@ -98,7 +98,12 @@ extension CueActivity {
       switch args.line("action") {
       case "recall": return item(.search, args.line("query") ?? "记忆")
       case "note": return item(.other, "记下：\(args.line("text") ?? "")")
-      case "remind": return item(.other, "提醒：\(args.line("text") ?? "")")
+      case "remind":
+        let text = args.line("text") ?? ""
+        // 挂在任务上的点了开那件任务（气泡里就是这条定时）；没挂的不能点
+        var task: UUID?
+        if !failed, let ref = args.line("task") { task = try? await CueTools(store: store).task(ref).id }
+        return .init(kind: .schedule, target: "定时：\(text)".clipped(PiChatMessage.Tools.targetLimit), failed: failed, task: task, name: text)
       case "zoom": return item(.read, "翻记忆")
       case "forget": return item(.other, "忘掉一条记忆")
       case "pin": return item(.other, (args.raw["pinned"] as? Bool) == false ? "一条记忆不再一直记着" : "一条记忆一直记着")

@@ -160,7 +160,7 @@ nonisolated struct CueDigest: Equatable, Sendable {
         switch row.wake! {
         case .message: return String(localized: "在回你的话")
         case .idle: return String(localized: "例行查看")
-        case .reminder: return String(localized: "提醒到点")
+        case .schedule: return String(localized: "定时到点")
         case .enabled: return String(localized: "刚启用")
         case .sessionActivity(let stirs):
             var seen = Set<String>()

@@ -51,9 +51,17 @@ extension CueTools {
     case "remind":
       let raw = try args.required("at")
       guard let at = Self.date(raw) else { throw Failure("at 写 ISO 8601（2026-10-15T09:00:00+08:00）或 yyyy-MM-dd HH:mm（本机时区）") }
-      guard at > Date() else { throw Failure("提醒时刻已经过了：\(raw)") }
-      let (_, index) = try await store.noteCueLine(try args.required("text"), source: .cue, remindAt: at)
-      return .ok("记下了 #\(index)，\(iso(at)) 叫醒你。")
+      guard at > Date() else { throw Failure("定时的第一次已经过了：\(raw)") }
+      let repeats = try args.string("repeat").map { rule in
+        guard let repeats = CueRepeat(rule: rule, time: at) else {
+          throw Failure("repeat 写 FREQ=DAILY、FREQ=WEEKLY;BYDAY=MO,TH 或 FREQ=MONTHLY;BYMONTHDAY=1（时刻取 at 的）：\(rule)")
+        }
+        return repeats
+      }
+      let task = try await args.string("task").asyncMap { try await self.task($0) }
+      let (line, index) = try await store.noteCueLine(try args.required("text"), source: .cue, remindAt: at, repeats: repeats, task: task?.id)
+      let kind = line.repeats.map(CueScheduleWords.repeats) ?? "一次"
+      return .ok("定好了 #\(index)（\(kind)\(task.map { "，挂在「\($0.heading)」上" } ?? "")），\(iso(at)) 第一次叫醒你；不再定时就 forget 它。")
     case "zoom":
       guard let lo = args.int("lo") else { throw Failure("zoom 要给 lo（与 hi，同记忆视图里的 #lo-hi）") }
       guard let text = CueMemoryView(try await store.cueMemory()).zoom(lo: lo, hi: args.int("hi") ?? lo) else {

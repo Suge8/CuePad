@@ -139,9 +139,10 @@ extension Schema {
     \(answeredIndex)
     \(setAsideIndex)
     \(toDeliverIndex)
+    -- 记忆；有 remindAt 的是定时（repeats 是重复规则，`CueRepeat.rule`；taskID 是挂在哪件任务上）
     CREATE TABLE cueLines (
       id TEXT PRIMARY KEY NOT NULL, text TEXT NOT NULL, pinned INTEGER NOT NULL, source TEXT NOT NULL, remindAt INTEGER,
-      createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL, deletedAt INTEGER
+      createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL, deletedAt INTEGER, repeats TEXT, taskID TEXT
     ) STRICT;
     CREATE INDEX cueLines_order ON cueLines(createdAt, id);
     CREATE INDEX cueLines_remindAt ON cueLines(remindAt) WHERE remindAt IS NOT NULL;

@@ -38,8 +38,8 @@ nonisolated enum Icon: Hashable, Sendable {
     case terminal, terminalWindow, readFile, editFile, pondering, tool, said, started, added, branch, markUnread, fireCode, thinking
     case subagent
     // Cue 与设置
-    case memory, wakeEnabled, wakeMessage, wakeActivity, wakeIdle, wakeReminder, looked, mail
-    case name, hotkey, talkToCue, appearance, updates
+    case memory, wakeEnabled, wakeMessage, wakeActivity, wakeIdle, schedule, looked, mail
+    case name, hotkey, talkToCue, appearance, updates, launchAtLogin
     // 文件与交付物：没有画面的音频、列表里的文字卡、还在下载、视频的播放标、认不出类型的文件、转动查看 3D 模型
     case audio, document, downloading, play, file, inspect3D
     /// Mac 菜单栏里的 CuePad（单色模板图）。
@@ -163,11 +163,11 @@ nonisolated enum Icon: Hashable, Sendable {
         case .thinking: .ink("bubble.dots")
         case .subagent: .ink("person")
         case .memory: .ink("bookmark")
-        case .wakeEnabled: .ink("power")
+        case .wakeEnabled, .launchAtLogin: .ink("power")
         case .wakeActivity: .ink("bolt")
         case .wakeMessage, .talkToCue: .ink("bubble")
         case .wakeIdle, .looked: .ink("eye")
-        case .wakeReminder: .ink("alarm")
+        case .schedule: .ink("alarm")
         case .mail: .ink("mail")
         case .name: .ink("tag")
         case .hotkey: .ink("keyboard")

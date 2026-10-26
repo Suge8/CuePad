@@ -27,10 +27,10 @@ nonisolated struct CueThread: Equatable, Sendable {
     /// 读最近这么多条对话（更早的不在 Cue 页里翻：要找旧事问 Cue）。
     static let limit = 200
 
-    /// `lines`：Cue 被提醒叫醒的那几轮，到点的记忆的正文（按 id）。
+    /// `lines`：定时叫醒 Cue 的那几轮，到点的那几条定时（按 id）。
     init(
         messages: [CueMessage], waiting: [TaskBoard.Wait], replies: [PiSessionState], shots: [UUID: [CueShown]],
-        unread: Set<UUID>, lines: [UUID: String]
+        unread: Set<UUID>, lines: [UUID: CueMemoryLine]
     ) {
         self.messages = messages
         self.waiting = waiting
@@ -71,10 +71,10 @@ nonisolated struct CueThread: Equatable, Sendable {
             }
             if !shown.isEmpty { shots[message.id] = shown }
         }
-        let reminded = messages.flatMap { message -> [UUID] in if case .reminder(let ids)? = message.wake { ids } else { [] } }
+        let fired = messages.flatMap { message -> [UUID] in if case .schedule(let fires)? = message.wake { fires.map(\.line) } else { [] } }
         return CueThread(
             messages: messages, waiting: waits, replies: try store.sessionsAwaitingReply(), shots: shots, unread: Set(try store.cueUnread()),
-            lines: Dictionary(try store.cueLines(reminded).map { ($0.line.id, $0.line.text) }) { first, _ in first })
+            lines: Dictionary(try store.cueLines(fired).map { ($0.line.id, $0.line) }) { first, _ in first })
     }
 
     /// 对话里的一格：你的话、你发起的一轮的经过（碰到的各处，`CueActivity.touches`；一处都没碰的一轮没有这一格；这一轮说的话与结果都在它之后）、Cue 的话（第一次提到一件活时下面一行这件活；
@@ -156,7 +156,7 @@ nonisolated struct CueThread: Equatable, Sendable {
     /// 结果卡：关联一件活、不是提问、点名了图（`shots`，Cue 做完时挑的最终成果）的 Cue 的话；只挂点名的那几张，这件活发到手机的其余文件在它的会话里。
     /// 提问的图跟着提问那一格（`CueSays`）。
     private static func rows(
-        _ messages: [CueMessage], waiting: Set<UUID>, shots: [UUID: [CueShown]], lines: [UUID: String]
+        _ messages: [CueMessage], waiting: Set<UUID>, shots: [UUID: [CueShown]], lines: [UUID: CueMemoryLine]
     ) -> [Row] {
         // 同一毫秒答的按问的先后（`messages` 的顺序）
         var answers = messages.enumerated().filter { $0.element.answer != nil && $0.element.answeredAt != nil }

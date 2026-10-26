@@ -8,6 +8,7 @@ extension CueTools {
   func board() async throws -> Result {
     let board = try await store.cueBoard()
     let left = try await store.cueState()?.left ?? []
+    let schedules = try await store.cueSchedules().map(\.line)
     let recent = try await store.cueRecentlyDone(limit: Self.recentlyDone)
     let items = board.tasks
     let names = Dictionary(uniqueKeysWithValues: try await store.projects().map { ($0.id, $0.name) })
@@ -18,7 +19,7 @@ extension CueTools {
         group = item.task.projectID
         lines.append(((names[item.task.projectID] ?? "") + "：", false))
       }
-      lines.append(("- " + CueEnvelope.boardLine(item, now: now, left: left), true))
+      lines.append(("- " + CueEnvelope.boardLine(item, now: now, left: left, schedules: schedules), true))
     }
     if !board.sessions.isEmpty {
       lines.append(("不归没做完的事的会话：", false))

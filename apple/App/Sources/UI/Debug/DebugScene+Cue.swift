@@ -6,7 +6,7 @@ import Foundation
 /// 演示库里的 Cue（`-CuePadScene cue`、`cuememory`，配 `-CuePadDemo YES`）：在演示 Mac 上值班，管着圆桌的"乱序"（步骤在 Agent 会话里跑，
 /// 部署那一步发来一张截图、在等你允许推送）与 CuePad 的"导入旧数据"（会话出错）；"README 截图换成 Swift 版"Cue 确认做完了（结果带证据与截图）。
 /// 对话里有你的话（一句带图）、Cue 的话、每一轮的经过（碰到 1 处、3 处）、折起的动态、一条结果与一条"等你"（正文带一段测试输出）；atlas 会话里有一句 Cue 发的话；
-/// 记忆有钉住的与其他，还有一条忘掉的；上下文用到换新线的七成（`CueContext`）。cuerun（仅 Mac）让 Cue 运行在这台 Mac，"运行情况"才有。
+/// 记忆有钉住的与其他，还有一条忘掉的，最上面三条定时（`seedSchedules`）；上下文用到换新线的七成（`CueContext`）。cuerun（仅 Mac）让 Cue 运行在这台 Mac，"运行情况"才有。
 /// `-CuePadWaitKinds YES`：等你里各种问题都有（Cue 把 homepage 的选择题、deploy 的确认题、rename 的文字题留给你答），对话都看过了、页停在最新处。
 /// `-CuePadReplies <N>`、`-CuePadAtlas`、`-CuePadAtlasTitle` 见 `DebugScene+CueSessions.swift`。
 /// 配 fresh 时 notes-edit 也结束，没有拍板：名牌说几个会话待回复。
@@ -56,7 +56,7 @@ extension DebugScene {
                 let message = try await store.addCueMessage(.you, text: text)
                 try await store.markCueMessagesDelivered([message.id])
             }
-            // 记忆先写：提醒到点的那一轮指着其中一条
+            // 记忆先写：定时到点的那一轮指着其中一条
             try await store.seed(cueLines: demoMemory)
             if defaults.bool(forKey: "CuePadLongChat") { try await seedLongCueChat(you: you, store: store) }
             try await you(String(localized: "圆桌那个 5 人以上乱序的 bug 交给你，修好之后部署到预发", table: "Demo"))
@@ -66,7 +66,7 @@ extension DebugScene {
                 step(.talk, String(localized: "对「发言轮次乱序」说：先复现 5 人以上的乱序，再改成按首次加入时间排序", table: "Demo"), order)))
             _ = try await store.addCueMessage(
                 .cue, text: String(localized: "好。拆成四步：复现、改成按首次加入时间排序、补 3 个重连用例、部署到预发。第一步已经复现了，现在在改排序。", table: "Demo"), task: order?.id)
-            // Cue 自己醒来的几轮（同值班的管理器醒来时写下的经过那一行，带着为什么醒）：会话停下、出错、提醒到点，两次只看了看；
+            // Cue 自己醒来的几轮（同值班的管理器醒来时写下的经过那一行，带着为什么醒）：会话停下、出错、定时到点，两次只看了看；
             // 连着六轮，Cue 页里折起前面的、两次只看了看的并成一行
             func stirred(_ kind: CueChange.Kind, _ session: String) -> CueWake { .sessionActivity([CueStir(kind: kind, session: session)]) }
             let meeting = try await store.cueMemory().lines.first { $0.text.hasPrefix(String(localized: "周会是每周一上午十点", table: "Demo")) }
@@ -76,7 +76,7 @@ extension DebugScene {
                     step(.read, String(localized: "看「发言轮次乱序」的近况", table: "Demo"), order), step(.talk, String(localized: "对「发言轮次乱序」说：按首次加入时间排序，改完把 scheduler 的测试全跑一遍", table: "Demo"), order))),
                 (stirred(.failed, "billing"), String(localized: "CuePad 导入旧数据的会话出错了：模型拒绝了请求（prompt 太长），等你回来再说", table: "Demo"), process(
                     step(.read, String(localized: "看板", table: "Demo")), step(.read, String(localized: "看「导入旧数据」的近况", table: "Demo"), importing), step(.search, String(localized: "导入旧数据 prompt 太长", table: "Demo")))),
-                (CueWake.reminder(meeting.map { [$0.id] } ?? []), "", process(
+                (CueWake.schedule(meeting.map { [CueFire(line: $0.id, due: .now)] } ?? []), "", process(
                     step(.read, String(localized: "看「README 截图」的近况", table: "Demo"), panel), step(.talk, String(localized: "对「README 截图」说：深色那张也按参考图拍，拍完发给我", table: "Demo"), panel),
                     step(.other, String(localized: "记下：README 截图要浅色深色各一张", table: "Demo")))),
                 (stirred(.settled, "notes"), "", process(step(.read, String(localized: "看「README 截图」的近况", table: "Demo"), panel))),
@@ -141,6 +141,7 @@ extension DebugScene {
                 try await store.recordCueRound(nil, startedAt: .now, answersYou: false, tools: tools, wake: wake)
                 if !note.isEmpty { _ = try await store.addCueMessage(.note, text: note) }
             }
+            try await seedSchedules(store, task: task(String(localized: "续费域名", table: "Demo")))
             // 这个班次两个半小时前起，用到换新线的七成（上下文用量那一块加深一档）
             let context = CueContext(used: 70_000, since: .now.addingTimeInterval(-9_000))
             try await store.setCueState(.settled, context: context)

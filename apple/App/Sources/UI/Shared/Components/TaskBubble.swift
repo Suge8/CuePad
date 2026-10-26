@@ -3,7 +3,7 @@ import SwiftUI
 
 /// 任务气泡：看一条任务只有它（看板的卡、项目页的任务行、Cue 页里提到与做完的任务、⌘K 与选择器、归档、小组件链接，都经 `Workspace.openTask`；
 /// 任务行与看板卡点开工了的叶子直接进会话，其余开它，`Workspace.enter`），
-/// 内容两端同一份（`TaskBubblePage` 加最下面的"下一步" `BubbleFooter`），只有摆法分端（`TaskBubbleSlot`）。不换页、不压暗；点外面或 Esc 关。
+/// 内容两端同一份（`TaskBubblePage`、挂在这一页上的定时 `ScheduleStrip`，加最下面的"下一步" `BubbleFooter`），只有摆法分端（`TaskBubbleSlot`）。不换页、不压暗；点外面或 Esc 关。
 /// 翻到一个子任务（点子任务行）原地换页、左上出返回；别处删掉、归档了它，气泡收起。
 /// "下一步"：交给了会话是它此刻的样子（这家 Agent 的标志、状态与一句话），点了去会话；还没开始的叶子是"开始"（正文连同标题交给 Agent）；
 /// 有子任务的看最该你看的那一步（`Workspace.lead`）。
@@ -41,6 +41,8 @@ struct TaskBubble: View {
                     if sheet { SheetGrabber().padding(.bottom, -BubbleMetrics.footerGap) }
                     #endif
                     TaskBubblePage(data: data, focus: focus, editing: editing)
+                    ForEach(data.schedules.filter { $0.line.task == focus.id }) { ScheduleStrip(scheduled: $0) }
+                        .padding(.leading, BubbleMetrics.textLeading).padding(.trailing, BubbleMetrics.textTrailing)
                     BubbleFooter(data: data, focus: focus, editing: editing)
                         .padding(.leading, BubbleMetrics.textLeading).padding(.trailing, BubbleMetrics.textTrailing)
                 }
@@ -97,7 +99,7 @@ struct TaskBubbleSlot: View {
     }
 }
 
-/// 气泡一次读出的东西：顶层任务、它的子任务、它在看板的哪一列。
+/// 气泡一次读出的东西：顶层任务、它的子任务、它在看板的哪一列、挂在它们上面的定时。
 nonisolated struct BubbleData: Sendable, Equatable {
     var goal: Card
     var steps: [Card]
@@ -105,6 +107,7 @@ nonisolated struct BubbleData: Sendable, Equatable {
     var progress: TaskProgress?
     /// 在看板的哪一列（`TaskBoard.Column.of`，与看板同一条规则、同一份 `cueTally`）。
     var column: TaskBoard.Column
+    var schedules: [CueScheduled]
     /// 已不是一条看得见的任务（删了、归档了）。
     var gone: Bool { goal.deletedAt != nil || goal.archivedAt != nil }
 
@@ -113,9 +116,10 @@ nonisolated struct BubbleData: Sendable, Equatable {
 
     static func read(_ id: UUID, from store: isolated CueStore) throws -> BubbleData {
         guard let goal = try store.card(id) else { throw CueStoreError.notFound }
+        let steps = try store.children(of: id).filter(\.isTask), ids = Set([id] + steps.map(\.id))
         return BubbleData(
-            goal: goal, steps: try store.children(of: id).filter(\.isTask),
-            progress: try store.subtaskProgress(of: [id])[id], column: .of(goal, in: try store.cueTally()))
+            goal: goal, steps: steps, progress: try store.subtaskProgress(of: [id])[id], column: .of(goal, in: try store.cueTally()),
+            schedules: try store.cueSchedules().filter { $0.line.task.map(ids.contains) == true })
     }
 }
 

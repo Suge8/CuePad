@@ -69,8 +69,23 @@ public enum CueWake: StoredJSON, Equatable, Sendable {
   case sessionActivity([CueStir])
   /// 空闲巡视
   case idle
-  /// 提醒到点：到点的那几条记忆
-  case reminder([UUID])
+  /// 定时到点：到点的那几条定时
+  case schedule([CueFire])
+}
+
+/// 定时到点叫醒 Cue 的一条：哪条定时（`CueMemoryLine`）、本该几点（那时的 `remindAt`）。叫醒得比本该晚过 `lateAfter` 就是错过了、醒来才补上
+/// （Mac 睡着、App 没开）：只是一句事实，经过、信封与任务气泡都按这一轮开始的时刻与它算（`CueScheduled.Last.late`），不另存状态。
+public struct CueFire: Codable, Equatable, Sendable {
+  public var line: UUID
+  public var due: Date
+
+  public init(line: UUID, due: Date) {
+    self.line = line
+    self.due = due
+  }
+
+  /// 晚这么久算错过：准点时只差对账的那一下，Cue 正忙一轮时也就等几分钟
+  public static let lateAfter: TimeInterval = 10 * 60
 }
 
 /// 叫醒 Cue 的一处动静：`CueChange` 里界面要的那点——出了什么事、在哪个会话、哪件任务。那一处当时叫什么在这一行的 `CueMessage.places` 里（加密同步）。

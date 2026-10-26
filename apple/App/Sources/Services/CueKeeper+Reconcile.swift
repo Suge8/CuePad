@@ -64,14 +64,18 @@ extension CueKeeper {
                 save()
             }
 
-            let due = try await store.dueCueReminders(at: now)
+            let due = try await store.dueCueSchedules(at: now)
             if !due.isEmpty {
-                guard try await wakeUp(.reminder(due.map(\.id))) else { return }
-                for line in due { try await store.clearCueReminder(line.id) }
+                // 错过了几次的只补最近的那一次：本该几点记那一次
+                let fires = due.compactMap { line in
+                    line.remindAt.map { CueFire(line: line.id, due: line.repeats?.latest(from: $0, until: now) ?? $0) }
+                }
+                guard try await wakeUp(.schedule(fires)) else { return }
+                try await store.fireCueSchedules(due, at: now)
                 return
             }
             var deadlines: [Date] = []
-            if let next = try await store.nextCueReminder(after: now) { deadlines.append(next) }
+            if let next = try await store.nextCueSchedule(after: now) { deadlines.append(next) }
             // 等子代理停住不写库：到点由定时器叫醒对账
             if let stall = try await store.nextCueStall(after: now) { deadlines.append(stall) }
 
