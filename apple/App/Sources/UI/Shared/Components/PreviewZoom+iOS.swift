@@ -31,6 +31,8 @@ final class PreviewZoomView: UIScrollView, UIScrollViewDelegate {
     private static let tapZoom: CGFloat = 2.5
     /// 放大后那一张的最长边上限（像素）：同改版前一直解着的那张，内存不比原来多
     nonisolated private static let detailPixels = 4800
+    /// 缩略图与图的比例差在这以内算没裁过（缩略图按整像素缩，比例会差一点）
+    private static let sameAspect: CGFloat = 0.02
 
     /// 不放大时图摆在这个框里：两条栏之间（安全区）
     var frameInsets: UIEdgeInsets = .zero { didSet { if frameInsets != oldValue { setNeedsLayout() } } }
@@ -43,8 +45,10 @@ final class PreviewZoomView: UIScrollView, UIScrollViewDelegate {
     private var detailing: Task<Void, Never>?
     /// 在动时到了的那张，停下来再换上
     private var pending: UIImage?
-    /// 内容的真实比例：先是缩略图给的，解出来的图到了以它为准
+    /// 内容的真实比例：读文件头得来（不解码），读不到时等解出来的图
     private var aspect: CGFloat?
+    /// 最近换上的解出来的那张（不算缩略图占位）：只往更清楚的换
+    private var decoded: UIImage?
     /// 图在缩放 1（适合屏幕）时的尺寸，与按哪个框、哪个比例算的：换框（转屏、栏变高）、比例与缩略图给的不同才重算，换清晰度不算
     private var fitted: CGSize = .zero
     private var fittedFor: (area: CGSize, aspect: CGFloat)?
@@ -68,6 +72,7 @@ final class PreviewZoomView: UIScrollView, UIScrollViewDelegate {
         imageView.contentMode = .scaleAspectFill
         imageView.clipsToBounds = true
         addSubview(imageView)
+        aspect = Thumbnails.pointSize(at: file).flatMap { $0.height > 0 ? $0.width / $0.height : nil }
         if let now = look.now { cover(now) } else {
             Task { [weak self] in if let look = await look.load() { self?.cover(look) } }
         }
@@ -135,25 +140,25 @@ final class PreviewZoomView: UIScrollView, UIScrollViewDelegate {
         detailing = load({ min(Int(max($0.width, $0.height)), Self.detailPixels) }) { [weak self] in self?.show($0) }
     }
 
-    /// 还没有解出来的图时先铺缩略图的画面。
+    /// 还没有解出来的图时先铺缩略图的画面；只铺没裁过的（与图的真实比例相同）：点名图那种裁成方块的铺上去是另一幅画面，不如先空着。
     private func cover(_ look: PreviewSources.Look) {
-        guard imageView.image == nil else { return }
+        guard decoded == nil, let aspect, abs(look.aspect / aspect - 1) < Self.sameAspect else { return }
         imageView.image = UIImage(cgImage: look.image)
-        aspect = look.aspect
         setNeedsLayout()
     }
 
     /// 换上一张（同一张图的两种清晰度，`imageView` 的框只随适合屏幕的尺寸变，换上不动位置）；清楚的到了以后不再换回铺满屏幕的那张。
     /// 在动时等停下来再换（下一次 `scrollViewDid…End…`）。
     private func show(_ image: UIImage) {
-        guard !(imageView.image.map { $0.size.width >= image.size.width } ?? false) else { return }
+        guard !(decoded.map { $0.size.width >= image.size.width } ?? false) else { return }
         guard !moving else {
             pending = image
             return
         }
+        decoded = image
         imageView.image = image
-        // 解出来的才是真比例；放大着时不重排（缩略图给的比例只在没放大前用过）
-        if !zoomedIn { aspect = image.size.width / max(image.size.height, 1) }
+        // 文件头读不到比例时以解出来的为准（同一张图的几种清晰度比例一样，只有第一张会改它）
+        if aspect == nil { aspect = image.size.width / max(image.size.height, 1) }
         setNeedsLayout()
         layoutIfNeeded()
     }
