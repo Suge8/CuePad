@@ -29,7 +29,7 @@ public actor CueStore {
   var readExpiry: Date?
   /// 订阅的这次读只依赖其中一部分行的表（`narrow`，同一张表可收窄几次）；不在订阅的一次读里为 nil，什么都不记。
   var readScopes: [Table: [RowScope]]?
-  private var syncSubscribers: [UUID: AsyncStream<Void>.Continuation] = [:]
+  private var syncSubscribers: [UUID: AsyncStream<Set<Table>>.Continuation] = [:]
   /// 可能让记录变成待推送的提交数（本连接让记录变成待推送的提交、别的进程的任何提交），与最近这些提交各自的增量
   /// （nil：范围不明，如别的进程的提交）：发送者确定没有剩下的待推送之后，只复查其后的提交碰过的记录（`pendingSync(since:)`）。
   private(set) var syncGeneration = 0
@@ -126,7 +126,7 @@ public actor CueStore {
     for table in posted { seenVersions[table] = version }
     guard !changed.isEmpty else { return }
     for subscriber in subscriptions.committed(changed) { subscriber.signal.yield() }
-    if !changed.isDisjoint(with: Table.synced) { syncChanged(nil) }
+    if !changed.isDisjoint(with: Table.synced) { syncChanged(nil, in: changed) }
   }
 
   // MARK: 内部：事务与通用行读写
@@ -151,22 +151,23 @@ public actor CueStore {
     if !tables.isDisjoint(with: Table.synced) {
       // 只有让记录变成待推送的提交才算（记账、应用远端版本这类不会）；算不出增量时照算
       let delta = try? pendingSync(in: changes)
-      if delta.map({ !$0.saves.isEmpty || !$0.deletes.isEmpty }) ?? true { syncChanged(delta) }
+      if delta.map({ !$0.saves.isEmpty || !$0.deletes.isEmpty }) ?? true { syncChanged(delta, in: tables) }
     }
     return result
   }
 
-  func syncChanged(_ delta: PendingSync?) {
+  /// `tables`：这次提交碰过的表（发送者据此认出 Cue 说了话，`pendingSpeech`）。
+  func syncChanged(_ delta: PendingSync?, in tables: Set<Table>) {
     syncGeneration += 1
     syncDeltas.append((syncGeneration, delta))
     if syncDeltas.count > Self.syncDeltaLimit { syncDeltas.removeFirst() }
-    for subscriber in syncSubscribers.values { subscriber.yield() }
+    for subscriber in syncSubscribers.values { subscriber.yield(tables) }
   }
 
-  /// 同步订阅：本连接的提交让记录变成待推送，或别的进程提交过（范围未知），就给一个信号；待推送是什么读 `pendingSync()`。
-  /// 订阅在返回前已生效。
-  package func syncChanges() -> AsyncStream<Void> {
-    let (stream, continuation) = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
+  /// 同步订阅：本连接的提交让记录变成待推送，或别的进程提交过（范围未知），就给出这次碰过的表；待推送是什么读 `pendingSync()`。
+  /// 每次提交一个、不合并（合并就丢了哪次碰过哪张表）。订阅在返回前已生效。
+  package func syncChanges() -> AsyncStream<Set<Table>> {
+    let (stream, continuation) = AsyncStream<Set<Table>>.makeStream()
     let token = UUID()
     syncSubscribers[token] = continuation
     continuation.onTermination = { _ in Task { await self.removeSyncSubscriber(token) } }

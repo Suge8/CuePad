@@ -5,7 +5,8 @@ import Foundation
 /// 推：库里推导的待推送（`CueStore.pendingSync`）是唯一的队列，这里只决定什么时候发、一批发哪些。
 ///
 /// 两路：后台那一路随本机提交（攒 `gatherWindow` 合成一批）与立即同步（`kick`）一轮轮地发，每批至多 `CloudKitLimits.recordsPerRequest` 条；
-/// 马上传（`send`，说的话、回执）另走一路，不进攒批窗口、不排在后台那批后面，当场只发这几条。同一条记录同一时刻只在一批里（`inFlight`）：
+/// 马上传（`send`，说的话、回执）另走一路，不进攒批窗口、不排在后台那批后面，当场只发这几条。Cue 对你说的话由这里认出来马上传
+/// （`speak`）：多半是命令行进程里 Cue 的工具写的，写的人叫不了上传。同一条记录同一时刻只在一批里（`inFlight`）：
 /// 不会有两个版本同时上传、互相以版本冲突拒绝。`.ifServerRecordUnchanged`；结果交给协调器记账（`SyncCoordinator.sent`）。
 /// 开始上传前先对一次最低对端版本（`prepare`），成功为止；拉取不等它。
 ///
@@ -58,7 +59,12 @@ actor RecordSender {
     let due = coordinator.retryDue.stream()
     tasks = [
       Task { [triggers] in for await _ in triggers { await self.round() } },
-      Task { [trigger] in for await _ in changes { trigger.yield() } },
+      Task { [trigger] in
+        for await tables in changes {
+          if tables.contains(.cueMessages) { await self.speak() }
+          trigger.yield()
+        }
+      },
       Task { for await _ in due { self.resume() } },
     ]
     kick()
@@ -98,6 +104,12 @@ actor RecordSender {
       waiters.append((names, true, continuation))
       runUrgent()
     }
+  }
+
+  /// 碰过 Cue 对话的提交：Cue 对你说的话还没传的马上传（`CueStore.pendingSpeech`），不等攒批窗口、不排在后台那批后面。
+  private func speak() async {
+    guard let names = try? await coordinator.store.pendingSpeech(), !names.subtracting(urgent).isEmpty else { return }
+    Task { _ = await send(names) }
   }
 
   /// 马上传那一路发一次，记着在跑的（`flush` 等它们）。
