@@ -55,6 +55,21 @@ extension CueStore {
     try select(PiChatMessage.self, where: "sessionID = ?", [sessionID], orderBy: "seq, role, id")
   }
 
+  /// 这几个会话里你这边最近说的几句的时刻（你打的、CuePad 替你或 Cue 发的、你的作答，不分谁说），每个会话从早到晚、至多 `limit` 句；
+  /// 没说过话的会话不在结果里。看板推进中一列的线一次读完（`BoardLine`），不读正文：每个会话先倒着找到第 `limit` 句的时刻，再从那里顺着取，都走 `piMessages_sessionID_at`。
+  public func recentSaid(in sessions: [String], limit: Int) throws -> [String: [Date]] {
+    guard !sessions.isEmpty, limit > 0 else { return [:] }
+    let said = "role IN ('\(PiChatRole.user.rawValue)', '\(PiChatRole.answer.rawValue)')"
+    let rows = try db.query(
+      """
+      SELECT j.value, m.at FROM json_each(?1) j JOIN piMessages m ON m.sessionID = j.value AND m.\(said)
+        AND m.at >= COALESCE((SELECT at FROM piMessages WHERE sessionID = j.value AND \(said) ORDER BY at DESC LIMIT 1 OFFSET ?2), 0)
+      ORDER BY m.at
+      """, [String(decoding: try JSONEncoder().encode(sessions), as: UTF8.self), limit - 1]
+    ) { ($0.text(0), $0.date(1)) }
+    return Dictionary(grouping: rows, by: \.0).mapValues { $0.suffix(limit).map(\.1) }
+  }
+
   /// 请 `host` 那台 Mac 把这个会话的对话补写进来（7 天前活跃过、还没同步对话的会话，手机打开时发）。
   /// 已有一条还没被领取的补写请求就是它，不再写第二条：Mac 没回应时它在页面上超时，再打开会话也不会越攒越多；
   /// 那台 Mac 醒来领取一条就够。

@@ -3,7 +3,7 @@ import SwiftUI
 
 /// 常驻循环动效的唯一宿主：Agent 在跑的心电线（`heartbeat`）、话在路上的纸飞机（`flight`）、等你确认的外扩波纹（`ripple`）、
 /// 等待的转圈（`orbit`，经 `Spinner`）、换模型与思考强度在路上时的呼吸（`pulse`）、进行中文字与最高思考强度上扫过的光（`sheen`）、
-/// 看板推进中卡下沿那条线（`wave`，`BoardWave`）。
+/// 看板推进中卡下沿那条线在跑的那一截（`wave`，`BoardLine`）。
 /// 用 Core Animation 而不是 SwiftUI 的 repeatForever 或符号动效：后两者每帧都在 App 进程里重算，
 /// 列表里有几个在工作的会话时，静止不动也要占约 9% CPU；CA 的动画交给渲染服务，App 进程不参与，离屏不画。
 /// 放不放只看 `LoopsPlay`，不放时调用方换静止的样子。
@@ -23,7 +23,7 @@ struct LoopLayer {
         case sheen
         /// 铺满的一层颜色从无到有再回去，一明一暗 1.4s（盖在内容上，内容看起来在呼吸）。
         case pulse
-        /// 一条预先画好的周期线（几层同一个周期）整条匀速横移一个周期，渲染服务只挪一层（`WaveStrip`）。
+        /// 看板线在跑的那一截（`WaveStrip`）：一条预先画好的周期线整条匀速横移一个周期，或子代理轨上的短划往前跑；渲染服务只挪层、动虚线相位。
         case wave(WaveStrip)
     }
 
@@ -203,7 +203,7 @@ struct LoopLayer {
                 return loop(fade, on: layer)
             case .wave(let wave):
                 let layer = wave.make()
-                _ = loop(wave.drift(), on: layer.sublayers![0])
+                for (animation, target) in wave.loops(in: layer) { _ = loop(animation, on: target) }
                 return layer
             case .sheen:
                 let layer = CAGradientLayer()
