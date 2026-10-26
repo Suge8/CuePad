@@ -67,6 +67,8 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
   public var modifiedAt: Date
   /// 本机（发起请求的设备）第一次看到执行结果的时刻，本机时钟；只在本机，不同步。
   public internal(set) var resultReceivedAt: Date?
+  /// 服务器收下它的时刻（服务器的时钟，拉到它的那台记下）；只在本机，不同步。本机写的、还没拉到过的为 nil。执行它的 Mac 按它算过期（`DeliveryExecutor.maxAge`）。
+  public internal(set) var serverAt: Date? = nil
   /// 谁写的（见 `DeliveryOrigin`）；nil 是你。
   public var origin: Open<DeliveryOrigin>?
   /// 服务器收下过这条请求（读的时候由同步元数据推出，不存，`Speech.reachedServerSQL`）：说的话"已发出"的依据。
@@ -140,11 +142,11 @@ extension DeliveryRequest: Record {
   static let table = Table.deliveryRequests
   static let columns = [
     "id", "content", "targetKind", "targetName", "targetRef", "hostID", "mode", "cardID", "status",
-    "failure", "handledBy", "createdAt", "completedAt", "modifiedAt", "resultReceivedAt", "origin",
+    "failure", "handledBy", "createdAt", "completedAt", "modifiedAt", "resultReceivedAt", "origin", "serverAt",
   ]
-  static let syncedColumns = columns.filter { $0 != "resultReceivedAt" }
+  static let syncedColumns = columns.filter { !["resultReceivedAt", "serverAt"].contains($0) }
   var bindings: [any SQLBindable] {
-    [id, content, target.kind.rawValue, target.name, target.ref, hostID, mode.rawValue, cardID, status.rawValue, failureReason?.stored, handledBy, createdAt, completedAt, modifiedAt, resultReceivedAt, origin?.rawValue]
+    [id, content, target.kind.rawValue, target.name, target.ref, hostID, mode.rawValue, cardID, status.rawValue, failureReason?.stored, handledBy, createdAt, completedAt, modifiedAt, resultReceivedAt, origin?.rawValue, serverAt]
   }
   init(row: Row) {
     self.init(
@@ -152,8 +154,8 @@ extension DeliveryRequest: Record {
       target: SendTarget(kind: Open(rawValue: row.text(2)), name: row.text(3), ref: row.textOrNil(4)),
       hostID: row.text(5), mode: Open(rawValue: row.text(6)), cardID: row.uuidOrNil(7),
       status: Open(rawValue: row.text(8)), failureReason: row.textOrNil(9).flatMap(ShownText.init(stored:)), handledBy: row.textOrNil(10),
-      createdAt: row.date(11), completedAt: row.dateOrNil(12), modifiedAt: row.date(13), resultReceivedAt: row.dateOrNil(14),
-      origin: row.textOrNil(15).map(Open.init(rawValue:)), reachedServer: row.bool(16))
+      createdAt: row.date(11), completedAt: row.dateOrNil(12), modifiedAt: row.date(13), resultReceivedAt: row.dateOrNil(14), serverAt: row.dateOrNil(16),
+      origin: row.textOrNil(15).map(Open.init(rawValue:)), reachedServer: row.bool(17))
   }
 }
 

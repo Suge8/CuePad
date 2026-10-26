@@ -9,7 +9,7 @@ import SwiftUI
 /// 这里答不了的写明要去哪回答——都不发自由文本（Pi 不答完题不会去看，消息会一直挂着）。
 /// 发出后空着、Agent 还没接过去时钮是发送中（`PiChat.sending`，同 Cue 页输入框）；停止发出后到这一轮歇下前转圈"正在停止"，进度只读投送请求（`MacDelivery.stopping`，页面传进来）。
 /// 玻璃上部是随下一句发出的批注（`ReplyNoteStack`）。键盘：`ReplyShortcut`（⌘↩、⌘⇧M 模型、⌘⇧E 思考强度、空着按 ↑ 调回上一句）。
-/// 同步到不了 Mac 时不能发，展开后在输入框上方叠一行写明原因（`composerNotice`，不占排版）。两端都经 `Workspace.speak` 写一条投送请求给会话所在的 Mac（本机的由本机执行器送达）：
+/// 同步到不了 Mac 时照样发：写下就排着，恢复后自动发出，同对 Cue 说的话（为什么不通只在同步那一处说）；停止要当场生效，那时停用。两端都经 `Workspace.speak` 写一条投送请求给会话所在的 Mac（本机的由本机执行器送达）：
 /// 按下就清空输入框，请求马上贴到对话末尾，不等上传。形态（`form`）：Mac 一直是两层（上面文字区，下面 ＋、模型与思考强度、发送），失焦也不收；
 /// 手机空着没聚焦时一行，有工具排的聚焦就展开，在看历史时收成短胶囊（停止钮在时不收）。
 /// Mac 上打开即聚焦、发出后焦点留着接着写；手机发出后收起键盘。
@@ -78,7 +78,7 @@ struct PiReplyBar: View {
     private var commands: [PiSlashCommand] { answering == nil ? session.usableCommands(in: catalog) : [] }
     private var reachable: Bool { services.reachesPiHost }
     private var hasDraft: Bool { !draft.isEmpty(accepting: accepts) }
-    private var canSend: Bool { hasDraft && reachable && speakBlocked == nil }
+    private var canSend: Bool { hasDraft && speakBlocked == nil }
     /// 这会儿说不了的原因（`PiSessionState.speakBlocked`）：发送钮的说明写全文，占位写短的（手机一行放不下全文），发送钮不可用；作答不是说话，不受它管。
     private var speakBlocked: String? { answering == nil ? session.speakBlocked : nil }
     private var canStop: Bool { session.canStop }
@@ -96,11 +96,9 @@ struct PiReplyBar: View {
         case .answerAbove: notice("先在上面作答", icon: .above)
         case .unanswerable: notice(Self.unanswerable, icon: .mac)
         case .message, .answer:
-            composer.composerNotice(commandProgress != nil || expanded && (!reachable || config?.failure != nil)) {
+            composer.composerNotice(commandProgress != nil || expanded && config?.failure != nil) {
                 if let commandProgress { progressLine(commandProgress) }
-                if expanded {
-                    MacInputNotice(failure: config?.failure, consequence: "看到的可能不是最新，也发不到 Mac")
-                }
+                if expanded { MacInputNotice(failure: config?.failure) }
             }
         }
     }

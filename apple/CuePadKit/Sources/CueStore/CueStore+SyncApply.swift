@@ -64,8 +64,8 @@ extension CueStore {
         try db.run("DELETE FROM projectDirectories WHERE projectID = ?", [key.id])
       }
       return hash
-    case .save(let remote, let systemFields):
-      try applySave(remote, systemFields)
+    case .save(let remote, let systemFields, let serverAt):
+      try applySave(remote, systemFields, serverAt: serverAt)
       return nil
     }
   }
@@ -77,9 +77,12 @@ extension CueStore {
   ///   卡片正文不同时，被淘汰的正文另存为冲突副本，不静默覆盖。
   /// 本机自己上传的版本回来（回声）不是并发编辑：由交出去与服务器收下的修改时间认出（`applyVersion`）。
   /// 排序键相同不在这里处理：读取时按 id 打平，移动时重排。
-  private func applySave(_ remote: SyncRow, _ systemFields: Data) throws {
+  private func applySave(_ remote: SyncRow, _ systemFields: Data, serverAt: Date?) throws {
     let awaitingResult = try remote.table == .deliveryRequests && isAwaitingResult(remote.id)
     try applyVersion(remote, systemFields)
+    if remote.table == .deliveryRequests, let serverAt {
+      try db.run("UPDATE deliveryRequests SET serverAt = ? WHERE id = ? AND serverAt IS NULL", [serverAt, remote.id])
+    }
     if awaitingResult {
       try db.run(
         "UPDATE deliveryRequests SET resultReceivedAt = ? WHERE id = ? AND status IN ('succeeded', 'failed')",
@@ -179,7 +182,7 @@ extension RemoteChange {
   /// 可能让一次"开新会话"被认领：会话记录、投送请求或卡片到了（同步乱序，哪个先到都要认）。
   fileprivate var touchesLaunches: Bool {
     switch self {
-    case .save(let row, _): [.piSessionStates, .deliveryRequests, .cards].contains(row.table)
+    case .save(let row, _, _): [.piSessionStates, .deliveryRequests, .cards].contains(row.table)
     case .delete: false
     }
   }
@@ -187,14 +190,14 @@ extension RemoteChange {
   /// 这条变更涉及的卡片 id；不是卡片的变更为 nil。
   fileprivate var cardID: UUID? {
     switch self {
-    case .save(let row, _): row.table == .cards ? UUID(uuidString: row.id) : nil
+    case .save(let row, _, _): row.table == .cards ? UUID(uuidString: row.id) : nil
     case .delete(let key): key.table == .cards ? UUID(uuidString: key.id) : nil
     }
   }
 
   fileprivate var recordName: String {
     switch self {
-    case .save(let row, _): row.id
+    case .save(let row, _, _): row.id
     case .delete(let key): key.id
     }
   }

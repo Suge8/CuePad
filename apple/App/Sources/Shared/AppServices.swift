@@ -274,8 +274,12 @@ final class AppServices {
 
     /// 同步从不通变通时立即同步一次（`syncNow`）：断网时没传上去的记录（留在库里待推送）当场传出、在等的回执当场拉回，
     /// 不等发送者的退避；按节奏的拉取也随之重开一个窗口（`pollingCondition`）。
+    /// Mac 停下同步等更新时当场查一次更新（`UpdateService.checkInBackground`）。
     func setSyncState(_ state: SyncState) {
         let recovered = state.status.reachesMac && speech.reachableSince == nil
+        #if os(macOS)
+        if state.status == .outdated, syncStatus != .outdated { updates.checkInBackground() }
+        #endif
         syncStatus = state.status
         speechClock.setReachable(state.status.reachesMac)
         if recovered { Task { await syncNow() } }

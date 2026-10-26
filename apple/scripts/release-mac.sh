@@ -5,7 +5,8 @@
 #   --resume   公证有时要等很久（新账号首次提交可能数小时）：中断后接着等这次提交，再装订并继续后面的步骤
 # 下载位置只有一处：Release $TAG 的三个资产，不新建版本或标签，每次发布原地替换；三个资产各自的用途与上传顺序的理由见 docs/release.md。
 # 更新源 SUFeedURL 直接是这里的 appcast.xml（releases/latest/download/appcast.xml），回读校验从 App 的 Info.plist 读这个地址。
-# 打包前先核对生产环境的 CloudKit 结构（ck-production.sh），缺字段就不发；待部署清单只拦 iOS（release-ios.sh）。门铃中转打包前、导出后各核对一次（check_relay）。
+# 打包前先核对生产环境的 CloudKit 结构（ck-production.sh），缺字段就不发；待部署清单只拦 iOS（release-ios.sh）。
+# 也核对发版顺序（check_ios_floor）：这一版的同步下界不高于 TestFlight 上处理好的最新 iOS 版（docs/release.md「发版顺序」）。门铃中转打包前、导出后各核对一次（check_relay）。
 # 前提：docs/release.md 里的凭据、Developer ID 证书与 CloudKit 管理令牌；gh 已登录且有仓库写权限。
 set -euo pipefail
 APPLE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -35,8 +36,28 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 notary=(--key "$ASC_KEY_PATH" --key-id "$ASC_KEY_ID" --issuer "$ASC_ISSUER_ID")
+
+# 某个提交里的同步下界（Schema.peerFloor）。
+schema_floor() {
+  git -C "$APPLE_DIR" show "$1:apple/CuePadKit/Sources/CueStore/Schema.swift" | sed -n 's/^ *static let peerFloor = \([0-9][0-9]*\)$/\1/p'
+}
+
+# iOS 的标签（release-ios.sh 打的 ios/<构建号>）里最新一个处理好（VALID）的，下界要不低于这一版的。
+check_ios_floor() {
+  local here valid tag
+  here="$(schema_floor HEAD)"
+  valid="$(python3 "$APPLE_DIR/scripts/testflight.py" builds | awk '$2 == "VALID" { print $1 }')"
+  for tag in $(git -C "$APPLE_DIR" tag -l 'ios/*' --sort=-version:refname); do
+    grep -qx "${tag#ios/}" <<<"$valid" || continue
+    [ "$(schema_floor "$tag")" -ge "$here" ] && return 0
+    break
+  done
+  echo "这一版的同步下界是 $here，TestFlight 上处理好的 iOS 版还没到：先 xc.sh release ios，等 testflight.py builds 显示 VALID 再发 Mac（docs/release.md「发版顺序」）" >&2
+  exit 1
+}
 # 上传要 gh 能写这个 Release：打包要几分钟，先确认
 $dry_run || gh release view "$TAG" -R "$REPO" --json tagName >/dev/null
+$dry_run || check_ios_floor
 "$APPLE_DIR/scripts/ck-production.sh"
 check_relay
 

@@ -9,7 +9,7 @@ import SwiftUI
 /// - 答不了的（编辑器这类只能在 Agent 里答的，`PiSessionState.answerableQuestion` 为空）：只有"打开会话"；会话页上不给（已经在里面了）。
 /// 会话的答案写成一条作答请求给它所在的 Mac：点下即停用、那颗写"送达中"，送到了写"已答，等 Mac 上的 Agent 继续"，没送到就地写原因、可以再答；
 /// 到哪了读库里答这道题（`promptID`）的那条请求，不记在视图里：切到别的卡再回来照样在，会话换了下一道题就是新的一题。
-/// 同步到不了 Mac 时不让答、写明去哪答。Mac 的会话页上选择题按 1–9 直接作答（键帽在胶囊里）。
+/// 同步到不了 Mac 时照样答：作答写下就排着，恢复后自动发出（同回复框）。Mac 的会话页上选择题按 1–9 直接作答（键帽在胶囊里）。
 struct WaitAnswer: View {
     let wait: CueTally.Wait
     /// 回复框在页上别处（会话页）
@@ -102,7 +102,7 @@ private struct SessionAnswer: View {
         ChipFlow { content() }.frame(maxWidth: .infinity, alignment: .trailing)
     }
 
-    /// 几颗回答，下面一行此刻到哪了（送不到 Mac、已答、没送到）。
+    /// 几颗回答，下面一行此刻到哪了（已答、没送到）。
     private func answers(_ values: [PiAnswerValue], numbered: Bool = false, other: Bool = false) -> some View {
         VStack(alignment: .trailing, spacing: 6) {
             chips {
@@ -110,8 +110,7 @@ private struct SessionAnswer: View {
                     chip(value, number: numbered && index < 9 ? index + 1 : nil)
                 }
             }
-            // 送不到 Mac 时不让答：写进去的请求会一直停在送达中
-            .disabled(answering || !services.reachesPiHost)
+            .disabled(answering)
             if other { Text("都不是？在下面的回复框里写你的回答").font(Typography.meta).foregroundStyle(palette.ink3) }
             // 到哪了那一行一直占着（没有时留白）、只写一行：它一出一收卡就变高变矮，浮在卡上面的对话跟着当帧跳
             Text(note?.text ?? " ").font(Typography.meta).foregroundStyle(note?.failed == true ? palette.failure : palette.ink3).lineLimit(1)
@@ -124,7 +123,7 @@ private struct SessionAnswer: View {
         .focused($keyboard)
         .onAppear { keyboard = numbered }
         .onKeyPress(characters: .decimalDigits, phases: .down) { press in
-            guard numbered, let number = Int(press.characters), values.indices.contains(number - 1), !answering, services.reachesPiHost else { return .ignored }
+            guard numbered, let number = Int(press.characters), values.indices.contains(number - 1), !answering else { return .ignored }
             answer(values[number - 1])
             return .handled
         }
@@ -132,7 +131,6 @@ private struct SessionAnswer: View {
     }
 
     private var note: (text: String, failed: Bool)? {
-        if !services.reachesPiHost { return (String(localized: "\(SyncSummary(services.syncStatus).title)，现在答不了，可在 Mac 上回答"), false) }
         if answering, sent == .delivered { return (String(localized: "已答，等 Mac 上的 Agent 继续"), false) }
         return failure.map { ($0, true) }
     }
@@ -162,7 +160,7 @@ private struct SessionAnswer: View {
 
     /// 写一条作答请求给会话所在的 Mac；写不进去时就地说明。
     private func answer(_ value: PiAnswerValue) {
-        guard services.reachesPiHost, let promptID = question?.promptID else { return }
+        guard let promptID = question?.promptID else { return }
         withAnimation(HandOff.quick) { pending = Pending(promptID: promptID, value: value) }
         Task {
             do {
@@ -177,7 +175,6 @@ private struct SessionAnswer: View {
 
 /// 会话在问的文字题怎么答（`WaitAnswer`）：一行回答框，草稿就是会话页回复框那一份（`AppSettings.replyDraft`，两处写的是同一句），发出同会话页的作答
 /// （`Workspace.speak`：会话在等 CuePad 答得了的提问时这句就是答案，选项写原文或序号）；只发文字，草稿里的卡片与图片留给会话页。
-/// 同步到不了 Mac 时不能发（同回复框）。
 private struct WaitReply: View {
     let session: PiSessionState
     @Environment(Workspace.self) private var workspace
@@ -185,7 +182,7 @@ private struct WaitReply: View {
     @Environment(\.palette) private var palette
 
     private var box: Binding<ComposerDraft> { services.settings.replyDraftBinding(for: session.id) }
-    private var canSend: Bool { services.reachesPiHost && !box.wrappedValue.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    private var canSend: Bool { !box.wrappedValue.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
     var body: some View {
         // 一行时字与发送钮同一条中线（字的格至少与钮同高、竖直居中）；写成几行长高时钮贴在最后一行旁（底对齐，上下边距让最后一行对着钮的中线）
