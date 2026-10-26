@@ -70,6 +70,3 @@ xcrun cktool export-schema $C --output-file /tmp/dev.ckdb   # 回读：服务端
 ### 待部署到生产
 
 发版前一次 Deploy Schema Changes，部署完删掉对应条目。这里记的是 cktool 看不到的订阅定义，订阅只有手机会建：这一节还有条目时 `release ios` 拒绝发版，`release mac` 不受影响：
-
-- 字段（INT64，2026-10-26 已导入开发环境并回读核对）：`sessionViewers.arrivedAt`（他最近一次来到这台设备的时刻，`Viewer`）。没部署时带它的"开着哪一页"记录在生产里存不上，`ck-production.sh` 拦下两端的发版。
-- 订阅定义（2026-10-26 已在开发容器里保存并回读核对）：新增 `cuepad.pi.wake`（该你接、你正在 Mac 上开着的会话只静默叫醒手机，`notify == wake`，`PiPush`）。没部署时生产里建不成它，这种会话的变化不叫醒手机、灵动岛要等下一次叫醒或回前台才跟上，别的照常。
