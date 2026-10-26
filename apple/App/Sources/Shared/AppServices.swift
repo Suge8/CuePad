@@ -93,7 +93,7 @@ final class AppServices {
     #if os(macOS)
     /// 主窗口露在屏上（没缩进程序坞、没被别的窗口整个盖住、App 没隐藏），有没有焦点都算（`ViewerKeeper.follow` 写）。
     var mainWindowExposed = true
-    /// 人不在跟前：睡眠、屏幕睡了、锁屏、`SessionPresence.window` 没动键盘鼠标（`ViewerKeeper.Away` 有没有，它写）。
+    /// 人不在跟前：睡眠、屏幕睡了、锁屏、`SessionPresence.window` 没动键盘鼠标、他去了别的设备（`ViewerKeeper.Away` 有没有，它写）。
     var away = false
     /// 这台 Mac 上的人看得到主窗口：开着的页算在看（会话页、Cue 页的在场、读过与提示都只认它）。
     var seesMainWindow: Bool { mainWindowExposed && !away }

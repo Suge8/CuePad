@@ -106,6 +106,8 @@ enum Schema {
     // - 提问的选项各端照类别与范围写（`CueMessage.shownChoice`）：已有的提问补上范围那个项目此刻的名字（`CuePlace`）
     // 每台设备各自升级、不改 modifiedAt（不同步出去）：同一份数据改出同一份
     Upgrade(shownTexts),
+    // 73：他最近一次来到这台设备的时刻（`Viewer.arrivedAt`）：他此刻在哪台设备前只按它判断
+    "ALTER TABLE sessionViewers ADD COLUMN arrivedAt INTEGER;",
   ]
 
   /// 72 的那一步（见 `upgrades` 里的说明）。

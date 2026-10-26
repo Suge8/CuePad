@@ -9,10 +9,11 @@ import Foundation
 import os
 import Synchronization
 
-/// 这台设备此刻开着哪一页（`Viewer`，规则在它的头注释）只由这里写，只在开着的页变了时写一次，写成立即上传；没有心跳。
+/// 这台设备此刻开着哪一页、他什么时候来到这台（`Viewer`，规则在它的头注释）只由这里写，只在变了时写一次，写成立即上传；没有心跳。
+/// 来到这台：手机每次回到前台；Mac 读到他最近来到的是别的设备（`CueStore.leftFor`）就算人不在跟前（`Away.elsewhere`），回到这台的第一下键盘鼠标才回来、记下来到。
 /// 开着的那一页由界面报来：会话页（`show`）Mac 是人看得到主窗口时内容区的会话页，手机是场景前台活跃时导航最上面的会话页
 /// （都是 `Workspace.shownSession`；iPad 开几个窗口各报各的，取最近开的那个）；Cue 页（`showCue`）两端都由 `CueViewing` 报（iPad 上它可以在面板里、
-/// 不在导航最上面）。Mac 上人不在跟前（系统将睡眠、屏幕睡了、锁屏、退出，或 `SessionPresence.window` 没动过键盘鼠标）时一概算没开着，
+/// 不在导航最上面）。Mac 上人不在跟前（系统将睡眠、屏幕睡了、锁屏、退出、他去了别的设备，或 `SessionPresence.window` 没动过键盘鼠标）时一概算没开着，
 /// 回来再按界面报的算；退出时写完、传完才放行，手机进后台时写完、传完。将睡眠不拖住系统：Mac 的这条只在那台 Mac 在线时算数（`Viewer`），
 /// `MacPresenceKeeper` 在将睡眠时同步写下离线，它在各端就作废了。
 /// 写的那一刻在 Store 的隔离域里读开着哪一页：几路写入谁先谁后，库里留下的都是最后的那个状态。
@@ -23,9 +24,9 @@ nonisolated final class ViewerKeeper: Sendable {
         let sessionID: String?
     }
 
-    /// Mac 上人不在跟前的原因：几样可能同时成立（锁着屏时屏幕亮了还是锁着），都过去了才算回来。
+    /// Mac 上人不在跟前的原因：几样可能同时成立（锁着屏时屏幕亮了还是锁着），都过去了才算回来。`elsewhere`：他最近来到的是别的设备。
     enum Away: Hashable, Sendable {
-        case asleep, screenOff, locked, idle, quitting
+        case asleep, screenOff, locked, idle, elsewhere, quitting
     }
 
     private struct State {
@@ -73,11 +74,17 @@ nonisolated final class ViewerKeeper: Sendable {
         update { $0.cue = shown }
     }
 
-    /// 写下界面报来的变化，直到任务取消；Mac 另跟系统的睡眠、屏幕与锁屏。
+    /// 写下界面报来的变化，直到任务取消；手机另在每次回到前台时记下来到，Mac 另跟系统的睡眠、屏幕与锁屏，与他去没去别的设备。
     func keep(notifications center: NotificationCenter = .default) async throws {
         try await withThrowingDiscardingTaskGroup { group in
             group.addTask { for await _ in self.changes { try await self.publish() } }
-            #if os(macOS)
+            #if os(iOS)
+            // 启动那次激活可能早于这里订上
+            group.addTask {
+                if await UIApplication.shared.applicationState == .active { try await self.arrive() }
+                for await _ in center.notifications(named: UIApplication.didBecomeActiveNotification) { try await self.arrive() }
+            }
+            #else
             let distributed = DistributedNotificationCenter.default()
             let events: [(NotificationCenter, Notification.Name, Away, Bool)] = [
                 (center, NSWorkspace.willSleepNotification, .asleep, true),
@@ -91,6 +98,7 @@ nonisolated final class ViewerKeeper: Sendable {
                 group.addTask { for await _ in source.notifications(named: name) { self.mark(reason, gone) } }
             }
             group.addTask { await self.followIdle() }
+            group.addTask { try await self.followElsewhere() }
             #endif
         }
     }
@@ -119,6 +127,12 @@ nonisolated final class ViewerKeeper: Sendable {
         await sync?.upload(id)
     }
 
+    /// 他来到了这台（`CueStore.arrive`），当场传出去：别的 Mac 据此让位。
+    private func arrive() async throws {
+        let id = try await store.arrive(device: device)
+        await sync?.upload(id)
+    }
+
     private func record(in store: isolated CueStore) throws -> UUID? {
         let viewing = state.withLock { $0.viewing }
         let sessionID = try viewing.session.flatMap { page in
@@ -143,6 +157,18 @@ nonisolated extension ViewerKeeper {
             mark(.idle, true)
             await Self.nextInput()
             mark(.idle, false)
+        }
+    }
+
+    /// 他去了别的设备（`CueStore.leftFor`）：算人不在跟前，回到这台的第一下键盘鼠标先记下来到这台、再回来。
+    /// 来到这台写进库后判断随之变回，所以订阅里的下一个值就是"没去别处"。
+    private func followElsewhere() async throws {
+        for try await left in store.observe({ [device] in try $0.leftFor(device: device) }) where left {
+            mark(.elsewhere, true)
+            await Self.nextInput()
+            guard !Task.isCancelled else { return }
+            try await arrive()
+            mark(.elsewhere, false)
         }
     }
 
