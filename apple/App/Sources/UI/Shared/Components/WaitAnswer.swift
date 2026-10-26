@@ -79,7 +79,7 @@ private struct SessionAnswer: View {
 
     /// 点下即算在答（请求写成前也是），胶囊立刻停用，不重复作答。
     private var answering: Bool { tapped != nil && writeError == nil && sent?.failure == nil }
-    private var failure: String? { writeError ?? sent?.failure?.text(sync: services.syncStatus) }
+    private var failure: String? { writeError ?? sent?.failure?.text }
 
     var body: some View {
         switch question?.kind.known {

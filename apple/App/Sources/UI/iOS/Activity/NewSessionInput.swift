@@ -163,7 +163,7 @@ struct NewSessionInput: View {
         switch status {
         case .noMac: MacInputNotice(noMac: true)
         case .noAgents(let agents): Text("\(agents.shownName)：\(agents.whyNone)").foregroundStyle(palette.ink3)
-        case .phase(.failed(let failure)): Text(failure.text(sync: services.syncStatus)).foregroundStyle(palette.failure)
+        case .phase(.failed(let failure)): Text(failure.text).foregroundStyle(palette.failure)
         case .phase(.sending(let transit)):
             HStack(spacing: 6) { Spinner(.mini); Text(transit.label) }.font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink2)
         case .phase: Text("Mac 正在开 Agent 会话…").foregroundStyle(palette.ink3)

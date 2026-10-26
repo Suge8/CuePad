@@ -41,10 +41,10 @@ nonisolated enum MacDelivery {
 
         var failed: Bool { if case .failed = self { true } else { false } }
 
-        func text(sync: SyncStatus) -> String {
+        var text: String {
             switch self {
             case .running(let command): String(localized: "正在执行 \(command)…")
-            case .failed(let command, let failure): String(localized: "\(command) 没执行成功：\(failure.text(sync: sync))")
+            case .failed(let command, let failure): String(localized: "\(command) 没执行成功：\(failure.text)")
             }
         }
     }

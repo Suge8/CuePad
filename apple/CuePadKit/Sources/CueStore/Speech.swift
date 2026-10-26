@@ -6,11 +6,12 @@ import Foundation
 /// - 发送中：还没离开这台设备（服务器没收下过）。接收方就是本机时不经服务器，回执前一直是发送中。
 /// - 已发出：服务器收下了（或接收的 Mac 已领取），还没回执。这之后本机同步断开不改变它：话已经在服务器上，回执晚点回来而已。
 /// - 已送达：请求成功；Cue 消息有 `deliveredAt`。
-/// - 没能送达：请求失败（原因读 `DeliveryRequest.failure`）；写下满 `sendLimit` 还没离开这台设备（`unsent`）；或已发出、同步通着满
+/// - 没能送达：请求失败（原因读 `DeliveryRequest.failure`）；同步通着满 `sendLimit` 还没离开这台设备（`unsent`）；或已发出、同步通着满
 ///   `receiptLimit` 还没回执（`timedOut`）——Cue 消息没有 `deliveredAt`，请求还没被 Mac 领取（领取了在执行的不算超时，如唤醒已结束的会话）。
 ///   每句只看自己的证据：一次拉取或上传失败（全局同步状态一时不通）不让别的话变红，已发出的话更不受影响。超时只说这句话自己没送到，
 ///   不推断那台 Mac 在不在（Mac 在不在线、Cue 在不在睡觉与值班只看那台的在线记录 `MacPresence`）。
-///   两个时限都从写下与本机同步恢复两者里晚的那一刻算：断网时写下的话，恢复后有一整段时限传出去、等回执。
+///   两个时限都只在同步通着时走，从写下与本机同步恢复两者里晚的那一刻算：同步不通时写下的话一直是发送中（排在本机，恢复后自动发出），
+///   不判没能送达——判了作答就又能点，排着的旧答案恢复后照样送到。
 ///   记录仍在，传出去了就回到已发出，回执来了就是已送达。到点翻状态由 App 一处刷新"此刻"（`SpeechClock`），不轮询。
 public enum Speech {
   public enum Trip: Equatable, Sendable {
@@ -28,7 +29,7 @@ public enum Speech {
   public enum Failure: Hashable, Sendable {
     /// 接收方说没送到（`DeliveryRequest.failure`）
     case reported(String)
-    /// 写下满 `sendLimit` 还没离开这台设备：本机同步不通，或这句一直没传上去
+    /// 同步通着满 `sendLimit` 还没离开这台设备：这句一直没传上去
     case unsent
     /// 已发出，同步通着过了时限没回执：接收方那台 Mac 一直没收下这句
     case timedOut
@@ -96,7 +97,7 @@ public enum Speech {
     }
   }
 
-  /// 还在等的话到这一刻就算没能送达；已有回执、已被领取，或已发出而此刻同步不通（不会到点，恢复时输入本身就变了）为 nil。
+  /// 还在等的话到这一刻就算没能送达；已有回执、已被领取，或此刻同步不通（不会到点，恢复时输入本身就变了）为 nil。
   public static func deadline(said: Date, delivered: Date?, reachedServer: Bool, host: String?, at moment: Moment) -> Date? {
     guard delivered == nil else { return nil }
     return due(said: said, reachedServer: reachedServer, host: host, at: moment)?.at
@@ -126,11 +127,12 @@ public enum Speech {
     return reachedServer && !moment.isLocal(host) ? .sent : .sending
   }
 
-  /// 在等的这一段到哪一刻算没能送达、算哪一种：本机接收的只等回执；没离开这台的等它传出去（同步不通时从写下算）；
-  /// 已发出的等回执，同步不通时不计时（nil）。
+  /// 在等的这一段到哪一刻算没能送达、算哪一种：本机接收的只等回执；没离开这台的等它传出去，已发出的等回执，
+  /// 这两段同步不通时都不计时（nil）。
   private static func due(said: Date, reachedServer: Bool, host: String?, at moment: Moment) -> (at: Date, failure: Failure)? {
     if moment.isLocal(host) { return (said.addingTimeInterval(receiptLimit), .timedOut) }
-    guard reachedServer else { return (max(said, moment.reachableSince ?? said).addingTimeInterval(sendLimit), .unsent) }
-    return moment.reachableSince.map { (max(said, $0).addingTimeInterval(receiptLimit), .timedOut) }
+    return moment.reachableSince.map { since in
+      reachedServer ? (max(said, since).addingTimeInterval(receiptLimit), .timedOut) : (max(said, since).addingTimeInterval(sendLimit), .unsent)
+    }
   }
 }

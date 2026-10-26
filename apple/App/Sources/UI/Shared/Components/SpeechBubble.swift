@@ -40,7 +40,7 @@ struct SpeechBubble<Menu: View>: View {
             if case .request(let request) = said { .sending(.of(request, session: session, trip: trip)) } else { .sending(trip == .sent ? .sent : .sending) }
         case .delivered: showsDelivered ? .delivered(said.roundTrip.map { PiClock.duration(Double($0.components.seconds)) }) : .arrived
         case .failed(let failure):
-            .failed(Undelivered(reason: failure.text(sync: services.syncStatus), resend: resend, remove: remove))
+            .failed(Undelivered(reason: failure.text, resend: resend, remove: remove))
         }
     }
 
@@ -61,12 +61,12 @@ struct SpeechBubble<Menu: View>: View {
 }
 
 nonisolated extension Speech.Failure {
-    /// 没能送达的原因：Mac 写回的原文；到点的只说这句话自己（不猜 Mac 在不在：那台 Mac 在不在线看它的在线记录）——
-    /// 一直没出这台设备时，本机同步此刻不通（`sync`）就说它排着、恢复后自动发出（为什么不通只在同步那一处说，`SyncSummary`），通着就是这句一直没传上去。
-    func text(sync: SyncStatus) -> String {
+    /// 没能送达的原因：Mac 写回的原文；到点的只说这句话自己（不猜 Mac 在不在：那台 Mac 在不在线看它的在线记录）。
+    /// 同步不通时排着的话不到点（`Speech`），所以一直没出这台的只会是同步通着、这句却没传上去。
+    var text: String {
         switch self {
         case .reported(let reason): reason
-        case .unsent: sync.reachesMac ? String(localized: "这句一直没传到 iCloud，发不到 Mac") : String(localized: "还没传出这台，同步恢复后自动发出")
+        case .unsent: String(localized: "这句一直没传到 iCloud，发不到 Mac")
         case .timedOut: String(localized: "Mac 迟迟没收下这句")
         }
     }

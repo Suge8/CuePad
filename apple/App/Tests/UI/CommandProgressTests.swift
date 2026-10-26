@@ -26,7 +26,7 @@ struct CommandProgressTests {
 
         let compact = try await store.requestDelivery("/compact", to: local, on: TestApp.hostID, mode: .command)
         let failed = try await services.store.outcome(of: compact)
-        #expect(try await progress()?.text(sync: app.services.syncStatus) == "/compact 没执行成功：Nothing to compact (session too small)")
+        #expect(try await progress()?.text == "/compact 没执行成功：Nothing to compact (session too small)")
 
         let said = try #require(failed.completedAt).addingTimeInterval(0.001)
         try await store.writePiTranscript(PiTranscript(

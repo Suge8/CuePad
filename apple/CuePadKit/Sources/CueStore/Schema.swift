@@ -102,7 +102,7 @@ enum Schema {
     },
     // 72：Mac 写下、同步给各端的界面字改存句式与参数（`ShownText`），各端按自己的语言显示：
     // - 投送没送到的原因换成新列 failure（resultDetail 下线）；已有的原因是写下那台的原文，照原文存
-    // - CuePad 代 Cue 写下的话存进新列 shownText，正文照旧（写下那台的语言，更早的版本照它读）；已有的做完的结果（`CueReport`）拆回任务名与证据
+    // - CuePad 代 Cue 写下的话存进新列 shownText，正文列留空；已有的做完的结果（`CueReport`）拆回任务名与证据
     // - 你在 CuePad 里答确认框的是否存进新列 piMessages.shownText；已有的作答分不出是不是确认框，照原文
     // - 提问的选项各端照类别与范围写（`CueMessage.shownChoice`）：已有的提问补上范围那个项目此刻的名字（`CuePlace`）
     // 每台设备各自升级、不改 modifiedAt（不同步出去）：同一份数据改出同一份
@@ -136,7 +136,7 @@ enum Schema {
     for (id, text) in reports {
       guard let end = text.range(of: "」做完了\n\n") else { continue }
       let task = String(text[text.index(after: text.startIndex)..<end.lowerBound]), evidence = String(text[end.upperBound...])
-      try db.run("UPDATE cueMessages SET shownText = ? WHERE id = ?", [ShownText("「\(task)」做完了\n\n\(evidence)").stored, id])
+      try db.run("UPDATE cueMessages SET text = '', shownText = ? WHERE id = ?", [ShownText("「\(task)」做完了\n\n\(evidence)").stored, id])
     }
     let asked = try db.query("SELECT id, ask, places FROM cueMessages WHERE ask LIKE '%/%'") { ($0.text(0), $0.text(1), $0.textOrNil(2)) }
     for (id, ask, stored) in asked {

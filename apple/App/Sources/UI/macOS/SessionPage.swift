@@ -200,7 +200,7 @@ extension Workspace {
             // 请求开成了、会话却一直没带着认领标识连上来：等认领的请求到期清掉（`DeliveryExecutor`），不再静静地等下去
             if progress.request != nil { seen = true } else if seen { throw SendError.notLaunched(String(localized: "会话一直没连上 CuePad")) }
             switch progress.phase(at: services.speech) {
-            case .failed(let failure): throw SendError.notLaunched(failure.text(sync: services.syncStatus))
+            case .failed(let failure): throw SendError.notLaunched(failure.text)
             case .opening where !reported:
                 reported = true
                 launched()
