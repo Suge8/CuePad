@@ -5,7 +5,7 @@ import CuePi
 #endif
 
 /// 会话页的对话区（iOS 会话页、Mac 会话页共用）：对话区的排开、跳转与刻度见 `ChatColumn`（与 Cue 页同一个），这里只接会话的数据——
-/// 对话（`PiConversation`，按段排），正在请 Mac 补写对话时最上面一行说明，还没说过话时叠一层空态（`BlankChat`）。会话所在的 Mac 不是本机、本机正在和 iCloud 对时，到的先不滑上来（`ChatScroll`）。
+/// 对话（`PiConversation`，按段排，正在请 Mac 补写对话时最上面一行说明），还没说过话时叠一层空态（`BlankChat`）。会话所在的 Mac 不是本机、本机正在和 iCloud 对时，到的先不滑上来（`ChatScroll`）。
 struct SessionChat: View {
     let session: PiSessionState
     let digest: SessionDigest
@@ -18,7 +18,6 @@ struct SessionChat: View {
     #endif
     @State private var derived = ChatDerived()
     @Environment(AppServices.self) private var services
-    @Environment(\.palette) private var palette
 
     var body: some View {
         let _ = derived.refresh(digest)
@@ -30,12 +29,7 @@ struct SessionChat: View {
             paging: PiConversation.paging,
             holding: services.isCatchingUp(on: session.hostID)
         ) { window in
-            VStack(spacing: 14) {
-                if digest.fetchingTranscript(at: services.speech) {
-                    Label("正在从 Mac 取对话…", icon: .fetching).font(Typography.meta).foregroundStyle(palette.ink3)
-                }
-                conversation(window: window)
-            }
+            conversation(window: window)
         }
         .overlay {
             BlankChat(shown: items.isEmpty && digest.deliveries.isEmpty && !session.hasStarted && session.state != .known(.ended)
@@ -44,7 +38,9 @@ struct SessionChat: View {
     }
 
     private func conversation(window: ChatWindow) -> PiConversation {
-        var conversation = PiConversation(session: session, items: derived.items, messages: digest.messages, deliveries: digest.deliveries, window: window)
+        var conversation = PiConversation(
+            session: session, items: derived.items, messages: digest.messages, deliveries: digest.deliveries, window: window,
+            fetching: digest.fetchingTranscript(at: services.speech))
         #if os(macOS)
         conversation.slot = slot
         #endif
