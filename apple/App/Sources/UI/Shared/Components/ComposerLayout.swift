@@ -14,6 +14,8 @@ enum ComposerMetrics {
     /// 输入框里的圆钮（`CircleGlyph`）：看得见的直径与点得到的边长。
     static let glyph: CGFloat = 40
     static let glyphTarget: CGFloat = 44
+    /// 输入框上方叠着的说明（`composerNotice`）的圆角：一两行小字，比输入框的胶囊收一档。
+    static let noticeRadius: CGFloat = 16
 
     /// 一行字与上下边距合起来的高，至少 `slot`：没露出工具排时圆钮占这么高、居中，与最后一行字同一条中线。
     static func lineSlot(line: CGFloat) -> CGFloat { max(slot, ceil(line + 2 * textTop)) }
@@ -107,4 +109,26 @@ enum ComposerForm: Equatable {
     }
 
     var isCapsule: Bool { if case .capsule = self { true } else { false } }
+}
+
+extension View {
+    /// 输入框上方的几行说明（同步到不了 Mac、命令的进度、没换成的原因、新会话开到哪了）：一块垫实底的玻璃叠在输入框上沿之上、往上长，不占排版。
+    /// 排进输入框里的话，它一出一收输入框就当帧变高变矮，浮着的输入框上面的对话跟着跳；叠在上面的代价是盖住它后面最下面的一截（同"回到最新"圆钮）。
+    /// 只是说明、不接点按：后面的对话照常滚、照常点。`shown` 为 false 时什么都不画。
+    func composerNotice(_ shown: Bool, @ViewBuilder _ notice: () -> some View) -> some View {
+        // 挂在输入框上沿一条零高的线上、底边对着它往上长：叠放的说明多高都不进输入框的排版
+        overlay(alignment: .top) {
+            if shown {
+                Color.clear.frame(height: 0).overlay(alignment: .bottomLeading) {
+                    VStack(alignment: .leading, spacing: 4) { notice() }
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 14).padding(.vertical, 8)
+                        .glass(in: .rect(cornerRadius: ComposerMetrics.noticeRadius, style: .continuous))
+                        .padding(.bottom, ComposerMetrics.stackGap)
+                }
+                .allowsHitTesting(false)
+            }
+        }
+    }
 }

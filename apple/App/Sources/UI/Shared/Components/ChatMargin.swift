@@ -56,6 +56,25 @@ struct NoteThread<Content: View>: View {
     }
 }
 
+/// 对话末尾此刻在做什么那一行的位置（Cue 页 `CueEnding`、会话页 `PiConversation`）：一直占着一行旁注的高（离上一格 `gap`），没有时留白。
+/// 不占位的话，它一出一收，贴着最新的整段对话跟着当帧上下跳一行（内容变高矮时底锚，`ChatScroll`），回复紧接着到时还与新到的那一条的上滑叠成一抖。
+/// 代价：歇着时对话末尾多一行空白；放进来的那一行只写一行（长的截断）。在跑的经过往下长出几行是内容，照常长。
+struct ChatLiveSlot<Content: View>: View {
+    let gap: CGFloat
+    /// 那一行字的字号：占位按它量高。
+    var font: Font = Typography.caption
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            NoteLine(icon: .pondering) { Text(verbatim: " ").font(font) }.hidden().accessibilityHidden(true)
+            content
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.top, gap)
+    }
+}
+
 extension View {
     /// 旁注的图标位（`Note.glyphWidth`）：`column` 是图标本身占的位，`indent` 让出图标位与它到字的空（清单、第二行的字对着标题行的字），
     /// `center` 挪到图标位的中线（清单的细线）。宽随动态字体放大：图标跟着字放大，定宽的位在大字号下放不下，图标压到后面的字上。

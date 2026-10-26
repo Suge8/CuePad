@@ -1040,18 +1040,18 @@
         }
       }
     },
-    "%@，现在答不了；同步恢复后再答，或在 Mac 上回答" : {
+    "%@，现在答不了，可在 Mac 上回答" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@, can't answer now. Answer once sync is back, or on the Mac."
+            "value" : "%@. Answer on the Mac."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@，现在答不了；同步恢复后再答，或在 Mac 上回答"
+            "value" : "%@，现在答不了，可在 Mac 上回答"
           }
         }
       }
