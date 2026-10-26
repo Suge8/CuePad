@@ -3,7 +3,7 @@ import SwiftUI
 
 /// 常驻循环动效的唯一宿主：Agent 在跑的心电线（`heartbeat`）、话在路上的纸飞机（`flight`）、等你确认的外扩波纹（`ripple`）、
 /// 等待的转圈（`orbit`，经 `Spinner`）、换模型与思考强度在路上时的呼吸（`pulse`）、进行中文字与最高思考强度上扫过的光（`sheen`）、
-/// 看板推进中卡下沿那条线（`wave`，`BoardWave`）。
+/// 看板推进中卡下沿那条线在跑的那一截（`wave`，`BoardLine`）。
 /// 用 Core Animation 而不是 SwiftUI 的 repeatForever 或符号动效：后两者每帧都在 App 进程里重算，
 /// 列表里有几个在工作的会话时，静止不动也要占约 9% CPU；CA 的动画交给渲染服务，App 进程不参与，离屏不画。
 /// 放不放只看 `LoopsPlay`，不放时调用方换静止的样子。
@@ -14,7 +14,7 @@ struct LoopLayer {
         /// 心电线：淡色的一段心电波形上，一截实色沿波形从左走到右，1.4s 一趟；线宽是边长的 9%，淡波形是三成的颜色。
         case heartbeat
         /// 话在路上：一架纸飞机（与发送钮、"已送达"同一架，`Icon.send`）从左下飞进来、在正中停一下、朝机头的右上飞出去，裁在自己的框里，
-        /// 一趟 `Flight.period` 秒。"发出"一族只有纸飞机：发送中、已送达都是它，燕尾箭只表示方向。
+        /// 一趟 `Flight.period` 秒。"发出"一族只有纸飞机：发送中、已送达都是它，胖箭头只表示方向。
         /// 不播时（截图、Mac 不在前台时只画的那一帧）停在正中；不放循环动效时调用方换静止符号。
         case flight
         /// 一圈细线从内切圆的大小往外扩到 1.6 倍、淡到看不见，2.4s 一次；线宽是边长的 7%。
@@ -23,7 +23,7 @@ struct LoopLayer {
         case sheen
         /// 铺满的一层颜色从无到有再回去，一明一暗 1.4s（盖在内容上，内容看起来在呼吸）。
         case pulse
-        /// 一条预先画好的周期线（几层同一个周期）整条匀速横移一个周期，渲染服务只挪一层（`WaveStrip`）。
+        /// 看板线在跑的那一截（`WaveStrip`）：一条预先画好的周期线整条匀速横移一个周期，或子代理轨上的短划往前跑；渲染服务只挪层、动虚线相位。
         case wave(WaveStrip)
     }
 
@@ -203,7 +203,7 @@ struct LoopLayer {
                 return loop(fade, on: layer)
             case .wave(let wave):
                 let layer = wave.make()
-                _ = loop(wave.drift(), on: layer.sublayers![0])
+                for (animation, target) in wave.loops(in: layer) { _ = loop(animation, on: target) }
                 return layer
             case .sheen:
                 let layer = CAGradientLayer()

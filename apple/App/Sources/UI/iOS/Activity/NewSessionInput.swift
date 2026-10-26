@@ -80,7 +80,7 @@ struct NewSessionInput: View {
         guard chosen?.host != nil, let agents, let agent else { return nil }
         return AgentModelChoice(agents: agents.agents, agent: agent, model: model, thinking: thinking)
     }
-    private var canStart: Bool { chosen?.host != nil && agent != nil && services.reachesPiHost && !inFlight }
+    private var canStart: Bool { chosen?.host != nil && agent != nil && !inFlight }
 
     var body: some View {
         Composer(
@@ -146,9 +146,9 @@ struct NewSessionInput: View {
         }
     }
 
-    /// 输入框上方叠着的那一行（`composerNotice`）：发出后的进度，上一次没能打开的原因，或开不了、送不到 Mac 的原因；都没有为 nil。
+    /// 输入框上方叠着的那一行（`composerNotice`）：发出后的进度，上一次没能打开的原因，或开不了的原因；都没有为 nil。
     private enum Status {
-        case noMac, phase(LaunchProgress.Phase), noAgents(MacAgents), unreachable
+        case noMac, phase(LaunchProgress.Phase), noAgents(MacAgents)
     }
 
     private var status: Status? {
@@ -156,14 +156,13 @@ struct NewSessionInput: View {
         if phase != .idle { return .phase(phase) }
         // 那台一家都不能用时先说它：同步通了也开不了
         if let agents, agents.agents.isEmpty { return .noAgents(agents) }
-        return services.reachesPiHost ? nil : .unreachable
+        return nil
     }
 
     @ViewBuilder private func statusLine(_ status: Status) -> some View {
         switch status {
         case .noMac: MacInputNotice(noMac: true)
         case .noAgents(let agents): Text("\(agents.shownName)：\(agents.whyNone)").foregroundStyle(palette.ink3)
-        case .unreachable: MacInputNotice()
         case .phase(.failed(let failure)): Text(failure.text(sync: services.syncStatus)).foregroundStyle(palette.failure)
         case .phase(.sending(let transit)):
             HStack(spacing: 6) { Spinner(.mini); Text(transit.label) }.font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink2)

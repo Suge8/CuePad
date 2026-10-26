@@ -42,20 +42,19 @@ enum TaskMetrics {
 /// 任务看板的卡（`boardCard`）：左右内边距 `cardPadding`、圆角 `cardRadius`；开头的记号占 `cardLead` 见方，看全部项目时标题前一个 `cardGlyph` 的项目小图形；
 /// 卡离列边与卡与卡之间都是 `inset`（列的托盘、拖入底的圆角 = 卡圆角 + 它，同心）。
 /// 卡的高度由几段加出来（`BoardCardLayout`），不另写一个数：列里的卡是 `titlePadding`、标题（按 `title` 留足行数，至少 `titleRow`）、`titlePadding`；
-/// 推进中的卡是 `titleTop`、标题那一带、`waveGap`、线（`WaveStrip.height`）、`waveBottom`。标题与线之间那一截两端同一个
-/// `waveGap`：贴得近了，线读起来像标题的下划线或删除线。手机竖版看板里卡铺满行给的格（`BoardRowLane`）。
+/// 推进中的卡是 `titleTop`、标题那一带、`waveGap`、线（`WaveStrip.height`）、`waveBottom`，与别的列的卡同高。
+/// 标题与线之间那一截（Mac 6、手机 8）不能再窄：再贴近，线读起来像标题的下划线或删除线。手机竖版看板里卡铺满行给的格（`BoardRowLane`）。
 enum BoardCardMetrics {
     static let inset: CGFloat = 8
     static let gap: CGFloat = 8
     static var radius: CGFloat { TaskMetrics.cardRadius }
-    static let waveGap: CGFloat = 8
     /// 手机竖版看板（`boardRow`）：卡窄，内边距、记号与标题之间都收一点，标题小一档。
     static let rowPadding: CGFloat = 12
     static let rowGap: CGFloat = 6
     static let rowTitle = Font.subheadline.weight(.medium)
     #if os(macOS)
     static let titlePadding: CGFloat = 14
-    static let titleTop: CGFloat = 8
+    static let titleTop: CGFloat = 6
     static let titleRow: CGFloat = 20
     static let waveBottom: CGFloat = 4
     #else
@@ -64,6 +63,8 @@ enum BoardCardMetrics {
     static let titleRow: CGFloat = 24
     static let waveBottom: CGFloat = 6
     #endif
+    /// 推进中的卡与别的列的卡同高：线占掉的那一截从上下两份 `titlePadding` 里出。
+    static var waveGap: CGFloat { 2 * titlePadding - titleTop - WaveStrip.height - waveBottom }
 
     /// 卡标题留几行、那一截多高（三端的列与手机的行同一条，所在的列或行按卡宽与字号算一次交给卡，`boardTitle`）：
     /// 卡里放字那一截（去掉左右内边距，连开头记号与项目小图形）宽得下 `oneLine` 个字排一行，否则两行——Mac 常用窗口与 iPad 横屏的列里

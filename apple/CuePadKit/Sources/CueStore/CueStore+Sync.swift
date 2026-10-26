@@ -36,7 +36,8 @@ package struct SyncRow: Codable, Equatable, Sendable {
 }
 
 package enum RemoteChange: Sendable {
-  case save(SyncRow, systemFields: Data)
+  /// `serverAt`：服务器收下这条记录的时刻（投送请求记进本机列 `DeliveryRequest.serverAt`）。
+  case save(SyncRow, systemFields: Data, serverAt: Date? = nil)
   case delete(SyncKey)
 }
 

@@ -6,6 +6,12 @@
 
 `release mac` 导出后、公证前由脚本核对，不过就停：门铃中转活着、签名完整、包里的正式版标记 `CuePadRelease` 是 YES（`Signing.xcconfig` 的 `CUEPAD_RELEASE`，只有发版脚本归档时设）、包里的命令行在空家目录下去找正式资料库 `CuePad/Library` 而不是开发库 `CuePad Dev`。少了标记，装上的正式版会开开发库，用户看到的是空库。只核对、不上传用 `xc.sh release mac --dry-run`（照样提交公证）。
 
+## 发版顺序
+
+同步下界（`Schema.peerFloor`，什么时候抬见它的注释）抬高的那一版先发 iOS，等 TestFlight 处理完（`testflight.py builds` 显示 VALID）再发 Mac：Mac 经 Sparkle 几分钟就装上，iOS 要等苹果处理十几分钟到一小时，反过来发，这段时间里手机停下收发。`release ios` 上传后在那个提交上打 `ios/<构建号>` 标签，`release mac` 核对 TestFlight 上处理好的最新一版的下界不低于这一版，不够就不发。下界没变的版本两端先后随意。
+
+先装上新版的那台把下界抬上去，另一台停下同步、写下的照记，更新后自动发出：Mac 停下时当场查一次更新（`UpdateService.checkInBackground`），手机在设置的同步那一行点「在 TestFlight 里更新」。
+
 ## 签名
 
 签名的做法与理由在 `App/Config/Signing.xcconfig` 与 `scripts/_signing.sh` 的头注释里（凭据文件的字段也在那里），版本号怎么推出在 `_signing.sh` 的 `release_versions`，权限以 `App/Config/*.entitlements` 为准。
@@ -64,3 +70,6 @@ xcrun cktool export-schema $C --output-file /tmp/dev.ckdb   # 回读：服务端
 ### 待部署到生产
 
 发版前一次 Deploy Schema Changes，部署完删掉对应条目。这里记的是 cktool 看不到的订阅定义，订阅只有手机会建：这一节还有条目时 `release ios` 拒绝发版，`release mac` 不受影响：
+
+- 字段（INT64，2026-10-26 已导入开发环境并回读核对）：`sessionViewers.arrivedAt`（他最近一次来到这台设备的时刻，`Viewer`）。没部署时带它的"开着哪一页"记录在生产里存不上，`ck-production.sh` 拦下两端的发版。
+- 订阅定义（2026-10-26 已在开发容器里保存并回读核对）：新增 `cuepad.pi.wake`（该你接、你正在 Mac 上开着的会话只静默叫醒手机，`notify == wake`，`PiPush`）。没部署时生产里建不成它，这种会话的变化不叫醒手机、灵动岛要等下一次叫醒或回前台才跟上，别的照常。

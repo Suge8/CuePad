@@ -92,7 +92,8 @@ protocol SubscriptionStore: Sendable {
 /// 不订阅整个同步区的变化：Mac 每小时写三百次上下（会话细节、在线续期、预览），每次一条静默推送，远超系统每小时两三条的预算，
 /// 被合并、节流后要紧的也跟着晚到（docs/sync.md「Agent 与 Cue 的通知」）。
 /// 可见通知：Pi 会话状态记录（等你确认、待回复、完成三个）与 Cue 消息（一个）的 `notify` 标志置位时，服务端直接生成；它们都另带 content-available，
-/// 把 App 叫到后台拉一次，实时活动随之更新。只靠静默推送的两个（Cue 对你说的、不出通知的话，发往 Mac 的请求有了结果）不出通知，只叫醒 App 拉。
+/// 把 App 叫到后台拉一次，实时活动随之更新。只靠静默推送的三个（Cue 对你说的、不出通知的话，该你接、你正在 Mac 上开着的会话，发往 Mac 的请求有了结果）
+/// 不出通知，只叫醒 App 拉：进了等你的事手机总会跟上（`CuePush`、`PiPush`）。
 /// 通知文案只用本地化 key 的通用句：标题与详情是加密字段，不可能出现在通知里；也不设 `desiredKeys`。删除不通知。
 /// 谓词按标志而不是按状态，因为"同一状态下的重复更新"与"从工作中进入完成"这类转换在谓词里表达不了；标志只在转换那一次写入上置位（见 `PiStateRecorder`）。
 /// 标志在上传前会被同状态的更新沿用；状态已前进或会话已结束时未上传的标志作废（见 `PiStateRecorder`）。
@@ -106,6 +107,8 @@ struct AlertSubscriptions {
   static let waitingID = prefix + "pi.waiting"
   static let settledID = prefix + "pi.settled"
   static let replyID = prefix + "pi.reply"
+  /// 该你接、你正在 Mac 上开着的会话：静默推送（与上面三个按 `PiPush` 分开，一条只命中一个）。
+  static let sessionWakeID = prefix + "pi.wake"
   static let cueID = prefix + "cue"
   /// Cue 对你说的、不出通知的话：静默推送（与 `cueID` 按 `CuePush` 分开，一条只命中一个）。
   static let cueSaidID = prefix + "cue.said"
@@ -129,9 +132,10 @@ struct AlertSubscriptions {
 
   func desired() -> [CKQuerySubscription] {
     [
-      alert(.piSessionStates, id: Self.waitingID, flag: PiAlert.waitingForUser.rawValue, key: Self.waitingKey),
-      alert(.piSessionStates, id: Self.settledID, flag: PiAlert.settled.rawValue, key: Self.settledKey),
-      alert(.piSessionStates, id: Self.replyID, flag: PiAlert.awaitsReply.rawValue, key: Self.replyKey),
+      alert(.piSessionStates, id: Self.waitingID, flag: PiPush.alert(.waitingForUser).rawValue, key: Self.waitingKey),
+      alert(.piSessionStates, id: Self.settledID, flag: PiPush.alert(.settled).rawValue, key: Self.settledKey),
+      alert(.piSessionStates, id: Self.replyID, flag: PiPush.alert(.awaitsReply).rawValue, key: Self.replyKey),
+      silent(.piSessionStates, id: Self.sessionWakeID, Self.flagged(PiPush.wake.rawValue), on: [.firesOnRecordCreation, .firesOnRecordUpdate]),
       alert(.cueMessages, id: Self.cueID, flag: CuePush.alert.rawValue, key: Self.cueKey),
       silent(.cueMessages, id: Self.cueSaidID, Self.flagged(CuePush.wake.rawValue), on: .firesOnRecordCreation),
       silent(

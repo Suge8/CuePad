@@ -5,10 +5,9 @@ from .icons_objects import *
 
 # ---------- Cue 与设置、文件预览的类型 ----------
 
-def badge_dart(m):
-    """自动检查更新：实心圆里刻一支朝下的燕尾箭（同一份几何，缩小）。"""
-    g, c = GROW[m], CARVE[m]
-    return [Layer("badge", [disc((0, 0), BADGE_R + g)] + holed(dart(180, 0.62, (0, -0.6))(0.0, c)))]
+def badge_arrow(m):
+    """自动检查更新：实心圆里刻一支朝下的胖箭头（同一份几何，缩小，居中）。"""
+    return [Layer("badge", [disc((0, 0), BADGE_R + GROW[m]), rev(fat_arrow(0.0, 180, 0.62, (0, 0.4)))])]
 
 
 def bookmark(m):
@@ -46,13 +45,6 @@ def alarm(m):
     return [Layer("clock", face + hands), Layer("bells", bells, "secondary")]
 
 
-def swap(m):
-    """换班次前写交接：两支燕尾箭（缩小）一上一下、一左一右反着走。"""
-    g, c = GROW[m], CARVE[m]
-    s = 0.62
-    return [Layer("a", dart(90, s, (0, -5.2))(g, c)), Layer("b", dart(-90, s, (0, 5.2))(g, c))]
-
-
 def mail(m):
     """邮件：一只信封——一块圆角实心，刻出信封盖的 V 槽。"""
     g = GROW[m]
@@ -66,15 +58,6 @@ def tag(m):
     g = GROW[m]
     body = grown([(-11.0, -7.2), (3.6, -7.2), (11.0, 0), (3.6, 7.2), (-11.0, 7.2)], [2.2, 1.2, 1.4, 1.2, 2.2], g)
     return [Layer("tag", [body, disc((-6.4, 0), 2.0 - 0.3 * g, hole=True)])]
-
-
-def shield_tick(m):
-    """自动允许：一面实心的盾，刻出做完那一笔勾。"""
-    g = GROW[m]
-    shield = grown([(0, -11.6), (10.0, -8.0), (10.0, 0.6), (0, 11.6), (-10.0, 0.6), (-10.0, -8.0)], [1.6, 1.8, 6.0, 1.2, 6.0, 1.8], g)
-    k, (cx, cy) = 0.62, (3.3, -3.2)
-    tick = bar([((x - cx) * k, (y - cy) * k - 0.4) for x, y in DONE_TICK], MARK_W(m, 2.8))
-    return [Layer("shield", [shield] + holed([tick]))]
 
 
 def keyboard(m):

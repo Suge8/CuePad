@@ -127,15 +127,6 @@ nonisolated struct CueThread: Equatable, Sendable {
             }
         }
 
-        /// 在跑的那一轮（`CueLiveRound.round`）在这一格里：你发起的一轮的经过，或动态里它那一节（醒来时就写下了）。
-        func contains(round: UUID) -> Bool {
-            switch self {
-            case .process(let message, _): message.id == round
-            case .notes(let rounds): rounds.contains { $0.row?.id == round }
-            case .you, .answer, .cue, .result: false
-            }
-        }
-
         /// 气泡在哪一边：你的话靠右，Cue 的话靠左；其余（结果卡、经过、醒来记录、分隔）不是气泡，不与上下的气泡连成一串。
         var speaker: HorizontalEdge? {
             switch self {

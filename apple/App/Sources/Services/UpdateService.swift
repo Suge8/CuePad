@@ -9,6 +9,8 @@ protocol AppUpdater: AnyObject {
     var automaticallyChecksForUpdates: Bool { get set }
     var canCheckForUpdates: Bool { get }
     func checkForUpdates()
+    /// 后台查一次：有更新照常提示，没有不出声。
+    func checkForUpdatesInBackground()
     /// 更新装好前、App 要退出重启时问一次（菜单的检查与后台的定期检查都到这里）：返回 true 就先不重启，之后调用交来的 `install` 接着装。
     var postponeRelaunch: ((_ install: @escaping () -> Void) -> Bool)? { get set }
 }
@@ -53,6 +55,11 @@ final class UpdateService {
 
     func checkForUpdates() {
         updater?.checkForUpdates()
+    }
+
+    /// 别的设备已用新版、这台停下同步时（`SyncStatus.outdated`）当场查一次，不等定期检查（默认一天一次）。
+    func checkInBackground() {
+        updater?.checkForUpdatesInBackground()
     }
 
     /// 不等了，现在就装（会结束还在跑的后台会话）。

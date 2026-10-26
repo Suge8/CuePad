@@ -28,5 +28,8 @@ struct CueReplyTip: View {
         .accessibilityLabel(only.map { String(localized: "\($0.title) 待回复") } ?? String(localized: "\(replies.count) 个会话待回复"))
     }
 
+    /// 它连同离底部那一块的间隔占多高（`floatingAbove`）：对话末尾那一行给它让出这么多（`ChatLiveSlot`）。玻璃胶囊定高，不随字号变。
+    static var clearance: CGFloat { ControlMetrics.height + ComposerMetrics.stackGap }
+
     private var only: PiSessionState? { replies.count == 1 ? replies.first : nil }
 }

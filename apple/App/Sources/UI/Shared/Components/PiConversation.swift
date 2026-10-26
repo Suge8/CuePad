@@ -29,6 +29,7 @@ struct PiConversation: View {
     @Environment(AppServices.self) private var services
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
+    @ScaledMetric(relativeTo: .footnote) private var noticeText = ComposerMetrics.noticeTextHeight
     @State private var opened: PreviewOpening?
 
     var body: some View {
@@ -85,22 +86,26 @@ struct PiConversation: View {
         #endif
     }
 
-    /// 对话末尾：正在说的话或处理中的进展（带子代理）、出错的原因（Agent 已把这次错误写成最后一条回答时不再重复）。
+    /// 对话末尾：出错的原因（Agent 已把这次错误写成最后一条回答时不再重复）、正在说的话或处理中的进展（带子代理）。
     /// 进展的第一行一直占着位置（`ChatLiveSlot`，没有时留白）：一轮开始、结束时对话不跟着跳；进展往下长出的几步是内容。
+    /// 它排在最后：回复框上方的说明（`composerNotice`）落在这段留白里，盖不到上面的内容。
     @ViewBuilder private var ending: some View {
-        #if os(macOS)
-        if let slot {
-            SessionDraft(slot: slot, session: session, newestReply: messages.last { $0.role == .known(.pi) }?.at)
-        } else {
-            ChatLiveSlot { liveStatus }
-        }
-        #else
-        ChatLiveSlot { liveStatus }
-        #endif
         if session.state == .known(.error), !PiErrorSummary.echoes(messages.last { $0.role == .known(.pi) }?.text, line: session.detail) {
             Callout(.failed, text: session.detail ?? String(localized: "Mac 没有说明原因"))
         }
+        #if os(macOS)
+        if let slot {
+            SessionDraft(slot: slot, session: session, newestReply: messages.last { $0.role == .known(.pi) }?.at, floating: floating)
+        } else {
+            ChatLiveSlot(spacing: Self.spacing, floating: floating) { liveStatus }
+        }
+        #else
+        ChatLiveSlot(spacing: Self.spacing, floating: floating) { liveStatus }
+        #endif
     }
+
+    /// 回复框上方的说明最高多高（两行，`composerNotice`）：末尾那一行给它让出这么多（`ChatLiveSlot`）。
+    private var floating: CGFloat { ComposerMetrics.noticeClearance(textHeight: noticeText) }
 
     @ViewBuilder private var liveStatus: some View {
         if session.state.isWorking || !session.subagents.isEmpty { LiveStatus(session: session).transition(.entry) }
@@ -118,6 +123,8 @@ struct SessionDraft: View {
     let session: PiSessionState
     /// 对话里最近一条 Agent 回答的时刻
     let newestReply: Date?
+    /// 回复框上方的说明最高多高（`PiConversation.floating`）。
+    let floating: CGFloat
 
     var body: some View {
         let draft = slot.draft
@@ -131,7 +138,7 @@ struct SessionDraft: View {
                     }
                 }
             }
-            ChatLiveSlot {
+            ChatLiveSlot(spacing: PiConversation.spacing, floating: floating) {
                 if speaking || landed && session.state.known?.isTurnRunning == true {
                     PiSubagentList(agents: session.subagents)
                 } else if session.state.isWorking || !session.subagents.isEmpty {

@@ -32,7 +32,6 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
     private let content: Content
     @Environment(\.accessibilityReduceMotion) var reduceMotion
     @Environment(\.chatBottomInset) var bottomInset
-    @ScaledMetric(relativeTo: .footnote) var noticeTextHeight = ComposerMetrics.noticeTextHeight
     /// 对话各条排在哪、正在读的那一条（`ChatAnchor`）与据它算出的在屏上的段。
     @State var anchor = ChatAnchor()
     @State var onScreen: Set<UUID> = []

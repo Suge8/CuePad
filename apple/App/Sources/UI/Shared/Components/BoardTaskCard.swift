@@ -3,7 +3,7 @@ import SwiftUI
 
 /// 看板上的一件任务：待办、推进中、已完成三列同一种卡（等你列是同样的卡，`BoardWaitCard`），一样高（`boardCard`），卡上只有标题与一个状态记号，其余收进悬停提示。
 /// - 开头是完成圈（`TaskCheckButton`，空心描边；做完是石绿的对勾），看全部项目时标题前一个项目小图形（`BoardProjectGlyph`，Mac 上悬停是项目联动）；
-/// - 推进中下沿是那条线、线的右端是要你管的状态词（`BoardPulse`，`BoardCardLayout`），歇着的标题淡一档；已完成标题淡一档、不加粗，卡尾是 Cue 点名的成果图；
+/// - 推进中下沿是那条线（`BoardLine`：过去说过的几句、此刻在跑或停住，右端是此刻状态多久与要你管的状态词），歇着的标题淡一档；已完成标题淡一档、不加粗，卡尾是 Cue 点名的成果图；
 /// - 悬停提示：项目、多久（推进中是跑了多久或估还要多久，已完成是几点做完）与交给了哪家 Agent。
 /// 上级收成一张（`TaskBoard.Item.leaf`）：状态看此刻干活的叶子。点圈完成（`TaskCheck`）；点卡的其余地方同任务行（`Workspace.enter`）：
 /// 开工了的叶子进它的会话，其余打开任务气泡。长按（Mac 右键）是这件任务的菜单（`CardActions`），点卡进的是会话时第一项"打开任务"。
@@ -13,7 +13,7 @@ struct BoardTaskCard: View {
     let column: TaskBoard.Column
     /// 标题前的项目小图形：看全部项目时才有。
     let project: Project?
-    /// 下沿那条线可以动（`BoardWave.moves`）。
+    /// 下沿那条线可以动（`BoardLine.moves`）。
     var moves = true
     var openShot: (PreviewOpening) -> Void = { _ in }
     @State private var check = TaskCheck()
@@ -28,7 +28,7 @@ struct BoardTaskCard: View {
         let next = workspace.next(for: task, lead: item.leaf, in: agents, steps: item.steps)
         let pulse = advancing ? workspace.pulse(for: task, lead: item.leaf, in: agents) : BoardPulse()
         framed(next: next) {
-            BoardCardLayout(advancing: advancing, pulse: pulse, moves: moves, steps: advancing ? item.steps : nil) {
+            BoardCardLayout(advancing: advancing, pulse: pulse, moves: moves) {
                 ring(next: next)
                 if let project { BoardProjectGlyph(project: project) }
                 title(resting: pulse.tier == .resting && advancing)

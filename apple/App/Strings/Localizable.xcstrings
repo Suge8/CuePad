@@ -1144,22 +1144,6 @@
         }
       }
     },
-    "%@，发不到 Mac" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@, can't reach the Mac"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@，发不到 Mac"
-          }
-        }
-      }
-    },
     "%@，和 %lld 个项目里的 %lld 个" : {
       "localizations" : {
         "en" : {
@@ -1200,22 +1184,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@，有要整理的"
-          }
-        }
-      }
-    },
-    "%@，现在答不了，可在 Mac 上回答" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@. Answer on the Mac."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@，现在答不了，可在 Mac 上回答"
           }
         }
       }
@@ -7271,34 +7239,18 @@
         }
       }
     },
-    "别的设备已用新版；在 TestFlight 里更新这台后接着同步，本机改动都在" : {
+    "别的设备已用新版，这台更新后接着同步；这期间写下的都在，更新后自动发出" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Another device uses a newer version. Update this device in TestFlight to keep syncing; your changes here are safe."
+            "value" : "Another device is on a newer version. Update this one to keep syncing; anything you write meanwhile is kept and sent after the update."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "别的设备已用新版；在 TestFlight 里更新这台后接着同步，本机改动都在"
-          }
-        }
-      }
-    },
-    "别的设备已用新版；更新这台（菜单「CuePad › 检查更新…」）后接着同步，本机改动都在" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Another device uses a newer version. Update this Mac (CuePad › Check for Updates…) to keep syncing; your changes here are safe."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "别的设备已用新版；更新这台（菜单「CuePad › 检查更新…」）后接着同步，本机改动都在"
+            "value" : "别的设备已用新版，这台更新后接着同步；这期间写下的都在，更新后自动发出"
           }
         }
       }
@@ -7651,22 +7603,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "反缩进"
-          }
-        }
-      }
-    },
-    "发不到 Mac" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "can’t reach your Mac"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "发不到 Mac"
           }
         }
       }
@@ -8391,6 +8327,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "同步已暂停，需要你决定"
+          }
+        }
+      }
+    },
+    "同步恢复后再启用" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Available once sync is back"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同步恢复后再启用"
           }
         }
       }
@@ -9127,6 +9079,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "在 Mac 的终端里开一个 Agent，或在这里开新会话"
+          }
+        }
+      }
+    },
+    "在 TestFlight 里更新" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Update in TestFlight"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在 TestFlight 里更新"
           }
         }
       }
@@ -17036,22 +17004,6 @@
         }
       }
     },
-    "看到的可能不是最新，也发不到 Mac" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "what you see may be out of date, and messages can't reach the Mac"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "看到的可能不是最新，也发不到 Mac"
-          }
-        }
-      }
-    },
     "看图：%@" : {
       "localizations" : {
         "en" : {
@@ -18936,30 +18888,18 @@
         }
       }
     },
-    "请求创建后超过 %lld 秒仍未执行，已放弃" : {
+    "请求到 iCloud 后超过 %lld 秒仍未执行，已放弃" : {
       "localizations" : {
         "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "Not run within %lld second of being sent; gave up"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "Not run within %lld seconds of being sent; gave up"
-                }
-              }
-            }
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not run within %lld seconds of reaching iCloud, so it was dropped"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "请求创建后超过 %lld 秒仍未执行，已放弃"
+            "value" : "请求到 iCloud 后超过 %lld 秒仍未执行，已放弃"
           }
         }
       }
@@ -19716,6 +19656,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "还有 %lld 条"
+          }
+        }
+      }
+    },
+    "还没传出这台，同步恢复后自动发出" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not sent from this device yet; it goes out when sync is back"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "还没传出这台，同步恢复后自动发出"
           }
         }
       }
@@ -20964,22 +20920,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "远程投送执行器没能启动：%@"
-          }
-        }
-      }
-    },
-    "连上 iCloud 后再启用" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Connect to iCloud to turn on"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "连上 iCloud 后再启用"
           }
         }
       }
