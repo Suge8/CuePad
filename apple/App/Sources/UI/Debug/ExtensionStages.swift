@@ -105,14 +105,17 @@ struct DebugActivityStage: View {
                 }
             }
             .padding(.horizontal, 20)
-            HStack {
-                Text("9:41").font(.system(size: 17, weight: .semibold)).foregroundStyle(palette.ink).frame(width: 78)
-                Spacer()
+            // 时间只在岛收着时写：岛撑开时真机上系统让开状态栏，这里照写就会压在紧凑态左半上（头像右下多出的"1"）
+            if !state.now.isLive {
+                HStack {
+                    Text("9:41").font(.system(size: 17, weight: .semibold)).foregroundStyle(palette.ink).frame(width: 78)
+                    Spacer()
+                }
+                .padding(.top, 21).padding(.horizontal, 6)
             }
-            .padding(.top, 21).padding(.horizontal, 6)
         }
         .ignoresSafeArea()
-        // 系统的状态栏画在最上层、会压住岛的两端（真机上岛撑开时系统让开）：藏起来，自己写时间
+        // 系统的状态栏画在最上层、会压住岛的两端：藏起来，岛收着时自己写时间
         .statusBarHidden(true)
         .animation(.smooth(duration: 0.45), value: workspace.cue.now)
         .allowsHitTesting(false)
