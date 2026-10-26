@@ -17,9 +17,8 @@ struct PiConversation: View {
     /// 发出还没进对话的话要对着已有的消息认。
     let messages: [PiChatMessage]
     var deliveries: [DeliveryRequest] = []
-    /// 至少排开最近这么多条（不用懒加载栈，见 `ChatScroll`）；更早的由 `showEarlier` 再排开一段。
-    let window: Int
-    var showEarlier: () -> Void = {}
+    /// 排开最近几条（不用懒加载栈，见 `ChatScroll`），更早的由它再排开一段。
+    let window: ChatWindow
     #if os(macOS)
     /// 这个会话在本机桥上的那一格（在线时）：正在说的话从这里读。
     var slot: PiBridge.Slot?
@@ -32,21 +31,15 @@ struct PiConversation: View {
     var body: some View {
         let all = items
         let notes = services.settings.replyNotes(for: session.id)
-        let first = max(0, all.count - window)
         VStack(alignment: .leading, spacing: Self.spacing) {
-            if first > 0 {
-                EarlierRow(count: Self.segment, action: showEarlier)
-            }
             if all.isEmpty, let prompt = session.pendingPrompt ?? session.lastPrompt { RecapPreview(session: session, prompt: prompt) }
-            ChatSegments(items: all, size: Self.segment, from: first) { items in
+            ChatSegments(items: all, window: window, size: Self.segment, spacing: Self.spacing) { items in
                 ChatSegment(items: Array(items), session: session, highlight: highlight, notes: notes, swapsInPlace: swapsInPlace, opened: $opened)
                     .equatable()
             }
             ForEach(PiChat.outgoing(deliveries, messages: messages)) { request in outgoing(request) }
             ending
         }
-        // 滚动目标（段与其余各行）：内容变了滚动位置跟着它走（`ChatScroll`）；跳到某一条按条的 id 找，不靠它
-        .scrollTargetLayout()
         .frame(maxWidth: .infinity, alignment: .leading)
         #if os(iOS)
         // 手机上长按出的是消息菜单，挑字、批注走菜单里的"选择文本""批注"：对话里的字不开行内选择，每行少建一套文字交互。
@@ -167,7 +160,7 @@ private struct ChatSegment: View, Equatable {
     private static var turnGap: CGFloat { 14 }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: PiConversation.spacing) {
+        ChatRows(ids: items.map(\.id), spacing: PiConversation.spacing) {
             ForEach(items) { item in row(item) }
         }
     }
@@ -215,18 +208,6 @@ private struct RoundEndNote: View {
             .transition(.entry)
     }
 }
-
-/// 排开的最上面一行：还有更早的对话（居中的标记）。往上翻快到这里时会自动再排开一段（`ChatFollow.nearOldest`），点它（读屏）也能排开。
-struct EarlierRow: View {
-    /// 点一下再排开几条。
-    let count: Int
-    let action: () -> Void
-
-    var body: some View {
-        ChatMarker(action: action) { Label("更早的 \(count) 条", icon: .earlier).labelStyle(.titleAndIcon) }
-    }
-}
-
 
 extension PiConversation {
     /// 对话里"有新内容"的标志（滚动跟随用，见 `ChatScroll`）：多了消息、发出的话或它的送达情况变了、开始或结束处理、出错。

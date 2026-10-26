@@ -34,7 +34,7 @@ struct SessionChat: View {
                 if digest.fetchingTranscript(at: services.speech) {
                     Label("正在从 Mac 取对话…", icon: .fetching).font(Typography.meta).foregroundStyle(palette.ink3)
                 }
-                conversation(window: window.count, showEarlier: window.showEarlier)
+                conversation(window: window)
             }
         }
         .overlay {
@@ -43,9 +43,8 @@ struct SessionChat: View {
         }
     }
 
-    private func conversation(window: Int, showEarlier: @escaping () -> Void) -> PiConversation {
-        var conversation = PiConversation(
-            session: session, items: derived.items, messages: digest.messages, deliveries: digest.deliveries, window: window, showEarlier: showEarlier)
+    private func conversation(window: ChatWindow) -> PiConversation {
+        var conversation = PiConversation(session: session, items: derived.items, messages: digest.messages, deliveries: digest.deliveries, window: window)
         #if os(macOS)
         conversation.slot = slot
         #endif

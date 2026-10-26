@@ -9,9 +9,9 @@ struct CueSegment: View, Equatable {
 
     nonisolated static func == (a: Self, b: Self) -> Bool { a.rows.map(\.key) == b.rows.map(\.key) }
 
-    /// 新到的淡入挂在插进来的那一格上（`equatable()` 外面）：挂在格子里面的过渡不会播。
+    /// 新到的淡入挂在插进来的那一格上（`equatable()` 外面）：挂在格子里面的过渡不会播。各格用 `equatable()` 包着，带时间的一格也只是一个子视图（`ChatRows` 按一格一个认）。
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        ChatRows(ids: rows.map(\.row.id), spacing: 0) {
             ForEach(rows, id: \.row.id) { row in
                 row.equatable().transition(CueRow.arrives(row.row, swapsInPlace: services.cueSwapsInPlace) ? CueBubble.arrival : .identity)
             }

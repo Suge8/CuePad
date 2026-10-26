@@ -152,12 +152,10 @@ struct CuePage: View {
             holding: catchingUp || docking,
             arrival: rows.last.flatMap { CueRow.arrives($0, swapsInPlace: services.cueSwapsInPlace) ? $0.id : nil }
         ) { window in
-            let first = max(0, rows.count - window.count)
             let lastYou = thread.messages.last { $0.author == .known(.you) }?.id
             VStack(alignment: .leading, spacing: 0) {
-                if first > 0 { EarlierRow(count: window.earlier, action: window.showEarlier) }
                 let live = live
-                ChatSegments(items: rows, size: Self.segment, from: first, spare: Self.spare) { items in
+                ChatSegments(items: rows, window: window, size: Self.segment, spacing: 0, spare: Self.spare) { items in
                     CueSegment(rows: items.map { item in
                         CueRow(
                             row: item, shots: thread.shots[item.id] ?? [],
@@ -175,8 +173,6 @@ struct CuePage: View {
             // 手机上对话里的字不开行内选择：长按出的是消息菜单，挑字走菜单里的"选择文本"（同会话页）
             .environment(\.inlineTextSelection, false)
             #endif
-            // 滚动目标（段与其余各行）：内容变了滚动位置跟着它走（`ChatScroll`）；跳到某一条按条的 id 找，不靠它
-            .scrollTargetLayout()
             .animation(HandOff.quick, value: cue.presence.progress)
         }
     }
