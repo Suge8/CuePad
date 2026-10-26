@@ -6,13 +6,15 @@ import SwiftUI
 /// （项目页"⋯"的"看这个项目的会话"经 `showSessions` 换到会话段）。两段只看项目范围里的（`Workspace.scopedProject`）。
 /// 顶栏中间一块玻璃（`ProgressHeader`）：两段的分段、项目范围、额度环；右上角随段是"添加任务"或"新会话"。
 /// 看板一段是流水看板（`TaskBoard`），待办 → 推进中 → 等你 → 已完成（今天）；选了项目以后卡上不画项目小图形、列头的数也只数这个项目。
-/// 宽屏（iPad）同 Mac 四列并排（`BoardColumns`）；窄屏是四行竖排、每行横划的竖版看板（`PhoneBoard`），四行一打开都在眼前，不另设落点。
+/// 宽屏（iPad）与 iPhone 横屏同 Mac 四列并排（`BoardColumns`）；窄屏竖着拿是四行竖排、每行横划的竖版看板（`PhoneBoard`），四行一打开都在眼前，不另设落点。
+/// 横屏的屏高减去顶栏与底部那一排只剩两百多点，四行连最小高都叠不下；横过来的宽正好排四列。
 /// "添加任务"去待办、顶上浮出添加那一行（`NewTaskLine`，落在范围里的项目或当前项目，可换），失焦且没写字时收回。
 /// 会话一段是全部会话（`SessionList`）：在线的在上、历史在下；搜会话在搜索页，这里不另放搜索框。
 struct ProgressScreen: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var board: TaskBoard?
     @State private var adding = false
@@ -49,7 +51,7 @@ struct ProgressScreen: View {
         let scope = workspace.scopedProject
         let shown = (board ?? .empty).only(scope)
         return Group {
-            if sizeClass == .regular {
+            if sizeClass == .regular || verticalSizeClass == .compact {
                 BoardColumns(board: shown, adding: $adding, newTaskProject: newTaskProject).padding(.horizontal, 12)
             } else {
                 PhoneBoard(board: shown, adding: $adding, newTaskProject: newTaskProject)

@@ -1,19 +1,16 @@
 import CueStore
 import SwiftUI
 
-/// 四列并排（Mac 与宽屏 iPad 的进展页）：每列（`BoardColumn`）的列头浮在顶上（`BoardColumnHeader`，写字玻璃），卡各自滚动、从列头后面过。
-/// 列按可见宽四等分，窄到一列放不下 `minColumn` 时整排横向滚动。
+/// 四列并排（Mac、宽屏 iPad 与 iPhone 横屏的进展页）：每列（`BoardColumn`）的列头浮在顶上（`BoardColumnHeader`，写字玻璃），卡各自滚动、从列头后面过。
+/// 列按可见宽四等分，四列总在眼前（藏在屏外的列没有露出一截，看不出能横划）；窄到一列放不下 `minColumn` 时整排横向滚动。
 struct BoardColumns: View {
     let board: TaskBoard
     @Binding var adding: Bool
     let newTaskProject: UUID?
 
-    #if os(macOS)
-    private static let minColumn: CGFloat = 230
-    #else
-    /// 一张卡要放下圈、项目小图形与一行够读的标题：iPad 竖屏放三列多一点，横滑看第四列。
-    private static let minColumn: CGFloat = 260
-    #endif
+    /// 一列最窄（三端同一个）：放得下圈、项目小图形与折两行后够读的标题（`BoardTitleBand`）。
+    /// iPad 竖屏、iPhone 横屏、Mac 900 宽收起侧栏的窗口都排得下四列。
+    private static let minColumn: CGFloat = 160
     /// 列与列之间：列没有底，靠这段留白分开。
     private static let gap: CGFloat = 20
 

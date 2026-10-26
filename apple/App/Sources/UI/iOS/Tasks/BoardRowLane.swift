@@ -8,7 +8,8 @@ import SwiftUI
 /// 行没有底（`BoardLane`）：分组靠留白与行头。
 /// 行多高由 `PhoneBoard` 按屏高给，卡多卡少、有没有都不改；这里只答最小高：待办、推进中、等你叠两排、已完成一排的最小格（`BoardRowMetrics`，随动态字体放大），
 /// 不低于行头玻璃（名字总写全）。给得比最小高多时格跟着长高，长到再叠得下一排最小格就多叠一排（`adaptive`）；卡铺满格，按列填（读的顺序不变）。
-/// 空行是一格铺满整行高的虚线框。卡上标题小一档、可折两行，推进中下面是线与状态词。
+/// 空行是一格铺满整行高的虚线框。卡上标题小一档（折几行同别处的卡，`BoardTitleBand`），推进中下面是线与状态词。
+/// 辅助字号下一行只叠一排、一张卡几乎占满可见宽（下一张露一条边）：窄卡里大字一行只放得下两个字。
 /// 行里的卡在懒加载的横排里，只建看得见的几张。
 /// 添加任务那一行（`above`）横贯这一行、在卡的上面，不挤进格子里（格子窄，选项目的胶囊会被截）；它占的高另加在最小高上，卡的格不变矮。添加时这一行先滑回行首。
 struct BoardRowLane<Above: View, Content: View>: View {
@@ -24,6 +25,7 @@ struct BoardRowLane<Above: View, Content: View>: View {
     @ScaledMetric(relativeTo: .subheadline) private var taskHeight = BoardRowMetrics.taskHeight
     @ScaledMetric(relativeTo: .subheadline) private var advancingHeight = BoardRowMetrics.advancingHeight
     @ScaledMetric(relativeTo: .caption) private var spineHeight = BoardRowMetrics.spineHeight
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         VStack(alignment: .leading, spacing: BoardRowMetrics.gap) {
@@ -52,7 +54,7 @@ struct BoardRowLane<Above: View, Content: View>: View {
                 LazyHGrid(rows: [tier], spacing: BoardRowMetrics.gap) {
                     // Group 把格子的框分给里面的每一张卡：卡、空格与"更早做完的"铺满格
                     Group { content }
-                        .containerRelativeFrame(.horizontal) { width, _ in (width * BoardRowMetrics.cardWidth).rounded() }
+                        .containerRelativeFrame(.horizontal) { [share = cardShare] width, _ in (width * share).rounded() }
                         .frame(maxHeight: .infinity, alignment: .top)
                 }
                 .scrollTargetLayout()
@@ -71,8 +73,11 @@ struct BoardRowLane<Above: View, Content: View>: View {
         }
     }
 
-    /// 最小高里叠几排：已完成一排，其余两排。
-    private var tiers: Int { column == .done ? 1 : 2 }
+    /// 最小高里叠几排：已完成与辅助字号下一排，其余两排。
+    private var tiers: Int { column == .done || typeSize.isAccessibilitySize ? 1 : 2 }
+
+    /// 一张卡占可见宽的几成。
+    private var cardShare: CGFloat { typeSize.isAccessibilitySize ? BoardRowMetrics.wideCardWidth : BoardRowMetrics.cardWidth }
 
     /// 一格最矮多高。
     private var cellHeight: CGFloat {
@@ -91,6 +96,8 @@ enum BoardRowMetrics {
     static let advancingHeight: CGFloat = 76
     /// 一格占可见宽：一张半，下一张露出一半。
     static let cardWidth: CGFloat = 0.62
+    /// 辅助字号下：几乎一张占满，下一张露出一条边，看得出还能横划。
+    static let wideCardWidth: CGFloat = 0.88
     /// 行头宽：记号、竖排的名字与数。
     static let spine: CGFloat = 32
     /// 行头玻璃的高（四行同一个，行至少这么高）：记号、三个字的竖排名与数，上下各留一点。

@@ -2,12 +2,9 @@ import CueStore
 import SwiftUI
 
 extension View {
-    /// 看板上一张卡的外形（四列同一种）：纸面（`paper`），同一种卡一样高（`BoardCardMetrics`：推进中带线的卡 `advancingHeight`，其余 `TaskMetrics.cardHeight`；手机竖版看板里铺满行给的格），
+    /// 看板上一张卡的外形（四列同一种）：纸面（`paper`），多高由里面的排法定（`BoardCardLayout`：同一列的卡一样宽，就一样高；手机竖版看板里铺满行给的格），
     /// 左右内边距与圆角见 `TaskMetrics`。平放的纸不加模糊阴影（侧栏开合时整面墙每帧重画，`paper` 的注释）：靠纸与桌面（托盘）的明度差把纸托出来。
-    func boardCard(advancing: Bool) -> some View { modifier(BoardCardFrame(advancing: advancing)) }
-
-    /// 卡上的标题：一行；手机竖版看板（`boardRow`）里小一档、可折成两行。`wraps`：等你列的卡（名字要先读得出，右端没有占地方的状态词）处处可折两行。
-    func boardTitle(wraps: Bool = false) -> some View { modifier(BoardTitleStyle(wraps: wraps)) }
+    func boardCard() -> some View { modifier(BoardCardFrame()) }
 
     /// 项目联动（Mac）：指针停在侧栏的项目行或卡上的项目小图形上时（`Workspace.hoveredProject`），别的项目的卡淡下去，这个项目的不动。
     /// 只这一个小修饰读它：指针换项目时重算的是各卡的透明度，不是整张卡。没有项目的（Cue 的一般提问）跟着淡。
@@ -22,29 +19,18 @@ extension View {
 
 extension EnvironmentValues {
     /// 卡在手机竖版看板（`PhoneBoard`）的一行里：卡铺满行给的那一格（格多高只由行高定，`BoardRowLane`）、标题小一档；
-    /// Mac 与宽屏 iPad 不是。
+    /// 列里的卡（Mac、宽屏 iPad、iPhone 横屏）不是。
     @Entry var boardRow = false
 }
 
 private struct BoardCardFrame: ViewModifier {
-    let advancing: Bool
     @Environment(\.boardRow) private var row
 
     func body(content: Content) -> some View {
-        let height: CGFloat? = row ? nil : advancing ? BoardCardMetrics.advancingHeight : TaskMetrics.cardHeight
         content.padding(.horizontal, row ? BoardCardMetrics.rowPadding : TaskMetrics.cardPadding)
-            .frame(maxWidth: .infinity, minHeight: height, maxHeight: height ?? .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, maxHeight: row ? .infinity : nil, alignment: .leading)
             .paper(radius: TaskMetrics.cardRadius)
             .contentShape(.rect(cornerRadius: TaskMetrics.cardRadius, style: .continuous))
-    }
-}
-
-private struct BoardTitleStyle: ViewModifier {
-    let wraps: Bool
-    @Environment(\.boardRow) private var row
-
-    func body(content: Content) -> some View {
-        content.font(row ? BoardCardMetrics.rowTitle : TaskMetrics.lineFont).lineLimit(row || wraps ? 2 : 1)
     }
 }
 
@@ -112,18 +98,18 @@ struct BoardSessionCard: View {
                 .font(.system(size: TaskMetrics.cardLead * 0.85)).foregroundStyle(resting ? palette.ink3 : palette.ink2)
                 .frame(width: TaskMetrics.cardLead, height: TaskMetrics.cardLead)
                 if let project { BoardProjectGlyph(project: project) }
-                Text(session.title).boardTitle().foregroundStyle(resting ? palette.ink2 : palette.ink)
+                Text(session.title).foregroundStyle(resting ? palette.ink2 : palette.ink)
             }
-            .boardCard(advancing: true)
+            .boardCard()
         }
         .help(Dotted(project?.shownName, PiClock.duration(Date.now.timeIntervalSince(pulse.shown?.clock?.since ?? session.stateSince)), session.agentMark).visible)
         .accessibilityLabel(Dotted(session.title, pulse.fullContext.map { $0.help.spoken } ?? pulse.shown?.label).spoken)
     }
 }
 
-/// 卡里的排法（任务卡、会话卡同一种）：一行开头记号、项目小图形与标题，右端是调用处给的尾巴；
-/// 推进中的卡标题贴上沿，下沿是那条线（`BoardWave`），有子任务的线下面再分段（`BoardSteps`），要你管的状态词在线的右端：
-/// 标题一整行都给字（状态词放在标题右端时，窄列里标题只剩四五个字）；别的列的卡标题竖直居中。
+/// 卡里的排法（看板上所有的卡同一种）：开头记号、项目小图形与标题一带（`BoardTitleBand`：折几行、多高），右端是调用处给的尾巴；
+/// 推进中的卡标题那一带贴上沿，下面是那条线（`BoardWave`），有子任务的线下面再分段（`BoardSteps`），要你管的状态词在线的右端：
+/// 标题一整带都给字（状态词放在标题右端时，窄列里标题只剩四五个字）。卡多高只由这里加出来：上下留白、标题那一带、线。
 struct BoardCardLayout<Lead: View, Trailing: View>: View {
     let advancing: Bool
     var pulse = BoardPulse()
@@ -145,31 +131,38 @@ struct BoardCardLayout<Lead: View, Trailing: View>: View {
     }
 
     var body: some View {
-        if row, advancing { rowAdvancing } else { standard }
-    }
-
-    private var title: some View {
-        HStack(spacing: row ? BoardCardMetrics.rowGap : Self.gap) {
-            lead
-            Spacer(minLength: 0)
-            trailing
+        switch (row, advancing) {
+        case (true, true): rowAdvancing
+        case (true, false): title.frame(maxHeight: .infinity)
+        case (false, true): columnAdvancing
+        case (false, false): title.padding(.vertical, BoardCardMetrics.titlePadding)
         }
     }
 
-    private var standard: some View {
-        title
-            .frame(height: advancing ? BoardCardMetrics.titleRow : nil)
-            .frame(maxHeight: .infinity, alignment: advancing ? .top : .center)
-            .padding(.top, advancing ? BoardCardMetrics.titleTop : 0)
-            .overlay(alignment: .topLeading) {
-                if advancing {
-                    // 线从离标题 `waveGap` 处起（带子代理细轨的线往下多占几点，不往上挤）；子任务的分段压在线那一格的底边，线最低处也在它上面
-                    waveLine.padding(.leading, TaskMetrics.cardLead + Self.gap).padding(.top, BoardCardMetrics.waveTop)
-                }
+    private var title: some View {
+        BoardTitleBand(least: BoardCardMetrics.titleRow) {
+            HStack(spacing: row ? BoardCardMetrics.rowGap : Self.gap) {
+                lead
+                Spacer(minLength: 0)
+                trailing
             }
+        }
+        .font(row ? BoardCardMetrics.rowTitle : TaskMetrics.lineFont)
     }
 
-    /// 竖版看板里的推进中：卡窄，标题可折两行、在线上面那一截里竖直居中。
+    /// 列里的推进中：标题那一带贴上沿，线离它 `waveGap`（带子代理细轨的线往下多占几点，不撑高卡）；子任务的分段压在线那一格的底边，线最低处也在它上面。
+    private var columnAdvancing: some View {
+        VStack(alignment: .leading, spacing: BoardCardMetrics.waveGap) {
+            title
+            waveLine.fixedSize(horizontal: false, vertical: true)
+                .frame(height: WaveStrip.height, alignment: .top)
+                .padding(.leading, TaskMetrics.cardLead + Self.gap)
+        }
+        .padding(.top, BoardCardMetrics.titleTop)
+        .padding(.bottom, BoardCardMetrics.waveBottom)
+    }
+
+    /// 竖版看板里的推进中：卡铺满格，标题那一带在线上面那一截里竖直居中。
     private var rowAdvancing: some View {
         title
             .frame(maxHeight: .infinity)

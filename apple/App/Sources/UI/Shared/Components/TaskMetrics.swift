@@ -17,7 +17,6 @@ enum TaskMetrics {
     static let columnGap: CGFloat = 2
     static let cardPadding: CGFloat = 14
     static let cardRadius: CGFloat = 14
-    static let cardHeight: CGFloat = 60
     static let cardLead: CGFloat = 24
     static let cardGlyph: CGFloat = 13
     #else
@@ -35,17 +34,16 @@ enum TaskMetrics {
     static let columnGap: CGFloat = 10
     static let cardPadding: CGFloat = 12
     static let cardRadius: CGFloat = 12
-    static let cardHeight: CGFloat = 48
     static let cardLead: CGFloat = 16
     static let cardGlyph: CGFloat = 12
     #endif
 }
 
-/// 任务看板的卡（`boardCard`）：同一种卡一样高——待办、已完成是 `TaskMetrics.cardHeight`，推进中带线的卡是 `advancingHeight`；
-/// 左右内边距 `cardPadding`、圆角 `cardRadius`；开头的记号占 `cardLead` 见方，看全部项目时标题前一个 `cardGlyph` 的项目小图形；
+/// 任务看板的卡（`boardCard`）：左右内边距 `cardPadding`、圆角 `cardRadius`；开头的记号占 `cardLead` 见方，看全部项目时标题前一个 `cardGlyph` 的项目小图形；
 /// 卡离列边与卡与卡之间都是 `inset`（列的托盘、拖入底的圆角 = 卡圆角 + 它，同心）。
-/// 推进中的卡从上往下：`titleTop`、标题一行 `titleRow`、`waveGap`、线（`WaveStrip.height`）、`waveBottom`。标题与线之间那一截两端同一个
-/// `waveGap`：贴得近了，线读起来像标题的下划线或删除线。卡的高度由这几段加出来，不另写一个数。
+/// 卡的高度由几段加出来（`BoardCardLayout`），不另写一个数：列里的卡是 `titlePadding`、标题那一带（`BoardTitleBand`，至少 `titleRow`）、`titlePadding`；
+/// 推进中的卡是 `titleTop`、标题那一带、`waveGap`、线（`WaveStrip.height`）、`waveBottom`。标题与线之间那一截两端同一个
+/// `waveGap`：贴得近了，线读起来像标题的下划线或删除线。手机竖版看板里卡铺满行给的格（`BoardRowLane`）。
 enum BoardCardMetrics {
     static let inset: CGFloat = 8
     static let gap: CGFloat = 8
@@ -56,15 +54,14 @@ enum BoardCardMetrics {
     static let rowGap: CGFloat = 6
     static let rowTitle = Font.subheadline.weight(.medium)
     #if os(macOS)
+    static let titlePadding: CGFloat = 14
     static let titleTop: CGFloat = 8
     static let titleRow: CGFloat = 20
     static let waveBottom: CGFloat = 4
     #else
+    static let titlePadding: CGFloat = 18
     static let titleTop: CGFloat = 10
     static let titleRow: CGFloat = 24
     static let waveBottom: CGFloat = 6
     #endif
-    /// 线的上沿离卡顶多远。
-    static var waveTop: CGFloat { titleTop + titleRow + waveGap }
-    static var advancingHeight: CGFloat { waveTop + WaveStrip.height + waveBottom }
 }
