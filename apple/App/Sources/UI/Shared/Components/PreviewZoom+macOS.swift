@@ -133,7 +133,7 @@ final class PreviewZoom: NSScrollView, PreviewShowing {
             context.timingFunction = Motion.moveTiming
             animator().setMagnification(target, centeredAt: point)
         } completionHandler: { [weak self] in
-            self?.settle()
+            MainActor.assumeIsolated { self?.settle() }  // AppKit 在主线程回调，类型上没带隔离
         }
     }
 

@@ -127,7 +127,7 @@ struct NewTaskLine: View {
                 Menu {
                     ForEach(projects) { item in Button(item.shownName) { chosen = item.id } }
                 } label: {
-                    DestinationChip(project: current).frame(minHeight: 44).contentShape(.rect).menuLabel("记到 \(current?.name ?? "")")
+                    DestinationChip(project: current).frame(minHeight: 44).contentShape(.rect).menuLabel("记到 \(current?.shownName ?? "")")
                 }
             }
         }

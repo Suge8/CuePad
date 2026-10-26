@@ -192,7 +192,7 @@ struct ChatRows<Content: View>: View {
 /// 竖排（同 `VStack(alignment: .leading, spacing:)`），摆完把各子视图相对自己上沿的位置与高、排的宽交给 `laid`。
 private struct RecordingStack: Layout {
     let spacing: CGFloat
-    let laid: (_ placed: [(subview: LayoutSubview, top: CGFloat, height: CGFloat)], _ width: CGFloat) -> Void
+    let laid: @MainActor (_ placed: [(subview: LayoutSubview, top: CGFloat, height: CGFloat)], _ width: CGFloat) -> Void
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout [CGFloat]) -> CGSize {
         let heights = heights(proposal.width, subviews, &cache)
@@ -207,7 +207,8 @@ private struct RecordingStack: Layout {
             placed.append((subview, y, height))
             y += height + spacing
         }
-        laid(placed, bounds.width)
+        // 排版只在主线程跑（Layout 的方法本身不带隔离）：记位置的是主线程上的 ChatAnchor
+        MainActor.assumeIsolated { laid(placed, bounds.width) }
     }
 
     func makeCache(subviews: Subviews) -> [CGFloat] { [] }
