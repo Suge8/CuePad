@@ -267,6 +267,22 @@
         }
       }
     },
+    "%@ 另写了一份全局说明" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ has its own global instructions"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 另写了一份全局说明"
+          }
+        }
+      }
+    },
     "%@ 各一份" : {
       "localizations" : {
         "en" : {

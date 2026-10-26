@@ -98,6 +98,7 @@ struct ScheduleEditor: View {
                 }
                 .buttonStyle(PressStyle())
                 .disabled(!savable || !draft.valid())
+                .opacity(savable && draft.valid() ? 1 : ControlMetrics.disabledOpacity)
             }
             if !text.isEmpty {
                 Text(verbatim: text).font(BubbleMetrics.meta).foregroundStyle(palette.ink2).lineLimit(2)

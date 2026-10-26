@@ -126,7 +126,7 @@ struct AgentLibraryTests {
         let lintInApp = "duplicate/lint/\(project.id.uuidString)", lintInBlog = "duplicate/lint/\(blog.id.uuidString)"
         #expect(found.tidies.map(\.id).prefix(3) == [lintInApp, lintInBlog, "duplicate/pr"])
         #expect(found.tidies.map(\.title) == [
-            "2 个技能都叫 lint", "2 个技能都叫 lint", "3 个技能都叫 pr", "「binary」的格式不对", "「broken」的格式不对", "1 家的全局说明各写一份",
+            "2 个技能都叫 lint", "2 个技能都叫 lint", "3 个技能都叫 pr", "「binary」的格式不对", "「broken」的格式不对", "Claude Code 另写了一份全局说明",
         ])
         #expect(found.automaticOrders.map(\.tidy) == ["global-instructions"])
         let global = try #require(found.tidies.last)

@@ -88,6 +88,13 @@ public struct LibraryTidy: Codable, Equatable, Sendable, Identifiable {
     return used.isEmpty ? nil : InstructionMerge.union(used.compactMap(\.text))
   }
 
+  /// 几家自己另写了全局说明（替换基础提示的两份只作比对，不算）：一家时写出是哪家。
+  private static func ownGlobals(_ sources: [InstructionSource]) -> String {
+    let own = Set(sources.filter { !$0.origin.replacesBasePrompt }.compactMap(\.origin.agent))
+    if own.count == 1, let agent = own.first { return String(localized: "\(agent.name) 另写了一份全局说明") }
+    return String(localized: "\(own.count) 家的全局说明各写一份")
+  }
+
   /// 一句事实（各端按自己的语言写，参数是名字与个数）。
   public var title: String {
     switch kind {
@@ -98,10 +105,7 @@ public struct LibraryTidy: Codable, Equatable, Sendable, Identifiable {
     case .malformed(let skill, _): String(localized: "「\(skill.name)」的格式不对")
     case .empty(let directories):
       directories.count == 1 ? String(localized: "技能目录里有个空目录") : String(localized: "技能目录里有 \(directories.count) 个空目录")
-    case .globalInstructions(let sources):
-      differs
-        ? String(localized: "\(Set(sources.filter { !$0.origin.replacesBasePrompt }.compactMap(\.origin.agent)).count) 家的全局说明各写一份")
-        : String(localized: "全局说明换成一份、各家链到它")
+    case .globalInstructions(let sources): differs ? Self.ownGlobals(sources) : String(localized: "全局说明换成一份、各家链到它")
     case .projectClaude:
       claudeCopies ? String(localized: "项目里另有一份不同的 CLAUDE.md") : String(localized: "Claude Code 读不到项目说明")
     }
