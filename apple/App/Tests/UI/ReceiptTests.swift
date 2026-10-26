@@ -117,10 +117,10 @@ struct ReceiptTests {
     }
 
     /// 话传上服务器就是已发出（会话行、Cue 页头同一个说法），不等 Mac 回执。弱网：一次拉取失败、同步状态成了连不上 iCloud，
-    /// 已发出的话不变红；断着时写下的话是发送中，满 `Speech.sendLimit` 才没能送达（只这一句，写同步的原因）。恢复后它传上去回到已发出；
+    /// 已发出的话不变红；断着时写下的话排在本机，一直是发送中、过了 `Speech.sendLimit` 也不判没能送达。恢复后它传上去回到已发出；
     /// Mac 回执的那句已送达，另一句已发出后满 `Speech.receiptLimit` 没回执是 Mac 迟迟没收下。
     @Test
-    func 说的话到服务器是已发出_回执是已送达_一次失败不让别的话变红_没发出与没回执各自到点() async throws {
+    func 说的话到服务器是已发出_回执是已送达_一次失败不让别的话变红_断着时排着不到点_没回执到点() async throws {
         let cloud = WeakCloud()
         let app = TestApp(sync: .built { CloudSync(store: $0) { cloud } }, timing: clock.timing)
         let services = app.services!
@@ -152,17 +152,14 @@ struct ReceiptTests {
         #expect(try await trip(of: toCue, services) == .sent)
         #expect(row(services)?.label == "已发出")
 
-        // 断着时写下的一句：传不出去，时限内仍是发送中，满时限只它没能送达
+        // 断着时写下的一句：传不出去就排着，过了时限仍是发送中，不数没送到
         let second = try await sayToSession(workspace, target, "再看看日志")
         #expect(try await trip(of: second, services) == .sending)
-        await advance(to: second.createdAt.addingTimeInterval(Speech.sendLimit - 1))
+        await advance(to: second.createdAt.addingTimeInterval(Speech.sendLimit + 1))
         #expect(try await trip(of: second, services) == .sending)
-        await advance(to: second.createdAt.addingTimeInterval(Speech.sendLimit))
-        try await eventually("满时限没发出") { try await trip(of: second, services) == .failed(.unsent) }
-        #expect(Speech.Failure.unsent.text(sync: services.syncStatus) == "还没传出这台，同步恢复后自动发出")
         #expect(try await trip(of: first, services) == .sent)
         #expect(try await trip(of: toCue, services) == .sent)
-        try await eventually("会话行是没能送达，只数这一句") { row(services)?.undelivered == .unsent && services.liveSessions.undelivered["atlas"] == 1 }
+        #expect(row(services)?.undelivered == nil && services.liveSessions.undelivered["atlas"] == nil)
 
         // 恢复：没发出的那句传上去，回到已发出；Mac 回执了第一句，它已送达
         await cloud.setDown(false)
@@ -183,11 +180,11 @@ struct ReceiptTests {
         #expect(row(services)?.label == "没能送达")
     }
 
-    /// 断网时说的话（对 Cue、对会话）先是发送中，满时限还没出这台才没能送达，不说 Mac 迟迟没收下、不说 Cue 在睡觉。断网超过手机主动拉取的
-    /// 两分钟窗口后恢复：立即同步一次（交回引擎的记录当场传出、回执当场拉回），主动拉取重开一个窗口；没发出的话回到发送中，时限从恢复那一刻重新算。
+    /// 断网时说的话（对 Cue、对会话）排在本机，一直是发送中：不判没能送达、不说 Mac 迟迟没收下、不说 Cue 在睡觉。断网超过手机主动拉取的
+    /// 两分钟窗口后恢复：立即同步一次（交回引擎的记录当场传出、回执当场拉回），主动拉取重开一个窗口；没发出的话的时限从恢复那一刻起算。
     /// 传出与回执经同步走完一圈见 CueSync 的 DeviceFlowTests（断网写下的请求恢复后到 Mac、结果回到手机）。
     @Test
-    func 断网时说的话_满时限才没能送达不报没回应_恢复后立即同步并重开拉取_时限重算() async throws {
+    func 断网时说的话_排着不判没能送达_恢复后立即同步并重开拉取_时限从恢复起算() async throws {
         let app = TestApp(timing: clock.timing)
         let services = app.services!
         let store = services.store
@@ -214,7 +211,7 @@ struct ReceiptTests {
         #expect(try await trips() == [.sending, .sending])
         try await eventually("会话行是发送中") { row(services)?.status == .delivery(.inTransit(.sending)) }
 
-        // 断网两分钟多：拉取的窗口走完（手机）；没发出的两句到点没能送达
+        // 断网两分钟多：拉取的窗口走完（手机）；没发出的两句仍是发送中
         try await eventually("在等回执时按节奏拉") { app.sync.syncNows > 0 }
         await clock.waitForSleeper()
         clock.advance(.seconds(121))
@@ -223,9 +220,9 @@ struct ReceiptTests {
         #else
         try await eventually("拉取醒来又睡下") { app.sync.syncNows > 1 && clock.sleeperCount > 0 }  // Mac 在等就一直拉
         #endif
-        #expect(try await trips() == [.failed(.unsent), .failed(.unsent)])
-        try await eventually("会话行是没能送达") { row(services)?.undelivered == .unsent }
-        #expect(services.liveSessions.undelivered["atlas"] == 1)
+        #expect(try await trips() == [.sending, .sending])
+        #expect(row(services)?.status == .delivery(.inTransit(.sending)))
+        #expect(services.liveSessions.undelivered["atlas"] == nil)
         #expect(try await presence(services) != .asleep)
         let syncs = app.sync.syncNows
 
@@ -242,5 +239,8 @@ struct ReceiptTests {
         clock.advance(.seconds(Speech.sendLimit - 1))
         #expect(try await trips() == [.sending, .sending])
         #expect(try await presence(services) == .sending(.sending))
+        // 同步通着满时限仍没传上去：这才没能送达
+        clock.advance(.seconds(1))
+        try await eventually("恢复后满时限没发出") { try await trips() == [.failed(.unsent), .failed(.unsent)] }
     }
 }

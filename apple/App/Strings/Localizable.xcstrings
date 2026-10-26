@@ -20184,22 +20184,6 @@
         }
       }
     },
-    "还没传出这台，同步恢复后自动发出" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Not sent from this device yet; it goes out when sync is back"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "还没传出这台，同步恢复后自动发出"
-          }
-        }
-      }
-    },
     "还没启用" : {
       "localizations" : {
         "en" : {

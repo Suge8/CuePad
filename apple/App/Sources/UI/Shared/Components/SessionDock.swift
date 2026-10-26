@@ -20,7 +20,7 @@ struct SessionDock: View {
         VStack(spacing: 8) {
             PiQuestionDock(session: session, deliveries: deliveries)
             if let failure = DeliveryRequest.shownEnd(in: deliveries, at: speech)?.failure, session.state != .known(.ended) {
-                Callout(.failed, text: String(localized: "没能结束：\(failure.text(sync: services.syncStatus))"), docked: true)
+                Callout(.failed, text: String(localized: "没能结束：\(failure.text)"), docked: true)
             }
             if let digest, digest.session == nil {
                 Text("这个会话已经不在了，发不到它").font(.footnote).foregroundStyle(palette.ink3)

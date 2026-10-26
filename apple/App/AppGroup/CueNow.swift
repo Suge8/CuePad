@@ -183,6 +183,18 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
 
 nonisolated extension CueNow: SnapshotFile { static let fileName = "cue.json" }
 
+nonisolated extension CueNow.Tally {
+    /// 上一版写下的快照（小组件读的 cue.json、开着的实时活动）没有 `delegating`：缺键按 0 读，不让整份读不出。
+    /// 这一版普及后（用户都升过、旧快照都被重写过）删掉，回到合成的解码。
+    init(from decoder: any Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        asks = try values.decode(Int.self, forKey: .asks)
+        reply = try values.decode(Int.self, forKey: .reply)
+        moving = try values.decode(Int.self, forKey: .moving)
+        delegating = try values.decodeIfPresent(Int.self, forKey: .delegating) ?? 0
+    }
+}
+
 nonisolated extension CueNow {
     /// 数字账的一项：哪一种、几件。
     struct Entry: Hashable, Sendable, Identifiable {

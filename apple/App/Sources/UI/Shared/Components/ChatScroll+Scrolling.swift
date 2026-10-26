@@ -1,4 +1,3 @@
-import Synchronization
 import SwiftUI
 
 extension ChatScroll {
@@ -25,22 +24,20 @@ extension ChatScroll {
     /// 叠在那一块上方的提示不在这里让：它落在对话末尾常驻的那一行的位置上（`ChatLiveSlot`）。
     var bottomPadding: CGFloat { max(bottomInset, held ?? 0) }
 
-    /// 最近一次读数里的可见区（偏移、最新处、可见区的高）与上一次交给读数 action 的读数。读数闭包不一定在主线程，所以带锁；
-    /// 它不是状态，写它不触发任何更新。
-    final class ScrollOffset: Sendable {
-        private struct Values {
-            /// 可见区顶边在内容里的位置。
-            var read: CGFloat = 0
-            /// 最新处的偏移（`scrollTo(y:)` 的 y）。
-            var end: CGFloat = 0
-            /// 可见区的高（扣掉上下边距）。
-            var container: CGFloat = 0
-            /// 上一次交给 action 的读数与那时可见区的高。不用 action 给的旧值：那是上一次求值，中间几次变化（打开时排开更早的一段）可能求了值却没调 action，
-            /// 拿它比内容变没变高会漏掉。
-            var delivered: (reading: Reading, container: CGFloat)?
-            /// 上一回记下的最新一条新到的（`arrival`）；还没有过为 nil。
-            var arrival: UUID?
-        }
+    /// 最近一次读数里的可见区（偏移、最新处、可见区的高）与上一次交给读数 action 的读数。读数闭包与 action 都在主线程
+    /// （`onScrollGeometryChange` 的读数闭包不要求跨线程，在主线程上的这个类型就是这条保证）；它不是状态，写它不触发任何更新。
+    final class ScrollOffset {
+        /// 可见区顶边在内容里的位置。
+        private(set) var read: CGFloat = 0
+        /// 最新处的偏移（`scrollTo(y:)` 的 y）。
+        private(set) var end: CGFloat = 0
+        /// 可见区的高（扣掉上下边距）。
+        private(set) var container: CGFloat = 0
+        /// 上一次交给 action 的读数与那时可见区的高。不用 action 给的旧值：那是上一次求值，中间几次变化（打开时排开更早的一段）可能求了值却没调 action，
+        /// 拿它比内容变没变高会漏掉。
+        private var delivered: (reading: Reading, container: CGFloat)?
+        /// 上一回记下的最新一条新到的（`arrival`）；还没有过为 nil。
+        private var arrival: UUID?
 
         /// 交给 action 时上一次交过去的读数，与这之间可见区从底下变矮了没有。
         struct Delivered {
@@ -48,35 +45,21 @@ extension ChatScroll {
             let viewShrank: Bool
         }
 
-        private let values = Mutex(Values())
-
         func set(read: CGFloat, end: CGFloat, container: CGFloat) {
-            values.withLock {
-                $0.read = read
-                $0.end = end
-                $0.container = container
-            }
+            (self.read, self.end, self.container) = (read, end, container)
         }
-
-        var read: CGFloat { values.withLock { $0.read } }
-        var end: CGFloat { values.withLock { $0.end } }
-        var container: CGFloat { values.withLock { $0.container } }
 
         /// 换上这次交给 action 的读数。
         func deliver(_ reading: Reading) -> Delivered {
-            values.withLock { values in
-                defer { values.delivered = (reading, values.container) }
-                return Delivered(reading: values.delivered?.reading, viewShrank: values.delivered.map { values.container < $0.container } ?? false)
-            }
+            defer { delivered = (reading, container) }
+            return Delivered(reading: delivered?.reading, viewShrank: delivered.map { container < $0.container } ?? false)
         }
 
         /// 换上这次读数时的 `arrival`，返回它是不是刚换成的一条。第一回有它时只记下：打开时已在的（对话读进来那一下）不算新到。
         func arrived(_ arrival: UUID?) -> Bool {
-            values.withLock { values in
-                guard let arrival else { return false }
-                defer { values.arrival = arrival }
-                return values.arrival.map { $0 != arrival } ?? false
-            }
+            guard let arrival else { return false }
+            defer { self.arrival = arrival }
+            return self.arrival.map { $0 != arrival } ?? false
         }
     }
 

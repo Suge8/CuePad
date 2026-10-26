@@ -63,7 +63,7 @@ private struct AgentStrip: View {
             let state = item.state
             #endif
             let shown = workspace.shown(state, delivery: item.delivery)
-            let look = TaskAgentLook(shown, line: PiProgress.note(of: state, failure: shown.undelivered?.text(sync: workspace.services.syncStatus)))
+            let look = TaskAgentLook(shown, line: PiProgress.note(of: state, failure: shown.undelivered?.text))
             Button { workspace.openSession(state.id, sessionID: state.sessionID) } label: { strip(look, shown: shown, session: state) }
                 .buttonStyle(PressStyle(.wide))
                 .accessibilityElement(children: .combine)

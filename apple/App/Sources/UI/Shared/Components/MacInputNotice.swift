@@ -7,7 +7,6 @@ import SwiftUI
 struct MacInputNotice: View {
     var noMac = false
     var failure: Speech.Failure?
-    @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -16,7 +15,7 @@ struct MacInputNotice: View {
                 Text(CueStoreError.noMac.localizedDescription).foregroundStyle(palette.ink3)
             }
             if let failure {
-                Text("没换成：\(failure.text(sync: services.syncStatus))").foregroundStyle(palette.failure)
+                Text("没换成：\(failure.text)").foregroundStyle(palette.failure)
             }
         }
         .font(Typography.caption).lineLimit(2)

@@ -26,9 +26,9 @@ struct BoardLine: View {
     static let maxMoving = 8
     static let maxTracks = 3
     /// 过去那段至多几颗点。
-    static let maxSaid = 6
+    nonisolated static let maxSaid = 6
     private static let nowShare: CGFloat = 0.42
-    fileprivate static let stroke: CGFloat = 1.5
+    nonisolated fileprivate static let stroke: CGFloat = 1.5
     private static let endDot: CGFloat = 6
 
     var body: some View {

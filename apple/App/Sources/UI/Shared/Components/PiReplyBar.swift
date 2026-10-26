@@ -132,7 +132,7 @@ struct PiReplyBar: View {
     private func progressLine(_ progress: MacDelivery.CommandProgress) -> some View {
         HStack(spacing: 6) {
             if case .running = progress { Spinner(.mini) }
-            Text(progress.text(sync: services.syncStatus)).lineLimit(2)
+            Text(progress.text).lineLimit(2)
         }
         .font(Typography.meta).foregroundStyle(progress.failed ? palette.failure : palette.ink3)
     }

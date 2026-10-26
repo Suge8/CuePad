@@ -131,7 +131,8 @@ private struct JellyFrame<Value: Equatable, Content: View>: View, Animatable {
 }
 
 /// 形变画在内容上：以底边中点为锚横竖缩放、转，再按高度的比例上下挪。形变每帧由 `JellyFrame` 给，这里不插值（`animatableData` 留空）。
-private struct JellyEffect: GeometryEffect {
+/// 不随主线程隔离：几何效果的协议不带隔离，SwiftUI 可能在渲染线程上求值。
+nonisolated private struct JellyEffect: GeometryEffect {
     var pose: JellyPose
 
     func effectValue(size: CGSize) -> ProjectionTransform {
@@ -145,7 +146,7 @@ private struct JellyEffect: GeometryEffect {
 }
 
 /// 形变的一帧：横竖缩放、绕底边转（度）、竖直位移（按高度的比例，向上为负）。
-struct JellyPose: Equatable {
+nonisolated struct JellyPose: Equatable, Sendable {
     var sx = 1.0, sy = 1.0, rot = 0.0, y = 0.0
 
     /// 被打断时此刻的形变在新的一下开头多久内收掉。

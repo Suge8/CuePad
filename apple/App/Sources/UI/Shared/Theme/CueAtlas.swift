@@ -56,7 +56,11 @@ import Synchronization
     nonisolated private static func build(_ names: [String], into target: CGColorSpace?) -> Sheet? {
         let start = ContinuousClock.now
         let images = names.compactMap { name in source(name).map { (name, $0) } }
-        guard images.count == names.count, let first = images.first?.1 else { return nil }
+        guard images.count == names.count, let first = images.first?.1 else {
+            let missing = Set(names).subtracting(images.map(\.0)).sorted().joined(separator: "、")
+            log.error("拼图缺帧，头像只画静止图：\(missing, privacy: .public)")
+            return nil
+        }
         defer {
             let space = describe(first.colorSpace)
             let into = target.map(describe) ?? "同源图"

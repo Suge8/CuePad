@@ -98,7 +98,7 @@ struct SpeakTests {
     }
 
     /// 这里没有同步，话一直出不了这台：写下 `Speech.sendLimit` 之内是发送中，Cue 是话在路上；过了这句没能送达，
-    /// 但那台 Mac 在线 Cue 就不算睡觉、仍在值班；那台 Mac 将睡眠标了离线 Cue 才在睡觉、不值班，本机同步不通时不说它在睡觉（照它写下的状态）；
+    /// 但那台 Mac 在线 Cue 就不算睡觉、仍在值班；那台 Mac 将睡眠标了离线 Cue 才在睡觉、不值班，本机同步不通时不说它在睡觉，这句也排着不判没送到；
     /// 没能送达后回执来了照样是已送达，Cue 照它写下的在做事。已发出后迟迟没回执见 `ReceiptTests`。
     @Test func 对Cue说_没发出只说这句没送到_在睡觉只看那台Mac在不在线() async throws {
         try await enableCue()
@@ -122,7 +122,7 @@ struct SpeakTests {
         try await store.recordMacPresence(host: "mac-cue") { false }  // 那台 Mac 将睡眠：标成离线，同步到这里
         #expect(try await presence() == .asleep)
         #expect(try await store.cueDuty() == nil)  // 值班与"在睡觉"同一条
-        #expect(try await presence(reachable: false) == .idle)
+        #expect(try await presence(reachable: false) == .sending(.sending))  // 本机同步不通：这句排着、仍在路上，不判没送到
 
         try await store.recordMacPresence(host: "mac-cue") { true }  // 醒来续上在线，收下你的话
         try await store.markCueMessagesDelivered([message.id])
