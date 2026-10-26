@@ -65,7 +65,6 @@ xcrun cktool export-schema $C --output-file /tmp/dev.ckdb   # 回读：服务端
 
 发版前一次 Deploy Schema Changes，部署完删掉对应条目。这里记的是 cktool 看不到的订阅定义，订阅只有手机会建：这一节还有条目时 `release ios` 拒绝发版，`release mac` 不受影响：
 
-- 字段 `deliveryRequests.failure`、`cueMessages.shownText`、`piMessages.shownText`（都是 ENCRYPTED STRING：没送到的原因、CuePad 代 Cue 写下的话、确认框的作答改存句式与参数，`ShownText`；`deliveryRequests.resultDetail` 下线）：还没导入开发环境。没部署时没送到的请求、做完的结果、Cue 起不来之类的话与确认框的作答在生产里存不上。
-- 字段 `cueMessages.places`（ENCRYPTED STRING，对话写下时提到的那几处的样子，`CuePlace`）：已导入开发环境。没部署时带它的 Cue 对话在生产里存不上。
+- 字段（都是 ENCRYPTED STRING，已导入开发环境）：`deliveryRequests.failure`、`cueMessages.shownText`、`piMessages.shownText`（没送到的原因、CuePad 代 Cue 写下的话、确认框的作答改存句式与参数，`ShownText`；`deliveryRequests.resultDetail` 下线），`cueMessages.places`（对话写下时提到的那几处的样子，`CuePlace`）。没部署时带这些字段的请求、Cue 对话与会话消息在生产里存不上。
 - 订阅定义（2026-10-26 已在开发容器里保存并回读核对）：`cuepad.cue.said` 的谓词从 `author == cue` 改成 `notify == said`（`CuePush`：带提示的 Cue 消息原先同时命中它与 `cuepad.cue`，推两次）。新版手机按同一 ID 原地换掉旧定义；`cueMessages.author` 的可查询索引为旧版手机留着（`AlertSubscriptions.legacyQueried`），数据结构文件不变。发版前在控制台 Deploy Schema Changes。没部署时新版手机建不成它，不出通知的 Cue 消息不再静默叫醒手机，可见通知照常。
 - 订阅定义（2026-10-26 已在开发容器里保存）：新增 `cuepad.pi.reply`（Cue 留给你回的会话，`notify == awaitsReply`，文案 key `pi_alert_reply`）。部署后再发 iOS 版。没部署时生产里建不成它，待回复的锁屏推送不来，别的照常。
