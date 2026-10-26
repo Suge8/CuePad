@@ -77,16 +77,28 @@ extension DebugScene {
             try? await store.writePiTranscript(PiTranscript(sessionID: id, messages: [], recap: recap))
             try? await recorder.end(sessionID: id)
         }
-        // 在问的从几分钟前问起（等了多久从进入这一态算，不给就是写入这一刻："1 秒"）
-        let asked: [String: TimeInterval] = ["deploy": 21, "rename": 14, "homepage": 9, "notes-edit": 4]
+        // 此刻的状态从几分钟前起（在问的等了多久、在跑的跑了多久、出错的停了多久都从这一刻算；不给就是写入这一刻："刚刚"）
+        let since: [String: TimeInterval] = [
+            "deploy": 21, "rename": 14, "homepage": 9, "notes-edit": 4, "atlas": 3, "cuepad": 5, "review": 4.5, "migrate": 9, "billing": 19, "scratch": 2,
+        ]
+        // 你这边之前说过的几句在几分钟前（看板推进中卡下沿那条线的过去一句一颗点）；有演示对话的会话（`seedChats`）用对话里的
+        let said: [String: [TimeInterval]] = [
+            "billing": [82, 51, 19], "rename": [120, 42, 14], "review": [95, 24, 4.5], "cuepad": [76, 28, 5], "migrate": [63, 9],
+        ]
         for (id, state, detail, name, recap) in sessions {
+            let messages = (said[id] ?? []).enumerated().map { index, minutes in
+                PiChatMessage(sessionID: id, entryID: "said-\(index)", seq: Int64(index), role: .user, text: recap.pendingPrompt ?? recap.lastPrompt ?? "", at: .now.addingTimeInterval(-minutes * 60))
+            }
             _ = try? await recorder.update(
                 sessionID: id, state: state, detail: detail, title: id, directory: id, projectID: name.flatMap(project), question: recap.question,
-                times: asked[id].map { PiTimes(stateSince: .now.addingTimeInterval(-$0 * 60), busySince: nil) },
+                times: since[id].map { minutes in
+                    let start = Date.now.addingTimeInterval(-minutes * 60)
+                    return PiTimes(stateSince: start, busySince: state.isWorking ? start : nil)
+                },
                 modelState: demoModels(for: demoAgents[id]), context: demoContexts[id] ?? PiContextUsage(tokens: 12_000, window: 200_000), commands: demoCommands(for: demoAgents[id]),
                 agent: demoAgents[id])
             try? await store.writePiTranscript(PiTranscript(
-                sessionID: id, messages: [],
+                sessionID: id, messages: messages,
                 recap: PiRecap(lastPrompt: recap.lastPrompt, lastReply: recap.lastReply, pendingPrompt: recap.pendingPrompt)))
         }
         try? await recorder.end(sessionID: "piwork")
@@ -113,7 +125,8 @@ extension DebugScene {
         ])
         await seedBindings(store, projects: projects)
         // 另一台 Mac 上的会话（演示发过去的话送达与失败）
-        _ = try? await PiStateRecorder(store: store, hostID: "demo-mini").update(sessionID: "relay", state: .settled, title: "relay", directory: "relay")
+        _ = try? await PiStateRecorder(store: store, hostID: "demo-mini").update(
+            sessionID: "relay", state: .settled, title: "relay", directory: "relay", times: PiTimes(stateSince: .now.addingTimeInterval(-32 * 60), busySince: nil))
         await seedChats(store)
         if defaults.bool(forKey: "CuePadLongChat") { await seedLongChat(store, project: project("CuePad")) }
         // 会话文件里的压缩记录：对话里的一行系统行（notes 最后一轮回答之后）
