@@ -5,7 +5,7 @@ import Foundation
 /// 别的设备发投送请求（`DeliveryMode.tidy`、`.instruction`）、等那台写回结果。
 extension Workspace {
     /// 整理几件（"全部整理"是 `library.automaticOrders`；同名那件带上留哪份，`TidyOrder.keep`）。不弹确认：
-    /// 本机做完提示"整理好了 N 件"，带撤销（恢复这一次的全部改动，移走的从废纸篓放回）；手机发往那台 Mac，等它做完再提示。没成提示原因。
+    /// 本机做完提示"整理好了 N 件"，带撤销（恢复这一次的全部改动，移走的从废纸篓放回）；手机发往那台 Mac，等它做完再提示，不带撤销（那台照做不留撤销，手机上按钮附近写明，`RemoteTidyNote`）。没成提示原因。
     /// 其中有几份说明合成一份的（内容不同的全局规则、项目里另一份 CLAUDE.md）：按段并集的合成稿常有重复，做完直接打开合成出的那份说明，
     /// 提示里说合成稿在这里、删掉重复的——当场删改，不先挑再合。
     func tidy(_ orders: [TidyOrder], in library: AgentLibrary) async {

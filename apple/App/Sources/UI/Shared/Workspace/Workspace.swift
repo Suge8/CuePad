@@ -93,16 +93,24 @@ final class Workspace {
     let pages = MacPages()
     let presses = CardPresses()
     let sendState: SendState
-    /// 打开的卡（编辑页，盖在当前页上；iOS 打开卡片是推入纸页，见 `showEditor`）。设成某张卡时编辑页立即挂上；
-    /// 清空时编辑页先淡出，淡完才卸下（`CardEditorPage`）。
-    var openCard: UUID? {
-        didSet { if let openCard { presses.present(openCard) } }
+    /// 盖在当前页上的那一页（一次只有一页，开新的就换掉旧的）：换页、"收起"、Esc 时清空；底部输入条、工具栏的"收起"都只看它。
+    /// 灵感的编辑页设上时立即挂上，清空时先淡出、淡完才卸下（`CardEditorPage`）；iOS 打开卡片与说明是推入，见 `showEditor`、`openLibrary`。
+    var overlay: Overlay? {
+        didSet { if case .card(let id)? = overlay { presses.present(id) } }
     }
-    /// 技能与说明里打开的一样（说明的编辑页、比一比），盖在当前页上（iOS 推入，见 `openLibrary`）；换页、"收起"、Esc 时清空。
-    var openLibraryItem: LibraryItem?
+    enum Overlay: Hashable {
+        /// 灵感的编辑页
+        case card(UUID)
+        /// 技能与说明里打开的一样（说明的编辑页、比一比）
+        case library(LibraryItem)
+    }
+    var openCard: UUID? { if case .card(let id)? = overlay { id } else { nil } }
+    var openLibraryItem: LibraryItem? { if case .library(let item)? = overlay { item } else { nil } }
+    /// 收起这一页；已换成别的就不动。
+    func close(_ page: Overlay) { if overlay == page { overlay = nil } }
     #else
-    /// 手机上改着的说明（`instructionDraft(_:)`）：离开说明页也留着。
-    @ObservationIgnored var instructionDrafts: [LibraryInstruction.Kind: InstructionDraft] = [:]
+    /// 手机上改着的说明（`instructionDraft(_:on:)`），按哪台 Mac 的哪一份分开：离开说明页也留着。
+    @ObservationIgnored var instructionDrafts: [InstructionDraftKey: InstructionDraft] = [:]
     #endif
     /// 气泡里看着的任务（`TaskBubble`）：从被点的那一下长出来，盖在当前页上，不换页。两端同一份，各个入口都经 `openTask(_:)`。
     var openTask: TaskBubble.Request? {

@@ -124,6 +124,7 @@ struct LibraryRow<Icon: View, Trailing: View>: View {
 
 /// 要整理：标题写几件、"全部整理"（有不要你挑的才有）；每件一行，按钮是它的动作（`LibraryTidy.action`）。
 /// 比一比打开比一比；格式不对在 Mac 上用默认的编辑器打开它的 SKILL.md；其余就地整理这一件。点下去那一件转圈，做完由提示说结果。
+/// 手机上纸下面一句撤不回（`RemoteTidyNote`）。
 struct TidySection: View {
     let library: AgentLibrary
     @Environment(Workspace.self) private var workspace
@@ -155,6 +156,9 @@ struct TidySection: View {
                     }
                 }
             }
+            #if os(iOS)
+            RemoteTidyNote().padding(.horizontal, 4)
+            #endif
         }
     }
 
@@ -196,6 +200,17 @@ struct TidySection: View {
     private static let sends = true
     #endif
 }
+
+#if os(iOS)
+/// 手机上整理那几颗按钮附近的一句：Mac 照手机发去的整理做完不留撤销（撤销只在 Mac 上自己整理时有，`Workspace.tidy`），移走的在那台的废纸篓里。
+struct RemoteTidyNote: View {
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        Text("发往 Mac 去做，做完撤不回；移走的在那台 Mac 的废纸篓里").font(.footnote).foregroundStyle(palette.ink3)
+    }
+}
+#endif
 
 /// 说明：全局说明一行（各家共读的那份），Pi 的系统提示（有才列），再是绑了文件夹的各项目；点哪一行打开它的编辑页。
 struct InstructionSection: View {

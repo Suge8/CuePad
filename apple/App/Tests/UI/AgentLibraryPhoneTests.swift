@@ -62,14 +62,14 @@ struct AgentLibraryPhoneTests {
 
         await workspace.tidy(library.automaticOrders, in: library)
 
-        #expect(workspace.notice?.text.visible == "整理好了 1 件" && workspace.notice?.action == nil, "手机上的整理撤销在 Mac 上")
+        #expect(workspace.notice?.text.visible == "整理好了 1 件" && workspace.notice?.action == nil, "手机上的整理没有撤销：Mac 照做、不留撤销")
         try await eventually("要整理的没了") { workspace.library?.tidies.isEmpty == true }
 
         let global = try #require(workspace.library?.instruction(.global))
-        let opened = workspace.instructionDraft(global)
+        let opened = workspace.instructionDraft(global, on: "mac-a")
         opened.changed("# 原则\n\n手机改的\n")
         // 离开说明页再回来：改着的还在，一条都没发
-        let draft = workspace.instructionDraft(global)
+        let draft = workspace.instructionDraft(global, on: "mac-a")
         let requests = try await store.deliveryRequests()
         #expect(draft === opened && draft.dirty && draft.text == "# 原则\n\n手机改的\n" && requests.allSatisfy { $0.instructionEdit == nil }, "没点纸飞机就不发")
 

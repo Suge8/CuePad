@@ -28,14 +28,16 @@ extension Workspace {
     }
 
     /// 一份说明在手机上的编辑：改着没发的留在这里，离开说明页再回来接着改、接着发——不点纸飞机就不发，也不丢（App 退出才没了）。
+    /// 按 `host` 那台 Mac 分开：Cue 换到另一台后看的是那台的说明，在这台没发的字不拿去对着那台。
     /// 再打开时先对上快照里此刻的样子（没改过就跟上，改着的就说 Mac 上改过了）。
-    func instructionDraft(_ instruction: LibraryInstruction) -> InstructionDraft {
-        if let draft = instructionDrafts[instruction.kind] {
+    func instructionDraft(_ instruction: LibraryInstruction, on host: String) -> InstructionDraft {
+        let key = InstructionDraftKey(host: host, kind: instruction.kind)
+        if let draft = instructionDrafts[key] {
             draft.follow(instruction.text)
             return draft
         }
         let draft = InstructionDraft(instruction, workspace: self)
-        instructionDrafts[instruction.kind] = draft
+        instructionDrafts[key] = draft
         return draft
     }
 
@@ -122,5 +124,11 @@ extension View {
     @ViewBuilder func zoomSource(_ id: UUID, in namespace: Namespace.ID?) -> some View {
         if let namespace { matchedTransitionSource(id: id, in: namespace) } else { self }
     }
+}
+
+/// 手机上改着的一份说明是哪台 Mac 的哪一份（`Workspace.instructionDrafts`）。
+struct InstructionDraftKey: Hashable {
+    let host: String
+    let kind: LibraryInstruction.Kind
 }
 #endif

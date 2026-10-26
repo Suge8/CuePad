@@ -5,7 +5,7 @@ import SwiftUI
 /// 只有这一份有的段落垫一层牛皮纸色（差异不用状态色：不是出了错，只是"这里不一样"）。Mac 上几列并排、各自滚；手机上左右翻（露出下一张的边）。
 /// 说明合成成一份（`LibraryTidy.merged(retiring:)`，按段取并集），各家改成读它，原来的进废纸篓；替换基础提示的两份（Pi 的系统提示、Codex 的自定提示词）
 /// 只作比对，勾了"合进去，撤掉这份"才并进来并撤掉（`TidyOrder.retire`），不勾就原样留着。同名的技能每份底下一颗"留这份"，其余进废纸篓。
-/// 那件不在了就回技能与说明页（整理好了、在别处整理过）；合成了说明的，`Workspace.tidy` 换成合成出的那份说明的编辑页。结果与撤销在提示里，没成留在这里。
+/// 手机上底下一句撤不回（`RemoteTidyNote`）。那件不在了就回技能与说明页（整理好了、在别处整理过）；合成了说明的，`Workspace.tidy` 换成合成出的那份说明的编辑页。结果与撤销在提示里，没成留在这里。
 struct CompareView: View {
     let tidyID: String
     let close: () -> Void
@@ -28,6 +28,9 @@ struct CompareView: View {
         let pages = Self.pages(of: tidy, workspace: workspace, library: library)
         VStack(spacing: 14) {
             columns(pages, tidy: tidy, library: library)
+            #if os(iOS)
+            RemoteTidyNote().frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 20)
+            #endif
             if tidy.action != .compare || !tidy.sources.isEmpty { bar(tidy, library) }
         }
     }

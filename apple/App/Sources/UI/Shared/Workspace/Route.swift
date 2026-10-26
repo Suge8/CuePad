@@ -2,7 +2,7 @@ import CueStore
 import Foundation
 
 /// 去哪一页：两端同一个值，都经 `Workspace.show` 去；Mac 内容区挂哪一页与 iOS 导航栈里推入哪一页只差呈现（`Workspace.Layout`）
-/// （Mac 只用其中的 `project`、`archive`、`trash`、`library`、`progress`、`cue`、`session`；说明与比一比在 Mac 上盖在当前页上，见 `Workspace.openLibraryItem`）。
+/// （Mac 只用其中的 `project`、`archive`、`trash`、`library`、`progress`、`cue`、`session`；说明与比一比在 Mac 上盖在当前页上，见 `Workspace.overlay`）。
 nonisolated enum Route: Hashable {
     /// 项目书架：全部项目（iPhone 底部那一排的"项目"）。
     case shelf

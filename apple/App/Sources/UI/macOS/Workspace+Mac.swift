@@ -17,8 +17,7 @@ extension Workspace {
     /// 换页时顺带的事：开着的编辑页收起、批量选择结束，记下去过的页（`MacPages`）；去会话页撤掉它那一组通知（点通知进来的也走这里），
     /// 去项目页记下它（下次打开回到它）。
     func willSelect(_ route: Route, root next: Route) {
-        openCard = nil
-        openLibraryItem = nil
+        overlay = nil
         presses.clearSelection()
         presses.dismiss()
         pages.visit(from: root, to: next)
@@ -29,13 +28,13 @@ extension Workspace {
     /// 灵感的编辑页整页盖在当前页上（`EditorLayer`）。
     func showEditor(_ card: UUID) {
         presses.clearSelection()
-        openCard = card
+        overlay = .card(card)
     }
 
     /// 技能与说明里的一样（说明的编辑页、比一比）盖在当前页上（`LibraryItemLayer`），同灵感的编辑页。
     func openLibrary(_ item: LibraryItem) {
         presses.clearSelection()
-        openLibraryItem = item
+        overlay = .library(item)
     }
 
     /// 格式不对的技能：用默认的编辑器打开它的 SKILL.md，自己改（改好了重扫就不在要整理里了）。

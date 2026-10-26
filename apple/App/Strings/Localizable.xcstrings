@@ -7847,6 +7847,22 @@
         }
       }
     },
+    "发往 Mac 去做，做完撤不回；移走的在那台 Mac 的废纸篓里" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Done on your Mac and can't be undone. Removed items go to that Mac's Trash."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "发往 Mac 去做，做完撤不回；移走的在那台 Mac 的废纸篓里"
+          }
+        }
+      }
+    },
     "发给" : {
       "localizations" : {
         "en" : {

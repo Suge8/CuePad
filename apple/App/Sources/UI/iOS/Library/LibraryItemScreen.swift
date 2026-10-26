@@ -43,9 +43,9 @@ private struct InstructionScreen: View {
         .background(palette.paper.ignoresSafeArea())
         .floatingHeader(.verbatim(workspace.instructionName(kind)), detail: detail(instruction)) { send }
         .onChange(of: instruction?.kind, initial: true) {
-            guard workspace.library != nil else { return }
+            guard let library = workspace.library else { return }
             guard let instruction else { dismiss(); return }
-            if draft == nil { draft = workspace.instructionDraft(instruction) }
+            if draft == nil { draft = workspace.instructionDraft(instruction, on: library.hostID) }
         }
         .onChange(of: instruction?.text) { draft?.follow(instruction?.text) }
     }

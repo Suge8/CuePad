@@ -27,7 +27,7 @@ private struct LibraryItemPage: View {
             switch item {
             case .instruction(let kind): InstructionEditorPage(kind: kind)
             case .compare(let id):
-                CompareView(tidyID: id) { workspace.openLibraryItem = nil }
+                CompareView(tidyID: id) { workspace.close(.library(item)) }
                     .padding(.horizontal, Spacing.page).padding(.bottom, 20)
                     .safeAreaPadding(.top, Bars.contentGap)
             }
@@ -63,7 +63,7 @@ private struct InstructionEditorPage: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .onChange(of: instruction?.kind, initial: true) {
             guard workspace.library != nil else { return }
-            guard let instruction else { workspace.openLibraryItem = nil; return }
+            guard let instruction else { workspace.close(.library(.instruction(kind))); return }
             if draft == nil { draft = InstructionDraft(instruction, workspace: workspace) }
         }
         .onChange(of: instruction?.text) { draft?.follow(instruction?.text) }

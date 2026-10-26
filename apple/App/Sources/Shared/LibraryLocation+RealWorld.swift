@@ -5,7 +5,7 @@ import AppKit
 
 extension LibraryLocation {
     /// 这个进程碰不碰这台设备上的真实世界（唯一判断）：各家 Agent 的配置目录（接入时写的技能、钩子与扩展）、`~/.local/bin` 里的命令行链接、
-    /// 缺省的连接目录（会话与钩子的 socket）、工作区根目录 `~/CuePad`、系统通知与角标、MetricKit 诊断、实时活动、主机标识。
+    /// 缺省的连接目录（会话与钩子的 socket）、工作区根目录 `~/CuePad`、系统通知与角标、登录项、MetricKit 诊断、实时活动、主机标识。
     /// 这些按 bundle id 或固定位置记，本机构建与正式版共用；库放哪是另一件事（`isIsolated`）。
     /// - 环境变量指定的隔离库（xc.sh、测试）：不碰。
     /// - 正式版：碰。

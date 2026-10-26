@@ -95,7 +95,8 @@ private struct GeneralSections: View {
         }
         Section {
             if let report = services.diagnostics.latest { CrashRow(report: report) }
-            LoginItemRow()
+            // 登录项按 bundle id 记、与正式版共用：不碰真实世界的实例（xc.sh 起的、装着正式版时的本机构建）不给开关
+            if services.location.touchesRealWorld { LoginItemRow() }
             UpdateRow()
         }
     }
