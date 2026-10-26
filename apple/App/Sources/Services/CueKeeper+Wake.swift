@@ -20,7 +20,7 @@ extension CueKeeper {
         let envelope = CueEnvelope.render(CueEnvelope.Input(
             now: setup.timing.clock(), projects: try await store.projects(),
             changes: changes.due, board: board, waiting: try await store.cueMessagesWaitingForYou(), left: try await store.cueState()?.left ?? [],
-            wake: wake, reminders: try await reminders(of: wake), language: CueInterface.current.writing(after: said)))
+            wake: wake, fired: try await fired(of: wake), schedules: try await store.cueSchedules().map(\.line), language: CueInterface.current.writing(after: said)))
         var parts = [envelope]
         if !shift.primed || renewDue(shift, now: now) {
             if shift.primed {
@@ -70,10 +70,17 @@ extension CueKeeper {
         return true
     }
 
-    /// 提醒到点的一轮要列给它的那几条记忆（带序号）；别的原因醒来没有。
-    private func reminders(of wake: CueWake) async throws -> [CueIndexedLine] {
-        guard case .reminder(let ids) = wake else { return [] }
-        return try await store.cueLines(ids)
+    /// 定时到点的一轮要列给它的那几条定时（带序号、本该几点与挂着的任务）；别的原因醒来没有。
+    private func fired(of wake: CueWake) async throws -> [CueEnvelope.Fired] {
+        guard case .schedule(let fires) = wake else { return [] }
+        let lines = try await store.cueLines(fires.map(\.line))
+        var fired: [CueEnvelope.Fired] = []
+        for fire in fires {
+            guard let line = lines.first(where: { $0.line.id == fire.line }) else { continue }
+            let task = if let id = line.line.task { try await store.card(id) } else { Card?.none }
+            fired.append(CueEnvelope.Fired(line: line, due: fire.due, task: task))
+        }
+        return fired
     }
 
     /// 这次醒来要先开新会话（换新，唯一规则）：上下文到了换新线，或距上一次模型请求超过提示缓存的时长（缓存已过期，接着用要把整段原价重写；
@@ -148,7 +155,7 @@ extension CueKeeper {
     static func author(of wake: CueWake) -> CueAuthor {
         switch wake {
         case .message, .enabled: .cue
-        case .sessionActivity, .idle, .reminder: .note
+        case .sessionActivity, .idle, .schedule: .note
         }
     }
 

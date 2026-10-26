@@ -106,6 +106,8 @@ enum Schema {
     // - 提问的选项各端照类别与范围写（`CueMessage.shownChoice`）：已有的提问补上范围那个项目此刻的名字（`CuePlace`）
     // 每台设备各自升级、不改 modifiedAt（不同步出去）：同一份数据改出同一份
     Upgrade(shownTexts),
+    // 73：定时（`CueMemoryLine`）：重复规则与挂在哪件任务上
+    "ALTER TABLE cueLines ADD COLUMN repeats TEXT; ALTER TABLE cueLines ADD COLUMN taskID TEXT;",
   ]
 
   /// 72 的那一步（见 `upgrades` 里的说明）。

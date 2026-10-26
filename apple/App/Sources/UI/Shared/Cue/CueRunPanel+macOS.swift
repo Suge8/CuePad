@@ -224,7 +224,7 @@ private enum CueRunFormat {
     static func reason(_ wake: CueWake) -> String {
         switch wake {
         case .sessionActivity(let stirs): String(localized: "\(wake.reason)（\(stirs.count) 处）")
-        case .reminder(let lines): String(localized: "\(wake.reason)（\(lines.count) 条）")
+        case .schedule(let fires): String(localized: "\(wake.reason)（\(fires.count) 条）")
         case .enabled, .message, .idle: wake.reason
         }
     }

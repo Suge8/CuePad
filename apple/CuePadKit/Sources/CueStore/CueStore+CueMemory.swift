@@ -5,25 +5,29 @@ import Foundation
 extension CueStore {
   private static let lineOrder = "createdAt, id"
 
-  /// 记一条。记不成一条的（`CueMemoryLine.fits`：空白、超过 `CueMemoryLine.maxBytes` 字节）拒绝。返回这一条与它的序号。
+  /// 记一条（带 `remindAt` 是一条定时，见 `CueMemoryLine`）。记不成一条的（`CueMemoryLine.fits`：空白、超过 `CueMemoryLine.maxBytes` 字节）拒绝。
+  /// 返回这一条与它的序号。
   @discardableResult
   public func noteCueLine(
-    _ text: String, source: CueLineSource, pinned: Bool = false, remindAt: Date? = nil
+    _ text: String, source: CueLineSource, pinned: Bool = false, remindAt: Date? = nil, repeats: CueRepeat? = nil, task: UUID? = nil
   ) throws -> (line: CueMemoryLine, index: Int) {
     let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !text.isEmpty else { throw CueStoreError.blankTaskContent }
     guard CueMemoryLine.fits(text) else { throw CueStoreError.memoryLineTooLong(CueMemoryLine.maxBytes) }
     return try write {
-      let line = try insertLine(text, source: source, pinned: pinned, remindAt: remindAt)
+      let line = try insertLine(text, source: source, pinned: pinned, remindAt: remindAt, repeats: repeats, task: task)
       return (line, try index(of: line))
     }
   }
 
   /// 记一条（在写事务内调用，调用方先查过记得成）。
-  func insertLine(_ text: String, source: CueLineSource, pinned: Bool, remindAt: Date? = nil) throws -> CueMemoryLine {
+  func insertLine(
+    _ text: String, source: CueLineSource, pinned: Bool, remindAt: Date? = nil, repeats: CueRepeat? = nil, task: UUID? = nil
+  ) throws -> CueMemoryLine {
     let now = Date.stamp
     let line = CueMemoryLine(
-      id: UUID(), text: text, pinned: pinned, source: .known(source), remindAt: remindAt, createdAt: now, modifiedAt: now, deletedAt: nil)
+      id: UUID(), text: text, pinned: pinned, source: .known(source), remindAt: remindAt, repeats: repeats, task: task, createdAt: now,
+      modifiedAt: now, deletedAt: nil)
     try insert(line)
     return line
   }
@@ -40,7 +44,7 @@ extension CueStore {
     try find(CueMemoryLine.self, id).map(index(of:))
   }
 
-  /// 这几条记忆与它们的序号，按给的先后（到点提醒叫醒的一轮：信封里列它们、Cue 页那一节写第一条）；不在了的跳过。
+  /// 这几条记忆与它们的序号，按给的先后（定时到点叫醒的一轮：信封里列它们、Cue 页那一节写第一条）；不在了的跳过。
   public func cueLines(_ ids: [UUID]) throws -> [CueIndexedLine] {
     let found = try select(CueMemoryLine.self, where: "id IN (SELECT value FROM json_each(?))", [Self.idList(ids)])
     return try ids.compactMap { id in try found.first { $0.id == id }.map { CueIndexedLine(index: try index(of: $0), line: $0) } }
@@ -69,19 +73,55 @@ extension CueStore {
     }
   }
 
-  /// 提醒叫醒过了：清掉它的时刻。
-  public func clearCueReminder(_ id: UUID) throws {
-    try write { try db.run("UPDATE cueLines SET remindAt = NULL, modifiedAt = ? WHERE id = ? AND remindAt IS NOT NULL", [Date.stamp, id]) }
+  /// 改一条定时的下一次与怎么重复（任务气泡与"记得什么"里原地改）；忘掉了的不改。
+  public func rescheduleCueLine(_ id: UUID, at: Date, repeats: CueRepeat?) throws {
+    try write {
+      guard let line = try find(CueMemoryLine.self, id), line.deletedAt == nil else { throw CueStoreError.notFound }
+      try db.run("UPDATE cueLines SET remindAt = ?, repeats = ?, modifiedAt = ? WHERE id = ?", [at, repeats?.rule, Date.stamp, id])
+    }
   }
 
-  /// 到点了的提醒（`remindAt` 不晚于 `now`、没忘掉），最早的在前。
-  public func dueCueReminders(at now: Date = .now) throws -> [CueMemoryLine] {
+  /// 这几条定时叫醒过 Cue 了：重复的推到 `now` 之后的下一次（中间错过的合成这一次），一次性的清掉下一次。
+  public func fireCueSchedules(_ lines: [CueMemoryLine], at now: Date = .now) throws {
+    try write {
+      for line in lines {
+        try db.run(
+          "UPDATE cueLines SET remindAt = ?, modifiedAt = ? WHERE id = ? AND remindAt IS NOT NULL", [line.repeats?.next(after: now), Date.stamp, line.id])
+      }
+    }
+  }
+
+  /// 到点了的定时（`remindAt` 不晚于 `now`、没忘掉），最早的在前。
+  public func dueCueSchedules(at now: Date = .now) throws -> [CueMemoryLine] {
     try select(CueMemoryLine.self, where: "remindAt IS NOT NULL AND remindAt <= ? AND deletedAt IS NULL", [now], orderBy: "remindAt, id")
   }
 
-  /// 下一个还没到点的提醒时刻；没有为 nil。管理器据此排下一次叫醒。
-  public func nextCueReminder(after now: Date = .now) throws -> Date? {
+  /// 下一个还没到点的定时时刻；没有为 nil。管理器据此排下一次叫醒。
+  public func nextCueSchedule(after now: Date = .now) throws -> Date? {
     try db.first("SELECT MIN(remindAt) FROM cueLines WHERE remindAt > ? AND deletedAt IS NULL", [now]) { $0.dateOrNil(0) } ?? nil
+  }
+
+  /// 全部定时（`task` 给了就只要挂在它上面的），先到点的在前，各带上一次到点。
+  public func cueSchedules(task: UUID? = nil) throws -> [CueScheduled] {
+    let lines = try select(
+      CueMemoryLine.self, where: "remindAt IS NOT NULL AND deletedAt IS NULL AND (?1 IS NULL OR taskID = ?1)", [task], orderBy: "remindAt, id")
+    return try lines.map { CueScheduled(line: $0, last: try lastFire(of: $0.id)) }
+  }
+
+  /// 一条定时上一次叫醒 Cue 的那一轮（经过那一行的叫醒原因里有它）。
+  private func lastFire(of line: UUID) throws -> CueScheduled.Last? {
+    let rows = try select(CueMessage.self, where: "wake LIKE ?", ["%\(line.uuidString)%"], orderBy: "createdAt DESC", limit: 1)
+    guard let row = rows.first, case .schedule(let fires)? = row.wake, let fire = fires.first(where: { $0.line == line }) else { return nil }
+    return CueScheduled.Last(due: fire.due, at: row.createdAt)
+  }
+
+  /// 这些任务（连同下级）上的定时不再定时：任务完成就是这件事不用再定时做了（在写事务内调用）。
+  func endCueSchedules(under task: UUID, at now: Date) throws {
+    try db.run(
+      """
+      UPDATE cueLines SET deletedAt = ?1, modifiedAt = ?1
+      WHERE remindAt IS NOT NULL AND deletedAt IS NULL AND taskID IN (\(Self.subtree(from: "SELECT ?2")))
+      """, [now, task])
   }
 
   /// 全部记忆与有效的摘要，一次读出。摘要写下时区间里各行的 id、忘没忘、钉没钉记成指纹，现在对不上（别处同步来更早的行、
@@ -99,11 +139,12 @@ extension CueStore {
     return CueMemory(lines: lines, summaries: valid.map(\.summary))
   }
 
-  /// 没忘掉的最新 `limit` 条与没忘掉的总数（`CueMemoryRecent`）：几行加一条计数。
+  /// 没忘掉的最新 `limit` 条、没忘掉的总数与下一个定时（`CueMemoryRecent`）：几行加一条计数。
   public func recentCueMemory(limit: Int) throws -> CueMemoryRecent {
     let lines = try select(CueMemoryLine.self, where: "deletedAt IS NULL", orderBy: "createdAt DESC, id DESC", limit: limit)
     let count = try db.first("SELECT count(*) FROM cueLines WHERE deletedAt IS NULL") { Int($0.int(0)) } ?? 0
-    return CueMemoryRecent(lines: lines, count: count)
+    let next = try select(CueMemoryLine.self, where: "remindAt IS NOT NULL AND deletedAt IS NULL", orderBy: "remindAt, id", limit: 1).first
+    return CueMemoryRecent(lines: lines, count: count, next: next)
   }
 
   /// 记忆的版本读数（`CueMemoryVersion`）：一条聚合，不读行的内容。

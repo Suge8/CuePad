@@ -17,18 +17,21 @@ public enum CueEnvelope {
     /// 它留给他回的会话（`CueState.left`）：看板上这几个写"待回复"。
     public var left: [CueLeft]
     public var wake: CueWake
-    /// 提醒到点（`CueWake.reminder`）时到点的那几条记忆，带序号
-    public var reminders: [CueIndexedLine]
+    /// 定时到点（`CueWake.schedule`）时到点的那几条
+    public var fired: [Fired]
+    /// 全部定时（`CueStore.cueSchedules`）：看板上挂着定时的任务写明
+    public var schedules: [CueMemoryLine]
     /// 这一轮要写的语言不是中文时它的名字（他这句话的语言，他没开口时是界面语言，App 定）：系统提示是中文，只在系统提示里说一次，
     /// 照着中文句式回的还是中文（实测），所以每一轮在块尾再说一次；中文时为 nil，不写这一行。
     public var language: String?
 
     public init(
       now: Date, projects: [Project], changes: [CueChange],
-      board: CueBoard, waiting: [CueMessage], left: [CueLeft] = [], wake: CueWake, reminders: [CueIndexedLine] = [], language: String? = nil
+      board: CueBoard, waiting: [CueMessage], left: [CueLeft] = [], wake: CueWake, fired: [Fired] = [], schedules: [CueMemoryLine] = [], language: String? = nil
     ) {
       self.language = language
-      self.reminders = reminders
+      self.schedules = schedules
+      self.fired = fired
       self.left = left
       self.now = now
       self.projects = projects
@@ -51,7 +54,7 @@ public enum CueEnvelope {
     lines.append("在做 \(active.count) 件" + (active.isEmpty ? "" : "："))
     lines += active.map { work in
       switch work {
-      case .task(let item): "- \(boardLine(item, now: input.now, left: input.left))"
+      case .task(let item): "- \(boardLine(item, now: input.now, left: input.left, schedules: input.schedules))"
       case .session(let session): "- \(sessionLine(session, now: input.now, left: input.left))"
       }
     }
@@ -60,7 +63,7 @@ public enum CueEnvelope {
     lines += input.waiting.map { "- " + question($0) }
 
     lines.append("醒来：" + wake(input.wake))
-    if case .reminder = input.wake { lines += input.reminders.map { "- #\($0.index) \($0.line.text)" } }
+    if case .schedule = input.wake { lines += input.fired.map { "- " + fired($0, now: input.now) } }
     if let language = input.language { lines.append("这一轮你写下的字都用\(language)（回复、tell、动态、任务、对会话说的话）") }
     lines.append("</cue>")
     return lines.joined(separator: "\n")
@@ -81,6 +84,28 @@ public enum CueEnvelope {
     }.joined(separator: "\n\n")
   }
 
+  /// 定时到点的一条：哪条定时（带序号）、本该几点（`CueFire`）与挂着的任务。
+  public struct Fired: Sendable {
+    public var line: CueIndexedLine
+    public var due: Date
+    public var task: Card?
+
+    public init(line: CueIndexedLine, due: Date, task: Card?) {
+      self.line = line
+      self.due = due
+      self.task = task
+    }
+  }
+
+  /// "#15 清理过期分支（每周一 9:00）· 任务「清理过期分支」（ab12cd34）· 本该 9:00，错过了，现在补上"。
+  private static func fired(_ fired: Fired, now: Date) -> String {
+    let line = fired.line.line
+    var parts = ["#\(fired.line.index) \(line.text)（\(line.repeats.map(CueScheduleWords.repeats) ?? "一次")）"]
+    if let task = fired.task { parts.append("任务「\(task.heading)」（\(task.id.shortID)）") }
+    if now.timeIntervalSince(fired.due) > CueFire.lateAfter { parts.append("本该 \(CueScheduleWords.time(fired.due, now: now))，错过了，现在补上") }
+    return parts.joined(separator: " · ")
+  }
+
   /// 一条提问一行：原话、id 与选项。
   private static func question(_ message: CueMessage) -> String {
     "\(clip(CueFormat.plainText(message.text), 80))（\(message.id.shortID)）选项：\((message.choices ?? []).joined(separator: " / "))"
@@ -92,7 +117,7 @@ public enum CueEnvelope {
     case .message: "他发来新消息"
     case .sessionActivity: "会话有动静"
     case .idle: "空闲，例行看一眼"
-    case .reminder: "提醒到点"
+    case .schedule: "定时到点"
     }
   }
 
@@ -113,8 +138,16 @@ public enum CueEnvelope {
   }
 
   /// 看板上的一件事（信封与 peek 共用）：在做的只有一个叶子时一行；同时在做几步时，头一行之后每步一行（缩进，带子任务的短 id）。
-  static func boardLine(_ item: CueBoardItem, now: Date, left: [CueLeft] = []) -> String {
+  /// 挂着定时的写明几点：重复的每次到点开工一次，做完一次不算这件事做完。
+  static func boardLine(_ item: CueBoardItem, now: Date, left: [CueLeft] = [], schedules: [CueMemoryLine] = []) -> String {
     var parts = ["\(item.task.heading)（\(item.task.id.shortID)）"]
+    if let line = schedules.first(where: { $0.task == item.task.id }) {
+      if let repeats = line.repeats {
+        parts.append("定时 \(CueScheduleWords.repeats(repeats))（做完这一次不 done）")
+      } else if let at = line.remindAt {
+        parts.append("定时 \(CueScheduleWords.time(at, now: now))")
+      }
+    }
     if let progress = item.progress { parts.append("子任务 \(progress.done)/\(progress.total)") }
     guard item.leaves.count > 1 else {
       let leaf = item.leaves[0]

@@ -2007,6 +2007,22 @@
         }
       }
     },
+    "周会前提醒他要讲的三件事" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Before the weekly meeting, remind him of the three things to cover"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "周会前提醒他要讲的三件事"
+          }
+        }
+      }
+    },
     "周会是每周一上午十点" : {
       "localizations" : {
         "en" : {
@@ -5063,6 +5079,22 @@
         }
       }
     },
+    "查一遍域名哪些快到期，续上" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check which domains are about to expire and renew them"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "查一遍域名哪些快到期，续上"
+          }
+        }
+      }
+    },
     "标题再短一点" : {
       "localizations" : {
         "en" : {
@@ -5251,6 +5283,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "求职信\n\n按岗位描述改写第一段。"
+          }
+        }
+      }
+    },
+    "汇总昨天各项目的进展，发到手机" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Summarize yesterday's progress across projects and send it to my phone"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "汇总昨天各项目的进展，发到手机"
           }
         }
       }

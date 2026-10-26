@@ -35,6 +35,7 @@
 - **在场**（`SessionPresence`）：只在代码里，界面上不出现
 - **新消息**（Cue 页，`CueStore.cueUnread`）vs **有新回复**（会话的，`PiUnread`）：前者各端同步，后者只记在本机；避免：未读消息（界面上）
 - **记忆**（`cueLines`）vs **置顶**（项目里的灵感）；长期生效的叫"一直记着"。不用先问的例外也是记忆：一条他说的、一直记着的原话（提问卡上选"以后……不用问"记下的，或他亲口说的，`CueStore.endCueQuestion`），范围写在字面上；避免：笔记、规矩（界面上）、允许清单（已退役）
+- **定时**（记忆里有下一次的那几条，`CueMemoryLine.remindAt`，怎么重复 `CueRepeat`）：到点叫醒 Cue 照它做，一次、每天、每周几、每月几号；挂在任务上的到点开工那件任务（每次一个会话），任务完成就不再定时。叫醒原因写"定时到点"，错过后补上只写一句事实（"9:00 那次错过，9:41 补上"）；动作"不再定时"；避免：提醒、计划任务、闹钟
 - **班次**（`CueKeeper` 起的一个大脑进程）vs **换新**（同一个班次里开新会话，用记忆视图与对话视图接上）：班次与 token 数只在代码、文档与 Mac 的"运行情况"里；换新这个词不上界面，上下文那一行（`CueContextLine`，只在 Mac 的"运行情况"）只写用到换新线的几成；避免：交接备忘（已退役）
 
 ## 英文界面
@@ -47,4 +48,5 @@
 - 拍板 Your Call（"等你拍板" Needs Your Call）；数字账（名牌、小组件、灵动岛与锁屏、菜单栏面板）与侧栏进展的计数里数接小写短形：N for you（拍板）· N to reply · N active · N subagent(s) · N need(s) you
 - 进行中 In Progress（任务自己的状态，不与 Active 混）· 已完成 Done（列名）· 完成 Complete（按钮）· 待回复 To Reply · 该你了 Your Turn · 新消息 New Messages · 有新回复 New Reply · 输出中 Writing…
 - 经过的动作词：查看 View · 发给 Message · 新建 New · 修改 Edit · 开始 Start · 停止 Stop · 完成 Complete · 留给你 Left for You
+- 定时 Schedule · 定时到点 Schedule Due · 不再定时 Stop Schedule · 到点（记一条时设定时的钮）Schedule
 - 只记下 Just Save · 对 Cue 说 Tell Cue · 运行情况 Status · 额度 Usage · 技能 Skill · 斜杠命令 Slash Command · 思考强度 Thinking · 灵动岛与锁屏 Live Activity

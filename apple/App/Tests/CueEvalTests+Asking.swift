@@ -4,7 +4,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 问与打扰的缺口：没贴着"推送""规矩"字样的收不回的事（该问）、他亲口或在卡上放行过的那一类（不该问）、到点的提醒（该打扰、该 urgent）。
+/// 问与打扰的缺口：没贴着"推送""规矩"字样的收不回的事（该问）、他亲口或在卡上放行过的那一类（不该问）、到点的提醒（该打扰、该 urgent），与定时的建与到点开工。
 extension CueEvalTests {
     /// 测"该问没问"：会话把删除说成清理的一步、不提"收不回"，Cue 要自己认出这是删数据那一类。
     @Test func v删数据要先问() async throws {
@@ -81,7 +81,7 @@ extension CueEvalTests {
         }
     }
 
-    /// 测必要的打扰：约好的时间点到了，tell 带 urgent，只说这一件事。
+    /// 测必要的打扰：约好的时间点到了（一次性、没挂任务的定时），tell 带 urgent，只说这一件事。
     @Test func x到点提醒() async throws {
         try await CueEval.run(
             "x-到点提醒",
@@ -97,6 +97,51 @@ extension CueEvalTests {
                 Check(.interrupt, "带 urgent", told.contains { $0.args["urgent"] as? Bool == true }),
                 Check(.interrupt, "一条说完", told.count == 1),
                 Check(.result, "没派活（没 add、start）", eval.calls("task", "add").isEmpty && eval.calls("task", "start").isEmpty),
+            ]
+        }
+    }
+
+    /// 他一句话要定期做一件事：定成每周一 9:00 的定时、挂在一件任务上（任务先建好、不开工）。
+    @Test func x2说一句建定时() async throws {
+        try await CueEval.run(
+            "x2-说一句建定时",
+            expect: "他要每周一早上 9 点清理一次过期分支和旧截图：建这件任务（不开工），memory remind 定成每周一 9:00 的定时、挂在它上面，回复一两句"
+        ) { eval in
+            try await eval.trigger { try await eval.rig.say("每周一早上 9 点清理一次演示项目的过期分支和旧截图") }
+            let reminds = eval.calls("memory", "remind").filter { !$0.call.failed }
+            let rule = reminds.compactMap { ($0.args["repeat"] as? String).flatMap { CueRepeat(rule: $0) } }.first
+            let schedule = try await eval.rig.store.cueSchedules().first?.line
+            let reply = try await eval.reply()
+            return [
+                Check(.tool, "定成每周一 9:00", rule == CueRepeat(.weekly([2]), hour: 9, minute: 0)),
+                Check(.result, "挂在任务上", schedule?.task != nil),
+                Check(.ask, "没开工（没 start、没开会话）", eval.calls("task", "start").isEmpty
+                    && !eval.rig.app.host.calls.contains { if case .open = $0 { true } else { false } }),
+                Check(.interrupt, "回复一两句", reply.map { sentences($0.text) <= 2 } == true),
+            ]
+        }
+    }
+
+    /// 挂在任务上的每周定时到点：开工那件任务，这一次的结果是一条会话；任务不 done（done 了就不再定时），不打扰他。
+    @Test func x3定时到点开工() async throws {
+        try await CueEval.run(
+            "x3-定时到点开工",
+            expect: "挂在「清理过期分支」上的每周定时到点：start 开工它，不 done 任务，定时还在、排到下一次，不 tell 打扰他"
+        ) { eval in
+            let store = eval.rig.store
+            let project = try #require(try await store.projects().first { $0.name == "演示" })
+            let task = try await store.createTask("清理过期分支\n删掉合并超过两周的远端分支，旧截图移到废纸篓。做完的标准：列出删了哪些分支、移走几张图。", in: project.id)
+            try await eval.trigger {
+                _ = try await store.noteCueLine(
+                    "清理过期分支和旧截图", source: .cue, remindAt: .now.addingTimeInterval(15), repeats: CueRepeat(.weekly([2]), hour: 9, minute: 0),
+                    task: task.id)
+            }
+            let schedule = try await store.cueSchedules().first?.line
+            return [
+                Check(.result, "开工了这件任务", eval.rig.app.host.calls.contains { if case .open = $0 { true } else { false } }),
+                Check(.result, "没 done 这件任务", eval.calls("task", "done").isEmpty),
+                Check(.result, "定时还在、排到下一次", schedule.flatMap(\.remindAt).map { $0 > .now } == true),
+                Check(.interrupt, "没打扰他（没 urgent）", !eval.calls("tell").contains { $0.args["urgent"] as? Bool == true }),
             ]
         }
     }

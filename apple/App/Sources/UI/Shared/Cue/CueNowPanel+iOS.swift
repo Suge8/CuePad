@@ -3,7 +3,8 @@ import CueStore
 import SwiftUI
 
 /// Cue 名牌长出的面板（`CueHeader`）：只放 Cue 自己的、会天天变的（Mac 上这些分在 Cue 页输入框、记忆弹层与设置里）。名牌长成的名片之下沿中轴排三块：
-/// 它的大脑（Agent、模型与思考强度，`CueConfigControls`）；它刚记下的两条（`CueRecall`，整块点进记忆）；最底下一行它在哪台 Mac 上运行、点了进设置。
+/// 它的大脑（Agent、模型与思考强度，`CueConfigControls`）；它的记忆（`CueRecall`：有定时时第一条是下一个定时，其余是刚记下的，整块点进记忆）；
+/// 最底下一行它在哪台 Mac 上运行、点了进设置。
 /// 上下文用了几成不在这里：换新是自动的、多在歇过一小时后，看了也没有可做的，只留在 Mac 的"运行情况"（`CueContextLine`）。
 /// 在做的会话不在这里：进行中的在进展页的会话段（左滑就到），点进会话只有那一条路，返回落点与行的长相都只有一种。
 /// 面板定高：空、一条、记满都一样高（两条各占两行的位），启用前后大脑那一块按启用了的样子占位（`BrainBlock`）。
@@ -58,8 +59,9 @@ private struct BrainBlock: View {
     private static let dimmed = 0.4
 }
 
-/// "刚记下"：它最近记下的两条（没忘掉的，新的在前，读 `CueStore.recentCueMemory`），右上"全部 N 条"（一条没有时只留箭头）；整块一个按钮，点了打开"Cue 记得什么"。
-/// 一条只露正文前两行与记下多久（钉住的带图钉）；两条总占两条的位（没有的那条留空），空、少、满面板一样高。
+/// "刚记下"：两条，有定时时第一条是下一个定时（闹钟、正文与下一次几点），其余是它最近记下的（没忘掉的，新的在前，都读 `CueStore.recentCueMemory`），
+/// 右上"全部 N 条"（一条没有时只留箭头）；整块一个按钮，点了打开"Cue 记得什么"（定时在它最上面一组）。
+/// 一条只露正文前两行与记下多久（钉住的带图钉）；两条总占两条的位（没有的那条留空），空、少、满、有没有定时面板一样高。
 private struct CueRecall: View {
     let open: () -> Void
     @Environment(Workspace.self) private var workspace
@@ -70,7 +72,8 @@ private struct CueRecall: View {
     nonisolated private static let shown = 2
 
     var body: some View {
-        let lines = recent?.lines ?? []
+        let next = recent?.next
+        let lines = Array(((next.map { [$0] } ?? []) + (recent?.lines ?? []).filter { $0.id != next?.id }).prefix(Self.shown))
         Button(action: open) {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 6) {
@@ -82,7 +85,7 @@ private struct CueRecall: View {
                     Image(.forward).font(.caption2.weight(.semibold)).foregroundStyle(palette.ink3)
                 }
                 ForEach(0..<Self.shown, id: \.self) { index in
-                    RecallLine(line: lines.indices.contains(index) ? lines[index] : nil)
+                    RecallLine(line: lines.indices.contains(index) ? lines[index] : nil, scheduled: index == 0 && next != nil)
                 }
             }
             .overlay {
@@ -95,23 +98,29 @@ private struct CueRecall: View {
         .buttonStyle(PressStyle())
         .observing(services.store, into: $recent, onError: workspace.fail) { try $0.recentCueMemory(limit: Self.shown) }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Dotted([String(localized: "刚记下")] + lines.map(\.text) + [String(localized: "全部 \(recent?.count ?? 0) 条")]).spoken)
+        .accessibilityLabel(Dotted(
+            [String(localized: "刚记下")] + lines.map { line in line.remindAt.map { "\(line.text)，\(ScheduleText.moment($0))" } ?? line.text }
+                + [String(localized: "全部 \(recent?.count ?? 0) 条")]).spoken)
         .accessibilityAddTraits(.isButton)
     }
 }
 
-/// "刚记下"的一条：正文至多两行（总占两行的位），行尾记下多久，钉住的在前面带图钉。
+/// "刚记下"的一条：正文至多两行（总占两行的位），行尾记下多久，钉住的在前面带图钉；定时行首一个闹钟、行尾是下一次几点。
 private struct RecallLine: View {
     let line: CueMemoryLine?
+    let scheduled: Bool
     @Environment(\.palette) private var palette
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
+            if scheduled { Image(.schedule).font(Typography.meta).foregroundStyle(palette.ink2) }
             Text(verbatim: line?.text ?? " ")
                 .font(Typography.body).foregroundStyle(palette.ink).multilineTextAlignment(.leading)
                 .lineLimit(2, reservesSpace: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            if let line {
+            if let line, scheduled, let at = line.remindAt {
+                Text(ScheduleText.moment(at)).font(Typography.meta).monospacedDigit().foregroundStyle(palette.ink2).fixedSize()
+            } else if let line {
                 HStack(spacing: 3) {
                     if line.pinned { Image(.pin).font(.caption2) }
                     Text(line.createdAt, format: .relative(presentation: .named, unitsStyle: .abbreviated))

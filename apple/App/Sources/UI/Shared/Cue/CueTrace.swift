@@ -70,6 +70,7 @@ struct CueTrace: View {
         case .stop: .endSession
         case .done: .complete
         case .leave: PiShown(status: .awaitsReply).icon
+        case .schedule: .schedule
         case .edit: .write
         case .command, .search, .other, .said, .ask: .tool
         }

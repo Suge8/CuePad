@@ -13,8 +13,8 @@ nonisolated struct CueNoteRound: Identifiable, Equatable, Sendable {
     /// 这一轮说的话（动态的正文），从早到晚
     var said: [CueMessage]
 
-    /// `lines`：提醒的那几条记忆的正文（按 id；记忆的正文写下就不变，忘掉的照读）
-    init(row: CueMessage, lines: [UUID: String]) {
+    /// `lines`：到点的那几条定时（按 id；记忆的正文写下就不变，忘掉的照读）
+    init(row: CueMessage, lines: [UUID: CueMemoryLine]) {
         header = row.wake.map { CueWakeHeader($0, in: row, lines: lines) }
         self.row = row
         touches = CueActivity.touches(row.tools)
@@ -41,7 +41,7 @@ nonisolated struct CueNoteRound: Identifiable, Equatable, Sendable {
 }
 
 /// 一轮为什么醒（只画图标，`CueWake.icon`）与叫醒它的那几处：会话、任务的动静各是一处，带当时出了什么事（`kind`，"停下了"）；
-/// 提醒是到点的那条记忆。都按写下时的记录（`CueStir` 与这一行的 `CueMessage.places`）：名字是当时的，会话、任务之后改名、再动起来都不变；
+/// 定时是到点的那条定时（挂在任务上的点了开那件任务，错过后补上的带一句事实）。都按写下时的记录（`CueStir` 与这一行的 `CueMessage.places`）：名字是当时的，会话、任务之后改名、再动起来都不变；
 /// 去哪由记录推出，不查库。
 nonisolated struct CueWakeHeader: Equatable, Sendable {
     /// 点了去哪（`Workspace.open`；Cue 页这一轮的经过里的一行也用它）。会话的 Pi 会话 id 知道就带上，进会话页少读一次
@@ -53,9 +53,11 @@ nonisolated struct CueWakeHeader: Equatable, Sendable {
 
     struct Place: Equatable, Sendable {
         let title: String
-        /// 当时出了什么事；提醒没有
+        /// 当时出了什么事；定时没有
         var kind: CueChange.Kind?
         let target: Target
+        /// 定时错过了、这一轮才补上：本该几点、几点补上
+        var missed: CueScheduled.Last?
     }
 
     let wake: CueWake
@@ -63,7 +65,7 @@ nonisolated struct CueWakeHeader: Equatable, Sendable {
     let places: [Place]
 
     /// `row`：这一轮的经过那一行（叫醒它的那几处当时叫什么记在它上面）。
-    init(_ wake: CueWake, in row: CueMessage, lines: [UUID: String]) {
+    init(_ wake: CueWake, in row: CueMessage, lines: [UUID: CueMemoryLine]) {
         self.wake = wake
         switch wake {
         case .sessionActivity(let stirs):
@@ -77,11 +79,13 @@ nonisolated struct CueWakeHeader: Equatable, Sendable {
                 }
             }
             self.places = places
-        case .reminder(let ids):
-            let first = ids.lazy.compactMap { lines[$0] }.first
-            places = first.map { line in
-                let title = PiProgress.firstLine(line) ?? line
-                return [Place(title: ids.count > 1 ? String(localized: "\(title) 等 \(ids.count) 条") : title, target: .memory)]
+        case .schedule(let fires):
+            places = fires.lazy.compactMap { fire in lines[fire.line].map { (fire, $0) } }.first.map { fire, line in
+                let title = PiProgress.firstLine(line.text) ?? line.text
+                let last = CueScheduled.Last(due: fire.due, at: row.createdAt)
+                return [Place(
+                    title: fires.count > 1 ? String(localized: "\(title) 等 \(fires.count) 条") : title, target: line.task.map(Target.task) ?? .memory,
+                    missed: last.late ? last : nil)]
             } ?? []
         case .enabled, .message, .idle:
             places = []
@@ -124,7 +128,7 @@ extension CueWake {
         case .message: String(localized: "你发来消息")
         case .idle: String(localized: "空闲时看了一眼")
         case .sessionActivity: String(localized: "会话有动静")
-        case .reminder: String(localized: "提醒到点")
+        case .schedule: String(localized: "定时到点")
         }
     }
 
@@ -135,7 +139,7 @@ extension CueWake {
         case .message: .wakeMessage
         case .sessionActivity: .wakeActivity
         case .idle: .wakeIdle
-        case .reminder: .wakeReminder
+        case .schedule: .schedule
         }
     }
 }

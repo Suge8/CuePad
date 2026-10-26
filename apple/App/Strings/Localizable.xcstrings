@@ -647,6 +647,22 @@
         }
       }
     },
+    "%@ 那次错过，%@ 补上" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Missed %1$@, caught up at %2$@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ 那次错过，%2$@ 补上"
+          }
+        }
+      }
+    },
     "%@ 里的 hooks 格式不对，CuePad 没有改它" : {
       "localizations" : {
         "en" : {
@@ -1406,6 +1422,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld 句没送到"
+          }
+        }
+      }
+    },
+    "%lld 号" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Day %lld"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld 号"
           }
         }
       }
@@ -3947,6 +3979,22 @@
         }
       }
     },
+    "一次" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Once"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "一次"
+          }
+        }
+      }
+    },
     "一直记着" : {
       "localizations" : {
         "en" : {
@@ -4251,6 +4299,38 @@
         }
       }
     },
+    "下一次 %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Next %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下一次 %@"
+          }
+        }
+      }
+    },
+    "下一次：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Next: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下一次：%@"
+          }
+        }
+      }
+    },
     "下载中" : {
       "localizations" : {
         "en" : {
@@ -4279,6 +4359,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "不再一直记着"
+          }
+        }
+      }
+    },
+    "不再定时" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stop Schedule"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "不再定时"
+          }
+        }
+      }
+    },
+    "不再定时？" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stop Schedule?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "不再定时？"
           }
         }
       }
@@ -4647,6 +4759,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "今天"
+          }
+        }
+      }
+    },
+    "今天 %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "today at %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "今天 %@"
           }
         }
       }
@@ -6559,6 +6687,38 @@
         }
       }
     },
+    "到点" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Schedule"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "到点"
+          }
+        }
+      }
+    },
+    "到点不再叫醒 %@，找不回来" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ won't be woken for it again. This can't be undone."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "到点不再叫醒 %@，找不回来"
+          }
+        }
+      }
+    },
     "刷新额度" : {
       "localizations" : {
         "en" : {
@@ -7331,6 +7491,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "只记下（记成灵感）"
+          }
+        }
+      }
+    },
+    "只这一次" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Once"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "只这一次"
           }
         }
       }
@@ -8871,6 +9047,22 @@
         }
       }
     },
+    "好" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Done"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "好"
+          }
+        }
+      }
+    },
     "子代理" : {
       "localizations" : {
         "en" : {
@@ -9251,6 +9443,54 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "完成或绑定任务、重命名、跳到终端、结束会话"
+          }
+        }
+      }
+    },
+    "定时" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Schedule"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "定时"
+          }
+        }
+      }
+    },
+    "定时与 Cue 值班都要 CuePad 开着" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Schedules and Cue only run while CuePad is open"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "定时与 Cue 值班都要 CuePad 开着"
+          }
+        }
+      }
+    },
+    "定时到点" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Schedule due"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "定时到点"
           }
         }
       }
@@ -11795,22 +12035,6 @@
         }
       }
     },
-    "提醒到点" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Reminder due"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "提醒到点"
-          }
-        }
-      }
-    },
     "提问" : {
       "localizations" : {
         "en" : {
@@ -12147,6 +12371,22 @@
         }
       }
     },
+    "改" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "改"
+          }
+        }
+      }
+    },
     "改了 %lld 个文件" : {
       "localizations" : {
         "en" : {
@@ -12251,6 +12491,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "改在这台运行"
+          }
+        }
+      }
+    },
+    "改定时" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit Schedule"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "改定时"
           }
         }
       }
@@ -12463,6 +12719,22 @@
         }
       }
     },
+    "新建 定时" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New Schedule"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "新建 定时"
+          }
+        }
+      }
+    },
     "新建项目" : {
       "localizations" : {
         "en" : {
@@ -12607,6 +12879,22 @@
         }
       }
     },
+    "日期" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Date"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "日期"
+          }
+        }
+      }
+    },
     "旧版 Pi 扩展文件没能删掉：%@" : {
       "localizations" : {
         "en" : {
@@ -12623,6 +12911,22 @@
         }
       }
     },
+    "时刻" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Time"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "时刻"
+          }
+        }
+      }
+    },
     "时间" : {
       "localizations" : {
         "en" : {
@@ -12635,6 +12939,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "时间"
+          }
+        }
+      }
+    },
+    "明天 %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tomorrow at %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "明天 %@"
           }
         }
       }
@@ -12683,6 +13003,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "昨天"
+          }
+        }
+      }
+    },
+    "昨天 %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "yesterday at %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "昨天 %@"
           }
         }
       }
@@ -14143,6 +14479,118 @@
         }
       }
     },
+    "每%@ %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Every %1$@ at %2$@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "每%1$@ %2$@"
+          }
+        }
+      }
+    },
+    "每周" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Weekly"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "每周"
+          }
+        }
+      }
+    },
+    "每天" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Daily"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "每天"
+          }
+        }
+      }
+    },
+    "每天 %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Daily at %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "每天 %@"
+          }
+        }
+      }
+    },
+    "每月" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monthly"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "每月"
+          }
+        }
+      }
+    },
+    "每月 %lld 号 %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monthly on day %1$lld at %2$@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "每月 %1$lld 号 %2$@"
+          }
+        }
+      }
+    },
+    "每月几号" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Day of Month"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "每月几号"
+          }
+        }
+      }
+    },
     "水滴" : {
       "localizations" : {
         "en" : {
@@ -15519,6 +15967,22 @@
         }
       }
     },
+    "登录时打开" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open at Login"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "登录时打开"
+          }
+        }
+      }
+    },
     "目录不存在：%@" : {
       "localizations" : {
         "en" : {
@@ -16267,6 +16731,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "等你回答"
+          }
+        }
+      }
+    },
+    "等你在系统设置里允许" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Waiting for approval in System Settings"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "等你在系统设置里允许"
           }
         }
       }
@@ -17367,6 +17847,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "记下的灵感、建的任务都能在这里搜到"
+          }
+        }
+      }
+    },
+    "记下的这一条到点叫醒 %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wakes %@ at the scheduled time"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "记下的这一条到点叫醒 %@"
           }
         }
       }
@@ -20071,6 +20567,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "重命名会话"
+          }
+        }
+      }
+    },
+    "重复" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Repeat"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重复"
           }
         }
       }

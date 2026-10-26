@@ -42,6 +42,8 @@ enum DebugHooks {
         var cueNow: CueNow?
         /// 会话页一出现就展开额度明细（`-CuePadQuotaOpen YES`）。
         var quotaOpen = false
+        /// 定时一出现就原地展开改（`-CuePadScheduleOpen YES`）：任务气泡里那一条、"记得什么"里"到点"的那一块。
+        var scheduleOpen = false
         #if os(iOS)
         /// 设置页通知那一行显示的状态（`-CuePadAlertStatus`；演示模式没有同步，真实状态出不来）。
         var alertStatus: PiAlertStatus?
