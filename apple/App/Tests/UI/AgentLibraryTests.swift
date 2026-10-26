@@ -202,6 +202,7 @@ struct AgentLibraryTests {
     /// 整理之后又改过（编辑页改了合成的说明）：撤销整个不做、说明原因，后来的改动留着。留着的 Pi 系统提示、各家自管的技能照样跟着文件变。
     @Test func 整理之后又改过_撤销整个不做_留着的系统提示照样跟着文件() async throws {
         for directory in [claude, codex, pi] { try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true) }
+        try FileManager.default.createDirectory(at: codex.appending(path: "skills/.system"), withIntermediateDirectories: true)
         try write("规则一\n", claude.appending(path: "CLAUDE.md"))
         try write("规则二\n", codex.appending(path: "AGENTS.md"))
         try write("你是 Pi\n", pi.appending(path: "SYSTEM.md"))
@@ -225,6 +226,10 @@ struct AgentLibraryTests {
         _ = try await library("系统提示跟上") { $0.instruction(.piSystem)?.text == "你是 Pi，改过\n" }
         try skill("from-claude-ai", in: claude.appending(path: "skills/synced"))
         _ = try await library("自管的计数跟上") { $0.selfManaged == [SelfManagedSkills(agent: .claudeCode, count: 1)] }
+        try skill("openai-docs", in: codex.appending(path: "skills/.system"))
+        _ = try await library("Codex 自带的多了一个") { $0.selfManaged.contains(SelfManagedSkills(agent: .codex, count: 1)) }
+        try FileManager.default.removeItem(at: codex.appending(path: "skills/.system/openai-docs"))
+        _ = try await library("Codex 自带的又没了") { $0.selfManaged == [SelfManagedSkills(agent: .claudeCode, count: 1)] }
     }
 }
 #endif

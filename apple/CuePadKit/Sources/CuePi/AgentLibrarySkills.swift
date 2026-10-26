@@ -43,7 +43,9 @@ struct LibrarySkillScan {
                 }
                 strays += oldWalk.found
                 if let managed = old.agent.selfManagedDirectory, scope == .global {
-                    let count = Self.skillCount(in: old.directory.appending(path: managed, directoryHint: .isDirectory))
+                    let directory = old.directory.appending(path: managed, directoryHint: .isDirectory)
+                    watched.insert(directory.path)  // 没有技能时也盯着（Codex 的 `.system` 走不到 `walk`）：多了少了，计数跟着变
+                    let count = Self.skillCount(in: directory)
                     if count > 0, !selfManaged.contains(where: { $0.agent == old.agent }) { selfManaged.append(SelfManagedSkills(agent: old.agent, count: count)) }
                 }
             }
