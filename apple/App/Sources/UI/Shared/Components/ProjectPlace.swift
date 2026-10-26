@@ -9,6 +9,8 @@ struct ProjectPlace: Equatable {
     let text: Dotted
     /// 绑着本机的文件夹（只在 Mac 上有）：点了在访达里显示。
     let folder: URL?
+    /// 头一段是本机路径（Mac）：放不下从中间省略，头尾都要紧；手机上是几段"X 上的 Y"，放不下整段整段地从尾部去掉（`ProjectPlaceLabel`）。
+    let isPath: Bool
 }
 
 extension Workspace {
@@ -17,11 +19,11 @@ extension Workspace {
         guard let catalog else { return nil }
         #if os(macOS)
         if let directory = catalog.directories[project.id] {
-            return ProjectPlace(text: Dotted(Workspaces.shown(directory)), folder: URL(filePath: directory, directoryHint: .isDirectory))
+            return ProjectPlace(text: Dotted(Workspaces.shown(directory)), folder: URL(filePath: directory, directoryHint: .isDirectory), isPath: true)
         }
-        return ProjectPlace(text: Dotted(pendingFolder(of: project), ProjectFolders.pending), folder: nil)
+        return ProjectPlace(text: Dotted(pendingFolder(of: project), ProjectFolders.pending), folder: nil, isPath: true)
         #else
-        return ProjectPlace(text: ProjectFolders.place(of: project, bindings: catalog.bindings, workMac: catalog.workMac), folder: nil)
+        return ProjectPlace(text: ProjectFolders.place(of: project, bindings: catalog.bindings, workMac: catalog.workMac), folder: nil, isPath: false)
         #endif
     }
 
@@ -33,14 +35,20 @@ extension Workspace {
     #endif
 }
 
-/// 一枚文件夹图标接 `ProjectPlace` 那一句，一行、太长从中间省略（路径的头尾都要紧）；Mac 上绑着本机文件夹的点了在访达里显示。
+/// `ProjectPlace` 那一句（`icon` 时前面一枚文件夹图标），一行：本机路径太长从中间省略；几段的放得下几段写几段，去掉的接一个"…"，
+/// 不拦腰截断一段（连头一段都放不下才从尾部省略），读屏照读全部。Mac 上绑着本机文件夹的点了在访达里显示。
 struct ProjectPlaceLabel: View {
     let place: ProjectPlace
+    var icon = true
 
     var body: some View {
         let label = HStack(spacing: 4) {
-            Image(.folder).imageScale(.small).accessibilityHidden(true)
-            Text(place.text).lineLimit(1).truncationMode(.middle)
+            if icon { Image(.folder).imageScale(.small).accessibilityHidden(true) }
+            if place.isPath {
+                Text(place.text).lineLimit(1).truncationMode(.middle)
+            } else {
+                segments
+            }
         }
         #if os(macOS)
         if let folder = place.folder {
@@ -54,12 +62,26 @@ struct ProjectPlaceLabel: View {
         label
         #endif
     }
+
+    private var segments: some View {
+        let parts = place.text.parts
+        return ViewThatFits(in: .horizontal) {
+            ForEach((1...max(parts.count, 1)).reversed(), id: \.self) { count in
+                Text(Dotted(parts.prefix(count) + (count < parts.count ? ["…"] : []))).lineLimit(1).fixedSize()
+            }
+            Text(Dotted(parts.first)).lineLimit(1).truncationMode(.tail)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(place.text.spoken)
+    }
 }
 
-/// 项目页最上面那一行：项目的一句介绍接它的文件夹（`ProjectPlace`），Mac 项目页与 iPad 侧栏在旁边时的项目页同一行（那时页顶不写标题与第二行）。
-/// 目录读到之前、没写介绍时也占着这一行的高：下面的任务纸与墙不上下跳。介绍优先占宽，文件夹在后面从中间省略。
+/// 项目的一句介绍接它的文件夹（`ProjectPlace`）：Mac 项目页与 iPad 侧栏在旁边时项目页最上面那一行（那时页顶不写标题与第二行），
+/// `inHeader` 时是手机页顶那块玻璃的第二行（小一号、同一档墨、不带图标，同 `floatingHeader` 的信息行）。
+/// 目录读到之前、没写介绍时也占着这一行的高：下面的任务纸与墙、玻璃里的标题不上下跳。介绍优先占宽，文件夹在后面省略（规则见 `ProjectPlaceLabel`）。
 struct ProjectIntroLine: View {
     let project: Project?
+    var inHeader = false
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
@@ -67,15 +89,16 @@ struct ProjectIntroLine: View {
         let intro = project?.intro, place = project.flatMap(workspace.place(of:))
         HStack(spacing: 0) {
             if let intro {
-                Text(intro).foregroundStyle(palette.ink2)
+                Text(intro).foregroundStyle(inHeader ? palette.ink3 : palette.ink2)
                     .lineLimit(1).truncationMode(.tail).help(intro).textSelection(.enabled)
                     .layoutPriority(1)
                 if place != nil { Dotted.inline.foregroundStyle(palette.ink3).accessibilityHidden(true) }
             }
-            if let place { ProjectPlaceLabel(place: place).foregroundStyle(palette.ink3) }
+            if let place { ProjectPlaceLabel(place: place, icon: !inHeader).foregroundStyle(palette.ink3) }
             Text(verbatim: " ").accessibilityHidden(true)
-            Spacer(minLength: 0)
         }
-        .font(Typography.secondary)
+        .font(inHeader ? .caption : Typography.secondary)
+        // 靠左铺满用外框，不在行里放 Spacer：Spacer 与文件夹那段分剩下的宽，几段的放得下也只给一段
+        .frame(maxWidth: inHeader ? nil : .infinity, alignment: .leading)
     }
 }
