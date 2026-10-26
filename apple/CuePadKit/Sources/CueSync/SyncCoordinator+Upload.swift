@@ -25,29 +25,29 @@ enum BatchScope: Sendable {
 
 extension SyncCoordinator {
   /// 下一批要上传的：至多 `limit` 条，没有可传的是空批。此刻不能同步（停下了、没有账号）或读库出错时抛出：
-  /// 调用方分得清"没有可传的"与"这次准备不了"。后台那一路在上次确定没有可传的之后只看其后的提交碰过的记录（`drained`）。
+  /// 调用方分得清"没有可传的"与"这次准备不了"。后台那一路在上次确定没有可传的之后只看其后的提交碰过的记录（`drained`）；
+  /// 马上传那一路只按主键查要的几条：后台那批在路上时 `drained` 是空的，照它就要全量推导。
   func nextBatch(_ scope: BatchScope, limit: Int) async throws -> OutgoingBatch {
     guard canSync else { throw SyncPaused() }
-    let since = drained
-    if case .pending = scope { drained = nil }
-    let pending: PendingSync, generation: Int
-    do { (pending, generation) = try await store.pendingSync(since: since) } catch {
+    let pending: PendingSync, generation: Int?, excluded: Set<String>
+    do {
+      switch scope {
+      case .pending(let inFlight):
+        let since = drained
+        drained = nil
+        (pending, generation) = try await store.pendingSync(since: since)
+        excluded = inFlight
+      case .only(let wanted):
+        (pending, generation, excluded) = (try await store.pendingSync(among: wanted), nil, [])
+      }
+    } catch {
       failed(error)
       throw error
     }
-    let excluded: Set<String>
     var names = pending.saves.map(\.id)
     var deletes = pending.deletes
-    switch scope {
-    case .pending(let inFlight):
-      excluded = inFlight
-      names.removeAll(where: inFlight.contains)
-      deletes.removeAll(where: inFlight.contains)
-    case .only(let wanted):
-      excluded = []
-      names.removeAll { !wanted.contains($0) }
-      deletes.removeAll { !wanted.contains($0) }
-    }
+    names.removeAll(where: excluded.contains)
+    deletes.removeAll(where: excluded.contains)
     var batch = OutgoingBatch(saves: [], deletes: [])
     for name in names {
       guard batch.saves.count < limit else {

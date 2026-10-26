@@ -4,6 +4,7 @@ import SwiftUI
 /// 设置的一行，全窗口只有这一种排法（同系统设置的网络、iCloud 行）：
 /// - 左边定宽的图标与名称，名称下面一行状态；状态有现成的解决办法时，紧跟一个链接（`fix`：打开系统设置、处理…、查看、复制命令）。
 /// - 图标与状态字按 `StatusTone` 一起着色（正常就是安静，没有绿色与对勾）；在等结果（`busy`）时图标位置是转圈。
+///   状态换一句、图标与转圈互换都是旧的先淡完、新的再淡入（`handOff`）：同时交叉淡时长短两句叠成一团，行高一变还把淡出中的那句裁掉半截。
 /// - 右边只放这一行常驻的那一个控件（开关、分段、键帽、立即同步、连接）。
 /// 解释性的长句不上屏，放在悬停提示里（`help`）。
 struct SettingRow<Control: View, Fix: View>: View {
@@ -26,19 +27,25 @@ struct SettingRow<Control: View, Fix: View>: View {
             Label {
                 Text(title)
                 if let status {
-                    HStack(spacing: 8) {
-                        Text(status).foregroundStyle(palette.color(tone, muted: true))
-                        fix
+                    // 新旧两句叠在同一处：淡出中的那句不另占一行
+                    ZStack(alignment: .leading) {
+                        HStack(spacing: 8) {
+                            Text(status).foregroundStyle(palette.color(tone, muted: true))
+                            fix
+                        }
+                        .id(status)
+                        .transition(.handOff)
                     }
                     .font(Typography.meta)
                 }
             } icon: {
-                Group {
+                ZStack {
                     if busy {
-                        Spinner(.small)
+                        Spinner(.small).transition(.handOff)
                     } else {
                         icon.foregroundStyle(palette.color(tone))
                             .contentTransition(.symbolEffect(.replace))
+                            .transition(.handOff)
                     }
                 }
                 // 各图标宽窄不一：定宽居中，名称才落在同一条竖线上

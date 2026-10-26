@@ -9,10 +9,13 @@ B 代替手机（模拟器登不了 iCloud；拉取节奏按手机那档，进�
   real      连 CloudKit 开发环境，只做少量确认：限流按设备与容器算，与这台的正式版共用一份（2026-10-26 01:20 起接连测量，正式版每 10 分钟被拒 300–490 次）。
       所以：上一次 real 运行结束不满 REAL_COOLDOWN 秒、或最近 5 分钟这台有 429，就不跑（ab 里两次之间等冷却）；每次运行连预热至多 REAL_LIMIT 秒，
       到点收掉实例、已量到的照记；每个实例至多 REAL_BUDGET 个请求，用满当断网、不再打 iCloud。库留在 REAL_LIBS 里接着用，不每次从头拉开发区的历史。
-LATENCY（中位、p95，秒，对数正态）：出处是 2026-10-24 16:57–19:12 research/sync-measure 在 CloudKit 开发环境的实测（没有限流，load1 中位约 16），
-  CKOperationMetrics 的 duration：CKModifyRecordsOperation n=2092 0.234 / 0.513；CKFetchRecordZoneChangesOperation n=3024 0.133 / 0.410；
-  CKFetchRecordsOperation n=77 0.123 / 0.368；订阅、账号类 n=130 约 0.12 / 0.18（原始日志 /tmp/cuepad-sync-research/measure/*/window.log）。
-  不含 cloudd 的排队（实测 p50 0.005、p95 0.10–0.13）与限流；改动这里就是换了模拟云的口径，前后对比两边要同一份。
+LATENCY（中位、p95，秒，对数正态；版本 MODEL）：每种请求在 App 里从发起到返回的用时（`CloudOutage` 在真 CloudKit 运行里记下，`request_timings`，结果里的"请求用时"）。
+  v2 出处：2026-10-26 07:25 真 CloudKit 运行（send 15 9，负载 628，429 为 0，A、B 两个进程）：上传 n=154 0.449 / 0.984；拉取 n=175 0.192 / 0.620；
+  按 ID 取记录 n=2 0.197 / 0.752；账号、密钥、建区 n=6 0.068 / 0.469。
+  标定时查过"App 到 cloudd 的开销与排队"：同一次运行里 CloudKit 自己记的 Starting→Finished（default 级日志，按 operationID 配对）是上传 0.451 / 0.984、拉取 0.198 / 0.620，
+  与 App 里量到的几乎一样，这一截可以忽略。v1（10-24 research/sync-measure，load1 中位约 16：上传 0.234 / 0.513、拉取 0.133 / 0.410）比真环境每经过一次云少约 0.2 秒，
+  是那天的请求本身快；10-26 几次真运行之间每种请求的中位也差 20–30%（上传 0.35–0.45），这是模型自带的误差，所以用最近一次、样本最多的那次。
+  不含：改记录冲突、限流。改动这里就是换了模拟云的口径：前后对比两边同一版（结果里记着 model）。
 
 用法：
   sync-bench.py <场景> [参数…]                              本检出：构建开发签名的 Debug，跑一次
@@ -45,7 +48,8 @@ SIM_LOCK = "/tmp/cuepad-sync-measure-sim.lock"  # 模拟云的运行之间互斥
 OUT_ROOT = "/tmp/cuepad-sync-bench"
 RELAY = os.environ.get("SYNC_BENCH_RELAY", "1") != "0"
 CLOUD = os.environ.get("SYNC_BENCH_CLOUD", "sim")
-LATENCY = {"upload": [0.234, 0.513], "fetch": [0.133, 0.410], "other": [0.12, 0.18]}  # 出处见头注释
+MODEL = "v2"
+LATENCY = {"upload": [0.449, 0.984], "fetch": [0.192, 0.620], "records": [0.197, 0.752], "other": [0.068, 0.469]}  # 出处见头注释
 REAL_COOLDOWN, REAL_LIMIT, REAL_BUDGET = 600, 180, 200
 REAL_LAST = "/tmp/cuepad-sync-measure.last-real"  # 上一次 real 运行结束的时刻
 
@@ -74,12 +78,15 @@ def hold_lock(what):
 
 
 def throttled(minutes=2, pids=None):
-    """最近几分钟这台 Mac 上 CuePad 收到的 CloudKit 限流（HTTP 429，`Device throttle`：按设备与容器算，正式版与测量实例共用一份）次数；
-    pids 给了只数这几个进程。"""
+    """最近几分钟这台 Mac 上 CuePad 收到的 CloudKit 限流次数（`Request Rate Limited`、`Device throttle`：按设备与容器算，正式版与测量实例共用一份）；
+    pids 给了只数这几个进程。只认 CloudKit 的限流错误：日志里别的数字（"用时 0.00042925 秒"）含 429 也不是限流。"""
     who = f" AND ({' OR '.join(f'processID == {p}' for p in pids)})" if pids else ""
-    out = subprocess.run(["log", "show", "--last", f"{minutes}m", "--predicate", f'subsystem == "{BUNDLE_ID}" AND eventMessage CONTAINS "429"{who}'],
-                         capture_output=True, text=True).stdout
-    return sum(1 for l in out.splitlines() if "429" in l and not l.startswith("Timestamp"))
+    predicate = f'subsystem == "{BUNDLE_ID}" AND (eventMessage CONTAINS "{THROTTLE_MARKS[0]}" OR eventMessage CONTAINS "{THROTTLE_MARKS[1]}"){who}'
+    out = subprocess.run(["log", "show", "--last", f"{minutes}m", "--predicate", predicate], capture_output=True, text=True).stdout
+    return sum(1 for l in out.splitlines() if any(mark in l for mark in THROTTLE_MARKS))
+
+
+THROTTLE_MARKS = ("Request Rate Limited", "Device throttle")
 
 
 def real_allowed(wait):
@@ -107,7 +114,7 @@ def commit(checkout):
 
 def run_once(checkout, scene, args, label="", wait=False):
     out = f"{OUT_ROOT}/{datetime.now():%m%d-%H%M%S}-{scene}{'-' + label if label else ''}"
-    cloud = "模拟云" if CLOUD == "sim" else "真 CloudKit（开发环境）"
+    cloud = f"模拟云（延迟模型 {MODEL}）" if CLOUD == "sim" else "真 CloudKit（开发环境）"
     print(f"\n== {scene} {' '.join(args)}：{checkout}（{commit(checkout)}），{cloud}，门铃{'通' if RELAY else '不通'}；输出 {out}", flush=True)
     real = CLOUD == "real" and scene != "island"
     if real: real_allowed(wait)
@@ -120,6 +127,7 @@ def run_once(checkout, scene, args, label="", wait=False):
         try:
             with run:
                 metrics, extra = SCENES[scene](run, args)
+                extra["请求用时"] = request_timings(run)
         except Aborted as stopped:
             print(f"  中止：{stopped}", flush=True)
         finally:
@@ -129,10 +137,21 @@ def run_once(checkout, scene, args, label="", wait=False):
             hit = throttled(minutes=int((time.time() - began) / 60) + 1, pids=[i.pid for i in (run.a, run.b) if i.proc])
             extra["限流"] = {"窗口内 429 次数": hit}
             if hit: print(f"  这次运行期间实例被 CloudKit 限流 {hit} 次：时延里含限流的等待，作废重测", flush=True)
-    result = {"scene": scene, "args": args, "checkout": checkout, "commit": commit(checkout), "relay": RELAY, "cloud": CLOUD,
+    result = {"scene": scene, "args": args, "checkout": checkout, "commit": commit(checkout), "relay": RELAY, "cloud": CLOUD, "model": MODEL if CLOUD == "sim" else None,
               "load": load.summary(), "metrics": dict(metrics), "extra": extra}
     json.dump(result, open(f"{out}/result.json", "w"), ensure_ascii=False, indent=1)
     return result
+
+
+def request_timings(run):
+    """两个实例每种请求在 App 里从发起到返回的用时（中位、p95、次数）：真 CloudKit 运行据此标定模拟云的 LATENCY。"""
+    found = {}
+    for inst in (run.a, run.b):
+        if not inst.alive(): continue
+        t = inst.send("stats")
+        e = inst.wait(lambda e: e["e"] == "stats" and "timings" in e, 10, after=t)
+        for kind, values in (e or {}).get("timings", {}).items(): found.setdefault(kind, []).extend(values)
+    return {k: [round(pct(v, 0.5), 3), round(pct(v, 0.95), 3), len(v)] for k, v in found.items() if v}
 
 
 def pct(values, q):

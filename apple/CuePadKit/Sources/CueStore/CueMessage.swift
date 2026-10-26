@@ -66,9 +66,9 @@ public struct CueMessage: Identifiable, Equatable, Sendable {
   public var wake: CueWake? = nil
   /// 写下那一刻它提到的那几处的样子（关联的任务、叫醒它的那几处，`CuePlace`）：Cue 页按它画，写下就不再变。
   public var places: [String: CuePlace] = [:]
-  /// 手机推送的标志（明文、可查询，服务端订阅按它出通知）：写下时按 `alerts` 与他在不在 Mac 上开着 Cue 页置位（`CueStore.insertCueMessage`），
+  /// 手机推送的标志（明文、可查询，服务端订阅按它推，见 `CuePush`）：Cue 写下的每条在写下时置位（`CueStore.insertCueMessage`），
   /// 随那一次上传送出后清掉，远端带回来的不留（同 `PiSessionState.notify`，见 docs/sync.md「Agent 与 Cue 的通知」）。
-  var notify: Bool = false
+  var notify: CuePush?
   /// 服务器收下过这条（读的时候由同步元数据推出，不存，`Speech.reachedServerSQL`）：你的话"已发出"的依据。
   public internal(set) var reachedServer = false
 
@@ -82,12 +82,10 @@ extension CueMessage: Record {
     "id", "author", "text", "choices", "urgent", "taskID", "answer", "answeredAt", "deliveredAt", "createdAt", "modifiedAt", "notify", "tools",
     "ask", "askAction", "askRule", "askShots", "setAsideBy", "wake", "places", "shownText",
   ]
-  /// `notify` 的值（订阅的谓词按它）。
-  package static let notifyFlag = "cue"
   var bindings: [any SQLBindable] {
     [
       id, author.rawValue, shownText == nil ? text : "", choices.map { JSONColumn.encode($0) }, urgent, taskID, answer, answeredAt, deliveredAt, createdAt, modifiedAt,
-      notify ? Self.notifyFlag : nil, tools?.stored, asked?.stored, askAction, askRule, JSONColumn.encodeList(shots), setAsideBy, wake?.stored,
+      notify?.rawValue, tools?.stored, asked?.stored, askAction, askRule, JSONColumn.encodeList(shots), setAsideBy, wake?.stored,
       places.isEmpty ? nil : JSONColumn.encode(places), shownText?.stored,
     ]
   }
@@ -99,8 +97,15 @@ extension CueMessage: Record {
       askAction: row.textOrNil(14), askRule: row.textOrNil(15), shots: JSONColumn.decodeList(CueShot.self, from: row.textOrNil(16)), urgent: row.bool(4), taskID: row.uuidOrNil(5),
       answer: row.textOrNil(6), answeredAt: row.dateOrNil(7), setAsideBy: row.uuidOrNil(17), deliveredAt: row.dateOrNil(8), createdAt: row.date(9),
       modifiedAt: row.date(10), tools: row.textOrNil(12).flatMap(PiChatMessage.Tools.init(stored:)), wake: row.textOrNil(18).flatMap(CueWake.init(stored:)),
-      places: JSONColumn.decode([String: CuePlace].self, from: row.textOrNil(19)) ?? [:], notify: row.textOrNil(11) != nil, reachedServer: row.bool(21))
+      places: JSONColumn.decode([String: CuePlace].self, from: row.textOrNil(19)) ?? [:], notify: row.textOrNil(11).flatMap(CuePush.init(rawValue:)), reachedServer: row.bool(21))
   }
+}
+
+/// Cue 的一条消息怎么推到手机（`CueMessage.notify` 的值，一条只有一种，订阅各按一种值，所以一条只推一次）：
+/// 要提示你、你又不在 Mac 上开着 Cue 页的出可见通知（同时叫醒 App 拉一次），其余只静默叫醒 App 拉一次（小组件、实时活动跟着变）。
+package enum CuePush: String, Sendable {
+  case alert = "cue"
+  case wake = "said"
 }
 
 /// 一条提问怎么结束（`CueStore.endCueQuestion`）：几种结局落到同一个状态上（`CueMessage.answeredAt`），没有"关掉"。

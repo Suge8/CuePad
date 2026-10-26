@@ -149,10 +149,9 @@ extension MacSyncTests {
         #expect(services.pollingCadence == SyncPoller.Cadence(every: .seconds(2)))
     }
 
-    /// 领取与写回结果后各立即只上传这一条，不等引擎调度：手机才能尽早知道 Mac 接手了、拉到结果。
-    /// 领取那次在后台任务里传，两次的先后不定：两次都传过才说明结果已写回并传出。
+    /// 执行器写回结果后立即只上传这一条，不等引擎调度：手机尽早拉到结果。交出哪一版（当场执行完的不先传领取）在 `DeliveryTests`。
     @Test
-    func 执行器领取与写回结果后各立即上传这一条() async throws {
+    func 执行器写回结果后立即上传这一条() async throws {
         try await services.executor.start()
         defer { services.cancelBackgroundWork() }
 
@@ -161,7 +160,6 @@ extension MacSyncTests {
         var uploads = rig.sync.uploads.stream.makeAsyncIterator()
         let name = request.id.uuidString.lowercased()
 
-        #expect(await uploads.next() == name)
         #expect(await uploads.next() == name)
         #expect(try await services.store.deliveryRequest(request.id)?.isOpen == false)
     }

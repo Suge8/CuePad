@@ -21,16 +21,18 @@ extension View {
 }
 
 /// 页头那一行的"正在同步"（Cue 页头与状态行、会话顶栏）：这一页的事实在别的设备上、本机正在和 iCloud 对，页头原来那一句可能已经过时。
-/// 字号与颜色跟着那一行，转圈是最小号。
+/// 字号与颜色跟着那一行，转圈是最小号。转圈挂在字前面、不进排版：整块的基线就是字的基线，与同一行按基线对齐的标题对得上
+/// （放进 HStack 时基线取转圈的下沿，Mac 会话顶栏的标题会被顶上去半行）。
 struct SyncingLabel: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        HStack(spacing: 4) {
-            Spinner(.mini).accessibilityHidden(true)
-            Text("正在同步")
-        }
-        .foregroundStyle(palette.ink3)
-        .accessibilityElement(children: .combine)
+        Text("正在同步")
+            .padding(.leading, Spinner.Size.mini.side + Self.gap)
+            .overlay(alignment: .leading) { Spinner(.mini).accessibilityHidden(true) }
+            .foregroundStyle(palette.ink3)
+            .accessibilityElement(children: .combine)
     }
+
+    private static let gap: CGFloat = 4
 }

@@ -11,6 +11,7 @@ import Synchronization
 public enum CloudOutage {
   private static let down = Atomic<Bool>(false)
   private static let spent = Atomic<Int>(0)
+  private static let timings = Mutex<[String: [Double]]>([:])
 
   public static func set(_ isDown: Bool, pathReturns: Bool = false) {
     down.store(isDown, ordering: .relaxed)
@@ -28,6 +29,8 @@ public enum CloudOutage {
 
   /// 已经发出的请求数（连真的 iCloud 时对着 `budget` 数）。
   public static var requests: Int { spent.load(ordering: .relaxed) }
+  /// 每种请求（upload、fetch、records、other）在 App 里从发起到返回的每次用时（秒）。
+  public static var requestTimings: [String: [Double]] { timings.withLock { $0 } }
 
   /// 断着时每个请求都交给断了网的替身（`UnreachableCloud`：拉取、订阅是包着的 -1009，上传是逐条 -1009 的 `partialFailure`），
   /// 认账号也失败（替身认得出账号，真断网认不出）。
@@ -48,15 +51,29 @@ public enum CloudOutage {
       if cut { throw UnreachableCloud.failure }
     }
 
-    func accountStatus() async throws -> CKAccountStatus { try reachable(); return try await base.accountStatus() }
-    func accountName() async throws -> String { try reachable(); return try await base.accountName() }
-    func relaySecret() async throws -> Data { try await now.relaySecret() }
-    func changes(since token: Data?, keys: [String]?) async throws -> ZoneChangeBatch { try await now.changes(since: token, keys: keys) }
-    func records(_ ids: [CKRecord.ID]) async throws -> [CKRecord] { try await now.records(ids) }
-    func upload(saving: [CKRecord], deleting: [CKRecord.ID]) async throws -> SentRecords { try await now.upload(saving: saving, deleting: deleting) }
-    func saveZone() async throws { try await now.saveZone() }
-    func subscriptions() async throws -> [CKSubscription.ID: CKSubscription] { try await now.subscriptions() }
-    func save(_ subscription: CKSubscription) async throws { try await now.save(subscription) }
-    func delete(_ id: CKSubscription.ID) async throws { try await now.delete(id) }
+    func accountStatus() async throws -> CKAccountStatus { try await timed("other") { try reachable(); return try await base.accountStatus() } }
+    func accountName() async throws -> String { try await timed("other") { try reachable(); return try await base.accountName() } }
+    func relaySecret() async throws -> Data { try await timed("other") { try await now.relaySecret() } }
+    func changes(since token: Data?, keys: [String]?) async throws -> ZoneChangeBatch {
+      try await timed("fetch") { try await now.changes(since: token, keys: keys) }
+    }
+    func records(_ ids: [CKRecord.ID]) async throws -> [CKRecord] { try await timed("records") { try await now.records(ids) } }
+    func upload(saving: [CKRecord], deleting: [CKRecord.ID]) async throws -> SentRecords {
+      try await timed("upload") { try await now.upload(saving: saving, deleting: deleting) }
+    }
+    func saveZone() async throws { try await timed("other") { try await now.saveZone() } }
+    func subscriptions() async throws -> [CKSubscription.ID: CKSubscription] { try await timed("other") { try await now.subscriptions() } }
+    func save(_ subscription: CKSubscription) async throws { try await timed("other") { try await now.save(subscription) } }
+    func delete(_ id: CKSubscription.ID) async throws { try await timed("other") { try await now.delete(id) } }
+
+    /// 记下这一请求在 App 里从发起到返回的用时（含 CloudKit 进程间的开销与排队）：模拟云的延迟模型按它标定。
+    private func timed<T>(_ kind: String, _ body: () async throws -> T) async throws -> T {
+      let began = ContinuousClock.now
+      defer {
+        let took = (ContinuousClock.now - began) / .seconds(1)
+        timings.withLock { $0[kind, default: []].append(took) }
+      }
+      return try await body()
+    }
   }
 }

@@ -13,6 +13,8 @@ struct SyncRow: View {
     @State private var showsDecision = false
     @State private var showsIssues = false
     @State private var confirmErase = false
+    /// 这一轮同步中已久过 `Pending.delay`（`AppServices.shownSync`）。
+    @State private var syncLasts = false
 
     /// 系统设置的 Apple 账户（iCloud 的开关在里面）。
     private static let accountSettings = URL(string: "x-apple.systempreferences:com.apple.systempreferences.AppleIDSettings")!
@@ -20,10 +22,10 @@ struct SyncRow: View {
     private enum Fix { case decide, openSettings, issues }
 
     var body: some View {
-        let summary = SyncSummary(services.syncStatus)
+        let shown = services.shownSync(lasting: syncLasts), summary = shown.summary
         let fix = fix
         SettingRow(
-            title: "iCloud 同步", icon: Image(summary.icon), tone: tone(summary), busy: services.isSyncBusy, status: status(summary, fix: fix),
+            title: "iCloud 同步", icon: Image(summary.icon), tone: tone(summary), busy: shown.busy, status: status(summary, fix: fix),
             help: fix == nil ? nil : summary.detail.map { "\($0)" }
         ) {
             if services.sync != nil, fix != .decide, fix != .openSettings {
@@ -48,6 +50,7 @@ struct SyncRow: View {
             }
         }
         .confirmsErase($confirmErase, choices: choices, services: services)
+        .pending(services.syncStatus == .syncing, shown: $syncLasts)
     }
 
     private var fix: Fix? {

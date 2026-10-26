@@ -35,7 +35,7 @@ extension CueStore {
 
   /// 写一条对话（在写事务内调用）：原话是 `text`，CuePad 代写的是 `shown`（各端按自己的语言显示）。`asking` 是提问问的什么，`project` 是它的范围，
   /// `shots` 是点名要你看的图；`at`：排在对话里的时刻，缺省是此刻（一轮的经过排在这一轮开始的时刻）。
-  /// 要提示你的（`CueMessage.alerts`）同时置手机推送标志，到不到你只看 `reaches`。它提到的那几处此刻的样子一并记下（`CuePlace`）。
+  /// Cue 写下的置手机推送标志：要提示你的（`CueMessage.alerts`）且到得了你（`reaches`）出可见通知，其余静默叫醒（`CuePush`）。它提到的那几处此刻的样子一并记下（`CuePlace`）。
   func insertCueMessage(
     _ author: CueAuthor, text: String = "", shown: ShownText? = nil, asking: CueAsking? = nil, shots: [CueShot] = [], in project: Project? = nil,
     urgent: Bool = false, task: UUID? = nil, tools: PiChatMessage.Tools? = nil, wake: CueWake? = nil, at time: Date? = nil
@@ -46,8 +46,8 @@ extension CueStore {
       asked: asking.map { CueAsked($0.ask, project: project?.id) }, askAction: asking?.action, askRule: asking?.rule, shots: shots,
       urgent: urgent, taskID: task,
       answer: nil, answeredAt: nil, setAsideBy: nil, deliveredAt: nil, createdAt: time ?? now, modifiedAt: now, tools: tools, wake: wake,
-      places: try CuePlace.capture(task: task, wake: wake, project: asking == nil ? nil : project?.id, in: db), notify: false)
-    message.notify = try message.alerts && reaches(.cue)
+      places: try CuePlace.capture(task: task, wake: wake, project: asking == nil ? nil : project?.id, in: db), notify: nil)
+    if author == .cue { message.notify = try message.alerts && reaches(.cue) ? .alert : .wake }
     try insert(message)
     try registerImages(in: text)
     return message

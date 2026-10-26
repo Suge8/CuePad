@@ -103,7 +103,7 @@ import Testing
   }
 
   /// 他发完消息就离开了 App：Cue 回答这一轮的话推到手机，正文是 Cue 的原话；这一轮先发了提问卡就只响提问卡那一下。
-  /// 他在 Mac 上开着 Cue 页时不推；手机上开着的不挡（那条可能停在"开着"，手机前台自己不弹）。
+  /// 他在 Mac 上开着 Cue 页时不出通知（只静默叫醒，`CuePush`）；手机上开着的不挡（那条可能停在"开着"，手机前台自己不弹）。
   @Test func cueRepliesToHisRoundReachThePhoneOncePerRoundUnlessHeHasTheCuePageOpenOnAMac() async throws {
     let rig = try Rig()
     func reply(_ text: String, startedAt: Date = .now) async throws -> UUID {
@@ -120,11 +120,11 @@ import Testing
     let round = Date.now
     let card = try await rig.store.addCueMessage(.cue, text: "要推送吗？", ask: try CueAsking(.push, action: "推送登录页的修复"))
     #expect(try await flag(rig, card.id) == "cue")
-    #expect(try await flag(rig, reply("问你了", startedAt: round)) == nil)
+    #expect(try await flag(rig, reply("问你了", startedAt: round)) == "said")  // 只静默叫醒
 
     try await rig.store.recordMacPresence(host: "mac") { true }
     try await rig.store.recordViewing(device: "mac", sessionID: nil, cue: true)
-    #expect(try await flag(rig, reply("合并好了")) == nil)
+    #expect(try await flag(rig, reply("合并好了")) == "said")
   }
 
   /// 会话做完：Cue 不值班时推；值班时会话归它接手不推，只推归他的停下（他刚在里面说过话）与它留给他回的（待回复，正文是会话最后那句回答）；

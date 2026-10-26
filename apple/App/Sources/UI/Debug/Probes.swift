@@ -45,7 +45,7 @@ private func pidRusage(_ pid: Int32, _ flavor: Int32, _ buffer: UnsafeMutablePoi
 #endif
 
 /// 主线程累计占用的 CPU 秒（用户态加内核态）。
-private func mainCPUSeconds(_ port: mach_port_t) -> Double {
+func mainCPUSeconds(_ port: mach_port_t) -> Double {
     var info = thread_basic_info()
     var count = mach_msg_type_number_t(MemoryLayout<thread_basic_info>.size / MemoryLayout<integer_t>.size)
     _ = withUnsafeMutablePointer(to: &info) {

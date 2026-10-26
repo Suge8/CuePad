@@ -101,6 +101,8 @@ final class AppServices {
     /// 还没返回的那一次立即同步（`syncNow`：启动、回到前台、下拉刷新、"立即同步"按钮）：期间再要立即同步的等它。
     /// 拉取（`CloudSync.syncNow`）只合并还没开拉的那一拉，立即同步要的是"这一次还没返回的"，所以另记。
     var syncing: Task<Void, Never>?
+    /// 已经开始认账号与第一拉（`connectSync`，只做一次）。
+    @ObservationIgnored var syncConnected = false
     /// 立即同步还没返回：按钮的忙碌与禁用读 `canSyncNow`，"本机是不是最新"读 `isCatchingUp`。
     var isSyncingNow: Bool { syncing != nil }
     /// 上次写进共享容器的快照；内容没变就不重写、不刷新小组件。

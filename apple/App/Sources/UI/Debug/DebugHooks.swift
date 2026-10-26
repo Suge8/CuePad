@@ -183,6 +183,9 @@ enum DebugHooks {
     static func mark(_ event: String) {
         #if DEBUG
         PerfProbe.mark(event)
+        #if os(macOS)
+        LaunchBench.mark(event)
+        #endif
         #endif
     }
 
@@ -250,6 +253,13 @@ enum DebugHooks {
     typealias MainWindowClass = MainShellWindow
     #endif
 
+    /// 进到 `main`：`-CuePadBench launch` 从这里量冷启动（`LaunchBench`）。
+    static func launching() {
+        #if DEBUG
+        LaunchBench.start()
+        #endif
+    }
+
     /// 资料库没能打开。量的时候（`-CuePadBench`）没人去点失败页，量的脚本会一直等：报出原因（`BENCH-ERR` 一行）后以 1 退出。
     static func libraryFailed(_ reason: String) {
         #if DEBUG
@@ -288,6 +298,7 @@ enum DebugHooks {
     static func present(_ window: NSWindow, activating: Bool = false) {
         #if DEBUG
         window.orderBack(nil)
+        LaunchBench.present(window)
         #else
         if activating { NSApp.activate() }
         window.makeKeyAndOrderFront(nil)

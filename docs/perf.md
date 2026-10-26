@@ -1,10 +1,12 @@
 # 性能与同步测量
 
-两个入口都是 Release 构建、每次全新进程、多次取中位，跑法与口径在各脚本头注释，和交互预算比的要占前台（[verify.md](verify.md)「占前台」）：交互是 `xc.sh perf mac|ios`，静置与常驻开销是 `xc.sh perf idle mac|ios`。前后对比是旧新两个检出交替跑同一条命令，以指令数与唤醒为准：机器忙时帧间隔、CPU 时间、能耗都会被别的进程拖歪。
+三个入口都是 Release 构建、每次全新进程、多次取中位，跑法与口径在各脚本头注释，和交互预算比的要占前台（[verify.md](verify.md)「占前台」）：交互是 `xc.sh perf mac|ios`，静置与常驻开销是 `xc.sh perf idle mac|ios`，Mac 冷启动到首屏与能交互是 `xc.sh perf launch mac`。前后对比是旧新两个检出交替跑同一条命令，以指令数与唤醒为准：机器忙时帧间隔、CPU 时间、能耗都会被别的进程拖歪。
 
 - 掉帧数是主线程 display link 的回调间隔，反映主线程跟不跟得上，不是实际交出的帧率；以 Instruments 的 Animation Hitches 为准。iOS 模拟器不支持 Animation Hitches，用 `xc.sh rec` 逐帧或应用内探针。屏幕外（`-CuePadOffscreen`）display link 不走，只用于布局与日志类场景。
 - Instruments：Release 用 `CUEPAD_TRACE=<模板>` 跟着 perf 录；Debug 实例 `xc.sh run mac` 拿 PID 再 `xctrace record --attach <PID>`。按名字或 bundle id 认 CuePad 会认到正式版。
 - SwiftUI 模板 `--attach` 没有数据：`--launch` 一份换了 bundle id 并重签名的副本。`Animation Hitches` 模板单独录会写出几十 GB，不用；`--launch` 的进程结束后可能停在暂停状态，按 PID 结束。
+- 冷启动在真实库的只读副本上量（`CUEPAD_PERF_SEED`），副本的 `preferences.plist` 里放一条正式版都有的窗口位置（`plutil -insert "NSWindow Frame main" -string "<x y 宽 高 屏x 屏y 屏宽 屏高>"`）：没记过位置的库少排一遍按记下的大小摆窗口，量得偏轻。
+  AppKit 起来时为本 App 查几遍 LaunchServices，同一个 bundle id 登记过的每一份都要比对；开发机上登记着上千份删掉了的本机构建（`lsregister -dump` 里 `Bundle node not found on disk`），这几次查找占冷启动主线程的一成多，正式版也一样付。
 - Cue 值班的开销：库里要有 Cue 运行在这台的设置（`cueProfile` 的 `hostID` 是 `mac-<名>`、运行时 pi，配 `-CuePadHost <名>`），大脑换成 `-CuePadCueBrain apple/scripts/cue-brain-stub.py`，会话的动静由说桥协议的假扩展给（[verify.md](verify.md)「通知」）。
   隔离实例的本机标识是 `mac-isolated`（`-CuePadHost` 可换，不能是这台的硬件标识），真实库副本里记给这台的请求、会话与 Cue 值班它都当别台的。在副本上量值班先把 `cueProfile` 的 `hostID` 改成 `mac-<名>`；副本没带 `Cue/keeper.json`，第一次值班会当刚启用醒一次。
 

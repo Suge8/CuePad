@@ -109,8 +109,8 @@ struct RouteView: View {
     }
 }
 
-/// 外接键盘快捷键（不占位的隐形按钮），两种容器同一组，与 Mac 对齐：⌘1–9 切项目、⌘K（及 ⌘F）搜索、⌘\ 侧栏（宽屏）、⌘N 新建卡片、
-/// ⌘⇧N 对 Cue 说、⌘⇧T 任务、⌘, 设置。
+/// 外接键盘快捷键（不占位的隐形按钮），两种容器同一组，与 Mac 对齐：⌘1–9 切项目、⌘K（及 ⌘F）搜索、⌘N 新建卡片、
+/// ⌘⇧N 对 Cue 说、⌘⇧T 任务、⌘, 设置。⌘\ 开合侧栏只在宽屏，按侧栏此刻在不在旁边（`SplitRoot`）。
 struct RootShortcuts: View {
     @Environment(Workspace.self) private var workspace
 
@@ -125,10 +125,6 @@ struct RootShortcuts: View {
             Button("记一条灵感") { workspace.newCard() }.keyboardShortcut("n")
             Button("对 Cue 说") { workspace.speakToCue() }.keyboardShortcut("n", modifiers: [.command, .shift])
             Button("设置") { workspace.select(.settings) }.keyboardShortcut(",")
-            Button("侧栏") {
-                withAnimation(Motion.snappy) { workspace.sidebar = workspace.sidebar == .detailOnly ? .automatic : .detailOnly }
-            }
-            .keyboardShortcut("\\")
             Button("进展") { workspace.show(.progress) }.keyboardShortcut("t", modifiers: [.command, .shift])
             ForEach(Array(1...9).prefix(workspace.catalog?.projects.count ?? 0), id: \.self) { number in
                 Button("项目 \(number)") { workspace.showProject(number: number) }

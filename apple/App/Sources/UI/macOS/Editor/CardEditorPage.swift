@@ -14,6 +14,7 @@ nonisolated private struct EditorData: Sendable, Equatable {
 /// 前台每帧几何变化会让 AppKit 重算整窗的鼠标跟踪区。
 /// 重活先在看不见时做完——挂上编辑器与底栏、让编辑器接过键盘，各占一帧——再淡入；这几帧里墙上那张卡保持按下（`CardPresence.opening`）。
 /// 编辑页底下的项目页保持挂载，关掉后回到原来的滚动位置。
+/// 这张卡的操作（置顶、移到项目、复制、归档、删除）在工具栏右上的"⋯"里（`PageMenuSlot`），页里不另放一个。
 struct CardEditorPage: View {
     let cardID: UUID
     @Environment(Workspace.self) private var workspace
@@ -121,11 +122,6 @@ struct CardEditorPage: View {
             Text(DateLabel.short(data.card.modifiedAt))
             SaveStatus(editing: editing)
             if data.card.isPinned { Label("已置顶", icon: .pin) }
-            Spacer(minLength: 0)
-            Menu("更多", icon: .more) {
-                CardActions(card: data.card, more: true)
-            }
-            .labelStyle(.iconOnly).menuStyle(.button).menuIndicator(.hidden).buttonStyle(PressStyle(.inline)).fixedSize()
         }
         .font(Typography.meta)
         .foregroundStyle(palette.ink3)

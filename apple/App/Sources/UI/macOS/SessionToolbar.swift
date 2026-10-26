@@ -54,17 +54,17 @@ extension Workspace {
 /// （与会话名重复的一段不写，见 `SessionTaskLink.path`），点它回到这件事。一个会话绑着好几件时写还没做完的第一件，后面跟"等 N 件"，其余在"⋯"里。
 /// 两行与一行同高（工具栏控件的高度）；会话的事都归档了或在回收站里时只有一行。
 /// 玻璃画在标题自己身上、随它一起淡出：系统给工具栏项画的那块不随内容显隐，让开时会留下一块空玻璃。
-/// 标题位的尺寸只随窗口变、不随内容变（项的尺寸一变整条工具栏重排）：宽裕时是 `width`，窗口窄、侧栏收起时让到最窄 `minWidth`，
-/// 不压到左上的侧栏钮、项目切换与右上的搜索、任务、"⋯"，玻璃里的名字随之截断。
+/// 标题位的尺寸只随窗口变、不随内容变（项的尺寸一变整条工具栏重排）：宽裕时是 `width`，窗口窄、侧栏收起时由工具栏压到最窄 `minWidth`（`ToolbarItemFlex`），
+/// 不把左右的控件挤进溢出菜单，玻璃里的名字随之截断；窗口最窄（720）时也放得下。
 /// Cue 页的页头也在这一位（`CueTitle`，同一块玻璃、同样的宽度规则），只在侧栏收起时有（同 `ProjectSwitcher` 只在收起时写当前页）。
 struct PageTitleSlot: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
     /// 工具栏里标题一块最宽多少：名字长时截断，不把右边的按钮挤走。
-    private static let width: CGFloat = 420
+    fileprivate static let width: CGFloat = 420
     /// 窗口窄时标题位最多让到多窄（名字截断，状态照常）。
-    private static let minWidth: CGFloat = 160
+    fileprivate static let minWidth: CGFloat = 160
 
     var body: some View {
         if let state = workspace.shownSessionHeader {
@@ -73,8 +73,7 @@ struct PageTitleSlot: View {
             CueTitle()
                 .frame(height: Spacing.toolbarControl)
                 .glass(in: .capsule)
-                .frame(maxWidth: .infinity)
-                .frame(minWidth: Self.minWidth, idealWidth: Self.width, maxWidth: Self.width)
+                .modifier(Flex())
         }
     }
 
@@ -101,8 +100,7 @@ struct PageTitleSlot: View {
         .glass(in: .capsule)
         .accessibilityElement(children: .contain)
         // 标题位的宽度只看工具栏给多少（玻璃只画到内容那么宽）：随内容变时换会话整条工具栏重排、整窗重算鼠标跟踪区，掉帧 8 次到 4～5 次
-        .frame(maxWidth: .infinity)
-        .frame(minWidth: Self.minWidth, idealWidth: Self.width, maxWidth: Self.width)
+        .modifier(Flex())
         .opacity(state.showsHeader ? 1 : 0)
         .animation(HandOff.quick, value: state.showsHeader)
         .allowsHitTesting(state.showsHeader)
@@ -114,6 +112,16 @@ struct PageTitleSlot: View {
                     .onHover { if $0 { workspace.sessionHeader.reveal() } }
                     .onTapGesture { workspace.sessionHeader.reveal() }
             }
+        }
+    }
+
+    /// 标题位在 `minWidth`～`width` 之间由工具栏给：理想宽写最窄（工具栏按理想宽量最少要多宽），能放多宽由 `ToolbarItemFlex` 告诉工具栏。
+    private struct Flex: ViewModifier {
+        func body(content: Content) -> some View {
+            content
+                .frame(maxWidth: .infinity)
+                .frame(minWidth: PageTitleSlot.minWidth, idealWidth: PageTitleSlot.minWidth, maxWidth: PageTitleSlot.width)
+                .background { ToolbarItemFlex(width: PageTitleSlot.minWidth...PageTitleSlot.width) }
         }
     }
 
@@ -139,6 +147,42 @@ struct PageTitleSlot: View {
         }
         .buttonStyle(PressStyle())
         .help("回到这件事")
+    }
+}
+
+/// 让所在的工具栏项能在 `width` 之间伸缩：SwiftUI 的工具栏项只报理想宽、按它定死，窗口一窄就整项挤进溢出菜单（实测）。
+/// 工具栏按项的视图的约束量尺寸（`NSToolbarItem.view`，macOS 12 起不用 minSize、maxSize），这里给那个视图加上宽的上下限，
+/// 并把它守住理想宽的优先级降到"量最小尺寸"那一档之下：工具栏量到最窄是下限，有地方时放宽到上限。
+/// 上下限只在挂着时有：标题位空了（别的页）就撤下，空的标题位不占着下限那么宽、不挡住下面页里的东西（项目页的回到顶部）。
+/// 降下的优先级留着（再挂上时一样，标题位换内容时新旧两份前后脚挂撤，各管各的上下限）。
+private struct ToolbarItemFlex: NSViewRepresentable {
+    let width: ClosedRange<CGFloat>
+
+    func makeNSView(context: Context) -> Probe { Probe(width: width) }
+    func updateNSView(_ probe: Probe, context: Context) {}
+
+    final class Probe: NSView {
+        let width: ClosedRange<CGFloat>
+        private var limits: [NSLayoutConstraint] = []
+
+        init(width: ClosedRange<CGFloat>) {
+            self.width = width
+            super.init(frame: .zero)
+        }
+
+        required init?(coder: NSCoder) { nil }
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            NSLayoutConstraint.deactivate(limits)
+            limits = []
+            guard let host = window?.toolbar?.items.first(where: { $0.view.map(isDescendant) ?? false })?.view else { return }
+            let yielding = NSLayoutConstraint.Priority(NSLayoutConstraint.Priority.fittingSizeCompression.rawValue - 1)
+            host.setContentHuggingPriority(yielding, for: .horizontal)
+            host.setContentCompressionResistancePriority(yielding, for: .horizontal)
+            limits = [host.widthAnchor.constraint(greaterThanOrEqualToConstant: width.lowerBound), host.widthAnchor.constraint(lessThanOrEqualToConstant: width.upperBound)]
+            NSLayoutConstraint.activate(limits)
+        }
     }
 }
 

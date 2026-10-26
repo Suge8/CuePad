@@ -9,10 +9,16 @@ from _sync_run import PEER, Metrics, kind
 from rusage import NS, usage
 
 ROUND_LIMIT = 60  # 一轮里等一样东西最多这么久（与 Speech.receiptLimit 同）
+# 按记录 id 等的打点不按时刻过滤（id 只出现一次）：同一毫秒打的两点、或回前台那一刻刚好到的，读到的先后与时刻不一定一致
 
 
 def by_id(name, id):
     return lambda e: e["e"] == name and e.get("id") == id
+
+
+def settled(inst, name, id):
+    """这条记录早该有的那一段（后面的段已经到了）：两个实例、两个订阅的打点到这里的先后不定，同一毫秒的会晚一点读到，等一下再认没有。"""
+    return inst.wait(by_id(name, id), 2)
 
 
 def arrived(id):
@@ -28,8 +34,8 @@ def round_trip(run, tag, m):
     if say:
         id = say["id"]
         receipt = b.wait(by_id("msg-delivered", id), ROUND_LIMIT)
-        accepted, got = b.first("msg-accepted", id), a.wait(arrived(id), 1)
-        handed = a.first("msg-delivered", id)
+        accepted, got = settled(b, "msg-accepted", id), a.wait(arrived(id), 1)
+        handed = settled(a, "msg-delivered", id)
         m.span("手机→Mac 对 Cue 说·写下→已发出", say, accepted)
         m.span("手机→Mac 对 Cue 说·已发出→Mac 入库", accepted, got)
         m.span("手机→Mac 对 Cue 说·Mac 入库→上屏", got, a.wait(by_id("msg-shown", id), 5))
@@ -40,14 +46,14 @@ def round_trip(run, tag, m):
         if reply:
             rid = reply["id"]
             shown = b.wait(by_id("msg-shown", rid), ROUND_LIMIT)
-            rgot = b.first("msg-arrived", rid)
+            rgot = b.wait(arrived(rid), 5)  # 页面与记录方各订阅一份，同一次提交先送到哪个不定
             m.span("Mac→手机 Cue 回话·写下→手机入库", reply, rgot)
             m.span("Mac→手机 Cue 回话·手机入库→上屏", rgot, shown)
             m.span("Mac→手机 Cue 回话·全程（写下→上屏）", reply, shown)
     if req:
         id = req["id"]
         done = b.wait(by_id("req-done", id), ROUND_LIMIT)
-        accepted, got, ran = b.first("req-accepted", id), a.wait(by_id("req-arrived", id), 1), a.first("req-done", id)
+        accepted, got, ran = settled(b, "req-accepted", id), a.wait(by_id("req-arrived", id), 1), settled(a, "req-done", id)
         executed = {"t": ran["at"]} if ran else None
         m.span("手机→Mac 对会话说·写下→已发出", req, accepted)
         m.span("手机→Mac 对会话说·已发出→Mac 入库", accepted, got)
@@ -88,8 +94,8 @@ def last(events):
 def cold_once(m, label, restarted, writer, writes):
     t0 = restarted.start()
     ready = restarted.wait(kind("ready"), 60, after=t0)
-    got = [restarted.wait(arrived(w["id"]), ROUND_LIMIT, after=t0) for w in writes]
-    shown = [restarted.wait(by_id("msg-shown", w["id"]), 30, after=t0) for w in writes]
+    got = [restarted.wait(arrived(w["id"]), ROUND_LIMIT) for w in writes]
+    shown = [restarted.wait(by_id("msg-shown", w["id"]), 30) for w in writes]
     start = {"t": t0}
     m.span(f"{label}·启动→打点就绪", start, ready)
     m.span(f"{label}·启动→最后一条入库", start, max(got, key=lambda e: e["t"]) if all(got) else None)
@@ -121,10 +127,10 @@ def scene_fg(run, args):
         time.sleep(away)
         if w:
             id = w[0]["id"]
-            before = b.first("msg-arrived", id)
             t0 = {"t": b.send("fg")}
-            if before: m["手机回前台·离开期间已到（次）"].append(1)
-            m.span("手机回前台·回前台→入库", t0, before or b.wait(arrived(id), ROUND_LIMIT, after=t0["t"]))
+            got = b.wait(arrived(id), ROUND_LIMIT)
+            if got and got["t"] < t0["t"]: m["手机回前台·离开期间已到（次）"].append(1)
+            else: m.span("手机回前台·回前台→入库", t0, got)
             m.span("手机回前台·回前台→上屏", t0, b.wait(by_id("msg-shown", id), ROUND_LIMIT))
         else:
             b.send("fg")
@@ -134,11 +140,11 @@ def scene_fg(run, args):
         time.sleep(away)
         if w:
             id = w[0]["id"]
-            m.span("Mac 隐藏·已发出→Mac 入库", b.first("msg-accepted", id), a.wait(arrived(id), 1))
-            early = a.first("msg-shown", id)
+            m.span("Mac 隐藏·已发出→Mac 入库", settled(b, "msg-accepted", id), a.wait(arrived(id), 1))
             t0 = {"t": a.send("activate")}
-            if early: m["Mac 隐藏期间已上屏（次）"].append(1)
-            else: m.span("Mac 回前台·回前台→上屏", t0, a.wait(by_id("msg-shown", id), ROUND_LIMIT))
+            shown = a.wait(by_id("msg-shown", id), ROUND_LIMIT)
+            if shown and shown["t"] < t0["t"]: m["Mac 隐藏期间已上屏（次）"].append(1)
+            else: m.span("Mac 回前台·回前台→上屏", t0, shown)
         else:
             a.send("activate")
         time.sleep(5)
@@ -237,19 +243,19 @@ def scene_offline(run, args):
 def island(checkout, out, args):
     """M4 收消息到灵动岛（iPhone 模拟器，App 这一侧）：island [轮数=10]。实现与量不到的段见 SyncBench+Island.swift。
     不连 iCloud、不用 cloudd，所以不拿测量锁；模拟器经 xc.sh run ios 领（按它的模拟器锁排队）。"""
-    rounds = int(args[0]) if args else 10
+    rounds, m = int(args[0]) if args else 10, Metrics()
     library = f"{out}/ios-library"
     os.makedirs(out, exist_ok=True)
     env = dict(os.environ, CUEPAD_SHOT_LIBRARY=library, CUEPAD_RUN_SECONDS="600")
     started = subprocess.run([f"{checkout}/apple/scripts/xc.sh", "run", "ios", "--", "-CuePadSyncBench", "island", "-CuePadLiveActivity", "YES",
                               "-CuePadSyncBenchRounds", str(rounds)], env=env, capture_output=True, text=True)
     open(f"{out}/ios-run.log", "w").write(started.stdout + started.stderr)
+    # App 跑完各轮才报就绪，run 返回时打点已写完；最后一行是"PID UDID"，按 PID 收掉这个实例
+    last = started.stdout.strip().splitlines()[-1].split() if started.stdout.strip() else []
+    if started.returncode == 0 and last and last[0].isdigit(): os.kill(int(last[0]), 15)
     marks = f"{library}/bench-marks.jsonl"
-    end = time.time() + 30 + rounds * 5
-    while time.time() < end and not (os.path.exists(marks) and '"done"' in open(marks).read()):
-        time.sleep(1)  # 等的是另一台模拟器里的进程写完文件，没有能订阅的事件
     events = [json.loads(l) for l in open(marks)] if os.path.exists(marks) else []
-    m = Metrics()
+    if not any(e["e"] == "done" for e in events): m["手机收消息·没跑完（次）"].append(1)
     for r in range(1, rounds + 1):
         write = next((e for e in events if e["e"] == "write" and e.get("round") == r), None)
         done = next((e for e in events if e["e"] == "snapshots" and e.get("round") == r), None)
@@ -257,7 +263,6 @@ def island(checkout, out, args):
         shown = next((e for e in events if write and e["e"] == "island" and write["t"] <= e["t"] < upto), None)
         m.span("手机收消息·入库→岛的内容换掉", write, shown)
         m.span("手机收消息·入库→快照写完（推送回调交还前）", write, done)
-    if not events: m["手机收消息·没有打点（超时）"].append(1)
     return m, {}
 
 

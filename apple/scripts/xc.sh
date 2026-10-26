@@ -13,6 +13,7 @@
 #   xc.sh stop                                      结束本检出 run 起的 Mac 实例
 #   xc.sh perf <mac|ios> [次数] [启动参数…]            单次交互：点击回合、指令、掉帧（perf-mac.sh、perf-ios.sh）；只有带 -CuePadForeground YES 的 Mac 测量独占机器
 #   xc.sh perf idle <mac|ios> [次数] [秒] [启动参数…]   静置时的 CPU、指令、唤醒、能耗、内存与启动到就绪（perf-idle.sh）
+#   xc.sh perf launch mac [次数] [启动参数…]            冷启动：到主窗口上屏、首屏内容出来、能交互（perf-launch.sh）
 #   xc.sh release <mac|ios> | device | provision    发布与签名（docs/release.md）
 # 启动参数原样传给 App（如 -CuePadDemo YES -CuePadScene editor -theme dark；Debug 认的参数见 DebugScene.swift）。
 # 实例的隔离、每个检出一份、一定退出见 app.py 头注释；排队、在等谁、等待上限与任务时限见 _lock.sh；模拟器池见 _sim.sh。
@@ -64,9 +65,10 @@ esac
 [ "$cmd" != check ] || platform=ios
 perf_script=""
 if [ "$cmd" = perf ]; then
-  # perf idle <平台> …：平台跟着传给 perf-idle.sh
-  if [ "$platform" = idle ]; then perf_script=perf-idle.sh; platform="${3:-}"; else perf_script="perf-$platform.sh"; fi
-  case "$platform" in mac|ios) ;; *) echo "用法：$0 perf [idle] <mac|ios> [参数…]" >&2; exit 2 ;; esac
+  # perf idle|launch <平台> …：平台跟着传给 perf-idle.sh、perf-launch.sh
+  perf_script="perf-$platform.sh"
+  case "$platform" in idle|launch) platform="${3:-}" ;; esac
+  case "$platform" in mac|ios) ;; *) echo "用法：$0 perf [idle|launch] <mac|ios> [参数…]" >&2; exit 2 ;; esac
 fi
 
 # perf 量的是 Release（带 DEBUG 条件，只为留下测量代码与调试场景）：数要和用户拿到的构建同一档优化
