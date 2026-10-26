@@ -28,8 +28,8 @@ public enum PiPush: Hashable, Sendable {
 }
 
 extension CueStore {
-  /// 这条提示此刻到不到你：手机推送标志（`PiStateRecorder`、`flagLeftToYou`、`insertCueMessage`）、Mac 的通知与手机前台的会话横幅
-  /// （`AlertCenter`、`SessionAlertTracker` 认出候选之后）都只问这里。会话记录已不在为不到。
+  /// 这条提示此刻到不到你：Cue 消息的推送标志（`insertCueMessage`）、Mac 的通知与手机前台的会话横幅（`AlertCenter`、`SessionAlertTracker` 认出候选之后）
+  /// 都只问这里，会话的推送标志问同一条规则的 `push`。会话记录已不在为不到。
   public func reaches(_ subject: AlertSubject) throws -> Bool {
     switch subject {
     case .cue: try !watchedOnMac(\.cue)
