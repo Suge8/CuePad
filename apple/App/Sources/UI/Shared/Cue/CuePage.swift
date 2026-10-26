@@ -152,7 +152,32 @@ struct CuePage: View {
             holding: catchingUp || docking,
             arrival: rows.last.flatMap { CueRow.arrives($0, swapsInPlace: services.cueSwapsInPlace) ? $0.id : nil }
         ) { window in
-            CueRows(thread: thread, window: window, live: live, progress: cue.presence.progress, opened: $opened, seen: $seen)
+            let first = max(0, rows.count - window.count)
+            let lastYou = thread.messages.last { $0.author == .known(.you) }?.id
+            VStack(alignment: .leading, spacing: 0) {
+                if first > 0 { EarlierRow(count: window.earlier, action: window.showEarlier) }
+                let live = live
+                ChatSegments(items: rows, size: Self.segment, from: first, spare: Self.spare) { items in
+                    CueSegment(rows: items.map { item in
+                        CueRow(
+                            row: item, shots: thread.shots[item.id] ?? [],
+                            joined: thread.joined.contains(item.id),
+                            stamp: thread.stamps[item.id], delivered: item.id == lastYou, live: live.flatMap { item.contains(round: $0.round) ? $0 : nil },
+                            unread: thread.unread.contains(item.id), opened: $opened, seen: $seen)
+                    })
+                    .equatable()
+                }
+                CueEnding(
+                    newestSaid: thread.messages.last { $0.author == .known(.cue) }?.createdAt, joined: rows.last?.speaker == .leading,
+                    roundInRows: live.map { live in rows.contains { $0.contains(round: live.round) } } ?? false)
+            }
+            #if os(iOS)
+            // 手机上对话里的字不开行内选择：长按出的是消息菜单，挑字走菜单里的"选择文本"（同会话页）
+            .environment(\.inlineTextSelection, false)
+            #endif
+            // 滚动目标（段与其余各行）：内容变了滚动位置跟着它走（`ChatScroll`）；跳到某一条按条的 id 找，不靠它
+            .scrollTargetLayout()
+            .animation(HandOff.quick, value: cue.presence.progress)
         }
     }
 
@@ -204,50 +229,5 @@ struct CuePage: View {
         }
         .animation(HandOff.quick, value: cue.canHear)
         .animation(HandOff.quick, value: thread?.replies.isEmpty)
-    }
-}
-
-/// 对话里排着的那几格（`ChatColumn` 交来的 `ChatWindow`）。那一列的宽只有这里用（离屏远的段换成的空白按它估高，`ChatSegments`），
-/// 也只记在这里：打开时量到宽写回、拉窗口时宽变了，都只重算这几格，不重算整页（拍板卡、输入框）。
-private struct CueRows: View {
-    let thread: CueThread
-    let window: ChatWindow
-    let live: CueLiveRound?
-    /// Cue 此刻在做什么（`CuePresence.progress`）：末尾的进展出现、收起时这几格一起挪。
-    let progress: String?
-    @Binding var opened: PreviewOpening?
-    @Binding var seen: [UUID: Date]
-    @State private var width: CGFloat = 0
-
-    var body: some View {
-        let rows = thread.rows
-        let first = max(0, rows.count - window.count)
-        let lastYou = thread.messages.last { $0.author == .known(.you) }?.id
-        VStack(alignment: .leading, spacing: 0) {
-            if first > 0 { EarlierRow(count: window.earlier, action: window.showEarlier) }
-            ChatSegments(
-                items: rows, size: CuePage.segment, from: first, width: width, spare: CuePage.spare
-            ) { items in
-                CueSegment(rows: items.map { item in
-                    CueRow(
-                        row: item, shots: thread.shots[item.id] ?? [],
-                        joined: thread.joined.contains(item.id),
-                        stamp: thread.stamps[item.id], delivered: item.id == lastYou, live: live.flatMap { item.contains(round: $0.round) ? $0 : nil },
-                        unread: thread.unread.contains(item.id), opened: $opened, seen: $seen)
-                })
-                .equatable()
-            }
-            CueEnding(
-                newestSaid: thread.messages.last { $0.author == .known(.cue) }?.createdAt, joined: rows.last?.speaker == .leading,
-                roundInRows: live.map { live in rows.contains { $0.contains(round: live.round) } } ?? false)
-        }
-        #if os(iOS)
-        // 手机上对话里的字不开行内选择：长按出的是消息菜单，挑字走菜单里的"选择文本"（同会话页）
-        .environment(\.inlineTextSelection, false)
-        #endif
-        // 滚动目标（段与其余各行）：内容变了滚动位置跟着它走（`ChatScroll`）；跳到某一条按条的 id 找，不靠它
-        .scrollTargetLayout()
-        .onGeometryChange(for: CGFloat.self) { $0.size.width.rounded() } action: { width = $0 }
-        .animation(HandOff.quick, value: progress)
     }
 }

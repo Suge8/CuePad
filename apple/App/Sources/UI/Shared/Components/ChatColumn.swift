@@ -68,6 +68,7 @@ struct ChatColumn<Content: View, Key: Equatable>: View {
             ChatScroll(followKey: followKey, readingWidth: readingWidth, inset: inset, follow: $follow, holding: holding, arrival: arrival) {
                 content(ChatWindow(count: window, earlier: first > 0 ? paging.step(size, first) : 0) { showEarlier(size) })
                     .environment(\.chatMargin, margin)
+                    .environment(\.chatWidth, size.width - 2 * margin)
             }
             .overlay(alignment: .trailing) {
                 if !marks.isEmpty {

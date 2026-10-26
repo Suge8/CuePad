@@ -156,6 +156,8 @@ extension EnvironmentValues {
     @Entry var chatHeight: CGFloat = .infinity
     /// 阅读栏两边的页边距（`ChatLayout.margin`，`ChatColumn` 按可见区的宽算一次）：边上放的小东西（刻度、新消息的点）据它看放不放得下。
     @Entry var chatMargin: CGFloat = 0
+    /// 阅读栏的宽（可见区的宽去掉两边的 `chatMargin`，`ChatColumn` 给）：离屏远的段换成的空白按它估高（`ChatSegments`）。
+    @Entry var chatWidth: CGFloat = 0
 }
 
 /// "回到最新"：回复框右上方一颗圆形玻璃钮，向下的箭头；离开后来过新内容时右上角带一个墨色的点。

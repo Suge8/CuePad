@@ -28,8 +28,6 @@ struct PiConversation: View {
     @Environment(AppServices.self) private var services
     @Environment(Workspace.self) private var workspace
     @State private var opened: PreviewOpening?
-    /// 整列的宽：离屏远的段换成的空白按它估高（`ChatSegments`）。
-    @State private var width: CGFloat = 0
 
     var body: some View {
         let all = items
@@ -40,7 +38,7 @@ struct PiConversation: View {
                 EarlierRow(count: Self.segment, action: showEarlier)
             }
             if all.isEmpty, let prompt = session.pendingPrompt ?? session.lastPrompt { RecapPreview(session: session, prompt: prompt) }
-            ChatSegments(items: all, size: Self.segment, from: first, width: width) { items in
+            ChatSegments(items: all, size: Self.segment, from: first) { items in
                 ChatSegment(items: Array(items), session: session, highlight: highlight, notes: notes, swapsInPlace: swapsInPlace, opened: $opened)
                     .equatable()
             }
@@ -50,7 +48,6 @@ struct PiConversation: View {
         // 滚动目标（段与其余各行）：内容变了滚动位置跟着它走（`ChatScroll`）；跳到某一条按条的 id 找，不靠它
         .scrollTargetLayout()
         .frame(maxWidth: .infinity, alignment: .leading)
-        .onGeometryChange(for: CGFloat.self) { $0.size.width.rounded() } action: { width = $0 }
         #if os(iOS)
         // 手机上长按出的是消息菜单，挑字、批注走菜单里的"选择文本""批注"：对话里的字不开行内选择，每行少建一套文字交互。
         // 挂在弹出预览之内：从这里打开的文件预览照常可选
