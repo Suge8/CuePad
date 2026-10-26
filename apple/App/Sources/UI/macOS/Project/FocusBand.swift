@@ -79,7 +79,8 @@ struct FocusBand: View {
     }
 }
 
-/// 下滚后收成的悬浮标题：一块玻璃写项目名与没做完的任务数（任务图标接数，不写"任务"二字：图标已经说了）；点一下回到顶部。
+/// 下滚后的回到顶部：一块玻璃，朝上的箭头接没做完的任务数（任务图标接数，不写"任务"二字：图标已经说了）；点一下回到顶部。
+/// 不写项目名：侧栏选中的那一行、侧栏收起时工具栏的切换胶囊已经写着（docs/ui.md 同一屏不重复写这一页的名字）。
 struct CompactFocus: View {
     let data: ProjectPageData
     let scrollToTop: () -> Void
@@ -87,20 +88,18 @@ struct CompactFocus: View {
 
     var body: some View {
         Button(action: scrollToTop) {
-            HStack(spacing: 14) {
-                HStack(spacing: 6) {
-                    ProjectGlyph(project: data.project, size: 13)
-                    Text(data.project?.shownName ?? "").font(Typography.toolbarTitle).lineLimit(1)
-                }
+            HStack(spacing: 10) {
+                Image(.above).accessibilityHidden(true)
                 if data.taskCounts.open > 0 {
                     Label { Text(data.taskCounts.open, format: .number).monospacedDigit() } icon: { Image(.task) }
                         .foregroundStyle(palette.ink2)
-                        .accessibilityLabel("\(data.taskCounts.open) 个任务没做完")
                 }
             }
         }
         .buttonStyle(ControlButtonStyle(kind: .glass))
         .help("回到顶部")
+        .accessibilityLabel("回到顶部")
+        .accessibilityValue(data.taskCounts.open > 0 ? Text("\(data.taskCounts.open) 个任务没做完") : Text(verbatim: ""))
     }
 }
 #endif

@@ -15,8 +15,6 @@ struct TaskBoardPage: View {
     var body: some View {
         let scope = workspace.scopedProject
         ZStack(alignment: .topLeading) {
-            // 页的上沿就是窗口最顶那一排的下沿：量一次给列头排进那一排
-            Color.clear.onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: { band = $0 }
             BoardColumns(board: (board ?? .empty).only(scope), adding: Bindable(workspace).addsTask, newTaskProject: scope ?? workspace.currentProject)
                 .padding(.horizontal, Spacing.page - 8)
                 .environment(\.boardBand, band)
@@ -26,6 +24,7 @@ struct TaskBoardPage: View {
                 .transaction(value: scope) { $0.disablesAnimations = true }
         }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .readsTopBand(into: $band)
             .background(palette.desk)
             .animation(HandOff.quick, value: workspace.addsTask)
             .onChange(of: workspace.scopedProject) { workspace.addsTask = false }

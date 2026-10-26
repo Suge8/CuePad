@@ -20,8 +20,7 @@ struct SearchScreen: View {
     @State private var scope = DebugHooks.preset.searchScope
     @State private var sessions = AgentListModel()
     @Environment(Workspace.self) private var workspace
-    @Environment(\.horizontalSizeClass) private var sizeClass
-    /// 页宽：导航栏中间那一格不会自己铺满，搜索框按页宽给定宽度（让出左边的返回与两侧页边；宽屏还有侧栏钮与 Cue 面板钮）。
+    /// 页宽：导航栏中间那一格不会自己铺满，搜索框按页宽给定宽度（让出左边的返回与两侧页边）。
     @State private var width: CGFloat = 0
     private static let maxField: CGFloat = 560
     static let prompt = String(localized: "搜索灵感、任务与会话")
@@ -43,7 +42,7 @@ struct SearchScreen: View {
     }
 
     private var fieldWidth: CGFloat {
-        let sides = FloatingHeaderLayout.margin * 2 + FloatingHeaderLayout.slot * (sizeClass == .compact ? 1 : 3)
+        let sides = FloatingHeaderLayout.margin * 2 + FloatingHeaderLayout.slot
         return min(Self.maxField, max(0, width - sides))
     }
 

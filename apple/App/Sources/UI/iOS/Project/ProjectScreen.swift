@@ -13,7 +13,7 @@ nonisolated private struct ProjectPage: Sendable, Equatable {
     }
 }
 
-/// 项目页：任务纸 → 置顶的灵感 → 最近（卡片墙）→ 更早，与 Mac 同构、同一套上墙规则；一条灵感都没有时墙上只有"记一条灵感"那一格（`NewIdeaTile`）。
+/// 项目页：任务纸 → 置顶的灵感 → 最近（卡片墙）→ 更早，与 Mac 同构、同一套上墙规则；一条灵感都没有时墙上只有"记一条灵感"那一格（`EmptyWallTile`）。
 /// 任务纸以下是一个懒加载列表：大项目只创建屏幕内的卡与行。
 struct ProjectScreen: View {
     let projectID: UUID
@@ -61,7 +61,7 @@ struct ProjectScreen: View {
             // 行距为 0：同一组的"更早"行拼成一张纸（首尾圆角、行间分隔线），段与段之间的距离各自写在段上
             LazyVStack(alignment: .leading, spacing: 0) {
                 if data.cards.isEmpty {
-                    wall { NewIdeaTile(action: workspace.newCard) }
+                    wall { EmptyWallTile() }
                 }
                 if !arrangement.pinned.isEmpty {
                     // 置顶的灵感：长期参考的，一行一条压在任务纸下面；不另起组名，行首的图钉认得出

@@ -40,7 +40,6 @@ struct CaptureComposer: View {
         )
         // 一直展开的出现的同一刻聚焦
         .onAppear { if pinnedOpen { focused = true } }
-        .onChange(of: workspace.captureFocusRequests) { focused = true }
     }
 
     private var header: some View {

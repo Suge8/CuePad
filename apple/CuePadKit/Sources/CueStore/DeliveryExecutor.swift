@@ -97,8 +97,9 @@ extension CueStore {
 /// - 暂时没成的（`DeliveryOutcome.transient`）重试一次，再不成按失败写回；
 /// - 启动时，上次执行到一半的请求判失败且不重试（可能已经发出）；
 /// - 读写 Store 失败交给 `onIssue`（请求停在原状态，手机那边会一直等，必须让人看到），下一次变化时再试；
-/// - 领取与写回结果后各调用一次 `onWritten`（App 用它立即上传这一条，排在其余待推送前面）：发起的设备据领取知道 Mac 接手了，
-///   执行得久的（唤醒已结束的会话）不会被它报成超时没送到。领取的那次不等上传完就开始执行。
+/// - 写回结果后调用一次 `onWritten`（App 用它立即上传这一条，排在其余待推送前面）；执行超过 `claimGrace` 的，领取那一版先传一次：
+///   发起的设备据领取知道 Mac 接手了，执行得久的（唤醒已结束的会话）不会被它报成超时没送到。多数执行几十毫秒就完，只传结果那一版：
+///   领取那一版在路上时结果得等它回来才能传（同一条记录一次只一版在路上），回执要多等一个来回。
 public actor DeliveryExecutor {
   private let store: CueStore
   private let hostID: String
@@ -106,6 +107,8 @@ public actor DeliveryExecutor {
   package static let maxAge: Duration = .seconds(600)
   /// 完成的请求保留多久。
   package static let retention: Duration = .seconds(60)
+  /// 执行多久还没完就先把领取传出去。说给在线会话的话交给桥几十毫秒就有结果，留足机器忙时的余量；远短于 `Speech.receiptLimit`。
+  package static let claimGrace: Duration = .milliseconds(500)
   private let timing: Timing
   private let onIssue: @Sendable (any Error) -> Void
   private let onWritten: @Sendable (DeliveryRequest.ID) async -> Void
@@ -114,6 +117,8 @@ public actor DeliveryExecutor {
   private var watcher: Task<Void, Never>?
   private var cleanup: Task<Void, Never>?
   private var processing = false
+  /// 正在执行的那一条到 `claimGrace` 才传领取（结果先写下就不传）。
+  private var claimUpload: Task<Void, Never>?
   private var rerun = false
 
   public init(
@@ -178,7 +183,10 @@ public actor DeliveryExecutor {
       if await reporting({ try await store.claimDelivery(request.id, host: hostID) }) == true {
         let age = timing.now().timeIntervalSince(request.createdAt)
         Self.log.info("领取投送请求 \(request.id.uuidString.prefix(8), privacy: .public) \(request.mode.rawValue, privacy: .public)，创建后 \(age, format: .fixed(precision: 1)) 秒")
-        Task { [onWritten] in await onWritten(request.id) }
+        claimUpload = Task { [onWritten, timing] in
+          guard (try? await timing.sleep(Self.claimGrace)) != nil else { return }
+          await onWritten(request.id)
+        }
         return request
       }
     }
@@ -192,6 +200,8 @@ public actor DeliveryExecutor {
     if case .transient = outcome, (try? await timing.sleep(Speech.retryDelay)) != nil {
       outcome = await handler(request)
     }
+    claimUpload?.cancel()
+    claimUpload = nil
     let took = timing.now().timeIntervalSince(started)
     Self.log.info("执行投送请求 \(request.id.uuidString.prefix(8), privacy: .public) \(request.mode.rawValue, privacy: .public) 用时 \(took, format: .fixed(precision: 2)) 秒")
     await finish(request, outcome)

@@ -28,7 +28,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         launch()
     }
 
-    /// 解析资料库位置、打开资料库、建出主窗口与菜单栏部件。位置有误时说明原因后退出（不能带着错误的位置去读写）；
+    /// 解析资料库位置、打开资料库、建出主窗口并显示，画完第一帧再起其余的（`startShell`）。位置有误时说明原因后退出（不能带着错误的位置去读写）；
     /// 资料库打不开时不终止：显示失败页，"重试"重新走这里。
     private func launch() {
         let location: LibraryLocation
@@ -51,16 +51,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         failureWindow = nil
         services.connectSync()  // 第一拉不等建窗口
         let workspace = Workspace(services: services)
-        Task { await workspace.follow() }
         let window = makeMainWindow(services, workspace: workspace)
         services.windowShell = window
         services.alerts = alerts
         alerts.services = services
         alerts.workspace = workspace
-        Task { await alerts.refresh() }
         self.services = services
         self.workspace = workspace
+        // 设置与"对 Cue 说"在这里接好入口（窗口与内容第一次打开才建、才排，这里几乎不花时间）：设置随时可能被打开，不等第一帧之后
+        let cueBar = CueBar(services: services, workspace: workspace)
+        self.cueBar = cueBar
+        settingsWindow = SettingsWindowController {
+            SettingsView(pane: $0).environment(cueBar).panelHost().modifier(PaletteProvider()).environment(services)
+        }
+        DebugHooks.present(window)
+        // 第一帧只有主窗口：工作区与服务的订阅、菜单栏图标与面板、后台服务都不在第一帧里，它们起头那一段同步的活（读库、注册、
+        // 起各家的接入）排在第一帧之前就把窗口往后推。首屏要的数据已经当场读好（`Workspace.init`、`LiveSessions`、页面的 `observing`）
+        Task {
+            await NextFrame.drawn()
+            startShell(services, workspace: workspace, window: window)
+        }
+    }
 
+    /// 主窗口第一帧画完之后：工作区与服务开始跟着库，建菜单栏图标与面板，起后台服务。
+    private func startShell(_ services: AppServices, workspace: Workspace, window: MainShellWindow) {
+        Task { await workspace.follow() }
+        Task { await alerts.refresh() }
         // 面板与主窗口共用 App 常驻的那个工作区（项目目录、会话归属与摘要只订阅一份，见 `Workspace.follow`）；点里面的一行在主窗口里打开那一页
         let panel = MenuBarPanel()
         panel.setContent(MenuBarPad { [weak panel] route in
@@ -87,12 +103,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
                 await alerts.showBadge(count)
             }
         }
-        let cueBar = CueBar(services: services, workspace: workspace)
-        self.cueBar = cueBar
-        settingsWindow = SettingsWindowController {
-            SettingsView(pane: $0).environment(cueBar).panelHost().modifier(PaletteProvider()).environment(services)
-        }
-        DebugHooks.present(window)
         // 首次打开：接入检测到的 Agent 并启用 Cue（主窗口里的浮层）。从 Xcode 编出来直接打开的也弹（克隆仓库自己编的人，开发库就是他的库）；
         // 脚本起的实例（截图、录屏、测量）不弹，免得盖住要拍的画面，验收这一次时给 -CuePadOfferSetup
         if !DebugHooks.scripted || DebugHooks.offersSetup { workspace.offerSetup() }
@@ -214,11 +224,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
 
     private func makeMainWindow(_ services: AppServices, workspace: Workspace) -> MainShellWindow {
-        let window = WindowFactory.main(content: MainRoot(workspace: workspace).environment(services))
-        // 屏幕外测量不记窗口位置：记下的屏幕外位置会让之后正常打开时窗口不见
-        if DebugHooks.placesOffscreen(window) { return window }
-        mainFrameKeeper = WindowFrameKeeper(window: window, name: "main", settings: services.settings)
-        return window
+        WindowFactory.main(content: MainRoot(workspace: workspace).environment(services)) { window in
+            // 屏幕外测量不记窗口位置：记下的屏幕外位置会让之后正常打开时窗口不见
+            if DebugHooks.placesOffscreen(window) { return }
+            mainFrameKeeper = WindowFrameKeeper(window: window, name: "main", settings: services.settings)
+        }
     }
 }
 

@@ -8287,6 +8287,22 @@
         }
       }
     },
+    "在右侧并排看 %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show %@ Alongside"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在右侧并排看 %@"
+          }
+        }
+      }
+    },
     "在后台启动的 Claude Code 没连上就退出了" : {
       "localizations" : {
         "en" : {
@@ -16679,6 +16695,22 @@
         }
       }
     },
+    "置顶、移到项目、复制、归档、删除" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pin, Move to Project, Copy, Archive, Delete"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "置顶、移到项目、复制、归档、删除"
+          }
+        }
+      }
+    },
     "置顶的灵感" : {
       "localizations" : {
         "en" : {
@@ -17203,34 +17235,34 @@
         }
       }
     },
-    "记下灵感 → %@（⌘↩ 记下）" : {
+    "记下灵感 → %@（⌘↩）" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Jot down an idea → %@ (⌘↩ to save)"
+            "value" : "Jot down an idea → %@ (⌘↩)"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "记下灵感 → %@（⌘↩ 记下）"
+            "value" : "记下灵感 → %@（⌘↩）"
           }
         }
       }
     },
-    "记下灵感（⌘↩ 记下）" : {
+    "记下灵感（⌘↩）" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Jot down an idea (⌘↩ to save)"
+            "value" : "Jot down an idea (⌘↩)"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "记下灵感（⌘↩ 记下）"
+            "value" : "记下灵感（⌘↩）"
           }
         }
       }
@@ -19199,6 +19231,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "这条提问已经结束了"
+          }
+        }
+      }
+    },
+    "这里还没有灵感" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No ideas here yet"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这里还没有灵感"
           }
         }
       }

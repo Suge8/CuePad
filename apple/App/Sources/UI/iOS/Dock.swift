@@ -92,7 +92,6 @@ struct HomePage: View {
     var body: some View {
         RouteView(route: route)
             .environment(\.headerHost, .page(search: Dock.search(on: route)))
-            .environment(\.pageNamedElsewhere, true)
             // Cue 页的底边是它自己的输入框
             .dockReserve(route != .cue)
     }

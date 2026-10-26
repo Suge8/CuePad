@@ -107,7 +107,7 @@ enum Motion {
     static let snappy = Animation.spring(duration: 0.25, bounce: 0)
     /// 卡片在墙上挪位（同列下移、新卡入场）：定长 0.24s，弹簧的尾巴会让实际时长超过 300ms。
     static let move = Animation.timingCurve(moveCurve.0, moveCurve.1, moveCurve.2, moveCurve.3, duration: moveDuration)
-    /// `move` 的时长与曲线控制点，渲染端照它走的动画（`ContentLift`）共用。
+    /// `move` 的时长与曲线控制点，渲染端照它走的动画（`ContentLift`、Mac 预览的飞出飞回 `PreviewFlight`）共用。
     nonisolated static let moveDuration = 0.24
     nonisolated static let moveCurve: (Double, Double, Double, Double) = (0.2, 0, 0, 1)
     /// iPhone 切页：根上那一条页滑过去、底部那一排的选中与换形都是这一条（`PagerController.animate`，图层与 SwiftUI 同一条），"⋯"开合也用它；
@@ -122,7 +122,9 @@ enum Motion {
     static let item = AnyTransition.opacity.combined(with: .scale(scale: 0.96))
 
     /// 减弱动态效果时的整块交叉淡入淡出：只配换了身份的视图用（新旧两块各自淡入淡出），同一个视图上用它照样会插值位置与尺寸。
-    static let crossfade = Animation.easeInOut(duration: 0.15)
+    static let crossfade = Animation.easeInOut(duration: crossfadeDuration)
+    /// `crossfade` 的时长，渲染端的交叉淡入淡出（Mac 预览落地时缩略图换成内容）共用。
+    nonisolated static let crossfadeDuration: TimeInterval = 0.15
 
     /// 位置、尺寸、旋转的动画；减弱动态效果时没有动画、直接到终态——一个动画事务里分不出只淡不挪，换曲线照样插值。
     static func spatial(_ animation: Animation, reduceMotion: Bool) -> Animation? {

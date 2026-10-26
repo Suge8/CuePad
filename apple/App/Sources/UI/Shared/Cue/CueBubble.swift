@@ -61,7 +61,7 @@ struct CueSays: View {
         BubbleWidth(fraction: CueBubble.cueWidth, edge: .leading) {
             VStack(alignment: .leading, spacing: card ? 12 : 8) {
                 words
-                if !shots.isEmpty { CueShots(shots: shots, group: message.id.uuidString, reply: .cue, open: open) }
+                if !shots.isEmpty { CueShots(shots: shots, group: message.id.uuidString, open: open) }
                 if let task { CueTaskLine(task: task, message: message) }
             }
             .modifier(CueSaysSurface(card: card, joined: joined))

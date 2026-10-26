@@ -1,6 +1,6 @@
 # 同步参考
 
-同步通路、拉取、发送与通知的规则和理由写在各自类型的头注释里：通路、冷启动与为什么不用 CKSyncEngine 在 `CloudSync`，拉、推在 `ZonePuller`、`RecordSender`，失败怎么归类、怎么重试在 `SyncFault`、`RecordSender`，等待理由与立即同步在 `AppServices+Sync.swift`，说的话到哪了在 `Speech`。这里只补代码里没有的：实测结论、跨设备的取舍、排查与真机验证。
+同步通路、拉取、发送与通知的规则和理由写在各自类型的头注释里：通路、冷启动与为什么不用 CKSyncEngine 在 `CloudSync`，拉、推在 `ZonePuller`、`RecordSender`，失败怎么归类、怎么重试在 `SyncFault`、`SyncCoordinator+Hold`，等待理由与立即同步在 `AppServices+Sync.swift`，说的话到哪了在 `Speech`。这里只补代码里没有的：实测结论、跨设备的取舍、排查与真机验证。
 
 ## 拉取节奏与门铃
 
@@ -62,7 +62,7 @@
 1. 按发送 → 本机库：先清空输入框，再写一条记录（毫秒级）。气泡是发送中。
 2. 本机 → 服务器：马上传（`CloudSync.send`），收下即已发出；满 `Speech.sendLimit` 还没传上去是没能送达（实测与取值理由在它的注释里）。
 3. 服务器 → 接收的 Mac：门铃或按节奏的拉取（节奏与实测见「拉取节奏与门铃」）。
-4. Mac 交给 Agent 或 Cue：0.2 秒内；领取、写回结果、交给 Cue 后都马上传。
+4. Mac 交给 Agent 或 Cue：0.2 秒内；写回结果、交给 Cue 后马上传，执行超过半秒的先传领取（`DeliveryExecutor.claimGrace`）。
 5. 服务器 → 发出方：门铃或按节奏的拉取（手机有在等回执的话时在等，见「拉取节奏与门铃」），另有推送。回执到了是已送达；已发出满 `Speech.receiptLimit`（同步不通时不计）没回执是 Mac 迟迟没收下。
 6. 进对话：Mac 读到会话文件里带请求标识的那条，在同一个事务里收走请求，气泡由对话里那条接替（`PiChat.outgoing`）。
 

@@ -168,9 +168,6 @@ final class Workspace {
     }
 
     #if os(macOS)
-    /// 请底部输入栏聚焦的次数（空态的"记一条"）：输入栏的焦点在它自己那里，只看这个数变了就聚焦。
-    private(set) var captureFocusRequests = 0
-    func focusCapture() { captureFocusRequests += 1 }
     let sessionHeader = SessionHeader()
 
     #endif

@@ -5,17 +5,23 @@ import SwiftUI
 /// CuePad 的窗口外框都在这里创建时定好，界面不再在运行时改窗口样式：内容铺到透明标题栏下，
 /// 页面的底色一直连到窗口上沿（侧栏通顶；设置等窗口不留一条系统色的标题栏和分隔线）。
 enum WindowFactory {
-    /// 主窗口：可缩放，标题隐藏（顶上是界面自己的工具栏）。
-    static func main(content: some View) -> MainShellWindow {
-        let window = dress(DebugHooks.MainWindowClass(
-            contentRect: .zero, styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
-            backing: .buffered, defer: false), controller: NSHostingController(rootView: content))
+    /// 主窗口：可缩放，标题隐藏（顶上是界面自己的工具栏）。`place` 在挂上内容之前摆好位置与大小（记下的、居中或屏幕外）：
+    /// 整窗的 SwiftUI 布局是冷启动的大头，挂上内容后再改大小就按新大小从头再排一遍。
+    /// 窗口大小只由人定（`contentMinSize` 是下限），托管控制器不按内容改它（`sizingOptions` 为空），也就不在每次更新时算整窗的理想大小。
+    static func main(content: some View, place: (NSWindow) -> Void) -> MainShellWindow {
+        let window = DebugHooks.MainWindowClass(
+            contentRect: NSRect(origin: .zero, size: NSSize(width: 1200, height: 760)),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
         window.title = "CuePad"
         window.delegate = window
         window.titleVisibility = .hidden
         window.contentMinSize = NSSize(width: 720, height: 520)
-        window.setContentSize(NSSize(width: 1200, height: 760)) // 须在设置 contentViewController 之后，否则被内容尺寸覆盖
-        return window
+        place(window)
+        let controller = NSHostingController(rootView: content)
+        controller.sizingOptions = []
+        // 挂上内容控制器时窗口改成它的视图的大小
+        controller.view.frame.size = window.contentRect(forFrameRect: window.frame).size
+        return dress(window, controller: controller)
     }
 
     /// 资料库读不出这类辅助窗口：有标题、可关闭，尺寸由内容定。内容自己让开标题栏（安全区）。

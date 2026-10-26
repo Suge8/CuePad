@@ -239,7 +239,7 @@ struct BoardShot: View {
 
     /// 点开它：全屏只这一张，页顶写看什么，底栏对 Cue 说（同结果卡）。
     static func opening(_ shot: CueShown, group: String) -> PreviewOpening {
-        PreviewOpening(preview: shot.preview, batch: [shot.preview], group: group, reply: .cue, looks: [shot.id: shot.look])
+        PreviewOpening(preview: shot.preview, batch: [shot.preview], group: group, looks: [shot.id: shot.look])
     }
 
     #if os(macOS)

@@ -126,7 +126,20 @@ extension AppServices {
 }
 #endif
 
+/// Mac 设置里同步那一行此刻怎么说：说哪种状态、图标位置转不转圈。
+struct ShownSync: Equatable {
+    let status: SyncStatus
+    let busy: Bool
+    var summary: SyncSummary { SyncSummary(status) }
+}
+
 extension AppServices {
+    /// Mac 设置那一行（`SyncRow`）用。`lasting`：这一轮同步中（`.syncing`，一批上传或拉积压）已久过 `Pending.delay`（经 `pending` 给）。没久过的照旧说已同步：
+    /// 每传一句都要零点几秒，一闪一下"正在同步…"比稍等更扰人（同 `Pending`）。正在连接从第一帧就是它，照说；立即同步是你按的，当场转圈。
+    func shownSync(lasting: Bool) -> ShownSync {
+        syncStatus == .syncing && !lasting ? ShownSync(status: .idle, busy: isSyncingNow) : ShownSync(status: syncStatus, busy: isSyncBusy)
+    }
+
     /// 发给 Pi 会话的请求（回复、作答、重发）此刻送得到执行它的 Mac：手机靠同步；Mac 上就是本机执行，总送得到。
     var reachesPiHost: Bool {
         #if os(iOS)

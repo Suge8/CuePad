@@ -157,12 +157,12 @@ struct CueChoices: View {
 /// （边长 `ShotRow`：放得下就是 `side`，不然几张平分可用宽），取细节最多的那一段填满（`LookBox.framed`）。缩略图本来看不全、都要点开，它只管认出是哪张、邀请点开；
 /// 要看什么由每张正下方那一句说（与图同宽、向下换行；含"："的拆两行，前半加粗是名字、后半是说明），辅助功能字号下也一样。
 /// 格窄、一行只排得下七八个字，折行时句尾几个字粘成一块（`CueQuestionLine.keepingTail`），不剩一两个字挂在下一行。
-/// 点一张全屏看整张，左右翻的就是这几张，页顶写看什么；底栏按 `reply`（拍板卡里是那几个选项）。
+/// 点一张全屏看整张，左右翻的就是这几张，页顶写看什么；底栏按 `reply`（拍板卡里是那几个选项，没给照 Cue 页的）。
 /// `chosen`："可以"选的就是其中这一张（`chosen(for:in:)`），它描一圈主按钮的靛青。
 struct CueShots: View {
     let shots: [CueShown]
     let group: String
-    let reply: PreviewReply
+    var reply: PreviewReply?
     var chosen: UUID?
     let open: (PreviewOpening) -> Void
     @Environment(\.palette) private var palette

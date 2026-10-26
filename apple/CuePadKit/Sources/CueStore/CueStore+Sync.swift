@@ -67,10 +67,15 @@ extension CueStore {
     return nil
   }
 
-  /// 这条记录此刻是不是待推送（从未推送过，或推送后又改过）；本机没有这条记录时不是。
-  package func isPending(_ recordName: String) throws -> Bool {
-    for table in Table.synced where try !pendingSaves(table, where: "t.id = ?", [recordName]).isEmpty { return true }
-    return false
+  /// 这几条里此刻待推送的（马上传只看自己要的几条，按主键查，不全量推导）。
+  package func pendingSync(among names: Set<String>) throws -> PendingSync {
+    let sorted = names.sorted(), ids = JSONColumn.encode(sorted)
+    var pending = PendingSync(saves: [], deletes: [])
+    for table in Table.synced {
+      pending.saves += try pendingSaves(table, where: "t.id IN (SELECT value FROM json_each(?))", [ids])
+      pending.deletes += try pendingDeletes(table, among: sorted)
+    }
+    return pending
   }
 
   /// 全量对账：所有同步表里待推送的记录。

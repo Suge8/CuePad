@@ -29,8 +29,8 @@ public enum Thumbnails {
 
     private static func source(_ url: URL) -> CGImageSource? { CGImageSourceCreateWithURL(url as CFURL, options) }
 
-    /// 编辑器里图片的点尺寸，只读文件头：按图片自带 DPI 折算（截图 144dpi → 像素的一半），计入方向标记。
-    static func pointSize(at url: URL) -> CGSize? {
+    /// 编辑器里图片的点尺寸，只读文件头：按图片自带 DPI 折算（截图 144dpi → 像素的一半），计入方向标记（全屏页也用它取图的真实比例）。
+    public static func pointSize(at url: URL) -> CGSize? {
         guard let header = source(url).flatMap(header) else { return nil }
         func dpi(_ key: CFString) -> Double { (header.props[key] as? NSNumber).map(\.doubleValue).flatMap { $0 > 0 ? $0 : nil } ?? 72 }
         let size = CGSize(width: header.pixels.width * 72 / dpi(kCGImagePropertyDPIWidth), height: header.pixels.height * 72 / dpi(kCGImagePropertyDPIHeight))

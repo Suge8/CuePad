@@ -11,10 +11,8 @@ import SwiftUI
 /// 点名牌、点面板外、在名牌上往上划都收起；点面板里的一项先收起再去那里。
 /// 开面板先收起键盘：面板盖住对话的上半截，键盘弹着时放不下；打开它就是从打字转去看 Cue，草稿留在输入框里，收起面板不再弹回（同推入别的页时交出焦点）。
 /// 名牌浮在对话上，展开不改对话的布局，长大的只有这一块；展开与否只在这里（不进 `CueWatch`：侧栏也读它）。
-/// 放在 iPad 的系统导航栏里时（`HeaderHost.navigationBar`）名牌不长，面板从它弹出（`GrowPanel`），名片的那一头不出现。
 /// 大脑那一行要的（设置与那台 Mac 的 Agent，`observingCueBrain`）随名牌一直订阅着：面板开时才建，长出的第一帧就是真的；其余都是整个窗口已经在订阅的。
 struct CueHeader: View {
-    @Environment(\.headerHost) private var host
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var expanded = DebugHooks.preset.cuePanelOpen
     @State private var brain: AgentModelChoice?
@@ -28,7 +26,7 @@ struct CueHeader: View {
 
     var body: some View {
         GrowPanel(open: $expanded, radius: Self.height / 2) {
-            Button(action: toggle) { CuePlate(card: expanded && host != .navigationBar) }
+            Button(action: toggle) { CuePlate(card: expanded) }
                 .buttonStyle(.plain)
                 .highPriorityGesture(DragGesture(minimumDistance: 16).onEnded { drag in
                     if expanded, drag.translation.height < -24 { toggle() }

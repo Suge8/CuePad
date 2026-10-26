@@ -40,20 +40,16 @@ private struct BoardTopRow: ViewModifier {
     /// 玻璃里字离两头多远：卡里的字也这么远，列头的记号与卡上的对齐。
     private static let inner = TaskMetrics.cardPadding
 
-    /// 从左上分段（`PanesSlot`）的右沿再空 `panesGap` 起；分段在哪一列上方随侧栏开合、拖宽而变，按量到的算。
+    /// 从左上分段（`PanesSlot`）的右沿再空 `toolbarGap` 起（同工具栏里相邻两块玻璃之间）；分段在哪一列上方随侧栏开合、拖宽而变，按量到的算。
     private var panesReserve: CGFloat {
         guard let span, workspace.pages.panesEdge > 0 else { return 0 }
-        return workspace.pages.panesEdge + Self.panesGap - span.lowerBound
+        return workspace.pages.panesEdge + Spacing.toolbarGap - span.lowerBound
     }
 
-    private static let panesGap: CGFloat = 12
-
-    /// 到右上"⋯"（`PageMenuSlot`）的左沿前 `moreGap` 止。
+    /// 到右上"⋯"（`PageMenuSlot`）的左沿前 `toolbarGap` 止。
     private var moreReserve: CGFloat {
         guard let span, workspace.pages.moreEdge > 0 else { return 0 }
-        return span.upperBound - (workspace.pages.moreEdge - Self.moreGap)
+        return span.upperBound - (workspace.pages.moreEdge - Spacing.toolbarGap)
     }
-
-    private static let moreGap: CGFloat = 8
 }
 #endif

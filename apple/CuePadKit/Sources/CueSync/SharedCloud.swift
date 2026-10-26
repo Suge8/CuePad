@@ -13,9 +13,10 @@ struct SharedCloud: SyncCloud {
   struct Latency: Decodable, Sendable {
     var upload: [Double]
     var fetch: [Double]
+    var records: [Double]
     var other: [Double]
 
-    static let none = Latency(upload: [0, 0], fetch: [0, 0], other: [0, 0])
+    static let none = Latency(upload: [0, 0], fetch: [0, 0], records: [0, 0], other: [0, 0])
 
     /// 一次请求的总用时（秒）。
     static func draw(_ spec: [Double]) -> Double {
@@ -72,7 +73,7 @@ struct SharedCloud: SyncCloud {
   }
 
   func records(_ ids: [CKRecord.ID]) async throws -> [CKRecord] {
-    await wait(latency.fetch)
+    await wait(latency.records)
     return try database { db in
       try ids.compactMap { id in try db.blob("SELECT data FROM records WHERE name = ?", id.recordName).map(Self.record) }
     }

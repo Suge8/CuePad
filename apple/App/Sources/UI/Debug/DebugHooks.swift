@@ -183,6 +183,9 @@ enum DebugHooks {
     static func mark(_ event: String) {
         #if DEBUG
         PerfProbe.mark(event)
+        #if os(macOS)
+        LaunchBench.mark(event)
+        #endif
         #endif
     }
 
@@ -207,6 +210,15 @@ enum DebugHooks {
         DebugScene.snapshotWeb(file)
         #endif
     }
+
+    #if os(macOS)
+    /// 全屏预览的翻页开始接本窗口的滚动（`PageInput`）：`-CuePadClick` 合成的滑动先过它（`DebugScene.scrollGate`）。
+    static func previewScrolls(_ takes: @escaping (NSEvent) -> Bool) {
+        #if DEBUG
+        DebugScene.scrollGate = takes
+        #endif
+    }
+    #endif
 
     /// 第 `attempt` 次订阅项目目录之前：`-CuePadCatalogFailure` 在这里注入读取失败。
     /// 隔离库下也要通知权限、发真实的系统通知、装提示音、设角标（`-CuePadNotifications YES`，见 `AlertCenter.delivers`）。
@@ -240,6 +252,13 @@ enum DebugHooks {
     #else
     typealias MainWindowClass = MainShellWindow
     #endif
+
+    /// 进到 `main`：`-CuePadBench launch` 从这里量冷启动（`LaunchBench`）。
+    static func launching() {
+        #if DEBUG
+        LaunchBench.start()
+        #endif
+    }
 
     /// 资料库没能打开。量的时候（`-CuePadBench`）没人去点失败页，量的脚本会一直等：报出原因（`BENCH-ERR` 一行）后以 1 退出。
     static func libraryFailed(_ reason: String) {
@@ -279,6 +298,7 @@ enum DebugHooks {
     static func present(_ window: NSWindow, activating: Bool = false) {
         #if DEBUG
         window.orderBack(nil)
+        LaunchBench.present(window)
         #else
         if activating { NSApp.activate() }
         window.makeKeyAndOrderFront(nil)
