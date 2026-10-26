@@ -5,7 +5,9 @@ import SwiftUI
 
 /// 会话页的页头全在窗口工具栏上，内容区里不再另起一行页头。
 /// 工具栏项在主窗口里常驻（`PageTitleSlot`、`PageMenuSlot`），随页面切换换里面的内容：增删工具栏项会重建整条工具栏，
-/// 进出会话页、换会话时那要占点击回合的一半。会话页只把算好的值与动作交到这里；不是会话页时槽里是空的。
+/// 进出会话页、换会话时那要占点击回合的一半。工具栏读不到页面的视图树：会话页把自己持有的那份状态（`SessionPageModel`）挂在这里，
+/// 标题与"⋯"按它现算——挂的是页面本身那一份，不是抄过来的值，页面一变工具栏读到的就是新的，不经 `onChange` 转一手
+/// （在线会话的状态一帧里连着变几次时，转手的那一下会被系统丢掉，标题停在旧的样子）。Mac 的内容区把去过的页都挂着，几个会话页可以同时挂着：按会话 id 记。
 @Observable
 final class SessionHeader {
     struct State: Equatable {
@@ -26,27 +28,27 @@ final class SessionHeader {
         var task: SessionTaskLink?
     }
 
-    private(set) var state: State?
-    @ObservationIgnored var rename: (PiSessionState) -> Void = { _ in }
-    @ObservationIgnored var end: (PiSessionState) -> Void = { _ in }
-    @ObservationIgnored var reveal: () -> Void = {}
+    private var pages: [String: SessionPageModel] = [:]
 
-    func set(_ state: State?) {
-        if self.state != state { self.state = state }
+    func mount(_ page: SessionPageModel) { pages[page.sessionID] = page }
+
+    /// 只摘自己：同一个会话换了一页（重新挂上）时新页可能已经先挂好了。
+    func unmount(_ page: SessionPageModel) {
+        if pages[page.sessionID] === page { pages[page.sessionID] = nil }
     }
 
-    /// 离开的会话页只清自己的：换会话时新页面的值可能已经先到了。
-    func clear(_ sessionID: String) {
-        if state?.session.sessionID == sessionID { state = nil }
-    }
+    func page(_ sessionID: String) -> SessionPageModel? { pages[sessionID] }
 }
 
 extension Workspace {
-    /// 当前会话页的标题与菜单要显示的值；不是会话页时为 nil。
-    var shownSessionHeader: SessionHeader.State? {
-        guard case .session(let route) = root, let state = sessionHeader.state, state.session.sessionID == route.sessionID else { return nil }
-        return state
+    /// 当前会话页的状态；不是会话页时为 nil。
+    var shownSessionPage: SessionPageModel? {
+        guard case .session(let route) = root, let sessionID = route.sessionID else { return nil }
+        return sessionHeader.page(sessionID)
     }
+
+    /// 当前会话页的标题与菜单要显示的值；不是会话页、或那一页还没读到会话时为 nil。
+    var shownSessionHeader: SessionHeader.State? { shownSessionPage?.headerState(in: self) }
 }
 
 /// 工具栏居中的标题位（`.principal`，在详情区里居中，侧栏开合都与对话的阅读栏对齐）：一块玻璃，第一行会话名接状态（`PiSessionSubtitle`，只有着色的字、不画状态圆点：玻璃里唯一的圆是任务圈；只在在跑或要你注意时有；所在写在"⋯"菜单最上面）。
@@ -111,8 +113,8 @@ struct PageTitleSlot: View {
         .background {
             if !state.showsHeader {
                 Color.clear.contentShape(.rect)
-                    .onHover { if $0 { workspace.sessionHeader.reveal() } }
-                    .onTapGesture { workspace.sessionHeader.reveal() }
+                    .onHover { if $0 { workspace.shownSessionPage?.follow.reveal() } }
+                    .onTapGesture { workspace.shownSessionPage?.follow.reveal() }
             }
         }
     }
@@ -177,13 +179,13 @@ struct SessionMenuItems: View {
             Divider()
         }
         if state.canRename {
-            Button("重命名…", icon: .rename) { workspace.sessionHeader.rename(state.session) }
+            Button("重命名…", icon: .rename) { workspace.shownSessionPage?.renaming = state.session }
         }
         if let id = state.liveID {
             Button("跳到终端窗口", icon: .terminalWindow) { workspace.jumpToTerminal(id) }
         }
         if state.canEnd {
-            Button("结束会话", icon: .endSession, role: .destructive) { workspace.sessionHeader.end(state.session) }
+            Button("结束会话", icon: .endSession, role: .destructive) { workspace.shownSessionPage?.confirmingEnd = state.session }
                 .disabled(state.ending)
         }
     }

@@ -46,45 +46,39 @@ extension SessionDigest {
 }
 
 /// 一个 Agent 会话的整页（侧栏、Agent 页、⌘K、菜单栏面板、任务上的会话状态都进这里），对话（`SessionChat`）、回复框（`PiReplyBar`，Mac 上一直是两层）
-/// 与顶栏规则（`ChatFollow.showsHeader`）与手机同一套。页头全在窗口工具栏上，内容区里不另起一行。
+/// 与顶栏规则（`ChatFollow.showsHeader`）与手机同一套。页头全在窗口工具栏上，内容区里不另起一行：工具栏读这一页挂出去的状态（`SessionHeader`）。
 /// 看历史时标题让开，"⋯"不让开：工具栏一直在，让开只留一格空位；Mac 没有状态栏可点，鼠标移到标题原来的位置（或点它）就唤出。
 /// 很久以前的会话没有对话时请它所在的 Mac 补写。是一页（`Route.session`），左上不放返回：去别处靠侧栏。
 struct SessionPage: View {
-    let sessionID: String
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
-    private var header: SessionHeader { workspace.sessionHeader }
-    @State private var stored: SessionDigest?
-    @State private var task: SessionTaskLink?
-    @State private var confirmingEnd: PiSessionState?
-    @State private var renaming: PiSessionState?
-    @State private var follow = ChatFollow()
+    @State private var page: SessionPageModel
 
-    /// 标题、状态与最新的对话先出；回复框、问题卡与"⋯"晚两帧（`NextFrame`）：它们的建立（文本视图、玻璃、菜单）占点击回合的一半，不在点的那一圈里。
-    @State private var secondary = false
     /// 读对话的宽度：长回答一行不至于太长，气泡也不挤。
     private static let readingWidth: CGFloat = 760
 
+    init(sessionID: String) {
+        _page = State(initialValue: SessionPageModel(sessionID: sessionID))
+    }
+
     var body: some View {
-        let slot = services.pi.slot(sessionID: sessionID)
-        let live = slot?.session
-        let project = live.flatMap { workspace.catalog?.project(workspace.sendState.projects[$0.id]) }
-        // 在线会话不等资料库读完就能显示
-        let digest = (stored ?? SessionDigest(session: nil, project: nil, deliveries: [])).live(live, hostID: services.hostID, project: project)
+        @Bindable var page = page
+        let slot = services.pi.slot(sessionID: page.sessionID)
+        let digest = page.digest(in: workspace)
         VStack(spacing: 0) {
             if let session = digest.session {
                 FloatingReply {
                     // 数据读到前不排对话：在线会话不等资料库就有状态，先排出来是空对话，数据到了再长成整段
-                    if stored != nil {
+                    if page.stored != nil {
                         SessionChat(
-                            session: session, digest: digest, readingWidth: Self.readingWidth, inset: 24, follow: $follow, slot: slot)
+                            session: session, digest: digest, readingWidth: Self.readingWidth, inset: 24, follow: $page.follow, slot: slot)
                             .replyNotes(session: session.id, messages: digest.messages)
                     }
                 } reply: {
                     VStack(spacing: 8) {
-                        if secondary {
-                            SessionDock(session: session, digest: digest, revealNote: { follow.seek($0.entry) }) { follow.sent() }
+                        if page.secondary {
+                            SessionDock(session: session, digest: digest, revealNote: { page.follow.seek($0.entry) }) { page.follow.sent() }
                         } else {
                             // 留出回复框平时的高度，它到了时对话不被顶上去
                             Color.clear.frame(height: ComposerMetrics.openOneLine)
@@ -93,55 +87,75 @@ struct SessionPage: View {
                     .padding(.horizontal, 24).padding(.bottom, 16)
                     .frame(maxWidth: Self.readingWidth)
                     .animation(HandOff.quick, value: session.question)
-                    .renameSession($renaming)
-                    .endSession($confirmingEnd)
+                    .renameSession($page.renaming)
+                    .endSession($page.confirmingEnd)
                 }
-            } else if stored != nil {
+            } else if page.stored != nil {
                 EmptyState(mascot: .empty, title: "找不到这个会话", message: "Mac 上这个会话的文件可能已经删掉了")
                     .frame(maxHeight: .infinity)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(palette.desk)
-        .onChange(of: headerState(digest, live: live, menu: secondary, task: task), initial: true) { _, state in header.set(state) }
-        .onAppear {
-            header.rename = { renaming = $0 }
-            header.end = { confirmingEnd = $0 }
-            header.reveal = { follow.reveal() }
-        }
-        .onDisappear { header.clear(sessionID) }
+        .onAppear { workspace.sessionHeader.mount(page) }
+        .onDisappear { workspace.sessionHeader.unmount(page) }
         .task {
             await NextFrame.wait()
             await NextFrame.wait()
-            secondary = true
+            page.secondary = true
         }
-        .observing(services.store, id: sessionID, into: $stored,
-                   onError: workspace.fail) { [sessionID] store in
+        .observing(services.store, id: page.sessionID, into: $page.stored,
+                   onError: workspace.fail) { [sessionID = page.sessionID] store in
             try SessionDigest.read(sessionID: sessionID, from: store)
         }
-        .observing(services.store, id: TaskKey(session: sessionID, project: digest.session?.projectID), into: $task,
-                   onError: workspace.fail) { [sessionID, project = digest.session?.projectID] store in
+        .observing(services.store, id: TaskKey(session: page.sessionID, project: digest.session?.projectID), into: $page.task,
+                   onError: workspace.fail) { [sessionID = page.sessionID, project = digest.session?.projectID] store in
             try SessionTaskLink.read(sessionID: sessionID, project: project, from: store)
         }
-        .requestsTranscript(stored)
+        .requestsTranscript(page.stored)
         // 开着这页就算看过：侧栏与菜单栏里的"有新回复"据此消失
         .task(id: digest.session?.stateSince) { if let session = digest.session { services.settings.markSeen(session) } }
-    }
-
-    /// 工具栏上的标题与"⋯"（`SessionHeader`）要显示的值：页面算好交过去，工具栏项在主窗口里常驻。
-    private func headerState(_ digest: SessionDigest, live: CuePi.PiSession?, menu: Bool, task: SessionTaskLink?) -> SessionHeader.State? {
-        guard let session = digest.session else { return nil }
-        return SessionHeader.State(
-            session: session, title: digest.title(at: services.speech) ?? session.title, undelivered: PiChat.undeliveredNote(digest.undelivered(at: services.speech)),
-            ending: DeliveryRequest.shownEnd(in: digest.deliveries, at: services.speech)?.inTransit == true, place: PiPlace.menuTitle(of: session, project: digest.project),
-            liveID: live.flatMap { $0.canJump ? $0.id : nil }, canEnd: session.canEnd, canRename: MacDelivery.canRename(session),
-            showsHeader: follow.showsHeader, showsMenu: menu, task: task)
     }
 
     /// 绑着的任务按会话读，还能绑的按所在项目读。
     private struct TaskKey: Equatable {
         var session: String
         var project: UUID?
+    }
+}
+
+/// 一个会话页的状态：页面与工具栏上的标题、"⋯"（`SessionHeader`）读的是同一份。
+@Observable
+final class SessionPageModel {
+    let sessionID: String
+    var stored: SessionDigest?
+    var task: SessionTaskLink?
+    var follow = ChatFollow()
+    /// 标题、状态与最新的对话先出；回复框、问题卡与"⋯"晚两帧（`NextFrame`）：它们的建立（文本视图、玻璃、菜单）占点击回合的一半，不在点的那一圈里。
+    var secondary = false
+    var renaming: PiSessionState?
+    var confirmingEnd: PiSessionState?
+
+    init(sessionID: String) { self.sessionID = sessionID }
+
+    /// 此刻的这一页：同步记录换上桥上的实时值；在线会话不等资料库读完就能显示。
+    func digest(in workspace: Workspace) -> SessionDigest {
+        let services = workspace.services
+        let live = services.pi.slot(sessionID: sessionID)?.session
+        let project = live.flatMap { workspace.catalog?.project(workspace.sendState.projects[$0.id]) }
+        return (stored ?? SessionDigest(session: nil, project: nil, deliveries: [])).live(live, hostID: services.hostID, project: project)
+    }
+
+    /// 工具栏上的标题与"⋯"要显示的值；还没读到会话时为 nil。
+    func headerState(in workspace: Workspace) -> SessionHeader.State? {
+        let digest = digest(in: workspace), speech = workspace.services.speech
+        guard let session = digest.session else { return nil }
+        let live = workspace.services.pi.slot(sessionID: sessionID)?.session
+        return SessionHeader.State(
+            session: session, title: digest.title(at: speech) ?? session.title, undelivered: PiChat.undeliveredNote(digest.undelivered(at: speech)),
+            ending: DeliveryRequest.shownEnd(in: digest.deliveries, at: speech)?.inTransit == true, place: PiPlace.menuTitle(of: session, project: digest.project),
+            liveID: live.flatMap { $0.canJump ? $0.id : nil }, canEnd: session.canEnd, canRename: MacDelivery.canRename(session),
+            showsHeader: follow.showsHeader, showsMenu: secondary, task: task)
     }
 }
 
