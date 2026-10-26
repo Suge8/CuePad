@@ -63,9 +63,9 @@ struct PageTitleSlot: View {
     @Environment(\.palette) private var palette
 
     /// 工具栏里标题一块最宽多少：名字长时截断，不把右边的按钮挤走。
-    fileprivate static let width: CGFloat = 420
+    private static let width: CGFloat = 420
     /// 窗口窄时标题位最多让到多窄（名字截断，状态照常）。
-    fileprivate static let minWidth: CGFloat = 160
+    private static let minWidth: CGFloat = 160
 
     var body: some View {
         if let state = workspace.shownSessionHeader {
