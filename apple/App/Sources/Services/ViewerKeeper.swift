@@ -10,7 +10,7 @@ import os
 import Synchronization
 
 /// 这台设备此刻开着哪一页、他什么时候来到这台（`Viewer`，规则在它的头注释）只由这里写，只在变了时写一次，写成立即上传；没有心跳。
-/// 来到这台：手机每次回到前台；Mac 读到他最近来到的是别的设备（`CueStore.leftFor`）就算人不在跟前（`Away.elsewhere`），回到这台的第一下键盘鼠标才回来、记下来到。
+/// 来到这台（`arrive`）：手机每次回到前台（App 回前台的那一处报来，`AppServices.startForeground`）；Mac 读到他最近来到的是别的设备（`CueStore.leftFor`）就算人不在跟前（`Away.elsewhere`），回到这台的第一下键盘鼠标才回来、记下来到。
 /// 开着的那一页由界面报来：会话页（`show`）Mac 是人看得到主窗口时内容区的会话页，手机是场景前台活跃时导航最上面的会话页
 /// （都是 `Workspace.shownSession`；iPad 开几个窗口各报各的，取最近开的那个）；Cue 页（`showCue`）两端都由 `CueViewing` 报（iPad 上它可以在面板里、
 /// 不在导航最上面）。Mac 上人不在跟前（系统将睡眠、屏幕睡了、锁屏、退出、他去了别的设备，或 `SessionPresence.window` 没动过键盘鼠标）时一概算没开着，
@@ -74,17 +74,11 @@ nonisolated final class ViewerKeeper: Sendable {
         update { $0.cue = shown }
     }
 
-    /// 写下界面报来的变化，直到任务取消；手机另在每次回到前台时记下来到，Mac 另跟系统的睡眠、屏幕与锁屏，与他去没去别的设备。
+    /// 写下界面报来的变化，直到任务取消；Mac 另跟系统的睡眠、屏幕与锁屏，与他去没去别的设备。
     func keep(notifications center: NotificationCenter = .default) async throws {
         try await withThrowingDiscardingTaskGroup { group in
             group.addTask { for await _ in self.changes { try await self.publish() } }
-            #if os(iOS)
-            // 启动那次激活可能早于这里订上
-            group.addTask {
-                if await UIApplication.shared.applicationState == .active { try await self.arrive() }
-                for await _ in center.notifications(named: UIApplication.didBecomeActiveNotification) { try await self.arrive() }
-            }
-            #else
+            #if os(macOS)
             let distributed = DistributedNotificationCenter.default()
             let events: [(NotificationCenter, Notification.Name, Away, Bool)] = [
                 (center, NSWorkspace.willSleepNotification, .asleep, true),
@@ -128,9 +122,13 @@ nonisolated final class ViewerKeeper: Sendable {
     }
 
     /// 他来到了这台（`CueStore.arrive`），当场传出去：别的 Mac 据此让位。
-    private func arrive() async throws {
-        let id = try await store.arrive(device: device)
-        await sync?.upload(id)
+    func arrive() async {
+        do {
+            let id = try await store.arrive(device: device)
+            await sync?.upload(id)
+        } catch {
+            Self.log.error("没能写下他来到这台：\(error.localizedDescription, privacy: .public)")
+        }
     }
 
     private func record(in store: isolated CueStore) throws -> UUID? {
@@ -167,7 +165,7 @@ nonisolated extension ViewerKeeper {
             mark(.elsewhere, true)
             await Self.nextInput()
             guard !Task.isCancelled else { return }
-            try await arrive()
+            await arrive()
             mark(.elsewhere, false)
         }
     }

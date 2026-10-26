@@ -57,9 +57,7 @@ extension CueStore {
       let id = Viewer.recordID(device: device)
       let current = try find(Viewer.self, id)
       guard current.map({ $0.sessionID != sessionID || $0.cue != cue }) ?? (sessionID != nil || cue) else { return nil }
-      try upsert(
-        Viewer(device: device, sessionID: sessionID, cue: cue, modifiedAt: Date.stamp, arrivedAt: current?.arrivedAt),
-        updating: ["sessionID", "cue", "modifiedAt"])
+      try upsert(Viewer(device: device, sessionID: sessionID, cue: cue, modifiedAt: Date.stamp), updating: ["sessionID", "cue", "modifiedAt"])
       return id
     }
   }
@@ -75,7 +73,7 @@ extension CueStore {
       let at = latest.map { max(now, $0.addingTimeInterval(0.001)) } ?? now
       let current = try find(Viewer.self, id)
       try upsert(
-        Viewer(device: device, sessionID: current?.sessionID, cue: current?.cue ?? false, modifiedAt: max(now, at), arrivedAt: at),
+        Viewer(device: device, sessionID: current?.sessionID, cue: current?.cue ?? false, modifiedAt: at, arrivedAt: at),
         updating: ["arrivedAt", "modifiedAt"])
       return id
     }
