@@ -2,7 +2,7 @@ import CueStore
 import SwiftUI
 
 /// 订阅额度的明细（读数规则在 `QuotaMeter`）：点额度环（`QuotaRings`）才展开——手机会话页顶栏那颗胶囊长出的面板、Mac 会话页的气泡、
-/// 菜单栏面板里就地展开的那一块；还没有额度记录时没有。
+/// 菜单栏面板里就地展开的那一块；还没有额度记录时那里写还没有额度、怎么才会有（`QuotaEmpty`）。
 ///
 /// 每个账号一块（`QuotaAccount`），排法同旁边的列表行：头一行是 20 点宽的图标列里的产品标志加账号名（数据陈旧时接"x 分钟前"），
 /// 下面每个窗口一行，与账号名左对齐：窗口名与多久后重置（计时文字，只在整分钟换字，`LiveText`；过了重置时间还没有新观测写"已重置"），
@@ -17,13 +17,30 @@ struct QuotaDetail: View {
 
     var body: some View {
         let quotas = services.accountQuotas.items
-        if !quotas.isEmpty {
+        if quotas.isEmpty {
+            QuotaEmpty()
+        } else {
             Moments(next: quotas.nextReset(after:)) { now in
                 QuotaColumns {
                     ForEach(quotas.map { QuotaMeter($0, at: now) }.filter { !$0.windows.isEmpty }, id: \.provider) { QuotaAccount(meter: $0) }
                 }
             }
         }
+    }
+}
+
+/// 还没有额度记录时明细那里的两行：没有，与怎么才会有；铺满所在那一块（Mac 的气泡、菜单栏面板、手机长出的面板）。
+private struct QuotaEmpty: View {
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("还没有额度").font(Typography.secondary.weight(.medium)).foregroundStyle(palette.ink)
+            Text("Agent 会话用订阅账号跑过一轮后，这里显示每个窗口还剩多少、多久后重置")
+                .font(Typography.meta).foregroundStyle(palette.ink2)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -170,7 +187,7 @@ private struct QuotaWindowRow: View {
 }
 
 /// 回复框模型胶囊上标志外的一圈细环：卡着的那个窗口还剩多少，从 12 点顺时针铺（`ModelBadge`）。
-/// 还剩随动画插值，档位的颜色直接换。不带窗口的是只有轨道的空环（还没有额度记录时 `QuotaRings` 占位用）。
+/// 还剩随动画插值，档位的颜色直接换。
 struct QuotaRing: View, Animatable {
     private var left: Double
     private let level: UsageLevel
@@ -181,11 +198,6 @@ struct QuotaRing: View, Animatable {
     init(_ window: QuotaMeter.Window) {
         left = window.left
         level = window.level
-    }
-
-    init() {
-        left = 0
-        level = .roomy
     }
 
     var animatableData: Double {
@@ -210,7 +222,8 @@ struct QuotaRing: View, Animatable {
 /// 每个账号一颗小额度环（产品标志在环里，同回复框模型胶囊上那颗 `ModelBadge`）：环是卡着的那个窗口还剩多少，只用颜色说余量、不写数。
 /// 整排是一颗按钮，点它展开明细（`QuotaDetail`，展开在哪由所在的地方定）；`open` 只给读屏说展开没有。
 /// 手机会话页顶栏那颗胶囊的右半、Mac 会话页顶上那一排、菜单栏面板的 Cue 那一行。账号多时只放前 `limit` 颗；
-/// 还没有额度记录时也在：一颗空环、按钮置灰（控件随数据置灰而不出现消失，所在那一块不随有没有额度变宽变窄）。
+/// 还没有可画的环时（还没有额度记录）环的位置写"额度"二字，照样能点，点开明细那里说怎么才会有（`QuotaDetail`）：一颗空环读不出是什么。
+/// 两个字与一颗环差不多宽，Mac 工具栏那一格与菜单栏面板不变宽；手机那块玻璃第一次有额度时窄几点，只变这一次。
 struct QuotaRings: View {
     let open: Bool
     let height: CGFloat
@@ -229,15 +242,14 @@ struct QuotaRings: View {
                 .contentShape(.rect)
         }
         .buttonStyle(PressStyle())
-        .disabled(quotas.isEmpty)
         .accessibilityExpanded(open)
-        .accessibilityHint(open ? "收起" : "看每个窗口还剩多少、多久后重置")
+        .accessibilityHint(open ? "收起" : quotas.isEmpty ? "看怎么才会有额度" : "看每个窗口还剩多少、多久后重置")
     }
 
     private func rings(_ quotas: [AccountQuota], at now: Date) -> some View {
         let rings = quotas.compactMap { quota in quota.binding(at: now).map { (provider: quota.provider, window: QuotaMeter.Window($0, at: now)) } }
         return HStack(spacing: 6) {
-            if rings.isEmpty { ModelBadge(mark: nil, binding: nil).overlay { QuotaRing() } }
+            if rings.isEmpty { Text("额度").font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink3).fixedSize() }
             ForEach(rings, id: \.provider) { ModelBadge(mark: PiProvider(id: $0.provider).mark, binding: $0.window) }
         }
         .foregroundStyle(palette.ink2)

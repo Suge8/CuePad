@@ -139,6 +139,22 @@
       },
       "shouldTranslate" : false
     },
+    "%@ 上的 %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%2$@ on %1$@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ 上的 %2$@"
+          }
+        }
+      }
+    },
     "%@ 不在 PATH 里" : {
       "localizations" : {
         "en" : {
@@ -932,22 +948,6 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$@（%2$lld）"
-          }
-        }
-      }
-    },
-    "%@（开工时建好）" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ (created on start)"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@（开工时建好）"
           }
         }
       }
@@ -2091,6 +2091,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Agent 会话已结束"
+          }
+        }
+      }
+    },
+    "Agent 会话用订阅账号跑过一轮后，这里显示每个窗口还剩多少、多久后重置" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "After an agent session runs a turn on a subscription account, this shows how much is left in each window and when it resets"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agent 会话用订阅账号跑过一轮后，这里显示每个窗口还剩多少、多久后重置"
           }
         }
       }
@@ -4443,6 +4459,22 @@
         }
       }
     },
+    "两台登同一个 iCloud" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sign In to the Same iCloud on Both"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "两台登同一个 iCloud"
+          }
+        }
+      }
+    },
     "中" : {
       "localizations" : {
         "en" : {
@@ -6623,6 +6655,22 @@
         }
       }
     },
+    "卡在这一步" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stuck here"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "卡在这一步"
+          }
+        }
+      }
+    },
     "历史" : {
       "localizations" : {
         "en" : {
@@ -8071,38 +8119,6 @@
         }
       }
     },
-    "在 %@ 上：%@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "On %1$@: %2$@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "在 %1$@ 上：%2$@"
-          }
-        }
-      }
-    },
-    "在 %@ 上：%@（开工时建好）" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "On %1$@: %2$@ (created when work starts)"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "在 %1$@ 上：%2$@（开工时建好）"
-          }
-        }
-      }
-    },
     "在 %@ 建一个指向 App 内命令行工具的 cuepad 链接，不需要管理员权限" : {
       "localizations" : {
         "en" : {
@@ -8131,6 +8147,54 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "在 %@ 里输入 /login"
+          }
+        }
+      }
+    },
+    "在 Mac 上接入 Agent" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connect Agents on Your Mac"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在 Mac 上接入 Agent"
+          }
+        }
+      }
+    },
+    "在 Mac 上装 CuePad" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Install CuePad on Your Mac"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在 Mac 上装 CuePad"
+          }
+        }
+      }
+    },
+    "在 Mac 的 CuePad 里接入 %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In CuePad on your Mac, connect %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在 Mac 的 CuePad 里接入 %@"
           }
         }
       }
@@ -10435,6 +10499,38 @@
         }
       }
     },
+    "开工时建好" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "created when work starts"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "开工时建好"
+          }
+        }
+      }
+    },
+    "开工要一台装了 CuePad 的 Mac" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Needs a Mac with CuePad to start work"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "开工要一台装了 CuePad 的 Mac"
+          }
+        }
+      }
+    },
     "开新会话" : {
       "localizations" : {
         "en" : {
@@ -10771,18 +10867,18 @@
         }
       }
     },
-    "我在你的 Mac 上干活。在 Mac 上打开 CuePad 就能叫我，这之前想到的先在下面记下" : {
+    "我在你的 Mac 上干活，接上 Mac 就能叫我" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "I work on your Mac. Open CuePad on a Mac to get me going. Until then, jot down ideas below."
+            "value" : "I work on your Mac. Connect a Mac and you can call me."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "我在你的 Mac 上干活。在 Mac 上打开 CuePad 就能叫我，这之前想到的先在下面记下"
+            "value" : "我在你的 Mac 上干活，接上 Mac 就能叫我"
           }
         }
       }
@@ -10879,6 +10975,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "手机上只能从 Mac 上跑过 Agent 的文件夹里选；别的文件夹请在 Mac 上绑定。"
+          }
+        }
+      }
+    },
+    "手机记事、拍板，Agent 在 Mac 上干活" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your phone captures and decides; agents work on your Mac"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "手机记事、拍板，Agent 在 Mac 上干活"
           }
         }
       }
@@ -14239,6 +14351,22 @@
         }
       }
     },
+    "没有 Mac 也能先用：记灵感、建任务，Mac 接上后接着做" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No Mac yet? Save ideas and tasks now; they pick up once a Mac connects."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没有 Mac 也能先用：记灵感、建任务，Mac 接上后接着做"
+          }
+        }
+      }
+    },
     "没有 tty 信息，无法定位标签页" : {
       "localizations" : {
         "en" : {
@@ -15359,6 +15487,22 @@
         }
       }
     },
+    "登好后 Mac 会出现在这里" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Once both are signed in, your Mac shows up here"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "登好后 Mac 会出现在这里"
+          }
+        }
+      }
+    },
     "登录" : {
       "localizations" : {
         "en" : {
@@ -15563,6 +15707,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "看图：%@"
+          }
+        }
+      }
+    },
+    "看怎么才会有额度" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shows how usage appears here"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "看怎么才会有额度"
           }
         }
       }
@@ -18327,6 +18487,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "还没有灵感与任务"
+          }
+        }
+      }
+    },
+    "还没有额度" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No Usage Yet"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "还没有额度"
           }
         }
       }

@@ -14,6 +14,7 @@ extension DebugScene {
             await seedIfFresh(store, "演示库", DemoLibrary.seed)
             await seedMacAgents(workspace.services)
         }
+        await seedOneMac(store)
         await presetSync(workspace.services)
         guard let name = defaults.string(forKey: "CuePadProject"),
               let project = try? await store.projects().first(where: { $0.name == name })
@@ -29,6 +30,20 @@ extension DebugScene {
         workspace.show(.project(project.id))
         #endif
         return project.id
+    }
+
+    /// `-CuePadMac agents|bare`：库里写下一台 Mac「MacBook Pro」，接了 Claude Code 与 Codex，或一家都没接（bare），
+    /// 看手机上启用 Cue 前那三步（`CueMacSteps`）走到哪一步。
+    private static func seedOneMac(_ store: CueStore) async {
+        guard let mac = defaults.string(forKey: "CuePadMac") else { return }
+        let bare = mac == "bare"
+        let agents = bare ? [] : [AgentKind.claudeCode, .codex].map { MacAgent(kind: $0, model: nil, models: []) }
+        let problems = bare ? AgentKind.allCases.map { MacAgentProblem(kind: $0, reason: .notInstalled) } : []
+        do {
+            _ = try await store.recordMacAgents(host: "debug-mac", name: String(localized: "MacBook Pro", table: "Demo"), agents, problems: problems)
+        } catch {
+            abandon("演示 Mac 没写下", error)
+        }
     }
 
     /// 库里只有默认项目（新的隔离库）时写入；读写出错就以失败退出（`abandon`）。

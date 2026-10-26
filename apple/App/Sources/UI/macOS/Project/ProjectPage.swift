@@ -2,8 +2,8 @@
 import CueStore
 import SwiftUI
 
-/// 项目页（与手机项目页同构）：最上面一行项目的一句介绍（没有就没有这一行）→ 任务那张纸（`FocusBand`）→ 置顶的灵感 → 工作集卡片墙 → 更早；一条灵感都没有时墙上只有说现状的那一格（`EmptyWallTile`，记灵感在底部随手记）。
-/// 不写项目名作大标题：侧栏开着时名字就在选中的那一行，收起时工具栏的切换胶囊写它（`ProjectSwitcher`）。文件夹在哪写在"⋯"里文件夹那一组的组头（`ProjectActions`）。
+/// 项目页（与手机项目页同构）：最上面一行项目的一句介绍接它的文件夹（`ProjectIntroLine`）→ 任务那张纸（`FocusBand`）→ 置顶的灵感 → 工作集卡片墙 → 更早；一条灵感都没有时墙上只有说现状的那一格（`EmptyWallTile`，记灵感在底部随手记）。
+/// 不写项目名作大标题：侧栏开着时名字就在选中的那一行，收起时工具栏的切换胶囊写它（`ProjectSwitcher`）。
 struct ProjectPage: View {
     let projectID: UUID
     @Environment(Workspace.self) private var workspace
@@ -80,14 +80,10 @@ struct ProjectPage: View {
         }
     }
 
-    /// 最上面那行介绍取自项目目录，切换项目的第一帧就是新项目；卡片与任务读到后在其下出现。
-    /// 没写介绍也占着这一行：有没有介绍的项目之间切换，下面的任务纸与墙不上下跳。
+    /// 最上面那行取自项目目录，切换项目的第一帧就是新项目；卡片与任务读到后在其下出现。
     @ViewBuilder private var content: some View {
         VStack(alignment: .leading, spacing: Spacing.sectionTitle) {
-            let intro = workspace.catalog?.project(projectID)?.intro
-            Text(intro ?? " ").font(Typography.secondary).foregroundStyle(palette.ink2)
-                .lineLimit(1).truncationMode(.tail).help(intro ?? "").textSelection(.enabled)
-                .accessibilityHidden(intro == nil)
+            ProjectIntroLine(project: workspace.catalog?.project(projectID))
             VStack(alignment: .leading, spacing: Spacing.section) {
                 if let data, let arrangement = board.arrangement, let shape { page(data, arrangement, shape) }
             }

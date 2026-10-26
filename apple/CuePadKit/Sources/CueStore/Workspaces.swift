@@ -34,7 +34,7 @@ public struct Workspaces: Equatable, Sendable {
     return name.isEmpty ? Project.untitled : name
   }
 
-  /// 本机路径给人看的写法（Mac 项目菜单里文件夹那一组的组头、接入面板里任务在哪做同一个）：家目录下的写成 `~/…`（`~/CuePad/默认`），其余照写全路径。
+  /// 本机路径给人看的写法（Mac 上项目的文件夹在哪，`ProjectPlace`；接入面板里任务在哪做同一个）：家目录下的写成 `~/…`（`~/CuePad/默认`），其余照写全路径。
   public static func shown(_ path: String) -> String {
     // 只比路径的各段，不经 standardizedFileURL / resolvingSymlinksInPath：它们对已存在与还没建的目录写法不同（/private/tmp 有时去掉 /private）
     let target = URL(filePath: path).pathComponents, home = URL.homeDirectory.pathComponents
