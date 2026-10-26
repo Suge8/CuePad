@@ -6,7 +6,8 @@ import SwiftUI
 enum Typography {
     #if os(macOS)
     /// 正文：卡片摘要、列表的主文字（输入框与气泡同一号，是阅读的 `readingSize`）。
-    static let body = Font.system(size: 14)
+    nonisolated static let bodySize: CGFloat = 14
+    static let body = Font.system(size: bodySize)
     /// 强调的正文：卡片标题、列表行的名字。
     static let bodyStrong = Font.system(size: 15, weight: .semibold)
     /// 次要：说明、一行里跟在标题后的摘要、空态的说明。

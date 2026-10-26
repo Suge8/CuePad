@@ -38,7 +38,7 @@ struct BoardTaskCard: View {
             #if os(macOS)
             .overlay(alignment: .trailing) { StartReveal(next: next) }
             #endif
-            .boardCard(advancing: advancing)
+            .boardCard()
         }
         .help(tip)
         .taskSpoken(task, subtasks: item.steps, next: next, check: $check, open: open, follow: { follow(next) }) {
@@ -59,7 +59,7 @@ struct BoardTaskCard: View {
     private func title(resting: Bool) -> some View {
         let finished = task.status == .done
         let ink = check.phase != .idle ? palette.ink3 : finished || resting ? palette.ink2 : palette.ink
-        return Text(task.title.textGlyphs).boardTitle().fontWeight(finished ? .regular : nil)
+        return Text(task.title.textGlyphs).fontWeight(finished ? .regular : nil)
             .strikethrough(check.phase != .idle, color: palette.ink3).foregroundStyle(ink)
     }
 
