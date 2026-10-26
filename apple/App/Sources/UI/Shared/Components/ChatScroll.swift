@@ -103,16 +103,25 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                         // 新到的那一条带来的长高（它插进来的那次排版）：在对、滚走了时它照常长在下面
                         let rising = offset.arrived(arrival) && grown > 0
                         if follow.wrappedValue.prepending, grown > 0 {
-                            follow.wrappedValue.prepended()
+                            // 这次读数是补之前的（上面长了、偏移没动，看着仍离最早那头近）。补之后的读数要晚一两帧才来，等的这一帧画完就接着排的话
+                            // 用的是补之前的"近"：按补到的位置当场算离最早那头还近不近，再排哪一批不看读数来得早晚
+                            let near: Bool
                             // 贴着最新时正在读的就是最新处：停回新的最新处。按偏移补的话，打开时顶栏边距刚生效、系统把偏移放回了顶上，
                             // 补出来的是顶上那一截
                             if follow.wrappedValue.atNewest, !follow.wrappedValue.scrolling {
                                 toEnd(reader)
                                 settle(reader, animated: false)
+                                near = reading.end < reading.container
                             } else if let target = follow.wrappedValue.target {
-                                // 跳去了某一条、你还没滚过：打开时排开更早的一段常与跳挤在相邻两帧，按偏移补的话晚一拍生效的偏移会盖掉跳，重新对准那一条
+                                // 跳去了某一条、你还没滚过：打开时排开更早的一段常与跳挤在相邻两帧，按偏移补的话晚一拍生效的偏移会盖掉跳，重新对准那一条。
+                                // 落在哪要等跳过去的读数：先按这次的算（多排的至多一批，下一批的读数里已经跳过去了）
                                 reader.scrollTo(target.id, anchor: target.anchor)
-                            } else { lift.scroll(by: grown) }
+                                near = reading.nearOldest
+                            } else {
+                                lift.scroll(by: grown)
+                                near = offset.read + grown < reading.container
+                            }
+                            follow.wrappedValue.prepended(nearOldest: near)
                             return
                         }
                         // 跳去了某一条、你还没滚过：内容这时才变高矮（它上面的图读到了真实的比例、更早的一段排开）的话偏移不动、那一条被推走，重新对准它。

@@ -16,8 +16,9 @@ extension CuePage {
     /// 隔了一阵写时间的那一格：时间上面空多少、时间与这一格之间空多少（`ChatTimeMarker`；排的与估高的同用这两个）。
     static let stampAbove: CGFloat = 16, stampBelow: CGFloat = 4
 
-    /// 打开与往上翻都铺一屏（`conversation`），按每格至少多高（`floor`）从下往上数，只算数到的那几格；打开时最新处停在浮着的那一块上方，
-    /// 只铺它上面那一截（`covered`）。
+    /// 打开时铺一屏（`conversation`），往上每批铺半屏、至多一段（`segment` 格），按每格至少多高（`floor`）从下往上数，只算数到的那几格；
+    /// 打开时最新处停在浮着的那一块上方，只铺它上面那一截（`covered`）。一批排的是一整块主线程的活（Cue 的回答长，真实库上一屏要一百多毫秒），
+    /// 打开后紧接着就是一批：批小了打开后那一下不挡点按，离最早那头还不到一屏就接着排（`ChatColumn`）。
     static func paging(_ thread: CueThread) -> ChatPaging {
         let rows = thread.rows
         func count(filling size: CGSize, above: Int) -> Int {
@@ -32,7 +33,7 @@ extension CuePage {
         }
         return ChatPaging(
             first: { count(filling: CGSize(width: $0.width, height: $0.height - covered(thread, size: $0)), above: $1) },
-            step: { count(filling: $0, above: $1) })
+            step: { min(count(filling: CGSize(width: $0.width, height: $0.height / 2), above: $1), segment) })
     }
 
     /// 浮在对话底上的那一块（`bottom`）至少多高：对话底下让出它那么高的留白（`chatBottomInset`），最新处停在它上方。
