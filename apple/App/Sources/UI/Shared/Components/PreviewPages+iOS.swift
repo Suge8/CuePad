@@ -1,6 +1,5 @@
 #if os(iOS)
 import AVKit
-import CueEditor
 import CueStore
 import PDFKit
 import QuickLook
@@ -8,6 +7,7 @@ import SwiftUI
 
 // 全屏预览里每类页都由 CuePad 自己画（手机）。不嵌快速查看：它把内容放在另一个进程里画，触摸进不来这边，嵌着它的页左右滑翻不了页、
 // 下拉收不起。文稿、表格、演示文稿交给 WebKit（`PreviewWeb`），3D 与认不出的类型是一张静态的图（`PreviewStill`）。
+// 每页铺满整屏：会滚的（图、PDF、文本、网页）铺到两条栏后面、按 `previewInsets` 让出内容边，其余排在两条栏之间（全屏页给的安全区）。
 
 /// 全屏页里除网页与 Markdown 外的每一类（`PreviewContent`）。
 struct PreviewPage: View {
@@ -17,103 +17,70 @@ struct PreviewPage: View {
 
     var body: some View {
         switch preview.kind {
-        case .image: PreviewImage(file: file)
-        case .pdf: PreviewPDF(file: file)
+        case .image: PreviewImage(file: file).ignoresSafeArea()
+        case .pdf: PreviewPDF(file: file).ignoresSafeArea()
         case .video, .audio: PreviewPlayer(file: file, active: active)
-        case .text: PreviewText(file: file)
+        case .text: PreviewText(file: file).ignoresSafeArea()
         case .document, .spreadsheet, .presentation: PreviewWeb(file: file)
         case .model, .web, .markdown, nil: PreviewStill(preview: preview, file: file)
         }
     }
 }
 
-/// 图片自己显示（不嵌快速查看，它把左右滑与下拉都吃掉）：没放大时左右滑翻页、下拉收起都给外面；双指或双击放大，放大了拖着看，双击回原样。
-struct PreviewImage: View {
-    let file: URL
-    @Environment(\.previewZoomedIn) private var zoomedIn: Binding<Bool>
-    @Environment(\.displayScale) private var scale
-    @State private var image: CGImage?
-    @State private var zoom: CGFloat = 1
-    @State private var pinch: CGFloat = 1
-    @State private var offset: CGSize = .zero
-    @State private var drag: CGSize = .zero
-
-    /// 解码的最长边（像素）：够全屏放大两倍看清字
-    private static let maxPoints: CGFloat = 1600
-
-    var body: some View {
-        Group {
-            if let image {
-                let zoomed = zoom * pinch > 1
-                Image(decorative: image, scale: 1).resizable().scaledToFit()
-                    .scaleEffect(zoom * pinch)
-                    .offset(x: offset.width + drag.width, y: offset.height + drag.height)
-                    .padding(16)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .contentShape(.rect)
-                    .gesture(MagnifyGesture().onChanged { pinch = $0.magnification }.onEnded { _ in settle(zoom * pinch) })
-                    .simultaneousGesture(DragGesture().onChanged { drag = $0.translation }.onEnded { value in
-                        offset.width += value.translation.width
-                        offset.height += value.translation.height
-                        drag = .zero
-                    }, isEnabled: zoomed)
-                    .onTapGesture(count: 2) { withAnimation(Motion.snappy) { settle(zoomed ? 1 : 2.5) } }
-            } else {
-                Color.clear
-            }
-        }
-        .task(id: file) { image = await Self.decode(file, pixels: Int(Self.maxPoints * scale)) }
-        // 翻走再翻回来是原样，不留着放大
-        .onDisappear { settle(1) }
-    }
-
-    private func settle(_ value: CGFloat) {
-        pinch = 1
-        zoom = min(max(value, 1), 5)
-        if zoom == 1 { offset = .zero }
-        zoomedIn.wrappedValue = zoom > 1
-    }
-
-    @concurrent private static func decode(_ file: URL, pixels: Int) async -> CGImage? {
-        Thumbnails.image(at: file, maxPixel: pixels)
-    }
-}
-/// PDF：系统的 PDF 视图，按宽铺满、竖着连续滚，双指缩放。
+/// PDF：系统的 PDF 视图，按宽铺满、竖着连续滚，页与页之间留一道缝，双指缩放（以手指处为锚、放大了拖到边再拖是翻页，同图片）。
 struct PreviewPDF: UIViewRepresentable {
     let file: URL
     @Environment(\.palette) private var palette
+    @Environment(\.previewInsets) private var insets
 
     func makeUIView(context: Context) -> PDFView {
         let view = PDFView()
-        view.autoScales = true
         view.displayMode = .singlePageContinuous
+        view.displaysPageBreaks = true
+        view.pageBreakMargins = UIEdgeInsets(top: 6, left: 8, bottom: 6, right: 8)
         view.backgroundColor = UIColor(palette.desk)
         view.document = PDFDocument(url: file)
+        view.autoScales = true
         return view
     }
 
     func updateUIView(_ view: PDFView, context: Context) {
         if view.document?.documentURL != file { view.document = PDFDocument(url: file) }
+        view.subviews.lazy.compactMap { $0 as? UIScrollView }.first?.previewInsets(insets)
     }
 }
 
-/// 视频与音频：系统播放器，翻到就播（同快速查看），翻走停下。
-struct PreviewPlayer: View {
+/// 视频与音频：系统播放器（播放、拖进度、静音、画中画都是它的），排在两条栏之间、画面外透出桌面，翻到就播（同快速查看），翻走停下。
+struct PreviewPlayer: UIViewControllerRepresentable {
     let file: URL
     let active: Bool
-    @State private var player: AVPlayer?
 
-    var body: some View {
-        VideoPlayer(player: player)
-            .onChange(of: active, initial: true) { _, active in
-                if active {
-                    if player == nil { player = AVPlayer(url: file) }
-                    player?.play()
-                } else {
-                    player?.pause()
-                }
-            }
-            .onDisappear { player?.pause() }
+    func makeUIViewController(context: Context) -> AVPlayerViewController {
+        let controller = AVPlayerViewController()
+        controller.player = AVPlayer(url: file)
+        controller.view.backgroundColor = .clear
+        return controller
+    }
+
+    func updateUIViewController(_ controller: AVPlayerViewController, context: Context) {
+        if active { controller.player?.play() } else { controller.player?.pause() }
+    }
+
+    static func dismantleUIViewController(_ controller: AVPlayerViewController, coordinator: ()) { controller.player?.pause() }
+}
+
+extension UIScrollView {
+    /// 全屏页里会滚的页：铺到两条栏后面，内容边让出栏（`previewInsets`），栏后面不垫系统的滚动边缘效果（docs/ui.md「沉浸式的栏」）。
+    func previewInsets(_ insets: EdgeInsets) {
+        let edges = UIEdgeInsets(top: insets.top, left: insets.leading, bottom: insets.bottom, right: insets.trailing)
+        topEdgeEffect.isHidden = true
+        bottomEdgeEffect.isHidden = true
+        guard contentInset != edges else { return }
+        contentInsetAdjustmentBehavior = .never
+        let atTop = contentOffset.y <= -contentInset.top
+        contentInset = edges
+        verticalScrollIndicatorInsets = edges
+        if atTop { contentOffset.y = -edges.top }
     }
 }
 
@@ -160,6 +127,7 @@ struct PreviewStill: View {
 /// 文本（源代码、日志）：只读的系统文字视图，长文也只排看得见的那段。
 struct PreviewText: UIViewRepresentable {
     let file: URL
+    @Environment(\.previewInsets) private var insets
 
     func makeUIView(context: Context) -> UITextView {
         let view = UITextView()
@@ -171,7 +139,7 @@ struct PreviewText: UIViewRepresentable {
         return view
     }
 
-    func updateUIView(_ view: UITextView, context: Context) {}
+    func updateUIView(_ view: UITextView, context: Context) { view.previewInsets(insets) }
 
     @concurrent private static func read(_ file: URL) async -> String { (try? String(contentsOf: file, encoding: .utf8)) ?? "" }
 }

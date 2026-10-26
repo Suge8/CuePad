@@ -15,7 +15,7 @@ struct PreviewWeb: View {
     var body: some View {
         Group {
             if let rules {
-                OfflineWebView(file: file, rules: rules).ignoresSafeArea(.container, edges: .bottom)
+                OfflineWebView(file: file, rules: rules).ignoresSafeArea(.container, edges: OfflineWebView.edges)
             } else if let failure {
                 EmptyState(mascot: .error, title: "没法安全地打开这个页面", message: .verbatim(failure)).padding(24).frame(maxHeight: .infinity)
             } else {
@@ -173,12 +173,15 @@ private enum DocumentLayout {
 
 #if os(macOS)
 extension OfflineWebView: NSViewRepresentable {
+    static let edges = Edge.Set.bottom
     func makeNSView(context: Context) -> WKWebView { make(context.coordinator) }
     func updateNSView(_ view: WKWebView, context: Context) {}
 }
 #else
+/// 手机的全屏页里铺满整屏、滚到两条栏后面，内容边按 `previewInsets` 让出栏。
 extension OfflineWebView: UIViewRepresentable {
+    static let edges = Edge.Set.all
     func makeUIView(context: Context) -> WKWebView { make(context.coordinator) }
-    func updateUIView(_ view: WKWebView, context: Context) {}
+    func updateUIView(_ view: WKWebView, context: Context) { view.scrollView.previewInsets(context.environment.previewInsets) }
 }
 #endif
