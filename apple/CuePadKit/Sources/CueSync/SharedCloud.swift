@@ -7,7 +7,8 @@ import SQLite3
 /// 同步代码照真的跑（`CloudSync` 只换掉网络那一头，同 `SimulatedCloud`），每个请求按延迟模型睡一段（`Latency`，脚本写在目录里的 latency.json，
 /// 数值与出处只在脚本头注释；没有这个文件就不睡）：
 /// 上传先睡六成再落盘、再睡剩下的（服务器收下在回包之前），拉取先睡六成再读。令牌是写入序号，一页至多 `page` 条（`moreComing`）。
-/// 不模拟：改记录冲突（serverRecordChanged）、cloudd 的排队、限流。门铃的密钥是这次运行的（文件里一份），房间不与别的运行重合。
+/// 不模拟：改记录冲突（serverRecordChanged）、cloudd 的排队。限流只在脚本要时注入（`admit`）。门铃的密钥是这次运行的（文件里一份），房间不与别的运行重合。
+/// 每个请求（认账号除外）记进 requests 表：时刻、进程、种类、结果、回给它的 Retry-After，脚本按它数各进程发了几次、守没守 Retry-After。
 struct SharedCloud: SyncCloud {
   /// 每种请求的用时分布：对数正态，按中位与 p95 定。
   struct Latency: Decodable, Sendable {
@@ -30,11 +31,19 @@ struct SharedCloud: SyncCloud {
 
   let path: String
   let latency: Latency
+  private let throttleFile: URL
+
+  /// 脚本写的限流窗口（throttle.json）：到 `until`（墙钟秒）之前到了服务器的请求回 429，带 `retryAfter`。
+  private struct Throttle: Decodable {
+    var until: Double
+    var retryAfter: Double
+  }
   private static let page = 200
   private static let zoneID = CloudSync.zoneID
 
   init(directory: URL) {
     path = directory.appending(path: "cloud.sqlite").path()
+    throttleFile = directory.appending(path: "throttle.json")
     latency = (try? JSONDecoder().decode(Latency.self, from: Data(contentsOf: directory.appending(path: "latency.json")))) ?? .none
   }
 
@@ -42,6 +51,7 @@ struct SharedCloud: SyncCloud {
   func accountName() async throws -> String { await wait(latency.other); return "sync-bench" }
 
   func relaySecret() async throws -> Data {
+    try admit("other")
     await wait(latency.other)
     return try database { db in
       if let secret = try db.blob("SELECT value FROM meta WHERE key = 'relaySecret'") { return secret }
@@ -52,6 +62,7 @@ struct SharedCloud: SyncCloud {
   }
 
   func changes(since token: Data?, keys: [String]?) async throws -> ZoneChangeBatch {
+    try admit("fetch")
     let total = Latency.draw(latency.fetch)
     try? await Task.sleep(for: .seconds(total * 0.6))
     let after = token.flatMap { Int64(String(decoding: $0, as: UTF8.self)) } ?? 0
@@ -73,6 +84,7 @@ struct SharedCloud: SyncCloud {
   }
 
   func records(_ ids: [CKRecord.ID]) async throws -> [CKRecord] {
+    try admit("records")
     await wait(latency.records)
     return try database { db in
       try ids.compactMap { id in try db.blob("SELECT data FROM records WHERE name = ?", id.recordName).map(Self.record) }
@@ -80,6 +92,7 @@ struct SharedCloud: SyncCloud {
   }
 
   func upload(saving: [CKRecord], deleting: [CKRecord.ID]) async throws -> SentRecords {
+    try admit("upload")
     let total = Latency.draw(latency.upload)
     try? await Task.sleep(for: .seconds(total * 0.6))
     try database { db in
@@ -103,10 +116,40 @@ struct SharedCloud: SyncCloud {
     return SentRecords(saved: saving, deleted: deleting)
   }
 
-  func saveZone() async throws { await wait(latency.other) }
+  func saveZone() async throws {
+    try admit("other")
+    await wait(latency.other)
+  }
   func subscriptions() async throws -> [CKSubscription.ID: CKSubscription] { [:] }
   func save(_ subscription: CKSubscription) async throws {}
   func delete(_ id: CKSubscription.ID) async throws {}
+
+  /// 记下这个请求，限流窗口里按 CloudKit 的设备限流回：到了服务器的回 429、带 `retryAfter`，并记下这台在那之前不再收（几个进程共用一份，同设备限流）；
+  /// 那之前来的当场回"被上一次 429 限着"（结果记 early），Retry-After 是剩下的秒数。窗口过了照常。
+  private func admit(_ kind: String) throws {
+    let now = Date.now.timeIntervalSince1970
+    let window = try? JSONDecoder().decode(Throttle.self, from: Data(contentsOf: throttleFile))
+    let refused: Double? = try database { db in
+      try db.run("BEGIN IMMEDIATE")
+      do {
+        let blocked = try db.double("SELECT value FROM meta WHERE key = 'blockedUntil'") ?? 0
+        var result = "ok", wait: Double?
+        if now < blocked {
+          (result, wait) = ("early", blocked - now)
+        } else if let window, now < window.until {
+          (result, wait) = ("429", window.retryAfter)
+          try db.run("INSERT OR REPLACE INTO meta (key, value) VALUES ('blockedUntil', ?)", now + window.retryAfter)
+        }
+        try db.run("INSERT INTO requests (t, pid, kind, result, wait) VALUES (?, ?, ?, ?, ?)", now, Int64(getpid()), kind, result, wait as Any)
+        try db.run("COMMIT")
+        return wait
+      } catch {
+        try? db.run("ROLLBACK")
+        throw error
+      }
+    }
+    if let refused { throw CKError(.requestRateLimited, userInfo: [CKErrorRetryAfterKey: refused]) }
+  }
 
   private func wait(_ spec: [Double]) async { try? await Task.sleep(for: .seconds(Latency.draw(spec))) }
 
@@ -133,6 +176,7 @@ struct SharedCloud: SyncCloud {
         CREATE TABLE IF NOT EXISTS records (name TEXT PRIMARY KEY, type TEXT NOT NULL, data BLOB, seq INTEGER NOT NULL);
         CREATE INDEX IF NOT EXISTS records_seq ON records(seq);
         CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value BLOB);
+        CREATE TABLE IF NOT EXISTS requests (t REAL NOT NULL, pid INTEGER NOT NULL, kind TEXT NOT NULL, result TEXT NOT NULL, wait REAL);
         """)
     }
 
@@ -156,6 +200,12 @@ struct SharedCloud: SyncCloud {
       return found
     }
 
+    func double(_ sql: String, _ values: Any...) throws -> Double? {
+      var found: Double?
+      try query(sql, values) { statement in found = sqlite3_column_double(statement, 0) }
+      return found
+    }
+
     func rows(_ sql: String, _ values: Any...) throws -> [(seq: Int64, name: String, type: String, data: Data?)] {
       var rows: [(seq: Int64, name: String, type: String, data: Data?)] = []
       try query(sql, values) { statement in
@@ -176,6 +226,7 @@ struct SharedCloud: SyncCloud {
         switch value {
         case let text as String: sqlite3_bind_text(statement, at, text, -1, Self.transient)
         case let number as Int64: sqlite3_bind_int64(statement, at, number)
+        case let number as Double: sqlite3_bind_double(statement, at, number)
         case let data as Data: _ = data.withUnsafeBytes { sqlite3_bind_blob(statement, at, $0.baseAddress, Int32(data.count), Self.transient) }
         default: sqlite3_bind_null(statement, at)
         }

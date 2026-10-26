@@ -20,15 +20,18 @@ LATENCY（中位、p95，秒，对数正态；版本 MODEL）：每种请求在 
 用法：
   sync-bench.py <场景> [参数…]                              本检出：构建开发签名的 Debug，跑一次
   sync-bench.py ab <检出X> <检出Y> <轮数> <场景> [参数…]      两个检出各构建一次，按 X Y、Y X… 交替跑 <轮数> 轮，出对比表
-场景（实现与每段的定义在 _sync_scenes.py）：
+场景（实现与每段的定义在 _sync_scenes.py，断网、限流、进后台收尾与撞版本在 _sync_edges.py）：
   send [轮数=10] [间隔=10]   M3 发消息：手机对 Cue 说（写下→已发出→Mac 入库→上屏→交给 Cue→回执）、对会话说（→执行完→结果回来）、Cue 回话到手机（→入库→上屏）
   cold [条数=5] [次数=3]     M1 冷启动：一端退出期间另一端写 N 句，从进程启动到最后一句入库、上屏（手机、Mac 各一遍）
   fg [次数=5] [离开秒=15]    M2 回前台：手机进后台期间、Mac 隐藏期间对端写一句，从回前台到入库、上屏
   idle [分钟=10] [每轮秒=30] M6 常驻开销：每轮一次 send 加立即同步，记两端的请求数、指令、CPU、唤醒、能耗（real 另记 CloudKit 字节）
   offline [秒=30] [次数=2] [path|nopath]  M5 断网恢复：只让手机的请求以 -1009 失败、门铃断开，断着时两边各写 3 句；恢复到第一次成功、积压发完、收完、回执
+  throttle [限流秒=20] [Retry-After=8] [次数=2]  M7 限流（只在模拟云）：窗口内云按设备限流回 429；数各实例窗口内的拉取、上传与早于 Retry-After 的请求，解除到第一拉成功
+  bgflush [次数=8]           M8 写完马上进后台：写下→已发出、进后台→收尾完、写下→Mac 入库
+  versions [命令行改几次=150] 撞版本探针（不进总表）：App 紧循环改一张卡、命令行同时逐条改，数提交后版本不比上一版大的次数
   island [轮数=10]           M4 收消息到灵动岛（iPhone 模拟器，App 这一侧：入库→实时活动换内容）；不连云、不拿测量锁，xc.sh run ios 自己构建
 环境：SYNC_BENCH_CLOUD=sim|real；SYNC_BENCH_RELAY=0 两端都不连门铃（门铃不通，只靠按节奏拉）；SYNC_BENCH_SKIP_BUILD=1 不构建；
-  SYNC_BENCH_SESSIONS 会话数（默认 3）、SYNC_BENCH_FLIP 会话平均几秒切一次状态（默认 8）；SYNC_BENCH_WARM 预热上限秒（默认 300）；SYNC_BENCH_LOCK_WAIT 等锁上限秒（默认 3600）。
+  SYNC_BENCH_SESSIONS 会话数（默认 3）、SYNC_BENCH_FLIP 会话平均几秒切一次状态（默认 8）；SYNC_BENCH_WARM 预热上限秒（默认 300）；SYNC_BENCH_LOCK_WAIT 等锁上限秒（默认 1200，到点列出持有者、以 75 退出）。
 每次跑之前拿全机测量锁（flock，进程退出就放；持有者写在锁文件里）：real 拿 LOCK（与别的连 CloudKit 的探针共用，不同时用 cloudd），
 sim 拿 SIM_LOCK（几个模拟云运行不同时抢 CPU；不碰 cloudd，不必等 real）；构建在锁外。
 结果在 OUT_ROOT/<时刻>-<场景>/：a.log、b.log（实例的全部输出）、result.json（每个指标的样本、负载、构建、云）；对比的汇总在 ab-*.json。
@@ -39,7 +42,8 @@ from datetime import datetime
 
 sys.dont_write_bytecode = True
 from _sync_run import Aborted, Load, Run, exe_of, fake_extension  # noqa: E402
-from _sync_scenes import SCENES, island  # noqa: E402
+from _sync_edges import EDGES  # noqa: E402
+from _sync_scenes import SCENES as BASIC, island  # noqa: E402
 from app_env import BUNDLE_ID  # noqa: E402
 
 CHECKOUT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -52,23 +56,36 @@ MODEL = "v2"
 LATENCY = {"upload": [0.449, 0.984], "fetch": [0.192, 0.620], "records": [0.197, 0.752], "other": [0.068, 0.469]}  # 出处见头注释
 REAL_COOLDOWN, REAL_LIMIT, REAL_BUDGET = 600, 180, 200
 REAL_LAST = "/tmp/cuepad-sync-measure.last-real"  # 上一次 real 运行结束的时刻
+SCENES = BASIC | EDGES
+
+
+LOCK_EXIT = 75  # 等锁超时的退出码，同 xc.sh 的入口锁（_lock.sh）
 
 
 def hold_lock(what):
-    """拿全机测量锁（flock 阻塞等，排队先后由内核定；每分钟打印一次持有者，最多 SYNC_BENCH_LOCK_WAIT 秒），返回打开的锁文件：进程活着就一直持有。"""
+    """拿测量锁（flock 阻塞等，排队先后由内核定），返回打开的锁文件：进程活着就一直持有。等的时候每分钟列一次持有者与它已经占了多久；
+    等满 SYNC_BENCH_LOCK_WAIT 秒（默认 1200）还没轮到，列出持有者、以 LOCK_EXIT 退出，不一直挂着。"""
     f = open(LOCK if CLOUD == "real" else SIM_LOCK, "a+")
-    limit = float(os.environ.get("SYNC_BENCH_LOCK_WAIT", 3600))
-    def holder(*_):
-        f.seek(0); return f.read().strip()
-    def tick(*_):
-        if time.time() - began > limit: raise SystemExit(f"等锁 {limit:.0f} 秒没轮到，持有者：{holder()}")
-        print(f"排队等测量锁，持有者：{holder()}", flush=True)
+    limit = float(os.environ.get("SYNC_BENCH_LOCK_WAIT", 1200))
     began = time.time()
+    def holder():
+        f.seek(0)
+        try: h = json.loads(f.read())
+        except ValueError: return "（锁文件里没有登记）"
+        held = time.time() - datetime.fromisoformat(h["since"]).timestamp()
+        return f"PID {h['pid']}（{h['checkout']}）{h['what']}，已占 {int(held) // 60} 分 {int(held) % 60:02d} 秒"
+    def tick(*_):
+        waited = time.time() - began
+        if waited >= limit:
+            print(f"等测量锁 {int(waited)} 秒没轮到，以 {LOCK_EXIT} 退出。持有者：{holder()}", file=sys.stderr, flush=True)
+            os._exit(LOCK_EXIT)
+        print(f"排队等测量锁（已等 {int(waited) // 60} 分 {int(waited) % 60:02d} 秒），持有者：{holder()}", flush=True)
+        signal.setitimer(signal.ITIMER_REAL, min(60, limit - waited))
     try:
         fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except BlockingIOError:
+        signal.signal(signal.SIGALRM, tick)
         tick()
-        signal.signal(signal.SIGALRM, tick); signal.setitimer(signal.ITIMER_REAL, 60, 60)
         try: fcntl.flock(f, fcntl.LOCK_EX)
         finally: signal.setitimer(signal.ITIMER_REAL, 0)
     f.seek(0); f.truncate()
