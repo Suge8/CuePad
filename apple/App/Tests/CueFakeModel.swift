@@ -215,11 +215,11 @@ nonisolated final class FakeModel: Sendable {
         if text.contains("醒来：空闲，例行看一眼") { return tell("巡视了一圈") }
         if let fired = text.firstMatch(of: /醒来：定时到点\n- ([^\n]+)/)?.1 { return tell("定时到点：\(fired)") }
         if text.contains("请隔天 9 点清理分支") {
-            let at = CueRepeat(.daily, hour: 9, minute: 0).next(after: .now).formatted(.iso8601)
+            let at = CueRepeat(.daily, hour: 9, minute: 0)!.next(after: .now).formatted(.iso8601)
             return call("memory", ["action": "remind", "text": "清理过期分支", "at": at, "repeat": "FREQ=DAILY;INTERVAL=2"])
         }
         if text.contains("请每周一 9 点清理分支") {
-            let at = CueRepeat(.weekly([2]), hour: 9, minute: 0).next(after: .now).formatted(.iso8601)
+            let at = CueRepeat(.weekly([2]), hour: 9, minute: 0)!.next(after: .now).formatted(.iso8601)
             return call("memory", ["action": "remind", "text": "清理过期分支", "at": at, "repeat": "FREQ=WEEKLY;BYDAY=MO", "task": "清理过期分支"])
         }
         if text.contains("醒来：刚启用") {

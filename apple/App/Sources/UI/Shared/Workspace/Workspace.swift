@@ -264,7 +264,7 @@ final class Workspace {
     private func readLibrary() {
         let host = localHost
         do {
-            libraryStart = try services.store.snapshot { try $0.agentLibrary(preferring: host) }
+            libraryStart = try services.store.snapshot { try $0.agentLibrary(host: host) }
             library = libraryStart?.value ?? nil
         } catch {
             fail(error)
@@ -274,7 +274,7 @@ final class Workspace {
     /// 从当场读到的那份接着订阅（当场没读出来就从头订阅）。
     private func followLibrary() async {
         let host = localHost
-        let read: @Sendable (isolated CueStore) throws -> AgentLibrary? = { try $0.agentLibrary(preferring: host) }
+        let read: @Sendable (isolated CueStore) throws -> AgentLibrary? = { try $0.agentLibrary(host: host) }
         guard let start = libraryStart else { return await follow(\.library, read) }
         do {
             for try await next in services.store.observe(from: start, read) { library = next }

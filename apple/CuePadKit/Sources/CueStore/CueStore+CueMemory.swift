@@ -81,12 +81,13 @@ extension CueStore {
     }
   }
 
-  /// 这几条定时叫醒过 Cue 了：重复的推到 `now` 之后的下一次（中间错过的合成这一次），一次性的清掉下一次。
+  /// 这几条定时叫醒过 Cue 了（`lines` 是到点时读出的）：此刻还是那一次的（`remindAt` 没在别处改过）才往下走——重复的按库里此刻的规则
+  /// 推到 `now` 之后的下一次（中间错过的合成这一次），一次性的清掉下一次；叫醒期间别处改过、忘掉的照改过的留着。
   public func fireCueSchedules(_ lines: [CueMemoryLine], at now: Date = .now) throws {
     try write {
-      for line in lines {
-        try db.run(
-          "UPDATE cueLines SET remindAt = ?, modifiedAt = ? WHERE id = ? AND remindAt IS NOT NULL", [line.repeats?.next(after: now), Date.stamp, line.id])
+      for fired in lines {
+        guard let line = try find(CueMemoryLine.self, fired.id), line.deletedAt == nil, line.remindAt != nil, line.remindAt == fired.remindAt else { continue }
+        try db.run("UPDATE cueLines SET remindAt = ?, modifiedAt = ? WHERE id = ?", [line.repeats?.next(after: now), Date.stamp, line.id])
       }
     }
   }
@@ -101,27 +102,41 @@ extension CueStore {
     try db.first("SELECT MIN(remindAt) FROM cueLines WHERE remindAt > ? AND deletedAt IS NULL", [now]) { $0.dateOrNil(0) } ?? nil
   }
 
-  /// 全部定时（`task` 给了就只要挂在它上面的），先到点的在前，各带上一次到点。
+  /// 全部定时（`task` 给了就只要挂在它上面的），先到点的在前。信封与看板只要这些行；要上一次到点的读 `cueSchedules`。
+  public func cueScheduleLines(task: UUID? = nil) throws -> [CueMemoryLine] {
+    try select(CueMemoryLine.self, where: "remindAt IS NOT NULL AND deletedAt IS NULL AND (?1 IS NULL OR taskID = ?1)", [task], orderBy: "remindAt, id")
+  }
+
+  /// 同 `cueScheduleLines`，各带上一次到点。
   public func cueSchedules(task: UUID? = nil) throws -> [CueScheduled] {
-    let lines = try select(
-      CueMemoryLine.self, where: "remindAt IS NOT NULL AND deletedAt IS NULL AND (?1 IS NULL OR taskID = ?1)", [task], orderBy: "remindAt, id")
-    return try lines.map { CueScheduled(line: $0, last: try lastFire(of: $0.id)) }
+    let lines = try cueScheduleLines(task: task)
+    let last = try lastFires(of: Set(lines.map(\.id)))
+    return lines.map { CueScheduled(line: $0, last: last[$0.id]) }
   }
 
-  /// 一条定时上一次叫醒 Cue 的那一轮（经过那一行的叫醒原因里有它）。
-  private func lastFire(of line: UUID) throws -> CueScheduled.Last? {
-    let rows = try select(CueMessage.self, where: "wake LIKE ?", ["%\(line.uuidString)%"], orderBy: "createdAt DESC", limit: 1)
-    guard let row = rows.first, case .schedule(let fires)? = row.wake, let fire = fires.first(where: { $0.line == line }) else { return nil }
-    return CueScheduled.Last(due: fire.due, at: row.createdAt)
+  /// 这几条定时各自上一次叫醒 Cue 的那一轮（经过那一行的叫醒原因，`CueWake.schedule`）：只读定时叫醒的那几行、一次读完，新的在前，每条取第一次碰到的。
+  private func lastFires(of lines: Set<UUID>) throws -> [UUID: CueScheduled.Last] {
+    guard !lines.isEmpty else { return [:] }
+    let rows = try db.query("SELECT wake, createdAt FROM cueMessages WHERE wake LIKE ? ORDER BY createdAt DESC", [Self.scheduleWake]) {
+      ($0.textOrNil(0).flatMap(CueWake.init(stored:)), $0.date(1))
+    }
+    var last: [UUID: CueScheduled.Last] = [:]
+    for (wake, at) in rows {
+      guard case .schedule(let fires)? = wake else { continue }
+      for fire in fires where lines.contains(fire.line) && last[fire.line] == nil { last[fire.line] = CueScheduled.Last(due: fire.due, at: at) }
+      if last.count == lines.count { break }
+    }
+    return last
   }
 
-  /// 这些任务（连同下级）上的定时不再定时：任务完成就是这件事不用再定时做了（在写事务内调用）。
-  func endCueSchedules(under task: UUID, at now: Date) throws {
+  /// 定时叫醒的那一轮存下的 wake 的开头（`CueWake.schedule` 照 `JSONColumn` 编码）。
+  private static let scheduleWake = #"{"schedule":%"#
+
+  /// 挂在 `tasks`（选出任务 id 的 SQL，参数是 ?2）上的定时不再定时（在写事务内调用）：任务完成、进回收站、归档就是这件事不用再定时做了；
+  /// 恢复、取回不复活（不再定时是忘掉那一条）。
+  func endCueSchedules(onTasksIn tasks: String, _ argument: any SQLBindable, at now: Date) throws {
     try db.run(
-      """
-      UPDATE cueLines SET deletedAt = ?1, modifiedAt = ?1
-      WHERE remindAt IS NOT NULL AND deletedAt IS NULL AND taskID IN (\(Self.subtree(from: "SELECT ?2")))
-      """, [now, task])
+      "UPDATE cueLines SET deletedAt = ?1, modifiedAt = ?1 WHERE remindAt IS NOT NULL AND deletedAt IS NULL AND taskID IN (\(tasks))", [now, argument])
   }
 
   /// 全部记忆与有效的摘要，一次读出。摘要写下时区间里各行的 id、忘没忘、钉没钉记成指纹，现在对不上（别处同步来更早的行、

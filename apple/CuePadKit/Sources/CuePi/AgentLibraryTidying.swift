@@ -50,8 +50,7 @@ struct LibraryTidying {
             try mergeGlobal(tidy, retiring: order.retire)
         case .projectClaude(let project, _):
             guard let file = places.projectInstructions(project), let claude = places.projectClaude(project) else { throw AgentLibraryError.noFolder }
-            try write(tidy.merged() ?? "", to: file)
-            try moveToTrash(claude)
+            try mergeProject(tidy, into: file, claude: claude)
         }
         return true
     }
@@ -90,6 +89,15 @@ struct LibraryTidying {
         if places.uses(.opencode), !RelativeLink.isLink(openCode), FileManager.default.fileExists(atPath: openCode.path) { try moveToTrash(openCode) }
         if retiring.contains(.piSystem), FileManager.default.fileExists(atPath: places.piSystem.path) { try moveToTrash(places.piSystem) }
         if retiring.contains(.codexPrompt), let key = CodexPromptKey(places) { try write(key.removed, to: key.config) }
+    }
+
+    /// 合进项目的 AGENTS.md，Claude Code 读的两份移走、`CLAUDE.md` 换成链到 AGENTS.md 的链接（同全局）；个人的 `CLAUDE.local.md` 不碰。
+    private mutating func mergeProject(_ tidy: LibraryTidy, into file: URL, claude: (main: URL, nested: URL, local: URL)) throws {
+        try write(tidy.merged() ?? "", to: file)
+        for other in [claude.main, claude.nested] where LibraryInstructionScan.exists(other) && !RelativeLink.points(other, to: file) { try moveToTrash(other) }
+        guard !RelativeLink.points(claude.main, to: file) else { return }
+        try RelativeLink.make(at: claude.main, to: file)
+        undo.steps.append(.linked(claude.main, to: file))
     }
 
     private mutating func moveToTrash(_ item: URL) throws {

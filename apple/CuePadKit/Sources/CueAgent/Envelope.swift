@@ -102,7 +102,7 @@ public enum CueEnvelope {
     let line = fired.line.line
     var parts = ["#\(fired.line.index) \(line.text)（\(line.repeats.map(CueScheduleWords.repeats) ?? "一次")）"]
     if let task = fired.task { parts.append("任务「\(task.heading)」（\(task.id.shortID)）") }
-    if now.timeIntervalSince(fired.due) > CueFire.lateAfter { parts.append("本该 \(CueScheduleWords.time(fired.due, now: now))，错过了，现在补上") }
+    if CueFire.late(fired.due, at: now) { parts.append("本该 \(CueScheduleWords.time(fired.due, now: now))，错过了，现在补上") }
     return parts.joined(separator: " · ")
   }
 

@@ -108,7 +108,7 @@ extension DebugScene {
     /// 定时（"记得什么"最上面一组、手机 Cue 面板第一条、任务气泡里那一条）：每天 8:00 的汇总；挂在 `task` 上的每月 1 号 9:00，
     /// 上一次那次错过了、41 分钟后补上（那一轮写在对话里它补上的时刻）；明天 15:00 只这一次的。
     static func seedSchedules(_ store: CueStore, task: Card?) async throws {
-        let daily = CueRepeat(.daily, hour: 8, minute: 0)
+        let daily = CueRepeat(.daily, hour: 8, minute: 0)!
         try await store.noteCueLine(
             String(localized: "汇总昨天各项目的进展，发到手机", table: "Demo"), source: .you, remindAt: daily.next(after: .now), repeats: daily)
         let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: .now) ?? .now
@@ -116,12 +116,12 @@ extension DebugScene {
             String(localized: "周会前提醒他要讲的三件事", table: "Demo"), source: .cue,
             remindAt: Calendar.current.date(bySettingHour: 15, minute: 0, second: 0, of: tomorrow))
         guard let task else { return }
-        let monthly = CueRepeat(.monthly(1), hour: 9, minute: 0)
+        let monthly = CueRepeat(.monthly(1), hour: 9, minute: 0)!
         let line = try await store.noteCueLine(
             String(localized: "查一遍域名哪些快到期，续上", table: "Demo"), source: .cue, remindAt: monthly.next(after: .now), repeats: monthly, task: task.id
         ).line
         let late: TimeInterval = 41 * 60
-        let due = CueRepeat(.daily, hour: 9, minute: 0).next(after: .now.addingTimeInterval(-late - 86_400))
+        let due = CueRepeat(.daily, hour: 9, minute: 0)!.next(after: .now.addingTimeInterval(-late - 86_400))
         try await store.recordCueRound(nil, startedAt: due.addingTimeInterval(late), answersYou: false, tools: nil, wake: .schedule([CueFire(line: line.id, due: due)]))
     }
 }

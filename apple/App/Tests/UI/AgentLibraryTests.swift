@@ -38,7 +38,7 @@ struct AgentLibraryTests {
 
     func library(_ what: String, _ condition: @escaping @Sendable (AgentLibrary) -> Bool) async throws -> AgentLibrary {
         let host = TestApp.hostID
-        return try #require(try await eventually(store, { try $0.agentLibrary(preferring: host) }) { $0.map(condition) ?? false })
+        return try #require(try await eventually(store, { try $0.agentLibrary(host: host) }) { $0.map(condition) ?? false })
     }
 
     @Test func 扫出技能与说明_全部整理一下做完_撤销恢复这一次的全部改动() async throws {
@@ -57,7 +57,7 @@ struct AgentLibraryTests {
         defer { keeping.cancel() }
 
         let found = try await library("扫出四件要整理") { $0.tidies.count == 4 }
-        #expect(found.tidies.map(\.title) == ["「retro」在旧目录里", "Claude Code 看不见 1 个技能", "技能目录里有个空目录", "2 家的全局规则各写一份"])
+        #expect(found.tidies.map(\.title) == ["「retro」在旧目录里", "Claude Code 看不见 1 个技能", "技能目录里有个空目录", "2 家的全局说明各写一份"])
         #expect(found.tidies.map(\.action) == [.move, .link, .trash, .compare])
         #expect(found.skills.map(\.name) == ["write-swift"] && found.skills[0].group == "development" && found.skills[0].unseenBy == [.claudeCode])
         #expect(found.selfManaged == [SelfManagedSkills(agent: .claudeCode, count: 2), SelfManagedSkills(agent: .codex, count: 1)])
@@ -126,7 +126,7 @@ struct AgentLibraryTests {
         let lintInApp = "duplicate/lint/\(project.id.uuidString)", lintInBlog = "duplicate/lint/\(blog.id.uuidString)"
         #expect(found.tidies.map(\.id).prefix(3) == [lintInApp, lintInBlog, "duplicate/pr"])
         #expect(found.tidies.map(\.title) == [
-            "2 个技能都叫 lint", "2 个技能都叫 lint", "3 个技能都叫 pr", "「binary」的格式不对", "「broken」的格式不对", "3 家的全局规则各写一份",
+            "2 个技能都叫 lint", "2 个技能都叫 lint", "3 个技能都叫 pr", "「binary」的格式不对", "「broken」的格式不对", "1 家的全局说明各写一份",
         ])
         #expect(found.automaticOrders.map(\.tidy) == ["global-instructions"])
         let global = try #require(found.tidies.last)
@@ -170,6 +170,8 @@ struct AgentLibraryTests {
         try await store.setDirectory(folder.path, for: project.id)
         try write("# Site\n", folder.appending(path: "AGENTS.md"))
         try write("# 旧的 Claude 说明\n", folder.appending(path: "CLAUDE.md"))
+        try write("# 藏在 .claude 里的\n", folder.appending(path: ".claude/CLAUDE.md"))
+        try write("# 我自己的\n", folder.appending(path: "CLAUDE.local.md"))
         let keeping = keep()
         defer { keeping.cancel() }
         let workspace = Workspace(services: services)
@@ -178,7 +180,8 @@ struct AgentLibraryTests {
 
         let found = try await library("扫出项目说明") { $0.instruction(.project(project.id))?.text == "# Site\n" }
         #expect(found.tidies.map(\.title) == ["项目里另有一份不同的 CLAUDE.md"])
-        #expect(found.instruction(.project(project.id))?.readers == [], "Claude Code 只读同层的 CLAUDE.md")
+        #expect(found.instruction(.project(project.id))?.readers == [], "有 CLAUDE.md 一类的 Claude Code 就不读 AGENTS.md")
+        #expect(found.tidies.first?.sources.map(\.path) == ["AGENTS.md", "CLAUDE.md", ".claude/CLAUDE.md"].map { folder.appending(path: $0).path })
         let seen = try #require(found.instruction(.project(project.id)))
 
         try await workspace.saveInstruction(InstructionEdit(instruction: seen.kind, base: seen.base, text: "# Site\n\n先跑测试\n"), in: found)
@@ -200,8 +203,10 @@ struct AgentLibraryTests {
 
         let tidy = try await store.requestTidy([TidyOrder(tidy: "project-claude/\(project.id.uuidString)")], on: TestApp.hostID)
         #expect(try await store.outcome(of: tidy).status == .known(.succeeded))
-        #expect(read(folder.appending(path: "AGENTS.md")) == "手机改的\n\n# 旧的 Claude 说明\n" && !exists(folder.appending(path: "CLAUDE.md")))
-        _ = try await library("合成后 Claude Code 读 AGENTS.md") { $0.tidies.isEmpty && $0.instruction(.project(project.id))?.readers == [.claudeCode] }
+        #expect(read(folder.appending(path: "AGENTS.md")) == "手机改的\n\n# 旧的 Claude 说明\n\n# 藏在 .claude 里的\n")
+        #expect(RelativeLink.points(folder.appending(path: "CLAUDE.md"), to: folder.appending(path: "AGENTS.md")), "同全局：CLAUDE.md 换成链到 AGENTS.md 的链接")
+        #expect(!exists(folder.appending(path: ".claude/CLAUDE.md")) && read(folder.appending(path: "CLAUDE.local.md")) == "# 我自己的\n")
+        _ = try await library("合成后 Claude Code 经链接读 AGENTS.md") { $0.tidies.isEmpty && $0.instruction(.project(project.id))?.readers == [.claudeCode] }
         services.cancelBackgroundWork()
     }
 

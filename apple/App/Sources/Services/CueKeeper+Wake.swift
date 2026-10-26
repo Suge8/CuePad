@@ -20,7 +20,7 @@ extension CueKeeper {
         let envelope = CueEnvelope.render(CueEnvelope.Input(
             now: setup.timing.clock(), projects: try await store.projects(),
             changes: changes.due, board: board, waiting: try await store.cueMessagesWaitingForYou(), left: try await store.cueState()?.left ?? [],
-            wake: wake, fired: try await fired(of: wake), schedules: try await store.cueSchedules().map(\.line), language: CueInterface.current.writing(after: said)))
+            wake: wake, fired: try await fired(of: wake), schedules: try await store.cueScheduleLines(), language: CueInterface.current.writing(after: said)))
         var parts = [envelope]
         if !shift.primed || renewDue(shift, now: now) {
             if shift.primed {
@@ -34,7 +34,6 @@ extension CueKeeper {
                 updateShift {
                     $0.context = nil
                     $0.lastRequest = nil
-                    $0.sessionSince = now
                 }
             }
             // 还没交给它的你的话不进对话视图：它们这次随信封交出去（`CueView` 只列已送达的）

@@ -8,7 +8,8 @@ import Foundation
 /// - 旧目录：各家自己的技能目录与项目里的 `.claude`、`.pi`、`.codex`、`.opencode` 下的。
 /// - 全局说明：`~/.agents/AGENTS.md`，Claude Code 的 `CLAUDE.md`、Codex、Pi 的 `AGENTS.md` 链到它；OpenCode 没有自己那份时读 Claude Code 的。
 ///   替换基础提示的两份（Pi 的 `SYSTEM.md`、Codex 配置里 `model_instructions_file` 指的）只作比对来源。
-/// - 项目说明：`<文件夹>/AGENTS.md`；同层有 `CLAUDE.md` 时 Claude Code 只读它。
+/// - 项目说明：`<文件夹>/AGENTS.md`；同层有 `CLAUDE.md`、`.claude/CLAUDE.md` 或 `CLAUDE.local.md` 时 Claude Code 不读它（2026-10 官方文档），
+///   `CLAUDE.md` 链到 AGENTS.md 时经链接读到，同全局。
 /// 碰不得的那家（隔离运行而它的目录是真实位置，`AgentIntegration.touches`）当作这台没有它。
 struct AgentLibraryPlaces: Sendable {
     let paths: AgentPaths
@@ -83,7 +84,10 @@ struct AgentLibraryPlaces: Sendable {
     var codexConfig: URL { paths.home(of: .codex).appending(path: "config.toml") }
 
     func projectInstructions(_ id: UUID) -> URL? { projects[id]?.appending(path: "AGENTS.md") }
-    func projectClaude(_ id: UUID) -> URL? { projects[id]?.appending(path: "CLAUDE.md") }
+    /// Claude Code 在项目里读的说明：有其中任一个它就不读 AGENTS.md。`local` 是个人的、不入库的那份，整理不碰。
+    func projectClaude(_ id: UUID) -> (main: URL, nested: URL, local: URL)? {
+        projects[id].map { ($0.appending(path: "CLAUDE.md"), $0.appending(path: ".claude/CLAUDE.md"), $0.appending(path: "CLAUDE.local.md")) }
+    }
 
     func file(_ kind: LibraryInstruction.Kind) throws -> URL {
         switch kind {

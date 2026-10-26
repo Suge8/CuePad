@@ -35,11 +35,9 @@ public struct CueState: Equatable, Sendable {
 }
 
 /// Cue 此刻的上下文（一个会话一份）：用了多少 token。用到 `renewAt` 后，下一次醒来先开新会话（`CueKeeper`）。
-/// 随 `CueState` 同步，各端的上下文那一行只读它。旧版本存过的模型窗口（`window`）读时略过。
+/// 随 `CueState` 同步，各端的上下文那一行只读它。旧版本存过的模型窗口（`window`）与会话起点（`since`）读时略过。
 public struct CueContext: StoredJSON, Equatable, Sendable {
   public var used: Int
-  /// 这个会话几点起：界面不读，照写，旧版本解码要它。
-  public var since: Date
 
   /// 换新线：10 万 token。按真实时间线每次醒来约涨 8k，10 万与 6 万每天的花费只差约 1%，换新却从每天约 13 次降到约 8 次：
   /// 换新只省后面几轮的缓存读，代价是重写视图并丢掉会话里原样的经过，线太低就换得太勤；再往上每次醒来读的上下文变长，花费又涨回去。
@@ -51,9 +49,8 @@ public struct CueContext: StoredJSON, Equatable, Sendable {
     count >= 1000 ? "\((Double(count) / 1000).formatted(.number.precision(.fractionLength(0...1))))k" : "\(count)"
   }
 
-  public init(used: Int, since: Date) {
+  public init(used: Int) {
     self.used = used
-    self.since = since
   }
 }
 
@@ -74,7 +71,7 @@ public enum CueWake: StoredJSON, Equatable, Sendable {
 }
 
 /// 定时到点叫醒 Cue 的一条：哪条定时（`CueMemoryLine`）、本该几点（那时的 `remindAt`）。叫醒得比本该晚过 `lateAfter` 就是错过了、醒来才补上
-/// （Mac 睡着、App 没开）：只是一句事实，经过、信封与任务气泡都按这一轮开始的时刻与它算（`CueScheduled.Last.late`），不另存状态。
+/// （Mac 睡着、App 没开）：只是一句事实，经过、信封与任务气泡都按这一轮开始的时刻与它算（`late`），不另存状态。
 public struct CueFire: Codable, Equatable, Sendable {
   public var line: UUID
   public var due: Date
@@ -84,8 +81,11 @@ public struct CueFire: Codable, Equatable, Sendable {
     self.due = due
   }
 
+  /// 本该 `due` 的一次在 `at` 才叫醒，算不算错过了、醒来才补上
+  public static func late(_ due: Date, at: Date) -> Bool { at.timeIntervalSince(due) > lateAfter }
+
   /// 晚这么久算错过：准点时只差对账的那一下，Cue 正忙一轮时也就等几分钟
-  public static let lateAfter: TimeInterval = 10 * 60
+  private static let lateAfter: TimeInterval = 10 * 60
 }
 
 /// 叫醒 Cue 的一处动静：`CueChange` 里界面要的那点——出了什么事、在哪个会话、哪件任务。那一处当时叫什么在这一行的 `CueMessage.places` 里（加密同步）。

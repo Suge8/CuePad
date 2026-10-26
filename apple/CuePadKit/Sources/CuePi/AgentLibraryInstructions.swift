@@ -7,7 +7,8 @@ import Foundation
 /// - 全局：链到 `~/.agents/AGENTS.md` 的几家读它；哪家还有自己的一份（或缺链接），就是"各写一份"——各家自己的那份、
 ///   共读的那份，连同替换基础提示的两份（Pi 的 SYSTEM.md、Codex 的 `model_instructions_file`）一起比；替换基础提示的两份自己不算问题。
 ///   指到别处的链接不碰。
-/// - 项目：同层另有一份内容不同的 CLAUDE.md（不是链到 AGENTS.md 的）就是问题，有它 Claude Code 不读 AGENTS.md。
+/// - 项目：Claude Code 读不到 AGENTS.md 的内容就是问题——`CLAUDE.md` 不是链到它的，而 `CLAUDE.md`、`.claude/CLAUDE.md` 有一份内容不同
+///   （空的也算，它照样挡住 AGENTS.md），或有个人的 `CLAUDE.local.md`；内容不同的那几份进比对与合成。
 struct LibraryInstructionScan {
     var instructions: [LibraryInstruction] = []
     var tidies: [LibraryTidy] = []
@@ -82,22 +83,24 @@ struct LibraryInstructionScan {
         return found
     }
 
-    private mutating func scanProject(_ id: UUID, file: URL, claude: URL, places: AgentLibraryPlaces) {
-        watch(file)
-        watch(claude)
+    private mutating func scanProject(_ id: UUID, file: URL, claude: (main: URL, nested: URL, local: URL), places: AgentLibraryPlaces) {
+        for watched in [file, claude.main, claude.nested, claude.local] { watch(watched) }
         let text = Self.content(file)
-        var links: [String] = [], claudeReads = true
-        if RelativeLink.points(claude, to: file) {
-            links.append(claude.path)
-        } else if let claudeText = Self.content(claude), claudeText != text {
-            claudeReads = false
+        let linked = RelativeLink.points(claude.main, to: file)
+        let others = (linked ? [claude.nested] : [claude.main, claude.nested]).filter(Self.exists)
+        let claudeReads = linked || (!Self.exists(claude.local) && others.allSatisfy { Self.content($0) == text })
+        if !claudeReads {
+            let differing = others.compactMap { other in Self.content(other).flatMap { $0 == text ? nil : (other, $0) } }
             let sources = (text.map { [InstructionSource(origin: .shared, path: file.path, text: $0, modifiedAt: Self.modified(file))] } ?? [])
-                + [InstructionSource(origin: .agent(.claudeCode), path: claude.path, text: claudeText, modifiedAt: Self.modified(claude))]
-            tidies.append(LibraryTidy(id: "project-claude/\(id.uuidString)", kind: .projectClaude(project: id, sources: sources)))
+                + differing.map { InstructionSource(origin: .agent(.claudeCode), path: $0.0.path, text: $0.1, modifiedAt: Self.modified($0.0)) }
+            if !sources.isEmpty { tidies.append(LibraryTidy(id: "project-claude/\(id.uuidString)", kind: .projectClaude(project: id, sources: sources))) }
         }
         let readers = text == nil ? [] : places.installed.filter { $0 != .claudeCode || claudeReads }
-        instructions.append(LibraryInstruction(kind: .project(id), path: file.path, text: text, modifiedAt: Self.modified(file), readers: readers, links: links))
+        instructions.append(LibraryInstruction(
+            kind: .project(id), path: file.path, text: text, modifiedAt: Self.modified(file), readers: readers, links: linked ? [claude.main.path] : []))
     }
+
+    static func exists(_ file: URL) -> Bool { FileManager.default.fileExists(atPath: file.path) || RelativeLink.isLink(file) }
 
     /// 盯文件与它所在的目录（文件换成链接、被删时目录里会变）。
     private mutating func watch(_ file: URL) {
