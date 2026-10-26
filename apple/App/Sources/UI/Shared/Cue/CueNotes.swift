@@ -1,13 +1,11 @@
 import CueStore
 import Foundation
 
-/// Cue 自己醒来的一轮在 Cue 页对话里的样子（`CueNoteLog` 里的一行）：这一轮的经过那一行（为什么醒、碰到的各处）与它这一轮说的话。
+/// Cue 自己醒来的一轮在 Cue 页对话里的样子（`CueNoteLog` 里的一行）：这一轮的经过那一行（为什么醒、叫醒它的各处）与它这一轮说的话。
 /// 旧版本写下的动态可能没有经过那一行（只有正文），也可能经过那一行上没有醒来原因（`header` 为 nil）。
 nonisolated struct CueNoteRound: Identifiable, Equatable, Sendable {
     /// 经过那一行
     let row: CueMessage?
-    /// 这一轮碰到的各处（`CueActivity.touches`）：在跑时挂在这一行下面（`CueTrace`）
-    let touches: [CueActivity.Touch]
     /// 为什么醒、叫醒它的那几处（`CueMessage.wake`）
     let header: CueWakeHeader?
     /// 这一轮说的话（动态的正文），从早到晚
@@ -17,13 +15,11 @@ nonisolated struct CueNoteRound: Identifiable, Equatable, Sendable {
     init(row: CueMessage, lines: [UUID: CueMemoryLine]) {
         header = row.wake.map { CueWakeHeader($0, in: row, lines: lines) }
         self.row = row
-        touches = CueActivity.touches(row.tools)
         said = []
     }
 
     init(said: CueMessage) {
         row = nil
-        touches = []
         header = nil
         self.said = [said]
     }
@@ -81,7 +77,7 @@ nonisolated struct CueWakeHeader: Equatable, Sendable {
             self.places = places
         case .schedule(let fires):
             places = fires.lazy.compactMap { fire in lines[fire.line].map { (fire, $0) } }.first.map { fire, line in
-                let title = PiProgress.firstLine(line.text) ?? line.text
+                let title = PiProgress.gist(line.text)
                 let last = CueScheduled.Last(due: fire.due, at: row.createdAt)
                 return [Place(
                     title: fires.count > 1 ? String(localized: "\(title) 等 \(fires.count) 条") : title, target: line.task.map(Target.task) ?? .memory,

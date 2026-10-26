@@ -39,7 +39,7 @@ struct HandOffInput: View {
         if let choice { return all.first { $0.state.id == choice } }
         return planned?.bound.flatMap { bound in all.first { $0.state.sessionID == bound.state.sessionID } }
     }
-    private var canSend: Bool { services.reachesPiHost && planned.map { !$0.noMac } == true }
+    private var canSend: Bool { planned.map { !$0.noMac } == true }
     private var draft: ComposerDraft { workspace.handOffDraft }
 
     /// 草稿在 `Workspace.handOffDraft`：发出即收起，写库失败时放回草稿、重新浮起这个输入框。
@@ -85,7 +85,7 @@ struct HandOffInput: View {
                     .buttonStyle(PressStyle(.button)).disabled(!canSend)
                     .accessibilityLabel(chosen.map { String(localized: "交给 \($0.state.title)") } ?? String(localized: "开新会话交给它"))
             })
-        .composerNotice(planned?.noMac == true || !services.reachesPiHost || config?.failure != nil) {
+        .composerNotice(planned?.noMac == true || config?.failure != nil) {
             MacInputNotice(noMac: planned?.noMac == true, failure: config?.failure)
         }
         .onAppear { focused = true }
@@ -111,7 +111,7 @@ struct HandOffInput: View {
         }
     }
 
-    /// 头部：交给谁的胶囊（菜单里是在线会话与"新会话"）；送不到 Mac 时的原因叠在输入框上方（`composerNotice`）。
+    /// 头部：交给谁的胶囊（菜单里是在线会话与"新会话"）；没选到 Mac、没换成的原因叠在输入框上方（`composerNotice`）。
     private var header: some View {
         HStack(spacing: 8) {
             // 新会话放最上面：会话多了也不用往下翻

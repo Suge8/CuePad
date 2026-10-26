@@ -6,12 +6,12 @@ import SwiftUI
 /// 按卡停（`viewAligned`）；卡滑动时从玻璃下面过，不遮罩、不在它右沿裁掉（docs/ui.md 沉浸式的栏）。玻璃贴屏边、不留缝：留缝时停着的上一张卡的尾巴在缝里露出碎字。
 /// 四行的玻璃一样大（至少 `spineHeight`，名字那一格按四个名字里最长的占位），在行里竖直居中、内容在玻璃里居中；比玻璃高的行里，停着的上一张卡在玻璃上下露出一截尾巴。
 /// 行没有底（`BoardLane`）：分组靠留白与行头。
-/// 行多高由 `PhoneBoard` 按屏高给，卡多卡少、有没有都不改；这里只答最小高：待办、推进中、等你叠两排、已完成一排的最小格（`BoardRowMetrics`，随动态字体放大），
-/// 不低于行头玻璃（名字总写全）。给得比最小高多时格跟着长高，长到再叠得下一排最小格就多叠一排（`adaptive`）；卡铺满格，按列填（读的顺序不变）。
+/// 行多高由 `PhoneBoard` 按屏高给，卡多卡少、有没有都不改；这里只答两个高：理想高是待办、推进中、等你叠两排、已完成一排的最小格（`BoardRowMetrics`，随动态字体放大），
+/// 最矮是一排最小格；都不低于行头玻璃（名字总写全）。叠得下几排最小格就叠几排（`adaptive`），格平分行高；卡铺满格，按列填（读的顺序不变）。
 /// 空行是一格铺满整行高的虚线框。卡上标题小一档、可折两行（`BoardCardMetrics.title`），推进中下面是线与状态词。
 /// 辅助字号下一行只叠一排、一张卡几乎占满可见宽（下一张露一条边）：窄卡里大字一行只放得下两个字。
 /// 行里的卡在懒加载的横排里，只建看得见的几张。
-/// 添加任务那一行（`above`）横贯这一行、在卡的上面，不挤进格子里（格子窄，选项目的胶囊会被截）；它占的高另加在最小高上，卡的格不变矮。添加时这一行先滑回行首。
+/// 添加任务那一行（`above`）横贯这一行、在卡的上面，不挤进格子里（格子窄，选项目的胶囊会被截）；它占的高另加在这一行的两个高上，卡的格不因它变矮。添加时这一行先滑回行首。
 struct BoardRowLane<Above: View, Content: View>: View {
     let column: TaskBoard.Column
     let count: Int
@@ -65,7 +65,7 @@ struct BoardRowLane<Above: View, Content: View>: View {
             .scrollTargetBehavior(.viewAligned)
             .scrollIndicators(.never)
             .scrollDismissesKeyboard(.immediately)
-            .frame(minHeight: cell * CGFloat(tiers) + BoardRowMetrics.gap * CGFloat(tiers - 1), maxHeight: .infinity)
+            .frame(minHeight: cell, idealHeight: cell * CGFloat(tiers) + BoardRowMetrics.gap * CGFloat(tiers - 1), maxHeight: .infinity)
             .environment(\.boardRow, true)
             .environment(\.boardTitle, BoardCardMetrics.title(cardWidth: nil, typeSize: typeSize))
             .onChange(of: rewind) {
@@ -74,7 +74,7 @@ struct BoardRowLane<Above: View, Content: View>: View {
         }
     }
 
-    /// 最小高里叠几排：已完成与辅助字号下一排，其余两排。
+    /// 理想高里叠几排：已完成与辅助字号下一排，其余两排。
     private var tiers: Int { column == .done || typeSize.isAccessibilitySize ? 1 : 2 }
 
     /// 一张卡占可见宽的几成。

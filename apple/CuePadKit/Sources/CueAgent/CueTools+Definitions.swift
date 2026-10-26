@@ -33,7 +33,7 @@ extension CueTools {
           say 与接着用上一步会话的 start 等送达结果至多 \(Int(Speech.cueWait)) 秒：已送达、没送到（出错，带原因），或还没结果（之后没送到会作为 [发送失败] 叫醒你）；
           peek{task?|session?}：只读。都不带：所有没做完的事、不归没做完的事的活会话，和最近完成的几件（各带会话）。带 task：叶子、正文、近况、最近几轮问答（"他"是用户，"你"是你）与最新回答全文、发到手机的文件（带本机路径）。带 session：那个会话；
           stop{task|session}：停下会话这一轮；
-          leave{task|session}：会话停着（歇下或等回答）、这次该他接手时用，把它留给他回：会话与 Cue 页显示"待回复"，不算等你（会话自己在等回答的提问照样进等你）；你已 tell 带 ask 问他的不再 leave；他或你再对它说话就作废；
+          leave{task|session}：会话停着（歇下或等回答）、这次该他接手时用，把它留给他回：歇着的显示"待回复"、等回答的成了他的拍板，都进等你；你已 tell 带 ask 问他的不再 leave；他或你再对它说话就作废；
           done{task|session,evidence?,show?}：做完。顶层任务要 evidence：1–\(evidenceCount) 条结论，每条宽不过 \(evidenceLimit)（约 20 个汉字，如"\(evidenceExample)"），CuePad 把标题与证据拼成结果告诉用户。show 是结果上挂的图，写法同 tell 的 show（如 look 写"最终版深色：分组标题"）；不带就不挂图，没点名的仍在会话里。下一步还用它的会话就留着，否则结束会话（结束的照样能 say）；已完成的再 done 只结束没人再用的会话，不要 evidence、show。给 session 是收掉那个会话：没做完的事在用、或有话正送进去的不收。
           """,
         "inputSchema": schema(

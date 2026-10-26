@@ -90,16 +90,19 @@ nonisolated struct ChatFollow: Equatable {
         if !atNewest { revealed = true }
     }
 
-    mutating func jumpToNewest() {
-        jumping = false
-        target = nil
-        toNewest = ToNewest(sent: false)
-    }
+    mutating func jumpToNewest() { returnToNewest(sent: false) }
 
-    mutating func sent() {
+    mutating func sent() { returnToNewest(sent: true) }
+
+    /// 要回到最新当场就贴上，不等滚到了读数来报：滚动区这时就按贴底排（内容变高矮时底锚、不跟正在读的那一条，`ChatScroll`）。
+    /// 等读数的话，这之间到的内容（发出的那句、答掉的拍板回到对话里）按"正在读的不动"排，可见区被留在上面、发出的那句压在输入框下；
+    /// 从新消息读起（`Landing.read`）落在最新处时读数不再变，一直等不到。
+    private mutating func returnToNewest(sent: Bool) {
+        atNewest = true
+        revealed = false
         jumping = false
         target = nil
-        toNewest = ToNewest(sent: true)
+        toNewest = ToNewest(sent: sent)
     }
 
     mutating func willPrepend() { prepending = true }

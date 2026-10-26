@@ -18,9 +18,10 @@ enum ComposerMetrics {
     static let noticeRadius: CGFloat = 16
     static let noticeSpacing: CGFloat = 4
     static let noticePadding: CGFloat = 8
-    /// 两行说明的文字预算（含行间距）；滚动区按动态字号缩放它，外边距不缩放。
-    static let noticeTextHeight: CGFloat = 2 * 20 + noticeSpacing
+    /// 两行说明的字（`Typography.meta` 一行约 16）连同两行之间的空；会话页对话末尾按动态字号缩放它（`PiConversation`），外边距不缩放。
+    static let noticeTextHeight: CGFloat = 2 * 16 + noticeSpacing
 
+    /// 两行说明连同离输入框的间隔占多高（字高 `textHeight`）。
     static func noticeClearance(textHeight: CGFloat) -> CGFloat {
         textHeight + 2 * noticePadding + stackGap
     }
@@ -121,7 +122,7 @@ enum ComposerForm: Equatable {
 
 extension View {
     /// 叠在这一块上沿之上（隔 `stackGap`）、底边对着上沿往上长，不进排版：挂在上沿一条零高的线上，叠放的东西多高都不改这一块的高。
-    /// 排进来的话它一出一收这一块就当帧变高变矮，浮在它上面的对话跟着跳；叠在上面的代价是盖住后面最下面的一截（同"回到最新"圆钮）。
+    /// 排进来的话它一出一收这一块就当帧变高变矮，浮在它上面的对话跟着跳；对话页上盖住的是对话末尾常驻那一行的位置（`ChatLiveSlot` 按它的高让出），不是内容。
     /// 输入框上方的说明（`composerNotice`）、Cue 页底部那一块上方的待回复提示（`CueReplyTip`）。
     func floatingAbove(@ViewBuilder _ content: () -> some View) -> some View {
         overlay(alignment: .top) {

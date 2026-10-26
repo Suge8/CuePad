@@ -1,4 +1,5 @@
 import CueStore
+import CueText
 import Foundation
 
 /// 会话"现在到哪了"的一句话（项目行、任务看板的卡、任务浮窗、会话页卡片的第二行；窄处的会话行不写它，只写状态与读数，见 `PiRowFacts`）：等你确认时是问题首行，干活时是当前动作（还没有动作时是正在处理的提问），
@@ -43,6 +44,23 @@ nonisolated enum PiProgress {
     static func firstLine(_ text: String?) -> String? {
         text.flatMap(MarkdownBlock.firstPlainLine)
     }
+
+    /// Cue 页一行旁注里的一句要点（唯一的截法）：经过的每一行只写动作、名字与这一句。Cue 说的话、记忆、命令这类原文都经它——
+    /// 第一行去掉开头的标签（"手机闪退：根因已查清…"：Cue 爱先写在说哪件，名字那一行已经写了），到第一个逗号、句号、分号、冒号、问号或叹号为止，
+    /// 至多 `gistLimit` 个字。名字（任务、会话的标题）本身就是要点，不经它。
+    static func gist(_ text: String) -> String {
+        var line = Substring(firstLine(text) ?? "")
+        if let colon = line.firstIndex(where: { "：:".contains($0) }), line.distance(from: line.startIndex, to: colon) <= gistLabel {
+            let rest = line[line.index(after: colon)...].drop { $0.isWhitespace }
+            if !rest.isEmpty { line = rest }
+        }
+        let clause = line.prefix { !"，,。；;：:！？!?".contains($0) }.trimmingCharacters(in: .whitespaces)
+        return (clause.isEmpty ? String(line) : clause).clipped(gistLimit)
+    }
+
+    static let gistLimit = 20
+    /// 冒号前至多这么多字才算标签，再长是话里的冒号
+    private static let gistLabel = 12
 
     /// 首句：到第一个句号、问号、叹号或换行为止。
     static func firstSentence(_ text: String?) -> String? {

@@ -28,11 +28,11 @@ extension DebugScene {
         await send(String(localized: "改成按首次加入时间排序", table: "Demo"), to: "atlas")
         await send(String(localized: "部署到预发环境", table: "Demo"), to: "deploy")
         if let reproduce = tasks.first(where: { $0.body.hasPrefix(String(localized: "复现乱序", table: "Demo")) }) { try? await store.setStatus(reproduce.id, .done) }
-        // notes 这一轮做完，会话歇下
+        // notes 这一轮几分钟前做完，会话歇下
         try? await Task.sleep(for: .milliseconds(5))
         _ = try? await PiStateRecorder(store: store, hostID: "demo-mac").update(
             sessionID: "notes", state: .settled, title: "notes", directory: "notes", projectID: projects.first { $0.name == "Career" }?.id,
-            times: PiTimes(stateSince: .now, busySince: nil), modelState: demoModels, commands: demoCommands)
+            times: PiTimes(stateSince: .now.addingTimeInterval(-6 * 60), busySince: nil), modelState: demoModels, commands: demoCommands)
         let cuepad = tasks.filter { $0.projectID == projects.first { $0.name == "CuePad" }?.id && !$0.body.hasPrefix(String(localized: "投送队列超时报错不发键", table: "Demo")) }
         if let started = cuepad.first { try? await store.setStatus(started.id, .inProgress) }
         // Flow 只有一条在推进的任务、没有 Agent：项目的"此刻"是这条任务

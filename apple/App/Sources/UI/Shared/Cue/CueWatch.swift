@@ -32,8 +32,6 @@ final class CueWatch {
     /// 它此刻的上下文（`CueState.context`，值班那台写、随状态同步）：Mac"运行情况"里上下文那一行（`CueContextLine`）只读它。
     private(set) var context: CueContext?
     #endif
-    /// 在跑的这一轮的经过那一行（`CueState.round`）。
-    private(set) var round: UUID?
     /// Cue 页的输入（离开再回来还在）。
     var draft = ComposerDraft()
     /// "Cue 记得什么"开着。
@@ -74,7 +72,6 @@ final class CueWatch {
         lastSaid = digest.lastSaid
         hostID = digest.hostID
         hostName = digest.hostName
-        round = digest.state?.round
         #if os(macOS)
         context = digest.state?.context
         #endif

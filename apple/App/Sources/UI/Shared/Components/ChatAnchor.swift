@@ -12,7 +12,8 @@ import SwiftUI
 /// 否决的方案：滚动位置按滚动目标认（`scrollPosition` 加 `scrollTargetLayout`）只保证那一段"还看得见"，段有几屏高，改宽时正在读的照样被推走；
 /// 懒加载栈会保持最上面那条可见的视图，但它的总高与偏移按估计推，底部锚定会落在内容外（`ChatScroll` 头注释）；
 /// 排版给的 `bounds` 原点不可靠（同一列有时按父视图的坐标、有时从 0 起），所以各层只记相对自己上沿的位置。
-/// 记录在排版里写、在读数闭包里读（不一定在主线程），所以带锁；它不是状态，写它不触发更新。
+/// 记录在排版里写、在读数闭包里读，两处都不保证在主线程（动画由 SwiftUI 的渲染线程推进时，排版就在那条线程上跑），
+/// 所以带锁，排版的回调也只捕获能跨线程的值；它不是状态，写它不触发更新。
 nonisolated final class ChatAnchor: Sendable {
     /// 一段或一条：相对上一层上沿的位置。
     struct Span: Equatable {
@@ -159,7 +160,7 @@ struct ChatStack<Content: View>: View {
     @Environment(\.chatAnchor) private var anchor
 
     var body: some View {
-        RecordingStack(spacing: spacing, laid: { placed, width in
+        RecordingStack(spacing: spacing, laid: { [anchor] placed, width in
             var runs: [ChatAnchor.Span] = [], real: Set<UUID> = []
             for (subview, top, height) in placed {
                 guard let tag = subview[ChatRun.self] else { continue }
@@ -181,7 +182,7 @@ struct ChatRows<Content: View>: View {
     @Environment(\.chatAnchor) private var anchor
 
     var body: some View {
-        RecordingStack(spacing: spacing, laid: { placed, _ in
+        RecordingStack(spacing: spacing, laid: { [ids, anchor] placed, _ in
             anchor?.laid(rows: zip(ids, placed).map { ChatAnchor.Span(id: $0, top: $1.top, height: $1.height) }, of: ids)
         }) {
             content
@@ -192,35 +193,37 @@ struct ChatRows<Content: View>: View {
 /// 竖排（同 `VStack(alignment: .leading, spacing:)`），摆完把各子视图相对自己上沿的位置与高、排的宽交给 `laid`。
 private struct RecordingStack: Layout {
     let spacing: CGFloat
-    let laid: @MainActor (_ placed: [(subview: LayoutSubview, top: CGFloat, height: CGFloat)], _ width: CGFloat) -> Void
+    let laid: @Sendable (_ placed: [(subview: LayoutSubview, top: CGFloat, height: CGFloat)], _ width: CGFloat) -> Void
 
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout [CGFloat]) -> CGSize {
+    /// 量过的各子视图的高与量时的宽：同一次排版里量高与摆放共用一次。
+    typealias Measured = (width: CGFloat?, heights: [CGFloat])
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout Measured) -> CGSize {
         let heights = heights(proposal.width, subviews, &cache)
         let width = proposal.width.flatMap { $0.isFinite ? $0 : nil } ?? subviews.map { $0.sizeThatFits(proposal).width }.max() ?? 0
         return CGSize(width: width, height: heights.reduce(0, +) + spacing * CGFloat(max(0, heights.count - 1)))
     }
 
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout [CGFloat]) {
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Measured) {
         var y: CGFloat = 0, placed: [(subview: LayoutSubview, top: CGFloat, height: CGFloat)] = []
         for (subview, height) in zip(subviews, heights(bounds.width, subviews, &cache)) {
             subview.place(at: CGPoint(x: bounds.minX, y: bounds.minY + y), anchor: .topLeading, proposal: ProposedViewSize(width: bounds.width, height: height))
             placed.append((subview, y, height))
             y += height + spacing
         }
-        // 排版只在主线程跑（Layout 的方法本身不带隔离）：记位置的是主线程上的 ChatAnchor
-        MainActor.assumeIsolated { laid(placed, bounds.width) }
+        laid(placed, bounds.width)
     }
 
-    func makeCache(subviews: Subviews) -> [CGFloat] { [] }
+    func makeCache(subviews: Subviews) -> Measured { (nil, []) }
 
-    func updateCache(_ cache: inout [CGFloat], subviews: Subviews) { cache = [] }
+    func updateCache(_ cache: inout Measured, subviews: Subviews) { cache = (nil, []) }
 
-    /// 各子视图在宽 `width` 下的高；同一次排版里量高与摆放共用一次。
-    private func heights(_ width: CGFloat?, _ subviews: Subviews, _ cache: inout [CGFloat]) -> [CGFloat] {
-        if cache.count != subviews.count + 1 || cache.last != width ?? -1 {
-            cache = subviews.map { $0.sizeThatFits(ProposedViewSize(width: width, height: nil)).height } + [width ?? -1]
+    /// 各子视图在宽 `width` 下的高。
+    private func heights(_ width: CGFloat?, _ subviews: Subviews, _ cache: inout Measured) -> [CGFloat] {
+        if cache.heights.count != subviews.count || cache.width != width {
+            cache = (width, subviews.map { $0.sizeThatFits(ProposedViewSize(width: width, height: nil)).height })
         }
-        return cache.dropLast()
+        return cache.heights
     }
 }
 

@@ -47,9 +47,6 @@ nonisolated enum CuePresence: Equatable, Sendable {
     /// 在用工具（不是在想）：对话末尾单列正在跑的那一步。
     var isUsingTool: Bool { if case .working(.tool, _, _) = self { true } else { false } }
 
-    /// 正在跑的那一步碰到的那一处（`CueState.step`）：对话里在跑那一行按它画成与经过同一种行（`CueTrace`）。
-    var step: CueActivity.Touch? { if case .working(_, _, let step) = self { step } else { nil } }
-
     /// 与 Agent 会话同一套的状态：话在路上、在做事；其余没有。
     var shown: PiShown? {
         switch self {
@@ -59,10 +56,11 @@ nonisolated enum CuePresence: Equatable, Sendable {
         }
     }
 
-    /// 在做事时那一句（页头、对话末尾）：碰到任务与会话的一步按按钮动词表写（`CueActivity.line`），其余同会话的当前动作，没有动作时是状态词。
+    /// 在做事时那一句（页头、对话末尾）：碰到任务与会话的一步按按钮动词表写（`CueActivity.line`），其余同会话的当前动作截成要点（`PiProgress.gist`），
+    /// 没有动作时是状态词。
     var progress: String? {
         guard case .working(_, let detail, let step) = self else { return nil }
-        return step.map(CueActivity.line) ?? detail.flatMap(PiProgress.action) ?? shown?.label
+        return step.map(CueActivity.line) ?? detail.flatMap(PiProgress.action).map(PiProgress.gist) ?? shown?.label
     }
 
     /// 它不在时那一句（Cue 此刻的原因，`CueNow.Brain.away`；等同步时那句由 `CueNow.Local` 给），`host` 是它运行的那台 Mac 的名字。

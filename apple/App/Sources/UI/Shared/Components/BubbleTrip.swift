@@ -17,18 +17,14 @@ enum BubbleTrip: Hashable {
     var opacity: CGFloat { if case .sending = self { 0.7 } else { 1 } }
 }
 
-/// 没能送达的这一句：原因全文与能做的事（叹号的菜单、气泡下那一行共用）。只按原因与能不能重发比较：动作随每次求值新建，比它们会让记号每次都重画。
+/// 没能送达的这一句：原因全文与能做的事（叹号的菜单、气泡下那一行共用）。只按原因比较：动作随每次求值新建，比它们会让记号每次都重画。
 struct Undelivered: Hashable {
     let reason: String
-    let canResend: Bool
     let resend: () -> Void
     let remove: () -> Void
 
-    static func == (lhs: Self, rhs: Self) -> Bool { lhs.reason == rhs.reason && lhs.canResend == rhs.canResend }
-    func hash(into hasher: inout Hasher) {
-        hasher.combine(reason)
-        hasher.combine(canResend)
-    }
+    static func == (lhs: Self, rhs: Self) -> Bool { lhs.reason == rhs.reason }
+    func hash(into hasher: inout Hasher) { hasher.combine(reason) }
 }
 
 extension View {
@@ -65,7 +61,6 @@ private struct TripMark: View {
                 Menu {
                     Section(undelivered.reason) {
                         Button(MessageMenu.Item.resend.title, icon: MessageMenu.Item.resend.icon, action: undelivered.resend)
-                            .disabled(!undelivered.canResend)
                         Button(MessageMenu.Item.remove.title, icon: MessageMenu.Item.remove.icon, role: .destructive, action: undelivered.remove)
                     }
                 } label: {

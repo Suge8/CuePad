@@ -176,14 +176,7 @@ def deck(m):
     return [Layer("deck", out)]
 
 
-def grid(m):
-    """全部项目：田字四块圆角方，块间一道宽于刻缝的缝。"""
-    g = GROW[m]
-    a, gap = 10.6, 1.4
-    out = []
-    for x0, y0 in ((-a, -a), (gap, -a), (-a, gap), (gap, gap)):
-        out.append(grown([(x0, y0), (x0 + a - gap, y0), (x0 + a - gap, y0 + a - gap), (x0, y0 + a - gap)], [2.4] * 4, g))
-    return [Layer("grid", out)]
+TRAY_ARROW_S, TRAY_ARROW_G = 0.55, 0.5  # 托盘里的胖箭头缩多小、随字重外扩几成（两臂之间的口子窄，外扩多了碰臂）
 
 
 def tray_arrow(up):
@@ -192,11 +185,7 @@ def tray_arrow(up):
         g = GROW[m]
         w = 2.8 + 1.2 * g
         tray = bar([(-5.0, -2.4), (-9.6, -2.4), (-9.6, 10.0), (9.6, 10.0), (9.6, -2.4), (5.0, -2.4)], w, [0, 2.6, 2.6, 2.6, 2.6, 0])
-        head = (4.0 * G, 4.6 * G + g * G)
-        if up:
-            a = arrow([Line(mul((0, 3.6), G), mul((0, -7.0), G))], w * G, head)
-        else:
-            a = arrow([Line(mul((0, -12.0), G), mul((0, 0.4), G))], w * G, head)
+        a = fat_arrow(g * TRAY_ARROW_G, 0, TRAY_ARROW_S, (0, -6.0)) if up else fat_arrow(g * TRAY_ARROW_G, 180, TRAY_ARROW_S, (0, 1.2))
         return [Layer("tray", [tray]), Layer("arrow", [a])]
     return build
 
