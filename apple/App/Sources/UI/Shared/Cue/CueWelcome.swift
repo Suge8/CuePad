@@ -13,21 +13,9 @@ import SwiftUI
 /// 手机上 Cue 与 Agent 都在 Mac 上、只经 iCloud 看到：启用钮之前是三步（`CueMacSteps`：装 Mac 版、登同一个 iCloud、在 Mac 上接 Agent），
 /// 卡住的那一步带出路（发出 Mac 版的下载链接（GitHub Releases，`CueSettings.macDownload`，隔空投送到 Mac 上最快）、没开 iCloud 时打开设置），三步都通才是启用钮。
 /// 没启用时下面的输入框发出去是记下灵感。Cue 运行在别的 Mac 上不写在这里：Mac 上写在输入框工具排的末尾（`CueComposer`）。
+/// 启用前后是同一张纸（同一个 `EmptyState`）：同步对完、Cue 在别处已启用时只换纸里的字与动作，吉祥物的出场不重播、不先空一下。
+/// 说过话后停用的那张小纸只在没启用时出现（`CuePage`）。
 struct CueWelcome: View {
-    let intro: Bool
-    @Environment(Workspace.self) private var workspace
-
-    var body: some View {
-        let cue = workspace.cue
-        if cue.canHear {
-            EmptyState(mascot: .hello, title: "我是 \(cue.name)", message: "要做什么，直接跟我说，比如：", waitsForSync: true) { CueStarters() }
-        } else {
-            CueEnable(intro: intro)
-        }
-    }
-}
-
-private struct CueEnable: View {
     let intro: Bool
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -40,7 +28,12 @@ private struct CueEnable: View {
         let name = workspace.cue.name
         Group {
             if intro {
-                EmptyState(mascot: .hello, title: "我是 \(name)", message: .verbatim(message(settings)), waitsForSync: true) { steps(settings, hosts) }
+                let hears = workspace.cue.canHear
+                EmptyState(
+                    mascot: .hello, title: "我是 \(name)", message: hears ? "要做什么，直接跟我说，比如：" : .verbatim(message(settings)), waitsForSync: true
+                ) {
+                    if hears { CueStarters() } else { steps(settings, hosts) }
+                }
             } else {
                 // 说过话后停用了：页头已写"已停用"，这里只说启用后怎样与那一步，不再自我介绍
                 VStack(spacing: 10) {
