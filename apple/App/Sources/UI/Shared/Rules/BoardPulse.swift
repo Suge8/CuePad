@@ -1,11 +1,12 @@
 import CueStore
+import SwiftUI
 
 /// 推进中一张卡此刻的样子（任务卡与没绑任务的会话卡同一条规则），只按这一份分：排在哪一档（`Workspace.byAttention`）、
-/// 卡下沿那条线（`trace`，`BoardWave` 画）、线右端写不写状态词、标题淡不淡。会话的状态只经 `PiShown` 判定。
+/// 卡下沿那条线（`trace`，`BoardLine` 画）、线右端写哪个状态词（`word`）、线与词什么颜色（`tint`）、标题淡不淡。会话的状态只经 `PiShown` 判定。
 /// - 要你管：写出状态词的（`PiShown.speaksOnTask`：出错、被打断、没能送达、待回复、有新回复），与上下文用到九成起的
-///   （`UsageLevel.critical`，状态词就是"上下文 94%"）；线停住；
-/// - 在跑：`PiShown.isRunning`，线在动；
-/// - 歇着：其余（会话停着、等 Cue 回答、还没开会话），一条静止的淡灰实线、标题淡一档。
+///   （`UsageLevel.critical`，状态词就是"上下文 94%"）；线停住，末端一颗点与状态词同色；
+/// - 在跑：`PiShown.isRunning`，线在动、靛青；
+/// - 歇着：其余（会话停着、等 Cue 回答、还没开会话），一条静止的淡线、不带点，标题淡一档。
 struct BoardPulse: Equatable {
     enum Tier: Int, CaseIterable, Comparable {
         case needsYou, running, resting
@@ -13,20 +14,24 @@ struct BoardPulse: Equatable {
         static func < (lhs: Self, rhs: Self) -> Bool { lhs.rawValue < rhs.rawValue }
     }
 
-    /// 卡下沿那条线：装饰，不对应真实事件，只认得出"在干哪类活""停住了"。
+    /// 卡下沿那条线"现在"那一截：装饰，不对应真实事件，只认得出"在干哪类活""停住了"。
     enum Trace: Equatable {
-        /// 在跑：按在干的活挑一种预先画好的线；派了子代理的另有在跑的子代理各一条细轨。
+        /// 在跑：按在干的活挑一种预先画好的线；派了子代理的换成在跑的子代理各一条轨。
         case running(Gait, subagents: Int)
-        /// 停住：出错类（出错、没能送达、上下文快满）是胭脂平线，被打断是灰色断线，其余（待回复、有新回复）是状态词那种颜色的平线；都带末端一个点。
-        case stopped(Stop)
-        /// 歇着：一条淡灰实线、不带点——横线就是"没在动"；与被打断靠断线与点分开。等高的卡下沿不空着，不像没画完。
+        /// 停住：末端一颗点（颜色同状态词，`tint`）；被打断（`broken`）是断线——停在半路，说一句就接着做。
+        case stopped(broken: Bool)
+        /// 歇着：一条淡线、不带点——横线就是"没在动"。等高的卡下沿不空着，不像没画完。
         case resting
     }
 
-    /// 在干哪类活：在想（含输出、话在路上）是慢而平的起伏，用工具是平线上几个尖峰，压缩上下文是细密的波纹。
+    /// 在干哪类活：在想（含输出、话在路上）是慢而平的起伏，用工具是平线上几个圆鼓包，压缩上下文是细密的波纹。
     nonisolated enum Gait: Equatable, Sendable { case think, tool, compact }
 
-    nonisolated enum Stop: Equatable, Sendable { case failure, interrupted, quiet }
+    /// 线右端要你管的那个词。
+    enum Word: Equatable {
+        case state(PiShown)
+        case context(PiContextMeter)
+    }
 
     var shown: PiShown?
     var session: PiSessionState?
@@ -41,30 +46,42 @@ struct BoardPulse: Equatable {
         session?.context.flatMap(PiContextMeter.init).flatMap { $0.level == .critical ? $0 : nil }
     }
 
-    /// 线右端写状态词（状态词或"上下文 94%"）。
-    var speaks: Bool { tier == .needsYou }
+    /// 要你管的状态词：会话的状态词在先，其次快满的上下文。
+    var word: Word? {
+        if let shown, shown.speaksOnTask { return .state(shown) }
+        return fullContext.map(Word.context)
+    }
+
+    /// 线右端写状态词。
+    var speaks: Bool { word != nil }
 
     var tier: Tier {
         guard let shown else { return .resting }
-        if shown.speaksOnTask || fullContext != nil { return .needsYou }
+        if speaks { return .needsYou }
         return shown.isRunning ? .running : .resting
     }
 
     var trace: Trace {
-        guard let shown else { return .resting }
         switch tier {
         case .resting: return .resting
-        case .needsYou:
-            if shown.status == .failed || shown.undelivered != nil || fullContext != nil { return .stopped(.failure) }
-            return .stopped(shown.status == .interrupted ? .interrupted : .quiet)
+        case .needsYou: return .stopped(broken: shown?.status == .interrupted)
         case .running:
             let subagents = session?.subagents.count { $0.phase == .known(.running) } ?? 0
-            let gait: Gait = switch shown.status {
+            let gait: Gait = switch shown?.status {
             case .working(.tool): .tool
             case .working(.compacting): .compact
             default: .think
             }
             return .running(gait, subagents: subagents)
+        }
+    }
+
+    /// 线"现在"那一截与状态词的颜色：状态词同 `PiShown.labelTint`，快满的上下文胭脂，在跑靛青，歇着淡墨。
+    func tint(_ palette: Palette) -> Color {
+        switch word {
+        case .state(let shown): shown.labelTint(palette)
+        case .context: palette.failure
+        case nil: tier == .running ? palette.signature : palette.ink3
         }
     }
 }

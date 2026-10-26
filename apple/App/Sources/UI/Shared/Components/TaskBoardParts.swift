@@ -39,7 +39,8 @@ struct BoardColumns: View {
 
 /// 看板的一列（`TaskBoard`；Mac 与宽屏 iPad 四列并排；手机转成一行，四行竖着排，`PhoneBoard`）：身后不铺底（`BoardLane`，拖进来时一层选中底），一件一张卡——
 /// 待办、推进中、已完成是任务卡（`BoardTaskCard`）、没绑任务的会话卡（`BoardSessionCard`），等你是一件一张的卡（`BoardWaitCard`，拍板在前、待回复在后），都在懒加载栈里（列可能很长，只建看得见的）。
-/// 推进中按档排（要你管 → 在跑 → 歇着，`Workspace.byAttention`），档与档之间多空一截；在跑的那一档只有前 `BoardWave.maxMoving` 张的线在动。
+/// 推进中按档排（要你管 → 在跑 → 歇着，`Workspace.byAttention`），档与档之间多空一截；在跑的那一档只有前 `BoardLine.maxMoving` 张的线在动，
+/// 各卡线上说过的话由列一次读好（`SaidReading`）。
 /// 看全部项目时卡上标题前一个项目小图形。点击去处：待办、已完成的卡开任务气泡；推进中的任务卡进此刻干活的会话（没有会话的开气泡），会话卡进会话；
 /// 等你的卡只看不答：拍板点了去 Cue 页那一问（会话在问的进会话），待回复进会话。已完成卡尾的成果图点开全屏看（这一列挂一个 `previewPresenter`）。
 /// 拖放：行拖到推进中是开始（同"开始"：Mac 交给 Agent，手机浮起发给 Agent 的输入框）、拖到已完成是做完（同点完成圈，还有没完成的子任务、
@@ -69,12 +70,22 @@ struct BoardColumn: View {
     @State private var opened: PreviewOpening?
 
     var body: some View {
-        lane
+        said
             .dropDestination(for: String.self) { ids, _ in
                 drop(ids, before: nil)
             } isTargeted: { targeted = $0 && column != .todo && column != .waiting }
             .taskCheck(finishing?.task, subtasks: finishing?.steps, check: $check)
             .modifier(ShotPresenter(column: column, opened: $opened))
+    }
+
+    /// 推进中这一列的线要的"最近说过的话"：一列一次读（`CueStore.recentSaid`），交给卡上的线（`boardSaid`）。
+    @ViewBuilder private var said: some View {
+        if column == .advancing {
+            let sessions = board.advancing.compactMap { workspace.pulse($0, agents: agents).session?.sessionID }.sorted()
+            lane.modifier(SaidReading(sessions: sessions))
+        } else {
+            lane
+        }
     }
 
     @ViewBuilder private var lane: some View {
@@ -154,7 +165,7 @@ struct BoardColumn: View {
                 // 档与档之间多空一截：栈里一格零高的空，前后各一个行距（横着的一行里一格就是一张卡宽，不空）
                 if group.tier != groups.first?.tier, !isRow { Color.clear.frame(height: 0) }
                 ForEach(Array(group.work.enumerated()), id: \.element.id) { index, work in
-                    let moves = group.tier == .running && index < BoardWave.maxMoving
+                    let moves = group.tier == .running && index < BoardLine.maxMoving
                     if let item = work.item {
                         card(item, moves: moves).draggable(item.id.uuidString)
                     } else if case .session(let session) = work.work {
@@ -330,5 +341,18 @@ private struct BoardReading: ViewModifier {
         content
             .observing(store, id: day, into: $board, onError: onError) { try TaskBoard.read(from: $0) }
             .onDayChange { day += 1 }
+    }
+}
+
+/// 读推进中一列各会话最近说的几句，交给列里的卡（`boardSaid`）：会话换了才重新订阅，读到的没变不送到界面。
+private struct SaidReading: ViewModifier {
+    let sessions: [String]
+    @State private var said: [String: [Date]]?
+    @Environment(Workspace.self) private var workspace
+
+    func body(content: Content) -> some View {
+        content
+            .environment(\.boardSaid, said ?? [:])
+            .observing(workspace.services.store, id: sessions, into: $said) { [sessions] in try $0.recentSaid(in: sessions, limit: BoardLine.maxSaid) }
     }
 }
