@@ -5,17 +5,25 @@ import SwiftUI
 /// iOS/iPadOS 一个窗口的根视图（建出本窗口的 `Workspace`）：宽屏是分栏（`SplitRoot`），窄屏（iPhone 与窄窗口 iPad）
 /// 是以当前去处为根的导航栈加底部一排（`DockRoot`）。两种容器读写同一份去处（`Workspace.root`、`path`），按尺寸类换 `Workspace.layout`。
 struct IOSRoot: View {
-    @State private var workspace: Workspace
+    let services: AppServices
+    /// 本窗口的工作区：出现时建（`onAppear` 在第一帧之前做完，第一帧照样是建好的样子），不在 init 里建：init 在上一层的 body 里跑，
+    /// 建它时读到的（Cue 的现状、说话的时钟）会被记成上一层的依赖，它们一变上一层就重算、再白建一个工作区（当场读一遍资料库），
+    /// 连带整个窗口的根与导航栈重建——Cue 一动一帧里就重建好几遍。
+    @State private var workspace: Workspace?
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Namespace private var zoom
 
-    init(services: AppServices) {
-        _workspace = State(initialValue: Workspace(services: services))
+    var body: some View {
+        if let workspace {
+            window(workspace)
+        } else {
+            Color.clear.onAppear { workspace = Workspace(services: services) }
+        }
     }
 
-    var body: some View {
+    private func window(_ workspace: Workspace) -> some View {
         @Bindable var workspace = workspace
-        CatalogGate {
+        return CatalogGate {
             Group {
                 if sizeClass == .regular { SplitRoot() } else { DockRoot() }
             }

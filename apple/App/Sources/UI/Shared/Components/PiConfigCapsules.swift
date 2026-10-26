@@ -202,7 +202,7 @@ struct PiThinkingDial: View {
                     .glass(in: .capsule)
                     .fixedSize()
                     .offset(y: -32)
-                    .transition(.opacity.combined(with: .scale(scale: 0.85, anchor: .bottom)))
+                    .transition(.opacity)
                     .allowsHitTesting(false)
             }
         }

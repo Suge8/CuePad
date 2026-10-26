@@ -39,7 +39,7 @@ private struct ReplyNoteLayer: ViewModifier {
             .overlay {
                 if let float {
                     Anchored(spot: float.at, gap: Self.lineHalf + 4) { floating(float) }
-                        .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .top)))
+                        .transition(.opacity)
                 }
             }
             .animation(HandOff.quick, value: float)
