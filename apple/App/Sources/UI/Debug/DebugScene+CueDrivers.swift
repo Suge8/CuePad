@@ -43,6 +43,20 @@ extension DebugScene {
         }
     }
 
+    /// `-CuePadReplyBlink <秒>`（配 `-CuePadDemo YES -CuePadScene cue`，画面就绪后开始、一直循环）：每隔这么久 Cue 把一个歇着的会话留给你回
+    /// （同值班的 Mac 写下的样子，`leaveToYou`），1.5 秒后那个会话又跑起来、不再待回复，看 Cue 页的待回复提示（`CueReplyTip`）怎么进出。
+    static func replyBlinkIfAsked(_ store: CueStore) async {
+        let recorder = PiStateRecorder(store: store, hostID: "demo-mac")
+        let title = String(localized: "底栏换系统液态玻璃", table: "Demo")
+        func set(_ state: PiWorkState) async throws {
+            _ = try await recorder.update(sessionID: "blink", state: state, title: title, directory: "CuePad", agent: .claudeCode)
+        }
+        await everyIfAsked("CuePadReplyBlink") {
+            guard (try? await set(.settled)) != nil, (try? await store.leaveToYou("blink")) != nil else { return nil }
+            return ("reply", { try? await set(.thinking) })
+        }
+    }
+
     /// `-CuePadNoAsks YES`（配 `-CuePadDemo YES`）：演示库里等你回答的会话都改成歇着、Cue 还没结束的提问都由它撤回（同 Cue 的 withdraw），
     /// "等你"为 0：看只有新消息时 Cue 入口上的样子（石绿点）。
     static func settleAsks(_ store: CueStore) async {
