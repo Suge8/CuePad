@@ -110,9 +110,7 @@ struct PanesSlot: View {
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        ProgressPanes(size: Spacing.toolbarControl - Self.inset * 2)
-            .padding(Self.inset)
-            .glass(in: .capsule)
+        ProgressControl { ProgressPanes(size: Spacing.toolbarControl - Self.inset * 2).padding(Self.inset).glass(in: .capsule) }
             .background { WindowEdge(\.maxX) { workspace.pages.panesEdge = $0 } }
             .toolbarPresence(workspace.root == .progress)
     }
@@ -180,7 +178,7 @@ struct WindowEdge: NSViewRepresentable {
 /// 工具栏左边、两段分段之后：这一页的范围，进展页的会话段是项目范围（`ProjectScopeMenu`，`Workspace.projectScope`；看板段那一排是列头，范围在"⋯"里）。
 /// 工具栏里的页面控件只有一条规矩（这一格、`PanesSlot`、`QuotaSlot`、`PageActionSlot`、`SearchSlot`、`PageMenuSlot` 都照它）：只放 Workspace 里已有的状态，
 /// 工具栏读不到页面读的库，抄一份过来就是第二个事实源。控件都一直挂着（换页时不现建整份项目菜单）、只换内容：工具栏项一增删整条重建（实测占进出会话页点击回合的一半，25fdb5fa、4fd371a4）。
-/// 只属于进展页的几格（这一格、分段、额度环、新会话）在别的页宽 0（`toolbarPresence`），进出进展页时整条重排一次（一次 100～150ms 的重排是逐帧变宽时量的，b9707fc5）；
+/// 只属于进展页的几格（这一格、分段、额度环、新会话）在别的页宽 0（`toolbarPresence`），随进展页第一次挂上才建（`ProgressControl`），进出进展页时整条重排一次（一次 100～150ms 的重排是逐帧变宽时量的，b9707fc5）；
 /// 进展页两段之间宽度不变，换段只换哪几样看得见（`toolbarVisible`）。这一格按项目名的宽、最宽 `maxWidth`（再长截断），只在换范围时变宽变窄；
 /// 状态归页面的（会话段的搜索、新会话表单读的这台 Mac 上有哪些 Agent）留在页里。
 struct ScopeSlot: View {
@@ -189,7 +187,7 @@ struct ScopeSlot: View {
     private static let maxWidth: CGFloat = 200
 
     var body: some View {
-        ProjectScopeMenu()
+        ProgressControl { ProjectScopeMenu() }
             .frame(maxWidth: Self.maxWidth, minHeight: Spacing.toolbarControl, maxHeight: Spacing.toolbarControl)
             .toolbarVisible(workspace.showsSessionsBar)
             .padding(.leading, Spacing.toolbarGap)
@@ -206,12 +204,28 @@ struct QuotaSlot: View {
     @State private var closed: ContinuousClock.Instant?
 
     var body: some View {
-        QuotaRings(open: open, height: Spacing.toolbarControl) { open = !open && !PressPoint.reopens(closedAt: closed) }
-            .glass(in: .capsule, interactive: true)
-            .bubble(isPresented: $open) { QuotaDetail().padding(16) }
-            .onChange(of: open) { _, open in if !open { closed = .now } }
-            .toolbarVisible(workspace.showsSessionsBar)
-            .toolbarPresence(workspace.root == .progress)
+        ProgressControl {
+            QuotaRings(open: open, height: Spacing.toolbarControl) { open = !open && !PressPoint.reopens(closedAt: closed) }
+                .glass(in: .capsule, interactive: true)
+                .bubble(isPresented: $open) { QuotaDetail().padding(16) }
+        }
+        .onChange(of: open) { _, open in if !open { closed = .now } }
+        .toolbarVisible(workspace.showsSessionsBar)
+        .toolbarPresence(workspace.root == .progress)
+    }
+}
+
+/// 只属于进展页的工具栏控件（`PanesSlot`、`ScopeSlot`、`QuotaSlot`、`PageActionSlot`）：别的页上宽 0、看不见。随进展页一起挂上——启动后空闲时进展页先挂上（`Prewarm`），
+/// 或一打开就在进展页——之后一直挂着；挂上之前不建，冷启动的第一帧不建看不见的分段、项目菜单、玻璃、额度环与新会话钮。
+private struct ProgressControl<Content: View>: View {
+    @ViewBuilder let content: Content
+    @Environment(Workspace.self) private var workspace
+    @State private var mounted = false
+
+    var body: some View {
+        let due = workspace.mountedPages.contains(.progress)
+        ZStack { if mounted || due { content } }
+            .onChange(of: due, initial: true) { if $1 { mounted = true } }
     }
 }
 
@@ -222,15 +236,17 @@ struct PageActionSlot: View {
 
     var body: some View {
         // 工具栏把"图标 + 字"的标签只画成图标：写明两样都要
-        Button("新会话", icon: .add) { workspace.showsNewSession = true }
-            .labelStyle(.titleAndIcon)
-            .buttonStyle(ControlButtonStyle(kind: .glass))
-            .help("开一个新的 Agent 会话（⌥⌘N）")
-            .toolbarVisible(workspace.showsSessionsBar)
-            .fixedSize()
-            .frame(height: Spacing.toolbarControl)
-            .padding(.leading, Spacing.toolbarGap)
-            .toolbarPresence(workspace.root == .progress)
+        ProgressControl {
+            Button("新会话", icon: .add) { workspace.showsNewSession = true }
+                .labelStyle(.titleAndIcon)
+                .buttonStyle(ControlButtonStyle(kind: .glass))
+                .help("开一个新的 Agent 会话（⌥⌘N）")
+        }
+        .toolbarVisible(workspace.showsSessionsBar)
+        .fixedSize()
+        .frame(height: Spacing.toolbarControl)
+        .padding(.leading, Spacing.toolbarGap)
+        .toolbarPresence(workspace.root == .progress)
     }
 }
 
