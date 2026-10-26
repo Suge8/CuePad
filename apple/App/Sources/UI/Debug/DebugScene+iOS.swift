@@ -57,6 +57,12 @@ extension DebugScene {
             workspace.sidebar = .all
         case "trash": open(.trash)
         case "archive": open(.archive)
+        case "library", "instruction", "compare":
+            // 同 Mac：技能与说明，instruction 推入全局说明（给了 -CuePadProject 是那个项目的），compare 推入各写一份的全局规则
+            if defaults.bool(forKey: "CuePadDemo") { await seedCue(workspace.services) }
+            open(.library)
+            if scene == "instruction" { workspace.openLibrary(.instruction(project.map(LibraryInstruction.Kind.project) ?? .global)) }
+            if scene == "compare" { workspace.openLibrary(.compare("global")) }
         case "settings":
             // 配演示库时 Cue 运行在演示的 Mac Studio 上（同 Mac 的设置画面）
             if defaults.bool(forKey: "CuePadDemo") { await seedCue(workspace.services) }

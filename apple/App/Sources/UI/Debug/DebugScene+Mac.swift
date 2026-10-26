@@ -8,7 +8,7 @@ extension DebugScene {
         // 窗口在首帧之后才定下尺寸（窗口位置记忆、内容尺寸），这之后再改
         try? await Task.sleep(for: .milliseconds(100))
         resizeWindow()
-        _ = await prepareLibrary(workspace)
+        let opened = await prepareLibrary(workspace)
         let sampleCue = defaults.double(forKey: "CuePadSampleCue")
         if sampleCue > 0 { Task { await askSample(after: .seconds(sampleCue), services: workspace.services) } }
         Task { await SyncBench.run(workspace) }
@@ -79,6 +79,11 @@ extension DebugScene {
             mainWindow?.orderOut(nil)
         case "trash": workspace.show(.trash)
         case "archive": workspace.show(.archive)
+        case "library", "instruction", "compare":
+            // 技能与说明（配 -CuePadDemo YES 有演示的快照）；instruction 打开全局说明（给了 -CuePadProject 是那个项目的，盖在项目页上），compare 打开各写一份的全局规则
+            if opened == nil || scene != "instruction" { workspace.show(.library) }
+            if scene == "instruction" { workspace.openLibrary(.instruction(opened.map(LibraryInstruction.Kind.project) ?? .global)) }
+            if scene == "compare" { workspace.openLibrary(.compare("global")) }
         case "editor":
             if let id = await card(in: workspace.currentProject ?? Project.defaultID, store: workspace.services.store),
                let card = try? await workspace.services.store.card(id) { workspace.open(card) }

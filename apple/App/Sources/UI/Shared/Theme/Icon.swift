@@ -19,6 +19,8 @@ nonisolated enum Icon: Hashable, Sendable {
     case cue, cueAsleep, cueLooking, cueHappy
     case idea, task, session, search, settings, archive, trash, sidebar
     case agent, all, filter, extensionNote
+    /// 技能与说明（侧栏底下那颗、Cue 面板那一行）；说明（AGENTS.md）一份
+    case skill, instruction
     // 状态
     case waiting, cueAsking, awaitsReply, failure, undelivered, onTheWay, replied, yourTurn, fresh, ended, interrupted, unknown, gone
     case done, donePending, picked
@@ -125,6 +127,8 @@ nonisolated enum Icon: Hashable, Sendable {
         case .all: .ink("deck")
         case .filter: .ink("filter")
         case .extensionNote: .ink("puzzle")
+        case .skill: .ink("skill")
+        case .instruction: .ink("doc")
 
         case .save, .checked: .ink("tick")
         case .endSession: .ink("ring.stop")

@@ -13,6 +13,7 @@ extension DebugScene {
         if defaults.bool(forKey: "CuePadDemo") {
             await seedIfFresh(store, "演示库", DemoLibrary.seed)
             await seedMacAgents(workspace.services)
+            await seedAgentLibrary(workspace.services)
         }
         await seedOneMac(store)
         await presetSync(workspace.services)

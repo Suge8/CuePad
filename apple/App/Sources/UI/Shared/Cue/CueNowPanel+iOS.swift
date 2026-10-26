@@ -3,7 +3,8 @@ import CueStore
 import SwiftUI
 
 /// Cue 名牌长出的面板（`CueHeader`）：只放 Cue 自己的、会天天变的（Mac 上这些分在 Cue 页输入框、记忆弹层与设置里）。名牌长成的名片之下沿中轴排三块：
-/// 它的大脑（Agent、模型与思考强度，`CueConfigControls`）；它刚记下的两条（`CueRecall`，整块点进记忆）；最底下一行它在哪台 Mac 上运行、点了进设置。
+/// 它的大脑（Agent、模型与思考强度，`CueConfigControls`）；它刚记下的两条（`CueRecall`，整块点进记忆）；
+/// 底下两行：它在用的技能与说明（`LibraryLine`，点了推入技能与说明），它在哪台 Mac 上运行、点了进设置。
 /// 上下文用了几成不在这里：换新是自动的、多在歇过一小时后，看了也没有可做的，只留在 Mac 的"运行情况"（`CueContextLine`）。
 /// 在做的会话不在这里：进行中的在进展页的会话段（左滑就到），点进会话只有那一条路，返回落点与行的长相都只有一种。
 /// 面板定高：空、一条、记满都一样高（两条各占两行的位），启用前后大脑那一块按启用了的样子占位（`BrainBlock`）。
@@ -20,7 +21,10 @@ struct CueNowPanel: View {
         VStack(spacing: 22) {
             BrainBlock(brain: brain)
             CueRecall { go { workspace.cue.showsMemory = true } }
-            CueHostLine { go { workspace.push(.settings) } }
+            VStack(spacing: 6) {
+                LibraryLine { go { workspace.push(.library) } }
+                CueHostLine { go { workspace.push(.settings) } }
+            }
         }
         .padding(.horizontal, 22).padding(.top, 14).padding(.bottom, 18)
         .dynamicTypeSize(...Self.largestType)
@@ -119,6 +123,38 @@ private struct RecallLine: View {
                 .font(Typography.meta).monospacedDigit().foregroundStyle(palette.ink3).fixedSize()
             }
         }
+    }
+}
+
+/// 技能与说明那一行：左边名字，行尾写几个技能（有要整理的写几件要整理），点了推入技能与说明。还没有哪台 Mac 报过时只有名字与箭头。
+private struct LibraryLine: View {
+    let open: () -> Void
+    @Environment(Workspace.self) private var workspace
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        let library = workspace.library
+        let summary = library.map { library in
+            library.tidies.isEmpty ? String(localized: "\(library.skills.count) 个技能") : String(localized: "\(library.tidies.count) 件要整理")
+        }
+        Button(action: open) {
+            HStack(spacing: 8) {
+                Image(.skill).foregroundStyle(palette.ink3)
+                Text("技能与说明").foregroundStyle(palette.ink2).lineLimit(1)
+                Spacer(minLength: 8)
+                if let summary {
+                    Text(verbatim: summary).monospacedDigit().foregroundStyle(library?.tidies.isEmpty == false ? palette.ink : palette.ink3)
+                }
+                Image(.forward).font(.caption2.weight(.semibold)).foregroundStyle(palette.ink3)
+            }
+            .font(Typography.secondary)
+            .frame(minHeight: 28)
+            .contentShape(.rect)
+        }
+        .buttonStyle(PressStyle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Dotted(String(localized: "技能与说明"), summary).spoken)
+        .accessibilityAddTraits(.isButton)
     }
 }
 

@@ -101,6 +101,7 @@ enum InkSymbols {
         "cue.window",
         "cue.doc",
         "cue.doc.blank",
+        "cue.skill",
         "cue.wrench",
         "cue.bubble.text",
         "cue.bubble.dots",

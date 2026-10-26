@@ -81,7 +81,7 @@ enum Typography {
 
 #if os(macOS)
 /// Mac 的间距：页面边距、分组间距、工具栏与侧栏的行高。
-enum Spacing {
+nonisolated enum Spacing {
     /// 页面内容的左右边距。
     static let page: CGFloat = 36
     /// 页面内容离工具栏下沿。

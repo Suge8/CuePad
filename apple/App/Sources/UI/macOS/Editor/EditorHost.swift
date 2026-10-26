@@ -13,6 +13,13 @@ final class EditorHandle {
     func focus() {
         if let textView { textView.window?.makeFirstResponder(textView) }
     }
+    /// 换掉整篇正文（说明在别处被改了，编辑页跟上）：光标留在原来的位置附近，撤销栈清空（之前的撤销对不上新正文）。
+    func replace(_ text: String) {
+        guard let textView else { return }
+        let location = textView.selectedRange().location
+        textView.storedText = text
+        textView.setSelectedRange(NSRange(location: min(location, (textView.string as NSString).length), length: 0))
+    }
 }
 
 /// CueEditorView 的 SwiftUI 宿主。正文只在创建时载入一次：之后编辑器是这张卡正文的唯一写者，

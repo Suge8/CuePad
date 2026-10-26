@@ -18,6 +18,9 @@ extension Workspace {
     /// 灵感的纸页推在当前页上。
     func showEditor(_ card: UUID) { push(.card(card)) }
 
+    /// 技能与说明里的一样（说明的编辑页、比一比）推在技能与说明页上。
+    func openLibrary(_ item: LibraryItem) { push(.libraryItem(item)) }
+
     /// 先读出这一页：推入的第一帧就是标题与最新的对话（`SessionRoute.seed`），只有记录 id 的入口顺带补上 Pi 的会话 id。
     /// 读不出来时照常推入，由页面报错。
     func sessionRoute(_ id: UUID, sessionID: String?) -> Route? {

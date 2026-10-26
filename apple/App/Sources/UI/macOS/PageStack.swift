@@ -35,6 +35,7 @@ struct PageStack: View {
         case .project(let id): ProjectPage(projectID: id)
         case .archive: ArchivePage()
         case .trash: TrashPage()
+        case .library: LibraryPage()
         case .cue: CuePage()
         case .progress: ProgressPage()
         case .session(let route): if let id = route.sessionID { SessionPage(sessionID: id).id(id) }

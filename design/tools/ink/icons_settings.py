@@ -117,3 +117,15 @@ def cube(m):
     left_ = grown([(-a, -11.6 + h + d), (-k, mid[1] - dy), (-k, 11.6 - dy), (-a, 11.6 - h)], [0.2, 0.2, 0.8, 0.8], g)
     right_ = grown([(k, mid[1] - dy), (a, -11.6 + h + d), (a, 11.6 - h), (k, 11.6 - dy)], [0.2, 0.2, 0.8, 0.8], g)
     return [Layer("cube", [top, left_, right_])]
+
+
+def skill(m):
+    """技能（技能与说明）：一张立着的手艺卡——圆角的牌，中间刻出一颗四角星的槽，星嵌在槽里（点睛）。
+    与书（读书项目：书架上的几本书）、纸（文档：右上折角）都不撞形：牌没有折角、不分本。"""
+    g, c = GROW[m], CARVE[m]
+    card = grown([(-9.0, -11.2), (9.0, -11.2), (9.0, 11.2), (-9.0, 11.2)], [3.0] * 4, g)
+    o = (0, 0.4)
+    R, q = 5.8 - 0.3 * g, 2.0 - 0.1 * g
+    slot = star(o, R + c * 1.8, q + c * 1.4, 0)
+    gem = star(o, R, q, 0)
+    return [Layer("card", [card] + holed([slot])), Layer("gem", [gem], "secondary")]
