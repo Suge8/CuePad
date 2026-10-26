@@ -41,7 +41,7 @@ nonisolated struct CueNoteRound: Identifiable, Equatable, Sendable {
 /// 去哪由记录推出，不查库。
 nonisolated struct CueWakeHeader: Equatable, Sendable {
     /// 点了去哪（`Workspace.open`；Cue 页这一轮的经过里的一行也用它）。会话的 Pi 会话 id 知道就带上，进会话页少读一次
-    enum Target: Equatable, Sendable {
+    enum Target: Hashable, Sendable {
         case session(UUID, sessionID: String?)
         case task(UUID)
         case memory
@@ -101,8 +101,8 @@ nonisolated extension CuePlace {
 }
 
 extension CueChange.Kind {
-    /// 当时出了什么事的图标（Cue 页只提到一处的那一行）：静止的，会话与任务同一种事同一个样子；形状借那时那一处的状态图形（`PiShown.icon`），
-    /// 不画那一处此刻的状态——此刻在跑的会话在这里也不动。
+    /// 当时出了什么事的图标（Cue 页只提到一处的那一行）：静止的、灰的，会话与任务同一种事同一个样子，只靠形状分；
+    /// 形状借那时那一处的状态图形（`PiShown.icon`），不画那一处此刻的状态——此刻在跑的会话在这里也不动。
     var icon: Icon {
         switch self {
         // 停下时 Cue 在值班，会话是"歇着"
@@ -111,7 +111,22 @@ extension CueChange.Kind {
         case .failed: PiShown(status: .failed).icon
         case .undelivered: .undelivered
         case .done: .complete
-        case .stalled: .subagent
+        // 等子代理那两颗点，小点空心：交出去的没动静了（与"停下了"的省略号形状不同族）
+        case .stalled: .relayStalled
+        }
+    }
+
+    /// 这件事此刻还没处理：那一处还停在当时那个样子（还在等你回答、还出着错、话还没送到、还在等卡住的子代理）。
+    /// 经过是历史，平时一律灰；只有还没处理的那一条着这件事的颜色（`CueNoteLog` 的 `openTint`），已经处理过的不再像在报警。做完、停下了从不着色。
+    func isUnresolved(_ status: PiShown.Status, session: PiSessionState, since: Date) -> Bool {
+        guard session.stateSince <= since else { return false }
+        return switch self {
+        case .waitingForUser: status == .asking
+        case .failed: status == .failed
+        case .undelivered: if case .delivery(.failed) = status { true } else { false }
+        case .stalled:
+            session.stallsAt.map { $0 <= since } ?? false
+        case .settled, .done: false
         }
     }
 }

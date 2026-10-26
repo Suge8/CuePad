@@ -87,17 +87,21 @@ private struct CompactLeading: View {
     var body: some View {
         HStack(spacing: 5) {
             CueNowFace(now: now, size: 24, rim: .black)
-            if !limited {
-                if !now.yours.isEmpty {
-                    // 拍板与待回复都有时收紧一号：两项加头像仍在摄像头左边那一半里
-                    let both = now.yours.count > 1
-                    HStack(spacing: both ? 5 : 6) { ForEach(now.yours) { CompactEntry(entry: $0, size: both ? 13 : 14) } }
-                } else if let lead = now.moving.first {
-                    CompactEntry(entry: lead)
-                } else if let word = now.quietWord {
-                    Text(word).font(.system(size: 14, weight: .semibold)).foregroundStyle(palette.ink2).lineLimit(1).fixedSize()
+            Group {
+                if !limited {
+                    if !now.yours.isEmpty {
+                        // 拍板与待回复都有时收紧一号：两项加头像仍在摄像头左边那一半里
+                        let both = now.yours.count > 1
+                        HStack(spacing: both ? 5 : 6) { ForEach(now.yours) { CompactEntry(entry: $0, size: both ? 13 : 14) } }
+                    } else if let lead = now.moving.first {
+                        CompactEntry(entry: lead)
+                    } else if let word = now.quietWord {
+                        Text(word).font(.system(size: 14, weight: .semibold)).foregroundStyle(palette.ink2).lineLimit(1).fixedSize()
+                    }
                 }
             }
+            .handOff(id: limited ? [] : !now.yours.isEmpty ? now.yours.map { String(describing: $0.kind) }
+                : now.moving.first.map { [String(describing: $0.kind)] } ?? now.quietWord.map { [$0] } ?? [])
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(now.spoken)
@@ -116,14 +120,16 @@ private struct CompactTrailing: View {
         Group {
             if limited {
                 if now.needsYou > 0 {
-                    Text(now.needsYou, format: .number).font(.system(size: 14, weight: .bold)).monospacedDigit().foregroundStyle(palette.waiting)
+                    Text(now.needsYou, format: .number).rollingCount(now.needsYou).font(.system(size: 14, weight: .bold)).monospacedDigit().foregroundStyle(palette.waiting)
                 } else if !now.moving.isEmpty {
-                    Text(now.advancing, format: .number).font(.system(size: 14, weight: .bold)).monospacedDigit().foregroundStyle(palette.signature)
+                    Text(now.advancing, format: .number).rollingCount(now.advancing).font(.system(size: 14, weight: .bold)).monospacedDigit().foregroundStyle(palette.signature)
                 }
             } else if let entry = Self.trailing(now) {
                 CompactEntry(entry: entry)
             }
         }
+        .handOff(id: limited ? (now.needsYou > 0 ? ["waiting-number"] : now.moving.isEmpty ? [] : ["advancing-number"])
+            : Self.trailing(now).map { [String(describing: $0.kind)] } ?? [])
         .accessibilityHidden(true)
     }
 
@@ -140,7 +146,7 @@ private struct CompactEntry: View {
 
     var body: some View {
         entry.text(number: entry.tone.color(palette)).monospacedDigit().foregroundStyle(palette.ink2)
-            .contentTransition(.numericText(value: Double(entry.count)))
+            .rollingCount(entry.count)
             .font(.system(size: size, weight: .semibold))
             .lineLimit(1).fixedSize()
     }

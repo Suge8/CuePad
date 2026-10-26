@@ -76,18 +76,6 @@ nonisolated enum CuePresence: Equatable, Sendable {
     }
 }
 
-nonisolated extension CueMood {
-    /// 哪个表情只在这里定：睡着、起不来闭眼；在做事；话在路上（在听）；有等你的；你正在写（在听）；它刚报了一件做完的；平时在听。
-    static func of(_ presence: CuePresence, waiting: Int, composing: Bool = false, justDone: Bool = false) -> CueMood {
-        switch presence {
-        case .disabled, .asleep, .unreachable: .sleeping
-        case .working: .thinking
-        case .sending: .listening
-        case .idle: waiting > 0 ? .waiting : composing ? .listening : justDone ? .done : .listening
-        }
-    }
-}
-
 /// Cue 的一页摘要：名字、推进中与等你、它最近一句、你最近一句交没交出去、它此刻在做什么与谁叫醒的、今天做完的。
 /// 三端侧栏的 Cue 一行与名片、菜单栏面板、小组件与实时活动都读它推出的 Cue 此刻（`CueNow`，一份规则）。
 nonisolated struct CueDigest: Equatable, Sendable {
@@ -105,8 +93,6 @@ nonisolated struct CueDigest: Equatable, Sendable {
     /// Cue 最近对你说的那条的摘要行（`CueMessage.headline`），只给 Mac 侧栏名片的气泡（Cue 那一行写 Cue 此刻，不写它）。
     /// 结束了的提问（`CueQuestionEnd`）不算：那件事已经定了，接着写它在那之前最近说的。
     var lastSaid: String?
-    /// 它最近一句说的那件事已经做完了（头像露"做完"的表情）。
-    var lastSaidDone: Bool
     /// 它运行的那台 Mac 此刻在线（`CueStore.macOnline`）；没启用为 false。
     var hostOnline: Bool
     /// 你最近一句：写下与交给它的时刻、服务器收下过没有（`CueStore.cueLastYou`）；你还没说过为 nil。到哪了按此刻推（`derive`）。
@@ -119,12 +105,14 @@ nonisolated struct CueDigest: Equatable, Sendable {
     var done: [Card]
 
     static let empty = CueDigest(
-        name: CueProfile.defaultName, enabled: false, hostID: nil, hostName: nil, tally: .empty, unread: 0, lastSaid: nil, lastSaidDone: false, hostOnline: false,
+        name: CueProfile.defaultName, enabled: false, hostID: nil, hostName: nil, tally: .empty, unread: 0, lastSaid: nil, hostOnline: false,
         lastYou: nil, state: nil, woke: nil, done: [])
 
     struct Woke: Equatable, Sendable {
         var at: Date
         var text: String
+        /// 会话的动静叫醒的：叫醒它的那几个会话（光从它们飞来，`CueWatch.wake`）；别的原因醒的为 nil。
+        var sessions: [String]?
     }
 
     struct LastYou: Equatable, Sendable {
@@ -137,7 +125,6 @@ nonisolated struct CueDigest: Equatable, Sendable {
         let profile = try store.cueProfile()
         let recent = try store.cueMessages(limit: recentWindow)
         let said = recent.last { $0.author == .known(.cue) && ($0.choices == nil || $0.answeredAt == nil) }
-        let saidTask = try said?.taskID.flatMap { try store.card($0) }
         let tally = try store.cueTally()
         return CueDigest(
             name: profile?.name ?? CueProfile.defaultName,
@@ -147,11 +134,16 @@ nonisolated struct CueDigest: Equatable, Sendable {
             tally: tally,
             unread: try store.cueUnread().count,
             lastSaid: said?.headline,
-            lastSaidDone: saidTask?.status == .done,
             hostOnline: try profile?.activeHost.map { try store.macOnline($0) } ?? false,
             lastYou: try store.cueLastYou().map { LastYou(said: $0.said, delivered: $0.delivered, reachedServer: $0.reachedServer) },
             state: try store.cueState(),
-            woke: try store.cueWaking().map { Woke(at: $0.createdAt, text: Self.woke($0)) },
+            woke: try store.cueWaking().map { row in
+                var seen = Set<String>()
+                let sessions: [String]? = if case .sessionActivity(let stirs)? = row.wake {
+                    stirs.compactMap(\.session).filter { seen.insert($0).inserted }
+                } else { nil }
+                return Woke(at: row.createdAt, text: Self.woke(row), sessions: sessions)
+            },
             done: try store.tasksDone(since: Calendar.current.startOfDay(for: .now)).filter { TaskBoard.Column.of($0, in: tally) == .done })
     }
 
@@ -216,33 +208,19 @@ nonisolated struct CueFlight: Equatable, Sendable {
         }
     }
 
-    /// 接力读的事实：叫醒它的那一下与它交给的那几条。
+    /// 交给读的事实：它交给的那几条。叫醒那一下不在这里：它的时间线归 Cue 的现状（`CueWatch.wake`），与"在想"同一份摘要。
     struct Facts: Equatable, Sendable {
-        /// 在跑的这一轮是会话的动静叫醒的：醒的时刻与叫醒它的那几个会话
-        var woke: (at: Date, sessions: [String])?
         var handed: [Handed]
 
-        static func read(from store: isolated CueStore) throws -> Facts {
-            var woke: (at: Date, sessions: [String])?
-            if let waking = try store.cueWaking(), case .sessionActivity(let stirs)? = waking.wake {
-                var seen = Set<String>()
-                woke = (waking.createdAt, stirs.compactMap(\.session).filter { seen.insert($0).inserted })
-            }
-            return Facts(woke: woke, handed: try Handed.read(from: store))
-        }
+        static func read(from store: isolated CueStore) throws -> Facts { Facts(handed: try Handed.read(from: store)) }
 
-        static func == (a: Self, b: Self) -> Bool { a.woke?.at == b.woke?.at && a.woke?.sessions == b.woke?.sessions && a.handed == b.handed }
-
-        /// 比 `seen` 新的那一次接力；没有为 nil。同一次读到两种都新时取更新的那种。
+        /// 比 `seen` 新的那一次交给；没有为 nil。
         func flight(after seen: Date?) -> CueFlight? {
-            let since = seen ?? .distantPast
-            let woke = woke.flatMap { $0.at > since ? CueFlight(direction: .wake, at: $0.at, ends: $0.sessions.map { RelayEnd(session: $0) }) : nil }
-            let fresh = handed.filter { $0.at > since }.sorted { $0.at > $1.at }
-            let relay = fresh.first.map { CueFlight(direction: .relay, at: $0.at, ends: fresh.map(\.end)) }
-            return [woke, relay].compactMap { $0 }.max { $0.at < $1.at }
+            let fresh = handed.filter { $0.at > seen ?? .distantPast }.sorted { $0.at > $1.at }
+            return fresh.first.map { CueFlight(direction: .relay, at: $0.at, ends: fresh.map(\.end)) }
         }
 
-        var latest: Date? { ([woke?.at] + handed.map(\.at)).compactMap { $0 }.max() }
+        var latest: Date? { handed.map(\.at).max() }
     }
 }
 

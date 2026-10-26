@@ -135,18 +135,27 @@ def ring_slash(m):
 
 
 BOLT = [(-1.4, -11.6), (6.6, -11.6), (2.0, -2.8), (7.8, -2.8), (-5.0, 11.8), (-1.4, 0.8), (-7.6, 0.8)]
-BOLT_CUT = 4.2
 
 
-def bolt_cut(m):
-    """断了（做到一半停下）：一道闪电（上宽下尖的 Z 字折线，一块实心）在下半截的尾巴上被一道横缝截断，尖头断开。
-    不压斜杠：杠与闪电交叉，小字号下读成 × 或星，闪电认不出；缝开在尾巴上（`BOLT_CUT` 格高处），上面整个 Z 字不动，12pt 也认得出。
-    缝宽 `GAP` 加两侧刻缝，比一条刻缝宽，小字号下还看得见。"""
+def broken_line(m):
+    """被打断（做到一半停下，说一句就接着做）：一条横线在正中断开，两截上下错开一点——线断了，不是停了也不是结束了。
+    不用闪电（Cue 页经过里"会话有动静"是整根闪电，缺口在小字号下不到 1pt，两个读成一个），不用圈（带圈的已经够多）。"""
     g, c = GROW[m], CARVE[m]
-    bolt = grown(sc(K, BOLT), [1.0, 1.0, 0, 0.9, 0.8, 0, 0.9], g)
-    line = [mul((-16, BOLT_CUT), G), mul((16, BOLT_CUT), G)]
-    off = (GAP / 2 + c) * G
-    return [Layer("bolt", [clip(bolt, Along(line, off, 1)), clip(bolt, Along(line, -off, -1))])]
+    w, gap, step = 3.4 + 1.4 * g, 2.6 + c - 2 * g, 1.7
+    return [Layer("line", [bar([(-10.6, step), (-gap / 2 - w / 2, step)], w), bar([(gap / 2 + w / 2, -step), (10.6, -step)], w)])]
+
+
+def relay(stalled=False):
+    """等子代理交回：一颗大点（会话）在正中，一颗小点（子代理）在右上——同状态标里会动的那两颗（`RelayMark`：直径是框边的 0.44 与 0.26，小点心离正中 0.34），静止时就是它。
+    `stalled`（子代理卡住了）：小点换成一个大一号的空心圈、大点往左下让——交出去的没动静了；13pt 里圈边约 1.4pt、孔约 2.6pt，小号里不读成实心。"""
+    def build(m):
+        g = GROW[m]
+        big = disc((0, 0), 5.3 + g)
+        if not stalled:
+            return [Layer("home", [big]), Layer("away", [disc((8.2, -8.2), 3.1 + g)])]
+        o = (7.2, -7.2)
+        return [Layer("home", [disc((-2.2, 2.2), 4.7 + g)]), Layer("away", [disc(o, 5.2 + g * 0.6), disc(o, 2.6 - g * 0.4, hole=True)])]
+    return build
 
 
 GAP = 1.0

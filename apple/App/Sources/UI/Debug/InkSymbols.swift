@@ -5,9 +5,6 @@
 enum InkSymbols {
     static let names = [
         "cue.mascot",
-        "cue.mascot.sleep",
-        "cue.mascot.look",
-        "cue.mascot.happy",
         "cue.idea",
         "cue.task",
         "cue.session",
@@ -35,6 +32,8 @@ enum InkSymbols {
         "cue.asking",
         "cue.ended",
         "cue.interrupted",
+        "cue.relay",
+        "cue.relay.stalled",
         "cue.cursor",
         "cue.sparkle",
         "cue.agent",
@@ -110,7 +109,6 @@ enum InkSymbols {
         "cue.layers",
         "cue.brush",
         "cue.eye",
-        "cue.person",
         "cue.bookmark",
         "cue.power",
         "cue.bubble",

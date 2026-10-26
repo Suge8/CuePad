@@ -67,7 +67,7 @@ struct CueEntryAvatar: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        CueAvatar(workspace.cue.now, size: size).relaySpot(cue: .entry)
+        CueAvatar(workspace.cue.beat, size: size).relaySpot(cue: .entry)
             .background { CueArrival(color: palette.replied, reach: 1.5) }
     }
 }
@@ -93,7 +93,7 @@ struct UnreadCount: View {
 }
 
 /// Cue 那一行的第二行（`tally`：Mac 侧栏名片、iPad 侧栏、菜单栏面板、输入条与手机、iPad 的页头）或 Mac Cue 页头里此刻在做什么的那一句。
-/// `tally` 时就是 Cue 此刻（`CueNowRow`：数字账，没有可数的写一句安静的现状、不在时写原因）；不写 tally 时不在写 Cue 此刻的那句原因（`CueNow.Brain.away`，起不来是失败色，其余次要灰），
+/// `tally` 时就是 Cue 此刻（`CueLedger`：数字账，没有可数的写一句安静的现状、不在时写原因）；不写 tally 时不在写 Cue 此刻的那句原因（`CueNow.Brain.away`，起不来是失败色，其余次要灰），
 /// 话在路上、在做事与会话顶栏同一个样子（`PiShownLabel`），空闲不写。
 /// Cue 在这台 Mac 值班、正在说回答你的话（`CueKeeper.speech`）时状态词是"输出中"（`PiShown.speaking`）。
 /// 它运行在别的设备上、本机正在和 iCloud 对时（`AppServices.isCatchingUp(on:)`，久过 `Pending.delay` 才出）写"正在同步"：那时写下的状态与数可能已经过时。
@@ -113,7 +113,7 @@ struct CueStatusLine: View {
             if syncing {
                 SyncingLabel().transition(.handOff)
             } else if tally {
-                CueNowRow(now: cue.now).transition(.handOff)
+                CueLedger(now: cue.now).transition(.handOff)
             } else if case .away(let line, let failed) = cue.now.cue {
                 Text(line).foregroundStyle(failed ? palette.failure : palette.ink3).id(line).transition(.handOff)
             } else if let shown {
@@ -136,15 +136,6 @@ struct CueStatusLine: View {
     }
 }
 
-/// App 里的 Cue 此刻那一行（数字账，`CueLedger`）：刚做完的那件到点自己收掉、那一句跟着换（`Moments` 睡到 `CueNow.nextChange`，不另计时）。
-struct CueNowRow: View {
-    let now: CueNow
-
-    var body: some View {
-        Moments(next: now.nextChange(after:)) { date in CueLedger(now: now.aged(to: date)) }
-    }
-}
-
 #if os(macOS)
 /// Mac Cue 页的页头（窗口工具栏居中，玻璃由工具栏给）：头像，名字接此刻在做什么，一行（Cue 此刻在侧栏的名片上，等你的卡就在输入框上方，这里不写）。输入框里有没说出去的话时头像露"在听"。
 /// 只在侧栏收起时有（`PageTitleSlot`）：侧栏开着时最上面的名片已经写了名字与现状。
@@ -156,7 +147,7 @@ struct CueTitle: View {
     var body: some View {
         let cue = workspace.cue
         HStack(spacing: 8) {
-            CueAvatar(cue.now, mood: cue.mood(composing: !cue.draft.isEmpty(accepting: .images)), size: .row)
+            CueAvatar(cue.beat, size: .row)
                 .relaySpot(cue: .header)
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(cue.name).font(Typography.toolbarTitle).foregroundStyle(palette.ink).lineLimit(1)

@@ -2,7 +2,7 @@ import CueStore
 import Foundation
 
 /// Cue 此刻（`CueNow`）从库里怎么推：只从 Cue 的摘要来（`CueDigest`，推进中与等你只读 `CueStore.cueTally`），按此刻（`moment`）推 Cue 在不在、
-/// 话在不在路上、表情与刚做完的那几颗，再配上库里没有的本机事实（`Local`）：还没和 iCloud 对过时不说没启用、写在等什么；
+/// 话在不在路上与刚做完的那几件，再配上库里没有的本机事实（`Local`）：还没和 iCloud 对过时不说没启用、写在等什么；
 /// Mac 上它运行在别的 Mac 时静着那句写在哪台。Cue 那一行（`CueWatch.now`）、小组件快照与 iPhone 的实时活动（`AppServices.startSnapshots`）都经这里。
 nonisolated extension CueNow {
     /// 本机知道、库里没有的（`AppServices.cueLocal`）：还没和 iCloud 对过时为什么等（`CueGate.waiting`，对过为 nil），这台 Mac 是哪台（手机为 nil）。
@@ -17,14 +17,11 @@ nonisolated extension CueNow {
         let host = digest.hostName ?? MacAgents.unnamed
         let tally = Tally(
             asks: items.count { $0.kind == .asks }, reply: items.count { $0.kind == .reply },
-            moving: items.count { $0.kind == .running || $0.kind == .delegating })
+            moving: items.count { $0.kind == .running || $0.kind == .delegating }, delegating: items.count { $0.kind == .delegating })
         self.init(
-            // 头像此刻的表情（不算你正在写）与歇下来时的那一个：有没有等你只看 `needsYou` 那一个数
-            name: digest.name, mood: CueMood.of(presence, waiting: tally.needsYou, justDone: digest.lastSaidDone),
-            restingMood: CueMood.of(.idle, waiting: tally.needsYou, justDone: digest.lastSaidDone),
-            cue: Self.brain(presence, digest: digest, local: local, at: moment.now),
+            name: digest.name, cue: Self.brain(presence, digest: digest, local: local, at: moment.now),
             tally: tally,
-            advancing: digest.advancing, subagents: digest.tally.advancing.reduce(0) { $0 + Self.subagents($1) }, items: Array(items.prefix(Self.itemLimit)),
+            advancing: digest.advancing, subagents: digest.tally.advancing.reduce(0) { $0 + Self.subagents($1) }, items: Self.limited(items),
             first: digest.tally.waiting.first.map { Self.wait($0, name: digest.name) }, at: moment.now,
             elsewhere: digest.enabled && local.here != nil && digest.hostID != local.here ? String(localized: "在「\(host)」上运行") : nil)
     }
@@ -63,6 +60,12 @@ nonisolated extension CueNow {
             task.completedAt.map { Item(id: "done/\(task.id.uuidString)", kind: .done, name: task.title, since: $0, subagents: 0) }
         }.filter { $0.isFresh(at: now) }
         return Item.Kind.allCases.flatMap { kind in (asks + replies + works + done).filter { $0.kind == kind } }
+    }
+
+    /// 截到 `itemLimit` 件，先后照旧；放不下时最后一格留给最近刚做完的那件（刚做完排在最后，照截就被截掉，头像与那一句就读不到它）。
+    private static func limited(_ items: [Item]) -> [Item] {
+        guard items.count > itemLimit, let done = items.first(where: { $0.kind == .done }) else { return Array(items.prefix(itemLimit)) }
+        return items.filter { $0.kind != .done }.prefix(itemLimit - 1) + [done]
     }
 
     /// 推进中的一件：有会话在跑（在想、用工具、压缩，或正在开、话正送进去）是在跑，从最早在跑的那一轮起算；

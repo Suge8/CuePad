@@ -94,7 +94,7 @@ extension PiSessionState {
 
   /// 等子代理停住的时刻：在等子代理、在跑的子代理里最后一次进展（`PiSubagentState.progressAt`）之后 `stallAfter`。
   /// 不在等子代理、没有在跑的子代理（只剩 Claude Code 的后台命令，它不报进展），或有在跑的不知道进展时刻，为 nil。
-  var stallsAt: Date? {
+  public var stallsAt: Date? {
     guard state == .known(.delegating) else { return nil }
     let progress = subagents.filter(\.isRunning).map(\.progressAt)
     guard !progress.isEmpty, !progress.contains(nil) else { return nil }

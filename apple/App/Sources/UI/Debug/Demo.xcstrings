@@ -423,6 +423,22 @@
       },
       "shouldTranslate" : false
     },
+    "Pi 没能启动" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pi couldn’t start"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pi 没能启动"
+          }
+        }
+      }
+    },
     "README 截图换完了吗？" : {
       "localizations" : {
         "en" : {

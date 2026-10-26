@@ -127,9 +127,12 @@ struct CueComposer: View {
     private var opens: Int? { if case .bar(let opens) = style { opens } else { nil } }
 
     private func send() {
-        guard hasDraft, workspace.sayToCue(from: Bindable(workspace.cue).draft) != nil else { return }
+        guard hasDraft else { return }
+        let event = CueWatch.Send(at: .now, beat: workspace.cue.beat)
+        guard workspace.sayToCue(from: Bindable(workspace.cue).draft) != nil else { return }
         launched = true
-        launch.fly(reduceMotion: reduceMotion)
+        workspace.cue.sent(event)
+        launch.fly(since: event.at, reduceMotion: reduceMotion)
         finish()
     }
 

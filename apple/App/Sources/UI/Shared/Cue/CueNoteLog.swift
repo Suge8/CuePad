@@ -6,7 +6,8 @@ import SwiftUI
 /// 要你拍板的不在这里：在输入框上方的拍板卡里（`CueWaitDock`），这里只留一句发生过什么。
 /// 一行从左到右：图标、字、几点（等宽一列，对齐）。一行是一条记录，定格在写下那一刻：图标与字只按记录画（`CueWakeHeader`），
 /// 那一处之后改名、再动起来都不变；这一轮在做什么只写在对话末尾那一行（`CueEnding`），这里不挂经过，一轮从开始到结束都是这一行。
-/// - 图标：提到一处时是当时出了什么事（`CueChange.Kind.icon`，静止的），提到几处或没提到哪处时是醒来原因（`CueWake.icon`）。
+/// - 图标：提到一处时是当时出了什么事（`CueChange.Kind.icon`，静止的），提到几处或没提到哪处时是醒来原因（`CueWake.icon`）。都是灰的、只靠形状分；
+///   只有一处的那件事此刻还没处理、又是提到这一处最近的那一行时着它的颜色（`CueChange.Kind.isUnresolved`）。
 /// - 字：当时的名字（次要墨，几处时用顿号连起）与当时出了什么事，逗号后接它这一轮说的话的要点（`PiProgress.gist`），其余淡墨；没提到哪处的写那句要点或为什么醒。
 /// 整行是一行（`RowStyle`），点了去提到的那一处（会话直接进；几处时列出来选；定时去它挂着的任务，没挂的去记忆）；没提到哪处的不能点。
 /// 多于 `foldAfter` 轮时只露最近 `shownWhenFolded` 轮，上面一行"更早还醒过 N 次"，点它全部展开。左缘对着 Cue 气泡的左缘（同经过 `CueTrace`）。
@@ -28,23 +29,36 @@ struct CueNoteLog: View {
                     }
                     .buttonStyle(.row)
                 }
-                ForEach(shown) { round in CueNoteLine(round: round) }
+                let newest = Self.newest(shown)
+                ForEach(shown) { round in CueNoteLine(round: round, newest: newest.contains(round.id)) }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .transition(.entry)
+    }
+
+    /// 只提到一处、又是提到这一处最近的那几轮。
+    private static func newest(_ rounds: [CueNoteRound]) -> Set<CueNoteRound.ID> {
+        var seen = Set<CueWakeHeader.Target>(), out = Set<CueNoteRound.ID>()
+        for round in rounds.reversed() {
+            guard let places = round.header?.places, places.count == 1 else { continue }
+            if seen.insert(places[0].target).inserted { out.insert(round.id) }
+        }
+        return out
     }
 }
 
 /// 一轮一行。
 private struct CueNoteLine: View {
     let round: CueNoteRound
+    /// 是提到这一处最近的那一行。
+    let newest: Bool
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
     var body: some View {
         let places = round.header?.places ?? []
-        link(places, row: CueNoteRow(time: round.date) { glyph(places) } text: { line(places) })
+        link(places, row: CueNoteRow(time: round.date, tint: tint(places)) { glyph(places) } text: { line(places) })
     }
 
     @ViewBuilder private func link(_ places: [CueWakeHeader.Place], row: some View) -> some View {
@@ -57,6 +71,14 @@ private struct CueNoteLine: View {
             } label: { row }
             .menuStyle(.button).buttonStyle(.row).menuIndicator(.hidden)
         }
+    }
+
+    /// 还没处理的那件事的颜色；其余 nil（灰）。
+    private func tint(_ places: [CueWakeHeader.Place]) -> Color? {
+        guard newest, places.count == 1, let kind = places[0].kind, case .session(_, let id?) = places[0].target,
+              let item = workspace.services.liveSessions.live.first(where: { $0.state.sessionID == id }),
+              kind.isUnresolved(workspace.shown(item).status, session: item.state, since: round.date) else { return nil }
+        return kind.openTint(palette)
     }
 
     private func glyph(_ places: [CueWakeHeader.Place]) -> Image {
@@ -104,6 +126,8 @@ private struct CueNoteLine: View {
 /// Cue 页的一行旁注（醒来那几行、一轮的经过 `CueTrace` 共用）：图标、截成一行的字，醒来那几行行末是等宽的几点（一列对齐）。
 struct CueNoteRow<Glyph: View, Words: View>: View {
     var time: Date?
+    /// 图标的颜色；平时灰（ink3）。
+    var tint: Color?
     @ViewBuilder let glyph: Glyph
     @ViewBuilder let text: Words
     @Environment(\.palette) private var palette
@@ -111,7 +135,7 @@ struct CueNoteRow<Glyph: View, Words: View>: View {
     var body: some View {
         let words = text.foregroundStyle(palette.ink3).lineLimit(1)
         HStack(alignment: .firstTextBaseline, spacing: Note.spacing) {
-            glyph.foregroundStyle(palette.ink3).noteGlyph().accessibilityHidden(true)
+            glyph.foregroundStyle(tint ?? palette.ink3).noteGlyph().accessibilityHidden(true)
             if let time {
                 MetaLine(gap: Note.spacing) {
                     words
@@ -135,4 +159,11 @@ enum CueNoteRows {
     static let timeWidth: CGFloat = 62
     /// 一行至少多高：比旁注（`Note.lineHeight`）高一点，整行可点。
     static let height: CGFloat = Note.lineHeight + 4
+}
+
+extension CueChange.Kind {
+    /// 还没处理时那一行图标的颜色（`isUnresolved`）：等你赭黄，其余是出了问题的胭脂。
+    func openTint(_ palette: Palette) -> Color {
+        self == .waitingForUser ? palette.waiting : palette.failure
+    }
 }

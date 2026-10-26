@@ -2,7 +2,7 @@ import Foundation
 
 /// Cue 此刻（WORDS.md「推进中」「等你」「待回复」）：各端 Cue 那一行（三端侧栏、手机与 iPad 的名牌、菜单栏面板与输入条）、小组件、
 /// iPhone 的灵动岛与锁屏、App 图标与菜单栏图标的角标读的唯一一份。App 由库推出（`CueNow.init(_:at:local:)`，从 Cue 的摘要 `CueDigest`），这里只有规则，各处只画（`CueNowViews`）。
-/// - Cue 自己（`cue`）：不在（没启用、睡着、起不来，带那一句原因）、歇着、你的话在路上、在一轮里（谁叫醒的、此刻那一步、从几点起）。头像的表情（`mood`）也在这里，各处的头像只读它。
+/// - Cue 自己（`cue`）：不在（没启用、睡着、起不来，带那一句原因）、歇着、你的话在路上、在一轮里（谁叫醒的、此刻那一步、从几点起）。头像是哪一拍（`beat`）由它与下面几样推出，各处的头像只读它。
 /// - 数字账（`ledger`）：要你管的（拍板、待回复，按件数）在前，"N 推进中"在后（与看板列头、底部那一排、侧栏进展那一行同一个数，`advancing`），
 ///   再接"M 子代理"（推进中各件的会话里在跑的子代理一共几个，`subagents`），放不下先去掉子代理；Cue 不在时也照写，为 0 的不写。
 ///   推进中那项只在有件在跑或等子代理交回时写（`Tally.moving`），都歇着时写那一句（`quietLine`）；每件此刻的样子（在跑、等子代理）不进数字账，在下面每件一行里。
@@ -14,9 +14,6 @@ import Foundation
 /// 推出之后自己不会再收到新一份的（小组件、实时活动）按 `shown(at:)` 画、在 `nextShownChange(after:)` 那一刻让系统重画。
 nonisolated struct CueNow: Codable, Hashable, Sendable {
     var name: String
-    /// 头像的表情；歇下来时的那一个（`restingMood`）给过时的那份用。
-    var mood: CueMood
-    var restingMood: CueMood
     var cue: Brain
     /// 截掉之前各种各几件：数字账与角标数的是它，不是列得下的那几行。
     var tally: Tally
@@ -24,7 +21,7 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
     var advancing: Int
     /// 推进中各件的会话里在跑的子代理一共几个。
     var subagents: Int
-    /// 至多 `itemLimit` 件。
+    /// 至多 `itemLimit` 件；截的时候留住最近刚做完的那件（`justDone`，头像那一拍与那一句读它）。
     var items: [Item]
     /// 第一件等你：说什么、"打开"去哪，只有 Cue 带选项的提问能"允许一次"（会话在问的只给打开）。
     var first: Wait?
@@ -48,6 +45,8 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
         var reply = 0
         /// 推进中在跑或等子代理交回的（不数歇着的）：有它才写"N 推进中"、开着实时活动。
         var moving = 0
+        /// 其中歇着、等它派出去的子代理交回的（`Item.Kind.delegating`）：头像那一拍读它（每件一行截过，读不全）。
+        var delegating = 0
 
         /// "等你 N"：拍板加待回复，这条规则只在这里（`CueNow.needsYou`）。
         var needsYou: Int { asks + reply }
@@ -110,6 +109,18 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
 
     var justDone: Item? { items.first { $0.kind == .done } }
 
+    /// 头像此刻是哪一拍，规则只在这里：起不来；不在（没启用、睡着、还没和 iCloud 对过）；在一轮里；话在路上；
+    /// 歇着时要你管的（拍板、待回复）先于刚做完（`justDone`，与数字账同一个 `doneWindow`，到点一起收），刚做完先于等子代理交回（`Tally.delegating`，截之前数的）。
+    /// 等子代理交回按件（推进中那件没有会话在跑、有会话在等子代理），不按 `subagents`：那个数也数在跑的会话带的子代理，等子代理的会话名册为空时又是 0。
+    var beat: CueBeat {
+        switch cue {
+        case .away(_, let failed): failed ? .failed : .away
+        case .working: .thinking
+        case .hearing: .hearing
+        case .idle: needsYou > 0 ? .waiting : justDone != nil ? .done : tally.delegating > 0 ? .delegating : .resting
+        }
+    }
+
     var isAway: Bool { if case .away = cue { true } else { false } }
 
     /// Cue 在一轮里或你的话在路上：头像右下那颗靛青的点。
@@ -131,12 +142,11 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
     var staleAfter: TimeInterval { isBusy ? Self.fastStale : Self.slowStale }
     var staleAt: Date { at.addingTimeInterval(staleAfter) }
 
-    /// 过时之后只信慢的事实：Cue 按歇着算（表情也换回歇着的那个）。
+    /// 过时之后只信慢的事实：Cue 按歇着算（头像那一拍跟着 `cue` 推出，不另改）。
     var settled: CueNow {
         guard isBusy else { return self }
         var now = self
         now.cue = .idle
-        now.mood = restingMood
         return now
     }
 
@@ -168,7 +178,7 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
     }
 
     static let empty = CueNow(
-        name: "Cue", mood: .sleeping, restingMood: .sleeping, cue: .idle, tally: Tally(), advancing: 0, subagents: 0, items: [], first: nil, at: .distantPast)
+        name: "Cue", cue: .idle, tally: Tally(), advancing: 0, subagents: 0, items: [], first: nil, at: .distantPast)
 }
 
 nonisolated extension CueNow: SnapshotFile { static let fileName = "cue.json" }
@@ -300,11 +310,4 @@ nonisolated extension CueNow.Item.Kind {
         case .done: String(localized: "做完")
         }
     }
-}
-
-/// 头像的表情（`Assets` 里的 mascot-cue-*）。App 里按 Cue 在不在、有没有等你推（`CueMood.of`），扩展只读 Cue 此刻里存的那个。
-nonisolated enum CueMood: String, Codable, Sendable {
-    case thinking, waiting, done, sleeping, listening
-
-    var asset: String { "mascot-cue-\(rawValue)" }
 }

@@ -54,7 +54,7 @@ extension View {
     /// 任务行（任务圈、正在开会话的那个空心点）：任务交给的会话在接力、或这件任务就是接力带着的那件时，接力落在这里。
     func relaySpot(task: UUID) -> some View { modifier(TaskSpot(task: task)) }
 
-    /// Cue 的头像：接力的 Cue 那一头，头像外亮起一圈光。
+    /// Cue 的头像：接力的 Cue 那一头，光落进、发自头像右下那颗点（`RelayFlight.Scene.land`）。
     func relaySpot(cue spot: CueSpot) -> some View { background { RelayAnchor(role: .cue(spot)) } }
 
     /// "进展"那一处（`EndSpot.dock`，`dock` 为真的那处）：会话哪一行都不在屏上时接力落在这里。一直挂着。
@@ -69,14 +69,14 @@ extension EnvironmentValues {
     @Entry var relayStage: CueRelayStage.Stage?
 }
 
-/// 会话状态标只读 `LiveSessions.flight`，不在窗口根上改环境值，避免每次接力让整棵视图树重算。
+/// 起飞与接住共用参与判定，不在窗口根上改环境值。
 private struct SessionSpot: ViewModifier {
     let session: String?
     let row: EndSpot.Row
     @Environment(Workspace.self) private var workspace
 
     func body(content: Content) -> some View {
-        let flying = session.flatMap { workspace.services.liveSessions.relays(session: $0) ? $0 : nil }
+        let flying = session.flatMap { workspace.relays(session: $0) ? $0 : nil }
         content.modifier(Arrival(session: session)).background {
             if let flying { RelayAnchor(role: .end(.session(flying, row))).transition(.identity) }
         }
@@ -90,9 +90,8 @@ private struct TaskSpot: ViewModifier {
     @Environment(\.cardAgents) private var agents
 
     func body(content: Content) -> some View {
-        let live = workspace.services.liveSessions
         let session = agents.items[task]?.state.sessionID
-        let flying = live.relays(task: task) || session.map(live.relays(session:)) == true
+        let flying = workspace.relays(session: session, task: task)
         content.background {
             if flying { RelayAnchor(role: .end(.task(task, session: session))).transition(.identity) }
         }
@@ -109,5 +108,13 @@ private struct Arrival: ViewModifier {
         content
             .opacity(waits ? 0 : 1)
             .animation(waits ? nil : HandOff.quick, value: waits)
+    }
+}
+
+extension Workspace {
+    func relays(session: String?, task: UUID? = nil) -> Bool {
+        let live = services.liveSessions
+        return session.map { cue.wake?.sessions.contains($0) == true || live.relays(session: $0) } == true
+            || task.map { live.relays(task: $0) } == true
     }
 }

@@ -31,10 +31,7 @@ PREFIX = "cue"
 
 
 SYMBOLS = {
-    "mascot": mascot("open"),
-    "mascot.sleep": mascot("sleep"),
-    "mascot.look": mascot("look"),
-    "mascot.happy": mascot("happy"),
+    "mascot": mascot,
     "idea": idea,
     "task": task,
     "session": session,
@@ -61,7 +58,9 @@ SYMBOLS = {
     "picked": picked,
     "asking": bubble_question,
     "ended": ring_slash,
-    "interrupted": bolt_cut,
+    "interrupted": broken_line,
+    "relay": relay(),
+    "relay.stalled": relay(stalled=True),
     "cursor": cursor,
     "sparkle": sparkle,
     "agent": sparkles,
@@ -137,7 +136,6 @@ SYMBOLS = {
     "layers": layers3,
     "brush": brush,
     "eye": eye,
-    "person": person,
     "bookmark": bookmark,
     "power": power,
     "bubble": bubble_solid,

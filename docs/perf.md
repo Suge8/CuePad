@@ -2,6 +2,8 @@
 
 三个入口都是 Release 构建、每次全新进程、多次取中位，跑法与口径在各脚本头注释，和交互预算比的要占前台（[verify.md](verify.md)「占前台」）：交互是 `xc.sh perf mac|ios`，静置与常驻开销是 `xc.sh perf idle mac|ios`，Mac 冷启动到首屏与能交互是 `xc.sh perf launch mac`。前后对比是旧新两个检出交替跑同一条命令，以指令数与唤醒为准：机器忙时帧间隔、CPU 时间、能耗都会被别的进程拖歪。
 
+- 常驻动效（`LoopLayer` 的循环、头像帧序列）的开销在渲染服务里，App 进程看不到：`perf idle` 同一窗口另记渲染服务的 `render*`（口径在 `rusage.py` 头注释）。头像的眨眼张望每一下都要合成几帧，静置开销随次数涨（`CueSprite` 头注释）。iOS 模拟器是它的 backboardd，CPU、指令、唤醒都有，含模拟器的系统界面，基线相同、前后可比；
+  Mac 是 WindowServer，不提权只读得到 ps 的累计 CPU，合成整个屏幕、随别的 App 起伏，机器上有别的东西在动时几秒的波动盖过 CuePad 自己的几十毫秒，只在静置的桌面上前后交替多跑几次才能比。
 - 掉帧数是主线程 display link 的回调间隔，反映主线程跟不跟得上，不是实际交出的帧率；以 Instruments 的 Animation Hitches 为准。iOS 模拟器不支持 Animation Hitches，用 `xc.sh rec` 逐帧或应用内探针。屏幕外（`-CuePadOffscreen`）display link 不走，只用于布局与日志类场景。
 - Instruments：Release 用 `CUEPAD_TRACE=<模板>` 跟着 perf 录；Debug 实例 `xc.sh run mac` 拿 PID 再 `xctrace record --attach <PID>`。按名字或 bundle id 认 CuePad 会认到正式版。
 - SwiftUI 模板 `--attach` 没有数据：`--launch` 一份换了 bundle id 并重签名的副本。`Animation Hitches` 模板单独录会写出几十 GB，不用；`--launch` 的进程结束后可能停在暂停状态，按 PID 结束。

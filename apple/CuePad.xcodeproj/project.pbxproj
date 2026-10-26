@@ -127,6 +127,7 @@
 			membershipExceptions = (
 				CueFaces.xcassets,
 				CueNowViews.swift,
+				LedgerFit.swift,
 				UsageLevel.swift,
 				Waiting.swift,
 			);

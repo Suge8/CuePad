@@ -2,9 +2,12 @@ import QuartzCore
 import SwiftUI
 
 /// Cue 与会话之间的"接力"：一束靛青的光沿弧交棒，两端同一套尺寸、曲线与时长。一次最多三道、错开 90ms。
-/// - 叫醒（会话 → Cue）：状态标先漾开，小光点拖着细亮芯与宽淡尾飞向头像；将到时头像外一圈光接亮，停一拍，再向外漾开两圈，不盖脸。
-/// - 交给（Cue → 会话）：头像外一圈光先亮，160ms 后一个空心小环带着尾巴离开；落点的状态标亮成实心、停一拍，再随外圈余光淡下去。
-/// - 发出（你 → Cue）：发送钮纸飞机的机头当场变成光点，不另叠起飞环（`RelayLaunch`），落进头像同叫醒。
+/// - 叫醒（会话 → Cue）：状态标先漾开，小光点拖着细亮芯与宽淡尾飞向头像右下那颗点；光头到点的那一刻那颗点亮起来，头像这时才醒
+///   （光在路上时各处的头像停在起飞那一刻的样子，`CueWatch.beat`），先醒后到读成因果反了。这次叫醒的时间线归 `CueWatch.wake`：起点是本机第一次看到它的时刻，
+///   起飞、到点点亮与小人醒都由起点加固定的飞行时长推出，这里照它画、不回报。不在头像外画环、不外扩：头像外的环是否决过的"加载进度"。
+/// - 交给（Cue → 会话）：头像右下那颗点先亮一下，160ms 后一个空心小环带着尾巴从那里离开；落点的状态标亮成实心、停一拍，再随外圈余光淡下去。
+/// - 发出（你 → Cue）：发送钮纸飞机的机头当场变成光点，不另叠起飞环（`RelayLaunch`），落进那颗点同叫醒（同一个到点时刻，`RelayFlight.Scene.land`）：
+///   光在路上时头像也停在原样，落下才露"在听"。
 /// 飞行 0.78～1.08s，先提速、后缓缓被接住；拖尾是同一条弧上三截由亮到暗、由细到宽的描边，尾端稍后起步、落下时追上光头。
 /// 弧向窗口竖中线鼓，几乎横着时向上鼓；来回同一条弧。短距离也至少鼓出 24pt，两头挨着仍看得清方向。
 /// 起飞、飞行与落点余光总共约 1.7～2.2s（含最多三道错峰）：全 App 唯一超过 300ms 的动效，给低频的交棒留出看清两头的时间。
@@ -15,14 +18,14 @@ import SwiftUI
 /// 光落下的那一刻（落点那圈环的动画真的开始时，Core Animation 回调）才淡出来（`relayArrival`、`Stage.arriving`）。
 ///
 /// 降级（两个方向同一条规则：没有一个看得见的东西就不凭空画，也不往屏外飞）：
-/// - 会话那头连同"会话"那一格都不在屏上（iPhone 的会话页与纸页、Mac 侧栏收起、iPad）：叫醒只在头像外亮一圈、漾开；交给是头像亮一下、光环离开头像朝窗口中间飘一小段就淡去——"它把事交出去了"。
+/// - 会话那头连同"会话"那一格都不在屏上（iPhone 的会话页与纸页、Mac 侧栏收起、iPad）：叫醒只是那颗点亮一下（头像同时醒）；交给是那颗点亮一下、光环从那里朝窗口中间飘一小段就淡去——"它把事交出去了"。
 /// - 头像不在屏上（Mac 侧栏收起且不在 Cue 页，iPhone 的会话页与纸页，iPad 不在 Cue 页与侧栏收起时）：叫醒是起飞的环照样扩开、光从状态标升起一小段就淡去；
 ///   交给是只在会话那头外扩一圈、垫一层淡光。
 /// - 两头都不在就什么都不画：Cue 的头像回到屏幕上时自己带着在动的点，会话的状态标自己会变。
 /// - 同步追赶中（`AppServices.isCatchingUp`：启动、回到前台、下拉刷新那一拉，积压的一页页）带回来的不播：那是不在眼前时发生过的事。
-/// - 减弱动态效果：不飞、不扩，头像外那圈光与会话那头的状态标同时淡入一层高亮再淡出（1s），同 `Motion` 的约定只留透明度。
+/// - 减弱动态效果：不飞、不扩，头像那颗点与会话那头的状态标同时淡入一层高亮再淡出（1s），同 `Motion` 的约定只留透明度；叫醒、发出的那一下落在同一个到点时刻，头像也在那一刻换。
 ///
-/// 接力只来自库里的事实，经 `LiveSessions.flight`（两个方向一个值，规则在 `CueFlight`）投影成只在变了时才写的值（打开资料库时已有的不算）；
+/// 接力只来自库里的事实：交给经 `LiveSessions.flight`（规则在 `CueFlight`）、叫醒经 `CueWatch.wake`，都投影成只在变了时才写的值（打开资料库时已有的不算）；
 /// 它与在做那一列同一份读到，重排那一列的写入与这次接力在同一次更新里到达，等一帧排好就量（`NextFrame`），不猜时长。
 /// 页面换来换去也不播（挂在窗口根上，不随页面出现）。舞台只另记一件事：哪几个新会话还在等光落下（`Stage.arriving`）。
 ///
@@ -44,7 +47,7 @@ struct CueRelayStage: ViewModifier {
         content.environment(\.relayStage, stage).background(Watcher(workspace: workspace, stage: stage))
     }
 
-    /// 只读 `LiveSessions.flight`（只在变了时才写）：又有一次就播。
+    /// 交给读 `LiveSessions.flight`、叫醒读 `CueWatch.wake`（都只在变了时才写）：又有一次就播。叫醒照 `CueWatch` 记下的起点画，不回报。
     private struct Watcher: View {
         let workspace: Workspace
         let stage: Stage
@@ -58,6 +61,11 @@ struct CueRelayStage: ViewModifier {
                     guard let flight = live.flight, !workspace.services.isCatchingUp(on: workspace.cue.hostID) else { return }
                     stage.play(flight, reduceMotion: reduceMotion)
                 }
+                .onChange(of: workspace.cue.wake) { _, wake in
+                    guard let wake else { return }
+                    let flight = CueFlight(direction: .wake, at: wake.at, ends: wake.sessions.map { RelayEnd(session: $0) })
+                    stage.play(flight, since: wake.seen, reduceMotion: reduceMotion)
+                }
         }
     }
 
@@ -68,14 +76,22 @@ struct CueRelayStage: ViewModifier {
         private(set) var arriving: Set<String> = []
         @ObservationIgnored fileprivate weak var host: RelayAnchorView?
         @ObservationIgnored fileprivate var color: CGColor?
+        @ObservationIgnored private var flightID = UUID()
 
-        func play(_ flight: CueFlight, reduceMotion: Bool) {
+        /// `since`：这次接力的起点（叫醒是 `CueWatch.Wake.seen`），光照它排时刻，晚到的从中途画起；交给从此刻起。
+        func play(_ flight: CueFlight, since: Date = .now, reduceMotion: Bool) {
             // 与新会话那一行同一次更新里就藏起来，不先露一帧
+            let id = UUID()
+            flightID = id
             arriving = Set(flight.ends.filter(\.opens).map(\.session))
             Task {
                 // 在接力的那几处这一刻才挂上锚：等这一次更新排好、提交了再量
                 await NextFrame.wait()
-                guard let window = host?.window, let root = RelayAnchorView.rootLayer(of: window), let color else { return arriving = [] }
+                guard self.flightID == id else { return }
+                guard let window = host?.window, let root = RelayAnchorView.rootLayer(of: window), let color else {
+                    arriving = []
+                    return
+                }
                 let anchors = RelayAnchorView.all(in: window)
                 let cue = RelayAnchorView.cue(among: anchors, in: root)
                 let placed = Array(
@@ -83,9 +99,10 @@ struct CueRelayStage: ViewModifier {
                         .prefix(RelayFlight.most))
                 // 没有落点的不等
                 arriving.formIntersection(placed.map(\.0))
-                RelayFlight(color: color, reduceMotion: reduceMotion).play(flight.direction, cue: cue, ends: placed.map(\.1), in: root) { index in
-                    self.arriving.remove(placed[index].0)
-                }
+                RelayFlight(color: color, reduceMotion: reduceMotion).play(
+                    flight.direction, cue: cue, ends: placed.map(\.1), in: root, since: since) { index in
+                        if self.flightID == id { self.arriving.remove(placed[index].0) }
+                    }
             }
         }
 
@@ -123,13 +140,14 @@ final class RelayLaunch {
     /// 机头在钮心右上方多远（钮宽、钮高的比例）：对着录屏逐帧对准，光的第一帧正落在正飞走的机头上。
     private static let nose = CGSize(width: 0.2, height: 0.2)
 
-    func fly(reduceMotion: Bool) {
+    /// 只画光；头像什么时候露"在听"由 `CueWatch.sent` 按同一个到点时刻推出。
+    func fly(since: Date, reduceMotion: Bool) {
         guard let pad, let window = pad.window, let root = RelayAnchorView.rootLayer(of: window), let color,
               let from = pad.frame(in: root) else { return }
         let cue = RelayAnchorView.cue(among: RelayAnchorView.all(in: window), in: root)
         let up: CGFloat = RelayFlight.up(in: root)
         let head = CGPoint(x: from.midX + from.width * Self.nose.width, y: from.midY + up * from.height * Self.nose.height)
-        RelayFlight(color: color, reduceMotion: reduceMotion).launch(from: head, to: cue, in: root)
+        RelayFlight(color: color, reduceMotion: reduceMotion).launch(from: head, to: cue, in: root, since: since)
     }
 }
 

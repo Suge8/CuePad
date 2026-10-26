@@ -205,12 +205,18 @@ extension DebugScene {
     }
     #endif
 
-    /// `-CuePadCueCycle YES`：就绪后 Cue 此刻每 2.6 秒换成下一份样例（`CueNowSamples.tour`），页头、侧栏与实时活动的调试画面同一份一起变，录切换的动效。
+    /// 样例轮播默认每拍停多久：够放完一下软糖再看清这一拍。
+    static let cueCycleStep = 2.6
+
+    /// `-CuePadCueCycle YES`：就绪后 Cue 此刻每 `cueCycleStep` 秒（`-CuePadCueCycleSeconds <秒>` 改，给得比软糖短就是每一下都被下一个值打断）换成下一份样例
+    /// （`CueNowSamples.tour`），页头、侧栏与实时活动的调试画面同一份一起变，录切换的动效。
     static func cueNowTourIfAsked(_ cue: CueWatch) async {
         guard defaults.bool(forKey: "CuePadCueCycle") else { return }
+        let samples = CueNowSamples.tour
+        let step = defaults.object(forKey: "CuePadCueCycleSeconds") == nil ? cueCycleStep : defaults.double(forKey: "CuePadCueCycleSeconds")
         for index in 0... {
-            cue.pin(CueNowSamples.tour[index % CueNowSamples.tour.count])
-            guard (try? await Task.sleep(for: .seconds(2.6))) != nil else { return }
+            cue.pin(samples[index % samples.count])
+            guard (try? await Task.sleep(for: .seconds(step))) != nil else { return }
         }
     }
 }

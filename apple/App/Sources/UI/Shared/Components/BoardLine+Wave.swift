@@ -118,16 +118,10 @@ nonisolated struct WaveStrip: Equatable, Sendable {
         guard let band = layer.sublayers?.first else { return }
         let width = tracks > 0 ? bounds.width : bounds.width + Self.period
         band.frame = CGRect(x: 0, y: 0, width: width, height: bounds.height)
-        // macOS 的层 y 朝上：翻过来，线不上下颠倒
-        #if os(macOS)
-        var flip = CGAffineTransform(a: 1, b: 0, c: 0, d: -1, tx: 0, ty: bounds.height)
-        #else
-        var flip = CGAffineTransform.identity
-        #endif
         for (index, shape) in (band.sublayers ?? []).compactMap({ $0 as? CAShapeLayer }).enumerated() {
             shape.frame = band.bounds
             let path = tracks > 0 ? lane(index / 2, width: width) : main(width: width)
-            shape.path = path.cgPath.copy(using: &flip)
+            shape.path = path.cgPath
             let base = tracks > 0 && index.isMultiple(of: 2)
             shape.strokeColor = base ? color?.copy(alpha: (color?.alpha ?? 1) * Self.laneOpacity) : color
         }

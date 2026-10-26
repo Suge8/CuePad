@@ -112,7 +112,7 @@ private struct DockCue: View {
                 DockTally()
                     .padding(.leading, 18)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                CueAvatar(cue.now, mood: cue.mood(composing: drafted), size: .header)
+                CueAvatar(cue.beat, size: .header)
                     .background { CueArrival(color: palette.replied, reach: 1.5) }
                     .relaySpot(cue: .dock)
                     .frame(width: Dock.height)
@@ -156,7 +156,7 @@ private struct DockCue: View {
 
 /// Cue 钮左边的两行：上"推进中 N"（次要墨色），下"等你 M"（`WaitingCount`，赭黄）；为 0 的那行不写，都为 0 写 Cue 此刻那一句
 /// （`CueNow.quietLine`：还没启用、哪台没开、在做的那一步、手上没有事……，同页头与小组件）。
-/// 两个数就是 Cue 此刻的（`CueNow.advancing`、`CueNow.needsYou`，都出自 `CueStore.cueTally`），不另算。数变了原地滚过去；那一句长了按尾截断。
+/// 两个数就是 Cue 此刻的（`CueNow.advancing`、`CueNow.needsYou`，都出自 `CueStore.cueTally`），不另算。计数与句子共用整组 handOff 交接；那一句长了按尾截断。
 private struct DockTally: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
@@ -170,18 +170,18 @@ private struct DockTally: View {
         let cue = workspace.cue
         VStack(alignment: .leading, spacing: 2) {
             if cue.now.advancing > 0 {
-                Text("推进中 \(cue.now.advancing)").monospacedDigit().foregroundStyle(palette.ink2)
-                    .contentTransition(.numericText(value: Double(cue.now.advancing)))
+                Text("推进中 \(cue.now.advancing)").monospacedDigit().foregroundStyle(palette.ink2).rollingCount(cue.now.advancing)
             }
             WaitingCount(count: cue.now.needsYou)
             if cue.now.advancing == 0, cue.now.needsYou == 0 {
-                Text(cue.now.quietLine).foregroundStyle(palette.ink3)
+                Text(cue.now.quietLine).foregroundStyle(palette.ink3).rollingCount(cue.now.quietLine)
             }
         }
         .font(.system(size: 12, weight: .medium))
         .lineLimit(1)
-        .animation(HandOff.quick, value: cue.now.advancing)
-        .animation(HandOff.quick, value: cue.now.needsYou)
+        .handOff(id: cue.now.advancing == 0 && cue.now.needsYou == 0
+            ? [HandOff.wording(cue.now.quietLine)]
+            : [cue.now.advancing > 0 ? "advancing" : nil, cue.now.needsYou > 0 ? "waiting" : nil].compactMap { $0 })
     }
 }
 #endif

@@ -52,6 +52,8 @@ extension PiShown {
         case .failed: .failure
         case .delivery(.failed): .undelivered
         case .delivery: .onTheWay
+        // 等子代理交回：一大一小两颗点（同状态标会动的那两颗、看板卡下沿那一端），不借在跑的心电线
+        case .working(.delegating): .relay
         case .working: .session
         // 铃铛：它回你了，像来了一条通知。不用对勾——对勾只表示完成与记下，任务行旁挨着会话状态时会读成任务做完了
         case .unread: .replied
@@ -62,7 +64,7 @@ extension PiShown {
         case .fresh: .fresh
         // 不用空心圈：待办任务的圆圈就是它
         case .ended: .ended
-        // 断了电：做到一半停下
+        // 断开的线：做到一半停下、说一句就接着做——归停着的灰（多半是你自己停的，标红会稀释出错），不用闪电（与"会话有动静"同轮廓）
         case .interrupted: .interrupted
         case .unknown: .unknown
         }
@@ -71,8 +73,8 @@ extension PiShown {
 
 /// 会话状态标（全 App 只此一份：Agent 页卡片、书架、侧栏、Mac 侧栏的项目行与菜单栏、会话页顶栏、任务上的会话状态）：
 /// 颜色 + 不带外框的整体图形（图标与颜色只取 `PiShown.icon`、`tint`）——等你确认赭黄问号圆（外圈一圈波纹慢慢扩开）、出错胭脂圆叹号、没能送达胭脂折回箭头、
-/// 在跑靛青心电线（一截实色沿波形走）、话在路上靛青纸飞机（从左下飞进、朝右上飞出）、有新回复石绿铃铛（变成它时摇一下）、
-/// 待回复墨点、该你了灰色输入光标、新会话灰色星光、已结束更淡的带斜线圈；Cue 值班时，等 Cue 回答是墨色气泡问号、歇着是灰色省略号。`size` 是标的基准直径，外框是它的 1.8 倍，跟着旁边的字随辅助字号放大。
+/// 在跑靛青心电线（一截实色沿波形走）、等子代理交回靛青一大一小两颗点（小的出去又回来贴住，`relay`）、话在路上靛青纸飞机（从左下飞进、朝右上飞出）、有新回复石绿铃铛（变成它时摇一下）、
+/// 待回复墨点、该你了灰色输入光标、新会话灰色星光、被打断灰色断开的线、已结束灰色带斜线圈（不再另淡：灰已在对比度底线上，靠斜线圈的形状分）；Cue 值班时，等 Cue 回答是墨色气泡问号、歇着是灰色省略号。`size` 是标的基准直径，外框是它的 1.8 倍，跟着旁边的字随辅助字号放大。
 /// 心电线、纸飞机、波纹是常驻循环动效，交给 Core Animation（`LoopLayer`），不在屏幕上时不画；换状态时旧图形缩小淡出、新图形放大淡入，
 /// 两个都是静止图标时由系统原地替换。不放循环动效时（`LoopsPlay`）换成同一状态的静止符号、没有波纹；减弱动态效果时不摇铃。
 /// 旁边有状态文字时读屏跳过它；`announces` 时标自己带读屏标签。
@@ -91,35 +93,14 @@ struct PiStateDot: View {
     /// 字的中线在基线以上多高，按标的外框算（外框约等于旁边的字号）。
     private nonisolated static let midline = 0.36
 
-    /// 画法：自绘的循环动效，或一个静止图标。换画法时整块换（缩放淡入淡出），同为图标时原地替换。
-    private enum Look: Hashable { case heartbeat, flight, icon }
-
-    private var look: Look {
-        switch shown.status {
-        case .working: loops ? .heartbeat : .icon
-        case .delivery(.failed): .icon
-        // 不放循环动效时静止的那一架由它自己换（`OnTheWay`）
-        case .delivery: .flight
-        default: .icon
-        }
-    }
-
     var body: some View {
         let tint = shown.tint(palette)
         let mark = ZStack {
-            switch look {
-            case .heartbeat: LoopLayer(kind: .heartbeat, color: tint).transition(Self.swap)
+            // 不放循环动效时画同一状态的静止图标（纸飞机的静止那一架由它自己换，`OnTheWay`）
+            switch shown.mark {
             case .flight: OnTheWay(size: box, color: tint).transition(Self.swap)
-            case .icon:
-                Image(shown.icon)
-                    .font(.system(size: box * 0.86, weight: .semibold))
-                    .foregroundStyle(tint)
-                    .contentTransition(.symbolEffect(.replace))
-                    .symbolEffect(.wiggle, options: .nonRepeating, value: rings)
-                    .background {
-                        if shown.status == .asking, loops { LoopLayer(kind: .ripple, color: tint).frame(width: box * 0.86, height: box * 0.86) }
-                    }
-                    .transition(Self.swap)
+            case .loop(let kind) where loops: LoopLayer(kind: kind, color: tint).transition(Self.swap)
+            case .loop, .icon, .rippled: icon(tint)
             }
         }
         .frame(width: box, height: box)
@@ -136,7 +117,43 @@ struct PiStateDot: View {
         }
     }
 
+    private func icon(_ tint: Color) -> some View {
+        Image(shown.icon)
+            .font(.system(size: box * 0.86, weight: .semibold))
+            .foregroundStyle(tint)
+            .contentTransition(.symbolEffect(.replace))
+            .symbolEffect(.wiggle, options: .nonRepeating, value: rings)
+            .background {
+                if shown.mark == .rippled, loops { LoopLayer(kind: .ripple, color: tint).frame(width: box * 0.86, height: box * 0.86) }
+            }
+            .transition(Self.swap)
+    }
+
     private static let swap = AnyTransition.scale(scale: 0.6).combined(with: .opacity)
+}
+
+/// 会话状态标画什么（`PiStateDot` 只画它、不判断），状态 → 样子只在 `PiShown.mark`：常驻的循环、话在路上那架纸飞机、外带一圈波纹的图标，或静止的图标（`PiShown.icon`）。
+/// 循环不放时（`LoopsPlay`）退回同一状态的静止图标。
+enum StateMark: Equatable {
+    /// 在跑是心电线，等子代理交回是一大一小两颗点（`LoopLayer` 的 `heartbeat`、`relay`）。
+    case loop(LoopLayer.Kind)
+    case flight
+    /// 等你确认：图标外一圈细线扩开淡去。
+    case rippled
+    case icon
+}
+
+extension PiShown {
+    var mark: StateMark {
+        switch status {
+        case .working(.delegating): .loop(.relay)
+        case .working: .loop(.heartbeat)
+        case .delivery(.failed): .icon
+        case .delivery: .flight
+        case .asking: .rippled
+        case .idle, .resting, .fresh, .ended, .interrupted, .unknown, .cueAsking, .awaitsReply, .failed, .unread: .icon
+        }
+    }
 }
 
 /// 状态的静止图形，大小跟着旁边的字（问题卡、出错与没能结束的提示、Cue 的等你、待回复的提示与看板卡、前台横幅、气泡上的没能送达）：

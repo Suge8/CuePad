@@ -27,7 +27,8 @@ final class LiveSessions {
     /// 这次运行里在这台 Mac 上结束的会话（运行之前就已结束的历史会话不在其中），最近结束的在前，只留最近的几个：
     /// Mac 的发送目标认出"刚结束的会话"、给已结束的目标写会话名都读它。iOS 上没有。
     private(set) var recentlyEnded: [PiSessionState] = []
-    /// 最近一次接力（`CueRelayStage` 画）：比已算过的更新的叫醒或交给（`CueFlight.Facts`），`at` 变成新的就播一次；打开资料库时已有的不算。
+    /// 最近一次交给（`CueRelayStage` 画）：比已算过的更新的交给（`CueFlight.Facts`），`at` 变成新的就播一次；打开资料库时已有的不算。
+    /// 叫醒那一路不在这里（`CueWatch.wake`）。
     /// 与会话一起读：重排"在做"那一列的那次写入（话在路上、新会话出现）与这次接力同一份到达界面，量落点时那一列已经排好。
     private(set) var flight: CueFlight?
     /// 已经算过的最新时刻（叫醒与交给同一条时间线）。

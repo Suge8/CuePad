@@ -15,12 +15,12 @@ extension View {
     /// `hidden` 时中间与右边让开（淡到透明、不可点、读屏跳过），左边一直在；占的高度不变，内容的边距不跟着变（会话页看历史时用，
     /// 见 `ChatFollow.showsHeader`）；给了 `reveal` 时让开的那一块仍接点按，点它唤出。标题同时是读屏、返回菜单与多任务切换器里的名字。
     func floatingHeader<Detail: View, Trailing: View>(
-        _ title: LocalizedStringResource, hidden: Bool = false, reveal: (() -> Void)? = nil,
+        _ title: LocalizedStringResource, hidden: Bool = false, reveal: (() -> Void)? = nil, wording: [String] = [],
         @ViewBuilder detail: () -> Detail, @ViewBuilder trailing: () -> Trailing
     ) -> some View {
         modifier(FloatingHeader(
             title: title, hidden: hidden, reveal: reveal, titled: true,
-            center: TitleStack(title: title, detail: detail()).padding(.horizontal, 16).headerPiece().opacity(String(localized: title).isEmpty ? 0 : 1),
+            center: TitleStack(title: title, detail: detail(), wording: wording).padding(.horizontal, 16).headerPiece().opacity(String(localized: title).isEmpty ? 0 : 1),
             trailing: trailing()))
     }
 
@@ -35,7 +35,7 @@ extension View {
     /// 要紧信息是一行字、右边一个圆钮或"⋯"菜单。`detail` 为 nil 时只写标题；要等读库才有的信息先给空串，
     /// 那一行先留着位置，读到后标题不再上移。
     func floatingHeader<Trailing: View>(_ title: LocalizedStringResource, detail: Dotted? = nil, @ViewBuilder trailing: () -> Trailing) -> some View {
-        floatingHeader(title, detail: { HeaderDetail(text: detail) }, trailing: trailing)
+        floatingHeader(title, wording: detail.map { $0.isEmpty ? ["blank"] : $0.parts.map(HandOff.wording) } ?? [], detail: { HeaderDetail(text: detail) }, trailing: trailing)
     }
 
     func floatingHeader(_ title: LocalizedStringResource, detail: Dotted? = nil) -> some View {
@@ -222,6 +222,7 @@ private struct HeaderPiece: ViewModifier {
 private struct TitleStack<Detail: View>: View {
     let title: LocalizedStringResource
     let detail: Detail
+    let wording: [String]
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -229,6 +230,7 @@ private struct TitleStack<Detail: View>: View {
             Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(1)
             detail
         }
+        .handOff(id: ["title"] + wording)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isHeader)
     }
@@ -240,10 +242,10 @@ private struct HeaderDetail: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        if let text {
-            (text.isEmpty ? Text(" ") : Text(text)).font(.caption.monospacedDigit()).foregroundStyle(palette.ink3).lineLimit(1)
-                .contentTransition(.numericText())
-                .animation(HandOff.quick, value: text)
+        Group {
+            if let text {
+                (text.isEmpty ? Text(" ") : Text(text)).font(.caption.monospacedDigit()).foregroundStyle(palette.ink3).lineLimit(1).rollingCount(text)
+            }
         }
     }
 }

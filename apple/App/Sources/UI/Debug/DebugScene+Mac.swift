@@ -12,6 +12,7 @@ extension DebugScene {
         let sampleCue = defaults.double(forKey: "CuePadSampleCue")
         if sampleCue > 0 { Task { await askSample(after: .seconds(sampleCue), services: workspace.services) } }
         Task { await SyncBench.run(workspace) }
+        Task { await cueNowTourIfAsked(workspace.cue) }
         if defaults.string(forKey: "CuePadSidebar") == "hidden" { workspace.pages.sidebar = .detailOnly }
         switch scene {
         case "collapsed": workspace.pages.sidebar = .detailOnly
