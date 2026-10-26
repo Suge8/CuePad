@@ -43,7 +43,7 @@ struct ProjectScreen: View {
         .scrollPosition($position)
         .taskFoldScroll(anchor)
         // 顶栏第二行是项目的一句介绍接它的文件夹（`ProjectPlace`）；页顶不写标题时（iPad 侧栏在旁边）这两样另起一行排在页里（`ProjectIntroLine`）
-        .floatingHeader(.verbatim(project?.shownName ?? ""), detail: headerDetail) { actions }
+        .floatingHeader(.verbatim(project?.shownName ?? ""), detail: { ProjectIntroLine(project: project, inHeader: true) }, trailing: { actions })
         .observing(services.store, id: projectID, into: $page, onError: workspace.fail) {
             [projectID] store in ProjectPage(try ProjectPageData.read(projectID, from: store))
         }
@@ -115,12 +115,6 @@ struct ProjectScreen: View {
 
     /// 名称、目录与计数取自项目目录，推入的第一帧就是最终值：导航栏标题在推入时定下，之后再换会让整页跳一下。
     private var project: Project? { workspace.catalog?.project(projectID) }
-
-    /// 顶栏第二行：介绍 · 文件夹。项目目录读到之前给空串，那一行先留着位置。
-    private var headerDetail: Dotted {
-        guard let project else { return Dotted() }
-        return Dotted(project.intro) + (workspace.place(of: project)?.text ?? Dotted())
-    }
 
     /// 卡片墙：辅助字号下只排一列，卡上的字与"记一条灵感"才不被窄列挤成一字一行。
     private func wall(@ViewBuilder _ tiles: () -> some View) -> some View {
