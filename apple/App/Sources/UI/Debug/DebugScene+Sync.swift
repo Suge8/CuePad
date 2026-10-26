@@ -20,7 +20,8 @@ extension DebugScene {
     /// 要你决定的两个选择、立即同步与 Mac 工具栏的同步提示都按有同步时的样子出现；`failed` 带两条没能同步的记录，`conflicts` 在演示库里造一份冲突副本。
     /// 这些替身都当已和 iCloud 对过。
     /// `-CuePadSync blips`：已同步，之后像一句句传上去那样反复报一小段同步中（`BlipSync`），看设置里同步那一行闪不闪；
-    /// `-CuePadSync catchup`：反复像回到前台那样对一遍（长短各一次），看页头、空态的"正在同步"怎么进出。
+    /// `-CuePadSync catchup`：反复像回到前台那样对一遍（长短各一次），看页头、空态的"正在同步"怎么进出；
+    /// `-CuePadSync flaky`：反复连不上 iCloud 又恢复（长短各一次），看同步到不了 Mac 的提醒点与拍板卡"现在答不了"那一行怎么进出。
     /// `-CuePadSync newmac`：换新 Mac 的第一遍同步，先报同步中、还没对过，`-CuePadReconcileSeconds`（默认 8）秒后带回 Cue 在「Mac Studio」上运行、
     /// 那台醒着，才报对过（`NewMacSync`）；秒数给得比实例活得久（如 3600）就一直在等。
     static var syncSource: AppServices.SyncSource {
@@ -42,8 +43,9 @@ extension DebugScene {
         case "restricted": .custom(StandInSync(.accountRestricted))
         case "offline": .custom(OfflineSync(seconds: seconds("CuePadOfflineSeconds", default: 6)))
         case "arrive": .custom(ArrivingSync())
-        case "blips": .custom(BlipSync(catchingUp: false))
-        case "catchup": .custom(BlipSync(catchingUp: true))
+        case "blips": .custom(BlipSync(.upload))
+        case "catchup": .custom(BlipSync(.catchup))
+        case "flaky": .custom(BlipSync(.offline))
         case "newmac": .custom(NewMacSync(seconds: seconds("CuePadReconcileSeconds", default: 8)))
         default: .iCloud
         }
@@ -71,25 +73,34 @@ extension DebugScene {
         func resolve(_ resolution: SyncResolution) async throws {}
     }
 
-    /// 已同步，然后依次报一段段同步中（`blips` 各段时长，段间隔 `gap` 的已同步），走完一遍再来。
-    /// `blips`：上传那种（`.syncing`），短的像一句话 0.3 秒传上去、长的像传一批；`catchup`：对一遍那种（`catchingUp`，同回前台时那一拉），页头写"正在同步"。
+    /// 已同步，然后依次报一段段别的状态（`blips` 各段时长，段间隔 `gap` 的已同步），走完一遍再来。
+    /// `upload`：上传那种（`.syncing`），短的像一句话 0.3 秒传上去、长的像传一批；`catchup`：对一遍那种（`catchingUp`，同回前台时那一拉），页头写"正在同步"；
+    /// `offline`：连不上 iCloud（像网络一时断开又回来），同步到不了 Mac 的提醒点、拍板卡的"现在答不了"一出一收。
     nonisolated final class BlipSync: SyncControlling {
+        enum Kind { case upload, catchup, offline }
         let blips: [Duration]
         let gap: Duration
-        let catchingUp: Bool
+        let busy: SyncState
 
-        init(catchingUp: Bool) {
-            self.catchingUp = catchingUp
-            blips = catchingUp ? [.milliseconds(1500), .milliseconds(250)] : [.milliseconds(300), .milliseconds(250), .milliseconds(350), .milliseconds(1500)]
-            gap = catchingUp ? .milliseconds(2500) : .milliseconds(1200)
+        init(_ kind: Kind) {
+            switch kind {
+            case .upload:
+                blips = [.milliseconds(300), .milliseconds(250), .milliseconds(350), .milliseconds(1500)]
+                gap = .milliseconds(1200)
+            case .catchup, .offline:
+                blips = [.milliseconds(1500), .milliseconds(250)]
+                gap = .milliseconds(2500)
+            }
+            busy = kind == .offline
+                ? SyncState(status: .offline, issues: [], reconciled: true)
+                : SyncState(status: .syncing, issues: [], catchingUp: kind == .catchup, reconciled: true)
         }
 
         var stateUpdates: AsyncStream<SyncState> {
             AsyncStream { continuation in
                 let idle = SyncState(status: .idle, issues: [], reconciled: true)
                 continuation.yield(idle)
-                let busy = SyncState(status: .syncing, issues: [], catchingUp: catchingUp, reconciled: true)
-                let task = Task { [blips, gap] in
+                let task = Task { [blips, gap, busy] in
                     while !Task.isCancelled {
                         for blip in blips {
                             try? await Task.sleep(for: gap)
