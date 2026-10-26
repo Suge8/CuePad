@@ -194,11 +194,13 @@ extension Workspace {
     ) async throws -> String {
         let launch = try await services.launchSession(
             in: project, prompt: prompt, title: title, on: host ?? services.hostID, card: card, agent: agent, model: model, thinking: thinking)
-        var reported = false
+        var reported = false, seen = false
         for try await progress in services.store.observe({ try launch.progress(from: $0) }) {
             if let claimed = progress.claimed { return claimed.sessionID }
+            // 请求开成了、会话却一直没带着认领标识连上来：等认领的请求到期清掉（`DeliveryExecutor`），不再静静地等下去
+            if progress.request != nil { seen = true } else if seen { throw SendError.notLaunched(String(localized: "会话一直没连上 CuePad")) }
             switch progress.phase(at: services.speech) {
-            case .failed(let failure): throw SendError.notDelivered(failure.text(sync: services.syncStatus))
+            case .failed(let failure): throw SendError.notLaunched(failure.text(sync: services.syncStatus))
             case .opening where !reported:
                 reported = true
                 launched()

@@ -23,6 +23,7 @@ Debug 认的启动参数只在 `DebugScene.swift`（及同目录 `DebugScene+*.s
 - 和交互预算比的 `xc.sh perf mac`：后台没有玻璃合成与动画，帧与掉帧偏乐观。
 - `-CuePadRightClick`，以及 `-CuePadClick` 点开的是系统菜单时：后台 App 的菜单是停用的灰。`-CuePadClick` 的其余点按在后台照样生效（事件在本进程里合成，不经窗口服务器、不先激活），浮层、气泡、按钮的逻辑与摆位不占前台验；截图是未激活窗口的样子，看激活态的强调色、焦点、悬停与真实首次点击的手感仍要前台或人工。
 - `-CuePadBench chatscroll` 的 process、hid 驱动：真实滚轮与指针。
+- `-CuePadClick` 的 `front`、`hidpinch`、`hidscroll`（`DebugGestures+Mac.swift`）：在 HID 层合成触控板捏合与带惯性的双指滚动，进得了系统滚动视图（进程内合成的进不去），量全屏页大图的缩放与看图。
 
 只在用户说过这段时间不用电脑、或明确要这几样数字时给；平时用后台的数（指令数照样能前后对比）。新加的自动化要占前台也只经 `DebugForeground`，并补进这张单子。真实按键（⌘V、全局热键）与跨应用粘贴不自动化，只人工验证。
 

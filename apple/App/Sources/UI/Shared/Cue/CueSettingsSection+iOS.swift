@@ -3,7 +3,7 @@ import SwiftUI
 
 /// 设置页最上面一组：组名是 Cue 的名字，两行——名字，与在哪台 Mac 上运行（同 Mac 设置窗口通用页那一组，`CueSettingsSection`）。
 /// 在哪台运行用各入口同一份菜单（`CueHostSetting`：每台写能当大脑的几家或为什么不能用，"不启用"是停用）；启用中转圈，没能写成的原因写在组下面；
-/// 能不能选读 `CueGate`：还没和 iCloud 对过时写在等什么、选不了，正在别的 Mac 上运行时改过来先确认；还没有哪台 Mac 写下过自己时写先去 Mac 上打开。
+/// 能不能选读 `CueGate`：还没和 iCloud 对过时写在等什么、选不了，正在别的 Mac 上运行时改过来先确认；还没有哪台 Mac 写下过自己时写先去 Mac 上打开、同步不通时写同步那一行的标题（`CueSettings.noHost`）。
 /// 用哪个 Agent、模型与思考强度在 Cue 面板第一行（`CueConfigControls`），这里不重复。读写都经各入口同一份 `CueSettingsModel`。
 struct CueSettingsSection: View {
     @Environment(AppServices.self) private var services
@@ -44,7 +44,7 @@ struct CueSettingsSection: View {
         if let waiting = settings.gate(services).waitingReason {
             Text(waiting).foregroundStyle(palette.ink3)
         } else if hosts.isEmpty {
-            Text(CueSettings.noHost).foregroundStyle(palette.ink3)
+            Text(CueSettings.noHost(services)).foregroundStyle(palette.ink3)
         } else {
             CueHostSetting(settings: settings, hosts: hosts, model: model)
         }

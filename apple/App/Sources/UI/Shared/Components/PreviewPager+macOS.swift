@@ -38,7 +38,7 @@ extension PanelStyle {
 
 /// 全屏页：一次显示翻到的那一份（`current`），翻页原地交叉淡（同快速查看与"预览"：Mac 上换一张不滑，滑动要逐帧挪整页）；
 /// 顶栏与底栏浮在内容上、栏后不垫底：顶上中间是这一份的标题，右上是前后箭头夹着"第几份 · 类型"、分享与关闭，各是一块玻璃；
-/// 底部是回复栏（`PreviewReplyBar`）。图片与 PDF 铺到两条栏下面，其余在两条栏之间（`previewChrome`）。
+/// 底部是回复栏（`PreviewReplyBar`）。图片与 PDF 铺到两条栏下面，其余在两条栏之间（`previewInsets`）。
 /// 翻页：←→、右上的箭头、触控板横扫（`PageInput`）。
 private struct PreviewPager: View {
     let opening: PreviewOpening
@@ -65,7 +65,7 @@ private struct PreviewPager: View {
                 .id(preview.id)
                 .transition(.opacity)
         }
-        .environment(\.previewChrome, chrome)
+        .environment(\.previewInsets, chrome)
         .environment(\.previewFlight, flight)
         .opacity(landed ? 1 : 0)
         .background {
@@ -134,7 +134,7 @@ private struct PreviewPager: View {
     }
 
     private static let edge: CGFloat = 12
-    /// 顶栏占的高：内容让出它（`previewChrome`）
+    /// 顶栏占的高：内容让出它（`previewInsets`）
     private static let headerHeight = edge + ControlMetrics.height + 8
     /// 标题两边让出右上那几块的宽
     private static let titleRoom: CGFloat = 200

@@ -49,7 +49,7 @@ import Testing
     clock.advance(DeliveryExecutor.retention * 2 + .seconds(1))
     _ = try await eventually(store, { try $0.deliveryRequest(plain.id) }) { $0 == nil }
     #expect(try await store.deliveryRequest(launch.id) != nil)
-    #expect(try await store.handedSessions() == [idea.id: .launching])
+    #expect(try await store.handedSessions() == [idea.id: .launching(.pi)])
 
     try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "s-late", state: .thinking, title: "圆桌", launchToken: "t-late")
     #expect(try await store.card(idea.id)?.piSessionID == "s-late")

@@ -10,6 +10,7 @@ import os
 actor SyncCoordinator {
   static let issueLimit = 50
   static let log = Logger(subsystem: AppIdentity.id, category: "delivery")
+  static let syncLog = Logger(subsystem: AppIdentity.id, category: "sync")
   static let accountKey = "account"
 
   let store: CueStore
@@ -23,6 +24,8 @@ actor SyncCoordinator {
   var holding: Hold?
   var backoff = Backoff()
   var retryTimer: Task<Void, Never>?
+  /// 正在等着自己恢复的这一段（`noteWaiting`）：进入、恢复各记一条日志，其间的重试不记。
+  var outage: (fault: SyncFault, began: ContinuousClock.Instant)?
   /// 这一版传不上去的记录与它的修改时间（删除记 `.min`）：附件文件不在本机、服务器拒收（`SyncFault.rejected`）。
   /// 同一版不再每批重试、重复报告，也不挡别的记录；改过再试，重启 App 也再试一次。
   var unsendable: [String: Int64] = [:]
@@ -187,6 +190,7 @@ actor SyncCoordinator {
   /// 连不上的等待提前结束（`connected`）。停下时不改状态。
   func succeeded() {
     connected()
+    noteRecovered()
     guard !stopped else { return }
     var next = facts
     next.issues.removeAll { $0.kind == .request }
@@ -209,18 +213,26 @@ actor SyncCoordinator {
     case .account(let status): facts.status = status
     case .wait: break
     case .rejected:
-      report(SyncIssue.Problem(error), detail: error.diagnosis, kind: kind, recordType: recordType, recordName: recordName)
+      report(SyncIssue.Problem(error), detail: error.diagnosis, kind: kind, recordType: recordType, recordName: recordName, reason: error.brief)
     }
+    noteWaiting(fault, error)
     return fault
   }
 
   // MARK: 报告
 
   /// 记一条问题：同一类、同一条记录只留最新的一条（`SyncIssue.sameAs`）。失败类的让状态变成同步出错。
-  /// 错误不直接报，经 `failed` 归类：连不上、要等、账号的不是问题。
-  func report(_ problem: SyncIssue.Problem, detail: String? = nil, kind: SyncIssue.Kind, recordType: String?, recordName: String?) {
+  /// 错误不直接报，经 `failed` 归类：连不上、要等、账号的不是问题。新出现的问题记一条 error 日志（`reason` 是给日志的原因，见 `Error.brief`；
+  /// 没给时只记哪类问题、哪条记录：`detail` 可能带记录内容）。
+  func report(
+    _ problem: SyncIssue.Problem, detail: String? = nil, kind: SyncIssue.Kind, recordType: String?, recordName: String?, reason: String? = nil
+  ) {
     var next = facts
     let issue = SyncIssue(kind: kind, recordType: recordType, recordName: recordName, problem: problem, detail: detail)
+    if !next.issues.contains(where: { $0.sameAs(issue) }) {
+      Self.syncLog.error(
+        "同步问题（\(String(describing: kind), privacy: .public)）：\(String(describing: problem), privacy: .public) \(recordType ?? "", privacy: .public) \(recordName?.prefix(8) ?? "", privacy: .public) \(reason ?? "", privacy: .public)")
+    }
     next.issues.removeAll { $0.sameAs(issue) }
     next.issues.append(issue)
     if next.issues.count > Self.issueLimit { next.issues.removeFirst(next.issues.count - Self.issueLimit) }

@@ -165,14 +165,21 @@ final class AlertCenter: NSObject, UNUserNotificationCenterDelegate {
     private(set) var registration: Registration = .pending
     @ObservationIgnored private var enabled = false
 
-    /// 幂等。只在有同步时调用：没有同步就不会有这类通知。尚未决定时请求一次权限（只会弹一次系统提示，不碰真实世界时不要，`delivers`）。
+    /// 幂等。只在有同步时调用：没有同步就不会有这类通知。尚未决定时，等库里第一次有了 Mac（`CueStore.workMac`）才请求一次权限：
+    /// 之前没有哪台会发来提示，新装一打开就弹系统提示，用户还不知道它要提示什么（设置里通知那一行随时能先开）。
+    /// 只弹一次系统提示，不碰真实世界时不要（`delivers`）。
     func enable() async {
-        guard !enabled else { return }
+        guard !enabled, let services else { return }
         enabled = true
         await refresh()
-        if authorization == .notDetermined { await requestAuthorization() }
         // 无论是否授权都注册：只叫醒 App 拉一次的静默推送（Cue 对你说的话、请求的结果，见 `AlertSubscriptions`）不要通知权限
         UIApplication.shared.registerForRemoteNotifications()
+        guard authorization == .notDetermined else { return }
+        services.follow(reporting: { .syncUnavailable(String(localized: "等 Mac 出现再请求通知权限没能启动：\(String(describing: $0))")) }) {
+            for try await hasMac in services.store.observe({ try $0.workMac() != nil }) where hasMac {
+                return await self.requestAuthorization()
+            }
+        }
     }
 
     func registered() { registration = .registered }

@@ -42,9 +42,19 @@ public struct ExecutableLocator: Sendable, Equatable {
     private init(shellPath: String?) {
         let home = FileManager.default.homeDirectoryForCurrentUser
         let path = (shellPath ?? "").split(separator: ":").map { URL(filePath: String($0), directoryHint: .isDirectory) }
-        let common = [home.appending(path: ".local/bin"), URL(filePath: "/opt/homebrew/bin"), URL(filePath: "/usr/local/bin"),
-                      home.appending(path: ".bun/bin"), home.appending(path: ".npm-global/bin"), home.appending(path: ".opencode/bin")]
-        self.init(searchDirectories: path + common)
+        // 先找到的先问版本：`.local/bin` 排在 Homebrew 之前，包管理器与 OpenCode 的在后
+        let homes = Self.homeDirectories(home)
+        self.init(searchDirectories: path + homes.prefix(1) + [URL(filePath: "/opt/homebrew/bin"), URL(filePath: "/usr/local/bin")] + homes.dropFirst())
+    }
+
+    /// 只看装在 `home` 里的（官方脚本与包管理器的缺省位置）：隔离运行时把一个空目录当家目录，像一台什么都没装的 Mac。
+    public init(home: URL) {
+        self.init(searchDirectories: Self.homeDirectories(home))
+    }
+
+    /// 家目录里各家安装脚本与包管理器的缺省位置：Claude Code、Codex、Pi 的脚本装进 `.local/bin`，OpenCode 的装进 `.opencode/bin`。
+    private static func homeDirectories(_ home: URL) -> [URL] {
+        [".local/bin", ".bun/bin", ".npm-global/bin", ".opencode/bin"].map { home.appending(path: $0, directoryHint: .isDirectory) }
     }
 
     /// 搜索目录里所有叫 `command` 的可执行文件，按目录先后。

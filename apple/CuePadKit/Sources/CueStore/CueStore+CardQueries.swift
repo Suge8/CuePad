@@ -35,16 +35,20 @@ extension CueStore {
       + " AND \(Self.latestHandoff("r"))"
     let rows = try db.query(
       """
-      SELECT r.cardID, r.targetRef, 0, 0 AS rank FROM deliveryRequests r WHERE \(handOff) AND r.mode != 'start' AND r.status IN (\(DeliveryStatus.openSQL))
+      SELECT r.cardID, r.targetRef, NULL, 0 AS rank FROM deliveryRequests r WHERE \(handOff) AND r.mode != 'start' AND r.status IN (\(DeliveryStatus.openSQL))
       UNION ALL
-      SELECT id, piSessionID, 0, 1 FROM cards WHERE piSessionID IS NOT NULL AND deletedAt IS NULL
+      SELECT id, piSessionID, NULL, 1 FROM cards WHERE piSessionID IS NOT NULL AND deletedAt IS NULL
       UNION ALL
-      SELECT r.cardID, r.targetRef, r.mode = 'start', 2 FROM deliveryRequests r
+      SELECT r.cardID, r.targetRef, CASE WHEN r.mode = 'start' THEN r.content END, 2 FROM deliveryRequests r
       WHERE \(handOff) AND r.cardID NOT IN (SELECT id FROM cards WHERE piSessionID IS NOT NULL)
         AND (r.mode != 'start' OR r.status != '\(DeliveryStatus.failed.rawValue)')
       ORDER BY rank
       """
-    ) { (card: $0.uuid(0), handoff: $0.int(2) != 0 ? AgentHandoff.launching : .session($0.text(1))) }
+    ) { row in
+      // 开新会话那一行带着请求内容，读出用哪家开
+      let launch = row.isNull(2) ? nil : PiLaunch(stored: row.text(2))
+      return (card: row.uuid(0), handoff: row.isNull(2) ? AgentHandoff.session(row.text(1)) : .launching(launch?.opening ?? .pi))
+    }
     return Dictionary(rows.map { ($0.card, $0.handoff) }, uniquingKeysWith: { first, _ in first })
   }
 

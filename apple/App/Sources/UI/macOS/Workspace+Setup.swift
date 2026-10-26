@@ -69,10 +69,9 @@ extension Workspace {
         }
     }
 
-    /// 装这一家（接入面板的"安装"）：后台跑官方安装脚本，装完再问一遍这台各家能不能用。
+    /// 装这一家（接入面板的"安装"）。
     func installAgent(_ kind: AgentKind) async {
-        await services.agents.installAgent(kind)
-        await recheckAgents()
+        do { try await services.installAgent(kind) } catch { fail(error) }
     }
 
     /// 登录这一家（接入面板的"登录"）：Claude Code、Codex 打开浏览器、等你登录完；Pi 开终端，你回到 CuePad 时再问（`recheckAgents`）。

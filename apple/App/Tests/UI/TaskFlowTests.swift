@@ -130,8 +130,8 @@ struct TaskFlowTests {
         #expect(try await requests(.end).map(\.target.ref) == ["s1"])
     }
 
-    /// 行尾那一格是"开始"；点它开一个会话，正在开时不再给"开始"，没开成不算交给过，重新给"开始"。
-    @Test func 点开始交给Agent_正在开时不再给开始_没开成重新给() async throws {
+    /// 行尾那一格是"开始"；点它开一个会话，正在开时不再给"开始"，没开成不算交给过，重新给"开始"，没开成的原因留在任务上。
+    @Test func 点开始交给Agent_正在开时不再给开始_没开成重新给且留下原因() async throws {
         try await rig.offersPi()
         let workspace = Workspace(services: rig.services)
         let project = try await store.createProject(name: "圆桌", color: "#000000")
@@ -150,6 +150,7 @@ struct TaskFlowTests {
         _ = try await eventually(store, { try $0.deliveryRequest(request.id)?.status }) { $0 == .known(.failed) }
         await executor.stop()
         #expect(try await next(task) == .start(leaf: task))
+        try await eventually("没开成的原因留在任务上") { workspace.launchFailures[task.id] == "没开成会话：这台 Mac 上开不了会话" }
     }
     #endif
 

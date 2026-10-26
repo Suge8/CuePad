@@ -8,8 +8,15 @@ from app_env import BUNDLE_ID, HOLD, REC_SECONDS, RUNTIME, die
 from app_proc import wait_ready
 
 
+# simctl 偶尔挂住不返回（实测 install 卡过 20 分钟，看守的时限要等装完才开始算）：每一次调用自己有上限，到了就失败、不干等
+SIMCTL_TIMEOUT = 180
+
+
 def simctl(*args, **kw):
-    return subprocess.run(["xcrun", "simctl", *args], check=True, **kw)
+    try:
+        return subprocess.run(["xcrun", "simctl", *args], check=True, timeout=SIMCTL_TIMEOUT, **kw)
+    except subprocess.TimeoutExpired:
+        die(f"simctl {args[0]} {SIMCTL_TIMEOUT} 秒没有返回（模拟器卡住了），重试一次；再卡就重启这台模拟器")
 
 
 def launch_sim(device, library, args, ready):

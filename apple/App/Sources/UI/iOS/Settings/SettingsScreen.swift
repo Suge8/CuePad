@@ -106,10 +106,11 @@ private struct AlertSection: View {
     }
 }
 
-/// iCloud 同步：一行状态，需要决定时给出两个选择，否则是立即同步；有两个版本的灵感或任务时一行推入处理，没能同步的记录可展开。
+/// iCloud 同步：一行状态，需要决定时给出两个选择，没开 iCloud 时打开设置，按了有用时是立即同步（`AppServices.canSyncNow`）；有两个版本的灵感或任务时一行推入处理，没能同步的记录可展开。
 private struct SyncSection: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
+    @Environment(\.openURL) private var openURL
     @State private var choices = SyncChoices()
     @State private var confirmErase = false
 
@@ -137,9 +138,11 @@ private struct SyncSection: View {
                     Button(SyncChoices.erase.title, icon: .replaceWithCloud, role: .destructive) { confirmErase = true }
                 }
                 .disabled(choices.working)
-            } else if services.sync != nil {
+            } else if services.syncStatus == .noAccount {
+                Button(SyncSummary.settingsTitle, icon: .settings) { openURL(SyncSummary.settings) }
+            } else if services.canSyncNow {
                 Button("立即同步", icon: .syncNow) { Task { await services.syncNow() } }
-                    .disabled(!services.canSyncNow)
+                    .disabled(services.isSyncingNow)
             }
             if let failure = choices.failure {
                 Label { Text(failure).font(.footnote) } icon: { FailureMark() }

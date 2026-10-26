@@ -1,4 +1,3 @@
-import CueEditor
 import CueStore
 import SwiftUI
 
@@ -252,17 +251,12 @@ struct DeliverableTile: View {
             }
     }
 
-    /// 点名图的画面裁成了方块（只为认出是哪张）：全屏页拿它占位就是另一幅画面，飞的与占位的改成整张解一份（`Thumbnails`，有缓存），
-    /// 边长同点名图的三倍（同 `ChatImages`）；文件到飞的那一下才找（登记时可能还没下载到）。别的形状交的画面没裁过，nil。
+    /// 点名图的画面裁成了方块（只为认出是哪张）：全屏页拿它占位就是另一幅画面，飞的与占位的改成整张（`Thumbnail.picture`，同你的话里带的图）；
+    /// 文件到飞的那一下才找（登记时可能还没下载到）。别的形状交的画面没裁过，nil。
     private var whole: (() async -> CGImage?)? {
         guard case .shot(let side, _) = shape else { return nil }
-        return { [files = services.store.files, hash = preview.hash, pixels = Int(side * 3 * scale)] in
-            guard let url = files.fileURL(for: hash) else { return nil }
-            return await Self.decode(url, pixels: pixels)
-        }
+        return { [files = services.store.files, hash = preview.hash, scale] in await Thumbnail.picture(hash, height: side, scale: scale, in: files) }
     }
-
-    @concurrent private static func decode(_ url: URL, pixels: Int) async -> CGImage? { Thumbnails.image(at: url, maxPixel: pixels) }
 
     private var caption: some View {
         Group {

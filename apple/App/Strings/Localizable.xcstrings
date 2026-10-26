@@ -4483,22 +4483,6 @@
         }
       }
     },
-    "了解 %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "About %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "了解 %@"
-          }
-        }
-      }
-    },
     "交给 %@" : {
       "localizations" : {
         "en" : {
@@ -4875,6 +4859,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "会话"
+          }
+        }
+      }
+    },
+    "会话一直没连上 CuePad" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The session never connected to CuePad"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "会话一直没连上 CuePad"
           }
         }
       }
@@ -6583,34 +6583,18 @@
         }
       }
     },
-    "升级 %@" : {
+    "升级" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Upgrade %@"
+            "value" : "Upgrade"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "升级 %@"
-          }
-        }
-      }
-    },
-    "升级方法" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "How to Upgrade"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "升级方法"
+            "value" : "升级"
           }
         }
       }
@@ -8543,22 +8527,6 @@
         }
       }
     },
-    "在终端运行：" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Run in Terminal:"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在终端运行："
-          }
-        }
-      }
-    },
     "在终端里开一个 Agent，或点右上角开新会话（⌥⌘N）" : {
       "localizations" : {
         "en" : {
@@ -8747,22 +8715,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "复制"
-          }
-        }
-      }
-    },
-    "复制 %@ 的安装命令" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Copy %@ install command"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "复制 %@ 的安装命令"
           }
         }
       }
@@ -9039,34 +8991,18 @@
         }
       }
     },
-    "安装 %@" : {
+    "安装、升级在后台运行官方命令：%@" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Install %@"
+            "value" : "Install and upgrade run the official command in the background: %@"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "安装 %@"
-          }
-        }
-      }
-    },
-    "安装 OpenCode 2" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Install OpenCode 2"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "安装 OpenCode 2"
+            "value" : "安装、升级在后台运行官方命令：%@"
           }
         }
       }
@@ -9083,22 +9019,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "安装中，可能要几分钟"
-          }
-        }
-      }
-    },
-    "安装方法" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "How to Install"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "安装方法"
           }
         }
       }
@@ -9863,22 +9783,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已复制"
-          }
-        }
-      }
-    },
-    "已复制 %@ 的安装命令" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Copied %@ install command"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已复制 %@ 的安装命令"
           }
         }
       }
@@ -11079,6 +10983,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "打开终端"
+          }
+        }
+      }
+    },
+    "打开设置" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Settings"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开设置"
           }
         }
       }
@@ -13863,6 +13783,22 @@
         }
       }
     },
+    "正在开 %@ 会话…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opening %@ session…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在开 %@ 会话…"
+          }
+        }
+      }
+    },
     "正在开…" : {
       "localizations" : {
         "en" : {
@@ -14211,6 +14147,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "没发过"
+          }
+        }
+      }
+    },
+    "没开成会话：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't open the session: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没开成会话：%@"
           }
         }
       }
@@ -15239,38 +15191,6 @@
         }
       }
     },
-    "现在是 %@。CuePad 只支持 OpenCode 2（v1 的服务接口不同）；装好 v2 后它替换 v1。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "You have %@. CuePad only supports OpenCode 2 (v1's server API is different). Installing v2 replaces v1."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "现在是 %@。CuePad 只支持 OpenCode 2（v1 的服务接口不同）；装好 v2 后它替换 v1。"
-          }
-        }
-      }
-    },
-    "现在是 %@，需要 %@ 或更新。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "You have %1$@; %2$@ or later is required."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "现在是 %1$@，需要 %2$@ 或更新。"
-          }
-        }
-      }
-    },
     "现在的版本" : {
       "localizations" : {
         "en" : {
@@ -16087,6 +16007,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "等 Agent 连上…"
+          }
+        }
+      }
+    },
+    "等 Mac 出现再请求通知权限没能启动：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't start waiting for a Mac to ask for notification permission: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "等 Mac 出现再请求通知权限没能启动：%@"
           }
         }
       }
@@ -16979,22 +16915,6 @@
         }
       }
     },
-    "装好后回到这里接入。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Then come back here to connect."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "装好后回到这里接入。"
-          }
-        }
-      }
-    },
     "要做什么，直接跟我说，比如：" : {
       "localizations" : {
         "en" : {
@@ -17263,6 +17183,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "记下灵感（⌘↩）"
+          }
+        }
+      }
+    },
+    "记下的灵感、建的任务都能在这里搜到" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ideas and tasks you save can be searched here."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "记下的灵感、建的任务都能在这里搜到"
           }
         }
       }
@@ -18339,22 +18275,6 @@
         }
       }
     },
-    "还没有 Mac 打开过 CuePad：先在 Mac 上打开它" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "CuePad hasn’t been opened on a Mac yet. Open it on your Mac first."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "还没有 Mac 打开过 CuePad：先在 Mac 上打开它"
-          }
-        }
-      }
-    },
     "还没有开启通知" : {
       "localizations" : {
         "en" : {
@@ -18383,6 +18303,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "还没有归档的"
+          }
+        }
+      }
+    },
+    "还没有灵感与任务" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No Ideas or Tasks Yet"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "还没有灵感与任务"
           }
         }
       }

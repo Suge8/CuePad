@@ -9,6 +9,9 @@ nonisolated struct SyncSummary: Equatable {
     let icon: Icon
     let tone: StatusTone
 
+    /// 一行写完：标题，有说明时接在冒号后（Mac 设置那一行、手机上到不了 Mac 时 Cue 的欢迎卡）。
+    var line: String { detail.map { String(localized: "\(title)：\($0)") } ?? title }
+
     init(_ status: SyncStatus) {
         switch status {
         case .starting: (title, detail, icon, tone) = (String(localized: "正在连接 iCloud…"), nil, .syncStarting, .calm)
@@ -44,6 +47,15 @@ nonisolated struct SyncSummary: Equatable {
     static let updateToSync = String(localized: "别的设备已用新版；更新这台（菜单「CuePad › 检查更新…」）后接着同步，本机改动都在")
     #else
     static let updateToSync = String(localized: "别的设备已用新版；在 TestFlight 里更新这台后接着同步，本机改动都在")
+    #endif
+
+    /// 没开 iCloud（`SyncStatus.noAccount`）时给的出路：打开系统设置。Mac 直达 Apple 账户那一页；iOS 只能打开设置里这个 App 的那一页，再照 `turnOnICloud` 走。
+    #if os(macOS)
+    static let settingsTitle = String(localized: "打开系统设置")
+    static let settings = URL(string: "x-apple.systempreferences:com.apple.systempreferences.AppleIDSettings")!
+    #else
+    static let settingsTitle = String(localized: "打开设置")
+    static let settings = URL(string: UIApplication.openSettingsURLString)!
     #endif
 
     /// 没登录 iCloud 或关掉了本 App 的 iCloud 时，去哪开。

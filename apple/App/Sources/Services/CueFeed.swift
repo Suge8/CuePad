@@ -50,6 +50,8 @@ final class CueFeed {
     fileprivate func follow() async {
         defer { following = false }
         let read: @Sendable (isolated CueStore) throws -> Read = { [widget] in try Read.read(from: $0, widget: widget) }
+        // 从当场读的那份接着订阅时，库不变就不再给一份：先把它记成手里的，本机事实（同步对没对过）变了照样配上它再给（`updates`）
+        if let start { self.read = start.value }
         do {
             for try await next in start.map({ store.observe(from: $0, read) }) ?? store.observe(read) { self.read = next }
         } catch {

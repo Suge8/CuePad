@@ -1,4 +1,3 @@
-import CueEditor
 import CueStore
 import ImageIO
 import SwiftUI
@@ -81,9 +80,8 @@ private struct ChatImage: View {
         Button(action: open) {
             // 到达时换一个身份，缩略图重新读文件；一开始就在的不重读
             Thumbnail(hash: hash, height: side, radius: Self.radius, fitWidth: fitWidth).frame(width: fitWidth == nil ? side : nil).id(arrived ?? true)
-                .previewSource(zoom, radius: Self.radius) { [files = services.store.files, hash, pixels = Self.pixels(side, scale)] in
-                    guard let url = files.fileURL(for: hash) else { return nil }
-                    return await Self.decode(url, pixels: pixels)
+                .previewSource(zoom, radius: Self.radius) { [files = services.store.files, hash, side, scale] in
+                    await Thumbnail.picture(hash, height: side, scale: scale, in: files)
                 }
         }
         .buttonStyle(PressStyle())
@@ -94,9 +92,4 @@ private struct ChatImage: View {
     }
 
     private static let radius: CGFloat = 12
-
-    /// 飞的那张取 `Thumbnail` 同样大小的那份，在缩略图缓存里（`Thumbnails`），不另解一遍。
-    private static func pixels(_ side: CGFloat, _ scale: CGFloat) -> Int { Int(side * 3 * scale) }
-
-    @concurrent private static func decode(_ url: URL, pixels: Int) async -> CGImage? { Thumbnails.image(at: url, maxPixel: pixels) }
 }

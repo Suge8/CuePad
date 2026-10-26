@@ -156,9 +156,5 @@ private struct PageKeys: UIViewRepresentable {
     }
 }
 
-extension EnvironmentValues {
-    /// 全屏页里两条栏与状态栏占的边：每页铺满整屏，不放大时的内容排在这几条边之内（页在分页滚动区里拿不到安全区）。
-    @Entry var previewInsets = EdgeInsets()
-}
 
 #endif

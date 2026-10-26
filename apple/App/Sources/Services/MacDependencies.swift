@@ -56,7 +56,7 @@ struct MacDependencies {
         let agents = AgentIntegrations(AgentIntegration(
             paths: paths,
             locate: { @Sendable in
-                if let agentHome { return ExecutableLocator(searchDirectories: [agentHome.appending(path: ".local/bin")]) }
+                if let agentHome { return ExecutableLocator(home: agentHome) }
                 return await .system
             },
             cuepad: commandLineTool.helper, isolated: isolated,
@@ -75,7 +75,7 @@ struct MacDependencies {
             workspaces: Workspaces.resolve(isolatedLibrary: isolated ? location.directory : nil),
             wakeNotifications: NSWorkspace.shared.notificationCenter,
             commandLineTool: commandLineTool,
-            updater: LibraryLocation.isReleaseSigned ? SparkleUpdater() : DebugHooks.updater,
+            updater: AppIdentity.isRelease ? SparkleUpdater() : DebugHooks.updater,
             hooks: hooks,
             runtimes: { store in [
                 .pi: PiRuntime(bridge: pi, paths: paths.pi, pi: { await agents.executable(.pi) }),

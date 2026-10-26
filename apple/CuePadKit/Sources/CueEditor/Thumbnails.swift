@@ -37,6 +37,12 @@ public enum Thumbnails {
         return header.turned ? CGSize(width: size.height, height: size.width) : size
     }
 
+    /// 原图的像素尺寸，只读文件头，计入方向标记（全屏页按它定能放大到多少、清楚的那张解多大）。
+    public static func pixelSize(at url: URL) -> CGSize? {
+        guard let header = source(url).flatMap(header) else { return nil }
+        return header.turned ? CGSize(width: header.pixels.height, height: header.pixels.width) : header.pixels
+    }
+
     /// 首帧的属性与像素尺寸；`turned`：方向标记要把它转 90°（宽高对调）。读不到为 nil。
     private static func header(_ source: CGImageSource) -> (props: [CFString: Any], pixels: CGSize, turned: Bool)? {
         guard let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],

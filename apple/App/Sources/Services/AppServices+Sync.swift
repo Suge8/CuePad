@@ -72,13 +72,9 @@ extension AppServices {
     /// 拉一次（返回时拉完）：立即同步、按节奏的拉取、收到推送（前台的通知、后台的静默推送）与门铃都经这里。
     /// 同一时刻只有一拉，在跑时再来的合成下一拉，同步开始前来的（冷启动时先到的推送）等它开始了再拉：都在 `CloudSync.syncNow`。
     /// 不碰立即同步的忙碌状态（`syncNow`）。不在调用方的线程上跑（`@concurrent`）：从主线程来的也当场离开，主线程忙时拉取不跟着晚。
-    /// 失败（多半是离线）只记日志：下一次触发会再拉，状态变化经同步状态反映。
+    /// 失败（多半是离线、被限流）由同步层归类、定下次的时刻并按段记日志，这里不另记：下一次触发或等待结束会再拉，状态变化经同步状态反映。
     @concurrent func pull() async {
-        do {
-            try await sync?.syncNow()
-        } catch {
-            Self.log.notice("拉取失败：\(error.brief, privacy: .public)")
-        }
+        try? await sync?.syncNow()
     }
 
     /// 此刻该按什么节奏拉（nil：不拉）。"是否在等"只在这里定义，节奏见 `SyncPoller.Cadence.mac`、`.phone`，门铃通着（`doorbellFallback`）时降为兜底：
@@ -190,11 +186,12 @@ extension AppServices {
         }
     }
 
-    /// "立即同步"按钮（Mac 设置与手机设置共用）能不能按：有同步、没停下（等你决定、这台要更新）、上一次立即同步已经返回。
+    /// 同步那一行给不给"立即同步"（Mac 设置与手机设置共用，没有就不画）：有同步，且按了能有用——没停下（等你决定、这台要更新），
+    /// iCloud 也开着（没登录、受限时按了什么都不会发生）。上一次立即同步还没返回时照给、只停用（`isSyncingNow`），一按一松不让一行出现又消失。
     var canSyncNow: Bool {
-        guard sync != nil, !isSyncingNow else { return false }
+        guard sync != nil else { return false }
         switch syncStatus {
-        case .needsDecision, .outdated: return false
+        case .needsDecision, .outdated, .noAccount, .accountRestricted: return false
         default: return true
         }
     }

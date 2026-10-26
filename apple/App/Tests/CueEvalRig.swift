@@ -93,4 +93,9 @@ func oneLine(_ text: String) -> String { text.split(whereSeparator: \.isNewline)
 func sentences(_ text: String) -> Int {
     text.split { "。！？!?\n".contains($0) }.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }.count
 }
+
+/// 派活的回复报了模型或强度（"sonnet""low 强度"这类）：他没问，经过那一行已写着用哪家开。
+func reportsConfig(_ text: String) -> Bool {
+    text.lowercased().contains(/强度|模型|\b(low|medium|high|xhigh|max|sonnet|opus|haiku|fable|gpt)\b/)
+}
 #endif

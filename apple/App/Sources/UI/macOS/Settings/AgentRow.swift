@@ -11,14 +11,14 @@ struct AgentRows: View {
 }
 
 /// 一个 Agent 一行：开关即接入（写技能；Pi 另写扩展，Claude Code、Codex 另写钩子，OpenCode 直连它的后台服务）或删除（CuePad 写的文件与因此空出的目录）。状态写它在不在、接没接（`AgentLine`）；
-/// 没装的给"安装方法"。正常的行是安静的，只有要你动手的（别人的同名文件、Pi 太旧）变色。怎么用、会写在哪、何时生效放在悬停提示里。
-/// 出现时重新检测它（用户可能刚在终端里装好）。
+/// 没装、太旧的给"安装""升级"：同接入面板，在后台跑官方安装脚本（`AppServices.installAgent`，进度与没装上的原因在 `AgentIntegrations.jobs`，
+/// 两处读同一份），缺前提的（Pi 要 Node.js）给官网。正常的行是安静的，只有要你动手的（别人的同名文件、Pi 太旧）变色。
+/// 怎么用、会写在哪、何时生效、安装跑的命令放在悬停提示里。出现时重新检测它（用户可能刚在终端里装好）。
 struct AgentRow: View {
     let kind: AgentKind
     @Environment(AppServices.self) private var services
     @State private var working = false
     @State private var outcome: Outcome?
-    @State private var showsGuide = false
 
     private enum Outcome: Equatable {
         case failed(String)
@@ -28,17 +28,19 @@ struct AgentRow: View {
         let status = services.agents.status(kind)
         let (tone, line) = describe(status)
 
-        SettingRow(title: .verbatim(kind.name), icon: kind.mark.image, tone: tone, busy: working, status: line, help: help) {
+        SettingRow(title: .verbatim(kind.name), icon: kind.mark.image, tone: tone, busy: working || installing, status: line, help: help) {
             // 开关常驻：检测中与开不了也关不了的（没装、版本不对、开发构建没指定目录、别人的同名文件）置灰，检测完只换状态那一行字
             Toggle(kind.name, isOn: Binding(get: { status?.isConnected ?? false }, set: apply))
                 .labelsHidden()
                 .toggleStyle(.switch)
                 .disabled(working || !(status.map(canToggle) ?? false))
         } fix: {
-            if let status, Self.needsSetup(status) {
-                Button(kind.upgrades(status.presence) ? "升级方法" : "安装方法") { showsGuide = true }
-                    .settingFix()
-                    .popover(isPresented: $showsGuide, arrowEdge: .bottom) { AgentSetupGuide(kind: kind, presence: status.presence) }
+            if let status, Self.needsSetup(status), !installing {
+                if let prerequisite = status.lacking {
+                    Link("去官网", destination: prerequisite.site).settingFix().accessibilityLabel("\(prerequisite.name) 官网")
+                } else {
+                    Button(kind.upgrades(status.presence) ? "升级" : "安装", action: install).settingFix()
+                }
             }
         }
         .task { await services.agents.detect(kind) }
@@ -60,8 +62,16 @@ struct AgentRow: View {
         }
     }
 
+    private var installing: Bool { services.agents.jobs[kind] == .installing }
+
+    /// 装的进度与没装上的原因在前（同接入面板那一行），缺前提的写缺什么。
     private func describe(_ status: AgentStatus?) -> (StatusTone, Dotted?) {
         if case .failed(let message) = outcome { return (.failure, Dotted(message)) }
+        if installing { return (.calm, Dotted(AgentLine.installing)) }
+        if let status, Self.needsSetup(status) {
+            if case .failed(let why) = services.agents.jobs[kind] { return (.failure, Dotted(AgentLine.notInstalled(why))) }
+            if let prerequisite = status.lacking { return (.notice, Dotted(AgentLine.needs(prerequisite))) }
+        }
         return AgentLine.of(kind, status, writable: services.agents.isWritable(kind))
     }
 
@@ -80,6 +90,7 @@ struct AgentRow: View {
             kind == .opencode ? String(localized: "会话直连 OpenCode 的后台服务，不用另装。") : nil,
             String(localized: "会写入 \(files)（配置文件里只加 CuePad 自己的条目）；关掉即删除。"),
             kind == .pi ? String(localized: "接入后运行中的会话 /reload 后生效。") : String(localized: "接入后新开的会话里生效。"),
+            services.agents.status(kind).map { String(localized: "安装、升级在后台运行官方命令：\(kind.installCommand($0.presence))") },
         ]
         return "\(lines.compactMap { $0 }.joined(separator: "\n"))"
     }
@@ -101,10 +112,29 @@ struct AgentRow: View {
             }
         }
     }
+
+    /// 没装上的原因在 `jobs` 里（状态那一行读它）；这里接住的是装完重新检测、写进库时抛的错，同开关一样写在这一行。
+    private func install() {
+        outcome = nil
+        let services = services, kind = kind
+        Task {
+            do { try await services.installAgent(kind) } catch { outcome = .failed(error.localizedDescription) }
+        }
+    }
 }
 
 /// 设置与接入面板里一个 Agent 那一行的状态（`AgentRow`、`SetupPanel`）：接入了的四家同一种写法"已接入 · 名字 版本"，报不出版本的（桌面版）只写"已接入"。
+/// 在装、没装上、缺前提的那几句两处同一份。
 enum AgentLine {
+    static var installing: String { String(localized: "安装中，可能要几分钟") }
+    /// 原因是安装脚本的最后一句原话
+    static func notInstalled(_ why: String) -> String { String(localized: "没装上：\(why)") }
+
+    static func needs(_ prerequisite: InstallPrerequisite) -> String {
+        let version = "\(prerequisite.minimum.major).\(prerequisite.minimum.minor)"
+        return String(localized: "需要 \(prerequisite.name) \(version) 以上")
+    }
+
     static func of(_ kind: AgentKind, _ status: AgentStatus?, writable: Bool) -> (StatusTone, Dotted?) {
         guard let status else { return (.calm, Dotted(String(localized: "检测中…"))) }
         guard writable else { return (.calm, Dotted(String(localized: "正式版在用，先用 \(kind.homeVariable) 指定目录"))) }

@@ -108,7 +108,8 @@ public struct TaskProgress: Equatable, Sendable {
 /// 灵感或任务交给了 Agent 的哪里：一个会话（Pi 会话 id），或正在开的新会话（还没开好、没认领到）。见 `CueStore.handedSessions`。
 public enum AgentHandoff: Hashable, Sendable {
   case session(String)
-  case launching
+  /// 正在用这家开新会话
+  case launching(AgentKind)
 }
 
 /// 卡片挂在哪：某项目的顶层，或某条任务下面（项目随它）。
