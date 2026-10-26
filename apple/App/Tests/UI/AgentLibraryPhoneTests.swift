@@ -5,7 +5,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 手机上的技能与说明：看的是 Mac 报来的快照，整理与改说明都发往那台 Mac、等它做完。改说明攒在纸页上，点纸飞机才发；
+/// 手机上的技能与说明：看的是 Mac 报来的快照，整理与改说明都发往那台 Mac、等它做完。改说明攒在纸页上，点纸飞机才发，离开再回来还在；
 /// Mac 上刚改过就退回，纸页留着你的字等你选。那台 Mac 由一个领 mac-a 请求的执行器扮演：照基准判断、做完写回新快照（同 Mac 的 `AgentLibraryKeeper`）。
 @MainActor
 struct AgentLibraryPhoneTests {
@@ -65,11 +65,13 @@ struct AgentLibraryPhoneTests {
         #expect(workspace.notice?.text.visible == "整理好了 1 件" && workspace.notice?.action == nil, "手机上的整理撤销在 Mac 上")
         try await eventually("要整理的没了") { workspace.library?.tidies.isEmpty == true }
 
-        let draft = InstructionDraft(try #require(workspace.library?.instruction(.global)), workspace: workspace)
-        draft.changed("# 原则\n\n手机改的\n")
-        await draft.leave()
+        let global = try #require(workspace.library?.instruction(.global))
+        let opened = workspace.instructionDraft(global)
+        opened.changed("# 原则\n\n手机改的\n")
+        // 离开说明页再回来：改着的还在，一条都没发
+        let draft = workspace.instructionDraft(global)
         let requests = try await store.deliveryRequests()
-        #expect(draft.dirty && requests.allSatisfy { $0.instructionEdit == nil }, "没点纸飞机就不发")
+        #expect(draft === opened && draft.dirty && draft.text == "# 原则\n\n手机改的\n" && requests.allSatisfy { $0.instructionEdit == nil }, "没点纸飞机就不发")
 
         await draft.send()
 

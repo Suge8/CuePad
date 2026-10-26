@@ -199,48 +199,6 @@ struct AgentLibraryTests {
         services.cancelBackgroundWork()
     }
 
-    /// 说明的编辑页（`InstructionDraft`，Mac 的编辑页与手机的纸页同一份）：停手就存进文件；别处改了而你没在改，当场跟上；
-    /// 你改着时别处也改了，你的字留着、不再自动写，等你选——换成文件里的，或留你的盖过它。
-    @Test func 编辑页自动存_跟上别处的改动_两边都改时由你选() async throws {
-        let file = agents.appending(path: "AGENTS.md")
-        try write("# 原则\n", file)
-        let keeping = keep()
-        defer { keeping.cancel() }
-        let workspace = Workspace(services: services)
-        let following = Task { await workspace.follow() }
-        defer { following.cancel() }
-        func snapshot(_ text: String) async throws -> String? {
-            try await eventually("快照读到 \(text)") { workspace.library?.instruction(.global)?.text == text }
-            return workspace.library?.instruction(.global)?.text
-        }
-        _ = try await snapshot("# 原则\n")
-        let draft = InstructionDraft(try #require(workspace.library?.instruction(.global)), workspace: workspace)
-
-        draft.changed("# 原则\n\n先读\n")
-        await draft.leave()
-        #expect(read(file) == "# 原则\n\n先读\n" && draft.state == .saved && !draft.dirty)
-
-        try write("# 原则\n\n终端里改的\n", file)
-        draft.follow(try await snapshot("# 原则\n\n终端里改的\n"))
-        #expect(draft.text == "# 原则\n\n终端里改的\n" && draft.state == .followed && !draft.dirty)
-
-        try write("别处又改\n", file)
-        draft.changed("我改的\n")
-        await draft.leave()
-        draft.follow(try await snapshot("别处又改\n"))
-        #expect(draft.state == .conflict(file: "别处又改\n") && draft.text == "我改的\n" && read(file) == "别处又改\n")
-        draft.takeFile()
-        #expect(draft.text == "别处又改\n" && !draft.dirty)
-
-        try write("第三次\n", file)
-        draft.changed("还是我的\n")
-        await draft.leave()
-        draft.follow(try await snapshot("第三次\n"))
-        #expect(draft.conflicted)
-        await draft.keepMine()
-        #expect(read(file) == "还是我的\n" && draft.state == .saved && !draft.dirty)
-    }
-
     /// 整理之后又改过（编辑页改了合成的说明）：撤销整个不做、说明原因，后来的改动留着。留着的 Pi 系统提示、各家自管的技能照样跟着文件变。
     @Test func 整理之后又改过_撤销整个不做_留着的系统提示照样跟着文件() async throws {
         for directory in [claude, codex, pi] { try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true) }

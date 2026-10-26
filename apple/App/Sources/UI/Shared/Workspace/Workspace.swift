@@ -100,6 +100,9 @@ final class Workspace {
     }
     /// 技能与说明里打开的一样（说明的编辑页、比一比），盖在当前页上（iOS 推入，见 `openLibrary`）；换页、"收起"、Esc 时清空。
     var openLibraryItem: LibraryItem?
+    #else
+    /// 手机上改着的说明（`instructionDraft(_:)`）：离开说明页也留着。
+    @ObservationIgnored var instructionDrafts: [LibraryInstruction.Kind: InstructionDraft] = [:]
     #endif
     /// 气泡里看着的任务（`TaskBubble`）：从被点的那一下长出来，盖在当前页上，不换页。两端同一份，各个入口都经 `openTask(_:)`。
     var openTask: TaskBubble.Request? {

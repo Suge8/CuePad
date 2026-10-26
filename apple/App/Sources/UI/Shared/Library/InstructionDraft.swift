@@ -57,7 +57,8 @@ final class InstructionDraft {
     func send() async { await write(text) }
 
     private func write(_ text: String) async {
-        guard let library = workspace.library, text != base else { return }
+        // 只写编辑器此刻的正文：换成文件里的之后，早先排着的那一版不算数
+        guard let library = workspace.library, text == self.text, text != base else { return }
         state = .saving
         do {
             try await workspace.saveInstruction(InstructionEdit(instruction: kind, base: LibraryInstruction.base(of: base), text: text), in: library)
@@ -65,6 +66,7 @@ final class InstructionDraft {
             mark()
             state = .saved
         } catch AgentLibraryError.changedOnMac {
+            autosave?.discard()
             state = .conflict(file: workspace.library?.instruction(kind)?.text)
         } catch {
             state = .failed
@@ -82,6 +84,8 @@ final class InstructionDraft {
             return
         }
         if dirty {
+            // 你选之前不写：还没写的那一版留在编辑器里，不在背后带着新基准盖过文件
+            autosave?.discard()
             state = .conflict(file: file)
         } else {
             replace(with: file)
@@ -104,6 +108,7 @@ final class InstructionDraft {
     }
 
     private func replace(with file: String) {
+        autosave?.discard()
         base = file
         text = file
         handle.replace(file)

@@ -22,7 +22,7 @@ struct LibraryItemScreen: View {
 
 /// 一份说明的纸页（手机）：改动攒在这里，顶栏右边的纸飞机"发往 Mac"（有改动才亮），那台写进文件、快照同步回来（`InstructionDraft`）。
 /// 顶栏第二行写文件名、发着没有；Mac 上又改过而你没改的当场跟上，你改着的留着、写出 Mac 上改过了，由你选换成 Mac 上的或留你的。
-/// 退出这一页时还有没发的就发出去（同 Mac 离开编辑页时存下没存的）：改了的字不丢。
+/// 不点纸飞机就不发：退出这一页时没发的留在 `Workspace.instructionDraft`，回来接着改。
 private struct InstructionScreen: View {
     let kind: LibraryInstruction.Kind
     @Environment(Workspace.self) private var workspace
@@ -45,10 +45,9 @@ private struct InstructionScreen: View {
         .onChange(of: instruction?.kind, initial: true) {
             guard workspace.library != nil else { return }
             guard let instruction else { dismiss(); return }
-            if draft == nil { draft = InstructionDraft(instruction, workspace: workspace) }
+            if draft == nil { draft = workspace.instructionDraft(instruction) }
         }
         .onChange(of: instruction?.text) { draft?.follow(instruction?.text) }
-        .onDisappear { if let draft, draft.dirty, draft.state != .saving, !draft.conflicted { Task { await draft.send() } } }
     }
 
     /// 顶栏第二行：文件名、发着没有。
