@@ -111,10 +111,14 @@ enum DemoLibrary {
     }
 
     /// 一张像界面截图的示意图：桌面底色上几块纸片。用 CoreGraphics 画，Mac 与 iOS 共用。
-    /// 演示用的主目录：Mac 上是真实主目录（截图用的假 Pi 会话按它归到项目），iOS 只作显示。
+    /// 演示用的主目录（以 / 结尾）：演示项目绑的文件夹、假 Pi 会话的工作目录都在它下面。Mac 上在隔离库里（`CUEPAD_LIBRARY_DIR/home`，
+    /// 没给隔离库时在临时目录），不是真实主目录：演示实例会真去读写绑定的文件夹（技能与说明的扫描与整理），落在真实主目录下就会改到真的仓库。
+    /// iOS 只作显示。
     static var demoHome: String {
         #if os(macOS)
-        FileManager.default.homeDirectoryForCurrentUser.path(percentEncoded: false)
+        let root = ProcessInfo.processInfo.environment[LibraryLocation.environmentKey].map { URL(filePath: $0, directoryHint: .isDirectory) }
+            ?? URL.temporaryDirectory.appending(path: "cuepad-demo", directoryHint: .isDirectory)
+        return root.appending(path: "home/", directoryHint: .isDirectory).path(percentEncoded: false)
         #else
         "/Users/demo/"
         #endif

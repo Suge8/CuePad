@@ -1,16 +1,20 @@
 #if DEBUG && os(macOS)
+import CueStore
 import Foundation
 
 extension DebugScene {
     /// 把演示的技能与说明写成文件，由本机照常扫（`AgentLibraryKeeper`）：只写进 `xc.sh` 给隔离实例换到库里的各家目录
-    /// （`CUEPAD_AGENTS_DIR` 等，`app_env.py`），没换走（真实位置）就什么都不写。目录里已有东西就不再写（重开、整理过的样子留着）。
-    /// 有要整理的样子：Claude Code 旧目录里两个技能、write-swift 没给 Claude Code 链上、uilane 没有名字与说明、Codex 技能目录里一个空目录、
-    /// Claude Code 与 Pi 的系统提示各写一份全局规则；`-CuePadAgentLibrary clean` 时都已收好。
+    /// （`CUEPAD_AGENTS_DIR` 等，`app_env.py`）与演示项目绑的文件夹（`DemoLibrary.demoHome`，也在隔离库里），没换走（真实位置）就什么都不写。
+    /// 目录里已有东西就不再写（重开、整理过的样子留着）。
+    /// 有要整理的样子：Claude Code 旧目录里两个技能、write-swift 与圆桌的 load-test 没给 Claude Code 链上、全局与 CuePad 各有一个 release、
+    /// uilane 没有名字与说明、Codex 技能目录里一个空目录、Claude Code 与 Pi 的系统提示各写一份全局规则、个人网站另有一份不同的 CLAUDE.md；
+    /// `-CuePadAgentLibrary clean` 时都已收好。
     static func seedAgentFiles() {
         let environment = ProcessInfo.processInfo.environment
         guard let sharedPath = environment["CUEPAD_AGENTS_DIR"], let claudePath = environment["CLAUDE_CONFIG_DIR"],
               let piPath = environment["PI_CODING_AGENT_DIR"], let codexPath = environment["CODEX_HOME"],
-              sharedPath.contains("/.derived/")
+              let library = environment[LibraryLocation.environmentKey], sharedPath.hasPrefix(library + "/"),
+              DemoLibrary.demoHome.hasPrefix(library + "/")
         else { return }
         let shared = URL(filePath: sharedPath, directoryHint: .isDirectory)
         guard !FileManager.default.fileExists(atPath: shared.appending(path: "skills").path) else { return }
@@ -37,13 +41,30 @@ extension DebugScene {
             skill(item.name, item.description, in: directory)
             if clean || item.name != "write-swift" { link(claude.appending(path: "skills/\(item.name)"), to: directory.appending(path: item.name)) }
         }
+        let projects = URL(filePath: DemoLibrary.demoHome, directoryHint: .isDirectory).appending(path: "Project")
+        let cuepad = projects.appending(path: "cuepad"), atlas = projects.appending(path: "atlas"), homepage = projects.appending(path: "homepage")
+        write(DemoAgentLibrary.cuepadRules, cuepad.appending(path: "AGENTS.md"))
+        link(cuepad.appending(path: "CLAUDE.md"), to: cuepad.appending(path: "AGENTS.md"))
+        for (name, description) in DemoAgentLibrary.cuepadSkills where clean || name != "release" {
+            skill(name, description, in: cuepad.appending(path: ".agents/skills"))
+            link(cuepad.appending(path: ".claude/skills/\(name)"), to: cuepad.appending(path: ".agents/skills/\(name)"))
+        }
+        skill("load-test", DemoAgentLibrary.loadTest, in: atlas.appending(path: ".agents/skills"))
+        if clean { link(atlas.appending(path: ".claude/skills/load-test"), to: atlas.appending(path: ".agents/skills/load-test")) }
+        write(DemoAgentLibrary.homepageRules, homepage.appending(path: "AGENTS.md"))
         write(DemoAgentLibrary.sharedRules, shared.appending(path: "AGENTS.md"))
         for file in [pi.appending(path: "AGENTS.md"), codex.appending(path: "AGENTS.md")] { link(file, to: shared.appending(path: "AGENTS.md")) }
         write(DemoAgentLibrary.piSystem, pi.appending(path: "SYSTEM.md"))
         if clean {
             link(claude.appending(path: "CLAUDE.md"), to: shared.appending(path: "AGENTS.md"))
+            link(homepage.appending(path: "CLAUDE.md"), to: homepage.appending(path: "AGENTS.md"))
             return
         }
+        write(DemoAgentLibrary.homepageClaude, homepage.appending(path: "CLAUDE.md"))
+        write(DemoAgentLibrary.cuepadRelease, cuepad.appending(path: ".agents/skills/release/SKILL.md"))
+        link(cuepad.appending(path: ".claude/skills/release"), to: cuepad.appending(path: ".agents/skills/release"))
+        write(DemoAgentLibrary.globalRelease, skills.appending(path: "release/SKILL.md"))
+        link(claude.appending(path: "skills/release"), to: skills.appending(path: "release"))
         write(DemoAgentLibrary.claudeRules, claude.appending(path: "CLAUDE.md"))
         skill("notion-export", String(localized: "把 Notion 页面导出成 Markdown", table: "Demo"), in: claude.appending(path: "skills"))
         skill("pdf", String(localized: "读写与合并 PDF", table: "Demo"), in: claude.appending(path: "skills"))

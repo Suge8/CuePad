@@ -22,7 +22,17 @@ extension DebugScene {
             if defaults.bool(forKey: "CuePadDemo") { await seedBusyBoard(workspace.services.store) }
             await seedCanvasSteps(workspace.services.store)
             workspace.show(.progress)
-        case "agentsetup": workspace.showsSetup = true
+        case "agentsetup":
+            // -CuePadConnected YES：几家先都接进隔离目录（同 connected），看接入面板的第二步（技能与说明收到一处）
+            // Cue 在演示的 Mac Studio 上运行（这一台不用再启用），面板里没有要接、要启用的就是第二步；面板打开后自己再检测一遍，等它检测完再拍
+            let connected = defaults.bool(forKey: "CuePadConnected")
+            if connected {
+                await connectAgents(workspace.services)
+                await seedDemo(workspace.services)
+                await workspace.recheckAgents()
+            }
+            workspace.showsSetup = true
+            if connected { try? await Task.sleep(for: .seconds(3)) }
         case "connected":
             await connectAgents(workspace.services)
             await bindFolderIfAsked(workspace.services.store)

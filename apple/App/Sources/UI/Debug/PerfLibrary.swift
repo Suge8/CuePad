@@ -52,7 +52,7 @@ enum PerfLibrary {
         }
         try await DemoLibrary.seed(store, groups: groups, tasks: tasks)
 
-        let home = FileManager.default.homeDirectoryForCurrentUser.path(percentEncoded: false)
+        let home = DemoLibrary.demoHome
         let projects = try await store.projects()
         for (index, project) in projects.prefix(boundProjects).enumerated() {
             try await store.setDirectory("\(home)Project/perf-\(index)", for: project.id)

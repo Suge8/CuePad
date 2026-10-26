@@ -40,6 +40,31 @@ struct DemoAgentLibrary {
             selfManaged: [SelfManagedSkills(agent: .claudeCode, count: 13), SelfManagedSkills(agent: .codex, count: 5)], modifiedAt: .now)
     }
 
+    /// 演示的 Mac Studio 照手机发来的整理与改说明改它的快照（`-CuePadDemoMac YES`，`runDemoMac`）：整理了的那几件不在了（链上了的各家都看得见），
+    /// 说明照基准写（快照里已不是手机看到的那一版就退回"Mac 上刚改过"，同真的 Mac）。不是这两种请求为 nil。
+    static func apply(_ request: DeliveryRequest, store: CueStore) async -> DeliveryOutcome? {
+        guard request.tidyOrders != nil || request.instructionEdit != nil else { return nil }
+        guard var library = try? await store.agentLibrary(preferring: request.hostID) else { return .failed(ShownText(AgentLibraryError.tidyGone)) }
+        if let orders = request.tidyOrders {
+            let ids = Set(orders.map(\.tidy))
+            library.tidies.removeAll { ids.contains($0.id) }
+            if ids.contains("unlinked") {
+                library.skills = library.skills.map {
+                    LibrarySkill(name: $0.name, description: $0.description, scope: $0.scope, group: $0.group, path: $0.path)
+                }
+            }
+        }
+        if let edit = request.instructionEdit {
+            guard let index = library.instructions.firstIndex(where: { $0.kind == edit.instruction }), library.instructions[index].base == edit.base
+            else { return .failed(ShownText(AgentLibraryError.changedOnMac)) }
+            let old = library.instructions[index]
+            library.instructions[index] = LibraryInstruction(
+                kind: old.kind, path: old.path, text: edit.text, modifiedAt: .now, readers: old.readers, links: old.links)
+        }
+        _ = try? await store.recordAgentLibrary(library)
+        return .succeeded
+    }
+
     // MARK: 技能
 
     static let global: [(group: String, name: String, description: String)] = [
@@ -69,21 +94,31 @@ struct DemoAgentLibrary {
         }
         var project: [LibrarySkill] = []
         if let cuepad {
-            project += [
-                ("xc", String(localized: "经 xc.sh 构建、测试与截图", table: "Demo")),
-                ("release", String(localized: "签名、公证、发布新版本", table: "Demo")),
-                ("strings", String(localized: "补齐界面的英文", table: "Demo")),
-            ].map { LibrarySkill(name: $0.0, description: $0.1, scope: .project(cuepad), group: "", path: "\(home)/Project/cuepad/.agents/skills/\($0.0)") }
+            project += Self.cuepadSkills.map { LibrarySkill(name: $0.0, description: $0.1, scope: .project(cuepad), group: "", path: "\(home)/Project/cuepad/.agents/skills/\($0.0)") }
         }
         if let atlas {
             project.append(LibrarySkill(
-                name: "load-test", description: String(localized: "多 Agent 调度压测", table: "Demo"), scope: .project(atlas), group: "",
+                name: "load-test", description: Self.loadTest, scope: .project(atlas), group: "",
                 path: "\(home)/Project/atlas/.agents/skills/load-test", unseenBy: clean ? [] : [.claudeCode]))
         }
         return global + project
     }
 
+    static let cuepadSkills = [
+        ("xc", String(localized: "经 xc.sh 构建、测试与截图", table: "Demo")),
+        ("release", String(localized: "签名、公证、发布新版本", table: "Demo")),
+        ("strings", String(localized: "补齐界面的英文", table: "Demo")),
+    ]
+    static let loadTest = String(localized: "多 Agent 调度压测", table: "Demo")
+    static let globalRelease = String(localized: "---\nname: release\ndescription: 发布新版本\n---\n\n打 tag，推送，等 CI 绿。", table: "Demo")
+    static let cuepadRelease = String(
+        localized: "---\nname: release\ndescription: 签名、公证、发布新版本\n---\n\n只在干净检出运行 xc.sh release。\n\n公证完再推 appcast。", table: "Demo")
+
     // MARK: 说明
+
+    static let cuepadRules = String(localized: "# CuePad\n\nSwift 原生应用。构建、测试、截图只经 apple/scripts/xc.sh。", table: "Demo")
+    static let homepageRules = String(localized: "# 个人网站\n\nAstro 静态站，部署前先跑 pnpm build。", table: "Demo")
+    static let homepageClaude = String(localized: "# 个人网站\n\n图片放 public/img，用 webp。", table: "Demo")
 
     static let sharedRules = String(localized: """
         # 原则
@@ -137,7 +172,7 @@ struct DemoAgentLibrary {
         if let cuepad {
             list.append(LibraryInstruction(
                 kind: .project(cuepad), path: home + "/Project/cuepad/AGENTS.md",
-                text: String(localized: "# CuePad\n\nSwift 原生应用。构建、测试、截图只经 apple/scripts/xc.sh。", table: "Demo"), modifiedAt: ago(3),
+                text: Self.cuepadRules, modifiedAt: ago(3),
                 readers: agents, links: [home + "/Project/cuepad/CLAUDE.md"]))
         }
         if let atlas {
@@ -146,7 +181,7 @@ struct DemoAgentLibrary {
         if let homepage {
             list.append(LibraryInstruction(
                 kind: .project(homepage), path: home + "/Project/homepage/AGENTS.md",
-                text: String(localized: "# 个人网站\n\nAstro 静态站，部署前先跑 pnpm build。", table: "Demo"), modifiedAt: ago(24 * 4),
+                text: Self.homepageRules, modifiedAt: ago(24 * 4),
                 readers: clean ? agents : [.pi, .codex], links: clean ? [home + "/Project/homepage/CLAUDE.md"] : []))
         }
         return list
@@ -168,9 +203,9 @@ struct DemoAgentLibrary {
         if let cuepad {
             list.append(LibraryTidy(id: "duplicate/release", kind: .duplicate(name: "release", copies: [
                 SkillCopy(skill: SkillEntry(name: "release", scope: .global, path: root + "/release"),
-                          text: String(localized: "---\nname: release\ndescription: 发布新版本\n---\n\n打 tag，推送，等 CI 绿。", table: "Demo"), modifiedAt: ago(24 * 30)),
+                          text: Self.globalRelease, modifiedAt: ago(24 * 30)),
                 SkillCopy(skill: SkillEntry(name: "release", scope: .project(cuepad), path: home + "/Project/cuepad/.agents/skills/release"),
-                          text: String(localized: "---\nname: release\ndescription: 签名、公证、发布新版本\n---\n\n只在干净检出运行 xc.sh release。\n\n公证完再推 appcast。", table: "Demo"), modifiedAt: ago(5)),
+                          text: Self.cuepadRelease, modifiedAt: ago(5)),
             ])))
         }
         list.append(LibraryTidy(id: "malformed/" + root + "/operations/uilane", kind: .malformed(
@@ -183,8 +218,8 @@ struct DemoAgentLibrary {
         if let homepage {
             let folder = home + "/Project/homepage"
             list.append(LibraryTidy(id: "project-claude/\(homepage.uuidString)", kind: .projectClaude(project: homepage, sources: [
-                InstructionSource(origin: .shared, path: folder + "/AGENTS.md", text: String(localized: "# 个人网站\n\nAstro 静态站，部署前先跑 pnpm build。", table: "Demo"), modifiedAt: ago(24 * 4)),
-                InstructionSource(origin: .agent(.claudeCode), path: folder + "/CLAUDE.md", text: String(localized: "# 个人网站\n\n图片放 public/img，用 webp。", table: "Demo"), modifiedAt: ago(24 * 20)),
+                InstructionSource(origin: .shared, path: folder + "/AGENTS.md", text: Self.homepageRules, modifiedAt: ago(24 * 4)),
+                InstructionSource(origin: .agent(.claudeCode), path: folder + "/CLAUDE.md", text: Self.homepageClaude, modifiedAt: ago(24 * 20)),
             ])))
         }
         return list

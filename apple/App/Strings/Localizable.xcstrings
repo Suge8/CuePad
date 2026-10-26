@@ -12199,6 +12199,23 @@
         }
       }
     },
+    "技能 %@" : {
+      "comment" : "技能清单那一组的组名，后面是个数",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Skills %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "技能 %@"
+          }
+        }
+      }
+    },
     "技能 %@ 的正文" : {
       "localizations" : {
         "en" : {

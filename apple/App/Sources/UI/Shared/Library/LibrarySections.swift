@@ -6,26 +6,26 @@ import SwiftUI
 /// 技能（全局按分类、各项目各一组，每行右端各家一列，再是各家自己管的个数）。整理不弹确认：做完的提示带撤销（`Workspace.tidy`）。
 /// 改动的写入都在那台 Mac 上：手机上的动作发往 Mac（按钮带纸飞机），快照随它写回同步来。
 
-/// 一组的标题：名字、可选个数、右边的东西（"全部整理"、各家的列头）。
+/// 一组的标题（带个数的把个数作为次一级的字嵌在整句里，英文才排得对：Skills 15）、右边的东西（"全部整理"、各家的列头）。
 struct LibraryHeader<Trailing: View>: View {
-    let title: String
-    var count: Int?
+    let title: Text
     @ViewBuilder var trailing: Trailing
     @Environment(\.palette) private var palette
 
     var body: some View {
         HStack(alignment: .center, spacing: 6) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(verbatim: title).font(Self.font).foregroundStyle(palette.ink)
-                if let count { Text("\(count)").font(Self.countFont).foregroundStyle(palette.ink3) }
-            }
-            .accessibilityElement(children: .combine)
-            .accessibilityAddTraits(.isHeader)
+            title.font(Self.font).foregroundStyle(palette.ink)
+                .accessibilityAddTraits(.isHeader)
             Spacer(minLength: 8)
             trailing
         }
         .frame(minHeight: ControlMetrics.compactHeight)
         .padding(.horizontal, 4)
+    }
+
+    /// 组名后面次一级的个数（嵌进组名那一句里）。
+    static func count(_ count: Int, palette: Palette) -> Text {
+        Text("\(count)").font(countFont).foregroundStyle(palette.ink3)
     }
 
     #if os(macOS)
@@ -38,7 +38,7 @@ struct LibraryHeader<Trailing: View>: View {
 }
 
 extension LibraryHeader where Trailing == EmptyView {
-    init(title: String, count: Int? = nil) { self.init(title: title, count: count) { EmptyView() } }
+    init(title: Text) { self.init(title: title) { EmptyView() } }
 }
 
 /// 一组行的纸：行与行之间一线发丝（同设置的分组），手机上行铺满纸宽、首尾的圆角跟着纸（`rowContainer`）。
@@ -135,7 +135,7 @@ struct TidySection: View {
     var body: some View {
         let orders = library.automaticOrders
         VStack(alignment: .leading, spacing: 10) {
-            LibraryHeader(title: String(localized: "\(library.tidies.count) 件要整理")) {
+            LibraryHeader(title: Text("\(library.tidies.count) 件要整理")) {
                 if !orders.isEmpty {
                     Button { run(Self.all, orders) } label: { label(Self.all, String(localized: "全部整理")) }
                         .buttonStyle(ControlButtonStyle(kind: .primary, compact: true))
@@ -206,7 +206,7 @@ struct InstructionSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            LibraryHeader(title: String(localized: "说明"))
+            LibraryHeader(title: Text("说明"))
             LibraryPaper {
                 ForEach(library.instructions) { instruction in
                     Button { workspace.openLibrary(.instruction(instruction.kind)) } label: {
@@ -253,7 +253,7 @@ struct SkillSection: View {
     var body: some View {
         let groups = SkillGroups(library, order: workspace.catalog?.projects.map(\.id) ?? [])
         VStack(alignment: .leading, spacing: 10) {
-            LibraryHeader(title: String(localized: "技能"), count: groups.total) {
+            LibraryHeader(title: Text("技能 \(LibraryHeader<EmptyView>.count(groups.total, palette: palette))", comment: "技能清单那一组的组名，后面是个数")) {
                 AgentColumns(columns: columns, header: true).padding(.trailing, LibraryPaper<EmptyView>.inset - 4)
             }
             if !groups.global.isEmpty {
