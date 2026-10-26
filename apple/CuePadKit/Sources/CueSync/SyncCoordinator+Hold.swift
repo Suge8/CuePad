@@ -88,7 +88,7 @@ extension SyncCoordinator {
 
   private func setHold(_ next: Hold) {
     holding = next
-    facts.serverWait = if case .wait = next.fault { true } else { false }
+    facts.serverWait = next.fault.isWait
     retryTimer?.cancel()
     retryTimer = Task { [until = next.until] in
       try? await Task.sleep(until: until, clock: .continuous)

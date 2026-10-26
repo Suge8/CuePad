@@ -12,18 +12,20 @@ extension Speech {
 }
 
 /// 读出时带着服务器收下过没有的记录（`CueStore.select` 据此只按行依赖同步元数据）。
-protocol AwaitsServer {
+protocol AwaitsServer: Record {
   /// 还没发出、发出了状态就会变的那句（等回执的话里服务器还没收下的）的记录名；不是为 nil。
   var unsentName: String? { get }
 }
 
-extension DeliveryRequest: AwaitsServer {
+extension AwaitsServer {
   static var selection: String { (columns + [Speech.reachedServerSQL(table.rawValue)]).joined(separator: ", ") }
+}
+
+extension DeliveryRequest: AwaitsServer {
   var unsentName: String? { !reachedServer && isWithdrawable ? id.uuidString.lowercased() : nil }
 }
 
 extension CueMessage: AwaitsServer {
-  static var selection: String { (columns + [Speech.reachedServerSQL(table.rawValue)]).joined(separator: ", ") }
   var unsentName: String? { !reachedServer && author == .known(.you) && deliveredAt == nil ? id.uuidString.lowercased() : nil }
 }
 
