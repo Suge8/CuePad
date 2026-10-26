@@ -9,6 +9,9 @@ nonisolated struct SyncSummary: Equatable {
     let icon: Icon
     let tone: StatusTone
 
+    /// 一行写完：标题，有说明时接在冒号后（Mac 设置那一行、手机上到不了 Mac 时 Cue 的欢迎卡）。
+    var line: String { detail.map { String(localized: "\(title)：\($0)") } ?? title }
+
     init(_ status: SyncStatus) {
         switch status {
         case .starting: (title, detail, icon, tone) = (String(localized: "正在连接 iCloud…"), nil, .syncStarting, .calm)

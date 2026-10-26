@@ -165,7 +165,7 @@ private struct CueHostLine: View {
 
 /// 还没选在哪台运行时面板里唯一的下一步：一颗"选在哪台 Mac 上运行"（选中那一档的靛青，与下面两个去处分开），点开是各入口同一份的 Mac 列表
 /// （`CueHostMenu`），选一台就在那台启用、面板留着，启用了这一块换成大脑。启用中转圈，没写成的原因写在下面；
-/// 还没和 iCloud 对过时只写在等什么，还没有哪台 Mac 写下过自己时写先去 Mac 上打开。
+/// 还没和 iCloud 对过时只写在等什么，还没有哪台 Mac 写下过自己时写先去 Mac 上打开、同步不通时写同步那一行的标题（`CueSettings.noHost`）。
 private struct CueHostPick: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
@@ -184,7 +184,7 @@ private struct CueHostPick: View {
                 }
                 .font(Typography.secondary).foregroundStyle(palette.ink3)
             } else if hosts.isEmpty {
-                Text(CueSettings.noHost).font(Typography.secondary).foregroundStyle(palette.ink3)
+                Text(CueSettings.noHost(services)).font(Typography.secondary).foregroundStyle(palette.ink3)
             } else {
                 HStack(spacing: 8) {
                     CueHostMenu(hosts: hosts, use: .enable { model.choose($0, services) }, accessibilityLabel: Self.title) {

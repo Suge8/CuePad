@@ -44,7 +44,7 @@ struct CueSettingsSection: View {
         if let waiting = settings.gate(services).waitingReason {
             Text(waiting).foregroundStyle(palette.ink3)
         } else if hosts.isEmpty {
-            Text(CueSettings.noHost).foregroundStyle(palette.ink3)
+            Text(CueSettings.noHost(services)).foregroundStyle(palette.ink3)
         } else {
             CueHostSetting(settings: settings, hosts: hosts, model: model)
         }

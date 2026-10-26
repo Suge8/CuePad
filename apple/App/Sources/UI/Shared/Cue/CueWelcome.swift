@@ -46,7 +46,7 @@ private struct CueEnable: View {
             } else {
                 // 说过话后停用了：页头已写"已停用"，这里只说启用后怎样与那一步，不再自我介绍
                 VStack(spacing: 10) {
-                    Text(offline.map(Self.line) ?? String(localized: "启用后 \(name) 接着干活")).font(Typography.secondary).foregroundStyle(palette.ink2)
+                    Text(offline?.line ?? String(localized: "启用后 \(name) 接着干活")).font(Typography.secondary).foregroundStyle(palette.ink2)
                     steps(settings, hosts)
                 }
                 .multilineTextAlignment(.center)
@@ -79,12 +79,8 @@ private struct CueEnable: View {
         #endif
     }
 
-    private static func line(_ summary: SyncSummary) -> String {
-        summary.detail.map { String(localized: "\(summary.title)：\($0)") } ?? summary.title
-    }
-
     private func message(_ hosts: [CueSettings.Host]) -> String {
-        if let offline { return Self.line(offline) }
+        if let offline { return offline.line }
         guard !hosts.isEmpty else { return String(localized: "我在你的 Mac 上干活。在 Mac 上打开 CuePad 就能叫我，这之前想到的先在下面记下") }
         return String(localized: "启用后说一件想做的事，我来开工，要你拿主意时再找你")
     }

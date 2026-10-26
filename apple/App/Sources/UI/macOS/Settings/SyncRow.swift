@@ -67,7 +67,7 @@ struct SyncRow: View {
         return switch fix {
         case .issues: Dotted(String(localized: "\(summary.title)，\(services.syncIssues.count) 条记录没能同步"))
         case .decide, .openSettings: Dotted(summary.title)
-        case nil: Dotted(summary.detail.map { String(localized: "\(summary.title)：\($0)") } ?? summary.title)
+        case nil: Dotted(summary.line)
         }
     }
 
