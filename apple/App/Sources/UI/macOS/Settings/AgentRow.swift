@@ -39,7 +39,7 @@ struct AgentRow: View {
                 if let prerequisite = status.lacking {
                     Link("去官网", destination: prerequisite.site).settingFix().accessibilityLabel("\(prerequisite.name) 官网")
                 } else {
-                    Button(kind.upgrades(status.presence) ? "升级" : "安装") { Task { try? await services.installAgent(kind) } }.settingFix()
+                    Button(kind.upgrades(status.presence) ? "升级" : "安装", action: install).settingFix()
                 }
             }
         }
@@ -110,6 +110,15 @@ struct AgentRow: View {
             } catch {
                 outcome = .failed(error.localizedDescription)
             }
+        }
+    }
+
+    /// 没装上的原因在 `jobs` 里（状态那一行读它）；这里接住的是装完重新检测、写进库时抛的错，同开关一样写在这一行。
+    private func install() {
+        outcome = nil
+        let services = services, kind = kind
+        Task {
+            do { try await services.installAgent(kind) } catch { outcome = .failed(error.localizedDescription) }
         }
     }
 }
