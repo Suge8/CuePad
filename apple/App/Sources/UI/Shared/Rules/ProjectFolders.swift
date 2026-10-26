@@ -25,12 +25,17 @@ nonisolated enum ProjectFolders {
         }
     }
 
-    /// 项目的文件夹在哪，给人看的那一行（手机项目菜单里文件夹那一组的组头）："在 MacBook Pro 上：默认"，绑在几台 Mac 上各写一段。只写文件夹名：
-    /// 同步来的绑定只有末段（完整路径不出那台 Mac）。哪台都没绑时写 `workMac` 开工时会建的那个（`Workspaces.folderName`）；一台 Mac 都没有为空。
-    static func places(of project: Project, bindings: [DirectoryBinding], workMac: MacAgents?) -> [String] {
+    /// 还没绑文件夹时接在工作区后面的那一段（"~/CuePad/Flow · 开工时建好"，Mac 与手机同一句）。
+    static var pending: String { String(localized: "开工时建好") }
+
+    /// 手机上项目的文件夹在哪（`ProjectPlace`）："Mac Studio 上的 cuepad"，绑在几台 Mac 上各写一段。只写文件夹名：
+    /// 同步来的绑定只有末段（完整路径不出那台 Mac）。哪台都没绑时写 `workMac` 开工时会建的那个（`Workspaces.folderName`）；
+    /// 一台 Mac 都没有时说开工要一台 Mac。
+    static func place(of project: Project, bindings: [DirectoryBinding], workMac: MacAgents?) -> Dotted {
         let own = bindings.filter { $0.projectID == project.id }
-        guard own.isEmpty else { return own.map { String(localized: "在 \($0.macName) 上：\($0.folder)") } }
-        return workMac.map { [String(localized: "在 \($0.shownName) 上：\(Workspaces.folderName(for: project.name))（开工时建好）")] } ?? []
+        guard own.isEmpty else { return Dotted(own.map { String(localized: "\($0.macName) 上的 \($0.folder)") }) }
+        guard let workMac else { return Dotted(String(localized: "开工要一台装了 CuePad 的 Mac")) }
+        return Dotted(String(localized: "\(workMac.shownName) 上的 \(Workspaces.folderName(for: project.name))"), pending)
     }
 
     /// 项目操作菜单里的绑定项（`ProjectActions`）："换文件夹…"之外，绑着的每处一项解除（解除后下次开工回到工作区）；

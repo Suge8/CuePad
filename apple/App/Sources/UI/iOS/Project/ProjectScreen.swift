@@ -22,6 +22,7 @@ struct ProjectScreen: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.headerHost) private var headerHost
     @State private var page: ProjectPage?
     @State private var expanded: Set<OlderGroup.Period> = []
     /// 任务纸的开合放在页面上：收起其余任务时连带页面的滚动（`TaskFoldAnchor`）。
@@ -41,8 +42,8 @@ struct ProjectScreen: View {
         }
         .scrollPosition($position)
         .taskFoldScroll(anchor)
-        // 顶栏第二行是项目的一句介绍；文件夹在哪写在"⋯"里文件夹那一组的组头（`ProjectActions`）
-        .floatingHeader(.verbatim(project?.shownName ?? ""), detail: project?.intro.map { Dotted($0) }) { actions }
+        // 顶栏第二行是项目的一句介绍接它的文件夹（`ProjectPlace`）；页顶不写标题时（iPad 侧栏在旁边）这两样另起一行排在页里（`ProjectIntroLine`）
+        .floatingHeader(.verbatim(project?.shownName ?? ""), detail: headerDetail) { actions }
         .observing(services.store, id: projectID, into: $page, onError: workspace.fail) {
             [projectID] store in ProjectPage(try ProjectPageData.read(projectID, from: store))
         }
@@ -57,6 +58,7 @@ struct ProjectScreen: View {
         let data = page.data, lastTarget = data.lastTarget
         // 任务纸不进懒加载栈：纸在懒加载栈的一格里时，收起后按 id 滚回纸底那一行会偏出一屏（`TaskFoldAnchor`）
         VStack(alignment: .leading, spacing: 0) {
+            if headerHost.namesPage { ProjectIntroLine(project: project).padding(.leading, 4).padding(.bottom, 12) }
             if data.project != nil { FocusCard(data: data, fold: $fold, position: $position, anchor: anchor).padding(.bottom, Self.sectionGap) }
             // 行距为 0：同一组的"更早"行拼成一张纸（首尾圆角、行间分隔线），段与段之间的距离各自写在段上
             LazyVStack(alignment: .leading, spacing: 0) {
@@ -113,6 +115,12 @@ struct ProjectScreen: View {
 
     /// 名称、目录与计数取自项目目录，推入的第一帧就是最终值：导航栏标题在推入时定下，之后再换会让整页跳一下。
     private var project: Project? { workspace.catalog?.project(projectID) }
+
+    /// 顶栏第二行：介绍 · 文件夹。项目目录读到之前给空串，那一行先留着位置。
+    private var headerDetail: Dotted {
+        guard let project else { return Dotted() }
+        return Dotted(project.intro) + (workspace.place(of: project)?.text ?? Dotted())
+    }
 
     /// 卡片墙：辅助字号下只排一列，卡上的字与"记一条灵感"才不被窄列挤成一字一行。
     private func wall(@ViewBuilder _ tiles: () -> some View) -> some View {

@@ -139,6 +139,22 @@
       },
       "shouldTranslate" : false
     },
+    "%@ 上的 %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%2$@ on %1$@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ 上的 %2$@"
+          }
+        }
+      }
+    },
     "%@ 不在 PATH 里" : {
       "localizations" : {
         "en" : {
@@ -932,22 +948,6 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$@（%2$lld）"
-          }
-        }
-      }
-    },
-    "%@（开工时建好）" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ (created on start)"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@（开工时建好）"
           }
         }
       }
@@ -2099,6 +2099,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Agent 会话已结束"
+          }
+        }
+      }
+    },
+    "Agent 会话用订阅账号跑过一轮后，这里显示每个窗口还剩多少、多久后重置" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "After an agent session runs a turn on a subscription account, this shows how much is left in each window and when it resets"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agent 会话用订阅账号跑过一轮后，这里显示每个窗口还剩多少、多久后重置"
           }
         }
       }
@@ -3987,6 +4003,22 @@
         }
       }
     },
+    "上一个（←）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Previous (←)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上一个（←）"
+          }
+        }
+      }
+    },
     "上一件" : {
       "localizations" : {
         "en" : {
@@ -4175,6 +4207,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "下一个"
+          }
+        }
+      }
+    },
+    "下一个（→）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Next (→)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下一个（→）"
           }
         }
       }
@@ -7999,22 +8047,6 @@
         }
       }
     },
-    "图片.%@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Image.%@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "图片.%@"
-          }
-        }
-      }
-    },
     "图片文件…" : {
       "localizations" : {
         "en" : {
@@ -8059,38 +8091,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "在 %@"
-          }
-        }
-      }
-    },
-    "在 %@ 上：%@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "On %1$@: %2$@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "在 %1$@ 上：%2$@"
-          }
-        }
-      }
-    },
-    "在 %@ 上：%@（开工时建好）" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "On %1$@: %2$@ (created when work starts)"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "在 %1$@ 上：%2$@（开工时建好）"
           }
         }
       }
@@ -10423,6 +10423,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "开始这一步"
+          }
+        }
+      }
+    },
+    "开工时建好" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "created when work starts"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "开工时建好"
+          }
+        }
+      }
+    },
+    "开工要一台装了 CuePad 的 Mac" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Needs a Mac with CuePad to start work"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "开工要一台装了 CuePad 的 Mac"
           }
         }
       }
@@ -15559,6 +15591,22 @@
         }
       }
     },
+    "看怎么才会有额度" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shows how usage appears here"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "看怎么才会有额度"
+          }
+        }
+      }
+    },
     "看成果" : {
       "localizations" : {
         "en" : {
@@ -18319,6 +18367,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "还没有灵感与任务"
+          }
+        }
+      }
+    },
+    "还没有额度" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No Usage Yet"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "还没有额度"
           }
         }
       }
