@@ -195,13 +195,16 @@ private struct RecordingStack: Layout {
     let spacing: CGFloat
     let laid: @Sendable (_ placed: [(subview: LayoutSubview, top: CGFloat, height: CGFloat)], _ width: CGFloat) -> Void
 
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout [CGFloat]) -> CGSize {
+    /// 量过的各子视图的高与量时的宽：同一次排版里量高与摆放共用一次。
+    typealias Measured = (width: CGFloat?, heights: [CGFloat])
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout Measured) -> CGSize {
         let heights = heights(proposal.width, subviews, &cache)
         let width = proposal.width.flatMap { $0.isFinite ? $0 : nil } ?? subviews.map { $0.sizeThatFits(proposal).width }.max() ?? 0
         return CGSize(width: width, height: heights.reduce(0, +) + spacing * CGFloat(max(0, heights.count - 1)))
     }
 
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout [CGFloat]) {
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Measured) {
         var y: CGFloat = 0, placed: [(subview: LayoutSubview, top: CGFloat, height: CGFloat)] = []
         for (subview, height) in zip(subviews, heights(bounds.width, subviews, &cache)) {
             subview.place(at: CGPoint(x: bounds.minX, y: bounds.minY + y), anchor: .topLeading, proposal: ProposedViewSize(width: bounds.width, height: height))
@@ -211,16 +214,16 @@ private struct RecordingStack: Layout {
         laid(placed, bounds.width)
     }
 
-    func makeCache(subviews: Subviews) -> [CGFloat] { [] }
+    func makeCache(subviews: Subviews) -> Measured { (nil, []) }
 
-    func updateCache(_ cache: inout [CGFloat], subviews: Subviews) { cache = [] }
+    func updateCache(_ cache: inout Measured, subviews: Subviews) { cache = (nil, []) }
 
-    /// 各子视图在宽 `width` 下的高；同一次排版里量高与摆放共用一次。
-    private func heights(_ width: CGFloat?, _ subviews: Subviews, _ cache: inout [CGFloat]) -> [CGFloat] {
-        if cache.count != subviews.count + 1 || cache.last != width ?? -1 {
-            cache = subviews.map { $0.sizeThatFits(ProposedViewSize(width: width, height: nil)).height } + [width ?? -1]
+    /// 各子视图在宽 `width` 下的高。
+    private func heights(_ width: CGFloat?, _ subviews: Subviews, _ cache: inout Measured) -> [CGFloat] {
+        if cache.heights.count != subviews.count || cache.width != width {
+            cache = (width, subviews.map { $0.sizeThatFits(ProposedViewSize(width: width, height: nil)).height })
         }
-        return cache.dropLast()
+        return cache.heights
     }
 }
 
