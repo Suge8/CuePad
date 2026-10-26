@@ -13,25 +13,27 @@ import SwiftUI
 /// 那个通知管的是在不在屏幕上，页一被盖住（回到列表、推入别的页）就报全都不在，回来时全靠它再报一次才排回真的，
 /// 没再报或报晚了，除最新一段全是空白——最新一条在，上面一大段白。几何只看段在滚动区里的位置，页盖没盖住都不变。
 /// 其余换成量好的那么高的空白：挂着的视图数不随翻过的深度变多（整列都挂着时，翻到 300 轮前排开一段要 200ms 以上），内容高也不变，
-/// 换的时候正在读的不动，滚动区不用补偿。宽（`width`，整列的宽，由放它的那一列量）变了（拖窗口、转屏），量过的高按宽反比估
+/// 换的时候正在读的不动，滚动区不用补偿。阅读栏的宽（`chatWidth`，`ChatColumn` 按可见区的宽算好往列里给，不在这里量了再写回：写回要整列再排一遍）变了（拖窗口、转屏），量过的高按宽反比估
 /// （字一行排得越宽越矮），排成真的时再换成实测：不估就得把翻过的段全排一遍，翻到 200 轮前拖一下窗口边主线程要卡 1 秒以上。
 struct ChatSegments<Item: Identifiable, Segment: View>: View where Item.ID == UUID {
     let items: [Item]
     let size: Int
     let from: Int
-    let width: CGFloat
     /// 屏上那几段上下各再留几段真的：快甩时滑进来的先是排好的，不露空白；来回翻时离开不远的段不拆了又建。
     var spare = 1
     @ViewBuilder let segment: (ArraySlice<Item>) -> Segment
     /// 要跳去的那一条（`ChatColumn` 往列里给）。在这里读，不由放列的页传：页在列外，读不到。
     @Environment(\.chatTarget) private var target
+    @Environment(\.chatWidth) private var width
     /// 量过的段，按段首那一条记。
     @State private var sizes: [Item.ID: Measured] = [:]
     /// 在屏上的段（段首那一条）。
     @State private var onScreen: Set<Item.ID> = []
 
     private struct Measured {
-        let size: CGSize
+        let height: CGFloat
+        /// 量的时候阅读栏的宽。
+        let width: CGFloat
         /// 量的时候这一段是哪几条。
         let ids: [Item.ID]
     }
@@ -74,11 +76,12 @@ struct ChatSegments<Item: Identifiable, Segment: View>: View where Item.ID == UU
     @ViewBuilder private func cell(_ run: Run, real: Bool) -> some View {
         let slice = items[run.range]
         if !real, width > 0, let measured = sizes[run.id], measured.ids.elementsEqual(slice.lazy.map(\.id)) {
-            Color.clear.frame(height: (measured.size.height * measured.size.width / width).rounded())
+            Color.clear.frame(height: (measured.height * measured.width / width).rounded())
         } else {
             segment(slice)
-                .onGeometryChange(for: CGSize.self) { CGSize(width: $0.size.width.rounded(), height: $0.size.height) } action: {
-                    sizes[run.id] = Measured(size: $0, ids: slice.map(\.id))
+                // 栏宽连同高一起交出：只变了宽、这一段的高没变时也记下新的宽
+                .onGeometryChange(for: CGSize.self) { [width] in CGSize(width: width, height: $0.size.height) } action: {
+                    sizes[run.id] = Measured(height: $0.height, width: $0.width, ids: slice.map(\.id))
                 }
         }
     }

@@ -32,8 +32,6 @@ struct CuePage: View {
     @State private var thread: CueThread?
     @State private var follow = ChatFollow()
     @State private var opened: PreviewOpening?
-    /// 对话那一列的宽：离屏远的段换成的空白按它估高（`ChatSegments`）。
-    @State private var width: CGFloat = 0
     /// 拍板卡正在来去（`CueWaitDock.moving`）：对话先不往上滑。
     @State private var docking = false
     /// 末尾在屏上的新消息（`CueViewing`）。
@@ -159,9 +157,7 @@ struct CuePage: View {
             VStack(alignment: .leading, spacing: 0) {
                 if first > 0 { EarlierRow(count: window.earlier, action: window.showEarlier) }
                 let live = live
-                ChatSegments(
-                    items: rows, size: Self.segment, from: first, width: width, spare: Self.spare
-                ) { items in
+                ChatSegments(items: rows, size: Self.segment, from: first, spare: Self.spare) { items in
                     CueSegment(rows: items.map { item in
                         CueRow(
                             row: item, shots: thread.shots[item.id] ?? [],
@@ -181,7 +177,6 @@ struct CuePage: View {
             #endif
             // 滚动目标（段与其余各行）：内容变了滚动位置跟着它走（`ChatScroll`）；跳到某一条按条的 id 找，不靠它
             .scrollTargetLayout()
-            .onGeometryChange(for: CGFloat.self) { $0.size.width.rounded() } action: { width = $0 }
             .animation(HandOff.quick, value: cue.presence.progress)
         }
     }

@@ -14,7 +14,7 @@ import QuartzCore
 /// 每个时刻另记到那一刻主线程执行的指令（`…MainM`，百万）、整个进程的（`…AllM`，含后台线程，随它们那一刻做到哪浮动）与主线程的 CPU 毫秒（`…CPUMs`）：
 /// 指令不随机器忙闲变，前后对比以主线程的为准；CPU 比墙钟短得多时主线程是在等（机器忙时等 CPU，或者等锁、等读盘）。
 /// 主线程与进程的计数从 exec 之前 app.py 那段 python 算起（`entry` 那一截，每次相同，前后对比时抵消）。
-/// `-CuePadTraceWait YES`（脚本带着 CUEPAD_TRACE 时）：进 `main` 就写 `AWAIT trace <PID>` 停着，等按 PID 开录了发来 SIGUSR1 再往下走，时刻从放行时算。
+/// 带着 `-CuePadTraceWait YES` 时进 `main` 就等开录（`waitForTracer`），时刻从放行时算。
 enum LaunchBench {
     static let active = DebugScene.defaults.string(forKey: "CuePadBench") == "launch"
     private static let longTurn: UInt64 = 50_000_000
@@ -47,7 +47,7 @@ enum LaunchBench {
 
     static func start() {
         guard active else { return }
-        if DebugScene.defaults.bool(forKey: "CuePadTraceWait") { waitForTracer() }
+        waitForTracer()
         woke = now
         stamp("entry", at: woke)
         let wake = CFRunLoopObserverCreateWithHandler(nil, CFRunLoopActivity.afterWaiting.rawValue, true, Int.min) { _, _ in
@@ -116,28 +116,5 @@ enum LaunchBench {
         guard stamps["interactive"] != nil else { exit(1) }
         NSApp.terminate(nil)
     }
-
-    /// 调用它的线程执行的指令（百万）：内核的每线程计数器（`thread_selfcounts`，取指令与周期两项），只在主线程上调。
-    private static func threadInstructionsMillions() -> Double {
-        var counts: (instructions: UInt64, cycles: UInt64) = (0, 0)
-        _ = withUnsafeMutablePointer(to: &counts) { threadSelfCounts(1, $0, MemoryLayout<(UInt64, UInt64)>.size) }
-        return Double(counts.instructions) / 1_000_000
-    }
-
-    /// 还没进 run loop：同步等信号（`sigwait`），开录之前什么都不做。
-    private static func waitForTracer() {
-        var set = sigset_t()
-        sigemptyset(&set)
-        sigaddset(&set, SIGUSR1)
-        pthread_sigmask(SIG_BLOCK, &set, nil)
-        print("AWAIT trace \(getpid())")
-        fflush(stdout)
-        var received: Int32 = 0
-        sigwait(&set, &received)
-    }
 }
-
-/// 内核的每线程计数器（xnu `thread_selfcounts`，类型 1 是指令与周期）：SDK 头文件里没有，符号在系统库里，只给测量用。
-@_silgen_name("thread_selfcounts")
-private func threadSelfCounts(_ type: Int32, _ buffer: UnsafeMutableRawPointer, _ size: Int) -> Int32
 #endif

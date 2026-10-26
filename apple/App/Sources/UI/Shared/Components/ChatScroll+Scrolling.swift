@@ -59,6 +59,7 @@ extension ChatScroll {
 
         var read: CGFloat { values.withLock { $0.read } }
         var end: CGFloat { values.withLock { $0.end } }
+        var container: CGFloat { values.withLock { $0.container } }
 
         /// 换上这次交给 action 的读数。
         func deliver(_ reading: Reading) -> Delivered {

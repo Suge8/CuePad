@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// 对话页的对话区（会话页与 Cue 页、Mac 与 iPhone 同一个）：滚动区（`ChatScroll`）里只排最近几条（多少由 `paging` 按可见区的高定），
-/// 离最早那头不到一屏时（往上翻、或排开的几条铺不满一屏）再排开一段。排开到哪按那一条记（`shown`），不按条数：新的在下面长出来、
+/// 离最早那头不到一屏时（往上翻、或排开的几条铺不满一屏）在上面再排开一批（`paging.step`），排上去、偏移补好了还不到一屏就接着排下一批。排开到哪按那一条记（`shown`），不按条数：新的在下面长出来、
 /// 读的范围丢掉了最早的几条（Cue 页只读最近 `CueThread.limit` 条）时，上面已经排着的不被挤掉——挤掉的话正在看的整段一下往上窜。
 /// 右缘的刻度滑条（`ChatScrubber`）与内容里的 `chatJump` 跳到某一条，跳到后描一圈（`chatHighlight`）；从新消息读起的不描（`ChatFollow.Landing`）。
 /// 先描圈、排开（那条所在的地方排成真的），下一次更新再跳：同一次更新里跳，目标还不在滚动区里。
@@ -68,6 +68,7 @@ struct ChatColumn<Content: View, Key: Equatable>: View {
             ChatScroll(followKey: followKey, readingWidth: readingWidth, inset: inset, follow: $follow, holding: holding, arrival: arrival) {
                 content(ChatWindow(count: window, earlier: first > 0 ? paging.step(size, first) : 0) { showEarlier(size) })
                     .environment(\.chatMargin, margin)
+                    .environment(\.chatWidth, size.width - 2 * margin)
             }
             .overlay(alignment: .trailing) {
                 if !marks.isEmpty {
@@ -80,12 +81,12 @@ struct ChatColumn<Content: View, Key: Equatable>: View {
                 let index = start ?? ids.count - self.window(size)
                 if shown?.first != (ids.indices.contains(index) ? ids[index] : nil) { show(from: index) }
             }
-            // 这一帧画上屏之后再排开：打开时读数就报着离最早那头不到一屏，同一次更新里排开的话第一帧要多排一屏
-            .onChange(of: follow.nearOldest, initial: true) { _, near in
-                guard near else { return }
+            // 每一批都等这一帧画上屏之后再排：打开时读数就报着离最早那头不到一屏，同一次更新里排开的话第一帧要多排；一批接一批也不挤进同一帧
+            .onChange(of: follow.wantsEarlier, initial: true) { _, wants in
+                guard wants else { return }
                 Task {
                     await NextFrame.drawn()
-                    if follow.nearOldest, !follow.prepending { showEarlier(size) }
+                    if follow.wantsEarlier { showEarlier(size) }
                 }
             }
             .onChange(of: follow.seeking) { if let target = follow.seeking { seek(target, size: size) } }
@@ -114,7 +115,7 @@ struct ChatColumn<Content: View, Key: Equatable>: View {
         pendingJump = target
     }
 
-    /// 在上面再排开一段，正在读的不动（`ChatFollow.willPrepend`）。都排开了就什么也不做。
+    /// 在上面再排开一批，正在读的不动（`ChatFollow.willPrepend`）。都排开了就什么也不做。
     private func showEarlier(_ size: CGSize) {
         let first = ids.count - window(size)
         guard first > 0 else { return }

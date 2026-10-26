@@ -11,7 +11,7 @@ nonisolated struct ChatFollow: Equatable {
     private(set) var atNewest = true
     /// 离最新处超过一屏：出"回到最新"圆钮。
     private(set) var showsJump = false
-    /// 离最早那头不到一屏：对话该在上面再排开一段（`SessionChat`）。
+    /// 可见区顶边离最早那头不到一屏。
     private(set) var nearOldest = false
     /// 正在上面排开更早的一段：内容接下来在上面变高，滚动区把多出来的高度当场加到偏移上，正在读的不动（`ContentLift.scroll`）。
     /// 不能交给滚动区自己：滑到顶时（快甩的惯性常常先到顶）它记下的是"贴着顶边"，新内容会把正在读的推下去。
@@ -44,6 +44,9 @@ nonisolated struct ChatFollow: Equatable {
     private var revealed = false
     /// 离最新处这么近算"在最新处"。
     static let slack: CGFloat = 24
+
+    /// 离最早那头不到一屏、上一批也排上去了：对话在上面再排开一批（`ChatColumn`）。
+    var wantsEarlier: Bool { nearOldest && !prepending }
 
     /// 标题此刻露着（iPhone 的"⋯"跟着它；返回钮与 Mac 的"⋯"一直在，见上）。
     var showsHeader: Bool { atNewest || revealed }
@@ -101,7 +104,11 @@ nonisolated struct ChatFollow: Equatable {
 
     mutating func willPrepend() { prepending = true }
 
-    mutating func prepended() { prepending = false }
+    /// 排上去的那一批到了、偏移补好了；`nearOldest` 是补好之后可见区离最早那头还近不近（`ChatScroll` 按补的量算）。
+    mutating func prepended(nearOldest: Bool) {
+        prepending = false
+        self.nearOldest = nearOldest
+    }
 
     /// 去读某一条（刻度滑条、回复框上的批注）：它可能还没排开，先由对话排开再 `jump(to:)`。
     mutating func seek(_ id: UUID, landing: Landing = .flash) { seeking = Target(id: id, landing: landing) }
@@ -149,6 +156,8 @@ extension EnvironmentValues {
     @Entry var chatHeight: CGFloat = .infinity
     /// 阅读栏两边的页边距（`ChatLayout.margin`，`ChatColumn` 按可见区的宽算一次）：边上放的小东西（刻度、新消息的点）据它看放不放得下。
     @Entry var chatMargin: CGFloat = 0
+    /// 阅读栏的宽（可见区的宽去掉两边的 `chatMargin`，`ChatColumn` 给）：离屏远的段换成的空白按它估高（`ChatSegments`）。
+    @Entry var chatWidth: CGFloat = 0
 }
 
 /// "回到最新"：回复框右上方一颗圆形玻璃钮，向下的箭头；离开后来过新内容时右上角带一个墨色的点。

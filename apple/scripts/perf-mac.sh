@@ -17,6 +17,8 @@
 set -euo pipefail
 
 APPLE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+# shellcheck source=_trace.sh source-path=SCRIPTDIR
+. "$APPLE_DIR/scripts/_trace.sh"
 APP="$1"
 runs="${2:-3}"
 extra=("${@:3}")
@@ -44,27 +46,18 @@ if [ ! -f "$LIBRARY/cuepad.db" ]; then
   wait "$pid" || true
 fi
 
-# 真实点击的小工具（源文件比它新时重编）：App 每写一行 `AWAIT click x y` 就在那一点点一下；`AWAIT trace <PID>` 时按 PID 开录（`$trace`），其余行原样转出
+# 真实点击的小工具（源文件比它新时重编）：App 每写一行 `AWAIT click x y` 就在那一点点一下；`AWAIT trace <PID>` 时按 PID 开录到 `$trace`（_trace.sh），其余行原样转出
 HID="$DERIVED/hid"
 if [ ! -x "$HID" ] || [ "$APPLE_DIR/scripts/hid.swift" -nt "$HID" ]; then xcrun swiftc -O "$APPLE_DIR/scripts/hid.swift" -o "$HID"; fi
 clicker() {
   local line kind what x y
   while IFS= read -r line; do
     read -r kind what x y <<<"$line"
-    if [ "$kind" = AWAIT ] && [ "$what" = trace ]; then record "$x" &
+    if [ "$kind" = AWAIT ] && [ "$what" = trace ]; then trace_attach "$x" "$trace" &
     elif [ "$kind" = AWAIT ]; then "$HID" click "$x" "$y"
     else printf '%s\n' "$line"; fi
   done
   wait
-}
-
-# 按 PID 开录，开录了放 App 往下量；没开录成（输出里没有 Starting recording）就结束它，这一次算没量完
-record() {
-  local pid="$1"
-  xcrun xctrace record --template "$CUEPAD_TRACE" --attach "$pid" --output "$trace" 2>&1 | tee "$trace.log" | {
-    if grep -q 'Starting recording'; then kill -USR1 "$pid"; else echo "xctrace 没开录，见 $trace.log" >&2; kill -TERM "$pid"; fi
-    cat >/dev/null
-  }
 }
 
 # 每次都是全新进程（首访就是首访）与一份没量过的库：量的动作会写库（发送），同一份库连跑，后几次量的是越来越长的对话。

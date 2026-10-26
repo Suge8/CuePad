@@ -8,9 +8,7 @@ import SwiftUI
 /// 名片与进展一直在看得见的地方，只有项目区滚动（方向键与 ⌘1–9 换到的项目滚进可见区）；项目区是普通栈：几十行的量级，行高固定。
 struct Sidebar: View {
     @Environment(Workspace.self) private var workspace
-    @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
-    @State private var trashCount: Int?
     /// 点过侧栏里的页后焦点留在侧栏，方向键才有地方去
     @FocusState private var focused: Bool
 
@@ -33,7 +31,7 @@ struct Sidebar: View {
                 }
             }
             .frame(maxHeight: .infinity, alignment: .top)
-            footer(trashCount: trashCount ?? 0)
+            footer
         }
         .focusable()
         .focused($focused)
@@ -45,7 +43,6 @@ struct Sidebar: View {
         }
         // 侧栏比桌面深一档：浅色、深色都能看出分层，与内容同一色温
         .background(palette.sidebar)
-        .observing(services.store, into: $trashCount, onError: workspace.fail) { try $0.trashCount() }
     }
 
     private func select(_ page: Route) {
@@ -64,12 +61,12 @@ struct Sidebar: View {
     }
 
     /// 底栏：启动问题（有才出现），下面一排归档、回收站与设置。
-    private func footer(trashCount: Int) -> some View {
+    private var footer: some View {
         VStack(spacing: 8) {
             StartupIssues()
             HStack(spacing: 2) {
                 FooterPage(entry: .archive, select: select)
-                FooterPage(entry: .trash, count: trashCount, select: select)
+                TrashFooterPage(select: select)
                 Spacer()
                 let settings = SidebarOutline.Entry.settings
                 Button { SettingsPane.open() } label: {
@@ -290,6 +287,19 @@ private struct FooterPage: View {
         .help(title)
         .accessibilityLabel(title)
         .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+}
+
+/// 回收站那一颗：条数只有它读（读到时只重算这一颗，不重算整个侧栏）。
+private struct TrashFooterPage: View {
+    let select: (Route) -> Void
+    @Environment(Workspace.self) private var workspace
+    @Environment(AppServices.self) private var services
+    @State private var count: Int?
+
+    var body: some View {
+        FooterPage(entry: .trash, count: count ?? 0, select: select)
+            .observing(services.store, into: $count, onError: workspace.fail) { try $0.trashCount() }
     }
 }
 
