@@ -151,7 +151,7 @@ struct NewSessionInput: View {
     /// 发出后的进度，上一次没能打开的原因，或送不到 Mac 的原因。
     @ViewBuilder private var status: some View {
         if chosen != nil, chosen?.host == nil {
-            Text("还没有 Mac 打开过 CuePad：先在 Mac 上打开它").foregroundStyle(palette.ink3)
+            Text(CueStoreError.noMac.localizedDescription).foregroundStyle(palette.ink3)
         } else {
             switch phase {
             case .failed(let failure): Text(failure.text(sync: services.syncStatus)).foregroundStyle(palette.failure)

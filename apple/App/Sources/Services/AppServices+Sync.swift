@@ -186,11 +186,12 @@ extension AppServices {
         }
     }
 
-    /// "立即同步"按钮（Mac 设置与手机设置共用）能不能按：有同步、没停下（等你决定、这台要更新）、上一次立即同步已经返回。
+    /// 同步那一行给不给"立即同步"（Mac 设置与手机设置共用，没有就不画）：有同步，且按了能有用——没停下（等你决定、这台要更新），
+    /// iCloud 也开着（没登录、受限时按了什么都不会发生）。上一次立即同步还没返回时照给、只停用（`isSyncingNow`），一按一松不让一行出现又消失。
     var canSyncNow: Bool {
-        guard sync != nil, !isSyncingNow else { return false }
+        guard sync != nil else { return false }
         switch syncStatus {
-        case .needsDecision, .outdated: return false
+        case .needsDecision, .outdated, .noAccount, .accountRestricted: return false
         default: return true
         }
     }

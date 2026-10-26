@@ -3,7 +3,7 @@ import CueStore
 import Foundation
 
 extension AgentKind {
-    /// 这台上的它（`presence`）要跑的官方命令（取自各家官网的安装页，唯一一份）：接入面板的"安装"在后台跑它，设置里的安装方法给你复制它。
+    /// 这台上的它（`presence`）要跑的官方命令（取自各家官网的安装页，唯一一份）：接入面板与设置里的"安装""升级"在后台跑它，设置那一行的悬停提示写出它。
     /// 要升级的 Pi 是它自带的升级命令（`upgrades`）；OpenCode 是 v2 的安装命令（v1 的服务接口不同，装 v2 替换它）。
     public func installCommand(_ presence: AgentStatus.Presence) -> String {
         switch self {
@@ -14,7 +14,7 @@ extension AgentKind {
         }
     }
 
-    /// 这台上的它要升级、不是新装（"升级方法""升级 Pi"）：只有 Pi 有自带的升级命令，太旧时用它；别家太旧也是重跑安装命令。
+    /// 这台上的它要升级、不是新装（设置里的"升级"）：只有 Pi 有自带的升级命令，太旧时用它；别家太旧也是重跑安装命令。
     public func upgrades(_ presence: AgentStatus.Presence) -> Bool {
         if self == .pi, case .tooOld = presence { true } else { false }
     }
@@ -44,7 +44,7 @@ public struct InstallPrerequisite: Sendable, Equatable {
     public let site: URL
 }
 
-/// 在后台装一家 Agent、登录它。三家的官方脚本都装进 `~/.local/bin`（检测本来就查那里），没有终端时不问问题。
+/// 在后台装一家 Agent、登录它。官方脚本装进家目录（`~/.local/bin`、OpenCode 的 `~/.opencode/bin`，检测本来就查那里），没有终端时不问问题。
 extension AgentIntegration {
     /// 跑这家的安装命令（`installCommand`），等它结束：返回退出码与输出（标准错误并在一起，失败时取末尾给人看）；起不来或超过 `installLimit` 为 nil。
     @concurrent public func runInstaller(_ kind: AgentKind, _ presence: AgentStatus.Presence) async -> (status: Int32, output: String)? {
