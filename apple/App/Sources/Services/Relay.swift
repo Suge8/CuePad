@@ -37,6 +37,8 @@ final class Relay {
     @ObservationIgnored private var owesRing = false
     /// 此刻想不想连着（`resume` 为真、`pause` 为假）：`settle` 只在仍不想连时断开。
     @ObservationIgnored private var wanted = false
+    /// 断着的这一段从何时起（日志按段记：断了一条、连回来一条，其间每次重连不记）。
+    @ObservationIgnored private var downSince: ContinuousClock.Instant?
 
     nonisolated static let pingInterval = Duration.seconds(10)
     nonisolated static let pongLimit = Duration.seconds(5)
@@ -145,7 +147,10 @@ final class Relay {
             do {
                 try await session(rang)
             } catch where !Task.isCancelled {
-                Self.log.notice("门铃断了：\(error.brief, privacy: .public)")
+                if downSince == nil {
+                    downSince = .now
+                    Self.log.notice("门铃断了，按退避重连：\(error.brief, privacy: .public)")
+                }
             } catch {}
             if isLive, ContinuousClock.now - began >= Self.steady { retry.reset() }
             isLive = false
@@ -184,7 +189,12 @@ final class Relay {
             socket.resume()
             try await Self.handshake(socket, credentials)
             isLive = true
-            Self.log.notice("门铃通了")
+            if let downSince {
+                Self.log.notice("门铃通了，断了 \((ContinuousClock.now - downSince).seconds, format: .fixed(precision: 1), privacy: .public) 秒")
+                self.downSince = nil
+            } else {
+                Self.log.notice("门铃通了")
+            }
             if owesRing {
                 owesRing = false
                 ring()
