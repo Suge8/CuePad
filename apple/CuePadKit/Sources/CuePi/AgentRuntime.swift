@@ -21,6 +21,13 @@ public struct AgentPaths: Sendable, Equatable {
         }
     }
 
+    /// 几家共读的目录（`~/.agents`，`CUEPAD_AGENTS_DIR` 换走）：全局技能 `skills`、全局说明 `AGENTS.md`，CuePad 的技能也写在这里。
+    /// 环境变量是 CuePad 自己的（各家都按家目录读它）：隔离实例与测试经它换到临时目录。
+    public var agentsDirectory: URL { directory("CUEPAD_AGENTS_DIR") ?? user(".agents") }
+
+    /// 家目录：环境里的 `HOME`（换了家目录的隔离实例），没有时是系统的。
+    public var userHome: URL { directory("HOME") ?? FileManager.default.homeDirectoryForCurrentUser }
+
     /// 会话文件所在的根目录（`PiHistoryIndexer` 读它）；OpenCode 的会话在它的数据库里，为 nil。
     public func sessionsDirectory(of kind: AgentKind) -> URL? {
         switch kind {
@@ -42,9 +49,7 @@ public struct AgentPaths: Sendable, Equatable {
 
     private func xdg(_ variable: String, _ fallback: String) -> URL { directory(variable) ?? user(fallback) }
 
-    private func user(_ path: String) -> URL {
-        FileManager.default.homeDirectoryForCurrentUser.appending(path: path, directoryHint: .isDirectory)
-    }
+    private func user(_ path: String) -> URL { userHome.appending(path: path, directoryHint: .isDirectory) }
 }
 
 /// CuePad 托管的 Claude Code、Codex 进程在环境里带的标记（钩子转发 `CUEPAD_` 前缀的变量）：钩子按它认回托管会话。

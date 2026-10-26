@@ -229,7 +229,10 @@ final class AppServices {
         runtimes = mac.runtimes(store)
         agents = mac.agents
         macAgents = MacAgentsRecorder(store: store, sync: self.sync, host: mac.hostID, agents: agents)
-        library = AgentLibraryKeeper(store: store, sync: self.sync, host: mac.hostID)
+        // 隔离运行时移走的不进系统废纸篓，放在库里
+        let trash = location.touchesRealWorld ? nil : AgentLibraryFiles.trash(into: location.directory.appending(path: "Trash", directoryHint: .isDirectory))
+        library = AgentLibraryKeeper(
+            store: store, sync: self.sync, host: mac.hostID, files: AgentLibraryFiles(integration: agents.integration, trash: trash))
         commandLineTool = mac.commandLineTool
         updates = UpdateService(updater: mac.updater, bridge: mac.pi, runtimes: runtimes)
         historyStore = PiHistoryPersistence(storage: store, host: mac.hostID)

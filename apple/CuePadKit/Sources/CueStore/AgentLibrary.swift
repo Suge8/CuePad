@@ -150,14 +150,17 @@ public struct InstructionEdit: Codable, Equatable, Sendable, StoredJSON {
   }
 }
 
-/// 整理里的一件（"全部整理"是全部不要你挑的那几件）：`keep` 只给同名的那件，是留下的那份技能目录。
+/// 整理里的一件（"全部整理"是全部不要你挑的那几件，不撤替换基础提示的）：`keep` 只给同名的那件，是留下的那份技能目录；
+/// `retire` 只给全局说明那件，是合成时一并撤掉的替换基础提示的几份（Pi 的进废纸篓、Codex 的撤掉配置键，撤销时都放回）。
 public struct TidyOrder: Codable, Hashable, Sendable {
   public var tidy: String
   public var keep: String?
+  public var retire: Set<InstructionSource.Origin>
 
-  public init(tidy: String, keep: String? = nil) {
+  public init(tidy: String, keep: String? = nil, retire: Set<InstructionSource.Origin> = []) {
     self.tidy = tidy
     self.keep = keep
+    self.retire = retire
   }
 }
 

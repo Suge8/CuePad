@@ -33,6 +33,7 @@ struct HistoryRulesTests {
             let agentPaths = AgentPaths(pi: paths, environment: [
                 "CLAUDE_CONFIG_DIR": directory.appending(path: "claude").path, "CODEX_HOME": directory.appending(path: "codex").path,
                 "OPENCODE_CONFIG_DIR": directory.appending(path: "opencode").path, "XDG_STATE_HOME": directory.appending(path: "state").path,
+                "CUEPAD_AGENTS_DIR": directory.appending(path: "agents").path,
             ])
             let agents = AgentIntegration(
                 paths: agentPaths, locate: { ExecutableLocator(searchDirectories: [realPi.deletingLastPathComponent()]) },
