@@ -203,7 +203,7 @@ class Run:
         self.extension = subprocess.Popen([sys.executable, os.path.abspath(sys.argv[0]), "--fake-extension", self.a.sockets, self.checkout])
         self.a.start()
         if not self.a.wait(kind("ready"), 60):
-            raise SystemExit(f"A 60 秒没有测量打点（{self.out}/a.log）：构建要含 DebugScene+SyncBench.swift 的打点（变基到含 climb/metrics 的 main）")
+            raise SystemExit(f"A 60 秒没有测量打点（{self.out}/a.log）：构建要含 DebugScene+SyncBench.swift 的打点")
         self.b.start()
         if not self.b.wait(kind("ready"), 60): raise SystemExit(f"B 没就绪（{self.out}/b.log）")
         self.warm()
