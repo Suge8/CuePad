@@ -6,7 +6,7 @@ B 代替手机（模拟器登不了 iCloud；拉取节奏按手机那档，进�
 云有两种（SYNC_BENCH_CLOUD）：
   sim（默认）两个实例共用这次运行自己的模拟云（SharedCloud：一个 SQLite 文件，同步代码照真的跑），每个请求按 LATENCY 睡一段；门铃照常连正式中转（房间按这次运行的密钥）。
       测的是我们自己代码的调度与排队，不连 iCloud、不吃也不制造设备限流。A/B 一律用它。
-  real      连 CloudKit 开发环境，只做少量确认：限流按设备与容器算，与这台的正式版共用一份（2026-10-26 01:20 起接连测量，正式版每 10 分钟被拒 300–490 次）。
+  real      连 CloudKit 开发环境，只做少量确认：限流按设备与容器算，与这台的正式版共用一份（实测见 docs/perf.md「真 CloudKit」）。
       所以：上一次 real 运行结束不满 REAL_COOLDOWN 秒、或最近 5 分钟这台有 429，就不跑（ab 里两次之间等冷却）；每次运行连预热至多 REAL_LIMIT 秒，
       到点收掉实例、已量到的照记；每个实例至多 REAL_BUDGET 个请求，用满当断网、不再打 iCloud。库留在 REAL_LIBS 里接着用，不每次从头拉开发区的历史。
 LATENCY（中位、p95，秒，对数正态；版本 MODEL）：每种请求在 App 里从发起到返回的用时（`CloudOutage` 在真 CloudKit 运行里记下，`request_timings`，结果里的"请求用时"）。
@@ -41,15 +41,13 @@ import fcntl, json, os, signal, subprocess, sys, time
 from datetime import datetime
 
 sys.dont_write_bytecode = True
-from _sync_run import Aborted, Load, Run, exe_of, fake_extension  # noqa: E402
+from _sync_run import OUT_ROOT, Aborted, Load, Run, exe_of, fake_extension  # noqa: E402
 from _sync_edges import EDGES  # noqa: E402
 from _sync_scenes import SCENES as BASIC, island  # noqa: E402
-from app_env import BUNDLE_ID  # noqa: E402
+from app_env import BUNDLE_ID, CHECKOUT  # noqa: E402
 
-CHECKOUT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 LOCK = "/tmp/cuepad-sync-measure.lock"  # real 与别的连 CloudKit 的探针共用
 SIM_LOCK = "/tmp/cuepad-sync-measure-sim.lock"  # 模拟云的运行之间互斥（不碰 cloudd，不必等 real）
-OUT_ROOT = "/tmp/cuepad-sync-bench"
 RELAY = os.environ.get("SYNC_BENCH_RELAY", "1") != "0"
 CLOUD = os.environ.get("SYNC_BENCH_CLOUD", "sim")
 MODEL = "v2"
