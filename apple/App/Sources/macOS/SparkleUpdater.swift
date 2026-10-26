@@ -22,6 +22,10 @@ final class SparkleUpdater: NSObject, AppUpdater, SPUUpdaterDelegate {
         controller.checkForUpdates(nil)
     }
 
+    func checkForUpdatesInBackground() {
+        controller.updater.checkForUpdatesInBackground()
+    }
+
     /// 要重启装更新的路都经过这里（你在更新窗里点"安装并重新启动"，不论那次检查是菜单点的还是后台定期的；自动下载后的立即安装）；
     /// 退出时顺带装的那一种不重启，不经过这里。每次更新只问一次。
     func updater(_ updater: SPUUpdater, shouldPostponeRelaunchForUpdate item: SUAppcastItem, untilInvokingBlock installHandler: @escaping () -> Void) -> Bool {

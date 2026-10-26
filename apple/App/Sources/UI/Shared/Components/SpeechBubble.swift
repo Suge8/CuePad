@@ -40,11 +40,11 @@ struct SpeechBubble<Menu: View>: View {
             if case .request(let request) = said { .sending(.of(request, session: session, trip: trip)) } else { .sending(trip == .sent ? .sent : .sending) }
         case .delivered: showsDelivered ? .delivered(said.roundTrip.map { PiClock.duration(Double($0.components.seconds)) }) : .arrived
         case .failed(let failure):
-            .failed(Undelivered(reason: failure.text(sync: services.syncStatus), canResend: services.reachesPiHost, resend: resend, remove: remove))
+            .failed(Undelivered(reason: failure.text(sync: services.syncStatus), resend: resend, remove: remove))
         }
     }
 
-    /// 一行，和旁注一样高：重发是行里的字，不画胶囊；点按区放大到 44 点而不撑高这一行。送不到 Mac 时也露出来（停用），看得出能重发。
+    /// 一行，和旁注一样高：重发是行里的字，不画胶囊；点按区放大到 44 点而不撑高这一行。
     private func failedLine(_ undelivered: Undelivered) -> some View {
         HStack(spacing: 0) {
             Text("未送达，")
@@ -52,7 +52,6 @@ struct SpeechBubble<Menu: View>: View {
                 .fontWeight(.semibold)
                 .buttonStyle(PressStyle(.inline))
                 .contentShape(.rect.inset(by: -14))
-                .disabled(!undelivered.canResend)
         }
         .font(Typography.caption).foregroundStyle(palette.failure)
     }
@@ -63,11 +62,11 @@ struct SpeechBubble<Menu: View>: View {
 
 nonisolated extension Speech.Failure {
     /// 没能送达的原因：Mac 写回的原文；到点的只说这句话自己（不猜 Mac 在不在：那台 Mac 在不在线看它的在线记录）——
-    /// 一直没出这台设备时，本机同步此刻不通就写同步状态那套说法（`sync` 此刻的状态），通着就是这句一直没传上去。
+    /// 一直没出这台设备时，本机同步此刻不通（`sync`）就说它排着、恢复后自动发出（为什么不通只在同步那一处说，`SyncSummary`），通着就是这句一直没传上去。
     func text(sync: SyncStatus) -> String {
         switch self {
         case .reported(let reason): reason
-        case .unsent: sync.reachesMac ? String(localized: "这句一直没传到 iCloud，发不到 Mac") : String(localized: "\(SyncSummary(sync).title)，发不到 Mac")
+        case .unsent: sync.reachesMac ? String(localized: "这句一直没传到 iCloud，发不到 Mac") : String(localized: "还没传出这台，同步恢复后自动发出")
         case .timedOut: String(localized: "Mac 迟迟没收下这句")
         }
     }

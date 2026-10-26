@@ -3,7 +3,7 @@ import CueSync
 import SwiftUI
 
 /// iCloud 同步那一行。状态字只写现状的标题（`SyncSummary`），补充说明在悬停提示里；有解决办法时后面给一个链接：
-/// 没开 iCloud → 打开系统设置；暂停等你决定 → "处理…"弹出两个选择（替换本机前再确认一次）；有记录没能同步 → "查看"明细。
+/// 没开 iCloud → 打开系统设置；这台要更新 → "检查更新…"；暂停等你决定 → "处理…"弹出两个选择（替换本机前再确认一次）；有记录没能同步 → "查看"明细。
 /// 按了有用时右边给"立即同步"（`AppServices.canSyncNow`）。
 struct SyncRow: View {
     @Environment(AppServices.self) private var services
@@ -16,7 +16,7 @@ struct SyncRow: View {
     /// 这一轮同步中已久过 `Pending.delay`（`AppServices.shownSync`）。
     @State private var syncLasts = false
 
-    private enum Fix { case decide, openSettings, issues }
+    private enum Fix { case decide, openSettings, update, issues }
 
     var body: some View {
         let shown = services.shownSync(lasting: syncLasts), summary = shown.summary
@@ -38,6 +38,8 @@ struct SyncRow: View {
                     .popover(isPresented: $showsDecision, arrowEdge: .bottom) { decision(summary) }
             case .openSettings:
                 Button(SyncSummary.settingsTitle) { openURL(SyncSummary.settings) }.settingFix()
+            case .update:
+                Button(SyncSummary.updateTitle) { services.updates.checkForUpdates() }.settingFix()
             case .issues:
                 Button("查看") { showsIssues = true }
                     .settingFix()
@@ -56,6 +58,7 @@ struct SyncRow: View {
         switch services.syncStatus {
         case .needsDecision: .decide
         case .noAccount: .openSettings
+        case .outdated: .update
         default: services.syncIssues.isEmpty ? nil : .issues
         }
     }

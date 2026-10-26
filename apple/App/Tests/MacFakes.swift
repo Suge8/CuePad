@@ -161,6 +161,8 @@ final class FakeUpdater: AppUpdater {
         let install: () -> Void = { [weak self] in self?.installs += 1 }
         if postponeRelaunch?(install) != true { install() }
     }
+
+    func checkForUpdatesInBackground() { checkForUpdates() }
 }
 
 /// 记下 Cue 推了哪些通知，不碰系统通知中心。

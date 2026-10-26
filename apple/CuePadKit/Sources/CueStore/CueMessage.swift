@@ -23,7 +23,8 @@ public enum CueAuthor: String, Sendable, CaseIterable {
 public struct CueMessage: Identifiable, Equatable, Sendable {
   public let id: UUID
   public var author: Open<CueAuthor>
-  /// 正文（`CueFormat`）；你的消息可带图片引用。CuePad 代写的（`shownText`）是这台设备语言的那一份。
+  /// 正文（`CueFormat`）；你的消息可带图片引用。CuePad 代写的（`shownText`）读出来是这台设备语言的那一份，存的是写下那台的：
+  /// 读不了句式的设备（更早的版本）照它显示。
   public var text: String
   /// CuePad 代 Cue 写下的话（做完的结果、起不来、出错……）：存句式与参数，各端按自己的语言显示（`ShownText`）；Cue 与你的原话为 nil。
   public var shownText: ShownText? = nil
@@ -84,7 +85,7 @@ extension CueMessage: Record {
   ]
   var bindings: [any SQLBindable] {
     [
-      id, author.rawValue, shownText == nil ? text : "", choices.map { JSONColumn.encode($0) }, urgent, taskID, answer, answeredAt, deliveredAt, createdAt, modifiedAt,
+      id, author.rawValue, text, choices.map { JSONColumn.encode($0) }, urgent, taskID, answer, answeredAt, deliveredAt, createdAt, modifiedAt,
       notify?.rawValue, tools?.stored, asked?.stored, askAction, askRule, JSONColumn.encodeList(shots), setAsideBy, wake?.stored,
       places.isEmpty ? nil : JSONColumn.encode(places), shownText?.stored,
     ]
