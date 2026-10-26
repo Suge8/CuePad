@@ -46,6 +46,8 @@ struct SyncRow: View {
                 EmptyView()
             }
         }
+        // 状态始终有一行：短句不留额外空白，长句截断；完整说明在悬停提示里。
+        .lineLimit(1)
         .confirmsErase($confirmErase, choices: choices, services: services)
         .pending(services.syncStatus == .syncing, shown: $syncLasts)
     }
