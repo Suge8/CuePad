@@ -190,8 +190,7 @@ struct SetupPanel: View {
 
     private var folder: String? {
         guard let home = workspace.catalog?.project(Project.defaultID), workspace.catalog?.directories[home.id] == nil else { return nil }
-        let path = Workspaces.shown(services.workspaces.directory(for: home.name).path(percentEncoded: false))
-        return String(localized: "任务在 \(path) 里做")
+        return String(localized: "任务在 \(workspace.pendingFolder(of: home)) 里做")
     }
 
     private func check(_ name: String, isOn: Binding<Bool>) -> some View {
