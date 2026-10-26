@@ -27,12 +27,8 @@ struct PreviewImage: UIViewRepresentable {
 final class PreviewZoomView: UIScrollView, UIScrollViewDelegate {
     /// 最多放大到适合屏幕的几倍
     private static let maxZoom: CGFloat = 5
-    /// 双击放大到的倍数（铺满可见区比它还大时放大到铺满：竖长截图一双击就按屏宽看）
-    private static let tapZoom: CGFloat = 2.5
     /// 放大后那一张的最长边上限（像素）：同改版前一直解着的那张，内存不比原来多
     nonisolated private static let detailPixels = 4800
-    /// 缩略图与图的比例差在这以内算没裁过（缩略图按整像素缩，比例会差一点）
-    private static let sameAspect: CGFloat = 0.02
 
     /// 不放大时图摆在这个框里：两条栏之间（安全区）
     var frameInsets: UIEdgeInsets = .zero { didSet { if frameInsets != oldValue { setNeedsLayout() } } }
@@ -68,7 +64,7 @@ final class PreviewZoomView: UIScrollView, UIScrollViewDelegate {
         topEdgeEffect.isHidden = true
         bottomEdgeEffect.isHidden = true
         imageView.isAccessibilityElement = false
-        // 缩略图可能裁过：照内容的比例铺满它的框
+        // 缩略图按整像素缩，比例与图差一点：照图的比例铺满它的框
         imageView.contentMode = .scaleAspectFill
         imageView.clipsToBounds = true
         addSubview(imageView)
@@ -140,9 +136,10 @@ final class PreviewZoomView: UIScrollView, UIScrollViewDelegate {
         detailing = load({ min(Int(max($0.width, $0.height)), Self.detailPixels) }) { [weak self] in self?.show($0) }
     }
 
-    /// 还没有解出来的图时先铺缩略图的画面；只铺没裁过的（与图的真实比例相同）：点名图那种裁成方块的铺上去是另一幅画面，不如先空着。
+    /// 还没有解出来的图时先铺缩略图的画面（`previewSource` 交的都是整张，点名图也是）；文件头读不到比例时先按它的排。
     private func cover(_ look: PreviewSources.Look) {
-        guard decoded == nil, let aspect, abs(look.aspect / aspect - 1) < Self.sameAspect else { return }
+        guard decoded == nil else { return }
+        if aspect == nil { aspect = look.aspect }
         imageView.image = UIImage(cgImage: look.image)
         setNeedsLayout()
     }
@@ -163,13 +160,13 @@ final class PreviewZoomView: UIScrollView, UIScrollViewDelegate {
         layoutIfNeeded()
     }
 
-    /// 双击：放大着就缩回适合屏幕，否则放大到点的那一处。动画用滚动区自己的（与捏合松手后的回弹同一条）：
+    /// 双击：放大着就缩回适合屏幕，否则放大到点的那一处（`PreviewScale.tap` 倍；铺满可见区比它还大时放大到铺满，竖长截图一双击就按屏宽看）。动画用滚动区自己的（与捏合松手后的回弹同一条）：
     /// 换成 `UIView.animate(Motion.snappy)` 驱动缩放时每次双击都掉两三帧（模拟器逐帧录屏实测），系统的一帧不掉。
     @objc private func doubleTapped(_ tap: UITapGestureRecognizer) {
         if zoomedIn { return setZoomScale(1, animated: true) }
         let area = bounds.inset(by: frameInsets).size
         let fill = max(area.width / fitted.width, area.height / fitted.height)
-        let target = min(max(Self.tapZoom, fill), maximumZoomScale)
+        let target = min(max(PreviewScale.tap, fill), maximumZoomScale)
         let point = tap.location(in: imageView)
         let size = CGSize(width: bounds.width / target, height: bounds.height / target)
         zoom(to: CGRect(x: point.x - size.width / 2, y: point.y - size.height / 2, width: size.width, height: size.height), animated: true)

@@ -36,6 +36,14 @@ struct PreviewOpener {
 
 extension EnvironmentValues {
     @Entry var openPreview: PreviewOpener?
+    /// 全屏页的顶栏、底栏（手机上还有状态栏）占的边：页铺满全屏页，没放大的内容排在这几条边之内，会滚、放大了的内容从栏后面透出来。
+    @Entry var previewInsets = EdgeInsets()
+}
+
+/// 全屏页里图的缩放，两端同一套。
+enum PreviewScale {
+    /// 双击（Mac 还有智能缩放）放大到适合屏幕的这么多倍
+    static let tap: CGFloat = 2.5
 }
 
 /// 一个文件的内容：网页与 Markdown 两端一样，其余每类怎么显示在各端的 `PreviewPage`。

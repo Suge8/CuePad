@@ -8,7 +8,7 @@ import IOSurface
 /// - 适合屏幕是 1 倍：整张放在两条栏之间（`chrome`）、居中；放大后铺到栏下面，拖到哪都看得到边角。
 /// - 触控板捏合以指尖处为中心、跟手，捏过头（小过适合屏幕、大过上限）有橡皮筋回弹；放大后双指滑动看图，滑到边有回弹：都是系统滚动视图的。
 /// - 捏完离适合屏幕不到一成就回到适合屏幕（`snap`）。
-/// - 双击、智能缩放（双指轻点两下）在适合屏幕与放大（`zoomStep` 倍，至多到上限）之间切，放大到点的那一处，走 `Motion.move` 的曲线。
+/// - 双击、智能缩放（双指轻点两下）在适合屏幕与放大（`PreviewScale.tap` 倍，至多到上限）之间切，放大到点的那一处，走 `Motion.move` 的曲线。
 /// - 放大后按住拖动看图（同"预览"的移动）。
 /// - 横扫翻不翻页由全屏页按这张往那边还滑不滑得动定（`PageInput`）：没放大、或放大了已滑到那一边才翻。
 /// 解码分两步，都在后台：先按全屏页的大小解一份（进缩略图缓存，再打开不再解），再解原图（最长边至多 `maxPixel`，不进缓存）换上，放大看得清。
@@ -74,9 +74,9 @@ final class PreviewZoom: NSScrollView, PreviewShowing {
         guard pixels.width > 0, pixels.height > 0, area.width > 0, area.height > 0 else { return }
         let scale = min(area.width / pixels.width, area.height / pixels.height)
         let size = CGSize(width: (pixels.width * scale).rounded(), height: (pixels.height * scale).rounded())
-        // 上限：至少放大到 `zoomStep`，原图像素多的放大到一个像素占两个屏幕像素。没变不重设：捏过头回弹的途中每帧都排一次，
+        // 上限：至少放大到 `PreviewScale.tap`，原图像素多的放大到一个像素占两个屏幕像素。没变不重设：捏过头回弹的途中每帧都排一次，
         // 重设上下限会打断回弹、停在半路
-        let most = max(Self.zoomStep, 2 * pixels.width / (size.width * (window?.backingScaleFactor ?? 2)))
+        let most = max(PreviewScale.tap, 2 * pixels.width / (size.width * (window?.backingScaleFactor ?? 2)))
         if maxMagnification != most { maxMagnification = most }
         guard canvas.frame.size != size else { return }
         canvas.frame.size = size
@@ -84,7 +84,7 @@ final class PreviewZoom: NSScrollView, PreviewShowing {
 
     /// 双击、智能缩放：在适合屏幕与放大之间切，放大到 `point`（画面坐标）那一处。
     func toggle(at point: NSPoint) {
-        animate(to: zoomed ? 1 : min(Self.zoomStep, maxMagnification), at: point)
+        animate(to: zoomed ? 1 : min(PreviewScale.tap, maxMagnification), at: point)
     }
 
     private func animate(to target: CGFloat, at point: NSPoint) {
@@ -166,8 +166,6 @@ final class PreviewZoom: NSScrollView, PreviewShowing {
 
     /// 原图最长边解到这么多像素为止：再大的图放大看也够清楚，一张至多 8192² × 4 字节（256MB）。
     nonisolated private static let maxPixel = 8192
-    /// 双击放大到适合屏幕的这么多倍（同手机）。
-    private static let zoomStep: CGFloat = 2.5
     /// 捏完比适合屏幕大不到这么多（一成）算回到适合屏幕
     private static let snap: CGFloat = 0.1
 }
