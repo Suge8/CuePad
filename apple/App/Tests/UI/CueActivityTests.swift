@@ -76,12 +76,12 @@ struct CueActivityTests {
         #expect(cue.isLive && cue.isBusy && cue.quietWord == "在想" && cue.staleAfter == CueNow.fastStale)
         #expect(cue.settled.quietLine == "刚做完「发布 v1.4」" && !cue.settled.isLive)
 
-        // 刚做完一件又派出一件在跑，Cue 歇下：数字账写在跑的那件，不停在"做完"
+        // 刚做完一件又派出一件在跑，Cue 歇下：数字账写推进中那件，不停在"做完"
         let ship = try await store.createTask("推送并发新版", in: project.id)
         try await recorder.update(sessionID: "ship", state: .thinking, title: "ship")
         try await store.bindSession("ship", to: ship.id)
         try await store.setCueState(.settled)
         cue = try await now()
-        #expect(cue.spoken == "1 件在跑" && cue.needsYou == 0)
+        #expect(cue.spoken == "1 件推进中" && cue.needsYou == 0)
     }
 }

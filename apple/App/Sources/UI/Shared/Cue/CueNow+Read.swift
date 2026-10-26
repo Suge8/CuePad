@@ -17,14 +17,14 @@ nonisolated extension CueNow {
         let host = digest.hostName ?? MacAgents.unnamed
         let tally = Tally(
             asks: items.count { $0.kind == .asks }, reply: items.count { $0.kind == .reply },
-            running: items.count { $0.kind == .running }, delegating: items.count { $0.kind == .delegating })
+            moving: items.count { $0.kind == .running || $0.kind == .delegating })
         self.init(
             // 头像此刻的表情（不算你正在写）与歇下来时的那一个：有没有等你只看 `needsYou` 那一个数
             name: digest.name, mood: CueMood.of(presence, waiting: tally.needsYou, justDone: digest.lastSaidDone),
             restingMood: CueMood.of(.idle, waiting: tally.needsYou, justDone: digest.lastSaidDone),
             cue: Self.brain(presence, digest: digest, local: local, at: moment.now),
             tally: tally,
-            advancing: digest.advancing, items: Array(items.prefix(Self.itemLimit)),
+            advancing: digest.advancing, subagents: digest.tally.advancing.reduce(0) { $0 + Self.subagents($1) }, items: Array(items.prefix(Self.itemLimit)),
             first: digest.tally.waiting.first.map { Self.wait($0, name: digest.name) }, at: moment.now,
             elsewhere: digest.enabled && local.here != nil && digest.hostID != local.here ? String(localized: "在「\(host)」上运行") : nil)
     }
@@ -93,6 +93,15 @@ nonisolated extension CueNow {
                 subagents: delegating.reduce(0) { $0 + $1.subagents.count(where: \.isRunning) })
         }
         return Item(id: work.id, kind: .resting, name: name, since: sessions.map(\.stateSince).max() ?? settledSince, subagents: 0)
+    }
+
+    /// 推进中的一件里在跑的子代理：它没结束的会话各自名册里在跑的。
+    private static func subagents(_ work: CueWork) -> Int {
+        let sessions = switch work {
+        case .task(let item): item.leaves.compactMap(\.session).filter { $0.state != .known(.ended) }
+        case .session(let state): [state]
+        }
+        return sessions.reduce(0) { $0 + $1.subagents.count(where: \.isRunning) }
     }
 
     private static func title(_ state: PiSessionState) -> String { state.title.isEmpty ? String(localized: "会话") : state.title }

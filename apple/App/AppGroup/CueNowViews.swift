@@ -14,7 +14,7 @@ extension AnyTransition {
 }
 
 /// "Cue 此刻"（`CueNow`）的现成样子，App、小组件、灵动岛与锁屏同一份：数字账（`CueLedger`）与头像的那一层（`cueFace`，扩展里的头像 `CueNowFace`；
-/// App 里会动的头像 `CueAvatar` 套同一层）。颜色只按意思取：拍板赭黄、待回复墨色、在跑与等子代理靛青、刚做完石绿、歇着灰。
+/// App 里会动的头像 `CueAvatar` 套同一层）。颜色只按意思取：拍板赭黄、待回复墨色、推进中与子代理（每件那一行的在跑、等子代理）靛青、刚做完石绿、歇着灰。
 /// 数字账：数字按意思上色、加粗，词是次要墨色；要你管的与推进中的两组之间比组里宽一截。排得下哪排画哪排（`CueNow.ledger` 由细到粗），
 /// 最粗那排还放不下先收紧间距，再不够去掉推进中那组；要你管的那组（拍板、待回复）永远写全、不截。没有可数的写那一句（`CueNow.quietLine`，起不来是胭脂色，不在是次要灰）。数字变了原地滚过去，换了说法先淡掉再淡入（`handOff`）。
 /// 每项只建一次，按量得的宽先挑出放得下的那排、只摆那排（`LedgerFit`）。
@@ -119,7 +119,7 @@ private struct LedgerFit: Layout {
 }
 
 extension CueNow.Entry {
-    /// 数接词（"3 在跑"）：每种一个整句的键，英文的语序在目录里（"3 running"、"1 for you"）；数加粗、着 `number` 色，词随外面。
+    /// 数接词（"4 推进中"）：每种一个整句的键，英文的语序在目录里（"4 active"、"1 for you"）；数加粗、着 `number` 色，词随外面。
     /// 数以整数进键（"%lld 待回复"），不以 `Text` 插进去：后者的键是"%@ 待回复"，与"会话名 待回复"撞成一条、只能有一种英文。
     /// 按纯文字取译文再给数上色：`AttributedString(localized:)` 每次要走一遍带格式的拼装与 Markdown 解析，数字账每排都要几个、侧栏名片冷启动就要排。
     func text(number: Color) -> Text { Text(line(number: number)) }
@@ -128,9 +128,8 @@ extension CueNow.Entry {
         let words = switch kind {
         case .asks: String(localized: "\(count) 拍板")
         case .reply: String(localized: "\(count) 待回复")
-        case .running: String(localized: "\(count) 在跑")
-        case .delegating: String(localized: "\(count) 等子代理")
         case .advancing: String(localized: "\(count) 推进中")
+        case .subagents: String(localized: "\(count) 子代理")
         }
         var line = AttributedString(words)
         if let digits = line.range(of: String(count)) {
