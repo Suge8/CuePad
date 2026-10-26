@@ -121,7 +121,7 @@ enum Schema {
   static let agentLibrariesTable = """
     CREATE TABLE agentLibraries (
       id TEXT PRIMARY KEY NOT NULL, hostID TEXT NOT NULL, home TEXT NOT NULL, skills TEXT, instructions TEXT, tidies TEXT, selfManaged TEXT,
-      modifiedAt INTEGER NOT NULL
+      agents TEXT, modifiedAt INTEGER NOT NULL
     ) STRICT;
     """
 

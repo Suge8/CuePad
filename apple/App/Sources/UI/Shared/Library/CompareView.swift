@@ -5,7 +5,7 @@ import SwiftUI
 /// 只有这一份有的段落垫一层牛皮纸色（差异不用状态色：不是出了错，只是"这里不一样"）。Mac 上几列并排、各自滚；手机上左右翻（露出下一张的边）。
 /// 说明合成成一份（`LibraryTidy.merged(retiring:)`，按段取并集），各家改成读它，原来的进废纸篓；替换基础提示的两份（Pi 的系统提示、Codex 的自定提示词）
 /// 只作比对，勾了"合进去，撤掉这份"才并进来并撤掉（`TidyOrder.retire`），不勾就原样留着。同名的技能每份底下一颗"留这份"，其余进废纸篓。
-/// 做完回到技能与说明页，结果与撤销在提示里（`Workspace.tidy`）；那件已经不在了（在别处整理过）也回去。
+/// 那件不在了就回技能与说明页（整理好了、在别处整理过）；合成了说明的，`Workspace.tidy` 换成合成出的那份说明的编辑页。结果与撤销在提示里，没成留在这里。
 struct CompareView: View {
     let tidyID: String
     let close: () -> Void
@@ -99,14 +99,18 @@ struct CompareView: View {
     /// 一份：头上是谁的、在哪、什么时候改的；正文按段，只有它有的垫底；可选撤掉的头下一个勾；同名技能底下"留这份"。
     private func sheet(_ page: Page, tidy: LibraryTidy, library: AgentLibrary) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 8) {
+            // 名字占满一行宽、写不下折成两行（各列都留两行的高，下面的正文各列对齐），不截；在哪、什么时候改的在下一行
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
                 if let mark = page.mark { mark.image } else if let icon = page.icon { Image(icon) }
-                Text(verbatim: page.name).font(Typography.bodyStrong).lineLimit(1)
-                Spacer(minLength: 4)
-                if let modified = page.modified { Text(verbatim: DateLabel.short(modified)).font(Typography.meta).foregroundStyle(palette.ink3) }
+                Text(verbatim: page.name).font(Typography.bodyStrong).lineLimit(2, reservesSpace: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
             .foregroundStyle(palette.ink)
-            Text(verbatim: page.place).font(Typography.meta).foregroundStyle(palette.ink3).lineLimit(1).truncationMode(.middle).padding(.top, 2)
+            HStack(spacing: 6) {
+                Text(verbatim: page.place).lineLimit(1).truncationMode(.middle)
+                if let modified = page.modified { Text(verbatim: DateLabel.short(modified)).fixedSize() }
+            }
+            .font(Typography.meta).foregroundStyle(palette.ink3).padding(.top, 2)
             if let origin = page.optional {
                 Toggle(isOn: Binding(get: { retire.contains(origin) }, set: { if $0 { retire.insert(origin) } else { retire.remove(origin) } })) {
                     Text("合进去，撤掉这份").font(Typography.meta).foregroundStyle(palette.ink2)
@@ -178,7 +182,6 @@ struct CompareView: View {
         Task {
             await workspace.tidy([order], in: library)
             working = false
-            close()
         }
     }
 

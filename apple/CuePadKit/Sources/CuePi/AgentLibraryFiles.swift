@@ -49,7 +49,8 @@ public struct AgentLibraryFiles: Sendable {
         let skills = LibrarySkillScan(places), instructions = LibraryInstructionScan(places)
         let library = AgentLibrary(
             hostID: host, home: integration.paths.userHome.path, skills: skills.skills, instructions: instructions.instructions,
-            tidies: Self.ordered(skills.tidies + instructions.tidies), selfManaged: skills.selfManaged, modifiedAt: Date())
+            tidies: Self.ordered(skills.tidies + instructions.tidies), selfManaged: skills.selfManaged, agents: places.installed,
+            modifiedAt: Date())
         // 各家的目录也盯着：装上一家（建出它的目录）就多一家要链接、要比的说明
         let homes = AgentKind.allCases.filter(integration.touches).map { integration.paths.home(of: $0).path }
         return (library, skills.watched.union(instructions.watched).union(homes + [integration.paths.agentsDirectory.path]))
@@ -95,7 +96,7 @@ public struct AgentLibraryFiles: Sendable {
     /// 写一份说明：文件此刻的内容不是 `edit.base` 就不写，抛 `changedOnMac`。链接写进它指的文件；还没有的建出来。
     @concurrent public func write(_ edit: InstructionEdit, projects: [UUID: String]) async throws {
         let file = try places(projects).file(edit.instruction).realPath
-        guard LibraryInstruction.base(of: LibraryInstructionScan.read(file)) == edit.base else { throw AgentLibraryError.changedOnMac }
+        guard LibraryInstruction.base(of: LibraryInstructionScan.content(file)) == edit.base else { throw AgentLibraryError.changedOnMac }
         try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
         try Data(edit.text.utf8).write(to: file, options: .atomic)
     }

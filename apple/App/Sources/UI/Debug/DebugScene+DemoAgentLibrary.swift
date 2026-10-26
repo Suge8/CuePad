@@ -37,7 +37,8 @@ struct DemoAgentLibrary {
     func library(host: String) -> AgentLibrary {
         AgentLibrary(
             hostID: host, home: home, skills: skills, instructions: instructions, tidies: clean ? [] : tidies,
-            selfManaged: [SelfManagedSkills(agent: .claudeCode, count: 13), SelfManagedSkills(agent: .codex, count: 5)], modifiedAt: .now)
+            selfManaged: [SelfManagedSkills(agent: .claudeCode, count: 13), SelfManagedSkills(agent: .codex, count: 5)],
+            agents: [.pi, .claudeCode, .codex], modifiedAt: .now)
     }
 
     /// 演示的 Mac Studio 照手机发来的整理与改说明改它的快照（`-CuePadDemoMac YES`，`runDemoMac`）：整理了的那几件不在了（链上了的各家都看得见），

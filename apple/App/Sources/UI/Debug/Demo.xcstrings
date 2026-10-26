@@ -3111,22 +3111,6 @@
         }
       }
     },
-    "对「登录回调超时」说" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tell “Login callback timeout”"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "对「登录回调超时」说"
-          }
-        }
-      }
-    },
     "对「登录回调超时」说：先复现回调等 token 刷新时一直挂着" : {
       "localizations" : {
         "en" : {

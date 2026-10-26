@@ -7,14 +7,12 @@ import SwiftUI
 /// 这台还没写下快照时（刚升级、第一次扫还没完）只写一句在读。
 struct LibraryPage: View {
     @Environment(Workspace.self) private var workspace
-    @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
-    @State private var mac: MacAgents?
 
     var body: some View {
         ScrollView {
             if let library = workspace.library {
-                let columns = library.columns(reported: mac?.kinds ?? [])
+                let columns = library.agents
                 LibraryColumns {
                     VStack(alignment: .leading, spacing: Spacing.section) {
                         if !library.tidies.isEmpty { TidySection(library: library).transition(.opacity) }
@@ -35,9 +33,6 @@ struct LibraryPage: View {
             }
         }
         .safeAreaPadding(.top, Bars.contentGap)
-        .observing(services.store, id: workspace.library?.hostID, into: $mac, onError: workspace.fail) { [host = workspace.library?.hostID ?? ""] in
-            try $0.macAgents(on: host)
-        }
     }
 }
 

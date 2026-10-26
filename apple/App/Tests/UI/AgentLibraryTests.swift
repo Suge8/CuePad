@@ -47,7 +47,9 @@ struct AgentLibraryTests {
         try skill("retro", in: codex.appending(path: "skills"))
         try FileManager.default.createDirectory(at: codex.appending(path: "skills/codex-primary-runtime"), withIntermediateDirectories: true)
         try skill("openai-docs", in: codex.appending(path: "skills/.system"))
-        try skill("from-claude-ai", in: claude.appending(path: "skills/synced"))
+        // claude.ai 同步的按账号分一层
+        try skill("from-claude-ai", in: claude.appending(path: "skills/synced/account-a"))
+        try skill("pdf", in: claude.appending(path: "skills/synced/account-b"))
         try write("# 原则\n\n先读后写\n", claude.appending(path: "CLAUDE.md"))
         try write("# 原则\n\n先读后写\n\n求证：以证据为准\n", codex.appending(path: "AGENTS.md"))
         let uploads = app.sync.uploads.stream
@@ -58,7 +60,8 @@ struct AgentLibraryTests {
         #expect(found.tidies.map(\.title) == ["「retro」在旧目录里", "Claude Code 看不见 1 个技能", "技能目录里有个空目录", "2 家的全局规则各写一份"])
         #expect(found.tidies.map(\.action) == [.move, .link, .trash, .compare])
         #expect(found.skills.map(\.name) == ["write-swift"] && found.skills[0].group == "development" && found.skills[0].unseenBy == [.claudeCode])
-        #expect(found.selfManaged == [SelfManagedSkills(agent: .claudeCode, count: 1), SelfManagedSkills(agent: .codex, count: 1)])
+        #expect(found.selfManaged == [SelfManagedSkills(agent: .claudeCode, count: 2), SelfManagedSkills(agent: .codex, count: 1)])
+        #expect(found.agents.contains(.claudeCode) && found.agents.contains(.codex), "装着就有一列，不看登没登录")
         #expect(found.instruction(.global)?.text == nil)
         var uploaded = uploads.makeAsyncIterator()
         #expect(await uploaded.next() == AgentLibrary.recordID(host: TestApp.hostID).uuidString.lowercased())
@@ -66,7 +69,8 @@ struct AgentLibraryTests {
         let workspace = Workspace(services: services)
         await workspace.tidy(found.automaticOrders, in: found)
 
-        #expect(workspace.notice?.text.visible == "整理好了 4 件")
+        #expect(workspace.notice?.text.visible == "整理好了 4 件，合成稿在这里，删掉重复的")
+        #expect(workspace.openLibraryItem == .instruction(.global), "合成完直接打开合成稿")
         let moved = agents.appending(path: "skills/retro")
         #expect(exists(moved.appending(path: "SKILL.md")) && !exists(codex.appending(path: "skills/retro")))
         #expect(RelativeLink.points(claude.appending(path: "skills/retro"), to: moved))
@@ -112,6 +116,7 @@ struct AgentLibraryTests {
         try write("全局规则\n", claude.appending(path: "CLAUDE.md"))
         try write("你是 Pi\n", pi.appending(path: "SYSTEM.md"))
         try write("你是 Codex\n", codex.appending(path: "prompt.md"))
+        try write("", codex.appending(path: "AGENTS.md"))  // 空文件等同没有：不算 Codex 写了一份、不进比对
         let config = "model = \"gpt\"\nmodel_instructions_file = \"prompt.md\"\n\n[tools]\nweb = true\n"
         try write(config, codex.appending(path: "config.toml"))
         let keeping = keep()
@@ -135,7 +140,8 @@ struct AgentLibraryTests {
             TidyOrder(tidy: global.id, retire: [.piSystem, .codexPrompt]),
         ], in: found)
 
-        #expect(workspace.notice?.text.visible == "整理好了 3 件")
+        #expect(workspace.notice?.text.visible == "整理好了 3 件，合成稿在这里，删掉重复的")
+        #expect(RelativeLink.points(codex.appending(path: "AGENTS.md"), to: agents.appending(path: "AGENTS.md")), "空的那份换成链接")
         #expect(!exists(folder.appending(path: ".codex/skills/lint")) && exists(other.appending(path: ".codex/skills/lint")))
         // 留项目里的那份：移走的只是和它撞名的全局那份，另一个项目的不动
         #expect(!exists(agents.appending(path: "skills/pr")) && exists(URL(filePath: projectCopy)) && exists(other.appending(path: ".agents/skills/pr")))
@@ -224,12 +230,14 @@ struct AgentLibraryTests {
         await quietPeriod(.milliseconds(300))  // 前面那些改动的跟随都过去了：下面这次只能由盯着 SYSTEM.md 读到
         try Data("你是 Pi，改过\n".utf8).write(to: pi.appending(path: "SYSTEM.md"))  // 原地写，不换文件，所在目录不变
         _ = try await library("系统提示跟上") { $0.instruction(.piSystem)?.text == "你是 Pi，改过\n" }
-        try skill("from-claude-ai", in: claude.appending(path: "skills/synced"))
+        try skill("from-claude-ai", in: claude.appending(path: "skills/synced/account-a"))
         _ = try await library("自管的计数跟上") { $0.selfManaged == [SelfManagedSkills(agent: .claudeCode, count: 1)] }
+        try skill("docx", in: claude.appending(path: "skills/synced/account-a"))  // 账号那一层也盯着
+        _ = try await library("同一个账号里又多一个") { $0.selfManaged == [SelfManagedSkills(agent: .claudeCode, count: 2)] }
         try skill("openai-docs", in: codex.appending(path: "skills/.system"))
         _ = try await library("Codex 自带的多了一个") { $0.selfManaged.contains(SelfManagedSkills(agent: .codex, count: 1)) }
         try FileManager.default.removeItem(at: codex.appending(path: "skills/.system/openai-docs"))
-        _ = try await library("Codex 自带的又没了") { $0.selfManaged == [SelfManagedSkills(agent: .claudeCode, count: 1)] }
+        _ = try await library("Codex 自带的又没了") { $0.selfManaged == [SelfManagedSkills(agent: .claudeCode, count: 2)] }
     }
 }
 #endif

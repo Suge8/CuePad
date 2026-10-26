@@ -14,7 +14,7 @@ struct LibraryScreen: View {
     var body: some View {
         ScrollView {
             if let library = workspace.library {
-                let columns = library.columns(reported: mac?.kinds ?? [])
+                let columns = library.agents
                 VStack(alignment: .leading, spacing: 28) {
                     if !library.tidies.isEmpty { TidySection(library: library).transition(.opacity) }
                     InstructionSection(library: library, columns: columns)

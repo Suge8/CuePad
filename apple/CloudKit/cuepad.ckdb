@@ -309,6 +309,7 @@ DEFINE SCHEMA
         instructions  ENCRYPTED STRING,
         tidies        ENCRYPTED STRING,
         selfManaged   ENCRYPTED STRING,
+        agents        ENCRYPTED STRING,
         modifiedAt    INT64,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"

@@ -13692,6 +13692,34 @@
         }
       }
     },
+    "整理好了 %lld 件，合成稿在这里，删掉重复的" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Tidied %lld item. The merged draft is open here; delete the duplicates."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Tidied %lld items. The merged draft is open here; delete the duplicates."
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "整理好了 %lld 件，合成稿在这里，删掉重复的"
+          }
+        }
+      }
+    },
     "整理技能与说明" : {
       "localizations" : {
         "en" : {

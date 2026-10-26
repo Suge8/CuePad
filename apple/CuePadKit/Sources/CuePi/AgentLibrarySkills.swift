@@ -5,7 +5,7 @@ import Foundation
 /// 照文件读出技能与技能那几种要整理的（位置见 `AgentLibraryPlaces`）。规则：
 /// - 有 `SKILL.md` 的目录是技能，不再往里找；没有的非空目录是分类（Claude Code 的目录只看一层），空的（只算 `.DS_Store` 也空）进"空目录"。
 /// - 格式取四家最严（`SkillProblem`）：格式不对的只进要整理，不列成技能、不搬、不链。
-/// - 旧目录里的：不是 CuePad 的（旧版副本由接入收掉）、不是各家自管的（Claude Code 的 `skills/synced`、Codex 的 `skills/.system`，只计数）；
+/// - 旧目录里的：不是 CuePad 的（旧版副本由接入收掉）、不是各家自管的（Claude Code 的 `skills/synced/<账号>/…`、Codex 的 `skills/.system`，只计数）；
 ///   链接不碰（Claude Code 目录里指到 `.agents` 的是它的技能链接）。搬到同层 `.agents/skills` 下的同一分类。
 /// - 同名：全局与项目之间、同一层里（旧目录里的按搬过去之后算）；两个项目各有一个不算。
 /// - Claude Code 看不见：它用着、链接的位置还空着（那里已有别的东西不碰）。
@@ -43,9 +43,7 @@ struct LibrarySkillScan {
                 }
                 strays += oldWalk.found
                 if let managed = old.agent.selfManagedDirectory, scope == .global {
-                    let directory = old.directory.appending(path: managed, directoryHint: .isDirectory)
-                    watched.insert(directory.path)  // 没有技能时也盯着（Codex 的 `.system` 走不到 `walk`）：多了少了，计数跟着变
-                    let count = Self.skillCount(in: directory)
+                    let count = managedCount(in: old.directory.appending(path: managed, directoryHint: .isDirectory))
                     if count > 0, !selfManaged.contains(where: { $0.agent == old.agent }) { selfManaged.append(SelfManagedSkills(agent: old.agent, count: count)) }
                 }
             }
@@ -138,8 +136,25 @@ struct LibrarySkillScan {
         AgentKind.allCases.contains { $0.selfManagedDirectory == name && root.lastPathComponent == "skills" }
     }
 
-    private static func skillCount(in directory: URL) -> Int {
-        entries(directory).filter { FileManager.default.fileExists(atPath: directory.appending(path: "\($0)/\(AgentSkill.fileName)").path) }.count
+    /// 各家自管目录里有几个技能：有 SKILL.md 的目录算一个，没有的往下找（Claude Code 的 `synced` 下先按账号分一层）。
+    /// 找过的目录都盯着，没有技能时也盯着（Codex 的 `.system` 走不到 `walk`）：多了少了，计数跟着变。
+    private mutating func managedCount(in directory: URL) -> Int {
+        var count = 0
+        func visit(_ directory: URL, depth: Int) {
+            watched.insert(directory.path)
+            for name in Self.entries(directory) where !name.hasPrefix(".") {
+                let item = directory.appending(path: name, directoryHint: .isDirectory)
+                var isDirectory: ObjCBool = false
+                guard FileManager.default.fileExists(atPath: item.path, isDirectory: &isDirectory), isDirectory.boolValue else { continue }
+                if FileManager.default.fileExists(atPath: item.appending(path: AgentSkill.fileName).path) {
+                    count += 1
+                } else if depth < Self.walkLimit {
+                    visit(item, depth: depth + 1)
+                }
+            }
+        }
+        visit(directory, depth: 0)
+        return count
     }
 
     /// 同名的几组（每组先全局、后各项目，按路径）：有全局的，连同各项目里同名的一组（留下哪份只移走和它撞名的，`LibraryTidying`）；

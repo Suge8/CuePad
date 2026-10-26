@@ -163,8 +163,10 @@ final class Workspace {
     /// 交给了会话的灵感与任务（`AgentLinks`，卡与行上的状态点读它）：整个窗口一份，页面直接读，
     /// 不各自订阅（挂着的页也不会在每次回到前台时重读一遍）。读到和已有的相同不送来（`observe(after:)` 在读取一侧比较），免得页面白算。
     private(set) var agentLinks = AgentLinks(items: [:], launching: [:])
-    /// 技能与说明（`AgentLibrary`：Mac 上是本机的，手机上是 Cue 运行的那台的）：入口的角标、技能与说明页、编辑页都读这一份；没有一台写过为 nil。
+    /// 技能与说明（`AgentLibrary`：Mac 上是本机的，手机上是 Cue 运行的那台的）：入口的角标、技能与说明页、编辑页与比一比都读这一份；
+    /// 同项目目录当场读（`readLibrary`），第一帧就是库里的样子；没有一台写过为 nil。
     private(set) var library: AgentLibrary?
+    @ObservationIgnored private var libraryStart: Snapshot<AgentLibrary?>?
 
     private func follow<T: Sendable & Equatable>(
         _ value: ReferenceWritableKeyPath<Workspace, T>, _ read: @escaping @Sendable (isolated CueStore) throws -> T
@@ -193,6 +195,7 @@ final class Workspace {
         sendState = SendState(services: services)
         #endif
         readCatalog()
+        readLibrary()
     }
 
     #if os(macOS)
@@ -258,9 +261,27 @@ final class Workspace {
 
     private func followAgentLinks() async { await follow(\.agentLinks) { try AgentLinks.read(from: $0) } }
 
+    private func readLibrary() {
+        let host = localHost
+        do {
+            libraryStart = try services.store.snapshot { try $0.agentLibrary(preferring: host) }
+            library = libraryStart?.value ?? nil
+        } catch {
+            fail(error)
+        }
+    }
+
+    /// 从当场读到的那份接着订阅（当场没读出来就从头订阅）。
     private func followLibrary() async {
         let host = localHost
-        await follow(\.library) { try $0.agentLibrary(preferring: host) }
+        let read: @Sendable (isolated CueStore) throws -> AgentLibrary? = { try $0.agentLibrary(preferring: host) }
+        guard let start = libraryStart else { return await follow(\.library, read) }
+        do {
+            for try await next in services.store.observe(from: start, read) { library = next }
+        } catch is CancellationError {
+        } catch {
+            fail(error)
+        }
     }
 
     private func readCatalog() {
@@ -301,6 +322,7 @@ final class Workspace {
     func retryCatalog() {
         catalogAttempt += 1
         readCatalog()
+        readLibrary()
     }
 
     #if os(macOS)

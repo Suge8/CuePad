@@ -72,15 +72,6 @@ extension Workspace {
     }
 }
 
-extension AgentLibrary {
-    /// 技能右端的几列：那台报的能用的几家（`MacAgents`），加上快照里提到的几家（谁看不见哪个技能、谁读哪份说明）——
-    /// 装了还没登录的那家也会看不见技能，它的空圈得有一列放。顺序同 `AgentKind`。
-    func columns(reported: [AgentKind]) -> [AgentKind] {
-        let named = Set(reported + skills.flatMap(\.unseenBy) + instructions.flatMap(\.readers))
-        return AgentKind.allCases.filter(named.contains)
-    }
-}
-
 extension SelfManagedSkills {
     /// "Claude Code 从 claude.ai 同步的 13 个"、"Codex 自带的 5 个"。
     var title: String {
@@ -138,7 +129,7 @@ nonisolated struct SkillGroups: Equatable {
     }
 }
 
-/// 一行技能右端的几列：这台 Mac 接入的每一家一列（顺序同 `AgentKind`），看得见是那家的标志，看不见留一个空圈。
+/// 一行技能右端的几列：这台装着的每一家一列（`AgentLibrary.agents`，与登没登录无关），看得见是那家的标志，看不见留一个空圈。
 /// 同一列上下对齐：哪家漏了哪个，一眼顺着列看出来。表头那一行（`header`）同列宽，标志是次一级墨色。
 struct AgentColumns: View {
     let columns: [AgentKind]

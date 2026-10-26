@@ -18,11 +18,14 @@ public struct AgentLibrary: Equatable, Sendable {
   public var tidies: [LibraryTidy]
   /// 各家自管、CuePad 不碰的技能有几个（接入面板写"不动：…"）
   public var selfManaged: [SelfManagedSkills]
+  /// 这台装着的几家（配置目录在的），按 `AgentKind` 的顺序：技能看不看得见按它们算（`LibrarySkill.unseenBy`），界面每家一列；
+  /// 与登没登录、能不能开会话（`MacAgents`）无关
+  public var agents: [AgentKind]
   public var modifiedAt: Date
 
   public init(
     hostID: String, home: String, skills: [LibrarySkill], instructions: [LibraryInstruction], tidies: [LibraryTidy],
-    selfManaged: [SelfManagedSkills] = [], modifiedAt: Date
+    selfManaged: [SelfManagedSkills] = [], agents: [AgentKind] = [], modifiedAt: Date
   ) {
     self.hostID = hostID
     self.home = home
@@ -30,6 +33,7 @@ public struct AgentLibrary: Equatable, Sendable {
     self.instructions = instructions
     self.tidies = tidies
     self.selfManaged = selfManaged
+    self.agents = agents
     self.modifiedAt = modifiedAt
   }
 
@@ -186,11 +190,11 @@ public enum AgentLibraryError: Error, Equatable, ShownError {
 
 extension AgentLibrary: Record {
   static let table = Table.agentLibraries
-  static let columns = ["id", "hostID", "home", "skills", "instructions", "tidies", "selfManaged", "modifiedAt"]
+  static let columns = ["id", "hostID", "home", "skills", "instructions", "tidies", "selfManaged", "agents", "modifiedAt"]
   var bindings: [any SQLBindable] {
     [
       Self.recordID(host: hostID), hostID, home, JSONColumn.encodeList(skills), JSONColumn.encodeList(instructions), JSONColumn.encodeList(tidies),
-      JSONColumn.encodeList(selfManaged), modifiedAt,
+      JSONColumn.encodeList(selfManaged), JSONColumn.encodeList(agents.map(\.rawValue)), modifiedAt,
     ]
   }
   init(row: Row) {
@@ -200,7 +204,8 @@ extension AgentLibrary: Record {
       instructions: JSONColumn.decodeList(Lenient<LibraryInstruction>.self, from: row.textOrNil(4)).compactMap(\.value),
       tidies: JSONColumn.decodeList(Lenient<LibraryTidy>.self, from: row.textOrNil(5)).compactMap(\.value),
       selfManaged: JSONColumn.decodeList(Lenient<SelfManagedSkills>.self, from: row.textOrNil(6)).compactMap(\.value),
-      modifiedAt: row.date(7))
+      agents: JSONColumn.decodeList(String.self, from: row.textOrNil(7)).compactMap(AgentKind.init(rawValue:)),
+      modifiedAt: row.date(8))
   }
 }
 

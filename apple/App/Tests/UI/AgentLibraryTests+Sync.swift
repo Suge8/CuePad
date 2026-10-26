@@ -53,7 +53,8 @@ extension AgentLibraryTests {
         #expect(read(folder.appending(path: "AGENTS.md")) == "手机改的\n")
 
         await workspace.tidy(library.automaticOrders, in: library)
-        #expect(workspace.notice?.text.visible == "整理好了 1 件")
+        #expect(workspace.notice?.text.visible == "整理好了 1 件，合成稿在这里，删掉重复的")
+        #expect(workspace.openLibraryItem == .instruction(.project(project.id)), "合成完直接打开合成出的那份说明")
         #expect(read(folder.appending(path: "AGENTS.md")) == "手机改的\n\n# 旧的 Claude 说明\n" && !exists(folder.appending(path: "CLAUDE.md")))
         try await eventually("手机上没有要整理的了") { workspace.library?.tidies.isEmpty == true }
     }
