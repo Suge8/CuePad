@@ -11,12 +11,10 @@ import os
 /// 开始上传前先对一次最低对端版本（`prepare`），成功为止；拉取不等它。
 ///
 /// 服务器拒收的单条记录不挡别的：协调器记下这一版跳过它（`SyncCoordinator.unsendable`），这一批照常算有进展。
-/// 整批的失败只有一个调度（`hold`）：协调器归类（`SyncFault`）后定下次最早什么时候发——连不上与账号按 `Backoff` 退避（有话在等时上限小），
-/// 服务器要求的等待照它，整个请求被拒停 `rejectedPause`。立即同步与按节奏的拉取顺带的一轮都守这个时刻；只有连通的证据（任何一次请求成功、
-/// 网络路径恢复）能提前结束连不上的等待。马上传与进后台前的那一轮（用户在等，试一次不费什么）越过连不上与被拒的等待，服务器要求的等待照守。
+/// 整批的失败交给同步层唯一的重试调度（协调器的 `hold`，与拉取共用）：立即同步与按节奏的拉取顺带的一轮都守它的时刻，等待结束时（`retryDue`）接着发。
+/// 马上传与进后台前的那一轮（用户在等，试一次不费什么）越过连不上与被拒的等待，服务器要求的等待照守。
 actor RecordSender {
   static let gatherWindow = Duration.milliseconds(300)
-  static let rejectedPause = Duration.seconds(60)
   /// 一轮至多发这么多批，余下的接着下一轮（防止被拒又处理不好的记录让一轮停不下来）。
   static let batchesPerRound = 100
   private static let log = Logger(subsystem: AppIdentity.id, category: "sync")
@@ -28,7 +26,7 @@ actor RecordSender {
   private let trigger: AsyncStream<Void>.Continuation
   private var tasks: [Task<Void, Never>] = []
 
-  /// 下一轮不攒窗口（立即同步、重试到点、连通了）；`urgentRound` 另越过连不上与被拒的等待（进后台前，`admitted`）。
+  /// 下一轮不攒窗口（立即同步、重试到点、连通了）；`urgentRound` 另越过连不上与被拒的等待（进后台前，`SyncCoordinator.admits`）。
   private var explicit = false
   private var urgentRound = false
   /// 等下一轮结束的（`flush`）；轮开始时取走、轮结束时答复。
@@ -46,10 +44,6 @@ actor RecordSender {
   private var waiters: [(remaining: Set<String>, received: Bool, continuation: CheckedContinuation<Bool, Never>)] = []
   private var urgentRuns: [Int: Task<Void, Never>] = [:]
   private var nextRun = 0
-  private var backoff = Backoff()
-  /// 下次最早什么时候发、因为什么，其中服务器给的最早时刻（连通的证据也不提前它）：唯一的重试调度。
-  private var hold: (until: ContinuousClock.Instant, fault: SyncFault, notBefore: ContinuousClock.Instant)?
-  private var retry: Task<Void, Never>?
   private var limit = CloudKitLimits.recordsPerRequest
   private var busy = false
 
@@ -60,23 +54,20 @@ actor RecordSender {
     (triggers, trigger) = AsyncStream.makeStream(bufferingPolicy: .bufferingNewest(1))
   }
 
-  /// 开始跟随本机提交、连通的证据与网络变化，并立即发一轮（上次没发完的）。
+  /// 开始跟随本机提交与重试的等待结束，并立即发一轮（上次没发完的）。
   func start() async {
     let changes = await coordinator.store.syncChanges()  // 先订阅：返回后的提交都不会漏
-    let connectivity = coordinator.connectivity.stream()
-    let network = NetworkReturns.stream()
+    let due = coordinator.retryDue.stream()
     tasks = [
       Task { [triggers] in for await _ in triggers { await self.round() } },
       Task { [trigger] in for await _ in changes { trigger.yield() } },
-      Task { for await _ in connectivity { self.connected() } },
-      Task { for await _ in network { self.connected() } },
+      Task { for await _ in due { self.resume() } },
     ]
     kick()
   }
 
   func stop() {
     tasks.forEach { $0.cancel() }
-    retry?.cancel()
     for waiter in waiters { waiter.continuation.resume(returning: false) }
     waiters = []
     for flush in flushes { flush.resume() }
@@ -136,9 +127,9 @@ actor RecordSender {
     let waiting = flushes
     flushes = []
     defer { waiting.forEach { $0.resume() } }
-    guard admitted(urgent: urgent), await coordinator.canSync, await ready() else { return }
+    guard await coordinator.admits(.upload(urgent: urgent)), await coordinator.canSync, await ready() else { return }
     for _ in 0..<Self.batchesPerRound {
-      guard admitted(urgent: urgent) else { return }  // 另一路这期间被要求等了
+      guard await coordinator.admits(.upload(urgent: urgent)) else { return }  // 另一路这期间被要求等了
       // 准备不了（停下了、读库出错）由协调器记下状态，下一次触发再来
       guard var batch = try? await coordinator.nextBatch(.pending(excluding: inFlight), limit: limit) else { return }
       batch.drop(inFlight)  // 挑的时候马上传那一路占下的
@@ -153,7 +144,7 @@ actor RecordSender {
   private func sendUrgent() async {
     let wanted = urgent.subtracting(inFlight)
     guard !wanted.isEmpty else { return }
-    guard admitted(urgent: true), await coordinator.canSync, await ready() else { return answer(wanted, received: []) }
+    guard await coordinator.admits(.upload(urgent: true)), await coordinator.canSync, await ready() else { return answer(wanted, received: []) }
     let reserved = wanted.subtracting(inFlight)  // 等的时候后台那一路可能已带走
     inFlight.formUnion(reserved)
     let prepared = try? await coordinator.nextBatch(.only(reserved), limit: limit)
@@ -200,15 +191,14 @@ actor RecordSender {
       answer(names, received: Set(sent.saved.map(\.recordID.recordName) + sent.deleted.map(\.recordName)))
       if outcome.zoneMissing { try await uploader.saveZone() }
       if let fault = outcome.fault {
-        schedule(fault)
+        await schedule(fault)
         return false
       }
       guard outcome.progressed else {
-        schedule(.wait(nil))
+        await schedule(.wait(nil))
         return false
       }
-      backoff.reset()
-      settled()
+      await coordinator.progressed()
       return true
     } catch let error as CKError where error.code == .limitExceeded && limit > 1 {
       limit /= 2  // 这一批太大：减半再试（马上传那一路的由后台那一路接着发）
@@ -221,7 +211,7 @@ actor RecordSender {
         await coordinator.zoneMissing(deletedByUser: true)
         return false
       }
-      schedule(await coordinator.failed(error))
+      await schedule(await coordinator.failed(error))
       return false
     }
   }
@@ -238,7 +228,7 @@ actor RecordSender {
         return false
       } catch {
         Self.log.notice("对最低对端版本失败，暂不上传：\(error.brief, privacy: .public)")
-        schedule(await coordinator.failed(error))
+        await schedule(await coordinator.failed(error))
         return false
       }
     }
@@ -248,59 +238,13 @@ actor RecordSender {
     return prepared
   }
 
-  // MARK: 重试调度
+  // MARK: 重试
 
-  /// 此刻能不能发：没有在等的，或是用户在等的一轮（`urgent`）而等的是连不上或整个请求被拒、服务器给的最早时刻已过。
-  private func admitted(urgent: Bool) -> Bool {
-    let now = ContinuousClock.now
-    guard let hold, now < hold.until else { return true }
-    guard urgent, now >= hold.notBefore else { return false }
-    return switch hold.fault {
-    case .offline, .rejected: true
-    case .wait, .account: false
-    }
+  private func schedule(_ fault: SyncFault) async {
+    await coordinator.hold(fault, waiting: !urgent.isEmpty)
   }
 
-  /// 定下次最早什么时候发（见类型注释）。
-  private func schedule(_ fault: SyncFault) {
-    let now = ContinuousClock.now
-    let cap = urgent.isEmpty ? nil : Backoff.waitingCap
-    // 另一路先前得到的服务器等待照守：两路的结果先后回来，后到的不缩短它
-    let notBefore = max(now + (fault.retryAfter ?? .zero), hold?.notBefore ?? now)
-    let until: ContinuousClock.Instant =
-      switch fault {
-      case .offline: now + backoff.next(cap: cap)
-      case .wait(let given): given.map { now + $0 } ?? now + backoff.next(cap: cap)
-      case .account: now + backoff.next()
-      case .rejected: now + Self.rejectedPause
-      }
-    hold = (max(until, notBefore), fault, notBefore)
-    wake(at: max(until, notBefore))
-  }
-
-  private func wake(at until: ContinuousClock.Instant) {
-    retry?.cancel()
-    retry = Task {
-      try? await Task.sleep(until: until, clock: .continuous)
-      guard !Task.isCancelled else { return }
-      self.resume()
-    }
-  }
-
-  /// 有一批收下了：退避的等待到此为止，服务器给的最早时刻照守（另一路被限流时它还在）。
-  private func settled() {
-    guard let hold, ContinuousClock.now < hold.notBefore else { return clearHold() }
-    self.hold = (hold.notBefore, hold.fault, hold.notBefore)
-    wake(at: hold.notBefore)
-  }
-
-  private func clearHold() {
-    hold = nil
-    retry?.cancel()
-    retry = nil
-  }
-
-  /// 到点或连通了：有话在等先只发它们，成了再发一轮后台的（没成就又定了时刻，那一轮守着它）：断网时每次重试只一个请求。
+  /// 等待结束：有话在等先只发它们，成了再发一轮后台的（没成就又定了时刻，那一轮守着它）：断网时每次重试只一个请求。
   private func resume() {
     guard !urgent.isEmpty else { return kick() }
     let run = runUrgent()
@@ -310,21 +254,9 @@ actor RecordSender {
     }
   }
 
-  /// 连通的证据（任何一次请求成功、网络路径恢复）：因连不上在等的不再等退避，服务器给的最早时刻照守。
-  private func connected() {
-    guard let hold, hold.fault.isOffline else { return }
-    guard ContinuousClock.now >= hold.notBefore else {
-      self.hold?.until = hold.notBefore
-      return wake(at: hold.notBefore)
-    }
-    clearHold()
-    resume()
-  }
-
-  /// 同步中：有一批在路上，或服务器要求等着重发（连不上、账号、出错各有自己的状态）。
+  /// 同步中：有一批在路上（服务器要求等着重发由协调器记）。
   private func updateBusy() async {
-    let waiting = if case .wait = hold?.fault { true } else { false }
-    let now = !inFlight.isEmpty || waiting
+    let now = !inFlight.isEmpty
     guard now != busy else { return }
     busy = now
     await coordinator.setSending(now)

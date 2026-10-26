@@ -5,7 +5,8 @@ import os
 
 /// 同步逻辑：远端变更应用、上传批次与结果处理、账号与状态。不碰网络：拉取器（`ZonePuller.pulled`）、发送者（`sent`、`nextBatch`）
 /// 与账号检查（`CloudSync`）把服务器给的直接交进来。待推送只有库里推导的一份（`CueStore.pendingSync`）。
-/// 失败（服务器的与本机读写的）只经 `failed` 按 `SyncFault` 改状态、记问题；任何一次请求成功经 `succeeded` 收掉离线、同步出错与请求类的问题，并告诉发送者网络通了（`connectivity`）。
+/// 失败（服务器的与本机读写的）只经 `failed` 按 `SyncFault` 改状态、记问题，下次什么时候再发只经 `hold`（`SyncCoordinator+Hold`）；
+/// 任何一次请求成功经 `succeeded` 收掉离线、同步出错与请求类的问题，并提前结束连不上的等待（`connected`）。
 actor SyncCoordinator {
   static let issueLimit = 50
   static let log = Logger(subsystem: AppIdentity.id, category: "delivery")
@@ -16,8 +17,12 @@ actor SyncCoordinator {
   private let states = Broadcast(latest: Facts().state)
   /// 服务器收下了本机的一批改动（`CloudSync.acceptedUpdates`）。
   nonisolated let acceptances = Broadcast<Void>()
-  /// 任何一次请求成功（连通的证据）：发送者因连不上在退避时据此当场再发（`RecordSender`）。
-  nonisolated let connectivity = Broadcast<Void>(bufferingPolicy: .bufferingNewest(1))
+  /// 重试的等待结束了（到点、连通了、收下了一批）：发送者接着发，拉取器补上被挡下的那一拉（`SyncCoordinator+Hold`）。
+  nonisolated let retryDue = Broadcast<Void>(bufferingPolicy: .bufferingNewest(1))
+  /// 下次最早什么时候发、因为什么（`hold`）；nil 是不用等。
+  var holding: Hold?
+  var backoff = Backoff()
+  var retryTimer: Task<Void, Never>?
   /// 这一版传不上去的记录与它的修改时间（删除记 `.min`）：附件文件不在本机、服务器拒收（`SyncFault.rejected`）。
   /// 同一版不再每批重试、重复报告，也不挡别的记录；改过再试，重启 App 也再试一次。
   var unsendable: [String: Int64] = [:]
@@ -31,15 +36,17 @@ actor SyncCoordinator {
     var status = SyncStatus.starting
     var sending = false
     var catchingUp = false
+    /// 服务器要求等着再发（限流、区忙）
+    var serverWait = false
     /// 库里有同步区令牌（`token()`、`setToken` 读写时记下）
     var reconciled = false
     var issues: [SyncIssue] = []
     var alerts = PiAlertSubscriptionStatus.off
 
-    /// 界面看到的快照："同步中"是底层空闲、而一轮上传或拉积压正在进行。
+    /// 界面看到的快照："同步中"是底层空闲、而一轮上传或拉积压正在进行，或服务器要求等着再发。
     var state: SyncState {
       SyncState(
-        status: status == .idle && (sending || catchingUp) ? .syncing : status, issues: issues, alerts: alerts, catchingUp: catchingUp,
+        status: status == .idle && (sending || catchingUp || serverWait) ? .syncing : status, issues: issues, alerts: alerts, catchingUp: catchingUp,
         reconciled: reconciled)
     }
   }
@@ -177,9 +184,9 @@ actor SyncCoordinator {
   // MARK: 成功与失败
 
   /// 一次请求成功（拉完、收下了上传、对过门槛）：连上了。正在连接、连不上、账号暂不可用回到空闲，请求类的问题消失，没有失败类的问题了就不再是同步出错；
-  /// 告诉发送者网络通了。停下时不改状态。
+  /// 连不上的等待提前结束（`connected`）。停下时不改状态。
   func succeeded() {
-    connectivity.yield(())
+    connected()
     guard !stopped else { return }
     var next = facts
     next.issues.removeAll { $0.kind == .request }

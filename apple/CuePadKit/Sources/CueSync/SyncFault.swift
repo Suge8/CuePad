@@ -41,6 +41,10 @@ enum SyncFault: Equatable, Sendable {
     if case .offline = self { true } else { false }
   }
 
+  var isWait: Bool {
+    if case .wait = self { true } else { false }
+  }
+
   /// 服务器给的最早重试间隔。
   var retryAfter: Duration? {
     switch self {
