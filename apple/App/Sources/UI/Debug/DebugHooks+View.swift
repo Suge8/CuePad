@@ -102,6 +102,7 @@ extension View {
             await DebugScene.signalReady(workspace.services)
             // 接力与关窗不挂在窗口内容上：关窗时内容摘下（`MainShellWindow`），内容上的任务跟着停
             Task { await DebugScene.wakeIfAsked(workspace) }
+            Task { await DebugScene.composerNoticeIfAsked(workspace.services) }
             Task { await DebugScene.replyBlinkIfAsked(workspace.services.store) }
             Task {
                 let from = workspace.root
@@ -143,6 +144,7 @@ extension View {
                 await DebugScene.prepare(workspace)
                 DebugScene.noticeIfAsked(workspace)
                 await DebugScene.signalReady(workspace.services)
+                async let notices: Void = DebugScene.composerNoticeIfAsked(workspace.services)
                 async let wakes: Void = DebugScene.wakeIfAsked(workspace)
                 async let blinks: Void = DebugScene.replyBlinkIfAsked(workspace.services.store)
                 let from = (workspace.root, workspace.path)
@@ -158,7 +160,7 @@ extension View {
                 async let tour: Void = DebugScene.dockTourIfAsked(workspace)
                 async let cueNow: Void = DebugScene.cueNowTourIfAsked(workspace.cue)
                 await DebugScene.cycleIfAsked(workspace.services)
-                _ = await (wakes, blinks, says, relays, flow, away, tour, cueNow)
+                _ = await (notices, wakes, blinks, says, relays, flow, away, tour, cueNow)
             }
         #else
         self

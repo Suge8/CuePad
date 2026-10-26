@@ -161,9 +161,9 @@ struct NewSessionInput: View {
 
     @ViewBuilder private func statusLine(_ status: Status) -> some View {
         switch status {
-        case .noMac: Text(CueStoreError.noMac.localizedDescription).foregroundStyle(palette.ink3)
+        case .noMac: MacInputNotice(noMac: true)
         case .noAgents(let agents): Text("\(agents.shownName)：\(agents.whyNone)").foregroundStyle(palette.ink3)
-        case .unreachable: SyncHint(status: services.syncStatus, consequence: "发不到 Mac")
+        case .unreachable: MacInputNotice()
         case .phase(.failed(let failure)): Text(failure.text(sync: services.syncStatus)).foregroundStyle(palette.failure)
         case .phase(.sending(let transit)):
             HStack(spacing: 6) { Spinner(.mini); Text(transit.label) }.font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink2)

@@ -92,10 +92,10 @@ struct PiConversation: View {
         if let slot {
             SessionDraft(slot: slot, session: session, newestReply: messages.last { $0.role == .known(.pi) }?.at)
         } else {
-            ChatLiveSlot(gap: 0) { liveStatus }
+            ChatLiveSlot { liveStatus }
         }
         #else
-        ChatLiveSlot(gap: 0) { liveStatus }
+        ChatLiveSlot { liveStatus }
         #endif
         if session.state == .known(.error), !PiErrorSummary.echoes(messages.last { $0.role == .known(.pi) }?.text, line: session.detail) {
             Callout(.failed, text: session.detail ?? String(localized: "Mac 没有说明原因"))
@@ -131,7 +131,7 @@ struct SessionDraft: View {
                     }
                 }
             }
-            ChatLiveSlot(gap: 0) {
+            ChatLiveSlot {
                 if speaking || landed && session.state.known?.isTurnRunning == true {
                     PiSubagentList(agents: session.subagents)
                 } else if session.state.isWorking || !session.subagents.isEmpty {

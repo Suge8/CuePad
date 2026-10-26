@@ -1,5 +1,4 @@
 import CueStore
-import CueSync
 import SwiftUI
 
 /// 会话页的回复框（iOS 与 Mac 同一份）：共用的 `Composer`，去处是这个 Agent 会话（＋ 选卡片与图片）。
@@ -100,10 +99,7 @@ struct PiReplyBar: View {
             composer.composerNotice(commandProgress != nil || expanded && (!reachable || config?.failure != nil)) {
                 if let commandProgress { progressLine(commandProgress) }
                 if expanded {
-                    if !reachable { SyncHint(status: services.syncStatus) }
-                    if let failure = config?.failure {
-                        Text("没换成：\(failure.text(sync: services.syncStatus))").font(Typography.caption).foregroundStyle(palette.failure)
-                    }
+                    MacInputNotice(failure: config?.failure, consequence: "看到的可能不是最新，也发不到 Mac")
                 }
             }
         }
@@ -265,21 +261,6 @@ struct PiReplyBar: View {
         }
         // 图片存不进图片库时什么都没发：不收键盘、不当作发出
         if written != nil { didSend(talked: command == nil) }
-    }
-}
-
-/// 同步到不了 Mac 时的一句提示（Agent 页同步图标点开、会话回复框上、新会话）：哪里不通；详情与处理在设置里。
-struct SyncHint: View {
-    let status: SyncStatus
-    /// 这对眼前的事意味着什么：浮起的输入框里只关心发不发得出去。
-    var consequence: LocalizedStringResource = "看到的可能不是最新，也发不到 Mac"
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        let summary = SyncSummary(status)
-        Label { Text("\(summary.title)：\(Text(consequence))") } icon: { Image(summary.icon) }
-            .font(Typography.meta).foregroundStyle(palette.ink3)
-            .lineLimit(2)
     }
 }
 
