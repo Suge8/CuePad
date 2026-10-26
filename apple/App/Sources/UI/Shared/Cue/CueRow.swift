@@ -122,6 +122,7 @@ nonisolated struct CueLiveRound: Equatable {
 /// （`CueKeeper.speech`，同会话页的 `SessionDraft`）：只有这个视图读它，出字时对话列表不重算；它与对话在同一次更新里拿到同一份对话，
 /// 落库了（`PiDraft.landed`）就不再显示，换下是同一帧里的一减一加。有草稿时（说着、已落库而 Cue 的状态还没歇下）那一行留白（话已经在说、说完了）；
 /// 中途转成工具调用时桥清掉草稿，那一行写进展。进展那一行被换下时直接拿掉，不与正在说的话叠着淡出。别的 Mac 与手机只有进展那一行。
+/// 待回复提示（`CueReplyTip`）落在这一行的位置上：它在时盖住这一行。
 struct CueEnding: View {
     /// 对话里最近一条 Cue 的话的时刻
     let newestSaid: Date?
@@ -145,9 +146,9 @@ struct CueEnding: View {
                 .padding(.top, CuePage.gap(before: .leading, joined: joined))
                 .transition(.asymmetric(insertion: CueBubble.arrival, removal: .identity))
             }
-            ChatLiveSlot(gap: CuePage.gap(before: nil, joined: false), font: CueDoing.font) { if draft == nil { live } }
+            ChatLiveSlot(gap: CuePage.gap(before: nil, joined: false), font: CueDoing.font, floating: CueReplyTip.clearance) { if draft == nil { live } }
             #else
-            ChatLiveSlot(gap: CuePage.gap(before: nil, joined: false), font: CueDoing.font) { live }
+            ChatLiveSlot(gap: CuePage.gap(before: nil, joined: false), font: CueDoing.font, floating: CueReplyTip.clearance) { live }
             #endif
         }
     }
