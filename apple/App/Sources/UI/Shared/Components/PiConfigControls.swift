@@ -133,7 +133,6 @@ struct PiConfigControls<Trailing: View>: View {
 /// 工具排：胶囊按内容宽从左排成一行，竖直居中，整排不超出给的宽（超出的话输入框跟着撑宽、伸出屏幕两边）。
 /// 一行放不下时按 `Give` 的次序一步步让，够了就停；让完还放不下（字号大、模型名长）就折到下一行，胶囊都按内容宽、不截字：
 /// 模型名是这一排要读的字，截成"…"就认不出用的是哪个模型。只有一枚自己就比整排宽时才截它。
-/// 按给的宽排好的（`Arranged`）记在缓存里：量与摆、一次排版里按几种宽轮流问（输入框量高时问无穷宽与实际宽）都不重排；胶囊一变就换一份新缓存。
 private struct ConfigRow: Layout {
     /// 让的次序：先去掉思考强度前的"思考"二字（`PiThinkingDial`），再收紧间距，再把"上下文"收成圆环（`PiContextGauge`）。
     enum Give: CaseIterable { case wording, spacing, context }
@@ -141,7 +140,7 @@ private struct ConfigRow: Layout {
     private static let spacing: CGFloat = 6
     private static let tightSpacing: CGFloat = 2
 
-    struct Arrangement {
+    private struct Arrangement {
         var widths: [CGFloat]
         var spacing: CGFloat
         /// 每行从第几枚起；一行时只有 0。
@@ -153,39 +152,24 @@ private struct ConfigRow: Layout {
         }
     }
 
-    /// 按一种宽排好的：怎么排与每行的尺寸。
-    struct Arranged {
-        let row: Arrangement
-        let lines: [(range: Range<Int>, size: CGSize)]
-    }
-
-    func makeCache(subviews: Subviews) -> [CGFloat?: Arranged] { [:] }
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout [CGFloat?: Arranged]) -> CGSize {
-        let lines = arranged(in: proposal.width, subviews, cache: &cache).lines.map(\.size)
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let row = arrange(in: proposal.width, subviews)
+        let lines = row.lines(subviews.count).map { line(row, $0, subviews) }
         return CGSize(width: lines.map(\.width).max() ?? 0, height: lines.map(\.height).reduce(0, +))
     }
 
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout [CGFloat?: Arranged]) {
-        let arranged = arranged(in: proposal.width, subviews, cache: &cache)
-        let row = arranged.row
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let row = arrange(in: proposal.width, subviews)
         var y = bounds.minY
-        for (range, size) in arranged.lines {
+        for range in row.lines(subviews.count) {
+            let height = line(row, range, subviews).height
             var x = bounds.minX
             for index in range {
-                subviews[index].place(at: CGPoint(x: x, y: y + size.height / 2), anchor: .leading, proposal: ProposedViewSize(width: row.widths[index], height: size.height))
+                subviews[index].place(at: CGPoint(x: x, y: y + height / 2), anchor: .leading, proposal: ProposedViewSize(width: row.widths[index], height: height))
                 x += row.widths[index] + row.spacing
             }
-            y += size.height
+            y += height
         }
-    }
-
-    private func arranged(in available: CGFloat?, _ subviews: Subviews, cache: inout [CGFloat?: Arranged]) -> Arranged {
-        if let arranged = cache[available] { return arranged }
-        let row = arrange(in: available, subviews)
-        let arranged = Arranged(row: row, lines: row.lines(subviews.count).map { ($0, line(row, $0, subviews)) })
-        cache[available] = arranged
-        return arranged
     }
 
     private func line(_ row: Arrangement, _ range: Range<Int>, _ subviews: Subviews) -> CGSize {
