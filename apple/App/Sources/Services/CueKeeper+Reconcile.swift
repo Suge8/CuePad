@@ -66,7 +66,11 @@ extension CueKeeper {
 
             let due = try await store.dueCueSchedules(at: now)
             if !due.isEmpty {
-                guard try await wakeUp(.schedule(due.compactMap { line in line.remindAt.map { CueFire(line: line.id, due: $0) } })) else { return }
+                // 错过了几次的只补最近的那一次：本该几点记那一次
+                let fires = due.compactMap { line in
+                    line.remindAt.map { CueFire(line: line.id, due: line.repeats?.latest(from: $0, until: now) ?? $0) }
+                }
+                guard try await wakeUp(.schedule(fires)) else { return }
                 try await store.fireCueSchedules(due, at: now)
                 return
             }

@@ -63,11 +63,23 @@ struct ScheduleTests {
         await rig.stop()
     }
 
-    /// Mac 关着时错过了好几次每天 9:00 的定时：启动、启用 Cue 后只叫醒一次（定时到点），之后排到下一次；
+    /// 你要的重复写不成定时（隔天一次）：Cue 收到退回，不悄悄定成每天。
+    @Test(.enabled(if: FileManager.default.isExecutableFile(atPath: realPi.path), "需要 ~/.local/bin/pi"))
+    func 写不成的重复_退回不定() async throws {
+        let rig = try await CueHostTests.Rig()
+        try await rig.say("请隔天 9 点清理分支")
+        try await rig.message(.cue, containing: "办好了")
+        #expect(try await rig.store.cueSchedules().isEmpty)
+        await rig.stop()
+    }
+
+    /// Mac 关着时错过了三次每天的定时：启动、启用 Cue 后只叫醒一次（定时到点），记的是最近错过的那一次，之后排到下一次；
     /// 那一次错过了、刚补上，任务气泡与"记得什么"读得到这句事实。
     @Test(.enabled(if: FileManager.default.isExecutableFile(atPath: realPi.path), "需要 ~/.local/bin/pi"))
     func 错过的每天定时_启动后只补一次_排到下一次() async throws {
-        let missed = Date.now.addingTimeInterval(-3 * 86_400)
+        // 三天前起每天这个时刻，最近错过的一次在 23 小时前
+        let start = Date.now.addingTimeInterval(-3 * 86_400 + 3600)
+        let missed = Date(timeIntervalSince1970: (start.timeIntervalSince1970 / 60).rounded(.down) * 60)
         let clock = Calendar.current.dateComponents([.hour, .minute], from: missed)
         let daily = CueRepeat(.daily, hour: clock.hour!, minute: clock.minute!)
         let rig = try await CueHostTests.Rig(prepare: { rig in
@@ -81,7 +93,8 @@ struct ScheduleTests {
         #expect(next <= .now.addingTimeInterval(86_400))
         #expect(Calendar.current.dateComponents([.hour, .minute], from: next) == DateComponents(hour: clock.hour, minute: clock.minute))
         let last = try #require(scheduled.last)
-        #expect(abs(last.due.timeIntervalSince(missed)) < 0.01 && last.late)
+        let latest = try #require(Calendar.current.date(byAdding: .day, value: 2, to: missed))
+        #expect(abs(last.due.timeIntervalSince(latest)) < 1 && last.late)
         await quietPeriod(.seconds(2))
         #expect(try await rig.store.cueMessages().filter { if case .schedule? = $0.wake { true } else { false } }.count == 1)
         await rig.stop()

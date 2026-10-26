@@ -74,8 +74,9 @@ struct ScheduleDraft: Equatable {
 /// 最下面一行写改完的下一次在哪台 Mac 上（定时到点由那台 Mac 上的 Cue 开工），已有的定时右边是"不再定时"。
 struct ScheduleEditor: View {
     let text: String
-    @State var draft: ScheduleDraft
-    let save: (ScheduleDraft) -> Void
+    /// 手上的那一份归调用方：点"好"与调用方自己的提交（"记一条"按回车）存的是同一份
+    @Binding var draft: ScheduleDraft
+    let save: () -> Void
     let cancel: () -> Void
     /// 已有的定时才有：不再定时（忘掉这一条）
     var end: (() -> Void)?
@@ -88,7 +89,7 @@ struct ScheduleEditor: View {
                 Label("定时", icon: .schedule).font(BubbleMetrics.strong).foregroundStyle(palette.ink)
                 Spacer(minLength: 8)
                 Button("取消", action: cancel).buttonStyle(PressStyle(.inline)).foregroundStyle(palette.ink2)
-                Button { save(draft) } label: {
+                Button(action: save) {
                     Text("好").font(BubbleMetrics.meta.weight(.semibold)).foregroundStyle(palette.onFill)
                         .padding(.horizontal, 14).frame(height: BubbleMetrics.capsule)
                         .background(palette.signatureFill, in: .capsule).contentShape(.capsule)
@@ -178,20 +179,26 @@ private struct WeekdayChip: View {
 /// 与下面会话那一条（`AgentStrip`）同一种底、同一种圆角。
 struct ScheduleStrip: View {
     let scheduled: CueScheduled
-    @State private var editing = DebugHooks.preset.scheduleOpen
+    /// 在改时手上的那一份；nil 是没在改
+    @State private var draft: ScheduleDraft?
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
+    init(scheduled: CueScheduled) {
+        self.scheduled = scheduled
+        _draft = State(initialValue: DebugHooks.preset.scheduleOpen ? ScheduleDraft(scheduled.line) : nil)
+    }
+
     var body: some View {
         let line = scheduled.line, id = line.id
-        if editing {
+        if let editing = draft {
             ScheduleEditor(
-                text: "", draft: ScheduleDraft(line),
-                save: { draft in
-                    workspace.rescheduleCueLine(id, draft)
-                    editing = false
+                text: "", draft: Binding { draft ?? editing } set: { draft = $0 },
+                save: {
+                    workspace.rescheduleCueLine(id, draft ?? editing)
+                    draft = nil
                 },
-                cancel: { editing = false }, end: { workspace.forgetCueLine(id) })
+                cancel: { draft = nil }, end: { workspace.forgetCueLine(id) })
             .transition(.opacity)
         } else {
             HStack(alignment: .top, spacing: BubbleMetrics.gap) {
@@ -205,7 +212,7 @@ struct ScheduleStrip: View {
                     }
                 }
                 Spacer(minLength: 4)
-                Button { editing = true } label: {
+                Button { draft = ScheduleDraft(line) } label: {
                     Text("改").font(BubbleMetrics.meta.weight(.semibold)).foregroundStyle(palette.ink)
                         .padding(.horizontal, 14).frame(height: BubbleMetrics.capsule)
                         .background(palette.fill, in: .capsule).contentShape(.capsule)

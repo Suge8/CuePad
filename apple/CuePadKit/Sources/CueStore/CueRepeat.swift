@@ -25,14 +25,21 @@ public struct CueRepeat: Hashable, Sendable {
   /// RRULE 的星期写法，下标 + 1 是 `Calendar` 的 weekday
   private static let days = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"]
 
-  /// 读 RRULE 子集；没写 BYHOUR、BYMINUTE 时取 `time` 在 `calendar` 里的时刻。写法不在子集里为 nil。
+  /// 每种频率认的字段：别的（INTERVAL、COUNT、UNTIL……）照不了它的意思，整条不认，不悄悄丢掉
+  private static let fields: [String: Set<String>] = [
+    "DAILY": ["FREQ", "BYHOUR", "BYMINUTE"], "WEEKLY": ["FREQ", "BYDAY", "BYHOUR", "BYMINUTE"],
+    "MONTHLY": ["FREQ", "BYMONTHDAY", "BYHOUR", "BYMINUTE"],
+  ]
+
+  /// 读 RRULE 子集；没写 BYHOUR、BYMINUTE 时取 `time` 在 `calendar` 里的时刻。写法不在子集里（多出别的字段也算）为 nil。
   public init?(rule: String, time: Date? = nil, calendar: Calendar = .current) {
     var parts: [String: String] = [:]
     for part in rule.uppercased().replacingOccurrences(of: "RRULE:", with: "").split(separator: ";") {
       let pair = part.split(separator: "=", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
-      guard pair.count == 2 else { return nil }
+      guard pair.count == 2, parts[pair[0]] == nil else { return nil }
       parts[pair[0]] = pair[1]
     }
+    guard let allowed = parts["FREQ"].flatMap({ Self.fields[$0] }), Set(parts.keys).isSubset(of: allowed) else { return nil }
     let clock = time.map { calendar.dateComponents([.hour, .minute], from: $0) }
     guard let hour = parts["BYHOUR"].flatMap({ Int($0) }) ?? clock?.hour, (0..<24).contains(hour),
       let minute = parts["BYMINUTE"].flatMap({ Int($0) }) ?? clock?.minute, (0..<60).contains(minute)
@@ -62,6 +69,13 @@ public struct CueRepeat: Hashable, Sendable {
       case .monthly(let day): "FREQ=MONTHLY;BYMONTHDAY=\(day)"
       }
     return frequency + ";BYHOUR=\(hour);BYMINUTE=\(minute)"
+  }
+
+  /// 不晚于 `now` 的最近一次（从 `due` 起往后数；`due` 本身晚于 `now` 时就是它）：错过了几次，只补这最近的一次。
+  public func latest(from due: Date, until now: Date, calendar: Calendar = .current) -> Date {
+    var (latest, next) = (due, self.next(after: due, calendar: calendar))
+    while next <= now { (latest, next) = (next, self.next(after: next, calendar: calendar)) }
+    return latest
   }
 
   /// `date` 之后的下一次。到点之后按它往后推：中间错过的几次合成这一次之后的下一次。

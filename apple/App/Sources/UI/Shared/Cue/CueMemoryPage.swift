@@ -21,7 +21,7 @@ struct CueMemoryPage: View {
     @State private var forgetting: CueMemoryLine?
     @State private var ending: CueMemoryLine?
     /// 原地展开在改的那条定时
-    @State private var rescheduling: UUID?
+    @State private var rescheduling: Rescheduling?
     /// 点了"到点"：记下的这一条带着它成为定时
     @State private var schedule: ScheduleDraft? = DebugHooks.preset.scheduleOpen ? ScheduleDraft() : nil
     @FocusState private var adding: Bool
@@ -75,13 +75,13 @@ struct CueMemoryPage: View {
         .padding(.bottom, Metrics.fieldBottom + Metrics.field / 2)
         .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: kept)
         .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: schedules)
-        .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: rescheduling)
+        .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: rescheduling?.id)
     }
 
     private var field: some View {
         VStack(alignment: .leading, spacing: 4) {
             if let draft = schedule {
-                ScheduleEditor(text: "", draft: draft, save: { schedule = $0; add() }, cancel: { schedule = nil })
+                ScheduleEditor(text: "", draft: Binding { schedule ?? draft } set: { schedule = $0 }, save: add, cancel: { schedule = nil })
                     .padding(.top, 12)
             }
             HStack(spacing: 10) {
@@ -127,11 +127,11 @@ struct CueMemoryPage: View {
     /// 一条定时：下面一行怎么重复、下一次（错过后补上的写那句事实）；改的时候原地换成 `ScheduleEditor`。
     @ViewBuilder private func scheduled(_ item: CueScheduled) -> some View {
         let line = item.line, id = line.id
-        if rescheduling == id {
+        if let editing = rescheduling, editing.id == id {
             ScheduleEditor(
-                text: line.text, draft: ScheduleDraft(line),
-                save: { draft in
-                    workspace.rescheduleCueLine(id, draft)
+                text: line.text, draft: Binding { rescheduling?.draft ?? editing.draft } set: { rescheduling?.draft = $0 },
+                save: {
+                    workspace.rescheduleCueLine(id, rescheduling?.draft ?? editing.draft)
                     rescheduling = nil
                 },
                 cancel: { rescheduling = nil }, end: { workspace.forgetCueLine(id) }
@@ -143,7 +143,7 @@ struct CueMemoryPage: View {
             MemoryRow(
                 line: line, note: Dotted(ScheduleText.repeats(line.repeats), late ?? next), copy: copy(line),
                 actions: [
-                    RowAction("改", icon: .write) { rescheduling = id },
+                    RowAction("改", icon: .write) { rescheduling = Rescheduling(id: id, draft: ScheduleDraft(line)) },
                     RowAction("不再定时", icon: .remove, tone: .destructive) { ending = line },
                 ])
         }
@@ -193,6 +193,12 @@ struct CueMemoryPage: View {
         .presentationDetents([.large])
     }
     #endif
+}
+
+/// 原地展开在改的那条定时与手上的那一份。
+private struct Rescheduling: Equatable {
+    let id: UUID
+    var draft: ScheduleDraft
 }
 
 /// 一组记忆的组头：小号、第三档墨，"一直记着"带一枚钉；上面空出一段把组分开。
