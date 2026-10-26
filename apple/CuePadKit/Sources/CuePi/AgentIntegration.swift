@@ -8,6 +8,7 @@ import Foundation
 /// 另有一个相对链接 `<它的目录>/skills/cuepad` 指到那里。各家接没接入记在技能的标记行里（`AgentSkill.kinds(in:)`）。
 /// 钩子的足迹（`HookFile.Footprint`）也放在那个目录里。旧版写在各家自己目录里、带标记的副本，装或升级任何一家时一起收掉
 /// （它们的那家记进标记行，足迹搬过来），所以旧版接入过的几家状态是 `outdated`、由静默升级换过来。
+/// 这是过渡：用户的 Mac 都装过一次带技能与说明（结构 76）起的 CuePad 并启动过后，连同 `legacyCopies` 与搬足迹那一段一起删。
 /// CuePad 起的 OpenCode 服务不读 `.claude/skills`（`OpenCodeRuntime.serviceEnvironment`），同一个技能不会经两条路读到。
 /// 写入不做事务：哪一样没写上，状态就是 `outdated`，下次启动的静默升级补上。
 public struct AgentIntegration: Sendable {
