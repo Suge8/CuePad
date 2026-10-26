@@ -110,7 +110,7 @@ extension CueKeeper {
             speech.offer(turn?.answersYou == true ? draft : nil)
         case .context(let used):
             updateShift {
-                $0.context = CueContext(used: used, since: $0.sessionSince)
+                $0.context = CueContext(used: used)
                 $0.lastRequest = .now
             }
         case .tool(let id, let name, let arguments):

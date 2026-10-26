@@ -5,7 +5,7 @@ import Foundation
 /// 只由它自己写，同 `MacAgents`；各端只读）。事实源是文件本身（读写规则在 CuePi 的 `AgentLibraryFiles`）：CuePad 不存副本，
 /// 这条是那台 Mac 照文件写下的快照，内容变了才写（不触发同步），`modifiedAt` 是最近一次变的时刻。
 /// 手机上的整理与改说明是投送请求（`DeliveryMode.tidy`、`.instruction`），由那台 Mac 照执行时的文件做。
-/// 读出时跳过本版本读不懂的条目（更新的版本加的种类），其余照读。
+/// 读出时跳过本版本读不懂的条目（更新的版本加的种类），其余照读。要整理里共读那份说明的正文不另存（`InstructionSource.stripped(in:)`）。
 public struct AgentLibrary: Equatable, Sendable {
   public var hostID: String
   /// 那台 Mac 的家目录：路径给人看时缩成 `~`（`shown(_:)`）
@@ -193,19 +193,46 @@ extension AgentLibrary: Record {
   static let columns = ["id", "hostID", "home", "skills", "instructions", "tidies", "selfManaged", "agents", "modifiedAt"]
   var bindings: [any SQLBindable] {
     [
-      Self.recordID(host: hostID), hostID, home, JSONColumn.encodeList(skills), JSONColumn.encodeList(instructions), JSONColumn.encodeList(tidies),
+      Self.recordID(host: hostID), hostID, home, JSONColumn.encodeList(skills), JSONColumn.encodeList(instructions),
+      JSONColumn.encodeList(tidies.map { $0.withSources { $0.stripped(in: instructions) } }),
       JSONColumn.encodeList(selfManaged), JSONColumn.encodeList(agents.map(\.rawValue)), modifiedAt,
     ]
   }
   init(row: Row) {
+    let instructions = JSONColumn.decodeList(Lenient<LibraryInstruction>.self, from: row.textOrNil(4)).compactMap(\.value)
     self.init(
       hostID: row.text(1), home: row.text(2),
       skills: JSONColumn.decodeList(Lenient<LibrarySkill>.self, from: row.textOrNil(3)).compactMap(\.value),
-      instructions: JSONColumn.decodeList(Lenient<LibraryInstruction>.self, from: row.textOrNil(4)).compactMap(\.value),
-      tidies: JSONColumn.decodeList(Lenient<LibraryTidy>.self, from: row.textOrNil(5)).compactMap(\.value),
+      instructions: instructions,
+      tidies: JSONColumn.decodeList(Lenient<LibraryTidy>.self, from: row.textOrNil(5)).compactMap(\.value)
+        .map { $0.withSources { $0.restored(in: instructions) } },
       selfManaged: JSONColumn.decodeList(Lenient<SelfManagedSkills>.self, from: row.textOrNil(6)).compactMap(\.value),
       agents: JSONColumn.decodeList(String.self, from: row.textOrNil(7)).compactMap(AgentKind.init(rawValue:)),
       modifiedAt: row.date(8))
+  }
+}
+
+extension InstructionSource {
+  /// 共读的那份（`.shared`）正文就是同一路径的那份说明（`AgentLibrary.instructions`）：存的时候去掉（`stripped`），读出时照路径补回（`restored`）。
+  fileprivate func stripped(in instructions: [LibraryInstruction]) -> InstructionSource {
+    guard origin == .shared, text != nil, text == instructions.first(where: { $0.path == path })?.text else { return self }
+    return InstructionSource(origin: origin, path: path, text: nil, modifiedAt: modifiedAt)
+  }
+
+  fileprivate func restored(in instructions: [LibraryInstruction]) -> InstructionSource {
+    guard origin == .shared, text == nil, let instruction = instructions.first(where: { $0.path == path }) else { return self }
+    return InstructionSource(origin: origin, path: path, text: instruction.text, modifiedAt: modifiedAt)
+  }
+}
+
+extension LibraryTidy {
+  /// 说明来源逐份换一下（存取 `AgentLibrary` 时去掉、补回共读那份的正文）；别的种类原样。
+  fileprivate func withSources(_ transform: (InstructionSource) -> InstructionSource) -> LibraryTidy {
+    switch kind {
+    case .globalInstructions(let sources): LibraryTidy(id: id, kind: .globalInstructions(sources.map(transform)))
+    case .projectClaude(let project, let sources): LibraryTidy(id: id, kind: .projectClaude(project: project, sources: sources.map(transform)))
+    default: self
+    }
   }
 }
 
@@ -222,9 +249,11 @@ extension CueStore {
     }
   }
 
-  /// 要看的那台 Mac 的技能与说明：Mac 上 `host` 给本机；手机上给 nil，看 Cue 运行的那台。那台没写过就是最近写过的一台，一台都没写过为 nil。
-  public func agentLibrary(preferring host: String?) throws -> AgentLibrary? {
-    if let host = try host ?? cueProfile()?.hostID, let library = try find(AgentLibrary.self, AgentLibrary.recordID(host: host)) { return library }
+  /// 要看的那台 Mac 的技能与说明：Mac 上 `host` 给本机，只认它（还没扫完、碰不得 `~/.agents` 时为 nil，不拿别台的充数）；
+  /// 手机上给 nil，看 Cue 运行的那台，那台没写过就是最近写过的一台，一台都没写过为 nil。
+  public func agentLibrary(host: String?) throws -> AgentLibrary? {
+    if let host { return try find(AgentLibrary.self, AgentLibrary.recordID(host: host)) }
+    if let cue = try cueProfile()?.hostID, let library = try find(AgentLibrary.self, AgentLibrary.recordID(host: cue)) { return library }
     return try select(AgentLibrary.self, orderBy: "modifiedAt DESC").first
   }
 }

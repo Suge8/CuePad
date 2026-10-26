@@ -45,7 +45,7 @@ struct DemoAgentLibrary {
     /// 说明照基准写（快照里已不是手机看到的那一版就退回"Mac 上刚改过"，同真的 Mac）。不是这两种请求为 nil。
     static func apply(_ request: DeliveryRequest, store: CueStore) async -> DeliveryOutcome? {
         guard request.tidyOrders != nil || request.instructionEdit != nil else { return nil }
-        guard var library = try? await store.agentLibrary(preferring: request.hostID) else { return .failed(ShownText(AgentLibraryError.tidyGone)) }
+        guard var library = try? await store.agentLibrary(host: request.hostID) else { return .failed(ShownText(AgentLibraryError.tidyGone)) }
         if let orders = request.tidyOrders {
             let ids = Set(orders.map(\.tidy))
             library.tidies.removeAll { ids.contains($0.id) }

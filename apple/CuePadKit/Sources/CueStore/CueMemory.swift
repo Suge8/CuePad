@@ -7,7 +7,7 @@ public enum CueLineSource: String, Sendable, CaseIterable {
 /// Cue 的一条记忆。只追加，位置就是身份：按 (`createdAt`, `id`) 排的序号（含忘掉的）。
 /// 只有 `pinned`、定时（`remindAt`、`repeats`）、`deletedAt` 会变；忘掉是软删，位置不变。
 /// 定时就是有 `remindAt` 的那几条：`remindAt` 是下一次，`repeats` 是怎么重复（一次性的没有），`task` 是挂在哪件任务上（到点 Cue 开工它）。
-/// 到点后值班的 Cue 把重复的推到下一次、一次性的清掉 `remindAt`（`CueStore.fireCueSchedules`）；不再定时就是忘掉这一条，任务完成时连带（`applyStatus`）。
+/// 到点后值班的 Cue 把重复的推到下一次、一次性的清掉 `remindAt`（`CueStore.fireCueSchedules`）；不再定时就是忘掉这一条，任务完成、归档、进回收站时连带（`endCueSchedules`），恢复不复活。
 public struct CueMemoryLine: Identifiable, Equatable, Sendable {
   public let id: UUID
   public var text: String
@@ -99,8 +99,8 @@ public struct CueScheduled: Identifiable, Equatable, Sendable {
       self.at = at
     }
 
-    /// 错过了、之后才补上（`CueFire.lateAfter`）
-    public var late: Bool { at.timeIntervalSince(due) > CueFire.lateAfter }
+    /// 错过了、之后才补上（`CueFire.late`）
+    public var late: Bool { CueFire.late(due, at: at) }
   }
 }
 

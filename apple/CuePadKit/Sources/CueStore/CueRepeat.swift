@@ -16,7 +16,15 @@ public struct CueRepeat: Hashable, Sendable {
   public var hour: Int
   public var minute: Int
 
-  public init(_ cycle: Cycle, hour: Int, minute: Int) {
+  /// 日子与时刻都在范围里才建得成（星期 1–7 且至少一天、几号 1–31、时 0–23、分 0–59）：读 RRULE 也经它，建成的都写得出 `rule`。
+  public init?(_ cycle: Cycle, hour: Int, minute: Int) {
+    let days =
+      switch cycle {
+      case .daily: true
+      case .weekly(let days): !days.isEmpty && days.allSatisfy((1...7).contains)
+      case .monthly(let day): (1...31).contains(day)
+      }
+    guard days, (0..<24).contains(hour), (0..<60).contains(minute) else { return nil }
     self.cycle = cycle
     self.hour = hour
     self.minute = minute
@@ -41,24 +49,21 @@ public struct CueRepeat: Hashable, Sendable {
     }
     guard let allowed = parts["FREQ"].flatMap({ Self.fields[$0] }), Set(parts.keys).isSubset(of: allowed) else { return nil }
     let clock = time.map { calendar.dateComponents([.hour, .minute], from: $0) }
-    guard let hour = parts["BYHOUR"].flatMap({ Int($0) }) ?? clock?.hour, (0..<24).contains(hour),
-      let minute = parts["BYMINUTE"].flatMap({ Int($0) }) ?? clock?.minute, (0..<60).contains(minute)
+    guard let hour = parts["BYHOUR"].flatMap({ Int($0) }) ?? clock?.hour, let minute = parts["BYMINUTE"].flatMap({ Int($0) }) ?? clock?.minute
     else { return nil }
+    let cycle: Cycle
     switch parts["FREQ"] {
     case "DAILY": cycle = .daily
     case "WEEKLY":
       let named = parts["BYDAY"]?.split(separator: ",").map { Self.days.firstIndex(of: String($0)).map { $0 + 1 } }
-      let days: [Int?]? = named ?? time.map { [calendar.component(.weekday, from: $0)] }
-      guard let days, !days.isEmpty, !days.contains(nil) else { return nil }
+      guard let days = named ?? time.map({ [calendar.component(.weekday, from: $0)] }), !days.contains(nil) else { return nil }
       cycle = .weekly(Set(days.compactMap { $0 }))
     case "MONTHLY":
-      guard let day = parts["BYMONTHDAY"].flatMap({ Int($0) }) ?? time.map({ calendar.component(.day, from: $0) }), (1...31).contains(day)
-      else { return nil }
+      guard let day = parts["BYMONTHDAY"].flatMap({ Int($0) }) ?? time.map({ calendar.component(.day, from: $0) }) else { return nil }
       cycle = .monthly(day)
     default: return nil
     }
-    self.hour = hour
-    self.minute = minute
+    self.init(cycle, hour: hour, minute: minute)
   }
 
   public var rule: String {

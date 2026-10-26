@@ -1818,7 +1818,7 @@
         }
       }
     },
-    "%lld 家的全局规则各写一份" : {
+    "%lld 家的全局说明各写一份" : {
       "localizations" : {
         "en" : {
           "variations" : {
@@ -1826,13 +1826,13 @@
               "one" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%lld agent has its own global rules"
+                  "value" : "%lld agent has its own global instructions"
                 }
               },
               "other" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%lld agents each have their own global rules"
+                  "value" : "%lld agents each have their own global instructions"
                 }
               }
             }
@@ -1841,7 +1841,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%lld 家的全局规则各写一份"
+            "value" : "%lld 家的全局说明各写一份"
           }
         }
       }
@@ -3059,6 +3059,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Claude Code 看不见 %lld 个技能"
+          }
+        }
+      }
+    },
+    "Claude Code 读不到项目说明" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Claude Code can't see the project instructions"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Claude Code 读不到项目说明"
           }
         }
       }

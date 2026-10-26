@@ -4,7 +4,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 定时（#38）：Cue 的提醒可重复、可挂在任务上，到点开工。按用户走的路写：任务气泡与"记得什么"里原地改、不再定时；任务完成就不再定时；
+/// 定时（#38）：Cue 的提醒可重复、可挂在任务上，到点开工。按用户走的路写：任务气泡与"记得什么"里原地改、不再定时；任务完成、归档、删掉就不再定时；
 /// 对 Cue 说一句就建；Mac 没开时错过的，启动后只补一次、排到下一次，那句事实记在叫醒原因上。
 @MainActor
 struct ScheduleTests {
@@ -34,17 +34,31 @@ struct ScheduleTests {
         _ = try await eventually(store, { try $0.cueSchedules(task: task.id) }) { $0.isEmpty }
     }
 
-    /// 勾掉挂着定时的任务：任务完成就是不再定时。
-    @Test func 任务完成就不再定时() async throws {
+    /// 勾掉、归档或删掉挂着定时的任务：这件事不用再定时做了，就不再定时；从归档取回、撤销删除也不回来。
+    @Test func 任务完成_归档_删掉就不再定时_取回也不回来() async throws {
         let rig = TestApp()
         let store = rig.services.store
-        let task = try await store.createTask("清理过期分支")
-        let line = try await store.noteCueLine(
-            "清理过期分支", source: .cue, remindAt: .now.addingTimeInterval(3600), repeats: CueRepeat(.daily, hour: 9, minute: 0), task: task.id
-        ).line
-        try await Workspace(services: rig.services).toggle(task.id)
+        let workspace = Workspace(services: rig.services)
+        var lines: [UUID] = []
+        for title in ["清理过期分支", "续费域名", "周报"] {
+            let task = try await store.createTask(title)
+            lines.append(try await store.noteCueLine(
+                title, source: .cue, remindAt: .now.addingTimeInterval(3600), repeats: CueRepeat(.daily, hour: 9, minute: 0), task: task.id
+            ).line.id)
+            switch title {
+            case "清理过期分支":
+                try await workspace.toggle(task.id)
+                try await workspace.toggle(task.id)  // 再点一下：重新打开
+            case "续费域名":
+                try await workspace.archive(task.id)
+                try await #require(workspace.notice?.action).run()  // 撤销：取回
+            default:
+                try await workspace.trash(task.id)
+                try await #require(workspace.notice?.action).run()  // 撤销：恢复
+            }
+        }
         #expect(try await store.cueSchedules().isEmpty)
-        #expect(try await store.cueLine(line.id)?.deletedAt != nil)
+        for line in lines { #expect(try await store.cueLine(line)?.deletedAt != nil) }
     }
 
     #if os(macOS)
@@ -81,7 +95,7 @@ struct ScheduleTests {
         let start = Date.now.addingTimeInterval(-3 * 86_400 + 3600)
         let missed = Date(timeIntervalSince1970: (start.timeIntervalSince1970 / 60).rounded(.down) * 60)
         let clock = Calendar.current.dateComponents([.hour, .minute], from: missed)
-        let daily = CueRepeat(.daily, hour: clock.hour!, minute: clock.minute!)
+        let daily = try #require(CueRepeat(.daily, hour: clock.hour!, minute: clock.minute!))
         let rig = try await CueHostTests.Rig(prepare: { rig in
             _ = try await rig.store.noteCueLine("汇总昨天各项目的进展", source: .you, remindAt: missed, repeats: daily)
         })

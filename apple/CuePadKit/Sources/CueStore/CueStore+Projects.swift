@@ -31,13 +31,13 @@ extension CueStore {
     guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw CueStoreError.blankProjectName }
   }
 
-  /// 进回收站；它的卡片随之隐藏（由项目推导），卡片行不动。默认项目不能删（`defaultProjectUndeletable`）。
+  /// 进回收站；它的卡片随之隐藏（由项目推导），卡片行不动，它的任务上的定时不再定时（`endCueSchedules`）。默认项目不能删（`defaultProjectUndeletable`）。
   public func trashProject(_ id: UUID) throws {
     guard id != Project.defaultID else { throw CueStoreError.defaultProjectUndeletable }
     try write {
-      try db.run(
-        "UPDATE projects SET deletedAt = ?1, modifiedAt = ?1 WHERE id = ?2 AND deletedAt IS NULL",
-        [Date.stamp, id])
+      let now = Date.stamp
+      try db.run("UPDATE projects SET deletedAt = ?1, modifiedAt = ?1 WHERE id = ?2 AND deletedAt IS NULL", [now, id])
+      try endCueSchedules(onTasksIn: "SELECT id FROM cards WHERE projectID = ?2", id, at: now)
     }
   }
 

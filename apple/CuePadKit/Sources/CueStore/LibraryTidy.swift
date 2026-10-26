@@ -26,7 +26,8 @@ public struct LibraryTidy: Codable, Equatable, Sendable, Identifiable {
     case empty([String])
     /// 各家的全局说明各写一份：内容不同的比一比、合成一份全局说明，各家换成链到它的链接；同内容的直接换链接
     case globalInstructions([InstructionSource])
-    /// 项目里另有不同的 CLAUDE.md（有它 Claude Code 就不读 AGENTS.md）：合成进 AGENTS.md，CLAUDE.md 移走
+    /// Claude Code 读不到项目的 AGENTS.md（同层另有 CLAUDE.md、`.claude/CLAUDE.md` 或个人的 CLAUDE.local.md）：内容不同的合成进 AGENTS.md，
+    /// 那两份移走、CLAUDE.md 换成链到 AGENTS.md 的链接（同全局）；只是个人那份挡着时只链上
     case projectClaude(project: UUID, sources: [InstructionSource])
   }
 
@@ -54,7 +55,7 @@ public struct LibraryTidy: Codable, Equatable, Sendable, Identifiable {
     case .malformed: .open
     case .empty: .trash
     case .globalInstructions: differs ? .compare : .link
-    case .projectClaude: .merge
+    case .projectClaude: claudeCopies ? .merge : .link
     }
   }
 
@@ -68,6 +69,9 @@ public struct LibraryTidy: Codable, Equatable, Sendable, Identifiable {
 
   /// 要合成的几份内容不止一种（比一比才有意义）。
   public var differs: Bool { Set(sources.compactMap(\.text)).count > 1 }
+
+  /// 项目里有 Claude Code 自己的、内容不同的说明要合成（不只是个人那份挡着）。
+  private var claudeCopies: Bool { sources.contains { $0.origin == .agent(.claudeCode) } }
 
   /// 说明的来源（合成的两种）；其余为空。
   public var sources: [InstructionSource] {
@@ -96,9 +100,10 @@ public struct LibraryTidy: Codable, Equatable, Sendable, Identifiable {
       directories.count == 1 ? String(localized: "技能目录里有个空目录") : String(localized: "技能目录里有 \(directories.count) 个空目录")
     case .globalInstructions(let sources):
       differs
-        ? String(localized: "\(Set(sources.compactMap(\.origin.agent)).count) 家的全局规则各写一份")
+        ? String(localized: "\(Set(sources.filter { !$0.origin.replacesBasePrompt }.compactMap(\.origin.agent)).count) 家的全局说明各写一份")
         : String(localized: "全局说明换成一份、各家链到它")
-    case .projectClaude: String(localized: "项目里另有一份不同的 CLAUDE.md")
+    case .projectClaude:
+      claudeCopies ? String(localized: "项目里另有一份不同的 CLAUDE.md") : String(localized: "Claude Code 读不到项目说明")
     }
   }
 }

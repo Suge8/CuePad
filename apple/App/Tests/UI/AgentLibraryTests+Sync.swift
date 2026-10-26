@@ -10,6 +10,7 @@ import Testing
 
 extension AgentLibraryTests {
     /// 两台设备经同一个云替身：Mac 写下的快照同步到手机；手机上改说明、整理从手机的工作区发出，经云到 Mac 照做，结果回到手机。
+    /// 这里的"手机"是第二个 Mac 进程：Mac 上的工作区只看本机的快照，手机那样读（`agentLibrary(host: nil)`）由测试自己读库。
     @Test func 手机经云看到Mac的快照_发往Mac改说明与整理_结果回到手机() async throws {
         let cloud = SimulatedCloud([Self.floor(CueStore.peerFloor)])
         let macApp = TestApp(sync: .built { CloudSync(store: $0) { cloud } })
@@ -26,8 +27,9 @@ extension AgentLibraryTests {
         defer { keeping.cancel() }
         try await macApp.services.executor.start()
         let workspace = Workspace(services: phone.services)
-        let following = Task { await workspace.follow() }
-        defer { following.cancel() }
+        func phoneSees(_ what: String, _ condition: @escaping @Sendable (AgentLibrary) -> Bool) async throws -> AgentLibrary {
+            try #require(try await eventually(phone.services.store, { try $0.agentLibrary(host: nil) }) { $0.map(condition) ?? false })
+        }
         // 没有门铃：两边按节奏拉取的那一下由这里来
         let pulling = Task {
             while !Task.isCancelled {
@@ -38,8 +40,8 @@ extension AgentLibraryTests {
         }
         defer { pulling.cancel() }
 
-        try await eventually("手机读到 Mac 的快照") { workspace.library?.hostID == TestApp.hostID && workspace.library?.tidies.count == 1 }
-        let library = try #require(workspace.library)
+        let mac = TestApp.hostID
+        let library = try await phoneSees("手机读到 Mac 的快照") { $0.hostID == mac && $0.tidies.count == 1 }
         let seen = try #require(library.instruction(.project(project.id)))
         #expect(seen.text == "# Site\n")
 
@@ -47,16 +49,17 @@ extension AgentLibraryTests {
         await #expect(throws: AgentLibraryError.changedOnMac) {
             try await workspace.saveInstruction(InstructionEdit(instruction: seen.kind, base: seen.base, text: "手机改的\n"), in: library)
         }
-        try await eventually("手机跟上 Mac 上的改动") { workspace.library?.instruction(.project(project.id))?.text == "# Site\n\nMac 上改的\n" }
-        let current = try #require(workspace.library?.instruction(.project(project.id)))
+        let followed = try await phoneSees("手机跟上 Mac 上的改动") { $0.instruction(.project(project.id))?.text == "# Site\n\nMac 上改的\n" }
+        let current = try #require(followed.instruction(.project(project.id)))
         try await workspace.saveInstruction(InstructionEdit(instruction: current.kind, base: current.base, text: "手机改的\n"), in: library)
         #expect(read(folder.appending(path: "AGENTS.md")) == "手机改的\n")
 
         await workspace.tidy(library.automaticOrders, in: library)
         #expect(workspace.notice?.text.visible == "整理好了 1 件，合成稿在这里，删掉重复的")
         #expect(workspace.openLibraryItem == .instruction(.project(project.id)), "合成完直接打开合成出的那份说明")
-        #expect(read(folder.appending(path: "AGENTS.md")) == "手机改的\n\n# 旧的 Claude 说明\n" && !exists(folder.appending(path: "CLAUDE.md")))
-        try await eventually("手机上没有要整理的了") { workspace.library?.tidies.isEmpty == true }
+        #expect(read(folder.appending(path: "AGENTS.md")) == "手机改的\n\n# 旧的 Claude 说明\n")
+        #expect(RelativeLink.points(folder.appending(path: "CLAUDE.md"), to: folder.appending(path: "AGENTS.md")))
+        _ = try await phoneSees("手机上没有要整理的了") { $0.tidies.isEmpty }
     }
 
     private static func floor(_ version: Int) -> CKRecord {

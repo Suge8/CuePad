@@ -33,9 +33,10 @@ extension CueStore {
     }
   }
 
-  /// 这些卡片连同各自的下级一起归档或取回。
+  /// 这些卡片连同各自的下级一起归档或取回；归档的不再定时（`endCueSchedules`）。
   func setArchived(_ roots: [UUID], at time: Date?) throws {
     let now = Date.stamp
+    if time != nil { try endCueSchedules(onTasksIn: Self.subtree(from: "SELECT value FROM json_each(?2)"), Self.idList(roots), at: now) }
     try db.run(
       """
       UPDATE cards SET archivedAt = ?1, modifiedAt = ?2
@@ -74,7 +75,7 @@ extension CueStore {
         UPDATE cards SET completedAt = ?1, modifiedAt = ?1
         WHERE completedAt IS NULL AND todoAt IS NOT NULL AND id IN (\(Self.subtree(from: "SELECT ?2")))
         """, [now, id])
-      try endCueSchedules(under: id, at: now)
+      try endCueSchedules(onTasksIn: Self.subtree(from: "SELECT ?2"), id, at: now)
     }
     return try find(Card.self, id)?.status ?? status
   }

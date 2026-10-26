@@ -59,6 +59,10 @@ extension CueTools {
         return repeats
       }
       let task = try await args.string("task").asyncMap { try await self.task($0) }
+      // 回收站里的 `task(_:)` 已不认；完成、归档的挂上去不会再被收掉（`endCueSchedules`）
+      if let task, task.completedAt != nil || task.archivedAt != nil {
+        throw Failure("「\(task.heading)」已完成或已归档：定时只挂在没完成的任务上")
+      }
       let (line, index) = try await store.noteCueLine(try args.required("text"), source: .cue, remindAt: at, repeats: repeats, task: task?.id)
       let kind = line.repeats.map(CueScheduleWords.repeats) ?? "一次"
       return .ok("定好了 #\(index)（\(kind)\(task.map { "，挂在「\($0.heading)」上" } ?? "")），\(iso(at)) 第一次叫醒你；不再定时就 forget 它。")

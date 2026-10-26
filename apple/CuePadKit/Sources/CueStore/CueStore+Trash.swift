@@ -19,11 +19,12 @@ extension CueStore {
     }
   }
 
-  /// 一条进回收站（在调用方的事务里），返回提到它位置的下级。
+  /// 一条进回收站（在调用方的事务里），返回提到它位置的下级；它上面的定时不再定时（下级提上去、照旧，`endCueSchedules`）。
   @discardableResult
   func trashRow(_ card: Card, at now: Date) throws -> [UUID] {
     let lifted = try liftChildren(of: card, at: now)
     try db.run("UPDATE cards SET deletedAt = ?1, modifiedAt = ?1 WHERE id = ?2", [now, card.id])
+    try endCueSchedules(onTasksIn: "SELECT ?2", card.id, at: now)
     if let parent = card.parentID { try settle(around: [parent]) }
     return lifted
   }

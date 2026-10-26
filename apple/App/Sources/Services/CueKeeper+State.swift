@@ -40,8 +40,6 @@ extension CueKeeper {
         /// 这个大脑的会话已经接上（第一条输入带过视图）；没有时下一次醒来带上
         var primed = false
         let startedAt = Date.now
-        /// 这个会话从何时起（开新会话时改）：上下文用量从这里算
-        var sessionSince = Date.now
         var turn: Turn?
         /// 最近一次模型请求的上下文用量与窗口（token）：随状态写进库（`CueState.context`），各端读那一份
         var context: CueContext?
