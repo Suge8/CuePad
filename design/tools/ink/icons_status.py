@@ -56,9 +56,8 @@ def mark_pause(c, s, w):
 
 
 def mark_arrow(c, s, w, down=False):
-    k = -1 if down else 1
-    a, b = at(c, s, (0, 6.2 * k)), at(c, s, (0, -2.4 * k))
-    return [arrow([Line(mul(a, G), mul(b, G))], w * s * G, (3.6 * s * G, 4.0 * s * G))]
+    """胖箭头（`fat_arrow`）当记号：按记号的宽 w（基准 3 格）外扩或内收。"""
+    return [fat_arrow((w - 3.0) / 2 * s, 180 if down else 0, 0.6 * s, c)]
 
 
 def mark_uturn(c, s, w):

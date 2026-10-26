@@ -66,17 +66,13 @@ def session(m):
     return [Layer("wave", [wave]), Layer("dot", [dot], "secondary")]
 
 
-def search(look=1.1):
-    """搜索：粗镜圈 + 一道刻缝隔开的实心把手；镜片里一只竖椭圆的眼（同 Cue 的眼，点睛）。look 是眼往右偏多少格。"""
-    def build(m):
-        g, c = GROW[m], CARVE[m]
-        o, r, T = (-2.2, -2.2), 6.9, 3.9 + 1.6 * g
-        ring = [disc(o, r + T / 2), disc(o, r - T / 2, hole=True)]
-        s0 = (r + T / 2 + c + 0.4) * 0.7071
-        handle = bar([(o[0] + s0 + 1.8, o[1] + s0 + 1.8), (9.4, 9.4)], 5.4 + 2 * g)
-        eye = ellipse((o[0] + look, o[1] - 0.3), 1.5 + g * 0.1, 2.4 + g * 0.1)
-        return [Layer("lens", ring + [handle]), Layer("eye", [eye], "secondary")]
-    return build
+def search(m):
+    """搜索：放大镜。镜圈偏细、把手粗而短，连成一块墨（经典放大镜的配重，22pt 的圆钮里最快认出）；没有点睛。
+    大小按"+"对齐（外框约 21 格）；Regular 的镜圈不细于 3.6 格，Mac 1x 下不发灰。"""
+    g = GROW[m]
+    o, r, T = (-2.2, -2.2), 6.3, 3.6 + 1.4 * g
+    handle = bar([(o[0] + (r + T / 2) * 0.7071, o[1] + (r + T / 2) * 0.7071), (8.8, 8.8)], 5.0 + 2 * g)
+    return [Layer("lens", [disc(o, r + T / 2), disc(o, r - T / 2, hole=True), handle])]
 
 
 def settings(m):
@@ -162,16 +158,16 @@ def chevron(deg):
     return build
 
 
-def dart_parts(g, c, s=1.0):
-    """燕尾箭（格，朝上）：一枚高而尖的箭镞，底边往里凹成 V；箭杆顶削成同角度的尖插在 V 里，中间一道等宽刀口。
-    s 按比例缩放整支，刀口不随着缩，每档仍是一条刻缝（两块各外扩 g：刀口预留 2g，外扩后正好是这一档的刻缝）。
-    只表示方向的一族（在上面、拿回来的、更早的、回到最新、压缩上下文、自动检查更新）都是这一支（`dart`）；"发出"是纸飞机（`plane`）。"""
-    k, notch, bx = 0.75, -1.6 * s, 7.6 * s  # V 的斜率、谷底、两翼半宽
-    cut = (c + 2 * g) / math.cos(math.atan(k))
-    head = grown([(0, -12.0 * s), (bx, notch + bx * k), (0, notch), (-bx, notch + bx * k)], [0.5, 0.45, 0, 0.45], g)
-    w, top = 2.4 * s, notch + cut
-    shaft = grown([(0, top), (w, top + w * k), (w, 11.4 * s), (-w, 11.4 * s), (-w, top + w * k)], [0, 0, 1.0, 1.0, 0], g)
-    return shaft, head
+FAT_ARROW = [(0, -10.1), (8.4, 0.7), (2.7, 0.7), (2.7, 10.1), (-2.7, 10.1), (-2.7, 0.7), (-8.4, 0.7)]  # 朝上，外框居中（格）
+FAT_RADII = [0.8, 1.0, 0, 1.6, 1.6, 0, 1.0]
+
+
+def fat_arrow(g, deg=0, s=1.0, at=(0.0, 0.0)):
+    """胖箭头（格）：短粗的杆接宽箭镞，一整块墨；箭尖与外角圆、两肩内角利。转 deg 度（0 朝上、90 朝右）、缩放 s、挪到 at，外扩 g。
+    杆只按 0.6 倍的 g 变粗（先内收 0.4g 再整体外扩），粗的母版里杆不成方墩。
+    只表示方向的箭（在上面、更早的、回到最新、压缩上下文、检查更新、上传与下载、分享与存成灵感）都是这一份几何；"发出"是纸飞机（`plane`）。"""
+    pts = [(x - math.copysign(1, x) * 0.4 * g, y) if abs(x) == 2.7 else (x, y) for x, y in FAT_ARROW]
+    return grown([add(rot(mul(p, s), deg), at) for p in pts], [r * s for r in FAT_RADII], g)
 
 
 def stop(m):

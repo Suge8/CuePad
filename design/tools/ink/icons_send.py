@@ -1,4 +1,4 @@
-"""输入与发送：纸飞机、燕尾箭、圆环里的记号。"""
+"""输入与发送：纸飞机、胖箭头、圆环里的记号。"""
 from __future__ import annotations
 
 from .icons_actions import *
@@ -60,27 +60,17 @@ def tick(m):
     return [Layer("tick", [bar([((x - cx) * k, (y - cy) * k) for x, y in DONE_TICK], (3.3 + 1.0 * GROW[m]) * k)])]
 
 
-def dart(deg, s=1.0, at=(0.0, 0.0)):
-    """燕尾箭（`dart_parts`）转 deg 度（0 朝上、90 朝右）、缩放 s、挪到 at（格）：箭头一族的同一份几何。"""
-    def build(g, c):
-        return [[seg_scaled(sg, 1.0, mul(at, G)) for sg in ct] for ct in turned(list(dart_parts(g, c, s)), deg)]
-    return build
-
-
 def pointing(deg):
-    """只表示方向的箭：燕尾箭朝上（在上面、拿回来的、更早的）或朝下（回到最新）。两块都在主层，分两层只为按层动效。"""
-    def build(m):
-        shaft, head = dart(deg)(GROW[m], CARVE[m])
-        return [Layer("shaft", [shaft]), Layer("head", [head])]
-    return build
+    """只表示方向的箭：胖箭头朝上（在上面、拿回来的、更早的）或朝下（回到最新）。"""
+    return lambda m: [Layer("arrow", [fat_arrow(GROW[m], deg)])]
 
 
 def compact(m):
-    """压缩上下文：两支燕尾箭（缩小）从左上、右下往中间收，箭尖之间隔一道缝。"""
-    g, c = GROW[m], CARVE[m]
+    """压缩上下文：两支胖箭头（缩小）从左上、右下往中间收，箭尖之间隔一道缝。"""
+    g = GROW[m] * 0.8
     s, tip = 0.72, 1.0  # 箭尖离中心多少格（沿对角线的分量）
-    d = tip + 12.0 * s * 0.7071
-    return [Layer("a", dart(135, s, (-d, -d))(g, c)), Layer("b", dart(-45, s, (d, d))(g, c))]
+    d = tip + FAT_ARROW[0][1] * -s * 0.7071
+    return [Layer("a", [fat_arrow(g, 135, s, (-d, -d))]), Layer("b", [fat_arrow(g, -45, s, (d, d))])]
 
 
 def bolt(m):
