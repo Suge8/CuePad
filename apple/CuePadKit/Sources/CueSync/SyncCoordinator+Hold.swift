@@ -67,6 +67,25 @@ extension SyncCoordinator {
     release()
   }
 
+  /// 会自己恢复的失败（连不上、服务器要求等、账号）按段记日志：进入时一条（归类、等多久、原因原话），恢复时一条（`noteRecovered`），
+  /// 其间每次重试不记；换了一类算新的一段。意料之外的（`rejected`）进问题列表时记 error（`report`）。
+  func noteWaiting(_ fault: SyncFault, _ error: any Error) {
+    guard fault != .rejected, !stopped else { return }
+    if let outage, outage.fault.sameKind(as: fault) { return }
+    outage = (fault, .now)
+    let wait = fault.retryAfter.map { "服务器要求 \(String(format: "%.1f", $0.seconds)) 秒后再试" }
+      ?? "下一次触发或退避到点再试"
+    Self.syncLog.notice("同步进入等待：\(fault.label, privacy: .public)，\(wait, privacy: .public)。原因：\(error.brief, privacy: .public)")
+  }
+
+  /// 一次请求成功：在等的那一段结束。
+  func noteRecovered() {
+    guard let outage else { return }
+    self.outage = nil
+    let lasted = (ContinuousClock.now - outage.began).seconds
+    Self.syncLog.notice("同步恢复：\(outage.fault.label, privacy: .public)，持续了 \(lasted, format: .fixed(precision: 1), privacy: .public) 秒")
+  }
+
   private func setHold(_ next: Hold) {
     holding = next
     facts.serverWait = if case .wait = next.fault { true } else { false }
@@ -87,4 +106,9 @@ extension SyncCoordinator {
     retryTimer = nil
     retryDue.yield(())
   }
+}
+
+/// 重试调度要求等着（`SyncCoordinator.admits`）：拉取途中停下记成欠着（`ZonePuller`），取门铃密钥的这次不发（`CloudSync.relaySecret`）。不算失败。
+struct RetryHeld: LocalizedError {
+  var errorDescription: String? { "同步在等重试的时刻" }
 }

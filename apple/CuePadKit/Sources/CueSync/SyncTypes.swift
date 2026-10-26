@@ -99,13 +99,25 @@ public struct SyncIssue: Equatable, Sendable {
 }
 
 extension Error {
-  /// 写进日志的原因：CloudKit 错误取错误码、服务器的说明（`localizedDescription` 常只剩"错误 14"，说明在 userInfo 的文字项里，
-  /// 如 `ServerErrorDescription`）与建议的重试间隔；整个 `description` 带记录内容，不进日志。同步与门铃的失败都按它记。
+  /// 写进日志的原因：哪一家的第几号错误加对方的原话，如"CloudKit 7：Operation throttled by previous server http 429 reply. Retry after 1.0 seconds."。
+  /// CloudKit 的 `localizedDescription` 常只剩"错误 14"，原话在 userInfo 的说明项里；一批里逐条的失败取第一条，底层错误接在后面。
+  /// 不带请求编号之类的排查噪音；整个 `description` 带记录内容，不进日志。同步与门铃的失败都按它记。
   public var brief: String {
-    guard let error = self as? CKError else { return localizedDescription }
-    let reasons = error.errorUserInfo.sorted { $0.key < $1.key }.compactMap { key, value in (value as? String).map { "\(key)=\($0)" } }
-    let retry = error.retryAfterSeconds.map { "，\($0) 秒后重试" } ?? ""
-    return "\(error.code.rawValue) \(error.code)" + (reasons.isEmpty ? "" : " " + reasons.joined(separator: "，")) + retry
+    let error = self as NSError
+    let source: String? =
+      switch error.domain {
+      case CKErrorDomain: "CloudKit"
+      case NSURLErrorDomain: "网络"
+      default: nil
+      }
+    guard let source else { return self is LocalizedError || Swift.type(of: self) is NSError.Type ? localizedDescription : "\(self)" }
+    if let items = error.userInfo[CKPartialErrorsByItemIDKey] as? [AnyHashable: any Error], let first = items.values.first {
+      return "\(source) \(error.code)：\(items.count) 条失败，如 \(first.brief)"
+    }
+    let said = ["CKErrorDescription", "ServerErrorDescription", NSLocalizedDescriptionKey].lazy.compactMap { error.userInfo[$0] as? String }.first
+    let under = (error.userInfo[NSUnderlyingErrorKey] as? any Error).map { "（\($0.brief)）" } ?? ""
+    let name = error.domain == CKErrorDomain ? CKError.Code(rawValue: error.code)?.name.map { " \($0)" } ?? "" : ""
+    return "\(source) \(error.code)\(name)" + (said.map { "：\($0)" } ?? "") + under
   }
 
   /// 给人排查用的完整原因：CloudKit 被服务端拒绝时 `localizedDescription` 常只剩"错误 N"，服务端说明与底层错误在 `description` 里。
@@ -152,4 +164,34 @@ struct SendOutcome: Sendable {
   var zoneMissing = false
   /// 有记录因可重试或要停下的原因被拒：这一轮到此为止，按它定下一次（nil：没有）。
   var fault: SyncFault?
+}
+
+extension CKError.Code {
+  /// 日志里认得出的名字（`Error.brief`）：同步归类（`SyncFault`）与各处单独处理的那些；其余只写编号。
+  fileprivate var name: String? {
+    switch self {
+    case .networkFailure: "networkFailure"
+    case .networkUnavailable: "networkUnavailable"
+    case .serviceUnavailable: "serviceUnavailable"
+    case .serverResponseLost: "serverResponseLost"
+    case .requestRateLimited: "requestRateLimited"
+    case .zoneBusy: "zoneBusy"
+    case .operationCancelled: "operationCancelled"
+    case .batchRequestFailed: "batchRequestFailed"
+    case .partialFailure: "partialFailure"
+    case .notAuthenticated: "notAuthenticated"
+    case .managedAccountRestricted: "managedAccountRestricted"
+    case .accountTemporarilyUnavailable: "accountTemporarilyUnavailable"
+    case .quotaExceeded: "quotaExceeded"
+    case .serverRecordChanged: "serverRecordChanged"
+    case .zoneNotFound: "zoneNotFound"
+    case .userDeletedZone: "userDeletedZone"
+    case .changeTokenExpired: "changeTokenExpired"
+    case .limitExceeded: "limitExceeded"
+    case .unknownItem: "unknownItem"
+    case .serverRejectedRequest: "serverRejectedRequest"
+    case .internalError: "internalError"
+    default: nil
+    }
+  }
 }

@@ -45,6 +45,25 @@ enum SyncFault: Equatable, Sendable {
     if case .wait = self { true } else { false }
   }
 
+  /// 同一类（不看服务器给的时刻；账号看是哪种状态）：日志按类分段（`SyncCoordinator.noteWaiting`）。
+  func sameKind(as other: SyncFault) -> Bool {
+    switch (self, other) {
+    case (.offline, .offline), (.wait, .wait), (.rejected, .rejected): true
+    case (.account(let a), .account(let b)): a == b
+    default: false
+    }
+  }
+
+  /// 写进日志的归类（只进日志、不上界面，不译）。
+  var label: String {
+    switch self {
+    case .offline: "连不上 iCloud"
+    case .wait: "服务器要求等"
+    case .account(let status): "账号（\(status)）"
+    case .rejected: "被拒"
+    }
+  }
+
   /// 服务器给的最早重试间隔。
   var retryAfter: Duration? {
     switch self {
