@@ -48,11 +48,11 @@ extension DebugScene {
         }
     }
 
-    /// 库里只有默认项目（新的隔离库）时写入；读写出错就以失败退出（`abandon`）。
     #if os(macOS)
-    /// 这台 Mac 上绑在真实主目录下的文件夹搬进演示主目录（`DemoLibrary.demoHome`，在隔离库里），保留主目录下的相对路径：
-    /// 演示与性能库是种子写的，旧版本的种子绑的是真实主目录（`~/Project/cuepad`），库在了就不重写；实例会真去读写绑定的文件夹（技能与说明的扫描、整理与改说明），
-    /// 每次启动都搬一遍，旧库也写不到真实仓库。`-CuePadFolder` 明说要绑的那个照旧（隔离实例里真跑 Cue 派活要它）。
+    /// 每次启动、只要是隔离库（演示库、性能库，也包括真实数据复现的只读副本），这台 Mac 上绑在真实主目录下的文件夹都改绑到演示主目录
+    /// （`DemoLibrary.demoHome`，在隔离库里），保留主目录下的相对路径：实例会真去读写绑定的文件夹（技能与说明的扫描、整理与改说明），
+    /// 绑在真实主目录下就会改到真的仓库；旧版本的演示种子绑的就是真实主目录（`~/Project/cuepad`），库在了不重写。
+    /// 所以副本里项目绑的文件夹也不是原来那些。`-CuePadFolder` 明说要绑的那个照旧（隔离实例里真跑 Cue 派活要它）。
     private static func isolateBoundFolders(_ store: CueStore) async {
         // 只在隔离库里搬：用真实库的 Debug 实例绑的就是用户自己的文件夹
         guard let library = ProcessInfo.processInfo.environment[LibraryLocation.environmentKey],
@@ -70,6 +70,7 @@ extension DebugScene {
     }
     #endif
 
+    /// 库里只有默认项目（新的隔离库）时写入；读写出错就以失败退出（`abandon`）。
     private static func seedIfFresh(_ store: CueStore, _ what: String, _ seed: (CueStore) async throws -> Void) async {
         do {
             if try await store.projects().allSatisfy(\.isDefault) { try await seed(store) }

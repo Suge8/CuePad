@@ -131,15 +131,16 @@ private struct EditorLayer: View {
     }
 }
 
-/// 底部输入条：编辑页挂着（含淡出途中）时不显示，底栏只有一套，先退后进；⌘K 打开时只是藏起来（不卸下），关掉面板的同一帧就回来。
+/// 底部输入条：盖着一页（`Workspace.overlay`；灵感的编辑页含淡出途中）时不显示，底栏只有一套，先退后进；⌘K 打开时只是藏起来（不卸下），关掉面板的同一帧就回来。
 /// 只在项目页与归档放：回收站、进展页与会话页不是记灵感的地方（进展页的主操作是新任务、新会话，会话页有回复框），它只会压住列表最后几行。
 private struct CaptureSlot: View {
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        if workspace.isLibraryReady, workspace.presses.presented == nil, workspace.presses.isSelecting {
+        let bare = workspace.isLibraryReady && workspace.overlay == nil && workspace.presses.presented == nil
+        if bare, workspace.presses.isSelecting {
             SelectionBar().padding(.bottom, 16).transition(.opacity)
-        } else if workspace.isLibraryReady, workspace.presses.presented == nil, workspace.root.takesCapture {
+        } else if bare, workspace.root.takesCapture {
             let searching = workspace.searching
             CaptureBar(project: workspace.currentProject).padding(.bottom, 16)
                 .opacity(searching ? 0 : 1)

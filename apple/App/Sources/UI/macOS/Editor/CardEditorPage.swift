@@ -66,7 +66,7 @@ struct CardEditorPage: View {
         .debugSettling(isOpen ? !settled : !gone)
         // 卡没了（并进了草稿、接进了会话的回复框）就收起，不当成出错
         .observing(services.store, id: cardID, into: $data, onError: { [workspace] error in
-            if case CueStoreError.notFound = error { workspace.openCard = nil } else { workspace.fail(error) }
+            if case CueStoreError.notFound = error { workspace.close(.card(cardID)) } else { workspace.fail(error) }
         }) { [cardID] store in
             guard let card = try store.card(cardID) else { throw CueStoreError.notFound }
             return EditorData(card: card, project: try store.project(card.projectID))
@@ -76,11 +76,11 @@ struct CardEditorPage: View {
             editing = CardEditing(card, workspace: workspace)
             if isOpen, !mounted { prepare() }
         }
-        .onChange(of: data?.card.deletedAt) { if data?.card.deletedAt != nil { workspace.openCard = nil } }
+        .onChange(of: data?.card.deletedAt) { if data?.card.deletedAt != nil { workspace.close(.card(cardID)) } }
         // 编辑页只给散放的灵感：挂到了任务下，这页收起，接着在任务气泡里看
         .onChange(of: data.map { $0.card.isTask || $0.card.parentID != nil }) { _, moved in
             guard moved == true, let card = data?.card else { return }
-            workspace.openCard = nil
+            workspace.close(.card(cardID))
             workspace.open(card)
         }
         .onChange(of: isOpen) { if !isOpen { collapse() } }

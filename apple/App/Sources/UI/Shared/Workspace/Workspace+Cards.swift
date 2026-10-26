@@ -63,7 +63,7 @@ extension Workspace {
     /// 这一条归档或删掉了：开着它的编辑页或任务气泡收起。
     private func closeIfOpen(_ id: UUID) {
         #if os(macOS)
-        if openCard == id { openCard = nil }
+        close(.card(id))
         #endif
         if openTask?.task == id { openTask = nil }
     }

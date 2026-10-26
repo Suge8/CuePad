@@ -7,7 +7,7 @@ import os
 
 /// `-CuePadBench interact`：单次交互那一下的主线程耗时，逐项与预算（docs/perf.md「交互预算」）比较，
 /// 每项结果作为一行 `INTERACT {json}` 打到标准输出，量完退出。配 `-CuePadDemo YES`（演示库）或 `-CuePadSeed perf`（大库）。
-/// 动作就是点击、快捷键最终调用的工作区方法（`show`、`openCard`、`toggle`；侧栏发主菜单的动作），不经事件投递（那一段只有 1～5ms）。
+/// 动作就是点击、快捷键最终调用的工作区方法（`show`、`overlay`、`toggle`；侧栏发主菜单的动作），不经事件投递（那一段只有 1～5ms）。
 /// 例外是前台量的"任务气泡开"：真实地点那条任务行（写 `AWAIT click x y`，`perf-mac.sh` 经 HID 点，同人点），从松开的那一下起量。
 /// 直接调方法时空闲一两秒后的第一下常落在没升频的性能核上（同样的指令点击回合差到一倍）；真实输入进来时系统照人点调度，量的才是用户点的那一下。
 /// - **点击回合**：动作发出到画面第一次变（含这次变化的第一帧提交）为止，主线程的全部 CPU 毫秒，跨多圈 run loop 求和：挪到下一帧的活照样算进去，
@@ -139,8 +139,8 @@ enum InteractionBench {
         if let a { await step("页面回访") { workspace.show(.project(a)) } }
         if let card = try? await store.cards(in: workspace.currentProject ?? Project.defaultID).first?.id {
             for _ in 0..<2 {
-                await step("开编辑页") { workspace.openCard = card }
-                await step("收编辑页") { workspace.openCard = nil }
+                await step("开编辑页") { workspace.overlay = .card(card) }
+                await step("收编辑页") { workspace.overlay = nil }
             }
         }
         // 任务气泡：第一条顶层任务（演示库里是"发言轮次乱序"那样有子任务的），在它的项目页上开：前台量时真实地点那一行，后台直接开

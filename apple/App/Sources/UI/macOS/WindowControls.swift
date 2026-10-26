@@ -90,11 +90,8 @@ struct CloseButton: View {
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        if workspace.openCard != nil || workspace.openLibraryItem != nil {
-            Button {
-                workspace.openCard = nil
-                workspace.openLibraryItem = nil
-            } label: {
+        if workspace.overlay != nil {
+            Button { workspace.overlay = nil } label: {
                 HStack(spacing: 4) {
                     Image(.back).font(.system(size: 13, weight: .semibold))
                     Text("收起")

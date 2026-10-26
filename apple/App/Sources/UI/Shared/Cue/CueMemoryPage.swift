@@ -15,8 +15,7 @@ struct CueMemoryPage: View {
     @Environment(\.closePanel) private var close
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var memory: CueMemory?
-    @State private var schedules: [CueScheduled]?
+    @State private var shown: MemoryShown?
     @State private var text = ""
     @State private var forgetting: CueMemoryLine?
     @State private var ending: CueMemoryLine?
@@ -28,27 +27,24 @@ struct CueMemoryPage: View {
 
     private var title: String { String(localized: "\(workspace.cue.name) 记得什么") }
     /// 定时之外没忘掉的记忆，新的在前（定时在最上面一组）
-    private var kept: [CueMemoryLine] { (memory?.lines ?? []).filter { $0.deletedAt == nil && $0.remindAt == nil }.reversed() }
+    private var kept: [CueMemoryLine] { (shown?.memory.lines ?? []).filter { $0.deletedAt == nil && $0.remindAt == nil }.reversed() }
     /// 有字但记不成一条（`CueMemoryLine.fits`：写入时同一个判断）。
     private var tooLong: Bool { !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !CueMemoryLine.fits(text) }
 
     var body: some View {
         content
-            .observing(services.store, into: $memory, onError: workspace.fail) { try $0.cueMemory() }
-            .background { Color.clear.observing(services.store, into: $schedules, onError: workspace.fail) { try $0.cueSchedules() } }
+            .observing(services.store, into: $shown, onError: workspace.fail) { MemoryShown(memory: try $0.cueMemory(), schedules: try $0.cueSchedules()) }
             .dialog("忘掉这一条？", item: $forgetting, message: "\(workspace.cue.name) 之后不再记得它，找不回来") { line in
                 [DialogButton(title: "忘掉", role: .destructive) { workspace.forgetCueLine(line.id) }]
             }
-            .dialog("不再定时？", item: $ending, message: "到点不再叫醒 \(workspace.cue.name)，找不回来") { line in
-                [DialogButton(title: "不再定时", role: .destructive) { workspace.forgetCueLine(line.id) }]
-            }
+            .stopScheduleDialog($ending)
     }
 
     private var list: some View {
         let kept = kept, pinned = kept.filter(\.pinned), others = kept.filter { !$0.pinned }
         return ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
-                if let schedules, !schedules.isEmpty {
+                if let schedules = shown?.schedules, !schedules.isEmpty {
                     groupTitle(String(localized: "定时"), icon: .schedule)
                     ForEach(schedules) { scheduled($0).transition(.opacity) }
                 }
@@ -66,7 +62,7 @@ struct CueMemoryPage: View {
         }
         .scrollEdgeEffectHidden()
         .overlay {
-            if memory != nil, kept.isEmpty, schedules?.isEmpty != false {
+            if let shown, kept.isEmpty, shown.schedules.isEmpty {
                 EmptyState(mascot: .empty, title: "还没记住什么", message: "你说过的要紧事，它会自己记下").padding(20)
             }
         }
@@ -74,14 +70,15 @@ struct CueMemoryPage: View {
         .safeAreaInset(edge: .bottom, spacing: 0) { field.padding(.bottom, -Metrics.field / 2) }
         .padding(.bottom, Metrics.fieldBottom + Metrics.field / 2)
         .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: kept)
-        .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: schedules)
+        .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: shown?.schedules)
         .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: rescheduling?.id)
     }
 
     private var field: some View {
         VStack(alignment: .leading, spacing: 4) {
             if let draft = schedule {
-                ScheduleEditor(text: "", draft: Binding { schedule ?? draft } set: { schedule = $0 }, save: add, cancel: { schedule = nil })
+                ScheduleEditor(
+                    text: "", draft: Binding { schedule ?? draft } set: { schedule = $0 }, savable: CueMemoryLine.fits(text), save: add, cancel: { schedule = nil })
                     .padding(.top, 12)
             }
             HStack(spacing: 10) {
@@ -118,10 +115,8 @@ struct CueMemoryPage: View {
         let id = line.id, pinned = line.pinned
         return MemoryRow(
             line: line, copy: copy(line),
-            actions: [
-                RowAction(pinned ? "不再一直记着" : "一直记着", icon: pinned ? .unpin : .pin) { workspace.pinCueLine(id, !pinned) },
-                RowAction("忘掉", icon: .remove, tone: .destructive) { forgetting = line },
-            ])
+            leading: RowAction(pinned ? "不再一直记着" : "一直记着", icon: pinned ? .unpin : .pin) { workspace.pinCueLine(id, !pinned) },
+            trailing: RowAction("忘掉", icon: .remove, tone: .destructive) { forgetting = line })
     }
 
     /// 一条定时：下面一行怎么重复、下一次（错过后补上的写那句事实）；改的时候原地换成 `ScheduleEditor`。
@@ -134,7 +129,7 @@ struct CueMemoryPage: View {
                     workspace.rescheduleCueLine(id, rescheduling?.draft ?? editing.draft)
                     rescheduling = nil
                 },
-                cancel: { rescheduling = nil }, end: { workspace.forgetCueLine(id) }
+                cancel: { rescheduling = nil }, end: { ending = line }
             )
             .padding(.vertical, 6)
         } else {
@@ -142,10 +137,8 @@ struct CueMemoryPage: View {
             let late = item.last.flatMap { $0.late ? ScheduleText.missed($0) : nil }
             MemoryRow(
                 line: line, note: Dotted(ScheduleText.repeats(line.repeats), late ?? next), copy: copy(line),
-                actions: [
-                    RowAction("改", icon: .write) { rescheduling = Rescheduling(id: id, draft: ScheduleDraft(line)) },
-                    RowAction("不再定时", icon: .remove, tone: .destructive) { ending = line },
-                ])
+                leading: RowAction("改", icon: .write) { rescheduling = Rescheduling(id: id, draft: ScheduleDraft(line)) },
+                trailing: RowAction("不再定时", icon: .remove, tone: .destructive) { ending = line })
         }
     }
 
@@ -195,6 +188,12 @@ struct CueMemoryPage: View {
     #endif
 }
 
+/// 这一页一次读出的：记忆与定时（同一次读，一条一次性定时到点后从"定时"挪进其他记忆时不在两帧里各变一半）。
+nonisolated private struct MemoryShown: Equatable, Sendable {
+    var memory: CueMemory
+    var schedules: [CueScheduled]
+}
+
 /// 原地展开在改的那条定时与手上的那一份。
 private struct Rescheduling: Equatable {
     let id: UUID
@@ -208,11 +207,14 @@ private struct MemoryRow: View {
     let line: CueMemoryLine
     var note: Dotted?
     let copy: RowAction
-    /// 两个：前一个右滑，后一个（删的那个）左滑
-    let actions: [RowAction]
+    /// 手机上右滑的那个
+    let leading: RowAction
+    /// 删的那个：手机上左滑
+    let trailing: RowAction
     @Environment(\.palette) private var palette
 
     private var meta: Dotted { Dotted(DateLabel.short(line.createdAt), line.source == .known(.you) ? String(localized: "你记的") : nil) }
+    private var actions: [RowAction] { [leading, trailing] }
     private var menu: some View {
         Section(meta.visible) { RowActionButtons(actions: [copy] + actions) }
     }
@@ -239,7 +241,7 @@ private struct MemoryRow: View {
             .background(palette.desk, in: .rect)
             .contentShape(.contextMenuPreview, .rect(cornerRadius: Metrics.radius, style: .continuous))
             .contextMenu { menu }
-            .rowSwipes(RowSwipes(leading: [actions[0]], trailing: [actions[1]]))
+            .rowSwipes(RowSwipes(leading: [leading], trailing: [trailing]))
             #else
             .hoverReveal(.bottomTrailing) { MemoryHoverActions(actions: actions) }
             .row()
