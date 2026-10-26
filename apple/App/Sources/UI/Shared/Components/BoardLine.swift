@@ -4,8 +4,6 @@ import SwiftUI
 extension EnvironmentValues {
     /// 推进中这一列各会话你这边最近说的几句的时刻（`CueStore.recentSaid`）：列读一次交给卡上的线（`BoardLine`），卡不各自读库。
     @Entry var boardSaid: [String: [Date]] = [:]
-    /// 线右端的时长按哪一刻写：整列一个，每过一个整分钟换一次（`BoardColumn`），一列的卡在同一次更新里换字，不各自定时。
-    @Entry var boardNow = Date.now
 }
 
 /// 看板推进中卡下沿那条线：整行一条线，状态与颜色只按 `BoardPulse`。
@@ -14,7 +12,6 @@ extension EnvironmentValues {
 /// - 右段固定占 `nowShare` 是现在（`BoardPulse.Trace`）：在跑是从最后一颗（靛青）点长出的波浪或子代理直轨（`WaveStrip`）；
 ///   停住是淡线接到右端、末端一颗与状态词同色的点，被打断是断线；歇着是淡线、不带点。每张卡的现在在同一位置、同一长度，一列读起来整齐；
 /// - 右端只写一个时长：会话在此刻这个状态里待了多久（同会话行那一格，`PiClock.Style.span`；数字加粗、单位小一号淡色），要你管的状态词紧跟。
-///   按列给的此刻写（`boardNow`，整分钟换），比会话行最多晚一分钟换字：一列的卡在同一次更新里换字，不各开一个定时任务。
 /// 动只经 `LoopLayer`，只有看得见的在动：卡在懒加载栈里，出屏就不存在；不放循环动效时（`LoopsPlay`）静止；
 /// 一列里排在第 `maxMoving` 条以后的静止（`moves` 由列按先后给）——"同屏最多几条"要逐行读几何才判得出，每行一个几何读数的开销比省下的动画还大，
 /// 按列里的先后数是最轻的等价做法：列从上往下读，排在前面的就是一屏里先看到的。读屏不念：卡的读屏标签已说了状态。
@@ -95,14 +92,16 @@ struct BoardLine: View {
         .fixedSize()
     }
 
-    /// 时长：数字加粗、单位小一号淡色（"12 分钟""42 sec"；不到一分钟是"刚刚"，整段淡色），一段字里分两种样子。单独一层读列给的此刻：换字时只重算它。
+    /// 时长：数字加粗、单位小一号淡色（"12 分钟""42 sec"；不到一分钟是"刚刚"，整段淡色），一段字里分两种样子；经 `LiveText` 只在字会变的那一刻重画。
     private struct TimeSpent: View {
         let clock: PiClock
-        @Environment(\.boardNow) private var now
         @Environment(\.palette) private var palette
 
         var body: some View {
-            let text = clock.text(now: now, style: .span)
+            LiveText(style: clock.live(.span)) { text in Self.styled(text, palette) }
+        }
+
+        private static func styled(_ text: String, _ palette: Palette) -> Text {
             let count = text.prefix { $0.isNumber }.count
             var digits = AttributedString(text.prefix(count))
             digits.font = Typography.meta.weight(.semibold).monospacedDigit()
