@@ -100,14 +100,14 @@ struct CueRow: View, Equatable {
     private var straddlesDot: Bool { margin < CueUnreadDot.room }
 }
 
-/// Cue 在跑的那一轮：经过那一行（`round`）与此刻在做的（这一轮的经过的末行，`CueTrace`）。
+/// Cue 在跑的那一轮：经过那一行（`round`）与此刻在做的（并进这一轮的经过，`CueTrace`）。
 /// 交给对话里各格的是这个值而不是闭包：闭包每次都不相等，Cue 的状态一变（被叫醒、在想→用工具）对话里每一格都要重算。
 nonisolated struct CueLiveRound: Equatable {
     let round: UUID
     /// 它那台 Mac 此刻不在（`CuePresence.shown` 为空）时为 nil：这一轮照样没做完，只是不写在做什么
     let doing: Doing?
 
-    /// 在跑那一行：碰到任务与会话的一步（`step`）画成与经过同一种行，其余是图标加那一句；在说话时（`speaking`）没有这一行。
+    /// 在跑那一步：碰到任务与会话的（`step`）并进经过里它那一处的一行，其余是末尾图标加那一句；在说话时（`speaking`）没有这一行。
     struct Doing: Equatable {
         let icon: Icon
         let step: CueActivity.Touch?

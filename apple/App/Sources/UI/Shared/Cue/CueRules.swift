@@ -47,7 +47,7 @@ nonisolated enum CuePresence: Equatable, Sendable {
     /// 在用工具（不是在想）：对话末尾单列正在跑的那一步。
     var isUsingTool: Bool { if case .working(.tool, _, _) = self { true } else { false } }
 
-    /// 正在跑的那一步碰到的那一处（`CueState.step`）：对话里在跑那一行按它画成与经过同一种行（`CueTrace`）。
+    /// 正在跑的那一步碰到的那一处（`CueState.step`）：对话里按它并进经过里那一处的一行（`CueTrace`）。
     var step: CueActivity.Touch? { if case .working(_, _, let step) = self { step } else { nil } }
 
     /// 与 Agent 会话同一套的状态：话在路上、在做事；其余没有。
