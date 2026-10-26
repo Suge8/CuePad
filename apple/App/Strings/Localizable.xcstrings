@@ -8443,18 +8443,18 @@
         }
       }
     },
-    "合进 AGENTS.md，Claude Code 改读它；CLAUDE.md 进废纸篓" : {
+    "合进 AGENTS.md，CLAUDE.md 换成链到它" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Merge into AGENTS.md for Claude Code to read; CLAUDE.md goes to the Trash"
+            "value" : "Merge into AGENTS.md; CLAUDE.md becomes a link to it"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "合进 AGENTS.md，Claude Code 改读它；CLAUDE.md 进废纸篓"
+            "value" : "合进 AGENTS.md，CLAUDE.md 换成链到它"
           }
         }
       }

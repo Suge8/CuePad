@@ -175,7 +175,7 @@ struct CompareView: View {
     }
 
     private static func outcome(_ tidy: LibraryTidy) -> String {
-        if case .projectClaude = tidy.kind { return String(localized: "合进 AGENTS.md，Claude Code 改读它；CLAUDE.md 进废纸篓") }
+        if case .projectClaude = tidy.kind { return String(localized: "合进 AGENTS.md，CLAUDE.md 换成链到它") }
         return String(localized: "合成一份全局说明，各家改成读它；原来的进废纸篓")
     }
 
