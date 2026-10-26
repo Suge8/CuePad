@@ -87,7 +87,7 @@ import Testing
 
   // MARK: 手机通知标志：只在"进入等你确认"和"从工作中进入完成"的那一次写入置位
 
-  private func alert(_ sessionID: String = "s1") async throws -> Open<PiAlert>? {
+  private func alert(_ sessionID: String = "s1") async throws -> PiPush? {
     try await states()[sessionID]?.notify
   }
 
@@ -100,11 +100,11 @@ import Testing
     #expect(try await alert() == nil)
 
     try await recorder.update(sessionID: "s1", state: .waitingForUser, detail: "确认写入？")
-    #expect(try await alert() == .known(.waitingForUser))
+    #expect(try await alert() == .alert(.waitingForUser))
 
     // 仍在等、只是问题换了：标志还没上传就不能被抹掉（否则用户仍被等着，锁屏却收不到通知）
     try await recorder.update(sessionID: "s1", state: .waitingForUser, detail: "换了个问题")
-    #expect(try await alert() == .known(.waitingForUser))
+    #expect(try await alert() == .alert(.waitingForUser))
     #expect(try await states()["s1"]?.detail == "换了个问题")
   }
 }

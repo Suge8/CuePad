@@ -7,7 +7,8 @@ import OSLog
 /// iPhone 锁屏与灵动岛上的实时活动（内容见 `CueActivityState`）：有活（`CueNow.isLive`：Cue 在一轮里、有在跑或等子代理的、有等你的）且 App 在前台时开一个（只一个），
 /// 变了就更新，没活了带着最后一份结束：刚做完一件时那一份在锁屏留到那颗收掉（`CueNow.doneWindow`），否则当场收起。
 /// 没有服务端，内容只由 App 改，每次都是当场从库推出的那一份（`AppServices.writeSnapshots`），这里不另存：前台时库一变就改（`AppServices.startSnapshots`）；
-/// 后台靠推送把 App 叫起来——等你类的可见推送带 content-available，与同步区的静默推送一样让 App 拉一次，拉完当场改（`IOSAppDelegate`），不另起轮询。
+/// 后台靠推送把 App 叫起来——Cue 的话、进了等你的会话总有一条推送（到得了你的是带 content-available 的可见推送，你正在 Mac 上看着的是静默推送，`CuePush`、`PiPush`），
+/// 让 App 拉一次，拉完当场改（`IOSAppDelegate`），不另起轮询。
 /// 推送会被系统合并、被划掉的 App 叫不醒，所以按时刻会变的交给系统：每份的 `staleDate` 是它下一次变的那一刻（`CueNow.nextShownChange`：
 /// 过时、刚做完的收掉），系统到点重画，画的是那一份到那时的样子（`CueActivityViews`）；走秒的计时也交给系统（`Text(timerInterval:)`）。
 /// 系统只许前台开启，所以后台读到有事时只改已开着的，回前台时再开。和系统里那一份一样就不发（`same`，不看推出的时刻），`resend` 时照发（过时时刻从此刻算）。

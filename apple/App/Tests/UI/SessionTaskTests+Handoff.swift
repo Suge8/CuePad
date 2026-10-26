@@ -177,7 +177,7 @@ extension SessionTaskTests {
         #expect(try await store.cueTally().waiting.count == 1)
         let states = try await store.piSessions(sessionIDs: ["s1", "s2"])
         #expect(states["s1"] != nil && states["s1"]?.state.notify == nil)
-        #expect(states["s2"]?.state.notify == .known(.waitingForUser))
+        #expect(states["s2"]?.state.notify == .alert(.waitingForUser))
 
         // mac-b 之后再没续期：期限（`MacPresence.lifetime`）一到"等你"自己从 1 变 2
         var counts = store.observe({ try $0.cueTally().waiting.count }).makeAsyncIterator()
@@ -188,7 +188,7 @@ extension SessionTaskTests {
         #expect(try await shown() == ["s1": "等你确认", "s2": "等你确认"])
         try await recorder.update(sessionID: "s3", state: .thinking, title: "s3")
         try await recorder.update(sessionID: "s3", state: .waitingForUser, question: PiQuestion(promptID: "p3", kind: .confirm, text: "删旧分支？"))
-        #expect(try await store.piSessions(sessionIDs: ["s3"])["s3"]?.state.notify == .known(.waitingForUser))
+        #expect(try await store.piSessions(sessionIDs: ["s3"])["s3"]?.state.notify == .alert(.waitingForUser))
 
         // mac-b 续上在线：又在值班
         try await store.recordMacPresence(host: "mac-b") { true }
