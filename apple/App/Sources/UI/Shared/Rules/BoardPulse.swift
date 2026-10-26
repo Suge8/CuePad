@@ -84,6 +84,11 @@ struct BoardPulse: Equatable {
         case nil: tier == .running ? palette.signature : palette.ink3
         }
     }
+
+    /// 线过去那段最后一颗点（最近说的那句）：在跑时现在那一截从它长出，同 `tint`；否则同更早的点，淡墨。
+    func lastSaidTint(_ palette: Palette) -> Color {
+        tier == .running ? tint(palette) : palette.ink3
+    }
 }
 
 extension Workspace {

@@ -51,7 +51,7 @@ struct BoardLine: View {
         PastLine(marks: marks)
             .fill(LinearGradient(stops: [.init(color: palette.track.opacity(0), location: 0), .init(color: palette.track, location: 0.3)], startPoint: .leading, endPoint: .trailing))
             .overlay { PastDots(marks: marks, pick: .earlier).fill(palette.ink3) }
-            .overlay { PastDots(marks: marks, pick: .last).fill(pulse.tier == .running ? palette.signature : palette.ink3) }
+            .overlay { PastDots(marks: marks, pick: .last).fill(pulse.lastSaidTint(palette)) }
     }
 
     /// `joint`：两段交界处有最后一颗点，停住与歇着的线从它挖的空后面接上。
@@ -61,9 +61,9 @@ struct BoardLine: View {
             let strip = WaveStrip(gait: gait, tracks: min(subagents, Self.maxTracks))
             Group {
                 if moves && plays {
-                    LoopLayer(kind: .wave(strip), color: palette.signature)
+                    LoopLayer(kind: .wave(strip), color: pulse.tint(palette))
                 } else {
-                    strip.still.stroke(palette.signature, style: StrokeStyle(lineWidth: strip.lineWidth, lineCap: .round, lineJoin: .round))
+                    strip.still.stroke(pulse.tint(palette), style: StrokeStyle(lineWidth: strip.lineWidth, lineCap: .round, lineJoin: .round))
                 }
             }
             .clipped()
