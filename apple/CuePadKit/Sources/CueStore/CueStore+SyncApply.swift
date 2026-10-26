@@ -43,7 +43,7 @@ extension CueStore {
 
   private func overwrite(_ row: SyncRow) throws {
     let columns = row.table.columns
-    try db.run(Self.upsertSQL(row.table, columns), columns.map { row.fields[$0] ?? .null })
+    try copyingRemote { try db.run(Self.upsertSQL(row.table, columns), columns.map { row.fields[$0] ?? .null }) }
   }
 
   /// 返回被删附件的哈希（提交后回收文件）。

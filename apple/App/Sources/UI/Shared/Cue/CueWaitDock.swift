@@ -69,7 +69,8 @@ struct CueWaitDock: View {
     }
 
     /// 来了从输入框后面升起（`RiseBehind`）；都答完让出的高一下到位、卡浮在原处淡掉：对话里接着长出这一问与你的回答，对话一次滑到终位。
-    /// 换一件时新的从叠边里微微放大淡入，旧的滑走的往那边飞出、其余原地淡掉（底边对齐叠放）。减弱动态效果时来也只淡入。卡与下面输入框的间距在卡里（`below`）。
+    /// 换一件时新的从叠边里上浮一截淡入，旧的滑走的往那边飞出、其余原地淡掉（底边对齐叠放）。减弱动态效果时来也只淡入。卡与下面输入框的间距在卡里（`below`）。
+    /// 卡上有字、有回答框，进场不缩放（理由同 `BubblePlacement.transition`；Mac 上缩放还让回答框的 AppKit 文本框每帧按缩放重报尺寸，SwiftUI 报 min <= max 不成立）。
     var body: some View {
         ZStack(alignment: .bottom) {
             if let shown {
@@ -77,7 +78,7 @@ struct CueWaitDock: View {
                     .offset(x: drag)
                     .id(shown.id)
                     .transition(.asymmetric(
-                        insertion: .scale(scale: 0.96, anchor: .bottom).combined(with: .opacity),
+                        insertion: .offset(y: Self.peek).combined(with: .opacity),
                         removal: .offset(x: exit).combined(with: .opacity)))
             }
         }

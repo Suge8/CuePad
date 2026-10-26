@@ -47,7 +47,7 @@ struct ProjectScreen: View {
             [projectID] store in ProjectPage(try ProjectPageData.read(projectID, from: store))
         }
         .onChange(of: page?.data.stamps) { rearrange() }
-        .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in rearrange() }
+        .onDayChange { rearrange() }
         // 打开时就不在了（iPad 恢复窗口时选回的项目已进回收站）也算：退回书架
         .onChange(of: project == nil, initial: true) { _, gone in if gone { workspace.pop(projectID) } }
     }

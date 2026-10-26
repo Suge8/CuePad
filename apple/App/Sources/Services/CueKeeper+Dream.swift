@@ -47,6 +47,8 @@ extension CueKeeper {
                 default: break
                 }
             }
+        } catch is CancellationError {
+            // 不再值班（停用 Cue、退出）时正起着的这次跟着取消，不是没起来
         } catch {
             Self.log.error("Cue 整理记忆没起来：\(error.localizedDescription, privacy: .public)")
         }

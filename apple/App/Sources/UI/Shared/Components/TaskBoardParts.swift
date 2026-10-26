@@ -322,6 +322,6 @@ private struct BoardReading: ViewModifier {
     func body(content: Content) -> some View {
         content
             .observing(store, id: day, into: $board, onError: onError) { try TaskBoard.read(from: $0) }
-            .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in day += 1 }
+            .onDayChange { day += 1 }
     }
 }

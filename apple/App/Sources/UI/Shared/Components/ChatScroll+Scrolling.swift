@@ -11,6 +11,9 @@ extension ChatScroll {
 
     func margin(_ width: CGFloat) -> CGFloat { ChatLayout.margin(width, readingWidth: readingWidth, inset: inset) }
 
+    /// 离开最新处后来过新内容："回到最新"圆钮上带一个点。
+    var unseen: Bool { leftAt.map { $0 != followKey } ?? false }
+
     /// 内容变高矮时底锚：贴着最新、用户没在滚、没在等和 iCloud 对完（或自己要回到最新）。滚走了、在对的期间新的长在下面，正在读的不动。
     var pinned: Bool { follow.wrappedValue.atNewest && !follow.wrappedValue.scrolling && (!holding || unheld) && !deferred }
 
@@ -21,7 +24,7 @@ extension ChatScroll {
     /// 键盘是安全区，不在这里：发出时键盘随即收起，对话跟着键盘的动画走，不留。
     var bottomPadding: CGFloat { max(bottomInset, held ?? 0) }
 
-    /// 最近一次读数（偏移、最新处）与上一次交给读数 action 的读数。读数闭包不一定在主线程，所以带锁；
+    /// 最近一次读数里的可见区（偏移、最新处、可见区的高）与上一次交给读数 action 的读数。读数闭包不一定在主线程，所以带锁；
     /// 它不是状态，写它不触发任何更新。
     final class ScrollOffset: Sendable {
         private struct Values {
@@ -29,30 +32,39 @@ extension ChatScroll {
             var read: CGFloat = 0
             /// 最新处的偏移（`scrollTo(y:)` 的 y）。
             var end: CGFloat = 0
-            /// 上一次交给 action 的读数。不用 action 给的旧值：那是上一次求值，中间几次变化（打开时排开更早的一段）可能求了值却没调 action，
+            /// 可见区的高（扣掉上下边距）。
+            var container: CGFloat = 0
+            /// 上一次交给 action 的读数与那时可见区的高。不用 action 给的旧值：那是上一次求值，中间几次变化（打开时排开更早的一段）可能求了值却没调 action，
             /// 拿它比内容变没变高会漏掉。
-            var delivered: Reading?
+            var delivered: (reading: Reading, container: CGFloat)?
             /// 上一回记下的最新一条新到的（`arrival`）；还没有过为 nil。
             var arrival: UUID?
         }
 
+        /// 交给 action 时上一次交过去的读数，与这之间可见区从底下变矮了没有。
+        struct Delivered {
+            let reading: Reading?
+            let viewShrank: Bool
+        }
+
         private let values = Mutex(Values())
 
-        func set(read: CGFloat, end: CGFloat) {
+        func set(read: CGFloat, end: CGFloat, container: CGFloat) {
             values.withLock {
                 $0.read = read
                 $0.end = end
+                $0.container = container
             }
         }
 
         var read: CGFloat { values.withLock { $0.read } }
         var end: CGFloat { values.withLock { $0.end } }
 
-        /// 换上这次交给 action 的读数，返回上一次交过去的。
-        func deliver(_ reading: Reading) -> Reading? {
+        /// 换上这次交给 action 的读数。
+        func deliver(_ reading: Reading) -> Delivered {
             values.withLock { values in
-                defer { values.delivered = reading }
-                return values.delivered
+                defer { values.delivered = (reading, values.container) }
+                return Delivered(reading: values.delivered?.reading, viewShrank: values.delivered.map { values.container < $0.container } ?? false)
             }
         }
 
@@ -66,8 +78,10 @@ extension ChatScroll {
         }
     }
 
-    /// 滚动区的读数：只留下会让状态改变的几条越线（离最新处近不近、超没超一屏、离最早处近不近）与内容高、边距，每帧都变的偏移不进来。
-    /// `action` 只在读数变了才跑，滚动时每帧不碰页面的状态。
+    /// 滚动区的读数：只留下会让状态改变的几条越线（离最新处近不近、超没超一屏、离最早处近不近）与内容自己的高、让出浮着那一块的那段，
+    /// action 只在它们变了才跑：滚动时每帧不碰页面的状态。可见区自己的尺寸与边距（偏移、最新处、可见区的高）只记在 `ScrollOffset`，不进读数：
+    /// 推入页面、App 刚打开时系统要排好几遍才定下导航栏的高与短内容贴底的那段边距，一帧里接连变好几次，进了读数 action 在一帧里就跑好几遍，
+    /// 系统丢掉第三遍起的（连同最后定下来的那次）。系统挪走了偏移时越线变了照样会来（`nearNewest`）。
     struct Reading: Equatable {
         var nearNewest: Bool
         var beyondScreen: Bool
@@ -76,12 +90,6 @@ extension ChatScroll {
         var height: CGFloat
         /// 让出浮着的那一块的那段（`bottomPadding`）。
         var floating: CGFloat
-        /// 滚到最新处时可见区顶边在内容里的位置（`scrollTo(y:)` 的 y，不含内容边距）。
-        var end: CGFloat
-        /// 顶部的内容边距：它一变系统就把偏移放回顶上，读数要跟着变，才会再补滚一次。
-        var inset: CGFloat
-        /// 可见区的高（扣掉上下边距）：手机上它从底下变矮是键盘升起来了。
-        var container: CGFloat
     }
 
     /// 对完一次（`holding` 期间长在下面的）、键盘升起时，整段滑到最新处（减弱动态效果时直接到）；贴着最新时来的新内容不经这里，底锚当帧就排好（`pinned`）。用定长的 `Motion.move`，不用弹簧：弹簧最后那段一两像素的尾巴
