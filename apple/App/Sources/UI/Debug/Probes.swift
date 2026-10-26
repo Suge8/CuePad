@@ -16,6 +16,17 @@ func jsonLine(_ tag: String, _ row: [String: Any]) -> String {
 /// 进程已执行的指令数（百万）。别的进程抢 CPU 时 CPU 时间会被拉长，指令数几乎不受影响，前后对比以它为准。
 func instructionsMillions() -> Double { Double(processCounters().instructions) / 1_000_000 }
 
+/// 调用它的线程累计执行的指令（百万）：内核的每线程计数器（`thread_selfcounts`，取指令与周期两项）。线程的计数跨 exec 不清零。
+func threadInstructionsMillions() -> Double {
+    var counts: (instructions: UInt64, cycles: UInt64) = (0, 0)
+    _ = withUnsafeMutablePointer(to: &counts) { threadSelfCounts(1, $0, MemoryLayout<(UInt64, UInt64)>.size) }
+    return Double(counts.instructions) / 1_000_000
+}
+
+/// xnu 的 `thread_selfcounts`（类型 1 是指令与周期）：SDK 头文件里没有，符号在系统库里，只给测量用。
+@_silgen_name("thread_selfcounts")
+private func threadSelfCounts(_ type: Int32, _ buffer: UnsafeMutableRawPointer, _ size: Int) -> Int32
+
 /// 进程累计执行的指令数与 CPU 周期数（内核的性能计数器）。
 func processCounters() -> (instructions: UInt64, cycles: UInt64) {
     var usage = rusage_info_v4()
@@ -35,6 +46,22 @@ func energyMillijoules() -> Double {
 }
 
 #if os(macOS)
+/// `-CuePadTraceWait YES`（perf 脚本带着 CUEPAD_TRACE 时，_trace.sh）：写 `AWAIT trace <PID>` 停着，等脚本按 PID 开录了发来 SIGUSR1。
+/// 按 PID 开录要好几秒，不等的话短的测量还没开录就量完了。在主线程上同步等（冷启动在进 run loop 之前就等）：开录之前什么都不做。
+/// 信号先忽略、经 kqueue 收：进程里哪个线程接到都不会被它结束；先登记再写这一行，信号不会在没人接的时候到。
+func waitForTracer() {
+    guard UserDefaults.standard.bool(forKey: "CuePadTraceWait") else { return }
+    signal(SIGUSR1, SIG_IGN)
+    let queue = kqueue()
+    var change = kevent(ident: UInt(SIGUSR1), filter: Int16(EVFILT_SIGNAL), flags: UInt16(EV_ADD), fflags: 0, data: 0, udata: nil)
+    _ = kevent(queue, &change, 1, nil, 0, nil)
+    print("AWAIT trace \(getpid())")
+    fflush(stdout)
+    var fired = kevent()
+    _ = kevent(queue, nil, 0, &fired, 1, nil)
+    close(queue)
+}
+
 private func pidRusage(_ pid: Int32, _ flavor: Int32, _ buffer: UnsafeMutablePointer<rusage_info_t?>) -> Int32 {
     proc_pid_rusage(pid, flavor, buffer)
 }

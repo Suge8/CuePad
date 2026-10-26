@@ -12,6 +12,8 @@
 set -euo pipefail
 
 APPLE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+# shellcheck source=_trace.sh source-path=SCRIPTDIR
+. "$APPLE_DIR/scripts/_trace.sh"
 APP="$1" runs="${3:-5}"
 args=("${@:4}")
 [ "$2" = mac ] || { echo "perf launch 只有 mac" >&2; exit 2; }
@@ -37,20 +39,11 @@ if [ -z "$seed" ]; then
   fi
 fi
 
-# 按 PID 开录，开录了发 SIGUSR1 放 App 往下走；没开录成就结束它。
-# xctrace 报 Starting recording 后采样还要一会儿才真的开始（实测头 0.47 秒没有样本），没有别的信号可等，停 TRACE_WARMUP 秒再放行
-TRACE_WARMUP=1
-record() {
-  local pid="$1"
-  xcrun xctrace record --template "$CUEPAD_TRACE" --attach "$pid" --output "$trace" 2>&1 | tee "$trace.log" | {
-    if grep -q 'Starting recording'; then sleep "$TRACE_WARMUP"; kill -USR1 "$pid"; else echo "xctrace 没开录，见 $trace.log" >&2; kill -TERM "$pid"; fi
-    cat >/dev/null
-  }
-}
+# App 写 `AWAIT trace <PID>` 时按 PID 开录（_trace.sh），其余行原样转出
 relay() {
   local line
   while IFS= read -r line; do
-    case "$line" in "AWAIT trace "*) record "${line#AWAIT trace }" & ;; *) printf '%s\n' "$line" ;; esac
+    case "$line" in "AWAIT trace "*) trace_attach "${line#AWAIT trace }" "$trace" & ;; *) printf '%s\n' "$line" ;; esac
   done
   wait
 }
