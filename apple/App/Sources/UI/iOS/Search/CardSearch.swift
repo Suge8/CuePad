@@ -1,7 +1,8 @@
 #if os(iOS)
 import SwiftUI
 
-/// 卡片搜索的结果（搜索页"灵感与任务"一栏）：筛选胶囊（前面是调用方给的 `leading`，右边写命中"N 条"）+ 按项目分组的卡片（多个词都要命中，最近修改在前）。
+/// 卡片搜索的结果（搜索页"灵感与任务"一栏）：筛选胶囊（前面是调用方给的 `leading`，右边写命中"N 条"）+ 按项目分组的卡片（多个词都要命中，最近修改在前）；
+/// 没有搜索词与条件时列全部，库里还没有灵感与任务时是空态。
 struct CardSearchResults<Leading: View>: View {
     @Binding var query: PaletteQuery
     @ViewBuilder let leading: Leading
@@ -33,8 +34,14 @@ struct CardSearchResults<Leading: View>: View {
                 }
                 .padding(.horizontal, -16)
                 if let data {
-                    if data.total == 0, !query.text.isEmpty || query.isFiltered {
-                        EmptyState.noMatch(query.text).padding(.top, 24)
+                    if data.total == 0 {
+                        // 没有搜索词与条件时列的是全部：一条都没有就是库里还没有，不是没搜到
+                        if !query.text.isEmpty || query.isFiltered {
+                            EmptyState.noMatch(query.text).padding(.top, 24)
+                        } else {
+                            EmptyState(mascot: .search, title: "还没有灵感与任务", message: "记下的灵感、建的任务都能在这里搜到", waitsForSync: true)
+                                .padding(.top, 24)
+                        }
                     }
                     ForEach(data.groups) { group in
                         let project = workspace.catalog?.project(group.id)

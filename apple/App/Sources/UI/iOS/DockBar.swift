@@ -154,14 +154,15 @@ private struct DockCue: View {
     }
 }
 
-/// Cue 钮左边的两行：上"推进中 N"（次要墨色），下"等你 M"（`WaitingCount`，赭黄）；为 0 的那行不写，都为 0 写一句安静的现状。
-/// 两个数就是 Cue 此刻的（`CueNow.advancing`、`CueNow.needsYou`，都出自 `CueStore.cueTally`），不另算。数变了原地滚过去。
+/// Cue 钮左边的两行：上"推进中 N"（次要墨色），下"等你 M"（`WaitingCount`，赭黄）；为 0 的那行不写，都为 0 写 Cue 此刻那一句
+/// （`CueNow.quietLine`：还没启用、哪台没开、在做的那一步、手上没有事……，同页头与小组件）。
+/// 两个数就是 Cue 此刻的（`CueNow.advancing`、`CueNow.needsYou`，都出自 `CueStore.cueTally`），不另算。数变了原地滚过去；那一句长了按尾截断。
 private struct DockTally: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
     static func spoken(_ cue: CueWatch) -> String {
-        guard cue.now.advancing > 0 || cue.now.needsYou > 0 else { return CueNow.quiet }
+        guard cue.now.advancing > 0 || cue.now.needsYou > 0 else { return cue.now.quietLine }
         return Dotted(cue.now.advancing > 0 ? String(localized: "推进中 \(cue.now.advancing)") : nil, cue.now.needsYou > 0 ? String(localized: "等你 \(cue.now.needsYou)") : nil).spoken
     }
 
@@ -174,12 +175,11 @@ private struct DockTally: View {
             }
             WaitingCount(count: cue.now.needsYou)
             if cue.now.advancing == 0, cue.now.needsYou == 0 {
-                Text(CueNow.quiet).foregroundStyle(palette.ink3)
+                Text(cue.now.quietLine).foregroundStyle(palette.ink3)
             }
         }
         .font(.system(size: 12, weight: .medium))
         .lineLimit(1)
-        .fixedSize()
         .animation(HandOff.quick, value: cue.now.advancing)
         .animation(HandOff.quick, value: cue.now.needsYou)
     }

@@ -19,11 +19,13 @@ struct HandOffInput: View {
 
     /// 交到哪的规则读出的：决定本身（不是从任务来的为 nil）、决定交给的会话的会话行（默认目标；没有为 nil，即新会话），
     /// 与选"新会话…"时的决定（`handOffPlan(fresh:)`，与 Cue 开工带 fresh 同一条规则），以及开新会话时任务的第一句（`CueStore.opening`）。
+    /// 还没有哪台 Mac 写下过自己时没有决定（`noMac`）：这是新用户的常态、不是出错，原因写在输入框头部，同新会话的输入框。
     nonisolated private struct Planned: Equatable, Sendable {
         var plan: HandOffPlan?
         var bound: PiSessionListItem?
         var fresh: HandOffPlan?
         var opening: String?
+        var noMac = false
     }
 
     /// 能交给的会话：在线的（Mac 的发送目标共用同一份规则），叶子绑着的会话已结束时它排最前。
@@ -37,7 +39,7 @@ struct HandOffInput: View {
         if let choice { return all.first { $0.state.id == choice } }
         return planned?.bound.flatMap { bound in all.first { $0.state.sessionID == bound.state.sessionID } }
     }
-    private var canSend: Bool { services.reachesPiHost && planned != nil }
+    private var canSend: Bool { services.reachesPiHost && planned.map { !$0.noMac } == true }
     private var draft: ComposerDraft { workspace.handOffDraft }
 
     /// 草稿在 `Workspace.handOffDraft`：发出即收起，写库失败时放回草稿、重新浮起这个输入框。
@@ -76,7 +78,10 @@ struct HandOffInput: View {
             commands: commands,
             header: {
                 header.padding(.horizontal, 12).padding(.top, 10)
-                if !services.reachesPiHost {
+                if planned?.noMac == true {
+                    Text(CueStoreError.noMac.localizedDescription).font(.caption).foregroundStyle(palette.ink3).lineLimit(2)
+                        .padding(.horizontal, 18).padding(.top, 8)
+                } else if !services.reachesPiHost {
                     SyncHint(status: services.syncStatus, consequence: "发不到 Mac").font(.caption).lineLimit(1)
                         .padding(.horizontal, 18).padding(.top, 8)
                 }
@@ -96,7 +101,13 @@ struct HandOffInput: View {
         .onAppear { focused = true }
         .observing(services.store, id: outbox.card, into: $planned, onError: workspace.fail) { [card = outbox.card] store in
             guard let card else { return Planned() }
-            let plan = try store.handOffPlan(card, host: nil), opening = try store.opening(of: plan.leaf, true)
+            let plan: HandOffPlan
+            do {
+                plan = try store.handOffPlan(card, host: nil)
+            } catch CueStoreError.noMac {
+                return Planned(noMac: true)
+            }
+            let opening = try store.opening(of: plan.leaf, true)
             guard case .session(let id, _, _) = plan.destination else { return Planned(plan: plan, fresh: plan, opening: opening) }
             return Planned(
                 plan: plan, bound: try store.piSessions(sessionIDs: [id])[id], fresh: try store.handOffPlan(card, host: nil, fresh: true), opening: opening)
