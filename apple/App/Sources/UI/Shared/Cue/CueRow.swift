@@ -116,11 +116,12 @@ nonisolated struct CueLiveRound: Equatable {
     }
 }
 
-/// Cue 页对话的末尾：它在做事、这一轮在对话里还没有一格（你发起的一轮还没碰到任务与会话）时是一行此刻在做的（`CueDoing`）。
-/// Cue 在这台 Mac 值班时，在回答你的一轮出字就换成逐字长出的正在说的话
+/// Cue 页对话的末尾：此刻在做的那一行（`CueDoing`）的位置一直占着（`ChatLiveSlot`，没有时留白）：它在做事、这一轮在对话里还没有一格时
+/// （你发起的一轮还没碰到任务与会话）写在这里，出现、收起与换字都不挪对话。
+/// Cue 在这台 Mac 值班时，在回答你的一轮出字就在这一行上方逐字长出正在说的话
 /// （`CueKeeper.speech`，同会话页的 `SessionDraft`）：只有这个视图读它，出字时对话列表不重算；它与对话在同一次更新里拿到同一份对话，
-/// 落库了（`PiDraft.landed`）就不再显示，换下是同一帧里的一减一加。已落库而 Cue 的状态还没歇下时也不冒出进展那一行（话已经说完）；
-/// 中途转成工具调用时让位给进展那一行。进展那一行被换下时直接拿掉，不与正在说的话叠着淡出。别的 Mac 与手机只有进展那一行。
+/// 落库了（`PiDraft.landed`）就不再显示，换下是同一帧里的一减一加。有草稿时（说着、已落库而 Cue 的状态还没歇下）那一行留白（话已经在说、说完了）；
+/// 中途转成工具调用时桥清掉草稿，那一行写进展。进展那一行被换下时直接拿掉，不与正在说的话叠着淡出。别的 Mac 与手机只有进展那一行。
 struct CueEnding: View {
     /// 对话里最近一条 Cue 的话的时刻
     let newestSaid: Date?
@@ -133,29 +134,28 @@ struct CueEnding: View {
     @Environment(AppServices.self) private var services
 
     var body: some View {
-        #if os(macOS)
-        let draft = services.cue.keeper?.speech.draft
-        let landed = draft?.landed(newestReply: newestSaid) ?? false
-        if let draft, !landed {
-            // 与落库后的那句（`CueSays`）同一颗气泡、同一个位置，换下时正文不动
-            BubbleWidth(fraction: CueBubble.cueWidth, edge: .leading) {
-                MarkdownText(source: draft.text).equatable().cueBubble(joined: joined)
+        VStack(alignment: .leading, spacing: 0) {
+            #if os(macOS)
+            let draft = services.cue.keeper?.speech.draft
+            if let draft, !draft.landed(newestReply: newestSaid) {
+                // 与落库后的那句（`CueSays`）同一颗气泡、同一个位置，换下时正文不动
+                BubbleWidth(fraction: CueBubble.cueWidth, edge: .leading) {
+                    MarkdownText(source: draft.text).equatable().cueBubble(joined: joined)
+                }
+                .padding(.top, CuePage.gap(before: .leading, joined: joined))
+                .transition(.asymmetric(insertion: CueBubble.arrival, removal: .identity))
             }
-            .padding(.top, CuePage.gap(before: .leading, joined: joined))
-            .transition(.asymmetric(insertion: CueBubble.arrival, removal: .identity))
-        } else if !landed {
-            live
+            ChatLiveSlot(gap: CuePage.gap(before: nil, joined: false), font: CueDoing.font) { if draft == nil { live } }
+            #else
+            ChatLiveSlot(gap: CuePage.gap(before: nil, joined: false), font: CueDoing.font) { live }
+            #endif
         }
-        #else
-        live
-        #endif
     }
 
     @ViewBuilder private var live: some View {
         let presence = workspace.cue.presence
         if !roundInRows, let shown = presence.shown, let progress = presence.progress {
             CueDoing(shown: shown, doing: progress)
-                .padding(.top, CuePage.gap(before: nil, joined: false))
                 .transition(.asymmetric(insertion: .entry, removal: .identity))
         }
     }
@@ -168,9 +168,12 @@ private struct CueDoing: View {
     let doing: String
     @Environment(\.palette) private var palette
 
+    static let font = Typography.secondary
+
     var body: some View {
+        // 一行：它的位置只留一行（`ChatLiveSlot`）
         NoteLine { PiStateDot(shown: shown, size: 7) } label: {
-            Text(doing).font(Typography.secondary).foregroundStyle(palette.ink2).lineLimit(2).shimmering()
+            Text(doing).font(Self.font).foregroundStyle(palette.ink2).lineLimit(1).shimmering()
         }
         .accessibilityElement(children: .ignore).accessibilityLabel(doing)
     }

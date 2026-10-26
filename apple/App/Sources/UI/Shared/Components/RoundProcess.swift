@@ -58,8 +58,8 @@ struct RoundProcess: View {
             }
             .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: expanded)
         } else if case .live(let shown, let doing, _) = ending, !shown.speaking {
-            // 还没调过工具：此刻在做的（在想、只说了话）
-            NoteLine { PiStateDot(shown: shown, size: 6) } label: { Text(doing).lineLimit(2).shimmering() }
+            // 还没调过工具：此刻在做的（在想、只说了话），一行：对话末尾只给它留一行（`ChatLiveSlot`）
+            NoteLine { PiStateDot(shown: shown, size: 6) } label: { Text(doing).lineLimit(1).shimmering() }
                 .accessibilityElement(children: .ignore).accessibilityLabel(doing)
         }
     }

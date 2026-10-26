@@ -100,7 +100,8 @@ struct CueWaitDock: View {
     /// 卡后面露出几层叠边：还有几件在等，至多 `layers`。
     private var behind: Int { min(max(waiting.count - 1, 0), Self.layers) }
 
-    /// 卡后面的叠边：与卡一样高，一层比一层窄、往下多露 `peek`，平时只露出卡下沿那一截。跟着在等的件数增减，不随滑卡挪。
+    /// 卡后面的叠边：与卡一样高，一层比一层窄、往下多露 `peek`，平时只露出卡下沿那一截。露几层跟着在等的件数，不随滑卡挪；
+    /// 卡下沿让出的位置按最多层数一直留着（`card`，没有时留白）：按件数让的话，来一件、答掉一件拍板卡就变高变矮，浮在上面的对话当帧跳一下。
     private var deck: some View {
         ZStack {
             ForEach((1...Self.layers).reversed(), id: \.self) { layer in
@@ -109,7 +110,7 @@ struct CueWaitDock: View {
                     .opacity(layer > behind ? 0 : layer == 1 ? 0.85 : 0.6)
                     .padding(.horizontal, Self.tuck * CGFloat(layer))
                     .padding(.top, Self.peek * CGFloat(layer))
-                    .padding(.bottom, Self.below + Self.peek * CGFloat(max(behind - layer, 0)))
+                    .padding(.bottom, Self.below + Self.peek * CGFloat(Self.layers - layer))
             }
         }
         .animation(HandOff.quick, value: behind)
@@ -127,7 +128,7 @@ struct CueWaitDock: View {
         #endif
         return card
             .paper(radius: ComposerMetrics.radius, lifted: true)
-            .padding(.bottom, Self.below + Self.peek * CGFloat(behind))
+            .padding(.bottom, Self.below + Self.peek * CGFloat(Self.layers))
     }
 
     /// 卡浮着、露出的比例当不透明度用：减弱动态效果时与离开时。

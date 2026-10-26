@@ -113,7 +113,9 @@ private struct SessionAnswer: View {
             // 送不到 Mac 时不让答：写进去的请求会一直停在送达中
             .disabled(answering || !services.reachesPiHost)
             if other { Text("都不是？在下面的回复框里写你的回答").font(Typography.meta).foregroundStyle(palette.ink3) }
-            if let note { Text(note.text).font(Typography.meta).foregroundStyle(note.failed ? palette.failure : palette.ink3).multilineTextAlignment(.trailing) }
+            // 到哪了那一行一直占着（没有时留白）、只写一行：它一出一收卡就变高变矮，浮在卡上面的对话跟着当帧跳
+            Text(note?.text ?? " ").font(Typography.meta).foregroundStyle(note?.failed == true ? palette.failure : palette.ink3).lineLimit(1)
+                .opacity(note == nil ? 0 : 1).accessibilityHidden(note == nil)
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
         #if os(macOS)
@@ -130,7 +132,7 @@ private struct SessionAnswer: View {
     }
 
     private var note: (text: String, failed: Bool)? {
-        if !services.reachesPiHost { return (String(localized: "\(SyncSummary(services.syncStatus).title)，现在答不了；同步恢复后再答，或在 Mac 上回答"), false) }
+        if !services.reachesPiHost { return (String(localized: "\(SyncSummary(services.syncStatus).title)，现在答不了，可在 Mac 上回答"), false) }
         if answering, sent == .delivered { return (String(localized: "已答，等 Mac 上的 Agent 继续"), false) }
         return failure.map { ($0, true) }
     }

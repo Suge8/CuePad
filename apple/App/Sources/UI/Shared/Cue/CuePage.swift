@@ -8,8 +8,8 @@ import SwiftUI
 /// 你发起的一轮在你的话之后先是这一轮的经过（`CueTrace`：碰到的任务与会话一处一行，在跑时原地往下长），这一轮说的话与结果按先后在它之后。
 /// Cue 自己醒来的那几轮每轮一行旁注（`CueNoteLog`：提到的那一处、当时出了什么事与它说的一句，点了去那里），
 /// 末尾是它此刻在做什么（`CueEnding`）；
-/// 对话区与会话页是同一个（`ChatColumn`：排开、刻度滑条、跳转与描圈）；底部是待回复提示（`CueReplyTip`）、拍板卡（`CueWaitDock`：Cue 的提问与会话在问的都在这里，
-/// 对话里不另挂）与输入框（`CueComposer`）。
+/// 对话区与会话页是同一个（`ChatColumn`：排开、刻度滑条、跳转与描圈）；底部是拍板卡（`CueWaitDock`：Cue 的提问与会话在问的都在这里，
+/// 对话里不另挂）与输入框（`CueComposer`），待回复提示（`CueReplyTip`）叠在它们上方。
 /// 首次见面与启用只有一处（`CueWelcome`）：还没说过话时在正中，说过话后停用了在输入框正上方。
 /// 对话第一帧就排好（`observing` 当场读），停在最新处；有新消息时从第一条读起，还没读的气泡旁一颗小点（`CueViewing`）。
 /// Cue 运行在别的设备上、本机正在和 iCloud 对时（`AppServices.isCatchingUp(on:)`）页头写"正在同步"，这期间到的话先不滑上来，
@@ -208,11 +208,11 @@ struct CuePage: View {
 
     // MARK: 底部
 
-    /// 浮在对话底上的一块：待回复提示、拍板卡、停用时的启用与输入框。输入框按自己的高、不被挤（`fixedSize`），地方不够时（键盘弹出、小屏、横屏、输入框写了好几行）卡用剩下的。
+    /// 浮在对话底上的一块：拍板卡、停用时的启用与输入框。输入框按自己的高、不被挤（`fixedSize`），地方不够时（键盘弹出、小屏、横屏、输入框写了好几行）卡用剩下的。
+    /// 待回复提示叠在这一块上方、不占排版（`floatingAbove`）：它一出一收不改这一块的高，对话不跟着跳。
     private var bottom: some View {
         VStack(spacing: 0) {
             if let thread {
-                if !thread.replies.isEmpty { CueReplyTip(replies: thread.replies).transition(.opacity) }
                 CueWaitDock(waiting: thread.waiting, asking: workspace.cueAsking, shots: thread.shots, open: { opened = $0 }, moving: $docking)
                 // 说过话后停用了：启用就在输入框正上方（`CueWelcome`），是这时唯一的主动作
                 if !thread.rows.isEmpty, !cue.canHear { CueWelcome(intro: false).fixedSize(horizontal: false, vertical: true).padding(.bottom, ComposerMetrics.stackGap).transition(.opacity) }
@@ -222,6 +222,9 @@ struct CuePage: View {
             #else
             CueComposer(style: .page, takesFocusRequests: true) { follow.sent() }.fixedSize(horizontal: false, vertical: true)
             #endif
+        }
+        .floatingAbove {
+            if let replies = thread?.replies, !replies.isEmpty { CueReplyTip(replies: replies).transition(.opacity) }
         }
         .animation(HandOff.quick, value: cue.canHear)
         .animation(HandOff.quick, value: thread?.replies.isEmpty)

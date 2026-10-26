@@ -80,15 +80,16 @@ struct PiConversation: View {
     }
 
     /// 对话末尾：正在说的话或处理中的进展（带子代理）、出错的原因（Agent 已把这次错误写成最后一条回答时不再重复）。
+    /// 进展的第一行一直占着位置（`ChatLiveSlot`，没有时留白）：一轮开始、结束时对话不跟着跳；进展往下长出的几步是内容。
     @ViewBuilder private var ending: some View {
         #if os(macOS)
         if let slot {
             SessionDraft(slot: slot, session: session, newestReply: messages.last { $0.role == .known(.pi) }?.at)
         } else {
-            liveStatus
+            ChatLiveSlot(gap: 0) { liveStatus }
         }
         #else
-        liveStatus
+        ChatLiveSlot(gap: 0) { liveStatus }
         #endif
         if session.state == .known(.error), !PiErrorSummary.echoes(messages.last { $0.role == .known(.pi) }?.text, line: session.detail) {
             Callout(.failed, text: session.detail ?? String(localized: "Mac 没有说明原因"))
@@ -103,9 +104,9 @@ struct PiConversation: View {
 
 #if os(macOS)
 /// 会话页对话的末尾（Mac，本机在线的会话）：正在说的话（`PiBridge.Slot.draft`）出字时逐字长出来（`DraftReply`，上方是这一轮的经过，标题行末写"输出中"），
-/// 没有时是进展那一行（`LiveStatus`）——中途的话转成工具调用时桥清掉草稿，这里就让位给工具那一行。出字时只读草稿的视图重算，对话列表不重算。
-/// 草稿落库了（`PiDraft.landed`）就不再显示：换下是同一帧里的一减一加。这一轮还在跑也不冒出进展那一行（正文已经说完）；
-/// 状态先到时草稿照常留着、等文件。下一条助手消息开始时扩展清掉旧草稿。进展行被草稿换下时直接拿掉，不叠着淡出。
+/// 下面是进展的位置（`ChatLiveSlot`）：没有草稿时写进展（`LiveStatus`）——中途的话转成工具调用时桥清掉草稿，这里就让位给工具那一行。出字时只读草稿的视图重算，对话列表不重算。
+/// 草稿落库了（`PiDraft.landed`）就不再显示：换下是同一帧里的一减一加。这一轮还在跑也不冒出进展（正文已经说完），只列子代理；
+/// 状态先到时草稿照常留着、等文件。下一条助手消息开始时扩展清掉旧草稿。进展被草稿换下时直接拿掉，不叠着淡出。
 struct SessionDraft: View {
     let slot: PiBridge.Slot
     let session: PiSessionState
@@ -115,19 +116,22 @@ struct SessionDraft: View {
     var body: some View {
         let draft = slot.draft
         let landed = draft?.landed(newestReply: newestReply) ?? false
-        if let draft, !landed {
-            VStack(alignment: .leading, spacing: 8) {
+        let speaking = draft != nil && !landed
+        VStack(alignment: .leading, spacing: PiConversation.spacing) {
+            if let draft, speaking {
                 DraftReply(text: draft.text) {
                     if let ending = LiveStatus.ending(of: session, speaking: true) {
                         RoundProcess(tools: session.pendingTools, ending: ending)
                     }
                 }
-                PiSubagentList(agents: session.subagents)
             }
-        } else if landed, session.state.known?.isTurnRunning == true {
-            PiSubagentList(agents: session.subagents)
-        } else if session.state.isWorking || !session.subagents.isEmpty {
-            LiveStatus(session: session).transition(.asymmetric(insertion: .entry, removal: .identity))
+            ChatLiveSlot(gap: 0) {
+                if speaking || landed && session.state.known?.isTurnRunning == true {
+                    PiSubagentList(agents: session.subagents)
+                } else if session.state.isWorking || !session.subagents.isEmpty {
+                    LiveStatus(session: session).transition(.asymmetric(insertion: .entry, removal: .identity))
+                }
+            }
         }
     }
 }

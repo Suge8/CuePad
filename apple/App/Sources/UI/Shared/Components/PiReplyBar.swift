@@ -10,7 +10,7 @@ import SwiftUI
 /// 这里答不了的写明要去哪回答——都不发自由文本（Pi 不答完题不会去看，消息会一直挂着）。
 /// 发出后空着、Agent 还没接过去时钮是发送中（`PiChat.sending`，同 Cue 页输入框）；停止发出后到这一轮歇下前转圈"正在停止"，进度只读投送请求（`MacDelivery.stopping`，页面传进来）。
 /// 玻璃上部是随下一句发出的批注（`ReplyNoteStack`）。键盘：`ReplyShortcut`（⌘↩、⌘⇧M 模型、⌘⇧E 思考强度、空着按 ↑ 调回上一句）。
-/// 同步到不了 Mac 时不能发，聚焦后写明原因。两端都经 `Workspace.speak` 写一条投送请求给会话所在的 Mac（本机的由本机执行器送达）：
+/// 同步到不了 Mac 时不能发，展开后在输入框上方叠一行写明原因（`composerNotice`，不占排版）。两端都经 `Workspace.speak` 写一条投送请求给会话所在的 Mac（本机的由本机执行器送达）：
 /// 按下就清空输入框，请求马上贴到对话末尾，不等上传。形态（`form`）：Mac 一直是两层（上面文字区，下面 ＋、模型与思考强度、发送），失焦也不收；
 /// 手机空着没聚焦时一行，有工具排的聚焦就展开，在看历史时收成短胶囊（停止钮在时不收）。
 /// Mac 上打开即聚焦、发出后焦点留着接着写；手机发出后收起键盘。
@@ -24,7 +24,7 @@ struct PiReplyBar: View {
     var compact = false
     /// 停止请求已发出、这一轮还没歇下（`MacDelivery.stopping`）。
     let stopping: Bool
-    /// 斜杠命令的进度（`MacDelivery.commandProgress`，页面传进来）：在路上与没成功时在回复框上方显示一行，成功、之后有新请求或对话时就收起。
+    /// 斜杠命令的进度（`MacDelivery.commandProgress`，页面传进来）：在路上与没成功时在回复框上方叠一行（`composerNotice`），成功、之后有新请求或对话时就收起。
     var commandProgress: MacDelivery.CommandProgress?
     /// 你的话还在路上（`PiChat.sending`，页面传进来）：空着而 Agent 没在跑时，发送钮是发送中（同 Cue 页输入框）。
     var sending = false
@@ -97,12 +97,20 @@ struct PiReplyBar: View {
         case .answerAbove: notice("先在上面作答", icon: .above)
         case .unanswerable: notice(Self.unanswerable, icon: .mac)
         case .message, .answer:
-            VStack(alignment: .leading, spacing: 6) {
+            composer.composerNotice(commandProgress != nil || expanded && (!reachable || config?.failure != nil)) {
                 if let commandProgress { progressLine(commandProgress) }
-                composer
+                if expanded {
+                    if !reachable { SyncHint(status: services.syncStatus) }
+                    if let failure = config?.failure {
+                        Text("没换成：\(failure.text(sync: services.syncStatus))").font(Typography.caption).foregroundStyle(palette.failure)
+                    }
+                }
             }
         }
     }
+
+    /// 输入框展开着（一直展开、聚焦，或没收成短胶囊时带着草稿与批注）：这时才写发不出去、没换成的原因（同从前排在玻璃头部时）。
+    private var expanded: Bool { form == .open || focused || !form.isCapsule && !draft.isEmpty(accepting: accepts.union(.notes)) }
 
     private var composer: some View {
             Composer(
@@ -111,11 +119,6 @@ struct PiReplyBar: View {
                 commands: commands, shortcuts: shortcuts, recall: recall,
                 header: {
                     if !draft.notes.isEmpty { ReplyNoteStack(notes: draft.notes, reveal: revealNote, remove: removeNote) }
-                    if !reachable { SyncHint(status: services.syncStatus).padding(.horizontal, 18).padding(.top, 12) }
-                    if form == .open || focused, let failure = config?.failure {
-                        Text("没换成：\(failure.text(sync: services.syncStatus))").font(Typography.caption).foregroundStyle(palette.failure).lineLimit(2)
-                            .padding(.horizontal, 18).padding(.top, 12)
-                    }
                 },
                 tools: {
                     if hasTools, let config { SessionConfigControls(session: session, models: models, shown: config, opening: $opening) }
@@ -138,8 +141,6 @@ struct PiReplyBar: View {
             Text(progress.text(sync: services.syncStatus)).lineLimit(2)
         }
         .font(Typography.meta).foregroundStyle(progress.failed ? palette.failure : palette.ink3)
-        .padding(.horizontal, 18)
-        .transition(.opacity)
     }
 
     #if os(iOS)
