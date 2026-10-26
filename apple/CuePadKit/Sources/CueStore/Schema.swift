@@ -106,7 +106,9 @@ enum Schema {
     // - 提问的选项各端照类别与范围写（`CueMessage.shownChoice`）：已有的提问补上范围那个项目此刻的名字（`CuePlace`）
     // 每台设备各自升级、不改 modifiedAt（不同步出去）：同一份数据改出同一份
     Upgrade(shownTexts),
-    // 73：投送请求记下服务器收下它的时刻（本机列，拉到时由服务器的记录给），执行的 Mac 按它算过期（`DeliveryExecutor.maxAge`）；已有的照写下的时刻算
+    // 73：他最近一次来到这台设备的时刻（`Viewer.arrivedAt`）：他此刻在哪台设备前只按它判断
+    "ALTER TABLE sessionViewers ADD COLUMN arrivedAt INTEGER;",
+    // 74：投送请求记下服务器收下它的时刻（本机列，拉到时由服务器的记录给），执行的 Mac 按它算过期（`DeliveryExecutor.maxAge`）；已有的照写下的时刻算
     "ALTER TABLE deliveryRequests ADD COLUMN serverAt INTEGER;",
   ]
 

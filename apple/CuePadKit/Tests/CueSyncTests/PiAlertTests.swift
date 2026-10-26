@@ -128,7 +128,7 @@ import Testing
   }
 
   /// 会话做完：Cue 不值班时推；值班时会话归它接手不推，只推归他的停下（他刚在里面说过话）与它留给他回的（待回复，正文是会话最后那句回答）；
-  /// 他在 Mac 上开着那个会话时都不推。
+  /// 他在 Mac 上开着那个会话时都不出通知，只静默叫醒手机（`PiPush.wake`）。
   @Test func sessionAlertsReachThePhoneOnlyWhenTheStopIsHis() async throws {
     let rig = try Rig()
     let recorder = PiStateRecorder(store: rig.store, hostID: "mac", timing: ManualTiming().timing)
@@ -148,7 +148,8 @@ import Testing
     try await rig.store.recordMacPresence(host: "mac") { true }
     try await rig.store.recordViewing(device: "mac", sessionID: "s1", cue: false)
     try await round()
-    #expect(try await flag(rig, session) == nil)
+    #expect(try await flag(rig, session) == "wake")
+    try await rig.simulatePush()
     try await rig.store.recordViewing(device: "mac", sessionID: nil, cue: false)
 
     _ = try await rig.store.updateCueProfile {

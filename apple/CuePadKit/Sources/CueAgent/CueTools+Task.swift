@@ -32,7 +32,7 @@ extension CueTools {
         throw Failure("等你里问着他「\(asked)」（\(question.id.shortID)），他在卡上答了你再转给会话：不用留给他回")
       }
       try await store.leaveToYou(target.session)
-      return .ok("已把\(target.label)留给他回：会话与 Cue 页显示待回复（不算等你），他或你再对它说话就作废。（\(target.short)）")
+      return .ok("已把\(target.label)留给他回：进了等你、推到他手机，他或你再对它说话就作废。（\(target.short)）")
     case "done": return try await done(args)
     case let other: throw Failure("task 没有 \(other)：可用 add / edit / start / say / peek / stop / leave / done")
     }
