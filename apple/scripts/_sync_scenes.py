@@ -210,36 +210,6 @@ def cloudkit_ops(window, pid):
     return ops, up, down
 
 
-def scene_offline(run, args):
-    """M5 断网恢复：offline [断网秒=30] [次数=2] [path|nopath]。只有手机（B）连 iCloud 的请求失败、门铃断开（CloudOutage）；
-    断着时手机对 Cue 说 3 句（积压待发）、Mac 的 Cue 说 3 句（积压待收）。恢复（path：同真断网，路径监视器报一次网络回来）后量
-    第一次成功（同步状态离开离线）、积压发完（3 句都已发出）、收完（3 句都入库、上屏）、说的 3 句都有回执。"""
-    down, times = float(args[0]) if args else 30, int(args[1]) if len(args) > 1 else 2
-    path = (args[2] if len(args) > 2 else "path") == "path"
-    a, b = run.a, run.b
-    label = f"断网 {down:g} 秒{'' if path else '（路径不变）'}"
-    m = run.metrics
-    for i in range(times):
-        t = b.send("offline"); b.wait(kind("offline"), 30, after=t)
-        began = time.time()
-        said = writes(b, [f"say off{i}-{k}" for k in range(3)], 3, "you", sent=False)
-        told = writes(a, ["cue 3"], 3, "cue")
-        time.sleep(max(0, began + down - time.time()))
-        on = {"t": b.send("online path" if path else "online")}
-        ok = b.wait(lambda e: e["e"] == "sync-status" and e["s"] != "offline", 120, after=on["t"])
-        sent = [b.wait(by_id("msg-accepted", w["id"]), 180) for w in said]
-        got = [b.wait(arrived(w["id"]), 180) for w in told]
-        shown = [b.wait(by_id("msg-shown", w["id"]), 30) for w in told]
-        receipts = [b.wait(by_id("msg-delivered", w["id"]), 180) for w in said]
-        m.span(f"{label}·恢复→第一次成功", on, ok)
-        m.span(f"{label}·恢复→积压发完", on, last(sent))
-        m.span(f"{label}·恢复→积压收完（入库）", on, last(got))
-        m.span(f"{label}·恢复→积压收完（上屏）", on, last(shown))
-        m.span(f"{label}·恢复→说的话都有回执", on, last(receipts))
-        time.sleep(10)
-    return m, {}
-
-
 def island(checkout, out, args):
     """M4 收消息到灵动岛（iPhone 模拟器，App 这一侧）：island [轮数=10]。实现与量不到的段见 SyncBench+Island.swift。
     不连 iCloud、不用 cloudd，所以不拿测量锁；模拟器经 xc.sh run ios 领（按它的模拟器锁排队）。"""
@@ -266,4 +236,4 @@ def island(checkout, out, args):
     return m, {}
 
 
-SCENES = {"offline": scene_offline, "send": scene_send, "cold": scene_cold, "fg": scene_fg, "idle": scene_idle}
+SCENES = {"send": scene_send, "cold": scene_cold, "fg": scene_fg, "idle": scene_idle}

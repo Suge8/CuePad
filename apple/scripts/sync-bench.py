@@ -20,12 +20,15 @@ LATENCY（中位、p95，秒，对数正态；版本 MODEL）：每种请求在 
 用法：
   sync-bench.py <场景> [参数…]                              本检出：构建开发签名的 Debug，跑一次
   sync-bench.py ab <检出X> <检出Y> <轮数> <场景> [参数…]      两个检出各构建一次，按 X Y、Y X… 交替跑 <轮数> 轮，出对比表
-场景（实现与每段的定义在 _sync_scenes.py）：
+场景（实现与每段的定义在 _sync_scenes.py，断网、限流、进后台收尾与撞版本在 _sync_edges.py）：
   send [轮数=10] [间隔=10]   M3 发消息：手机对 Cue 说（写下→已发出→Mac 入库→上屏→交给 Cue→回执）、对会话说（→执行完→结果回来）、Cue 回话到手机（→入库→上屏）
   cold [条数=5] [次数=3]     M1 冷启动：一端退出期间另一端写 N 句，从进程启动到最后一句入库、上屏（手机、Mac 各一遍）
   fg [次数=5] [离开秒=15]    M2 回前台：手机进后台期间、Mac 隐藏期间对端写一句，从回前台到入库、上屏
   idle [分钟=10] [每轮秒=30] M6 常驻开销：每轮一次 send 加立即同步，记两端的请求数、指令、CPU、唤醒、能耗（real 另记 CloudKit 字节）
   offline [秒=30] [次数=2] [path|nopath]  M5 断网恢复：只让手机的请求以 -1009 失败、门铃断开，断着时两边各写 3 句；恢复到第一次成功、积压发完、收完、回执
+  throttle [限流秒=20] [Retry-After=8] [次数=2]  M7 限流（只在模拟云）：窗口内云按设备限流回 429；数各实例窗口内的拉取、上传与早于 Retry-After 的请求，解除到第一拉成功
+  bgflush [次数=8]           M8 写完马上进后台：写下→已发出、进后台→收尾完、写下→Mac 入库
+  versions [命令行改几次=150] 撞版本探针（不进总表）：App 紧循环改一张卡、命令行同时逐条改，数提交后版本不比上一版大的次数
   island [轮数=10]           M4 收消息到灵动岛（iPhone 模拟器，App 这一侧：入库→实时活动换内容）；不连云、不拿测量锁，xc.sh run ios 自己构建
 环境：SYNC_BENCH_CLOUD=sim|real；SYNC_BENCH_RELAY=0 两端都不连门铃（门铃不通，只靠按节奏拉）；SYNC_BENCH_SKIP_BUILD=1 不构建；
   SYNC_BENCH_SESSIONS 会话数（默认 3）、SYNC_BENCH_FLIP 会话平均几秒切一次状态（默认 8）；SYNC_BENCH_WARM 预热上限秒（默认 300）；SYNC_BENCH_LOCK_WAIT 等锁上限秒（默认 1200，到点列出持有者、以 75 退出）。
@@ -39,7 +42,8 @@ from datetime import datetime
 
 sys.dont_write_bytecode = True
 from _sync_run import Aborted, Load, Run, exe_of, fake_extension  # noqa: E402
-from _sync_scenes import SCENES, island  # noqa: E402
+from _sync_edges import EDGES  # noqa: E402
+from _sync_scenes import SCENES as BASIC, island  # noqa: E402
 from app_env import BUNDLE_ID  # noqa: E402
 
 CHECKOUT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -52,6 +56,7 @@ MODEL = "v2"
 LATENCY = {"upload": [0.449, 0.984], "fetch": [0.192, 0.620], "records": [0.197, 0.752], "other": [0.068, 0.469]}  # 出处见头注释
 REAL_COOLDOWN, REAL_LIMIT, REAL_BUDGET = 600, 180, 200
 REAL_LAST = "/tmp/cuepad-sync-measure.last-real"  # 上一次 real 运行结束的时刻
+SCENES = BASIC | EDGES
 
 
 LOCK_EXIT = 75  # 等锁超时的退出码，同 xc.sh 的入口锁（_lock.sh）
