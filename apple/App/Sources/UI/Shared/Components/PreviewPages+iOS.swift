@@ -10,21 +10,34 @@ import SwiftUI
 // 每页铺满整屏：会滚的（图、PDF、文本、网页）铺到两条栏后面、按 `previewInsets` 让出内容边，其余排在两条栏之间（全屏页给的安全区）。
 
 /// 全屏页里除网页与 Markdown 外的每一类（`PreviewContent`）。
+/// 图与视频在内容出来前先铺缩略图的画面（`previewLooks`）：从缩略图飞出来的第一帧就有图，不是一张空的纸。
 struct PreviewPage: View {
     let preview: PiPreview
     let file: URL
     let active: Bool
+    @Environment(\.previewLooks) private var looks
 
     var body: some View {
         switch preview.kind {
-        case .image: PreviewImage(file: file).ignoresSafeArea()
+        case .image: PreviewImage(file: file, look: look).ignoresSafeArea()
         case .pdf: PreviewPDF(file: file).ignoresSafeArea()
-        case .video, .audio: PreviewPlayer(file: file, active: active)
+        case .video, .audio: PreviewPlayer(file: file, active: active, look: look)
         case .text: PreviewText(file: file).ignoresSafeArea()
         case .document, .spreadsheet, .presentation: PreviewWeb(file: file)
         case .model, .web, .markdown, nil: PreviewStill(preview: preview, file: file)
         }
     }
+
+    private var look: PreviewLook { PreviewLook(id: preview.id, looks: looks) }
+}
+
+/// 一份的缩略图画面：已经取到的当场给（`now`），没取到的再去取（`load`）。
+struct PreviewLook {
+    let id: UUID
+    let looks: PreviewLooks?
+
+    var now: PreviewSources.Look? { looks?.taken(id) }
+    func load() async -> PreviewSources.Look? { await looks?.look(id) }
 }
 
 /// PDF：系统的 PDF 视图，按宽铺满、竖着连续滚，页与页之间留一道缝，双指缩放（以手指处为锚、放大了拖到边再拖是翻页，同图片）。
@@ -51,14 +64,25 @@ struct PreviewPDF: UIViewRepresentable {
 }
 
 /// 视频与音频：系统播放器（播放、拖进度、静音、画中画都是它的），排在两条栏之间、画面外透出桌面，翻到就播（同快速查看），翻走停下。
+/// 第一帧画出来之前铺缩略图的画面（按视频的比例摆在画面那块），播放器就绪（`isReadyForDisplay`）就撤。
 struct PreviewPlayer: UIViewControllerRepresentable {
     let file: URL
     let active: Bool
+    let look: PreviewLook
 
     func makeUIViewController(context: Context) -> AVPlayerViewController {
         let controller = AVPlayerViewController()
         controller.player = AVPlayer(url: file)
         controller.view.backgroundColor = .clear
+        let cover = PreviewCover(look: look)
+        cover.frame = controller.contentOverlayView?.bounds ?? .zero
+        cover.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        controller.contentOverlayView?.addSubview(cover)
+        // 播放器在主线程报就绪
+        context.coordinator.ready = controller.observe(\.isReadyForDisplay, options: [.initial, .new]) { [weak cover] _, change in
+            guard change.newValue == true else { return }
+            MainActor.assumeIsolated { cover?.removeFromSuperview() }
+        }
         return controller
     }
 
@@ -66,7 +90,47 @@ struct PreviewPlayer: UIViewControllerRepresentable {
         if active { controller.player?.play() } else { controller.player?.pause() }
     }
 
-    static func dismantleUIViewController(_ controller: AVPlayerViewController, coordinator: ()) { controller.player?.pause() }
+    static func dismantleUIViewController(_ controller: AVPlayerViewController, coordinator: Coordinator) { controller.player?.pause() }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    final class Coordinator {
+        var ready: NSKeyValueObservation?
+    }
+}
+
+/// 内容出来前铺的缩略图画面：按内容的真实比例在框里放到最大（缩略图裁过的那几边照比例铺满，同 zoom 转场飞的那张）。
+final class PreviewCover: UIView {
+    private let imageView = UIImageView()
+    private var aspect: CGFloat?
+
+    init(look: PreviewLook) {
+        super.init(frame: .zero)
+        isUserInteractionEnabled = false
+        imageView.contentMode = .scaleAspectFill
+        imageView.clipsToBounds = true
+        addSubview(imageView)
+        if let now = look.now { show(now) } else {
+            Task { [weak self] in if let look = await look.load() { self?.show(look) } }
+        }
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError() }
+
+    private func show(_ look: PreviewSources.Look) {
+        imageView.image = UIImage(cgImage: look.image)
+        aspect = look.aspect
+        setNeedsLayout()
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        guard let aspect, aspect > 0, !bounds.isEmpty else { return }
+        let size = bounds.width / bounds.height > aspect
+            ? CGSize(width: bounds.height * aspect, height: bounds.height) : CGSize(width: bounds.width, height: bounds.width / aspect)
+        imageView.frame = CGRect(x: (bounds.width - size.width) / 2, y: (bounds.height - size.height) / 2, width: size.width, height: size.height)
+    }
 }
 
 extension UIScrollView {

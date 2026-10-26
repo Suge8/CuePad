@@ -289,13 +289,21 @@ private struct PreviewSource: ViewModifier {
     let image: () async -> CGImage?
     #if os(iOS)
     @Environment(\.previewZoom) private var namespace
+    @Environment(\.previewSources) private var sources
     #else
     @Environment(\.previewFlight) private var flight
     #endif
 
     func body(content: Content) -> some View {
         #if os(iOS)
-        if let namespace { content.matchedTransitionSource(id: key, in: namespace) } else { content }
+        // 画面登记给全屏页当占位（`PreviewSources`）：出现时与画面换了（比例从无到有）时各记一次，不在每次重画时写
+        if let namespace {
+            content.matchedTransitionSource(id: key, in: namespace)
+                .onAppear(perform: register)
+                .onChange(of: aspect, register)
+        } else {
+            content
+        }
         #else
         if let flight {
             content.background { PreviewSourceMark(flight: flight, key: key, image: image, aspect: aspect, radius: radius) }
@@ -304,4 +312,8 @@ private struct PreviewSource: ViewModifier {
         }
         #endif
     }
+
+    #if os(iOS)
+    private func register() { sources?.register(key, .init(aspect: aspect, image: image)) }
+    #endif
 }

@@ -4,7 +4,8 @@ import SwiftUI
 
 extension View {
     /// 点交付物后的全屏页：同一组的几份左右翻，每类由 CuePad 自己显示（`PreviewPage`；网页与文稿只读、不联网）。
-    /// 从点的那张缩略图放大出来（系统 zoom 转场），关掉时缩回翻到的那一份原处；减弱动态效果时整块交叉淡入淡出。
+    /// 从点的那张缩略图放大出来（系统 zoom 转场），关掉时缩回翻到的那一份原处；减弱动态效果时系统自己把转场降成淡入淡出、关闭手势照旧（实测）。
+    /// 飞出来的第一帧就有图：等点的那张缩略图交出画面（`previewSource`，一般已在内存里）再呈现，页里大图解好前先铺它。
     /// `reply` 是这一页的底栏对谁说（`PreviewOpening.reply` 另给的除外）。一个页面只在这里挂一次，不在每张缩略图上各挂一个。
     func previewPresenter(_ opened: Binding<PreviewOpening?>, reply: PreviewReply) -> some View {
         modifier(PreviewPresenter(opened: opened, reply: reply))
@@ -14,23 +15,23 @@ extension View {
 private struct PreviewPresenter: ViewModifier {
     @Binding var opened: PreviewOpening?
     let reply: PreviewReply
-    /// 呈现着的那一份：跟着 `opened` 走，只多管一件事——减弱动态效果时不带呈现动画地换上（不滑上来，全屏页自己淡入，`PreviewPager.shown`）。
-    /// 调用处直接写 `opened`，写的那一下的动画由它们定，这里另起一个事务才拦得住。
+    /// 呈现着的那一份：跟着 `opened` 走，晚一步——点的那张的画面取到了才换上（关掉是同时）。
     @State private var presented: PreviewOpening?
+    @State private var sources = PreviewSources()
     @Namespace private var zoom
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func body(content: Content) -> some View {
         content
-            .environment(\.previewZoom, reduceMotion ? nil : zoom)
+            .environment(\.previewZoom, zoom)
+            .environment(\.previewSources, sources)
             .environment(\.openPreview, PreviewOpener { opened = $0 })
-            .onChange(of: opened, initial: true) { _, next in
-                var transaction = Transaction()
-                transaction.disablesAnimations = reduceMotion
-                withTransaction(transaction) { presented = next }
+            .task(id: opened) {
+                if let opened { await sources.prepare(PreviewZoomKey(group: opened.group, preview: opened.preview.id)) }
+                presented = opened
             }
             .panel(item: Binding { presented } set: { presented = $0; opened = $0 }, style: .fullScreen) {
-                PreviewPager(opening: $0, reply: $0.reply ?? reply, current: $0.preview.id, zoom: reduceMotion ? nil : zoom)
+                PreviewPager(opening: $0, reply: $0.reply ?? reply, current: $0.preview.id, zoom: zoom)
+                    .environment(\.previewLooks, PreviewLooks(sources: sources, group: $0.group))
             }
     }
 }
@@ -43,13 +44,11 @@ private struct PreviewPager: View {
     let opening: PreviewOpening
     let reply: PreviewReply
     @State var current: UUID
-    let zoom: Namespace.ID?
+    let zoom: Namespace.ID
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @Environment(\.closePanel) private var close
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// 减弱动态效果时整页的淡入淡出
-    @State private var shown = false
     /// 两条栏与状态栏占的边（`previewInsets`）
     @State private var insets = EdgeInsets()
 
@@ -66,22 +65,20 @@ private struct PreviewPager: View {
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("关闭", icon: .close, role: .cancel) { dismiss() }
+                    Button("关闭", icon: .close, role: .cancel) { close() }
                 }
             }
             .safeAreaBar(edge: .bottom) {
-                PreviewReplyBar(reply: reply, about: title, done: dismiss)
+                PreviewReplyBar(reply: reply, about: title) { close() }
                     .padding(.horizontal, 12).padding(.bottom, 8)
                     .frame(maxWidth: 640)
                     .frame(maxWidth: .infinity)
             }
-            .background { PageKeys(turn: turn, close: dismiss) }
+            .background { PageKeys(turn: turn) { close() } }
         }
         .overlay { StatusBarBlur() }
-        .zoomed(from: PreviewZoomKey(group: opening.group, preview: current), in: zoom)
-        .opacity(reduceMotion && !shown ? 0 : 1)
-        .presentationBackground(reduceMotion ? .clear : palette.desk)
-        .onAppear { if reduceMotion { withAnimation(Motion.crossfade) { shown = true } } }
+        .navigationTransition(.zoom(sourceID: PreviewZoomKey(group: opening.group, preview: current), in: zoom))
+        .presentationBackground(palette.desk)
     }
 
     @ViewBuilder private var share: some View {
@@ -105,19 +102,6 @@ private struct PreviewPager: View {
         .onGeometryChange(for: EdgeInsets.self) { $0.safeAreaInsets } action: { insets = $0 }
         .background { PreviewDismissGuard() }
         .background(palette.desk)
-    }
-
-    /// 关掉：减弱动态效果时先淡出再无动画地收起，其余照系统的（缩回那张缩略图）。
-    private func dismiss() {
-        if reduceMotion {
-            withAnimation(Motion.crossfade) { shown = false } completion: {
-                var transaction = Transaction()
-                transaction.disablesAnimations = true
-                withTransaction(transaction) { close() }
-            }
-            return
-        }
-        close()
     }
 
     /// 往前、往后翻一份（键盘），到头不动。
@@ -176,9 +160,4 @@ extension EnvironmentValues {
     @Entry var previewInsets = EdgeInsets()
 }
 
-private extension View {
-    @ViewBuilder func zoomed(from key: PreviewZoomKey, in namespace: Namespace.ID?) -> some View {
-        if let namespace { navigationTransition(.zoom(sourceID: key, in: namespace)) } else { self }
-    }
-}
 #endif

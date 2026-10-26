@@ -7,14 +7,15 @@ import UIKit
 /// （外面的分页接手，嵌套滚动区的系统行为），双击在"适合屏幕"与放大到点的那一处之间切换。
 /// "放大着没有"只有滚动区自己的 `zoomScale` 一个来源：翻页、关闭的手势都直接看手指下的它（`PreviewDismissGuard`），不另存一份。
 /// 铺满整屏、从两条栏后面透出来，没放大时排在两条栏之间（`insets`），放大了能拖到栏后面、四边都拖得到眼前。
-/// 先解一张够铺满屏幕的；第一次放大后停下来（松手、回弹完、双击放大完）才解更清楚的一张，解好且不在动时换上，留到这一页被拆掉：
+/// 解好之前先铺缩略图的画面（`look`，飞出来的第一帧就有图）；先解一张够铺满屏幕的；第一次放大后停下来（松手、回弹完、双击放大完）才解更清楚的一张，解好且不在动时换上，留到这一页被拆掉：
 /// 大图解码与上传纹理几十毫秒，放在手势中间会让那几帧卡住（模拟器上解码还会抢渲染的 CPU）；只看不放大的图不解大的。
 struct PreviewImage: UIViewRepresentable {
     let file: URL
+    let look: PreviewLook
     @Environment(\.previewInsets) private var insets
     @Environment(\.displayScale) private var scale
 
-    func makeUIView(context: Context) -> PreviewZoomView { PreviewZoomView(file: file, scale: scale) }
+    func makeUIView(context: Context) -> PreviewZoomView { PreviewZoomView(file: file, scale: scale, look: look) }
 
     func updateUIView(_ view: PreviewZoomView, context: Context) {
         view.frameInsets = UIEdgeInsets(top: insets.top, left: insets.leading, bottom: insets.bottom, right: insets.trailing)
@@ -42,11 +43,13 @@ final class PreviewZoomView: UIScrollView, UIScrollViewDelegate {
     private var detailing: Task<Void, Never>?
     /// 在动时到了的那张，停下来再换上
     private var pending: UIImage?
-    /// 图在缩放 1（适合屏幕）时的尺寸，与按哪个框算的：换框（转屏、栏变高）才重算，换清晰度不算
+    /// 内容的真实比例：先是缩略图给的，解出来的图到了以它为准
+    private var aspect: CGFloat?
+    /// 图在缩放 1（适合屏幕）时的尺寸，与按哪个框、哪个比例算的：换框（转屏、栏变高）、比例与缩略图给的不同才重算，换清晰度不算
     private var fitted: CGSize = .zero
-    private var fittedArea: CGSize = .zero
+    private var fittedFor: (area: CGSize, aspect: CGFloat)?
 
-    init(file: URL, scale: CGFloat) {
+    init(file: URL, scale: CGFloat, look: PreviewLook) {
         self.file = file
         self.scale = scale
         super.init(frame: .zero)
@@ -61,7 +64,13 @@ final class PreviewZoomView: UIScrollView, UIScrollViewDelegate {
         topEdgeEffect.isHidden = true
         bottomEdgeEffect.isHidden = true
         imageView.isAccessibilityElement = false
+        // 缩略图可能裁过：照内容的比例铺满它的框
+        imageView.contentMode = .scaleAspectFill
+        imageView.clipsToBounds = true
         addSubview(imageView)
+        if let now = look.now { cover(now) } else {
+            Task { [weak self] in if let look = await look.load() { self?.cover(look) } }
+        }
         let doubleTap = UITapGestureRecognizer(target: self, action: #selector(doubleTapped))
         doubleTap.numberOfTapsRequired = 2
         addGestureRecognizer(doubleTap)
@@ -82,10 +91,10 @@ final class PreviewZoomView: UIScrollView, UIScrollViewDelegate {
         super.layoutSubviews()
         if loading == nil, !bounds.isEmpty { loading = load(Self.screenPixels(bounds.size, scale)) { [weak self] in self?.show($0) } }
         let area = bounds.inset(by: frameInsets).size
-        guard area != fittedArea, let size = imageView.image?.size, size.width > 0, size.height > 0, area.width > 0, area.height > 0 else { return }
-        fittedArea = area
-        let fit = min(area.width / size.width, area.height / size.height)
-        fitted = CGSize(width: size.width * fit, height: size.height * fit)
+        guard let aspect, area.width > 0, area.height > 0, fittedFor.map({ $0.area != area || $0.aspect != aspect }) ?? true else { return }
+        fittedFor = (area, aspect)
+        fitted = area.width / area.height > aspect
+            ? CGSize(width: area.height * aspect, height: area.height) : CGSize(width: area.width, height: area.width / aspect)
         zoomScale = 1
         imageView.frame = CGRect(origin: .zero, size: fitted)
         contentSize = fitted
@@ -126,6 +135,14 @@ final class PreviewZoomView: UIScrollView, UIScrollViewDelegate {
         detailing = load({ min(Int(max($0.width, $0.height)), Self.detailPixels) }) { [weak self] in self?.show($0) }
     }
 
+    /// 还没有解出来的图时先铺缩略图的画面。
+    private func cover(_ look: PreviewSources.Look) {
+        guard imageView.image == nil else { return }
+        imageView.image = UIImage(cgImage: look.image)
+        aspect = look.aspect
+        setNeedsLayout()
+    }
+
     /// 换上一张（同一张图的两种清晰度，`imageView` 的框只随适合屏幕的尺寸变，换上不动位置）；清楚的到了以后不再换回铺满屏幕的那张。
     /// 在动时等停下来再换（下一次 `scrollViewDid…End…`）。
     private func show(_ image: UIImage) {
@@ -135,6 +152,8 @@ final class PreviewZoomView: UIScrollView, UIScrollViewDelegate {
             return
         }
         imageView.image = image
+        // 解出来的才是真比例；放大着时不重排（缩略图给的比例只在没放大前用过）
+        if !zoomedIn { aspect = image.size.width / max(image.size.height, 1) }
         setNeedsLayout()
         layoutIfNeeded()
     }
