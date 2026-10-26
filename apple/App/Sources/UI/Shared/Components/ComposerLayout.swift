@@ -112,22 +112,26 @@ enum ComposerForm: Equatable {
 }
 
 extension View {
-    /// 输入框上方的几行说明（同步到不了 Mac、命令的进度、没换成的原因、新会话开到哪了）：一块垫实底的玻璃叠在输入框上沿之上、往上长，不占排版。
-    /// 排进输入框里的话，它一出一收输入框就当帧变高变矮，浮着的输入框上面的对话跟着跳；叠在上面的代价是盖住它后面最下面的一截（同"回到最新"圆钮）。
+    /// 叠在这一块上沿之上（隔 `stackGap`）、底边对着上沿往上长，不进排版：挂在上沿一条零高的线上，叠放的东西多高都不改这一块的高。
+    /// 排进来的话它一出一收这一块就当帧变高变矮，浮在它上面的对话跟着跳；叠在上面的代价是盖住后面最下面的一截（同"回到最新"圆钮）。
+    /// 输入框上方的说明（`composerNotice`）、Cue 页底部那一块上方的待回复提示（`CueReplyTip`）。
+    func floatingAbove(@ViewBuilder _ content: () -> some View) -> some View {
+        overlay(alignment: .top) {
+            Color.clear.frame(height: 0).overlay(alignment: .bottomLeading) { content().padding(.bottom, ComposerMetrics.stackGap) }
+        }
+    }
+
+    /// 输入框上方的几行说明（同步到不了 Mac、命令的进度、没换成的原因、新会话开到哪了）：一块垫实底的玻璃叠在输入框上方（`floatingAbove`）。
     /// 只是说明、不接点按：后面的对话照常滚、照常点。`shown` 为 false 时什么都不画。
     func composerNotice(_ shown: Bool, @ViewBuilder _ notice: () -> some View) -> some View {
-        // 挂在输入框上沿一条零高的线上、底边对着它往上长：叠放的说明多高都不进输入框的排版
-        overlay(alignment: .top) {
+        floatingAbove {
             if shown {
-                Color.clear.frame(height: 0).overlay(alignment: .bottomLeading) {
-                    VStack(alignment: .leading, spacing: 4) { notice() }
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.horizontal, 14).padding(.vertical, 8)
-                        .glass(in: .rect(cornerRadius: ComposerMetrics.noticeRadius, style: .continuous))
-                        .padding(.bottom, ComposerMetrics.stackGap)
-                }
-                .allowsHitTesting(false)
+                VStack(alignment: .leading, spacing: 4) { notice() }
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 14).padding(.vertical, 8)
+                    .glass(in: .rect(cornerRadius: ComposerMetrics.noticeRadius, style: .continuous))
+                    .allowsHitTesting(false)
             }
         }
     }
