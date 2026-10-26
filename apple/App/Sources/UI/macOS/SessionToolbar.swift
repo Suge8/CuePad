@@ -54,8 +54,9 @@ extension Workspace {
 /// （与会话名重复的一段不写，见 `SessionTaskLink.path`），点它回到这件事。一个会话绑着好几件时写还没做完的第一件，后面跟"等 N 件"，其余在"⋯"里。
 /// 两行与一行同高（工具栏控件的高度）；会话的事都归档了或在回收站里时只有一行。
 /// 玻璃画在标题自己身上、随它一起淡出：系统给工具栏项画的那块不随内容显隐，让开时会留下一块空玻璃。
-/// 标题位的尺寸只随窗口变、不随内容变（项的尺寸一变整条工具栏重排）：宽裕时是 `width`，窗口窄、侧栏收起时由工具栏压到最窄 `minWidth`（`ToolbarItemFlex`），
-/// 不把左右的控件挤进溢出菜单，玻璃里的名字随之截断；窗口最窄（720）时也放得下。
+/// 标题位与玻璃的尺寸只随窗口变、不随内容变：宽裕时是 `width`，窗口窄、侧栏收起时由工具栏压到最窄 `minWidth`（`ToolbarItemFlex`），
+/// 不把左右的控件挤进溢出菜单，玻璃里的名字随之截断；窗口最窄（720）时也放得下。玻璃铺满标题位、内容靠左：
+/// 玻璃按内容宽画再居中时，状态一换（进出"正在同步"、开始结束工作、计时进位）玻璃就变宽变窄、名字左右挪。
 /// Cue 页的页头也在这一位（`CueTitle`，同一块玻璃、同样的宽度规则），只在侧栏收起时有（同 `ProjectSwitcher` 只在收起时写当前页）。
 struct PageTitleSlot: View {
     @Environment(Workspace.self) private var workspace
@@ -72,7 +73,6 @@ struct PageTitleSlot: View {
         } else if workspace.root == .cue, workspace.pages.sidebar == .detailOnly {
             CueTitle()
                 .frame(height: Spacing.toolbarControl)
-                .glass(in: .capsule)
                 .modifier(Flex())
         }
     }
@@ -97,9 +97,8 @@ struct PageTitleSlot: View {
         }
         .padding(.leading, task == nil ? 12 : 4).padding(.trailing, task == nil ? 12 : 14)
         .frame(height: Spacing.toolbarControl)
-        .glass(in: .capsule)
         .accessibilityElement(children: .contain)
-        // 标题位的宽度只看工具栏给多少（玻璃只画到内容那么宽）：随内容变时换会话整条工具栏重排、整窗重算鼠标跟踪区，掉帧 8 次到 4～5 次
+        // 标题位的宽度只看工具栏给多少：随内容变时换会话整条工具栏重排、整窗重算鼠标跟踪区，掉帧 8 次到 4～5 次
         .modifier(Flex())
         .opacity(state.showsHeader ? 1 : 0)
         .animation(HandOff.quick, value: state.showsHeader)
@@ -115,11 +114,12 @@ struct PageTitleSlot: View {
         }
     }
 
-    /// 标题位在 `minWidth`～`width` 之间由工具栏给：理想宽写最窄（工具栏按理想宽量最少要多宽），能放多宽由 `ToolbarItemFlex` 告诉工具栏。
+    /// 标题位在 `minWidth`～`width` 之间由工具栏给：理想宽写最窄（工具栏按理想宽量最少要多宽），能放多宽由 `ToolbarItemFlex` 告诉工具栏。玻璃铺满给的宽。
     private struct Flex: ViewModifier {
         func body(content: Content) -> some View {
             content
-                .frame(maxWidth: .infinity)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .glass(in: .capsule)
                 .frame(minWidth: PageTitleSlot.minWidth, idealWidth: PageTitleSlot.minWidth, maxWidth: PageTitleSlot.width)
                 .background { ToolbarItemFlex(width: PageTitleSlot.minWidth...PageTitleSlot.width) }
         }

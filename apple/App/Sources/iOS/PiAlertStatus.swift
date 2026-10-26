@@ -35,6 +35,9 @@ struct PiAlertStatus: Equatable {
         }
     }
 
+    /// 连不上 iCloud 时的样子：设置里按它的说明留高（`StatusText`）。
+    static let offline = PiAlertStatus(authorization: .authorized, registration: .registered, subscription: .offline)
+
     private static let retrying: LocalizedStringResource = "锁屏通知暂时收不到。回到前台时会自动重试，也可以现在重试。"
 
     private init(_ state: State, _ title: LocalizedStringResource, _ detail: LocalizedStringResource?, diagnostics: String? = nil, action: Action? = nil) {
