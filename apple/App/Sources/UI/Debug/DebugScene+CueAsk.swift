@@ -55,7 +55,7 @@ extension DebugScene {
     private enum Proposal { case sheet, thread, slide, drawer }
 
     /// 一个方案的手机效果图：一页对话，中间是那种样子的提问（各有一块显眼、彼此分得开的样子：黄卡大蓝钮、对话气泡、绿色滑轨、深色抽屉），
-    /// 方形缩略图取细节最多的那一段（`DeliverableLooks.detailCrop`）也一眼认得出是哪张。
+    /// 方形缩略图取细节最多的那一段（`DeliverableLooks.detailRegion`）也一眼认得出是哪张。
     private static func proposalPNG(_ proposal: Proposal) -> Data {
         let indigo = Color(red: 0.18, green: 0.29, blue: 0.62)
         let question = Text("可以推送 scheduler 的重连修复吗？", tableName: "Demo").font(.system(size: 15, weight: .semibold))
