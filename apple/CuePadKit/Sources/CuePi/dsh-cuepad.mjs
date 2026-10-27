@@ -9,10 +9,10 @@
 //   - `session/load`：dsh-acp 只有 `session/resume`（不重放历史），改名转给它
 //   - 模型选项的值：dsh-acp 的是 `["提供方","模型"]` 的 JSON 原文，进出都换成 CuePad 的写法 `提供方/模型`
 // 标准没有的，CuePad 的扩展方法（`ACPDialect`）：
-//   `_cuepad/steer`  {sessionId, text, images?[{mimeType, data}]}：插进在跑的这一轮，下一步就读到；歇着时回错误码 -32001，该走 session/prompt
+//   `_cuepad/steer`  {sessionId, text, images?[{mimeType, data}], deliveryId?}：插进在跑的这一轮，下一步就读到；歇着时回错误码 -32001，该走 session/prompt
 //   `_cuepad/rename` {sessionId, name}
 // CuePad 送进去的话带投送请求 id（`session/prompt` 的 `_meta.cuepadDelivery`）：这句话进收件箱时往会话记录里先记一条
-// `plugin:cuepad/delivery` {message, delivery}，随后的 `user/message` 按 message id 认（`DshHistory`）。
+// `plugin:cuepad/delivery` {message, delivery}，随后的 `user/message` 按 message id 认（`DshHistory`）；插话的 `deliveryId` 同样记。
 // config.prompt：给了就是 Cue 的大脑，整份替换系统提示（文件路径，原样不插值）。
 // 环境 CUEPAD_MODEL（`提供方/模型`）：新会话用它；没给用 acp profile 的缺省模型（`agent-default-model`，dsh-acp 自己写死的那个不用）。
 // dsh-acp 只在握手时按这个模型判定收不收图（`promptCapabilities.image`），之后换到能看图的模型也不改。
@@ -43,6 +43,7 @@ export async function apply(ctx, config = {}) {
   }
 
   const { appendPluginRecord } = await ctx.loader.internal.import("@deepseek-ai/dsh-session", ctx.baseUrl, {});
+  const record = (session, message, delivery) => appendPluginRecord(session, "plugin:cuepad/delivery", { message, delivery });
   /** 每个会话：已作为增量发出、还没等到整段的话；等着进收件箱的投送请求 id */
   const streamed = new Map(), deliveries = new Map();
   /** 发出去的请求里认会话开好的回应：请求 id → 会话 id（`session/load` 的请求里就有） */
@@ -77,10 +78,10 @@ export async function apply(ctx, config = {}) {
     const delivery = deliveries.get(agent.session.id);
     if (delivery === undefined || message.source?.kind !== "user") return;
     deliveries.delete(agent.session.id);
-    appendPluginRecord(agent.session, "plugin:cuepad/delivery", { message: message.id, delivery });
+    record(agent.session, message.id, delivery);
   });
 
-  const methods = extensions(ctx);
+  const methods = extensions(ctx, record);
   const toAgent = (message) => {
     if (typeof message.method === "string" && message.method.startsWith(prefix)) return answer(message, () => methods[message.method.slice(prefix.length)], send);
     const params = message.params ?? {};
@@ -139,20 +140,22 @@ function commands(ctx, agent) {
   return ctx.commands.list(agent).map((c) => ({ name: c.name, description: c.description ?? "", ...(c.input?.hint ? { input: { hint: c.input.hint } } : {}) }));
 }
 
-function extensions(ctx) {
+function extensions(ctx, record) {
   const agent = (sessionId) => {
     const found = ctx.agents.get(sessionId);
     if (!found) throw failure(`unknown session ${sessionId}`);
     return found;
   };
   return {
-    async steer({ sessionId, text, images = [] }) {
+    async steer({ sessionId, text, images = [], deliveryId }) {
       const target = agent(sessionId);
       if (target.status !== "running") throw failure("the session is idle: send it as a prompt", idle);
       const refs = images.length === 0 ? [] : await ctx.get("attachments").saveImages(
         images.map((image) => ({ mediaType: image.mimeType, data: Buffer.from(image.data, "base64") })));
       const content = [...(text ? [{ type: "text", text }] : []), ...refs.map((attachment) => ({ type: "image", attachment }))];
-      target.steer(Object.freeze({ id: randomUUID(), role: "user", content, source: { kind: "user" } }));
+      const message = Object.freeze({ id: randomUUID(), role: "user", content, source: { kind: "user" } });
+      if (deliveryId) record(target.session, message.id, deliveryId);
+      target.steer(message);
       return {};
     },
     async rename({ sessionId, name }) {
