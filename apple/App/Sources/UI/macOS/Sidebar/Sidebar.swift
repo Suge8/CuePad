@@ -3,7 +3,7 @@ import CueStore
 import SwiftUI
 
 /// 侧栏的结构与 iPhone、iPad 同一份（`SidebarOutline`），这里只管 Mac 的长相，一列到底：最上面 Cue 名片（`CueSidebarCard`，要你拍板的事）、
-/// 下面一行进展（`ProgressRow`：看板与会话）、项目（全部，置顶的在前；行只有图标与名字），底栏是归档、回收站、技能与说明，右边额度环（`SidebarQuota`）与设置。
+/// 下面一行进展（`ProgressRow`：看板与会话）、项目（全部，置顶的在前；行只有图标与名字），项目区下面一行额度（`SidebarQuota`），底栏是归档、回收站、技能与说明与设置。
 /// 点哪一处，内容区就是哪一页。会话不在侧栏列：全部在进展页的会话段；项目行不挂状态标——要看的在 Cue，在动的在进展。
 /// 名片与进展一直在看得见的地方，只有项目区滚动（方向键与 ⌘1–9 换到的项目滚进可见区）；项目区是普通栈：几十行的量级，行高固定。
 struct Sidebar: View {
@@ -31,6 +31,7 @@ struct Sidebar: View {
                 }
             }
             .frame(maxHeight: .infinity, alignment: .top)
+            SidebarQuota().padding(.horizontal, SidebarMetrics.column)
             footer
         }
         .focusable()
@@ -60,7 +61,7 @@ struct Sidebar: View {
         }
     }
 
-    /// 底栏：启动问题（有才出现），下面一排归档、回收站、技能与说明（有要整理的角上带点），右边额度环与设置。
+    /// 底栏：启动问题（有才出现），下面一排归档、回收站、技能与说明（有要整理的角上带点）与设置。
     private var footer: some View {
         VStack(spacing: 8) {
             StartupIssues()
@@ -69,7 +70,6 @@ struct Sidebar: View {
                 TrashFooterPage(select: select)
                 FooterPage(entry: .library, alert: !(workspace.library?.tidies.isEmpty ?? true), select: select)
                 Spacer()
-                SidebarQuota()
                 let settings = SidebarOutline.Entry.settings
                 Button { SettingsPane.open() } label: {
                     Image(settings.icon).font(.system(size: 15)).foregroundStyle(palette.ink2)

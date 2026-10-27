@@ -5,7 +5,7 @@ import Observation
 import CuePi
 #endif
 
-/// 订阅账号的额度（`AccountQuota`，每个提供方一条），整个 App 一份：Mac 侧栏底栏与手机进展页顶栏的额度环、菜单栏面板、回复框的模型胶囊与模型菜单都读这里，
+/// 订阅账号的额度（`AccountQuota`，每个提供方一条），整个 App 一份：Mac 侧栏与手机进展页顶栏的额度环、菜单栏面板、回复框的模型胶囊与模型菜单都读这里，
 /// 不各自订阅；每次变化按它重排周额度提醒（`QuotaReminder`）。数据只在 Mac 上由桥写入（回复里带回的观测随时到，见 `AppServices.consumePiChanges`）；这里还管主动刷新的节流：
 /// 只在额度视图出现、有观测陈旧（`AccountQuota.staleAfter`）时查一次，同时来的几次合并成一次，查到后同样久之内不再查，
 /// 失败后冷却 `failureCooldown`。没有定时器：不看就不查。
