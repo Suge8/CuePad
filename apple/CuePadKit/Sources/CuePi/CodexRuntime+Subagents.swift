@@ -234,7 +234,8 @@ extension CodexRuntime {
         }
     }
 
-    /// 最后一个在跑的子代理落定、父线程歇着：补一轮空输入，这一轮发出就算开始，它做完才歇下。空输入的一轮先把子代理的结果取进来再请求模型；
+    /// 最后一个在跑的子代理落定、父线程歇着：补一轮空输入，它做完才歇下。终端会话这一轮发出就算开始（常驻服务不报开始）；托管的照常等驱动报开始
+    /// （这一批的结果随 `startTurn` 交出），期间仍是等子代理。空输入的一轮先把子代理的结果取进来再请求模型；
     /// 带文字的一轮先请求模型，v2 的结果要到之后才取出，模型会答"还没收到"。
     /// 同 Codex 的 `wake_on_agent_messages`（openai/codex#54961，未发布、默认关、不管 v1，发布并默认开启后改用它），边界也照它：
     /// 父线程上一轮被停下、在 Plan 模式、这一批没有交回结果（都被停下）的不补，直接歇下。补的这一轮在跑时你说话，照常先停下它再开你那一轮（`deliver`）。
@@ -248,15 +249,23 @@ extension CodexRuntime {
             var last: CodexHistory.LastTurn?
             if delivered, let file { last = await CodexHistory.lastTurn(in: file) }
             guard tracked[session.id] === session, !session.facts.running, session.facts.inFlight == batch else { return }
-            session.unread = [:]
-            session.facts.inFlight = []
-            guard delivered, last?.plan != true, last?.interrupted != true else { return publish(session) }
-            startTurn(session, at: .now)
-            publish(session)
+            guard delivered, last?.plan != true, last?.interrupted != true else {
+                session.unread = [:]
+                session.facts.inFlight = []
+                return publish(session)
+            }
+            let hostedSession = hosted[session.pid] != nil
+            if !hostedSession {
+                startTurn(session, at: .now)
+                publish(session)
+            }
             do {
                 try await turnStart(session, [])
             } catch {
-                guard tracked[session.id] === session, session.facts.running else { return }
+                // 没开成：终端会话收回发出时算的开始，托管的这一批不再等，都带着原因歇下
+                guard tracked[session.id] === session, session.facts.running != hostedSession else { return }
+                session.unread = [:]
+                session.facts.inFlight = []
                 session.facts.endTurn(failure: error.localizedDescription)
                 publish(session)
             }

@@ -23,7 +23,8 @@ extension CodexRuntime {
             publish(session)
             throw error
         }
-        guard session.restarting == .stopped else { return }
+        // 托管的这一轮由驱动报开始（`event`），这里只补终端会话的
+        guard session.restarting == .stopped, hosted[session.pid] == nil else { return }
         startTurn(session, at: .now)
         publish(session)
     }
