@@ -63,6 +63,9 @@ public enum CueActivity {
     return touches
   }
 
+  /// 这一轮最要紧的那一处（`weight` 里最靠前的动作；都不在表里时是第一处）：会话行上"Cue 对它做了什么"没话可说时写它（`CueDid`）。
+  public static func lead(_ tools: PiChatMessage.Tools?) -> Touch? { touches(tools).min { rank($0.kind) < rank($1.kind) } }
+
   private static func rank(_ kind: PiChatMessage.Tools.Kind) -> Int { weight.firstIndex(of: kind) ?? weight.count }
 }
 

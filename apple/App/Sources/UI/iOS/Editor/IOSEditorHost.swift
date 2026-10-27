@@ -6,13 +6,14 @@ import UIKit
 /// 对编辑器的操作口：插入图片与文件、取当前正文与选中部分。
 final class IOSEditorHandle {
     fileprivate weak var view: CueTextView?
+    /// 停用时编辑器拿着键盘：再启用时还给它
+    fileprivate var refocus = false
 
     var text: String? { view?.storedText }
     /// 选中部分的存储格式；没选中为 nil。
     var selection: String? { view?.selectedStoredText }
-    func insertImage(_ data: Data) { view?.insertImage(data: data) }
-    /// 文件选择器选来的（安全作用域的访问由编辑器拿、存好后放开）。
-    func insertFiles(_ urls: [URL]) { view?.insertFiles(urls) }
+    /// 相册、文件选择器选来的。
+    func insert(_ files: [IncomingFile]) { view?.insert(files) }
     func focus() { view?.becomeFirstResponder() }
     /// 换掉整篇正文（说明在 Mac 上被改了、你还没动过，编辑页跟上）：光标留在原来的位置附近。
     func replace(_ text: String) {
@@ -37,6 +38,8 @@ struct IOSEditorHost: UIViewRepresentable {
     var onError: (any Error) -> Void = { _ in }
     /// 高贴着字、自己不滚（任务气泡：整张纸一起滚）；否则铺满给的地方、在里面滚（纸页）。
     var fits = false
+    /// false：盖着别的东西、看不见时（技能与规则文件页标出合并时）收起键盘、不接输入、读屏跳过；回到 true 时之前拿着键盘的再拿回来。
+    var editable = true
     @Environment(AppServices.self) private var services
 
     func makeCoordinator() -> KeyboardBar.Actions { KeyboardBar.Actions() }
@@ -71,9 +74,23 @@ struct IOSEditorHost: UIViewRepresentable {
         context.coordinator.insertImage = onInsertImage ?? {}
         context.coordinator.insertFile = onInsertFile ?? {}
         context.coordinator.variables = onVariables ?? {}
+        if view.isEditable != editable { setEditable(view) }
         if view.theme.textColor != theme.textColor || view.theme.horizontalInset != theme.horizontalInset || view.theme.title?.color != theme.title?.color {
             view.theme = theme
         }
+    }
+
+    private func setEditable(_ view: CueTextView) {
+        if !editable {
+            handle.refocus = view.isFirstResponder
+            view.resignFirstResponder()
+        }
+        view.isEditable = editable
+        view.isSelectable = editable
+        view.isAccessibilityElement = editable
+        // 点不进去：不接点按，键盘也就叫不出来
+        view.isUserInteractionEnabled = editable
+        if editable, handle.refocus { view.becomeFirstResponder() }
     }
 
     static func dismantleUIView(_ view: CueTextView, coordinator: KeyboardBar.Actions) { coordinator.watching?.cancel() }

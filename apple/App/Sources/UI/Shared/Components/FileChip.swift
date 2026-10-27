@@ -1,6 +1,5 @@
 import CueEditor
 import CueStore
-import QuickLookThumbnailing
 import SwiftUI
 #if os(iOS)
 import UIKit
@@ -19,10 +18,10 @@ struct FileChip: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     @Environment(\.displayScale) private var scale
-    @State private var arrived: Bool?
+    @State private var place = AttachmentPlace.unchecked
     @State private var thumbnail: CGImage?
 
-    private var file: URL? { arrived == false ? nil : services.store.files.fileURL(for: key) }
+    private var file: URL? { place.file(key, in: services.store.files) }
     private var thumbSide: CGFloat { height - 16 }
 
     var body: some View {
@@ -55,10 +54,10 @@ struct FileChip: View {
         .buttonStyle(PressStyle(.card))
         .accessibilityLabel(Dotted(name, status.detail).spoken)
         .accessibilityHint(file == nil ? "从 iCloud 取来" : "打开")
-        .observingArrival(of: key, in: services, into: $arrived)
+        .observingArrival(of: key, in: services, into: $place)
         .task(id: file) {
             guard let file else { return thumbnail = nil }
-            thumbnail = await Self.thumbnail(file, side: thumbSide, scale: scale)
+            thumbnail = await Thumbnails.chip(at: file, side: thumbSide, scale: scale)
         }
     }
 
@@ -78,11 +77,6 @@ struct FileChip: View {
         guard let file else { return workspace.fetchFile(key) }
         if let open { open(file) } else { FilePreview.open(file, title: name) }
     }
-
-    @concurrent private static func thumbnail(_ file: URL, side: CGFloat, scale: CGFloat) async -> CGImage? {
-        let request = QLThumbnailGenerator.Request(fileAt: file, size: CGSize(width: side, height: side), scale: scale, representationTypes: .all)
-        return try? await QLThumbnailGenerator.shared.generateBestRepresentation(for: request).cgImage
-    }
 }
 
 /// 附件条里的一张图：方块缩略图，点它快速查看；还没到这台时点它去取。
@@ -91,18 +85,18 @@ struct ImageTile: View {
     var side: CGFloat = 64
     @Environment(AppServices.self) private var services
     @Environment(Workspace.self) private var workspace
-    @State private var arrived: Bool?
+    @State private var place = AttachmentPlace.unchecked
 
     var body: some View {
         Button {
-            guard arrived != false, let file = services.store.files.fileURL(for: key) else { return workspace.fetchFile(key) }
+            guard let file = place.file(key, in: services.store.files) else { return workspace.fetchFile(key) }
             FilePreview.open(file, title: String(localized: "图片"))
         } label: {
-            Thumbnail(hash: key, height: side, radius: 12).frame(width: side).id(arrived ?? true)
+            Thumbnail(hash: key, height: side, radius: 12).frame(width: side).id(place.isAway)
         }
         .buttonStyle(PressStyle())
         .accessibilityLabel("图片")
-        .observingArrival(of: key, in: services, into: $arrived)
+        .observingArrival(of: key, in: services, into: $place)
     }
 }
 

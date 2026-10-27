@@ -868,22 +868,6 @@
       },
       "shouldTranslate" : false
     },
-    "%@也并进来，撤掉那份" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Also merge %@ and retire it"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@也并进来，撤掉那份"
-          }
-        }
-      }
-    },
     "%@前发出" : {
       "localizations" : {
         "en" : {
@@ -5279,6 +5263,22 @@
         }
       }
     },
+    "也合并 %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Also merge %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "也合并 %@"
+          }
+        }
+      }
+    },
     "书" : {
       "localizations" : {
         "en" : {
@@ -8535,6 +8535,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "各家读同一份技能与规则，改一处就都改了"
+          }
+        }
+      }
+    },
+    "合并" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Merge"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "合并"
           }
         }
       }

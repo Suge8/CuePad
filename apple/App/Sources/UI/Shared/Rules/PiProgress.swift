@@ -14,6 +14,16 @@ nonisolated enum PiProgress {
         return nil
     }
 
+    /// 歇着、Cue 已接手这次停下时近况那一句（会话卡片、看板卡）：换成 Cue 对它做的最近一件事（`CueDid`）——它说的头一句，没说话是那个动作（"发给 cuepad"）。
+    /// 状态由状态标与状态词表达，这一句不另加标签；别的状态没有。
+    static func cue(_ did: CueDid?, shown: PiShown) -> String? {
+        guard shown.status == .resting, let did else { return nil }
+        return switch did {
+        case .said(let text): firstSentence(CueFormat.plainText(text))
+        case .touched(let touch): CueActivity.line(touch)
+        }
+    }
+
     static func line(of session: PiSessionState) -> String? {
         switch session.state.known {
         case .waitingForUser: firstLine(session.question?.text ?? session.detail)

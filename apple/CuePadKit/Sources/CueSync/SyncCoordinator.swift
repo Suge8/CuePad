@@ -35,6 +35,7 @@ actor SyncCoordinator {
   var drained: Int?
   /// 文件那一路在传的附件记录（`takeFile`）：后台那一路不删它们，文件那一路不再交出（停下又开始同步时，上一轮的还在系统里传）。
   var fileUploads: Set<String> = []
+  var quotaTimer: Task<Void, Never>?
 
   /// 协调器自己记的事实。`status` 不含 `.syncing`；上传与拉积压的忙闲分开记。对外的快照只在发布处推出（`state`）。
   struct Facts {
@@ -47,14 +48,14 @@ actor SyncCoordinator {
     var reconciled = false
     var issues: [SyncIssue] = []
     var alerts = PiAlertSubscriptionStatus.off
-    /// 文件那一路因 iCloud 空间不足停着（`FileSender`）：别的记录照常同步，所以不进 `status`。
-    var filesOverQuota = false
+    /// 文件那一路因 iCloud 空间不足停着、到这一刻再试（`holdFiles`）；之后传上去一个才清掉：别的记录照常同步，所以不进 `status`。
+    var filesHeldUntil: ContinuousClock.Instant?
 
     /// 界面看到的快照："同步中"是底层空闲、而一轮上传或拉积压正在进行，或服务器要求等着再发。
     var state: SyncState {
       SyncState(
         status: status == .idle && (sending || catchingUp || serverWait) ? .syncing : status, issues: issues, alerts: alerts, catchingUp: catchingUp,
-        reconciled: reconciled, filesOverQuota: filesOverQuota)
+        reconciled: reconciled, filesOverQuota: filesHeldUntil != nil)
     }
   }
 
@@ -88,7 +89,6 @@ actor SyncCoordinator {
   var stopped: Bool { needsDecision != nil || status == .outdated }
 
   var alertSubscription: PiAlertSubscriptionStatus { facts.alerts }
-  func setFilesOverQuota(_ over: Bool) { facts.filesOverQuota = over }
   func setAlerts(_ alerts: PiAlertSubscriptionStatus) { facts.alerts = alerts }
 
   /// 用户对 `needsDecision` 的选择。之后重新开始同步（元数据、令牌与账号这里已清掉）。没有等你决定的事什么都不做：免得误擦数据。

@@ -24,6 +24,10 @@ final class FileDraft {
     /// 有没写进文件的字。
     private(set) var dirty = false
     private(set) var state = State.idle
+    /// 规则另写了一份时，正文换成合并稿、标出会并进来的段（`MergeBar` 点"合并进来"）；这时编辑器交出键盘、不接输入
+    var previewing = DebugHooks.preset.mergePreview
+    /// 合并时一并撤掉的替换基础提示的那几份（`TidyOrder.retire`）
+    var retire: Set<InstructionSource.Origin> = []
     @ObservationIgnored private let workspace: Workspace
     @ObservationIgnored private var autosave: Autosave?
 
@@ -156,6 +160,35 @@ final class FileDraft {
     }
 
     private func mark() { if dirty != (text != base) { dirty = text != base } }
+
+    /// 页顶次要一行里写的存好没有（Mac 自动存，手机发往 Mac）；文件在别处改过、等你选时不写，文件页顶上那一条写（`ConflictBar`）。
+    var shownState: String? { Self.shown(state, dirty: dirty) }
+
+    /// 最长的那个（页顶按它留宽，换字时不伸缩）。
+    static var longestShownState: String {
+        [State.saving, .saved, .followed, .failed, .idle].compactMap { shown($0, dirty: true) }.max { $0.count < $1.count } ?? ""
+    }
+
+    private static func shown(_ state: State, dirty: Bool) -> String? {
+        #if os(macOS)
+        switch state {
+        case .saving: SaveState.saving.text
+        case .saved: SaveState.saved.text
+        case .followed: String(localized: "在别处改过，已跟上")
+        case .failed: SaveState.failed.text
+        case .idle, .conflict: nil
+        }
+        #else
+        switch state {
+        case .saving: String(localized: "正在发往 Mac…")
+        case .saved: String(localized: "Mac 上已写好")
+        case .followed: String(localized: "Mac 上改过，已跟上")
+        case .failed: String(localized: "没发出去")
+        case .idle: dirty ? String(localized: "有改动没发") : nil
+        case .conflict: nil
+        }
+        #endif
+    }
 
     /// "已保存"、"已跟上"亮一会儿就收。
     func settle() { if state == .saved || state == .followed { state = .idle } }

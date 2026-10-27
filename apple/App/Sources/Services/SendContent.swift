@@ -7,21 +7,6 @@ nonisolated struct SendContent: Sendable {
     private let tokens: [CueToken]
 
     init(stored: String) { tokens = CueFormat.parse(stored) }
-
-    /// 只看文字：图片去掉、文件留文件名，原样拼接（不像 `CueFormat.plainText` 那样折叠空行、去首尾空白）。
-    var plainText: String { tokens.map(\.shownText).joined() }
-
-    var hasImages: Bool { tokens.contains { if case .image = $0 { true } else { false } } }
-
-    /// 正文里的附件（图片与文件）的键，按出现顺序。
-    var attachmentKeys: [String] {
-        tokens.compactMap {
-            switch $0 {
-            case .image(let key), .file(let key, _): key
-            case .text: nil
-            }
-        }
-    }
 }
 
 #if os(macOS)

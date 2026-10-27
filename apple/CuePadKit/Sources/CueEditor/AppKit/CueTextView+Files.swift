@@ -18,8 +18,8 @@ extension CueTextView {
         return true
     }
 
-    /// 存好（后台）再插到此刻的光标处。
-    func insert(_ files: [IncomingFile]) {
+    /// 拖入、粘贴、"插入文件…"选来的：存好（后台）再插到此刻的光标处。
+    public func insert(_ files: [IncomingFile]) {
         core.importFiles(files) { [weak self] result in
             guard let self else { return }
             switch result {
@@ -27,11 +27,6 @@ extension CueTextView {
             case .failure(let error): onError?(error)
             }
         }
-    }
-
-    /// 选文件面板选来的文件（"插入文件…"）插到光标处。
-    public func insertFiles(_ urls: [URL]) {
-        insert(urls.map(IncomingFile.file))
     }
 
     public override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
@@ -55,7 +50,7 @@ extension CueTextView {
         panel.begin { [weak self] response in
             guard response == .OK else { return }
             let urls = panel.urls
-            MainActor.assumeIsolated { self?.insertFiles(urls) }
+            MainActor.assumeIsolated { self?.insert(urls.map(IncomingFile.file)) }
         }
     }
 
