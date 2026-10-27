@@ -50,7 +50,7 @@ final class CodexBrain: HostedSession {
         do {
             let rpc = try await driver.launch(
                 config.executable, arguments: Self.overrides.flatMap { ["-c", $0] } + Self.disabledFeatures.flatMap { ["--disable", $0] },
-                environment: BrainSession.environment(config), directory: config.workingDirectory)
+                environment: config.launchEnvironment(), directory: config.workingDirectory)
             let effective = try await rpc.call("config/read", [:])
             let userServers = effective["config"]?["mcp_servers"]?.object?.keys ?? [:].keys
             var overrides: [String: JSONValue] = Dictionary(uniqueKeysWithValues: userServers.map { ("mcp_servers.\($0).enabled", false) })

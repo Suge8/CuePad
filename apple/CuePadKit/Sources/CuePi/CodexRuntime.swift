@@ -186,9 +186,8 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
     func executable() async throws -> (url: URL, environment: [String: String]) {
         guard let codex = await codex() else { throw AgentRuntimeError.notInstalled(.codex) }
         let locator = await locate()
-        return (codex, locator.environment(launching: codex, overrides: paths.environment.merging([
-            Self.facts.homeVariable: paths.home(of: .codex).path, "CUEPAD_PI_SOCKET_DIR": paths.pi.socketDirectory.path,
-        ]) { $1 }))
+        return (codex, locator.environment(launching: codex, overrides: paths.launchEnvironment(of: .codex).merging(
+            ["CUEPAD_PI_SOCKET_DIR": paths.pi.socketDirectory.path]) { $1 }))
     }
 
     /// 起一个托管进程交给 `body`；连同握手至多 `AgentTimeouts.launch`，超时或出错时停掉进程。

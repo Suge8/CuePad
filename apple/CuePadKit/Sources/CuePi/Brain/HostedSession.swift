@@ -99,6 +99,11 @@ extension HostedSessionError: LocalizedError {
 }
 
 extension CueBrainConfig {
+    /// 运行时的环境：CuePad 自己的环境加上配置给的与 `extra`，PATH 按 `ExecutableLocator.environment` 的规则（配置给的 PATH 已是找到它的那组目录）。
+    func launchEnvironment(adding extra: [String: String] = [:]) -> [String: String] {
+        ExecutableLocator(searchDirectories: []).environment(launching: executable, overrides: environment.merging(extra) { $1 })
+    }
+
     @MainActor public func startBrain() async throws -> any HostedSession {
         let brain = runtime.facts.brain()
         try await brain.start(self)

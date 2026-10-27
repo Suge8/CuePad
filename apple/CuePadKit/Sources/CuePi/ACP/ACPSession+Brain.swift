@@ -16,7 +16,7 @@ extension ACPSession: HostedSession {
         guard let brain else { throw HostedSessionError.notRunning }
         do {
             let setup = try dialect.brain(config, directory: try brain.makeDirectory())
-            try await launch(config.executable, environment: BrainSession.environment(config, setup.environment), directory: config.workingDirectory)
+            try await launch(config.executable, environment: config.launchEnvironment(adding: setup.environment), directory: config.workingDirectory)
             brainSetup = (config, setup)
             try await openBrain()
             try await configure(model: config.model, effort: config.effort)
@@ -51,10 +51,6 @@ extension ACPSession: HostedSession {
         try await openBrain()
         let (model, effort) = configured
         if model != nil || effort != nil { try await configure(model: model, effort: effort) }
-    }
-
-    func abort() async throws {
-        try await interrupt()
     }
 
     func stop() -> @concurrent @Sendable () async -> Void {

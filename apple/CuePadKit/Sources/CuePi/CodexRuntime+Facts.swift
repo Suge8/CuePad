@@ -22,7 +22,7 @@ extension CodexRuntime {
     /// 否决 `account/read`：它要联网查工作区，断网或刚醒时超时就成了没登录）；默认是用户配置的模型（`config/read` 的 `model`），
     /// 没配是 `model/list` 里标了 `isDefault` 的那个。
     private static func askCodex(_ executable: URL, _ probe: AgentProbe) async throws -> MacAgent? {
-        let environment = probe.paths.environment.merging([facts.homeVariable: probe.paths.home(of: .codex).path]) { $1 }
+        let environment = probe.paths.launchEnvironment(of: .codex)
         let rpc = try await CodexRPC.launch(executable, environment: probe.locator.environment(launching: executable, overrides: environment))
         do {
             let agent = try await models(rpc)

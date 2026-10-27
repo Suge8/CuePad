@@ -27,15 +27,13 @@ public final class DshRuntime: AgentRuntime {
             guard let executable = await dsh() else { throw AgentRuntimeError.notInstalled(.dsh) }
             try DshLaunch.prepare(.hosted)
             let environment = await locate().environment(
-                launching: executable, overrides: paths.environment.merging(DshLaunch.environment(paths, model: model)) { $1 })
+                launching: executable, overrides: DshLaunch.environment(paths, model: model))
             return ACPHost.Launching(executable: executable, environment: environment, dialect: DshDialect(patch: .hosted))
-        }, sessionFile: { cwd, id in Self.sessionFile(home: Self.home(paths), cwd: cwd, id: id) })
+        }, sessionFile: { cwd, id in Self.sessionFile(home: paths.home(of: .dsh), cwd: cwd, id: id) })
         self.bridge = bridge
     }
 
     public func start() throws {}
-
-    public var hostedSessionsOutliveApp: Bool { false }
 
     public func stop() -> @concurrent @Sendable () async -> Void { host.stop() }
 

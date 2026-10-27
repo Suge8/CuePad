@@ -8,20 +8,18 @@ extension GrokRuntime {
     /// 技能：除了自己的 `skills`，也递归读几家共读的 `~/.agents/skills`（`SharedSkills.recursive`）与 Claude Code 的 `~/.claude/skills`（按名字去重，见它的文档 08-skills）；
     /// 全局规则是自己目录下的 `AGENTS.md`（文档 12-project-rules），链到共读的那份。
     nonisolated public static let facts = AgentFacts(
-        command: "grok", homeVariable: "GROK_HOME", home: home, minimumVersion: AgentVersion(1, 0, 52),
+        command: "grok", homeVariable: "GROK_HOME", minimumVersion: AgentVersion(1, 0, 52),
         installScript: "curl -fsSL https://x.ai/cli/install.sh | bash", upgradeCommand: "grok update", loginArguments: ["login"],
         sessionFiles: SessionFileFormat(ingest: GrokHistory.ingest, depth: 3, naming: .inDirectory(file: GrokHistory.fileName, cwdInPath: true)) {
-            home($0).appending(path: "sessions", directoryHint: .isDirectory)
+            $0.home(of: .grok).appending(path: "sessions", directoryHint: .isDirectory)
         },
         releasesIdleHosted: true, probe: ask, brain: { ACPSession(dialect: GrokDialect()) }, projectFolder: ".grok")
-
-    nonisolated private static func home(_ paths: AgentPaths) -> URL { paths.directory(facts.homeVariable) ?? paths.user(".grok") }
 
     /// 起 ACP 服务、只握手（不开会话、不落记录）：握手的 `_meta` 里有默认的登录方式（没有就是没登录：没有登录过的凭据、也没有 API 密钥）
     /// 与模型清单（`modelState`：默认模型、每个模型能用的思考强度）。
     private static func ask(_ executable: URL, _ probe: AgentProbe) async throws -> MacAgent? {
         let environment = probe.locator.environment(
-            launching: executable, overrides: probe.paths.environment.merging([facts.homeVariable: home(probe.paths).path]) { $1 })
+            launching: executable, overrides: probe.paths.launchEnvironment(of: .grok))
         let connection = try await ACPConnection.launch(executable, GrokDialect().arguments, environment: environment)
         let meta = connection.agent["_meta"]
         await connection.shutdown()

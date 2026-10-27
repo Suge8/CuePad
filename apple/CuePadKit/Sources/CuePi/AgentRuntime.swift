@@ -32,6 +32,11 @@ public struct AgentPaths: Sendable, Equatable {
         xdg("XDG_STATE_HOME", ".local/state").appending(path: "opencode/service.json")
     }
 
+    /// 起这家的进程用的环境：此刻的环境加上它的配置目录变量，指到 `home(of:)`（隔离测试里是临时目录）。
+    func launchEnvironment(of kind: AgentKind) -> [String: String] {
+        environment.merging([kind.facts.homeVariable: home(of: kind).path]) { $1 }
+    }
+
     func directory(_ variable: String) -> URL? {
         environment[variable].flatMap { $0.isEmpty ? nil : URL(filePath: ($0 as NSString).expandingTildeInPath, directoryHint: .isDirectory) }
     }

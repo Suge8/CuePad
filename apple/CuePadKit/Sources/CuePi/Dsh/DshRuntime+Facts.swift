@@ -12,16 +12,14 @@ extension DshRuntime {
     /// 技能读 `<DSH_HOME>/skills` 与 `~/.agents/skills` 的一层（`<名>/SKILL.md`，分类目录里的看不到）；全局规则读 `<DSH_HOME>/AGENTS.md`
     /// 再读 `~/.agents/AGENTS.md`（内容相同只算一份），所以照多数家链过去。
     nonisolated public static let facts = AgentFacts(
-        command: "dsh", homeVariable: "DSH_HOME", home: home, minimumVersion: AgentVersion(0, 2, 1, prerelease: "rc.2"),
+        command: "dsh", homeVariable: "DSH_HOME", minimumVersion: AgentVersion(0, 2, 1, prerelease: "rc.2"),
         installScript: "npm install -g @deepseek-ai/dsh",
         installPrerequisite: InstallPrerequisite(name: "Node.js", command: "node", minimum: AgentVersion(22, 19, 0), site: URL(string: "https://nodejs.org")!),
         loginArguments: ["web"],
         sessionFiles: SessionFileFormat(ingest: DshHistory.ingest, depth: 3, naming: .inDirectory(file: DshHistory.fileName)) {
-            home($0).appending(path: sessions, directoryHint: .isDirectory)
+            $0.home(of: .dsh).appending(path: sessions, directoryHint: .isDirectory)
         },
         releasesIdleHosted: true, probe: askDsh, brain: { ACPSession(dialect: DshDialect()) }, sharedSkills: .topLevel, projectFolder: ".dsh")
-
-    nonisolated static func home(_ paths: AgentPaths) -> URL { paths.directory(facts.homeVariable) ?? paths.user(".dsh") }
 
     /// CuePad 托管的会话的存储根（在 DSH_HOME 下，明文；理由见 `DshRuntime` 头注释；补丁里的存储根也由它推出，见 `DshLaunch`）
     nonisolated static let storage = "cuepad"
@@ -32,22 +30,14 @@ extension DshRuntime {
     nonisolated private static func askDsh(_ executable: URL, _ probe: AgentProbe) async throws -> MacAgent? {
         try DshLaunch.prepare(.hosted)
         let environment = probe.locator.environment(
-            launching: executable, overrides: probe.paths.environment.merging(DshLaunch.environment(probe.paths, model: nil)) { $1 }.merging(["CUEPAD_PROBE": "1"]) { $1 })
+            launching: executable, overrides: DshLaunch.environment(probe.paths, model: nil).merging(["CUEPAD_PROBE": "1"]) { $1 })
         let process = try await ChildProcess(
             executable, DshLaunch.arguments(.hosted), directory: FileManager.default.temporaryDirectory, environment: environment, placement: .group,
             input: .lifeline, output: .lines)
-        struct Line: Decodable {
-            let cuepadProbe: Models
-            struct Models: Decodable {
-                let model: PiModelOption?
-                let models: [PiModelOption]
-            }
-        }
-        let decoder = JSONDecoder()
-        let reply = await process.output.compactMap { try? decoder.decode(Line.self, from: $0).cuepadProbe }.first { _ in true }
+        let reply = await process.output.compactMap { AgentProbe.PluginReply(line: $0) }.first { _ in true }
         await process.stop()
         guard let reply else { throw AgentProbe.ProbeError.noAnswer(status: process.status ?? -1) }
-        return reply.models.isEmpty ? nil : MacAgent(kind: .dsh, model: reply.model?.key, models: reply.models)
+        return reply.agent(.dsh)
     }
 }
 
@@ -80,9 +70,9 @@ enum DshLaunch {
         try Data(text.utf8).write(to: file(patch), options: .atomic)
     }
 
-    /// 托管会话与探测的环境：配置目录（`DSH_HOME`）与新会话的模型（`提供方/模型`，插件的 `CUEPAD_MODEL`）。
+    /// 托管会话与探测的环境：此刻的环境加上配置目录（`DSH_HOME`）与新会话的模型（`提供方/模型`，插件的 `CUEPAD_MODEL`）。
     static func environment(_ paths: AgentPaths, model: String?) -> [String: String] {
-        [DshRuntime.facts.homeVariable: DshRuntime.home(paths).path, "CUEPAD_MODEL": model].compactMapValues(\.self)
+        paths.launchEnvironment(of: .dsh).merging(["CUEPAD_MODEL": model].compactMapValues(\.self)) { $1 }
     }
 
     /// 大脑的环境：本次运行的临时目录（会话、附件、存储都在里面）与写在里面的系统提示。

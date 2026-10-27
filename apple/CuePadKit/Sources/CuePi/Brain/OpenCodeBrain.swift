@@ -57,7 +57,7 @@ final class OpenCodeBrain: HostedSession {
     func start(_ config: CueBrainConfig) async throws {
         do {
             directory = config.workingDirectory.path
-            let environment = BrainSession.environment(config, [
+            let environment = config.launchEnvironment(adding: [
                 "OPENCODE_CONFIG_CONTENT": jsonString(Self.inlineConfig(config)), "OPENCODE_DISABLE_PROJECT_CONFIG": "1",
             ])
             let (process, client) = try await OpenCodeClient.serve(config.executable, environment: environment, directory: config.workingDirectory)

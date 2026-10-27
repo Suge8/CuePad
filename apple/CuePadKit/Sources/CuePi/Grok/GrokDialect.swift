@@ -54,7 +54,7 @@ struct GrokDialect: ACPDialect {
         }
         // 用户自己指定的凭据文件照用；没指定时是用户配置目录里的那份（配置目录换成了临时目录，不指过去就找不到）
         let auth = variable("GROK_AUTH_PATH")
-            ?? (variable("GROK_HOME").map { URL(filePath: $0, directoryHint: .isDirectory) }
+            ?? (variable(GrokRuntime.facts.homeVariable).map { URL(filePath: $0, directoryHint: .isDirectory) }
                 ?? FileManager.default.homeDirectoryForCurrentUser.appending(path: ".grok", directoryHint: .isDirectory)).appending(path: "auth.json").path
         let profile: JSONValue = [
             "name": "cue", "description": "Cue", "promptMode": "full", "promptBody": .string("${% raw %}\(config.systemPrompt)${% endraw %}"),
@@ -62,7 +62,7 @@ struct GrokDialect: ACPDialect {
             "agentsMd": false, "discoverSkills": false, "userMessageTemplate": ["custom": .string(Self.firstMessage)],
         ]
         return ACPBrainSetup(
-            environment: Self.brainSwitches.merging(["GROK_HOME": home.path, "GROK_AUTH_PATH": auth]) { $1 },
+            environment: Self.brainSwitches.merging([GrokRuntime.facts.homeVariable: home.path, "GROK_AUTH_PATH": auth]) { $1 },
             meta: ["agentProfile": profile, "yoloMode": true])
     }
 

@@ -63,7 +63,7 @@ final class PiBrain: HostedSession {
             if let model = config.model { arguments += ["--model", model] }
             if let effort = config.effort { arguments += ["--thinking", effort.rawValue] }
             let process = try await ChildProcess(
-                config.executable, arguments, directory: config.workingDirectory, environment: BrainSession.environment(config, [
+                config.executable, arguments, directory: config.workingDirectory, environment: config.launchEnvironment(adding: [
                     "PI_CACHE_RETENTION": "long", "CUEPAD_CLAUDE": Self.claude(config), "CUEPAD_CUE_MCP": jsonString(config.mcp),
                 ]),
                 placement: .group, input: .pipe, output: .lines)

@@ -42,7 +42,7 @@ public final class GrokRuntime: AgentRuntime {
         let home = paths.home(of: .grok)
         host = ACPHost(.grok, bridge: bridge, timing: timing, launching: { _ in
             guard let grok = await grok() else { throw AgentRuntimeError.notInstalled(.grok) }
-            let environment = await locate().environment(launching: grok, overrides: paths.environment.merging([Self.facts.homeVariable: home.path]) { $1 })
+            let environment = await locate().environment(launching: grok, overrides: paths.launchEnvironment(of: .grok))
             return ACPHost.Launching(executable: grok, environment: environment, dialect: GrokDialect())
         }, sessionFile: { cwd, id in Self.sessionFile(in: home, cwd: cwd.path, id: id) })
     }
@@ -59,9 +59,6 @@ public final class GrokRuntime: AgentRuntime {
         self.scope = scope
         refresh()
     }
-
-    /// 托管的会话在 App 起的进程里，`stop()` 收掉它们。
-    public var hostedSessionsOutliveApp: Bool { false }
 
     public func stop() -> @concurrent @Sendable () async -> Void {
         stopped = true
