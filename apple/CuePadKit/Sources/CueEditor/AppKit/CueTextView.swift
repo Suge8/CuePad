@@ -149,7 +149,15 @@ public final class CueTextView: NSTextView, CueEditorHost {
 
     func resolvedColor(_ color: CueColor) -> CueColor { color }  // 底色在绘制时按当时的外观解析
     func layoutDidAdvance() { needsLayout = true }
-    func needsRelayout() { needsLayout = true }
+    /// 重排之外还要把画字的子视图标脏：TextKit 2 的 NSTextView 重排后不重画布局片段，附件的新样子要等别的事（打字、滚动）触发才出来。
+    func needsRelayout() {
+        needsLayout = true
+        func redisplay(_ view: NSView) {
+            view.needsDisplay = true
+            view.subviews.forEach(redisplay)
+        }
+        redisplay(self)
+    }
     var displayScale: CGFloat { window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2 }
 }
 
