@@ -20868,22 +20868,6 @@
         }
       }
     },
-    "这个目标只能接收文字，请先移除图片" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This destination only accepts text. Remove the images first."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这个目标只能接收文字，请先移除图片"
-          }
-        }
-      }
-    },
     "这个组合已被其他应用占用" : {
       "localizations" : {
         "en" : {

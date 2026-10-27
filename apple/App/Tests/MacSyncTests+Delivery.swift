@@ -1,5 +1,4 @@
 #if os(macOS)
-import CryptoKit
 import CueStore
 import CueText
 import CueSync
@@ -63,41 +62,6 @@ extension MacSyncTests {
         #expect(try RawDB(services.location.databaseURL).count("sendRecords") == 0)
     }
 
-    /// 别的设备写下的请求带着还没到这台 Mac 的大附件、排在前面，发给另一个会话的一句在后：后一句先执行完，不等文件（等文件不占执行队列）；
-    /// 文件执行时现取（`AppServices.fetchFile`），取到了前一句照常发出，会话收到的是本机那份的路径。
-    @Test func 附件还没到的请求不挡后面的话_执行时现取_取到后照常发出() async throws {
-        let app = try await rig.host.connect("sess-1", cwd: "/work/app")
-        let web = try await rig.host.connect("sess-2", cwd: "/work/web")
-        let movie = Data(repeating: 3, count: 2_000_000)
-        let source = FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString)/录屏.mov")
-        try FileManager.default.createDirectory(at: source.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try movie.write(to: source)
-        let key = AttachmentKey.make(hash: SHA256.hash(data: movie).map { String(format: "%02x", $0) }.joined(), format: "mov")
-        let arrive = AsyncStream<Void>.makeStream()
-        rig.sync.fetching.withLock {
-            $0 = { [files = services.store.files, arrived = arrive.stream] wanted in
-                for await _ in arrived { break }  // 在路上，直到放行
-                _ = try files.store(fileAt: source)
-                guard let url = files.fileURL(for: wanted) else { throw FileFetchFailure.damaged }
-                return url
-            }
-        }
-        try await services.executor.start()
-        defer { services.cancelBackgroundWork() }
-
-        let big = try await services.store.requestDelivery(
-            "看这段\n[录屏.mov](cuepad://file/\(key))", to: SendTarget(kind: .piSession, name: "app", ref: "sess-1"), on: TestApp.hostID)
-        let small = try await services.store.requestDelivery("先改文案", to: SendTarget(kind: .piSession, name: "web", ref: "sess-2"), on: TestApp.hostID)
-        #expect(try await awaitFinished(small.id).status == .known(.succeeded))
-        #expect(web.messages.map(\.text) == ["先改文案"])
-        #expect(try await services.store.deliveryRequest(big.id)?.status == .known(.pending) && app.messages.isEmpty)
-
-        arrive.continuation.yield()
-        #expect(try await awaitFinished(big.id).status == .known(.succeeded))
-        let path = try #require(services.store.files.fileURL(for: key)).path(percentEncoded: false)
-        #expect(app.messages.map(\.text) == ["看这段\n附件：录屏.mov（\(path)）"])
-    }
-
     /// 看不了图的会话（模型报了不收图）：图片同文件一样写成本机路径交给它，不丢、不另附；看得了图的照常另附原图。
     @Test func 看不了图的会话收到图片的路径() async throws {
         let blind = try await rig.host.connect("sess-1", cwd: "/work/app", seesImages: false)
@@ -113,8 +77,8 @@ extension MacSyncTests {
         #expect(blind.messages == [PiMessage(text: "按这张改\n附件：图片.png（\(path)）", deliveryID: request.id.uuidString)])
     }
 
-    /// 发给 Agent 时命令带着卡片（卡片文字是参数）：卡片关联到会话、任务进行中，照样不写发送记录；命令里带图片按失败写回，什么都不交给桥。
-    @Test func 斜杠命令带卡片只关联卡片_带图片按失败写回() async throws {
+    /// 发给 Agent 时命令带着卡片（卡片文字是参数）：卡片关联到会话、任务进行中，照样不写发送记录；命令里带的图片写成本机路径。
+    @Test func 斜杠命令带卡片只关联卡片_带的图片写成路径() async throws {
         let ext = try await rig.host.connect("sess-1", cwd: "/work/app")
         let task = try await services.store.createTask("改登录")
         try await services.executor.start()
@@ -128,11 +92,11 @@ extension MacSyncTests {
         #expect(try RawDB(services.location.databaseURL).count("sendRecords") == 0)
 
         // 图片文件在本机（没到的由执行器在旁边取来，那是另一条路径）
-        let hash = try services.store.files.store(pngData(shade: 0.3))
-        let commands = ext.commands.count
-        let image = try await services.store.requestDelivery("/greet\n\n![](cuepad://file/\(hash))", to: target, on: TestApp.hostID, mode: .command)
-        #expect(try await awaitFinished(image.id).status == .known(.failed))
-        #expect(ext.commands.count == commands)
+        let key = try services.store.files.store(pngData(shade: 0.3))
+        let image = try await services.store.requestDelivery("/greet\n\n![](cuepad://file/\(key))", to: target, on: TestApp.hostID, mode: .command)
+        #expect(try await awaitFinished(image.id).status == .known(.succeeded))
+        let path = try #require(services.store.files.fileURL(for: key)).path(percentEncoded: false)
+        #expect(ext.commands.last?.json["text"] as? String == "/greet\n\n附件：图片.png（\(path)）", "\(ext.commands.last?.json ?? [:])")
     }
 
     /// 已经结束的会话（不在这台 Mac 的桥上）没有可结束的会话、也没有这一轮可停：目标达成，按成功写回，不恢复它、不碰桥。

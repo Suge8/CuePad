@@ -106,7 +106,7 @@ extension CueStoreError: LocalizedError {
     case .attachmentHashMismatch: String(localized: "附件内容与其哈希不符")
     case .invalidAttachmentHash: String(localized: "附件的哈希格式不对")
     case .blankDeliveryContent: String(localized: "发送内容不能为空")
-    case .attachmentFilesNotRemoved(let hashes): String(localized: "已永久删除，但有 \(hashes.count) 个附件文件没能删掉")
+    case .attachmentFilesNotRemoved(let keys): String(localized: "已永久删除，但有 \(keys.count) 个附件文件没能删掉")
     case .unsupportedSchemaVersion(let version): String(localized: "资料库由更新版本的 CuePad 建立（结构版本 \(version)），这个版本打不开")
     case .schemaTooOld(let version): String(localized: "资料库由更早版本的 CuePad 建立（结构版本 \(version)），这个版本不再升级它")
     case .invalidParent: String(localized: "只能挂到任务下，不能挂到自己或自己的下级下")

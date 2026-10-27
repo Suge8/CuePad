@@ -149,12 +149,11 @@ final class MacExecutor {
         try await pi.configure(model: config.model, thinking: config.thinking, name: config.name, in: id)
     }
 
-    /// 命令带着卡片（发给 Agent 时卡片文字是参数）：卡片关联到会话，但不写发送记录。
+    /// 命令带着卡片（发给 Agent 时卡片文字是参数）：卡片关联到会话，但不写发送记录。命令只有文字，带着的图片同文件一样写成路径。
     private func runCommand(_ request: DeliveryRequest) async throws {
         let content = SendContent(stored: request.content)
-        guard !content.hasImages else { throw SendError.imagesNotSupported }
         let (ref, id) = try await connect(request.target)
-        try await pi.command(try content.agentText(from: store.files).trimmingCharacters(in: .whitespacesAndNewlines), in: id)
+        try await pi.command(try content.agentText(from: store.files, imagesAsFiles: true).trimmingCharacters(in: .whitespacesAndNewlines), in: id)
         if let card = request.cardID { try await store.linkCard(card, toSession: ref) }
     }
 

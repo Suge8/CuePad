@@ -4,7 +4,6 @@ import Foundation
 nonisolated enum SendError: Error, Equatable {
     /// 正文里的附件（图片或文件）不在这台 Mac 上、也没取到。
     case attachmentUnavailable(String)
-    case imagesNotSupported
     /// 手机指定的 Pi 会话已结束，或不在这台 Mac 上。
     case sessionNotOnThisMac(String)
     /// 这台 Mac 不支持的投送目标（来自更新版本或缺少必要信息）。
@@ -39,7 +38,6 @@ extension SendError: ShownError {
     var shown: String.LocalizationValue {
         switch self {
         case .attachmentUnavailable: "正文里有附件找不到了，无法发送"
-        case .imagesNotSupported: "这个目标只能接收文字，请先移除图片"
         case .sessionNotOnThisMac(let name): "Agent 会话「\(name)」已经结束，或不在这台 Mac 上"
         case .unsupportedTarget(let name): "这台 Mac 不支持发送到「\(name)」"
         case .unsupportedMode(let raw): "这台 Mac 上的 CuePad 不认识这种发送方式（\(raw)），请更新"
