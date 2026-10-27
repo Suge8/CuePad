@@ -23,9 +23,9 @@
 		C10000000000000000000013 /* CuePadShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = C10000000000000000000004 /* CuePadShare.appex */; platformFilters = (ios, ); settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		C10000000000000000000014 /* CuePadWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = C10000000000000000000005 /* CuePadWidget.appex */; platformFilters = (ios, ); settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		C1000000000000000000F00A /* CueStore in Frameworks */ = {isa = PBXBuildFile; productRef = C1000000000000000000F001 /* CueStore */; };
-		C1000000000000000000F00A /* CueStore in Frameworks */ = {isa = PBXBuildFile; productRef = C1000000000000000000F002 /* CueStore */; };
+		C1000000000000000000F00B /* CueStore in Frameworks */ = {isa = PBXBuildFile; productRef = C1000000000000000000F002 /* CueStore */; };
 		D1000000000000000000A00B /* CueSync in Frameworks */ = {isa = PBXBuildFile; productRef = D1000000000000000000A001 /* CueSync */; };
-		D1000000000000000000A00B /* CueSync in Frameworks */ = {isa = PBXBuildFile; productRef = D1000000000000000000A002 /* CueSync */; };
+		D1000000000000000000A00C /* CueSync in Frameworks */ = {isa = PBXBuildFile; productRef = D1000000000000000000A002 /* CueSync */; };
 		E1000000000000000000000A /* cuepad in Embed CLI */ = {isa = PBXBuildFile; fileRef = E10000000000000000000001 /* cuepad */; platformFilters = (macos, ); settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		E1000000000000000000000F /* CueStore in Frameworks */ = {isa = PBXBuildFile; productRef = E1000000000000000000000D /* CueStore */; };
 		E10000000000000000000010 /* CueText in Frameworks */ = {isa = PBXBuildFile; productRef = E1000000000000000000000E /* CueText */; };
@@ -207,7 +207,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				D1000000000000000000A00B /* CueSync in Frameworks */,
+				D1000000000000000000A00C /* CueSync in Frameworks */,
 				B10000000000000000000005 /* CueText in Frameworks */,
 				B10000000000000000000009 /* CueStore in Frameworks */,
 				B10000000000000000000031 /* CueTestSupport in Frameworks */,
@@ -228,7 +228,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				C1000000000000000000F00A /* CueStore in Frameworks */,
+				C1000000000000000000F00B /* CueStore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
