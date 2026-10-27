@@ -25,7 +25,7 @@ nonisolated private struct PaletteData: Sendable, Equatable {
     }
 }
 
-/// ⌘K：两个范围。卡片——跨项目搜索，四个筛选（项目、含图片、发送目标、时间），结果按项目分组，右侧纸面预览；
+/// ⌘K：两个范围。卡片——跨项目搜索，四个筛选（项目、含附件、发送目标、时间），结果按项目分组，右侧纸面预览；
 /// ↑↓ 选择，↩ 打开，⌘⇧C 复制。会话——上面是在线的，下面是已结束的、按结束时间分段（分页，下一页只接在末尾），
 /// 右侧是它的近况与回复。
 struct SearchPalette: View {
@@ -207,7 +207,7 @@ struct SearchPalette: View {
             }
             .frame(width: 16)
             .accessibilityElement()
-            .accessibilityLabel(Self.kindLabel(task: card.isTask, images: !text.images.isEmpty))
+            .accessibilityLabel(Self.kindLabel(task: card.isTask, attachments: CueFormat.hasAttachments(card.body)))
             Text(Highlight.matches(text.label, query.text)).font(Typography.body).lineLimit(1)
             Spacer()
             Text(DateLabel.short(card.modifiedAt)).font(Typography.meta).foregroundStyle(palette.ink2)
@@ -263,12 +263,12 @@ struct SearchPalette: View {
         }
     }
 
-    private static func kindLabel(task: Bool, images: Bool) -> LocalizedStringResource {
-        switch (task, images) {
+    private static func kindLabel(task: Bool, attachments: Bool) -> LocalizedStringResource {
+        switch (task, attachments) {
         case (true, false): "任务"
-        case (true, true): "任务，含图片"
+        case (true, true): "任务，含附件"
         case (false, false): "灵感"
-        case (false, true): "灵感，含图片"
+        case (false, true): "灵感，含附件"
         }
     }
 

@@ -5643,18 +5643,18 @@
         }
       }
     },
-    "任务，含图片" : {
+    "任务，含附件" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Task, with images"
+            "value" : "Task, with attachments"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "任务，含图片"
+            "value" : "任务，含附件"
           }
         }
       }
@@ -8731,22 +8731,6 @@
         }
       }
     },
-    "含图片" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Has Images"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "含图片"
-          }
-        }
-      }
-    },
     "含图片的灵感" : {
       "localizations" : {
         "en" : {
@@ -8759,6 +8743,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "含图片的灵感"
+          }
+        }
+      }
+    },
+    "含附件" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Has Attachments"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "含附件"
           }
         }
       }
@@ -17023,18 +17023,18 @@
         }
       }
     },
-    "灵感，含图片" : {
+    "灵感，含附件" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Idea, with images"
+            "value" : "Idea, with attachments"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "灵感，含图片"
+            "value" : "灵感，含附件"
           }
         }
       }

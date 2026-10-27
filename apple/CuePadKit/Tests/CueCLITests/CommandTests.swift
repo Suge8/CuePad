@@ -176,7 +176,7 @@ import Testing
     let beta = try await sb.project("Beta")
     let hit = try await sb.store.createCard(in: alpha.id, body: "部署 脚本 说明")
     _ = try await sb.store.createCard(in: alpha.id, body: "部署 only")
-    let other = try await sb.store.createCard(in: beta.id, body: "部署 脚本 ![](cuepad://file/\(String(repeating: "b", count: 64)))")
+    let other = try await sb.store.createCard(in: beta.id, body: "部署 脚本 [方案.pdf](cuepad://file/\(String(repeating: "b", count: 64)).pdf)")
     _ = try await sb.store.recordSend("x", to: SendTarget(kind: .piSession, name: "atlas", ref: "s1"), card: other.id)
 
     func search(_ args: [String]) async throws -> [String: Any] {
@@ -193,8 +193,8 @@ import Testing
     #expect(both["total"] as? Int == 2)
     #expect(try cardIDs(try await search(["部署", "--project", "alpha", "--limit", "1"])).count == 1)
     #expect(try cardIDs(try await search(["脚本", "--project", "Alpha"])) == [hitID])
-    #expect(try cardIDs(try await search(["脚本", "--images"])) == [otherID])
-    #expect(try cardIDs(try await search(["脚本", "--no-images"])) == [hitID])
+    #expect(try cardIDs(try await search(["脚本", "--attachments"])) == [otherID])
+    #expect(try cardIDs(try await search(["脚本", "--no-attachments"])) == [hitID])
     #expect(try cardIDs(try await search(["脚本", "--unsent"])) == [hitID])
     #expect(try cardIDs(try await search(["脚本", "--sent"])) == [otherID])
     #expect(try cardIDs(try await search(["--to", "atlas"])) == [otherID])
