@@ -29,7 +29,7 @@ extension AgentTape {
     /// 盯着的目录里，自上次以来 Agent 写出的文件（新文件整份，已有文件只追加新的完整行）。不录删除：用例收尾时删临时目录早于
     /// 收尾的输入被录下，回放时会提前删掉；Agent 自己删的文件（假模型取走的放行标记）CuePad 不读。
     static func snapshot(_ state: inout State) {
-        for root in state.watched {
+        for (root, named) in state.watched {
             var info = stat()
             let paths: AnySequence<String> = lstat(root, &info) == 0 && info.st_mode & S_IFMT == S_IFREG
                 ? AnySequence([root])
@@ -44,7 +44,7 @@ extension AgentTape {
                     }
                     continue
                 }
-                guard info.st_mode & S_IFMT == S_IFREG else { continue }
+                guard info.st_mode & S_IFMT == S_IFREG, named.map({ path.hasSuffix("/" + $0) }) ?? true else { continue }
                 let old = state.files[path]
                 if let old, old.size == Int(info.st_size), old.inode == info.st_ino, old.modified.tv_sec == info.st_mtimespec.tv_sec,
                    old.modified.tv_nsec == info.st_mtimespec.tv_nsec { continue }

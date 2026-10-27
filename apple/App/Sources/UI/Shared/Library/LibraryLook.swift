@@ -8,7 +8,7 @@ extension Workspace {
     func fact(of tidy: LibraryTidy, in library: AgentLibrary) -> String {
         switch tidy.kind {
         case .stray(let moves): return String(localized: "\(moves.count) 个技能在旧目录里")
-        case .unlinked(let skills): return String(localized: "\(skills.count) 个技能 Claude Code 读不到")
+        case .unlinked(let agent, let skills): return String(localized: "\(skills.count) 个技能 \(agent.name) 读不到")
         case .empty(let directories): return String(localized: "\(directories.count) 个空文件夹")
         case .globalInstructions:
             let unseen = library.instruction(.global).map(library.unseen) ?? []

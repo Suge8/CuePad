@@ -11,7 +11,7 @@ extension PiRuntime {
         installScript: "curl -fsSL https://pi.dev/install.sh | sh", upgradeCommand: "pi update --self",
         installPrerequisite: InstallPrerequisite(name: "Node.js", command: "node", minimum: AgentVersion(22, 19, 0), site: URL(string: "https://nodejs.org")!),
         homeMeansInstalled: false,
-        sessionFiles: SessionFileFormat(ingest: PiHistory.ingest, depth: 2, nameIsSessionID: false) { $0.pi.sessionsDirectory },
+        sessionFiles: SessionFileFormat(ingest: PiHistory.ingest, depth: 2, naming: .idSuffix) { $0.pi.sessionsDirectory },
         channel: { integration, _ in
             PiExtensionFiles(extensionsDirectory: integration.paths.pi.extensionsDirectory, legacyInUse: integration.legacyPiExtensionInUse)
         },

@@ -9,6 +9,10 @@ nonisolated extension AgentKind {
         case .claudeCode: .claudeCode
         case .codex: .codex
         case .opencode: .opencode
+        // Grok Build 没有自己的标志，用的就是 Grok 的
+        case .grok: .grok
+        // dsh 自己的标志就是 DeepSeek 的鲸鱼（它网页版的图标）
+        case .dsh: .deepseek
         }
     }
 }

@@ -6,7 +6,7 @@
 
 <p align="center">
   <b>一本替你指挥 coding agent 的安静笔记本。</b><br />
-  记下来，Cue 交给 Claude Code、Codex、Pi 或 OpenCode，盯着它们推进，只把真正要你拍板的事拿来问你。<br />
+  记下来，Cue 交给 Claude Code、Codex、Pi、OpenCode、Grok Build 或 DeepSeek Harness，盯着它们推进，只把真正要你拍板的事拿来问你。<br />
   Mac、iPhone、iPad 原生。本地优先，无需账号，没有服务器。
 </p>
 
@@ -50,7 +50,7 @@ open CuePad/apple/CuePad.xcodeproj    # 选 CuePad scheme 与 My Mac，然后 �
 
 自己编的版本是 ad-hoc 签名，资料库单独放在 `~/Library/Application Support/CuePad Dev`，不会自动更新（`git pull` 后重新编）。这台 Mac 上也装着正式版时，Agent 的接入与通知留给正式版，自己编的不去动。iCloud 同步与 iPhone、iPad 版要用你自己的 Apple 开发者账号（[docs/release.md](docs/release.md#换成自己的身份fork)）。
 
-**2. 接上 Agent。** 第一次打开时，CuePad 找出这台 Mac 上的 Agent（[Pi](https://pi.dev)、Claude Code、Codex、OpenCode），勾上的就接入；没装或没登录的一点就装、就登录。每一行都写明会写什么，点了才写，以后关掉某一家就把写过的全部删掉。活在项目的文件夹里做，默认是 `~/CuePad/<项目名>`，也可以指向你已有的代码目录。
+**2. 接上 Agent。** 第一次打开时，CuePad 找出这台 Mac 上的 Agent（[Pi](https://pi.dev)、Claude Code、Codex、OpenCode、Grok Build、[DeepSeek Harness](https://www.npmjs.com/package/@deepseek-ai/dsh)），勾上的就接入；没装或没登录的一点就装、就登录。每一行都写明会写什么，点了才写，以后关掉某一家就把写过的全部删掉。活在项目的文件夹里做，默认是 `~/CuePad/<项目名>`，也可以指向你已有的代码目录。
 
 **3. 派出第一件事。** 在任何地方按 `Option + Shift + Space` 告诉 Cue 你要什么，比如“给 ~/code/my-app 加一个深色模式开关，做完给我看截图”；或者写一条任务、点“开始”。Cue 挑好 Agent、开好会话，结果回到 CuePad 里。
 
