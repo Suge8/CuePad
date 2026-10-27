@@ -87,10 +87,6 @@ struct RealBrainTests {
             try await eventually("第 \(n) 轮做完") { self.count(.turnFinished) >= n }
         }
 
-        func started(_ n: Int = 1) async throws {
-            try await eventually("第 \(n) 轮开始") { self.count(.turnStarted) >= n }
-        }
-
         /// 每轮的回答：做完时还留着的正在说的话
         var replies: [String] {
             var speaking: PiDraft?, replies: [String] = []
@@ -207,21 +203,6 @@ struct RealBrainTests {
 
         #expect(rig.failures == [], "\(rig.events)")
         #expect(try FileManager.default.contentsOfDirectory(atPath: rig.directory.path) == [])
-        }
-    }
-
-    @Test(arguments: runtimes) func anAbortedTurnHasNoReplyAndTheNextMessageIsAnswered(_ runtime: AgentKind) async throws {
-        AgentTape.use(runtime)
-        try await withRig(runtime) { rig in
-        try await rig.brain.send("Write the numbers from 1 to 400, one per line, in plain text. Do not use any tool.")
-        try await rig.started()
-        try await rig.brain.abort()
-        try await rig.finished()
-        #expect(rig.failures == [] && rig.replies == [], "\(rig.events)")
-
-        try await rig.brain.send("Reply with the single word OK.")
-        try await rig.finished(2)
-        #expect(rig.replies.last?.uppercased().contains("OK") == true)
         }
     }
 }

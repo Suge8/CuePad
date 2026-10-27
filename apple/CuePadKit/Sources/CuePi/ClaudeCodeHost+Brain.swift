@@ -64,10 +64,6 @@ extension ClaudeHostedSession: HostedSession {
         if let effort { try await stream.setEffort(effort) }
     }
 
-    func abort() async throws {
-        try await interrupt(restarting: false)
-    }
-
     func stop() -> @concurrent @Sendable () async -> Void {
         let process = stream?.process
         return { await process?.stop() }

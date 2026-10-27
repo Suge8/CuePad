@@ -16,8 +16,7 @@ enum GrokHistory {
 
     static func ingest(_ raw: UnsafeRawBufferPointer, _ cp: inout PiHistoryCheckpoint, _ transcript: inout PiHistory.Transcript) throws {
         cp.seq += 1
-        guard let base = raw.baseAddress, !raw.isEmpty,
-              let line = JSONValue.parse(Data(bytesNoCopy: UnsafeMutableRawPointer(mutating: base), count: raw.count, deallocator: .none)),
+        guard let data = raw.borrowedData, let line = JSONValue.parse(data),
               let params = line["params"], let update = params["update"]
         else { return }
         if cp.sessionID == nil { cp.sessionID = params["sessionId"]?.string }

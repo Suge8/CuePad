@@ -3,6 +3,14 @@ import CueStore
 import CueText
 import Foundation
 
+extension UnsafeRawBufferPointer {
+    /// 不拷贝的 `Data` 视图，只在这次 `Ingest` 调用里有效；空行为 nil。
+    var borrowedData: Data? {
+        guard let base = baseAddress, !isEmpty else { return nil }
+        return Data(bytesNoCopy: UnsafeMutableRawPointer(mutating: base), count: count, deallocator: .none)
+    }
+}
+
 /// 一家 Agent 的会话文件在哪、怎么认、怎么读（`AgentFacts.sessionFiles`）。
 struct SessionFileFormat: Sendable {
     /// 一行会话文件（不含换行）的解码：经检查点上的那几个变化（`said`、`answered`……）更新摘要与轮次，你的话与每轮的回答加进对话。

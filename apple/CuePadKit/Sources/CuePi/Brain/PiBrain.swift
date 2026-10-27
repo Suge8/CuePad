@@ -19,7 +19,6 @@ import Foundation
 /// - 提示缓存用长的一档（`PI_CACHE_RETENTION=long`：Anthropic 1 小时，OpenAI 24 小时，提供方不支持的照常）；
 /// - 开新会话走 `new_session`：Pi 按启动参数重建整个运行时（扩展与它起的工具服务都重起），所以就地换过的模型与强度随后再交一次；
 /// - 发话一律带 `streamingBehavior: steer`：正忙时 Pi 在当前回合的工具调用做完后、下一次请求模型前把它交给模型，空闲时照常开始一轮；
-///   停下时先 `clear_queue` 再 `abort`（Pi 的 docs/rpc-commands.md「clear_queue」）：`abort` 不清这个队列，还没交出的话会并进下一轮；
 /// - 一轮从第一个 `agent_start` 到 `agent_settled`（重试、压缩、插话都在其中）；
 /// - 正在说的话（拼法见 `DraftParts`）：段号是 `contentIndex`，`message_update` 的 `text_delta` 追加（RPC 只发增量，见 Pi 的 docs/json.md
 ///   「Reconstruct streaming messages」），`text_end` 与 `message_end` 给定稿；开出工具调用、停下或出错后这条不再算。
@@ -115,11 +114,6 @@ final class PiBrain: HostedSession {
         window = model?["contextWindow"]?.int
     }
 
-    func abort() async throws {
-        _ = try await command(["type": "clear_queue"])
-        _ = try await command(["type": "abort"])
-    }
-
     func stop() -> @concurrent @Sendable () async -> Void {
         let process = process
         return { await process?.stop() }
@@ -182,7 +176,7 @@ final class PiBrain: HostedSession {
             if used > 0 { session.emit(.context(used: used, window: window)) }
         }
         let stop = message["stopReason"]?.string
-        // 被 abort 停下的是 "aborted"，不算出错；之后成功的请求（重试）清掉前面的错
+        // Pi 自己中止的请求（如压缩）是 "aborted"，不算出错；之后成功的请求（重试）清掉前面的错
         turn?.error = stop == "error" ? (message["errorMessage"]?.string ?? String(localized: "未知错误")) : nil
         if stop == "error" || stop == "aborted" { speech = nil }
         for (index, block) in (message["content"]?.array ?? []).enumerated() where block["type"]?.string == "text" {

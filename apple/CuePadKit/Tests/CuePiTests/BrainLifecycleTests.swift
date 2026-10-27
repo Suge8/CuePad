@@ -16,7 +16,7 @@ struct BrainLifecycleTests {
         try TestScript.install("#!/bin/sh\necho $$ > \"$PID_FILE\"\n\(body)\n", at: script)
         let pid = directory.appending(path: "pid")
         let config = CueBrainConfig(
-            runtime: runtime, executable: script, systemPrompt: "x", workingDirectory: directory, mcp: ["/usr/bin/true"],
+            runtime: runtime, executable: script, model: nil, effort: nil, systemPrompt: "x", workingDirectory: directory, mcp: ["/usr/bin/true"],
             environment: ["PID_FILE": pid.path])
         return (config, pid)
     }
