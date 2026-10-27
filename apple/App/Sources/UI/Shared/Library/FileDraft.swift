@@ -7,7 +7,7 @@ import Foundation
 /// - `base` 是以为文件此刻的样子（打开时读到的、自己写成的、跟上的那一版）；写入都带它的哈希（`LibraryEdit.base`），
 ///   文件已不是它，那台 Mac 就不写（`AgentLibraryError.changedOnMac`）。
 /// - Mac 自动存（停手一小会儿，同灵感的编辑页，`Autosave`），没有保存钮；手机攒着，点纸飞机"发往 Mac"（`send`）。
-/// - 快照里的这份变了（文件在别处被改了，`follow`）：你没改过就当场跟上；你改着没写成的，留着你的字、说出文件变了，
+/// - 这份的正文变了（文件在别处被改了，`follow`）：你没改过就当场跟上；你改着没写成的，留着你的字、说出文件变了，
 ///   由你选换成文件里的（`takeFile`）或留你的盖过它（`keepMine`）；选之前不再自动写。
 @Observable
 final class FileDraft {
@@ -24,6 +24,10 @@ final class FileDraft {
     /// 有没写进文件的字。
     private(set) var dirty = false
     private(set) var state = State.idle
+    /// 规则另写了一份时，正文换成合并稿、标出会并进来的段（`MergeBar` 点"合并进来"）；这时编辑器交出键盘、不接输入
+    var previewing = DebugHooks.preset.mergePreview
+    /// 合并时一并撤掉的替换基础提示的那几份（`TidyOrder.retire`）
+    var retire: Set<InstructionSource.Origin> = []
     @ObservationIgnored private let workspace: Workspace
     @ObservationIgnored private var autosave: Autosave?
 
@@ -92,14 +96,15 @@ final class FileDraft {
             state = .saved
         } catch AgentLibraryError.changedOnMac {
             autosave?.discard()
-            state = .conflict(file: workspace.library?.file(file)?.text)
+            // 文件此刻的样子随它那一条同步来（`follow`）
+            state = .conflict(file: nil)
         } catch {
             state = .failed
             workspace.fail(error)
         }
     }
 
-    /// 快照里这份的正文变了：是自己写成的那一版就只记下；你没改过就跟上；改着的留着，说出文件变了。
+    /// 这份同步来的正文变了（`LibraryFileText`，对上了快照的哈希）：是自己写成的那一版就只记下；你没改过就跟上；改着的留着，说出文件变了。
     func follow(_ file: String?) {
         let file = file ?? ""
         guard file != base else { return }
@@ -155,6 +160,35 @@ final class FileDraft {
     }
 
     private func mark() { if dirty != (text != base) { dirty = text != base } }
+
+    /// 页顶次要一行里写的存好没有（Mac 自动存，手机发往 Mac）；文件在别处改过、等你选时不写，文件页顶上那一条写（`ConflictBar`）。
+    var shownState: String? { Self.shown(state, dirty: dirty) }
+
+    /// 最长的那个（页顶按它留宽，换字时不伸缩）。
+    static var longestShownState: String {
+        [State.saving, .saved, .followed, .failed, .idle].compactMap { shown($0, dirty: true) }.max { $0.count < $1.count } ?? ""
+    }
+
+    private static func shown(_ state: State, dirty: Bool) -> String? {
+        #if os(macOS)
+        switch state {
+        case .saving: SaveState.saving.text
+        case .saved: SaveState.saved.text
+        case .followed: String(localized: "在别处改过，已跟上")
+        case .failed: SaveState.failed.text
+        case .idle, .conflict: nil
+        }
+        #else
+        switch state {
+        case .saving: String(localized: "正在发往 Mac…")
+        case .saved: String(localized: "Mac 上已写好")
+        case .followed: String(localized: "Mac 上改过，已跟上")
+        case .failed: String(localized: "没发出去")
+        case .idle: dirty ? String(localized: "有改动没发") : nil
+        case .conflict: nil
+        }
+        #endif
+    }
 
     /// "已保存"、"已跟上"亮一会儿就收。
     func settle() { if state == .saved || state == .followed { state = .idle } }

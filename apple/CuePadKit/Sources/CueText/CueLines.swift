@@ -3,12 +3,12 @@ import Foundation
 /// 正文按行的规则：哪些行有文字（卡片名字与摘要用），选中的文字怎么转成任务。
 public enum CueLines {
     // 有文字的行只有一条规则，实现在私有的 `text(of:)`：不是分割线（`---`），且除图片引用
-    // （存储格式的 `![](…)` 或运行时的 U+FFFC）外还有文字。
+    // （存储格式的 `![](…)` 或运行时的 U+FFFC）外还有文字；文件链接算它的文件名。
 
     /// 这一行是不是卡片名字所在的那种行（有文字的行）。
     static func isTitleLine(_ line: String) -> Bool { !text(of: line).isEmpty }
 
-    /// 正文里全部有文字的行（去掉图片引用，空白折成单个空格），按出现顺序。
+    /// 正文里全部有文字的行（图片引用去掉、文件留文件名，空白折成单个空格），按出现顺序。
     static func contentLines(_ stored: String) -> [String] {
         stored.components(separatedBy: "\n").map(text(of:)).filter { !$0.isEmpty }
     }
@@ -20,13 +20,9 @@ public enum CueLines {
 
     static func text(of line: String) -> String {
         guard !CueFormat.isRule(line) else { return "" }
-        // 绝大多数行没有图片引用：不必拆成记号再拼回去
+        // 绝大多数行没有附件引用：不必拆成记号再拼回去
         var text = line
-        if CueFormat.hasImages(line) {
-            text = CueFormat.parse(line).compactMap { token -> String? in
-                if case .text(let text) = token { text } else { nil }
-            }.joined()
-        }
+        if CueFormat.hasAttachments(line) { text = CueFormat.parse(line).map(\.shownText).joined() }
         let object = String(UnicodeScalar(CueFormat.objectCharacter)!)
         return text.replacingOccurrences(of: object, with: "").split(whereSeparator: \.isWhitespace).joined(separator: " ")
     }
@@ -37,7 +33,7 @@ public enum CueLines {
         guard let index = lines.firstIndex(where: isTitleLine) else { return (stored, nil) }
         let heading = lines.remove(at: index)
         let rest = lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
-        let hasContent = !contentLines(rest).isEmpty || !CueFormat.imageHashes(in: rest).isEmpty
+        let hasContent = !contentLines(rest).isEmpty || !CueFormat.attachmentKeys(in: rest).isEmpty
         return (heading, hasContent ? rest : nil)
     }
 

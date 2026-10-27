@@ -16,6 +16,7 @@ extension AppServices {
             switch token {
             case .text(let text): .text(text)
             case .image(let hash): .image(try store.files.png(hash))
+            case .file(_, let name): .text(name)
             }
         }), to: pasteboard)
         #else
@@ -24,6 +25,7 @@ extension AppServices {
             switch token {
             case .text(let text): text.isEmpty ? nil : [UTType.utf8PlainText.identifier: text]
             case .image(let hash): [UTType.png.identifier: try store.files.png(hash)]
+            case .file(_, let name): [UTType.utf8PlainText.identifier: name]
             }
         })
         #endif

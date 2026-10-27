@@ -10,7 +10,7 @@ struct AgentRows: View {
     }
 }
 
-/// 一个 Agent 一行：开关即接入（写技能；Pi 另写扩展，Claude Code、Codex 另写钩子，OpenCode 直连它的后台服务）或删除（CuePad 写的文件与因此空出的目录）。状态写它在不在、接没接（`AgentLine`）；
+/// 一个 Agent 一行：开关即接入（写技能；Pi 另写扩展，Claude Code、Codex 另写钩子，OpenCode 直连它的后台服务，Grok Build 跟读它的会话记录）或删除（CuePad 写的文件与因此空出的目录）。状态写它在不在、接没接（`AgentLine`）；
 /// 没装、太旧的给"安装""升级"：同接入面板，在后台跑官方安装脚本（`AppServices.installAgent`，进度与没装上的原因在 `AgentIntegrations.jobs`，
 /// 两处读同一份），缺前提的（Pi 要 Node.js）给官网。正常的行是安静的，只有要你动手的（别人的同名文件、Pi 太旧）变色。
 /// 怎么用、会写在哪、何时生效、安装跑的命令放在悬停提示里。出现时重新检测它（用户可能刚在终端里装好）。
@@ -79,10 +79,15 @@ struct AgentRow: View {
     private var help: LocalizedStringResource {
         let files = services.agents.writtenFiles(kind).joined(separator: String(localized: "、"))
         let name = kind.name
+        let shown = switch kind {
+        case .pi: String(localized: "接入后，在终端里开的 \(name) 会话也出现在 CuePad 里：在 Mac 和手机上看它在做什么、发话、回答它的提问。")
+        case .grok: String(localized: "接入后，在终端里开的 \(name) 会话也出现在 CuePad 里：在 Mac 和手机上看它在做什么。")
+        case .dsh: String(localized: "CuePad 在后台开的 \(name) 会话出现在 CuePad 里；它的网页与桌面版里开的会话不接。")
+        case .claudeCode, .codex, .opencode:
+            String(localized: "接入后，在终端和桌面版里开的 \(name) 会话也出现在 CuePad 里：在 Mac 和手机上看它在做什么、发话、回答它的提问。")
+        }
         let lines = [
-            kind == .pi
-                ? String(localized: "接入后，在终端里开的 \(name) 会话也出现在 CuePad 里：在 Mac 和手机上看它在做什么、发话、回答它的提问。")
-                : String(localized: "接入后，在终端和桌面版里开的 \(name) 会话也出现在 CuePad 里：在 Mac 和手机上看它在做什么、发话、回答它的提问。"),
+            shown,
             kind == .pi ? String(localized: "CuePad 在后台开 Pi 会话也要先接入。") : String(localized: "不接入也能让 CuePad 在后台开 \(name) 会话。"),
             kind.limits,
             String(localized: "它也学会用 cuepad 记灵感、看和改任务，把页面和截图发到手机上看。"),
@@ -123,7 +128,7 @@ struct AgentRow: View {
     }
 }
 
-/// 设置与接入面板里一个 Agent 那一行的状态（`AgentRow`、`SetupPanel`）：接入了的四家同一种写法"已接入 · 名字 版本"，报不出版本的（桌面版）只写"已接入"。
+/// 设置与接入面板里一个 Agent 那一行的状态（`AgentRow`、`SetupPanel`）：接入了的各家同一种写法"已接入 · 名字 版本"，报不出版本的（桌面版）只写"已接入"。
 /// 在装、没装上、缺前提的那几句两处同一份。
 enum AgentLine {
     static var installing: String { String(localized: "安装中，可能要几分钟") }
@@ -159,6 +164,8 @@ extension AgentKind {
         case .pi: String(localized: "写入扩展与技能")
         case .claudeCode, .codex: String(localized: "写入技能与钩子")
         case .opencode: String(localized: "写入技能，直连它的后台服务")
+        case .grok: String(localized: "写入技能，跟读它的会话记录")
+        case .dsh: String(localized: "写入技能")
         }
     }
 
@@ -166,7 +173,7 @@ extension AgentKind {
     var limits: String? {
         let missing = AgentCapabilities.all.subtracting(.of(self, hosted: false, model: nil))
         let names: [(AgentCapabilities, String)] = [
-            (.images, String(localized: "发图片")), (.abort, String(localized: "中途停下")), (.model, String(localized: "切换模型")),
+            (.speak, String(localized: "发话")), (.images, String(localized: "发图片")), (.abort, String(localized: "中途停下")), (.model, String(localized: "切换模型")),
             (.rename, String(localized: "改会话名")), (.commands, String(localized: "用斜杠命令")), (.answer, String(localized: "回答提问")),
             (.end, String(localized: "结束这个会话")),
         ]

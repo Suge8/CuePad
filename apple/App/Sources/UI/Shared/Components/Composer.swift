@@ -1,9 +1,9 @@
 import CueStore
 import SwiftUI
 
-/// 随手记、新会话与 Pi 会话回复框共用的输入框（iOS 与 Mac 同一份；文字区各用平台的文本视图，见 `ComposerField`；图片来源与带上的卡片的菜单、面板
-/// 在 `Composer+iOS`、`Composer+macOS`）：一层玻璃，里面是（调用方放的）头部、带上的卡片、图片条、文字区，以及底下一整排工具：
-/// 左"＋"（选卡片、相册、拍照；粘贴的图片也进图片条）、调用方的小圆钮（会话回复框的模型与思考强度），右提交钮，"＋"与提交钮钉在左下、右下角。
+/// 随手记、新会话与 Pi 会话回复框共用的输入框（iOS 与 Mac 同一份；文字区各用平台的文本视图，见 `ComposerField`；附件来源与带上的卡片的菜单、面板
+/// 在 `Composer+iOS`、`Composer+macOS`）：一层玻璃，里面是（调用方放的）头部、带上的卡片、附件条、文字区，以及底下一整排工具：
+/// 左"＋"（选卡片、相册、拍照、文件；粘贴、拖进来的也进附件条）、调用方的小圆钮（会话回复框的模型与思考强度），右提交钮，"＋"与提交钮钉在左下、右下角。
 /// 一直展开（`ComposerForm.open`，不变形）又有工具的，文字铺满整宽在上，底下一排是＋、工具与提交钮；其余的文字区一直在两颗圆钮中间、往上长，
 /// 工具排（有就）在文字下面、两颗圆钮之间：变形时只有玻璃上沿与文字往上下挪，没有横着挪的东西——文字区是平台的文本视图，
 /// 变形时它一下换到新位置，横着挪的"＋"会从字上滑过、挪着的提交钮被玻璃下沿裁掉。带上的卡片点一下看全文，能"展开编辑"成这次要发的文字。
@@ -13,7 +13,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     let prompt: LocalizedStringResource
     let label: LocalizedStringResource
     let focus: FocusState<Bool>.Binding
-    var accepts: ComposerKinds = [.images, .cards]
+    var accepts: ComposerKinds = [.files, .cards]
     /// 选卡片时排在前面的项目（回复框是会话所属的项目）。
     var cardsFrom: UUID?
     var form = ComposerForm.open
@@ -32,7 +32,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     /// 这个会话此刻能用的斜杠命令：输入 "/" 时弹出面板（`PiSlashPalette`）；空表示不弹。
     var commands: [PiSlashCommand] = []
     var shortcuts: [ReplyShortcut: () -> Void] = [:]
-    /// 空着时按 ↑ 放进来的话，存储格式（回复框：你在这个会话里说过的上一句，文字与图片）。
+    /// 空着时按 ↑ 放进来的话，存储格式（回复框：你在这个会话里说过的上一句，文字与附件）。
     var recall: String?
     @ViewBuilder let header: () -> Header
     /// 工具排里"＋"右边的小圆钮（会话回复框的模型与思考强度）：一直展开的形态里一直在，会收起的形态里只在聚焦时出现。
@@ -51,7 +51,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     @State private var dismissedPalette: String?
 
 
-    private var expanded: Bool { !shrunk && (form == .open || (focused && form.opensOnFocus) || !draft.isEmpty(accepting: [.images, .cards])) }
+    private var expanded: Bool { !shrunk && (form == .open || (focused && form.opensOnFocus) || !draft.isEmpty(accepting: [.files, .cards])) }
     /// 收成短胶囊：一行的形态再变窄、居中，点它照常聚焦展开。有草稿也收（胶囊里写"草稿：第一行"）：翻历史时整宽的两层太占地方。
     private var shrunk: Bool { form.isCapsule && !focused }
     private var showsTools: Bool { form == .open || focused }
@@ -63,7 +63,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     private var shrunkDraft: String? { shrunk ? draft.preview : nil }
     private static var compactWidth: CGFloat { 220 }
     private static var headerTransition: AnyTransition {
-        .asymmetric(insertion: .opacity.animation(HandOff.quick.delay(0.12)), removal: .identity)
+        .asymmetric(insertion: .opacity.animation(Motion.fade.delay(0.12)), removal: .identity)
     }
     /// 玻璃上方允许浮出的高度（见 `field` 的裁切）。
     private static var overhang: CGFloat { 120 }
@@ -84,8 +84,8 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     private func handle(_ key: ComposerKey) -> Bool {
         let list = paletteCommands
         guard !list.isEmpty else {
-            guard key == .up, let recall, draft.isEmpty(accepting: [.images, .cards]) else { return false }
-            draft.append(stored: recall, files: workspace.services.store.files)
+            guard key == .up, let recall, draft.isEmpty(accepting: [.files, .cards]) else { return false }
+            draft.append(stored: recall)
             return true
         }
         let current = min(highlighted, list.count - 1)
@@ -107,16 +107,16 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
         field
         // 短胶囊 ↔ 全宽、聚焦时工具排出现是空间动画：无回弹弹簧，减弱动态效果时直接到终态。打字与清空（有没有草稿）时高度一帧到位：
         // 文字区是平台的文本视图，折行长高本来就是一帧到位，收回时也一样，占位字不悬在上一行；浮着的输入框上面的对话也同一帧跟
-        .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: shrunk)
+        .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion), value: shrunk)
         .onChange(of: focus.wrappedValue, initial: true) { _, now in
             // 一直展开时焦点不改形状，不起动画：Mac 会话页打开即聚焦，白跑的一段动画每帧都要 AppKit 重算整窗的跟踪区
-            if form == .open { focused = now } else { withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { focused = now } }
+            if form == .open { focused = now } else { withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { focused = now } }
         }
-        .animation(HandOff.quick, value: paletteCommands.isEmpty)
+        .animation(Motion.fade, value: paletteCommands.isEmpty)
         .onChange(of: draft.text) { highlighted = 0 }
-        .animation(HandOff.quick, value: draft.attachments.map(\.id))
-        .animation(HandOff.quick, value: draft.images.map(\.id))
-        .modifier(ImageSources(source: $source, images: $draft.images))
+        .animation(Motion.fade, value: draft.attachments.map(\.id))
+        .animation(Motion.fade, value: draft.files)
+        .modifier(FileSources(source: $source) { add($0) })
         .modifier(CardPanels(on: accepts.contains(.cards), picking: $source.isOn(.cards), previewing: $previewing) {
             CardPicker(project: cardsFrom) { draft.attach($0) }
         } preview: { outbox in
@@ -137,8 +137,8 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
             if accepts.contains(.cards) {
                 ForEach(draft.attachments) { chip($0).padding([.horizontal, .top], ComposerMetrics.inset).transition(.opacity) }
             }
-            if accepts.contains(.images), !draft.images.isEmpty {
-                imageStrip.padding([.horizontal, .top], ComposerMetrics.inset).transition(.opacity)
+            if accepts.contains(.files), !draft.files.isEmpty {
+                fileStrip.padding([.horizontal, .top], ComposerMetrics.inset).transition(.opacity)
             }
             if form == .open, tooled { layered } else { row }
         }
@@ -200,7 +200,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     private var text: some View {
         ComposerField(
             text: $draft.text, prompt: String(localized: prompt), label: String(localized: label), maxLines: expanded ? 6 : 1, ink: palette.ink, focus: focus, keys: handle,
-            shortcut: shortcut, images: accepts.contains(.images) ? { draft.images += $0.map(PickedImage.init(data:)) } : nil)
+            shortcut: shortcut, files: accepts.contains(.files) ? { add($0) } : nil)
             .focused(focus)
             // 收起时原文与"草稿：…"在同一个位置一换即成，不两层叠着交叉淡：同一行字在变形中只有一层
             .animation(nil) { $0.opacity(shrunkDraft == nil ? 1 : 0) }
@@ -223,6 +223,6 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
         }
         .frame(width: ComposerMetrics.slot, height: buttonHeight)
         // 只管钮自己进出：打第一个字时钮出现与一行变两层是同一次更新，挂在整块上的话"＋"的挪位也跟着它动画（减弱动态效果时也滑）
-        .animation(HandOff.quick, value: sendVisible)
+        .animation(Motion.fade, value: sendVisible)
     }
 }

@@ -10,13 +10,8 @@ import sys
 import time
 
 from app_env import APPLE, BUILD, FRONT, FRONT_RETRY, HOLD, READY, REC_SECONDS, RUN_TTL, SLOT, SOCKETS, WINDOW, die, isolated_env
-from app_proc import quit_mac, wait_ready
-
-
-def holder_alive(note):
-    pid = note.get("holder")
-    command = subprocess.run(["ps", "-o", "command=", "-p", str(pid)], capture_output=True, text=True).stdout if pid else ""
-    return "app.py" in command
+from app_proc import alive, quit_mac, silence, wait_ready
+from app_shots import batch
 
 
 def read_note(slot):
@@ -37,7 +32,7 @@ def take_slot():
     except BlockingIOError:
         pass
     note = read_note(slot)  # 锁被占着，记录就是占着的那个写的
-    if holder_alive(note):
+    if alive(note):
         os.kill(note["holder"], signal.SIGTERM)
     fcntl.flock(slot, fcntl.LOCK_EX)
     return slot
@@ -60,9 +55,12 @@ class Mac:
 
     def __enter__(self):
         self.slot = take_slot()
+        # 显示器睡着时窗口不上屏、截不到画面：-u 叫醒它，-d 到看守退出前不让它再睡（只 -u 的断言几秒就过期）
+        subprocess.Popen(["caffeinate", "-d", "-u", "-w", str(os.getpid())], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return self
 
     def start(self, args):
+        self.quit()
         if "-CuePadWindowSize" not in args:
             args = [*args, "-CuePadWindowSize", WINDOW]
         os.makedirs(SOCKETS, mode=0o700, exist_ok=True)
@@ -77,6 +75,7 @@ class Mac:
     def quit(self):
         if self.proc:
             quit_mac(self.proc)
+            self.proc = None
 
     def __exit__(self, *_):
         self.quit()
@@ -92,17 +91,25 @@ def wincap():
     return binary
 
 
-def mac(cmd, app, library, out, args):
+def mac(cmd, app, library, shots):
     if cmd == "run":
-        return run_mac(app, library, args)
+        return run_mac(app, library, shots[0].args)
+    seconds = REC_SECONDS if cmd == "rec" else 0
     with Mac(app, library, cmd) as m:
-        signal.alarm(HOLD + int(REC_SECONDS if cmd == "rec" else 0))  # 从拿到那一份算起，排队等别人的不算
-        size = m.start(args)
-        if len(size) != 2:
-            die("就绪文件里没有窗口尺寸：画面没有可拍的普通窗口")
-        capture = ["rec", str(m.proc.pid), str(REC_SECONDS)] if cmd == "rec" else ["shot", str(m.proc.pid)]
-        os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
-        subprocess.run([wincap(), *capture, *size, out], check=True)
+        def take(shot):
+            signal.alarm(HOLD + int(seconds))  # 每张从起实例算，排队等别人的不算
+            try:
+                size = m.start(shot.args)
+                if len(size) != 2:
+                    die("就绪文件里没有窗口尺寸：画面没有可拍的普通窗口")
+                capture = ["rec", str(m.proc.pid), str(REC_SECONDS)] if cmd == "rec" else ["shot", str(m.proc.pid)]
+                os.makedirs(os.path.dirname(os.path.abspath(shot.out)), exist_ok=True)
+                subprocess.run([wincap(), *capture, *size, shot.out], check=True)
+            finally:
+                m.quit()
+                signal.alarm(0)
+
+        batch(shots, take)
 
 
 def run_mac(app, library, args):
@@ -122,10 +129,7 @@ def run_mac(app, library, args):
         m.start(args)
         os.write(report_w, str(m.proc.pid).encode())
         os.close(report_w)
-        # 不再占着调用方的输出：否则调用方要等这个后台进程结束才拿到结果
-        null = os.open(os.devnull, os.O_RDWR)
-        for fd in (0, 1, 2):
-            os.dup2(null, fd)
+        silence()
         m.proc.wait()
 
 
@@ -168,9 +172,7 @@ def front_keeper(pid, args):
     if os.fork():
         return
     os.setsid()
-    null = os.open(os.devnull, os.O_RDWR)
-    for fd in (0, 1, 2):
-        os.dup2(null, fd)
+    silence()
     os.closerange(3, 1024)  # 不带着本检出那一份的锁与调用方的管道
     pull = f'tell application "System Events" to set frontmost of (first process whose unix id is {pid}) to true'
     queue, folder = select.kqueue(), os.open(os.path.dirname(FRONT), os.O_RDONLY)
@@ -191,21 +193,20 @@ def front_keeper(pid, args):
 
 
 def stop():
+    """结束 run 起的 Mac 实例；返回要报的话，没有就是 None。"""
     os.makedirs(os.path.dirname(SLOT), exist_ok=True)
     with open(SLOT, "a+") as slot:
         try:
             fcntl.flock(slot, fcntl.LOCK_EX | fcntl.LOCK_NB)  # 拿得到就是没有实例，留下的记录是旧的
-            print("本检出没有在跑的 Mac 实例")
-            return
+            return None
         except BlockingIOError:
             pass
         note = read_note(slot)
-        if not holder_alive(note):
-            print("本检出的 Mac 实例是 perf 在量，不是 run 起的，等它量完")
-            return
+        if not alive(note):
+            return "本检出的 Mac 实例是 perf 在量，不是 run 起的，等它量完"
         os.kill(note["holder"], signal.SIGTERM)
         fcntl.flock(slot, fcntl.LOCK_EX)  # 看守收完实例才放锁
-    print(f"已结束 {note['app']}")
+    return f"已结束 Mac 实例 {note['app']}"
 
 
 def preflight():

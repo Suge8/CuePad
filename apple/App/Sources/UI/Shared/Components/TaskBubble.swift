@@ -52,7 +52,7 @@ struct TaskBubble: View {
                 .transition(.opacity)
             }
         }
-        .animation(HandOff.quick, value: step)
+        .animation(Motion.fade, value: step)
         #if os(macOS)
         // Mac 的浮层挂在页面之外：子任务的状态点、"下一步"读的"交给了哪个会话"在这里补上
         .modifier(WindowCardAgents(workspace: workspace))

@@ -5,7 +5,7 @@ import SwiftUI
 extension AnyTransition {
     /// 对话里一条出现或消失：只淡入淡出，动画随过渡自带。不给整段对话挂动画：其余各行的位移若也跟着动画，
     /// 底部锚定下正在读的那段会先被推走再滑回来
-    static let entry = AnyTransition.opacity.animation(HandOff.quick)
+    static let entry = AnyTransition.opacity.animation(Motion.fade)
 }
 
 /// 你的话那颗气泡长什么样，两处各一种，只在这里分：
@@ -40,7 +40,7 @@ enum BubbleLook: Equatable {
 }
 
 /// 你的一句话：右侧气泡（样子见 `BubbleLook`），最宽到所在一栏的 `widthFraction`；到哪了画在气泡左下角外（`BubbleTrip`）。长按（Mac 右键）是 `menu`，预览就是这颗气泡。
-/// `stored` 是存储格式正文（`CueFormat`）：文字在气泡里，带的图片是气泡下面的缩略图（`ChatImages`）；送达前后同一个样子。
+/// `stored` 是存储格式正文（`CueFormat`）：文字在气泡里，带的图片是气泡下面的缩略图（`ChatImages`），文件是再下面的文件牌（`ChatFiles`）；送达前后同一个样子。
 /// 用斜杠技能说的（`PiSkillCall`）气泡里是你发的样子，技能正文收在气泡下，点开看（`SkillBody`）。
 struct UserBubble<Menu: View>: View {
     /// 长的话折到这么多行，点"展开"看全：会话页的重点是回答，你自己写的长提示词不该是整屏最重的一块。
@@ -61,7 +61,7 @@ struct UserBubble<Menu: View>: View {
     @State private var truncated = false
 
     var body: some View {
-        let text = CueFormat.plainText(stored), images = CueFormat.imageHashes(in: stored), skill = PiSkillCall.parse(text)
+        let parts = BubbleParts(stored), text = parts.text, images = parts.images, skill = PiSkillCall.parse(text)
         BubbleWidth(fraction: Self.widthFraction, edge: .trailing) {
             VStack(alignment: .trailing, spacing: 6) {
                 if fromCue { CueByline() }
@@ -70,10 +70,11 @@ struct UserBubble<Menu: View>: View {
                     BubbleText(
                         text: skill?.line ?? text, look: look, highlighted: highlighted, trip: trip, lineLimit: expanded ? nil : Self.foldedLines,
                         truncated: $truncated, expand: truncated && !expanded ? { expanded = true } : nil, quote: quote)
-                    .tripMark(images.isEmpty ? trip : .arrived, above: look.padding.bottom)
+                    .tripMark(images.isEmpty && parts.files.isEmpty ? trip : .arrived, above: look.padding.bottom)
                 }
                 if let skill, !skill.body.isEmpty { SkillBody(skill: skill) }
-                if !images.isEmpty { ChatImages(hashes: images, trip: trip).tripMark(trip, above: 0) }
+                if !images.isEmpty { ChatImages(hashes: images, trip: trip).tripMark(parts.files.isEmpty ? trip : .arrived, above: 0) }
+                if !parts.files.isEmpty { ChatFiles(files: parts.files, trip: trip).tripMark(trip, above: 0) }
             }
             #if os(iOS)
             .contentShape(.contextMenuPreview, look.shape)
@@ -81,6 +82,26 @@ struct UserBubble<Menu: View>: View {
             .contextMenu { menu }
         }
         .transition(.entry)
+    }
+}
+
+/// 你的一句话拆成气泡里的字、下面的图片与文件（存储格式按原顺序切开，`CueFormat.parse`）。
+nonisolated struct BubbleParts {
+    let text: String
+    let images: [String]
+    let files: [DraftFile]
+
+    init(_ stored: String) {
+        guard CueFormat.hasAttachments(stored) else {
+            (text, images, files) = (CueFormat.plainText(stored), [], [])
+            return
+        }
+        let tokens = CueFormat.parse(stored)
+        text = CueFormat.plainText(tokens.map { if case .text(let text) = $0 { text } else { "" } }.joined())
+        images = tokens.compactMap { if case .image(let key) = $0 { key } else { nil } }
+        // 同一份文件在一句话里引用两次只画一个牌子（`DraftFile` 按键认）
+        var seen = Set<DraftFile>()
+        files = tokens.compactMap { if case .file(let key, let name) = $0 { DraftFile(key: key, name: name) } else { nil } }.filter { seen.insert($0).inserted }
     }
 }
 
@@ -100,7 +121,7 @@ private struct SkillBody: View {
             .accessibilityExpanded(open)
             if open { NoteThread { MarkdownText(source: skill.body).equatable() }.frame(maxWidth: .infinity, alignment: .leading) }
         }
-        .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: open)
+        .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion), value: open)
     }
 }
 
@@ -131,8 +152,8 @@ struct BubbleText: View {
             .background(palette.bubble, in: shape)
             .overlay { edge(shape) }
             .opacity(trip.opacity)
-            .animation(HandOff.quick, value: highlighted)
-            .animation(HandOff.quick, value: trip)
+            .animation(Motion.fade, value: highlighted)
+            .animation(Motion.fade, value: trip)
     }
 
     /// 折起着、而且长到可能被截：每个气泡多挂一份量全文高的视图（每个几何读数都是一次布局回调），所以短的话（绝大多数）不挂。

@@ -88,7 +88,7 @@ struct CueGateTests {
         model.moving = nil
         model.confirm(move, services)
         try await eventually("原因写在那一行") { model.failure != nil }
-        #expect(model.failure == "没有能当 Cue 的 Agent：Pi 没装 · Claude Code 没装 · Codex 没装 · OpenCode 没装")
+        #expect(model.failure == "没有能当 Cue 的 Agent：Pi 没装 · Claude Code 没装 · Codex 没装 · OpenCode 没装 · Grok Build 没装 · DeepSeek Harness 没装")
         #expect(try await store.cueProfile()?.activeHost == "mac-old")
     }
 }

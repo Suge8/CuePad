@@ -3,7 +3,7 @@ import CueStore
 extension Command {
   static let project: [Command] = [
     Command(
-      path: ["project", "list"], summary: "列出项目（置顶在前，其余按最近活动）",
+      path: ["project", "list"], summary: "列出项目（置顶在前，其余按最近的进展）",
       notes: Schema.output("[Project]", Schema.project)
     ) { call in
       try call.args.expect()

@@ -5,7 +5,7 @@ import Foundation
 /// CuePad 接入各个 Agent：检测、安装、升级与卸载它们的技能与上报通道（`AgentFacts.channel`：Pi 是桥扩展，Claude Code、Codex 是钩子；
 /// OpenCode 直连它的服务，不用装），一起装、一起升级。
 /// `status` 没有任何副作用；写入只发生在 `install`，调用方要先征得用户同意；`uninstall` 删掉 CuePad 写的全部文件和因此空出来的目录。
-/// 技能只写一份，在几家共读的 `~/.agents/skills/cuepad`；不读 `.agents` 的（`AgentFacts.readsSharedSkills`，Claude Code）
+/// 技能只写一份，在几家共读的 `~/.agents/skills/cuepad`；不读 `.agents` 的（`SharedSkills.none`，Claude Code）
 /// 另有一个相对链接 `<它的目录>/skills/cuepad` 指到那里。各家接没接入记在技能的标记行里（`AgentSkill.kinds(in:)`）。
 /// 钩子的足迹（`HookFile.Footprint`）也放在那个目录里。旧版写在各家自己目录里、带标记的副本，装或升级任何一家时一起收掉
 /// （它们的那家记进标记行，足迹搬过来），所以旧版接入过的几家状态是 `outdated`、由静默升级换过来。
@@ -60,6 +60,9 @@ public struct AgentIntegration: Sendable {
     /// 写进钩子配置的命令：App 里 `cuepad` 的绝对路径（App 被移动后它变了，钩子就成了旧版，启动时重写）。
     func hookCommand(_ kind: AgentKind) -> String { "\(AgentSkill.shellQuoted(cuepad.path)) hook \(kind.rawValue)" }
 
+    /// 那一份技能不在分类里：读不到 `.agents` 第一层的那家才要链接。
+    private static func linksSkill(_ kind: AgentKind) -> Bool { !kind.facts.sharedSkills.reaches(group: "") }
+
     /// 那一份技能的目录（`~/.agents/skills/cuepad`）。
     var skillDirectory: URL { paths.agentsDirectory.appending(path: "skills/\(AgentSkill.name)", directoryHint: .isDirectory) }
     var skillFile: URL { skillDirectory.appending(path: AgentSkill.fileName) }
@@ -69,7 +72,7 @@ public struct AgentIntegration: Sendable {
 
     /// CuePad 写给这家的文件：技能（不读 `.agents` 的另有链接），上报通道（钩子配置只改其中 CuePad 的条目）。界面据此说明会写哪里。
     public func writtenFiles(of kind: AgentKind) -> [URL] {
-        [skillFile] + (kind.facts.readsSharedSkills ? [] : [agentSkillDirectory(kind)]) + (channel(kind)?.writtenFiles ?? [])
+        [skillFile] + (Self.linksSkill(kind) ? [agentSkillDirectory(kind)] : []) + (channel(kind)?.writtenFiles ?? [])
     }
 
     @concurrent public func status(of kind: AgentKind) async -> AgentStatus {
@@ -108,7 +111,7 @@ public struct AgentIntegration: Sendable {
         if legacyCopies.contains(kind) { try writeSkill(for: connectedKinds.union(legacyCopies)) }  // 先把足迹搬过来，钩子才删得干净
         try await channel(kind, executable: executable)?.uninstall()
         let left = connectedKinds.subtracting([kind])
-        if !kind.facts.readsSharedSkills, RelativeLink.isLink(agentSkillDirectory(kind)) { try FileManager.default.removeItem(at: agentSkillDirectory(kind)) }
+        if Self.linksSkill(kind), RelativeLink.isLink(agentSkillDirectory(kind)) { try FileManager.default.removeItem(at: agentSkillDirectory(kind)) }
         if left.isEmpty {
             if FileManager.default.fileExists(atPath: skillFile.path) { try FileManager.default.removeItem(at: skillFile) }
         } else {
@@ -144,7 +147,7 @@ public struct AgentIntegration: Sendable {
             }
             try files.removeItem(at: legacy)
         }
-        for kind in kinds where !kind.facts.readsSharedSkills {
+        for kind in kinds where Self.linksSkill(kind) {
             let link = agentSkillDirectory(kind)
             guard !RelativeLink.points(link, to: skillDirectory) else { continue }
             if RelativeLink.isLink(link) { try files.removeItem(at: link) }
@@ -165,7 +168,7 @@ public struct AgentIntegration: Sendable {
         let own = agentSkillDirectory(kind), ownFile = own.appending(path: AgentSkill.fileName)
         let legacy = !RelativeLink.isLink(own) && FileManager.default.fileExists(atPath: own.path)
         if legacy, read(ownFile).flatMap(AgentSkill.kinds(in:)) == nil { return .foreign(abbreviated(own)) }
-        let linked = kind.facts.readsSharedSkills || RelativeLink.points(own, to: skillDirectory)
+        let linked = !Self.linksSkill(kind) || RelativeLink.points(own, to: skillDirectory)
         if RelativeLink.isLink(own), !linked { return .foreign(abbreviated(own)) }
         let kinds = skill.flatMap(AgentSkill.kinds(in:)) ?? []
         guard kinds.contains(kind) else { return legacy ? .outdated : .missing }

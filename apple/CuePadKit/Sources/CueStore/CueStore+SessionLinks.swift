@@ -14,7 +14,7 @@ extension CueStore {
         id: UUID(), content: content, targetKind: target.kind, targetName: target.name,
         targetRef: target.ref, cardID: card, sentAt: now, modifiedAt: now, deliveryID: delivery, origin: origin)
       try insert(record)
-      try registerImages(in: content)
+      try registerAttachments(in: content)
       if let card, target.kind == .known(.piSession), let session = target.ref { try linkCardInTransaction(card, toSession: session, at: now) }
       return record
     }

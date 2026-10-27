@@ -25,6 +25,7 @@ extension AppServices {
             reportIssue(.piBridgeUnavailable("\(error)"))
         }
         follow { await self.historyStore.keepPruned() }
+        startStrayFileCleanup()
         // 先对账再起各家的接入：重新接上的会话沿用对账前的起点（`PiBridge.carryOver`）。对账失败照样起，只是从此刻算
         follow(reporting: { .syncUnavailable(String(localized: "Agent 状态没能写入同步记录：\(String(describing: $0))")) }) {
             var failure: (any Error)?
@@ -129,7 +130,9 @@ extension AppServices {
     // MARK: 全局快捷键
 
     /// 启动时注册存着的快捷键；没注册上记成启动问题，设置里换一个。
+    /// 脚本起的实例不注册：全局快捷键全机只有一份，会和用户在用的 CuePad 抢同一个键。
     func register(_ hotkey: GlobalHotkey) {
+        guard !DebugHooks.scripted else { return }
         do {
             try hotkey.registerSaved()
         } catch {

@@ -94,7 +94,7 @@ struct ChatScrubber: View {
                         .allowsHitTesting(false)
                 }
             }
-            .animation(reduceMotion ? nil : HandOff.quick, value: active)
+            .animation(Motion.spatial(Motion.fade, reduceMotion: reduceMotion), value: active)
             // 只有刻度区接手指：上面的顶栏区与下面的回复框附近照常滚对话
             .contentShape(Rectangle().path(in: CGRect(x: 0, y: band.top, width: Self.width, height: band.bottom - band.top)))
             .gesture(
@@ -135,7 +135,7 @@ struct ChatScrubber: View {
         .opacity(keyboard ? 0 : 1)
         .allowsHitTesting(!keyboard)
         .accessibilityHidden(keyboard)
-        .animation(reduceMotion ? nil : HandOff.quick, value: keyboard)
+        .animation(Motion.spatial(Motion.fade, reduceMotion: reduceMotion), value: keyboard)
         #if os(iOS)
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in keyboard = true }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in keyboard = false }
@@ -269,7 +269,7 @@ nonisolated struct ChatMark: Equatable, Sendable {
     /// 一条话的第一行文字；只有图片时写张数。
     static func firstLine(_ stored: String) -> String {
         if let line = CueFormat.plainText(stored).split(whereSeparator: \.isNewline).first { return line.trimmingCharacters(in: .whitespaces) }
-        let images = CueFormat.imageHashes(in: stored).count
+        let images = CueFormat.imageKeys(in: stored).count
         return images > 0 ? String(localized: "\(images) 张图片") : ""
     }
 }

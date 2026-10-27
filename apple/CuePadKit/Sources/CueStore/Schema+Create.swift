@@ -29,7 +29,6 @@ extension Schema {
       formerSessionIDs TEXT, writeSeq INTEGER NOT NULL DEFAULT 0
     ) STRICT;
     CREATE INDEX cards_projectID_sortKey ON cards(projectID, sortKey);
-    CREATE INDEX cards_projectID_modifiedAt ON cards(projectID, modifiedAt);
     CREATE INDEX cards_parentID ON cards(parentID);
     CREATE INDEX cards_deletedAt ON cards(deletedAt) WHERE deletedAt IS NOT NULL;
     CREATE INDEX cards_todoAt ON cards(todoAt) WHERE todoAt IS NOT NULL;
@@ -66,6 +65,7 @@ extension Schema {
     \(launchTokenIndex)
     \(hostedIndex)
     CREATE INDEX piSessionStates_projectID ON piSessionStates(projectID, stateSince);
+    \(progressIndexes)
     -- 指向带模型的目录记录的只有在线会话，进程没了的只指向只有命令的那几份：回收没人用的目录时不必翻全部历史
     CREATE INDEX piSessionStates_catalogID ON piSessionStates(catalogID) WHERE catalogID IS NOT NULL;
     \(folderIndex)
@@ -165,6 +165,7 @@ extension Schema {
     CREATE TABLE macPresence (id TEXT PRIMARY KEY NOT NULL, hostID TEXT NOT NULL, onlineUntil INTEGER NOT NULL, modifiedAt INTEGER NOT NULL) STRICT;
     CREATE TABLE macAgents (id TEXT PRIMARY KEY NOT NULL, hostID TEXT NOT NULL, agents TEXT, problems TEXT, modifiedAt INTEGER NOT NULL, name TEXT) STRICT;
     \(agentLibrariesTable)
+    \(agentLibraryFilesTable)
     -- 每台设备自己写：此刻开着哪个会话、开没开着 Cue 页、他最近一次来到这台的时刻（会话停下时他在不在场的一半；提示到不到他）。
     CREATE TABLE sessionViewers (
       id TEXT PRIMARY KEY NOT NULL, device TEXT NOT NULL, sessionID TEXT, modifiedAt INTEGER NOT NULL, cue INTEGER, arrivedAt INTEGER

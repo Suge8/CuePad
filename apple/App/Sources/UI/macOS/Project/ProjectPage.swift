@@ -45,13 +45,13 @@ struct ProjectPage: View {
                 .scrollPosition($position)
                 .taskFoldScroll(anchor)
                 .onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y > Self.collapseOffset } action: { _, isCollapsed in
-                    withAnimation(HandOff.quick) { collapsed = isCollapsed }
+                    withAnimation(Motion.fade) { collapsed = isCollapsed }
                 }
                 // 下滚后的回到顶部：排进窗口最顶那一排、居中（项目页那一排中间是空的），不压在下一排的卡片上；
                 // 是页里的一块、不放进工具栏——工具栏内容只随用户操作变，不随滚动位置这种布局读数变（工具栏一变就重排整个窗口，跟着滚动位置变会形成布局循环）
                 if collapsed, let data, !data.tasks.isEmpty {
                     CompactFocus(data: data) {
-                        withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { proxy.scrollTo("top", anchor: .top) }
+                        withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { proxy.scrollTo("top", anchor: .top) }
                     }
                     .frame(height: band)
                     .ignoresSafeArea(edges: .top)
@@ -151,7 +151,7 @@ struct ProjectPage: View {
         if next.refresh(with: data, project: projectID) {
             board = next
         } else if next != board {
-            withAnimation(Motion.spatial(Motion.move, reduceMotion: reduceMotion)) { board = next }
+            withAnimation(Motion.spatial(Motion.travel, reduceMotion: reduceMotion)) { board = next }
         }
         if let arrangement = next.arrangement {
             let shape = PageShape(data, arrangement)

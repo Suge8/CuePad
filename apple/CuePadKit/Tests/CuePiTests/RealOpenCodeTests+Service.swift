@@ -13,7 +13,7 @@ extension RealOpenCodeTests {
         try await withOpenCode { sandbox, store, bridge, runtime in
             let opencode = try #require(realOpenCodeURL)
             _ = await ChildProcess.run(
-                opencode, ["run", "-m", "opencode/no-such-model-xyz", "say hi"], directory: sandbox.work, environment: sandbox.environment,
+                opencode, ["run", "-m", "\(openCodeTestModel.provider)/no-such-model-xyz", "say hi"], directory: sandbox.work, environment: sandbox.environment,
                 timeout: .seconds(120))
             try await eventually("终端的会话出现、名字是首条消息") { session(bridge)?.displayName.contains("say hi") == true }
             let terminalService = try #require(sandbox.service)
@@ -22,7 +22,7 @@ extension RealOpenCodeTests {
             #expect(sandbox.service?.pid == terminalService.pid && kill(terminalService.pid, 0) == 0, "终端拉起的服务不动")
             // 第二次重开时会话索引已是最新、不再读对话：首条消息只能从读到哪了里取
             for _ in 0..<2 {
-                let reconnected = OpenCodeRuntime(bridge: bridge, paths: sandbox.paths, store: store, hostID: "mac", opencode: { await ExecutableLocator.system.candidates("opencode").first })
+                let reconnected = sandbox.runtime(bridge, store)
                 try reconnected.start()
                 try await eventually("重新接上") { session(bridge) != nil }
                 await quietPeriod(.seconds(2))  // 名字被改写没有事件可等
@@ -32,7 +32,7 @@ extension RealOpenCodeTests {
 
             try await sandbox.run(["service", "stop"])
             try await eventually("服务停了") { kill(terminalService.pid, 0) != 0 }
-            let host = OpenCodeRuntime(bridge: bridge, paths: sandbox.paths, store: store, hostID: "mac", opencode: { await ExecutableLocator.system.candidates("opencode").first })
+            let host = sandbox.runtime(bridge, store)
             try host.start()
             _ = try await host.open(in: sandbox.work, launchToken: "t-service", name: nil, model: nil, thinking: nil)
             let started = try #require(sandbox.service)
@@ -45,7 +45,7 @@ extension RealOpenCodeTests {
         try await withOpenCode { sandbox, store, bridge, runtime in
             await #expect(throws: PiBridgeError.unknownModel(.opencode)) {
                 _ = try await runtime.open(
-                    in: sandbox.work, launchToken: "token-bad", name: "配不上", model: PiModelKey(provider: "opencode", id: "no-such-model"), thinking: nil)
+                    in: sandbox.work, launchToken: "token-bad", name: "配不上", model: PiModelKey(provider: openCodeTestModel.provider, id: "no-such-model"), thinking: nil)
             }
             #expect(session(bridge) == nil)
             let listed = try await sandbox.api("GET", "/api/session")["data"] as? [Any]
@@ -65,10 +65,10 @@ extension RealOpenCodeTests {
             #expect(opened.agent == .opencode && opened.hosted && opened.launchToken == "token-1" && sandbox.service != nil)
             let image = pngData(width: 8, height: 8, shade: 0.9)
             try await bridge.send(PiMessage(text: "Reply with exactly the word SEEN.", images: [PiImage(mimeType: "image/png", data: image)]), to: id)
-            let hash = SHA256.hash(data: image).map { String(format: "%02x", $0) }.joined()
+            let hash = SHA256.hash(data: image).map { String(format: "%02x", $0) }.joined() + ".png"
             try await eventually("带图的那句与回答进了对话") {
                 let messages = try await store.piMessages(of: opened.sessionID)
-                return messages.contains { $0.role == .known(.user) && $0.text.contains("cuepad://img/\(hash)") }
+                return messages.contains { $0.role == .known(.user) && $0.text.contains("cuepad://file/\(hash)") }
                     && messages.last?.role == .known(.pi)
             }
             #expect(store.files.fileURL(for: hash) != nil)
@@ -78,7 +78,7 @@ extension RealOpenCodeTests {
             @MainActor func explored() -> Bool {
                 session(bridge)?.subagents.contains { $0.name == "find-readme" && $0.role == "explore" && $0.phase == .known(.done) } == true
             }
-            // 免费模型偶尔不派子代理就答（实测 big-pickle 说"没有 subagent 工具"）：那样当场报出它的回答，不干等
+            // 真模型偶尔不派子代理就答（实测 big-pickle 说"没有 subagent 工具"）：那样当场报出它的回答，不干等
             try await eventually("子代理出现、做完") {
                 if explored() { return true }
                 guard session(bridge)?.state == .settled else { return false }
@@ -113,7 +113,7 @@ extension RealOpenCodeTests {
             try await bridge.send(PiMessage(text: "Write the numbers from 1 to 30, one per line, each with a short sentence about it."), to: id)
             try await eventually("在忙") { session(bridge)?.state.isWorking == true }
             try await bridge.send(PiMessage(text: "Reply with the word STEERED."), to: id)
-            // 这句停下在跑的一轮、开新一轮并做完（模型怎么回不在验收里：免费模型不一定照说）
+            // 这句停下在跑的一轮、开新一轮并做完（模型怎么回不在验收里：真模型不一定照说）
             try await eventually("这句开的一轮做完") {
                 let messages = try await store.piMessages(of: opened.sessionID)
                 let said = messages.lastIndex { $0.role == .known(.user) && $0.text.contains("STEERED") }

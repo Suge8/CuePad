@@ -2,17 +2,14 @@
 import SwiftUI
 
 /// 工具栏中间的标题位（`PageTitleSlot`）：技能与规则页的规则｜技能两段（`LibraryPanes`），同手机页顶中间那一块，也是页名。
-/// 定宽（两颗的字不随数据变）；开着文件页时宽度照旧、只是看不见（换的是盖住的那一页）。
+/// 定宽（两颗的字不随数据变）；开着文件页时这一位换成文件页的标题（`OverlayTitle`）。
 struct LibraryPanesSlot: View {
-    @Environment(Workspace.self) private var workspace
-
     var body: some View {
         LibraryPanes()
             .frame(height: PaneMetrics.square)
             .padding(PaneMetrics.inset)
             .glass(in: .capsule)
             .fixedSize()
-            .toolbarVisible(workspace.overlay == nil)
     }
 }
 

@@ -40,7 +40,7 @@ private struct DockedComposer: ViewModifier {
 
     /// 与底部那一排同一条弹簧（`DockBar`）：两边各在一棵树里，各按 `places` 变了起动画，同一回合起、同一条曲线。
     func body(content: Content) -> some View {
-        content.modifier(ComposerFade(places: motion?.places ?? 0)).animation(Motion.dock, value: motion?.places ?? 0)
+        content.modifier(ComposerFade(places: motion?.places ?? 0)).animation(Motion.nudge, value: motion?.places ?? 0)
     }
 }
 

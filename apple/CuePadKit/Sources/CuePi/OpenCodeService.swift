@@ -176,58 +176,6 @@ struct OpenCodeEvent: Decodable, Sendable {
     }
 }
 
-/// 事件流里各会话正在说的话（`PiDraft`，拼法见 `DraftParts`）：一条回答（`assistantMessageID`）的段号是 `ordinal`（与对话里这条回答的写法一致，
-/// 见 `OpenCodeHistory`），正文的增量（`session.text.delta`）追加，一段说完（`session.text.ended`）换成这段的全文；
-/// 换一条回答就重来；转成工具调用（`session.tool.input.started`）、下一轮开始（`session.execution.started`）、这一轮停下或失败时清掉，
-/// 正常说完的留着。服务不续传：断线重连后错过的增量补不回来，由调用方 `reset`。
-///
-/// `since` 取这一步开始（`session.step.started` 的 `started`）的时刻，不取第一个增量到的时刻：对话里这条回答的时刻是这条消息建立的时刻
-/// （`OpenCodeMessage.at`，与 `started` 是同一个毫秒数、同一种换算），早于第一个字；取后者，界面认不出它已落库（`PiDraft.landed`），
-/// 说完后草稿与对话里的回答会叠成两份。没看到这一步开始（中途连上）的回答不给草稿。
-struct OpenCodeDrafts {
-    private var entries: [String: DraftParts] = [:]
-    /// 每个会话最近开始的一步：哪条回答、它的时刻
-    private var steps: [String: (message: String, at: Date)] = [:]
-
-    /// 这条事件改了哪个会话正在说的话、改成什么；与正在说的话无关为 nil。
-    mutating func apply(_ event: OpenCodeEvent) -> (sessionID: String, draft: PiDraft?)? {
-        let data = event.data
-        guard let sessionID = data.sessionID else { return nil }
-        switch event.type {
-        case "session.step.started":
-            if let message = data.assistantMessageID, let started = data.started {
-                steps[sessionID] = (message, Date(timeIntervalSince1970: started / 1000))
-            }
-            return nil
-        case "session.text.delta":
-            guard let message = data.assistantMessageID, let delta = data.delta, var entry = entries[sessionID].flatMap({ $0.message == message ? $0 : nil })
-                ?? steps[sessionID].flatMap({ $0.message == message ? DraftParts(message: message, since: $0.at) : nil })
-            else { return nil }
-            entry.append(delta, to: data.ordinal ?? 0)
-            entries[sessionID] = entry
-            return (sessionID, entry.draft)
-        case "session.text.ended":
-            guard var entry = entries[sessionID], entry.message == data.assistantMessageID, let text = data.text else { return nil }
-            entry.finish(data.ordinal ?? 0, with: text)
-            entries[sessionID] = entry
-            return (sessionID, entry.draft)
-        case "session.tool.input.started", "session.execution.started", "session.execution.failed", "session.execution.interrupted",
-             "session.deleted":
-            if event.type == "session.deleted" { steps[sessionID] = nil }
-            entries[sessionID] = nil
-            return (sessionID, nil)
-        default:
-            return nil
-        }
-    }
-
-    /// 全部清掉（断线重连），返回原先有草稿的会话。
-    mutating func reset() -> [String] {
-        defer { entries = [:]; steps = [:] }
-        return Array(entries.keys)
-    }
-}
-
 struct OpenCodeLocation: Codable, Sendable, Equatable { var directory: String }
 
 struct OpenCodeModelRef: Codable, Sendable, Equatable {

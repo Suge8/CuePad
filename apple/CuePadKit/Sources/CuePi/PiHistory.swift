@@ -2,6 +2,7 @@
 import CueStore
 import CueText
 import Foundation
+import ImageIO
 
 /// 会话列表要的摘要：会话 id、工作目录、名字、首条用户消息、最后活动时间。原文留在会话文件里，这里不复制。
 public struct PiSessionHistory: Sendable, Equatable {
@@ -39,8 +40,8 @@ public struct PiHistoryUpdate: Sendable {
     public var messages: [PiChatMessage]
     /// 这次读的时候要不要对话（调用方——索引器——的判定）：写不写对话以它为准
     public var includesTranscript: Bool
-    /// 会话 id：会话文件头里的；还没读到文件头时是文件名（只有文件名就是会话 id 的才会这样发出）。
-    public var sessionID: String { history.sessionID ?? file.deletingPathExtension().lastPathComponent }
+    /// 会话 id：会话文件头里的；还没读到文件头时是路径里的（只有文件名就是会话 id 的才会这样发出）。
+    public var sessionID: String { history.sessionID ?? agent.facts.sessionFiles?.sessionID(of: file) ?? file.deletingPathExtension().lastPathComponent }
     public var recap: PiRecap { checkpoint.projectedRecap }
     /// 这次读到的对话与摘要，交给 `CueStore.writePiTranscript`
     public var transcript: PiTranscript { PiTranscript(sessionID: sessionID, messages: messages, recap: recap) }
@@ -68,13 +69,6 @@ public enum PiHistoryScope: Sendable, Equatable {
         case .sessions(let ids): ids.contains(sessionID.lowercased())
         }
     }
-
-    /// 三家的会话文件名都以会话 id 结尾（Claude Code `<id>.jsonl`，Pi `<时刻>_<id>.jsonl`，Codex `rollout-<时刻>-<id>.jsonl`）。
-    func covers(_ file: URL) -> Bool {
-        covers(sessionID: String(file.deletingPathExtension().lastPathComponent.suffix(Self.idLength)))
-    }
-
-    private static let idLength = 36
 }
 
 /// Agent 会话文件（JSONL）的增量解析：读取、检查点、轮次与摘要的规则各家共用（检查点上的 `said`、`answered`、`interrupted`、
@@ -88,7 +82,7 @@ public enum PiHistory {
     /// 从检查点继续索引 `file`（没有检查点或检查点已失效则从头）。文件不存在时抛错——
     /// 会话文件在第一条消息落盘前并不存在，调用方等文件出现再来。
     ///
-    /// 你的消息里的图片当场存进 `files`（按内容哈希，已有的不重写），对话里只留 `![](cuepad://img/<哈希>)`：会话文件是图片唯一的来源，
+    /// 你的消息里的图片当场存进 `files`（按内容哈希，已有的不重写），对话里只留 `![](cuepad://file/<键>)`：会话文件是图片唯一的来源，
     /// 终端里贴的图片附件目录里原本没有。不是图片的块跳过；存不下（磁盘错误）时抛错，不留一条缺图的消息。
     ///
     /// `transcript` 为 false 时不要对话（7 天外的会话）：照样逐行读出检查点，丢掉对话、不存图片（工具结果行不做 JSON 解码，
@@ -104,8 +98,9 @@ public enum PiHistory {
 
         let resumed = try checkpoint.flatMap { try isResumable($0, handle: handle, size: size) ? $0 : nil }
         var state = resumed ?? PiHistoryCheckpoint()
+        if state.cwd == nil { state.cwd = format.cwd(of: file) }
         let start = state.offset
-        var transcript = Transcript(fallbackID: file.deletingPathExtension().lastPathComponent, files: wanted ? files : nil)
+        var transcript = Transcript(fallbackID: format.sessionID(of: file), files: wanted ? files : nil, file: file)
         let consumed = try forEachLine(handle, from: start, size: size) { line in try format.ingest(line, &state, &transcript) }
         if !wanted { transcript.messages = [] }
         state.offset = consumed
@@ -195,6 +190,8 @@ public enum PiHistory {
     struct Transcript {
         let fallbackID: String
         let files: AttachmentFiles?
+        /// 读的会话文件（不在文件里的为 nil）：dsh 的图片按它找到所在的 dsh 目录
+        var file: URL? = nil
         var messages: [PiChatMessage] = []
 
         mutating func add(
@@ -219,17 +216,24 @@ public enum PiHistory {
 
         fileprivate init(files: AttachmentFiles?) { self.files = files }
 
+        /// 交给 Agent 的附件行（`AttachmentFiles.agentLine`）认回文件引用：正文里是文件，标题与摘要里是文件名。
         mutating func text(_ block: String?) {
             let text = PiSessionName.withoutImageNotes(block ?? "")
             guard !text.isEmpty else { return }
-            texts.append(text)
-            pieces.append(text)
+            texts.append(AttachmentFiles.namingAgentLines(in: text))
+            if let files { pieces.append(files.restoringAgentLines(in: text)) }
         }
 
-        /// 图片原字节；不是图片的跳过。
+        /// 先前读到、存在检查点里的那一句（图片已存好，`stored` 里是它的标记，见 `PiHistoryCheckpoint.held`）。
+        mutating func restore(text: String, stored: String) {
+            texts = text.isEmpty ? [] : [text]
+            pieces = stored.isEmpty ? [] : [stored]
+        }
+
+        /// 图片原字节；不是图片的跳过（不存进附件）。
         mutating func image(_ data: Data?) throws {
-            guard let files, let data else { return }
-            do { pieces.append(CueFormat.imageMarkup(id: try files.store(data))) } catch CueStoreError.notAnImage {}
+            guard let files, let data, let source = CGImageSourceCreateWithData(data as CFData, nil), CGImageSourceGetCount(source) > 0 else { return }
+            pieces.append(CueFormat.imageMarkup(key: try files.store(data)))
         }
 
         var text: String { texts.joined(separator: "\n") }

@@ -47,7 +47,7 @@ struct EmptyState<Action: View>: View {
 
     private func appear() {
         guard !shown else { return }
-        withAnimation(reduceMotion ? HandOff.quick : Motion.snappy) { shown = true }
+        withAnimation(Motion.fading(Motion.nudge, reduceMotion: reduceMotion)) { shown = true }
     }
 
     private var illustration: some View {

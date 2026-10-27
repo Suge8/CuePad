@@ -12,7 +12,7 @@ import Testing
   private func populate() async throws -> (card: Card, hash: String) {
     let hash = try store.files.store(pngData(width: 2, height: 2))
     let project = try await store.createProject(name: "P", color: "#111")
-    let card = try await store.createCard(in: project.id, body: "hello ![](cuepad://img/\(hash))")
+    let card = try await store.createCard(in: project.id, body: "hello ![](cuepad://file/\(hash))")
     try await store.updateCard(card.id) {
       $0.isPinned = true
       $0.variableValues = ["k": "v"]
@@ -44,11 +44,14 @@ import Testing
     try await store.recordMacPresence(host: "mac") { true }
     try await store.recordViewing(device: "phone", sessionID: "s1", cue: false)
     try await store.recordMacAgents(host: "mac", name: "工作室", [MacAgent(kind: .pi, model: nil, models: [])], problems: [MacAgentProblem(kind: .codex, reason: .notLoggedIn)])
-    try await store.recordAgentLibrary(AgentLibrary(
-      hostID: "mac", home: "/Users/me", skills: [LibrarySkill(
-        name: "pr", scope: .global, group: "", path: "/Users/me/.agents/skills/pr", text: "---\nname: pr\ndescription: 写 PR\n---\n")],
-      instructions: [LibraryInstruction(kind: .global, path: "/Users/me/.agents/AGENTS.md", text: "规则", modifiedAt: .now)],
-      tidies: [LibraryTidy(id: "empty", kind: .empty(["/Users/me/.codex/skills/x"]))], modifiedAt: .now))
+    let skill = "---\nname: pr\ndescription: 写 PR\n---\n"
+    try await store.recordAgentLibrary(
+      AgentLibrary(
+        hostID: "mac", home: "/Users/me", skills: [LibrarySkill(
+          name: "pr", scope: .global, group: "", path: "/Users/me/.agents/skills/pr", description: "写 PR", hash: LibraryEdit.base(of: skill))],
+        instructions: [LibraryInstruction(kind: .global, path: "/Users/me/.agents/AGENTS.md", hash: LibraryEdit.base(of: "规则"), modifiedAt: .now)],
+        tidies: [LibraryTidy(id: "empty", kind: .empty(["/Users/me/.codex/skills/x"]))], modifiedAt: .now),
+      texts: ["/Users/me/.agents/skills/pr/SKILL.md": skill, "/Users/me/.agents/AGENTS.md": "规则"])
     return (card, hash)
   }
 

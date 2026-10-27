@@ -18,4 +18,15 @@ import Testing
     #expect(location.directory.path == directory && location.isIsolated == isolated)
     #expect(location.databaseURL.path == directory + "/cuepad.db")
   }
+
+  /// 附件与缩略图的缓存：iOS 的真实库在共享容器里（分享扩展、小组件与主 App 读写同一份），Mac 的真实库在系统缓存目录，隔离库在库目录里。
+  @Test func cachesSitWhereEveryProcessOfTheLibrarySeesThem() throws {
+    let group = try LibraryLocation.resolve(environment: [:], base: .appGroup(container: URL(filePath: "/group")))
+    #if os(iOS)
+    #expect(group.caches.path == "/group/Library/Caches")
+    #else
+    #expect(group.caches == URL.cachesDirectory)
+    #endif
+    #expect(LibraryLocation.isolated(URL(filePath: "/tmp/iso")).caches.path == "/tmp/iso/Caches")
+  }
 }

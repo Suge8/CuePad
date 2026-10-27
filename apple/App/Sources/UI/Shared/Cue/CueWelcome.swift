@@ -48,7 +48,7 @@ struct CueWelcome: View {
             }
         }
         .cueSettings(model)
-        .animation(HandOff.quick, value: model.failure)
+        .animation(Motion.fade, value: model.failure)
     }
 
     @ViewBuilder private func steps(_ settings: CueSettings, _ hosts: [CueSettings.Host]) -> some View {

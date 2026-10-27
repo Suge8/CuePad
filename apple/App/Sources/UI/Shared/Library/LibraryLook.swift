@@ -8,7 +8,7 @@ extension Workspace {
     func fact(of tidy: LibraryTidy, in library: AgentLibrary) -> String {
         switch tidy.kind {
         case .stray(let moves): return String(localized: "\(moves.count) 个技能在旧目录里")
-        case .unlinked(let skills): return String(localized: "\(skills.count) 个技能 Claude Code 读不到")
+        case .unlinked(let agent, let skills): return String(localized: "\(skills.count) 个技能 \(agent.name) 读不到")
         case .empty(let directories): return String(localized: "\(directories.count) 个空文件夹")
         case .globalInstructions:
             let unseen = library.instruction(.global).map(library.unseen) ?? []
@@ -100,19 +100,21 @@ nonisolated struct SkillGroups: Equatable {
     }
 }
 
-/// 一行右端读不到这一份的那几家：只画那几家的标志（淡墨），全读得到什么都不画。槽位定宽（这台装着几家就几格，`AgentLibrary.agents`），
-/// 标志靠右排，各行的名字与说明不随它挪。
+/// 一行右端读不到这一份的那几家：只画那几家压了斜杠的标志（`StruckBrandMark`，淡墨），不点问号也读得懂是"这家读不到"；全读得到什么都不画。
+/// Mac 悬停一个写"<那家> 读不到"，读屏整组念同一句。槽位定宽（这台装着几家就几格，`AgentLibrary.agents`），标志靠右排，各行的名字与说明不随它挪。
 struct UnseenMarks: View {
     let agents: [AgentKind]
     let unseen: [AgentKind]
     @Environment(\.palette) private var palette
 
     static let width: CGFloat = 18
+    private static let mark: CGFloat = 12
 
     var body: some View {
         HStack(spacing: 0) {
             ForEach(agents.filter(unseen.contains), id: \.self) { kind in
-                kind.mark.image.font(.system(size: 11)).foregroundStyle(palette.ink3).opacity(0.7).frame(width: Self.width)
+                StruckBrandMark(mark: kind.mark, size: Self.mark).foregroundStyle(palette.ink3).frame(width: Self.width)
+                    .help(String(localized: "\(kind.name) 读不到"))
             }
         }
         .frame(width: Self.width * CGFloat(agents.count), alignment: .trailing)

@@ -3,7 +3,7 @@ import CueStore
 import Foundation
 import Synchronization
 
-/// 技能与规则的文件（事实源，CuePad 不存副本）：读成快照（`AgentLibrary`，判定规则在 `LibrarySkillScan`、`LibraryInstructionScan`）、
+/// 技能与规则的文件（事实源）：读成快照（`AgentLibrary`，判定规则在 `LibrarySkillScan`、`LibraryInstructionScan`）与各份文件的正文、
 /// 跟着文件变化重读（`keep`）、整理与撤销、改一份文件。写入只在用户动作时（整理、文件页），后台只读。
 /// 碰得了哪些目录同接入（`AgentIntegration.touches`）：隔离运行而几家共读的 `~/.agents` 是真实位置时什么都不读（`isAvailable`）。
 public struct AgentLibraryFiles: Sendable {
@@ -41,10 +41,15 @@ public struct AgentLibraryFiles: Sendable {
         AgentLibraryPlaces(paths: integration.paths, touches: integration.touches, projects: projects)
     }
 
-    /// `projects` 是这台绑了文件夹的项目（`CueStore.projectDirectories`）。
-    @concurrent public func scan(host: String, projects: [UUID: String]) async -> AgentLibrary { read(host: host, projects: projects).library }
+    /// 读一次：快照与它列出的各份文件的正文（路径 → 正文，`LibraryFileText`）。`projects` 是这台绑了文件夹的项目（`CueStore.projectDirectories`）。
+    public struct Scan: Sendable {
+        public let library: AgentLibrary
+        public let texts: [String: String]
+    }
 
-    private func read(host: String, projects: [UUID: String]) -> (library: AgentLibrary, watched: Set<String>) {
+    @concurrent public func scan(host: String, projects: [UUID: String]) async -> Scan { read(host: host, projects: projects).scan }
+
+    private func read(host: String, projects: [UUID: String]) -> (scan: Scan, watched: Set<String>) {
         let places = places(projects)
         let skills = LibrarySkillScan(places), instructions = LibraryInstructionScan(places)
         let library = AgentLibrary(
@@ -53,7 +58,8 @@ public struct AgentLibraryFiles: Sendable {
             modifiedAt: Date())
         // 各家的目录也盯着：装上一家（建出它的目录）就多一家要链接、要比的规则
         let homes = AgentKind.allCases.filter(integration.touches).map { integration.paths.home(of: $0).path }
-        return (library, skills.watched.union(instructions.watched).union(homes + [integration.paths.agentsDirectory.path]))
+        let texts = skills.texts.merging(instructions.texts) { a, _ in a }
+        return (Scan(library: library, texts: texts), skills.watched.union(instructions.watched).union(homes + [integration.paths.agentsDirectory.path]))
     }
 
     /// 该整理的按 `LibraryTidy.Kind` 的先后。
@@ -74,13 +80,14 @@ public struct AgentLibraryFiles: Sendable {
     /// 照此刻的文件做这几件（那件已不在的不做，一件都不在抛 `tidyGone`）：返回做了几件与撤销。中途出错先把做了的放回再抛。
     @concurrent public func tidy(_ orders: [TidyOrder], projects: [UUID: String]) async throws -> (count: Int, undo: LibraryUndo) {
         let places = places(projects)
-        let current = read(host: "", projects: projects).library.tidies
+        let scan = read(host: "", projects: projects).scan, current = scan.library.tidies
         guard orders.contains(where: { order in current.contains { $0.id == order.tidy } }) else { throw AgentLibraryError.tidyGone }
-        var tidying = LibraryTidying(places: places, trash: trash)
+        var tidying = LibraryTidying(places: places, texts: scan.texts, trash: trash)
         var count = 0
         do {
             for order in orders {
                 guard let tidy = current.first(where: { $0.id == order.tidy }) else { continue }
+                if let base = order.base, tidy.base != base { throw AgentLibraryError.changedOnMac }
                 try tidying.run(tidy, order)
                 count += 1
             }
@@ -114,7 +121,7 @@ public struct AgentLibraryFiles: Sendable {
     /// 跟着文件与绑定的文件夹（`projects`，每次变了给一次全部）重读，每读一次交给 `record`（内容没变不写由它管）。
     /// 盯读到的每个目录与文件（`FileFollower`，当场）；读的时候又变了的并成下一次。直到所在任务取消或 `projects` 结束。
     public func keep(
-        host: String, projects: some AsyncSequence<[UUID: String], any Error> & Sendable, record: @escaping @Sendable (AgentLibrary) async throws -> Void
+        host: String, projects: some AsyncSequence<[UUID: String], any Error> & Sendable, record: @escaping @Sendable (Scan) async throws -> Void
     ) async throws {
         let follower = FileFollower()
         defer { follower.stop() }
@@ -134,8 +141,8 @@ public struct AgentLibraryFiles: Sendable {
             group.addTask {
                 for await _ in changes {
                     guard let projects = latest.withLock({ $0 }) else { continue }
-                    let (library, watched) = read(host: host, projects: projects)
-                    try await record(library)
+                    let (scan, watched) = read(host: host, projects: projects)
+                    try await record(scan)
                     follower.follow(only: Set(watched.map { URL(filePath: $0).realPath.path }))
                 }
                 follower.stop()

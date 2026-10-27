@@ -27,6 +27,8 @@ final class Workspace {
             case done
             /// 点了去的那一处已不在（删了、归档了）
             case gone
+            /// 停着等你腾地方（iCloud 空间满，附件先不传），不算出错
+            case paused
             case failure
 
             var icon: Icon {
@@ -34,6 +36,7 @@ final class Workspace {
                 case .done: .done
                 // 带斜线的圈：那里已经没有它了。不用对勾（对勾只表示完成与记下）
                 case .gone: .gone
+                case .paused: .syncPaused
                 case .failure: .failure
                 }
             }
@@ -107,7 +110,7 @@ final class Workspace {
     let presses = CardPresses()
     let sendState: SendState
     /// 盖在当前页上的那一页（一次只有一页，开新的就换掉旧的）：换页、"收起"、Esc 时清空；底部输入条、工具栏的"收起"都只看它。
-    /// 灵感的编辑页设上时立即挂上，清空时先淡出、淡完才卸下（`CardEditorPage`）；iOS 打开卡片与技能、规则是推入，见 `showEditor`、`openLibrary`。
+    /// 开合各页自己管；iOS 打开卡片与技能、规则是推入，见 `showEditor`、`openLibrary`。
     var overlay: Overlay? {
         didSet { if case .card(let id)? = overlay { presses.present(id) } }
     }
@@ -121,10 +124,9 @@ final class Workspace {
     var openLibraryFile: LibraryFile? { if case .library(let file)? = overlay { file } else { nil } }
     /// 收起这一页；已换成别的就不动。
     func close(_ page: Overlay) { if overlay == page { overlay = nil } }
-    #else
-    /// 手机上改着的技能与规则（`fileDraft(_:on:)`），按哪台 Mac 的哪一份分开：离开文件页也留着。
-    @ObservationIgnored var fileDrafts: [FileDraftKey: FileDraft] = [:]
     #endif
+    /// 改着的技能与规则（`fileDraft(_:text:on:)`），按哪台 Mac 的哪一份分开：离开文件页也留着。
+    @ObservationIgnored var fileDrafts: [FileDraftKey: FileDraft] = [:]
     /// 气泡里看着的任务（`TaskBubble`）：从被点的那一下长出来，盖在当前页上，不换页。两端同一份，各个入口都经 `openTask(_:)`。
     var openTask: TaskBubble.Request? {
         didSet { if openTask == nil, let oldValue { closedTask = (oldValue.task, .now) } }
@@ -204,7 +206,7 @@ final class Workspace {
 
     #if os(macOS)
     let sessionHeader = SessionHeader()
-
+    let overlayHeader = OverlayHeader()
     #endif
 
     @ObservationIgnored private var noticeTask: Task<Void, Never>?
@@ -272,10 +274,20 @@ final class Workspace {
         async let cue: Void = followCue()
         async let opens: Void = openLinks()
         async let library: Void = followLibrary()
+        async let quota: Void = followFilesQuota()
         #if os(macOS)
         await followSessionPlacement()
         #endif
-        _ = await (catalog, links, cue, opens, library)
+        _ = await (catalog, links, cue, opens, library, quota)
+    }
+
+    /// iCloud 空间满了、附件停在这台（`AppServices.syncFilesOverQuota`）：变满的那一下说一次，不进同步状态（别的记录照常同步，说的话不变红）。
+    private func followFilesQuota() async {
+        var was = false
+        for await over in Observations({ self.services.syncFilesOverQuota }) {
+            if over, !was { say(Dotted(FileStatus.overQuota), tone: .paused, duration: .seconds(6)) }
+            was = over
+        }
     }
 
     private func followCatalog() async {

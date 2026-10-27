@@ -108,11 +108,11 @@ private struct PreviewPager: View {
     /// 往前、往后翻一份（键盘），到头不动。
     private func turn(_ step: Int) {
         guard let next = opening.neighbor(of: current, step: step) else { return }
-        withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { current = next }
+        withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { current = next }
     }
 
     private func file(of preview: PiPreview) -> URL? {
-        services.store.files.url(of: preview)
+        services.store.files.fileURL(for: preview.key)
     }
 }
 

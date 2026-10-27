@@ -4,6 +4,20 @@ import Foundation
 /// 技能与规则的动作（两端同一个入口，读的是 `Workspace.library`，规则见 `AgentLibrary`）：文件只由那台 Mac 写——本机的直接做，
 /// 别的设备发投送请求（`DeliveryMode.tidy`、`.libraryEdit`）、等那台写回结果。
 extension Workspace {
+    /// 一份文件的文件页（两端同一份，`FileDraft`）：改着的、标着合并的都留在这里，离开文件页再回来接着——手机上不点纸飞机就不发，也不丢（App 退出才没了）。
+    /// 按 `host` 那台 Mac 分开：Cue 换到另一台后看的是那台的文件，在这台没发的字不拿去对着那台。
+    /// 再打开时先对上快照里此刻的样子（没改过就跟上，改着的就说文件变了）。
+    func fileDraft(_ file: LibraryFile, text: String?, on host: String) -> FileDraft {
+        let key = FileDraftKey(host: host, file: file)
+        if let draft = fileDrafts[key] {
+            draft.follow(text)
+            return draft
+        }
+        let draft = FileDraft(file, text: text, workspace: self)
+        fileDrafts[key] = draft
+        return draft
+    }
+
     /// 整理：一键整理（`library.automaticOrders`）、去重（带上留哪份，`TidyOrder.keep`）、合并（`LibraryTidy.merges` 的那件）。不弹确认：
     /// 本机做完提示结果，带撤销（恢复这一次的全部改动，移走的从废纸篓放回）；手机发往那台 Mac，等它做完再提示，不带撤销
     /// （那台照做不留撤销，手机上按钮旁写明，`TidyConsequence`）。没成提示原因。合并后的那份规则就在开着的文件页里，跟着快照换成合并稿。
@@ -63,4 +77,10 @@ extension Workspace {
         case .project(let id): catalog?.project(id)?.shownName ?? String(localized: "项目规则")
         }
     }
+}
+
+/// 改着的一份文件是哪台 Mac 的哪一份（`Workspace.fileDrafts`）。
+struct FileDraftKey: Hashable {
+    let host: String
+    let file: LibraryFile
 }

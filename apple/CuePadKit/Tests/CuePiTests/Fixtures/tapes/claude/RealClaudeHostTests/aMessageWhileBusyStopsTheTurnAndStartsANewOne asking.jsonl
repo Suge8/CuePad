@@ -3,7 +3,7 @@
 {"c":"p1","d":"2.1.299 (Claude Code)","k":"stdout"}
 {"c":"p1","k":"exit","n":0}
 {"a":["agents","--json"],"c":"p2","d":"claude","k":"spawn","p":"{pwd}"}
-{"a":["--input-format","stream-json","--output-format","stream-json","--verbose","--include-partial-messages","--permission-prompt-tool","stdio","--permission-mode","auto","--session-id","ce5b0810-5701-45d7-9cb0-c8f1cb2b6979"],"c":"p3","d":"claude","k":"spawn","m":"ce5b0810-5701-45d7-9cb0-c8f1cb2b6979","p":"/private{tmp:1}/work"}
+{"a":["--input-format","stream-json","--output-format","stream-json","--verbose","--include-partial-messages","--permission-prompt-tool","stdio","--permission-mode","auto","--session-id","ce5b0810-5701-45d7-9cb0-c8f1cb2b6979","--add-dir","{tmp:1}/store/Caches/CuePadAttachments/"],"c":"p3","d":"claude","k":"spawn","m":"ce5b0810-5701-45d7-9cb0-c8f1cb2b6979","p":"/private{tmp:1}/work"}
 {"c":"p2","k":"eof"}
 {"c":"p3","d":"{\"request\":{\"subtype\":\"initialize\"},\"request_id\":\"BDF55B69-B272-4198-A52E-346065940C56\",\"type\":\"control_request\"}","k":"stdin"}
 {"c":"p2","d":"[]","k":"stdout"}

@@ -33,7 +33,7 @@ final class EditorHarness {
     let nowhere = NSRange(location: NSNotFound, length: 0)
 
     init(width: CGFloat = 390, height: CGFloat = 700, theme: CueEditorTheme = .test) {
-        textView = CueTextView(imageStore: store, theme: theme)
+        textView = CueTextView(files: store, theme: theme)
         root = UIView(frame: CGRect(x: 0, y: 0, width: width, height: height))
         textView.frame = root.bounds
         root.addSubview(textView)

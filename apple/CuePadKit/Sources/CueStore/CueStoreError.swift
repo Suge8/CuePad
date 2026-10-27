@@ -4,7 +4,8 @@ public enum CueStoreError: Error, Equatable {
   case notFound
   case blankTaskContent
   case blankProjectName
-  case notAnImage
+  /// 单个文件超过上限（`AttachmentFiles.maxBytes`）。
+  case fileTooLarge(limit: Int)
   /// 卡片或任务只能归属存在且未在回收站的项目。
   case invalidProject
   /// 默认项目不能删除（`Project.defaultID`）。
@@ -16,7 +17,7 @@ public enum CueStoreError: Error, Equatable {
   /// 附件记录声明的哈希格式不对（不是 SHA-256 十六进制）。
   case invalidAttachmentHash
   case blankDeliveryContent
-  /// 永久删除已完成，但这些哈希的图片文件没能删掉（记录与文件保留）。
+  /// 永久删除已完成，但这些键的附件文件没能删掉（记录与文件保留）。
   case attachmentFilesNotRemoved([String])
   /// 库文件是更新版本建的，不打开。
   case unsupportedSchemaVersion(Int)
@@ -66,6 +67,8 @@ public enum CueStoreError: Error, Equatable {
   case sessionInUse(String)
   /// 会话在跑，Cue 这会儿说不了（参数是会话名与原因）：会打断他发起的那一轮，或停不下这一轮（`PiSessionState.speakBlocked`）。
   case cannotSpeakNow(String, String)
+  /// 会话开在终端里、CuePad 只读跟读它（`AgentCapabilities.speak`），对它说不了话（参数是会话名）。
+  case terminalOnly(String)
   /// 会话不能从 CuePad 结束（参数是会话名）。
   case cannotEnd(String)
   /// 会话没停着，没有可留给他回的停下（参数是会话名）。
@@ -98,14 +101,14 @@ extension CueStoreError: LocalizedError {
     case .notFound: String(localized: "找不到这条记录，可能已被删除")
     case .blankTaskContent: String(localized: "任务内容不能为空")
     case .blankProjectName: String(localized: "项目名不能为空")
-    case .notAnImage: String(localized: "不是可识别的图片")
+    case .fileTooLarge(let limit): String(localized: "文件超过 \(limit / 1_000_000) MB，存不进来")
     case .invalidProject: String(localized: "目标项目已不存在或在回收站")
     case .defaultProjectUndeletable: String(localized: "默认项目不能删除")
     case .notAConflictCopy: String(localized: "这条不是冲突副本")
     case .attachmentHashMismatch: String(localized: "附件内容与其哈希不符")
     case .invalidAttachmentHash: String(localized: "附件的哈希格式不对")
     case .blankDeliveryContent: String(localized: "发送内容不能为空")
-    case .attachmentFilesNotRemoved(let hashes): String(localized: "已永久删除，但有 \(hashes.count) 个图片文件没能删掉")
+    case .attachmentFilesNotRemoved(let keys): String(localized: "已永久删除，但有 \(keys.count) 个附件文件没能删掉")
     case .unsupportedSchemaVersion(let version): String(localized: "资料库由更新版本的 CuePad 建立（结构版本 \(version)），这个版本打不开")
     case .schemaTooOld(let version): String(localized: "资料库由更早版本的 CuePad 建立（结构版本 \(version)），这个版本不再升级它")
     case .invalidParent: String(localized: "只能挂到任务下，不能挂到自己或自己的下级下")
@@ -130,6 +133,7 @@ extension CueStoreError: LocalizedError {
     case .cannotChangeModel(let title): "会话「\(title)」换不了模型（这一家在终端里开的会话不能从 CuePad 换）：用 start 带 fresh:true 和 model 开新会话"
     case .cannotStop(let title): "会话「\(title)」现在停不了：没在跑一轮、在等回答，或它在终端里开、不能从 CuePad 停止"
     case .cannotSpeakNow(let title, let why): "会话「\(title)」\(why)：没说出去。等它歇下（会叫醒你）再说"
+    case .terminalOnly(let title): "会话「\(title)」开在终端里，CuePad 只看得到它在做什么、对它说不了话：要它做的 tell 他在终端里说；它退出后再 say 会在后台接着它"
     case .sessionInUse(let title): "会话「\(title)」还在用（没做完的事绑着它，或有话正送进去），没结束：那件事做完时 done 那件事"
     case .cannotEnd(let title): "会话「\(title)」不能从 CuePad 结束（终端里开的这类）：要收掉就 tell 他在终端里退出"
     case .notStopped(let title): "会话「\(title)」没停着（在跑、被打断或已结束）：留给他回只用在它歇着、在等回答或出错时"

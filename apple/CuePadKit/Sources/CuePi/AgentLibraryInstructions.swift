@@ -11,6 +11,8 @@ import Foundation
 ///   （空的也算，它照样挡住 AGENTS.md），或有个人的 `CLAUDE.local.md`；内容不同的那几份进合并。
 struct LibraryInstructionScan {
     var instructions: [LibraryInstruction] = []
+    /// 列出的规则与要比的各份的正文（路径 → 正文）
+    var texts: [String: String] = [:]
     var tidies: [LibraryTidy] = []
     var watched: Set<String> = []
 
@@ -25,7 +27,7 @@ struct LibraryInstructionScan {
     private mutating func scanGlobal(_ places: AgentLibraryPlaces) {
         let shared = places.globalInstructions
         let sharedText = Self.content(shared)
-        var sources: [InstructionSource] = sharedText.map { [InstructionSource(origin: .shared, path: shared.path, text: $0, modifiedAt: Self.modified(shared))] } ?? []
+        var sources: [InstructionSource] = sharedText.map { [source(.shared, shared, $0)] } ?? []
         var readers: [AgentKind] = [], links: [String] = [], unlinked = false
         watch(shared)
         for kind in places.linkedKinds {
@@ -37,7 +39,7 @@ struct LibraryInstructionScan {
             } else if RelativeLink.isLink(file) {
                 continue
             } else if let text = Self.content(file) {
-                sources.append(InstructionSource(origin: .agent(kind), path: file.path, text: text, modifiedAt: Self.modified(file)))
+                sources.append(source(.agent(kind), file, text))
                 unlinked = true
             } else {
                 unlinked = true
@@ -47,7 +49,7 @@ struct LibraryInstructionScan {
             let own = places.globalFile(.opencode)
             watch(own)
             if !RelativeLink.isLink(own), let text = Self.content(own) {
-                sources.append(InstructionSource(origin: .agent(.opencode), path: own.path, text: text, modifiedAt: Self.modified(own)))
+                sources.append(source(.agent(.opencode), own, text))
                 unlinked = true
             } else if readers.contains(.claudeCode) {
                 readers.append(.opencode)
@@ -57,11 +59,8 @@ struct LibraryInstructionScan {
         if unlinked, !sources.isEmpty {
             tidies.append(LibraryTidy(id: "global-instructions", kind: .globalInstructions(sources + replacements)))
         }
-        instructions.append(LibraryInstruction(
-            kind: .global, path: shared.path, text: sharedText, modifiedAt: Self.modified(shared), readers: readers, links: links))
-        if places.uses(.pi), let text = Self.content(places.piSystem) {
-            instructions.append(LibraryInstruction(kind: .piSystem, path: places.piSystem.path, text: text, modifiedAt: Self.modified(places.piSystem), readers: [.pi]))
-        }
+        add(.global, shared, sharedText, readers: readers, links: links)
+        if places.uses(.pi), let text = Self.content(places.piSystem) { add(.piSystem, places.piSystem, text, readers: [.pi]) }
     }
 
     /// 替换基础提示的两份（有才列）；不论要不要比都盯着：SYSTEM.md 留着时是单独一份规则，Codex 的配置里加上这个键就有一份要比。
@@ -70,14 +69,14 @@ struct LibraryInstructionScan {
         if places.uses(.pi) {
             watch(places.piSystem)
             if let text = Self.content(places.piSystem) {
-                found.append(InstructionSource(origin: .piSystem, path: places.piSystem.path, text: text, modifiedAt: Self.modified(places.piSystem)))
+                found.append(source(.piSystem, places.piSystem, text))
             }
         }
         if places.uses(.codex) {
             watch(places.codexConfig)
             if let prompt = CodexPromptKey(places), let text = Self.content(prompt.file) {
                 watch(prompt.file)
-                found.append(InstructionSource(origin: .codexPrompt, path: prompt.file.path, text: text, modifiedAt: Self.modified(prompt.file)))
+                found.append(source(.codexPrompt, prompt.file, text))
             }
         }
         return found
@@ -91,13 +90,24 @@ struct LibraryInstructionScan {
         let claudeReads = linked || (!Self.exists(claude.local) && others.allSatisfy { Self.content($0) == text })
         if !claudeReads {
             let differing = others.compactMap { other in Self.content(other).flatMap { $0 == text ? nil : (other, $0) } }
-            let sources = (text.map { [InstructionSource(origin: .shared, path: file.path, text: $0, modifiedAt: Self.modified(file))] } ?? [])
-                + differing.map { InstructionSource(origin: .agent(.claudeCode), path: $0.0.path, text: $0.1, modifiedAt: Self.modified($0.0)) }
+            let sources = (text.map { [source(.shared, file, $0)] } ?? []) + differing.map { source(.agent(.claudeCode), $0.0, $0.1) }
             if !sources.isEmpty { tidies.append(LibraryTidy(id: "project-claude/\(id.uuidString)", kind: .projectClaude(project: id, sources: sources))) }
         }
         let readers = text == nil ? [] : places.installed.filter { $0 != .claudeCode || claudeReads }
+        add(.project(id), file, text, readers: readers, links: linked ? [claude.main.path] : [])
+    }
+
+    /// 列出一份规则：快照里是它的哈希，正文记进 `texts`。
+    private mutating func add(_ kind: LibraryInstruction.Kind, _ file: URL, _ text: String?, readers: [AgentKind], links: [String] = []) {
+        if let text { texts[file.path] = text }
         instructions.append(LibraryInstruction(
-            kind: .project(id), path: file.path, text: text, modifiedAt: Self.modified(file), readers: readers, links: linked ? [claude.main.path] : []))
+            kind: kind, path: file.path, hash: text.map(LibraryEdit.base), modifiedAt: Self.modified(file), readers: readers, links: links))
+    }
+
+    /// 要比的一份：快照里是它的哈希，正文记进 `texts`（合并稿照它算）。
+    private mutating func source(_ origin: InstructionSource.Origin, _ file: URL, _ text: String) -> InstructionSource {
+        texts[file.path] = text
+        return InstructionSource(origin: origin, path: file.path, hash: LibraryEdit.base(of: text), modifiedAt: Self.modified(file))
     }
 
     static func exists(_ file: URL) -> Bool { FileManager.default.fileExists(atPath: file.path) || RelativeLink.isLink(file) }
@@ -115,8 +125,10 @@ struct LibraryInstructionScan {
         read(file).flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0 }
     }
 
+    /// 取整到秒：快照按 1970 起的秒存（`StoredJSON`），带小数的时刻存回来差最后一位，每次重读都当成变了、重写重传。
     static func modified(_ file: URL) -> Date? {
-        (try? FileManager.default.attributesOfItem(atPath: file.realPath.path))?[.modificationDate] as? Date
+        ((try? FileManager.default.attributesOfItem(atPath: file.realPath.path))?[.modificationDate] as? Date)
+            .map { Date(timeIntervalSince1970: $0.timeIntervalSince1970.rounded(.down)) }
     }
 }
 

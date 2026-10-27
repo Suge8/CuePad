@@ -16,7 +16,8 @@ import OSLog
 ///   新会话显式带上工作目录建，接着已结束的会话就是对库里的会话接着说（同一个服务谁都能续）。
 /// - Cue 的大脑（`OpenCodeBrain`）开的会话也在用户的库里，按标记（`OpenCodeSessionInfo.isCueBrain`）跳过：不上桥、不进会话索引与历史。
 ///   它们由大脑自己的服务跑，事件不经后台服务的事件流，接入只会在会话列表与按 id 取会话时碰到。
-/// - 正在说的话（`PiDraft`）：顶层会话的由 `OpenCodeDrafts` 从事件流累积，交给桥；终端里开的会话也一样（都在同一个服务里），子代理的不要。
+/// - 一轮：每个会话的事件交给它的 `OpenCodeTurn`（与大脑同一份），翻出的一轮落到会话的事实（`SessionFacts`）与桥上，正在说的话交给桥
+///   （终端里开的会话也一样，都在同一个服务里）；子代理的一轮只落到名册上，说的话不要。权限、表单、压缩、改名、选模型与对话的读入在这里。
 /// - 从没取过模型表的第一次启动，它先用随包的旧表、同时联网取新表（约 1～2 秒）；这期间配置的默认模型不在旧表里就改用旧表第一个
 ///   （它自己的终端界面也一样）。CuePad 不补，会话页显示实际用的模型。
 @MainActor
@@ -44,8 +45,8 @@ public final class OpenCodeRuntime: AgentRuntime, SessionLink {
     var sessions: [String: Tracked] = [:]
     /// 子会话 → 父会话
     var parents: [String: String] = [:]
-    /// 子代理在跑的工具调用 → 名字
-    var childTools: [String: String] = [:]
+    /// 子代理（子会话）的一轮
+    var childTurns: [String: OpenCodeTurn] = [:]
     /// 在 CuePad 里结束的会话与结束时刻：再有活动才重新上线
     var ended: [String: Date] = [:]
     /// 每个工作目录可选的模型与命令
@@ -57,7 +58,6 @@ public final class OpenCodeRuntime: AgentRuntime, SessionLink {
     var ingesting: Task<Void, Never>?
     /// CuePad 拉起的服务（它的 `opencode` 与环境），停止接入时由 CuePad 停掉；本来就在跑的为 nil
     var startedService: (executable: URL, environment: [String: String])?
-    var drafts = OpenCodeDrafts()
 
     @MainActor final class Connection {
         let client: OpenCodeClient
@@ -85,9 +85,8 @@ public final class OpenCodeRuntime: AgentRuntime, SessionLink {
         var hosted = false
         var launchToken: String?
         var facts = SessionFacts()
-        /// 在跑的工具调用 → 名字（`tool.called` 不带名字，名字在它之前的 `tool.input.started` 里）
-        var toolNames: [String: String] = [:]
-        var tokens: Int?
+        var turn = OpenCodeTurn()
+        var context: PiContextUsage?
         var firstMessage: String?
 
         var directory: String { info.location.directory }
@@ -175,10 +174,9 @@ public final class OpenCodeRuntime: AgentRuntime, SessionLink {
         for (id, tracked) in sessions where tracked.online { bridge.detach(bridgeID(id, connection), reason: .disconnected) }
         sessions = [:]
         parents = [:]
-        childTools = [:]
+        childTurns = [:]
         ended = [:]
         catalogs = [:]
-        drafts = OpenCodeDrafts()
         listed = nil
         ingestQueue = []
     }

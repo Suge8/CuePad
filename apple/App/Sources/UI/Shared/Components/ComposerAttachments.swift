@@ -1,7 +1,7 @@
 import CueText
 import SwiftUI
 
-/// 带上的卡片或任务的全文：文字、图片按原来的顺序；标题已写在面板顶上，正文从标题之后开始。
+/// 带上的卡片或任务的全文：文字、图片、文件按原来的顺序；标题已写在面板顶上，正文从标题之后开始。
 /// `height` 报出内容的高度，面板按它定高。
 struct AttachmentBody: View {
     let content: String
@@ -16,6 +16,7 @@ struct AttachmentBody: View {
                     switch block {
                     case .text(let text): Paragraphs(verbatim: text).font(Typography.body).foregroundStyle(palette.ink)
                     case .image(let hash): Thumbnail(hash: hash, height: 220, radius: 12)
+                    case .file(let key, let name): FileChip(key: key, name: name).frame(maxWidth: 360)
                     }
                 }
             }
@@ -26,7 +27,7 @@ struct AttachmentBody: View {
         .background(palette.paper, in: .rect)
     }
 
-    /// 文字与图片按原顺序各成一块，删掉正文开头的标题那一行。
+    /// 文字与附件按原顺序各成一块，删掉正文开头的标题那一行。
     private static func blocks(_ content: String) -> [CueToken] {
         var blocks = CueFormat.parse(content)
         if case .text(let first)? = blocks.first {

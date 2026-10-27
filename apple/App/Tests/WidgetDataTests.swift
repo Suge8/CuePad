@@ -14,7 +14,7 @@ struct WidgetDataTests {
             _ = try await services.store.createCard(body: "卡片 \(index)\n后面的行")
             try await Task.sleep(for: .milliseconds(2))  // 修改时间是毫秒：一张比一张新
         }
-        _ = try await services.store.createCard(body: "![](cuepad://img/\(String(repeating: "a", count: 64)))")
+        _ = try await services.store.createCard(body: "![](cuepad://file/\(String(repeating: "a", count: 64)))")
         let project = try await services.store.createProject(name: "P", color: "#000000")
         _ = try await services.store.createCard(in: project.id, body: "不在默认项目")
 

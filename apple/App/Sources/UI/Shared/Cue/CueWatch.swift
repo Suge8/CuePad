@@ -54,7 +54,7 @@ final class CueWatch {
     /// 否决过：光在飞时按 Cue 歇着推（`CueNow.settled`）——起飞前它若正在听你的话，挂闸那一下先退回歇着、到点再醒，多一次来回。
     var beat: CueBeat {
         if let transition, transition.until > .now { return transition.beat }
-        return now.beat.composing(!draft.isEmpty(accepting: .images))
+        return now.beat.composing(!draft.isEmpty(accepting: .files))
     }
 
     private struct Transition {

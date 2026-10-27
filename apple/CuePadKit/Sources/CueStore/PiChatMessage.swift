@@ -30,7 +30,7 @@ public struct PiChatMessage: Identifiable, Equatable, Sendable {
   /// 序号相同，按说话人排：Agent 说的在系统行前
   public var seq: Int64
   public var role: Open<PiChatRole>
-  /// 正文。你的消息是 CuePad 正文格式（`CueFormat`：文字，图片是 `![](cuepad://img/<哈希>)`，与投送请求的 content 同一种），
+  /// 正文。你的消息是 CuePad 正文格式（`CueFormat`：文字，附件是 `![](cuepad://file/<键>)` 与 `[文件名](cuepad://file/<键>)`，与投送请求的 content 同一种），
   /// Pi 的回答与系统行是纯文字。文字至多 `PiChatMessage.textLimit` 个字符，超出截断并以省略号结尾（图片引用不计、不截）
   public var text: String
   /// 这条消息的时间（会话文件里的时间戳）

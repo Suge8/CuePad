@@ -90,12 +90,12 @@ extension CueTools {
     return .ok(lines.joined(separator: "\n"))
   }
 
-  /// 发到手机的文件，每份一行：id（提问与做完的 show 照它点名）、标题、类型、发来的时刻与本机路径（读文件工具按扩展名认类型，给的是按原文件名放的那份）。
+  /// 发到手机的文件，每份一行：id（提问与做完的 show 照它点名）、标题、类型、发来的时刻与本机路径（读文件工具按扩展名认类型，本机那份的扩展名由附件的键定）。
   private func deliveredLines(_ previews: [PiPreview]) -> [String] {
     guard !previews.isEmpty else { return [] }
     return ["发到手机的（id，图片、PDF 用 read 打开）："] + previews.map { preview in
       "  - \(preview.id.shortID) 「\(preview.title)」\(preview.kind?.label ?? preview.name) · \(Self.clock(preview.createdAt)) · "
-        + (store.files.url(of: preview)?.path ?? "还没同步到这台 Mac")
+        + (store.files.fileURL(for: preview.key)?.path ?? "还没同步到这台 Mac")
     }
   }
 

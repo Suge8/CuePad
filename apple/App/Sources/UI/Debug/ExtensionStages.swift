@@ -117,7 +117,7 @@ struct DebugActivityStage: View {
         .ignoresSafeArea()
         // 系统的状态栏画在最上层、会压住岛的两端：藏起来，岛收着时自己写时间
         .statusBarHidden(true)
-        .animation(.smooth(duration: 0.45), value: workspace.cue.now)
+        .animation(Motion.travel, value: workspace.cue.now)
         .allowsHitTesting(false)
     }
 

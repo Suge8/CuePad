@@ -118,7 +118,7 @@ extension Workspace {
     }
 
     /// ⌘1–9：打开侧栏里此刻的第 number 个项目。快捷键只绑数字，按下的那一刻才按项目目录当前的顺序取：
-    /// 顺序随最近活动与置顶变化，绑在某个项目上会在顺序变了之后打开错的。没有那么多个项目时什么也不做。
+    /// 顺序随最近的进展与置顶变化，绑在某个项目上会在顺序变了之后打开错的。没有那么多个项目时什么也不做。
     func showProject(number: Int) {
         guard let projects = catalog?.projects, projects.indices.contains(number - 1) else { return }
         show(.project(projects[number - 1].id))

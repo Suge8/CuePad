@@ -3,14 +3,18 @@ import CueStore
 import Foundation
 import os
 
-/// 内存里的 iCloud 替身：账号总是可用，同步区是一组按写入先后编号的记录，令牌就是编号；收下的上传照单记下（`saved`）。
+/// 内存里的 iCloud 替身：账号总是可用，同步区是一组按写入先后编号的记录，令牌就是编号；收下的上传照单记下（`saved`、`deleted`）。
+/// 删掉的记录留一个同样编号的墓碑，拉取时作为删除交给拉到它之后的设备（同 CloudKit 的变更令牌）。
 /// 测试与调试画面用它跑真实的同步代码（`CloudSync`），只换掉网络那一头。
 actor SimulatedCloud: SyncCloud {
   private var zone: [CKRecord.ID: (seq: Int, record: CKRecord)] = [:]
+  private var tombstones: [CKRecord.ID: (seq: Int, recordType: String)] = [:]
   private var seq = 0
   private var account = "simulated"
   /// 收下的上传（记录名），按先后。
   private(set) var saved: [String] = []
+  /// 收下的删除（记录名），按先后。
+  private(set) var deleted: [String] = []
   private static let log = Logger(subsystem: AppIdentity.id, category: "sync")
 
   init(_ records: [CKRecord] = []) {
@@ -24,32 +28,52 @@ actor SimulatedCloud: SyncCloud {
   func put(_ record: CKRecord) {
     seq += 1
     zone[record.recordID] = (seq, record)
+    tombstones[record.recordID] = nil
   }
 
   /// 换登了另一个 iCloud 账号：它的同步区是空的。
   func signIn(_ account: String) {
     self.account = account
     zone = [:]
+    tombstones = [:]
   }
 
   func accountStatus() -> CKAccountStatus { .available }
   func accountName() -> String { account }
   func relaySecret() -> Data { Data(repeating: 7, count: RelaySecret.length) }
 
-  func changes(since token: Data?, keys: [String]?) -> ZoneChangeBatch {
+  func changes(since token: Data?, keys: [String]) -> ZoneChangeBatch {
     let after = token.flatMap { Int(String(decoding: $0, as: UTF8.self)) } ?? 0
-    let changed = zone.values.filter { $0.seq > after }.sorted { $0.seq < $1.seq }.map(\.record)
-    return ZoneChangeBatch(modifications: changed, deletions: [], token: Data(String(seq).utf8), moreComing: false)
+    let changed = zone.values.filter { $0.seq > after }.sorted { $0.seq < $1.seq }.map { $0.record.withoutFile }
+    let gone = tombstones.filter { $0.value.seq > after }.sorted { $0.value.seq < $1.value.seq }.map { ($0.key, $0.value.recordType) }
+    return ZoneChangeBatch(modifications: changed, deletions: gone, token: Data(String(seq).utf8), moreComing: false)
   }
 
-  func records(_ ids: [CKRecord.ID]) -> [CKRecord] { ids.compactMap { zone[$0]?.record } }
+  func records(_ ids: [CKRecord.ID]) -> [CKRecord] { ids.compactMap { zone[$0]?.record.withoutFile } }
+
+  func uploadFile(_ record: CKRecord, progress: @Sendable (Double) -> Void) -> SentRecords {
+    progress(1)
+    return upload(saving: [record], deleting: [])
+  }
+
+  func resumedFileUploads() -> [ResumedUpload] { [] }
+
+  func downloadFile(_ id: CKRecord.ID, progress: @Sendable (Double) -> Void) -> CKRecord? {
+    progress(1)
+    return zone[id]?.record
+  }
 
   func upload(saving: [CKRecord], deleting: [CKRecord.ID]) -> SentRecords {
     for record in saving {
       put(record)
       saved.append(record.recordID.recordName)
     }
-    for id in deleting { zone[id] = nil }
+    for id in deleting {
+      guard let gone = zone.removeValue(forKey: id) else { continue }
+      seq += 1
+      tombstones[id] = (seq, gone.record.recordType)
+      deleted.append(id.recordName)
+    }
     Self.log.notice("替身 iCloud 收下 \(saving.count, privacy: .public) 条、删除 \(deleting.count, privacy: .public) 条")
     return SentRecords(saved: saving, deleted: deleting)
   }
@@ -79,12 +103,15 @@ struct UnreachableCloud: SyncCloud {
   func accountStatus() -> CKAccountStatus { .available }
   func accountName() -> String { "simulated" }
   func relaySecret() throws -> Data { throw Self.failure }
-  func changes(since token: Data?, keys: [String]?) throws -> ZoneChangeBatch { throw Self.failure }
+  func changes(since token: Data?, keys: [String]) throws -> ZoneChangeBatch { throw Self.failure }
   func records(_ ids: [CKRecord.ID]) throws -> [CKRecord] { throw Self.failure }
   func upload(saving: [CKRecord], deleting: [CKRecord.ID]) throws -> SentRecords {
     let ids = saving.map(\.recordID) + deleting
     throw CKError(.partialFailure, userInfo: [CKPartialErrorsByItemIDKey: Dictionary(uniqueKeysWithValues: ids.map { ($0, Self.offline) })])
   }
+  func uploadFile(_ record: CKRecord, progress: @Sendable (Double) -> Void) throws -> SentRecords { throw Self.failure }
+  func resumedFileUploads() throws -> [ResumedUpload] { throw Self.failure }
+  func downloadFile(_ id: CKRecord.ID, progress: @Sendable (Double) -> Void) throws -> CKRecord? { throw Self.failure }
   func saveZone() throws { throw Self.failure }
   func subscriptions() throws -> [CKSubscription.ID: CKSubscription] { throw Self.failure }
   func save(_ subscription: CKSubscription) throws { throw Self.failure }
@@ -94,4 +121,13 @@ struct UnreachableCloud: SyncCloud {
 extension CloudSync {
   /// 连断了网的 iCloud 替身（`UnreachableCloud`，调试画面）。
   public static func unreachable(store: CueStore) -> CloudSync { CloudSync(store: store) { UnreachableCloud() } }
+}
+
+extension CKRecord {
+  /// 去掉文件的一份（替身的拉取与按 ID 取同 CloudKit 只要列：不带文件）。
+  var withoutFile: CKRecord {
+    guard self[RecordMapper.fileKey] != nil, let copy = copy() as? CKRecord else { return self }
+    copy[RecordMapper.fileKey] = nil
+    return copy
+  }
 }

@@ -64,7 +64,7 @@ private struct CueRoundRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Button { withAnimation(Motion.snappy) { expanded.toggle() } } label: { header }
+            Button { withAnimation(Motion.nudge) { expanded.toggle() } } label: { header }
                 .buttonStyle(PressStyle())
                 .accessibilityValue(expanded ? "已展开" : "已收起")
             if expanded { detail.transition(.opacity) }
@@ -108,7 +108,7 @@ private struct CueRoundRow: View {
     private var detail: some View {
         VStack(alignment: .leading, spacing: 8) {
             if !round.sent.isEmpty {
-                Button { withAnimation(HandOff.quick) { showsSent.toggle() } } label: {
+                Button { withAnimation(Motion.fade) { showsSent.toggle() } } label: {
                     HStack(spacing: 6) {
                         Image(.mail).frame(width: 13).accessibilityHidden(true)
                         Text("交给 Cue 的话")
@@ -139,7 +139,7 @@ private struct CueCallRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Button { withAnimation(HandOff.quick) { expanded.toggle() } } label: {
+            Button { withAnimation(Motion.fade) { expanded.toggle() } } label: {
                 ToolRow(icon: CueRunFormat.icon(tool: call.name), target: target, truncation: .tail) { status }
                     .frame(minHeight: 22).contentShape(.rect)
             }

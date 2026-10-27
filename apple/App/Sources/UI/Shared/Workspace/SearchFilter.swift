@@ -20,7 +20,7 @@ nonisolated struct PaletteQuery: Equatable {
     var text = "" { didSet { pages = 1; sessionPages = 1 } }
     /// nil 不限。
     var project: UUID? { didSet { pages = 1 } }
-    var withImages = false { didSet { pages = 1 } }
+    var withAttachments = false { didSet { pages = 1 } }
     var sent: SendCondition = .any { didSet { pages = 1 } }
     var period: Period = .any { didSet { pages = 1 } }
     var pages = 1
@@ -36,7 +36,7 @@ nonisolated struct PaletteQuery: Equatable {
 
     static let pageSize = 30
 
-    var isFiltered: Bool { project != nil || withImages || sent != .any || period != .any }
+    var isFiltered: Bool { project != nil || withAttachments || sent != .any || period != .any }
 
     /// 项目筛选此刻的取值：选的项目名，没选是"全部"。
     func projectLabel(in projects: [Project]) -> String {
@@ -56,7 +56,7 @@ nonisolated struct PaletteQuery: Equatable {
     func store(now: Date = .now) -> SearchQuery {
         var query = SearchQuery(text: text)
         if let project { query.projects = [project] }
-        if withImages { query.hasImages = true }
+        if withAttachments { query.hasAttachments = true }
         query.sent = sent
         if period != .any { query.modifiedIn = now.addingTimeInterval(-Double(period.rawValue) * 86_400)...now }
         return query

@@ -45,8 +45,8 @@ extension MacSyncTests {
     }
 
     /// 新会话的会话名与模型、思考强度一样是 Pi 的启动参数：从步骤开的叫步骤名，开出来就叫它，再送开场的话（会话名不会先成了第一句话）；
-    /// 开场的话里带图片的，原图随第一条消息送达，不把存储格式的引用当文字发出去；没有开场的话就什么都不发。
-    @Test func 新会话_以步骤命名_开场的话带原图_没有开场的话不发() async throws {
+    /// 开场的话里带图片的，原图随第一条消息送达，不把存储格式的引用当文字发出去；文件写成本机的路径；没有开场的话就什么都不发。
+    @Test func 新会话_以步骤命名_开场的话带原图与文件路径_没有开场的话不发() async throws {
         let directory = try folder("proj")
         let project = try await services.store.createProject(name: "App", color: "#000000")
         try await services.store.setDirectory(directory.path, for: project.id)
@@ -64,10 +64,19 @@ extension MacSyncTests {
 
         let png = pngData()
         let hash = try services.store.files.store(png)
-        let shown = try await launched(PiLaunch(project: project.id, prompt: "看这张设计稿\n\n![](cuepad://img/\(hash))", token: "tok-5"), title: "App")
+        let shown = try await launched(PiLaunch(project: project.id, prompt: "看这张设计稿\n\n![](cuepad://file/\(hash))", token: "tok-5"), title: "App")
         #expect(rig.host.extensions["new-tok-5"]?.messages == [
             PiMessage(text: "看这张设计稿", images: [PiImage(mimeType: "image/png", data: png)], deliveryID: shown.id.uuidString)
         ])
+
+        // 文件在原处换成一行"附件：文件名（路径）"，路径是附件目录里本机那份
+        let source = FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString)-方案.pdf")
+        try Data("%PDF-1.4 方案".utf8).write(to: source)
+        let pdf = try services.store.files.store(fileAt: source)
+        let withFile = try await launched(PiLaunch(project: project.id, prompt: "照这份方案做\n\n[方案.pdf](cuepad://file/\(pdf))", token: "tok-7"), title: "App")
+        let path = try #require(services.store.files.fileURL(for: pdf)).path(percentEncoded: false)
+        #expect(path.hasPrefix(services.location.caches.path(percentEncoded: false)))
+        #expect(rig.host.extensions["new-tok-7"]?.messages == [PiMessage(text: "照这份方案做\n\n附件：方案.pdf（\(path)）", deliveryID: withFile.id.uuidString)])
 
         #expect(try await launched(PiLaunch(project: project.id, prompt: nil, token: "tok-2")).status == .known(.succeeded))
         #expect(rig.host.extensions["new-tok-2"]?.commands.isEmpty == true)

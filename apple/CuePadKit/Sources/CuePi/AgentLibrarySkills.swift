@@ -3,15 +3,17 @@ import CueStore
 import Foundation
 
 /// 照文件读出技能与技能那几种该整理的（位置见 `AgentLibraryPlaces`）。规则：
-/// - 有 `SKILL.md` 的目录是技能，不再往里找；没有的非空目录是分类（Claude Code 的目录只看一层），空的（只算 `.DS_Store` 也空）进"空目录"。
+/// - 有 `SKILL.md` 的目录是技能，不再往里找；没有的非空目录是分类（Claude Code、dsh 的目录只看一层），空的（只算 `.DS_Store` 也空）进"空目录"。
 /// - 格式取四家最严（`SkillProblem`）：格式不对的照列成技能、带上哪里不对，不搬、不链、不算同名。
 /// - 列出的技能：`.agents/skills` 里的全部，加旧目录里一键整理搬不走的（同名、格式不对的）；旧目录里的只有那一家读得到。
 /// - 旧目录里的：不是 CuePad 的（旧版副本由接入收掉）、不是各家自管的（Claude Code 的 `skills/synced/<账号>/…`、Codex 的 `skills/.system`，只计数）；
-///   链接不碰（Claude Code 目录里指到 `.agents` 的是它的技能链接）。搬到同层 `.agents/skills` 下的同一分类。
+///   链接不碰（Claude Code、dsh 目录里指到 `.agents` 的是它们的技能链接）。搬到同层 `.agents/skills` 下的同一分类。
 /// - 同名：全局与项目之间、同一层里（旧目录里的按搬过去之后算）；两个项目各有一个不算。
-/// - Claude Code 看不见：它用着、链接的位置还空着（那里已有别的东西不碰）。
+/// - 读不到 `.agents` 里这一个的那家（`SharedSkills`）看不见：它用着、链接的位置还空着（那里已有别的东西不碰），每家一件。
 struct LibrarySkillScan {
     var skills: [LibrarySkill] = []
+    /// 列出的技能的 SKILL.md 全文（`LibrarySkill.textPath` → 正文）
+    var texts: [String: String] = [:]
     var tidies: [LibraryTidy] = []
     var selfManaged: [SelfManagedSkills] = []
     var watched: Set<String> = []
@@ -21,6 +23,7 @@ struct LibrarySkillScan {
         let entry: SkillEntry
         let group: String
         let text: String
+        let modifiedAt: Date?
         let problem: SkillProblem?
         /// 在旧目录里：哪家的、搬到这里
         var owner: AgentKind?
@@ -66,23 +69,24 @@ struct LibrarySkillScan {
         }
         if !moves.isEmpty { tidies.append(LibraryTidy(id: "stray", kind: .stray(moves))) }
 
-        var unlinked: [SkillEntry] = []
+        var unlinked: [AgentKind: [SkillEntry]] = [:]
         for found in shared {
             var unseen: [AgentKind] = []
-            if found.problem == nil {
-                let link = places.claudeSkills(found.entry.scope)?.appending(path: found.entry.name, directoryHint: .isDirectory)
-                let linked = link.map { RelativeLink.points($0, to: URL(filePath: found.entry.path)) } ?? true
-                let free = link.map { !FileManager.default.fileExists(atPath: $0.path) && !RelativeLink.isLink($0) } ?? false
-                if !linked, free, !duplicated.contains(found.entry.path) { unlinked.append(found.entry) }
-                if !linked { unseen = [.claudeCode] }
+            for (agent, link) in found.problem == nil ? places.links(found.entry.name, group: found.group, in: found.entry.scope) : []
+            where !RelativeLink.points(link, to: URL(filePath: found.entry.path)) {
+                unseen.append(agent)
+                let free = !FileManager.default.fileExists(atPath: link.path) && !RelativeLink.isLink(link)
+                if free, !duplicated.contains(found.entry.path) { unlinked[agent, default: []].append(found.entry) }
             }
-            skills.append(Self.skill(found, unseenBy: unseen))
+            add(found, unseenBy: unseen)
         }
         let moved = Set(moves.map(\.skill.path))
         for found in strays where !moved.contains(found.entry.path) {
-            skills.append(Self.skill(found, unseenBy: found.problem == nil ? places.installed.filter { $0 != found.owner } : []))
+            add(found, unseenBy: found.problem == nil ? places.installed.filter { $0 != found.owner } : [])
         }
-        if !unlinked.isEmpty { tidies.append(LibraryTidy(id: "unlinked", kind: .unlinked(unlinked))) }
+        for agent in AgentKind.allCases {
+            if let entries = unlinked[agent] { tidies.append(LibraryTidy(id: "unlinked/\(agent.rawValue)", kind: .unlinked(agent: agent, skills: entries))) }
+        }
         // 先全局、后各项目（同 `places.scopes`），每层按分类（不在分类里的最后）、名字、路径
         let scopes = places.scopes
         skills.sort { a, b in
@@ -92,10 +96,13 @@ struct LibrarySkillScan {
         if !empties.isEmpty { tidies.append(LibraryTidy(id: "empty", kind: .empty(empties))) }
     }
 
-    private static func skill(_ found: Found, unseenBy: [AgentKind]) -> LibrarySkill {
-        LibrarySkill(
-            name: found.entry.name, scope: found.entry.scope, group: found.group, path: found.entry.path, text: found.text,
+    private mutating func add(_ found: Found, unseenBy: [AgentKind]) {
+        let skill = LibrarySkill(
+            name: found.entry.name, scope: found.entry.scope, group: found.group, path: found.entry.path,
+            description: SkillDocument(found.text).description ?? "", hash: LibraryEdit.base(of: found.text), modifiedAt: found.modifiedAt,
             problem: found.problem, unseenBy: unseenBy)
+        skills.append(skill)
+        texts[skill.textPath] = found.text
     }
 
     /// 走一个技能目录：读出技能与空目录，记下要盯的目录与文件。旧目录里的链接不碰（Claude Code 的技能链接、指到别处的）。
@@ -118,7 +125,7 @@ struct LibrarySkillScan {
                     watched.insert(skillFile.path)
                     found.append(Found(
                         entry: SkillEntry(name: name, scope: scope, path: item.path), group: group.joined(separator: "/"), text: text,
-                        problem: SkillDocument(text).problem(directory: name, depth: group.count + 1)))
+                        modifiedAt: LibraryInstructionScan.modified(skillFile), problem: SkillDocument(text).problem(directory: name, depth: group.count + 1)))
                 } else if Self.entries(item).allSatisfy({ $0 == ".DS_Store" }) {
                     empties.append(item.path)
                 } else if recursive, group.count < Self.walkLimit {

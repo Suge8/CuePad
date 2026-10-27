@@ -19,6 +19,16 @@ public struct PiTerminal: Sendable, Equatable {
         self.tmuxSocketPath = tmuxSocketPath
     }
 
+    /// 进程的控制终端名（如 `ttys012`）；没有终端为 nil。
+    static func controllingTerminal(of pid: Int32) -> String? {
+        var info = proc_bsdinfo()
+        let size = Int32(MemoryLayout<proc_bsdinfo>.size)
+        guard proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, size) == size, info.e_tdev != UInt32(bitPattern: -1),
+              let name = devname(dev_t(bitPattern: info.e_tdev), S_IFCHR) else { return nil }
+        let tty = String(cString: name)
+        return tty == "??" ? nil : tty
+    }
+
     init(tty: String?, environment env: [String: String]) {
         self.init(
             tty: tty,
@@ -99,13 +109,14 @@ public struct PiSession: Identifiable, Sendable, Equatable {
 
 /// Pi 会话显示名的唯一规则（活动会话与历史会话共用），与 Pi 自己的会话列表一致：
 /// `/name` 设的名字 → 会话文件里第一条有文字的用户消息 → 工作目录名。控制字符换成空格并去掉首尾空白，所以是单行。
-/// 用斜杠技能说的写你发的样子（`PiSkillCall`），不写 Pi 展开后的正文。
+/// 用斜杠技能说的写你发的样子（`PiSkillCall`），不写 Pi 展开后的正文；交给 Agent 的附件行只留文件名（`AttachmentFiles.namingAgentLines`）。
 public enum PiSessionName {
     /// 首条用户消息只用来当单行显示名：只取开头这么多字符（扩展的 `FIRST_MESSAGE_LIMIT` 与之相同）。
     public static let firstMessageLimit = 200
 
     public static func display(name: String?, firstMessage: String?, folder: String) -> String {
-        [name, firstMessage.map { PiSkillCall.shown(withoutImageNotes($0)) }].lazy.compactMap { $0.map(singleLine) }.first { !$0.isEmpty } ?? folder
+        [name, firstMessage.map { PiSkillCall.shown(withoutImageNotes($0)) }].lazy
+            .compactMap { $0.map { singleLine(AttachmentFiles.namingAgentLines(in: $0)) } }.first { !$0.isEmpty } ?? folder
     }
 
     /// 你的一句话当首条消息记下的样子：去掉首尾空白后的开头 `firstMessageLimit` 个字符；没有文字为 nil（接着看下一条）。

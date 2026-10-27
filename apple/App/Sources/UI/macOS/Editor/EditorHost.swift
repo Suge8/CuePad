@@ -6,6 +6,8 @@ import SwiftUI
 /// 对编辑器的操作口：底部操作栏经它取当前正文与选中部分。
 final class EditorHandle {
     fileprivate weak var textView: CueTextView?
+    /// 停用时编辑器拿着键盘：再启用时还给它
+    fileprivate var refocus = false
 
     var text: String? { textView?.storedText }
     /// 选中部分的存储格式；没选中为 nil。
@@ -34,11 +36,21 @@ struct EditorHost: NSViewRepresentable {
     /// ⌘↩ 的主动作（见 `CueTextView.onSubmit`）。
     var onSubmit: (() -> Void)?
     var onError: (any Error) -> Void = { _ in }
+    /// false：盖着别的东西、看不见时（技能与规则文件页标出合并时）交出键盘、不接输入、读屏跳过；回到 true 时之前拿着键盘的再拿回来。
+    var editable = true
     @Environment(AppServices.self) private var services
 
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    /// 跟着附件传输重画文件牌的任务（`AttachmentLooks.follow`），编辑器拆掉时取消。
+    final class Coordinator {
+        var watching: Task<Void, Never>?
+    }
+
     func makeNSView(context: Context) -> CueEditorView {
-        let view = CueEditorView(imageStore: services.store.files, theme: theme)
+        let view = CueEditorView(files: services.store.files, theme: theme)
         view.textView.storedText = initialText
+        context.coordinator.watching = AttachmentLooks.follow(services, in: view.textView)
         view.scrollerStyle = .overlay
         handle.textView = view.textView
         if let range = DebugHooks.preset.editorSelection {
@@ -51,16 +63,33 @@ struct EditorHost: NSViewRepresentable {
     }
 
     func updateNSView(_ view: CueEditorView, context: Context) {
-        update(view.textView)
+        update(view.textView, services: services)
     }
 
-    fileprivate func update(_ textView: CueTextView) {
+    static func dismantleNSView(_ view: CueEditorView, coordinator: Coordinator) { coordinator.watching?.cancel() }
+
+    /// `services` 由真正上屏的那个宿主给（`FittedEditorHost` 里的 `host` 不上屏，读不到环境）。
+    fileprivate func update(_ textView: CueTextView, services: AppServices) {
         textView.onChange = onChange
         textView.onSelectionChange = onSelectionChange
         textView.selectionActions = selectionActions
         textView.onSubmit = onSubmit
         textView.onError = onError
+        textView.onFetchFile = { [services, onError] key in AttachmentLooks.fetch(key, services: services, onError: onError) }
+        if textView.isEditable != editable { setEditable(textView) }
         if !Self.sameLook(textView.theme, theme) { textView.theme = theme }
+    }
+
+    private func setEditable(_ textView: CueTextView) {
+        let window = textView.window
+        if !editable {
+            handle.refocus = window?.firstResponder === textView
+            if handle.refocus { window?.makeFirstResponder(nil) }
+        }
+        textView.isEditable = editable
+        textView.isSelectable = editable
+        textView.setAccessibilityElement(editable)
+        if editable, handle.refocus { window?.makeFirstResponder(textView) }
     }
 
     /// 主题每次渲染都新建，只在外观相关的值真的变了才替换（替换会重排全文）。
@@ -75,14 +104,19 @@ struct FittedEditorHost: NSViewRepresentable {
     let host: EditorHost
     @Environment(AppServices.self) private var services
 
+    func makeCoordinator() -> EditorHost.Coordinator { EditorHost.Coordinator() }
+
     func makeNSView(context: Context) -> CueTextView {
-        let textView = CueTextView(imageStore: services.store.files, theme: host.theme)
+        let textView = CueTextView(files: services.store.files, theme: host.theme)
+        context.coordinator.watching = AttachmentLooks.follow(services, in: textView)
         textView.storedText = host.initialText
         host.handle.textView = textView
         return textView
     }
 
-    func updateNSView(_ textView: CueTextView, context: Context) { host.update(textView) }
+    func updateNSView(_ textView: CueTextView, context: Context) { host.update(textView, services: services) }
+
+    static func dismantleNSView(_ textView: CueTextView, coordinator: EditorHost.Coordinator) { coordinator.watching?.cancel() }
 
     func sizeThatFits(_ proposal: ProposedViewSize, nsView: CueTextView, context: Context) -> CGSize? {
         guard let width = proposal.width else { return nil }

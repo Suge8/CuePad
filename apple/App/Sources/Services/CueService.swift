@@ -61,7 +61,7 @@ final class CueService {
         setup = CueKeeper.Setup(
             recorder: recorder, launch: { [launch = dependencies.launch] in try await launch($0, store) }, helper: dependencies.helper,
             library: library, piAgentDirectory: piAgentDirectory, timing: dependencies.timing,
-            upload: { [sync] ids in await sync?.upload(ids) })
+            upload: { [sync] ids in await sync?.upload(ids) }, fetchFile: { [sync] key in try await sync.fetchFile(key) })
         hostID = recorder.hostID
         notifier = dependencies.notifier
     }

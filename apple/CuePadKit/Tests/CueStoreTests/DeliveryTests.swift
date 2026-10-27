@@ -153,47 +153,6 @@ import Testing
   }
 
   @Test
-  func requestWaitsForItsImagesToArriveThenRunsAfterOtherRequests() async throws {
-    let data = pngData(width: 6, height: 6)
-    let elsewhere = try Fixture()  // 图片在另一台设备上，尚未同步到本机
-    let hash = try elsewhere.store.files.store(data)
-    let store = store
-    let runs = RunLog()
-    let executor = DeliveryExecutor(
-      store: store, hostID: "mac-a", timing: clock.timing, onIssue: { Issue.record("执行器意外上报：\($0)") }
-    ) { request in
-      await runs.record(request.content.hasPrefix("look") ? "look" : request.content, imagePresent: store.files.fileURL(for: hash) != nil)
-      return .succeeded
-    }
-    try await executor.start()
-    let waiting = try await store.requestDelivery("look ![](cuepad://img/\(hash))", to: pi, on: "mac-a")
-    _ = try await store.requestDelivery("plain", to: pi, on: "mac-a")
-
-    // 排在后面的普通请求先执行，说明前面那条被跳过而不是抢跑
-    _ = try await eventually(store, { try $0.deliveryRequests().filter { $0.status == .known(.succeeded) }.count }) { $0 == 1 }
-    #expect(try await store.deliveryRequest(waiting.id)?.status == .known(.pending))
-
-    // 图片同步到了：文件放进附件目录，附件记录随后应用
-    _ = try store.files.store(data)
-    let arrived: [String: SQLValue] = [
-      "id": .text(UUID().uuidString.lowercased()), "hash": .text(hash), "byteCount": .int(Int64(data.count)),
-      "format": .text("png"), "createdAt": .int(1), "modifiedAt": .int(1),
-    ]
-    _ = try await store.applyRemote([.save(SyncRow(table: .attachments, fields: arrived), systemFields: Data())])
-
-    _ = try await eventually(store, { try $0.deliveryRequests().filter { $0.status == .known(.succeeded) }.count }) { $0 == 2 }
-    #expect(await runs.entries.map(\.name) == ["plain", "look"])
-    #expect(await runs.entries.last?.imagePresent == true)  // 执行时图片已经在本机
-    await executor.stop()
-  }
-
-  actor RunLog {
-    struct Entry: Sendable { var name: String; var imagePresent: Bool }
-    private(set) var entries: [Entry] = []
-    func record(_ name: String, imagePresent: Bool) { entries.append(Entry(name: name, imagePresent: imagePresent)) }
-  }
-
-  @Test
   func aModeFromANewerVersionIsKeptButNeverExecutedAndFailsWithAReason() async throws {
     let handler = Handler()
     let made = try await store.requestDelivery("x", to: pi, on: "mac-a")
