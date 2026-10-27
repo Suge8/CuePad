@@ -18,7 +18,7 @@ actor FakeZone: ZoneChangeSource {
     self.server = Dictionary(uniqueKeysWithValues: server.map { ($0.recordID, $0) })
   }
 
-  func changes(since token: Data?, keys: [String]?) async throws -> ZoneChangeBatch {
+  func changes(since token: Data?, keys: [String]) async throws -> ZoneChangeBatch {
     calls.append((token, keys))
     return try responses.removeFirst().get()
   }
@@ -146,9 +146,11 @@ func sendFields(kind: String, modifiedAt: Int64) -> [String: SQLValue] {
 }
 
 /// 两台"设备"之间的假云：把一端此刻的待推送交给另一端（`pulled`），并回报发送成功。
+/// 附件同真的一样分两路：记录不带文件先到，文件经接收端的 `FileFetcher` 从云里取。
 struct Loopback {
   let a: Rig
   let b: Rig
+  let cloud = SimulatedCloud()
 
   /// 一来一回：a 的待推送到 b，再 b 的到 a。
   func exchange() async throws {
@@ -166,6 +168,20 @@ struct Loopback {
     }
     _ = await from.coordinator.sent(SentRecords(saved: batch.saves, deleted: batch.deletes))
     try await to.coordinator.pulled(batch.saves, deletions)
+    try await deliverFiles(from: from, to: to)
+  }
+
+  private func deliverFiles(from: Rig, to: Rig) async throws {
+    for name in try await from.store.pendingAttachments() {
+      guard let record = try await from.coordinator.takeFile(name), let key = RecordMapper.row(from: record)?.attachmentKey else { continue }
+      _ = await from.coordinator.sent(await cloud.uploadFile(record) { _ in })
+      await from.coordinator.fileDone(name)
+      try await to.coordinator.pulled([record.withoutFile], [])
+      let fetcher = FileFetcher(cloud: cloud, coordinator: to.coordinator, board: TransferBoard())
+      await fetcher.start()
+      _ = try await fetcher.fetch(key)
+      await fetcher.stop()
+    }
   }
 }
 

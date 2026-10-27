@@ -2,7 +2,7 @@
 {"c":"p1","k":"eof"}
 {"c":"p1","d":"2.1.299 (Claude Code)","k":"stdout"}
 {"c":"p1","k":"exit","n":0}
-{"a":["--input-format","stream-json","--output-format","stream-json","--verbose","--include-partial-messages","--permission-prompt-tool","stdio","--permission-mode","auto","--session-id","e54c677f-60b9-479e-acf6-632db2671d94"],"c":"p2","d":"claude","k":"spawn","m":"e54c677f-60b9-479e-acf6-632db2671d94","p":"/private{tmp:1}/work"}
+{"a":["--input-format","stream-json","--output-format","stream-json","--verbose","--include-partial-messages","--permission-prompt-tool","stdio","--permission-mode","auto","--session-id","e54c677f-60b9-479e-acf6-632db2671d94","--add-dir","{tmp:1}/store/Caches/CuePadAttachments/"],"c":"p2","d":"claude","k":"spawn","m":"e54c677f-60b9-479e-acf6-632db2671d94","p":"/private{tmp:1}/work"}
 {"a":["agents","--json"],"c":"p3","d":"claude","k":"spawn","p":"{pwd}"}
 {"c":"p2","d":"{\"request\":{\"subtype\":\"initialize\"},\"request_id\":\"2B16C3BE-58CA-4EF3-BFF0-1A628BBA8338\",\"type\":\"control_request\"}","k":"stdin"}
 {"c":"p3","k":"eof"}

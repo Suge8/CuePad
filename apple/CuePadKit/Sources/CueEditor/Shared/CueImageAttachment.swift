@@ -7,7 +7,7 @@ import AppKit
 import UIKit
 #endif
 
-/// 内联图片附件。只保存 id 与文件位置；尺寸只读文件头，像素在附件被绘制（进入视口）时才由
+/// 内联图片附件。只保存键与文件位置；尺寸只读文件头，像素在附件被绘制（进入视口）时才由
 /// `ThumbnailLoader` 降采样解码。
 ///
 /// 这里不用 NSTextAttachmentViewProvider：TextKit（macOS）不保证首次布局后加载视图，视图还会吞掉点击、
@@ -15,19 +15,30 @@ import UIKit
 final class CueImageAttachment: NSTextAttachment {
     private static let placeholderSize = CGSize(width: 240, height: 120)
 
-    let imageID: String
-    let fileURL: URL?
+    let key: String
+    /// 本机那份；还没从 iCloud 取来为 nil，到了由 `relocate` 补上。
+    private(set) var fileURL: URL?
     weak var core: EditorCore?
     private lazy var pointSize: CGSize? = fileURL.flatMap(Thumbnails.pointSize(at:))
 
-    init(id: String, fileURL: URL?) {
-        imageID = id
+    init(key: String, fileURL: URL?) {
+        self.key = key
         self.fileURL = fileURL
         super.init(data: nil, ofType: nil)
         image = CueImageRendering.stub
     }
 
     required init?(coder: NSCoder) { nil }
+
+    /// 文件到了（`EditorCore.refreshAttachments`）：本来缺着的换成本机那份，尺寸重读。还没到的也要重画（占位上写着传了几成）。
+    func relocate(_ url: URL?) -> Bool {
+        guard fileURL == nil else { return false }
+        if let url {
+            fileURL = url
+            pointSize = Thumbnails.pointSize(at: url)
+        }
+        return true
+    }
 
     /// 宽度自适应：不超过行宽，也不放大超过自然尺寸；文件缺失时用固定占位尺寸。
     func size(fitting width: CGFloat) -> CGSize {
@@ -50,8 +61,11 @@ final class CueImageAttachment: NSTextAttachment {
         for bounds: CGRect, attributes: [NSAttributedString.Key: Any], location: any NSTextLocation,
         textContainer: NSTextContainer?
     ) -> CueImage? {
-        let core = core
-        let url = fileURL
-        return MainActor.assumeIsolated { core?.thumbnails.image(at: url, size: bounds.size) }
+        let core = core, url = fileURL, key = key
+        return MainActor.assumeIsolated {
+            guard let core else { return nil }
+            guard let url else { return CueImageRendering.placeholder(size: bounds.size, style: core.style, label: core.missingImageLabel(key)) }
+            return core.thumbnails.image(at: url, size: bounds.size)
+        }
     }
 }

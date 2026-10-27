@@ -147,7 +147,7 @@ enum DebugHooks {
         #endif
     }
 
-    /// 脚本起的实例（带就绪文件 `DebugScene.readyFile`：截图、录屏、交互验收、测量）；测试宿主不算。Mac 上当作有人在看（`CueViewing`）。
+    /// 脚本起的实例（带就绪文件 `DebugScene.readyFile`：截图、录屏、交互验收、测量）；测试宿主不算。Mac 上当作有人在看（`CueViewing`）；不建菜单栏图标（`AppDelegate`）、不注册全局快捷键（`AppServices.register`）：那是用户的菜单栏与按键，一天上百次的起停不该碰。
     static var scripted: Bool {
         #if DEBUG
         DebugScene.readyFile != nil
@@ -259,9 +259,10 @@ enum DebugHooks {
     typealias MainWindowClass = MainShellWindow
     #endif
 
-    /// 进到 `main`：`-CuePadBench launch` 从这里量冷启动（`LaunchBench`）。
+    /// 进到 `main`：先查用户在不在才许借前台（`DebugForeground`），再从这里量冷启动（`-CuePadBench launch`，`LaunchBench`）。
     static func launching() {
         #if DEBUG
+        DebugForeground.requireUserAway()
         LaunchBench.start()
         #endif
     }

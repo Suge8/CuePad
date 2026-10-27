@@ -10,7 +10,7 @@
 #   CUEPAD_TRACE=<xctrace 模板>（如 'Time Profiler'）：每次量的同时录整段 trace（启动前开录，含冷启动），存本检出的 apple/.derived-perf/Build/traces/interact-ios-<第几次>.trace。
 #   录的是整机（模拟器里的进程 xctrace 按 PID、按名字都认不出），按打印的 PID 筛；INTERACT 行的 at（墙钟）减 trace 的开始时刻就是各项在 trace 里的位置。
 #   xctrace 连设备卡住（不出"Starting recording"、收到 Ctrl-C 也不退）时这里 60 秒后放弃并以 1 退出，不带着卡住的录制往下量。
-# xc.sh 构建好 Release（带 DEBUG 条件，只为留下测量代码；产物在 apple/.derived-perf）、领到一台模拟器后调这里（不独占机器：只比指令数与主线程 CPU），第一个参数是 CuePad.app；
+# xc.sh 构建好 Release（带 DEBUG 条件，只为留下测量代码；产物在 apple/.derived-perf）、领到一个模拟器槽位后调这里（只比指令数与主线程 CPU），第一个参数是 CuePad.app；
 # 设备是领到的那台（机型 CUEPAD_IOS_DEVICE，默认 iPhone 17；见 _sim.sh）。
 set -euo pipefail
 command -v axe >/dev/null || { echo "需要 axe（brew install cameroncooke/axe/axe）" >&2; exit 1; }

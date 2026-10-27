@@ -43,7 +43,7 @@ enum PerfLibrary {
         // 用剩的图分给大项目最近的卡，保证 300 张都用上
         var big = groups[0]
         for (offset, hash) in imagePool.enumerated() where offset < big.cards.count {
-            big.cards[offset].text += "\n\n" + CueFormat.imageMarkup(id: hash)
+            big.cards[offset].text += "\n\n" + CueFormat.imageMarkup(key: hash)
         }
         groups[0] = big
 
@@ -138,7 +138,7 @@ enum PerfLibrary {
             lines.append((0..<(1 + random.next(5))).map { _ in sentence(&random, chinese: chinese, words: 6...24) }.joined(separator: chinese ? "" : " "))
         }
         if random.unit() < imageShare, let hash = images.popFirst() {
-            lines.insert(CueFormat.imageMarkup(id: hash), at: 2)
+            lines.insert(CueFormat.imageMarkup(key: hash), at: 2)
         }
         // 一年内，越近越密
         let days = 365 * pow(random.unit(), 2.2)

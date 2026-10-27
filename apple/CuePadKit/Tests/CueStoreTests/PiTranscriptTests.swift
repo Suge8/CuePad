@@ -35,9 +35,9 @@ import Testing
     let longAgo = now.addingTimeInterval(-30 * 86_400)
     let only = try store.files.store(pngData(width: 8, height: 8, shade: 0.1))
     let shared = try store.files.store(pngData(width: 8, height: 8, shade: 0.9))
-    _ = try await store.createCard(body: CueFormat.imageMarkup(id: shared))
+    _ = try await store.createCard(body: CueFormat.imageMarkup(key: shared))
     try await store.upsertPiSession(IndexedSession(id: "s", path: "/s/s.jsonl", cwd: "/w", lastActivityAt: longAgo), host: "mac")
-    let text = "看\n\(CueFormat.imageMarkup(id: only))\n\(CueFormat.imageMarkup(id: shared))"
+    let text = "看\n\(CueFormat.imageMarkup(key: only))\n\(CueFormat.imageMarkup(key: shared))"
     try await store.writePiTranscript(
       PiTranscript(sessionID: "s", messages: [PiChatMessage(sessionID: "s", entryID: "u", seq: 1, role: .user, text: text, at: longAgo)], recap: PiRecap()))
     #expect(try await store.hasAttachment(only))
@@ -50,11 +50,11 @@ import Testing
 
   /// 超长正文只截文字，图片引用不能被切断。
   @Test func clippingKeepsImageReferencesWhole() {
-    let reference = CueFormat.imageMarkup(id: String(repeating: "a", count: 64))
+    let reference = CueFormat.imageMarkup(key: String(repeating: "a", count: 64))
     let message = PiChatMessage(
       sessionID: "s", entryID: "u", seq: 1, role: .user, text: String(repeating: "字", count: PiChatMessage.textLimit + 50) + "\n" + reference, at: .now)
     #expect(message.text.hasSuffix("…" + reference))
-    #expect(CueFormat.imageHashes(in: message.text) == [String(repeating: "a", count: 64)])
+    #expect(CueFormat.imageKeys(in: message.text) == [String(repeating: "a", count: 64)])
     #expect(CueFormat.plainText(message.text).count == PiChatMessage.textLimit)
   }
 }

@@ -1,15 +1,16 @@
+import CueText
 import Foundation
 
 extension CueStore {
   /// 在一个写事务里应用一批远端变更；提交后一次通知订阅者。单条记录失败（如字段非法）只回滚该条并报告，不影响其余。
   package func applyRemote(_ changes: [RemoteChange]) throws -> [RemoteFailure] {
     var failures: [RemoteFailure] = []
-    var removedHashes: [String] = []
+    var removedKeys: [String] = []
     try write {
       for change in changes {
         try db.exec("SAVEPOINT remote")
         do {
-          if let hash = try apply(change) { removedHashes.append(hash) }
+          if let key = try apply(change) { removedKeys.append(key) }
           try db.exec("RELEASE remote")
         } catch {
           try db.exec("ROLLBACK TO remote")
@@ -21,7 +22,7 @@ extension CueStore {
       if !cards.isEmpty { try repairCardTree(touching: cards) }
       if changes.contains(where: \.touchesLaunches) { try claimLaunchedCards() }
     }
-    return failures + (try removeFiles(of: removedHashes))
+    return failures + (try removeFiles(of: removedKeys))
   }
 
   func readSyncRow(_ table: Table, _ id: String) throws -> SyncRow? {
@@ -46,13 +47,13 @@ extension CueStore {
     try copyingRemote { try db.run(Self.upsertSQL(row.table, columns), columns.map { row.fields[$0] ?? .null }) }
   }
 
-  /// 返回被删附件的哈希（提交后回收文件）。
+  /// 返回被删附件的键（提交后回收文件）。
   private func apply(_ change: RemoteChange) throws -> String? {
     switch change {
     case .delete(let key):
-      var hash: String?
+      var attachment: String?
       if key.table == .attachments {
-        hash = try db.first("SELECT hash FROM attachments WHERE id = ?", [key.id]) { $0.text(0) }
+        attachment = try db.first("SELECT hash, format FROM attachments WHERE id = ?", [key.id]) { AttachmentKey.make(hash: $0.text(0), format: $0.text(1)) }
       }
       try db.run("DELETE FROM \(key.table.rawValue) WHERE id = ?", [key.id])
       try db.run("DELETE FROM syncRecords WHERE recordName = ?", [key.id])
@@ -63,7 +64,7 @@ extension CueStore {
         try db.run("UPDATE cards SET projectID = ?, modifiedAt = ? WHERE projectID = ?", [Project.defaultID, now, key.id])
         try db.run("DELETE FROM projectDirectories WHERE projectID = ?", [key.id])
       }
-      return hash
+      return attachment
     case .save(let remote, let systemFields, let serverAt):
       try applySave(remote, systemFields, serverAt: serverAt)
       return nil
@@ -166,12 +167,12 @@ extension CueStore {
     try overwrite(SyncRow(table: .cards, fields: fields))
   }
 
-  /// 远端删除附件记录后回收文件；仍被卡片或发送记录引用的保留（引用它的记录也许马上就到）。删不掉的作为失败报告。
-  private func removeFiles(of hashes: [String]) throws -> [RemoteFailure] {
+  /// 远端删除附件记录后回收文件；仍被引用的保留（`isAttachmentReferenced`）（引用它的记录也许马上就到）。删不掉的作为失败报告。
+  private func removeFiles(of keys: [String]) throws -> [RemoteFailure] {
     var failures: [RemoteFailure] = []
-    for hash in Set(hashes).sorted() where try !isImageReferenced(hash) {
-      do { try files.remove(hash: hash) } catch {
-        failures.append(RemoteFailure(recordName: hash, message: String(localized: "附件文件没能删除：\(String(describing: error))")))
+    for key in Set(keys).sorted() where try !isAttachmentReferenced(key) {
+      do { try files.remove(key) } catch {
+        failures.append(RemoteFailure(recordName: key, message: String(localized: "附件文件没能删除：\(String(describing: error))")))
       }
     }
     return failures

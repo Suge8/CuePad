@@ -65,10 +65,10 @@ extension RealOpenCodeTests {
             #expect(opened.agent == .opencode && opened.hosted && opened.launchToken == "token-1" && sandbox.service != nil)
             let image = pngData(width: 8, height: 8, shade: 0.9)
             try await bridge.send(PiMessage(text: "Reply with exactly the word SEEN.", images: [PiImage(mimeType: "image/png", data: image)]), to: id)
-            let hash = SHA256.hash(data: image).map { String(format: "%02x", $0) }.joined()
+            let hash = SHA256.hash(data: image).map { String(format: "%02x", $0) }.joined() + ".png"
             try await eventually("带图的那句与回答进了对话") {
                 let messages = try await store.piMessages(of: opened.sessionID)
-                return messages.contains { $0.role == .known(.user) && $0.text.contains("cuepad://img/\(hash)") }
+                return messages.contains { $0.role == .known(.user) && $0.text.contains("cuepad://file/\(hash)") }
                     && messages.last?.role == .known(.pi)
             }
             #expect(store.files.fileURL(for: hash) != nil)

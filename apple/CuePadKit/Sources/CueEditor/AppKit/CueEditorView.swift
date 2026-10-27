@@ -6,8 +6,8 @@ import AppKit
 public final class CueEditorView: NSScrollView {
     public let textView: CueTextView
 
-    public init(imageStore: any CueImageStore, theme: CueEditorTheme) {
-        textView = CueTextView(imageStore: imageStore, theme: theme)
+    public init(files: any CueFileStore, theme: CueEditorTheme) {
+        textView = CueTextView(files: files, theme: theme)
         super.init(frame: .zero)
         hasVerticalScroller = true
         drawsBackground = false

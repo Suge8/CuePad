@@ -40,6 +40,7 @@ enum SyncBench {
         let services = workspace.services
         mark("ready", ["role": role, "pid": Int(getpid()), "relay": services.relay != nil])
         Watch.start(services)
+        Files.start(services)
         if role == "host" { await enableCue(services) }
         do {
             for try await line in FileHandle.standardInput.bytes.lines {
@@ -83,6 +84,7 @@ enum SyncBench {
     /// - `offline`：这个实例连 iCloud 的请求都以没有网络失败（`CloudOutage`），门铃断开；`online [path]`：恢复，门铃重连，
     ///   给了 path 再替路径监视器报一次网络回来（真断网的恢复；不给是路径一直可用、只是 iCloud 连不上）。
     /// - `card-new`：建一张卡记 `card id=`；`churn <卡片 id>`：紧循环改它的正文，`churn-stop` 停下并记 `churned writes=`（撞版本探针，`sync-bench.py versions`）。
+    /// - 带文件的那几条（`burst`、`watch-file`）见 `Files.command`。
     /// - `bg`、`fg`：像手机那样进后台的收尾（`prepareForBackground`）、回前台（`handleActivation`）；`hide`、`activate`：Mac 隐藏、回到前台。
     private static func command(_ words: [String], _ workspace: Workspace) async {
         let services = workspace.services
@@ -146,7 +148,7 @@ enum SyncBench {
         case "hide":
             NSApp.hide(nil)
         default:
-            mark("bench-error", ["what": "不认识的命令"])
+            if await !Files.command(words, workspace) { mark("bench-error", ["what": "不认识的命令"]) }
         }
     }
 

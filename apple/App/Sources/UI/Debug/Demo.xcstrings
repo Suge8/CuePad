@@ -1047,6 +1047,22 @@
         }
       }
     },
+    "交接材料" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Handoff Materials"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "交接材料"
+          }
+        }
+      }
+    },
     "交给 notes 会话按参考图重拍了。" : {
       "localizations" : {
         "en" : {
@@ -2775,6 +2791,22 @@
         }
       }
     },
+    "季度复盘.pdf" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quarterly Review.pdf"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "季度复盘.pdf"
+          }
+        }
+      }
+    },
     "完整页面可以直接点按钮试交互" : {
       "localizations" : {
         "en" : {
@@ -3251,6 +3283,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "导出 PNG 时保留透明背景"
+          }
+        }
+      }
+    },
+    "导出日志.zip" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exported Logs.zip"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导出日志.zip"
           }
         }
       }
@@ -7443,6 +7491,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "评审结论：还有三处要改"
+          }
+        }
+      }
+    },
+    "评审要看的都在这里：复盘、首页配色，和上周导出的日志。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Everything for the review is here: the retro, the homepage colors, and last week's exported logs."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "评审要看的都在这里：复盘、首页配色，和上周导出的日志。"
           }
         }
       }

@@ -24,7 +24,7 @@ struct IOSTests {
         let png = pngData()
         let hash = try app.services.store.files.store(png)
 
-        try app.services.copy("前\n![](cuepad://img/\(hash))\n后")
+        try app.services.copy("前\n![](cuepad://file/\(hash))\n后")
 
         let items = app.pasteboard.items
         #expect(items.count == 3)

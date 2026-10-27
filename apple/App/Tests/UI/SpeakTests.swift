@@ -1,3 +1,4 @@
+import CueEditor
 import CueStore
 import CueTestSupport
 import Foundation
@@ -38,6 +39,15 @@ struct SpeakTests {
         CuePresence.derive(try await CueDigest.read(from: store), at: Speech.Moment(now: .now, reachableSince: reachable ? .distantPast : nil))
     }
 
+    /// 选来的一个文件存进附件目录（输入框选好就存，`DraftFile.store`）。
+    private func attachedFile(_ name: String, _ data: Data) throws -> DraftFile {
+        let url = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString).appending(path: name)
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try data.write(to: url)
+        let stored = try IncomingFile.file(url).store(in: files)
+        return DraftFile(key: stored.key, name: stored.name)
+    }
+
     /// 把你这句话的写下时刻挪到 `ago` 秒前：时限从真实的此刻起算，不等一分钟。
     private func backdate(_ message: CueMessage, by ago: TimeInterval) throws {
         try RawDB(app.services.location.databaseURL).exec(
@@ -60,9 +70,9 @@ struct SpeakTests {
         let workspace = Workspace(services: app.services)
         workspace.cue.draft = ComposerDraft(text: "看看发布")
 
-        let writing = workspace.speak(to: .cue, from: Bindable(workspace.cue).draft) { try $0.stored(in: files) }
+        let writing = workspace.speak(to: .cue, from: Bindable(workspace.cue).draft) { $0.stored }
         #expect(workspace.cue.draft.text.isEmpty)
-        await writing?.value
+        await writing.value
 
         let said = try await youSaid()
         #expect(said.map(\.text) == ["看看发布"])
@@ -78,21 +88,24 @@ struct SpeakTests {
     }
 
     /// 对 Cue 说的输入框也是随手记：长按发送"只记下"，或 Cue 没启用时按发送，这句不交给 Cue，记成默认项目里的一条灵感
-    /// （不选项目；文字在前、图片按顺序在后），输入框立刻空，提示落点；Cue 那边不多一句你的话。
+    /// （不选项目；文字在前、附件按顺序在后：图片嵌入，文件是带文件名的链接），输入框立刻空，提示落点；Cue 那边不多一句你的话。
     @Test(arguments: [true, false])
     func 只记下或Cue没启用时发送_记成默认项目里的灵感_输入框立刻空_不对Cue说(cueEnabled: Bool) async throws {
         if cueEnabled { try await enableCue() }
         let workspace = Workspace(services: app.services)
-        let photos = [PickedImage(data: pngData(shade: 0.1)), PickedImage(data: pngData(shade: 0.9))]
-        workspace.cue.draft = ComposerDraft(text: "  周末读完第三章  ", images: photos)
+        let photos = try [pngData(shade: 0.1), pngData(shade: 0.9)].map { DraftFile(key: try files.store($0), name: "") }
+        let pdf = try attachedFile("第三章 [批注].pdf", Data("%PDF-1.4".utf8))
+        workspace.cue.draft = ComposerDraft(text: "  周末读完第三章  ", files: photos + [pdf])
         let box = Bindable(workspace.cue).draft
 
         let writing = cueEnabled ? workspace.note(from: box) : workspace.sayToCue(from: box)
-        #expect(workspace.cue.draft.isEmpty(accepting: .images))
+        #expect(workspace.cue.draft.isEmpty(accepting: .files))
         await writing?.value
 
-        let hashes = try photos.map { try files.store($0.data) }
-        #expect(try await store.cards(in: Project.defaultID).map(\.body) == ["周末读完第三章\n\n![](cuepad://img/\(hashes[0]))\n![](cuepad://img/\(hashes[1]))"])
+        #expect(pdf.key.hasSuffix(".pdf"))
+        #expect(try await store.cards(in: Project.defaultID).map(\.body) == [
+            "周末读完第三章\n\n![](cuepad://file/\(photos[0].key))\n![](cuepad://file/\(photos[1].key))\n[第三章 (批注).pdf](cuepad://file/\(pdf.key))",
+        ])
         #expect(workspace.notice?.text.visible == "已记到 默认")
         #expect(try await youSaid().isEmpty)
     }
@@ -104,7 +117,7 @@ struct SpeakTests {
         try await enableCue()
         let workspace = Workspace(services: app.services)
         workspace.cue.draft = ComposerDraft(text: "顺便看看登录回调那个超时")
-        await workspace.speak(to: .cue, from: Bindable(workspace.cue).draft) { try $0.stored(in: files) }?.value
+        await workspace.speak(to: .cue, from: Bindable(workspace.cue).draft) { $0.stored }.value
         let message = try #require(try await youSaid().first)
         let said = Said.cue(message, host: "mac-cue")
         let inTime = message.createdAt.addingTimeInterval(Speech.sendLimit - 1)
@@ -135,7 +148,7 @@ struct SpeakTests {
         try await enableCue()
         let workspace = Workspace(services: app.services)
         workspace.cue.draft = ComposerDraft(text: "README 的截图也交给你")
-        await workspace.speak(to: .cue, from: Bindable(workspace.cue).draft) { try $0.stored(in: files) }?.value
+        await workspace.speak(to: .cue, from: Bindable(workspace.cue).draft) { $0.stored }.value
         let old = try #require(try await youSaid().first)
 
         workspace.resend(.cue(old, host: "mac-cue"), restoringInto: Bindable(workspace.cue).draft)
@@ -150,30 +163,37 @@ struct SpeakTests {
         #expect(try await youSaid().map(\.id) == [renewed[0].id])
     }
 
-    /// 图片存不进图片库（磁盘满、目录没权限）：什么都没发，两条去处都一样——草稿原样留着，只看到报错，写出后的那句"已交给"不出现。
-    @Test func 图片存不进图片库_什么都没发_草稿留着_只看到报错() async throws {
-        try await enableCue()
+    // MARK: 发给会话
+
+    /// 回复框带的附件发出去就是正文里的引用（图片嵌入、文件带文件名）：依次是带上的卡片、文字、附件，只有附件也能发；
+    /// 放回输入框时（重发、展开编辑）文字回到文字区、附件回到附件条，不变成文件名。
+    @Test func 发给会话_带卡片图片与文件_正文依次是卡片文字附件_放回输入框时附件回到附件条() async throws {
         let target = try await session()
         let workspace = Workspace(services: app.services)
-        let attachments = app.services.location.databaseURL.deletingLastPathComponent().appending(path: "Attachments")
-        try FileManager.default.createDirectory(at: attachments, withIntermediateDirectories: true)
-        try FileManager.default.setAttributes([.posixPermissions: 0o500], ofItemAtPath: attachments.path)
-        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: attachments.path) }
-        let photo = PickedImage(data: pngData())
-        let reply = app.services.settings.replyDraftBinding(for: target.id)
+        let box = app.services.settings.replyDraftBinding(for: target.id)
+        let card = try await store.createCard(body: "接口约定\n\n![](cuepad://file/\(try files.store(pngData(shade: 0.8))))")
+        let photo = DraftFile(key: try files.store(pngData()), name: "")
+        let log = try attachedFile("crash.log", Data("Fatal error".utf8))
+        box.wrappedValue = ComposerDraft(text: "  照这个改  ", files: [photo, log], attachments: [Outbox(content: card.body, card: card.id)])
 
-        for (listener, box) in [(Listener.cue, Bindable(workspace.cue).draft), (.session(target, mode: .send), reply)] {
-            box.wrappedValue = ComposerDraft(text: "参考这张", images: [photo])
-            let writing = workspace.speak(to: listener, from: box, saying: Dotted("已交给")) { try $0.stored(in: files) }
-            #expect(writing == nil)
-            #expect(box.wrappedValue.text == "参考这张" && box.wrappedValue.images.map(\.id) == [photo.id])
-            #expect(workspace.notice?.isError == true && workspace.notice?.text.visible != "已交给")
-        }
-        #expect(try await youSaid().isEmpty)
-        #expect(try await store.deliveryRequests().isEmpty)
+        await workspace.speak(to: .session(target, mode: .send), from: box) { $0.stored }.value
+
+        let request = try #require(try await store.deliveryRequests().first)
+        #expect(request.content == "\(card.body)\n\n照这个改\n\n![](cuepad://file/\(photo.key))\n[crash.log](cuepad://file/\(log.key))")
+        #expect(box.wrappedValue.isEmpty(accepting: [.files, .cards]))
+
+        var restored = ComposerDraft()
+        restored.append(stored: "照这个改\n\n![](cuepad://file/\(photo.key))\n[crash.log](cuepad://file/\(log.key))")
+        #expect(restored.text == "照这个改" && restored.files == [photo, log])
+
+        // 同一份内容改了名再带一次：还是同一个附件，不多一个
+        restored.append(stored: "[crash 副本.log](cuepad://file/\(log.key))")
+        #expect(restored.files.map(\.name) == ["", "crash.log"])
+
+        box.wrappedValue = ComposerDraft(files: [log])
+        await workspace.speak(to: .session(target, mode: .send), from: box) { $0.stored }.value
+        #expect(try await store.deliveryRequests().map(\.content).contains("[crash.log](cuepad://file/\(log.key))"))
     }
-
-    // MARK: 发给会话
 
     @Test func 发给会话_按发送输入框立刻空_只多一个气泡_Mac送达后是已送达() async throws {
         let target = try await session()
@@ -181,9 +201,9 @@ struct SpeakTests {
         let box = app.services.settings.replyDraftBinding(for: target.id)
         box.wrappedValue = ComposerDraft(text: "把断言也改了")
 
-        let writing = workspace.speak(to: .session(target, mode: .send), from: box) { try $0.stored(in: files) }
+        let writing = workspace.speak(to: .session(target, mode: .send), from: box) { $0.stored }
         #expect(box.wrappedValue.text.isEmpty)
-        await writing?.value
+        await writing.value
 
         let requests = try await store.deliveryRequests()
         #expect(requests.map(\.content) == ["把断言也改了"] && requests.first?.hostID == "mac-b")
@@ -204,7 +224,7 @@ struct SpeakTests {
         let workspace = Workspace(services: app.services)
         let box = app.services.settings.replyDraftBinding(for: target.id)
         box.wrappedValue = ComposerDraft(text: "改完再跑一遍")
-        await workspace.speak(to: .session(target, mode: .send), from: box) { try $0.stored(in: files) }?.value
+        await workspace.speak(to: .session(target, mode: .send), from: box) { $0.stored }.value
         let lost = try #require(try await store.deliveryRequests().first)
 
         let executor = DeliveryExecutor(store: store, hostID: "mac-b", onIssue: { _ in }) { _ in .failed(.verbatim("Pi 已经退出")) }
@@ -239,10 +259,10 @@ struct SpeakTests {
         let box = toCue ? Bindable(workspace.cue).draft : app.services.settings.replyDraftBinding(for: target.id)
         box.wrappedValue = ComposerDraft(text: "看看发布")
 
-        let writing = workspace.speak(to: toCue ? .cue : .session(target, mode: .send), from: box) { try $0.stored(in: files) }
+        let writing = workspace.speak(to: toCue ? .cue : .session(target, mode: .send), from: box) { $0.stored }
         #expect(box.wrappedValue.text.isEmpty)
         box.wrappedValue.text = "再补一句"
-        await writing?.value
+        await writing.value
 
         #expect(box.wrappedValue.text == "看看发布\n\n再补一句")
         #expect(workspace.notice?.isError == true)

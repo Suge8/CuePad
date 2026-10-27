@@ -86,7 +86,7 @@ extension DebugScene {
 
     /// 演示用的一张图（手机上的登录页）存进附件目录，返回正文里引用它的写法；你的话带图片的演示（对话里的、还在路上的）用它。
     static func screenshotMarkup(_ store: CueStore) -> String? {
-        screenshotPNG().flatMap { try? store.files.store($0) }.map(CueFormat.imageMarkup(id:))
+        screenshotPNG().flatMap { try? store.files.store($0) }.map(CueFormat.imageMarkup(key:))
     }
 
     /// 手机宽度下登录页的"截图"：渐变底上一张白卡、两个输入框和一个按钮。
