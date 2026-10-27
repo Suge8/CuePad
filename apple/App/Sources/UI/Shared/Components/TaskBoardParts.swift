@@ -115,7 +115,7 @@ struct BoardColumn: View {
         #endif
     }
 
-    /// 列头浮在卡上，卡从它后面滚过，不在它下沿裁掉（docs/ui.md 沉浸式的栏）：都是一块写字玻璃，Mac 上排进窗口最顶那一排（`boardTopRow`）。
+    /// 列头浮在卡上，卡从它后面滚过，不在它下沿裁掉（docs/layout.md 沉浸式的栏）：都是一块写字玻璃，Mac 上排进窗口最顶那一排（`boardTopRow`）。
     private var columnLane: some View {
         #if os(macOS)
         ScrollView { cards }

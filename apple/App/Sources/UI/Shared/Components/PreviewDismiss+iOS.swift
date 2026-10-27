@@ -4,10 +4,10 @@ import UIKit
 
 /// 全屏页的关闭手势全是系统 zoom 转场的（下拉、左缘右滑、双指捏小），跟着手指缩回缩略图；这里只定它们什么时候让给页里：
 /// 手指下的滚动区还能往那个方向走时先走它——放大着的图与 PDF 拖动是看图、捏合是缩小，往下翻过的长文往下拉是往回翻，
-/// 左边还有一份时左缘右滑是翻回上一份（docs/ui.md 横拖的归属那一条）。"放大着没有""翻过没有"都直接看手指下的滚动区，不另存状态。
+/// 左边还有一份时左缘右滑是翻回上一份。"放大着没有""翻过没有"都直接看手指下的滚动区，不另存状态。
 /// 做法：给系统的每个关闭手势配一个只看不拦的守门手势，系统的要等它失败才能开始；守门的在手指落下那一刻就定（让给页里就认下，否则失败）。
 /// SwiftUI 的 zoom 转场没有"可不可以开始收起"的接口（UIKit 的 `interactiveDismissShouldBegin`），系统手势按它们公开的 `name` 认。
-/// 顺带关掉分页滚动区的滚动边缘效果：系统在栏后面按它垫一层雾（docs/ui.md「沉浸式的栏」不垫），`scrollEdgeEffectHidden` 管不到 `TabView` 的分页。
+/// 顺带关掉分页滚动区的滚动边缘效果：系统在栏后面按它垫一层雾（docs/layout.md「沉浸式的栏」不垫），`scrollEdgeEffectHidden` 管不到 `TabView` 的分页。
 struct PreviewDismissGuard: UIViewRepresentable {
     func makeUIView(context: Context) -> Anchor { Anchor() }
     func updateUIView(_ view: Anchor, context: Context) {}

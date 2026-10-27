@@ -123,7 +123,7 @@ struct CuePage: View {
 
     // MARK: 对话
 
-    /// 读不出来时也排一个真的视图：读库的订阅挂在页上，等视图出现才启动（docs/ui.md）。
+    /// 读不出来时也排一个真的视图：读库的订阅挂在页上，等视图出现才启动（docs/layout.md）。
     /// 还没说过话时正中是首次见面（`CueWelcome`：自我介绍，没启用时连同启用那一步，启用了接几句能直接说的话）。
     @ViewBuilder private var chat: some View {
         Group {
