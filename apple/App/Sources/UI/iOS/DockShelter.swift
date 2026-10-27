@@ -61,6 +61,9 @@ struct DockShelter: UIViewControllerRepresentable {
     private static func build(_ tab: UITab, in bar: UITabBarController) async {
         guard tab != bar.selectedTab, tab.viewController?.isViewLoaded == false, let page = tab.viewController,
               let shown = bar.selectedTab?.viewController?.view, let container = shown.superview else { return }
+        // 建出来的页走一遍出现时，SwiftUI 按它（tab 的根页，留着标签栏）改标签栏的显隐：选中的页让开标签栏时（设置、技能与规则）建完放回去
+        let hidden = bar.isTabBarHidden
+        defer { if bar.isTabBarHidden != hidden { bar.setTabBarHidden(hidden, animated: false) } }
         page.view.frame = shown.frame
         page.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         page.beginAppearanceTransition(true, animated: false)
