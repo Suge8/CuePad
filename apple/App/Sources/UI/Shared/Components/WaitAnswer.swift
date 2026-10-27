@@ -48,6 +48,7 @@ private struct SessionAnswer: View {
     @State private var pending: Pending?
     #if os(macOS)
     @FocusState private var keyboard: Bool
+    @Environment(\.panelCovered) private var covered
     #endif
 
     private var question: PiQuestion? { session.answerableQuestion }
@@ -122,7 +123,7 @@ private struct SessionAnswer: View {
         .focusEffectDisabled()
         .focused($keyboard)
         .yieldsFocusWhenCovered($keyboard)
-        .onAppear { keyboard = numbered }
+        .onAppear { keyboard = numbered && !covered }
         .onKeyPress(characters: .decimalDigits, phases: .down) { press in
             guard numbered, let number = Int(press.characters), values.indices.contains(number - 1), !answering else { return .ignored }
             answer(values[number - 1])

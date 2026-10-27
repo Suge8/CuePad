@@ -42,6 +42,7 @@ struct PiReplyBar: View {
     /// 读到了（在路上，或 Agent 已经接过去开始跑）就交还给页面。
     @State private var launched = false
     @FocusState private var focused: Bool
+    @Environment(\.panelCovered) private var covered
     /// ⌘⇧M、⌘⇧E 请模型或思考强度弹出菜单（Mac）。
     @State private var opening: PiConfigPick?
 
@@ -124,7 +125,7 @@ struct PiReplyBar: View {
             .onChange(of: canStop) { launched = false }
             .task { await DebugHooks.pressSendIfAsked(session: true) { shortcuts[.send]?() } }
             #if os(macOS)
-            .onAppear { focused = active }
+            .onAppear { focused = active && !covered }
             #endif
     }
 
