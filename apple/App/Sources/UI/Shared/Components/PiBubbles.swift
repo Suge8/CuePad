@@ -98,10 +98,11 @@ nonisolated struct BubbleParts {
         }
         let tokens = CueFormat.parse(stored)
         text = CueFormat.plainText(tokens.map { if case .text(let text) = $0 { text } else { "" } }.joined())
-        images = tokens.compactMap { if case .image(let key) = $0 { key } else { nil } }
-        // 同一份文件在一句话里引用两次只画一个牌子（`DraftFile` 按键认）
+        // 同一份附件在一句话里引用两次只画一个（`DraftFile` 按键认）
         var seen = Set<DraftFile>()
-        files = tokens.compactMap { if case .file(let key, let name) = $0 { DraftFile(key: key, name: name) } else { nil } }.filter { seen.insert($0).inserted }
+        let attached = tokens.compactMap(DraftFile.init).filter { seen.insert($0).inserted }
+        images = attached.filter(\.isImage).map(\.key)
+        files = attached.filter { !$0.isImage }
     }
 }
 

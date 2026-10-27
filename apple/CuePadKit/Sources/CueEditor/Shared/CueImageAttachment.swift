@@ -65,7 +65,7 @@ final class CueImageAttachment: NSTextAttachment {
         return MainActor.assumeIsolated {
             guard let core else { return nil }
             guard let url else { return CueImageRendering.placeholder(size: bounds.size, style: core.style, label: core.missingImageLabel(key)) }
-            return core.thumbnails.image(at: url, size: bounds.size)
+            return core.thumbnails.image(key: key, at: url, size: bounds.size)
         }
     }
 }

@@ -32,33 +32,6 @@ extension View {
 }
 
 extension View {
-    /// 附件文件到没到本机（记录随同步先到、文件另走一路后到，手机上大文件点了才取）：出现时与这个文件的一趟传输结束时
-    /// （在路上的那一张里没了它，`AppServices.fileTransfers`）各查一次。行在滚动中一个个出现，不在主线程上查，没查到时按到了画。
-    func observingArrival(of key: String, in services: AppServices, into arrived: Binding<Bool?>) -> some View {
-        modifier(Arrival(key: key, services: services, arrived: arrived))
-    }
-}
-
-private struct Arrival: ViewModifier {
-    let key: String
-    let services: AppServices
-    @Binding var arrived: Bool?
-
-    private struct Run: Equatable {
-        let key: String
-        let moving: Bool
-    }
-
-    func body(content: Content) -> some View {
-        content.task(id: Run(key: key, moving: services.fileTransfers[key] != nil)) {
-            arrived = await Self.here(key, in: services.store.files)
-        }
-    }
-
-    @concurrent private static func here(_ key: String, in files: AttachmentFiles) async -> Bool { files.fileURL(for: key) != nil }
-}
-
-extension View {
     /// 过了零点（"今天"按读的那一刻分的页面要重排、重读）。系统在它自己的线程上发这个通知：按主线程上的任务等，`action` 改的界面状态不跨线程。
     func onDayChange(_ action: @escaping () -> Void) -> some View {
         task { for await _ in NotificationCenter.default.notifications(named: .NSCalendarDayChanged) { action() } }

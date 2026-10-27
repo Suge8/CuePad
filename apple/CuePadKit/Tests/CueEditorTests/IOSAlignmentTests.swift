@@ -23,7 +23,7 @@ struct IOSAlignmentTests {
         let h = EditorHarness()
         h.load("甲乙")
         h.setCaret(1)
-        h.textView.insertImage(data: makePNG(width: 40, height: 30))
+        h.textView.insert([.data(makePNG(width: 40, height: 30))])
         let original = h.stored
         h.textView.selectedRange = NSRange(location: 0, length: h.textView.textStorage.length)
         let range = try #require(h.textView.selectedTextRange)

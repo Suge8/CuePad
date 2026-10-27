@@ -31,7 +31,7 @@ struct ChatImages: View {
                     ForEach(start..<min(start + Self.perRow, hashes.count), id: \.self) { index in
                         ChatImage(
                             hash: hashes[index], side: Self.side, fitWidth: hashes.count == 1 ? Self.singleWidth : nil,
-                            zoom: PreviewZoomKey(group: group, preview: Self.id(of: hashes[index]))
+                            zoom: PreviewZoomKey(group: group, preview: PiPreview.id(of: hashes[index]))
                         ) { open(hashes[index]) }
                         .disabled(openPreview == nil)
                     }
@@ -48,17 +48,9 @@ struct ChatImages: View {
         openPreview?(PreviewOpening(preview: opened, batch: batch, group: group))
     }
 
-    /// 全屏页按交付物认一份：文件名的扩展名就是键的（系统按扩展名认类型），标题是"图片"。没到本机的为 nil。
+    /// 没到本机的为 nil。
     private func preview(_ key: String) -> PiPreview? {
-        guard services.store.files.fileURL(for: key) != nil, let parts = AttachmentKey.parts(key) else { return nil }
-        return PiPreview(id: Self.id(of: key), sessionID: "", hash: parts.hash, name: "image.\(parts.format)", title: String(localized: "图片"), byteCount: 0)
-    }
-
-    /// 同一张图同一个身份（哈希的前 128 位）：缩略图与全屏页按它对上。
-    static func id(of hash: String) -> UUID {
-        let hex = Array(hash.prefix(32))
-        let groups = [0..<8, 8..<12, 12..<16, 16..<20, 20..<32].map { String(hex[$0]) }
-        return UUID(uuidString: groups.joined(separator: "-")) ?? UUID()
+        services.store.files.fileURL(for: key) == nil ? nil : PiPreview(attachment: DraftFile(key: key, name: ""))
     }
 }
 
@@ -73,17 +65,17 @@ private struct ChatImage: View {
     @Environment(\.palette) private var palette
     @Environment(\.displayScale) private var scale
     /// 文件到本机的那一刻就绪
-    @State private var arrived: Bool?
+    @State private var place = AttachmentPlace.unchecked
 
     var body: some View {
-        Button { if arrived == false { workspace.fetchFile(hash) } else { open() } } label: {
+        Button { if place.isAway { workspace.fetchFile(hash) } else { open() } } label: {
             // 到达时换一个身份，缩略图重新读文件；一开始就在的不重读
-            Thumbnail(hash: hash, height: side, radius: Self.radius, fitWidth: fitWidth).frame(width: fitWidth == nil ? side : nil).id(arrived ?? true)
+            Thumbnail(hash: hash, height: side, radius: Self.radius, fitWidth: fitWidth).frame(width: fitWidth == nil ? side : nil).id(place.isAway)
                 .previewSource(zoom, radius: Self.radius) { [files = services.store.files, hash, side, scale] in
                     await Thumbnail.picture(hash, height: side, scale: scale, in: files)
                 }
                 .overlay {
-                    if arrived == false {
+                    if place.isAway {
                         Text(verbatim: FileStatus.line(name: "", file: nil, transfer: services.fileTransfers[hash]).detail)
                             .font(Typography.caption).monospacedDigit().foregroundStyle(palette.ink3)
                             .multilineTextAlignment(.center).padding(6)
@@ -92,8 +84,8 @@ private struct ChatImage: View {
         }
         .buttonStyle(PressStyle())
         .accessibilityLabel("图片")
-        .accessibilityHint(arrived == false ? "从 iCloud 取来" : "查看大图")
-        .observingArrival(of: hash, in: services, into: $arrived)
+        .accessibilityHint(place.isAway ? "从 iCloud 取来" : "查看大图")
+        .observingArrival(of: hash, in: services, into: $place)
     }
 
     private static let radius: CGFloat = 12
@@ -120,15 +112,27 @@ struct ChatFiles: View {
 
     /// 已到本机的几个作为一组打开，从点的那个起。全屏页按交付物认一份：标题与名字都是文件名。
     private func open(_ file: DraftFile, with opener: PreviewOpener) {
-        let batch = files.compactMap(Self.preview)
+        let batch = files.compactMap(PiPreview.init(attachment:))
         guard let opened = batch.first(where: { $0.key == file.key }) else { return }
         opener(PreviewOpening(preview: opened, batch: batch, group: "chat-files-" + files.map(\.key).joined(separator: ",")))
     }
+}
 
-    /// 名字的扩展名与键的不一致时（键按内容认的、名字没写）接上键的，全屏页按它认类型、找本机那份。
-    private static func preview(_ file: DraftFile) -> PiPreview? {
+extension PiPreview {
+    /// 你的话里带的一个附件在全屏页里按交付物认一份：同一份同一个身份（`id(of:)`）；图片没有名字，标题写"图片"。
+    /// 名字的扩展名与键的不一致时（键按内容认的、名字没写）接上键的：全屏页按它认类型、找本机那份。
+    init?(attachment file: DraftFile) {
         guard let parts = AttachmentKey.parts(file.key) else { return nil }
         let name = AttachmentKey.make(hash: parts.hash, name: file.name) == file.key ? file.name : file.name + "." + parts.format
-        return PiPreview(id: ChatImages.id(of: file.key), sessionID: "", hash: parts.hash, name: name, title: file.name, byteCount: 0)
+        self.init(
+            id: Self.id(of: file.key), sessionID: "", hash: parts.hash, name: file.name.isEmpty ? "image.\(parts.format)" : name,
+            title: file.name.isEmpty ? String(localized: "图片") : file.name, byteCount: 0)
+    }
+
+    /// 同一份附件同一个身份（哈希的前 128 位）：缩略图与全屏页按它对上。
+    static func id(of key: String) -> UUID {
+        let hex = Array(key.prefix(32))
+        let groups = [0..<8, 8..<12, 12..<16, 16..<20, 20..<32].map { String(hex[$0]) }
+        return UUID(uuidString: groups.joined(separator: "-")) ?? UUID()
     }
 }
