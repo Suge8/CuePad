@@ -14,6 +14,8 @@ extension Schema {
   /// 服务器才收敛到新写法，又不把修改时间刷成"刚刚"。各台都升级同一批时，写出的内容与版本号都相同：
   /// 先到服务器的那台赢，别的台按冲突规则（`applyVersion`，同刻以服务器为准）收下它，卡片正文相同就不留冲突副本。
   /// 推不出来的（这台没有记录也没有文件）只在本机改成不带扩展名的键、不加版本：推得出来的那台传上来的版本在这里会直接盖掉它。
+  /// 只改了 format 的记录照常经文件那一路整条上传（`FileSender`），不另做只传字段的分支：CloudKit 对同内容的资产整文件去重，
+  /// 同一份内容的另一条记录实测只传约 0.1MB，真实库里这样的 301 条（约 360MB）不会再传一遍。
   static func keyedAttachments(_ db: SQLite, _ files: AttachmentFiles) throws {
     let records = try db.query(
       """

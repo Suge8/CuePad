@@ -73,6 +73,8 @@ final class CueKeeper {
         var timing: CueTiming
         /// 立即上传这几条（记下送达后：手机与别的 Mac 上那句话马上是已送达，排在其余待推送前面，见 `Speech`）
         var upload: @Sendable ([UUID]) async -> Void
+        /// 你的消息里的附件取到这台 Mac 上（`AppServices.fetchFile`）
+        var fetchFile: FileFetching
 
         /// Cue 自己的目录（在资料库目录里）：`work` 是大脑的工作目录（空的），`keeper.json` 是跨班次的对账进度
         var directory: URL { library.appending(path: "Cue", directoryHint: .isDirectory) }

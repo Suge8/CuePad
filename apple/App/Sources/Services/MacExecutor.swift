@@ -14,13 +14,14 @@ final class MacExecutor {
     private let recorder: PiStateRecorder
     private let library: AgentLibraryKeeper
     private let upload: @Sendable (UUID) async -> Void
+    private let fetchFile: FileFetching
     private let refreshQuota: @MainActor () async throws -> Void
     private let reportIssue: @MainActor (String) -> Void
     private var running: DeliveryExecutor?
 
     init(
         store: CueStore, pi: PiBridge, runtimes: [AgentKind: any AgentRuntime], hostID: String, workspaces: Workspaces, recorder: PiStateRecorder,
-        library: AgentLibraryKeeper, upload: @escaping @Sendable (UUID) async -> Void,
+        library: AgentLibraryKeeper, upload: @escaping @Sendable (UUID) async -> Void, fetchFile: @escaping FileFetching,
         refreshQuota: @escaping @MainActor () async throws -> Void,
         reportIssue: @escaping @MainActor (String) -> Void
     ) {
@@ -32,6 +33,7 @@ final class MacExecutor {
         self.recorder = recorder
         self.library = library
         self.upload = upload
+        self.fetchFile = fetchFile
         self.refreshQuota = refreshQuota
         self.reportIssue = reportIssue
     }
@@ -118,7 +120,7 @@ final class MacExecutor {
     /// 交给会话的一句（存储格式）：附件先取到本机，图片另附，文件写成路径（`SendContent.agentText`）。
     private func message(_ stored: String, of request: DeliveryRequest) async throws -> PiMessage {
         let content = SendContent(stored: stored)
-        try await store.files.fetch(content)
+        try await content.fetchAttachments(store.files, using: fetchFile)
         // 图片拿走后留下的空行不发
         return PiMessage(text: try content.agentText(from: store.files).trimmingCharacters(in: .whitespacesAndNewlines), images: try content.piImages(from: store.files), deliveryID: request.id.uuidString)
     }
@@ -150,7 +152,7 @@ final class MacExecutor {
     private func runCommand(_ request: DeliveryRequest) async throws {
         let content = SendContent(stored: request.content)
         guard !content.hasImages else { throw SendError.imagesNotSupported }
-        try await store.files.fetch(content)
+        try await content.fetchAttachments(store.files, using: fetchFile)
         let (ref, id) = try await connect(request.target)
         try await pi.command(try content.agentText(from: store.files).trimmingCharacters(in: .whitespacesAndNewlines), in: id)
         if let card = request.cardID { try await store.linkCard(card, toSession: ref) }

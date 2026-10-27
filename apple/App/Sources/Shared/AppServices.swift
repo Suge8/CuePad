@@ -159,6 +159,7 @@ final class AppServices {
     @ObservationIgnored lazy var executor = MacExecutor(
         store: store, pi: pi, runtimes: runtimes, hostID: hostID, workspaces: workspaces, recorder: piStateRecorder, library: library,
         upload: { [weak self] id in await self?.upload(id) },
+        fetchFile: { [sync] key in try await sync.fetchFile(key) },
         refreshQuota: { [weak self] in try await self?.refreshQuotaForRequest() },
         reportIssue: { [weak self] message in self?.reportIssue(.syncUnavailable(message)) })
 

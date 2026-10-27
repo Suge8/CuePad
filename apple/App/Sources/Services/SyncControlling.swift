@@ -24,6 +24,17 @@ nonisolated protocol SyncControlling: Sendable {
 
 extension CloudSync: SyncControlling {}
 
+/// 取附件文件（`AppServices.fetchFile`、发给 Agent 之前的 `SendContent.fetchAttachments`）。
+typealias FileFetching = @Sendable (String) async throws -> URL
+
+nonisolated extension Optional where Wrapped == any SyncControlling {
+    /// 这台不同步（隔离库）时取不到，抛 `FileFetchFailure.notSyncing`。
+    func fetchFile(_ key: String) async throws -> URL {
+        guard let self else { throw FileFetchFailure.notSyncing }
+        return try await self.fetchFile(key)
+    }
+}
+
 nonisolated extension SyncControlling {
     /// 马上只传这几条，不等提交触发的合并窗口，也不等后台那批（`CloudSync.send`）；同一次写入写出的几条一起给，一个请求传完。
     /// `deleted`：本机删掉了它们，传的是删除（传什么由库推导，这里只用于日志）。没传成的之后照常重试。返回时已经传完（或没传成）。

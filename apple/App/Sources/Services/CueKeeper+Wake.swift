@@ -101,7 +101,7 @@ extension CueKeeper {
     func fetchAttachments(in pending: [CueMessage]) async {
         for message in pending where message.author == .known(.you) {
             do {
-                try await store.files.fetch(SendContent(stored: message.text))
+                try await SendContent(stored: message.text).fetchAttachments(store.files, using: setup.fetchFile)
             } catch {
                 await say(.cue, ShownText("你发的附件没能交给我：\(ShownText(error).embedded)"))
             }

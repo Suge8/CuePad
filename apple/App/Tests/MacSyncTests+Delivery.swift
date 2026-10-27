@@ -75,7 +75,7 @@ extension MacSyncTests {
         #expect(linked.piSessionID == "sess-1" && linked.status == .inProgress)
         #expect(try RawDB(services.location.databaseURL).count("sendRecords") == 0)
 
-        // 图片文件在本机（没到的图片执行器会等它同步过来，那是另一条路径）
+        // 图片文件在本机（没到的由执行时取来，那是另一条路径）
         let hash = try services.store.files.store(pngData(shade: 0.3))
         let commands = ext.commands.count
         let image = try await services.store.requestDelivery("/greet\n\n![](cuepad://file/\(hash))", to: target, on: TestApp.hostID, mode: .command)

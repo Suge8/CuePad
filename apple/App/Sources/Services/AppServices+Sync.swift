@@ -205,10 +205,7 @@ extension AppServices {
     }
 
     /// 这个附件文件在本机的位置：没有就现在从 iCloud 取（手机上大文件、按流量计费时不自动取，用到时走这里）；没有同步（隔离库）抛 `FileFetchFailure.notSyncing`。
-    func fetchFile(_ key: String) async throws -> URL {
-        guard let sync else { throw FileFetchFailure.notSyncing }
-        return try await sync.fetchFile(key)
-    }
+    func fetchFile(_ key: String) async throws -> URL { try await sync.fetchFile(key) }
 
     func resolveConflict(copy id: UUID, keep choice: ConflictChoice) async throws {
         try await store.resolveConflict(copy: id, keep: choice)

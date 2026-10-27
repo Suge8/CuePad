@@ -1,4 +1,3 @@
-import CueText
 import Foundation
 import os
 
@@ -7,12 +6,6 @@ extension CueStore {
     try select(
       DeliveryRequest.self, where: "status = 'pending' AND hostID = ?", [host],
       orderBy: "createdAt, rowid")
-  }
-
-  /// 执行器要醒来的理由：有新的请求等着，或有附件到达（等图片的请求这时才能继续）。
-  fileprivate func executorQueue(for host: String) throws -> DeliveryQueue {
-    DeliveryQueue(
-      pending: try pendingDeliveries(for: host).map(\.id), attachments: try db.first("SELECT count(*) FROM attachments") { Int($0.int(0)) } ?? 0)
   }
 
   /// 领取：只有仍是 pending 的请求能被领取，同一请求不会被执行两次。
@@ -94,7 +87,7 @@ extension CueStore {
 /// 把结果写回请求；完成的请求保留 `retention` 后清理（发出的话等它进对话、等认领的开新会话请求等认领，见 `deleteCompletedDeliveries`）。
 /// - 服务器收下后超过 `maxAge` 还没执行的请求直接判失败（Mac 离线太久后不再突然发出旧内容）。从服务器收下算、不从写下算：
 ///   在发出的设备上等着的那段（断网、要更新）你看得到它在等、撤得回，传上来就照常执行，同对 Cue 说的话；本机写的从写下算；
-/// - 请求引用的图片还没同步到本机时先等着，图片到达（观察到附件变化）后再执行；
+/// - 请求引用的附件不在本机照样领取，由执行它的 App 层当场取来（`SendContent.fetchAttachments`）；
 /// - 暂时没成的（`DeliveryOutcome.transient`）重试一次，再不成按失败写回；
 /// - 启动时，上次执行到一半的请求判失败且不重试（可能已经发出）；
 /// - 读写 Store 失败交给 `onIssue`（请求停在原状态，手机那边会一直等，必须让人看到），下一次变化时再试；
@@ -142,7 +135,7 @@ public actor DeliveryExecutor {
     if try await deleteExpired() { scheduleCleanup() }
     watcher = Task { [store, hostID, onIssue] in
       do {
-        for try await _ in store.observe({ try $0.executorQueue(for: hostID) }) { await self.process() }
+        for try await _ in store.observe({ try $0.pendingDeliveries(for: hostID).map(\.id) }) { await self.process() }
       } catch {
         onIssue(error)
       }
@@ -180,7 +173,6 @@ public actor DeliveryExecutor {
         await finish(request, .failed(ShownText("这个版本的 CuePad 不认识发送方式「\(raw)」，没有执行（可能来自更新版本，请升级 Mac 上的 CuePad）")))
         continue
       }
-      if hasMissingAttachments(request) { continue }
       if await reporting({ try await store.claimDelivery(request.id, host: hostID) }) == true {
         let age = timing.now().timeIntervalSince(request.createdAt)
         Self.log.info("领取投送请求 \(request.id.uuidString.prefix(8), privacy: .public) \(request.mode.rawValue, privacy: .public)，创建后 \(age, format: .fixed(precision: 1)) 秒")
@@ -224,10 +216,6 @@ public actor DeliveryExecutor {
     }
   }
 
-  private func hasMissingAttachments(_ request: DeliveryRequest) -> Bool {
-    CueFormat.attachmentKeys(in: request.content).contains { store.files.fileURL(for: $0) == nil }
-  }
-
   /// 发出的话与 Cue 的失败请求最多留多久（与对话的保留期一样是 7 天）。
   private static let keptRetention: TimeInterval = 7 * 86_400
 
@@ -252,10 +240,4 @@ public actor DeliveryExecutor {
     cleanup = nil
     if rescheduling { scheduleCleanup() }
   }
-}
-
-/// 执行器看的队列状态（`CueStore.executorQueue`）：等执行的请求，与附件记录数。
-struct DeliveryQueue: Equatable, Sendable {
-  var pending: [UUID]
-  var attachments: Int
 }
