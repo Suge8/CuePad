@@ -89,10 +89,9 @@ import Testing
     let step = try await store.createTask("备份", under: top.id)
     let taken = try await store.createTask("已有会话", in: project.id)
     let finished = try await store.createTask("做完了", in: project.id)
-    let loneBound = try await store.createTask("别的项目")
+    _ = try await store.createTask("别的项目")
     try await store.bindSession("s1", to: taken.id)
     try await store.setStatus(finished.id, .done)
-    _ = loneBound
 
     let tasks = try await store.bindableTasks(in: project.id)
     #expect(tasks.map(\.task.id) == [step.id])

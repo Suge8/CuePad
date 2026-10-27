@@ -55,7 +55,7 @@ import Testing
     let target = try await store.createTask("目标", in: project.id)
     let idea = try await store.createCard(in: project.id, body: "想法")
     let task = try await store.createTask("相邻的任务", in: project.id)  // 新建的排在最前
-    let tail = try await store.createCard(in: project.id, body: "尾巴")
+    _ = try await store.createCard(in: project.id, body: "尾巴")
     try await store.moveCard(idea.id, to: .top(project: project.id), after: task.id)  // 任务 → 想法 → …
     let order = try await topOrder(project.id)
     #expect(order.firstIndex(of: task.id)! + 1 == order.firstIndex(of: idea.id)!)
@@ -66,7 +66,6 @@ import Testing
 
     #expect(try await card(idea.id).parentID == nil)
     #expect(try await topOrder(project.id) == order)
-    _ = tail
   }
 
 }
