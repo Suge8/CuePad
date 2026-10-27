@@ -1,7 +1,7 @@
 # shellcheck shell=bash
-# 被 xc.sh 与 perf 脚本 source：每种机型固定一小池模拟器（SIM_POOL 台，名为"CuePad <机型> #<号>"），
-# 任务从 _lock.sh 领到号（CUEPAD_SIM）；只编译不运行的用 0 号做目标（不开机、不占）。
-# 第一次用时新建，开机后一直开着给后来的任务复用（脚本不关）：冷启动一次要 15–30 秒。
+# 被 xc.sh 与 perf 脚本 source：全机共 SIM_SLOTS 个模拟器槽位（_lock.sh），槽位 n 上的模拟器名为"CuePad <机型> #n"，
+# 任务从 _lock.sh 领到槽位号（CUEPAD_SIM）；只编译不运行的用 0 号做目标（不开机、不占）。
+# 第一次用时新建，开机后一直开着给后来的同机型任务复用：冷启动一次要 15–30 秒。换机型时 _lock.py 先关掉这个槽位上别的机型的，这里只开不关。
 #
 # 瘦身：开机后停用 SIM_SLIM 里的系统后台服务（Siri、Spotlight、健康、照片分析、遥测等），每台模拟器的进程与内存降到一半以下（iOS 27.0 实测进程 212→103、内存 2.2→0.9 GB），
 # 一台 Mac 才开得下多个会话并行的模拟器。清单取自 simslim（github.com/MobAI-App/simslim，MIT）的 profiles.go，去掉了 CuePad 要用的：
@@ -57,7 +57,7 @@ SIM_SLIM=(
   com.apple.storagedatad com.apple.StatusKitAgent com.apple.countryd com.apple.managedconfiguration.passcodenagd
 )
 
-# sim_udid <机型>：输出领到的这台（没领就 0 号）的 UDID，没有就建（只建不开机）。
+# sim_udid <机型>：输出领到的槽位（没领就 0 号）上这个机型那台的 UDID，没有就建（只建不开机）。
 sim_udid() {
   local name="CuePad $1 #${CUEPAD_SIM:-0}" udid
   udid="$(xcrun simctl list devices -j | jq -r --arg n "$name" 'first(.devices[][] | select(.name == $n and .isAvailable) | .udid) // empty')"

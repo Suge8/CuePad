@@ -11,16 +11,16 @@
 #   xc.sh rec  <mac|ios|ipad> [片.mov] [-- 启动参数…]  同上，录 CUEPAD_REC_SECONDS 秒（默认 12）；CUEPAD_REC_LAUNCH=1 从启动前开录（ios、ipad）
 #   xc.sh run  <mac|ios|ipad> [-- 启动参数…]          起着给 bcu、axe 操作，打印 PID（模拟器另带 UDID）；Mac 实例 5 分钟后自己退出（CUEPAD_RUN_SECONDS 改）
 #   xc.sh stop                                      结束本检出 run 起的 Mac 实例
-#   xc.sh perf <mac|ios> [次数] [启动参数…]            单次交互：点击回合、指令、掉帧（perf-mac.sh、perf-ios.sh）；只有带 -CuePadForeground YES 的 Mac 测量独占机器
+#   xc.sh perf <mac|ios> [次数] [启动参数…]            单次交互：点击回合、指令、掉帧（perf-mac.sh、perf-ios.sh）
 #   xc.sh perf idle <mac|ios> [次数] [秒] [启动参数…]   静置时的 CPU、指令、唤醒、能耗、内存与启动到就绪（perf-idle.sh）
 #   xc.sh perf launch mac [次数] [启动参数…]            冷启动：到主窗口上屏、首屏内容出来、能交互（perf-launch.sh）
 #   xc.sh release <mac|ios> | device | provision    发布与签名（docs/release.md）
 # 启动参数原样传给 App（如 -CuePadDemo YES -CuePadScene editor -theme dark；Debug 认的参数见 DebugScene.swift）。
-# 实例的隔离、每个检出一份、一定退出见 app.py 头注释；排队、在等谁、等待上限与任务时限见 _lock.sh；模拟器池见 _sim.sh。
+# 实例的隔离、每个检出一份、一定退出见 app.py 头注释；排队、在等谁、等待上限、任务时限、结束时的用时行见 _lock.sh；模拟器槽位见 _lock.sh 与 _sim.sh。
 # CUEPAD_SHOT_LIBRARY 换隔离库目录（默认 apple/.derived/library[-ios|-ipad]，如真实库的只读副本）。
 # 产物目录是本检出的 apple/.derived（perf 的 Release 构建在 apple/.derived-perf，Kit 的测试在 apple/.derived/kit-<平台>，check 的 Kit 构建在 CuePadKit/.build）：每个检出一份增量。
 # 本机构建一律 ad-hoc 签名（工程默认，见 Signing.xcconfig）；CUEPAD_SIGN=development 只给同步测量（docs/perf.md「同步测量」）。
-# 每个测试最多 TEST_TIME_LIMIT 秒（CUEPAD_TEST_TIME_LIMIT 覆盖，给真模型的评测用；Xcode 的测试时限，对 Swift Testing 与主线程死锁也生效）：超时记一条 "Time limit was exceeded"，非零退出。
+# 每个测试最多 TEST_TIME_LIMIT 秒（_lock.sh；CUEPAD_TEST_TIME_LIMIT 覆盖，给真模型的评测用，任务时限随它变；Xcode 的测试时限，对 Swift Testing 与主线程死锁也生效）：超时记一条 "Time limit was exceeded"，非零退出。
 # Kit 的测试因此也走 xcodebuild：swift test（Swift 6.4）没有测试时限的参数，Swift Testing 的 .timeLimit 只取消测试任务、要等它自己结束，
 # 不响应取消的等待会让整个测试进程挂到任务时限。xcodebuild 只把 TEST_RUNNER_ 开头的环境变量交给测试进程（去掉前缀），测试进程的工作目录是 /private/tmp。
 # 提交钩子：git config core.hooksPath apple/scripts/hooks（每个仓库一次）。
@@ -35,8 +35,6 @@ APPLE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 . "$APPLE_DIR/scripts/_lock.sh"
 IOS_DEVICE="${CUEPAD_IOS_DEVICE:-iPhone 17}"
 IPAD_DEVICE="${CUEPAD_IPAD_DEVICE:-iPad Pro 11-inch (M5)}"
-# 正常的测试几秒内跑完，最慢的也不到一分钟；挂住的测试曾让测试宿主停了 34 分钟没人发现
-TEST_TIME_LIMIT=${CUEPAD_TEST_TIME_LIMIT:-120}
 # 测试里条件等待的上限从这个时限推出（CueTestSupport 的 conditionBudget）：测试不另写短的墙钟上限
 export TEST_RUNNER_CUEPAD_TEST_TIME_LIMIT=$TEST_TIME_LIMIT
 USAGE="用法：$0 <check|build|strings|test|shot|rec|run|stop|perf|release|device|provision> [mac|ios|ipad|kit] …（见脚本头注释）"
@@ -58,8 +56,8 @@ case "$cmd" in
   provision) exec python3 "$APPLE_DIR/scripts/provision.py" "${2:-all}" "${@:3}" ;;
   stop) exec python3 "$APPLE_DIR/scripts/app.py" stop ;;
   perf) ;;  # 先构建、再测量，两段各自进锁（见下）
-  test|shot|rec|run) case "$platform" in ios|ipad) xc_enter sim "$0" "$@" ;; *) xc_enter plain "$0" "$@" ;; esac ;;
-  check|build|build-perf) xc_enter plain "$0" "$@" ;;  # build-perf：perf 的构建段，内部用
+  test|shot|rec|run) case "$platform" in ios) xc_enter "$IOS_DEVICE" "$0" "$@" ;; ipad) xc_enter "$IPAD_DEVICE" "$0" "$@" ;; *) xc_enter "" "$0" "$@" ;; esac ;;
+  check|build|build-perf) xc_enter "" "$0" "$@" ;;  # build-perf：perf 的构建段，内部用
   *) echo "$USAGE" >&2; exit 2 ;;
 esac
 [ "$cmd" != check ] || platform=ios
@@ -144,14 +142,14 @@ case "$cmd" in
     wait "$kit" || status=$?
     exit $status ;;
   build) xcd; sign_development ;;
-  build-perf) xcb -quiet build ;;
+  build-perf) phase 编译 xcb -quiet build ;;
   test)
     # 用例断言的是中文界面：不随跑测试那台机器的系统语言变
     limits=(-test-timeouts-enabled YES -maximum-test-execution-time-allowance "$TEST_TIME_LIMIT" -testLanguage zh-Hans -testRegion CN)
     # 先开好领到的模拟器（并瘦身，见 _sim.sh），xcodebuild 就用开着的这台。
     # 再卸掉上一次装的 App：它开着的实时活动在重装时被系统结束，系统随即把 App 叫到后台（不带测试的环境），
     # 正撞上测试宿主的启动，测试进程就连不上（"The test runner hung before establishing connection"）。卸掉时活动一起没了，没有这一下
-    if [ -n "${device:-}" ]; then sim_boot "$device"; xcrun simctl uninstall "$device" "$CUEPAD_APP_ID"; fi
+    if [ -n "${device:-}" ]; then phase 开机 sim_boot "$device"; xcrun simctl uninstall "$device" "$CUEPAD_APP_ID"; fi
     # 屏幕上只留编译的警告与错误、失败的用例（带原因）与汇总：编译的每一步、App 与测试宿主的日志、每条用例的开始与通过一次就是几千行，
     # 会把失败挤出 Agent 的输出上限。所以先 -quiet 编（只出警告与错误），再不带 -quiet 跑（-quiet 连失败的原因也吞掉），跑的输出滤掉上面那些；
     # 完整输出写进 log，查失败前后的日志去那里
@@ -164,7 +162,7 @@ case "$cmd" in
     narrowed() { local a; for a in "$@"; do case "$a" in -only-testing:*|-skip-testing:*) printf '%s\0' "$a" ;; esac; done; }
     kit_test() {
       local narrow=(); while IFS= read -r -d '' a; do narrow+=("$a"); done < <(narrowed "$@")
-      (cd "$APPLE_DIR/CuePadKit" && xcodebuild -quiet build-for-testing -scheme CuePadKit-Package -destination "$destination" -derivedDataPath "$DERIVED/kit-$platform" ${narrow[@]+"${narrow[@]}"} 2>&1 \
+      (cd "$APPLE_DIR/CuePadKit" && phase 编译 xcodebuild -quiet build-for-testing -scheme CuePadKit-Package -destination "$destination" -derivedDataPath "$DERIVED/kit-$platform" ${narrow[@]+"${narrow[@]}"} 2>&1 \
         && xcodebuild test-without-building -scheme CuePadKit-Package -destination "$destination" -derivedDataPath "$DERIVED/kit-$platform" "${limits[@]}" "$@" 2>&1) \
         | { grep -v 'failed with exit code 0 but produced no further output' || true; }
     }
@@ -192,15 +190,12 @@ case "$cmd" in
     xcd
     rest=("${@:3}") target=()
     if [ "${#rest[@]}" -gt 0 ] && [ "${rest[0]}" != -- ]; then target=(--out "${rest[0]}"); rest=("${rest[@]:1}"); fi
-    if [ "$platform" != mac ]; then sim_boot "$device"; target+=(--device "$device"); fi
+    if [ "$platform" != mac ]; then phase 开机 sim_boot "$device"; target+=(--device "$device"); fi
     library="${CUEPAD_SHOT_LIBRARY:-$APPLE_DIR/.derived/library$([ "$platform" = mac ] || echo "-$platform")}"
     exec python3 "$APPLE_DIR/scripts/app.py" "$cmd" "$platform" "$app" "$library" ${target[@]+"${target[@]}"} ${rest[@]+"${rest[@]}"} ;;
   perf)
-    # 构建照普通任务排队；测量只有前台和预算比的 Mac 一种独占（帧与回合时长怕别的进程抢），其余只比指令数，不随机器忙闲变
+    # 构建与测量各自按普通任务进锁；帧与回合时长随机器忙闲变，看结束时的负载，前后对比以指令数为准
     "$0" build-perf "$platform" >"$DERIVED/build.log" || { tail -30 "$DERIVED/build.log" >&2; exit 1; }
-    mode=plain
-    if [ "$platform" = ios ]; then mode=sim
-    elif [ "$perf_script" = perf-mac.sh ] && [[ " ${*:3} " == *" -CuePadForeground YES "* ]]; then mode=exclusive; fi
-    xc_enter "$mode" "$APPLE_DIR/scripts/$perf_script" "$app" "${@:3}"
+    xc_enter "$([ "$platform" = ios ] && echo "$IOS_DEVICE")" "$APPLE_DIR/scripts/$perf_script" "$app" "${@:3}"
     exec "$APPLE_DIR/scripts/$perf_script" "$app" "${@:3}" ;;  # 已在锁里（脚本调脚本）时 xc_enter 直接返回
 esac

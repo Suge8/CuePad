@@ -56,7 +56,7 @@ apple/scripts/xc.sh stop       # 验完就收；忘了 5 分钟后会自己退�
 - 提示条 2.4 秒就收：`expect` 写进同一组动作。
 - 任务行右键在后台弹得出菜单；墙上灵感卡的右键被当成点按，它的操作从编辑页走。
 - 让 Cue 真跑：隔离实例里各家的配置目录是空的、没有登录的大脑。起实例前同 `ClaudeTestbed` 把这台 Claude Code 的登录交给它：`export CLAUDE_CODE_OAUTH_TOKEN="$(<ClaudeLogin.tokenCommand 那条命令>)" ANTHROPIC_API_KEY=`（只读钥匙串里的访问令牌，不刷新），启用时选 Claude Code。
-- iOS：`xc.sh run ios|ipad` 打印 PID 与 UDID；点按 `axe tap -x <x> -y <y> --udid <UDID>`（坐标是点，`xcrun simctl io <UDID> screenshot` 换算；`axe describe-ui` 读不到 SwiftUI 的元素）。模拟器池共用，别的任务随时会装包重跑，连续操作尽快做完。模拟器默认当作接了电脑键盘，看软键盘加 `-CuePadSoftKeyboard YES`；键盘变高用表情键。
+- iOS：`xc.sh run ios|ipad` 打印 PID 与 UDID；点按 `axe tap -x <x> -y <y> --udid <UDID>`（坐标是点，`xcrun simctl io <UDID> screenshot` 换算；`axe describe-ui` 读不到 SwiftUI 的元素）。模拟器槽位全机共 4 个，别的任务随时会装包重跑，换机型的任务还会关掉同槽位上别的机型，连续操作尽快做完。模拟器默认当作接了电脑键盘，看软键盘加 `-CuePadSoftKeyboard YES`；键盘变高用表情键。
 
 ## 陌生人第一次打开
 

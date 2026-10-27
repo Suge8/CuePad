@@ -8,7 +8,7 @@
 #   后台量（不抢前台）：墙钟随机器忙闲变，每行带当时的 1 分钟负载；前后对比新旧检出交替跑，以主线程的指令数为准、墙钟看中位数。
 #   CUEPAD_TRACE=<xctrace 模板>（如 'Time Profiler'）：每次按 PID 录 trace，App 进 main 就停着等开录（-CuePadTraceWait），
 #   存 apple/.derived-perf/Build/traces/launch-<第几次>.trace；录着的那几次时刻不和不录的比。
-# xc.sh 构建好 Release（同 perf-mac.sh）后调这里，第一个参数是 CuePad.app。不独占机器。
+# xc.sh 构建好 Release（同 perf-mac.sh）后调这里，第一个参数是 CuePad.app。
 set -euo pipefail
 
 APPLE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
