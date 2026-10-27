@@ -79,7 +79,7 @@ struct SplitRoot: View {
 
     private func collapseSidebarIfNarrow() {
         guard width < Self.threeColumnWidth, sidebarShown else { return }
-        withAnimation(Motion.snappy) { workspace.sidebar = .detailOnly }
+        withAnimation(Motion.nudge) { workspace.sidebar = .detailOnly }
     }
 }
 
@@ -118,7 +118,7 @@ struct SidebarToggle: View {
 
     /// 按侧栏此刻在不在屏幕上开合：`.automatic` 在竖屏本来就是收起，按要的样子换的话第一下没反应。
     static func flip(_ workspace: Workspace, shown: Bool) {
-        withAnimation(Motion.snappy) { workspace.sidebar = shown ? .detailOnly : .all }
+        withAnimation(Motion.nudge) { workspace.sidebar = shown ? .detailOnly : .all }
     }
 
     private static func cueNews(_ cue: CueWatch) -> String {
@@ -216,7 +216,7 @@ private struct CueSidebarItem: View {
         .buttonStyle(RowStyle(selected: selected))
         .accessibilityAddTraits(selected ? .isSelected : [])
         .overlay(alignment: .trailing) {
-            Button { withAnimation(Motion.snappy) { workspace.agentPanel.toggle() } } label: {
+            Button { withAnimation(Motion.nudge) { workspace.agentPanel.toggle() } } label: {
                 // 侧栏钮的符号左右翻过来：在右边开一栏
                 Label { Text("在右侧并排看 \(workspace.cue.name)") } icon: { IconImage(.sidebar, accent: open ? .lit : .none).scaleEffect(x: -1) }
                     .labelStyle(.iconOnly)

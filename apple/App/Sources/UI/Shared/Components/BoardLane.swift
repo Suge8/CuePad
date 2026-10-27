@@ -13,7 +13,7 @@ struct BoardLane: View {
         ZStack {
             if targeted { RoundedRectangle(cornerRadius: Self.radius, style: .continuous).fill(palette.selection).transition(.opacity) }
         }
-        .animation(HandOff.quick, value: targeted)
+        .animation(Motion.fade, value: targeted)
     }
 }
 

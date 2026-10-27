@@ -42,7 +42,7 @@ struct Jelly<Value: Equatable, Content: View>: View {
     private func start(_ new: Value) {
         if reduceMotion {
             // 样子没变时里面的点、变淡跟着这一下淡入淡出；样子变了的由 `handOff` 自带的节奏淡
-            return withAnimation(HandOff.quick) { run = JellyRun(from: new, to: new) }
+            return withAnimation(Motion.fade) { run = JellyRun(from: new, to: new) }
         }
         // 上一下画到了哪：画的值与形变都从最后求值的那一帧接着（按墙钟估会比动画实际走到的早一两帧，接上时跳一下）
         let time = run.drawn.time

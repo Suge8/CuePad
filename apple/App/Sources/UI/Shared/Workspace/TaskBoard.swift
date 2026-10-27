@@ -183,14 +183,18 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         return cards
     }
 
-    /// 比 `before` 换了列的卡（`Item.flight`、`Work.id`、`Held.id`）：看板据此让它整张飞过去、不在新处淡入（`boardFlight`）。
-    func moved(from before: TaskBoard) -> Set<String> {
+    /// 比 `before` 换了列的卡（`Item.flight`、`Work.id`、`Held.id`）与它原来在哪一列：看板据此让它从原处飞过去（`boardFlight`）。
+    func moved(from before: TaskBoard) -> [String: Column] {
         let was = before.columns
-        return Set(columns.compactMap { id, column in was[id].flatMap { $0 == column ? nil : id } })
+        return columns.reduce(into: [:]) { moved, card in
+            if let old = was[card.key], old != card.value { moved[card.key] = old }
+        }
     }
 
-    /// 看板上有这张卡（`Item.flight`、`Work.id`、`Held.id`）。
-    func holds(_ flight: String) -> Bool { Column.allCases.contains { flights($0).contains(flight) } }
+    /// 比 `before` 多出来或少了的卡（新来、离开看板）：它们不是在飞的那张，进出照常淡（`boardFlight`）。
+    func entered(from before: TaskBoard) -> Set<String> {
+        Set(columns.keys).symmetricDifference(before.columns.keys)
+    }
 
     /// 每张卡在哪一列。
     private var columns: [String: Column] {

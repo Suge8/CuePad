@@ -70,7 +70,7 @@ struct PiModelCapsule: View {
         .background(palette.fill, in: .capsule)
         .frame(minHeight: ConfigCapsule.hitHeight)
         .contentShape(.capsule)
-        .animation(HandOff.quick, value: current?.key)
+        .animation(Motion.fade, value: current?.key)
     }
 
     private func spoken(at now: Date) -> String {
@@ -123,7 +123,7 @@ struct PiAgentCapsule: View {
         .background(palette.fill, in: .capsule)
         .frame(minHeight: ConfigCapsule.hitHeight)
         .contentShape(.capsule)
-        .animation(HandOff.quick, value: kind)
+        .animation(Motion.fade, value: kind)
     }
 }
 
@@ -140,7 +140,7 @@ struct ModelBadge: View {
         ZStack {
             if let binding {
                 QuotaRing(binding)
-                    .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: binding)
+                    .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion), value: binding)
             }
             mark?.image
                 .font(.system(size: side * 0.52))
@@ -222,8 +222,8 @@ struct PiThinkingDial: View {
             bubble = nil
         }
         .sensoryFeedback(.selection, trigger: touched) { _, new in new != nil }
-        .animation(reduceMotion ? nil : Motion.snappy, value: drawn)
-        .animation(HandOff.quick, value: bubble)
+        .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion), value: drawn)
+        .animation(Motion.fade, value: bubble)
         .accessibilityElement()
         .accessibilityLabel("思考强度")
         .accessibilityValue(meter.label)

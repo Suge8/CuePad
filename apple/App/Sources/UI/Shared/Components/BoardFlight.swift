@@ -1,46 +1,178 @@
 import CueStore
+import Synchronization
 import SwiftUI
 
 extension EnvironmentValues {
-    /// 看板卡飞行的命名空间：四列或四行共用一个（`boardStage`），卡换列时两头认得出是同一张。
-    @Entry var boardFlight: Namespace.ID?
-    /// 这一次读看板换了列的卡（`TaskBoard.moved(from:)`，`observingBoard` 与看板同一个事务里给）。
-    @Entry var boardMoved: Set<String> = []
-    /// 下一份看板里要换列的卡，在换上那一份之前先给（`observingBoard`）：它们在原处的那张撤掉时不淡出。
-    @Entry var boardLeaving: Set<String> = []
+    /// 这一次读看板谁换了列（`observingBoard` 给）。
+    @Entry var boardMoves: BoardMoves?
+    /// 卡所在的那一列（行）的滚动区（`boardLane`）。
+    @Entry var boardLane: TaskBoard.Column?
+}
+
+/// 转场里写的环境键不带隔离（`BoardPresence`）。
+nonisolated extension EnvironmentValues {
+    /// 换列飞来的这张卡从哪一列来、落地没有（`BoardArrival`）：卡上叠着的原来那一列的纸色随着飞淡掉（`boardCard`）。
+    @Entry var boardArrival: BoardArrival?
+}
+
+/// 飞来的卡起飞时是哪一列的纸；`landed` 从起飞的 false 变到 true 是在看板那一份的事务里，跟着它变的透明度随飞行插值。
+nonisolated struct BoardArrival: Equatable {
+    let from: TaskBoard.Column
+    let landed: Bool
+}
+
+/// 每次读看板谁换了列、各从哪一列来、原处在哪：换列的卡在原处撤掉、在新处飞来，都要在换上新看板的那一刻知道。
+/// 撤掉的那张用的是它上一次排版时的样子（转场在它身上），那时还不知道看板要变，所以这一份不走环境的值，
+/// 是读看板那一处在换上新看板之前写好（`read`）、两头在转场开始时来读的同一份（`BoardDepartures`）：新看板一步换上，不先排一次标出谁要走（多等一帧）。
+/// 原处 = 卡在所在列（行）滚动区里的框（`frames`）+ 那个滚动区在看板坐标系里的框（`lanes`），都是排版、滚动后记下、不触发重绘。
+/// 分两段记：卡直接记看板坐标系里的框的话，列里一让位每张卡每帧都要换算一遍跨过滚动区的坐标，大库里一次换列主线程多出近一半的指令。
+/// 不用 `matchedGeometryEffect` 对两头：它取的是撤掉那张此刻的框，懒加载栈里撤掉的那张从第二帧起排在栈顶，飞的第一帧从列顶起跳。
+@MainActor final class BoardMoves {
+    /// 看板四列或四行的坐标系（`boardStage`）。
+    nonisolated static let space = "boardStage"
+
+    nonisolated struct Departure: Sendable {
+        let column: TaskBoard.Column
+        let frame: CGRect
+        /// 哪一刻起飞：过了这一趟飞行的时长就不算数（`BoardDepartures`）。
+        let at: ContinuousClock.Instant
+    }
+
+    /// 这一次换了列、原处看得见的卡（原处没排出来的——懒加载还没建、滚出去了——不飞，在新处淡入）。
+    let departures = BoardDepartures()
+    /// 最近一次有卡换列时它们的身份：飞进去的那一列排在上面（`BoardColumn`），飞到一半又来一份没人换列的看板时不落到别的列下面。
+    private var landing: Set<String> = []
+    fileprivate var frames: [String: (lane: TaskBoard.Column, frame: CGRect)] = [:]
+    fileprivate var lanes: [TaskBoard.Column: CGRect] = [:]
+
+    /// `moved`：这一份里换了列的卡；`entered`：新来或离开看板的卡——它们这一趟不是飞，还没飞完的记录也撤掉，进出照常淡。
+    fileprivate func read(_ moved: [String: TaskBoard.Column], entered: Set<String>) {
+        let now = ContinuousClock.now
+        departures.add(moved.reduce(into: [:]) { departures, move in
+            guard let card = frames[move.key], let lane = lanes[card.lane] else { return }
+            departures[move.key] = Departure(column: move.value, frame: card.frame.offsetBy(dx: lane.minX, dy: lane.minY), at: now)
+        }, dropping: entered, at: now)
+        if !moved.isEmpty { landing = Set(moved.keys) }
+    }
+
+    func lands(in flights: [String]) -> Bool { !landing.isEmpty && flights.contains(where: landing.contains) }
+}
+
+/// 正在飞的卡与原处（`BoardMoves.departures`）。iOS 上转场在渲染线程上求值，所以是加锁的一份，不是主线程上的状态。
+/// 一趟飞行要飞完才撤下（`Motion.Spring.travel` 收住的时长）：飞着时又来一份没人换列的看板，正在飞的那张、刚撤的那张再求值转场时照样认得出自己在飞；
+/// 过了这么久就不算数；还没飞完就离开看板或又回来的，读看板那一处当场撤掉它的记录（`BoardMoves.read`），照常淡出淡入。
+nonisolated final class BoardDepartures: Sendable {
+    private let state = Mutex<[String: BoardMoves.Departure]>([:])
+    private static let lasts = Duration.seconds(Motion.Spring.travel.settlingDuration)
+
+    func callAsFunction(_ id: String) -> BoardMoves.Departure? {
+        state.withLock { $0[id] }.flatMap { ContinuousClock.now - $0.at < Self.lasts ? $0 : nil }
+    }
+
+    fileprivate func add(_ departures: [String: BoardMoves.Departure], dropping gone: Set<String>, at now: ContinuousClock.Instant) {
+        state.withLock { current in
+            current = current.filter { now - $0.value.at < Self.lasts && !gone.contains($0.key) }.merging(departures) { _, new in new }
+        }
+    }
 }
 
 extension View {
     /// 看板上一张卡的身份（`TaskBoard.Item.flight`、`Work.id`、`Held.id`：任务是 `task/…`，没绑任务的会话是 `session/…`，换列不换）。
-    /// 卡换列是这一列删一张、那一列添一张：两张同一个身份，在同一个动画事务里（`observingBoard`）新的一张从旧的那一处飞到新处，整张不透明地飞，
-    /// 旧的那张当场撤掉（只留一张在飞）。新来的（新建、取回归档、等你来了）在原处淡入；离开看板的（归档、删掉、等你答完）在原处淡出，列里后面的卡挪上来补位。
-    /// 换列的那张要当场撤，是因为懒加载栈里带着飞行身份淡出的那张先跳到栈顶再飞，一闪；撤掉时用的是它上一次排版时的样子，
-    /// 所以读看板那一处先单独排一次、告诉它要走（`boardLeaving`），再换上新的一份。
+    /// 卡换列是这一列删一张、那一列添一张，两张同一个身份，在同一个动画事务里（`observingBoard`）：
+    /// - 旧的那张当场撤掉，新的那张在原处接上、平移到新处，只留一张在飞。它按这一列的终态排好，一路不重排、不缩放，只是渲染时的位移：
+    ///   插值整个框的话每帧按插值的宽高重排一遍字，字逐帧挪动，主线程也跟不上；从旧的大小缩放过来的话，两列宽高比不同，字被横着拉宽；
+    /// - 起飞时盖着原来那一列的纸色，随着飞淡掉（`BoardArrival`），纸色不在起飞那一下换；
+    /// - 新来的（新建、取回归档、等你来了）在原处淡入，离开看板的（归档、删掉、等你答完）在原处淡出（`Motion.fade`），列里后面的卡挪上来补位。
+    /// 不让旧的那张淡出、与新的交叉淡：懒加载栈里撤掉的那张从第二帧起排在栈顶，淡着的旧样子在列顶闪一下。
     /// 飞行要越过所在列、行的边，所以列与行的滚动区不裁内容（`scrollClipDisabled`；超出窗口的照样被窗口裁掉）。
     func boardFlight(_ id: String) -> some View { modifier(BoardFlight(id: id)) }
+
+    /// 一列（行）卡的滚动区：卡飞的原处按它量（`BoardMoves`）。
+    func boardLane(_ column: TaskBoard.Column) -> some View { modifier(BoardLaneFrame(column: column)) }
+}
+
+private struct BoardLaneFrame: ViewModifier {
+    let column: TaskBoard.Column
+    @Environment(\.boardMoves) private var moves
+
+    func body(content: Content) -> some View {
+        content
+            .environment(\.boardLane, column)
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(BoardMoves.space)) } action: { moves?.lanes[column] = $0 }
+    }
 }
 
 private struct BoardFlight: ViewModifier {
     let id: String
-    @Environment(\.boardFlight) private var space
-    @Environment(\.boardMoved) private var moved
-    @Environment(\.boardLeaving) private var leaving
+    @Environment(\.boardMoves) private var moves
+    @Environment(\.boardLane) private var lane
 
     func body(content: Content) -> some View {
-        if let space {
-            content.matchedGeometryEffect(id: id, in: space)
-                .transition(.asymmetric(insertion: moved.contains(id) ? .identity : .opacity, removal: leaving.contains(id) ? .identity : .opacity))
+        if let moves, let lane {
+            content
+                .onGeometryChange(for: CGRect.self) { $0.frame(in: .scrollView) } action: { moves.frames[id] = (lane, $0) }
+                .transition(.board(id, moves.departures))
         } else {
             content
         }
     }
 }
 
+extension Transition where Self == BoardPresence {
+    /// 卡在看板上的进出（`boardFlight`）：三段合成，各走各的动画——飞（位移，照看板那一份的事务走）、淡（`Motion.fade`）、换列的旧那张当场撤（不动画）。
+    /// 三段的 `body` 都写明 `nonisolated`：协议把它标成主线程，SwiftUI 在 iOS 上却由渲染线程求值（`com.apple.SwiftUI.AsyncRenderer`）。
+    /// 只在类型上写 `nonisolated` 不够，`body` 照样从协议继承主线程隔离，里面的闭包都带主线程检查，渲染线程一调就崩；
+    /// 写在 `body` 上，里面用到的类型、环境键、常量都得不带隔离，编译器替它把关。
+    static func board(_ id: String, _ departures: BoardDepartures) -> some Transition {
+        BoardPresence(id: id, departures: departures)
+            .combined(with: BoardFade(id: id, departures: departures).animation(Motion.fade))
+            .combined(with: BoardDrop(id: id, departures: departures).animation(nil))
+    }
+}
+
+/// 换列飞来的那张从原处平移过来、起飞时盖着原来那一列的纸色（`BoardArrival`）。转场开始时才问这一次谁换了列（见 `BoardMoves`）。
+/// 平移是渲染时插值的效果，起点与终点各算一次，途中每帧不重算卡的内容。撤掉的那张（`didDisappear`）什么都不加：
+/// 给它换环境、挂效果，它所在的那一列会整列跳一下。
+nonisolated struct BoardPresence: Transition {
+    let id: String
+    let departures: BoardDepartures
+
+    nonisolated func body(content: Content, phase: TransitionPhase) -> some View {
+        let arrival = phase == .didDisappear ? nil : departures(id)
+        content
+            .environment(\.boardArrival, arrival.map { BoardArrival(from: $0.column, landed: phase.isIdentity) })
+            .visualEffect { [start = phase == .willAppear ? arrival?.frame : nil] effect, proxy in
+                let own = proxy.frame(in: .named(BoardMoves.space))
+                let start = start ?? own
+                return effect.offset(x: start.midX - own.midX, y: start.midY - own.midY)
+            }
+    }
+}
+
+/// 新来的在原处淡入、离开看板的在原处淡出；换列的两头不淡（飞来的那张一起飞就在，旧的那张由 `BoardDrop` 当场撤）。
+nonisolated private struct BoardFade: Transition {
+    let id: String
+    let departures: BoardDepartures
+
+    nonisolated func body(content: Content, phase: TransitionPhase) -> some View {
+        content.opacity(phase.isIdentity || departures(id) != nil ? 1 : 0)
+    }
+}
+
+/// 换列的旧那张当场撤掉、只留一张在飞。
+nonisolated private struct BoardDrop: Transition {
+    let id: String
+    let departures: BoardDepartures
+
+    nonisolated func body(content: Content, phase: TransitionPhase) -> some View {
+        content.opacity(phase == .didDisappear && departures(id) != nil ? 0 : 1)
+    }
+}
+
 extension View {
     /// 读看板（三端进展页同一处）：库变了重读；过了零点也重读一次——"今天做完"按读的那一刻分，库没变时日子换了也要换（同项目页）。
-    /// 看板怎么动只在这里定：第一份是页面打开的样子、不动；之后每一份都在一个动画事务里换上（`Motion.move`，减弱动态效果时直接到终态），
-    /// 卡的出现、消失、列内让位与换列（`boardFlight`）都跟着这一份走，各列各行不另挂动画。有卡换列时分两步：先只排一次、标出要换列的卡
-    /// （`boardLeaving`），排完（`onChange`）再换上新的一份。
+    /// 看板怎么动只在这里定：第一份是页面打开的样子、不动；之后每一份都在一个动画事务里换上（`Motion.travel`：换列是看板上最远的挪动，
+    /// 列里让位跟着同一条走、与飞的那张同起同落；减弱动态效果时直接到终态，进出照样淡），各列各行不另挂动画。
     func observingBoard(into board: Binding<TaskBoard?>, store: CueStore, onError: @escaping (any Error) -> Void) -> some View {
         modifier(BoardReading(board: board, store: store, onError: onError))
     }
@@ -51,37 +183,17 @@ private struct BoardReading: ViewModifier {
     let store: CueStore
     let onError: (any Error) -> Void
     @State private var day = 0
-    @State private var moved: Set<String> = []
-    @State private var leaving: Set<String> = []
-    /// 有卡换列时等着换上的那一份（先排一次 `leaving`）。
-    @State private var pending: TaskBoard?
+    @State private var moves = BoardMoves()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func body(content: Content) -> some View {
         content
-            .environment(\.boardMoved, moved)
-            .environment(\.boardLeaving, leaving)
+            .environment(\.boardMoves, moves)
             .observing(store, id: day, into: Binding { board } set: { read in
                 guard let board, let read else { return board = read }
-                let moving = read.moved(from: board)
-                // 没有换列的这一份不清掉还在飞的那张：飞到一半换掉它的进场方式，飞行会停住再跳到终点；它离开看板时才清
-                if moving.isEmpty { return show(read, moved: moved.filter(read.holds)) }
-                leaving = moving
-                pending = read
+                moves.read(read.moved(from: board), entered: read.entered(from: board))
+                withAnimation(Motion.spatial(Motion.travel, reduceMotion: reduceMotion)) { self.board = read }
             }, onError: onError) { try TaskBoard.read(from: $0) }
-            .onChange(of: pending) {
-                guard let pending, let board else { return }
-                self.pending = nil
-                show(pending, moved: pending.moved(from: board))
-            }
             .onDayChange { day += 1 }
-    }
-
-    private func show(_ read: TaskBoard, moved: Set<String>) {
-        withAnimation(Motion.spatial(Motion.move, reduceMotion: reduceMotion)) {
-            self.moved = moved
-            leaving = []
-            board = read
-        }
     }
 }

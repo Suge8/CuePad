@@ -25,7 +25,7 @@ struct TaskBoardPage: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .readsTopBand(into: $band)
             .background(palette.desk)
-            .animation(HandOff.quick, value: workspace.addsTask)
+            .animation(Motion.fade, value: workspace.addsTask)
             .onChange(of: workspace.scopedProject) { workspace.addsTask = false }
             .observingBoard(into: $board, store: services.store, onError: workspace.fail)
     }

@@ -75,10 +75,10 @@ struct DockRoot: View {
     /// 浮起的输入框（新会话、发给 Agent）开着时底边归它，这一排让开：它落在这一排的位置上，留着就是两层玻璃叠着。
     private var stays: Bool { workspace.newSession == nil && workspace.outbox == nil && Dock.stays(on: workspace.top) }
 
-    /// "⋯"展开、收起（点别处、滚动、点 Cue 钮、输入框有焦点时收起）：底部那一排用 `Motion.dock` 换形。
+    /// "⋯"展开、收起（点别处、滚动、点 Cue 钮、输入框有焦点时收起）：底部那一排用 `Motion.travel` 换形。
     private func openPlaces(_ open: Bool) {
         guard open != motion.placesOpen else { return }
-        withAnimation(Motion.spatial(Motion.dock, reduceMotion: reduceMotion)) { motion.placesOpen = open }
+        withAnimation(Motion.spatial(Motion.travel, reduceMotion: reduceMotion)) { motion.placesOpen = open }
     }
 }
 

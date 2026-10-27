@@ -69,12 +69,13 @@ struct BoardRowLane<Above: View, Content: View>: View {
             .scrollTargetBehavior(.viewAligned)
             .scrollIndicators(.never)
             .scrollClipDisabled()
+            .boardLane(column)
             .scrollDismissesKeyboard(.immediately)
             .frame(minHeight: cell, idealHeight: cell * CGFloat(tiers) + BoardRowMetrics.gap * CGFloat(tiers - 1), maxHeight: .infinity)
             .environment(\.boardRow, true)
             .environment(\.boardTitle, BoardCardMetrics.title(column, cardWidth: nil, typeSize: typeSize))
             .onChange(of: rewind) {
-                if let rewind { withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { proxy.scrollTo(rewind, anchor: .leading) } }
+                if let rewind { withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { proxy.scrollTo(rewind, anchor: .leading) } }
             }
         }
     }

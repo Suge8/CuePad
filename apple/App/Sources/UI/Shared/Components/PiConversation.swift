@@ -302,7 +302,7 @@ struct PiShownLabel: View {
             #endif
             Text(shown.label).fontWeight(shown.needsYou ? .medium : nil).foregroundStyle(shown.labelTint(palette))
                 .contentTransition(.opacity)
-                .animation(HandOff.quick, value: shown)
+                .animation(Motion.fade, value: shown)
         }
     }
 }

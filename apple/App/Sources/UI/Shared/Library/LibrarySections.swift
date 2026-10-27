@@ -160,7 +160,7 @@ struct TidySlot: View {
         Group {
             if !tidies.isEmpty { TidyPaper(tidies: tidies, library: library).transition(.opacity).padding(.bottom, LibraryLayout.gap) }
         }
-        .animation(HandOff.quick, value: tidies.isEmpty)
+        .animation(Motion.fade, value: tidies.isEmpty)
     }
 }
 

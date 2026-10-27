@@ -113,7 +113,7 @@ struct CueWaitDock: View {
                     .padding(.bottom, Self.below + Self.peek * CGFloat(Self.layers - layer))
             }
         }
-        .animation(HandOff.quick, value: behind)
+        .animation(Motion.fade, value: behind)
         .accessibilityHidden(true)
     }
 
@@ -144,18 +144,18 @@ struct CueWaitDock: View {
             guard animated else { return leave() }
             leaving = true
             // 收尾看此刻的状态（`leaving`）：淡的这 80ms 里又来了一件时不把它拿掉
-            move(to: 0, .easeOut(duration: HandOff.gap), holds: false) { if leaving { leave() } }
+            move(to: 0, Motion.yield, holds: false) { if leaving { leave() } }
             return
         }
         let swapping = shown != nil
         leaving = false
-        withAnimation(swapping && animated ? HandOff.quick : nil) { shown = next }
+        withAnimation(swapping && animated ? Motion.fade : nil) { shown = next }
         guard animated, level < 1, next.wait.since > watching else { return level = 1 }
         moving = true
         Task {
             await NextFrame.wait()
             guard shown?.id == next.id else { return moving = false }
-            move(to: 1, reduceMotion ? HandOff.quick : Motion.snappy)
+            move(to: 1, Motion.fading(Motion.nudge, reduceMotion: reduceMotion))
         }
     }
 
@@ -194,10 +194,10 @@ struct CueWaitDock: View {
         let next = commits && abs(projected) > Self.commit ? pick.neighbor(by: projected < 0 ? 1 : -1) : nil
         guard let next else {
             exit = 0
-            withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { drag = 0 }
+            withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { drag = 0 }
             return
         }
-        withAnimation(reduceMotion ? HandOff.quick : Motion.snappy, completionCriteria: .removed) {
+        withAnimation(Motion.fading(Motion.nudge, reduceMotion: reduceMotion), completionCriteria: .removed) {
             drag = 0
             workspace.cueAsking = next.id
             shown = next
