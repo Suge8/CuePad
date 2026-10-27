@@ -57,7 +57,8 @@ public actor CueStore {
       throw CueStoreError.schemaTooOld(version)
     } else if version < Schema.version {
       _ = try connection.transaction {
-        for upgrade in Schema.upgrades[(version - Schema.baseVersion)...] { try upgrade.run(connection) }
+        let files = Self.files(of: location)
+        for upgrade in Schema.upgrades[(version - Schema.baseVersion)...] { try upgrade.run(connection, files) }
         try connection.exec("PRAGMA user_version = \(Schema.version)")
       }
       try Schema.reclaim(connection)

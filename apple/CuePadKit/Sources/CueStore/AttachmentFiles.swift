@@ -15,8 +15,9 @@ import UniformTypeIdentifiers
 public struct AttachmentFiles: Sendable {
   /// 保底的硬链接所在（库旁的 `Attachments/`）
   let backups: URL
-  /// 本机那份所在（缓存目录的 `CuePadAttachments/`；Mac 上没有沙盒，缓存目录是各家共用的 `~/Library/Caches`，所以带前缀）
-  let directory: URL
+  /// 本机那份所在（缓存目录的 `CuePadAttachments/`；Mac 上没有沙盒，缓存目录是各家共用的 `~/Library/Caches`，所以带前缀）。
+  /// 交给 Agent 的路径都在这里面：托管的 Claude Code 起进程时加进可读目录、OpenCode 的服务放行它。
+  public let directory: URL
   /// 这个库的缓存目录（`LibraryLocation.caches`）：附件、界面的缩略图与快照都放这里。
   public let caches: URL
   /// 单个文件上限：经 iCloud 同步，手机上也要取得下来。
@@ -116,7 +117,7 @@ public struct AttachmentFiles: Sendable {
     }
   }
 
-  private func link(_ file: URL, to backup: URL) throws {
+  func link(_ file: URL, to backup: URL) throws {
     try FileManager.default.createDirectory(at: backups, withIntermediateDirectories: true)
     do { try FileManager.default.linkItem(at: file, to: backup) } catch let error as CocoaError where error.code == .fileWriteFileExists {}
   }
@@ -126,7 +127,7 @@ public struct AttachmentFiles: Sendable {
   }
 
   /// ImageIO 认出的图片类型的扩展名；不是图片为空。
-  private static func imageFormat(_ source: CGImageSource?) -> String {
+  static func imageFormat(_ source: CGImageSource?) -> String {
     guard let source, CGImageSourceGetCount(source) > 0, let type = CGImageSourceGetType(source) else { return "" }
     return UTType(type as String)?.preferredFilenameExtension ?? ""
   }
@@ -153,11 +154,28 @@ extension CueStore {
   }
 
   /// 本机已有这个文件、还没有记录时登记附件记录（同步载体）。必须在写事务内调用。
+  /// 记录已有、服务器也收下过的（同一份内容再存了一次）：存入时新留的保底用不着，删掉。
   func registerAttachment(_ key: String) throws {
-    guard try !hasAttachment(key), let metadata = files.metadata(key) else { return }
+    guard try !hasAttachment(key) else {
+      if try isUploaded(key) { try files.uploaded(key) }
+      return
+    }
+    guard let metadata = files.metadata(key) else { return }
     let now = Date.stamp
     try insert(
       Attachment(id: UUID(), hash: metadata.hash, byteCount: metadata.byteCount, format: metadata.format, createdAt: now, modifiedAt: now))
+  }
+}
+
+extension CueStore {
+  /// 这个键的附件记录服务器收下过（有一版推送成功）。
+  func isUploaded(_ key: String) throws -> Bool {
+    guard let parts = AttachmentKey.parts(key) else { return false }
+    return try db.first(
+      """
+      SELECT 1 FROM attachments a JOIN syncRecords s ON s.recordName = a.id
+      WHERE a.hash = ? AND a.format = ? AND s.pushedModifiedAt IS NOT NULL
+      """, [parts.hash, parts.format]) { _ in true } != nil
   }
 }
 

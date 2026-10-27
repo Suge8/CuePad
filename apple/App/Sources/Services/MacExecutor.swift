@@ -111,10 +111,16 @@ final class MacExecutor {
     private func deliver(_ request: DeliveryRequest) async throws {
         let (_, id) = try await connect(request.target)
         guard let session = pi.session(id: id) else { throw PiBridgeError.unknownSession(id) }
-        let content = SendContent(stored: request.content)
-        try await pi.send(
-            PiMessage(text: content.plainText, images: try content.piImages(from: store.files), deliveryID: request.id.uuidString), to: id)
+        try await pi.send(try await message(request.content, of: request), to: id)
         await record(request.content, of: request, to: session.sendTarget)
+    }
+
+    /// 交给会话的一句（存储格式）：附件先取到本机，图片另附，文件写成路径（`SendContent.agentText`）。
+    private func message(_ stored: String, of request: DeliveryRequest) async throws -> PiMessage {
+        let content = SendContent(stored: stored)
+        try await store.files.fetch(content)
+        // 图片拿走后留下的空行不发
+        return PiMessage(text: try content.agentText(from: store.files).trimmingCharacters(in: .whitespacesAndNewlines), images: try content.piImages(from: store.files), deliveryID: request.id.uuidString)
     }
 
     /// 记发送记录。话已经送达，记不下也照样按成功写回（手机才不会重发）：没记下是这台 Mac 的资料库问题，在这里报。
@@ -144,8 +150,9 @@ final class MacExecutor {
     private func runCommand(_ request: DeliveryRequest) async throws {
         let content = SendContent(stored: request.content)
         guard !content.hasImages else { throw SendError.imagesNotSupported }
+        try await store.files.fetch(content)
         let (ref, id) = try await connect(request.target)
-        try await pi.command(content.plainText.trimmingCharacters(in: .whitespacesAndNewlines), in: id)
+        try await pi.command(try content.agentText(from: store.files).trimmingCharacters(in: .whitespacesAndNewlines), in: id)
         if let card = request.cardID { try await store.linkCard(card, toSession: ref) }
     }
 
@@ -205,10 +212,8 @@ final class MacExecutor {
                 "开新会话（\(launch.opening.rawValue, privacy: .public)）：起进程上桥 \(began.duration(to: opened), privacy: .public)，送开场 \(opened.duration(to: clock.now), privacy: .public)")
         }
         if let opening = launch.prompt?.trimmingCharacters(in: .whitespacesAndNewlines), !opening.isEmpty {
-            // 开场的话是存储格式（可带卡片里的图片）
-            let content = SendContent(stored: opening)
-            let text = content.plainText.trimmingCharacters(in: .whitespacesAndNewlines)
-            try await pi.send(PiMessage(text: text, images: try content.piImages(from: store.files), deliveryID: request.id.uuidString), to: id)
+            // 开场的话是存储格式（可带卡片里的图片与文件）
+            try await pi.send(try await message(opening, of: request), to: id)
             guard let session = pi.session(id: id) else { throw PiBridgeError.unknownSession(id) }
             await record(opening, of: request, to: session.sendTarget)
         }

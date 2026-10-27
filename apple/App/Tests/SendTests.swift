@@ -33,7 +33,7 @@ struct SendTests {
         let missing = String(repeating: "a", count: 64)
         rig.pasteboard.clearContents()
         rig.pasteboard.setString("原有", forType: .string)
-        #expect(throws: SendError.imageUnavailable(missing)) { try services.copy("x \(CueFormat.imageMarkup(key: missing))") }
+        #expect(throws: SendError.attachmentUnavailable(missing)) { try services.copy("x \(CueFormat.imageMarkup(key: missing))") }
         #expect(rig.pasteboard.string(forType: .string) == "原有")
 
         let body = try await bodyWithImage()

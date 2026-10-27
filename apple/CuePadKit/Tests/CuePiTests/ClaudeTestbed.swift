@@ -79,7 +79,8 @@ final class ClaudeTestbed {
             "ANTHROPIC_MODEL": claudeTestModel, "DISABLE_AUTOUPDATER": "1", "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1",
         ]
         paths = AgentPaths(pi: PiPaths(agentDirectory: root.appending(path: "pi"), socketDirectory: sockets), environment: environment)
-        store = try Fixture().store
+        // 库在这个用例的临时目录里：交给托管进程的附件目录（`--add-dir`）录成占位符，回放对得上
+        store = try CueStore(location: .isolated(root.appending(path: "store", directoryHint: .isDirectory)))
         files = store.files
         bridge = PiBridge(socketDirectory: sockets, hostedIdle: idleLimit)
         log = ChangeLog(bridge)

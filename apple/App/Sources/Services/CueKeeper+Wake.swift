@@ -97,6 +97,17 @@ extension CueKeeper {
         Task { await upload(ids) }
     }
 
+    /// 你的消息里的附件先取到这台 Mac 上：图交给大脑、文件的路径写进话里（`CueEnvelope.delivered`）。取不到的对你说一声，话照交。
+    func fetchAttachments(in pending: [CueMessage]) async {
+        for message in pending where message.author == .known(.you) {
+            do {
+                try await store.files.fetch(SendContent(stored: message.text))
+            } catch {
+                await say(.cue, ShownText("你发的附件没能交给我：\(ShownText(error).embedded)"))
+            }
+        }
+    }
+
     /// 你的消息里的图，按发给会话的同一个转换取出、交给大脑；文字里的图片引用照留（Cue 转给会话时原样写进去）。
     /// 模型看不了图、或图不在这台 Mac 上，不交图并对你说一声，不悄悄丢掉。
     func images(in pending: [CueMessage], for brain: any CueBrain) async -> [PiImage] {

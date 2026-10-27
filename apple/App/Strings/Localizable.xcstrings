@@ -5839,6 +5839,22 @@
         }
       }
     },
+    "你发的附件没能交给我：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your attachment didn't reach me: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你发的附件没能交给我：%@"
+          }
+        }
+      }
+    },
     "你的规矩要先问的事" : {
       "localizations" : {
         "en" : {
@@ -15688,18 +15704,18 @@
         }
       }
     },
-    "正文里有图片找不到了，无法发送" : {
+    "正文里有附件找不到了，无法发送" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "An image in the notes is missing, so it can't be sent"
+            "value" : "An attachment in the notes is missing, so it can't be sent"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "正文里有图片找不到了，无法发送"
+            "value" : "正文里有附件找不到了，无法发送"
           }
         }
       }
@@ -22336,6 +22352,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "附件记录没有文件"
+          }
+        }
+      }
+    },
+    "附件：%@（%@）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Attachment: %@ (%@)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "附件：%1$@（%2$@）"
           }
         }
       }

@@ -62,6 +62,21 @@ import Testing
     #expect(store.files.fileURL(for: key) == nil)
   }
 
+  /// 服务器早已收下的内容再存一次（缓存被清后又粘贴了同一张）：引用它时认出记录已上传，存入时新留的保底删掉。
+  @Test func storingUploadedContentAgainKeepsNoBackupOnceReferenced() async throws {
+    let key = try store.files.store(pngData(width: 7, height: 7))
+    _ = try await store.createCard(body: "![](cuepad://file/\(key))")
+    let id = try #require(try RawDB(fixture.url).rows("SELECT id FROM attachments").first?[0])
+    try RawDB(fixture.url).exec("INSERT INTO syncRecords (recordName, recordType, pushedModifiedAt) VALUES ('\(id)', 'attachments', 1)")
+    try store.files.uploaded(key)
+    try FileManager.default.removeItem(at: cached)
+
+    _ = try store.files.store(pngData(width: 7, height: 7))
+    #expect(FileManager.default.fileExists(atPath: backups.appending(path: key).path))
+    _ = try await store.createCard(body: "又一张 ![](cuepad://file/\(key))")
+    #expect(!FileManager.default.fileExists(atPath: backups.appending(path: key).path) && store.files.fileURL(for: key) != nil)
+  }
+
   @Test func referencingStoredFilesRegistersOneRecordPerKey() async throws {
     let png = pngData(width: 12, height: 12)
     let key = try store.files.store(png)

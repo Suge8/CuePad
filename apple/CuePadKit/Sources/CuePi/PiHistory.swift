@@ -220,11 +220,14 @@ public enum PiHistory {
 
         fileprivate init(files: AttachmentFiles?) { self.files = files }
 
+        /// 交给 Agent 的附件行（`AttachmentFiles.agentLine`）认回文件引用：正文里是文件，标题与摘要里是文件名。
         mutating func text(_ block: String?) {
             let text = PiSessionName.withoutImageNotes(block ?? "")
             guard !text.isEmpty else { return }
-            texts.append(text)
-            pieces.append(text)
+            guard let files else { return texts.append(text) }
+            let stored = files.restoringAgentLines(in: text)
+            texts.append(stored == text ? text : CueFormat.parse(stored).map(\.shownText).joined())
+            pieces.append(stored)
         }
 
         /// 图片原字节；不是图片的跳过（不存进附件）。
