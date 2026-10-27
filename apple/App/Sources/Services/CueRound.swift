@@ -48,7 +48,7 @@ struct CueRound: Identifiable {
     }
 }
 
-/// 一轮里的一次工具调用：名字与参数是大脑报的原样（`CueBrainEvent.tool`）。
+/// 一轮里的一次工具调用：名字与参数是大脑报的原样（`TurnEvent.tool`）。
 struct CueToolCall: Identifiable {
     let id: String
     let name: String

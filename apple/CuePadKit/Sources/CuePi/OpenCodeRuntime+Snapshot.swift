@@ -82,7 +82,7 @@ extension OpenCodeRuntime {
         let compaction = try await client.get(OpenCodePage<OpenCodeMessage>.self, "/api/session/\(id)/message?type=compaction&limit=1").data.first
         try await catalog(tracked.directory, client)
         sessions[id]?.facts.questions = permissions.map(Self.question) + forms.map(Self.question)
-        sessions[id]?.tokens = last?.tokens?.context
+        sessions[id]?.tokens = last?.tokens?.prompt
         sessions[id]?.facts.compacting = compaction?.status == "running"
         if tracked.info.model == nil { sessions[id]?.info.model = last?.model }
         if tracked.facts.failure != nil, let error = last?.error?.message { sessions[id]?.facts.failure = error }

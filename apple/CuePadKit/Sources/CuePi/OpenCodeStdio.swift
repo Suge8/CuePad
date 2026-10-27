@@ -38,25 +38,4 @@ extension OpenCodeClient {
         return (process, OpenCodeClient(info))
     }
 }
-
-extension AgentProbe {
-    /// OpenCode 能选哪些模型、不指定时用哪个：起一台不开 MCP、不读工作目录配置的服务（`OpenCodeClient.serve`，在临时目录里），
-    /// 问 `/api/model`（已连上的提供方的模型，与会话的模型菜单同一份）与 `/api/model/default`（按用户配置解析出的默认），问完关掉。
-    /// 免费模型不用登录，所以总有模型；一个都没有（用户关掉了免费模型、又没连提供方）是没登录，返回 nil。
-    func askOpenCode(_ executable: URL) async throws -> MacAgent? {
-        let config = jsonString(["policies": [["action": "integration.use", "resource": "mcp:*", "effect": "deny"]]])
-        let overrides = paths.environment.merging(["OPENCODE_CONFIG_CONTENT": config, "OPENCODE_DISABLE_PROJECT_CONFIG": "1"]) { $1 }
-        let (process, client) = try await OpenCodeClient.serve(
-            executable, environment: locator.environment(launching: executable, overrides: overrides), directory: FileManager.default.temporaryDirectory)
-        do {
-            let models = try await client.get(OpenCodeData<[OpenCodeModel]>.self, "/api/model").data
-            let model = try await client.get(OpenCodeData<OpenCodeModel?>.self, "/api/model/default").data
-            await process.stop()
-            return models.isEmpty ? nil : MacAgent(kind: .opencode, model: model?.key, models: models.map(\.option))
-        } catch {
-            await process.stop()
-            throw error
-        }
-    }
-}
 #endif

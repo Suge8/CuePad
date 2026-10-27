@@ -20,9 +20,9 @@ import Foundation
 /// - 一轮是一次执行（`session.execution.*`）；正在说的话由 `OpenCodeDrafts` 累积；上下文是每一步的输入合计（`OpenCodeTokens.prompt`）；
 ///   工具名去掉 MCP 的前缀 `cuepad_`。事件流断了（服务卡住）就结束进程，报成退出。
 @MainActor
-final class OpenCodeBrain: CueBrain {
+final class OpenCodeBrain: HostedSession {
     private let session = BrainSession()
-    var events: AsyncStream<CueBrainEvent> { session.events }
+    var events: AsyncStream<TurnEvent> { session.events }
     private var process: ChildProcess?
     private var client: OpenCodeClient?
     private var directory = ""
@@ -65,14 +65,14 @@ final class OpenCodeBrain: CueBrain {
             }
             try await follow(client)
             try await sweep(client)
-            try await withDeadline(AgentTimeouts.launch, orThrow: CueBrainError.rejected(String(localized: "CuePad 的 MCP 服务没有及时连上"))) {
+            try await withDeadline(AgentTimeouts.launch, orThrow: HostedSessionError.rejected(String(localized: "CuePad 的 MCP 服务没有及时连上"))) {
                 try await self.mcpReady(client)
             }
             models = try await client.get(OpenCodeData<[OpenCodeModel]>.self, "/api/model", directory: directory).data
             let model = if let ref = config.model { try find(ref) } else {
                 try await client.get(OpenCodeData<OpenCodeModel?>.self, "/api/model/default", directory: directory).data
             }
-            guard let model else { throw CueBrainError.rejected(String(localized: "OpenCode 没有可用的模型")) }
+            guard let model else { throw HostedSessionError.rejected(String(localized: "OpenCode 没有可用的模型")) }
             self.model = model
             level = config.effort
             let create = Create(
@@ -116,7 +116,7 @@ final class OpenCodeBrain: CueBrain {
                             self?.received(event)
                         }
                     }
-                    connected?.resume(throwing: CueBrainError.notRunning)
+                    connected?.resume(throwing: HostedSessionError.notRunning)
                 } catch {
                     connected?.resume(throwing: error)
                 }
@@ -140,15 +140,15 @@ final class OpenCodeBrain: CueBrain {
             let status = servers.first { $0.name == CueMCPServer.name }?.status
             switch status?.status {
             case "connected": return
-            case nil, "pending": guard await changes.next() != nil else { throw CueBrainError.notRunning }
-            default: throw CueBrainError.rejected(String(localized: "CuePad 的 MCP 服务连不上：\(status?.error ?? status?.status ?? "")"))
+            case nil, "pending": guard await changes.next() != nil else { throw HostedSessionError.notRunning }
+            default: throw HostedSessionError.rejected(String(localized: "CuePad 的 MCP 服务连不上：\(status?.error ?? status?.status ?? "")"))
             }
         }
     }
 
     private func find(_ ref: String) throws -> OpenCodeModel {
         guard let key = AgentKind.opencode.modelKey(ref), let found = models.first(where: { $0.key == key }) else {
-            throw CueBrainError.rejected(String(localized: "OpenCode 没有模型 \(ref)"))
+            throw HostedSessionError.rejected(String(localized: "OpenCode 没有模型 \(ref)"))
         }
         return found
     }
@@ -159,7 +159,7 @@ final class OpenCodeBrain: CueBrain {
     }
 
     func newSession() async throws {
-        guard let client, var create, let old = sessionID, let model else { throw CueBrainError.notRunning }
+        guard let client, var create, let old = sessionID, let model else { throw HostedSessionError.notRunning }
         create.model = model.ref(level.flatMap(model.variant))
         sessionID = try await open(create, on: client)
         toolNames = [:]
@@ -167,7 +167,7 @@ final class OpenCodeBrain: CueBrain {
     }
 
     func configure(model ref: String?, effort: PiThinkingLevel?) async throws {
-        guard let client, let sessionID, let current = model else { throw CueBrainError.notRunning }
+        guard let client, let sessionID, let current = model else { throw HostedSessionError.notRunning }
         let target = try ref.map(find) ?? current
         let level = effort ?? level
         struct Switch: Encodable { var model: OpenCodeModelRef }
@@ -178,7 +178,7 @@ final class OpenCodeBrain: CueBrain {
     }
 
     func send(_ text: String, images: [PiImage]) async throws {
-        guard let client, let sessionID else { throw CueBrainError.notRunning }
+        guard let client, let sessionID else { throw HostedSessionError.notRunning }
         struct File: Encodable { var uri: String }
         struct Prompt: Encodable { var text: String; var files: [File]; var delivery = "steer" }
         let files = images.map { File(uri: "data:\($0.mimeType);base64,\($0.data.base64EncodedString())") }
@@ -217,7 +217,7 @@ final class OpenCodeBrain: CueBrain {
             toolNames = [:]
             session.emit(.turnStarted)
         case "session.step.ended":
-            if let tokens = data.tokens { session.emit(.context(used: tokens.prompt)) }
+            if let tokens = data.tokens { session.emit(.context(used: tokens.prompt, window: model?.limit?.context)) }
         case "session.tool.input.started":
             if let id = data.id, let name = data.name { toolNames[id] = name }
         case "session.tool.called":

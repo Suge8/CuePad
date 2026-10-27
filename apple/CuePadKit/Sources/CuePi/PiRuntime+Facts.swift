@@ -15,7 +15,7 @@ extension PiRuntime {
         channel: { integration, _ in
             PiExtensionFiles(extensionsDirectory: integration.paths.pi.extensionsDirectory, legacyInUse: integration.legacyPiExtensionInUse)
         },
-        hostingNeedsChannel: true, probe: askPi, projectFolder: ".pi")
+        hostingNeedsChannel: true, probe: askPi, brain: { PiBrain() }, projectFolder: ".pi")
 
     /// RPC 模式、不存会话，只加载随包的桥扩展（不加载装好的那份与其他扩展，也就不连 CuePad）并开探测模式（扩展的 `CUEPAD_PROBE`）：
     /// 扩展把会话里上报的同一份模型配置写成一行就收尾。可选的与 Pi 的 /model 同一规则，配了范围（`enabledModels`）就是范围内的。

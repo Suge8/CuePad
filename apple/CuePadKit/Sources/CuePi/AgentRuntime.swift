@@ -48,8 +48,6 @@ extension AgentKind {
         case .opencode: OpenCodeRuntime.facts
         }
     }
-
-    public var command: String { facts.command }
 }
 
 /// 一家 Agent 在这台 Mac 上与别家不同的事实（跨平台的名字、会话变量、模型提供方、能力在 CueStore 的 `AgentKind`）。
@@ -84,6 +82,8 @@ public struct AgentFacts: Sendable {
     var releasesIdleHosted = false
     /// 问出不指定模型时用哪个、能选哪些（`AgentProbe`）：nil 是没登录，没回答抛错。
     let probe: @Sendable (_ executable: URL, AgentProbe) async throws -> MacAgent?
+    /// 开一个当 Cue 的大脑用的会话（`CueBrainConfig.startBrain` 再 `start`）
+    let brain: @MainActor @Sendable () -> any HostedSession
     /// 读几家共读的 `~/.agents/skills`（递归、跟链接）。不读的只读自己目录下一层的 `skills/<名>`：CuePad 的技能链过去，
     /// 它的旧技能目录也只找一层。
     var readsSharedSkills = true

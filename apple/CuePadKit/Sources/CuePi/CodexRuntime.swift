@@ -190,7 +190,7 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
         guard let codex = await codex() else { throw AgentRuntimeError.notInstalled(.codex) }
         let locator = await locate()
         return (codex, locator.environment(launching: codex, overrides: paths.environment.merging([
-            "CODEX_HOME": paths.home(of: .codex).path, "CUEPAD_PI_SOCKET_DIR": paths.pi.socketDirectory.path,
+            Self.facts.homeVariable: paths.home(of: .codex).path, "CUEPAD_PI_SOCKET_DIR": paths.pi.socketDirectory.path,
         ]) { $1 }))
     }
 

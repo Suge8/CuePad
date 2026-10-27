@@ -6,7 +6,7 @@ import Foundation
 import Testing
 @testable import CuePi
 
-/// 本机装的 OpenCode（`brew install opencode`）
+/// 本机装的 OpenCode v2
 let realOpenCodeURL = ExecutableLocator.standard.candidates("opencode").first
 /// 测试用的模型：缺省免费的 big-pickle，限流时用 `CUEPAD_OPENCODE_MODEL` 换成别的免费模型（`opencode` 提供方下的 id），
 /// 或写成 `提供方/模型` 换成自己的提供方（密钥只经环境给，如 `DEEPSEEK_API_KEY`）

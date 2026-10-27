@@ -11,13 +11,13 @@ import Foundation
 /// - 开新会话是写一句 `/clear`：Claude Code 清掉对话（进程、MCP 连接、模型与强度都留着），回一条不调模型的 `result`，不报成一轮；
 /// - 提示缓存留 1 小时（`ENABLE_PROMPT_CACHING_1H`：订阅登录多数时候本来就是，API 密钥与超额时默认 5 分钟）；
 /// - 思考强度按 Claude Code 的档位夹取（`ClaudeCode.effort`）；就地换模型与强度走控制请求（`ClaudeStream`）。
-extension ClaudeHostedSession: CueBrain {
-    var events: AsyncStream<CueBrainEvent> { brain?.events ?? AsyncStream { $0.finish() } }
+extension ClaudeHostedSession: HostedSession {
+    var events: AsyncStream<TurnEvent> { brain?.events ?? AsyncStream { $0.finish() } }
     /// Claude 的模型都能看图
     var seesImages: Bool { true }
 
     func start(_ config: CueBrainConfig) async throws {
-        guard let brain else { throw CueBrainError.notRunning }
+        guard let brain else { throw HostedSessionError.notRunning }
         do {
             let directory = try brain.makeDirectory()
             let prompt = directory.appending(path: "system-prompt.md")

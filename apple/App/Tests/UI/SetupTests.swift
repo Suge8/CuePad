@@ -7,7 +7,7 @@ import Testing
 @testable import CuePad
 
 /// 首次打开的接入面板：Cue 从没在哪台 Mac 上设过时自己弹一次，一处接入检测到的 Agent 并在这台启用 Cue，之后对 Cue 说的话直接交给它；
-/// 能当 Cue 的一家都用不了时，推荐 Claude Code，一行一个按钮：安装（后台跑官方脚本）→ 登录（打开浏览器）→ 启用，没做成的就地写原因、可再点；
+/// 一家都用不了时，推荐 Claude Code，一行一个按钮：安装（后台跑官方脚本）→ 登录（打开浏览器）→ 启用，没做成的就地写原因、可再点；
 /// 装了没登录的一打开就是登录，Pi 缺 Node.js 时先给官网；
 /// 换新 Mac、还没和 iCloud 对过时不提议在这台启用，对过发现 Cue 在别处就只管接入；已接入只差 Cue 的老用户也弹一次，停用过 Cue 的不弹。
 @MainActor
@@ -67,11 +67,12 @@ struct SetupTests {
         #expect(now.cue == .needsAgent)
         let node = try #require(AgentKind.pi.facts.installPrerequisite)
         let codex = SetupRow(kind: .codex, step: .install(nil)), pi = SetupRow(kind: .pi, step: .needs(node))
-        #expect(now.rows == [SetupRow(kind: .claudeCode, step: .install(nil)), codex, pi])  // 三家平行列出，推荐的排第一
+        let openCode = SetupRow(kind: .opencode, step: .install(nil))
+        #expect(now.rows == [SetupRow(kind: .claudeCode, step: .install(nil)), codex, pi, openCode])  // 各家平行列出，推荐的排第一
 
         await workspace.installAgent(.claudeCode)
         now = try await panel(workspace)
-        #expect(now.rows == [SetupRow(kind: .claudeCode, step: .logIn(nil)), codex, pi])
+        #expect(now.rows == [SetupRow(kind: .claudeCode, step: .logIn(nil)), codex, pi, openCode])
 
         await workspace.logIn(.claudeCode)
         now = try await panel(workspace)
@@ -90,6 +91,7 @@ struct SetupTests {
         #expect(now.cue == .needsAgent)
         #expect(now.rows == [
             SetupRow(kind: .claudeCode, step: .logIn(nil)), SetupRow(kind: .codex, step: .install(nil)), SetupRow(kind: .pi, step: .logIn(nil)),
+            SetupRow(kind: .opencode, step: .install(nil)),
         ])
 
         await workspace.logIn(.claudeCode)

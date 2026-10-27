@@ -28,10 +28,10 @@ extension CueKeeper {
         var busy: Bool
     }
 
-    /// 合一次：Cue 的那家与模型、强度用低档（一行行的摘要用不着深想，模型照用户给 Cue 选的，三家都起得来、不另猜模型名），
+    /// 合一次：Cue 的那家与模型、强度用低档（一行行的摘要用不着深想，模型照用户给 Cue 选的，各家都起得来、不另猜模型名），
     /// 系统提示只讲怎么合（`CuePrompt.dream`），工具只有 merge（`cuepad mcp --dream`），不带 Cue 的会话。一轮做完或进程退出就停。
     private func dream() async {
-        var brain: (any CueBrain)?
+        var brain: (any HostedSession)?
         do {
             guard let blocks = CueMemoryView(try await store.cueMemory()).mergeText,
                   let profile = try await store.cueProfile(), let runtime = profile.runtime.known, let launch = try await setup.launch(runtime)

@@ -187,22 +187,6 @@
         }
       }
     },
-    "%@ 不能当 Cue 的大脑" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ can't run Cue"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ 不能当 Cue 的大脑"
-          }
-        }
-      }
-    },
     "%@ 之后不再记得它，找不回来" : {
       "localizations" : {
         "en" : {
@@ -3513,6 +3497,38 @@
         }
       }
     },
+    "CuePad 的 MCP 服务没有及时连上" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CuePad's MCP server didn't connect in time"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CuePad 的 MCP 服务没有及时连上"
+          }
+        }
+      }
+    },
+    "CuePad 的 MCP 服务连不上：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Can't connect to CuePad's MCP server: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CuePad 的 MCP 服务连不上：%@"
+          }
+        }
+      }
+    },
     "CuePad 的资料库没打开，到 App 里看看" : {
       "localizations" : {
         "en" : {
@@ -3701,6 +3717,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Mac 迟迟没收下这句"
+          }
+        }
+      }
+    },
+    "OpenCode 没有可用的模型" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenCode has no models available"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenCode 没有可用的模型"
+          }
+        }
+      }
+    },
+    "OpenCode 没有模型 %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenCode has no model %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenCode 没有模型 %@"
           }
         }
       }
@@ -4013,6 +4061,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "name 写的是 %@，和目录名不一样"
+          }
+        }
+      }
+    },
+    "opencode serve --stdio 没有报出地址" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "opencode serve --stdio didn't report an address"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "opencode serve --stdio 没有报出地址"
           }
         }
       }

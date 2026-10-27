@@ -50,7 +50,7 @@ extension CueActivity {
   }
 
   /// 正在用时没碰哪一处（`step` 为 nil）的那一句：看板、记忆、对你说，读文件类照会话里的写法"工具 · 目标"。
-  /// `tool`、`arguments` 是大脑报的（`CueBrainEvent.tool`：去掉前缀的小写名字与 JSON 原文）。
+  /// `tool`、`arguments` 是大脑报的（`TurnEvent.tool`：去掉前缀的小写名字与 JSON 原文）。
   public static func detail(tool: String, arguments: String) -> String {
     let args = Parsed(arguments)
     func line(_ action: String, _ target: String? = nil) -> String {

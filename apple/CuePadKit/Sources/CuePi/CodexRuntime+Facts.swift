@@ -16,7 +16,7 @@ extension CodexRuntime {
                 home: integration.home(of: .codex), skillDirectory: integration.skillDirectory, codex: codex, locate: integration.locate,
                 environment: integration.paths.environment)
         },
-        releasesIdleHosted: true, probe: askCodex, projectFolder: ".codex", selfManagedSkills: ".system")
+        releasesIdleHosted: true, probe: askCodex, brain: { CodexDriver() }, projectFolder: ".codex", selfManagedSkills: ".system")
 
     nonisolated private static func home(_ paths: AgentPaths) -> URL { paths.directory(facts.homeVariable) ?? paths.user(".codex") }
 

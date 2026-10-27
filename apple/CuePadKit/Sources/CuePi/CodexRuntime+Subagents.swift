@@ -39,11 +39,6 @@ extension CodexRuntime {
             session.facts.questions = []
         case "thread/closed":
             return detach(session.id)
-        case "thread/tokenUsage/updated":
-            guard let usage = params["tokenUsage"], let window = usage["modelContextWindow"]?.int else { return }
-            let used = usage["last"]?["totalTokens"]?.int
-            bridge.update(session.id) { $0.context = PiContextUsage(tokens: used, window: window) }
-            return
         default:
             return
         }
@@ -51,7 +46,7 @@ extension CodexRuntime {
     }
 
     /// 托管会话的一轮（它的驱动报的）接到桥上。以一句话开新一轮时（`deliver`），这一轮开始就是那句开出的，之后的结束照常歇下。
-    func event(_ event: CueBrainEvent, from pid: Int32) {
+    func event(_ event: TurnEvent, from pid: Int32) {
         if case .exited = event { return processGone(pid) }
         guard let thread = hosted[pid]?.thread, let session = tracked["\(thread).\(pid)"] else { return }
         switch event {
@@ -65,6 +60,8 @@ extension CodexRuntime {
             endTurn(session, failure: session.lastError)
         case .speaking(let draft):
             return bridge.setDraft(session.id, draft)
+        case .context(let used, let window?):
+            return bridge.update(session.id) { $0.context = PiContextUsage(tokens: used, window: window) }
         case .context, .tool, .toolDone, .exited:
             return
         }

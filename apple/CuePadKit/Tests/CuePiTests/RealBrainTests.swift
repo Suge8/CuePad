@@ -8,8 +8,7 @@ import Testing
 /// 端到端：真实的 Pi / Codex / Claude Code / OpenCode 当 Cue 的大脑，用本机用户自己登录的账号与便宜的模型，MCP 是 Fixtures/mcp-echo.mjs 替身。
 /// 默认回放录像带，录制与模型、强度的换法见 `RealAgents`；OpenCode 没有录像带，列出它时直连，在隔离的 `OpenCodeSandbox` 里用免费模型。
 private let environment = ProcessInfo.processInfo.environment
-private let runtimes = [AgentKind.pi, .codex, .claudeCode].filter(RealAgents.runs)
-    + (RealAgents.mode(of: .opencode) == .live && RealAgents.installed(.opencode) ? [.opencode] : [])
+private let runtimes = AgentKind.allCases.filter { $0 == .opencode ? RealAgents.mode(of: $0) == .live && RealAgents.installed($0) : RealAgents.runs($0) }
 /// 连真运行时才看得出的（进程树、各家的历史）：录制或直连时列出、本机装着的几家
 private let liveRuntimes = runtimes.filter { RealAgents.mode(of: $0) != .replay }
 /// Pi 用 openai-codex 的模型：Claude 只走官方 Claude Code，不经 Pi 用 Claude 订阅。OpenCode 用能看图的免费模型
@@ -47,8 +46,8 @@ struct RealBrainTests {
         /// OpenCode 的隔离家目录与库：测试进程里共用一台（头一次起要联网取模型表，几十秒；临时目录随测试进程清理）
         let sandbox: OpenCodeSandbox?
         private static var openCodeSandbox: OpenCodeSandbox?
-        let brain: any CueBrain
-        private(set) var events: [CueBrainEvent] = []
+        let brain: any HostedSession
+        private(set) var events: [TurnEvent] = []
 
         init(_ runtime: AgentKind) async throws {
             self.runtime = runtime
@@ -64,7 +63,7 @@ struct RealBrainTests {
                 sandbox = nil
             }
             let config = CueBrainConfig(
-                runtime: runtime, executable: runtime == .opencode ? try #require(realOpenCodeURL) : AgentTape.executable(runtime.command),
+                runtime: runtime, executable: runtime == .opencode ? try #require(realOpenCodeURL) : AgentTape.executable(runtime.facts.command),
                 model: environment["CUEPAD_BRAIN_MODEL_\(runtime.rawValue.uppercased())"] ?? cheapModels[runtime], effort: effort,
                 systemPrompt: "You are Cue, a test assistant. Your codename is \(codename). Keep answers to one short sentence. When asked to echo something, call the echo tool.",
                 workingDirectory: directory,
@@ -77,7 +76,7 @@ struct RealBrainTests {
             Task { [weak self] in for await event in events { self?.events.append(event) } }
         }
 
-        func count(_ event: CueBrainEvent) -> Int { events.filter { $0 == event }.count }
+        func count(_ event: TurnEvent) -> Int { events.filter { $0 == event }.count }
 
         func finished(_ n: Int = 1) async throws {
             try await eventually("第 \(n) 轮做完") { self.count(.turnFinished) >= n }
@@ -102,7 +101,7 @@ struct RealBrainTests {
             return replies
         }
         var failures: [String] { events.compactMap { if case .failed(let text) = $0 { text } else { nil } } }
-        var contexts: [Int] { events.compactMap { if case .context(let used) = $0 { used } else { nil } } }
+        var contexts: [Int] { events.compactMap { if case .context(let used, _) = $0 { used } else { nil } } }
         var echoed: [String] { ((try? String(contentsOf: echoLog, encoding: .utf8)) ?? "").split(separator: "\n").map(String.init) }
     }
 
@@ -306,7 +305,7 @@ struct RealBrainProcessTests {
     }
 }
 
-private extension CueBrain {
+private extension HostedSession {
     func send(_ text: String) async throws { try await send(text, images: []) }
 }
 #endif

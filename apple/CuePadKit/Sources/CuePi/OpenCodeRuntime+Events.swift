@@ -83,7 +83,7 @@ extension OpenCodeRuntime {
                 if $0.toolNames.isEmpty { $0.facts.work(.thinking) }
             }
         case "session.step.ended":
-            await change(sessionID, connection) { if let tokens = data.tokens { $0.tokens = tokens.context } }
+            await change(sessionID, connection) { if let tokens = data.tokens { $0.tokens = tokens.prompt } }
             enqueueIngest(sessionID, urgent: true)
         case "session.compaction.started":
             await change(sessionID, connection, active: true) { $0.facts.compacting = true }

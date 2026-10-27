@@ -243,14 +243,11 @@ struct OpenCodeFailure: Decodable, Sendable {
 
 struct OpenCodeTokens: Decodable, Sendable {
     var input: Int
-    var output: Int
     var cache: Cache?
     struct Cache: Decodable, Sendable { var read: Int; var write: Int }
 
-    /// 这一步请求模型的输入合计：`input` 不含缓存命中与写入，加上它们。
+    /// 这一步请求模型的输入合计（上下文用量的口径，`TurnEvent.context`）：`input` 不含缓存命中与写入，加上它们。
     var prompt: Int { input + (cache?.read ?? 0) + (cache?.write ?? 0) }
-    /// 下一次请求要带上的上下文：这一步的输入（含缓存）加它的输出。
-    var context: Int { prompt + output }
 }
 
 struct OpenCodePrompt: Decodable, Sendable {

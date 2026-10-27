@@ -4,7 +4,7 @@ import CueTestSupport
 import Foundation
 import Testing
 
-/// 真 Agent 用例（Pi、Codex、Claude Code 的托管、钩子、大脑与开工）的跑法，唯一的一处。
+/// 真 Agent 用例（Pi、Codex、Claude Code、OpenCode 的托管、钩子、大脑与开工）的跑法，唯一的一处。
 ///
 /// 默认回放：每个用例读 `Fixtures/tapes/<家>/<套件>/<用例>[ <参数>].jsonl` 里录好的 Agent 输出（`AgentTape`），不起真 Agent、
 /// 不联网、不花钱，断言照旧。录在 CuePad 读 Agent 输出的边界：Agent 进程的标准输入输出、信号与退出（CuePad 起的是替身
@@ -25,9 +25,9 @@ import Testing
 /// 列出的家本机没装或没登录时，它的用例跳过、录像带不动。模型的回答每次不同，录下的一盘断言没过就再录这一个用例。
 ///
 /// 没有录像带、只在列出这家时连真 Agent 跑的（`live(_:_:)`）：终端里的 Codex 与 Claude Code（断言的是伪终端、tmux 里真终端界面的
-/// 输出与按键），大脑结束后不留进程与历史（`RealBrainProcessTests`，看的是真进程树与各家真实的历史目录），旧扩展托管进程换上新扩展（两个 Pi 进程交替上桥、热换扩展文件，回放排不稳先后），OpenCode（CuePad 只接 v2
-/// 后台服务，v2 只有 Homebrew 的源码构建版，用例用的免费模型对它回"free tier can only be used from within OpenCode"或限流，
-/// 录不出一盘能回放的；它的 HTTP/SSE 边界也就没接进录像带；免费模型缺省 big-pickle，限流时 `CUEPAD_OPENCODE_MODEL` 换成别的）。
+/// 输出与按键），大脑结束后不留进程与历史（`RealBrainProcessTests`，看的是真进程树与各家真实的历史目录），旧扩展托管进程换上新扩展（两个 Pi 进程交替上桥、热换扩展文件，回放排不稳先后），OpenCode（它的 HTTP/SSE 边界没接进录像带；
+/// 本机装的 v2——官方脚本、Homebrew 或 npm 的 `@opencode/cli`——在隔离的 `OpenCodeSandbox` 里用免费模型跑，要联网；免费额度按 IP 计，
+/// 用完或限流时 `CUEPAD_OPENCODE_MODEL` 写成 `提供方/模型` 换到自己的提供方，密钥只经环境给）。
 enum RealAgents {
     static let recording: Set<AgentKind> = Set((ProcessInfo.processInfo.environment["CUEPAD_AGENT_TESTS"] ?? "").split(separator: ",")
         .compactMap { AgentKind(rawValue: String($0).trimmingCharacters(in: .whitespaces)) })

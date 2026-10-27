@@ -5,12 +5,12 @@ import Foundation
 
 /// CuePad 起的一个 `claude` 进程，以 stream-json 收发（与 Agent SDK 同一套线协议，`ClaudeStream`），没有终端界面。两种开法，同一套一轮的状态：
 /// - 托管会话（`init(bridge:)` → `host` → `connect`）：上桥、进会话列表，发话（带图）、斜杠命令、停止、换模型与强度、改名、作答、结束（+Control）；
-/// - Cue 的大脑（`init()` → `start`，`CueBrain`，见 +Brain）：不上桥，只产出事件流，启动参数与发话语义见那里。
+/// - Cue 的大脑（`init()` → `start`，`HostedSession`，见 +Brain）：不上桥，只产出事件流，启动参数与发话语义见那里。
 ///
 /// 一轮的起止、工具、上下文、正在说的话都在这里判一次，从同一处交给两边：事件（`emit`，大脑的事件流）与桥上的事实（`facts`、草稿、上下文）。
 /// - 一轮从发出话或它开始请求模型（`ClaudeStream.requestsModel`）起，到 `result` 止，被停下的照常结束、不算出错；
 ///   没在跑时来的 `result`（大脑的 `/clear`、子代理交回时的空转）不报成一轮。在飞的工作见 `ClaudeHostedTasks`，正在说的话由 `ClaudeStream` 得出。
-/// - 上下文用量：最近一次调模型（模型回答带的 `usage`）的输入合计——`input_tokens` 加缓存的读与写，不含输出（同 `CueBrainEvent.context`）；
+/// - 上下文用量：最近一次调模型（模型回答带的 `usage`）的输入合计——`input_tokens` 加缓存的读与写，不含输出（同 `TurnEvent.context`）；
 ///   为 0 的是 Claude Code 合成的回答（报错等），不算。`result` 的用量是整轮累加的、停在模型回话之前时全是 0，不用；窗口从它的模型用量里来，只给桥。
 /// - 停下（`interrupt`）：在跑就发 `interrupt` 控制请求（连同在跑的工具）并等它收尾（`result`）；发出的话还没等到 `system/init` 时
 ///   中断不起作用（实测 2.1.299），先等它开跑。托管会话的发话与斜杠命令是先停下再送进去开新一轮，被停下的那一轮不算歇下；
@@ -48,6 +48,7 @@ final class ClaudeHostedSession: SessionLink {
     var clearing: CheckedContinuation<Void, any Error>?
     /// 这一轮里 Claude Code 合成的出错回答（`ClaudeCode.failure` 的原文）；一轮结束时清掉
     private var apiError: String?
+    /// 报过的上下文用量（`TurnEvent.context`）：用量随每条回答来，窗口到这一轮收尾（`result` 的 `modelUsage`）才知道
     private var contextUsed: Int?
     private var contextWindow: Int?
     /// 模型目录里每项（别名，如 `haiku`）解析到的 id（`claude-haiku-5-5`）：每轮报的是后者，界面认前者
@@ -124,12 +125,12 @@ final class ClaudeHostedSession: SessionLink {
     // MARK: 一处产出
 
     /// 交给事件流（大脑）与桥（托管会话）。
-    private func emit(_ event: CueBrainEvent) {
+    private func emit(_ event: TurnEvent) {
         brain?.emit(event)
         guard let id, let bridge else { return }
         switch event {
         case .speaking(let draft): bridge.setDraft(id, draft)
-        case .context: showContext()
+        case .context(let used, let window?): bridge.update(id) { $0.context = PiContextUsage(tokens: used, window: window) }
         default: break
         }
     }
@@ -148,9 +149,11 @@ final class ClaudeHostedSession: SessionLink {
         emit(.turnFinished)
     }
 
-    private func showContext() {
-        guard let used = contextUsed, let window = contextWindow, let id else { return }
-        bridge?.update(id) { $0.context = PiContextUsage(tokens: used, window: window) }
+    private func noteContext(used: Int?, window: Int?) {
+        guard let used, used != contextUsed || window != contextWindow else { return }
+        contextUsed = used
+        contextWindow = window
+        emit(.context(used: used, window: window))
     }
 
     // MARK: 输出
@@ -197,10 +200,7 @@ final class ClaudeHostedSession: SessionLink {
     private func answered(_ message: JSONValue) {
         if let usage = message["message"]?["usage"] {
             let used = ["input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"].compactMap { usage[$0]?.int }.reduce(0, +)
-            if used > 0, used != contextUsed {
-                contextUsed = used
-                emit(.context(used: used))
-            }
+            if used > 0 { noteContext(used: used, window: contextWindow) }
         }
         // 这一轮出错时 Claude Code 合成一条带错误类型的回答（`is_api_error_message`），原话就是对话里的那条
         if message["is_api_error_message"]?.bool == true, let code = message["error"]?.string {
@@ -223,10 +223,11 @@ final class ClaudeHostedSession: SessionLink {
     private func result(_ message: JSONValue, at now: Date) {
         clearing?.resume()
         clearing = nil
+        var window = contextWindow
         for usage in (message["modelUsage"]?.object ?? [:]).values {
-            if let window = usage["contextWindow"]?.int { contextWindow = window }
+            if let reported = usage["contextWindow"]?.int { window = reported }
         }
-        showContext()
+        noteContext(used: contextUsed, window: window)
         let stopped = stopping
         stopping = false
         permission = nil

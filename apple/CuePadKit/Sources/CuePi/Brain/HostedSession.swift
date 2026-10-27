@@ -39,14 +39,15 @@ public struct CueBrainConfig: Sendable {
 /// 各家同形的事件。一轮：`turnStarted` →（`speaking`、`context`、`tool` / `toolDone`…）→ `failed`（出错时）→ `turnFinished`；
 /// 一轮进行中再 `send` 的话并进这一轮，不另起一轮。被 `abort` 停下的一轮照常以 `turnFinished` 结束，不报 `failed`。
 /// 子代理与嵌套的工具调用、子代理说的话不报。
-public enum CueBrainEvent: Sendable, Equatable {
+public enum TurnEvent: Sendable, Equatable {
     case turnStarted
     /// 正在说的话（`PiDraft`，规则同它）：这一轮此刻正在说的这条回答到目前为止的全文，随增量报（不节流），nil 是清掉。
     /// 转成工具调用、这一轮被停下或出错（都在 `turnFinished` 之前）、下一轮开始时清掉；正常说完的留着——
     /// `turnFinished` 时还留着的就是这一轮的回答，没有就是这一轮没说话。各家都在协议层得出（逐字增量累积，每段说完时换成运行时给的定稿，不发增量也有），回答不另取一份
     case speaking(PiDraft?)
-    /// 最近一次模型请求的输入 token 合计（含缓存命中与写入）
-    case context(used: Int)
+    /// 上下文用量，四家同一口径：`used` 是最近一次模型请求的输入 token 合计（含缓存的读与写，不含输出）；`window` 是在用模型的上下文窗口，
+    /// 运行时没报时为 nil。托管会话在桥上显示的（`PiSession.context`）也是这一份
+    case context(used: Int, window: Int?)
     /// 开始调一个工具：`id` 是运行时给这次调用的编号（做完时对上）；名字去掉 CuePad 的 MCP 前缀并小写（`task`、`read`；
     /// Codex 跑的命令记作 `bash`，参数是 `{"command": …}`），参数是 JSON 原文
     case tool(id: String, name: String, arguments: String)
@@ -59,10 +60,13 @@ public enum CueBrainEvent: Sendable, Equatable {
     case exited(ShownText?)
 }
 
+/// CuePad 起、掌握全部输入输出的一个 Agent 会话：托管会话与 Cue 的大脑同一份（`AgentFacts.brain` 开出大脑用的那一种）。
+/// Claude Code、Codex 的托管会话就是它（`ClaudeHostedSession`、`CodexDriver`）；Pi 的托管会话要撑过 App 重启、走桥扩展，
+/// 只有大脑走 Pi 的 RPC（`PiBrain`）；OpenCode 的托管会话连用户的后台服务，大脑另起一台隔离的服务（`OpenCodeBrain`）。
 @MainActor
-public protocol CueBrain: AnyObject {
+public protocol HostedSession: AnyObject {
     /// 只有一个订阅者：CuePad 里管 Cue 的那一处
-    var events: AsyncStream<CueBrainEvent> { get }
+    var events: AsyncStream<TurnEvent> { get }
     /// 起进程并做完握手；之后就能 `send`。起不来时已起的进程停掉再抛
     func start(_ config: CueBrainConfig) async throws
     /// 模型能看图（起好之后才算数）；看不了时别交图，交了各家也只是丢掉或报错
@@ -80,13 +84,13 @@ public protocol CueBrain: AnyObject {
     func stop() -> @concurrent @Sendable () async -> Void
 }
 
-public enum CueBrainError: Error, Equatable {
+public enum HostedSessionError: Error, Equatable {
     /// 还没启动、已经停了或进程已退出
     case notRunning
     case rejected(String)
 }
 
-extension CueBrainError: LocalizedError {
+extension HostedSessionError: LocalizedError {
     public var errorDescription: String? {
         switch self {
         case .notRunning: String(localized: "Cue 没在运行")
@@ -95,15 +99,9 @@ extension CueBrainError: LocalizedError {
     }
 }
 
-
 extension CueBrainConfig {
-    @MainActor public func startBrain() async throws -> any CueBrain {
-        let brain: any CueBrain = switch runtime {
-        case .pi: PiBrain()
-        case .codex: CodexDriver()
-        case .claudeCode: ClaudeHostedSession()
-        case .opencode: OpenCodeBrain()
-        }
+    @MainActor public func startBrain() async throws -> any HostedSession {
+        let brain = runtime.facts.brain()
         try await brain.start(self)
         return brain
     }

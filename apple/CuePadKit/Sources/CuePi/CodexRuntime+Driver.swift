@@ -4,12 +4,12 @@ import CueStore
 import Foundation
 
 /// CuePad 起的一个 `codex app-server` 进程与它上面 CuePad 开的那个线程（`thread`）的驱动：这个线程的一轮只在这里判，翻成
-/// `CueBrainEvent` 同步交给 `onEvent`（按到达先后）。托管会话（`CodexRuntime` 起的进程，一轮接到桥上）与 Cue 的大脑（`start(_:)`）
+/// `TurnEvent` 同步交给 `onEvent`（按到达先后）。托管会话（`CodexRuntime` 起的进程，一轮接到桥上）与 Cue 的大脑（`start(_:)`）
 /// 是同一个驱动的两种开法。协议见 https://developers.openai.com/codex/app-server （本机版本的完整类型用 `codex app-server generate-ts` 生成）。
 /// - 一轮开始：`turn/start` 的回应与 `turn/started` 通知谁先到算谁，按轮的 id 只报一次（已经结束的那一轮的回应晚到不再报）；
 /// - 一轮结束：这一轮的 `turn/completed`（别的轮的不算：停下旧的一轮紧接着开新的一轮时，旧的结束可能晚到）。失败的先报 `failed`：
 ///   这一轮不再重试的 `error` 通知的原文，没有就用 `turn.error`。不看线程状态：失败时 systemError 先于原文与 `turn/completed` 到（实测 0.162.1）；
-/// - 工具是这一轮里的 `mcpToolCall` 与 `commandExecution` 项（命令记作 `bash`）；用量是最近一次请求的 `inputTokens`（已含缓存命中）；
+/// - 工具是这一轮里的 `mcpToolCall` 与 `commandExecution` 项（命令记作 `bash`）；用量是最近一次请求的 `inputTokens`（已含缓存命中）与 `modelContextWindow`；
 /// - 正在说的话是 `CodexRPC` 累积好的这个线程的（`onDraft`）：过程中的说明说完、停下与失败的一轮它已清掉，留下的只有给你看的回答；
 /// - 子线程（子代理）与线程之外的事不在这里：每条通知处理完原样转给 `onNotification`，服务端请求由开它的一方接（`CodexRPC.onRequest`）。
 @MainActor
@@ -22,7 +22,7 @@ final class CodexDriver {
     private var finishedTurn: String?
     /// 这一轮不再重试的 `error` 通知的原文
     private var lastError: String?
-    var onEvent: (CueBrainEvent) -> Void = { _ in }
+    var onEvent: (TurnEvent) -> Void = { _ in }
     var onNotification: (String, JSONValue) -> Void = { _, _ in }
 
     // 以下只有大脑用（托管会话的模型、强度归 `thread/settings/update`）
@@ -58,7 +58,7 @@ final class CodexDriver {
     /// 开或接着一个线程（`thread/start`、`thread/resume`），之后报的是它的事。
     @discardableResult
     func open(_ method: String, _ params: JSONValue) async throws -> JSONValue {
-        guard let rpc else { throw CueBrainError.notRunning }
+        guard let rpc else { throw HostedSessionError.notRunning }
         let result = try await rpc.call(method, params)
         thread = result["thread"]?["id"]?.string
         turn = nil
@@ -67,7 +67,7 @@ final class CodexDriver {
 
     /// 开一轮（`options` 是 `turn/start` 的其余参数）。
     func startTurn(_ input: [JSONValue], options: [String: JSONValue] = [:]) async throws {
-        guard let rpc, let thread else { throw CueBrainError.notRunning }
+        guard let rpc, let thread else { throw HostedSessionError.notRunning }
         let params = options.merging(["threadId": .string(thread), "input": .array(input)]) { $1 }
         let started = try await rpc.call("turn/start", .object(params))
         if let id = started["turn"]?["id"]?.string { begin(id) }
@@ -138,7 +138,8 @@ final class CodexDriver {
             default: break
             }
         case "thread/tokenUsage/updated":
-            if let input = params["tokenUsage"]?["last"]?["inputTokens"]?.int { onEvent(.context(used: input)) }
+            let usage = params["tokenUsage"]
+            if let input = usage?["last"]?["inputTokens"]?.int { onEvent(.context(used: input, window: usage?["modelContextWindow"]?.int)) }
         default:
             break
         }
@@ -161,7 +162,7 @@ final class CodexDriver {
 /// - 图以 data URL 随输入交；模型能不能看图、支持哪些强度都看 `model/list` 里的这个模型；
 /// - 模型与思考强度每轮随 `turn/start` 给（就地换就是改下一轮给的）：强度按 `model/list` 里这个模型支持的档位夹取（`PiThinkingLevel.clamped`）；
 /// - 正忙时说的话经 `turn/steer` 并进当前这一轮；这一轮恰好已经结束（steer 被拒）就开新的一轮。
-extension CodexDriver: CueBrain {
+extension CodexDriver: HostedSession {
     /// 停用的功能：会写 Codex 自己的记忆与时间线（memories、chronicle），会跑用户配置的钩子（hooks，也就不会报给 CuePad 成一个会话），
     /// 或会给模型加上读文件以外的能力（apps、plugins、computer_use、browser_use、image_generation）。
     static let disabledFeatures = ["memories", "chronicle", "hooks", "apps", "plugins", "computer_use", "browser_use", "image_generation"]
@@ -171,7 +172,7 @@ extension CodexDriver: CueBrain {
         "include_collaboration_mode_instructions=false", "include_permissions_instructions=false",
     ]
 
-    var events: AsyncStream<CueBrainEvent> { outlet.events }
+    var events: AsyncStream<TurnEvent> { outlet.events }
     var seesImages: Bool { model?.seesImages == true }
 
     func start(_ config: CueBrainConfig) async throws {
@@ -206,21 +207,21 @@ extension CodexDriver: CueBrain {
     }
 
     func newSession() async throws {
-        guard thread != nil else { throw CueBrainError.notRunning }
+        guard thread != nil else { throw HostedSessionError.notRunning }
         try await open("thread/start", threadParams)
     }
 
     func configure(model id: String?, effort: PiThinkingLevel?) async throws {
-        guard thread != nil else { throw CueBrainError.notRunning }
+        guard thread != nil else { throw HostedSessionError.notRunning }
         if let id {
-            guard let found = models.first(where: { $0.id == id }) else { throw CueBrainError.rejected(String(localized: "Codex 没有模型 \(id)")) }
+            guard let found = models.first(where: { $0.id == id }) else { throw HostedSessionError.rejected(String(localized: "Codex 没有模型 \(id)")) }
             model = found
         }
         if let effort { level = effort }
     }
 
     func send(_ text: String, images: [PiImage]) async throws {
-        guard let rpc, let thread else { throw CueBrainError.notRunning }
+        guard let rpc, let thread else { throw HostedSessionError.notRunning }
         let input = CodexRPC.input(text: text, images: images)
         if let active = turn {
             do {
