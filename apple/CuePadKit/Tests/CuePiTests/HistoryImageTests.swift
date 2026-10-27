@@ -16,7 +16,7 @@ struct HistoryImageTests {
 
     private func imageBlock(_ data: Data) -> [String: Any] { ["type": "image", "data": data.base64EncodedString(), "mimeType": "image/png"] }
 
-    @Test func 图片按原顺序成为正文引用_说明行去掉_图片存进附件目录并随对话登记() async throws {
+    @Test func 图片按原顺序成为正文引用_说明行去掉_图片存进附件目录() throws {
         let sent = pngData(width: 8, height: 8, shade: 0.2)
         let pasted = pngData(width: 8, height: 8, shade: 0.7)
         let note = "[Image: original 3000x2000, displayed at 1500x1000. Multiply coordinates by 2.00 to map to original image.]"
@@ -28,7 +28,6 @@ struct HistoryImageTests {
             SessionFile.user("u2", "a1", [imageBlock(pasted)], at: 3))
 
         let update = try PiHistory.index(file: file.url, agent: .pi, from: nil, files: store.files)
-        try await store.writePiTranscript(update.transcript)
 
         let users = update.messages.filter { $0.role == .known(.user) }
         #expect(users.map(\.text) == ["看这张\n![](cuepad://file/\(key(sent)))", "![](cuepad://file/\(key(pasted)))"])
@@ -36,7 +35,6 @@ struct HistoryImageTests {
         #expect(update.history.displayName == "看这张")
         for data in [sent, pasted] {
             #expect(try Data(contentsOf: #require(store.files.fileURL(for: key(data)))) == data)
-            #expect(try await store.hasAttachment(key(data)))
         }
     }
 

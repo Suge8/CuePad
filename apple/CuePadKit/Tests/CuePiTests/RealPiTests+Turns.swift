@@ -55,10 +55,10 @@ extension RealPiTests {
     @Test func sendDeliversTextAndImageIntoTheModelContext() async throws {
         try await withRig { _, bridge, s in
             try await bridge.send(PiMessage(text: "look", images: [PiImage(mimeType: "image/png", data: tinyPNG)]), to: s.id)
-            try await eventually("回复写入") { !self.replies(of: s).isEmpty }
-            let prompt = try #require(messages(of: s).first { $0.role == "user" })
+            try await eventually("回复写入") { !fileTexts("assistant", in: s.sessionFile).isEmpty }
+            let prompt = try #require(fileMessages(in: s.sessionFile).first { $0.role == "user" })
             #expect(prompt.text.hasPrefix("look") && prompt.images == 1)
-            let reply = replies(of: s)[0]
+            let reply = fileTexts("assistant", in: s.sessionFile)[0]
             #expect(reply.contains("IMAGES[image/png:"), "假模型看到了图片：\(reply)")
         }
     }
@@ -75,14 +75,14 @@ extension RealPiTests {
             try await bridge.send(PiMessage(text: "SECOND", deliveryID: second.uuidString), to: s.id)
 
             try await eventually("最后一句答完") {
-                self.replies(of: s).last?.hasPrefix("ECHO SECOND") == true && bridge.sessions.first?.state == .settled && log.states.last == .settled
+                fileTexts("assistant", in: s.sessionFile).last?.hasPrefix("ECHO SECOND") == true && bridge.sessions.first?.state == .settled && log.states.last == .settled
             }
             #expect(log.settles == 1, "被停下的两轮都不算歇下：\(log.states)")
             let messages = try PiHistory.index(file: #require(s.sessionFile), from: nil).messages
             let users = messages.filter { $0.role == .known(.user) }
             #expect(users.map(\.text) == ["[[tool:sleep 30]] 跑个慢命令", "[[slow]] FIRST", "SECOND"])
             #expect(users.map(\.deliveryID) == [nil, first, second])
-            #expect(!replies(of: s).contains { $0 == "TOOL_DONE" || $0.contains("FIRST") }, "被停下的两轮都没有做完")
+            #expect(!fileTexts("assistant", in: s.sessionFile).contains { $0 == "TOOL_DONE" || $0.contains("FIRST") }, "被停下的两轮都没有做完")
             // Pi 把这两轮记成 error（"The operation was aborted."）：对话里照停下处理，各留一行"已停止"
             #expect(messages.map(\.text).filter { $0 == PiNotice.stopped.rawValue }.count == 2, "\(messages.map(\.text))")
         }

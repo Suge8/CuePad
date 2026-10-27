@@ -31,16 +31,6 @@ struct RealHostTests {
         return try #require(bridge.session(id: id))
     }
 
-    private func replies(in file: URL) -> [String] {
-        let text = (try? String(contentsOf: file, encoding: .utf8)) ?? ""
-        return text.split(separator: "\n").compactMap { line in
-            guard let object = try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any],
-                  let message = object["message"] as? [String: Any], message["role"] as? String == "assistant",
-                  let blocks = message["content"] as? [[String: Any]] else { return nil }
-            return blocks.compactMap { $0["text"] as? String }.joined()
-        }
-    }
-
     @Test func anEndedSessionIsResumedInTheBackgroundAndTheMessageArrives() async throws {
         let pi = try await PiProcess(modelInAgentDirectory: true)
         let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
@@ -55,7 +45,7 @@ struct RealHostTests {
 
         #expect(resumed.sessionID == sessionID && resumed.hosted)
         try await bridge.send(PiMessage(text: "后台接着说"), to: resumed.id)
-        try await eventually("后台进程回答了") { replies(in: file).last == "ECHO 后台接着说 IMAGES[]" }
+        try await eventually("后台进程回答了") { fileTexts("assistant", in: file).last == "ECHO 后台接着说 IMAGES[]" }
     }
 
     /// 托管的标记只属于托管的那个 Pi：它起的子进程（Agent 的命令、里面再起的 pi）看不到 CUEPAD_HOSTED，不会也自认托管、空闲到点自己退出；
@@ -165,19 +155,6 @@ struct RealHostTests {
 
     private func busy(_ state: PiWorkState?) -> Bool { state?.isWorking == true }
 
-    /// 会话文件里的条目（跳过文件头）：id、上一条、角色、文字。
-    private func entries(in file: URL) -> [(id: String, parent: String?, role: String?, text: String)] {
-        let text = (try? String(contentsOf: file, encoding: .utf8)) ?? ""
-        return text.split(separator: "\n").compactMap { line in
-            guard let object = try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any],
-                  let id = object["id"] as? String, object["type"] as? String != "session" else { return nil }
-            let message = object["message"] as? [String: Any]
-            let blocks = message?["content"] as? [[String: Any]] ?? []
-            let body = (message?["content"] as? String) ?? blocks.compactMap { $0["text"] as? String }.joined()
-            return (id, object["parentId"] as? String, message?["role"] as? String, body)
-        }
-    }
-
     /// 后台进程正在跑一轮时用户打开了同一会话：后台做完这一轮再退；用户那个进程这期间没写过，就把会话重新载入到最新——
     /// 接着说的话接在后台那一轮的回答后面，不分支。
     @Test func aBusyHandoffReloadsTheUsersProcessSoTheSessionDoesNotBranch() async throws {
@@ -206,8 +183,8 @@ struct RealHostTests {
                 && log.changes.count { if case .appeared(let s) = $0 { s.pid == mine.pid } else { false } } >= 2
         }
         try mine.prompt("我接着说")
-        try await eventually("用户这句落盘") { entries(in: file).contains { $0.role == "user" && $0.text == "我接着说" } }
-        let all = entries(in: file)
+        try await eventually("用户这句落盘") { fileMessages(in: file).contains { $0.role == "user" && $0.text == "我接着说" } }
+        let all = fileMessages(in: file)
         let backgroundReply = try #require(all.last { $0.role == "assistant" && $0.text.contains("后台这一轮") })
         let mineEntry = try #require(all.first { $0.role == "user" && $0.text == "我接着说" })
         #expect(mineEntry.parent == backgroundReply.id)
@@ -231,7 +208,7 @@ struct RealHostTests {
         defer { mine.stop() }
         try await eventually("用户的进程连上") { bridge.sessions.contains { $0.pid == mine.pid } }
         try mine.prompt("我自己的")
-        try await eventually("用户这句落盘") { entries(in: file).contains { $0.role == "user" && $0.text == "我自己的" } }
+        try await eventually("用户这句落盘") { fileMessages(in: file).contains { $0.role == "user" && $0.text == "我自己的" } }
         try pi.release()  // 用户先写了：后台这一轮这才做完
 
         _ = try await mine.waitForEvent("提示会话分出了支线") {
@@ -268,7 +245,7 @@ struct RealHostTests {
         #expect(recap(of: again)?.lastReply?.contains("跑到一半") == true)
         try await next.send(PiMessage(text: "新的 CuePad 认回之后"), to: again.id)
         let file = try #require(again.sessionFile)
-        try await eventually("认回的进程接着收话、有回答") { replies(in: file).last == "ECHO 新的 CuePad 认回之后 IMAGES[]" }
+        try await eventually("认回的进程接着收话、有回答") { fileTexts("assistant", in: file).last == "ECHO 新的 CuePad 认回之后 IMAGES[]" }
     }
 
     /// App 更新后扩展协议号变了，上一版 App 托管的进程还在跑旧扩展：新 App 装上新扩展、请它核对后它空闲时换上、以新协议重新连上，
@@ -306,7 +283,7 @@ struct RealHostTests {
         let target = try #require(bridge.sessions.first { $0.pid == left.pid })
         #expect(target.sessionID == sessionID)
         try await bridge.send(PiMessage(text: "换上新扩展之后"), to: target.id)
-        try await eventually("话送达、有回答") { replies(in: file).last == "ECHO 换上新扩展之后 IMAGES[]" }
+        try await eventually("话送达、有回答") { fileTexts("assistant", in: file).last == "ECHO 换上新扩展之后 IMAGES[]" }
     }
 
     /// 磁盘上的扩展不是随包版本（接入没修好）：托管启动起出的进程读不懂托管约定，既不会空闲自退、CuePad 也不认它——

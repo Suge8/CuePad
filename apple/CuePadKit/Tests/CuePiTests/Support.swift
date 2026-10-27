@@ -57,10 +57,6 @@ func makeTempDirectory() throws -> URL {
     for session in bridge.sessions where session.hosted { kill(session.pid, SIGTERM) }
 }
 
-func makeSocketDirectory() throws -> URL {
-    try makeTempDirectory()
-}
-
 func fileGone(_ url: URL) -> Bool { !FileManager.default.fileExists(atPath: url.path) }
 
 /// 已经退出的进程 pid（用于"残留 socket 的属主已死"）。
@@ -92,6 +88,28 @@ extension PiHistoryIndexer {
 func recap(of session: PiSession?) -> PiRecap? {
     session?.sessionFile.flatMap { try? PiHistory.index(file: $0, from: nil).checkpoint.recap }
 }
+
+/// Pi 会话文件里的消息条目（文件顺序）：真实 Pi 写出的内容，作为投送是否到达模型的证据。
+struct FileMessage {
+    let id: String
+    let parent: String?
+    let role: String
+    let text: String
+    let images: Int
+}
+
+func fileMessages(in file: URL?) -> [FileMessage] {
+    guard let file, let text = try? String(contentsOf: file, encoding: .utf8) else { return [] }
+    return text.split(separator: "\n").compactMap { line in
+        guard let object = try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any], object["type"] as? String == "message",
+              let id = object["id"] as? String, let message = object["message"] as? [String: Any], let role = message["role"] as? String else { return nil }
+        let blocks = message["content"] as? [[String: Any]] ?? []
+        let text = (message["content"] as? String) ?? blocks.compactMap { $0["type"] as? String == "text" ? $0["text"] as? String : nil }.joined()
+        return FileMessage(id: id, parent: object["parentId"] as? String, role: role, text: text, images: blocks.filter { $0["type"] as? String == "image" }.count)
+    }
+}
+
+func fileTexts(_ role: String, in file: URL?) -> [String] { fileMessages(in: file).filter { $0.role == role }.map(\.text) }
 
 /// 订阅 `changes()` 并记录，供测试断言事件顺序。
 @MainActor

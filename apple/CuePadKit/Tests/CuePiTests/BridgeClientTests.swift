@@ -13,7 +13,7 @@ struct BridgeClientTests {
     let bridge: PiBridge
 
     init() throws {
-        dir = try makeSocketDirectory()
+        dir = try makeTempDirectory()
         bridge = PiBridge(socketDirectory: dir)
     }
 
