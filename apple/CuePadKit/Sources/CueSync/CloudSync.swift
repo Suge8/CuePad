@@ -182,8 +182,10 @@ public actor CloudSync {
     guard await coordinator.canSync, let sender, let fileSender, let fileFetcher else { return false }
     connected = true
     await sender.start()
-    await fileFetcher.start()
-    Task { await fileSender.start() }  // 先接上一个进程交给系统的上传，第一拉不等它
+    Task {  // 文件那一路（接上一个进程交给系统的上传、看哪些文件要取）：第一拉不等它
+      await fileFetcher.start()
+      await fileSender.start()
+    }
     alertsAttemptedAt = .now  // 立即同步不另起一遍
     Task { await ensureAlertSubscriptions(cloud) }  // 第一拉不等订阅
     return true

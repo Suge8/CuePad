@@ -67,6 +67,8 @@ struct SyncWiringTests {
         #expect(saved.first == PeerFloor.recordType)
         #expect(PeerFloor.version(in: await cloud.records([PeerFloor(zoneID: CloudSync.zoneID).id])) == CueStore.peerFloor)
 
+        // 立即同步在跑时再要的只等这一次、不另拉（`AppServices.syncNow`）：启动那次还没收尾就会错过下面这条门槛
+        try await eventually("启动那次立即同步做完") { !services.isSyncingNow }
         await cloud.put(Self.floor(CueStore.supportedSchemaVersions.upperBound + 1))
         await services.syncNow()
         try await eventually("拉到就停下") { services.syncStatus == .outdated }

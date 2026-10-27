@@ -3995,6 +3995,22 @@
         }
       }
     },
+    "iCloud 里的这个文件坏了，取不下来" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This file is damaged in iCloud and can’t be downloaded."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iCloud 里的这个文件坏了，取不下来"
+          }
+        }
+      }
+    },
     "me@example.com" : {
       "localizations" : {
 
@@ -21268,6 +21284,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "这台手机开着的页没能写下：%@"
+          }
+        }
+      }
+    },
+    "这台现在没在同步，取不了 iCloud 里的文件" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not syncing, so files in iCloud can’t be downloaded."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这台现在没在同步，取不了 iCloud 里的文件"
           }
         }
       }

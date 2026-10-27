@@ -21,6 +21,15 @@ public enum FileFetchFailure: Error, Equatable, Sendable {
   case damaged
 }
 
+extension FileFetchFailure: LocalizedError {
+  public var errorDescription: String? {
+    switch self {
+    case .notSyncing: String(localized: "这台现在没在同步，取不了 iCloud 里的文件")
+    case .damaged: String(localized: "iCloud 里的这个文件坏了，取不下来")
+    }
+  }
+}
+
 /// 文件那一路的进度板：按附件的 key 记在路上的，一处写、多处订阅（`CloudSync.fileTransfers`）。
 /// 回调很密（CloudKit 约 0.26 秒一次），每个文件只在多走了一成的百分之一或开始、结束时给出新快照，订阅的界面不跟着每个回调重画。
 final class TransferBoard: Sendable {
