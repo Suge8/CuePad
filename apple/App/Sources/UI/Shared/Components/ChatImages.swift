@@ -68,7 +68,7 @@ private struct ChatImage: View {
                 }
                 .overlay {
                     if place.isAway {
-                        Text(verbatim: FileStatus.line(name: "", file: nil, transfer: services.fileTransfers[hash]).detail)
+                        Text(verbatim: services.awayLine(hash))
                             .font(Typography.caption).monospacedDigit().foregroundStyle(palette.ink3)
                             .multilineTextAlignment(.center).padding(6)
                     }
@@ -79,7 +79,6 @@ private struct ChatImage: View {
         .accessibilityHint(place.isAway ? "从 iCloud 取来" : "查看大图")
         .observingArrival(of: hash, in: services, into: $place)
     }
-
 }
 
 /// 你的话里带的文件（会话记录里的"附件：名（路径）"认回来的引用也是）：气泡下面一行一个文件牌（`FileChip`），靠右；

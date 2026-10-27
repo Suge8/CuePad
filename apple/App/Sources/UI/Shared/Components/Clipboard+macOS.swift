@@ -36,25 +36,22 @@ enum Clipboard {
             let document = NSMutableAttributedString()
             var room = Self.budget
             for (index, segment) in content.segments.enumerated() {
-                if case .image(let url) = segment, Self.take(url, from: &room) == false { continue }
-                if case .file(let url, let name) = segment, Self.take(url, from: &room) == false {
-                    document.append(NSAttributedString(string: name))
-                    continue
-                }
-                let wrapper: FileWrapper?
                 switch segment {
                 case .text(let text):
                     document.append(NSAttributedString(string: text))
-                    continue
                 case .image(let url):
-                    wrapper = (try? Data(contentsOf: url)).flatMap(ImageFiles.png(from:)).map(FileWrapper.init(regularFileWithContents:))
-                    wrapper?.preferredFilename = "image-\(index).png"
+                    guard Self.take(url, from: &room), let png = (try? Data(contentsOf: url)).flatMap(ImageFiles.png(from:)) else { continue }
+                    let wrapper = FileWrapper(regularFileWithContents: png)
+                    wrapper.preferredFilename = "image-\(index).png"
+                    document.append(NSAttributedString(attachment: NSTextAttachment(fileWrapper: wrapper)))
                 case .file(let url, let name):
-                    wrapper = try? FileWrapper(url: url)
-                    wrapper?.preferredFilename = name
-                    if wrapper == nil { document.append(NSAttributedString(string: name)) }
+                    guard Self.take(url, from: &room), let wrapper = try? FileWrapper(url: url) else {
+                        document.append(NSAttributedString(string: name))
+                        continue
+                    }
+                    wrapper.preferredFilename = name
+                    document.append(NSAttributedString(attachment: NSTextAttachment(fileWrapper: wrapper)))
                 }
-                if let wrapper { document.append(NSAttributedString(attachment: NSTextAttachment(fileWrapper: wrapper))) }
             }
             if let data = document.rtfd(from: NSRange(location: 0, length: document.length)) { item.setData(data, forType: type) }
         }

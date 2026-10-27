@@ -207,6 +207,7 @@ struct PreviewText: UIViewRepresentable {
 
     @concurrent private static func read(_ file: URL) async -> String { (try? String(contentsOf: file, encoding: .utf8)) ?? "" }
 }
+
 /// 全屏页里各份 PDF 的查找（按文件认）：页顶的搜索钮打开翻到的那一份的（`PreviewPager`）。
 @MainActor final class PreviewFinds {
     private struct Weak { weak var value: UIFindInteraction? }
