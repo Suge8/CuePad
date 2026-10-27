@@ -5,7 +5,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 手机上的技能与规则：看的是 Mac 报来的快照，整理与改文件都发往那台 Mac、等它做完。改动攒在文件页上，点纸飞机才发，离开再回来还在；
+/// 手机上的技能与规则：看的是 Mac 报来的快照，改文件发往那台 Mac、等它做完（整理的往返在 `AgentLibraryTests+Sync`）。改动攒在文件页上，点纸飞机才发，离开再回来还在；
 /// Mac 上刚改过就退回（技能那条）。那台 Mac 由一个领 mac-a 请求的执行器扮演：照基准判断、做完写回新快照（同 Mac 的 `AgentLibraryKeeper`）。
 @MainActor
 struct AgentLibraryPhoneTests {
@@ -21,24 +21,22 @@ struct AgentLibraryPhoneTests {
         return library.arrived(file, in: texts) ?? nil
     }
 
-    /// 那台 Mac 上全局规则与 pr 这个技能此刻的样子，与有没有该整理的。
+    /// 那台 Mac 上全局规则与 pr 这个技能此刻的样子。
     actor Mac {
         var text = "# 原则\n"
         var skill = "---\nname: pr\ndescription: 写 PR\nlicense: MIT\n---\n\n先读模板\n"
-        var tidied = false
         let store: CueStore
 
         init(store: CueStore) { self.store = store }
 
         func snapshot() -> AgentLibrary {
-            let unlinked = LibraryTidy(id: "unlinked/claude", kind: .unlinked(agent: .claudeCode, skills: [SkillEntry(name: "pr", scope: .global, path: AgentLibraryPhoneTests.skillPath)]))
-            return AgentLibrary(
+            AgentLibrary(
                 hostID: "mac-a", home: "/Users/a",
                 skills: [LibrarySkill(
                     name: "pr", scope: .global, group: "", path: AgentLibraryPhoneTests.skillPath, description: SkillDocument(skill).description ?? "",
                     hash: LibraryEdit.base(of: skill))],
                 instructions: [LibraryInstruction(kind: .global, path: AgentLibraryPhoneTests.rulesPath, hash: LibraryEdit.base(of: text), modifiedAt: .now, readers: [.pi])],
-                tidies: tidied ? [] : [unlinked], modifiedAt: .now)
+                tidies: [], modifiedAt: .now)
         }
 
         func report() async throws {
@@ -51,7 +49,6 @@ struct AgentLibraryPhoneTests {
         }
 
         func handle(_ request: DeliveryRequest) async -> DeliveryOutcome {
-            if request.tidyOrders != nil { tidied = true }
             if let edit = request.libraryEdit {
                 let current = edit.file == .instruction(.global) ? text : skill
                 guard edit.base == LibraryEdit.base(of: current) else { return .failed(ShownText(AgentLibraryError.changedOnMac)) }
@@ -76,15 +73,9 @@ struct AgentLibraryPhoneTests {
         })
     }
 
-    @Test func 一键整理发往Mac_改规则攒着点发才写() async throws {
+    @Test func 改规则攒着点发才写() async throws {
         let (mac, workspace, stop) = try await start()
         defer { stop() }
-        let library = try #require(workspace.library)
-
-        await workspace.tidy(library.automaticOrders, in: library)
-
-        #expect(workspace.notice?.text.visible == "整理好了 1 件" && workspace.notice?.action == nil, "手机上的整理没有撤销：Mac 照做、不留撤销")
-        try await eventually("该整理的没了") { workspace.library?.tidies.isEmpty == true }
 
         let global = try await text(.instruction(.global), workspace)
         let opened = workspace.fileDraft(.instruction(.global), text: global, on: "mac-a")

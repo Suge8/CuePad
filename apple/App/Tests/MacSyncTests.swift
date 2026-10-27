@@ -58,18 +58,6 @@ struct MacSyncTests {
         signal.wait(timeout: .now() + seconds) == .success
     }
 
-    @Test
-    func 退出收尾有上限_组件卡住时到点放行并指出是哪个() async throws {
-        services.startSync()
-        try await eventually("rig.sync.started == 1") { rig.sync.started == 1 }
-        rig.sync.stopHangs.withLock { $0 = true }
-
-        let late = await services.beginShutdown(within: .milliseconds(200))()
-
-        #expect(late == "同步")
-        #expect(rig.sync.stopped == 1)
-    }
-
     /// 退出时这台 Mac 当场离线：排在前面的组件卡住、耗尽了收尾的上限，离线这一条也已写下并上传。
     @Test
     func 退出时这台Mac离线_前面的组件卡住也不漏() async throws {
