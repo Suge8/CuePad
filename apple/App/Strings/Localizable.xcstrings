@@ -22356,22 +22356,6 @@
         }
       }
     },
-    "附件：%@（%@）" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Attachment: %@ (%@)"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "附件：%1$@（%2$@）"
-          }
-        }
-      }
-    },
     "随手记" : {
       "localizations" : {
         "en" : {
