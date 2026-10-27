@@ -76,7 +76,7 @@ extension Workspace {
 
     /// 登录这一家（接入面板的"登录"）：Claude Code、Codex 打开浏览器、等你登录完；Pi 开终端，你回到 CuePad 时再问（`recheckAgents`）。
     func logIn(_ kind: AgentKind) async {
-        guard kind.loginArguments != nil else {
+        guard kind.facts.loginArguments != nil else {
             do { try await services.agents.openPiLogin() } catch { fail(error) }
             return
         }

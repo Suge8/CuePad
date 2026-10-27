@@ -58,8 +58,10 @@ public enum PiExtensionBundle {
 }
 
 /// Pi 扩展目录里 CuePad 的那份扩展：整个目录换新（`renamex_np` 交换，在跑的扩展读到的总是完整的一份：v38 及更早盯着扩展目录，之后的在 CuePad 请它核对时读）。
-struct PiExtensionFiles {
+struct PiExtensionFiles: AgentHookConfig {
     let extensionsDirectory: URL
+    /// 还有 Pi 会话开着旧单文件扩展（`AgentIntegration.legacyPiExtensionInUse`）
+    var legacyInUse: @Sendable () async -> Bool = { false }
     var directory: URL { extensionsDirectory.appending(path: PiExtensionBundle.directoryName, directoryHint: .isDirectory) }
     private var entry: URL { directory.appending(path: PiExtensionBundle.entryName) }
     private var legacyFile: URL { extensionsDirectory.appending(path: PiExtensionBundle.legacyFileName) }
@@ -70,7 +72,9 @@ struct PiExtensionFiles {
         return (directory.path as NSString).abbreviatingWithTildeInPath
     }
 
-    var state: AgentStatus.Files {
+    var writtenFiles: [URL] { [directory] }
+
+    func files(command: String) -> AgentStatus.Files {
         if let foreign { return .foreign(foreign) }
         if !FileManager.default.fileExists(atPath: directory.path) { return Self.isOurs(legacyFile) ? .outdated : .missing }
         let names = (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []
@@ -79,8 +83,8 @@ struct PiExtensionFiles {
         return same && !legacyIsBridge ? .current : .outdated
     }
 
-    /// `legacyInUse`：还有 Pi 会话开着旧单文件扩展
-    func install(legacyInUse: Bool) throws {
+    func install(command: String) async throws {
+        let legacyInUse = await legacyInUse()
         let fm = FileManager.default
         try fm.createDirectory(at: extensionsDirectory, withIntermediateDirectories: true)
         // 点开头：Pi 不载入，旧扩展也不认这个名字
@@ -111,9 +115,12 @@ struct PiExtensionFiles {
         }
     }
 
+    /// 扩展目录因此空了一并删掉。
     func uninstall() throws {
-        if FileManager.default.fileExists(atPath: directory.path) { try FileManager.default.removeItem(at: directory) }
-        if Self.isOurs(legacyFile) { try FileManager.default.removeItem(at: legacyFile) }
+        let fm = FileManager.default
+        if fm.fileExists(atPath: directory.path) { try fm.removeItem(at: directory) }
+        if Self.isOurs(legacyFile) { try fm.removeItem(at: legacyFile) }
+        if (try? fm.contentsOfDirectory(atPath: extensionsDirectory.path))?.isEmpty == true { try fm.removeItem(at: extensionsDirectory) }
     }
 
     private static func isOurs(_ file: URL) -> Bool { read(file)?.hasPrefix(PiExtensionBundle.ownershipMarker) == true }

@@ -18,28 +18,6 @@ public struct AgentVersion: Sendable, Equatable, Comparable, CustomStringConvert
     public static func < (a: AgentVersion, b: AgentVersion) -> Bool { (a.major, a.minor, a.patch) < (b.major, b.minor, b.patch) }
 }
 
-extension AgentKind {
-    /// CuePad 要求的最低版本：Pi 要有 `ui_prompt_*` 事件；OpenCode 只认 v2（v1 的服务接口不同，不做兼容；Homebrew 与官方脚本装的是 v2，
-    /// npm 上 v2 是 `@opencode/cli`，旧包 `opencode-ai` 仍是 1.x）。其余没有要求。
-    public var minimumVersion: AgentVersion? {
-        switch self {
-        case .pi: AgentVersion(0, 84, 4)
-        case .opencode: AgentVersion(2, 0, 0)
-        case .claudeCode, .codex: nil
-        }
-    }
-
-    /// 指定它配置目录的环境变量（OpenCode 另认 `XDG_CONFIG_HOME`）；不碰真实世界时没给它就不接入这家（`AgentInstallError.isolated`）。
-    public var homeVariable: String {
-        switch self {
-        case .pi: "PI_CODING_AGENT_DIR"
-        case .claudeCode: "CLAUDE_CONFIG_DIR"
-        case .codex: "CODEX_HOME"
-        case .opencode: "OPENCODE_CONFIG_DIR"
-        }
-    }
-}
-
 /// 一个 Agent 在这台 Mac 上的情况，与 CuePad 写给它的文件——唯一的一份状态。
 public struct AgentStatus: Sendable, Equatable {
     public enum Presence: Sendable, Equatable {
@@ -65,7 +43,7 @@ public struct AgentStatus: Sendable, Equatable {
     public var files: Files
     /// 检测时挑中的可执行文件（`found` 时；只有配置目录、比如只装了桌面版时为 nil）：开会话、起大脑、问模型都用这一个，不另找。
     public var executable: URL?
-    /// 没装、而装它要先有的这台还没有（`AgentKind.installPrerequisite`）：先装这个，官方脚本才跑得成。
+    /// 没装、而装它要先有的这台还没有（`AgentFacts.installPrerequisite`）：先装这个，官方脚本才跑得成。
     public var lacking: InstallPrerequisite?
 
     public init(presence: Presence, files: Files, executable: URL? = nil, lacking: InstallPrerequisite? = nil) {
@@ -94,9 +72,9 @@ extension AgentInstallError: LocalizedError {
         switch self {
         case .notFound(let kind): String(localized: "没有找到 \(kind.name)")
         case .unresponsive(let kind): String(localized: "\(kind.name) 问版本没有回应，稍后再试")
-        case .tooOld(let kind, let found): String(localized: "\(kind.name) \(found.description) 太旧，需要 \(kind.minimumVersion?.description ?? "") 或更新")
+        case .tooOld(let kind, let found): String(localized: "\(kind.name) \(found.description) 太旧，需要 \(kind.facts.minimumVersion?.description ?? "") 或更新")
         case .foreign(let path): String(localized: "\(path) 是别人的同名文件，没有改动")
-        case .isolated(let kind): String(localized: "这台 Mac 装着正式版，本机构建不改它在用的配置：先用 \(kind.homeVariable) 指定 \(kind.name) 的目录再接入")
+        case .isolated(let kind): String(localized: "这台 Mac 装着正式版，本机构建不改它在用的配置：先用 \(kind.facts.homeVariable) 指定 \(kind.name) 的目录再接入")
         }
     }
 }

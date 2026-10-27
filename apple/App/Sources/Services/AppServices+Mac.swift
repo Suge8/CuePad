@@ -16,12 +16,8 @@ extension AppServices {
         if location.touchesRealWorld { diagnostics.start() }
         let piChanges = pi.changes() // 先订阅再启动桥与各家的接入：启动时发现的会话不能漏
         let legacyPiChanges = pi.changes()
-        // 关掉 OpenCode 的开关：CuePad 拉起的服务一并停掉（本来就在跑的不动）
-        agents.uninstalled = { [weak self] kind in
-            guard kind == .opencode, let openCode = self?.runtimes[.opencode] as? OpenCodeRuntime else { return }
-            await openCode.stopStartedService()()
-        }
-        agents.installed = { [weak self] kind in if kind == .pi { self?.pi.offerExtensionUpgrade() } }
+        agents.uninstalled = { [weak self] kind in await self?.runtimes[kind]?.integrationRemoved() }
+        agents.installed = { [weak self] kind in self?.runtimes[kind]?.integrationInstalled() }
         do {
             try pi.start()
             try hooks.start()
