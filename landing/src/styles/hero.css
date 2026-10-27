@@ -13,10 +13,9 @@
 		border-color 0.4s;
 }
 .site-head.scrolled {
-	background: color-mix(in oklch, var(--canvas) 84%, transparent);
+	background: color-mix(in srgb, var(--desk) 84%, transparent);
 	backdrop-filter: blur(14px) saturate(1.15);
-	-webkit-backdrop-filter: blur(14px) saturate(1.15);
-	border-bottom-color: var(--border);
+	border-bottom-color: var(--hair);
 }
 .nav {
 	width: min(76rem, 100% - 2.5rem);
@@ -30,10 +29,9 @@
 	display: inline-flex;
 	align-items: center;
 	gap: 0.55rem;
-	font-family: var(--font-display);
 	font-weight: 700;
 	font-size: 1.15rem;
-	letter-spacing: -0.01em;
+	letter-spacing: -0.02em;
 	color: var(--ink);
 }
 .nav-links {
@@ -43,8 +41,8 @@
 }
 .nav-links a {
 	font-size: 0.95rem;
-	font-weight: 550;
-	color: var(--muted);
+	font-weight: 500;
+	color: var(--ink2);
 	transition: color 0.25s;
 }
 .nav-links a:hover {
@@ -58,9 +56,9 @@
 .lang {
 	display: inline-flex;
 	padding: 0.18rem;
-	border: 1px solid var(--border-strong);
+	border: 1px solid var(--hair);
 	border-radius: 999px;
-	background: oklch(99.7% 0.005 95.1 / 0.55);
+	background: var(--paper);
 }
 .lang button {
 	padding: 0.28rem 0.7rem;
@@ -68,14 +66,14 @@
 	font-size: 0.85rem;
 	font-weight: 600;
 	white-space: nowrap;
-	color: var(--muted);
+	color: var(--ink2);
 	transition:
 		background 0.3s var(--ease-out),
 		color 0.3s;
 }
 .lang button[aria-pressed='true'] {
 	background: var(--ink);
-	color: var(--canvas);
+	color: var(--desk);
 }
 .nav-cta {
 	display: inline-flex;
@@ -84,7 +82,7 @@
 	padding: 0.5rem 1.05rem;
 	border-radius: 999px;
 	background: var(--ink);
-	color: var(--canvas);
+	color: var(--desk);
 	font-size: 0.9rem;
 	font-weight: 600;
 	transition:
@@ -92,7 +90,7 @@
 		transform 0.3s var(--ease-out);
 }
 .nav-cta:hover {
-	background: var(--sage-ink);
+	background: var(--ink2);
 	transform: translateY(-1px);
 }
 .nav-cta .ic {
@@ -103,13 +101,13 @@
 	display: inline-flex;
 	padding: 0.45rem;
 	border-radius: 999px;
-	color: var(--text);
+	color: var(--ink);
 	transition:
 		background 0.3s,
 		transform 0.3s var(--ease-out);
 }
 .gh-link:hover {
-	background: oklch(30% 0.02 70 / 0.07);
+	background: var(--fill);
 	transform: translateY(-1px);
 }
 .gh-link .ic {
@@ -142,18 +140,16 @@
 	}
 }
 .display {
-	font-family: var(--font-display);
-	font-weight: 720;
+	font-weight: 700;
 	font-size: clamp(2.9rem, 4.4vw + 1.2rem, 5.2rem);
-	line-height: 1.03;
-	letter-spacing: -0.028em;
+	line-height: 1.04;
+	letter-spacing: -0.022em;
 	color: var(--ink);
 	text-wrap: balance;
 }
 html[lang^='zh'] .display {
-	letter-spacing: 0.01em;
+	letter-spacing: 0;
 	line-height: 1.16;
-	font-weight: 700;
 }
 /* Load choreography (CSS-driven, GSAP handles scroll work) */
 .display .l {
@@ -255,7 +251,7 @@ html.js .squiggle.drawn {
 }
 .squiggle path {
 	fill: none;
-	stroke: var(--sage);
+	stroke: var(--signature);
 	stroke-width: 5;
 	stroke-linecap: round;
 	vector-effect: non-scaling-stroke;
@@ -265,7 +261,7 @@ html.js .squiggle.drawn {
 	margin-top: 1.6rem;
 	font-size: clamp(1.05rem, 0.6vw + 0.95rem, 1.22rem);
 	line-height: 1.7;
-	color: var(--muted);
+	color: var(--ink2);
 	text-wrap: pretty;
 }
 .hero-ctas {
@@ -283,7 +279,6 @@ html.js .squiggle.drawn {
 	max-width: 40rem;
 	margin-left: auto;
 	mask-image: radial-gradient(ellipse 88% 86% at 50% 46%, #000 55%, transparent 76%);
-	-webkit-mask-image: radial-gradient(ellipse 88% 86% at 50% 46%, #000 55%, transparent 76%);
 	will-change: translate;
 	animation: hero-float 7s ease-in-out infinite;
 }
@@ -320,7 +315,7 @@ html.js .squiggle.drawn {
 	top: -4.2rem;
 	width: clamp(96px, 11vw, 148px);
 	transform: rotate(4deg);
-	filter: drop-shadow(0 18px 24px oklch(20% 0.01 75 / 0.22));
+	filter: drop-shadow(0 18px 24px rgb(0 0 0 / 0.22));
 	pointer-events: none;
 }
 .bob {
@@ -335,6 +330,8 @@ html.js .squiggle.drawn {
 /* Ambient canvases */
 .dust,
 .sparks {
+	color: var(--ink);
+	accent-color: var(--signature);
 	position: absolute;
 	inset: 0;
 	z-index: 0;

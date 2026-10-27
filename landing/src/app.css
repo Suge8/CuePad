@@ -1,7 +1,4 @@
-/* ============================================================
-   CuePad Landing — "纸面工作室" design system (Svelte 5 + GSAP)
-   Palette derived 1:1 from the CuePad app tokens (OKLCH).
-   ============================================================ */
+/* CuePad 落地页样式入口：令牌在 base.css，与 App 的 Palette 同一套 */
 
 @import './styles/base.css';
 @import './styles/hero.css';

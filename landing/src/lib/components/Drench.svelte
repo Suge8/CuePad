@@ -114,7 +114,7 @@
 	});
 </script>
 
-<section class="drench" id="cue" bind:this={section}>
+<section class="drench night" id="cue" bind:this={section}>
 	<Canvas kind="spark" />
 	<div class="drench-stage" bind:this={stage}>
 		<div class="drench-inner">
@@ -144,7 +144,7 @@
 		</svg>
 		<svg class="plane" bind:this={plane} viewBox="0 0 48 48" aria-hidden="true">
 			<path d="M3 25 45 5 29 43 23 29Z" fill="currentColor" />
-			<path d="M23 29 45 5" stroke="oklch(82% 0.02 90)" stroke-width="1.6" fill="none" />
+			<path class="fold" d="M23 29 45 5" />
 		</svg>
 		<div class="burst" bind:this={burst} aria-hidden="true">
 			{#each { length: 14 } as _}<i></i>{/each}
