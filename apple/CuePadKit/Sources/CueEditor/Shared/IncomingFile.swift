@@ -7,10 +7,14 @@ public enum IncomingFile: Sendable {
     case data(Data)
 
     /// 存进附件目录，返回键与显示的文件名（字节没有名字）。在后台调用：大文件要读一遍算哈希。
+    /// 选择器、文件 App 给的带安全作用域的文件在这里拿访问权、存好就放开；别的文件拿不到也照常读。
     public func store(in files: any CueFileStore) throws -> (key: String, name: String) {
         switch self {
-        case .file(let url): (try files.store(fileAt: url), url.lastPathComponent)
-        case .data(let data): (try files.store(data), "")
+        case .file(let url):
+            let scoped = url.startAccessingSecurityScopedResource()
+            defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+            return (try files.store(fileAt: url), url.lastPathComponent)
+        case .data(let data): return (try files.store(data), "")
         }
     }
 }

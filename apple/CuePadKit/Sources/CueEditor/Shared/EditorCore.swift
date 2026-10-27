@@ -56,11 +56,10 @@ final class EditorCore {
     private var decorationDelegate: DecorationDelegate?
     private(set) lazy var settler = LayoutSettler(core: self)
     private(set) lazy var thumbnails = ThumbnailLoader(core: self)
-    private(set) lazy var fileThumbnails = FileThumbnails(core: self)
     var displayScale: CGFloat { host?.displayScale ?? 2 }
     /// 附件此刻的样子（宿主给：类型与大小、还没到时怎么取、传了几成）；参数是键、文件名与本机那份（不在本机为 nil）。
     var fileStatus: (_ key: String, _ name: String, _ file: URL?) -> CueFileStatus = { _, name, _ in
-        CueFileStatus(detail: (name as NSString).pathExtension.uppercased())
+        CueFileStatus(detail: AttachmentKey.format(ofName: name).uppercased())
     }
     /// 文件牌上没有缩略图时的记号，按文件名的类型（宿主给：图标只在 App 的图标表里）。
     var fileIcon: (String) -> CueImage? = { _ in nil }
@@ -175,7 +174,7 @@ final class EditorCore {
     func fileChip(key: String, name: String, size: CGSize) -> CueImage {
         let url = files.fileURL(for: key)
         let status = fileStatus(key, name, url)
-        let thumbnail = url.flatMap { fileThumbnails.image(at: $0, key: key) }
+        let thumbnail = url.flatMap { thumbnails.chip(key: key, at: $0) }
         var style = style
         style.imagePlaceholderColor = resolved(style.imagePlaceholderColor)
         style.textColor = resolved(style.textColor)
@@ -270,15 +269,12 @@ final class EditorCore {
 
     // MARK: 附件重绘
 
-    /// 缩略图解码完成后重绘引用它的附件：TextKit 缓存了片段的渲染结果，必须让对应片段失效重排。
-    /// 重画某张图（`url` 为 nil 时所有图，例如换到缩放比例不同的屏）。
-    func redrawImages(at url: URL? = nil) {
-        redraw { ($0 as? CueImageAttachment).map { url == nil || $0.fileURL == url } ?? false }
-    }
-
-    /// 重画这个键的文件牌（缩略图出好了）。
-    func redrawFiles(_ key: String) {
-        redraw { ($0 as? CueFileAttachment)?.key == key }
+    /// 缩略图出好后重画引用它的附件（`key` 为 nil 时全部，例如换到缩放比例不同的屏）：TextKit 缓存了片段的渲染结果，必须让对应片段失效重排。
+    func redraw(key: String?) {
+        redraw { attachment in
+            let found = (attachment as? CueImageAttachment)?.key ?? (attachment as? CueFileAttachment)?.key
+            return found != nil && (key == nil || found == key)
+        }
     }
 
     /// 附件的文件到了、传的进度变了（宿主报来）：还没到的图片再找一次本机那份，文件牌全部重画（说明与进度现读）。

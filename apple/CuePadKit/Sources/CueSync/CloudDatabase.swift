@@ -64,7 +64,7 @@ struct CloudDatabase: SyncCloud {
   let container: CKContainer
   let zoneID: CKRecordZone.ID
 
-  /// 数据库的每个请求都带 CloudKit 自己的超时：`RequestLimits.request` 没有新数据（空闲，不是总用时：大附件照样传完）就失败，
+  /// 数据库的每个请求都带 CloudKit 自己的超时：`RequestLimits.request` 没有新数据（空闲，不是总用时；文件那一路同样，见 `CloudDatabase+Files`）就失败，
   /// 归为连不上、退避重发。默认的 60 秒太长：挂住的一批挡着后面的话一起等。
   func database<R>(_ body: @escaping @Sendable (CKDatabase) async throws -> R) async throws -> R {
     let configuration = CKOperation.Configuration()

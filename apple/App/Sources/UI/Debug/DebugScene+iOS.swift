@@ -159,6 +159,8 @@ extension DebugScene {
             let name = defaults.string(forKey: "CuePadProject") ?? String(localized: "闲鱼", table: "Demo")
             workspace.folderPicker = try? await workspace.services.store.projects().first { $0.name == name }
         case "sessions":
+            // 配 -CuePadDemo 时 Cue 在演示 Mac 上值班（同 Mac 的 sessions）：会话行按值班时的样子写（歇着、等 Cue 回答、待回复）
+            if defaults.bool(forKey: "CuePadDemo") { await seedCue(workspace.services) }
             workspace.projectScope = project
             workspace.showSessions()
         case "search":

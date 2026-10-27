@@ -9,9 +9,9 @@ import Synchronization
 ///
 /// 自动取（`wanted`）：Mac 取全部；手机只取不大于 `phoneAutoLimit`、且网络不按流量计费（`NetworkReturns.isMetered`）时的，其余用到时取（`fetch`）。
 /// 自己传上去的文件本来就在本机，不会再取。自动取的至多 `parallel` 个同时在路上；用到时取的不排队。
-/// 跟着附件表（新记录到了）、网络回来（手机换到 Wi-Fi）与重试的等待结束再看一遍；连不上与服务器要求等的守同步层的调度（拉取那一档，`admits(.pull)`），
-/// 用到时取的也守，只越过自动取的条件。自动取失败的那几个按退避（`Backoff`）晾着，到点或连通的证据（网络回来、等待结束）再试，不当场重来。
-/// 文件坏了（没有文件、哈希不符）报告一次、记下不再取：它不会自己变好。
+/// 跟着附件表（新记录到了）、网络回来（手机换到 Wi-Fi）与重试的等待结束再看一遍。失败交给同步层唯一的调度（`SyncCoordinator.hold`），
+/// 自动取守它（`admits(.fileDownload(urgent: false))`），等待结束（`retryDue`）再试；用到时取的同马上传，只越过连不上与被拒的退避。
+/// 文件坏了（没有文件、哈希不符）报告一次，与这期间在 iCloud 被删了的一样记下不再取（`skipped`），直到记录本身变了或没了。
 /// 用到时取的调用方被取消就当场抛出；没有别人在等、也不是自动取的那一趟随之取消。
 actor FileFetcher {
   static let parallel = 2
@@ -26,11 +26,9 @@ actor FileFetcher {
   private var running: [String: Task<URL, any Error>] = [:]
   /// 在跑的里面自动取的（占 `parallel` 的名额）。
   private var automatic: Set<String> = []
-  private var damaged: Set<String> = []
-  /// 自动取失败、在退避里晾着的（`retryTimer` 到点清掉）。
-  private var resting: Set<String> = []
-  private var backoff = Backoff()
-  private var retryTimer: Task<Void, Never>?
+  /// 不再取的（坏了：`FileFetchFailure.damaged`；在 iCloud 被删了：`unknownItem`）与那时的记录：用到时取的照样抛出这个错，
+  /// 记录变了（另一台重传）或没了（删除拉到了）就忘掉。
+  private var skipped: [String: (attachment: Attachment, error: any Error)] = [:]
   /// 每个 key 有几个用到时取的调用方在等。
   private var demand: [String: Int] = [:]
   /// 用到时要取、记录还没到的：记录到了就取。
@@ -54,15 +52,14 @@ actor FileFetcher {
           await self.coordinator.failed(error)
         }
       },
-      Task { for await _ in network { await self.wake() } },
-      Task { for await _ in due { await self.wake() } },
+      Task { for await _ in network { await self.scan() } },
+      Task { for await _ in due { await self.scan() } },
     ]
   }
 
   func stop() {
     tasks.forEach { $0.cancel() }
     tasks = []
-    retryTimer?.cancel()
     running.values.forEach { $0.cancel() }
     for waiter in waiters.values { waiter.continuation.resume(throwing: FileFetchFailure.notSyncing) }
     waiters = [:]
@@ -72,7 +69,7 @@ actor FileFetcher {
   /// 停下同步（要你决定、要更新、没有账号）抛 `FileFetchFailure.notSyncing`；被取消就抛出。
   func fetch(_ key: String) async throws -> URL {
     if let url = files.fileURL(for: key) { return url }
-    guard !damaged.contains(key) else { throw FileFetchFailure.damaged }
+    if let skip = skipped[key] { throw skip.error }
     demand[key, default: 0] += 1
     defer { release(key) }
     if let task = running[key] { return try await outcome(of: task) }
@@ -89,7 +86,7 @@ actor FileFetcher {
     let due = coordinator.retryDue.stream()  // 先订阅：看条件时跨了 actor，其间结束的那次不漏
     while true {
       guard await coordinator.canSync else { throw FileFetchFailure.notSyncing }
-      if await coordinator.admits(.pull) { return }
+      if await coordinator.admits(.fileDownload(urgent: true)) { return }
       for await _ in due { break }
       try Task.checkCancellation()
     }
@@ -135,6 +132,7 @@ actor FileFetcher {
 
   private func seen(_ rows: [Attachment]) async {
     known = Dictionary(rows.map { (AttachmentKey.make(hash: $0.hash, format: $0.format), $0) }, uniquingKeysWith: { first, _ in first })
+    skipped = skipped.filter { known[$0.key] == $0.value.attachment }
     for (id, waiter) in waiters {
       guard let attachment = known[waiter.key] else { continue }
       waiters[id] = nil
@@ -143,19 +141,11 @@ actor FileFetcher {
     await scan()
   }
 
-  /// 连通的证据（网络回来、重试的等待结束）：晾着的不再等退避。
-  private func wake() async {
-    resting = []
-    await scan()
-  }
-
   /// 补足自动取的。
   private func scan() async {
-    guard automatic.count < Self.parallel, await coordinator.canSync, await coordinator.admits(.pull) else { return }
+    guard automatic.count < Self.parallel, await coordinator.canSync, await coordinator.admits(.fileDownload(urgent: false)) else { return }
     for (key, attachment) in known where automatic.count < Self.parallel {
-      guard running[key] == nil, !damaged.contains(key), !resting.contains(key), Self.wanted(attachment), files.fileURL(for: key) == nil else {
-        continue
-      }
+      guard running[key] == nil, skipped[key] == nil, Self.wanted(attachment), files.fileURL(for: key) == nil else { continue }
       begin(attachment, automatic: true)
     }
   }
@@ -176,40 +166,17 @@ actor FileFetcher {
     running[key] = task
     if isAutomatic { automatic.insert(key) }
     Task {
-      let result = await task.result
-      self.ended(key, result)
+      _ = await task.result
+      self.ended(key)
       await self.scan()
     }
     return task
   }
 
-  /// 一趟结束：失败了的（坏了的不再取，取消的不算）晾到退避到点，自动取不当场再来。
-  private func ended(_ key: String, _ result: Result<URL, any Error>) {
+  private func ended(_ key: String) {
     running[key] = nil
     automatic.remove(key)
     board.clear(key)
-    switch result {
-    case .success: backoff.reset()
-    case .failure(let error as FileFetchFailure) where error == .damaged: break
-    case .failure(is CancellationError): break
-    case .failure: rest(key)
-    }
-  }
-
-  private func rest(_ key: String) {
-    resting.insert(key)
-    guard retryTimer == nil else { return }
-    let wait = backoff.next()
-    retryTimer = Task {
-      try? await Task.sleep(for: wait)
-      guard !Task.isCancelled else { return }
-      await self.retryDue()
-    }
-  }
-
-  private func retryDue() async {
-    retryTimer = nil
-    await wake()
   }
 
   private func download(_ attachment: Attachment, _ key: String) async throws -> URL {
@@ -217,34 +184,36 @@ actor FileFetcher {
     board.set(key, .download, 0)
     do {
       let record = try await cloud.downloadFile(coordinator.recordID(name)) { board.set(key, .download, $0) }
-      guard let record else { throw CKError(.unknownItem) }  // 这期间被删了：删除随下一拉到
+      guard let record else { throw skip(attachment, key, CKError(.unknownItem)) }  // 这期间被删了：删除随下一拉到
       guard let file = (record[RecordMapper.fileKey] as? CKAsset)?.fileURL else {
-        throw await broken(name, detail: String(localized: "附件记录没有文件"), key)
+        throw await broken(attachment, key, detail: String(localized: "附件记录没有文件"))
       }
       do {
         try files.adopt(fileAt: file, key: key)
       } catch let error as CueStoreError where [.invalidAttachmentHash, .attachmentHashMismatch].contains(error) {
-        throw await broken(name, detail: "\(error)", key)
+        throw await broken(attachment, key, detail: "\(error)")
       }
       guard let url = files.fileURL(for: key) else { throw CueStoreError.notFound }
       return url
-    } catch let error as FileFetchFailure {
+    } catch where skipped[key] != nil {
       throw error
     } catch where Task.isCancelled || error is CancellationError {
       throw CancellationError()  // 用到时取的调用方不等了：CloudKit 报的取消不归类、不让同步等
-    } catch let error as CKError where error.code == .unknownItem {
-      throw error
     } catch {
-      let fault = await coordinator.failed(error)
-      if fault.isWait || fault.retryAfter != nil { await coordinator.hold(fault, waiting: false) }
+      await coordinator.hold(await coordinator.failed(error), waiting: false)
       throw error
     }
   }
 
-  private func broken(_ name: String, detail: String, _ key: String) async -> FileFetchFailure {
-    damaged.insert(key)
+  private func skip(_ attachment: Attachment, _ key: String, _ error: any Error) -> any Error {
+    skipped[key] = (attachment, error)
+    return error
+  }
+
+  private func broken(_ attachment: Attachment, _ key: String, detail: String) async -> any Error {
+    let name = attachment.id.uuidString.lowercased()
     await coordinator.report(.damaged, detail: detail, kind: .incoming, recordType: Table.attachments.rawValue, recordName: name)
-    return .damaged
+    return skip(attachment, key, FileFetchFailure.damaged)
   }
 }
 

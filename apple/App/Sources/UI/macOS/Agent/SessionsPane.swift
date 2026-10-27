@@ -98,7 +98,7 @@ struct SessionsPane: View {
     private func row(_ item: PiSessionListItem, in list: PiSessionList, end: Speech.Trip?) -> some View {
         let session = item.state
         let endable = session.canEnd && end?.inTransit != true
-        return PiSessionRow(session: session, project: list.showsPlace ? item.project : nil, delivery: item.delivery, end: end, rename: item.rename, undelivered: item.undelivered(at: services.speech), style: .page).equatable()
+        return PiSessionRow(session: session, project: list.showsPlace ? item.project : nil, delivery: item.delivery, end: end, rename: item.rename, undelivered: item.undelivered(at: services.speech), cueDid: item.cueDid, style: .page).equatable()
             .sessionLink(session.sessionID, press: .card)
             .contextMenu {
                 SessionMenu(session: session, rename: { model.renaming = session }, end: endable ? { model.confirmingEnd = session } : nil)

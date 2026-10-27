@@ -8,11 +8,10 @@ import os
 ///
 /// 上传是长期操作（`FileCloud.uploadFile`）：App 退出后系统接着传，下次开始时先接上（`resume`），接上的那几条不再另传。
 /// 结果与后台那一路一样交给协调器记账（`SyncCoordinator.sent`），服务器收下了就删本机的保底（`AttachmentFiles.uploaded`）。
-/// 重试守同步层唯一的调度（`SyncCoordinator.admits`、`hold`，等待结束时 `retryDue` 接着传），只有 iCloud 空间不足是这一路自己的：
-/// 文件停在本机、`quotaPause` 后再试，期间别的记录照常同步（`SyncState.filesOverQuota`，不改 `status`）。
+/// 重试守同步层唯一的调度（`SyncCoordinator.admits(.fileUpload)`、`hold`，等待结束时 `retryDue` 接着传），空间不足的停顿也在那里（`holdFiles`）。
+/// 在路上的只记在协调器（`SyncCoordinator.fileUploads`）。
 actor FileSender {
   static let parallel = 2
-  static let quotaPause = Duration.seconds(600)
   private static let log = Logger(subsystem: AppIdentity.id, category: "sync")
 
   private let cloud: any FileCloud & RecordUploader
@@ -20,8 +19,6 @@ actor FileSender {
   private let board: TransferBoard
   /// 对过最低对端版本（`RecordSender.ready`）：文件同别的记录一样在那之后才传。
   private let ready: @Sendable () async -> Bool
-  private var running: Set<String> = []
-  private var quotaUntil: ContinuousClock.Instant?
   private var tasks: [Task<Void, Never>] = []
 
   init(cloud: any FileCloud & RecordUploader, coordinator: SyncCoordinator, board: TransferBoard, ready: @escaping @Sendable () async -> Bool) {
@@ -52,9 +49,8 @@ actor FileSender {
   private func resume() async {
     do {
       for upload in try await cloud.resumedFileUploads() {
-        let records = upload.records, names = records.map(\.recordID.recordName)
-        running.formUnion(names)
-        await coordinator.filesResumed(names)
+        let records = upload.records
+        await coordinator.filesResumed(records.map(\.recordID.recordName))
         Self.log.notice("接上上次没交回结果的文件上传：\(records.count, privacy: .public) 条")
         Task {
           await self.finish(records) { progress in try await upload.result(progress) }
@@ -68,18 +64,18 @@ actor FileSender {
 
   /// 补足在路上的：守重试的时刻与空间不足的停顿，先对过门槛。
   private func fill() async {
-    guard running.count < Self.parallel, quotaUntil.map({ ContinuousClock.now >= $0 }) ?? true else { return }
-    guard await coordinator.admits(.upload(urgent: false)), await coordinator.canSync, await ready() else { return }
+    guard await coordinator.fileUploads.count < Self.parallel, await coordinator.admits(.fileUpload), await coordinator.canSync, await ready()
+    else { return }
     let pending: [String]
     do { pending = try await coordinator.store.pendingAttachments() } catch {
       await coordinator.failed(error)
       return
     }
-    for name in pending where running.count < Self.parallel && !running.contains(name) {
+    for name in pending {
+      guard await coordinator.fileUploads.count < Self.parallel else { return }
       let taken: CKRecord?
       do { taken = try await coordinator.takeFile(name) } catch { return }  // 停下了或读库出错：协调器已记下，下一次触发再来
-      guard let record = taken else { continue }
-      running.insert(name)
+      guard let record = taken else { continue }  // 已在路上，或这一版传不上去
       Task { await self.finish([record]) { progress in try await self.cloud.uploadFile(record, progress: progress) } }
     }
   }
@@ -93,49 +89,30 @@ actor FileSender {
       var sent = try await upload { fraction in keys.forEach { board.set($0, .upload, fraction) } }
       let full = sent.failedSaves.filter { SyncFault($0.error) == .account(.quotaExceeded) }
       sent.failedSaves.removeAll { SyncFault($0.error) == .account(.quotaExceeded) }
-      if !full.isEmpty { await overQuota(full[0].error) }
+      if let first = full.first { await coordinator.holdFiles(first.error) }
       let outcome = await coordinator.sent(sent, for: OutgoingBatch(saves: records, deletes: []))
       for record in sent.saved {
         guard let key = RecordMapper.row(from: record)?.attachmentKey else { continue }
         // 删不掉的保底只多占一个硬链接，下次收下同一个文件时再删
         do { try coordinator.store.files.uploaded(key) } catch { Self.log.error("附件的保底没能删：\(error.brief, privacy: .public)") }
       }
-      if !sent.saved.isEmpty, quotaUntil != nil {
-        quotaUntil = nil
-        await coordinator.setFilesOverQuota(false)
-      }
+      if !sent.saved.isEmpty { await coordinator.filesAccepted() }
       if outcome.zoneMissing { try? await cloud.saveZone() }
       if let fault = outcome.fault { await coordinator.hold(fault, waiting: false) } else if !sent.saved.isEmpty { await coordinator.progressed() }
     } catch {
       await failed(error)
     }
     for key in keys { board.clear(key) }
-    for record in records {
-      running.remove(record.recordID.recordName)
-      await coordinator.fileDone(record.recordID.recordName)
-    }
+    for record in records { await coordinator.fileDone(record.recordID.recordName) }
     await fill()
   }
 
   private func failed(_ error: any Error) async {
-    if SyncFault(error) == .account(.quotaExceeded) { return await overQuota(error) }
+    if SyncFault(error) == .account(.quotaExceeded) { return await coordinator.holdFiles(error) }
     if let error = error as? CKError, error.code == .zoneNotFound {
       try? await cloud.saveZone()  // 新装的第一次就是文件：建区，下一次触发再传
       return
     }
     await coordinator.hold(await coordinator.failed(error), waiting: false)
-  }
-
-  /// 空间不足：这一路停 `quotaPause`，到点再试；别的记录照常。
-  private func overQuota(_ error: any Error) async {
-    if quotaUntil == nil { Self.log.notice("iCloud 空间不足，文件先不上传：\(error.brief, privacy: .public)") }
-    let until = ContinuousClock.now + Self.quotaPause
-    quotaUntil = until
-    await coordinator.setFilesOverQuota(true)
-    tasks.append(Task {
-      try? await Task.sleep(until: until, clock: .continuous)
-      guard !Task.isCancelled else { return }
-      await self.fill()
-    })
   }
 }

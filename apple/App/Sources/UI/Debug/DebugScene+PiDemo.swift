@@ -54,6 +54,9 @@ extension DebugScene {
             ("billing", .error, String(localized: "模型拒绝了请求（400）：prompt is too long", table: "Demo"), String(localized: "闲鱼", table: "Demo"), DemoRecap(lastPrompt: String(localized: "把整个 billing 目录读一遍，总结计费规则", table: "Demo"))),
             ("notes", .settled, nil, "Career", DemoRecap(
                 lastPrompt: String(localized: "整理一下这周的会议记录", table: "Demo"), lastReply: String(localized: "整理好了，放在 `notes/2026-W40.md`。三件待办：**续费域名**、评审计费额度、补 scheduler 测试。", table: "Demo"))),
+            // 歇着、Cue 已接手这次停下（转给了 cuepad，`seedCue`）：会话行与看板卡写 Cue 对它做的那件事
+            ("docs", .settled, nil, "Career", DemoRecap(
+                lastPrompt: String(localized: "把简历里的项目经历按时间重排", table: "Demo"), lastReply: String(localized: "排好了，最近的在前。投送队列那段的数据要等补丁合进去再填。", table: "Demo"))),
             // 终端里刚开、还没说过话
             ("scratch", .settled, nil, "CuePad", DemoRecap()),
             ("piwork", .settled, nil, nil, DemoRecap(
@@ -79,7 +82,7 @@ extension DebugScene {
         }
         // 此刻的状态从几分钟前起（在问的等了多久、在跑的跑了多久、出错的停了多久都从这一刻算；不给就是写入这一刻："刚刚"）
         let since: [String: TimeInterval] = [
-            "deploy": 21, "rename": 14, "homepage": 9, "notes-edit": 4, "atlas": 3, "cuepad": 5, "review": 4.5, "migrate": 9, "billing": 19, "scratch": 2,
+            "deploy": 21, "rename": 14, "homepage": 9, "notes-edit": 4, "atlas": 3, "cuepad": 5, "review": 4.5, "migrate": 9, "billing": 19, "scratch": 2, "docs": 6,
         ]
         // 你这边之前说过的几句在几分钟前（看板推进中卡下沿那条线的过去一句一颗点）；有演示对话的会话（`seedChats`）用对话里的
         let said: [String: [TimeInterval]] = [
