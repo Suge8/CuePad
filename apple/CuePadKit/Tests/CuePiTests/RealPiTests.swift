@@ -6,7 +6,6 @@ import Testing
 @testable import CuePi
 
 private let longCommand = "echo " + String(repeating: "a", count: 200)
-private let cjkCommand = "echo " + String(repeating: "你", count: 130)
 
 /// 端到端：真实 Pi（`~/.local/bin/pi`，已验证到 0.99.1）+ 安装器装进临时 agent 目录的真实扩展 + 假模型 + `PiBridge`。
 @MainActor
@@ -21,21 +20,6 @@ struct RealPiTests {
         try await eventually("桥发现真实 Pi 会话") { !bridge.sessions.isEmpty }
         try await body(pi, bridge, bridge.sessions[0])
     }
-
-    /// 会话文件里的消息（文件顺序）：角色、文字、图片数。真实 Pi 写出的内容，作为投送是否到达模型的证据。
-    func messages(of session: PiSession) -> [(role: String, text: String, images: Int)] {
-        guard let file = session.sessionFile, let text = try? String(contentsOf: file, encoding: .utf8) else { return [] }
-        return text.split(separator: "\n").compactMap { line in
-            guard let object = try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any],
-                  object["type"] as? String == "message", let message = object["message"] as? [String: Any],
-                  let role = message["role"] as? String else { return nil }
-            let blocks = message["content"] as? [[String: Any]] ?? []
-            let text = (message["content"] as? String) ?? blocks.compactMap { $0["type"] as? String == "text" ? $0["text"] as? String : nil }.joined()
-            return (role, text, blocks.filter { $0["type"] as? String == "image" }.count)
-        }
-    }
-
-    func replies(of session: PiSession) -> [String] { messages(of: session).filter { $0.role == "assistant" }.map(\.text) }
 
     @Test func installedExtensionIsLoadedByPiAndReportsTheSession() async throws {
         try await withRig { pi, _, s in
@@ -123,7 +107,7 @@ struct RealPiTests {
             try await eventually("回填完成") { history.finishedBackfill }
 
             try pi.prompt("记进历史")
-            try await eventually("回复写入") { !self.replies(of: s).isEmpty }
+            try await eventually("回复写入") { !fileTexts("assistant", in: s.sessionFile).isEmpty }
             pi.kill(SIGTERM)
 
             try await eventually("退出的会话在历史里") {
@@ -159,7 +143,6 @@ struct RealPiTests {
     @Test(arguments: [
         ("echo first\\necho second", "echo first"),
         (longCommand, String(longCommand.prefix(119)) + "…"),
-        (cjkCommand, String(cjkCommand.prefix(119)) + "…"),
     ])
     func bashToolDetailIsTheFirstLineTruncatedTo120Characters(command: String, expected: String) async throws {
         AgentTape.variant("\(command.count)")

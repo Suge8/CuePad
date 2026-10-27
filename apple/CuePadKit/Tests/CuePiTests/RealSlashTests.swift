@@ -29,17 +29,6 @@ struct RealSlashTests {
         try await body(pi, bridge, bridge.sessions[0])
     }
 
-    private func userTexts(of session: PiSession) -> [String] {
-        guard let file = session.sessionFile, let text = try? String(contentsOf: file, encoding: .utf8) else { return [] }
-        return text.split(separator: "\n").compactMap { line in
-            guard let object = try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any],
-                  object["type"] as? String == "message", let message = object["message"] as? [String: Any],
-                  message["role"] as? String == "user" else { return nil }
-            let blocks = message["content"] as? [[String: Any]] ?? []
-            return (message["content"] as? String) ?? blocks.compactMap { $0["text"] as? String }.joined()
-        }
-    }
-
     /// 上下文余量：窗口大小来自当前模型；跑过一轮后有已用量；压缩后到下一次回答前未知（tokens 为 nil），窗口仍在。
     @Test func contextUsageIsReportedPerTurnAndUnknownRightAfterCompaction() async throws {
         try await withRig { pi, bridge, s in
@@ -90,14 +79,14 @@ struct RealSlashTests {
         try await withRig { pi, bridge, s in
             try await bridge.command("/shout hi there", in: s.id)
             _ = try await pi.waitForEvent("扩展命令跑了") { $0["method"] as? String == "notify" && $0["message"] as? String == "shout:hi there" }
-            #expect(userTexts(of: s).isEmpty, "扩展命令不产生发给模型的消息")
+            #expect(fileTexts("user", in: s.sessionFile).isEmpty, "扩展命令不产生发给模型的消息")
 
             try await bridge.command("/greet world", in: s.id)
-            try await eventually("模板展开后进了模型上下文") { self.userTexts(of: s) == ["Say hello to world."] }
+            try await eventually("模板展开后进了模型上下文") { fileTexts("user", in: s.sessionFile) == ["Say hello to world."] }
 
             try await bridge.command("/skill:careful 小心点", in: s.id)
             try await eventually("skill 展开后进了模型上下文") {
-                self.userTexts(of: s).last?.contains("CAREFUL-BODY-MARKER") == true
+                fileTexts("user", in: s.sessionFile).last?.contains("CAREFUL-BODY-MARKER") == true
             }
         }
     }
@@ -132,7 +121,7 @@ struct RealSlashTests {
         try await withRig { pi, bridge, s in
             let log = ChangeLog(bridge)
             try pi.prompt("先说一句")
-            try await eventually("回复写入") { self.userTexts(of: s) == ["先说一句"] }
+            try await eventually("回复写入") { fileTexts("user", in: s.sessionFile) == ["先说一句"] }
             try await eventually("歇下") { bridge.sessions.first?.state == .settled }
 
             try await bridge.command("/new", in: s.id)
@@ -158,7 +147,7 @@ struct RealSlashTests {
             try await eventually("答完歇下") { recap(of: s)?.lastReply != nil && bridge.sessions.first?.state == .settled }
             try await bridge.command("/clone", in: s.id)
             try await eventually("克隆出新会话") { bridge.sessions.count == 1 && bridge.sessions[0].sessionID != s.sessionID }
-            try await eventually("克隆带着历史") { self.userTexts(of: bridge.sessions[0]) == ["要克隆的一句"] }
+            try await eventually("克隆带着历史") { fileTexts("user", in: bridge.sessions[0].sessionFile) == ["要克隆的一句"] }
         }
     }
 }

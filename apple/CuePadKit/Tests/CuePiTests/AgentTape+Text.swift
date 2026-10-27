@@ -50,7 +50,7 @@ extension AgentTape {
         // 主机名大小写因来源而异（ProcessInfo 给小写，gethostname 原样）：两种都换，先长后短
         var buffer = [CChar](repeating: 0, count: 256)
         gethostname(&buffer, buffer.count)
-        let hosts = [String(cString: buffer), ProcessInfo.processInfo.hostName]
+        let hosts = [String(decoding: buffer.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self), ProcessInfo.processInfo.hostName]
         var pairs = (hosts + hosts.compactMap { $0.split(separator: ".").first.map(String.init) }).map { ($0, "localhost") }
         if let name = Host.current().localizedName { pairs.append((name, "Mac")) }
         if let output = try? String(contentsOf: FileManager.default.homeDirectoryForCurrentUser.appending(path: ".gitconfig"), encoding: .utf8),
