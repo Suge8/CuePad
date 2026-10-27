@@ -179,7 +179,7 @@ enum DebugHooks {
         DebugScene.later(delay, work)
         #else
         Task {
-            try? await Task.sleep(for: delay)
+            await Task.wait(for: delay)
             work()
         }
         #endif

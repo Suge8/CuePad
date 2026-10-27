@@ -63,7 +63,7 @@ extension DebugScene {
             AsyncStream { [seconds] continuation in
                 continuation.yield(SyncState(status: .offline, issues: []))
                 let task = Task {
-                    try? await Task.sleep(for: .seconds(seconds))
+                    await Task.wait(for: .seconds(seconds))
                     continuation.yield(SyncState(status: .idle, issues: [], reconciled: true))
                 }
                 continuation.onTermination = { _ in task.cancel() }
@@ -101,9 +101,9 @@ extension DebugScene {
                 let task = Task { [blips, gap, busy] in
                     while !Task.isCancelled {
                         for blip in blips {
-                            try? await Task.sleep(for: gap)
+                            await Task.wait(for: gap)
                             continuation.yield(busy)
-                            try? await Task.sleep(for: blip)
+                            await Task.wait(for: blip)
                             continuation.yield(idle)
                         }
                     }
@@ -144,11 +144,13 @@ extension DebugScene {
                 (.note, String(localized: "CuePad 导入旧数据的会话又出错了：prompt 太长，等你回来再拆", table: "Demo")),
                 (.cue, String(localized: "重连用例都过了，预发也部署好了，截图放在任务上。要推送到 origin/main 吗？", table: "Demo")),
             ]
-            for page in 0..<pages {
-                try? await Task.sleep(for: pageGap)
-                for index in 0..<perPage {
-                    let (author, text) = lines[(page * perPage + index) % lines.count]
-                    _ = try? await store.addCueMessage(author, text: text)
+            await running("第一次拉取带回的话") {
+                for page in 0..<pages {
+                    await Task.wait(for: pageGap)
+                    for index in 0..<perPage {
+                        let (author, text) = lines[(page * perPage + index) % lines.count]
+                        _ = try await store.addCueMessage(author, text: text)
+                    }
                 }
             }
         }
@@ -171,12 +173,14 @@ extension DebugScene {
             AsyncStream { [seconds] continuation in
                 continuation.yield(SyncState(status: .syncing, issues: [], reconciled: false))
                 let task = Task {
-                    guard let store = await standInLibrary(), (try? await Task.sleep(for: .seconds(seconds))) != nil else { return }
-                    _ = try? await store.recordMacAgents(host: "demo-mac", name: "Mac Studio", [MacAgent(kind: .pi, model: nil, models: [])])
-                    _ = try? await store.recordMacPresence(host: "demo-mac") { true }
-                    _ = try? await store.updateCueProfile { profile in
-                        profile.hostID = "demo-mac"
-                        profile.enabledAt = .now
+                    guard let store = await standInLibrary(), await Task.wait(for: .seconds(seconds)) else { return }
+                    await running("换新 Mac 的第一遍拉取") {
+                        _ = try await store.recordMacAgents(host: "demo-mac", name: "Mac Studio", [MacAgent(kind: .pi, model: nil, models: [])])
+                        _ = try await store.recordMacPresence(host: "demo-mac") { true }
+                        _ = try await store.updateCueProfile { profile in
+                            profile.hostID = "demo-mac"
+                            profile.enabledAt = .now
+                        }
                     }
                     continuation.yield(SyncState(status: .idle, issues: [], reconciled: true))
                 }
@@ -207,14 +211,16 @@ extension DebugScene {
 
     /// 拿演示库里的一张灵感，复制一份改过的正文，标成它的冲突副本。
     private static func seedConflict(_ services: AppServices) async {
-        let store = services.store
-        var original: Card?
-        for project in (try? await store.projects()) ?? [] where original == nil {
-            original = try? await store.cards(in: project.id).first
+        await running("冲突副本") {
+            let store = services.store
+            var original: Card?
+            for project in try await store.projects() where original == nil {
+                original = try await store.cards(in: project.id).first
+            }
+            guard let original else { return }
+            let copy = try await store.createCard(in: original.projectID, body: original.body + "\n" + String(localized: "另一台设备上补了一句", table: "Demo"))
+            guard markConflict(copy: copy.id, of: original.id, database: services.location.databaseURL) else { throw Unmet("冲突副本没能标进库文件") }
         }
-        guard let original, let copy = try? await store.createCard(in: original.projectID, body: original.body + "\n" + String(localized: "另一台设备上补了一句", table: "Demo"))
-        else { return }
-        _ = markConflict(copy: copy.id, of: original.id, database: services.location.databaseURL)
     }
 
     /// 库里没有创建冲突副本的公开入口（由同步产生）：直接在库文件里把副本指回原卡。演示与测试共用这一处。

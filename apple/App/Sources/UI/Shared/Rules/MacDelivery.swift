@@ -87,11 +87,6 @@ nonisolated extension PiSessionState {
     func usableCommands(in catalog: AgentCatalog?) -> [PiSlashCommand] { capabilities.contains(.commands) ? catalog?.commands ?? [] : [] }
 }
 
-extension PiSessionState {
-    /// 输入框能带的：附件（图片与文件，交给 Agent 的是本机路径，各家都读得了）、卡片（发出去是文字）与批注。
-    var composerKinds: ComposerKinds { [.files, .cards, .notes] }
-}
-
 nonisolated extension DeliveryMode {
     var label: String {
         switch self {

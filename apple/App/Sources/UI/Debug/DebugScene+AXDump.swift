@@ -12,12 +12,12 @@ extension DebugScene {
             unsafeBitCast(symbol, to: (@convention(c) (Int32) -> Void).self)(1)
         }
         Task {
-            try? await Task.sleep(for: .seconds(4))
+            await Task.wait(for: .seconds(4))
             var lines: [String] = []
             for case let scene as UIWindowScene in UIApplication.shared.connectedScenes {
                 for window in scene.windows where !window.isHidden { collect(window, into: &lines) }
             }
-            try? lines.joined(separator: "\n").write(toFile: dir + "/ax-dump.txt", atomically: true, encoding: .utf8)
+            await running("无障碍快照") { try lines.joined(separator: "\n").write(toFile: dir + "/ax-dump.txt", atomically: true, encoding: .utf8) }
         }
     }
 

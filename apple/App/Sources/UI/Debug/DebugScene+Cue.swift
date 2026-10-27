@@ -19,7 +19,6 @@ import Foundation
 extension DebugScene {
     static func seedCue(_ services: AppServices) async {
         let store = services.store
-        guard (try? await store.cueMessages(limit: 1).isEmpty) == true else { return }
         let presence = defaults.string(forKey: "CuePadCuePresence")
         if presence == "unchosen" { return }
         // "运行情况"只在 Cue 值班的这台 Mac 上有：cuerun 让它运行在这台（大脑在隔离目录里起不来，几轮是空的或出错）
@@ -29,6 +28,7 @@ extension DebugScene {
         let host = "demo-mac"
         #endif
         do {
+            guard try await store.cueMessages(limit: 1).isEmpty else { return }
             _ = try await store.updateCueProfile { profile in
                 profile.hostID = host
                 profile.enabledAt = presence == "disabled" ? nil : .now
@@ -45,7 +45,7 @@ extension DebugScene {
             if let importing { try await store.linkCard(importing.id, toSession: "billing") }
             // 截图是 notes 会话做的（歇着）：Cue 值班，侧栏与会话列表里它只说"歇着"
             if let panel { try await store.linkCard(panel.id, toSession: "notes") }
-            let evidence = await seedEvidence(store, session: "notes", title: String(localized: "README 截图（浅色）", table: "Demo"), png: readmePNG())
+            let evidence = try await seedEvidence(store, session: "notes", title: String(localized: "README 截图（浅色）", table: "Demo"), png: readmePNG())
             // Cue 发进 atlas 会话的一句（还在路上）：会话页的气泡上标着 Cue
             _ = try await store.requestDelivery(
                 String(localized: "排序改完后把 scheduler 的测试全跑一遍，结果贴给我", table: "Demo"), to: SendTarget(kind: .piSession, name: "atlas", ref: "atlas"), on: "demo-mac", cue: true)
@@ -98,7 +98,7 @@ extension DebugScene {
             if let panel {
                 _ = try await store.finishTask(
                     panel.id, evidence: [String(localized: "浅色深色各一张，都按你给的参考图", table: "Demo"), String(localized: "README 里的旧截图都换掉了", table: "Demo")],
-                    shots: evidence.map { [CueShot(preview: $0.id, look: String(localized: "浅色：新的 README 截图", table: "Demo"))] } ?? [])
+                    shots: [CueShot(preview: evidence.id, look: String(localized: "浅色：新的 README 截图", table: "Demo"))])
             }
             try await later(25)
             let asked = try await store.addCueMessage(

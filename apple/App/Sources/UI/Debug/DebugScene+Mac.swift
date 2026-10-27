@@ -1,12 +1,13 @@
 #if os(macOS) && DEBUG
 import AppKit
+import CuePi
 import CueStore
 import SwiftUI
 
 extension DebugScene {
     static func prepare(_ workspace: Workspace) async {
         // 窗口在首帧之后才定下尺寸（窗口位置记忆、内容尺寸），这之后再改
-        try? await Task.sleep(for: .milliseconds(100))
+        await Task.wait(for: .milliseconds(100))
         resizeWindow()
         let opened = await prepareLibrary(workspace)
         let sampleCue = defaults.double(forKey: "CuePadSampleCue")
@@ -33,24 +34,16 @@ extension DebugScene {
                 await workspace.recheckAgents()
             }
             workspace.showsSetup = true
-            if connected { try? await Task.sleep(for: .seconds(3)) }
+            if connected { await Task.wait(for: .seconds(3)) }
         case "connected":
             await connectAgents(workspace.services)
             await bindFolderIfAsked(workspace.services.store)
             workspace.showSessions()
         case "wallgap":
             // 卡片墙删卡后的排布：在当前项目（配 -CuePadProject Flow）新记两条，再删掉最早那条（它独占一列），看留下的几张怎么排
-            try? await Task.sleep(for: .seconds(1))
-            let project = workspace.currentProject ?? Project.defaultID
-            for body in [String(localized: "报销\nbs 84.36 刀 claude github", table: "Demo"), String(localized: "产品决策\nanti-slop 整理前端", table: "Demo")] {
-                _ = try? await workspace.createCard(body: body, in: project)
-                try? await Task.sleep(for: .milliseconds(300))
-            }
-            try? await Task.sleep(for: .seconds(1))
-            let cards = (try? await workspace.services.store.cards(in: project)) ?? []
-            if let oldest = cards.filter({ !$0.isTask }).min(by: { $0.modifiedAt < $1.modifiedAt }) { try? await workspace.trash(oldest.id) }
+            await running("卡片墙删卡") { try await wallGap(workspace) }
         case "select":
-            try? await Task.sleep(for: .seconds(1))
+            await Task.wait(for: .seconds(1))
             for id in workspace.presses.selectable.prefix(3) { workspace.presses.toggle(id) }
         case "task":
             // 没给 -CuePadTask 时是本项目第一条没完成的顶层任务
@@ -99,8 +92,10 @@ extension DebugScene {
             workspace.libraryPane = DebugHooks.preset.libraryPane
             if let scene, let file = DemoAgentLibrary.file(scene: scene, project: opened) { workspace.openLibrary(file) }
         case "editor":
-            if let id = await card(in: workspace.currentProject ?? Project.defaultID, store: workspace.services.store),
-               let card = try? await workspace.services.store.card(id) { workspace.open(card) }
+            await running("打开编辑页") {
+                if let id = try await card(in: workspace.currentProject ?? Project.defaultID, store: workspace.services.store),
+                   let card = try await workspace.services.store.card(id) { workspace.open(card) }
+            }
         case "session":
             // 整页打开 -CuePadSession（演示会话的 sessionID 与会话名相同）
             await seedDemo(workspace.services)
@@ -128,27 +123,42 @@ extension DebugScene {
         await seedCue(services)
     }
 
+    /// 卡片墙删卡后的排布：在当前项目（配 -CuePadProject Flow）新记两条，再删掉最早那条（它独占一列），看留下的几张怎么排。
+    private static func wallGap(_ workspace: Workspace) async throws {
+        await Task.wait(for: .seconds(1))
+        let project = workspace.currentProject ?? Project.defaultID
+        for body in [String(localized: "报销\nbs 84.36 刀 claude github", table: "Demo"), String(localized: "产品决策\nanti-slop 整理前端", table: "Demo")] {
+            _ = try await workspace.createCard(body: body, in: project)
+            await Task.wait(for: .milliseconds(300))
+        }
+        await Task.wait(for: .seconds(1))
+        let cards = try await workspace.services.store.cards(in: project)
+        if let oldest = cards.filter({ !$0.isTask }).min(by: { $0.modifiedAt < $1.modifiedAt }) { try await workspace.trash(oldest.id) }
+    }
+
     /// `-CuePadSidebarCycle YES`（配录屏）：画面就绪后每 1.5 秒开合一次侧栏，走 ⌃⌘S 那条路（主菜单动作经响应链），看开合的动效。
     /// `-CuePadSidebarCycle fast`：动画中途反向——按下后 0.1 秒再按、0.06 秒连按三次，各停 1.5 秒，看打断时页是否仍贴着侧栏、停下时是否回到终点。
     private static func cycleSidebar() async {
         // 两次之间停多久是录屏的节奏，不是在等别的事
         let gaps: [Double] = defaults.string(forKey: "CuePadSidebarCycle") == "fast" ? [0.1, 1.5, 0.06, 0.06, 1.5] : [1.5]
-        try? await Task.sleep(for: .seconds(1.5))
+        await Task.wait(for: .seconds(1.5))
         var step = 0
         while !Task.isCancelled {
             NSApp.sendAction(#selector(AppDelegate.toggleCueSidebar(_:)), to: nil, from: nil)
-            try? await Task.sleep(for: .seconds(gaps[step % gaps.count]))
+            await Task.wait(for: .seconds(gaps[step % gaps.count]))
             step += 1
         }
     }
 
     /// `-CuePadSampleCue`：Cue 请你允许一件事（算进"等你"）。隔离库里 Cue 不值班，替 `CueService.followNotifications` 交给同一个出口。
     private static func askSample(after delay: Duration, services: AppServices) async {
-        try? await Task.sleep(for: delay)
-        guard let message = try? await services.store.addCueMessage(.cue, text: String(localized: "登录页修好了，要推送到 origin/main 吗？", table: "Demo"), ask: try? CueAsking(.push, action: String(localized: "把登录页的修复推送到 origin/main", table: "Demo"))),
-              let alerts = services.alerts else { return }
-        let content = CueAlert.content(name: try? await services.store.cueProfile()?.name, text: message.text, asking: message.asking, choices: message.choices, looks: message.shots.map(\.look))
-        await alerts.post(title: content.title, body: content.body)
+        await Task.wait(for: delay)
+        await running("Cue 请你允许一件事") {
+            let message = try await services.store.addCueMessage(.cue, text: String(localized: "登录页修好了，要推送到 origin/main 吗？", table: "Demo"), ask: CueAsking(.push, action: String(localized: "把登录页的修复推送到 origin/main", table: "Demo")))
+            guard let alerts = services.alerts else { return }
+            let content = CueAlert.content(name: try await services.store.cueProfile()?.name, text: message.text, asking: message.asking, choices: message.choices, looks: message.shots.map(\.look))
+            await alerts.post(title: content.title, body: content.body)
+        }
     }
 
     /// 演示用的更新器（`-CuePadScene updatewait`）：检查就当找到了更新、你点了安装，像 Sparkle 一样先问要不要推迟重启；装的那一刻只打一个点
@@ -171,19 +181,26 @@ extension DebugScene {
     private static func bindFolderIfAsked(_ store: CueStore) async {
         guard let path = defaults.string(forKey: "CuePadFolder") else { return }
         let name = URL(filePath: path).lastPathComponent
-        guard (try? await store.projects())?.contains(where: { $0.name == name }) != true,
-            let project = try? await store.createProject(name: name, color: "#2F4A9E", icon: ProjectIcon.globe.rawValue)
-        else { return }
-        try? await store.setDirectory(path, for: project.id)
+        await running("绑文件夹的项目") {
+            guard try await !store.projects().contains(where: { $0.name == name }) else { return }
+            let project = try await store.createProject(name: name, color: "#2F4A9E", icon: ProjectIcon.globe.rawValue)
+            try await store.setDirectory(path, for: project.id)
+        }
     }
 
     /// connected：把几家 Agent 接进截图用的隔离目录（`xc.sh shot` 把各家的配置目录指到产物目录下），看接入后的侧栏、设置与 + 的新会话（选 Agent）。
     /// 配置目录建出来就算装着（没有命令时按目录认）。
     private static func connectAgents(_ services: AppServices) async {
-        for kind in AgentKind.allCases {
-            try? FileManager.default.createDirectory(at: services.agents.home(kind), withIntermediateDirectories: true)
-            await services.agents.detect(kind)
-            try? await services.agents.install(kind)
+        await running("接入各家 Agent") {
+            for kind in AgentKind.allCases {
+                try FileManager.default.createDirectory(at: services.agents.home(kind), withIntermediateDirectories: true)
+                await services.agents.detect(kind)
+                do {
+                    try await services.agents.install(kind)
+                } catch AgentInstallError.isolated {
+                    continue  // 隔离环境没给这家指配置目录：本机构建不改真实配置，这家不接入
+                }
+            }
         }
     }
 
@@ -191,7 +208,7 @@ extension DebugScene {
     /// 配合 `-AppleShowScrollBars Always`（滚动条占宽，内容高度一变可用宽度就变）最容易触发几何读数↔布局的循环；
     /// 出现循环时 SwiftUI 记 "Geometry action is cycling"，严重时 AppKit 因布局迭代超限抛异常退出。跑完自动退出。
     private static func benchChurn(_ workspace: Workspace) async {
-        try? await Task.sleep(for: .seconds(1))
+        await Task.wait(for: .seconds(1))
         guard let window = mainWindow else { return }
         let project = workspace.currentProject ?? Project.defaultID
         let widths = Array(stride(from: 900.0, through: 1500.0, by: 1))
@@ -202,7 +219,7 @@ extension DebugScene {
             if step.isMultiple(of: 4) {
                 workspace.attempt { _ = try await workspace.createCard(body: String(localized: "导入中 \(step)", table: "Demo") + "\n" + String(repeating: String(localized: "正文", table: "Demo"), count: step % 40), in: project) }
             }
-            try? await Task.sleep(for: .milliseconds(15))
+            await Task.wait(for: .milliseconds(15))
         }
         NSApp.terminate(nil)
     }

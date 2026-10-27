@@ -85,8 +85,8 @@ extension DebugScene {
         """, table: "Demo") }
 
     /// 演示用的一张图（手机上的登录页）存进附件目录，返回正文里引用它的写法；你的话带图片的演示（对话里的、还在路上的）用它。
-    static func screenshotMarkup(_ store: CueStore) -> String? {
-        screenshotPNG().flatMap { try? store.files.store($0) }.map(CueFormat.imageMarkup(key:))
+    static func screenshotMarkup(_ store: CueStore) throws -> String? {
+        try screenshotPNG().map { CueFormat.imageMarkup(key: try store.files.store($0)) }
     }
 
     /// 手机宽度下登录页的"截图"：渐变底上一张白卡、两个输入框和一个按钮。
@@ -110,9 +110,9 @@ extension DebugScene {
 
     /// 演示对话：notes 是几轮做完的对话（带工具活动与用时、Markdown），atlas 在处理新的话，homepage、rename 停在问题上，
     /// relay 在另一台 Mac 上（第二句是斜杠技能，存的是 Pi 展开后的样子；发过去的一条已送达还没进对话、一条没能送达）。
-    static func seedChats(_ store: CueStore) async {
+    static func seedChats(_ store: CueStore) async throws {
         let now = Date.now
-        func chat(_ sessionID: String, _ turns: [(you: String, pi: String?, tools: PiChatMessage.Tools?, minutes: Double)], startedMinutesAgo: Double) async {
+        func chat(_ sessionID: String, _ turns: [(you: String, pi: String?, tools: PiChatMessage.Tools?, minutes: Double)], startedMinutesAgo: Double) async throws {
             var clock = now.addingTimeInterval(-startedMinutesAgo * 60)
             var rounds: [ChatTurn] = []
             for turn in turns {
@@ -121,9 +121,9 @@ extension DebugScene {
                 rounds.append(ChatTurn(you: turn.you, pi: turn.pi, tools: turn.tools, asked: asked, answered: clock))
                 clock = clock.addingTimeInterval(120)
             }
-            try? await writeChat(sessionID, rounds, store: store)
+            try await writeChat(sessionID, rounds, store: store)
         }
-        await chat("notes", [
+        try await chat("notes", [
             (String(localized: "整理一下这周的会议记录", table: "Demo"), String(localized: "整理好了，放在 `notes/2026-W40.md`。三件待办：\n\n- **续费域名**（周五前）\n- 评审计费额度\n- 补 scheduler 测试", table: "Demo"), Self.notesWeek, 1.5),
             (String(localized: "续费域名那条加上负责人和链接", table: "Demo"), String(localized: "加好了：负责人写的是你，链接指向注册商的续费页。", table: "Demo"), .init(steps: 1, items: [.init(kind: .edit, target: "notes/2026-W40.md", added: 2, removed: 1)]), 0.4),
             (String(localized: "再把评审计费额度拆成两步", table: "Demo"), String(localized: "拆成了两步：\n\n1. 先对一遍额度表和账单的口径\n2. 再看超额时的提示文案\n\n都放在待办的同一节下面。", table: "Demo"), .init(steps: 2, items: [.init(kind: .read, target: "notes/2026-W40.md"), .init(kind: .edit, target: "notes/2026-W40.md", added: 5, removed: 1)]), 0.8),
@@ -152,10 +152,8 @@ extension DebugScene {
             ```
             """, table: "Demo"), .init(steps: 3, items: [.init(kind: .read, target: "bench/sorting.md"), .init(kind: .read, target: "bench/results.csv"), .init(kind: .edit, target: "notes/sorting-compare.md", added: 24)]), 1.0),
         ], startedMinutesAgo: 20)
-        await seedPreviews(store, now: now)
-        if let kinds = defaults.string(forKey: "CuePadAllKinds") { await seedAllKinds(store, upTo: Int(kinds)) }
-        if let media = defaults.string(forKey: "CuePadPreviewMedia") { await seedPreviewMedia(store, from: media) }
-        await chat("atlas", [
+        try await seedPreviews(store, now: now)
+        try await chat("atlas", [
             (String(localized: "跑一下 scheduler 的测试，失败的话先别改代码，告诉我原因", table: "Demo"), String(localized: "12 个用例里有 **2 个失败**：\n\n1. 发言轮次在 5 人以上时，第 6 位被排到了最前——队列按加入时间排序，但重连的人会拿到新的时间戳。\n2. 登录回调走了旧网关，超时后没有重试。\n\n第一个建议改成按首次加入时间排序，改动在 `scheduler/queue.ts`：\n\n```ts\nqueue.sort((a, b) => a.firstJoinedAt - b.firstJoinedAt)\n```\n\n要我先改第一个吗？", table: "Demo"), Self.testRun, 2),
             (String(localized: "按你说的改成首次加入时间排序，把断言也改了，再跑一遍", table: "Demo"), nil, .init(
                 steps: 4,
@@ -164,10 +162,10 @@ extension DebugScene {
                     .init(kind: .edit, target: "scheduler/queue.test.ts", added: 8, removed: 2), .init(kind: .command, target: "pnpm tsc --noEmit", failed: true),
                 ]), 0),
         ], startedMinutesAgo: 6)
-        await chat("homepage", [
+        try await chat("homepage", [
             (String(localized: "把 RSS 输出改成全文", table: "Demo"), nil, nil, 0),
         ], startedMinutesAgo: 3)
-        await chat("relay", [
+        try await chat("relay", [
             (String(localized: "看一下线上库的迁移有没有卡住", table: "Demo"), String(localized: "迁移跑到第 14 步停住了：`add_index_on_cards` 在等锁。现在没有别的写入，可以安全重跑。", table: "Demo"), .init(steps: 3, items: [.init(kind: .command, target: "psql -c 'select * from schema_migrations order by id desc limit 3'"), .init(kind: .command, target: "psql -c 'select pid, state, query from pg_stat_activity'"), .init(kind: .command, target: "psql -c 'select * from pg_locks where not granted'")]), 1.2),
             (Self.skillSaid, String(localized: "就像排队上厕所：建索引要把整张表锁一下，可前面有人一直占着没出来，它只能在门口等。占着的人走了，它马上就能进去。", table: "Demo"), nil, 0.3),
         ], startedMinutesAgo: 10)

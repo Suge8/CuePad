@@ -23,9 +23,9 @@ extension IOSInteractionBench {
         let right = bounds.width * 3 / 4, mid = bounds.midY
         for _ in 0..<2 {
             workspace.select(.cue)
-            try? await Task.sleep(for: .seconds(1))
+            await Task.wait(for: .seconds(1))
             workspace.openSession(session)
-            try? await Task.sleep(for: .seconds(1.5))
+            await Task.wait(for: .seconds(1.5))
             await step("右滑返回", swipeWindow, .swipe(from: CGPoint(x: 60, y: mid), to: CGPoint(x: right, y: mid))) {}
         }
     }

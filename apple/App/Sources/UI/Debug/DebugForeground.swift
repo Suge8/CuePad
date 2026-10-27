@@ -81,7 +81,13 @@ enum DebugForeground {
         if wanted {
             FileManager.default.createFile(atPath: request, contents: nil)
         } else {
-            try? FileManager.default.removeItem(atPath: request)
+            do {
+                try FileManager.default.removeItem(atPath: request)
+            } catch let error as CocoaError where error.code == .fileNoSuchFile {
+                // 脚本已经收走
+            } catch {
+                DebugScene.abandon("要前台的请求文件删不掉", error)
+            }
         }
     }
 }

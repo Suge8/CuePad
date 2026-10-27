@@ -63,6 +63,10 @@ enum InteractionBench {
     static var rows: [UUID: CGRect] = [:]
 
     static func run(_ workspace: Workspace) async {
+        await DebugScene.running("交互测量") { try await measureAll(workspace) }
+    }
+
+    private static func measureAll(_ workspace: Workspace) async throws {
         waitForTracer()
         if PerfProbe.firstSeen["content"] == nil { await PerfProbe.wait(for: "content") }
         if UserDefaults.standard.bool(forKey: "CuePadDemo") { await DebugScene.seedRemote(workspace.services) }
@@ -71,17 +75,17 @@ enum InteractionBench {
         let only = UserDefaults.standard.string(forKey: "CuePadInteractOnly").map { Set($0.split(separator: ",").map(String.init)) }
         let measuresCue = only.map { $0.contains("Cue 页首访") || $0.contains("发送·Cue 页") } ?? true
         if measuresCue { await DebugScene.seedCue(workspace.services) }
-        try? await Task.sleep(for: .seconds(3))
+        await Task.wait(for: .seconds(3))
         guard let window = DebugScene.mainWindow,
               let view = window.contentView
         else { return }
         let borrowed = DebugForeground.borrow(window)
-        try? await Task.sleep(for: .seconds(1))
+        await Task.wait(for: .seconds(1))
         // 真到了前台才算前台量的（借了却被别的应用占着时，帧与掉帧照样偏乐观）
         let foreground = borrowed && NSApp.isActive
         let store = workspace.services.store
         let projects = (workspace.catalog?.projects ?? []).map(\.id)
-        let sessions = ((try? await store.piSessionPage(PiSessionQuery(limit: 3)))?.items ?? []).map(\.state.sessionID)
+        let sessions = try await store.piSessionPage(PiSessionQuery(limit: 3)).items.map(\.state.sessionID)
         func step(_ name: String, _ action: () -> Void) async {
             if let only, !only.contains(name) { return }
             // 每一项在 trace 里是一段区间（CUEPAD_TRACE 录的掉帧、采样按它对到是哪一项）
@@ -122,7 +126,7 @@ enum InteractionBench {
         for id in sessions.prefix(2) { await step("会话页") { workspace.show(.session(id)) } }
         // 发送：回复框里写好几行再按 ⌘↩（主菜单"回复"的项经响应链交给文字区，这里直接交给它），量输入框收起、话贴到对话末尾、滚到最新那一下。
         // 大库在最长的那段对话里发，演示库在最近的会话里发；Cue 页先写好一段对话（库里没有时）
-        let longest = try? await store.piSessionPage(PiSessionQuery(id: PiSessionState.recordID(sessionID: PerfLibrary.longestChat))).items.first
+        let longest = try await store.piSessionPage(PiSessionQuery(id: PiSessionState.recordID(sessionID: PerfLibrary.longestChat))).items.first
         if let id = longest?.state.sessionID ?? sessions.first, only.map({ $0.contains("发送·会话页") }) ?? true {
             workspace.show(.session(id))
             for _ in 0..<2 {
@@ -139,18 +143,18 @@ enum InteractionBench {
             }
         }
         if let a { await step("页面回访") { workspace.show(.project(a)) } }
-        if let card = try? await store.cards(in: workspace.currentProject ?? Project.defaultID).first?.id {
+        if let card = try await store.cards(in: workspace.currentProject ?? Project.defaultID).first?.id {
             for _ in 0..<2 {
                 await step("开编辑页") { workspace.overlay = .card(card) }
                 await step("收编辑页") { workspace.overlay = nil }
             }
         }
         // 任务气泡：第一条顶层任务（演示库里是"发言轮次乱序"那样有子任务的），在它的项目页上开：前台量时真实地点那一行，后台直接开
-        let tasks = ((try? await store.tasks(.inProgress, .todo))?.flatMap(\.tasks) ?? []).filter { $0.parentID == nil }
+        let tasks = try await store.tasks(.inProgress, .todo).flatMap(\.tasks).filter { $0.parentID == nil }
         if let task = tasks.first {
             if only?.contains("任务气泡开") ?? true, workspace.currentProject != task.projectID {
                 workspace.show(.project(task.projectID))
-                try? await Task.sleep(for: .seconds(1))
+                await Task.wait(for: .seconds(1))
             }
             for _ in 0..<2 {
                 if foreground, let row = rows[task.id] {
@@ -172,7 +176,7 @@ enum InteractionBench {
         if let a {
             workspace.progressPane = .board
             workspace.show(.progress)
-            try? await Task.sleep(for: .seconds(1))
+            await Task.wait(for: .seconds(1))
             for _ in 0..<2 {
                 await step("看板→会话") { workspace.progressPane = .sessions }
                 await step("会话→看板") { workspace.progressPane = .board }
@@ -187,17 +191,17 @@ enum InteractionBench {
         if only.map({ $0.contains("卡换列") || $0.contains("卡回待办") }) ?? true, let task = tasks.first(where: { $0.status == .todo }) {
             workspace.progressPane = .board
             workspace.show(.progress)
-            try? await Task.sleep(for: .seconds(1))
+            await Task.wait(for: .seconds(1))
             for _ in 0..<2 {
-                await step("卡换列") { Task { try? await store.setStatus(task.id, .done) } }
-                await step("卡回待办") { Task { try? await store.setStatus(task.id, .todo) } }
+                await step("卡换列") { Task { await DebugScene.running("卡换列") { try await store.setStatus(task.id, .done) } } }
+                await step("卡回待办") { Task { await DebugScene.running("卡回待办") { try await store.setStatus(task.id, .todo) } } }
             }
         }
         // 项目页任务纸点"还有 N 条"展开、再收起：在没做完的任务最多的项目上（配 `-CuePadManyTasks` 量任务多时）
         if only.map({ $0.contains("展开任务") || $0.contains("收起任务") }) ?? true,
            let busiest = workspace.catalog?.openTasks.max(by: { $0.value < $1.value })?.key {
             workspace.show(.project(busiest))
-            try? await Task.sleep(for: .seconds(2))
+            await Task.wait(for: .seconds(2))
             for _ in 0..<2 {
                 await step("展开任务") { DebugScene.toggleTaskFold() }
                 await step("收起任务") { DebugScene.toggleTaskFold() }
@@ -232,7 +236,7 @@ enum InteractionBench {
     }
 
     private static func measure(_ name: String, in view: NSView, _ action: () -> Void) async -> [String: Any] {
-        try? await Task.sleep(for: .milliseconds(900))
+        await Task.wait(for: .milliseconds(900))
         let recorder = FrameRecorder()
         recorder.start(in: view)
         let instructions = instructionsMillions()
@@ -244,7 +248,7 @@ enum InteractionBench {
     /// 真实地点 `point`（全局坐标，主屏左上为原点）：指针先放到那里（退出时还回原位），写 `AWAIT click` 等 `perf-mac.sh` 经 HID 点下去，
     /// 从松开的那一下起量（手势在松开时认出点按）。10 秒内没点到是 nil。
     private static func measureClick(_ name: String, at point: CGPoint, in view: NSView) async -> [String: Any]? {
-        try? await Task.sleep(for: .milliseconds(900))
+        await Task.wait(for: .milliseconds(900))
         let recorder = FrameRecorder()
         recorder.start(in: view)
         DebugForeground.movePointer(to: point)
@@ -262,7 +266,7 @@ enum InteractionBench {
             print("AWAIT click \(Int(point.x.rounded())) \(Int(point.y.rounded()))")
             fflush(stdout)
             Task {
-                try? await Task.sleep(for: Self.clickLimit)
+                await Task.wait(for: Self.clickLimit)
                 release.resume()
             }
         }
@@ -300,7 +304,7 @@ enum InteractionBench {
     private static let titleInset: CGFloat = 30
 
     private static func finish(_ name: String, instructions: Double, recorder: FrameRecorder) async -> [String: Any] {
-        try? await Task.sleep(for: .milliseconds(800))
+        await Task.wait(for: .milliseconds(800))
         let began = turns.began
         var row = TurnLog.metrics(turns.finish(), instructions: instructions, frames: recorder.stop())
         if let shown = PerfProbe.lastSeen["cue"], shown >= began { row["contentMs"] = ((shown - began) * 10_000).rounded() / 10 }

@@ -74,7 +74,7 @@ struct PiReplyBar: View {
         if case .answer(let question) = reply { question } else { nil }
     }
 
-    private var accepts: ComposerKinds { answering == nil ? session.composerKinds : [] }
+    private var accepts: ComposerKinds { answering == nil ? .reply : [] }
     /// 输入 "/" 时弹出的命令（作答时不弹）。
     private var commands: [PiSlashCommand] { answering == nil ? session.usableCommands(in: catalog) : [] }
     private var reachable: Bool { services.reachesPiHost }

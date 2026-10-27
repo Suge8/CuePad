@@ -56,9 +56,13 @@ enum SyncBench {
         var row = fields
         row["e"] = event
         row["t"] = time.timeIntervalSince1970
-        guard let data = try? JSONSerialization.data(withJSONObject: row, options: [.sortedKeys]) else { return }
-        print("SYNCBENCH " + String(decoding: data, as: UTF8.self))
-        fflush(stdout)
+        do {
+            let data = try JSONSerialization.data(withJSONObject: row, options: [.sortedKeys])
+            print("SYNCBENCH " + String(decoding: data, as: UTF8.self))
+            fflush(stdout)
+        } catch {
+            DebugScene.abandon("同步测量的打点写不出", error)
+        }
     }
 
     /// Cue 在这台值班：设置写成运行在这台、运行时 Pi（大脑由 `-CuePadCueBrain` 换成替身）。
@@ -111,7 +115,7 @@ enum SyncBench {
                 } catch {
                     mark("bench-error", ["what": "写 Cue 的话：\(error.localizedDescription)"])
                 }
-                if gap > 0, index < count - 1 { try? await Task.sleep(for: .seconds(gap)) }
+                if gap > 0, index < count - 1 { await Task.wait(for: .seconds(gap)) }
             }
         case "sync":
             let began = ContinuousClock.now
@@ -167,8 +171,13 @@ enum SyncBench {
 
     /// `host` 那台 Mac 上的一个在线会话（与手机的发送目标同一批：同步来的会话状态）。
     private static func onlineSession(on host: String, _ services: AppServices) async -> PiSessionState? {
-        let page = try? await services.store.piSessionPage(.current)
-        return page?.items.map(\.state).filter { $0.hostID == host && $0.state != .known(.ended) }.randomElement()
+        let page: PiSessionPage
+        do {
+            page = try await services.store.piSessionPage(.current)
+        } catch {
+            DebugScene.abandon("同步测量读会话", error)
+        }
+        return page.items.map(\.state).filter { $0.hostID == host && $0.state != .known(.ended) }.randomElement()
     }
 }
 #endif

@@ -56,21 +56,12 @@ struct ReplyTests {
             """)
     }
 
-    /// 回复框都收附件（交给 Agent 的是本机路径，各家都读得了）：收不了图片的会话（终端里的 Claude Code）与 Pi 一样，
-    /// 带上的卡片里的图片照引用发出（怎么交给它由 Mac 定）。只收文字的是作答框（`accepting([])`）：卡片里的附件只留文件名。
-    @Test func 回复框都收附件_作答框只有文字() async throws {
-        let app = TestApp()
-        let recorder = PiStateRecorder(store: app.services.store, hostID: "mac")
-        try await recorder.update(sessionID: "claude", state: .settled, title: "claude", agent: .claudeCode)
-        try await recorder.update(sessionID: "pi", state: .settled, title: "pi")
-        let live = try await app.services.store.piSessionPage(.live).items.map(\.state)
-        let claude = try #require(live.first { $0.sessionID == "claude" }), pi = try #require(live.first { $0.sessionID == "pi" })
+    /// 回复框收附件：带上的卡片里的图片照引用发出（怎么交给收不了图片的会话由 Mac 定）。只收文字的是作答框（`accepting([])`）：卡片里的附件只留文件名。
+    @Test func 回复框收附件_作答框只有文字() {
         let image = "![](cuepad://file/\(String(repeating: "a", count: 64)).png)"
         let draft = ComposerDraft(text: "按这张改", attachments: [Outbox(content: "登录页\n\n\(image)\n\n按钮改圆角", card: UUID())])
 
-        #expect(claude.composerKinds.contains(.files) && pi.composerKinds.contains(.files))
-        #expect(draft.accepting(claude.composerKinds).stored.contains(image))
-        #expect(draft.accepting(pi.composerKinds).stored.contains(image))
+        #expect(draft.accepting(.reply).stored.contains(image))
 
         let answer = draft.accepting([]).stored
         #expect(!answer.contains("cuepad://file"))

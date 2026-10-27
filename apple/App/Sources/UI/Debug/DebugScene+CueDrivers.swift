@@ -25,9 +25,9 @@ extension DebugScene {
             if let opened { woke = [opened] + woke.prefix(count - 1) }
             round += 1
             let wake = CueWake.sessionActivity(woke.map { CueStir(kind: .settled, session: $0) })
-            guard !woke.isEmpty, let row = try? await store.recordCueRound(nil, startedAt: .now, answersYou: false, tools: nil, wake: wake),
-                (try? await store.setCueState(.thinking, round: row)) != nil
-            else { return nil }
+            guard !woke.isEmpty else { return nil }
+            let row = try await store.recordCueRound(nil, startedAt: .now, answersYou: false, tools: nil, wake: wake)
+            try await store.setCueState(.thinking, round: row)
             // 隔一次动手说一句再歇下（同真的一轮：醒来、动手、说话、歇下）
             let acts = round % 2 == 0
             return ("wake", {
@@ -35,10 +35,10 @@ extension DebugScene {
                     var tools = PiChatMessage.Tools()
                     tools.record(.init(
                         kind: .talk, target: String(localized: "对 \(woke[0]) 说：测试跑完把结果贴过来", table: "Demo"), name: woke[0], session: PiSessionState.recordID(sessionID: woke[0])))
-                    _ = try? await store.recordCueRound(row, startedAt: .now, answersYou: false, tools: tools)
-                    _ = try? await store.addCueMessage(.note, text: String(localized: "催了 \(woke[0])：测试跑完把结果贴过来", table: "Demo"))
+                    _ = try await store.recordCueRound(row, startedAt: .now, answersYou: false, tools: tools)
+                    _ = try await store.addCueMessage(.note, text: String(localized: "催了 \(woke[0])：测试跑完把结果贴过来", table: "Demo"))
                 }
-                try? await store.setCueState(.settled)
+                try await store.setCueState(.settled)
             })
         }
     }
@@ -52,17 +52,20 @@ extension DebugScene {
             _ = try await recorder.update(sessionID: "blink", state: state, title: title, directory: "CuePad", agent: .claudeCode)
         }
         await everyIfAsked("CuePadReplyBlink") {
-            guard (try? await set(.settled)) != nil, (try? await store.leaveToYou("blink")) != nil else { return nil }
-            return ("reply", { try? await set(.thinking) })
+            try await set(.settled)
+            _ = try await store.leaveToYou("blink")
+            return ("reply", { try await set(.thinking) })
         }
     }
 
     /// `-CuePadNoAsks YES`（配 `-CuePadDemo YES`）：演示库里等你回答的会话都改成歇着、Cue 还没结束的提问都由它撤回（同 Cue 的 withdraw），
     /// "等你"为 0：看只有新消息时 Cue 入口上的样子（石绿点）。
     static func settleAsks(_ store: CueStore) async {
-        for asked in (try? await store.cueMessagesWaitingForYou()) ?? [] { _ = try? await store.endCueQuestion(asked.id, .withdrawn) }
-        for session in (try? await store.piSessionPage(PiSessionQuery(limit: 500)))?.items.map(\.state) ?? [] where session.state == .known(.waitingForUser) {
-            _ = try? await PiStateRecorder(store: store, hostID: session.hostID).update(sessionID: session.sessionID, state: .settled, title: session.title)
+        await running("撤回等你的提问") {
+            for asked in try await store.cueMessagesWaitingForYou() { _ = try await store.endCueQuestion(asked.id, .withdrawn) }
+            for session in try await store.piSessionPage(PiSessionQuery(limit: 500)).items.map(\.state) where session.state == .known(.waitingForUser) {
+                _ = try await PiStateRecorder(store: store, hostID: session.hostID).update(sessionID: session.sessionID, state: .settled, title: session.title)
+            }
         }
     }
 
@@ -72,15 +75,17 @@ extension DebugScene {
     static func saysIfAsked(_ services: AppServices, visit: @MainActor () -> Void = {}, back: @MainActor () -> Void = {}) async {
         let delay = defaults.double(forKey: "CuePadCueSays")
         guard delay > 0 else { return }
-        try? await services.store.markCueRead(through: .now)
-        try? await Task.sleep(for: .seconds(delay))
-        _ = try? await services.store.addCueMessage(.cue, text: String(localized: "圆桌的预发部署好了，5 人以上的房间发言顺序都对了。", table: "Demo"))
-        let visitAfter = defaults.double(forKey: "CuePadVisitCue")
-        guard visitAfter > 0 else { return }
-        try? await Task.sleep(for: .seconds(visitAfter))
-        visit()
-        try? await Task.sleep(for: .seconds(3))
-        back()
+        await running("Cue 自己说一句") {
+            try await services.store.markCueRead(through: .now)
+            await Task.wait(for: .seconds(delay))
+            _ = try await services.store.addCueMessage(.cue, text: String(localized: "圆桌的预发部署好了，5 人以上的房间发言顺序都对了。", table: "Demo"))
+            let visitAfter = defaults.double(forKey: "CuePadVisitCue")
+            guard visitAfter > 0 else { return }
+            await Task.wait(for: .seconds(visitAfter))
+            visit()
+            await Task.wait(for: .seconds(3))
+            back()
+        }
     }
 
     /// 你不在的一夜里 Cue 陆续说的几句（中间夹一条它自己醒来的动态）：之前的对话一段段挪早，最后一句是刚说的。
@@ -116,12 +121,14 @@ extension DebugScene {
     static func awayIfAsked(_ store: CueStore, leave: @MainActor () -> Void = {}, back: @MainActor () -> Void = {}) async {
         let delay = defaults.double(forKey: "CuePadAwayAfter")
         guard delay > 0 else { return }
-        try? await Task.sleep(for: .seconds(delay))
+        await Task.wait(for: .seconds(delay))
         leave()
-        _ = try? await store.addCueMessage(.you, text: goingAway)
-        try? await seedAway(store, aged: false)
-        try? await Task.sleep(for: .seconds(1.5))
-        back()
+        await running("Cue 说一夜的话") {
+            _ = try await store.addCueMessage(.you, text: goingAway)
+            try await seedAway(store, aged: false)
+            await Task.wait(for: .seconds(1.5))
+            back()
+        }
     }
 
     /// `-CuePadRelay <秒>`（配 `-CuePadDemo YES`，画面就绪后开始、一直循环）：每隔这么久 Cue 交给会话一次——写一条 Cue 发起的投送请求
@@ -137,14 +144,14 @@ extension DebugScene {
             let starts = kind.map { $0 == "start" } ?? !round.isMultiple(of: 2)
             round += 1
             if starts {
-                guard let (request, session) = try? await relayStart(store, on: launcher) else { return nil }
+                guard let (request, session) = try await relayStart(store, on: launcher) else { return nil }
                 return ("start", {
-                    try? await store.deleteDelivery(request.id)
-                    try? await launcher.end(sessionID: session)
+                    try await store.deleteDelivery(request.id)
+                    try await launcher.end(sessionID: session)
                 })
             }
-            guard let request = try? await relaySay(workspace) else { return nil }
-            return ("say", { try? await store.deleteDelivery(request.id) })
+            guard let request = try await relaySay(workspace) else { return nil }
+            return ("say", { try await store.deleteDelivery(request.id) })
         }
     }
 
@@ -171,19 +178,21 @@ extension DebugScene {
     }
 
     /// `key` 给了秒数时每隔这么久做一次 `act`（返回量的那段叫什么与 1.5 秒后怎么收回；做不成返回 nil，跳过这一次），配 `-CuePadFlightLog` 前后各量一段。
-    private static func everyIfAsked(_ key: String, _ act: () async -> (kind: String, undo: () async -> Void)?) async {
+    private static func everyIfAsked(_ key: String, _ act: () async throws -> (kind: String, undo: () async throws -> Void)?) async {
         let every = defaults.double(forKey: key)
         guard every > 0 else { return }
         let log = defaults.string(forKey: "CuePadFlightLog").map { URL(fileURLWithPath: $0) }
         let probe = log == nil ? 0 : flightProbe
-        while !Task.isCancelled {
-            // 间隔是演示节奏，不是在等别的事
-            try? await Task.sleep(for: .seconds(max(every - probe, 0)))
-            if let log { await measureFlight("idle", seconds: probe, into: log) }
-            guard let done = await act() else { continue }
-            if let log { await measureFlight(done.kind, seconds: probe, into: log) }
-            try? await Task.sleep(for: .seconds(max(1.5 - probe, 0)))
-            await done.undo()
+        await running(key) {
+            while !Task.isCancelled {
+                // 间隔是演示节奏，不是在等别的事
+                await Task.wait(for: .seconds(max(every - probe, 0)))
+                if let log { try await measureFlight("idle", seconds: probe, into: log) }
+                guard let done = try await act() else { continue }
+                if let log { try await measureFlight(done.kind, seconds: probe, into: log) }
+                await Task.wait(for: .seconds(max(1.5 - probe, 0)))
+                try await done.undo()
+            }
         }
     }
 
@@ -194,13 +203,13 @@ extension DebugScene {
     static func closeIfAsked(_ workspace: Workspace) async {
         let after = defaults.double(forKey: "CuePadClosed")
         guard after > 0, let shell = workspace.services.windowShell else { return }
-        try? await Task.sleep(for: .seconds(after))
+        await Task.wait(for: .seconds(after))
         shell.hide()
         let reopen = defaults.double(forKey: "CuePadReopen")
         guard reopen > 0 else { return }
-        try? await Task.sleep(for: .seconds(reopen / 2))
-        try? await workspace.services.store.setCueState(.tool, detail: String(localized: "读看板 · 关窗时写下", table: "Demo"))
-        try? await Task.sleep(for: .seconds(reopen / 2))
+        await Task.wait(for: .seconds(reopen / 2))
+        await running("关窗时写下 Cue 的状态") { try await workspace.services.store.setCueState(.tool, detail: String(localized: "读看板 · 关窗时写下", table: "Demo")) }
+        await Task.wait(for: .seconds(reopen / 2))
         shell.show()
     }
     #endif
@@ -216,7 +225,7 @@ extension DebugScene {
         let step = defaults.object(forKey: "CuePadCueCycleSeconds") == nil ? cueCycleStep : defaults.double(forKey: "CuePadCueCycleSeconds")
         for index in 0... {
             cue.pin(samples[index % samples.count])
-            guard (try? await Task.sleep(for: .seconds(step))) != nil else { return }
+            guard await Task.wait(for: .seconds(step)) else { return }
         }
     }
 }

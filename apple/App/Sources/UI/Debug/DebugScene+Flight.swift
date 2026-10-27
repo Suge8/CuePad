@@ -8,7 +8,7 @@ extension DebugScene {
     static let flightProbe = 2.4
 
     /// `act`：开始量之后当场做的那一下（按发送钮，`pressSendIfAsked`）。
-    static func measureFlight(_ kind: String, seconds: Double, into log: URL, act: () -> Void = {}) async {
+    static func measureFlight(_ kind: String, seconds: Double, into log: URL, act: () -> Void = {}) async throws {
         let turns = TurnLog(), frames = FlightFrames()
         let instructions = instructionsMillions(), energy = energyMillijoules()
         #if os(macOS)
@@ -19,7 +19,7 @@ extension DebugScene {
         #endif
         turns.begin(CACurrentMediaTime(), root: nil)
         act()
-        try? await Task.sleep(for: .seconds(seconds))
+        await Task.wait(for: .seconds(seconds))
         let samples = frames.stop()
         var line = TurnLog.metrics(turns.finish(), instructions: instructions, frames: samples.hitches)
         line["frames"] = samples.intervals.count
@@ -29,13 +29,14 @@ extension DebugScene {
         line["kind"] = kind
         line["energyMJ"] = ((energyMillijoules() - energy) * 10).rounded() / 10
         for key in ["clickMs", "visibleTurns", "seen", "heavy"] { line[key] = nil }
-        guard let data = try? JSONSerialization.data(withJSONObject: line, options: .sortedKeys) else { return }
-        if let handle = try? FileHandle(forWritingTo: log) {
-            handle.seekToEndOfFile()
-            handle.write(data + Data("\n".utf8))
-            try? handle.close()
+        let row = try JSONSerialization.data(withJSONObject: line, options: .sortedKeys) + Data("\n".utf8)
+        if FileManager.default.fileExists(atPath: log.path) {
+            let handle = try FileHandle(forWritingTo: log)
+            try handle.seekToEnd()
+            try handle.write(contentsOf: row)
+            try handle.close()
         } else {
-            try? (data + Data("\n".utf8)).write(to: log)
+            try row.write(to: log)
         }
     }
 }

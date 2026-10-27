@@ -42,15 +42,15 @@ enum ChatScrollBench {
         let pointer = defaults.string(forKey: "CuePadScrollPointer")
         var found: (NSWindow, NSScrollView)?
         for _ in 0..<90 {
-            try? await Task.sleep(for: .seconds(1))
+            await Task.wait(for: .seconds(1))
             if let window = DebugScene.mainWindow,
                let content = window.contentView, let scroll = chatScroll(in: content) { found = (window, scroll); break }
         }
         guard let (window, scroll) = found else { print("CHATSCROLL-ERR 找不到对话的滚动视图"); fflush(stdout); exit(1) }
-        try? await Task.sleep(for: .seconds(3))
+        await Task.wait(for: .seconds(3))
         if driver != .direct {
             DebugForeground.require(window, for: "CuePadScrollDriver \(driver.rawValue)")
-            try? await Task.sleep(for: .seconds(1))
+            await Task.wait(for: .seconds(1))
         }
         let primaryHeight = NSScreen.screens[0].frame.height
         let center = window.convertToScreen(scroll.convert(scroll.bounds, to: nil))
@@ -105,21 +105,21 @@ enum ChatScrollBench {
             }
             defer { if driver == .direct { NotificationCenter.default.post(name: NSScrollView.didEndLiveScrollNotification, object: scroll) } }
             for event in Self.events(up: up, gesture) {
-                try? await clock.sleep(until: start + .seconds(event.at))
+                do { try await clock.sleep(until: start + .seconds(event.at)) } catch { break }  // 取消就不再投递
                 deliver(event, real: real)
             }
-            try? await Task.sleep(for: .milliseconds(200))
+            await Task.wait(for: .milliseconds(200))
         }
 
         // 热身（指针还没动）：往上翻几趟排开更早的对话、量过各段的高度，再回来一点
         let warm = Gesture(name: "warm", speed: 2400, wheel: false)
         for _ in 0..<7 { await play(up: true, warm) }
         for _ in 0..<2 { await play(up: false, warm) }
-        try? await Task.sleep(for: .seconds(1))
+        await Task.wait(for: .seconds(1))
         let movesPointer = driver != .direct && (pointer == "in" || pointer == "out")
         if movesPointer {
             DebugForeground.movePointer(to: spot)
-            try? await Task.sleep(for: .milliseconds(500))
+            await Task.wait(for: .milliseconds(500))
         }
         if driver == .hid {
             // 窗口得在指针下的最上层才发得出事件：等一会儿，等不到就不量（也不让指针白占着）
@@ -128,7 +128,7 @@ enum ChatScrollBench {
                 ready = NSWindow.windowNumber(at: NSEvent.mouseLocation, belowWindowWithWindowNumber: 0) == window.windowNumber
                 if ready { break }
                 DebugForeground.require(window, for: "CuePadScrollDriver hid")
-                try? await Task.sleep(for: .milliseconds(500))
+                await Task.wait(for: .milliseconds(500))
             }
             guard ready else {
                 print("CHATSCROLL-ERR 本窗口不在指针下的最上层")
@@ -174,7 +174,7 @@ enum ChatScrollBench {
             row["frontmostIsMe"] = NSWorkspace.shared.frontmostApplication?.processIdentifier == getpid()
             print(jsonLine("CHATSCROLL", row))
             fflush(stdout)
-            try? await Task.sleep(for: .milliseconds(500))
+            await Task.wait(for: .milliseconds(500))
         }
         finish(0)
     }

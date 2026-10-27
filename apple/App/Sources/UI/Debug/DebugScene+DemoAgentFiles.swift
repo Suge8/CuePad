@@ -10,7 +10,7 @@ extension DebugScene {
     /// 该整理的样子：Claude Code 旧目录里两个技能、write-swift 与圆桌的 load-test 没给 Claude Code 补上链接、全局与 CuePad 各有一个 release、
     /// uilane 没有名字与说明、Codex 技能目录里一个空目录、Claude Code 与 Pi 的系统提示各写一份全局规则、个人网站另有一份不同的 CLAUDE.md；
     /// `-CuePadAgentLibrary clean` 时都已收好。
-    static func seedAgentFiles() {
+    static func seedAgentFiles() throws {
         let environment = ProcessInfo.processInfo.environment
         guard let sharedPath = environment["CUEPAD_AGENTS_DIR"], let claudePath = environment[AgentKind.claudeCode.facts.homeVariable],
               let piPath = environment[AgentKind.pi.facts.homeVariable], let codexPath = environment[AgentKind.codex.facts.homeVariable],
@@ -25,52 +25,52 @@ extension DebugScene {
         let clean = defaults.string(forKey: "CuePadAgentLibrary") == "clean"
         let skills = shared.appending(path: "skills")
 
-        func write(_ text: String, _ file: URL) {
-            try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try? text.write(to: file, atomically: true, encoding: .utf8)
+        func write(_ text: String, _ file: URL) throws {
+            try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try text.write(to: file, atomically: true, encoding: .utf8)
         }
-        func link(_ file: URL, to target: URL) {
-            try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try? FileManager.default.createSymbolicLink(atPath: file.path, withDestinationPath: relative(target, from: file.deletingLastPathComponent()))
+        func link(_ file: URL, to target: URL) throws {
+            try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try FileManager.default.createSymbolicLink(atPath: file.path, withDestinationPath: relative(target, from: file.deletingLastPathComponent()))
         }
-        func skill(_ name: String, _ description: String, in directory: URL) {
-            write(DemoAgentLibrary.skillText(name, description), directory.appending(path: "\(name)/SKILL.md"))
+        func skill(_ name: String, _ description: String, in directory: URL) throws {
+            try write(DemoAgentLibrary.skillText(name, description), directory.appending(path: "\(name)/SKILL.md"))
         }
 
         for item in DemoAgentLibrary.global {
             let directory = item.group.isEmpty ? skills : skills.appending(path: item.group)
-            skill(item.name, item.description, in: directory)
-            if clean || item.name != "write-swift" { link(claude.appending(path: "skills/\(item.name)"), to: directory.appending(path: item.name)) }
+            try skill(item.name, item.description, in: directory)
+            if clean || item.name != "write-swift" { try link(claude.appending(path: "skills/\(item.name)"), to: directory.appending(path: item.name)) }
         }
         let projects = URL(filePath: DemoLibrary.demoHome, directoryHint: .isDirectory).appending(path: "Project")
         let cuepad = projects.appending(path: "cuepad"), atlas = projects.appending(path: "atlas"), homepage = projects.appending(path: "homepage")
-        write(DemoAgentLibrary.cuepadRules, cuepad.appending(path: "AGENTS.md"))
-        link(cuepad.appending(path: "CLAUDE.md"), to: cuepad.appending(path: "AGENTS.md"))
+        try write(DemoAgentLibrary.cuepadRules, cuepad.appending(path: "AGENTS.md"))
+        try link(cuepad.appending(path: "CLAUDE.md"), to: cuepad.appending(path: "AGENTS.md"))
         for (name, description) in DemoAgentLibrary.cuepadSkills where clean || name != "release" {
-            skill(name, description, in: cuepad.appending(path: ".agents/skills"))
-            link(cuepad.appending(path: ".claude/skills/\(name)"), to: cuepad.appending(path: ".agents/skills/\(name)"))
+            try skill(name, description, in: cuepad.appending(path: ".agents/skills"))
+            try link(cuepad.appending(path: ".claude/skills/\(name)"), to: cuepad.appending(path: ".agents/skills/\(name)"))
         }
-        skill("load-test", DemoAgentLibrary.loadTest, in: atlas.appending(path: ".agents/skills"))
-        if clean { link(atlas.appending(path: ".claude/skills/load-test"), to: atlas.appending(path: ".agents/skills/load-test")) }
-        write(DemoAgentLibrary.homepageRules, homepage.appending(path: "AGENTS.md"))
-        write(DemoAgentLibrary.sharedRules, shared.appending(path: "AGENTS.md"))
-        for file in [pi.appending(path: "AGENTS.md"), codex.appending(path: "AGENTS.md")] { link(file, to: shared.appending(path: "AGENTS.md")) }
-        write(DemoAgentLibrary.piSystem, pi.appending(path: "SYSTEM.md"))
+        try skill("load-test", DemoAgentLibrary.loadTest, in: atlas.appending(path: ".agents/skills"))
+        if clean { try link(atlas.appending(path: ".claude/skills/load-test"), to: atlas.appending(path: ".agents/skills/load-test")) }
+        try write(DemoAgentLibrary.homepageRules, homepage.appending(path: "AGENTS.md"))
+        try write(DemoAgentLibrary.sharedRules, shared.appending(path: "AGENTS.md"))
+        for file in [pi.appending(path: "AGENTS.md"), codex.appending(path: "AGENTS.md")] { try link(file, to: shared.appending(path: "AGENTS.md")) }
+        try write(DemoAgentLibrary.piSystem, pi.appending(path: "SYSTEM.md"))
         if clean {
-            link(claude.appending(path: "CLAUDE.md"), to: shared.appending(path: "AGENTS.md"))
-            link(homepage.appending(path: "CLAUDE.md"), to: homepage.appending(path: "AGENTS.md"))
+            try link(claude.appending(path: "CLAUDE.md"), to: shared.appending(path: "AGENTS.md"))
+            try link(homepage.appending(path: "CLAUDE.md"), to: homepage.appending(path: "AGENTS.md"))
             return
         }
-        write(DemoAgentLibrary.homepageClaude, homepage.appending(path: "CLAUDE.md"))
-        write(DemoAgentLibrary.cuepadRelease, cuepad.appending(path: ".agents/skills/release/SKILL.md"))
-        link(cuepad.appending(path: ".claude/skills/release"), to: cuepad.appending(path: ".agents/skills/release"))
-        write(DemoAgentLibrary.globalRelease, skills.appending(path: "release/SKILL.md"))
-        link(claude.appending(path: "skills/release"), to: skills.appending(path: "release"))
-        write(DemoAgentLibrary.claudeRules, claude.appending(path: "CLAUDE.md"))
-        skill("notion-export", String(localized: "把 Notion 页面导出成 Markdown", table: "Demo"), in: claude.appending(path: "skills"))
-        skill("pdf", String(localized: "读写与合并 PDF", table: "Demo"), in: claude.appending(path: "skills"))
-        write(DemoAgentLibrary.uilane, skills.appending(path: "operations/uilane/SKILL.md"))
-        try? FileManager.default.createDirectory(at: codex.appending(path: "skills/codex-primary-runtime"), withIntermediateDirectories: true)
+        try write(DemoAgentLibrary.homepageClaude, homepage.appending(path: "CLAUDE.md"))
+        try write(DemoAgentLibrary.cuepadRelease, cuepad.appending(path: ".agents/skills/release/SKILL.md"))
+        try link(cuepad.appending(path: ".claude/skills/release"), to: cuepad.appending(path: ".agents/skills/release"))
+        try write(DemoAgentLibrary.globalRelease, skills.appending(path: "release/SKILL.md"))
+        try link(claude.appending(path: "skills/release"), to: skills.appending(path: "release"))
+        try write(DemoAgentLibrary.claudeRules, claude.appending(path: "CLAUDE.md"))
+        try skill("notion-export", String(localized: "把 Notion 页面导出成 Markdown", table: "Demo"), in: claude.appending(path: "skills"))
+        try skill("pdf", String(localized: "读写与合并 PDF", table: "Demo"), in: claude.appending(path: "skills"))
+        try write(DemoAgentLibrary.uilane, skills.appending(path: "operations/uilane/SKILL.md"))
+        try FileManager.default.createDirectory(at: codex.appending(path: "skills/codex-primary-runtime"), withIntermediateDirectories: true)
     }
 
     /// 从 `directory` 到 `target` 的相对路径（两者都是绝对路径）：链接跟着整个隔离库搬也不断。

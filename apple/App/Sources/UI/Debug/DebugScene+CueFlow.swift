@@ -51,11 +51,7 @@ extension DebugScene {
 
     private static func runCueFlow(_ workspace: Workspace, leave: (_ away: Bool) -> Void) async {
         guard defaults.bool(forKey: "CuePadCueFlow") else { return }
-        do {
-            try await cueFlow(workspace, leave: leave)
-        } catch {
-            print("cueflow: \(error)")
-        }
+        await running("Cue 流程") { try await cueFlow(workspace, leave: leave) }
     }
 
     private static func cueFlow(_ workspace: Workspace, leave: (_ away: Bool) -> Void) async throws {
@@ -67,17 +63,17 @@ extension DebugScene {
             try await beat(FlowBeat.keystroke)
         }
         try await beat(FlowBeat.beforeSend)
-        guard let press = flowPress else { return print("cueflow: Cue 页的输入框不在") }
+        guard let press = flowPress else { throw Unmet("Cue 页的输入框不在") }
         flowPress = nil
         flowPressed = true
         // 量在这里而不在输入框的任务里：手机上发出后输入框的任务会被取消，量到一半就断了
         let sending = Task {
             guard let log = cueFlowLog else { return press.resume() }
-            await measureFlight("send", seconds: FlowBeat.probe, into: log) { press.resume() }
+            try await measureFlight("send", seconds: FlowBeat.probe, into: log) { press.resume() }
         }
         try await beat(FlowBeat.inTransit)
         guard let said = try await store.cueMessages(limit: 5).last(where: { $0.author == .known(.you) && $0.text == flowSaid }) else {
-            return print("cueflow: 那一句没有写进库")
+            throw Unmet("那一句没有写进库")
         }
         let startedAt = Date.now
         try await store.markCueMessagesDelivered([said.id], at: startedAt)
@@ -108,10 +104,10 @@ extension DebugScene {
         try await store.setCueState(.settled, context: context)
         try await beat(FlowBeat.reply)
 
-        let evidence = await seedEvidence(store, session: flowSession, title: String(localized: "登录页（超时后）", table: "Demo"), png: loginTimeoutPNG())
+        let evidence = try await seedEvidence(store, session: flowSession, title: String(localized: "登录页（超时后）", table: "Demo"), png: loginTimeoutPNG())
         _ = try await store.finishTask(
             task.id, evidence: [String(localized: "等授权超过 10 秒就回到登录页，说明了原因", table: "Demo"), String(localized: "超时用例 3 个都过了", table: "Demo")],
-            shots: evidence.map { [CueShot(preview: $0.id, look: String(localized: "超时后回到登录页", table: "Demo"))] } ?? [])
+            shots: [CueShot(preview: evidence.id, look: String(localized: "超时后回到登录页", table: "Demo"))])
         try await beat(FlowBeat.result)
         let asked = try await store.addCueMessage(.cue, text: String(localized: "登录回调的修复验过了，要**推送到 origin/main** 吗？", table: "Demo"), ask: try CueAsking(.push, action: String(localized: "把登录回调的超时修复推送到 origin/main", table: "Demo")), task: task.id)
         try await beat(FlowBeat.asking)
@@ -122,8 +118,8 @@ extension DebugScene {
         try await beat(FlowBeat.away)
         leave(false)
         try await beat(FlowBeat.back)
-        await sending.value
-        if let log = cueFlowLog { await measureFlight("idle", seconds: FlowBeat.probe, into: log) }
+        try await sending.value
+        if let log = cueFlowLog { try await measureFlight("idle", seconds: FlowBeat.probe, into: log) }
     }
 
     private static var cueFlowLog: URL? { defaults.string(forKey: "CuePadCueFlowLog").map { URL(fileURLWithPath: $0) } }

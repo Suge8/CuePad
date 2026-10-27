@@ -12,53 +12,57 @@ extension DebugScene {
     static let longChat = "marathon"
     private static let longChatRounds = 300
 
-    static func seedLongChat(_ store: CueStore, project: UUID?) async {
-        _ = try? await PiStateRecorder(store: store, hostID: "demo-mac").update(
+    static func seedLongChat(_ store: CueStore, project: UUID?) async throws {
+        _ = try await PiStateRecorder(store: store, hostID: "demo-mac").update(
             sessionID: longChat, state: .settled, title: longChat, directory: longChat, projectID: project)
         let start = Date.now.addingTimeInterval(-Double(longChatRounds) * 240)
         let turns = (0..<longChatRounds).map { round in
             let asked = start.addingTimeInterval(Double(round) * 240)
             return ChatTurn(you: longChatPrompt(round), pi: longChatReply(round), tools: nil, asked: asked, answered: asked.addingTimeInterval(60))
         }
-        try? await writeChat(longChat, turns, store: store)
+        try await writeChat(longChat, turns, store: store)
     }
 
     /// 给 `sessionID` 像真的 Agent 那样一轮一轮追加，共 `rounds` 轮：你的话 → 每 200ms 做完一步（经过清单变长、状态在思考与跑工具之间换、
     /// 子代理名册变）→ 第 15 步落回答（高矮轮换）→ 等子代理时它交回一张机器消息卡片 → 歇下。
     static func stream(_ sessionID: String, rounds: Int = 100, store: CueStore) async {
-        guard let session = try? await store.piSessionPage(PiSessionQuery(id: PiSessionState.recordID(sessionID: sessionID))).items.first?.state else { return }
+        await running("追加对话") { try await appendRounds(sessionID, rounds: rounds, store: store) }
+    }
+
+    private static func appendRounds(_ sessionID: String, rounds: Int, store: CueStore) async throws {
+        guard let session = try await store.piSessionPage(PiSessionQuery(id: PiSessionState.recordID(sessionID: sessionID))).items.first?.state else { return }
         let recorder = PiStateRecorder(store: store, hostID: session.hostID, minInterval: .zero)
-        func set(_ state: PiWorkState, detail: String? = nil, agents: [PiSubagentState]) async {
-            _ = try? await recorder.update(
+        func set(_ state: PiWorkState, detail: String? = nil, agents: [PiSubagentState]) async throws {
+            _ = try await recorder.update(
                 sessionID: sessionID, state: state, detail: detail, title: session.title, directory: session.folder, projectID: session.projectID, subagents: agents)
         }
-        func write(_ messages: [PiChatMessage], _ recap: PiRecap) async {
-            try? await store.writePiTranscript(PiTranscript(sessionID: sessionID, messages: messages, recap: recap))
+        func write(_ messages: [PiChatMessage], _ recap: PiRecap) async throws {
+            try await store.writePiTranscript(PiTranscript(sessionID: sessionID, messages: messages, recap: recap))
         }
         for round in 0..<rounds {
             let seq = Int64(1_000_000 + round * 3)
             let you = PiChatMessage(sessionID: sessionID, entryID: "stream-u\(round)", seq: seq, role: .user, text: longChatPrompt(round + 1), at: .now)
-            await write([you], PiRecap(pendingPrompt: you.text))
+            try await write([you], PiRecap(pendingPrompt: you.text))
             var tools = PiChatMessage.Tools()
             for step in 0..<15 {
-                try? await Task.sleep(for: .milliseconds(200))
+                await Task.wait(for: .milliseconds(200))
                 tools.record(.init(kind: step % 4 == 0 ? .said : .command, target: step % 4 == 0 ? String(localized: "看一下第 \(step) 步的输出", table: "Demo") : "pnpm test -- --run case\(step)"))
-                await write([], PiRecap(pendingPrompt: you.text, pendingTools: tools))
+                try await write([], PiRecap(pendingPrompt: you.text, pendingTools: tools))
                 let helper = PiSubagentState(name: "helper-\(round)", role: String(localized: "工程师", table: "Demo"), phase: .known(.running), action: String(localized: "第 \(step) 步", table: "Demo"), startedAt: you.at)
-                await set(step % 2 == 0 ? .tool : .thinking, detail: step % 2 == 0 ? "bash · pnpm test case\(step)" : nil, agents: [helper])
+                try await set(step % 2 == 0 ? .tool : .thinking, detail: step % 2 == 0 ? "bash · pnpm test case\(step)" : nil, agents: [helper])
             }
             let answer = PiChatMessage(
                 sessionID: sessionID, entryID: "stream-p\(round)", seq: seq + 1, role: .pi, text: longChatReply(round + 1), at: .now, tools: tools, roundStartedAt: you.at)
-            await write([answer], PiRecap(lastPrompt: you.text, lastReply: answer.text))
+            try await write([answer], PiRecap(lastPrompt: you.text, lastReply: answer.text))
             let helper = PiSubagentState(name: "helper-\(round)", role: String(localized: "工程师", table: "Demo"), phase: .known(.running), action: String(localized: "收尾", table: "Demo"), startedAt: you.at)
-            await set(.delegating, agents: [helper])
-            try? await Task.sleep(for: .seconds(1))
+            try await set(.delegating, agents: [helper])
+            await Task.wait(for: .seconds(1))
             let returned = PiChatMessage(
                 sessionID: sessionID, entryID: "stream-m\(round)", seq: seq + 2, role: .machine,
                 text: "<firecode_master_event>\nhelper-\(round) 交回：\(longChatReply(round))\n</firecode_master_event>", at: .now)
-            await write([returned], PiRecap(lastPrompt: you.text, lastReply: answer.text))
-            await set(.settled, agents: [PiSubagentState(name: "helper-\(round)", role: String(localized: "工程师", table: "Demo"), phase: .known(.done), startedAt: you.at, settledAt: .now)])
-            try? await Task.sleep(for: .seconds(1))
+            try await write([returned], PiRecap(lastPrompt: you.text, lastReply: answer.text))
+            try await set(.settled, agents: [PiSubagentState(name: "helper-\(round)", role: String(localized: "工程师", table: "Demo"), phase: .known(.done), startedAt: you.at, settledAt: .now)])
+            await Task.wait(for: .seconds(1))
         }
     }
 

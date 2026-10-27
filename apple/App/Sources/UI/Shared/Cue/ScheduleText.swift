@@ -3,15 +3,9 @@ import Foundation
 
 /// 定时在界面上的说法（任务气泡、定时页、手机 Cue 面板、Cue 页的叫醒那一行同一套）；给 Cue 看的在 Kit（`CueScheduleWords`）。
 nonisolated enum ScheduleText {
-    /// 怎么重复："每天 8:00""每周一和周四 9:00""每月 1 号 9:00"；一次性的写"只这一次"。
-    static func repeats(_ rule: CueRepeat?) -> String {
-        guard let rule else { return String(localized: "只这一次") }
-        let time = clock(hour: rule.hour, minute: rule.minute)
-        switch rule.cycle {
-        case .daily: return String(localized: "每天 \(time)")
-        case .weekly(let days): return String(localized: "每\(weekdays(days)) \(time)")
-        case .monthly(let day): return String(localized: "每月 \(day) 号 \(time)")
-        }
+    /// 怎么重复："每天 8:00""每周一和周四 9:00""每月 1 号 9:00"。
+    static func repeats(_ rule: CueRepeat) -> String {
+        [cycle(rule.cycle), clock(hour: rule.hour, minute: rule.minute)].joined(separator: " ")
     }
 
     /// 重复的哪几天："每天""每周一和周四""每月 1 号"。
