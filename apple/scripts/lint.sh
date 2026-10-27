@@ -43,6 +43,8 @@ forbid "常驻循环动效只用 LoopLayer（Core Animation）：SwiftUI 的 rep
 forbid "动画曲线只用 Motion 的几种（AppGroup/Motion.swift，按用途分、数值与理由在它的头注释）：各处另写的弹簧、缓动是又一套手感，减弱动态效果也各管各的。软糖换拍子（Jelly）是按进度走的编排" \
   '(?:(?<![\w.])|\bAnimation)\.(?:spring|easeOut|easeIn|easeInOut|timingCurve|smooth|snappy|bouncy|interactiveSpring|interpolatingSpring|linear)\(' \
   'App/AppGroup/Motion.swift' '**/Theme/Jelly.swift'
+forbid "自定义转场的 body 写成 nonisolated func：协议标的是主线程，iOS 上 SwiftUI 却在渲染线程求值，body 继承来的主线程隔离让里面的闭包一调就崩；只在类型上写 nonisolated 不够（理由在 BoardFlight.swift 的 board）" \
+  '(?<!nonisolated )func body\(content: Content, phase: TransitionPhase\)'
 forbid "按时刻换字的文字用 LiveText（Moments.swift，不用系统时间文本的原因在它的注释里）" \
   '\.currentDate\b'
 forbid "不用 DispatchQueue.main.asyncAfter：它取消不了。等事件用通知序列或 NextFrame，真要定时用可取消的 Task.sleep" \

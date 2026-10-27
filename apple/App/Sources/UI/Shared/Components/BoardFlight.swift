@@ -7,12 +7,16 @@ extension EnvironmentValues {
     @Entry var boardMoves: BoardMoves?
     /// 卡所在的那一列（行）的滚动区（`boardLane`）。
     @Entry var boardLane: TaskBoard.Column?
+}
+
+/// 转场里写的环境键不带隔离（`BoardPresence`）。
+nonisolated extension EnvironmentValues {
     /// 换列飞来的这张卡从哪一列来、落地没有（`BoardArrival`）：卡上叠着的原来那一列的纸色随着飞淡掉（`boardCard`）。
     @Entry var boardArrival: BoardArrival?
 }
 
 /// 飞来的卡起飞时是哪一列的纸；`landed` 从起飞的 false 变到 true 是在看板那一份的事务里，跟着它变的透明度随飞行插值。
-struct BoardArrival: Equatable {
+nonisolated struct BoardArrival: Equatable {
     let from: TaskBoard.Column
     let landed: Bool
 }
@@ -25,7 +29,7 @@ struct BoardArrival: Equatable {
 /// 不用 `matchedGeometryEffect` 对两头：它取的是撤掉那张此刻的框，懒加载栈里撤掉的那张从第二帧起排在栈顶，飞的第一帧从列顶起跳。
 @MainActor final class BoardMoves {
     /// 看板四列或四行的坐标系（`boardStage`）。
-    static let space = "boardStage"
+    nonisolated static let space = "boardStage"
 
     nonisolated struct Departure: Sendable {
         let column: TaskBoard.Column
@@ -116,7 +120,9 @@ private struct BoardFlight: ViewModifier {
 
 extension Transition where Self == BoardPresence {
     /// 卡在看板上的进出（`boardFlight`）：三段合成，各走各的动画——飞（位移，照看板那一份的事务走）、淡（`Motion.fade`）、换列的旧那张当场撤（不动画）。
-    /// 分段而不在一段里用 `animation(_:body:)` 给透明度单挂一条曲线：iOS 上转场在渲染线程上求值，那个闭包按主线程隔离，一调就崩。
+    /// 三段的 `body` 都写明 `nonisolated`：协议把它标成主线程，SwiftUI 在 iOS 上却由渲染线程求值（`com.apple.SwiftUI.AsyncRenderer`）。
+    /// 只在类型上写 `nonisolated` 不够，`body` 照样从协议继承主线程隔离，里面的闭包都带主线程检查，渲染线程一调就崩；
+    /// 写在 `body` 上，里面用到的类型、环境键、常量都得不带隔离，编译器替它把关。
     static func board(_ id: String, _ departures: BoardDepartures) -> some Transition {
         BoardPresence(id: id, departures: departures)
             .combined(with: BoardFade(id: id, departures: departures).animation(Motion.fade))
@@ -131,7 +137,7 @@ nonisolated struct BoardPresence: Transition {
     let id: String
     let departures: BoardDepartures
 
-    func body(content: Content, phase: TransitionPhase) -> some View {
+    nonisolated func body(content: Content, phase: TransitionPhase) -> some View {
         let arrival = phase == .didDisappear ? nil : departures(id)
         content
             .environment(\.boardArrival, arrival.map { BoardArrival(from: $0.column, landed: phase.isIdentity) })
@@ -148,7 +154,7 @@ nonisolated private struct BoardFade: Transition {
     let id: String
     let departures: BoardDepartures
 
-    func body(content: Content, phase: TransitionPhase) -> some View {
+    nonisolated func body(content: Content, phase: TransitionPhase) -> some View {
         content.opacity(phase.isIdentity || departures(id) != nil ? 1 : 0)
     }
 }
@@ -158,7 +164,7 @@ nonisolated private struct BoardDrop: Transition {
     let id: String
     let departures: BoardDepartures
 
-    func body(content: Content, phase: TransitionPhase) -> some View {
+    nonisolated func body(content: Content, phase: TransitionPhase) -> some View {
         content.opacity(phase == .didDisappear && departures(id) != nil ? 0 : 1)
     }
 }
