@@ -6,13 +6,14 @@ import Testing
 /// 会话回复框：草稿只有一份（`AppSettings`，iOS 与 Mac 同一份）：离开会话再回来还在；文字与批注存在本机偏好、跨退出保留，
 /// 带上的卡片与图片只留在这次运行；批注随下一句发出；iOS"发到 Mac"带来的卡片写进同一份草稿。
 struct ReplyTests {
-    private func settings(_ suite: String) -> AppSettings {
-        AppSettings(defaults: UserDefaults(suiteName: suite)!, launchArguments: [:])
+    /// 偏好放在临时目录（`TempDefaults`）：按名字开的套件落进本机的 ~/Library/Preferences，每跑一次留一个文件。
+    private func settings(_ preferences: TempDefaults) -> AppSettings {
+        AppSettings(defaults: preferences.reopened(), launchArguments: [:])
     }
 
     @Test func 离开再回来草稿还在_文字跨退出保留_卡片只留在这次运行() {
-        let suite = "drafts-\(UUID())", session = UUID()
-        let settings = settings(suite)
+        let preferences = TempDefaults(), session = UUID()
+        let settings = settings(preferences)
         var draft = settings.replyDraft(for: session)
         draft.text = "改完再跑一遍"
         draft.attachments = [Outbox(content: "接口约定", card: UUID())]
@@ -22,7 +23,7 @@ struct ReplyTests {
         #expect(settings.replyDraft(for: session).attachments.first?.content == "接口约定")
 
         settings.flush()  // 退出前
-        let relaunched = self.settings(suite)
+        let relaunched = self.settings(preferences)
         #expect(relaunched.replyDraft(for: session).text == "改完再跑一遍")
         #expect(relaunched.replyDraft(for: session).attachments.isEmpty)
     }
@@ -30,11 +31,11 @@ struct ReplyTests {
     /// 批注随下一句发出，排在你写的话前面：原文已在 Agent 的上下文里，只带认得出位置的摘录（列表符、换行收掉，过长只留头尾），
     /// 不重发原文。
     @Test func 批注跨退出保留_随下一句发出时只带头尾摘录() async throws {
-        let suite = "notes-\(UUID())"
+        let preferences = TempDefaults()
         let app = TestApp()
         try await PiStateRecorder(store: app.services.store, hostID: "mac").update(sessionID: "s", state: .tool, title: "s")
         let session = try #require(try await app.services.store.piSessionPage(.live).items.first?.state)
-        let settings = settings(suite)
+        let settings = settings(preferences)
         var draft = settings.replyDraft(for: session.id)
         draft.text = "按这个改"
         draft.notes = [
@@ -44,7 +45,7 @@ struct ReplyTests {
         settings.setReplyDraft(draft, for: session.id)
         settings.flush()
 
-        let request = try await Workspace(services: app.services).said(self.settings(suite).replyDraft(for: session.id), to: session, mode: .send)
+        let request = try await Workspace(services: app.services).said(self.settings(preferences).replyDraft(for: session.id), to: session, mode: .send)
 
         #expect(request.content == """
             对你回答的批注（「」里是原话摘录）：

@@ -23,8 +23,13 @@ final class TempDefaults {
 
     init() {
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        defaults = UserDefaults(suiteName: directory.appending(path: "preferences").path)!
+        defaults = Self.open(directory)
     }
+
+    /// 同一份存储再开一次（模拟退出后重开）。
+    func reopened() -> UserDefaults { Self.open(directory) }
+
+    private static func open(_ directory: URL) -> UserDefaults { UserDefaults(suiteName: directory.appending(path: "preferences").path)! }
 
     deinit { try? FileManager.default.removeItem(at: directory) }
 }
