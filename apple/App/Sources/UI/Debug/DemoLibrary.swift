@@ -17,10 +17,11 @@ enum DemoLibrary {
 
     static func seed(_ store: CueStore) async throws {
         let image = try store.files.store(sampleImage())
-        try await seed(store, groups: projects(image: image), tasks: tasks)
+        let doc = DebugScene.demoPDF(store)?.markup ?? ""
+        try await seed(store, groups: projects(image: image, doc: doc), tasks: tasks)
         try await seedSubtasks(store)
 
-        let catalog = projects(image: image)
+        let catalog = projects(image: image, doc: doc)
         for project in try await store.projects() {
             if let directory = catalog.first(where: { $0.name == project.name })?.directory {
                 try await store.setDirectory(directory, for: project.id)

@@ -56,15 +56,10 @@ extension CueTextView {
 
     // MARK: 点附件
 
-    /// 点在附件上（不移光标）：文件牌在本机就快速查看，还没到这台的文件牌、图片交给宿主去取；本机的图片与别处照常。
+    /// 点在文件牌或还没到这台的图片上（不移光标）：交给宿主（`onOpenAttachment`）；本机的图片与别处照常。
     public override func mouseDown(with event: NSEvent) {
-        guard event.clickCount == 1, let hit = attachment(at: event) else { return super.mouseDown(with: event) }
-        if let file = hit.file {
-            guard !hit.name.isEmpty else { return super.mouseDown(with: event) }
-            QuickLook.show(file, title: hit.name)
-        } else {
-            onFetchFile?(hit.key)
-        }
+        guard event.clickCount == 1, let hit = attachment(at: event), hit.file == nil || !hit.name.isEmpty else { return super.mouseDown(with: event) }
+        onOpenAttachment?(hit.key, hit.name)
     }
 
     private func attachment(at event: NSEvent) -> (key: String, name: String, file: URL?)? {

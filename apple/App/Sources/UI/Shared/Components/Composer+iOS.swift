@@ -107,6 +107,8 @@ struct AttachmentSheet: View {
     @Environment(\.closePanel) private var close
     @State private var contentHeight: CGFloat = 0
     @State private var detent = PresentationDetent.height(barHeight)
+    /// 卡里的文件在这张面板上看：面板开着时，挂在下面页上的全屏页弹不出来
+    @State private var previewing: PreviewOpening?
 
     /// 顶栏的高度，加到内容高度上就是面板高度（只有标题的卡片就只剩顶栏）。
     private static let barHeight: CGFloat = 64
@@ -122,6 +124,7 @@ struct AttachmentSheet: View {
                     ToolbarItem(placement: .confirmationAction) { Button("展开编辑", action: expand) }
                 }
         }
+        .previewPresenter($previewing, reply: nil)
         .presentationDetents([fitted, .large], selection: $detent)
         // 内容量出来后贴合它；用户拉到满屏后不再缩回
         .onChange(of: contentHeight) { if detent != .large { detent = fitted } }

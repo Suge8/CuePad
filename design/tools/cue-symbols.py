@@ -117,6 +117,7 @@ SYMBOLS = {
     "hand": hand,
     "mac": mac,
     "photo": photo,
+    "clip": paperclip,
     "photos": photos,
     "camera": camera,
     "select": select_text,

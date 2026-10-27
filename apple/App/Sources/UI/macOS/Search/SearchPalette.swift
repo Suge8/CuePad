@@ -202,12 +202,12 @@ struct SearchPalette: View {
                 if card.isTask {
                     TaskRingView(status: card.status, done: false, size: 14)
                 } else {
-                    Image(text.images.isEmpty ? .document : .photo).foregroundStyle(palette.ink2)
+                    Image(text.attachments.isEmpty ? .document : .attachment).foregroundStyle(palette.ink2)
                 }
             }
             .frame(width: 16)
             .accessibilityElement()
-            .accessibilityLabel(Self.kindLabel(task: card.isTask, attachments: CueFormat.hasAttachments(card.body)))
+            .accessibilityLabel(Self.kindLabel(task: card.isTask, attachments: !text.attachments.isEmpty))
             Text(Highlight.matches(text.label, query.text)).font(Typography.body).lineLimit(1)
             Spacer()
             Text(DateLabel.short(card.modifiedAt)).font(Typography.meta).foregroundStyle(palette.ink2)

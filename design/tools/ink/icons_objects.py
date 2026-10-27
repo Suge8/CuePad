@@ -139,6 +139,14 @@ def photo(m):
     return [Layer("photo", frame + [mountain]), Layer("sun", [sun], "secondary")]
 
 
+def paperclip(m):
+    """附件：一枚回形针，三道竖笔（外圈左、右，中间一道）由上下两个 U 弯连起，斜着摆；同系统的 paperclip。"""
+    g = GROW[m]
+    w = 2.0 + 0.9 * g
+    pts = [(0.0, -4.4), (0.0, 7.0), (-3.8, 7.0), (-3.8, -9.0), (3.8, -9.0), (3.8, 5.6)]
+    return [Layer("clip", turned([bar(pts, w, [0, 1.85, 1.85, 3.75, 3.75, 0])], 45))]
+
+
 def photos(m):
     """相册：一张相片往左下让，后面一张往右上错开，只露出上边与右边的 L 形（同全部的错开一叠）。"""
     g, c = GROW[m], CARVE[m]

@@ -4503,18 +4503,18 @@
         }
       }
     },
-    "排查 Pi 桥\n\n日志里 Pi 桥报错 {{错误码}}，查清触发条件再动手。" : {
+    "排查 Pi 桥\n\n日志里 Pi 桥报错 {{错误码}}，查清触发条件再动手。\n%@" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Investigate the Pi bridge\n\nThe Pi bridge logs error {{error code}}. Find out what triggers it before changing anything."
+            "value" : "Investigate the Pi bridge\n\nThe log shows a Pi bridge error {{error code}}. Pin down the trigger before changing anything.\n%@"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "排查 Pi 桥\n\n日志里 Pi 桥报错 {{错误码}}，查清触发条件再动手。"
+            "value" : "排查 Pi 桥\n\n日志里 Pi 桥报错 {{错误码}}，查清触发条件再动手。\n%@"
           }
         }
       }
@@ -5111,18 +5111,18 @@
         }
       }
     },
-    "整理发布清单\n\n签名、公证、Sparkle 更新源。" : {
+    "整理发布清单\n\n签名、公证、Sparkle 更新源。\n%@" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Prepare the release checklist\n\nSigning, notarization, Sparkle update feed."
+            "value" : "Tidy the release checklist\n\nSigning, notarization, Sparkle feed.\n%@"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "整理发布清单\n\n签名、公证、Sparkle 更新源。"
+            "value" : "整理发布清单\n\n签名、公证、Sparkle 更新源。\n%@"
           }
         }
       }

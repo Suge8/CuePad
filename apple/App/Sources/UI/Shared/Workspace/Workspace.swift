@@ -182,6 +182,8 @@ final class Workspace {
     /// Cue 页拍板卡露的是哪一件（`TaskBoard.Wait.id`）：看板上点了一张 Cue 问的卡、在拍板卡上换一件都写这里；不在等了露第一件。
     var cueAsking: String?
     var notice: Notice?
+    /// 窗口根上的全屏页开着哪一份（`previewPresenter`，没有底栏）：正文、输入框里的附件，与没挂全屏页的小窗（菜单栏、Cue 条）点的附件都在这里看。
+    var preview: PreviewOpening?
     /// 正在给哪个项目选文件夹（iOS：根视图据此弹候选；Mac 直接弹系统的选文件夹面板，不经这里）。
     var folderPicker: Project?
 
@@ -376,23 +378,4 @@ final class Workspace {
         }
     }
     #endif
-
-    /// 请会话所在的 Mac 结束它。进度（正在结束、没能结束的原因）只来自这条结束请求，界面按 `DeliveryRequest.shownEnd` 读；
-    /// 还在路上时再点不会再发一条（Store 去重）。写不进请求时提示。
-    func end(_ session: PiSessionState) async {
-        do { _ = try await services.end(session) } catch { fail(error) }
-    }
-
-    /// 执行一个异步操作，失败时提示。
-    func attempt(_ work: @escaping @MainActor () async throws -> Void) {
-        Task {
-            do { try await work() } catch { fail(error) }
-        }
-    }
-
-    /// 执行一个 Store 写操作，失败时提示。
-    func perform(_ work: @escaping @Sendable (CueStore) async throws -> Void) {
-        let store = services.store
-        attempt { try await work(store) }
-    }
 }

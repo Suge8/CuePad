@@ -3,7 +3,7 @@ import CueStore
 import SwiftUI
 
 /// 编辑器里附件的样子由这台给（`CueTextView.fileStatus`、`fileIcon`）：说法同 `FileStatus`，跟着附件传输（`AppServices.fileTransfers`）重画——
-/// 文件到了换上缩略图与大小、在传时进度往前走。点了还没到的去取（`fetch`），到了也是经这里重画。
+/// 文件到了换上缩略图与大小、在传时进度往前走。点了附件经 `Workspace.openAttachment`（还没到的去取，到了也是经这里重画）。
 @MainActor
 enum AttachmentLooks {
     /// 接上编辑器；返回跟着传输重画的任务，编辑器拆掉时由宿主取消。
@@ -14,21 +14,26 @@ enum AttachmentLooks {
             for await _ in Observations({ services.fileTransfers }) { view?.refreshAttachments() }
         }
     }
-
-    static func fetch(_ key: String, services: AppServices, onError: @escaping (any Error) -> Void) {
-        Task {
-            do {
-                _ = try await services.fetchFile(key)
-            } catch {
-                onError(error)
-            }
-        }
-    }
 }
 
 extension Workspace {
     /// 把还没到这台的附件文件从 iCloud 取来（点了还没到的文件、图片）；到了界面自己换上（在路上的那一张变了）。
-    func fetchFile(_ key: String) { AttachmentLooks.fetch(key, services: services, onError: fail) }
+    func fetchFile(_ key: String) { attempt { _ = try await self.services.fetchFile(key) } }
+
+    /// 点了一个附件（正文里的、附件条里的、你的话里的）：还没到这台就去取；到了在全屏页里看，从它起、同一组（`files`）里已到本机的几份左右翻。
+    /// 挂着全屏页的页面给 `opener`（底栏对着这一页说）；没挂的小窗（菜单栏、Cue 条）在主窗口里打开（`preview`）。`files` 空的是只有它自己。
+    func openAttachment(_ file: DraftFile, among files: [DraftFile] = [], group: String, with opener: PreviewOpener?) {
+        let store = services.store.files, files = files.isEmpty ? [file] : files
+        guard store.fileURL(for: file.key) != nil else { return fetchFile(file.key) }
+        let batch = files.filter { $0 == file || store.fileURL(for: $0.key) != nil }.compactMap(PiPreview.init(attachment:))
+        guard let opened = batch.first(where: { $0.key == file.key }) else { return }
+        let opening = PreviewOpening(preview: opened, batch: batch, group: group)
+        if let opener { return opener(opening) }
+        preview = opening
+        #if os(macOS)
+        services.windowShell?.show()
+        #endif
+    }
 }
 
 /// 附件文件在不在本机（记录随同步先到、文件另走一路后到，手机上大文件点了才取），由 `observingArrival` 查：

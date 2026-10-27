@@ -86,9 +86,8 @@ extension DebugScene {
     static func presetComposer(_ draft: Binding<ComposerDraft>, source: Binding<ComposerSource?>, store: CueStore) async {
         switch defaults.string(forKey: "CuePadComposer") {
         case "cards":
-            // 等推入页面的转场走完再弹，转场中弹出的面板会被系统丢掉
-            try? await Task.sleep(for: .seconds(1))
-            source.wrappedValue = .cards
+            // 等推入页面的转场走完再弹，转场中弹出的面板会被系统丢掉；弹出前不算就绪
+            later(.seconds(1)) { source.wrappedValue = .cards }
         case "attachments":
             // 先挑默认项目里的，没有再挑第一个项目里的
             var id = await card(in: Project.defaultID, store: store)

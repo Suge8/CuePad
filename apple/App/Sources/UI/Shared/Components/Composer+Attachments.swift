@@ -52,16 +52,16 @@ extension Composer {
         .background(palette.fill, in: shape)
     }
 
-    /// 附件条：图片是方块缩略图，别的文件是文件牌（`FileChip`），各带一颗移除；点一个快速查看。
+    /// 附件条：图片是方块缩略图，别的文件是文件牌（`FileChip`），各带一颗移除；点一个在全屏页里看（附件条里的几份左右翻）。
     var fileStrip: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 ForEach(draft.files) { file in
                     ZStack(alignment: .topTrailing) {
                         if file.isImage {
-                            ImageTile(key: file.key)
+                            ImageTile(key: file.key, among: draft.files, group: "draft")
                         } else {
-                            FileChip(key: file.key, name: file.name, height: Self.stripSide).frame(maxWidth: 220)
+                            FileChip(key: file.key, name: file.name, height: Self.stripSide, among: draft.files, group: "draft").frame(maxWidth: 220)
                         }
                         Button { draft.files.removeAll { $0 == file } } label: {
                             // 图上是压暗的底，文件牌上是纸色的叉落在二墨的圆上

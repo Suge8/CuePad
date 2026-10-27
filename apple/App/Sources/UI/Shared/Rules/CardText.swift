@@ -10,8 +10,12 @@ nonisolated struct CardText: Equatable, Sendable {
     var title: String
     /// 标题之后的第一段，供卡片与列表的摘要行。
     var preview: String
-    /// 正文里的图片哈希，按出现顺序。
+    /// 正文里引用的附件（图片与文件）的键，按出现顺序（`CueFormat.attachmentKeys`）：有没有附件、带几个都按它。
+    var attachments: [String]
+    /// 其中的图片：卡片、列表与搜索的预览显示第一张。
     var images: [String]
+    /// 其余（不是图片的文件）有几个：预览里看不见，卡片上另标（`AttachmentMark`）。
+    var files: Int
     /// 第一个链接的域名，卡片上当小标。
     var linkHost: String?
 
@@ -19,19 +23,24 @@ nonisolated struct CardText: Equatable, Sendable {
         let summary = CueSummary(body)
         title = summary.title
         preview = summary.preview
-        images = CueFormat.imageKeys(in: body)
+        attachments = CueFormat.attachmentKeys(in: body)
+        images = attachments.filter(AttachmentKey.isImage)
+        files = attachments.count - images.count
         linkHost = summary.linkHost
     }
 
-    /// 列表、卡片、看板里叫它什么：标题；没有文字时按有没有图写"N 张图"或"空白灵感"。全 App 只在这里定。
-    var label: String { title.nonEmpty ?? Self.untitled(images: images.count) }
+    /// 列表、卡片、看板里叫它什么：标题；没有文字时按带了什么写"N 张图""N 个附件"或"空白灵感"。全 App 只在这里定。
+    var label: String { title.nonEmpty ?? Self.untitled(attachments) }
 
-    /// 只要名字时用它：只读到标题那一行（`CueSummary.title(of:)`），没有标题才数图片，不算摘要与链接。
+    /// 只要名字时用它：只读到标题那一行（`CueSummary.title(of:)`），没有标题才数附件，不算摘要与链接。
     static func label(of body: String) -> String {
-        CueSummary.title(of: body).nonEmpty ?? untitled(images: CueFormat.imageKeys(in: body).count)
+        CueSummary.title(of: body).nonEmpty ?? untitled(CueFormat.attachmentKeys(in: body))
     }
 
-    private static func untitled(images: Int) -> String { images == 0 ? String(localized: "空白灵感") : String(localized: "\(images) 张图") }
+    private static func untitled(_ attachments: [String]) -> String {
+        if attachments.isEmpty { return String(localized: "空白灵感") }
+        return attachments.allSatisfy(AttachmentKey.isImage) ? String(localized: "\(attachments.count) 张图") : String(localized: "\(attachments.count) 个附件")
+    }
 }
 
 nonisolated extension Card {

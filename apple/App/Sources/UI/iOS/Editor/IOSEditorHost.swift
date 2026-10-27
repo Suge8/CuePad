@@ -41,6 +41,8 @@ struct IOSEditorHost: UIViewRepresentable {
     /// false：盖着别的东西、看不见时（技能与规则文件页标出合并时）收起键盘、不接输入、读屏跳过；回到 true 时之前拿着键盘的再拿回来。
     var editable = true
     @Environment(AppServices.self) private var services
+    @Environment(Workspace.self) private var workspace
+    @Environment(\.openPreview) private var openPreview
 
     func makeCoordinator() -> KeyboardBar.Actions { KeyboardBar.Actions() }
 
@@ -70,7 +72,9 @@ struct IOSEditorHost: UIViewRepresentable {
         view.onChange = onChange
         view.selectionActions = selectionActions
         view.onError = onError
-        view.onFetchFile = { [services, onError] key in AttachmentLooks.fetch(key, services: services, onError: onError) }
+        view.onOpenAttachment = { [workspace, openPreview] key, name in
+            workspace.openAttachment(DraftFile(key: key, name: name), group: "note", with: openPreview)
+        }
         context.coordinator.insertImage = onInsertImage ?? {}
         context.coordinator.insertFile = onInsertFile ?? {}
         context.coordinator.variables = onVariables ?? {}

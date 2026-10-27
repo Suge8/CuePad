@@ -152,11 +152,7 @@ extension CueTextView {
 
     @objc func tappedAttachment(_ tap: UITapGestureRecognizer) {
         guard let hit = attachment(at: tap.location(in: self)) else { return }
-        if let file = hit.file {
-            QuickLook.show(file, title: hit.name, from: self)
-        } else {
-            onFetchFile?(hit.key)
-        }
+        onOpenAttachment?(hit.key, hit.name)
     }
 
     // MARK: 复制

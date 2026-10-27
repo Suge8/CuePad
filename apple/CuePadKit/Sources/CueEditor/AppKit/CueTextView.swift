@@ -19,8 +19,8 @@ public final class CueTextView: NSTextView, CueEditorHost {
     public var selectionActions: [CueSelectionAction] = []
     /// 附件入库失败（磁盘满、文件不可读、太大）。失败的附件不会插入。
     public var onError: ((any Error) -> Void)?
-    /// 点了还没到这台的附件（文件牌或图片）：宿主去 iCloud 取，到了调 `refreshAttachments`。
-    public var onFetchFile: ((String) -> Void)?
+    /// 点了文件牌或还没到这台的图片（键、文件名；图片没有名字）：宿主在本机就打开看，还没到就去 iCloud 取，到了调 `refreshAttachments`。
+    public var onOpenAttachment: ((_ key: String, _ name: String) -> Void)?
     /// 附件此刻的样子（见 `CueFileStatus`）：参数是键、文件名与本机那份（不在本机为 nil）。
     public var fileStatus: (_ key: String, _ name: String, _ file: URL?) -> CueFileStatus {
         get { core.fileStatus }

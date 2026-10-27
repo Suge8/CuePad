@@ -90,6 +90,7 @@ enum InkSymbols {
         "cue.hand",
         "cue.mac",
         "cue.photo",
+        "cue.clip",
         "cue.photos",
         "cue.camera",
         "cue.select",
