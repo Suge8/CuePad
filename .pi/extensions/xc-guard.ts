@@ -81,11 +81,30 @@ function killsByName(text: string): boolean {
 	return false;
 }
 
-/** osascript 要执行的脚本文本：它自己这一段里的（-e）、点名的脚本文件；没有 -e 与文件时脚本来自标准输入（管道、heredoc），看整条命令。字符串字面量去掉：窗口名里写 click 不是点按。 */
+/** 还原 shell 交给程序的字面文本：单引号内原样，双引号内 \" \\ \$ \` 还原，引号外的反斜杠转义还原。 */
+function unshell(text: string): string {
+	let out = "";
+	for (let i = 0; i < text.length; i++) {
+		const ch = text[i];
+		if (ch === "'") {
+			const end = text.indexOf("'", i + 1);
+			out += text.slice(i + 1, end < 0 ? undefined : end);
+			i = end < 0 ? text.length : end;
+		} else if (ch === '"') {
+			for (i++; i < text.length && text[i] !== '"'; i++) out += text[i] === "\\" && '"\\$`'.includes(text[i + 1] ?? "") ? text[++i] : text[i];
+		} else out += ch === "\\" ? (text[++i] ?? "") : ch;
+	}
+	return out;
+}
+
+/** osascript 要执行的脚本文本（字符串字面量去掉：窗口名里写 click 不是点按）：自己这一段里的（-e，先还原 shell 引号）、heredoc 正文、点名的脚本文件；
+ * 没有 -e 与文件时脚本来自标准输入（管道、heredoc），看整条命令。 */
 function scriptText(segment: string, command: string, heredocs: string, args: string[]): string {
 	const files = args.filter((a) => !a.startsWith("-") && existsSync(a) && statSync(a).isFile() && statSync(a).size < 1e5);
 	const fromStdin = !args.includes("-e") && files.length === 0;
-	return [segment, heredocs, fromStdin ? command : "", ...files.map((f) => readFileSync(f, "utf8"))].join("\n").replace(/"(?:[^"\\\n]|\\.)*"/g, '""');
+	return [unshell(segment), heredocs, fromStdin ? unshell(command) : "", ...files.map((f) => readFileSync(f, "utf8"))]
+		.map((text) => text.replace(/"(?:[^"\\\n]|\\.)*"/g, '""'))
+		.join("\n");
 }
 
 function blocked(command: string): string | undefined {
