@@ -38,6 +38,8 @@ APPLE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 . "$APPLE_DIR/scripts/_sim.sh"
 # shellcheck source=_lock.sh source-path=SCRIPTDIR
 . "$APPLE_DIR/scripts/_lock.sh"
+# shellcheck source=_build.sh source-path=SCRIPTDIR
+. "$APPLE_DIR/scripts/_build.sh"
 IOS_DEVICE="${CUEPAD_IOS_DEVICE:-iPhone 17}"
 IPAD_DEVICE="${CUEPAD_IPAD_DEVICE:-iPad Pro 11-inch (M5)}"
 # 测试里条件等待的上限从这个时限推出（CueTestSupport 的 conditionBudget）：测试不另写短的墙钟上限
@@ -116,34 +118,11 @@ xcb() {
     | { grep -v 'failed with exit code 0 but produced no further output' || true; }
 }
 
-# 源码没变就跳过：代码没动时空编也要 3–133 秒（随负载）。指纹 = HEAD + 相对 HEAD 的改动内容 + 未跟踪文件的内容 + 平台、配置、构建设置、
-# 收窄参数、CUEPAD_SIGN + Xcode 的版本号（换 Xcode 即换 SDK）。工程文件、Package.resolved、xcconfig 都在 apple/ 里，一并算；
-# apple/ 之外没有构建的输入，scripts/ 里没有（工程里没有脚本阶段，xc.sh 给的设置已算进去）。
-# 指纹在构建成功后才写、构建前先删（被打断的构建留不下旧指纹），App 不在也不跳。perf 的 Release 构建同样跳过（xc.sh perf ab 每轮都过一遍构建）。
-# 构建中途改了源码不会误跳：指纹取在构建前，改动让下一次的指纹对不上。
-build_key() {
-  {
-    git -C "$APPLE_DIR" rev-parse HEAD
-    git -C "$APPLE_DIR" diff HEAD --binary -- . ':(exclude)scripts'
-    (cd "$APPLE_DIR" && git ls-files -o --exclude-standard -z -- . ':(exclude)scripts' | xargs -0 shasum -a 1)
-    plutil -extract ProductBuildVersion raw "${DEVELOPER_DIR:-$(xcode-select -p)}/../version.plist"
-    printf '%s\n' "$platform" "$configuration" "${CUEPAD_SIGN:-}" ${build_settings[@]+"${build_settings[@]}"} "$@"
-  } | shasum -a 1
-}
-# built <构建命令…>：指纹对得上且 App 在就跳过，否则构建并记下指纹
-built() {
-  local keyfile="$DERIVED/build-key-$platform" key
-  key="$(build_key "$@")"
-  if [ -d "$app" ] && [ "$(cat "$keyfile" 2>/dev/null)" = "$key" ]; then return 0; fi
-  rm -f "$keyfile"
-  phase 编译 "$@" || return
-  printf '%s' "$key" >"$keyfile"
-}
-
 # Debug 一律连测试目标一起编（build-for-testing），与 test 同一张构建图：测试目标也链接 CuePadKit 时，Xcode 把被几个目标共用的
 # 包产品改编成动态框架，只编 App 时却静态链接。两种编法交替时，一边留下的旧模块会被另一边的 App 编译读到（报"没有这个成员"、
 # 改了存储属性后一启动就崩在 Kit 的释放里），每次切换还要重新链接、签名。测量用的 Release（build-perf）不编测试，不受影响
-xcd() { built xcb -quiet build-for-testing "$@"; }
+# 第一个参数是范围（见 _build.sh 的 built），其余收窄参数原样给 xcodebuild
+xcd() { local need="$1"; shift; built "$DERIVED/build-key-$platform" "$app" "$need" xcb -quiet build-for-testing "$@"; }
 
 # CUEPAD_SIGN=development：ad-hoc 构建完只给主程序换签名（嵌入描述文件、带 iCloud 权限并写定开发环境）。不在 xcodebuild 里换：
 # 签名设置覆盖到每个 target，框架与命令行工具会要团队、bundle id；内嵌的仍是 ad-hoc，没开 Hardened Runtime 就照常加载。
@@ -170,11 +149,11 @@ case "$cmd" in
     # Kit 的 macOS 构建（CuePi、命令行工具只在这里编到）与 iOS 编译产物目录不同，并行跑
     (cd "$APPLE_DIR/CuePadKit" && swift build --quiet) & kit=$!
     status=0
-    if xcd; then python3 "$APPLE_DIR/scripts/strings.py" check || status=$?; else status=$?; fi
+    if xcd all; then python3 "$APPLE_DIR/scripts/strings.py" check || status=$?; else status=$?; fi
     wait "$kit" || status=$?
     exit $status ;;
-  build) xcd; sign_development ;;
-  build-perf) built xcb -quiet build ;;
+  build) xcd all; sign_development ;;
+  build-perf) built "$DERIVED/build-key-$platform" "$app" all xcb -quiet build ;;
   test)
     # 用例断言的是中文界面：不随跑测试那台机器的系统语言变
     limits=(-test-timeouts-enabled YES -maximum-test-execution-time-allowance "$TEST_TIME_LIMIT" -testLanguage zh-Hans -testRegion CN)
@@ -194,7 +173,7 @@ case "$cmd" in
     narrowed() { local a; for a in "$@"; do case "$a" in -only-testing:*|-skip-testing:*) printf '%s\0' "$a" ;; esac; done; }
     kit_test() {
       local narrow=(); while IFS= read -r -d '' a; do narrow+=("$a"); done < <(narrowed "$@")
-      (cd "$APPLE_DIR/CuePadKit" && phase 编译 xcodebuild -quiet build-for-testing -scheme CuePadKit-Package -destination "$destination" -derivedDataPath "$DERIVED/kit-$platform" ${narrow[@]+"${narrow[@]}"} 2>&1 \
+      (cd "$APPLE_DIR/CuePadKit" && built "$DERIVED/kit-$platform/build-key" "$DERIVED/kit-$platform/Build/Products" "${narrow[*]:-all}" xcodebuild -quiet build-for-testing -scheme CuePadKit-Package -destination "$destination" -derivedDataPath "$DERIVED/kit-$platform" ${narrow[@]+"${narrow[@]}"} 2>&1 \
         && xcodebuild test-without-building -scheme CuePadKit-Package -destination "$destination" -derivedDataPath "$DERIVED/kit-$platform" "${limits[@]}" "$@" 2>&1) \
         | { grep -v 'failed with exit code 0 but produced no further output' || true; }
     }
@@ -205,7 +184,7 @@ case "$cmd" in
       kit_test "${@:3}" | shown || status=$?
     else
       narrow=(); while IFS= read -r -d '' a; do narrow+=("$a"); done < <(narrowed "${@:3}")
-      { xcd ${narrow[@]+"${narrow[@]}"} && xcb test-without-building "${limits[@]}" "${@:3}"; } | shown || status=$?
+      { xcd "${narrow[*]:-all}" ${narrow[@]+"${narrow[@]}"} && xcb test-without-building "${limits[@]}" "${@:3}"; } | shown || status=$?
       if [ "$platform" != mac ] && [ "$#" -le 2 ]; then kit_test | shown || status=$?; fi
     fi
     # 点名的测试一个也没对上（名字或所在的 Suite 写错）时 xcodebuild 照样报成功。并行跑（-parallel-testing-enabled YES）时没有那两行汇总，
@@ -219,7 +198,7 @@ case "$cmd" in
   shot|rec|run)
     # 截图前先查台前调度：开着就拍不对，不白等一次构建
     if [ "$platform" = mac ]; then python3 "$APPLE_DIR/scripts/app.py" preflight; fi
-    xcd
+    xcd app
     target=()
     if [ "$platform" != mac ]; then phase 开机 sim_boot "$device"; target=(--device "$device"); fi
     library="${CUEPAD_SHOT_LIBRARY:-$APPLE_DIR/.derived/library$([ "$platform" = mac ] || echo "-$platform")}"
