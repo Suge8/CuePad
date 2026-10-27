@@ -103,7 +103,7 @@ extension CueBrainConfig {
         let brain: any CueBrain = switch runtime {
         case .pi: PiBrain()
         case .codex: CodexBrain()
-        case .claudeCode: ClaudeBrain()
+        case .claudeCode: ClaudeHostedSession()
         case .opencode: throw CueBrainError.unsupported(runtime)
         }
         try await brain.start(self)
