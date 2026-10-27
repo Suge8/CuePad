@@ -16,7 +16,7 @@ final class IOSEditorHandle {
     /// 文件选择器选来的（安全作用域的访问由编辑器拿、存好后放开）。
     func insertFiles(_ urls: [URL]) { view?.insertFiles(urls) }
     func focus() { view?.becomeFirstResponder() }
-    /// 换掉整篇正文（说明在 Mac 上被改了、你还没动过，编辑页跟上）：光标留在原来的位置附近。
+    /// 换掉整篇正文（文件在 Mac 上被改了、你还没动过，文件页跟上）：光标留在原来的位置附近。
     func replace(_ text: String) {
         guard let view else { return }
         let location = view.selectedRange.location

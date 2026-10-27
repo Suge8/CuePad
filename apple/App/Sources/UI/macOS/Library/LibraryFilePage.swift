@@ -1,5 +1,4 @@
 #if os(macOS)
-import CueEditor
 import CueStore
 import SwiftUI
 
@@ -31,80 +30,34 @@ private struct LibraryFilePage: View {
     @State private var draft: FileDraft?
     @State private var texts: [String: String]?
 
-    private static let textWidth: CGFloat = LibraryLayout.column
-    private static let inset: CGFloat = 24
-
     var body: some View {
         let library = workspace.library
-        let entry = library?.file(file)
         VStack(spacing: 14) {
-            if let library, entry != nil, let draft {
-                Group {
-                    if draft.conflicted { ConflictBar(draft: draft) }
-                    bar(library, draft)
-                    if case .skill(let path) = file { SkillFields(draft: draft, problem: library.skill(at: path)?.problem) }
-                }
-                .frame(maxWidth: Self.textWidth, alignment: .leading).padding(.horizontal, Self.inset)
-                // 各份正文没到齐时标不出来，照常显示正文
-                let blocks = draft.previewing ? merge(library)?.preview(retiring: draft.retire, texts: texts) : nil
-                let theme = CueEditorTheme.editor(palette, horizontalInset: Self.inset, maxTextWidth: Self.textWidth)
-                ZStack {
-                    EditorHost(
-                        initialText: draft.body, theme: theme, handle: draft.handle,
-                        onChange: { draft.changed(body: $0) }, editable: blocks == nil)
-                    .opacity(blocks == nil ? 1 : 0)
-                    if let blocks {
-                        MergePreview(blocks: blocks, theme: theme).background(palette.desk)
-                    }
-                }
+            if let library, library.file(file) != nil, let draft {
+                LibraryFileTop(file: file, library: library, draft: draft, texts: texts)
+                LibraryFileBody(file: file, library: library, draft: draft, texts: texts)
             }
         }
         .padding(.top, Spacing.pageTop)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(palette.desk.ignoresSafeArea())
-        .observingLibraryTexts(library?.textPaths(for: file) ?? [], in: library, into: $texts)
-        .onChange(of: entry == nil, initial: true) {
-            if library != nil, entry == nil { workspace.close(.library(file)) }
-        }
-        .onChange(of: library?.arrived(file, in: texts), initial: true) { _, arrived in
-            guard let library, let arrived else { return }
-            if let draft { draft.follow(arrived) } else { draft = workspace.fileDraft(file, text: arrived, on: library.hostID) }
-        }
+        .loadingFileDraft($draft, of: file, in: library, texts: $texts) { workspace.close(.library(file)) }
         .task(id: draft != nil) {
             await NextFrame.wait()
             draft?.handle.focus()
         }
-        .overlayHeader(header(library, entry: entry), in: workspace)
-        .task(id: draft?.state) {
-            guard let draft, draft.state == .saved || draft.state == .followed else { return }
-            try? await Task.sleep(for: SaveState.savedDisplay * 2)
-            if !Task.isCancelled { draft.settle() }
-        }
+        .overlayHeader(header(library), in: workspace)
         .onDisappear { if let draft { Task { await draft.leave() } } }
     }
 
-    /// 工具栏中间那一块：标题同手机（技能是全局或项目名，规则是名字），次要一行是文件名与存好没有（还没有这个文件时写还没有：写了就建出来）；完整路径悬停看（多是一长串家目录里的点目录）。
-    private func header(_ library: AgentLibrary?, entry: (path: String, textPath: String, hash: String?)?) -> OverlayHeader.Content {
-        let name = entry.map { URL(filePath: $0.textPath).lastPathComponent }
+    /// 工具栏中间那一块：标题同手机（技能是全局或项目名，规则是名字），次要一行是文件名与存好没有；完整路径悬停看（多是一长串家目录里的点目录）。
+    private func header(_ library: AgentLibrary?) -> OverlayHeader.Content {
+        let entry = library?.file(file)
         return OverlayHeader.Content(
             page: .library(file), title: workspace.fileTitle(file, in: library),
-            detail: Dotted(name, draft?.shownState ?? (entry?.hash == nil ? String(localized: "还没有") : nil)),
+            detail: library?.detail(of: file, draft: draft) ?? Dotted(),
             failed: draft?.state == .failed, help: entry.flatMap { library?.shown($0.textPath) },
-            widest: Dotted(name, FileDraft.longestShownState))
-    }
-
-    private func merge(_ library: AgentLibrary) -> LibraryTidy? {
-        if case .instruction(let kind) = file { library.merge(into: kind) } else { nil }
-    }
-
-    @ViewBuilder private func bar(_ library: AgentLibrary, _ draft: FileDraft) -> some View {
-        if case .skill(let path) = file, let tidy = library.duplicate(of: path) {
-            DuplicateBar(path: path, tidy: tidy, library: library)
-        } else if let tidy = merge(library) {
-            MergeBar(tidy: tidy, library: library, draft: draft, ready: tidy.preview(retiring: draft.retire, texts: texts) != nil) {
-                await draft.leave()
-            }
-        }
+            widest: Dotted(library?.fileName(file), FileDraft.longestShownState))
     }
 }
 #endif

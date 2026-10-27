@@ -44,7 +44,7 @@ struct CardEditorPage: View {
             if mounted, let data, let editing {
                 editor(data.card, editing)
                     .padding(.top, Spacing.pageTop)
-                .padding(.bottom, Self.barClearance)
+                    .padding(.bottom, Self.barClearance)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
