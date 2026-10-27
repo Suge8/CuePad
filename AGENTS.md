@@ -4,7 +4,7 @@ Swift 原生应用（macOS / iOS / iPadOS），产品见 [README.md](README.md)�
 
 ## 命令
 
-- 构建、测试、截图、录屏、测量、发布只经 `apple/scripts/xc.sh`（用法见头注释），共用包是 `xc.sh test kit`，提交前跑 `xc.sh check`。绕开它的构建命令和按名字或 bundle id 起停 CuePad（与正式版同一个 bundle id）会被 Pi 扩展拦下。
+- 构建、测试、截图、录屏、测量、发布只经 `apple/scripts/xc.sh`（用法见头注释），共用包是 `xc.sh test kit`，提交前跑 `xc.sh check`。它在前台跑到结束（排队、时限、失败退出都在里面，结束打一行各段用时），不放后台再 sleep 轮询。绕开它的构建命令和按名字或 bundle id 起停 CuePad（与正式版同一个 bundle id）会被 Pi 扩展拦下。
 - 提交钩子拦下超过 5000 令牌（字节数 ÷ 4，约 20KB）的新文件与变大的超标文件，拆法在它的报错里：新代码按职责分文件写，不往超标文件里加。
 - 调试实例只用 `xc.sh shot|rec|run` 起（隔离、用完自己退出，`run` 起的用 `xc.sh stop` 收）；多张图在一次调用里拍（用 `,` 隔开，见 xc.sh 头注释），不一张一次、不另写批拍脚本。别的进程只按自己拿到的 PID 结束。排队等过上限以 75 退出并列出持有者（`_lock.sh` 头注释）。
 - 测试摘要里的 "Executed N tests" 只数 XCTest，Swift Testing 的用例不在内。
