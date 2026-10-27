@@ -1,9 +1,10 @@
 #if os(iOS)
+import CueEditor
 import CueStore
 import SwiftUI
 
 /// 一份技能或规则的文件页（手机）：改动攒在这里，顶栏右边的纸飞机"发往 Mac"（有改动才亮），那台写进文件、快照同步回来（`FileDraft`）。
-/// 顶上依次是：Mac 上又改过而你也改着时的那一条（换成 Mac 上的、留我的），同名的分段与"只留这份"、或另写了一份的"合并进来"（`DuplicateBar`、`MergeBar`），
+/// 顶上依次是：Mac 上又改过而你也改着时的那一条（`ConflictBar`），同名的分段与"只留这份"、或另写了一份的"合并进来"（`DuplicateBar`、`MergeBar`），
 /// 技能的名字与说明两个框；下面是正文。顶栏写它在哪（技能是全局或项目名，规则是名字），第二行写文件名、发着没有。
 /// 正文读本地已同步来的那一条（`LibraryFileText`），不向 Mac 要；对上快照的哈希才载入、才跟（`AgentLibrary.arrived`）。
 /// 不点纸飞机就不发：退出这一页时没发的留在 `Workspace.fileDraft`，回来接着改。快照里没有这一份了就退回去。
@@ -25,12 +26,13 @@ struct LibraryFileScreen: View {
                 top(library, draft)
                 // 各份正文没到齐时标不出来，照常显示正文
                 let blocks = previewing ? merge(library)?.preview(retiring: retire, texts: texts) : nil
+                let theme = CueEditorTheme.editor(palette, horizontalInset: 20)
                 ZStack {
-                    IOSEditorHost(initialText: draft.body, theme: .editor(palette, horizontalInset: 20), handle: draft.handle,
+                    IOSEditorHost(initialText: draft.body, theme: theme, handle: draft.handle,
                                   onChange: { draft.changed(body: $0) }, onError: workspace.fail)
                     .opacity(blocks == nil ? 1 : 0)
                     if let blocks {
-                        MergePreview(blocks: blocks, font: .body).padding(.horizontal, 16).background(palette.paper)
+                        MergePreview(blocks: blocks, theme: theme).background(palette.paper)
                     }
                 }
             } else if entry != nil {
@@ -40,7 +42,7 @@ struct LibraryFileScreen: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(palette.paper.ignoresSafeArea())
-        .floatingHeader(.verbatim(workspace.fileTitle(file, in: library)), detail: detail(entry?.path)) { send }
+        .floatingHeader(.verbatim(workspace.fileTitle(file, in: library)), detail: detail(entry)) { send }
         .observingLibraryTexts(library?.textPaths(for: file) ?? [], in: library, into: $texts)
         .onChange(of: entry == nil, initial: true) {
             if library != nil, entry == nil { dismiss() }
@@ -61,7 +63,7 @@ struct LibraryFileScreen: View {
         let merge = merge(library)
         if draft.conflicted || duplicate != nil || merge != nil || isSkill {
             VStack(alignment: .leading, spacing: 12) {
-                if case .conflict(let file) = draft.state { conflict(draft, file: file) }
+                if draft.conflicted { ConflictBar(draft: draft) }
                 if case .skill(let path) = file, let duplicate {
                     DuplicateBar(path: path, tidy: duplicate, library: library)
                 } else if let merge {
@@ -72,7 +74,6 @@ struct LibraryFileScreen: View {
                 }
                 if case .skill(let path) = file {
                     SkillFields(draft: draft, problem: library.skill(at: path)?.problem).padding(.horizontal, 4)
-                    Divider()
                 }
             }
             .padding(.horizontal, 16)
@@ -82,17 +83,9 @@ struct LibraryFileScreen: View {
 
     private var isSkill: Bool { if case .skill = file { true } else { false } }
 
-    /// 顶栏第二行：文件名、发着没有。
-    private func detail(_ path: String?) -> Dotted {
-        let name = path.map { isSkill ? "SKILL.md" : ($0 as NSString).lastPathComponent } ?? ""
-        let state: String? = switch draft?.state {
-        case .saving: String(localized: "正在发往 Mac…")
-        case .saved: String(localized: "Mac 上已写好")
-        case .followed: String(localized: "Mac 上改过，已跟上")
-        case .failed: String(localized: "没发出去")
-        default: draft?.dirty == true ? String(localized: "有改动没发") : nil
-        }
-        return Dotted(name, state)
+    /// 顶栏第二行：文件名、发着没有（还没有这个文件时写还没有：写了发往 Mac 就建出来）。
+    private func detail(_ entry: (path: String, textPath: String, hash: String?)?) -> Dotted {
+        Dotted(entry.map { URL(filePath: $0.textPath).lastPathComponent }, draft?.shownState ?? (entry?.hash == nil ? String(localized: "还没有") : nil))
     }
 
     private var send: some View {
@@ -103,20 +96,6 @@ struct LibraryFileScreen: View {
                 try? await Task.sleep(for: SaveState.savedDisplay * 2)
                 if !Task.isCancelled { draft.settle() }
             }
-    }
-
-    /// Mac 上改过、你也改着：一条写出来，给"换成 Mac 上的"（丢下你的）与"留我的"（以 Mac 上此刻的为基准发过去盖过它）。
-    private func conflict(_ draft: FileDraft, file: String?) -> some View {
-        HStack(spacing: 10) {
-            Text("Mac 上改过了，你改的还没发").font(.footnote).foregroundStyle(palette.ink)
-            Spacer(minLength: 8)
-            if file != nil {
-                Button("换成 Mac 上的") { draft.takeFile() }.font(.footnote.weight(.medium)).foregroundStyle(palette.ink)
-                Button("留我的") { Task { await draft.keepMine() } }.font(.footnote.weight(.medium)).foregroundStyle(palette.ink)
-            }
-        }
-        .padding(.horizontal, 14).padding(.vertical, 10)
-        .background(palette.bubble, in: .rect(cornerRadius: 16, style: .continuous))
     }
 }
 #endif

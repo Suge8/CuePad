@@ -59,22 +59,25 @@ extension Workspace {
 /// 玻璃按内容宽画再居中时，状态一换（进出"正在同步"、开始结束工作、计时进位）玻璃就变宽变窄、名字左右挪。
 /// Cue 页的页头也在这一位（`CueTitle`，同一块玻璃、同样的宽度规则），只在侧栏收起时有（同 `ProjectSwitcher` 只在收起时写当前页）。
 /// 一页里换看哪一段的分段也在这一位（技能与规则页，`LibraryPanesSlot`，同手机页顶中间）；进展页的例外见 `PanesSlot`。
+/// 开着盖在页上的编辑页时这一位是它的标题与次要一行（`OverlayTitle`）。
 struct PageTitleSlot: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
     /// 工具栏里标题一块最宽多少：名字长时截断，不把右边的按钮挤走。
-    private static let width: CGFloat = 420
+    fileprivate static let width: CGFloat = 420
     /// 窗口窄时标题位最多让到多窄（名字截断，状态照常）。
-    private static let minWidth: CGFloat = 160
+    fileprivate static let minWidth: CGFloat = 160
 
     var body: some View {
-        if let state = workspace.shownSessionHeader {
+        if workspace.overlay != nil {
+            OverlayTitle()
+        } else if let state = workspace.shownSessionHeader {
             title(state)
         } else if workspace.root == .cue, workspace.pages.sidebar == .detailOnly {
             CueTitle()
                 .frame(height: Spacing.toolbarControl)
-                .modifier(Flex())
+                .modifier(PageTitleFlex())
         } else if workspace.root == .library {
             LibraryPanesSlot()
         }
@@ -102,7 +105,7 @@ struct PageTitleSlot: View {
         .frame(height: Spacing.toolbarControl)
         .accessibilityElement(children: .contain)
         // 标题位的宽度只看工具栏给多少：随内容变时换会话整条工具栏重排、整窗重算鼠标跟踪区，掉帧 8 次到 4～5 次
-        .modifier(Flex())
+        .modifier(PageTitleFlex())
         .opacity(state.showsHeader ? 1 : 0)
         .animation(HandOff.quick, value: state.showsHeader)
         .allowsHitTesting(state.showsHeader)
@@ -117,16 +120,6 @@ struct PageTitleSlot: View {
         }
     }
 
-    /// 标题位在 `minWidth`～`width` 之间由工具栏给：理想宽写最窄（工具栏按理想宽量最少要多宽），能放多宽由 `ToolbarItemFlex` 告诉工具栏。玻璃铺满给的宽。
-    private struct Flex: ViewModifier {
-        func body(content: Content) -> some View {
-            content
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .glass(in: .capsule)
-                .frame(minWidth: PageTitleSlot.minWidth, idealWidth: PageTitleSlot.minWidth, maxWidth: PageTitleSlot.width)
-                .background { ToolbarItemFlex(width: PageTitleSlot.minWidth...PageTitleSlot.width) }
-        }
-    }
 
     /// 这件事的完成圈：命中区占满玻璃的高度。完成了只显示对勾（回到待办在任务那边做）。
     private func ring(_ task: Card) -> some View {
@@ -150,6 +143,19 @@ struct PageTitleSlot: View {
         }
         .buttonStyle(PressStyle())
         .help("回到这件事")
+    }
+}
+
+/// 标题位在 `minWidth`～`width` 之间由工具栏给：理想宽写最窄（工具栏按理想宽量最少要多宽），能放多宽由 `ToolbarItemFlex` 告诉工具栏。玻璃铺满给的宽。
+struct PageTitleFlex: ViewModifier {
+    var alignment = Alignment.leading
+
+    func body(content: Content) -> some View {
+        content
+            .frame(maxWidth: .infinity, alignment: alignment)
+            .glass(in: .capsule)
+            .frame(minWidth: PageTitleSlot.minWidth, idealWidth: PageTitleSlot.minWidth, maxWidth: PageTitleSlot.width)
+            .background { ToolbarItemFlex(width: PageTitleSlot.minWidth...PageTitleSlot.width) }
     }
 }
 

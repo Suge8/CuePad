@@ -15,6 +15,7 @@ nonisolated private struct EditorData: Sendable, Equatable {
 /// 重活先在看不见时做完——挂上编辑器与底栏、让编辑器接过键盘，各占一帧——再淡入；这几帧里墙上那张卡保持按下（`CardPresence.opening`）。
 /// 编辑页底下的项目页保持挂载，关掉后回到原来的滚动位置。
 /// 这张卡的操作（置顶、移到项目、复制、归档、删除）在工具栏右上的"⋯"里（`PageMenuSlot`），页里不另放一个。
+/// 它在哪个项目、改于什么时候、存好没有在工具栏中间（`OverlayHeader`，同手机编辑页页顶中间那块），页里不另写。
 struct CardEditorPage: View {
     let cardID: UUID
     @Environment(Workspace.self) private var workspace
@@ -41,11 +42,8 @@ struct CardEditorPage: View {
     var body: some View {
         ZStack(alignment: .top) {
             if mounted, let data, let editing {
-                VStack(spacing: 10) {
-                    meta(data, editing)
-                    editor(data.card, editing)
-                }
-                .padding(.top, Spacing.pageTop)
+                editor(data.card, editing)
+                    .padding(.top, Spacing.pageTop)
                 .padding(.bottom, Self.barClearance)
             }
         }
@@ -84,6 +82,13 @@ struct CardEditorPage: View {
             workspace.open(card)
         }
         .onChange(of: isOpen) { if !isOpen { collapse() } }
+        .overlayHeader(header, in: workspace)
+        // "已保存"只亮一会儿；状态再变（又在保存、出错）时这次计时作废
+        .task(id: editing?.saveState) {
+            guard let editing, editing.saveState == .saved else { return }
+            try? await Task.sleep(for: SaveState.savedDisplay)
+            if !Task.isCancelled { editing.settleSaved() }
+        }
         .onDisappear { editing?.leave() }
     }
 
@@ -114,18 +119,15 @@ struct CardEditorPage: View {
         }
     }
 
-    private func meta(_ data: EditorData, _ editing: CardEditing) -> some View {
-        HStack(spacing: 8) {
-            ProjectGlyph(project: data.project, size: 12)
-            Text(data.project?.shownName ?? "").foregroundStyle(palette.ink)
-            Dot()
-            Text(DateLabel.short(data.card.modifiedAt))
-            SaveStatus(editing: editing)
-            if data.card.isPinned { Label("已置顶", icon: .pin) }
-        }
-        .font(Typography.meta)
-        .foregroundStyle(palette.ink3)
-        .column()
+    /// 工具栏中间那一块：标题是项目名，次要一行是改于什么时候、置顶与存好没有（同手机编辑页的页顶）。
+    private var header: OverlayHeader.Content {
+        let card = data?.card
+        return OverlayHeader.Content(
+            page: .card(cardID), title: data?.project?.shownName ?? "",
+            detail: Dotted(
+                card.map { String(localized: "改于 \(DateLabel.short($0.modifiedAt))") }, card?.isPinned == true ? String(localized: "已置顶") : nil,
+                editing?.saveState.text),
+            failed: editing?.saveState == .failed)
     }
 
     private func editor(_ card: Card, _ editing: CardEditing) -> some View {

@@ -157,6 +157,28 @@ final class FileDraft {
 
     private func mark() { if dirty != (text != base) { dirty = text != base } }
 
+    /// 页顶次要一行里写的存好没有（Mac 自动存，手机发往 Mac）；文件在别处改过、等你选时不写，文件页顶上那一条写（`ConflictBar`）。
+    var shownState: String? {
+        #if os(macOS)
+        switch state {
+        case .saving: SaveState.saving.text
+        case .saved: SaveState.saved.text
+        case .followed: String(localized: "在别处改过，已跟上")
+        case .failed: SaveState.failed.text
+        case .idle, .conflict: nil
+        }
+        #else
+        switch state {
+        case .saving: String(localized: "正在发往 Mac…")
+        case .saved: String(localized: "Mac 上已写好")
+        case .followed: String(localized: "Mac 上改过，已跟上")
+        case .failed: String(localized: "没发出去")
+        case .idle: dirty ? String(localized: "有改动没发") : nil
+        case .conflict: nil
+        }
+        #endif
+    }
+
     /// "已保存"、"已跟上"亮一会儿就收。
     func settle() { if state == .saved || state == .followed { state = .idle } }
 

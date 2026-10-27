@@ -246,6 +246,7 @@ struct InstructionSection: View {
 }
 
 /// 全局规则那一张纸：名字一行，下面露出正文开头四行（留足四行的高，短的不缩），点开就改。正文读同步来的那一条（`LibraryFileText`），不另存一份预览。
+/// 露出的是渲染后的样子（`MarkdownBlock`）：标题加粗、不带 #，列表带圆点，行内记号只留字，代码块、表格与分割线跳过。
 private struct GlobalRuleRow: View {
     let library: AgentLibrary
     let instruction: LibraryInstruction
@@ -262,7 +263,7 @@ private struct GlobalRuleRow: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                     InstructionTrailing(library: library, instruction: instruction)
                 }
-                Text(verbatim: opening)
+                Text(opening)
                     .font(Self.textFont).foregroundStyle(instruction.hash == nil ? palette.ink3 : palette.ink2)
                     .lineLimit(Self.lines, reservesSpace: true).lineSpacing(2)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -278,11 +279,31 @@ private struct GlobalRuleRow: View {
 
     private static let lines = 4
 
-    /// 正文开头几行（跳过空行）；还没有这个文件写"还没有"，正文还在路上时空着（四行的高留着）。
-    private var opening: String {
+    /// 正文开头几行；还没有这个文件写"还没有"，正文还在路上时空着（四行的高留着）。
+    private var opening: AttributedString {
         guard let arrived = AgentLibrary.arrived(instruction.path, hash: instruction.hash, in: texts) else { return "" }
-        guard let text = arrived else { return String(localized: "还没有") }
-        return text.split(separator: "\n").filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }.prefix(Self.lines).joined(separator: "\n")
+        guard let text = arrived else { return AttributedString(localized: "还没有") }
+        var lines: [AttributedString] = []
+        func add(_ line: String, bold: Bool = false) {
+            let plain = MarkdownBlock.plainInline(line).trimmingCharacters(in: .whitespaces)
+            guard !plain.isEmpty, lines.count < Self.lines else { return }
+            var shown = AttributedString(plain)
+            if bold { shown.inlinePresentationIntent = .stronglyEmphasized }
+            lines.append(shown)
+        }
+        _ = MarkdownBlock.parse(text) { block in
+            switch block {
+            case .heading(_, let text): add(text, bold: true)
+            case .paragraph(let text), .quote(let text): text.split(separator: "\n").forEach { add(String($0)) }
+            case .item(let marker, let text, _): add(marker + " " + text)
+            case .code, .table, .rule: break
+            }
+            return lines.count < Self.lines
+        }
+        return lines.reduce(into: AttributedString()) { all, line in
+            if !all.characters.isEmpty { all += "\n" }
+            all += line
+        }
     }
 
     #if os(macOS)

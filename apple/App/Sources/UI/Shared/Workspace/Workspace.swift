@@ -107,7 +107,7 @@ final class Workspace {
     let presses = CardPresses()
     let sendState: SendState
     /// 盖在当前页上的那一页（一次只有一页，开新的就换掉旧的）：换页、"收起"、Esc 时清空；底部输入条、工具栏的"收起"都只看它。
-    /// 灵感的编辑页设上时立即挂上，清空时先淡出、淡完才卸下（`CardEditorPage`）；iOS 打开卡片与技能、规则是推入，见 `showEditor`、`openLibrary`。
+    /// 开合各页自己管；iOS 打开卡片与技能、规则是推入，见 `showEditor`、`openLibrary`。
     var overlay: Overlay? {
         didSet { if case .card(let id)? = overlay { presses.present(id) } }
     }
@@ -204,7 +204,7 @@ final class Workspace {
 
     #if os(macOS)
     let sessionHeader = SessionHeader()
-
+    let overlayHeader = OverlayHeader()
     #endif
 
     @ObservationIgnored private var noticeTask: Task<Void, Never>?
