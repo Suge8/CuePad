@@ -3,7 +3,7 @@ import CueStore
 import Foundation
 
 /// `-CuePadBoardTour YES`（配 progress 画面与 `-CuePadDemo YES`，就绪后一直循环）：待办里"续费域名"依次走过看板各列，录卡的进出、换列与列内换位（`xc.sh rec`）——
-/// 交给 Agent（到推进中）→ 要你确认（到等你）→ 做完（到已完成）→ 重新打开（回待办）→ 排到待办最前，再从交给 Agent 开始。
+/// 交给 Agent（到推进中）→ 要你确认（到等你）→ 做完（到已完成）→ 归档（离开看板）→ 重新打开（取回归档，出现在待办）→ 排到待办最前，再从交给 Agent 开始。
 extension DebugScene {
     static func boardTourIfAsked(_ store: CueStore) async {
         guard defaults.bool(forKey: "CuePadBoardTour") else { return }
@@ -25,6 +25,8 @@ extension DebugScene {
             await pause()
             try? await store.setStatus(task.id, .done)
             await session(.ended)
+            await pause()
+            try? await store.archive(task.id)
             await pause()
             try? await store.setStatus(task.id, .todo)
             await pause()

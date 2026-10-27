@@ -189,6 +189,9 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         return Set(columns.compactMap { id, column in was[id].flatMap { $0 == column ? nil : id } })
     }
 
+    /// 看板上有这张卡（`Item.flight`、`Work.id`、`Held.id`）。
+    func holds(_ flight: String) -> Bool { Column.allCases.contains { flights($0).contains(flight) } }
+
     /// 每张卡在哪一列。
     private var columns: [String: Column] {
         Dictionary(Column.allCases.flatMap { column in flights(column).map { ($0, column) } }) { first, _ in first }
