@@ -107,6 +107,7 @@ extension View {
             Task { await DebugScene.closeIfAsked(workspace) }
             Task { await DebugScene.openMenuIfAsked() }
             Task { await DebugScene.cueFlowIfAsked(workspace) }
+            Task { await DebugScene.boardTourIfAsked(workspace.services.store) }
             await DebugScene.cycleIfAsked(workspace.services)
         }
         .background { if DebugScene.injectsGeometryLoop { GeometryLoopProbe() } }
@@ -154,8 +155,9 @@ extension View {
                     workspace.services.store, leave: { workspace.show(.progress) }, back: { workspace.show(.cue) })
                 async let tour: Void = DebugScene.dockTourIfAsked(workspace)
                 async let cueNow: Void = DebugScene.cueNowTourIfAsked(workspace.cue)
+                async let board: Void = DebugScene.boardTourIfAsked(workspace.services.store)
                 await DebugScene.cycleIfAsked(workspace.services)
-                _ = await (notices, wakes, blinks, says, relays, flow, away, tour, cueNow)
+                _ = await (notices, wakes, blinks, says, relays, flow, away, tour, cueNow, board)
             }
         #else
         self
