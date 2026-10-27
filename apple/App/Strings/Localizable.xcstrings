@@ -7687,22 +7687,6 @@
         }
       }
     },
-    "去处" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Places"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "去处"
-          }
-        }
-      }
-    },
     "去官网" : {
       "localizations" : {
         "en" : {
@@ -10699,22 +10683,6 @@
         }
       }
     },
-    "展开项目、进展" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Shows projects and progress"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "展开项目、进展"
-          }
-        }
-      }
-    },
     "崩溃线程顶部" : {
       "localizations" : {
         "en" : {
@@ -13056,22 +13024,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "推进中"
-          }
-        }
-      }
-    },
-    "推进中 %lld" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld active"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "推进中 %lld"
           }
         }
       }

@@ -1,13 +1,13 @@
 import CueStore
 
 /// 三端侧栏的结构只有这一份：有哪些条目、什么顺序、叫什么、用什么图标。Mac 的侧栏（`Sidebar`）与 iPad 的列表（`SplitSidebar`）只管长相与点了做什么；
-/// iPhone 底部那一排（`Dock`）取其中的去处。
+/// iPhone 标签栏（`Dock`）取其中的去处。
 /// 从上到下：Cue；进展（看板｜会话，`Route.progress`）；项目（全部，置顶的在前，其余按最近）；底部归档、回收站、设置。
 /// 技能与说明（`library`）只在 Mac 侧栏底下那一排（归档、回收站之后，有要整理的角上带点）：手机与 iPad 从 Cue 名牌的面板进，书架与 iPad 侧栏不列它。
 /// 项目行只有图标与名字：项目里在发生什么在项目页，要你拍板的在 Cue，在动的在进展。
 /// 搜索不占一行：iPad 在列表顶上一个搜索框，iPhone 在项目页顶上中间一条搜索框、进展页左上一颗搜索钮，Mac 在工具栏（⌘K）。
 nonisolated struct SidebarOutline: Equatable {
-    /// 侧栏里固定的条目（Cue 与项目行之外的）。`projects` 只给 iPhone 底部那一排（窄屏的项目书架），侧栏的项目是一行一个项目。
+    /// 侧栏里固定的条目（Cue 与项目行之外的）。`projects` 只给 iPhone 标签栏（窄屏的项目书架），侧栏的项目是一行一个项目。
     enum Entry {
         case progress, projects, archive, trash, library, settings
 

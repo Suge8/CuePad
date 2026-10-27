@@ -4,9 +4,8 @@ import SwiftUI
 
 /// 窄屏进展页的竖版看板：Mac 看板转 90°——待办、推进中、等你、已完成四行竖着排，每行一条（`BoardRowLane`），
 /// 行头竖在左端，卡在行里横着排、放不下就在这一行里横划。
-/// 四行竖着铺满顶栏与底部那一排之间（`BoardRows`）：行高只由这段高定，卡多卡少、有没有都不改，下面不空出一块，整页拖不动；
+/// 四行竖着铺满顶栏与标签栏之间（`BoardRows`）：行高只由这段高定，卡多卡少、有没有都不改，下面不空出一块，整页拖不动；
 /// 只有辅助字号下四行连各自的最矮都叠不下，才整页竖着滚。
-/// 横拖的归属照通用的那条（`PagerArbiter`）：手指下的行还能往那边滚就滚行，贴屏幕边起手、滚到头、行与行之间、空行、行头上的横拖是切页。
 /// 点"+"添加任务时整页先回到待办那一行。
 struct PhoneBoard: View {
     let board: TaskBoard
@@ -18,7 +17,7 @@ struct PhoneBoard: View {
         ScrollViewReader { proxy in
             ScrollView {
                 BoardRows(gap: Self.gap) {
-                    // 量这一屏多高的尺：滚动区看得见的那段（让开顶栏与底部那一排）
+                    // 量这一屏多高的尺：滚动区看得见的那段（让开顶栏与标签栏）
                     Color.clear.containerRelativeFrame(.vertical)
                     ForEach(TaskBoard.Column.allCases) { column in
                         BoardColumn(column: column, board: board, adding: $adding, newTaskProject: newTaskProject, row: true)
