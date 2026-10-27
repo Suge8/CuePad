@@ -166,12 +166,16 @@ public final class ClaudeCodeRuntime: AgentRuntime {
 
     // MARK: 终端会话
 
-    /// 一次钩子调用：托管会话自己的直接放行（状态来自 stream-json）——按环境里的 `HostMark`（值是会话 id）认，还要对上会话
-    /// （从托管会话里开的终端继承了标记）；其余交给它所在的终端会话（第一次见到就上桥）。
+    /// 一次钩子调用。原样放行、不登记的两种：
+    /// - 不是 Claude Code 发的：Claude Code 按每次钩子的输入设环境里的 `CLAUDE_CODE_SESSION_ID`，与输入里的 `session_id` 相同；
+    ///   照读 `~/.claude/settings.json` 跑这些钩子的别家（Grok Build、Cursor、OpenCode 的兼容插件）没有它，或是从 Claude Code
+    ///   里起时继承来的别的会话；
+    /// - 托管会话自己的（状态来自 stream-json）：环境里的 `HostMark`（值是会话 id）对上一个托管会话（从托管会话里开的终端继承了标记，会话不同）。
+    /// 其余交给它所在的终端会话（第一次见到就上桥）。
     private func received(_ call: AgentHookCall) {
         let envelope = call.envelope
         guard let input = JSONValue.parse(envelope.input), let event = input["hook_event_name"]?.string,
-              let sessionID = input["session_id"]?.string,
+              let sessionID = input["session_id"]?.string, envelope.environment["CLAUDE_CODE_SESSION_ID"] == sessionID,
               envelope.environment[HostMark.variable] != sessionID || hosted[sessionID] == nil else { return call.finish() }
         let id = PiSession.claudeID(sessionID: sessionID, pid: envelope.pid)
         if event == "SessionEnd" {
