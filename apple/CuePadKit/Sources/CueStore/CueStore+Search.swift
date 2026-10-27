@@ -51,8 +51,8 @@ extension CueStore {
       parts.append("projectID IN (SELECT value FROM json_each(?))")
       arguments.append(Self.idList(projects))
     }
-    if let hasImages = query.hasImages {
-      parts.append("instr(body, '\(CueFormat.imagePrefix)') \(hasImages ? ">" : "=") 0")
+    if let hasAttachments = query.hasAttachments {
+      parts.append("instr(body, '\(CueFormat.referencePrefix)') \(hasAttachments ? ">" : "=") 0")
     }
     switch query.sent {
     case .any:

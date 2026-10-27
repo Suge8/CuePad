@@ -8,8 +8,8 @@ public struct SearchQuery: Sendable, ExpressibleByStringLiteral {
   public var text: String
   /// 限定所属项目；nil 表示不限；空集合无结果。
   public var projects: Set<UUID>?
-  /// true 只要含图片的卡，false 只要不含图片的卡，nil 不限。
-  public var hasImages: Bool?
+  /// true 只要含附件（图片或文件）的卡，false 只要不含附件的卡，nil 不限。
+  public var hasAttachments: Bool?
   /// 发送条件：不限、从未发送过、或发送过（可限目标）。
   public var sent: SendCondition
   /// 卡片最近修改时间落在区间内（含两端）。
@@ -18,12 +18,12 @@ public struct SearchQuery: Sendable, ExpressibleByStringLiteral {
   public var inTrash: Bool
 
   public init(
-    text: String = "", projects: Set<UUID>? = nil, hasImages: Bool? = nil, sent: SendCondition = .any,
+    text: String = "", projects: Set<UUID>? = nil, hasAttachments: Bool? = nil, sent: SendCondition = .any,
     modifiedIn: ClosedRange<Date>? = nil, inTrash: Bool = false
   ) {
     self.text = text
     self.projects = projects
-    self.hasImages = hasImages
+    self.hasAttachments = hasAttachments
     self.sent = sent
     self.modifiedIn = modifiedIn
     self.inTrash = inTrash
@@ -31,7 +31,7 @@ public struct SearchQuery: Sendable, ExpressibleByStringLiteral {
 
   public init(stringLiteral value: String) { self.init(text: value) }
 
-  var hasCardFilters: Bool { projects != nil || hasImages != nil || sent != .any || modifiedIn != nil }
+  var hasCardFilters: Bool { projects != nil || hasAttachments != nil || sent != .any || modifiedIn != nil }
 }
 
 public enum SendCondition: Equatable, Sendable {
