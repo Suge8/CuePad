@@ -21,7 +21,7 @@ struct PreviewReplyBar: View {
             case .answer(let message): choices(message)
             }
         }
-        .glass(in: .rect(cornerRadius: ComposerMetrics.radius, style: .continuous))
+        .glass(in: .rect(cornerRadius: Radius.field))
     }
 
     private func field(_ prompt: String, to listener: Listener) -> some View {

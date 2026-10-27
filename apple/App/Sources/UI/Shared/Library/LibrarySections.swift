@@ -16,7 +16,7 @@ enum LibraryLayout {
     static let margin: CGFloat = Spacing.page
     static let bottom: CGFloat = Spacing.section
     /// 纸的圆角
-    static let radius: CGFloat = 12
+    static let radius = Radius.block
     /// 一张纸里行上下留的边；手机上行铺满纸宽（`flush`），不留
     static let paperVertical: CGFloat = 4
     static let flush = false
@@ -25,7 +25,7 @@ enum LibraryLayout {
     #else
     static let margin: CGFloat = 16
     static let bottom: CGFloat = 24
-    static let radius: CGFloat = 22
+    static let radius = Radius.sheet
     static let paperVertical: CGFloat = 0
     static let flush = true
     static let textInset: CGFloat = 20
@@ -46,8 +46,8 @@ struct LibraryPaper<Content: View>: View {
             }
         }
         .padding(.vertical, LibraryLayout.paperVertical)
-        .paper(radius: LibraryLayout.radius)
-        .rowContainer(.rect(cornerRadius: LibraryLayout.radius, style: .continuous), flush: LibraryLayout.flush)
+        .paper(cornerRadius: LibraryLayout.radius)
+        .rowContainer(.rect(cornerRadius: LibraryLayout.radius), flush: LibraryLayout.flush)
     }
 }
 
@@ -108,7 +108,7 @@ struct TidyPaper: View {
         }
         .padding(LibraryLayout.inset)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .paper(radius: LibraryLayout.radius)
+        .paper(cornerRadius: LibraryLayout.radius)
     }
 
     private func run() {

@@ -96,11 +96,11 @@ extension DebugScene {
             VStack(alignment: .leading, spacing: 12) {
                 Text("欢迎回来", tableName: "Demo").font(.system(size: 26, weight: .bold))
                 Text("用邮箱登录 Atlas", tableName: "Demo").foregroundStyle(.gray)
-                RoundedRectangle(cornerRadius: 12).stroke(.gray.opacity(0.3)).frame(height: 44).overlay(alignment: .leading) { Text("me@example.com").padding(.leading, 14) }
-                RoundedRectangle(cornerRadius: 12).stroke(.gray.opacity(0.3)).frame(height: 44).overlay(alignment: .leading) { Text("••••••").padding(.leading, 14) }
-                RoundedRectangle(cornerRadius: 12).fill(Color(red: 0.31, green: 0.27, blue: 0.9)).frame(height: 46).overlay { Text("登录", tableName: "Demo").foregroundStyle(.white).bold() }
+                RoundedRectangle(cornerRadius: Radius.block).stroke(.gray.opacity(0.3)).frame(height: 44).overlay(alignment: .leading) { Text("me@example.com").padding(.leading, 14) }
+                RoundedRectangle(cornerRadius: Radius.block).stroke(.gray.opacity(0.3)).frame(height: 44).overlay(alignment: .leading) { Text("••••••").padding(.leading, 14) }
+                RoundedRectangle(cornerRadius: Radius.block).fill(Color(red: 0.31, green: 0.27, blue: 0.9)).frame(height: 46).overlay { Text("登录", tableName: "Demo").foregroundStyle(.white).bold() }
             }
-            .padding(28).frame(width: 320).background(.white, in: RoundedRectangle(cornerRadius: 20))
+            .padding(28).frame(width: 320).background(.white, in: RoundedRectangle(cornerRadius: Radius.sheet))
         }
         .frame(width: 390, height: 640)
         let renderer = ImageRenderer(content: view)

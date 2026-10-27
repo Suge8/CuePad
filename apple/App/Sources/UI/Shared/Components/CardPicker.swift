@@ -216,13 +216,13 @@ struct CardRow: View {
             .multilineTextAlignment(.leading)
             Spacer(minLength: 0)
             if let image = text.images.first {
-                Thumbnail(hash: image, height: 64, radius: 8).frame(width: 80)
+                Thumbnail(hash: image, height: 64, cornerRadius: Radius.chip).frame(width: 80)
             }
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .paper(radius: 16)
-        .contentShape(.rect(cornerRadius: 16))
+        .paper()
+        .contentShape(.rect(cornerRadius: Radius.card))
     }
 
     private var terms: [String] { highlight.split(whereSeparator: \.isWhitespace).map(String.init) }

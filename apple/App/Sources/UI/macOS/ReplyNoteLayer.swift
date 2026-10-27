@@ -136,7 +136,7 @@ private struct NoteEditor: View {
     }
 
     private static let width: CGFloat = 300
-    private static let shape = RoundedRectangle(cornerRadius: 16, style: .continuous)
+    private static let shape = RoundedRectangle(cornerRadius: Radius.card)
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {

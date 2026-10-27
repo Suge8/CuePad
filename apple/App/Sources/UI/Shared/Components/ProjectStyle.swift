@@ -24,7 +24,7 @@ struct ProjectStylePicker: View {
                     let selected = icon == choice
                     Button { icon = choice } label: {
                         Image(.project(choice)).font(.system(size: cell * Self.glyph, weight: .medium)).frame(width: cell, height: cell)
-                            .modifier(Picked(selected: selected, radius: cell / 4))
+                            .modifier(Picked(selected: selected, cornerRadius: cell / 4))
                     }
                     .buttonStyle(PressStyle(.button))
                     .foregroundStyle(palette.project(color))
@@ -39,7 +39,7 @@ struct ProjectStylePicker: View {
                     Button { color = stored } label: {
                         Circle().fill(palette.project(stored)).frame(width: cell * 0.66, height: cell * 0.66)
                             .frame(width: cell, height: cell)
-                            .modifier(Picked(selected: selected, radius: cell / 4))
+                            .modifier(Picked(selected: selected, cornerRadius: cell / 4))
                     }
                     .buttonStyle(PressStyle(.button))
                     .accessibilityLabel("颜色：\(choice.name)")
@@ -55,11 +55,11 @@ struct ProjectStylePicker: View {
 /// 浅底上的项目色圆点也框得出来，深浅色下都清楚，不靠图标本身的颜色。
 private struct Picked: ViewModifier {
     let selected: Bool
-    let radius: CGFloat
+    let cornerRadius: CGFloat
     @Environment(\.palette) private var palette
 
     func body(content: Content) -> some View {
-        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: cornerRadius)
         content
             .background(selected ? palette.selection : .clear, in: shape)
             .overlay { if selected { shape.strokeBorder(palette.signature, lineWidth: 1.5) } }

@@ -3,8 +3,8 @@ import SwiftUI
 extension View {
     /// 纸面：从上沿极轻地亮到纸色的实底 + 上沿一线高光 + 1px 半透明描边；抬起的纸浅色下多一层柔影（深色只留描边）。
     /// `wash`：要你看的那张纸铺这种状态的淡底（`PiShown.wash`），代替纸色。
-    func paper(radius: CGFloat = 14, lifted: Bool = false, wash: Color? = nil) -> some View {
-        modifier(PaperSurface(radius: radius, lifted: lifted, wash: wash))
+    func paper(cornerRadius: CGFloat = Radius.card, lifted: Bool = false, wash: Color? = nil) -> some View {
+        modifier(PaperSurface(radius: cornerRadius, lifted: lifted, wash: wash))
     }
 
     /// 计数变化时数字滚动过去（增大往上滚、减小往下滚），不整块换字。
@@ -35,7 +35,7 @@ private struct PaperSurface: ViewModifier {
     @Environment(\.palette) private var palette
 
     func body(content: Content) -> some View {
-        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: radius)
         content
             .environment(\.rowSurface, wash ?? palette.paper)
             // 影子只挂在底那块形状上：挂在整块内容上时，里面的字、图与按钮要先离屏合成一遍再糊影子，转场与按压的每帧都重算。
@@ -216,14 +216,13 @@ extension View {
     }
 }
 
-/// 按钮悬停那层淡底的形状：随按钮的框——方的是圆、矮的是胶囊（同圆钮与胶囊控件），高的是圆角不超过 `maxRadius` 的圆角矩形。
+/// 按钮悬停那层淡底的形状：随按钮的框——方的是圆、矮的是胶囊（同圆钮与胶囊控件），高的是圆角不超过 `Radius.card` 的圆角矩形。
 nonisolated private struct HoverShape: Shape {
-    private static let maxRadius: CGFloat = 18
-    /// 字里行间的小钮（`Press.inline`）的悬停底比字宽出的一圈。
+        /// 字里行间的小钮（`Press.inline`）的悬停底比字宽出的一圈。
     static let inlineOutset = EdgeInsets(top: -2, leading: -6, bottom: -2, trailing: -6)
 
     func path(in rect: CGRect) -> Path {
-        Path(roundedRect: rect, cornerRadius: min(min(rect.width, rect.height) / 2, Self.maxRadius), style: .continuous)
+        Path(roundedRect: rect, cornerRadius: min(min(rect.width, rect.height) / 2, Radius.card), style: .continuous)
     }
 }
 #endif

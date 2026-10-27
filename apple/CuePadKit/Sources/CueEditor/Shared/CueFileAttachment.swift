@@ -93,9 +93,11 @@ nonisolated enum FileChip {
 
         let box = CGRect(x: padding, y: (size.height - thumbSide) / 2, width: thumbSide, height: thumbSide)
         if let thumbnail {
+            // 缩略图离牌边 `padding`，与牌的圆角同心
+            let inner = max(style.imageCornerRadius - padding, 0)
             let fitted = fit(CGSize(width: thumbnail.width, height: thumbnail.height), in: box)
             context.saveGState()
-            context.addPath(CGPath(roundedRect: fitted, cornerWidth: 5, cornerHeight: 5, transform: nil))
+            context.addPath(CGPath(roundedRect: fitted, cornerWidth: inner, cornerHeight: inner, transform: nil))
             context.clip()
             // 画布是翻过的（原点在左上），CGImage 要按图像坐标再翻一次
             context.translateBy(x: 0, y: fitted.minY * 2 + fitted.height)
@@ -123,11 +125,11 @@ nonisolated enum FileChip {
 
         guard let progress = status.progress else { return }
         let track = CGRect(x: left, y: size.height - 7, width: width, height: 3)
-        context.addPath(CGPath(roundedRect: track, cornerWidth: 1.5, cornerHeight: 1.5, transform: nil))
+        context.addPath(CGPath(roundedRect: track, cornerWidth: track.height / 2, cornerHeight: track.height / 2, transform: nil))
         context.setFillColor(style.markerColor.withAlphaComponent(0.25).cgColor)
         context.fillPath()
         let done = CGRect(x: track.minX, y: track.minY, width: max(track.height, track.width * min(max(progress, 0), 1)), height: track.height)
-        context.addPath(CGPath(roundedRect: done, cornerWidth: 1.5, cornerHeight: 1.5, transform: nil))
+        context.addPath(CGPath(roundedRect: done, cornerWidth: done.height / 2, cornerHeight: done.height / 2, transform: nil))
         context.setFillColor(style.textColor.cgColor)
         context.fillPath()
     }

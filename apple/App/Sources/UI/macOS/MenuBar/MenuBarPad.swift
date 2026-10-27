@@ -16,7 +16,6 @@ struct MenuBarPad: View {
     @State private var capture = CaptureState()
     @State private var quotaOpen = false
 
-    private static let blockRadius: CGFloat = 22
     private static let blockPadding: CGFloat = 14
 
     var body: some View {
@@ -60,7 +59,7 @@ struct MenuBarPad: View {
             content
                 .padding(MenuBarPad.blockPadding)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .glass(in: .rect(cornerRadius: MenuBarPad.blockRadius))
+                .glass(in: .rect(cornerRadius: Radius.sheet))
         }
     }
 }

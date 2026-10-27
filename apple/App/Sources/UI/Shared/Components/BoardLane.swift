@@ -7,11 +7,9 @@ struct BoardLane: View {
     let targeted: Bool
     @Environment(\.palette) private var palette
 
-    static let radius = BoardCardMetrics.radius + BoardCardMetrics.inset
-
     var body: some View {
         ZStack {
-            if targeted { RoundedRectangle(cornerRadius: Self.radius, style: .continuous).fill(palette.selection).transition(.opacity) }
+            if targeted { RoundedRectangle(cornerRadius: Radius.sheet).fill(palette.selection).transition(.opacity) }
         }
         .animation(Motion.fade, value: targeted)
     }

@@ -55,6 +55,9 @@ forbid "自绘玻璃只经 glass(in:)（Surfaces.swift）：材质统一 .regula
   '\.glassEffect\(' '**/Theme/Surfaces.swift'
 forbid "产品代码不写 #if DEBUG，经 DebugHooks 碰调试画面：两种构建的分叉收在 DebugHooks 一处（Release 里钩子什么都不做）；调试代码放 App/Sources/UI/Debug，演示数据在 Seed.swift" \
   '^\s*#(?:if|elseif)\b.*\bDEBUG\b' 'App/Sources/UI/Debug/**' '**/CueStore/Seed.swift'
+forbid "圆角只用 Radius 的几档（Theme/Radius.swift，按东西的种类分：chip、block、card、sheet、field）：各处自写的数是又一套手感，新东西先问它是哪一类；嵌在容器里的块用 Radius.nested 同心；胶囊与圆写 .capsule、.circle，不写半高" \
+  '(?:\b[A-Za-z]*[cC]ornerRadius:\s*[\d.]|\b(?:topLeading|bottomLeading|bottomTrailing|topTrailing|top|bottom|leading|trailing)Radius:\s*[\d.]|\b(?:xRadius|yRadius|cornerWidth|cornerHeight):\s*[\d.]|\b\w*[rR]adius(?::\s*CGFloat)?\s*=\s*[1-9.])' \
+  '**/Theme/**' 'CuePadKit/Tests/**'
 forbid "色值只在色板（AppGroup/Palette.swift）：界面取 palette 的令牌，新颜色先进色板、定语义名与浅深两档，一样东西只有一份颜色" \
   '\b(?:Color|UIColor|NSColor|CGColor)\(\s*(?:hex|red|white|hue|srgbRed|calibratedRed|displayP3Red|deviceRed|calibratedWhite)\s*:' \
   'App/AppGroup/Palette.swift' 'App/Sources/UI/Debug/**' '**/Tests/**'

@@ -60,7 +60,7 @@ struct OlderList: View {
                         OlderRow(card: card, lastTarget: lastTarget[card.id])
                     }
                 }
-                .rowPaper(radius: 12)
+                .rowPaper(cornerRadius: Radius.block)
             }
         }
     }

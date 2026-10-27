@@ -49,7 +49,7 @@ struct CueRunPanel: View {
         }
         .frame(width: Self.width)
         .frame(maxHeight: .infinity, alignment: .top)
-        .glass(in: .rect(cornerRadius: PiReplyBar.radius, style: .continuous))
+        .glass(in: .rect(cornerRadius: Radius.field))
     }
 }
 

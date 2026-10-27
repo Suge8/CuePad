@@ -237,10 +237,8 @@ struct SessionCard: ViewModifier {
     var wash: Color?
     @Environment(\.palette) private var palette
 
-    static let radius: CGFloat = 18
-
     func body(content: Content) -> some View {
-        let shape = RoundedRectangle(cornerRadius: Self.radius, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: Radius.card)
         content
             .padding(.horizontal, 16).padding(.vertical, 14)
             .frame(maxWidth: .infinity, alignment: .leading)

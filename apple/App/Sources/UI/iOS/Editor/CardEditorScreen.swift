@@ -29,9 +29,9 @@ struct CardEditorScreen: View {
     var body: some View {
         editor
             .frame(maxWidth: wide ? Self.pageWidth : .infinity, maxHeight: .infinity, alignment: .top)
-            .background(palette.paper, in: .rect(cornerRadius: wide ? 22 : 0, style: .continuous))
+            .background(palette.paper, in: .rect(cornerRadius: wide ? Radius.sheet : 0))
             .overlay {
-                if wide { RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(palette.hair).allowsHitTesting(false) }
+                if wide { RoundedRectangle(cornerRadius: Radius.sheet).strokeBorder(palette.hair).allowsHitTesting(false) }
             }
             .padding(wide ? EdgeInsets(top: 8, leading: 24, bottom: 0, trailing: 24) : EdgeInsets())
             .frame(maxWidth: .infinity, maxHeight: .infinity)

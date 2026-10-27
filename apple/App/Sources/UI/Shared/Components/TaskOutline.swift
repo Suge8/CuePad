@@ -218,7 +218,7 @@ private struct IdeaDropMark: View {
         ZStack(alignment: .trailing) {
             if on {
                 Color.clear.row(selected: true)
-                RoundedRectangle(cornerRadius: RowMetrics.radius, style: .continuous)
+                RoundedRectangle(cornerRadius: Radius.row)
                     .strokeBorder(palette.signature, lineWidth: 1.5)
                     .padding(.horizontal, -RowMetrics.bleed)
                 // 实底的小签盖在行尾的旁注（时间、"开始"）上，字不叠字

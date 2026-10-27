@@ -8,8 +8,8 @@ extension View {
     func deskBackground() -> some View { modifier(DeskBackground()) }
 
     /// 长按项目（书架、侧栏）：抬起这一项作预览，菜单是共用的项目操作。项目还没同步到（nil）时没有菜单。
-    func projectActions(_ project: Project?, radius: CGFloat) -> some View {
-        modifier(ProjectContextMenu(project: project, radius: radius))
+    func projectActions(_ project: Project?, cornerRadius: CGFloat) -> some View {
+        modifier(ProjectContextMenu(project: project, cornerRadius: cornerRadius))
     }
 }
 
@@ -46,12 +46,12 @@ private struct LiftedContextMenu<Menu: View, Preview: View>: ViewModifier {
 
 private struct ProjectContextMenu: ViewModifier {
     let project: Project?
-    let radius: CGFloat
+    let cornerRadius: CGFloat
 
     func body(content: Content) -> some View {
         if let project {
             content
-                .contentShape(.contextMenuPreview, .rect(cornerRadius: radius, style: .continuous))
+                .contentShape(.contextMenuPreview, .rect(cornerRadius: cornerRadius))
                 .contextMenu { ProjectActions(project: project) { workspace.projectForm = .init(project: project) } }
         } else {
             content

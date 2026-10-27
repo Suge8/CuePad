@@ -35,8 +35,8 @@ struct StyleBoard: View {
         return LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4), spacing: 8) {
             ForEach(tokens, id: \.0) { name, color in
                 VStack(spacing: 4) {
-                    RoundedRectangle(cornerRadius: 10, style: .continuous).fill(color).frame(height: 44)
-                        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(palette.hair))
+                    RoundedRectangle(cornerRadius: Radius.block).fill(color).frame(height: 44)
+                        .overlay(RoundedRectangle(cornerRadius: Radius.block).strokeBorder(palette.hair))
                     Text(name).font(.caption2.monospaced()).foregroundStyle(palette.ink2)
                 }
             }
@@ -44,12 +44,24 @@ struct StyleBoard: View {
     }
 
     private var surfaces: some View {
-        HStack(spacing: 12) {
-            Text("纸").frame(maxWidth: .infinity, minHeight: 72).paper(radius: 16, lifted: true)
-            Text("玻璃").frame(maxWidth: .infinity, minHeight: 72).glass(in: .rect(cornerRadius: 16))
+        VStack(spacing: 12) {
+            HStack(spacing: 12) {
+                Text("纸").frame(maxWidth: .infinity, minHeight: 72).paper(lifted: true)
+                Text("玻璃").frame(maxWidth: .infinity, minHeight: 72).glass(in: .rect(cornerRadius: Radius.card))
+            }
+            HStack(spacing: 8) {
+                ForEach(Self.radii, id: \.name) { radius in
+                    Text(radius.name).font(.caption2.monospaced()).frame(maxWidth: .infinity, minHeight: 56)
+                        .background(palette.fill, in: .rect(cornerRadius: radius.value))
+                }
+            }
         }
         .foregroundStyle(palette.ink)
     }
+
+    private static let radii: [(name: String, value: CGFloat)] = [
+        ("chip", Radius.chip), ("block", Radius.block), ("card", Radius.card), ("sheet", Radius.sheet), ("field", Radius.field),
+    ]
 
     private var presses: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -63,7 +75,7 @@ struct StyleBoard: View {
             }
             .foregroundStyle(palette.ink)
             Button {} label: {
-                Text("整张卡片").frame(maxWidth: .infinity, minHeight: 64).paper(radius: 16)
+                Text("整张卡片").frame(maxWidth: .infinity, minHeight: 64).paper()
             }
             .buttonStyle(PressStyle(.card))
             Button {} label: {
@@ -71,7 +83,7 @@ struct StyleBoard: View {
                     .contentShape(.rect)
             }
             .buttonStyle(.row)
-            .rowPaper(radius: 14)
+            .rowPaper(cornerRadius: Radius.card)
         }
         .foregroundStyle(palette.ink)
     }
@@ -105,7 +117,7 @@ struct StyleBoard: View {
                         .transition(.opacity)
                 }
             }
-            .paper(radius: 14)
+            .paper()
             .foregroundStyle(palette.ink)
         }
     }

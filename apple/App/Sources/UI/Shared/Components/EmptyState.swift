@@ -35,7 +35,7 @@ struct EmptyState<Action: View>: View {
         .frame(maxWidth: 420)
         .padding(24)
         .frame(maxWidth: .infinity)
-        .paper(radius: 24)
+        .paper(cornerRadius: Radius.sheet)
         .scaleEffect(shown || reduceMotion ? 1 : 0.97)
         .opacity(shown ? 1 : 0)
         .buttonStyle(ControlButtonStyle(kind: .primary))

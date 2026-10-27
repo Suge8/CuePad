@@ -58,7 +58,7 @@ struct CrashReportView: View {
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(10).frame(maxWidth: .infinity, alignment: .leading)
-                    .background(palette.fill, in: .rect(cornerRadius: 8))
+                    .background(palette.fill, in: .rect(cornerRadius: Radius.chip))
             }
             ExportDiagnosticsButton(text: report.diagnostics).settingButton()
             Text(Self.note).font(Typography.meta).foregroundStyle(palette.ink3).fixedSize(horizontal: false, vertical: true)

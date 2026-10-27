@@ -14,7 +14,7 @@ func mockShot(_ name: String) throws -> Data {
     let ink: Color = dark ? .white : .black, paper: Color = dark ? Color(white: 0.16) : .white, fill: Color = dark ? Color(white: 0.28) : Color(white: 0.92)
     func button(_ text: String, primary: Bool = false) -> some View {
         Text(text).font(.callout.weight(.semibold)).frame(maxWidth: .infinity).padding(.vertical, 10)
-            .background(primary ? Color.orange : fill, in: .rect(cornerRadius: 10)).foregroundStyle(primary ? .white : ink)
+            .background(primary ? Color.orange : fill, in: .rect(cornerRadius: Radius.block)).foregroundStyle(primary ? .white : ink)
     }
     let question = Text("可以推送 scheduler 的重连修复吗？").font(.headline)
     let why = Text("推上去别人就拉得到，撤不回来。").font(.caption).foregroundStyle(.secondary)
@@ -38,8 +38,8 @@ func mockShot(_ name: String) throws -> Data {
             }
         } else if name.hasPrefix("in-thread") {
             VStack(alignment: .leading, spacing: 10) {
-                Text("重连用例补上了，全过。").font(.callout).padding(10).background(fill, in: .rect(cornerRadius: 12))
-                Text("要推送吗？").font(.callout).padding(10).background(fill, in: .rect(cornerRadius: 12))
+                Text("重连用例补上了，全过。").font(.callout).padding(10).background(fill, in: .rect(cornerRadius: Radius.block))
+                Text("要推送吗？").font(.callout).padding(10).background(fill, in: .rect(cornerRadius: Radius.block))
                 Spacer().frame(height: 30)
                 HStack { button("可以", primary: true); button("以后不用问") }
                 Text("对 Cue 说").font(.callout).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading).padding(10)
@@ -67,13 +67,13 @@ func mockShot(_ name: String) throws -> Data {
                         Spacer()
                         if running > 0 { Text("\(running) 个会话在跑").font(.caption).foregroundStyle(.secondary) }
                     }
-                    .padding(8).background(fill, in: .rect(cornerRadius: 8))
+                    .padding(8).background(fill, in: .rect(cornerRadius: Radius.block))
                 }
             }
         } else {
             VStack(alignment: .leading, spacing: 10) {
                 Text(name).font(.headline)
-                ForEach(0..<4) { _ in RoundedRectangle(cornerRadius: 8).fill(fill).frame(height: 36) }
+                ForEach(0..<4) { _ in RoundedRectangle(cornerRadius: Radius.block).fill(fill).frame(height: 36) }
             }
         }
     }
@@ -81,7 +81,7 @@ func mockShot(_ name: String) throws -> Data {
     let shot = VStack(alignment: .leading, spacing: 14) {
         label
         Spacer()
-        card.padding(16).background(paper, in: .rect(cornerRadius: 18)).shadow(radius: 4)
+        card.padding(16).background(paper, in: .rect(cornerRadius: Radius.card)).shadow(radius: 4)
     }
     .padding(20).frame(width: mac ? 520 : 300, height: mac ? 340 : 600)
     .background(dark ? Color.black : Color(white: 0.96)).foregroundStyle(ink)
@@ -101,21 +101,21 @@ func png(_ view: some View) throws -> Data {
 @MainActor
 func loginShot() throws -> Data {
     func field(_ text: String) -> some View {
-        Text(text).frame(width: 200, alignment: .leading).padding(8).overlay(RoundedRectangle(cornerRadius: 6).stroke(.gray))
+        Text(text).frame(width: 200, alignment: .leading).padding(8).overlay(RoundedRectangle(cornerRadius: Radius.chip).stroke(.gray))
     }
     func page(_ label: String, @ViewBuilder _ content: () -> some View) -> some View {
         VStack(spacing: 12) {
             Text(label).font(.caption).foregroundStyle(.gray)
             content()
         }
-        .padding(20).frame(width: 260, height: 300, alignment: .top).background(.white).overlay(RoundedRectangle(cornerRadius: 10).stroke(.gray))
+        .padding(20).frame(width: 260, height: 300, alignment: .top).background(.white).overlay(RoundedRectangle(cornerRadius: Radius.block).stroke(.gray))
     }
     func login(forgot: Bool) -> some View {
         VStack(spacing: 12) {
             Text("登录").font(.title2.bold())
             field("邮箱")
             field("密码")
-            Text("登录").foregroundStyle(.white).frame(width: 216, height: 34).background(.blue, in: .rect(cornerRadius: 6))
+            Text("登录").foregroundStyle(.white).frame(width: 216, height: 34).background(.blue, in: .rect(cornerRadius: Radius.chip))
             if forgot { Text("忘记密码？").foregroundStyle(.blue) }
         }
     }
@@ -125,7 +125,7 @@ func loginShot() throws -> Data {
         page("改后 · 点了忘记密码") {
             Text("重置密码").font(.title2.bold())
             field("you@example.com")
-            Text("发送重置邮件").foregroundStyle(.white).frame(width: 216, height: 34).background(.blue, in: .rect(cornerRadius: 6))
+            Text("发送重置邮件").foregroundStyle(.white).frame(width: 216, height: 34).background(.blue, in: .rect(cornerRadius: Radius.chip))
             Text("如果这个邮箱注册过，你会收到一封邮件").font(.footnote).foregroundStyle(.green)
         }
     }
