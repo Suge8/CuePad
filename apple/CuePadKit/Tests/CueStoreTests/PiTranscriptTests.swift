@@ -54,7 +54,7 @@ import Testing
     let message = PiChatMessage(
       sessionID: "s", entryID: "u", seq: 1, role: .user, text: String(repeating: "字", count: PiChatMessage.textLimit + 50) + "\n" + reference, at: .now)
     #expect(message.text.hasSuffix("…" + reference))
-    #expect(CueFormat.imageKeys(in: message.text) == [String(repeating: "a", count: 64)])
+    #expect(CueFormat.attachmentKeys(in: message.text) == [String(repeating: "a", count: 64)])
     #expect(CueFormat.plainText(message.text).count == PiChatMessage.textLimit)
   }
 }

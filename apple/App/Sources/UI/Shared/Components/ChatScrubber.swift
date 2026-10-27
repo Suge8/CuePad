@@ -269,7 +269,7 @@ nonisolated struct ChatMark: Equatable, Sendable {
     /// 一条话的第一行文字；只有图片时写张数。
     static func firstLine(_ stored: String) -> String {
         if let line = CueFormat.plainText(stored).split(whereSeparator: \.isNewline).first { return line.trimmingCharacters(in: .whitespaces) }
-        let images = CueFormat.imageKeys(in: stored).count
+        let images = CueFormat.parse(stored).count { if case .image = $0 { true } else { false } }
         return images > 0 ? String(localized: "\(images) 张图片") : ""
     }
 }

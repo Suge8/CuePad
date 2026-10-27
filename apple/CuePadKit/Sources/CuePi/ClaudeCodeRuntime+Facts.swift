@@ -28,14 +28,7 @@ extension ClaudeCodeRuntime {
         let stream = try await ClaudeStream(
             executable: executable, arguments: arguments, directory: FileManager.default.temporaryDirectory,
             environment: probe.locator.environment(launching: executable, overrides: probe.paths.environment))
-        do {
-            let agent = try await models(stream)
-            await stream.process.stop()
-            return agent
-        } catch {
-            await stream.process.stop()
-            throw error
-        }
+        return try await withStopped(stream, stop: { await $0.process.stop() }, models)
     }
 
     private static func models(_ stream: ClaudeStream) async throws -> MacAgent? {

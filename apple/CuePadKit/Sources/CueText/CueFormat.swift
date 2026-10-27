@@ -80,13 +80,7 @@ public enum CueFormat {
         return collapsed ?? text
     }
 
-    /// 正文里有没有图片引用。按字节找（memmem）：比 Foundation 的 `contains` 快约 20 倍，标准库的 `utf8.firstRange(of:)` 还要再慢 6 倍。
-    public static func hasImages(_ stored: String) -> Bool {
-        var stored = stored
-        return stored.withUTF8 { contains($0, imagePrefixBytes) }
-    }
-
-    /// 正文里有没有附件引用（图片或文件）。
+    /// 正文里有没有附件引用（图片或文件）。按字节找（memmem）：比 Foundation 的 `contains` 快约 20 倍，标准库的 `utf8.firstRange(of:)` 还要再慢 6 倍。
     public static func hasAttachments(_ stored: String) -> Bool {
         var stored = stored
         return stored.withUTF8 { contains($0, referencePrefixBytes) }
@@ -97,14 +91,7 @@ public enum CueFormat {
     }
 
     private static let threeNewlines = Array("\n\n\n".utf8)
-    private static let imagePrefixBytes = Array(imagePrefix.utf8)
     private static let referencePrefixBytes = Array(referencePrefix.utf8)
-
-    /// 正文里引用的图片的键，按出现顺序（可重复）。
-    public static func imageKeys(in stored: String) -> [String] {
-        guard hasImages(stored) else { return [] }
-        return parse(stored).compactMap { if case .image(let key) = $0 { key } else { nil } }
-    }
 
     /// 正文里引用的全部附件的键，按出现顺序（可重复）：登记附件记录、回收、等文件到本机都按它。
     public static func attachmentKeys(in stored: String) -> [String] {

@@ -328,4 +328,16 @@ public final class ChildProcess: Sendable {
     }
 }
 
+/// 用一个起好的进程（或连着进程的连接）办一件事：办完返回或抛错，都先把它停掉。
+func withStopped<Resource, T>(_ resource: Resource, stop: (Resource) async -> Void, _ body: (Resource) async throws -> T) async throws -> T {
+    do {
+        let value = try await body(resource)
+        await stop(resource)
+        return value
+    } catch {
+        await stop(resource)
+        throw error
+    }
+}
+
 #endif

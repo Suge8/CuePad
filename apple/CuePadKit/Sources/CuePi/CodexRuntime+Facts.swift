@@ -24,14 +24,7 @@ extension CodexRuntime {
     private static func askCodex(_ executable: URL, _ probe: AgentProbe) async throws -> MacAgent? {
         let environment = probe.paths.launchEnvironment(of: .codex)
         let rpc = try await CodexRPC.launch(executable, environment: probe.locator.environment(launching: executable, overrides: environment))
-        do {
-            let agent = try await models(rpc)
-            await rpc.shutdown()
-            return agent
-        } catch {
-            await rpc.shutdown()
-            throw error
-        }
+        return try await withStopped(rpc, stop: { await $0.shutdown() }, models)
     }
 
     private static func models(_ rpc: CodexRPC) async throws -> MacAgent? {

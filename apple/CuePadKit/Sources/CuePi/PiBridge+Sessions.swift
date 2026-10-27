@@ -47,6 +47,15 @@ extension PiBridge {
         slots.first { $0.id == id }?.offer(draft)
     }
 
+    /// 一轮里报的话与上下文用量（`TurnEvent`）放到这个会话上：托管会话的各家接入都经这里，别的事件与桥无关。
+    public func show(_ event: TurnEvent, in id: PiSession.ID) {
+        switch event {
+        case .speaking(let draft): setDraft(id, draft)
+        case .context(let used, let window?): update(id) { $0.context = PiContextUsage(tokens: used, window: window) }
+        default: break
+        }
+    }
+
     public func detach(_ id: PiSession.ID, reason: PiSessionEndReason) {
         controls[id] = nil
         idleTimers.removeValue(forKey: id)?.cancel()
