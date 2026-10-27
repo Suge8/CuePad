@@ -2,74 +2,46 @@
 import SwiftUI
 import UIKit
 
-/// 窄屏（iPhone 与窄窗口 iPad）的容器：项目、进展、Cue 三个 tab（`Dock.tabs`），每个 tab 一个导航栈（`Workspace.stacks`），叠在一起、只露选中的那个；
-/// 底部那一排整个窗口一份（`DockBar`），盖在几个栈上：点哪一格换到哪个 tab（`Workspace.tap`），各 tab 的栈留着，切走再切回来还停在原来那一页。
-/// 几个栈一直挂着（不在前台的透明、点不到、读屏跳过，暂停订阅 `pageActive`）：切 tab 只换哪个露着，页不重建、不重排、不重画，滚动位置、没写完的字都在。
-/// 没去过的 tab 打开 App 后安静一阵（`buildDelay`）再一个一个建（先读一份 `pagePrefetch`），第一次切过去也是现成的。推入、返回是系统的过渡，切 tab 原地换。
-/// 被否决的：系统 `TabView` 藏起自带的标签栏、由这一排驱动——它每次换 tab 把切走的页摘出窗口（整页消失、挂回要重排重画，切一次多一倍的活），
-/// 要靠把页藏回窗口的变通（依赖 UIKit 里 `UITab` 怎么管页）才省得下；底部附件（`tabViewBottomAccessory`）摆不出两格加 Cue 钮。
-/// 推入的页上这一排照样在（同系统标签栏，写着灵感也能切去 Cue 看一眼），设置、技能与规则这类二级页让开（`Dock.stays`）。
-/// Cue 页的输入框在页里（随键盘升起），底边那一格在换形里与 Cue 钮交叉，浓淡都是 `DockMotion.places` 的函数（`DockHandoff`）。打开 App 落在 Cue。
+/// 窄屏（iPhone 与窄窗口 iPad）的容器：项目、进展、Cue 三个 tab（`Dock.tabs`）横排成一条（`DockPager`：左右滑跟手切 tab，点底部那一排整条滑过去），
+/// 每个 tab 一个导航栈（`Workspace.stacks`、`DockStack`），切走再切回来还停在原来那一页；推入、返回是系统的过渡，返回后在 Cue 页左滑前进回刚才那页。
+/// 打开 App 落在 Cue。底部那一排整个窗口一份（`DockBar`），盖在条上、不在哪一页里：切 tab 时它不重建、不跟着滑，选中与换形跟着条（`DockMotion`）走；
+/// 推入的页上也留着（同系统标签栏，写着灵感也能切去 Cue 看一眼），设置、技能与规则这类二级页让开（`Dock.stays`）。
+/// Cue 页的输入框在页里（随键盘升起），底边那一格在换形里与 Cue 钮交叉，浓淡都是条的位置与"⋯"开合的函数（`DockHandoff`）。
+/// 被否决的：几个导航栈在 SwiftUI 里叠着、只露选中的那个——切 tab 是一下换走，没法跟手滑；系统 `TabView` 每次换 tab 把切走的页摘出窗口，
+/// 底部附件（`tabViewBottomAccessory`）也摆不出两格加 Cue 钮。
 struct DockRoot: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var motion: DockMotion
-    /// 建过的 tab：建过就一直挂着。
-    @State private var built: Set<Route> = []
-    /// 在前台订阅的 tab：跟着 `Workspace.root`，等切过去的那一帧画上屏才换（同 Mac 的 `MacPages.leaving`）：
-    /// 前后两个 tab 的订阅一停一起、实时状态一暂停一恢复要几十毫秒，不放在点击的回合里；页里的值本来就要等读库回来才更新。
-    @State private var live: Route?
+    /// 推入 Cue 页的页离开前拍的快照（左滑前进时跟手用）。
+    @State private var shot = LeaveShot()
 
     init(workspace: Workspace) { _motion = State(initialValue: DockMotion(workspace: workspace)) }
 
-    /// 打开 App 后先等这么久再建别的 tab：首屏、紧接着的滚动与输入不和它挤（同 Mac 启动后的预热）。
-    private static let buildDelay: Duration = .seconds(2)
-
     var body: some View {
-        let root = workspace.root, active = live ?? root
-        ZStack {
-            ForEach(Dock.tabs, id: \.self) { tab in
-                if tab == root || built.contains(tab) {
-                    let shown = tab == root
-                    DockStack(tab: tab, active: active == tab)
-                        .opacity(shown ? 1 : 0)
-                        .allowsHitTesting(shown)
-                        .accessibilityHidden(!shown)
-                        .zIndex(shown ? 1 : 0)
+        DockPager(motion: motion, shot: shot)
+            .environment(\.dockMotion, motion)
+            .overlay {
+                // 底部那一排按窗口的宽在同一遍排版里排，不写回状态：打开时先按 0 宽排一遍，玻璃就多变一次形
+                GeometryReader { proxy in
+                    ZStack(alignment: .bottom) {
+                        PlacesCatcher(motion: motion, onCue: workspace.top == .cue) { openPlaces(false) }
+                        DockBar(
+                            motion: motion, width: max(0, proxy.size.width - Dock.margin * 2),
+                            stays: stays, forwardStays: shot.route.map(Dock.stays) ?? true, openPlaces: openPlaces)
+                            .padding(.bottom, Dock.margin).ignoresSafeArea(edges: .bottom)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                 }
             }
-        }
-        .environment(\.dockMotion, motion)
-        .overlay {
-            // 底部那一排按窗口的宽在同一遍排版里排，不写回状态：打开时先按 0 宽排一遍，玻璃就多变一次形
-            GeometryReader { proxy in
-                ZStack(alignment: .bottom) {
-                    PlacesCatcher(motion: motion, onCue: workspace.top == .cue) { openPlaces(false) }
-                    DockBar(motion: motion, width: max(0, proxy.size.width - Dock.margin * 2), stays: stays, openPlaces: openPlaces)
-                        .padding(.bottom, Dock.margin).ignoresSafeArea(edges: .bottom)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+            .debugExposesPlaces { openPlaces(true) }
+            .onChange(of: workspace.root) {
+                shot.forget()
+                // 切走的 tab 留在条上、藏着：它里面的输入框不交出焦点的话键盘还在、字还打进看不见的页里
+                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
             }
-        }
-        .debugExposesPlaces { openPlaces(true) }
-        .onChange(of: root, initial: true) {
-            built.insert(root)
-            motion.placesOpen = false
-            // 切走的 tab 留着、透明：它里面的输入框不交出焦点的话键盘还在、字还打进看不见的页里
-            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-        }
-        .task(id: root) {
-            await NextFrame.drawn()
-            if !Task.isCancelled { live = root }
-        }
-        .task {
-            for tab in Dock.tabs {
-                guard (try? await Task.sleep(for: Self.buildDelay)) != nil else { return }
-                built.insert(tab)
-            }
-        }
-        // 有焦点时"⋯"收起
-        .onChange(of: motion.composing) { if motion.composing { openPlaces(false) } }
+            // 有焦点时"⋯"收起
+            .onChange(of: motion.composing) { if motion.composing { openPlaces(false) } }
     }
 
     /// 浮起的输入框（新会话、发给 Agent）开着时底边归它，这一排让开：它落在这一排的位置上，留着就是两层玻璃叠着。
@@ -82,10 +54,12 @@ struct DockRoot: View {
     }
 }
 
-/// 一个 tab：根页自己画页顶那一排（系统导航栏只给推入的页，`HeaderHost.page`），内容一直滚到底部那一排后面（Cue 页的底边是它自己的输入框）。
-private struct DockStack: View {
+/// 一个 tab 的导航栈（条上的一页，`PagerController`）：根页自己画页顶那一排（系统导航栏只给推入的页，`HeaderHost.page`），
+/// 内容一直滚到底部那一排后面（Cue 页的底边是它自己的输入框）。Cue 的栈推入的页离开前拍快照（`shot`，只有 Cue 页能前进回来）。
+struct DockStack: View {
     let tab: Route
     let active: Bool
+    let shot: LeaveShot?
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
@@ -95,33 +69,17 @@ private struct DockStack: View {
                 .environment(\.headerHost, .page(search: Dock.search(on: tab)))
                 .dockReserve(tab != .cue)
                 .toolbarVisibility(.hidden, for: .navigationBar)
-                .navigationDestination(for: Route.self) { RouteView(route: $0).dockReserve(Dock.stays(on: $0)) }
+                .navigationDestination(for: Route.self) { route in
+                    if let shot {
+                        RouteView(route: route).dockReserve(Dock.stays(on: route)).leaveShot(route, into: shot)
+                    } else {
+                        RouteView(route: route).dockReserve(Dock.stays(on: route))
+                    }
+                }
         }
         .environment(\.pageActive, active)
         .environment(\.pagePrefetch, !active)
     }
-}
-
-/// 底部那一排此刻的样子：两格去处还是"⋯"加输入框只从这里推出来（`places`），底部那一排与 Cue 页的输入框读的是同一份。
-@Observable
-final class DockMotion {
-    private let workspace: Workspace
-    /// Cue 页底部的"⋯"展开成了两格（`DockRoot.openPlaces` 带着弹簧改）；换 tab 就收起。
-    var placesOpen = false
-    /// Cue 页的输入框有焦点：底部那一排让开、输入框占满整排。Cue 页在焦点进出时带着弹簧改（`CuePage`），
-    /// 它与底部那一排各在一棵 SwiftUI 树里，读的是这同一份，所以输入框长宽与"⋯"淡出在同一次动画里。
-    var composing = false
-
-    init(workspace: Workspace) { self.workspace = workspace }
-
-    /// 底部那一排是两格的样子占几成：1 是两格，0 是"⋯"加输入框（`DockHandoff`）。Cue 页的根上是后者；别的 tab、Cue 页上推入了页、"⋯"展开着是前者。
-    var places: CGFloat { placesOpen || workspace.root != .cue || !workspace.path.isEmpty ? 1 : 0 }
-
-    /// 选中的是 Cue：它的输入框在屏上。
-    var onCue: Bool { workspace.root == .cue }
-
-    /// 选中哪一格（`Dock.places` 的序号）；在 Cue 上时为 nil。
-    var tab: Int? { Dock.places.firstIndex { $0.route == workspace.root } }
 }
 
 /// "⋯"展开时铺在 Cue 页上的一层：点一下或一划就收起。开合只重算这一小块。
@@ -173,12 +131,14 @@ enum Dock {
     static let maxCell: CGFloat = 76
     /// 两个去处，从左到右：项目、进展（进展挨着 Cue：会话在进展里，接力的光从 Cue 落到它那一格最近）。
     static let places: [SidebarOutline.Entry] = [.projects, .progress]
-    /// 三个 tab：两格去处与 Cue 钮。
+    /// 三个 tab 从左到右（两格去处，Cue 在最右）：左右滑切 tab 与点按换 tab 时整条滑的顺序（`DockPager`）。
     static let tabs: [Route] = places.map(\.route) + [.cue]
 
     /// 一格多宽：整排按格数分（每格去处一份、Cue 钮两份），中间不空；两格的胶囊与 Cue 钮差不多一样宽，不像缺了一格。
     static func cell(in width: CGFloat) -> CGFloat { min(maxCell, (width - gap - inset * 2) / CGFloat(places.count + 2)) }
     static func capsule(in width: CGFloat) -> CGFloat { cell(in: width) * CGFloat(places.count) + inset * 2 }
+
+    static func order(_ tab: Route) -> Int { tabs.firstIndex(of: tab) ?? tabs.count - 1 }
 
     /// tab 根页页顶那一排的搜索入口：项目页中间没有别的，是铺满的一条搜索框；进展页中间放着这一页看什么，是左边一颗圆钮；
     /// Cue 页的焦点就是 Cue，没有。提示横幅按它决定盖多宽（`NoticeBanner`）。
