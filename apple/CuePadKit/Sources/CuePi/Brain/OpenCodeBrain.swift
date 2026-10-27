@@ -14,7 +14,7 @@ import Foundation
 ///   `cuepadBrain`（值是这台服务的 pid）；接入认这个标记跳过它们（`OpenCodeSessionInfo.isCueBrain`）。开新会话与停下时删掉旧会话；
 ///   起大脑时先删掉这个工作目录里服务已不在的带标记会话（崩溃留下的；同时在跑的另一个大脑的不动）；
 /// - MCP 是起服务后异步连上的：起大脑时等 `/api/mcp` 报 `cuepad` 已连上（`mcp.status.changed` 时再看）、再等它的工具进了工具表
-///   （见 `mcpReady`），之前说的话模型看不到它的工具；
+///   （没有信号可等，见 `mcpToolsSettle`），之前说的话模型看不到它的工具；
 /// - 说的话以 `steer` 交：空闲时开一轮，正忙时在下一个步骤边界并进这一轮；停下用 `interrupt`；
 /// - 模型写成 `提供方/模型`，换模型与强度（模型的 `variant`，按 `OpenCodeModel.variant(for:)` 夹取）先在 `/api/model` 里认：
 ///   服务对不存在的模型也回 204；能不能看图看模型的 `capabilities.input`；
@@ -38,7 +38,13 @@ final class OpenCodeBrain: HostedSession {
     private let mcpChanges = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
 
     nonisolated static let agent = "cue"
-    private static let toolReload: Duration = .milliseconds(300)
+    /// MCP 连上后等它的工具进工具表的时长。OpenCode 没有可观察的信号（实测 2.1.4）：服务自己的 /openapi.json（124 个接口，含
+    /// /api/experimental/ 下的）没有列工具表的接口，v1 的 experimental/tool/ids 已不在（非 /api 的路径落到网页界面）；工具表重载完也不发事件。
+    /// 依据是二进制里的 `@opencode/McpTool` 服务：订阅 `mcp.tools.changed`（连上时先于 `connected` 状态发出），`debounce("100 millis")`
+    /// 之后才 `tools()` 并 `reload()` 工具注册表；一轮开始时取的是那一刻的工具表。这里取防抖的三倍。
+    /// 失效时（OpenCode 拉长防抖或改了重载）：紧接着起大脑说的第一句，那一步的请求里没有 CuePad 的工具，模型调了会得到
+    /// "No tool named … is currently available"，下一步才有；`RealBrainTests` 的并进一轮用例（第一句就调 echo）会因此失败。
+    private static let mcpToolsSettle: Duration = .milliseconds(300)
 
     private struct Create: Encodable {
         var agent = OpenCodeBrain.agent
@@ -138,9 +144,7 @@ final class OpenCodeBrain: HostedSession {
             let status = servers.first { $0.name == CueMCPServer.name }?.status
             switch status?.status {
             case "connected":
-                // 连上时 OpenCode 先发 `mcp.tools.changed`，它的工具表防抖 100 毫秒后才重载，重载完没有事件也没有接口看得到；
-                // 一轮开始时取的是那一刻的工具表，紧接着说的第一句就看不到 CuePad 的工具（实测 2.1.4）：等过这段防抖
-                try await Task.sleep(for: Self.toolReload)
+                try await Task.sleep(for: Self.mcpToolsSettle)
                 return
             case nil, "pending": guard await changes.next() != nil else { throw HostedSessionError.notRunning }
             default: throw HostedSessionError.rejected(String(localized: "CuePad 的 MCP 服务连不上：\(status?.error ?? status?.status ?? "")"))
