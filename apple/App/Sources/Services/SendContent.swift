@@ -43,5 +43,4 @@ extension SendContent {
         return text
     }
 }
-
 #endif
