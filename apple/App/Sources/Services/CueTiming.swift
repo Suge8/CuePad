@@ -6,7 +6,7 @@ import Foundation
 nonisolated struct CueTiming: Sendable {
     /// 你这么久没说话、又没有在做的事，才巡视。
     var patrolAfter: Duration = .seconds(2 * 3600)
-    /// 提示缓存的时长（两家大脑都开了 1 小时的，见 `ClaudeBrain`、`PiBrain`）：距上一次模型请求超过它，缓存已过期，醒来就换新。
+    /// 提示缓存的时长（Claude Code 与 Pi 的大脑开了 1 小时的，见 `ClaudeCodeHost+Brain`、`PiBrain`）：距上一次模型请求超过它，缓存已过期，醒来就换新。
     var cacheLifetime: Duration = .seconds(3600)
     /// 换新线（token）：上下文用到它，醒来就换新。数与理由见 `CueContext.renewAt`。
     var renewAt = CueContext.renewAt

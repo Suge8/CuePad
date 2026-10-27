@@ -109,7 +109,7 @@ nonisolated struct CueSettings: Equatable, Sendable {
         CueSettings(profile: try store.cueProfile() ?? CueProfile(), macs: try store.allMacAgents())
     }
 
-    /// 能运行 Cue 的一台：名字（那台自报的，`MacAgents.shownName`；是这台（`isHere`）时写"这台 Mac"）、能当大脑的几家与一家都不能用时为什么。
+    /// 能运行 Cue 的一台：名字（那台自报的，`MacAgents.shownName`；是这台（`isHere`）时写"这台 Mac"）、能用的几家与一家都不能用时为什么。
     struct Host: Identifiable, Equatable {
         let id: String
         let isHere: Bool
@@ -118,10 +118,10 @@ nonisolated struct CueSettings: Equatable, Sendable {
         let whyNone: String
 
         var usable: Bool { !brains.isEmpty }
-        /// 能不能选它启用：一家都不能当大脑的别的 Mac 选不了（各入口列着、写为什么，是停用项）；这台照样能选——它的记录可能还没写下，
+        /// 能不能选它启用：一家都用不了的别的 Mac 选不了（各入口列着、写为什么，是停用项）；这台照样能选——它的记录可能还没写下，
         /// 启用前会重新探测，Cue 页上点它还会打开接入面板给装法。
         var selectable: Bool { usable || isHere }
-        /// 菜单里名字下面那一行：能当大脑的几家，或为什么一家都不能用。
+        /// 菜单里名字下面那一行：能用的几家，或为什么一家都不能用。
         var note: String { usable ? brains.map(\.name).formatted(.list(type: .and)) : whyNone }
     }
 
@@ -129,7 +129,7 @@ nonisolated struct CueSettings: Equatable, Sendable {
     func hosts(here: String?) -> [Host] {
         var hosts = macs.map { mac in
             Host(id: mac.hostID, isHere: mac.hostID == here, name: mac.hostID == here ? Self.here : mac.shownName,
-                 brains: CueProfile.runtimes.filter(mac.kinds.contains), whyNone: mac.whyNone)
+                 brains: mac.kinds, whyNone: mac.whyNone)
         }
         if let here {
             let local = hosts.firstIndex { $0.id == here }.map { hosts.remove(at: $0) }

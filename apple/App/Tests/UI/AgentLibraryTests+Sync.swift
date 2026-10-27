@@ -9,9 +9,9 @@ import Testing
 @testable import CuePi
 
 extension AgentLibraryTests {
-    /// 两台设备经同一个云替身：Mac 写下的快照同步到手机；手机上改说明、整理从手机的工作区发出，经云到 Mac 照做，结果回到手机。
+    /// 两台设备经同一个云替身：Mac 写下的快照同步到手机；手机上改规则、合并从手机的工作区发出，经云到 Mac 照做，结果回到手机。
     /// 这里的"手机"是第二个 Mac 进程：Mac 上的工作区只看本机的快照，手机那样读（`agentLibrary(host: nil)`）由测试自己读库。
-    @Test func 手机经云看到Mac的快照_发往Mac改说明与整理_结果回到手机() async throws {
+    @Test func 手机经云看到Mac的快照_发往Mac改规则与合并_结果回到手机() async throws {
         let cloud = SimulatedCloud([Self.floor(CueStore.peerFloor)])
         let macApp = TestApp(sync: .built { CloudSync(store: $0) { cloud } })
         let phone = TestApp(sync: .built { CloudSync(store: $0) { cloud } }, host: "mac-phone")
@@ -46,20 +46,21 @@ extension AgentLibraryTests {
         #expect(seen.text == "# Site\n")
 
         try write("# Site\n\nMac 上改的\n", folder.appending(path: "AGENTS.md"))
+        let file = LibraryFile.instruction(seen.kind)
         await #expect(throws: AgentLibraryError.changedOnMac) {
-            try await workspace.saveInstruction(InstructionEdit(instruction: seen.kind, base: seen.base, text: "手机改的\n"), in: library)
+            try await workspace.saveFile(LibraryEdit(file: file, base: LibraryEdit.base(of: seen.text), text: "手机改的\n"), in: library)
         }
         let followed = try await phoneSees("手机跟上 Mac 上的改动") { $0.instruction(.project(project.id))?.text == "# Site\n\nMac 上改的\n" }
         let current = try #require(followed.instruction(.project(project.id)))
-        try await workspace.saveInstruction(InstructionEdit(instruction: current.kind, base: current.base, text: "手机改的\n"), in: library)
+        try await workspace.saveFile(LibraryEdit(file: file, base: LibraryEdit.base(of: current.text), text: "手机改的\n"), in: library)
         #expect(read(folder.appending(path: "AGENTS.md")) == "手机改的\n")
 
-        await workspace.tidy(library.automaticOrders, in: library)
-        #expect(workspace.notice?.text.visible == "整理好了 1 件，合成稿在这里，删掉重复的")
-        #expect(workspace.openLibraryItem == .instruction(.project(project.id)), "合成完直接打开合成出的那份说明")
+        let merge = try #require(library.merge(into: .project(project.id)))
+        await workspace.tidy([TidyOrder(tidy: merge.id)], in: library)
+        #expect(workspace.notice?.text.visible == "合并好了" && workspace.notice?.action == nil, "手机发的合并没有撤销")
         #expect(read(folder.appending(path: "AGENTS.md")) == "手机改的\n\n# 旧的 Claude 说明\n")
         #expect(RelativeLink.points(folder.appending(path: "CLAUDE.md"), to: folder.appending(path: "AGENTS.md")))
-        _ = try await phoneSees("手机上没有要整理的了") { $0.tidies.isEmpty }
+        _ = try await phoneSees("手机上没有该整理的了") { $0.tidies.isEmpty }
     }
 
     private static func floor(_ version: Int) -> CKRecord {

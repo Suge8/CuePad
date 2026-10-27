@@ -24,28 +24,6 @@ class Outside:
         return catmull([E] + [add(self.c, mul((math.cos(a0 + sw * k / self.n), math.sin(a0 + sw * k / self.n)), self.R)) for k in range(1, self.n)] + [N])
 
 
-# ---- 标签栏图标角上的点（同系统的 *.badge）：右上是消息，右下是此刻的事（同 Cue 头像右下那颗点）----
-TAB_DOT_R = 3.4
-
-
-def dotted(build, *spots):
-    """原图形整个放在主层（标签栏里本来就单色，点睛并进主体不改样子），碰到点的轮廓沿点外一圈刻缝裁掉；
-    每颗点单独一层，按 spots 的先后是 secondary、tertiary：调色板渲染时各上一种颜色，主体照标签栏的选中色。
-    点的圆心按图形各自挑（格）：圆切过的拐角在三个母版里要是同几段，才能插值（`template` 断言），挪一点就可能对不上。"""
-    def b(m):
-        g, c = GROW[m], CARVE[m]
-        r = TAB_DOT_R + 0.4 * g
-        def cut(contour, accent):
-            for o in spots:
-                kept = contour and clip(contour, Outside(o, r + c))
-                # 点睛碰到点就整块让给点：切剩的一角在细的母版里还在、粗的里没了，三个母版就对不上
-                contour = None if accent and kept is not contour else kept
-            return contour
-        body = [k for L in build(m) for k in (cut(x, L.tier != "primary") for x in L.contours) if k]
-        return [Layer("glyph", body)] + [Layer(f"dot{i}", [disc(o, r)], tier) for i, (o, tier) in enumerate(zip(spots, ("secondary", "tertiary")))]
-    return b
-
-
 def arrow(segs, width, head):
     """一笔带箭镞（模板单位）：尾端圆头，头端是三角箭镞；head=(镞长, 镞半宽)。"""
     h, (hl, hw) = width / 2, head
@@ -118,6 +96,11 @@ def badge(mark, solid=True):
         return [Layer("ring", [disc((0, 0), 11.6 + T / 2), disc((0, 0), 11.6 - T / 2, hole=True)]),
                 Layer("mark", mark((0, 0.3), 0.88, 3.0 + 1.2 * g))]
     return build
+
+
+def question(m):
+    """说明（技能与规则页的问号圆钮）：只一个问号、不带圆——它本身就嵌在一颗圆钮里。问号同"未知"里那个，放大到满格。"""
+    return [Layer("question", mark_question((0, 0.3), 1.55, 3.0 + 1.2 * GROW[m]))]
 
 
 BADGE_R = 12.6

@@ -24,7 +24,7 @@ extension DebugScene {
             await seedCanvasSteps(workspace.services.store)
             workspace.show(.progress)
         case "agentsetup":
-            // -CuePadConnected YES：几家先都接进隔离目录（同 connected），看接入面板的第二步（技能与说明收到一处）
+            // -CuePadConnected YES：几家先都接进隔离目录（同 connected），看接入面板的第二步（技能与规则收到一处）
             // Cue 在演示的 Mac Studio 上运行（这一台不用再启用），面板里没有要接、要启用的就是第二步；面板打开后自己再检测一遍，等它检测完再拍
             let connected = defaults.bool(forKey: "CuePadConnected")
             if connected {
@@ -90,11 +90,11 @@ extension DebugScene {
             mainWindow?.orderOut(nil)
         case "trash": workspace.show(.trash)
         case "archive": workspace.show(.archive)
-        case "library", "instruction", "compare":
-            // 技能与说明（配 -CuePadDemo YES 有演示的快照）；instruction 打开全局说明（给了 -CuePadProject 是那个项目的，盖在项目页上），compare 打开各写一份的全局规则
+        case "library", "instruction", "skill", "duplicate":
+            // 技能与规则（配 -CuePadDemo YES 有演示的文件）；文件页同 iOS（`DemoAgentLibrary.file`），给了 -CuePadProject 的项目规则盖在项目页上
             if opened == nil || scene != "instruction" { workspace.show(.library) }
-            if scene == "instruction" { workspace.openLibrary(.instruction(opened.map(LibraryInstruction.Kind.project) ?? .global)) }
-            if scene == "compare" { workspace.openLibrary(.compare("global-instructions")) }
+            workspace.libraryPane = DebugHooks.preset.libraryPane
+            if let scene, let file = DemoAgentLibrary.file(scene: scene, project: opened) { workspace.openLibrary(file) }
         case "editor":
             if let id = await card(in: workspace.currentProject ?? Project.defaultID, store: workspace.services.store),
                let card = try? await workspace.services.store.card(id) { workspace.open(card) }

@@ -19,7 +19,7 @@ nonisolated enum Icon: Hashable, Sendable {
     case cue
     case idea, task, session, search, settings, archive, trash, sidebar
     case agent, all, filter, extensionNote
-    /// 技能与说明（侧栏底下那颗、Cue 面板那一行）；说明（AGENTS.md）一份
+    /// 技能与规则（侧栏底下那颗、Cue 面板那一行）；规则（AGENTS.md）一份
     case skill, instruction
     // 状态
     case waiting, cueAsking, awaitsReply, failure, undelivered, onTheWay, replied, yourTurn, fresh, ended, interrupted, unknown, gone
@@ -31,6 +31,8 @@ nonisolated enum Icon: Hashable, Sendable {
     case projects, folder, newProject, unbindFolder, pin, unpin
     case copy, share, saveAsIdea, write, rename, close, remove, clear, more
     case forward, back, expand, collapse, choose, conflict
+    /// 这一页的说明（问号圆钮，点开是气泡）；同名的技能（几份，去重）
+    case help, duplicate
     // 输入、发送与会话
     case send, save, checked, stop, endSession, handOff, delivered, retry, toLatest, fetching, compact, renew
     case declined, mac, yourAnswer, above, floated, earlier
@@ -116,7 +118,8 @@ nonisolated enum Icon: Hashable, Sendable {
         case .pin: .ink("pin")
         case .unpin: .ink("unpin")
         case .copy: .ink("copy")
-        case .conflict: .ink("conflict")
+        case .conflict, .duplicate: .ink("conflict")
+        case .help: .ink("question")
         case .share: .ink("share")
         case .saveAsIdea: .ink("save")
         case .write: .ink("write")
@@ -191,15 +194,6 @@ nonisolated enum Icon: Hashable, Sendable {
         switch source {
         case .ink(let name), .filled(let name): UIImage(named: Self.ink(name))
         }
-    }
-
-    /// 角上带点的变体（同系统的 *.badge：点与图形之间刻一圈缝，cue-symbols.py 的 `dotted`），标签栏用（`TabMarks`）：右上 `badge`、右下 `status`，
-    /// 各给一种颜色，都没有就是原图。主体上 `.tintColor`：调色板渲染时它解析成所在视图的 tint，标签栏里就是选中、未选中各自的颜色，同没有点时一样。
-    /// 只有 Cue（两角）与文件夹（右上）生成了变体。
-    func platformImage(badge: UIColor?, status: UIColor?) -> UIImage? {
-        guard case .ink(let name) = source, badge != nil || status != nil else { return platformImage }
-        let variant = name + (badge == nil ? "" : ".badge") + (status == nil ? "" : ".status")
-        return UIImage(named: Self.ink(variant))?.applyingSymbolConfiguration(.init(paletteColors: [.tintColor] + [badge, status].compactMap(\.self)))
     }
     #else
     /// AppKit 的菜单与工具条用。

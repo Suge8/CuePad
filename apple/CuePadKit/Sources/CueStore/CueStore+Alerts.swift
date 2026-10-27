@@ -38,21 +38,21 @@ extension CueStore {
   }
 
   /// 会话的这次提示怎么推（`PiPush`），两半：
-  /// - 这一停该你接：等你确认要真在等你（`PiSessionState.asksYou`）；待回复要还待回复（`awaitsReply`）；做完了在 Cue 不值班时都算，
-  ///   值班时会话归它接手，只有归你的停下（`hisStop`：你发起的一轮、你在场）才算——它留给你回的另按待回复提示（`flagLeftToYou`）。不该你接的不推。
+  /// - 这一停该你接：等你确认要真在等你（`PiSessionState.asksYou`）；待回复要还待回复（`awaitsReply`）；做完了只在 Cue 不值班时算——
+  ///   值班时留给你回的（你发起的一轮当场就是）另按待回复提示（`flagLeftToYou`），其余归 Cue 接。不该你接的不推。
   /// - 你没在看：没在哪台在线的 Mac 上开着这个会话页（`watchedOnMac`）就出通知，开着就只叫醒。
   func push(_ alert: PiAlert, _ state: PiSessionState) throws -> PiPush? {
     let cue = try cueDuty()
     let yours = switch alert {
     case .waitingForUser: state.asksYou(cue)
     case .awaitsReply: state.awaitsReply(cue)
-    case .settled: try cue.map { _ in try hisStop(state.sessionID) != nil } ?? true
+    case .settled: cue == nil
     }
     guard yours else { return nil }
     return try watchedOnMac { $0.sessionID.map(PiSessionState.recordID) == state.id } ? .wake : .alert(alert)
   }
 
-  /// Cue 刚把这次停下留给你（`leaveToYou`，会话状态没变，状态转换的标志轮不到它）：会话在这台 Mac 上（会话记录只有它写）、
+  /// 这次停下刚留给你（`CueLeft`，会话状态没变，状态转换的标志轮不到它）：会话在这台 Mac 上（会话记录只有它写）、
   /// 这次停下还在，就给会话记录置手机推送标志（哪种提示见 `PiSessionState.leftAlert`，怎么推见 `push`）。
   /// 返回记录 id（立即上传用），没置为 nil。
   @discardableResult

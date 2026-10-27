@@ -5,16 +5,21 @@ import Foundation
 import Testing
 @testable import CuePi
 
-/// 端到端：真实的 Pi / Codex / Claude Code 当 Cue 的大脑，用本机用户自己登录的账号与便宜的模型，MCP 是 Fixtures/mcp-echo.mjs 替身。
-/// 默认回放录像带，录制与模型、强度的换法见 `RealAgents`（OpenCode 不能当大脑）。
+/// 端到端：真实的 Pi / Codex / Claude Code / OpenCode 当 Cue 的大脑，用本机用户自己登录的账号与便宜的模型，MCP 是 Fixtures/mcp-echo.mjs 替身。
+/// 默认回放录像带，录制与模型、强度的换法见 `RealAgents`；OpenCode 没有录像带，列出它时直连，在隔离的 `OpenCodeSandbox` 里用免费模型。
 private let environment = ProcessInfo.processInfo.environment
-private let runtimes = [AgentKind.pi, .codex, .claudeCode].filter(RealAgents.runs)
-/// 连真运行时才看得出的（进程树、各家的历史）：录制时列出、本机装着的几家
-private let liveRuntimes = runtimes.filter { RealAgents.mode(of: $0) == .record }
-/// Pi 用 openai-codex 的模型：Claude 只走官方 Claude Code，不经 Pi 用 Claude 订阅
-private let cheapModels: [AgentKind: String] = [.pi: "openai-codex/gpt-5.6-luna", .codex: "gpt-5.6-luna", .claudeCode: "haiku"]
-/// 就地换到的模型：Pi 的上下文窗口与上面的不同，换没换看得出来（Codex 里两个窗口一样，Claude Code 报的是用过的模型里最大的窗口）
-private let otherModels: [AgentKind: String] = [.pi: "openai-codex/gpt-6-luna", .codex: "gpt-6-luna", .claudeCode: "sonnet"]
+private let runtimes = AgentKind.allCases.filter { $0 == .opencode ? RealAgents.mode(of: $0) == .live && RealAgents.installed($0) : RealAgents.runs($0) }
+/// 连真运行时才看得出的（进程树、各家的历史）：录制或直连时列出、本机装着的几家
+private let liveRuntimes = runtimes.filter { RealAgents.mode(of: $0) != .replay }
+/// Pi 用 openai-codex 的模型：Claude 只走官方 Claude Code，不经 Pi 用 Claude 订阅。OpenCode 用能看图的免费模型
+private let cheapModels: [AgentKind: String] = [
+    .pi: "openai-codex/gpt-5.6-luna", .codex: "gpt-5.6-luna", .claudeCode: "haiku", .opencode: "opencode/deepseek-v4.1-flash-free",
+]
+/// 就地换到的模型：Pi 的上下文窗口与上面的不同，换没换看得出来（Codex 里两个窗口一样，Claude Code 报的是用过的模型里最大的窗口）。
+/// 用 `CUEPAD_BRAIN_OTHER_MODEL_<家>` 换（OpenCode 的免费模型限流时连同 `CUEPAD_BRAIN_MODEL_<家>` 换成自己提供方的，密钥只经环境给）
+private let otherModels: [AgentKind: String] = [
+    .pi: "openai-codex/gpt-6-luna", .codex: "gpt-6-luna", .claudeCode: "sonnet", .opencode: AgentKind.opencode.modelRef(openCodeTestModel),
+]
 private let echoServer = URL(filePath: #filePath).deletingLastPathComponent().appending(path: "Fixtures/mcp-echo.mjs")
 private let home = FileManager.default.homeDirectoryForCurrentUser
 /// 缺省 off：最便宜，Codex、Claude Code 还会走夹取
@@ -26,7 +31,7 @@ private func executable(_ name: String) -> URL? {
 }
 
 @MainActor
-@Suite(.agentTapes, RealAgents.serialWhenRecording(.pi, .codex, .claudeCode), RealAgents.timeLimit(.minutes(5)))
+@Suite(.agentTapes, RealAgents.serialWhenRecording(.pi, .codex, .claudeCode, .opencode), RealAgents.timeLimit(.minutes(5)))
 struct RealBrainTests {
     /// 一个大脑与它的现场：独立的工作目录（名字里有随机标记，用来在各家的历史里找它）、MCP 替身的调用记录、收到的事件。
     @MainActor
@@ -38,8 +43,11 @@ struct RealBrainTests {
         let echoLog: URL
         let sessions: URL
         let codename = "ZEBRA-4821"
-        let brain: any CueBrain
-        private(set) var events: [CueBrainEvent] = []
+        /// OpenCode 的隔离家目录与库：测试进程里共用一台（头一次起要联网取模型表，几十秒；临时目录随测试进程清理）
+        let sandbox: OpenCodeSandbox?
+        private static var openCodeSandbox: OpenCodeSandbox?
+        let brain: any HostedSession
+        private(set) var events: [TurnEvent] = []
 
         init(_ runtime: AgentKind) async throws {
             self.runtime = runtime
@@ -48,21 +56,27 @@ struct RealBrainTests {
             sessions = root.appending(path: "pi-sessions")
             echoLog = root.appending(path: "echo.log")
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            if runtime == .opencode {
+                if Self.openCodeSandbox == nil { Self.openCodeSandbox = try await OpenCodeSandbox() }
+                sandbox = Self.openCodeSandbox
+            } else {
+                sandbox = nil
+            }
             let config = CueBrainConfig(
-                runtime: runtime, executable: AgentTape.executable(runtime.command),
+                runtime: runtime, executable: runtime == .opencode ? try #require(realOpenCodeURL) : AgentTape.executable(runtime.facts.command),
                 model: environment["CUEPAD_BRAIN_MODEL_\(runtime.rawValue.uppercased())"] ?? cheapModels[runtime], effort: effort,
                 systemPrompt: "You are Cue, a test assistant. Your codename is \(codename). Keep answers to one short sentence. When asked to echo something, call the echo tool.",
                 workingDirectory: directory,
                 mcp: [try #require(executable("node")).path, echoServer.path, marker],
                 // Pi 的会话落盘位置指到这里：`--no-session` 生效的话它一直是空的（不去翻用户的 ~/.pi）
-                environment: ["MCP_ECHO_LOG": echoLog.path, "PI_CODING_AGENT_SESSION_DIR": sessions.path])
+                environment: ["MCP_ECHO_LOG": echoLog.path, "PI_CODING_AGENT_SESSION_DIR": sessions.path].merging(sandbox?.environment ?? [:]) { $1 })
             AgentTape.current?.watch(root)
             brain = try await config.startBrain()
             let events = brain.events
             Task { [weak self] in for await event in events { self?.events.append(event) } }
         }
 
-        func count(_ event: CueBrainEvent) -> Int { events.filter { $0 == event }.count }
+        func count(_ event: TurnEvent) -> Int { events.filter { $0 == event }.count }
 
         func finished(_ n: Int = 1) async throws {
             try await eventually("第 \(n) 轮做完") { self.count(.turnFinished) >= n }
@@ -87,7 +101,7 @@ struct RealBrainTests {
             return replies
         }
         var failures: [String] { events.compactMap { if case .failed(let text) = $0 { text } else { nil } } }
-        var contexts: [Int] { events.compactMap { if case .context(let used) = $0 { used } else { nil } } }
+        var contexts: [Int] { events.compactMap { if case .context(let used, _) = $0 { used } else { nil } } }
         var echoed: [String] { ((try? String(contentsOf: echoLog, encoding: .utf8)) ?? "").split(separator: "\n").map(String.init) }
     }
 
@@ -155,9 +169,15 @@ struct RealBrainTests {
         try await rig.brain.send("Remember the word PAPAYA. Reply with only OK.")
         try await rig.finished()
 
-        let unknown = runtime == .pi ? "openai-codex/no-such-model" : "no-such-model"
+        // OpenCode 的服务对不存在的模型也回 204：大脑自己认
+        let unknown = switch runtime {
+        case .pi: "openai-codex/no-such-model"
+        case .opencode: "opencode/no-such-model"
+        case .codex, .claudeCode: "no-such-model"
+        }
         await #expect(throws: (any Error).self) { try await rig.brain.configure(model: unknown, effort: nil) }
-        try await rig.brain.configure(model: try #require(otherModels[runtime]), effort: .low)
+        let other = environment["CUEPAD_BRAIN_OTHER_MODEL_\(runtime.rawValue.uppercased())"] ?? otherModels[runtime]
+        try await rig.brain.configure(model: try #require(other), effort: .low)
         try await rig.brain.send("What word did I ask you to remember? Reply with only the word.")
         try await rig.finished(2)
 
@@ -194,9 +214,9 @@ struct RealBrainTests {
 }
 
 /// 结束后进程连同它起的子进程（MCP 服务等）都退出、各家的历史里没有这次对话：断言的是真进程树与各家真实的历史目录，回放不出来，
-/// 只在录制时连真运行时跑。
+/// 只在录制或直连时连真运行时跑。
 @MainActor
-@Suite(.enabled(if: !liveRuntimes.isEmpty, "只连真运行时跑（看真进程树与各家的历史）：CUEPAD_AGENT_TESTS 列出 pi、codex 或 claude 时开启"), .serialized, .timeLimit(.minutes(5)))
+@Suite(.enabled(if: !liveRuntimes.isEmpty, "只连真运行时跑（看真进程树与各家的历史）：CUEPAD_AGENT_TESTS 列出 pi、codex、claude 或 opencode 时开启"), .serialized, .timeLimit(.minutes(5)))
 struct RealBrainProcessTests {
     @Test(arguments: liveRuntimes) func stoppingLeavesNoProcessesOrHistory(_ runtime: AgentKind) async throws {
         let rig = try await RealBrainTests.Rig(runtime)
@@ -205,6 +225,12 @@ struct RealBrainProcessTests {
 
         let tree = try processTree(containing: rig.marker)
         #expect(tree.count >= 2)  // 运行时与 MCP 替身
+        // OpenCode 的会话在它的库里：用接入连的后台服务看这个工作目录里的会话，停之前有、停之后一个不剩
+        let sandbox = rig.sandbox
+        if let sandbox {
+            try await sandbox.run(["service", "start"])
+            #expect(try await openCodeSessions(in: rig.directory, sandbox).count == 1)
+        }
         await rig.brain.stop()()
         try await eventually("报告退出") { rig.events.last == .exited(nil) }
         let survivors = tree.filter { kill($0, 0) == 0 }
@@ -218,11 +244,19 @@ struct RealBrainProcessTests {
         case .claudeCode:
             #expect(try claudeTranscripts(for: rig.marker) == [])
         case .opencode:
-            Issue.record("OpenCode 不能当大脑")
+            let sandbox = try #require(sandbox)
+            let left = try await openCodeSessions(in: rig.directory, sandbox)
+            try await sandbox.run(["service", "stop"])
+            #expect(left.isEmpty, "\(left)")
         }
     }
 
-    /// 大脑进程与它的全部后代：从命令行里带着标记的 MCP 替身往上找到本测试进程的直接子进程（运行时），再取它的整棵子树。
+    private func openCodeSessions(in directory: URL, _ sandbox: OpenCodeSandbox) async throws -> [Any] {
+        try await sandbox.api("GET", "/api/session?directory=" + OpenCodeClient.escaped(directory.path))["data"] as? [Any] ?? []
+    }
+
+    /// 大脑进程与它的全部后代：从命令行里带着标记的 MCP 替身往上找到运行时，再取它的整棵子树。运行时挂在 launchd 下
+    /// （`ChildProcess` 经中转起，见它的头注释），挂在本测试进程下的也认。
     private func processTree(containing marker: String) throws -> [pid_t] {
         let ps = Process()
         ps.executableURL = URL(filePath: "/bin/ps")
@@ -239,10 +273,7 @@ struct RealBrainProcessTests {
         }
         let parent = Dictionary(rows.map { ($0.pid, $0.ppid) }, uniquingKeysWith: { a, _ in a })
         var root = try #require(rows.first { $0.command.contains(marker) }).pid
-        while let up = parent[root], up != getpid() {
-            guard up > 1 else { Issue.record("MCP 替身不在本测试进程之下"); return [] }
-            root = up
-        }
+        while let up = parent[root], up != getpid(), up > 1 { root = up }
         var tree = [root]
         var index = 0
         while index < tree.count {
@@ -274,7 +305,7 @@ struct RealBrainProcessTests {
     }
 }
 
-private extension CueBrain {
+private extension HostedSession {
     func send(_ text: String) async throws { try await send(text, images: []) }
 }
 #endif

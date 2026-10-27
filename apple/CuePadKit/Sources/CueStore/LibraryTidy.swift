@@ -1,8 +1,9 @@
 import Foundation
 
-/// 要整理的一件（`AgentLibrary.tidies`）：只有问题时出现，每件一句事实（`title`）一个动作（`action`）。判定规则在 CuePi 的
-/// `LibrarySkillScan`、`LibraryInstructionScan`；整理不弹确认，移走的进系统废纸篓，做完给一条可撤销的提示。
-/// `id` 由种类推出（同名的带名字、格式不对的带路径、项目的带项目），重扫后不变；整理请求（`TidyOrder`）按它指认，
+/// 该整理的一件（`AgentLibrary.tidies`），只在有问题时出现。判定规则在 CuePi 的 `LibrarySkillScan`、`LibraryInstructionScan`。
+/// 动作只有三个：一键整理（不用你选的那几件，`isAutomatic`）、去重（同名的在技能的文件页里只留一份，`TidyOrder.keep`）、
+/// 合并（内容不同的规则在规则的文件页里合并进来，`merges`）。不弹确认，移走的进系统废纸篓，本机做完给一条可撤销的提示。
+/// `id` 由种类推出（同名的带名字、项目的带项目），重扫后不变；整理请求（`TidyOrder`）按它指认，
 /// 照执行时的文件做（那时多出来的同类问题一并做），那件已不在就不做（一件都不在时 `AgentLibraryError.tidyGone`）。
 public struct LibraryTidy: Codable, Equatable, Sendable, Identifiable {
   public let id: String
@@ -16,64 +17,53 @@ public struct LibraryTidy: Codable, Equatable, Sendable, Identifiable {
   public enum Kind: Codable, Equatable, Sendable {
     /// 旧目录里的技能（各家自己的技能目录、项目里 .claude/.pi/.codex/.opencode 下的，不是 CuePad 写的、不是各家自管的）：搬进同范围的 `.agents/skills`
     case stray([SkillMove])
-    /// Claude Code 看不见（不读 `.agents`）：缺逐个技能的相对链接，链上
+    /// Claude Code 读不到（不读 `.agents`）：缺逐个技能的相对链接，补上
     case unlinked([SkillEntry])
-    /// 同名（全局与项目之间、同一范围内都不许）：比一比、留一份，其余进废纸篓
-    case duplicate(name: String, copies: [SkillCopy])
-    /// 格式不对（取四家最严）：打开它自己改
-    case malformed(SkillEntry, SkillProblem)
+    /// 同名（全局与项目之间、同一范围内都不许）：去重，留一份，其余进废纸篓；各份都列在技能里（`AgentLibrary.skills`）
+    case duplicate(name: String, copies: [SkillEntry])
     /// 技能目录里的空目录：移走
     case empty([String])
-    /// 各家的全局说明各写一份：内容不同的比一比、合成一份全局说明，各家换成链到它的链接；同内容的直接换链接
+    /// 各家的全局规则各写一份：内容不同的合并成一份全局规则（`merges`），各家换成链到它的链接；同内容的直接换链接
     case globalInstructions([InstructionSource])
-    /// Claude Code 读不到项目的 AGENTS.md（同层另有 CLAUDE.md、`.claude/CLAUDE.md` 或个人的 CLAUDE.local.md）：内容不同的合成进 AGENTS.md，
-    /// 那两份移走、CLAUDE.md 换成链到 AGENTS.md 的链接（同全局）；只是个人那份挡着时只链上
+    /// Claude Code 读不到项目的 AGENTS.md（同层另有 CLAUDE.md、`.claude/CLAUDE.md` 或个人的 CLAUDE.local.md）：内容不同的合并进 AGENTS.md，
+    /// 那两份移走、CLAUDE.md 换成链到 AGENTS.md 的链接（同全局）；只是个人那份挡着、或内容一样时只换链接
     case projectClaude(project: UUID, sources: [InstructionSource])
   }
 
-  /// 按什么动：界面的按钮。
-  public enum Action: Sendable {
-    case move, link, compare, open, trash, merge
-
-    public var title: String {
-      switch self {
-      case .move: String(localized: "搬过去")
-      case .link: String(localized: "链上")
-      case .compare: String(localized: "比一比")
-      case .open: String(localized: "打开")
-      case .trash: String(localized: "移走")
-      case .merge: String(localized: "合成")
-      }
-    }
-  }
-
-  public var action: Action {
-    switch kind {
-    case .stray: .move
-    case .unlinked: .link
-    case .duplicate: .compare
-    case .malformed: .open
-    case .empty: .trash
-    case .globalInstructions: differs ? .compare : .link
-    case .projectClaude: claudeCopies ? .merge : .link
-    }
-  }
-
-  /// "全部整理"做不做它：同名要你挑留哪份、格式不对要你自己改，不做；内容不同的说明照合成稿（`merged`）做。
+  /// 一键整理做不做它：同名要你挑留哪份、内容不同的规则要你看过再合并，不做。
   public var isAutomatic: Bool {
     switch kind {
-    case .duplicate, .malformed: false
-    default: true
+    case .duplicate: false
+    case .globalInstructions, .projectClaude: !merges
+    case .stray, .unlinked, .empty: true
     }
   }
 
-  /// 要合成的几份内容不止一种（比一比才有意义）。
-  public var differs: Bool { Set(sources.compactMap(\.text)).count > 1 }
+  /// 内容不同、要合并的规则（在那份规则的文件页里"合并进来"）。替换基础提示的两份只作比对，自己不算不同。
+  public var merges: Bool {
+    switch kind {
+    case .globalInstructions: Set(sources.filter { !$0.origin.replacesBasePrompt }.compactMap(\.text)).count > 1
+    case .projectClaude: sources.contains { $0.origin == .agent(.claudeCode) }
+    default: false
+    }
+  }
 
-  /// 项目里有 Claude Code 自己的、内容不同的说明要合成（不只是个人那份挡着）。
-  private var claudeCopies: Bool { sources.contains { $0.origin == .agent(.claudeCode) } }
+  /// 说的是哪份规则；技能的为 nil。
+  public var instruction: LibraryInstruction.Kind? {
+    switch kind {
+    case .globalInstructions: .global
+    case .projectClaude(let project, _): .project(project)
+    default: nil
+    }
+  }
 
-  /// 说明的来源（合成的两种）；其余为空。
+  /// 另写了一份的几家（替换基础提示的两份不算），按 `AgentKind` 的顺序。
+  public var writers: [AgentKind] {
+    let own = Set(sources.filter { !$0.origin.replacesBasePrompt }.compactMap(\.origin.agent))
+    return AgentKind.allCases.filter(own.contains)
+  }
+
+  /// 规则的来源（合并的两种）；其余为空。
   public var sources: [InstructionSource] {
     switch kind {
     case .globalInstructions(let sources), .projectClaude(_, let sources): sources
@@ -81,38 +71,21 @@ public struct LibraryTidy: Codable, Equatable, Sendable, Identifiable {
     }
   }
 
-  /// 合成稿：几份说明按段取并集（`InstructionMerge`），整理时照它写进 AGENTS.md；不是说明的为 nil。
+  /// 合并稿：几份规则按段取并集（`InstructionMerge`），整理时照它写进 AGENTS.md；不是规则的为 nil。
   /// 替换基础提示的两份（`InstructionSource.Origin.replacesBasePrompt`）只有撤掉的（`retiring`，同 `TidyOrder.retire`）才并进来。
   public func merged(retiring: Set<InstructionSource.Origin> = []) -> String? {
     let used = sources.filter { !$0.origin.replacesBasePrompt || retiring.contains($0.origin) }
     return used.isEmpty ? nil : InstructionMerge.union(used.compactMap(\.text))
   }
 
-  /// 几家自己另写了全局说明（替换基础提示的两份只作比对，不算）：一家时写出是哪家。
-  private static func ownGlobals(_ sources: [InstructionSource]) -> String {
-    let own = Set(sources.filter { !$0.origin.replacesBasePrompt }.compactMap(\.origin.agent))
-    if own.count == 1, let agent = own.first { return String(localized: "\(agent.name) 另写了一份全局说明") }
-    return String(localized: "\(own.count) 家的全局说明各写一份")
-  }
-
-  /// 一句事实（各端按自己的语言写，参数是名字与个数）。
-  public var title: String {
-    switch kind {
-    case .stray(let moves):
-      moves.count == 1 ? String(localized: "「\(moves[0].skill.name)」在旧目录里") : String(localized: "\(moves.count) 个技能在旧目录里")
-    case .unlinked(let skills): String(localized: "Claude Code 看不见 \(skills.count) 个技能")
-    case .duplicate(let name, let copies): String(localized: "\(copies.count) 个技能都叫 \(name)")
-    case .malformed(let skill, _): String(localized: "「\(skill.name)」的格式不对")
-    case .empty(let directories):
-      directories.count == 1 ? String(localized: "技能目录里有个空目录") : String(localized: "技能目录里有 \(directories.count) 个空目录")
-    case .globalInstructions(let sources): differs ? Self.ownGlobals(sources) : String(localized: "全局说明换成一份、各家链到它")
-    case .projectClaude:
-      claudeCopies ? String(localized: "项目里另有一份不同的 CLAUDE.md") : String(localized: "Claude Code 读不到项目说明")
-    }
+  /// 合并稿按段，标出共读的那份里没有、会并进来的段（合并前给你看）。
+  public func preview(retiring: Set<InstructionSource.Origin>) -> [(text: String, incoming: Bool)] {
+    let shared = Set(InstructionMerge.blocks(of: sources.first { $0.origin == .shared }?.text ?? "").map(InstructionMerge.normalized))
+    return InstructionMerge.blocks(of: merged(retiring: retiring) ?? "").map { ($0, !shared.contains(InstructionMerge.normalized($0))) }
   }
 }
 
-/// 一个技能所在（要整理里列出的）：名字取目录名。
+/// 一个技能所在（整理里列出的）：名字取目录名。
 public struct SkillEntry: Codable, Hashable, Sendable {
   public let name: String
   public let scope: LibraryScope
@@ -137,19 +110,6 @@ public struct SkillMove: Codable, Hashable, Sendable {
   }
 }
 
-/// 同名技能的一份：比一比要看的正文（SKILL.md）。
-public struct SkillCopy: Codable, Equatable, Sendable {
-  public let skill: SkillEntry
-  public let text: String
-  public let modifiedAt: Date
-
-  public init(skill: SkillEntry, text: String, modifiedAt: Date) {
-    self.skill = skill
-    self.text = text
-    self.modifiedAt = modifiedAt
-  }
-}
-
 /// 技能的格式哪里不对（四家最严的那条）。
 public enum SkillProblem: Codable, Equatable, Sendable, CustomStringConvertible {
   /// SKILL.md 读不出（不是 UTF-8 文本、没有权限）或开头没有 `---` 包着的名字与说明
@@ -163,30 +123,41 @@ public enum SkillProblem: Codable, Equatable, Sendable, CustomStringConvertible 
   /// 嵌套超过 6 层（Codex 读不到、不报错）
   case tooDeep
 
+  /// 写在文件页哪个输入框下面（`tooDeep` 说的是放在哪，不在哪个框上）。
+  public enum Field: Sendable { case name, description }
+
+  public var field: Field? {
+    switch self {
+    case .unreadable, .nameMismatch, .badName: .name
+    case .badDescription: .description
+    case .tooDeep: nil
+    }
+  }
+
   public var description: String {
     switch self {
-    case .unreadable: String(localized: "SKILL.md 读不出名字与说明：要是文本，开头用 --- 包着 name 与 description")
-    case .nameMismatch(let name): String(localized: "name 写的是 \(name)，和目录名不一样")
-    case .badName: String(localized: "名字只能用小写字母、数字和连字符，最多 64 个字")
-    case .badDescription: String(localized: "description 要有，且不超过 1024 个字")
+    case .unreadable: String(localized: "读不出 name 与 description")
+    case .nameMismatch: String(localized: "要和文件夹名一样")
+    case .badName: String(localized: "文件夹名只能用小写字母、数字和连字符，最多 64 个字")
+    case .badDescription: String(localized: "要有，且不超过 1024 个字")
     case .tooDeep: String(localized: "放得太深（超过 6 层），Codex 读不到")
     }
   }
 }
 
-/// 要合成的一份说明。
+/// 要合并的一份规则。
 public struct InstructionSource: Codable, Equatable, Sendable {
   public enum Origin: Codable, Hashable, Sendable {
     /// 大家共读的那份：全局的 `~/.agents/AGENTS.md`、项目的 `AGENTS.md`
     case shared
     /// 这家自己的那份：全局的 `~/.claude/CLAUDE.md`、`~/.codex/AGENTS.md`……，项目的 `CLAUDE.md`
     case agent(AgentKind)
-    /// Pi 的 `SYSTEM.md`（替换它的基础提示）：只作比对来源，合成时可选进废纸篓；留着时仍是说明里单独的一份（`LibraryInstruction.Kind.piSystem`）
+    /// Pi 的 `SYSTEM.md`（替换它的基础提示）：只作比对来源，合并时可选进废纸篓；留着时仍是规则里单独的一份（`LibraryInstruction.Kind.piSystem`）
     case piSystem
-    /// Codex 配置里 `model_instructions_file` 指的那份（替换它的基础提示）：只作比对来源，合成时可选撤掉这个键
+    /// Codex 配置里 `model_instructions_file` 指的那份（替换它的基础提示）：只作比对来源，合并时可选撤掉这个键
     case codexPrompt
 
-    /// 替换基础提示的两份：自己不算"各写一份"，合成时撤不撤由你选（`TidyOrder.retire`）。
+    /// 替换基础提示的两份：自己不算"另写一份"，合并时撤不撤由你选（`TidyOrder.retire`）。
     public var replacesBasePrompt: Bool { self == .piSystem || self == .codexPrompt }
 
     /// 是哪家的；共读的那份为 nil。
@@ -214,8 +185,8 @@ public struct InstructionSource: Codable, Equatable, Sendable {
   }
 }
 
-/// 几份说明合成一份：以第一份为底，其余各份里底稿没有的段落（空行隔开，忽略首尾空白）插在它前面那段之后，顺序照原文。
-/// 合成稿之后在编辑页里改；不猜哪一份对。
+/// 几份规则合并成一份：以第一份为底，其余各份里底稿没有的段落（空行隔开，忽略首尾空白）插在它前面那段之后，顺序照原文。
+/// 合并稿之后在文件页里改；不猜哪一份对。
 public enum InstructionMerge {
   public static func union(_ texts: [String]) -> String {
     var merged: [String] = []
@@ -233,7 +204,7 @@ public enum InstructionMerge {
     return merged.joined(separator: "\n\n") + (merged.isEmpty ? "" : "\n")
   }
 
-  /// 按段拆开（空行隔开，去掉首尾空行与空段）：合成与比一比按同一种段落认"一样"。
+  /// 按段拆开（空行隔开，去掉首尾空行与空段）：合并与预览按同一种段落认"一样"。
   public static func blocks(of text: String) -> [String] {
     text.replacingOccurrences(of: "\r\n", with: "\n").split(separator: /\n[ \t]*\n/)
       .map { $0.trimmingCharacters(in: .newlines) }.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }

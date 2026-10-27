@@ -6,6 +6,7 @@ import SwiftUI
 /// 叠加（`additive`）、每次各用各的键：上一段没走完又来一条时两段相加，屏上从当前位置连续接上。
 /// 否决的方案：SwiftUI 的偏移逐帧挪——每帧要主线程更新，Mac 上发出一句到回复与结果卡出来的那几秒主线程指令多近两成。
 /// 挪哪一层由内容里一个不占地方的平台视图往上找（`Anchor`）；顺着它也找到平台的滚动视图，直接挪偏移（`scroll(by:)`）。
+/// 横向的进出（`slideIn`、`slideOut`）给一页里换段：那一段的内容在自己的滚动区里平移，同样不经主线程。
 @MainActor final class ContentLift {
     weak var probe: PlatformView?
     private var slides = 0
@@ -21,6 +22,37 @@ import SwiftUI
         slides += 1
         layer.add(slide, forKey: "lift.\(slides)")
     }
+
+    /// 换进来的一段：内容从横向 `x` 处（正是右边）平移到原位；之前出场停在一边的那一截撤掉。
+    func slideIn(fromX x: CGFloat) {
+        guard let layer else { return }
+        layer.removeAnimation(forKey: Self.outKey)
+        layer.add(sideways(from: x, to: 0, keep: false), forKey: Self.inKey)
+    }
+
+    /// 换走的一段：内容从原位平移到 `x` 并停在那里（它已淡出，再换回来时 `slideIn` 撤掉）。
+    func slideOut(toX x: CGFloat) {
+        guard let layer else { return }
+        layer.removeAnimation(forKey: Self.inKey)
+        layer.add(sideways(from: 0, to: x, keep: true), forKey: Self.outKey)
+    }
+
+    private func sideways(from: CGFloat, to: CGFloat, keep: Bool) -> CABasicAnimation {
+        let slide = CABasicAnimation(keyPath: "transform.translation.x")
+        slide.fromValue = from
+        slide.toValue = to
+        slide.isAdditive = true
+        slide.duration = Motion.Glide.duration
+        slide.timingFunction = Motion.Glide.timing
+        if keep {
+            slide.fillMode = .forwards
+            slide.isRemovedOnCompletion = false
+        }
+        return slide
+    }
+
+    private static let inKey = "pane.in"
+    private static let outKey = "pane.out"
 
     /// 可见区沿内容往下挪 `height`：正在读的那一条在内容里挪了这么多时（`ChatAnchor`），它留在原处。直接改平台滚动视图的偏移，
     /// 在内容变高的这次更新里生效、这一帧就画在原处，正滚着（触控板的惯性、滚轮、手指拖着）也接着从新的位置滚。

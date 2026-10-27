@@ -232,12 +232,12 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
   public func waitsForCue(_ cue: CueDuty?) -> Bool { cue.map { !$0.leftToYou(self) } == true && answerableQuestion != nil }
 
   /// 拍板里会话那一半的唯一规则：在等回答且等的不是 Cue（`waitsForCue`）。拍板卡、"等你确认"的提示
-  /// （Mac 的通知、手机的前台横幅与锁屏推送标志，`CueStore.reaches`）都只认它。歇着的不算，Cue 留给你回的是待回复（`awaitsReply`），两种合起来是等你（`CueTally`）。
+  /// （Mac 的通知、手机的前台横幅与锁屏推送标志，`CueStore.reaches`）都只认它。歇着的不算，留给你回的是待回复（`awaitsReply`），两种合起来是等你（`CueTally`）。
   public func asksYou(_ cue: CueDuty?) -> Bool { state == .known(.waitingForUser) && !waitsForCue(cue) }
 
-  /// 待回复的唯一规则：歇着，Cue 值班时把这次停下留给了你回（`CueDuty.leftToYou`）。会话行的"待回复"、Cue 页的待回复提示、
-  /// 名牌、看板等你列里的待回复与待回复的提示（`CueStore.sessionsAwaitingReply`、`reaches`）都只认它。
-  public func awaitsReply(_ cue: CueDuty?) -> Bool { state == .known(.settled) && cue?.leftToYou(self) == true }
+  /// 待回复的唯一规则：停着没在问（歇着或出错），Cue 值班时这次停下留给了你回（`CueDuty.leftToYou`：你发起的一轮当场就是，Cue 发起的由它定）。
+  /// 会话行的"待回复"（出错的照样显示出错）、Cue 页的待回复提示、名牌、看板等你列里的待回复与待回复的提示（`CueStore.sessionsAwaitingReply`、`reaches`）都只认它。
+  public func awaitsReply(_ cue: CueDuty?) -> Bool { state != .known(.waitingForUser) && cue?.leftToYou(self) == true }
 
   /// 一个 Pi 会话对应的记录 id（每个会话一条，任何设备上算出来都一样）。
   public static func recordID(sessionID: String) -> UUID { DeterministicID.uuid("pi-session/\(sessionID)") }

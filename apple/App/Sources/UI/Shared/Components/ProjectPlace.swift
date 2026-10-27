@@ -79,7 +79,7 @@ struct ProjectPlaceLabel: View {
 /// 项目的一句介绍接它的文件夹（`ProjectPlace`）：Mac 项目页与 iPad 侧栏在旁边时项目页最上面那一行（那时页顶不写标题与第二行），
 /// `inHeader` 时是手机页顶那块玻璃的第二行（小一号、同一档墨、不带图标，同 `floatingHeader` 的信息行）。
 /// 目录读到之前、没写介绍时也占着这一行的高：下面的任务纸与墙、玻璃里的标题不上下跳。介绍优先占宽，文件夹在后面省略（规则见 `ProjectPlaceLabel`）。
-/// 绑着文件夹的项目（技能与说明的快照里有它）行末一个"说明"，点了直接打开这个项目的 AGENTS.md 编辑页；手机页顶那块玻璃里不放，在右上"⋯"里。
+/// 绑着文件夹的项目（技能与规则的快照里有它）行末一个"规则"，点了直接打开这个项目的 AGENTS.md 编辑页；手机页顶那块玻璃里不放，在右上"⋯"里。
 struct ProjectIntroLine: View {
     let project: Project?
     var inHeader = false
@@ -99,7 +99,7 @@ struct ProjectIntroLine: View {
             if !inHeader, let project, workspace.library?.instruction(.project(project.id)) != nil {
                 Dotted.inline.foregroundStyle(palette.ink3).accessibilityHidden(true)
                 Button { workspace.openLibrary(.instruction(.project(project.id))) } label: {
-                    Label("说明", icon: .instruction).labelStyle(.titleAndIcon).imageScale(.small)
+                    Label("规则", icon: .instruction).labelStyle(.titleAndIcon).imageScale(.small)
                 }
                 .buttonStyle(PressStyle(.inline))
                 .foregroundStyle(palette.ink2)

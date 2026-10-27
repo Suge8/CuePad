@@ -29,6 +29,8 @@ enum CueTextStack {
         content.addTextLayoutManager(layout)
         let container = NSTextContainer(size: CGSize(width: 0, height: CGFloat.greatestFiniteMagnitude))
         container.widthTracksTextView = true
+        // 字离编辑器左右沿只隔主题给的留白（`CueEditorTheme.horizontalInset`），不再多系统默认的 5pt 行片段留白：宿主按同一个数对齐别的字
+        container.lineFragmentPadding = 0
         layout.textContainer = container
         return (content, layout, container)
     }

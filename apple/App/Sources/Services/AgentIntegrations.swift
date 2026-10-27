@@ -20,9 +20,9 @@ final class AgentIntegrations {
     /// 每一家都检测过了（之前的"有哪些"还说不准，界面写检测中）。
     var detected: Bool { statuses.count == AgentKind.allCases.count }
     @ObservationIgnored let integration: AgentIntegration
-    /// 移除成功之后（关掉开关）：收起 CuePad 为它起的东西（如 CuePad 拉起的 OpenCode 服务）
+    /// 移除成功之后（关掉开关，`AgentRuntime.integrationRemoved`）
     @ObservationIgnored var uninstalled: (AgentKind) async -> Void = { _ in }
-    /// 新装或升级成功之后：Pi 的请在跑的会话换上新扩展（`PiBridge.offerExtensionUpgrade`）
+    /// 新装或升级成功之后（`AgentRuntime.integrationInstalled`）
     @ObservationIgnored var installed: (AgentKind) -> Void = { _ in }
 
     init(_ integration: AgentIntegration) {
@@ -79,7 +79,7 @@ final class AgentIntegrations {
         return failures
     }
 
-    /// 在后台跑这家的官方安装脚本（`AgentKind.installCommand`），装完重新检测它；没装上的原因记在 `jobs`（脚本输出的最后一句）。
+    /// 在后台跑这家的官方安装脚本（`AgentFacts.installCommand`），装完重新检测它；没装上的原因记在 `jobs`（脚本输出的最后一句）。
     func installAgent(_ kind: AgentKind) async {
         jobs[kind] = .installing
         let result = await integration.runInstaller(kind, statuses[kind]?.presence ?? .notFound)
@@ -87,12 +87,12 @@ final class AgentIntegrations {
         jobs[kind] = switch result {
         case nil: .failed(String(localized: "安装超时"))
         case let (status, output)? where status != 0: .failed(Self.lastLine(output) ?? String(localized: "安装没成功"))
-        case _ where statuses[kind]?.isAvailable != true: .failed(String(localized: "装好了，但找不到 \(kind.command)"))
+        case _ where statuses[kind]?.isAvailable != true: .failed(String(localized: "装好了，但找不到 \(kind.facts.command)"))
         default: nil
         }
     }
 
-    /// 命令行登录（`AgentKind.loginArguments`，会打开浏览器），等它结束；再点一次就结束旧的、等它退出（放开 Codex 的固定端口）再重来。
+    /// 命令行登录（`AgentFacts.loginArguments`，会打开浏览器），等它结束；再点一次就结束旧的、等它退出（放开 Codex 的固定端口）再重来。
     /// 没登录成的记在 `jobs`。
     func logIn(_ kind: AgentKind) async {
         if let previous = logins.removeValue(forKey: kind) {

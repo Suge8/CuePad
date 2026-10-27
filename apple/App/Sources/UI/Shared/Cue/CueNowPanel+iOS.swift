@@ -4,7 +4,7 @@ import SwiftUI
 
 /// Cue 名牌长出的面板（`CueHeader`）：只放 Cue 自己的、会天天变的（Mac 上这些分在 Cue 页输入框、记忆弹层与设置里）。名牌长成的名片之下沿中轴排三块：
 /// 它的大脑（Agent、模型与思考强度，`CueConfigControls`）；它的记忆（`CueRecall`：有定时时第一条是下一个定时，其余是刚记下的，整块点进记忆）；
-/// 底下两行：它在用的技能与说明（`LibraryLine`，点了推入技能与说明），它在哪台 Mac 上运行、点了进设置。
+/// 底下两行：它在用的技能与规则（`LibraryLine`，点了推入技能与规则），它在哪台 Mac 上运行、点了进设置。
 /// 上下文用了几成不在这里：换新是自动的、多在歇过一小时后，看了也没有可做的，只留在 Mac 的"运行情况"（`CueContextLine`）。
 /// 在做的会话不在这里：进行中的在进展页的会话段（左滑就到），点进会话只有那一条路，返回落点与行的长相都只有一种。
 /// 面板定高：空、一条、记满都一样高（两条各占两行的位），启用前后大脑那一块按启用了的样子占位（`BrainBlock`）。
@@ -134,7 +134,7 @@ private struct RecallLine: View {
     }
 }
 
-/// 技能与说明那一行：左边名字，行尾写几个技能（有要整理的写几件要整理），点了推入技能与说明。还没有哪台 Mac 报过时只有名字与箭头。
+/// 技能与规则那一行：左边名字，行尾写几个技能（有该整理的前面一颗墨点，同 Mac 侧栏那颗），点了推入技能与规则。还没有哪台 Mac 报过时只有名字与箭头。
 private struct LibraryLine: View {
     let open: () -> Void
     @Environment(Workspace.self) private var workspace
@@ -142,17 +142,15 @@ private struct LibraryLine: View {
 
     var body: some View {
         let library = workspace.library
-        let summary = library.map { library in
-            library.tidies.isEmpty ? String(localized: "\(library.skills.count) 个技能") : String(localized: "\(library.tidies.count) 件要整理")
-        }
+        let summary = library.map { String(localized: "\($0.skills.count) 个技能") }
+        let alert = library?.tidies.isEmpty == false
         Button(action: open) {
             HStack(spacing: 8) {
                 Image(.skill).foregroundStyle(palette.ink3)
-                Text("技能与说明").foregroundStyle(palette.ink2).lineLimit(1)
+                Text("技能与规则").foregroundStyle(palette.ink2).lineLimit(1)
                 Spacer(minLength: 8)
-                if let summary {
-                    Text(verbatim: summary).monospacedDigit().foregroundStyle(library?.tidies.isEmpty == false ? palette.ink : palette.ink3)
-                }
+                if alert { Circle().fill(palette.ink).frame(width: CueDot.size, height: CueDot.size).accessibilityLabel(String(localized: "有该整理的")) }
+                if let summary { Text(verbatim: summary).monospacedDigit().foregroundStyle(palette.ink3) }
                 Image(.forward).font(.caption2.weight(.semibold)).foregroundStyle(palette.ink3)
             }
             .font(Typography.secondary)
@@ -161,7 +159,7 @@ private struct LibraryLine: View {
         }
         .buttonStyle(PressStyle())
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Dotted(String(localized: "技能与说明"), summary).spoken)
+        .accessibilityLabel(Dotted(String(localized: "技能与规则"), summary).spoken)
         .accessibilityAddTraits(.isButton)
     }
 }

@@ -1,7 +1,7 @@
 #if os(macOS)
 import Foundation
 
-/// CuePad 建的符号链接都是相对的（Claude Code 的技能链接、各家全局说明的链接）：整个家目录搬走、换了挂载点也照样指得到。
+/// CuePad 建的符号链接都是相对的（Claude Code 的技能链接、各家全局规则的链接）：整个家目录搬走、换了挂载点也照样指得到。
 enum RelativeLink {
     /// 在 `link` 建一个指向 `target` 的相对链接（上层目录没有就建）。
     static func make(at link: URL, to target: URL) throws {

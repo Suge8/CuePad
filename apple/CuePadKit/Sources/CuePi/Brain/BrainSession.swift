@@ -2,12 +2,12 @@
 import CueStore
 import Foundation
 
-/// 三家大脑共用的部分：事件流、本次运行的临时目录（系统提示等）、给运行时的环境。进程与协议各家用接入里的那一份
-/// （`ChildProcess`、`CodexRPC`、`ClaudeStream`）。
+/// 各家大脑共用的部分：事件流、本次运行的临时目录（系统提示等）、给运行时的环境。进程与协议各家用接入里的那一份
+/// （`ChildProcess`、`CodexRPC`、`ClaudeStream`、`OpenCodeClient`）。
 @MainActor
 final class BrainSession {
-    let events: AsyncStream<CueBrainEvent>
-    private let emitter: AsyncStream<CueBrainEvent>.Continuation
+    let events: AsyncStream<TurnEvent>
+    private let emitter: AsyncStream<TurnEvent>.Continuation
     private var directory: URL?
     private var ended = false
 
@@ -15,7 +15,7 @@ final class BrainSession {
         (events, emitter) = AsyncStream.makeStream(bufferingPolicy: .unbounded)
     }
 
-    func emit(_ event: CueBrainEvent) {
+    func emit(_ event: TurnEvent) {
         emitter.yield(event)
     }
 

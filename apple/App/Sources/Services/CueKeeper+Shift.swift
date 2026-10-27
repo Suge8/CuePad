@@ -45,13 +45,13 @@ extension CueKeeper {
     /// 按这家起一个大脑（Cue 的班次与后台整理记忆的都经这里）：工作目录是 Cue 自己的空目录，`tools` 是 `cuepad mcp` 后面的参数（给哪一组工具）。
     func startBrain(
         _ runtime: AgentKind, _ launch: CueLaunch, model: String?, effort: PiThinkingLevel?, systemPrompt: String, tools: [String]
-    ) async throws -> any CueBrain {
+    ) async throws -> any HostedSession {
         let work = setup.directory.appending(path: "work", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
         return try await CueBrainConfig(
             runtime: runtime, executable: launch.executable, model: model, effort: effort, systemPrompt: systemPrompt, workingDirectory: work,
             mcp: [setup.helper.path, "mcp"] + tools,
-            environment: ["CUEPAD_LIBRARY_DIR": setup.library.path, "PI_CODING_AGENT_DIR": setup.piAgentDirectory.path, "PATH": launch.path]
+            environment: ["CUEPAD_LIBRARY_DIR": setup.library.path, AgentKind.pi.facts.homeVariable: setup.piAgentDirectory.path, "PATH": launch.path]
         ).startBrain()
     }
 
@@ -91,7 +91,7 @@ extension CueKeeper {
         }
     }
 
-    func handle(_ event: CueBrainEvent) async {
+    func handle(_ event: TurnEvent) async {
         switch event {
         // 逐字的正在说（每条带着到此为止的全文）与上下文用量，一轮几十上百条：不记
         case .speaking, .context: break
@@ -108,7 +108,7 @@ extension CueKeeper {
         case .speaking(let draft):
             updateShift { $0.turn?.speaking = draft }
             speech.offer(turn?.answersYou == true ? draft : nil)
-        case .context(let used):
+        case .context(let used, _):
             updateShift {
                 $0.context = CueContext(used: used)
                 $0.lastRequest = .now
@@ -195,7 +195,7 @@ extension CueKeeper {
         }
     }
 
-    /// 该报给 Cue 的变化：基线之后的（到 `now` 为止到了的停住），与记着的归他的停下（`CueStore.cueChanges`）。
+    /// 该报给 Cue 的变化：基线之后的（到 `now` 为止到了的停住），与记着的他在场的停下（`CueStore.cueChanges`）。
     func changes(at now: Date = .now) async throws -> CueChanges {
         try await store.cueChanges(after: progress.marks ?? CueMarks(0), held: progress.held, at: now)
     }

@@ -149,7 +149,7 @@ final class AppServices {
     @ObservationIgnored let presence: MacPresenceKeeper
     /// 这台 Mac 上的 Agent 能不能用（同步表 macAgents）的唯一写入口；`start()` 时开始跟着接入状态与唤醒问，Cue 启用前也经它问。
     @ObservationIgnored let macAgents: MacAgentsRecorder
-    /// 这台 Mac 的技能与说明（同步表 agentLibraries）的唯一写入口，整理与改说明也经它。
+    /// 这台 Mac 的技能与规则（同步表 agentLibraries）的唯一写入口，整理与改规则也经它。
     @ObservationIgnored let library: AgentLibraryKeeper
     /// 执行发给这台 Mac 的投送请求（手机发来的与本机界面写的）；`start()` 时启动。
     @ObservationIgnored lazy var executor = MacExecutor(

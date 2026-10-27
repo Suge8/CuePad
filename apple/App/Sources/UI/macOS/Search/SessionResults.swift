@@ -24,10 +24,6 @@ struct SessionGroup: Equatable {
 }
 
 /// ⌘K 搜什么：卡片或 Agent 会话。每次打开 ⌘K 从卡片开始。
-enum SearchScope: Hashable {
-    case cards, sessions
-}
-
 /// 会话范围读到的：全部在线的（不多，不分页）与已结束的前若干页（从新到旧），同一个搜索词。
 nonisolated struct SessionSearchData: Sendable, Equatable {
     var live: [PiSessionState]

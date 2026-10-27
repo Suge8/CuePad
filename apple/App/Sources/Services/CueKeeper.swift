@@ -8,14 +8,14 @@ import Observation
 import os
 
 /// 一个"在这台 Mac 上值班"的时段：Cue 运行在这台 Mac 且已启用时由 `CueService` 起一个，不再运行在这里时停掉。
-/// 一个班次是一个大脑进程（`CueBrain`），系统提示在班次内不变（只带一直记着的，跨班次也不变，提示缓存一直命中）；对话、看板、"等你"与记忆都在库里，换班次、App 重启都不丢。
+/// 一个班次是一个大脑进程（`HostedSession`），系统提示在班次内不变（只带一直记着的，跨班次也不变，提示缓存一直命中）；对话、看板、"等你"与记忆都在库里，换班次、App 重启都不丢。
 /// 设置（`CueProfile`，唯一的事实源）每次对账从库里读，与大脑在用的（`BrainSettings`）不同就去对上：
-/// - 只换了模型或思考强度：空闲时就地交给在跑的大脑（`CueBrain.configure`），下一轮起生效，不换班次、上下文不丢；
+/// - 只换了模型或思考强度：空闲时就地交给在跑的大脑（`HostedSession.configure`），下一轮起生效，不换班次、上下文不丢；
 ///   大脑不认就把设置改回它在用的，并告诉你。
 /// - 换了名字（在系统提示里）、Agent，或模型、强度回到运行时默认（就地取不回默认）：要换大脑。正在跑的一轮先做完、你的话先交，再按新设置起新班次。
 ///   大脑没在跑（等着重起、停在起不来）就直接按新设置起。
 /// 换新（开新会话）只在一次醒来开始时判断，规则只在 `renewDue`：上下文到了换新线（`CueTiming.renewAt`），或距上一次模型请求超过提示缓存的时长
-/// （`CueTiming.cacheLifetime`：缓存过期后接着用要把整段原价重写，换新只写固定前缀与视图，从不更贵）。满足就让大脑开新会话（`CueBrain.newSession`），
+/// （`CueTiming.cacheLifetime`：缓存过期后接着用要把整段原价重写，换新只写固定前缀与视图，从不更贵）。满足就让大脑开新会话（`HostedSession.newSession`），
 /// 不多跑一轮、不先写交接（实测缓存热时先写交接再换没有带来提升，交接还每次写超 600 字）；一直记着的在这个班次起来后变过（钉上、取消、忘掉），就改成换个班次，让系统提示跟上。
 /// 新会话从哪接上只有一条规则：不论怎么来的（换新、换大脑、App 重启、意外退出后重起、起不来再试），第一条输入是记忆视图（`CueMemoryView`，一直记着的除外）、
 /// 平铺的对话视图（`CueView`，最近的对话与每一轮的经过）加信封；之后同一个会话里只往后加信封。
@@ -34,12 +34,13 @@ import os
 /// 5. 有会话的事或不归没做完的事的会话有变化（`CueStore.cueChanges`：歇下的带着这一轮的回复，含会话等回答、Cue 自己发起的请求没能执行）：马上醒。
 ///    一轮在跑时来的变化等这一轮做完就醒，一起看（不另攒窗口：一轮的时长就是合批）。等子代理不是变化（子代理的结果交回、会话为它跑完那一轮歇下才是）；
 ///    等子代理停住（`CueChange.Kind.stalled`）不随写入出现，按下一次停住的时刻（`CueStore.nextCueStall`）排定时器，到点对账时它就在变化里。
-///    会话停下归谁接手由 `CueStore.cueChanges` 定：归他的不叫醒 Cue，记下（`Progress.held`）等他离开再报；还在场就按最早的离开时刻排一次对账，
+///    他发起的一轮停下不等 Cue：每次对账先当场留给他回（`CueStore.leaveHisStops`，Cue 在跑一轮也照做），Cue 之后看过再定收不收回；
+///    他停下时在场的先不叫醒 Cue，记下（`Progress.held`）等他离开再报（`CueStore.cueChanges`）；还在场就按最早的离开时刻排一次对账，
 ///    设备开着会话的记录一变也重对。
 /// 6. 空闲巡视：没有在做的事（`CueStore.cueBoardActive`）、你最近一句（`CueStore.cueLastYou`，还没说过从启用算起）之后很久没说话、不在打扰时段（`CueTiming.quietHours`），每段空闲最多一次、每天最多 3 次；
 ///    手上什么都没有（`handsEmpty`，同刚启用）不巡视。
 ///
-/// 回复是这一轮做完时大脑还留着的正在说的话（`CueBrainEvent.speaking`），一轮结束时才写进对话（`cueMessages` 是 Cue 对话唯一的事实源）。
+/// 回复是这一轮做完时大脑还留着的正在说的话（`TurnEvent.speaking`），一轮结束时才写进对话（`cueMessages` 是 Cue 对话唯一的事实源）。
 /// 说的过程只在这台 Mac 的内存里给 Cue 页逐字显示（`speech`），只显示在回答你的一轮（`Turn.answersYou`）：
 /// Cue 自己醒来的一轮最后的话可能被当复述不写，显示了就落不了库。
 /// 回复写成什么看这一轮为什么醒（`author(of:)`）：你发起的（含插进来的话）与刚启用的写成 `cue`（回答你的那一轮的推送提示你），其余 Cue 自己醒来的写成 `note`（动态、不推送）；
@@ -92,6 +93,8 @@ final class CueKeeper {
     var lastFailure: String?
     var setback: Setback?
     var timer: Task<Void, Never>?
+    /// 他发起的一轮停下已对到的写入序号（`CueStore.leaveHisStops`）；nil 是这次上班还没对过，从变化的基线算起
+    @ObservationIgnored var handedOver: Int?
     /// 做完的几轮，旧的在前，至多 `roundsKept`
     private var history: [CueRound] = []
     @ObservationIgnored private var roundCount = 0

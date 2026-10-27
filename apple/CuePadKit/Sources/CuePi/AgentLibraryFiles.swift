@@ -3,8 +3,8 @@ import CueStore
 import Foundation
 import Synchronization
 
-/// 技能与说明的文件（事实源，CuePad 不存副本）：读成快照（`AgentLibrary`，判定规则在 `LibrarySkillScan`、`LibraryInstructionScan`）、
-/// 跟着文件变化重读（`keep`）、整理与撤销、写说明。写入只在用户动作时（整理、编辑），后台只读。
+/// 技能与规则的文件（事实源，CuePad 不存副本）：读成快照（`AgentLibrary`，判定规则在 `LibrarySkillScan`、`LibraryInstructionScan`）、
+/// 跟着文件变化重读（`keep`）、整理与撤销、改一份文件。写入只在用户动作时（整理、文件页），后台只读。
 /// 碰得了哪些目录同接入（`AgentIntegration.touches`）：隔离运行而几家共读的 `~/.agents` 是真实位置时什么都不读（`isAvailable`）。
 public struct AgentLibraryFiles: Sendable {
     private let integration: AgentIntegration
@@ -51,22 +51,21 @@ public struct AgentLibraryFiles: Sendable {
             hostID: host, home: integration.paths.userHome.path, skills: skills.skills, instructions: instructions.instructions,
             tidies: Self.ordered(skills.tidies + instructions.tidies), selfManaged: skills.selfManaged, agents: places.installed,
             modifiedAt: Date())
-        // 各家的目录也盯着：装上一家（建出它的目录）就多一家要链接、要比的说明
+        // 各家的目录也盯着：装上一家（建出它的目录）就多一家要链接、要比的规则
         let homes = AgentKind.allCases.filter(integration.touches).map { integration.paths.home(of: $0).path }
         return (library, skills.watched.union(instructions.watched).union(homes + [integration.paths.agentsDirectory.path]))
     }
 
-    /// 要整理的按 `LibraryTidy.Kind` 的先后。
+    /// 该整理的按 `LibraryTidy.Kind` 的先后。
     private static func ordered(_ tidies: [LibraryTidy]) -> [LibraryTidy] {
         func rank(_ kind: LibraryTidy.Kind) -> Int {
             switch kind {
             case .stray: 0
             case .unlinked: 1
             case .duplicate: 2
-            case .malformed: 3
-            case .empty: 4
-            case .globalInstructions: 5
-            case .projectClaude: 6
+            case .empty: 3
+            case .globalInstructions: 4
+            case .projectClaude: 5
             }
         }
         return tidies.enumerated().sorted { (rank($0.element.kind), $0.offset) < (rank($1.element.kind), $1.offset) }.map(\.element)
@@ -82,7 +81,8 @@ public struct AgentLibraryFiles: Sendable {
         do {
             for order in orders {
                 guard let tidy = current.first(where: { $0.id == order.tidy }) else { continue }
-                if try tidying.run(tidy, order) { count += 1 }
+                try tidying.run(tidy, order)
+                count += 1
             }
         } catch {
             try? LibraryTidying.revert(tidying.undo)
@@ -93,10 +93,20 @@ public struct AgentLibraryFiles: Sendable {
 
     @concurrent public func undo(_ undo: LibraryUndo) async throws { try LibraryTidying.revert(undo) }
 
-    /// 写一份说明：文件此刻的内容不是 `edit.base` 就不写，抛 `changedOnMac`。链接写进它指的文件；还没有的建出来。
-    @concurrent public func write(_ edit: InstructionEdit, projects: [UUID: String]) async throws {
-        let file = try places(projects).file(edit.instruction).realPath
-        guard LibraryInstruction.base(of: LibraryInstructionScan.content(file)) == edit.base else { throw AgentLibraryError.changedOnMac }
+    /// 改一份文件：文件此刻的内容（同快照里的读法）不是 `edit.base` 就不写，抛 `changedOnMac`。链接写进它指的文件；
+    /// 还没有的规则建出来，已经不在的技能抛 `gone`。
+    @concurrent public func write(_ edit: LibraryEdit, projects: [UUID: String]) async throws {
+        let file: URL, current: String?
+        switch edit.file {
+        case .instruction(let kind):
+            file = try places(projects).file(kind).realPath
+            current = LibraryInstructionScan.content(file)
+        case .skill(let path):
+            file = URL(filePath: path, directoryHint: .isDirectory).appending(path: AgentSkill.fileName).realPath
+            guard FileManager.default.fileExists(atPath: file.path) else { throw AgentLibraryError.gone }
+            current = LibraryInstructionScan.read(file) ?? ""
+        }
+        guard LibraryEdit.base(of: current) == edit.base else { throw AgentLibraryError.changedOnMac }
         try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
         try Data(edit.text.utf8).write(to: file, options: .atomic)
     }

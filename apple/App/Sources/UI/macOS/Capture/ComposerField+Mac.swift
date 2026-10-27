@@ -61,9 +61,15 @@ struct ComposerField: NSViewRepresentable {
         context.coordinator.parent = self
         guard let view = scroll.documentView as? GrowingTextView else { return }
         // 组字期的文字已经在 `text` 里；只在外部改写（回到会话恢复草稿、发送后清空、展开编辑、编辑后重发）时才写回，免得打断输入法。
-        // 外部写进来的光标放到末尾、排好后让末尾露出来（同 iOS 那份）
-        if text != context.coordinator.sent, !view.hasMarkedText() {
+        // 外部改写赢过组字期，先让输入法丢掉没上屏的那串（同 iOS 那份）。外部写进来的光标放到末尾、排好后让末尾露出来
+        if text != context.coordinator.sent {
             context.coordinator.sent = text
+            if view.hasMarkedText() {
+                context.coordinator.writing = true
+                view.inputContext?.discardMarkedText()
+                view.unmarkText()
+                context.coordinator.writing = false
+            }
             view.string = text
             // 整篇重铺的属性要带上字色：只铺字体与段落时颜色被清掉、落回黑色（深色下草稿字发黑），之后接着打的字也照它的属性继承成黑的
             view.textStorage?.setAttributes(GrowingTextView.attributes(ink), range: NSRange(location: 0, length: (text as NSString).length))
@@ -98,10 +104,12 @@ struct ComposerField: NSViewRepresentable {
         /// 上次交给 `text` 的那一串（同 iOS 那份：更新时拿它判断是不是外部改写）。
         var sent = ""
         var ink: Color?
+        /// 正在写外部改写的文字：这期间文字区报的变化不是你打的。
+        var writing = false
         init(_ parent: ComposerField) { self.parent = parent }
 
         func textDidChange(_ notification: Notification) {
-            guard let view = notification.object as? NSTextView else { return }
+            guard !writing, let view = notification.object as? NSTextView else { return }
             let text = String(native: view.textStorage?.string as NSString? ?? "")
             sent = text
             // 高度跟着文字一起走动画：换行、删行每次都差一整行

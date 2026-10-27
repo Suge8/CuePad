@@ -28,10 +28,10 @@ public struct PiHistoryIndexer: Sendable {
         agent: AgentKind, paths: AgentPaths, transcriptWindow: TimeInterval = .infinity, files: AttachmentFiles,
         start: @escaping @Sendable (URL) async -> PiHistoryStart?
     ) {
-        guard let format = SessionFileFormat.of(agent), let root = paths.sessionsDirectory(of: agent) else { return nil }
+        guard let format = agent.facts.sessionFiles else { return nil }
         self.agent = agent
         self.format = format
-        self.root = root
+        root = format.directory(paths)
         self.transcriptWindow = transcriptWindow
         self.files = files
         self.start = start

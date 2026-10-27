@@ -34,7 +34,7 @@ extension CueKeeper {
 
     struct Shift {
         let id: Int
-        let brain: any CueBrain
+        let brain: any HostedSession
         /// 起它时系统提示里一直记着的那几条：换新时变了就换班次（`renewDue`）
         let pinned: [UUID]
         /// 这个大脑的会话已经接上（第一条输入带过视图）；没有时下一次醒来带上
@@ -59,7 +59,7 @@ extension CueKeeper {
         var patrolledIdle: Date?
         /// 已为哪一次启用（`CueProfile.enabledAt`）醒来过
         var greeted: Date?
-        /// 归他、等他离开再报的停下：会话 id → 那次停下的起点（`CueChanges.held`）
+        /// 他在场、等他离开再报的停下：会话 id → 那次停下的起点（`CueChanges.held`）
         var held: [String: Date] = [:]
     }
 
@@ -102,7 +102,7 @@ extension CueKeeper {
 
     nonisolated enum Input: Sendable {
         case kick, retry, stop
-        case brain(Int, CueBrainEvent)
+        case brain(Int, TurnEvent)
     }
 
     /// 触发对账的读数：变了就对一次账（内容不用，对账自己读）。对话只取对账用到的：待交给它的你的话与回答、你最近一句的时刻（巡视从它算空闲）；

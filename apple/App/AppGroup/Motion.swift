@@ -11,7 +11,7 @@ import SwiftUI
 nonisolated enum Motion {
     /// 小位移：列表里让位、面板与浮层开合、展开收起、切换、计数滚动。0.25 秒，一屏里挪几十上百点时跟手。
     static let nudge = Animation.spring(Spring.nudge)
-    /// 远距离的空间移动：卡在看板上换列、在墙上换位。0.4 秒：时长随距离长（Material「距离越远时长越长」，大的转场 375～400ms；
+    /// 远距离的空间移动：卡在看板上换列、在墙上换位、手机底部那一排换形（Cue 钮长成整排宽的输入框）。0.4 秒：时长随距离长（Material「距离越远时长越长」，大的转场 375～400ms；
     /// Apple 默认的弹簧 0.5 秒），0.25 秒的弹簧前 50ms 就走掉三成多，飞过两三列（上千点）看着是一跳。
     static let travel = Animation.spring(Spring.travel)
     /// 定长的挪动：滚到某处、渲染端的平移与缩放（`ContentLift`、Mac 预览的飞出飞回与缩放）。弹簧最后一两像素的尾巴要再画两百多毫秒，

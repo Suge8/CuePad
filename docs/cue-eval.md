@@ -30,8 +30,8 @@ TEST_RUNNER_CUEPAD_CUE_EVAL=1 TEST_RUNNER_CUEPAD_CUE_EVAL_RUNTIME=pi TEST_RUNNER
 | x2 | 他要每周定时做一件事 | 建任务不开工，remind 带 repeat 与 task |
 | x3 | 挂在任务上的每周定时到点 | 开工那件任务，不 done、不打扰 |
 | k、y | 会话交回界面方案、停下问配色 | ask=taste 带方案图（每个方案一张、推荐的在前），不留给他；他点可以后转给会话 |
-| o、o2 | 他自己那一轮：会话答了他问的、碰上推送 | 留给他回（待回复），不 say、不 tell |
-| z | 他那一轮会话只应了一声 | 不留给他、不 tell |
+| o、o2 | 他自己那一轮（CuePad 已留给他回）：会话答了他问的、碰上推送 | 留着待回复，不收回、不 say、不 tell |
+| z | 他那一轮会话只应了一声 | task take 收回，不 tell |
 | o3 | 调研交回，正文写他看完再定 | 一句 tell 说结论与要他定的，再留给他回，先不 done |
 
 他发起的一轮与会话的常规停下另判"没 tell"。
