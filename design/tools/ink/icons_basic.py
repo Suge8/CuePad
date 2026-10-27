@@ -5,27 +5,25 @@ from .geometry import *
 
 # ---------- 图标：每个函数（母版名）→ [Layer]，第一层是墨，第二层（有的话）是点睛 ----------
 def mascot(m):
-    """Cue：纸身体（右上让出折角的槽）、斜着的腰环（前半圈压在身体上，把身体切成上下两块）、竖胶囊的两只眼挖出来，折角是点睛。"""
+    """Cue（App 图标、菜单栏、图标族共用的唯一一份几何）：纸身体（右上让出折角的槽）、两只竖胶囊的眼挖出来、腰上一道斜带（照 3D 小人的环：约 15° 往右上斜，前半圈微微下垂压在身体上，刻缝隔开，两端略出身体，带下是身体的下摆），折角是点睛。
+    16pt 单色下一眼读出纸、折角、眼、腰上那一道；不画环绕到身后的后半圈——它会让身体读成一顶帽子。"""
     g, c = GROW[m], CARVE[m]
-    x0, x1, y0, y1, r, e = -8.0 - g, 8.0 + g, -11.2 - g, 10.6 + g, 4.4 + g, 4.1 + g * 0.5
+    x0, x1, y0, y1, r, e = -9.2 - g, 9.2 + g, -10.4 - g, 11.2 + g, 4.4 + g, 3.7 + g * 0.5
     body = rpoly([(x0, y0), (x1 - e - c, y0), (x1 - e - c, y0 + e + c), (x1, y0 + e + c), (x1, y1), (x0, y1)],
                  [r, 0.5 + g * 0.5, 0, 0.5 + g * 0.5, r, r])
-    # 腰环是一个剪切过的椭圆：前半圈压在身体上，两头绕到身体两侧外面再往身后收，在离身体一条刻缝处收住
-    t = 3.0 + 1.0 * g
-    A, B, cy, sh = 11.4 + g, 3.4, 2.6, -0.2
-    def E(th): return mul((A * math.cos(th), cy + B * math.sin(th) + sh * A * math.cos(th)), G)
-    front = [E(math.pi - math.pi * k / 120) for k in range(121)]
-    upper = clip(body, Along(front, t * G / 2 + c * G, 1))
-    lower = clip(body, Along(front, -(t * G / 2 + c * G), -1))
-    edge = (8.0 + g + c + t / 2) / A
-    th0, th1 = math.pi + math.acos(edge), 2 * math.pi - math.acos(edge)
-    ring = thick([E(th0 - (th0 - (th1 - 2 * math.pi)) * k / 160) for k in range(161)], t * G, 10)
-    ex, ey = 3.0, -1.8
-    erx, ery = 1.5 - g * 0.15, 2.4 - g * 0.15
+    t, reach, slope, sag, mid = 2.8 + 1.0 * g, 9.3, -0.26, 0.9, 4.2
+    def Y(x): return mid + slope * x + sag * (1 - (x / reach) ** 2)
+    def belt(span, n): return [mul((x, Y(x)), G) for x in [-span + 2 * span * k / n for k in range(n + 1)]]
+    cut = belt(reach + 5, 60)
+    upper = clip(body, Along(cut, t * G / 2 + c * G, 1))
+    lower = clip(body, Along(cut, -(t * G / 2 + c * G), -1))
+    band = thick(belt(reach, 40), t * G, 8)
+    ex, ey = 3.0, -2.0
+    erx, ery = 1.6 - g * 0.15, 2.4 - g * 0.15
     def eye(x): return bar([(x + 0.03, ey - ery + erx), (x, ey), (x + 0.03, ey + ery - erx)], 2 * erx)
     face = holed([eye(-ex), eye(ex)])
     ear = rpoly([(x1 - e, y0), (x1, y0 + e), (x1 - e, y0 + e)], [0.7 + g * 0.4, 0.7 + g * 0.4, 0])
-    return [Layer("body", [upper] + face + [lower]), Layer("ring", [ring]), Layer("ear", [ear], "secondary")]
+    return [Layer("body", [upper] + face + [lower]), Layer("band", [band]), Layer("ear", [ear], "secondary")]
 
 
 def idea(m):
@@ -174,7 +172,7 @@ DONE_TICK = [(-3.95, -0.35), (-1.4, 2.2), (10.6, -8.6)]  # 做完里那一笔勾
 
 
 def done(stage="done"):
-    """做完：C 环（logo 的 C，开口朝右上）里伸出一个勾；勾的拐点在圆心附近，最粗的母版里也离 C 一条刻缝。
+    """做完：C 环（开口朝右上）里伸出一个勾；勾的拐点在圆心附近，最粗的母版里也离 C 一条刻缝。
     勾与 C 都在主层（勾是一整笔，不是小部件）；分两层只为按层动效。
     pre 是做完之前的那一下：勾缩成拐点处一颗点（同一种笔画、两臂几乎为零，结构与勾一致），动效里弹成勾。"""
     def build(m):
