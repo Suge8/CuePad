@@ -121,6 +121,7 @@ private struct SessionAnswer: View {
         .focusable(numbered)
         .focusEffectDisabled()
         .focused($keyboard)
+        .yieldsFocusWhenCovered($keyboard)
         .onAppear { keyboard = numbered }
         .onKeyPress(characters: .decimalDigits, phases: .down) { press in
             guard numbered, let number = Int(press.characters), values.indices.contains(number - 1), !answering else { return .ignored }

@@ -69,7 +69,7 @@ extension DebugScene {
     private static let keys: [String: (code: UInt16, character: String)] = ["esc": (53, "\u{1b}"), "return": (36, "\r")]
 
     /// `cmd:键`：主菜单里快捷键是 ⌘键 的那一项，从窗口此刻的焦点沿响应链发它的动作（同按下 ⌘键）。
-    /// 后台窗口不是 key，菜单的快捷键与校验都找不到接收者，所以不经菜单分派：项指了接收者就交给它，没有就从焦点发。
+    /// 后台窗口不是 key，菜单的快捷键与校验都找不到接收者，所以不经菜单分派，直接从焦点沿响应链发。
     private static func perform(menuKey key: String, in window: NSWindow) {
         func find(_ menu: NSMenu) -> NSMenuItem? {
             menu.items.lazy.compactMap { item in
@@ -77,12 +77,7 @@ extension DebugScene {
             }.first
         }
         guard let item = NSApp.mainMenu.flatMap(find), let action = item.action else { return }
-        // 同菜单的分派：项指了接收者就交给它，没指就从焦点沿响应链找
-        if let target = item.target {
-            NSApp.sendAction(action, to: target, from: item)
-        } else {
-            _ = window.firstResponder?.tryToPerform(action, with: item)
-        }
+        _ = window.firstResponder?.tryToPerform(action, with: item)
     }
 
     private static func post(_ type: NSEvent.EventType, in window: NSWindow, key: (code: UInt16, character: String)) {

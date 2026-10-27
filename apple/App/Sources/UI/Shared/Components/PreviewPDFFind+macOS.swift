@@ -46,20 +46,10 @@ final class PDFFindHost: NSView, NSTextFinderBarContainer, NSMenuItemValidation 
 
     func findBarViewDidChangeHeight() { place() }
 
-    /// 上屏就拿键盘，并在屏上时接下"编辑"菜单的查找三项（项的接收者指向这里，下了屏还给响应链）：
-    /// 焦点可能被下面盖着的输入框按它的聚焦状态要回去（会话页的回复框），⌘F、⌘G 不能只靠响应链走到这里。
+    /// 上屏就拿键盘：⌘F、⌘G 经响应链从 PDF 视图走到这里（下面盖着的输入框不再要回焦点，`yieldsFocusWhenCovered`）。
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         window?.makeFirstResponder(pdf)
-        for item in Self.findItems(in: NSApp.mainMenu) where window != nil || item.target === self {
-            item.target = window == nil ? nil : self
-        }
-    }
-
-    private static func findItems(in menu: NSMenu?) -> [NSMenuItem] {
-        (menu?.items ?? []).flatMap { item in
-            item.action == #selector(performTextFinderAction(_:)) ? [item] : findItems(in: item.submenu)
-        }
     }
 
     func contentView() -> NSView? { pdf.documentView }

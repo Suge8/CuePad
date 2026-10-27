@@ -137,6 +137,39 @@ final class PanelHost {
     }
 
     private static let escape: UInt16 = 53
+
+    /// 在 `layer` 这一层（nil 是窗口本身的界面）上面有开着的模态浮层。
+    func covers(_ layer: UUID?) -> Bool {
+        let floor = layer.flatMap { id in shown.firstIndex { $0.id == id } } ?? -1
+        return shown.indices.contains { $0 > floor && shown[$0].modal && shown[$0].open }
+    }
+}
+
+extension EnvironmentValues {
+    /// 所在的浮层（`PanelHost.Shown.id`）；不在浮层里为 nil。
+    @Entry var panelLayer: UUID?
+}
+
+extension View {
+    /// 被模态浮层盖住时交出 SwiftUI 的焦点：浮层弹出时窗口交出了第一响应者（`PanelHost.opened`），焦点状态却还是真，
+    /// SwiftUI 会照它把焦点要回下面的输入框（会话页的回复框盖在全屏页下面还接着 ⌘F 与打字，实测）。浮层收起时焦点由
+    /// `PanelHost.released` 交还，输入框拿到焦点再报回真。不在有浮层的窗口里（菜单栏面板、Cue 条）时什么也不做。
+    func yieldsFocusWhenCovered(_ focus: FocusState<Bool>.Binding) -> some View {
+        modifier(YieldsFocusWhenCovered(focus: focus))
+    }
+}
+
+private struct YieldsFocusWhenCovered: ViewModifier {
+    let focus: FocusState<Bool>.Binding
+    @Environment(PanelHost.self) private var host: PanelHost?
+    @Environment(\.panelLayer) private var layer
+
+    func body(content: Content) -> some View {
+        // 盖着时谁要焦点（出现时的自动聚焦、浮层弹出前就聚焦着）都当场收回
+        content.onChange(of: focus.wrappedValue && host?.covers(layer) == true, initial: true) { _, stolen in
+            if stolen { focus.wrappedValue = false }
+        }
+    }
 }
 
 private extension PanelStyle {
@@ -289,6 +322,7 @@ private struct PanelLayer: View {
                 .accessibilityHidden(!shown.open)
                 .environment(\.pageActive, shown.open)
                 .environment(\.pagePrefetch, !shown.open)
+                .environment(\.panelLayer, shown.id)
         }
         .transition(.opacity)
     }
@@ -300,7 +334,7 @@ private struct PanelLayer: View {
                 ForEach(host.shown) { shown in
                     if case .bubble(let source) = shown.style {
                         let placement = BubblePlacement(source: source, container: proxy.frame(in: .global), insets: Self.bubbleInsets)
-                        BubbleFrame(placement: placement) { shown.content } area: { area(shown.id) }
+                        BubbleFrame(placement: placement) { shown.content.environment(\.panelLayer, shown.id) } area: { area(shown.id) }
                             .transition(placement.transition(reduceMotion: reduceMotion))
                     }
                 }
