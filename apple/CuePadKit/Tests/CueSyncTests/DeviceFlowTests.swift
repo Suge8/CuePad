@@ -104,7 +104,8 @@ import Testing
     #expect(try await mac.store.deliveryRequest(made.id)?.config == config)
   }
 
-  /// 发出的话：手机写、Mac 执行，结果回到手机；Mac 把这句写进对话时收走请求，收走也同步到手机，气泡由对话里那条接替。
+  /// 发出的话：手机写、Mac 执行，结果回到手机；这句进了对话、消息上了服务器，Mac 才收走请求，气泡由对话里那条接替。
+  /// 回执马上传、消息排在后面时（同步区里正传着大附件），手机上的请求不先没了：气泡一直在。
   @Test
   func deliveryRequestTravelsFromPhoneToMacAndTheResultComesBackThenIsCleanedUp() async throws {
     let executor = DeliveryExecutor(store: mac.store, hostID: "mac", timing: clock.timing, onIssue: { Issue.record("\($0)") }) { _ in .succeeded }
@@ -122,10 +123,13 @@ import Testing
 
     let said = PiChatMessage(sessionID: "s1", entryID: "u1", seq: 1, role: .user, text: request.content, at: .now, deliveryID: request.id)
     try await mac.store.writePiTranscript(PiTranscript(sessionID: "s1", messages: [said], recap: PiRecap()))
+    try await cloud.deliver(from: mac, to: phone, only: [mac.id(request.id)])  // 回执马上传
+    #expect(try await phone.store.deliveryRequest(request.id) != nil)
+    try await cloud.exchange()  // 消息上了服务器、到了手机
+    #expect(try await phone.store.piMessages(of: "s1").map(\.deliveryID) == [request.id])
     #expect(try await mac.store.deliveryRequest(request.id) == nil)
     try await cloud.exchange()  // 收走同步过去
     #expect(try await phone.store.deliveryRequest(request.id) == nil)
-    #expect(try await phone.store.piMessages(of: "s1").map(\.deliveryID) == [request.id])
     await executor.stop()
   }
 

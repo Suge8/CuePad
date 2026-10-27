@@ -99,7 +99,7 @@ nonisolated enum PiDelivery: Hashable, Sendable {
 
     /// `request` 是发给 `session` 的最近一条（`DeliveryMode.toSession` 的方式）。会话状态的时间（`stateSince`）与送达时间
     /// （`completedAt`）都是 Mac 的钟；发出时间是发起设备的钟，只拿来判断"发出之后会话动起来了"，跨设备的钟差最多让"发送中"早一点让位。
-    /// 送到了的请求不会一直挂着（发出的话进了对话就随之收走，别的请求过一会儿由执行它的 Mac 清理）；没能送达的留着（等你重发或移除），
+    /// 送到了的请求不会一直挂着（发出的话进了对话、消息上了服务器就收走，别的请求过一会儿由执行它的 Mac 清理）；没能送达的留着（等你重发或移除），
     /// 在你看过这个会话（`seen`，本机最后一次看它）之前一直显示，会话之后动过也不算数。
     static func phase(of request: DeliveryRequest?, for session: PiSessionState, seen: Date? = nil, at moment: Speech.Moment) -> PiDelivery? {
         guard let request, let mode = request.mode.known, DeliveryMode.toSession.contains(mode) else { return nil }

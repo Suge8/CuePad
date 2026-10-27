@@ -23,12 +23,16 @@ nonisolated struct ChatFollow: Equatable {
     private(set) var target: Target?
     /// 请对话把某一条排开、描圈再跳过去（`seek`）：对话（`SessionChat`）看到它变了就照做。
     private(set) var seeking: Target?
+    /// 开始看时欠着的一次从第一条新消息读起（Cue 页，`CueViewing`）：正在和 iCloud 对时等对完才落。这之间你自己滚、回到最新、
+    /// 发出一句、跳去某一条，就是已经在看了，不再落：对完时不把你从刚发出的那句带走，一拉翻几页时也不每对完一次落一回。
+    private(set) var owesLanding = false
     /// 用户正拖着或甩着滚动区（滚动区写入）。刚开始滚时人已经离开了最新处（读数先到）就在这里解除贴底。
     var scrolling = false {
         didSet {
             if scrolling {
                 jumping = false
                 target = nil
+                owesLanding = false
             }
             if scrolling, !withinSlack {
                 atNewest = false
@@ -98,6 +102,7 @@ nonisolated struct ChatFollow: Equatable {
     /// 等读数的话，这之间到的内容（发出的那句、答掉的拍板回到对话里）按"正在读的不动"排，可见区被留在上面、发出的那句压在输入框下；
     /// 从新消息读起（`Landing.read`）落在最新处时读数不再变，一直等不到。
     private mutating func returnToNewest(sent: Bool) {
+        owesLanding = false
         atNewest = true
         revealed = false
         jumping = false
@@ -114,7 +119,20 @@ nonisolated struct ChatFollow: Equatable {
     }
 
     /// 去读某一条（刻度滑条、回复框上的批注）：它可能还没排开，先由对话排开再 `jump(to:)`。
-    mutating func seek(_ id: UUID, landing: Landing = .flash) { seeking = Target(id: id, landing: landing) }
+    mutating func seek(_ id: UUID, landing: Landing = .flash) {
+        owesLanding = false
+        seeking = Target(id: id, landing: landing)
+    }
+
+    /// 开始看了：欠下一次从第一条新消息读起（`owesLanding`）。
+    mutating func oweLanding() { owesLanding = true }
+
+    /// 还欠着就落：有新消息从 `first` 读起，没有就停在原处（最新处）。
+    mutating func land(on first: UUID?) {
+        guard owesLanding else { return }
+        owesLanding = false
+        if let first { seeking = Target(id: first, landing: .read) }
+    }
 
     /// 跳到某一条去读：不再贴着最新。
     mutating func jump(to target: Target) {
