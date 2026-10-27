@@ -6,19 +6,19 @@ import Testing
 @testable import CuePi
 
 /// 端到端：真实的 Pi / Codex / Claude Code / OpenCode 当 Cue 的大脑，用本机用户自己登录的账号与便宜的模型，MCP 是 Fixtures/mcp-echo.mjs 替身。
-/// 默认回放录像带，录制与模型、强度的换法见 `RealAgents`；OpenCode 没有录像带，列出它时直连，在隔离的 `OpenCodeSandbox` 里用免费模型。
+/// 默认回放录像带，录制与模型、强度的换法见 `RealAgents`；OpenCode 没有录像带，总在隔离的 `OpenCodeSandbox` 里连真 OpenCode 跑（模型见它）。
 private let environment = ProcessInfo.processInfo.environment
-private let runtimes = AgentKind.allCases.filter { $0 == .opencode ? RealAgents.mode(of: $0) == .live && RealAgents.installed($0) : RealAgents.runs($0) }
-/// 连真运行时才看得出的（进程树、各家的历史）：录制或直连时列出、本机装着的几家
+private let runtimes = AgentKind.allCases.filter(RealAgents.runs)
+/// 连真运行时才看得出的（进程树、各家的历史）：录制时列出的、OpenCode（总连真的），本机跑得起来的几家
 private let liveRuntimes = runtimes.filter { RealAgents.mode(of: $0) != .replay }
-/// Pi 用 openai-codex 的模型：Claude 只走官方 Claude Code，不经 Pi 用 Claude 订阅。OpenCode 用能看图的免费模型
+/// Pi 用 openai-codex 的模型：Claude 只走官方 Claude Code，不经 Pi 用 Claude 订阅
 private let cheapModels: [AgentKind: String] = [
-    .pi: "openai-codex/gpt-5.6-luna", .codex: "gpt-5.6-luna", .claudeCode: "haiku", .opencode: "opencode/deepseek-v4.1-flash-free",
+    .pi: "openai-codex/gpt-5.6-luna", .codex: "gpt-5.6-luna", .claudeCode: "haiku", .opencode: AgentKind.opencode.modelRef(openCodeTestModel),
 ]
 /// 就地换到的模型：Pi 的上下文窗口与上面的不同，换没换看得出来（Codex 里两个窗口一样，Claude Code 报的是用过的模型里最大的窗口）。
-/// 用 `CUEPAD_BRAIN_OTHER_MODEL_<家>` 换（OpenCode 的免费模型限流时连同 `CUEPAD_BRAIN_MODEL_<家>` 换成自己提供方的，密钥只经环境给）
+/// 用 `CUEPAD_BRAIN_OTHER_MODEL_<家>` 换
 private let otherModels: [AgentKind: String] = [
-    .pi: "openai-codex/gpt-6-luna", .codex: "gpt-6-luna", .claudeCode: "sonnet", .opencode: AgentKind.opencode.modelRef(openCodeTestModel),
+    .pi: "openai-codex/gpt-6-luna", .codex: "gpt-6-luna", .claudeCode: "sonnet", .opencode: AgentKind.opencode.modelRef(openCodeOtherModel),
 ]
 private let echoServer = URL(filePath: #filePath).deletingLastPathComponent().appending(path: "Fixtures/mcp-echo.mjs")
 private let home = FileManager.default.homeDirectoryForCurrentUser
@@ -43,9 +43,8 @@ struct RealBrainTests {
         let echoLog: URL
         let sessions: URL
         let codename = "ZEBRA-4821"
-        /// OpenCode 的隔离家目录与库：测试进程里共用一台（头一次起要联网取模型表，几十秒；临时目录随测试进程清理）
+        /// OpenCode 的隔离家目录、库与假模型：每个大脑一台（并行的几台 OpenCode 头一次同起一个库会撞上建表）
         let sandbox: OpenCodeSandbox?
-        private static var openCodeSandbox: OpenCodeSandbox?
         let brain: any HostedSession
         private(set) var events: [TurnEvent] = []
 
@@ -56,12 +55,7 @@ struct RealBrainTests {
             sessions = root.appending(path: "pi-sessions")
             echoLog = root.appending(path: "echo.log")
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            if runtime == .opencode {
-                if Self.openCodeSandbox == nil { Self.openCodeSandbox = try await OpenCodeSandbox() }
-                sandbox = Self.openCodeSandbox
-            } else {
-                sandbox = nil
-            }
+            sandbox = runtime == .opencode ? try await OpenCodeSandbox() : nil
             let config = CueBrainConfig(
                 runtime: runtime, executable: runtime == .opencode ? try #require(realOpenCodeURL) : AgentTape.executable(runtime.facts.command),
                 model: environment["CUEPAD_BRAIN_MODEL_\(runtime.rawValue.uppercased())"] ?? cheapModels[runtime], effort: effort,
@@ -105,11 +99,14 @@ struct RealBrainTests {
         var echoed: [String] { ((try? String(contentsOf: echoLog, encoding: .utf8)) ?? "").split(separator: "\n").map(String.init) }
     }
 
-    /// 起一个大脑跑完测试体，不论成败都等它退出。
+    /// 起一个大脑跑完测试体，不论成败都等它退出、收掉 OpenCode 的隔离环境。
     private func withRig(_ runtime: AgentKind, _ body: (Rig) async throws -> Void) async throws {
         let rig = try await Rig(runtime)
-        do { try await body(rig) } catch { await rig.brain.stop()(); throw error }
+        let outcome: Result<Void, any Error>
+        do { try await body(rig); outcome = .success(()) } catch { outcome = .failure(error) }
         await rig.brain.stop()()
+        try await rig.sandbox?.stop()
+        try outcome.get()
     }
 
     /// 发一句话：这一轮开始、报上下文用量（带窗口）、回答、做完；回答出自我们给的系统提示。
@@ -172,7 +169,7 @@ struct RealBrainTests {
         // OpenCode 的服务对不存在的模型也回 204：大脑自己认
         let unknown = switch runtime {
         case .pi: "openai-codex/no-such-model"
-        case .opencode: "opencode/no-such-model"
+        case .opencode: "\(openCodeTestModel.provider)/no-such-model"
         case .codex, .claudeCode: "no-such-model"
         }
         await #expect(throws: (any Error).self) { try await rig.brain.configure(model: unknown, effort: nil) }
@@ -216,7 +213,7 @@ struct RealBrainTests {
 /// 结束后进程连同它起的子进程（MCP 服务等）都退出、各家的历史里没有这次对话：断言的是真进程树与各家真实的历史目录，回放不出来，
 /// 只在录制或直连时连真运行时跑。
 @MainActor
-@Suite(.enabled(if: !liveRuntimes.isEmpty, "只连真运行时跑（看真进程树与各家的历史）：CUEPAD_AGENT_TESTS 列出 pi、codex、claude 或 opencode 时开启"), .serialized, .timeLimit(.minutes(5)))
+@Suite(.enabled(if: !liveRuntimes.isEmpty, "只连真运行时跑（看真进程树与各家的历史）：CUEPAD_AGENT_TESTS 列出 pi、codex、claude，或本机有 opencode v2 时开启"), .serialized, .timeLimit(.minutes(5)))
 struct RealBrainProcessTests {
     @Test(arguments: liveRuntimes) func stoppingLeavesNoProcessesOrHistory(_ runtime: AgentKind) async throws {
         let rig = try await RealBrainTests.Rig(runtime)
@@ -246,7 +243,7 @@ struct RealBrainProcessTests {
         case .opencode:
             let sandbox = try #require(sandbox)
             let left = try await openCodeSessions(in: rig.directory, sandbox)
-            try await sandbox.run(["service", "stop"])
+            try await sandbox.stop()
             #expect(left.isEmpty, "\(left)")
         }
     }
