@@ -55,7 +55,7 @@ final class DshRig {
         try FileManager.default.createDirectory(at: root.appending(path: "work"), withIntermediateDirectories: true)
         bridge = PiBridge(socketDirectory: root.appending(path: "s", directoryHint: .isDirectory))
         let paths = AgentPaths(environment: ["DSH_HOME": root.appending(path: "dsh").path])
-        runtime = DshRuntime(bridge: bridge, paths: paths, dsh: { AgentTape.executable("dsh") }, locate: { AgentTape.locator("dsh") })
+        runtime = DshRuntime(bridge: bridge, paths: paths, dsh: { AgentTape.executable("dsh") }, locate: { AgentTape.locator("dsh") }, timing: noDeadline)
         AgentTape.current?.watch(root.appending(path: "dsh/\(DshRuntime.sessions)"))
         try bridge.start()
     }

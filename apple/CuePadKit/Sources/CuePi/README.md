@@ -1,6 +1,6 @@
 # CuePi —— Agent 桥（macOS）
 
-Pi、Claude Code、Codex、OpenCode、Grok Build、dsh 的会话都登记在同一个桥上（`PiBridge`），各家怎么发现会话、怎么说话在 `AgentRuntime` 的各家实现里，与别家不同的事实（命令、目录、安装、上报通道、探测、技能位置、大脑用哪种会话）在各自 `+Facts` 文件的 `AgentFacts` 里；CuePad 掌握全部输入输出的会话（Claude Code、Codex、Grok Build、dsh 的托管会话与 Cue 的大脑）是 `HostedSession`。说 ACP（Agent Client Protocol）的 Agent 共用一个驱动（`ACP/`：`ACPSession` 托管会话与大脑是同一份），各家的扩展方法只经 `ACPDialect` 的扩展点接进来（Grok Build 是 `GrokDialect`，dsh 是 `DshDialect`）。规则只写在类型的头注释里；这里只记 Pi 桥扩展的线上约定与已知边界。
+Pi、Claude Code、Codex、OpenCode、Grok Build、dsh 的会话都登记在同一个桥上（`PiBridge`），各家怎么发现会话、怎么说话在 `AgentRuntime` 的各家实现里，与别家不同的事实（命令、目录、安装、上报通道、探测、技能位置、大脑用哪种会话）在各自 `+Facts` 文件的 `AgentFacts` 里；CuePad 掌握全部输入输出的会话（Claude Code、Codex、Grok Build、dsh 的托管会话与 Cue 的大脑）是 `HostedSession`。说 ACP（Agent Client Protocol）的 Agent 共用一个驱动（`ACP/`：`ACPSession` 托管会话与大脑是同一份，托管会话的起法与登记是 `ACPHost`），各家的扩展方法只经 `ACPDialect` 的扩展点接进来，各家的文件在自己的目录里（`Grok/`、`Dsh/`）。规则只写在类型的头注释里；这里只记 Pi 桥扩展的线上约定与已知边界。
 
 ## 协议
 

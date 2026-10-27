@@ -19,12 +19,7 @@ public final class GrokRuntime: AgentRuntime {
     private let bridge: PiBridge
     private let paths: AgentPaths
     private let files: AttachmentFiles
-    /// 这家的可执行文件（检测时挑中的那个，`AgentStatus.executable`）；没有为 nil
-    private let grok: @Sendable () async -> URL?
-    private let locate: @Sendable () async -> ExecutableLocator
-    private let timing: Timing
-    /// CuePad 起的托管会话
-    private var hosted: [ACPSession] = []
+    private let host: ACPHost
     /// 在桥上的终端会话
     private var terminals: [PiSession.ID: Terminal] = [:]
     private var watcher: DirectoryWatcher?
@@ -44,9 +39,12 @@ public final class GrokRuntime: AgentRuntime {
         self.bridge = bridge
         self.paths = paths
         self.files = files
-        self.grok = grok
-        self.locate = locate
-        self.timing = timing
+        let home = paths.home(of: .grok)
+        host = ACPHost(.grok, bridge: bridge, timing: timing, launching: { _ in
+            guard let grok = await grok() else { throw AgentRuntimeError.notInstalled(.grok) }
+            let environment = await locate().environment(launching: grok, overrides: paths.environment.merging([Self.facts.homeVariable: home.path]) { $1 })
+            return ACPHost.Launching(executable: grok, environment: environment, dialect: GrokDialect())
+        }, sessionFile: { cwd, id in Self.sessionFile(in: home, cwd: cwd.path, id: id) })
     }
 
     private var home: URL { paths.home(of: .grok) }
@@ -69,59 +67,22 @@ public final class GrokRuntime: AgentRuntime {
         stopped = true
         watcher = nil
         for id in terminals.keys { detach(id) }
-        let processes = hosted.compactMap(\.connection?.process)
-        hosted = []
-        return { for process in processes { await process.stop() } }
+        return host.stop()
     }
 
     public func open(
         in directory: URL, launchToken: String, name: String?, model: PiModelKey?, thinking: PiThinkingLevel?
     ) async throws -> PiSession.ID {
-        let id = try await launch(in: directory, launchToken: launchToken) { try await $0.open(in: directory) }
+        let id = try await host.open(in: directory, launchToken: launchToken)
         return try await configure(opened: id, name: name, model: model, thinking: thinking, on: bridge)
     }
 
-    /// 接着一个已结束的会话；开在终端里的（同一会话 Grok 会两边各写各的）不接。
-    public func resume(_ session: IndexedSession) async throws -> PiSession.ID {
-        if let live = bridge.session(sessionID: session.id) {
-            guard live.hosted else { throw AgentRuntimeError.openElsewhere }
-            return live.id
-        }
-        let directory = URL(filePath: session.cwd, directoryHint: .isDirectory)
-        return try await launch(in: directory, launchToken: nil) { try await $0.load(session.id, in: directory) }
-    }
+    public func resume(_ session: IndexedSession) async throws -> PiSession.ID { try await host.resume(session) }
 
     public func read(_ update: PiHistoryUpdate) {
         guard let (id, terminal) = terminals.first(where: { bridge.session(id: $0.key)?.sessionID == update.sessionID }) else { return }
         follow(terminal, update.checkpoint)
         bridge.update(id) { terminal.facts.publish(to: &$0) }
-    }
-
-    // MARK: 托管
-
-    /// 起进程、握手、开或接着会话（`open`）、上桥；连同握手至多 `AgentTimeouts.launch`，超时或出错时停掉进程。
-    private func launch(in directory: URL, launchToken: String?, _ open: @escaping @MainActor (ACPSession) async throws -> Void) async throws -> PiSession.ID {
-        guard let grok = await grok() else { throw AgentRuntimeError.notInstalled(.grok) }
-        let environment = await locate().environment(launching: grok, overrides: paths.environment.merging([GrokRuntime.facts.homeVariable: home.path]) { $1 })
-        let session = ACPSession(dialect: GrokDialect(), bridge: bridge)
-        do {
-            try await withDeadline(AgentTimeouts.launch, timing: timing, orThrow: AgentRuntimeError.launchTimedOut(.grok)) {
-                try await session.launch(grok, environment: environment, directory: directory)
-                try await open(session)
-            }
-        } catch {
-            await session.connection?.shutdown()
-            throw error
-        }
-        guard let sessionID = session.sessionID, let pid = session.connection?.process.pid else { throw AgentRuntimeError.launchFailed(.grok, "") }
-        hosted = hosted.filter { $0.connection?.isClosed == false } + [session]
-        var opened = PiSession(
-            id: "\(sessionID).\(pid)", sessionID: sessionID, agent: .grok, sessionFile: Self.sessionFile(in: home, cwd: directory.path, id: sessionID),
-            pid: pid, cwd: directory, terminal: PiTerminal(), state: .settled, stateSince: .now)
-        opened.hosted = true
-        opened.launchToken = launchToken
-        session.attach(opened)
-        return opened.id
     }
 
     // MARK: 终端
@@ -130,7 +91,7 @@ public final class GrokRuntime: AgentRuntime {
     private func refresh() {
         guard !stopped else { return }
         if watcher == nil { watcher = try? DirectoryWatcher(home) { [weak self] in self?.refresh() } }
-        let hostedIDs = Set(hosted.filter { $0.connection?.isClosed == false }.compactMap(\.sessionID))
+        let hostedIDs = host.sessionIDs
         let open = Self.activeSessions(in: home).filter { scope.covers(sessionID: $0.sessionID) && !hostedIDs.contains($0.sessionID) && kill($0.pid, 0) == 0 }
         let ids = Set(open.map { "\($0.sessionID).\($0.pid)" })
         for id in terminals.keys where !ids.contains(id) { detach(id) }

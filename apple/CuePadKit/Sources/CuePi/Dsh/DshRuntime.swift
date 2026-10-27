@@ -17,80 +17,37 @@ import Foundation
 @MainActor
 public final class DshRuntime: AgentRuntime {
     private let bridge: PiBridge
-    private let paths: AgentPaths
-    /// 这家的可执行文件（检测时挑中的那个，`AgentStatus.executable`）；没有为 nil
-    private let dsh: @Sendable () async -> URL?
-    private let locate: @Sendable () async -> ExecutableLocator
-    /// 会话 id → 托管它的进程上的会话
-    private var hosted: [String: ACPSession] = [:]
+    private let host: ACPHost
 
     public init(
         bridge: PiBridge, paths: AgentPaths, dsh: @escaping @Sendable () async -> URL?,
-        locate: @escaping @Sendable () async -> ExecutableLocator = { await .system }
+        locate: @escaping @Sendable () async -> ExecutableLocator = { await .system }, timing: Timing = .system
     ) {
+        host = ACPHost(.dsh, bridge: bridge, timing: timing, launching: { model in
+            guard let executable = await dsh() else { throw AgentRuntimeError.notInstalled(.dsh) }
+            try DshLaunch.prepare(.hosted)
+            let environment = await locate().environment(
+                launching: executable, overrides: paths.environment.merging(DshLaunch.environment(paths, model: model)) { $1 })
+            return ACPHost.Launching(executable: executable, environment: environment, dialect: DshDialect(patch: .hosted))
+        }, sessionFile: { cwd, id in Self.sessionFile(home: Self.home(paths), cwd: cwd, id: id) })
         self.bridge = bridge
-        self.paths = paths
-        self.dsh = dsh
-        self.locate = locate
     }
 
     public func start() throws {}
 
     public var hostedSessionsOutliveApp: Bool { false }
 
-    public func stop() -> @concurrent @Sendable () async -> Void {
-        let processes = hosted.values.compactMap { $0.connection?.process }
-        return { for process in processes { await process.stop() } }
-    }
+    public func stop() -> @concurrent @Sendable () async -> Void { host.stop() }
 
     public func open(
         in directory: URL, launchToken: String, name: String?, model: PiModelKey?, thinking: PiThinkingLevel?
     ) async throws -> PiSession.ID {
         // 模型在起进程时给，不再经 `configure` 换：dsh-acp 握手时按开会话的模型判定收不收图
-        let id = try await host(in: directory, model: model.map(AgentKind.dsh.modelRef), launchToken: launchToken) { try await $0.open(in: directory) }
+        let id = try await host.open(in: directory, launchToken: launchToken, model: model.map(AgentKind.dsh.modelRef))
         return try await configure(opened: id, name: name, model: nil, thinking: thinking, on: bridge)
     }
 
-    public func resume(_ session: IndexedSession) async throws -> PiSession.ID {
-        if let running = hosted[session.id]?.id { return running }
-        let directory = URL(filePath: session.cwd, directoryHint: .isDirectory)
-        return try await host(in: directory, model: nil, launchToken: nil) { try await $0.load(session.id, in: directory) }
-    }
-
-    /// 起进程、握手、开好会话（`open`）、上桥；中途失败停掉进程再抛。进程退出时从 `hosted` 里拿掉。
-    private func host(
-        in directory: URL, model: String?, launchToken: String?, open: (ACPSession) async throws -> Void
-    ) async throws -> PiSession.ID {
-        guard let executable = await dsh() else { throw AgentRuntimeError.notInstalled(.dsh) }
-        try DshLaunch.prepare(.hosted)
-        let environment = await locate().environment(
-            launching: executable, overrides: paths.environment.merging(DshLaunch.environment(paths, model: model)) { $1 })
-        let session = ACPSession(dialect: DshDialect(patch: .hosted), bridge: bridge)
-        try await session.launch(executable, environment: environment, directory: directory)
-        do {
-            try await open(session)
-            return try attach(session, in: directory, launchToken: launchToken)
-        } catch {
-            await session.connection?.shutdown()
-            throw error
-        }
-    }
-
-    private func attach(_ session: ACPSession, in directory: URL, launchToken: String?) throws -> PiSession.ID {
-        guard let sessionID = session.sessionID, let process = session.connection?.process else { throw PiBridgeError.sessionEnded }
-        var state = PiSession(
-            id: "\(sessionID).\(process.pid)", sessionID: sessionID, agent: .dsh, sessionFile: Self.sessionFile(home: Self.home(paths), cwd: directory, id: sessionID),
-            pid: process.pid, cwd: directory, terminal: PiTerminal(), state: .settled, stateSince: .now)
-        state.hosted = true
-        state.launchToken = launchToken
-        session.attach(state)
-        hosted[sessionID] = session
-        Task { [weak self] in
-            _ = await process.exited()
-            if self?.hosted[sessionID] === session { self?.hosted[sessionID] = nil }
-        }
-        return state.id
-    }
+    public func resume(_ session: IndexedSession) async throws -> PiSession.ID { try await host.resume(session) }
 
     /// 会话文件：`<存储根>/<工作目录的键>/<会话 id>/session.v4.jsonl`，键照 dsh 的 `projectKey`（分隔符成 `-`，其余不安全的字成 `~XXXX`，
     /// 按 UTF-16 码元，至多 251 个，前后各加 `--`）。
