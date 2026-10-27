@@ -100,7 +100,7 @@ struct IOSEditingTests {
         #expect(errors.count == 1 && errors.first is DiskFull)
     }
 
-    @Test("insertImage：光标处插入图片引用（自成一行）并通知，可撤销、可重做；后续键入是普通文字")
+    @Test("insert：光标处插入图片引用（自成一行）并通知，可撤销、可重做；后续键入是普通文字")
     func insertImage() async throws {
         let h = EditorHarness()
         h.load("前文后文")
@@ -108,7 +108,7 @@ struct IOSEditingTests {
         var notified: [String] = []
         h.textView.onChange = { notified.append($0) }
 
-        h.textView.insertImage(data: makePNG(width: 40, height: 30))
+        h.textView.insert([.data(makePNG(width: 40, height: 30))])
         #expect(await h.wait { CueFormat.hasImages(h.stored) })
 
         let id = try #require(CueFormat.parse(h.stored).compactMap { if case .image(let id) = $0 { id } else { nil } }.first)
@@ -131,7 +131,7 @@ struct IOSEditingTests {
         h.textView.pasteboard = h.privatePasteboard()
         h.load("甲乙")
         h.setCaret(1)
-        h.textView.insertImage(data: makePNG(width: 40, height: 30))
+        h.textView.insert([.data(makePNG(width: 40, height: 30))])
         #expect(await h.wait { CueFormat.hasImages(h.stored) })
         let original = h.stored
         h.textView.selectedRange = NSRange(location: 0, length: h.textView.textStorage.length)

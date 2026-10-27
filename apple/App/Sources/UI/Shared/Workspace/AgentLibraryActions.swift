@@ -18,6 +18,16 @@ extension Workspace {
         return draft
     }
 
+    /// 这个项目的规则文件（绑着文件夹、快照里有它的 AGENTS.md）：有才有。项目页、项目菜单里的"规则"入口都问它，点了 `openLibrary`。
+    func rules(of project: UUID) -> LibraryFile? {
+        library?.instruction(.project(project)) == nil ? nil : .instruction(.project(project))
+    }
+
+    /// 这份文件此刻改着的那一份；文件页还没载入（正文没到）时为 nil。
+    func draft(of file: LibraryFile, in library: AgentLibrary?) -> FileDraft? {
+        library.flatMap { fileDrafts[FileDraftKey(host: $0.hostID, file: file)] }
+    }
+
     /// 整理：一键整理（`library.automaticOrders`）、去重（带上留哪份，`TidyOrder.keep`）、合并（`LibraryTidy.merges` 的那件）。不弹确认：
     /// 本机做完提示结果，带撤销（恢复这一次的全部改动，移走的从废纸篓放回）；手机发往那台 Mac，等它做完再提示，不带撤销
     /// （那台照做不留撤销，手机上按钮旁写明，`TidyConsequence`）。没成提示原因。合并后的那份规则就在开着的文件页里，跟着快照换成合并稿。

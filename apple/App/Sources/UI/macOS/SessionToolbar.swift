@@ -120,7 +120,6 @@ struct PageTitleSlot: View {
         }
     }
 
-
     /// 这件事的完成圈：命中区占满玻璃的高度。完成了只显示对勾（回到待办在任务那边做）。
     private func ring(_ task: Card) -> some View {
         let done = task.status == .done

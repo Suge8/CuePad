@@ -6,11 +6,10 @@ import Testing
 @testable import CuePad
 
 extension AgentLibraryTests {
-    /// 规则的文件页（`FileDraft`，Mac 与手机的文件页同一份）：停手就存进文件；别处改了而你没在改，当场跟上；
+    /// 规则的文件页（`FileDraft`，Mac 与手机的文件页同一份）：文件还没有时停手就建出它，之后停手就存进文件；别处改了而你没在改，当场跟上；
     /// 你改着时别处也改了，你的字留着、不再自动写，等你选——换成文件里的（排着没存的那一版也不再写），或留你的盖过它。
     @Test func 规则的文件页自动存_跟上别处的改动_两边都改时由你选() async throws {
         let file = agents.appending(path: "AGENTS.md")
-        try write("# 原则\n", file)
         let keeping = keep()
         defer { keeping.cancel() }
         let workspace = Workspace(services: services)
@@ -20,7 +19,12 @@ extension AgentLibraryTests {
             try await eventually("快照读到 \(text)") { workspace.library?.instruction(.global)?.hash == hash(text) }
             return try await self.text(.instruction(.global), in: try #require(workspace.library))
         }
-        let draft = FileDraft(.instruction(.global), text: try await snapshot("# 原则\n"), workspace: workspace)
+        try await eventually("快照里有还没文件的全局规则") { workspace.library?.instruction(.global) != nil }
+        let draft = FileDraft(.instruction(.global), text: nil, workspace: workspace)
+
+        draft.changed(body: "# 原则\n")
+        await draft.leave()
+        #expect(read(file) == "# 原则\n" && draft.state == .saved && !draft.dirty)
 
         draft.changed(body: "# 原则\n\n先读\n")
         await draft.leave()
@@ -87,29 +91,6 @@ extension AgentLibraryTests {
         #expect(read(file) == "---\nname: pr-new\ndescription: \"用法: 先读模板\"\nlicense: MIT\n---\n\n新的正文\n")
         try await eventually("重扫标出 name 不对") { workspace.library?.skill(at: directory.path)?.problem == .nameMismatch("pr-new") }
         #expect(workspace.library?.skill(at: directory.path)?.problem?.field == .name)
-    }
-
-    /// 技能与规则页换段只有 `Workspace.libraryPane` 一份（工具栏的分段读写它）：换到技能、打开一份技能再收起、去别页再回来，都还在技能段。
-    @Test func 换到技能段_打开技能再收起_换页回来还在技能段() async throws {
-        try skill("pr", in: agents.appending(path: "skills"))
-        let keeping = keep()
-        defer { keeping.cancel() }
-        let workspace = Workspace(services: services)
-        let following = Task { await workspace.follow() }
-        defer { following.cancel() }
-        let path = agents.appending(path: "skills/pr").path
-        try await eventually("快照读到这个技能") { workspace.library?.skill(at: path) != nil }
-        workspace.show(.library)
-        #expect(workspace.libraryPane == .rules)
-
-        workspace.libraryPane = .skills
-        workspace.openLibrary(.skill(path))
-        workspace.overlay = nil
-        #expect(workspace.root == .library && workspace.libraryPane == .skills)
-
-        workspace.show(.progress)
-        workspace.show(.library)
-        #expect(workspace.libraryPane == .skills)
     }
 }
 #endif

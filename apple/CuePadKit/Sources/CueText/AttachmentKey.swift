@@ -18,6 +18,11 @@ public enum AttachmentKey {
     /// 文件名对应的键：扩展名取文件名的（小写、只认字母数字，`reassigned` 里的换掉），没有或不合规为空。
     public static func make(hash: String, name: String) -> String { make(hash: hash, format: format(ofName: name)) }
 
+    /// 文件名对应的系统类型（快速查看、图标、预览的种类都按它）：按键的扩展名认，系统认错的（`reassigned`）已换掉；没有扩展名为 nil。
+    public static func type(ofName name: String) -> UTType? { type(ofFormat: format(ofName: name)) }
+
+    static func type(ofFormat format: String) -> UTType? { format.isEmpty ? nil : UTType(filenameExtension: format) }
+
     public static func format(ofName name: String) -> String {
         let raw = (name as NSString).pathExtension.lowercased()
         guard isFormat(Substring(raw)) else { return "" }
@@ -38,7 +43,7 @@ public enum AttachmentKey {
 
     /// 这个键是不是能在正文里内联显示的图片：扩展名是图片、ImageIO 解得了（HEIC、RAW 是，PDF、SVG 不是）。
     public static func isImage(_ key: String) -> Bool {
-        guard let format = parts(key)?.format, !format.isEmpty, let type = UTType(filenameExtension: format) else { return false }
+        guard let format = parts(key)?.format, let type = type(ofFormat: format) else { return false }
         return type.conforms(to: .image) && imageTypes.contains(type.identifier)
     }
 

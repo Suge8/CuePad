@@ -156,8 +156,10 @@ final class AgentIntegrations {
     /// 用户的 Mac 都装过一次 v38 起的 CuePad 并启动过（启动检查把旧扩展换掉）后，连同 Kit 里的存根与 `legacyPiExtensionInUse` 一起删。
     func retireLegacyPiExtension(following changes: AsyncStream<PiSessionChange>) async throws {
         for await change in changes {
-            if case .appeared = change { try await integration.retireLegacyPiExtension() }
-            if case .ended = change { try await integration.retireLegacyPiExtension() }
+            switch change {
+            case .appeared, .ended: try await integration.retireLegacyPiExtension()
+            default: break
+            }
         }
     }
 

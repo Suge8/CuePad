@@ -190,8 +190,16 @@ final class FileDraft {
         #endif
     }
 
-    /// "已保存"、"已跟上"亮一会儿就收。
-    func settle() { if state == .saved || state == .followed { state = .idle } }
+    /// "已保存"、"已跟上"亮一会儿就收（页面 `.task(id: draft?.state)` 里调，机制见 `SaveState.linger`）。
+    func settleSoon() async {
+        guard state == .saved || state == .followed else { return }
+        #if os(iOS)
+        let awaitsMac = true
+        #else
+        let awaitsMac = false
+        #endif
+        if await SaveState.linger(awaitsMac: awaitsMac) { state = .idle }
+    }
 
     /// 离开文件页：Mac 写下没存的字。
     func leave() async { await autosave?.flush() }

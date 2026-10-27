@@ -7,21 +7,6 @@ nonisolated struct SendContent: Sendable {
     private let tokens: [CueToken]
 
     init(stored: String) { tokens = CueFormat.parse(stored) }
-
-    /// 只看文字：图片去掉、文件留文件名，原样拼接（不像 `CueFormat.plainText` 那样折叠空行、去首尾空白）。
-    var plainText: String { tokens.map(\.shownText).joined() }
-
-    var hasImages: Bool { tokens.contains { if case .image = $0 { true } else { false } } }
-
-    /// 正文里的附件（图片与文件）的键，按出现顺序。
-    var attachmentKeys: [String] {
-        tokens.compactMap {
-            switch $0 {
-            case .image(let key), .file(let key, _): key
-            case .text: nil
-            }
-        }
-    }
 }
 
 #if os(macOS)
@@ -33,23 +18,20 @@ extension SendContent {
     func piImages(from files: AttachmentFiles) throws -> [PiImage] {
         try tokens.compactMap { token -> PiImage? in
             guard case .image(let key) = token else { return nil }
-            let data = try files.original(key)
-            guard let mimeType = ImageFiles.mimeType(of: data) else { throw SendError.attachmentUnavailable(key) }
+            guard let url = files.fileURL(for: key), let data = try? Data(contentsOf: url), let mimeType = ImageFiles.mimeType(of: data) else {
+                throw SendError.attachmentUnavailable(key)
+            }
             return PiImage(mimeType: mimeType, data: data)
         }
     }
 
     /// 交给 Agent 的文字：图片去掉（另作 `piImages`），文件在原处换成自成一行的"附件：文件名（路径）"（`AttachmentFiles.agentLine`）；
-    /// `imagesAsFiles`（收不了图片的会话）时图片也这样写，名字是"图片.<扩展名>"。
+    /// `imagesAsFiles`（收不了图片的会话）时图片也这样写（`AttachmentFiles.agentFile`）。
     /// 文件要已在本机（投送执行器取齐了才执行），不在抛 `SendError.attachmentUnavailable`。
     func agentText(from files: AttachmentFiles, imagesAsFiles: Bool = false) throws -> String {
         var text = ""
         for (index, token) in tokens.enumerated() {
-            let key: String, name: String
-            switch token {
-            case .file(let file, let named): (key, name) = (file, named)
-            case .image(let image) where imagesAsFiles: (key, name) = (image, "图片." + (AttachmentKey.parts(image)?.format ?? ""))
-            default:
+            guard let (key, name) = AttachmentFiles.agentFile(token, imagesAsFiles: imagesAsFiles) else {
                 text += token.shownText
                 continue
             }

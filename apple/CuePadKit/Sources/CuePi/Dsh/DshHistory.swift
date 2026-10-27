@@ -18,8 +18,7 @@ enum DshHistory {
 
     static func ingest(_ raw: UnsafeRawBufferPointer, _ cp: inout PiHistoryCheckpoint, _ transcript: inout PiHistory.Transcript) throws {
         cp.seq += 1
-        guard let base = raw.baseAddress, !raw.isEmpty,
-              let line = try? decoder.decode(Line.self, from: Data(bytesNoCopy: UnsafeMutableRawPointer(mutating: base), count: raw.count, deallocator: .none))
+        guard let bytes = raw.borrowedData, let line = try? decoder.decode(Line.self, from: bytes)
         else { return }
         let time = (line.time ?? line.createdAt).map { Date(timeIntervalSince1970: $0 / 1000) }
         if let time { cp.lastActivity = time }

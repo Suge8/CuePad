@@ -218,7 +218,7 @@ extension CueStore {
   /// 上传一次只有一批在路上，结果按发出的先后回来。
   ///
   /// 你发出的话的那条消息（带请求标识，`PiChatMessage.deliveryID`）上了服务器，同一事务里收走它的投送请求（写对话时已记为送到，`applyTranscript`）。
-  /// 不在写对话时收：请求的删除随回执马上传，消息走后台那一路，排在大附件后面时晚到十几秒，别的设备先收到删除、气泡就空着。
+  /// 不在写对话时收：请求的删除随回执马上传，消息走后台那一路、要等合并窗口与前面的批次，别的设备会先收到删除、气泡就空着。
   /// 服务器上删除排在消息之后，拉到删除时消息已经在了。
   package func markPushed(_ pushed: [(row: SyncRow, systemFields: Data)]) throws {
     guard !pushed.isEmpty else { return }

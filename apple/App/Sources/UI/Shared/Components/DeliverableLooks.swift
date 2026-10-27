@@ -2,7 +2,6 @@ import AVFoundation
 import CueEditor
 import CueStore
 import ImageIO
-import QuickLookThumbnailing
 import SwiftUI
 import UniformTypeIdentifiers
 import WebKit
@@ -202,34 +201,11 @@ enum DeliverableLooks {
     /// 系统缩略图只会整张放进框里：先按框要一张，铺满框还不够大（比例与框不同，如竖版 PDF 放进横的主图）就按它的比例算出要多大再要一张，
     /// 不一上来就按最大可能要（Mac 主图那样要会渲出五千多像素见方的一页）。
     private static func systemThumbnail(_ file: URL, box: LookBox, scale: CGFloat) async -> CGImage? {
-        guard let first = await systemThumbnail(file, fitting: box.fitting, scale: scale) else { return nil }
+        guard let first = await Thumbnails.system(at: file, fitting: box.fitting, scale: scale, icons: false) else { return nil }
         let longest = box.longestSide(of: CGSize(width: first.width, height: first.height))
         let image = longest > max(first.width, first.height)
-            ? await systemThumbnail(file, fitting: CGSize(width: longest, height: longest), scale: scale) ?? first : first
-        return await shrunk(image, to: longest)
-    }
-
-    private static func systemThumbnail(_ file: URL, fitting size: CGSize, scale: CGFloat) async -> CGImage? {
-        let request = QLThumbnailGenerator.Request(
-            fileAt: file, size: CGSize(width: size.width / scale, height: size.height / scale), scale: scale, representationTypes: .thumbnail)
-        return try? await QLThumbnailGenerator.shared.generateBestRepresentation(for: request).cgImage
-    }
-
-    /// 系统缩略图不一定照要的尺寸给（视频常按原片给，真实库里一张约 11MB，画上屏时再拷一份）：超过框的重画到框的尺寸，原图随即放掉。
-    /// 不加这一步时真实库的 iPhone Cue 页常驻 243MB，其中系统缩略图与它在屏上的拷贝约 140MB。
-    @concurrent private static func shrunk(_ image: CGImage, to longest: Int) async -> CGImage {
-        let size = CGSize(width: image.width, height: image.height)
-        guard max(image.width, image.height) > longest else { return image }
-        let factor = CGFloat(longest) / max(size.width, size.height)
-        let width = max(1, Int((size.width * factor).rounded())), height = max(1, Int((size.height * factor).rounded()))
-        let space = image.colorSpace.flatMap { $0.model == .rgb ? $0 : nil } ?? CGColorSpace(name: CGColorSpace.sRGB)!
-        guard let context = CGContext(
-            data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0, space: space,
-            bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue)
-        else { return image }
-        context.interpolationQuality = .high
-        context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
-        return context.makeImage() ?? image
+            ? await Thumbnails.system(at: file, fitting: CGSize(width: longest, height: longest), scale: scale, icons: false) ?? first : first
+        return await Thumbnails.shrunk(image, to: longest)
     }
 
     private static func duration(_ file: URL) async -> String? {

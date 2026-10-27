@@ -1,10 +1,12 @@
 import CoreGraphics
 import Foundation
 import ImageIO
+import QuickLookThumbnailing
 
-/// 缩略图：ImageIO 直接降采样解码（已按 EXIF 方向校正、不放大），原图不整张进内存。全 App 的降采样只此一处（在后台调用）。
+/// 缩略图，全 App 只此一处（在后台调用）。图片由 ImageIO 直接降采样解码（已按 EXIF 方向校正、不放大），原图不整张进内存；
+/// 别的文件（PDF 的页、视频的帧、文稿的首屏）是系统快速查看的缩略图（`system`、文件牌的 `chip`）。
 /// `image(at:maxPixel:)` 的结果按"文件 + 尺寸"缓存（编辑器、卡片墙、全屏页）；系统内存紧张时 NSCache 自动清空，下次需要时重新降采样。
-/// `decoded` 按原图尺寸定要多大、不进这份缓存：调用方自己留（交付物缩略图、输入框图片条）。
+/// `decoded` 按原图尺寸定要多大、不进这份缓存：调用方自己留（交付物缩略图、附件条）。
 public enum Thumbnails {
     /// 最长边不超过 `maxPixel` 的缩略图。不是图片或读不到返回 nil。
     public static func image(at url: URL, maxPixel: Int) -> CGImage? {
@@ -67,6 +69,38 @@ public enum Thumbnails {
             kCGImageSourceThumbnailMaxPixelSize: maxPixel,
             kCGImageSourceCreateThumbnailWithTransform: true,
         ] as CFDictionary)
+    }
+
+    /// 系统快速查看的缩略图，整张放进 `fitting`（像素）；`icons` 时出不了画面的给类型图标。系统不一定照要的尺寸给
+    /// （视频常按原片给），要多大的由调用方再 `shrunk`。
+    public static func system(at url: URL, fitting pixels: CGSize, scale: CGFloat, icons: Bool) async -> CGImage? {
+        let request = QLThumbnailGenerator.Request(
+            fileAt: url, size: CGSize(width: pixels.width / scale, height: pixels.height / scale), scale: scale,
+            representationTypes: icons ? .all : .thumbnail)
+        return try? await QLThumbnailGenerator.shared.generateBestRepresentation(for: request).cgImage
+    }
+
+    /// 文件牌左边那一块（正文里的、附件条与对话里的同一份）：系统缩略图，出不了画面给类型图标，缩到 `side`（点）见方以内。
+    @concurrent public static func chip(at url: URL, side: CGFloat, scale: CGFloat) async -> CGImage? {
+        let pixels = Int((side * scale).rounded())
+        guard let image = await system(at: url, fitting: CGSize(width: pixels, height: pixels), scale: scale, icons: true) else { return nil }
+        return await shrunk(image, to: pixels)
+    }
+
+    /// 超过 `longest`（像素）的重画到这个最长边，原图随即放掉：系统缩略图按原片给时一张约 11MB，画上屏时还要再拷一份。
+    @concurrent public static func shrunk(_ image: CGImage, to longest: Int) async -> CGImage {
+        let size = CGSize(width: image.width, height: image.height)
+        guard max(image.width, image.height) > longest else { return image }
+        let factor = CGFloat(longest) / max(size.width, size.height)
+        let width = max(1, Int((size.width * factor).rounded())), height = max(1, Int((size.height * factor).rounded()))
+        let space = image.colorSpace.flatMap { $0.model == .rgb ? $0 : nil } ?? CGColorSpace(name: CGColorSpace.sRGB)!
+        guard let context = CGContext(
+            data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0, space: space,
+            bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue)
+        else { return image }
+        context.interpolationQuality = .high
+        context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        return context.makeImage() ?? image
     }
 
     private static func key(_ url: URL, _ maxPixel: Int) -> NSString { "\(url.path)@\(maxPixel)" as NSString }

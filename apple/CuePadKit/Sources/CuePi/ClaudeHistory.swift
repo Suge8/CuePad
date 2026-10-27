@@ -15,8 +15,7 @@ import Foundation
 enum ClaudeHistory {
     static func ingest(_ raw: UnsafeRawBufferPointer, _ cp: inout PiHistoryCheckpoint, _ transcript: inout PiHistory.Transcript) throws {
         cp.seq += 1
-        guard let base = raw.baseAddress, !raw.isEmpty,
-              let line = try? decoder.decode(Line.self, from: Data(bytesNoCopy: UnsafeMutableRawPointer(mutating: base), count: raw.count, deallocator: .none))
+        guard let data = raw.borrowedData, let line = try? decoder.decode(Line.self, from: data)
         else { return }
         let time = line.timestamp.flatMap { try? Date($0, strategy: timestampStyle) }
         if let time { cp.lastActivity = time }

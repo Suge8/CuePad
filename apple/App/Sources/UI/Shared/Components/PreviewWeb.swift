@@ -1,4 +1,5 @@
 import CueStore
+import CueText
 import SwiftUI
 import UniformTypeIdentifiers
 import WebKit
@@ -66,7 +67,7 @@ enum PreviewWebGuard {
     /// 网页按内容载入（about:blank 上，读不到任何文件）；别的类型（文稿）按文件载入，WebKit 才转成页面，给它一段字节只会把字节铺出来。
     static func loadsByContent(_ file: URL) -> Bool { PiPreviewKind(fileName: file.lastPathComponent) == .web }
 
-    static func mimeType(of file: URL) -> String { UTType(filenameExtension: file.pathExtension)?.preferredMIMEType ?? "text/html" }
+    static func mimeType(of file: URL) -> String { AttachmentKey.type(ofName: file.lastPathComponent)?.preferredMIMEType ?? "text/html" }
 
     /// 不显示的网页（缩略图快照 `PageSnapshots` 与调试快照）：装好规则、载入这个文件，载入完才返回。不上屏的渲染用 `WebPage`
     /// （没有视图也能导出画面）；上屏的是 `OfflineWebView`。

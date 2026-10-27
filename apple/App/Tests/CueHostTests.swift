@@ -63,12 +63,15 @@ struct CueHostTests {
         await rig.stop()
     }
 
-    /// 模型看不了图：明确告诉你图没交给它，文字照常交（Cue 照常回答）。
-    @Test func 模型看不了图_告诉你() async throws {
+    /// 模型看不了图：同看不了图的会话一样，图写成"附件：图片.png（本机路径）"交给它（不另附图），Cue 照常回答。
+    @Test func 模型看不了图_图写成路径交给它() async throws {
         let rig = try await Rig(seesImages: false)
-        try await rig.say("这是什么？\n\(try rig.image())")
-        try await rig.message(.cue, containing: "看不了图")
-        try await rig.message(.cue, containing: "收到：")
+        let image = try rig.image()
+        try await rig.say("这是什么？\n\(image)")
+        let key = try #require(CueFormat.attachmentKeys(in: image).first)
+        let path = try #require(rig.store.files.fileURL(for: key)).path(percentEncoded: false)
+        try await rig.message(.cue, containing: "图在 \(path)")
+        #expect(try await rig.store.cueMessages().allSatisfy { !$0.text.contains("看不了图") })
         await rig.stop()
     }
 

@@ -108,7 +108,7 @@ final class ACPConnection {
     }
 }
 
-enum ACPError: Error, Equatable {
+enum ACPError: Error {
     case server(code: Int, message: String)
     case closed
     /// Agent 没有及时回应（握手时已停掉它）

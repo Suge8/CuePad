@@ -41,14 +41,13 @@ public struct AgentLibraryFiles: Sendable {
         AgentLibraryPlaces(paths: integration.paths, touches: integration.touches, projects: projects)
     }
 
-    /// 读一次：快照与它列出的各份文件的正文（路径 → 正文，`LibraryFileText`）。`projects` 是这台绑了文件夹的项目（`CueStore.projectDirectories`）。
+    /// 读一次：快照与它列出的各份文件的正文（路径 → 正文，`LibraryFileText`）。
     public struct Scan: Sendable {
         public let library: AgentLibrary
         public let texts: [String: String]
     }
 
-    @concurrent public func scan(host: String, projects: [UUID: String]) async -> Scan { read(host: host, projects: projects).scan }
-
+    /// `projects` 是这台绑了文件夹的项目（`CueStore.projectDirectories`）。
     private func read(host: String, projects: [UUID: String]) -> (scan: Scan, watched: Set<String>) {
         let places = places(projects)
         let skills = LibrarySkillScan(places), instructions = LibraryInstructionScan(places)

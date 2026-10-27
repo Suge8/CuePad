@@ -96,9 +96,9 @@ struct ProjectIntroLine: View {
                 if place != nil { Dotted.inline.foregroundStyle(palette.ink3).accessibilityHidden(true) }
             }
             if let place { ProjectPlaceLabel(place: place, icon: !inHeader).foregroundStyle(palette.ink3) }
-            if !inHeader, let project, workspace.library?.instruction(.project(project.id)) != nil {
+            if !inHeader, let project, let rules = workspace.rules(of: project.id) {
                 Dotted.inline.foregroundStyle(palette.ink3).accessibilityHidden(true)
-                Button { workspace.openLibrary(.instruction(.project(project.id))) } label: {
+                Button { workspace.openLibrary(rules) } label: {
                     Label("规则", icon: .instruction).labelStyle(.titleAndIcon).imageScale(.small)
                 }
                 .buttonStyle(PressStyle(.inline))

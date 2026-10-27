@@ -38,8 +38,6 @@ final class ACPSession {
     private(set) var opened: JSONValue = [:]
     /// 会话的配置项（`configOptions`）
     private(set) var options: [JSONValue] = []
-    /// Agent 报的斜杠命令名
-    var commands: Set<String> = []
     /// 在等你回答的（Agent 的请求 id 与这一问）
     var pending: (request: JSONValue, ask: ACPAsk)?
     /// 一轮一个编号：`session/prompt` 的回应只结束它自己开的那一轮
@@ -125,9 +123,7 @@ final class ACPSession {
     func attach(_ session: PiSession) {
         id = session.id
         var session = session
-        session.availableModels = models
-        session.model = currentOption
-        session.thinking = currentLevel.map(Open.known)
+        publishOptions(to: &session)
         bridge?.attach(session, via: self)
     }
 
@@ -196,11 +192,13 @@ final class ACPSession {
         options = updated
         contextWindow = currentModel.flatMap { dialect.window(of: $0, in: opened) } ?? contextWindow
         guard let id else { return }
-        bridge?.update(id) { session in
-            session.availableModels = models
-            session.model = currentOption
-            session.thinking = currentLevel.map(Open.known)
-        }
+        bridge?.update(id) { publishOptions(to: &$0) }
+    }
+
+    private func publishOptions(to session: inout PiSession) {
+        session.availableModels = models
+        session.model = currentOption
+        session.thinking = currentLevel.map(Open.known)
     }
 
     // MARK: 一轮
@@ -357,9 +355,9 @@ final class ACPSession {
         case "tool_call":
             guard facts.running else { return }
             speak(nil)
-            let name = dialect.toolName(update)
-            facts.work(.tool, detail: ToolDetail.line(name, update["rawInput"]))
-            emit(.tool(id: update["toolCallId"]?.string ?? "", name: CueMCPServer.bareName(name, on: agent), arguments: String(decoding: (update["rawInput"] ?? [:]).data, as: UTF8.self)))
+            let (name, input) = dialect.tool(update)
+            facts.work(.tool, detail: ToolDetail.line(name, input))
+            emit(.tool(id: update["toolCallId"]?.string ?? "", name: CueMCPServer.bareName(name, on: agent), arguments: String(decoding: input.data, as: UTF8.self)))
             toolSettled(update)
         case "tool_call_update":
             toolSettled(update)
@@ -370,7 +368,6 @@ final class ACPSession {
                     name: name, summary: command["description"]?.string.map { $0.clipped(ToolDetail.limit) }, source: .known(.builtin),
                     hint: command["input"]?["hint"]?.string)
             }
-            commands = Set(listed.map(\.name))
             if let id { bridge?.update(id) { $0.commands = listed } }
         case "config_option_update":
             if let updated = update["configOptions"]?.array { adopt(options: updated) }

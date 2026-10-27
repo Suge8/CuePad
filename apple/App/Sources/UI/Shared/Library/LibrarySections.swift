@@ -10,12 +10,25 @@ import SwiftUI
 enum LibraryLayout {
     static let column: CGFloat = 680
     static let gap: CGFloat = 12
+    /// 纸里行与块的左右留白
+    static let inset: CGFloat = 16
     #if os(macOS)
     static let margin: CGFloat = Spacing.page
     static let bottom: CGFloat = Spacing.section
+    /// 纸的圆角
+    static let radius: CGFloat = 12
+    /// 一张纸里行上下留的边；手机上行铺满纸宽（`flush`），不留
+    static let paperVertical: CGFloat = 4
+    static let flush = false
+    /// 文件页里正文与上面各块的左右留白
+    static let textInset: CGFloat = 24
     #else
     static let margin: CGFloat = 16
     static let bottom: CGFloat = 24
+    static let radius: CGFloat = 22
+    static let paperVertical: CGFloat = 0
+    static let flush = true
+    static let textInset: CGFloat = 20
     #endif
 }
 
@@ -28,26 +41,14 @@ struct LibraryPaper<Content: View>: View {
             Group(subviews: content) { rows in
                 ForEach(rows) { row in
                     row
-                    if row.id != rows.last?.id { Divider().padding(.leading, Self.inset + LibraryRowMetrics.icon + LibraryRowMetrics.gap) }
+                    if row.id != rows.last?.id { Divider().padding(.leading, LibraryLayout.inset + LibraryRowMetrics.icon + LibraryRowMetrics.gap) }
                 }
             }
         }
-        .padding(.vertical, Self.vertical)
-        .paper(radius: Self.radius)
-        .rowContainer(.rect(cornerRadius: Self.radius, style: .continuous), flush: Self.flush)
+        .padding(.vertical, LibraryLayout.paperVertical)
+        .paper(radius: LibraryLayout.radius)
+        .rowContainer(.rect(cornerRadius: LibraryLayout.radius, style: .continuous), flush: LibraryLayout.flush)
     }
-
-    #if os(macOS)
-    static var radius: CGFloat { 12 }
-    static var inset: CGFloat { 16 }
-    private static var vertical: CGFloat { 4 }
-    private static var flush: Bool { false }
-    #else
-    static var radius: CGFloat { 22 }
-    static var inset: CGFloat { 16 }
-    private static var vertical: CGFloat { 0 }
-    private static var flush: Bool { true }
-    #endif
 }
 
 enum LibraryRowMetrics {
@@ -55,17 +56,18 @@ enum LibraryRowMetrics {
     static let icon: CGFloat = 18
     static let gap: CGFloat = 12
     static let height: CGFloat = 44
+    static let titleFont = Typography.body.weight(.medium)
     #else
     static let icon: CGFloat = 22
     static let gap: CGFloat = 12
     static let height: CGFloat = 58
+    static let titleFont = Font.body
     #endif
 }
 
-/// 一行：图标一列、名字与下面一行、右边的东西。
+/// 一行：图标一列、名字、右边的东西。
 struct LibraryRow<Icon: View, Trailing: View>: View {
     let title: String
-    let detail: String?
     @ViewBuilder var icon: Icon
     @ViewBuilder var trailing: Trailing
     @Environment(\.palette) private var palette
@@ -73,31 +75,16 @@ struct LibraryRow<Icon: View, Trailing: View>: View {
     var body: some View {
         HStack(spacing: LibraryRowMetrics.gap) {
             icon.frame(width: LibraryRowMetrics.icon)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(verbatim: title).font(Self.titleFont).foregroundStyle(palette.ink).lineLimit(Self.lines)
-                if let detail { Text(verbatim: detail).font(Self.detailFont).foregroundStyle(palette.ink2).lineLimit(Self.lines) }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            // 写不下一行就折成两行，不截掉（手机窄、英文长）
+            Text(verbatim: title).font(LibraryRowMetrics.titleFont).foregroundStyle(palette.ink).lineLimit(2)
+                .frame(maxWidth: .infinity, alignment: .leading)
             trailing
         }
-        .padding(.horizontal, LibraryPaper<EmptyView>.inset)
-        .padding(.vertical, Self.vertical)
+        .padding(.horizontal, LibraryLayout.inset)
+        .padding(.vertical, 8)
         .frame(minHeight: LibraryRowMetrics.height)
         .contentShape(.rect)
     }
-
-    private static var vertical: CGFloat { 8 }
-
-    /// 一件事的那句写不下一行就折成两行，不截掉（手机窄、英文长）
-    private static var lines: Int { 2 }
-
-    #if os(macOS)
-    private static var titleFont: Font { Typography.body.weight(.medium) }
-    private static var detailFont: Font { Typography.meta }
-    #else
-    private static var titleFont: Font { .body }
-    private static var detailFont: Font { .footnote }
-    #endif
 }
 
 /// 一键整理那块纸：按段分开，规则段只列规则的事（内容相同换链接、Claude Code 读不到项目规则），技能段只列技能的事（旧目录、读不到、空文件夹），
@@ -107,20 +94,11 @@ struct TidyPaper: View {
     let tidies: [LibraryTidy]
     let library: AgentLibrary
     @Environment(Workspace.self) private var workspace
-    @Environment(\.palette) private var palette
     @State private var working = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            VStack(alignment: .leading, spacing: 8) {
-                ForEach(tidies) { tidy in
-                    HStack(alignment: .firstTextBaseline, spacing: LibraryRowMetrics.gap) {
-                        Image(tidy.icon).foregroundStyle(palette.ink2).frame(width: LibraryRowMetrics.icon)
-                        Text(verbatim: workspace.fact(of: tidy, in: library)).font(Self.font).foregroundStyle(palette.ink)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-            }
+            TidyFacts(tidies: tidies, library: library, font: Self.font)
             HStack(spacing: 12) {
                 Button { run() } label: { TidyLabel(title: "一键整理", working: working) }
                     .buttonStyle(ControlButtonStyle(kind: .primary))
@@ -128,9 +106,9 @@ struct TidyPaper: View {
                 TidyConsequence(kind: .automatic)
             }
         }
-        .padding(LibraryPaper<EmptyView>.inset)
+        .padding(LibraryLayout.inset)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .paper(radius: LibraryPaper<EmptyView>.radius)
+        .paper(radius: LibraryLayout.radius)
     }
 
     private func run() {
@@ -146,6 +124,27 @@ struct TidyPaper: View {
     #else
     private static var font: Font { .subheadline }
     #endif
+}
+
+/// 一键整理要做的那几件，各一条结果的事实（图标加一句；一键整理的纸与 Mac 接入面板的第二步同一份）。
+struct TidyFacts: View {
+    let tidies: [LibraryTidy]
+    let library: AgentLibrary
+    /// 字体；不给时用外面的
+    var font: Font?
+    @Environment(Workspace.self) private var workspace
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(tidies) { tidy in
+                HStack(alignment: .firstTextBaseline, spacing: LibraryRowMetrics.gap) {
+                    Image(tidy.icon).foregroundStyle(palette.ink2).frame(width: LibraryRowMetrics.icon)
+                    Text(verbatim: workspace.fact(of: tidy, in: library)).font(font).foregroundStyle(palette.ink).fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+    }
 }
 
 /// 一键整理那块纸摆在一段的最上面，只放这一段的事（`rules`：规则的，否则技能的）。
@@ -235,7 +234,7 @@ struct InstructionSection: View {
 
     private func row(_ instruction: LibraryInstruction) -> some View {
         Button { workspace.openLibrary(.instruction(instruction.kind)) } label: {
-            LibraryRow(title: workspace.instructionName(instruction.kind), detail: nil) {
+            LibraryRow(title: workspace.instructionName(instruction.kind)) {
                 InstructionIcon(kind: instruction.kind)
             } trailing: {
                 InstructionTrailing(library: library, instruction: instruction)
@@ -259,7 +258,7 @@ private struct GlobalRuleRow: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: LibraryRowMetrics.gap) {
                     InstructionIcon(kind: .global).frame(width: LibraryRowMetrics.icon)
-                    Text(verbatim: workspace.instructionName(.global)).font(Self.titleFont).foregroundStyle(palette.ink)
+                    Text(verbatim: workspace.instructionName(.global)).font(LibraryRowMetrics.titleFont).foregroundStyle(palette.ink)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     InstructionTrailing(library: library, instruction: instruction)
                 }
@@ -269,7 +268,7 @@ private struct GlobalRuleRow: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.leading, LibraryRowMetrics.icon + LibraryRowMetrics.gap)
             }
-            .padding(.horizontal, LibraryPaper<EmptyView>.inset)
+            .padding(.horizontal, LibraryLayout.inset)
             .padding(.vertical, 12)
             .contentShape(.rect)
         }
@@ -307,10 +306,8 @@ private struct GlobalRuleRow: View {
     }
 
     #if os(macOS)
-    private static var titleFont: Font { Typography.body.weight(.medium) }
     private static var textFont: Font { Typography.meta }
     #else
-    private static var titleFont: Font { .body }
     private static var textFont: Font { .footnote }
     #endif
 }

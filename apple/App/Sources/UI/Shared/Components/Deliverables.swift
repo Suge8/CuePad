@@ -97,26 +97,12 @@ struct DeliverableTile: View {
     @Environment(\.palette) private var palette
     @Environment(\.displayScale) private var scale
     /// 文件到本机的那一刻就绪（这个文件的一趟传输结束时重查）
-    @State private var arrived: Bool?
+    @State private var place = AttachmentPlace.unchecked
     @State private var look: DeliverableLook?
     /// 画面出了 `Pending.delay` 还没出来：这时才写它是什么（`kindIcon`）。
     @State private var slow = false
-    @State private var located = Located()
 
-    /// 本机的那份文件（`AttachmentFiles.fileURL(for:)` 要查文件系统）：同一次"到没到"只找一次，
-    /// 视图体里用到它的几处不再各找一遍。
-    private var file: URL? {
-        if located.arrived != .some(arrived) {
-            located.arrived = arrived
-            located.url = arrived == false ? nil : services.store.files.fileURL(for: preview.key)
-        }
-        return located.url
-    }
-
-    private final class Located {
-        var arrived: Bool??
-        var url: URL?
-    }
+    private var file: URL? { place.file(preview.key, in: services.store.files) }
 
     var body: some View {
         Button { if file == nil { workspace.fetchFile(preview.key) } else { open(preview) } } label: {
@@ -132,7 +118,7 @@ struct DeliverableTile: View {
         #if os(macOS)
         .help(label)
         #endif
-        .observingArrival(of: preview.key, in: services, into: $arrived)
+        .observingArrival(of: preview.key, in: services, into: $place)
         .task(id: file) {
             guard let file else { return }
             let waited = shown == nil

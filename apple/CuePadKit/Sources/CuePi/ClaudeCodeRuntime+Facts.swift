@@ -8,17 +8,15 @@ extension ClaudeCodeRuntime {
     /// 最低 2.1.145：从这版起钩子的环境里才有 `CLAUDE_CODE_SESSION_ID`（取自钩子输入的 `session_id`），钩子入口靠它认出是 Claude Code 发的
     /// （`ClaudeCodeRuntime.received`），更旧的钩子会全被放行。
     nonisolated public static let facts = AgentFacts(
-        command: "claude", homeVariable: "CLAUDE_CONFIG_DIR", home: home, minimumVersion: AgentVersion(2, 1, 145),
+        command: "claude", homeVariable: "CLAUDE_CONFIG_DIR", minimumVersion: AgentVersion(2, 1, 145),
         installScript: "curl -fsSL https://claude.ai/install.sh | bash",
         loginArguments: ["auth", "login"],
         sessionFiles: SessionFileFormat(ingest: ClaudeHistory.ingest, depth: 2, naming: .id) {
-            home($0).appending(path: "projects", directoryHint: .isDirectory)
+            $0.home(of: .claudeCode).appending(path: "projects", directoryHint: .isDirectory)
         },
         channel: { integration, _ in HookFile.claudeCode(home: integration.home(of: .claudeCode), skillDirectory: integration.skillDirectory) },
         releasesIdleHosted: true, probe: askClaude, brain: { ClaudeHostedSession() }, sharedSkills: .none, projectFolder: ".claude", selfManagedSkills: "synced",
         instructionsFile: "CLAUDE.md")
-
-    nonisolated private static func home(_ paths: AgentPaths) -> URL { paths.directory(facts.homeVariable) ?? paths.user(".claude") }
 
     /// stream-json 不存会话、关掉钩子（否则 CuePad 自己的钩子把它报成一个会话）、不起 MCP 服务，控制请求 `initialize` 给模型清单，
     /// 其中的 `account` 没有令牌也没有 API 密钥是没登录；`get_settings` 的 `applied.model` 是按用户配置解析出的实际模型。默认落到清单
