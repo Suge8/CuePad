@@ -15,7 +15,7 @@ nonisolated enum ScheduleText {
     }
 
     /// 重复的哪几天："每天""每周一和周四""每月 1 号"。
-    static func cycle(_ cycle: CueRepeat.Cycle) -> String {
+    private static func cycle(_ cycle: CueRepeat.Cycle) -> String {
         switch cycle {
         case .daily: return String(localized: "每天")
         case .weekly(let days): return String(localized: "每\(weekdays(days))")
@@ -38,7 +38,7 @@ nonisolated enum ScheduleText {
     }
 
     /// 哪天："今天""明天""昨天""周一"（一周之内）、"11月3日"。
-    static func day(_ date: Date, now: Date = .now) -> String {
+    private static func day(_ date: Date, now: Date = .now) -> String {
         let calendar = Calendar.current
         if calendar.isDate(date, inSameDayAs: now) { return String(localized: "今天") }
         if calendar.isDateInTomorrow(date) { return String(localized: "明天") }

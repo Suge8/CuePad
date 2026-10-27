@@ -73,7 +73,7 @@ extension CueStore {
     }
   }
 
-  /// 改一条定时的下一次与怎么重复（任务气泡与"记得什么"里原地改）；忘掉了的不改。
+  /// 改一条定时的下一次与怎么重复（任务气泡与定时页里原地改）；忘掉了的不改。
   public func rescheduleCueLine(_ id: UUID, at: Date, repeats: CueRepeat?) throws {
     try write {
       guard let line = try find(CueMemoryLine.self, id), line.deletedAt == nil else { throw CueStoreError.notFound }

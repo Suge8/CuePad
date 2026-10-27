@@ -4,7 +4,7 @@ import CueText
 import SwiftUI
 
 extension DebugScene {
-    /// 演示记忆：长短不一（一句话到接近一条的上限）、钉住的与其他、你记的与 Cue 记的，时间从刚刚到几个月前。
+    /// 演示记忆：长短不一（一句话到接近一条的上限）、钉住的与其他、你说的与 Cue 记的，时间从刚刚到几个月前。
     static var demoMemory: [SeedCueLine] {
         let hour: TimeInterval = 3600, day = 24 * hour
         func ago(_ seconds: TimeInterval) -> Date { .now.addingTimeInterval(-seconds) }

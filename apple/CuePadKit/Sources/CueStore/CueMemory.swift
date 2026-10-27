@@ -82,7 +82,7 @@ public struct CueMemoryRecent: Equatable, Sendable {
   public var count: Int
 }
 
-/// 一条定时与它上一次到点（读那一轮的叫醒原因，`CueWake.schedule`）：任务气泡与"记得什么"的定时一组都读它。
+/// 一条定时与它上一次到点（读那一轮的叫醒原因，`CueWake.schedule`）：任务气泡与定时页都读它。
 public struct CueScheduled: Identifiable, Equatable, Sendable {
   public var line: CueMemoryLine
   /// 上一次到点：本该几点（`CueFire.due`）、几点叫醒的 Cue（那一轮开始的时刻）
