@@ -121,6 +121,8 @@ enum Schema {
     "\(agentLibraryFilesTable) \(modifiedIndex(.agentLibraryFiles))",
     // 78：附件按键存取，旧引用、记录与文件改到新写法（`keyedAttachments`）
     Upgrade(files: keyedAttachments),
+    // 79：项目按最近的进展排（`CueStore.projectOrder`），换成按进展时刻的索引；只是本机索引，不碰同步的字段
+    "DROP INDEX IF EXISTS cards_projectID_modifiedAt; \(progressIndexes)",
   ]
 
   /// 技能与规则里每份文件的正文：那台 Mac 每份一条、各端读（`LibraryFileText`）。

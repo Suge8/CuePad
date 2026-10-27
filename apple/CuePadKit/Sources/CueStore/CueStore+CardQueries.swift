@@ -125,7 +125,7 @@ extension CueStore {
   }
 
   private func taskCounts(scope: String, _ arguments: [any SQLBindable]) throws -> [UUID: TaskCounts] {
-    // GROUP BY 写成 +t.projectID：不然 SQLite 为省排序沿 cards_projectID_modifiedAt 逐张翻全部卡片，而不走 cards_todoAt 只翻任务
+    // GROUP BY 写成 +t.projectID：不然 SQLite 为省排序沿按项目的卡片索引逐张翻全部卡片，而不走 cards_todoAt 只翻任务
     let rows = try db.query(
       """
       SELECT t.projectID, SUM(t.completedAt IS NULL AND began), SUM(t.completedAt IS NULL AND NOT began), SUM(t.completedAt IS NOT NULL)
