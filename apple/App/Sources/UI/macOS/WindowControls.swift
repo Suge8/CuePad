@@ -28,6 +28,7 @@ struct TrailingSlots: View {
             SyncAlertSlot()
             PageActionSlot()
             LibraryHelpSlot()
+            CueListSlots()
             SearchSlot()
             PageMenuSlot()
         }
@@ -213,6 +214,27 @@ struct PageControl<Content: View>: View {
         let due = workspace.mountedPages.contains(page)
         ZStack { if mounted || due { content } }
             .onChange(of: due, initial: true) { if $1 { mounted = true } }
+    }
+}
+
+/// 工具栏右边、搜索之前：Cue 页的记忆与定时两颗圆钮，各打开自己的弹层（`CueMemoryPage`、`CueSchedulePage`）。规矩同 `ScopeSlot`。
+struct CueListSlots: View {
+    @Environment(Workspace.self) private var workspace
+
+    var body: some View {
+        let cue = workspace.cue
+        PageControl(.cue) {
+            HStack(spacing: Spacing.toolbarGap) {
+                Button("\(cue.name) 记得什么", icon: .memory) { cue.showsMemory = true }
+                    .help("\(cue.name) 记得什么")
+                Button("定时", icon: .schedule) { cue.showsSchedules = true }
+                    .help("定时")
+            }
+            .labelStyle(.iconOnly)
+            .buttonStyle(ControlButtonStyle(kind: .circular))
+        }
+        .padding(.leading, Spacing.toolbarGap)
+        .toolbarPresence(workspace.root == .cue)
     }
 }
 

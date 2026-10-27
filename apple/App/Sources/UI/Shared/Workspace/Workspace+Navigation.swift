@@ -80,12 +80,12 @@ extension Workspace {
         }
     }
 
-    /// 去 Cue 页一行旁注提到的那一处（醒来那几行、一轮的经过）：会话、任务（从点的地方长出气泡）或记忆。
+    /// 去 Cue 页一行旁注提到的那一处（醒来那几行、一轮的经过）：会话、任务（从点的地方长出气泡）或定时。
     func open(_ target: CueWakeHeader.Target) {
         switch target {
         case .session(let id, let sessionID): openSession(id, sessionID: sessionID)
         case .task(let id): openTask(id: id)
-        case .memory: cue.showsMemory = true
+        case .schedules: cue.showsSchedules = true
         }
     }
 

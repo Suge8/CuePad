@@ -42,7 +42,7 @@ enum DebugHooks {
         var cueNow: CueNow?
         /// 额度环一出现就展开明细（`-CuePadQuotaOpen YES`：手机进展页顶栏、Mac 侧栏）。
         var quotaOpen = false
-        /// 定时一出现就原地展开改（`-CuePadScheduleOpen YES`）：任务气泡里那一条、"记得什么"里"到点"的那一块。
+        /// 定时一出现就原地展开改（`-CuePadScheduleOpen YES`）：任务气泡里那一条、定时页新定时的几点。
         var scheduleOpen = false
         /// 规则的文件页一打开就是合并前标出会并进来的段（`-CuePadMergePreview YES`）。
         var mergePreview = false

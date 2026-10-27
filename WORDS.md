@@ -38,7 +38,7 @@
 - **技能与规则**（`AgentLibrary`）；**规则**是 AGENTS.md 那几份（全局规则、项目规则、Pi 的系统提示）；**文件页**是点开一份技能或规则、在 CuePad 里改它的那一页；避免：说明、指令、提示词、CLAUDE.md（界面上统称时）
 - 整理只有三个动作词（`LibraryTidy`）：**一键整理**（不用你选的那几件）、**去重**（同名的技能，按钮"只留这份"）、**合并**（内容不同的规则，按钮"合并进来"）；避免：修复、清理、同步（指整理时）
 - **发往 Mac**（手机上改技能与规则的纸飞机，`LibraryEdit`）：手机只攒着改，由那台 Mac 写进文件；避免：保存、上传
-- **定时**（记忆里有下一次的那几条，`CueMemoryLine.remindAt`，怎么重复 `CueRepeat`）：到点叫醒 Cue 照它做，一次、每天、每周几、每月几号；挂在任务上的到点开工那件任务（每次一个会话），任务完成、归档或进回收站就不再定时（恢复也不回来）。叫醒原因写"定时到点"，错过后补上只写一句事实（"9:00 那次错过，9:41 补上"）；动作"不再定时"；避免：提醒、计划任务、闹钟
+- **定时** vs **记忆**：同存一张表（有下一次的那几条，`CueMemoryLine.remindAt`），界面上是两处，各有一页、一个入口（`CueSchedulePage`、`CueMemoryPage`），定时不进记忆页；到点叫醒 Cue 照它做，一次的做完就没了。叫醒原因写"定时到点"，错过后补上只写一句事实（"9:00 那次错过，9:41 补上"）；动作"不再定时"；避免：提醒、计划任务、闹钟、到点（作钮名或标签）
 - **班次**（`CueKeeper` 起的一个大脑进程）vs **换新**（同一个班次里开新会话，用记忆视图与对话视图接上）：班次与 token 数只在代码、文档与 Mac 的"运行情况"里；换新这个词不上界面，上下文那一行（`CueContextLine`，只在 Mac 的"运行情况"）只写用到换新线的几成；避免：交接备忘（已退役）
 
 ## 英文界面
@@ -52,5 +52,5 @@
 - 进行中 In Progress（任务自己的状态，不与 Active 混）· 已完成 Done（列名）· 完成 Complete（按钮）· 待回复 To Reply · 该你了 Your Turn · 新消息 New Messages · 有新回复 New Reply · 输出中 Writing…
 - 经过的动作词：查看 View · 发给 Message · 新建 New · 修改 Edit · 开始 Start · 停止 Stop · 完成 Complete · 留给你 Left for You
 - 技能与规则 Skills & Rules · 规则 Rules（全局规则 Global Rules · 项目规则 Project Rules）· 一键整理 Tidy Up · 去重（按钮"只留这份"）Keep This One · 合并（按钮"合并进来"）Merge In · 发往 Mac Send to Mac
-- 定时 Schedule · 定时到点 Schedule Due · 不再定时 Stop Schedule · 到点（记一条时设定时的钮）Schedule
+- 定时 Schedule · 定时到点 Schedule Due · 不再定时 Stop Schedule
 - 只记下 Just Save · 对 Cue 说 Tell Cue · 运行情况 Status · 额度 Usage · 技能 Skill · 斜杠命令 Slash Command · 思考强度 Thinking · 灵动岛与锁屏 Live Activity

@@ -1,4 +1,5 @@
 import CueStore
+import Foundation
 
 /// Cue 的记忆视图（OptMem 的读法）：一直记着的全部列出（在系统提示里，`pinnedText`）；其余按序号铺成对齐的 2 的幂块，越新越细、总行数固定在预算内
 /// （按预算二分 alpha，见 `cover`），放在新会话的第一条输入里（`viewText`）。块有摘要用摘要，没有就拆成两半直到有摘要或单行；
@@ -6,13 +7,13 @@ import CueStore
 /// 参考 https://github.com/VictorTaelin/OptMem 的 `_cover` / `cover`。
 public struct CueMemoryView: Equatable, Sendable {
   public enum Entry: Equatable, Sendable {
-    case line(index: Int, text: String)
+    case line(index: Int, line: CueMemoryLine)
     case summary(lo: Int, hi: Int, text: String)
 
-    /// 视图里的写法：#序号 或 #a-b（b 含在内）
+    /// 视图里的写法：#序号 日期 [他] 正文（`CueMemoryLine.shown`），或 #a-b 摘要（b 含在内）
     var text: String {
       switch self {
-      case .line(let index, let text): "#\(index) \(text)"
+      case .line(let index, let line): line.shown(at: index)
       case .summary(let lo, let hi, let text): "#\(lo)-\(hi - 1) \(text)"
       }
     }
@@ -50,7 +51,7 @@ public struct CueMemoryView: Equatable, Sendable {
     func expand(_ lo: Int, _ hi: Int) -> [Entry] {
       if hi - lo == 1 {
         let line = lines[lo]
-        return line.deletedAt == nil && !line.pinned ? [.line(index: lo, text: line.text)] : []
+        return line.deletedAt == nil && !line.pinned ? [.line(index: lo, line: line)] : []
       }
       if let text = summaries[[lo, hi]] { return [.summary(lo: lo, hi: hi, text: text)] }
       return expand(lo, (lo + hi) / 2) + expand((lo + hi) / 2, hi)
@@ -60,7 +61,7 @@ public struct CueMemoryView: Equatable, Sendable {
     func pending(_ lo: Int, _ hi: Int) {
       guard summaries[[lo, hi]] == nil, expand(lo, hi).count > 1 else { return }
       if hi - lo <= Self.rawMax {
-        let raw = (lo..<hi).filter { lines[$0].deletedAt == nil && !lines[$0].pinned }.map { "#\($0) \(lines[$0].text)" }
+        let raw = (lo..<hi).filter { lines[$0].deletedAt == nil && !lines[$0].pinned }.map { lines[$0].shown(at: $0) }
         merges.append(Merge(lo: lo, hi: hi, source: raw.joined(separator: "\n")))
         return
       }
@@ -83,7 +84,7 @@ public struct CueMemoryView: Equatable, Sendable {
   /// 系统提示里的一直记着的（班次内不变）。
   public var pinnedText: String {
     guard !pinned.isEmpty else { return "还没有。" }
-    var out = pinned.map { "#\($0.index) \($0.line.text)" }
+    var out = pinned.map { $0.line.shown(at: $0.index) }
     if pinnedOverBudget { out.append("（一直记着的太多，超出了记忆的预算：过时的 forget，不必一直记着的 pin false）") }
     return out.joined(separator: "\n")
   }
@@ -91,7 +92,7 @@ public struct CueMemoryView: Equatable, Sendable {
   /// 新会话第一条输入里的 `<memory>` 块：其余的记忆，从早到晚、越早越粗；没有为 nil。
   public var viewText: String? {
     guard !entries.isEmpty else { return nil }
-    return (["<memory>", "你的记忆（一直记着的在系统提示里；其余从早到晚，越早越粗，#a-b 是摘要，用 memory zoom 展开）："] + entries.map(\.text) + ["</memory>"])
+    return (["<memory>", "你的记忆（一直记着的在系统提示里；其余从早到晚，越早越粗。一条是 #序号 记下的日期 [他] 正文，[他] 是他的原话；#a-b 是摘要，用 memory zoom 展开）："] + entries.map(\.text) + ["</memory>"])
       .joined(separator: "\n")
   }
 
@@ -112,7 +113,7 @@ public struct CueMemoryView: Equatable, Sendable {
 
   private func raw(_ index: Int) -> String {
     let line = lines[index]
-    return "#\(index) \(line.text)" + (line.deletedAt != nil ? "（已忘掉）" : line.pinned ? "（一直记着）" : "")
+    return line.shown(at: index) + (line.deletedAt != nil ? "（已忘掉）" : line.pinned ? "（一直记着）" : "")
   }
 
   /// 交给整理记忆的大脑的待合并的块（规则在它的系统提示里，`CuePrompt.dream`）：由小到大，大块里还要先合的那一半指向排在前面的块；没有为 nil。
@@ -155,5 +156,16 @@ public struct CueMemoryView: Equatable, Sendable {
       out.replaceSubrange(index...index, with: [(lo, mid), (mid, hi)])
     }
     return out
+  }
+}
+
+extension CueMemoryLine {
+  /// Cue 看到的一条记忆（记忆视图、一直记着、zoom、recall 与待合并的原文只有这一种写法）：#序号 日期 [他] 正文。
+  /// 日期是记下的那天（本机时区，今年 10-21、往年 2025-10-21），[他] 只在他的原话（`source` 是 `you`）时有；摘要行不带。
+  func shown(at index: Int, now: Date = .now) -> String {
+    let calendar = Calendar(identifier: .gregorian)
+    let sameYear = calendar.component(.year, from: createdAt) == calendar.component(.year, from: now)
+    let day = createdAt.formatted(sameYear ? CueEnvelope.monthDay : CueEnvelope.fullDay)
+    return "#\(index) \(day) " + (source == .known(.you) ? "[他] " : "") + text
   }
 }

@@ -82,12 +82,16 @@ extension CueStore {
   }
 
   /// 这几条定时叫醒过 Cue 了（`lines` 是到点时读出的）：此刻还是那一次的（`remindAt` 没在别处改过）才往下走——重复的按库里此刻的规则
-  /// 推到 `now` 之后的下一次（中间错过的合成这一次），一次性的清掉下一次；叫醒期间别处改过、忘掉的照改过的留着。
+  /// 推到 `now` 之后的下一次（中间错过的合成这一次），一次性的忘掉（到点就做完了，不留成普通记忆）；叫醒期间别处改过、忘掉的照改过的留着。
   public func fireCueSchedules(_ lines: [CueMemoryLine], at now: Date = .now) throws {
     try write {
       for fired in lines {
         guard let line = try find(CueMemoryLine.self, fired.id), line.deletedAt == nil, line.remindAt != nil, line.remindAt == fired.remindAt else { continue }
-        try db.run("UPDATE cueLines SET remindAt = ?, modifiedAt = ? WHERE id = ?", [line.repeats?.next(after: now), Date.stamp, line.id])
+        if let repeats = line.repeats {
+          try db.run("UPDATE cueLines SET remindAt = ?, modifiedAt = ? WHERE id = ?", [repeats.next(after: now), Date.stamp, line.id])
+        } else {
+          try db.run("UPDATE cueLines SET deletedAt = ?1, modifiedAt = ?1 WHERE id = ?2", [Date.stamp, line.id])
+        }
       }
     }
   }
@@ -154,12 +158,12 @@ extension CueStore {
     return CueMemory(lines: lines, summaries: valid.map(\.summary))
   }
 
-  /// 没忘掉的最新 `limit` 条、没忘掉的总数与下一个定时（`CueMemoryRecent`）：几行加一条计数。
+  /// 没忘掉、不是定时的最新 `limit` 条与它们的总数（`CueMemoryRecent`）：几行加一条计数。
   public func recentCueMemory(limit: Int) throws -> CueMemoryRecent {
-    let lines = try select(CueMemoryLine.self, where: "deletedAt IS NULL", orderBy: "createdAt DESC, id DESC", limit: limit)
-    let count = try db.first("SELECT count(*) FROM cueLines WHERE deletedAt IS NULL") { Int($0.int(0)) } ?? 0
-    let next = try select(CueMemoryLine.self, where: "remindAt IS NOT NULL AND deletedAt IS NULL", orderBy: "remindAt, id", limit: 1).first
-    return CueMemoryRecent(lines: lines, count: count, next: next)
+    let kept = "deletedAt IS NULL AND remindAt IS NULL"
+    let lines = try select(CueMemoryLine.self, where: kept, orderBy: "createdAt DESC, id DESC", limit: limit)
+    let count = try db.first("SELECT count(*) FROM cueLines WHERE \(kept)") { Int($0.int(0)) } ?? 0
+    return CueMemoryRecent(lines: lines, count: count)
   }
 
   /// 记忆的版本读数（`CueMemoryVersion`）：一条聚合，不读行的内容。

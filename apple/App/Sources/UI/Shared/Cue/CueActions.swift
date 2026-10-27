@@ -42,13 +42,13 @@ extension Workspace {
 
     // MARK: 记忆
 
-    /// 记一条；带 `schedule` 是一条定时（"记得什么"里点了"到点"）。
+    /// 记一条（算你说的）；带 `schedule` 是一条定时（定时页的新定时）。
     func noteCueLine(_ text: String, schedule: ScheduleDraft? = nil) async throws {
         let line = try await services.store.noteCueLine(text, source: .you, remindAt: schedule?.next(), repeats: schedule?.repeats).line
         await services.upload(line.id)
     }
 
-    /// 改一条定时（任务气泡与"记得什么"里原地改）。
+    /// 改一条定时（任务气泡与定时页里原地改）。
     func rescheduleCueLine(_ id: UUID, _ draft: ScheduleDraft) {
         let at = draft.next(), repeats = draft.repeats
         writeCueLine(id) { try await $0.rescheduleCueLine(id, at: at, repeats: repeats) }

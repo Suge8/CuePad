@@ -615,6 +615,22 @@
         }
       }
     },
+    "%@ 自己记下的事和你说过的话。一直记着的每次都会看，其余的越早越概括，用到时再翻。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "What %@ noted and what you've told it. Always Remember items are read every time; older ones are summarized and looked up when needed."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 自己记下的事和你说过的话。一直记着的每次都会看，其余的越早越概括，用到时再翻。"
+          }
+        }
+      }
+    },
     "%@ 自带的 %lld 个" : {
       "localizations" : {
         "en" : {
@@ -6011,22 +6027,6 @@
         }
       }
     },
-    "你记的" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Added by you"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "你记的"
-          }
-        }
-      }
-    },
     "你说一件事，%@ 交给这台 Mac 上的 Agent 去做" : {
       "localizations" : {
         "en" : {
@@ -6039,6 +6039,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "你说一件事，%@ 交给这台 Mac 上的 Agent 去做"
+          }
+        }
+      }
+    },
+    "你说的" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your words"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你说的"
           }
         }
       }
@@ -7523,18 +7539,18 @@
         }
       }
     },
-    "到点" : {
+    "到时候做什么" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Schedule"
+            "value" : "What to do"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "到点"
+            "value" : "到时候做什么"
           }
         }
       }
@@ -7551,6 +7567,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "到点不再叫醒 %@，找不回来"
+          }
+        }
+      }
+    },
+    "到点时，%@ 在「%@」上照这句话去做；挂在任务上的，到点开工那件任务。也可以直接跟 %@ 说，比如「每天早上 8 点汇总进展」。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "At the set time, %@ on “%@” does what the line says; one attached to a task starts that task. You can also just tell %@, like “Sum up progress every morning at 8.”"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "到点时，%1$@ 在「%2$@」上照这句话去做；挂在任务上的，到点开工那件任务。也可以直接跟 %3$@ 说，比如「每天早上 8 点汇总进展」。"
           }
         }
       }
@@ -11827,6 +11859,22 @@
         }
       }
     },
+    "开工「%@」" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Starts “%@”"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "开工「%@」"
+          }
+        }
+      }
+    },
     "开工时建好" : {
       "localizations" : {
         "en" : {
@@ -14059,6 +14107,22 @@
         }
       }
     },
+    "新定时" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New schedule"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "新定时"
+          }
+        }
+      }
+    },
     "新建" : {
       "localizations" : {
         "en" : {
@@ -14295,6 +14359,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "时间"
+          }
+        }
+      }
+    },
+    "明天" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tomorrow"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "明天"
           }
         }
       }
@@ -15947,6 +16027,22 @@
         }
       }
     },
+    "每%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Every %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "每%@"
+          }
+        }
+      }
+    },
     "每%@ %@" : {
       "localizations" : {
         "en" : {
@@ -16023,6 +16119,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "每月"
+          }
+        }
+      }
+    },
+    "每月 %lld 号" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monthly on day %lld"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "每月 %lld 号"
           }
         }
       }
@@ -19479,22 +19591,6 @@
         }
       }
     },
-    "记下的这一条到点叫醒 %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Wakes %@ at the scheduled time"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "记下的这一条到点叫醒 %@"
-          }
-        }
-      }
-    },
     "记下（⌘↩）" : {
       "localizations" : {
         "en" : {
@@ -19523,22 +19619,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "记到 %@"
-          }
-        }
-      }
-    },
-    "记得什么" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Memory"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "记得什么"
           }
         }
       }
@@ -20051,6 +20131,22 @@
         }
       }
     },
+    "跟 %@ 说「每天早上 8 点汇总进展」，它就会到点去做" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tell %@ “Sum up progress every morning at 8” and it'll do it on time"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "跟 %@ 说「每天早上 8 点汇总进展」，它就会到点去做"
+          }
+        }
+      }
+    },
     "跟随系统" : {
       "localizations" : {
         "en" : {
@@ -20287,6 +20383,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "运行情况"
+          }
+        }
+      }
+    },
+    "运行情况、设置" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Status, settings"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "运行情况、设置"
           }
         }
       }
@@ -20615,6 +20727,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "还没有 Mac 打开过 CuePad，开不了会话：先在 Mac 上打开它"
+          }
+        }
+      }
+    },
+    "还没有定时" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No Schedules Yet"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "还没有定时"
           }
         }
       }
@@ -21911,6 +22039,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "选中的部分没有文字"
+          }
+        }
+      }
+    },
+    "选几点" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose a time"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选几点"
           }
         }
       }

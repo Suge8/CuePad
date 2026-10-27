@@ -125,6 +125,7 @@ struct CueEvalTests {
                     return asking.action.contains(/迁移|表/) && asking.rule?.contains("数据库") == true
                 }),
                 Check(.tool, "text 不写分类名（rule）", !eval.calls("tell").contains { ($0.args["text"] as? String)?.contains("rule") == true }),
+                eval.notesArePlain(),
             ]
         }
     }

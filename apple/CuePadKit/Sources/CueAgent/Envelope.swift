@@ -238,4 +238,12 @@ public enum CueEnvelope {
       format: "\(hour: .twoDigits(clock: .twentyFourHour, hourCycle: .zeroBased)):\(minute: .twoDigits)",
       timeZone: .current, calendar: Calendar(identifier: .gregorian))
   }
+  /// 月日：10-21
+  static var monthDay: Date.VerbatimFormatStyle {
+    .init(format: "\(month: .twoDigits)-\(day: .twoDigits)", timeZone: .current, calendar: Calendar(identifier: .gregorian))
+  }
+  /// 年月日：2025-10-21
+  static var fullDay: Date.VerbatimFormatStyle {
+    .init(format: "\(year: .defaultDigits)-\(month: .twoDigits)-\(day: .twoDigits)", timeZone: .current, calendar: Calendar(identifier: .gregorian))
+  }
 }
