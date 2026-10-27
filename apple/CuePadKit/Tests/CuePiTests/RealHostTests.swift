@@ -297,7 +297,7 @@ struct RealHostTests {
         let host = host(pi, bridge)
         host.start()
         defer { stopHostedProcesses(bridge) }
-        try installed.install(legacyInUse: false)  // 新 App 装好了新扩展，请连着的会话换上（App 里经 `AgentIntegrations.installed`）
+        try await installed.install(command: "")  // 新 App 装好了新扩展，请连着的会话换上（App 里经 `AgentIntegrations.installed`）
         bridge.offerExtensionUpgrade()
 
         try await eventually("同一个进程换上新扩展、重新连上") {

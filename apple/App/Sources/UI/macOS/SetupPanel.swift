@@ -143,7 +143,7 @@ struct SetupPanel: View {
                     .buttonStyle(ControlButtonStyle(kind: .secondary))
                     .accessibilityLabel("\(prerequisite.name) 官网")
             case .logIn:
-                action(kind.loginArguments == nil ? "打开终端" : "登录", kind) { await workspace.logIn(kind) }
+                action(kind.facts.loginArguments == nil ? "打开终端" : "登录", kind) { await workspace.logIn(kind) }
             case .loggingIn:
                 action("重新登录", kind) { await workspace.logIn(kind) }
             case .checking, .installing, .problem:
@@ -169,7 +169,7 @@ struct SetupPanel: View {
         case .needs(let prerequisite): return (.notice, Dotted(AgentLine.needs(prerequisite)), false)
         case .installing: return (.calm, Dotted(AgentLine.installing), true)
         case .logIn:
-            let how = kind.loginArguments == nil ? String(localized: "在 \(kind.name) 里输入 /login") : String(localized: "在浏览器里登录")
+            let how = kind.facts.loginArguments == nil ? String(localized: "在 \(kind.name) 里输入 /login") : String(localized: "在浏览器里登录")
             return (.calm, Dotted(how), false)
         case .loggingIn: return (.calm, Dotted(String(localized: "在浏览器里登录完回到这里")), true)
         case .problem(let why): return (.notice, Dotted(why), false)

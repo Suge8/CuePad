@@ -2,17 +2,6 @@
 import CueStore
 import Foundation
 
-extension AgentKind {
-    public var command: String {
-        switch self {
-        case .pi: "pi"
-        case .claudeCode: "claude"
-        case .codex: "codex"
-        case .opencode: "opencode"
-        }
-    }
-}
-
 /// 在哪里找 Agent 的可执行文件、给 CuePad 起的子进程什么环境：唯一的一处。挑哪一个只由检测定（`AgentIntegration.status(of:)`，
 /// 结果是 `AgentStatus.executable`），各家的接入、Cue 的大脑、问模型都用检测挑中的那个，不在这里另挑。
 /// GUI 应用的 PATH 很短，所以除了 PATH 还查用户登录 shell 的 PATH 与各家安装脚本的默认位置。

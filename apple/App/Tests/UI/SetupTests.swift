@@ -65,7 +65,7 @@ struct SetupTests {
         #expect(workspace.showsSetup)
         var now = try await panel(workspace)
         #expect(now.cue == .needsAgent)
-        let node = try #require(AgentKind.pi.installPrerequisite)
+        let node = try #require(AgentKind.pi.facts.installPrerequisite)
         let codex = SetupRow(kind: .codex, step: .install(nil)), pi = SetupRow(kind: .pi, step: .needs(node))
         #expect(now.rows == [SetupRow(kind: .claudeCode, step: .install(nil)), codex, pi])  // 三家平行列出，推荐的排第一
 
@@ -99,7 +99,7 @@ struct SetupTests {
     }
 
     @Test func Pi缺够新的NodeJS_先给官网_装上了才给安装() async throws {
-        let node = try #require(AgentKind.pi.installPrerequisite)
+        let node = try #require(AgentKind.pi.facts.installPrerequisite)
         let workspace = try await launch()
         func pi() async throws -> SetupStep? { try await panel(workspace).rows.first { $0.kind == .pi }?.step }
         #expect(try await pi() == .needs(node))

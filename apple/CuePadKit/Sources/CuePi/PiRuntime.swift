@@ -55,6 +55,9 @@ public final class PiRuntime: AgentRuntime {
     /// 托管的 Pi 会话不随 CuePad 退出（新会话组、空闲由扩展自退），没有要关的。
     public func stop() -> @concurrent @Sendable () async -> Void { {} }
 
+    /// 新装或升级了扩展：请在跑的会话换上新扩展（`PiBridge.offerExtensionUpgrade`）。
+    public func integrationInstalled() { bridge.offerExtensionUpgrade() }
+
     /// 认领后的托管进程脱离 App；扩展协议号随更新变了也一样，它歇下时换上新扩展、以新协议连回。
     public var hostedSessionsOutliveApp: Bool { true }
 

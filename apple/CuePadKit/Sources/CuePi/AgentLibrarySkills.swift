@@ -42,7 +42,7 @@ struct LibrarySkillScan {
                     oldWalk.found[index].moveTo = root.appending(path: relative, directoryHint: .isDirectory)
                 }
                 strays += oldWalk.found
-                if let managed = old.agent.selfManagedDirectory, scope == .global {
+                if let managed = old.agent.facts.selfManagedSkills, scope == .global {
                     let count = managedCount(in: old.directory.appending(path: managed, directoryHint: .isDirectory))
                     if count > 0, !selfManaged.contains(where: { $0.agent == old.agent }) { selfManaged.append(SelfManagedSkills(agent: old.agent, count: count)) }
                 }
@@ -133,7 +133,7 @@ struct LibrarySkillScan {
 
     /// 各家自管、不碰的目录（只在它自己的全局技能目录下一层）。
     private static func isManaged(_ name: String, in root: URL) -> Bool {
-        AgentKind.allCases.contains { $0.selfManagedDirectory == name && root.lastPathComponent == "skills" }
+        AgentKind.allCases.contains { $0.facts.selfManagedSkills == name && root.lastPathComponent == "skills" }
     }
 
     /// 各家自管目录里有几个技能：有 SKILL.md 的目录算一个，没有的往下找（Claude Code 的 `synced` 下先按账号分一层）。
@@ -174,17 +174,6 @@ struct LibrarySkillScan {
             groups[copy.entry.scope, default: []].append(copy)
         }
         return order.compactMap { groups[$0].flatMap { $0.count > 1 ? $0 : nil } }
-    }
-}
-
-extension AgentKind {
-    /// 这家自己管、CuePad 不碰的技能目录（在它的全局技能目录下）。
-    var selfManagedDirectory: String? {
-        switch self {
-        case .claudeCode: "synced"
-        case .codex: ".system"
-        case .pi, .opencode: nil
-        }
     }
 }
 
