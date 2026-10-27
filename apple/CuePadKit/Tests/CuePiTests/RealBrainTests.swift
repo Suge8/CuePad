@@ -16,7 +16,8 @@ private let liveRuntimes = runtimes.filter { RealAgents.mode(of: $0) != .replay 
 private let cheapModels: [AgentKind: String] = [
     .pi: "openai-codex/gpt-5.6-luna", .codex: "gpt-5.6-luna", .claudeCode: "haiku", .opencode: "opencode/deepseek-v4.1-flash-free",
 ]
-/// 就地换到的模型：Pi 的上下文窗口与上面的不同，换没换看得出来（Codex 里两个窗口一样，Claude Code 报的是用过的模型里最大的窗口）
+/// 就地换到的模型：Pi 的上下文窗口与上面的不同，换没换看得出来（Codex 里两个窗口一样，Claude Code 报的是用过的模型里最大的窗口）。
+/// 用 `CUEPAD_BRAIN_OTHER_MODEL_<家>` 换（OpenCode 的免费模型限流时连同 `CUEPAD_BRAIN_MODEL_<家>` 换成自己提供方的，密钥只经环境给）
 private let otherModels: [AgentKind: String] = [
     .pi: "openai-codex/gpt-6-luna", .codex: "gpt-6-luna", .claudeCode: "sonnet", .opencode: AgentKind.opencode.modelRef(openCodeTestModel),
 ]
@@ -176,7 +177,8 @@ struct RealBrainTests {
         case .codex, .claudeCode: "no-such-model"
         }
         await #expect(throws: (any Error).self) { try await rig.brain.configure(model: unknown, effort: nil) }
-        try await rig.brain.configure(model: try #require(otherModels[runtime]), effort: .low)
+        let other = environment["CUEPAD_BRAIN_OTHER_MODEL_\(runtime.rawValue.uppercased())"] ?? otherModels[runtime]
+        try await rig.brain.configure(model: try #require(other), effort: .low)
         try await rig.brain.send("What word did I ask you to remember? Reply with only the word.")
         try await rig.finished(2)
 
