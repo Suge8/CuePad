@@ -3,7 +3,7 @@ import SwiftUI
 
 /// 手机竖版看板的一行（`BoardColumn` 的 `row`，`PhoneBoard` 四行竖着排）：Mac 看板的一列转 90°——一行横贯全屏，
 /// 行头（`BoardLaneMark`、竖排的名字、数）是一块竖窄的写字玻璃，贴着屏幕左边钉在行里、竖直居中，卡在它右边横着排，放不下就在这一行里横划、
-/// 按卡停（`viewAligned`）；卡滑动时从玻璃下面过，不遮罩、不在它右沿裁掉（docs/ui.md 沉浸式的栏）。玻璃贴屏边、不留缝：留缝时停着的上一张卡的尾巴在缝里露出碎字。
+/// 按卡停（`viewAligned`）；卡滑动时从玻璃下面过，不遮罩、不在它右沿裁掉（docs/layout.md 沉浸式的栏）。玻璃贴屏边、不留缝：留缝时停着的上一张卡的尾巴在缝里露出碎字。
 /// 行分轻重（`TaskBoard.Column`，`BoardWeight.swift`）：
 /// - 推进中、等你：理想高叠三排最小格（`rowTiers`），行头玻璃随行高拉长、上下各让出 `spineInset`，记号、名字与放大的数在里面竖直居中；
 /// - 待办、已完成：一排矮卡（`lightHeight`），行头与卡同高，记号与数并排在上、名字竖排在下，字小一档。
@@ -63,7 +63,7 @@ struct BoardRowLane<Above: View, Content: View>: View {
                 }
                 .scrollTargetLayout()
             }
-            // 边用 safeAreaPadding（docs/ui.md 布局约束）；左边让出行头，滑动时卡从它下面过
+            // 边用 safeAreaPadding（docs/layout.md）；左边让出行头，滑动时卡从它下面过
             .safeAreaPadding(.leading, BoardRowMetrics.lead)
             .safeAreaPadding(.trailing, BoardRowMetrics.margin)
             .scrollTargetBehavior(.viewAligned)

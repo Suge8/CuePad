@@ -134,7 +134,7 @@ final class PreviewCover: UIView {
 }
 
 extension UIScrollView {
-    /// 全屏页里会滚的页：铺到两条栏后面，内容边让出栏（`previewInsets`），栏后面不垫系统的滚动边缘效果（docs/ui.md「沉浸式的栏」）。
+    /// 全屏页里会滚的页：铺到两条栏后面，内容边让出栏（`previewInsets`），栏后面不垫系统的滚动边缘效果（docs/layout.md「沉浸式的栏」）。
     func previewInsets(_ insets: EdgeInsets) {
         let edges = UIEdgeInsets(top: insets.top, left: insets.leading, bottom: insets.bottom, right: insets.trailing)
         topEdgeEffect.isHidden = true
