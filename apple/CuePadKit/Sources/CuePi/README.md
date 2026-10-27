@@ -1,6 +1,6 @@
 # CuePi —— Agent 桥（macOS）
 
-Pi、Claude Code、Codex、OpenCode 的会话都登记在同一个桥上（`PiBridge`），各家怎么发现会话、怎么说话在 `AgentRuntime` 的四个实现里。规则只写在类型的头注释里；这里只记 Pi 桥扩展的线上约定与已知边界。
+Pi、Claude Code、Codex、OpenCode 的会话都登记在同一个桥上（`PiBridge`），各家怎么发现会话、怎么说话在 `AgentRuntime` 的四个实现里，与别家不同的事实（命令、目录、安装、上报通道、探测、技能位置、大脑用哪种会话）在各自 `+Facts` 文件的 `AgentFacts` 里；CuePad 掌握全部输入输出的会话（Claude Code、Codex 的托管会话与 Cue 的大脑）是 `HostedSession`。规则只写在类型的头注释里；这里只记 Pi 桥扩展的线上约定与已知边界。
 
 ## 协议
 

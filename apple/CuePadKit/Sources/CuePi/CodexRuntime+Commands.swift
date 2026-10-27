@@ -11,19 +11,20 @@ extension CodexRuntime {
 
     /// 以这句开新一轮：在跑就先停下这一轮。`turn/interrupt` 等这一轮真的中止了才回（实测 0.162.1：回应与 `turn/completed` 的
     /// `interrupted` 同时到），所以紧接着的 `turn/start` 开的是新一轮——它碰上还在跑的一轮会变成插话（压缩那一轮则拒收）。
-    /// 被停下的那一轮不报歇下（`restarting`）：这句开出新一轮就从此刻算起，没开成才歇下。
+    /// 被停下的那一轮不报歇下（`restarting`）：这句开出新一轮就从此刻算起（托管的从驱动报的开始算，见 `event`），没开成才歇下。
     func deliver(_ input: [JSONValue], clientID: String, to session: Tracked) async throws {
         session.restarting = .stopping
         defer { session.restarting = nil }
         do {
             try await interrupt(session)
-            try await call(session, "turn/start", ["threadId": .string(session.threadID), "clientUserMessageId": .string(clientID), "input": .array(input)])
+            try await turnStart(session, input, options: ["clientUserMessageId": .string(clientID)])
         } catch {
             if session.restarting == .stopped { session.facts.endTurn() }
             publish(session)
             throw error
         }
-        guard session.restarting == .stopped else { return }
+        // 托管的这一轮由驱动报开始（`event`），这里只补终端会话的
+        guard session.restarting == .stopped, hosted[session.pid] == nil else { return }
         startTurn(session, at: .now)
         publish(session)
     }
@@ -75,11 +76,12 @@ extension CodexRuntime {
         try await interrupt(session)
     }
 
-    /// 停下 Codex 此刻在跑的那一轮（含压缩那一轮）；歇着什么都不做。在不在跑、是哪一轮只问 Codex（最近一轮），不另记这一轮的 id：
+    /// 停下 Codex 此刻在跑的那一轮（含压缩那一轮）；歇着什么都不做。托管的问它的驱动；终端的只问 Codex（最近一轮），不另记这一轮的 id：
     /// 钩子推出的忙闲只给界面看，不拿来判断要不要停。
     private func interrupt(_ session: Tracked) async throws {
         let thread = JSONValue.string(session.threadID)
         do {
+            if let driver = hosted[session.pid] { return try await driver.interrupt() }
             let rpc = try await control(session)
             let latest = try await Self.lastTurn(session.threadID, on: rpc)
             guard latest?["status"]?.string == "inProgress", let turn = latest?["id"] else { return }
@@ -115,8 +117,19 @@ extension CodexRuntime {
 
     /// 托管的会话关掉进程（app-server 读到 EOF 收尾退出）；终端里的会话 Codex 没有让终端退出的接口（能力表里没有，桥先拒绝）。
     public func end(_ id: PiSession.ID) throws {
-        guard let session = tracked[id], let rpc = hosted[session.pid] else { throw PiBridgeError.unsupported }
+        guard let session = tracked[id], let rpc = hosted[session.pid]?.rpc else { throw PiBridgeError.unsupported }
         rpc.close()
+    }
+
+    /// 开一轮：托管的经它的驱动（一轮从回应或通知起算），终端的经常驻服务（一轮的起止看钩子）。
+    func turnStart(_ session: Tracked, _ input: [JSONValue], options: [String: JSONValue] = [:]) async throws {
+        do {
+            if let driver = hosted[session.pid] { return try await driver.startTurn(input, options: options) }
+            let params = options.merging(["threadId": .string(session.threadID), "input": .array(input)]) { $1 }
+            try await control(session).call("turn/start", .object(params))
+        } catch CodexRPCError.server(_, let message) {
+            throw PiBridgeError.rejected("failed: \(message)")
+        }
     }
 
     func call(_ session: Tracked, _ method: String, _ params: JSONValue) async throws {

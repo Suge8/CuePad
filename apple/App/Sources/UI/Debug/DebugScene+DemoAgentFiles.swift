@@ -1,4 +1,5 @@
 #if DEBUG && os(macOS)
+import CuePi
 import CueStore
 import Foundation
 
@@ -11,8 +12,8 @@ extension DebugScene {
     /// `-CuePadAgentLibrary clean` 时都已收好。
     static func seedAgentFiles() {
         let environment = ProcessInfo.processInfo.environment
-        guard let sharedPath = environment["CUEPAD_AGENTS_DIR"], let claudePath = environment["CLAUDE_CONFIG_DIR"],
-              let piPath = environment["PI_CODING_AGENT_DIR"], let codexPath = environment["CODEX_HOME"],
+        guard let sharedPath = environment["CUEPAD_AGENTS_DIR"], let claudePath = environment[AgentKind.claudeCode.facts.homeVariable],
+              let piPath = environment[AgentKind.pi.facts.homeVariable], let codexPath = environment[AgentKind.codex.facts.homeVariable],
               let library = environment[LibraryLocation.environmentKey], sharedPath.hasPrefix(library + "/"),
               DemoLibrary.demoHome.hasPrefix(library + "/")
         else { return }
