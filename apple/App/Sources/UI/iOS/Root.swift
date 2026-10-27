@@ -3,7 +3,7 @@ import CueStore
 import SwiftUI
 
 /// iOS/iPadOS 一个窗口的根视图（建出本窗口的 `Workspace`）：宽屏是分栏（`SplitRoot`），窄屏（iPhone 与窄窗口 iPad）
-/// 是标签栏、每个 tab 一个导航栈（`DockRoot`）。两种容器读写同一份去处（`Workspace.root`、`stacks`），按尺寸类换 `Workspace.layout`。
+/// 是底部那一排、每个 tab 一个导航栈（`DockRoot`）。两种容器读写同一份去处（`Workspace.root`、`stacks`），按尺寸类换 `Workspace.layout`。
 struct IOSRoot: View {
     let services: AppServices
     /// 本窗口的工作区：出现时建（`onAppear` 在第一帧之前做完，第一帧照样是建好的样子），不在 init 里建：init 在上一层的 body 里跑，
@@ -25,7 +25,7 @@ struct IOSRoot: View {
         @Bindable var workspace = workspace
         return CatalogGate {
             Group {
-                if sizeClass == .regular { SplitRoot() } else { DockRoot() }
+                if sizeClass == .regular { SplitRoot() } else { DockRoot(workspace: workspace) }
             }
             .background { RootShortcuts() }
             // 会写资料库的面板挂在门内：读不出资料库时不弹出，读到后再弹；新会话与发给 Agent 都是浮在键盘上方的输入框

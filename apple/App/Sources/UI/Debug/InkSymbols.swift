@@ -5,9 +5,6 @@
 enum InkSymbols {
     static let names = [
         "cue.mascot",
-        "cue.mascot.badge",
-        "cue.mascot.status",
-        "cue.mascot.badge.status",
         "cue.idea",
         "cue.task",
         "cue.session",
@@ -62,7 +59,6 @@ enum InkSymbols {
         "cue.link",
         "cue.unlink",
         "cue.folder",
-        "cue.folder.badge",
         "cue.folder.add",
         "cue.folder.remove",
         "cue.books",

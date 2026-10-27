@@ -19,6 +19,8 @@ struct CueComposer: View {
     /// 接"对 Cue 说"的焦点请求（`Workspace.cueFocusPending`）：Cue 页的输入框接，iPad 右侧面板里的不接。
     var takesFocusRequests = false
     var sent: () -> Void = {}
+    /// 焦点进出时告诉外面（iPhone Cue 页底部的"⋯"随它让开）。
+    var focusChanged: (Bool) -> Void = { _ in }
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -50,9 +52,10 @@ struct CueComposer: View {
                 focused = true
                 workspace.cueFocusPending = false
             }
+            .onChange(of: focused) { focusChanged(focused) }
             #if os(iOS)
             // 推入别的页就交出焦点、收起键盘，返回时不还：只由系统收起的话 SwiftUI 记着它，返回时在推出转场里把键盘弹回来，
-            // 这一页的托管控制器不认转场里到的键盘，输入框与拍板卡就压在键盘底下（实测）。切到别的 tab 也一样
+            // 这一页的托管控制器不认转场里到的键盘，输入框与拍板卡就压在键盘底下（实测）。焦点经上面那条报给底部那一排
             .onChange(of: workspace.top) { _, top in
                 if style == .page, takesFocusRequests, top != .cue { focused = false }
             }
