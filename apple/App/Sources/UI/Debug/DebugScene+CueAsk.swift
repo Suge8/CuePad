@@ -68,10 +68,10 @@ extension DebugScene {
                         .frame(maxWidth: .infinity).frame(height: 56).background(indigo, in: .capsule)
                     Text("以后「圆桌」里推送代码不用问", tableName: "Demo").font(.system(size: 13, weight: .medium)).frame(maxWidth: .infinity)
                 }
-                .padding(18).background(Color(red: 0.98, green: 0.88, blue: 0.55), in: .rect(cornerRadius: 22))
+                .padding(18).background(Color(red: 0.98, green: 0.88, blue: 0.55), in: .rect(cornerRadius: Radius.sheet))
             case .thread:
                 VStack(alignment: .trailing, spacing: 10) {
-                    question.padding(14).background(Color(white: 0.9), in: .rect(cornerRadius: 18)).frame(maxWidth: .infinity, alignment: .leading)
+                    question.padding(14).background(Color(white: 0.9), in: .rect(cornerRadius: Radius.card)).frame(maxWidth: .infinity, alignment: .leading)
                     ForEach([String(localized: "以后不用问", table: "Demo"), CueAsk.once], id: \.self) { choice in
                         Text(choice).font(.system(size: 16, weight: .semibold)).foregroundStyle(.white)
                             .padding(.horizontal, 22).padding(.vertical, 14).background(Color(red: 0.2, green: 0.55, blue: 0.95), in: .capsule)
@@ -91,7 +91,7 @@ extension DebugScene {
                     Text(CueAsk.once).font(.system(size: 16, weight: .semibold)).foregroundStyle(.black)
                         .frame(maxWidth: .infinity).frame(height: 48).background(.white, in: .capsule)
                 }
-                .padding(18).background(Color(white: 0.15), in: .rect(cornerRadius: 26))
+                .padding(18).background(Color(white: 0.15), in: .rect(cornerRadius: Radius.sheet))
             }
         }
         let view = VStack(alignment: .leading, spacing: 12) {
@@ -116,7 +116,7 @@ extension DebugScene {
                     Text(tag).font(.system(size: 10)).foregroundStyle(.indigo)
                     Text(line).font(.system(size: 13))
                 }
-                .padding(10).frame(maxWidth: .infinity, alignment: .leading).background(.white, in: .rect(cornerRadius: 10))
+                .padding(10).frame(maxWidth: .infinity, alignment: .leading).background(.white, in: .rect(cornerRadius: Radius.block))
             }
             Spacer()
         }
