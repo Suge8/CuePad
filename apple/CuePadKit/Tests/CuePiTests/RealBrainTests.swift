@@ -229,7 +229,7 @@ struct RealBrainTests {
 /// 结束后进程连同它起的子进程（MCP 服务等）都退出、各家的历史里没有这次对话：断言的是真进程树与各家真实的历史目录，回放不出来，
 /// 只在录制或直连时连真运行时跑。
 @MainActor
-@Suite(.enabled(if: !liveRuntimes.isEmpty, "只连真运行时跑（看真进程树与各家的历史）：CUEPAD_AGENT_TESTS 列出 pi、codex、claude、grok，或本机有 opencode v2 时开启"), .serialized, .timeLimit(.minutes(5)))
+@Suite(.enabled(if: !liveRuntimes.isEmpty, "只连真运行时跑（看真进程树与各家的历史）：CUEPAD_AGENT_TESTS 列出 pi、codex、claude、grok、dsh，或本机有 opencode v2 时开启"), .serialized, .timeLimit(.minutes(5)))
 struct RealBrainProcessTests {
     @Test(arguments: liveRuntimes) func stoppingLeavesNoProcessesOrHistory(_ runtime: AgentKind) async throws {
         let rig = try await RealBrainTests.Rig(runtime)

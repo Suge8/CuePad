@@ -11,6 +11,9 @@
 // 标准没有的，CuePad 的扩展方法（`ACPDialect`）：
 //   `_cuepad/steer`  {sessionId, text, images?[{mimeType, data}], deliveryId?}：插进在跑的这一轮，下一步就读到；歇着时回错误码 -32001，该走 session/prompt
 //   `_cuepad/rename` {sessionId, name}
+// 插件发给 CuePad 的请求（CuePad 回了才接着做）：
+//   `_cuepad/ask_user_question` {sessionId, questions}：`ask_user_question` 工具要你回答（dsh 的 `AskUserQuestionItem`，托管会话才插这个工具）；
+//   回 {answers} 交给它，回 {cancelled: true}（这一轮停下、没答就作废）这次提问失败。dsh 自己收回（停下这一轮）时不再等回应
 // CuePad 送进去的话带投送请求 id（`session/prompt` 的 `_meta.cuepadDelivery`）：这句话进收件箱时往会话记录里先记一条
 // `plugin:cuepad/delivery` {message, delivery}，随后的 `user/message` 按 message id 认（`DshHistory`）；插话的 `deliveryId` 同样记。
 // config.prompt：给了就是 Cue 的大脑，整份替换系统提示（文件路径，原样不插值）。
@@ -25,6 +28,7 @@ export const name = "cuepad";
 export const inject = ["agents", "commands", "llm", "systemPrompt", "agentDefaultModel", "acpAppStartup"];
 
 const prefix = "_cuepad/";
+const askPrefix = "cuepad-ask-";
 const efforts = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
 
 export async function apply(ctx, config = {}) {
@@ -48,6 +52,17 @@ export async function apply(ctx, config = {}) {
   const streamed = new Map(), deliveries = new Map();
   /** 发出去的请求里认会话开好的回应：请求 id → 会话 id（`session/load` 的请求里就有） */
   const opening = new Map();
+  /** 发给 CuePad、等着回应的提问：请求 id → 那次提问的 resolve、reject */
+  const asking = new Map();
+  ctx.on("user-questions/request", (request, next) => {
+    if (request.agent === undefined) return next();
+    const id = askPrefix + randomUUID();
+    return new Promise((resolve, reject) => {
+      asking.set(id, { resolve, reject });
+      request.signal?.addEventListener("abort", () => { asking.delete(id); reject(request.signal.reason); }, { once: true });
+      send({ jsonrpc: "2.0", id, method: `${prefix}ask_user_question`, params: { sessionId: request.agent.session.id, questions: request.questions } });
+    });
+  });
 
   const fromAcp = (message) => {
     if (message.result?.configOptions) message = { ...message, result: { ...message.result, configOptions: rewriteModels(message.result.configOptions) } };
@@ -84,6 +99,14 @@ export async function apply(ctx, config = {}) {
   const methods = extensions(ctx, record);
   const toAgent = (message) => {
     if (typeof message.method === "string" && message.method.startsWith(prefix)) return answer(message, () => methods[message.method.slice(prefix.length)], send);
+    // 插件自己发出的请求的回应不交给 dsh-acp（已收回的提问也是）
+    if (message.method === undefined && String(message.id).startsWith(askPrefix)) {
+      const asked = asking.get(message.id);
+      asking.delete(message.id);
+      if (message.result?.answers) asked?.resolve({ answers: message.result.answers });
+      else asked?.reject(failure("the user did not answer"));
+      return;
+    }
     const params = message.params ?? {};
     switch (message.method) {
       case "session/new":

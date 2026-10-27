@@ -93,8 +93,9 @@ enum DshLaunch {
 
     private static func file(_ patch: Patch) -> URL { directory.appending(path: patch.rawValue + ".yml") }
 
+    /// 托管会话另插上提问工具（acp profile 里没有它）：它问的经插件转给 CuePad（`DshDialect+Ask`）。
     private static var hosted: String {
-        common(prompt: false, storage: "dshHomePath('cuepad')")
+        common(prompt: false, storage: "dshHomePath('cuepad')", insert: "    - id: tool-ask-user\n      name: '@deepseek-ai/dsh-tool-ask-user'\n")
     }
 
     /// 大脑不写代码：只留读文件与搜索，技能、规则、子代理、计划、网页这些都关掉；附件也进临时目录。
@@ -105,7 +106,7 @@ enum DshLaunch {
             "tool-subagent-fork", "tool-subagent-control", "tool-subagent-list-agents", "tool-working-directory", "tool-plugin-manager",
             "repeat-tool-reminder", "mcp-resources", "session-title",
         ]
-        return common(prompt: true, storage: "process.env.CUEPAD_BRAIN_DIR") + """
+        return common(prompt: true, storage: "process.env.CUEPAD_BRAIN_DIR", insert: "") + """
             - id: system-prompt
               config: { includeHarnessIdentity: false, includeRuntimeContext: false }
             - id: tool-fs
@@ -116,13 +117,13 @@ enum DshLaunch {
             """ + off.map { "- { id: \($0), disabled: true }\n" }.joined()
     }
 
-    /// 两份都有的：插件接管传输、关掉上传与写用户的 profile、会话存进 `storage` 下的明文根（JS 表达式）。
-    private static func common(prompt: Bool, storage: String) -> String {
+    /// 两份都有的：插件接管传输、关掉上传与写用户的 profile、会话存进 `storage` 下的明文根（JS 表达式）；`insert` 是另插的插件。
+    private static func common(prompt: Bool, storage: String, insert: String) -> String {
         """
         - insert:
             - id: cuepad
               name: \(quoted(plugin.path))
-        \(prompt ? "      config: { prompt: !!js process.env.CUEPAD_PROMPT }\n" : "")- id: acp
+        \(prompt ? "      config: { prompt: !!js process.env.CUEPAD_PROMPT }\n" : "")\(insert)- id: acp
           inject: [acpAppStartup, cuepadAcp]
           config:
             stream: !!js ctx.get('cuepadAcp').stream

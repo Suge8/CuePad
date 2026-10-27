@@ -13,7 +13,7 @@ import Foundation
 ///   （那些会话的进程不是 CuePad 起的，没有通道）。为只读的历史不值。
 /// - 托管的进程是 CuePad 起的，一个进程一个会话（歇满 `PiBridge.hostedIdle` 由桥请它退出），撑不过 App 退出。
 /// - 开会话时要的模型在起进程时就给（插件的 `CUEPAD_MODEL`）：dsh-acp 握手时按它判定收不收图，之后换到能看图的模型也一样。
-/// - 不接 dsh 的 `ask_user_question`（不插这个工具）：驱动只有权限确认这一种提问，它要你回答的问题在 CuePad 里答不了，会话会一直挂着。
+/// - 托管会话插上 dsh 的 `ask_user_question` 工具，它的提问在 CuePad 里答（`DshDialect+Ask`）；大脑没人可问，不插。
 @MainActor
 public final class DshRuntime: AgentRuntime {
     private let bridge: PiBridge

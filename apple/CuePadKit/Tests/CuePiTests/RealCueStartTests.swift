@@ -112,23 +112,7 @@ struct RealCueStartTests {
                 try await body(rig.runtime, rig.bridge, rig.work, PiModelKey(provider: AgentKind.grok.rawValue, id: "grok-4.5"))
             }
         case .dsh:
-            // 家目录在临时目录里（登录只经环境里的 DEEPSEEK_API_KEY），会话存进它下面 CuePad 的明文根
-            let root = try makeTempDirectory()
-            let work = root.appending(path: "work", directoryHint: .isDirectory)
-            try FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
-            let bridge = PiBridge(socketDirectory: root.appending(path: "s", directoryHint: .isDirectory))
-            defer { bridge.stop() }
-            try bridge.start()
-            let paths = AgentPaths(environment: ["DSH_HOME": root.appending(path: "dsh").path])
-            let runtime = DshRuntime(bridge: bridge, paths: paths, dsh: { AgentTape.executable("dsh") }, locate: { AgentTape.locator("dsh") })
-            AgentTape.current?.watch(root.appending(path: "dsh/\(DshRuntime.sessions)"))
-            do {
-                try await body(runtime, bridge, work, PiModelKey(provider: "deepseek-official", id: "deepseek-flash"))
-            } catch {
-                await runtime.stop()()
-                throw error
-            }
-            await runtime.stop()()
+            try await withDshRig { rig in try await body(rig.runtime, rig.bridge, rig.work, rig.model) }
         }
     }
 }
