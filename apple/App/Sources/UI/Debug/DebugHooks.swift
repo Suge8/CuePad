@@ -40,7 +40,7 @@ enum DebugHooks {
         var showsDone = false
         /// Cue 此刻钉成这一份样例（`-CuePadCueNow <样例>`，`CueNowSamples`）：页头、侧栏、小组件与实时活动都按它画，截各态用。
         var cueNow: CueNow?
-        /// 会话页一出现就展开额度明细（`-CuePadQuotaOpen YES`）。
+        /// 额度环一出现就展开明细（`-CuePadQuotaOpen YES`：手机进展页顶栏、Mac 侧栏底栏）。
         var quotaOpen = false
         /// 定时一出现就原地展开改（`-CuePadScheduleOpen YES`）：任务气泡里那一条、"记得什么"里"到点"的那一块。
         var scheduleOpen = false
