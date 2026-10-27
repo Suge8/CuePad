@@ -4,7 +4,7 @@ import Foundation
 
 /// 一家 ACP Agent 与标准不同的地方：ACP 驱动（`ACPSession`）的扩展点，每家一个实现。标准里有的一律走标准（一轮、正在说的话、工具、
 /// 权限确认、模型与强度的配置项、斜杠命令、`usage_update`），这里只放标准没有的；没写的取下面扩展里的标准做法。
-/// 各家的扩展方法与通知（方法名以 `_` 开头，如 Grok 的 `_x.ai/*`）只在这里认，翻成驱动的动作（`ACPSignal`）。
+/// 各家的扩展方法与通知（方法名以 `_` 开头，如 Grok 的 `_x.ai/*`）只在这里认，翻成驱动的动作（`ACPSignal`）与要你回答的一问（`ACPAsk`）。
 protocol ACPDialect: Sendable {
     var agent: AgentKind { get }
     /// 起它的 ACP 服务的参数（接在可执行文件后面）
@@ -30,6 +30,8 @@ protocol ACPDialect: Sendable {
     func window(of model: String, in session: JSONValue) -> Int?
     /// 能交图（`agent` 是握手的回应）
     func acceptsImages(_ agent: JSONValue) -> Bool
+    /// Agent 发来的这个请求是它自己的提问（标准只有权限确认，那一种驱动自己认）：翻成要你回答的一问；不是提问为 nil
+    func ask(_ method: String, _ params: JSONValue) -> ACPAsk?
 }
 
 /// 大脑的配法（`ACPDialect.brain`）
@@ -68,6 +70,8 @@ extension ACPDialect {
     func window(of model: String, in session: JSONValue) -> Int? { nil }
 
     func acceptsImages(_ agent: JSONValue) -> Bool { agent["agentCapabilities"]?["promptCapabilities"]?["image"]?.bool == true }
+
+    func ask(_ method: String, _ params: JSONValue) -> ACPAsk? { nil }
 }
 
 /// ACP 的内容块。

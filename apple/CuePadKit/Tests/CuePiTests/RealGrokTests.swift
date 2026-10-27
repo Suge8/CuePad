@@ -74,6 +74,33 @@ struct RealGrokTests {
         }
     }
 
+    /// Grok 问你（`ask_user_question`，一次两问）：会话停在"等你回答"，逐问带着选项与说明、也能自己填；在 CuePad 里答完第一问才出第二问，
+    /// 两问都答了它拿着答案接着说，这一轮做完。
+    @Test func aQuestionIsAnsweredFromCuePadOneByOne() async throws {
+        try await withGrokRig { rig in
+            let id = try await rig.runtime.open(in: rig.work, launchToken: "token-ask", name: nil, model: nil, thinking: nil)
+            try await rig.bridge.send(PiMessage(text: "Ask me which drink and which size I want, then tell me what I chose."), to: id)
+
+            try await eventually("问第一问") { rig.bridge.session(id: id)?.question?.text.hasPrefix("Which drink?") == true }
+            let drink = try #require(rig.bridge.session(id: id)?.question)
+            #expect(rig.bridge.session(id: id)?.state == .waitingForUser)
+            #expect(drink.kind == .known(.select) && drink.options == ["Tea", "Coffee"] && drink.allowsOther && drink.text.contains("Coffee：strong"))
+            await #expect(throws: PiBridgeError.rejected("bad_answer")) { try await rig.bridge.answer(.option("Milk"), to: try #require(drink.promptID), in: id) }
+            try await rig.bridge.answer(.option("Coffee"), to: try #require(drink.promptID), in: id)
+
+            let size = try #require(rig.bridge.session(id: id)?.question)
+            #expect(size.text == "Which size?" && size.options == ["Small", "Large"] && size.promptID != drink.promptID)
+            try await rig.bridge.answer(.text("Medium"), to: try #require(size.promptID), in: id)
+
+            try await eventually("拿到答案接着说，这一轮做完") {
+                rig.bridge.session(id: id).map { $0.state == .settled && rig.replies($0).last?.contains("\"Which drink?\"=\"Coffee\"") == true } == true
+            }
+            let reply = try #require(rig.bridge.session(id: id).flatMap { rig.replies($0).last })
+            #expect(reply.contains("\"Which size?\"=\"Medium\""), "\(reply)")
+            #expect(rig.bridge.session(id: id)?.question == nil)
+        }
+    }
+
     /// 说了一句正在跑时停下：这一轮就此结束，会话歇下、能接着说。
     @Test func aRunningTurnIsAborted() async throws {
         try await withGrokRig { rig in

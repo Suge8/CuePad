@@ -10,6 +10,7 @@ import Foundation
 /// - 上下文：每次请求模型的 `response_completed` 的用量，输入是未缓存、缓存读、缓存写三项之和；窗口是会话的模型清单里这个模型的 `totalContextTokens`；
 /// - 正忙时插话：`_x.ai/interject`（只收文字），下一次请求模型时并进这一轮，这一轮已经不再请求模型时它自己补开一轮；
 /// - 改名：`_x.ai/session/rename`；工具名在 `_meta["x.ai/tool"].name`（标准的 `title` 随后会换成给人看的说法），MCP 工具的结果在 `rawOutput`；
+/// - 提问：`_x.ai/ask_user_question`（+Ask）；
 /// - 图：握手不报能收图，实际收（`image_normalize`，太小的丢掉、太大的压缩）；
 /// - MCP 服务在会话开好之后才连，连上报 `_x.ai/mcp/server_status`。
 ///

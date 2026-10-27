@@ -3,7 +3,7 @@ import CueStore
 import Foundation
 
 /// 托管会话的控制：发话与斜杠命令都是先停下在跑的这一轮、再以它开新一轮；斜杠命令就是 `/` 开头的一句话（ACP 的约定），
-/// 只认 Agent 报过的命令名。权限确认的允许回 allow_once，拒绝回 reject_once。结束是关标准输入、等它收尾。
+/// 只认 Agent 报过的命令名。作答经在等的那一问翻回去（`ACPAsk`）。结束是关标准输入、等它收尾。
 extension ACPSession: SessionLink {
     func send(_ message: PiMessage, in _: PiSession.ID) async throws {
         guard !message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !message.images.isEmpty else {
@@ -29,22 +29,24 @@ extension ACPSession: SessionLink {
     }
 
     func answer(_ answer: PiAnswerValue, to promptID: String, in _: PiSession.ID) async throws {
-        guard let pending = permission else { throw PiBridgeError.rejected("no_prompt") }
+        guard let pending else { throw PiBridgeError.rejected("no_prompt") }
         guard facts.question?.promptID == promptID else { throw PiBridgeError.rejected("stale_prompt") }
-        guard case .confirmed(let allowed) = answer else { throw PiBridgeError.rejected("bad_answer") }
-        let kinds = allowed ? ["allow_once", "allow_always"] : ["reject_once", "reject_always"]
-        guard let option = kinds.lazy.compactMap({ kind in pending.options.first { $0["kind"]?.string == kind }?["optionId"] }).first else {
+        switch pending.ask.answer(answer) {
+        case nil:
             throw PiBridgeError.rejected("bad_answer")
+        case .next(let ask):
+            present(ask, request: pending.request)
+        case .result(let result):
+            self.pending = nil
+            facts.questions = []
+            try live.respond(to: pending.request, result: result)
+            publish()
         }
-        permission = nil
-        facts.questions = []
-        try live.respond(to: pending.request, result: ["outcome": ["outcome": "selected", "optionId": option]])
-        publish()
     }
 
     func configure(model: PiModelKey?, thinking: PiThinkingLevel?, name: String?, in _: PiSession.ID) async throws {
         do {
-            try await configure(model: model?.id, effort: thinking)
+            try await configure(model: model.map(agent.modelRef), effort: thinking)
         } catch ACPError.server(ACPError.invalidParams, _) where model != nil {
             throw PiBridgeError.unknownModel(agent)
         }

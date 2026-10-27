@@ -16,8 +16,8 @@ import Foundation
 /// - 上下文：标准的 `usage_update`（`used`、`size`），或各家报的输入合计（`ACPSignal.context`，窗口取各家给的模型窗口）。
 /// - 模型与强度：会话的配置项（`configOptions` 里 `category` 为 `model`、`thought_level` 的两项，`config_option_update` 随时换掉），
 ///   换用 `session/set_config_option`；强度的值照 `PiThinkingLevel` 的写法对上，夹到这一项有的档位。
-/// - Agent 问权限（`session/request_permission`）：托管会话成为 CuePad 里的确认（+Control）；大脑一律允许（它只有读文件与 CuePad 的工具）。
-///   停下这一轮时没答的回 `cancelled`（协议要求）。
+/// - Agent 要你回答的（`ACPAsk`：标准的权限确认，各家的提问请求经 `ACPDialect.ask`）：托管会话成为 CuePad 里的提问（+Control），
+///   一次只等一问，又来一问、停下或结束这一轮时没答的作废；大脑没人可问：权限一律允许（它只有读文件与 CuePad 的工具），提问作废。
 /// - 载入旧会话（`session/load`）时 Agent 把历史重放成通知：不算。
 @MainActor
 final class ACPSession {
@@ -40,8 +40,8 @@ final class ACPSession {
     private(set) var options: [JSONValue] = []
     /// Agent 报的斜杠命令名
     var commands: Set<String> = []
-    /// 在等的权限确认（Agent 的请求 id 与选项）
-    var permission: (request: JSONValue, options: [JSONValue])?
+    /// 在等你回答的（Agent 的请求 id 与这一问）
+    var pending: (request: JSONValue, ask: ACPAsk)?
     /// 一轮一个编号：`session/prompt` 的回应只结束它自己开的那一轮
     private var turn = 0
     private var draft: DraftParts?
@@ -126,7 +126,7 @@ final class ACPSession {
         id = session.id
         var session = session
         session.availableModels = models
-        session.model = currentModel.flatMap { current in models.first { $0.key.id == current } }
+        session.model = currentOption
         session.thinking = currentLevel.map(Open.known)
         bridge?.attach(session, via: self)
     }
@@ -172,6 +172,10 @@ final class ACPSession {
         }
     }
 
+    /// 在用的模型：按完整的模型键对（模型写成 `提供方/模型` 的家，只对 id 会认错或认不出）
+    var currentOption: PiModelOption? { currentModel.flatMap { current in models.first { $0.key == key(current) } } }
+
+    /// 配置项里的模型值读成模型键（`AgentKind.modelKey`；下发时反过来写成 `AgentKind.modelRef`）
     func key(_ model: String) -> PiModelKey { agent.modelKey(model) ?? PiModelKey(provider: "", id: model) }
 
     /// 换掉一项（`session/set_config_option`）：Agent 不认这个值时抛 `ACPError.server`，在用的不变。
@@ -194,7 +198,7 @@ final class ACPSession {
         guard let id else { return }
         bridge?.update(id) { session in
             session.availableModels = models
-            session.model = currentModel.flatMap { current in models.first { $0.key.id == current } }
+            session.model = currentOption
             session.thinking = currentLevel.map(Open.known)
         }
     }
@@ -266,12 +270,21 @@ final class ACPSession {
         closing = []
     }
 
-    /// 没答的权限确认：回 `cancelled`。
+    /// 没答的作废（`ACPAsk.withdrawn`）。
     private func decline() {
-        guard let pending = permission else { return }
-        permission = nil
+        guard let pending else { return }
+        self.pending = nil
         facts.questions = []
-        connection?.respond(to: pending.request, result: ["outcome": ["outcome": "cancelled"]])
+        connection?.respond(to: pending.request, result: pending.ask.withdrawn)
+    }
+
+    /// 等你回答这一问（同一请求的下一问也经这里）。
+    func present(_ ask: ACPAsk, request: JSONValue) {
+        var ask = ask
+        ask.question.promptID = UUID().uuidString
+        pending = (request, ask)
+        facts.questions = [ask.question]
+        publish()
     }
 
     // MARK: 一处产出
@@ -377,20 +390,15 @@ final class ACPSession {
     }
 
     private func asked(_ method: String, _ params: JSONValue, request: JSONValue) -> Bool {
-        guard method == "session/request_permission", params["sessionId"]?.string == sessionID else { return false }
-        let options = params["options"]?.array ?? []
+        guard params["sessionId"]?.string == sessionID else { return false }
+        let isPermission = method == "session/request_permission"
+        guard let ask = isPermission ? ACPAsk.permission(params, agent: agent, dialect: dialect) : dialect.ask(method, params) else { return false }
         guard brain == nil else {
-            let allow = options.first { $0["kind"]?.string == "allow_once" } ?? options.first { $0["kind"]?.string == "allow_always" }
-            connection?.respond(to: request, result: ["outcome": allow.flatMap { $0["optionId"] }.map { ["outcome": "selected", "optionId": $0] } ?? ["outcome": "cancelled"]])
+            connection?.respond(to: request, result: isPermission ? ACPAsk.allowed(params) : ask.withdrawn)
             return true
         }
         decline()
-        let call = params["toolCall"] ?? [:]
-        let name = ToolDetail.name(dialect.toolName(call))
-        let text = PermissionWording.question(agent, String(localized: "使用 \(name)"), [ToolDetail.target(call["rawInput"]), call["title"]?.string])
-        permission = (request, options)
-        facts.questions = [PiQuestion(promptID: String(decoding: request.data, as: UTF8.self), kind: .confirm, text: text)]
-        publish()
+        present(ask, request: request)
         return true
     }
 

@@ -157,6 +157,14 @@ final class FakeResponses: Sendable {
             let seen = input.contains { ($0["content"] as? [[String: Any]])?.contains { $0["type"] as? String == "input_image" } == true }
             return .say(seen ? "red" : "I see no image")
         }
+        if query.contains("which drink") {
+            let questions: [[String: Any]] = [
+                ["question": "Which drink?", "header": "Drink", "multiSelect": false,
+                 "options": [["label": "Tea", "description": "hot"], ["label": "Coffee", "description": "strong"]]],
+                ["question": "Which size?", "header": "Size", "multiSelect": false, "options": [["label": "Small", "description": ""], ["label": "Large", "description": ""]]],
+            ]
+            return calls.isEmpty ? .call("ask_user_question", ["questions": questions]) : .say(outputs.last ?? "")
+        }
         if query.contains("Remember the word") { return .say("OK") }
         if query.contains("What word did I ask you to remember") {
             return .say(users.lazy.compactMap { $0.firstMatch(of: /Remember the word (\w+)/)?.output.1 }.first.map(String.init) ?? "?")
