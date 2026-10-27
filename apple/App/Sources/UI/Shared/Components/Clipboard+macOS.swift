@@ -8,12 +8,13 @@ enum Clipboard {
         NSPasteboard.general.setString(text, forType: .string)
     }
 
-    /// 文字与图片按原顺序：一个条目两种表示——`.string` 纯文字（文本框、终端取它），有图时另有 `.rtfd` 内联图片（富文本取它）。
-    /// 不并列放 `.png/.tiff`：图形应用会在其中挑图片而丢掉文字。
+    /// 文字与附件按原顺序：一个条目两种表示——`.string` 纯文字（文本框、终端取它，文件写文件名），有附件时另有 `.rtfd`
+    /// 内联图片与文件（富文本取它：备忘录、邮件、文本编辑里粘出来是图与文件附件）。
+    /// 不并列放 `.png/.tiff` 与文件网址：图形应用会在其中挑图片而丢掉文字，访达会只粘出文件。
     static func write(_ content: ClipboardContent, to pasteboard: NSPasteboard = .general) throws {
         let item = NSPasteboardItem()
         item.setString(content.plainText, forType: .string)
-        if content.hasImages { item.setData(try rtfd(content), forType: .rtfd) }
+        if content.hasAttachments { item.setData(try rtfd(content), forType: .rtfd) }
         pasteboard.clearContents()
         guard pasteboard.writeObjects([item]) else { throw ClipboardError.writeFailed }
     }
@@ -28,6 +29,10 @@ enum Clipboard {
                 let wrapper = FileWrapper(regularFileWithContents: png)
                 wrapper.preferredFilename = "image-\(index).png"
                 document.append(NSAttributedString(attachment: NSTextAttachment(fileWrapper: wrapper)))
+            case .file(let url, let name):
+                let wrapper = try FileWrapper(url: url)
+                wrapper.preferredFilename = name
+                document.append(NSAttributedString(attachment: NSTextAttachment(fileWrapper: wrapper)))
             }
         }
         guard let data = document.rtfd(from: NSRange(location: 0, length: document.length)) else { throw ClipboardError.writeFailed }
@@ -35,11 +40,12 @@ enum Clipboard {
     }
 }
 
-/// 复制到剪贴板的内容：正文按原顺序切成的文字与图片（PNG）。
+/// 复制到剪贴板的内容：正文按原顺序切成的文字、图片（PNG）与文件（本机那份与显示的名字）。
 nonisolated struct ClipboardContent: Sendable, Equatable {
     enum Segment: Sendable, Equatable {
         case text(String)
         case image(Data)
+        case file(URL, name: String)
     }
 
     var segments: [Segment]
@@ -47,10 +53,16 @@ nonisolated struct ClipboardContent: Sendable, Equatable {
     init(_ segments: [Segment]) { self.segments = segments }
 
     var plainText: String {
-        segments.reduce(into: "") { result, segment in if case .text(let text) = segment { result += text } }
+        segments.reduce(into: "") { result, segment in
+            switch segment {
+            case .text(let text): result += text
+            case .image: break
+            case .file(_, let name): result += name
+            }
+        }
     }
 
-    var hasImages: Bool { segments.contains { if case .image = $0 { true } else { false } } }
+    var hasAttachments: Bool { segments.contains { if case .text = $0 { false } else { true } } }
 }
 
 enum ClipboardError: LocalizedError {

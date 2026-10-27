@@ -8,7 +8,8 @@ import CuePi
 
 /// 复制：正文解析 → 放进系统剪贴板。复制不是发送，不记发送记录；发给 Agent 见 `Workspace.speak`。
 extension AppServices {
-    /// 复制正文（存储格式，变量已填）：文字与图片按原顺序放进系统剪贴板。
+    /// 复制正文（存储格式，变量已填）：文字与附件按原顺序放进系统剪贴板。Mac 上文件在本机就作为附件带上（纯文字那份写文件名），
+    /// 还没到本机的只写文件名；手机上文件只写文件名。
     func copy(_ storedText: String) throws {
         let tokens = CueFormat.parse(storedText)
         #if os(macOS)
@@ -16,7 +17,7 @@ extension AppServices {
             switch token {
             case .text(let text): .text(text)
             case .image(let hash): .image(try store.files.png(hash))
-            case .file(_, let name): .text(name)
+            case .file(let key, let name): store.files.fileURL(for: key).map { .file($0, name: name) } ?? .text(name)
             }
         }), to: pasteboard)
         #else
