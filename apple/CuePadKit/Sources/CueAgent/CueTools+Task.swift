@@ -26,8 +26,7 @@ extension CueTools {
       _ = try await host()  // 停用后不再替他判断谁接手
       let target = try await speaker(args)
       // 他在等你里答 Cue 问的那张卡，会话等的是 Cue 转达：再留给他回，同一件事就既在等你、又是待回复
-      for question in try await store.cueMessagesWaitingForYou() {
-        guard let task = question.taskID, (try? await store.leafSession(store.workingLeaf(of: task).id)) == target.session else { continue }
+      if let question = try await store.question(waitingOn: target.session) {
         let asked = question.asking?.question ?? CueEnvelope.clip(CueFormat.plainText(question.text), 40)
         throw Failure("等你里问着他「\(asked)」（\(question.id.shortID)），他在卡上答了你再转给会话：不用留给他回")
       }

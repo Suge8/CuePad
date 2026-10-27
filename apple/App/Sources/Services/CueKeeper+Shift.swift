@@ -113,18 +113,8 @@ extension CueKeeper {
                 $0.context = CueContext(used: used)
                 $0.lastRequest = .now
             }
-        case .tool(let id, let name, let arguments):
-            let named = await CueActivity.named(tool: name, arguments: arguments, store: store)
-            let step = CueActivity.step(tool: name, arguments: arguments, named: named)
-            updateShift { $0.turn?.round.calls.append(CueToolCall(
-                id: id, name: name, arguments: arguments, named: named, step: step,
-                detail: step == nil ? CueActivity.detail(tool: name, arguments: arguments) : nil, startedAt: .now)) }
-            await recordRound()
-        case .toolDone(let id, let result, let failed):
-            guard let call = turn?.round.calls.last(where: { $0.id == id && $0.finishedAt == nil }) else { return }
-            let item = await CueActivity.item(tool: call.name, arguments: call.arguments, named: call.named, failed: failed, store: store)
-            updateShift { $0.turn?.round.finish(id, result: result, failed: failed, item: item) }
-            await recordRound()
+        case .tool(let id, let name, let arguments): await began(id, name, arguments)
+        case .toolDone(let id, let result, let failed): await ended(id, result: result, failed: failed)
         case .failed(let raw):
             updateShift { $0.turn?.round.failure = raw }
             let summary = PiErrorSummary(raw)
@@ -136,6 +126,7 @@ extension CueKeeper {
             let text = summary.kind == .other ? ShownText("这一轮出错了：\(raw)") : ShownText("这一轮出错了：\(summary.shownTitle.embedded)\n\(raw)")
             if let turn, turn.answersYou { await reply(text, in: turn) } else { await say(.cue, text) }
         case .turnFinished:
+            await leaveUnattended()
             guard var finished = turn else { return }
             let reply = finished.writesReply ? finished.speaking?.text : nil
             if reply?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false { lastFailure = nil }
@@ -157,6 +148,23 @@ extension CueKeeper {
             // 自己停的大脑不会走到这里（停之前已离开这个班次）：退出都是意外
             await broke(reason.map { ShownText("大脑退出了（\($0.embedded)）") } ?? ShownText("大脑退出了"))
         }
+    }
+
+    /// 一次工具调用开始 / 做完：记进这一轮的经过（大脑报的，与 `leaveUnattended` 代留的同一条路）。
+    func began(_ id: String, _ name: String, _ arguments: String) async {
+        let named = await CueActivity.named(tool: name, arguments: arguments, store: store)
+        let step = CueActivity.step(tool: name, arguments: arguments, named: named)
+        updateShift { $0.turn?.round.calls.append(CueToolCall(
+            id: id, name: name, arguments: arguments, named: named, step: step,
+            detail: step == nil ? CueActivity.detail(tool: name, arguments: arguments) : nil, startedAt: .now)) }
+        await recordRound()
+    }
+
+    func ended(_ id: String, result: String, failed: Bool) async {
+        guard let call = turn?.round.calls.last(where: { $0.id == id && $0.finishedAt == nil }) else { return }
+        let item = await CueActivity.item(tool: call.name, arguments: call.arguments, named: call.named, failed: failed, store: store)
+        updateShift { $0.turn?.round.finish(id, result: result, failed: failed, item: item) }
+        await recordRound()
     }
 
     /// 把在跑这一轮的经过写进对话里它那一行（`CueStore.recordCueRound`）：Cue 自己醒来的一轮醒来时已写下（`wakeUp`），你发起的第一次调工具时写下，

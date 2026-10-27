@@ -51,7 +51,7 @@ extension CueKeeper {
         }
         var turn = Turn(
             author: author, round: beginRound(wake, sent: [sent], at: now), selfStarted: wake == .message ? nil : wake, delivered: delivering,
-            mark: mark, held: changes.held)
+            mark: mark, held: changes.held, stops: Self.stops(in: wake, changes.due))
         // Cue 自己醒来的一轮醒来就写下经过那一行：为什么醒在它上面，各端马上画得出叫醒的那一下
         if !turn.answersYou {
             do {
@@ -67,6 +67,13 @@ extension CueKeeper {
         save()
         try await markDelivered(delivering)
         return true
+    }
+
+    /// 会话停下叫醒的一轮报给 Cue 的停下（歇着、等回答、出错的会话与那次停下的起点）；别的原因醒来没有。
+    private static func stops(in wake: CueWake, _ due: [CueChange]) -> [CueLeft] {
+        guard case .sessionActivity = wake else { return [] }
+        return due.filter { [.settled, .waitingForUser, .failed].contains($0.kind) }
+            .compactMap { $0.session.map { CueLeft(sessionID: $0.sessionID, since: $0.stateSince) } }
     }
 
     /// 定时到点的一轮要列给它的那几条定时（带序号、本该几点与挂着的任务）；别的原因醒来没有。
@@ -179,7 +186,7 @@ extension CueKeeper {
         }
     }
 
-    /// 这一轮的回复写成谁的：你发来消息、刚启用写成 cue；其余写成 note。
+    /// 这一轮的回复写成谁的：你发来消息、刚启用写成 cue；其余写成 note（不写回复，只给醒来后出错重试时判断是不是在回答你，`Turn.answersYou`）。
     static func author(of wake: CueWake) -> CueAuthor {
         switch wake {
         case .message, .enabled: .cue

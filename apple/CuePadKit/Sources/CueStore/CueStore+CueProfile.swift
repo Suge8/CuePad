@@ -68,6 +68,28 @@ extension CueStore {
     }
   }
 
+  /// 一轮收尾的兜底（`CueKeeper.leaveUnattended`）：会话仍停在 `stop` 那次停下、没留给你回、等你里没有问着他的提问，且它与它绑着的任务（含上级）
+  /// 都不在 `given`（这一轮已给过去处的会话与任务）里，就留给你回（同 `leaveToYou`）。不用留返回 nil；留了返回会话与记录 id（立即上传用）。
+  public func leaveUnattended(_ stop: CueLeft, given: Set<UUID>) throws -> (session: PiSessionState, record: UUID)? {
+    try write {
+      guard let session = try sessionState(stop.sessionID), stop.holds(for: session),
+        try cueState()?.left.contains(where: { $0.holds(for: session) }) != true, try question(waitingOn: session.sessionID) == nil
+      else { return nil }
+      let places = try tasks(boundTo: session.sessionID).flatMap { [$0.task.id, $0.parent?.id] }.compactMap(\.self)
+      guard !given.contains(session.id), given.isDisjoint(with: places) else { return nil }
+      try putLeft([session])
+      return (session, CueState.recordID)
+    }
+  }
+
+  /// 等你里问着会话那件事的提问（会话等的是他在卡上的回答，再留给他回，同一件事就既在等你、又是待回复）；没有为 nil。
+  public func question(waitingOn sessionID: String) throws -> CueMessage? {
+    try cueMessagesWaitingForYou().first { question in
+      guard let task = question.taskID else { return false }
+      return (try? leafSession(workingLeaf(of: task).id)) == sessionID
+    }
+  }
+
   /// Cue 收回留给你回的这次停下（看过是只应了你一声、你不用回）：不再待回复，在等回答的回到等它答。没留给你的返回 nil，收回了返回记录 id（立即上传用）。
   public func takeBack(_ sessionID: String) throws -> UUID? {
     try write {

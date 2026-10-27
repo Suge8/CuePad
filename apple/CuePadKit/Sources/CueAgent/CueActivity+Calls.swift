@@ -38,6 +38,16 @@ extension CueActivity {
     }
   }
 
+  /// 这次调用给了会话一个去处：对它说话、留给他回、收回、做完（含收掉会话）或就它问他。`CueKeeper.leaveUnattended` 据此认一轮里谁已经有去处。
+  public static func settlesStop(tool: String, arguments: String) -> Bool {
+    let args = Parsed(arguments)
+    switch tool {
+    case "task": return ["say", "leave", "take", "done"].contains(args.line("action"))
+    case "tell": return args.raw["ask"] != nil
+    default: return false
+    }
+  }
+
   /// 调用开始时认一次对象（`Named`），存在这次调用上，正在用时那一句与做完后那一条都用它，不再查第二次库。
   public static func named(tool: String, arguments: String, store: CueStore) async -> Named {
     await Named(Parsed(arguments), tool: tool, store: store)

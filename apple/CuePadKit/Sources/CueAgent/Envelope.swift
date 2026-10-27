@@ -64,7 +64,7 @@ public enum CueEnvelope {
 
     lines.append("醒来：" + wake(input.wake))
     if case .schedule = input.wake { lines += input.fired.map { "- " + fired($0, now: input.now) } }
-    if let language = input.language { lines.append("这一轮你写下的字都用\(language)（回复、tell、动态、任务、对会话说的话）") }
+    if let language = input.language { lines.append("这一轮你写下的字都用\(language)（回复、tell、任务、对会话说的话）") }
     lines.append("</cue>")
     return lines.joined(separator: "\n")
   }
