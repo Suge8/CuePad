@@ -30,8 +30,6 @@ private struct LibraryFilePage: View {
     @Environment(\.palette) private var palette
     @State private var draft: FileDraft?
     @State private var texts: [String: String]?
-    @State private var previewing = DebugHooks.preset.mergePreview
-    @State private var retire: Set<InstructionSource.Origin> = []
 
     private static let textWidth: CGFloat = LibraryLayout.column
     private static let inset: CGFloat = 24
@@ -48,7 +46,7 @@ private struct LibraryFilePage: View {
                 }
                 .frame(maxWidth: Self.textWidth, alignment: .leading).padding(.horizontal, Self.inset)
                 // 各份正文没到齐时标不出来，照常显示正文
-                let blocks = previewing ? merge(library)?.preview(retiring: retire, texts: texts) : nil
+                let blocks = draft.previewing ? merge(library)?.preview(retiring: draft.retire, texts: texts) : nil
                 let theme = CueEditorTheme.editor(palette, horizontalInset: Self.inset, maxTextWidth: Self.textWidth)
                 ZStack {
                     EditorHost(
@@ -69,8 +67,8 @@ private struct LibraryFilePage: View {
             if library != nil, entry == nil { workspace.close(.library(file)) }
         }
         .onChange(of: library?.arrived(file, in: texts), initial: true) { _, arrived in
-            guard let arrived else { return }
-            if let draft { draft.follow(arrived) } else { draft = FileDraft(file, text: arrived, workspace: workspace) }
+            guard let library, let arrived else { return }
+            if let draft { draft.follow(arrived) } else { draft = workspace.fileDraft(file, text: arrived, on: library.hostID) }
         }
         .task(id: draft != nil) {
             await NextFrame.wait()
@@ -103,7 +101,7 @@ private struct LibraryFilePage: View {
         if case .skill(let path) = file, let tidy = library.duplicate(of: path) {
             DuplicateBar(path: path, tidy: tidy, library: library)
         } else if let tidy = merge(library) {
-            MergeBar(tidy: tidy, library: library, previewing: $previewing, retire: $retire, ready: tidy.preview(retiring: retire, texts: texts) != nil) {
+            MergeBar(tidy: tidy, library: library, draft: draft, ready: tidy.preview(retiring: draft.retire, texts: texts) != nil) {
                 await draft.leave()
             }
         }

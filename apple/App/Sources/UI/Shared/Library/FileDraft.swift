@@ -24,6 +24,10 @@ final class FileDraft {
     /// 有没写进文件的字。
     private(set) var dirty = false
     private(set) var state = State.idle
+    /// 规则另写了一份时，正文换成合并稿、标出会并进来的段（`MergeBar` 点"合并进来"）；这时编辑器交出键盘、不接输入
+    var previewing = DebugHooks.preset.mergePreview
+    /// 合并时一并撤掉的替换基础提示的那几份（`TidyOrder.retire`）
+    var retire: Set<InstructionSource.Origin> = []
     @ObservationIgnored private let workspace: Workspace
     @ObservationIgnored private var autosave: Autosave?
 

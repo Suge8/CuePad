@@ -83,6 +83,8 @@ struct IOSEditorHost: UIViewRepresentable {
         view.isEditable = editable
         view.isSelectable = editable
         view.isAccessibilityElement = editable
+        // 点不进去：不接点按，键盘也就叫不出来
+        view.isUserInteractionEnabled = editable
         if editable, handle.refocus { view.becomeFirstResponder() }
     }
 

@@ -15,8 +15,6 @@ struct LibraryFileScreen: View {
     @Environment(\.dismiss) private var dismiss
     @State private var draft: FileDraft?
     @State private var texts: [String: String]?
-    @State private var previewing = DebugHooks.preset.mergePreview
-    @State private var retire: Set<InstructionSource.Origin> = []
 
     var body: some View {
         let library = workspace.library
@@ -25,7 +23,7 @@ struct LibraryFileScreen: View {
             if let library, let draft {
                 top(library, draft)
                 // 各份正文没到齐时标不出来，照常显示正文
-                let blocks = previewing ? merge(library)?.preview(retiring: retire, texts: texts) : nil
+                let blocks = draft.previewing ? merge(library)?.preview(retiring: draft.retire, texts: texts) : nil
                 let theme = CueEditorTheme.editor(palette, horizontalInset: 20)
                 ZStack {
                     IOSEditorHost(initialText: draft.body, theme: theme, handle: draft.handle,
@@ -69,8 +67,8 @@ struct LibraryFileScreen: View {
                 } else if let merge {
                     // 有没发的改动时不让合并：合并照 Mac 上此刻的文件做，你的字会变成和它冲突
                     MergeBar(
-                        tidy: merge, library: library, previewing: $previewing, retire: $retire,
-                        ready: merge.preview(retiring: retire, texts: texts) != nil, prepare: draft.dirty ? nil : {})
+                        tidy: merge, library: library, draft: draft,
+                        ready: merge.preview(retiring: draft.retire, texts: texts) != nil, prepare: draft.dirty ? nil : {})
                 }
                 if case .skill(let path) = file {
                     SkillFields(draft: draft, problem: library.skill(at: path)?.problem).padding(.horizontal, 4)

@@ -43,15 +43,14 @@ struct DuplicateBar: View {
     }
 }
 
-/// 内容不同的规则："<那家> 另写了一份"加"合并进来"。两步，按钮说出在哪一步：点"合并进来"先在正文里标出会并进来的段落（`previewing`，`MergePreview`），
+/// 内容不同的规则："<那家> 另写了一份"加"合并进来"。两步，按钮说出在哪一步：点"合并进来"先在正文里标出会并进来的段落（`FileDraft.previewing`，`MergePreview`），
 /// 这时按钮换成"合并"、旁边"取消"；再点"合并"才做（照那件的合并稿写，`LibraryTidy.merged(retiring:)`，请求带着你看过的那一版，`TidyOrder.base`）。
 /// 后果一句贴在按钮下；替换基础提示的那份（Pi 的系统提示、Codex 的自定提示词）有才在标出时给一个勾，勾了才并进来并撤掉它（预览跟着变）。
 /// 各份正文没到齐（`ready`）前按不了。两步同一个高：第二行一直占着。
 struct MergeBar: View {
     let tidy: LibraryTidy
     let library: AgentLibrary
-    @Binding var previewing: Bool
-    @Binding var retire: Set<InstructionSource.Origin>
+    let draft: FileDraft
     /// 各份正文都到了、是快照里那一版（`LibraryTidy.preview` 不为 nil）
     let ready: Bool
     /// 合并前先做的事（Mac 写下没存的字）；手机上有没发的改动时为 nil，不让合并
@@ -68,18 +67,18 @@ struct MergeBar: View {
                     .font(Typography.secondary).foregroundStyle(palette.ink).lineLimit(2)
             }
             Spacer(minLength: 8)
-            if previewing {
-                Button("取消") { previewing = false }
+            if draft.previewing {
+                Button("取消") { draft.previewing = false }
                     .buttonStyle(ControlButtonStyle(kind: .secondary, compact: true))
                     .disabled(working)
             }
-            Button { merge() } label: { TidyLabel(title: previewing ? "合并" : "合并进来", working: working) }
-                .buttonStyle(ControlButtonStyle(kind: previewing ? .primary : .secondary, compact: true))
+            Button { merge() } label: { TidyLabel(title: draft.previewing ? "合并" : "合并进来", working: working) }
+                .buttonStyle(ControlButtonStyle(kind: draft.previewing ? .primary : .secondary, compact: true))
                 .disabled(working || !ready || prepare == nil)
         } consequence: {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 ForEach(tidy.sources.map(\.origin).filter(\.replacesBasePrompt), id: \.self) { origin in
-                    Toggle(isOn: Binding(get: { retire.contains(origin) }, set: { if $0 { retire.insert(origin) } else { retire.remove(origin) } })) {
+                    Toggle(isOn: Binding(get: { draft.retire.contains(origin) }, set: { if $0 { draft.retire.insert(origin) } else { draft.retire.remove(origin) } })) {
                         Text(verbatim: String(localized: "也合并 \(workspace.replacementName(origin))")).font(Typography.meta).foregroundStyle(palette.ink2)
                     }
                     #if os(macOS)
@@ -88,7 +87,7 @@ struct MergeBar: View {
                     // 一颗选中时着色的小胶囊：手机上没有勾选框
                     .toggleStyle(.button).buttonStyle(.bordered).buttonBorderShape(.capsule).controlSize(.small)
                     #endif
-                    .opacity(previewing ? 1 : 0).disabled(!previewing || working)
+                    .opacity(draft.previewing ? 1 : 0).disabled(!draft.previewing || working)
                 }
                 Spacer(minLength: 8)
                 TidyConsequence(kind: .merge)
@@ -97,16 +96,16 @@ struct MergeBar: View {
     }
 
     private func merge() {
-        guard previewing else {
-            previewing = true
+        guard draft.previewing else {
+            draft.previewing = true
             return
         }
         working = true
         Task {
             await prepare?()
-            await workspace.tidy([TidyOrder(tidy: tidy.id, retire: retire, base: tidy.base)], in: library)
+            await workspace.tidy([TidyOrder(tidy: tidy.id, retire: draft.retire, base: tidy.base)], in: library)
             working = false
-            previewing = false
+            draft.previewing = false
         }
     }
 }

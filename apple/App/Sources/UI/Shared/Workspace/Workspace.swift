@@ -121,10 +121,9 @@ final class Workspace {
     var openLibraryFile: LibraryFile? { if case .library(let file)? = overlay { file } else { nil } }
     /// 收起这一页；已换成别的就不动。
     func close(_ page: Overlay) { if overlay == page { overlay = nil } }
-    #else
-    /// 手机上改着的技能与规则（`fileDraft(_:on:)`），按哪台 Mac 的哪一份分开：离开文件页也留着。
-    @ObservationIgnored var fileDrafts: [FileDraftKey: FileDraft] = [:]
     #endif
+    /// 改着的技能与规则（`fileDraft(_:text:on:)`），按哪台 Mac 的哪一份分开：离开文件页也留着。
+    @ObservationIgnored var fileDrafts: [FileDraftKey: FileDraft] = [:]
     /// 气泡里看着的任务（`TaskBubble`）：从被点的那一下长出来，盖在当前页上，不换页。两端同一份，各个入口都经 `openTask(_:)`。
     var openTask: TaskBubble.Request? {
         didSet { if openTask == nil, let oldValue { closedTask = (oldValue.task, .now) } }

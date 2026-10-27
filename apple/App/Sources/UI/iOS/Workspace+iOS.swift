@@ -28,20 +28,6 @@ extension Workspace {
         if case .libraryFile? = path.last { path[path.count - 1] = .libraryFile(file) } else { push(.libraryFile(file)) }
     }
 
-    /// 一份文件在手机上的改动：改着没发的留在这里，离开文件页再回来接着改、接着发——不点纸飞机就不发，也不丢（App 退出才没了）。
-    /// 按 `host` 那台 Mac 分开：Cue 换到另一台后看的是那台的文件，在这台没发的字不拿去对着那台。
-    /// 再打开时先对上快照里此刻的样子（没改过就跟上，改着的就说 Mac 上改过了）。
-    func fileDraft(_ file: LibraryFile, text: String?, on host: String) -> FileDraft {
-        let key = FileDraftKey(host: host, file: file)
-        if let draft = fileDrafts[key] {
-            draft.follow(text)
-            return draft
-        }
-        let draft = FileDraft(file, text: text, workspace: self)
-        fileDrafts[key] = draft
-        return draft
-    }
-
     /// 先读出这一页：推入的第一帧就是标题与最新的对话（`SessionRoute.seed`），只有记录 id 的入口顺带补上 Pi 的会话 id。
     /// 读不出来时照常推入，由页面报错。
     func sessionRoute(_ id: UUID, sessionID: String?) -> Route? {
@@ -126,11 +112,5 @@ extension View {
     @ViewBuilder func zoomSource(_ id: UUID, in namespace: Namespace.ID?) -> some View {
         if let namespace { matchedTransitionSource(id: id, in: namespace) } else { self }
     }
-}
-
-/// 手机上改着的一份文件是哪台 Mac 的哪一份（`Workspace.fileDrafts`）。
-struct FileDraftKey: Hashable {
-    let host: String
-    let file: LibraryFile
 }
 #endif
