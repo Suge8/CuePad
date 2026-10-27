@@ -88,7 +88,7 @@ struct NewTaskField: View {
     }
 
     #if os(macOS)
-    private static let glyph = Font.system(size: 12, weight: .semibold)
+    private static let glyph = Glyph.small
     #else
     private static let glyph = Font.footnote.weight(.semibold)
     #endif

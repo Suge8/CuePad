@@ -72,7 +72,7 @@ struct Sidebar: View {
                 Spacer()
                 let settings = SidebarOutline.Entry.settings
                 Button { SettingsPane.open() } label: {
-                    Image(settings.icon).font(.system(size: 15)).foregroundStyle(palette.ink2)
+                    Image(settings.icon).font(Glyph.control).foregroundStyle(palette.ink2)
                         .frame(width: SidebarMetrics.footerButton, height: SidebarMetrics.footerButton).contentShape(.circle)
                 }
                 .buttonStyle(PressStyle(.button))
@@ -138,7 +138,7 @@ private struct SidebarHeader<Action: View>: View {
             action
                 .labelStyle(SidebarHeaderAction())
                 .buttonStyle(PressStyle(.button))
-                .font(.system(size: 13, weight: .semibold))
+                .font(Glyph.row)
                 .foregroundStyle(palette.ink2)
         }
         .padding(.leading, SidebarMetrics.column).padding(.trailing, SidebarMetrics.edge)
@@ -177,7 +177,7 @@ private struct ProgressRow: View {
     var body: some View {
         let entry = SidebarOutline.Entry.progress
         PageRow(selected: workspace.root == entry.route, action: { select(entry.route) }) {
-            Image(entry.icon).font(.system(size: 13, weight: .medium)).foregroundStyle(palette.ink2)
+            Image(entry.icon).font(Glyph.row).foregroundStyle(palette.ink2)
         } title: {
             Text(entry.title)
         } trailing: {
@@ -284,7 +284,7 @@ private struct FooterPage: View {
     var body: some View {
         let selected = workspace.root == entry.route
         Button { select(entry.route) } label: {
-            IconImage(entry.icon, accent: selected ? .lit : .none).font(.system(size: 15))
+            IconImage(entry.icon, accent: selected ? .lit : .none).font(Glyph.control)
                 .foregroundStyle(selected ? palette.ink : palette.ink2)
                 .frame(width: SidebarMetrics.footerButton, height: SidebarMetrics.footerButton)
                 .background(selected ? palette.selection : .clear, in: .circle)

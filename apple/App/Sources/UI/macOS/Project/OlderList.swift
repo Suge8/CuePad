@@ -30,7 +30,7 @@ struct OlderList: View {
         let open = isExpanded(group)
         let header = HStack {
             if group.isMonth {
-                Image(.forward).font(.system(size: 10, weight: .bold)).accessibilityHidden(true)
+                Image(.forward).font(Glyph.mark).accessibilityHidden(true)
                     .rotationEffect(.degrees(open ? 90 : 0))
             }
             Text(OlderGroupTitle.text(group.period)).font(Typography.label).foregroundStyle(palette.ink2)
@@ -140,7 +140,7 @@ private struct RowGlyph: View {
                 Image(pinned ? .pin : attached ? .attachment : .document).foregroundStyle(pinned ? palette.ink2 : palette.ink3)
             }
         }
-        .font(.system(size: 13)).frame(width: 18)
+        .font(Glyph.row).frame(width: 18)
         .accessibilityLabel(selected ? "已选" : pinned ? "置顶的灵感" : attached ? "含附件的灵感" : "灵感")
     }
 }

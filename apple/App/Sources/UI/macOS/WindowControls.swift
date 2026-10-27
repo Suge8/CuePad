@@ -94,7 +94,7 @@ struct CloseButton: View {
     var body: some View {
         if workspace.overlay != nil {
             // 箭头比放大镜、"⋯"细瘦：大一号、粗一档，与它们一样重
-            Button { workspace.overlay = nil } label: { Image(.back).font(.system(size: 15, weight: .bold)) }
+            Button { workspace.overlay = nil } label: { Image(.back).font(Glyph.control.weight(.bold)) }
             .buttonStyle(ControlButtonStyle(kind: .circular))
             .keyboardShortcut(.cancelAction)
             .help("收起（Esc）")

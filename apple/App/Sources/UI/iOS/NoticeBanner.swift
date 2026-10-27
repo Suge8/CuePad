@@ -75,7 +75,7 @@ private struct NoticeCapsule: View {
         .frame(height: FloatingHeaderLayout.height)
         // 盖住的名牌、搜索框与正文不能透出来叠字。
         .glass(in: .capsule, interactive: notice.link != nil || notice.action != nil)
-        .shadow(color: palette.shadow, radius: 12, y: 4)
+        .elevation(.lifted)
         .accessibilityHint(notice.link == nil ? "" : "去那里看看")
         .accessibilityAddTraits(.updatesFrequently)
     }

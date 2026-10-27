@@ -148,12 +148,6 @@ private struct QuotaWindowRow: View {
     let window: QuotaMeter.Window
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// 还剩多少的数字（Mac 没有动态字体，给固定字号）。
-    #if os(macOS)
-    private static let number = Font.system(size: 15, weight: .semibold, design: .rounded).monospacedDigit()
-    #else
-    private static let number = Font.system(.body, design: .rounded, weight: .semibold).monospacedDigit()
-    #endif
 
     var body: some View {
         let critical = window.level == .critical
@@ -162,7 +156,7 @@ private struct QuotaWindowRow: View {
             MetaLine(gap: 8) {
                 heading.font(Typography.meta).foregroundStyle(palette.ink3)
             } meta: {
-                Text("剩 \(Text(window.percent).font(Self.number).foregroundStyle(critical ? palette.failure : palette.ink))")
+                Text("剩 \(Text(window.percent).font(Typography.gaugeNumber).foregroundStyle(critical ? palette.failure : palette.ink))")
                     .font(Typography.meta).foregroundStyle(palette.ink3)
                     .contentTransition(.numericText(value: window.left))
             }

@@ -23,7 +23,7 @@
 - 悬停：点得到的东西指针一过就有回应（同 macOS 26 工具栏的玻璃钮、Linear、Arc）——自绘的按钮浮一层淡底、卡片亮一档、行铺淡底，淡入淡出、不挪位置不缩放；只经 `PressStyle`（按种类 `Press`）与 `RowStyle`，自绘的可点控件不用 `.plain`、`.borderless`（`lint.sh` 查），悬停时要换颜色、露记号的按钮读 `buttonHovered`，不各自挂 `onHover`；浮在内容上的玻璃胶囊与圆钮只经 `ControlButtonStyle`（`glass`、`circular`）。系统控件的悬停与焦点环交给系统。
 - 项目联动（Mac）：指针停在侧栏的项目行或看板卡上的项目小图形上时，看板上别的项目的卡淡下去，同一项目的不动。指着哪个项目只有 `Workspace.hoveredProject` 一份，侧栏与看板读写同一份（`boardDim`）。
 - 悬停、选中时才出现的东西不改动周围的排版：悬停才露的操作只经 `hoverReveal` 浮在行上，随选中变的只换颜色与字重、不插不撤占位置的东西。露出一个钮挤动了标题与时间、选中一页让整列侧栏上下跳，都是用户能一眼看见的抖。
-- 圆角只有 `Radius` 的几档，按东西的种类取，Theme 以外不写数（`lint.sh` 查）；嵌在容器里的块用 `Radius.nested`，内角随容器走、不手算；胶囊与圆写 `.capsule`、`.circle`。列表行的底（选中、按下、悬停）只有 `RowStyle` 一份，调用处不自己画底与负边距。
+- 圆角只有 `Radius` 的几档，按东西的种类取，Theme 以外不写数（`lint.sh` 查）；嵌在容器里的块用 `Radius.nested`，内角随容器走、不手算；胶囊与圆写 `.capsule`、`.circle`。字号只经 `Typography`、图标尺寸只经 `Glyph`、投影只经 `Elevation`，Theme 以外同样不写数（`lint.sh` 查）。列表行的底（选中、按下、悬停）只有 `RowStyle` 一份，调用处不自己画底与负边距。
 - 少写字：不写说明句与次级标签，要解释的放问号气泡；撤不回的后果写在按钮旁。叫法见 WORDS.md。
 
 ## 加载与同步

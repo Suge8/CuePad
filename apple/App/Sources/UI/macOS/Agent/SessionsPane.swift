@@ -141,7 +141,7 @@ private struct ConnectAgents: View {
             HStack(alignment: .center, spacing: 14) {
                 HStack(spacing: -6) {
                     ForEach(found, id: \.self) { kind in
-                        kind.mark.image.font(.system(size: 15)).foregroundStyle(palette.ink)
+                        kind.mark.image.font(Glyph.control).foregroundStyle(palette.ink)
                             .frame(width: 30, height: 30).background(palette.desk, in: .circle)
                             .overlay(Circle().strokeBorder(palette.paper, lineWidth: 2))
                     }

@@ -29,7 +29,7 @@ struct NoticeView: View {
                     Button { if let link = notice.link { workspace.go(to: link) } } label: {
                         HStack(spacing: 6) {
                             Label { Text(notice.text) } icon: { Image(notice.tone.icon) }
-                            if notice.link != nil { Image(.forward).font(.system(size: 10, weight: .semibold)).accessibilityHidden(true) }
+                            if notice.link != nil { Image(.forward).font(Glyph.mark).accessibilityHidden(true) }
                         }
                         .font(Typography.secondary.weight(.medium))
                         .foregroundStyle(notice.isError ? palette.failure : palette.ink)

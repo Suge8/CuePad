@@ -135,7 +135,7 @@ private enum ChipMetrics {
     #if os(macOS)
     static let spacing: CGFloat = 5, glyph: CGFloat = 12, inset: CGFloat = 8, height: CGFloat = 24
     static let font = Typography.meta
-    static let chevron = Font.system(size: 9, weight: .semibold)
+    static let chevron = Glyph.mark
     #else
     static let spacing: CGFloat = 6, glyph: CGFloat = 13, inset: CGFloat = 12, height: CGFloat = 32
     static let font = Font.subheadline.weight(.medium)

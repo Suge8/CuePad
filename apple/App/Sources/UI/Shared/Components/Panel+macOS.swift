@@ -304,7 +304,7 @@ private struct PanelLayer: View {
                 .clipShape(.rect(cornerRadius: Radius.card))
                 .rowContainer(.rect(cornerRadius: Radius.card))
                 .overlay { RoundedRectangle(cornerRadius: Radius.card).strokeBorder(palette.hair) }
-                .shadow(color: palette.panelShadow, radius: 28, y: 10)
+                .elevation(.panel)
                 .accessibilityAddTraits(.isModal)
                 .padding(Self.margin)
                 // 常驻的浮层收起时：透明、点不到、读屏与按键快捷键都停用，订阅暂停，还没读过的先读一份

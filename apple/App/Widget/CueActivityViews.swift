@@ -92,11 +92,11 @@ private struct CompactLeading: View {
                     if !now.yours.isEmpty {
                         // 拍板与待回复都有时收紧一号：两项加头像仍在摄像头左边那一半里
                         let both = now.yours.count > 1
-                        HStack(spacing: both ? 5 : 6) { ForEach(now.yours) { CompactEntry(entry: $0, size: both ? 13 : 14) } }
+                        HStack(spacing: both ? 5 : 6) { ForEach(now.yours) { CompactEntry(entry: $0, size: both ? IslandType.tightEntrySize : IslandType.entrySize) } }
                     } else if let lead = now.moving.first {
                         CompactEntry(entry: lead)
                     } else if let word = now.quietWord {
-                        Text(word).font(.system(size: 14, weight: .semibold)).foregroundStyle(palette.ink2).lineLimit(1).fixedSize()
+                        Text(word).font(IslandType.word).foregroundStyle(palette.ink2).lineLimit(1).fixedSize()
                     }
                 }
             }
@@ -120,9 +120,9 @@ private struct CompactTrailing: View {
         Group {
             if limited {
                 if now.needsYou > 0 {
-                    Text(now.needsYou, format: .number).rollingCount(now.needsYou).font(.system(size: 14, weight: .bold)).monospacedDigit().foregroundStyle(palette.waiting)
+                    Text(now.needsYou, format: .number).rollingCount(now.needsYou).font(IslandType.count).monospacedDigit().foregroundStyle(palette.waiting)
                 } else if !now.moving.isEmpty {
-                    Text(now.advancing, format: .number).rollingCount(now.advancing).font(.system(size: 14, weight: .bold)).monospacedDigit().foregroundStyle(palette.signature)
+                    Text(now.advancing, format: .number).rollingCount(now.advancing).font(IslandType.count).monospacedDigit().foregroundStyle(palette.signature)
                 }
             } else if let entry = Self.trailing(now) {
                 CompactEntry(entry: entry)
@@ -141,13 +141,13 @@ private struct CompactTrailing: View {
 /// 紧凑态的一项：着色的数接词。
 private struct CompactEntry: View {
     let entry: CueNow.Entry
-    var size: CGFloat = 14
+    var size = IslandType.entrySize
     @Environment(\.palette) private var palette
 
     var body: some View {
         entry.text(number: entry.tone.color(palette)).monospacedDigit().foregroundStyle(palette.ink2)
             .rollingCount(entry.count)
-            .font(.system(size: size, weight: .semibold))
+            .font(IslandType.entry(size))
             .lineLimit(1).fixedSize()
     }
 }

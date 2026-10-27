@@ -1,6 +1,11 @@
 import SwiftUI
+#if os(macOS)
+import AppKit
+#else
+import UIKit
+#endif
 
-/// 字号与行距的唯一来源，共享组件里的平台差异只在这里：iOS 用系统文字样式、跟随动态字体；
+/// 字号与行距的唯一来源（图标的尺寸在 `Glyph`），Theme 以外不写字号的数（`lint.sh` 查）。共享组件里的平台差异只在这里：iOS 用系统文字样式、跟随动态字体；
 /// Mac 没有动态字体，系统文字样式偏小（正文 13、脚注与说明 10），苹方在这个字号下读着吃力，所以 Mac 按角色给固定字号，
 /// 比系统样式高一档，层级之间至少差 1pt、靠字重与墨色深浅再拉开。
 enum Typography {
@@ -59,6 +64,10 @@ enum Typography {
     static let cueCardName = Font.system(size: 18, weight: .semibold)
     /// 多行正文的行距：苹方的默认行高偏紧，加上这些约是 1.5 倍行高。
     static let lineSpacing: CGFloat = 4
+    /// 用量环里剩多少的数字。
+    static let gaugeNumber = Font.system(size: 15, weight: .semibold, design: .rounded).monospacedDigit()
+    /// 菜单栏图标右边的计数。
+    static let menuBarCount = NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .semibold)
     #else
     static let body = Font.body
     static let bodyStrong = Font.headline
@@ -76,7 +85,15 @@ enum Typography {
     static let readingLineSpacing: CGFloat = 4
     static let title = Font.title3.weight(.semibold)
     static let emptyTitle = Font.title3.weight(.semibold)
+    static let gaugeNumber = Font.system(.body, design: .rounded, weight: .semibold).monospacedDigit()
+    /// 底栏上的字：栏高固定，不随动态字体。
+    static let dockLabel = Font.system(size: 12, weight: .medium)
+    /// 预览页里整份文件的等宽字（UIKit 文本视图）。
+    static let codeUIFont = UIFont.monospacedSystemFont(ofSize: UIFont.preferredFont(forTextStyle: .footnote).pointSize, weight: .regular)
     #endif
+
+    /// 一个换行撑出的空行：`Text` 不认段距，块与块之间用一个这个字号的换行拉开。
+    static func gap(_ height: CGFloat) -> Font { .system(size: height) }
 }
 
 #if os(macOS)

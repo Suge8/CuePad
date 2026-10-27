@@ -15,7 +15,7 @@ final class StatusItemController: NSObject {
         self.toggleWindow = toggleWindow
         super.init()
         // 20pt 的符号实高约 17pt（同系统菜单栏图标），在 22pt 高的菜单栏里上下各留一点；模板图随菜单栏明暗着色
-        guard let image = Icon.cue.platformImage?.withSymbolConfiguration(.init(pointSize: 20, weight: .regular)) else {
+        guard let image = Icon.cue.platformImage?.withSymbolConfiguration(.init(pointSize: Glyph.largeSize, weight: .regular)) else {
             preconditionFailure("缺少 Cue 符号 cue.mascot")
         }
         image.isTemplate = true
@@ -32,7 +32,7 @@ final class StatusItemController: NSObject {
         guard let button = item.button else { return }
         button.imagePosition = count > 0 ? .imageLeading : .imageOnly
         button.attributedTitle = count > 0
-            ? NSAttributedString(string: "\(count)", attributes: [.font: NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .semibold)])
+            ? NSAttributedString(string: "\(count)", attributes: [.font: Typography.menuBarCount])
             : NSAttributedString()
         button.setAccessibilityValue(count > 0 ? String(localized: "\(count) 件要你管") : nil)
     }

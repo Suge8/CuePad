@@ -23,7 +23,7 @@ struct CueRunPanel: View {
                 Text("运行情况").font(Typography.sectionTitle).foregroundStyle(palette.ink)
                 Spacer()
                 Button("收起", icon: .close) { workspace.cue.showsRun = false }
-                    .labelStyle(.iconOnly).font(.system(size: 12, weight: .semibold)).foregroundStyle(palette.ink3)
+                    .labelStyle(.iconOnly).font(Glyph.small).foregroundStyle(palette.ink3)
                     .frame(width: 28, height: 28).contentShape(.rect)
                     .buttonStyle(PressStyle(.button))
             }

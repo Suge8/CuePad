@@ -20,7 +20,7 @@ struct CueReplyTip: View {
                     Text("\(replies.count) 个会话待回复").foregroundStyle(palette.ink).lineLimit(1)
                 }
                 Spacer(minLength: 8)
-                Image(.forward).font(.system(size: 10, weight: .bold)).foregroundStyle(palette.ink3)
+                Image(.forward).font(Glyph.mark).foregroundStyle(palette.ink3)
             }
             .frame(maxWidth: .infinity)
         }

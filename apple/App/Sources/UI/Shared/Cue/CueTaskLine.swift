@@ -34,7 +34,7 @@ struct CueTaskLine: View {
             HStack(spacing: 6) {
                 TaskRingView(status: place?.status?.known, done: done, size: 13, steps: place?.progress).relaySpot(task: task)
                 Text(title).lineLimit(1)
-                Image(.forward).font(.system(size: 9, weight: .semibold))
+                Image(.forward).font(Glyph.mark)
             }
             .font(Typography.meta).foregroundStyle(palette.ink2)
             .frame(minHeight: Self.lineHeight).contentShape(.rect)

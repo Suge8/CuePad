@@ -49,7 +49,7 @@ struct CueSchedulePage: View {
                     .padding(.top, 12)
             }
             HStack(spacing: 10) {
-                Image(.add).font(.system(size: 14, weight: .semibold)).foregroundStyle(palette.ink2).accessibilityHidden(true)
+                Image(.add).font(Glyph.row).foregroundStyle(palette.ink2).accessibilityHidden(true)
                 TextField(String(localized: "到时候做什么"), text: $text, palette: palette).textFieldStyle(.plain).font(Typography.body)
                     .focused($adding)
                     .onSubmit(add)
@@ -144,7 +144,7 @@ private struct Rescheduling: Equatable {
 /// 一行的几点那一列：字号比正文大一档，与正文隔开一段。
 private enum ScheduleMetrics {
     #if os(macOS)
-    static let time = Font.system(size: 15, weight: .medium)
+    static let time = Typography.bodyStrong.weight(.medium)
     #else
     static let time = Font.system(.title3, weight: .medium)
     #endif

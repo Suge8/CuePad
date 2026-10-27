@@ -123,7 +123,7 @@ private struct DeleteGlyph: View {
             .frame(width: 24, height: 24)
             .background(palette.paperLit, in: .circle)
             .overlay(Circle().strokeBorder(palette.hair))
-            .shadow(color: palette.shadow, radius: 6, y: 2)
+            .elevation(.hover)
             .contentShape(.circle)
     }
 }
@@ -137,7 +137,7 @@ private struct SelectedFrame: View {
         if selected {
             RoundedRectangle(cornerRadius: Radius.card).strokeBorder(palette.signature, lineWidth: 2)
                 .overlay(alignment: .topTrailing) {
-                    Image(.picked).font(.system(size: 18)).foregroundStyle(palette.onFill, palette.signature)
+                    Image(.picked).font(Glyph.large).foregroundStyle(palette.onFill, palette.signature)
                         .padding(10)
                 }
                 .allowsHitTesting(false)

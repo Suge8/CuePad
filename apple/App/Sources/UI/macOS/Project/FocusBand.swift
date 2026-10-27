@@ -69,7 +69,7 @@ struct FocusBand: View {
         Button { toggle(key) } label: {
             HStack(spacing: 3) {
                 Text(title)
-                Image(open ? .collapse : .expand).font(.system(size: 8, weight: .semibold)).accessibilityHidden(true)
+                Image(open ? .collapse : .expand).font(Glyph.mark).accessibilityHidden(true)
             }
             .fixedSize()
             .contentShape(.rect)

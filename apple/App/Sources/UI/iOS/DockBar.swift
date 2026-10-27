@@ -79,7 +79,7 @@ private struct DockMore: View {
 
     var body: some View {
         Button(action: expand) {
-            IconImage(.more).font(.system(size: 20, weight: .medium))
+            IconImage(.more).font(Glyph.large.weight(.medium))
                 .frame(width: Dock.slot, height: Dock.slot)
                 .contentShape(.circle)
         }
@@ -143,7 +143,7 @@ private struct DockCue: View {
             if workspace.cue.unread > 0 {
                 CueDot().offset(x: -10, y: 6)
             } else if drafted {
-                IconImage(.said).font(.system(size: 10, weight: .semibold)).foregroundStyle(palette.ink)
+                IconImage(.said).font(Glyph.mark).foregroundStyle(palette.ink)
                     .frame(width: Self.badge, height: Self.badge)
                     .background(palette.bubble, in: .circle)
                     .offset(x: -2, y: -4)
@@ -177,7 +177,7 @@ private struct DockTally: View {
                 Text(cue.now.quietLine).foregroundStyle(palette.ink3).rollingCount(cue.now.quietLine)
             }
         }
-        .font(.system(size: 12, weight: .medium))
+        .font(Typography.dockLabel)
         .lineLimit(1)
         .handOff(id: cue.now.advancing == 0 && cue.now.needsYou == 0
             ? [HandOff.wording(cue.now.quietLine)]
