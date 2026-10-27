@@ -1,11 +1,11 @@
 #if os(iOS)
 import SwiftUI
 
-/// 底部那一排换形里每样东西多浓、点不点得到，全是 `DockMotion.places` 的函数（1 是两格，0 是"⋯"加输入框）；换 tab 时的弹簧、
+/// 底部那一排换形里每样东西多浓、点不点得到，全是 `DockMotion.places` 的函数（1 是两格，0 是"⋯"加输入框）；拖动跟手、点按与松手的弹簧、
 /// 减弱动态效果时直接到位，都只是 `places` 走得快慢不同，没有另外的交接时机。
 /// 分两段，前后不相叠：先是两格（系统标签栏，不能变形）原地淡出，这一段别的都不动；淡完了才是后一段，Cue 钮长成输入框那么宽、那么高，
-/// 同时"⋯"按原尺寸在左边淡入。底边那一格在后一段里交叉：玻璃连续，字不相叠。输入框（在 Cue 页里）在前两成半连玻璃带字淡完，
-/// Cue 钮的玻璃在前三成淡入，它的字与头像等输入框淡完才起。
+/// 同时"⋯"按原尺寸在左边淡入。底边那一格在后一段里交叉：玻璃连续，字不相叠。输入框（在 Cue 页里，随页滑）在前两成半连玻璃带字淡完，
+/// Cue 钮的玻璃（不随页滑）在前三成淡入，它的字与头像等输入框淡完才起。
 /// 被否决的：两格与 Cue 钮同时变（Cue 钮压在半透明的标签栏上，中途冒出半宽的空玻璃再缩成"⋯"）；按"停稳了没有"交接（交给输入框后等它画上屏一帧再藏 Cue 钮，
 /// 收回时拍下输入框盖住）——几样状态互相触发，到 Cue 页时空玻璃闪两三帧、两行草稿时玻璃只一行高。
 enum DockHandoff {
@@ -38,9 +38,9 @@ extension View {
 private struct DockedComposer: ViewModifier {
     let motion: DockMotion?
 
-    /// 与底部那一排同一条弹簧（`DockBar`）：两边各在一棵树里，各按 `places` 变了起动画，同一回合起、同一条曲线。
+    /// 推入、返回盖住 Cue 页时与底部那一排同一条弹簧（`DockBar`）；拖动、松手与"⋯"开合的弹簧由改的那一下带来。
     func body(content: Content) -> some View {
-        content.modifier(ComposerFade(places: motion?.places ?? 0)).animation(Motion.nudge, value: motion?.places ?? 0)
+        content.modifier(ComposerFade(places: motion?.places ?? 0)).animation(Motion.nudge, value: motion?.covered ?? false)
     }
 }
 
@@ -60,7 +60,7 @@ private struct ComposerFade: ViewModifier, Animatable {
 }
 
 extension EnvironmentValues {
-    /// 底部那一排此刻的样子（`DockMotion`）；宽屏没有底部那一排，为 nil。
+    /// 底部那一排与条此刻的样子（`DockMotion`）；宽屏没有底部那一排，为 nil。
     @Entry var dockMotion: DockMotion?
 }
 #endif
