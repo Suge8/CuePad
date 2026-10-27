@@ -1,6 +1,5 @@
 import CloudKit
 import CueStore
-import CueText
 import Foundation
 import Synchronization
 
@@ -131,7 +130,7 @@ actor FileFetcher {
   }
 
   private func seen(_ rows: [Attachment]) async {
-    known = Dictionary(rows.map { (AttachmentKey.make(hash: $0.hash, format: $0.format), $0) }, uniquingKeysWith: { first, _ in first })
+    known = Dictionary(rows.map { ($0.key, $0) }, uniquingKeysWith: { first, _ in first })
     skipped = skipped.filter { known[$0.key] == $0.value.attachment }
     for (id, waiter) in waiters {
       guard let attachment = known[waiter.key] else { continue }
@@ -161,7 +160,7 @@ actor FileFetcher {
 
   @discardableResult
   private func begin(_ attachment: Attachment, automatic isAutomatic: Bool) -> Task<URL, any Error> {
-    let key = AttachmentKey.make(hash: attachment.hash, format: attachment.format)
+    let key = attachment.key
     let task = Task { try await self.download(attachment, key) }
     running[key] = task
     if isAutomatic { automatic.insert(key) }

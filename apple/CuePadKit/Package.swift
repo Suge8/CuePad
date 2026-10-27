@@ -21,7 +21,7 @@ let package = Package(
         // 卡片正文（Markdown 原文）的模型：图片的解析/序列化、标题与按行规则、轻装饰、变量。仅依赖 Foundation。
         .target(name: "CueText"),
         // SQLite 唯一事实源、结构与升级、仓储。直接用系统 SQLite3，零第三方依赖。
-        .target(name: "CueStore", dependencies: ["CueText"], linkerSettings: [.linkedLibrary("sqlite3")]),
+        .target(name: "CueStore", dependencies: ["CueText"]),
         // TextKit 2 编辑器宿主（AppKit / UIKit）。
         .target(name: "CueEditor", dependencies: ["CueText"]),
         // macOS Pi 桥：扩展（随包资源）、socket 客户端、会话历史索引、终端跳转。仅 macOS，iOS 目标不依赖。

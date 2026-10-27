@@ -170,7 +170,6 @@ public struct LibraryInstruction: Codable, Equatable, Sendable, Identifiable {
     self.readers = readers
     self.links = links
   }
-
 }
 
 /// 各家自管、CuePad 不碰的技能（Claude Code 从 claude.ai 同步的 `skills/synced`、Codex 自带的 `skills/.system`）。
