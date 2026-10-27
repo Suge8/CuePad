@@ -16,14 +16,14 @@ struct CueDot: View {
             CueArrival(color: palette.replied)
         }
         .frame(width: Self.size, height: Self.size)
-        .animation(HandOff.quick, value: color)
+        .animation(Motion.fade, value: color)
         .accessibilityHidden(true)
     }
 }
 
 /// Cue 又说了一句（新消息变多）时从这里漾开一圈，告诉你"又来了"；读掉、变少不漾，有人在看 Cue 页时（`AppServices.cueViewers`）不漾，
 /// 减弱动态效果时没有。挂在一直在的视图上（头像、入口的点）：它自己看新消息的数变多，不另存状态，数只在 `CueWatch.unread`。
-/// 一圈与别的尺寸动效同一条弹簧（`Motion.snappy`）：余光里抓得住的是突然动起来的那一下，不是动多久；之后靠加粗、墨色与点留着。
+/// 一圈与别的尺寸动效同一条弹簧（`Motion.nudge`）：余光里抓得住的是突然动起来的那一下，不是动多久；之后靠加粗、墨色与点留着。
 /// `reach`：圈扩到自身的几倍（点小、扩得远；头像大、扩一圈就够）。
 struct CueArrival: View {
     let color: Color
@@ -50,7 +50,7 @@ struct CueArrival: View {
         var body: some View {
             Circle().stroke(color, lineWidth: 2)
                 .scaleEffect(spread ? reach : 1).opacity(spread ? 0 : 1)
-                .onAppear { withAnimation(Motion.snappy) { spread = true } }
+                .onAppear { withAnimation(Motion.nudge) { spread = true } }
         }
     }
 }

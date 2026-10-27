@@ -147,7 +147,7 @@ private struct CaptureSlot: View {
                 .allowsHitTesting(!searching)
                 .accessibilityHidden(searching)
                 .animation(nil, value: searching)
-                .transition(.opacity.animation(.easeOut(duration: 0.1)))
+                .transition(.opacity.animation(Motion.yield))
         }
     }
 }

@@ -46,7 +46,7 @@ struct SaveStatus: View {
                 Text(text).foregroundStyle(editing.saveState == .failed ? palette.failure : palette.ink3).transition(.opacity)
             }
         }
-        .animation(HandOff.quick, value: editing.saveState)
+        .animation(Motion.fade, value: editing.saveState)
         // "已保存"只亮一会儿；状态再变（又在保存、出错）时这次计时作废
         .task(id: editing.saveState) {
             guard editing.saveState == .saved else { return }

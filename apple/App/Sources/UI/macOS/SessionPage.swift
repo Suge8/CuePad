@@ -92,7 +92,7 @@ struct SessionPage: View {
                     }
                     .padding(.horizontal, 24).padding(.bottom, 16)
                     .frame(maxWidth: Self.readingWidth)
-                    .animation(HandOff.quick, value: session.question)
+                    .animation(Motion.fade, value: session.question)
                     .renameSession($renaming)
                     .endSession($confirmingEnd)
                 }

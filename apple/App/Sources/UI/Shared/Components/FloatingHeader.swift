@@ -167,7 +167,7 @@ private struct Yield: ViewModifier {
     func body(content: Content) -> some View {
         content
             .opacity(hidden ? 0 : 1)
-            .animation(HandOff.quick, value: hidden)
+            .animation(Motion.fade, value: hidden)
             .allowsHitTesting(!hidden)
             .accessibilityHidden(hidden)
     }

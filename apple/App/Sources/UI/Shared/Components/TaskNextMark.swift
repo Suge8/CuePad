@@ -38,7 +38,7 @@ struct TaskNextMark: View {
         // 点按区比图形宽；图形贴着行的那一边（手机行尾的一列右缘对齐，紧跟标题时靠左），不在点按区里居中
         .frame(minWidth: Self.target, minHeight: Self.target, alignment: edge)
         .contentShape(.rect)
-        .animation(HandOff.quick, value: lit)
+        .animation(Motion.fade, value: lit)
     }
 
     #if os(macOS)

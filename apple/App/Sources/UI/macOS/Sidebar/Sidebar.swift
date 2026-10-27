@@ -291,7 +291,7 @@ private struct FooterPage: View {
                 .overlay(alignment: .topTrailing) {
                     if alert { Circle().fill(palette.ink).frame(width: CueDot.size, height: CueDot.size).offset(x: -5, y: 5).transition(.opacity) }
                 }
-                .animation(HandOff.quick, value: alert)
+                .animation(Motion.fade, value: alert)
                 .contentShape(.circle)
         }
         .buttonStyle(PressStyle(.button))

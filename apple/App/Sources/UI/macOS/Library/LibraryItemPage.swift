@@ -13,7 +13,7 @@ struct LibraryItemLayer: View {
                 LibraryItemPage(item: item).id(item).transition(.opacity)
             }
         }
-        .animation(HandOff.quick, value: workspace.openLibraryItem)
+        .animation(Motion.fade, value: workspace.openLibraryItem)
     }
 }
 
@@ -112,7 +112,7 @@ struct DraftStatus: View {
             }
         }
         .transition(.opacity)
-        .animation(HandOff.quick, value: draft.state)
+        .animation(Motion.fade, value: draft.state)
         .task(id: draft.state) {
             guard draft.state == .saved || draft.state == .followed else { return }
             try? await Task.sleep(for: SaveState.savedDisplay * 2)

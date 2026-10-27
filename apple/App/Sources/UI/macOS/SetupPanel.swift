@@ -66,8 +66,8 @@ struct SetupPanel: View {
         }
         .frame(width: 520)
         .background(palette.desk)
-        .animation(HandOff.quick, value: checked)
-        .onAppear { withAnimation(reduceMotion ? HandOff.quick : Motion.snappy) { shown = true } }
+        .animation(Motion.fade, value: checked)
+        .onAppear { withAnimation(Motion.fading(Motion.nudge, reduceMotion: reduceMotion)) { shown = true } }
         .observing(services.store, into: $here, onError: workspace.fail) { [host = services.hostID] in try $0.macAgents(on: host) }
         .task {
             await workspace.recheckAgents()

@@ -28,11 +28,19 @@ extension EnvironmentValues {
 private struct BoardCardFrame: ViewModifier {
     let column: TaskBoard.Column
     @Environment(\.boardRow) private var row
+    @Environment(\.boardArrival) private var arrival
     @Environment(\.palette) private var palette
 
     func body(content: Content) -> some View {
         content.padding(.horizontal, row ? BoardCardMetrics.rowPadding : TaskMetrics.cardPadding)
             .frame(maxWidth: .infinity, maxHeight: row ? .infinity : nil, alignment: .leading)
+            .background {
+                // 换列飞来时盖着原来那一列的纸色，随着飞淡掉（`boardFlight`）：纸色在飞的途中调过来，不在起飞那一下换
+                if let arrival {
+                    RoundedRectangle(cornerRadius: TaskMetrics.cardRadius, style: .continuous)
+                        .fill(arrival.from.paper(palette) ?? palette.paper).opacity(arrival.landed ? 0 : 1)
+                }
+            }
             .paper(radius: TaskMetrics.cardRadius, wash: column.paper(palette))
             .contentShape(.rect(cornerRadius: TaskMetrics.cardRadius, style: .continuous))
     }
@@ -50,7 +58,7 @@ private struct BoardDim: ViewModifier {
         let hovered = workspace.hoveredProject
         content
             .opacity(hovered.map { $0 == project } ?? true ? 1 : Self.dimmed)
-            .animation(HandOff.quick, value: hovered)
+            .animation(Motion.fade, value: hovered)
     }
 }
 #endif

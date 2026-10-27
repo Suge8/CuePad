@@ -20,7 +20,7 @@ struct LibraryPage: View {
                     }
                     SkillSection(library: library, columns: columns)
                 }
-                .animation(HandOff.quick, value: library.tidies.isEmpty)
+                .animation(Motion.fade, value: library.tidies.isEmpty)
                 .padding(.horizontal, Spacing.page)
                 .padding(.bottom, Spacing.section)
             } else {

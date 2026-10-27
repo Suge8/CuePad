@@ -19,7 +19,7 @@ struct ProgressPanes: View {
     private func pane(_ pane: ProgressPane, _ title: LocalizedStringResource, icon: Icon) -> some View {
         let on = workspace.progressPane == pane
         return Button {
-            withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { workspace.progressPane = pane }
+            withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { workspace.progressPane = pane }
         } label: {
             Image(icon).font(.subheadline.weight(.semibold))
                 .foregroundStyle(on ? palette.signature : palette.ink2)

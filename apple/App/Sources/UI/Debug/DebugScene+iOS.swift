@@ -25,10 +25,24 @@ extension DebugScene {
         for mode in UITextInputMode.activeInputModes where mode.responds(to: selector) { mode.perform(selector, with: nil) }
     }
 
+    /// iPad 的窗口模式下系统记着上次的窗口大小（别的调试会话缩过、拖过的窗口下次照那么大起）：调试实例铺满屏，截图、录屏画的是整屏的四列；
+    /// 要窄窗口用 `-CuePadCompact`。只撑最小尺寸、不锁死：起来后照样能拖小。
+    private static func fillScreenOnPad() {
+        guard UIDevice.current.userInterfaceIdiom == .pad, defaults.string(forKey: "CuePadCompact") == nil,
+              let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene, let restrictions = scene.sizeRestrictions
+        else { return }
+        restrictions.minimumSize = scene.screen.bounds.size
+        Task {
+            await NextFrame.wait()
+            restrictions.minimumSize = .zero
+        }
+    }
+
     static func prepare(_ workspace: Workspace) async {
         if defaults.string(forKey: "CuePadBench") == "interact" { IOSInteractionBench.beginCold() }
         dumpAccessibilityIfAsked()
         if defaults.bool(forKey: "CuePadSoftKeyboard") { showSoftwareKeyboard() }
+        fillScreenOnPad()
         if defaults.bool(forKey: "CuePadLandscape") {
             (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.requestGeometryUpdate(.iOS(interfaceOrientations: .landscapeRight))
         }

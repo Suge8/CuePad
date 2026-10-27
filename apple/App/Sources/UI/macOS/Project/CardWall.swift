@@ -82,7 +82,7 @@ struct CardTile: View {
         .onDrag { CardDragSession.shared.begin(.idea(card.id)) }
         .onHover { hovering = $0 }
         .presetHover($hovering)
-        .animation(HandOff.quick, value: hovering)
+        .animation(Motion.fade, value: hovering)
         .contextMenu { CardActions(card: card, selectable: true) }
         .accessibilityElement(children: .combine)
     }

@@ -72,8 +72,8 @@ private struct BubbleLayer<Item: Identifiable, Panel: View>: View {
         }
         // 贴在底部的纸伸进 Home 指示条那一截：与屏幕圆角同心，盖住标签栏
         .ignoresSafeArea(source == .bottom ? .all : .keyboard, edges: source == .bottom ? .bottom : .all)
-        .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion) ?? HandOff.quick, value: item?.id)
-        .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: keyboardTop)
+        .animation(Motion.fading(Motion.nudge, reduceMotion: reduceMotion), value: item?.id)
+        .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion), value: keyboardTop)
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { note in
             guard item != nil, let end = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
             // 键盘开着时只往上让、不往下回：菜单一开候选栏收起、键盘矮一截，气泡跟着掉下去再弹回来是看得见的抖（同 `KeyboardHold`）；
@@ -92,7 +92,7 @@ private struct BubbleLayer<Item: Identifiable, Panel: View>: View {
     /// 松手按去势定去留（`predicted` 是照这股劲滑到哪）：拖得够远或甩得够快就关、从此刻的位置落回底边，否则弹回。
     private func released(_ translation: CGFloat, predicted: CGFloat) {
         if max(translation, predicted) > Self.dismissDrag { return close() }
-        withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { drag = 0 }
+        withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { drag = 0 }
     }
 
     /// 拖过（或照去势会滑过）这么远就关。

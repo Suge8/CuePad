@@ -2,7 +2,7 @@ import QuartzCore
 import SwiftUI
 
 /// 对话内容在渲染端的平移（新到的一条把上面的对话撑上去，`ChatScroll.rise`）：给滚动区里装内容的那一层叠一段相对的竖直平移，
-/// 从让出的高无回弹地回到 0（`Motion.move` 的曲线与时长），全在 Core Animation 的渲染端跑，动画里主线程不重排、不读几何。
+/// 从让出的高定长地回到 0（`Motion.glide`），全在 Core Animation 的渲染端跑，动画里主线程不重排、不读几何。
 /// 叠加（`additive`）、每次各用各的键：上一段没走完又来一条时两段相加，屏上从当前位置连续接上。
 /// 否决的方案：SwiftUI 的偏移逐帧挪——每帧要主线程更新，Mac 上发出一句到回复与结果卡出来的那几秒主线程指令多近两成。
 /// 挪哪一层由内容里一个不占地方的平台视图往上找（`Anchor`）；顺着它也找到平台的滚动视图，直接挪偏移（`scroll(by:)`）。
@@ -16,8 +16,8 @@ import SwiftUI
         slide.fromValue = downIsPositive ? height : -height
         slide.toValue = 0
         slide.isAdditive = true
-        slide.duration = Motion.moveDuration
-        slide.timingFunction = Motion.moveTiming
+        slide.duration = Motion.Glide.duration
+        slide.timingFunction = Motion.Glide.timing
         slides += 1
         layer.add(slide, forKey: "lift.\(slides)")
     }

@@ -34,7 +34,7 @@ struct BlankChat: View {
         }
             .padding(.bottom, bottomInset)
             .opacity(shown ? 1 : 0)
-            .animation(HandOff.quick, value: shown)
+            .animation(Motion.fade, value: shown)
             .allowsHitTesting(false)
             .accessibilityHidden(!shown)
     }
@@ -121,7 +121,7 @@ private struct MachineCard: View {
             .accessibilityExpanded(note.detail.isEmpty ? nil : open)
             if open { NoteThread { MarkdownText(source: note.detail).equatable() } }
         }
-        .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: open)
+        .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion), value: open)
     }
 }
 

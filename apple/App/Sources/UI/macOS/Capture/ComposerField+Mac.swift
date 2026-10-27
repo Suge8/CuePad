@@ -105,7 +105,7 @@ struct ComposerField: NSViewRepresentable {
             let text = String(native: view.textStorage?.string as NSString? ?? "")
             sent = text
             // 高度跟着文字一起走动画：换行、删行每次都差一整行
-            withAnimation(parent.reduceMotion ? nil : Motion.snappy) { parent.text = text }
+            withAnimation(Motion.spatial(Motion.nudge, reduceMotion: parent.reduceMotion)) { parent.text = text }
         }
 
         func textView(_ view: NSTextView, doCommandBy selector: Selector) -> Bool {

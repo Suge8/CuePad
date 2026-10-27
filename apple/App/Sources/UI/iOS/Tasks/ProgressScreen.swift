@@ -42,7 +42,7 @@ struct ProgressScreen: View {
             }
         }
         .refreshesQuota()
-        .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: adding)
+        .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion), value: adding)
         .onChange(of: workspace.scopedProject) { adding = false }
         .observingBoard(into: $board, store: services.store, onError: workspace.fail)
     }

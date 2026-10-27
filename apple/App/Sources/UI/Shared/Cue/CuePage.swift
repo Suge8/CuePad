@@ -73,7 +73,7 @@ struct CuePage: View {
                     .transition(.move(edge: .trailing).combined(with: .opacity))
             }
         }
-        .animation(Motion.snappy, value: cue.showsRun)
+        .animation(Motion.nudge, value: cue.showsRun)
         .background(palette.desk)
     }
     #else
@@ -142,7 +142,7 @@ struct CuePage: View {
             // 手机上对话里的字不开行内选择：长按出的是消息菜单，挑字走菜单里的"选择文本"（同会话页）
             .environment(\.inlineTextSelection, false)
             #endif
-            .animation(HandOff.quick, value: cue.presence.progress)
+            .animation(Motion.fade, value: cue.presence.progress)
         }
     }
 
@@ -183,7 +183,7 @@ struct CuePage: View {
         .floatingAbove {
             if let replies = thread?.replies, !replies.isEmpty { CueReplyTip(replies: replies).transition(.opacity) }
         }
-        .animation(HandOff.quick, value: cue.canHear)
-        .animation(HandOff.quick, value: thread?.replies.isEmpty)
+        .animation(Motion.fade, value: cue.canHear)
+        .animation(Motion.fade, value: thread?.replies.isEmpty)
     }
 }
