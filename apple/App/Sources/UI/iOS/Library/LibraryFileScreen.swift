@@ -60,7 +60,7 @@ struct LibraryFileScreen: View {
                     MergeBar(tidy: merge, library: library, previewing: $previewing, retire: $retire, prepare: draft.dirty ? nil : {})
                 }
                 if case .skill(let path) = file {
-                    SkillFields(draft: draft, problem: library.skill(at: path)?.problem).padding(.horizontal, 4 + EditorGutter.width)
+                    SkillFields(draft: draft, problem: library.skill(at: path)?.problem).padding(.horizontal, 4)
                     Divider()
                 }
             }

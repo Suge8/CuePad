@@ -180,5 +180,12 @@ enum LibraryPane: Int, CaseIterable, Comparable {
         case .skills: "技能"
         }
     }
+
+    var icon: Icon {
+        switch self {
+        case .rules: .instruction
+        case .skills: .skill
+        }
+    }
 }
 

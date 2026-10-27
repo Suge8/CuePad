@@ -88,7 +88,7 @@ private struct ProgressHeader: View {
     var body: some View {
         GrowPanel(open: $open, radius: FloatingHeaderLayout.height / 2) {
             HStack(spacing: 0) {
-                ProgressPanes(size: Self.pane).padding(.leading, 3)
+                ProgressPanes().frame(height: Self.pane).padding(.leading, 3)
                 ProjectScope()
                 QuotaRings(open: open, height: FloatingHeaderLayout.height) { $open.grow(reduceMotion: reduceMotion) }
             }

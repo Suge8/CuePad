@@ -77,8 +77,6 @@ struct FittedEditorHost: NSViewRepresentable {
 
     func makeNSView(context: Context) -> CueTextView {
         let textView = CueTextView(imageStore: services.store.files, theme: host.theme)
-        // 字贴着框的左沿，与气泡里别的行对齐
-        textView.textContainer?.lineFragmentPadding = 0
         textView.storedText = host.initialText
         host.handle.textView = textView
         return textView

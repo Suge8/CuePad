@@ -46,8 +46,6 @@ struct IOSEditorHost: UIViewRepresentable {
         if fits {
             view.isScrollEnabled = false
             view.alwaysBounceVertical = false
-            // 字贴着框的左沿，与气泡里别的行对齐
-            view.textContainer.lineFragmentPadding = 0
         }
         handle.view = view
         // 新建的空卡直接进入输入

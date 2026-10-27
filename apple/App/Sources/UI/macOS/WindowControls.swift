@@ -11,7 +11,6 @@ struct LeadingSlots: View {
             SwitcherSlot()
             CloseButton()
             PanesSlot()
-            LibraryPanesSlot()
             ScopeSlot()
         }
         // 离侧栏的边、侧栏钮各空一点：工具栏把这一项贴着它们排；再多空，侧栏收起时英文的待办列头写不下列名
@@ -87,37 +86,34 @@ struct SidebarToggle: View {
 /// 主窗口的视图体不读它，开合时不重算整个窗口、不重建整条工具栏。
 
 /// 工具栏左上的"收起"：只在开着编辑页时有（灵感的编辑页、技能与规则的文件页，Esc 同），没有时不占位置。
+/// 一颗返回图标的圆钮（同手机推入页左上的系统返回），悬停提示与读屏说"收起"。
 struct CloseButton: View {
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
         if workspace.overlay != nil {
-            Button { workspace.overlay = nil } label: {
-                HStack(spacing: 4) {
-                    Image(.back).font(.system(size: 13, weight: .semibold))
-                    Text("收起")
-                }
-            }
-            .buttonStyle(ControlButtonStyle(kind: .glass))
+            // 箭头比放大镜、"⋯"细瘦：大一号、粗一档，与它们一样重
+            Button { workspace.overlay = nil } label: { Image(.back).font(.system(size: 15, weight: .bold)) }
+            .buttonStyle(ControlButtonStyle(kind: .circular))
             .keyboardShortcut(.cancelAction)
             .help("收起（Esc）")
+            .accessibilityLabel("收起")
             .padding(.trailing, Spacing.toolbarGap)
         }
     }
 }
 
 /// 工具栏左边、侧栏钮（与侧栏收起时的项目切换）之后：进展页两段的图标分段（`ProgressPanes`，同 iPhone 顶上那块玻璃里那一组），两段同一个位置。
+/// 分段本该在中间（`PageTitleSlot`）：看板段那一排是四个列头、各对齐自己那一列，中间正是推进中、等你的列头，放中间就压住它们，所以留在左上、待办那一列上方。
 /// 右沿报给看板段的列头（`MacPages.panesEdge`）：它下面的列头从它右边起，不压在分段下面。
 struct PanesSlot: View {
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        PageControl(.progress) { ProgressPanes(size: Spacing.toolbarControl - Self.inset * 2).padding(Self.inset).glass(in: .capsule) }
+        PageControl(.progress) { ProgressPanes().frame(height: PaneMetrics.square).padding(PaneMetrics.inset).glass(in: .capsule) }
             .background { WindowFrame(\.maxX) { workspace.pages.panesEdge = $0 } }
             .toolbarPresence(workspace.root == .progress)
     }
-
-    static let inset: CGFloat = 3
 }
 
 /// 量这一块在窗口里的框（左上为原点，同窗口里浮层的坐标），或它的一条边（`CGRect.minX`、`maxX`）：工具栏项与页面不在同一棵视图里，
@@ -199,7 +195,7 @@ struct ScopeSlot: View {
     }
 }
 
-/// 只属于一页的工具栏控件（进展页的 `PanesSlot`、`ScopeSlot`、`PageActionSlot`，技能与规则页的 `LibraryPanesSlot`、`LibraryHelpSlot`）：
+/// 只属于一页的工具栏控件（进展页的 `PanesSlot`、`ScopeSlot`、`PageActionSlot`，技能与规则页的 `LibraryHelpSlot`）：
 /// 别的页上宽 0、看不见。随那一页一起挂上——进展页在启动后空闲时先挂上（`Prewarm`），或一打开就在那一页——之后一直挂着；
 /// 挂上之前不建，冷启动的第一帧不建看不见的分段、项目菜单、玻璃与新会话钮。
 struct PageControl<Content: View>: View {

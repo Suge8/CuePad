@@ -53,34 +53,14 @@ private struct LibraryPaneScroll<Content: View>: View {
     }
 }
 
-/// 规则｜技能两段，看哪一段只有 `Workspace.libraryPane` 一份。两端同一组：Mac 在窗口最顶那一排（`LibraryPanesSlot`），
-/// 手机与 iPad 在页顶中间那块玻璃里（`LibraryScreen`）；它也是页名，页里不另写。两颗等宽，英文下也不换形。
+/// 规则｜技能两段，看哪一段只有 `Workspace.libraryPane` 一份（`PaneSegment`）：Mac 在工具栏中间（`LibraryPanesSlot`），
+/// 手机与 iPad 在页顶中间那块玻璃里（`LibraryScreen`）；它也是页名，页里不另写。
 struct LibraryPanes: View {
     @Environment(Workspace.self) private var workspace
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        HStack(spacing: 0) {
-            ForEach(LibraryPane.allCases, id: \.self) { pane in
-                PaneButton(title: pane.title, on: workspace.libraryPane == pane) {
-                    // 点着的那一段再点不动（幂等）；减弱动态效果时两段只交叉淡入淡出
-                    withAnimation(reduceMotion ? Motion.crossfade : Motion.snappy) { workspace.libraryPane = pane }
-                } label: {
-                    Text(pane.title).font(Self.font).lineLimit(1)
-                        .frame(minWidth: Self.width).padding(.horizontal, Self.padding)
-                        .frame(maxHeight: .infinity)
-                }
-            }
+        PaneSegment(items: LibraryPane.allCases.map { .init(value: $0, title: $0.title, icon: $0.icon) }, selection: workspace.libraryPane) {
+            workspace.libraryPane = $0
         }
     }
-
-    #if os(macOS)
-    private static let font = Typography.toolbarLabel
-    private static let width: CGFloat = 52
-    private static let padding: CGFloat = 8
-    #else
-    private static let font = Font.subheadline.weight(.semibold)
-    private static let width: CGFloat = 76
-    private static let padding: CGFloat = 10
-    #endif
 }

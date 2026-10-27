@@ -40,11 +40,9 @@ private struct LibraryFilePage: View {
         VStack(spacing: 14) {
             if let library, let entry, let draft {
                 Group {
-                    meta(path: entry.path, library: library, draft: draft).padding(.leading, EditorGutter.width)
+                    meta(path: entry.path, library: library, draft: draft)
                     bar(library, draft)
-                    if case .skill(let path) = file {
-                        SkillFields(draft: draft, problem: library.skill(at: path)?.problem).padding(.leading, EditorGutter.width)
-                    }
+                    if case .skill(let path) = file { SkillFields(draft: draft, problem: library.skill(at: path)?.problem) }
                 }
                 .frame(maxWidth: Self.textWidth, alignment: .leading).padding(.horizontal, Self.inset)
                 ZStack {

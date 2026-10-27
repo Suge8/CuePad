@@ -150,11 +150,6 @@ struct MergePreview: View {
     }
 }
 
-/// 编辑器里的字离它的左沿还有一截：TextKit 的行片段留白（系统默认 5pt，编辑器没改）。文件页正文上面的字（页顶那一行、名字与说明两个框）让出同样一截，与正文的字对齐。
-enum EditorGutter {
-    static let width: CGFloat = 5
-}
-
 /// 技能的 name 与 description：不写键名，名字框是大号粗体、像这一页的标题，说明在它下面、次一档墨色；空时占位"名字""什么时候用它"。
 /// 格式不对的那条标在对应的框下（出错的记号加一句）；说的是放在哪的（`tooDeep`）标在两个框下面。
 struct SkillFields: View {

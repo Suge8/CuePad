@@ -3,7 +3,7 @@ import CueStore
 import SwiftUI
 
 /// 手机与 iPad 的技能与规则（Cue 名牌的面板那一行推入，`Route.library`；底部那一排让开，`Dock.stays`）：看的是 Cue 运行那台 Mac 报上来的快照（`Workspace.library`）。
-/// 两段（`LibraryDeck`）在页顶中间那块玻璃里换（`LibraryPanes`），它也是页名，不另写标题；
+/// 两段（`LibraryDeck`）在页顶中间那块玻璃里换（`LibraryPanes`，同 Mac 工具栏中间），它也是页名，不另写标题；
 /// 右边一颗问号，点开是说明的气泡（`LibraryHelp`，贴在底部的纸：哪台 Mac、多久前报的也在里面）。
 /// 一台 Mac 都还没报过时只写一句先去 Mac 上打开 CuePad。
 struct LibraryScreen: View {
@@ -27,12 +27,10 @@ struct LibraryScreen: View {
             if let library = workspace.library { LibraryHelp(library: library) }
         }
         // 标题给读屏、返回菜单与系统
-        .floatingHeader("技能与规则", center: { LibraryPanes().padding(Self.inset).headerPiece() }) {
+        .floatingHeader("技能与规则", center: { LibraryPanes().padding(PaneMetrics.inset).headerPiece() }) {
             Button("说明", icon: .help) { helpOpen.toggle() }
                 .disabled(workspace.library == nil)
         }
     }
-
-    private static let inset: CGFloat = 3
 }
 #endif

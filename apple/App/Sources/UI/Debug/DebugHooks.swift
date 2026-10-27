@@ -52,7 +52,7 @@ enum DebugHooks {
         /// 设置页通知那一行显示的状态（`-CuePadAlertStatus`；演示模式没有同步，真实状态出不来）。
         var alertStatus: PiAlertStatus?
         /// 搜索页一打开在哪个范围（`-CuePadSearchScope sessions`）。
-        var searchScope = SearchScreen.Scope.cards
+        var searchScope = SearchScope.cards
         /// Cue 页头一出现就展开成面板（`-CuePadCuePanel YES`）。
         var cuePanelOpen = false
         /// 不弹演示会话的前台横幅（`-CuePadQuiet YES`）。
