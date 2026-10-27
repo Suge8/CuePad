@@ -16,7 +16,7 @@ struct RealGrokTests {
     @Test func aHostedSessionTakesAMessageWithAnImageIsConfiguredEndedAndResumed() async throws {
         try await withGrokRig { rig in
             let log = ChangeLog(rig.bridge)
-            let id = try await rig.runtime.open(in: rig.work, launchToken: "token-1", name: nil, model: nil, thinking: nil)
+            let id = try await rig.open("token-1")
 
             let opened = try #require(rig.bridge.session(id: id))
             #expect(opened.hosted && opened.agent == .grok && opened.launchToken == "token-1")
@@ -59,7 +59,7 @@ struct RealGrokTests {
     /// 用例的话是真模型也照做的明确指令，断言只看你看得到的（假模型的剧本认这几句原话，`FakeResponses.plan`）。
     @Test func aPermissionRequestIsAnsweredFromCuePad() async throws {
         try await withGrokRig { rig in
-            let id = try await rig.runtime.open(in: rig.work, launchToken: "token-2", name: nil, model: nil, thinking: nil)
+            let id = try await rig.open("token-2")
             let marker = rig.work.appending(path: "marker.txt")
 
             try await rig.bridge.send(PiMessage(text: "Use the run_terminal_command tool to run exactly: echo ok > marker.txt  Then reply with only DONE."), to: id)
@@ -81,7 +81,7 @@ struct RealGrokTests {
     /// 才出第二问，两问都答了它拿着答案接着说，这一轮做完。
     @Test func aQuestionIsAnsweredFromCuePadOneByOne() async throws {
         try await withGrokRig { rig in
-            let id = try await rig.runtime.open(in: rig.work, launchToken: "token-ask", name: nil, model: nil, thinking: nil)
+            let id = try await rig.open("token-ask")
             try await rig.bridge.send(PiMessage(text: """
                 Use the ask_user_question tool once to ask me exactly two single-select questions: "Which drink?" with options Tea \
                 (description: hot) and Coffee (description: strong), then "Which size?" with options Small (description: small cup) \
@@ -109,7 +109,7 @@ struct RealGrokTests {
     /// 说了一句正在跑时停下：这一轮就此结束，会话歇下、能接着说。
     @Test func aRunningTurnIsAborted() async throws {
         try await withGrokRig { rig in
-            let id = try await rig.runtime.open(in: rig.work, launchToken: "token-3", name: nil, model: nil, thinking: nil)
+            let id = try await rig.open("token-3")
             try await rig.bridge.send(PiMessage(text: "Write the numbers from 1 to 400, one per line."), to: id)
             try await eventually("在说") { rig.bridge.session(id: id)?.state == .thinking && rig.bridge.slots.first { $0.id == id }?.draft != nil }
 
@@ -124,7 +124,7 @@ struct RealGrokTests {
     /// 会话记录里一轮开始到结束跟着在跑、歇下；登记注销后下桥。终端的会话记录借托管会话录下的那份。
     @Test func aTerminalSessionIsFollowedReadOnly() async throws {
         try await withGrokRig { rig in
-            let hosted = try await rig.runtime.open(in: rig.work, launchToken: "token-4", name: nil, model: nil, thinking: nil)
+            let hosted = try await rig.open("token-4")
             try await rig.bridge.send(PiMessage(text: "Reply with the single word FIRST."), to: hosted)
             let session = try #require(rig.bridge.session(id: hosted))
             try await eventually("回答落盘") { rig.replies(session).last == "FIRST" }
@@ -185,6 +185,11 @@ final class GrokRig {
         AgentTape.current?.watch(root.appending(path: "work"))
         try bridge.start()
         try runtime.start()
+    }
+
+    /// 开一个托管会话（模型见 `GrokModel.hosted`）
+    func open(_ launchToken: String) async throws -> PiSession.ID {
+        try await runtime.open(in: work, launchToken: launchToken, name: nil, model: GrokModel.hosted, thinking: nil)
     }
 
     func stop() async {

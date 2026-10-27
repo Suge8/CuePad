@@ -17,6 +17,10 @@ enum GrokModel {
     /// 测试进程环境里的真凭据
     static let credentials = ProcessInfo.processInfo.environment.filter { ["XAI_API_KEY", "GROK_AUTH_PATH"].contains($0.key) && !$0.value.isEmpty }
 
+    /// 连真模型时托管会话开在 `CUEPAD_GROK_MODEL` 给的模型上（不给是账号的默认模型；Grok 的新会话不认 `GROK_DEFAULT_MODEL`）；假模型与回放为 nil。
+    static let hosted: PiModelKey? = credentials.isEmpty ? nil
+        : ProcessInfo.processInfo.environment["CUEPAD_GROK_MODEL"].map { PiModelKey(provider: AgentKind.grok.rawValue, id: $0) }
+
     /// 测试进程里共用一个，录制时头一次起 grok 时才开（回放不起：Grok 的输出都在录像带里）；连真模型时为 nil。
     static let fake: FakeResponses? = credentials.isEmpty ? try? FakeResponses() : nil
 

@@ -21,7 +21,7 @@ import Testing
 /// - codex：本机的 codex 与登录（复制进临时目录且不刷新，见 `copyCodexAuth`），账号里最便宜的模型；
 /// - claude：本机的 claude 与它自己的登录（钥匙串里的那条，见 `ClaudeLogin`），模型 haiku（`ClaudeTestbed`）；
 /// - grok：本机的 grok（`CUEPAD_GROK` 可换），假模型（`FakeResponses`），零网络；环境里给了 `XAI_API_KEY` 或 `GROK_AUTH_PATH`（已登录的
-///   凭据文件，如 `~/.grok/auth.json`）时连真的 xAI（`GrokModel`）；
+///   凭据文件，如 `~/.grok/auth.json`）时连真的 xAI（`GrokModel`），托管会话的模型用 `CUEPAD_GROK_MODEL` 换；
 /// - dsh：`CUEPAD_DSH` 指的 dsh（0.2.1-rc.2 以上；没给按 PATH 找），DeepSeek 的 key 只经 `DEEPSEEK_API_KEY` 给（录完 grep 录像带确认没有它）；
 /// - 大脑（`RealBrainTests`）用本机用户自己的登录，模型用 `CUEPAD_BRAIN_MODEL_<家>`、强度用 `CUEPAD_BRAIN_EFFORT` 换。
 ///
