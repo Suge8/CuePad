@@ -17951,6 +17951,22 @@
         }
       }
     },
+    "等 %@ 做完" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Waiting on %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "等 %@ 做完"
+          }
+        }
+      }
+    },
     "等 %@ 回答" : {
       "localizations" : {
         "en" : {
@@ -18079,22 +18095,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "等 Mac 出现再请求通知权限没能启动：%@"
-          }
-        }
-      }
-    },
-    "等「%@」做完" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Waiting on “%@”"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "等「%@」做完"
           }
         }
       }
