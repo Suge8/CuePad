@@ -23,7 +23,7 @@ enum ScrollAnchor {
 /// - `-CuePadOffscreen YES`（仅 Mac）：主窗口放在所有屏幕之外（第一次显示前就放好、不被系统夹回，也不记位置），复现窗口不可见时的布局、测量时不露在桌面上；
 /// - `-CuePadGeometryLoop YES`（仅 Mac）：挂一个刻意的几何回写环，给布局压力场景的检测器自检；
 /// - 录屏驱动（画面就绪后循环或走一遍，各自的注释写参数）：`-CuePadCycle`（`DebugScene+PiDemo.swift`）；`-CuePadWake`、`-CuePadReplyBlink`、`-CuePadRelay`、`-CuePadFlightLog`、`-CuePadNoAsks`、
-///   `-CuePadCueSays`、`-CuePadVisitCue`、`-CuePadClosed`、`-CuePadReopen`（`DebugScene+CueDrivers.swift`）；`-CuePadCueFlow`、`-CuePadCueFlowLog`（`DebugScene+CueFlow.swift`）；
+///   `-CuePadCueSays`、`-CuePadVisitCue`、`-CuePadClosed`、`-CuePadReopen`（`DebugScene+CueDrivers.swift`）；`-CuePadCueFlow`、`-CuePadCueFlowLog`（`DebugScene+CueFlow.swift`）；`-CuePadBoardTour`（`DebugScene+BoardTour.swift`）；
 /// - `-CuePadForeground YES`（仅 Mac）：允许占前台（本机构建默认在后台）；只有下面几项真占，规则见 `DebugForeground` 与 docs/verify.md「占前台」；
 /// - `-CuePadClick x,y[;x,y|esc|return|type:文字…]`、`-CuePadRightClick x,y`（仅 Mac；右键与要截系统菜单的要 `-CuePadForeground YES`，其余在后台点）：就绪后在主窗口里按顺序左键点几下（`esc`、`return` 是按那个键；双击、拖、捏合、滑动等几步见 `DebugGestures+Mac.swift`）、或右键点一下，打开那里的系统菜单、任务气泡再截图、录屏（`openMenuIfAsked`，见 `DebugMenus+Mac.swift`）；
 /// - `-CuePadCueBrain <可执行文件>`（仅 Mac）：Cue 的大脑换成这个替身（如 `scripts/cue-brain-stub.py`），量值班开销用（docs/perf.md）；

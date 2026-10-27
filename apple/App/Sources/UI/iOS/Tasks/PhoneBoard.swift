@@ -5,7 +5,9 @@ import SwiftUI
 /// 窄屏进展页的竖版看板：Mac 看板转 90°——待办、推进中、等你、已完成四行竖着排，每行一条（`BoardRowLane`），
 /// 行头竖在左端，卡在行里横着排、放不下就在这一行里横划。
 /// 四行竖着铺满顶栏与底部那一排之间（`BoardRows`）：行高只由这段高定，卡多卡少、有没有都不改，下面不空出一块，整页拖不动；
-/// 只有辅助字号下四行连各自的最矮都叠不下，才整页竖着滚。
+/// 只有辅助字号下四行连各自的最矮都叠不下，才整页竖着滚。高按各行的理想高分（`TaskBoard.Column.rowTiers`）：推进中、等你各三排卡，
+/// 待办、已完成各一排矮卡——iPhone 17 默认字号下重的两行各余出 5～10 点，矮屏与大一两档的字下重的两行先回到两排。
+/// 卡换行时从原处飞到新处（`boardFlight`），四行共用一个飞行的命名空间。
 /// 横拖的归属照通用的那条（`PagerArbiter`）：手指下的行还能往那边滚就滚行，贴屏幕边起手、滚到头、行与行之间、空行、行头上的横拖是切页。
 /// 点"+"添加任务时整页先回到待办那一行。
 struct PhoneBoard: View {
@@ -13,6 +15,7 @@ struct PhoneBoard: View {
     @Binding var adding: Bool
     let newTaskProject: UUID?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Namespace private var flight
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -28,6 +31,7 @@ struct PhoneBoard: View {
             }
             .scrollBounceBehavior(.basedOnSize)
             .scrollIndicators(.never)
+            .environment(\.boardFlight, flight)
             .onChange(of: adding) {
                 if adding { withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { proxy.scrollTo(TaskBoard.Column.todo, anchor: .top) } }
             }

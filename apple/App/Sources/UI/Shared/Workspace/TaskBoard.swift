@@ -42,6 +42,8 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         /// 已完成的：Cue 做完时点名的第一张成果图（还在的）；别的列为 nil。
         var shot: CueShown?
         var id: UUID { task.id }
+        /// 卡在看板上的身份，换列不换：与推进中的 `Work.id`、等你的 `Held.id` 同一种写法（`boardFlight`）。
+        var flight: String { "task/\(id)" }
     }
 
     /// 推进中的一件（`CueTally.advancing`）：在做的任务带那件任务，没绑没做完的任务的活会话没有。
@@ -118,7 +120,8 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         var waits: [Wait]
         var replies: [Reply]
 
-        var id: String { item.map { "task/\($0.id)" } ?? waits.first?.id ?? replies.first?.id ?? "" }
+        /// 同推进中那张卡的身份（`Item.flight`、`CueWork.id`）：任务是 `task/…`，没绑任务的会话是 `session/…`，换列认得出是同一张。
+        var id: String { item?.flight ?? waits.first?.id ?? replies.first.map { "session/\($0.session.sessionID)" } ?? "" }
         /// 有一件拍板就是拍板（赭黄问号），只剩待回复是待回复（墨点）。
         var deciding: Bool { !waits.isEmpty }
         /// 收了几件（卡上大于 1 才写）。
@@ -178,6 +181,27 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         for wait in waiting { add(wait.item) { $0.waits.append(wait) } }
         for reply in replies { add(reply.item) { $0.replies.append(reply) } }
         return cards
+    }
+
+    /// 比 `before` 换了列的卡（`Item.flight`、`Work.id`、`Held.id`）：看板据此让它整张飞过去、不在新处淡入（`boardFlight`）。
+    func moved(from before: TaskBoard) -> Set<String> {
+        let was = before.columns
+        return Set(columns.compactMap { id, column in was[id].flatMap { $0 == column ? nil : id } })
+    }
+
+    /// 每张卡在哪一列。
+    private var columns: [String: Column] {
+        Dictionary(Column.allCases.flatMap { column in flights(column).map { ($0, column) } }) { first, _ in first }
+    }
+
+    /// 一列里各张卡的身份（已完成连更早做完的）。
+    func flights(_ column: Column) -> [String] {
+        switch column {
+        case .todo: todo.map(\.flight)
+        case .advancing: advancing.map(\.id)
+        case .waiting: held.map(\.id)
+        case .done: (done + earlier).map(\.flight)
+        }
     }
 
     func count(_ column: Column) -> Int {
