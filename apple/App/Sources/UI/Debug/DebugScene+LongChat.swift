@@ -12,15 +12,15 @@ extension DebugScene {
     static let longChat = "marathon"
     private static let longChatRounds = 300
 
-    static func seedLongChat(_ store: CueStore, project: UUID?) async {
-        _ = try? await PiStateRecorder(store: store, hostID: "demo-mac").update(
+    static func seedLongChat(_ store: CueStore, project: UUID?) async throws {
+        _ = try await PiStateRecorder(store: store, hostID: "demo-mac").update(
             sessionID: longChat, state: .settled, title: longChat, directory: longChat, projectID: project)
         let start = Date.now.addingTimeInterval(-Double(longChatRounds) * 240)
         let turns = (0..<longChatRounds).map { round in
             let asked = start.addingTimeInterval(Double(round) * 240)
             return ChatTurn(you: longChatPrompt(round), pi: longChatReply(round), tools: nil, asked: asked, answered: asked.addingTimeInterval(60))
         }
-        try? await writeChat(longChat, turns, store: store)
+        try await writeChat(longChat, turns, store: store)
     }
 
     /// 给 `sessionID` 像真的 Agent 那样一轮一轮追加，共 `rounds` 轮：你的话 → 每 200ms 做完一步（经过清单变长、状态在思考与跑工具之间换、

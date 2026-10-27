@@ -16043,22 +16043,6 @@
         }
       }
     },
-    "每%@ %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Every %1$@ at %2$@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "每%1$@ %2$@"
-          }
-        }
-      }
-    },
     "每周" : {
       "localizations" : {
         "en" : {
@@ -16091,22 +16075,6 @@
         }
       }
     },
-    "每天 %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Daily at %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "每天 %@"
-          }
-        }
-      }
-    },
     "每月" : {
       "localizations" : {
         "en" : {
@@ -16135,22 +16103,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "每月 %lld 号"
-          }
-        }
-      }
-    },
-    "每月 %lld 号 %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Monthly on day %1$lld at %2$@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "每月 %1$lld 号 %2$@"
           }
         }
       }

@@ -209,7 +209,7 @@ struct ScheduleStrip: View {
             HStack(alignment: .top, spacing: BubbleMetrics.gap) {
                 Image(.schedule).font(.system(size: BubbleMetrics.brand * 0.8)).foregroundStyle(palette.ink2).frame(width: BubbleMetrics.markSlot)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(line.repeats == nil ? line.remindAt.map { ScheduleText.moment($0) } ?? "" : ScheduleText.repeats(line.repeats))
+                    Text(line.repeats.map(ScheduleText.repeats) ?? line.remindAt.map { ScheduleText.moment($0) } ?? "")
                         .font(BubbleMetrics.strong).foregroundStyle(palette.ink)
                     Text(next).font(BubbleMetrics.meta).foregroundStyle(palette.ink2).lineLimit(2)
                     if let last = scheduled.last, last.late {

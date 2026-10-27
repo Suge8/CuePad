@@ -36,6 +36,11 @@ extension DebugScene {
         exit(1)
     }
 
+    /// 摆画面的数据写一段：任何一步失败都以失败退出（`abandon`），演示数据不吞错。
+    static func seeding(_ what: String, _ write: () async throws -> Void) async {
+        do { try await write() } catch { abandon("\(what)没写完", error) }
+    }
+
     /// 给了就绪文件时，画面摆好（`prepare` 做完）之后等到：读库的结果都回来了、摆画面的事都做完了、
     /// 没有视图报着正在过渡、屏上没有进行中的一次性动画（转圈这类一直循环的不算），连着三帧都这样，再写下这个文件。`xc.sh shot` 等它出现才截图，不靠固定的等待。
     static func signalReady(_ services: AppServices) async {

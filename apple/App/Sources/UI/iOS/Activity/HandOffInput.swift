@@ -74,7 +74,7 @@ struct HandOffInput: View {
     var body: some View {
         Composer(
             draft: box, prompt: "补一句（可不填）", label: "发给 Agent", focus: $focused,
-            accepts: chosen?.state.composerKinds ?? [.files, .cards], cardsFrom: outbox.project, keeps: outbox.card, tooled: tools != nil,
+            accepts: chosen == nil ? [.files, .cards] : .reply, cardsFrom: outbox.project, keeps: outbox.card, tooled: tools != nil,
             commands: commands,
             header: { header.padding(.horizontal, 12).padding(.top, 10) },
             tools: {
@@ -139,12 +139,11 @@ struct HandOffInput: View {
             guard choice == nil else { return newSession() }
             return Self.startDefault(draft, card: outbox.card, plan: planned?.plan, opening: planned?.opening, workspace: workspace)
         }
-        let kinds = session.composerKinds
         let saying = Dotted(String(localized: "已交给 \(session.title)"))
-        if let line = PiSlash.line(of: draft.accepting(kinds), in: commands) {
+        if let line = PiSlash.line(of: draft.accepting(.reply), in: commands) {
             workspace.speak(to: .session(session, mode: .command, card: outbox.card), from: box, saying: saying) { _ in line }
         } else {
-            workspace.speak(to: .session(session, mode: .send, card: outbox.card), from: box, saying: saying) { $0.accepting(kinds).stored }
+            workspace.speak(to: .session(session, mode: .send, card: outbox.card), from: box, saying: saying) { $0.accepting(.reply).stored }
         }
         focused = false
         workspace.outbox = nil

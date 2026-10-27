@@ -54,21 +54,28 @@ extension DebugScene {
         _ = try await store.addPreviews([(try file(String(localized: "测试报告.pdf", table: "Demo"), reconnectReportPDF()), String(localized: "重连测试报告", table: "Demo"))], sessionID: "deploy")
     }
 
-    /// `-CuePadAllKinds YES|<n>`：空着的 scratch 会话里发六批，每批两份并排：3D 模型与一张还没到本机的（附件文件删掉，卡片写"下载中"；
+    /// 每次启动都往 scratch 会话追加的交付物：库已有数据时 `seedIfFresh` 不再写，不能挂在它下面；要从空起配新的 `CUEPAD_SHOT_LIBRARY`。
+    static func seedScratchFiles(_ store: CueStore) async throws {
+        if let kinds = defaults.string(forKey: "CuePadAllKinds") { try await seedAllKinds(store, upTo: Int(kinds)) }
+        if let media = defaults.string(forKey: "CuePadPreviewMedia") { try await seedPreviewMedia(store, from: media) }
+    }
+
+    /// `-CuePadAllKinds YES|<n>`：scratch 会话里发六批，每批两份并排：3D 模型与一张还没到本机的（附件文件删掉，卡片写"下载中"；
     /// 标题同文件名），之后每种能发的类型各一份；`-CuePadOpenPreview <文件名>` 打开其中一份的预览页。给数字只发前 n 批：
     /// 会话页停在最新处，一屏看到的是最后两三批，换着 n 拍几张就每种都拍到了。
     /// 视频、音频、Office 与 3D 只要扩展名对，内容是占位的字节：系统给不出缩略图、时长时显示的正是类型图标。
-    static func seedAllKinds(_ store: CueStore, upTo count: Int?) async {
+    private static func seedAllKinds(_ store: CueStore, upTo count: Int?) async throws {
         let directory = FileManager.default.temporaryDirectory.appending(path: "cuepad-demo-kinds", directoryHint: .isDirectory)
-        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        func file(_ name: String, _ data: Data) -> URL? {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        func file(_ name: String, _ data: Data) throws -> URL {
             let url = directory.appending(path: name)
-            return (try? data.write(to: url)).map { url }
+            try data.write(to: url)
+            return url
         }
         let filler = Data("placeholder".utf8)
         // 字节与别处的截图不同：附件按内容存一份，同样的字节会被别的演示数据重新写回来
         let away = phonePNG(covered: true) + Data("away".utf8)
-        let batches: [[URL?]] = [
+        let batches = try [
             [file(String(localized: "模型.usdz", table: "Demo"), filler), file(String(localized: "还在路上.png", table: "Demo"), away)],
             [file(String(localized: "录音.m4a", table: "Demo"), filler), file(String(localized: "录屏.mov", table: "Demo"), filler)],
             [file(String(localized: "需求.docx", table: "Demo"), filler), file(String(localized: "数据.xlsx", table: "Demo"), filler)],
@@ -77,21 +84,20 @@ extension DebugScene {
             [file(String(localized: "定价页.html", table: "Demo"), Data(pricingPage.utf8)), file(String(localized: "预发.png", table: "Demo"), stagingOrderPNG())],
         ]
         for files in batches.prefix(count ?? batches.count) {
-            let named = files.compactMap { $0 }.map { (url: $0, title: $0.deletingPathExtension().lastPathComponent) }
-            guard let added = try? await store.addPreviews(named, sessionID: "scratch") else { continue }
+            let added = try await store.addPreviews(files.map { (url: $0, title: $0.deletingPathExtension().lastPathComponent) }, sessionID: "scratch")
             for entry in added where entry.preview.name == String(localized: "还在路上.png", table: "Demo") {
-                if let stored = store.files.fileURL(for: entry.preview.key) { try? FileManager.default.removeItem(at: stored) }
+                if let stored = store.files.fileURL(for: entry.preview.key) { try FileManager.default.removeItem(at: stored) }
             }
         }
     }
 
     /// `-CuePadPreviewMedia <目录>`：目录里的文件按文件名顺序作为一批发进 scratch 会话（标题同文件名）。录预览页的缩放、切图、播放与翻页用真内容：
     /// 大图、真视频、多页 PDF（演示数据里的视频只是占位的字节）。
-    static func seedPreviewMedia(_ store: CueStore, from directory: String) async {
-        let files = (try? FileManager.default.contentsOfDirectory(at: URL(filePath: directory), includingPropertiesForKeys: nil)) ?? []
+    private static func seedPreviewMedia(_ store: CueStore, from directory: String) async throws {
+        let files = try FileManager.default.contentsOfDirectory(at: URL(filePath: directory), includingPropertiesForKeys: nil)
         let named = files.filter { !$0.lastPathComponent.hasPrefix(".") }.sorted { $0.lastPathComponent < $1.lastPathComponent }
             .map { (url: $0, title: $0.deletingPathExtension().lastPathComponent) }
-        _ = try? await store.addPreviews(named, sessionID: "scratch")
+        _ = try await store.addPreviews(named, sessionID: "scratch")
     }
 
     private static var pricingPage: String { """

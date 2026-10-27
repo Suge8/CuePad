@@ -6,12 +6,12 @@ extension DebugScene {
     /// 演示的技能与规则（配 `-CuePadDemo YES`）：手机上看的是演示的 Mac Studio 报来的快照（各家都接了，`seedMacAgents`），这里替它写一份；
     /// Mac 上看的是本机照文件扫出的（`AgentLibraryKeeper`），这里把同一套内容写成隔离目录里的文件（`seedAgentFiles`）。
     /// 默认是该整理的样子（散落的、Claude Code 读不到的、空目录、同名的、格式不对的、另写了一份的全局规则）；`-CuePadAgentLibrary clean` 是整理好了的样子。
-    static func seedAgentLibrary(_ services: AppServices) async {
+    static func seedAgentLibrary(_ services: AppServices) async throws {
         #if os(macOS)
         seedAgentFiles()
         #endif
         let store = services.store
-        let projects = (try? await store.projects()) ?? []
+        let projects = try await store.projects()
         func project(_ name: String) -> UUID? { projects.first { $0.name == name }?.id }
         let host = "demo-mac"
         let clean = defaults.string(forKey: "CuePadAgentLibrary") == "clean"
@@ -20,7 +20,7 @@ extension DebugScene {
             cuepad: project("CuePad"), atlas: project(String(localized: "圆桌", table: "Demo")),
             homepage: project(String(localized: "个人网站", table: "Demo"))
         )
-        _ = try? await store.recordAgentLibrary(library.library(host: host), texts: library.texts)
+        _ = try await store.recordAgentLibrary(library.library(host: host), texts: library.texts)
     }
 }
 

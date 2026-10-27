@@ -65,7 +65,7 @@ extension Workspace {
             try await services.library.write(edit)
             #endif
         } else {
-            let request = try await services.requestLibraryEdit(edit, title: fileName(edit.file), on: library.hostID)
+            let request = try await services.requestLibraryEdit(edit, title: shownName(of: edit.file), on: library.hostID)
             let outcome = try await services.store.outcome(of: request)
             if outcome.failureReason == ShownText(AgentLibraryError.changedOnMac) { throw AgentLibraryError.changedOnMac }
             if let failure = outcome.failure { throw SendError.notDelivered(failure) }
@@ -73,7 +73,7 @@ extension Workspace {
     }
 
     /// 一份文件的名字：技能是它的目录名；规则是全局规则、Pi 的系统提示、项目名。
-    func fileName(_ file: LibraryFile) -> String {
+    func shownName(of file: LibraryFile) -> String {
         switch file {
         case .skill(let path): (path as NSString).lastPathComponent
         case .instruction(let kind): instructionName(kind)

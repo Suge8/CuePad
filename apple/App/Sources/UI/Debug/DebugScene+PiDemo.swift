@@ -22,10 +22,16 @@ extension DebugScene {
 
     /// 演示用的 Mac 端状态：各种状态、各家 Agent 的会话（含刚开的、回复框里有草稿的）、发到 Mac 的几条请求。只在库里还没有时写。
     static func seedRemote(_ services: AppServices) async {
+        await seeding("演示 Pi 会话") { try await seedPiSessions(services) }
+    }
+
+    private static func seedPiSessions(_ services: AppServices) async throws {
         let store = services.store
         // 演示库的会话索引已写成历史；这里补的是演示 Mac 的在线会话，它有在线的就是写过了。只看演示 Mac：
         // 截图实例的连接目录是各检出共用的，别处起的 Pi 会话会先连上来，算上它就一个演示会话都不补
-        guard (try? await store.piSessionPage(.live).items.contains { $0.state.hostID == "demo-mac" }) == false, let projects = try? await store.projects() else { return }
+        let live = try await store.piSessionPage(.live).items
+        guard !live.contains(where: { $0.state.hostID == "demo-mac" }) else { return }
+        let projects = try await store.projects()
         func project(_ name: String) -> UUID? { projects.first { $0.name == name }?.id }
         let recorder = PiStateRecorder(store: store, hostID: "demo-mac")
         let sessions: [(String, PiWorkState, String?, String?, DemoRecap)] = [
@@ -71,14 +77,14 @@ extension DebugScene {
         // 文件夹名与还没绑文件夹的项目同名（Flow）：手机给项目换文件夹时的候选里有它
         for index in 1...3 {
             let id = "flow-\(index)"
-            _ = try? await recorder.update(sessionID: id, state: .settled, detail: nil, title: "flow \(index)", directory: "flow", projectID: nil)
-            try? await recorder.end(sessionID: id)
+            _ = try await recorder.update(sessionID: id, state: .settled, detail: nil, title: "flow \(index)", directory: "flow", projectID: nil)
+            try await recorder.end(sessionID: id)
         }
         for (id, name, recap) in history {
-            _ = try? await recorder.update(
+            _ = try await recorder.update(
                 sessionID: id, state: .settled, detail: nil, title: id, directory: id, projectID: name.flatMap(project), agent: demoAgents[id])
-            try? await store.writePiTranscript(PiTranscript(sessionID: id, messages: [], recap: recap))
-            try? await recorder.end(sessionID: id)
+            try await store.writePiTranscript(PiTranscript(sessionID: id, messages: [], recap: recap))
+            try await recorder.end(sessionID: id)
         }
         // 此刻的状态从几分钟前起（在问的等了多久、在跑的跑了多久、出错的停了多久都从这一刻算；不给就是写入这一刻："刚刚"）
         let since: [String: TimeInterval] = [
@@ -92,7 +98,7 @@ extension DebugScene {
             let messages = (said[id] ?? []).enumerated().map { index, minutes in
                 PiChatMessage(sessionID: id, entryID: "said-\(index)", seq: Int64(index), role: .user, text: recap.pendingPrompt ?? recap.lastPrompt ?? "", at: .now.addingTimeInterval(-minutes * 60))
             }
-            _ = try? await recorder.update(
+            _ = try await recorder.update(
                 sessionID: id, state: state, detail: detail, title: id, directory: id, projectID: name.flatMap(project), question: recap.question,
                 times: since[id].map { minutes in
                     let start = Date.now.addingTimeInterval(-minutes * 60)
@@ -100,14 +106,14 @@ extension DebugScene {
                 },
                 modelState: demoModels(for: demoAgents[id]), context: demoContexts[id] ?? PiContextUsage(tokens: 12_000, window: 200_000), commands: demoCommands(for: demoAgents[id]),
                 agent: demoAgents[id])
-            try? await store.writePiTranscript(PiTranscript(
+            try await store.writePiTranscript(PiTranscript(
                 sessionID: id, messages: messages,
                 recap: PiRecap(lastPrompt: recap.lastPrompt, lastReply: recap.lastReply, pendingPrompt: recap.pendingPrompt)))
         }
-        try? await recorder.end(sessionID: "piwork")
+        try await recorder.end(sessionID: "piwork")
         // 没指定项目的想法：进默认项目
         for body in [String(localized: "周末读完《设计心理学》第三章", table: "Demo"), String(localized: "菜单栏面板能不能直接拖图进来？", table: "Demo"), String(localized: "给落地页换一张首图", table: "Demo")] {
-            _ = try? await store.createCard(body: body)
+            _ = try await store.createCard(body: body)
         }
         // 后台托管、带八个子代理的会话（两个在跑、一个失败、其余已交回或空闲：名册一行要让在跑的先被看到）
         let started = Date.now.addingTimeInterval(-260)
@@ -115,7 +121,7 @@ extension DebugScene {
             PiSubagentState(name: name, role: role, phase: .known(phase), action: action, startedAt: started, settledAt: started.addingTimeInterval(seconds),
                             model: "anthropic/claude-sonnet-5-5")
         }
-        _ = try? await recorder.update(sessionID: "review", state: .delegating, hosted: true, subagents: [
+        _ = try await recorder.update(sessionID: "review", state: .delegating, hosted: true, subagents: [
             PiSubagentState(name: String(localized: "计费额度", table: "Demo"), role: String(localized: "哨兵", table: "Demo"), phase: .known(.running), action: String(localized: "运行 pnpm test billing", table: "Demo"), startedAt: started, model: "anthropic/claude-opus-5-5"),
             PiSubagentState(name: String(localized: "同步冲突", table: "Demo"), role: String(localized: "工程师", table: "Demo"), phase: .known(.running), action: String(localized: "改 CardLinks.repairs", table: "Demo"), startedAt: started.addingTimeInterval(40),
                             model: "openai-codex/gpt-6.1-sol"),
@@ -126,46 +132,46 @@ extension DebugScene {
             settled(String(localized: "截图", table: "Demo"), String(localized: "设计师", table: "Demo"), .done, String(localized: "已出浅色、深色各一组", table: "Demo"), after: 120),
             PiSubagentState(name: String(localized: "性能", table: "Demo"), role: String(localized: "工程师", table: "Demo"), phase: .known(.idle), action: ""),
         ])
-        await seedBindings(store, projects: projects)
+        try await seedBindings(store, projects: projects)
         // 另一台 Mac 上的会话（演示发过去的话送达与失败）
-        _ = try? await PiStateRecorder(store: store, hostID: "demo-mini").update(
+        _ = try await PiStateRecorder(store: store, hostID: "demo-mini").update(
             sessionID: "relay", state: .settled, title: "relay", directory: "relay", times: PiTimes(stateSince: .now.addingTimeInterval(-32 * 60), busySince: nil))
-        await seedChats(store)
-        if defaults.bool(forKey: "CuePadLongChat") { await seedLongChat(store, project: project("CuePad")) }
+        try await seedChats(store)
+        if defaults.bool(forKey: "CuePadLongChat") { try await seedLongChat(store, project: project("CuePad")) }
         // 会话文件里的压缩记录：对话里的一行系统行（notes 最后一轮回答之后）
-        try? await store.writePiTranscript(PiTranscript(
+        try await store.writePiTranscript(PiTranscript(
             sessionID: "notes",
             messages: [PiChatMessage(sessionID: "notes", entryID: "compaction-demo", seq: 99, role: .system, text: PiNotice.compacted.rawValue, at: .now.addingTimeInterval(-1_800))],
             recap: PiRecap(lastPrompt: String(localized: "整理一下这周的会议记录", table: "Demo"), lastReply: String(localized: "整理好了，放在 `notes/2026-W40.md`。三件待办：**续费域名**、评审计费额度、补 scheduler 测试。", table: "Demo"))))
-        let states = (try? await store.piSessionPage(PiSessionQuery(limit: 100)).items.map(\.state)) ?? []
+        let states = try await store.piSessionPage(PiSessionQuery(limit: 100)).items.map(\.state)
         // -CuePadCommand YES：atlas 的会话页回复框上方有一条在路上的命令（看进度行；没有执行它的 Mac，一直在路上）
         if defaults.bool(forKey: "CuePadCommand"), let atlas = states.first(where: { $0.sessionID == "atlas" }) {
-            _ = try? await services.store.requestDelivery("/compact", to: atlas.target, on: atlas.hostID, mode: .command)
+            _ = try await services.store.requestDelivery("/compact", to: atlas.target, on: atlas.hostID, mode: .command)
         }
-        await seedTaskStates(store, projects: projects)
+        try await seedTaskStates(store, projects: projects)
         if let relay = states.first(where: { $0.sessionID == "relay" }) {
             // 一条已送达还没进对话、一条没能送达：由一个只认这台演示 Mac 的执行器给出结果
-            _ = try? await services.store.requestDelivery(String(localized: "先把迁移脚本在测试库上跑一遍，报错长这样", table: "Demo") + (screenshotMarkup(store).map { "\n" + $0 } ?? ""), to: relay.target, on: relay.hostID, mode: .send)
-            _ = try? await services.store.requestDelivery(String(localized: "顺便备份一下线上数据库", table: "Demo"), to: relay.target, on: relay.hostID, mode: .send)
+            _ = try await services.store.requestDelivery(String(localized: "先把迁移脚本在测试库上跑一遍，报错长这样", table: "Demo") + (screenshotMarkup(store).map { "\n" + $0 } ?? ""), to: relay.target, on: relay.hostID, mode: .send)
+            _ = try await services.store.requestDelivery(String(localized: "顺便备份一下线上数据库", table: "Demo"), to: relay.target, on: relay.hostID, mode: .send)
             // 发给那台 Mac 上已结束的会话、没能送达：装修项目的"此刻"写这条的原因
             let mini = PiStateRecorder(store: store, hostID: relay.hostID)
-            _ = try? await mini.update(sessionID: "quote", state: .settled, title: "quote", directory: "quote", projectID: project(String(localized: "装修", table: "Demo")))
-            try? await mini.end(sessionID: "quote")
-            if let quote = try? await store.piSessionPage(PiSessionQuery(text: "quote")).items.first(where: { $0.state.sessionID == "quote" })?.state {
-                _ = try? await services.store.requestDelivery(String(localized: "把报价单备份到网盘", table: "Demo"), to: quote.target, on: quote.hostID, mode: .send)
+            _ = try await mini.update(sessionID: "quote", state: .settled, title: "quote", directory: "quote", projectID: project(String(localized: "装修", table: "Demo")))
+            try await mini.end(sessionID: "quote")
+            if let quote = try await store.piSessionPage(PiSessionQuery(text: "quote")).items.first(where: { $0.state.sessionID == "quote" })?.state {
+                _ = try await services.store.requestDelivery(String(localized: "把报价单备份到网盘", table: "Demo"), to: quote.target, on: quote.hostID, mode: .send)
             }
             relayExecutor = DeliveryExecutor(store: store, hostID: relay.hostID, onIssue: { _ in }) { request in
                 [String(localized: "顺便备份一下线上数据库", table: "Demo"), String(localized: "把报价单备份到网盘", table: "Demo")].contains(request.content)
                     ? .failed(ShownText(SendError.sessionNotOnThisMac(request.target.name))) : .succeeded
             }
-            try? await relayExecutor?.start()
+            try await relayExecutor?.start()
         }
         if let atlas = states.first(where: { $0.sessionID == "atlas" }) {
-            _ = try? await services.store.requestDelivery(String(localized: "改完再看看登录回调那个超时", table: "Demo"), to: atlas.target, on: atlas.hostID)
+            _ = try await services.store.requestDelivery(String(localized: "改完再看看登录回调那个超时", table: "Demo"), to: atlas.target, on: atlas.hostID)
         }
         if let landing = states.first(where: { $0.sessionID == "landing-copy" }) {
             // 发给已结束的会话：Mac 先在后台唤醒它
-            _ = try? await services.store.requestDelivery(String(localized: "标题再短一点", table: "Demo"), to: landing.target, on: landing.hostID, mode: .send)
+            _ = try await services.store.requestDelivery(String(localized: "标题再短一点", table: "Demo"), to: landing.target, on: landing.hostID, mode: .send)
         }
         if let notes = states.first(where: { $0.sessionID == "notes" }) {
             // 回复框里还挂着两条对最后那轮回答的批注（对话里那两处带高亮）

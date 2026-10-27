@@ -97,6 +97,8 @@ struct ComposerKinds: OptionSet {
     static let files = ComposerKinds(rawValue: 1)
     static let cards = ComposerKinds(rawValue: 2)
     static let notes = ComposerKinds(rawValue: 4)
+    /// 会话回复框收的：附件、卡片（发出去是文字）与批注。作答框只收文字（`[]`）。
+    static let reply: ComposerKinds = [.files, .cards, .notes]
 }
 
 /// 左边"＋"能打开的来源：卡片两端都有；附件 iOS 是相册、拍照与文件，Mac 是文件（各平台的选项见 `fileChoices`）。粘贴、拖进来的附件不经这里，由文字区直接交进附件条。

@@ -108,7 +108,7 @@ extension DebugScene {
     /// MacBook Air（demo-air，只绑了 CuePad）一家都不能用，各有原因（新会话里选"CuePad · MacBook Air"看为什么）。
     /// Mac 上给 `-CuePadHost bare` 时本机是一家都不能用的那台（看 + 的悬停与表单里的原因）；本机的记录会被它自己的探测改写成隔离目录里真实的样子。
     /// 各家的模型与不指定时用的那个照演示会话报的（`demoModels(for:)`）。
-    static func seedMacAgents(_ services: AppServices) async {
+    static func seedMacAgents(_ services: AppServices) async throws {
         func agent(_ kind: AgentKind) -> MacAgent {
             let state = demoModels(for: kind)
             return MacAgent(kind: kind, model: state.model?.key, models: state.models)
@@ -116,12 +116,12 @@ extension DebugScene {
         let full = [agent(.pi), agent(.claudeCode), agent(.codex)]
         let bare = [MacAgentProblem(kind: .pi, reason: .notLoggedIn)] + [.claudeCode, .codex].map { MacAgentProblem(kind: $0, reason: .notInstalled) }
         let store = services.store
-        _ = try? await store.recordMacAgents(host: "demo-mac", name: "Mac Studio", full)
-        _ = try? await store.recordMacAgents(host: "demo-mini", name: "Mac mini", [agent(.claudeCode), agent(.codex)])
-        _ = try? await store.recordMacAgents(host: "demo-air", name: "MacBook Air", [], problems: bare)
+        _ = try await store.recordMacAgents(host: "demo-mac", name: "Mac Studio", full)
+        _ = try await store.recordMacAgents(host: "demo-mini", name: "Mac mini", [agent(.claudeCode), agent(.codex)])
+        _ = try await store.recordMacAgents(host: "demo-air", name: "MacBook Air", [], problems: bare)
         #if os(macOS)
         let local = services.hostID
-        _ = try? await store.recordMacAgents(
+        _ = try await store.recordMacAgents(
             host: local, name: String(localized: "这台 Mac", table: "Demo"), local == "mac-bare" ? [] : full, problems: local == "mac-bare" ? bare : [])
         #endif
     }
