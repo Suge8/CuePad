@@ -42,14 +42,15 @@ struct RealOpenCodeTests {
         try await withOpenCode { sandbox, store, bridge, runtime in
             try await sandbox.run(["run", "Reply with exactly the word PONG and nothing else."])
 
-            try await eventually("终端里的会话上了桥、歇下") { session(bridge)?.state == .settled }
+            // 会话一建好就上桥，那时还没开始这一轮、也就还不知道用的模型（状态同样是歇着）：等回答进了资料库——这一轮的事件都已处理——再看歇下
+            try await eventually("终端里的会话上了桥、答完歇下") {
+                guard let live = session(bridge), live.state == .settled else { return false }
+                return try await replies(store, live.sessionID).last?.contains("PONG") == true
+            }
             let live = try #require(session(bridge))
             #expect(live.cwd.resolvingSymlinksInPath() == sandbox.work.resolvingSymlinksInPath())
             #expect(live.model?.key == openCodeTestModel && live.context?.window != nil)
             #expect(live.commands.contains { $0.name == "review" } && live.commands.contains { $0.name == "compact" })
-            try await eventually("对话进了资料库") {
-                try await replies(store, live.sessionID).last?.contains("PONG") == true
-            }
             #expect(try await store.piSessions().contains { $0.id == live.sessionID && $0.agent == .opencode })
 
             let delivery = UUID()
