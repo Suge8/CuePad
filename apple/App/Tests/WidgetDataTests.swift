@@ -44,23 +44,19 @@ struct WidgetDataTests {
     }
     #endif
 
+    /// 草稿落盘要赶在快照之前：快照里得有它刚写进库的那张。
     @Test func 进入后台前先跑完登记的落盘_再刷新快照() async throws {
-        var order: [String] = []
-        let token = services.addBackgroundFlush {
+        let store = services.store
+        services.addBackgroundFlush {
             try? await Task.sleep(for: .milliseconds(50))
-            order.append("草稿")
+            _ = try? await store.createCard(body: "刚写的")
         }
-        services.addBackgroundFlush { order.append("另一处") }
-        let removed = services.addBackgroundFlush { order.append("已注销") }
+        let removed = services.addBackgroundFlush { _ = try? await store.createCard(body: "已注销") }
         services.removeBackgroundFlush(removed)
-        _ = try await services.store.createCard(body: "刚写的")
 
         await services.prepareForBackground()
 
-        #expect(Set(order) == ["草稿", "另一处"])
-        #expect(order.count == 2)
         #expect(Snapshots.read(DefaultProjectSnapshot.self, from: snapshots)?.cards.map(\.title) == ["刚写的"])
-        services.removeBackgroundFlush(token)
     }
 
     /// 小组件、通知与旧版本写出的链接：认得的解析与生成互逆，不认识的忽略。
