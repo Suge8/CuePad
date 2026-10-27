@@ -75,16 +75,17 @@ private struct Chip: View {
     let name: String
     let value: String?
     let on: Bool
+    @Environment(\.palette) private var palette
 
     var body: some View {
         FilterChip(on: on) {
             HStack(spacing: 4) {
-                Text(name).opacity(on ? 0.7 : 1)
+                Text(name).foregroundStyle(on ? palette.signatureSoft : palette.ink)
                 if let value, on {
                     Text(value).fontWeight(.medium)
                 }
                 if value != nil {
-                    Image(.expand).font(.caption2.weight(.bold)).opacity(0.5).accessibilityHidden(true)
+                    Image(.expand).font(.caption2.weight(.bold)).foregroundStyle(on ? palette.signatureSoft : palette.ink3).accessibilityHidden(true)
                 }
             }
         }

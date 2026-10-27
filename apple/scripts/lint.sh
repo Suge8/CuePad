@@ -58,10 +58,10 @@ forbid "产品代码不写 #if DEBUG，经 DebugHooks 碰调试画面：两种�
 forbid "圆角只用 Radius 的几档（Theme/Radius.swift，按东西的种类分：chip、block、card、sheet、field）：各处自写的数是又一套手感，新东西先问它是哪一类；嵌在容器里的块用 Radius.nested 同心；胶囊与圆写 .capsule、.circle，不写半高" \
   '(?:\b[A-Za-z]*[cC]ornerRadius:\s*[\d.]|\b(?:topLeading|bottomLeading|bottomTrailing|topTrailing|top|bottom|leading|trailing)Radius:\s*[\d.]|\b(?:xRadius|yRadius|cornerWidth|cornerHeight):\s*[\d.]|\b\w*[rR]adius(?::\s*CGFloat)?\s*=\s*[1-9.])' \
   '**/Theme/**' 'CuePadKit/Tests/**'
-# 例外：Debug 里演示用的别家界面（预发页、登录页、手机截图）有它们自己的字号；灵动岛的字号在扩展里（扩展没有 Typography）；编辑器在 Kit 里、不依赖 App，字号由主题字号推出
+# 例外：Debug 里演示用的别家界面（预发页、登录页、手机截图）有它们自己的字号；灵动岛的字号在扩展里（扩展没有 Typography）
 forbid "字号只经 Typography（文字，Theme/Typography.swift）与 Glyph（图标，Theme/Glyph.swift）的几档，Theme 以外不写 .system(size: 数) 与 ofSize:、pointSize: 的数：各处自写的字号是又一套层级，新东西先问它是正文、说明还是哪一档图标；确要新档就在那两处按用途加一个" \
   '(?:\.system\(size:\s*[\d.]|\b(?:ofSize|pointSize):\s*[\d.])' \
-  '**/Theme/**' 'App/Sources/UI/Debug/**' '**/Tests/**' 'App/Widget/IslandType.swift' 'CuePadKit/Sources/CueEditor/**'
+  '**/Theme/**' 'App/Sources/UI/Debug/**' '**/Tests/**' 'App/Widget/IslandType.swift'
 forbid "投影只经 elevation 的几档（Theme/Surfaces.swift 的 Elevation，按浮多高分：hover、lifted、panel）：各处自写的半径与偏移是又一套手感，颜色随外观由色板给" \
   '\.shadow\(' '**/Theme/**' 'App/Sources/UI/Debug/**' '**/Tests/**'
 forbid "色值只在色板（AppGroup/Palette.swift）：界面取 palette 的令牌，新颜色先进色板、定语义名与浅深两档，一样东西只有一份颜色" \

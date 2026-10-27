@@ -16,7 +16,7 @@ enum CueImageRendering {
             style.imagePlaceholderColor.setFill()
             UIBezierPath(roundedRect: rect, cornerRadius: style.imageCornerRadius).fill()
             guard let label = label as NSString? else { return }
-            let attributes: [NSAttributedString.Key: Any] = [.font: UIFont.systemFont(ofSize: 12), .foregroundColor: style.markerColor]
+            let attributes: [NSAttributedString.Key: Any] = [.font: style.captionFont, .foregroundColor: style.markerColor]
             let textSize = label.size(withAttributes: attributes)
             label.draw(at: CGPoint(x: rect.midX - textSize.width / 2, y: rect.midY - textSize.height / 2), withAttributes: attributes)
         }
@@ -28,8 +28,8 @@ enum CueImageRendering {
     }
 
     /// 文件牌上没有缩略图时的记号（宿主给的符号）按颜色着色。
-    static func tinted(_ symbol: UIImage, color: UIColor) -> UIImage {
-        (symbol.applyingSymbolConfiguration(UIImage.SymbolConfiguration(pointSize: 20, weight: .regular)) ?? symbol)
+    static func tinted(_ symbol: UIImage, color: UIColor, size: CGFloat) -> UIImage {
+        (symbol.applyingSymbolConfiguration(UIImage.SymbolConfiguration(pointSize: size, weight: .regular)) ?? symbol)
             .withTintColor(color, renderingMode: .alwaysOriginal)
     }
 }

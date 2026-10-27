@@ -105,6 +105,8 @@ struct Palette {
         case (true, true): Color(hex: 0xB3C4F0)
         }
     }
+    /// 靛青的次一档字：筛选胶囊生效时名称让给取值、下拉箭头退后；底是 `selection`。
+    var signatureSoft: Color { signature.opacity(0.7) }
     /// 主按钮、发送钮的靛青底：浅色就是签名色；深色压到中等明度——深色的签名色是给字与焦点用的浅靛青，铺成实心钮是一块亮斑。
     /// 钮上的字（`onFill`）8.0，深色 5.4，深色增强对比度 6.0。
     var signatureFill: Color {

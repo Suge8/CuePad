@@ -36,7 +36,7 @@ private struct FilterCapsule: View {
             Text(name).foregroundStyle(on ? palette.signature : palette.ink2)
             if let value {
                 Text(value).fontWeight(.medium)
-                Image(.expand).font(Glyph.mark).opacity(0.6).accessibilityHidden(true)
+                Image(.expand).font(Glyph.mark).foregroundStyle(on ? palette.signatureSoft : palette.ink3).accessibilityHidden(true)
             }
         }
         .font(Typography.meta)
