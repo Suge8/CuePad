@@ -188,4 +188,3 @@ enum LibraryPane: Int, CaseIterable, Comparable {
         }
     }
 }
-

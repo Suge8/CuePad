@@ -261,7 +261,7 @@ extension View {
 
 /// 按钮悬停那层淡底的形状：随按钮的框——方的是圆、矮的是胶囊（同圆钮与胶囊控件），高的是圆角不超过 `Radius.card` 的圆角矩形。
 nonisolated private struct HoverShape: Shape {
-        /// 字里行间的小钮（`Press.inline`）的悬停底比字宽出的一圈。
+    /// 字里行间的小钮（`Press.inline`）的悬停底比字宽出的一圈。
     static let inlineOutset = EdgeInsets(top: -2, leading: -6, bottom: -2, trailing: -6)
 
     func path(in rect: CGRect) -> Path {
