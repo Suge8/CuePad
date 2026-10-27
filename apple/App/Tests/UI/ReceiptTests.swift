@@ -89,7 +89,7 @@ struct ReceiptTests {
 
     private func sayToCue(_ workspace: Workspace, _ text: String) async throws -> CueMessage {
         workspace.cue.draft = ComposerDraft(text: text)
-        await workspace.speak(to: .cue, from: Bindable(workspace.cue).draft) { try $0.stored(in: workspace.services.store.files) }?.value
+        await workspace.speak(to: .cue, from: Bindable(workspace.cue).draft) { $0.stored }.value
         return try #require(try await workspace.services.store.cueMessages().last { $0.author == .known(.you) })
     }
 
@@ -97,7 +97,7 @@ struct ReceiptTests {
         let services = workspace.services
         let box = services.settings.replyDraftBinding(for: target.id)
         box.wrappedValue = ComposerDraft(text: text)
-        await workspace.speak(to: .session(target, mode: .send), from: box) { try $0.stored(in: services.store.files) }?.value
+        await workspace.speak(to: .session(target, mode: .send), from: box) { $0.stored }.value
         return try #require(try await services.store.deliveryRequests().first)
     }
 

@@ -45,7 +45,7 @@ struct PreviewReplyBar: View {
     private func send(to listener: Listener) {
         guard !text.isEmpty else { return }
         let line = String(localized: "关于「\(about)」：\(text)")
-        guard workspace.speak(to: listener, from: $draft, content: { _ in line }) != nil else { return }
+        workspace.speak(to: listener, from: $draft, content: { _ in line })
         done()
     }
 

@@ -4,11 +4,11 @@ import UIKit
 import UniformTypeIdentifiers
 
 /// TextKit 2 编辑器（iOS/iPadOS 薄宿主）。正文的唯一事实源是 `storedText`（Markdown 原文）：
-/// 只有图片在运行时是 U+FFFC + 附件，所有出口（保存、复制、通知）都经序列化。
+/// 只有附件（图片与文件牌）在运行时是 U+FFFC，所有出口（保存、复制、通知）都经序列化。
 /// 全程不得访问 `UITextView.layoutManager`：一次访问就会把视图永久降级到 TextKit 1。
 @MainActor
 public final class CueTextView: UITextView, CueEditorHost {
-    public let imageStore: any CueImageStore
+    public let files: any CueFileStore
     /// 设计基准样式；字号会按系统字号档位（Dynamic Type）缩放后使用。
     public var theme: CueEditorTheme { didSet { applyTheme() } }
     /// 用户编辑后的新正文；程序设置 `storedText` 与输入法组合期间不触发。
@@ -19,8 +19,20 @@ public final class CueTextView: UITextView, CueEditorHost {
     public var selectedStoredText: String? { core.stored(in: selectedRange) }
     /// 选中文字时编辑菜单里排在系统项前面的动作。
     public var selectionActions: [CueSelectionAction] = []
-    /// 图片入库失败（磁盘满、文件不可读）。失败的图片不会插入。
+    /// 附件入库失败（磁盘满、文件不可读、太大）。失败的附件不会插入。
     public var onError: ((any Error) -> Void)?
+    /// 点了还没到这台的附件（文件牌或图片）：宿主去 iCloud 取，到了调 `refreshAttachments`。
+    public var onFetchFile: ((String) -> Void)?
+    /// 附件此刻的样子（见 `CueFileStatus`）：参数是键、文件名与本机那份（不在本机为 nil）。
+    public var fileStatus: (_ key: String, _ name: String, _ file: URL?) -> CueFileStatus {
+        get { core.fileStatus }
+        set { core.fileStatus = newValue }
+    }
+    /// 文件牌上没有缩略图时的记号，按文件名（宿主给）。
+    public var fileIcon: (String) -> CueImage? {
+        get { core.fileIcon }
+        set { core.fileIcon = newValue }
+    }
 
     var pasteboard: UIPasteboard = .general
     private(set) var core: EditorCore!
@@ -31,12 +43,12 @@ public final class CueTextView: UITextView, CueEditorHost {
     private var transferDelegate: TransferDelegate?
     private var menuDelegate: MenuDelegate?
 
-    public init(imageStore: any CueImageStore, theme: CueEditorTheme) {
-        self.imageStore = imageStore
+    public init(files: any CueFileStore, theme: CueEditorTheme) {
+        self.files = files
         self.theme = theme
         let stack = CueTextStack.make()
         super.init(frame: .zero, textContainer: stack.container)
-        core = EditorCore(host: self, imageStore: imageStore, style: theme, storage: textStorage, content: stack.content, layout: stack.layout)
+        core = EditorCore(host: self, files: files, style: theme, storage: textStorage, content: stack.content, layout: stack.layout)
         let transfer = TransferDelegate(textView: self)
         transferDelegate = transfer
         pasteDelegate = transfer
@@ -48,7 +60,14 @@ public final class CueTextView: UITextView, CueEditorHost {
         configure()
         applyTheme()
         observe()
+        // 点附件：只在点中文件牌（或还没到的图片）时才开始，系统定光标、弹键盘的那几个手势要等它不成立才动
+        let tap = UITapGestureRecognizer(target: self, action: #selector(tappedAttachment(_:)))
+        tap.delegate = menu
+        addGestureRecognizer(tap)
     }
+
+    /// 附件的文件到了、传的进度变了：还没到的图片换上真图，文件牌重画。
+    public func refreshAttachments() { core.refreshAttachments() }
 
     public required init?(coder: NSCoder) { nil }
 
@@ -63,7 +82,7 @@ public final class CueTextView: UITextView, CueEditorHost {
         smartInsertDeleteType = .no
         autocorrectionType = .no
         pasteConfiguration = UIPasteConfiguration(
-            acceptableTypeIdentifiers: [UTType.image, .plainText, .text].map(\.identifier))
+            acceptableTypeIdentifiers: [UTType.image, .plainText, .text, .item].map(\.identifier))
         alwaysBounceVertical = true
         keyboardDismissMode = .interactive
     }
@@ -178,8 +197,18 @@ public final class CueTextView: UITextView, CueEditorHost {
     var displayScale: CGFloat { traitCollection.displayScale }
 }
 
-/// 编辑菜单加上外部提供的选区动作；选区变化（含手势）报告给宿主。
-private final class MenuDelegate: NSObject, UITextViewDelegate {
+/// 编辑菜单加上外部提供的选区动作；选区变化（含手势）报告给宿主；点附件的手势只在点中附件时开始，并且先于系统的手势。
+private final class MenuDelegate: NSObject, UITextViewDelegate, UIGestureRecognizerDelegate {
+    func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        guard let view = gestureRecognizer.view as? CueTextView else { return false }
+        return view.opensAttachment(at: gestureRecognizer.location(in: view))
+    }
+
+    /// 系统的手势（定光标、成为第一响应者弹键盘）等点附件的手势不成立才动：点在附件上光标不动、键盘不弹。
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldBeRequiredToFailBy other: UIGestureRecognizer) -> Bool {
+        other.view === gestureRecognizer.view || other.view?.isDescendant(of: gestureRecognizer.view!) == true
+    }
+
     func textView(_ textView: UITextView, editMenuForTextIn range: NSRange, suggestedActions: [UIMenuElement]) -> UIMenu? {
         guard let view = textView as? CueTextView, let stored = view.selectedStoredText, !view.selectionActions.isEmpty else { return nil }
         let custom = view.selectionActions.map { action in

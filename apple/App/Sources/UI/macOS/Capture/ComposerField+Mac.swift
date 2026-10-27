@@ -6,7 +6,7 @@ import SwiftUI
 /// 输入框里的多行文字区（Mac）：与 iOS 那份同样的接口与行为——高度随文字长到 `maxLines` 行后在里面滚，
 /// 输入法组字期间不从外面写回，空着时显示提示。焦点由调用方的 `.focused` 交给文本视图；文本视图自己拿到、交出焦点
 /// （点进来、Esc）时再报回 `focus`。↩ 换行；⌘↩ 等回复框快捷键是主菜单"回复"里的项，经响应链交到这里（`performReplyShortcut`）。
-/// 粘贴、拖进来的图片交给 `images`（输入框放进图片条），不当文字插。
+/// 粘贴、拖进来的文件与图片交给 `files`（输入框放进附件条），不当文字插。
 struct ComposerField: NSViewRepresentable {
     @Binding var text: String
     let prompt: String
@@ -18,11 +18,10 @@ struct ComposerField: NSViewRepresentable {
     var keys: (ComposerKey) -> Bool = { _ in false }
     /// 回复框的快捷键（`ReplyShortcut`）此刻要做的事；nil 是此刻用不了（菜单项停用）。
     var shortcut: (ReplyShortcut) -> (() -> Void)? = { _ in nil }
-    /// 收下粘贴、拖进来的图片（原图字节）；nil 是这个输入框不收图片，剪贴板里的照常当文字粘。
-    var images: (([Data]) -> Void)?
+    /// 收下粘贴、拖进来的文件与图片；nil 是这个输入框不收附件，剪贴板里的照常当文字粘。
+    var files: (([IncomingFile]) -> Void)?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.palette) private var palette
-    @Environment(Workspace.self) private var workspace
 
     /// 文字区一行中文的高（`ComposerMetrics.lineSlot`）；Mac 的字号不跟系统的动态字号走。
     static func lineHeight(_: DynamicTypeSize) -> CGFloat { GrowingTextView.lineHeight }
@@ -83,8 +82,7 @@ struct ComposerField: NSViewRepresentable {
         }
         view.setAccessibilityLabel(label)
         view.maxLines = maxLines
-        view.images = images
-        view.fail = workspace.fail
+        view.files = files
         view.needsDisplay = true
     }
 
@@ -165,10 +163,8 @@ final class GrowingTextView: NSTextView {
     var maxLines = 1
     var focusChanged: ((Bool) -> Void)?
     var shortcut: (ReplyShortcut) -> (() -> Void)? = { _ in nil }
-    /// 收下粘贴、拖进来的图片（`ComposerField.images`）。
-    var images: (([Data]) -> Void)?
-    /// 粘贴的图片文件读不出来（访达复制后删掉了、没有读那个文件夹的权限）。
-    var fail: (any Error) -> Void = { _ in }
+    /// 收下粘贴、拖进来的文件与图片（`ComposerField.files`）。
+    var files: (([IncomingFile]) -> Void)?
     /// 外部刚写进文字：滚动区下一次排版后滚到末尾。
     var revealsEnd = false
     /// 最大高度：排满 `maxLines` 行中文量出来的高度（中文行比西文行高），撑满时最后一行不被切一半。
@@ -217,22 +213,17 @@ final class GrowingTextView: NSTextView {
     }
 
     override var readablePasteboardTypes: [NSPasteboard.PasteboardType] {
-        images == nil ? super.readablePasteboardTypes : NSPasteboard.imageTypes + super.readablePasteboardTypes
+        files == nil ? super.readablePasteboardTypes : NSPasteboard.fileTypes + super.readablePasteboardTypes
     }
 
-    /// 粘贴与拖入都汇到这里：有图片（规则在 `NSPasteboard.images`）就交出去；否则按文字的种类照常插（图片的种类排在前面，传进来的可能是它们）。
+    /// 粘贴与拖入都汇到这里：有附件（规则在 `NSPasteboard.files`）就交出去；否则按文字的种类照常插（附件的种类排在前面，传进来的可能是它们）。
     override func readSelection(from pboard: NSPasteboard, type: NSPasteboard.PasteboardType) -> Bool {
-        let found = pboard.images
-        guard let images, !found.isEmpty else {
+        let found = pboard.files
+        guard let files, !found.isEmpty else {
             return super.readSelection(from: pboard, type: pboard.availableType(from: super.readablePasteboardTypes) ?? type)
         }
-        do {
-            images(try found.map { try $0.data() })
-            return true
-        } catch {
-            fail(error)
-            return false
-        }
+        files(found)
+        return true
     }
 
     override func becomeFirstResponder() -> Bool {

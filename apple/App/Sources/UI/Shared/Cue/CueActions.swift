@@ -19,8 +19,7 @@ extension Workspace {
     @discardableResult
     func sayToCue(from box: Binding<ComposerDraft>) -> Task<Void, Never>? {
         guard cue.canHear else { return note(from: box) }
-        let files = services.store.files
-        return speak(to: .cue, from: box) { try $0.stored(in: files) }
+        return speak(to: .cue, from: box) { $0.stored }
     }
 
     /// 只记下（"对 Cue 说"长按发送）：这句不交给 Cue，记成一条灵感落在默认项目（不选项目，之后在灵感里挪到别的项目或拖进一条任务），
@@ -28,7 +27,7 @@ extension Workspace {
     @discardableResult
     func note(from box: Binding<ComposerDraft>) -> Task<Void, Never>? {
         let taken = box.wrappedValue
-        let note = CaptureDraft(text: taken.text, images: taken.images.map(\.data))
+        let note = CaptureDraft(text: taken.text, files: taken.files)
         guard !note.isEmpty else { return nil }
         box.wrappedValue = ComposerDraft()
         return Task {

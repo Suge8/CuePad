@@ -5,7 +5,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 输入组件的两条跨边界合同：草稿（文字、图片、带上的卡片）写成什么样的投送请求正文；Pi 的一条回答存为卡片落在哪、正文是什么。
+/// 输入组件的两条跨边界合同：草稿（文字、带上的卡片）写成什么样的投送请求正文（附件见 `SpeakTests`）；Pi 的一条回答存为卡片落在哪、正文是什么。
 struct ComposerTests {
     let app = TestApp()
     var store: CueStore { app.services.store }
@@ -13,27 +13,6 @@ struct ComposerTests {
     private func session(project: UUID? = nil) async throws -> PiSessionState {
         try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "atlas", state: .settled, title: "atlas", projectID: project)
         return try #require(try await store.allPiSessionStates().first)
-    }
-
-    @Test func 回复带图片和卡片_正文依次是卡片_文字_图片_原图入库_只有图片也能发() async throws {
-        let target = try await session()
-        let photo = pngData(shade: 0.3)
-        let hash = try store.files.store(pngData(shade: 0.8))
-        let card = try await store.createCard(body: "接口约定\n\n![](cuepad://file/\(hash))")
-        let draft = ComposerDraft(
-            text: "  照这个改  ", images: [PickedImage(data: photo)],
-            attachments: [Outbox(content: card.body, card: card.id, project: nil)])
-
-        let request = try await Workspace(services: app.services).said(draft, to: target, mode: .send)
-
-        let photoHash = try #require(CueFormat.imageKeys(in: request.content).last)
-        #expect(request.content == "\(card.body)\n\n照这个改\n\n![](cuepad://file/\(photoHash))")
-        #expect(app.services.store.files.fileURL(for: photoHash) != nil)
-        #expect(request.hostID == "mac-a" && request.mode == .known(.send))
-
-        // 只有一张图片也能发
-        let onlyPhoto = try await Workspace(services: app.services).said(ComposerDraft(images: [PickedImage(data: pngData())]), to: target, mode: .send)
-        #expect(CueFormat.imageKeys(in: onlyPhoto.content).count == 1 && !onlyPhoto.content.contains("\n"))
     }
 
     /// 发给 Agent 时用"＋ 选灵感"带上本项目置顶的灵感：卡片作为这次消息的附件跟着发出（任务的正文在前、灵感在后），

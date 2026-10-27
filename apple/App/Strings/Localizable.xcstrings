@@ -1514,6 +1514,34 @@
         }
       }
     },
+    "%lld 个附件" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld attachment"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld attachments"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld 个附件"
+          }
+        }
+      }
+    },
     "%lld 个项目里的 %lld 个" : {
       "localizations" : {
         "en" : {
@@ -3931,6 +3959,22 @@
         }
       }
     },
+    "iCloud 空间已满：附件先留在这台，腾出空间后接着传" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iCloud storage is full. Attachments stay on this device and upload once there’s space."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iCloud 空间已满：附件先留在这台，腾出空间后接着传"
+          }
+        }
+      }
+    },
     "iCloud 账号受限" : {
       "localizations" : {
         "en" : {
@@ -4755,6 +4799,22 @@
         }
       }
     },
+    "上传中 %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uploading %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上传中 %@"
+          }
+        }
+      }
+    },
     "上传本机数据" : {
       "localizations" : {
         "en" : {
@@ -4963,18 +5023,18 @@
         }
       }
     },
-    "下载中" : {
+    "下载中 %@" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Downloading"
+            "value" : "Downloading %@"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "下载中"
+            "value" : "下载中 %@"
           }
         }
       }
@@ -5455,6 +5515,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "今天还没做完的"
+          }
+        }
+      }
+    },
+    "从 iCloud 取来" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Downloads it from iCloud"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "从 iCloud 取来"
           }
         }
       }
@@ -9143,22 +9219,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "图片"
-          }
-        }
-      }
-    },
-    "图片文件…" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Image Files…"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "图片文件…"
           }
         }
       }
@@ -13124,6 +13184,38 @@
         }
       }
     },
+    "插入文件" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Insert File"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "插入文件"
+          }
+        }
+      }
+    },
+    "插入文件…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Insert File…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "插入文件…"
+          }
+        }
+      }
+    },
     "插话 %lld" : {
       "localizations" : {
         "en" : {
@@ -13764,6 +13856,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "文件"
+          }
+        }
+      }
+    },
+    "文件…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "File…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "文件…"
           }
         }
       }
@@ -15320,38 +15428,6 @@
         }
       }
     },
-    "正在从 iCloud 下载" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Downloading from iCloud"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "正在从 iCloud 下载"
-          }
-        }
-      }
-    },
-    "正在从 iCloud 下载…" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Downloading from iCloud…"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "正在从 iCloud 下载…"
-          }
-        }
-      }
-    },
     "正在从 iCloud 同步" : {
       "localizations" : {
         "en" : {
@@ -16200,18 +16276,18 @@
         }
       }
     },
-    "没有可保存的文字、网址或图片" : {
+    "没有可保存的文字、网址或文件" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Nothing to save: no text, link, or image"
+            "value" : "Nothing to save: no text, link, or file"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "没有可保存的文字、网址或图片"
+            "value" : "没有可保存的文字、网址或文件"
           }
         }
       }
@@ -16984,6 +17060,22 @@
         }
       }
     },
+    "点一下从 iCloud 取" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tap to download from iCloud"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "点一下从 iCloud 取"
+          }
+        }
+      }
+    },
     "点一下，按下新的组合键（Esc 取消）" : {
       "localizations" : {
         "en" : {
@@ -17716,6 +17808,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "移除"
+          }
+        }
+      }
+    },
+    "移除这个文件" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remove This File"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "移除这个文件"
           }
         }
       }
@@ -22320,6 +22428,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "问版本没有回应，稍后再试"
+          }
+        }
+      }
+    },
+    "附件" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Attachment"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "附件"
           }
         }
       }

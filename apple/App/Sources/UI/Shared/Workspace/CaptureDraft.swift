@@ -18,19 +18,17 @@ nonisolated enum CaptureCopy {
     static func saved(to destination: String) -> String { String(localized: "已记到 \(destination)") }
 }
 
-/// 随手记的草稿：一段文字加若干图片，存成一条灵感（文字在前，图片按顺序各占一行）。要做的事随后拖进一条任务（`Workspace.mergeIdea`）。
+/// 随手记的草稿：一段文字加若干附件，存成一条灵感（文字在前，附件按顺序各占一行）。要做的事随后拖进一条任务（`Workspace.mergeIdea`）。
 struct CaptureDraft {
     var text: String
-    var images: [Data]
+    var files: [DraftFile]
 
-    var isEmpty: Bool { text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && images.isEmpty }
+    var isEmpty: Bool { text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && files.isEmpty }
 
     /// 存下并提示实际的落点（点提示去那里）；项目已失效时 `Workspace` 回落到默认项目，提示照实写。
     func save(in project: UUID, workspace: Workspace) async throws {
         let store = workspace.services.store
-        let files = store.files
-        let body = StoredBody.make(text: text, imageHashes: try images.map { try files.store($0) })
-        let card = try await workspace.createCard(body: body, in: project)
+        let card = try await workspace.createCard(body: StoredBody.make(text: text, files: files), in: project)
         let destination = try await store.project(card.projectID)?.shownName ?? ""
         workspace.say(Dotted(CaptureCopy.saved(to: destination)), link: .project(card.projectID))
     }
@@ -39,6 +37,6 @@ struct CaptureDraft {
 extension Workspace {
     /// Pi 的一条回答存为灵感：进该会话所属项目，会话没归项目的进默认项目；提示落点，点它过去。
     func saveReply(_ text: String, of session: PiSessionState) async throws {
-        try await CaptureDraft(text: text, images: []).save(in: session.projectID ?? Project.defaultID, workspace: self)
+        try await CaptureDraft(text: text, files: []).save(in: session.projectID ?? Project.defaultID, workspace: self)
     }
 }

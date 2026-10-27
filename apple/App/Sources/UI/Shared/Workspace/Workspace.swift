@@ -27,6 +27,8 @@ final class Workspace {
             case done
             /// 点了去的那一处已不在（删了、归档了）
             case gone
+            /// 停着等你腾地方（iCloud 空间满，附件先不传），不算出错
+            case paused
             case failure
 
             var icon: Icon {
@@ -34,6 +36,7 @@ final class Workspace {
                 case .done: .done
                 // 带斜线的圈：那里已经没有它了。不用对勾（对勾只表示完成与记下）
                 case .gone: .gone
+                case .paused: .syncPaused
                 case .failure: .failure
                 }
             }
@@ -254,10 +257,20 @@ final class Workspace {
         async let cue: Void = followCue()
         async let opens: Void = openLinks()
         async let library: Void = followLibrary()
+        async let quota: Void = followFilesQuota()
         #if os(macOS)
         await followSessionPlacement()
         #endif
-        _ = await (catalog, links, cue, opens, library)
+        _ = await (catalog, links, cue, opens, library, quota)
+    }
+
+    /// iCloud 空间满了、附件停在这台（`AppServices.syncFilesOverQuota`）：变满的那一下说一次，不进同步状态（别的记录照常同步，说的话不变红）。
+    private func followFilesQuota() async {
+        var was = false
+        for await over in Observations({ self.services.syncFilesOverQuota }) {
+            if over, !was { say(Dotted(FileStatus.overQuota), tone: .paused, duration: .seconds(6)) }
+            was = over
+        }
     }
 
     private func followCatalog() async {

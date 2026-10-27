@@ -7,7 +7,7 @@ import UniformTypeIdentifiers
 
 private struct DiskFull: Error {}
 
-private final class FailingStore: CueImageStore {
+private final class FailingStore: CueFileStore {
     func store(_ data: Data) throws -> String { throw DiskFull() }
     func store(fileAt url: URL) throws -> String { throw DiskFull() }
     func fileURL(for id: String) -> URL? { nil }
@@ -55,9 +55,23 @@ struct IOSEditingTests {
 
             let found = attachments(in: item.result)
             let attachment = try #require(found.first as? CueImageAttachment)
-            #expect(found.count == 1 && h.store.storedData.count == 1 && h.store.fileURL(for: attachment.imageID) != nil)
+            #expect(found.count == 1 && h.store.storedData.count == 1 && h.store.fileURL(for: attachment.key) != nil)
             if fromFile { #expect(h.store.storedData == [png]) }  // 文件原样入库，不重新编码
         }
+    }
+
+    @Test("粘贴/拖入任意文件（文件 App 分享的 PDF）：委托给出一枚文件牌，名字是原文件名，文件经注入的库存入")
+    func pasteFile() async throws {
+        let h = EditorHarness()
+        let file = h.store.directory.appendingPathComponent("报告.pdf")
+        try Data("%PDF-1.4".utf8).write(to: file)
+
+        let item = await transform(try #require(NSItemProvider(contentsOf: file)), in: h)
+
+        let chip = try #require(attachments(in: item.result).first as? CueFileAttachment)
+        #expect(chip.name == "报告.pdf")
+        #expect(chip.key.hasSuffix(".pdf"))
+        #expect(h.store.fileURL(for: chip.key) != nil)
     }
 
     @Test("粘贴文本按存储格式解析：图片标记还原成图片，其余（含分割线）原样")
@@ -72,7 +86,7 @@ struct IOSEditingTests {
     @Test("图片入库失败：报告错误、不插入")
     func importFailure() async throws {
         let h = EditorHarness()
-        let failing = CueTextView(imageStore: FailingStore(), theme: .test)
+        let failing = CueTextView(files: FailingStore(), theme: .test)
         h.root.addSubview(failing)
         h.root.layoutIfNeeded()
         var errors: [any Error] = []
@@ -86,8 +100,8 @@ struct IOSEditingTests {
         #expect(errors.count == 1 && errors.first is DiskFull)
     }
 
-    @Test("insertImage：光标处插入图片引用并通知，可撤销、可重做；后续键入是普通文字")
-    func insertImage() throws {
+    @Test("insertImage：光标处插入图片引用（自成一行）并通知，可撤销、可重做；后续键入是普通文字")
+    func insertImage() async throws {
         let h = EditorHarness()
         h.load("前文后文")
         h.setCaret(2)
@@ -95,9 +109,10 @@ struct IOSEditingTests {
         h.textView.onChange = { notified.append($0) }
 
         h.textView.insertImage(data: makePNG(width: 40, height: 30))
+        #expect(await h.wait { CueFormat.hasImages(h.stored) })
 
         let id = try #require(CueFormat.parse(h.stored).compactMap { if case .image(let id) = $0 { id } else { nil } }.first)
-        #expect(h.stored == "前文![](cuepad://file/\(id))后文")
+        #expect(h.stored == "前文\n![](cuepad://file/\(id))\n后文")
         #expect(notified == [h.stored])
         let inserted = h.stored
 
@@ -107,7 +122,7 @@ struct IOSEditingTests {
         #expect(h.stored == inserted)
 
         h.textView.insertText("x")
-        #expect(h.stored == "前文![](cuepad://file/\(id))x后文")
+        #expect(h.stored == "前文\n![](cuepad://file/\(id))\nx后文")
     }
 
     @Test("编辑器内复制/剪切输出存储格式，粘回去还原成图片")
@@ -117,6 +132,7 @@ struct IOSEditingTests {
         h.load("甲乙")
         h.setCaret(1)
         h.textView.insertImage(data: makePNG(width: 40, height: 30))
+        #expect(await h.wait { CueFormat.hasImages(h.stored) })
         let original = h.stored
         h.textView.selectedRange = NSRange(location: 0, length: h.textView.textStorage.length)
 
@@ -125,7 +141,7 @@ struct IOSEditingTests {
         #expect(h.stored == original)
 
         let item = await transform(NSItemProvider(object: try #require(h.textView.pasteboard.string) as NSString), in: h)
-        #expect((attachments(in: item.result).first as? CueImageAttachment)?.imageID != nil)
+        #expect((attachments(in: item.result).first as? CueImageAttachment)?.key != nil)
 
         h.textView.pasteboard.string = ""
         h.textView.cut(nil)
