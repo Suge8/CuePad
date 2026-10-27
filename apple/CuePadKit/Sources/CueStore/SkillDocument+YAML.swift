@@ -30,12 +30,55 @@ extension SkillDocument {
     }
   }
 
-  /// `key: 值` 的几行（用文件的换行符连起来，末尾不带换行）。多行的写成 `|-` 块；单行的能不加引号就不加，原来带引号的保留那种引号；
+  /// 冒号后那段接着的 `rest` 里有几行属于值：引号的到收尾引号那行；块的到缩进不够的那行；普通的到值之后的注释（` #` 或单独一行的 `#`）。
+  static func valueLines(_ first: Substring, rest: ArraySlice<Substring>) -> Int {
+    let head = first.trimmingCharacters(in: .whitespaces)
+    let blank = { (line: Substring) in line.allSatisfy { $0 == " " || $0 == "\t" } }
+    switch head.first {
+    case "|", ">":
+      let explicit = head.first { $0.isNumber }?.wholeNumberValue
+      guard let indent = explicit ?? rest.first(where: { !blank($0) }).map({ $0.prefix { $0 == " " }.count }) else { return rest.count }
+      return rest.prefix { blank($0) || $0.prefix { $0 == " " }.count >= indent }.count
+    case "\"", "'":
+      let quote = head.first!
+      var escaped = false, pendingQuote = false
+      for (offset, line) in ([Substring(head.dropFirst())] + rest).enumerated() {
+        for character in line {
+          if pendingQuote {
+            pendingQuote = false
+            if character == "'" { continue }
+            return offset
+          }
+          if escaped { escaped = false } else if quote == "\"" && character == "\\" { escaped = true } else if character == quote {
+            if quote == "\"" { return offset }
+            pendingQuote = true
+          }
+        }
+        if pendingQuote { return offset }
+        escaped = false
+      }
+      return rest.count
+    default:
+      // 值从下一行起时，它前面的注释行算在这个键里
+      var started = !head.isEmpty && !head.hasPrefix("#"), count = 0
+      if started && first.contains(" #") { return 0 }
+      for line in rest {
+        let content = line.trimmingCharacters(in: .whitespaces)
+        if started && content.hasPrefix("#") { break }
+        count += 1
+        if !content.isEmpty && !content.hasPrefix("#") { started = true }
+        if started && line.contains(" #") { break }
+      }
+      return count
+    }
+  }
+
+  /// `key: 值` 的几行（用文件的换行符连起来，末尾不带换行）。多行的写成 `|-` 块（`block` 为假时不用块）；单行的能不加引号就不加，原来带引号的保留那种引号；
   /// 双引号能写下一切，是最后的写法。
-  static func yaml(_ key: Key, _ value: String, quote: Character?, newline: String) -> String {
+  static func yaml(_ key: Key, _ value: String, quote: Character?, block: Bool, newline: String) -> String {
     let prefix = key.rawValue + ":"
     let printable = !value.unicodeScalars.contains(where: needsEscape)
-    if printable, value.contains("\n"), let first = value.first, let last = value.last, !first.isWhitespace, !last.isWhitespace {
+    if block, printable, value.contains("\n"), let first = value.first, let last = value.last, !first.isWhitespace, !last.isWhitespace {
       let lines = value.split(separator: "\n", omittingEmptySubsequences: false).map { $0.isEmpty ? "" : "  " + $0 }
       return ([prefix + " |-"] + lines).joined(separator: newline)
     }

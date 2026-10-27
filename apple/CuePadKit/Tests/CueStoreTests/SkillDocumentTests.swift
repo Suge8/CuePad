@@ -23,6 +23,10 @@ import Testing
           expected: "---\nname: a\ndescription: new\nlicense: MIT\n---\nx"),
     Write(label: "跨行的双引号整段换掉", file: "---\ndescription: \"one\n  two\"\nname: a\n---\nx", description: "new",
           expected: "---\ndescription: \"new\"\nname: a\n---\nx"),
+    Write(label: "值后面的注释行留着", file: "---\nname: a\ndescription: one\n  # 注释\nlicense: MIT\n---\nx", description: "new",
+          expected: "---\nname: a\ndescription: new\n  # 注释\nlicense: MIT\n---\nx"),
+    Write(label: "值后面有注释行时多行说明不写成块", file: "---\nname: a\ndescription: one\n  # 注释\n---\nx", description: "a\nb",
+          expected: "---\nname: a\ndescription: \"a\\nb\"\n  # 注释\n---\nx"),
     Write(label: "多行说明写成块", file: "---\nname: a\ndescription: b\n---\nx", description: "first\n\nsecond",
           expected: "---\nname: a\ndescription: |-\n  first\n\n  second\n---\nx"),
     Write(label: "双引号的保留双引号并转义", file: "---\nname: a\ndescription: \"say \\\"hi\\\"\"\n---\nx", description: "say \"bye\" \\ ok",
@@ -43,6 +47,7 @@ import Testing
     ("description: one\n  two", "one two"),
     ("description: |\n  a\n    b\n", "a\n  b"),
     ("description: >\n  a\n  b\n\n  c\n", "a b\nc"),
+    ("description: |\n    a\n  # 缩进不够的是注释", "a"),
   ])
   func readsTheYAMLValue(_ field: String, _ expected: String) {
     #expect(SkillDocument("---\nname: a\n\(field)\n---\nx").description == expected)

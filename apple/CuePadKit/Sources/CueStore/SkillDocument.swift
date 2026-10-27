@@ -32,6 +32,8 @@ public struct SkillDocument: Equatable, Sendable {
   private struct Field: Equatable, Sendable {
     let range: Range<String.Index>
     let quote: Character?
+    /// 值后面跟着缩进的注释行：换成块写法会把它们读进值里
+    let commented: Bool
   }
 
   public init(_ text: String) {
@@ -52,17 +54,17 @@ public struct SkillDocument: Equatable, Sendable {
       let start = index
       index += 1
       guard let first = line.first, !" \t#".contains(first), let colon = line.firstIndex(of: ":") else { continue }
-      // 值接着的几行：缩进的与夹在中间的空行，末尾的空行留给下一个键
-      var last = index
-      while index < end, lines[index].allSatisfy({ $0 == " " || $0 == "\t" }) || " \t".contains(lines[index].first!) {
-        index += 1
-        if !lines[index - 1].allSatisfy({ $0 == " " || $0 == "\t" }) { last = index }
-      }
+      // 缩进的与夹在中间的空行接着这个键；其中属于值的几行按值的写法定（之后的注释行不算），末尾的空行留给下一个键
+      while index < end, lines[index].first.map({ " \t".contains($0) }) ?? true { index += 1 }
+      let value = line[line.index(after: colon)...]
+      var last = start + 1 + Self.valueLines(value, rest: lines[start + 1..<index])
+      while last > start + 1, lines[last - 1].allSatisfy({ $0 == " " || $0 == "\t" }) { last -= 1 }
+      let commented = lines[last..<index].contains { !$0.allSatisfy { $0 == " " || $0 == "\t" } }
       index = last
       guard let key = Key(rawValue: line[..<colon].trimmingCharacters(in: .whitespaces)) else { continue }
-      let scalar = Self.scalar(line[line.index(after: colon)...], rest: Array(lines[start + 1..<last]))
+      let scalar = Self.scalar(value, rest: Array(lines[start + 1..<last]))
       values[key] = scalar.value
-      fields[key] = Field(range: line.startIndex..<lines[last - 1].endIndex, quote: scalar.quote)
+      fields[key] = Field(range: line.startIndex..<lines[last - 1].endIndex, quote: scalar.quote, commented: commented)
     }
     var bodyLine = end + 1
     while bodyLine < lines.count - 1, lines[bodyLine].isEmpty { bodyLine += 1 }
@@ -81,16 +83,16 @@ public struct SkillDocument: Equatable, Sendable {
     let changes = [(Key.name, name, self.name), (.description, description, self.description)].filter { $0.1 != ($0.2 ?? "") }
     guard let header else {
       if changes.isEmpty { return body }
-      let fields = changes.map { Self.yaml($0.0, $0.1, quote: nil, newline: newline) + newline }.joined()
+      let fields = changes.map { Self.yaml($0.0, $0.1, quote: nil, block: true, newline: newline) + newline }.joined()
       return "---" + newline + fields + "---" + newline + (body.hasPrefix(newline) ? "" : newline) + body
     }
     var edits: [(range: Range<String.Index>, text: String)] = []
     var added = ""
     for (key, value, _) in changes {
       if let field = header.fields[key] {
-        edits.append((field.range, Self.yaml(key, value, quote: field.quote, newline: newline)))
+        edits.append((field.range, Self.yaml(key, value, quote: field.quote, block: !field.commented, newline: newline)))
       } else {
-        added += Self.yaml(key, value, quote: nil, newline: newline) + newline
+        added += Self.yaml(key, value, quote: nil, block: true, newline: newline) + newline
       }
     }
     if !added.isEmpty { edits.append((header.start..<header.start, added)) }
