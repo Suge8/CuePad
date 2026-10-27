@@ -56,12 +56,13 @@ struct RealGrokTests {
     }
 
     /// 需要你确认的命令：会话停在"等你确认"、带着要跑的命令；在 CuePad 里允许后命令照常跑完，这一轮做完。
+    /// 用例的话是真模型也照做的明确指令，断言只看你看得到的（假模型的剧本认这几句原话，`FakeResponses.plan`）。
     @Test func aPermissionRequestIsAnsweredFromCuePad() async throws {
         try await withGrokRig { rig in
             let id = try await rig.runtime.open(in: rig.work, launchToken: "token-2", name: nil, model: nil, thinking: nil)
             let marker = rig.work.appending(path: "marker.txt")
 
-            try await rig.bridge.send(PiMessage(text: "Run exactly this shell command: echo ok > marker.txt"), to: id)
+            try await rig.bridge.send(PiMessage(text: "Use the run_terminal_command tool to run exactly: echo ok > marker.txt  Then reply with only DONE."), to: id)
             try await eventually("等你确认") { rig.bridge.session(id: id)?.question != nil }
             let question = try #require(rig.bridge.session(id: id)?.question)
             #expect(rig.bridge.session(id: id)?.state == .waitingForUser)
@@ -69,34 +70,38 @@ struct RealGrokTests {
 
             try await rig.bridge.answer(.confirmed(true), to: try #require(question.promptID), in: id)
 
-            try await eventually("这一轮做完") { rig.bridge.session(id: id)?.state == .settled && rig.replies(rig.bridge.session(id: id)!).last == "DONE" }
+            try await eventually("这一轮做完") {
+                rig.bridge.session(id: id).map { $0.state == .settled && rig.replies($0).last?.contains("DONE") == true } == true
+            }
             #expect(FileManager.default.fileExists(atPath: marker.path))
         }
     }
 
-    /// Grok 问你（`ask_user_question`，一次两问）：会话停在"等你回答"，逐问带着选项与说明、也能自己填；在 CuePad 里答完第一问才出第二问，
-    /// 两问都答了它拿着答案接着说，这一轮做完。
+    /// Grok 问你（`ask_user_question`，一次两问）：会话停在"等你回答"，逐问带着选项与说明、也能自己填，选项外的不收；在 CuePad 里答完第一问
+    /// 才出第二问，两问都答了它拿着答案接着说，这一轮做完。
     @Test func aQuestionIsAnsweredFromCuePadOneByOne() async throws {
         try await withGrokRig { rig in
             let id = try await rig.runtime.open(in: rig.work, launchToken: "token-ask", name: nil, model: nil, thinking: nil)
-            try await rig.bridge.send(PiMessage(text: "Ask me which drink and which size I want, then tell me what I chose."), to: id)
+            try await rig.bridge.send(PiMessage(text: """
+                Use the ask_user_question tool once to ask me exactly two single-select questions: "Which drink?" with options Tea \
+                (description: hot) and Coffee (description: strong), then "Which size?" with options Small (description: small cup) \
+                and Large (description: large cup). Then reply with only my two answers.
+                """), to: id)
 
-            try await eventually("问第一问") { rig.bridge.session(id: id)?.question?.text.hasPrefix("Which drink?") == true }
+            try await eventually("问第一问") { rig.bridge.session(id: id)?.question?.options.contains("Coffee") == true }
             let drink = try #require(rig.bridge.session(id: id)?.question)
             #expect(rig.bridge.session(id: id)?.state == .waitingForUser)
-            #expect(drink.kind == .known(.select) && drink.options == ["Tea", "Coffee"] && drink.allowsOther && drink.text.contains("Coffee：strong"))
+            #expect(drink.kind == .known(.select) && Set(drink.options) == ["Tea", "Coffee"] && drink.allowsOther && drink.text.contains("Coffee："), "\(drink)")
             await #expect(throws: PiBridgeError.rejected("bad_answer")) { try await rig.bridge.answer(.option("Milk"), to: try #require(drink.promptID), in: id) }
             try await rig.bridge.answer(.option("Coffee"), to: try #require(drink.promptID), in: id)
 
             let size = try #require(rig.bridge.session(id: id)?.question)
-            #expect(size.text == "Which size?" && size.options == ["Small", "Large"] && size.promptID != drink.promptID)
+            #expect(Set(size.options) == ["Small", "Large"] && size.allowsOther && size.promptID != drink.promptID, "\(size)")
             try await rig.bridge.answer(.text("Medium"), to: try #require(size.promptID), in: id)
 
             try await eventually("拿到答案接着说，这一轮做完") {
-                rig.bridge.session(id: id).map { $0.state == .settled && rig.replies($0).last?.contains("\"Which drink?\"=\"Coffee\"") == true } == true
+                rig.bridge.session(id: id).map { $0.state == .settled && rig.replies($0).last.map { $0.contains("Coffee") && $0.contains("Medium") } == true } == true
             }
-            let reply = try #require(rig.bridge.session(id: id).flatMap { rig.replies($0).last })
-            #expect(reply.contains("\"Which size?\"=\"Medium\""), "\(reply)")
             #expect(rig.bridge.session(id: id)?.question == nil)
         }
     }

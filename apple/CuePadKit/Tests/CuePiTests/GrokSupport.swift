@@ -165,11 +165,11 @@ final class FakeResponses: Sendable {
             let seen = input.contains { ($0["content"] as? [[String: Any]])?.contains { $0["type"] as? String == "input_image" } == true }
             return .say(seen ? "red" : "I see no image")
         }
-        if query.contains("which drink") {
+        if query.contains("ask_user_question") {
             let questions: [[String: Any]] = [
                 ["question": "Which drink?", "header": "Drink", "multiSelect": false,
                  "options": [["label": "Tea", "description": "hot"], ["label": "Coffee", "description": "strong"]]],
-                ["question": "Which size?", "header": "Size", "multiSelect": false, "options": [["label": "Small", "description": ""], ["label": "Large", "description": ""]]],
+                ["question": "Which size?", "header": "Size", "multiSelect": false, "options": [["label": "Small", "description": "small cup"], ["label": "Large", "description": "large cup"]]],
             ]
             return calls.isEmpty ? .call("ask_user_question", ["questions": questions]) : .say(outputs.last ?? "")
         }
@@ -181,7 +181,7 @@ final class FakeResponses: Sendable {
         if query.contains("hack.txt") {
             return calls.isEmpty ? .call("run_terminal_command", ["command": "echo x > hack.txt", "description": "write the file"]) : .say("I cannot write files here.")
         }
-        if let command = query.firstMatch(of: /Run exactly this shell command: (.+)/)?.output.1 {
+        if let command = query.firstMatch(of: /run exactly: (.+?)  Then/)?.output.1 {
             return calls.isEmpty ? .call("run_terminal_command", ["command": String(command), "description": "run it"]) : .say("DONE")
         }
         if let word = query.firstMatch(of: /single word ([A-Za-z]+)/)?.output.1 { return .say(String(word)) }
