@@ -14,6 +14,14 @@
 			h = 0,
 			time = 0,
 			raf: number | null = null;
+		/* 粒子是墨与靛青：颜色取自画布自己的 color / accent-color（CSS 令牌按所在段的浅深解析），不在这里另写色值 */
+		let ink = '',
+			signature = '';
+		function readColors() {
+			const cs = getComputedStyle(canvas);
+			ink = cs.color;
+			signature = cs.accentColor;
+		}
 
 		interface P {
 			x: number;
@@ -57,21 +65,16 @@
 				if (p.x < -8) p.x = w + 8;
 				if (p.x > w + 8) p.x = -8;
 				if (DUST) {
-					const a = 0.05 + 0.05 * (0.5 + 0.5 * Math.sin(time * p.spin + p.phase));
-					ctx2d.fillStyle =
-						p.hue < 0.6
-							? `rgba(23, 21, 18, ${a})`
-							: p.hue < 0.85
-								? `rgba(86, 128, 103, ${a})`
-								: `rgba(200, 162, 74, ${a})`;
+					ctx2d.globalAlpha = 0.05 + 0.05 * (0.5 + 0.5 * Math.sin(time * p.spin + p.phase));
+					ctx2d.fillStyle = p.hue < 0.75 ? ink : signature;
 					ctx2d.save();
 					ctx2d.translate(p.x, p.y);
 					ctx2d.rotate(p.phase + time * p.spin * 0.4);
 					ctx2d.fillRect(-p.s / 2, -p.s / 2, p.s, p.s * 0.72);
 					ctx2d.restore();
 				} else {
-					const a = 0.14 + 0.3 * (0.5 + 0.5 * Math.sin(time * p.spin * 1.6 + p.phase));
-					ctx2d.fillStyle = p.hue < 0.55 ? `rgba(200, 162, 74, ${a})` : `rgba(169, 196, 180, ${a})`;
+					ctx2d.globalAlpha = 0.14 + 0.3 * (0.5 + 0.5 * Math.sin(time * p.spin * 1.6 + p.phase));
+					ctx2d.fillStyle = p.hue < 0.55 ? ink : signature;
 					const s = p.s * (0.7 + 0.3 * Math.sin(time * p.spin * 1.6 + p.phase));
 					ctx2d.beginPath();
 					ctx2d.moveTo(p.x, p.y - s);
@@ -97,6 +100,9 @@
 
 		resize();
 		seed();
+		readColors();
+		const scheme = window.matchMedia('(prefers-color-scheme: dark)');
+		scheme.addEventListener('change', readColors);
 		const io = new IntersectionObserver((entries) => {
 			if (entries[0].isIntersecting) start();
 			else stop();
@@ -113,6 +119,7 @@
 		return () => {
 			stop();
 			io.disconnect();
+			scheme.removeEventListener('change', readColors);
 			document.removeEventListener('visibilitychange', onVis);
 			window.removeEventListener('resize', onResize);
 		};
