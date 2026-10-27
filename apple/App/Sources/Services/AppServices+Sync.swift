@@ -23,13 +23,16 @@ extension AppServices {
         return (nil, .unavailable(reason))
     }
 
-    /// 启动同步，并让 `syncStatus`、`syncIssues`、`conflicts` 跟随，直到任务取消。没有同步（隔离模式）什么都不做。
+    /// 启动同步，并让 `syncStatus`、`syncIssues`、`conflicts`、`fileTransfers` 跟随，直到任务取消。没有同步（隔离模式）什么都不做。
     /// 启动后的第一次拉走立即同步（`CloudSync.start` 自己不拉；拉取等得到同步开始）：算在 `isCatchingUp` 里，打开的页面知道手里的可能不是最新。
     func startSync() {
         guard let sync else { return }
         connectSync()
         follow {
             for await state in sync.stateUpdates { self.setSyncState(state) }
+        }
+        follow {
+            for await transfers in sync.fileTransfers { self.setFileTransfers(transfers) }
         }
         follow(reporting: { .syncUnavailable(String(localized: "冲突列表读取失败：\(String(describing: $0))")) }) {
             for try await conflicts in self.store.observe({ try $0.conflicts() }) { self.setConflicts(conflicts) }
@@ -199,6 +202,12 @@ extension AppServices {
     /// 处理 `syncStatus == .needsDecision`：用户选择后同步重新开始。
     func resolveSync(_ resolution: SyncResolution) async throws {
         try await sync?.resolve(resolution)
+    }
+
+    /// 这个附件文件在本机的位置：没有就现在从 iCloud 取（手机上大文件、按流量计费时不自动取，用到时走这里）；没有同步（隔离库）抛 `FileFetchFailure.notSyncing`。
+    func fetchFile(_ key: String) async throws -> URL {
+        guard let sync else { throw FileFetchFailure.notSyncing }
+        return try await sync.fetchFile(key)
     }
 
     func resolveConflict(copy id: UUID, keep choice: ConflictChoice) async throws {

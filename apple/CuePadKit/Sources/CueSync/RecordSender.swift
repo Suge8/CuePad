@@ -2,7 +2,7 @@ import CloudKit
 import CueStore
 import Foundation
 
-/// 推：库里推导的待推送（`CueStore.pendingSync`）是唯一的队列，这里只决定什么时候发、一批发哪些。
+/// 推：库里推导的待推送（`CueStore.pendingSync`）是唯一的队列，这里只决定什么时候发、一批发哪些。附件记录带着文件，不在这里传（`FileSender`）。
 ///
 /// 两路：后台那一路随本机提交（攒 `gatherWindow` 合成一批）与立即同步（`kick`）一轮轮地发，每批至多 `CloudKitLimits.recordsPerRequest` 条；
 /// 马上传（`send`，说的话、回执）另走一路，不进攒批窗口、不排在后台那批后面，当场只发这几条。Cue 对你说的话由这里认出来马上传
@@ -225,8 +225,8 @@ actor RecordSender {
     }
   }
 
-  /// 上传前对一次最低对端版本，成功为止（同一时刻只对一次）；停下（这台要更新、要你决定）的不再对。
-  private func ready() async -> Bool {
+  /// 上传前对一次最低对端版本，成功为止（同一时刻只对一次）；停下（这台要更新、要你决定）的不再对。文件那一路（`FileSender`）同样等它。
+  func ready() async -> Bool {
     if prepared { return true }
     if let preparing { return await preparing.value }
     let task = Task { () -> Bool in

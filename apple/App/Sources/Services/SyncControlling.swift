@@ -16,6 +16,10 @@ nonisolated protocol SyncControlling: Sendable {
     /// 把待推送全部发出去，返回时这一轮结束
     func push() async
     func resolve(_ resolution: SyncResolution) async throws
+    /// 附件文件此刻在路上的（按 key）：先给当前快照，之后每次变化给新快照（`CloudSync.fileTransfers`）
+    var fileTransfers: AsyncStream<[String: FileTransfer]> { get }
+    /// 这个附件文件在本机的位置，没有就现在从 iCloud 取、记录还没到就等它到（`CloudSync.fetchFile`）
+    func fetchFile(_ key: String) async throws -> URL
 }
 
 extension CloudSync: SyncControlling {}

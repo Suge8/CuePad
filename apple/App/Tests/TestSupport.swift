@@ -77,6 +77,8 @@ nonisolated final class FakeSync: SyncControlling, Sendable {
     func push() async {}
 
     func resolve(_ resolution: SyncResolution) async throws {}
+    var fileTransfers: AsyncStream<[String: FileTransfer]> { AsyncStream { $0.yield([:]) } }
+    func fetchFile(_ key: String) async throws -> URL { throw FileFetchFailure.notSyncing }
 }
 
 /// 一次"App 启动"：临时库目录 + 独立偏好 + 替身（macOS 的发送通道、热键；iOS 的私有命名剪贴板，
