@@ -15,6 +15,31 @@ def interrupted(sig, _):
     raise SystemExit(128 + sig)
 
 
+def silence():
+    """标准输入输出不再占着调用方的管道（否则调用方要等本进程结束才拿到结果）。"""
+    null = os.open(os.devnull, os.O_RDWR)
+    for fd in (0, 1, 2):
+        os.dup2(null, fd)
+
+
+def wait_exit(pid):
+    """等进程退出（kqueue）；它已经不在就立刻返回。"""
+    queue = select.kqueue()
+    try:
+        queue.control([select.kevent(pid, select.KQ_FILTER_PROC, select.KQ_EV_ADD, select.KQ_NOTE_EXIT)], 1, None)
+    except ProcessLookupError:
+        pass
+    finally:
+        queue.close()
+
+
+def alive(note):
+    """note["holder"] 是不是还在跑的 app.py（run 留下的看守）。"""
+    pid = note.get("holder")
+    command = subprocess.run(["ps", "-o", "command=", "-p", str(pid)], capture_output=True, text=True).stdout if pid else ""
+    return "app.py" in command
+
+
 def descendants(pid):
     children = {}
     for line in subprocess.run(["ps", "-axo", "pid=,ppid="], capture_output=True, text=True).stdout.splitlines():
