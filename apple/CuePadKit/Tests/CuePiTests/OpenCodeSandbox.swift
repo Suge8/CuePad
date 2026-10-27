@@ -6,11 +6,29 @@ import Testing
 @testable import CuePi
 
 private let environment = ProcessInfo.processInfo.environment
-/// 测试用的 OpenCode v2：`CUEPAD_OPENCODE` 给的可执行文件，没给就是本机装的
-let realOpenCodeURL = environment["CUEPAD_OPENCODE"].map { URL(filePath: $0) } ?? ExecutableLocator.standard.candidates("opencode").first
-/// 测试用的模型：缺省是假模型（`Fixtures/fake-openai.mjs`，提供方 `fake`，零网络、结果确定）；`CUEPAD_OPENCODE_MODEL` 写成 `提供方/模型`
-/// 换成真提供方（密钥只经环境给，如 `DEEPSEEK_API_KEY`），`CUEPAD_OPENCODE_OTHER_MODEL` 是就地换到的那个（要有 high 强度），缺省同一个
-let openCodeTestModel = environment["CUEPAD_OPENCODE_MODEL"].flatMap(AgentKind.opencode.modelKey) ?? PiModelKey(provider: OpenCodeSandbox.fake, id: "echo")
+/// 测试用的 OpenCode v2：`CUEPAD_OPENCODE` 给的可执行文件，没给就是本机装的里头第一个 v2（v1 的接口不同）
+let realOpenCodeURL = environment["CUEPAD_OPENCODE"].map { URL(filePath: $0) }
+    ?? ExecutableLocator.standard.candidates("opencode").first { (version(of: $0)?.major ?? 0) >= 2 }
+/// 测试用的模型：缺省是假模型（`Fixtures/fake-openai.mjs`，提供方 `fake`，零网络、结果确定）；`CUEPAD_AGENT_TESTS` 列出 opencode 时
+/// 换成真提供方 `CUEPAD_OPENCODE_MODEL`（`提供方/模型`，密钥只经环境给，如 `DEEPSEEK_API_KEY`），`CUEPAD_OPENCODE_OTHER_MODEL`
+/// 是就地换到的那个（要有 high 强度），缺省同一个
+let openCodeRealModel = environment["CUEPAD_OPENCODE_MODEL"].flatMap(AgentKind.opencode.modelKey)
+/// 列出 opencode 却没给（或写错）真提供方的模型时套件跳过（`RealAgents.missing`），用不到这里
+let openCodeTestModel = RealAgents.recording.contains(.opencode) ? openCodeRealModel! : PiModelKey(provider: OpenCodeSandbox.fake, id: "echo")
+
+/// `opencode --version` 报的版本；跑不起来或读不懂为 nil
+private func version(of executable: URL) -> AgentVersion? {
+    let process = Process()
+    process.executableURL = executable
+    process.arguments = ["--version"]
+    let output = Pipe()
+    process.standardOutput = output
+    process.standardError = FileHandle.nullDevice
+    guard (try? process.run()) != nil else { return nil }
+    let text = String(decoding: output.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+    process.waitUntilExit()
+    return AgentVersion(parsing: text)
+}
 let openCodeOtherModel = openCodeTestModel.provider == OpenCodeSandbox.fake ? PiModelKey(provider: OpenCodeSandbox.fake, id: "echo-b")
     : environment["CUEPAD_OPENCODE_OTHER_MODEL"].flatMap(AgentKind.opencode.modelKey) ?? openCodeTestModel
 
@@ -19,7 +37,7 @@ let openCodeOtherModel = openCodeTestModel.provider == OpenCodeSandbox.fake ? Pi
 /// 不开免费模型、不盯文件（它从根目录起逐级盯到工作目录，机器忙时起服务要几十秒）。
 /// - 假模型：起一个 `Fixtures/fake-openai.mjs`，配成提供方 `fake`（两个模型，窗口不同、都有 low / high 两档强度）；
 /// - 真模型：提供方的密钥（测试进程环境里 `*_API_KEY` 的）交给它，模型要在随包的模型表里。
-final class OpenCodeSandbox {
+final class OpenCodeSandbox: Sendable {
     static let fake = "fake"
     let root: URL
     let work: URL

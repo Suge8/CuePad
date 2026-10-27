@@ -7,7 +7,7 @@ import Testing
 
 /// 端到端：Cue 用这家开工、说话、歇下。后台开一个带名字、模型、强度的会话（`AgentRuntime.open`，一次生效），开场一句做完歇下，
 /// 再说一句又做完歇下。各家用自己的隔离测试台：Pi 是假模型，Codex 用复制的登录（不刷新），Claude Code 用订阅令牌，OpenCode 见 `OpenCodeSandbox`。
-/// 默认回放录像带（OpenCode 没有录像带，列出它时直连），见 `RealAgents`。
+/// 默认回放录像带（OpenCode 没有录像带，总连真 OpenCode），见 `RealAgents`。
 private let agents = AgentKind.allCases.filter(RealAgents.runs)
 
 @MainActor

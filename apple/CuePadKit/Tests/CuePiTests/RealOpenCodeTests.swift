@@ -8,7 +8,7 @@ import Testing
 /// 端到端：真 OpenCode 的后台服务，模型见 `openCodeTestModel`（缺省是假模型，零网络）。CuePad 看得到它的会话、在 CuePad 里跟它说话与作答，
 /// 也能在服务没开时自己把它拉起来开新会话、接着已结束的会话。
 @MainActor
-@Suite(RealAgents.live(.opencode, "HTTP/SSE 边界没接进录像带，见 RealAgents"), .serialized, .timeLimit(.minutes(10)))
+@Suite(RealAgents.taped(.opencode), .serialized, .timeLimit(.minutes(10)))
 struct RealOpenCodeTests {
     func session(_ bridge: PiBridge) -> PiSession? { bridge.sessions.first { $0.agent == .opencode } }
 
