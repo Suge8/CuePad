@@ -5,21 +5,26 @@ import Foundation
 import Testing
 @testable import CuePi
 
-/// 端到端：真实的 Pi / Codex / Claude Code / OpenCode 当 Cue 的大脑，用本机用户自己登录的账号与便宜的模型，MCP 是 Fixtures/mcp-echo.mjs 替身。
-/// 默认回放录像带，录制与模型、强度的换法见 `RealAgents`；OpenCode 没有录像带，列出它时直连，在隔离的 `OpenCodeSandbox` 里用免费模型。
+/// 端到端：真实的 Pi / Codex / Claude Code / OpenCode / Grok Build / dsh 当 Cue 的大脑，用本机用户自己登录的账号与便宜的模型（Grok Build 用假模型，见 `GrokModel`），
+/// MCP 是 Fixtures/mcp-echo.mjs 替身。
+/// 默认回放录像带，录制与模型、强度的换法见 `RealAgents`；OpenCode 没有录像带，总在隔离的 `OpenCodeSandbox` 里连真 OpenCode 跑（模型见它）。
 private let environment = ProcessInfo.processInfo.environment
-private let runtimes = AgentKind.allCases.filter { $0 == .opencode ? RealAgents.mode(of: $0) == .live && RealAgents.installed($0) : RealAgents.runs($0) }
-/// 连真运行时才看得出的（进程树、各家的历史）：录制或直连时列出、本机装着的几家
+private let runtimes = AgentKind.allCases.filter(RealAgents.runs)
+/// 连真运行时才看得出的（进程树、各家的历史）：录制时列出的、OpenCode（总连真的），本机跑得起来的几家
 private let liveRuntimes = runtimes.filter { RealAgents.mode(of: $0) != .replay }
-/// Pi 用 openai-codex 的模型：Claude 只走官方 Claude Code，不经 Pi 用 Claude 订阅。OpenCode 用能看图的免费模型
+/// Pi 用 openai-codex 的模型：Claude 只走官方 Claude Code，不经 Pi 用 Claude 订阅
 private let cheapModels: [AgentKind: String] = [
-    .pi: "openai-codex/gpt-5.6-luna", .codex: "gpt-5.6-luna", .claudeCode: "haiku", .opencode: "opencode/deepseek-v4.1-flash-free",
+    .pi: "openai-codex/gpt-5.6-luna", .codex: "gpt-5.6-luna", .claudeCode: "haiku", .opencode: AgentKind.opencode.modelRef(openCodeTestModel),
+    .grok: "grok-4.6", .dsh: "deepseek-official/deepseek-flash",
 ]
 /// 就地换到的模型：Pi 的上下文窗口与上面的不同，换没换看得出来（Codex 里两个窗口一样，Claude Code 报的是用过的模型里最大的窗口）。
-/// 用 `CUEPAD_BRAIN_OTHER_MODEL_<家>` 换（OpenCode 的免费模型限流时连同 `CUEPAD_BRAIN_MODEL_<家>` 换成自己提供方的，密钥只经环境给）
+/// 用 `CUEPAD_BRAIN_OTHER_MODEL_<家>` 换
 private let otherModels: [AgentKind: String] = [
-    .pi: "openai-codex/gpt-6-luna", .codex: "gpt-6-luna", .claudeCode: "sonnet", .opencode: AgentKind.opencode.modelRef(openCodeTestModel),
+    .pi: "openai-codex/gpt-6-luna", .codex: "gpt-6-luna", .claudeCode: "sonnet", .opencode: AgentKind.opencode.modelRef(openCodeOtherModel),
+    .grok: "grok-4.5", .dsh: "deepseek-official/deepseek-v4-pro",
 ]
+/// 录 dsh 用的 dsh：`CUEPAD_DSH` 指定（本机装的常是旧版，要 0.2.1-rc.2 以上），没给时按 PATH 找
+let realDshURL = environment["CUEPAD_DSH"].map { URL(filePath: $0) } ?? ExecutableLocator.standard.candidates("dsh").first
 private let echoServer = URL(filePath: #filePath).deletingLastPathComponent().appending(path: "Fixtures/mcp-echo.mjs")
 private let home = FileManager.default.homeDirectoryForCurrentUser
 /// 缺省 off：最便宜，Codex、Claude Code 还会走夹取
@@ -31,7 +36,7 @@ private func executable(_ name: String) -> URL? {
 }
 
 @MainActor
-@Suite(.agentTapes, RealAgents.serialWhenRecording(.pi, .codex, .claudeCode, .opencode), RealAgents.timeLimit(.minutes(5)))
+@Suite(.agentTapes, RealAgents.serialWhenRecording(.pi, .codex, .claudeCode, .opencode, .grok, .dsh), RealAgents.timeLimit(.minutes(5)))
 struct RealBrainTests {
     /// 一个大脑与它的现场：独立的工作目录（名字里有随机标记，用来在各家的历史里找它）、MCP 替身的调用记录、收到的事件。
     @MainActor
@@ -43,9 +48,8 @@ struct RealBrainTests {
         let echoLog: URL
         let sessions: URL
         let codename = "ZEBRA-4821"
-        /// OpenCode 的隔离家目录与库：测试进程里共用一台（头一次起要联网取模型表，几十秒；临时目录随测试进程清理）
+        /// OpenCode 的隔离家目录、库与假模型：每个大脑一台（并行的几台 OpenCode 头一次同起一个库会撞上建表）
         let sandbox: OpenCodeSandbox?
-        private static var openCodeSandbox: OpenCodeSandbox?
         let brain: any HostedSession
         private(set) var events: [TurnEvent] = []
 
@@ -56,11 +60,12 @@ struct RealBrainTests {
             sessions = root.appending(path: "pi-sessions")
             echoLog = root.appending(path: "echo.log")
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            if runtime == .opencode {
-                if Self.openCodeSandbox == nil { Self.openCodeSandbox = try await OpenCodeSandbox() }
-                sandbox = Self.openCodeSandbox
-            } else {
-                sandbox = nil
+            sandbox = runtime == .opencode ? try await OpenCodeSandbox() : nil
+            // Grok 的大脑另起临时配置目录，登录取用户配置目录里的：用户配置目录指到这里，不碰真实的 ~/.grok；dsh 的家目录也在这里（登录只经环境里的 key）
+            let agentHome = switch runtime {
+            case .grok: ["GROK_HOME": root.appending(path: "grok-user").path]
+            case .dsh: ["DSH_HOME": root.appending(path: "dsh").path]
+            default: [String: String]()
             }
             let config = CueBrainConfig(
                 runtime: runtime, executable: runtime == .opencode ? try #require(realOpenCodeURL) : AgentTape.executable(runtime.facts.command),
@@ -69,7 +74,7 @@ struct RealBrainTests {
                 workingDirectory: directory,
                 mcp: [try #require(executable("node")).path, echoServer.path, marker],
                 // Pi 的会话落盘位置指到这里：`--no-session` 生效的话它一直是空的（不去翻用户的 ~/.pi）
-                environment: ["MCP_ECHO_LOG": echoLog.path, "PI_CODING_AGENT_SESSION_DIR": sessions.path].merging(sandbox?.environment ?? [:]) { $1 })
+                environment: ["MCP_ECHO_LOG": echoLog.path, "PI_CODING_AGENT_SESSION_DIR": sessions.path].merging(sandbox?.environment ?? agentHome) { $1 })
             AgentTape.current?.watch(root)
             brain = try await config.startBrain()
             let events = brain.events
@@ -105,11 +110,14 @@ struct RealBrainTests {
         var echoed: [String] { ((try? String(contentsOf: echoLog, encoding: .utf8)) ?? "").split(separator: "\n").map(String.init) }
     }
 
-    /// 起一个大脑跑完测试体，不论成败都等它退出。
+    /// 起一个大脑跑完测试体，不论成败都等它退出、收掉 OpenCode 的隔离环境。
     private func withRig(_ runtime: AgentKind, _ body: (Rig) async throws -> Void) async throws {
         let rig = try await Rig(runtime)
-        do { try await body(rig) } catch { await rig.brain.stop()(); throw error }
+        let outcome: Result<Void, any Error>
+        do { try await body(rig); outcome = .success(()) } catch { outcome = .failure(error) }
         await rig.brain.stop()()
+        try await rig.sandbox?.stop()
+        try outcome.get()
     }
 
     /// 发一句话：这一轮开始、报上下文用量（带窗口）、回答、做完；回答出自我们给的系统提示。
@@ -152,6 +160,10 @@ struct RealBrainTests {
             """)
         try await eventually("第一次调到 MCP 替身") { !rig.echoed.isEmpty }
         try await rig.brain.send("Stop now: make no more tool calls and reply with only the word STOPPED.")
+        if runtime == .grok {
+            AgentTape.current?.mark("release")
+            GrokModel.fake?.release()
+        }
         try await rig.finished()
 
         #expect(rig.failures == [], "\(rig.events)")
@@ -172,8 +184,9 @@ struct RealBrainTests {
         // OpenCode 的服务对不存在的模型也回 204：大脑自己认
         let unknown = switch runtime {
         case .pi: "openai-codex/no-such-model"
-        case .opencode: "opencode/no-such-model"
-        case .codex, .claudeCode: "no-such-model"
+        case .opencode: "\(openCodeTestModel.provider)/no-such-model"
+        case .dsh: "deepseek-official/no-such-model"
+        case .codex, .claudeCode, .grok: "no-such-model"
         }
         await #expect(throws: (any Error).self) { try await rig.brain.configure(model: unknown, effort: nil) }
         let other = environment["CUEPAD_BRAIN_OTHER_MODEL_\(runtime.rawValue.uppercased())"] ?? otherModels[runtime]
@@ -216,7 +229,7 @@ struct RealBrainTests {
 /// 结束后进程连同它起的子进程（MCP 服务等）都退出、各家的历史里没有这次对话：断言的是真进程树与各家真实的历史目录，回放不出来，
 /// 只在录制或直连时连真运行时跑。
 @MainActor
-@Suite(.enabled(if: !liveRuntimes.isEmpty, "只连真运行时跑（看真进程树与各家的历史）：CUEPAD_AGENT_TESTS 列出 pi、codex、claude 或 opencode 时开启"), .serialized, .timeLimit(.minutes(5)))
+@Suite(.enabled(if: !liveRuntimes.isEmpty, "只连真运行时跑（看真进程树与各家的历史）：CUEPAD_AGENT_TESTS 列出 pi、codex、claude、grok、dsh，或本机有 opencode v2 时开启"), .serialized, .timeLimit(.minutes(5)))
 struct RealBrainProcessTests {
     @Test(arguments: liveRuntimes) func stoppingLeavesNoProcessesOrHistory(_ runtime: AgentKind) async throws {
         let rig = try await RealBrainTests.Rig(runtime)
@@ -246,8 +259,16 @@ struct RealBrainProcessTests {
         case .opencode:
             let sandbox = try #require(sandbox)
             let left = try await openCodeSessions(in: rig.directory, sandbox)
-            try await sandbox.run(["service", "stop"])
+            try await sandbox.stop()
             #expect(left.isEmpty, "\(left)")
+        case .grok:
+            // 大脑的配置目录是它自己的临时目录（停下时删掉）：用户的会话目录里没有这个工作目录（只读）
+            let sessions = home.appending(path: ".grok/sessions")
+            #expect(((try? FileManager.default.contentsOfDirectory(atPath: sessions.path)) ?? []).filter { $0.contains(rig.marker) } == [])
+        case .dsh:
+            // 会话、附件、存储都在本次运行的临时目录里，随它删掉；dsh 的家目录里没有会话
+            let dshHome = rig.directory.deletingLastPathComponent().appending(path: "dsh")
+            #expect(!FileManager.default.fileExists(atPath: dshHome.appending(path: DshRuntime.sessions).path))
         }
     }
 

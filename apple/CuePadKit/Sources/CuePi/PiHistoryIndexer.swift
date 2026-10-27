@@ -2,7 +2,7 @@
 import CueStore
 import Foundation
 
-/// 后台索引一个 Agent 的会话目录（Pi、Claude Code、Codex 的会话文件，怎么认、怎么读见 `SessionFileFormat`）：先按修改时间倒序回填
+/// 后台索引一个 Agent 的会话目录（Pi、Claude Code、Codex、Grok Build 的会话文件，怎么认、怎么读见 `SessionFileFormat`）：先按修改时间倒序回填
 /// `scope` 里的会话文件（最近的会话最先可用），发出 `backfillFinished` 后只跟着在线会话的文件（桥上的，`PiBridge.sessionFiles`；
 /// `FileFollower` 当场报），只读新增字节。会话的对话只从这里来：托管的会话没接入也开得出，所以没接入的 Agent 也要回填它托管过的那些。
 /// 整棵目录只在回填时列一次，没经接入的会话（如 Pi 关了扩展）下次启动时进历史。会话从开始到结束都在桥上（各家的接入上报），
@@ -60,7 +60,7 @@ public struct PiHistoryIndexer: Sendable {
             var last: Set<URL>?
             for await files in liveFiles where files != last {  // 会话的每次状态变化都会再给一份
                 last = files
-                follower.follow(only: Set(files.map(\.realPath.path).filter { Self.isSessionFile($0, under: root, depth: format.depth) }))
+                follower.follow(only: Set(files.map(\.realPath.path).filter { Self.isSessionFile($0, under: root, format: format) }))
             }
         }
         defer { following.cancel() }
@@ -99,7 +99,7 @@ public struct PiHistoryIndexer: Sendable {
         }
 
         // 回填时记住最近修改的那批文件（在线会话的就在其中）：之后盯到的写入落到缓存上，不会重读也不会重复发出
-        let found = Self.sessionFiles(under: root, depth: format.depth).filter { scope.covers($0.url) }
+        let found = Self.sessionFiles(under: root, format: format).filter { scope.covers(sessionID: format.sessionID(of: $0.url)) }
         for (rank, file) in found.enumerated() {
             if Task.isCancelled { return }
             await index(file.url, modified: file.modified, size: file.size, remember: rank < Self.liveCacheLimit)
@@ -113,11 +113,11 @@ public struct PiHistoryIndexer: Sendable {
         }
     }
 
-    private static func isSessionFile(_ path: String, under root: URL, depth: Int) -> Bool {
+    private static func isSessionFile(_ path: String, under root: URL, format: SessionFileFormat) -> Bool {
         let url = URL(filePath: path)
-        guard url.pathExtension == "jsonl" else { return false }
+        guard format.matches(url) else { return false }
         var parent = url
-        for _ in 0..<depth { parent = parent.deletingLastPathComponent() }
+        for _ in 0..<format.depth { parent = parent.deletingLastPathComponent() }
         return parent.path == root.path
     }
 
@@ -126,14 +126,14 @@ public struct PiHistoryIndexer: Sendable {
     }
 
     /// 全部会话文件与修改时间、大小，最近修改的在前。
-    private static func sessionFiles(under root: URL, depth: Int) -> [(url: URL, modified: Date, size: UInt64?)] {
+    private static func sessionFiles(under root: URL, format: SessionFileFormat) -> [(url: URL, modified: Date, size: UInt64?)] {
         let keys: [URLResourceKey] = [.contentModificationDateKey, .isRegularFileKey, .fileSizeKey]
         guard let walker = FileManager.default.enumerator(at: root, includingPropertiesForKeys: keys, options: [.skipsHiddenFiles]) else { return [] }
         var files: [(url: URL, modified: Date, size: UInt64?)] = []
         for case let url as URL in walker {
-            guard walker.level == depth else { continue }
+            guard walker.level == format.depth else { continue }
             walker.skipDescendants()  // 更深的子目录（如 subagents/）不进
-            guard url.pathExtension == "jsonl" else { continue }
+            guard format.matches(url) else { continue }
             let values = try? url.resourceValues(forKeys: Set(keys))
             guard values?.isRegularFile == true else { continue }
             files.append((url, values?.contentModificationDate ?? .distantPast, values?.fileSize.map(UInt64.init)))

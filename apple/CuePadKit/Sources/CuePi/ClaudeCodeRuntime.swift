@@ -167,12 +167,16 @@ public final class ClaudeCodeRuntime: AgentRuntime {
 
     // MARK: 终端会话
 
-    /// 一次钩子调用：托管会话自己的直接放行（状态来自 stream-json）——按环境里的 `HostMark`（值是会话 id）认，还要对上会话
-    /// （从托管会话里开的终端继承了标记）；其余交给它所在的终端会话（第一次见到就上桥）。
+    /// 一次钩子调用。原样放行、不登记的两种：
+    /// - 不是 Claude Code 发的：Claude Code 按每次钩子的输入设环境里的 `CLAUDE_CODE_SESSION_ID`，与输入里的 `session_id` 相同；
+    ///   照读 `~/.claude/settings.json` 跑这些钩子的别家（Grok Build、Cursor、OpenCode 的兼容插件）没有它，或是从 Claude Code
+    ///   里起时继承来的别的会话；
+    /// - 托管会话自己的（状态来自 stream-json）：环境里的 `HostMark`（值是会话 id）对上一个托管会话（从托管会话里开的终端继承了标记，会话不同）。
+    /// 其余交给它所在的终端会话（第一次见到就上桥）。
     private func received(_ call: AgentHookCall) {
         let envelope = call.envelope
         guard let input = JSONValue.parse(envelope.input), let event = input["hook_event_name"]?.string,
-              let sessionID = input["session_id"]?.string,
+              let sessionID = input["session_id"]?.string, envelope.environment["CLAUDE_CODE_SESSION_ID"] == sessionID,
               envelope.environment[HostMark.variable] != sessionID || hosted[sessionID] == nil else { return call.finish() }
         let id = PiSession.claudeID(sessionID: sessionID, pid: envelope.pid)
         if event == "SessionEnd" {
@@ -283,7 +287,7 @@ public final class ClaudeCodeRuntime: AgentRuntime {
             guard terminals[id] == nil, scope.covers(sessionID: entry.sessionID) else { continue }  // 读文件时钩子先到、已上桥，或范围换了
             let session = PiSession(
                 id: id, sessionID: entry.sessionID, agent: .claudeCode, sessionFile: file,
-                pid: entry.pid, cwd: cwd, terminal: PiTerminal(tty: Self.controllingTerminal(of: entry.pid)),
+                pid: entry.pid, cwd: cwd, terminal: PiTerminal(tty: PiTerminal.controllingTerminal(of: entry.pid)),
                 state: .settled, stateSince: .now)
             _ = attach(session, inbox: inbox(of: entry.pid), runningSince: running, waiting: waiting)
             recall(id, sessionID: entry.sessionID)
@@ -300,16 +304,6 @@ public final class ClaudeCodeRuntime: AgentRuntime {
     private func inbox(of pid: Int32) -> String? {
         let file = home.appending(path: "sessions/\(pid).json")
         return (try? Data(contentsOf: file)).flatMap(JSONValue.parse)?["messagingSocketPath"]?.string
-    }
-
-    /// 进程的控制终端名（如 `ttys012`）；没有终端为 nil。
-    private static func controllingTerminal(of pid: Int32) -> String? {
-        var info = proc_bsdinfo()
-        let size = Int32(MemoryLayout<proc_bsdinfo>.size)
-        guard proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, size) == size, info.e_tdev != UInt32(bitPattern: -1),
-              let name = devname(dev_t(bitPattern: info.e_tdev), S_IFCHR) else { return nil }
-        let tty = String(cString: name)
-        return tty == "??" ? nil : tty
     }
 }
 

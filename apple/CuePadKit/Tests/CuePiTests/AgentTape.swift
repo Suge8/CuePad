@@ -53,7 +53,7 @@ final class AgentTape: @unchecked Sendable {
     }
 
     /// 替身的名字 → 录制时背后的真 Agent
-    static let realExecutables: [String: URL?] = ["pi": realPiURL, "codex": realCodexURL, "claude": claudeURL]
+    static let realExecutables: [String: URL?] = ["pi": realPiURL, "codex": realCodexURL, "claude": claudeURL, "grok": realGrokURL, "dsh": realDshURL]
 
     /// - Parameter agent: 一个套件一家时由特征给出；几家共用一个套件时用例自己用 `use(_:variant:)` 给出。
     init(agent: AgentKind?, test: Test) throws {
@@ -105,10 +105,10 @@ final class AgentTape: @unchecked Sendable {
     static func executable(_ name: String) -> URL { current?.executable(name) ?? (realExecutables[name] ?? nil)! }
     static func locator(_ name: String) -> ExecutableLocator { ExecutableLocator(searchDirectories: [executable(name).deletingLastPathComponent()]) }
 
-    /// 录制时盯着这些目录里 Agent 写出的文件（会话文件、工作目录里的产物）。
-    func watch(_ urls: URL...) {
+    /// 录制时盯着这些目录里 Agent 写出的文件（会话文件、工作目录里的产物）；给了 `named` 只录叫这个名字的（目录里还有 CuePad 不读的大文件时）。
+    func watch(_ urls: URL..., named: String? = nil) {
         guard mode == .record else { return }
-        state.withLock { $0.watched += urls.map(\.path) }
+        state.withLock { $0.watched += urls.map { ($0.path, named) } }
     }
 
     /// 测试经文件系统等旁路交给 Agent 的动作（如放行假模型）：录制时记下，回放时当作这一步输入已到。
@@ -216,7 +216,7 @@ final class AgentTape: @unchecked Sendable {
         var variant: String?
         var proxying = false
         var secrets: [String] = []
-        var watched: [String] = []
+        var watched: [(path: String, named: String?)] = []
         var problems: [String] = []
         // 录制
         var events: [TapeEvent] = []

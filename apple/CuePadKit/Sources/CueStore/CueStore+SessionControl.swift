@@ -50,7 +50,8 @@ extension CueStore {
   /// Cue 这会儿说不了就抛 `cannotSpeakNow`、什么都不写，它歇下时 Cue 被叫醒再说：停不下这一轮（`speakBlocked`），
   /// 或会打断他发起的那一轮（`inUserTurn`）。正文原样写：收不了图片的会话由 Mac 交出时把图片写成路径。必须在写事务内调用。
   func say(_ content: String, to session: SessionTarget, card: UUID?, host: String, cue: Bool) throws -> DeliveryRequest {
-    if cue, session.state?.speakBlocked != nil {
+    if cue, let state = session.state, state.speakBlocked != nil {
+      guard state.capabilities.contains(.speak) else { throw CueStoreError.terminalOnly(session.target.name) }
       throw CueStoreError.cannotSpeakNow(session.target.name, "在跑，CuePad 打断不了它（在终端里开的）")
     }
     if cue, try inUserTurn(session.target.ref) { throw CueStoreError.cannotSpeakNow(session.target.name, "正在跑他发起的一轮，现在说会打断它") }

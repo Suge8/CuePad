@@ -40,7 +40,7 @@ Sparkle 2：密钥、appcast 与只发完整包见 `sparkle.sh` 头注释，更�
 
 enclosure 带构建号，是因为 GitHub 不能一次替换多个资产：用固定名字时，换包与换 appcast 之间有一段旧签名配新包的窗口，落后的客户端验签失败。所以上传顺序是：带构建号的新包 → `appcast.xml` → 官网包 → 删上一版带构建号的包；中途失败重跑 `release mac` 即可补齐。
 
-装更新要重启 CuePad：托管的 Pi 撑得过重启（新版经桥认回），Claude Code、Codex、OpenCode 这类随 App 退出的托管会话还在干活或等你确认时，重启推迟到它们空下来（`UpdateService`）。`-CuePadScene updatewait` 验托管的 Pi 在干活时更新直接装。
+装更新要重启 CuePad：托管的 Pi 撑得过重启（新版经桥认回），Claude Code、Codex、OpenCode、Grok Build 这类随 App 退出的托管会话还在干活或等你确认时，重启推迟到它们空下来（`UpdateService`）。`-CuePadScene updatewait` 验托管的 Pi 在干活时更新直接装。
 
 换 logo 时重跑 `scripts/make-icon.py`，菜单栏图标 `cue.menubar` 在符号生成器里一起改。
 

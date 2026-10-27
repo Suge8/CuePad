@@ -14,7 +14,7 @@ extension OpenCodeRuntime {
             started[info.id] = read.checkpoint.history.lastTurnStart ?? asked
         }
         guard self.connection === connection else { return }
-        for id in drafts.reset() { bridge.setDraft(bridgeID(id, connection), nil) }
+        childTurns = [:]
 
         let topLevel = all.filter { $0.parentID == nil }
         for info in topLevel {
@@ -24,9 +24,10 @@ extension OpenCodeRuntime {
             // 快照里在跑的一轮：开始取快照之后读到的对话里的（可能是断线期间开始的另一轮，`SessionFacts.startTurn(at:)`）
             if let start = started[info.id] { tracked.facts.startTurn(at: start) } else { tracked.facts.running = false }
             tracked.facts.work(.thinking)
-            tracked.toolNames = [:]
+            if tracked.turn.speaking { bridge.setDraft(bridgeID(info.id, connection), nil) }
+            tracked.turn = OpenCodeTurn()
             tracked.facts.compacting = false
-            tracked.facts.failure = !tracked.facts.running && info.outcome == "failed" ? Self.unknownFailure : nil
+            tracked.facts.failure = !tracked.facts.running && info.outcome == "failed" ? OpenCodeTurn.unknownFailure : nil
             if tracked.facts.running || info.updatedAt >= connection.startedAt, ended[info.id].map({ info.updatedAt > $0 }) ?? true {
                 tracked.online = true
             }
@@ -82,7 +83,8 @@ extension OpenCodeRuntime {
         let compaction = try await client.get(OpenCodePage<OpenCodeMessage>.self, "/api/session/\(id)/message?type=compaction&limit=1").data.first
         try await catalog(tracked.directory, client)
         sessions[id]?.facts.questions = permissions.map(Self.question) + forms.map(Self.question)
-        sessions[id]?.tokens = last?.tokens?.prompt
+        let window = OpenCodeTurn.window(of: last?.model, in: catalogs[tracked.directory]?.models ?? [])
+        sessions[id]?.context = window.map { PiContextUsage(tokens: last?.tokens?.prompt, window: $0) }
         sessions[id]?.facts.compacting = compaction?.status == "running"
         if tracked.info.model == nil { sessions[id]?.info.model = last?.model }
         if tracked.facts.failure != nil, let error = last?.error?.message { sessions[id]?.facts.failure = error }
@@ -103,7 +105,6 @@ extension OpenCodeRuntime {
     }
 
     static let compact = "compact"
-    static let unknownFailure = String(localized: "出错了，原因不明")
 
     func bridgeID(_ sessionID: String, _ connection: Connection) -> PiSession.ID { "\(sessionID).\(connection.pid)" }
 
@@ -116,7 +117,6 @@ extension OpenCodeRuntime {
             catalog?.models.first { $0.key == PiModelKey(provider: ref.providerID, id: ref.id) }?.option
                 ?? PiModelOption(key: PiModelKey(provider: ref.providerID, id: ref.id), name: ref.id, thinkingLevels: [.off])
         }
-        let window = tracked.info.model.flatMap { ref in catalog?.models.first { $0.id == ref.id && $0.providerID == ref.providerID }?.limit?.context }
         func fill(_ session: inout PiSession) {
             tracked.facts.publish(to: &session)
             session.name = tracked.info.title
@@ -126,7 +126,7 @@ extension OpenCodeRuntime {
             session.model = model
             session.thinking = model.flatMap { Self.thinking(tracked.info.model?.variant, of: $0) }
             session.availableModels = catalog?.models.map(\.option) ?? []
-            session.context = window.map { PiContextUsage(tokens: tracked.tokens, window: $0) }
+            session.context = tracked.context
             session.commands = catalog?.commands ?? []
         }
         if bridge.session(id: id) == nil {

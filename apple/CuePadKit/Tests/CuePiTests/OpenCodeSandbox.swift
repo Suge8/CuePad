@@ -5,15 +5,45 @@ import Foundation
 import Testing
 @testable import CuePi
 
+private let environment = ProcessInfo.processInfo.environment
+/// 测试用的 OpenCode v2：`CUEPAD_OPENCODE` 给的可执行文件，没给就是本机装的里头第一个 v2（v1 的接口不同）
+let realOpenCodeURL = environment["CUEPAD_OPENCODE"].map { URL(filePath: $0) }
+    ?? ExecutableLocator.standard.candidates("opencode").first { (version(of: $0)?.major ?? 0) >= 2 }
+/// 测试用的模型：缺省是假模型（`Fixtures/fake-openai.mjs`，提供方 `fake`，零网络、结果确定）；`CUEPAD_AGENT_TESTS` 列出 opencode 时
+/// 换成真提供方 `CUEPAD_OPENCODE_MODEL`（`提供方/模型`，密钥只经环境给，如 `DEEPSEEK_API_KEY`），`CUEPAD_OPENCODE_OTHER_MODEL`
+/// 是就地换到的那个（要有 high 强度），缺省同一个
+let openCodeRealModel = environment["CUEPAD_OPENCODE_MODEL"].flatMap(AgentKind.opencode.modelKey)
+/// 列出 opencode 却没给（或写错）真提供方的模型时套件跳过（`RealAgents.missing`），用不到这里
+let openCodeTestModel = RealAgents.recording.contains(.opencode) ? openCodeRealModel! : PiModelKey(provider: OpenCodeSandbox.fake, id: "echo")
+
+/// `opencode --version` 报的版本；跑不起来或读不懂为 nil
+private func version(of executable: URL) -> AgentVersion? {
+    let process = Process()
+    process.executableURL = executable
+    process.arguments = ["--version"]
+    let output = Pipe()
+    process.standardOutput = output
+    process.standardError = FileHandle.nullDevice
+    guard (try? process.run()) != nil else { return nil }
+    let text = String(decoding: output.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+    process.waitUntilExit()
+    return AgentVersion(parsing: text)
+}
+let openCodeOtherModel = openCodeTestModel.provider == OpenCodeSandbox.fake ? PiModelKey(provider: OpenCodeSandbox.fake, id: "echo-b")
+    : environment["CUEPAD_OPENCODE_OTHER_MODEL"].flatMap(AgentKind.opencode.modelKey) ?? openCodeTestModel
+
 /// 一台隔离的 OpenCode：HOME、XDG 与配置目录都在临时目录里，绝不碰真实的 ~/.config/opencode 与它的库。
-/// 后台服务的缺省端口是固定的（0xc0de），会撞上本机真在跑的服务，所以先给它配一个空闲端口。
-/// 像用过 OpenCode 的机器：先起一次服务、等它取到模型表（存进它的库）再停。从没取过表的头一次启动用随包的旧表，
-/// 配置的默认模型不在旧表里时它改用表里第一个（README"已知边界"）。
-final class OpenCodeSandbox {
+/// 后台服务的缺省端口是固定的（0xc0de），会撞上本机真在跑的服务，所以先给它配一个空闲端口。不联网取模型表（只用随包的那份）、
+/// 不开免费模型、不盯文件（它从根目录起逐级盯到工作目录，机器忙时起服务要几十秒）。
+/// - 假模型：起一个 `Fixtures/fake-openai.mjs`，配成提供方 `fake`（两个模型，窗口不同、都有 low / high 两档强度）；
+/// - 真模型：提供方的密钥（测试进程环境里 `*_API_KEY` 的）交给它，模型要在随包的模型表里。
+final class OpenCodeSandbox: Sendable {
+    static let fake = "fake"
     let root: URL
     let work: URL
     let environment: [String: String]
     let paths: AgentPaths
+    private let model: ChildProcess?
 
     init() async throws {
         let root = try makeTempDirectory()
@@ -25,45 +55,43 @@ final class OpenCodeSandbox {
             "XDG_DATA_HOME": root.appending(path: "xd").path, "XDG_STATE_HOME": root.appending(path: "xs").path,
             "XDG_CACHE_HOME": root.appending(path: "xk").path, "OPENCODE_CONFIG_DIR": config.path, "OPENCODE_DISABLE_AUTOUPDATE": "1",
             "PATH": [realOpenCodeURL!.deletingLastPathComponent().path, "/usr/bin", "/bin", "/usr/sbin", "/sbin"].joined(separator: ":"),
-        ]
+            "OPENCODE_DISABLE_MODELS_FETCH": "1", "OPENCODE_DISABLE_FREE_MODELS": "1", "OPENCODE_DISABLE_FILEWATCHER": "1",
+        ].merging(ProcessInfo.processInfo.environment.filter { $0.key.hasSuffix("_API_KEY") }) { $1 }
         paths = AgentPaths(pi: PiPaths(agentDirectory: root.appending(path: "pi"), socketDirectory: root.appending(path: "s"), environment: [:]), environment: environment)
         for directory in [work, config, root.appending(path: "home")] {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         }
-        let settings: [String: Any] = ["model": "\(openCodeTestModel.provider)/\(openCodeTestModel.id)"]
+        var settings: [String: Any] = ["model": AgentKind.opencode.modelRef(openCodeTestModel)]
+        model = openCodeTestModel.provider == Self.fake ? try await Self.fakeModel() : nil
+        if let model { settings["providers"] = [Self.fake: try await Self.provider(model)] }
         try JSONSerialization.data(withJSONObject: settings).write(to: config.appending(path: "opencode.json"))
         try await run(["service", "set", "port", String(try Self.freePort())])
-        try await run(["service", "start"])
-        try await refreshed()
-        let pid = try #require(service?.pid)
-        try await run(["service", "stop"])
-        try await eventually("OpenCode 服务退出") { kill(pid, 0) == -1 && errno == ESRCH && self.service == nil }
     }
 
-    /// 让服务取到模型表：头一回有人要模型表时它才联网取（实测 0.6～2 秒），存进它库里的 `kv`（`models-dev:catalog`）后发
-    /// `models-dev.refreshed`。先连上事件流再要一次模型表；连上时与之后每来一行（含每 15 秒的心跳）都看一眼库里存了没有。
-    private func refreshed() async throws {
-        let service = try #require(service)
-        var request = URLRequest(url: URL(string: service.url + "/api/event")!)
-        request.setValue("Basic " + Data("opencode:\(service.password)".utf8).base64EncodedString(), forHTTPHeaderField: "Authorization")
-        let events = request
-        request.url = URL(string: service.url + "/api/model")!
-        let models = request
-        let database = root.appending(path: "xd/opencode/opencode.db").path
-        try await withDeadline(.seconds(60), orThrow: CancellationError()) {
-            let (bytes, _) = try await URLSession.shared.bytes(for: events)
-            var asked = false
-            for try await _ in bytes.lines {
-                if !asked {
-                    _ = try await URLSession.shared.data(for: models)
-                    asked = true
-                }
-                let stored = await ChildProcess.run(
-                    URL(filePath: "/usr/bin/sqlite3"), ["-readonly", database, "SELECT count(*) FROM kv WHERE key = 'models-dev:catalog'"],
-                    timeout: .seconds(10))
-                if stored?.output.trimmingCharacters(in: .whitespacesAndNewlines) == "1" { return }
-            }
+    private static func fakeModel() async throws -> ChildProcess {
+        let node = try #require(ExecutableLocator.standard.candidates("node").first)
+        let script = URL(filePath: #filePath).deletingLastPathComponent().appending(path: "Fixtures/fake-openai.mjs")
+        return try await ChildProcess(node, [script.path], placement: .group, input: .pipe, output: .lines)
+    }
+
+    /// 假模型的提供方配置（OpenCode v2 的 `providers`）：地址是它报出的端口
+    private static func provider(_ model: ChildProcess) async throws -> [String: Any] {
+        struct Ready: Decodable { var port: Int }
+        let line = try #require(await model.output.first { _ in true }, "假模型没报端口")
+        let port = try JSONDecoder().decode(Ready.self, from: line).port
+        func entry(_ window: Int) -> [String: Any] {
+            ["capabilities": ["tools": true, "input": ["text", "image"], "output": ["text"]], "limit": ["context": window, "output": 4000],
+             "variants": [["id": "low", "body": [:]], ["id": "high", "body": [:]]]]
         }
+        return [
+            "package": "@opencode/ai/providers/openai-compatible", "settings": ["baseURL": "http://127.0.0.1:\(port)/v1", "apiKey": "fake"],
+            "models": ["echo": entry(100_000), "echo-b": entry(50_000)],
+        ]
+    }
+
+    /// 连这台服务的接入
+    @MainActor func runtime(_ bridge: PiBridge, _ store: CueStore) -> OpenCodeRuntime {
+        OpenCodeRuntime(bridge: bridge, paths: paths, store: store, hostID: "mac", opencode: { realOpenCodeURL })
     }
 
     /// 跑一条 opencode 命令（在 `directory` 里），要它成功。
@@ -110,12 +138,13 @@ final class OpenCodeSandbox {
         Issue.record("OpenCode 现场：\(file.path)")
     }
 
-    /// 停掉这台的后台服务（按登记文件里的确切 pid），删掉临时目录。
+    /// 停掉这台的后台服务（按登记文件里的确切 pid）与假模型，删掉临时目录。
     func stop() async throws {
         if let pid = service?.pid {
             kill(pid, SIGTERM)
             try await eventually("OpenCode 服务退出") { kill(pid, 0) == -1 && errno == ESRCH }
         }
+        await model?.stop()
         try? FileManager.default.removeItem(at: root)
     }
 
