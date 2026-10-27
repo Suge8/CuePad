@@ -9,7 +9,7 @@ import Testing
     let p = try await store.createProject(name: "P", color: "#111")
     let a = try await store.createCard(in: p.id, body: "a")
     let b = try await store.createCard(in: p.id, body: "b")
-    let neverSent = try await store.createCard(in: p.id, body: "never")
+    _ = try await store.createCard(in: p.id, body: "never")
     let trashed = try await store.createCard(in: p.id, body: "trashed")
     let home = try await store.createCard(body: "home")
     let review = SendTarget(kind: .piSession, name: "review", ref: "s2")
@@ -31,6 +31,5 @@ import Testing
     #expect(sends[a.id]?.target == pi)  // 最近一次发给谁
     #expect(sends[b.id] == LastSend(sentAt: onlyOnce.sentAt, target: review))
     #expect(try await store.lastSends(in: Project.defaultID).keys.contains(home.id))
-    _ = neverSent
   }
 }
