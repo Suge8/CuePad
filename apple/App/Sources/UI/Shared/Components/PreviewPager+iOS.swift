@@ -52,6 +52,7 @@ private struct PreviewPager: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// 两条栏与状态栏占的边（`previewInsets`）
     @State private var insets = EdgeInsets()
+    @State private var finds = PreviewFinds()
 
     private var batch: [PiPreview] { opening.batch }
     private var index: Int { opening.index(of: current) }
@@ -66,18 +67,24 @@ private struct PreviewPager: View {
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("关闭", icon: .close, role: .cancel) { close() }
+                    Button("关闭", icon: .close, role: .cancel) { leave() }
+                }
+                // PDF 的页内搜索（系统的查找条，`PreviewFinds`）：与分享并排在右上；接了键盘 ⌘F 也是它（压过根上的 ⌘F 搜索）
+                if let file = findable {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button("在文中搜索", icon: .search) { finds.present(file) }.labelStyle(.iconOnly).keyboardShortcut("f")
+                    }
                 }
             }
             .safeAreaBar(edge: .bottom) {
                 if let reply {
-                    PreviewReplyBar(reply: reply, about: title) { close() }
+                    PreviewReplyBar(reply: reply, about: title) { leave() }
                         .padding(.horizontal, 12).padding(.bottom, 8)
                         .frame(maxWidth: 640)
                         .frame(maxWidth: .infinity)
                 }
             }
-            .background { PageKeys(turn: turn) { close() } }
+            .background { PageKeys(turn: turn) { leave() } }
         }
         .overlay { StatusBarBlur() }
         .navigationTransition(.zoom(sourceID: PreviewZoomKey(group: opening.group, preview: current), in: zoom))
@@ -102,10 +109,17 @@ private struct PreviewPager: View {
         // 栏后面不垫系统的滚动边缘效果（docs/ui.md「沉浸式的栏」）：SwiftUI 这一层与分页滚动区自己那一层（`PreviewDismissGuard`）都关
         .scrollEdgeEffectHidden()
         .environment(\.previewInsets, insets)
+        .environment(\.previewFinds, finds)
         .ignoresSafeArea()
         .onGeometryChange(for: EdgeInsets.self) { $0.safeAreaInsets } action: { insets = $0 }
         .background { PreviewDismissGuard() }
         .background(palette.desk)
+    }
+
+    /// 关上：开着的查找条先收（它挂在键盘那一层，不随页面缩回去）。
+    private func leave() {
+        finds.dismiss()
+        close()
     }
 
     /// 往前、往后翻一份（键盘），到头不动。
@@ -113,6 +127,9 @@ private struct PreviewPager: View {
         guard let next = opening.neighbor(of: current, step: step) else { return }
         withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { current = next }
     }
+
+    /// 翻到的这一份能页内搜索时是它的文件（PDF）
+    private var findable: URL? { preview.kind == .pdf ? file(of: preview) : nil }
 
     private func file(of preview: PiPreview) -> URL? {
         services.store.files.fileURL(for: preview.key)

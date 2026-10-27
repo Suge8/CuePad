@@ -4,8 +4,8 @@ import CueText
 import Foundation
 
 extension DemoLibrary {
-    /// `doc`：一份 PDF 的引用（只带文件、不带图的灵感看附件标记）。
-    static func projects(image: String, doc: String) -> [DemoProject] {
+    /// `doc`：一份 PDF 的引用，`docs`：它加一份日志（只带一个、两个文件的灵感看附件标记）。
+    static func projects(image: String, doc: String, docs: String) -> [DemoProject] {
         let home = demoHome
         let pic = CueFormat.imageMarkup(key: image)
         return [
@@ -13,11 +13,11 @@ extension DemoLibrary {
                 (0.2, String(localized: "修复 TextKit 编辑器\n\nTextKit 编辑器偶发失败。先稳定复现，定位根因后再改，不要加重试掩盖。", table: "Demo"), false),
                 (0.6, String(localized: "设计 iCloud 同步\n\n给 iCloud 同步出三个方案，比较代价，推荐一个并说明理由。\n---\n约束：离线并发编辑保留两个版本，不静默覆盖。", table: "Demo"), false),
                 (1.2, String(localized: "变量模板文档\n\n\(pic)\n更新变量模板的开发文档，删掉过时的说明。", table: "Demo"), false),
-                (1.5, String(localized: "排查 Pi 桥\n\n日志里 Pi 桥报错 {{错误码}}，查清触发条件再动手。\n\(doc)", table: "Demo"), false),
+                (1.5, String(localized: "排查 Pi 桥\n\n日志里 Pi 桥报错 {{错误码}}，查清触发条件再动手。\n\(docs)", table: "Demo"), false),
                 (2.0, String(localized: "重构菜单栏面板\n\n把 {{模块路径}} 里的菜单栏面板拆成独立模块，保持公开接口不变。\n\n- 唤起到可输入 < 100ms\n- 参考 [NSPanel 文档](https://developer.apple.com/documentation/appkit/nspanel)\n---\n完成后把改动摘要写进发布说明。", table: "Demo"), false),
                 (3.0, String(localized: "评审：导入旧数据\n\n审查 {{分支}} 中导入旧数据相关改动，只报告会导致错误行为的问题。", table: "Demo"), false),
                 (4.0, String(localized: "优化回收站性能\n\n回收站在 {{数据量}} 条时明显卡顿，先测量再优化。", table: "Demo"), false),
-                (5.5, String(localized: "迁移投送队列\n\n把投送队列迁到新的存储层，旧数据一次性导入。", table: "Demo"), false),
+                (5.5, String(localized: "迁移投送队列\n\n把投送队列迁到新的存储层，旧数据一次性导入。\n\(doc)", table: "Demo"), false),
                 (6.0, String(localized: "想法：TextKit 编辑器\n\n\(pic)\n编辑器的附件也许可以按视口懒加载，只挂缩略图。", table: "Demo"), false),
                 (9.0, String(localized: "变量模板补测试\n\n在接缝上给变量模板补验收测试，先看到它失败，再实现。", table: "Demo"), false),
                 (12.0, String(localized: "Todo\n\n- 截图换成 Swift 版\n- 续费域名\n- 更新落地页", table: "Demo"), false),
@@ -25,9 +25,9 @@ extension DemoLibrary {
                 (21.0, String(localized: "评审：快捷键录制\n\n只看会导致错误行为的问题。", table: "Demo"), false),
                 (26.0, String(localized: "想法：发送记录\n\n一键重发时带上当时的变量取值。", table: "Demo"), false),
                 (33.0, String(localized: "重构设置页\n\n设置项的描述写打开后会发生什么。", table: "Demo"), false),
-                (38.0, String(localized: "排查 socket 残留\n\n强杀后 socket 没删，检查 kqueue 退出通知。", table: "Demo"), false),
+                (38.0, String(localized: "排查 socket 残留\n\n强杀后 socket 没删，检查 kqueue 退出通知。\n\(doc)", table: "Demo"), false),
                 (45.0, String(localized: "设计通知\n\nPi 完成与等你确认时推送，点通知跳到会话。", table: "Demo"), false),
-                (52.0, String(localized: "整理发布清单\n\n签名、公证、Sparkle 更新源。\n\(doc)", table: "Demo"), false),
+                (52.0, String(localized: "整理发布清单\n\n签名、公证、Sparkle 更新源。\n\(docs)", table: "Demo"), false),
                 (60.0, String(localized: "修复拖入图片\n\n拖入 HEIC 时缩略图空白。", table: "Demo"), false),
                 (75.0, String(localized: "想法：卡片墙\n\n只在打开项目或跨天时重排，同一次打开里墙不自己挪动。", table: "Demo"), false),
                 (84.0, String(localized: "评审：搜索筛选\n\n分页前先筛选，总数不受分页影响。", table: "Demo"), false),

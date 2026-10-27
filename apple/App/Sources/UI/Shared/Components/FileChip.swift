@@ -71,6 +71,10 @@ struct FileChip: View {
             }
         }
         .frame(width: thumbSide, height: thumbSide)
+        // 全屏页从这块放大出来、缩回这里
+        .previewSource(PreviewZoomKey(group: group, preview: PiPreview.id(of: key)), radius: 5) { [files = services.store.files, key] in
+            await AttachmentLooks.picture(key, in: files)
+        }
     }
 
     private func tap() {
@@ -87,6 +91,7 @@ struct ImageTile: View {
     @Environment(AppServices.self) private var services
     @Environment(Workspace.self) private var workspace
     @Environment(\.openPreview) private var openPreview
+    @Environment(\.displayScale) private var scale
     @State private var place = AttachmentPlace.unchecked
 
     var body: some View {
@@ -94,6 +99,9 @@ struct ImageTile: View {
             workspace.openAttachment(DraftFile(key: key, name: ""), among: among, group: group, with: openPreview)
         } label: {
             Thumbnail(hash: key, height: side, radius: 12).frame(width: side).id(place.isAway)
+                .previewSource(PreviewZoomKey(group: group, preview: PiPreview.id(of: key)), radius: 12) { [files = services.store.files, key, side, scale] in
+                    await Thumbnail.picture(key, height: side, scale: scale, in: files)
+                }
         }
         .buttonStyle(PressStyle())
         .accessibilityLabel("图片")

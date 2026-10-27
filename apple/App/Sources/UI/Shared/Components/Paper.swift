@@ -92,15 +92,21 @@ struct CardMeta: View {
     }
 }
 
-/// 带着的附件：回形针加个数，读作"带 N 个附件"。图片在预览里看得见的地方只数文件（`CardText.files`），没有预览的行数全部附件。
+/// 带着的附件：一个时只有回形针，两个以上回形针加个数（同别处的"图标 + 字"）；读屏都读"带 N 个附件"。
+/// 图片在预览里看得见的地方只数文件（`CardText.files`），没有预览的行数全部附件。
 struct AttachmentMark: View {
     let count: Int
 
     var body: some View {
-        Label { Text(verbatim: "\(count)").monospacedDigit() } icon: { Image(.attachment) }
-            .labelStyle(.titleAndIcon)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("带 \(count) 个附件")
+        Group {
+            if count > 1 {
+                Label { Text(verbatim: "\(count)").monospacedDigit() } icon: { Image(.attachment) }.labelStyle(.titleAndIcon)
+            } else {
+                Image(.attachment)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("带 \(count) 个附件")
     }
 }
 

@@ -71,6 +71,12 @@ nonisolated enum FileChip {
         CueFont.systemFont(ofSize: (style.font.pointSize * 0.78).rounded())
     }
 
+    /// 附件在 `rect` 里画面的那一块：文件牌（有名字）是左边的缩略图，图片（没有名字）是整张。
+    static func picture(in rect: CGRect, named name: String) -> CGRect {
+        guard !name.isEmpty else { return rect }
+        return CGRect(x: rect.minX + padding, y: rect.midY - thumbSide / 2, width: thumbSide, height: thumbSide)
+    }
+
     /// 两行字加上下留白，至少放得下缩略图。
     static func height(style: CueEditorTheme) -> CGFloat {
         max(thumbSide + padding * 2, ceil(line(nameFont(style)) + line(detailFont(style)) + 22))

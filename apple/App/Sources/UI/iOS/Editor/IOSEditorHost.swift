@@ -6,6 +6,8 @@ import UIKit
 /// 对编辑器的操作口：插入图片与文件、取当前正文与选中部分。
 final class IOSEditorHandle {
     fileprivate weak var view: CueTextView?
+    /// 点的那个附件在哪（全屏页从那里放大，`AttachmentSpotLayer` 盖在编辑器上）
+    let spot = AttachmentSpot()
     /// 停用时编辑器拿着键盘：再启用时还给它
     fileprivate var refocus = false
 
@@ -72,8 +74,11 @@ struct IOSEditorHost: UIViewRepresentable {
         view.onChange = onChange
         view.selectionActions = selectionActions
         view.onError = onError
-        view.onOpenAttachment = { [workspace, openPreview] key, name in
-            workspace.openAttachment(DraftFile(key: key, name: name), group: "note", with: openPreview)
+        view.onOpenAttachment = { [weak view, handle, workspace, openPreview] key, name, picture in
+            guard let view else { return }
+            // 编辑器自己会滚：框换到它露出的那一块的坐标
+            let frame = picture.offsetBy(dx: -view.contentOffset.x, dy: -view.contentOffset.y)
+            handle.spot.open(DraftFile(key: key, name: name), at: frame, in: workspace, with: openPreview)
         }
         context.coordinator.insertImage = onInsertImage ?? {}
         context.coordinator.insertFile = onInsertFile ?? {}

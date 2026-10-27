@@ -18,10 +18,11 @@ enum DemoLibrary {
     static func seed(_ store: CueStore) async throws {
         let image = try store.files.store(sampleImage())
         let doc = DebugScene.demoPDF(store)?.markup ?? ""
-        try await seed(store, groups: projects(image: image, doc: doc), tasks: tasks)
+        let docs = doc + "\n" + (try demoLog(store))
+        try await seed(store, groups: projects(image: image, doc: doc, docs: docs), tasks: tasks)
         try await seedSubtasks(store)
 
-        let catalog = projects(image: image, doc: doc)
+        let catalog = projects(image: image, doc: doc, docs: docs)
         for project in try await store.projects() {
             if let directory = catalog.first(where: { $0.name == project.name })?.directory {
                 try await store.setDirectory(directory, for: project.id)
@@ -123,6 +124,14 @@ enum DemoLibrary {
         #else
         "/Users/demo/"
         #endif
+    }
+
+    /// 一份日志文本的引用（带两个文件的灵感里的第二个）。
+    private static func demoLog(_ store: CueStore) throws -> String {
+        let name = String(localized: "桥接日志.txt", table: "Demo")
+        let url = FileManager.default.temporaryDirectory.appending(path: name)
+        try Data("12:04:31 bridge: socket closed (code 54)\n12:04:32 bridge: reconnect in 2s\n".utf8).write(to: url)
+        return CueFormat.markup(key: try store.files.store(fileAt: url), name: name)
     }
 
     private static func sampleImage() -> Data {

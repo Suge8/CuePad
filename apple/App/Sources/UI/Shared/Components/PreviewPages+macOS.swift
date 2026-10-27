@@ -42,7 +42,8 @@ private struct PreviewImage: NSViewRepresentable {
     }
 }
 
-/// PDF：系统的 PDF 视图，按宽铺满、竖着连续滚，捏合与智能缩放是它自己的。关上时从屏上看得见的那几页飞回（`Shown`）。
+/// PDF：系统的 PDF 视图，按宽铺满、竖着连续滚，捏合与智能缩放是它自己的，⌘F 是系统的查找条（`PDFFindHost`）。
+/// 关上时从屏上看得见的那几页飞回（`Shown`）。
 private struct PreviewPDF: NSViewRepresentable {
     let preview: UUID
     let file: URL
@@ -52,23 +53,20 @@ private struct PreviewPDF: NSViewRepresentable {
 
     func makeCoordinator() -> Shown { Shown() }
 
-    func makeNSView(context: Context) -> PDFView {
-        let view = PDFView()
-        view.autoScales = true
-        view.displayMode = .singlePageContinuous
-        view.backgroundColor = NSColor(palette.desk)
-        view.document = PDFDocument(url: file)
-        context.coordinator.view = view
-        return view
+    func makeNSView(context: Context) -> PDFFindHost {
+        let host = PDFFindHost(document: PDFDocument(url: file))
+        host.pdf.autoScales = true
+        host.pdf.displayMode = .singlePageContinuous
+        host.pdf.backgroundColor = NSColor(palette.desk)
+        context.coordinator.view = host.pdf
+        DebugHooks.pdfShown(host)
+        return host
     }
 
-    func updateNSView(_ view: PDFView, context: Context) {
+    func updateNSView(_ host: PDFFindHost, context: Context) {
         flight?.showing(preview, context.coordinator)
-        guard let scroll = view.documentView?.enclosingScrollView else { return }
-        let insets = NSEdgeInsets(top: chrome.top, left: 0, bottom: chrome.bottom, right: 0)
-        guard scroll.contentInsets.top != insets.top || scroll.contentInsets.bottom != insets.bottom else { return }
-        scroll.automaticallyAdjustsContentInsets = false
-        scroll.contentInsets = insets
+        host.top = chrome.top
+        host.chrome = NSEdgeInsets(top: chrome.top, left: 0, bottom: chrome.bottom, right: 0)
     }
 }
 

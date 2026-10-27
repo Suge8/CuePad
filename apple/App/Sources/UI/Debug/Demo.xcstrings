@@ -823,6 +823,38 @@
         }
       }
     },
+    "一、投送队列本月上线，超时不再静默。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1. The delivery queue shipped this month; timeouts are no longer silent."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "一、投送队列本月上线，超时不再静默。"
+          }
+        }
+      }
+    },
+    "三、风险：投送重试与额度提醒还缺验收。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "3. Risks: delivery retries and quota alerts still need sign-off."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "三、风险：投送重试与额度提醒还缺验收。"
+          }
+        }
+      }
+    },
     "三档价格对比表" : {
       "localizations" : {
         "en" : {
@@ -1027,6 +1059,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "乱序的根因在重连时重新入队，修复要保留首次加入的时间"
+          }
+        }
+      }
+    },
+    "二、同步：附件按需取，空间满时先留在本机。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "2. Sync: attachments download on demand and stay local when storage is full."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "二、同步：附件按需取，空间满时先留在本机。"
           }
         }
       }
@@ -2391,6 +2439,22 @@
         }
       }
     },
+    "四、下季度：Cue 记得什么、多 Agent 圆桌。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "4. Next quarter: what Cue remembers, multi-agent roundtables."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "四、下季度：Cue 记得什么、多 Agent 圆桌。"
+          }
+        }
+      }
+    },
     "回复要短，先说结论" : {
       "localizations" : {
         "en" : {
@@ -2787,6 +2851,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "好，我先让 auth 会话复现一下。"
+          }
+        }
+      }
+    },
+    "季度复盘" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quarterly Review"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "季度复盘"
           }
         }
       }
@@ -4519,18 +4599,18 @@
         }
       }
     },
-    "排查 socket 残留\n\n强杀后 socket 没删，检查 kqueue 退出通知。" : {
+    "排查 socket 残留\n\n强杀后 socket 没删，检查 kqueue 退出通知。\n%@" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Investigate leftover sockets\n\nThe socket isn’t deleted after a force quit; check the kqueue exit notification."
+            "value" : "Investigate leftover sockets\n\nAfter a force quit the socket isn't removed. Check the kqueue exit notification.\n%@"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "排查 socket 残留\n\n强杀后 socket 没删，检查 kqueue 退出通知。"
+            "value" : "排查 socket 残留\n\n强杀后 socket 没删，检查 kqueue 退出通知。\n%@"
           }
         }
       }
@@ -5555,6 +5635,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "标题再短一点"
+          }
+        }
+      }
+    },
+    "桥接日志.txt" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bridge-log.txt"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "桥接日志.txt"
           }
         }
       }
@@ -7879,18 +7975,18 @@
         }
       }
     },
-    "迁移投送队列\n\n把投送队列迁到新的存储层，旧数据一次性导入。" : {
+    "迁移投送队列\n\n把投送队列迁到新的存储层，旧数据一次性导入。\n%@" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Migrate the delivery queue\n\nMove the delivery queue to the new storage layer; import old data in one go."
+            "value" : "Migrate the delivery queue\n\nMove the delivery queue to the new storage layer and import the old data once.\n%@"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "迁移投送队列\n\n把投送队列迁到新的存储层，旧数据一次性导入。"
+            "value" : "迁移投送队列\n\n把投送队列迁到新的存储层，旧数据一次性导入。\n%@"
           }
         }
       }
