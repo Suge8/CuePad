@@ -29,7 +29,7 @@ enum GrokModel {
 final class FakeResponses: Sendable {
     private let listener: NWListener
     let port: UInt16
-    private let gate = Mutex<(released: Int, waiting: [CheckedContinuation<Void, Never>])>((0, []))
+    private let gate = Mutex<(released: Int, waiting: [(id: UUID, continuation: CheckedContinuation<Void, Never>)])>((0, []))
     private static let ceiling = Duration.seconds(30)
 
     var baseURL: String { "http://127.0.0.1:\(port)/v1" }
@@ -58,28 +58,28 @@ final class FakeResponses: Sendable {
     /// 放行一次停住。
     func release() {
         let waiter = gate.withLock { state -> CheckedContinuation<Void, Never>? in
-            guard state.waiting.isEmpty else { return state.waiting.removeFirst() }
+            guard state.waiting.isEmpty else { return state.waiting.removeFirst().continuation }
             state.released += 1
             return nil
         }
         waiter?.resume()
     }
 
+    /// 停住，直到放行或到了上限（到上限时从等待里摘掉自己再放行，之后的放行不会落到它身上）。
     private func hold() async {
-        await withTaskGroup { group in
-            group.addTask {
-                await withCheckedContinuation { continuation in
-                    let ready = self.gate.withLock { state in
-                        guard state.released == 0 else { state.released -= 1; return true }
-                        state.waiting.append(continuation)
-                        return false
-                    }
-                    if ready { continuation.resume() }
-                }
+        let id = UUID()
+        await withCheckedContinuation { continuation in
+            let ready = gate.withLock { state in
+                guard state.released == 0 else { state.released -= 1; return true }
+                state.waiting.append((id, continuation))
+                return false
             }
-            group.addTask { try? await Task.sleep(for: Self.ceiling) }
-            await group.next()
-            group.cancelAll()
+            if ready { return continuation.resume() }
+            Task {
+                try? await Task.sleep(for: Self.ceiling)
+                let expired = self.gate.withLock { state in state.waiting.firstIndex { $0.id == id }.map { state.waiting.remove(at: $0).continuation } }
+                expired?.resume()
+            }
         }
     }
 
@@ -212,8 +212,13 @@ final class FakeResponses: Sendable {
             for part in parts {
                 guard await event("response.output_text.delta", ["output_index": 0, "item_id": "msg_\(id)", "content_index": 0, "delta": part, "logprobs": []]) else { return }
             }
-            // 说到一半停住：直到 Grok 断开（停下这一轮）
+            // 说到一半停住：直到 Grok 断开（停下这一轮），至多到上限（断开这条连接，等着的收也就结束）
+            let limit = Task {
+                try await Task.sleep(for: Self.ceiling)
+                connection.cancel()
+            }
             _ = await Self.receive(connection)
+            limit.cancel()
             return
         case .held:
             return

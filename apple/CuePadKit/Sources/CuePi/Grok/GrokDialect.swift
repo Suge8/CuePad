@@ -15,7 +15,7 @@ import Foundation
 ///
 /// 当大脑（`brain`）：
 /// - 配置目录（`GROK_HOME`）换成本次运行的临时目录：会话不落进用户的历史，用户的配置、钩子、技能、记忆、MCP 服务都不读；
-///   登录照用用户的（`GROK_AUTH_PATH` 指到用户配置目录里的 `auth.json`；有 `XAI_API_KEY` 也认）。Claude Code、Cursor 的钩子、技能、规则、
+///   登录照用用户的（用户给了 `GROK_AUTH_PATH` 照用，否则指到用户配置目录里的 `auth.json`；有 `XAI_API_KEY` 也认）。Claude Code、Cursor 的钩子、技能、规则、
 ///   MCP 与组织下发的 MCP 都关掉（`compat` 各项、`GROK_MANAGED_MCPS_ENABLED`），工作流清单、每轮摘要、标题刷新、自动更新也关掉；
 /// - 系统提示经会话的智能体定义（`_meta.agentProfile`）整份替换（`promptMode: full`）：换模型时也不丢（`systemPromptOverride` 换模型就被清空，
 ///   源码 model_switch.rs）。系统提示会被当成 MiniJinja 模板渲染（`${{ }}`、`${% %}`），整份包在 raw 块里原样交；
@@ -47,16 +47,20 @@ struct GrokDialect: ACPDialect {
     func brain(_ config: CueBrainConfig, directory: URL) throws -> ACPBrainSetup {
         let home = directory.appending(path: "grok", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
-        let user = (config.environment["GROK_HOME"] ?? ProcessInfo.processInfo.environment["GROK_HOME"]).flatMap { $0.isEmpty ? nil : $0 }
-            .map { URL(filePath: ($0 as NSString).expandingTildeInPath, directoryHint: .isDirectory) }
-            ?? FileManager.default.homeDirectoryForCurrentUser.appending(path: ".grok", directoryHint: .isDirectory)
+        func variable(_ name: String) -> String? {
+            (config.environment[name] ?? ProcessInfo.processInfo.environment[name]).flatMap { $0.isEmpty ? nil : ($0 as NSString).expandingTildeInPath }
+        }
+        // 用户自己指定的凭据文件照用；没指定时是用户配置目录里的那份（配置目录换成了临时目录，不指过去就找不到）
+        let auth = variable("GROK_AUTH_PATH")
+            ?? (variable("GROK_HOME").map { URL(filePath: $0, directoryHint: .isDirectory) }
+                ?? FileManager.default.homeDirectoryForCurrentUser.appending(path: ".grok", directoryHint: .isDirectory)).appending(path: "auth.json").path
         let profile: JSONValue = [
             "name": "cue", "description": "Cue", "promptMode": "full", "promptBody": .string("${% raw %}\(config.systemPrompt)${% endraw %}"),
             "tools": .array(Self.readingTools.map(JSONValue.string)), "disallowedTools": ["search_tool", "use_tool"], "injectDefaultTools": false,
             "agentsMd": false, "discoverSkills": false, "userMessageTemplate": ["custom": .string(Self.firstMessage)],
         ]
         return ACPBrainSetup(
-            environment: Self.brainSwitches.merging(["GROK_HOME": home.path, "GROK_AUTH_PATH": user.appending(path: "auth.json").path]) { $1 },
+            environment: Self.brainSwitches.merging(["GROK_HOME": home.path, "GROK_AUTH_PATH": auth]) { $1 },
             meta: ["agentProfile": profile, "yoloMode": true])
     }
 
