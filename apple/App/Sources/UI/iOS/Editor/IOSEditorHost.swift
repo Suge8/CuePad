@@ -27,7 +27,7 @@ struct IOSEditorHost: UIViewRepresentable {
     let theme: CueEditorTheme
     let handle: IOSEditorHandle
     let onChange: (String) -> Void
-    /// 插图与变量取值；都为 nil 时键盘上方只有"收起键盘"（说明是纯文字，`LibraryItemScreen`）。
+    /// 插图与变量取值；都为 nil 时键盘上方只有"收起键盘"（技能与规则是纯文字，`LibraryFileScreen`）。
     var onInsertImage: (() -> Void)?
     var onVariables: (() -> Void)?
     var selectionActions: [CueSelectionAction] = []

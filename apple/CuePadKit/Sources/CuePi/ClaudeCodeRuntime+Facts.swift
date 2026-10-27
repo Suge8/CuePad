@@ -4,7 +4,7 @@ import Foundation
 
 extension ClaudeCodeRuntime {
     /// 会话文件是 `projects/<项目目录>/<会话 id>.jsonl`。上报通道是钩子（`HookFile.claudeCode`）；托管的进程是 CuePad 起的。
-    /// 不读 `~/.agents/skills`（技能逐个链过去），自己往 `skills/synced` 写 claude.ai 同步的技能；全局说明是 `CLAUDE.md`。
+    /// 不读 `~/.agents/skills`（技能逐个链过去），自己往 `skills/synced` 写 claude.ai 同步的技能；全局规则是 `CLAUDE.md`。
     nonisolated public static let facts = AgentFacts(
         command: "claude", homeVariable: "CLAUDE_CONFIG_DIR", home: home, installScript: "curl -fsSL https://claude.ai/install.sh | bash",
         loginArguments: ["auth", "login"],

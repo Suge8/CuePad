@@ -55,6 +55,7 @@ SYMBOLS = {
     "failure": badge(mark_exclaim),
     "undelivered": badge(mark_uturn),
     "unknown": badge(mark_question, solid=False),
+    "question": question,
     "picked": picked,
     "asking": bubble_question,
     "ended": ring_slash,

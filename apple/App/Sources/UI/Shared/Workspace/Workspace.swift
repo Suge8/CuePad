@@ -51,21 +51,37 @@ final class Workspace {
     }
 
     let services: AppServices
-    /// 当前去处（Mac 的内容区、iPad 右边那一栏、窄屏选中的 tab）：打开 App 先到 `openingRoute`。经 `select` 换；窄屏点标签栏直接换它（各 tab 的栈留着）。
+    /// 当前去处（Mac 的内容区、iPad 右边那一栏、窄屏选中的 tab）：打开 App 先到 `openingRoute`。经 `select` 换；窄屏点底部那一排经 `tap` 换（各 tab 的栈留着）。
     var root: Route
     /// 各个根上推入的页（iOS 的卡片纸页、会话页……），按根分开：窄屏每个 tab 一个导航栈，切走再回来还在；宽屏与 Mac 只有当前根的那一份（`select` 换根时清掉）。
-    /// Mac 没有历史，总是空的。
-    var stacks: [Route: [Route]] = [:]
+    /// Mac 没有历史，总是空的。经 `subscript(stack:)` 读写，按根分开观察：在一个 tab 里推入、返回只叫醒那个 tab 的导航栈，别的 tab 不跟着重算。
+    @ObservationIgnored private(set) var stacks: [Route: [Route]] = [:]
+
+    subscript(stack root: Route) -> [Route] {
+        get {
+            access(keyPath: \.[stack: root])
+            return stacks[root] ?? []
+        }
+        set { withMutation(keyPath: \.[stack: root]) { stacks[root] = newValue } }
+    }
+
     /// 当前根上推入的页。
     var path: [Route] {
-        get { stacks[root] ?? [] }
-        set { stacks[root] = newValue }
+        get { self[stack: root] }
+        set { self[stack: root] = newValue }
+    }
+
+    /// 清掉各个根上推入的页。
+    func clearStacks() {
+        for root in stacks.keys { self[stack: root] = [] }
     }
     /// 去处怎么摆：Mac 固定是 `.pages`，iOS 随尺寸类在 `.split` 与 `.dock` 之间换（`IOSRoot`）。变窄时把宽屏的去处推到它所属的那一页上。
     var layout = Layout.native {
         didSet {
             guard layout == .dock, oldValue != .dock, let home = root.home, home != root else { return }
-            stacks = [home: [root] + path]
+            let pushed = [root] + path
+            clearStacks()
+            self[stack: home] = pushed
             root = home
         }
     }
@@ -91,23 +107,23 @@ final class Workspace {
     let presses = CardPresses()
     let sendState: SendState
     /// 盖在当前页上的那一页（一次只有一页，开新的就换掉旧的）：换页、"收起"、Esc 时清空；底部输入条、工具栏的"收起"都只看它。
-    /// 灵感的编辑页设上时立即挂上，清空时先淡出、淡完才卸下（`CardEditorPage`）；iOS 打开卡片与说明是推入，见 `showEditor`、`openLibrary`。
+    /// 灵感的编辑页设上时立即挂上，清空时先淡出、淡完才卸下（`CardEditorPage`）；iOS 打开卡片与技能、规则是推入，见 `showEditor`、`openLibrary`。
     var overlay: Overlay? {
         didSet { if case .card(let id)? = overlay { presses.present(id) } }
     }
     enum Overlay: Hashable {
         /// 灵感的编辑页
         case card(UUID)
-        /// 技能与说明里打开的一样（说明的编辑页、比一比）
-        case library(LibraryItem)
+        /// 技能与规则的文件页
+        case library(LibraryFile)
     }
     var openCard: UUID? { if case .card(let id)? = overlay { id } else { nil } }
-    var openLibraryItem: LibraryItem? { if case .library(let item)? = overlay { item } else { nil } }
+    var openLibraryFile: LibraryFile? { if case .library(let file)? = overlay { file } else { nil } }
     /// 收起这一页；已换成别的就不动。
     func close(_ page: Overlay) { if overlay == page { overlay = nil } }
     #else
-    /// 手机上改着的说明（`instructionDraft(_:on:)`），按哪台 Mac 的哪一份分开：离开说明页也留着。
-    @ObservationIgnored var instructionDrafts: [InstructionDraftKey: InstructionDraft] = [:]
+    /// 手机上改着的技能与规则（`fileDraft(_:on:)`），按哪台 Mac 的哪一份分开：离开文件页也留着。
+    @ObservationIgnored var fileDrafts: [FileDraftKey: FileDraft] = [:]
     #endif
     /// 气泡里看着的任务（`TaskBubble`）：从被点的那一下长出来，盖在当前页上，不换页。两端同一份，各个入口都经 `openTask(_:)`。
     var openTask: TaskBubble.Request? {
@@ -159,6 +175,8 @@ final class Workspace {
     var scopedProject: UUID? { catalog?.project(projectScope)?.id }
     /// 进展页此刻在哪一段：看板或会话。三端同一份：工具栏的主操作（新任务 / 新会话）与页顶的分段都读它，去会话段经 `showSessions`。
     var progressPane = ProgressPane.board
+    /// 技能与规则页此刻在哪一段：规则或技能。两端同一份：Mac 工具栏与手机页顶的分段都读它，去文件页再回来、换页再回来都还在这一段。
+    var libraryPane = LibraryPane.rules
     /// Cue 页拍板卡露的是哪一件（`TaskBoard.Wait.id`）：看板上点了一张 Cue 问的卡、在拍板卡上换一件都写这里；不在等了露第一件。
     var cueAsking: String?
     var notice: Notice?
@@ -168,7 +186,7 @@ final class Workspace {
     /// 交给了会话的灵感与任务（`AgentLinks`，卡与行上的状态点读它）：整个窗口一份，页面直接读，
     /// 不各自订阅（挂着的页也不会在每次回到前台时重读一遍）。读到和已有的相同不送来（`observe(after:)` 在读取一侧比较），免得页面白算。
     private(set) var agentLinks = AgentLinks(items: [:], launching: [:])
-    /// 技能与说明（`AgentLibrary`：Mac 上是本机的，手机上是 Cue 运行的那台的）：入口的角标、技能与说明页、编辑页与比一比都读这一份；
+    /// 技能与规则（`AgentLibrary`：Mac 上是本机的，手机上是 Cue 运行的那台的）：入口的角标、技能与规则页与文件页都读这一份；
     /// 同项目目录当场读（`readLibrary`），第一帧就是库里的样子；没有一台写过为 nil。
     private(set) var library: AgentLibrary?
     @ObservationIgnored private var libraryStart: Snapshot<AgentLibrary?>?

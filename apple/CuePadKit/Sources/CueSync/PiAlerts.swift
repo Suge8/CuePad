@@ -45,19 +45,20 @@ public enum PiAlertText {
     let fields = record.encryptedValues
     guard let title = (fields["title"] as? String).flatMap({ $0.isEmpty ? nil : $0 }) else { return nil }
     let question = (fields["question"] as? String).flatMap(PiQuestion.init(stored:))?.text
-    return content(title: title, question: question, reply: fields["lastReply"] as? String, kind: kind)
+    let failure = record["state"] as? String == PiWorkState.error.rawValue ? fields["detail"] as? String : nil
+    return content(title: title, question: question, reply: fields["lastReply"] as? String, failure: failure, kind: kind)
   }
 
   /// 等你：标题"会话名 等你拍板"（同名牌数字账的叫法），正文是问题首行；没有问题时是它最后那句回答的首行；都没有写"去看看它在问什么"。
-  /// 待回复（Cue 把歇着的它留给你回）：标题"会话名 待回复"，正文是它最后那句回答的首行，没有写"去看看它说了什么"。
+  /// 待回复（停着的它留给你回）：标题"会话名 待回复"，正文是出错的原因（`failure`，出错时），否则它最后那句回答的首行，都没有写"去看看它说了什么"。
   /// 完成：标题会话名，正文"完成了"。
-  public static func content(title: String, question: String?, reply: String?, kind: PiAlert) -> (title: String, body: String) {
+  public static func content(title: String, question: String?, reply: String?, failure: String? = nil, kind: PiAlert) -> (title: String, body: String) {
     switch kind {
     case .waitingForUser:
       let first = [question, reply].lazy.compactMap { $0.flatMap(\.firstLine) }.first
       return (String(localized: "\(title) 等你拍板"), first ?? String(localized: "去看看它在问什么"))
     case .awaitsReply:
-      return (String(localized: "\(title) 待回复"), reply.flatMap(\.firstLine) ?? String(localized: "去看看它说了什么"))
+      return (String(localized: "\(title) 待回复"), (failure ?? reply).flatMap(\.firstLine) ?? String(localized: "去看看它说了什么"))
     case .settled:
       return (title, String(localized: "完成了"))
     }

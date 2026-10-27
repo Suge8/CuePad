@@ -7,7 +7,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 会话停下时归谁、打扰不打扰：要按他口味定的（请他选）、他自己那一轮里的（应一声不管，碰上先问的留给他回）、要他看完再聊的（一句结论再留给他）。
+/// 会话停下时归谁、打扰不打扰：要按他口味定的（请他选）、他自己那一轮里的（已留给他回：应一声的收回，碰上先问的留着）、要他看完再聊的（一句结论再留给他）。
 extension CueEvalTests {
     @Test func y审美取舍请他选() async throws {
         try await CueEval.run(
@@ -44,14 +44,15 @@ extension CueEvalTests {
     @Test func z只是应一声() async throws {
         try await CueEval.run(
             "z-只是应一声",
-            expect: "他 15 分钟前在会话里说限流那条先不做，会话只应了一声（「好，限流不做，同意。」）就歇下、没在等他：不留给他、不 tell、不发等你"
+            expect: "他 15 分钟前在会话里说限流那条先不做，会话只应了一声（「好，限流不做，同意。」）就歇下、没在等他（CuePad 已当场留给他）：task take 收回、不 tell、不发等你"
         ) { eval in
             let work = try await eval.rig.working(Self.title, Self.body)
             try await eval.trigger {
                 try await eval.rig.settleHisTurn(work, said: "限流那条先不做了，以后再说。", ago: 15 * 60, reply: "好，限流不做，同意。")
             }
+            let session = try #require(try await eval.rig.store.sessions(matching: work.id).first)
             return [
-                Check(.ask, "没留给他（没 leave）", eval.calls("task", "leave").isEmpty),
+                Check(.interrupt, "收回了，不再待回复", !session.awaitsReply(try await eval.rig.store.cueDuty())),
                 Check(.ask, "没发等你", try await eval.said().allSatisfy { $0.choices == nil }),
                 Check(.interrupt, "没打扰他（没 tell）", eval.calls("tell").isEmpty),
             ]
@@ -61,7 +62,7 @@ extension CueEvalTests {
     @Test func o他那一轮碰上推送() async throws {
         try await CueEval.run(
             "o2-他那一轮碰上推送",
-            expect: "他 15 分钟前在会话里说测试过了就提交，会话提交后停下问要不要推送（他那一轮碰上先问的）：task leave 留给他回，不替他答、不 tell、不发 Cue 的等你"
+            expect: "他 15 分钟前在会话里说测试过了就提交，会话提交后停下问要不要推送（他那一轮碰上先问的，CuePad 已当场留给他）：留着是他的拍板，不收回、不替他答、不 tell、不发 Cue 的等你"
         ) { eval in
             let rig = eval.rig
             let work = try await rig.working(Self.title, Self.body)
@@ -78,8 +79,9 @@ extension CueEvalTests {
                 work.session.setState(["kind": "waiting_user", "title": question])
             }
             let said = eval.calls("task", "say").compactMap { $0.args["text"] as? String }
+            let session = try #require(try await rig.store.sessions(matching: work.id).first)
             return [
-                Check(.result, "留给了他（leave 成了）", eval.calls("task", "leave").contains { !$0.call.failed }),
+                Check(.result, "还是他的拍板（没收回）", session.asksYou(try await rig.store.cueDuty())),
                 Check(.ask, "没替他答（没 say 推送）", !said.contains { $0.trimmingCharacters(in: .whitespaces) == "推送" || $0 == "1" }),
                 Check(.ask, "没发 Cue 的等你", try await eval.said().allSatisfy { $0.choices == nil }),
                 Check(.interrupt, "没打扰他（没 tell）", eval.calls("tell").isEmpty),

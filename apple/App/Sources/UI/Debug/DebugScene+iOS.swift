@@ -7,6 +7,8 @@ import UIKit
 
 /// iOS 画面（`-CuePadScene`）：shelf（书架，窄屏底部的"项目"、宽屏侧栏的"全部项目"）、cue（Cue 页，iPad 侧栏展开；`-CuePadCuePanel YES` 页头一出现就展开成面板，`-CuePadPanelCycle YES` 就绪后反复开合；`-CuePadCuePresence disabled` 看说过话后停用时输入框上方那张启用的小纸（`CueWelcome`））、cuememory（再打开"Cue 记得什么"）、project、older、editor、progress（进展页看板段，窄屏底部与宽屏侧栏的"进展"；给了 `-CuePadProject` 先把项目范围设成它）、sessions（进展页的会话段；给了 `-CuePadProject` 先把项目范围设成它，`-CuePadQuotaOpen YES` 顶栏胶囊长出额度明细）、send、search、trash、archive、settings（配 -CuePadDemo 时 Cue 运行在演示的 Mac 上）、sidebar（iPad 展开侧栏）；不给是打开 App 的第一屏（Cue 页）。
 /// search 是搜索页，出现即聚焦并填入 `-CuePadSearch`；`-CuePadSearchScope sessions` 打开在会话那一栏。
+/// library 是技能与规则（`-CuePadLibraryTab skills` 打开在技能那一段），再推入文件页：instruction 是全局规则（给了 `-CuePadProject` 是那个项目的，
+/// 演示的全局规则顶上有合并那一条，`-CuePadMergePreview YES` 已点过一下"合并进来"、标出会并进来的段），skill 是 write-swift，duplicate 是同名的 release。
 /// task 打开进行中第一条的任务气泡（没有落点、在上方居中；没有进行中的就是第一条待办；给了 `-CuePadTask <标题开头>` 是那一条）。
 /// session：打开 `-CuePadSession <会话名>`（默认 homepage）的近况页（`-CuePadNotify YES`：走点锁屏通知的那条路进去；长对话与追加中的对话见 `DebugScene+LongChat.swift`）；send 是从卡片"发到 Mac"先选会话。
 /// projectform：项目表单（给了 `-CuePadProject` 是编辑该项目，否则新建）。
@@ -58,12 +60,12 @@ extension DebugScene {
             workspace.sidebar = .all
         case "trash": open(.trash)
         case "archive": open(.archive)
-        case "library", "instruction", "compare":
-            // 同 Mac：技能与说明，instruction 推入全局说明（给了 -CuePadProject 是那个项目的），compare 推入各写一份的全局规则
+        case "library", "instruction", "skill", "duplicate":
+            // 同 Mac
             if defaults.bool(forKey: "CuePadDemo") { await seedCue(workspace.services) }
             open(.library)
-            if scene == "instruction" { workspace.openLibrary(.instruction(project.map(LibraryInstruction.Kind.project) ?? .global)) }
-            if scene == "compare" { workspace.openLibrary(.compare("global-instructions")) }
+            workspace.libraryPane = DebugHooks.preset.libraryPane
+            if let scene, let file = DemoAgentLibrary.file(scene: scene, project: project) { workspace.openLibrary(file) }
         case "settings":
             // 配演示库时 Cue 运行在演示的 Mac Studio 上（同 Mac 的设置画面）
             if defaults.bool(forKey: "CuePadDemo") { await seedCue(workspace.services) }
@@ -94,6 +96,7 @@ extension DebugScene {
             if defaults.bool(forKey: "CuePadDemo") { await seedCue(workspace.services) }
             if let draft = defaults.string(forKey: "CuePadCueDraft") { workspace.cue.draft.text = draft }
             workspace.show(.cue)
+            if defaults.bool(forKey: "CuePadPlacesOpen") { openPlaces() }
             workspace.sidebar = .all
             if scene == "cuememory" { workspace.cue.showsMemory = true }
             if defaults.bool(forKey: "CuePadPanelCycle") { Task { await cyclePanel() } }
@@ -170,7 +173,7 @@ extension DebugScene {
         }
     }
 
-    /// `-CuePadDockTour stack|motion`（iPhone，配 `-CuePadDemo YES`）：画面就绪后每一拍走一步。切 tab 走点标签栏的那条路（直接换 `Workspace.root`），推入、返回走导航栈的路径：
+    /// `-CuePadDockTour stack|motion`（iPhone，配 `-CuePadDemo YES`）：画面就绪后每一拍走一步。切 tab 走点底部那一排的那条路（`Workspace.tap`），推入、返回走导航栈的路径：
     /// - stack：项目 → 进默认项目 → 进一条灵感、在末尾接着写一句、收起键盘 → 切到 Cue → 切回项目（还停在那条灵感，字还在）→ 切到进展 → 再切回项目。
     /// - motion：进默认项目 → 进一条灵感 → 返回 → 返回；切到进展、进一个会话 → 返回；切到 Cue。
     static func dockTourIfAsked(_ workspace: Workspace) async {
@@ -179,7 +182,7 @@ extension DebugScene {
         guard let card = await card(in: Project.defaultID, store: store) else { return }
         // 节奏是要录的内容，不是在等别的事
         func beat() async { try? await Task.sleep(for: .seconds(1.6)) }
-        workspace.root = .shelf
+        workspace.tap(.shelf)
         await beat()
         workspace.push(.project(Project.defaultID))
         await beat()
@@ -198,7 +201,7 @@ extension DebugScene {
             }
             await beat()
             for tab in [Route.cue, .shelf, .progress, .shelf] {
-                workspace.root = tab
+                workspace.tap(tab)
                 await beat()
             }
         } else {
@@ -206,7 +209,7 @@ extension DebugScene {
             await beat()
             workspace.path.removeLast()
             await beat()
-            workspace.root = .progress
+            workspace.tap(.progress)
             await beat()
             if let session = try? await store.piSessionPage(PiSessionQuery(limit: 1)).items.first?.state {
                 workspace.openSession(session.id, sessionID: session.sessionID)
@@ -214,7 +217,7 @@ extension DebugScene {
                 workspace.path.removeLast()
                 await beat()
             }
-            workspace.root = .cue
+            workspace.tap(.cue)
         }
     }
 

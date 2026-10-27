@@ -22,9 +22,9 @@ struct ProjectActions<Extra: View>: View {
             }
             #endif
             #if os(iOS)
-            // 手机页顶那块玻璃里放不下"说明"（Mac 与 iPad 在介绍行末，`ProjectIntroLine`）：在这里
+            // 手机页顶那块玻璃里放不下"规则"（Mac 与 iPad 在介绍行末，`ProjectIntroLine`）：在这里
             if workspace.library?.instruction(.project(id)) != nil {
-                Button("说明", icon: .instruction) { workspace.openLibrary(.instruction(.project(id))) }
+                Button("规则", icon: .instruction) { workspace.openLibrary(.instruction(.project(id))) }
             }
             #endif
             Button("换文件夹…", icon: .folder) { workspace.chooseFolder(for: project) }

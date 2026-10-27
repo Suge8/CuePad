@@ -195,7 +195,7 @@ extension CueKeeper {
         }
     }
 
-    /// 该报给 Cue 的变化：基线之后的（到 `now` 为止到了的停住），与记着的归他的停下（`CueStore.cueChanges`）。
+    /// 该报给 Cue 的变化：基线之后的（到 `now` 为止到了的停住），与记着的他在场的停下（`CueStore.cueChanges`）。
     func changes(at now: Date = .now) async throws -> CueChanges {
         try await store.cueChanges(after: progress.marks ?? CueMarks(0), held: progress.held, at: now)
     }

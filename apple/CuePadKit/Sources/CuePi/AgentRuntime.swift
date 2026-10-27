@@ -14,7 +14,7 @@ public struct AgentPaths: Sendable, Equatable {
 
     public func home(of kind: AgentKind) -> URL { kind.facts.home(self) }
 
-    /// 几家共读的目录（`~/.agents`，`CUEPAD_AGENTS_DIR` 换走）：全局技能 `skills`、全局说明 `AGENTS.md`，CuePad 的技能也写在这里。
+    /// 几家共读的目录（`~/.agents`，`CUEPAD_AGENTS_DIR` 换走）：全局技能 `skills`、全局规则 `AGENTS.md`，CuePad 的技能也写在这里。
     /// 环境变量是 CuePad 自己的（各家都按家目录读它）：隔离实例与测试经它换到临时目录。
     public var agentsDirectory: URL { directory("CUEPAD_AGENTS_DIR") ?? user(".agents") }
 
@@ -93,9 +93,9 @@ public struct AgentFacts: Sendable {
     let projectFolder: String
     /// 它自己管、CuePad 不碰的技能目录（在它的全局技能目录下）
     var selfManagedSkills: String?
-    /// 它自己那份全局说明的文件名（在配置目录下）
+    /// 它自己那份全局规则的文件名（在配置目录下）
     var instructionsFile = "AGENTS.md"
-    /// 它的全局说明链到 `~/.agents/AGENTS.md`（`AgentLibraryPlaces.linkedKinds`）
+    /// 它的全局规则链到 `~/.agents/AGENTS.md`（`AgentLibraryPlaces.linkedKinds`）
     var linksGlobalInstructions = true
 }
 

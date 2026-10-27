@@ -44,6 +44,10 @@ enum DebugHooks {
         var quotaOpen = false
         /// 定时一出现就原地展开改（`-CuePadScheduleOpen YES`）：任务气泡里那一条、"记得什么"里"到点"的那一块。
         var scheduleOpen = false
+        /// 规则的文件页一打开就是合并前标出会并进来的段（`-CuePadMergePreview YES`）。
+        var mergePreview = false
+        /// 技能与规则页一打开在哪一段（`-CuePadLibraryTab skills`，两端的 library 场景设给 `Workspace.libraryPane`）。
+        var libraryPane = LibraryPane.rules
         #if os(iOS)
         /// 设置页通知那一行显示的状态（`-CuePadAlertStatus`；演示模式没有同步，真实状态出不来）。
         var alertStatus: PiAlertStatus?

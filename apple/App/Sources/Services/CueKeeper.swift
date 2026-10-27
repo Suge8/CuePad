@@ -34,7 +34,8 @@ import os
 /// 5. 有会话的事或不归没做完的事的会话有变化（`CueStore.cueChanges`：歇下的带着这一轮的回复，含会话等回答、Cue 自己发起的请求没能执行）：马上醒。
 ///    一轮在跑时来的变化等这一轮做完就醒，一起看（不另攒窗口：一轮的时长就是合批）。等子代理不是变化（子代理的结果交回、会话为它跑完那一轮歇下才是）；
 ///    等子代理停住（`CueChange.Kind.stalled`）不随写入出现，按下一次停住的时刻（`CueStore.nextCueStall`）排定时器，到点对账时它就在变化里。
-///    会话停下归谁接手由 `CueStore.cueChanges` 定：归他的不叫醒 Cue，记下（`Progress.held`）等他离开再报；还在场就按最早的离开时刻排一次对账，
+///    他发起的一轮停下不等 Cue：每次对账先当场留给他回（`CueStore.leaveHisStops`，Cue 在跑一轮也照做），Cue 之后看过再定收不收回；
+///    他停下时在场的先不叫醒 Cue，记下（`Progress.held`）等他离开再报（`CueStore.cueChanges`）；还在场就按最早的离开时刻排一次对账，
 ///    设备开着会话的记录一变也重对。
 /// 6. 空闲巡视：没有在做的事（`CueStore.cueBoardActive`）、你最近一句（`CueStore.cueLastYou`，还没说过从启用算起）之后很久没说话、不在打扰时段（`CueTiming.quietHours`），每段空闲最多一次、每天最多 3 次；
 ///    手上什么都没有（`handsEmpty`，同刚启用）不巡视。
@@ -92,6 +93,8 @@ final class CueKeeper {
     var lastFailure: String?
     var setback: Setback?
     var timer: Task<Void, Never>?
+    /// 他发起的一轮停下已对到的写入序号（`CueStore.leaveHisStops`）；nil 是这次上班还没对过，从变化的基线算起
+    @ObservationIgnored var handedOver: Int?
     /// 做完的几轮，旧的在前，至多 `roundsKept`
     private var history: [CueRound] = []
     @ObservationIgnored private var roundCount = 0

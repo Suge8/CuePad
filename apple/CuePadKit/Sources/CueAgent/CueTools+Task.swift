@@ -33,8 +33,13 @@ extension CueTools {
       }
       try await store.leaveToYou(target.session)
       return .ok("已把\(target.label)留给他回：进了等你、推到他手机，他或你再对它说话就作废。（\(target.short)）")
+    case "take":
+      _ = try await host()
+      let target = try await speaker(args)
+      guard try await store.takeBack(target.session) != nil else { throw Failure("\(target.label)没留给他回（或已作废），不用收回") }
+      return .ok("已收回\(target.label)：不再待回复、出了等你。（\(target.short)）")
     case "done": return try await done(args)
-    case let other: throw Failure("task 没有 \(other)：可用 add / edit / start / say / peek / stop / leave / done")
+    case let other: throw Failure("task 没有 \(other)：可用 add / edit / start / say / peek / stop / leave / take / done")
     }
   }
 
