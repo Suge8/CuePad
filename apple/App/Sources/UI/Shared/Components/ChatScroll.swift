@@ -187,7 +187,7 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                         guard let target else { return }
                         Task {
                             await NextFrame.wait()
-                            withAnimation(reduceMotion || target.landing == .read ? nil : HandOff.quick) { reader.scrollTo(target.id, anchor: target.anchor) }
+                            withAnimation(reduceMotion || target.landing == .read ? nil : Motion.fade) { reader.scrollTo(target.id, anchor: target.anchor) }
                         }
                     }
             }
@@ -199,7 +199,7 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                     .transition(.scale(scale: 0.6).combined(with: .opacity))
             }
         }
-        .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: follow.wrappedValue.showsJump)
-        .animation(HandOff.quick, value: unseen)
+        .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion), value: follow.wrappedValue.showsJump)
+        .animation(Motion.fade, value: unseen)
     }
 }

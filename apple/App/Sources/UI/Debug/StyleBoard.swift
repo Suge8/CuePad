@@ -117,7 +117,7 @@ struct StyleBoard: View {
             tick += 1
             if tick % 3 == 0 { count += 1 }
             if tick % 4 == 0 {
-                withAnimation(Motion.snappy) {
+                withAnimation(Motion.nudge) {
                     if rows.count > 3 { rows.removeFirst() } else { rows.append((rows.last ?? 0) + 1) }
                 }
             }

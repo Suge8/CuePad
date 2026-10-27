@@ -112,7 +112,7 @@ final class SidebarSlide {
     private static let holdKey = "sidebar.hold"
 }
 
-/// 一次开合里侧栏的边怎么走：从 `from` 到 `to`（总是隔着侧栏的宽），曲线同 `Motion.snappy`（不回弹的弹簧，0.25 秒）。
+/// 一次开合里侧栏的边怎么走：从 `from` 到 `to`（总是隔着侧栏的宽），曲线是 `Motion.nudge` 那条弹簧（`Motion.Spring.nudge`），离终点不到半点时收住。
 private struct SlideCurve {
     /// 按加动画的这一刻估的起点（真正的起点是这次提交送到渲染端的时刻）：只用来判断工具栏重排时还在不在滑。
     let begin = CACurrentMediaTime()
@@ -128,7 +128,7 @@ private struct SlideCurve {
         duration = Self.settles(over: abs(to - from))
     }
 
-    private static let omega = 2 * Double.pi / 0.25
+    private static let omega = 2 * Double.pi / Motion.Spring.nudge.duration
     /// 关键帧每秒取样多少次：比 144Hz 密，帧之间按直线插值看不出折线。
     private static let samplesPerSecond = 240.0
 

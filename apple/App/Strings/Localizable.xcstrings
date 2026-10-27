@@ -4311,6 +4311,22 @@
         }
       }
     },
+    "一台 Mac 上一份技能或规则的正文" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The text of a skill or rule on a Mac"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "一台 Mac 上一份技能或规则的正文"
+          }
+        }
+      }
+    },
     "一台 Mac 上的技能与规则" : {
       "localizations" : {
         "en" : {
@@ -8795,22 +8811,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "和 Cue 的一条对话"
-          }
-        }
-      }
-    },
-    "哪家读不到，行末就画那家的标志" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "An agent's logo at the end of a row means it can't read that file"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "哪家读不到，行末就画那家的标志"
           }
         }
       }
@@ -18659,22 +18659,6 @@
         }
       }
     },
-    "范围" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Scope"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "范围"
-          }
-        }
-      }
-    },
     "草稿：%@" : {
       "localizations" : {
         "en" : {
@@ -18703,6 +18687,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "蓝色"
+          }
+        }
+      }
+    },
+    "行末划掉的标志：那一家读不到这一份" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A struck-through logo at the end of a row: that agent can't read this file"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "行末划掉的标志：那一家读不到这一份"
           }
         }
       }

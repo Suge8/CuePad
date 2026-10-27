@@ -20,11 +20,14 @@ public struct LibraryUndo: Sendable {
 /// 照一次扫出来的该整理的做（`AgentLibraryFiles.tidy`），每一步记进 `undo`。
 struct LibraryTidying {
     let places: AgentLibraryPlaces
+    /// 那次扫出来的规则正文（路径 → 正文）：合并稿照它算
+    let texts: [String: String]
     let trash: @Sendable (URL) throws -> URL
     private(set) var undo = LibraryUndo()
 
-    init(places: AgentLibraryPlaces, trash: @escaping @Sendable (URL) throws -> URL) {
+    init(places: AgentLibraryPlaces, texts: [String: String], trash: @escaping @Sendable (URL) throws -> URL) {
         self.places = places
+        self.texts = texts
         self.trash = trash
     }
 
@@ -75,7 +78,7 @@ struct LibraryTidying {
     /// 合并成一份全局规则，各家换成链到它的链接；OpenCode 自己那份移走（没有它时读 Claude Code 的）；撤掉选中的替换基础提示。
     private mutating func mergeGlobal(_ tidy: LibraryTidy, retiring: Set<InstructionSource.Origin>) throws {
         let shared = places.globalInstructions
-        try write(tidy.merged(retiring: retiring) ?? "", to: shared)
+        try write(tidy.merged(retiring: retiring, texts: texts) ?? "", to: shared)
         for kind in places.linkedKinds {
             let file = places.globalFile(kind)
             guard !RelativeLink.points(file, to: shared) else { continue }
@@ -92,7 +95,7 @@ struct LibraryTidying {
 
     /// 合进项目的 AGENTS.md，Claude Code 读的两份移走、`CLAUDE.md` 换成链到 AGENTS.md 的链接（同全局）；个人的 `CLAUDE.local.md` 不碰。
     private mutating func mergeProject(_ tidy: LibraryTidy, into file: URL, claude: (main: URL, nested: URL, local: URL)) throws {
-        try write(tidy.merged() ?? "", to: file)
+        try write(tidy.merged(texts: texts) ?? "", to: file)
         for other in [claude.main, claude.nested] where LibraryInstructionScan.exists(other) && !RelativeLink.points(other, to: file) { try moveToTrash(other) }
         guard !RelativeLink.points(claude.main, to: file) else { return }
         try RelativeLink.make(at: claude.main, to: file)

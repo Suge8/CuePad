@@ -82,7 +82,7 @@ struct TaskOutline<Line: View>: View {
             update: { update($0, rows: rows) },
             exit: { drag.end() },
             perform: perform))
-        .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: rows.map(\.id))
+        .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion), value: rows.map(\.id))
         .sensoryFeedback(.impact(weight: .medium), trigger: commits)
     }
 
@@ -229,7 +229,7 @@ private struct IdeaDropMark: View {
             }
         }
         .allowsHitTesting(false)
-        .animation(HandOff.quick, value: on)
+        .animation(Motion.fade, value: on)
     }
 }
 
@@ -254,7 +254,7 @@ private struct InsertionLine: View {
             }
         }
         .allowsHitTesting(false)
-        .animation(HandOff.quick, value: drag.drop?.mark)
+        .animation(Motion.fade, value: drag.drop?.mark)
         .sensoryFeedback(.selection, trigger: drag.drop?.mark) { _, mark in mark != nil }
         // 拖着灵感换了一行：同一下轻触感（整行的亮起画在行上，`IdeaDropMark`）
         .sensoryFeedback(.selection, trigger: drag.idea) { _, row in row != nil }

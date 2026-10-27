@@ -137,7 +137,7 @@ struct DeliverableTile: View {
             guard let file else { return }
             let waited = shown == nil
             let loaded = await DeliverableLooks.load(preview, file: file, box: box, scale: scale, caches: services.store.files.caches)
-            withAnimation(waited ? HandOff.quick : nil) { look = loaded }
+            withAnimation(waited ? Motion.fade : nil) { look = loaded }
         }
         .pending(loading, shown: $slow)
         // 截图等画面读到再拍：读的头 `Pending.delay` 里格子只有边，拍下来就是一张空白占位

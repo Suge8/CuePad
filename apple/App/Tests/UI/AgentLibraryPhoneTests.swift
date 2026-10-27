@@ -12,6 +12,14 @@ struct AgentLibraryPhoneTests {
     let app = TestApp()
     var store: CueStore { app.services.store }
     nonisolated static let skillPath = "/Users/a/.agents/skills/pr"
+    nonisolated static let rulesPath = "/Users/a/.agents/AGENTS.md"
+
+    /// 手机上这份文件此刻同步来的正文（文件页读的那一条，对上快照的哈希才算）。
+    func text(_ file: LibraryFile, _ workspace: Workspace) async throws -> String? {
+        let library = try #require(workspace.library)
+        let texts = try await store.agentLibraryTexts(host: library.hostID, paths: library.textPaths(for: file))
+        return library.arrived(file, in: texts) ?? nil
+    }
 
     /// 那台 Mac 上全局规则与 pr 这个技能此刻的样子，与有没有该整理的。
     actor Mac {
@@ -26,12 +34,16 @@ struct AgentLibraryPhoneTests {
             let unlinked = LibraryTidy(id: "unlinked/claude", kind: .unlinked(agent: .claudeCode, skills: [SkillEntry(name: "pr", scope: .global, path: AgentLibraryPhoneTests.skillPath)]))
             return AgentLibrary(
                 hostID: "mac-a", home: "/Users/a",
-                skills: [LibrarySkill(name: "pr", scope: .global, group: "", path: AgentLibraryPhoneTests.skillPath, text: skill)],
-                instructions: [LibraryInstruction(kind: .global, path: "/Users/a/.agents/AGENTS.md", text: text, modifiedAt: .now, readers: [.pi])],
+                skills: [LibrarySkill(
+                    name: "pr", scope: .global, group: "", path: AgentLibraryPhoneTests.skillPath, description: SkillDocument(skill).description ?? "",
+                    hash: LibraryEdit.base(of: skill))],
+                instructions: [LibraryInstruction(kind: .global, path: AgentLibraryPhoneTests.rulesPath, hash: LibraryEdit.base(of: text), modifiedAt: .now, readers: [.pi])],
                 tidies: tidied ? [] : [unlinked], modifiedAt: .now)
         }
 
-        func report() async throws { try await store.recordAgentLibrary(snapshot()) }
+        func report() async throws {
+            try await store.recordAgentLibrary(snapshot(), texts: [AgentLibraryPhoneTests.rulesPath: text, AgentLibraryPhoneTests.skillPath + "/SKILL.md": skill])
+        }
 
         /// 在 Mac 上直接改了文件（终端里、Mac 的文件页）。
         func edit(_ text: String) async throws {
@@ -80,11 +92,11 @@ struct AgentLibraryPhoneTests {
         #expect(workspace.notice?.text.visible == "整理好了 1 件" && workspace.notice?.action == nil, "手机上的整理没有撤销：Mac 照做、不留撤销")
         try await eventually("该整理的没了") { workspace.library?.tidies.isEmpty == true }
 
-        let global = try #require(workspace.library?.instruction(.global))
-        let opened = workspace.fileDraft(.instruction(.global), text: global.text, on: "mac-a")
+        let global = try await text(.instruction(.global), workspace)
+        let opened = workspace.fileDraft(.instruction(.global), text: global, on: "mac-a")
         opened.changed(body: "# 原则\n\n手机改的\n")
         // 离开文件页再回来：改着的还在，一条都没发
-        let draft = workspace.fileDraft(.instruction(.global), text: global.text, on: "mac-a")
+        let draft = workspace.fileDraft(.instruction(.global), text: global, on: "mac-a")
         let requests = try await store.deliveryRequests()
         #expect(draft === opened && draft.dirty && draft.body == "# 原则\n\n手机改的\n" && requests.allSatisfy { $0.libraryEdit == nil }, "没点纸飞机就不发")
 
@@ -92,15 +104,15 @@ struct AgentLibraryPhoneTests {
 
         var file = await mac.text
         #expect(file == "# 原则\n\n手机改的\n" && draft.state == .saved && !draft.dirty)
-        try await eventually("快照写回") { workspace.library?.instruction(.global)?.text == "# 原则\n\n手机改的\n" }
-        draft.follow(workspace.library?.instruction(.global)?.text)
+        try await eventually("快照写回") { try await text(.instruction(.global), workspace) == "# 原则\n\n手机改的\n" }
+        draft.follow(try await text(.instruction(.global), workspace))
         #expect(draft.state == .saved)
 
         try await mac.edit("Mac 上改的\n")
         draft.changed(body: "手机又改\n")
         await draft.send()
-        try await eventually("快照跟上 Mac") { workspace.library?.instruction(.global)?.text == "Mac 上改的\n" }
-        draft.follow(workspace.library?.instruction(.global)?.text)
+        try await eventually("快照跟上 Mac") { try await text(.instruction(.global), workspace) == "Mac 上改的\n" }
+        draft.follow(try await text(.instruction(.global), workspace))
 
         file = await mac.text
         #expect(draft.state == .conflict(file: "Mac 上改的\n") && draft.body == "手机又改\n" && file == "Mac 上改的\n")
@@ -114,7 +126,7 @@ struct AgentLibraryPhoneTests {
         let (mac, workspace, stop) = try await start()
         defer { stop() }
         let skill = try #require(workspace.library?.skill(at: Self.skillPath))
-        let draft = workspace.fileDraft(.skill(skill.path), text: skill.text, on: "mac-a")
+        let draft = workspace.fileDraft(.skill(skill.path), text: try await text(.skill(skill.path), workspace), on: "mac-a")
         #expect(draft.name == "pr" && draft.summary == "写 PR" && draft.body == "先读模板\n")
 
         draft.changed(summary: "写 PR 描述")
@@ -132,7 +144,7 @@ struct AgentLibraryPhoneTests {
         file = await mac.skill
         #expect(draft.conflicted && draft.body == "手机又改\n" && file == "---\nname: pr\ndescription: Mac 上改的\n---\n", "Mac 上刚改过：不写，留着你的字")
         try await eventually("快照跟上 Mac") { workspace.library?.skill(at: Self.skillPath)?.description == "Mac 上改的" }
-        draft.follow(workspace.library?.skill(at: Self.skillPath)?.text)
+        draft.follow(try await text(.skill(Self.skillPath), workspace))
         draft.takeFile()
         #expect(draft.summary == "Mac 上改的" && draft.body == "" && !draft.dirty)
     }

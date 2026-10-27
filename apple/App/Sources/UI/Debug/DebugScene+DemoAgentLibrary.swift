@@ -19,8 +19,8 @@ extension DebugScene {
             home: String(DemoLibrary.demoHome.dropLast()), clean: clean,
             cuepad: project("CuePad"), atlas: project(String(localized: "圆桌", table: "Demo")),
             homepage: project(String(localized: "个人网站", table: "Demo"))
-        ).library(host: host)
-        _ = try? await store.recordAgentLibrary(library)
+        )
+        _ = try? await store.recordAgentLibrary(library.library(host: host), texts: library.texts)
     }
 }
 
@@ -36,9 +36,38 @@ struct DemoAgentLibrary {
 
     func library(host: String) -> AgentLibrary {
         AgentLibrary(
-            hostID: host, home: home, skills: skills, instructions: instructions, tidies: clean ? [] : tidies,
+            hostID: host, home: home, skills: skills.map(\.skill), instructions: instructions.map(\.instruction), tidies: clean ? [] : tidies,
             selfManaged: [SelfManagedSkills(agent: .claudeCode, count: 13), SelfManagedSkills(agent: .codex, count: 5)],
             agents: [.pi, .claudeCode, .codex], modifiedAt: .now)
+    }
+
+    /// 各份文件的正文（`LibraryFileText`）：列出的技能与规则，加合并要比的各家那几份。
+    var texts: [String: String] {
+        var texts: [String: String] = [:]
+        for (skill, text) in skills { texts[skill.textPath] = text }
+        for (instruction, text) in instructions { texts[instruction.path] = text }
+        texts[home + "/.claude/CLAUDE.md"] = Self.claudeRules
+        texts[home + "/Project/homepage/CLAUDE.md"] = Self.homepageClaude
+        return texts
+    }
+
+    private static func skill(
+        _ name: String, _ scope: LibraryScope, group: String = "", path: String, text: String, problem: SkillProblem? = nil, unseenBy: [AgentKind] = []
+    ) -> (skill: LibrarySkill, text: String) {
+        let skill = LibrarySkill(
+            name: name, scope: scope, group: group, path: path, description: SkillDocument(text).description ?? "", hash: LibraryEdit.base(of: text),
+            problem: problem, unseenBy: unseenBy)
+        return (skill, text)
+    }
+
+    private func instruction(
+        _ kind: LibraryInstruction.Kind, _ path: String, text: String?, hours: Double?, readers: [AgentKind] = [], links: [String] = []
+    ) -> (instruction: LibraryInstruction, text: String?) {
+        (LibraryInstruction(kind: kind, path: path, hash: text.map(LibraryEdit.base), modifiedAt: hours.map(ago), readers: readers, links: links), text)
+    }
+
+    private func source(_ origin: InstructionSource.Origin, _ path: String, _ text: String, hours: Double) -> InstructionSource {
+        InstructionSource(origin: origin, path: path, hash: LibraryEdit.base(of: text), modifiedAt: ago(hours))
     }
 
     /// 演示的 Mac Studio 照手机发来的整理与改文件改它的快照（`-CuePadDemoMac YES`，`runDemoMac`）：整理了的那几件不在了（补上链接的各家都读得到，
@@ -46,6 +75,8 @@ struct DemoAgentLibrary {
     static func apply(_ request: DeliveryRequest, store: CueStore) async -> DeliveryOutcome? {
         guard request.tidyOrders != nil || request.libraryEdit != nil else { return nil }
         guard var library = try? await store.agentLibrary(host: request.hostID) else { return .failed(ShownText(AgentLibraryError.tidyGone)) }
+        let paths = library.skills.map(\.textPath) + library.instructions.map(\.path) + library.tidies.flatMap { $0.sources.map(\.path) }
+        var texts = (try? await store.agentLibraryTexts(host: request.hostID, paths: paths)) ?? [:]
         if let orders = request.tidyOrders {
             let ids = Set(orders.map(\.tidy))
             let kept = Set(orders.compactMap(\.keep))
@@ -53,29 +84,36 @@ struct DemoAgentLibrary {
                 if case .duplicate(_, let copies) = tidy.kind { copies.map(\.path).filter { !kept.contains($0) } } else { [] }
             }
             library.tidies.removeAll { ids.contains($0.id) }
+            for skill in library.skills where dropped.contains(skill.path) { texts[skill.textPath] = nil }
             library.skills.removeAll { dropped.contains($0.path) }
             if ids.contains("unlinked/claude") {
                 library.skills = library.skills.map {
-                    LibrarySkill(name: $0.name, scope: $0.scope, group: $0.group, path: $0.path, text: $0.text, problem: $0.problem)
+                    LibrarySkill(name: $0.name, scope: $0.scope, group: $0.group, path: $0.path, description: $0.description, hash: $0.hash, problem: $0.problem)
                 }
             }
         }
         if let edit = request.libraryEdit {
-            guard LibraryEdit.base(of: library.file(edit.file)?.text) == edit.base else { return .failed(ShownText(AgentLibraryError.changedOnMac)) }
+            guard let entry = library.file(edit.file) else { return .failed(ShownText(AgentLibraryError.gone)) }
+            guard LibraryEdit.base(of: entry.hash == nil ? nil : texts[entry.textPath]) == edit.base else {
+                return .failed(ShownText(AgentLibraryError.changedOnMac))
+            }
+            texts[entry.textPath] = edit.text
+            let hash = LibraryEdit.base(of: edit.text)
             switch edit.file {
             case .instruction(let kind):
-                guard let index = library.instructions.firstIndex(where: { $0.kind == kind }) else { return .failed(ShownText(AgentLibraryError.gone)) }
+                let index = library.instructions.firstIndex { $0.kind == kind }!
                 let old = library.instructions[index]
                 library.instructions[index] = LibraryInstruction(
-                    kind: old.kind, path: old.path, text: edit.text, modifiedAt: .now, readers: old.readers, links: old.links)
+                    kind: old.kind, path: old.path, hash: hash, modifiedAt: .now, readers: old.readers, links: old.links)
             case .skill(let path):
-                guard let index = library.skills.firstIndex(where: { $0.path == path }) else { return .failed(ShownText(AgentLibraryError.gone)) }
+                let index = library.skills.firstIndex { $0.path == path }!
                 let old = library.skills[index]
                 library.skills[index] = LibrarySkill(
-                    name: old.name, scope: old.scope, group: old.group, path: old.path, text: edit.text, unseenBy: old.unseenBy)
+                    name: old.name, scope: old.scope, group: old.group, path: old.path, description: SkillDocument(edit.text).description ?? "",
+                    hash: hash, modifiedAt: .now, unseenBy: old.unseenBy)
             }
         }
-        _ = try? await store.recordAgentLibrary(library)
+        _ = try? await store.recordAgentLibrary(library, texts: texts)
         return .succeeded
     }
 
@@ -119,30 +157,26 @@ struct DemoAgentLibrary {
         "---\nname: \(name)\ndescription: \(description)\n---\n\n\(description)\n"
     }
 
-    private var skills: [LibrarySkill] {
+    private var skills: [(skill: LibrarySkill, text: String)] {
         var global = Self.global.map { item in
-            LibrarySkill(
-                name: item.name, scope: .global, group: item.group,
-                path: item.group.isEmpty ? "\(root)/\(item.name)" : "\(root)/\(item.group)/\(item.name)",
+            Self.skill(
+                item.name, .global, group: item.group, path: item.group.isEmpty ? "\(root)/\(item.name)" : "\(root)/\(item.group)/\(item.name)",
                 text: Self.skillText(item.name, item.description), unseenBy: !clean && item.name == "write-swift" ? [.claudeCode] : [])
         }
         if !clean {
-            global.append(LibrarySkill(name: "release", scope: .global, group: "", path: root + "/release", text: Self.globalRelease))
-            global.append(LibrarySkill(
-                name: "uilane", scope: .global, group: "operations", path: root + "/operations/uilane", text: Self.uilane, problem: .unreadable))
+            global.append(Self.skill("release", .global, path: root + "/release", text: Self.globalRelease))
+            global.append(Self.skill("uilane", .global, group: "operations", path: root + "/operations/uilane", text: Self.uilane, problem: .unreadable))
         }
-        var project: [LibrarySkill] = []
+        var project: [(skill: LibrarySkill, text: String)] = []
         if let cuepad {
             project += Self.cuepadSkills.map {
-                LibrarySkill(name: $0.0, scope: .project(cuepad), group: "", path: "\(home)/Project/cuepad/.agents/skills/\($0.0)", text: Self.skillText($0.0, $0.1))
+                Self.skill($0.0, .project(cuepad), path: "\(home)/Project/cuepad/.agents/skills/\($0.0)", text: Self.skillText($0.0, $0.1))
             }
-            if !clean {
-                project.append(LibrarySkill(name: "release", scope: .project(cuepad), group: "", path: Self.cuepadReleasePath(home), text: Self.cuepadRelease))
-            }
+            if !clean { project.append(Self.skill("release", .project(cuepad), path: Self.cuepadReleasePath(home), text: Self.cuepadRelease)) }
         }
         if let atlas {
-            project.append(LibrarySkill(
-                name: "load-test", scope: .project(atlas), group: "", path: "\(home)/Project/atlas/.agents/skills/load-test",
+            project.append(Self.skill(
+                "load-test", .project(atlas), path: "\(home)/Project/atlas/.agents/skills/load-test",
                 text: Self.skillText("load-test", Self.loadTest), unseenBy: clean ? [] : [.claudeCode]))
         }
         return global + project
@@ -207,28 +241,23 @@ struct DemoAgentLibrary {
         互不依赖的调用放在同一轮里并发完成。
         """, table: "Demo")
 
-    private var instructions: [LibraryInstruction] {
+    private var instructions: [(instruction: LibraryInstruction, text: String?)] {
         let agents: [AgentKind] = [.pi, .claudeCode, .codex]
         var list = [
-            LibraryInstruction(
-                kind: .global, path: home + "/.agents/AGENTS.md", text: Self.sharedRules, modifiedAt: ago(26),
-                readers: clean ? agents : [.pi, .codex],
+            instruction(
+                .global, home + "/.agents/AGENTS.md", text: Self.sharedRules, hours: 26, readers: clean ? agents : [.pi, .codex],
                 links: [home + "/.pi/agent/AGENTS.md", home + "/.codex/AGENTS.md"] + (clean ? [home + "/.claude/CLAUDE.md"] : [])),
-            LibraryInstruction(kind: .piSystem, path: home + "/.pi/agent/SYSTEM.md", text: Self.piSystem, modifiedAt: ago(24 * 9), readers: [.pi]),
+            instruction(.piSystem, home + "/.pi/agent/SYSTEM.md", text: Self.piSystem, hours: 24 * 9, readers: [.pi]),
         ]
         if let cuepad {
-            list.append(LibraryInstruction(
-                kind: .project(cuepad), path: home + "/Project/cuepad/AGENTS.md",
-                text: Self.cuepadRules, modifiedAt: ago(3),
-                readers: agents, links: [home + "/Project/cuepad/CLAUDE.md"]))
+            list.append(instruction(
+                .project(cuepad), home + "/Project/cuepad/AGENTS.md", text: Self.cuepadRules, hours: 3, readers: agents,
+                links: [home + "/Project/cuepad/CLAUDE.md"]))
         }
-        if let atlas {
-            list.append(LibraryInstruction(kind: .project(atlas), path: home + "/Project/atlas/AGENTS.md", text: nil, modifiedAt: nil))
-        }
+        if let atlas { list.append(instruction(.project(atlas), home + "/Project/atlas/AGENTS.md", text: nil, hours: nil)) }
         if let homepage {
-            list.append(LibraryInstruction(
-                kind: .project(homepage), path: home + "/Project/homepage/AGENTS.md",
-                text: Self.homepageRules, modifiedAt: ago(24 * 4),
+            list.append(instruction(
+                .project(homepage), home + "/Project/homepage/AGENTS.md", text: Self.homepageRules, hours: 24 * 4,
                 readers: clean ? agents : [.pi, .codex], links: clean ? [home + "/Project/homepage/CLAUDE.md"] : []))
         }
         return list
@@ -255,15 +284,15 @@ struct DemoAgentLibrary {
         }
         list.append(LibraryTidy(id: "empty", kind: .empty([home + "/.codex/skills/codex-primary-runtime"])))
         list.append(LibraryTidy(id: "global-instructions", kind: .globalInstructions([
-            InstructionSource(origin: .shared, path: home + "/.agents/AGENTS.md", text: Self.sharedRules, modifiedAt: ago(26)),
-            InstructionSource(origin: .agent(.claudeCode), path: home + "/.claude/CLAUDE.md", text: Self.claudeRules, modifiedAt: ago(24 * 2)),
-            InstructionSource(origin: .piSystem, path: home + "/.pi/agent/SYSTEM.md", text: Self.piSystem, modifiedAt: ago(24 * 9)),
+            source(.shared, home + "/.agents/AGENTS.md", Self.sharedRules, hours: 26),
+            source(.agent(.claudeCode), home + "/.claude/CLAUDE.md", Self.claudeRules, hours: 24 * 2),
+            source(.piSystem, home + "/.pi/agent/SYSTEM.md", Self.piSystem, hours: 24 * 9),
         ])))
         if let homepage {
             let folder = home + "/Project/homepage"
             list.append(LibraryTidy(id: "project-claude/\(homepage.uuidString)", kind: .projectClaude(project: homepage, sources: [
-                InstructionSource(origin: .shared, path: folder + "/AGENTS.md", text: Self.homepageRules, modifiedAt: ago(24 * 4)),
-                InstructionSource(origin: .agent(.claudeCode), path: folder + "/CLAUDE.md", text: Self.homepageClaude, modifiedAt: ago(24 * 20)),
+                source(.shared, folder + "/AGENTS.md", Self.homepageRules, hours: 24 * 4),
+                source(.agent(.claudeCode), folder + "/CLAUDE.md", Self.homepageClaude, hours: 24 * 20),
             ])))
         }
         return list

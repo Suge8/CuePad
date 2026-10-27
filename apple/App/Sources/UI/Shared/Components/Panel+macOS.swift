@@ -73,12 +73,12 @@ final class PanelHost {
                 responders[id] = Weak(value: window.firstResponder)
                 window.makeFirstResponder(nil)
             }
-            withAnimation(entry.style.fades ? HandOff.quick : nil) {
+            withAnimation(entry.style.fades ? Motion.fade : nil) {
                 if let index = shown.firstIndex(where: { $0.id == id }) { shown[index] = entry } else { shown.append(entry) }
             }
         } else {
             // 气泡：不动焦点（同系统 popover）：输入栏聚焦时交出焦点，它要收起再重排，开一次多约 800M 指令、点击回合多十几毫秒（实测）
-            withAnimation(Motion.snappy) { shown.append(entry) }
+            withAnimation(Motion.nudge) { shown.append(entry) }
         }
         if monitor == nil {
             monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .leftMouseDown, .rightMouseDown]) { [weak self] event in
@@ -90,9 +90,9 @@ final class PanelHost {
     func hide(_ id: UUID) {
         guard let index = shown.firstIndex(where: { $0.id == id }) else { return }
         if shown[index].modal {
-            withAnimation(shown[index].style.fades ? HandOff.quick : nil) { _ = shown.remove(at: index) }
+            withAnimation(shown[index].style.fades ? Motion.fade : nil) { _ = shown.remove(at: index) }
         } else {
-            withAnimation(Motion.snappy) { _ = shown.remove(at: index) }
+            withAnimation(Motion.nudge) { _ = shown.remove(at: index) }
         }
         areas[id] = nil
         released(id)

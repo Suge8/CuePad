@@ -20,7 +20,7 @@ struct PiSubagentList: View {
                     NoteThread { ForEach(agents.identified, id: \.id) { row($0.agent).padding(.vertical, 3) } }
                 }
             }
-            .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: expanded)
+            .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion), value: expanded)
         }
     }
 

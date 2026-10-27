@@ -28,7 +28,7 @@ struct CardSearchResults<Leading: View>: View {
                     }
                     if let data, !query.text.isEmpty || query.isFiltered {
                         Text(CountCopy.hits(data.total)).font(Typography.meta.monospacedDigit()).foregroundStyle(palette.ink3)
-                            .contentTransition(.numericText()).animation(HandOff.quick, value: data.total)
+                            .contentTransition(.numericText()).animation(Motion.fade, value: data.total)
                             .fixedSize().padding(.trailing, 16)
                     }
                 }
@@ -125,7 +125,7 @@ struct FilterChip<Label: View>: View {
             .overlay { if !on { Capsule().strokeBorder(palette.hair) } }
             .padding(.vertical, 4)
             .contentShape(.rect)
-            .animation(HandOff.quick, value: on)
+            .animation(Motion.fade, value: on)
     }
 }
 #endif

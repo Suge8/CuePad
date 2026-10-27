@@ -7,7 +7,7 @@
 #   CUEPAD_IDLE_BACKGROUND=1（仅 ios）：就绪后切到设置 App，量 CuePad 进后台之后的开销。
 #   CUEPAD_TRACE=<xctrace 模板>（如 'Time Profiler'、Allocations）：量的窗口里同时录 trace，存本检出的 apple/.derived-perf/Build/traces/idle-<平台>-<第几次>.trace；
 #   iOS 录的是整机（模拟器里的进程 xctrace 按 PID、按名字都认不出），按打印的 PID 筛。
-# xc.sh 构建好 Release（同 perf-mac.sh，产物在 apple/.derived-perf）后调这里，第一个参数是 CuePad.app。不独占机器：量的都是进程自己的内核记账。
+# xc.sh 构建好 Release（同 perf-mac.sh，产物在 apple/.derived-perf）后调这里，第一个参数是 CuePad.app。量的都是进程自己的内核记账。
 set -euo pipefail
 
 APPLE_DIR="$(cd "$(dirname "$0")/.." && pwd)"

@@ -1,9 +1,9 @@
 # 性能与同步测量
 
-三个入口都是 Release 构建、每次全新进程、多次取中位，跑法与口径在各脚本头注释，和交互预算比的要占前台（[verify.md](verify.md)「占前台」）：交互是 `xc.sh perf mac|ios`，静置与常驻开销是 `xc.sh perf idle mac|ios`，Mac 冷启动到首屏与能交互是 `xc.sh perf launch mac`。前后对比是旧新两个检出交替跑同一条命令，以指令数与唤醒为准：机器忙时帧间隔、CPU 时间、能耗都会被别的进程拖歪。
+三个入口都是 Release 构建、每次全新进程、多次取中位，跑法与口径在各脚本头注释，和交互预算比的要占前台（[verify.md](verify.md)「占前台」）：交互是 `xc.sh perf mac|ios`，静置与常驻开销是 `xc.sh perf idle mac|ios`，Mac 冷启动到首屏与能交互是 `xc.sh perf launch mac`。前后对比一律用 `xc.sh perf ab <旧检出> <新检出> <轮数> <上面那条 perf 命令的参数>`（如 `xc.sh perf ab ../CuePad ./ 4 idle mac 1 30`）：两边各构建一次、交替跑，每轮跑完一行（带当时的负载），最后出两边中位数与各次范围的对比表，两边范围重叠的标「≈」，前台阻塞到结束，不要自己写交替脚本、也不用轮询。以指令数与唤醒为准：机器忙时帧间隔、CPU 时间、能耗都会被别的进程拖歪。`xc.sh` 每条命令结束打一行用时（排队、编译、其余）与那一刻的 1 分钟负载，时间花在哪、机器忙不忙看它。
 
 - 常驻动效（`LoopLayer` 的循环、头像帧序列）的开销在渲染服务里，App 进程看不到：`perf idle` 同一窗口另记渲染服务的 `render*`（口径在 `rusage.py` 头注释）。头像的眨眼张望每一下都要合成几帧，静置开销随次数涨（`CueSprite` 头注释）。iOS 模拟器是它的 backboardd，CPU、指令、唤醒都有，含模拟器的系统界面，基线相同、前后可比；
-  Mac 是 WindowServer，不提权只读得到 ps 的累计 CPU，合成整个屏幕、随别的 App 起伏，机器上有别的东西在动时几秒的波动盖过 CuePad 自己的几十毫秒，只在静置的桌面上前后交替多跑几次才能比。
+  Mac 是 WindowServer，不提权只读得到 ps 的累计 CPU，合成整个屏幕、随别的 App 起伏，机器上有别的东西在动时几秒的波动盖过 CuePad 自己的几十毫秒，只在静置的桌面上用 `perf ab` 多跑几轮才能比。
 - 掉帧数是主线程 display link 的回调间隔，反映主线程跟不跟得上，不是实际交出的帧率；以 Instruments 的 Animation Hitches 为准。iOS 模拟器不支持 Animation Hitches，用 `xc.sh rec` 逐帧或应用内探针。屏幕外（`-CuePadOffscreen`）display link 不走，只用于布局与日志类场景。
 - Instruments：Release 用 `CUEPAD_TRACE=<模板>` 跟着 perf 录；Debug 实例 `xc.sh run mac` 拿 PID 再 `xctrace record --attach <PID>`。按名字或 bundle id 认 CuePad 会认到正式版。
 - SwiftUI 模板 `--attach` 没有数据：`--launch` 一份换了 bundle id 并重签名的副本。`Animation Hitches` 模板单独录会写出几十 GB，不用；`--launch` 的进程结束后可能停在暂停状态，按 PID 结束。
@@ -14,7 +14,7 @@
 
 ## 交互预算
 
-预算表在 `InteractionBench.budgets`，指标定义在它与 `Probes.swift` 的注释里。和预算比的数在前台量、至少跑两遍取中位。点击回合随机器那一刻的频率差到一倍（空闲后的第一下性能核常没升频）：同列的指令数不随它变，GHz 低的那几次就是慢在频率上。
+预算表在 `InteractionBench.budgets`，指标定义在它与 `Probes.swift` 的注释里。和预算比的数在前台量、至少跑两遍取中位；前台测量不独占机器，别的编译、测试照常在跑，看 `xc.sh` 结束那行用时里的 1 分钟负载：高于 CPU 核数（`sysctl -n hw.ncpu`）时帧、掉帧与回合时长不可比，只比指令数。点击回合随机器那一刻的频率差到一倍（空闲后的第一下性能核常没升频）：同列的指令数不随它变，GHz 低的那几次就是慢在频率上。
 
 - `-CuePadInteractOnly 项,项`（跟在 `xc.sh perf <mac|ios> 次数` 之后）只量列出的几项，前后对比省下整套流程；列的项之间要自己够得着（开编辑页配收编辑页）。
 - 冷启动进 Cue 页要量真实大小的对话：`CUEPAD_PERF_SEED=<真实库的只读副本> xc.sh perf ios 5 -CuePadInteractOnly "冷启动·Cue 页"`（副本先用这个构建打开一次，免得每次都量进升级库结构）。项名带空格要加引号。

@@ -43,6 +43,8 @@ enum InteractionBench {
         "项目页→看板": (14, 1),
         "换项目范围": (28, 2),
         "清项目范围": (28, 2),
+        "卡换列": (14, 2),
+        "卡回待办": (14, 2),
         "回 Cue 页": (14, 2),
         "⌘K 面板开": (28, 2),
         "⌘K 面板关": (14, 2),
@@ -178,6 +180,17 @@ enum InteractionBench {
                 await step("项目页→看板") { workspace.show(.progress) }
                 await step("换项目范围") { workspace.projectScope = a }
                 await step("清项目范围") { workspace.projectScope = nil }
+            }
+        }
+        // 看板上一件待办做完、再打开：卡从待办整张飞到已完成、再飞回来（隔着两列，最远的一趟），量飞行那段的帧。
+        // 写库是异步的：动作只是发出写入，画面在库变了、看板重读之后才动，800ms 的窗口盖得住写入加飞行
+        if only.map({ $0.contains("卡换列") || $0.contains("卡回待办") }) ?? true, let task = tasks.first(where: { $0.status == .todo }) {
+            workspace.progressPane = .board
+            workspace.show(.progress)
+            try? await Task.sleep(for: .seconds(1))
+            for _ in 0..<2 {
+                await step("卡换列") { Task { try? await store.setStatus(task.id, .done) } }
+                await step("卡回待办") { Task { try? await store.setStatus(task.id, .todo) } }
             }
         }
         // 项目页任务纸点"还有 N 条"展开、再收起：在没做完的任务最多的项目上（配 `-CuePadManyTasks` 量任务多时）

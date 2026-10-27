@@ -16,7 +16,7 @@ struct NoticeBanner: View {
 
     /// 被盖住的名牌、页头给横幅让开：立刻淡出；横幅收走后等它离场再淡回来，两块玻璃不叠着、不交叉淡。
     static func giveWay(_ notice: Workspace.Notice?) -> Animation {
-        notice == nil ? HandOff.quick.delay(0.12) : HandOff.quick
+        notice == nil ? Motion.fade.delay(0.12) : Motion.fade
     }
 
     var body: some View {
@@ -32,10 +32,10 @@ struct NoticeBanner: View {
         .frame(maxWidth: .infinity)
         .padding(.leading, field ? FloatingHeaderLayout.margin : Self.sideClearance)
         .padding(.trailing, Self.sideClearance)
-        .animation(HandOff.quick, value: field)
+        .animation(Motion.fade, value: field)
         // iPad 窄窗口：按窗口给的角落让开左上的窗口钮，不盖住它
         .containerCornerOffset(.horizontal, sizeToFit: true)
-        .animation(HandOff.quick, value: workspace.notice)
+        .animation(Motion.fade, value: workspace.notice)
         .sensoryFeedback(trigger: workspace.notice) { _, notice in
             guard let notice else { return nil }
             return notice.isError ? .error : .success

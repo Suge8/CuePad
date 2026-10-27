@@ -44,7 +44,7 @@ struct ShelfScreen: View {
         }
         .padding(.horizontal, 16)
         .padding(.bottom, 24)
-        .animation(Motion.snappy, value: catalog.projects.map(\.id))
+        .animation(Motion.nudge, value: catalog.projects.map(\.id))
         // 宽屏不把一行项目拉满整屏
         .frame(maxWidth: Self.readableWidth)
         .frame(maxWidth: .infinity)

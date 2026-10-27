@@ -127,7 +127,7 @@ private struct SwipeRow: ViewModifier {
     /// 过了这条线松手就执行最外侧那个：至少多出一个按钮宽，或行宽的六成。
     private var fullSwipe: CGFloat { max(tray + Self.slot, size.width * 0.6) }
     private var armed: Bool { !side.isEmpty && abs(offset) >= fullSwipe }
-    private var animation: Animation? { Motion.spatial(Motion.snappy, reduceMotion: reduceMotion) }
+    private var animation: Animation? { Motion.spatial(Motion.nudge, reduceMotion: reduceMotion) }
 
     func body(content: Content) -> some View {
         let moved = content

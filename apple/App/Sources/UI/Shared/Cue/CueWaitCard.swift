@@ -107,7 +107,7 @@ struct CueWaitCard: View {
     /// 换到挨着的那件（眉题行的小箭头、读屏的"上一件""下一件"；手机上滑卡在 `CueWaitDock`）。
     private func step(by offset: Int) {
         guard let next = pick.neighbor(by: offset) else { return }
-        withAnimation(HandOff.quick) { workspace.cueAsking = next.id }
+        withAnimation(Motion.fade) { workspace.cueAsking = next.id }
     }
 
     /// Cue 点名的图（`CueShots`）："可以"选的是其中一张时那张描靛青圈；点开全屏时底栏就是这几个选项，看完当场定。

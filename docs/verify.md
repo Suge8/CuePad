@@ -4,8 +4,9 @@ Debug 认的启动参数只在 `DebugScene.swift`（及同目录 `DebugScene+*.s
 
 ## 视觉验收
 
-截图、录屏用 `xc.sh shot|rec`（首次要给终端屏幕录制权限）。
+截图、录屏用 `xc.sh shot|rec`（首次要给终端屏幕录制权限）。浅深色、几个场景一次调用拍完：`xc.sh shot ios -- -CuePadScene shelf -theme light , -- -CuePadScene shelf -theme dark`（一次进锁、构建、装包；iOS 的模拟器外观随每张的 `-theme` 切）。源码没变时构建自动跳过。
 
+- Mac 的 shot、rec、run 期间自动让显示器醒着（`caffeinate -d -u`），不用自己 `caffeinate -u`。
 - Mac 按窗口拍，图的像素是窗口在屏上的像素（1x 屏上与点数相同，Retina 屏上翻倍）。报窗口被缩小显示时是调度中心或台前调度开着：请用户收起，不发系统按键。
 - 后台窗口里的网页过几秒就成空白，截图不可信：用 `-CuePadWebSnapshot`。
 - Mac 浮层与气泡（点开后的样子、摆在哪）：`xc.sh rec mac -- … -CuePadClick x,y` 在后台点开，取录屏末帧，不占前台。
@@ -19,14 +20,14 @@ Debug 认的启动参数只在 `DebugScene.swift`（及同目录 `DebugScene+*.s
 
 ## 占前台
 
-本机构建（Debug、测试宿主、perf 的 Release）一律在后台、窗口排最后；截图按窗口拍、模拟器不开 Simulator.app、bcu 与 axe 按进程投递，都不动用户的前台和指针。借前台只经 `DebugForeground`（启动参数 `-CuePadForeground YES`，量完把前台与指针还回去），非占不可的只有：
+本机构建（Debug、测试宿主、perf 的 Release）一律在后台、窗口排最后；截图按窗口拍、模拟器不开 Simulator.app、bcu 与 axe 按进程投递，都不动用户的前台和指针。借前台只经 `DebugForeground`（启动参数 `-CuePadForeground YES`，量完把前台与指针还回去）。**用户键鼠静止不足 5 分钟时代码直接拒借**：实例打印读数、退出码 2，`xc.sh` 的命令随之失败，不会降级成后台，重试也一样；用户确实在场时改用后台量。非占不可的只有：
 
 - 和交互预算比的 `xc.sh perf mac`：后台没有玻璃合成与动画，帧与掉帧偏乐观。
 - `-CuePadRightClick`，以及 `-CuePadClick` 点开的是系统菜单时：后台 App 的菜单是停用的灰。`-CuePadClick` 的其余点按在后台照样生效（事件在本进程里合成，不经窗口服务器、不先激活），浮层、气泡、按钮的逻辑与摆位不占前台验；截图是未激活窗口的样子，看激活态的强调色、焦点、悬停与真实首次点击的手感仍要前台或人工。
 - `-CuePadBench chatscroll` 的 process、hid 驱动：真实滚轮与指针。
 - `-CuePadClick` 的 `front`、`hidpinch`、`hidscroll`（`DebugGestures+Mac.swift`）：在 HID 层合成触控板捏合与带惯性的双指滚动，进得了系统滚动视图（进程内合成的进不去），量全屏页大图的缩放与看图。
 
-只在用户说过这段时间不用电脑、或明确要这几样数字时给；平时用后台的数（指令数照样能前后对比）。新加的自动化要占前台也只经 `DebugForeground`，并补进这张单子。真实按键（⌘V、全局热键）与跨应用粘贴不自动化，只人工验证。
+前台量会抢键盘、移指针：只在要和预算比的那几样数字上用，一次量够，不连跑；前后对比只要指令数就用后台。新加的自动化要占前台也只经 `DebugForeground`，并补进这张单子。真实按键（⌘V、全局热键）与跨应用粘贴不自动化，只人工验证。
 
 ## 真实数据复现
 
@@ -56,7 +57,7 @@ apple/scripts/xc.sh stop       # 验完就收；忘了 5 分钟后会自己退�
 - 提示条 2.4 秒就收：`expect` 写进同一组动作。
 - 任务行右键在后台弹得出菜单；墙上灵感卡的右键被当成点按，它的操作从编辑页走。
 - 让 Cue 真跑：隔离实例里各家的配置目录是空的、没有登录的大脑。起实例前同 `ClaudeTestbed` 把这台 Claude Code 的登录交给它：`export CLAUDE_CODE_OAUTH_TOKEN="$(<ClaudeLogin.tokenCommand 那条命令>)" ANTHROPIC_API_KEY=`（只读钥匙串里的访问令牌，不刷新），启用时选 Claude Code。
-- iOS：`xc.sh run ios|ipad` 打印 PID 与 UDID；点按 `axe tap -x <x> -y <y> --udid <UDID>`（坐标是点，`xcrun simctl io <UDID> screenshot` 换算；`axe describe-ui` 读不到 SwiftUI 的元素）。模拟器池共用，别的任务随时会装包重跑，连续操作尽快做完。模拟器默认当作接了电脑键盘，看软键盘加 `-CuePadSoftKeyboard YES`；键盘变高用表情键。
+- iOS：`xc.sh run ios|ipad` 打印 PID 与 UDID；点按 `axe tap -x <x> -y <y> --udid <UDID>`（坐标是点，`xcrun simctl io <UDID> screenshot` 换算；`axe describe-ui` 读不到 SwiftUI 的元素）。`run` 起的实例由后台看守租着那台模拟器（别的检出领不到），到 `CUEPAD_RUN_SECONDS`、实例退出或 `xc.sh stop` 才放；`shot`、`rec` 只在拍的那几秒占着。槽位全机共用（`_lock.sh`），换机型的任务会关掉同槽位上别的机型。模拟器默认当作接了电脑键盘，看软键盘加 `-CuePadSoftKeyboard YES`；键盘变高用表情键。
 
 ## 陌生人第一次打开
 
