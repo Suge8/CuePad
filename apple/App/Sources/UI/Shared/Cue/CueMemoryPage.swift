@@ -103,7 +103,7 @@ struct CueMemoryPage: View {
             }
         }
         .padding(.horizontal, 18)
-        .glass(in: .rect(cornerRadius: Metrics.field / 2, style: .continuous))
+        .glass(in: .capsule)
         .padding(.horizontal, 16)
     }
 
@@ -239,7 +239,7 @@ private struct MemoryRow: View {
             #if os(iOS)
             // 长按抬起的预览与左右滑时露出的缝是这一行的快照：没有底色时抬起来是透明的一条。形状要写明：不写时 iOS 26 按所在容器取同心圆角
             .background(palette.desk, in: .rect)
-            .contentShape(.contextMenuPreview, .rect(cornerRadius: Metrics.radius, style: .continuous))
+            .contentShape(.contextMenuPreview, .rect(cornerRadius: Radius.card))
             .contextMenu { menu }
             .rowSwipes(RowSwipes(leading: [leading], trailing: [trailing]))
             #else
@@ -287,7 +287,6 @@ private enum Metrics {
     static let margin: CGFloat = 4
     static let inset: CGFloat = 16
     static let vertical: CGFloat = 9
-    static let radius: CGFloat = 16
     static let field: CGFloat = 50
     static let fieldBottom: CGFloat = 8
     #endif

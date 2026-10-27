@@ -55,7 +55,7 @@ struct TrashPage: View {
     private func group(_ title: LocalizedStringResource, @ViewBuilder rows: () -> some View) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title).font(Typography.sectionTitle).foregroundStyle(palette.ink)
-            VStack(spacing: 0) { rows() }.rowPaper(radius: 12)
+            VStack(spacing: 0) { rows() }.rowPaper(cornerRadius: Radius.block)
         }
     }
 }

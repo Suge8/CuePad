@@ -16,7 +16,7 @@ enum TaskMetrics {
     static let ringColumn: CGFloat = 44
     static let columnGap: CGFloat = 2
     static let cardPadding: CGFloat = 14
-    static let cardRadius: CGFloat = 14
+    static let cardRadius = Radius.card
     static let cardLead: CGFloat = 24
     static let cardGlyph: CGFloat = 13
     #else
@@ -33,21 +33,20 @@ enum TaskMetrics {
     static let ringColumn: CGFloat = 18
     static let columnGap: CGFloat = 10
     static let cardPadding: CGFloat = 12
-    static let cardRadius: CGFloat = 12
+    static let cardRadius = Radius.block
     static let cardLead: CGFloat = 16
     static let cardGlyph: CGFloat = 12
     #endif
 }
 
 /// 任务看板的卡（`boardCard`）：左右内边距 `cardPadding`、圆角 `cardRadius`；开头的记号占 `cardLead` 见方，看全部项目时标题前一个 `cardGlyph` 的项目小图形；
-/// 卡离列边与卡与卡之间都是 `inset`（列的托盘、拖入底的圆角 = 卡圆角 + 它，同心）。
+/// 卡离列边与卡与卡之间都是 `inset`（列的托盘与拖入底是 `Radius.sheet`，与卡近似同心）。
 /// 卡的高度由几段加出来（`BoardCardLayout`），不另写一个数：列里的卡是上下留白（重的列 `titlePadding`、轻的列 `lightPadding`）、标题（按 `title` 留足行数，至少 `titleRow`）；
 /// 推进中的卡是 `titleTop`、标题那一带、`waveGap`、线（`WaveStrip.height`）、`waveBottom`，与等你的卡同高。
 /// 标题与线之间那一截（Mac 6、手机 8）不能再窄：再贴近，线读起来像标题的下划线或删除线。手机竖版看板里卡铺满行给的格（`BoardRowLane`）。
 enum BoardCardMetrics {
     static let inset: CGFloat = 8
     static let gap: CGFloat = 8
-    static var radius: CGFloat { TaskMetrics.cardRadius }
     /// 手机竖版看板（`boardRow`）：卡窄，内边距、记号与标题之间都收一点，标题小一档。
     static let rowPadding: CGFloat = 12
     static let rowGap: CGFloat = 6

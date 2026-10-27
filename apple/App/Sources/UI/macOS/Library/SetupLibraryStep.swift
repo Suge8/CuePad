@@ -14,7 +14,7 @@ struct SetupLibraryStep: View {
             TidyFacts(tidies: library.automaticTidies, library: library)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 12).padding(.vertical, 10)
-                .background(palette.paper, in: .rect(cornerRadius: 10, style: .continuous))
+                .background(palette.paper, in: .rect(cornerRadius: Radius.block))
             if !library.selfManaged.isEmpty {
                 Text(verbatim: untouched).font(Typography.meta).foregroundStyle(palette.ink3).padding(.horizontal, 4)
             }

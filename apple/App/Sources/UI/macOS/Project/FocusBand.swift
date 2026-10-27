@@ -24,7 +24,7 @@ struct FocusBand: View {
         taskRows
         .padding(.horizontal, 20).padding(.vertical, 14)
         .frame(maxWidth: .infinity, alignment: .topLeading)
-        .paper(radius: 18)
+        .paper()
         .accessibilityElement(children: .contain)
         .accessibilityLabel("任务")
         .debugExposesTaskFold(active: active) { toggle(\.showsAll) }

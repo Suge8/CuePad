@@ -118,9 +118,9 @@ struct BoardTaskCard: View {
     private func framed(next: TaskNext?, session: PiSessionState?, @ViewBuilder _ card: () -> some View) -> some View {
         card()
             .onTapGesture { tap() }
-            .contentShape(.contextMenuPreview, .rect(cornerRadius: TaskMetrics.cardRadius, style: .continuous))
+            .contentShape(.contextMenuPreview, .rect(cornerRadius: TaskMetrics.cardRadius))
             .contextMenu { menu(session: session) }
-            .contentShape(.dragPreview, .rect(cornerRadius: TaskMetrics.cardRadius, style: .continuous))
+            .contentShape(.dragPreview, .rect(cornerRadius: TaskMetrics.cardRadius))
     }
     #endif
 }

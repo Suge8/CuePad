@@ -16,13 +16,9 @@ enum BubbleLook: Equatable {
     /// `joined`：上面紧挨着你的另一句。
     case cue(joined: Bool)
 
-    private static let sessionRadius: CGFloat = 20
-
     var shape: UnevenRoundedRectangle {
         switch self {
-        case .session: UnevenRoundedRectangle(cornerRadii: RectangleCornerRadii(
-            topLeading: Self.sessionRadius, bottomLeading: Self.sessionRadius, bottomTrailing: Self.sessionRadius, topTrailing: Self.sessionRadius),
-            style: .continuous)
+        case .session: UnevenRoundedRectangle(cornerRadii: .init(topLeading: Radius.sheet, bottomLeading: Radius.sheet, bottomTrailing: Radius.sheet, topTrailing: Radius.sheet))
         case .cue(let joined): CueBubble.shape(.trailing, joined: joined)
         }
     }

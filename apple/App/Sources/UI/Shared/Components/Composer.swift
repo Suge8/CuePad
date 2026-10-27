@@ -148,7 +148,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
         // 外面原本什么都接不住，点下去玻璃动了一下却没聚焦，得再点一次）。文字区、＋ 与提交钮在它上面，照旧自己接
         .background {
             if !focused {
-                Color.clear.contentShape(.rect(cornerRadius: ComposerMetrics.radius, style: .continuous))
+                Color.clear.contentShape(.rect(cornerRadius: Radius.field))
                     .onTapGesture { focus.wrappedValue = true }
                     .accessibilityHidden(true)
             }
@@ -157,9 +157,9 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
         .frame(maxWidth: shrunk ? Self.compactWidth : .infinity, alignment: .leading)
         // 里面的东西裁在玻璃里：变形时淡出中的提交钮、工具排随玻璃一起收，不留在玻璃外。上沿不裁（往上浮出的
         // 思考强度的读数要露在玻璃上方），所以裁的形状向上伸出去
-        .mask { RoundedRectangle(cornerRadius: ComposerMetrics.radius, style: .continuous).padding(.top, -Self.overhang) }
-        .rowContainer(.rect(cornerRadius: ComposerMetrics.radius, style: .continuous))
-        .glass(in: .rect(cornerRadius: ComposerMetrics.radius, style: .continuous), interactive: !expanded)
+        .mask { RoundedRectangle(cornerRadius: Radius.field).padding(.top, -Self.overhang) }
+        .rowContainer(.rect(cornerRadius: Radius.field))
+        .glass(in: .rect(cornerRadius: Radius.field), interactive: !expanded)
         .frame(maxWidth: .infinity)
     }
 

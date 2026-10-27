@@ -5,8 +5,6 @@ import SwiftUI
 /// 说话的那一边下角收成小角，像从那一边递过来的一张纸条：一眼分得出谁说的，不画尾巴；
 /// 同一边连着说的几颗收紧成一串（`joinedGap`），后面几颗那一边的上角也收小，连成一列。圆角、内边距只在这里定。
 enum CueBubble {
-    static let radius: CGFloat = 22
-    static let corner: CGFloat = 6
     #if os(macOS)
     static let padding = EdgeInsets(top: 13, leading: 18, bottom: 13, trailing: 18)
     #else
@@ -22,10 +20,10 @@ enum CueBubble {
 
     /// `joined`：上面紧挨着同一边的一颗。
     static func shape(_ edge: HorizontalEdge, joined: Bool = false) -> UnevenRoundedRectangle {
-        let top = joined ? corner : radius
+        let top = joined ? Radius.chip : Radius.sheet
         return switch edge {
-        case .trailing: UnevenRoundedRectangle(topLeadingRadius: radius, bottomLeadingRadius: radius, bottomTrailingRadius: corner, topTrailingRadius: top, style: .continuous)
-        case .leading: UnevenRoundedRectangle(topLeadingRadius: top, bottomLeadingRadius: corner, bottomTrailingRadius: radius, topTrailingRadius: radius, style: .continuous)
+        case .trailing: UnevenRoundedRectangle(topLeadingRadius: Radius.sheet, bottomLeadingRadius: Radius.sheet, bottomTrailingRadius: Radius.chip, topTrailingRadius: top)
+        case .leading: UnevenRoundedRectangle(topLeadingRadius: top, bottomLeadingRadius: Radius.chip, bottomTrailingRadius: Radius.sheet, topTrailingRadius: Radius.sheet)
         }
     }
 
@@ -132,9 +130,9 @@ private struct CueSaysSurface: ViewModifier {
 
     func body(content: Content) -> some View {
         if card {
-            content.padding(CueBubble.padding).frame(maxWidth: .infinity, alignment: .leading).paper(radius: CueBubble.radius)
+            content.padding(CueBubble.padding).frame(maxWidth: .infinity, alignment: .leading).paper(cornerRadius: Radius.sheet)
                 #if os(iOS)
-                .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: CueBubble.radius, style: .continuous))
+                .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: Radius.sheet))
                 #endif
         } else {
             content.cueBubble(joined: joined)

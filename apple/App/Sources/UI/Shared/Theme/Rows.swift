@@ -7,7 +7,7 @@ import SwiftUI
 ///
 /// 形状只有一条规则：同心圆角矩形（系统的 `ConcentricRectangle`），四角与最近的行容器（`rowContainer`）同心——
 /// 挨着容器圆角的角是容器的圆角减去两者的间距，离容器角远的角取下限。容器只分两种：
-/// - 浮着的行（默认：面板、侧栏、Mac 的列表）：底比行左右各宽出 `bleed`（行里的字仍与本栏的字对齐，底向两边让出一截），下限是 `radius`；
+/// - 浮着的行（默认：面板、侧栏、Mac 的列表）：底比行左右各宽出 `bleed`（行里的字仍与本栏的字对齐，底向两边让出一截），下限是 `Radius.row`；
 /// - 铺满的行（`rowContainer(_:flush: true)`，手机的分组纸，同系统的分组列表）：底就是行的框，下限是直角——中间的行是直角，首尾两行的外角跟着纸。
 ///   行要贴到纸边：纸的首尾要多留白时放进首尾两行里，不给纸加内边距（不然底与纸边之间留一道缝，圆角也不同心）。
 /// 底多大，能点的就多大。
@@ -27,10 +27,8 @@ import SwiftUI
 enum RowMetrics {
     #if os(iOS)
     static let bleed: CGFloat = 10
-    static let radius: CGFloat = 12
     #else
     static let bleed: CGFloat = 8
-    static let radius: CGFloat = 8
     #endif
     /// 悬停露出的操作垫的实底靠字那一侧淡入的宽度（`hoverReveal`）。
     static let revealFade: CGFloat = 16
@@ -72,9 +70,9 @@ extension View {
 
 extension View {
     /// 一组行拼成的一张纸（手机书架的几组、Mac 的更早、置顶与回收站）：纸是行容器，行铺满纸，里面的东西裁在纸的圆角里。
-    func rowPaper(radius: CGFloat) -> some View {
-        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
-        return clipShape(shape).rowContainer(shape, flush: true).paper(radius: radius)
+    func rowPaper(cornerRadius: CGFloat) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius)
+        return clipShape(shape).rowContainer(shape, flush: true).paper(cornerRadius: cornerRadius)
     }
 }
 
@@ -152,7 +150,7 @@ private struct RowHighlight: ViewModifier {
     }
 
     private var shape: ConcentricRectangle {
-        ConcentricRectangle(corners: .concentric(minimum: .fixed(fit.flush ? 0 : RowMetrics.radius)))
+        ConcentricRectangle(corners: .concentric(minimum: .fixed(fit.flush ? 0 : Radius.row)))
     }
 
     #if os(iOS)

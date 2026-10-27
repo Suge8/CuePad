@@ -65,7 +65,7 @@ struct NewSessionForm: View {
                 .textFieldStyle(.plain).lineLimit(2...5)
                 .onSubmit { if let place, let agents, let agent, stage != .opening { start(place, choice(agents, agent)) } }
                 .padding(.horizontal, 10).padding(.vertical, 8)
-                .paper(radius: 10)
+                .paper(cornerRadius: Radius.block)
                 .accessibilityLabel("开场的话")
             if let agents, let agent {
                 PiConfigControls(choice: choice(agents, agent)) {

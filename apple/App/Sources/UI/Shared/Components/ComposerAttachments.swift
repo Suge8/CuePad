@@ -15,7 +15,7 @@ struct AttachmentBody: View {
                 ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
                     switch block {
                     case .text(let text): Paragraphs(verbatim: text).font(Typography.body).foregroundStyle(palette.ink)
-                    case .image(let hash): Thumbnail(hash: hash, height: 220, radius: 12)
+                    case .image(let hash): Thumbnail(hash: hash, height: 220, cornerRadius: Radius.block)
                     case .file(let key, let name): FileChip(key: key, name: name, among: attached, group: "card").frame(maxWidth: 360)
                     }
                 }

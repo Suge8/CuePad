@@ -29,7 +29,7 @@ nonisolated struct BubblePlacement: Equatable {
     var side: CGFloat = -1
     /// 贴在底部的纸（`BubbleSource.bottom`）：圆角与屏幕同心、整张从底边升起。
     var sheet = false
-    var radius: CGFloat { sheet ? Self.sheetRadius : Self.radius }
+    var radius: CGFloat { sheet ? Radius.screen : Self.radius }
 
     /// `container`：气泡那一层在窗口里的框（与来源同一套坐标）；`insets`：容器四周不放气泡的那一圈（安全区、工具栏与页边）。
     init(source: BubbleSource, container: CGRect, insets: EdgeInsets) {
@@ -95,12 +95,10 @@ nonisolated struct BubblePlacement: Equatable {
     static let width: CGFloat = 400
     static let rise: CGFloat = 8
     #if os(macOS)
-    static let radius: CGFloat = 18
+    static let radius = Radius.card
     #else
-    static let radius: CGFloat = 26
+    static let radius = Radius.field
     #endif
-    /// 贴在底部的纸：与屏幕圆角同心（屏幕圆角减去留的边）。
-    static let sheetRadius: CGFloat = 46
     /// 那一下离所在那一行上下沿的距离（半行高）：气泡让开整行，尾巴尖贴着行沿。
     static let reach: CGFloat = TaskMetrics.rowHeight / 2
     /// 尾巴离气泡角的最小距离：不画到圆角上。
@@ -174,7 +172,7 @@ struct BubbleFrame<Content: View, Area: View>: View {
 
     var body: some View {
         let shape = BubbleShape(tail: placement.tail, radius: placement.radius)
-        let card = RoundedRectangle(cornerRadius: placement.radius, style: .continuous)
+        let card = RoundedRectangle(cornerRadius: placement.radius)
         ScrollView { content }
             .scrollBounceBehavior(.basedOnSize)
             .frame(width: placement.width)

@@ -11,7 +11,7 @@ struct Keycap: View {
             .font(Typography.keycap)
             .foregroundStyle(palette.ink2)
             .padding(.horizontal, 5).padding(.vertical, 1)
-            .background(palette.fill, in: .rect(cornerRadius: 4))
+            .background(palette.fill, in: .rect(cornerRadius: Radius.chip))
     }
 }
 #endif

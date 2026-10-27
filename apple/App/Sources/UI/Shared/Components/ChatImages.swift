@@ -62,8 +62,8 @@ private struct ChatImage: View {
     var body: some View {
         Button { if place.isAway { workspace.fetchFile(hash) } else { open() } } label: {
             // 到达时换一个身份，缩略图重新读文件；一开始就在的不重读
-            Thumbnail(hash: hash, height: side, radius: Self.radius, fitWidth: fitWidth).frame(width: fitWidth == nil ? side : nil).id(place.isAway)
-                .previewSource(zoom, radius: Self.radius) { [files = services.store.files, hash, side, scale] in
+            Thumbnail(hash: hash, height: side, cornerRadius: Radius.block, fitWidth: fitWidth).frame(width: fitWidth == nil ? side : nil).id(place.isAway)
+                .previewSource(zoom, cornerRadius: Radius.block) { [files = services.store.files, hash, side, scale] in
                     await Thumbnail.picture(hash, height: side, scale: scale, in: files)
                 }
                 .overlay {
@@ -80,7 +80,6 @@ private struct ChatImage: View {
         .observingArrival(of: hash, in: services, into: $place)
     }
 
-    private static let radius: CGFloat = 12
 }
 
 /// 你的话里带的文件（会话记录里的"附件：名（路径）"认回来的引用也是）：气泡下面一行一个文件牌（`FileChip`），靠右；

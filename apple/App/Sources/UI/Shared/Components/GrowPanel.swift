@@ -19,7 +19,7 @@ struct GrowPanel<Head: View, Panel: View>: View {
     @Environment(\.pageActive) private var active
 
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: radius)
         return ZStack(alignment: .top) {
             if open {
                 Color.clear.contentShape(.rect).ignoresSafeArea()

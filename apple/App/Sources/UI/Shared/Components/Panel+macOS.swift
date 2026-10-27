@@ -276,9 +276,9 @@ private struct PanelLayer: View {
             }
             shown.content
                 .background { area(shown.id) }
-                .clipShape(.rect(cornerRadius: PanelStyle.radius, style: .continuous))
-                .rowContainer(.rect(cornerRadius: PanelStyle.radius, style: .continuous))
-                .overlay { RoundedRectangle(cornerRadius: PanelStyle.radius, style: .continuous).strokeBorder(palette.hair) }
+                .clipShape(.rect(cornerRadius: Radius.card))
+                .rowContainer(.rect(cornerRadius: Radius.card))
+                .overlay { RoundedRectangle(cornerRadius: Radius.card).strokeBorder(palette.hair) }
                 .shadow(color: palette.panelShadow, radius: 28, y: 10)
                 .accessibilityAddTraits(.isModal)
                 .padding(Self.margin)
@@ -371,7 +371,7 @@ struct PanelSearchField: View {
         }
         .font(Typography.body)
         .padding(.horizontal, 12).frame(height: 34)
-        .background(palette.fill, in: .rect(cornerRadius: 10, style: .continuous))
+        .background(palette.fill, in: .rect(cornerRadius: Radius.block))
         .padding(.horizontal, 20)
         .onAppear { focused = true }
     }

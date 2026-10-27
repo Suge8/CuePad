@@ -194,7 +194,7 @@ private struct SplitSidebar: View {
 
     private func row(_ project: Project) -> some View {
         SidebarRow(route: .project(project.id), title: project.shownName, project: project)
-            .projectActions(project, radius: 10)
+            .projectActions(project, cornerRadius: Radius.row)
     }
 }
 

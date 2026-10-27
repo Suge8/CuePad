@@ -159,9 +159,9 @@ struct LibraryFileBar<Content: View, Consequence: View>: View {
         }
         .padding(.horizontal, 14).padding(.vertical, 10)
         #if os(macOS)
-        .paper(radius: 12)
+        .paper(cornerRadius: Radius.block)
         #else
-        .background(palette.desk, in: .rect(cornerRadius: 16, style: .continuous))
+        .background(palette.desk, in: .rect(cornerRadius: Radius.card))
         #endif
     }
 }
@@ -183,7 +183,7 @@ struct MergePreview: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     .padding(.vertical, 4).padding(.trailing, 6).padding(.leading, Self.mark)
-                    .background(block.incoming ? palette.bubble : .clear, in: .rect(cornerRadius: 6, style: .continuous))
+                    .background(block.incoming ? palette.bubble : .clear, in: .rect(cornerRadius: Radius.chip))
                     // 记号与底挂在字的左边：字与编辑器里的对齐
                     .padding(.leading, -(Self.mark + Self.bar + Self.gap))
                     .accessibilityElement(children: .combine)

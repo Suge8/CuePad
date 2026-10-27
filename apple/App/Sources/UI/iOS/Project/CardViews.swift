@@ -17,7 +17,7 @@ struct CardTileView: View {
             // 标题与正文挨着读成一段，日期另起一小段
             VStack(alignment: .leading, spacing: 4) {
                 if let image = text.images.first {
-                    Thumbnail(hash: image, height: 96, radius: 9).padding(.bottom, 4)
+                    Thumbnail(hash: image, height: 96, cornerRadius: Radius.block).padding(.bottom, 4)
                 }
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
                     Text(text.label)
@@ -38,8 +38,8 @@ struct CardTileView: View {
             .multilineTextAlignment(.leading)
             .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .paper(radius: 16)
-            .contentShape(.rect(cornerRadius: 16))
+            .paper()
+            .contentShape(.rect(cornerRadius: Radius.card))
         }
         .buttonStyle(PressStyle(.card))
         .zoomSource(card.id, in: zoom)
@@ -96,12 +96,10 @@ struct OlderRow: View {
     @Environment(\.palette) private var palette
     @Environment(\.zoomNamespace) private var zoom
 
-    private static let radius: CGFloat = 12
-
     private var shape: UnevenRoundedRectangle {
         UnevenRoundedRectangle(
-            topLeadingRadius: isFirst ? Self.radius : 0, bottomLeadingRadius: isLast ? Self.radius : 0,
-            bottomTrailingRadius: isLast ? Self.radius : 0, topTrailingRadius: isFirst ? Self.radius : 0, style: .continuous)
+            topLeadingRadius: isFirst ? Radius.block : 0, bottomLeadingRadius: isLast ? Radius.block : 0,
+            bottomTrailingRadius: isLast ? Radius.block : 0, topTrailingRadius: isFirst ? Radius.block : 0)
     }
 
     var body: some View {

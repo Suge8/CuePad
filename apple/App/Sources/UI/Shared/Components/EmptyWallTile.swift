@@ -15,7 +15,6 @@ struct EmptyWallTile: View {
     #endif
 
     private static let mascot: CGFloat = 72
-    private static let radius: CGFloat = 16
 
     var body: some View {
         #if os(iOS)
@@ -41,7 +40,7 @@ struct EmptyWallTile: View {
         }
         .padding(.horizontal, 14).padding(.vertical, 18)
         .frame(maxWidth: .infinity)
-        .paper(radius: Self.radius)
-        .contentShape(.rect(cornerRadius: Self.radius))
+        .paper()
+        .contentShape(.rect(cornerRadius: Radius.card))
     }
 }

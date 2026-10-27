@@ -119,7 +119,7 @@ struct SetupPanel: View {
     private func note(@ViewBuilder _ content: () -> some View) -> some View {
         HStack(spacing: 8) { content() }.foregroundStyle(palette.ink2)
             .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 12).padding(.vertical, 9)
-            .background(palette.paper, in: .rect(cornerRadius: 10, style: .continuous))
+            .background(palette.paper, in: .rect(cornerRadius: Radius.block))
     }
 
     /// 一家一行：这一步写什么、右边放什么（勾选、安装、登录）。
@@ -276,7 +276,7 @@ struct SetupPanel: View {
                 }
             }
         }
-        .background(palette.paper, in: .rect(cornerRadius: 10, style: .continuous))
+        .background(palette.paper, in: .rect(cornerRadius: Radius.block))
     }
 }
 

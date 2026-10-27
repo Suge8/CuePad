@@ -38,7 +38,7 @@ struct ShelfScreen: View {
                     ForEach(rest) { ShelfRow(project: $0) }
                 }
                 .padding(.vertical, Self.paperInset)
-                .rowPaper(radius: Self.radius)
+                .rowPaper(cornerRadius: Radius.sheet)
             }
             if narrow { ShelfFooter() }
         }
@@ -52,7 +52,6 @@ struct ShelfScreen: View {
 
     private static let readableWidth: CGFloat = 1080
     private static let sectionGap: CGFloat = 20
-    static let radius: CGFloat = 20
     /// 纸的上下沿比行间多留的白。
     static let paperInset: CGFloat = 6
 
@@ -79,8 +78,6 @@ private struct PinnedShelfCard: View {
     @Environment(\.palette) private var palette
     @ScaledMetric(relativeTo: .title3) private var glyph: CGFloat = 22
 
-    private static let radius: CGFloat = 20
-
     var body: some View {
         let wash = palette.projectWash(project.color)
         NavigationLink(value: Route.project(project.id)) {
@@ -104,11 +101,11 @@ private struct PinnedShelfCard: View {
             // 渐变只铺在填充上（不用渐变描边，见 docs/ui.md「渲染性能约束」）
             .background(
                 LinearGradient(colors: [wash, wash.opacity(0)], startPoint: wide ? .leading : .top, endPoint: .center),
-                in: .rect(cornerRadius: Self.radius, style: .continuous))
-            .paper(radius: Self.radius)
+                in: .rect(cornerRadius: Radius.sheet))
+            .paper(cornerRadius: Radius.sheet)
         }
         .buttonStyle(PressStyle(.card))
-        .projectActions(project, radius: Self.radius)
+        .projectActions(project, cornerRadius: Radius.sheet)
         .accessibilityElement(children: .combine)
     }
 
@@ -138,7 +135,7 @@ private struct ShelfRow: View {
             .contentShape(.rect)
         }
         .buttonStyle(.row)
-        .projectActions(project, radius: ShelfScreen.radius)
+        .projectActions(project, cornerRadius: Radius.sheet)
         .accessibilityElement(children: .combine)
     }
 }
@@ -155,7 +152,7 @@ private struct ShelfFooter: View {
             }
         }
         .padding(.vertical, ShelfScreen.paperInset)
-        .rowPaper(radius: ShelfScreen.radius)
+        .rowPaper(cornerRadius: Radius.sheet)
     }
 }
 

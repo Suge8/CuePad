@@ -121,7 +121,7 @@ private struct CalloutSurface: ViewModifier {
     let docked: Bool
 
     func body(content: Content) -> some View {
-        if docked { content.glass(in: .rect(cornerRadius: PiReplyBar.radius, style: .continuous)) } else { content.paper(radius: 16) }
+        if docked { content.glass(in: .rect(cornerRadius: Radius.field)) } else { content.paper() }
     }
 }
 
