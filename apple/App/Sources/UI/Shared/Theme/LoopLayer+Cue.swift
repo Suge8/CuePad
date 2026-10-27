@@ -69,13 +69,13 @@ extension LoopLayer.Host {
         let home = CALayer(), away = CALayer()
         for dot in [home, away] { layer.addSublayer(dot) }
         let trip = CAKeyframeAnimation(keyPath: "transform.translation")
-        trip.keyTimes = RelayMark.tripTimes
+        trip.keyTimes = RelayMark.tripTimes.map(NSNumber.init(value:))
         trip.timingFunctions = [.init(controlPoints: 0.3, 0, 0.2, 1), .init(name: .linear), .init(controlPoints: 0.5, 0, 0.3, 1), .init(name: .linear)]
         trip.duration = RelayMark.period
         _ = loop(trip, on: away)
         let catchIt = CAKeyframeAnimation(keyPath: "transform.scale")
         catchIt.values = [1, 1, RelayMark.bulge, 1, 1]
-        catchIt.keyTimes = RelayMark.catchTimes
+        catchIt.keyTimes = RelayMark.catchTimes.map(NSNumber.init(value:))
         catchIt.duration = RelayMark.period
         _ = loop(catchIt, on: home)
         return layer
@@ -112,10 +112,10 @@ nonisolated enum RelayMark {
     static let reach: CGFloat = 0.34
     static let period = 2.4
     /// 小点：在外面停着 → 回来（缓入缓出）→ 贴住 → 出去，各段的起点。
-    static let tripTimes: [NSNumber] = [0, 0.4, 0.62, 0.86, 1]
+    static let tripTimes: [Double] = [0, 0.4, 0.62, 0.86, 1]
     /// 大点在小点贴上的那一下鼓到 `bulge` 倍。
     static let bulge = 1.18
-    static let catchTimes: [NSNumber] = [0, 0.6, 0.68, 0.8, 1]
+    static let catchTimes: [Double] = [0, 0.6, 0.68, 0.8, 1]
 }
 
 private func sizeValue(_ size: CGSize) -> NSValue {
