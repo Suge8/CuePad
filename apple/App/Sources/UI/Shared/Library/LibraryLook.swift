@@ -59,7 +59,7 @@ extension LibraryTidy {
         case .stray: .folder
         case .unlinked, .globalInstructions, .projectClaude: .link
         case .empty: .unbindFolder
-        case .duplicate: .conflict
+        case .duplicate: .duplicate
         }
     }
 }
@@ -72,14 +72,13 @@ extension SelfManagedSkills {
 }
 
 /// 技能清单的几组：全局一组（按分类排，"不在分类里"的最后），各项目各一组（按项目目录的先后）。
-nonisolated struct SkillGroups: Equatable {
-    struct Category: Equatable, Identifiable {
+nonisolated struct SkillGroups {
+    struct Category {
         let name: String
         let skills: [LibrarySkill]
-        var id: String { name }
     }
 
-    struct ProjectSkills: Equatable, Identifiable {
+    struct ProjectSkills: Identifiable {
         let project: UUID
         let skills: [LibrarySkill]
         var id: UUID { project }
@@ -107,7 +106,7 @@ struct UnseenMarks: View {
     let unseen: [AgentKind]
     @Environment(\.palette) private var palette
 
-    static let width: CGFloat = 18
+    private static let width: CGFloat = 18
     private static let mark: CGFloat = 12
 
     var body: some View {

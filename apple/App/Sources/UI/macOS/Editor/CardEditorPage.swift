@@ -44,7 +44,7 @@ struct CardEditorPage: View {
             if mounted, let data, let editing {
                 editor(data.card, editing)
                     .padding(.top, Spacing.pageTop)
-                .padding(.bottom, Self.barClearance)
+                    .padding(.bottom, Self.barClearance)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -83,11 +83,9 @@ struct CardEditorPage: View {
         }
         .onChange(of: isOpen) { if !isOpen { collapse() } }
         .overlayHeader(header, in: workspace)
-        // "已保存"只亮一会儿；状态再变（又在保存、出错）时这次计时作废
         .task(id: editing?.saveState) {
-            guard let editing, editing.saveState == .saved else { return }
-            try? await Task.sleep(for: SaveState.savedDisplay)
-            if !Task.isCancelled { editing.settleSaved() }
+            guard let editing, editing.saveState == .saved, await SaveState.linger() else { return }
+            editing.settleSaved()
         }
         .onDisappear { editing?.leave() }
     }

@@ -24,7 +24,7 @@ struct SkillSection: View {
                         Text(verbatim: workspace.projectName(group.project))
                     }
                     .font(Typography.label).foregroundStyle(palette.ink2)
-                    .padding(.horizontal, LibraryPaper<EmptyView>.inset)
+                    .padding(.horizontal, LibraryLayout.inset)
                     .accessibilityAddTraits(.isHeader)
                     skills(group.skills.map(SkillLine.skill))
                 }
@@ -33,7 +33,7 @@ struct SkillSection: View {
             if !library.selfManaged.isEmpty {
                 LibraryPaper {
                     ForEach(library.selfManaged, id: \.agent) { managed in
-                        LibraryRow(title: managed.title, detail: nil) {
+                        LibraryRow(title: managed.title) {
                             managed.agent.mark.image.foregroundStyle(palette.ink2)
                         } trailing: {
                             EmptyView()
@@ -59,15 +59,15 @@ struct SkillSection: View {
                     Text(verbatim: name.isEmpty ? String(localized: "不在分类里") : name)
                         .font(Typography.label).foregroundStyle(palette.ink3)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, LibraryPaper<EmptyView>.inset).padding(.top, 10).padding(.bottom, 2)
+                        .padding(.horizontal, LibraryLayout.inset).padding(.top, 10).padding(.bottom, 2)
                         .accessibilityAddTraits(.isHeader)
                 case .skill(let skill): SkillRow(skill: skill, library: library)
                 }
             }
         }
         .padding(.vertical, 4)
-        .paper(radius: LibraryPaper<EmptyView>.radius)
-        .rowContainer(.rect(cornerRadius: LibraryPaper<EmptyView>.radius, style: .continuous))
+        .paper(radius: LibraryLayout.radius)
+        .rowContainer(.rect(cornerRadius: LibraryLayout.radius, style: .continuous))
     }
 }
 
@@ -119,7 +119,7 @@ private struct SkillRow: View {
             #endif
             UnseenMarks(agents: library.agents, unseen: skill.unseenBy)
         }
-        .padding(.horizontal, LibraryPaper<EmptyView>.inset)
+        .padding(.horizontal, LibraryLayout.inset)
         .padding(.vertical, Self.vertical)
         .frame(minHeight: Self.height)
         .contentShape(.rect)

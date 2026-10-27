@@ -319,7 +319,7 @@ DEFINE SCHEMA
         "___recordID" REFERENCE QUERYABLE,
         hostID        STRING,
         path          ENCRYPTED STRING,
-        hash          STRING,
+        hash          ENCRYPTED STRING,
         text          ENCRYPTED STRING,
         modifiedAt    INT64,
         GRANT WRITE TO "_creator",

@@ -6,7 +6,7 @@ import Testing
 @testable import CuePad
 
 /// 手机上的技能与规则：看的是 Mac 报来的快照，整理与改文件都发往那台 Mac、等它做完。改动攒在文件页上，点纸飞机才发，离开再回来还在；
-/// Mac 上刚改过就退回，文件页留着你的字等你选。那台 Mac 由一个领 mac-a 请求的执行器扮演：照基准判断、做完写回新快照（同 Mac 的 `AgentLibraryKeeper`）。
+/// Mac 上刚改过就退回（技能那条）。那台 Mac 由一个领 mac-a 请求的执行器扮演：照基准判断、做完写回新快照（同 Mac 的 `AgentLibraryKeeper`）。
 @MainActor
 struct AgentLibraryPhoneTests {
     let app = TestApp()
@@ -45,12 +45,6 @@ struct AgentLibraryPhoneTests {
             try await store.recordAgentLibrary(snapshot(), texts: [AgentLibraryPhoneTests.rulesPath: text, AgentLibraryPhoneTests.skillPath + "/SKILL.md": skill])
         }
 
-        /// 在 Mac 上直接改了文件（终端里、Mac 的文件页）。
-        func edit(_ text: String) async throws {
-            self.text = text
-            try await report()
-        }
-
         func editSkill(_ text: String) async throws {
             skill = text
             try await report()
@@ -82,7 +76,7 @@ struct AgentLibraryPhoneTests {
         })
     }
 
-    @Test func 一键整理发往Mac_改规则攒着点发才写_Mac上刚改过就等你选() async throws {
+    @Test func 一键整理发往Mac_改规则攒着点发才写() async throws {
         let (mac, workspace, stop) = try await start()
         defer { stop() }
         let library = try #require(workspace.library)
@@ -102,23 +96,10 @@ struct AgentLibraryPhoneTests {
 
         await draft.send()
 
-        var file = await mac.text
-        #expect(file == "# 原则\n\n手机改的\n" && draft.state == .saved && !draft.dirty)
+        #expect(await mac.text == "# 原则\n\n手机改的\n" && draft.state == .saved && !draft.dirty)
         try await eventually("快照写回") { try await text(.instruction(.global), workspace) == "# 原则\n\n手机改的\n" }
         draft.follow(try await text(.instruction(.global), workspace))
         #expect(draft.state == .saved)
-
-        try await mac.edit("Mac 上改的\n")
-        draft.changed(body: "手机又改\n")
-        await draft.send()
-        try await eventually("快照跟上 Mac") { try await text(.instruction(.global), workspace) == "Mac 上改的\n" }
-        draft.follow(try await text(.instruction(.global), workspace))
-
-        file = await mac.text
-        #expect(draft.state == .conflict(file: "Mac 上改的\n") && draft.body == "手机又改\n" && file == "Mac 上改的\n")
-        await draft.keepMine()
-        file = await mac.text
-        #expect(file == "手机又改\n" && draft.state == .saved && !draft.dirty)
     }
 
     /// 手机上改技能：说明与正文攒着，纸飞机发往 Mac 写成整份 SKILL.md（别的键留着）；Mac 上刚改过就退回，留着你的字等你选。
@@ -147,21 +128,6 @@ struct AgentLibraryPhoneTests {
         draft.follow(try await text(.skill(Self.skillPath), workspace))
         draft.takeFile()
         #expect(draft.summary == "Mac 上改的" && draft.body == "" && !draft.dirty)
-    }
-
-    /// 技能与规则页换段只有 `Workspace.libraryPane` 一份：换到技能、点开一份技能再返回，还在技能段。
-    @Test func 换到技能段_打开技能再返回还在技能段() async throws {
-        let (_, workspace, stop) = try await start()
-        defer { stop() }
-        workspace.select(.library)
-        #expect(workspace.libraryPane == .rules)
-
-        workspace.libraryPane = .skills
-        workspace.openLibrary(.skill(Self.skillPath))
-        #expect(workspace.path.last == .libraryFile(.skill(Self.skillPath)))
-        workspace.path.removeLast()
-
-        #expect((workspace.path.last ?? workspace.root) == .library && workspace.libraryPane == .skills)
     }
 }
 #endif

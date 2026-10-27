@@ -15,7 +15,7 @@ final class EditorHandle {
     func focus() {
         if let textView { textView.window?.makeFirstResponder(textView) }
     }
-    /// 换掉整篇正文（说明在别处被改了，编辑页跟上）：光标留在原来的位置附近，撤销栈清空（之前的撤销对不上新正文）。
+    /// 换掉整篇正文（文件在别处被改了，文件页跟上）：光标留在原来的位置附近，撤销栈清空（之前的撤销对不上新正文）。
     func replace(_ text: String) {
         guard let textView else { return }
         let location = textView.selectedRange().location
