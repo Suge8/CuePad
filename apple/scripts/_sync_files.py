@@ -92,25 +92,28 @@ def scene_files_quota(run, args):
 
 def scene_file_resume(run, args):
     """fileresume [MB=100]（只在真 CloudKit）：手机传大文件传到四成时被杀掉（SIGKILL），20 秒后再起：
-    系统（cloudd）接着传的长期操作被接上，不从头再传。量重启→手机读到上传结束（从头再传要几十秒）、重启后第一次读到的进度、文件到 Mac。"""
+    系统（cloudd）接着传的长期操作被接上（手机日志"接上上次没交回结果的文件上传"），不从头再传。
+    量重启→文件到 Mac（接上的结果一交回就按门铃；从头再传要几十秒），并数重启后手机界面读到的这个文件的上传进度（从头再传会有几十次）。"""
     if run.cloud != "real": raise SystemExit("fileresume 只在真 CloudKit：模拟云的上传在进程里，杀掉就没了")
     megabytes = int(args[0]) if args else 100
     a, b, m = run.a, run.b, run.metrics
     path = make_file(f"{FILES}/{os.getpid()}-resume.tiff", megabytes)
     t0 = b.send(f"burst r {path}")
     burst = b.wait(kind("burst"), 60, after=t0 - 0.5)
-    if not burst: m["长期操作·没写成（次）"].append(1); return m, {}
+    if not burst:
+        m["长期操作·没写成（次）"].append(1)
+        return m, {}
     key = burst["key"]
     a.send(f"watch-file {key}")
-    up = lambda e: e["e"] in ("transfer", "transfer-end") and e.get("key") == key and e.get("dir") == "up"
-    if not b.wait(lambda e: up(e) and e.get("f", 0) >= 0.4, 120): m["长期操作·没传到四成（次）"].append(1); return m, {}
+    up = lambda e: e["e"] == "transfer" and e.get("key") == key and e.get("dir") == "up"
+    if not b.wait(lambda e: up(e) and e["f"] >= 0.4, 120):
+        m["长期操作·没传到四成（次）"].append(1)
+        return m, {}
     b.proc.kill(); b.proc.wait()
     time.sleep(20)
     restarted = {"t": b.start()}
-    first = b.wait(lambda e: up(e) and e["t"] >= restarted["t"], 120)
-    if first and "f" in first: m["长期操作·重启后第一次读到的进度（成）"].append(round(first["f"] * 10, 1))
-    m.span("长期操作·重启→手机读到上传结束", restarted, b.wait(lambda e: e["e"] == "transfer-end" and e.get("key") == key and e["t"] >= restarted["t"], 120))
-    m.span("长期操作·写下→文件到 Mac", {"t": burst["at"]}, a.wait(lambda e: e["e"] == "file-arrived" and e.get("key") == key, 120))
+    m.span("长期操作·重启→文件到 Mac", restarted, a.wait(lambda e: e["e"] == "file-arrived" and e.get("key") == key, 120))
+    m["长期操作·重启后读到的上传进度（次）"].append(sum(1 for e in b.events if up(e) and e["t"] >= restarted["t"]))
     os.remove(path)
     return m, {}
 
