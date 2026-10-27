@@ -56,8 +56,7 @@ struct OpenCodeTurn {
         case "session.tool.called":
             guard let id = data.id else { return [] }
             let name = toolNames[id] ?? "tool"
-            let bare = name.hasPrefix(Self.cuePadPrefix) ? String(name.dropFirst(Self.cuePadPrefix.count)) : name
-            return [.tool(id: id, name: bare.lowercased(), arguments: String(decoding: (data.input?.json ?? [:]).data, as: UTF8.self))]
+            return [.tool(id: id, name: CueMCPServer.bareName(name, on: .opencode), arguments: String(decoding: (data.input?.json ?? [:]).data, as: UTF8.self))]
         case "session.tool.success", "session.tool.failed":
             guard let id = data.id else { return [] }
             toolNames[id] = nil
@@ -87,8 +86,6 @@ struct OpenCodeTurn {
         return models.first { $0.id == model.id && $0.providerID == model.providerID }?.limit?.context
     }
 
-    /// CuePad 的 MCP 工具在 OpenCode 里的前缀（`<服务>_<工具>`）
-    static let cuePadPrefix = "\(CueMCPServer.name)_"
     static let unknownFailure = String(localized: "出错了，原因不明")
 }
 extension TurnEvent {

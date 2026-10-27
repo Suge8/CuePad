@@ -1,6 +1,6 @@
 # CuePi —— Agent 桥（macOS）
 
-Pi、Claude Code、Codex、OpenCode 的会话都登记在同一个桥上（`PiBridge`），各家怎么发现会话、怎么说话在 `AgentRuntime` 的四个实现里，与别家不同的事实（命令、目录、安装、上报通道、探测、技能位置、大脑用哪种会话）在各自 `+Facts` 文件的 `AgentFacts` 里；CuePad 掌握全部输入输出的会话（Claude Code、Codex 的托管会话与 Cue 的大脑）是 `HostedSession`。规则只写在类型的头注释里；这里只记 Pi 桥扩展的线上约定与已知边界。
+Pi、Claude Code、Codex、OpenCode、Grok Build 的会话都登记在同一个桥上（`PiBridge`），各家怎么发现会话、怎么说话在 `AgentRuntime` 的五个实现里，与别家不同的事实（命令、目录、安装、上报通道、探测、技能位置、大脑用哪种会话）在各自 `+Facts` 文件的 `AgentFacts` 里；CuePad 掌握全部输入输出的会话（Claude Code、Codex、Grok Build 的托管会话与 Cue 的大脑）是 `HostedSession`。说 ACP（Agent Client Protocol）的 Agent 共用一个驱动（`ACP/`：`ACPSession` 托管会话与大脑是同一份），各家的扩展方法只经 `ACPDialect` 的扩展点接进来（Grok Build 是 `GrokDialect`）。规则只写在类型的头注释里；这里只记 Pi 桥扩展的线上约定与已知边界。
 
 ## 协议
 
@@ -59,4 +59,5 @@ FireCode 经两个频道把事实交给扩展：`firecode:workers`（`{inFlight}
 
 - 会话冻结（SIGSTOP）或机器休眠造成的假死发现不了：既定取舍，不做心跳。
 - 跳到终端定位不到 herdr 这类再套一层的复用器里的 pane。
+- 终端里的 Grok Build 只读：CuePad 碰不到它的输入，只从它的会话记录看它在做什么，看不到它在等你确认（`GrokRuntime`）。
 - 不用 FSEvents（延迟实测数据见 `FileFollower`、`DirectoryWatcher` 的头注释）。

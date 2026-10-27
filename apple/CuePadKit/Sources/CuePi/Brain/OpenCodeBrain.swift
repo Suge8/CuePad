@@ -93,7 +93,7 @@ final class OpenCodeBrain: HostedSession {
 
     /// 内联配置，键名见 OpenCode v2 的 config.schema.json。
     private static func inlineConfig(_ config: CueBrainConfig) -> [String: Any] {
-        let allowed = ["read", "glob", "grep", "external_directory", "\(OpenCodeTurn.cuePadPrefix)*"]
+        let allowed = ["read", "glob", "grep", "external_directory", "\(CueMCPServer.toolPrefix(on: .opencode))*"]
         let permissions = [["action": "*", "resource": "*", "effect": "deny"]] + allowed.map { ["action": $0, "resource": "*", "effect": "allow"] }
         return [
             "default_agent": agent, "snapshots": false,

@@ -4,7 +4,7 @@ import CueTestSupport
 import Foundation
 import Testing
 
-/// 真 Agent 用例（Pi、Codex、Claude Code、OpenCode 的托管、钩子、大脑与开工）的跑法，唯一的一处。
+/// 真 Agent 用例（Pi、Codex、Claude Code、OpenCode、Grok Build 的托管、钩子、大脑与开工）的跑法，唯一的一处。
 ///
 /// 默认回放：每个用例读 `Fixtures/tapes/<家>/<套件>/<用例>[ <参数>].jsonl` 里录好的 Agent 输出（`AgentTape`），不起真 Agent、
 /// 不联网、不花钱，断言照旧。录在 CuePad 读 Agent 输出的边界：Agent 进程的标准输入输出、信号与退出（CuePad 起的是替身
@@ -20,6 +20,7 @@ import Testing
 /// - pi：`~/.local/bin/pi`，假模型（`Fixtures/fake-model.ts`），零网络；FireCode 用例另要本机的 FireCode 源码（`CUEPAD_FIRECODE_SOURCE` 可换）；
 /// - codex：本机的 codex 与登录（复制进临时目录且不刷新，见 `copyCodexAuth`），账号里最便宜的模型；
 /// - claude：本机的 claude 与它自己的登录（钥匙串里的那条，见 `ClaudeLogin`），模型 haiku（`ClaudeTestbed`）；
+/// - grok：本机的 grok（`CUEPAD_GROK` 可换），假模型（`FakeResponses`），零网络；环境里给了 `XAI_API_KEY` 时连真的 xAI（`GrokModel`）；
 /// - 大脑（`RealBrainTests`）用本机用户自己的登录，模型用 `CUEPAD_BRAIN_MODEL_<家>`、强度用 `CUEPAD_BRAIN_EFFORT` 换。
 ///
 /// 列出的家本机没装或没登录时，它的用例跳过、录像带不动。模型的回答每次不同，录下的一盘断言没过就再录这一个用例。
@@ -51,6 +52,7 @@ enum RealAgents {
             if realOpenCodeURL == nil { "本机找不到 opencode v2（CUEPAD_OPENCODE 可指定）" }
             else if recording.contains(.opencode), openCodeRealModel == nil { "列出 opencode 连真提供方要给 CUEPAD_OPENCODE_MODEL（提供方/模型）" }
             else { nil }
+        case .grok: realGrokURL == nil ? "本机找不到 grok（CUEPAD_GROK 可指定）" : nil
         }
     }
 

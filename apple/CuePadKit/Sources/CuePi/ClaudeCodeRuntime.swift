@@ -286,7 +286,7 @@ public final class ClaudeCodeRuntime: AgentRuntime {
             guard terminals[id] == nil, scope.covers(sessionID: entry.sessionID) else { continue }  // 读文件时钩子先到、已上桥，或范围换了
             let session = PiSession(
                 id: id, sessionID: entry.sessionID, agent: .claudeCode, sessionFile: file,
-                pid: entry.pid, cwd: cwd, terminal: PiTerminal(tty: Self.controllingTerminal(of: entry.pid)),
+                pid: entry.pid, cwd: cwd, terminal: PiTerminal(tty: PiTerminal.controllingTerminal(of: entry.pid)),
                 state: .settled, stateSince: .now)
             _ = attach(session, inbox: inbox(of: entry.pid), runningSince: running, waiting: waiting)
             recall(id, sessionID: entry.sessionID)
@@ -303,16 +303,6 @@ public final class ClaudeCodeRuntime: AgentRuntime {
     private func inbox(of pid: Int32) -> String? {
         let file = home.appending(path: "sessions/\(pid).json")
         return (try? Data(contentsOf: file)).flatMap(JSONValue.parse)?["messagingSocketPath"]?.string
-    }
-
-    /// 进程的控制终端名（如 `ttys012`）；没有终端为 nil。
-    private static func controllingTerminal(of pid: Int32) -> String? {
-        var info = proc_bsdinfo()
-        let size = Int32(MemoryLayout<proc_bsdinfo>.size)
-        guard proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, size) == size, info.e_tdev != UInt32(bitPattern: -1),
-              let name = devname(dev_t(bitPattern: info.e_tdev), S_IFCHR) else { return nil }
-        let tty = String(cString: name)
-        return tty == "??" ? nil : tty
     }
 }
 
