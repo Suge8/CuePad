@@ -118,11 +118,15 @@ extension Binding where Value == ComposerSource? {
 
 /// 带上的一个附件（相册、拍照、文件、粘贴、拖入）：选好就存进附件目录（`store`，在后台：大文件要读一遍算哈希），草稿里只记键与文件名，
 /// 发出去就是正文里的引用（`CueFormat.markup`）。图片没有名字（嵌入的写法不带名字）。
+/// 同一份内容就是同一个附件（身份与相等都只看键）：改了名再选一次不多一个，附件条与对话里的文件牌身份不重。
 nonisolated struct DraftFile: Identifiable, Hashable, Sendable {
     let key: String
     let name: String
 
     var id: String { key }
+
+    static func == (lhs: DraftFile, rhs: DraftFile) -> Bool { lhs.key == rhs.key }
+    func hash(into hasher: inout Hasher) { hasher.combine(key) }
     var isImage: Bool { AttachmentKey.isImage(key) }
     var markup: String { CueFormat.markup(key: key, name: name) }
 

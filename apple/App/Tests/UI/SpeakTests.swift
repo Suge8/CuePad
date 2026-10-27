@@ -186,6 +186,10 @@ struct SpeakTests {
         restored.append(stored: "照这个改\n\n![](cuepad://file/\(photo.key))\n[crash.log](cuepad://file/\(log.key))")
         #expect(restored.text == "照这个改" && restored.files == [photo, log])
 
+        // 同一份内容改了名再带一次：还是同一个附件，不多一个
+        restored.append(stored: "[crash 副本.log](cuepad://file/\(log.key))")
+        #expect(restored.files.map(\.name) == ["", "crash.log"])
+
         box.wrappedValue = ComposerDraft(files: [log])
         await workspace.speak(to: .session(target, mode: .send), from: box) { $0.stored }.value
         #expect(try await store.deliveryRequests().map(\.content).contains("[crash.log](cuepad://file/\(log.key))"))
