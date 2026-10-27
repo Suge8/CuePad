@@ -7,8 +7,9 @@ import SQLite3
 /// 同步代码照真的跑（`CloudSync` 只换掉网络那一头，同 `SimulatedCloud`），每个请求按延迟模型睡一段（`Latency`，脚本写在目录里的 latency.json，
 /// 数值与出处只在脚本头注释；没有这个文件就不睡）：
 /// 上传先睡六成再落盘、再睡剩下的（服务器收下在回包之前），拉取先睡六成再读。令牌是写入序号，一页至多 `page` 条（`moreComing`）。
-/// 带文件的记录另按文件大小与速率（`Latency.assetUp`、`assetDown`）多睡：上传在落盘之前，取在读出之后；没要文件字段的拉取与取不带文件。
-/// 不模拟：改记录冲突（serverRecordChanged）、cloudd 的排队。限流只在脚本要时注入（`admit`）。门铃的密钥是这次运行的（文件里一份），房间不与别的运行重合。
+/// 带文件的记录另按文件大小与速率（`Latency.assetUp`、`assetDown`）多睡、按 CloudKit 的节奏报进度：上传在落盘之前，取文件在读出之后；
+/// 拉取与按 ID 取不带文件。
+/// 不模拟：改记录冲突（serverRecordChanged）、cloudd 的排队。限流与空间满只在脚本要时注入（`admit`、`quotaFile`）。门铃的密钥是这次运行的（文件里一份），房间不与别的运行重合。
 /// 每个请求（认账号除外）记进 requests 表：时刻、进程、种类、结果、回给它的 Retry-After，脚本按它数各进程发了几次、守没守 Retry-After；
 /// 拉取与上传另记模型抽到的用时（drawn）与回到调用方的时刻（done），两者之差是落盘与调用方那头没及时接回来的部分；
 /// 另记带了哪些记录（names：上传的是存与删的，拉取的是拉回的，每条 `类型:记录名`，逗号隔开）与落盘的时刻（landed：上传写进同步区、拉取读出的那一刻），
@@ -45,6 +46,8 @@ struct SharedCloud: SyncCloud {
   let path: String
   let latency: Latency
   private let throttleFile: URL
+  /// 脚本放了这个文件就是 iCloud 空间满了：带文件的保存逐条以 quotaExceeded 被拒（别的记录照收）。
+  private let quotaFile: URL
 
   /// 脚本写的限流窗口（throttle.json）：到 `until`（墙钟秒）之前到了服务器的请求回 429，带 `retryAfter`。
   private struct Throttle: Decodable {
@@ -57,6 +60,7 @@ struct SharedCloud: SyncCloud {
   init(directory: URL) {
     path = directory.appending(path: "cloud.sqlite").path()
     throttleFile = directory.appending(path: "throttle.json")
+    quotaFile = directory.appending(path: "quota-full")
     latency = (try? JSONDecoder().decode(Latency.self, from: Data(contentsOf: directory.appending(path: "latency.json")))) ?? .none
   }
 
@@ -74,7 +78,7 @@ struct SharedCloud: SyncCloud {
     }
   }
 
-  func changes(since token: Data?, keys: [String]?) async throws -> ZoneChangeBatch {
+  func changes(since token: Data?, keys: [String]) async throws -> ZoneChangeBatch {
     let total = Latency.draw(latency.fetch)
     let row = try admit("fetch", drawn: total)
     try? await Task.sleep(for: .seconds(total * 0.6))
@@ -102,17 +106,57 @@ struct SharedCloud: SyncCloud {
     let row = try admit("records")
     await wait(latency.records)
     let found = try database { db in
-      try ids.compactMap { id in try db.blob("SELECT data FROM records WHERE name = ?", id.recordName).map { try Self.record($0, keys: nil) } }
+      try ids.compactMap { id in try db.blob("SELECT data FROM records WHERE name = ?", id.recordName).map { try Self.record($0, keys: []) } }
     }
-    try? await Task.sleep(for: .seconds(Latency.transfer(found, rate: latency.assetDown)))
     finish(row, landed: Date.now.timeIntervalSince1970, names: found.map { "\($0.recordType):\($0.recordID.recordName)" })
     return found
   }
 
+  func uploadFile(_ record: CKRecord, progress: @escaping @Sendable (Double) -> Void) async throws -> SentRecords {
+    try await upload(saving: [record], deleting: [], progress: progress)
+  }
+
+  /// 模拟云的上传都在进程里，退出就没了：没有可接上的。
+  func resumedFileUploads() async throws -> [ResumedUpload] { [] }
+
+  func downloadFile(_ id: CKRecord.ID, progress: @escaping @Sendable (Double) -> Void) async throws -> CKRecord? {
+    let row = try admit("file-download")
+    await wait(latency.records)
+    let found = try database { db in try db.blob("SELECT data FROM records WHERE name = ?", id.recordName).map { try Self.record($0, keys: nil) } }
+    await transfer(Latency.transfer(found.map { [$0] } ?? [], rate: latency.assetDown), progress)
+    finish(row, landed: Date.now.timeIntervalSince1970, names: found.map { ["\($0.recordType):\($0.recordID.recordName)"] } ?? [])
+    return found
+  }
+
+  /// 按传输时长睡，每 `progressTick` 报一次进度（同 CloudKit 的回调节奏）。
+  private func transfer(_ seconds: Double, _ progress: @Sendable (Double) -> Void) async {
+    let began = ContinuousClock.now
+    progress(0)
+    while seconds > 0 {
+      let done = (ContinuousClock.now - began).seconds / seconds
+      guard done < 1 else { break }
+      progress(done)
+      try? await Task.sleep(for: .seconds(min(Self.progressTick, seconds * (1 - done))))
+    }
+    progress(1)
+  }
+
+  private static let progressTick = 0.26
+
   func upload(saving: [CKRecord], deleting: [CKRecord.ID]) async throws -> SentRecords {
+    try await upload(saving: saving, deleting: deleting) { _ in }
+  }
+
+  private func upload(saving: [CKRecord], deleting: [CKRecord.ID], progress: @Sendable (Double) -> Void) async throws -> SentRecords {
     let total = Latency.draw(latency.upload)
-    let row = try admit("upload", drawn: total)
-    try? await Task.sleep(for: .seconds(total * 0.6 + Latency.transfer(saving, rate: latency.assetUp)))
+    let files = saving.contains { $0.fileBytes != nil }
+    let row = try admit(files ? "file-upload" : "upload", drawn: total)
+    try? await Task.sleep(for: .seconds(total * 0.6))
+    if files, FileManager.default.fileExists(atPath: quotaFile.path) {
+      finish(row, landed: Date.now.timeIntervalSince1970, names: [])
+      return SentRecords(failedSaves: saving.map { ($0, CKError(.quotaExceeded)) })
+    }
+    await transfer(Latency.transfer(saving, rate: latency.assetUp), progress)
     try database { db in
       try db.run("BEGIN IMMEDIATE")
       do {
@@ -185,11 +229,9 @@ struct SharedCloud: SyncCloud {
   /// `keys` 没要文件字段时去掉文件（同 CloudKit 的 desiredKeys：不下载）。
   private static func record(_ data: Data, keys: [String]?) throws -> CKRecord {
     guard let record = try NSKeyedUnarchiver.unarchivedObject(ofClass: CKRecord.self, from: data) else { throw CKError(.internalError) }
-    if let keys, !keys.contains(Self.fileKey) { record[Self.fileKey] = nil }
+    if let keys, !keys.contains(RecordMapper.fileKey) { record[RecordMapper.fileKey] = nil }
     return record
   }
-
-  static let fileKey = "file"
 
   /// 每次请求开一次连接（请求本来就隔着上百毫秒，几个进程各开各的，锁交给 SQLite 的 WAL 与 busy_timeout）。
   private func database<T>(_ body: (Connection) throws -> T) throws -> T {
@@ -287,7 +329,7 @@ struct SharedCloud: SyncCloud {
 extension CKRecord {
   /// 带的文件有多大（没有文件为 nil）。
   var fileBytes: Int? {
-    guard let url = (self[SharedCloud.fileKey] as? CKAsset)?.fileURL else { return nil }
+    guard let url = (self[RecordMapper.fileKey] as? CKAsset)?.fileURL else { return nil }
     return (try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? Int
   }
 }

@@ -33,6 +33,7 @@ LATENCY（中位、p95，秒，对数正态；版本 MODEL）：每种请求在 
   bgflush [次数=8]           M8 写完马上进后台：写下→已发出、进后台→收尾完、写下→Mac 入库
   versions [命令行改几次=150] 撞版本探针（不进总表）：App 紧循环改一张卡、命令行同时逐条改，数提交后版本不比上一版大的次数
   files [轮数=6] [MB=50]     M9 带文件：手机同一刻写下带大文件的灵感、只有字的灵感、对 Cue 说的一句，Mac 收；量前两样与文件各自写下→Mac 入库（_sync_files.py）
+  filesquota [轮数=2] [MB=50] 空间满（只在模拟云）：同上，文件被拒；量只有字的与对 Cue 说的照常到、手机状态不变、文件停着
   island [轮数=10]           M4 收消息到灵动岛（iPhone 模拟器，App 这一侧：入库→实时活动换内容）；不连云、不拿测量锁，xc.sh run ios 自己构建
 环境：SYNC_BENCH_CLOUD=sim|real；SYNC_BENCH_RELAY=0 两端都不连门铃（门铃不通，只靠按节奏拉）；SYNC_BENCH_SKIP_BUILD=1 不构建；
   SYNC_BENCH_SESSIONS 会话数（默认 3）、SYNC_BENCH_FLIP 会话平均几秒切一次状态（默认 8）；SYNC_BENCH_WARM 预热上限秒（默认 300）；SYNC_BENCH_LOCK_WAIT 等锁上限秒（默认 1200，到点列出持有者、以 75 退出）。

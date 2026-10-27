@@ -1,5 +1,6 @@
 #if DEBUG && os(macOS)
 import CueStore
+import CueSync
 import CueText
 import Foundation
 
@@ -11,6 +12,18 @@ extension SyncBench {
     enum Files {
         static func start(_ services: AppServices) {
             let store = services.store
+            Task {
+                var last: [String: FileTransfer] = [:]
+                for await transfers in Observations({ services.fileTransfers }) {
+                    for (key, transfer) in transfers where last[key] != transfer {
+                        mark("transfer", ["key": key, "dir": transfer.direction == .upload ? "up" : "down", "f": transfer.fraction])
+                    }
+                    last = transfers
+                }
+            }
+            Task {
+                for await over in Observations({ services.syncFilesOverQuota }) { mark("files-over-quota", ["v": over]) }
+            }
             Task {
                 var known: Set<UUID>?
                 do {
@@ -54,13 +67,11 @@ extension SyncBench {
                 return true
             case "watch-file":
                 guard let key = words.dropFirst().first else { mark("bench-error", ["what": "watch-file 要 key"]); return true }
+                guard let sync = workspace.services.sync else { mark("bench-error", ["what": "没有同步"]); return true }
                 Task {
-                    do {
-                        for try await here in store.observe({ try $0.hasAttachment(key) }) where here {
-                            return mark("file-arrived", ["key": key])
-                        }
-                    } catch {
-                        mark("bench-error", ["what": "等文件：\(error.localizedDescription)"])
+                    // 文件取完、放进附件目录之后它才离开在路上的那一张
+                    for await _ in sync.fileTransfers where store.files.fileURL(for: key) != nil {
+                        return mark("file-arrived", ["key": key])
                     }
                 }
                 return true

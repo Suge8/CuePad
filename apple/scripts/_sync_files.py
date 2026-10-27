@@ -54,9 +54,40 @@ def scene_files(run, args):
             m.span("同一刻写下·对 Cue 说·写下→Mac 入库", say, a.wait(arrived(say["id"]), ROUND_LIMIT))
             m.span("同一刻写下·对 Cue 说·全程（写下→已送达）", say, b.wait(by_id("msg-delivered", say["id"]), ROUND_LIMIT))
         m.span("同一刻写下·文件·写下→到 Mac", written, a.wait(lambda e: e["e"] == "file-arrived" and e.get("key") == burst["key"], FILE_LIMIT))
+        for name, inst, direction in (("上传", b, "up"), ("下载", a, "down")):
+            seen = [e for e in inst.events if e["e"] == "transfer" and e["key"].startswith(burst["key"]) and e["dir"] == direction]
+            m[f"同一刻写下·文件·界面读到的{name}进度（次）"].append(len(seen))
+            if seen and max(e["f"] for e in seen) < 1: m[f"同一刻写下·文件·{name}进度没到 1（次）"].append(1)
         os.remove(path)
         time.sleep(5)
     return m, {}
 
 
-SCENES = {"files": scene_files}
+def scene_files_quota(run, args):
+    """filesquota [轮数=2] [MB=50]（只在模拟云）：iCloud 空间满（模拟云拒收带文件的保存），手机同一刻写下三样；
+    只有字的灵感与对 Cue 说的照常到 Mac、手机的同步状态不变，文件停在手机、界面读到"文件因空间不足停着"。"""
+    if run.cloud != "sim": raise SystemExit("filesquota 只在模拟云")
+    rounds, megabytes = int(args[0]) if args else 2, int(args[1]) if len(args) > 1 else 50
+    a, b, m = run.a, run.b, run.metrics
+    open(f"{run.out}/cloud/quota-full", "w").close()
+    for i in range(rounds):
+        path = make_file(f"{FILES}/{os.getpid()}-q{i}.tiff", megabytes)
+        t0 = b.send(f"burst q{i} {path}")
+        burst = b.wait(kind("burst"), 60, after=t0 - 0.5)
+        if not burst:
+            m["空间满·没写成（次）"].append(1)
+            continue
+        a.send(f"watch-file {burst['key']}")
+        written = {"t": burst["at"]}
+        say = b.wait(kind("msg-write", "you"), 10, after=t0 - 0.5)
+        m.span("空间满·只有字的灵感·写下→Mac 入库", written, a.wait(card_new(burst["text"]), ROUND_LIMIT))
+        if say: m.span("空间满·对 Cue 说·写下→Mac 入库", say, a.wait(arrived(say["id"]), ROUND_LIMIT))
+        if i == 0: m.span("空间满·写下→手机读到文件停着", written, b.wait(lambda e: e["e"] == "files-over-quota" and e["v"], ROUND_LIMIT))
+        if a.wait(lambda e: e["e"] == "file-arrived" and e.get("key") == burst["key"], 30): m["空间满·文件却到了 Mac（次）"].append(1)
+        bad = [e["s"] for e in b.events if e["e"] == "sync-status" and e["t"] >= burst["at"] and e["s"] not in ("idle", "syncing")]
+        if bad: m["空间满·手机同步状态变了（次）"].append(len(bad))
+        os.remove(path)
+    return m, {}
+
+
+SCENES = {"files": scene_files, "filesquota": scene_files_quota}

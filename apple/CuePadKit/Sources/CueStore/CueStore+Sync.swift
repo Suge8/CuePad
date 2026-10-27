@@ -87,6 +87,14 @@ extension CueStore {
     return Set(said + (try pendingSaves(.cueState, where: "1").map(\.id)))
   }
 
+  /// 待推送的附件记录：文件那一路单独传（CueSync 的 `FileSender`），后台那一路不带它们。附件表小，每次全表查。
+  package func pendingAttachments() throws -> [String] {
+    try pendingSaves(.attachments, where: "1").map(\.id)
+  }
+
+  /// 全部附件记录：文件那一路据此找本机还没有的文件（CueSync 的 `FileFetcher`）。
+  package func attachments() throws -> [Attachment] { try select(Attachment.self) }
+
   /// 全量对账：所有同步表里待推送的记录。
   package func pendingSync() throws -> PendingSync {
     var pending = PendingSync(saves: [], deletes: [])
