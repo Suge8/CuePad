@@ -68,11 +68,12 @@ struct SetupTests {
         let node = try #require(AgentKind.pi.facts.installPrerequisite)
         let codex = SetupRow(kind: .codex, step: .install(nil)), pi = SetupRow(kind: .pi, step: .needs(node))
         let openCode = SetupRow(kind: .opencode, step: .install(nil)), grok = SetupRow(kind: .grok, step: .install(nil))
-        #expect(now.rows == [SetupRow(kind: .claudeCode, step: .install(nil)), codex, pi, openCode, grok])  // 各家平行列出，推荐的排第一
+        let dsh = SetupRow(kind: .dsh, step: .needs(node))
+        #expect(now.rows == [SetupRow(kind: .claudeCode, step: .install(nil)), codex, pi, openCode, grok, dsh])  // 各家平行列出，推荐的排第一
 
         await workspace.installAgent(.claudeCode)
         now = try await panel(workspace)
-        #expect(now.rows == [SetupRow(kind: .claudeCode, step: .logIn(nil)), codex, pi, openCode, grok])
+        #expect(now.rows == [SetupRow(kind: .claudeCode, step: .logIn(nil)), codex, pi, openCode, grok, dsh])
 
         await workspace.logIn(.claudeCode)
         now = try await panel(workspace)
@@ -92,6 +93,7 @@ struct SetupTests {
         #expect(now.rows == [
             SetupRow(kind: .claudeCode, step: .logIn(nil)), SetupRow(kind: .codex, step: .install(nil)), SetupRow(kind: .pi, step: .logIn(nil)),
             SetupRow(kind: .opencode, step: .install(nil)), SetupRow(kind: .grok, step: .install(nil)),
+            SetupRow(kind: .dsh, step: .needs(try #require(AgentKind.dsh.facts.installPrerequisite))),
         ])
 
         await workspace.logIn(.claudeCode)

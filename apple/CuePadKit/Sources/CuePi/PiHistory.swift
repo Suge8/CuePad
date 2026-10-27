@@ -99,7 +99,7 @@ public enum PiHistory {
         var state = resumed ?? PiHistoryCheckpoint()
         if state.cwd == nil { state.cwd = format.cwd(of: file) }
         let start = state.offset
-        var transcript = Transcript(fallbackID: format.sessionID(of: file), files: wanted ? files : nil)
+        var transcript = Transcript(fallbackID: format.sessionID(of: file), files: wanted ? files : nil, file: file)
         let consumed = try forEachLine(handle, from: start, size: size) { line in try format.ingest(line, &state, &transcript) }
         if !wanted { transcript.messages = [] }
         state.offset = consumed
@@ -189,6 +189,8 @@ public enum PiHistory {
     struct Transcript {
         let fallbackID: String
         let files: AttachmentFiles?
+        /// 读的会话文件（不在文件里的为 nil）：dsh 的图片按它找到所在的 dsh 目录
+        var file: URL? = nil
         var messages: [PiChatMessage] = []
 
         mutating func add(

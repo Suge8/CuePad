@@ -6,12 +6,13 @@ import Testing
 @testable import CuePi
 
 /// 端到端：Cue 用这家开工、说话、歇下。后台开一个带名字、模型、强度的会话（`AgentRuntime.open`，一次生效），开场一句做完歇下，
-/// 再说一句又做完歇下。各家用自己的隔离测试台：Pi 与 Grok Build 是假模型，Codex 用复制的登录（不刷新），Claude Code 用订阅令牌，OpenCode 见 `OpenCodeSandbox`。
+/// 再说一句又做完歇下。各家用自己的隔离测试台：Pi 与 Grok Build 是假模型，Codex 用复制的登录（不刷新），Claude Code 用订阅令牌，OpenCode 见 `OpenCodeSandbox`，
+/// dsh 的家目录在临时目录里、登录只经环境里的 DeepSeek key。
 /// 默认回放录像带（OpenCode 没有录像带，总连真 OpenCode），见 `RealAgents`。
 private let agents = AgentKind.allCases.filter(RealAgents.runs)
 
 @MainActor
-@Suite(.agentTapes, RealAgents.serialWhenRecording(.pi, .codex, .claudeCode, .opencode, .grok), RealAgents.timeLimit(.minutes(6)))
+@Suite(.agentTapes, RealAgents.serialWhenRecording(.pi, .codex, .claudeCode, .opencode, .grok, .dsh), RealAgents.timeLimit(.minutes(6)))
 struct RealCueStartTests {
     @Test(arguments: agents) func cueStartsASessionTalksAndItSettles(_ agent: AgentKind) async throws {
         AgentTape.use(agent)
@@ -38,13 +39,16 @@ struct RealCueStartTests {
                 let used = try #require(Self.used(in: file, agent), "会话文件里没记下用的模型")
                 // Claude Code 的别名（sonnet）在会话文件里记成它解析到的完整 id（claude-sonnet-…）
                 #expect(agent == .claudeCode ? used.model?.hasPrefix("claude-\(model.id)") == true : used.model == model.id, "\(used)")
-                if agent != .pi && agent != .grok { #expect(used.effort == "medium", "\(used)") }
+                // 强度照这个模型能选的落位（dsh 的模型没有 medium）
+                let levels = bridge.session(id: id)?.model?.thinkingLevels ?? []
+                if agent != .pi && agent != .grok { #expect(used.effort == PiThinkingLevel.medium.clamped(to: levels).rawValue, "\(used)") }
             }
         }
     }
 
     /// 会话文件里最后一次模型请求记下的模型与强度（各家自己写的）：Claude Code 是回答上的 `model`、`effort`，Codex 是 `turn_context`，
-    /// Pi 是回答上的 `model`，Grok Build 是你的话上的 `_meta.modelId`（强度不记）。OpenCode 的会话在它的库里，看会话上报的就够了。
+    /// Pi 是回答上的 `model`，Grok Build 是你的话上的 `_meta.modelId`（强度不记），dsh 是请求头 `request/header` 的 `config`。
+    /// OpenCode 的会话在它的库里，看会话上报的就够了。
     private static func used(in file: URL, _ agent: AgentKind) -> (model: String?, effort: String?)? {
         let lines = ((try? String(contentsOf: file, encoding: .utf8)) ?? "").split(separator: "\n").reversed().lazy
             .compactMap { JSONValue.parse(Data($0.utf8)) }
@@ -58,6 +62,11 @@ struct RealCueStartTests {
         case .grok:
             return lines.first { $0["params"]?["update"]?["sessionUpdate"]?.string == "user_message_chunk" }
                 .map { ($0["params"]?["update"]?["_meta"]?["modelId"]?.string, nil) }
+        case .dsh:
+            return lines.first { $0["type"]?.string == "request/header" }.map { line in
+                let config = line["data"]?["header"]?["config"]
+                return (config?["model"]?.string, config?["reasoningEffort"]?.string)
+            }
         case .opencode:
             return nil
         }
@@ -102,6 +111,24 @@ struct RealCueStartTests {
             try await withGrokRig { rig in
                 try await body(rig.runtime, rig.bridge, rig.work, PiModelKey(provider: AgentKind.grok.rawValue, id: "grok-4.5"))
             }
+        case .dsh:
+            // 家目录在临时目录里（登录只经环境里的 DEEPSEEK_API_KEY），会话存进它下面 CuePad 的明文根
+            let root = try makeTempDirectory()
+            let work = root.appending(path: "work", directoryHint: .isDirectory)
+            try FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
+            let bridge = PiBridge(socketDirectory: root.appending(path: "s", directoryHint: .isDirectory))
+            defer { bridge.stop() }
+            try bridge.start()
+            let paths = AgentPaths(environment: ["DSH_HOME": root.appending(path: "dsh").path])
+            let runtime = DshRuntime(bridge: bridge, paths: paths, dsh: { AgentTape.executable("dsh") }, locate: { AgentTape.locator("dsh") })
+            AgentTape.current?.watch(root.appending(path: "dsh/\(DshRuntime.sessions)"))
+            do {
+                try await body(runtime, bridge, work, PiModelKey(provider: "deepseek-official", id: "deepseek-flash"))
+            } catch {
+                await runtime.stop()()
+                throw error
+            }
+            await runtime.stop()()
         }
     }
 }

@@ -26,6 +26,8 @@ public struct PiHistoryCheckpoint: Sendable, Codable, Equatable {
     /// 最近你说的那句之后、助手最后说的一段（还没归给那句：等下一句你的话或这一轮结束）
     var reply: Reply?
     var recap = PiRecap()
+    /// 先于那句话记下的投送请求 id（按 Agent 给那句话的消息 id）：dsh 的插件在话进收件箱时记，话随后才写进会话（`DshHistory`）
+    var deliveries: [String: String] = [:]
     /// 解码时认出这个文件不是会话列表里的会话（如 Codex 子代理自己的会话文件，与主会话同层）：索引器不发出它
     var excluded = false
     /// 你说的一句、还在等它的投送请求 id：Grok 把发它的请求 id 写在它之后的那几行上（`GrokHistory`），等到下一行再照常 `said`

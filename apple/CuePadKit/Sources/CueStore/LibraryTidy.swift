@@ -17,8 +17,8 @@ public struct LibraryTidy: Codable, Equatable, Sendable, Identifiable {
   public enum Kind: Codable, Equatable, Sendable {
     /// 旧目录里的技能（各家自己的技能目录、项目里 .claude/.pi/.codex/.opencode 下的，不是 CuePad 写的、不是各家自管的）：搬进同范围的 `.agents/skills`
     case stray([SkillMove])
-    /// Claude Code 读不到（不读 `.agents`）：缺逐个技能的相对链接，补上
-    case unlinked([SkillEntry])
+    /// 这一家读不到（Claude Code 不读 `.agents`，dsh 不读分类里的）：缺逐个技能的相对链接，补上；每家一件
+    case unlinked(agent: AgentKind, skills: [SkillEntry])
     /// 同名（全局与项目之间、同一范围内都不许）：去重，留一份，其余进废纸篓；各份都列在技能里（`AgentLibrary.skills`）
     case duplicate(name: String, copies: [SkillEntry])
     /// 技能目录里的空目录：移走

@@ -8,6 +8,7 @@ public enum AgentKind: String, CaseIterable, Sendable, Identifiable, Codable {
   case codex
   case opencode
   case grok
+  case dsh
 
   public var id: Self { self }
 
@@ -18,6 +19,7 @@ public enum AgentKind: String, CaseIterable, Sendable, Identifiable, Codable {
     case .codex: "Codex"
     case .opencode: "OpenCode"
     case .grok: "Grok Build"
+    case .dsh: "DeepSeek Harness"
     }
   }
 
@@ -29,15 +31,16 @@ public enum AgentKind: String, CaseIterable, Sendable, Identifiable, Codable {
     case .codex: "CODEX_THREAD_ID"
     case .opencode: "OPENCODE_SESSION_ID"
     case .grok: "GROK_SESSION_ID"
+    case .dsh: "DSH_SESSION_ID"
     }
   }
 
   /// 这家模型的提供方（`PiModelKey.provider`），唯一的一处：Claude Code、Codex、Grok Build 的模型名在它们自己的命名空间里（`opus`、`gpt-5.1`、`grok-4.6`），
-  /// 提供方就写成这家；Pi、OpenCode 的模型本身带提供方（`provider/id`），为 nil。会话上报的模型、Cue 的可选清单、开工时只给了 id 的补全都按它。
+  /// 提供方就写成这家；Pi、OpenCode、dsh 的模型本身带提供方（`provider/id`），为 nil。会话上报的模型、Cue 的可选清单、开工时只给了 id 的补全都按它。
   public var modelProvider: String? {
     switch self {
     case .claudeCode, .codex, .grok: rawValue
-    case .pi, .opencode: nil
+    case .pi, .opencode, .dsh: nil
     }
   }
 
@@ -61,7 +64,7 @@ public enum AgentKind: String, CaseIterable, Sendable, Identifiable, Codable {
 }
 
 /// 从 CuePad 能对一个会话做什么。只由 Agent 与会话在哪跑定：Mac 与手机按同一条规则从会话记录推出，
-/// 界面据此只露出做得到的操作，执行端不另做判断。各家能力的出处见各家接入的头注释（`ClaudeTerminalSession`、`CodexRuntime`、`OpenCodeRuntime`、`GrokRuntime`）。
+/// 界面据此只露出做得到的操作，执行端不另做判断。各家能力的出处见各家接入的头注释（`ClaudeTerminalSession`、`CodexRuntime`、`OpenCodeRuntime`、`GrokRuntime`、`DshRuntime`）。
 public struct AgentCapabilities: OptionSet, Sendable, Hashable {
   public let rawValue: Int
   public init(rawValue: Int) { self.rawValue = rawValue }
@@ -104,7 +107,8 @@ public struct AgentCapabilities: OptionSet, Sendable, Hashable {
   private static func of(_ agent: AgentKind, hosted: Bool) -> AgentCapabilities {
     if hosted { return .all }
     switch agent {
-    case .pi, .opencode: return .all
+    // dsh 只有 CuePad 托管的会话（它的 web 与桌面版的会话不接）
+    case .pi, .opencode, .dsh: return .all
     // 终端里的会话经它的收件箱说话与改名（只收文字）、经钩子作答、像 Ctrl-C 那样结束；停止这一轮、换模型、斜杠命令只有托管的能做
     case .claudeCode: return [.speak, .answer, .rename, .end]
     // 终端里的会话由 Codex 的常驻服务承载，经它的控制接口说话；作答经钩子

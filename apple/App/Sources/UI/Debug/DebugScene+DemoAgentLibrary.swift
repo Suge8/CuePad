@@ -54,7 +54,7 @@ struct DemoAgentLibrary {
             }
             library.tidies.removeAll { ids.contains($0.id) }
             library.skills.removeAll { dropped.contains($0.path) }
-            if ids.contains("unlinked") {
+            if ids.contains("unlinked/claude") {
                 library.skills = library.skills.map {
                     LibrarySkill(name: $0.name, scope: $0.scope, group: $0.group, path: $0.path, text: $0.text, problem: $0.problem)
                 }
@@ -243,7 +243,7 @@ struct DemoAgentLibrary {
                 SkillMove(skill: SkillEntry(name: "notion-export", scope: .global, path: claude + "/notion-export"), to: root + "/notion-export"),
                 SkillMove(skill: SkillEntry(name: "pdf", scope: .global, path: claude + "/pdf"), to: root + "/pdf"),
             ])),
-            LibraryTidy(id: "unlinked", kind: .unlinked(
+            LibraryTidy(id: "unlinked/claude", kind: .unlinked(agent: .claudeCode, skills:
                 [SkillEntry(name: "write-swift", scope: .global, path: root + "/development/write-swift")]
                     + (atlas.map { [SkillEntry(name: "load-test", scope: .project($0), path: home + "/Project/atlas/.agents/skills/load-test")] } ?? []))),
         ]

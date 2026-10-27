@@ -11,11 +11,11 @@ extension ClaudeCodeRuntime {
         command: "claude", homeVariable: "CLAUDE_CONFIG_DIR", home: home, minimumVersion: AgentVersion(2, 1, 145),
         installScript: "curl -fsSL https://claude.ai/install.sh | bash",
         loginArguments: ["auth", "login"],
-        sessionFiles: SessionFileFormat(ingest: ClaudeHistory.ingest, depth: 2, nameIsSessionID: true) {
+        sessionFiles: SessionFileFormat(ingest: ClaudeHistory.ingest, depth: 2, naming: .id) {
             home($0).appending(path: "projects", directoryHint: .isDirectory)
         },
         channel: { integration, _ in HookFile.claudeCode(home: integration.home(of: .claudeCode), skillDirectory: integration.skillDirectory) },
-        releasesIdleHosted: true, probe: askClaude, brain: { ClaudeHostedSession() }, readsSharedSkills: false, projectFolder: ".claude", selfManagedSkills: "synced",
+        releasesIdleHosted: true, probe: askClaude, brain: { ClaudeHostedSession() }, sharedSkills: .none, projectFolder: ".claude", selfManagedSkills: "synced",
         instructionsFile: "CLAUDE.md")
 
     nonisolated private static func home(_ paths: AgentPaths) -> URL { paths.directory(facts.homeVariable) ?? paths.user(".claude") }

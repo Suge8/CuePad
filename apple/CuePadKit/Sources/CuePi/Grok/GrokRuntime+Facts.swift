@@ -5,12 +5,12 @@ import Foundation
 extension GrokRuntime {
     /// 官方脚本装进 `~/.grok/bin`，自带 `grok update` 升级。要的版本是验过 ACP 用法（`_meta.agentProfile`、`_x.ai/interject`）的最旧一版。
     /// 会话记录是每个会话目录里的 `updates.jsonl`（`GrokHistory`）；不装上报通道（终端会话只读跟读它，见 `GrokRuntime`）。
-    /// 技能：除了自己的 `skills`，也递归读几家共读的 `~/.agents/skills` 与 Claude Code 的 `~/.claude/skills`（按名字去重，见它的文档 08-skills）；
+    /// 技能：除了自己的 `skills`，也递归读几家共读的 `~/.agents/skills`（`SharedSkills.recursive`）与 Claude Code 的 `~/.claude/skills`（按名字去重，见它的文档 08-skills）；
     /// 全局规则是自己目录下的 `AGENTS.md`（文档 12-project-rules），链到共读的那份。
     nonisolated public static let facts = AgentFacts(
         command: "grok", homeVariable: "GROK_HOME", home: home, minimumVersion: AgentVersion(1, 0, 52),
         installScript: "curl -fsSL https://x.ai/cli/install.sh | bash", upgradeCommand: "grok update", loginArguments: ["login"],
-        sessionFiles: SessionFileFormat(ingest: GrokHistory.ingest, depth: 3, nameIsSessionID: false, fileName: "updates.jsonl") {
+        sessionFiles: SessionFileFormat(ingest: GrokHistory.ingest, depth: 3, naming: .inDirectory(file: "updates.jsonl", cwdInPath: true)) {
             home($0).appending(path: "sessions", directoryHint: .isDirectory)
         },
         releasesIdleHosted: true, probe: ask, brain: { ACPSession(dialect: GrokDialect()) }, projectFolder: ".grok")

@@ -23,7 +23,7 @@ struct AgentLibraryPhoneTests {
         init(store: CueStore) { self.store = store }
 
         func snapshot() -> AgentLibrary {
-            let unlinked = LibraryTidy(id: "unlinked", kind: .unlinked([SkillEntry(name: "pr", scope: .global, path: AgentLibraryPhoneTests.skillPath)]))
+            let unlinked = LibraryTidy(id: "unlinked/claude", kind: .unlinked(agent: .claudeCode, skills: [SkillEntry(name: "pr", scope: .global, path: AgentLibraryPhoneTests.skillPath)]))
             return AgentLibrary(
                 hostID: "mac-a", home: "/Users/a",
                 skills: [LibrarySkill(name: "pr", scope: .global, group: "", path: AgentLibraryPhoneTests.skillPath, text: skill)],

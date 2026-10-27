@@ -115,7 +115,7 @@ public struct PiHistoryIndexer: Sendable {
 
     private static func isSessionFile(_ path: String, under root: URL, format: SessionFileFormat) -> Bool {
         let url = URL(filePath: path)
-        guard format.isSessionFile(url) else { return false }
+        guard format.matches(url) else { return false }
         var parent = url
         for _ in 0..<format.depth { parent = parent.deletingLastPathComponent() }
         return parent.path == root.path
@@ -133,7 +133,7 @@ public struct PiHistoryIndexer: Sendable {
         for case let url as URL in walker {
             guard walker.level == format.depth else { continue }
             walker.skipDescendants()  // 更深的子目录（如 subagents/）不进
-            guard format.isSessionFile(url) else { continue }
+            guard format.matches(url) else { continue }
             let values = try? url.resourceValues(forKeys: Set(keys))
             guard values?.isRegularFile == true else { continue }
             files.append((url, values?.contentModificationDate ?? .distantPast, values?.fileSize.map(UInt64.init)))

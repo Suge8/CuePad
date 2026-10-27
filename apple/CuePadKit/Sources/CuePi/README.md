@@ -1,6 +1,6 @@
 # CuePi —— Agent 桥（macOS）
 
-Pi、Claude Code、Codex、OpenCode、Grok Build 的会话都登记在同一个桥上（`PiBridge`），各家怎么发现会话、怎么说话在 `AgentRuntime` 的五个实现里，与别家不同的事实（命令、目录、安装、上报通道、探测、技能位置、大脑用哪种会话）在各自 `+Facts` 文件的 `AgentFacts` 里；CuePad 掌握全部输入输出的会话（Claude Code、Codex、Grok Build 的托管会话与 Cue 的大脑）是 `HostedSession`。说 ACP（Agent Client Protocol）的 Agent 共用一个驱动（`ACP/`：`ACPSession` 托管会话与大脑是同一份），各家的扩展方法只经 `ACPDialect` 的扩展点接进来（Grok Build 是 `GrokDialect`）。规则只写在类型的头注释里；这里只记 Pi 桥扩展的线上约定与已知边界。
+Pi、Claude Code、Codex、OpenCode、Grok Build、dsh 的会话都登记在同一个桥上（`PiBridge`），各家怎么发现会话、怎么说话在 `AgentRuntime` 的各家实现里，与别家不同的事实（命令、目录、安装、上报通道、探测、技能位置、大脑用哪种会话）在各自 `+Facts` 文件的 `AgentFacts` 里；CuePad 掌握全部输入输出的会话（Claude Code、Codex、Grok Build、dsh 的托管会话与 Cue 的大脑）是 `HostedSession`。说 ACP（Agent Client Protocol）的 Agent 共用一个驱动（`ACP/`：`ACPSession` 托管会话与大脑是同一份），各家的扩展方法只经 `ACPDialect` 的扩展点接进来（Grok Build 是 `GrokDialect`，dsh 是 `DshDialect`）。规则只写在类型的头注释里；这里只记 Pi 桥扩展的线上约定与已知边界。
 
 ## 协议
 
@@ -54,6 +54,8 @@ CuePad → 扩展（都带 `id`）：
 任何命令都可能以 `failed: <原因>` 拒绝。`ack` 只回给发命令的连接；多个客户端同连一个会话时各自收到全部状态，扩展不仲裁。
 
 FireCode 经两个频道把事实交给扩展：`firecode:workers`（`{inFlight}`，在飞子代理数）与 `firecode:subagents`（`{workers}`，名册原文）。扩展不读 FireCode 的档案与会话文件。
+
+dsh 的随包插件（`dsh-cuepad.mjs`，每次启动经 `--patch` 叠上）与 CuePad 之间的扩展方法、通知与环境变量只写在插件的头注释里。
 
 ## 已知边界
 

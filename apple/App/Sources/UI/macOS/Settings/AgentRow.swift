@@ -82,7 +82,9 @@ struct AgentRow: View {
         let shown = switch kind {
         case .pi: String(localized: "接入后，在终端里开的 \(name) 会话也出现在 CuePad 里：在 Mac 和手机上看它在做什么、发话、回答它的提问。")
         case .grok: String(localized: "接入后，在终端里开的 \(name) 会话也出现在 CuePad 里：在 Mac 和手机上看它在做什么。")
-        default: String(localized: "接入后，在终端和桌面版里开的 \(name) 会话也出现在 CuePad 里：在 Mac 和手机上看它在做什么、发话、回答它的提问。")
+        case .dsh: String(localized: "CuePad 在后台开的 \(name) 会话出现在 CuePad 里；它的网页与桌面版里开的会话不接。")
+        case .claudeCode, .codex, .opencode:
+            String(localized: "接入后，在终端和桌面版里开的 \(name) 会话也出现在 CuePad 里：在 Mac 和手机上看它在做什么、发话、回答它的提问。")
         }
         let lines = [
             shown,
@@ -163,6 +165,7 @@ extension AgentKind {
         case .claudeCode, .codex: String(localized: "写入技能与钩子")
         case .opencode: String(localized: "写入技能，直连它的后台服务")
         case .grok: String(localized: "写入技能，跟读它的会话记录")
+        case .dsh: String(localized: "写入技能")
         }
     }
 

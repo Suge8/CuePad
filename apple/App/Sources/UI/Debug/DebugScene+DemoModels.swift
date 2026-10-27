@@ -41,6 +41,11 @@ extension DebugScene {
             let provider = AgentKind.grok.modelProvider ?? ""
             let efforts: [PiThinkingLevel] = [.low, .medium, .high, .xhigh]
             return listed([model(provider, "grok-4.6", "Grok 4.6", efforts), model(provider, "grok-4.5", "Grok 4.5", efforts)], current: 0, thinking: .high)
+        case .dsh:
+            return listed([
+                model("deepseek-official", "deepseek-flash", "DeepSeek-V4.1-Flash", [.off, .low, .high, .max]),
+                model("deepseek-official", "deepseek-v4-pro", "DeepSeek-V4-Pro", [.off, .low, .high, .max]),
+            ], current: 1, thinking: .high)
         case .pi, nil:
             return demoModels
         }
@@ -82,6 +87,7 @@ extension DebugScene {
         let names: Set<String>? = switch agent {
         case .codex: ["compact", "name", "model", "skill:deploy", "skill:frontend-design"]
         case .opencode: ["compact", "review", "changelog"]
+        case .dsh: ["compact", "plan"]
         case .pi, .claudeCode, .grok, nil: nil
         }
         return names.map { names in demoCommands.filter { names.contains($0.name) } } ?? demoCommands

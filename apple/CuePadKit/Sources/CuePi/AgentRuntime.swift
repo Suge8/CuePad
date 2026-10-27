@@ -47,6 +47,7 @@ extension AgentKind {
         case .codex: CodexRuntime.facts
         case .opencode: OpenCodeRuntime.facts
         case .grok: GrokRuntime.facts
+        case .dsh: DshRuntime.facts
         }
     }
 }
@@ -85,9 +86,8 @@ public struct AgentFacts: Sendable {
     let probe: @Sendable (_ executable: URL, AgentProbe) async throws -> MacAgent?
     /// 开一个当 Cue 的大脑用的会话（`CueBrainConfig.startBrain` 再 `start`）
     let brain: @MainActor @Sendable () -> any HostedSession
-    /// 读几家共读的 `~/.agents/skills`（递归、跟链接）。不读的只读自己目录下一层的 `skills/<名>`：CuePad 的技能链过去，
-    /// 它的旧技能目录也只找一层。
-    var readsSharedSkills = true
+    /// 怎么读几家共读的 `.agents/skills`
+    var sharedSkills = SharedSkills.recursive
     /// 它自己的技能目录名（在它的配置目录与项目的 `projectFolder` 下，`AgentLibraryPlaces.oldSkills`）
     var skillFolders = ["skills"]
     /// 项目里它的目录（`.claude` 这样）
@@ -98,6 +98,21 @@ public struct AgentFacts: Sendable {
     var instructionsFile = "AGENTS.md"
     /// 它的全局规则链到 `~/.agents/AGENTS.md`（`AgentLibraryPlaces.linkedKinds`）
     var linksGlobalInstructions = true
+}
+
+/// 一家怎么读几家共读的 `.agents/skills`（全局的与项目里的）。读不到的技能 CuePad 逐个链到它自己的技能目录
+/// （`<配置目录>/skills/<名>`、项目里的 `<projectFolder>/skills/<名>`，`AgentLibraryPlaces.links`）；整个目录链不行：
+/// Claude Code 往自己的 `skills/synced` 写 claude.ai 同步的技能。它自己的技能目录也按同样的深度找（`AgentLibraryPlaces.oldSkills`）。
+enum SharedSkills: Sendable {
+    /// 递归、跟链接（Pi、Codex、OpenCode）
+    case recursive
+    /// 只读一层，分类里的读不到（dsh）
+    case topLevel
+    /// 不读（Claude Code）
+    case none
+
+    /// 读得到 `group` 分类里的技能（空串是不在分类里）
+    func reaches(group: String) -> Bool { self == .recursive || self == .topLevel && group.isEmpty }
 }
 
 /// CuePad 托管的 Claude Code、Codex 进程在环境里带的标记（钩子转发 `CUEPAD_` 前缀的变量）：钩子按它认回托管会话。
