@@ -190,7 +190,7 @@ try:
         keep = sims[int(sim)].fileno()
         os.closerange(3, keep)
         os.closerange(keep + 1, 4096)
-        me.update(pid=os.getpid(), cmd=me["cmd"] + "（租着这台模拟器）", held=[h for h in me["held"] if h[0].startswith("模拟器")])
+        me.update(pid=os.getpid(), start=processes([os.getpid()])[os.getpid()][1], cmd=me["cmd"] + "（租着这台模拟器）", held=[h for h in me["held"] if h[0].startswith("模拟器")])
         record = f"{holders}/{me['pid']}.json"
         publish()
         wait_exit(watcher)

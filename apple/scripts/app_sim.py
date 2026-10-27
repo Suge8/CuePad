@@ -13,6 +13,8 @@ from app_shots import batch
 # simctl 偶尔挂住不返回（实测 install 卡过 20 分钟）：每次调用自己有上限，到了就把这台关机再开、重做一次，再卡才失败
 SIMCTL_TIMEOUT = 180
 BOOT_TIMEOUT = 180
+# 一张的看守上限要装得下一次 simctl 自愈（超时 + shutdown + boot + 重做），不然第二次尝试被闹钟截断
+SHOT_HOLD = HOLD + 2 * SIMCTL_TIMEOUT + 2 * BOOT_TIMEOUT
 
 
 class Sim:
@@ -94,7 +96,7 @@ def sim(cmd, device, app, library, shots):
         if want != appearance:
             s.run("ui", device, "appearance", want)
             appearance = want
-        signal.alarm(HOLD + int(seconds))
+        signal.alarm(SHOT_HOLD + int(seconds))
         os.makedirs(os.path.dirname(os.path.abspath(shot.out)), exist_ok=True)
         rec = None
         try:

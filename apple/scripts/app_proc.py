@@ -6,12 +6,13 @@ import subprocess
 import sys
 import time
 
-from app_env import READY_TIMEOUT, die
+from app_env import READY_TIMEOUT, Failed, die
 
 
 def interrupted(sig, _):
     if sig == signal.SIGALRM:
         print("看守超时，结束实例", file=sys.stderr, flush=True)
+        raise Failed(128 + sig)  # 批里只算这一张失败
     raise SystemExit(128 + sig)
 
 
