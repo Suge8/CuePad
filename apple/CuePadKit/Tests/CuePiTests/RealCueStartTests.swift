@@ -6,9 +6,9 @@ import Testing
 @testable import CuePi
 
 /// 端到端：Cue 用这家开工、说话、歇下。后台开一个带名字、模型、强度的会话（`AgentRuntime.open`，一次生效），开场一句做完歇下，
-/// 再说一句又做完歇下。各家用自己的隔离测试台：Pi 是假模型，Codex 用复制的登录（不刷新），Claude Code 用订阅令牌，OpenCode 用免费模型。
+/// 再说一句又做完歇下。各家用自己的隔离测试台：Pi 是假模型，Codex 用复制的登录（不刷新），Claude Code 用订阅令牌，OpenCode 见 `OpenCodeSandbox`。
 /// 默认回放录像带（OpenCode 没有录像带，列出它时直连），见 `RealAgents`。
-private let agents = AgentKind.allCases.filter { $0 == .opencode ? RealAgents.mode(of: $0) == .live && RealAgents.installed($0) : RealAgents.runs($0) }
+private let agents = AgentKind.allCases.filter(RealAgents.runs)
 
 @MainActor
 @Suite(.agentTapes, RealAgents.serialWhenRecording(.pi, .codex, .claudeCode, .opencode), RealAgents.timeLimit(.minutes(6)))
@@ -85,7 +85,7 @@ struct RealCueStartTests {
         case .opencode:
             let sandbox = try await OpenCodeSandbox()
             let bridge = PiBridge(socketDirectory: sandbox.paths.pi.socketDirectory)
-            let runtime = OpenCodeRuntime(bridge: bridge, paths: sandbox.paths, store: try Fixture().store, hostID: "mac", opencode: { await ExecutableLocator.system.candidates("opencode").first })
+            let runtime = sandbox.runtime(bridge, try Fixture().store)
             let outcome: Result<Void, any Error>
             do {
                 try runtime.start()

@@ -1,23 +1,14 @@
 #if os(macOS)
-import CryptoKit
 import CueStore
 import CueTestSupport
 import Foundation
 import Testing
 @testable import CuePi
 
-/// 本机装的 OpenCode v2
-let realOpenCodeURL = ExecutableLocator.standard.candidates("opencode").first
-/// 测试用的模型：缺省免费的 big-pickle，限流时用 `CUEPAD_OPENCODE_MODEL` 换成别的免费模型（`opencode` 提供方下的 id），
-/// 或写成 `提供方/模型` 换成自己的提供方（密钥只经环境给，如 `DEEPSEEK_API_KEY`）
-let openCodeTestModel = ProcessInfo.processInfo.environment["CUEPAD_OPENCODE_MODEL"].map {
-    AgentKind.opencode.modelKey($0) ?? PiModelKey(provider: "opencode", id: $0)
-} ?? PiModelKey(provider: "opencode", id: "big-pickle")
-
-/// 端到端：真 OpenCode 的后台服务、真模型（免费的 big-pickle，要联网）。CuePad 看得到它的会话、在 CuePad 里跟它说话与作答，
+/// 端到端：真 OpenCode 的后台服务，模型见 `openCodeTestModel`（缺省是假模型，零网络）。CuePad 看得到它的会话、在 CuePad 里跟它说话与作答，
 /// 也能在服务没开时自己把它拉起来开新会话、接着已结束的会话。
 @MainActor
-@Suite(RealAgents.live(.opencode, "录不出录像带：要 OpenCode v2，它的免费模型拒绝自行构建的 v2，见 RealAgents"), .serialized, .timeLimit(.minutes(10)))
+@Suite(RealAgents.live(.opencode, "HTTP/SSE 边界没接进录像带，见 RealAgents"), .serialized, .timeLimit(.minutes(10)))
 struct RealOpenCodeTests {
     func session(_ bridge: PiBridge) -> PiSession? { bridge.sessions.first { $0.agent == .opencode } }
 
@@ -26,7 +17,7 @@ struct RealOpenCodeTests {
         let sandbox = try await OpenCodeSandbox()
         let store = try Fixture().store
         let bridge = PiBridge(socketDirectory: sandbox.paths.pi.socketDirectory)
-        let runtime = OpenCodeRuntime(bridge: bridge, paths: sandbox.paths, store: store, hostID: "mac", opencode: { await ExecutableLocator.system.candidates("opencode").first })
+        let runtime = sandbox.runtime(bridge, store)
         let outcome: Result<Void, any Error>
         do {
             try runtime.start()
@@ -70,14 +61,14 @@ struct RealOpenCodeTests {
 
             try await bridge.configure(name: "改过的名字", in: live.id)
             try await eventually("改名到了") { session(bridge)?.displayName == "改过的名字" }
-            let thinker = PiModelKey(provider: "opencode", id: "cat-jam-free")
+            let thinker = openCodeOtherModel
             try await bridge.configure(model: thinker, thinking: .high, in: live.id)
             try await eventually("模型与强度换了") { session(bridge)?.model?.key == thinker && session(bridge)?.thinking == .known(.high) }
             let stored = try await sandbox.api("GET", "/api/session/\(live.sessionID)")["data"] as? [String: Any]
             let model = stored?["model"] as? [String: Any]
             #expect(model?["id"] as? String == thinker.id && model?["variant"] as? String == "high" && stored?["title"] as? String == "改过的名字")
             await #expect(throws: PiBridgeError.unknownModel(.opencode)) {
-                try await bridge.configure(model: PiModelKey(provider: "opencode", id: "no-such-model"), in: live.id)
+                try await bridge.configure(model: PiModelKey(provider: openCodeTestModel.provider, id: "no-such-model"), in: live.id)
             }
             await #expect(throws: PiBridgeError.rejected("unknown_command")) { try await bridge.command("/no-such-command", in: live.id) }
             try await bridge.configure(model: openCodeTestModel, in: live.id)
@@ -123,7 +114,8 @@ struct RealOpenCodeTests {
             try await bridge.send(PiMessage(text: "Use the shell tool to run exactly: sleep 60 . Then reply SLEPT."), to: id)
             try await eventually("在跑命令") { session(bridge)?.state.isWorking == true }
             let delivery = UUID()
-            try await bridge.send(PiMessage(text: "Now: what is 6+6", deliveryID: delivery.uuidString), to: id)
+            // 不说明作废，真模型会在新的一轮里把被停下的命令再跑一遍（实测 deepseek-flash）
+            try await bridge.send(PiMessage(text: "The earlier request is cancelled, do not run it. Now: what is 6+6", deliveryID: delivery.uuidString), to: id)
 
             try await eventually("这句开的一轮答完") {
                 let messages = try await store.piMessages(of: sessionID)
@@ -134,7 +126,7 @@ struct RealOpenCodeTests {
             #expect(messages.filter { $0.role == .known(.user) }.map(\.text).last?.contains("Now") == true)
             let now = try #require(messages.firstIndex { $0.deliveryID == delivery })
             #expect(messages[..<now].contains { $0.text == PiNotice.stopped.rawValue }, "被停下的那一轮留了一行已停止")
-            #expect(!messages.contains { $0.role == .known(.pi) && $0.text.contains("SLEPT") })
+            #expect(!messages[..<now].contains { $0.role == .known(.pi) }, "被停下的那一轮没有回答")
             #expect(messages.map(\.seq) == messages.map(\.seq).sorted())
         }
     }

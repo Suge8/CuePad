@@ -25,9 +25,9 @@ import Testing
 /// 列出的家本机没装或没登录时，它的用例跳过、录像带不动。模型的回答每次不同，录下的一盘断言没过就再录这一个用例。
 ///
 /// 没有录像带、只在列出这家时连真 Agent 跑的（`live(_:_:)`）：终端里的 Codex 与 Claude Code（断言的是伪终端、tmux 里真终端界面的
-/// 输出与按键），大脑结束后不留进程与历史（`RealBrainProcessTests`，看的是真进程树与各家真实的历史目录），旧扩展托管进程换上新扩展（两个 Pi 进程交替上桥、热换扩展文件，回放排不稳先后），OpenCode（它的 HTTP/SSE 边界没接进录像带；
-/// 本机装的 v2——官方脚本、Homebrew 或 npm 的 `@opencode/cli`——在隔离的 `OpenCodeSandbox` 里用免费模型跑，要联网；免费额度按 IP 计，
-/// 用完或限流时 `CUEPAD_OPENCODE_MODEL` 写成 `提供方/模型` 换到自己的提供方，密钥只经环境给）。
+/// 输出与按键），大脑结束后不留进程与历史（`RealBrainProcessTests`，看的是真进程树与各家真实的历史目录），旧扩展托管进程换上新扩展（两个 Pi 进程交替上桥、热换扩展文件，回放排不稳先后），OpenCode（它的 HTTP/SSE 边界没接进录像带：
+/// 本机装的 v2——官方脚本、Homebrew 或 npm 的 `@opencode/cli`，`CUEPAD_OPENCODE` 可指定——在隔离的 `OpenCodeSandbox` 里跑，
+/// 缺省用假模型 `Fixtures/fake-openai.mjs`，零网络；`CUEPAD_OPENCODE_MODEL` 写成 `提供方/模型` 换成真提供方，密钥只经环境给）。
 enum RealAgents {
     static let recording: Set<AgentKind> = Set((ProcessInfo.processInfo.environment["CUEPAD_AGENT_TESTS"] ?? "").split(separator: ",")
         .compactMap { AgentKind(rawValue: String($0).trimmingCharacters(in: .whitespaces)) })
@@ -47,8 +47,8 @@ enum RealAgents {
         }
     }
 
-    /// 回放，或录制且本机跑得起来
-    static func runs(_ agent: AgentKind) -> Bool { mode(of: agent) == .replay || installed(agent) }
+    /// 回放（OpenCode 没有录像带，不算），或录制、直连且本机跑得起来
+    static func runs(_ agent: AgentKind) -> Bool { mode(of: agent) == .replay ? agent != .opencode : installed(agent) }
 
     /// 有录像带的套件：回放总是跑，录制要本机跑得起来。
     static func taped(_ agent: AgentKind) -> ConditionTrait {

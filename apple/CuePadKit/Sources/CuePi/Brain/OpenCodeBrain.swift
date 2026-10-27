@@ -4,7 +4,7 @@ import CueStore
 import Foundation
 
 /// OpenCode 当大脑：自己起一台 `opencode serve --stdio`（`OpenCodeClient.serve`，生命随标准输入，不复用用户的后台服务），
-/// 经与接入同一份的接口与事件流（`OpenCodeClient`、`OpenCodeEvent`、`OpenCodeDrafts`）说话。配置只经环境变量与内联配置，不改用户的文件：
+/// 接口、事件流与一轮的解读都与接入同一份（`OpenCodeClient`、`OpenCodeEvent`、`OpenCodeTurn`，翻出的原样发出）。配置只经环境变量与内联配置，不改用户的文件：
 /// - 内联配置（`OPENCODE_CONFIG_CONTENT`，见 `inlineConfig`）定义智能体 `cue`：`system` 整份替换系统提示；权限先全部拒绝，再放行读文件的三样
 ///   （`read`、`glob`、`grep`，连同工作目录外的路径）与 CuePad 的 MCP 工具；MCP 只开 CuePad 的 `cuepad`（策略拒绝 `mcp:*`、只放 `mcp:cuepad`，
 ///   用户配置里的 MCP 服务不起），不走 codemode（工具直接给模型）；不留快照；
@@ -13,12 +13,12 @@ import Foundation
 /// - 会话落在用户真实的库里（订阅登录、提供方凭据都在那里）：开会话时带标题（省掉起标题的那次模型调用），metadata 里标上
 ///   `cuepadBrain`（值是这台服务的 pid）；接入认这个标记跳过它们（`OpenCodeSessionInfo.isCueBrain`）。开新会话与停下时删掉旧会话；
 ///   起大脑时先删掉这个工作目录里服务已不在的带标记会话（崩溃留下的；同时在跑的另一个大脑的不动）；
-/// - MCP 是起服务后异步连上的：起大脑时等 `/api/mcp` 报 `cuepad` 已连上（`mcp.status.changed` 时再看），之前说的话模型看不到它的工具；
+/// - MCP 是起服务后异步连上的：起大脑时等 `/api/mcp` 报 `cuepad` 已连上（`mcp.status.changed` 时再看）、再等它的工具进了工具表
+///   （见 `mcpReady`），之前说的话模型看不到它的工具；
 /// - 说的话以 `steer` 交：空闲时开一轮，正忙时在下一个步骤边界并进这一轮；停下用 `interrupt`；
 /// - 模型写成 `提供方/模型`，换模型与强度（模型的 `variant`，按 `OpenCodeModel.variant(for:)` 夹取）先在 `/api/model` 里认：
 ///   服务对不存在的模型也回 204；能不能看图看模型的 `capabilities.input`；
-/// - 一轮是一次执行（`session.execution.*`）；正在说的话由 `OpenCodeDrafts` 累积；上下文是每一步的输入合计（`OpenCodeTokens.prompt`）；
-///   工具名去掉 MCP 的前缀 `cuepad_`。事件流断了（服务卡住）就结束进程，报成退出。
+/// - 事件流断了（服务卡住）就结束进程，报成退出。
 @MainActor
 final class OpenCodeBrain: HostedSession {
     private let session = BrainSession()
@@ -33,14 +33,12 @@ final class OpenCodeBrain: HostedSession {
     private var model: OpenCodeModel?
     private var level: PiThinkingLevel?
     var seesImages: Bool { model?.seesImages == true }
-    private var drafts = OpenCodeDrafts()
-    /// 在跑的工具调用 → 名字（`tool.called` 不带名字，名字在它之前的 `tool.input.started` 里）
-    private var toolNames: [String: String] = [:]
+    private var turn = OpenCodeTurn()
     /// MCP 服务的状态变了：等它连上的那一处醒来再看
     private let mcpChanges = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
 
     nonisolated static let agent = "cue"
-    nonisolated static let toolPrefix = "\(CueMCPServer.name)_"
+    private static let toolReload: Duration = .milliseconds(300)
 
     private struct Create: Encodable {
         var agent = OpenCodeBrain.agent
@@ -88,7 +86,7 @@ final class OpenCodeBrain: HostedSession {
 
     /// 内联配置，键名见 OpenCode v2 的 config.schema.json。
     private static func inlineConfig(_ config: CueBrainConfig) -> [String: Any] {
-        let allowed = ["read", "glob", "grep", "external_directory", "\(toolPrefix)*"]
+        let allowed = ["read", "glob", "grep", "external_directory", "\(OpenCodeTurn.cuePadPrefix)*"]
         let permissions = [["action": "*", "resource": "*", "effect": "deny"]] + allowed.map { ["action": $0, "resource": "*", "effect": "allow"] }
         return [
             "default_agent": agent, "snapshots": false,
@@ -139,7 +137,11 @@ final class OpenCodeBrain: HostedSession {
             let servers = try await client.get(OpenCodeData<[OpenCodeMCPServer]>.self, "/api/mcp", directory: directory).data
             let status = servers.first { $0.name == CueMCPServer.name }?.status
             switch status?.status {
-            case "connected": return
+            case "connected":
+                // 连上时 OpenCode 先发 `mcp.tools.changed`，它的工具表防抖 100 毫秒后才重载，重载完没有事件也没有接口看得到；
+                // 一轮开始时取的是那一刻的工具表，紧接着说的第一句就看不到 CuePad 的工具（实测 2.1.4）：等过这段防抖
+                try await Task.sleep(for: Self.toolReload)
+                return
             case nil, "pending": guard await changes.next() != nil else { throw HostedSessionError.notRunning }
             default: throw HostedSessionError.rejected(String(localized: "CuePad 的 MCP 服务连不上：\(status?.error ?? status?.status ?? "")"))
             }
@@ -162,7 +164,7 @@ final class OpenCodeBrain: HostedSession {
         guard let client, var create, let old = sessionID, let model else { throw HostedSessionError.notRunning }
         create.model = model.ref(level.flatMap(model.variant))
         sessionID = try await open(create, on: client)
-        toolNames = [:]
+        turn = OpenCodeTurn()
         try await client.call("DELETE", "/api/session/\(old)")
     }
 
@@ -208,36 +210,9 @@ final class OpenCodeBrain: HostedSession {
     }
 
     private func received(_ event: OpenCodeEvent) {
-        let data = event.data
         if event.type == "mcp.status.changed" { mcpChanges.continuation.yield() }
-        guard let sessionID, data.sessionID == sessionID else { return }
-        if let (_, draft) = drafts.apply(event) { session.emit(.speaking(draft)) }
-        switch event.type {
-        case "session.execution.started":
-            toolNames = [:]
-            session.emit(.turnStarted)
-        case "session.step.ended":
-            if let tokens = data.tokens { session.emit(.context(used: tokens.prompt, window: model?.limit?.context)) }
-        case "session.tool.input.started":
-            if let id = data.id, let name = data.name { toolNames[id] = name }
-        case "session.tool.called":
-            guard let id = data.id else { return }
-            let name = toolNames[id] ?? "?"
-            let arguments = String(decoding: (data.input?.json ?? [:]).data, as: UTF8.self)
-            session.emit(.tool(id: id, name: (name.hasPrefix(Self.toolPrefix) ? String(name.dropFirst(Self.toolPrefix.count)) : name).lowercased(), arguments: arguments))
-        case "session.tool.success", "session.tool.failed":
-            guard let id = data.id else { return }
-            toolNames[id] = nil
-            let failed = event.type == "session.tool.failed"
-            session.emit(.toolDone(id: id, result: failed ? data.error?.message ?? "" : brainText(data.content), failed: failed))
-        case "session.execution.succeeded", "session.execution.failed", "session.execution.interrupted":
-            if event.type == "session.execution.failed" {
-                session.emit(.failed(data.error?.message ?? data.error?.type ?? OpenCodeRuntime.unknownFailure))
-            }
-            session.emit(.turnFinished)
-        default:
-            break
-        }
+        guard let sessionID, event.data.sessionID == sessionID else { return }
+        for event in turn.apply(event, models: models) { session.emit(event) }
     }
 }
 #endif
