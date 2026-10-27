@@ -86,7 +86,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             workspace.show(route)
         }.environment(workspace).modifier(PaletteProvider()).environment(services))
         menuBarPanel = panel
-        statusItem = StatusItemController(
+        // 脚本起的实例（一天上百次）不建：那是用户菜单栏上的位置，每次起停都会闪一下
+        statusItem = DebugHooks.scripted ? nil : StatusItemController(
             togglePanel: {
                 panel.toggle(below: $0)
                 // 面板常驻、内容不重建：弹出时在这里看额度是否陈旧

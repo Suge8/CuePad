@@ -5,7 +5,7 @@
 #   每次一行 LAUNCH-ROW {json}，最后列中位数。
 #   种子：CUEPAD_PERF_SEED=<库目录>（如真实库的只读副本，先用这个构建打开一次，免得量进升级库结构）；没给时先写一份演示库
 #   （-CuePadDemo YES，就绪后结束，留在 apple/.derived-perf/Build/library-launch-seed），之后每次从它克隆、不带演示参数（演示参数会在启动时写库）。
-#   后台量（不抢前台）：墙钟随机器忙闲变，每行带当时的 1 分钟负载；前后对比新旧检出交替跑，以主线程的指令数为准、墙钟看中位数。
+#   后台量（不抢前台）：墙钟随机器忙闲变，每行带当时的 1 分钟负载；前后对比用 `xc.sh perf ab`（perf-ab.py），以主线程的指令数为准、墙钟看中位数。
 #   CUEPAD_TRACE=<xctrace 模板>（如 'Time Profiler'）：每次按 PID 录 trace，App 进 main 就停着等开录（-CuePadTraceWait），
 #   存 apple/.derived-perf/Build/traces/launch-<第几次>.trace；录着的那几次时刻不和不录的比。
 # xc.sh 构建好 Release（同 perf-mac.sh）后调这里，第一个参数是 CuePad.app。
