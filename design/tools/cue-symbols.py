@@ -9,7 +9,6 @@
 - 最多一块点睛，放在第二层（hierarchical 的 secondary，调色板渲染的第二个颜色）。点睛平时什么颜色、什么时候点亮是 App 代码里的着色规则，符号只管分层。
   点睛只能是小部件（一处点、一条缝里的块，不超过整个图形墨量的 `ACCENT_SHARE`，按 Regular 量、生成时检查——细的母版里主体墨少，占比自然高）：主体在主层——点睛平时是次一级的颜色，
   主体放进点睛层的话，没选中时整个图标是灰的，像被禁用。没有合适的小部件就不设点睛。
-  标签栏的带点变体（`dotted`，*.badge、*.status）例外：点睛并进主体，第二、三层是角上的点。
 - 字重：体块按母版外扩 / 内缩（`GROW`），孔跟着缩 / 扩，缝在粗的母版里收窄一点——重量来自墨，不来自线。
 - 品牌的物件：纸（圆角方纸 + 右上折角）、C 环（logo 的粗 C）、Cue（纸身体 + 斜着的腰环 + 竖着的眼）。
 
@@ -29,15 +28,10 @@ NAMES_SWIFT = ROOT / "apple/App/Sources/UI/Debug/InkSymbols.swift"
 WIDGET_OUT = ROOT / "apple/App/Widget/Symbols.xcassets"
 WIDGET_SYMBOLS = ("waiting", "done")  # 小组件与实时活动用到的（`WidgetIcon`）
 PREFIX = "cue"
-MASCOT_BADGE, MASCOT_STATUS = (8.4, -8.8), (8.0, 8.0)
 
 
 SYMBOLS = {
     "mascot": mascot,
-    # 标签栏上的 Cue（`TabMarks`）：右上新消息或草稿，右下此刻的事
-    "mascot.badge": dotted(mascot, MASCOT_BADGE),
-    "mascot.status": dotted(mascot, MASCOT_STATUS),
-    "mascot.badge.status": dotted(mascot, MASCOT_BADGE, MASCOT_STATUS),
     "idea": idea,
     "task": task,
     "session": session,
@@ -93,7 +87,6 @@ SYMBOLS = {
     "link": chain(True),
     "unlink": chain(False),
     "folder": folder(),
-    "folder.badge": dotted(folder(), (8.6, -9.8)),  # 标签栏上的项目：同步到不了 Mac
     "folder.add": folder(mark_plus),
     "folder.remove": folder(mark_minus),
     "books": books,

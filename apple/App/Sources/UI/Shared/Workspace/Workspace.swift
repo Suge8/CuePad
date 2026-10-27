@@ -51,21 +51,37 @@ final class Workspace {
     }
 
     let services: AppServices
-    /// 当前去处（Mac 的内容区、iPad 右边那一栏、窄屏选中的 tab）：打开 App 先到 `openingRoute`。经 `select` 换；窄屏点标签栏直接换它（各 tab 的栈留着）。
+    /// 当前去处（Mac 的内容区、iPad 右边那一栏、窄屏选中的 tab）：打开 App 先到 `openingRoute`。经 `select` 换；窄屏点底部那一排经 `tap` 换（各 tab 的栈留着）。
     var root: Route
     /// 各个根上推入的页（iOS 的卡片纸页、会话页……），按根分开：窄屏每个 tab 一个导航栈，切走再回来还在；宽屏与 Mac 只有当前根的那一份（`select` 换根时清掉）。
-    /// Mac 没有历史，总是空的。
-    var stacks: [Route: [Route]] = [:]
+    /// Mac 没有历史，总是空的。经 `subscript(stack:)` 读写，按根分开观察：在一个 tab 里推入、返回只叫醒那个 tab 的导航栈，别的 tab 不跟着重算。
+    @ObservationIgnored private(set) var stacks: [Route: [Route]] = [:]
+
+    subscript(stack root: Route) -> [Route] {
+        get {
+            access(keyPath: \.[stack: root])
+            return stacks[root] ?? []
+        }
+        set { withMutation(keyPath: \.[stack: root]) { stacks[root] = newValue } }
+    }
+
     /// 当前根上推入的页。
     var path: [Route] {
-        get { stacks[root] ?? [] }
-        set { stacks[root] = newValue }
+        get { self[stack: root] }
+        set { self[stack: root] = newValue }
+    }
+
+    /// 清掉各个根上推入的页。
+    func clearStacks() {
+        for root in stacks.keys { self[stack: root] = [] }
     }
     /// 去处怎么摆：Mac 固定是 `.pages`，iOS 随尺寸类在 `.split` 与 `.dock` 之间换（`IOSRoot`）。变窄时把宽屏的去处推到它所属的那一页上。
     var layout = Layout.native {
         didSet {
             guard layout == .dock, oldValue != .dock, let home = root.home, home != root else { return }
-            stacks = [home: [root] + path]
+            let pushed = [root] + path
+            clearStacks()
+            self[stack: home] = pushed
             root = home
         }
     }

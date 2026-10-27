@@ -291,17 +291,6 @@ class Along:
         return catmull([E] + [self.point(u0 + (u1 - u0) * k / self.n) for k in range(1, self.n)] + [N])
 
 
-def _sub_cubic(s, t0, t1):
-    """三次曲线 t0..t1 那一截（de Casteljau 切两刀）。"""
-    def split(c, t):
-        a, b, d = (add(c.p0, mul(sub(c.p1, c.p0), t)), add(c.p1, mul(sub(c.p2, c.p1), t)), add(c.p2, mul(sub(c.p3, c.p2), t)))
-        ab, bd = add(a, mul(sub(b, a), t)), add(b, mul(sub(d, b), t))
-        m = add(ab, mul(sub(bd, ab), t))
-        return Cubic(c.p0, a, ab, m), Cubic(m, bd, d, c.p3)
-    head = split(s, t1)[0] if t1 < 1 else s
-    return split(head, t0 / t1)[1] if t0 > 0 else head
-
-
 def clip(contour, cut):
     def roots(s, n=64):
         vals = [cut.f(sample(s, k / n)) for k in range(n + 1)]
@@ -318,7 +307,7 @@ def clip(contour, cut):
 
     def piece(s, t0, t1):
         if isinstance(s, Line): return Line(sample(s, t0), sample(s, t1))
-        if isinstance(s, Cubic): return _sub_cubic(s, t0, t1)
+        assert isinstance(s, Arc), "裁切的轮廓只支持直线与圆弧"
         return Arc(s.c, s.r, s.a0 + s.sweep * t0, s.sweep * (t1 - t0), 1)
 
     parts = []

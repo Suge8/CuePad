@@ -195,15 +195,6 @@ nonisolated enum Icon: Hashable, Sendable {
         case .ink(let name), .filled(let name): UIImage(named: Self.ink(name))
         }
     }
-
-    /// 角上带点的变体（同系统的 *.badge：点与图形之间刻一圈缝，cue-symbols.py 的 `dotted`），标签栏用（`TabMarks`）：右上 `badge`、右下 `status`，
-    /// 各给一种颜色，都没有就是原图。主体上 `.tintColor`：调色板渲染时它解析成所在视图的 tint，标签栏里就是选中、未选中各自的颜色，同没有点时一样。
-    /// 只有 Cue（两角）与文件夹（右上）生成了变体。
-    func platformImage(badge: UIColor?, status: UIColor?) -> UIImage? {
-        guard case .ink(let name) = source, badge != nil || status != nil else { return platformImage }
-        let variant = name + (badge == nil ? "" : ".badge") + (status == nil ? "" : ".status")
-        return UIImage(named: Self.ink(variant))?.applyingSymbolConfiguration(.init(paletteColors: [.tintColor] + [badge, status].compactMap(\.self)))
-    }
     #else
     /// AppKit 的菜单与工具条用。
     var platformImage: NSImage? {
