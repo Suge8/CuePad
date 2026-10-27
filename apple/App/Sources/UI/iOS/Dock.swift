@@ -151,9 +151,10 @@ enum Dock {
 
     /// 这一页上留不留着底部那一排（同系统标签栏：往下钻的页都留着，回到哪一格、换去处随时点得到）。
     /// 会话页与卡片纸页让开：底边是它们自己的（回复框、整页的纸与键盘），在那里专心说、专心写，同"信息"的对话与"备忘录"的一条。
+    /// 技能与规则连同从它点开的也让开：是从 Cue 面板推进去的二级页（同设置里推进去的一页），不是这一排的去处。
     static func stays(on route: Route) -> Bool {
         switch route {
-        case .session, .card, .libraryItem: false
+        case .session, .card, .library, .libraryFile: false
         default: true
         }
     }

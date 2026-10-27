@@ -118,14 +118,14 @@ extension CueStore {
     try requestDelivery(bind.stored, to: SendTarget(kind: .mac, name: title, ref: nil), on: host, mode: .bind)
   }
 
-  /// 请 `host` 那台 Mac 整理技能与说明（`orders` 是那几件，"全部整理"是 `AgentLibrary.automaticOrders`）。
+  /// 请 `host` 那台 Mac 整理技能与规则（`orders` 是那几件，一键整理是 `AgentLibrary.automaticOrders`）。
   public func requestTidy(_ orders: [TidyOrder], on host: String) throws -> DeliveryRequest {
-    try requestDelivery(JSONColumn.encode(orders), to: SendTarget(kind: .mac, name: String(localized: "技能与说明"), ref: nil), on: host, mode: .tidy)
+    try requestDelivery(JSONColumn.encode(orders), to: SendTarget(kind: .mac, name: String(localized: "技能与规则"), ref: nil), on: host, mode: .tidy)
   }
 
-  /// 请 `host` 那台 Mac 把一份说明写成 `edit.text`（`title` 是说明的名字，给人看的目标名）。
-  public func requestInstructionEdit(_ edit: InstructionEdit, title: String, on host: String) throws -> DeliveryRequest {
-    try requestDelivery(edit.stored, to: SendTarget(kind: .mac, name: title, ref: nil), on: host, mode: .instruction)
+  /// 请 `host` 那台 Mac 把一份技能或规则文件写成 `edit.text`（`title` 是它的名字，给人看的目标名）。
+  public func requestLibraryEdit(_ edit: LibraryEdit, title: String, on host: String) throws -> DeliveryRequest {
+    try requestDelivery(edit.stored, to: SendTarget(kind: .mac, name: title, ref: nil), on: host, mode: .libraryEdit)
   }
 
   /// 所有投送请求，最近的在前。

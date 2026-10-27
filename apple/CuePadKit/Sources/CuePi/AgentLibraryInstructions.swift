@@ -2,13 +2,13 @@
 import CueStore
 import Foundation
 
-/// 照文件读出说明与说明那两种要整理的（位置见 `AgentLibraryPlaces`）：
+/// 照文件读出规则与规则那两种该整理的（位置见 `AgentLibraryPlaces`）：
 /// - 空文件等同没有（`content`）。
 /// - 全局：链到 `~/.agents/AGENTS.md` 的几家读它；哪家还有自己的一份（或缺链接），就是"各写一份"——各家自己的那份、
 ///   共读的那份，连同替换基础提示的两份（Pi 的 SYSTEM.md、Codex 的 `model_instructions_file`）一起比；替换基础提示的两份自己不算问题。
 ///   指到别处的链接不碰。
 /// - 项目：Claude Code 读不到 AGENTS.md 的内容就是问题——`CLAUDE.md` 不是链到它的，而 `CLAUDE.md`、`.claude/CLAUDE.md` 有一份内容不同
-///   （空的也算，它照样挡住 AGENTS.md），或有个人的 `CLAUDE.local.md`；内容不同的那几份进比对与合成。
+///   （空的也算，它照样挡住 AGENTS.md），或有个人的 `CLAUDE.local.md`；内容不同的那几份进合并。
 struct LibraryInstructionScan {
     var instructions: [LibraryInstruction] = []
     var tidies: [LibraryTidy] = []
@@ -64,7 +64,7 @@ struct LibraryInstructionScan {
         }
     }
 
-    /// 替换基础提示的两份（有才列）；不论要不要比都盯着：SYSTEM.md 留着时是单独一份说明，Codex 的配置里加上这个键就有一份要比。
+    /// 替换基础提示的两份（有才列）；不论要不要比都盯着：SYSTEM.md 留着时是单独一份规则，Codex 的配置里加上这个键就有一份要比。
     private mutating func replacements(_ places: AgentLibraryPlaces) -> [InstructionSource] {
         var found: [InstructionSource] = []
         if places.uses(.pi) {
@@ -110,7 +110,7 @@ struct LibraryInstructionScan {
 
     static func read(_ file: URL) -> String? { (try? Data(contentsOf: file)).flatMap { String(data: $0, encoding: .utf8) } }
 
-    /// 一份说明的正文：空的（0 字节、只有空白）等同没有——不算哪家写了一份、不进比对与合成，项目里写"还没有 AGENTS.md"。
+    /// 一份规则的正文：空的（0 字节、只有空白）等同没有——不算哪家写了一份、不进合并，项目里写"还没有"。
     static func content(_ file: URL) -> String? {
         read(file).flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0 }
     }

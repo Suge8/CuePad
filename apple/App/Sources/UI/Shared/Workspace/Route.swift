@@ -2,17 +2,17 @@ import CueStore
 import Foundation
 
 /// 去哪一页：两端同一个值，都经 `Workspace.show` 去；Mac 内容区挂哪一页与 iOS 导航栈里推入哪一页只差呈现（`Workspace.Layout`）
-/// （Mac 只用其中的 `project`、`archive`、`trash`、`library`、`progress`、`cue`、`session`；说明与比一比在 Mac 上盖在当前页上，见 `Workspace.overlay`）。
+/// （Mac 只用其中的 `project`、`archive`、`trash`、`library`、`progress`、`cue`、`session`；技能与规则的文件页在 Mac 上盖在当前页上，见 `Workspace.overlay`）。
 nonisolated enum Route: Hashable {
     /// 项目书架：全部项目（iPhone 底部那一排的"项目"）。
     case shelf
     case project(UUID)
     case archive
     case trash
-    /// 技能与说明（`AgentLibrary`）：Mac 侧栏底下那颗、iPhone 的 Cue 面板那一行。
+    /// 技能与规则（`AgentLibrary`）：Mac 侧栏底下那颗、iPhone 的 Cue 面板那一行。
     case library
-    /// 一份说明的编辑页或要整理那件的比一比（iOS 推入；Mac 盖在当前页上）。
-    case libraryItem(LibraryItem)
+    /// 一份技能或规则的文件页（iOS 推入；Mac 盖在当前页上）。
+    case libraryFile(LibraryFile)
     case settings
     case conflicts
     /// 进展：跨项目的看板与会话两段（`Workspace.progressPane`；侧栏与 iPhone 底部的"进展"）。
@@ -41,7 +41,7 @@ nonisolated enum Route: Hashable {
         case .cue: .cue
         case .progress: .progress
         case .shelf, .project, .archive, .trash, .settings, .conflicts: .shelf
-        case .search, .card, .session, .library, .libraryItem: nil
+        case .search, .card, .session, .library, .libraryFile: nil
         }
     }
 }
@@ -56,10 +56,4 @@ nonisolated struct SessionRoute: Hashable {
 
     static func == (lhs: Self, rhs: Self) -> Bool { lhs.id == rhs.id }
     func hash(into hasher: inout Hasher) { hasher.combine(id) }
-}
-
-/// 技能与说明页里点开的一样：一份说明（编辑页）或要整理的一件（比一比，按 `LibraryTidy.id`）。
-nonisolated enum LibraryItem: Hashable {
-    case instruction(LibraryInstruction.Kind)
-    case compare(String)
 }

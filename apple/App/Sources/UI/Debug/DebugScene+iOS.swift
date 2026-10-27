@@ -6,6 +6,8 @@ import UIKit
 
 /// iOS 画面（`-CuePadScene`）：shelf（书架，窄屏底部的"项目"、宽屏侧栏的"全部项目"）、cue（Cue 页，iPad 侧栏展开；`-CuePadCuePanel YES` 页头一出现就展开成面板，`-CuePadPanelCycle YES` 就绪后反复开合；`-CuePadCuePresence disabled` 看说过话后停用时输入框上方那张启用的小纸（`CueWelcome`））、cuememory（再打开"Cue 记得什么"）、project、older、editor、progress（进展页看板段，窄屏底部与宽屏侧栏的"进展"；给了 `-CuePadProject` 先把项目范围设成它）、sessions（进展页的会话段；给了 `-CuePadProject` 先把项目范围设成它，`-CuePadQuotaOpen YES` 顶栏胶囊长出额度明细）、send、search、trash、archive、settings（配 -CuePadDemo 时 Cue 运行在演示的 Mac 上）、sidebar（iPad 展开侧栏）；不给是打开 App 的第一屏（Cue 页）。
 /// search 是搜索页，出现即聚焦并填入 `-CuePadSearch`；`-CuePadSearchScope sessions` 打开在会话那一栏。
+/// library 是技能与规则（`-CuePadLibraryTab skills` 打开在技能那一段），再推入文件页：instruction 是全局规则（给了 `-CuePadProject` 是那个项目的，
+/// 演示的全局规则顶上有合并那一条，`-CuePadMergePreview YES` 已点过一下"合并进来"、标出会并进来的段），skill 是 write-swift，duplicate 是同名的 release。
 /// task 打开进行中第一条的任务气泡（没有落点、在上方居中；没有进行中的就是第一条待办；给了 `-CuePadTask <标题开头>` 是那一条）。
 /// session：打开 `-CuePadSession <会话名>`（默认 homepage）的近况页（`-CuePadNotify YES`：走点锁屏通知的那条路进去；长对话与追加中的对话见 `DebugScene+LongChat.swift`）；send 是从卡片"发到 Mac"先选会话。
 /// projectform：项目表单（给了 `-CuePadProject` 是编辑该项目，否则新建）。
@@ -57,12 +59,11 @@ extension DebugScene {
             workspace.sidebar = .all
         case "trash": open(.trash)
         case "archive": open(.archive)
-        case "library", "instruction", "compare":
-            // 同 Mac：技能与说明，instruction 推入全局说明（给了 -CuePadProject 是那个项目的），compare 推入各写一份的全局规则
+        case "library", "instruction", "skill", "duplicate":
+            // 同 Mac
             if defaults.bool(forKey: "CuePadDemo") { await seedCue(workspace.services) }
             open(.library)
-            if scene == "instruction" { workspace.openLibrary(.instruction(project.map(LibraryInstruction.Kind.project) ?? .global)) }
-            if scene == "compare" { workspace.openLibrary(.compare("global-instructions")) }
+            if let scene, let file = DemoAgentLibrary.file(scene: scene, project: project) { workspace.openLibrary(file) }
         case "settings":
             // 配演示库时 Cue 运行在演示的 Mac Studio 上（同 Mac 的设置画面）
             if defaults.bool(forKey: "CuePadDemo") { await seedCue(workspace.services) }

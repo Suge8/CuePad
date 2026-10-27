@@ -60,7 +60,7 @@ struct Sidebar: View {
         }
     }
 
-    /// 底栏：启动问题（有才出现），下面一排归档、回收站、技能与说明（有要整理的角上带点）与设置。
+    /// 底栏：启动问题（有才出现），下面一排归档、回收站、技能与规则（有该整理的角上带点）与设置。
     private var footer: some View {
         VStack(spacing: 8) {
             StartupIssues()
@@ -269,14 +269,14 @@ private struct ProjectRow: View, Equatable {
 private struct FooterPage: View {
     let entry: SidebarOutline.Entry
     var count = 0
-    /// 角上带一颗墨点：这一页里有要你处理的（技能与说明有要整理的），不在那一页时也看得到，不打断。
+    /// 角上带一颗墨点：这一页里有要你处理的（技能与规则有该整理的），不在那一页时也看得到，不打断。
     var alert = false
     let select: (Route) -> Void
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
     private var title: String {
-        if alert { return String(localized: "\(entry.title)，有要整理的") }
+        if alert { return String(localized: "\(entry.title)，有该整理的") }
         return count > 0 ? String(localized: "\(entry.title)，\(count) 项") : entry.title
     }
 

@@ -3,9 +3,9 @@ import CueStore
 import Foundation
 
 extension DebugScene {
-    /// 演示的技能与说明（配 `-CuePadDemo YES`）：手机上看的是演示的 Mac Studio 报来的快照（各家都接了，`seedMacAgents`），这里替它写一份；
+    /// 演示的技能与规则（配 `-CuePadDemo YES`）：手机上看的是演示的 Mac Studio 报来的快照（各家都接了，`seedMacAgents`），这里替它写一份；
     /// Mac 上看的是本机照文件扫出的（`AgentLibraryKeeper`），这里把同一套内容写成隔离目录里的文件（`seedAgentFiles`）。
-    /// 默认是有要整理的样子（散落的、Claude Code 看不见的、同名的、格式不对的、各写一份的全局规则）；`-CuePadAgentLibrary clean` 是整理好了的样子。
+    /// 默认是该整理的样子（散落的、Claude Code 读不到的、空目录、同名的、格式不对的、另写了一份的全局规则）；`-CuePadAgentLibrary clean` 是整理好了的样子。
     static func seedAgentLibrary(_ services: AppServices) async {
         #if os(macOS)
         seedAgentFiles()
@@ -41,29 +41,57 @@ struct DemoAgentLibrary {
             agents: [.pi, .claudeCode, .codex], modifiedAt: .now)
     }
 
-    /// 演示的 Mac Studio 照手机发来的整理与改说明改它的快照（`-CuePadDemoMac YES`，`runDemoMac`）：整理了的那几件不在了（链上了的各家都看得见），
-    /// 说明照基准写（快照里已不是手机看到的那一版就退回"Mac 上刚改过"，同真的 Mac）。不是这两种请求为 nil。
+    /// 演示的 Mac Studio 照手机发来的整理与改文件改它的快照（`-CuePadDemoMac YES`，`runDemoMac`）：整理了的那几件不在了（补上链接的各家都读得到，
+    /// 去重留下的那份之外的不在了），文件照基准写（快照里已不是手机看到的那一版就退回"Mac 上刚改过"，同真的 Mac）。不是这两种请求为 nil。
     static func apply(_ request: DeliveryRequest, store: CueStore) async -> DeliveryOutcome? {
-        guard request.tidyOrders != nil || request.instructionEdit != nil else { return nil }
+        guard request.tidyOrders != nil || request.libraryEdit != nil else { return nil }
         guard var library = try? await store.agentLibrary(host: request.hostID) else { return .failed(ShownText(AgentLibraryError.tidyGone)) }
         if let orders = request.tidyOrders {
             let ids = Set(orders.map(\.tidy))
+            let kept = Set(orders.compactMap(\.keep))
+            let dropped = library.tidies.filter { ids.contains($0.id) }.flatMap { tidy -> [String] in
+                if case .duplicate(_, let copies) = tidy.kind { copies.map(\.path).filter { !kept.contains($0) } } else { [] }
+            }
             library.tidies.removeAll { ids.contains($0.id) }
+            library.skills.removeAll { dropped.contains($0.path) }
             if ids.contains("unlinked") {
                 library.skills = library.skills.map {
-                    LibrarySkill(name: $0.name, description: $0.description, scope: $0.scope, group: $0.group, path: $0.path)
+                    LibrarySkill(name: $0.name, scope: $0.scope, group: $0.group, path: $0.path, text: $0.text, problem: $0.problem)
                 }
             }
         }
-        if let edit = request.instructionEdit {
-            guard let index = library.instructions.firstIndex(where: { $0.kind == edit.instruction }), library.instructions[index].base == edit.base
-            else { return .failed(ShownText(AgentLibraryError.changedOnMac)) }
-            let old = library.instructions[index]
-            library.instructions[index] = LibraryInstruction(
-                kind: old.kind, path: old.path, text: edit.text, modifiedAt: .now, readers: old.readers, links: old.links)
+        if let edit = request.libraryEdit {
+            guard LibraryEdit.base(of: library.file(edit.file)?.text) == edit.base else { return .failed(ShownText(AgentLibraryError.changedOnMac)) }
+            switch edit.file {
+            case .instruction(let kind):
+                guard let index = library.instructions.firstIndex(where: { $0.kind == kind }) else { return .failed(ShownText(AgentLibraryError.gone)) }
+                let old = library.instructions[index]
+                library.instructions[index] = LibraryInstruction(
+                    kind: old.kind, path: old.path, text: edit.text, modifiedAt: .now, readers: old.readers, links: old.links)
+            case .skill(let path):
+                guard let index = library.skills.firstIndex(where: { $0.path == path }) else { return .failed(ShownText(AgentLibraryError.gone)) }
+                let old = library.skills[index]
+                library.skills[index] = LibrarySkill(
+                    name: old.name, scope: old.scope, group: old.group, path: old.path, text: edit.text, unseenBy: old.unseenBy)
+            }
         }
         _ = try? await store.recordAgentLibrary(library)
         return .succeeded
+    }
+
+    /// 画面直接打开的那份文件（`-CuePadScene instruction|skill|duplicate`）：全局规则（给了项目是它的规则）、write-swift、同名的全局 release。
+    static func file(scene: String, project: UUID?) -> LibraryFile? {
+        #if os(macOS)
+        let root = (ProcessInfo.processInfo.environment["CUEPAD_AGENTS_DIR"] ?? "") + "/skills"
+        #else
+        let root = DemoLibrary.demoHome + ".agents/skills"
+        #endif
+        return switch scene {
+        case "instruction": .instruction(project.map(LibraryInstruction.Kind.project) ?? .global)
+        case "skill": .skill(root + "/development/write-swift")
+        case "duplicate": .skill(root + "/release")
+        default: nil
+        }
     }
 
     // MARK: 技能
@@ -86,24 +114,42 @@ struct DemoAgentLibrary {
         ("", "web-search", String(localized: "联网搜索与取正文", table: "Demo")),
     ]
 
+    /// SKILL.md 的样子（同 `seedAgentFiles` 写出的）。
+    static func skillText(_ name: String, _ description: String) -> String {
+        "---\nname: \(name)\ndescription: \(description)\n---\n\n\(description)\n"
+    }
+
     private var skills: [LibrarySkill] {
-        let global = Self.global.map { item in
+        var global = Self.global.map { item in
             LibrarySkill(
-                name: item.name, description: item.description, scope: .global, group: item.group,
+                name: item.name, scope: .global, group: item.group,
                 path: item.group.isEmpty ? "\(root)/\(item.name)" : "\(root)/\(item.group)/\(item.name)",
-                unseenBy: !clean && item.name == "write-swift" ? [.claudeCode] : [])
+                text: Self.skillText(item.name, item.description), unseenBy: !clean && item.name == "write-swift" ? [.claudeCode] : [])
+        }
+        if !clean {
+            global.append(LibrarySkill(name: "release", scope: .global, group: "", path: root + "/release", text: Self.globalRelease))
+            global.append(LibrarySkill(
+                name: "uilane", scope: .global, group: "operations", path: root + "/operations/uilane", text: Self.uilane, problem: .unreadable))
         }
         var project: [LibrarySkill] = []
         if let cuepad {
-            project += Self.cuepadSkills.map { LibrarySkill(name: $0.0, description: $0.1, scope: .project(cuepad), group: "", path: "\(home)/Project/cuepad/.agents/skills/\($0.0)") }
+            project += Self.cuepadSkills.map {
+                LibrarySkill(name: $0.0, scope: .project(cuepad), group: "", path: "\(home)/Project/cuepad/.agents/skills/\($0.0)", text: Self.skillText($0.0, $0.1))
+            }
+            if !clean {
+                project.append(LibrarySkill(name: "release", scope: .project(cuepad), group: "", path: Self.cuepadReleasePath(home), text: Self.cuepadRelease))
+            }
         }
         if let atlas {
             project.append(LibrarySkill(
-                name: "load-test", description: Self.loadTest, scope: .project(atlas), group: "",
-                path: "\(home)/Project/atlas/.agents/skills/load-test", unseenBy: clean ? [] : [.claudeCode]))
+                name: "load-test", scope: .project(atlas), group: "", path: "\(home)/Project/atlas/.agents/skills/load-test",
+                text: Self.skillText("load-test", Self.loadTest), unseenBy: clean ? [] : [.claudeCode]))
         }
         return global + project
     }
+
+    static func cuepadReleasePath(_ home: String) -> String { home + "/Project/cuepad/.agents/skills/release" }
+    static let uilane = String(localized: "# uilane\n\n界面泳道图。\n", table: "Demo")
 
     static let cuepadSkills = [
         ("xc", String(localized: "经 xc.sh 构建、测试与截图", table: "Demo")),
@@ -115,7 +161,7 @@ struct DemoAgentLibrary {
     static let cuepadRelease = String(
         localized: "---\nname: release\ndescription: 签名、公证、发布新版本\n---\n\n只在干净检出运行 xc.sh release。\n\n公证完再推 appcast。", table: "Demo")
 
-    // MARK: 说明
+    // MARK: 规则
 
     static let cuepadRules = String(localized: "# CuePad\n\nSwift 原生应用。构建、测试、截图只经 apple/scripts/xc.sh。", table: "Demo")
     static let homepageRules = String(localized: "# 个人网站\n\nAstro 静态站，部署前先跑 pnpm build。", table: "Demo")
@@ -188,7 +234,7 @@ struct DemoAgentLibrary {
         return list
     }
 
-    // MARK: 要整理
+    // MARK: 该整理的
 
     private var tidies: [LibraryTidy] {
         let claude = home + "/.claude/skills"
@@ -203,14 +249,11 @@ struct DemoAgentLibrary {
         ]
         if let cuepad {
             list.append(LibraryTidy(id: "duplicate/release", kind: .duplicate(name: "release", copies: [
-                SkillCopy(skill: SkillEntry(name: "release", scope: .global, path: root + "/release"),
-                          text: Self.globalRelease, modifiedAt: ago(24 * 30)),
-                SkillCopy(skill: SkillEntry(name: "release", scope: .project(cuepad), path: home + "/Project/cuepad/.agents/skills/release"),
-                          text: Self.cuepadRelease, modifiedAt: ago(5)),
+                SkillEntry(name: "release", scope: .global, path: root + "/release"),
+                SkillEntry(name: "release", scope: .project(cuepad), path: Self.cuepadReleasePath(home)),
             ])))
         }
-        list.append(LibraryTidy(id: "malformed/" + root + "/operations/uilane", kind: .malformed(
-            SkillEntry(name: "uilane", scope: .global, path: root + "/operations/uilane"), .unreadable)))
+        list.append(LibraryTidy(id: "empty", kind: .empty([home + "/.codex/skills/codex-primary-runtime"])))
         list.append(LibraryTidy(id: "global-instructions", kind: .globalInstructions([
             InstructionSource(origin: .shared, path: home + "/.agents/AGENTS.md", text: Self.sharedRules, modifiedAt: ago(26)),
             InstructionSource(origin: .agent(.claudeCode), path: home + "/.claude/CLAUDE.md", text: Self.claudeRules, modifiedAt: ago(24 * 2)),

@@ -9,7 +9,7 @@ import SwiftUI
 /// 打开后第一次问完之前只写检测中：没登录的那家一出来就是"登录"，不先给勾选再在启用时报错。
 /// Agent 那几行与 Cue 那一行只读 `Workspace.setupRows`、`setupCue`：能当 Cue 的一家都用不了时，一行一个按钮（安装、登录），
 /// 装、登录都在后台做、就地写进度与原因，不用开终端粘命令；平时是勾选要接入的几家。每行写它会写什么或做什么，点按钮就是同意。
-/// 没做成的那一行写原因，都做成就收起；这台的技能与说明还有"全部整理"能做的，换成第二步把它们收到一处（`SetupLibraryStep`，"跳过"就不整理）。
+/// 没做成的那一行写原因，都做成就收起；这台的技能与规则还有一键整理能做的，换成第二步（`SetupLibraryStep`，"跳过"就不整理）。
 /// "以后再说"关掉就是不接。
 struct SetupPanel: View {
     @Environment(Workspace.self) private var workspace
@@ -45,7 +45,7 @@ struct SetupPanel: View {
         rows.contains { if case .logIn = $0.step { true } else { $0.step == .loggingIn } }
     }
     private var done: Bool { checked && rows.isEmpty && !cueRowShown }
-    /// 都接好了、技能与说明还有"全部整理"能做的：第二步把它们收到一处（`SetupLibraryStep`）。
+    /// 都接好了、技能与规则还有一键整理能做的：第二步（`SetupLibraryStep`）。
     private var tidying: AgentLibrary? {
         guard done, let library = workspace.library, library.hostID == services.hostID, !library.automaticOrders.isEmpty else { return nil }
         return library
@@ -84,10 +84,10 @@ struct SetupPanel: View {
                 .opacity(shown ? 1 : 0)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 4) {
-                Text(tidying != nil ? "把技能与说明收到一处" : setupCue == .none ? "接入 Agent" : "启用 \(cueName)")
+                Text(tidying != nil ? "把技能与规则收到一处" : setupCue == .none ? "接入 Agent" : "启用 \(cueName)")
                     .font(Typography.heading).foregroundStyle(palette.ink)
                 if tidying != nil {
-                    Text("各家读同一份技能与说明，改一处就都改了").font(Typography.secondary).foregroundStyle(palette.ink2)
+                    Text("各家读同一份技能与规则，改一处就都改了").font(Typography.secondary).foregroundStyle(palette.ink2)
                 } else if setupCue != .none {
                     Text("你说一件事，\(cueName) 交给这台 Mac 上的 Agent 去做").font(Typography.secondary).foregroundStyle(palette.ink2)
                 }
@@ -108,11 +108,7 @@ struct SetupPanel: View {
             if !rows.isEmpty { group { ForEach(rows) { row($0) } } }
             if cueRowShown { group { cueRow } }
             if let tidying {
-                SetupLibraryStep(library: tidying) { id in
-                    close()
-                    workspace.show(.library)
-                    workspace.openLibrary(.compare(id))
-                }
+                SetupLibraryStep(library: tidying)
             } else if done {
                 note { Text("都已接入") }
             }
@@ -223,12 +219,14 @@ struct SetupPanel: View {
                 Button("跳过") { close() }
                     .buttonStyle(ControlButtonStyle(kind: .secondary))
                     .keyboardShortcut(.cancelAction)
-                Button(tidyingNow ? "整理中…" : "收到一处") {
+                Button {
                     tidyingNow = true
                     Task {
                         await workspace.tidy(tidying.automaticOrders, in: tidying)
                         close()
                     }
+                } label: {
+                    TidyLabel(title: "一键整理", working: tidyingNow)
                 }
                 .buttonStyle(ControlButtonStyle(kind: .primary))
                 .keyboardShortcut(.defaultAction)
@@ -263,7 +261,7 @@ struct SetupPanel: View {
         Task {
             failures = await workspace.setUp(connecting: chosen, enablingCue: enablingCue)
             working = false
-            // 还有技能与说明要收的：留着面板，换成第二步
+            // 还有技能与规则要收的：留着面板，换成第二步
             if failures.isEmpty, tidying == nil { close() }
         }
     }

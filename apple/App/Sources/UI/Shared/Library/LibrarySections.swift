@@ -1,20 +1,21 @@
 import CueStore
 import SwiftUI
 
-/// 技能与说明页的三组（Mac 的页与手机的页同一份，`LibraryPage`、`LibraryScreen` 只管怎么摆）：
-/// 要整理（只在有问题时出现，每件一句事实一个动作，"全部整理"做不要你挑的那几件）、说明（全局一行，Pi 的系统提示有才列，再是绑了文件夹的各项目）、
-/// 技能（全局按分类、各项目各一组，每行右端各家一列，再是各家自己管的个数）。整理不弹确认：做完的提示带撤销（`Workspace.tidy`）。
-/// 改动的写入都在那台 Mac 上：手机上的动作发往 Mac（按钮带纸飞机），快照随它写回同步来。
+/// 技能与规则页的几块（Mac 的页与手机的页同一份，`LibraryPage`、`LibraryScreen` 只管怎么摆）：
+/// 一键整理那块纸（只在有不用你选的几件时出现，`TidyPaper`）、规则（`InstructionSection`）、技能（`SkillSection`）。
+/// 点任何一份都在 CuePad 里打开它的文件页（`LibraryFilePage`、`LibraryFileScreen`）；去重与合并在文件页顶上那一条里做。
+/// 改动的写入都在那台 Mac 上：手机上的动作发往 Mac（按钮带纸飞机），快照随它写回同步来。行末只画读不到这一份的那几家（`UnseenMarks`）。
 
-/// 一组的标题（带个数的把个数作为次一级的字嵌在整句里，英文才排得对：Skills 15）、右边的东西（"全部整理"、各家的列头）。
+/// 一组的标题（带个数的把个数作为次一级的字嵌在整句里，英文才排得对：Skills 15）、右边的东西（Mac 规则列的问号）。
+/// 标题为 nil：手机上规则、技能两组的名字已写在页顶那两段上（`LibraryScreen`），同一屏不重复。
 struct LibraryHeader<Trailing: View>: View {
-    let title: Text
+    let title: Text?
     @ViewBuilder var trailing: Trailing
     @Environment(\.palette) private var palette
 
     var body: some View {
         HStack(alignment: .center, spacing: 6) {
-            title.font(Self.font).foregroundStyle(palette.ink)
+            title?.font(Self.font).foregroundStyle(palette.ink)
                 .accessibilityAddTraits(.isHeader)
             Spacer(minLength: 8)
             trailing
@@ -39,6 +40,15 @@ struct LibraryHeader<Trailing: View>: View {
 
 extension LibraryHeader where Trailing == EmptyView {
     init(title: Text) { self.init(title: title) { EmptyView() } }
+}
+
+/// 规则、技能两组自己写不写组名：Mac 两列并排写；手机分两段，组名在页顶那两段上。
+private enum LibraryGroupTitle {
+    #if os(macOS)
+    static let shown = true
+    #else
+    static let shown = false
+    #endif
 }
 
 /// 一组行的纸：行与行之间一线发丝（同设置的分组），手机上行铺满纸宽、首尾的圆角跟着纸（`rowContainer`）。
@@ -122,127 +132,205 @@ struct LibraryRow<Icon: View, Trailing: View>: View {
     #endif
 }
 
-/// 要整理：标题写几件、"全部整理"（有不要你挑的才有）；每件一行，按钮是它的动作（`LibraryTidy.action`）。
-/// 比一比打开比一比；格式不对在 Mac 上用默认的编辑器打开它的 SKILL.md；其余就地整理这一件。点下去那一件转圈，做完由提示说结果。
-/// 手机上纸下面一句撤不回（`RemoteTidyNote`）。
-struct TidySection: View {
+/// 一键整理那块纸（规则段与技能段最上面同一块，Mac 在左列最上面）：不用你选的那几件逐条写结果的事实，不带逐条的按钮、不写标题，
+/// 底下一颗"一键整理"。手机上按钮旁直写后果（`TidyConsequence`）；Mac 做完给可撤销的提示（`Workspace.tidy`）。
+struct TidyPaper: View {
     let library: AgentLibrary
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
-    @State private var working: Set<String> = []
-
-    private static let all = "*"
+    @State private var working = false
 
     var body: some View {
-        let orders = library.automaticOrders
-        VStack(alignment: .leading, spacing: 10) {
-            LibraryHeader(title: Text("\(library.tidies.count) 件要整理")) {
-                if !orders.isEmpty {
-                    Button { run(Self.all, orders) } label: { label(Self.all, String(localized: "全部整理")) }
-                        .buttonStyle(ControlButtonStyle(kind: .primary, compact: true))
-                        .disabled(!working.isEmpty)
-                }
-            }
-            LibraryPaper {
-                ForEach(library.tidies) { tidy in
-                    LibraryRow(title: tidy.title, detail: workspace.detail(of: tidy, in: library)) {
-                        if tidy.icon == .failure { FailureMark() } else { Image(tidy.icon).foregroundStyle(palette.ink) }
-                    } trailing: {
-                        if tidy.actionable(onMac: Self.onMac) {
-                            Button { act(tidy) } label: { label(tidy.id, tidy.action.title, sends: tidy.action != .compare) }
-                                .buttonStyle(ControlButtonStyle(kind: .secondary, compact: true))
-                                .disabled(working.contains(Self.all) || working.contains(tidy.id))
-                        }
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(library.automaticTidies) { tidy in
+                    HStack(alignment: .firstTextBaseline, spacing: LibraryRowMetrics.gap) {
+                        Image(tidy.icon).foregroundStyle(palette.ink2).frame(width: LibraryRowMetrics.icon)
+                        Text(verbatim: workspace.fact(of: tidy, in: library)).font(Self.font).foregroundStyle(palette.ink)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
             }
-            #if os(iOS)
-            RemoteTidyNote().padding(.horizontal, 4)
-            #endif
+            HStack(spacing: 12) {
+                Button { run() } label: { TidyLabel(title: "一键整理", working: working) }
+                    .buttonStyle(ControlButtonStyle(kind: .primary))
+                    .disabled(working)
+                TidyConsequence(kind: .automatic)
+            }
         }
+        .padding(LibraryPaper<EmptyView>.inset)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .paper(radius: LibraryPaper<EmptyView>.radius)
     }
 
-    /// 按钮上的字：做着时换成转圈（宽度不变）；手机上会改文件的动作带纸飞机——是发往 Mac 去做的。
-    private func label(_ id: String, _ title: String, sends: Bool = true) -> some View {
-        HStack(spacing: 5) {
-            if Self.sends, sends { Image(.send).imageScale(.small) }
-            Text(verbatim: title)
-        }
-        .opacity(working.contains(id) ? 0 : 1)
-        .overlay { if working.contains(id) { Spinner(.mini) } }
-    }
-
-    private func act(_ tidy: LibraryTidy) {
-        switch tidy.action {
-        case .compare: workspace.openLibrary(.compare(tidy.id))
-        case .open:
-            // 手机上这一件没有按钮（`LibraryTidy.actionable`）
-            #if os(macOS)
-            if case .malformed(let skill, _) = tidy.kind { workspace.openSkillFile(skill.path) }
-            #endif
-        default: run(tidy.id, [TidyOrder(tidy: tidy.id)])
-        }
-    }
-
-    private func run(_ id: String, _ orders: [TidyOrder]) {
-        working.insert(id)
+    private func run() {
+        working = true
         Task {
-            await workspace.tidy(orders, in: library)
-            working.remove(id)
+            await workspace.tidy(library.automaticOrders, in: library)
+            working = false
         }
     }
 
     #if os(macOS)
-    private static let onMac = true
-    private static let sends = false
+    private static var font: Font { Typography.body }
     #else
-    private static let onMac = false
-    private static let sends = true
+    private static var font: Font { .subheadline }
     #endif
 }
 
-#if os(iOS)
-/// 手机上整理那几颗按钮附近的一句：Mac 照手机发去的整理做完不留撤销（撤销只在 Mac 上自己整理时有，`Workspace.tidy`），移走的在那台的废纸篓里。
-struct RemoteTidyNote: View {
+/// 一键整理那块纸摆在哪：规则段最上面（Mac 在规则标题下），手机的技能段最上面再一份（两段一次只看一段；Mac 两列并排，不重复）。
+/// 整理完收起时淡出、下面的跟着上移：是你点了才变的。
+struct TidySlot: View {
+    let library: AgentLibrary
+
+    var body: some View {
+        VStack(spacing: 0) {
+            if !library.automaticTidies.isEmpty { TidyPaper(library: library).transition(.opacity).padding(.bottom, 8) }
+        }
+        .animation(HandOff.quick, value: library.automaticTidies.isEmpty)
+    }
+}
+
+/// 整理那几颗按钮上的字：做着时换成转圈（宽度不变）；手机上带纸飞机——是发往 Mac 去做的。
+struct TidyLabel: View {
+    let title: LocalizedStringResource
+    let working: Bool
+
+    var body: some View {
+        HStack(spacing: 5) {
+            #if os(iOS)
+            Image(.send).imageScale(.small)
+            #endif
+            Text(title)
+        }
+        .opacity(working ? 0 : 1)
+        .overlay { if working { Spinner(.mini) } }
+    }
+}
+
+/// 整理按钮旁的后果（操作前必须知道的，不藏进问号）：去重、合并有东西进废纸篓；手机上发往 Mac 去做，做完撤不回（那台照做不留撤销，`MacExecutor`）。
+/// Mac 上做完给可撤销的提示，一键整理不另写。
+struct TidyConsequence: View {
+    enum Kind { case automatic, duplicate, merge }
+
+    let kind: Kind
     @Environment(\.palette) private var palette
 
     var body: some View {
-        Text("发往 Mac 去做，做完撤不回；移走的在那台 Mac 的废纸篓里").font(.footnote).foregroundStyle(palette.ink3)
+        if let text {
+            Text(text).font(Typography.meta).foregroundStyle(palette.ink2).fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var text: LocalizedStringResource? {
+        #if os(macOS)
+        switch kind {
+        case .automatic: nil
+        case .duplicate: "其余几份进废纸篓"
+        case .merge: "原来那份进废纸篓"
+        }
+        #else
+        switch kind {
+        case .automatic: "在 Mac 上做，做完撤不回"
+        case .duplicate: "其余几份进废纸篓，撤不回"
+        case .merge: "原来那份进废纸篓，撤不回"
+        }
+        #endif
     }
 }
-#endif
 
-/// 说明：全局说明一行（各家共读的那份），Pi 的系统提示（有才列），再是绑了文件夹的各项目；点哪一行打开它的编辑页。
+/// 规则：全局规则是一张露出正文开头几行的纸，Pi 的系统提示（有才列）接在它下面；绑了文件夹的各项目另一张纸，各一行。点哪一份都打开它的文件页。
+/// 行末是读不到这一份的那几家，内容不同、另写了一份的那家也在内（文件页顶上那一条里合并进来）；Pi 的系统提示不画。
 struct InstructionSection: View {
     let library: AgentLibrary
-    let columns: [AgentKind]
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
     var body: some View {
+        let projects = library.instructions.filter { if case .project = $0.kind { true } else { false } }
         VStack(alignment: .leading, spacing: 10) {
-            LibraryHeader(title: Text("说明"))
-            LibraryPaper {
-                ForEach(library.instructions) { instruction in
-                    Button { workspace.openLibrary(.instruction(instruction.kind)) } label: {
-                        LibraryRow(title: workspace.instructionName(instruction.kind), detail: workspace.line(of: instruction, readers: columns)) {
-                            icon(instruction.kind)
-                        } trailing: {
-                            if let modified = instruction.modifiedAt {
-                                Text(verbatim: DateLabel.short(modified)).font(Typography.meta).foregroundStyle(palette.ink3).fixedSize()
-                            }
-                            #if os(iOS)
-                            Image(.forward).font(.caption.weight(.semibold)).foregroundStyle(palette.ink3)
-                            #endif
-                        }
-                    }
-                    .buttonStyle(.row)
+            if LibraryGroupTitle.shown {
+                LibraryHeader(title: Text("规则")) {
+                    #if os(macOS)
+                    LibraryHelpButton(library: library)
+                    #endif
                 }
+            }
+            TidySlot(library: library)
+            LibraryPaper {
+                if let global = library.instruction(.global) { GlobalRuleRow(library: library, instruction: global) }
+                if let pi = library.instruction(.piSystem) { row(pi) }
+            }
+            if !projects.isEmpty {
+                LibraryPaper { ForEach(projects) { row($0) } }
             }
         }
     }
 
-    @ViewBuilder private func icon(_ kind: LibraryInstruction.Kind) -> some View {
+    private func row(_ instruction: LibraryInstruction) -> some View {
+        Button { workspace.openLibrary(.instruction(instruction.kind)) } label: {
+            LibraryRow(title: workspace.instructionName(instruction.kind), detail: nil) {
+                InstructionIcon(kind: instruction.kind)
+            } trailing: {
+                InstructionTrailing(library: library, instruction: instruction)
+            }
+        }
+        .buttonStyle(.row)
+    }
+}
+
+/// 全局规则那一张纸：名字一行，下面露出正文开头四行（留足四行的高，短的不缩），点开就改。
+private struct GlobalRuleRow: View {
+    let library: AgentLibrary
+    let instruction: LibraryInstruction
+    @Environment(Workspace.self) private var workspace
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        Button { workspace.openLibrary(.instruction(.global)) } label: {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: LibraryRowMetrics.gap) {
+                    InstructionIcon(kind: .global).frame(width: LibraryRowMetrics.icon)
+                    Text(verbatim: workspace.instructionName(.global)).font(Self.titleFont).foregroundStyle(palette.ink)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    InstructionTrailing(library: library, instruction: instruction)
+                }
+                Text(verbatim: Self.opening(instruction.text) ?? String(localized: "还没有"))
+                    .font(Self.textFont).foregroundStyle(instruction.text == nil ? palette.ink3 : palette.ink2)
+                    .lineLimit(Self.lines, reservesSpace: true).lineSpacing(2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.leading, LibraryRowMetrics.icon + LibraryRowMetrics.gap)
+            }
+            .padding(.horizontal, LibraryPaper<EmptyView>.inset)
+            .padding(.vertical, 12)
+            .contentShape(.rect)
+        }
+        .buttonStyle(.row)
+    }
+
+    private static let lines = 4
+
+    /// 正文开头几行（跳过空行）。
+    private static func opening(_ text: String?) -> String? {
+        text.map { $0.split(separator: "\n").filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }.prefix(lines).joined(separator: "\n") }
+    }
+
+    #if os(macOS)
+    private static var titleFont: Font { Typography.body.weight(.medium) }
+    private static var textFont: Font { Typography.meta }
+    #else
+    private static var titleFont: Font { .body }
+    private static var textFont: Font { .footnote }
+    #endif
+}
+
+/// 规则行首的图：全局规则一张纸，Pi 的系统提示是 Pi 的标志，项目是它的图形。
+private struct InstructionIcon: View {
+    let kind: LibraryInstruction.Kind
+    @Environment(Workspace.self) private var workspace
+    @Environment(\.palette) private var palette
+
+    var body: some View {
         switch kind {
         case .global: Image(.instruction).foregroundStyle(palette.ink)
         case .piSystem: AgentKind.pi.mark.image.foregroundStyle(palette.ink)
@@ -257,114 +345,22 @@ struct InstructionSection: View {
     #endif
 }
 
-/// 技能：标题写一共几个，右边是各家的列头；全局一组按分类，各项目一组，最后各家自己管的只写个数（CuePad 不碰它们）。
-/// Mac 上点一行在访达里显示它的目录。
-struct SkillSection: View {
+/// 规则行末：读不到的那几家与另写了一份的那家（还没有这个文件时写"还没有"），手机上再一个箭头。
+private struct InstructionTrailing: View {
     let library: AgentLibrary
-    let columns: [AgentKind]
-    @Environment(Workspace.self) private var workspace
+    let instruction: LibraryInstruction
     @Environment(\.palette) private var palette
 
     var body: some View {
-        let groups = SkillGroups(library, order: workspace.catalog?.projects.map(\.id) ?? [])
-        VStack(alignment: .leading, spacing: 10) {
-            LibraryHeader(title: Text("技能 \(LibraryHeader<EmptyView>.count(groups.total, palette: palette))", comment: "技能清单那一组的组名，后面是个数")) {
-                AgentColumns(columns: columns, header: true).padding(.trailing, LibraryPaper<EmptyView>.inset - 4)
-            }
-            if !groups.global.isEmpty {
-                skills(groups.global.flatMap { category in [SkillLine.category(category.name)] + category.skills.map(SkillLine.skill) })
-            }
-            ForEach(groups.projects) { group in
-                HStack(spacing: 6) {
-                    ProjectGlyph(project: workspace.catalog?.project(group.project), size: 12)
-                    Text(verbatim: workspace.projectName(group.project)).font(Typography.label).foregroundStyle(palette.ink2)
-                    Text("\(group.skills.count)").font(Typography.meta.monospacedDigit()).foregroundStyle(palette.ink3)
-                }
-                .padding(.horizontal, 4).padding(.top, 8)
-                skills(group.skills.map(SkillLine.skill))
-            }
-            if !library.selfManaged.isEmpty {
-                LibraryPaper {
-                    ForEach(library.selfManaged, id: \.agent) { managed in
-                        LibraryRow(title: managed.title, detail: String(localized: "由 \(managed.agent.name) 自己管，CuePad 不碰")) {
-                            managed.agent.mark.image.foregroundStyle(palette.ink2)
-                        } trailing: {
-                            EmptyView()
-                        }
-                    }
-                }
-                .padding(.top, 8)
-            }
+        if instruction.text == nil {
+            Text("还没有").font(Typography.meta).foregroundStyle(palette.ink3).fixedSize()
+        } else {
+            let writers = library.merge(into: instruction.kind)?.writers ?? []
+            let unseen = library.unseen(instruction)
+            UnseenMarks(agents: library.agents, unseen: library.agents.filter { unseen.contains($0) || writers.contains($0) })
         }
-    }
-
-    private func skills(_ lines: [SkillLine]) -> some View {
-        VStack(spacing: 0) {
-            ForEach(lines) { line in
-                switch line {
-                case .category(let name):
-                    Text(verbatim: name.isEmpty ? String(localized: "不在分类里") : name)
-                        .font(Typography.label).foregroundStyle(palette.ink3)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, LibraryPaper<EmptyView>.inset).padding(.top, 10).padding(.bottom, 2)
-                        .accessibilityAddTraits(.isHeader)
-                case .skill(let skill): SkillRow(skill: skill, columns: columns)
-                }
-            }
-        }
-        .padding(.vertical, 4)
-        .paper(radius: LibraryPaper<EmptyView>.radius)
-        .rowContainer(.rect(cornerRadius: LibraryPaper<EmptyView>.radius, style: .continuous))
-    }
-
-}
-
-private enum SkillLine: Identifiable {
-    case category(String)
-    case skill(LibrarySkill)
-
-    var id: String {
-        switch self {
-        case .category(let name): "category/" + name
-        case .skill(let skill): skill.id
-        }
-    }
-}
-
-/// 一个技能：名字、一句说明、右端各家一列。
-private struct SkillRow: View {
-    let skill: LibrarySkill
-    let columns: [AgentKind]
-    @Environment(Workspace.self) private var workspace
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        let row = HStack(spacing: 12) {
-            Text(verbatim: skill.name).font(Self.nameFont).foregroundStyle(palette.ink).lineLimit(1)
-                .frame(width: Self.nameWidth, alignment: .leading)
-            Text(verbatim: skill.description).font(Typography.meta).foregroundStyle(palette.ink2).lineLimit(1)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            AgentColumns(columns: columns, unseen: skill.unseenBy)
-        }
-        .padding(.horizontal, LibraryPaper<EmptyView>.inset)
-        .frame(minHeight: Self.height)
-        .contentShape(.rect)
-        #if os(macOS)
-        Button { workspace.revealSkill(skill.path) } label: { row }
-            .buttonStyle(.row)
-            .help(String(localized: "在访达中显示"))
-        #else
-        row.accessibilityElement(children: .combine)
+        #if os(iOS)
+        Image(.forward).font(.caption.weight(.semibold)).foregroundStyle(palette.ink3)
         #endif
     }
-
-    #if os(macOS)
-    private static let nameFont = Typography.body.weight(.medium)
-    private static let nameWidth: CGFloat = 168
-    private static let height: CGFloat = 32
-    #else
-    private static let nameFont = Font.subheadline.weight(.medium)
-    private static let nameWidth: CGFloat = 132
-    private static let height: CGFloat = 40
-    #endif
 }

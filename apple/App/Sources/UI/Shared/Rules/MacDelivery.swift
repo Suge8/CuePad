@@ -105,8 +105,8 @@ nonisolated extension DeliveryMode {
         case .stop: String(localized: "停止这一轮")
         case .bind: String(localized: "绑定文件夹")
         case .quota: String(localized: "刷新额度")
-        case .tidy: String(localized: "整理技能与说明")
-        case .instruction: String(localized: "改说明")
+        case .tidy: String(localized: "整理技能与规则")
+        case .libraryEdit: String(localized: "改技能与规则")
         }
     }
 }

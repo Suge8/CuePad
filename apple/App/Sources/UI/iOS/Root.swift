@@ -107,7 +107,7 @@ struct RouteView: View {
         case .cue: CuePage().countsAsPiViewer()
         case .search: SearchScreen()
         case .library: LibraryScreen()
-        case .libraryItem(let item): LibraryItemScreen(item: item)
+        case .libraryFile(let file): LibraryFileScreen(file: file)
         case .session(let route): SessionScreen(id: route.id, seed: route.seed).countsAsPiViewer()
         case .card(let id):
             if let zoom {

@@ -18,26 +18,22 @@ extension Workspace {
     /// 灵感的纸页推在当前页上。
     func showEditor(_ card: UUID) { push(.card(card)) }
 
-    /// 技能与说明里的一样（说明的编辑页、比一比）推在技能与说明页上；比一比合成之后打开的说明换掉比一比（返回回到技能与说明页）。
-    func openLibrary(_ item: LibraryItem) {
-        if case .instruction = item, case .libraryItem(.compare)? = path.last {
-            path[path.count - 1] = .libraryItem(item)
-        } else {
-            push(.libraryItem(item))
-        }
+    /// 技能与规则的文件页推在技能与规则页上；已在一份文件页上时换掉它、不叠一层（去重的几份之间切换，返回回到技能与规则页）。
+    func openLibrary(_ file: LibraryFile) {
+        if case .libraryFile? = path.last { path[path.count - 1] = .libraryFile(file) } else { push(.libraryFile(file)) }
     }
 
-    /// 一份说明在手机上的编辑：改着没发的留在这里，离开说明页再回来接着改、接着发——不点纸飞机就不发，也不丢（App 退出才没了）。
-    /// 按 `host` 那台 Mac 分开：Cue 换到另一台后看的是那台的说明，在这台没发的字不拿去对着那台。
+    /// 一份文件在手机上的改动：改着没发的留在这里，离开文件页再回来接着改、接着发——不点纸飞机就不发，也不丢（App 退出才没了）。
+    /// 按 `host` 那台 Mac 分开：Cue 换到另一台后看的是那台的文件，在这台没发的字不拿去对着那台。
     /// 再打开时先对上快照里此刻的样子（没改过就跟上，改着的就说 Mac 上改过了）。
-    func instructionDraft(_ instruction: LibraryInstruction, on host: String) -> InstructionDraft {
-        let key = InstructionDraftKey(host: host, kind: instruction.kind)
-        if let draft = instructionDrafts[key] {
-            draft.follow(instruction.text)
+    func fileDraft(_ file: LibraryFile, text: String?, on host: String) -> FileDraft {
+        let key = FileDraftKey(host: host, file: file)
+        if let draft = fileDrafts[key] {
+            draft.follow(text)
             return draft
         }
-        let draft = InstructionDraft(instruction, workspace: self)
-        instructionDrafts[key] = draft
+        let draft = FileDraft(file, text: text, workspace: self)
+        fileDrafts[key] = draft
         return draft
     }
 
@@ -126,9 +122,9 @@ extension View {
     }
 }
 
-/// 手机上改着的一份说明是哪台 Mac 的哪一份（`Workspace.instructionDrafts`）。
-struct InstructionDraftKey: Hashable {
+/// 手机上改着的一份文件是哪台 Mac 的哪一份（`Workspace.fileDrafts`）。
+struct FileDraftKey: Hashable {
     let host: String
-    let kind: LibraryInstruction.Kind
+    let file: LibraryFile
 }
 #endif

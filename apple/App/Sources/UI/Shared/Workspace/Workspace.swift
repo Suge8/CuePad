@@ -94,23 +94,23 @@ final class Workspace {
     let presses = CardPresses()
     let sendState: SendState
     /// 盖在当前页上的那一页（一次只有一页，开新的就换掉旧的）：换页、"收起"、Esc 时清空；底部输入条、工具栏的"收起"都只看它。
-    /// 灵感的编辑页设上时立即挂上，清空时先淡出、淡完才卸下（`CardEditorPage`）；iOS 打开卡片与说明是推入，见 `showEditor`、`openLibrary`。
+    /// 灵感的编辑页设上时立即挂上，清空时先淡出、淡完才卸下（`CardEditorPage`）；iOS 打开卡片与技能、规则是推入，见 `showEditor`、`openLibrary`。
     var overlay: Overlay? {
         didSet { if case .card(let id)? = overlay { presses.present(id) } }
     }
     enum Overlay: Hashable {
         /// 灵感的编辑页
         case card(UUID)
-        /// 技能与说明里打开的一样（说明的编辑页、比一比）
-        case library(LibraryItem)
+        /// 技能与规则的文件页
+        case library(LibraryFile)
     }
     var openCard: UUID? { if case .card(let id)? = overlay { id } else { nil } }
-    var openLibraryItem: LibraryItem? { if case .library(let item)? = overlay { item } else { nil } }
+    var openLibraryFile: LibraryFile? { if case .library(let file)? = overlay { file } else { nil } }
     /// 收起这一页；已换成别的就不动。
     func close(_ page: Overlay) { if overlay == page { overlay = nil } }
     #else
-    /// 手机上改着的说明（`instructionDraft(_:on:)`），按哪台 Mac 的哪一份分开：离开说明页也留着。
-    @ObservationIgnored var instructionDrafts: [InstructionDraftKey: InstructionDraft] = [:]
+    /// 手机上改着的技能与规则（`fileDraft(_:on:)`），按哪台 Mac 的哪一份分开：离开文件页也留着。
+    @ObservationIgnored var fileDrafts: [FileDraftKey: FileDraft] = [:]
     #endif
     /// 气泡里看着的任务（`TaskBubble`）：从被点的那一下长出来，盖在当前页上，不换页。两端同一份，各个入口都经 `openTask(_:)`。
     var openTask: TaskBubble.Request? {
@@ -171,7 +171,7 @@ final class Workspace {
     /// 交给了会话的灵感与任务（`AgentLinks`，卡与行上的状态点读它）：整个窗口一份，页面直接读，
     /// 不各自订阅（挂着的页也不会在每次回到前台时重读一遍）。读到和已有的相同不送来（`observe(after:)` 在读取一侧比较），免得页面白算。
     private(set) var agentLinks = AgentLinks(items: [:], launching: [:])
-    /// 技能与说明（`AgentLibrary`：Mac 上是本机的，手机上是 Cue 运行的那台的）：入口的角标、技能与说明页、编辑页与比一比都读这一份；
+    /// 技能与规则（`AgentLibrary`：Mac 上是本机的，手机上是 Cue 运行的那台的）：入口的角标、技能与规则页与文件页都读这一份；
     /// 同项目目录当场读（`readLibrary`），第一帧就是库里的样子；没有一台写过为 nil。
     private(set) var library: AgentLibrary?
     @ObservationIgnored private var libraryStart: Snapshot<AgentLibrary?>?

@@ -85,7 +85,7 @@ struct SidebarToggle: View {
 /// 打开、收起卡片只改动下面三处（收起按钮、编辑页图层、底部输入条的位置），各自读"打开的卡"：
 /// 主窗口的视图体不读它，开合时不重算整个窗口、不重建整条工具栏。
 
-/// 工具栏左上的"收起"：只在开着编辑页时有（灵感的编辑页、说明的编辑页与比一比，Esc 同），没有时不占位置。
+/// 工具栏左上的"收起"：只在开着编辑页时有（灵感的编辑页、技能与规则的文件页，Esc 同），没有时不占位置。
 struct CloseButton: View {
     @Environment(Workspace.self) private var workspace
 

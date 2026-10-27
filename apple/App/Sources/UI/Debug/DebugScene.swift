@@ -120,9 +120,11 @@ enum DebugScene {
         #endif
         preset.quotaOpen = defaults.bool(forKey: "CuePadQuotaOpen")
         preset.scheduleOpen = defaults.bool(forKey: "CuePadScheduleOpen")
+        preset.mergePreview = defaults.bool(forKey: "CuePadMergePreview")
         #if os(iOS)
         preset.alertStatus = alertStatus
         if defaults.string(forKey: "CuePadSearchScope") == "sessions" { preset.searchScope = .sessions }
+        if defaults.string(forKey: "CuePadLibraryTab") == "skills" { preset.libraryTab = .skills }
         preset.cuePanelOpen = defaults.bool(forKey: "CuePadCuePanel")
         preset.quietAlerts = defaults.bool(forKey: "CuePadQuiet")
         #endif

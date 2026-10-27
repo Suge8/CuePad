@@ -35,7 +35,7 @@ struct MainWindow: View {
         ZStack {
             page
             EditorLayer().zIndex(1)
-            LibraryItemLayer().zIndex(1)
+            LibraryFileLayer().zIndex(1)
         }
         .overlay(alignment: .bottom) { CaptureSlot() }
         .overlay(alignment: .top) { NoticeView().padding(.top, 8) }
