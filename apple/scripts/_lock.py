@@ -6,7 +6,7 @@ import fcntl, json, os, re, shlex, signal, subprocess, sys, threading, time
 
 sys.dont_write_bytecode = True
 from app_env import APPLE, CHECKOUT, RUNTIME  # noqa: E402
-from app_proc import descendants  # noqa: E402
+from app_proc import descendants, silence, wait_exit  # noqa: E402
 
 hold, wait_limit, report, slots, model, *cmd = sys.argv[1:]
 hold, wait_limit, report, slots = int(hold), int(wait_limit), int(report), int(slots)
@@ -209,7 +209,8 @@ try:
         clear_slots(files, int(sim))
         phases["关旧模拟器"] = time.time() - cleared
 
-    child = subprocess.Popen(cmd, env=dict(os.environ, CUEPAD_SIM=sim, CUEPAD_PHASES=phase_file))
+    lease = f"{RUNTIME}/lease-{me['pid']}"  # run ios 留下实例时，看守把自己的 PID 写在这里（app_sim.keep）
+    child = subprocess.Popen(cmd, env=dict(os.environ, CUEPAD_SIM=sim, CUEPAD_PHASES=phase_file, CUEPAD_LEASE=lease))
 
     def signal_tree(sig, _=None):
         for pid in reversed([child.pid, *descendants(child.pid)]):
@@ -231,6 +232,25 @@ try:
             signal_tree(signal.SIGKILL)
         code = 124
     summary(time.time() - begun)
+    if code == 0 and os.path.exists(lease) and os.fork() == 0:
+        # 租约：分身只带着这台模拟器的槽位锁（flock 跟着打开的文件描述符走，原进程退出不放），别的锁随分身关掉的描述符放掉，
+        # 守到看守退出；登记换成分身的，排队的人看得到谁租着
+        with open(lease) as f:
+            watcher = int(f.read())
+        os.remove(lease)
+        os.setsid()
+        silence()
+        for sig in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
+            signal.signal(sig, signal.SIG_DFL)
+        keep = files[int(sim)].fileno()
+        os.closerange(3, keep)
+        os.closerange(keep + 1, 4096)
+        me.update(pid=os.getpid(), start=processes([os.getpid()])[os.getpid()][1], cmd=me["cmd"] + "（租着这台模拟器）", held=[h for h in me["held"] if h[0].startswith("模拟器")])
+        record = f"{holders}/{me['pid']}.json"
+        publish()
+        wait_exit(watcher)
+        os.remove(record)
+        os._exit(0)
 finally:
     for path in (record, phase_file):
         if os.path.exists(path):

@@ -7,10 +7,14 @@
 #   xc.sh test <mac|ios|ipad> [xcodebuild 参数…]     如 -only-testing:CuePadTests/SuiteName；ios、ipad 不带参数时连 CuePadKit 也在模拟器上跑
 #   xc.sh test kit [xcodebuild 参数…]               CuePadKit 在 macOS 上的测试，如 -only-testing:CueSyncTests/PendingTests
 #     test 只打印编译的警告与错误、失败的用例与汇总；完整输出（App 日志、每条用例）在 apple/.derived/test.log
-#   xc.sh shot <mac|ios|ipad> [图.png] [-- 启动参数…]  构建 → 起隔离实例 → 画面就绪后截窗口 → 退出
-#   xc.sh rec  <mac|ios|ipad> [片.mov] [-- 启动参数…]  同上，录 CUEPAD_REC_SECONDS 秒（默认 12）；CUEPAD_REC_LAUNCH=1 从启动前开录（ios、ipad）
-#   xc.sh run  <mac|ios|ipad> [-- 启动参数…]          起着给 bcu、axe 操作，打印 PID（模拟器另带 UDID）；Mac 实例 5 分钟后自己退出（CUEPAD_RUN_SECONDS 改）
-#   xc.sh stop                                      结束本检出 run 起的 Mac 实例
+#   xc.sh shot <mac|ios|ipad> [图.png] [-- 启动参数…] [, [图.png] [-- 启动参数…]]…
+#                                                   构建 → 逐张起隔离实例 → 画面就绪后截窗口 → 退出。一次调用拍一批：一次进锁、一次构建（iOS 还一次装包），
+#                                                   张与张之间用单独的 , 隔开；一张失败记下继续，最后列出失败的并非零退出。没写图路径的放 apple/.derived/shot-<平台>/<启动参数的值连起来>.png。例：
+#                                                   xc.sh shot ios -- -CuePadScene shelf -theme light , -- -CuePadScene shelf -theme dark , dark-cue.png -- -CuePadScene cue -theme dark
+#   xc.sh rec  <mac|ios|ipad> [片.mov] [-- 启动参数…] [, …]  同上，每张录 CUEPAD_REC_SECONDS 秒（默认 12）；CUEPAD_REC_LAUNCH=1 从启动前开录（ios、ipad）
+#   xc.sh run  <mac|ios|ipad> [-- 启动参数…]          起着给 bcu、axe 操作，打印 PID（模拟器另带 UDID）；实例 5 分钟后自己退出（CUEPAD_RUN_SECONDS 改）。
+#                                                   iOS 的模拟器由后台看守租着，别的检出领不到，直到实例退出、到时或 stop
+#   xc.sh stop                                      结束本检出 run 起的实例（Mac 与模拟器）
 #   xc.sh perf <mac|ios> [次数] [启动参数…]            单次交互：点击回合、指令、掉帧（perf-mac.sh、perf-ios.sh）
 #   xc.sh perf idle <mac|ios> [次数] [秒] [启动参数…]   静置时的 CPU、指令、唤醒、能耗、内存与启动到就绪（perf-idle.sh）
 #   xc.sh perf launch mac [次数] [启动参数…]            冷启动：到主窗口上屏、首屏内容出来、能交互（perf-launch.sh）
@@ -56,7 +60,10 @@ case "$cmd" in
   provision) exec python3 "$APPLE_DIR/scripts/provision.py" "${2:-all}" "${@:3}" ;;
   stop) exec python3 "$APPLE_DIR/scripts/app.py" stop ;;
   perf) ;;  # 先构建、再测量，两段各自进锁（见下）
-  test|shot|rec|run) case "$platform" in ios) xc_enter "$IOS_DEVICE" "$0" "$@" ;; ipad) xc_enter "$IPAD_DEVICE" "$0" "$@" ;; *) xc_enter "" "$0" "$@" ;; esac ;;
+  test|shot|rec|run)
+    # 本检出上一个 run 的实例租着一台模拟器：先收掉再排队，免得槽位被自己占满
+    if [ "$cmd" = run ] && [ "$platform" != mac ]; then python3 "$APPLE_DIR/scripts/app.py" stop sim >/dev/null; fi
+    case "$platform" in ios) xc_enter "$IOS_DEVICE" "$0" "$@" ;; ipad) xc_enter "$IPAD_DEVICE" "$0" "$@" ;; *) xc_enter "" "$0" "$@" ;; esac ;;
   check|build|build-perf) xc_enter "" "$0" "$@" ;;  # build-perf：perf 的构建段，内部用
   *) echo "$USAGE" >&2; exit 2 ;;
 esac
@@ -111,7 +118,32 @@ xcb() {
 # Debug 一律连测试目标一起编（build-for-testing），与 test 同一张构建图：测试目标也链接 CuePadKit 时，Xcode 把被几个目标共用的
 # 包产品改编成动态框架，只编 App 时却静态链接。两种编法交替时，一边留下的旧模块会被另一边的 App 编译读到（报"没有这个成员"、
 # 改了存储属性后一启动就崩在 Kit 的释放里），每次切换还要重新链接、签名。测量用的 Release（build-perf）不编测试，不受影响
-xcd() { xcb -quiet build-for-testing "$@"; }
+#
+# 源码没变就跳过：代码没动时空编也要 3–133 秒（随负载）。指纹 = HEAD + 相对 HEAD 的改动内容 + 未跟踪文件的内容 + 平台、配置、构建设置、
+# 收窄参数、CUEPAD_SIGN + Xcode 的版本号（换 Xcode 即换 SDK）。工程文件、Package.resolved、xcconfig 都在 apple/ 里，一并算；
+# apple/ 之外没有构建的输入，scripts/ 里没有（工程里没有脚本阶段，xc.sh 给的设置已算进去）。
+# 指纹在构建成功后才写、构建前先删（被打断的构建留不下旧指纹），产物（App 与 xctestrun）不在也不跳。
+# 构建中途改了源码不会误跳：指纹取在构建前，改动让下一次的指纹对不上。
+build_key() {
+  {
+    git -C "$APPLE_DIR" rev-parse HEAD
+    git -C "$APPLE_DIR" diff HEAD --binary -- . ':(exclude)scripts'
+    (cd "$APPLE_DIR" && git ls-files -o --exclude-standard -z -- . ':(exclude)scripts' | xargs -0 shasum -a 1)
+    plutil -extract ProductBuildVersion raw "${DEVELOPER_DIR:-$(xcode-select -p)}/../version.plist"
+    printf '%s\n' "$platform" "$configuration" "${CUEPAD_SIGN:-}" ${build_settings[@]+"${build_settings[@]}"} "$@"
+  } | shasum -a 1
+}
+xcd() {
+  local keyfile="$DERIVED/build-key-$platform" key sdk=iphonesimulator
+  [ "$platform" != mac ] || sdk=macosx
+  key="$(build_key "$@")"
+  if [ -d "$app" ] && compgen -G "$DERIVED/Build/Products/*_$sdk*.xctestrun" >/dev/null && [ "$(cat "$keyfile" 2>/dev/null)" = "$key" ]; then
+    return 0
+  fi
+  rm -f "$keyfile"
+  phase 编译 xcb -quiet build-for-testing "$@" || return
+  printf '%s' "$key" >"$keyfile"
+}
 
 # CUEPAD_SIGN=development：ad-hoc 构建完只给主程序换签名（嵌入描述文件、带 iCloud 权限并写定开发环境）。不在 xcodebuild 里换：
 # 签名设置覆盖到每个 target，框架与命令行工具会要团队、bundle id；内嵌的仍是 ad-hoc，没开 Hardened Runtime 就照常加载。
@@ -188,11 +220,10 @@ case "$cmd" in
     # 截图前先查台前调度：开着就拍不对，不白等一次构建
     if [ "$platform" = mac ]; then python3 "$APPLE_DIR/scripts/app.py" preflight; fi
     xcd
-    rest=("${@:3}") target=()
-    if [ "${#rest[@]}" -gt 0 ] && [ "${rest[0]}" != -- ]; then target=(--out "${rest[0]}"); rest=("${rest[@]:1}"); fi
-    if [ "$platform" != mac ]; then phase 开机 sim_boot "$device"; target+=(--device "$device"); fi
+    target=()
+    if [ "$platform" != mac ]; then phase 开机 sim_boot "$device"; target=(--device "$device"); fi
     library="${CUEPAD_SHOT_LIBRARY:-$APPLE_DIR/.derived/library$([ "$platform" = mac ] || echo "-$platform")}"
-    exec python3 "$APPLE_DIR/scripts/app.py" "$cmd" "$platform" "$app" "$library" ${target[@]+"${target[@]}"} ${rest[@]+"${rest[@]}"} ;;
+    exec python3 "$APPLE_DIR/scripts/app.py" "$cmd" "$platform" "$app" "$library" ${target[@]+"${target[@]}"} "${@:3}" ;;
   perf)
     # 构建与测量各自按普通任务进锁；帧与回合时长随机器忙闲变，看结束时的负载，前后对比以指令数为准
     "$0" build-perf "$platform" >"$DERIVED/build.log" || { tail -30 "$DERIVED/build.log" >&2; exit 1; }

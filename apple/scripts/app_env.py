@@ -10,6 +10,7 @@ CHECKOUT = os.path.dirname(APPLE)
 BUNDLE_ID = re.search(r"^CUEPAD_APP_ID *= *(\S+)", open(f"{APPLE}/App/Config/Signing.xcconfig").read(), re.M)[1]
 RUNTIME = f"/tmp/cuepad-xc-{os.getuid()}"  # xc.sh 的入口锁与持有者登记（_lock.py），模拟器的就绪文件（按设备分）
 SLOT, READY = f"{APPLE}/.derived/mac-app.lock", f"{APPLE}/.derived/mac-ready"
+SIM_RUN = f"{APPLE}/.derived/sim-run.json"  # run 留在模拟器里的实例：看守的 PID、实例的 PID、模拟器（app_sim.keep）
 # 实例借着前台却没到前台时写它（DebugForeground），看守替它拉到前台：别的应用在前台时 App 自己 activate 会被系统忽略
 FRONT = f"{APPLE}/.derived/mac-front"
 FRONT_RETRY = 0.3  # 拉了还没到前台时隔多久再拉
@@ -24,9 +25,13 @@ RUN_TTL = int(os.environ.get("CUEPAD_RUN_SECONDS", 5 * 60))
 REC_SECONDS = float(os.environ.get("CUEPAD_REC_SECONDS", 12))
 
 
+class Failed(SystemExit):
+    """一张图失败：批量里记下继续（app_shots.batch），其余地方照常以 1 退出。"""
+
+
 def die(message):
     print(message, file=sys.stderr, flush=True)
-    sys.exit(1)
+    raise Failed(1)
 
 
 REAL_LIBRARY = os.path.expanduser("~/Library/Application Support/CuePad")
@@ -38,7 +43,7 @@ def isolated_env(library, sockets=SOCKETS):
         die(f"{library} 是真实资料库：本机构建一打开就升级结构、改写并同步出去。用只读副本（docs/verify.md「真实数据复现」）")
     agents = f"{library}/agents"
     # 锁的内部变量不带进实例：实例里的 Agent 再调 xc.sh 要照常进锁
-    inherited = {k: v for k, v in os.environ.items() if k not in ("CUEPAD_SIM", "CUEPAD_FAKE_HOME")}
+    inherited = {k: v for k, v in os.environ.items() if k not in ("CUEPAD_SIM", "CUEPAD_LEASE", "CUEPAD_FAKE_HOME")}
     env = dict(inherited, CUEPAD_LIBRARY_DIR=library, CUEPAD_PI_SOCKET_DIR=sockets)
     fake_home = os.environ.get("CUEPAD_FAKE_HOME")
     if fake_home:
