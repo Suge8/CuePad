@@ -1,5 +1,7 @@
 import Foundation
 
+/// 一条记忆是谁的话：`you` 是他的原话（他在 CuePad 里记的、提问卡上选"以后……不用问"记下的、Cue 照他的原话记的），`cue` 是 Cue 自己记的。
+/// 界面写"你说的"，Cue 在记忆里看到的写作 [他]（`CueMemoryLine.shown`）。
 public enum CueLineSource: String, Sendable, CaseIterable {
   case you, cue
 }
@@ -7,7 +9,7 @@ public enum CueLineSource: String, Sendable, CaseIterable {
 /// Cue 的一条记忆。只追加，位置就是身份：按 (`createdAt`, `id`) 排的序号（含忘掉的）。
 /// 只有 `pinned`、定时（`remindAt`、`repeats`）、`deletedAt` 会变；忘掉是软删，位置不变。
 /// 定时就是有 `remindAt` 的那几条：`remindAt` 是下一次，`repeats` 是怎么重复（一次性的没有），`task` 是挂在哪件任务上（到点 Cue 开工它）。
-/// 到点后值班的 Cue 把重复的推到下一次、一次性的清掉 `remindAt`（`CueStore.fireCueSchedules`）；不再定时就是忘掉这一条，任务完成、归档、进回收站时连带（`endCueSchedules`），恢复不复活。
+/// 到点后值班的 Cue 把重复的推到下一次、一次性的忘掉（`CueStore.fireCueSchedules`，不留成普通记忆）；不再定时也是忘掉这一条，任务完成、归档、进回收站时连带（`endCueSchedules`），恢复不复活。
 public struct CueMemoryLine: Identifiable, Equatable, Sendable {
   public let id: UUID
   public var text: String
@@ -74,12 +76,10 @@ public struct CueMemorySummary: Equatable, Sendable {
   public var createdAt: Date
 }
 
-/// 最近记下的几条（没忘掉的，新的在前）、没忘掉的一共几条与下一个定时：手机 Cue 面板记忆那一块只读它，不读整份记忆。
+/// 最近记下的几条（没忘掉、不是定时的，新的在前）与它们一共几条：手机 Cue 面板记忆那一块只读它，不读整份记忆。
 public struct CueMemoryRecent: Equatable, Sendable {
   public var lines: [CueMemoryLine]
   public var count: Int
-  /// 最早到点的那条定时
-  public var next: CueMemoryLine?
 }
 
 /// 一条定时与它上一次到点（读那一轮的叫醒原因，`CueWake.schedule`）：任务气泡与"记得什么"的定时一组都读它。

@@ -60,12 +60,13 @@ extension DebugScene {
             await seedDemo(workspace.services)
             workspace.projectScope = opened
             workspace.showSessions()
-        case "cue", "cuememory", "cuerun":
+        case "cue", "cuememory", "cueschedules", "cuerun":
             // Cue 页（演示数据见 `DebugScene+Cue.swift`）；cuememory 再打开"Cue 记得什么"，cuerun 打开"运行情况"（Cue 在这台值班时才有）
             await seedDemo(workspace.services)
             if defaults.bool(forKey: "CuePadNoAsks") { await settleAsks(workspace.services.store) }
             workspace.show(.cue)
             if scene == "cuememory" { workspace.cue.showsMemory = true }
+            if scene == "cueschedules" { workspace.cue.showsSchedules = true }
             if scene == "cuerun" { workspace.cue.showsRun = true }
         case "cuerows":
             await connectAgents(workspace.services)

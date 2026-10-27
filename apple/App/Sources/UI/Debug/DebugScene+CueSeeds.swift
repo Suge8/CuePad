@@ -105,7 +105,7 @@ extension DebugScene {
 
 #if DEBUG
 extension DebugScene {
-    /// 定时（"记得什么"最上面一组、手机 Cue 面板第一条、任务气泡里那一条）：每天 8:00 的汇总；挂在 `task` 上的每月 1 号 9:00，
+    /// 定时（定时页、手机 Cue 面板的定时那一行、任务气泡里那一条）：每天 8:00 的汇总；挂在 `task` 上的每月 1 号 9:00，
     /// 上一次那次错过了、41 分钟后补上（那一轮写在对话里它补上的时刻）；明天 15:00 只这一次的。
     static func seedSchedules(_ store: CueStore, task: Card?) async throws {
         let daily = CueRepeat(.daily, hour: 8, minute: 0)!

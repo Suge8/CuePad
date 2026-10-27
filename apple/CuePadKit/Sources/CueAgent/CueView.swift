@@ -35,7 +35,7 @@ public enum CueView {
     var lines = ["<view>", header], day: DateComponents?
     for (index, event) in kept.reversed().enumerated() {
       let today = calendar.dateComponents([.year, .month, .day], from: event.at)
-      let date = today == day ? "" : event.at.formatted(monthDay)
+      let date = today == day ? "" : event.at.formatted(CueEnvelope.monthDay) + " "
       day = today
       lines.append("#\(index + 1) \(date)\(event.at.formatted(CueEnvelope.clock)) \(event.text)")
     }
@@ -44,11 +44,6 @@ public enum CueView {
   }
 
   static let header = "你和他最近的对话与你此前每一轮的经过（从早到晚，一条一行：#序号 时刻）。这只是最后一小段，更早的对话不在这里、往往比这多得多：他问起自己的事（说过的、做过的、有几次、一共多少、最近一次、他的情况与喜好），或要你推荐、出主意，先用 memory recall 查全再答；这里没有不等于没有。"
-
-  /// 换了一天的那一行时刻前写的月日（同信封的时刻，按此刻的时区）：10-21
-  private static var monthDay: Date.VerbatimFormatStyle {
-    .init(format: "\(month: .twoDigits)-\(day: .twoDigits) ", timeZone: .current, calendar: Calendar(identifier: .gregorian))
-  }
 
   private struct Entry {
     var at: Date

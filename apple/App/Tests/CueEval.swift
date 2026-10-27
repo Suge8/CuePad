@@ -155,6 +155,13 @@ final class CueEval {
         return Check(.tool, "他看得到的字里没有编号", !written.contains { text in ids.contains { text.contains($0) } })
     }
 
+    /// Cue 这一遍（场景里所有轮）note 下的记忆正文只写事情本身：不以日期时刻或「他说」「他问」开头（记下的时间与是不是他的原话另存）。这一遍没 note 的不计。
+    func notesArePlain() -> Check {
+        let notes = Self.calls(in: rounds, "memory", ["note"]).filter { !$0.call.failed }.compactMap { $0.args["text"] as? String }
+        let dated = notes.filter { $0.contains(/^[\s（(\[【]*(?:\d{4}-)?\d{1,2}-\d{1,2}|^\s*\d{1,2}:\d{2}|^\s*他[说问]/) }
+        return Check(.tool, "记下的记忆正文不以日期时刻或「他说」「他问」开头", dated.isEmpty, note: dated.isEmpty ? "" : "：" + dated.joined(separator: " | "), counted: !notes.isEmpty)
+    }
+
     func reply(since: Date? = nil) async throws -> CueMessage? {
         try await said(since: since).last { $0.author == .known(.cue) && $0.choices == nil && $0.taskID == nil }
     }

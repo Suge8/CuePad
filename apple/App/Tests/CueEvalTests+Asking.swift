@@ -44,6 +44,7 @@ extension CueEvalTests {
             let said = eval.calls("task", "say").compactMap { $0.args["text"] as? String }
             return [
                 Check(.tool, "他放行时照原话记下并一直记着（memory note pin）", allowed),
+                eval.notesArePlain(),
                 Check(.ask, "照放行直接答推送", said.contains { ($0.contains("推送") && !$0.contains("不推送")) || $0 == "1" }),
                 Check(.ask, "没发等你", try await eval.said().allSatisfy { $0.choices == nil }),
                 Check(.interrupt, "没打扰他（没 tell）", eval.calls("tell").isEmpty),

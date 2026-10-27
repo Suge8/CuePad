@@ -20,13 +20,14 @@ extension CueTools {
   func memory(_ args: Args) async throws -> Result {
     switch try args.required("action") {
     case "note":
-      let (line, index) = try await store.noteCueLine(try args.required("text"), source: .cue, pinned: args.bool("pin") ?? false)
+      let source: CueLineSource = args.bool("his") == true ? .you : .cue
+      let (line, index) = try await store.noteCueLine(try args.required("text"), source: source, pinned: args.bool("pin") ?? false)
       return .ok("记下了 #\(index)\(line.pinned ? "，一直记着" : "")。")
     case "recall":
       let query = try args.required("query")
       let found = try await store.recallCue(query)
       let words = CueStore.recallWords(query)
-      var lines = found.lines.map { "#\($0.index) \($0.line.text)" + ($0.line.deletedAt == nil ? "" : "（已忘掉）") }
+      var lines = found.lines.map { $0.line.shown(at: $0.index) + ($0.line.deletedAt == nil ? "" : "（已忘掉）") }
       lines += found.messages.map { "对话 \(iso($0.createdAt)) \($0.author.rawValue)：\(Self.excerpt(CueFormat.plainText($0.text), around: words))" }
       lines += found.cards.map { "\($0.isTask ? "任务" : "灵感")「\($0.heading)」（\($0.id.shortID)）" }
       lines += found.replies.map { reply in

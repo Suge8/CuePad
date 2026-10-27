@@ -15,7 +15,7 @@ import SwiftUI
 /// Cue 运行在别的设备上、本机正在和 iCloud 对时（`AppServices.isCatchingUp(on:)`）页头写"正在同步"，这期间到的话先不滑上来，
 /// 对完一次滑上来（`ChatColumn` 的 `holding`）：对完才算开始看，有新消息就到第一条新消息、从它读起，没有才到最新处（`CueViewing`）。
 /// Cue 在做的事在任务与 Agent 页里看，这里不另列。
-/// 页面只读写库：写一条你的消息就是对 Cue 说话，Cue 运行在哪台 Mac 都一样。"Cue 记得什么"（`CueMemoryPage`）在 Mac 的"⋯"里、手机页头的面板里；
+/// 页面只读写库：写一条你的消息就是对 Cue 说话，Cue 运行在哪台 Mac 都一样。"Cue 记得什么"（`CueMemoryPage`）与定时（`CueSchedulePage`）在 Mac 工具栏右上的两颗圆钮（`CueListSlots`）、手机页头的面板里；
 /// Cue 在这台 Mac 值班时 Mac 的"⋯"里还有"运行情况"，在右侧开一栏（`CueRunPanel`）。
 struct CuePage: View {
     /// iPad 右侧面板里：没有自己的顶栏（页头浮在面板顶上）。
@@ -54,6 +54,7 @@ struct CuePage: View {
             .observing(services.store, into: $thread, onError: workspace.fail) { try CueThread.read(from: $0) }
             .previewPresenter($opened, reply: .cue)
             .panel(isPresented: Bindable(cue).showsMemory) { CueMemoryPage() }
+            .panel(isPresented: Bindable(cue).showsSchedules) { CueSchedulePage() }
             .modifier(CueViewing(thread: thread, catchingUp: catchingUp, seen: $seen, follow: $follow))
             .onChange(of: thread != nil, initial: true) { _, loaded in
                 guard loaded else { return }

@@ -4,7 +4,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 定时（#38）：Cue 的提醒可重复、可挂在任务上，到点开工。按用户走的路写：任务气泡与"记得什么"里原地改、不再定时；任务完成、归档、删掉就不再定时；
+/// 定时（#38）：Cue 的提醒可重复、可挂在任务上，到点开工。按用户走的路写：任务气泡与定时页里原地改、不再定时；任务完成、归档、删掉就不再定时；
 /// 对 Cue 说一句就建；Mac 没开时错过的，启动后只补一次、排到下一次，那句事实记在叫醒原因上。
 @MainActor
 struct ScheduleTests {
@@ -88,7 +88,7 @@ struct ScheduleTests {
     }
 
     /// Mac 关着时错过了三次每天的定时：启动、启用 Cue 后只叫醒一次（定时到点），记的是最近错过的那一次，之后排到下一次；
-    /// 那一次错过了、刚补上，任务气泡与"记得什么"读得到这句事实。
+    /// 那一次错过了、刚补上，任务气泡与定时页读得到这句事实。
     @Test(.enabled(if: FileManager.default.isExecutableFile(atPath: realPi.path), "需要 ~/.local/bin/pi"))
     func 错过的每天定时_启动后只补一次_排到下一次() async throws {
         // 三天前起每天这个时刻，最近错过的一次在 23 小时前

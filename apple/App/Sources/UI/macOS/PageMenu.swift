@@ -32,7 +32,7 @@ struct PageMenuSlot: View {
             case .session: "完成或绑定任务、重命名、跳到终端、结束会话"
             case .card: "置顶、移到项目、复制、归档、删除"
             case .project: "选择灵感、看这个项目的会话、项目操作"
-            case .cue: "记得什么"
+            case .cue: "运行情况、设置"
             case .progress: "新任务、新会话、项目范围、搜索、归档做完的、接入 Agent"
             case .trash: "清空回收站"
             case .none: "这一页没有更多操作"
@@ -60,7 +60,6 @@ struct PageMenuSlot: View {
             case .card(let card?): CardActions(card: card, more: true)
             case .project(let id): ProjectMenuItems(projectID: id)
             case .cue:
-                Button("\(workspace.cue.name) 记得什么", icon: .memory) { workspace.cue.showsMemory = true }
                 // 运行情况给开发者看：只在 Cue 于这台 Mac 值班时有（经过只在值班的管理器里）
                 if workspace.services.cue.keeper != nil {
                     Toggle("运行情况", icon: .session, isOn: Bindable(workspace.cue).showsRun)

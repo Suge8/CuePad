@@ -44,7 +44,7 @@ nonisolated struct CueWakeHeader: Equatable, Sendable {
     enum Target: Hashable, Sendable {
         case session(UUID, sessionID: String?)
         case task(UUID)
-        case memory
+        case schedules
     }
 
     struct Place: Equatable, Sendable {
@@ -80,7 +80,7 @@ nonisolated struct CueWakeHeader: Equatable, Sendable {
                 let title = PiProgress.gist(line.text)
                 let last = CueScheduled.Last(due: fire.due, at: row.createdAt)
                 return [Place(
-                    title: fires.count > 1 ? String(localized: "\(title) 等 \(fires.count) 条") : title, target: line.task.map(Target.task) ?? .memory,
+                    title: fires.count > 1 ? String(localized: "\(title) 等 \(fires.count) 条") : title, target: line.task.map(Target.task) ?? .schedules,
                     missed: last.late ? last : nil)]
             } ?? []
         case .enabled, .message, .idle:
