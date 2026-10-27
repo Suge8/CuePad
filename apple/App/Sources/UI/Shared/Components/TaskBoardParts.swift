@@ -2,9 +2,10 @@ import CueStore
 import SwiftUI
 
 /// 四列并排（Mac、宽屏 iPad 与 iPhone 横屏的进展页）：每列（`BoardColumn`）的列头浮在顶上（`BoardColumnHeader`，写字玻璃），卡各自滚动、从列头后面过。
-/// 列按可见宽、各列的份数分（`TaskBoard.Column.share`：推进中、等你宽，待办、已完成窄），四列总在眼前；列最窄 `minColumn`，放不下四列时（如 Mac 窄窗开着侧栏）
+/// 每列先给最窄的 `minColumn`，可见宽多出来的按各列的份数分（`TaskBoard.Column.share`：推进中、等你多分，待办、已完成少分）——宽窗口里轻重分得开，
+/// iPad 竖屏这类刚够四列的宽里四列差不多一样宽、轻的两列不被挤成一行三四个字；四列总在眼前，放不下四列时（如 Mac 窄窗开着侧栏）
 /// 整排横向滚动、最右一列露出一截（看得出能横划）：两侧页边是滚动区内容的边（`margin`），列滚到窗口边才裁，滚到头右边照样留页边。
-/// 卡换列时从原处飞到新处（`boardFlight`），四列共用一个飞行的命名空间。
+/// 卡换列时从原处飞到新处（`boardFlight`），四列共用一个飞行的命名空间与正被拖着的那件（`boardStage`）。
 struct BoardColumns: View {
     let board: TaskBoard
     @Binding var adding: Bool
@@ -19,16 +20,16 @@ struct BoardColumns: View {
     private static let gap: CGFloat = 20
 
     @Environment(\.dynamicTypeSize) private var typeSize
-    @Namespace private var flight
 
     var body: some View {
         // 按可见宽算一次各列宽与卡标题的行数，每列的卡都用这一份（几何读数只给子视图，不写回状态）
         GeometryReader { proxy in
-            let unit = (proxy.size.width - margin * 2 - Self.gap * 3) / TaskBoard.Column.allCases.map(\.share).reduce(0, +)
+            let spare = max(0, proxy.size.width - margin * 2 - Self.gap * 3 - Self.minColumn * 4)
+            let unit = spare / TaskBoard.Column.allCases.map(\.share).reduce(0, +)
             ScrollView(.horizontal) {
                 HStack(alignment: .top, spacing: Self.gap) {
                     ForEach(TaskBoard.Column.allCases) { item in
-                        let width = max(Self.minColumn, unit * item.share)
+                        let width = Self.minColumn + unit * item.share
                         BoardColumn(column: item, board: board, adding: $adding, newTaskProject: newTaskProject)
                             .frame(width: width)
                             .environment(\.boardTitle, BoardCardMetrics.title(item, cardWidth: width - 2 * BoardCardMetrics.inset, typeSize: typeSize))
@@ -38,7 +39,7 @@ struct BoardColumns: View {
             .safeAreaPadding(.horizontal, margin)
             .scrollBounceBehavior(.basedOnSize)
             .scrollIndicators(.never)
-            .environment(\.boardFlight, flight)
+            .boardStage()
         }
     }
 }
@@ -68,6 +69,7 @@ struct BoardColumn: View {
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.boardMoved) private var moved
+    @Environment(\.boardDrag) private var dragging
     @State private var showsEarlier = DebugHooks.preset.showsDone
     @State private var targeted = false
     /// 拖到已完成的那件与它这一下（同点完成圈，`taskCheck`）。
@@ -100,7 +102,7 @@ struct BoardColumn: View {
     @ViewBuilder private var lane: some View {
         #if os(iOS)
         if row {
-            BoardRowLane(column: column, count: board.count(column), targeted: targeted, rewind: adding && column == .todo ? board.todo.first?.id : nil) {
+            BoardRowLane(column: column, count: board.count(column), targeted: lit, rewind: adding && column == .todo ? board.todo.first?.id : nil) {
                 if adding && column == .todo { newTask.transition(.opacity) }
             } content: {
                 content
@@ -120,7 +122,7 @@ struct BoardColumn: View {
             .scrollBounceBehavior(.basedOnSize)
             .scrollClipDisabled()
             .boardTopRow(column: column, count: board.count(column))
-            .background { BoardLane(targeted: targeted) }
+            .background { BoardLane(targeted: lit) }
         #else
         ScrollView { cards }
             .scrollBounceBehavior(.basedOnSize)
@@ -132,9 +134,12 @@ struct BoardColumn: View {
                     .glass(in: .rect(cornerRadius: BoardCardMetrics.radius, style: .continuous))
                     .padding([.horizontal, .top], BoardCardMetrics.inset)
             }
-            .background { BoardLane(targeted: targeted) }
+            .background { BoardLane(targeted: lit) }
         #endif
     }
+
+    /// 拖着卡停在这一列上：只在有一张卡正被拖着时算（`boardDrag`），拖完不留着底。
+    private var lit: Bool { targeted && dragging != nil }
 
     private var isRow: Bool {
         #if os(iOS)
@@ -157,7 +162,7 @@ struct BoardColumn: View {
                 newTask.transition(.opacity)
             }
             ForEach(board.todo) { item in
-                card(item).draggable(item.id.uuidString).modifier(InsertBefore(id: item.id) { drop($0, before: item.id) })
+                card(item).boardDraggable(item.id).insertsBefore(item.id) { drop($0, before: item.id) }
             }
             if board.todo.isEmpty && !adding { empty("没有待办") }
         case .advancing:
@@ -168,7 +173,7 @@ struct BoardColumn: View {
                 ForEach(Array(group.work.enumerated()), id: \.element.id) { index, work in
                     let moves = group.tier == .running && index < BoardLine.maxMoving
                     if let item = work.item {
-                        card(item, moves: moves).draggable(item.id.uuidString)
+                        card(item, moves: moves).boardDraggable(item.id)
                     } else if case .session(let session) = work.work {
                         BoardSessionCard(session: session, project: glyph(workspace.catalog?.project(work.project)), moves: moves)
                             .boardDim(project: work.project)
@@ -180,7 +185,7 @@ struct BoardColumn: View {
         case .waiting:
             ForEach(board.held) { held in
                 let card = BoardWaitCard(held: held, project: glyph(workspace.catalog?.project(held.project))).boardFlight(held.id)
-                if let item = held.item { card.draggable(item.id.uuidString) } else { card }
+                if let item = held.item { card.boardDraggable(item.id) } else { card }
             }
             if board.count(.waiting) == 0 { empty("没有等你的事") }
         case .done:
@@ -300,61 +305,6 @@ private struct ShotPresenter: ViewModifier {
 
     func body(content: Content) -> some View {
         if column == .done { content.previewPresenter($opened, reply: .cue) } else { content }
-    }
-}
-
-/// 待办里一张卡的落点：拖到它上面就是排到它前面，卡的上沿画一条插入线（同大纲的插入线：墨色、起点一个小圈）。
-private struct InsertBefore: ViewModifier {
-    let id: UUID
-    let perform: ([String]) -> Bool
-    @State private var targeted = false
-    @Environment(\.palette) private var palette
-
-    func body(content: Content) -> some View {
-        content
-            .overlay(alignment: .top) {
-                if targeted {
-                    HStack(spacing: 0) {
-                        Circle().strokeBorder(palette.ink, lineWidth: 2).frame(width: 9, height: 9)
-                        Capsule().fill(palette.ink).frame(height: 2)
-                    }
-                    .offset(y: -8).allowsHitTesting(false).transition(.opacity)
-                }
-            }
-            .dropDestination(for: String.self) { ids, _ in perform(ids) } isTargeted: { targeted = $0 }
-            .animation(HandOff.quick, value: targeted)
-            .sensoryFeedback(.selection, trigger: targeted) { _, now in now }
-    }
-}
-
-extension View {
-    /// 读看板（三端进展页同一处）：库变了重读；过了零点也重读一次——"今天做完"按读的那一刻分，库没变时日子换了也要换（同项目页）。
-    /// 看板怎么动只在这里定：第一份是页面打开的样子、不动；之后每一份都在一个动画事务里换上（`Motion.move`，减弱动态效果时直接到终态），
-    /// 卡的出现、消失、列内让位与换列（`boardFlight`）都跟着这一份走，各列各行不再各挂动画。
-    func observingBoard(into board: Binding<TaskBoard?>, store: CueStore, onError: @escaping (any Error) -> Void) -> some View {
-        modifier(BoardReading(board: board, store: store, onError: onError))
-    }
-}
-
-private struct BoardReading: ViewModifier {
-    @Binding var board: TaskBoard?
-    let store: CueStore
-    let onError: (any Error) -> Void
-    @State private var day = 0
-    @State private var moved: Set<String> = []
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    func body(content: Content) -> some View {
-        content
-            .environment(\.boardMoved, moved)
-            .observing(store, id: day, into: Binding { board } set: { read in
-                guard let board, let read else { return board = read }
-                withAnimation(Motion.spatial(Motion.move, reduceMotion: reduceMotion)) {
-                    moved = read.moved(from: board)
-                    self.board = read
-                }
-            }, onError: onError) { try TaskBoard.read(from: $0) }
-            .onDayChange { day += 1 }
     }
 }
 

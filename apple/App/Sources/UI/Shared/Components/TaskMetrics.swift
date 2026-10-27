@@ -84,7 +84,8 @@ enum BoardCardMetrics {
     }
 
     private static let oneLine: CGFloat = 14
-    private static let lightLine: CGFloat = 8
+    /// 开头的圈与项目小图形约占三个字宽：一行放得下八个字的标题。
+    private static let lightLine: CGFloat = 11
 
     /// 列里卡标题的字（`TaskMetrics.lineFont`）：中文字宽等于字号。
     private static func titleFont(_ typeSize: DynamicTypeSize) -> (pointSize: CGFloat, lineHeight: CGFloat) {

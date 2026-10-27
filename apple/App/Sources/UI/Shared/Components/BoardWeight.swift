@@ -46,12 +46,12 @@ extension TaskBoard.Column {
         }
     }
 
-    /// 四列并排时占几份宽（`BoardColumns`）。
+    /// 四列并排时，各列最窄之外多出来的宽分几份（`BoardColumns`）：Mac 常用窗口里推进中最宽，轻的两列仍放得下一行十来个字。
     var share: CGFloat {
         switch self {
-        case .todo: 0.95
-        case .advancing: 1.25
-        case .waiting: 1.05
+        case .todo: 1
+        case .advancing: 2
+        case .waiting: 1.35
         case .done: 0.9
         }
     }
