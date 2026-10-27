@@ -72,17 +72,18 @@ extension CueStore {
     try db.first("SELECT count(*) FROM piSessionStates") { Int($0.int(0)) } ?? 0
   }
 
-  /// 会话记录配上列表项要的其余几样（项目、最近一条投送请求、改名、没送达的话）：分页与按 id 取的唯一组装处。
+  /// 会话记录配上列表项要的其余几样（项目、最近一条投送请求、改名、没送达的话、Cue 对它做的）：分页与按 id 取的唯一组装处。
   private func listItems(_ states: [PiSessionState]) throws -> [PiSessionListItem] {
     let ids = states.map(\.sessionID)
     let projects = Dictionary(uniqueKeysWithValues: try self.projects().map { ($0.id, $0) })
     let deliveries = try latestDeliveries(to: ids)
     let renames = try latestRenames(to: ids)
     let unsettled = try unsettledTalk(to: ids)
+    let did = try cueDid(states)
     return states.map {
       PiSessionListItem(
         state: $0, project: $0.projectID.flatMap { projects[$0] }, delivery: deliveries[$0.sessionID], rename: renames[$0.sessionID],
-        unsettled: unsettled[$0.sessionID] ?? [])
+        unsettled: unsettled[$0.sessionID] ?? [], cueDid: did[$0.sessionID])
     }
   }
 

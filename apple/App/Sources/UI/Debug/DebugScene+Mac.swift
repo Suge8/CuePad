@@ -56,7 +56,9 @@ extension DebugScene {
             // 没给 -CuePadTask 时是本项目第一条没完成的顶层任务
             await openTask(workspace) { $0.parentID == nil && $0.projectID == workspace.currentProject }
         case "sessions":
+            // 给了 -CuePadProject 先把项目范围设成它（同 iOS）
             await seedDemo(workspace.services)
+            workspace.projectScope = opened
             workspace.showSessions()
         case "cue", "cuememory", "cuerun":
             // Cue 页（演示数据见 `DebugScene+Cue.swift`）；cuememory 再打开"Cue 记得什么"，cuerun 打开"运行情况"（Cue 在这台值班时才有）

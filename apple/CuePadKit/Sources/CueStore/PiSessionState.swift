@@ -71,19 +71,22 @@ public struct PiSessionListItem: Identifiable, Sendable, Equatable {
   public var rename: DeliveryRequest?
   /// 发给它、还没有回执或失败了的话（说话的方式，没被领取或失败、还没重发或移除的）：哪几句没能送达按说的话那条规则看此刻（`undelivered`）。
   public var unsettled: [DeliveryRequest]
+  /// 停着、Cue 已接手这次停下：它对它做的最近一件事（`CueDid`）
+  public var cueDid: CueDid?
   public var id: UUID { state.id }
   /// 会话归在哪个项目（会话页按它筛、项目的此刻按它归）：它的项目还在就是它，没有项目或项目已删的归默认项目。
   public var home: UUID { project?.id ?? Project.defaultID }
 
   public init(
     state: PiSessionState, project: Project? = nil, delivery: DeliveryRequest? = nil, rename: DeliveryRequest? = nil,
-    unsettled: [DeliveryRequest] = []
+    unsettled: [DeliveryRequest] = [], cueDid: CueDid? = nil
   ) {
     self.state = state
     self.project = project
     self.delivery = delivery
     self.rename = rename
     self.unsettled = unsettled
+    self.cueDid = cueDid
   }
 
   /// 此刻没能送达的话有几句（`Speech`：失败的与超时的）：会话行的标记与会话页顶栏的"N 句没送到"同读这个数。
