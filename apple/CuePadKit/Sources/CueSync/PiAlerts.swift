@@ -52,7 +52,7 @@ public enum PiAlertText {
   /// 等你：标题"会话名 等你拍板"（同名牌数字账的叫法），正文是问题首行；没有问题时是它最后那句回答的首行；都没有写"去看看它在问什么"。
   /// 待回复（停着的它留给你回）：标题"会话名 待回复"，正文是出错的原因（`failure`，出错时），否则它最后那句回答的首行，都没有写"去看看它说了什么"。
   /// 完成：标题会话名，正文"完成了"。
-  public static func content(title: String, question: String?, reply: String?, failure: String? = nil, kind: PiAlert) -> (title: String, body: String) {
+  public static func content(title: String, question: String?, reply: String?, failure: String?, kind: PiAlert) -> (title: String, body: String) {
     switch kind {
     case .waitingForUser:
       let first = [question, reply].lazy.compactMap { $0.flatMap(\.firstLine) }.first

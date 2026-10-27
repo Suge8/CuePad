@@ -73,8 +73,6 @@ public struct AgentCapabilities: OptionSet, Sendable, Hashable {
   public let rawValue: Int
   public init(rawValue: Int) { self.rawValue = rawValue }
 
-  /// 发文字（开新一轮）
-  public static let speak = AgentCapabilities(rawValue: 1 << 7)
   public static let images = AgentCapabilities(rawValue: 1 << 0)
   /// 停止这一轮
   public static let abort = AgentCapabilities(rawValue: 1 << 1)
@@ -84,6 +82,8 @@ public struct AgentCapabilities: OptionSet, Sendable, Hashable {
   /// 回答它弹出的问题与权限确认
   public static let answer = AgentCapabilities(rawValue: 1 << 5)
   public static let end = AgentCapabilities(rawValue: 1 << 6)
+  /// 发文字（开新一轮）
+  public static let speak = AgentCapabilities(rawValue: 1 << 7)
 
   public static let all: AgentCapabilities = [.speak, .images, .abort, .model, .rename, .commands, .answer, .end]
 
