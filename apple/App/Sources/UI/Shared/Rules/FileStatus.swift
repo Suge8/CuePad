@@ -12,6 +12,9 @@ nonisolated enum FileStatus {
         PiPreviewKind(fileName: name)?.label ?? AttachmentKey.format(ofName: name).uppercased().nonEmpty ?? String(localized: "文件")
     }
 
+    /// iCloud 空间满时附件的说法（提示与设置里同一句）：只有附件停着，别的照常同步。
+    static var overQuota: String { String(localized: "iCloud 空间已满：附件先留在这台，腾出空间后接着传") }
+
     /// 本机那份的大小（"1.2 MB"）；读不到为 nil。
     static func size(of file: URL) -> String? {
         guard let bytes = (try? file.resourceValues(forKeys: [.fileSizeKey]))?.fileSize else { return nil }

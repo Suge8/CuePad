@@ -40,25 +40,32 @@ nonisolated enum ShareItemLoader {
         return provider.registeredContentTypes.first { $0.conforms(to: .data) } ?? .data
     }
 
-    /// 系统给的那份只在回调里有效：拷进扩展自己的临时目录。名字用分享方给的，没有就用系统的。
+    /// 系统给的那份只在回调里有效：拷进扩展自己的临时目录。分享的是文件（带文件网址的）时从网址拿原文件，名字是原文件名；
+    /// 别的是系统起名的临时副本，名字用分享方给的，没有就用系统的。
     private static func loadFile(_ provider: NSItemProvider, type: UTType) async throws -> ShareContent.File {
+        if provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier),
+           let url: URL = try? await loadObject(provider), url.isFileURL {
+            let scoped = url.startAccessingSecurityScopedResource()
+            defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+            return ShareContent.File(url: try copy(url), name: url.lastPathComponent)
+        }
         let suggested = provider.suggestedName
         return try await withCheckedThrowingContinuation { continuation in
             _ = provider.loadFileRepresentation(for: type, openInPlace: false) { url, _, error in
                 guard let url else { return continuation.resume(throwing: error ?? ShareError.nothingToShare) }
-                do {
-                    let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString, directoryHint: .isDirectory)
-                    try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-                    let copy = folder.appending(path: url.lastPathComponent)
-                    try FileManager.default.copyItem(at: url, to: copy)
-                    let ext = url.pathExtension
-                    let name = suggested.map { ext.isEmpty || $0.lowercased().hasSuffix("." + ext.lowercased()) ? $0 : $0 + "." + ext } ?? url.lastPathComponent
-                    continuation.resume(returning: ShareContent.File(url: copy, name: name))
-                } catch {
-                    continuation.resume(throwing: error)
-                }
+                let ext = url.pathExtension
+                let name = suggested.map { ext.isEmpty || $0.lowercased().hasSuffix("." + ext.lowercased()) ? $0 : $0 + "." + ext } ?? url.lastPathComponent
+                continuation.resume(with: Result { ShareContent.File(url: try copy(url), name: name) })
             }
         }
+    }
+
+    private static func copy(_ url: URL) throws -> URL {
+        let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let copy = folder.appending(path: url.lastPathComponent)
+        try FileManager.default.copyItem(at: url, to: copy)
+        return copy
     }
 
     private static func loadURL(_ provider: NSItemProvider) async -> URL? {

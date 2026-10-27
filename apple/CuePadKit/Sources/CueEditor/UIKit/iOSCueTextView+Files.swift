@@ -34,9 +34,11 @@ extension CueTextView {
 
     fileprivate func transform(_ item: UITextPasteItem) {
         let provider = item.itemProvider
-        // 文字（含存储格式的附件引用）按文字收；图片取图片；别的都当文件收
+        // 图片与文件（带文件网址的，文字能从网址读出来，要先认）当附件收；文字（含存储格式的附件引用）按文字收；别的有内容的也当文件收
         if provider.hasItemConformingToTypeIdentifier(UTType.image.identifier) {
             importFile(from: provider, type: .image, into: item)
+        } else if provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) {
+            importLinkedFile(from: provider, into: item)
         } else if provider.canLoadObject(ofClass: NSString.self) {
             // 文本一律按存储格式解析：附件引用还原成附件
             _ = provider.loadObject(ofClass: NSString.self) { [weak self] object, _ in
@@ -47,18 +49,57 @@ extension CueTextView {
                     item.setResult(attributedString: self.core.attributed(CueFormat.parse(text)))
                 }
             }
-        } else if let type = provider.registeredContentTypes.first {
+        } else if let type = provider.registeredContentTypes.first(where: { $0.conforms(to: .data) }) {
             importFile(from: provider, type: type, into: item)
         } else {
             item.setNoResult()
         }
     }
 
-    /// 取文件表示（系统给的临时副本，回调里拷走），存好后把附件交回粘贴项；图片只有对象没有文件时转 PNG。
-    private func importFile(from provider: NSItemProvider, type: UTType, into item: UITextPasteItem) {
+    /// 带文件网址的（文件 App、访达拖来的）：从网址拿原文件，名字是原文件名；拿不到网址时同别的文件取文件表示。
+    private func importLinkedFile(from provider: NSItemProvider, into item: UITextPasteItem) {
         let files = files
         nonisolated(unsafe) let item = item, provider = provider
-        let finish: @Sendable (Result<(key: String, name: String), any Error>) -> Void = { [weak self] result in
+        let finish = delivery(to: item)
+        _ = provider.loadObject(ofClass: URL.self) { [weak self] url, _ in
+            guard let url, url.isFileURL else {
+                Task { @MainActor in
+                    self?.importFile(from: provider, type: provider.registeredContentTypes.first { $0.conforms(to: .data) } ?? .data, into: item)
+                }
+                return
+            }
+            let scoped = url.startAccessingSecurityScopedResource()
+            defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+            finish(Result { (try files.store(fileAt: url), url.lastPathComponent) })
+        }
+    }
+
+    /// 取文件表示（回调里存进附件目录），存好后把附件交回粘贴项；图片只有对象没有文件时转 PNG。
+    private func importFile(from provider: NSItemProvider, type: UTType, into item: UITextPasteItem) {
+        let files = files
+        nonisolated(unsafe) let provider = provider
+        let finish = delivery(to: item)
+        // 系统给的是它起名的临时副本：名字用分享方给的
+        _ = provider.loadFileRepresentation(for: type, openInPlace: false) { url, _, fileError in
+            if let url {
+                let ext = url.pathExtension
+                let suggested = provider.suggestedName.map { ext.isEmpty || $0.lowercased().hasSuffix("." + ext.lowercased()) ? $0 : $0 + "." + ext }
+                finish(Result { (try files.store(fileAt: url), suggested ?? url.lastPathComponent) })
+            } else if provider.canLoadObject(ofClass: UIImage.self) {
+                _ = provider.loadObject(ofClass: UIImage.self) { object, objectError in
+                    guard let png = (object as? UIImage)?.pngData() else { return finish(.failure(objectError ?? fileError ?? CocoaError(.fileReadUnknown))) }
+                    finish(Result { (try files.store(png), "") })
+                }
+            } else {
+                finish(.failure(fileError ?? CocoaError(.fileReadUnknown)))
+            }
+        }
+    }
+
+    /// 存好的附件交回粘贴项（自成一行）；存不进报错、不插。
+    private func delivery(to item: UITextPasteItem) -> @Sendable (Result<(key: String, name: String), any Error>) -> Void {
+        nonisolated(unsafe) let item = item
+        return { [weak self] result in
             Task { @MainActor in
                 guard let self else { return item.setNoResult() }
                 switch result {
@@ -68,20 +109,6 @@ extension CueTextView {
                     self.onError?(error)
                     item.setNoResult()
                 }
-            }
-        }
-        _ = provider.loadFileRepresentation(for: type, openInPlace: false) { url, _, fileError in
-            if let url {
-                // 临时副本的名字是系统起的，显示用分享方给的名字
-                let name = provider.suggestedName.map { $0 + ((url.pathExtension.isEmpty || $0.hasSuffix("." + url.pathExtension)) ? "" : "." + url.pathExtension) }
-                finish(Result { (try files.store(fileAt: url), name ?? url.lastPathComponent) })
-            } else if provider.canLoadObject(ofClass: UIImage.self) {
-                _ = provider.loadObject(ofClass: UIImage.self) { object, objectError in
-                    guard let png = (object as? UIImage)?.pngData() else { return finish(.failure(objectError ?? fileError ?? CocoaError(.fileReadUnknown))) }
-                    finish(Result { (try files.store(png), "") })
-                }
-            } else {
-                finish(.failure(fileError ?? CocoaError(.fileReadUnknown)))
             }
         }
     }

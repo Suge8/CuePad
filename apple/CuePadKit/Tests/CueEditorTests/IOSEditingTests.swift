@@ -60,6 +60,20 @@ struct IOSEditingTests {
         }
     }
 
+    @Test("粘贴/拖入任意文件（文件 App 分享的 PDF）：委托给出一枚文件牌，名字是原文件名，文件经注入的库存入")
+    func pasteFile() async throws {
+        let h = EditorHarness()
+        let file = h.store.directory.appendingPathComponent("报告.pdf")
+        try Data("%PDF-1.4".utf8).write(to: file)
+
+        let item = await transform(try #require(NSItemProvider(contentsOf: file)), in: h)
+
+        let chip = try #require(attachments(in: item.result).first as? CueFileAttachment)
+        #expect(chip.name == "报告.pdf")
+        #expect(chip.key.hasSuffix(".pdf"))
+        #expect(h.store.fileURL(for: chip.key) != nil)
+    }
+
     @Test("粘贴文本按存储格式解析：图片标记还原成图片，其余（含分割线）原样")
     func pasteText() async throws {
         let h = EditorHarness()
@@ -118,6 +132,7 @@ struct IOSEditingTests {
         h.load("甲乙")
         h.setCaret(1)
         h.textView.insertImage(data: makePNG(width: 40, height: 30))
+        #expect(await h.wait { CueFormat.hasImages(h.stored) })
         let original = h.stored
         h.textView.selectedRange = NSRange(location: 0, length: h.textView.textStorage.length)
 
@@ -126,7 +141,7 @@ struct IOSEditingTests {
         #expect(h.stored == original)
 
         let item = await transform(NSItemProvider(object: try #require(h.textView.pasteboard.string) as NSString), in: h)
-        #expect((attachments(in: item.result).first as? CueImageAttachment)?.imageID != nil)
+        #expect((attachments(in: item.result).first as? CueImageAttachment)?.key != nil)
 
         h.textView.pasteboard.string = ""
         h.textView.cut(nil)

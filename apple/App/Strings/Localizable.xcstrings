@@ -3959,6 +3959,22 @@
         }
       }
     },
+    "iCloud 空间已满：附件先留在这台，腾出空间后接着传" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iCloud storage is full. Attachments stay on this device and upload once there’s space."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iCloud 空间已满：附件先留在这台，腾出空间后接着传"
+          }
+        }
+      }
+    },
     "iCloud 账号受限" : {
       "localizations" : {
         "en" : {

@@ -41,6 +41,7 @@ extension DebugScene {
         case "simulated": .built { CloudSync.simulated(store: $0, peerFloor: CueStore.peerFloor) }
         case "failed": .custom(StandInSync(.failed, issues: issues))
         case "restricted": .custom(StandInSync(.accountRestricted))
+        case "fullquota": .custom(StandInSync(filesOverQuota: true))
         case "offline": .custom(OfflineSync(seconds: seconds("CuePadOfflineSeconds", default: 6)))
         case "arrive": .custom(ArrivingSync())
         case "blips": .custom(BlipSync(.upload))
@@ -188,8 +189,8 @@ extension DebugScene {
     nonisolated final class StandInSync: StandInSyncing {
         let state: SyncState
         let stalls: Bool
-        init(_ status: SyncStatus = .idle, issues: [SyncIssue] = [], stalls: Bool = false) {
-            (state, self.stalls) = (SyncState(status: status, issues: issues, reconciled: true), stalls)
+        init(_ status: SyncStatus = .idle, issues: [SyncIssue] = [], stalls: Bool = false, filesOverQuota: Bool = false) {
+            (state, self.stalls) = (SyncState(status: status, issues: issues, reconciled: true, filesOverQuota: filesOverQuota), stalls)
         }
         var stateUpdates: AsyncStream<SyncState> { AsyncStream { [state] in $0.yield(state) } }
         func syncNow() async throws { if stalls { try await Task.sleep(for: .seconds(86_400)) } }
