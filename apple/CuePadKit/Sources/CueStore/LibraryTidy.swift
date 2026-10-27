@@ -42,7 +42,7 @@ public struct LibraryTidy: Codable, Equatable, Sendable, Identifiable {
   /// 内容不同、要合并的规则（在那份规则的文件页里"合并进来"）。替换基础提示的两份只作比对，自己不算不同。
   public var merges: Bool {
     switch kind {
-    case .globalInstructions: Set(sources.filter { !$0.origin.replacesBasePrompt }.compactMap(\.text)).count > 1
+    case .globalInstructions: Set(sources.filter { !$0.origin.replacesBasePrompt }.compactMap(\.hash)).count > 1
     case .projectClaude: sources.contains { $0.origin == .agent(.claudeCode) }
     default: false
     }
@@ -71,17 +71,27 @@ public struct LibraryTidy: Codable, Equatable, Sendable, Identifiable {
     }
   }
 
-  /// 合并稿：几份规则按段取并集（`InstructionMerge`），整理时照它写进 AGENTS.md；不是规则的为 nil。
+  /// 合并稿：几份规则按段取并集（`InstructionMerge`），整理时照它写进 AGENTS.md；不是规则的为 nil。`texts` 是各份的正文（路径 → 正文，
+  /// Mac 上是刚读的文件，手机上是同步来的 `LibraryFileText`）。
   /// 替换基础提示的两份（`InstructionSource.Origin.replacesBasePrompt`）只有撤掉的（`retiring`，同 `TidyOrder.retire`）才并进来。
-  public func merged(retiring: Set<InstructionSource.Origin> = []) -> String? {
-    let used = sources.filter { !$0.origin.replacesBasePrompt || retiring.contains($0.origin) }
-    return used.isEmpty ? nil : InstructionMerge.union(used.compactMap(\.text))
+  public func merged(retiring: Set<InstructionSource.Origin> = [], texts: [String: String]) -> String? {
+    let used = sources.filter { $0.hash != nil && (!$0.origin.replacesBasePrompt || retiring.contains($0.origin)) }
+    return used.isEmpty ? nil : InstructionMerge.union(used.compactMap { texts[$0.path] })
   }
 
-  /// 合并稿按段，标出共读的那份里没有、会并进来的段（合并前给你看）。
-  public func preview(retiring: Set<InstructionSource.Origin>) -> [(text: String, incoming: Bool)] {
-    let shared = Set(InstructionMerge.blocks(of: sources.first { $0.origin == .shared }?.text ?? "").map(InstructionMerge.normalized))
-    return InstructionMerge.blocks(of: merged(retiring: retiring) ?? "").map { ($0, !shared.contains(InstructionMerge.normalized($0))) }
+  /// 各份规则此刻的样子（各份的哈希合成一个）：合并请求带着它（`TidyOrder.base`），Mac 上照执行时的文件算出的不一样就不合并，
+  /// 并进去的就是你看过的那一版。不是规则的为 nil。
+  public var base: String? {
+    sources.isEmpty ? nil : LibraryEdit.base(of: sources.map { "\($0.path)\n\($0.hash ?? "")" }.joined(separator: "\n"))
+  }
+
+  /// 合并稿按段，标出共读的那份里没有、会并进来的段（合并前给你看）。各份的正文（`texts`）有一份还没到、或不是快照里那一版时为 nil：
+  /// 正文与快照分条同步，先到的快照配旧正文算出的稿与合并时 Mac 照文件写的对不上。
+  public func preview(retiring: Set<InstructionSource.Origin>, texts: [String: String]?) -> [(text: String, incoming: Bool)]? {
+    guard let texts, sources.allSatisfy({ $0.hash == nil || texts[$0.path].map(LibraryEdit.base) == $0.hash }) else { return nil }
+    let shared = sources.first { $0.origin == .shared }.flatMap { texts[$0.path] } ?? ""
+    let blocks = Set(InstructionMerge.blocks(of: shared).map(InstructionMerge.normalized))
+    return InstructionMerge.blocks(of: merged(retiring: retiring, texts: texts) ?? "").map { ($0, !blocks.contains(InstructionMerge.normalized($0))) }
   }
 }
 
@@ -172,15 +182,16 @@ public struct InstructionSource: Codable, Equatable, Sendable {
   }
 
   public let origin: Origin
+  /// 文件的绝对路径；正文那一条也按它（`LibraryFileText.path`）
   public let path: String
-  /// 正文；共读的那份还没有时为 nil
-  public let text: String?
+  /// 正文的哈希（`LibraryEdit.base`）；共读的那份还没有时为 nil
+  public let hash: String?
   public let modifiedAt: Date?
 
-  public init(origin: Origin, path: String, text: String?, modifiedAt: Date?) {
+  public init(origin: Origin, path: String, hash: String?, modifiedAt: Date?) {
     self.origin = origin
     self.path = path
-    self.text = text
+    self.hash = hash
     self.modifiedAt = modifiedAt
   }
 }

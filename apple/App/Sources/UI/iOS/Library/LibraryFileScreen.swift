@@ -5,6 +5,7 @@ import SwiftUI
 /// 一份技能或规则的文件页（手机）：改动攒在这里，顶栏右边的纸飞机"发往 Mac"（有改动才亮），那台写进文件、快照同步回来（`FileDraft`）。
 /// 顶上依次是：Mac 上又改过而你也改着时的那一条（换成 Mac 上的、留我的），同名的分段与"只留这份"、或另写了一份的"合并进来"（`DuplicateBar`、`MergeBar`），
 /// 技能的名字与说明两个框；下面是正文。顶栏写它在哪（技能是全局或项目名，规则是名字），第二行写文件名、发着没有。
+/// 正文读本地已同步来的那一条（`LibraryFileText`），不向 Mac 要；对上快照的哈希才载入、才跟（`AgentLibrary.arrived`）。
 /// 不点纸飞机就不发：退出这一页时没发的留在 `Workspace.fileDraft`，回来接着改。快照里没有这一份了就退回去。
 struct LibraryFileScreen: View {
     let file: LibraryFile
@@ -12,6 +13,7 @@ struct LibraryFileScreen: View {
     @Environment(\.palette) private var palette
     @Environment(\.dismiss) private var dismiss
     @State private var draft: FileDraft?
+    @State private var texts: [String: String]?
     @State private var previewing = DebugHooks.preset.mergePreview
     @State private var retire: Set<InstructionSource.Origin> = []
 
@@ -21,25 +23,32 @@ struct LibraryFileScreen: View {
         VStack(spacing: 0) {
             if let library, let draft {
                 top(library, draft)
+                // 各份正文没到齐时标不出来，照常显示正文
+                let blocks = previewing ? merge(library)?.preview(retiring: retire, texts: texts) : nil
                 ZStack {
                     IOSEditorHost(initialText: draft.body, theme: .editor(palette, horizontalInset: 20), handle: draft.handle,
                                   onChange: { draft.changed(body: $0) }, onError: workspace.fail)
-                    .opacity(previewing ? 0 : 1)
-                    if previewing, let merge = merge(library) {
-                        MergePreview(blocks: merge.preview(retiring: retire), font: .body).padding(.horizontal, 16).background(palette.paper)
+                    .opacity(blocks == nil ? 1 : 0)
+                    if let blocks {
+                        MergePreview(blocks: blocks, font: .body).padding(.horizontal, 16).background(palette.paper)
                     }
                 }
+            } else if entry != nil {
+                // 快照先到了、正文那一条还在路上
+                Spinner(.small).padding(.top, 40)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(palette.paper.ignoresSafeArea())
         .floatingHeader(.verbatim(workspace.fileTitle(file, in: library)), detail: detail(entry?.path)) { send }
+        .observingLibraryTexts(library?.textPaths(for: file) ?? [], in: library, into: $texts)
         .onChange(of: entry == nil, initial: true) {
-            guard let library else { return }
-            guard let entry else { dismiss(); return }
-            if draft == nil { draft = workspace.fileDraft(file, text: entry.text, on: library.hostID) }
+            if library != nil, entry == nil { dismiss() }
         }
-        .onChange(of: entry?.text) { draft?.follow(entry?.text) }
+        .onChange(of: library?.arrived(file, in: texts), initial: true) { _, arrived in
+            guard let library, let arrived else { return }
+            if let draft { draft.follow(arrived) } else { draft = workspace.fileDraft(file, text: arrived, on: library.hostID) }
+        }
     }
 
     private func merge(_ library: AgentLibrary) -> LibraryTidy? {
@@ -57,7 +66,9 @@ struct LibraryFileScreen: View {
                     DuplicateBar(path: path, tidy: duplicate, library: library)
                 } else if let merge {
                     // 有没发的改动时不让合并：合并照 Mac 上此刻的文件做，你的字会变成和它冲突
-                    MergeBar(tidy: merge, library: library, previewing: $previewing, retire: $retire, prepare: draft.dirty ? nil : {})
+                    MergeBar(
+                        tidy: merge, library: library, previewing: $previewing, retire: $retire,
+                        ready: merge.preview(retiring: retire, texts: texts) != nil, prepare: draft.dirty ? nil : {})
                 }
                 if case .skill(let path) = file {
                     SkillFields(draft: draft, problem: library.skill(at: path)?.problem).padding(.horizontal, 4)

@@ -7,7 +7,7 @@ import Foundation
 /// - `base` 是以为文件此刻的样子（打开时读到的、自己写成的、跟上的那一版）；写入都带它的哈希（`LibraryEdit.base`），
 ///   文件已不是它，那台 Mac 就不写（`AgentLibraryError.changedOnMac`）。
 /// - Mac 自动存（停手一小会儿，同灵感的编辑页，`Autosave`），没有保存钮；手机攒着，点纸飞机"发往 Mac"（`send`）。
-/// - 快照里的这份变了（文件在别处被改了，`follow`）：你没改过就当场跟上；你改着没写成的，留着你的字、说出文件变了，
+/// - 这份的正文变了（文件在别处被改了，`follow`）：你没改过就当场跟上；你改着没写成的，留着你的字、说出文件变了，
 ///   由你选换成文件里的（`takeFile`）或留你的盖过它（`keepMine`）；选之前不再自动写。
 @Observable
 final class FileDraft {
@@ -92,14 +92,15 @@ final class FileDraft {
             state = .saved
         } catch AgentLibraryError.changedOnMac {
             autosave?.discard()
-            state = .conflict(file: workspace.library?.file(file)?.text)
+            // 文件此刻的样子随它那一条同步来（`follow`）
+            state = .conflict(file: nil)
         } catch {
             state = .failed
             workspace.fail(error)
         }
     }
 
-    /// 快照里这份的正文变了：是自己写成的那一版就只记下；你没改过就跟上；改着的留着，说出文件变了。
+    /// 这份同步来的正文变了（`LibraryFileText`，对上了快照的哈希）：是自己写成的那一版就只记下；你没改过就跟上；改着的留着，说出文件变了。
     func follow(_ file: String?) {
         let file = file ?? ""
         guard file != base else { return }
