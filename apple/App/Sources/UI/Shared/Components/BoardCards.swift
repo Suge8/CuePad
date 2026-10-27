@@ -107,7 +107,7 @@ struct BoardSessionCard: View {
             .boardCard(.advancing)
         }
         .help(Dotted(project?.shownName, session.agentMark).visible)
-        .accessibilityLabel(Dotted(session.title, pulse.fullContext.map { $0.help.spoken } ?? pulse.shown?.label).spoken)
+        .accessibilityLabel(Dotted(session.title, pulse.fullContext.map { $0.help.spoken } ?? pulse.shown?.label, pulse.cue).spoken)
     }
 }
 

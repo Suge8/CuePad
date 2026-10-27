@@ -141,6 +141,12 @@ extension DebugScene {
                 try await store.recordCueRound(nil, startedAt: .now, answersYou: false, tools: tools, wake: wake)
                 if !note.isEmpty { _ = try await store.addCueMessage(.note, text: note) }
             }
+            // docs 停下后 Cue 把要的数据转给了 cuepad、自己留着等它打完补丁：会话行与看板卡上歇着的 docs 写 Cue 对它做的这件事（`CueDid`）
+            try await later(1)
+            try await store.recordCueRound(nil, startedAt: .now, answersYou: false, tools: process(
+                step(.read, String(localized: "看 docs 的近况", table: "Demo"), session: "docs"),
+                step(.talk, String(localized: "对 cuepad 说：补丁合进去后告诉 docs 填投送队列的数据", table: "Demo"), session: "cuepad")), wake: stirred(.settled, "docs"))
+            _ = try await store.addCueMessage(.note, text: String(localized: "已转给 cuepad，等它打补丁", table: "Demo"))
             try await seedSchedules(store, task: task(String(localized: "续费域名", table: "Demo")))
             // 用到换新线的七成（上下文用量那一块加深一档）
             let context = CueContext(used: 70_000)

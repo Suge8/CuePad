@@ -11,6 +11,7 @@ extension EnvironmentValues {
 ///   相邻两颗按两句隔了多久开方排开、至少隔 `PastDots.spacing`，第一颗前那段从会话开始算，最后一句落在两段交界；
 /// - 右段固定占 `nowShare` 是现在（`BoardPulse.Trace`）：在跑是从最后一颗（靛青）点长出的波浪或子代理直轨（`WaveStrip`）；
 ///   停住是淡线接到右端、末端一颗与状态词同色的点，被打断是断线；歇着是淡线、不带点。每张卡的现在在同一位置、同一长度，一列读起来整齐；
+/// - 歇着、Cue 已接手这次停下时整条线换成 Cue 对它做的那一句（`BoardPulse.cue`），同高、不挪卡；
 /// - 右端只写一个时长：会话在此刻这个状态里待了多久（同会话行那一格，`PiClock.Style.span`；数字加粗、单位小一号淡色），要你管的状态词紧跟。
 /// 动只经 `LoopLayer`，只有看得见的在动：卡在懒加载栈里，出屏就不存在；不放循环动效时（`LoopsPlay`）静止；
 /// 一列里排在第 `maxMoving` 条以后的静止（`moves` 由列按先后给）——"同屏最多几条"要逐行读几何才判得出，每行一个几何读数的开销比省下的动画还大，
@@ -32,11 +33,15 @@ struct BoardLine: View {
     private static let endDot: CGFloat = 6
 
     var body: some View {
-        let marks = PastDots.marks(said: pulse.session.flatMap { said[$0.sessionID] } ?? [], origin: pulse.session?.createdAt)
         HStack(spacing: 8) {
-            LineSplit(share: Self.nowShare) {
-                past(marks)
-                now(joint: !marks.isEmpty)
+            if let cue = pulse.cue {
+                Text(cue).font(TaskMetrics.caption).foregroundStyle(palette.ink2).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                let marks = PastDots.marks(said: pulse.session.flatMap { said[$0.sessionID] } ?? [], origin: pulse.session?.createdAt)
+                LineSplit(share: Self.nowShare) {
+                    past(marks)
+                    now(joint: !marks.isEmpty)
+                }
             }
             reading
         }

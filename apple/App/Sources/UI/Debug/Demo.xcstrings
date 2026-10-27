@@ -3015,6 +3015,22 @@
         }
       }
     },
+    "对 cuepad 说：补丁合进去后告诉 docs 填投送队列的数据" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tell cuepad: once the patch lands, have docs fill in the delivery queue numbers"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "对 cuepad 说：补丁合进去后告诉 docs 填投送队列的数据"
+          }
+        }
+      }
+    },
     "对「README 截图」说：换成 Swift 版的样子，按你给的参考图拍" : {
       "localizations" : {
         "en" : {
@@ -3411,6 +3427,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已补完 README 的同步一节"
+          }
+        }
+      }
+    },
+    "已转给 cuepad，等它打补丁" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Handed to cuepad, waiting for its patch"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已转给 cuepad，等它打补丁"
           }
         }
       }
@@ -4007,6 +4039,22 @@
         }
       }
     },
+    "把简历里的项目经历按时间重排" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reorder the projects on my résumé by date"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "把简历里的项目经历按时间重排"
+          }
+        }
+      }
+    },
     "把计费那个会话的进展说一下" : {
       "localizations" : {
         "en" : {
@@ -4355,6 +4403,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "换模型"
+          }
+        }
+      }
+    },
+    "排好了，最近的在前。投送队列那段的数据要等补丁合进去再填。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Done, newest first. The delivery queue numbers wait until the patch lands."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "排好了，最近的在前。投送队列那段的数据要等补丁合进去再填。"
           }
         }
       }
@@ -6291,6 +6355,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "目录里有 3 个文件：\n- README.md\n- notes.txt\n- todo.md"
+          }
+        }
+      }
+    },
+    "看 docs 的近况" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check on docs"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "看 docs 的近况"
           }
         }
       }
