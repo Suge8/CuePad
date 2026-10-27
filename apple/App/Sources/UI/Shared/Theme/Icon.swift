@@ -36,6 +36,8 @@ nonisolated enum Icon: Hashable, Sendable {
     // 输入、发送与会话
     case send, save, checked, stop, endSession, handOff, delivered, retry, toLatest, fetching, compact, renew
     case declined, mac, yourAnswer, above, floated, earlier
+    /// 带着附件（回形针）：只带文件的灵感在列表、卡片与搜索里的标记
+    case attachment
     case photo, photoLibrary, camera, pickCards, expandEdit, selectText, dismissKeyboard, variables
     case terminal, terminalWindow, readFile, editFile, pondering, tool, said, started, added, branch, markUnread, fireCode, thinking
     case relay, relayStalled
@@ -143,6 +145,7 @@ nonisolated enum Icon: Hashable, Sendable {
         case .mac: .ink("mac")
         case .yourAnswer: .ink("restore")
         case .above, .floated, .earlier: .ink("arrow.up")
+        case .attachment: .ink("clip")
         case .photo: .ink("photo")
         case .photoLibrary: .ink("photos")
         case .camera: .ink("camera")

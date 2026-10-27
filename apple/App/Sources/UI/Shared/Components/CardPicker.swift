@@ -22,6 +22,7 @@ struct CardPicker: View {
 
     var body: some View {
         content
+            .onAppear { if text.isEmpty { text = DebugHooks.preset.searchText } }
             .onChange(of: text) { if !TextComposition.isComposing { settled = text } }
             .onChange(of: settled) { pages = 1 }
             .observing(services.store, id: Key(text: settled, pages: pages), into: $data, onError: workspace.fail) {
@@ -193,7 +194,11 @@ struct CardRow: View {
                         Text(marked(text.label)).font(.headline).foregroundStyle(palette.ink).lineLimit(2)
                     }
                 } meta: {
-                    Text(DateLabel.short(card.modifiedAt)).font(.caption.monospacedDigit()).foregroundStyle(palette.ink3)
+                    HStack(spacing: 8) {
+                        if text.files > 0 { AttachmentMark(count: text.files) }
+                        Text(DateLabel.short(card.modifiedAt)).monospacedDigit()
+                    }
+                    .font(.caption).foregroundStyle(palette.ink3)
                 }
                 // 搜索时摘要从命中处截起（`CueSummary.snippet`），看得出为什么搜到它
                 let preview = highlight.isEmpty ? text.preview : CueSummary.snippet(card.body, matching: terms).textGlyphs

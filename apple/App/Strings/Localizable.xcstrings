@@ -8747,22 +8747,6 @@
         }
       }
     },
-    "含图片的灵感" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Idea with images"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "含图片的灵感"
-          }
-        }
-      }
-    },
     "含附件" : {
       "localizations" : {
         "en" : {
@@ -8775,6 +8759,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "含附件"
+          }
+        }
+      }
+    },
+    "含附件的灵感" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Idea with attachments"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "含附件的灵感"
           }
         }
       }
@@ -9767,6 +9767,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "在想"
+          }
+        }
+      }
+    },
+    "在文中搜索" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Find in Document"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在文中搜索"
           }
         }
       }
@@ -11587,6 +11603,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已重置"
+          }
+        }
+      }
+    },
+    "带 %lld 个附件" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld attachment"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld attachments"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "带 %lld 个附件"
           }
         }
       }
@@ -15099,6 +15143,54 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "查找"
+          }
+        }
+      }
+    },
+    "查找…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Find…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "查找…"
+          }
+        }
+      }
+    },
+    "查找上一个" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Find Previous"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "查找上一个"
+          }
+        }
+      }
+    },
+    "查找下一个" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Find Next"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "查找下一个"
           }
         }
       }

@@ -9,7 +9,7 @@ import SwiftUI
 struct ChatImages: View {
     let hashes: [String]
     var trip = BubbleTrip.arrived
-    @Environment(AppServices.self) private var services
+    @Environment(Workspace.self) private var workspace
     @Environment(\.openPreview) private var openPreview
 
     private static var side: CGFloat { 120 }
@@ -33,7 +33,6 @@ struct ChatImages: View {
                             hash: hashes[index], side: Self.side, fitWidth: hashes.count == 1 ? Self.singleWidth : nil,
                             zoom: PreviewZoomKey(group: group, preview: PiPreview.id(of: hashes[index]))
                         ) { open(hashes[index]) }
-                        .disabled(openPreview == nil)
                     }
                 }
             }
@@ -43,14 +42,7 @@ struct ChatImages: View {
 
     /// 已到本机的几张作为一组打开，从点的那张起。
     private func open(_ hash: String) {
-        let batch = hashes.compactMap(preview)
-        guard let opened = batch.first(where: { $0.key == hash }) else { return }
-        openPreview?(PreviewOpening(preview: opened, batch: batch, group: group))
-    }
-
-    /// 没到本机的为 nil。
-    private func preview(_ key: String) -> PiPreview? {
-        services.store.files.fileURL(for: key) == nil ? nil : PiPreview(attachment: DraftFile(key: key, name: ""))
+        workspace.openAttachment(DraftFile(key: hash, name: ""), among: hashes.map { DraftFile(key: $0, name: "") }, group: group, with: openPreview)
     }
 }
 
@@ -96,25 +88,17 @@ private struct ChatImage: View {
 struct ChatFiles: View {
     let files: [DraftFile]
     var trip = BubbleTrip.arrived
-    @Environment(\.openPreview) private var openPreview
 
     private static var maxWidth: CGFloat { 300 }
 
     var body: some View {
         VStack(alignment: .trailing, spacing: 6) {
             ForEach(files) { file in
-                FileChip(key: file.key, name: file.name, open: openPreview.map { opener in { _ in open(file, with: opener) } })
+                FileChip(key: file.key, name: file.name, among: files, group: "chat-files-" + files.map(\.key).joined(separator: ","))
                     .frame(maxWidth: Self.maxWidth)
             }
         }
         .opacity(trip.opacity)
-    }
-
-    /// 已到本机的几个作为一组打开，从点的那个起。全屏页按交付物认一份：标题与名字都是文件名。
-    private func open(_ file: DraftFile, with opener: PreviewOpener) {
-        let batch = files.compactMap(PiPreview.init(attachment:))
-        guard let opened = batch.first(where: { $0.key == file.key }) else { return }
-        opener(PreviewOpening(preview: opened, batch: batch, group: "chat-files-" + files.map(\.key).joined(separator: ",")))
     }
 }
 

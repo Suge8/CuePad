@@ -6,15 +6,16 @@ extension View {
     /// 点交付物后的全屏页：同一组的几份左右翻，每类由 CuePad 自己显示（`PreviewPage`；网页与文稿只读、不联网）。
     /// 从点的那张缩略图放大出来（系统 zoom 转场），关掉时缩回翻到的那一份原处；减弱动态效果时系统自己把转场降成淡入淡出、关闭手势照旧（实测）。
     /// 飞出来的第一帧就有图：等点的那张缩略图交出画面（`previewSource`，一般已在内存里）再呈现，页里大图解好前先铺它。
-    /// `reply` 是这一页的底栏对谁说（`PreviewOpening.reply` 另给的除外）。一个页面只在这里挂一次，不在每张缩略图上各挂一个。
-    func previewPresenter(_ opened: Binding<PreviewOpening?>, reply: PreviewReply) -> some View {
+    /// `reply` 是这一页的底栏对谁说（`PreviewOpening.reply` 另给的除外），nil 时没有底栏（窗口根上那一个，看正文、输入框里的附件）。
+    /// 一个页面只在这里挂一次，不在每张缩略图上各挂一个。
+    func previewPresenter(_ opened: Binding<PreviewOpening?>, reply: PreviewReply?) -> some View {
         modifier(PreviewPresenter(opened: opened, reply: reply))
     }
 }
 
 private struct PreviewPresenter: ViewModifier {
     @Binding var opened: PreviewOpening?
-    let reply: PreviewReply
+    let reply: PreviewReply?
     /// 呈现着的那一份：跟着 `opened` 走，晚一步——点的那张的画面取到了才换上（关掉是同时）。
     @State private var presented: PreviewOpening?
     @State private var sources = PreviewSources()
@@ -36,12 +37,12 @@ private struct PreviewPresenter: ViewModifier {
 }
 
 /// 全屏页：页顶那一排（左关闭、中间一块玻璃写标题与"第几份 · 类型"、右分享，`floatingHeader`），标题是当前这一份（写法同缩略图下那行），
-/// 底部一条玻璃栏（`PreviewReplyBar`）。内容铺满整屏、从两条栏后面透出来，没放大时排在两条栏之间。
+/// 有去处时底部一条玻璃栏（`PreviewReplyBar`）。内容铺满整屏、从两条栏后面透出来，没放大时排在两条栏之间。
 /// 关掉的手势全是系统 zoom 转场的（下拉、左缘右滑、双指捏小），跟着手指缩回翻到的那一份；页里放大着、往下翻过或左边还有一份时由 `PreviewDismissGuard` 让给页里。
 /// 接了键盘：左右方向键翻页，Esc 关闭。
 private struct PreviewPager: View {
     let opening: PreviewOpening
-    let reply: PreviewReply
+    let reply: PreviewReply?
     @State var current: UUID
     let zoom: Namespace.ID
     let sources: PreviewSources
@@ -51,6 +52,7 @@ private struct PreviewPager: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// 两条栏与状态栏占的边（`previewInsets`）
     @State private var insets = EdgeInsets()
+    @State private var finds = PreviewFinds()
 
     private var batch: [PiPreview] { opening.batch }
     private var index: Int { opening.index(of: current) }
@@ -65,16 +67,24 @@ private struct PreviewPager: View {
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("关闭", icon: .close, role: .cancel) { close() }
+                    Button("关闭", icon: .close, role: .cancel) { leave() }
+                }
+                // PDF 的页内搜索（系统的查找条，`PreviewFinds`）：与分享并排在右上；接了键盘 ⌘F 也是它（压过根上的 ⌘F 搜索）
+                if let file = findable {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button("在文中搜索", icon: .search) { finds.present(file) }.labelStyle(.iconOnly).keyboardShortcut("f")
+                    }
                 }
             }
             .safeAreaBar(edge: .bottom) {
-                PreviewReplyBar(reply: reply, about: title) { close() }
-                    .padding(.horizontal, 12).padding(.bottom, 8)
-                    .frame(maxWidth: 640)
-                    .frame(maxWidth: .infinity)
+                if let reply {
+                    PreviewReplyBar(reply: reply, about: title) { leave() }
+                        .padding(.horizontal, 12).padding(.bottom, 8)
+                        .frame(maxWidth: 640)
+                        .frame(maxWidth: .infinity)
+                }
             }
-            .background { PageKeys(turn: turn) { close() } }
+            .background { PageKeys(turn: turn) { leave() } }
         }
         .overlay { StatusBarBlur() }
         .navigationTransition(.zoom(sourceID: PreviewZoomKey(group: opening.group, preview: current), in: zoom))
@@ -99,10 +109,17 @@ private struct PreviewPager: View {
         // 栏后面不垫系统的滚动边缘效果（docs/ui.md「沉浸式的栏」）：SwiftUI 这一层与分页滚动区自己那一层（`PreviewDismissGuard`）都关
         .scrollEdgeEffectHidden()
         .environment(\.previewInsets, insets)
+        .environment(\.previewFinds, finds)
         .ignoresSafeArea()
         .onGeometryChange(for: EdgeInsets.self) { $0.safeAreaInsets } action: { insets = $0 }
         .background { PreviewDismissGuard() }
         .background(palette.desk)
+    }
+
+    /// 关上：开着的查找条先收（它挂在键盘那一层，不随页面缩回去）。
+    private func leave() {
+        finds.dismiss()
+        close()
     }
 
     /// 往前、往后翻一份（键盘），到头不动。
@@ -110,6 +127,9 @@ private struct PreviewPager: View {
         guard let next = opening.neighbor(of: current, step: step) else { return }
         withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { current = next }
     }
+
+    /// 翻到的这一份能页内搜索时是它的文件（PDF）
+    private var findable: URL? { preview.kind == .pdf ? file(of: preview) : nil }
 
     private func file(of preview: PiPreview) -> URL? {
         services.store.files.fileURL(for: preview.key)

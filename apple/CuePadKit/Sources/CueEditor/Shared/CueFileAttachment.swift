@@ -22,7 +22,7 @@ public struct CueFileStatus: Equatable, Sendable {
 }
 
 /// 正文里的任意文件（`CueToken.file`）：一枚文件牌，左边缩略图（系统快速查看的缩略图，文件不在本机时是文件记号），右边文件名与一行说明
-/// （`CueFileStatus`，宿主给），在传时底下一条进度。点它由宿主打开（`onOpenFile`）；牌子在绘制时现画，缩略图后台出好再重画。
+/// （`CueFileStatus`，宿主给），在传时底下一条进度。点它交给宿主（`onOpenAttachment`）；牌子在绘制时现画，缩略图后台出好再重画。
 final class CueFileAttachment: NSTextAttachment {
     private static let maxWidth: CGFloat = 360
 
@@ -69,6 +69,12 @@ nonisolated enum FileChip {
 
     static func detailFont(_ style: CueEditorTheme) -> CueFont {
         CueFont.systemFont(ofSize: (style.font.pointSize * 0.78).rounded())
+    }
+
+    /// 附件在 `rect` 里画面的那一块：文件牌（有名字）是左边的缩略图，图片（没有名字）是整张。
+    static func picture(in rect: CGRect, named name: String) -> CGRect {
+        guard !name.isEmpty else { return rect }
+        return CGRect(x: rect.minX + padding, y: rect.midY - thumbSide / 2, width: thumbSide, height: thumbSide)
     }
 
     /// 两行字加上下留白，至少放得下缩略图。

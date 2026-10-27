@@ -5,15 +5,16 @@ import SwiftUI
 extension View {
     /// 点交付物后的全屏页：窗口内浮层（`panel`），从点的那张缩略图飞出、关上时飞回翻到的那一份（`PreviewFlight`）；
     /// 同一组的几份用 ←→、右上的前后箭头、触控板横扫翻；每类怎么显示见 `PreviewPage`。
-    /// `reply` 是这一页的底栏对谁说（`PreviewOpening.reply` 另给的除外）。一个页面只在这里挂一次，不在每张缩略图上各挂一个。
-    func previewPresenter(_ opened: Binding<PreviewOpening?>, reply: PreviewReply) -> some View {
+    /// `reply` 是这一页的底栏对谁说（`PreviewOpening.reply` 另给的除外），nil 时没有底栏（窗口根上那一个，看正文、输入框里的附件）。
+    /// 一个页面只在这里挂一次，不在每张缩略图上各挂一个。
+    func previewPresenter(_ opened: Binding<PreviewOpening?>, reply: PreviewReply?) -> some View {
         modifier(PreviewPresenter(opened: opened, reply: reply))
     }
 }
 
 private struct PreviewPresenter: ViewModifier {
     @Binding var opened: PreviewOpening?
-    let reply: PreviewReply
+    let reply: PreviewReply?
     @State private var flight = PreviewFlight()
 
     func body(content: Content) -> some View {
@@ -38,11 +39,11 @@ extension PanelStyle {
 
 /// 全屏页：一次显示翻到的那一份（`current`），翻页原地交叉淡（同快速查看与"预览"：Mac 上换一张不滑，滑动要逐帧挪整页）；
 /// 顶栏与底栏浮在内容上、栏后不垫底：顶上中间是这一份的标题，右上是前后箭头夹着"第几份 · 类型"、分享与关闭，各是一块玻璃；
-/// 底部是回复栏（`PreviewReplyBar`）。图片与 PDF 铺到两条栏下面，其余在两条栏之间（`previewInsets`）。
+/// 有去处时底部是回复栏（`PreviewReplyBar`）。图片与 PDF 铺到两条栏下面，其余在两条栏之间（`previewInsets`）。
 /// 翻页：←→、右上的箭头、触控板横扫（`PageInput`）。
 private struct PreviewPager: View {
     let opening: PreviewOpening
-    let reply: PreviewReply
+    let reply: PreviewReply?
     let flight: PreviewFlight
     @State var current: UUID
     @State private var barHeight: CGFloat = 0
@@ -74,9 +75,11 @@ private struct PreviewPager: View {
         }
         .overlay(alignment: .top) { header }
         .overlay(alignment: .bottom) {
-            PreviewReplyBar(reply: reply, about: title, done: { close() })
-                .frame(maxWidth: 640).padding([.horizontal, .bottom], 16)
-                .onGeometryChange(for: CGFloat.self) { $0.size.height + 16 } action: { barHeight = $0 }
+            if let reply {
+                PreviewReplyBar(reply: reply, about: title, done: { close() })
+                    .frame(maxWidth: 640).padding([.horizontal, .bottom], 16)
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height + 16 } action: { barHeight = $0 }
+            }
         }
         .background(palette.desk)
         .background { PageInput { step($0) } }

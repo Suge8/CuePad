@@ -31,6 +31,7 @@ struct CardTextField: View {
             selectionActions: [.convertToTasks(from: card, workspace: workspace)],
             onError: workspace.fail,
             fits: fits)
+        .overlay { AttachmentSpotLayer(spot: editing.handle.spot) }
         .photosPicker(isPresented: $pickingImage, selection: $pickedImage, matching: .images)
         .onChange(of: pickedImage) { insertPicked() }
         .fileImporter(isPresented: $pickingFile, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in

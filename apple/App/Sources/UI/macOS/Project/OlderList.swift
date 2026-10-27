@@ -101,7 +101,7 @@ private struct OlderRowLine: View {
     var body: some View {
         let text = CardText(card.body)
         HStack(spacing: 10) {
-            RowGlyph(images: !text.images.isEmpty, pinned: pinned)
+            RowGlyph(attached: !text.attachments.isEmpty, pinned: pinned)
             Text(text.label)
                 .font(Typography.body.weight(.medium)).foregroundStyle(palette.ink).lineLimit(1).layoutPriority(1)
             Text(text.preview).font(Typography.secondary).foregroundStyle(palette.ink3).lineLimit(1)
@@ -127,7 +127,7 @@ extension OlderRow {
 
 /// 行首的小图标（置顶的是图钉）；批量选择里选上时换成签名色的对勾。
 private struct RowGlyph: View {
-    let images: Bool
+    let attached: Bool
     let pinned: Bool
     @Environment(\.cardSelected) private var selected
     @Environment(\.palette) private var palette
@@ -137,11 +137,11 @@ private struct RowGlyph: View {
             if selected {
                 Image(.picked).foregroundStyle(palette.onFill, palette.signature)
             } else {
-                Image(pinned ? .pin : images ? .photo : .document).foregroundStyle(pinned ? palette.ink2 : palette.ink3)
+                Image(pinned ? .pin : attached ? .attachment : .document).foregroundStyle(pinned ? palette.ink2 : palette.ink3)
             }
         }
         .font(.system(size: 13)).frame(width: 18)
-        .accessibilityLabel(selected ? "已选" : pinned ? "置顶的灵感" : images ? "含图片的灵感" : "灵感")
+        .accessibilityLabel(selected ? "已选" : pinned ? "置顶的灵感" : attached ? "含附件的灵感" : "灵感")
     }
 }
 

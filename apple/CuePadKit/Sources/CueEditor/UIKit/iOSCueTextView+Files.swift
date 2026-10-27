@@ -76,17 +76,17 @@ extension CueTextView {
     // MARK: 点附件
 
     /// 点按落在哪个附件上（字符位置的附件，且点在它的框里）。
-    func attachment(at point: CGPoint) -> (key: String, name: String, file: URL?)? {
+    func attachment(at point: CGPoint) -> (key: String, name: String, file: URL?, rect: CGRect)? {
         guard let position = closestPosition(to: point) else { return nil }
         let offset = self.offset(from: beginningOfDocument, to: position)
         for index in [offset, offset - 1] {
             guard let hit = core.attachment(at: index),
                   let start = self.position(from: beginningOfDocument, offset: index),
                   let end = self.position(from: start, offset: 1),
-                  let range = textRange(from: start, to: end),
-                  firstRect(for: range).contains(point)
+                  let range = textRange(from: start, to: end)
             else { continue }
-            return hit
+            let rect = firstRect(for: range)
+            if rect.contains(point) { return (hit.key, hit.name, hit.file, rect) }
         }
         return nil
     }
@@ -99,11 +99,7 @@ extension CueTextView {
 
     @objc func tappedAttachment(_ tap: UITapGestureRecognizer) {
         guard let hit = attachment(at: tap.location(in: self)) else { return }
-        if let file = hit.file {
-            QuickLook.show(file, title: hit.name, from: self)
-        } else {
-            onFetchFile?(hit.key)
-        }
+        onOpenAttachment?(hit.key, hit.name, FileChip.picture(in: hit.rect, named: hit.name))
     }
 
     // MARK: 复制

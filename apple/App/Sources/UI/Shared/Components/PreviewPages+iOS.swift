@@ -30,13 +30,18 @@ struct PreviewPage: View {
 }
 
 /// PDF：系统的 PDF 视图，按宽铺满、竖着连续滚，页与页之间留一道缝，双指缩放（以手指处为锚、放大了拖到边再拖是翻页，同图片）。
+/// 页内搜索是系统的查找（`UIFindInteraction`）：页顶的搜索钮或接了键盘时 ⌘F 打开（`PreviewFinds`）。
 struct PreviewPDF: UIViewRepresentable {
     let file: URL
     @Environment(\.palette) private var palette
     @Environment(\.previewInsets) private var insets
+    @Environment(\.previewFinds) private var finds
 
     func makeUIView(context: Context) -> PDFView {
         let view = PDFView()
+        view.isFindInteractionEnabled = true
+        finds?.register(file, view.findInteraction)
+        DebugHooks.pdfShown(view)
         view.displayMode = .singlePageContinuous
         view.displaysPageBreaks = true
         view.pageBreakMargins = UIEdgeInsets(top: 6, left: 8, bottom: 6, right: 8)
@@ -202,5 +207,20 @@ struct PreviewText: UIViewRepresentable {
     func updateUIView(_ view: UITextView, context: Context) { view.previewInsets(insets) }
 
     @concurrent private static func read(_ file: URL) async -> String { (try? String(contentsOf: file, encoding: .utf8)) ?? "" }
+}
+/// 全屏页里各份 PDF 的查找（按文件认）：页顶的搜索钮打开翻到的那一份的（`PreviewPager`）。
+@MainActor final class PreviewFinds {
+    private struct Weak { weak var value: UIFindInteraction? }
+    private var finds: [URL: Weak] = [:]
+
+    func register(_ file: URL, _ find: UIFindInteraction?) { finds[file] = Weak(value: find) }
+
+    func present(_ file: URL) { finds[file]?.value?.presentFindNavigator(showingReplace: false) }
+
+    func dismiss() { finds.values.forEach { $0.value?.dismissFindNavigator() } }
+}
+
+extension EnvironmentValues {
+    @Entry var previewFinds: PreviewFinds?
 }
 #endif

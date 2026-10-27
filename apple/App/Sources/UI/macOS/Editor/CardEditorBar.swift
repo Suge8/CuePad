@@ -18,8 +18,17 @@ extension CardEditing {
         }
     }
 
-    /// 这张卡的编辑器：正文变化交给自动保存，右键有选区动作，⌘↩ 是主动作。
-    func field(_ card: Card, theme: CueEditorTheme) -> EditorHost {
+    /// 这张卡的编辑器：正文变化交给自动保存，右键有选区动作，⌘↩ 是主动作；点附件从牌子放大出全屏页（`AttachmentSpotLayer`）。
+    func field(_ card: Card, theme: CueEditorTheme) -> some View {
+        host(card, theme: theme).overlay { AttachmentSpotLayer(spot: handle.spot) }
+    }
+
+    /// 高贴着字、不自己滚的那一种（任务气泡）。
+    func fittedField(_ card: Card, theme: CueEditorTheme) -> some View {
+        FittedEditorHost(host: host(card, theme: theme)).overlay { AttachmentSpotLayer(spot: handle.spot) }
+    }
+
+    private func host(_ card: Card, theme: CueEditorTheme) -> EditorHost {
         let workspace = workspace
         return EditorHost(
             initialText: initialText, theme: theme, handle: handle,
@@ -27,11 +36,6 @@ extension CardEditing {
             selectionActions: [.convertToTasks(from: card, workspace: workspace)],
             onSubmit: { [weak self] in self?.submit() },
             onError: workspace.fail)
-    }
-
-    /// 高贴着字、不自己滚的那一种（任务气泡）。
-    func fittedField(_ card: Card, theme: CueEditorTheme) -> FittedEditorHost {
-        FittedEditorHost(host: field(card, theme: theme))
     }
 }
 
