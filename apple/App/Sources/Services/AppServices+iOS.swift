@@ -9,6 +9,7 @@ extension AppServices {
     func start() {
         guard !tasks.isRunning else { return }
         startCaptureIngest()
+        startStrayFileCleanup()
         startSnapshots()
         startSync()
         startRelay()

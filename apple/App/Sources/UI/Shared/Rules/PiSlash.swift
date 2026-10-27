@@ -43,7 +43,7 @@ nonisolated enum PiSlash {
     @MainActor static func line(of draft: ComposerDraft, in commands: [PiSlashCommand]) -> String? {
         // 回复框每次重算都问一遍：先只看开头，是命令再整串修剪（长草稿每次都整串复制一遍，打一个字就要几毫秒）
         let start = draft.text.drop { $0.isWhitespace }
-        guard start.hasPrefix("/"), !draft.hasImages else { return nil }
+        guard start.hasPrefix("/"), !draft.hasFiles else { return nil }
         let name = start.dropFirst().prefix { !$0.isWhitespace }
         guard commands.contains(where: { $0.name == name }) else { return nil }
         let typed = start.trimmingCharacters(in: .whitespacesAndNewlines)

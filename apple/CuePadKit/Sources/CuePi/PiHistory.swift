@@ -2,6 +2,7 @@
 import CueStore
 import CueText
 import Foundation
+import ImageIO
 
 /// 会话列表要的摘要：会话 id、工作目录、名字、首条用户消息、最后活动时间。原文留在会话文件里，这里不复制。
 public struct PiSessionHistory: Sendable, Equatable {
@@ -88,7 +89,7 @@ public enum PiHistory {
     /// 从检查点继续索引 `file`（没有检查点或检查点已失效则从头）。文件不存在时抛错——
     /// 会话文件在第一条消息落盘前并不存在，调用方等文件出现再来。
     ///
-    /// 你的消息里的图片当场存进 `files`（按内容哈希，已有的不重写），对话里只留 `![](cuepad://img/<哈希>)`：会话文件是图片唯一的来源，
+    /// 你的消息里的图片当场存进 `files`（按内容哈希，已有的不重写），对话里只留 `![](cuepad://file/<键>)`：会话文件是图片唯一的来源，
     /// 终端里贴的图片附件目录里原本没有。不是图片的块跳过；存不下（磁盘错误）时抛错，不留一条缺图的消息。
     ///
     /// `transcript` 为 false 时不要对话（7 天外的会话）：照样逐行读出检查点，丢掉对话、不存图片（工具结果行不做 JSON 解码，
@@ -219,17 +220,18 @@ public enum PiHistory {
 
         fileprivate init(files: AttachmentFiles?) { self.files = files }
 
+        /// 交给 Agent 的附件行（`AttachmentFiles.agentLine`）认回文件引用：正文里是文件，标题与摘要里是文件名。
         mutating func text(_ block: String?) {
             let text = PiSessionName.withoutImageNotes(block ?? "")
             guard !text.isEmpty else { return }
-            texts.append(text)
-            pieces.append(text)
+            texts.append(AttachmentFiles.namingAgentLines(in: text))
+            if let files { pieces.append(files.restoringAgentLines(in: text)) }
         }
 
-        /// 图片原字节；不是图片的跳过。
+        /// 图片原字节；不是图片的跳过（不存进附件）。
         mutating func image(_ data: Data?) throws {
-            guard let files, let data else { return }
-            do { pieces.append(CueFormat.imageMarkup(id: try files.store(data))) } catch CueStoreError.notAnImage {}
+            guard let files, let data, let source = CGImageSourceCreateWithData(data as CFData, nil), CGImageSourceGetCount(source) > 0 else { return }
+            pieces.append(CueFormat.imageMarkup(key: try files.store(data)))
         }
 
         var text: String { texts.joined(separator: "\n") }

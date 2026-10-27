@@ -3,11 +3,12 @@ import Foundation
 import os
 
 /// iCloud 同步入口：私有数据库里一个自定义同步区，自己的同步循环——一个拉取器（`ZonePuller`）、一个发送者（`RecordSender`），
-/// 逻辑在协调器（`SyncCoordinator`）。
+/// 附件的文件另走一路（传 `FileSender`、取 `FileFetcher`），逻辑在协调器（`SyncCoordinator`）。
 ///
 /// 用法：`let sync = CloudSync(store: store)`；`await sync.start()` 认账号（认不了由这里自己按退避再认）、开始上传，第一次拉由 App 发起
 /// （`syncNow`，它等得到拉完）；界面订阅 `stateUpdates`，状态为 `.needsDecision` 时让用户选择后调用 `resolve(_:)`。冲突副本由 `CueStore.conflicts()` 提供。
 /// 实时层订阅 `acceptedUpdates`（服务器收下了本机的一批改动），要立刻拉一次就调 `syncNow`，门铃的密钥经 `relaySecret` 取。
+/// 附件文件的进度订阅 `fileTransfers`，用到本机还没有的文件调 `fetchFile`。
 /// 需要 App 带 iCloud（CloudKit）entitlement 与容器；没有 entitlement 的进程（命令行测试）不能调用 `start()`。
 ///
 /// 冷启动：认过账号就能拉，第一拉不等别的；最低对端版本（`PeerFloor`）由发送者在第一次上传前对（上传等它，拉取不等：拉到的页里有门槛就当场看，
@@ -26,6 +27,9 @@ public actor CloudSync {
   private var cloud: (any SyncCloud)?
   private var puller: ZonePuller?
   private var sender: RecordSender?
+  private var fileSender: FileSender?
+  private var fileFetcher: FileFetcher?
+  private let transfers = TransferBoard()
   /// 认过账号（可用、是上次同步的那个）：拉取与上传都开始了。认不了（离线、没登录）时不拉也不传：本机的同步元数据可能属于上一个账号。
   private var connected = false
   /// 正在认的那一次：同时要认的都等它。
@@ -69,6 +73,19 @@ public actor CloudSync {
   /// 之后每次服务器收下本机的一批改动给出一个（不补之前的；实时层据此按门铃）。
   public nonisolated var acceptedUpdates: AsyncStream<Void> { coordinator.acceptances.stream() }
 
+  /// 附件文件此刻在路上的（按 key，见 `FileTransfer`）：先给当前快照，之后每次变化给新快照。一个 key 离开快照就是那一趟结束了，
+  /// 文件在不在本机看附件目录（取完了就在；传完的本来就在）。
+  public nonisolated var fileTransfers: AsyncStream<[String: FileTransfer]> { transfers.stream }
+
+  /// 这个附件文件在本机的位置：没有就现在从 iCloud 取（不看手机自动取的条件），附件记录还没到就等它到（发出的设备还在传），
+  /// 服务器要求等就等到点；没开始同步的等开始。这台不同步（没认过账号、停下了）抛 `FileFetchFailure.notSyncing`，文件坏了抛 `.damaged`，网络与 iCloud 的失败原样抛出；被取消就抛出。
+  /// Mac 把带附件的话交给会话前用它确保文件在本机。
+  public func fetchFile(_ key: String) async throws -> URL {
+    if cloud == nil { await withCheckedContinuation { startWaiters.append($0) } }
+    guard await connectNow(), let fileFetcher else { throw FileFetchFailure.notSyncing }
+    return try await fileFetcher.fetch(key)
+  }
+
   /// 连上 iCloud 并认一次账号（返回时认完；认不了的这里自己按退避再认）。
   public func start() async {
     guard cloud == nil else { return }
@@ -76,10 +93,13 @@ public actor CloudSync {
     self.cloud = cloud
     let puller = ZonePuller(source: cloud, coordinator: coordinator)
     self.puller = puller
-    sender = RecordSender(uploader: cloud, coordinator: coordinator) { [coordinator] in
+    let sender = RecordSender(uploader: cloud, coordinator: coordinator) { [coordinator] in
       try await PeerFloor(zoneID: Self.zoneID).settle(cloud, coordinator: coordinator)
       await coordinator.succeeded()
     }
+    self.sender = sender
+    fileSender = FileSender(cloud: cloud, coordinator: coordinator, board: transfers) { await sender.ready() }
+    fileFetcher = FileFetcher(cloud: cloud, coordinator: coordinator, board: transfers)
     await coordinator.loadToken()
     let due = coordinator.retryDue.stream(), network = NetworkReturns.stream()
     retryWatchers = [
@@ -105,6 +125,10 @@ public actor CloudSync {
     retryWatchers = []
     await sender?.stop()
     sender = nil
+    await fileSender?.stop()
+    fileSender = nil
+    await fileFetcher?.stop()
+    fileFetcher = nil
     puller = nil
     cloud = nil
     connected = false
@@ -155,9 +179,13 @@ public actor CloudSync {
     accountBackoff.reset()
     defer { accountChecks.yield(()) }
     guard !connected else { return true }
-    guard await coordinator.canSync, let sender else { return false }
+    guard await coordinator.canSync, let sender, let fileSender, let fileFetcher else { return false }
     connected = true
     await sender.start()
+    Task {  // 文件那一路（接上一个进程交给系统的上传、看哪些文件要取）：第一拉不等它
+      await fileFetcher.start()
+      await fileSender.start()
+    }
     alertsAttemptedAt = .now  // 立即同步不另起一遍
     Task { await ensureAlertSubscriptions(cloud) }  // 第一拉不等订阅
     return true

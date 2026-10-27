@@ -5,7 +5,7 @@ import CueText
 import PhotosUI
 import SwiftUI
 
-/// 手机上一段正文的编辑器：键盘上方的工具栏插图（相册）、填变量取值；灵感的纸页与任务气泡里的正文共用。
+/// 手机上一段正文的编辑器：键盘上方的工具栏插图（相册）、插文件（系统的文件选择器）、填变量取值；灵感的纸页与任务气泡里的正文共用。
 /// 正文的读写都经 `CardEditing`（编辑器是唯一写者）。
 struct CardTextField: View {
     let card: Card
@@ -16,6 +16,7 @@ struct CardTextField: View {
     @Environment(Workspace.self) private var workspace
     @State private var pickingImage = false
     @State private var pickedImage: PhotosPickerItem?
+    @State private var pickingFile = false
     @State private var editingVariables = false
 
     var body: some View {
@@ -25,12 +26,19 @@ struct CardTextField: View {
             handle: editing.handle,
             onChange: { [editing] in editing.changed($0) },
             onInsertImage: { pickingImage = true },
+            onInsertFile: { pickingFile = true },
             onVariables: { editingVariables = true },
             selectionActions: [.convertToTasks(from: card, workspace: workspace)],
             onError: workspace.fail,
             fits: fits)
         .photosPicker(isPresented: $pickingImage, selection: $pickedImage, matching: .images)
         .onChange(of: pickedImage) { insertPicked() }
+        .fileImporter(isPresented: $pickingFile, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
+            switch result {
+            case .success(let urls): editing.handle.insertFiles(urls)
+            case .failure(let error): workspace.fail(error)
+            }
+        }
         .sheet(isPresented: $editingVariables) {
             VariablesSheet(card: card, names: CueVariables.names(in: editing.handle.text ?? editing.initialText))
         }
@@ -42,7 +50,7 @@ struct CardTextField: View {
         Task {
             do {
                 guard let data = try await item.loadTransferable(type: Data.self) else { return }
-                editing.handle.insertImage(PickedImage.outgoing(data))
+                editing.handle.insertImage(PhotoData.outgoing(data))
             } catch {
                 workspace.fail(error)
             }

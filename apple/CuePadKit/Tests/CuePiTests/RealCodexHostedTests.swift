@@ -33,7 +33,7 @@ struct RealCodexHostedTests {
             let session = try #require(rig.bridge.session(id: id))
             let mine = try #require(try rig.transcript(session).messages.first { $0.role == .known(.user) })
             #expect(mine.deliveryID == delivery)
-            #expect(mine.text.hasPrefix("What color is this image?") && mine.text.contains("![](cuepad://img/"))
+            #expect(mine.text.hasPrefix("What color is this image?") && mine.text.contains("![](cuepad://file/"))
             #expect(rig.replies(session).last?.lowercased().contains("red") == true, "\(rig.replies(session))")
 
             let other = try #require(session.availableModels.first { $0.key.id != codexTestModel })
@@ -57,6 +57,27 @@ struct RealCodexHostedTests {
             try await rig.bridge.send(PiMessage(text: "Reply with the single word AGAIN."), to: resumed)
             // 前一句要它答小写，模型可能沿用：大小写不论
             try await eventually("接着回答了") { rig.replies(session).last?.uppercased().contains("AGAIN") == true }
+        }
+    }
+
+    /// 发一句带 PDF 的话（文件交给 Agent 的那一行，`AttachmentFiles.agentLine`，指到附件目录里本机那份）：Codex 读到 PDF 里印的暗号；
+    /// 读回会话文件时那一行认回文件引用，会话页照样显示成文件。PDF 是手写的固定字节：键（内容哈希）每次相同，录下的发送对得上。
+    @Test func aHostedSessionReadsAnAttachedPDF() async throws {
+        try await withCodexRig { rig in
+            let id = try await rig.runtime.open(in: rig.codex.work, launchToken: "token-pdf", name: nil, model: nil, thinking: nil)
+            // 库在用例的临时目录里：消息里的路径录成占位符，回放对得上
+            let files = try CueStore(location: .isolated(makeTempDirectory())).files
+            let source = try makeTempDirectory().appending(path: "暗号.pdf")
+            try Data(codeWordPDF.utf8).write(to: source)
+            let key = try files.store(fileAt: source)
+            let line = try #require(files.agentLine(key: key, name: "暗号.pdf"))
+            let ask = "Read the attached PDF and reply with the code word printed in it, nothing else."
+            try await rig.bridge.send(PiMessage(text: ask + "\n" + line), to: id)
+            let session = try #require(rig.bridge.session(id: id))
+            try await eventually("读到了 PDF 里的暗号") { rig.replies(session).last?.contains("ORCHID-42") == true }
+
+            let said = try PiHistory.index(file: try #require(session.sessionFile), agent: .codex, from: nil, files: files).messages
+            #expect(said.first { $0.role == .known(.user) }?.text == ask + "\n[暗号.pdf](cuepad://file/\(key))")
         }
     }
 
@@ -206,4 +227,18 @@ struct RealCodexHostedTests {
     }
 }
 
+/// 一页的 PDF，印着暗号 ORCHID-42（内容流不压缩）
+private let codeWordPDF = """
+    %PDF-1.4
+    1 0 obj <</Type /Catalog /Pages 2 0 R>> endobj
+    2 0 obj <</Type /Pages /Kids [3 0 R] /Count 1>> endobj
+    3 0 obj <</Type /Page /Parent 2 0 R /MediaBox [0 0 300 100] /Contents 4 0 R /Resources <</Font <</F1 5 0 R>>>>>> endobj
+    4 0 obj <</Length 43>> stream
+    BT /F1 18 Tf 20 40 Td (ORCHID-42) Tj ET
+    endstream endobj
+    5 0 obj <</Type /Font /Subtype /Type1 /BaseFont /Helvetica>> endobj
+    trailer <</Root 1 0 R>>
+    %%EOF
+
+    """
 #endif

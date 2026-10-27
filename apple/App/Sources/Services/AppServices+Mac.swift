@@ -25,6 +25,7 @@ extension AppServices {
             reportIssue(.piBridgeUnavailable("\(error)"))
         }
         follow { await self.historyStore.keepPruned() }
+        startStrayFileCleanup()
         // 先对账再起各家的接入：重新接上的会话沿用对账前的起点（`PiBridge.carryOver`）。对账失败照样起，只是从此刻算
         follow(reporting: { .syncUnavailable(String(localized: "Agent 状态没能写入同步记录：\(String(describing: $0))")) }) {
             var failure: (any Error)?

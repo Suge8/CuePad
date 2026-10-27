@@ -19,7 +19,7 @@ nonisolated struct CardText: Equatable, Sendable {
         let summary = CueSummary(body)
         title = summary.title
         preview = summary.preview
-        images = CueFormat.imageHashes(in: body)
+        images = CueFormat.imageKeys(in: body)
         linkHost = summary.linkHost
     }
 
@@ -28,7 +28,7 @@ nonisolated struct CardText: Equatable, Sendable {
 
     /// 只要名字时用它：只读到标题那一行（`CueSummary.title(of:)`），没有标题才数图片，不算摘要与链接。
     static func label(of body: String) -> String {
-        CueSummary.title(of: body).nonEmpty ?? untitled(images: CueFormat.imageHashes(in: body).count)
+        CueSummary.title(of: body).nonEmpty ?? untitled(images: CueFormat.imageKeys(in: body).count)
     }
 
     private static func untitled(images: Int) -> String { images == 0 ? String(localized: "空白灵感") : String(localized: "\(images) 张图") }

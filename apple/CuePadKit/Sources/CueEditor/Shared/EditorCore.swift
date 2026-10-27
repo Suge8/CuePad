@@ -36,12 +36,12 @@ enum CueTextStack {
     }
 }
 
-/// 编辑器的平台无关核心：存储格式（Markdown 原文）与运行时富文本的互转（只有图片换成附件）、变量高亮、轻装饰、
-/// 图片懒加载与分片预布局。平台宿主只负责视图、输入与系统交互。
+/// 编辑器的平台无关核心：存储格式（Markdown 原文）与运行时富文本的互转（只有附件——图片与文件牌——换成 U+FFFC）、变量高亮、轻装饰、
+/// 附件懒加载与分片预布局。平台宿主只负责视图、输入与系统交互。
 @MainActor
 final class EditorCore {
     private weak var host: (any CueEditorHost)?
-    let imageStore: any CueImageStore
+    let files: any CueFileStore
     let storage: NSTextStorage
     let content: NSTextContentStorage
     let layout: NSTextLayoutManager
@@ -56,11 +56,18 @@ final class EditorCore {
     private var decorationDelegate: DecorationDelegate?
     private(set) lazy var settler = LayoutSettler(core: self)
     private(set) lazy var thumbnails = ThumbnailLoader(core: self)
+    private(set) lazy var fileThumbnails = FileThumbnails(core: self)
     var displayScale: CGFloat { host?.displayScale ?? 2 }
+    /// 附件此刻的样子（宿主给：类型与大小、还没到时怎么取、传了几成）；参数是键、文件名与本机那份（不在本机为 nil）。
+    var fileStatus: (_ key: String, _ name: String, _ file: URL?) -> CueFileStatus = { _, name, _ in
+        CueFileStatus(detail: (name as NSString).pathExtension.uppercased())
+    }
+    /// 文件牌上没有缩略图时的记号，按文件名的类型（宿主给：图标只在 App 的图标表里）。
+    var fileIcon: (String) -> CueImage? = { _ in nil }
 
-    init(host: any CueEditorHost, imageStore: any CueImageStore, style: CueEditorTheme, storage: NSTextStorage, content: NSTextContentStorage, layout: NSTextLayoutManager) {
+    init(host: any CueEditorHost, files: any CueFileStore, style: CueEditorTheme, storage: NSTextStorage, content: NSTextContentStorage, layout: NSTextLayoutManager) {
         self.host = host
-        self.imageStore = imageStore
+        self.files = files
         self.style = style
         self.storage = storage
         self.content = content
@@ -81,7 +88,8 @@ final class EditorCore {
         var tokens: [CueToken] = []
         storage.enumerateAttribute(.attachment, in: range) { value, run, _ in
             switch value {
-            case let image as CueImageAttachment: tokens.append(.image(image.imageID))
+            case let image as CueImageAttachment: tokens.append(.image(image.key))
+            case let file as CueFileAttachment: tokens.append(.file(key: file.key, name: file.name))
             default: tokens.append(.text(storage.attributedSubstring(from: run).string))
             }
         }
@@ -99,18 +107,96 @@ final class EditorCore {
         for token in tokens {
             switch token {
             case .text(let text): result.append(NSAttributedString(string: text, attributes: baseAttributes))
-            case .image(let id): result.append(imageString(id: id))
+            case .image(let key): result.append(imageString(key: key))
+            case .file(let key, let name): result.append(fileString(key: key, name: name))
             }
         }
         return result
     }
 
-    func imageString(id: String) -> NSAttributedString {
-        let attachment = CueImageAttachment(id: id, fileURL: imageStore.fileURL(for: id))
+    func imageString(key: String) -> NSAttributedString {
+        let attachment = CueImageAttachment(key: key, fileURL: files.fileURL(for: key))
         attachment.core = self
+        return attachmentString(attachment)
+    }
+
+    func fileString(key: String, name: String) -> NSAttributedString {
+        let attachment = CueFileAttachment(key: key, name: CueFormat.fileName(name))
+        attachment.core = self
+        return attachmentString(attachment)
+    }
+
+    /// 存好的一个附件放进正文的样子：能内联显示的图片嵌入，其余是文件牌（同 `CueFormat.markup`）。
+    func attachmentString(key: String, name: String) -> NSAttributedString {
+        AttachmentKey.isImage(key) ? imageString(key: key) : fileString(key: key, name: name)
+    }
+
+    private func attachmentString(_ attachment: NSTextAttachment) -> NSAttributedString {
         let string = NSMutableAttributedString(attachment: attachment)
         string.addAttributes(baseAttributes, range: NSRange(location: 0, length: string.length))
         return string
+    }
+
+    /// 存入几个文件（拖入、粘贴、选的；任意类型，调用方持有访问权直到回调），在后台算哈希、拷贝，回调在主线程：
+    /// 每个附件自成一行（文件牌、图片之间与前后的字各隔一个换行）。有一个存不进就整批不插，报那个错。
+    func importFiles(_ sources: [IncomingFile], completion: @escaping @MainActor (Result<NSAttributedString, any Error>) -> Void) {
+        let files = files
+        Task {
+            let stored = await Self.store(sources, in: files)
+            completion(stored.map { pairs in
+                let result = NSMutableAttributedString()
+                for (index, pair) in pairs.enumerated() {
+                    if index > 0 { result.append(NSAttributedString(string: "\n", attributes: baseAttributes)) }
+                    result.append(attachmentString(key: pair.key, name: pair.name))
+                }
+                return result
+            })
+        }
+    }
+
+    @concurrent private static func store(_ sources: [IncomingFile], in files: any CueFileStore) async -> Result<[(key: String, name: String)], any Error> {
+        Result { try sources.map { try $0.store(in: files) } }
+    }
+
+    /// 插进来的附件自成一行：插入处前面、后面不是换行（也不是开头、结尾）就补一个。
+    func onOwnLine(_ insertion: NSAttributedString, replacing range: NSRange) -> NSAttributedString {
+        let text = storage.mutableString, newline: unichar = 0x0A
+        let result = NSMutableAttributedString(attributedString: insertion)
+        if range.location > 0, text.character(at: range.location - 1) != newline {
+            result.insert(NSAttributedString(string: "\n", attributes: baseAttributes), at: 0)
+        }
+        if NSMaxRange(range) < text.length, text.character(at: NSMaxRange(range)) != newline {
+            result.append(NSAttributedString(string: "\n", attributes: baseAttributes))
+        }
+        return result
+    }
+
+    /// 文件牌此刻的画面（`CueFileAttachment` 绘制时取）。
+    func fileChip(key: String, name: String, size: CGSize) -> CueImage {
+        let url = files.fileURL(for: key)
+        let status = fileStatus(key, name, url)
+        let thumbnail = url.flatMap { fileThumbnails.image(at: $0, key: key) }
+        var style = style
+        style.imagePlaceholderColor = resolved(style.imagePlaceholderColor)
+        style.textColor = resolved(style.textColor)
+        style.markerColor = resolved(style.markerColor)
+        let symbol = thumbnail == nil ? fileIcon(name).map { CueImageRendering.tinted($0, color: style.markerColor) } : nil
+        return CueImageRendering.canvas(size: size) { context in
+            FileChip.draw(in: context, size: size, name: name, status: status, thumbnail: thumbnail, symbol: symbol, style: style)
+        }
+    }
+
+    /// 还没到这台的图片的占位上写什么（宿主给的那一行）。
+    func missingImageLabel(_ key: String) -> String { fileStatus(key, "", nil).detail }
+
+    /// 这个字符位置上的附件，连同它的键与本机有没有（点按据此打开或去取）；不是附件为 nil。
+    func attachment(at index: Int) -> (key: String, name: String, file: URL?)? {
+        guard index >= 0, index < storage.length else { return nil }
+        switch storage.attribute(.attachment, at: index, effectiveRange: nil) {
+        case let file as CueFileAttachment: return (file.key, file.name, files.fileURL(for: file.key))
+        case let image as CueImageAttachment: return (image.key, "", image.fileURL)
+        default: return nil
+        }
     }
 
     /// 整体替换正文；撤销栈、选区、`onChange` 由宿主处理。
@@ -182,16 +268,38 @@ final class EditorCore {
         }
     }
 
-    // MARK: 图片重绘
+    // MARK: 附件重绘
 
     /// 缩略图解码完成后重绘引用它的附件：TextKit 缓存了片段的渲染结果，必须让对应片段失效重排。
     /// 重画某张图（`url` 为 nil 时所有图，例如换到缩放比例不同的屏）。
     func redrawImages(at url: URL? = nil) {
-        storage.enumerateAttribute(.attachment, in: NSRange(location: 0, length: storage.length)) { value, range, _ in
-            guard let image = value as? CueImageAttachment, url == nil || image.fileURL == url, let target = textRange(range) else { return }
-            layout.invalidateLayout(for: target)
+        redraw { ($0 as? CueImageAttachment).map { url == nil || $0.fileURL == url } ?? false }
+    }
+
+    /// 重画这个键的文件牌（缩略图出好了）。
+    func redrawFiles(_ key: String) {
+        redraw { ($0 as? CueFileAttachment)?.key == key }
+    }
+
+    /// 附件的文件到了、传的进度变了（宿主报来）：还没到的图片再找一次本机那份，文件牌全部重画（说明与进度现读）。
+    func refreshAttachments() {
+        redraw { attachment in
+            switch attachment {
+            case let image as CueImageAttachment: image.relocate(files.fileURL(for: image.key))
+            case is CueFileAttachment: true
+            default: false
+            }
         }
-        needsRelayout()
+    }
+
+    private func redraw(where matches: (NSTextAttachment) -> Bool) {
+        var any = false
+        storage.enumerateAttribute(.attachment, in: NSRange(location: 0, length: storage.length)) { value, range, _ in
+            guard let attachment = value as? NSTextAttachment, matches(attachment), let target = textRange(range) else { return }
+            layout.invalidateLayout(for: target)
+            any = true
+        }
+        if any { needsRelayout() }
     }
 
     /// 选中部分的存储格式；没选中为 nil。

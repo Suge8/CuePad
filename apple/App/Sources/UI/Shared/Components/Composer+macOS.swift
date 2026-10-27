@@ -1,9 +1,10 @@
 #if os(macOS)
 import AppKit
+import CueEditor
 import SwiftUI
 
 extension ComposerSource {
-    static var imageChoices: [(title: LocalizedStringResource, icon: Icon, source: ComposerSource)] { [("图片文件…", .photo, .files)] }
+    static var fileChoices: [(title: LocalizedStringResource, icon: Icon, source: ComposerSource)] { [("文件…", .file, .files)] }
 }
 
 extension ComposerMetrics {
@@ -11,24 +12,17 @@ extension ComposerMetrics {
     static let openOneLine = textTop + GrowingTextView().maxHeight + textBottomOpen + slot
 }
 
-/// "＋"里图片的来源：选图片文件，选好的追加到图片条。
-struct ImageSources: ViewModifier {
+/// "＋"里附件的来源：选文件（任意类型，图片也是），选好的交给 `add`（存好接进附件条）。
+struct FileSources: ViewModifier {
     @Binding var source: ComposerSource?
-    @Binding var images: [PickedImage]
-    @Environment(Workspace.self) private var workspace
+    let add: ([IncomingFile]) -> Void
 
     func body(content: Content) -> some View {
         content
             .onChange(of: source) {
                 guard source == .files else { return }
                 source = nil
-                Task {
-                    do {
-                        for data in try await FilePicker.images() { images.append(PickedImage(data: data)) }
-                    } catch {
-                        workspace.fail(error)
-                    }
-                }
+                Task { add(await FilePicker.files().map(IncomingFile.file)) }
             }
     }
 }

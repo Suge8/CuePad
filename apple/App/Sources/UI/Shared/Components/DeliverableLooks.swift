@@ -67,7 +67,7 @@ enum DeliverableLooks {
         memory.object(forKey: key(preview, box) as NSString)?.look
     }
 
-    /// `file` 是按原文件名放的那份（系统认类型靠扩展名）；`box` 是画面画在多大的框里；`caches` 是库的缓存目录（`AttachmentFiles.caches`）。
+    /// `file` 是本机那份（`AttachmentFiles.fileURL`，系统认类型靠键的扩展名）；`box` 是画面画在多大的框里；`caches` 是库的缓存目录（`AttachmentFiles.caches`）。
     static func load(_ preview: PiPreview, file: URL, box: LookBox, scale: CGFloat, caches: URL) async -> DeliverableLook {
         if let cached = cached(preview, box: box) { return cached }
         let key = key(preview, box)

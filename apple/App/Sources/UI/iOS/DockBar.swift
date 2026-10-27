@@ -106,7 +106,7 @@ private struct DockCue: View {
 
     var body: some View {
         let cue = workspace.cue
-        let drafted = !cue.draft.isEmpty(accepting: .images)
+        let drafted = !cue.draft.isEmpty(accepting: .files)
         Button(action: open) {
             HStack(spacing: 0) {
                 DockTally()

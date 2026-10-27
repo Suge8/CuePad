@@ -65,7 +65,7 @@ struct LayoutTests {
         let line = String(repeating: "这是一段用来测试排版的中文文字，", count: 8)
         for i in 0..<400 {
             stored += line + "\n"
-            if i % 40 == 39 { stored += "![](cuepad://img/\(try h.store.store(makePNG(width: 1600, height: 1000, seed: i))))\n" }
+            if i % 40 == 39 { stored += "![](cuepad://file/\(try h.store.store(makePNG(width: 1600, height: 1000, seed: i))))\n" }
         }
         h.load(stored)
         #expect(await h.wait { laidOutToTheEnd(h.textView.textLayoutManager!) })

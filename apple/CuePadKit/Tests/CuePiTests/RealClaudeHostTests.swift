@@ -47,7 +47,7 @@ struct RealClaudeHostTests {
             let transcript = try testbed.transcript(session.sessionFile)
             let said = try #require(transcript.messages.first { $0.role == .known(.user) })
             #expect(said.deliveryID == UUID(uuidString: delivery))
-            #expect(said.text.hasPrefix("不用工具，直接看图：它是红色还是蓝色？只答颜色词\n![](cuepad://img/"))
+            #expect(said.text.hasPrefix("不用工具，直接看图：它是红色还是蓝色？只答颜色词\n![](cuepad://file/"))
             #expect(transcript.recap.lastReply?.contains("红") == true, "\(String(describing: transcript.recap.lastReply))")
             #expect(testbed.bridge.sessions.filter { $0.sessionID == session.sessionID }.count == 1)
         }

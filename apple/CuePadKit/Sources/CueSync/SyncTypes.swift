@@ -69,7 +69,7 @@ public struct SyncIssue: Equatable, Sendable {
     case fileMissing
     /// 拉到这版不认识的记录类型（更新版本的 CuePad 写的），已跳过
     case unknownType
-    /// 拉到的附件没有文件或内容与哈希不符，已跳过
+    /// 取到的附件文件没有或内容与哈希不符，没放进本机
     case damaged
 
     /// 请求或读写失败的那一类：CloudKit 的错误是 iCloud 没收下，其余是本机。
@@ -145,15 +145,19 @@ public struct SyncState: Equatable, Sendable {
   /// 这台的库和 iCloud 完整对过至少一遍：库里有同步区令牌（拉完第一遍才存，换账号、云端数据被删或重置时清掉）。
   /// 没对过时，别的设备写下的事实（Cue 在哪台启用）可能还没到。
   public var reconciled: Bool
+  /// iCloud 空间不足，文件停在本机不往上传（隔一阵再试，`FileSender.quotaPause`）；别的记录照常同步，`status` 不因它变。
+  public var filesOverQuota: Bool
 
   public init(
-    status: SyncStatus, issues: [SyncIssue], alerts: PiAlertSubscriptionStatus = .off, catchingUp: Bool = false, reconciled: Bool = false
+    status: SyncStatus, issues: [SyncIssue], alerts: PiAlertSubscriptionStatus = .off, catchingUp: Bool = false, reconciled: Bool = false,
+    filesOverQuota: Bool = false
   ) {
     self.status = status
     self.issues = issues
     self.alerts = alerts
     self.catchingUp = catchingUp
     self.reconciled = reconciled
+    self.filesOverQuota = filesOverQuota
   }
 }
 

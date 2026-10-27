@@ -22,13 +22,13 @@ final class ThumbnailLoader {
 
     init(core: EditorCore) { self.core = core }
 
-    func image(at url: URL?, size: CGSize) -> CueImage {
-        guard let url, !failed.contains(url) else { return CueImageRendering.placeholder(size: size, style: core.style, missing: true) }
+    func image(at url: URL, size: CGSize) -> CueImage {
+        guard !failed.contains(url) else { return CueImageRendering.placeholder(size: size, style: core.style, label: String(localized: "图片缺失")) }
         let scale = core.displayScale
         let key = "\(url.path)@\(Int(size.width))x\(Int(size.height))@\(scale)x" as NSString
         if let cached = rendered.object(forKey: key) { return cached }
         render(url, size: size, scale: scale, key: key)
-        return latest[url] ?? CueImageRendering.placeholder(size: size, style: core.style, missing: false)
+        return latest[url] ?? CueImageRendering.placeholder(size: size, style: core.style, label: nil)
     }
 
     private func render(_ url: URL, size: CGSize, scale: CGFloat, key: NSString) {

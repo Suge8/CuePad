@@ -11,10 +11,10 @@ struct SendTests {
     var services: AppServices { rig.services }
     let png = pngData()
 
-    /// `before\n![](cuepad://img/<哈希>)\nafter`
+    /// `before\n![](cuepad://file/<哈希>)\nafter`
     func bodyWithImage() async throws -> String {
         let hash = try services.store.files.store(png)
-        return "before\n\(CueFormat.imageMarkup(id: hash))\nafter"
+        return "before\n\(CueFormat.imageMarkup(key: hash))\nafter"
     }
 
     /// 发给 Pi 走本机投送请求：会话要连着桥，执行器要在运行。
@@ -33,7 +33,7 @@ struct SendTests {
         let missing = String(repeating: "a", count: 64)
         rig.pasteboard.clearContents()
         rig.pasteboard.setString("原有", forType: .string)
-        #expect(throws: SendError.imageUnavailable(missing)) { try services.copy("x \(CueFormat.imageMarkup(id: missing))") }
+        #expect(throws: SendError.attachmentUnavailable(missing)) { try services.copy("x \(CueFormat.imageMarkup(key: missing))") }
         #expect(rig.pasteboard.string(forType: .string) == "原有")
 
         let body = try await bodyWithImage()
