@@ -12284,6 +12284,22 @@
         }
       }
     },
+    "技能命令" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Skill"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "技能命令"
+          }
+        }
+      }
+    },
     "把任务的正文交给 Agent，开始做" : {
       "localizations" : {
         "en" : {
