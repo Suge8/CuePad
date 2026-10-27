@@ -17,17 +17,17 @@ struct DockRoot: View {
             Tab(value: Route.shelf) {
                 DockStack(tab: .shelf, active: root == .shelf)
             } label: {
-                Label(SidebarOutline.Entry.projects.title, icon: SidebarOutline.Entry.projects.icon)
+                DockTabLabel(tab: .shelf, selected: root == .shelf)
             }
             Tab(value: Route.progress) {
                 DockStack(tab: .progress, active: root == .progress)
             } label: {
-                Label(SidebarOutline.Entry.progress.title, icon: SidebarOutline.Entry.progress.icon)
+                DockTabLabel(tab: .progress, selected: root == .progress)
             }
             Tab(value: Route.cue) {
                 DockStack(tab: .cue, active: root == .cue)
             } label: {
-                Label { Text(verbatim: workspace.cue.name) } icon: { Image(.cue) }
+                DockTabLabel(tab: .cue, selected: root == .cue)
             }
             .badge(workspace.cue.unread)
         }
