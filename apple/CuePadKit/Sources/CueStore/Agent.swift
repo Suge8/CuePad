@@ -23,6 +23,10 @@ public enum AgentKind: String, CaseIterable, Sendable, Identifiable, Codable {
     }
   }
 
+  /// CuePad 的 Pi 扩展设在它所在进程环境里的会话 id：用户在 CuePad 里看的那个会话。FireCode 子代理与它同进程，命令里的
+  /// `PI_SESSION_ID` 是子代理自己的会话（CuePad 不列），所以 `cuepad show` 先认这个，子代理发的卡也落在用户看的对话里。
+  public static let watchedSessionVariable = "CUEPAD_SESSION_ID"
+
   /// 这家给它执行的每条命令带上当前会话 id 的环境变量（`cuepad show` 据此认出会话）。
   public var sessionVariable: String {
     switch self {
