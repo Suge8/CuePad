@@ -4,7 +4,7 @@ import Foundation
 /// 去哪一页：两端同一个值，都经 `Workspace.show` 去；Mac 内容区挂哪一页与 iOS 导航栈里推入哪一页只差呈现（`Workspace.Layout`）
 /// （Mac 只用其中的 `project`、`archive`、`trash`、`library`、`progress`、`cue`、`session`；技能与规则的文件页在 Mac 上盖在当前页上，见 `Workspace.overlay`）。
 nonisolated enum Route: Hashable {
-    /// 项目书架：全部项目（iPhone 底部那一排的"项目"）。
+    /// 项目书架：全部项目（iPhone 标签栏的"项目"）。
     case shelf
     case project(UUID)
     case archive
@@ -35,7 +35,7 @@ nonisolated enum Route: Hashable {
     /// 从 Pi 的会话 id 去会话页（Mac 的侧栏、搜索）。
     static func session(_ sessionID: String) -> Route { .session(PiSessionState.recordID(sessionID: sessionID), sessionID: sessionID) }
 
-    /// 窄屏（`Workspace.Layout.dock`）上它所属的去处（底部那一排的去处与 Cue 之一）：去处本身是它自己；卡片纸页、会话页、搜索不属于哪一页（推在当前页上），为 nil。
+    /// 窄屏（`Workspace.Layout.dock`）上它所属的 tab（`Dock.tabs` 之一）：tab 本身是它自己；卡片纸页、会话页、搜索不属于哪一页（推在当前 tab 上），为 nil。
     var home: Route? {
         switch self {
         case .cue: .cue

@@ -59,7 +59,7 @@ extension CueKeeper {
         var patrolledIdle: Date?
         /// 已为哪一次启用（`CueProfile.enabledAt`）醒来过
         var greeted: Date?
-        /// 归他、等他离开再报的停下：会话 id → 那次停下的起点（`CueChanges.held`）
+        /// 他在场、等他离开再报的停下：会话 id → 那次停下的起点（`CueChanges.held`）
         var held: [String: Date] = [:]
     }
 

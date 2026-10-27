@@ -14,7 +14,7 @@ public struct CueState: Equatable, Sendable {
   public var round: UUID?
   /// 它这个班次的上下文（`CueContext`），值班的 Mac 随状态写；不在值班、这个班次还没请求过模型为 nil
   public var context: CueContext?
-  /// 它留给你回的会话（`CueLeft`，只由 `CueStore.leaveToYou` 写，`setCueState` 不动它）
+  /// 留给你回的会话（`CueLeft`，只由 `CueStore.putLeft` 写，`setCueState` 不动它）
   public var left: [CueLeft]
   public var modifiedAt: Date
 
@@ -107,8 +107,9 @@ public struct CueStir: Codable, Equatable, Sendable {
   }
 }
 
-/// Cue 把会话的这一次停下留给你回（`CueStore.leaveToYou`）：会话停在 `since` 起的那次停下（歇着或等回答）时成立，
-/// 谁再对它说话、它动起来（`stateSince` 变了）就自然作废，不用谁去清。只有一份：待回复（`PiSessionState.awaitsReply`）与会话在问的归不归你（`waitsForCue`）都经 `CueDuty` 读它。
+/// 会话的这一次停下留给你回：你发起的一轮停下当场留（`CueStore.leaveHisStops`），Cue 发起的由它核对后留（`leaveToYou`），它看过也可收回（`takeBack`）。
+/// 会话停在 `since` 起的那次停下（歇着、等回答或出错）时成立，谁再对它说话、它动起来（`stateSince` 变了）就自然作废，不用谁去清。
+/// 只有一份：待回复（`PiSessionState.awaitsReply`）与会话在问的归不归你（`waitsForCue`）都经 `CueDuty` 读它。
 public struct CueLeft: StoredJSON, Hashable, Sendable {
   public var sessionID: String
   public var since: Date
@@ -124,7 +125,7 @@ public struct CueLeft: StoredJSON, Hashable, Sendable {
   }
 }
 
-/// Cue 在值班时各端看会话要用的那一份（`CueStore.cueDuty`；不在值班为 nil）：它的名字（"等 X 回答"）与它留给你回的会话。
+/// Cue 在值班时各端看会话要用的那一份（`CueStore.cueDuty`；不在值班为 nil）：它的名字（"等 X 回答"）与留给你回的会话。
 /// 会话等的是 Cue 还是你（`PiSessionState.waitsForCue`、`asksYou`）、待回复（`awaitsReply`）都只读它。
 public struct CueDuty: Equatable, Sendable {
   public var name: String

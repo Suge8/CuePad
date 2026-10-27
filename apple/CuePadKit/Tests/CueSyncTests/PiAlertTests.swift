@@ -96,7 +96,7 @@ import Testing
     #expect(answered["notify"] == nil && answered.encryptedValues["answer"] as? String == CueAsk.once)
   }
 
-  // MARK: 到不到你（用户定的规则：回答他那一轮的话推到手机、一轮只响一次；他在 Mac 上开着那一页不推；Cue 值班时会话做完只推归他的停下与留给他的）
+  // MARK: 到不到你（用户定的规则：回答他那一轮的话推到手机、一轮只响一次；他在 Mac 上开着那一页不推；Cue 值班时会话做完只推留给他回的）
 
   private func flag(_ rig: Rig, _ id: UUID) async throws -> String? {
     try #require(try await rig.coordinator.record(for: rig.recordID(id)))["notify"] as? String
@@ -127,17 +127,18 @@ import Testing
     #expect(try await flag(rig, reply("合并好了")) == "said")
   }
 
-  /// 会话做完：Cue 不值班时推；值班时会话归它接手不推，只推归他的停下（他刚在里面说过话）与它留给他回的（待回复，正文是会话最后那句回答）；
+  /// 会话做完：Cue 不值班时推；值班时做完不推，只推留给他回的（他发起的一轮当场留，待回复，正文是会话最后那句回答）；
   /// 他在 Mac 上开着那个会话时都不出通知，只静默叫醒手机（`PiPush.wake`）。
   @Test func sessionAlertsReachThePhoneOnlyWhenTheStopIsHis() async throws {
     let rig = try Rig()
     let recorder = PiStateRecorder(store: rig.store, hostID: "mac", timing: ManualTiming().timing)
     let session = PiSessionState.recordID(sessionID: "s1")
     func round(_ said: String? = nil) async throws {
-      try await recorder.update(sessionID: "s1", state: .thinking, title: "登录页")
+      try await recorder.update(sessionID: "s1", state: .thinking, title: "登录页", turnStartedAt: .now)
       if let said {
         let message = PiChatMessage(sessionID: "s1", entryID: UUID().uuidString, seq: 1, role: .user, text: said, at: .now, deliveryID: nil)
-        try await rig.store.writePiTranscript(PiTranscript(sessionID: "s1", messages: [message], recap: PiRecap(lastPrompt: said, lastReply: "改好了\n细节见下")))
+        let recap = PiRecap(lastPrompt: said, lastReply: "改好了\n细节见下", answeredAt: .now)
+        try await rig.store.writePiTranscript(PiTranscript(sessionID: "s1", messages: [message], recap: recap))
       }
       try await recorder.update(sessionID: "s1", state: .settled)
     }
@@ -159,13 +160,9 @@ import Testing
     try await round()
     #expect(try await flag(rig, session) == nil)  // 归 Cue 接手
     try await round("顺便把限流加上")
-    #expect(try await flag(rig, session) == "settled")  // 他刚说过话：这一停归他
-    try await rig.simulatePush()
-
-    let left = try #require(try await { () async throws -> CueLeft? in
-      try await rig.store.leaveToYou("s1")
-      return try await rig.store.cueDuty()?.left.first
-    }())
+    #expect(try await flag(rig, session) == nil)  // 做完这一下不推：他发起的这一轮按待回复推
+    _ = try await rig.store.leaveHisStops(after: 0)  // 值班的管理器对账时当场留给他回
+    let left = try #require(try await rig.store.cueDuty()?.left.first)
     #expect(try await rig.store.flagLeftToYou(left, host: "mac") == session)
     let record = try #require(try await rig.coordinator.record(for: rig.recordID(session)))
     #expect(record["notify"] as? String == "awaitsReply")

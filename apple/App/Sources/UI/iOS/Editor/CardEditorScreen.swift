@@ -45,7 +45,7 @@ struct CardEditorScreen: View {
                 editing = CardEditing(card, workspace: workspace)
             }
             .onChange(of: data?.card.deletedAt) { if data?.card.deletedAt != nil { dismiss() } }
-            .onDisappear { editing?.leave() }
+            .onDisappear { if !workspace.isTabbedAway(.card(cardID)) { editing?.leave() } }
     }
 
     private var wide: Bool { sizeClass == .regular }

@@ -2,7 +2,7 @@
 import CueStore
 import SwiftUI
 
-/// iOS 怎么摆去处（`Workspace+Navigation`）：宽屏是分栏（`.split`），窄屏是底部那一排（`.dock`，`IOSRoot` 按尺寸类换）；
+/// iOS 怎么摆去处（`Workspace+Navigation`）：宽屏是分栏（`.split`），窄屏是标签栏（`.dock`，`IOSRoot` 按尺寸类换）；
 /// 卡片纸页与会话页推在当前页上。还有只在手机与 iPad 上的浮层：发给 Agent、新会话、搜索页。
 extension Workspace.Layout {
     static let native = Self.split
@@ -12,8 +12,13 @@ extension Workspace {
     /// 打开 App 先到 `Route.first`；iPad 的窗口恢复时再选回上次的项目（`restore`）。
     static func openingRoute(_ services: AppServices) -> Route { .first }
 
-    /// 换去处没有顺带的事：底部那一排的"⋯"与输入框焦点跟着去处走，在窄屏的容器里（`DockRoot`）。
+    /// 换去处没有顺带的事。
     func willSelect(_ route: Route, root next: Route) {}
+
+    /// 这一页只是随它的 tab 藏起来了（切到了别的 tab），还在那个 tab 的栈里：离开页面时做的事（写下没保存的字、空的灵感不留）这时不做。
+    func isTabbedAway(_ route: Route) -> Bool {
+        layout == .dock && stacks.contains { $0.key != root && $0.value.contains(route) }
+    }
 
     /// 灵感的纸页推在当前页上。
     func showEditor(_ card: UUID) { push(.card(card)) }
@@ -80,12 +85,13 @@ extension Workspace {
         if top == .search { path.removeLast() }
     }
 
-    /// 项目进了回收站：从路径里移除它的页面。
+    /// 项目进了回收站：从各个栈里移除它的页面（连同推在它上面的）。
     func pop(_ project: UUID?) {
         guard let project else { return }
         let gone = Route.project(project)
-        if let index = path.firstIndex(of: gone) { path.removeSubrange(index...) }
-        if forward == gone { forward = nil }
+        for (tab, stack) in stacks {
+            if let index = stack.firstIndex(of: gone) { stacks[tab] = Array(stack[..<index]) }
+        }
         if root == gone { select(.shelf) }
     }
 

@@ -2,8 +2,8 @@
 import SwiftUI
 import UIKit
 
-/// 只接横向的拖（行上的轻扫 `rowSwipes`、Cue 页拍板卡换一件 `CueWaitDock`）：开始时横向速度明显大于纵向、不贴屏幕两边起手（贴边是返回与切页）、
-/// 挂它的那一块要它（`allows`，按开始那一刻的横向速度）才开始，不抢列表滚动；页上的横拖（内容区右滑返回、根上切页）等它先判：它不要的才归它们。
+/// 只接横向的拖（行上的轻扫 `rowSwipes`、Cue 页拍板卡换一件 `CueWaitDock`）：开始时横向速度明显大于纵向、不贴屏幕两边起手（贴边是返回）、
+/// 挂它的那一块要它（`allows`，按开始那一刻的横向速度）才开始，不抢列表滚动；页上的横拖（内容区右滑返回）等它先判：它不要的才归它。
 struct HorizontalPan: UIGestureRecognizerRepresentable {
     let allows: (CGFloat) -> Bool
     let changed: (CGFloat) -> Void
@@ -42,7 +42,7 @@ struct HorizontalPan: UIGestureRecognizerRepresentable {
             return abs(velocity.x) > abs(velocity.y) * 1.5 && x > Self.edge && x < width - Self.edge && allows(velocity.x)
         }
 
-        /// 外层的横拖（导航栈的返回、根上切页）等这一行先判。
+        /// 外层的横拖（导航栈的返回）等这一行先判。
         func gestureRecognizer(_ recognizer: UIGestureRecognizer, shouldBeRequiredToFailBy other: UIGestureRecognizer) -> Bool {
             guard other is UIPanGestureRecognizer, let view = recognizer.view, let outer = other.view, outer !== view, view.isDescendant(of: outer) else { return false }
             return (outer as? UIScrollView)?.panGestureRecognizer !== other

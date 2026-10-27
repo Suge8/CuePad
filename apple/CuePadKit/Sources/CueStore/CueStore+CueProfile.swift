@@ -57,23 +57,41 @@ extension CueStore {
   }
 
   /// Cue 把会话此刻的这次停下留给你回（`CueLeft`）：会话行显示"待回复"（在等回答的回到等你确认），谁再对它说话就作废。
-  /// 会话没停着（在跑、出错、已结束）抛 `notStopped`。顺手去掉已作废的旧条目，表里只留此刻还成立的。返回记录 id（立即上传用）。
+  /// 会话没停着（在跑、被打断、已结束）抛 `notStopped`。返回记录 id（立即上传用）。你发起的一轮停下不经这里，当场留给你（`leaveHisStops`）。
   @discardableResult
   public func leaveToYou(_ sessionID: String) throws -> UUID {
     try write {
       guard let session = try sessionState(sessionID) else { throw CueStoreError.notFound }
       guard session.state.known?.isStopped == true else { throw CueStoreError.notStopped(session.title) }
-      let current = try cueState()
-      let others = current?.left.filter { $0.sessionID != sessionID } ?? []
-      let sessions = try select(
-        PiSessionState.self, where: "sessionID IN (SELECT value FROM json_each(?))", [JSONColumn.encode(others.map(\.sessionID))])
-      let left = others.filter { entry in sessions.contains(where: entry.holds) } + [CueLeft(sessionID: sessionID, since: session.stateSince)]
-      let next = CueState(
-        state: current?.state ?? .known(.settled), detail: current?.detail, step: current?.step, round: current?.round, context: current?.context,
-        left: left, modifiedAt: Date.stamp)
-      try upsert(next, updating: ["leftToYou", "modifiedAt"])
+      try putLeft([session])
       return CueState.recordID
     }
+  }
+
+  /// Cue 收回留给你回的这次停下（看过是只应了你一声、你不用回）：不再待回复，在等回答的回到等它答。没留给你的返回 nil，收回了返回记录 id（立即上传用）。
+  public func takeBack(_ sessionID: String) throws -> UUID? {
+    try write {
+      guard let session = try sessionState(sessionID), try cueState()?.left.contains(where: { $0.holds(for: session) }) == true else { return nil }
+      try putLeft([], removing: sessionID)
+      return CueState.recordID
+    }
+  }
+
+  /// 把这几个会话此刻的停下记进 `CueState.left`（同一会话换成这一次），去掉 `removing` 与已作废的，表里只留此刻还成立的；和库里一样就不写。
+  /// 返回写没写。必须在写事务内调用。
+  @discardableResult
+  func putLeft(_ sessions: [PiSessionState], removing: String? = nil) throws -> Bool {
+    let current = try cueState()
+    let replaced = Set(sessions.map(\.sessionID) + [removing].compactMap(\.self))
+    let others = current?.left.filter { !replaced.contains($0.sessionID) } ?? []
+    let live = try select(PiSessionState.self, where: "sessionID IN (SELECT value FROM json_each(?))", [JSONColumn.encode(others.map(\.sessionID))])
+    let left = others.filter { entry in live.contains(where: entry.holds) } + sessions.map { CueLeft(sessionID: $0.sessionID, since: $0.stateSince) }
+    guard Set(left) != Set(current?.left ?? []) else { return false }
+    let next = CueState(
+      state: current?.state ?? .known(.settled), detail: current?.detail, step: current?.step, round: current?.round, context: current?.context,
+      left: left, modifiedAt: Date.stamp)
+    try upsert(next, updating: ["leftToYou", "modifiedAt"])
+    return true
   }
 
   /// Cue 在跑的这一轮自己醒来的那一行（经过那一行，带着为什么醒 `CueMessage.wake`、几点醒的与叫醒它的那几处当时叫什么）；

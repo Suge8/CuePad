@@ -100,9 +100,9 @@ import Testing
     await executor.stop()
   }
 
-  /// 发出的话到期清理不带走：没能送达的等用户重发或移除，送到的等它进了对话再随之收走，气泡不会两头都不在（别的完成请求照常清理）。
+  /// 发出的话到期清理不带走：没能送达的等用户重发或移除，送到的等它的消息上了服务器再收走（见 `DeviceFlowTests`），别的完成请求照常清理。
   @Test
-  func sentMessagesStayUntilTheyReachTheConversationOrTheUserRemovesThem() async throws {
+  func sentMessagesOutliveTheRetention() async throws {
     let handler = Handler()
     await handler.setOutcome(.failed(.verbatim("Pi 已经退出")))
     let executor = executor(handler)
@@ -118,11 +118,6 @@ import Testing
     clock.advance(DeliveryExecutor.retention + .seconds(1))
     let remaining = try await eventually(store, { try $0.deliveryRequests() }) { $0.count == 2 }
     #expect(Set(remaining.map(\.id)) == [failed.id, sent.id])
-
-    let said = PiChatMessage(sessionID: "s", entryID: "u0", seq: 0, role: .user, text: sent.content, at: .now, deliveryID: sent.id)
-    try await store.writePiTranscript(PiTranscript(sessionID: "s", messages: [said], recap: PiRecap()))
-    #expect(try await store.deliveryRequests().map(\.id) == [failed.id])
-    #expect(try await store.latest(of: sent)?.status == .known(.succeeded))
     await executor.stop()
   }
 

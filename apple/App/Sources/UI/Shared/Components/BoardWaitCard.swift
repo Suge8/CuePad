@@ -32,7 +32,7 @@ struct BoardWaitCard: View {
                     Text("\(held.count) 件").font(TaskMetrics.caption).monospacedDigit().foregroundStyle(palette.ink2).fixedSize()
                 }
             }
-            .boardCard()
+            .boardCard(.waiting)
         }
         .accessibilityLabel(Dotted(held.title, held.deciding ? String(localized: "等你拍板") : String(localized: "待回复"), held.count > 1 ? String(localized: "\(held.count) 件") : nil).spoken)
         .boardDim(project: held.project)

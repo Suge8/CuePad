@@ -8630,6 +8630,22 @@
           }
         }
       }
+    },
+    "，切去 Cue 看一眼再回来接着写" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : ", switching to Cue for a look, then back to keep writing"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "，切去 Cue 看一眼再回来接着写"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

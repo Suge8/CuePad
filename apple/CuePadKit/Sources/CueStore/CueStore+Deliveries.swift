@@ -164,7 +164,7 @@ extension CueStore {
     throw CancellationError()
   }
 
-  /// 投送请求此刻的样子：记录还在就是它；发出的话已成了对话里的消息（请求随之收走，见 `applyTranscript`）就是已送达；
+  /// 投送请求此刻的样子：记录还在就是它；发出的话已成了对话里的消息（之后请求被收走，见 `markPushed`）就是已送达；
   /// 都不是（撤回、清理了）为 nil。
   public func latest(of request: DeliveryRequest) throws -> DeliveryRequest? {
     if let current = try deliveryRequest(request.id) { return current }

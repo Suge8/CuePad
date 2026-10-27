@@ -75,7 +75,7 @@ extension View {
 
     /// 自绘的行（任务大纲、卡片墙、会话列表）：自绘出与系统轻扫同样的观感与行为——跟手露出圆角按钮，
     /// 松手过半停开、点按钮执行，一滑到底执行最外侧那个（过线一下触感），同一时刻只开一行；没有动作的一边只给一点阻力。
-    /// 只认慢慢拖开：快甩、贴着屏幕两边起手是切页与返回（`HorizontalPan`），在行上也照样切页、返回。
+    /// 只认慢慢拖开：快甩、贴着屏幕两边起手是返回（`HorizontalPan`），在行上也照样返回。
     /// `clipped`：滑开的内容裁在行内（拼在一张纸里的行）；单独的一张卡整张移开，不裁。
     /// 读屏：两边的动作同样挂成这一行的读屏动作（系统 `List` 的轻扫自带），露出的按钮本身不进读屏。
     func rowSwipes(_ swipes: RowSwipes, clipped: Bool = true) -> some View {
@@ -119,7 +119,7 @@ private struct SwipeRow: ViewModifier {
     private static let resistance: CGFloat = 12
     /// 行至少这么高才在按钮下写字（矮的任务行只放图标）。
     private static let labelHeight: CGFloat = 72
-    /// 开始那一刻横向快过这个（点/秒）算快甩：是要切页、返回，不是要露出行的动作（慢慢拖开、看着按钮出来）。
+    /// 开始那一刻横向快过这个（点/秒）算快甩：是要返回，不是要露出行的动作（慢慢拖开、看着按钮出来）。
     private static let flick: CGFloat = 600
 
     private var side: [RowAction] { offset > 0 ? swipes.leading : offset < 0 ? swipes.trailing : [] }

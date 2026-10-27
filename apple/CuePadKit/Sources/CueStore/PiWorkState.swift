@@ -45,8 +45,8 @@ public enum PiWorkState: String, Sendable, CaseIterable {
   /// 与 `isTurnRunning` 的差别只有等子代理（这时指挥官自己没在跑一轮，但托管的进程还有活）。
   public var hasPendingWork: Bool { isWorking || self == .waitingForUser }
 
-  /// 停下等人接手：这一轮做完歇着，或在等回答。会话停下时谁接手（Cue 接着推进，还是留给你回，`CueLeft`）只说这两种。
-  var isStopped: Bool { self == .settled || self == .waitingForUser }
+  /// 停下等人接手：这一轮做完歇着、在等回答，或出错。会话停下时谁接手（Cue 接着推进，还是留给你回，`CueLeft`）只说这几种。
+  var isStopped: Bool { self == .settled || self == .waitingForUser || self == .error }
 }
 
 extension PiWorkState {
@@ -70,7 +70,7 @@ extension Open<PiWorkState> {
 }
 
 /// 需要推送到手机锁屏的事件。状态转换的两种只在"进入等你确认"和"从工作中进入完成"的那一次写入上置位，其余写入为 nil，
-/// 服务端订阅据此触发一次通知（同一状态下的重复写入不会再通知）；待回复（`awaitsReply`）不是转换，是 Cue 把歇着的会话留给你回的那一下
+/// 服务端订阅据此触发一次通知（同一状态下的重复写入不会再通知）；待回复（`awaitsReply`）不是转换，是停着的会话留给你回的那一下
 /// （`CueStore.flagLeftToYou`）。
 public enum PiAlert: String, Sendable, CaseIterable {
   case waitingForUser, settled, awaitsReply
@@ -97,8 +97,8 @@ extension PiSessionState {
     return PiAlert.entering(state, since: stateSince, from: before.map { ($0, previous.stateSince) })
   }
 
-  /// Cue 把这次停下留给你（`CueLeft`）时提示的那种：歇着的是待回复，在等回答的是等你确认（它本来就在问你，留给你只是 Cue 不替你答）。
-  public var leftAlert: PiAlert { state == .known(.settled) ? .awaitsReply : .waitingForUser }
+  /// 这次停下留给你（`CueLeft`）时提示的那种：在等回答的是等你确认（它本来就在问你，留给你只是 Cue 不替你答），歇着、出错的是待回复。
+  public var leftAlert: PiAlert { state == .known(.waitingForUser) ? .waitingForUser : .awaitsReply }
 }
 
 /// 会话的计时基准（扩展给出，原样写入）。

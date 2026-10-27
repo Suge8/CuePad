@@ -20,13 +20,12 @@ struct LeadingSlots: View {
     private static let leadingGap: CGFloat = 4
 }
 
-/// 窗口最顶那一排右边的一项：同步提醒、会话段的额度环与新会话、搜索、"⋯"排在同一个工具栏项里（理由同 `LeadingSlots`）。
+/// 窗口最顶那一排右边的一项：同步提醒、会话段的新会话、搜索、"⋯"排在同一个工具栏项里（理由同 `LeadingSlots`）。
 struct TrailingSlots: View {
     var body: some View {
         // 间隔由各控件自己在前面留（`toolbarGap`）：宽 0 的那几格不多出空隙
         HStack(spacing: 0) {
             SyncAlertSlot()
-            QuotaSlot()
             PageActionSlot()
             SearchSlot()
             PageMenuSlot()
@@ -177,9 +176,9 @@ struct WindowEdge: NSViewRepresentable {
 }
 
 /// 工具栏左边、两段分段之后：这一页的范围，进展页的会话段是项目范围（`ProjectScopeMenu`，`Workspace.projectScope`；看板段那一排是列头，范围在"⋯"里）。
-/// 工具栏里的页面控件只有一条规矩（这一格、`PanesSlot`、`QuotaSlot`、`PageActionSlot`、`SearchSlot`、`PageMenuSlot` 都照它）：只放 Workspace 里已有的状态，
+/// 工具栏里的页面控件只有一条规矩（这一格、`PanesSlot`、`PageActionSlot`、`SearchSlot`、`PageMenuSlot` 都照它）：只放 Workspace 里已有的状态，
 /// 工具栏读不到页面读的库，抄一份过来就是第二个事实源。控件都一直挂着（换页时不现建整份项目菜单）、只换内容：工具栏项一增删整条重建（实测占进出会话页点击回合的一半，25fdb5fa、4fd371a4）。
-/// 只属于进展页的几格（这一格、分段、额度环、新会话）在别的页宽 0（`toolbarPresence`），随进展页第一次挂上才建（`ProgressControl`），进出进展页时整条重排一次（一次 100～150ms 的重排是逐帧变宽时量的，b9707fc5）；
+/// 只属于进展页的几格（这一格、分段、新会话）在别的页宽 0（`toolbarPresence`），随进展页第一次挂上才建（`ProgressControl`），进出进展页时整条重排一次（一次 100～150ms 的重排是逐帧变宽时量的，b9707fc5）；
 /// 进展页两段之间宽度不变，换段只换哪几样看得见（`toolbarVisible`）。这一格按项目名的宽、最宽 `maxWidth`（再长截断），只在换范围时变宽变窄；
 /// 状态归页面的（会话段的搜索、新会话表单读的这台 Mac 上有哪些 Agent）留在页里。
 struct ScopeSlot: View {
@@ -196,29 +195,8 @@ struct ScopeSlot: View {
     }
 }
 
-/// 工具栏右边、搜索之前：进展页会话段的额度环（额度是会话的，看板段不放）（`QuotaRings`，点它从环下长出明细的气泡 `QuotaDetail`）。额度是整个 App 的（`AppServices.accountQuotas`），
-/// 不是哪一页读的库，照 `ScopeSlot` 的规矩；宽度按账号数（环数），只在账号增减时变。
-struct QuotaSlot: View {
-    @Environment(Workspace.self) private var workspace
-    @State private var open = DebugHooks.preset.quotaOpen
-    /// 收起的时刻：按在环上收起的，松开时不再打开（`PressPoint.reopens`）。
-    @State private var closed: ContinuousClock.Instant?
-
-    var body: some View {
-        ProgressControl {
-            QuotaRings(open: open, height: Spacing.toolbarControl) { open = !open && !PressPoint.reopens(closedAt: closed) }
-                .glass(in: .capsule, interactive: true)
-                .bubble(isPresented: $open) { QuotaDetail().padding(16) }
-        }
-        .onChange(of: open) { _, open in if !open { closed = .now } }
-        .toolbarVisible(workspace.showsSessionsBar)
-        .padding(.leading, Spacing.toolbarGap)
-        .toolbarPresence(workspace.root == .progress)
-    }
-}
-
-/// 只属于进展页的工具栏控件（`PanesSlot`、`ScopeSlot`、`QuotaSlot`、`PageActionSlot`）：别的页上宽 0、看不见。随进展页一起挂上——启动后空闲时进展页先挂上（`Prewarm`），
-/// 或一打开就在进展页——之后一直挂着；挂上之前不建，冷启动的第一帧不建看不见的分段、项目菜单、玻璃、额度环与新会话钮。
+/// 只属于进展页的工具栏控件（`PanesSlot`、`ScopeSlot`、`PageActionSlot`）：别的页上宽 0、看不见。随进展页一起挂上——启动后空闲时进展页先挂上（`Prewarm`），
+/// 或一打开就在进展页——之后一直挂着；挂上之前不建，冷启动的第一帧不建看不见的分段、项目菜单、玻璃与新会话钮。
 private struct ProgressControl<Content: View>: View {
     @ViewBuilder let content: Content
     @Environment(Workspace.self) private var workspace
@@ -253,7 +231,7 @@ struct PageActionSlot: View {
 }
 
 /// 工具栏右边最前面：同步需要关注时（没登录 iCloud、连不上、需要你决定、出错等）露一个图标，悬停看原因，点开设置处理。
-/// 有同步就常驻一格圆钮宽，平时只是看不见：提醒一出一收不挤动标题、额度环与搜索（工具栏项一变宽整条重排，窄窗口里居中的标题跟着挪）。
+/// 有同步就常驻一格圆钮宽，平时只是看不见：提醒一出一收不挤动标题与搜索（工具栏项一变宽整条重排，窄窗口里居中的标题跟着挪）。
 struct SyncAlertSlot: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
@@ -271,7 +249,7 @@ struct SyncAlertSlot: View {
     }
 }
 
-/// 工具栏右边的搜索（⌘K 同）。进展页上不在这里，收在"⋯"里（`PageMenuSlot`）：看板段那一排是列头，会话段那一排已有范围、额度环与新会话，页里还有搜会话的框。
+/// 工具栏右边的搜索（⌘K 同）。进展页上不在这里，收在"⋯"里（`PageMenuSlot`）：看板段那一排是列头，会话段那一排已有范围与新会话，页里还有搜会话的框。
 struct SearchSlot: View {
     @Environment(Workspace.self) private var workspace
 
@@ -288,7 +266,7 @@ struct SearchSlot: View {
 }
 
 extension Workspace {
-    /// 进展页的会话段：那一排左边是项目范围，右边额度环与新会话。
+    /// 进展页的会话段：那一排左边是项目范围，右边新会话。
     var showsSessionsBar: Bool { root == .progress && progressPane == .sessions }
 }
 #endif
