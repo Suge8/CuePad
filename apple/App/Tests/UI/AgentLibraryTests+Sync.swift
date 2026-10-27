@@ -12,7 +12,7 @@ extension AgentLibraryTests {
     /// 两台设备经同一个云替身：Mac 写下的快照同步到手机；手机上改规则、合并从手机的工作区发出，经云到 Mac 照做，结果回到手机。
     /// 这里的"手机"是第二个 Mac 进程：Mac 上的工作区只看本机的快照，手机那样读（`agentLibrary(host: nil)`）由测试自己读库。
     @Test func 手机经云看到Mac的快照_发往Mac改规则与合并_结果回到手机() async throws {
-        let cloud = SimulatedCloud([Self.floor(CueStore.peerFloor)])
+        let cloud = SimulatedCloud([CKRecord.peerFloor(CueStore.peerFloor)])
         let macApp = TestApp(sync: .built { CloudSync(store: $0) { cloud } })
         let phone = TestApp(sync: .built { CloudSync(store: $0) { cloud } }, host: "mac-phone")
         let folder = macApp.directory.appending(path: "work/site", directoryHint: .isDirectory)
@@ -62,12 +62,6 @@ extension AgentLibraryTests {
         #expect(read(folder.appending(path: "AGENTS.md")) == "手机改的\n\n# 旧的 Claude 说明\n")
         #expect(RelativeLink.points(folder.appending(path: "CLAUDE.md"), to: folder.appending(path: "AGENTS.md")))
         _ = try await phoneSees("手机上没有该整理的了") { $0.tidies.isEmpty }
-    }
-
-    static func floor(_ version: Int) -> CKRecord {
-        let record = CKRecord(recordType: PeerFloor.recordType, recordID: PeerFloor(zoneID: CloudSync.zoneID).id)
-        record[PeerFloor.field] = version as NSNumber
-        return record
     }
 }
 #endif

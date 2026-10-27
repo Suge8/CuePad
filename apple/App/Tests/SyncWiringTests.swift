@@ -34,7 +34,7 @@ struct SyncWiringTests {
     /// 设置里说要更新、立即同步按不了，本机照记，改动不上传。
     @Test
     func 云端门槛高于这台时_提示更新_本机照记_改动不上传() async throws {
-        let cloud = SimulatedCloud([Self.floor(CueStore.supportedSchemaVersions.upperBound + 1)])
+        let cloud = SimulatedCloud([CKRecord.peerFloor(CueStore.supportedSchemaVersions.upperBound + 1)])
         let app = TestApp(sync: .built { CloudSync(store: $0) { cloud } })
         let services = app.services!
         services.startSync()
@@ -54,7 +54,7 @@ struct SyncWiringTests {
     /// 拉到就停下提示更新，之后的改动不再上传。
     @Test
     func 门槛先抬再传内容_别的设备抬过这台后停下不再上传() async throws {
-        let cloud = SimulatedCloud([Self.floor(CueStore.peerFloor - 1)])
+        let cloud = SimulatedCloud([CKRecord.peerFloor(CueStore.peerFloor - 1)])
         let app = TestApp(sync: .built { CloudSync(store: $0) { cloud } })
         let services = app.services!
         let workspace = Workspace(services: services)
@@ -69,7 +69,7 @@ struct SyncWiringTests {
 
         // 立即同步在跑时再要的只等这一次、不另拉（`AppServices.syncNow`）：启动那次还没收尾就会错过下面这条门槛
         try await eventually("启动那次立即同步做完") { !services.isSyncingNow }
-        await cloud.put(Self.floor(CueStore.supportedSchemaVersions.upperBound + 1))
+        await cloud.put(CKRecord.peerFloor(CueStore.supportedSchemaVersions.upperBound + 1))
         await services.syncNow()
         try await eventually("拉到就停下") { services.syncStatus == .outdated }
         let after = try await workspace.createCard(body: "停下之后写的", in: Project.defaultID)
@@ -82,7 +82,7 @@ struct SyncWiringTests {
     /// 本机的 Pi 会话索引（与账号无关）留着。
     @Test(arguments: [SyncResolution.uploadLocal, .eraseLocal])
     func 换了iCloud账号_停下等你决定(_ resolution: SyncResolution) async throws {
-        let cloud = SimulatedCloud([Self.floor(CueStore.peerFloor)])
+        let cloud = SimulatedCloud([CKRecord.peerFloor(CueStore.peerFloor)])
         let app = TestApp(sync: .built { CloudSync(store: $0) { cloud } })
         let services = app.services!
         let workspace = Workspace(services: services)
@@ -110,12 +110,6 @@ struct SyncWiringTests {
             #expect(try await services.store.piSessions().map(\.id) == ["s1"])
             #expect(await cloud.records(ids).isEmpty)
         }
-    }
-
-    private static func floor(_ version: Int) -> CKRecord {
-        let record = CKRecord(recordType: PeerFloor.recordType, recordID: PeerFloor(zoneID: CloudSync.zoneID).id)
-        record[PeerFloor.field] = version as NSNumber
-        return record
     }
 
     /// 同步一直不返回（引擎队列被占着、网络没有回音）：下拉刷新的圈到时限就停，同步仍挂着；转着的时候主线程照常响应（测试本身在主线程上推钟）。

@@ -35,9 +35,6 @@ struct CueGateTests {
         let here = try #require(model.settings?.hosts(here: TestApp.hostID).first)
         model.choose(here, services)
         let move = try #require(model.moving)
-        #expect(move.title == "让 Cue 改在这台 Mac 上运行？")
-        #expect(move.message == "原来那台「Mac Studio」就不再运行 Cue。")
-        #expect(move.confirm == "改在这台运行")
         #expect(try await store.cueProfile()?.activeHost == "mac-old")
         return (model, move)
     }
@@ -70,6 +67,9 @@ struct CueGateTests {
         #expect(try await gate() == .runs(id: "mac-old", name: "Mac Studio"))
 
         let (model, move) = try await chooseHere()
+        #expect(move.title == "让 Cue 改在这台 Mac 上运行？")
+        #expect(move.message == "原来那台「Mac Studio」就不再运行 Cue。")
+        #expect(move.confirm == "改在这台运行")
         await #expect(throws: CueEnableError.runsElsewhere("Mac Studio")) { try await services.enableCue(on: TestApp.hostID, moving: false) }
         #expect(try await store.cueProfile()?.activeHost == "mac-old")
 
@@ -88,7 +88,7 @@ struct CueGateTests {
         model.moving = nil
         model.confirm(move, services)
         try await eventually("原因写在那一行") { model.failure != nil }
-        #expect(model.failure == "没有能当 Cue 的 Agent：Pi 没装 · Claude Code 没装 · Codex 没装 · OpenCode 没装 · Grok Build 没装 · DeepSeek Harness 没装")
+        #expect(model.failure?.hasPrefix("没有能当 Cue 的 Agent：") == true)  // 各家为什么的全文在 `CueEnableTests`
         #expect(try await store.cueProfile()?.activeHost == "mac-old")
     }
 }

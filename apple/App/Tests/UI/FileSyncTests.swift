@@ -33,9 +33,7 @@ struct FileSyncTests {
         let big = Data(repeating: 7, count: FileFetcher.phoneAutoLimit + 1)
         let (smallRecord, smallKey) = try attachment(small, format: "png")
         let (bigRecord, bigKey) = try attachment(big, format: "bin")
-        let floor = CKRecord(recordType: PeerFloor.recordType, recordID: PeerFloor(zoneID: CloudSync.zoneID).id)
-        floor[PeerFloor.field] = CueStore.peerFloor as NSNumber
-        let cloud = SimulatedCloud([floor, smallRecord, bigRecord])
+        let cloud = SimulatedCloud([.peerFloor(CueStore.peerFloor), smallRecord, bigRecord])
         let app = TestApp(sync: .built { CloudSync(store: $0) { cloud } })
         let services = app.services!
         let files = services.store.files

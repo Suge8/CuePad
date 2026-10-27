@@ -11,7 +11,7 @@ extension AgentLibraryTests {
     /// 每份文件的正文各一条（`LibraryFileText`）：Mac 上改了一个技能的正文，经云到手机的只有这一条正文（快照随哈希改一次），手机读到新正文；
     /// 删掉一个技能，手机上那条正文也没了。"手机"是连同一个云替身的第二个进程（同 `+Sync`）。
     @Test func 改一个技能只传它那一条正文_删掉的技能手机上也没了() async throws {
-        let cloud = SimulatedCloud([Self.floor(CueStore.peerFloor)])
+        let cloud = SimulatedCloud([CKRecord.peerFloor(CueStore.peerFloor)])
         let macApp = TestApp(sync: .built { CloudSync(store: $0) { cloud } })
         let phone = TestApp(sync: .built { CloudSync(store: $0) { cloud } }, host: "mac-phone")
         let root = macApp.directory.appending(path: "agents/skills", directoryHint: .isDirectory)
@@ -57,7 +57,7 @@ extension AgentLibraryTests {
 
     /// 500 个技能：快照里只有元数据，单条记录远小于 iCloud 的 1MB 上限；正文在各自那一条里。
     @Test func 五百个技能的快照远小于1MB() async throws {
-        let cloud = SimulatedCloud([Self.floor(CueStore.peerFloor)])
+        let cloud = SimulatedCloud([CKRecord.peerFloor(CueStore.peerFloor)])
         let macApp = TestApp(sync: .built { CloudSync(store: $0) { cloud } })
         let root = macApp.directory.appending(path: "agents/skills", directoryHint: .isDirectory)
         let body = String(repeating: "按这一步做：先读代码与一手资料，再动手；改完跑最窄的验证。\n", count: 40)
