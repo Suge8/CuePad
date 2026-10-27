@@ -97,7 +97,7 @@ public enum PiHistory {
         file: URL, agent: AgentKind, from checkpoint: PiHistoryCheckpoint?, transcript wanted: Bool = true, modified: Date? = nil,
         files: AttachmentFiles
     ) throws -> PiHistoryUpdate {
-        guard let format = SessionFileFormat.of(agent) else { preconditionFailure("\(agent.name) 的会话不在文件里") }
+        guard let format = agent.facts.sessionFiles else { preconditionFailure("\(agent.name) 的会话不在文件里") }
         let handle = try FileHandle(forReadingFrom: file)
         defer { try? handle.close() }
         let size = try handle.seekToEnd()

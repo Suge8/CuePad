@@ -39,7 +39,7 @@ struct AgentRow: View {
                 if let prerequisite = status.lacking {
                     Link("去官网", destination: prerequisite.site).settingFix().accessibilityLabel("\(prerequisite.name) 官网")
                 } else {
-                    Button(kind.upgrades(status.presence) ? "升级" : "安装", action: install).settingFix()
+                    Button(kind.facts.upgrades(status.presence) ? "升级" : "安装", action: install).settingFix()
                 }
             }
         }
@@ -90,7 +90,7 @@ struct AgentRow: View {
             kind == .opencode ? String(localized: "会话直连 OpenCode 的后台服务，不用另装。") : nil,
             String(localized: "会写入 \(files)（配置文件里只加 CuePad 自己的条目）；关掉即删除。"),
             kind == .pi ? String(localized: "接入后运行中的会话 /reload 后生效。") : String(localized: "接入后新开的会话里生效。"),
-            services.agents.status(kind).map { String(localized: "安装、升级在后台运行官方命令：\(kind.installCommand($0.presence))") },
+            services.agents.status(kind).map { String(localized: "安装、升级在后台运行官方命令：\(kind.facts.installCommand($0.presence))") },
         ]
         return "\(lines.compactMap { $0 }.joined(separator: "\n"))"
     }
@@ -137,11 +137,11 @@ enum AgentLine {
 
     static func of(_ kind: AgentKind, _ status: AgentStatus?, writable: Bool) -> (StatusTone, Dotted?) {
         guard let status else { return (.calm, Dotted(String(localized: "检测中…"))) }
-        guard writable else { return (.calm, Dotted(String(localized: "正式版在用，先用 \(kind.homeVariable) 指定目录"))) }
+        guard writable else { return (.calm, Dotted(String(localized: "正式版在用，先用 \(kind.facts.homeVariable) 指定目录"))) }
         switch (status.presence, status.files) {
         case (_, .foreign(let path)): return (.failure, Dotted(String(localized: "\(path) 是别人的同名文件，没有改动")))
         case (.tooOld(let version), _) where kind == .opencode: return (.notice, Dotted(String(localized: "需要 OpenCode 2，现在是 \(version.description)")))
-        case (.tooOld(let version), _): return (.notice, Dotted(String(localized: "\(version.description) 太旧，需要 \(kind.minimumVersion.map(\.description) ?? "") 或更新")))
+        case (.tooOld(let version), _): return (.notice, Dotted(String(localized: "\(version.description) 太旧，需要 \(kind.facts.minimumVersion.map(\.description) ?? "") 或更新")))
         case (.unresponsive, _): return (.notice, Dotted(String(localized: "找到了，但问版本没有回应，稍后再看")))
         case (.notFound, .missing): return (.calm, Dotted(String(localized: "没有检测到")))
         case (.notFound, _): return (.calm, Dotted(String(localized: "已卸载，CuePad 的技能还留着")))

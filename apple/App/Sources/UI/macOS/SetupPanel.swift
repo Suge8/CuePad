@@ -7,7 +7,7 @@ import SwiftUI
 /// 接入 Agent 并启用 Cue，一处做完：首次打开出现一次（`Workspace.offerSetup`），Cue 页的启用钮（`CueWelcome`）、会话页的"接入"也打开它；之后在设置里逐个开关。
 /// 打开时与回到 App 时重新检测这台的 Agent、问它们能不能用（`Workspace.recheckAgents`：用户可能刚在终端里登录了 Pi、装了 Node.js），
 /// 打开后第一次问完之前只写检测中：没登录的那家一出来就是"登录"，不先给勾选再在启用时报错。
-/// Agent 那几行与 Cue 那一行只读 `Workspace.setupRows`、`setupCue`：能当 Cue 的一家都用不了时，一行一个按钮（安装、登录），
+/// Agent 那几行与 Cue 那一行只读 `Workspace.setupRows`、`setupCue`：一家都用不了时，一行一个按钮（安装、登录），
 /// 装、登录都在后台做、就地写进度与原因，不用开终端粘命令；平时是勾选要接入的几家。每行写它会写什么或做什么，点按钮就是同意。
 /// 没做成的那一行写原因，都做成就收起；这台的技能与规则还有一键整理能做的，换成第二步（`SetupLibraryStep`，"跳过"就不整理）。
 /// "以后再说"关掉就是不接。
@@ -139,7 +139,7 @@ struct SetupPanel: View {
                     .buttonStyle(ControlButtonStyle(kind: .secondary))
                     .accessibilityLabel("\(prerequisite.name) 官网")
             case .logIn:
-                action(kind.loginArguments == nil ? "打开终端" : "登录", kind) { await workspace.logIn(kind) }
+                action(kind.facts.loginArguments == nil ? "打开终端" : "登录", kind) { await workspace.logIn(kind) }
             case .loggingIn:
                 action("重新登录", kind) { await workspace.logIn(kind) }
             case .checking, .installing, .problem:
@@ -165,7 +165,7 @@ struct SetupPanel: View {
         case .needs(let prerequisite): return (.notice, Dotted(AgentLine.needs(prerequisite)), false)
         case .installing: return (.calm, Dotted(AgentLine.installing), true)
         case .logIn:
-            let how = kind.loginArguments == nil ? String(localized: "在 \(kind.name) 里输入 /login") : String(localized: "在浏览器里登录")
+            let how = kind.facts.loginArguments == nil ? String(localized: "在 \(kind.name) 里输入 /login") : String(localized: "在浏览器里登录")
             return (.calm, Dotted(how), false)
         case .loggingIn: return (.calm, Dotted(String(localized: "在浏览器里登录完回到这里")), true)
         case .problem(let why): return (.notice, Dotted(why), false)

@@ -48,17 +48,16 @@ struct AgentLibraryPlaces: Sendable {
     func oldSkills(_ scope: LibraryScope) -> [(directory: URL, agent: AgentKind, recursive: Bool)] {
         switch scope {
         case .global:
-            installed.flatMap { kind -> [(URL, AgentKind, Bool)] in
-                let home = paths.home(of: kind)
-                let names = kind == .opencode ? ["skills", "skill"] : ["skills"]
-                return names.map { (home.appending(path: $0, directoryHint: .isDirectory), kind, kind != .claudeCode) }
-            }
+            installed.flatMap { kind in skillFolders(of: kind, in: paths.home(of: kind)) }
         case .project(let id):
             projects[id].map { folder in
-                [(".claude/skills", AgentKind.claudeCode), (".pi/skills", .pi), (".codex/skills", .codex), (".opencode/skills", .opencode), (".opencode/skill", .opencode)]
-                    .map { (folder.appending(path: $0.0, directoryHint: .isDirectory), $0.1, $0.1 != .claudeCode) }
+                AgentKind.allCases.flatMap { skillFolders(of: $0, in: folder.appending(path: $0.facts.projectFolder, directoryHint: .isDirectory)) }
             } ?? []
         }
+    }
+
+    private func skillFolders(of kind: AgentKind, in parent: URL) -> [(directory: URL, agent: AgentKind, recursive: Bool)] {
+        kind.facts.skillFolders.map { (parent.appending(path: $0, directoryHint: .isDirectory), kind, kind.facts.readsSharedSkills) }
     }
 
     private func base(_ scope: LibraryScope) -> URL? {
@@ -74,11 +73,11 @@ struct AgentLibraryPlaces: Sendable {
 
     /// 这家自己的全局规则。
     func globalFile(_ kind: AgentKind) -> URL {
-        paths.home(of: kind).appending(path: kind == .claudeCode ? "CLAUDE.md" : "AGENTS.md")
+        paths.home(of: kind).appending(path: kind.facts.instructionsFile)
     }
 
-    /// 链到全局规则的几家（OpenCode 不链：它没有自己那份时读 Claude Code 的）。
-    var linkedKinds: [AgentKind] { installed.filter { $0 != .opencode } }
+    /// 链到全局规则的几家（`AgentFacts.linksGlobalInstructions`）。
+    var linkedKinds: [AgentKind] { installed.filter(\.facts.linksGlobalInstructions) }
 
     var piSystem: URL { paths.home(of: .pi).appending(path: "SYSTEM.md") }
     var codexConfig: URL { paths.home(of: .codex).appending(path: "config.toml") }

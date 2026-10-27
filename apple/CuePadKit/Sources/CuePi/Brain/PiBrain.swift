@@ -23,13 +23,15 @@ import Foundation
 /// - 正在说的话（拼法见 `DraftParts`）：段号是 `contentIndex`，`message_update` 的 `text_delta` 追加（RPC 只发增量，见 Pi 的 docs/json.md
 ///   「Reconstruct streaming messages」），`text_end` 与 `message_end` 给定稿；开出工具调用、停下或出错后这条不再算。
 @MainActor
-final class PiBrain: CueBrain {
+final class PiBrain: HostedSession {
     private let session = BrainSession()
-    var events: AsyncStream<CueBrainEvent> { session.events }
+    var events: AsyncStream<TurnEvent> { session.events }
     private var process: ChildProcess?
-    private let replies = PendingReplies<String, JSONValue>(timeout: AgentTimeouts.reply, timeoutError: CueBrainError.rejected(String(localized: "没有及时回应")))
+    private let replies = PendingReplies<String, JSONValue>(timeout: AgentTimeouts.reply, timeoutError: HostedSessionError.rejected(String(localized: "没有及时回应")))
     private var nextID = 0
     private(set) var seesImages = false
+    /// 在用模型的上下文窗口
+    private var window: Int?
     static let subscription = Bundle.module.url(forResource: "claude-subscription", withExtension: "ts")!
     static let tools = Bundle.module.url(forResource: "cue-tools", withExtension: "ts")!
 
@@ -37,7 +39,7 @@ final class PiBrain: CueBrain {
     private static func claude(_ config: CueBrainConfig) -> String {
         let path = (config.environment["PATH"] ?? "").split(separator: ":").map { URL(filePath: String($0), directoryHint: .isDirectory) }
         let locator = ExecutableLocator(searchDirectories: path + ExecutableLocator.standard.searchDirectories)
-        return locator.candidates(AgentKind.claudeCode.command).first?.path ?? AgentKind.claudeCode.command
+        return locator.candidates(ClaudeCodeRuntime.facts.command).first?.path ?? ClaudeCodeRuntime.facts.command
     }
     /// 就地换过的模型与强度（`configure`）：开新会话后 Pi 回到启动参数，要再交一次
     private var configured: (model: String?, effort: PiThinkingLevel?) = (nil, nil)
@@ -100,7 +102,7 @@ final class PiBrain: CueBrain {
     private func apply(model: String?, effort: PiThinkingLevel?) async throws {
         if let model {
             let parts = model.split(separator: "/", maxSplits: 1).map(String.init)
-            guard parts.count == 2 else { throw CueBrainError.rejected(String(localized: "Pi 的模型要写成 提供方/模型：\(model)")) }
+            guard parts.count == 2 else { throw HostedSessionError.rejected(String(localized: "Pi 的模型要写成 提供方/模型：\(model)")) }
             adopt(try await command(["type": "set_model", "provider": .string(parts[0]), "modelId": .string(parts[1])])["data"])
         }
         if let effort { _ = try await command(["type": "set_thinking_level", "level": .string(effort.rawValue)]) }
@@ -109,6 +111,7 @@ final class PiBrain: CueBrain {
     /// 在用的模型（Pi 的 Model 对象）：能不能看图。
     private func adopt(_ model: JSONValue?) {
         seesImages = model?["input"]?.array?.contains("image") == true
+        window = model?["contextWindow"]?.int
     }
 
     func abort() async throws {
@@ -122,17 +125,17 @@ final class PiBrain: CueBrain {
 
     /// 发一条命令、等它的回应；回应 `success: false` 抛 `rejected`。
     private func command(_ command: [String: JSONValue]) async throws -> JSONValue {
-        guard let process else { throw CueBrainError.notRunning }
+        guard let process else { throw HostedSessionError.notRunning }
         nextID += 1
         let id = "cue-\(nextID)"
         let reply = try await replies.request(id) { process.write(JSONValue.object(command.merging(["id": .string(id)]) { $1 }).data) }
-        guard reply["success"]?.bool == true else { throw CueBrainError.rejected(reply["error"]?.string ?? String(localized: "未知错误")) }
+        guard reply["success"]?.bool == true else { throw HostedSessionError.rejected(reply["error"]?.string ?? String(localized: "未知错误")) }
         return reply
     }
 
     /// 进程退出：等着的命令以 `notRunning` 失败，报退出。
     private func ended(_ reason: ShownText?) {
-        replies.closeAll(CueBrainError.notRunning)
+        replies.closeAll(HostedSessionError.notRunning)
         session.exited(reason)
     }
 
@@ -174,7 +177,7 @@ final class PiBrain: CueBrain {
     private func assistantMessage(_ message: JSONValue) {
         if let usage = message["usage"] {
             let used = ["input", "cacheRead", "cacheWrite"].reduce(0) { $0 + (usage[$1]?.int ?? 0) }
-            if used > 0 { session.emit(.context(used: used)) }
+            if used > 0 { session.emit(.context(used: used, window: window)) }
         }
         let stop = message["stopReason"]?.string
         // 被 abort 停下的是 "aborted"，不算出错；之后成功的请求（重试）清掉前面的错

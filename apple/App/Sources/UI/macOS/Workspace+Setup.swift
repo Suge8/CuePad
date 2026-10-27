@@ -18,31 +18,31 @@ extension Workspace {
         /// 这台的库还没和 iCloud 对过一遍（`CueGate.waiting`，换新 Mac 时）：Cue 也许已在别的 Mac 上设过，
         /// 先不提议在这台启用，免得把它从那台抢过来；写 `why`
         case waiting(String)
-        /// 能当 Cue 的 Agent（`CueProfile.runtimes`）这台一家都用不了：带着装、登录的那几行（`setupRows`）
+        /// 这台一家 Agent 都用不了（每家都能当 Cue）：带着装、登录的那几行（`setupRows`）
         case needsAgent
         /// 能勾：在这台启用
         case enable
     }
 
-    /// `here` 是这台写下的各家能不能用（`CueStore.macAgents`）。能当 Cue 的有一家能用、或只差接入（勾上接入、同一下启用）就能启用。
+    /// `here` 是这台写下的各家能不能用（`CueStore.macAgents`）。有一家能用、或只差接入（勾上接入、同一下启用）就能启用。
     func setupCue(here: MacAgents) -> SetupCue {
         switch CueGate.of(services, running: cue.canHear ? cue.hostID : nil, name: cue.hostName) {
         case .runs: return .none
         case .waiting(let why): return .waiting(why)
         case .open:
             let connectable = services.agents.connectable
-            let usable = CueProfile.runtimes.contains { here.kinds.contains($0) || here.problem($0) == .notConnected && connectable.contains($0) }
+            let usable = AgentKind.allCases.contains { here.kinds.contains($0) || here.problem($0) == .notConnected && connectable.contains($0) }
             return usable ? .enable : .needsAgent
         }
     }
 
     /// 接入面板的 Agent 那几行（只在这里推）：各家还要你做的那一步（`setupStep`），没事可做的不列。平时只列可勾的与要登录的；
-    /// 能当 Cue 的一家都用不了时，能当 Cue 的几家平行列上，推荐的 Claude Code 排第一。
+    /// 一家都用不了时，几家平行列上，推荐的 Claude Code 排第一。
     func setupRows(here: MacAgents) -> [SetupRow] {
         let needsAgent = setupCue(here: here) == .needsAgent
         return Self.rowOrder.compactMap { kind in
             setupStep(kind, here: here).map { SetupRow(kind: kind, step: $0) }
-        }.filter { $0.step.isActionable || needsAgent && CueProfile.runtimes.contains($0.kind) }
+        }.filter { $0.step.isActionable || needsAgent }
     }
 
     private static let rowOrder: [AgentKind] = [.claudeCode, .codex, .pi, .opencode]
@@ -76,7 +76,7 @@ extension Workspace {
 
     /// 登录这一家（接入面板的"登录"）：Claude Code、Codex 打开浏览器、等你登录完；Pi 开终端，你回到 CuePad 时再问（`recheckAgents`）。
     func logIn(_ kind: AgentKind) async {
-        guard kind.loginArguments != nil else {
+        guard kind.facts.loginArguments != nil else {
             do { try await services.agents.openPiLogin() } catch { fail(error) }
             return
         }

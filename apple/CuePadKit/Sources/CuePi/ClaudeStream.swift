@@ -3,7 +3,7 @@ import CueStore
 import Foundation
 
 /// 到一个 `claude` 子进程的 stream-json 连接（`--input-format/--output-format stream-json`，与 Agent SDK 同一套线协议）：
-/// 后台托管的会话（`ClaudeHostedSession`）与 Cue 的大脑（`ClaudeBrain`）共用。
+/// `ClaudeHostedSession`（托管会话与 Cue 的大脑）与探测（`AgentProbe`）用。
 /// 控制请求（`control_request`）按 `request_id` 配上回应（`PendingReplies`）；正在说的话在这里得出交给 `onDraft`
 /// （逐字增量是 `--include-partial-messages` 的 `stream_event`，定稿是每个内容块说完时那一行完整的 `assistant`）；除增量外每行交给 `onMessage`。
 /// 退出靠关标准输入（读到 EOF 正常收尾）；进程退出时等着的请求以 `sessionEnded` 失败，再调 `onClose`。

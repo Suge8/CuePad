@@ -65,7 +65,7 @@ struct AgentIntegrationTests {
         (.opencode, "1.19.0", .tooOld(AgentVersion(1, 19, 0))),
     ])
     func anAgentTooOldOrWithoutAVersionIsNotConnectable(kind: AgentKind, output: String, presence: AgentStatus.Presence) async throws {
-        try fakeAgent(kind.command, printing: output)
+        try fakeAgent(kind.facts.command, printing: output)
         #expect(await integration().status(of: kind).presence == presence)
     }
 
@@ -93,7 +93,7 @@ struct AgentIntegrationTests {
         let integration = AgentIntegration(
             paths: AgentPaths(pi: paths, environment: environment), locate: { [bin] in ExecutableLocator(searchDirectories: [bin, later]) }, cuepad: cuepad,
             timing: noDeadline)
-        #expect(await integration.status(of: .pi).lacking == AgentKind.pi.installPrerequisite)
+        #expect(await integration.status(of: .pi).lacking == AgentKind.pi.facts.installPrerequisite)
     }
 
     // MARK: 接入与删除

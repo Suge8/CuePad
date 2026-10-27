@@ -2,8 +2,9 @@
 import CueStore
 import Foundation
 
-/// Claude Code、Codex 的钩子配置：CuePad 的条目合并进用户自己的配置文件（别人的条目原样留着），卸载只删 CuePad 的条目。
-/// 认 CuePad 的条目只看命令（`<cuepad> hook <agent>`，路径可能是旧位置）。
+/// 一家的上报通道（`AgentFacts.channel`）写下的文件。Claude Code、Codex 的是钩子配置：CuePad 的条目合并进用户自己的配置文件
+/// （别人的条目原样留着），卸载只删 CuePad 的条目，认 CuePad 的条目只看命令（`<cuepad> hook <agent>`，路径可能是旧位置）；
+/// Pi 的是整个桥扩展目录（`PiExtensionFiles`，不看命令）。
 protocol AgentHookConfig: Sendable {
     /// CuePad 写的文件（不含 `files(command:)` 判定用的记录）：卸载删它们里 CuePad 的条目，界面据此说明会写哪里。
     var writtenFiles: [URL] { get }

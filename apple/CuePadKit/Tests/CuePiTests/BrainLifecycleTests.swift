@@ -52,7 +52,7 @@ struct BrainLifecycleTests {
         }
         await brain.stop()()
         #expect(kill(try pid(in: file), 0) != 0)
-        var last: CueBrainEvent?
+        var last: TurnEvent?
         for await event in brain.events { last = event }
         #expect(last == .exited(nil))
     }
