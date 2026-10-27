@@ -7,7 +7,7 @@ import OSLog
 /// Codex 的接入：终端里的会话经钩子（`AgentHookServer`）上报、经它常驻服务的控制 socket 说话；后台托管的会话是 CuePad 起的 `codex app-server`。
 ///
 /// - 状态来自钩子：提交一句话进入工作，调工具、等权限确认、压缩随事件更新，`Stop`/`Interrupt` 歇下，`SessionEnd` 下线。
-///   托管的会话另有自己进程的 `turn/started`、`turn/completed` 通知管忙闲（钩子没装好时也对）。
+///   托管的会话一轮的起止、成败、正在说的话只看它的驱动（`CodexDriver`，与 Cue 的大脑同一个），钩子只管这一轮里在做什么与权限确认。
 /// - 子代理只认 app-server 的子线程推送（托管的是自己的进程，终端的是常驻服务：子线程没有订阅者，它的推送广播给所有连接，实测、文档没写）。
 ///   钩子不行：`SubagentStop` 只在正常做完时发，出错、被停没有；v2 `followup_task` 再跑不发 `SubagentStart`。
 ///   子线程按 `thread/read` 的 `parentThreadId` 一路找到会话（`threads`）；它的一轮开始是在跑，结束按状态落定（做完、出错、被停），
@@ -18,8 +18,7 @@ import OSLog
 ///   `HostMark` 认回（`codex` 可能是外壳，钩子的父进程是外壳起的子进程，不按进程号认）。
 ///   承载进程退出时它上面的会话都下线。常驻服务里的线程在终端退出后还会挂着（没有订阅者、闲置约 30 分钟后才卸载并报 `SessionEnd`，
 ///   实测、文档没写），这段时间它仍在线、能收话。
-/// - 正在说的话（`PiDraft`）与上下文余量只有托管的会话有：增量与用量只发给订阅了线程的连接（自己起的进程），`CodexRPC` 累积好
-///   （回答项说完换成全文）交给桥；终端里的会话不订阅，也就没有。
+/// - 正在说的话（`PiDraft`）与上下文余量只有托管的会话有：增量与用量只发给订阅了线程的连接（自己起的进程）；终端里的会话不订阅，也就没有。
 /// - 控制只经 app-server 的接口，不为观察而订阅（`thread/resume` 会把终端的事件与审批抢走）：说话是 `turn/start`，在跑就先
 ///   `turn/interrupt`（`turn/steer` 要等在跑的工具做完才读到，不是打断），停止是 `turn/interrupt`，换模型与强度是
 ///   `thread/settings/update`，改名是 `thread/name/set`，斜杠命令只有映射得上的几个。常驻服务把 `thread/status/changed`、
@@ -45,7 +44,7 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
     private let locate: @Sendable () async -> ExecutableLocator
     let gate: PresenceGate
     var tracked: [PiSession.ID: Tracked] = [:]
-    var hosted: [Int32: CodexRPC] = [:]
+    var hosted: [Int32: CodexDriver] = [:]
     /// 托管进程环境里的标记（`HostMark`）→ 进程号
     var marks: [String: Int32] = [:]
     var daemon: CodexRPC?
@@ -98,7 +97,7 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
         var unread: [String: Bool] = [:]
         /// 子代理最后说的一段话：落定时作那句说明
         var lastWords: [String: String] = [:]
-        /// 这一轮报过的错误原文（`error` 通知），出错歇下时用
+        /// 这一轮报过的错误原文（终端会话是常驻服务广播的 `error` 通知，托管的是驱动报的 `failed`），出错歇下时用
         var lastError: String?
         /// CuePad 正以一句话开新一轮（`deliver`）：期间一轮结束不算歇下，接着就是这句开的那一轮
         var restarting: Restart?
@@ -145,15 +144,15 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
         exitWatchers = [:]
         daemon?.close()
         daemon = nil
-        let waits = hosted.values.map { rpc in Task { await rpc.shutdown() } }
+        let waits = hosted.values.compactMap(\.rpc).map { rpc in Task { await rpc.shutdown() } }
         return { for wait in waits { await wait.value } }
     }
 
     public func open(
         in directory: URL, launchToken: String, name: String?, model: PiModelKey?, thinking: PiThinkingLevel?
     ) async throws -> PiSession.ID {
-        let id = try await launch { rpc in
-            let started = try await rpc.call("thread/start", .object(try await self.sandbox(in: directory.path, on: rpc).merging(["cwd": .string(directory.path)]) { $1 }))
+        let id = try await launch { driver, rpc in
+            let started = try await driver.open("thread/start", .object(try await self.sandbox(in: directory.path, on: rpc).merging(["cwd": .string(directory.path)]) { $1 }))
             return self.attachHosted(started, rpc: rpc, launchToken: launchToken)
         }
         return try await configure(opened: id, name: name, model: model, thinking: thinking, on: bridge)
@@ -165,9 +164,9 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
         if let live = bridge.session(sessionID: session.id) { return live.id }
         if let id = try await adoptFromDaemon(session.id) { return id }
         do {
-            return try await launch { rpc in
+            return try await launch { driver, rpc in
                 let params: [String: JSONValue] = ["threadId": .string(session.id), "path": .string(session.path), "excludeTurns": true]
-                let resumed = try await rpc.call("thread/resume", .object(try await self.sandbox(in: session.cwd, on: rpc).merging(params) { $1 }))
+                let resumed = try await driver.open("thread/resume", .object(try await self.sandbox(in: session.cwd, on: rpc).merging(params) { $1 }))
                 return self.attachHosted(resumed, rpc: rpc, launchToken: nil)
             }
         } catch CodexRPCError.server(_, let message) where message.contains("active writer") {
@@ -196,30 +195,30 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
     }
 
     /// 起一个托管进程交给 `body`；连同握手至多 `AgentTimeouts.launch`，超时或出错时停掉进程。
-    private func launch(_ body: @escaping @MainActor (CodexRPC) async throws -> PiSession.ID) async throws -> PiSession.ID {
+    private func launch(_ body: @escaping @MainActor (CodexDriver, CodexRPC) async throws -> PiSession.ID) async throws -> PiSession.ID {
         let codex = try await executable()
         let mark = UUID().uuidString
-        let rpc = try await CodexRPC.launch(codex.url, environment: codex.environment.merging([HostMark.variable: mark]) { $1 })
-        host(rpc, mark: mark)
+        let driver = CodexDriver()
+        let rpc = try await driver.launch(codex.url, environment: codex.environment.merging([HostMark.variable: mark]) { $1 })
+        host(driver, rpc, mark: mark)
         do {
-            return try await withDeadline(AgentTimeouts.launch, timing: timing, orThrow: AgentRuntimeError.launchTimedOut(.codex)) { try await body(rpc) }
+            return try await withDeadline(AgentTimeouts.launch, timing: timing, orThrow: AgentRuntimeError.launchTimedOut(.codex)) { try await body(driver, rpc) }
         } catch {
             await rpc.shutdown()
             throw error as? CodexRPCError == .timedOut ? AgentRuntimeError.launchTimedOut(.codex) : error
         }
     }
 
-    private func host(_ rpc: CodexRPC, mark: String) {
+    private func host(_ driver: CodexDriver, _ rpc: CodexRPC, mark: String) {
         let pid = rpc.pid
-        hosted[pid] = rpc
+        hosted[pid] = driver
         marks[mark] = pid
-        rpc.onNotification = { [weak self] method, params in self?.notification(method, params, from: pid) }
+        driver.onNotification = { [weak self] method, params in self?.notification(method, params, from: pid) }
+        driver.onEvent = { [weak self] event in self?.event(event, from: pid) }
         rpc.onRequest = { [weak self, weak rpc] method, id, params in
             guard let self, let rpc, method == "item/tool/requestUserInput" else { return false }
             return self.userInput(params, id: id, on: rpc)
         }
-        rpc.onDraft = { [weak self] thread, draft in self?.bridge.setDraft("\(thread).\(pid)", draft) }
-        rpc.onClose = { [weak self] in self?.processGone(pid) }
     }
 
     private func attachHosted(_ result: JSONValue, rpc: CodexRPC, launchToken: String?) -> PiSession.ID {
