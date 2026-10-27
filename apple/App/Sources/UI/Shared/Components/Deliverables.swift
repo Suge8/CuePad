@@ -102,12 +102,12 @@ struct DeliverableTile: View {
     @State private var slow = false
     @State private var located = Located()
 
-    /// 本机的那份文件（`AttachmentFiles.url(of:)` 要查几次文件系统，第一次还要拷一份）：同一次"到没到"只找一次，
+    /// 本机的那份文件（`AttachmentFiles.fileURL(for:)` 要查文件系统）：同一次"到没到"只找一次，
     /// 视图体里用到它的几处不再各找一遍。
     private var file: URL? {
         if located.arrived != .some(arrived) {
             located.arrived = arrived
-            located.url = arrived == false ? nil : services.store.files.url(of: preview)
+            located.url = arrived == false ? nil : services.store.files.fileURL(for: preview.key)
         }
         return located.url
     }
@@ -132,7 +132,7 @@ struct DeliverableTile: View {
         #if os(macOS)
         .help(label)
         #endif
-        .observingArrival(of: preview.hash, in: services.store, into: $arrived)
+        .observingArrival(of: preview.key, in: services.store, into: $arrived)
         .task(id: file) {
             guard let file else { return }
             let waited = shown == nil
@@ -255,7 +255,7 @@ struct DeliverableTile: View {
     /// 文件到飞的那一下才找（登记时可能还没下载到）。别的形状交的画面没裁过，nil。
     private var whole: (() async -> CGImage?)? {
         guard case .shot(let side, _) = shape else { return nil }
-        return { [files = services.store.files, hash = preview.hash, scale] in await Thumbnail.picture(hash, height: side, scale: scale, in: files) }
+        return { [files = services.store.files, hash = preview.key, scale] in await Thumbnail.picture(hash, height: side, scale: scale, in: files) }
     }
 
     private var caption: some View {

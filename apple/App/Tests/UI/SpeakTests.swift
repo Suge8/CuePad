@@ -92,7 +92,7 @@ struct SpeakTests {
         await writing?.value
 
         let hashes = try photos.map { try files.store($0.data) }
-        #expect(try await store.cards(in: Project.defaultID).map(\.body) == ["周末读完第三章\n\n![](cuepad://img/\(hashes[0]))\n![](cuepad://img/\(hashes[1]))"])
+        #expect(try await store.cards(in: Project.defaultID).map(\.body) == ["周末读完第三章\n\n![](cuepad://file/\(hashes[0]))\n![](cuepad://file/\(hashes[1]))"])
         #expect(workspace.notice?.text.visible == "已记到 默认")
         #expect(try await youSaid().isEmpty)
     }
@@ -155,7 +155,7 @@ struct SpeakTests {
         try await enableCue()
         let target = try await session()
         let workspace = Workspace(services: app.services)
-        let attachments = app.services.location.databaseURL.deletingLastPathComponent().appending(path: "Attachments")
+        let attachments = app.services.location.caches.appending(path: "CuePadAttachments")
         try FileManager.default.createDirectory(at: attachments, withIntermediateDirectories: true)
         try FileManager.default.setAttributes([.posixPermissions: 0o500], ofItemAtPath: attachments.path)
         defer { try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: attachments.path) }

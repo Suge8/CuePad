@@ -21,7 +21,7 @@ struct ImageTests {
         #expect(h.textView.readSelection(from: pasteboard, type: .png))
 
         let imageID = try #require(CueFormat.parse(h.stored).compactMap { if case .image(let id) = $0 { id } else { nil } }.first)
-        #expect(h.stored == "前文![](cuepad://img/\(imageID))后文")
+        #expect(h.stored == "前文![](cuepad://file/\(imageID))后文")
         #expect(h.store.storedData == [png])
         #expect(notified == [h.stored])
     }
@@ -36,7 +36,7 @@ struct ImageTests {
 
         let stored = try #require(h.store.storedData.first)
         #expect(stored.starts(with: [0x89, 0x50, 0x4E, 0x47]))
-        #expect(h.stored.hasPrefix("![](cuepad://img/"))
+        #expect(h.stored.hasPrefix("![](cuepad://file/"))
     }
 
     @Test("拖入图片文件：按落点插入")
@@ -115,7 +115,7 @@ struct ImageTests {
     @Test("图片文件缺失时存储引用保持不变")
     func missingImage() {
         let h = EditorHarness()
-        let stored = "前\n![](cuepad://img/00000000deadbeef)\n后"
+        let stored = "前\n![](cuepad://file/\(String(repeating: "0", count: 64)).png)\n后"
         h.load(stored)
         #expect(h.stored == stored)
         #expect(h.imageLineFrames().count == 1)
@@ -125,7 +125,7 @@ struct ImageTests {
     func rendersPixels() async throws {
         let h = EditorHarness()
         let id = try h.store.store(makePNG(width: 800, height: 400, color: NSColor(srgbRed: 1, green: 0, blue: 0, alpha: 1)))
-        h.load("![](cuepad://img/\(id))")
+        h.load("![](cuepad://file/\(id))")
         let frame = try #require(h.imageLineFrames().first)
         #expect(await h.wait {
             guard let color = h.renderedCenterColor(of: frame) else { return false }

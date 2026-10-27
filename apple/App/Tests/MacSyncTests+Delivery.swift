@@ -78,7 +78,7 @@ extension MacSyncTests {
         // 图片文件在本机（没到的图片执行器会等它同步过来，那是另一条路径）
         let hash = try services.store.files.store(pngData(shade: 0.3))
         let commands = ext.commands.count
-        let image = try await services.store.requestDelivery("/greet\n\n![](cuepad://img/\(hash))", to: target, on: TestApp.hostID, mode: .command)
+        let image = try await services.store.requestDelivery("/greet\n\n![](cuepad://file/\(hash))", to: target, on: TestApp.hostID, mode: .command)
         #expect(try await awaitFinished(image.id).status == .known(.failed))
         #expect(ext.commands.count == commands)
     }

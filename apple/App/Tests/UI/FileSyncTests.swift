@@ -1,6 +1,7 @@
 import CloudKit
 import CryptoKit
 import CueStore
+import CueText
 @testable import CueSync
 import Foundation
 import Testing
@@ -24,7 +25,7 @@ struct FileSyncTests {
             record[field] = value
         }
         record[RecordMapper.fileKey] = CKAsset(fileURL: file)
-        return (record, AttachmentFiles.key(hash: hash, format: format))
+        return (record, AttachmentKey.make(hash: hash, format: format))
     }
 
     @Test func 别的设备的文件先到记录_手机只自动取小的_大的用到时取() async throws {
@@ -42,20 +43,20 @@ struct FileSyncTests {
         defer { services.cancelBackgroundWork() }
 
         try await eventually("记录到了") {
-            let small = try await services.store.hasAttachment(smallRecord["hash"] as! String)
-            let big = try await services.store.hasAttachment(bigRecord["hash"] as! String)
+            let small = try await services.store.hasAttachment(smallKey)
+            let big = try await services.store.hasAttachment(bigKey)
             return small && big
         }
-        try await eventually("小文件自动取到") { files.fileURL(forKey: smallKey) != nil }
+        try await eventually("小文件自动取到") { files.fileURL(for: smallKey) != nil }
         #if os(macOS)
-        try await eventually("Mac 大文件也自动取") { files.fileURL(forKey: bigKey) != nil }
+        try await eventually("Mac 大文件也自动取") { files.fileURL(for: bigKey) != nil }
         #else
         try await eventually("自动取的都结束了") { services.fileTransfers.isEmpty }
-        #expect(files.fileURL(forKey: bigKey) == nil)
+        #expect(files.fileURL(for: bigKey) == nil)
         #endif
 
         let url = try await services.fetchFile(bigKey)
         #expect(try Data(contentsOf: url) == big)
-        #expect(try Data(contentsOf: try #require(files.fileURL(forKey: smallKey))) == small)
+        #expect(try Data(contentsOf: try #require(files.fileURL(for: smallKey))) == small)
     }
 }

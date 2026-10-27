@@ -33,7 +33,7 @@ struct RealCodexHostedTests {
             let session = try #require(rig.bridge.session(id: id))
             let mine = try #require(try rig.transcript(session).messages.first { $0.role == .known(.user) })
             #expect(mine.deliveryID == delivery)
-            #expect(mine.text.hasPrefix("What color is this image?") && mine.text.contains("![](cuepad://img/"))
+            #expect(mine.text.hasPrefix("What color is this image?") && mine.text.contains("![](cuepad://file/"))
             #expect(rig.replies(session).last?.lowercased().contains("red") == true, "\(rig.replies(session))")
 
             let other = try #require(session.availableModels.first { $0.key.id != codexTestModel })

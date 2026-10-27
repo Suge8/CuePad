@@ -12,7 +12,7 @@ struct HistoryImageTests {
     let dir = try! makeTempDirectory()
     var store: CueStore { fixture.store }
 
-    private func hash(_ data: Data) -> String { SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined() }
+    private func key(_ data: Data) -> String { SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined() + ".png" }
 
     private func imageBlock(_ data: Data) -> [String: Any] { ["type": "image", "data": data.base64EncodedString(), "mimeType": "image/png"] }
 
@@ -31,12 +31,12 @@ struct HistoryImageTests {
         try await store.writePiTranscript(update.transcript)
 
         let users = update.messages.filter { $0.role == .known(.user) }
-        #expect(users.map(\.text) == ["看这张\n![](cuepad://img/\(hash(sent)))", "![](cuepad://img/\(hash(pasted)))"])
+        #expect(users.map(\.text) == ["看这张\n![](cuepad://file/\(key(sent)))", "![](cuepad://file/\(key(pasted)))"])
         #expect(update.recap.pendingPrompt == nil && update.recap.lastPrompt == "看这张" && update.recap.lastReply == "看到了")
         #expect(update.history.displayName == "看这张")
         for data in [sent, pasted] {
-            #expect(try store.files.original(hash: hash(data)) == data)
-            #expect(try await store.hasAttachment(hash(data)))
+            #expect(try Data(contentsOf: #require(store.files.fileURL(for: key(data)))) == data)
+            #expect(try await store.hasAttachment(key(data)))
         }
     }
 

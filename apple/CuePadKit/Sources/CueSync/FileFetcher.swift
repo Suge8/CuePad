@@ -1,5 +1,6 @@
 import CloudKit
 import CueStore
+import CueText
 import Foundation
 
 /// 文件那一路的取：附件记录随拉取与别的记录一起先入库（不带文件，`ZonePuller`），文件在这里另取、带进度（`TransferBoard`），
@@ -59,12 +60,12 @@ actor FileFetcher {
 
   /// 这个文件在本机的位置：本机没有就现在取（不看自动取的条件），记录还没到就等它到。被取消就抛出。
   func fetch(_ key: String) async throws -> URL {
-    if let url = files.fileURL(forKey: key) { return url }
+    if let url = files.fileURL(for: key) { return url }
     guard !damaged.contains(key) else { throw FileFetchFailure.damaged }
     if let task = running[key] { return try await task.value }
     let attachment: Attachment
     if let found = known[key] { attachment = found } else { attachment = try await record(of: key) }
-    if let url = files.fileURL(forKey: key) { return url }
+    if let url = files.fileURL(for: key) { return url }
     return try await (running[key] ?? begin(attachment, automatic: false)).value
   }
 
@@ -86,7 +87,7 @@ actor FileFetcher {
   }
 
   private func seen(_ rows: [Attachment]) async {
-    known = Dictionary(rows.map { (AttachmentFiles.key(of: $0), $0) }, uniquingKeysWith: { first, _ in first })
+    known = Dictionary(rows.map { (AttachmentKey.make(hash: $0.hash, format: $0.format), $0) }, uniquingKeysWith: { first, _ in first })
     for (id, waiter) in waiters {
       guard let attachment = known[waiter.key] else { continue }
       waiters[id] = nil
@@ -99,7 +100,7 @@ actor FileFetcher {
   private func scan() async {
     guard automatic.count < Self.parallel, await coordinator.canSync, await coordinator.admits(.pull) else { return }
     for (key, attachment) in known where automatic.count < Self.parallel {
-      guard running[key] == nil, !damaged.contains(key), Self.wanted(attachment), files.fileURL(forKey: key) == nil else { continue }
+      guard running[key] == nil, !damaged.contains(key), Self.wanted(attachment), files.fileURL(for: key) == nil else { continue }
       begin(attachment, automatic: true)
     }
   }
@@ -115,7 +116,7 @@ actor FileFetcher {
 
   @discardableResult
   private func begin(_ attachment: Attachment, automatic isAutomatic: Bool) -> Task<URL, any Error> {
-    let key = AttachmentFiles.key(of: attachment)
+    let key = AttachmentKey.make(hash: attachment.hash, format: attachment.format)
     let task = Task { try await self.download(attachment, key) }
     running[key] = task
     if isAutomatic { automatic.insert(key) }
@@ -147,7 +148,7 @@ actor FileFetcher {
       } catch let error as CueStoreError where [.invalidAttachmentHash, .attachmentHashMismatch].contains(error) {
         throw await broken(name, detail: "\(error)", key)
       }
-      guard let url = files.fileURL(forKey: key) else { throw CueStoreError.notFound }
+      guard let url = files.fileURL(for: key) else { throw CueStoreError.notFound }
       return url
     } catch let error as FileFetchFailure {
       throw error

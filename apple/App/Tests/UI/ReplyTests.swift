@@ -63,7 +63,7 @@ struct ReplyTests {
         try await recorder.update(sessionID: "pi", state: .settled, title: "pi")
         let live = try await app.services.store.piSessionPage(.live).items.map(\.state)
         let claude = try #require(live.first { $0.sessionID == "claude" }), pi = try #require(live.first { $0.sessionID == "pi" })
-        let image = "![](cuepad://img/abc)"
+        let image = "![](cuepad://file/\(String(repeating: "a", count: 64)).png)"
         let draft = ComposerDraft(text: "按这张改", attachments: [Outbox(content: "登录页\n\n\(image)\n\n按钮改圆角", card: UUID())])
 
         #expect(!claude.composerKinds.contains(.images))
@@ -71,7 +71,7 @@ struct ReplyTests {
         let toClaude = try await workspace.said(draft.accepting(claude.composerKinds), to: claude, mode: .send)
         let toPi = try await workspace.said(draft.accepting(pi.composerKinds), to: pi, mode: .send)
 
-        #expect(!toClaude.content.contains("cuepad://img"))
+        #expect(!toClaude.content.contains("cuepad://file"))
         #expect(toClaude.content.contains("按钮改圆角") && toClaude.content.contains("按这张改"))
         #expect(toPi.content.contains(image))
     }

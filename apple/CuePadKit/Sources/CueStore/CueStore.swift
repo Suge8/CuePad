@@ -21,7 +21,7 @@ public actor CueStore {
   nonisolated let rereader: CueStore?
   /// 订阅者与提交序号：提交在本队列上登记，重读在 `rereader` 上收窄。
   nonisolated let subscriptions = Subscriptions()
-  /// 图片文件的读写（`AttachmentFiles`）；不经过 actor，界面可并发调用。
+  /// 附件文件的读写（`AttachmentFiles`）；不经过 actor，界面可并发调用。
   public nonisolated let files: AttachmentFiles
   /// 随时间变的读（`expire(at:)` 的到点重读、Mac 在不在线）用的时钟（你的话等没等过时限归 App 的 `SpeechClock`）；测试换成手动推进的。写下的时刻仍盖真实时间（`Date.stamp`）。
   public nonisolated let timing: Timing
@@ -101,7 +101,7 @@ public actor CueStore {
   }
 
   private static func files(of location: LibraryLocation) -> AttachmentFiles {
-    AttachmentFiles(directory: location.directory.appending(path: "Attachments", directoryHint: .isDirectory), caches: location.caches)
+    AttachmentFiles(library: location.directory, caches: location.caches)
   }
 
   /// 这个版本能打开的库结构版本范围（`PRAGMA user_version`）；失败页据此区分"库是更新版本建的""库是更早版本建的"与别的失败。

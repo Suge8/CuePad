@@ -17,7 +17,7 @@ final class DirectoryImageStore: CueImageStore, Sendable {
     deinit { try? FileManager.default.removeItem(at: directory) }
 
     func store(_ data: Data) throws -> String {
-        let id = SHA256.hash(data: data).prefix(8).map { String(format: "%02x", $0) }.joined()
+        let id = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined() + ".png"  // 与附件的键同形（`AttachmentKey`）
         let url = directory.appendingPathComponent(id)
         try data.write(to: url)
         stored.withLock { $0.files[id] = url; $0.data.append(data) }

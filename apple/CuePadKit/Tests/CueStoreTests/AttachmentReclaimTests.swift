@@ -7,13 +7,13 @@ import Testing
 @Suite struct AttachmentReclaimTests {
   let fixture = try! Fixture()
   var store: CueStore { fixture.store }
-  var attachmentsDirectory: URL { fixture.directory.appending(path: "Attachments", directoryHint: .isDirectory) }
+  var cached: URL { fixture.directory.appending(path: "Caches/CuePadAttachments", directoryHint: .isDirectory) }
 
-  private func ref(_ hash: String) -> String { "text ![](cuepad://img/\(hash)) more" }
+  private func ref(_ key: String) -> String { "text ![](cuepad://file/\(key)) more" }
 
-  private func exists(_ hash: String) throws -> Bool {
-    let row = try RawDB(fixture.url).rows("SELECT 1 FROM attachments WHERE hash = '\(hash)'")
-    let file = FileManager.default.fileExists(atPath: attachmentsDirectory.appending(path: hash).path)
+  private func exists(_ key: String) throws -> Bool {
+    let row = try RawDB(fixture.url).rows("SELECT 1 FROM attachments WHERE hash || '.' || format = '\(key)'")
+    let file = FileManager.default.fileExists(atPath: cached.appending(path: key).path)
     #expect(row.isEmpty || file, "附件记录必须有文件")
     return file
   }

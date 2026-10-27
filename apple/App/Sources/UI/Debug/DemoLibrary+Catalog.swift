@@ -6,7 +6,7 @@ import Foundation
 extension DemoLibrary {
     static func projects(image: String) -> [DemoProject] {
         let home = demoHome
-        let pic = CueFormat.imageMarkup(id: image)
+        let pic = CueFormat.imageMarkup(key: image)
         return [
             DemoProject(name: "CuePad", icon: .sparkles, color: "#A260C4", pinned: false, directory: "\(home)Project/cuepad", intro: String(localized: "投送队列本月可上线", table: "Demo"), cards: [
                 (0.2, String(localized: "修复 TextKit 编辑器\n\nTextKit 编辑器偶发失败。先稳定复现，定位根因后再改，不要加重试掩盖。", table: "Demo"), false),

@@ -61,7 +61,7 @@ struct UserBubble<Menu: View>: View {
     @State private var truncated = false
 
     var body: some View {
-        let text = CueFormat.plainText(stored), images = CueFormat.imageHashes(in: stored), skill = PiSkillCall.parse(text)
+        let text = CueFormat.plainText(stored), images = CueFormat.imageKeys(in: stored), skill = PiSkillCall.parse(text)
         BubbleWidth(fraction: Self.widthFraction, edge: .trailing) {
             VStack(alignment: .trailing, spacing: 6) {
                 if fromCue { CueByline() }

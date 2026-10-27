@@ -37,7 +37,7 @@ struct IOSEditingTests {
     func roundTrip() throws {
         let h = EditorHarness()
         let id = try h.store.store(makePNG(width: 40, height: 30))
-        let stored = "前\n![](cuepad://img/\(id))\n---\n后 ![](cuepad://img/00000000deadbeef)"
+        let stored = "前\n![](cuepad://file/\(id))\n---\n后 ![](cuepad://file/\(String(repeating: "0", count: 64)).png)"
         h.load(stored)
         #expect(h.stored == stored)
     }
@@ -64,7 +64,7 @@ struct IOSEditingTests {
     func pasteText() async throws {
         let h = EditorHarness()
         let id = try h.store.store(makePNG(width: 40, height: 30))
-        let item = await transform(NSItemProvider(object: "a\n---\n![](cuepad://img/\(id))" as NSString), in: h)
+        let item = await transform(NSItemProvider(object: "a\n---\n![](cuepad://file/\(id))" as NSString), in: h)
         #expect(attachments(in: item.result).first is CueImageAttachment)
         #expect(item.result?.string == "a\n---\n\u{FFFC}")
     }
@@ -97,7 +97,7 @@ struct IOSEditingTests {
         h.textView.insertImage(data: makePNG(width: 40, height: 30))
 
         let id = try #require(CueFormat.parse(h.stored).compactMap { if case .image(let id) = $0 { id } else { nil } }.first)
-        #expect(h.stored == "前文![](cuepad://img/\(id))后文")
+        #expect(h.stored == "前文![](cuepad://file/\(id))后文")
         #expect(notified == [h.stored])
         let inserted = h.stored
 
@@ -107,7 +107,7 @@ struct IOSEditingTests {
         #expect(h.stored == inserted)
 
         h.textView.insertText("x")
-        #expect(h.stored == "前文![](cuepad://img/\(id))x后文")
+        #expect(h.stored == "前文![](cuepad://file/\(id))x后文")
     }
 
     @Test("编辑器内复制/剪切输出存储格式，粘回去还原成图片")

@@ -41,33 +41,17 @@ public enum PiPreviewKind: String, Sendable, CaseIterable {
     }
   }
 
+  /// 类型按附件键的扩展名认（`AttachmentKey.format`）：系统认错的 .ts 等在那里已按文本算，快速查看打开的也是同一份。
   public init?(fileName: String) {
-    guard let type = Self.type(ofExtension: Self.pathExtension(fileName)),
+    let format = AttachmentKey.format(ofName: fileName)
+    guard !Self.unreadable.contains(format), let type = UTType(filenameExtension: format),
       let kind = Self.allCases.first(where: { $0.types.contains { type.conforms(to: $0) } })
     else { return nil }
     self = kind
   }
 
-  /// 系统把 .ts、.mts 认作 MPEG-2 传输流（视频），可 Agent 发来的几乎都是 TypeScript：这几个按源代码（文本）认。
-  /// 用通用的源代码类型：TypeScript 自己的类型（com.microsoft.typescript）只有装了开发工具的 Mac 上有，手机上没有。
-  /// 别的同名歧义系统本来就归到文本（.m 是 Objective-C 还是 MATLAB、.r、.fs 都是源代码），不用改。
-  private static let reassigned: [String: UTType] = ["ts": .sourceCode, "mts": .sourceCode, "cts": .sourceCode]
   /// 系统认得、这里却显示不了的：.svgz 是 gzip 压缩的 SVG，网页预览按原字节载入、不解压。
   private static let unreadable: Set<String> = ["svgz"]
-
-  /// 交给系统（快速查看、缩略图）时的文件名：系统按扩展名认类型，改认过的（`reassigned`）要再接一个 .txt，否则快速查看照样当视频打开。
-  static func systemFileName(_ name: String) -> String {
-    reassigned[pathExtension(name)] == nil ? name : name + ".txt"
-  }
-
-  /// 文件名的扩展名（小写）。不经 `URL(filePath:)`：相对的文件名要先取一次当前目录（getcwd 系统调用），缩略图每画一次问好几遍。
-  private static func pathExtension(_ name: String) -> String { (name as NSString).pathExtension.lowercased() }
-
-  private static func type(ofExtension pathExtension: String) -> UTType? {
-    let pathExtension = pathExtension.lowercased()
-    guard !unreadable.contains(pathExtension) else { return nil }
-    return reassigned[pathExtension] ?? UTType(filenameExtension: pathExtension)
-  }
 
   /// 给 Agent 与用户看的"可发什么"：网页（html、htm、svg）、Markdown（md、markdown）、图片、……
   public static let supportedList = allCases.map { kind in
@@ -99,8 +83,8 @@ public struct PiPreview: Identifiable, Equatable, Sendable {
   /// 这台设备不认识的类型（别的版本发来的）为 nil
   public var kind: PiPreviewKind? { PiPreviewKind(fileName: name) }
 
-  /// 本机交给系统（快速查看、缩略图）的那份文件叫什么：系统认错类型的扩展名（.ts 等）另接 .txt，按这里归的类打开。
-  var systemFileName: String { PiPreviewKind.systemFileName(name) }
+  /// 附件的键：扩展名由文件名定（`AttachmentKey.make(hash:name:)`），本机文件 `AttachmentFiles.fileURL(for:)` 按它找。
+  public var key: String { AttachmentKey.make(hash: hash, name: name) }
 
   public init(id: UUID = UUID(), sessionID: String, hash: String, name: String, title: String, byteCount: Int, createdAt: Date? = nil) {
     let createdAt = createdAt ?? .stamp
@@ -129,11 +113,6 @@ extension PiPreview: Record {
     createdAt = row.date(6)
     modifiedAt = row.date(7)
   }
-}
-
-extension AttachmentFiles {
-  /// 一份预览在本机按原文件名放的那份（界面交给快速查看、Cue 的读文件工具用的都是它）；还没同步到本机为 nil。
-  public func url(of preview: PiPreview) -> URL? { named(preview.hash, as: preview.systemFileName) }
 }
 
 /// `CueStore.addPreviews` 的结果，一个文件一份：预览，以及 HTML 里引用了、手机上预览时拿不到的外部资源。
@@ -172,7 +151,9 @@ extension CueStore {
       return (url: url, kind: kind, size: size)
     }
     let hashes = try checked.map { file in
-      guard let hash = try? files.storeFile(at: file.url) else { throw CueStoreError.previewUnreadable(file.url.path) }
+      guard let key = try? files.store(fileAt: file.url), let hash = AttachmentKey.parts(key)?.hash else {
+        throw CueStoreError.previewUnreadable(file.url.path)
+      }
       return hash
     }
     let ids = urls.map { _ in UUID() }.sorted { $0.uuidString < $1.uuidString }
@@ -185,7 +166,7 @@ extension CueStore {
           byteCount: checked[index].size, createdAt: createdAt)
       }
       for preview in previews {
-        try registerAttachment(hash: preview.hash)
+        try registerAttachment(preview.key)
         try insert(preview)
       }
       return previews

@@ -47,7 +47,7 @@ extension DebugScene {
         let asks = [String(localized: "今天先看哪件？", table: "Demo"), String(localized: "把计费那个会话的进展说一下", table: "Demo"), String(localized: "圆桌的预发什么时候能好？", table: "Demo"), String(localized: "帮我记一下：周五不发版", table: "Demo"), String(localized: "README 截图换完了吗？", table: "Demo"), String(localized: "重连用例加了几个？", table: "Demo")]
         let replies = [String(localized: "先看圆桌：乱序会影响所有 5 人以上的房间。", table: "Demo"), String(localized: "计费会话卡在额度接口的签名上，我让它先把请求原文打出来。", table: "Demo"), String(localized: "测试在跑，大概二十分钟后能部署到预发。", table: "Demo"),
                        String(localized: "记下了，周五不发版。", table: "Demo"), String(localized: "浅色那张换好了，深色的还在拍。", table: "Demo"), String(localized: "加了 2 个，第 3 个等排序改完再补。", table: "Demo")]
-        let shot = CueFormat.imageMarkup(id: try store.files.store(stagingOrderPNG()))
+        let shot = CueFormat.imageMarkup(key: try store.files.store(stagingOrderPNG()))
         for round in 0..<110 {
             let ask = round % 25 == 0 ? longChatPrompt(round) : String(localized: "第 \(round + 1) 句：", table: "Demo") + asks[round % asks.count]
             try await you(round % 15 == 7 ? ask + "\n" + shot : ask)

@@ -171,7 +171,7 @@ import Testing
       return .succeeded
     }
     try await executor.start()
-    let waiting = try await store.requestDelivery("look ![](cuepad://img/\(hash))", to: pi, on: "mac-a")
+    let waiting = try await store.requestDelivery("look ![](cuepad://file/\(hash))", to: pi, on: "mac-a")
     _ = try await store.requestDelivery("plain", to: pi, on: "mac-a")
 
     // 排在后面的普通请求先执行，说明前面那条被跳过而不是抢跑
@@ -181,7 +181,7 @@ import Testing
     // 图片同步到了：文件放进附件目录，附件记录随后应用
     _ = try store.files.store(data)
     let arrived: [String: SQLValue] = [
-      "id": .text(UUID().uuidString.lowercased()), "hash": .text(hash), "byteCount": .int(Int64(data.count)),
+      "id": .text(UUID().uuidString.lowercased()), "hash": .text(String(hash.prefix(64))), "byteCount": .int(Int64(data.count)),
       "format": .text("png"), "createdAt": .int(1), "modifiedAt": .int(1),
     ]
     _ = try await store.applyRemote([.save(SyncRow(table: .attachments, fields: arrived), systemFields: Data())])

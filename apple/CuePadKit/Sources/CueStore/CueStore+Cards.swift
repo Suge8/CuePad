@@ -46,7 +46,7 @@ extension CueStore {
       edit(&card)
       card.modifiedAt = Date.stamp
       try update(card)
-      try registerImages(in: card.body)
+      try registerAttachments(in: card.body)
     }
   }
 
@@ -124,7 +124,7 @@ extension CueStore {
       id: UUID(), projectID: project, body: body, isPinned: false, variableValues: [:], conflictOf: nil, sortKey: sortKey,
       deletedAt: nil, createdAt: now, modifiedAt: now, parentID: parent, todoAt: todo ? now : nil)
     try insert(card)
-    try registerImages(in: body)
+    try registerAttachments(in: body)
     return card
   }
 

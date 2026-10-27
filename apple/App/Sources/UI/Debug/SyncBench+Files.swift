@@ -57,7 +57,7 @@ extension SyncBench {
                     let began = ContinuousClock.now
                     let key = try await Task.detached { try store.files.store(fileAt: file) }.value
                     let stored = (ContinuousClock.now - began).seconds, at = Date.now
-                    let big = try await store.createCard(body: "\(bigPrefix) \(tag)\n\(CueFormat.imageMarkup(id: key))")
+                    let big = try await store.createCard(body: "\(bigPrefix) \(tag)\n\(CueFormat.markup(key: key, name: file.lastPathComponent))")
                     let text = try await store.createCard(body: "\(textPrefix) \(tag)")
                     workspace.speak("同步测量 \(tag)", to: .cue)
                     mark("burst", ["big": big.id.uuidString.lowercased(), "text": text.id.uuidString.lowercased(), "key": key, "stored": stored, "at": at.timeIntervalSince1970])

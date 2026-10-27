@@ -34,7 +34,7 @@ extension AppServices {
         let sections = [
             capture.text ?? "",
             capture.urls.map(\.absoluteString).joined(separator: "\n"),
-            hashes.map { CueFormat.imageMarkup(id: $0) }.joined(separator: "\n"),
+            hashes.map { CueFormat.imageMarkup(key: $0) }.joined(separator: "\n"),
         ].filter { !$0.isEmpty }
         let project = try await existingProject(capture.project)
         _ = try await store.createCard(in: project, body: sections.joined(separator: "\n\n"))

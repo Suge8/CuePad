@@ -33,7 +33,7 @@ extension Command {
       path: ["card", "add"], summary: "新建灵感（放在项目最前）",
       options: [.project("放进该项目"), .body],
       notes: Schema.defaultScope(otherwise: Schema.defaultTarget) + "\n"
-        + "正文是 Markdown，图片是 ![](cuepad://img/<哈希>)。例：printf '第一段\\n---\\n第二段' | cuepad card add\n"
+        + "正文是 Markdown，图片是 ![](cuepad://file/<键>)，别的文件是 [文件名](cuepad://file/<键>)。例：printf '第一段\\n---\\n第二段' | cuepad card add\n"
         + Schema.output("新建的 Card", Schema.card)
     ) { call in
       try call.args.expect()

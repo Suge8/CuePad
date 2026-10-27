@@ -96,7 +96,9 @@ actor FileSender {
       if !full.isEmpty { await overQuota(full[0].error) }
       let outcome = await coordinator.sent(sent, for: OutgoingBatch(saves: records, deletes: []))
       for record in sent.saved {
-        if let key = RecordMapper.row(from: record)?.attachmentKey { coordinator.store.files.uploaded(key) }
+        guard let key = RecordMapper.row(from: record)?.attachmentKey else { continue }
+        // 删不掉的保底只多占一个硬链接，下次收下同一个文件时再删
+        do { try coordinator.store.files.uploaded(key) } catch { Self.log.error("附件的保底没能删：\(error.brief, privacy: .public)") }
       }
       if !sent.saved.isEmpty, quotaUntil != nil {
         quotaUntil = nil

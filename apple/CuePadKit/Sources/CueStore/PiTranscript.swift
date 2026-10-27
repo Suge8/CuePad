@@ -95,7 +95,7 @@ extension CueStore {
       "DELETE FROM deliveryRequests WHERE mode = '\(DeliveryMode.send.rawValue)' AND id IN (SELECT value FROM json_each(?))",
       [Self.idList(transcript.messages.compactMap(\.deliveryID))])
     for message in transcript.messages {
-      try registerImages(in: message.text)
+      try registerAttachments(in: message.text)
       if try insert(message, ignoringExisting: true) { continue }
       // 已写过的消息只有正文和工具活动会变（读会话文件的规则升级后重读）：同样的内容不改写，免得重复上传
       try db.run(
@@ -126,19 +126,19 @@ extension CueStore {
             LEFT JOIN piSessions s ON s.id = m.sessionID
           WHERE COALESCE(s.lastActivityAt, m.at) < ?1 AND m.createdAt < ?1
           """, [cutoff]) { $0.text(0) }
-        var hashes = Set<String>()
+        var keys = Set<String>()
         if !quiet.isEmpty {
           let sessions = JSONColumn.encode(quiet)
           let said = try db.query(
-            "SELECT text FROM piMessages WHERE \(Self.userImages) AND sessionID IN (SELECT value FROM json_each(?2))",
-            [CueFormat.imagePrefix, sessions]) { $0.text(0) }
-          hashes.formUnion(said.flatMap(CueFormat.imageHashes(in:)))
+            "SELECT text FROM piMessages WHERE \(Self.userAttachments) AND sessionID IN (SELECT value FROM json_each(?2))",
+            [CueFormat.referencePrefix, sessions]) { $0.text(0) }
+          keys.formUnion(said.flatMap(CueFormat.attachmentKeys(in:)))
           try db.run("DELETE FROM piMessages WHERE sessionID IN (SELECT value FROM json_each(?))", [sessions])
         }
         let expired = "createdAt < ? AND sessionID NOT IN (SELECT sessionID FROM piMessages)"
-        hashes.formUnion(try db.query("SELECT hash FROM previews WHERE \(expired)", [cutoff]) { $0.text(0) })
+        keys.formUnion(try db.query("SELECT hash, name FROM previews WHERE \(expired)", [cutoff]) { AttachmentKey.make(hash: $0.text(0), name: $0.text(1)) })
         try db.run("DELETE FROM previews WHERE \(expired)", [cutoff])
-        return try reclaimAttachments(hashes)
+        return try reclaimAttachments(keys)
       }
     }
   }

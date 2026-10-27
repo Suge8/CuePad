@@ -16,6 +16,7 @@ struct AttachmentBody: View {
                     switch block {
                     case .text(let text): Paragraphs(verbatim: text).font(Typography.body).foregroundStyle(palette.ink)
                     case .image(let hash): Thumbnail(hash: hash, height: 220, radius: 12)
+                    case .file(_, let name): Paragraphs(verbatim: name).font(Typography.body).foregroundStyle(palette.ink)
                     }
                 }
             }
