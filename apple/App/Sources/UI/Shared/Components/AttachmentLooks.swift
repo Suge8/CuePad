@@ -16,6 +16,11 @@ enum AttachmentLooks {
     }
 }
 
+extension AppServices {
+    /// 文件还没到这台时画面上写的那一行：传了几成，还没开始取的写怎么取。
+    func awayLine(_ key: String) -> String { FileStatus.line(name: "", file: nil, transfer: fileTransfers[key]).detail }
+}
+
 extension Workspace {
     /// 把还没到这台的附件文件从 iCloud 取来（点了还没到的文件、图片）；到了界面自己换上（在路上的那一张变了）。
     func fetchFile(_ key: String) { attempt { _ = try await self.services.fetchFile(key) } }

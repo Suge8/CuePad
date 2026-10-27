@@ -135,9 +135,6 @@ struct DeliverableTile: View {
         [preview.kind?.label ?? String(localized: "文件"), shown?.detail].compactMap { $0 }.joined(separator: " ")
     }
 
-    /// 还没到这台时写的那一行：下载中几成，还没开始取的写怎么取。
-    private var away: String { FileStatus.line(name: "", file: nil, transfer: services.fileTransfers[preview.key]).detail }
-
     /// 读到之前先从内存里拿（同一份别处读过、滚回来的），第一帧就是该有的比例。
     private var shown: DeliverableLook? { look ?? DeliverableLooks.cached(preview, box: box) }
 
@@ -211,7 +208,7 @@ struct DeliverableTile: View {
                     // 还没到本机：点名的图没有下面那行字，传了几成、怎么取写在画面上
                     VStack(spacing: 3) {
                         Image(.downloading).font(.callout)
-                        Text(verbatim: away).font(Typography.caption).monospacedDigit().multilineTextAlignment(.center)
+                        Text(verbatim: services.awayLine(preview.key)).font(Typography.caption).monospacedDigit().multilineTextAlignment(.center)
                     }
                     .padding(.horizontal, 6)
                     .foregroundStyle(palette.ink3)
@@ -249,7 +246,7 @@ struct DeliverableTile: View {
     private var caption: some View {
         Group {
             if file == nil {
-                Text(verbatim: away).foregroundStyle(palette.ink3)
+                Text(verbatim: services.awayLine(preview.key)).foregroundStyle(palette.ink3)
             } else {
                 Text("\(Text(label).foregroundStyle(palette.ink2))\(Dotted.inline)\(Text(kind))").foregroundStyle(palette.ink3)
             }

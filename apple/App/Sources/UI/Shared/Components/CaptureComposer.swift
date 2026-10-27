@@ -22,7 +22,6 @@ struct CaptureComposer: View {
     /// 记下之后（iOS 收起输入框）；草稿在这之前已清空。
     var saved: () -> Void = {}
     @Environment(Workspace.self) private var workspace
-    @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @State private var saving = false
     @FocusState private var focused: Bool

@@ -89,8 +89,6 @@ struct PiReplyBar: View {
     private var commandLine: String? { commands.isEmpty ? nil : PiSlash.line(of: draft, in: commands) }
     private var button: PiReplyButton? { MacDelivery.button(for: session, hasDraft: hasDraft, command: commandLine != nil) }
 
-    /// 与输入框同一个圆角（贴在它上方的问题卡、收成一行的说明用）。
-
     var body: some View {
         switch reply {
         case .answerAbove: notice("先在上面作答", icon: .above)

@@ -13,7 +13,6 @@ struct PiContextGauge: View {
     let session: PiSessionState
     let meter: PiContextMeter
     @Environment(Workspace.self) private var workspace
-    @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @State private var showsDetail = false
     @ScaledMetric(relativeTo: .footnote) private var ringSide: CGFloat = 11
