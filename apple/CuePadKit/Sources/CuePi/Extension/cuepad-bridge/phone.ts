@@ -1,14 +1,14 @@
 // 发到手机这件事：命令认得出用户在看的会话，回答说了图却没发时提醒一次。
 
-import type { AgentBeforeSettleEvent, AgentBeforeSettleEventResult, ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { AgentBeforeSettleEvent, AgentBeforeSettleEventResult, ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { replyText } from "./info.ts";
 
 /** 用户在 CuePad 里看的会话的 id，扩展设在自己所在进程的环境里、随每条命令带下去（`AgentKind.watchedSessionVariable`）。
  * FireCode 子代理与它同进程，命令里的 `PI_SESSION_ID` 是子代理自己的会话，CuePad 不列它们：只认那个，子代理发的卡就落在用户看不到的会话里 */
-export const WATCHED_SESSION_ENV = "CUEPAD_SESSION_ID";
+const WATCHED_SESSION_ENV = "CUEPAD_SESSION_ID";
 
-/** 发预览的命令行，与 CuePi `PiToolLog.preview` 认的是同一种写法 */
-const SHOW_COMMAND = /(?:'[^']*\/|[^\s']*\/)?cuepad'?\s+show(?:\s|$)/;
+/** 命令里有一段 `cuepad show`（cuepad 可带路径、整段加单引号，同 CuePi `PiToolLog.preview`） */
+const SHOW_COMMAND = /cuepad'?\s+show(?:\s|$)/;
 /** 这个进程里最后一次发成功的时刻，进程内共用：子代理会话里发的也算（扩展每个会话载入一份，状态记在进程上） */
 const LAST_SHOW = Symbol.for("cuepad.lastShowAt");
 const processScope = globalThis as { [LAST_SHOW]?: number };
@@ -43,18 +43,23 @@ const REMINDER_TEXT = [
 	"现在用 `cuepad show` 把你说的那些发出去（完整命令在 cuepad 技能里），再用一句话说发了什么；说的其实是之前已发过的那批，或这次本来没有要给他看的图，就用一句话更正。",
 ].join("\n");
 
-type Message = AgentBeforeSettleEvent["context"]["contextMessages"][number];
+/** 服务一个用户在看的会话（终端与 RPC）：把它的 id 设进进程环境，歇下前核对回答里说的图发了没有；返回拆掉这两样的函数。 */
+export function watchSession(pi: ExtensionAPI, ctx: ExtensionContext): () => void {
+	const sessionId = ctx.sessionManager.getSessionId();
+	process.env[WATCHED_SESSION_ENV] = sessionId;
+	const off = pi.on("agent_before_settle", checkShown);
+	return () => {
+		off();
+		if (process.env[WATCHED_SESSION_ENV] === sessionId) delete process.env[WATCHED_SESSION_ENV];
+	};
+}
 
 /** 歇下前：回答说图用户看得到，从用户上一句话起却没有发成功过，就补一条只给模型看的提醒、再跑一次（每句话至多一次）。 */
-export function checkShown(event: AgentBeforeSettleEvent): AgentBeforeSettleEventResult | undefined {
+function checkShown(event: AgentBeforeSettleEvent): AgentBeforeSettleEventResult | undefined {
 	const messages = event.context.contextMessages;
 	const answer = messages.at(-1);
 	if (event.outcome !== "completed" || answer?.role !== "assistant" || !CLAIMS_SHOWN.test(replyText(answer))) return;
 	const askedAt = messages.findLast((m) => m.role === "user")?.timestamp ?? 0;
-	if ((processScope[LAST_SHOW] ?? 0) >= askedAt || messages.some((m) => isReminder(m) && m.timestamp >= askedAt)) return;
+	if ((processScope[LAST_SHOW] ?? 0) >= askedAt || messages.some((m) => m.role === "custom" && m.customType === REMINDER && m.timestamp >= askedAt)) return;
 	return { entries: [{ type: "custom_message", customType: REMINDER, content: REMINDER_TEXT, display: false }], continue: true };
-}
-
-function isReminder(message: Message): boolean {
-	return message.role === "custom" && message.customType === REMINDER;
 }

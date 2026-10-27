@@ -14,7 +14,7 @@ import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext } from "@e
 import { listen } from "./connection.ts";
 import { captureDialogs, follow } from "./events.ts";
 import { INTERNAL_COMMAND, modelInfo, reason, subagentsOf } from "./info.ts";
-import { checkShown, trackShows, WATCHED_SESSION_ENV } from "./phone.ts";
+import { trackShows, watchSession } from "./phone.ts";
 import { Session, type Firecode } from "./session.ts";
 
 const EXTENSION_VERSION = 40;
@@ -104,9 +104,7 @@ export default function (pi: ExtensionAPI) {
 	/** 服务一个终端或 RPC 会话：开 socket、跟踪状态、托管时空闲自退；返回会话与拆掉它的函数。 */
 	function serve(ctx: ExtensionContext, launchToken: string | null) {
 		const session = new Session(pi, ctx, firecode, { protocol: PROTOCOL_VERSION, extensionVersion: EXTENSION_VERSION, launchToken });
-		const unsubscribe = [...follow(session), pi.on("agent_before_settle", checkShown)];
-		const sessionId = ctx.sessionManager.getSessionId();
-		process.env[WATCHED_SESSION_ENV] = sessionId;
+		const unsubscribe = [...follow(session), watchSession(pi, ctx)];
 		session.idleExit.follow(session.phase);
 		captureDialogs(ctx.ui, session);
 		let stop: ((reason: string) => void) | undefined;
@@ -119,7 +117,6 @@ export default function (pi: ExtensionAPI) {
 		/** 会话关闭：拆掉它挂的一切——事件处理、计时、连接与 socket。 */
 		function close(why: string) {
 			for (const off of unsubscribe) off();
-			if (process.env[WATCHED_SESSION_ENV] === sessionId) delete process.env[WATCHED_SESSION_ENV];
 			session.idleExit.cancel();
 			session.reload.close();
 			session.draft.cancel();
