@@ -103,12 +103,21 @@ import Testing
     let used = try store.files.store(pngData(width: 2, height: 2, shade: 0.3))
     let drafted = try store.files.store(pngData(width: 2, height: 2, shade: 0.5))
     _ = try await store.createCard(body: "![](cuepad://file/\(used))")
+    // 上次运行留下的、又在这次选进来的：同内容已在本机（直接用那份），拷来的文件还带着很早的时刻
+    let again = pngData(width: 2, height: 2, shade: 0.9)
+    let reused = try store.files.store(again)
+    let old = try file(named: "旧图.png", again)
+    try FileManager.default.setAttributes([.creationDate: Date.distantPast, .modificationDate: Date.distantPast], ofItemAtPath: old.path)
+    let copied = try file(named: "拷来的.pdf", Data("很早的文件".utf8))
+    try FileManager.default.setAttributes([.creationDate: Date.distantPast, .modificationDate: Date.distantPast], ofItemAtPath: copied.path)
     let launched = Date.now
     let fresh = try store.files.store(pngData(width: 2, height: 2, shade: 0.7))
+    #expect(try store.files.store(fileAt: old) == reused)
+    let pdf = try store.files.store(fileAt: copied)
 
     #expect(try await store.removeStrayFiles(before: launched, drafts: ["看 ![](cuepad://file/\(drafted))"]) == 1)
     #expect(store.files.fileURL(for: stray) == nil && !FileManager.default.fileExists(atPath: backups.appending(path: stray).path))
-    for kept in [used, drafted, fresh] { #expect(store.files.fileURL(for: kept) != nil) }
+    for kept in [used, drafted, fresh, reused, pdf] { #expect(store.files.fileURL(for: kept) != nil) }
   }
 
   /// 键来自同步记录：拼不出附件目录外的路径。

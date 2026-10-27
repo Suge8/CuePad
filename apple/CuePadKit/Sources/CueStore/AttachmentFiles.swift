@@ -92,14 +92,14 @@ public struct AttachmentFiles: Sendable {
     try Self.removeIfPresent(backups)
   }
 
-  /// 本机上（缓存与保底里）在 `date` 之前存下的附件的键。硬链接的两份是同一个文件，创建时刻相同。
+  /// 本机上（缓存与保底里）在 `date` 之前最后一次存入的附件的键：按修改时刻，存入时刷成当下（`place`）。硬链接的两份是同一个文件，时刻相同。
   func keys(storedBefore date: Date) -> Set<String> {
     var keys = Set<String>()
     for folder in [directory, backups] {
       let names = (try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? []
       for name in names where AttachmentKey.isValid(name) {
-        let created = (try? FileManager.default.attributesOfItem(atPath: folder.appending(path: name).path))?[.creationDate] as? Date
-        if let created, created < date { keys.insert(name) }
+        let stored = (try? FileManager.default.attributesOfItem(atPath: folder.appending(path: name).path))?[.modificationDate] as? Date
+        if let stored, stored < date { keys.insert(name) }
       }
     }
     return keys
@@ -115,12 +115,15 @@ public struct AttachmentFiles: Sendable {
 
   /// 先写到目录内的临时名再改名：别的进程或线程永远看不到写了一半的文件。新放进来的、要上传的（不是从 iCloud 取来的）先留好保底再改名，
   /// 所以留不下保底就什么都没存。
+  /// 每次存入（含同内容已在、直接用那份的）都把修改时刻刷成当下：启动时的清理据此认出这次运行里存的（`keys(storedBefore:)`）。
+  /// 不用创建时刻：实测系统拷贝（`copyItem`）把原文件的创建与修改时刻都带过来，创建时刻也刷不到已在的那份上。
   private func place(_ key: String, backup: Bool = true, write: (URL) throws -> Void) throws {
     let url = directory.appending(path: key)
-    guard !FileManager.default.fileExists(atPath: url.path) else { return }
+    guard !FileManager.default.fileExists(atPath: url.path) else { return try Self.touch(url) }
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     let partial = directory.appending(path: ".\(key).\(UUID().uuidString)")
     try write(partial)
+    try Self.touch(partial)
     do {
       if backup { try link(partial, to: backups.appending(path: key)) }
       try FileManager.default.moveItem(at: partial, to: url)
@@ -133,6 +136,10 @@ public struct AttachmentFiles: Sendable {
   func link(_ file: URL, to backup: URL) throws {
     try FileManager.default.createDirectory(at: backups, withIntermediateDirectories: true)
     do { try FileManager.default.linkItem(at: file, to: backup) } catch let error as CocoaError where error.code == .fileWriteFileExists {}
+  }
+
+  private static func touch(_ url: URL) throws {
+    try FileManager.default.setAttributes([.modificationDate: Date.now], ofItemAtPath: url.path)
   }
 
   private static func removeIfPresent(_ url: URL) throws {
@@ -183,7 +190,7 @@ extension CueStore {
 extension CueStore {
   /// 删掉本机上用不着的附件文件（缓存与保底一起），返回删了几个：没有附件记录、库里没有任何正文与文字引用它（`isAttachmentReferenced`），
   /// 也不在 `drafts`（跨启动留着的草稿）里。这些是存进来却没发出去的：回复框选了又没发的、编辑器里插了又删的。
-  /// 只看 `before` 之前存下的：这次运行里刚存、还没写进正文的（输入框里的、正在入库的分享）都比它晚，不会被删。
+  /// 只看 `before` 之前存入的（按存入时刷的修改时刻）：这次运行里刚存、还没写进正文的（输入框里的、正在入库的分享，含同内容已在本机的）都比它晚，不会被删。
   /// 在一个写事务里查与删：别的进程（命令行）这期间写不进引用它的记录。
   public func removeStrayFiles(before: Date, drafts: [String]) throws -> Int {
     let drafted = Set(drafts.flatMap(CueFormat.attachmentKeys(in:)))
