@@ -32,7 +32,7 @@ struct RealGrokTests {
             let session = try #require(rig.bridge.session(id: id))
             let mine = try #require(try rig.transcript(session).messages.first { $0.role == .known(.user) })
             #expect(mine.deliveryID == delivery)
-            #expect(mine.text.hasPrefix("What color is this image?") && mine.text.contains("![](cuepad://img/"))
+            #expect(mine.text.hasPrefix("What color is this image?") && mine.text.contains("![](cuepad://file/"))
 
             let other = try #require(session.availableModels.first { $0.key.id != session.model?.key.id })
             try await rig.bridge.configure(model: other.key, thinking: .high, name: "看图", in: id)
