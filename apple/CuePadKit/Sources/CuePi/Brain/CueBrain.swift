@@ -102,7 +102,7 @@ extension CueBrainConfig {
     @MainActor public func startBrain() async throws -> any CueBrain {
         let brain: any CueBrain = switch runtime {
         case .pi: PiBrain()
-        case .codex: CodexBrain()
+        case .codex: CodexDriver()
         case .claudeCode: ClaudeHostedSession()
         case .opencode: throw CueBrainError.unsupported(runtime)
         }

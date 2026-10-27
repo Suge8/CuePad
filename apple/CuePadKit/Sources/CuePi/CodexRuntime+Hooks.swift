@@ -27,8 +27,8 @@ extension CodexRuntime {
             if event == "PreToolUse", let agent { session.facts.updateSubagent(agent, at: now) { $0.action = ToolDetail.line(tool, input["tool_input"]) } }
         case "UserPromptSubmit":
             session.facts.standingQuestion = nil
-            // 钩子里没有时刻：用收到它的时刻
-            startTurn(session, at: now)
+            // 钩子里没有时刻：用收到它的时刻。托管会话的一轮归它的驱动
+            if hosted[pid] == nil { startTurn(session, at: now) }
             bridge.update(id) { s in
                 if s.firstMessage == nil, let prompt = input["prompt"]?.string, !prompt.isEmpty {
                     s.firstMessage = String(prompt.prefix(PiSessionName.firstMessageLimit))
@@ -53,7 +53,7 @@ extension CodexRuntime {
         case "PostCompact":
             session.facts.compacting = false
         case "Stop", "Interrupt":
-            endTurn(session)
+            if hosted[pid] == nil { endTurn(session) }
             refresh(id)
         default:
             break

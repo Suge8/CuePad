@@ -11,13 +11,15 @@ extension CodexRuntime {
         }
         guard let threadID = params["threadId"]?.string else { return }
         guard let session = tracked["\(threadID).\(pid)"] else { return child(method, params, thread: threadID, pid: pid) }
+        // 托管会话的一轮归它的驱动（`event`），下面两项只管终端会话
+        let terminal = hosted[pid] == nil
         switch method {
         case "thread/name/updated":
             bridge.update(session.id) { $0.name = params["threadName"]?.string }
             return
-        case "thread/status/changed":
+        case "thread/status/changed" where terminal:
             switch params["status"]?["type"]?.string {
-            // 钩子漏报的歇下（出错的一轮没有 Stop）；钩子的 Stop 晚到也只是再歇一次。睡着等（`clock.sleep`）时不报 idle（托管与终端实测）
+            // 钩子漏报的歇下（出错的一轮没有 Stop）；钩子的 Stop 晚到也只是再歇一次。睡着等（`clock.sleep`）时不报 idle（实测）
             case "idle" where session.facts.running:
                 endTurn(session)
             case "systemError":
@@ -25,21 +27,11 @@ extension CodexRuntime {
                 if session.lastError == nil { readFailure(session) }
             default: return
             }
-        case "error" where params["willRetry"]?.bool != true:
-            // 出错的原文（常驻服务也广播）；随后的 systemError 或失败的 turn/completed 用它
+        case "error" where terminal && params["willRetry"]?.bool != true:
+            // 出错的原文（常驻服务也广播）；随后的 systemError 用它
             session.lastError = CodexModel.failure(of: params)
             return
         // 以下只有开出这个线程的连接（托管的进程）收得到
-        case "turn/started":
-            session.lastError = nil
-            guard !session.facts.running else { return }
-            startTurn(session, at: Self.startedAt(params["turn"]))
-        case "turn/completed" where params["turn"]?["status"]?.string == "failed":
-            // 失败的一轮没有 Stop 钩子，状态停在这里
-            endTurn(session, failure: session.lastError ?? CodexModel.failure(of: params["turn"]))
-        case "turn/completed":
-            guard session.facts.running else { return }
-            endTurn(session)
         case "serverRequest/resolved":
             // 服务端请求被别处答了或收回了
             guard case .request = session.reply else { return }
@@ -53,6 +45,27 @@ extension CodexRuntime {
             bridge.update(session.id) { $0.context = PiContextUsage(tokens: used, window: window) }
             return
         default:
+            return
+        }
+        publish(session)
+    }
+
+    /// 托管会话的一轮（它的驱动报的）接到桥上。以一句话开新一轮时（`deliver`），这一轮开始就是那句开出的，之后的结束照常歇下。
+    func event(_ event: CueBrainEvent, from pid: Int32) {
+        if case .exited = event { return processGone(pid) }
+        guard let thread = hosted[pid]?.thread, let session = tracked["\(thread).\(pid)"] else { return }
+        switch event {
+        case .turnStarted:
+            session.restarting = nil
+            startTurn(session, at: .now)
+        case .failed(let text):
+            session.lastError = text
+            return
+        case .turnFinished:
+            endTurn(session, failure: session.lastError)
+        case .speaking(let draft):
+            return bridge.setDraft(session.id, draft)
+        case .context, .tool, .toolDone, .exited:
             return
         }
         publish(session)
@@ -81,6 +94,7 @@ extension CodexRuntime {
     /// 开始新的一轮（`start` 是这一轮开始的时刻，早于它可能的结束：Codex 给的 `Turn.startedAt`，CuePad 补开的是发出的时刻，
     /// 钩子没有时刻用收到的时刻）：歇着时落定的子代理的结果随这一轮交给模型，不再在飞。开始一轮只经这里。
     func startTurn(_ session: Tracked, at start: Date) {
+        session.lastError = nil
         session.facts.startTurn(at: start)
         session.facts.inFlight.subtract(session.unread.keys)
         session.unread = [:]
@@ -108,7 +122,7 @@ extension CodexRuntime {
     }
 
     private func resolve(_ thread: String, pid: Int32) async {
-        guard let rpc = hosted[pid] ?? daemon.flatMap({ $0.pid == pid ? $0 : nil }),
+        guard let rpc = hosted[pid]?.rpc ?? daemon.flatMap({ $0.pid == pid ? $0 : nil }),
               let info = try? await rpc.call("thread/read", ["threadId": .string(thread)])["thread"] else {
             threads["\(thread).\(pid)"] = .foreign
             return
@@ -220,7 +234,8 @@ extension CodexRuntime {
         }
     }
 
-    /// 最后一个在跑的子代理落定、父线程歇着：补一轮空输入，这一轮发出就算开始，它做完才歇下。空输入的一轮先把子代理的结果取进来再请求模型；
+    /// 最后一个在跑的子代理落定、父线程歇着：补一轮空输入，它做完才歇下。终端会话这一轮发出就算开始（常驻服务不报开始）；托管的照常等驱动报开始
+    /// （这一批的结果随 `startTurn` 交出），期间仍是等子代理。空输入的一轮先把子代理的结果取进来再请求模型；
     /// 带文字的一轮先请求模型，v2 的结果要到之后才取出，模型会答"还没收到"。
     /// 同 Codex 的 `wake_on_agent_messages`（openai/codex#54961，未发布、默认关、不管 v1，发布并默认开启后改用它），边界也照它：
     /// 父线程上一轮被停下、在 Plan 模式、这一批没有交回结果（都被停下）的不补，直接歇下。补的这一轮在跑时你说话，照常先停下它再开你那一轮（`deliver`）。
@@ -234,15 +249,23 @@ extension CodexRuntime {
             var last: CodexHistory.LastTurn?
             if delivered, let file { last = await CodexHistory.lastTurn(in: file) }
             guard tracked[session.id] === session, !session.facts.running, session.facts.inFlight == batch else { return }
-            session.unread = [:]
-            session.facts.inFlight = []
-            guard delivered, last?.plan != true, last?.interrupted != true else { return publish(session) }
-            startTurn(session, at: .now)
-            publish(session)
+            guard delivered, last?.plan != true, last?.interrupted != true else {
+                session.unread = [:]
+                session.facts.inFlight = []
+                return publish(session)
+            }
+            let hostedSession = hosted[session.pid] != nil
+            if !hostedSession {
+                startTurn(session, at: .now)
+                publish(session)
+            }
             do {
-                try await control(session).call("turn/start", ["threadId": .string(session.threadID), "input": []])
+                try await turnStart(session, [])
             } catch {
-                guard tracked[session.id] === session, session.facts.running else { return }
+                // 没开成：终端会话收回发出时算的开始，托管的这一批不再等，都带着原因歇下
+                guard tracked[session.id] === session, session.facts.running != hostedSession else { return }
+                session.unread = [:]
+                session.facts.inFlight = []
                 session.facts.endTurn(failure: error.localizedDescription)
                 publish(session)
             }
