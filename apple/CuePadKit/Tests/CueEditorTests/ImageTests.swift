@@ -5,10 +5,10 @@ import Testing
 @testable import CueEditor
 
 @MainActor
-@Suite("内联图片")
+@Suite("内联图片与文件牌")
 struct ImageTests {
-    @Test("粘贴 PNG：以附件显示，存储只留引用，图片经注入的库存入，编辑通知带新正文")
-    func pastePNG() throws {
+    @Test("粘贴 PNG：以附件自成一行显示，存储只留引用，图片经注入的库存入，编辑通知带新正文")
+    func pastePNG() async throws {
         let h = EditorHarness()
         h.load("前文后文")
         h.setCaret(2)
@@ -19,20 +19,22 @@ struct ImageTests {
         pasteboard.setData(png, forType: .png)
 
         #expect(h.textView.readSelection(from: pasteboard, type: .png))
+        #expect(await h.wait { CueFormat.hasImages(h.stored) })
 
         let imageID = try #require(CueFormat.parse(h.stored).compactMap { if case .image(let id) = $0 { id } else { nil } }.first)
-        #expect(h.stored == "前文![](cuepad://file/\(imageID))后文")
+        #expect(h.stored == "前文\n![](cuepad://file/\(imageID))\n后文")
         #expect(h.store.storedData == [png])
         #expect(notified == [h.stored])
     }
 
     @Test("剪贴板只有 TIFF 时（如浏览器复制的图）转成 PNG 入库")
-    func pasteTIFF() throws {
+    func pasteTIFF() async throws {
         let h = EditorHarness()
         let pasteboard = h.privatePasteboard()
         pasteboard.setData(NSBitmapImageRep(data: makePNG(width: 40, height: 30))!.tiffRepresentation!, forType: .tiff)
 
         #expect(h.textView.readSelection(from: pasteboard, type: .tiff))
+        #expect(await h.wait { CueFormat.hasImages(h.stored) })
 
         let stored = try #require(h.store.storedData.first)
         #expect(stored.starts(with: [0x89, 0x50, 0x4E, 0x47]))
@@ -40,7 +42,7 @@ struct ImageTests {
     }
 
     @Test("拖入图片文件：按落点插入")
-    func dropFile() throws {
+    func dropFile() async throws {
         let h = EditorHarness()
         h.load("第一行文字\n第二行文字")
         let file = h.store.directory.appendingPathComponent("dropped.png")
@@ -60,6 +62,7 @@ struct ImageTests {
         let drag = FakeDrag(pasteboard: pasteboard, location: point, window: h.window)
         #expect(h.textView.draggingEntered(drag) == .copy)
         #expect(h.textView.performDragOperation(drag))
+        #expect(await h.wait { CueFormat.hasImages(h.stored) })
 
         let tokens = CueFormat.parse(h.stored)
         let imageIndex = try #require(tokens.firstIndex { if case .image = $0 { true } else { false } })
@@ -71,13 +74,14 @@ struct ImageTests {
     }
 
     @Test("单次粘贴可撤销、可重做；之后键入是普通文字")
-    func undoRedo() {
+    func undoRedo() async {
         let h = EditorHarness()
         h.load("文字")
         h.textView.undoManager?.removeAllActions()
         let pasteboard = h.privatePasteboard()
         pasteboard.setData(makePNG(width: 40, height: 30), forType: .png)
         _ = h.textView.readSelection(from: pasteboard, type: .png)
+        #expect(await h.wait { CueFormat.hasImages(h.stored) })
         let pasted = h.stored
 
         h.textView.undoManager?.undo()
@@ -87,18 +91,19 @@ struct ImageTests {
 
         // 图片后继续键入：新字符是普通文字，不带附件
         h.textView.insertText("x", replacementRange: NSRange(location: NSNotFound, length: 0))
-        #expect(h.stored.contains(")x"))
+        #expect(h.stored.contains(")\nx"))
         #expect(CueFormat.parse(h.stored).filter { if case .image = $0 { true } else { false } }.count == 1)
     }
 
     @Test("编辑器内复制输出存储格式，粘回去还原成图片")
-    func copyRoundTrip() throws {
+    func copyRoundTrip() async throws {
         let h = EditorHarness()
         let pasteboard = h.privatePasteboard()
         pasteboard.setData(makePNG(width: 40, height: 30), forType: .png)
         h.load("甲乙")
         h.setCaret(1)
         _ = h.textView.readSelection(from: pasteboard, type: .png)
+        #expect(await h.wait { CueFormat.hasImages(h.stored) })
         let original = h.stored
         h.textView.setSelectedRange(NSRange(location: 0, length: h.textView.textStorage!.length))
 
@@ -110,6 +115,29 @@ struct ImageTests {
         _ = other.store  // 独立的库：图片 id 在库里不存在，也要原样往返
         #expect(other.textView.readSelection(from: copied, type: .string))
         #expect(other.stored == original)
+    }
+
+    @Test("粘贴访达复制的任意文件：显示成文件牌，存储写成带文件名的链接")
+    func pasteFile() async throws {
+        let h = EditorHarness()
+        h.load("看这份")
+        h.setCaret(3)
+        let file = h.store.directory.appendingPathComponent("季度 报告.pdf")
+        try Data("%PDF-1.4".utf8).write(to: file)
+        let pasteboard = h.privatePasteboard()
+        pasteboard.writeObjects([file as NSURL])
+
+        #expect(h.textView.readSelection(from: pasteboard, type: .fileURL))
+        #expect(await h.wait { CueFormat.hasAttachments(h.stored) })
+
+        let key = try #require(CueFormat.attachmentKeys(in: h.stored).first)
+        #expect(key.hasSuffix(".pdf"))
+        #expect(h.stored == "看这份\n[季度 报告.pdf](cuepad://file/\(key))")
+        var chips: [CueFileAttachment] = []
+        h.textView.textStorage!.enumerateAttribute(.attachment, in: NSRange(location: 0, length: h.textView.textStorage!.length)) { value, _, _ in
+            if let chip = value as? CueFileAttachment { chips.append(chip) }
+        }
+        #expect(chips.map(\.name) == ["季度 报告.pdf"])
     }
 
     @Test("图片文件缺失时存储引用保持不变")

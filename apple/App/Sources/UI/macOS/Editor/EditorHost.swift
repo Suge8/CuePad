@@ -37,7 +37,7 @@ struct EditorHost: NSViewRepresentable {
     @Environment(AppServices.self) private var services
 
     func makeNSView(context: Context) -> CueEditorView {
-        let view = CueEditorView(imageStore: services.store.files, theme: theme)
+        let view = CueEditorView(files: services.store.files, theme: theme)
         view.textView.storedText = initialText
         view.scrollerStyle = .overlay
         handle.textView = view.textView
@@ -76,7 +76,7 @@ struct FittedEditorHost: NSViewRepresentable {
     @Environment(AppServices.self) private var services
 
     func makeNSView(context: Context) -> CueTextView {
-        let textView = CueTextView(imageStore: services.store.files, theme: host.theme)
+        let textView = CueTextView(files: services.store.files, theme: host.theme)
         // 字贴着框的左沿，与气泡里别的行对齐
         textView.textContainer?.lineFragmentPadding = 0
         textView.storedText = host.initialText
