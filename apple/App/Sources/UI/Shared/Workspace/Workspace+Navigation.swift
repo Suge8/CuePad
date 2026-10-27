@@ -168,3 +168,17 @@ enum ProgressPane: Hashable {
     case board, sessions
 }
 
+/// 技能与规则页的两段（`Workspace.libraryPane`），先后即分段里的左右。
+enum LibraryPane: Int, CaseIterable, Comparable {
+    case rules, skills
+
+    static func < (a: Self, b: Self) -> Bool { a.rawValue < b.rawValue }
+
+    var title: LocalizedStringResource {
+        switch self {
+        case .rules: "规则"
+        case .skills: "技能"
+        }
+    }
+}
+

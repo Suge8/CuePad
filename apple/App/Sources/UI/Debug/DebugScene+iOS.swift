@@ -64,6 +64,7 @@ extension DebugScene {
             // 同 Mac
             if defaults.bool(forKey: "CuePadDemo") { await seedCue(workspace.services) }
             open(.library)
+            workspace.libraryPane = DebugHooks.preset.libraryPane
             if let scene, let file = DemoAgentLibrary.file(scene: scene, project: project) { workspace.openLibrary(file) }
         case "settings":
             // 配演示库时 Cue 运行在演示的 Mac Studio 上（同 Mac 的设置画面）

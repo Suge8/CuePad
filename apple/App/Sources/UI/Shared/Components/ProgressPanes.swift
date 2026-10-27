@@ -26,7 +26,7 @@ struct ProgressPanes: View {
     }
 }
 
-/// 一页里换看哪一段的一颗（进展页的看板｜会话、手机技能与规则页的规则｜技能）：选中的靛青字、浅底，其余次一档的墨。
+/// 一页里换看哪一段的一颗（进展页的看板｜会话、技能与规则页的规则｜技能）：选中的靛青字、浅底，其余次一档的墨。
 struct PaneButton<Label: View>: View {
     let title: LocalizedStringResource
     let on: Bool

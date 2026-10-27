@@ -1,7 +1,8 @@
 import CueStore
 import SwiftUI
 
-/// 技能：Mac 上标题写一共几个；全局一组按分类，各项目一组，最后各家自己管的只写个数（CuePad 不碰它们）。
+/// 技能：全局的一张纸按分类分组（分类名是纸里的一行淡字；只有一组且不在分类里时不写），各项目一张纸、纸上头写项目（图形与名字），
+/// 最后各家自己管的只写个数（CuePad 不碰它们）。组名都与行首的字对齐。
 /// 点一行在 CuePad 里打开它的文件页（Mac 的"在访达中显示"在右键菜单里）。
 struct SkillSection: View {
     let library: AgentLibrary
@@ -10,22 +11,24 @@ struct SkillSection: View {
 
     var body: some View {
         let groups = SkillGroups(library, order: workspace.catalog?.projects.map(\.id) ?? [])
-        VStack(alignment: .leading, spacing: 10) {
-            #if os(macOS)
-            LibraryHeader(title: Text("技能 \(LibraryHeader<EmptyView>.count(groups.total, palette: palette))", comment: "技能清单那一组的组名，后面是个数"))
-            #endif
+        VStack(alignment: .leading, spacing: LibraryLayout.gap) {
             TidySlot(library: library, rules: false)
             if !groups.global.isEmpty {
-                skills(groups.global.flatMap { category in [SkillLine.category(category.name)] + category.skills.map(SkillLine.skill) })
+                let labeled = groups.global.count > 1 || groups.global.first?.name.isEmpty == false
+                skills(groups.global.flatMap { category in (labeled ? [SkillLine.category(category.name)] : []) + category.skills.map(SkillLine.skill) })
             }
             ForEach(groups.projects) { group in
-                HStack(spacing: 6) {
-                    ProjectGlyph(project: workspace.catalog?.project(group.project), size: 12)
-                    Text(verbatim: workspace.projectName(group.project)).font(Typography.label).foregroundStyle(palette.ink2)
-                    Text("\(group.skills.count)").font(Typography.meta.monospacedDigit()).foregroundStyle(palette.ink3)
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 6) {
+                        ProjectGlyph(project: workspace.catalog?.project(group.project), size: Self.glyph)
+                        Text(verbatim: workspace.projectName(group.project))
+                    }
+                    .font(Typography.label).foregroundStyle(palette.ink2)
+                    .padding(.horizontal, LibraryPaper<EmptyView>.inset)
+                    .accessibilityAddTraits(.isHeader)
+                    skills(group.skills.map(SkillLine.skill))
                 }
-                .padding(.horizontal, 4).padding(.top, 8)
-                skills(group.skills.map(SkillLine.skill))
+                .padding(.top, 8)
             }
             if !library.selfManaged.isEmpty {
                 LibraryPaper {
@@ -41,6 +44,12 @@ struct SkillSection: View {
             }
         }
     }
+
+    #if os(macOS)
+    private static let glyph: CGFloat = 12
+    #else
+    private static let glyph: CGFloat = 13
+    #endif
 
     private func skills(_ lines: [SkillLine]) -> some View {
         VStack(spacing: 0) {
@@ -146,7 +155,7 @@ private struct SkillRow: View {
     private static let nameWidth: CGFloat = 188
     private static let markWidth: CGFloat = 16
     private static let vertical: CGFloat = 0
-    private static let height: CGFloat = 32
+    private static let height: CGFloat = 36
     #else
     private static let nameFont = Font.body.weight(.medium)
     private static let descriptionFont = Font.footnote

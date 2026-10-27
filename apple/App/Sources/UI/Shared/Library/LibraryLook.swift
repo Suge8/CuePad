@@ -87,7 +87,6 @@ nonisolated struct SkillGroups: Equatable {
 
     let global: [Category]
     let projects: [ProjectSkills]
-    let total: Int
 
     init(_ library: AgentLibrary, order: [UUID]) {
         let global = library.skills(in: .global)
@@ -98,7 +97,6 @@ nonisolated struct SkillGroups: Equatable {
         for skill in library.skills { if case .project(let id) = skill.scope { byProject[id, default: []].append(skill) } }
         let ranked = order.filter { byProject[$0] != nil } + byProject.keys.filter { !order.contains($0) }.sorted { $0.uuidString < $1.uuidString }
         projects = ranked.map { ProjectSkills(project: $0, skills: byProject[$0] ?? []) }
-        total = library.skills.count
     }
 }
 

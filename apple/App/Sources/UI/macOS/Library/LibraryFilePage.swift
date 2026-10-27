@@ -17,7 +17,7 @@ struct LibraryFileLayer: View {
     }
 }
 
-/// 一份技能或规则的文件页（Mac）：字在一列里居中，自动存、没有保存钮（`FileDraft`）。页顶一行写它是哪一份、文件在哪、存好没有；
+/// 一份技能或规则的文件页（Mac）：字在一列里居中（同技能与规则页那一列），自动存、没有保存钮（`FileDraft`）。页顶一行写它是哪一份、存好没有；
 /// 下面是同名的分段与"只留这份"、或另写了一份的"合并进来"（有才有，`DuplicateBar`、`MergeBar`）；技能再是名字与说明两个框，最下面正文。
 /// 文件在别处被改了（终端里、别的编辑器、手机发来的）当场跟上，你改着没存上的留着、写出文件变了，由你选换成文件里的或留你的。
 /// 快照里没有这一份了（项目解绑了文件夹、去重时这份进了废纸篓）就收起。
@@ -29,7 +29,9 @@ private struct LibraryFilePage: View {
     @State private var previewing = DebugHooks.preset.mergePreview
     @State private var retire: Set<InstructionSource.Origin> = []
 
-    private static let textWidth: CGFloat = 680
+    private static let textWidth: CGFloat = LibraryLayout.column
+    /// 页顶那一行按"换成文件里的""留我的"两颗钮的高留着：冲突时出现不把下面推下去
+    private static let metaHeight: CGFloat = 22
     private static let inset: CGFloat = 24
 
     var body: some View {
@@ -38,9 +40,11 @@ private struct LibraryFilePage: View {
         VStack(spacing: 14) {
             if let library, let entry, let draft {
                 Group {
-                    meta(path: entry.path, library: library, draft: draft)
+                    meta(path: entry.path, library: library, draft: draft).padding(.leading, EditorGutter.width)
                     bar(library, draft)
-                    if case .skill(let path) = file { SkillFields(draft: draft, problem: library.skill(at: path)?.problem) }
+                    if case .skill(let path) = file {
+                        SkillFields(draft: draft, problem: library.skill(at: path)?.problem).padding(.leading, EditorGutter.width)
+                    }
                 }
                 .frame(maxWidth: Self.textWidth, alignment: .leading).padding(.horizontal, Self.inset)
                 ZStack {
@@ -84,18 +88,24 @@ private struct LibraryFilePage: View {
         }
     }
 
-    /// 页顶一行：图标、它在哪（技能是全局或项目名，规则是名字）、文件在哪、存好没有（或文件变了与"换成文件里的"）。
+    /// 页顶一行：图标、它在哪（技能是全局或项目名，规则是名字；同名的有几份时下面的分段已经写了，不重复）、存好没有（或文件变了与"换成文件里的"）。
+    /// 完整路径不占这一行（多是一长串家目录里的点目录，没人读），悬停在名字上看；技能要去访达在清单那一行的右键菜单里。
     private func meta(path: String, library: AgentLibrary, draft: FileDraft) -> some View {
         let shown = if case .skill = file { library.shown(path) + "/SKILL.md" } else { library.shown(path) }
+        let duplicated = if case .skill(let path) = file { library.duplicate(of: path) != nil } else { false }
         return HStack(spacing: 8) {
-            if case .skill = file { Image(.skill).imageScale(.small) } else { Image(.instruction).imageScale(.small) }
-            Text(verbatim: workspace.fileTitle(file, in: library)).foregroundStyle(palette.ink)
-            Dotted.inline
-            Text(verbatim: shown).lineLimit(1).truncationMode(.middle)
+            if !duplicated {
+                HStack(spacing: 6) {
+                    if case .skill = file { Image(.skill).imageScale(.small) } else { Image(.instruction).imageScale(.small) }
+                    Text(verbatim: workspace.fileTitle(file, in: library)).foregroundStyle(palette.ink)
+                }
+                .help(shown)
+            }
             DraftStatus(draft: draft)
         }
         .font(Typography.meta)
         .foregroundStyle(palette.ink3)
+        .frame(minHeight: Self.metaHeight, alignment: .leading)
     }
 }
 

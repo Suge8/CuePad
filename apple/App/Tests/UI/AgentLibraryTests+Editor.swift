@@ -72,10 +72,10 @@ extension AgentLibraryTests {
         let skill = try #require(workspace.library?.skill(at: directory.path))
         #expect(skill.description == "写 PR 描述")
         let draft = FileDraft(.skill(skill.path), text: skill.text, workspace: workspace)
-        #expect(draft.name == "pr" && draft.summary == "写 PR 描述" && draft.body == "\n旧的正文\n")
+        #expect(draft.name == "pr" && draft.summary == "写 PR 描述" && draft.body == "旧的正文\n", "正文从第一行字起，frontmatter 后的空行写回时放回")
 
         draft.changed(summary: "用法: 先读模板")
-        draft.changed(body: "\n新的正文\n")
+        draft.changed(body: "新的正文\n")
         await draft.leave()
 
         #expect(read(file) == "---\nname: pr\ndescription: \"用法: 先读模板\"\nlicense: MIT\n---\n\n新的正文\n")
@@ -88,6 +88,29 @@ extension AgentLibraryTests {
         #expect(read(file) == "---\nname: pr-new\ndescription: \"用法: 先读模板\"\nlicense: MIT\n---\n\n新的正文\n")
         try await eventually("重扫标出 name 不对") { workspace.library?.skill(at: directory.path)?.problem == .nameMismatch("pr-new") }
         #expect(workspace.library?.skill(at: directory.path)?.problem?.field == .name)
+    }
+
+    /// 技能与规则页换段只有 `Workspace.libraryPane` 一份（工具栏的分段读写它）：换到技能、打开一份技能再收起、去别页再回来，都还在技能段。
+    @Test func 换到技能段_打开技能再收起_换页回来还在技能段() async throws {
+        try skill("pr", in: agents.appending(path: "skills"))
+        let keeping = keep()
+        defer { keeping.cancel() }
+        let workspace = Workspace(services: services)
+        let following = Task { await workspace.follow() }
+        defer { following.cancel() }
+        let path = agents.appending(path: "skills/pr").path
+        try await eventually("快照读到这个技能") { workspace.library?.skill(at: path) != nil }
+        workspace.show(.library)
+        #expect(workspace.libraryPane == .rules)
+
+        workspace.libraryPane = .skills
+        workspace.openLibrary(.skill(path))
+        workspace.overlay = nil
+        #expect(workspace.root == .library && workspace.libraryPane == .skills)
+
+        workspace.show(.progress)
+        workspace.show(.library)
+        #expect(workspace.libraryPane == .skills)
     }
 }
 #endif

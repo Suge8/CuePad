@@ -1,53 +1,21 @@
 import CueStore
 import SwiftUI
 
-/// 技能与规则页的几块（Mac 的页与手机的页同一份，`LibraryPage`、`LibraryScreen` 只管怎么摆）：
+/// 技能与规则页的几块（Mac 的页与手机的页同一份，两段怎么挂、怎么换在 `LibraryDeck`，`LibraryPage`、`LibraryScreen` 只管页顶与空着时）：
 /// 一键整理那块纸（只在有不用你选的几件时出现，`TidyPaper`）、规则（`InstructionSection`）、技能（`SkillSection`）。
 /// 点任何一份都在 CuePad 里打开它的文件页（`LibraryFilePage`、`LibraryFileScreen`）；去重与合并在文件页顶上那一条里做。
 /// 改动的写入都在那台 Mac 上：手机上的动作发往 Mac（按钮带纸飞机），快照随它写回同步来。行末只画读不到这一份的那几家（`UnseenMarks`）。
 
-/// 一组的标题（带个数的把个数作为次一级的字嵌在整句里，英文才排得对：Skills 15）、右边的东西（Mac 规则列的问号）。
-/// 标题为 nil：手机上规则、技能两组的名字已写在页顶那两段上（`LibraryScreen`），同一屏不重复。
-struct LibraryHeader<Trailing: View>: View {
-    let title: Text?
-    @ViewBuilder var trailing: Trailing
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        HStack(alignment: .center, spacing: 6) {
-            title?.font(Self.font).foregroundStyle(palette.ink)
-                .accessibilityAddTraits(.isHeader)
-            Spacer(minLength: 8)
-            trailing
-        }
-        .frame(minHeight: ControlMetrics.compactHeight)
-        .padding(.horizontal, 4)
-    }
-
-    /// 组名后面次一级的个数（嵌进组名那一句里）。
-    static func count(_ count: Int, palette: Palette) -> Text {
-        Text("\(count)").font(countFont).foregroundStyle(palette.ink3)
-    }
-
+/// 两段共用的排版：一列居中、最宽 `column`（同 Mac 文件页那一列字），块与块之间 `gap`。段名只在分段上（Mac 工具栏、手机页顶），段里不再写组名与个数。
+enum LibraryLayout {
+    static let column: CGFloat = 680
+    static let gap: CGFloat = 12
     #if os(macOS)
-    private static var font: Font { Typography.sectionTitle }
-    private static var countFont: Font { Typography.sectionCount }
+    static let margin: CGFloat = Spacing.page
+    static let bottom: CGFloat = Spacing.section
     #else
-    private static var font: Font { .headline }
-    private static var countFont: Font { .footnote.monospacedDigit() }
-    #endif
-}
-
-extension LibraryHeader where Trailing == EmptyView {
-    init(title: Text) { self.init(title: title) { EmptyView() } }
-}
-
-/// 规则、技能两组自己写不写组名：Mac 两列并排写；手机分两段，组名在页顶那两段上。
-private enum LibraryGroupTitle {
-    #if os(macOS)
-    static let shown = true
-    #else
-    static let shown = false
+    static let margin: CGFloat = 16
+    static let bottom: CGFloat = 24
     #endif
 }
 
@@ -86,7 +54,7 @@ enum LibraryRowMetrics {
     #if os(macOS)
     static let icon: CGFloat = 18
     static let gap: CGFloat = 12
-    static let height: CGFloat = 48
+    static let height: CGFloat = 44
     #else
     static let icon: CGFloat = 22
     static let gap: CGFloat = 12
@@ -133,7 +101,7 @@ struct LibraryRow<Icon: View, Trailing: View>: View {
 }
 
 /// 一键整理那块纸：按段分开，规则段只列规则的事（内容相同换链接、Claude Code 读不到项目规则），技能段只列技能的事（旧目录、读不到、空文件夹），
-/// 那一段没有就不出现；Mac 规则的在左列、技能的在右列，各在标题下。不用你选的那几件逐条写结果的事实，不带逐条的按钮、不写标题，
+/// 那一段没有就不出现，有就在那一段最上面。不用你选的那几件逐条写结果的事实，不带逐条的按钮、不写标题，
 /// 底下一颗"一键整理"只做这一块列出的。手机上按钮旁直写后果（`TidyConsequence`）；Mac 做完给可撤销的提示（`Workspace.tidy`）。
 struct TidyPaper: View {
     let tidies: [LibraryTidy]
@@ -180,7 +148,7 @@ struct TidyPaper: View {
     #endif
 }
 
-/// 一键整理那块纸摆在一段的最上面（Mac 在那一列标题下），只放这一段的事（`rules`：规则的，否则技能的）。
+/// 一键整理那块纸摆在一段的最上面，只放这一段的事（`rules`：规则的，否则技能的）。
 /// 整理完收起时淡出、下面的跟着上移：是你点了才变的。
 struct TidySlot: View {
     let library: AgentLibrary
@@ -188,9 +156,9 @@ struct TidySlot: View {
 
     var body: some View {
         let tidies = library.automaticTidies.filter { ($0.instruction != nil) == rules }
-        // Group：这一段没有时不占位置，所在那一列的间距也不多出一格
+        // Group：这一段没有时不占位置，那一段的间距也不多出一格
         Group {
-            if !tidies.isEmpty { TidyPaper(tidies: tidies, library: library).transition(.opacity).padding(.bottom, 8) }
+            if !tidies.isEmpty { TidyPaper(tidies: tidies, library: library).transition(.opacity).padding(.bottom, LibraryLayout.gap) }
         }
         .animation(HandOff.quick, value: tidies.isEmpty)
     }
@@ -253,14 +221,7 @@ struct InstructionSection: View {
 
     var body: some View {
         let projects = library.instructions.filter { if case .project = $0.kind { true } else { false } }
-        VStack(alignment: .leading, spacing: 10) {
-            if LibraryGroupTitle.shown {
-                LibraryHeader(title: Text("规则")) {
-                    #if os(macOS)
-                    LibraryHelpButton(library: library)
-                    #endif
-                }
-            }
+        VStack(alignment: .leading, spacing: LibraryLayout.gap) {
             TidySlot(library: library, rules: true)
             LibraryPaper {
                 if let global = library.instruction(.global) { GlobalRuleRow(library: library, instruction: global) }

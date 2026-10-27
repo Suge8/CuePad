@@ -115,10 +115,10 @@ struct AgentLibraryPhoneTests {
         defer { stop() }
         let skill = try #require(workspace.library?.skill(at: Self.skillPath))
         let draft = workspace.fileDraft(.skill(skill.path), text: skill.text, on: "mac-a")
-        #expect(draft.name == "pr" && draft.summary == "写 PR" && draft.body == "\n先读模板\n")
+        #expect(draft.name == "pr" && draft.summary == "写 PR" && draft.body == "先读模板\n")
 
         draft.changed(summary: "写 PR 描述")
-        draft.changed(body: "\n先读模板，再写\n")
+        draft.changed(body: "先读模板，再写\n")
         await draft.send()
 
         var file = await mac.skill
@@ -126,15 +126,30 @@ struct AgentLibraryPhoneTests {
         try await eventually("快照写回") { workspace.library?.skill(at: Self.skillPath)?.description == "写 PR 描述" }
 
         try await mac.editSkill("---\nname: pr\ndescription: Mac 上改的\n---\n")
-        draft.changed(body: "\n手机又改\n")
+        draft.changed(body: "手机又改\n")
         await draft.send()
 
         file = await mac.skill
-        #expect(draft.conflicted && draft.body == "\n手机又改\n" && file == "---\nname: pr\ndescription: Mac 上改的\n---\n", "Mac 上刚改过：不写，留着你的字")
+        #expect(draft.conflicted && draft.body == "手机又改\n" && file == "---\nname: pr\ndescription: Mac 上改的\n---\n", "Mac 上刚改过：不写，留着你的字")
         try await eventually("快照跟上 Mac") { workspace.library?.skill(at: Self.skillPath)?.description == "Mac 上改的" }
         draft.follow(workspace.library?.skill(at: Self.skillPath)?.text)
         draft.takeFile()
         #expect(draft.summary == "Mac 上改的" && draft.body == "" && !draft.dirty)
+    }
+
+    /// 技能与规则页换段只有 `Workspace.libraryPane` 一份：换到技能、点开一份技能再返回，还在技能段。
+    @Test func 换到技能段_打开技能再返回还在技能段() async throws {
+        let (_, workspace, stop) = try await start()
+        defer { stop() }
+        workspace.select(.library)
+        #expect(workspace.libraryPane == .rules)
+
+        workspace.libraryPane = .skills
+        workspace.openLibrary(.skill(Self.skillPath))
+        #expect(workspace.path.last == .libraryFile(.skill(Self.skillPath)))
+        workspace.path.removeLast()
+
+        #expect((workspace.path.last ?? workspace.root) == .library && workspace.libraryPane == .skills)
     }
 }
 #endif

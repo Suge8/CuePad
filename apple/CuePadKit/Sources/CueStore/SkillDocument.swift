@@ -8,8 +8,10 @@ public struct SkillDocument: Equatable, Sendable {
   private let header: [String]?
   public let name: String?
   public let description: String?
-  /// 收尾那条 `---` 之后的全部；没有 frontmatter 时是全文
+  /// 收尾那条 `---` 之后的正文，不含紧跟着的空行（文件页的正文从第一行字起，不空出一行）；没有 frontmatter 时是全文
   public let body: String
+  /// 收尾那条 `---` 与正文之间的空行：写回时原样放回
+  private let lead: String
   /// name、description 在 `header` 里占的行（写回时换掉这几行）
   private let ranges: [Key: Range<Int>]
 
@@ -24,6 +26,7 @@ public struct SkillDocument: Equatable, Sendable {
       name = nil
       description = nil
       body = text.replacingOccurrences(of: "\r\n", with: "\n")
+      lead = ""
       ranges = [:]
       return
     }
@@ -55,7 +58,9 @@ public struct SkillDocument: Equatable, Sendable {
     self.ranges = ranges
     name = fields[Key.name.rawValue]
     description = fields[Key.description.rawValue]
-    body = lines[(end + 1)...].joined(separator: "\n")
+    let rest = lines[(end + 1)...].joined(separator: "\n")
+    body = String(rest.drop { $0 == "\n" })
+    lead = String(rest.prefix { $0 == "\n" })
   }
 
   /// 换掉名字、说明与正文后的全文：没变的那一项原样，其余键与行不动；原来没有 frontmatter、名字与说明又都空着时只有正文。
@@ -78,7 +83,7 @@ public struct SkillDocument: Equatable, Sendable {
       }
     }
     header.insert(contentsOf: missing, at: 0)
-    return "---\n" + header.map { $0 + "\n" }.joined() + "---\n" + body
+    return "---\n" + header.map { $0 + "\n" }.joined() + "---\n" + lead + body
   }
 
   /// `键: 值`：值写得成 YAML 的普通写法就照写，不然加引号，两种引号都有时用折叠块（读的时候同样折回一行）。值里的换行折成空格。

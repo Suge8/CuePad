@@ -93,6 +93,7 @@ extension DebugScene {
         case "library", "instruction", "skill", "duplicate":
             // 技能与规则（配 -CuePadDemo YES 有演示的文件）；文件页同 iOS（`DemoAgentLibrary.file`），给了 -CuePadProject 的项目规则盖在项目页上
             if opened == nil || scene != "instruction" { workspace.show(.library) }
+            workspace.libraryPane = DebugHooks.preset.libraryPane
             if let scene, let file = DemoAgentLibrary.file(scene: scene, project: opened) { workspace.openLibrary(file) }
         case "editor":
             if let id = await card(in: workspace.currentProject ?? Project.defaultID, store: workspace.services.store),
