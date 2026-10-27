@@ -76,7 +76,7 @@ public struct CueMemorySummary: Equatable, Sendable {
   public var createdAt: Date
 }
 
-/// 最近记下的几条（没忘掉、不是定时的，新的在前）与它们一共几条：手机 Cue 面板记忆那一块只读它，不读整份记忆。
+/// 记忆里最近记下的几条（没忘掉、不是定时的，新的在前）与一共几条：手机 Cue 面板与记忆页只读它，不读整份记忆与摘要（那是 Cue 的视图要的）。
 public struct CueMemoryRecent: Equatable, Sendable {
   public var lines: [CueMemoryLine]
   public var count: Int

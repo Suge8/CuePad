@@ -7,14 +7,15 @@ extension Schema {
   ///   "他问"那条正文只剩「原话」与 Cue 的做法，同"他说"那些一样是在转述他的话，不单留一个"问"；
   /// - 开头"标签（…）："里的那对括号（`labelBrackets`）：去掉括号里的月日、时刻与单独的"他说"，括号里没剩别的字就整对删掉，去掉了"他说"的改记为 `you`。
   ///
-  /// 每台设备各自升级、不改 modifiedAt（不同步出去）：同一份数据改出同一份。
+  /// 改过的行盖新的 modifiedAt、同步出去：新装的设备直接建成最新结构、不跑这一步，从 iCloud 拉到的要已是干净的；几台各自升级改出的是同一份，谁后到都一样。
   static func plainCueLines(_ db: SQLite) throws {
     let rows = try db.query("SELECT id, text FROM cueLines WHERE source = 'cue'") { ($0.text(0), $0.text(1)) }
+    let now = Date.stamp
     for (id, text) in rows {
       let (rest, prefixHis) = strippedPrefix(text)
       let (label, labelHis) = labelBrackets(rest)
       guard label != text else { continue }
-      try db.run("UPDATE cueLines SET text = ?, source = ? WHERE id = ?", [label, prefixHis || labelHis ? "you" : "cue", id])
+      try db.run("UPDATE cueLines SET text = ?, source = ?, modifiedAt = ? WHERE id = ?", [label, prefixHis || labelHis ? "you" : "cue", now, id])
     }
   }
 

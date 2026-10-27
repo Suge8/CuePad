@@ -161,16 +161,6 @@ private struct CueListHoverActions: View {
 }
 #endif
 
-/// 组头：小号、第三档墨，可带一枚图标；上面空出一段把组分开。
-struct CueListGroupTitle: View {
-    let title: String
-    var icon: Icon?
-
-    var body: some View {
-        SectionLabel(text: Dotted(title), icon: icon).padding(.horizontal, CueListMetrics.inset).padding(.top, 20).padding(.bottom, 2)
-    }
-}
-
 /// 页边距（Mac 的行底向两边伸出 `RowMetrics.bleed`，边距要盖住它）、行的内边距、输入胶囊的高与离底。
 enum CueListMetrics {
     #if os(macOS)

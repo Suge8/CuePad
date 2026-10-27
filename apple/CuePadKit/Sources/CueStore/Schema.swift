@@ -123,7 +123,7 @@ enum Schema {
     Upgrade(files: keyedAttachments),
     // 79：项目按最近的进展排（`CueStore.projectOrder`），换成按进展时刻的索引；只是本机索引，不碰同步的字段
     "DROP INDEX IF EXISTS cards_projectID_modifiedAt; \(progressIndexes)",
-    // 80：Cue 记下的记忆去掉开头的记下时间与"他说"（`plainCueLines`）；只改数据
+    // 80：Cue 记下的记忆去掉开头的记下时间与"他说"（`plainCueLines`）；只改数据，改过的同步出去
     Upgrade(plainCueLines),
   ]
 

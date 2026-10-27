@@ -11,18 +11,17 @@ struct CueMemoryPage: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var memory: CueMemory?
+    /// 记忆（没忘掉、不是定时的），新的在前
+    @State private var memory: CueMemoryRecent?
     @State private var text = ""
     @State private var forgetting: CueMemoryLine?
     @FocusState private var adding: Bool
 
-    /// 没忘掉、不是定时的记忆，新的在前
-    private var kept: [CueMemoryLine] { (memory?.lines ?? []).filter { $0.deletedAt == nil && $0.remindAt == nil }.reversed() }
     /// 有字但记不成一条（`CueMemoryLine.fits`：写入时同一个判断）。
     private var tooLong: Bool { !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !CueMemoryLine.fits(text) }
 
     var body: some View {
-        let kept = kept, pinned = kept.filter(\.pinned), others = kept.filter { !$0.pinned }
+        let kept = memory?.lines ?? [], pinned = kept.filter(\.pinned), others = kept.filter { !$0.pinned }
         let name = workspace.cue.name
         CueListPanel(
             title: String(localized: "\(name) 记得什么"),
@@ -30,11 +29,11 @@ struct CueMemoryPage: View {
             isEmpty: memory != nil && kept.isEmpty
         ) {
             if !pinned.isEmpty {
-                CueListGroupTitle(title: String(localized: "一直记着"), icon: .pin)
+                GroupTitle(title: String(localized: "一直记着"), icon: .pin)
                 ForEach(pinned) { row($0).transition(.opacity) }
             }
             ForEach(TimeSection.split(others, date: \.createdAt, now: .now), id: \.section) { run in
-                CueListGroupTitle(title: run.section.title)
+                GroupTitle(title: run.section.title)
                 ForEach(run.items) { row($0).transition(.opacity) }
             }
         } field: {
@@ -43,7 +42,7 @@ struct CueMemoryPage: View {
             EmptyState(mascot: .empty, title: "还没记住什么", message: "你说过的要紧事，它会自己记下")
         }
         .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion), value: kept)
-        .observing(services.store, into: $memory, onError: workspace.fail) { try $0.cueMemory() }
+        .observing(services.store, into: $memory, onError: workspace.fail) { try $0.recentCueMemory() }
         .dialog("忘掉这一条？", item: $forgetting, message: "\(name) 之后不再记得它，找不回来") { line in
             [DialogButton(title: "忘掉", role: .destructive) { workspace.forgetCueLine(line.id) }]
         }
@@ -97,5 +96,15 @@ extension RowAction {
     /// 复制这一行的字（菜单与读屏里）。
     static func copy(_ text: String, _ workspace: Workspace) -> RowAction {
         RowAction(.verbatim(MessageMenu.Item.copy.title), icon: MessageMenu.Item.copy.icon) { workspace.copy(text) }
+    }
+}
+
+/// 组头：小号、第三档墨，可带一枚图标；上面空出一段把组分开。
+private struct GroupTitle: View {
+    let title: String
+    var icon: Icon?
+
+    var body: some View {
+        SectionLabel(text: Dotted(title), icon: icon).padding(.horizontal, CueListMetrics.inset).padding(.top, 20).padding(.bottom, 2)
     }
 }

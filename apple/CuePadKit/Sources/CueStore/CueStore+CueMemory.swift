@@ -4,6 +4,9 @@ import Foundation
 
 extension CueStore {
   private static let lineOrder = "createdAt, id"
+  /// 定时与记忆同表，只分这一处：有下一次、没忘掉的是定时（`CueMemoryLine`），其余没忘掉的是记忆
+  private static let scheduled = "remindAt IS NOT NULL AND deletedAt IS NULL"
+  private static let kept = "remindAt IS NULL AND deletedAt IS NULL"
 
   /// 记一条（带 `remindAt` 是一条定时，见 `CueMemoryLine`）。记不成一条的（`CueMemoryLine.fits`：空白、超过 `CueMemoryLine.maxBytes` 字节）拒绝。
   /// 返回这一条与它的序号。
@@ -98,17 +101,17 @@ extension CueStore {
 
   /// 到点了的定时（`remindAt` 不晚于 `now`、没忘掉），最早的在前。
   public func dueCueSchedules(at now: Date = .now) throws -> [CueMemoryLine] {
-    try select(CueMemoryLine.self, where: "remindAt IS NOT NULL AND remindAt <= ? AND deletedAt IS NULL", [now], orderBy: "remindAt, id")
+    try select(CueMemoryLine.self, where: "\(Self.scheduled) AND remindAt <= ?", [now], orderBy: "remindAt, id")
   }
 
   /// 下一个还没到点的定时时刻；没有为 nil。管理器据此排下一次叫醒。
   public func nextCueSchedule(after now: Date = .now) throws -> Date? {
-    try db.first("SELECT MIN(remindAt) FROM cueLines WHERE remindAt > ? AND deletedAt IS NULL", [now]) { $0.dateOrNil(0) } ?? nil
+    try db.first("SELECT MIN(remindAt) FROM cueLines WHERE \(Self.scheduled) AND remindAt > ?", [now]) { $0.dateOrNil(0) } ?? nil
   }
 
   /// 全部定时（`task` 给了就只要挂在它上面的），先到点的在前。信封与看板只要这些行；要上一次到点的读 `cueSchedules`。
   public func cueScheduleLines(task: UUID? = nil) throws -> [CueMemoryLine] {
-    try select(CueMemoryLine.self, where: "remindAt IS NOT NULL AND deletedAt IS NULL AND (?1 IS NULL OR taskID = ?1)", [task], orderBy: "remindAt, id")
+    try select(CueMemoryLine.self, where: "\(Self.scheduled) AND (?1 IS NULL OR taskID = ?1)", [task], orderBy: "remindAt, id")
   }
 
   /// 同 `cueScheduleLines`，各带上一次到点。
@@ -140,7 +143,7 @@ extension CueStore {
   /// 恢复、取回不复活（不再定时是忘掉那一条）。
   func endCueSchedules(onTasksIn tasks: String, _ argument: any SQLBindable, at now: Date) throws {
     try db.run(
-      "UPDATE cueLines SET deletedAt = ?1, modifiedAt = ?1 WHERE remindAt IS NOT NULL AND deletedAt IS NULL AND taskID IN (\(tasks))", [now, argument])
+      "UPDATE cueLines SET deletedAt = ?1, modifiedAt = ?1 WHERE \(Self.scheduled) AND taskID IN (\(tasks))", [now, argument])
   }
 
   /// 全部记忆与有效的摘要，一次读出。摘要写下时区间里各行的 id、忘没忘、钉没钉记成指纹，现在对不上（别处同步来更早的行、
@@ -158,11 +161,10 @@ extension CueStore {
     return CueMemory(lines: lines, summaries: valid.map(\.summary))
   }
 
-  /// 没忘掉、不是定时的最新 `limit` 条与它们的总数（`CueMemoryRecent`）：几行加一条计数。
-  public func recentCueMemory(limit: Int) throws -> CueMemoryRecent {
-    let kept = "deletedAt IS NULL AND remindAt IS NULL"
-    let lines = try select(CueMemoryLine.self, where: kept, orderBy: "createdAt DESC, id DESC", limit: limit)
-    let count = try db.first("SELECT count(*) FROM cueLines WHERE \(kept)") { Int($0.int(0)) } ?? 0
+  /// 记忆（没忘掉、不是定时的）里最新的 `limit` 条（不给是全部）与一共几条（`CueMemoryRecent`）：手机面板读两条，记忆页读全部。
+  public func recentCueMemory(limit: Int = -1) throws -> CueMemoryRecent {
+    let lines = try select(CueMemoryLine.self, where: Self.kept, orderBy: "createdAt DESC, id DESC", limit: limit)
+    let count = try db.first("SELECT count(*) FROM cueLines WHERE \(Self.kept)") { Int($0.int(0)) } ?? 0
     return CueMemoryRecent(lines: lines, count: count)
   }
 
