@@ -5,7 +5,7 @@
 ## 简介（Description）
 
 ```
-A calm, native notebook for working with coding agents on Mac, iPhone and iPad: jot ideas, turn them into tasks, and let Cue hand them to Pi, Claude Code, Codex or OpenCode and report back. Local-first, synced via iCloud. 与 coding agents 协作的安静笔记本。
+A calm, native notebook for working with coding agents on Mac, iPhone and iPad: jot ideas, turn them into tasks, and let Cue hand them to Pi, Claude Code, Codex, OpenCode or Grok Build and report back. Local-first, synced via iCloud. 与 coding agents 协作的安静笔记本。
 ```
 
 ## Topics
