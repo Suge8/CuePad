@@ -3,8 +3,8 @@ import CueStore
 import Foundation
 
 /// 技能与规则在这台 Mac 上的位置（2026-10 实测各家怎么读）：
-/// - 技能：全局 `~/.agents/skills`、项目 `<文件夹>/.agents/skills`，Pi、Codex、OpenCode 原生读（递归、跟链接）；Claude Code 不读 `.agents`、
-///   不递归，只读 `<它的目录>/skills/<名>` 与 `<文件夹>/.claude/skills/<名>`，所以逐个技能链过去（整个目录链不行：它往 `skills/synced` 写 claude.ai 同步的技能）。
+/// - 技能：全局 `~/.agents/skills`、项目 `<文件夹>/.agents/skills`，Pi、Codex、OpenCode 原生读（递归、跟链接）；dsh 只读一层，Claude Code 不读，
+///   读不到的逐个链到它们自己的技能目录（`SharedSkills`）。
 /// - 旧目录：各家自己的技能目录与项目里的 `.claude`、`.pi`、`.codex`、`.opencode` 下的。
 /// - 全局规则：`~/.agents/AGENTS.md`，Claude Code 的 `CLAUDE.md`、Codex、Pi 的 `AGENTS.md` 链到它；OpenCode 没有自己那份时读 Claude Code 的。
 ///   替换基础提示的两份（Pi 的 `SYSTEM.md`、Codex 配置里 `model_instructions_file` 指的）只作比对来源。
@@ -35,16 +35,20 @@ struct AgentLibraryPlaces: Sendable {
         base(scope).map { $0.appending(path: scope == .global ? "skills" : ".agents/skills", directoryHint: .isDirectory) }
     }
 
-    /// Claude Code 在这一层读技能的目录（它不用就没有）。
-    func claudeSkills(_ scope: LibraryScope) -> URL? {
-        guard uses(.claudeCode) else { return nil }
-        switch scope {
-        case .global: return paths.home(of: .claudeCode).appending(path: "skills", directoryHint: .isDirectory)
-        case .project(let id): return projects[id]?.appending(path: ".claude/skills", directoryHint: .isDirectory)
-        }
+    /// 这一层 `group` 分类里叫 `name` 的技能要链到的位置：这台用着、读不到它的几家，各在自己读技能的目录里（`SharedSkills`）。
+    func links(_ name: String, group: String, in scope: LibraryScope) -> [(agent: AgentKind, link: URL)] {
+        installed.filter { !$0.facts.sharedSkills.reaches(group: group) }.compactMap { kind in link(name, for: kind, in: scope).map { (kind, $0) } }
     }
 
-    /// 这一层的旧目录：哪家的、递不递归（Claude Code 只读一层）。全局的只列这台用着的几家。
+    func link(_ name: String, for kind: AgentKind, in scope: LibraryScope) -> URL? {
+        let parent = switch scope {
+        case .global: paths.home(of: kind)
+        case .project(let id): projects[id]?.appending(path: kind.facts.projectFolder, directoryHint: .isDirectory)
+        }
+        return parent?.appending(path: "skills/\(name)", directoryHint: .isDirectory)
+    }
+
+    /// 这一层的旧目录：哪家的、递不递归（同它读 `.agents` 的深度）。全局的只列这台用着的几家。
     func oldSkills(_ scope: LibraryScope) -> [(directory: URL, agent: AgentKind, recursive: Bool)] {
         switch scope {
         case .global:
@@ -57,7 +61,7 @@ struct AgentLibraryPlaces: Sendable {
     }
 
     private func skillFolders(of kind: AgentKind, in parent: URL) -> [(directory: URL, agent: AgentKind, recursive: Bool)] {
-        kind.facts.skillFolders.map { (parent.appending(path: $0, directoryHint: .isDirectory), kind, kind.facts.readsSharedSkills) }
+        kind.facts.skillFolders.map { (parent.appending(path: $0, directoryHint: .isDirectory), kind, kind.facts.sharedSkills == .recursive) }
     }
 
     private func base(_ scope: LibraryScope) -> URL? {

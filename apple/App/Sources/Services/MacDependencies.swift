@@ -84,6 +84,7 @@ struct MacDependencies {
                 .opencode: OpenCodeRuntime(
                     bridge: pi, paths: paths, store: store, hostID: hostID, opencode: { await agents.executable(.opencode) },
                     transcriptWindow: PiHistoryPersistence.transcriptWindow),
+                .dsh: DshRuntime(bridge: pi, paths: paths, dsh: { await agents.executable(.dsh) }),
             ] },
             pasteboard: .general,
             cue: CueDependencies(

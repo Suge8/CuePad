@@ -19,6 +19,7 @@ struct AgentLibraryTests {
     var agents: URL { home("agents") }
     var claude: URL { home("claude") }
     var codex: URL { home("codex") }
+    var dsh: URL { home("dsh") }
     var pi: URL { app.piPaths.agentDirectory }
 
     func write(_ text: String, _ file: URL) throws {
@@ -41,9 +42,10 @@ struct AgentLibraryTests {
         return try #require(try await eventually(store, { try $0.agentLibrary(host: host) }) { $0.map(condition) ?? false })
     }
 
-    /// 一键整理只做不用你选的（旧目录里的、Claude Code 读不到的、空目录）；内容不同的全局规则留给合并。
+    /// 一键整理只做不用你选的（旧目录里的、Claude Code 与 dsh 读不到的、空目录）；内容不同的全局规则留给合并。
+    /// dsh 只读 `.agents/skills` 一层：分类里的链给它，搬到第一层的不用。
     @Test func 一键整理只做不用选的几件_撤销恢复这一次的全部改动() async throws {
-        for directory in [claude, codex] { try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true) }
+        for directory in [claude, codex, dsh] { try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true) }
         try skill("write-swift", in: agents.appending(path: "skills/development"))
         try skill("retro", in: codex.appending(path: "skills"))
         try FileManager.default.createDirectory(at: codex.appending(path: "skills/codex-primary-runtime"), withIntermediateDirectories: true)
@@ -57,11 +59,11 @@ struct AgentLibraryTests {
         let keeping = keep()
         defer { keeping.cancel() }
 
-        let found = try await library("扫出四件") { $0.tidies.count == 4 }
+        let found = try await library("扫出五件") { $0.tidies.count == 5 }
         let workspace = Workspace(services: services)
-        #expect(found.automaticTidies.map { workspace.fact(of: $0, in: found) } == ["1 个技能在旧目录里", "1 个技能 Claude Code 读不到", "1 个空文件夹"])
+        #expect(found.automaticTidies.map { workspace.fact(of: $0, in: found) } == ["1 个技能在旧目录里", "1 个技能 Claude Code 读不到", "1 个技能 DeepSeek Harness 读不到", "1 个空文件夹"])
         #expect(found.merge(into: .global)?.writers == [.claudeCode, .codex], "内容不同的全局规则不在一键整理里，在全局规则的文件页里合并")
-        #expect(found.skills.map(\.name) == ["write-swift"] && found.skills[0].group == "development" && found.skills[0].unseenBy == [.claudeCode])
+        #expect(found.skills.map(\.name) == ["write-swift"] && found.skills[0].group == "development" && found.skills[0].unseenBy == [.claudeCode, .dsh])
         #expect(found.selfManaged == [SelfManagedSkills(agent: .claudeCode, count: 2), SelfManagedSkills(agent: .codex, count: 1)])
         #expect(found.instruction(.global)?.text == nil)
         var uploaded = uploads.makeAsyncIterator()
@@ -69,11 +71,13 @@ struct AgentLibraryTests {
 
         await workspace.tidy(found.automaticOrders, in: found)
 
-        #expect(workspace.notice?.text.visible == "整理好了 3 件")
+        #expect(workspace.notice?.text.visible == "整理好了 4 件")
         let moved = agents.appending(path: "skills/retro")
         #expect(exists(moved.appending(path: "SKILL.md")) && !exists(codex.appending(path: "skills/retro")))
         #expect(RelativeLink.points(claude.appending(path: "skills/retro"), to: moved))
         #expect(RelativeLink.points(claude.appending(path: "skills/write-swift"), to: agents.appending(path: "skills/development/write-swift")))
+        #expect(RelativeLink.points(dsh.appending(path: "skills/write-swift"), to: agents.appending(path: "skills/development/write-swift")))
+        #expect(!exists(dsh.appending(path: "skills/retro")), "第一层的 dsh 自己读得到")
         #expect(!exists(codex.appending(path: "skills/codex-primary-runtime")))
         #expect(!RelativeLink.isLink(claude.appending(path: "CLAUDE.md")) && !exists(agents.appending(path: "AGENTS.md")), "规则一个字没动")
         let tidied = try await library("只剩要合并的全局规则") { $0.tidies.map(\.id) == ["global-instructions"] }
@@ -82,9 +86,9 @@ struct AgentLibraryTests {
         try await #require(workspace.notice?.action).run()
 
         #expect(exists(codex.appending(path: "skills/retro/SKILL.md")) && !exists(moved))
-        #expect(!exists(claude.appending(path: "skills/write-swift")) && !exists(claude.appending(path: "skills/retro")))
+        #expect(!exists(claude.appending(path: "skills/write-swift")) && !exists(claude.appending(path: "skills/retro")) && !exists(dsh.appending(path: "skills/write-swift")))
         #expect(exists(codex.appending(path: "skills/codex-primary-runtime")))
-        _ = try await library("撤销后又是四件") { $0.tidies.count == 4 }
+        _ = try await library("撤销后又是五件") { $0.tidies.count == 5 }
     }
 
     /// 文件页自动存：带着改之前看到的内容（基准）写进文件；文件在别处改过就不写、退回"Mac 上刚改过"，文件页跟上文件此刻的样子。

@@ -53,7 +53,7 @@ final class AgentTape: @unchecked Sendable {
     }
 
     /// 替身的名字 → 录制时背后的真 Agent
-    static let realExecutables: [String: URL?] = ["pi": realPiURL, "codex": realCodexURL, "claude": claudeURL]
+    static let realExecutables: [String: URL?] = ["pi": realPiURL, "codex": realCodexURL, "claude": claudeURL, "dsh": realDshURL]
 
     /// - Parameter agent: 一个套件一家时由特征给出；几家共用一个套件时用例自己用 `use(_:variant:)` 给出。
     init(agent: AgentKind?, test: Test) throws {

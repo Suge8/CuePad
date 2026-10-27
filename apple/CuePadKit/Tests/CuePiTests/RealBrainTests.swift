@@ -5,12 +5,10 @@ import Foundation
 import Testing
 @testable import CuePi
 
-/// 端到端：真实的 Pi / Codex / Claude Code / OpenCode 当 Cue 的大脑，用本机用户自己登录的账号与便宜的模型，MCP 是 Fixtures/mcp-echo.mjs 替身。
+/// 端到端：真实的 Pi / Codex / Claude Code / OpenCode / dsh 当 Cue 的大脑，用本机用户自己登录的账号与便宜的模型，MCP 是 Fixtures/mcp-echo.mjs 替身。
 /// 默认回放录像带，录制与模型、强度的换法见 `RealAgents`；OpenCode 没有录像带，列出它时直连，在隔离的 `OpenCodeSandbox` 里用免费模型。
 private let environment = ProcessInfo.processInfo.environment
-// dsh 等通用 ACP 驱动接上、录了录像带再加进来
-private let runtimes = AgentKind.allCases.filter { $0 != .dsh }
-    .filter { $0 == .opencode ? RealAgents.mode(of: $0) == .live && RealAgents.installed($0) : RealAgents.runs($0) }
+private let runtimes = AgentKind.allCases.filter { $0 == .opencode ? RealAgents.mode(of: $0) == .live && RealAgents.installed($0) : RealAgents.runs($0) }
 /// 连真运行时才看得出的（进程树、各家的历史）：录制或直连时列出、本机装着的几家
 private let liveRuntimes = runtimes.filter { RealAgents.mode(of: $0) != .replay }
 /// Pi 用 openai-codex 的模型：Claude 只走官方 Claude Code，不经 Pi 用 Claude 订阅。OpenCode 用能看图的免费模型
@@ -37,7 +35,7 @@ private func executable(_ name: String) -> URL? {
 }
 
 @MainActor
-@Suite(.agentTapes, RealAgents.serialWhenRecording(.pi, .codex, .claudeCode, .opencode), RealAgents.timeLimit(.minutes(5)))
+@Suite(.agentTapes, RealAgents.serialWhenRecording(.pi, .codex, .claudeCode, .opencode, .dsh), RealAgents.timeLimit(.minutes(5)))
 struct RealBrainTests {
     /// 一个大脑与它的现场：独立的工作目录（名字里有随机标记，用来在各家的历史里找它）、MCP 替身的调用记录、收到的事件。
     @MainActor
@@ -74,8 +72,10 @@ struct RealBrainTests {
                 systemPrompt: "You are Cue, a test assistant. Your codename is \(codename). Keep answers to one short sentence. When asked to echo something, call the echo tool.",
                 workingDirectory: directory,
                 mcp: [try #require(executable("node")).path, echoServer.path, marker],
-                // Pi 的会话落盘位置指到这里：`--no-session` 生效的话它一直是空的（不去翻用户的 ~/.pi）
-                environment: ["MCP_ECHO_LOG": echoLog.path, "PI_CODING_AGENT_SESSION_DIR": sessions.path].merging(sandbox?.environment ?? [:]) { $1 })
+                // Pi 的会话落盘位置指到这里：`--no-session` 生效的话它一直是空的（不去翻用户的 ~/.pi）；dsh 的家目录也在这里（不碰用户的 ~/.dsh）
+                environment: ["MCP_ECHO_LOG": echoLog.path, "PI_CODING_AGENT_SESSION_DIR": sessions.path]
+                    .merging(runtime == .dsh ? ["DSH_HOME": root.appending(path: "dsh").path] : [:]) { $1 }
+                    .merging(sandbox?.environment ?? [:]) { $1 })
             AgentTape.current?.watch(root)
             brain = try await config.startBrain()
             let events = brain.events
@@ -256,8 +256,9 @@ struct RealBrainProcessTests {
             try await sandbox.run(["service", "stop"])
             #expect(left.isEmpty, "\(left)")
         case .dsh:
-            // 会话、附件、存储都在本次运行的临时目录里，随它删掉
-            break
+            // 会话、附件、存储都在本次运行的临时目录里，随它删掉；dsh 的家目录里没有会话
+            let home = rig.directory.deletingLastPathComponent().appending(path: "dsh")
+            #expect(!FileManager.default.fileExists(atPath: home.appending(path: DshRuntime.sessions).path))
         }
     }
 

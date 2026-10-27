@@ -12,7 +12,7 @@ extension ClaudeCodeRuntime {
             home($0).appending(path: "projects", directoryHint: .isDirectory)
         },
         channel: { integration, _ in HookFile.claudeCode(home: integration.home(of: .claudeCode), skillDirectory: integration.skillDirectory) },
-        releasesIdleHosted: true, probe: askClaude, brain: { ClaudeHostedSession() }, readsSharedSkills: false, projectFolder: ".claude", selfManagedSkills: "synced",
+        releasesIdleHosted: true, probe: askClaude, brain: { ClaudeHostedSession() }, sharedSkills: .none, projectFolder: ".claude", selfManagedSkills: "synced",
         instructionsFile: "CLAUDE.md")
 
     nonisolated private static func home(_ paths: AgentPaths) -> URL { paths.directory(facts.homeVariable) ?? paths.user(".claude") }

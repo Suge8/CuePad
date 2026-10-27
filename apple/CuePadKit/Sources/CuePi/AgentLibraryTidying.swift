@@ -33,8 +33,8 @@ struct LibraryTidying {
         switch tidy.kind {
         case .stray(let moves):
             for move in moves { try moveSkill(move) }
-        case .unlinked(let skills):
-            for skill in skills { try linkForClaude(skill.name, URL(filePath: skill.path), in: skill.scope) }
+        case .unlinked(let agent, let skills):
+            for skill in skills { if let link = places.link(skill.name, for: agent, in: skill.scope) { try make(link, to: URL(filePath: skill.path)) } }
         case .duplicate(_, let copies):
             guard let keep = order.keep else { throw AgentLibraryError.tidyGone }
             guard let kept = copies.first(where: { $0.path == keep })?.scope else { throw AgentLibraryError.tidyGone }
@@ -52,19 +52,21 @@ struct LibraryTidying {
         }
     }
 
-    /// 搬进同层的 `.agents/skills`；Claude Code 用着时在它读的位置链回来（搬走的若就在那里，链接正好补上空出的位置）。
+    /// 搬进同层的 `.agents/skills`；读不到那里的几家在它们读的位置链回来（搬走的若就在那里，链接正好补上空出的位置）。
     private mutating func moveSkill(_ move: SkillMove) throws {
         let from = URL(filePath: move.skill.path), to = URL(filePath: move.to)
         guard !FileManager.default.fileExists(atPath: to.path) else { return }
         try ensureDirectory(to.deletingLastPathComponent())
         try FileManager.default.moveItem(at: from, to: to)
         undo.steps.append(.moved(from: from, to: to))
-        try linkForClaude(move.skill.name, to, in: move.skill.scope)
+        let root = places.skills(move.skill.scope)?.path ?? ""
+        let group = to.deletingLastPathComponent().path.dropFirst(root.count).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        for (_, link) in places.links(move.skill.name, group: group, in: move.skill.scope) { try make(link, to: to) }
     }
 
-    private mutating func linkForClaude(_ name: String, _ skill: URL, in scope: LibraryScope) throws {
-        guard let link = places.claudeSkills(scope)?.appending(path: name, directoryHint: .isDirectory),
-              !FileManager.default.fileExists(atPath: link.path), !RelativeLink.isLink(link) else { return }
+    /// 那里已有东西的不碰。
+    private mutating func make(_ link: URL, to skill: URL) throws {
+        guard !FileManager.default.fileExists(atPath: link.path), !RelativeLink.isLink(link) else { return }
         try ensureDirectory(link.deletingLastPathComponent())
         try RelativeLink.make(at: link, to: skill)
         undo.steps.append(.linked(link, to: skill))

@@ -1,4 +1,5 @@
 #if os(macOS)
+import CryptoKit
 import CueStore
 import Foundation
 
@@ -18,20 +19,21 @@ extension DshRuntime {
         sessionFiles: SessionFileFormat(ingest: DshHistory.ingest, depth: 3, naming: .inDirectory(file: DshHistory.fileName)) {
             home($0).appending(path: sessions, directoryHint: .isDirectory)
         },
-        releasesIdleHosted: true, probe: askDsh, brain: { DshBrain() }, projectFolder: ".dsh")
+        releasesIdleHosted: true, probe: askDsh, brain: { ACPSession(dialect: DshDialect()) }, sharedSkills: .topLevel, projectFolder: ".dsh")
 
     nonisolated static func home(_ paths: AgentPaths) -> URL { paths.directory(facts.homeVariable) ?? paths.user(".dsh") }
 
-    /// CuePad 托管的会话的存储根（在 DSH_HOME 下，明文；理由见 `DshRuntime` 头注释）
+    /// CuePad 托管的会话的存储根（在 DSH_HOME 下，明文；理由见 `DshRuntime` 头注释；补丁里的同一个位置见 `DshLaunch`）
     nonisolated static let sessions = "cuepad/sessions"
 
     /// 起一个不答 ACP 的进程，插件的探测模式（`CUEPAD_PROBE`）把模型清单写成一行就退出：与会话的模型菜单同一份（各提供方的清单），
     /// 缺省是新会话用的模型。一个模型都没有是没登录（没有 key、也没登录账号）。标准输入要一直开着：一关 dsh 就收场，清单还没问完。
     nonisolated private static func askDsh(_ executable: URL, _ probe: AgentProbe) async throws -> MacAgent? {
-        let launch = try DshLaunch.hosted(probe.paths)
-        let environment = probe.locator.environment(launching: executable, overrides: launch.environment.merging(["CUEPAD_PROBE": "1"]) { $1 })
+        try DshLaunch.prepare(.hosted)
+        let environment = probe.locator.environment(
+            launching: executable, overrides: probe.paths.environment.merging(DshLaunch.environment(probe.paths, model: nil)) { $1 }.merging(["CUEPAD_PROBE": "1"]) { $1 })
         let process = try await ChildProcess(
-            executable, launch.arguments, directory: FileManager.default.temporaryDirectory, environment: environment, placement: .group,
+            executable, DshLaunch.arguments(.hosted), directory: FileManager.default.temporaryDirectory, environment: environment, placement: .group,
             input: .lifeline, output: .lines)
         struct Line: Decodable {
             let cuepadProbe: Models
@@ -49,88 +51,93 @@ extension DshRuntime {
 }
 
 /// 起 dsh 的 ACP 服务：`dsh --profile acp --patch <补丁>`。补丁叠在用户的 acp profile 之上（不改它），插入随包插件（`dsh-cuepad.mjs`，
-/// 它接管 ACP 的传输、加上 CuePad 要的扩展方法），并关掉：会话记录上传 DeepSeek（`session-log-deepseek`，实测关前每次请求都带着会话记录）、
+/// 它接管 ACP 的传输、补成驱动用的标准样子），并关掉：会话记录上传 DeepSeek（`session-log-deepseek`，实测关前每次请求都带着会话记录）、
 /// 遥测（`session-telemetry-otel`）、设置与配置编辑器（不往用户的 profile 写；旧版留下的 `settings.yaml` 也不被这次启动导进 acp profile、改名）。
-/// 托管会话另插入 `ask_user_question`；大脑只留读文件类工具、整份系统提示换成 Cue 的，存储全进本次运行的临时目录（用完随它删）。
-struct DshLaunch {
-    let arguments: [String]
-    /// 加给 dsh 的环境（在 CuePad 的环境之上）
-    let environment: [String: String]
+/// 大脑另只留读文件类工具、整份系统提示换成 Cue 的，存储全进本次运行的临时目录（用完随它删）。
+/// 两份补丁的内容只随 App 的位置变：随时用到随时写在临时目录里（变了才重写），各次运行的不同经环境给（`!!js process.env`）。
+enum DshLaunch {
+    enum Patch: String {
+        case hosted, brain
+    }
 
     static let plugin = Bundle.module.url(forResource: "dsh-cuepad", withExtension: "mjs")!
+    /// 按插件的位置分开：同时开着的两份 App（本机构建与正式版）各用各的。写成 UUID 的样子：录像带比对启动参数时不算它
+    private static let directory = FileManager.default.temporaryDirectory.appending(path: "cuepad-dsh-" + uuid(plugin.path), directoryHint: .isDirectory)
 
-    /// 托管的会话与探测：补丁内容只随 App 的位置变，写在 `<DSH_HOME>/cuepad/acp.yml`（变了才重写）。`model` 是新会话的模型（`提供方/模型`）。
-    static func hosted(_ paths: AgentPaths, model: String? = nil) throws -> DshLaunch {
-        let home = DshRuntime.home(paths)
-        let root = home.appending(path: DshRuntime.sessions, directoryHint: .isDirectory)
-        let patch = home.appending(path: "cuepad/acp.yml")
-        let text = render(plugin: [:], insert: [askUser], storage: root.deletingLastPathComponent(), sessions: root)
-        if (try? String(contentsOf: patch, encoding: .utf8)) != text {
-            try FileManager.default.createDirectory(at: patch.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try Data(text.utf8).write(to: patch, options: .atomic)
-        }
-        return DshLaunch(arguments: arguments(patch), environment: environment(home, model: model))
+    private static func uuid(_ text: String) -> String {
+        let b = Array(SHA256.hash(data: Data(text.utf8)))
+        return UUID(uuid: (b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7], b[8], b[9], b[10], b[11], b[12], b[13], b[14], b[15])).uuidString
     }
 
-    /// Cue 的大脑：补丁与系统提示写进本次运行的临时目录 `directory`，会话、附件、存储也都在里面。
-    static func brain(_ paths: AgentPaths, in directory: URL, prompt: String, model: String?) throws -> DshLaunch {
-        let promptFile = directory.appending(path: "prompt.md")
+    static func arguments(_ patch: Patch) -> [String] { ["--profile", "acp", "--patch", file(patch).path] }
+
+    /// 写好这份补丁（内容变了才重写）。
+    static func prepare(_ patch: Patch) throws {
+        let text = patch == .hosted ? hosted : brain
+        guard (try? String(contentsOf: file(patch), encoding: .utf8)) != text else { return }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try Data(text.utf8).write(to: file(patch), options: .atomic)
+    }
+
+    /// 托管会话与探测的环境：配置目录（`DSH_HOME`）与新会话的模型（`提供方/模型`，插件的 `CUEPAD_MODEL`）。
+    static func environment(_ paths: AgentPaths, model: String?) -> [String: String] {
+        [DshRuntime.facts.homeVariable: DshRuntime.home(paths).path].merging(model.map { ["CUEPAD_MODEL": $0] } ?? [:]) { $1 }
+    }
+
+    /// 大脑的环境：本次运行的临时目录（会话、附件、存储都在里面）与写在里面的系统提示。
+    static func brainEnvironment(in run: URL, prompt: String, model: String?) throws -> [String: String] {
+        let promptFile = run.appending(path: "prompt.md")
         try Data(prompt.utf8).write(to: promptFile)
-        let patch = directory.appending(path: "brain.yml")
-        let text = render(plugin: ["prompt": promptFile.path], insert: [], storage: directory, sessions: directory.appending(path: "sessions")) + brainOnly(directory)
-        try Data(text.utf8).write(to: patch)
-        return DshLaunch(arguments: arguments(patch), environment: environment(DshRuntime.home(paths), model: model))
+        return ["CUEPAD_BRAIN_DIR": run.path, "CUEPAD_PROMPT": promptFile.path].merging(model.map { ["CUEPAD_MODEL": $0] } ?? [:]) { $1 }
     }
 
-    private static func arguments(_ patch: URL) -> [String] { ["--profile", "acp", "--patch", patch.path] }
+    private static func file(_ patch: Patch) -> URL { directory.appending(path: patch.rawValue + ".yml") }
 
-    private static func environment(_ home: URL, model: String?) -> [String: String] {
-        [DshRuntime.facts.homeVariable: home.path].merging(model.map { ["CUEPAD_MODEL": $0] } ?? [:]) { $1 }
-    }
-
-    private static let askUser = "    - id: tool-ask-user\n      name: '@deepseek-ai/dsh-tool-ask-user'\n"
-
-    private static func render(plugin config: [String: String], insert: [String], storage: URL, sessions: URL) -> String {
-        let settings = config.map { "        \($0.key): \(quoted($0.value))\n" }.sorted().joined()
-        return """
-            - insert:
-                - id: cuepad
-                  name: \(quoted(plugin.path))
-            \(settings.isEmpty ? "" : "      config:\n" + settings)\(insert.joined())- id: acp
-              inject: [acpAppStartup, cuepadAcp]
-              config:
-                stream: !!js ctx.get('cuepadAcp').stream
-                provider: !!js ctx.get('cuepadAcp').provider
-                model: !!js ctx.get('cuepadAcp').model
-            - { id: session-log-deepseek, disabled: true }
-            - { id: session-telemetry-otel, disabled: true }
-            - { id: settings, disabled: true }
-            - { id: config-editor, disabled: true }
-            - id: session-persistence-jsonl
-              config: { root: \(quoted(sessions.path)), compression: none }
-            - id: storage-json
-              config: { root: \(quoted(storage.appending(path: "storages").path)) }
-
-            """
+    private static var hosted: String {
+        common(prompt: false, storage: "dshHomePath('cuepad')")
     }
 
     /// 大脑不写代码：只留读文件与搜索，技能、规则、子代理、计划、网页这些都关掉；附件也进临时目录。
-    private static func brainOnly(_ directory: URL) -> String {
+    private static var brain: String {
         let off = [
             "tool-bash", "tool-pwsh", "tool-jobs", "tool-skill", "skill", "skill-filesystem", "agent-instructions", "plan-mode", "goal",
             "goal-round-driver", "command-goal", "tool-goal", "tool-todo", "tool-web", "tool-workflow", "workflow-ptc", "tool-subagent",
             "tool-subagent-fork", "tool-subagent-control", "tool-subagent-list-agents", "tool-working-directory", "tool-plugin-manager",
             "repeat-tool-reminder", "mcp-resources", "session-title",
         ]
-        return """
+        return common(prompt: true, storage: "process.env.CUEPAD_BRAIN_DIR") + """
             - id: system-prompt
               config: { includeHarnessIdentity: false, includeRuntimeContext: false }
             - id: tool-fs
               config: { write: false, edit: false }
             - id: attachment-local
-              config: { dshHome: \(quoted(directory.path)) }
+              config: { dshHome: !!js process.env.CUEPAD_BRAIN_DIR }
 
             """ + off.map { "- { id: \($0), disabled: true }\n" }.joined()
+    }
+
+    /// 两份都有的：插件接管传输、关掉上传与写用户的 profile、会话存进 `storage` 下的明文根（JS 表达式）。
+    private static func common(prompt: Bool, storage: String) -> String {
+        """
+        - insert:
+            - id: cuepad
+              name: \(quoted(plugin.path))
+        \(prompt ? "      config: { prompt: !!js process.env.CUEPAD_PROMPT }\n" : "")- id: acp
+          inject: [acpAppStartup, cuepadAcp]
+          config:
+            stream: !!js ctx.get('cuepadAcp').stream
+            provider: !!js ctx.get('cuepadAcp').provider
+            model: !!js ctx.get('cuepadAcp').model
+        - { id: session-log-deepseek, disabled: true }
+        - { id: session-telemetry-otel, disabled: true }
+        - { id: settings, disabled: true }
+        - { id: config-editor, disabled: true }
+        - id: session-persistence-jsonl
+          config: { root: !!js "\(storage) + '/sessions'", compression: none }
+        - id: storage-json
+          config: { root: !!js "\(storage) + '/storages'" }
+
+        """
     }
 
     /// YAML 的单引号字符串：里面的单引号写两遍。
