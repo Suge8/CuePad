@@ -134,9 +134,6 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
         if scope != .sessions([]) { Task { await discover() } }
     }
 
-    /// 托管的会话在 App 起的 app-server 里，`stop()` 收掉它。
-    public var hostedSessionsOutliveApp: Bool { false }
-
     public func stop() -> @concurrent @Sendable () async -> Void {
         stopped = true
         for session in tracked.values { release(session) }

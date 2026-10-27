@@ -154,8 +154,6 @@ struct OpenCodeEvent: Decodable, Sendable {
         var item: Item?
         /// 工具的结果（`session.tool.success`）：内容块
         var content: JSONValue?
-        /// 哪个 MCP 服务的状态变了（`mcp.status.changed`）
-        var server: String?
         /// 正文的增量（`session.text.delta`）与说完的全文（`session.text.ended`）属于哪条回答的第几段
         var assistantMessageID: String?
         var ordinal: Int?
@@ -346,9 +344,6 @@ struct OpenCodeCommand: Decodable, Sendable {
     var name: String
     var description: String?
 }
-
-/// `GET /api/session/active` 的一项（只有 `running`）。
-struct OpenCodeActive: Decodable, Sendable { var type: String }
 
 enum OpenCodeAnswer: Encodable {
     case string(String), bool(Bool)

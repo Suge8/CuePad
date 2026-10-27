@@ -156,14 +156,5 @@ public final class GrokRuntime: AgentRuntime {
 }
 
 /// 终端里的会话只读：桥按能力表先拒掉，到不了这里。
-extension GrokRuntime: SessionLink {
-    public func send(_ message: PiMessage, in id: PiSession.ID) async throws { throw PiBridgeError.unsupported }
-    public func command(_ line: String, in id: PiSession.ID) async throws { throw PiBridgeError.unsupported }
-    public func end(_ id: PiSession.ID) async throws { throw PiBridgeError.unsupported }
-    public func abort(_ id: PiSession.ID) async throws { throw PiBridgeError.unsupported }
-    public func answer(_ answer: PiAnswerValue, to promptID: String, in id: PiSession.ID) async throws { throw PiBridgeError.unsupported }
-    public func configure(model: PiModelKey?, thinking: PiThinkingLevel?, name: String?, in id: PiSession.ID) async throws {
-        throw PiBridgeError.unsupported
-    }
-}
+extension GrokRuntime: SessionLink {}
 #endif

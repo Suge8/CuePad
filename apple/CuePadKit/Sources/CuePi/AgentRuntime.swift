@@ -12,7 +12,10 @@ public struct AgentPaths: Sendable, Equatable {
         self.environment = environment
     }
 
-    public func home(of kind: AgentKind) -> URL { kind.facts.home(self) }
+    public func home(of kind: AgentKind) -> URL {
+        let facts = kind.facts
+        return facts.home?(self) ?? directory(facts.homeVariable) ?? user(facts.projectFolder)
+    }
 
     /// 几家共读的目录（`~/.agents`，`CUEPAD_AGENTS_DIR` 换走）：全局技能 `skills`、全局规则 `AGENTS.md`，CuePad 的技能也写在这里。
     /// 环境变量是 CuePad 自己的（各家都按家目录读它）：隔离实例与测试经它换到临时目录。
@@ -59,8 +62,8 @@ public struct AgentFacts: Sendable {
     public let command: String
     /// 指定它配置目录的环境变量（OpenCode 另认 `XDG_CONFIG_HOME`）；不碰真实世界时没给它就不接入这家（`AgentInstallError.isolated`）。
     public let homeVariable: String
-    /// 配置目录（`AgentPaths.home(of:)`）
-    let home: @Sendable (AgentPaths) -> URL
+    /// 配置目录在别处的自己给（Pi、OpenCode）；缺省是环境变量 `homeVariable` 指的目录，没给就是家目录下的 `projectFolder`（`AgentPaths.home(of:)`）
+    var home: (@Sendable (AgentPaths) -> URL)?
     /// CuePad 要求的最低版本：有要求的要报得出够新的版本才算装着（`AgentIntegration.detect`）。
     public var minimumVersion: AgentVersion?
     /// 官方安装命令（取自各家官网的安装页）
@@ -90,7 +93,7 @@ public struct AgentFacts: Sendable {
     var sharedSkills = SharedSkills.recursive
     /// 它自己的技能目录名（在它的配置目录与项目的 `projectFolder` 下，`AgentLibraryPlaces.oldSkills`）
     var skillFolders = ["skills"]
-    /// 项目里它的目录（`.claude` 这样）
+    /// 项目里它的目录（`.claude` 这样），也是多数家在家目录下的配置目录名
     let projectFolder: String
     /// 它自己管、CuePad 不碰的技能目录（在它的全局技能目录下）
     var selfManagedSkills: String?
@@ -130,6 +133,7 @@ public protocol AgentRuntime: AnyObject {
     /// 关掉托管的会话与连接；返回的等待在它们都结束后结束，不需要主线程（App 退出时限时等）。
     func stop() -> @concurrent @Sendable () async -> Void
     /// 托管的会话撑得过 App 重启（退出、更新）：`stop()` 不收掉它们，新起的 App 经桥认回。更新只等撑不过的做完（`UpdateService`）。
+    /// 缺省撑不过：托管的进程靠管道连着 App，`stop()` 收掉它们。
     var hostedSessionsOutliveApp: Bool { get }
     /// 在后台于 `directory` 开一个新会话，带上发起方的认领标识（`PiSession.launchToken`）；等它上了桥，返回桥上的 id。
     /// 会话名、模型、思考强度在开场的话之前一起生效（第一句话不会先当了会话名）：Pi 作为启动参数，其余上桥后一次配好
@@ -153,6 +157,8 @@ public protocol AgentRuntime: AnyObject {
 }
 
 extension AgentRuntime {
+    public var hostedSessionsOutliveApp: Bool { false }
+
     /// 后台开出的会话按开工的要求一次配好会话名、模型与强度；配不上就结束它再抛：开工整体失败，不留会话。
     func configure(
         opened id: PiSession.ID, name: String?, model: PiModelKey?, thinking: PiThinkingLevel?, on bridge: PiBridge

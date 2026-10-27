@@ -29,17 +29,9 @@ extension PiRuntime {
             launching: executable, overrides: probe.paths.pi.launchEnvironment.merging(["CUEPAD_PROBE": "1"]) { $1 })
         guard let result = await ChildProcess.run(executable, arguments, environment: environment, timeout: AgentTimeouts.probe, timing: probe.timing)
         else { throw AgentProbe.ProbeError.timedOut }
-        struct Line: Decodable {
-            let cuepadProbe: Models
-            struct Models: Decodable {
-                let model: PiModelOption?
-                let models: [PiModelOption]
-            }
-        }
-        let decoder = JSONDecoder()
-        guard let reply = result.output.split(separator: "\n").lazy.compactMap({ try? decoder.decode(Line.self, from: Data($0.utf8)) }).first?.cuepadProbe
+        guard let reply = result.output.split(separator: "\n").lazy.compactMap({ AgentProbe.PluginReply(line: Data($0.utf8)) }).first
         else { throw AgentProbe.ProbeError.noAnswer(status: result.status) }
-        return reply.models.isEmpty ? nil : MacAgent(kind: .pi, model: reply.model?.key, models: reply.models)
+        return reply.agent(.pi)
     }
 }
 #endif

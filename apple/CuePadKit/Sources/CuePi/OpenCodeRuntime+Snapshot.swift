@@ -7,7 +7,7 @@ extension OpenCodeRuntime {
         let client = connection.client
         let all = try await client.sessions().filter { !$0.isCueBrain }
         let asked = Date.now  // 对话里读不到一轮时的开始：快照里在跑的那一轮此刻之后才收尾
-        let active = Set(try await client.get(OpenCodeData<[String: OpenCodeActive]>.self, "/api/session/active").data.keys)
+        let active = Set(try await client.get(OpenCodeData<[String: JSONValue]>.self, "/api/session/active").data.keys)
         var started: [String: Date] = [:]
         for info in all where info.parentID == nil && active.contains(info.id) {
             let read = try await OpenCodeHistory.read(client, info, from: try await checkpoint(of: info.id), files: store.files)

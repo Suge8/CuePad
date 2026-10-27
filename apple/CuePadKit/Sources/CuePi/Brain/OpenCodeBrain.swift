@@ -15,8 +15,7 @@ import Foundation
 ///   起大脑时先删掉这个工作目录里服务已不在的带标记会话（崩溃留下的；同时在跑的另一个大脑的不动）；
 /// - MCP 是起服务后异步连上的：起大脑时等 `/api/mcp` 报 `cuepad` 已连上（`mcp.status.changed` 时再看）、再等它的工具进了工具表
 ///   （没有信号可等，见 `mcpToolsSettle`），之前说的话模型看不到它的工具；
-/// - 说的话以 `steer` 交：空闲时开一轮，正忙时在下一个步骤边界并进这一轮；停下用 `interrupt`，再撤掉收件箱里还没交出的话
-///   （不带 `resume` 的 `interrupt` 把它们留在收件箱，下一句来时一起交给模型）；
+/// - 说的话以 `steer` 交：空闲时开一轮，正忙时在下一个步骤边界并进这一轮；
 /// - 模型写成 `提供方/模型`，换模型与强度（模型的 `variant`，按 `OpenCodeModel.variant(for:)` 夹取）先在 `/api/model` 里认：
 ///   服务对不存在的模型也回 204；能不能看图看模型的 `capabilities.input`；
 /// - 事件流断了（服务卡住）就结束进程，报成退出。
@@ -190,16 +189,6 @@ final class OpenCodeBrain: HostedSession {
         struct Prompt: Encodable { var text: String; var files: [File]; var delivery = "steer" }
         let files = images.map { File(uri: "data:\($0.mimeType);base64,\($0.data.base64EncodedString())") }
         try await client.call("POST", "/api/session/\(sessionID)/prompt", directory: directory, body: Prompt(text: text, files: files))
-    }
-
-    /// 在不在跑由服务判断（歇着时是空操作）：刚交的话还没开出执行时也停得下。
-    func abort() async throws {
-        guard let client, let sessionID else { return }
-        struct Item: Decodable, Sendable { var id: String }
-        try await client.call("POST", "/api/session/\(sessionID)/interrupt", directory: directory)
-        for item in try await client.get(OpenCodeData<[Item]>.self, "/api/session/\(sessionID)/inbox", directory: directory).data {
-            try await client.call("DELETE", "/api/session/\(sessionID)/inbox/\(item.id)", directory: directory)
-        }
     }
 
     /// 先删会话再关输入；删不掉的（服务已卡住或退出）留给下次起大脑时清。
