@@ -81,7 +81,7 @@ extension OpenCodeRuntime {
         guard let connection else { return }
         do {
             let info = try await connection.client.get(OpenCodeData<OpenCodeSessionInfo>.self, "/api/session/\(sessionID)").data
-            guard info.parentID == nil else { return }
+            guard info.parentID == nil, !info.isCueBrain else { return }
             let (next, transcript) = try await OpenCodeHistory.read(connection.client, info, from: try await checkpoint(of: sessionID), files: store.files)
             // 读的时候会话被删了：删除时已对过账，这里再写就把索引写回来了
             guard self.connection === connection, sessions[sessionID] != nil else { return }

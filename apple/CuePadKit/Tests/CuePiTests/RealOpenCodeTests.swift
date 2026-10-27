@@ -8,8 +8,11 @@ import Testing
 
 /// 本机装的 OpenCode（`brew install opencode`）
 let realOpenCodeURL = ExecutableLocator.standard.candidates("opencode").first
-/// 测试用的免费模型：缺省 big-pickle，限流时用 `CUEPAD_OPENCODE_MODEL` 换成别的免费模型（`opencode` 提供方下的 id）
-let openCodeTestModel = PiModelKey(provider: "opencode", id: ProcessInfo.processInfo.environment["CUEPAD_OPENCODE_MODEL"] ?? "big-pickle")
+/// 测试用的模型：缺省免费的 big-pickle，限流时用 `CUEPAD_OPENCODE_MODEL` 换成别的免费模型（`opencode` 提供方下的 id），
+/// 或写成 `提供方/模型` 换成自己的提供方（密钥只经环境给，如 `DEEPSEEK_API_KEY`）
+let openCodeTestModel = ProcessInfo.processInfo.environment["CUEPAD_OPENCODE_MODEL"].map {
+    AgentKind.opencode.modelKey($0) ?? PiModelKey(provider: "opencode", id: $0)
+} ?? PiModelKey(provider: "opencode", id: "big-pickle")
 
 /// 端到端：真 OpenCode 的后台服务、真模型（免费的 big-pickle，要联网）。CuePad 看得到它的会话、在 CuePad 里跟它说话与作答，
 /// 也能在服务没开时自己把它拉起来开新会话、接着已结束的会话。
