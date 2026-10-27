@@ -81,10 +81,11 @@ function killsByName(text: string): boolean {
 	return false;
 }
 
-/** osascript 要执行的脚本文本：它自己这一段里的（-e）、heredoc 正文、点名的脚本文件。 */
-function scriptText(segment: string, heredocs: string, args: string[]): string {
+/** osascript 要执行的脚本文本：它自己这一段里的（-e）、点名的脚本文件；没有 -e 与文件时脚本来自标准输入（管道、heredoc），看整条命令。字符串字面量去掉：窗口名里写 click 不是点按。 */
+function scriptText(segment: string, command: string, heredocs: string, args: string[]): string {
 	const files = args.filter((a) => !a.startsWith("-") && existsSync(a) && statSync(a).isFile() && statSync(a).size < 1e5);
-	return [segment, heredocs, ...files.map((f) => readFileSync(f, "utf8"))].join("\n");
+	const fromStdin = !args.includes("-e") && files.length === 0;
+	return [segment, heredocs, fromStdin ? command : "", ...files.map((f) => readFileSync(f, "utf8"))].join("\n").replace(/"(?:[^"\\\n]|\\.)*"/g, '""');
 }
 
 function blocked(command: string): string | undefined {
@@ -105,7 +106,7 @@ function blocked(command: string): string | undefined {
 		if ((program === "killall" || program === "pkill") && args.some((a) => namesCuePad(a))) return `不按名字结束 CuePad。${INSTANCE}`;
 		if (program === "osascript") {
 			if (namesCuePad(segment)) return `不经 AppleScript 按名字操作 CuePad。${INSTANCE}`;
-			if (ACTIVATING.test(scriptText(segment, heredocs, args))) return FOREGROUND;
+			if (ACTIVATING.test(scriptText(segment, command, heredocs, args))) return FOREGROUND;
 		}
 		if (program === "xctrace" && args.some((a) => CUEPAD.test(a)))
 			return "xctrace 按名字、bundle id 或 .app 认 CuePad 会认到正式版、起出不隔离的实例：先 xc.sh run mac 拿 PID 再 xctrace record --attach <PID>，Release 构建用 CUEPAD_TRACE=<模板> xc.sh perf idle。";

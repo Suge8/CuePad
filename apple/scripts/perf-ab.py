@@ -142,8 +142,8 @@ def main(argv):
         for name in ("旧", "新") if i % 2 == 0 else ("新", "旧"):
             log = f"{out}/round{i + 1}-{name}.log"
             status, seconds = xc(sides[name], ["perf", *args], log)
-            # 前台的单次交互超预算时 perf mac 以 1 退出，行照样是全的；别的非零都是没量完
-            overBudget = status == 1 and kind == "interact" and "-CuePadForeground" in args
+            # 前台的单次交互超预算时 perf mac 以 1 退出，但表（含「超预算」）是量完才打的、行是全的；退出码 1 也可能是中途失败，要看到表
+            overBudget = status == 1 and kind == "interact" and "超预算" in open(log).read()
             rows = read_rows(sides[name], kind) if status == 0 or overBudget else []
             if not rows:
                 fail(sides[name], log, status)
