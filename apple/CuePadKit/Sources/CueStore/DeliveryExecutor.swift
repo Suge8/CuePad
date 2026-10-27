@@ -61,7 +61,7 @@ extension CueStore {
   /// 删除完成时间早于 `cutoff` 的请求；返回是否还剩已完成的（还剩就再排一轮）。
   /// 带着灵感或任务、已成功的开新会话请求在被认领前留着（会话记录可能晚到，认领靠它，见 `claimLaunchedCards`），
   /// 最多等到完成时间早于 `claimCutoff`（会话记录始终没到）；认领了、失败了、或之后又交给了别处（不会再被认领）就按保留期清理。
-  /// 发出的话（`send`）不按保留期清：送到的等它成了对话里的消息时随之收走（`applyTranscript`），气泡才不会在进对话之前没了；
+  /// 发出的话（`send`）不按保留期清：送到的等它在对话里的那条消息上了服务器再收走（`markPushed`），气泡才不会在消息到别的设备之前没了；
   /// 没能送达的留着等用户重发或移除（重发写成后移除它）。Cue 发起的请求失败了留着给 Cue 醒来时看（`cueChanges`）。
   /// 这几种都至多留到完成早于 `keptCutoff`。
   fileprivate func deleteCompletedDeliveries(before cutoff: Date, claimCutoff: Date, keptCutoff: Date) throws -> Bool {

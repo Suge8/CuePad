@@ -184,7 +184,7 @@ extension CodexRuntime {
 
     /// 会话的控制通道：托管的是它的进程，终端里的是常驻服务（钩子的父进程就是它才算；`codex exec` 之类没有控制接口）。
     func control(_ session: Tracked) async throws -> CodexRPC {
-        if let rpc = hosted[session.pid] { return rpc }
+        if let rpc = hosted[session.pid]?.rpc { return rpc }
         guard let rpc = try await daemonConnection(), rpc.pid == session.pid else { throw PiBridgeError.unsupported }
         return rpc
     }

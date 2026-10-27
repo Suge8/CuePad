@@ -130,7 +130,7 @@ struct ChatMarker<Label: View>: View {
             .font(Typography.caption.monospacedDigit()).foregroundStyle(palette.ink3).lineLimit(1)
             .padding(.horizontal, 8).padding(.vertical, 3)
             .background { if highlighted { Capsule().fill(palette.selection).transition(.opacity) } }
-            .animation(HandOff.quick, value: highlighted)
+            .animation(Motion.fade, value: highlighted)
         if let action {
             Button(action: action) { text.contentShape(.capsule) }
                 .buttonStyle(PressStyle(.button))

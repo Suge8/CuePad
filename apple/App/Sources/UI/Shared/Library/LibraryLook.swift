@@ -1,29 +1,29 @@
 import CueStore
 import SwiftUI
 
-/// 技能与说明里给人看的写法（两端同一份）：要整理的一件写什么、一份说明下面那一行、技能分几组、比一比的各份叫什么。
-/// 规则（哪些算要整理、谁读得到）在 `AgentLibrary`、`LibraryTidy` 与 Mac 端的扫描里，这里只把快照写成字。
+/// 技能与规则里给人看的写法（两端同一份）：一键整理那块纸上的几条事实、去重的几份叫什么、技能分几组、读不到的那几家怎么画。
+/// 规则（哪些该整理、谁读得到）在 `AgentLibrary`、`LibraryTidy` 与 Mac 端的扫描里，这里只把快照写成字。
 extension Workspace {
-    /// 要整理的那一件下面那一行：涉及哪些（名字、范围、哪几家），一行写得下的。
-    func detail(of tidy: LibraryTidy, in library: AgentLibrary) -> String {
+    /// 一键整理那块纸上的一条：结果的事实（多少个、谁读不到），不写要做什么。
+    func fact(of tidy: LibraryTidy, in library: AgentLibrary) -> String {
         switch tidy.kind {
-        case .stray(let moves): return Self.names(moves.map(\.skill.name))
-        case .unlinked(let skills):
-            let global = skills.filter { $0.scope == .global }.map(\.name)
-            let inProjects = skills.filter { $0.scope != .global }
-            let projects = Set(inProjects.map(\.scope)).count
-            if inProjects.isEmpty { return Self.names(global) }
-            if global.isEmpty { return String(localized: "\(projects) 个项目里的 \(inProjects.count) 个") }
-            return String(localized: "\(Self.names(global))，和 \(projects) 个项目里的 \(inProjects.count) 个")
-        case .duplicate(_, let copies):
-            return String(localized: "\(copies.map { scopeName($0.skill.scope) }.formatted(.list(type: .and))) 各一份")
-        case .malformed(_, let problem): return problem.description
-        case .empty(let directories): return Self.names(directories.map { ($0 as NSString).lastPathComponent })
-        case .globalInstructions(let sources):
-            let owners = AgentKind.allCases.filter(Set(sources.compactMap(\.origin.agent)).contains).map(\.name)
-            return tidy.differs ? String(localized: "\(owners.formatted(.list(type: .and))) 各一份，内容不同") : String(localized: "内容一样，换成链接就行")
-        case .projectClaude(let project, _):
-            return String(localized: "\(projectName(project))：Claude Code 读的是它，不读 AGENTS.md")
+        case .stray(let moves): return String(localized: "\(moves.count) 个技能在旧目录里")
+        case .unlinked(let skills): return String(localized: "\(skills.count) 个技能 Claude Code 读不到")
+        case .empty(let directories): return String(localized: "\(directories.count) 个空文件夹")
+        case .globalInstructions:
+            let unseen = library.instruction(.global).map(library.unseen) ?? []
+            let names = AgentKind.allCases.filter { tidy.writers.contains($0) || unseen.contains($0) }.map(\.name)
+            return String(localized: "\(names.formatted(.list(type: .and))) 没链到全局规则")
+        case .projectClaude(let project, _): return String(localized: "Claude Code 读不到「\(projectName(project))」的项目规则")
+        case .duplicate(let name, _): return name
+        }
+    }
+
+    /// 文件页页顶写的那一份：技能写它在哪（全局或项目名，名字在下面的名字框里，不重复），规则写它的名字。
+    func fileTitle(_ file: LibraryFile, in library: AgentLibrary?) -> String {
+        switch file {
+        case .skill(let path): library?.skill(at: path).map { scopeName($0.scope) } ?? ""
+        case .instruction(let kind): instructionName(kind)
         }
     }
 
@@ -37,38 +37,30 @@ extension Workspace {
 
     func projectName(_ id: UUID) -> String { catalog?.project(id)?.shownName ?? String(localized: "项目") }
 
-    /// 比一比里一份说明叫什么：共读的那份（全局说明、项目的 AGENTS.md）、哪家自己的那份、Pi 的系统提示、Codex 的自定提示词。
-    func sourceName(_ origin: InstructionSource.Origin, project: UUID?) -> String {
-        switch origin {
-        case .shared: project == nil ? String(localized: "全局说明") : "AGENTS.md"
-        case .agent(let kind): kind.name
-        case .piSystem: String(localized: "Pi 的系统提示")
-        case .codexPrompt: String(localized: "Codex 的自定提示词")
-        }
+    /// 去重时一份叫什么：范围名；同一范围有几份时带上它所在的目录（旧目录里的，如 `.codex`）。
+    func copyName(_ copy: SkillEntry, among copies: [SkillEntry]) -> String {
+        let scope = scopeName(copy.scope)
+        guard copies.filter({ $0.scope == copy.scope }).count > 1 else { return scope }
+        let parts = copy.path.split(separator: "/")
+        guard let skills = parts.lastIndex(where: { $0 == "skills" || $0 == "skill" }), skills > 0 else { return scope }
+        return Dotted(scope, String(parts[skills - 1])).visible
     }
 
-    /// 一份说明名字下面那一行：有没有这个文件、谁读它、谁链到它。
-    func line(of instruction: LibraryInstruction, readers columns: [AgentKind]) -> String {
-        guard instruction.text != nil else {
-            return instruction.kind == .global ? String(localized: "还没有") : String(localized: "还没有 AGENTS.md")
-        }
-        switch instruction.kind {
-        case .global:
-            let readers = instruction.readers.map(\.name)
-            return readers.isEmpty ? String(localized: "还没有一家读它") : String(localized: "\(Self.names(readers, limit: readers.count)) 都读这一份")
-        case .piSystem:
-            return String(localized: "换掉了 Pi 自带的系统提示")
-        case .project:
-            let linked = instruction.links.contains { ($0 as NSString).lastPathComponent == "CLAUDE.md" }
-            let blocked = columns.contains(.claudeCode) && !instruction.readers.contains(.claudeCode)
-            return Dotted("AGENTS.md", linked ? String(localized: "CLAUDE.md 链到它") : nil, blocked ? String(localized: "Claude Code 读的是另一份") : nil).visible
-        }
+    /// 替换基础提示的那两份叫什么（合并时可选一并撤掉）。
+    func replacementName(_ origin: InstructionSource.Origin) -> String {
+        origin == .piSystem ? String(localized: "Pi 的系统提示") : String(localized: "Codex 的自定提示词")
     }
+}
 
-    /// 几个名字：三个以内都写（"a、b 和 c"），再多写前两个"等 N 个"。
-    static func names(_ names: [String], limit: Int = 3) -> String {
-        if names.count <= limit { return names.formatted(.list(type: .and)) }
-        return String(localized: "\(names.prefix(2).formatted(.list(type: .and))) 等 \(names.count) 个")
+extension LibraryTidy {
+    /// 一键整理那块纸上这一条行首的图。
+    var icon: Icon {
+        switch kind {
+        case .stray: .folder
+        case .unlinked, .globalInstructions, .projectClaude: .link
+        case .empty: .unbindFolder
+        case .duplicate: .conflict
+        }
     }
 }
 
@@ -79,26 +71,7 @@ extension SelfManagedSkills {
     }
 }
 
-extension LibraryTidy {
-    /// 这一件行首的图：在哪（文件夹）、谁看不见（那家的标志）、撞名、格式不对（出错）、空目录、说明。
-    var icon: Icon {
-        switch kind {
-        case .stray: .folder
-        case .unlinked: .link
-        case .duplicate: .conflict
-        case .malformed: .failure
-        case .empty: .unbindFolder
-        case .globalInstructions, .projectClaude: .instruction
-        }
-    }
-
-    /// 那一件做不做得了：格式不对要在 Mac 上打开自己改，手机上只写出哪里不对。
-    func actionable(onMac: Bool) -> Bool {
-        if case .malformed = kind { onMac } else { true }
-    }
-}
-
-/// 技能清单的几组：全局一组（按分类排，"不在分类里"的最后），各项目各一组（按项目目录的先后），再是各家自己管的（只写个数）。
+/// 技能清单的几组：全局一组（按分类排，"不在分类里"的最后），各项目各一组（按项目目录的先后）。
 nonisolated struct SkillGroups: Equatable {
     struct Category: Equatable, Identifiable {
         let name: String
@@ -114,7 +87,6 @@ nonisolated struct SkillGroups: Equatable {
 
     let global: [Category]
     let projects: [ProjectSkills]
-    let total: Int
 
     init(_ library: AgentLibrary, order: [UUID]) {
         let global = library.skills(in: .global)
@@ -125,40 +97,29 @@ nonisolated struct SkillGroups: Equatable {
         for skill in library.skills { if case .project(let id) = skill.scope { byProject[id, default: []].append(skill) } }
         let ranked = order.filter { byProject[$0] != nil } + byProject.keys.filter { !order.contains($0) }.sorted { $0.uuidString < $1.uuidString }
         projects = ranked.map { ProjectSkills(project: $0, skills: byProject[$0] ?? []) }
-        total = library.skills.count
     }
 }
 
-/// 一行技能右端的几列：这台装着的每一家一列（`AgentLibrary.agents`，与登没登录无关），看得见是那家的标志，看不见留一个空圈。
-/// 同一列上下对齐：哪家漏了哪个，一眼顺着列看出来。表头那一行（`header`）同列宽，标志是次一级墨色。
-struct AgentColumns: View {
-    let columns: [AgentKind]
-    var unseen: [AgentKind] = []
-    var header = false
+/// 一行右端读不到这一份的那几家：只画那几家压了斜杠的标志（`StruckBrandMark`，淡墨），不点问号也读得懂是"这家读不到"；全读得到什么都不画。
+/// Mac 悬停一个写"<那家> 读不到"，读屏整组念同一句。槽位定宽（这台装着几家就几格，`AgentLibrary.agents`），标志靠右排，各行的名字与说明不随它挪。
+struct UnseenMarks: View {
+    let agents: [AgentKind]
+    let unseen: [AgentKind]
     @Environment(\.palette) private var palette
 
     static let width: CGFloat = 18
+    private static let mark: CGFloat = 12
 
     var body: some View {
         HStack(spacing: 0) {
-            ForEach(columns, id: \.self) { kind in
-                Group {
-                    if unseen.contains(kind) {
-                        Circle().strokeBorder(palette.track, lineWidth: 1.2).frame(width: 11, height: 11)
-                    } else {
-                        kind.mark.image.font(.system(size: header ? 12 : 11)).foregroundStyle(header ? palette.ink2 : palette.ink3)
-                    }
-                }
-                .frame(width: Self.width)
+            ForEach(agents.filter(unseen.contains), id: \.self) { kind in
+                StruckBrandMark(mark: kind.mark, size: Self.mark).foregroundStyle(palette.ink3).frame(width: Self.width)
+                    .help(String(localized: "\(kind.name) 读不到"))
             }
         }
+        .frame(width: Self.width * CGFloat(agents.count), alignment: .trailing)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(label)
-    }
-
-    private var label: String {
-        if header { return columns.map(\.name).formatted(.list(type: .and)) }
-        let missing = columns.filter(unseen.contains).map(\.name)
-        return missing.isEmpty ? String(localized: "各家都看得见") : String(localized: "\(missing.formatted(.list(type: .and))) 看不见")
+        .accessibilityLabel(unseen.isEmpty ? "" : String(localized: "\(unseen.map(\.name).formatted(.list(type: .and))) 读不到"))
+        .accessibilityHidden(unseen.isEmpty)
     }
 }

@@ -25,7 +25,7 @@ struct CueContextLine: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("上下文")
         .accessibilityValue("已用 \(percent)")
-        .animation(HandOff.quick, value: context)
+        .animation(Motion.fade, value: context)
     }
 }
 #endif

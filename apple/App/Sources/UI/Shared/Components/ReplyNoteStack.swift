@@ -84,6 +84,6 @@ private struct NoteRow: View {
             .help("删掉这条批注")
         }
         .onHover { hovering = $0 }
-        .animation(HandOff.quick, value: hovering)
+        .animation(Motion.fade, value: hovering)
     }
 }

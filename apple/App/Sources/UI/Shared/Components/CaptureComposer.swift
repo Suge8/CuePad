@@ -54,7 +54,7 @@ struct CaptureComposer: View {
             }
             if pinnedOpen { handOffButton }
         }
-        .animation(HandOff.quick, value: workspace.notice)
+        .animation(Motion.fade, value: workspace.notice)
         .padding(.horizontal, 12).padding(.top, 10)
     }
 

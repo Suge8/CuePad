@@ -89,11 +89,13 @@ extension CueStore {
   /// 在调用方的写事务里写对话与摘要（原样写会话文件的投影；"已结束的会话没有进行中的提问"在读出时定，见
   /// `PiSessionState.pendingPrompt`）。会话记录还不存在时只写消息。
   func applyTranscript(_ transcript: PiTranscript) throws {
-    // 你发出的话成了对话里的消息，投送请求就到头了：气泡由这条消息接替（`PiChat.outgoing`），请求随之收走，不另等清理。
-    // 没送到的也一样：Agent 晚收下的那句以对话为准
+    // 你发出的话成了对话里的消息就是送到了，没送到的也一样：Agent 晚收下的那句以对话为准。
+    // 请求等这条消息上了服务器再收走（`markPushed`），这之前气泡由它接替（`PiChat.outgoing`）
     try db.run(
-      "DELETE FROM deliveryRequests WHERE mode = '\(DeliveryMode.send.rawValue)' AND id IN (SELECT value FROM json_each(?))",
-      [Self.idList(transcript.messages.compactMap(\.deliveryID))])
+      """
+      UPDATE deliveryRequests SET status = '\(DeliveryStatus.succeeded.rawValue)', failure = NULL, completedAt = COALESCE(completedAt, ?2), modifiedAt = ?2
+      WHERE mode = '\(DeliveryMode.send.rawValue)' AND status != '\(DeliveryStatus.succeeded.rawValue)' AND id IN (SELECT value FROM json_each(?1))
+      """, [Self.idList(transcript.messages.compactMap(\.deliveryID)), Date.stamp])
     for message in transcript.messages {
       try registerAttachments(in: message.text)
       if try insert(message, ignoringExisting: true) { continue }

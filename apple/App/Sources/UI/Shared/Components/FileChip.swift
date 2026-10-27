@@ -47,7 +47,7 @@ struct FileChip: View {
                         .overlay { Capsule().fill(palette.ink2).scaleEffect(x: progress, anchor: .leading) }
                         .frame(height: 3)
                         .padding(.leading, thumbSide + 18).padding(.trailing, 12).padding(.bottom, 5)
-                        .animation(HandOff.quick, value: progress)
+                        .animation(Motion.fade, value: progress)
                 }
             }
             .contentShape(.rect)

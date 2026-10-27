@@ -198,12 +198,12 @@ final class TestApp {
     func install(_ kind: AgentKind, version: String = "2.1.0", signedIn: Bool = true) throws {
         let line = signedIn ? Self.piProbeLine : #"{"cuepadProbe":{"model":null,"models":[]}}"#
         let probe = kind == .pi ? "[ -n \"$CUEPAD_PROBE\" ] && { echo '\(line)'; exit 0; }\n" : ""
-        try executable(kind.command, "#!/bin/sh\n\(probe)echo '\(version)'\n", in: bin)
+        try executable(kind.facts.command, "#!/bin/sh\n\(probe)echo '\(version)'\n", in: bin)
     }
 
     /// 装了 Claude Code、还没登录（同 `offersClaudeInstaller` 备的那个，探测问得出没登录）。
     func installClaude() throws {
-        try executable(AgentKind.claudeCode.command, Self.fakeClaude(loginFails: false), in: bin)
+        try executable(AgentKind.claudeCode.facts.command, Self.fakeClaude(loginFails: false), in: bin)
     }
 
     /// 这台 Mac 上的 Node.js（找 Agent 的同一组目录里）：只报版本。
@@ -222,7 +222,7 @@ final class TestApp {
     /// CuePad 写技能与钩子，信任写成 Codex 记下的样子（`[hooks.state."<键>"]` 下一行 `trusted_hash`）。
     private func installCodexTrustedLikeCodex() throws {
         let integration = agentIntegration
-        let hooks = try #require(integration.hooks(.codex) as? CodexHooks).hooks
+        let hooks = try #require(integration.channel(.codex) as? CodexHooks).hooks
         let command = integration.hookCommand(.codex)
         let skill = integration.skillFile
         try FileManager.default.createDirectory(at: skill.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -241,7 +241,7 @@ final class TestApp {
         let bin = bin, installers = installers.path
         return AgentIntegration(
             paths: AgentPaths(pi: piPaths, environment: agentHomes), locate: { ExecutableLocator(searchDirectories: [bin]) },
-            cuepad: helper, installCommand: { kind, _ in "mkdir -p '\(bin.path)' && cp '\(installers)/\(kind.command)' '\(bin.path)/'" })
+            cuepad: helper, installCommand: { kind, _ in "mkdir -p '\(bin.path)' && cp '\(installers)/\(kind.facts.command)' '\(bin.path)/'" })
     }
 
     /// "官方安装脚本"的替身（`AgentIntegration.installCommand`）拷的东西：备好了的那家装得上，没备好的 cp 报错、装不上。
@@ -250,7 +250,7 @@ final class TestApp {
     /// 备好一个装得上的 Claude Code：报版本；`auth login` 记下已登录（`loginFails` 时退出码 1、没登录上）；
     /// 探测时（stream-json 的 initialize）按登录了没有回答账号，同真的 Claude Code。
     func offersClaudeInstaller(loginFails: Bool = false) throws {
-        try executable(AgentKind.claudeCode.command, Self.fakeClaude(loginFails: loginFails), in: installers)
+        try executable(AgentKind.claudeCode.facts.command, Self.fakeClaude(loginFails: loginFails), in: installers)
     }
 
     private static func fakeClaude(loginFails: Bool) -> String {

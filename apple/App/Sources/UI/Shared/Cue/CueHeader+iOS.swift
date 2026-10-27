@@ -70,7 +70,7 @@ private struct CuePlate: View {
         // 收着是定高的两行：字号跟着动态字体放大到这一档为止，再大第二行就被裁掉
         .dynamicTypeSize(...FloatingHeaderLayout.largestType)
         .contentShape(.rect)
-        .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: cue.now)
+        .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion), value: cue.now)
         .accessibilityElement(children: .combine)
     }
 }

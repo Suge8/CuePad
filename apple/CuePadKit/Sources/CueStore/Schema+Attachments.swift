@@ -3,7 +3,7 @@ import Foundation
 import ImageIO
 
 extension Schema {
-  /// 77：附件换成按键存取（`AttachmentKey`、`AttachmentFiles`）。
+  /// 78：附件换成按键存取（`AttachmentKey`、`AttachmentFiles`）。
   /// - 正文与文字里的 `![](cuepad://img/<hash>)` 改写成 `![](cuepad://file/<键>)`；
   /// - 附件记录的 format 换成键的扩展名（预览的按文件名，`PiPreview.key`；"bin" 是旧版给非图片写的）；同一份内容的几份预览文件名扩展名不同时，
   ///   多出的键各补一条记录（id 由键推出，各台补出同一行；只在文件在本机的那台补，免得传一条没文件的记录）；
@@ -104,7 +104,7 @@ extension Schema {
 }
 
 extension AttachmentFiles {
-  /// 77 的那一步：库旁的旧文件（以哈希为名）链成这几个键在缓存目录里的那份，要保底的再链成 `Attachments/<键>`；旧名不再是哪个键的保底就删掉。
+  /// 78 的那一步：库旁的旧文件（以哈希为名）链成这几个键在缓存目录里的那份，要保底的再链成 `Attachments/<键>`；旧名不再是哪个键的保底就删掉。
   func adoptLegacy(_ old: URL, as keys: [String], backup: Bool) throws {
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     for key in keys {

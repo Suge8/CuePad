@@ -44,11 +44,15 @@ enum DebugHooks {
         var quotaOpen = false
         /// 定时一出现就原地展开改（`-CuePadScheduleOpen YES`）：任务气泡里那一条、"记得什么"里"到点"的那一块。
         var scheduleOpen = false
+        /// 规则的文件页一打开就是合并前标出会并进来的段（`-CuePadMergePreview YES`）。
+        var mergePreview = false
+        /// 技能与规则页一打开在哪一段（`-CuePadLibraryTab skills`，两端的 library 场景设给 `Workspace.libraryPane`）。
+        var libraryPane = LibraryPane.rules
         #if os(iOS)
         /// 设置页通知那一行显示的状态（`-CuePadAlertStatus`；演示模式没有同步，真实状态出不来）。
         var alertStatus: PiAlertStatus?
         /// 搜索页一打开在哪个范围（`-CuePadSearchScope sessions`）。
-        var searchScope = SearchScreen.Scope.cards
+        var searchScope = SearchScope.cards
         /// Cue 页头一出现就展开成面板（`-CuePadCuePanel YES`）。
         var cuePanelOpen = false
         /// 不弹演示会话的前台横幅（`-CuePadQuiet YES`）。
@@ -143,7 +147,7 @@ enum DebugHooks {
         #endif
     }
 
-    /// 脚本起的实例（带就绪文件 `DebugScene.readyFile`：截图、录屏、交互验收、测量）；测试宿主不算。Mac 上当作有人在看（`CueViewing`）。
+    /// 脚本起的实例（带就绪文件 `DebugScene.readyFile`：截图、录屏、交互验收、测量）；测试宿主不算。Mac 上当作有人在看（`CueViewing`）；不建菜单栏图标（`AppDelegate`）、不注册全局快捷键（`AppServices.register`）：那是用户的菜单栏与按键，一天上百次的起停不该碰。
     static var scripted: Bool {
         #if DEBUG
         DebugScene.readyFile != nil
@@ -255,9 +259,10 @@ enum DebugHooks {
     typealias MainWindowClass = MainShellWindow
     #endif
 
-    /// 进到 `main`：`-CuePadBench launch` 从这里量冷启动（`LaunchBench`）。
+    /// 进到 `main`：先查用户在不在才许借前台（`DebugForeground`），再从这里量冷启动（`-CuePadBench launch`，`LaunchBench`）。
     static func launching() {
         #if DEBUG
+        DebugForeground.requireUserAway()
         LaunchBench.start()
         #endif
     }

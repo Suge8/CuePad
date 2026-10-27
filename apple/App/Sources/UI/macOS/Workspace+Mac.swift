@@ -31,18 +31,13 @@ extension Workspace {
         overlay = .card(card)
     }
 
-    /// 技能与说明里的一样（说明的编辑页、比一比）盖在当前页上（`LibraryItemLayer`），同灵感的编辑页。
-    func openLibrary(_ item: LibraryItem) {
+    /// 技能与规则的文件页盖在当前页上（`LibraryFileLayer`），同灵感的编辑页；已开着一份时换成这一份（去重的几份之间切换）。
+    func openLibrary(_ file: LibraryFile) {
         presses.clearSelection()
-        overlay = .library(item)
+        overlay = .library(file)
     }
 
-    /// 格式不对的技能：用默认的编辑器打开它的 SKILL.md，自己改（改好了重扫就不在要整理里了）。
-    func openSkillFile(_ directory: String) {
-        NSWorkspace.shared.open(URL(filePath: directory).appending(path: "SKILL.md"))
-    }
-
-    /// 技能那一行：在访达里显示它的目录。
+    /// 技能那一行的右键菜单：在访达里显示它的目录。
     func revealSkill(_ directory: String) {
         NSWorkspace.shared.activateFileViewerSelecting([URL(filePath: directory, directoryHint: .isDirectory)])
     }

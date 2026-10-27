@@ -11,7 +11,7 @@ extension CueStore {
   }
 
   /// 让 Cue 运行在 `host` 那台 Mac 并启用（另一台上的会停下）——手机与 Mac 同一条规则，按那台写下的能用的 Agent（`MacAgents`）判断：
-  /// 选的 Agent 那台用不了才换成 `CueProfile.runtimes` 里第一家能用的，模型属于原来那家、一并清掉；强度留着（运行时自己取档）。
+  /// 选的 Agent 那台用不了才换成第一家能用的（按 `AgentKind` 的顺序），模型属于原来那家、一并清掉；强度留着（运行时自己取档）。
   /// 那台一家都不能用时抛 `CueEnableError`，带上各家为什么。Cue 正在另一台上运行时只有 `moving`（你确认了要改过来）才改，否则抛
   /// `CueEnableError.runsElsewhere`：同一个事务里读、判、写，读到别的设备刚同步来的启用也不会悄悄把它抢过来。
   public func enableCue(on host: String, moving: Bool) throws {
@@ -20,7 +20,7 @@ extension CueStore {
         throw CueEnableError.runsElsewhere(try macAgents(on: running).shownName)
       }
       let usable = try macAgents(on: host)
-      let available = CueProfile.runtimes.filter(usable.kinds.contains)
+      let available = AgentKind.allCases.filter(usable.kinds.contains)
       guard let first = available.first else { throw CueEnableError.noRuntime(usable.whyNone) }
       _ = try editProfile { profile in
         profile.hostID = host
@@ -57,23 +57,41 @@ extension CueStore {
   }
 
   /// Cue 把会话此刻的这次停下留给你回（`CueLeft`）：会话行显示"待回复"（在等回答的回到等你确认），谁再对它说话就作废。
-  /// 会话没停着（在跑、出错、已结束）抛 `notStopped`。顺手去掉已作废的旧条目，表里只留此刻还成立的。返回记录 id（立即上传用）。
+  /// 会话没停着（在跑、被打断、已结束）抛 `notStopped`。返回记录 id（立即上传用）。你发起的一轮停下不经这里，当场留给你（`leaveHisStops`）。
   @discardableResult
   public func leaveToYou(_ sessionID: String) throws -> UUID {
     try write {
       guard let session = try sessionState(sessionID) else { throw CueStoreError.notFound }
       guard session.state.known?.isStopped == true else { throw CueStoreError.notStopped(session.title) }
-      let current = try cueState()
-      let others = current?.left.filter { $0.sessionID != sessionID } ?? []
-      let sessions = try select(
-        PiSessionState.self, where: "sessionID IN (SELECT value FROM json_each(?))", [JSONColumn.encode(others.map(\.sessionID))])
-      let left = others.filter { entry in sessions.contains(where: entry.holds) } + [CueLeft(sessionID: sessionID, since: session.stateSince)]
-      let next = CueState(
-        state: current?.state ?? .known(.settled), detail: current?.detail, step: current?.step, round: current?.round, context: current?.context,
-        left: left, modifiedAt: Date.stamp)
-      try upsert(next, updating: ["leftToYou", "modifiedAt"])
+      try putLeft([session])
       return CueState.recordID
     }
+  }
+
+  /// Cue 收回留给你回的这次停下（看过是只应了你一声、你不用回）：不再待回复，在等回答的回到等它答。没留给你的返回 nil，收回了返回记录 id（立即上传用）。
+  public func takeBack(_ sessionID: String) throws -> UUID? {
+    try write {
+      guard let session = try sessionState(sessionID), try cueState()?.left.contains(where: { $0.holds(for: session) }) == true else { return nil }
+      try putLeft([], removing: sessionID)
+      return CueState.recordID
+    }
+  }
+
+  /// 把这几个会话此刻的停下记进 `CueState.left`（同一会话换成这一次），去掉 `removing` 与已作废的，表里只留此刻还成立的；和库里一样就不写。
+  /// 返回写没写。必须在写事务内调用。
+  @discardableResult
+  func putLeft(_ sessions: [PiSessionState], removing: String? = nil) throws -> Bool {
+    let current = try cueState()
+    let replaced = Set(sessions.map(\.sessionID) + [removing].compactMap(\.self))
+    let others = current?.left.filter { !replaced.contains($0.sessionID) } ?? []
+    let live = try select(PiSessionState.self, where: "sessionID IN (SELECT value FROM json_each(?))", [JSONColumn.encode(others.map(\.sessionID))])
+    let left = others.filter { entry in live.contains(where: entry.holds) } + sessions.map { CueLeft(sessionID: $0.sessionID, since: $0.stateSince) }
+    guard Set(left) != Set(current?.left ?? []) else { return false }
+    let next = CueState(
+      state: current?.state ?? .known(.settled), detail: current?.detail, step: current?.step, round: current?.round, context: current?.context,
+      left: left, modifiedAt: Date.stamp)
+    try upsert(next, updating: ["leftToYou", "modifiedAt"])
+    return true
   }
 
   /// Cue 在跑的这一轮自己醒来的那一行（经过那一行，带着为什么醒 `CueMessage.wake`、几点醒的与叫醒它的那几处当时叫什么）；

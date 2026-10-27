@@ -315,6 +315,17 @@ DEFINE SCHEMA
         GRANT CREATE TO "_icloud"
     );
 
+    RECORD TYPE agentLibraryFiles (
+        "___recordID" REFERENCE QUERYABLE,
+        hostID        STRING,
+        path          ENCRYPTED STRING,
+        hash          STRING,
+        text          ENCRYPTED STRING,
+        modifiedAt    INT64,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud"
+    );
+
     RECORD TYPE syncFloor (
         "___recordID" REFERENCE QUERYABLE,
         version       INT64,

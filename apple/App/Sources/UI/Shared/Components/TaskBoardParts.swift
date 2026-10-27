@@ -2,8 +2,10 @@ import CueStore
 import SwiftUI
 
 /// 四列并排（Mac、宽屏 iPad 与 iPhone 横屏的进展页）：每列（`BoardColumn`）的列头浮在顶上（`BoardColumnHeader`，写字玻璃），卡各自滚动、从列头后面过。
-/// 列按可见宽四等分，四列总在眼前；列最窄 `minColumn`，放不下四列时（如 Mac 窄窗开着侧栏）整排横向滚动、最右一列露出一截
-/// （看得出能横划）：两侧页边是滚动区内容的边（`margin`），列滚到窗口边才裁，滚到头右边照样留页边。
+/// 每列先给最窄的 `minColumn`，可见宽多出来的按各列的份数分（`TaskBoard.Column.share`：推进中、等你多分，待办、已完成少分）——宽窗口里轻重分得开，
+/// iPad 竖屏这类刚够四列的宽里四列差不多一样宽、轻的两列不被挤成一行三四个字；四列总在眼前，放不下四列时（如 Mac 窄窗开着侧栏）
+/// 整排横向滚动、最右一列露出一截（看得出能横划）：两侧页边是滚动区内容的边（`margin`），列滚到窗口边才裁，滚到头右边照样留页边。
+/// 卡换列时从原处飞到新处（`boardFlight`），四列共用量飞行位置的坐标系与正被拖着的那件（`boardStage`）。
 struct BoardColumns: View {
     let board: TaskBoard
     @Binding var adding: Bool
@@ -20,19 +22,24 @@ struct BoardColumns: View {
     @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
-        // 按可见宽算一次列宽与卡标题的行数，四列、每张卡都用这一份（几何读数只给子视图，不写回状态）
+        // 按可见宽算一次各列宽与卡标题的行数，每列的卡都用这一份（几何读数只给子视图，不写回状态）
         GeometryReader { proxy in
-            let column = max(Self.minColumn, (proxy.size.width - margin * 2 - Self.gap * 3) / 4)
+            let spare = max(0, proxy.size.width - margin * 2 - Self.gap * 3 - Self.minColumn * 4)
+            let unit = spare / TaskBoard.Column.allCases.map(\.share).reduce(0, +)
             ScrollView(.horizontal) {
                 HStack(alignment: .top, spacing: Self.gap) {
                     ForEach(TaskBoard.Column.allCases) { item in
-                        BoardColumn(column: item, board: board, adding: $adding, newTaskProject: newTaskProject).frame(width: column)
+                        let width = Self.minColumn + unit * item.share
+                        BoardColumn(column: item, board: board, adding: $adding, newTaskProject: newTaskProject)
+                            .frame(width: width)
+                            .environment(\.boardTitle, BoardCardMetrics.title(item, cardWidth: width - 2 * BoardCardMetrics.inset, typeSize: typeSize))
                     }
                 }
             }
             .safeAreaPadding(.horizontal, margin)
             .scrollBounceBehavior(.basedOnSize)
-            .environment(\.boardTitle, BoardCardMetrics.title(cardWidth: column - 2 * BoardCardMetrics.inset, typeSize: typeSize))
+            .scrollIndicators(.never)
+            .boardStage()
         }
     }
 }
@@ -61,6 +68,8 @@ struct BoardColumn: View {
     @Environment(\.cardAgents) private var agents
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.boardMoves) private var moves
+    @Environment(\.boardDrag) private var dragging
     @State private var showsEarlier = DebugHooks.preset.showsDone
     @State private var targeted = false
     /// 拖到已完成的那件与它这一下（同点完成圈，`taskCheck`）。
@@ -76,6 +85,8 @@ struct BoardColumn: View {
             } isTargeted: { targeted = $0 && column != .todo && column != .waiting }
             .taskCheck(finishing?.task, subtasks: finishing?.steps, check: $check)
             .modifier(ShotPresenter(column: column, opened: $opened))
+            // 有卡飞进来的那一列（行）排在别的列上面：往左、往上飞的卡不从别的列的卡下面钻过去（`boardFlight`）
+            .zIndex(moves?.lands(in: board.flights(column)) == true ? 1 : 0)
     }
 
     /// 推进中这一列的线要的"最近说过的话"（`SaidReading`）。
@@ -91,7 +102,7 @@ struct BoardColumn: View {
     @ViewBuilder private var lane: some View {
         #if os(iOS)
         if row {
-            BoardRowLane(column: column, count: board.count(column), targeted: targeted, rewind: adding && column == .todo ? board.todo.first?.id : nil) {
+            BoardRowLane(column: column, count: board.count(column), targeted: lit, rewind: adding && column == .todo ? board.todo.first?.id : nil) {
                 if adding && column == .todo { newTask.transition(.opacity) }
             } content: {
                 content
@@ -109,11 +120,15 @@ struct BoardColumn: View {
         #if os(macOS)
         ScrollView { cards }
             .scrollBounceBehavior(.basedOnSize)
+            .scrollClipDisabled()
+            .boardLane(column)
             .boardTopRow(column: column, count: board.count(column))
-            .background { BoardLane(targeted: targeted) }
+            .background { BoardLane(targeted: lit) }
         #else
         ScrollView { cards }
             .scrollBounceBehavior(.basedOnSize)
+            .scrollClipDisabled()
+            .boardLane(column)
             .safeAreaPadding(.top, BoardColumnHeader.height + BoardCardMetrics.inset)
             .overlay(alignment: .top) {
                 BoardColumnHeader(column: column, count: board.count(column))
@@ -121,9 +136,12 @@ struct BoardColumn: View {
                     .glass(in: .rect(cornerRadius: BoardCardMetrics.radius, style: .continuous))
                     .padding([.horizontal, .top], BoardCardMetrics.inset)
             }
-            .background { BoardLane(targeted: targeted) }
+            .background { BoardLane(targeted: lit) }
         #endif
     }
+
+    /// 拖着卡停在这一列上：只在有一张卡正被拖着时算（`boardDrag`），拖完不留着底。
+    private var lit: Bool { targeted && dragging != nil }
 
     private var isRow: Bool {
         #if os(iOS)
@@ -136,16 +154,6 @@ struct BoardColumn: View {
     private var cards: some View {
         LazyVStack(alignment: .leading, spacing: BoardCardMetrics.gap) { content }
             .padding(.horizontal, BoardCardMetrics.inset).padding(.vertical, BoardCardMetrics.inset).padding(.bottom, 24)
-            .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: ids)
-    }
-
-    private var ids: [String] {
-        switch column {
-        case .todo: board.todo.map(\.id.uuidString)
-        case .advancing: board.advancing.map(\.id)
-        case .waiting: board.waiting.map(\.id)
-        case .done: board.done.map(\.id.uuidString) + (showsEarlier ? board.earlier.map(\.id.uuidString) : [])
-        }
     }
 
     @ViewBuilder private var content: some View {
@@ -156,29 +164,31 @@ struct BoardColumn: View {
                 newTask.transition(.opacity)
             }
             ForEach(board.todo) { item in
-                card(item).draggable(item.id.uuidString).modifier(InsertBefore(id: item.id) { drop($0, before: item.id) })
+                card(item).boardDraggable(item.id).insertsBefore(item.id) { drop($0, before: item.id) }
             }
             if board.todo.isEmpty && !adding { empty("没有待办") }
         case .advancing:
-            let groups = workspace.byAttention(board.advancing, agents: agents)
-            ForEach(groups, id: \.tier) { group in
-                // 档与档之间多空一截：栈里一格零高的空，前后各一个行距（横着的一行里一格就是一张卡宽，不空）
-                if group.tier != groups.first?.tier, !isRow { Color.clear.frame(height: 0) }
-                ForEach(Array(group.work.enumerated()), id: \.element.id) { index, work in
-                    let moves = group.tier == .running && index < BoardLine.maxMoving
+            // 一个 ForEach 排完各档：卡换档是同一串里换位（让位），不是这一档删一张、那一档添一张（同一个飞行身份一删一添会从栈顶飞过来）
+            ForEach(AdvancingSlot.slots(workspace.byAttention(board.advancing, agents: agents), gaps: !isRow)) { slot in
+                switch slot {
+                case .gap:
+                    // 档与档之间多空一截：栈里一格零高的空，前后各一个行距（横着的一行里一格就是一张卡宽，不空）
+                    Color.clear.frame(height: 0)
+                case .work(let work, let moves):
                     if let item = work.item {
-                        card(item, moves: moves).draggable(item.id.uuidString)
+                        card(item, moves: moves).boardDraggable(item.id)
                     } else if case .session(let session) = work.work {
                         BoardSessionCard(session: session, project: glyph(workspace.catalog?.project(work.project)), moves: moves)
                             .boardDim(project: work.project)
+                            .boardFlight(work.id)
                     }
                 }
             }
             if board.advancing.isEmpty { empty("拖一件待办到这里开始") }
         case .waiting:
             ForEach(board.held) { held in
-                let card = BoardWaitCard(held: held, project: glyph(workspace.catalog?.project(held.project)))
-                if let item = held.item { card.draggable(item.id.uuidString) } else { card }
+                let card = BoardWaitCard(held: held, project: glyph(workspace.catalog?.project(held.project))).boardFlight(held.id)
+                if let item = held.item { card.boardDraggable(item.id) } else { card }
             }
             if board.count(.waiting) == 0 { empty("没有等你的事") }
         case .done:
@@ -193,6 +203,7 @@ struct BoardColumn: View {
     private func card(_ item: TaskBoard.Item, moves: Bool = false) -> some View {
         BoardTaskCard(item: item, column: column, project: glyph(item.project), moves: moves) { opened = $0 }
             .boardDim(project: item.task.projectID)
+            .boardFlight(item.flight)
     }
 
     /// 卡上的项目小图形：只看一个项目时不画（范围已经说了）。
@@ -219,7 +230,7 @@ struct BoardColumn: View {
     private var earlierToggle: some View {
         HStack(spacing: 12) {
             Button {
-                withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { showsEarlier.toggle() }
+                withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { showsEarlier.toggle() }
             } label: {
                 HStack(spacing: 4) {
                     Text("更早做完的 \(board.earlier.count)").monospacedDigit()
@@ -300,50 +311,6 @@ private struct ShotPresenter: ViewModifier {
     }
 }
 
-/// 待办里一张卡的落点：拖到它上面就是排到它前面，卡的上沿画一条插入线（同大纲的插入线：墨色、起点一个小圈）。
-private struct InsertBefore: ViewModifier {
-    let id: UUID
-    let perform: ([String]) -> Bool
-    @State private var targeted = false
-    @Environment(\.palette) private var palette
-
-    func body(content: Content) -> some View {
-        content
-            .overlay(alignment: .top) {
-                if targeted {
-                    HStack(spacing: 0) {
-                        Circle().strokeBorder(palette.ink, lineWidth: 2).frame(width: 9, height: 9)
-                        Capsule().fill(palette.ink).frame(height: 2)
-                    }
-                    .offset(y: -8).allowsHitTesting(false).transition(.opacity)
-                }
-            }
-            .dropDestination(for: String.self) { ids, _ in perform(ids) } isTargeted: { targeted = $0 }
-            .animation(HandOff.quick, value: targeted)
-            .sensoryFeedback(.selection, trigger: targeted) { _, now in now }
-    }
-}
-
-extension View {
-    /// 读看板（三端进展页同一处）：库变了重读；过了零点也重读一次——"今天做完"按读的那一刻分，库没变时日子换了也要换（同项目页）。
-    func observingBoard(into board: Binding<TaskBoard?>, store: CueStore, onError: @escaping (any Error) -> Void) -> some View {
-        modifier(BoardReading(board: board, store: store, onError: onError))
-    }
-}
-
-private struct BoardReading: ViewModifier {
-    @Binding var board: TaskBoard?
-    let store: CueStore
-    let onError: (any Error) -> Void
-    @State private var day = 0
-
-    func body(content: Content) -> some View {
-        content
-            .observing(store, id: day, into: $board, onError: onError) { try TaskBoard.read(from: $0) }
-            .onDayChange { day += 1 }
-    }
-}
-
 /// 读推进中一列各会话最近说的几句，交给列里的卡（`boardSaid`）：一列一次读，会话换了才重新订阅，读到的没变不送到界面。
 private struct SaidReading: ViewModifier {
     let sessions: [String]
@@ -354,5 +321,25 @@ private struct SaidReading: ViewModifier {
         content
             .environment(\.boardSaid, said ?? [:])
             .observing(workspace.services.store, id: sessions, into: $said) { [sessions] in try $0.recentSaid(in: sessions, limit: BoardLine.maxSaid) }
+    }
+}
+
+/// 推进中这一列从上到下的一格：一张卡（`moves`：线可以动，只给在跑那一档的前几张，`BoardLine.maxMoving`），或档与档之间的空。
+private enum AdvancingSlot: Identifiable {
+    case gap(BoardPulse.Tier)
+    case work(TaskBoard.Work, moves: Bool)
+
+    var id: String {
+        switch self {
+        case .gap(let tier): "gap/\(tier)"
+        case .work(let work, _): work.id
+        }
+    }
+
+    static func slots(_ groups: [(tier: BoardPulse.Tier, work: [TaskBoard.Work])], gaps: Bool) -> [AdvancingSlot] {
+        groups.enumerated().flatMap { offset, group in
+            (offset > 0 && gaps ? [.gap(group.tier)] : [])
+                + group.work.enumerated().map { .work($1, moves: group.tier == .running && $0 < BoardLine.maxMoving) }
+        }
     }
 }

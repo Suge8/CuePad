@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// 选 Cue 在哪台 Mac 上运行的菜单，各入口同一份（Cue 页的启用 `CueWelcome`、手机 Cue 面板、两端设置里那一行 `CueHostSetting`）：
-/// 每台一项，副标题写能当大脑的几家或为什么一家都不能用，选不了的是停用项（`CueSettings.Host.selectable`）。
+/// 每台一项，副标题写能用的几家或为什么一家都不能用，选不了的是停用项（`CueSettings.Host.selectable`）。
 /// 启用入口只列几台，选了就在那台启用；设置里打勾此刻运行的那台，另一组是"不启用"，选了另一台（或不启用）才改。
 struct CueHostMenu<Label: View>: View {
     let hosts: [CueSettings.Host]

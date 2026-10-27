@@ -8,7 +8,7 @@ import IOSurface
 /// - 适合屏幕是 1 倍：整张放在两条栏之间（`chrome`）、居中；放大后铺到栏下面，拖到哪都看得到边角。
 /// - 触控板捏合以指尖处为中心、跟手，捏过头（小过适合屏幕、大过上限）有橡皮筋回弹；放大后双指滑动看图，滑到边有回弹：都是系统滚动视图的。
 /// - 捏完离适合屏幕不到一成就回到适合屏幕（`snap`，在 `settle` 里）。
-/// - 双击、智能缩放（双指轻点两下）在适合屏幕与放大（`PreviewScale.tap` 倍，至多到上限）之间切，放大到点的那一处，走 `Motion.move` 的曲线。
+/// - 双击、智能缩放（双指轻点两下）在适合屏幕与放大（`PreviewScale.tap` 倍，至多到上限）之间切，放大到点的那一处，走 `Motion.glide`。
 /// - 放大后按住拖动看图（同"预览"的移动）。
 /// - 横扫翻不翻页由全屏页按这张往那边还滑不滑得动定（`PageInput`）：没放大、或放大了已滑到那一边才翻。
 /// 解码都在后台，与手机同一套：打开时只按全屏页的大小解一份（进缩略图缓存，再打开不再解）；第一次放大停下来才解清楚的那张
@@ -129,8 +129,8 @@ final class PreviewZoom: NSScrollView, PreviewShowing {
     private func animate(to target: CGFloat, at point: NSPoint) {
         moving = true
         NSAnimationContext.runAnimationGroup { context in
-            context.duration = Motion.moveDuration
-            context.timingFunction = Motion.moveTiming
+            context.duration = Motion.Glide.duration
+            context.timingFunction = Motion.Glide.timing
             animator().setMagnification(target, centeredAt: point)
         } completionHandler: { [weak self] in
             MainActor.assumeIsolated { self?.settle() }  // AppKit 在主线程回调，类型上没带隔离

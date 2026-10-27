@@ -3,7 +3,7 @@ import CueStore
 import SwiftUI
 
 /// 侧栏的结构与 iPhone、iPad 同一份（`SidebarOutline`），这里只管 Mac 的长相，一列到底：最上面 Cue 名片（`CueSidebarCard`，要你拍板的事）、
-/// 下面一行进展（`ProgressRow`：看板与会话）、项目（全部，置顶的在前；行只有图标与名字），项目区下面一行额度（`SidebarQuota`），底栏是归档、回收站、技能与说明与设置。
+/// 下面一行进展（`ProgressRow`：看板与会话）、项目（全部，置顶的在前；行只有图标与名字），项目区下面一行额度（`SidebarQuota`），底栏是归档、回收站、技能与规则与设置。
 /// 点哪一处，内容区就是哪一页。会话不在侧栏列：全部在进展页的会话段；项目行不挂状态标——要看的在 Cue，在动的在进展。
 /// 名片与进展一直在看得见的地方，只有项目区滚动（方向键与 ⌘1–9 换到的项目滚进可见区）；项目区是普通栈：几十行的量级，行高固定。
 struct Sidebar: View {
@@ -61,7 +61,7 @@ struct Sidebar: View {
         }
     }
 
-    /// 底栏：启动问题（有才出现），下面一排归档、回收站、技能与说明（有要整理的角上带点）与设置。
+    /// 底栏：启动问题（有才出现），下面一排归档、回收站、技能与规则（有该整理的角上带点）与设置。
     private var footer: some View {
         VStack(spacing: 8) {
             StartupIssues()
@@ -270,14 +270,14 @@ private struct ProjectRow: View, Equatable {
 private struct FooterPage: View {
     let entry: SidebarOutline.Entry
     var count = 0
-    /// 角上带一颗墨点：这一页里有要你处理的（技能与说明有要整理的），不在那一页时也看得到，不打断。
+    /// 角上带一颗墨点：这一页里有要你处理的（技能与规则有该整理的），不在那一页时也看得到，不打断。
     var alert = false
     let select: (Route) -> Void
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
     private var title: String {
-        if alert { return String(localized: "\(entry.title)，有要整理的") }
+        if alert { return String(localized: "\(entry.title)，有该整理的") }
         return count > 0 ? String(localized: "\(entry.title)，\(count) 项") : entry.title
     }
 
@@ -291,7 +291,7 @@ private struct FooterPage: View {
                 .overlay(alignment: .topTrailing) {
                     if alert { Circle().fill(palette.ink).frame(width: CueDot.size, height: CueDot.size).offset(x: -5, y: 5).transition(.opacity) }
                 }
-                .animation(HandOff.quick, value: alert)
+                .animation(Motion.fade, value: alert)
                 .contentShape(.circle)
         }
         .buttonStyle(PressStyle(.button))

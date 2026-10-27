@@ -86,9 +86,9 @@ public struct PiSession: Identifiable, Sendable, Equatable {
     /// 重新上桥时沿用的状态与计时（`PiBridge.attach`）
     var carried: (state: PiWorkState, times: PiTimes) { (state, PiTimes(stateSince: stateSince, busySince: busySince)) }
 
-    /// 留下了对话：会话文件已经落盘（第一条消息之前不建文件）；OpenCode 的会话一建就在它的数据库里。下线时据此决定进不进历史。
+    /// 留下了对话：会话文件已经落盘（第一条消息之前不建文件）；会话不在文件里的（OpenCode）一建就在它的数据库里。下线时据此决定进不进历史。
     public var spoke: Bool {
-        agent == .opencode || sessionFile.map { FileManager.default.fileExists(atPath: $0.path(percentEncoded: false)) } ?? false
+        agent.facts.sessionFiles == nil || sessionFile.map { FileManager.default.fileExists(atPath: $0.path(percentEncoded: false)) } ?? false
     }
 
     /// 会话的显示名，规则见 `PiSessionName`。

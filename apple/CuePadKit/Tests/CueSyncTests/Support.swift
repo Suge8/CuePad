@@ -158,8 +158,9 @@ struct Loopback {
     try await deliver(from: b, to: a)
   }
 
-  func deliver(from: Rig, to: Rig) async throws {
-    let batch = try await from.coordinator.nextBatch(.pending(excluding: []), limit: .max)
+  /// `only`：只传这几条（马上传那一路）。
+  func deliver(from: Rig, to: Rig, only names: Set<String>? = nil) async throws {
+    let batch = try await from.coordinator.nextBatch(names.map { .only($0) } ?? .pending(excluding: []), limit: .max)
     guard !batch.isEmpty else { return }
     let deletions: [(id: CKRecord.ID, recordType: String)] = try batch.deletes.compactMap { id in
       let type = try RawDB(from.fixture.url).rows("SELECT recordType FROM syncRecords WHERE recordName = '\(id.recordName)'").first?[0]

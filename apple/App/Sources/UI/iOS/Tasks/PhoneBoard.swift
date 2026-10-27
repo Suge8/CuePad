@@ -4,8 +4,10 @@ import SwiftUI
 
 /// 窄屏进展页的竖版看板：Mac 看板转 90°——待办、推进中、等你、已完成四行竖着排，每行一条（`BoardRowLane`），
 /// 行头竖在左端，卡在行里横着排、放不下就在这一行里横划。
-/// 四行竖着铺满顶栏与标签栏之间（`BoardRows`）：行高只由这段高定，卡多卡少、有没有都不改，下面不空出一块，整页拖不动；
-/// 只有辅助字号下四行连各自的最矮都叠不下，才整页竖着滚。
+/// 四行竖着铺满顶栏与底部那一排之间（`BoardRows`）：行高只由这段高定，卡多卡少、有没有都不改，下面不空出一块，整页拖不动；
+/// 只有辅助字号下四行连各自的最矮都叠不下，才整页竖着滚。高按各行的理想高分（`TaskBoard.Column.rowTiers`）：推进中、等你各三排卡，
+/// 待办、已完成各一排矮卡——iPhone 17 默认字号下推进中的三排还余约 14 点、等你约 11 点（实测于底部那一排之上），矮屏与大一两档的字下重的两行先回到两排。
+/// 卡换行时从原处飞到新处（`boardFlight`），四行共用量飞行位置的坐标系与正被拖着的那件（`boardStage`）。
 /// 点"+"添加任务时整页先回到待办那一行。
 struct PhoneBoard: View {
     let board: TaskBoard
@@ -17,7 +19,7 @@ struct PhoneBoard: View {
         ScrollViewReader { proxy in
             ScrollView {
                 BoardRows(gap: Self.gap) {
-                    // 量这一屏多高的尺：滚动区看得见的那段（让开顶栏与标签栏）
+                    // 量这一屏多高的尺：滚动区看得见的那段（让开顶栏与底部那一排）
                     Color.clear.containerRelativeFrame(.vertical)
                     ForEach(TaskBoard.Column.allCases) { column in
                         BoardColumn(column: column, board: board, adding: $adding, newTaskProject: newTaskProject, row: true)
@@ -27,8 +29,9 @@ struct PhoneBoard: View {
             }
             .scrollBounceBehavior(.basedOnSize)
             .scrollIndicators(.never)
+            .boardStage()
             .onChange(of: adding) {
-                if adding { withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { proxy.scrollTo(TaskBoard.Column.todo, anchor: .top) } }
+                if adding { withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { proxy.scrollTo(TaskBoard.Column.todo, anchor: .top) } }
             }
         }
     }

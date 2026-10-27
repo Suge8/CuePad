@@ -48,9 +48,15 @@ struct ComposerField: UIViewRepresentable {
     func updateUIView(_ view: GrowingTextView, context: Context) {
         context.coordinator.parent = self
         // 组合期的文字已经在 `text` 里；只在外部改写（回到会话恢复草稿、发送后清空、展开编辑、编辑后重发）时才写回，免得打断输入法。
+        // 外部改写赢过组合期：没定字就发出时拼音已随这句发出去，先结束组合（定字那一下不回写草稿）再写，框里不留它、之后也不被定字写回草稿。
         // 外部写进来的光标放到末尾、排好后让末尾露出来：接着写的地方在末尾，撑满行数时看见的是最后几行而不是开头
-        if text != context.coordinator.sent, view.markedTextRange == nil {
+        if text != context.coordinator.sent {
             context.coordinator.sent = text
+            if view.markedTextRange != nil {
+                context.coordinator.writing = true
+                view.unmarkText()
+                context.coordinator.writing = false
+            }
             view.text = text
             view.textChanged()
             view.layOutAll()
@@ -84,16 +90,18 @@ struct ComposerField: UIViewRepresentable {
         /// 上次交给 `text` 的那一串：绑定原样传回时是同一块存储，比较不用逐字（更新时拿它判断是不是外部改写，不拿文字区的字比）。
         var sent = ""
         var ink: Color?
+        /// 正在写外部改写的文字：这期间文字区报的变化不是你打的。
+        var writing = false
         init(_ parent: ComposerField) { self.parent = parent }
 
         func textViewDidChange(_ view: UITextView) {
-            guard let view = view as? GrowingTextView else { return }
+            guard !writing, let view = view as? GrowingTextView else { return }
             view.placeholder.isHidden = !view.text.isEmpty
             view.textChanged()
             let text = String(native: view.textStorage.string as NSString)
             sent = text
             // 高度跟着文字一起走动画：拼音换行、定字收回每次都差一整行
-            withAnimation(parent.reduceMotion ? nil : Motion.snappy) { parent.text = text }
+            withAnimation(Motion.spatial(Motion.nudge, reduceMotion: parent.reduceMotion)) { parent.text = text }
         }
     }
 }

@@ -90,7 +90,7 @@ struct PageMenuSlot: View {
         .menuStyle(.button).menuIndicator(.hidden)
         .buttonStyle(ControlButtonStyle(kind: .circular))
         .fixedSize()
-        .background { WindowEdge(\.minX) { workspace.pages.moreEdge = $0 } }
+        .background { WindowFrame(\.minX) { workspace.pages.moreEdge = $0 } }
         .padding(.leading, Spacing.toolbarGap)
         .disabled(content == .none || content == .card(nil))
         .help(content.help)

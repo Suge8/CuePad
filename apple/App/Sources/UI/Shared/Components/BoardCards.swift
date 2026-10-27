@@ -2,9 +2,9 @@ import CueStore
 import SwiftUI
 
 extension View {
-    /// 看板上一张卡的外形（四列同一种）：纸面（`paper`），多高由里面的排法定（`BoardCardLayout`：同一列的卡一样宽，就一样高；手机竖版看板里铺满行给的格），
-    /// 左右内边距与圆角见 `TaskMetrics`。平放的纸不加模糊阴影（侧栏开合时整面墙每帧重画，`paper` 的注释）：靠纸与桌面（托盘）的明度差把纸托出来。
-    func boardCard() -> some View { modifier(BoardCardFrame()) }
+    /// 看板上一张卡的外形：纸面（`paper`），纸色随所在的列（`TaskBoard.Column.paper`，四列分轻重），多高由里面的排法定（`BoardCardLayout`：同一列的卡一样宽，就一样高；
+    /// 手机竖版看板里铺满行给的格），左右内边距与圆角见 `TaskMetrics`。平放的纸不加模糊阴影（侧栏开合时整面墙每帧重画，`paper` 的注释）：靠纸与桌面的明度、色相差把纸托出来。
+    func boardCard(_ column: TaskBoard.Column) -> some View { modifier(BoardCardFrame(column: column)) }
 
     /// 项目联动（Mac）：指针停在侧栏的项目行或卡上的项目小图形上时（`Workspace.hoveredProject`），别的项目的卡淡下去，这个项目的不动。
     /// 只这一个小修饰读它：指针换项目时重算的是各卡的透明度，不是整张卡。没有项目的（Cue 的一般提问）跟着淡。
@@ -26,12 +26,22 @@ extension EnvironmentValues {
 }
 
 private struct BoardCardFrame: ViewModifier {
+    let column: TaskBoard.Column
     @Environment(\.boardRow) private var row
+    @Environment(\.boardArrival) private var arrival
+    @Environment(\.palette) private var palette
 
     func body(content: Content) -> some View {
         content.padding(.horizontal, row ? BoardCardMetrics.rowPadding : TaskMetrics.cardPadding)
             .frame(maxWidth: .infinity, maxHeight: row ? .infinity : nil, alignment: .leading)
-            .paper(radius: TaskMetrics.cardRadius)
+            .background {
+                // 换列飞来时盖着原来那一列的纸色，随着飞淡掉（`boardFlight`）：纸色在飞的途中调过来，不在起飞那一下换
+                if let arrival {
+                    RoundedRectangle(cornerRadius: TaskMetrics.cardRadius, style: .continuous)
+                        .fill(arrival.from.paper(palette) ?? palette.paper).opacity(arrival.landed ? 0 : 1)
+                }
+            }
+            .paper(radius: TaskMetrics.cardRadius, wash: column.paper(palette))
             .contentShape(.rect(cornerRadius: TaskMetrics.cardRadius, style: .continuous))
     }
 }
@@ -48,7 +58,7 @@ private struct BoardDim: ViewModifier {
         let hovered = workspace.hoveredProject
         content
             .opacity(hovered.map { $0 == project } ?? true ? 1 : Self.dimmed)
-            .animation(HandOff.quick, value: hovered)
+            .animation(Motion.fade, value: hovered)
     }
 }
 #endif
@@ -102,7 +112,7 @@ struct BoardSessionCard: View {
                 if let project { BoardProjectGlyph(project: project) }
                 Text(session.title).foregroundStyle(resting ? palette.ink2 : palette.ink)
             }
-            .boardCard()
+            .boardCard(.advancing)
         }
         .help(Dotted(project?.shownName, session.agentMark).visible)
         .accessibilityLabel(Dotted(session.title, pulse.fullContext.map { $0.help.spoken } ?? pulse.shown?.label).spoken)
@@ -111,7 +121,7 @@ struct BoardSessionCard: View {
 
 /// 卡里的排法（看板上所有的卡同一种）：开头记号、项目小图形与标题一行带，右端是调用处给的尾巴；
 /// 推进中的卡标题贴上沿，下面是那条线（`BoardLine`，时长与要你管的状态词在线的右端）：标题一整带都给字（状态词放在标题右端时，窄列里标题只剩四五个字）。
-/// 卡多高只由这里加出来：上下留白、标题（按所在的列或行给的行数留足，`boardTitle`：只有一行字的卡也一样高）、线。
+/// 卡多高只由这里加出来：上下留白、标题（按所在的列或行给的行数与留白，`boardTitle`：只有一行字的卡也一样高）、线。
 struct BoardCardLayout<Lead: View, Trailing: View>: View {
     let advancing: Bool
     var pulse = BoardPulse()
@@ -120,6 +130,7 @@ struct BoardCardLayout<Lead: View, Trailing: View>: View {
     let trailing: Trailing
     @Environment(\.boardRow) private var row
     @Environment(\.boardTitle) private var titleBand
+    @Environment(\.boardArrival) private var arrival
 
     init(advancing: Bool, pulse: BoardPulse = BoardPulse(), moves: Bool = true,
          @ViewBuilder lead: () -> Lead, @ViewBuilder trailing: () -> Trailing = { EmptyView() }) {
@@ -131,7 +142,25 @@ struct BoardCardLayout<Lead: View, Trailing: View>: View {
     }
 
     var body: some View {
-        if advancing { withLine } else if row { title.frame(maxHeight: .infinity) } else { title.padding(.vertical, BoardCardMetrics.titlePadding) }
+        if advancing { withLine } else if row { title.frame(maxHeight: .infinity).overlay(alignment: .bottomLeading) { leftLine } } else {
+            title.padding(.vertical, titleBand.padding).overlay(alignment: .bottomLeading) { leftLine }
+        }
+    }
+
+    /// 从推进中飞出来的卡（`boardArrival`）：起飞时还带着那条线（调用处照旧给 `pulse`），随即淡掉——线不在起飞那一下没了。
+    /// 新的一列没给线留高，淡得比飞快（`Motion.fade`），不在字上多压几帧。
+    @ViewBuilder private var leftLine: some View {
+        if let arrival, arrival.from == .advancing {
+            line(moves: false)
+                .opacity(arrival.landed ? 0 : 1)
+                .animation(Motion.fade, value: arrival.landed)
+        }
+    }
+
+    private func line(moves: Bool) -> some View {
+        BoardLine(pulse: pulse, moves: moves)
+            .padding(.leading, TaskMetrics.cardLead + gap)
+            .padding(.bottom, BoardCardMetrics.waveBottom)
     }
 
     private var title: some View {
@@ -151,9 +180,8 @@ struct BoardCardLayout<Lead: View, Trailing: View>: View {
             .padding(.top, row ? 0 : BoardCardMetrics.titleTop)
             .padding(.bottom, (row ? 0 : BoardCardMetrics.waveGap) + WaveStrip.height + BoardCardMetrics.waveBottom)
             .overlay(alignment: .bottomLeading) {
-                BoardLine(pulse: pulse, moves: moves)
-                    .padding(.leading, TaskMetrics.cardLead + gap)
-                    .padding(.bottom, BoardCardMetrics.waveBottom)
+                // 从别的列飞进推进中（`boardArrival`）：线随着飞淡出来，不在起飞那一下冒出来
+                line(moves: moves).opacity(arrival.map { $0.from == .advancing || $0.landed ? 1 : 0 } ?? 1)
             }
     }
 

@@ -5,7 +5,8 @@ import SwiftUI
 /// - 算一个在看的（`AppServices.cueViewers`）：这台设备开着 Cue 页（`ViewerKeeper.showCue`，Cue 的提示据此不发，见 `AlertCenter`），手机按节奏拉；
 /// - 读新消息（哪几条算新的只在 Kit 的 `CueStore.cueUnread`，读到哪只记在同步的 `CueRead`，换一台设备接着读）。
 /// 新消息是气泡旁的一颗小点（`CueUnreadDot`），不插进对话：来去都不重排。开始看（进来、App 回到前台、窗口重新露出来）
-/// 又没在和 iCloud 对时，有新消息就从第一条读起（`ChatFollow.Landing.read`：停在顶上，下面不到一屏时滚动区停在最新处）。
+/// 又没在和 iCloud 对时，有新消息就从第一条读起（`ChatFollow.Landing.read`：停在顶上，下面不到一屏时滚动区停在最新处）；
+/// 每次开始看只落一次，对完之前你自己动过（发出一句、滚动、跳转）就不落（`ChatFollow.owesLanding`）。
 /// 读没读按条算：一条新消息的末尾在滚动区里停够 `dwell` 就算读到了它（`CueRow` 报看见，这里取最晚的一条合并成一次写），
 /// 打开时先停在最新处那一下、甩过去的不算；没在看、正在和 iCloud 对时不算。
 struct CueViewing: ViewModifier {
@@ -44,8 +45,13 @@ struct CueViewing: ViewModifier {
                 appeared = false
                 count(false)
             }
-            .onChange(of: watching, initial: true) { _, on in count(on) }
-            .onChange(of: reading && thread != nil, initial: true) { _, start in if start { land() } }
+            .onChange(of: watching, initial: true) { _, on in
+                count(on)
+                guard on else { return }
+                follow.oweLanding()
+                land()
+            }
+            .onChange(of: reading && thread != nil) { _, start in if start { land() } }
             .task(id: Reading(seen: Set(seen.keys), counts: reading)) { await mark() }
     }
 
@@ -62,8 +68,8 @@ struct CueViewing: ViewModifier {
     }
 
     private func land() {
-        guard let thread, let first = thread.rows.first(where: { thread.unread.contains($0.id) }) else { return }
-        follow.seek(first.id, landing: .read)
+        guard reading, let thread else { return }
+        follow.land(on: thread.rows.first { thread.unread.contains($0.id) }?.id)
     }
 
     private func mark() async {
@@ -105,7 +111,6 @@ struct CueUnreadDot: View {
     nonisolated static let gap: CGFloat = 6
     /// 页边距至少这么宽才把点放在气泡外（点、缝，离屏缘再留一条缝），不然骑在气泡左缘上（`CueRow`）。
     nonisolated static let room: CGFloat = size + gap + 8
-    static let fade = Animation.easeOut(duration: 0.5)
 
     var body: some View {
         Text(verbatim: " ").font(Typography.reading).hidden()
@@ -113,7 +118,7 @@ struct CueUnreadDot: View {
             .overlay {
                 if unread { Circle().fill(palette.replied).frame(width: Self.size, height: Self.size).transition(.opacity) }
             }
-            .animation(Self.fade, value: unread)
+            .animation(Motion.fade, value: unread)
             .padding(.top, CueBubble.padding.top)
             .accessibilityLabel("新消息")
             .accessibilityHidden(!unread)

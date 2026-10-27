@@ -2,13 +2,13 @@
 import CueStore
 import Foundation
 
-/// 技能与说明在这台 Mac 上的位置（2026-10 实测各家怎么读）：
+/// 技能与规则在这台 Mac 上的位置（2026-10 实测各家怎么读）：
 /// - 技能：全局 `~/.agents/skills`、项目 `<文件夹>/.agents/skills`，Pi、Codex、OpenCode 原生读（递归、跟链接）；Claude Code 不读 `.agents`、
 ///   不递归，只读 `<它的目录>/skills/<名>` 与 `<文件夹>/.claude/skills/<名>`，所以逐个技能链过去（整个目录链不行：它往 `skills/synced` 写 claude.ai 同步的技能）。
 /// - 旧目录：各家自己的技能目录与项目里的 `.claude`、`.pi`、`.codex`、`.opencode` 下的。
-/// - 全局说明：`~/.agents/AGENTS.md`，Claude Code 的 `CLAUDE.md`、Codex、Pi 的 `AGENTS.md` 链到它；OpenCode 没有自己那份时读 Claude Code 的。
+/// - 全局规则：`~/.agents/AGENTS.md`，Claude Code 的 `CLAUDE.md`、Codex、Pi 的 `AGENTS.md` 链到它；OpenCode 没有自己那份时读 Claude Code 的。
 ///   替换基础提示的两份（Pi 的 `SYSTEM.md`、Codex 配置里 `model_instructions_file` 指的）只作比对来源。
-/// - 项目说明：`<文件夹>/AGENTS.md`；同层有 `CLAUDE.md`、`.claude/CLAUDE.md` 或 `CLAUDE.local.md` 时 Claude Code 不读它（2026-10 官方文档），
+/// - 项目规则：`<文件夹>/AGENTS.md`；同层有 `CLAUDE.md`、`.claude/CLAUDE.md` 或 `CLAUDE.local.md` 时 Claude Code 不读它（2026-10 官方文档），
 ///   `CLAUDE.md` 链到 AGENTS.md 时经链接读到，同全局。
 /// 碰不得的那家（隔离运行而它的目录是真实位置，`AgentIntegration.touches`）当作这台没有它。
 struct AgentLibraryPlaces: Sendable {
@@ -48,17 +48,16 @@ struct AgentLibraryPlaces: Sendable {
     func oldSkills(_ scope: LibraryScope) -> [(directory: URL, agent: AgentKind, recursive: Bool)] {
         switch scope {
         case .global:
-            installed.flatMap { kind -> [(URL, AgentKind, Bool)] in
-                let home = paths.home(of: kind)
-                let names = kind == .opencode ? ["skills", "skill"] : ["skills"]
-                return names.map { (home.appending(path: $0, directoryHint: .isDirectory), kind, kind != .claudeCode) }
-            }
+            installed.flatMap { kind in skillFolders(of: kind, in: paths.home(of: kind)) }
         case .project(let id):
             projects[id].map { folder in
-                [(".claude/skills", AgentKind.claudeCode), (".pi/skills", .pi), (".codex/skills", .codex), (".opencode/skills", .opencode), (".opencode/skill", .opencode)]
-                    .map { (folder.appending(path: $0.0, directoryHint: .isDirectory), $0.1, $0.1 != .claudeCode) }
+                AgentKind.allCases.flatMap { skillFolders(of: $0, in: folder.appending(path: $0.facts.projectFolder, directoryHint: .isDirectory)) }
             } ?? []
         }
+    }
+
+    private func skillFolders(of kind: AgentKind, in parent: URL) -> [(directory: URL, agent: AgentKind, recursive: Bool)] {
+        kind.facts.skillFolders.map { (parent.appending(path: $0, directoryHint: .isDirectory), kind, kind.facts.readsSharedSkills) }
     }
 
     private func base(_ scope: LibraryScope) -> URL? {
@@ -68,23 +67,23 @@ struct AgentLibraryPlaces: Sendable {
         }
     }
 
-    // MARK: 说明
+    // MARK: 规则
 
     var globalInstructions: URL { paths.agentsDirectory.appending(path: "AGENTS.md") }
 
-    /// 这家自己的全局说明。
+    /// 这家自己的全局规则。
     func globalFile(_ kind: AgentKind) -> URL {
-        paths.home(of: kind).appending(path: kind == .claudeCode ? "CLAUDE.md" : "AGENTS.md")
+        paths.home(of: kind).appending(path: kind.facts.instructionsFile)
     }
 
-    /// 链到全局说明的几家（OpenCode 不链：它没有自己那份时读 Claude Code 的）。
-    var linkedKinds: [AgentKind] { installed.filter { $0 != .opencode } }
+    /// 链到全局规则的几家（`AgentFacts.linksGlobalInstructions`）。
+    var linkedKinds: [AgentKind] { installed.filter(\.facts.linksGlobalInstructions) }
 
     var piSystem: URL { paths.home(of: .pi).appending(path: "SYSTEM.md") }
     var codexConfig: URL { paths.home(of: .codex).appending(path: "config.toml") }
 
     func projectInstructions(_ id: UUID) -> URL? { projects[id]?.appending(path: "AGENTS.md") }
-    /// Claude Code 在项目里读的说明：有其中任一个它就不读 AGENTS.md。`local` 是个人的、不入库的那份，整理不碰。
+    /// Claude Code 在项目里读的规则：有其中任一个它就不读 AGENTS.md。`local` 是个人的、不入库的那份，整理不碰。
     func projectClaude(_ id: UUID) -> (main: URL, nested: URL, local: URL)? {
         projects[id].map { ($0.appending(path: "CLAUDE.md"), $0.appending(path: ".claude/CLAUDE.md"), $0.appending(path: "CLAUDE.local.md")) }
     }

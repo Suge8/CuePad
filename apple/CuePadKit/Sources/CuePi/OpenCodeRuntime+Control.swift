@@ -106,13 +106,10 @@ extension OpenCodeRuntime {
             if target == nil { target = try await catalog(tracked.directory, connection.client, reload: true).models.first { $0.key == key } }
             guard let target else { throw PiBridgeError.unknownModel(.opencode) }
             let variants = (target.variants ?? []).map(\.id)
-            // 模型没有强度档（没有 variant）时不带；关闭就是不带 variant
-            let level = thinking.flatMap { target.thinkingLevels.isEmpty ? nil : $0.clamped(to: target.thinkingLevels) }
-            let variant: String? = if thinking != nil { level == .off ? nil : level?.rawValue }
+            let variant: String? = if let thinking { target.variant(for: thinking) }
                 else { current?.variant.flatMap { variants.contains($0) ? $0 : nil } }
-            let ref = OpenCodeModelRef(id: target.id, providerID: target.providerID, variant: variant)
             struct Switch: Encodable { var model: OpenCodeModelRef }
-            try await connection.client.call("POST", "/api/session/\(sessionID)/model", body: Switch(model: ref))
+            try await connection.client.call("POST", "/api/session/\(sessionID)/model", body: Switch(model: target.ref(variant)))
         }
         // 桥上的名字与模型只随服务自己的事件（改名、选模型）更新，不在这里先写
     }

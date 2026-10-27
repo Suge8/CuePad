@@ -216,10 +216,20 @@ extension CueStore {
 
   /// 服务器已接受这些记录（上传结果里的那一版，与系统字段归档）：记下系统字段与被推送版本的修改时间，一批一个事务。之后再改才会重新变成待推送。
   /// 上传一次只有一批在路上，结果按发出的先后回来。
+  ///
+  /// 你发出的话的那条消息（带请求标识，`PiChatMessage.deliveryID`）上了服务器，同一事务里收走它的投送请求（写对话时已记为送到，`applyTranscript`）。
+  /// 不在写对话时收：请求的删除随回执马上传，消息走后台那一路，排在大附件后面时晚到十几秒，别的设备先收到删除、气泡就空着。
+  /// 服务器上删除排在消息之后，拉到删除时消息已经在了。
   package func markPushed(_ pushed: [(row: SyncRow, systemFields: Data)]) throws {
     guard !pushed.isEmpty else { return }
+    let messages = JSONColumn.encode(pushed.filter { $0.row.table == .piMessages }.map(\.row.id))
     let deletedMeanwhile = try write {
-      try pushed.compactMap { row, systemFields -> String? in
+      try db.run(
+        """
+        DELETE FROM deliveryRequests WHERE mode = '\(DeliveryMode.send.rawValue)'
+          AND id IN (SELECT deliveryID FROM piMessages WHERE id IN (SELECT value FROM json_each(?)) AND deliveryID IS NOT NULL)
+        """, [messages])
+      return try pushed.compactMap { row, systemFields -> String? in
         try setMetadata(row.table, row.id, systemFields, pushed: row.modifiedAt)
         // 通知标志随这次上传送出，之后不能再被本机别的改动带上去（见 `PiStateRecorder`）；不动修改时间，不会让记录重新待推送
         if Table.notifyFlagged.contains(row.table), let sent = row.fields["notify"], sent != .null {

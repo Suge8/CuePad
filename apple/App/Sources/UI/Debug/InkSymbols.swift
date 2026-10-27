@@ -28,6 +28,7 @@ enum InkSymbols {
         "cue.failure",
         "cue.undelivered",
         "cue.unknown",
+        "cue.question",
         "cue.picked",
         "cue.asking",
         "cue.ended",

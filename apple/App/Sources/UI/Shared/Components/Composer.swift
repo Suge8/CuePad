@@ -63,7 +63,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     private var shrunkDraft: String? { shrunk ? draft.preview : nil }
     private static var compactWidth: CGFloat { 220 }
     private static var headerTransition: AnyTransition {
-        .asymmetric(insertion: .opacity.animation(HandOff.quick.delay(0.12)), removal: .identity)
+        .asymmetric(insertion: .opacity.animation(Motion.fade.delay(0.12)), removal: .identity)
     }
     /// 玻璃上方允许浮出的高度（见 `field` 的裁切）。
     private static var overhang: CGFloat { 120 }
@@ -107,15 +107,15 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
         field
         // 短胶囊 ↔ 全宽、聚焦时工具排出现是空间动画：无回弹弹簧，减弱动态效果时直接到终态。打字与清空（有没有草稿）时高度一帧到位：
         // 文字区是平台的文本视图，折行长高本来就是一帧到位，收回时也一样，占位字不悬在上一行；浮着的输入框上面的对话也同一帧跟
-        .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: shrunk)
+        .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion), value: shrunk)
         .onChange(of: focus.wrappedValue, initial: true) { _, now in
             // 一直展开时焦点不改形状，不起动画：Mac 会话页打开即聚焦，白跑的一段动画每帧都要 AppKit 重算整窗的跟踪区
-            if form == .open { focused = now } else { withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { focused = now } }
+            if form == .open { focused = now } else { withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { focused = now } }
         }
-        .animation(HandOff.quick, value: paletteCommands.isEmpty)
+        .animation(Motion.fade, value: paletteCommands.isEmpty)
         .onChange(of: draft.text) { highlighted = 0 }
-        .animation(HandOff.quick, value: draft.attachments.map(\.id))
-        .animation(HandOff.quick, value: draft.files)
+        .animation(Motion.fade, value: draft.attachments.map(\.id))
+        .animation(Motion.fade, value: draft.files)
         .modifier(FileSources(source: $source) { add($0) })
         .modifier(CardPanels(on: accepts.contains(.cards), picking: $source.isOn(.cards), previewing: $previewing) {
             CardPicker(project: cardsFrom) { draft.attach($0) }
@@ -223,6 +223,6 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
         }
         .frame(width: ComposerMetrics.slot, height: buttonHeight)
         // 只管钮自己进出：打第一个字时钮出现与一行变两层是同一次更新，挂在整块上的话"＋"的挪位也跟着它动画（减弱动态效果时也滑）
-        .animation(HandOff.quick, value: sendVisible)
+        .animation(Motion.fade, value: sendVisible)
     }
 }

@@ -60,7 +60,7 @@ extension PiBridge {
     // MARK: 托管的会话
 
     /// 托管的会话什么时候请它退出（不算结束，发话时再接着）：同一会话在别处（终端里）也开着、自己又空闲的（两边会各写各的；正在跑一轮的等它做完、状态变化时再看）；
-    /// 歇着满 `hostedIdle` 的（为自己起了进程的 Claude Code、Codex；Pi 自己计时，App 退出后照常在；OpenCode 的会话在它的服务里，没有进程要关）。
+    /// 歇着满 `hostedIdle` 的（CuePad 为它起了进程的几家，`AgentFacts.releasesIdleHosted`）。
     func reviewHosted() {
         for slot in slots where slot.session.hosted && !releasing.contains(slot.id) {
             let session = slot.session
@@ -68,7 +68,7 @@ extension PiBridge {
             let elsewhere = slots.contains { $0.session.agent == session.agent && $0.sessionID == session.sessionID && !$0.session.hosted }
             if !busy && elsewhere {
                 release(session.id)
-            } else if session.agent == .pi || session.agent == .opencode {
+            } else if !session.agent.facts.releasesIdleHosted {
                 continue
             } else if busy {
                 idleTimers.removeValue(forKey: session.id)?.cancel()

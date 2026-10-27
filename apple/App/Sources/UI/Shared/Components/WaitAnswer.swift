@@ -161,7 +161,7 @@ private struct SessionAnswer: View {
     /// 写一条作答请求给会话所在的 Mac；写不进去时就地说明。
     private func answer(_ value: PiAnswerValue) {
         guard let promptID = question?.promptID else { return }
-        withAnimation(HandOff.quick) { pending = Pending(promptID: promptID, value: value) }
+        withAnimation(Motion.fade) { pending = Pending(promptID: promptID, value: value) }
         Task {
             do {
                 let id = try await workspace.services.answer(value, to: session).id

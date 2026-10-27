@@ -27,6 +27,7 @@ struct TrailingSlots: View {
         HStack(spacing: 0) {
             SyncAlertSlot()
             PageActionSlot()
+            LibraryHelpSlot()
             SearchSlot()
             PageMenuSlot()
         }
@@ -49,13 +50,13 @@ extension View {
     }
 }
 
-/// 侧栏收起时的项目切换（紧跟在侧栏钮后面）。进展页上没有它：左上的看板｜会话分段已经说了在哪一页，它再占一截就把分段推到待办那一列上面、
+/// 侧栏收起时的项目切换（紧跟在侧栏钮后面）。进展页、技能与规则页上没有它：左上的分段已经说了在哪一页；进展页上它再占一截就把分段推到待办那一列上面、
 /// 待办的列头只剩个数（去别处用侧栏钮、⌘1–9）。单独一个视图读侧栏开合：主窗口的视图体读了它，开合的那一帧就要重算整个窗口、重新提交整条工具栏。
 struct SwitcherSlot: View {
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        let shown = workspace.pages.sidebar == .detailOnly && workspace.root != .progress
+        let shown = workspace.pages.sidebar == .detailOnly && workspace.root != .progress && workspace.root != .library
         // 不用 disabled：环境一变整份菜单又要重算；⌘1–9 本来就由窗口快捷键（`WorkspaceShortcuts`）接，菜单里的只是提示
         // 玻璃与墨色字自己画，同右边的项目范围（`ProjectScopeMenu`）：交给工具栏画时，没焦点的窗口里字是停用的淡灰
         ProjectSwitcher(collapsed: shown)
@@ -84,47 +85,44 @@ struct SidebarToggle: View {
 /// 打开、收起卡片只改动下面三处（收起按钮、编辑页图层、底部输入条的位置），各自读"打开的卡"：
 /// 主窗口的视图体不读它，开合时不重算整个窗口、不重建整条工具栏。
 
-/// 工具栏左上的"收起"：只在开着编辑页时有（灵感的编辑页、说明的编辑页与比一比，Esc 同），没有时不占位置。
+/// 工具栏左上的"收起"：只在开着编辑页时有（灵感的编辑页、技能与规则的文件页，Esc 同），没有时不占位置。
+/// 一颗返回图标的圆钮（同手机推入页左上的系统返回），悬停提示与读屏说"收起"。
 struct CloseButton: View {
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
         if workspace.overlay != nil {
-            Button { workspace.overlay = nil } label: {
-                HStack(spacing: 4) {
-                    Image(.back).font(.system(size: 13, weight: .semibold))
-                    Text("收起")
-                }
-            }
-            .buttonStyle(ControlButtonStyle(kind: .glass))
+            // 箭头比放大镜、"⋯"细瘦：大一号、粗一档，与它们一样重
+            Button { workspace.overlay = nil } label: { Image(.back).font(.system(size: 15, weight: .bold)) }
+            .buttonStyle(ControlButtonStyle(kind: .circular))
             .keyboardShortcut(.cancelAction)
             .help("收起（Esc）")
+            .accessibilityLabel("收起")
             .padding(.trailing, Spacing.toolbarGap)
         }
     }
 }
 
 /// 工具栏左边、侧栏钮（与侧栏收起时的项目切换）之后：进展页两段的图标分段（`ProgressPanes`，同 iPhone 顶上那块玻璃里那一组），两段同一个位置。
+/// 分段本该在中间（`PageTitleSlot`）：看板段那一排是四个列头、各对齐自己那一列，中间正是推进中、等你的列头，放中间就压住它们，所以留在左上、待办那一列上方。
 /// 右沿报给看板段的列头（`MacPages.panesEdge`）：它下面的列头从它右边起，不压在分段下面。
 struct PanesSlot: View {
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        ProgressControl { ProgressPanes(size: Spacing.toolbarControl - Self.inset * 2).padding(Self.inset).glass(in: .capsule) }
-            .background { WindowEdge(\.maxX) { workspace.pages.panesEdge = $0 } }
+        PageControl(.progress) { ProgressPanes().frame(height: PaneMetrics.square).padding(PaneMetrics.inset).glass(in: .capsule) }
+            .background { WindowFrame(\.maxX) { workspace.pages.panesEdge = $0 } }
             .toolbarPresence(workspace.root == .progress)
     }
-
-    private static let inset: CGFloat = 3
 }
 
-/// 量这一块的一条边（`CGRect.minX`、`maxX`）在窗口里的横坐标：工具栏项与页面不在同一棵视图里，SwiftUI 的全局坐标对不上，按窗口坐标量。
-/// 开合侧栏、拖侧栏的宽时挪的是外面的几层（工具栏项那一格），听这几层的框变了再量。
-struct WindowEdge: NSViewRepresentable {
-    let edge: KeyPath<CGRect, CGFloat>
-    let report: (CGFloat) -> Void
+/// 量这一块在窗口里的框（左上为原点，同窗口里浮层的坐标），或它的一条边（`CGRect.minX`、`maxX`）：工具栏项与页面不在同一棵视图里，
+/// SwiftUI 的全局坐标对不上，按窗口坐标量。开合侧栏、拖侧栏的宽时挪的是外面的几层（工具栏项那一格），听这几层的框变了再量。
+struct WindowFrame<Value: Equatable>: NSViewRepresentable {
+    let edge: KeyPath<CGRect, Value>
+    let report: (Value) -> Void
 
-    init(_ edge: KeyPath<CGRect, CGFloat>, report: @escaping (CGFloat) -> Void) {
+    init(_ edge: KeyPath<CGRect, Value>, report: @escaping (Value) -> Void) {
         self.edge = edge
         self.report = report
     }
@@ -133,12 +131,12 @@ struct WindowEdge: NSViewRepresentable {
     func updateNSView(_ probe: Probe, context: Context) { probe.report = report }
 
     final class Probe: NSView {
-        let edge: KeyPath<CGRect, CGFloat>
-        var report: (CGFloat) -> Void
+        let edge: KeyPath<CGRect, Value>
+        var report: (Value) -> Void
         private var observers: [any NSObjectProtocol] = []
-        private var last: CGFloat?
+        private var last: Value?
 
-        init(edge: KeyPath<CGRect, CGFloat>, report: @escaping (CGFloat) -> Void) {
+        init(edge: KeyPath<CGRect, Value>, report: @escaping (Value) -> Void) {
             self.edge = edge
             self.report = report
             super.init(frame: .zero)
@@ -165,8 +163,10 @@ struct WindowEdge: NSViewRepresentable {
         }
 
         private func measure() {
-            guard window != nil else { return }
-            let x = convert(bounds, to: nil)[keyPath: edge]
+            guard let window else { return }
+            let frame = convert(bounds, to: nil)
+            let height = window.contentView?.bounds.height ?? 0
+            let x = CGRect(x: frame.minX, y: height - frame.maxY, width: frame.width, height: frame.height)[keyPath: edge]
             guard x != last else { return }
             last = x
             // 不在布局的这一圈里改可观察的值
@@ -178,7 +178,7 @@ struct WindowEdge: NSViewRepresentable {
 /// 工具栏左边、两段分段之后：这一页的范围，进展页的会话段是项目范围（`ProjectScopeMenu`，`Workspace.projectScope`；看板段那一排是列头，范围在"⋯"里）。
 /// 工具栏里的页面控件只有一条规矩（这一格、`PanesSlot`、`PageActionSlot`、`SearchSlot`、`PageMenuSlot` 都照它）：只放 Workspace 里已有的状态，
 /// 工具栏读不到页面读的库，抄一份过来就是第二个事实源。控件都一直挂着（换页时不现建整份项目菜单）、只换内容：工具栏项一增删整条重建（实测占进出会话页点击回合的一半，25fdb5fa、4fd371a4）。
-/// 只属于进展页的几格（这一格、分段、新会话）在别的页宽 0（`toolbarPresence`），随进展页第一次挂上才建（`ProgressControl`），进出进展页时整条重排一次（一次 100～150ms 的重排是逐帧变宽时量的，b9707fc5）；
+/// 只属于进展页的几格（这一格、分段、新会话）在别的页宽 0（`toolbarPresence`），随进展页第一次挂上才建（`PageControl`），进出进展页时整条重排一次（一次 100～150ms 的重排是逐帧变宽时量的，b9707fc5）；
 /// 进展页两段之间宽度不变，换段只换哪几样看得见（`toolbarVisible`）。这一格按项目名的宽、最宽 `maxWidth`（再长截断），只在换范围时变宽变窄；
 /// 状态归页面的（会话段的搜索、新会话表单读的这台 Mac 上有哪些 Agent）留在页里。
 struct ScopeSlot: View {
@@ -187,7 +187,7 @@ struct ScopeSlot: View {
     private static let maxWidth: CGFloat = 200
 
     var body: some View {
-        ProgressControl { ProjectScopeMenu() }
+        PageControl(.progress) { ProjectScopeMenu() }
             .frame(maxWidth: Self.maxWidth, minHeight: Spacing.toolbarControl, maxHeight: Spacing.toolbarControl)
             .toolbarVisible(workspace.showsSessionsBar)
             .padding(.leading, Spacing.toolbarGap)
@@ -195,15 +195,22 @@ struct ScopeSlot: View {
     }
 }
 
-/// 只属于进展页的工具栏控件（`PanesSlot`、`ScopeSlot`、`PageActionSlot`）：别的页上宽 0、看不见。随进展页一起挂上——启动后空闲时进展页先挂上（`Prewarm`），
-/// 或一打开就在进展页——之后一直挂着；挂上之前不建，冷启动的第一帧不建看不见的分段、项目菜单、玻璃与新会话钮。
-private struct ProgressControl<Content: View>: View {
-    @ViewBuilder let content: Content
+/// 只属于一页的工具栏控件（进展页的 `PanesSlot`、`ScopeSlot`、`PageActionSlot`，技能与规则页的 `LibraryHelpSlot`）：
+/// 别的页上宽 0、看不见。随那一页一起挂上——进展页在启动后空闲时先挂上（`Prewarm`），或一打开就在那一页——之后一直挂着；
+/// 挂上之前不建，冷启动的第一帧不建看不见的分段、项目菜单、玻璃与新会话钮。
+struct PageControl<Content: View>: View {
+    let page: Route
+    let content: Content
     @Environment(Workspace.self) private var workspace
     @State private var mounted = false
 
+    init(_ page: Route, @ViewBuilder content: () -> Content) {
+        self.page = page
+        self.content = content()
+    }
+
     var body: some View {
-        let due = workspace.mountedPages.contains(.progress)
+        let due = workspace.mountedPages.contains(page)
         ZStack { if mounted || due { content } }
             .onChange(of: due, initial: true) { if $1 { mounted = true } }
     }
@@ -216,7 +223,7 @@ struct PageActionSlot: View {
 
     var body: some View {
         // 工具栏把"图标 + 字"的标签只画成图标：写明两样都要
-        ProgressControl {
+        PageControl(.progress) {
             Button("新会话", icon: .add) { workspace.showsNewSession = true }
                 .labelStyle(.titleAndIcon)
                 .buttonStyle(ControlButtonStyle(kind: .glass))

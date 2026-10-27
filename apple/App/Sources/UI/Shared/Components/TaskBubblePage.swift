@@ -35,7 +35,7 @@ struct TaskBubblePage: View {
                 }
                 .padding(.leading, BubbleMetrics.stepLead).padding(.trailing, BubbleMetrics.textTrailing)
                 .padding(.top, 4)
-                .animation(HandOff.quick, value: data.steps.map(\.id))
+                .animation(Motion.fade, value: data.steps.map(\.id))
             }
         }
     }

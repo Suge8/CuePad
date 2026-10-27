@@ -3,7 +3,7 @@ import CueStore
 import Foundation
 import Testing
 
-/// 升级到按键存取的附件（结构 77）：旧引用 `cuepad://img/<哈希>`、旧记录（非图片写 "bin"）与库旁以哈希为名的旧文件改到新写法；
+/// 升级到按键存取的附件（结构 78）：旧引用 `cuepad://img/<哈希>`、旧记录（非图片写 "bin"）与库旁以哈希为名的旧文件改到新写法；
 /// 推得出扩展名的行版本加 1 毫秒（照常上传、服务器收敛），推不出的只在本机改。
 @Suite struct AttachmentUpgradeTests {
   let directory = TestLibraries.makeDirectory()
@@ -33,7 +33,7 @@ import Testing
         ('00000000-0000-4000-8000-0000000000a1', '\(photo)', \(png.count), 'png', 1, 10), ('00000000-0000-4000-8000-0000000000a2', '\(clip)', \(movie.count), 'bin', 1, 20);
       INSERT INTO syncRecords (recordName, recordType, pushedModifiedAt) VALUES ('00000000-0000-4000-8000-0000000000a1', 'attachments', 10), ('00000000-0000-4000-8000-0000000000a2', 'attachments', NULL);
       INSERT INTO previews (id, sessionID, hash, name, title, byteCount, createdAt, modifiedAt) VALUES ('00000000-0000-4000-8000-0000000000b1', 's', '\(clip)', '演示.MOV', '演示', \(movie.count), 1, 1);
-      PRAGMA user_version = 76;
+      PRAGMA user_version = 77;
       """)
 
     let store = try CueStore(location: .isolated(directory))

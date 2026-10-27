@@ -79,7 +79,7 @@ extension ChatScroll {
         var anchor: ChatAnchor.Tracked
     }
 
-    /// 对完一次（`holding` 期间长在下面的）、键盘升起时，整段滑到最新处（减弱动态效果时直接到）；贴着最新时来的新内容不经这里，底锚当帧就排好（`pinned`）。用定长的 `Motion.move`，不用弹簧：弹簧最后那段一两像素的尾巴
+    /// 对完一次（`holding` 期间长在下面的）、键盘升起时，整段滑到最新处（减弱动态效果时直接到）；贴着最新时来的新内容不经这里，底锚当帧就排好（`pinned`）。用定长的 `Motion.glide`，不用弹簧：弹簧最后那段一两像素的尾巴
     /// 要再画两百多毫秒，正好压在发出的话送达、状态变了的那几次更新上，那几帧本来不用画，一画就掉帧。
     /// 等这一帧提交了再滑：动画从这一帧起算的话，第一帧画出来时已经走了一大截，看着是一跳。
     /// 滑到的是那时的最新处（留白收起之后）；等的这一帧里用户开始滚了就不滑了。
@@ -90,7 +90,7 @@ extension ChatScroll {
             guard !Task.isCancelled else { return }
             sliding = nil
             guard follow.wrappedValue.atNewest, !follow.wrappedValue.scrolling else { return }
-            withAnimation(Motion.spatial(Motion.move, reduceMotion: reduceMotion)) { toEnd(reader) }
+            withAnimation(Motion.spatial(Motion.glide, reduceMotion: reduceMotion)) { toEnd(reader) }
         }
     }
 
@@ -102,7 +102,7 @@ extension ChatScroll {
         Task {
             await NextFrame.wait()
             guard follow.wrappedValue.atNewest, !follow.wrappedValue.scrolling, sliding == nil, offset.read < offset.end else { return }
-            withAnimation(animated ? Motion.spatial(Motion.move, reduceMotion: reduceMotion) : nil) { toEnd(reader) }
+            withAnimation(animated ? Motion.spatial(Motion.glide, reduceMotion: reduceMotion) : nil) { toEnd(reader) }
         }
     }
 
@@ -112,7 +112,7 @@ extension ChatScroll {
         held = sent ? bottomInset : nil
         if holding { unheld = true }
         deferred = false
-        withAnimation(reduceMotion ? nil : HandOff.quick) { toEnd(reader) }
+        withAnimation(Motion.spatial(Motion.fade, reduceMotion: reduceMotion)) { toEnd(reader) }
     }
 
     /// 新到的那一条长高了 `height`：整段内容在渲染端先往下挪这么多（上面的对话看着还在原处），无回弹地归零（`ContentLift`），它让开了再淡入（`CueBubble.arrival`）。

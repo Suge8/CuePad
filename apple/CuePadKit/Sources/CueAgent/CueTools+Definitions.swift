@@ -33,12 +33,13 @@ extension CueTools {
           say 与接着用上一步会话的 start 等送达结果至多 \(Int(Speech.cueWait)) 秒：已送达、没送到（出错，带原因），或还没结果（之后没送到会作为 [发送失败] 叫醒你）；
           peek{task?|session?}：只读。都不带：所有没做完的事、不归没做完的事的活会话，和最近完成的几件（各带会话）。带 task：叶子、正文、近况、最近几轮问答（"他"是用户，"你"是你）与最新回答全文、发到手机的文件（带本机路径）。带 session：那个会话；
           stop{task|session}：停下会话这一轮；
-          leave{task|session}：会话停着（歇下或等回答）、这次该他接手时用，把它留给他回：歇着的显示"待回复"、等回答的成了他的拍板，都进等你；你已 tell 带 ask 问他的不再 leave；他或你再对它说话就作废；
+          leave{task|session}：你发起的那一轮停着（歇下、等回答或出错）、这次该他接手时用，把它留给他回：歇着、出错的显示"待回复"，等回答的成了他的拍板，都进等你；你已 tell 带 ask 问他的不再 leave；他或你再对它说话就作废。他发起的一轮停下 CuePad 已当场留给他，不用 leave；
+          take{task|session}：收回留给他回的（待回复，或成了他拍板的等回答），出了等你：只是应他一声、他不用回时用；要推进直接 say，不用先收回；
           done{task|session,evidence?,show?}：做完。顶层任务要 evidence：1–\(evidenceCount) 条结论，每条宽不过 \(evidenceLimit)（约 20 个汉字，如"\(evidenceExample)"），CuePad 把标题与证据拼成结果告诉用户。show 是结果上挂的图，写法同 tell 的 show（如 look 写"最终版深色：分组标题"）；不带就不挂图，没点名的仍在会话里。下一步还用它的会话就留着，否则结束会话（结束的照样能 say）；已完成的再 done 只结束没人再用的会话，不要 evidence、show。给 session 是收掉那个会话：没做完的事在用、或有话正送进去的不收。
           """,
         "inputSchema": schema(
           [
-            "action": ["type": "string", "enum": ["add", "edit", "start", "say", "peek", "stop", "leave", "done"]],
+            "action": ["type": "string", "enum": ["add", "edit", "start", "say", "peek", "stop", "leave", "take", "done"]],
             "task": string, "session": string, "title": name, "project": string, "steps": ["type": "array", "items": name], "body": string,
             "agent": ["type": "string", "enum": AgentKind.allCases.map(\.rawValue)], "model": ["type": "string", "description": "provider/id"],
             "effort": ["type": "string", "enum": PiThinkingLevel.allCases.map(\.rawValue)], "text": string,

@@ -13,7 +13,7 @@
 #   CUEPAD_TRACE=<xctrace 模板>（如 'Animation Hitches'、'Time Profiler'）：每次量的同时按 PID 录 trace，存本检出的 apple/.derived-perf/Build/traces/interact-<库>-<第几次>.trace（xctrace 的输出在同名 .log）。
 #   按 PID 开录要好几秒，短的几项等不到就量完退出了：App 带 -CuePadTraceWait YES 起，就绪后写 AWAIT trace <PID> 停着等，这里开录了发 SIGUSR1 放它走。
 # xc.sh 构建好 Release（带 DEBUG 条件，只为留下测量代码；预算按用户拿到的构建定，产物在 apple/.derived-perf，Instruments 也用这份）、
-# 带 -CuePadForeground YES 时独占机器（别的编译、测试同时跑，指令数之外的数都会被拖歪；后台量只比指令数，不独占）后调这里，第一个参数是 CuePad.app。iOS 的单次交互见 perf-ios.sh。
+# 后调这里，第一个参数是 CuePad.app。不独占机器：别的编译、测试同时跑时指令数之外的数会被拖歪，xc.sh 结束的用时行带 1 分钟负载（高于核数就只比指令数）。iOS 的单次交互见 perf-ios.sh。
 set -euo pipefail
 
 APPLE_DIR="$(cd "$(dirname "$0")/.." && pwd)"

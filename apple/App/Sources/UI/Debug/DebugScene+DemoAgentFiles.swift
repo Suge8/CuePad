@@ -1,18 +1,19 @@
 #if DEBUG && os(macOS)
+import CuePi
 import CueStore
 import Foundation
 
 extension DebugScene {
-    /// 把演示的技能与说明写成文件，由本机照常扫（`AgentLibraryKeeper`）：只写进 `xc.sh` 给隔离实例换到库里的各家目录
+    /// 把演示的技能与规则写成文件，由本机照常扫（`AgentLibraryKeeper`）：只写进 `xc.sh` 给隔离实例换到库里的各家目录
     /// （`CUEPAD_AGENTS_DIR` 等，`app_env.py`）与演示项目绑的文件夹（`DemoLibrary.demoHome`，也在隔离库里），没换走（真实位置）就什么都不写。
     /// 目录里已有东西就不再写（重开、整理过的样子留着）。
-    /// 有要整理的样子：Claude Code 旧目录里两个技能、write-swift 与圆桌的 load-test 没给 Claude Code 链上、全局与 CuePad 各有一个 release、
+    /// 该整理的样子：Claude Code 旧目录里两个技能、write-swift 与圆桌的 load-test 没给 Claude Code 补上链接、全局与 CuePad 各有一个 release、
     /// uilane 没有名字与说明、Codex 技能目录里一个空目录、Claude Code 与 Pi 的系统提示各写一份全局规则、个人网站另有一份不同的 CLAUDE.md；
     /// `-CuePadAgentLibrary clean` 时都已收好。
     static func seedAgentFiles() {
         let environment = ProcessInfo.processInfo.environment
-        guard let sharedPath = environment["CUEPAD_AGENTS_DIR"], let claudePath = environment["CLAUDE_CONFIG_DIR"],
-              let piPath = environment["PI_CODING_AGENT_DIR"], let codexPath = environment["CODEX_HOME"],
+        guard let sharedPath = environment["CUEPAD_AGENTS_DIR"], let claudePath = environment[AgentKind.claudeCode.facts.homeVariable],
+              let piPath = environment[AgentKind.pi.facts.homeVariable], let codexPath = environment[AgentKind.codex.facts.homeVariable],
               let library = environment[LibraryLocation.environmentKey], sharedPath.hasPrefix(library + "/"),
               DemoLibrary.demoHome.hasPrefix(library + "/")
         else { return }
@@ -33,7 +34,7 @@ extension DebugScene {
             try? FileManager.default.createSymbolicLink(atPath: file.path, withDestinationPath: relative(target, from: file.deletingLastPathComponent()))
         }
         func skill(_ name: String, _ description: String, in directory: URL) {
-            write("---\nname: \(name)\ndescription: \(description)\n---\n\n\(description)\n", directory.appending(path: "\(name)/SKILL.md"))
+            write(DemoAgentLibrary.skillText(name, description), directory.appending(path: "\(name)/SKILL.md"))
         }
 
         for item in DemoAgentLibrary.global {
@@ -68,7 +69,7 @@ extension DebugScene {
         write(DemoAgentLibrary.claudeRules, claude.appending(path: "CLAUDE.md"))
         skill("notion-export", String(localized: "把 Notion 页面导出成 Markdown", table: "Demo"), in: claude.appending(path: "skills"))
         skill("pdf", String(localized: "读写与合并 PDF", table: "Demo"), in: claude.appending(path: "skills"))
-        write(String(localized: "# uilane\n\n界面泳道图。\n", table: "Demo"), skills.appending(path: "operations/uilane/SKILL.md"))
+        write(DemoAgentLibrary.uilane, skills.appending(path: "operations/uilane/SKILL.md"))
         try? FileManager.default.createDirectory(at: codex.appending(path: "skills/codex-primary-runtime"), withIntermediateDirectories: true)
     }
 

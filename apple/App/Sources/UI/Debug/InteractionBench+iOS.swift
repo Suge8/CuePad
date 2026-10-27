@@ -5,9 +5,9 @@ import Darwin
 import QuartzCore
 import UIKit
 
-/// iOS 的 `-CuePadBench interact`（配 `-CuePadDemo YES`，iPhone：标签栏、每个 tab 一个导航栈）：单次交互那一下的主线程耗时，口径同 Mac 的 `InteractionBench`，
+/// iOS 的 `-CuePadBench interact`（配 `-CuePadDemo YES`，iPhone：每个 tab 一个导航栈加底部一排）：单次交互那一下的主线程耗时，口径同 Mac 的 `InteractionBench`，
 /// 每项一行 `INTERACT {json}` 写进隔离库目录下的 `interact.jsonl`（模拟器里的标准输出不好取），量完退出。
-/// 动作是点击最终调用的同一条路（导航路径、`openSession`、点标签栏换的 `Workspace.root`、侧栏的 `select`、浮窗与面板的状态），不经触摸投递。
+/// 动作是点击最终调用的同一条路（导航路径、`openSession`、点底部那一排的 `tap`、侧栏的 `select`、浮窗与面板的状态），不经触摸投递。
 /// 长按菜单与右滑返回由 `perf-ios.sh` 在模拟器上真按、真滑（`AWAIT` 行，`InteractionBench+iOSTouch`），
 /// 从手指按下起量；每行的 `landed` 是量完时的根与推入的页。每项至少做两遍：第一遍是首次（要现建视图），之后是再次。
 /// 演示库缺了要量的东西时写 `FAIL 原因` 并以 1 退出；全部量完写 `DONE`。`-CuePadInteractOnly 项,项` 只量列出的几项（同 Mac）。
@@ -98,20 +98,20 @@ enum IOSInteractionBench {
         }
         workspace.select(.cue)
         try? await Task.sleep(for: .seconds(1))
-        // 主导航：Cue 页点标签栏的"进展"去进展页（配 `-CuePadManyTasks` 量任务多时）、再点 Cue 回来（点标签栏换的就是 `root`）
+        // 主导航：Cue 页点底部的"进展"去进展页（配 `-CuePadManyTasks` 量任务多时）、进展页点 Cue 钮回来（点按调的就是 `tap`）
         for _ in 0..<2 {
-            await step("Cue 进任务") { workspace.root = .progress }
-            await step("任务回 Cue") { workspace.root = .cue }
+            await step("Cue 进任务") { workspace.tap(.progress) }
+            await step("任务回 Cue") { workspace.tap(.cue) }
         }
         // 项目 tab 停在一条灵感上时切走再切回来：栈与页都留着，不重建
         workspace.select(.project(Project.defaultID))
         workspace.push(.card(idea.id))
         try? await Task.sleep(for: .seconds(1.5))
         for _ in 0..<2 {
-            await step("灵感去 Cue") { workspace.root = .cue }
-            await step("Cue 回灵感") { workspace.root = .shelf }
+            await step("灵感去 Cue") { workspace.tap(.cue) }
+            await step("Cue 回灵感") { workspace.tap(.shelf) }
         }
-        workspace.root = .cue
+        workspace.tap(.cue)
         // Cue 页头开合面板（点页头的那条路）
         for _ in 0..<2 {
             await step("展开 Cue 面板") { DebugScene.toggleCuePanel() }

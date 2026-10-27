@@ -30,6 +30,8 @@ nonisolated private struct PaletteData: Sendable, Equatable {
 /// 右侧是它的近况与回复。
 struct SearchPalette: View {
     @Binding var scope: SearchScope
+    /// 范围那组分段（`SearchScopePanes`）的高：同过滤胶囊。
+    private static let scopeHeight: CGFloat = 28
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
@@ -114,11 +116,7 @@ struct SearchPalette: View {
                 }
                 .onKeyPress(.downArrow) { move(1); return .handled }
                 .onKeyPress(.upArrow) { move(-1); return .handled }
-            Picker("范围", selection: $scope) {
-                Text("灵感与任务").tag(SearchScope.cards)
-                Text("会话").tag(SearchScope.sessions)
-            }
-            .pickerStyle(.segmented).labelsHidden().fixedSize()
+            SearchScopePanes(scope: $scope).frame(height: Self.scopeHeight)
             Keycap(text: "esc")
         }
         .padding(.horizontal, 18).frame(height: 52)

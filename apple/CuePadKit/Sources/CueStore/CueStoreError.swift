@@ -133,7 +133,7 @@ extension CueStoreError: LocalizedError {
     case .cannotSpeakNow(let title, let why): "会话「\(title)」\(why)：没说出去。等它歇下（会叫醒你）再说"
     case .sessionInUse(let title): "会话「\(title)」还在用（没做完的事绑着它，或有话正送进去），没结束：那件事做完时 done 那件事"
     case .cannotEnd(let title): "会话「\(title)」不能从 CuePad 结束（终端里开的这类）：要收掉就 tell 他在终端里退出"
-    case .notStopped(let title): "会话「\(title)」没停着（在跑、出错或已结束）：留给他回只用在它歇着或在等回答时"
+    case .notStopped(let title): "会话「\(title)」没停着（在跑、被打断或已结束）：留给他回只用在它歇着、在等回答或出错时"
     case .invalidAnswer(let options): "会话在等提问的回答，答案要是其中之一（原文或从 1 起的序号）：\(options.joined(separator: " / "))"
     case .memoryLineTooLong(let limit): String(localized: "一条记忆最多 \(limit) 字节（UTF-8）")
     case .invalidSummaryRange: "摘要的区间要是记忆里对齐的 2 的幂区间，至少两行、行都在"

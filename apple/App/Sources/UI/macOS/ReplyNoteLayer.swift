@@ -42,7 +42,7 @@ private struct ReplyNoteLayer: ViewModifier {
                         .transition(.opacity)
                 }
             }
-            .animation(HandOff.quick, value: float)
+            .animation(Motion.fade, value: float)
     }
 
     @ViewBuilder private func floating(_ float: Floating) -> some View {

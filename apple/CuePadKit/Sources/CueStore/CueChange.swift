@@ -26,7 +26,7 @@ public struct CueChange: Equatable, Sendable {
   public var leaf: Card?
   /// 变化所在的会话；任务完成这类不在会话上的变化为 nil。
   public var session: PiSessionState?
-  /// 这一轮是他直接在会话里说的（`CueStore.turnOpener`，由事实推出，不另存）：Cue 说的不算；扩展投进来的机器消息开的轮跟着它之前那句。
+  /// 这一轮是他的（`CueStore.hisTurn`，由事实推出，不另存）：Cue 说的不算；扩展投进来的机器消息开的轮跟着它之前那句。
   public var byUser = false
   /// 事件发生的时刻（给 Cue 看）；分新旧看 `seq`
   public var at: Date
@@ -38,14 +38,22 @@ public struct CueChange: Equatable, Sendable {
   public var recap: PiRecap?
   /// 停下是因为做到一半被打断（`PiWorkState.interrupted`），不是做完了。
   public var interrupted = false
+}
 
-  /// 会话停着（歇下、等回答、出错；被打断的不算）：谁接手（`CueStore.cueChanges`）只管这几种。等子代理停住时会话还在做，
-  /// 与完成、发送失败一样总报给 Cue。
-  var isStop: Bool { [.settled, .waitingForUser, .failed].contains(kind) && !interrupted }
+extension PiSessionState {
+  /// 停在要人接手的地方：歇下（最后一轮的回答已读到，`answered`，同它作为变化的时机）、在等回答或出错；被打断的不算，Cue 让它接着做。
+  /// 谁接手（`CueStore.cueChanges`、`leaveHisStops`）只管这几种。等子代理停住时会话还在做，与完成、发送失败一样总报给 Cue。
+  var atStop: Bool {
+    switch state.known {
+    case .settled: answered
+    case .waitingForUser, .error: true
+    default: false
+    }
+  }
 }
 
 /// 会话停下时他在不在场：正开着这个会话（某台设备的 `Viewer`），或 `window` 内在里面说过话（在终端里打的与在 CuePad 里发的一样，
-/// Cue 发进去的不算）。不是 Cue 开的一轮停下时他在场，这一停归他（`CueStore.cueChanges`）。由事实现推，不另存。
+/// Cue 发进去的不算）。他发起的一轮停下时他在场，先不报给 Cue，等他离开（`CueStore.cueChanges`）。由事实现推，不另存。
 public struct SessionPresence: Equatable, Sendable {
   var viewing: Bool
   /// 窗口内最近一次在里面说话的时刻；窗口内没说过为 nil
@@ -60,13 +68,13 @@ public struct SessionPresence: Equatable, Sendable {
   var lapse: Date? { viewing ? nil : spokeAt.map { $0 + Self.window } }
 }
 
-/// 该报给 Cue 的变化，与归他、等他离开的停下（`CueStore.cueChanges`）。
+/// 该报给 Cue 的变化，与他在场、等他离开再报的停下（`CueStore.cueChanges`）。
 public struct CueChanges: Equatable, Sendable {
   /// 报给 Cue 的，按事件时刻从早到晚
   public var due: [CueChange]
-  /// 归他的停下：会话 id → 那次停下的起点。值班的管理器记着，下次对账交回来
+  /// 他在场的停下：会话 id → 那次停下的起点。值班的管理器记着，下次对账交回来
   public var held: [String: Date]
-  /// 归他的停下里最早会到点的离开时刻（只有说过话的那一半会到点；开着的那一半由设备写下离开，管理器的订阅就醒）
+  /// 这些停下里最早会到点的离开时刻（只有说过话的那一半会到点；开着的那一半由设备写下离开，管理器的订阅就醒）
   public var lapse: Date?
 }
 

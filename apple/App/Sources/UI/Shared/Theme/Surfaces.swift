@@ -9,7 +9,7 @@ extension View {
 
     /// 计数变化时数字滚动过去（增大往上滚、减小往下滚），不整块换字。
     func counting(_ value: Int) -> some View {
-        contentTransition(.numericText(value: Double(value))).animation(Motion.snappy, value: value)
+        contentTransition(.numericText(value: Double(value))).animation(Motion.nudge, value: value)
     }
 
     /// 控件层玻璃；"降低透明度"开启时退回实底。玻璃不叠玻璃：调用方不在玻璃里再套玻璃。
@@ -97,44 +97,12 @@ private struct GlassSurface<S: Shape>: ViewModifier {
     }
 }
 
-/// 动效：没有大幅的空间过渡（Mac 打开卡片是编辑页原地淡入）；位置与尺寸只在列表、面板里小幅挪动，其余为短淡入淡出。
-/// 减弱动态效果时空间动画直接到终态（`spatial`）；确要交代"变了"的地方由调用处换身份、用 `crossfade` 整块交叉淡入淡出。
-/// 动效 token（Mac 与 iOS 共用）：位置与尺寸用不回弹的临界阻尼弹簧，都在 300ms 以内；弹簧从当前呈现值继续，天然可打断。
-/// 只有按压松开带一点回弹（`pressUp`），给手感；常驻的循环动效只给 Agent 在工作与话在路上（`PiStateDot`）和进行中的流光，都在 `LoopLayer`（Core Animation），离屏即停。
-/// 超过 300ms 的只有 Cue 与会话之间接力的那一下（`CueRelayStage`），时长与理由在它那里。
-enum Motion {
-    /// 短动效：列表里挪位置、面板、浮层、切换。
-    static let snappy = Animation.spring(duration: 0.25, bounce: 0)
-    /// 卡片在墙上挪位（同列下移、新卡入场）：定长 0.24s，弹簧的尾巴会让实际时长超过 300ms。
-    static let move = Animation.timingCurve(moveCurve.0, moveCurve.1, moveCurve.2, moveCurve.3, duration: moveDuration)
-    /// `move` 的时长与曲线，渲染端照它走的动画（`ContentLift`、Mac 预览的飞出飞回 `PreviewFlight` 与缩放）共用。
-    nonisolated static let moveDuration = 0.24
-    static var moveTiming: CAMediaTimingFunction {
-        CAMediaTimingFunction(controlPoints: Float(moveCurve.0), Float(moveCurve.1), Float(moveCurve.2), Float(moveCurve.3))
-    }
-    private static let moveCurve: (Double, Double, Double, Double) = (0.2, 0, 0, 1)
-    /// 按下：快、不回弹，手指一落就到位。
-    static let pressDown = Animation.spring(duration: 0.14, bounce: 0)
-    /// 松开：稍慢、带一点回弹，像纸被放开时弹回来。
-    static let pressUp = Animation.spring(duration: 0.34, bounce: 0.32)
-
-    /// 减弱动态效果时的整块交叉淡入淡出：只配换了身份的视图用（新旧两块各自淡入淡出），同一个视图上用它照样会插值位置与尺寸。
-    static let crossfade = Animation.easeInOut(duration: crossfadeDuration)
-    /// `crossfade` 的时长，渲染端的交叉淡入淡出（Mac 预览落地时缩略图换成内容）共用。
-    nonisolated static let crossfadeDuration: TimeInterval = 0.15
-
-    /// 位置、尺寸、旋转的动画；减弱动态效果时没有动画、直接到终态——一个动画事务里分不出只淡不挪，换曲线照样插值。
-    static func spatial(_ animation: Animation, reduceMotion: Bool) -> Animation? {
-        reduceMotion ? nil : animation
-    }
-}
-
 /// 按压反馈只有这几类（`PressStyle` 按种类、列表的行 `RowStyle`、系统的主按钮）。调用处只说按的是哪一种（`Press`），两端写法相同；
 /// 每种在各平台长什么样只在 `PressFeedback` 定，行的底只在 `RowMetrics` 定。
 /// 手机：按下快、松开带一点回弹，按种类缩到不同比例，按下有一下轻触感；行只亮底不缩放（一屏几十行，缩放会让列表显得软）；减弱动态效果时只降透明度。
 /// Mac 照原生控件（访达、邮件、备忘录的按钮、列表与卡片都这样）：按下的那一刻变淡（卡片压暗一层），松开即复原，
 /// 不缩放、不回弹、不震动——缩放与回弹是触屏的习惯，在指针下显得软、慢；触控板的震动在 macOS 只给对齐这类反馈，点按钮不震。
-/// Mac 悬停：指针一进来就有回应（同 macOS 26 工具栏玻璃钮的悬停，与 Linear、Raycast、Arc），淡入淡出 `HandOff.quick`、不挪位置不缩放：
+/// Mac 悬停：指针一进来就有回应（同 macOS 26 工具栏玻璃钮的悬停，与 Linear、Raycast、Arc），淡入淡出 `Motion.fade`、不挪位置不缩放：
 /// 按钮在自己的框上浮一层淡底（`fill`，形状随框：方的、矮的是圆与胶囊，高的是圆角矩形），卡片整张亮一档（按下压暗的一半）。
 /// 指针照 HIG 与访达、邮件：按钮、行、卡片都是箭头，手形只给打开网页的链接（`pointerStyle(.link)`）——手形在 Mac 上读作"这是网页链接"。
 /// iPad 的指针用系统给按钮的悬停效果（自定义样式的按钮照样有），行另见 `RowStyle`。
@@ -196,7 +164,7 @@ struct PressFeedback: ViewModifier {
         .environment(\.buttonHovered, lit)
         .onHover { hovering = $0 }
         .presetHover($hovering)
-        .animation(HandOff.quick, value: lit)
+        .animation(Motion.fade, value: lit)
         .animation(nil, value: active)
     }
     #else
@@ -220,7 +188,7 @@ struct PressFeedback: ViewModifier {
             .scaleEffect(active && !reduceMotion ? scale : 1)
             .brightness(active && card ? -0.02 : 0)
             .opacity(active && (reduceMotion || !card) ? (kind == .inline ? Self.inlineDimmed : 0.9) : 1)
-            .animation(active ? Motion.pressDown : Motion.pressUp, value: active)
+            .animation(active ? Motion.press : Motion.release, value: active)
             .sensoryFeedback(.impact(flexibility: .soft, intensity: 0.55), trigger: active) { _, now in now && kind != .inline }
     }
 

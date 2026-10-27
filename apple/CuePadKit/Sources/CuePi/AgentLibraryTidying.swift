@@ -3,7 +3,7 @@ import CueStore
 import Foundation
 
 /// 一次整理改了什么（按先后），撤销时倒着放回：搬走的搬回、进了废纸篓的放回原处、建的链接与目录删掉、改写的文件写回原样。
-/// 整理之后又有人动过这些文件（改了合成的说明、换了链接、在放回的位置上又建了东西），撤销就整个不做（`changedSinceTidy`），不盖掉后来的改动。
+/// 整理之后又有人动过这些文件（改了合并的规则、换了链接、在放回的位置上又建了东西），撤销就整个不做（`changedSinceTidy`），不盖掉后来的改动。
 public struct LibraryUndo: Sendable {
     enum Step: Sendable {
         case moved(from: URL, to: URL)
@@ -17,19 +17,22 @@ public struct LibraryUndo: Sendable {
     var steps: [Step] = []
 }
 
-/// 照一次扫出来的要整理的做（`AgentLibraryFiles.tidy`），每一步记进 `undo`。
+/// 照一次扫出来的该整理的做（`AgentLibraryFiles.tidy`），每一步记进 `undo`。
 struct LibraryTidying {
     let places: AgentLibraryPlaces
+    /// 那次扫出来的规则正文（路径 → 正文）：合并稿照它算
+    let texts: [String: String]
     let trash: @Sendable (URL) throws -> URL
     private(set) var undo = LibraryUndo()
 
-    init(places: AgentLibraryPlaces, trash: @escaping @Sendable (URL) throws -> URL) {
+    init(places: AgentLibraryPlaces, texts: [String: String], trash: @escaping @Sendable (URL) throws -> URL) {
         self.places = places
+        self.texts = texts
         self.trash = trash
     }
 
-    /// 做一件；格式不对的那件没有可做的（打开它自己改），返回 false。
-    mutating func run(_ tidy: LibraryTidy, _ order: TidyOrder) throws -> Bool {
+    /// 做一件。
+    mutating func run(_ tidy: LibraryTidy, _ order: TidyOrder) throws {
         switch tidy.kind {
         case .stray(let moves):
             for move in moves { try moveSkill(move) }
@@ -37,13 +40,11 @@ struct LibraryTidying {
             for skill in skills { try linkForClaude(skill.name, URL(filePath: skill.path), in: skill.scope) }
         case .duplicate(_, let copies):
             guard let keep = order.keep else { throw AgentLibraryError.tidyGone }
-            guard let kept = copies.first(where: { $0.skill.path == keep })?.skill.scope else { throw AgentLibraryError.tidyGone }
+            guard let kept = copies.first(where: { $0.path == keep })?.scope else { throw AgentLibraryError.tidyGone }
             // 只移走和留下的那份撞名的：同一层的、全局的（留的是项目里的），留的是全局的就是各项目里的全部
-            for copy in copies where copy.skill.path != keep && (copy.skill.scope == kept || copy.skill.scope == .global || kept == .global) {
-                try moveToTrash(URL(filePath: copy.skill.path))
+            for copy in copies where copy.path != keep && (copy.scope == kept || copy.scope == .global || kept == .global) {
+                try moveToTrash(URL(filePath: copy.path))
             }
-        case .malformed:
-            return false
         case .empty(let directories):
             for directory in directories { try moveToTrash(URL(filePath: directory)) }
         case .globalInstructions:
@@ -52,7 +53,6 @@ struct LibraryTidying {
             guard let file = places.projectInstructions(project), let claude = places.projectClaude(project) else { throw AgentLibraryError.noFolder }
             try mergeProject(tidy, into: file, claude: claude)
         }
-        return true
     }
 
     /// 搬进同层的 `.agents/skills`；Claude Code 用着时在它读的位置链回来（搬走的若就在那里，链接正好补上空出的位置）。
@@ -73,10 +73,10 @@ struct LibraryTidying {
         undo.steps.append(.linked(link, to: skill))
     }
 
-    /// 合成一份全局说明，各家换成链到它的链接；OpenCode 自己那份移走（没有它时读 Claude Code 的）；撤掉选中的替换基础提示。
+    /// 合并成一份全局规则，各家换成链到它的链接；OpenCode 自己那份移走（没有它时读 Claude Code 的）；撤掉选中的替换基础提示。
     private mutating func mergeGlobal(_ tidy: LibraryTidy, retiring: Set<InstructionSource.Origin>) throws {
         let shared = places.globalInstructions
-        try write(tidy.merged(retiring: retiring) ?? "", to: shared)
+        try write(tidy.merged(retiring: retiring, texts: texts) ?? "", to: shared)
         for kind in places.linkedKinds {
             let file = places.globalFile(kind)
             guard !RelativeLink.points(file, to: shared) else { continue }
@@ -93,7 +93,7 @@ struct LibraryTidying {
 
     /// 合进项目的 AGENTS.md，Claude Code 读的两份移走、`CLAUDE.md` 换成链到 AGENTS.md 的链接（同全局）；个人的 `CLAUDE.local.md` 不碰。
     private mutating func mergeProject(_ tidy: LibraryTidy, into file: URL, claude: (main: URL, nested: URL, local: URL)) throws {
-        try write(tidy.merged() ?? "", to: file)
+        try write(tidy.merged(texts: texts) ?? "", to: file)
         for other in [claude.main, claude.nested] where LibraryInstructionScan.exists(other) && !RelativeLink.points(other, to: file) { try moveToTrash(other) }
         guard !RelativeLink.points(claude.main, to: file) else { return }
         try RelativeLink.make(at: claude.main, to: file)

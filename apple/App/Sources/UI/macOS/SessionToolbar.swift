@@ -58,6 +58,7 @@ extension Workspace {
 /// 不把左右的控件挤进溢出菜单，玻璃里的名字随之截断；窗口最窄（720）时也放得下。玻璃铺满标题位、内容靠左：
 /// 玻璃按内容宽画再居中时，状态一换（进出"正在同步"、开始结束工作、计时进位）玻璃就变宽变窄、名字左右挪。
 /// Cue 页的页头也在这一位（`CueTitle`，同一块玻璃、同样的宽度规则），只在侧栏收起时有（同 `ProjectSwitcher` 只在收起时写当前页）。
+/// 一页里换看哪一段的分段也在这一位（技能与规则页，`LibraryPanesSlot`，同手机页顶中间）；进展页的例外见 `PanesSlot`。
 struct PageTitleSlot: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
@@ -74,6 +75,8 @@ struct PageTitleSlot: View {
             CueTitle()
                 .frame(height: Spacing.toolbarControl)
                 .modifier(Flex())
+        } else if workspace.root == .library {
+            LibraryPanesSlot()
         }
     }
 
@@ -101,7 +104,7 @@ struct PageTitleSlot: View {
         // 标题位的宽度只看工具栏给多少：随内容变时换会话整条工具栏重排、整窗重算鼠标跟踪区，掉帧 8 次到 4～5 次
         .modifier(Flex())
         .opacity(state.showsHeader ? 1 : 0)
-        .animation(HandOff.quick, value: state.showsHeader)
+        .animation(Motion.fade, value: state.showsHeader)
         .allowsHitTesting(state.showsHeader)
         .accessibilityHidden(!state.showsHeader)
         // 让开时这一块仍接指针：移上去或点一下唤出

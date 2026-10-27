@@ -46,7 +46,7 @@ struct NoticeView: View {
                     .accessibilityAddTraits(.isStaticText)
             }
         }
-        .animation(HandOff.quick, value: workspace.notice)
+        .animation(Motion.fade, value: workspace.notice)
     }
 }
 #endif

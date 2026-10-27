@@ -5,7 +5,7 @@ import SwiftUI
 /// `head` 里的几块不另画玻璃（`headerGrown`）；`head` 可以跟着开合换排法（Cue 的名牌长成名片），在同一块玻璃里一起长。
 /// 面板的几行按长大后的位置排好、淡入并下移 6 点，玻璃还在长的那几帧里不画到玻璃外面。点面板外只收起、不开（背后的页面不压色），离开页面时收起，
 /// 开合轻触感一下；提示横幅盖在这一排上时收着的整块让开，开着的只让开 `head`。开没开由调用方持有，`head` 里的按钮经 `grow` 开合
-/// （无回弹弹簧 `Motion.snappy`，减弱动态效果时直接到终态）。
+/// （无回弹弹簧 `Motion.nudge`，减弱动态效果时直接到终态）。
 /// 里面的高度只在开合时变：长大的动画里挨一下不带动画的改高，整块玻璃就有几帧不画。面板能长到的高不让键盘：键盘起落时里面不跟着重排
 /// （Cue 的名牌开面板前先收起键盘，按的是收完的高）。
 /// 只放在页自己画的那一排里（手机与 iPad 的根页、iPad 右侧的 Cue 面板，`HeaderHost`）。
@@ -75,7 +75,7 @@ extension Binding<Bool> {
     func grow(to value: Bool? = nil, reduceMotion: Bool) {
         let next = value ?? !wrappedValue
         guard next != wrappedValue else { return }
-        withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { wrappedValue = next }
+        withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { wrappedValue = next }
     }
 }
 #endif

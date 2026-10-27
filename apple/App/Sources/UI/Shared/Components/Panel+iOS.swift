@@ -70,10 +70,10 @@ private struct BubbleLayer<Item: Identifiable, Panel: View>: View {
                 }
             }
         }
-        // 贴在底部的纸伸进 Home 指示条那一截：与屏幕圆角同心，盖住标签栏
+        // 贴在底部的纸伸进 Home 指示条那一截：与屏幕圆角同心，盖住底部那一排
         .ignoresSafeArea(source == .bottom ? .all : .keyboard, edges: source == .bottom ? .bottom : .all)
-        .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion) ?? HandOff.quick, value: item?.id)
-        .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: keyboardTop)
+        .animation(Motion.fading(Motion.nudge, reduceMotion: reduceMotion), value: item?.id)
+        .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion), value: keyboardTop)
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { note in
             guard item != nil, let end = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
             // 键盘开着时只往上让、不往下回：菜单一开候选栏收起、键盘矮一截，气泡跟着掉下去再弹回来是看得见的抖（同 `KeyboardHold`）；
@@ -92,7 +92,7 @@ private struct BubbleLayer<Item: Identifiable, Panel: View>: View {
     /// 松手按去势定去留（`predicted` 是照这股劲滑到哪）：拖得够远或甩得够快就关、从此刻的位置落回底边，否则弹回。
     private func released(_ translation: CGFloat, predicted: CGFloat) {
         if max(translation, predicted) > Self.dismissDrag { return close() }
-        withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { drag = 0 }
+        withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { drag = 0 }
     }
 
     /// 拖过（或照去势会滑过）这么远就关。
@@ -173,6 +173,43 @@ private struct TouchWatch: UIViewRepresentable {
         }
 
         func gestureRecognizer(_ recognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { true }
+    }
+}
+#endif
+
+#if os(iOS)
+/// 导航栏里的圆钮在窗口里的框（从它长出气泡，`BubbleSource.control`）：栏里的项是系统按 SwiftUI 的按钮另建的，挂在按钮上的视图不跟过去，
+/// SwiftUI 量的框也对不上页。圆钮带一个读屏标识（`accessibilityIdentifier`，系统照样给栏里那颗），点下时从页所在的窗口里按它找、
+/// 按窗口坐标量一次（推入转场里栏在动，不跟着量）。找不到为 nil，调用处退回贴底的纸。
+@MainActor final class ControlAnchor {
+    let id: String
+    fileprivate weak var view: UIView?
+
+    init(_ id: String) { self.id = id }
+
+    var frame: CGRect? {
+        guard let window = view?.window, let control = Self.find(id, in: window) else { return nil }
+        return control.convert(control.bounds, to: nil)
+    }
+
+    private static func find(_ id: String, in view: UIView) -> UIView? {
+        if view.accessibilityIdentifier == id { return view }
+        for child in view.subviews { if let found = find(id, in: child) { return found } }
+        return nil
+    }
+
+    /// 挂在页上（`background`）：认出页所在的窗口。
+    struct Probe: UIViewRepresentable {
+        let anchor: ControlAnchor
+
+        func makeUIView(context: Context) -> UIView {
+            let view = UIView()
+            view.isUserInteractionEnabled = false
+            anchor.view = view
+            return view
+        }
+
+        func updateUIView(_ view: UIView, context: Context) {}
     }
 }
 #endif

@@ -29,7 +29,7 @@ struct IOSEditorHost: UIViewRepresentable {
     let theme: CueEditorTheme
     let handle: IOSEditorHandle
     let onChange: (String) -> Void
-    /// 插图、插文件与变量取值；都为 nil 时键盘上方只有"收起键盘"（说明是纯文字，`LibraryItemScreen`）。
+    /// 插图、插文件与变量取值；都为 nil 时键盘上方只有"收起键盘"（技能与规则是纯文字，`LibraryFileScreen`）。
     var onInsertImage: (() -> Void)?
     var onInsertFile: (() -> Void)?
     var onVariables: (() -> Void)?
@@ -50,8 +50,6 @@ struct IOSEditorHost: UIViewRepresentable {
         if fits {
             view.isScrollEnabled = false
             view.alwaysBounceVertical = false
-            // 字贴着框的左沿，与气泡里别的行对齐
-            view.textContainer.lineFragmentPadding = 0
         }
         handle.view = view
         // 新建的空卡直接进入输入

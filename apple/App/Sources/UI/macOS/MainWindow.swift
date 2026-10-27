@@ -35,7 +35,7 @@ struct MainWindow: View {
         ZStack {
             page
             EditorLayer().zIndex(1)
-            LibraryItemLayer().zIndex(1)
+            LibraryFileLayer().zIndex(1)
         }
         .overlay(alignment: .bottom) { CaptureSlot() }
         .overlay(alignment: .top) { NoticeView().padding(.top, 8) }
@@ -147,7 +147,7 @@ private struct CaptureSlot: View {
                 .allowsHitTesting(!searching)
                 .accessibilityHidden(searching)
                 .animation(nil, value: searching)
-                .transition(.opacity.animation(.easeOut(duration: 0.1)))
+                .transition(.opacity.animation(Motion.yield))
         }
     }
 }

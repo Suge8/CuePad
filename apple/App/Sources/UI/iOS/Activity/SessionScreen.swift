@@ -41,7 +41,7 @@ struct SessionScreen: View {
                 SessionDock(session: session, digest: digest, compact: !follow.atNewest, revealNote: { follow.seek($0.entry) }) { follow.sent() }
                     .padding(.horizontal, 12)
                     .frame(maxWidth: Self.readingWidth)
-                    .animation(HandOff.quick, value: session.question)
+                    .animation(Motion.fade, value: session.question)
             }
         }
         .scrollDismissesKeyboard(.interactively)

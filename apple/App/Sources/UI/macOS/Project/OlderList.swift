@@ -42,7 +42,7 @@ struct OlderList: View {
         return VStack(alignment: .leading, spacing: 6) {
             if group.isMonth {
                 Button {
-                    withAnimation(HandOff.quick) {
+                    withAnimation(Motion.fade) {
                         if open { expanded.remove(group.period) } else { expanded.insert(group.period) }
                     }
                 } label: { header }

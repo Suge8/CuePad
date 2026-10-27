@@ -16,7 +16,7 @@ APPLE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 # 进本检出的入口锁：实例经 app.py 占本检出那一份，同检出的 shot、rec 不能同时在跑
 # shellcheck source=_lock.sh source-path=SCRIPTDIR
 . "$APPLE_DIR/scripts/_lock.sh"
-xc_enter plain "$0" "$@"
+xc_enter "" "$0" "$@"
 inject=()
 if [ "${1:-}" = --inject-loop ]; then inject=(-CuePadGeometryLoop YES); shift; fi
 app="${1:-$APPLE_DIR/.derived/Build/Products/Debug/CuePad.app}"

@@ -61,7 +61,7 @@ struct TaskLine: View {
         #if os(macOS)
         .hoverReveal(when: !done && next.map { !Self.inlines($0) } ?? false) { if let next { TaskNextMark(next: next).padding(.leading, 4) } }
         #endif
-        .animation(HandOff.quick, value: done)
+        .animation(Motion.fade, value: done)
     }
 
     private func ring(next: TaskNext?) -> some View {

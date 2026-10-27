@@ -5,7 +5,7 @@ import Observation
 /// 此刻正在说的这条回答：到目前为止的正文全文（不含思考、工具参数与子代理），只在 Mac 的内存里，不入库、不同步。
 /// 说完的那条仍以库里的对话为准，界面在它落库后原位换下（`landed`，在 App 里）。两处来源，规则相同：
 /// - 在线会话：各家接入维护，经 `PiBridge.setDraft` 放进这个会话的格子（不进 `PiBridge.changes()`）；
-/// - Cue：大脑报 `CueBrainEvent.speaking`，值班的 `CueKeeper` 只把在回答你的那一轮放进 `CueKeeper.speech`。
+/// - Cue：大脑报 `TurnEvent.speaking`，值班的 `CueKeeper` 只把在回答你的那一轮放进 `CueKeeper.speech`。
 /// 这条开始出字时设上、随增量更新；它转成工具调用、这一轮被停下或出错、下一轮开始时清掉；正常说完的留着，由界面在对话里出现它之后换下。
 public struct PiDraft: Equatable, Sendable {
     public var text: String

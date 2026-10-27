@@ -97,10 +97,10 @@ final class MacExecutor {
         case .send: try await deliver(request)
         case .tidy:
             guard let orders = request.tidyOrders else { throw SendError.unsupportedMode(request.mode.rawValue) }
-            // 别的设备发来的整理不留撤销：撤销只给在这台上点的那一下（发的那台写明撤不回，`RemoteTidyNote`）
+            // 别的设备发来的整理不留撤销：撤销只给在这台上点的那一下（发的那台在按钮旁写明撤不回，`TidyConsequence`）
             _ = try await library.tidy(orders)
-        case .instruction:
-            guard let edit = request.instructionEdit else { throw SendError.unsupportedMode(request.mode.rawValue) }
+        case .libraryEdit:
+            guard let edit = request.libraryEdit else { throw SendError.unsupportedMode(request.mode.rawValue) }
             try await library.write(edit)
         }
         return .succeeded

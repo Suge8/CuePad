@@ -98,6 +98,11 @@ def badge(mark, solid=True):
     return build
 
 
+def question(m):
+    """说明（技能与规则页的问号圆钮）：只一个问号、不带圆——它本身就嵌在一颗圆钮里。问号同"未知"里那个，放大到满格。"""
+    return [Layer("question", mark_question((0, 0.3), 1.55, 3.0 + 1.2 * GROW[m]))]
+
+
 BADGE_R = 12.6
 # 没有圆底的状态图形按这个倍数放大：同一行字里，系统的同类符号都比圆标宽、高出一截（气泡、星、闪电、光标 K，铃 BK，云最宽 CK，
 # 照系统 bell、icloud 在同一字号下的实测宽高定）

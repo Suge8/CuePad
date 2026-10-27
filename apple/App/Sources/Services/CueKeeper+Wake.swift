@@ -131,7 +131,7 @@ extension CueKeeper {
 
     /// 你的消息里的图，按发给会话的同一个转换取出、交给大脑；文字里的图片引用照留（Cue 转给会话时原样写进去）。
     /// 模型看不了图、或图不在这台 Mac 上，不交图并对你说一声，不悄悄丢掉。
-    func images(in pending: [CueMessage], for brain: any CueBrain) async -> [PiImage] {
+    func images(in pending: [CueMessage], for brain: any HostedSession) async -> [PiImage] {
         let contents = pending.filter { $0.author == .known(.you) }.map { SendContent(stored: $0.text) }.filter(\.hasImages)
         guard !contents.isEmpty else { return [] }
         guard brain.seesImages else {

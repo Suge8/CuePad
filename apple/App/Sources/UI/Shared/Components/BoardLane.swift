@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// 看板一列（手机一行）身后那一块（`BoardColumn`、`BoardRowLane`）：平时什么都没有——列（行）靠留白与列头分开，不按列铺色，
-/// 颜色只在列的记号上（`BoardLaneMark`）；拖着卡停在上面时铺一层选中底，圆角是卡片圆角加卡离列边的空（同心）。
+/// 看板一列（手机一行）身后那一块（`BoardColumn`、`BoardRowLane`）：平时什么都没有——列（行）靠留白与列头分开，身后不按列铺色，
+/// 列的颜色只在记号（`BoardLaneMark`）与卡的纸上（`TaskBoard.Column.paper`）；拖着卡停在上面时铺一层选中底，圆角是卡片圆角加卡离列边的空（同心）。
 /// 只铺实色：侧栏开合时整面墙每帧重画，大面积不铺渐变、不描边。
 struct BoardLane: View {
     let targeted: Bool
@@ -13,11 +13,12 @@ struct BoardLane: View {
         ZStack {
             if targeted { RoundedRectangle(cornerRadius: Self.radius, style: .continuous).fill(palette.selection).transition(.opacity) }
         }
-        .animation(HandOff.quick, value: targeted)
+        .animation(Motion.fade, value: targeted)
     }
 }
 
-/// 列头：状态色实心圆里一个白字形（`BoardLaneMark`）、列名，右边是这一列的数（大字）。卡片开头的记号是空心描边，与它分得开。
+/// 列头：状态色实心圆里一个白字形（`BoardLaneMark`）、列名，右边是这一列的数。数随列的轻重（`BoardWeight.swift`）：推进中、等你放大、着状态色，
+/// 待办、已完成与列名同字号、列名与数都是 ink3。卡片开头的记号是空心描边，与它分得开。
 struct BoardColumnHeader: View {
     let column: TaskBoard.Column
     let count: Int
@@ -42,9 +43,9 @@ struct BoardColumnHeader: View {
     private func row(title: Bool, mark: Bool) -> some View {
         HStack(spacing: 8) {
             if mark { BoardLaneMark(column: column, size: Self.mark) }
-            if title { Text(column.title).font(Self.font).foregroundStyle(palette.ink2).fixedSize() }
+            if title { Text(column.title).font(Self.font).foregroundStyle(column.light ? palette.ink3 : palette.ink2).fixedSize() }
             Spacer(minLength: 8)
-            Text("\(count)").font(Self.countFont).monospacedDigit().foregroundStyle(palette.ink).counting(count).fixedSize()
+            Text("\(count)").font(column.light ? Self.font : Self.countFont).monospacedDigit().foregroundStyle(column.countInk(palette)).counting(count).fixedSize()
         }
     }
 

@@ -92,7 +92,7 @@ public final class ClaudeCodeRuntime: AgentRuntime {
         for terminal in terminals.values { terminal.close() }
         for watcher in exitWatchers.values { watcher.cancel() }
         exitWatchers = [:]
-        let processes = hosted.values.map(\.process)
+        let processes = hosted.values.compactMap(\.stream?.process)
         return { for process in processes { await process.stop() } }
     }
 
@@ -142,25 +142,25 @@ public final class ClaudeCodeRuntime: AgentRuntime {
         known: (name: String?, firstMessage: String?)? = nil
     ) async throws -> PiSession.ID {
         let claude = try await executable()
+        let session = ClaudeHostedSession(bridge: bridge)
         // 交给会话的附件在工作目录外（`AttachmentFiles.directory`）：读它不用再问
-        let session = try await ClaudeHostedSession(
-            executable: claude.url, arguments: arguments + ["--add-dir", store.files.directory.path(percentEncoded: false)], sessionID: sessionID,
-            directory: directory,
-            environment: claude.environment.merging([HostMark.variable: sessionID]) { $1 }, bridge: bridge)
+        let process = try await session.host(
+            executable: claude.url, arguments: arguments + ["--add-dir", store.files.directory.path(percentEncoded: false)], directory: directory,
+            environment: claude.environment.merging([HostMark.variable: sessionID]) { $1 })
         hosted[sessionID] = session
         Task { [weak self] in
-            _ = await session.process.exited()
+            _ = await process.exited()
             if self?.hosted[sessionID] === session { self?.hosted[sessionID] = nil }
         }
         let cwd = URL(filePath: ClaudeCode.realPath(directory), directoryHint: .isDirectory)
         do {
             return try await session.connect(
-                cwd: cwd, sessionFile: ClaudeCode.sessionFile(home: home, cwd: cwd, sessionID: sessionID), model: model, launchToken: launchToken,
+                sessionID: sessionID, cwd: cwd, sessionFile: ClaudeCode.sessionFile(home: home, cwd: cwd, sessionID: sessionID), model: model, launchToken: launchToken,
                 known: known).id
         } catch PiBridgeError.sessionEnded {
-            throw ClaudeCodeError.exited(await session.process.exited())
+            throw ClaudeCodeError.exited(await process.exited())
         } catch PiBridgeError.ackTimeout {
-            await session.process.stop()
+            await process.stop()
             throw AgentRuntimeError.launchTimedOut(.claudeCode)
         }
     }

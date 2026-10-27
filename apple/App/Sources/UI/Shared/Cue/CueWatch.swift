@@ -18,7 +18,7 @@ final class CueWatch {
     private(set) var sending = false
     /// 你最近一句写下的时刻（`CueDigest.lastYou`）：刚发出的那句读到了没有只看它。
     private(set) var lastYouSaid: Date?
-    /// Cue 此刻（`CueNow`）：头像那一拍、数字账、拍板几件（Cue 名牌与侧栏进展那一行的"等你 M"、入口的点）、推进中几件、
+    /// Cue 此刻（`CueNow`）：头像那一拍、数字账、拍板几件（底部那一排与侧栏进展那一行的"等你 M"、入口的点）、推进中几件、
     /// 角标的数都只读它，不另存一份；内容变了才换（推出的时刻不算）。刚做完的那件到点在这里收掉（`show`），头像与数字账同一刻换。
     private(set) var now = CueNow.empty
     /// 这一次会话叫醒的接力（`Wake`）：接力层（`CueRelayStage`）照它画光，头像照它醒。
