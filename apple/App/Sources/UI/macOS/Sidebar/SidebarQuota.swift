@@ -14,6 +14,7 @@ struct SidebarQuota: View {
 
     var body: some View {
         QuotaRings(open: open, height: Spacing.sidebarRow, row: true) { open = !open && !PressPoint.reopens(closedAt: closed) }
+            .font(Typography.sidebarHeader)
             .bubble(isPresented: $open) { QuotaDetail().padding(16).refreshesQuota() }
             .onChange(of: open) { _, open in if !open { closed = .now } }
             .refreshesQuota()

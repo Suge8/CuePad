@@ -224,7 +224,7 @@ struct QuotaRing: View, Animatable {
 /// 手机会话页顶栏那颗胶囊的右半、菜单栏面板的 Cue 那一行、Mac 侧栏的一行（`SidebarQuota`）。账号多时只放前 `limit` 颗；
 /// 还没有可画的环时（还没有额度记录）环的位置写"额度"二字，照样能点，点开明细那里说怎么才会有（`QuotaDetail`）：一颗空环读不出是什么。
 /// 两个字与一颗环差不多宽，菜单栏面板不变宽；手机那块玻璃第一次有额度时窄几点，只变这一次。
-/// `row`：铺满宽的一行（Mac 侧栏）：左边一直写"额度"、环靠右，按下与展开着是行的底（`RowStyle`）。
+/// `row`：铺满宽的一行（Mac 侧栏）：左边一直写"额度"（字号随所在处）、环靠右，按下与展开着是行的底（`RowStyle`）。
 struct QuotaRings: View {
     let open: Bool
     let height: CGFloat
@@ -257,7 +257,7 @@ struct QuotaRings: View {
         let rings = quotas.compactMap { quota in quota.binding(at: now).map { (provider: quota.provider, window: QuotaMeter.Window($0, at: now)) } }
         return HStack(spacing: 6) {
             if row {
-                Text("额度").font(Typography.sidebarHeader).foregroundStyle(palette.ink3)
+                Text("额度").foregroundStyle(palette.ink3)
                 Spacer(minLength: 0)
             } else if rings.isEmpty { Text("额度").font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink3).fixedSize() }
             ForEach(rings, id: \.provider) { ModelBadge(mark: PiProvider(id: $0.provider).mark, binding: $0.window) }
