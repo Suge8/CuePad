@@ -119,8 +119,8 @@ struct LibrarySkillScan {
                 if inOldDirectory, group.isEmpty, Self.isManaged(name, in: root) { continue }
                 let skillFile = item.appending(path: AgentSkill.fileName)
                 if FileManager.default.fileExists(atPath: skillFile.path) {
-                    // 读不出（不是 UTF-8、没权限）的也是技能，格式不对
-                    let text = (try? String(contentsOf: skillFile, encoding: .utf8)) ?? ""
+                    // 读不出（不是 UTF-8、没权限）的也是技能，格式不对；同改文件时的读法（`AgentLibraryFiles.write`），哈希才对得上
+                    let text = LibraryInstructionScan.read(skillFile) ?? ""
                     if inOldDirectory, name == AgentSkill.name, AgentSkill.kinds(in: text) != nil { continue }  // 旧版 CuePad 副本：接入收掉它
                     watched.insert(skillFile.path)
                     found.append(Found(
