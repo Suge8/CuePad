@@ -88,7 +88,7 @@ struct SessionList<Top: View>: View {
             .listRowInsets(EdgeInsets(top: 14, leading: 0, bottom: 4, trailing: 0))
     }
 
-    /// 一张卡片：长按与慢慢左滑都有"结束会话"（在线的）与"重命名"（读得到的会话；Mac 够不着时置灰，会话近况页"⋯"里同一个说法）；快甩是切页（`rowSwipes`）。
+    /// 一张卡片：长按与慢慢左滑都有"结束会话"（在线的）与"重命名"（读得到的会话；Mac 够不着时置灰，会话近况页"⋯"里同一个说法）（`rowSwipes`）。
     private func row(_ item: PiSessionListItem, in list: PiSessionList, end: Speech.Trip?) -> some View {
         let endable = item.state.canEnd && end?.inTransit != true
         let renamable = MacDelivery.canRename(item.state)

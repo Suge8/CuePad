@@ -10,12 +10,12 @@ nonisolated struct RelayEnd: Equatable, Sendable {
 
 /// Cue 那一头落在哪：同时在屏上几处时取排在前面的。三端的规则就是这个顺序——
 /// Mac 与 iPad 有侧栏时总落在侧栏的 Cue 一行（在不在 Cue 页都一样），侧栏收起时退到 Cue 页页头；
-/// iPhone 没有侧栏：在 Cue 页落在页头的头像（从底部往上飞一长段，最看得出），在三页上落在底部那一排的 Cue 钮。
+/// iPhone 没有侧栏：在 Cue 页落在页头的头像（从底部往上飞一长段，最看得出），在别的页上落在标签栏的 Cue 那一格。
 enum CueSpot: Int {
     /// 侧栏最上面的 Cue（Mac 是名片 `CueSidebarCard`、iPad 是那一行，头像都是 `CueEntryAvatar`；菜单栏面板、输入条在别的窗口，不参与）。
     case entry
     case header
-    /// iPhone 三页底部那一排的 Cue 钮。
+    /// iPhone 标签栏的 Cue 那一格（`DockRoot`）。
     case dock
 }
 
@@ -25,7 +25,7 @@ enum EndSpot: Equatable {
     case session(String, Row)
     /// 任务圈与正在开会话的空心点：带着这件任务、或交给的会话就是它绑着的那个时算。
     case task(UUID, session: String?)
-    /// "进展"那一处：iPhone 底部那一排的那一格、Mac 与 iPad 侧栏的那一行；Cue 页收起的去处钮不接力。
+    /// "进展"那一处：iPhone 标签栏的那一格、Mac 与 iPad 侧栏的那一行。
     case dock
 
     /// 状态标所在的行，越具体越前。

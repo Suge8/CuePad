@@ -4,7 +4,7 @@ import SwiftUI
 /// 拍板卡：固定在输入框上方的一张纸，Cue 的提问只在这里答（进展页等你列只看，点了来这里；会话在问的也可在会话页答）——与进展页等你列里的拍板同一份（`CueThread.waiting`，出自 `CueStore.cueTally`；待回复不进来，在上方的提示里）：
 /// Cue 的提问与会话在问的同排（等得最久的在前），一次铺开一件：露哪件只记在 `Workspace.cueAsking`（看板上点进来的、滑卡与小箭头换的都写它），不在等了露第一件。
 /// 不止一件时像叠在一起的通知：卡后面露出一两层叠边（`deck`），眉题行写第几件（`CueWaitEyebrow`）；手机上左右滑卡换一件（跟手，甩过或拖过一段就换，
-/// 到头了让给切页），Mac 上点眉题行的小箭头。答完一件，下一件从叠边里顶上来。
+/// 到头了不接），Mac 上点眉题行的小箭头。答完一件，下一件从叠边里顶上来。
 /// 铺开的那件：眉题（`CueWaitEyebrow`）、问句（`CueQuestionLine`）、点名的图、怎么答（`WaitAnswer`，与会话页问题卡同一个；主动作在右下角）。问句是代码按 Cue 写的动作短语写出的
 /// （`CueAsking.question`），不靠 Cue 的措辞；要看细节（Cue 的原话、会话里的来龙去脉）点眉题进任务或会话。对话里不另挂还在等你的提问：同一问同屏只一处。
 /// 圆角、与输入框和待回复提示之间的空同一套（`ComposerMetrics.radius`、`stackGap`）。
@@ -118,7 +118,7 @@ struct CueWaitDock: View {
     }
 
     /// 铺开的那件（`CueWaitCard`）垫上纸；手机上左右滑换一件。
-    /// 整张卡接这一拖（`contentShape`）：只挂在内容上的话卡里的空白处接不住，落到页上成了切页。卡里的按钮照样先接自己的点按。
+    /// 整张卡接这一拖（`contentShape`）：只挂在内容上的话卡里的空白处接不住。卡里的按钮照样先接自己的点按。
     private func card(_ pick: CueWaitPick) -> some View {
         let card = CueWaitCard(pick: pick, shots: pick.wait.message.flatMap { shots[$0.id] }, open: open)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -176,7 +176,7 @@ struct CueWaitDock: View {
     }
 
     #if os(iOS)
-    /// 这一拖归不归卡：那个方向还有一件（往左拖是下一件）；到头了让给页上的横拖（切页）。
+    /// 这一拖归不归卡：那个方向还有一件（往左拖是下一件）；到头了不接。
     private func swipes(_ pick: CueWaitPick, toward velocity: CGFloat) -> Bool {
         pick.neighbor(by: velocity < 0 ? 1 : -1) != nil
     }

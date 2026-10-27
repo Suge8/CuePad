@@ -26,15 +26,6 @@ extension View {
         self
         #endif
     }
-
-    /// 展开底部"⋯"的那条路交给调试画面（`-CuePadPlacesOpen`、`dockTourIfAsked`），状态在窄屏的容器里（`DockRoot`）。
-    func debugExposesPlaces(_ open: @escaping () -> Void) -> some View {
-        #if DEBUG
-        onAppear { DebugScene.openPlaces = open }
-        #else
-        self
-        #endif
-    }
     #endif
 
     /// 项目页任务纸点"还有 N 条"的那条路交给测量（两端 `InteractionBench` 的"展开任务"）：看得见的那一页（`active`）的纸。

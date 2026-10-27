@@ -36,7 +36,7 @@ class Timebase(ctypes.Structure):
 timebase = Timebase()
 libc.mach_timebase_info(ctypes.byref(timebase))
 NS = timebase.numer / timebase.denom
-# 就绪后还有收尾：iOS 另外两页在启动后空闲时才建（PagerController），SwiftUI 再在优先级低的后台线程给新出现的视图类型
+# 就绪后还有收尾：SwiftUI 在优先级低的后台线程给新出现的视图类型
 # 算比较用的布局（AttributeGraph 的 TypeDescriptorCache）。模拟器里这一段有几十亿条指令，机器忙时被拖到半分钟以后，
 # 固定静置几秒就开窗，量到的是这段收尾而不是静置。收尾一阵一阵地来，阵与阵之间实测空过 9 秒。
 QUIET_RATE = 30e6  # 每秒指令低于它算安静：静置的 iOS 模拟器每秒几百万，收尾时每秒几亿起
